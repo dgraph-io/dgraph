@@ -34,6 +34,13 @@ type DirectedEdge struct {
 }
 ```
 
+## Technologies Used
+- Use [RocksDB](http://rocksdb.org/) for storing original data and posting lists.
+- Use [Cap'n Proto](https://capnproto.org/) as both in-memory and on-disk representation.
+Ref: [experiment](https://github.com/dgraph-io/experiments/tree/master/cproto)
+- [RAFT via CoreOS](https://github.com/coreos/etcd/tree/master/raft), or possibly
+[MultiRaft by Cockroachdb](http://www.cockroachlabs.com/blog/scaling-raft/)
+
 ## Internal representation
 Internally, `Entity`, `Attribute` and `ValueId` are converted and stored in
 `uint64` format. Integers are chosen over strings, because:
@@ -50,13 +57,25 @@ generally won't be passed around during joins.
 For the purposes of conversion, a couple of internal sharded posting lists
 would be used.
 
-## Internal Storage
-Use [RocksDB](http://rocksdb.org/) for storing original data and posting lists.
+#### string -> uint64
+`TODO(manish): Fill`
+
+#### uint64 -> string
+`TODO(manish): Fill`
+
 
 ## Sharded Posting Lists
 
 #### What
-A posting list would be generated per `Attribute`. The key would be `Entity`,
+A posting list allows for super fast random lookups for `Attribute, Entity`.
+It's implemented via RocksDB, given the latter provides enough
+knobs to decide how much data should be served out of memory, ssd or disk.
+In addition, it supports bloom filters on keys, which would help random lookups
+required by Dgraph.
+
+A posting list would be generated per `Attribute`.
+In terms of RocksDB, this means each PL would correspond to a RocksDB database.
+The key would be `Entity`,
 and the value would be `sorted list of ValueIds`. Note that having sorted
 lists make it really easy for doing intersects with other sorted lists.
 
@@ -81,18 +100,64 @@ would produce a list of friends, namely `[person0, person1, person2, person3]`.
 
 #### Why Sharded?
 A single posting list can grow too big.
-RocksDB can serve data out of disk, but still uses RAM for bloom filters, which
+While RocksDB can serve data out of disk, it still requires RAM for bloom filters, which
 allow for efficient random key lookups. If a single store becomes too big, both
 it's data and bloom filters wouldn't fit in memory, and result in inefficient
-data access.
+data access. Also, more data = hot PL and longer initialization
+time in case of a machine failure or PL inter-machine transfer.
 
 To avoid such a scenario, we run compactions to split up posting lists, where
-each such posting list would then be renamed to:
-`Attribute-MIN_VALUEID`.
-Of course, most posting lists would start with just `Attribute`. The threshold
+each such PL would then be renamed to:
+`Attribute-MIN_ENTITY`.
+A PL named as `Attribute-MIN_ENTITY` would contain all `keys > MIN_ENTITY`,
+until either end of data, or beginning of another PL `Attribute-MIN_ENTITY_2`,
+where `MIN_ENTITY_2 > MIN_ENTITY`.
+Of course, most posting lists would start with just `Attribute`. The data threshold
 which triggers such a split should be configurable.
+
+Note that the split threshould would be configurable in terms of byte usage
+(shard size), not frequency of access (or hotness of shard). Each join query
+must still hit all the shards of a PL to retrieve entire dataset, so splits
+based on frequency of access would stay the same. Moreover, shard hotness can
+be addressed by increased replication of that shard. By default, each PL shard
+would be replicated 3x. That would translate to 3 machines generally speaking.
 
 **Caveat**:
 Sharded Posting Lists don't have to be colocated on the same machine.
 Hence, to do `Entity` seeks over sharded posting lists would require us to hit
 multiple machines, as opposed to just one machine.
+
+#### Terminology
+Henceforth, a single Posting List shard would be referred to as shard. While
+a Posting List would mean a collection of shards which together contain all
+the data associated with an `Attribute`.
+
+## Machine (Server)
+Each machine can pick up multiple shards. For high availability even during
+machine failures, multiple machines at random would hold replicas of each shard.
+How many replicas are created per shard would be configurable, but defaults to 3.
+
+However, only 1 out of the 3 or more machines holding a shard can do the writes. Which
+machine would that be, depends on who's the master, determined via a
+master election process. We'll be using CoreOS implementation of RAFT consensus
+algorithm for master election.
+
+Naturally, each machine would then be participating in a separate election process
+for each shard located on that machine.
+This could create a lot of network traffic, so we'll look into
+using **MultiRaft by CockroachDB**.
+
+#### Machine Failure
+In case of a machine failure, the shards held by that machine would need to be
+reassigned to other machines. RAFT could reliably inform us of the machine failure
+or connection timeouts to that machine, in which case we could do the shard
+reassignment depending upon which other machines have spare capacity.
+
+#### New Machines & Discovery
+Dgraph should be able to detect new machines allocated to the cluster, establish
+connections to it, and reassign a subset of existing shards to it. `TODO(manish): Figure
+out a good story for doing discovery.`
+
+## Backups and Snapshots
+`TODO(manish): Fill this up`
+
