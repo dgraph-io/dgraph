@@ -36,10 +36,13 @@ type DirectedEdge struct {
 
 ## Technologies Used
 - Use [RocksDB](http://rocksdb.org/) for storing original data and posting lists.
-- Use [Cap'n Proto](https://capnproto.org/) as both in-memory and on-disk representation.
+- Use [Cap'n Proto](https://capnproto.org/) for in-memory and on-disk representation,
+and network transfer.
 Ref: [experiment](https://github.com/dgraph-io/experiments/tree/master/cproto)
 - [RAFT via CoreOS](https://github.com/coreos/etcd/tree/master/raft), or possibly
 [MultiRaft by Cockroachdb](http://www.cockroachlabs.com/blog/scaling-raft/)
+- Use [tcp](http://golang.org/pkg/net/) for inter machine communication.
+Ref: [experiment](https://github.com/dgraph-io/experiments/tree/master/vrpc)
 
 ## Internal representation
 Internally, `Entity`, `Attribute` and `ValueId` are converted and stored in
@@ -57,16 +60,46 @@ generally won't be passed around during joins.
 For the purposes of conversion, a couple of internal sharded posting lists
 would be used.
 
-#### string -> uint64
-`TODO(manish): Fill`
-
 #### uint64 -> string
-`TODO(manish): Fill`
+We store an internal sharded posting list for converting from `uint64`
+representation to original `string` value. Once the query results
+are computed utilizing internal `uint64` representation, this PL is
+hit to retrieve back their original `string` representation.
 
+Note that it's quite likely that this PL would have multiple shards, as
+the number of unique ids grow in the system. Also, this PL would 
+have to be kept in `strict consistency`, so we can avoid allocating
+multiple `uint64`s to the same `string`Id.
+
+#### string -> uint64
+Instead of keeping another Posting List which points from `String -> Uint64`,
+we could just use the already existant `Uint64 -> String` PL. This way
+we could avoid synchronization issues between these posting lists, which
+every query must hit, and have to be kept in `strict consistency`.
+
+We could use such an algorithm:
+```go
+h := crc64.New(..)
+io.WriteString(h, stringId)
+rid := h.Sum64()
+for {
+	if pval, present := Uint64ToStringPL[rid]; present {
+		if pval != stringId {
+			rid += 1  // Increment sum by 1, until we find an empty slot.
+								// Handle overflow.
+			continue
+		}
+	} else {
+		// New string id. Store in Uint64 to String Posting List.
+		Uint64ToStringPL[rid] = stringId
+	}
+	break
+}
+```
 
 ## Sharded Posting Lists
 
-#### What
+#### Posting List (PL)
 A posting list allows for super fast random lookups for `Attribute, Entity`.
 It's implemented via RocksDB, given the latter provides enough
 knobs to decide how much data should be served out of memory, ssd or disk.
@@ -157,6 +190,15 @@ reassignment depending upon which other machines have spare capacity.
 Dgraph should be able to detect new machines allocated to the cluster, establish
 connections to it, and reassign a subset of existing shards to it. `TODO(manish): Figure
 out a good story for doing discovery.`
+
+## Inter Machine Communication
+We're using TCP directly for all inter machine communication. This was chosen
+over TLS over TCP because of the significant performance difference, and the
+expectation of a secure, access controlled environment within a data center,
+which renders the overhead of TLS unnecessary.
+
+Instead of using any custom library, we'll be using Go standard `net/rpc` package,
+again based on [these benchmarks](https://github.com/dgraph-io/experiments/tree/master/vrpc).
 
 ## Backups and Snapshots
 `TODO(manish): Fill this up`
