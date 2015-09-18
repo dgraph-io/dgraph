@@ -100,24 +100,12 @@ for {
 ## Sharded Posting Lists
 
 #### Posting List (PL)
-A posting list allows for super fast random lookups for `Attribute, Entity`.
-It's implemented via RocksDB, given the latter provides enough
-knobs to decide how much data should be served out of memory, ssd or disk.
-In addition, it supports bloom filters on keys, which would help random lookups
-required by Dgraph.
-
-A posting list would be generated per `Attribute`.
-In terms of RocksDB, this means each PL would correspond to a RocksDB database.
-The key would be `Entity`,
-and the value would be `sorted list of ValueIds`. Note that having sorted
-lists make it really easy for doing intersects with other sorted lists.
+Conceptually, a posting list contains all the `DirectedEdges` corresponding to
+an `Attribute`, in the following format:
 
 ```
-Attribute: Entity -> sorted list of ValueId // Everything in uint64 format
+Attribute: Entity -> sorted list of ValueId // Everything in uint64 representation.
 ```
-
-Note that the above structure makes posting lists **directional**. You can do
-Entity -> ValueId seeks, but not vice-versa.
 
 **Example**: If we're storing a list of friends, such as:
 ```
@@ -131,34 +119,76 @@ Me friend person3
 Then a posting list `friend` would be generated. Seeking for `Me` in this PL
 would produce a list of friends, namely `[person0, person1, person2, person3]`.
 
-#### Why Sharded?
-A single posting list can grow too big.
-While RocksDB can serve data out of disk, it still requires RAM for bloom filters, which
-allow for efficient random key lookups. If a single store becomes too big, both
+Note that the above structure makes posting lists **directional**. You can do
+`Attribute, Entity -> ValueId` seeks, but not vice-versa. The big advantage
+of having such a structure is that, we have all the data to do one join in one
+Posting List. In case of a single shard (unsplit) PL, this means, one RPC to
+the machine serving that shard would result in a join, without any further
+network calls, reducing joins to lookups on RocksDB.
+This is what allows Dgraph minimize network calls and optimize query latency.
+
+#### Implementation
+PLs are served via RocksDB, given the latter provides enough
+knobs to decide how much data should be served out of memory, ssd or disk.
+In addition, it supports bloom filters on keys, which would help random lookups
+required by Dgraph.
+
+To allow RocksDB full access to memory to optimize for caches, we'll have
+one RocksDB database per machine. Each RocksDB database would contain all the
+posting lists served by the machine.
+The key would be `Attribute, Entity`,
+and the value would be `sorted list of ValueIds`. Note that having sorted
+lists make it really easy for doing intersects with other sorted lists.
+
+#### Shards
+While RocksDB can serve PL out of disk, it still requires RAM for bloom filters, which
+allow for efficient random key lookups. If a single PL becomes too big, both
 it's data and bloom filters wouldn't fit in memory, and result in inefficient
 data access. Also, more data = hot PL and longer initialization
 time in case of a machine failure or PL inter-machine transfer.
 
-To avoid such a scenario, we run compactions to split up posting lists, where
-each such PL would then be renamed to:
-`Attribute-MIN_ENTITY`.
-A PL named as `Attribute-MIN_ENTITY` would contain all `keys > MIN_ENTITY`,
-until either end of data, or beginning of another PL `Attribute-MIN_ENTITY_2`,
-where `MIN_ENTITY_2 > MIN_ENTITY`.
-Of course, most posting lists would start with just `Attribute`. The data threshold
-which triggers such a split should be configurable.
+To avoid such a scenario, we run compactions to split up posting lists into
+shards, where each shard would contain a range of entities. A shard is the
+smallest granularity of data a machine would serve. Note that to do a full join,
+over that `Attribute`, query must go through all the shards of the PL.
+
+```
+// Original PL grown too big
+PL = [E0, E1, E2, E3, ... En]
+
+// PL split into 2 shards
+PL = [E0, E1, E2, .., Ei]
+PL_Ei = [Ei+1, Ei+2, ..., En]
+
+// Each of these shards are now treated independently.
+```
+
+The data threshold which triggers such a split would be configurable. It helps
+that all the PLs are stored in `uint64` format, so we have a really good idea
+of how many `DirectedEdges` worth of data gets stored in one shard.
 
 Note that the split threshould would be configurable in terms of byte usage
 (shard size), not frequency of access (or hotness of shard). Each join query
 must still hit all the shards of a PL to retrieve entire dataset, so splits
 based on frequency of access would stay the same. Moreover, shard hotness can
 be addressed by increased replication of that shard. By default, each PL shard
-would be replicated 3x. That would translate to 3 machines generally speaking.
+would be replicated 3x.
 
-**Caveat**:
-Sharded Posting Lists don't have to be colocated on the same machine.
+```
+If we set max shard size to 64MB, assuming the predicate is Friend (as in
+Facebook), with average number of connected friends = 300 and no source field, we get
+(64*1024*1024 Bytes)/((300 ValueIds * (8 Bytes each id + 8 bytes timestamp)) + 16 Bytes for key +
+say 8 Bytes overhead)
+~ 14,000 Attribute, Entities in the shard, with 300 ValueIds each.
+~ 4.2M edges stored in one shard.
+```
+
+The bigger the shard, the longer it would take to 
+**Downside**:
+Note that Sharded Posting Lists might not be colocated on the same machine.
 Hence, to do `Entity` seeks over sharded posting lists would require us to hit
-multiple machines, as opposed to just one machine.
+multiple machines, as opposed to just one machine. This increases RPC calls
+required to run a query.
 
 #### Terminology
 Henceforth, a single Posting List shard would be referred to as shard. While
@@ -166,8 +196,8 @@ a Posting List would mean a collection of shards which together contain all
 the data associated with an `Attribute`.
 
 ## Machine (Server)
-Each machine can pick up multiple shards. For high availability even during
-machine failures, multiple machines at random would hold replicas of each shard.
+Each machine can pick up multiple shards. For high availability,
+multiple machines at random would hold replicas of each shard.
 How many replicas are created per shard would be configurable, but defaults to 3.
 
 However, only 1 out of the 3 or more machines holding a shard can do the writes. Which
@@ -199,6 +229,18 @@ which renders the overhead of TLS unnecessary.
 
 Instead of using any custom library, we'll be using Go standard `net/rpc` package,
 again based on [these benchmarks](https://github.com/dgraph-io/experiments/tree/master/vrpc).
+
+## Data updates
+Assuming update instruction of format `DirectedEdge`, it must
+contain a `SET` or `REMOVE` action with `Entity` and `Attributed` both
+filled. If either `Value` or `ValueId` is set, then the update would affect
+only one edge (at max, if the edge exists with different ts). If none of them
+are set, both `SET` or `REMOVE` would delete all the edges corresponding to
+`Entity, Attribute`, with `SET` additionally adding a new edge.
+
+## Transactions
+
+## Queries
 
 ## Backups and Snapshots
 `TODO(manish): Fill this up`
