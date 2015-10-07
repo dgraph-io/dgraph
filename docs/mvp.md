@@ -103,4 +103,4 @@ approch on a big and complicated design doc, which almost always changes
 as we learn more. This way, we reduce the number of concepts we're working
 on at the same time, and build up to the more complicated concepts that
 are required in a full fledged strongly consistent and higly performant
-graph databsae.
+graph database.
