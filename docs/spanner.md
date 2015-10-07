@@ -24,9 +24,11 @@ involving multiple range of keys.
 - **In case of Dgraph, every txn would involve other groups**
 - Each txn manager would co-ordinate with other txn managers, by participating
 in paxos leader election.
-- One Participant Leader, other Participant slaves.
-- Confused about coordinator leader + slaves.
 - Txn manager acquires locks.
+- In one Paxos group, one Participant Leader, other would be Participant slaves.
+- Among participating paxos groups, one would be coordinator.
+- Participant leader of that group = coordinator leader.
+- Participant slaves of that group = coordinator slaves.
 
 ### Reads
 - Ts is system-chosen without locking, so no incoming writes are blocked.
@@ -72,7 +74,6 @@ tabs(e2,start) < tabs(e2,server)  // causality
 tabs(e2,server) < s2  // start
 => s1 < s2 *oh yeah*
 ```
-
 
 ### Read Write Transactions
 - Reads come back with timestamps. Writes are buffered in client.
