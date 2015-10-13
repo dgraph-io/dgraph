@@ -1,0 +1,8 @@
+namespace types;
+
+table Uid {
+	id:string;
+	name:string;
+}
+
+root_type Uid;
