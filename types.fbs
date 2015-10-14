@@ -1,8 +1,7 @@
 namespace types;
 
-table Uid {
-	id:string;
-	name:string;
+table PostingList {
+	ids:[ulong];
 }
 
-root_type Uid;
+root_type PostingList;

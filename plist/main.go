@@ -58,12 +58,15 @@ func main() {
 
 	batch := new(leveldb.Batch)
 	b := flatbuffers.NewBuilder(0)
-	oi := b.CreateString("mrjn is a smart kid")
-	on := b.CreateString("His name is jain")
-	types.UidStart(b)
-	types.UidAddId(b, oi)
-	types.UidAddName(b, on)
-	oe := types.UidEnd(b)
+
+	types.PostingListStartIdsVector(b, 2)
+	b.PlaceUint64(5)
+	b.PlaceUint64(2)
+	vec := b.EndVector(2)
+
+	types.PostingListStart(b)
+	types.PostingListAddIds(b, vec)
+	oe := types.PostingListEnd(b)
 	b.Finish(oe)
 	fmt.Println("Value byte size:", len(b.Bytes))
 
@@ -92,9 +95,11 @@ func main() {
 	}
 	fmt.Println("Value byte size from Leveldb:", len(val))
 
-	uid := types.GetRootAsUid(val, 0)
-	fmt.Println("buffer.uid id =", string(uid.Id()))
-	fmt.Println("buffer.uid name =", string(uid.Name()))
+	plist := types.GetRootAsPostingList(val, 0)
+	fmt.Println("buffer.uid id length =", plist.IdsLength())
+	for i := 0; i < plist.IdsLength(); i++ {
+		fmt.Printf("[%d] [%d]\n", i, plist.Ids(i))
+	}
 	// http.HandleFunc("/add", addTriple)
 	// http.ListenAndServe(":8080", nil)
 
