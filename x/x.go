@@ -27,6 +27,13 @@ type Status struct {
 	Message string `json:"message"`
 }
 
+func Log(p string) *logrus.Entry {
+	l := logrus.WithFields(logrus.Fields{
+		"package": p,
+	})
+	return l
+}
+
 func Err(entry *logrus.Entry, err error) *logrus.Entry {
 	return entry.WithField("error", err)
 }

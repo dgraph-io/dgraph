@@ -1,9 +1,24 @@
-package main
+/*
+ * Copyright 2015 Manish R Jain <manishrjain@gmail.com>
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * 		http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package triple
 
 import (
 	"fmt"
 	"io/ioutil"
-	"time"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/google/flatbuffers/go"
@@ -16,29 +31,20 @@ import (
 var log = logrus.WithField("package", "plist")
 
 type Triple struct {
-	Entity    string
+	Entity    uint64
+	EntityEid string
 	Attribute string
 	Value     interface{}
-	ValueId   string
-	Source    string
-	Timestamp time.Time
+	ValueId   uint64
+	// Source    string
+	// Timestamp time.Time
 }
 
-/*
-func addTriple(w http.ResponseWriter, r *http.Request) {
-	if r.Method != "POST" {
-		x.SetStatus(w, x.E_INVALID_METHOD, "Should be POST")
-		return
-	}
+func AddToList(t Triple) {
 
-	var t Triple
-	if ok := x.ParseRequest(w, r, &t); !ok {
-		return
-	}
-
-	log.Debug(t)
 }
-*/
+
+var ldb *leveldb.DB
 
 func main() {
 	path, err := ioutil.TempDir("", "dgraphldb_")
@@ -49,7 +55,8 @@ func main() {
 	opt := &opt.Options{
 		Filter: filter.NewBloomFilter(10),
 	}
-	db, err := leveldb.OpenFile(path, opt)
+	var err error
+	ldb, err := leveldb.OpenFile(path, opt)
 	if err != nil {
 		log.Fatal(err)
 		return
@@ -100,7 +107,4 @@ func main() {
 	for i := 0; i < plist.IdsLength(); i++ {
 		fmt.Printf("[%d] [%d]\n", i, plist.Ids(i))
 	}
-	// http.HandleFunc("/add", addTriple)
-	// http.ListenAndServe(":8080", nil)
-
 }
