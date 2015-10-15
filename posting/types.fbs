@@ -1,0 +1,13 @@
+namespace types;
+
+table Posting {
+	uid:ulong;
+	source:string;
+	ts:long;
+}
+
+table PostingList {
+	postings:[Posting];
+}
+
+root_type PostingList;

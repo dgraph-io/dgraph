@@ -1,7 +1,0 @@
-namespace types;
-
-table PostingList {
-	ids:[ulong];
-}
-
-root_type PostingList;

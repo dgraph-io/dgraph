@@ -21,16 +21,22 @@ func (rcv *PostingList) Init(buf []byte, i flatbuffers.UOffsetT) {
 	rcv._tab.Pos = i
 }
 
-func (rcv *PostingList) Ids(j int) uint64 {
+func (rcv *PostingList) Postings(obj *Posting, j int) bool {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
 	if o != 0 {
-		a := rcv._tab.Vector(o)
-		return rcv._tab.GetUint64(a + flatbuffers.UOffsetT(j * 8))
+		x := rcv._tab.Vector(o)
+		x += flatbuffers.UOffsetT(j) * 4
+		x = rcv._tab.Indirect(x)
+	if obj == nil {
+		obj = new(Posting)
 	}
-	return 0
+		obj.Init(rcv._tab.Bytes, x)
+		return true
+	}
+	return false
 }
 
-func (rcv *PostingList) IdsLength() int {
+func (rcv *PostingList) PostingsLength() int {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
 	if o != 0 {
 		return rcv._tab.VectorLen(o)
@@ -39,7 +45,7 @@ func (rcv *PostingList) IdsLength() int {
 }
 
 func PostingListStart(builder *flatbuffers.Builder) { builder.StartObject(1) }
-func PostingListAddIds(builder *flatbuffers.Builder, ids flatbuffers.UOffsetT) { builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(ids), 0) }
-func PostingListStartIdsVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT { return builder.StartVector(8, numElems, 8)
+func PostingListAddPostings(builder *flatbuffers.Builder, postings flatbuffers.UOffsetT) { builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(postings), 0) }
+func PostingListStartPostingsVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT { return builder.StartVector(4, numElems, 4)
 }
 func PostingListEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT { return builder.EndObject() }

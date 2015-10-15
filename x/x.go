@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/Sirupsen/logrus"
 )
@@ -25,6 +26,16 @@ const (
 type Status struct {
 	Code    string `json:"code"`
 	Message string `json:"message"`
+}
+
+type Triple struct {
+	Entity    uint64
+	EntityEid string
+	Attribute string
+	Value     interface{}
+	ValueId   uint64
+	Source    string
+	Timestamp time.Time
 }
 
 func Log(p string) *logrus.Entry {
