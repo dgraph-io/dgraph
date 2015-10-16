@@ -4,6 +4,7 @@ table Posting {
 	uid:ulong;
 	source:string;
 	ts:long;
+	op:ubyte;
 }
 
 table PostingList {

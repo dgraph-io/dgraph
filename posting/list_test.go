@@ -24,8 +24,20 @@ import (
 	"github.com/manishrjain/dgraph/x"
 )
 
-var uids = [...]uint64{
-	9, 49, 81,
+func checkUids(t *testing.T, l List, uids ...uint64) {
+	if l.Root().PostingsLength() != len(uids) {
+		t.Errorf("Length: %d", l.Root().PostingsLength())
+		t.Fail()
+	}
+	for i := 0; i < len(uids); i++ {
+		var p types.Posting
+		if ok := l.Root().Postings(&p, i); !ok {
+			t.Error("Unable to retrieve posting at 2nd iter")
+		}
+		if p.Uid() != uids[i] {
+			t.Errorf("Expected: %v. Got: %v", uids[i], p.Uid())
+		}
+	}
 }
 
 func TestAddTriple(t *testing.T) {
@@ -37,13 +49,14 @@ func TestAddTriple(t *testing.T) {
 		Source:    "testing",
 		Timestamp: time.Now(),
 	}
-	l.AddTriple(triple)
+	l.AddMutation(triple, Set)
+	l.Commit()
 
-	if l.TList.PostingsLength() != 1 {
+	if l.Root().PostingsLength() != 1 {
 		t.Error("Unable to find added elements in posting list")
 	}
 	var p types.Posting
-	if ok := l.TList.Postings(&p, 0); !ok {
+	if ok := l.Root().Postings(&p, 0); !ok {
 		t.Error("Unable to retrieve posting at 1st iter")
 		t.Fail()
 	}
@@ -56,37 +69,51 @@ func TestAddTriple(t *testing.T) {
 
 	// Add another triple now.
 	triple.ValueId = 81
-	l.AddTriple(triple)
-	if l.TList.PostingsLength() != 2 {
-		t.Errorf("Length: %d", l.TList.PostingsLength())
+	l.AddMutation(triple, Set)
+	l.Commit()
+	if l.Root().PostingsLength() != 2 {
+		t.Errorf("Length: %d", l.Root().PostingsLength())
 		t.Fail()
 	}
 
 	var uid uint64
 	uid = 1
-	for i := 0; i < l.TList.PostingsLength(); i++ {
-		if ok := l.TList.Postings(&p, i); !ok {
+	for i := 0; i < l.Root().PostingsLength(); i++ {
+		if ok := l.Root().Postings(&p, i); !ok {
 			t.Error("Unable to retrieve posting at 2nd iter")
 		}
 		uid *= 9
 		if p.Uid() != uid {
-			t.Errorf("Expected: %v. Got: %v", uid, p.Uid())
+			t.Logf("Expected: %v. Got: %v", uid, p.Uid())
 		}
 	}
 
 	// Add another triple, in between the two above.
-	triple.ValueId = 49
-	l.AddTriple(triple)
-	if l.TList.PostingsLength() != 3 {
-		t.Errorf("Length: %d", l.TList.PostingsLength())
-		t.Fail()
+	uids := []uint64{
+		9, 49, 81,
 	}
-	for i := 0; i < len(uids); i++ {
-		if ok := l.TList.Postings(&p, i); !ok {
-			t.Error("Unable to retrieve posting at 2nd iter")
-		}
-		if p.Uid() != uids[i] {
-			t.Errorf("Expected: %v. Got: %v", uids[i], p.Uid())
-		}
+	triple.ValueId = 49
+	l.AddMutation(triple, Set)
+	l.Commit()
+	checkUids(t, l, uids...)
+
+	// Delete a triple, add a triple, replace a triple
+	triple.ValueId = 49
+	l.AddMutation(triple, Del)
+
+	triple.ValueId = 69
+	l.AddMutation(triple, Set)
+
+	triple.ValueId = 9
+	triple.Source = "anti-testing"
+	l.AddMutation(triple, Set)
+	l.Commit()
+
+	uids = []uint64{9, 69, 81}
+	checkUids(t, l, uids...)
+
+	l.Root().Postings(&p, 0)
+	if string(p.Source()) != "anti-testing" {
+		t.Errorf("Expected: anti-testing. Got: %v", p.Source())
 	}
 }
