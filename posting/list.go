@@ -17,6 +17,8 @@
 package posting
 
 import (
+	"sync"
+
 	"github.com/google/flatbuffers/go"
 	"github.com/manishrjain/dgraph/posting/types"
 	"github.com/manishrjain/dgraph/x"
@@ -30,6 +32,7 @@ const Set = 0x01
 const Del = 0x02
 
 type List struct {
+	mutex     sync.RWMutex
 	buffer    []byte
 	mutations []byte
 }
@@ -59,6 +62,9 @@ func addPosting(b *flatbuffers.Builder, p types.Posting) flatbuffers.UOffsetT {
 var empty []byte
 
 func (l *List) Init() {
+	l.mutex.Lock()
+	defer l.mutex.Unlock()
+
 	if len(empty) == 0 {
 		b := flatbuffers.NewBuilder(0)
 		types.PostingListStart(b)
@@ -73,10 +79,16 @@ func (l *List) Init() {
 }
 
 func (l *List) Root() *types.PostingList {
+	l.mutex.RLock()
+	defer l.mutex.RUnlock()
+
 	return types.GetRootAsPostingList(l.buffer, 0)
 }
 
 func (l *List) AddMutation(t x.Triple, op byte) {
+	l.mutex.Lock()
+	defer l.mutex.Unlock()
+
 	b := flatbuffers.NewBuilder(0)
 	muts := types.GetRootAsPostingList(l.mutations, 0)
 	var offsets []flatbuffers.UOffsetT
@@ -135,7 +147,7 @@ func remove(ll *linked.List, p *types.Posting) {
 	}
 }
 
-func (l *List) GenerateLinkedList() *linked.List {
+func (l *List) generateLinkedList() *linked.List {
 	plist := types.GetRootAsPostingList(l.buffer, 0)
 	ll := linked.New()
 
@@ -169,7 +181,10 @@ func (l *List) GenerateLinkedList() *linked.List {
 }
 
 func (l *List) Commit() {
-	ll := l.GenerateLinkedList()
+	l.mutex.Lock()
+	defer l.mutex.Unlock()
+
+	ll := l.generateLinkedList()
 	b := flatbuffers.NewBuilder(0)
 
 	var offsets []flatbuffers.UOffsetT
