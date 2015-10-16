@@ -20,36 +20,39 @@ import (
 	"github.com/google/flatbuffers/go"
 	"github.com/manishrjain/dgraph/posting/types"
 	"github.com/manishrjain/dgraph/x"
+
+	linked "container/list"
 )
 
+var log = x.Log("posting")
+
+type mutation struct {
+	Set    types.Posting
+	Delete types.Posting
+}
+
 type List struct {
-	TList *types.PostingList
+	TList     *types.PostingList
+	buffer    []byte
+	mutations []mutation
 }
 
 func addTripleToPosting(b *flatbuffers.Builder,
 	t x.Triple) flatbuffers.UOffsetT {
 
-	// Do this before posting start.
-	so := b.CreateString(t.Source)
+	so := b.CreateString(t.Source) // Do this before posting start.
 	types.PostingStart(b)
 	types.PostingAddUid(b, t.ValueId)
-
-	// so := b.CreateString(t.Source)
 	types.PostingAddSource(b, so)
-
 	types.PostingAddTs(b, t.Timestamp.UnixNano())
 	return types.PostingEnd(b)
 }
 
 func addPosting(b *flatbuffers.Builder, p types.Posting) flatbuffers.UOffsetT {
-	// Do this before posting start.
-	so := b.CreateByteString(p.Source())
-
+	so := b.CreateByteString(p.Source()) // Do this before posting start.
 	types.PostingStart(b)
 	types.PostingAddUid(b, p.Uid())
-
 	types.PostingAddSource(b, so)
-
 	types.PostingAddTs(b, p.Ts())
 	return types.PostingEnd(b)
 }
@@ -60,10 +63,52 @@ func (l *List) Init() {
 	of := types.PostingListEnd(b)
 	b.Finish(of)
 
-	l.TList = types.GetRootAsPostingList(b.Bytes, b.Head())
+	l.buffer = b.Bytes[b.Head():]
 }
 
 func (l *List) AddTriple(t x.Triple) {
+	m := mutation{
+		Add: t,
+	}
+}
+
+func (l *List) Remove(t x.Triple) {
+
+}
+
+func addOrSet(ll *linked.List, m mutation) {
+}
+
+func remove(ll *linked.List, m mutation) {
+	e := ll.Front()
+	for e := ll.Front(); e != nil; e = e.Next() {
+	}
+}
+
+func (l *List) GenerateLinkedList() *linked.List {
+	plist := types.GetRootAsPostingList(l.Buffer, 0)
+	ll := linked.New()
+
+	for i := 0; i < plist.PostingsLength(); i++ {
+		p := new(types.Posting)
+		plist.Postings(p, i)
+
+		ll.PushBack(p)
+	}
+
+	// Now go through mutations
+	for i, m := range l.mutations {
+		if m.Set.Ts > 0 {
+			start := ll.Front
+		} else if m.Delete.Ts > 0 {
+
+		} else {
+			log.Fatalf("Strange mutation: %+v", m)
+		}
+	}
+}
+
+func (l *List) Commit() {
 	b := flatbuffers.NewBuilder(0)
 
 	num := l.TList.PostingsLength()
@@ -104,5 +149,6 @@ func (l *List) AddTriple(t x.Triple) {
 	end := types.PostingListEnd(b)
 	b.Finish(end)
 
+	l.Buffer = b.Bytes[b.Head():]
 	l.TList = types.GetRootAsPostingList(b.Bytes, b.Head())
 }
