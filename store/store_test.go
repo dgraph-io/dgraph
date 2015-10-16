@@ -33,24 +33,25 @@ func TestGet(t *testing.T) {
 
 	var s Store
 	s.Init(path)
-	if err := s.SetOne("name", 1, []byte("neo")); err != nil {
+	k := Key("name", 1)
+	if err := s.SetOne(k, []byte("neo")); err != nil {
 		t.Error(err)
 		t.Fail()
 	}
 
-	if val, err := s.Get("name", 1); err != nil {
+	if val, err := s.Get(k); err != nil {
 		t.Error(err)
 		t.Fail()
 	} else if string(val) != "neo" {
 		t.Errorf("Expected 'neo'. Found: %s", string(val))
 	}
 
-	if err := s.SetOne("name", 1, []byte("the one")); err != nil {
+	if err := s.SetOne(k, []byte("the one")); err != nil {
 		t.Error(err)
 		t.Fail()
 	}
 
-	if val, err := s.Get("name", 1); err != nil {
+	if val, err := s.Get(k); err != nil {
 		t.Error(err)
 		t.Fail()
 	} else if string(val) != "the one" {

@@ -47,31 +47,27 @@ func (s *Store) IsNew(id uint64) bool {
 }
 
 // key = (attribute, entity id)
-func key(attr string, eid uint64) (ret []byte, rerr error) {
+func Key(attr string, eid uint64) []byte {
 	buf := new(bytes.Buffer)
 	buf.WriteString(attr)
 	if err := binary.Write(buf, binary.LittleEndian, eid); err != nil {
-		return ret, err
+		log.Fatalf("Error while creating key with attr: %v eid: %v\n", attr, eid)
 	}
-	return buf.Bytes(), nil
+	return buf.Bytes()
 }
 
-func (s *Store) Get(attr string, eid uint64) (val []byte, rerr error) {
-	k, err := key(attr, eid)
-	if err != nil {
-		return val, err
-	}
+func (s *Store) Get(k []byte) (val []byte, rerr error) {
 	return s.db.Get(k, nil)
 }
 
-func (s *Store) SetOne(attr string, eid uint64, val []byte) error {
-	k, err := key(attr, eid)
-	if err != nil {
-		return err
-	}
+func (s *Store) SetOne(k []byte, val []byte) error {
 	wb := new(leveldb.Batch)
 	wb.Put(k, val)
 	return s.db.Write(wb, nil)
+}
+
+func (s *Store) Delete(k []byte) error {
+	return s.db.Delete(k, nil)
 }
 
 func (s *Store) Close() error {

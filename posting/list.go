@@ -21,6 +21,7 @@ import (
 
 	"github.com/google/flatbuffers/go"
 	"github.com/manishrjain/dgraph/posting/types"
+	"github.com/manishrjain/dgraph/store"
 	"github.com/manishrjain/dgraph/x"
 
 	linked "container/list"
@@ -32,9 +33,12 @@ const Set = 0x01
 const Del = 0x02
 
 type List struct {
+	key       []byte
 	mutex     sync.RWMutex
 	buffer    []byte
 	mutations []byte
+	pstore    *store.Store // postinglist store
+	mstore    *store.Store // mutation store
 }
 
 func addTripleToPosting(b *flatbuffers.Builder,
@@ -61,21 +65,38 @@ func addPosting(b *flatbuffers.Builder, p types.Posting) flatbuffers.UOffsetT {
 
 var empty []byte
 
-func (l *List) Init() {
+// package level init
+func init() {
+	b := flatbuffers.NewBuilder(0)
+	types.PostingListStart(b)
+	of := types.PostingListEnd(b)
+	b.Finish(of)
+	empty = b.Bytes[b.Head():]
+}
+
+func (l *List) Init(key []byte, pstore, mstore *store.Store) {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
 
 	if len(empty) == 0 {
-		b := flatbuffers.NewBuilder(0)
-		types.PostingListStart(b)
-		of := types.PostingListEnd(b)
-		b.Finish(of)
-		empty = b.Bytes[b.Head():]
+		log.Fatal("empty should have some bytes.")
 	}
-	l.buffer = make([]byte, len(empty))
-	l.mutations = make([]byte, len(empty))
-	copy(l.buffer, empty)
-	copy(l.mutations, empty)
+	l.key = key
+	l.pstore = pstore
+	l.mstore = mstore
+
+	var err error
+	if l.buffer, err = pstore.Get(key); err != nil {
+		log.Errorf("While retrieving posting list from db: %v\n", err)
+		l.buffer = make([]byte, len(empty))
+		copy(l.buffer, empty)
+	}
+
+	if l.mutations, err = mstore.Get(key); err != nil {
+		log.Debugf("While retrieving mutation list from db: %v\n", err)
+		l.mutations = make([]byte, len(empty))
+		copy(l.mutations, empty)
+	}
 }
 
 func (l *List) Root() *types.PostingList {
@@ -85,7 +106,7 @@ func (l *List) Root() *types.PostingList {
 	return types.GetRootAsPostingList(l.buffer, 0)
 }
 
-func (l *List) AddMutation(t x.Triple, op byte) {
+func (l *List) AddMutation(t x.Triple, op byte) error {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
 
@@ -114,6 +135,7 @@ func (l *List) AddMutation(t x.Triple, op byte) {
 	b.Finish(end)
 
 	l.mutations = b.Bytes[b.Head():]
+	return l.mstore.SetOne(l.key, l.mutations)
 }
 
 func addOrSet(ll *linked.List, p *types.Posting) {
@@ -180,7 +202,7 @@ func (l *List) generateLinkedList() *linked.List {
 	return ll
 }
 
-func (l *List) Commit() {
+func (l *List) Commit() error {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
 
@@ -206,6 +228,16 @@ func (l *List) Commit() {
 	b.Finish(end)
 
 	l.buffer = b.Bytes[b.Head():]
+	if err := l.pstore.SetOne(l.key, l.buffer); err != nil {
+		log.WithField("error", err).Errorf("While storing posting list")
+		return err
+	}
+
+	if err := l.mstore.Delete(l.key); err != nil {
+		log.WithField("error", err).Errorf("While deleting mutation list")
+		return err
+	}
 	l.mutations = make([]byte, len(empty))
 	copy(l.mutations, empty)
+	return nil
 }

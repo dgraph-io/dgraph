@@ -17,10 +17,13 @@
 package posting
 
 import (
+	"io/ioutil"
+	"os"
 	"testing"
 	"time"
 
 	"github.com/manishrjain/dgraph/posting/types"
+	"github.com/manishrjain/dgraph/store"
 	"github.com/manishrjain/dgraph/x"
 )
 
@@ -40,17 +43,42 @@ func checkUids(t *testing.T, l List, uids ...uint64) {
 	}
 }
 
+func NewStore(t *testing.T) string {
+	path, err := ioutil.TempDir("", "storetest_")
+	if err != nil {
+		t.Error(err)
+		t.Fail()
+		return ""
+	}
+	return path
+}
+
 func TestAddTriple(t *testing.T) {
 	var l List
-	l.Init()
+	key := store.Key("name", 1)
+	pdir := NewStore(t)
+	defer os.RemoveAll(pdir)
+	ps := new(store.Store)
+	ps.Init(pdir)
+
+	mdir := NewStore(t)
+	defer os.RemoveAll(mdir)
+	ms := new(store.Store)
+	ms.Init(mdir)
+
+	l.Init(key, ps, ms)
 
 	triple := x.Triple{
 		ValueId:   9,
 		Source:    "testing",
 		Timestamp: time.Now(),
 	}
-	l.AddMutation(triple, Set)
-	l.Commit()
+	if err := l.AddMutation(triple, Set); err != nil {
+		t.Error(err)
+	}
+	if err := l.Commit(); err != nil {
+		t.Error(err)
+	}
 
 	if l.Root().PostingsLength() != 1 {
 		t.Error("Unable to find added elements in posting list")
@@ -93,21 +121,33 @@ func TestAddTriple(t *testing.T) {
 		9, 49, 81,
 	}
 	triple.ValueId = 49
-	l.AddMutation(triple, Set)
-	l.Commit()
+	if err := l.AddMutation(triple, Set); err != nil {
+		t.Error(err)
+	}
+	if err := l.Commit(); err != nil {
+		t.Error(err)
+	}
 	checkUids(t, l, uids...)
 
 	// Delete a triple, add a triple, replace a triple
 	triple.ValueId = 49
-	l.AddMutation(triple, Del)
+	if err := l.AddMutation(triple, Del); err != nil {
+		t.Error(err)
+	}
 
 	triple.ValueId = 69
-	l.AddMutation(triple, Set)
+	if err := l.AddMutation(triple, Set); err != nil {
+		t.Error(err)
+	}
 
 	triple.ValueId = 9
 	triple.Source = "anti-testing"
-	l.AddMutation(triple, Set)
-	l.Commit()
+	if err := l.AddMutation(triple, Set); err != nil {
+		t.Error(err)
+	}
+	if err := l.Commit(); err != nil {
+		t.Error(err)
+	}
 
 	uids = []uint64{9, 69, 81}
 	checkUids(t, l, uids...)
@@ -116,4 +156,9 @@ func TestAddTriple(t *testing.T) {
 	if string(p.Source()) != "anti-testing" {
 		t.Errorf("Expected: anti-testing. Got: %v", p.Source())
 	}
+
+	// Try reading the same data in another PostingList.
+	var dl List
+	dl.Init(key, ps, ms)
+	checkUids(t, dl, uids...)
 }
