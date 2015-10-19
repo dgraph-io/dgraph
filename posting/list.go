@@ -17,6 +17,7 @@
 package posting
 
 import (
+	"sort"
 	"sync"
 
 	"github.com/google/flatbuffers/go"
@@ -32,16 +33,29 @@ var log = x.Log("posting")
 const Set = 0x01
 const Del = 0x02
 
-type List struct {
-	key       []byte
-	mutex     sync.RWMutex
-	buffer    []byte
-	mutations []byte
-	pstore    *store.Store // postinglist store
-	mstore    *store.Store // mutation store
-	dirty     bool
-	postings  *types.PostingList
+type MutationLink struct {
+	idx     int
+	posting types.Posting
 }
+
+type List struct {
+	key     []byte
+	mutex   sync.RWMutex
+	buffer  []byte
+	mbuffer []byte
+	pstore  *store.Store // postinglist store
+	mstore  *store.Store // mutation store
+	dirty   bool
+
+	pmutex sync.RWMutex
+	mindex *linked.List
+}
+
+type ByUid []*types.Posting
+
+func (pa ByUid) Len() int           { return len(pa) }
+func (pa ByUid) Swap(i, j int)      { pa[i], pa[j] = pa[j], pa[i] }
+func (pa ByUid) Less(i, j int) bool { return pa[i].Uid() < pa[j].Uid() }
 
 func addTripleToPosting(b *flatbuffers.Builder,
 	t x.Triple, op byte) flatbuffers.UOffsetT {
@@ -95,25 +109,80 @@ func (l *List) Init(key []byte, pstore, mstore *store.Store) {
 		copy(l.buffer, empty)
 	}
 
-	if l.mutations, err = mstore.Get(key); err != nil {
+	if l.mbuffer, err = mstore.Get(key); err != nil {
 		log.Debugf("While retrieving mutation list from db: %v\n", err)
 		// Error. Just set to empty.
-		l.mutations = make([]byte, len(empty))
-		copy(l.mutations, empty)
+		l.mbuffer = make([]byte, len(empty))
+		copy(l.mbuffer, empty)
 	}
-
-	l.postings = types.GetRootAsPostingList(l.buffer, 0)
 }
 
 func (l *List) Length() int {
 	l.mutex.RLock()
 	defer l.mutex.RUnlock()
 
-	return l.postings.PostingsLength()
+	plist := types.GetRootAsPostingList(l.buffer, 0)
+	mlist := types.GetRootAsPostingList(l.mbuffer, 0)
+	return plist.PostingsLength() + mlist.PostingsLength()
 }
 
 func (l *List) Get(p *types.Posting, i int) bool {
-	return l.postings.Postings(p, i)
+	l.mutex.RLock()
+	defer l.mutex.RUnlock()
+
+	plist := types.GetRootAsPostingList(l.buffer, 0)
+	if l.mindex == nil {
+		return plist.Postings(p, i)
+	}
+
+	if i >= plist.PostingsLength()+l.mindex.Len() {
+		return false
+	}
+	count := 0
+	for e := l.mindex.Front(); e != nil; e = e.Next() {
+		mlink := e.Value.(*MutationLink)
+		if mlink.idx > i {
+			break
+
+		} else if mlink.idx == i {
+			*p = mlink.posting
+			return true
+		}
+		count += 1
+	}
+	return plist.Postings(p, i-count)
+}
+
+func (l *List) mutationIndex() *linked.List {
+	mlist := types.GetRootAsPostingList(l.mbuffer, 0)
+	plist := types.GetRootAsPostingList(l.buffer, 0)
+	if mlist.PostingsLength() == 0 {
+		return nil
+	}
+	var muts []*types.Posting
+	for i := 0; i < mlist.PostingsLength(); i++ {
+		var mp types.Posting
+		mlist.Postings(&mp, i)
+		muts = append(muts, &mp)
+	}
+	sort.Sort(ByUid(muts))
+
+	// TODO: Convert to binary search once this works.
+	mchain := linked.New()
+	pi := 0
+	var pp types.Posting
+	plist.Postings(&pp, pi)
+
+	for mi, mp := range muts {
+		for ; pi < plist.PostingsLength() && pp.Uid() < mp.Uid(); pi++ {
+			plist.Postings(&pp, pi)
+		}
+		mlink := new(MutationLink)
+		mlink.idx = pi + mi
+		mlink.posting = *mp
+		mchain.PushBack(mlink)
+	}
+	return mchain
 }
 
 func (l *List) AddMutation(t x.Triple, op byte) error {
@@ -123,7 +192,7 @@ func (l *List) AddMutation(t x.Triple, op byte) error {
 	l.dirty = true // Mark as dirty.
 
 	b := flatbuffers.NewBuilder(0)
-	muts := types.GetRootAsPostingList(l.mutations, 0)
+	muts := types.GetRootAsPostingList(l.mbuffer, 0)
 	var offsets []flatbuffers.UOffsetT
 	for i := 0; i < muts.PostingsLength(); i++ {
 		var p types.Posting
@@ -146,8 +215,9 @@ func (l *List) AddMutation(t x.Triple, op byte) error {
 	end := types.PostingListEnd(b)
 	b.Finish(end)
 
-	l.mutations = b.Bytes[b.Head():]
-	return l.mstore.SetOne(l.key, l.mutations)
+	l.mbuffer = b.Bytes[b.Head():]
+	l.mindex = l.mutationIndex()
+	return l.mstore.SetOne(l.key, l.mbuffer)
 }
 
 func addOrSet(ll *linked.List, p *types.Posting) {
@@ -192,7 +262,7 @@ func (l *List) generateLinkedList() *linked.List {
 		ll.PushBack(p)
 	}
 
-	mlist := types.GetRootAsPostingList(l.mutations, 0)
+	mlist := types.GetRootAsPostingList(l.mbuffer, 0)
 	// Now go through mutations
 	for i := 0; i < mlist.PostingsLength(); i++ {
 		p := new(types.Posting)
@@ -259,9 +329,7 @@ func (l *List) CommitIfDirty() error {
 		log.WithField("error", err).Errorf("While deleting mutation list")
 		return err
 	}
-	l.mutations = make([]byte, len(empty))
-	copy(l.mutations, empty)
-
-	l.postings = types.GetRootAsPostingList(l.buffer, 0)
+	l.mbuffer = make([]byte, len(empty))
+	copy(l.mbuffer, empty)
 	return nil
 }
