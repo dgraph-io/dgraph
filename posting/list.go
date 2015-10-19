@@ -35,6 +35,7 @@ const Del = 0x02
 
 type MutationLink struct {
 	idx     int
+	moveidx int
 	posting types.Posting
 }
 
@@ -47,7 +48,9 @@ type List struct {
 	mstore  *store.Store // mutation store
 	dirty   bool
 
-	pmutex sync.RWMutex
+	// mlayer keeps only replace instructions for the posting list.
+	// This works at the
+	mlayer map[int]types.Posting
 	mindex *linked.List
 }
 
@@ -153,6 +156,55 @@ func (l *List) Get(p *types.Posting, i int) bool {
 	return plist.Postings(p, i-count)
 }
 
+// mutationIndex is useful to avoid having to parse the entire postinglist
+// upto idx, for every Get(*types.Posting, idx), which has a complexity
+// of O(idx). Iteration over N size posting list would this push us into
+// O(N^2) territory, without this technique.
+//
+// Using this technique,
+// we can overlay mutation layers over immutable posting list, to allow for
+// O(m) lookups, where m = size of mutation list. Obviously, the size of
+// mutation list should be much smaller than the size of posting list, except
+// in tiny posting lists, where performance wouldn't be such a concern anyways.
+//
+// Say we have this data:
+// Posting List (plist, immutable):
+// idx:   0  1  2  3  4  5
+// value: 2  5  9 10 13 15
+//
+// Mutation List (mlist):
+// idx:          0   1   2
+// value:        7  10  13' // posting uid is 13 but other values vary.
+// Op:         SET DEL SET
+// Effective:  ADD DEL REP  (REP = replace)
+//
+// ----------------------------------------------------------------------------
+// mutationIndex would generate these:
+// mlayer (layer just above posting list contains only replace instructions)
+// idx:          4
+// value:       13'
+// Op:       	 SET
+// Effective:  REP  (REP = replace)
+//
+// mindex:
+// idx:          2   4
+// value:        7  10
+// moveidx:     -1  +1
+// Effective:  ADD DEL
+//
+// Now, let's see how the access would work:
+// idx: get --> calculation [idx, served from, value]
+// idx: 0 --> 0   [0, plist, 2]
+// idx: 1 --> 1   [1, plist, 5]
+// idx: 2 --> ADD from mindex
+//        -->     [2, mindex, 7] // also has moveidx = -1
+// idx: 3 --> 3 + moveidx=-1 = 2 [2, plist, 9]
+// idx: 4 --> DEL from mindex
+//        --> 4 + moveidx=-1 + moveidx=+1 = 4 [4, mlayer, 13']
+// idx: 5 --> 5 + moveidx=-1 + moveidx=+1 = 5 [5, plist, 15]
+//
+// Thus we can provide mutation layers over immutable posting list, while
+// still ensuring fast lookup access.
 func (l *List) mutationIndex() *linked.List {
 	mlist := types.GetRootAsPostingList(l.mbuffer, 0)
 	plist := types.GetRootAsPostingList(l.buffer, 0)
@@ -177,9 +229,25 @@ func (l *List) mutationIndex() *linked.List {
 		for ; pi < plist.PostingsLength() && pp.Uid() < mp.Uid(); pi++ {
 			plist.Postings(&pp, pi)
 		}
+
 		mlink := new(MutationLink)
-		mlink.idx = pi + mi
 		mlink.posting = *mp
+
+		if pp.Uid() == mp.Uid() {
+			if mp.Op() == 0x01 {
+				// This is a replace, so don't move the main index forward.
+				mlink.moveidx = 0
+			} else if mp.Op() == 0x02 {
+				// This is a delete, so move the main index next.
+				mlink.moveidx = 1
+			} else {
+				log.Fatal("This operation isn't being handled.")
+			}
+		} else if mp.Uid() < pp.Uid() {
+			mlink.moveidx = -1
+		}
+
+		mlink.idx = pi + mi
 		mchain.PushBack(mlink)
 	}
 	return mchain
