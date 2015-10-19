@@ -28,13 +28,13 @@ import (
 )
 
 func checkUids(t *testing.T, l List, uids ...uint64) {
-	if l.Root().PostingsLength() != len(uids) {
-		t.Errorf("Length: %d", l.Root().PostingsLength())
+	if l.Length() != len(uids) {
+		t.Errorf("Length: %d", l.Length())
 		t.Fail()
 	}
 	for i := 0; i < len(uids); i++ {
 		var p types.Posting
-		if ok := l.Root().Postings(&p, i); !ok {
+		if ok := l.Get(&p, i); !ok {
 			t.Error("Unable to retrieve posting at 2nd iter")
 		}
 		if p.Uid() != uids[i] {
@@ -76,15 +76,15 @@ func TestAddTriple(t *testing.T) {
 	if err := l.AddMutation(triple, Set); err != nil {
 		t.Error(err)
 	}
-	if err := l.Commit(); err != nil {
+	if err := l.CommitIfDirty(); err != nil {
 		t.Error(err)
 	}
 
-	if l.Root().PostingsLength() != 1 {
+	if l.Length() != 1 {
 		t.Error("Unable to find added elements in posting list")
 	}
 	var p types.Posting
-	if ok := l.Root().Postings(&p, 0); !ok {
+	if ok := l.Get(&p, 0); !ok {
 		t.Error("Unable to retrieve posting at 1st iter")
 		t.Fail()
 	}
@@ -98,16 +98,16 @@ func TestAddTriple(t *testing.T) {
 	// Add another triple now.
 	triple.ValueId = 81
 	l.AddMutation(triple, Set)
-	l.Commit()
-	if l.Root().PostingsLength() != 2 {
-		t.Errorf("Length: %d", l.Root().PostingsLength())
+	l.CommitIfDirty()
+	if l.Length() != 2 {
+		t.Errorf("Length: %d", l.Length())
 		t.Fail()
 	}
 
 	var uid uint64
 	uid = 1
-	for i := 0; i < l.Root().PostingsLength(); i++ {
-		if ok := l.Root().Postings(&p, i); !ok {
+	for i := 0; i < l.Length(); i++ {
+		if ok := l.Get(&p, i); !ok {
 			t.Error("Unable to retrieve posting at 2nd iter")
 		}
 		uid *= 9
@@ -124,7 +124,7 @@ func TestAddTriple(t *testing.T) {
 	if err := l.AddMutation(triple, Set); err != nil {
 		t.Error(err)
 	}
-	if err := l.Commit(); err != nil {
+	if err := l.CommitIfDirty(); err != nil {
 		t.Error(err)
 	}
 	checkUids(t, l, uids...)
@@ -145,14 +145,14 @@ func TestAddTriple(t *testing.T) {
 	if err := l.AddMutation(triple, Set); err != nil {
 		t.Error(err)
 	}
-	if err := l.Commit(); err != nil {
+	if err := l.CommitIfDirty(); err != nil {
 		t.Error(err)
 	}
 
 	uids = []uint64{9, 69, 81}
 	checkUids(t, l, uids...)
 
-	l.Root().Postings(&p, 0)
+	l.Get(&p, 0)
 	if string(p.Source()) != "anti-testing" {
 		t.Errorf("Expected: anti-testing. Got: %v", p.Source())
 	}

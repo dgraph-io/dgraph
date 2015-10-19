@@ -1,0 +1,103 @@
+/*
+ * Copyright 2015 Manish R Jain <manishrjain@gmail.com>
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * 		http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package uid
+
+import (
+	"io/ioutil"
+	"os"
+	"testing"
+
+	"github.com/manishrjain/dgraph/store"
+)
+
+func NewStore(t *testing.T) string {
+	path, err := ioutil.TempDir("", "storetest_")
+	if err != nil {
+		t.Error(err)
+		t.Fail()
+		return ""
+	}
+	return path
+}
+
+func TestGetOrAssign(t *testing.T) {
+	pdir := NewStore(t)
+	defer os.RemoveAll(pdir)
+	ps := new(store.Store)
+	ps.Init(pdir)
+
+	mdir := NewStore(t)
+	defer os.RemoveAll(mdir)
+	ms := new(store.Store)
+	ms.Init(mdir)
+
+	var a Assigner
+	a.Init(ps, ms)
+
+	var u1, u2 uint64
+	{
+		uid, err := a.GetOrAssign("externalid0")
+		if err != nil {
+			t.Error(err)
+		}
+		t.Logf("Found uid: [%v]", uid)
+		u1 = uid
+	}
+
+	{
+		uid, err := a.GetOrAssign("externalid1")
+		if err != nil {
+			t.Error(err)
+		}
+		t.Logf("Found uid: [%v]", uid)
+		u2 = uid
+	}
+
+	if u1 == u2 {
+		t.Error("Uid1 and Uid2 shouldn't be the same")
+	}
+
+	{
+		uid, err := a.GetOrAssign("externalid0")
+		if err != nil {
+			t.Error(err)
+		}
+		t.Logf("Found uid: [%v]", uid)
+		if u1 != uid {
+			t.Error("Uid should be the same.")
+		}
+	}
+
+	{
+		xid, err := a.ExternalId(u1)
+		if err != nil {
+			t.Error(err)
+		}
+		if xid != "externalid0" {
+			t.Errorf("Expected externalid0. Found: [%v]", xid)
+		}
+	}
+	{
+		xid, err := a.ExternalId(u2)
+		if err != nil {
+			t.Error(err)
+		}
+		if xid != "externalid1" {
+			t.Errorf("Expected externalid1. Found: [%v]", xid)
+		}
+	}
+}

@@ -2,6 +2,7 @@ namespace types;
 
 table Posting {
 	uid:ulong;
+	value:[ubyte];
 	source:string;
 	ts:long;
 	op:ubyte;
@@ -9,7 +10,6 @@ table Posting {
 
 table PostingList {
 	postings:[Posting];
-	value:[byte];
 }
 
 root_type PostingList;

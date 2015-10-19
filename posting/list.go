@@ -39,6 +39,8 @@ type List struct {
 	mutations []byte
 	pstore    *store.Store // postinglist store
 	mstore    *store.Store // mutation store
+	dirty     bool
+	postings  *types.PostingList
 }
 
 func addTripleToPosting(b *flatbuffers.Builder,
@@ -88,27 +90,37 @@ func (l *List) Init(key []byte, pstore, mstore *store.Store) {
 	var err error
 	if l.buffer, err = pstore.Get(key); err != nil {
 		log.Errorf("While retrieving posting list from db: %v\n", err)
+		// Error. Just set to empty.
 		l.buffer = make([]byte, len(empty))
 		copy(l.buffer, empty)
 	}
 
 	if l.mutations, err = mstore.Get(key); err != nil {
 		log.Debugf("While retrieving mutation list from db: %v\n", err)
+		// Error. Just set to empty.
 		l.mutations = make([]byte, len(empty))
 		copy(l.mutations, empty)
 	}
+
+	l.postings = types.GetRootAsPostingList(l.buffer, 0)
 }
 
-func (l *List) Root() *types.PostingList {
+func (l *List) Length() int {
 	l.mutex.RLock()
 	defer l.mutex.RUnlock()
 
-	return types.GetRootAsPostingList(l.buffer, 0)
+	return l.postings.PostingsLength()
+}
+
+func (l *List) Get(p *types.Posting, i int) bool {
+	return l.postings.Postings(p, i)
 }
 
 func (l *List) AddMutation(t x.Triple, op byte) error {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
+
+	l.dirty = true // Mark as dirty.
 
 	b := flatbuffers.NewBuilder(0)
 	muts := types.GetRootAsPostingList(l.mutations, 0)
@@ -202,7 +214,17 @@ func (l *List) generateLinkedList() *linked.List {
 	return ll
 }
 
-func (l *List) Commit() error {
+func (l *List) isDirty() bool {
+	l.mutex.RLock()
+	defer l.mutex.RUnlock()
+	return l.dirty
+}
+
+func (l *List) CommitIfDirty() error {
+	if !l.isDirty() {
+		return nil
+	}
+
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
 
@@ -239,5 +261,7 @@ func (l *List) Commit() error {
 	}
 	l.mutations = make([]byte, len(empty))
 	copy(l.mutations, empty)
+
+	l.postings = types.GetRootAsPostingList(l.buffer, 0)
 	return nil
 }
