@@ -17,7 +17,10 @@
 package posting
 
 import (
+	"bytes"
+	"encoding/gob"
 	"errors"
+	"math"
 	"sort"
 	"sync"
 
@@ -64,9 +67,28 @@ func (pa ByUid) Less(i, j int) bool { return pa[i].Uid() < pa[j].Uid() }
 func addTripleToPosting(b *flatbuffers.Builder,
 	t x.Triple, op byte) flatbuffers.UOffsetT {
 
+	var bo flatbuffers.UOffsetT
+	if t.Value != nil {
+		var buf bytes.Buffer
+		enc := gob.NewEncoder(&buf)
+		if err := enc.Encode(t.Value); err != nil {
+			x.Err(log, err).Fatal("Unable to encode interface")
+			return 0
+		}
+		bo = b.CreateByteVector(buf.Bytes())
+	}
 	so := b.CreateString(t.Source) // Do this before posting start.
+
 	types.PostingStart(b)
-	types.PostingAddUid(b, t.ValueId)
+	if bo > 0 {
+		// All triples with a value set, have the same uid. In other words,
+		// an (entity, attribute) can only have one interface{} value.
+		types.PostingAddUid(b, math.MaxUint64)
+		types.PostingAddValue(b, bo)
+
+	} else {
+		types.PostingAddUid(b, t.ValueId)
+	}
 	types.PostingAddSource(b, so)
 	types.PostingAddTs(b, t.Timestamp.UnixNano())
 	types.PostingAddOp(b, op)
