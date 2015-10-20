@@ -7,7 +7,10 @@ joins by minimizing network calls required, and hence to keep end-to-end latency
 low.
 
 # MVP Design
-This is an MVP design doc. This would only contain part of the functionality,
+
+> In a rapidly changing environment, there is no sense in doing the detailed analysis of a problem until they day before you are able to start working on it. Requirements and the technical ecosystem change too rapidly to generate a positive return on these activities when done far in advance. -Jason Buberel (PM, Golang @ Google)
+
+Following from Jason, this is an MVP design doc. This would only contain part of the functionality,
 which can be pushed out of the door within a month. This version
 would not enforce strong consistency, and might not be as distributed. Also,
 shard movement from dead machines might not make a cut in this version.
@@ -28,7 +31,8 @@ type DirectedEdge struct {
 
 ## Technologies Used
 - Use [RocksDB](http://rocksdb.org/) for storing original data and posting lists.
-- Use [Cap'n Proto](https://capnproto.org/) for in-memory and on-disk representation,
+- Use [Flatbuffers](https://google.github.io/flatbuffers/) for in-memory and on-disk representation.
+Had considered Cap'n Proto before, but Flatbuffers team provides better Go support than the latter.
 - For this version, stick to doing everything on a single server. Possibly still
 using TCP layer, to avoid complexities later.
 - Possibly use a simple go mutex library for txn locking.
@@ -50,6 +54,12 @@ Ref: [experiment](https://github.com/dgraph-io/experiments/tree/master/vrpc)
 - No distributed Posting Lists. One complete PL = one shard.
 - Graph languages, like Facebook's GraphQL. For this version, just use some internal lingo
 as the mode of communication.
+
+## No Go zone
+- Versioning of data wouldn't be provided in this, or later versions. The best way I can
+currently think of to do versioning would involve writing the deltas, and reading them back
+to generate the final state. This would be too slow and memory consuming for generating the
+long posting lists that we'll encounter in DGraph.
 
 ## Terminology
 

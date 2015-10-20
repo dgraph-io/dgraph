@@ -17,6 +17,7 @@
 package posting
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -27,20 +28,20 @@ import (
 	"github.com/manishrjain/dgraph/x"
 )
 
-func checkUids(t *testing.T, l List, uids ...uint64) {
+func checkUids(t *testing.T, l List, uids ...uint64) error {
 	if l.Length() != len(uids) {
-		t.Errorf("Length: %d", l.Length())
-		t.Fail()
+		return fmt.Errorf("Length: %d", l.Length())
 	}
 	for i := 0; i < len(uids); i++ {
 		var p types.Posting
 		if ok := l.Get(&p, i); !ok {
-			t.Error("Unable to retrieve posting at 2nd iter")
+			return fmt.Errorf("Unable to retrieve posting.")
 		}
 		if p.Uid() != uids[i] {
-			t.Errorf("Expected: %v. Got: %v", uids[i], p.Uid())
+			return fmt.Errorf("Expected: %v. Got: %v", uids[i], p.Uid())
 		}
 	}
+	return nil
 }
 
 func NewStore(t *testing.T) string {
@@ -96,6 +97,7 @@ func TestAddTriple(t *testing.T) {
 	if string(p.Source()) != "testing" {
 		t.Errorf("Expected testing. Got: %v", string(p.Source()))
 	}
+	// return // Test 1.
 
 	// Add another triple now.
 	triple.ValueId = 81
@@ -117,6 +119,7 @@ func TestAddTriple(t *testing.T) {
 			t.Logf("Expected: %v. Got: %v", uid, p.Uid())
 		}
 	}
+	// return // Test 2.
 
 	// Add another triple, in between the two above.
 	uids := []uint64{
@@ -131,7 +134,10 @@ func TestAddTriple(t *testing.T) {
 			t.Error(err)
 		}
 	*/
-	checkUids(t, l, uids...)
+	if err := checkUids(t, l, uids...); err != nil {
+		t.Error(err)
+	}
+	// return // Test 3.
 
 	// Delete a triple, add a triple, replace a triple
 	triple.ValueId = 49
@@ -156,15 +162,37 @@ func TestAddTriple(t *testing.T) {
 	*/
 
 	uids = []uint64{9, 69, 81}
-	checkUids(t, l, uids...)
+	if err := checkUids(t, l, uids...); err != nil {
+		t.Error(err)
+	}
 
 	l.Get(&p, 0)
 	if string(p.Source()) != "anti-testing" {
 		t.Errorf("Expected: anti-testing. Got: %v", string(p.Source()))
 	}
 
+	/*
+		if err := l.CommitIfDirty(); err != nil {
+			t.Error(err)
+		}
+	*/
 	// Try reading the same data in another PostingList.
-	// var dl List
-	// dl.Init(key, ps, ms)
-	// checkUids(t, dl, uids...)
+	var dl List
+	dl.Init(key, ps, ms)
+	if err := checkUids(t, dl, uids...); err != nil {
+		t.Error(err)
+	}
+
+	if err := dl.CommitIfDirty(); err != nil {
+		t.Error(err)
+	}
+	if err := checkUids(t, dl, uids...); err != nil {
+		t.Error(err)
+	}
+
+	var ol List
+	ol.Init(key, ps, ms)
+	if err := checkUids(t, ol, uids...); err != nil {
+		t.Error(err)
+	}
 }
