@@ -28,6 +28,22 @@ import (
 	"github.com/manishrjain/dgraph/x"
 )
 
+// Aim to get this query working:
+// {
+//   me {
+//     id
+//     firstName
+//     lastName
+//     birthday {
+//       month
+//       day
+//     }
+//     friends {
+//       name
+//     }
+//   }
+// }
+
 var log = x.Log("query")
 
 type Mattr struct {
