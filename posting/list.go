@@ -69,6 +69,9 @@ func addTripleToPosting(b *flatbuffers.Builder,
 
 	var bo flatbuffers.UOffsetT
 	if t.Value != nil {
+		if t.ValueId != math.MaxUint64 {
+			log.Fatal("This should have already been set by the caller.")
+		}
 		var buf bytes.Buffer
 		enc := gob.NewEncoder(&buf)
 		if err := enc.Encode(t.Value); err != nil {
@@ -81,14 +84,9 @@ func addTripleToPosting(b *flatbuffers.Builder,
 
 	types.PostingStart(b)
 	if bo > 0 {
-		// All triples with a value set, have the same uid. In other words,
-		// an (entity, attribute) can only have one interface{} value.
-		types.PostingAddUid(b, math.MaxUint64)
 		types.PostingAddValue(b, bo)
-
-	} else {
-		types.PostingAddUid(b, t.ValueId)
 	}
+	types.PostingAddUid(b, t.ValueId)
 	types.PostingAddSource(b, so)
 	types.PostingAddTs(b, t.Timestamp.UnixNano())
 	types.PostingAddOp(b, op)
@@ -129,6 +127,16 @@ func init() {
 
 	log.Infof("Empty size: [%d] EmptyPosting size: [%d]",
 		len(empty), len(emptyPosting))
+}
+
+func ParseValue(i interface{}, p types.Posting) error {
+	if p.ValueLength() == 0 {
+		return errors.New("No value found in posting")
+	}
+	var buf bytes.Buffer
+	buf.Write(p.ValueBytes())
+	dec := gob.NewDecoder(&buf)
+	return dec.Decode(i)
 }
 
 func (l *List) Init(key []byte, pstore, mstore *store.Store) {
@@ -391,6 +399,13 @@ func (l *List) AddMutation(t x.Triple, op byte) error {
 	// a)		check if the entity exists in main posting list.
 	// 				- If yes, store the mutation.
 	// 				- If no, disregard this mutation.
+
+	// All triples with a value set, have the same uid. In other words,
+	// an (entity, attribute) can only have one interface{} value.
+	if t.Value != nil {
+		t.ValueId = math.MaxUint64
+	}
+
 	b := flatbuffers.NewBuilder(0)
 	muts := types.GetRootAsPostingList(l.mbuffer, 0)
 	var offsets []flatbuffers.UOffsetT

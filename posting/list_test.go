@@ -19,6 +19,7 @@ package posting
 import (
 	"fmt"
 	"io/ioutil"
+	"math"
 	"os"
 	"testing"
 	"time"
@@ -54,7 +55,7 @@ func NewStore(t *testing.T) string {
 	return path
 }
 
-func TestAddTriple(t *testing.T) {
+func TestAddMutation(t *testing.T) {
 	var l List
 	key := store.Key("name", 1)
 	pdir := NewStore(t)
@@ -189,10 +190,60 @@ func TestAddTriple(t *testing.T) {
 	if err := checkUids(t, dl, uids...); err != nil {
 		t.Error(err)
 	}
+}
 
+func TestAddMutation_Value(t *testing.T) {
 	var ol List
+	key := store.Key("value", 10)
+	pdir := NewStore(t)
+	defer os.RemoveAll(pdir)
+	ps := new(store.Store)
+	ps.Init(pdir)
+
+	mdir := NewStore(t)
+	defer os.RemoveAll(mdir)
+	ms := new(store.Store)
+	ms.Init(mdir)
+
 	ol.Init(key, ps, ms)
-	if err := checkUids(t, ol, uids...); err != nil {
+
+	triple := x.Triple{
+		Value:     "oh hey there",
+		Source:    "new-testing",
+		Timestamp: time.Now(),
+	}
+	if err := ol.AddMutation(triple, Set); err != nil {
 		t.Error(err)
+	}
+	var p types.Posting
+	ol.Get(&p, 0)
+	if p.Uid() != math.MaxUint64 {
+		t.Errorf("All value uids should go to MaxUint64. Got: %v", p.Uid())
+	}
+	var out string
+	if err := ParseValue(&out, p); err != nil {
+		t.Error(err)
+	}
+	if out != "oh hey there" {
+		t.Errorf("Expected a value. Got: [%q]", out)
+	}
+
+	// The value made it to the posting list. Changing it now.
+	triple.Value = 119
+	if err := ol.AddMutation(triple, Set); err != nil {
+		t.Error(err)
+	}
+	if ol.Length() != 1 {
+		t.Errorf("Length should be one. Got: %v", ol.Length())
+	}
+	if ok := ol.Get(&p, 0); !ok {
+		t.Error("While retrieving posting")
+	}
+	var iout int
+	if err := ParseValue(&iout, p); err != nil {
+		t.Error(err)
+	}
+	if iout != 119 {
+		t.Errorf("Expected 119. Got: %v", iout)
 	}
 }
