@@ -19,6 +19,7 @@ package uid
 import (
 	"bytes"
 	"errors"
+	"math"
 	"time"
 
 	"github.com/dgryski/go-farm"
@@ -43,32 +44,41 @@ func (a *Assigner) Init(pstore, mstore *store.Store) {
 func (a *Assigner) allocateNew(xid string) (uid uint64, rerr error) {
 	for sp := ""; ; sp += " " {
 		txid := xid + sp
-		uid = farm.Hash64([]byte(txid)) // Generate from hash.
-		log.Debugf("xid: [%v] uid: [%v]", txid, uid)
+		uid = farm.Fingerprint64([]byte(txid)) // Generate from hash.
+		log.Debugf("txid: [%q] uid: [%x]", txid, uid)
 
 		// Check if this uid has already been allocated.
+		// TODO: Posting List shouldn't be created here.
+		// Possibly, use some singular class to serve all the posting lists.
 		pl := new(posting.List)
 		key := store.Key("_xid_", uid) // uid -> "_xid_" -> xid
 		pl.Init(key, a.pstore, a.mstore)
+
 		if pl.Length() > 0 {
 			// Something already present here.
 			var p types.Posting
 			pl.Get(&p, 0)
-			log.Debug("Found existing xid: [%v]. Continuing...", string(p.ValueBytes()))
 
-		} else {
-			// Uid hasn't been assigned yet.
-			t := x.Triple{
-				Entity:    uid,
-				Attribute: "_xid_",
-				Value:     xid,
-				Source:    "_assigner_",
-				Timestamp: time.Now(),
-			}
-			rerr = pl.AddMutation(t, posting.Set)
-			pl.CommitIfDirty()
-			return uid, rerr
+			var tmp string
+			posting.ParseValue(&tmp, p)
+			log.Debug("Found existing xid: [%q]. Continuing...", tmp)
+			continue
 		}
+
+		// Uid hasn't been assigned yet.
+		t := x.Triple{
+			Value:     xid, // not txid
+			Source:    "_assigner_",
+			Timestamp: time.Now(),
+		}
+		rerr = pl.AddMutation(t, posting.Set)
+		if rerr != nil {
+			x.Err(log, rerr).Error("While adding mutation")
+		}
+		if err := pl.CommitIfDirty(); err != nil {
+			x.Err(log, err).Error("While commiting")
+		}
+		return uid, rerr
 	}
 	return 0, errors.New("Some unhandled route lead me here." +
 		" Wake the stupid developer up.")
@@ -120,15 +130,23 @@ func (a *Assigner) ExternalId(uid uint64) (xid string, rerr error) {
 	key := store.Key("_xid_", uid) // uid -> "_xid_" -> xid
 	pl.Init(key, a.pstore, a.mstore)
 	if pl.Length() == 0 {
-		return "", errors.New("NO_EXTERNAL_ID")
+		return "", errors.New("NO external id")
 	}
+
 	if pl.Length() > 1 {
 		log.WithField("uid", uid).Fatal("This shouldn't be happening.")
+		return "", errors.New("Multiple external ids for this uid.")
 	}
+
 	var p types.Posting
 	if ok := pl.Get(&p, 0); !ok {
 		log.WithField("uid", uid).Error("While retrieving posting")
 		return "", errors.New("While retrieving posting")
 	}
-	return string(p.ValueBytes()), nil
+
+	if p.Uid() != math.MaxUint64 {
+		log.WithField("uid", uid).Fatal("Value uid must be MaxUint64.")
+	}
+	rerr = posting.ParseValue(&xid, p)
+	return xid, rerr
 }

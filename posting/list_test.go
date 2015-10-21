@@ -228,6 +228,23 @@ func TestAddMutation_Value(t *testing.T) {
 		t.Errorf("Expected a value. Got: [%q]", out)
 	}
 
+	// Run the same check after committing.
+	if err := ol.CommitIfDirty(); err != nil {
+		t.Error(err)
+	}
+	{
+		var tp types.Posting
+		if ok := ol.Get(&tp, 0); !ok {
+			t.Error("While retrieving posting")
+		}
+		if err := ParseValue(&out, tp); err != nil {
+			t.Error(err)
+		}
+		if out != "oh hey there" {
+			t.Errorf("Expected a value. Got: [%q]", out)
+		}
+	}
+
 	// The value made it to the posting list. Changing it now.
 	triple.Value = 119
 	if err := ol.AddMutation(triple, Set); err != nil {

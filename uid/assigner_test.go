@@ -21,6 +21,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/Sirupsen/logrus"
 	"github.com/manishrjain/dgraph/store"
 )
 
@@ -35,6 +36,8 @@ func NewStore(t *testing.T) string {
 }
 
 func TestGetOrAssign(t *testing.T) {
+	logrus.SetLevel(logrus.DebugLevel)
+
 	pdir := NewStore(t)
 	defer os.RemoveAll(pdir)
 	ps := new(store.Store)
@@ -54,7 +57,7 @@ func TestGetOrAssign(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
-		t.Logf("Found uid: [%v]", uid)
+		t.Logf("Found uid: [%x]", uid)
 		u1 = uid
 	}
 
@@ -63,24 +66,26 @@ func TestGetOrAssign(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
-		t.Logf("Found uid: [%v]", uid)
+		t.Logf("Found uid: [%x]", uid)
 		u2 = uid
 	}
 
 	if u1 == u2 {
 		t.Error("Uid1 and Uid2 shouldn't be the same")
 	}
+	// return
 
 	{
 		uid, err := a.GetOrAssign("externalid0")
 		if err != nil {
 			t.Error(err)
 		}
-		t.Logf("Found uid: [%v]", uid)
+		t.Logf("Found uid: [%x]", uid)
 		if u1 != uid {
 			t.Error("Uid should be the same.")
 		}
 	}
+	// return
 
 	{
 		xid, err := a.ExternalId(u1)
@@ -88,16 +93,17 @@ func TestGetOrAssign(t *testing.T) {
 			t.Error(err)
 		}
 		if xid != "externalid0" {
-			t.Errorf("Expected externalid0. Found: [%v]", xid)
+			t.Errorf("Expected externalid0. Found: [%q]", xid)
 		}
 	}
+	return
 	{
 		xid, err := a.ExternalId(u2)
 		if err != nil {
 			t.Error(err)
 		}
 		if xid != "externalid1" {
-			t.Errorf("Expected externalid1. Found: [%v]", xid)
+			t.Errorf("Expected externalid1. Found: [%q]", xid)
 		}
 	}
 }

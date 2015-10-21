@@ -94,9 +94,18 @@ func addTripleToPosting(b *flatbuffers.Builder,
 }
 
 func addPosting(b *flatbuffers.Builder, p types.Posting) flatbuffers.UOffsetT {
+
 	so := b.CreateByteString(p.Source()) // Do this before posting start.
+	var bo flatbuffers.UOffsetT
+	if p.ValueLength() > 0 {
+		bo = b.CreateByteVector(p.ValueBytes())
+	}
+
 	types.PostingStart(b)
 	types.PostingAddUid(b, p.Uid())
+	if bo > 0 {
+		types.PostingAddValue(b, bo)
+	}
 	types.PostingAddSource(b, so)
 	types.PostingAddTs(b, p.Ts())
 	types.PostingAddOp(b, p.Op())
@@ -152,14 +161,14 @@ func (l *List) Init(key []byte, pstore, mstore *store.Store) {
 
 	var err error
 	if l.buffer, err = pstore.Get(key); err != nil {
-		log.Errorf("While retrieving posting list from db: %v\n", err)
+		// log.Debugf("While retrieving posting list from db: %v\n", err)
 		// Error. Just set to empty.
 		l.buffer = make([]byte, len(empty))
 		copy(l.buffer, empty)
 	}
 
 	if l.mbuffer, err = mstore.Get(key); err != nil {
-		log.Debugf("While retrieving mutation list from db: %v\n", err)
+		// log.Debugf("While retrieving mutation list from db: %v\n", err)
 		// Error. Just set to empty.
 		l.mbuffer = make([]byte, len(empty))
 		copy(l.mbuffer, empty)
@@ -521,8 +530,10 @@ func (l *List) isDirty() bool {
 
 func (l *List) CommitIfDirty() error {
 	if !l.isDirty() {
-		log.Debug("Not dirty. Ignoring commit.")
+		log.WithField("dirty", false).Debug("Not Committing")
 		return nil
+	} else {
+		log.WithField("dirty", true).Debug("Committing")
 	}
 
 	l.mutex.Lock()
