@@ -16,13 +16,109 @@
 
 package query
 
-type QAttribute struct {
-	Attr  string
-	Query *Query
+import (
+	"fmt"
+	"math"
+
+	"github.com/google/flatbuffers/go"
+	"github.com/manishrjain/dgraph/posting"
+	"github.com/manishrjain/dgraph/posting/types"
+	"github.com/manishrjain/dgraph/query/result"
+	"github.com/manishrjain/dgraph/uid"
+	"github.com/manishrjain/dgraph/x"
+)
+
+var log = x.Log("query")
+
+type Mattr struct {
+	Attr string
+	Msg  *Message
+
+	ResultUids  []byte // Flatbuffer result.Uids
+	ResultValue []byte // gob.Encode
 }
 
-type Query struct {
+type Message struct {
 	Id    uint64 // Dgraph Id
-	Eid   string // External Id
-	Attrs []QAttribute
+	Xid   string // External Id
+	Attrs []Mattr
+}
+
+type Node struct {
+	Id  uint64
+	Xid string
+}
+
+func extract(l *posting.List, uids *[]byte, value *[]byte) error {
+	b := flatbuffers.NewBuilder(0)
+	var p types.Posting
+
+	llen := l.Length()
+	if ok := l.Get(&p, l.Length()-1); ok {
+		if p.Uid() == math.MaxUint64 {
+			// Contains a value posting, not useful for Uids vector.
+			llen -= 1
+		}
+	}
+
+	result.UidsStartUidVector(b, llen)
+	for i := l.Length() - 1; i >= 0; i-- {
+		if ok := l.Get(&p, i); !ok {
+			return fmt.Errorf("While retrieving posting")
+		}
+		if p.Uid() == math.MaxUint64 {
+			*value = make([]byte, p.ValueLength())
+			copy(*value, p.ValueBytes())
+
+		} else {
+			b.PrependUint64(p.Uid())
+		}
+	}
+	vend := b.EndVector(llen)
+
+	result.UidsStart(b)
+	result.UidsAddUid(b, vend)
+	end := result.UidsEnd(b)
+	b.Finish(end)
+
+	buf := b.Bytes[b.Head():]
+	*uids = make([]byte, len(buf))
+	copy(*uids, buf)
+	return nil
+}
+
+func Run(m *Message) error {
+	if len(m.Xid) > 0 {
+		u, err := uid.GetOrAssign(m.Xid)
+		if err != nil {
+			x.Err(log, err).WithField("xid", m.Xid).Error(
+				"While GetOrAssign uid from external id")
+			return err
+		}
+		log.WithField("xid", m.Xid).WithField("uid", u).Debug("GetOrAssign")
+		m.Id = u
+	}
+
+	if m.Id == 0 {
+		err := fmt.Errorf("Query internal id is zero")
+		x.Err(log, err).Error("Invalid query")
+		return err
+	}
+
+	for idx := range m.Attrs {
+		mattr := &m.Attrs[idx]
+		key := posting.Key(m.Id, mattr.Attr)
+		pl := posting.Get(key)
+
+		if err := extract(pl, &mattr.ResultUids, &mattr.ResultValue); err != nil {
+			x.Err(log, err).WithField("uid", m.Id).WithField("attr", mattr.Attr).
+				Error("While extracting data from posting list")
+		}
+		if mattr.Msg != nil {
+			if err := Run(mattr.Msg); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }

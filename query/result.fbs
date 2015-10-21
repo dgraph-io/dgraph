@@ -1,0 +1,7 @@
+namespace result;
+
+table Uids {
+	uid:[ulong];
+}
+
+root_type Uids;

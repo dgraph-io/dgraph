@@ -25,34 +25,24 @@ import (
 	"github.com/dgryski/go-farm"
 	"github.com/manishrjain/dgraph/posting"
 	"github.com/manishrjain/dgraph/posting/types"
-	"github.com/manishrjain/dgraph/store"
 	"github.com/manishrjain/dgraph/x"
 )
 
 var log = x.Log("uid")
 
-type Assigner struct {
-	mstore *store.Store
-	pstore *store.Store
-}
-
-func (a *Assigner) Init(pstore, mstore *store.Store) {
-	a.mstore = mstore
-	a.pstore = pstore
-}
-
-func (a *Assigner) allocateNew(xid string) (uid uint64, rerr error) {
+func allocateNew(xid string) (uid uint64, rerr error) {
 	for sp := ""; ; sp += " " {
 		txid := xid + sp
 		uid = farm.Fingerprint64([]byte(txid)) // Generate from hash.
-		log.Debugf("txid: [%q] uid: [%x]", txid, uid)
+		log.WithField("txid", txid).WithField("uid", uid).Debug("Generated")
+		if uid == math.MaxUint64 {
+			log.Debug("Hit uint64max while generating fingerprint. Ignoring...")
+			continue
+		}
 
 		// Check if this uid has already been allocated.
-		// TODO: Posting List shouldn't be created here.
-		// Possibly, use some singular class to serve all the posting lists.
-		pl := new(posting.List)
-		key := store.Key("_xid_", uid) // uid -> "_xid_" -> xid
-		pl.Init(key, a.pstore, a.mstore)
+		key := posting.Key(uid, "_xid_") // uid -> "_xid_" -> xid
+		pl := posting.Get(key)
 
 		if pl.Length() > 0 {
 			// Something already present here.
@@ -60,7 +50,7 @@ func (a *Assigner) allocateNew(xid string) (uid uint64, rerr error) {
 			pl.Get(&p, 0)
 
 			var tmp string
-			posting.ParseValue(&tmp, p)
+			posting.ParseValue(&tmp, p.ValueBytes())
 			log.Debug("Found existing xid: [%q]. Continuing...", tmp)
 			continue
 		}
@@ -84,7 +74,7 @@ func (a *Assigner) allocateNew(xid string) (uid uint64, rerr error) {
 		" Wake the stupid developer up.")
 }
 
-func Key(xid string) []byte {
+func stringKey(xid string) []byte {
 	buf := new(bytes.Buffer)
 	buf.WriteString("_uid_")
 	buf.WriteString("|")
@@ -92,13 +82,13 @@ func Key(xid string) []byte {
 	return buf.Bytes()
 }
 
-func (a *Assigner) GetOrAssign(xid string) (uid uint64, rerr error) {
-	key := Key(xid)
-	pl := new(posting.List)
-	pl.Init(key, a.pstore, a.mstore)
+// TODO: Currently one posting list is modified after another, without
+func GetOrAssign(xid string) (uid uint64, rerr error) {
+	key := stringKey(xid)
+	pl := posting.Get(key)
 	if pl.Length() == 0 {
 		// No current id exists. Create one.
-		uid, err := a.allocateNew(xid)
+		uid, err := allocateNew(xid)
 		if err != nil {
 			return 0, err
 		}
@@ -125,10 +115,9 @@ func (a *Assigner) GetOrAssign(xid string) (uid uint64, rerr error) {
 		" Wake the stupid developer up.")
 }
 
-func (a *Assigner) ExternalId(uid uint64) (xid string, rerr error) {
-	pl := new(posting.List)
-	key := store.Key("_xid_", uid) // uid -> "_xid_" -> xid
-	pl.Init(key, a.pstore, a.mstore)
+func ExternalId(uid uint64) (xid string, rerr error) {
+	key := posting.Key(uid, "_xid_") // uid -> "_xid_" -> xid
+	pl := posting.Get(key)
 	if pl.Length() == 0 {
 		return "", errors.New("NO external id")
 	}
@@ -147,6 +136,6 @@ func (a *Assigner) ExternalId(uid uint64) (xid string, rerr error) {
 	if p.Uid() != math.MaxUint64 {
 		log.WithField("uid", uid).Fatal("Value uid must be MaxUint64.")
 	}
-	rerr = posting.ParseValue(&xid, p)
+	rerr = posting.ParseValue(&xid, p.ValueBytes())
 	return xid, rerr
 }

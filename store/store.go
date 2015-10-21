@@ -17,9 +17,6 @@
 package store
 
 import (
-	"bytes"
-	"encoding/binary"
-
 	"github.com/manishrjain/gocrud/x"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
@@ -44,16 +41,6 @@ func (s *Store) Init(filepath string) {
 
 func (s *Store) IsNew(id uint64) bool {
 	return false
-}
-
-// key = (attribute, entity id)
-func Key(attr string, eid uint64) []byte {
-	buf := new(bytes.Buffer)
-	buf.WriteString(attr)
-	if err := binary.Write(buf, binary.LittleEndian, eid); err != nil {
-		log.Fatalf("Error while creating key with attr: %v eid: %v\n", attr, eid)
-	}
-	return buf.Bytes()
 }
 
 func (s *Store) Get(k []byte) (val []byte, rerr error) {

@@ -18,6 +18,7 @@ package posting
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/gob"
 	"errors"
 	"math"
@@ -64,6 +65,16 @@ func (pa ByUid) Len() int           { return len(pa) }
 func (pa ByUid) Swap(i, j int)      { pa[i], pa[j] = pa[j], pa[i] }
 func (pa ByUid) Less(i, j int) bool { return pa[i].Uid() < pa[j].Uid() }
 
+// key = (entity id, attribute)
+func Key(eid uint64, attr string) []byte {
+	buf := new(bytes.Buffer)
+	buf.WriteString(attr)
+	if err := binary.Write(buf, binary.LittleEndian, eid); err != nil {
+		log.Fatalf("Error while creating key with attr: %v eid: %v\n", attr, eid)
+	}
+	return buf.Bytes()
+}
+
 func addTripleToPosting(b *flatbuffers.Builder,
 	t x.Triple, op byte) flatbuffers.UOffsetT {
 
@@ -94,7 +105,6 @@ func addTripleToPosting(b *flatbuffers.Builder,
 }
 
 func addPosting(b *flatbuffers.Builder, p types.Posting) flatbuffers.UOffsetT {
-
 	so := b.CreateByteString(p.Source()) // Do this before posting start.
 	var bo flatbuffers.UOffsetT
 	if p.ValueLength() > 0 {
@@ -138,17 +148,17 @@ func init() {
 		len(empty), len(emptyPosting))
 }
 
-func ParseValue(i interface{}, p types.Posting) error {
-	if p.ValueLength() == 0 {
+func ParseValue(i interface{}, value []byte) error {
+	if len(value) == 0 {
 		return errors.New("No value found in posting")
 	}
 	var buf bytes.Buffer
-	buf.Write(p.ValueBytes())
+	buf.Write(value)
 	dec := gob.NewDecoder(&buf)
 	return dec.Decode(i)
 }
 
-func (l *List) Init(key []byte, pstore, mstore *store.Store) {
+func (l *List) init(key []byte, pstore, mstore *store.Store) {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
 

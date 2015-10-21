@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"github.com/Sirupsen/logrus"
+	"github.com/manishrjain/dgraph/posting"
 	"github.com/manishrjain/dgraph/store"
 )
 
@@ -47,13 +48,11 @@ func TestGetOrAssign(t *testing.T) {
 	defer os.RemoveAll(mdir)
 	ms := new(store.Store)
 	ms.Init(mdir)
-
-	var a Assigner
-	a.Init(ps, ms)
+	posting.Init(ps, ms)
 
 	var u1, u2 uint64
 	{
-		uid, err := a.GetOrAssign("externalid0")
+		uid, err := GetOrAssign("externalid0")
 		if err != nil {
 			t.Error(err)
 		}
@@ -62,7 +61,7 @@ func TestGetOrAssign(t *testing.T) {
 	}
 
 	{
-		uid, err := a.GetOrAssign("externalid1")
+		uid, err := GetOrAssign("externalid1")
 		if err != nil {
 			t.Error(err)
 		}
@@ -76,7 +75,7 @@ func TestGetOrAssign(t *testing.T) {
 	// return
 
 	{
-		uid, err := a.GetOrAssign("externalid0")
+		uid, err := GetOrAssign("externalid0")
 		if err != nil {
 			t.Error(err)
 		}
@@ -88,7 +87,7 @@ func TestGetOrAssign(t *testing.T) {
 	// return
 
 	{
-		xid, err := a.ExternalId(u1)
+		xid, err := ExternalId(u1)
 		if err != nil {
 			t.Error(err)
 		}
@@ -98,7 +97,7 @@ func TestGetOrAssign(t *testing.T) {
 	}
 	return
 	{
-		xid, err := a.ExternalId(u2)
+		xid, err := ExternalId(u2)
 		if err != nil {
 			t.Error(err)
 		}

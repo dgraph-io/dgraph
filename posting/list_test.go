@@ -68,7 +68,7 @@ func TestAddMutation(t *testing.T) {
 	ms := new(store.Store)
 	ms.Init(mdir)
 
-	l.Init(key, ps, ms)
+	l.init(key, ps, ms)
 
 	triple := x.Triple{
 		ValueId:   9,
@@ -179,7 +179,7 @@ func TestAddMutation(t *testing.T) {
 	*/
 	// Try reading the same data in another PostingList.
 	var dl List
-	dl.Init(key, ps, ms)
+	dl.init(key, ps, ms)
 	if err := checkUids(t, dl, uids...); err != nil {
 		t.Error(err)
 	}
@@ -205,7 +205,7 @@ func TestAddMutation_Value(t *testing.T) {
 	ms := new(store.Store)
 	ms.Init(mdir)
 
-	ol.Init(key, ps, ms)
+	ol.init(key, ps, ms)
 
 	triple := x.Triple{
 		Value:     "oh hey there",
