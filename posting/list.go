@@ -21,6 +21,7 @@ import (
 	"encoding/binary"
 	"encoding/gob"
 	"errors"
+	"fmt"
 	"math"
 	"sort"
 	"sync"
@@ -65,12 +66,12 @@ func (pa ByUid) Len() int           { return len(pa) }
 func (pa ByUid) Swap(i, j int)      { pa[i], pa[j] = pa[j], pa[i] }
 func (pa ByUid) Less(i, j int) bool { return pa[i].Uid() < pa[j].Uid() }
 
-// key = (entity id, attribute)
-func Key(eid uint64, attr string) []byte {
+// key = (entity uid, attribute)
+func Key(uid uint64, attr string) []byte {
 	buf := new(bytes.Buffer)
 	buf.WriteString(attr)
-	if err := binary.Write(buf, binary.LittleEndian, eid); err != nil {
-		log.Fatalf("Error while creating key with attr: %v eid: %v\n", attr, eid)
+	if err := binary.Write(buf, binary.LittleEndian, uid); err != nil {
+		log.Fatalf("Error while creating key with attr: %v uid: %v\n", attr, uid)
 	}
 	return buf.Bytes()
 }
@@ -210,18 +211,26 @@ func (l *List) find(uid uint64) int {
 	return findIndex(posting, uid, 0, posting.PostingsLength())
 }
 
+// Caller must hold at least a read lock.
+func (l *List) length() int {
+	plist := types.GetRootAsPostingList(l.buffer, 0)
+	return plist.PostingsLength() + l.mdelta
+}
+
 func (l *List) Length() int {
 	l.mutex.RLock()
 	defer l.mutex.RUnlock()
-
-	plist := types.GetRootAsPostingList(l.buffer, 0)
-	return plist.PostingsLength() + l.mdelta
+	return l.length()
 }
 
 func (l *List) Get(p *types.Posting, i int) bool {
 	l.mutex.RLock()
 	defer l.mutex.RUnlock()
+	return l.get(p, i)
+}
 
+// Caller must hold at least a read lock.
+func (l *List) get(p *types.Posting, i int) bool {
 	plist := types.GetRootAsPostingList(l.buffer, 0)
 	if l.mindex == nil {
 		return plist.Postings(p, i)
@@ -584,4 +593,38 @@ func (l *List) CommitIfDirty() error {
 	copy(l.mbuffer, empty)
 	l.generateIndex()
 	return nil
+}
+
+// This is a blocking function. It would block when the channel buffer capacity
+// has been reached.
+func (l *List) StreamUids(ch chan uint64) {
+	l.mutex.RLock()
+	defer l.mutex.RUnlock()
+
+	var p types.Posting
+	for i := 0; i < l.length(); i++ {
+		if ok := l.get(&p, i); !ok || p.Uid() == math.MaxUint64 {
+			break
+		}
+		ch <- p.Uid()
+	}
+	close(ch)
+}
+
+func (l *List) Value() (result []byte, rerr error) {
+	l.mutex.RLock()
+	defer l.mutex.RUnlock()
+
+	if l.length() == 0 {
+		return result, fmt.Errorf("No value found")
+	}
+
+	var p types.Posting
+	if ok := l.get(&p, l.length()-1); !ok {
+		return result, fmt.Errorf("Unable to get last posting")
+	}
+	if p.Uid() != math.MaxUint64 {
+		return result, fmt.Errorf("No value found")
+	}
+	return p.ValueBytes(), nil
 }

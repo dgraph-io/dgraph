@@ -57,7 +57,7 @@ func NewStore(t *testing.T) string {
 
 func TestAddMutation(t *testing.T) {
 	var l List
-	key := store.Key("name", 1)
+	key := Key(1, "name")
 	pdir := NewStore(t)
 	defer os.RemoveAll(pdir)
 	ps := new(store.Store)
@@ -194,7 +194,7 @@ func TestAddMutation(t *testing.T) {
 
 func TestAddMutation_Value(t *testing.T) {
 	var ol List
-	key := store.Key("value", 10)
+	key := Key(10, "value")
 	pdir := NewStore(t)
 	defer os.RemoveAll(pdir)
 	ps := new(store.Store)
@@ -221,7 +221,7 @@ func TestAddMutation_Value(t *testing.T) {
 		t.Errorf("All value uids should go to MaxUint64. Got: %v", p.Uid())
 	}
 	var out string
-	if err := ParseValue(&out, p); err != nil {
+	if err := ParseValue(&out, p.ValueBytes()); err != nil {
 		t.Error(err)
 	}
 	if out != "oh hey there" {
@@ -237,7 +237,7 @@ func TestAddMutation_Value(t *testing.T) {
 		if ok := ol.Get(&tp, 0); !ok {
 			t.Error("While retrieving posting")
 		}
-		if err := ParseValue(&out, tp); err != nil {
+		if err := ParseValue(&out, tp.ValueBytes()); err != nil {
 			t.Error(err)
 		}
 		if out != "oh hey there" {
@@ -257,7 +257,7 @@ func TestAddMutation_Value(t *testing.T) {
 		t.Error("While retrieving posting")
 	}
 	var iout int
-	if err := ParseValue(&iout, p); err != nil {
+	if err := ParseValue(&iout, p.ValueBytes()); err != nil {
 		t.Error(err)
 	}
 	if iout != 119 {

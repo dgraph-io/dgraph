@@ -1,0 +1,15 @@
+namespace task;
+
+table Query {
+	attr:string;
+	uids:[ulong];
+}
+
+table Value {
+	val:[ubyte];
+}
+
+table Result {
+	uids:[ulong];
+	values:[Value];
+}
