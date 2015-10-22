@@ -29,6 +29,7 @@ func (h *elemHeap) Pop() interface{} {
 }
 
 func addUids(b *flatbuffers.Builder, sorted []uint64) flatbuffers.UOffsetT {
+	// Invert the sorted uids to maintain same order in flatbuffers.
 	task.ResultStartUidsVector(b, len(sorted))
 	for i := len(sorted) - 1; i >= 0; i-- {
 		b.PrependUint64(sorted[i])
@@ -112,6 +113,23 @@ func ProcessQuery(query []byte) (result []byte, rerr error) {
 	rend := task.ResultEnd(b)
 	b.Finish(rend)
 	return b.Bytes[b.Head():], nil
+}
+
+func NewQuery(attr string, uids []uint64) []byte {
+	b := flatbuffers.NewBuilder(0)
+	task.QueryStartUidsVector(b, len(uids))
+	for i := len(uids) - 1; i >= 0; i-- {
+		b.PrependUint64(uids[i])
+	}
+	vend := b.EndVector(len(uids))
+
+	ao := b.CreateString(attr)
+	task.QueryStart(b)
+	task.QueryAddAttr(b, ao)
+	task.QueryAddUids(b, vend)
+	qend := task.QueryEnd(b)
+	b.Finish(qend)
+	return b.Bytes[b.Head():]
 }
 
 var nilbyte []byte
