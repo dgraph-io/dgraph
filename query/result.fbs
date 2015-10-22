@@ -4,4 +4,18 @@ table Uids {
 	uid:[ulong];
 }
 
+table TaskQuery {
+	attr:string;
+	uids:[ulong];
+}
+
+struct Value {
+	val:[ubyte];
+}
+
+table TaskResult {
+	uids:[ulong];
+	values:[Value];
+}
+
 root_type Uids;

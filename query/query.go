@@ -46,12 +46,30 @@ import (
 
 var log = x.Log("query")
 
-type Mattr struct {
-	Attr string
-	Msg  *Message
+type SubGraph struct {
+	Attr     string
+	Children []*SubGraph
 
-	ResultUids  []byte // Flatbuffer result.Uids
-	ResultValue []byte // gob.Encode
+	Query  []byte
+	Result []byte
+}
+
+func NewGraph(id uint64, xid string) *SubGraph {
+	// This would set the Result field in SubGraph,
+	// and populate the children for attributes.
+	return nil
+}
+
+type Mattr struct {
+	Attr   string
+	Msg    *Mattr
+	Query  []byte // flatbuffer
+	Result []byte // flatbuffer
+
+	/*
+		ResultUids  []byte // Flatbuffer result.Uids
+		ResultValue []byte // gob.Encode
+	*/
 }
 
 type Message struct {
@@ -130,7 +148,9 @@ func Run(m *Message) error {
 			x.Err(log, err).WithField("uid", m.Id).WithField("attr", mattr.Attr).
 				Error("While extracting data from posting list")
 		}
+
 		if mattr.Msg != nil {
+			// Now this would most likely be sent over wire to other servers.
 			if err := Run(mattr.Msg); err != nil {
 				return err
 			}
