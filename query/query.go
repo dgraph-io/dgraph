@@ -18,143 +18,110 @@ package query
 
 import (
 	"fmt"
-	"math"
 
 	"github.com/google/flatbuffers/go"
-	"github.com/manishrjain/dgraph/posting"
-	"github.com/manishrjain/dgraph/posting/types"
-	"github.com/manishrjain/dgraph/query/result"
+	"github.com/manishrjain/dgraph/task"
 	"github.com/manishrjain/dgraph/uid"
 	"github.com/manishrjain/dgraph/x"
 )
 
-// Aim to get this query working:
-// {
-//   me {
-//     id
-//     firstName
-//     lastName
-//     birthday {
-//       month
-//       day
-//     }
-//     friends {
-//       name
-//     }
-//   }
-// }
+/*
+ * QUERY:
+ * Let's take this query from GraphQL as example:
+ * {
+ *   me {
+ *     id
+ *     firstName
+ *     lastName
+ *     birthday {
+ *       month
+ *       day
+ *     }
+ *     friends {
+ *       name
+ *     }
+ *   }
+ * }
+ *
+ * REPRESENTATION:
+ * This would be represented in SubGraph format internally, as such:
+ * SubGraph [result uid = me]
+ *    |
+ *  Children
+ *    |
+ *    --> SubGraph [Attr = "xid"]
+ *    --> SubGraph [Attr = "firstName"]
+ *    --> SubGraph [Attr = "lastName"]
+ *    --> SubGraph [Attr = "birthday"]
+ *           |
+ *         Children
+ *           |
+ *           --> SubGraph [Attr = "month"]
+ *           --> SubGraph [Attr = "day"]
+ *    --> SubGraph [Attr = "friends"]
+ *           |
+ *         Children
+ *           |
+ *           --> SubGraph [Attr = "name"]
+ *
+ * ALGORITHM:
+ * This is a rough and simple algorithm of how to process this SubGraph query
+ * and populate the results:
+ *
+ * For a given entity, a new SubGraph can be started off with NewGraph(id).
+ * Given a SubGraph, is the Query field empty? [Step a]
+ *   - If no, run (or send it to server serving the attribute) query
+ *     and populate result.
+ * Iterate over children and copy Result Uids to child Query Uids.
+ *     Set Attr. Then for each child, use goroutine to run Step:a.
+ * Wait for goroutines to finish.
+ * Return errors, if any.
+ */
 
 var log = x.Log("query")
 
+// SubGraph is the way to represent data internally. It contains both the
+// query and the response. Once generated, this can then be encoded to other
+// client convenient formats, like GraphQL / JSON.
 type SubGraph struct {
 	Attr     string
 	Children []*SubGraph
 
-	Query  []byte
-	Result []byte
+	query  []byte
+	result []byte
 }
 
-func NewGraph(id uint64, xid string) *SubGraph {
+func NewGraph(euid uint64, exid string) (*SubGraph, error) {
 	// This would set the Result field in SubGraph,
 	// and populate the children for attributes.
-	return nil
-}
-
-type Mattr struct {
-	Attr   string
-	Msg    *Mattr
-	Query  []byte // flatbuffer
-	Result []byte // flatbuffer
-
-	/*
-		ResultUids  []byte // Flatbuffer result.Uids
-		ResultValue []byte // gob.Encode
-	*/
-}
-
-type Message struct {
-	Id    uint64 // Dgraph Id
-	Xid   string // External Id
-	Attrs []Mattr
-}
-
-type Node struct {
-	Id  uint64
-	Xid string
-}
-
-func extract(l *posting.List, uids *[]byte, value *[]byte) error {
-	b := flatbuffers.NewBuilder(0)
-	var p types.Posting
-
-	llen := l.Length()
-	if ok := l.Get(&p, l.Length()-1); ok {
-		if p.Uid() == math.MaxUint64 {
-			// Contains a value posting, not useful for Uids vector.
-			llen -= 1
-		}
-	}
-
-	result.UidsStartUidVector(b, llen)
-	for i := l.Length() - 1; i >= 0; i-- {
-		if ok := l.Get(&p, i); !ok {
-			return fmt.Errorf("While retrieving posting")
-		}
-		if p.Uid() == math.MaxUint64 {
-			*value = make([]byte, p.ValueLength())
-			copy(*value, p.ValueBytes())
-
-		} else {
-			b.PrependUint64(p.Uid())
-		}
-	}
-	vend := b.EndVector(llen)
-
-	result.UidsStart(b)
-	result.UidsAddUid(b, vend)
-	end := result.UidsEnd(b)
-	b.Finish(end)
-
-	buf := b.Bytes[b.Head():]
-	*uids = make([]byte, len(buf))
-	copy(*uids, buf)
-	return nil
-}
-
-func Run(m *Message) error {
-	if len(m.Xid) > 0 {
-		u, err := uid.GetOrAssign(m.Xid)
+	if len(exid) > 0 {
+		u, err := uid.GetOrAssign(exid)
 		if err != nil {
-			x.Err(log, err).WithField("xid", m.Xid).Error(
+			x.Err(log, err).WithField("xid", exid).Error(
 				"While GetOrAssign uid from external id")
-			return err
+			return nil, err
 		}
-		log.WithField("xid", m.Xid).WithField("uid", u).Debug("GetOrAssign")
-		m.Id = u
+		log.WithField("xid", exid).WithField("uid", u).Debug("GetOrAssign")
+		euid = u
 	}
 
-	if m.Id == 0 {
+	if euid == 0 {
 		err := fmt.Errorf("Query internal id is zero")
 		x.Err(log, err).Error("Invalid query")
-		return err
+		return nil, err
 	}
 
-	for idx := range m.Attrs {
-		mattr := &m.Attrs[idx]
-		key := posting.Key(m.Id, mattr.Attr)
-		pl := posting.Get(key)
+	// Encode uid into result flatbuffer.
+	b := flatbuffers.NewBuilder(0)
+	task.ResultStartUidsVector(b, 1)
+	b.PrependUint64(euid)
+	vend := b.EndVector(1)
+	task.ResultStart(b)
+	task.ResultAddUids(b, vend)
+	rend := task.ResultEnd(b)
+	b.Finish(rend)
 
-		if err := extract(pl, &mattr.ResultUids, &mattr.ResultValue); err != nil {
-			x.Err(log, err).WithField("uid", m.Id).WithField("attr", mattr.Attr).
-				Error("While extracting data from posting list")
-		}
-
-		if mattr.Msg != nil {
-			// Now this would most likely be sent over wire to other servers.
-			if err := Run(mattr.Msg); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
+	sg := new(SubGraph)
+	sg.result = b.Bytes[b.Head():]
+	return sg, nil
 }
