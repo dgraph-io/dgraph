@@ -18,15 +18,15 @@ package query
 
 import (
 	"io/ioutil"
-	"math"
 	"os"
 	"testing"
 	"time"
 
 	"github.com/Sirupsen/logrus"
+	"github.com/google/flatbuffers/go"
 	"github.com/manishrjain/dgraph/posting"
-	"github.com/manishrjain/dgraph/query/result"
 	"github.com/manishrjain/dgraph/store"
+	"github.com/manishrjain/dgraph/task"
 	"github.com/manishrjain/dgraph/x"
 )
 
@@ -37,6 +37,7 @@ func setErr(err *error, nerr error) {
 	*err = nerr
 }
 
+/*
 func populateList(key []byte) error {
 	pl := posting.Get(key)
 
@@ -58,16 +59,6 @@ func populateList(key []byte) error {
 	setErr(&err, pl.AddMutation(t, posting.Set))
 
 	return err
-}
-
-func NewStore(t *testing.T) string {
-	path, err := ioutil.TempDir("", "storetest_")
-	if err != nil {
-		t.Error(err)
-		t.Fail()
-		return ""
-	}
-	return path
 }
 
 func TestRun(t *testing.T) {
@@ -122,4 +113,191 @@ func TestRun(t *testing.T) {
 	if val != "abracadabra" {
 		t.Errorf("Expected abracadabra. Got: [%q]", val)
 	}
+}
+*/
+
+func NewStore(t *testing.T) string {
+	path, err := ioutil.TempDir("", "storetest_")
+	if err != nil {
+		t.Error(err)
+		t.Fail()
+		return ""
+	}
+	return path
+}
+
+func addTriple(t *testing.T, triple x.Triple, l *posting.List) {
+	if err := l.AddMutation(triple, posting.Set); err != nil {
+		t.Error(err)
+	}
+}
+
+func checkName(t *testing.T, r *task.Result, idx int, expected string) {
+	var tv task.Value
+	if ok := r.Values(&tv, idx); !ok {
+		t.Error("Unable to retrieve value")
+	}
+	var name string
+	if err := posting.ParseValue(&name, tv.ValBytes()); err != nil {
+		t.Error(err)
+	}
+	if name != expected {
+		t.Errorf("Expected: %v. Got: %v", expected, name)
+	}
+}
+
+func checkSingleValue(t *testing.T, child *SubGraph,
+	attr string, value string) {
+	if child.Attr != attr || len(child.result) == 0 {
+		t.Error("Expected attr name with some result")
+	}
+	uo := flatbuffers.GetUOffsetT(child.result)
+	r := new(task.Result)
+	r.Init(child.result, uo)
+	if r.ValuesLength() != 1 {
+		t.Error("Expected value length 1. Got: %v", r.ValuesLength())
+	}
+	if r.UidsLength() != 0 {
+		t.Error("Expected uids length 0. Got: %v", r.UidsLength())
+	}
+	checkName(t, r, 0, value)
+}
+
+func TestProcessGraph(t *testing.T) {
+	logrus.SetLevel(logrus.DebugLevel)
+
+	pdir := NewStore(t)
+	defer os.RemoveAll(pdir)
+	ps := new(store.Store)
+	ps.Init(pdir)
+
+	mdir := NewStore(t)
+	defer os.RemoveAll(mdir)
+	ms := new(store.Store)
+	ms.Init(mdir)
+	posting.Init(ps, ms)
+
+	// So, user we're interested in has uid: 1.
+	// She has 4 friends: 23, 24, 25, 31, and 101
+	triple := x.Triple{
+		ValueId:   23,
+		Source:    "testing",
+		Timestamp: time.Now(),
+	}
+	addTriple(t, triple, posting.Get(posting.Key(1, "friend")))
+
+	triple.ValueId = 24
+	addTriple(t, triple, posting.Get(posting.Key(1, "friend")))
+
+	triple.ValueId = 25
+	addTriple(t, triple, posting.Get(posting.Key(1, "friend")))
+
+	triple.ValueId = 31
+	addTriple(t, triple, posting.Get(posting.Key(1, "friend")))
+
+	triple.ValueId = 101
+	addTriple(t, triple, posting.Get(posting.Key(1, "friend")))
+
+	// Now let's add a few properties for the main user.
+	triple.Value = "Michonne"
+	addTriple(t, triple, posting.Get(posting.Key(1, "name")))
+
+	triple.Value = "female"
+	addTriple(t, triple, posting.Get(posting.Key(1, "gender")))
+
+	triple.Value = "alive"
+	addTriple(t, triple, posting.Get(posting.Key(1, "status")))
+
+	// Now let's add a name for each of the friends, except 101.
+	triple.Value = "Rick Grimes"
+	addTriple(t, triple, posting.Get(posting.Key(23, "name")))
+
+	triple.Value = "Glenn Rhee"
+	addTriple(t, triple, posting.Get(posting.Key(24, "name")))
+
+	triple.Value = "Daryl Dixon"
+	addTriple(t, triple, posting.Get(posting.Key(25, "name")))
+
+	triple.Value = "Andrea"
+	addTriple(t, triple, posting.Get(posting.Key(31, "name")))
+
+	// Alright. Now we have everything set up. Let's create the query.
+	sg, err := NewGraph(1, "")
+	if err != nil {
+		t.Error(err)
+	}
+
+	// Retrieve friends, and their names.
+	csg := new(SubGraph)
+	csg.Attr = "friend"
+	gsg := new(SubGraph)
+	gsg.Attr = "name"
+	csg.Children = append(csg.Children, gsg)
+	sg.Children = append(sg.Children, csg)
+
+	// Retireve profile information for uid:1.
+	csg = new(SubGraph)
+	csg.Attr = "name"
+	sg.Children = append(sg.Children, csg)
+	csg = new(SubGraph)
+	csg.Attr = "gender"
+	sg.Children = append(sg.Children, csg)
+	csg = new(SubGraph)
+	csg.Attr = "status"
+	sg.Children = append(sg.Children, csg)
+
+	ch := make(chan error)
+	go ProcessGraph(sg, ch)
+	err = <-ch
+	if err != nil {
+		t.Error(err)
+	}
+
+	if len(sg.Children) != 4 {
+		t.Errorf("Expected len 4. Got: %v", len(sg.Children))
+	}
+	child := sg.Children[0]
+	if child.Attr != "friend" {
+		t.Errorf("Expected attr friend. Got: %v", child.Attr)
+	}
+	if len(child.result) == 0 {
+		t.Errorf("Expected some result.")
+	}
+	uo := flatbuffers.GetUOffsetT(child.result)
+	r := new(task.Result)
+	r.Init(child.result, uo)
+
+	if r.UidsLength() != 5 {
+		t.Errorf("Expected 5 friends. Got: %v", r.UidsLength())
+	}
+	if r.Uids(0) != 23 || r.Uids(1) != 24 || r.Uids(2) != 25 ||
+		r.Uids(3) != 31 || r.Uids(4) != 101 {
+		t.Errorf("Friend ids don't match")
+	}
+	if len(child.Children) != 1 || child.Children[0].Attr != "name" {
+		t.Errorf("Expected attr name")
+	}
+	child = child.Children[0]
+	uo = flatbuffers.GetUOffsetT(child.result)
+	r.Init(child.result, uo)
+	if r.ValuesLength() != 5 {
+		t.Errorf("Expected 5 names of 5 friends")
+	}
+	checkName(t, r, 0, "Rick Grimes")
+	checkName(t, r, 1, "Glenn Rhee")
+	checkName(t, r, 2, "Daryl Dixon")
+	checkName(t, r, 3, "Andrea")
+	{
+		var tv task.Value
+		if ok := r.Values(&tv, 4); !ok {
+			t.Error("Unable to retrieve value")
+		}
+		if tv.ValLength() != 1 || tv.ValBytes()[0] != 0x00 {
+			t.Error("Expected a null byte")
+		}
+	}
+
+	checkSingleValue(t, sg.Children[1], "name", "Michonne")
+	checkSingleValue(t, sg.Children[2], "gender", "female")
+	checkSingleValue(t, sg.Children[3], "status", "alive")
 }
