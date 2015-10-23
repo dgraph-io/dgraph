@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	"github.com/google/flatbuffers/go"
+	"github.com/manishrjain/dgraph/posting"
 	"github.com/manishrjain/dgraph/task"
 	"github.com/manishrjain/dgraph/uid"
 	"github.com/manishrjain/dgraph/x"
@@ -124,4 +125,68 @@ func NewGraph(euid uint64, exid string) (*SubGraph, error) {
 	sg := new(SubGraph)
 	sg.result = b.Bytes[b.Head():]
 	return sg, nil
+}
+
+func createTaskQuery(attr string, r *task.Result) []byte {
+	b := flatbuffers.NewBuilder(0)
+	ao := b.CreateString(attr)
+
+	task.QueryStartUidsVector(b, r.UidsLength())
+	for i := r.UidsLength() - 1; i >= 0; i-- {
+		uid := r.Uids(i)
+		b.PrependUint64(uid)
+	}
+	vend := b.EndVector(r.UidsLength())
+
+	task.QueryStart(b)
+	task.QueryAddAttr(b, ao)
+	task.QueryAddUids(b, vend)
+	qend := task.QueryEnd(b)
+	b.Finish(qend)
+	return b.Bytes[b.Head():]
+}
+
+func ProcessGraph(sg *SubGraph, rch chan error) {
+	var err error
+	if len(sg.query) > 0 {
+		// This task execution would go over the wire in later versions.
+		sg.result, err = posting.ProcessTask(sg.query)
+		if err != nil {
+			rch <- err
+			return
+		}
+	}
+
+	uo := flatbuffers.GetUOffsetT(sg.result)
+	r := new(task.Result)
+	r.Init(sg.result, uo)
+	if r.UidsLength() == 0 {
+		// Looks like we're done here.
+		if len(sg.Children) > 0 {
+			log.Debug("Have some children but no results. Life got cut short early.")
+		}
+		rch <- nil
+		return
+	}
+
+	// Let's execute it in a tree fashion. Each SubGraph would break off
+	// as many goroutines as it's children; which would then recursively
+	// do the same thing.
+	// Buffered channel to ensure no-blockage.
+	childchan := make(chan error, len(sg.Children))
+	for i := 0; i < len(sg.Children); i++ {
+		child := sg.Children[i]
+		child.query = createTaskQuery(child.Attr, r)
+		go ProcessGraph(child, childchan)
+	}
+
+	// Now get all the results back.
+	for i := 0; i < len(sg.Children); i++ {
+		err = <-childchan
+		if err != nil {
+			rch <- err
+			return
+		}
+	}
+	rch <- nil
 }

@@ -37,7 +37,7 @@ func addUids(b *flatbuffers.Builder, sorted []uint64) flatbuffers.UOffsetT {
 	return b.EndVector(len(sorted))
 }
 
-func ProcessQuery(query []byte) (result []byte, rerr error) {
+func ProcessTask(query []byte) (result []byte, rerr error) {
 	uo := flatbuffers.GetUOffsetT(query)
 	q := new(task.Query)
 	q.Init(query, uo)

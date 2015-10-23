@@ -68,7 +68,7 @@ func addTriple(t *testing.T, triple x.Triple, l *List) {
 	}
 }
 
-func TestProcessQuery(t *testing.T) {
+func TestProcessTask(t *testing.T) {
 	logrus.SetLevel(logrus.DebugLevel)
 
 	pdir := NewStore(t)
@@ -105,7 +105,7 @@ func TestProcessQuery(t *testing.T) {
 	addTriple(t, triple, Get(Key(12, "friend")))
 
 	query := NewQuery("friend", []uint64{10, 11, 12})
-	result, err := ProcessQuery(query)
+	result, err := ProcessTask(query)
 	if err != nil {
 		t.Error(err)
 	}
