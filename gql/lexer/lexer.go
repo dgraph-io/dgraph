@@ -2,7 +2,6 @@ package gqlex
 
 import (
 	"fmt"
-	"strings"
 	"unicode/utf8"
 
 	"github.com/Sirupsen/logrus"
@@ -14,15 +13,19 @@ var glog = x.Log("lexer")
 type itemType int
 
 const (
-	itemEOF       itemType = iota
-	itemError              // error
-	itemText               // plain text
-	itemLeftCurl           // left curly bracket
-	itemRightCurl          // right curly bracket
-	itemComment            // comment
-	itemName               // names
-	itemOpType             // operation type
-	itemString             // quoted string
+	itemEOF        itemType = iota
+	itemError               // error
+	itemText                // plain text
+	itemLeftCurl            // left curly bracket
+	itemRightCurl           // right curly bracket
+	itemComment             // comment
+	itemName                // names
+	itemOpType              // operation type
+	itemString              // quoted string
+	itemLeftRound           // left round bracket
+	itemRightRound          // right round bracket
+	itemArgName             // argument name
+	itemArgVal              // argument val
 )
 
 const EOF = -1
@@ -123,16 +126,15 @@ func (l *lexer) ignore() {
 	l.start = l.pos
 }
 
-func (l *lexer) accept(valid string) bool {
-	if strings.IndexRune(valid, l.next()) >= 0 {
-		return true
-	}
-	l.backup()
-	return false
-}
+type checkRune func(r rune) bool
 
-func (l *lexer) acceptRun(valid string) {
-	for strings.IndexRune(valid, l.next()) >= 0 {
+func (l *lexer) acceptRun(c checkRune) {
+	for {
+		r := l.next()
+		if !c(r) {
+			break
+		}
 	}
+
 	l.backup()
 }

@@ -55,11 +55,13 @@ func lexInside(l *lexer) stateFn {
 		case isSpace(r) || isEndOfLine(r) || r == ',':
 			l.ignore()
 		case isNameBegin(r):
-			l.backup()
 			return lexName
 		case r == '#':
 			l.backup()
 			return lexComment
+		case r == '(':
+			l.emit(itemLeftRound)
+			return lexArgInside
 		default:
 			return l.errorf("Unrecognized character in lexInside: %#U", r)
 		}
@@ -68,7 +70,7 @@ func lexInside(l *lexer) stateFn {
 
 func lexName(l *lexer) stateFn {
 	for {
-		// The caller must have already checked isNameBegin.
+		// The caller already checked isNameBegin, and absorbed one rune.
 		r := l.next()
 		if isNameSuffix(r) {
 			continue
@@ -112,6 +114,68 @@ func lexOperationType(l *lexer) stateFn {
 		break
 	}
 	return lexText
+}
+
+func lexArgInside(l *lexer) stateFn {
+	for {
+		switch r := l.next(); {
+		case r == EOF:
+			return l.errorf("unclosed argument")
+		case isSpace(r) || isEndOfLine(r):
+			l.ignore()
+		case isNameBegin(r):
+			return lexArgName
+		case r == ':':
+			l.ignore()
+			return lexArgVal
+		case r == ')':
+			l.emit(itemRightRound)
+			return lexInside
+		case r == ',':
+			l.ignore()
+		}
+	}
+}
+
+func lexArgName(l *lexer) stateFn {
+	for {
+		r := l.next()
+		if isNameSuffix(r) {
+			continue
+		}
+		l.backup()
+		l.emit(itemArgName)
+		break
+	}
+	return lexArgInside
+}
+
+func lexArgVal(l *lexer) stateFn {
+	l.acceptRun(isSpace)
+	l.ignore() // Any spaces encountered.
+	for {
+		r := l.next()
+		if isSpace(r) || isEndOfLine(r) || r == ')' || r == ',' {
+			l.backup()
+			l.emit(itemArgVal)
+			return lexArgInside
+		}
+		if r == EOF {
+			return l.errorf("Reached EOF while reading var value: %v",
+				l.input[l.start:l.pos])
+		}
+	}
+	glog.Fatal("This shouldn't be reached.")
+	return nil
+}
+
+func lexArgumentVal(l *lexer) stateFn {
+	for {
+		switch r := l.next(); {
+		case isSpace(r):
+			l.ignore()
+		}
+	}
 }
 
 func isSpace(r rune) bool {
