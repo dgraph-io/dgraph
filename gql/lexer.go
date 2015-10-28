@@ -1,4 +1,4 @@
-package gqlex
+package gql
 
 import (
 	"fmt"
