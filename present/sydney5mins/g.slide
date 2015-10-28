@@ -1,0 +1,49 @@
+DGraph
+Go Meetup Sydney
+29 Oct 2015
+Tags: go golang dgraph graph
+
+Manish R Jain
+Backend Developer
+Ex-Google - Web Search & Knowledge Infra
+manishrjain@gmail.com
+https://mrjn.xyz
+@manishrjain
+
+* What is Graph
+
+- Abstract data type to represent mathematical graph concepts.
+- Made up of Entities and Edges. Example edge in triple format:
+		[Tom Hanks]--married-->[Rita Wilson]
+- Popular graphs: Facebook Social Graph, Google Knowledge Graph.
+
+.image graph.png
+
+* What is DGraph
+
+DGraph is a distributed, low-latency graph serving system.
+
+- *Low*Latency*: Minimize the latency of query execution.
+
+		Linear time complexity, based on complexity/depth of query, not results.
+		Minimize the number of network calls required to run the query.
+		Meant to be run in production, serving real time user queries.
+
+- *Distributed*: Automatically distribute data to and serve from provided servers.
+		Handle shard splits, shard merges, and shard movement.
+
+- *Resilience*: Automatically handle server failures, and reassignment to healthy servers.
+
+* Low Latency
+
+Most interesting challenge in all of this.
+
+
+
+* MVP
+- Planning to launch in mid-November.
+- Non-distributed, run on only one server.
+- Support GraphQL w/ JSON response.
+- Low-latency.
+- Launch with benchmarks against Neo4J.
+- Possibly provide sorting.
