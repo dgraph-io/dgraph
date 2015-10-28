@@ -1,5 +1,7 @@
 ## Overview
 
+**This document is out of date, and probably inconsistent. Current focus is on MVP, which has [it's own doc](mvp.md).**
+
 Dgraph is a distributed graph serving system, meant to be deployed in production,
 and tackle user queries in real time. The aim of the system is to run complicated
 joins by minimizing network calls required, and hence to keep end-to-end latency

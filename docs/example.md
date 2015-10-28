@@ -58,5 +58,5 @@ It can be split sharded to fit on multiple machines,
 just like Bigtable sharding works. This would mean a few additional RPCs, but
 still no where near as many as would be required by existing datastores.
 
-This system would allow infinite scalability, and yet production level latencies,
+This system would allow vast scalability, and yet production level latencies,
 to support running complicated queries requiring deep joins.

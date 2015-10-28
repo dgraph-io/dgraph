@@ -36,7 +36,8 @@ Had considered Cap'n Proto before, but Flatbuffers team provides better Go suppo
 - For this version, stick to doing everything on a single server. Possibly still
 using TCP layer, to avoid complexities later.
 - Possibly use a simple go mutex library for txn locking.
-- Use UUID as entity id.
+- Use uint64 as entity id.
+- Support [GraphQL](https://facebook.github.io/graphql/): Facebook's new Graph Query Language.
 - Provide sorting in this version.
 
 ## Concepts / Technologies Skipped
@@ -81,6 +82,12 @@ Replica | Replica is defined as a non-leading copy of the shard after RAFT elect
 - One complete posting list = one shard.
 - One mutex lock per shard.
 - One single server, serving all shards.
+
+## Posting List
+- TODO: Write about how posting list reads and updates work. Possibly in another doc.
+
+## GraphQL
+- TODO: Write about what features are supported in GraphQL. Possibly in another doc.
 
 ## Write
 - Convert the query into individual instructions with posting lists.
