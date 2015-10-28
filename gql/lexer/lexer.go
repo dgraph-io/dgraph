@@ -4,18 +4,25 @@ import (
 	"fmt"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/Sirupsen/logrus"
+	"github.com/manishrjain/dgraph/x"
 )
+
+var glog = x.Log("lexer")
 
 type itemType int
 
 const (
-	itemError itemType = iota
-	itemEOF
-	itemLeftCurl   // left curly bracket
-	itemRightCurl  // right curly bracket
-	itemString     // quoted string
-	itemText       // plain text
-	itemIdentifier // variables
+	itemEOF       itemType = iota
+	itemError              // error
+	itemText               // plain text
+	itemLeftCurl           // left curly bracket
+	itemRightCurl          // right curly bracket
+	itemComment            // comment
+	itemName               // names
+	itemOpType             // operation type
+	itemString             // quoted string
 )
 
 const EOF = -1
@@ -31,15 +38,10 @@ func (i item) String() string {
 		return "EOF"
 	case itemError:
 		return i.val
-	case itemIdentifier:
-		return fmt.Sprintf("var: [%v]", i.val)
+	case itemName:
+		return fmt.Sprintf("name: [%v]", i.val)
 	}
-	/*
-		if len(i.val) > 10 {
-			return fmt.Sprintf("%.10q...", i.val)
-		}
-	*/
-	return fmt.Sprintf("%q", i.val)
+	return fmt.Sprintf("[%v] %q", i.typ, i.val)
 }
 
 type lexer struct {
@@ -73,6 +75,15 @@ func (l *lexer) errorf(format string,
 }
 
 func (l *lexer) emit(t itemType) {
+	if t != itemEOF && l.pos <= l.start {
+		// Let itemEOF go through.
+		glog.WithFields(logrus.Fields{
+			"start": l.start,
+			"pos":   l.pos,
+			"typ":   t,
+		}).Info("Invalid emit")
+		return
+	}
 	l.items <- item{
 		typ: t,
 		val: l.input[l.start:l.pos],

@@ -1,13 +1,8 @@
 package gqlex
 
-import (
-	"strings"
-	"unicode"
-)
-
 const (
-	leftCurl  = "{"
-	rightCurl = "}"
+	leftCurl  = '{'
+	rightCurl = '}'
 )
 
 // stateFn represents the state of the scanner as a function that
@@ -15,91 +10,137 @@ const (
 type stateFn func(*lexer) stateFn
 
 func lexText(l *lexer) stateFn {
+Loop:
 	for {
-		if strings.HasPrefix(l.input[l.pos:], leftCurl) {
-			if l.pos > l.start {
-				l.emit(itemText)
+		switch r := l.next(); {
+		case r == leftCurl:
+			l.backup()
+			l.emit(itemText) // emit whatever we have so far.
+			l.next()         // advance one to get back to where we saw leftCurl.
+			l.depth += 1     // one level down.
+			l.emit(itemLeftCurl)
+			return lexInside // we're in.
+
+		case r == rightCurl:
+			return l.errorf("Too many right characters")
+		case r == EOF:
+			break Loop
+		case isNameBegin(r):
+			l.backup()
+			l.emit(itemText)
+			return lexOperationType
+		}
+	}
+	if l.pos > l.start {
+		l.emit(itemText)
+	}
+	l.emit(itemEOF)
+	return nil
+}
+
+func lexInside(l *lexer) stateFn {
+	for {
+		switch r := l.next(); {
+		case r == rightCurl:
+			l.depth -= 1
+			l.emit(itemRightCurl)
+			if l.depth == 0 {
+				return lexText
 			}
-			return lexLeftCurl
+		case r == leftCurl:
+			l.depth += 1
+			l.emit(itemLeftCurl)
+		case r == EOF:
+			return l.errorf("unclosed action")
+		case isSpace(r) || isEndOfLine(r) || r == ',':
+			l.ignore()
+		case isNameBegin(r):
+			l.backup()
+			return lexName
+		case r == '#':
+			l.backup()
+			return lexComment
+		default:
+			return l.errorf("Unrecognized character in lexInside: %#U", r)
 		}
-		if strings.HasPrefix(l.input[l.pos:], rightCurl) {
-			return l.errorf("Too many right brackets")
+	}
+}
+
+func lexName(l *lexer) stateFn {
+	for {
+		// The caller must have already checked isNameBegin.
+		r := l.next()
+		if isNameSuffix(r) {
+			continue
 		}
-		if l.next() == EOF {
+		l.backup()
+		l.emit(itemName)
+		break
+	}
+	return lexInside
+}
+
+func lexComment(l *lexer) stateFn {
+	for {
+		r := l.next()
+		if isEndOfLine(r) {
+			l.emit(itemComment)
+			return lexInside
+		}
+		if r == EOF {
 			break
 		}
 	}
-	// Correctly reached EOF.
 	if l.pos > l.start {
-		l.emit(itemText)
+		l.emit(itemComment)
 	}
 	l.emit(itemEOF)
 	return nil // Stop the run loop.
 }
 
-func lexLeftCurl(l *lexer) stateFn {
-	l.pos += len(leftCurl)
-	l.depth += 1
-	l.emit(itemLeftCurl)
-	return lexInside(l)
-}
-
-func lexRightCurl(l *lexer) stateFn {
-	l.pos += len(rightCurl)
-	l.depth -= 1
-	l.emit(itemRightCurl)
-
-	if l.depth == 0 {
-		return lexText
-	} else {
-		return lexInside
-	}
-}
-
-func lexInside(l *lexer) stateFn {
+func lexOperationType(l *lexer) stateFn {
 	for {
-		if strings.HasPrefix(l.input[l.pos:], rightCurl) {
-			return lexRightCurl
+		r := l.next()
+		if isNameSuffix(r) {
+			continue // absorb
 		}
-		if strings.HasPrefix(l.input[l.pos:], leftCurl) {
-			return lexLeftCurl
+		l.backup()
+		word := l.input[l.start:l.pos]
+		if word == "query" || word == "mutation" {
+			l.emit(itemOpType)
 		}
-
-		switch r := l.next(); {
-		case r == EOF:
-			return l.errorf("unclosed action")
-		case isSpace(r) || isEndOfLine(r):
-			l.ignore()
-		case isAlphaNumeric(r):
-			l.backup()
-			return lexIdentifier
-		}
+		break
 	}
-}
-
-func lexIdentifier(l *lexer) stateFn {
-Loop:
-	for {
-		switch r := l.next(); {
-		case isAlphaNumeric(r):
-			// absorb.
-		default:
-			l.backup()
-			l.emit(itemIdentifier)
-			break Loop
-		}
-	}
-	return lexInside
+	return lexText
 }
 
 func isSpace(r rune) bool {
-	return r == ' ' || r == '\t'
+	return r == '\u0009' || r == '\u0020'
 }
 
 func isEndOfLine(r rune) bool {
-	return r == '\r' || r == '\n'
+	return r == '\u000A' || r == '\u000D'
 }
 
-func isAlphaNumeric(r rune) bool {
-	return r == '_' || unicode.IsLetter(r) || unicode.IsDigit(r)
+func isNameBegin(r rune) bool {
+	switch {
+	case r >= 'a' && r <= 'z':
+		return true
+	case r >= 'A' && r <= 'Z':
+		return true
+	case r == '_':
+		return true
+	default:
+		return false
+	}
+}
+
+func isNameSuffix(r rune) bool {
+	if isNameBegin(r) {
+		return true
+	}
+	if r >= '0' && r <= '9' {
+		return true
+	}
+	return false
 }

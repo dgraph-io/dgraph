@@ -7,10 +7,10 @@ import (
 
 func TestNewLexer(t *testing.T) {
 	input := `
-	{
+	mutation {
 		me {
-			name
-			city
+			name0 # my name
+			_city, # 0what would fail lex.
 			friends {
 				name
 			}
