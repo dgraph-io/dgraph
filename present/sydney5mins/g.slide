@@ -23,12 +23,14 @@ https://mrjn.xyz
 
 * What is DGraph
 
-DGraph is a distributed, low-latency graph serving system.
+[[https://github.com/dgraph-io/dgraph][https://github.com/dgraph-io/dgraph]]
+
+DGraph is an open source, distributed, low-latency graph serving system written in Go.
 
 - *Low*Latency*: Minimize the latency of query execution.
 
-		Linear time complexity, based on attributes/depth of query, not number of results.
 		Minimize the number of network calls required to run the query.
+		Linear time complexity, based on attributes/depth of query, not number of results.
 		Meant to be run in production, serving real time user queries.
 
 - *Distributed*: Automatically distribute data to and serve from provided servers.
