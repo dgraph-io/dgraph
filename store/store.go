@@ -17,7 +17,7 @@
 package store
 
 import (
-	"github.com/manishrjain/gocrud/x"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 )
@@ -33,7 +33,7 @@ func (s *Store) Init(filepath string) {
 	var err error
 	s.db, err = leveldb.OpenFile(filepath, s.opt)
 	if err != nil {
-		x.LogErr(log, err).WithField("filepath", filepath).
+		x.Err(log, err).WithField("filepath", filepath).
 			Fatal("While opening store")
 		return
 	}

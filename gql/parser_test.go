@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/manishrjain/dgraph/query"
+	"github.com/dgraph-io/dgraph/query"
 )
 
 func checkAttr(g *query.SubGraph, attr string) error {

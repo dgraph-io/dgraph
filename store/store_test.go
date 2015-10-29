@@ -33,7 +33,7 @@ func TestGet(t *testing.T) {
 
 	var s Store
 	s.Init(path)
-	k := Key("name", 1)
+	k := []byte("mykey")
 	if err := s.SetOne(k, []byte("neo")); err != nil {
 		t.Error(err)
 		t.Fail()

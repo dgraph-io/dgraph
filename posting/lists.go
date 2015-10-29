@@ -20,7 +20,7 @@ import (
 	"sync"
 
 	"github.com/dgryski/go-farm"
-	"github.com/manishrjain/dgraph/store"
+	"github.com/dgraph-io/dgraph/store"
 )
 
 var lmutex sync.RWMutex

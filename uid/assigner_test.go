@@ -22,8 +22,8 @@ import (
 	"testing"
 
 	"github.com/Sirupsen/logrus"
-	"github.com/manishrjain/dgraph/posting"
-	"github.com/manishrjain/dgraph/store"
+	"github.com/dgraph-io/dgraph/posting"
+	"github.com/dgraph-io/dgraph/store"
 )
 
 func NewStore(t *testing.T) string {

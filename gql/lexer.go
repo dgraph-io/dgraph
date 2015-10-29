@@ -21,7 +21,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/Sirupsen/logrus"
-	"github.com/manishrjain/dgraph/x"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 var glog = x.Log("lexer")

@@ -4,7 +4,7 @@ import (
 	"container/heap"
 
 	"github.com/google/flatbuffers/go"
-	"github.com/manishrjain/dgraph/task"
+	"github.com/dgraph-io/dgraph/task"
 )
 
 type elem struct {

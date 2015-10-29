@@ -24,10 +24,10 @@ import (
 
 	"github.com/Sirupsen/logrus"
 	"github.com/google/flatbuffers/go"
-	"github.com/manishrjain/dgraph/posting"
-	"github.com/manishrjain/dgraph/store"
-	"github.com/manishrjain/dgraph/task"
-	"github.com/manishrjain/dgraph/x"
+	"github.com/dgraph-io/dgraph/posting"
+	"github.com/dgraph-io/dgraph/store"
+	"github.com/dgraph-io/dgraph/task"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 func setErr(err *error, nerr error) {

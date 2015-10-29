@@ -23,9 +23,9 @@ import (
 	"time"
 
 	"github.com/dgryski/go-farm"
-	"github.com/manishrjain/dgraph/posting"
-	"github.com/manishrjain/dgraph/posting/types"
-	"github.com/manishrjain/dgraph/x"
+	"github.com/dgraph-io/dgraph/posting"
+	"github.com/dgraph-io/dgraph/posting/types"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 var log = x.Log("uid")

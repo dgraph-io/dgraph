@@ -21,8 +21,8 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/manishrjain/dgraph/query"
-	"github.com/manishrjain/dgraph/x"
+	"github.com/dgraph-io/dgraph/query"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 func Parse(input string) (sg *query.SubGraph, rerr error) {

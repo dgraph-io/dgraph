@@ -20,10 +20,10 @@ import (
 	"fmt"
 
 	"github.com/google/flatbuffers/go"
-	"github.com/manishrjain/dgraph/posting"
-	"github.com/manishrjain/dgraph/task"
-	"github.com/manishrjain/dgraph/uid"
-	"github.com/manishrjain/dgraph/x"
+	"github.com/dgraph-io/dgraph/posting"
+	"github.com/dgraph-io/dgraph/task"
+	"github.com/dgraph-io/dgraph/uid"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 /*

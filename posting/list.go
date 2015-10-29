@@ -27,9 +27,9 @@ import (
 	"sync"
 
 	"github.com/google/flatbuffers/go"
-	"github.com/manishrjain/dgraph/posting/types"
-	"github.com/manishrjain/dgraph/store"
-	"github.com/manishrjain/dgraph/x"
+	"github.com/dgraph-io/dgraph/posting/types"
+	"github.com/dgraph-io/dgraph/store"
+	"github.com/dgraph-io/dgraph/x"
 
 	linked "container/list"
 )
