@@ -12,9 +12,11 @@ https://mrjn.xyz
 
 * What is Graph
 
-- Abstract data type to represent mathematical graph concepts.
-- Made up of Entities and Edges. Example edge in triple format:
-		[Tom Hanks]--married-->[Rita Wilson]
+- Abstract data type to represent relationships between objects.
+- Made up of Entities and Edges. Directed edge in triple format:
+		Entity      --attribute-->  Entity/Value
+		[Tom Hanks] --married_to->  [Rita Wilson]
+		[Tom Hanks] --born_on---->  [July 9, 1956]
 - Popular graphs: Facebook Social Graph, Google Knowledge Graph.
 
 .image graph.png
@@ -25,25 +27,59 @@ DGraph is a distributed, low-latency graph serving system.
 
 - *Low*Latency*: Minimize the latency of query execution.
 
-		Linear time complexity, based on complexity/depth of query, not results.
+		Linear time complexity, based on attributes/depth of query, not number of results.
 		Minimize the number of network calls required to run the query.
 		Meant to be run in production, serving real time user queries.
 
 - *Distributed*: Automatically distribute data to and serve from provided servers.
 		Handle shard splits, shard merges, and shard movement.
 
+- *Highly*Availability*: Automatic data replication and failover.
 - *Resilience*: Automatically handle server failures, and reassignment to healthy servers.
 
-* Low Latency
+* Implementation
 
-Most interesting challenge in all of this.
+- Use Flatbuffers for on-disk, in-memory and over-network representation.
+- Entities assigned `uint64` uids for optimized representation.
+- Use RocksDB to store data internally in posting list format.
+	Optimized for seeks: ram, ssd, disk
+	Used at Facebook, CockroachDB.
+- Posting List = all directed edges from a given attribute
+		[attribute, entity] -> [sorted list of entities / value]
+- Generally one complete posting list would be served by a server.
+- If posting list is too _big_, chunk it into shards.
+- Shard is the most granular data to be served or moved around.
+- Server can serve many shards.
+- Each shard replicated across at least 3 different servers.
 
+* Example: Names of Friends of Friends of ME
 
+	- GraphQL query received. Parse into internal query rep.
 
-* MVP
+	[Network call]
+
+	- Pick server serving posting list `friend`.
+	- Seek to `friend, me`. Get a list of friends uids, and return.
+
+	[Network call]
+
+	- Send all uids again. For each friend uid_i, seek to `friend, uid_i`
+	- Get lists of lists of uids. Merge them into one big list, and return.
+
+	[Network call]
+
+	- Pick server serving posting list `name`.
+	- For each uid_i, seek to `name,`uid_i`, and return.
+
+- 3 RT network calls in total
+- Network calls: O(m) where m = depth + attributes in query
+- RocksDB Seeks: O(n) where n = total results.
+
+* Minimum Viable Product
 - Planning to launch in mid-November.
-- Non-distributed, run on only one server.
-- Support GraphQL w/ JSON response.
-- Low-latency.
-- Launch with benchmarks against Neo4J.
-- Possibly provide sorting.
+- Non-distributed. Runs on only one server.
+- Focus on low-latency.
+- Support a subset of GraphQL. Responses in JSON.
+- Launch with performance comparisons against popular Neo4J.
+
+Do try it out!
