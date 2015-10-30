@@ -37,7 +37,7 @@ DGraph is an open source, distributed, low-latency graph serving system written 
 		Handle shard splits, shard merges, and shard movement.
 
 - *Highly*Availability*: Automatic data replication and failover.
-- *Resilience*: Automatically handle server failures, and reassignment to healthy servers.
+- *Resilience*: Automatically handle server failures, and shard reassignment to healthy servers.
 
 * Implementation
 
@@ -71,7 +71,7 @@ DGraph is an open source, distributed, low-latency graph serving system written 
 	[Network call]
 
 	- Pick server serving posting list `name`.
-	- For each uid_i, seek to `name,`uid_i`, and return.
+	- For each uid_i, seek to `name, uid_i`, and return.
 
 - 3 RT network calls in total
 - Network calls: O(m) where m = depth + attributes in query
