@@ -1,0 +1,140 @@
+/*
+ * Copyright 2015 Manish R Jain <manishrjain@gmail.com>
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * 		http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package lex
+
+import (
+	"fmt"
+	"unicode/utf8"
+
+	"github.com/Sirupsen/logrus"
+	"github.com/dgraph-io/dgraph/x"
+)
+
+var glog = x.Log("lexer")
+
+const EOF = -1
+
+// ItemType is used to set the type of a token. These constants can be defined
+// in the file containing state functions. Note that their value should be >= 5.
+type ItemType int
+
+const (
+	ItemEOF   ItemType = iota
+	ItemError          // error
+)
+
+// stateFn represents the state of the scanner as a function that
+// returns the next state.
+type StateFn func(*Lexer) StateFn
+
+type item struct {
+	Typ ItemType
+	Val string
+}
+
+func (i item) String() string {
+	switch i.Typ {
+	case 0:
+		return "EOF"
+	}
+	return fmt.Sprintf("[%v] %q", i.Typ, i.Val)
+}
+
+type Lexer struct {
+	// NOTE: Using a text scanner wouldn't work because it's designed for parsing
+	// Golang. It won't keep track of start position, or allow us to retrieve
+	// slice from [start:pos]. Better to just use normal string.
+	Input string    // string being scanned.
+	Start int       // start position of this item.
+	Pos   int       // current position of this item.
+	Width int       // width of last rune read from input.
+	Items chan item // channel of scanned items.
+	Depth int       // nesting of {}
+}
+
+func NewLexer(input string) *Lexer {
+	l := &Lexer{
+		Input: input,
+		Items: make(chan item),
+	}
+	return l
+}
+
+func (l *Lexer) Errorf(format string,
+	args ...interface{}) StateFn {
+	l.Items <- item{
+		Typ: ItemError,
+		Val: fmt.Sprintf(format, args...),
+	}
+	return nil
+}
+
+// Emit emits the item with it's type information.
+func (l *Lexer) Emit(t ItemType) {
+	if t != ItemEOF && l.Pos <= l.Start {
+		// Let ItemEOF go through.
+		glog.WithFields(logrus.Fields{
+			"start": l.Start,
+			"pos":   l.Pos,
+			"typ":   t,
+		}).Info("Invalid emit")
+		return
+	}
+	l.Items <- item{
+		Typ: t,
+		Val: l.Input[l.Start:l.Pos],
+	}
+	l.Start = l.Pos
+}
+
+func (l *Lexer) Next() (result rune) {
+	if l.Pos >= len(l.Input) {
+		l.Width = 0
+		return EOF
+	}
+	r, w := utf8.DecodeRuneInString(l.Input[l.Pos:])
+	l.Width = w
+	l.Pos += l.Width
+	return r
+}
+
+func (l *Lexer) Backup() {
+	l.Pos -= l.Width
+}
+
+func (l *Lexer) Peek() rune {
+	r := l.Next()
+	l.Backup()
+	return r
+}
+
+func (l *Lexer) Ignore() {
+	l.Start = l.Pos
+}
+
+type checkRune func(r rune) bool
+
+func (l *Lexer) AcceptRun(c checkRune) {
+	for {
+		r := l.Next()
+		if !c(r) {
+			break
+		}
+	}
+
+	l.Backup()
+}

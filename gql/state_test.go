@@ -19,6 +19,8 @@ package gql
 import (
 	"fmt"
 	"testing"
+
+	"github.com/dgraph-io/dgraph/lex"
 )
 
 func TestNewLexer(t *testing.T) {
@@ -33,8 +35,9 @@ func TestNewLexer(t *testing.T) {
 			}
 		}
 	}`
-	l := newLexer(input)
-	for item := range l.items {
+	l := lex.NewLexer(input)
+	go run(l)
+	for item := range l.Items {
 		fmt.Println(item.String())
 	}
 }

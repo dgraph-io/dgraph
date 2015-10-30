@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 Manish R Jain <manishrjain@gmail.com>
+ * Copyright 2015 Manish R Jain <manishrjain@gmaicom>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,23 +21,35 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/dgraph-io/dgraph/lex"
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/x"
 )
 
+var glog = x.Log("gql")
+
+func run(l *lex.Lexer) {
+	for state := lexText; state != nil; {
+		state = state(l)
+	}
+	close(l.Items) // No more tokens.
+}
+
 func Parse(input string) (sg *query.SubGraph, rerr error) {
-	l := newLexer(input)
+	l := lex.NewLexer(input)
+	go run(l)
+
 	sg = nil
-	for item := range l.items {
-		if item.typ == itemText {
+	for item := range l.Items {
+		if item.Typ == itemText {
 			continue
 		}
-		if item.typ == itemOpType {
-			if item.val == "mutation" {
+		if item.Typ == itemOpType {
+			if item.Val == "mutation" {
 				return nil, errors.New("Mutations not supported")
 			}
 		}
-		if item.typ == itemLeftCurl {
+		if item.Typ == itemLeftCurl {
 			if sg == nil {
 				sg, rerr = getRoot(l)
 				if rerr != nil {
@@ -52,14 +64,14 @@ func Parse(input string) (sg *query.SubGraph, rerr error) {
 	return sg, nil
 }
 
-func getRoot(l *lexer) (sg *query.SubGraph, rerr error) {
-	item := <-l.items
-	if item.typ != itemName {
+func getRoot(l *lex.Lexer) (sg *query.SubGraph, rerr error) {
+	item := <-l.Items
+	if item.Typ != itemName {
 		return nil, fmt.Errorf("Expected some name. Got: %v", item)
 	}
 	// ignore itemName for now.
-	item = <-l.items
-	if item.typ != itemLeftRound {
+	item = <-l.Items
+	if item.Typ != itemLeftRound {
 		return nil, fmt.Errorf("Expected variable start. Got: %v", item)
 	}
 
@@ -68,21 +80,21 @@ func getRoot(l *lexer) (sg *query.SubGraph, rerr error) {
 	for {
 		var key, val string
 		// Get key or close bracket
-		item = <-l.items
-		if item.typ == itemArgName {
-			key = item.val
-		} else if item.typ == itemRightRound {
+		item = <-l.Items
+		if item.Typ == itemArgName {
+			key = item.Val
+		} else if item.Typ == itemRightRound {
 			break
 		} else {
 			return nil, fmt.Errorf("Expecting argument name. Got: %v", item)
 		}
 
 		// Get corresponding value.
-		item = <-l.items
-		if item.typ == itemArgVal {
-			val = item.val
+		item = <-l.Items
+		if item.Typ == itemArgVal {
+			val = item.Val
 		} else {
-			return nil, fmt.Errorf("Expecting argument val. Got: %v", item)
+			return nil, fmt.Errorf("Expecting argument va Got: %v", item)
 		}
 
 		if key == "uid" {
@@ -96,30 +108,30 @@ func getRoot(l *lexer) (sg *query.SubGraph, rerr error) {
 			return nil, fmt.Errorf("Expecting uid or xid. Got: %v", item)
 		}
 	}
-	if item.typ != itemRightRound {
+	if item.Typ != itemRightRound {
 		return nil, fmt.Errorf("Unexpected token. Got: %v", item)
 	}
 	return query.NewGraph(uid, xid)
 }
 
-func godeep(l *lexer, sg *query.SubGraph) {
+func godeep(l *lex.Lexer, sg *query.SubGraph) {
 	curp := sg // stores current pointer.
 	for {
-		switch item := <-l.items; {
-		case item.typ == itemName:
+		switch item := <-l.Items; {
+		case item.Typ == itemName:
 			child := new(query.SubGraph)
-			child.Attr = item.val
+			child.Attr = item.Val
 			sg.Children = append(sg.Children, child)
 			curp = child
-		case item.typ == itemLeftCurl:
+		case item.Typ == itemLeftCurl:
 			godeep(l, curp) // recursive iteration
-		case item.typ == itemRightCurl:
+		case item.Typ == itemRightCurl:
 			return
-		case item.typ == itemLeftRound:
+		case item.Typ == itemLeftRound:
 			// absorb all these, we don't care right now.
 			for {
-				item = <-l.items
-				if item.typ == itemRightRound || item.typ == itemEOF {
+				item = <-l.Items
+				if item.Typ == itemRightRound || item.Typ == lex.ItemEOF {
 					break
 				}
 			}
@@ -127,5 +139,4 @@ func godeep(l *lexer, sg *query.SubGraph) {
 			// continue
 		}
 	}
-
 }

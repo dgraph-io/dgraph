@@ -16,180 +16,192 @@
 
 package gql
 
+import "github.com/dgraph-io/dgraph/lex"
+
 const (
 	leftCurl  = '{'
 	rightCurl = '}'
 )
 
-// stateFn represents the state of the scanner as a function that
-// returns the next state.
-type stateFn func(*lexer) stateFn
+const (
+	itemText       lex.ItemType = 5 + iota // plain text
+	itemLeftCurl                           // left curly bracket
+	itemRightCurl                          // right curly bracket
+	itemComment                            // comment
+	itemName                               // names
+	itemOpType                             // operation type
+	itemString                             // quoted string
+	itemLeftRound                          // left round bracket
+	itemRightRound                         // right round bracket
+	itemArgName                            // argument name
+	itemArgVal                             // argument val
+)
 
-func lexText(l *lexer) stateFn {
+func lexText(l *lex.Lexer) lex.StateFn {
 Loop:
 	for {
-		switch r := l.next(); {
+		switch r := l.Next(); {
 		case r == leftCurl:
-			l.backup()
-			l.emit(itemText) // emit whatever we have so far.
-			l.next()         // advance one to get back to where we saw leftCurl.
-			l.depth += 1     // one level down.
-			l.emit(itemLeftCurl)
+			l.Backup()
+			l.Emit(itemText) // emit whatever we have so far.
+			l.Next()         // advance one to get back to where we saw leftCurl.
+			l.Depth += 1     // one level down.
+			l.Emit(itemLeftCurl)
 			return lexInside // we're in.
 
 		case r == rightCurl:
-			return l.errorf("Too many right characters")
-		case r == EOF:
+			return l.Errorf("Too many right characters")
+		case r == lex.EOF:
 			break Loop
 		case isNameBegin(r):
-			l.backup()
-			l.emit(itemText)
+			l.Backup()
+			l.Emit(itemText)
 			return lexOperationType
 		}
 	}
-	if l.pos > l.start {
-		l.emit(itemText)
+	if l.Pos > l.Start {
+		l.Emit(itemText)
 	}
-	l.emit(itemEOF)
+	l.Emit(lex.ItemEOF)
 	return nil
 }
 
-func lexInside(l *lexer) stateFn {
+func lexInside(l *lex.Lexer) lex.StateFn {
 	for {
-		switch r := l.next(); {
+		switch r := l.Next(); {
 		case r == rightCurl:
-			l.depth -= 1
-			l.emit(itemRightCurl)
-			if l.depth == 0 {
+			l.Depth -= 1
+			l.Emit(itemRightCurl)
+			if l.Depth == 0 {
 				return lexText
 			}
 		case r == leftCurl:
-			l.depth += 1
-			l.emit(itemLeftCurl)
-		case r == EOF:
-			return l.errorf("unclosed action")
+			l.Depth += 1
+			l.Emit(itemLeftCurl)
+		case r == lex.EOF:
+			return l.Errorf("unclosed action")
 		case isSpace(r) || isEndOfLine(r) || r == ',':
-			l.ignore()
+			l.Ignore()
 		case isNameBegin(r):
 			return lexName
 		case r == '#':
-			l.backup()
+			l.Backup()
 			return lexComment
 		case r == '(':
-			l.emit(itemLeftRound)
+			l.Emit(itemLeftRound)
 			return lexArgInside
 		default:
-			return l.errorf("Unrecognized character in lexInside: %#U", r)
+			return l.Errorf("Unrecognized character in lexInside: %#U", r)
 		}
 	}
 }
 
-func lexName(l *lexer) stateFn {
+func lexName(l *lex.Lexer) lex.StateFn {
 	for {
 		// The caller already checked isNameBegin, and absorbed one rune.
-		r := l.next()
+		r := l.Next()
 		if isNameSuffix(r) {
 			continue
 		}
-		l.backup()
-		l.emit(itemName)
+		l.Backup()
+		l.Emit(itemName)
 		break
 	}
 	return lexInside
 }
 
-func lexComment(l *lexer) stateFn {
+func lexComment(l *lex.Lexer) lex.StateFn {
 	for {
-		r := l.next()
+		r := l.Next()
 		if isEndOfLine(r) {
-			l.emit(itemComment)
+			l.Emit(itemComment)
 			return lexInside
 		}
-		if r == EOF {
+		if r == lex.EOF {
 			break
 		}
 	}
-	if l.pos > l.start {
-		l.emit(itemComment)
+	if l.Pos > l.Start {
+		l.Emit(itemComment)
 	}
-	l.emit(itemEOF)
+	l.Emit(lex.ItemEOF)
 	return nil // Stop the run loop.
 }
 
-func lexOperationType(l *lexer) stateFn {
+func lexOperationType(l *lex.Lexer) lex.StateFn {
 	for {
-		r := l.next()
+		r := l.Next()
 		if isNameSuffix(r) {
 			continue // absorb
 		}
-		l.backup()
-		word := l.input[l.start:l.pos]
+		l.Backup()
+		word := l.Input[l.Start:l.Pos]
 		if word == "query" || word == "mutation" {
-			l.emit(itemOpType)
+			l.Emit(itemOpType)
 		}
 		break
 	}
 	return lexText
 }
 
-func lexArgInside(l *lexer) stateFn {
+func lexArgInside(l *lex.Lexer) lex.StateFn {
 	for {
-		switch r := l.next(); {
-		case r == EOF:
-			return l.errorf("unclosed argument")
+		switch r := l.Next(); {
+		case r == lex.EOF:
+			return l.Errorf("unclosed argument")
 		case isSpace(r) || isEndOfLine(r):
-			l.ignore()
+			l.Ignore()
 		case isNameBegin(r):
 			return lexArgName
 		case r == ':':
-			l.ignore()
+			l.Ignore()
 			return lexArgVal
 		case r == ')':
-			l.emit(itemRightRound)
+			l.Emit(itemRightRound)
 			return lexInside
 		case r == ',':
-			l.ignore()
+			l.Ignore()
 		}
 	}
 }
 
-func lexArgName(l *lexer) stateFn {
+func lexArgName(l *lex.Lexer) lex.StateFn {
 	for {
-		r := l.next()
+		r := l.Next()
 		if isNameSuffix(r) {
 			continue
 		}
-		l.backup()
-		l.emit(itemArgName)
+		l.Backup()
+		l.Emit(itemArgName)
 		break
 	}
 	return lexArgInside
 }
 
-func lexArgVal(l *lexer) stateFn {
-	l.acceptRun(isSpace)
-	l.ignore() // Any spaces encountered.
+func lexArgVal(l *lex.Lexer) lex.StateFn {
+	l.AcceptRun(isSpace)
+	l.Ignore() // Any spaces encountered.
 	for {
-		r := l.next()
+		r := l.Next()
 		if isSpace(r) || isEndOfLine(r) || r == ')' || r == ',' {
-			l.backup()
-			l.emit(itemArgVal)
+			l.Backup()
+			l.Emit(itemArgVal)
 			return lexArgInside
 		}
-		if r == EOF {
-			return l.errorf("Reached EOF while reading var value: %v",
-				l.input[l.start:l.pos])
+		if r == lex.EOF {
+			return l.Errorf("Reached lex.EOF while reading var value: %v",
+				l.Input[l.Start:l.Pos])
 		}
 	}
 	glog.Fatal("This shouldn't be reached.")
 	return nil
 }
 
-func lexArgumentVal(l *lexer) stateFn {
+func lexArgumentVal(l *lex.Lexer) lex.StateFn {
 	for {
-		switch r := l.next(); {
+		switch r := l.Next(); {
 		case isSpace(r):
-			l.ignore()
+			l.Ignore()
 		}
 	}
 }
