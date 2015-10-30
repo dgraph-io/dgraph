@@ -126,15 +126,24 @@ func (l *Lexer) Ignore() {
 	l.Start = l.Pos
 }
 
-type checkRune func(r rune) bool
+type CheckRune func(r rune) bool
 
-func (l *Lexer) AcceptRun(c checkRune) {
+func (l *Lexer) AcceptRun(c CheckRune) {
 	for {
 		r := l.Next()
-		if !c(r) {
+		if r == EOF || !c(r) {
 			break
 		}
 	}
+	l.Backup()
+}
 
+func (l *Lexer) AcceptUntil(c CheckRune) {
+	for {
+		r := l.Next()
+		if r == EOF || c(r) {
+			break
+		}
+	}
 	l.Backup()
 }
