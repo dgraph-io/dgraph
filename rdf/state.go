@@ -32,6 +32,7 @@ const (
 	itemLiteral                            // literal, 10
 	itemLanguage                           // language, 11
 	itemObjectType                         // object type, 12
+	itemValidEnd                           // end with dot, 13
 )
 
 const (
@@ -82,7 +83,13 @@ Loop:
 			l.Emit(itemText)
 			return lexObject
 
-		case r == '.' || r == lex.EOF:
+		case r == lex.EOF:
+			break Loop
+
+		case r == '.':
+			if l.Depth > AT_OBJECT {
+				l.Emit(itemValidEnd)
+			}
 			break Loop
 		}
 	}

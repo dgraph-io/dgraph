@@ -100,6 +100,56 @@ var testNQuads = []struct {
 			ObjectValue: nil,
 		},
 	},
+	{
+		input:  "_:alice .",
+		hasErr: true,
+	},
+	{
+		input:  "_:alice knows .",
+		hasErr: true,
+	},
+	{
+		input:  `_:alice "knows" stuff .`,
+		hasErr: true,
+	},
+	{
+		input:  "_:alice <knows> stuff .",
+		hasErr: true,
+	},
+	{
+		input:  "_:alice <knows> <stuff>",
+		hasErr: true,
+	},
+	{
+		input:  `"_:alice" <knows> <stuff> .`,
+		hasErr: true,
+	},
+	{
+		input:  `_:alice <knows> "stuff .`,
+		hasErr: true,
+	},
+	{
+		input:  `_:alice <knows> "stuff"@-en .`,
+		hasErr: true,
+	},
+	{
+		input:  `_:alice <knows> "stuff"^<string> .`,
+		hasErr: true,
+	},
+	{
+		input:  `_:alice <knows> "stuff"^^xs:string .`,
+		hasErr: true,
+	},
+	{
+		input: `_:alice <knows> "stuff"^^<xs:string> .`,
+		nq: NQuad{
+			Subject:     "_:alice",
+			Predicate:   "knows",
+			ObjectId:    "",
+			ObjectValue: "stuff@@xs:string",
+		},
+		hasErr: false,
+	},
 }
 
 func TestLex(t *testing.T) {
@@ -107,9 +157,15 @@ func TestLex(t *testing.T) {
 		rnq, err := Parse(test.input)
 		if test.hasErr {
 			if err == nil {
-				t.Errorf("Expected error for input: %q", test.input)
+				t.Errorf("Expected error for input: %q. Output: %+v", test.input, rnq)
+			}
+			continue
+		} else {
+			if err != nil {
+				t.Errorf("Unexpected error: %v", err)
 			}
 		}
+
 		if !reflect.DeepEqual(rnq, test.nq) {
 			t.Errorf("Expected %v. Got: %v", test.nq, rnq)
 		}

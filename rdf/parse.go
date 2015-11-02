@@ -45,6 +45,7 @@ func Parse(line string) (rnq NQuad, rerr error) {
 	l := lex.NewLexer(line)
 	go run(l)
 	var oval string
+	var vend bool
 	for item := range l.Items {
 		if item.Typ == itemSubject {
 			rnq.Subject = stripBracketsIfPresent(item.Val)
@@ -62,12 +63,22 @@ func Parse(line string) (rnq NQuad, rerr error) {
 			rnq.Language = item.Val
 		}
 		if item.Typ == itemObjectType {
+			// TODO: Strictly parse common types like integers, floats etc.
 			if len(oval) == 0 {
 				glog.Fatalf(
 					"itemObject should be emitted before itemObjectType. Input: %q", line)
 			}
 			oval += "@@" + stripBracketsIfPresent(item.Val)
 		}
+		if item.Typ == lex.ItemError {
+			return rnq, fmt.Errorf(item.Val)
+		}
+		if item.Typ == itemValidEnd {
+			vend = true
+		}
+	}
+	if !vend {
+		return rnq, fmt.Errorf("Invalid end of input")
 	}
 	if len(oval) > 0 {
 		rnq.ObjectValue = oval
