@@ -91,7 +91,7 @@ func (l *Lexer) Emit(t ItemType) {
 			"start": l.Start,
 			"pos":   l.Pos,
 			"typ":   t,
-		}).Info("Invalid emit")
+		}).Debug("Invalid emit")
 		return
 	}
 	l.Items <- item{

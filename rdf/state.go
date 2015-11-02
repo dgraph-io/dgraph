@@ -18,7 +18,10 @@
 // http://www.w3.org/TR/n-quads/
 package rdf
 
-import "github.com/dgraph-io/dgraph/lex"
+import (
+	"github.com/dgraph-io/dgraph/lex"
+	"github.com/dgraph-io/dgraph/x"
+)
 
 const (
 	itemText       lex.ItemType = 5 + iota // plain text
@@ -37,6 +40,8 @@ const (
 	AT_OBJECT
 	AT_LABEL
 )
+
+var glog = x.Log("rdf")
 
 func run(l *lex.Lexer) {
 	for state := lexText; state != nil; {
