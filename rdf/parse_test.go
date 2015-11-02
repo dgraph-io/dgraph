@@ -150,6 +150,32 @@ var testNQuads = []struct {
 		},
 		hasErr: false,
 	},
+	{
+		input: `_:alice <knows> "stuff"^^<xs:string> <label> .`,
+		nq: NQuad{
+			Subject:     "_:alice",
+			Predicate:   "knows",
+			ObjectId:    "",
+			ObjectValue: "stuff@@xs:string",
+			Label:       "label",
+		},
+		hasErr: false,
+	},
+	{
+		input: `_:alice <knows> "stuff"^^<xs:string> _:label .`,
+		nq: NQuad{
+			Subject:     "_:alice",
+			Predicate:   "knows",
+			ObjectId:    "",
+			ObjectValue: "stuff@@xs:string",
+			Label:       "_:label",
+		},
+		hasErr: false,
+	},
+	{
+		input:  `_:alice <knows> "stuff"^^<xs:string> "label" .`,
+		hasErr: true,
+	},
 }
 
 func TestLex(t *testing.T) {

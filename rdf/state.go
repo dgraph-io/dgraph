@@ -71,6 +71,11 @@ Loop:
 				l.Emit(itemText)
 				return lexObject
 
+			} else if l.Depth == AT_LABEL {
+				l.Backup()
+				l.Emit(itemText)
+				return lexLabel
+
 			} else {
 				return l.Errorf("Invalid input: %v at lexText", r)
 			}
@@ -133,7 +138,6 @@ func lexBlankNode(l *lex.Lexer, styp lex.ItemType,
 	}
 	if isSpace(r) {
 		l.Emit(styp)
-		l.Depth += 1
 		return sfn
 	}
 	return l.Errorf("Invalid character %v found for itemType: %v", r, styp)
@@ -147,6 +151,7 @@ func lexSubject(l *lex.Lexer) lex.StateFn {
 	}
 
 	if r == '_' {
+		l.Depth += 1
 		return lexBlankNode(l, itemSubject, lexText)
 	}
 
@@ -221,6 +226,7 @@ func lexObject(l *lex.Lexer) lex.StateFn {
 		return lexUntilClosing(l, itemObject, lexText)
 	}
 	if r == '_' {
+		l.Depth += 1
 		return lexBlankNode(l, itemObject, lexText)
 	}
 	if r == '"' {
@@ -229,6 +235,19 @@ func lexObject(l *lex.Lexer) lex.StateFn {
 	}
 
 	return l.Errorf("Invalid char: %v at lexObject", r)
+}
+
+func lexLabel(l *lex.Lexer) lex.StateFn {
+	r := l.Next()
+	if r == '<' {
+		l.Depth += 1
+		return lexUntilClosing(l, itemLabel, lexText)
+	}
+	if r == '_' {
+		l.Depth += 1
+		return lexBlankNode(l, itemLabel, lexText)
+	}
+	return l.Errorf("Invalid char: %v at lexLabel", r)
 }
 
 func isClosingBracket(r rune) bool {

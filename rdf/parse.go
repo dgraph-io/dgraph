@@ -76,6 +76,9 @@ func Parse(line string) (rnq NQuad, rerr error) {
 		if item.Typ == itemValidEnd {
 			vend = true
 		}
+		if item.Typ == itemLabel {
+			rnq.Label = stripBracketsIfPresent(item.Val)
+		}
 	}
 	if !vend {
 		return rnq, fmt.Errorf("Invalid end of input")
