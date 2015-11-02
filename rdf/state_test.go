@@ -41,6 +41,36 @@ var testNQuads = []struct {
 		attr:    "<predicate>",
 		valueid: "<Object_id>",
 	},
+	{
+		input:   `_:alice <follows> _:bob0 .`,
+		entity:  "_:alice",
+		attr:    "<follows>",
+		valueid: "_:bob0",
+	},
+	{
+		input:   `_:alice <name> "Alice In Wonderland" .`,
+		entity:  "_:alice",
+		attr:    "<name>",
+		valueid: "Alice In Wonderland",
+	},
+	{
+		input:   `_:alice <name> "Alice In Wonderland"@en-0 .`,
+		entity:  "_:alice",
+		attr:    "<name>",
+		valueid: "Alice In Wonderland",
+	},
+	{
+		input:   `_:alice <age> "013"^^<integer> .`,
+		entity:  "_:alice",
+		attr:    "<age>",
+		valueid: "Alice In Wonderland",
+	},
+	{
+		input:   `<http://www.w3.org/2001/sw/RDFCore/ntriples/> <http://purl.org/dc/terms/title> "N-Triples"@en-US .`,
+		entity:  "<http://www.w3.org/2001/sw/RDFCore/ntriples/>",
+		attr:    "<http://purl.org/dc/terms/title>",
+		valueid: "Alice In Wonderland",
+	},
 }
 
 func TestLex(t *testing.T) {
