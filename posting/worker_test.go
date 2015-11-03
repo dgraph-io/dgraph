@@ -62,8 +62,8 @@ func TestPush(t *testing.T) {
 	}
 }
 
-func addTriple(t *testing.T, triple x.Triple, l *List) {
-	if err := l.AddMutation(triple, Set); err != nil {
+func addEdge(t *testing.T, edge x.DirectedEdge, l *List) {
+	if err := l.AddMutation(edge, Set); err != nil {
 		t.Error(err)
 	}
 }
@@ -82,27 +82,27 @@ func TestProcessTask(t *testing.T) {
 	ms.Init(mdir)
 	Init(ps, ms)
 
-	triple := x.Triple{
+	edge := x.DirectedEdge{
 		ValueId:   23,
 		Source:    "author0",
 		Timestamp: time.Now(),
 	}
-	addTriple(t, triple, Get(Key(10, "friend")))
-	addTriple(t, triple, Get(Key(11, "friend")))
-	addTriple(t, triple, Get(Key(12, "friend")))
+	addEdge(t, edge, Get(Key(10, "friend")))
+	addEdge(t, edge, Get(Key(11, "friend")))
+	addEdge(t, edge, Get(Key(12, "friend")))
 
-	triple.ValueId = 25
-	addTriple(t, triple, Get(Key(12, "friend")))
+	edge.ValueId = 25
+	addEdge(t, edge, Get(Key(12, "friend")))
 
-	triple.ValueId = 26
-	addTriple(t, triple, Get(Key(12, "friend")))
+	edge.ValueId = 26
+	addEdge(t, edge, Get(Key(12, "friend")))
 
-	triple.ValueId = 31
-	addTriple(t, triple, Get(Key(10, "friend")))
-	addTriple(t, triple, Get(Key(12, "friend")))
+	edge.ValueId = 31
+	addEdge(t, edge, Get(Key(10, "friend")))
+	addEdge(t, edge, Get(Key(12, "friend")))
 
-	triple.Value = "photon"
-	addTriple(t, triple, Get(Key(12, "friend")))
+	edge.Value = "photon"
+	addEdge(t, edge, Get(Key(12, "friend")))
 
 	query := NewQuery("friend", []uint64{10, 11, 12})
 	result, err := ProcessTask(query)

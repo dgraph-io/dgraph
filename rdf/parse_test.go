@@ -82,12 +82,12 @@ var testNQuads = []struct {
 		},
 	},
 	{
-		input: `<http://www.w3.org/2001/sw/RDFCore/ntriples/> <http://purl.org/dc/terms/title> "N-Triples"@en-US .`,
+		input: `<http://www.w3.org/2001/sw/RDFCore/nedges/> <http://purl.org/dc/terms/title> "N-Edges"@en-US .`,
 		nq: NQuad{
-			Subject:     "http://www.w3.org/2001/sw/RDFCore/ntriples/",
+			Subject:     "http://www.w3.org/2001/sw/RDFCore/nedges/",
 			Predicate:   "http://purl.org/dc/terms/title",
 			ObjectId:    "",
-			ObjectValue: "N-Triples",
+			ObjectValue: "N-Edges",
 			Language:    "en-US",
 		},
 	},

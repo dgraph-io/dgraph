@@ -28,7 +28,7 @@ type Status struct {
 	Message string `json:"message"`
 }
 
-type Triple struct {
+type DirectedEdge struct {
 	Entity    uint64
 	EntityEid string
 	Attribute string

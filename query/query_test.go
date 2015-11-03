@@ -41,7 +41,7 @@ func setErr(err *error, nerr error) {
 func populateList(key []byte) error {
 	pl := posting.Get(key)
 
-	t := x.Triple{
+	t := x.DirectedEdge{
 		ValueId:   9,
 		Source:    "query_test",
 		Timestamp: time.Now(),
@@ -126,8 +126,8 @@ func NewStore(t *testing.T) string {
 	return path
 }
 
-func addTriple(t *testing.T, triple x.Triple, l *posting.List) {
-	if err := l.AddMutation(triple, posting.Set); err != nil {
+func addEdge(t *testing.T, edge x.DirectedEdge, l *posting.List) {
+	if err := l.AddMutation(edge, posting.Set); err != nil {
 		t.Error(err)
 	}
 }
@@ -179,47 +179,47 @@ func TestProcessGraph(t *testing.T) {
 
 	// So, user we're interested in has uid: 1.
 	// She has 4 friends: 23, 24, 25, 31, and 101
-	triple := x.Triple{
+	edge := x.DirectedEdge{
 		ValueId:   23,
 		Source:    "testing",
 		Timestamp: time.Now(),
 	}
-	addTriple(t, triple, posting.Get(posting.Key(1, "friend")))
+	addEdge(t, edge, posting.Get(posting.Key(1, "friend")))
 
-	triple.ValueId = 24
-	addTriple(t, triple, posting.Get(posting.Key(1, "friend")))
+	edge.ValueId = 24
+	addEdge(t, edge, posting.Get(posting.Key(1, "friend")))
 
-	triple.ValueId = 25
-	addTriple(t, triple, posting.Get(posting.Key(1, "friend")))
+	edge.ValueId = 25
+	addEdge(t, edge, posting.Get(posting.Key(1, "friend")))
 
-	triple.ValueId = 31
-	addTriple(t, triple, posting.Get(posting.Key(1, "friend")))
+	edge.ValueId = 31
+	addEdge(t, edge, posting.Get(posting.Key(1, "friend")))
 
-	triple.ValueId = 101
-	addTriple(t, triple, posting.Get(posting.Key(1, "friend")))
+	edge.ValueId = 101
+	addEdge(t, edge, posting.Get(posting.Key(1, "friend")))
 
 	// Now let's add a few properties for the main user.
-	triple.Value = "Michonne"
-	addTriple(t, triple, posting.Get(posting.Key(1, "name")))
+	edge.Value = "Michonne"
+	addEdge(t, edge, posting.Get(posting.Key(1, "name")))
 
-	triple.Value = "female"
-	addTriple(t, triple, posting.Get(posting.Key(1, "gender")))
+	edge.Value = "female"
+	addEdge(t, edge, posting.Get(posting.Key(1, "gender")))
 
-	triple.Value = "alive"
-	addTriple(t, triple, posting.Get(posting.Key(1, "status")))
+	edge.Value = "alive"
+	addEdge(t, edge, posting.Get(posting.Key(1, "status")))
 
 	// Now let's add a name for each of the friends, except 101.
-	triple.Value = "Rick Grimes"
-	addTriple(t, triple, posting.Get(posting.Key(23, "name")))
+	edge.Value = "Rick Grimes"
+	addEdge(t, edge, posting.Get(posting.Key(23, "name")))
 
-	triple.Value = "Glenn Rhee"
-	addTriple(t, triple, posting.Get(posting.Key(24, "name")))
+	edge.Value = "Glenn Rhee"
+	addEdge(t, edge, posting.Get(posting.Key(24, "name")))
 
-	triple.Value = "Daryl Dixon"
-	addTriple(t, triple, posting.Get(posting.Key(25, "name")))
+	edge.Value = "Daryl Dixon"
+	addEdge(t, edge, posting.Get(posting.Key(25, "name")))
 
-	triple.Value = "Andrea"
-	addTriple(t, triple, posting.Get(posting.Key(31, "name")))
+	edge.Value = "Andrea"
+	addEdge(t, edge, posting.Get(posting.Key(31, "name")))
 
 	// Alright. Now we have everything set up. Let's create the query.
 	sg, err := NewGraph(1, "")

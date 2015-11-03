@@ -56,7 +56,7 @@ func allocateNew(xid string) (uid uint64, rerr error) {
 		}
 
 		// Uid hasn't been assigned yet.
-		t := x.Triple{
+		t := x.DirectedEdge{
 			Value:     xid, // not txid
 			Source:    "_assigner_",
 			Timestamp: time.Now(),
@@ -92,7 +92,7 @@ func GetOrAssign(xid string) (uid uint64, rerr error) {
 		if err != nil {
 			return 0, err
 		}
-		t := x.Triple{
+		t := x.DirectedEdge{
 			ValueId:   uid,
 			Source:    "_assigner_",
 			Timestamp: time.Now(),

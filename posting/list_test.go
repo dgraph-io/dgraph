@@ -70,12 +70,12 @@ func TestAddMutation(t *testing.T) {
 
 	l.init(key, ps, ms)
 
-	triple := x.Triple{
+	edge := x.DirectedEdge{
 		ValueId:   9,
 		Source:    "testing",
 		Timestamp: time.Now(),
 	}
-	if err := l.AddMutation(triple, Set); err != nil {
+	if err := l.AddMutation(edge, Set); err != nil {
 		t.Error(err)
 	}
 	/*
@@ -100,9 +100,9 @@ func TestAddMutation(t *testing.T) {
 	}
 	// return // Test 1.
 
-	// Add another triple now.
-	triple.ValueId = 81
-	l.AddMutation(triple, Set)
+	// Add another edge now.
+	edge.ValueId = 81
+	l.AddMutation(edge, Set)
 	// l.CommitIfDirty()
 	if l.Length() != 2 {
 		t.Errorf("Length: %d", l.Length())
@@ -122,12 +122,12 @@ func TestAddMutation(t *testing.T) {
 	}
 	// return // Test 2.
 
-	// Add another triple, in between the two above.
+	// Add another edge, in between the two above.
 	uids := []uint64{
 		9, 49, 81,
 	}
-	triple.ValueId = 49
-	if err := l.AddMutation(triple, Set); err != nil {
+	edge.ValueId = 49
+	if err := l.AddMutation(edge, Set); err != nil {
 		t.Error(err)
 	}
 	/*
@@ -140,20 +140,20 @@ func TestAddMutation(t *testing.T) {
 	}
 	// return // Test 3.
 
-	// Delete a triple, add a triple, replace a triple
-	triple.ValueId = 49
-	if err := l.AddMutation(triple, Del); err != nil {
+	// Delete an edge, add an edge, replace an edge
+	edge.ValueId = 49
+	if err := l.AddMutation(edge, Del); err != nil {
 		t.Error(err)
 	}
 
-	triple.ValueId = 69
-	if err := l.AddMutation(triple, Set); err != nil {
+	edge.ValueId = 69
+	if err := l.AddMutation(edge, Set); err != nil {
 		t.Error(err)
 	}
 
-	triple.ValueId = 9
-	triple.Source = "anti-testing"
-	if err := l.AddMutation(triple, Set); err != nil {
+	edge.ValueId = 9
+	edge.Source = "anti-testing"
+	if err := l.AddMutation(edge, Set); err != nil {
 		t.Error(err)
 	}
 	/*
@@ -207,12 +207,12 @@ func TestAddMutation_Value(t *testing.T) {
 
 	ol.init(key, ps, ms)
 
-	triple := x.Triple{
+	edge := x.DirectedEdge{
 		Value:     "oh hey there",
 		Source:    "new-testing",
 		Timestamp: time.Now(),
 	}
-	if err := ol.AddMutation(triple, Set); err != nil {
+	if err := ol.AddMutation(edge, Set); err != nil {
 		t.Error(err)
 	}
 	var p types.Posting
@@ -246,8 +246,8 @@ func TestAddMutation_Value(t *testing.T) {
 	}
 
 	// The value made it to the posting list. Changing it now.
-	triple.Value = 119
-	if err := ol.AddMutation(triple, Set); err != nil {
+	edge.Value = 119
+	if err := ol.AddMutation(edge, Set); err != nil {
 		t.Error(err)
 	}
 	if ol.Length() != 1 {

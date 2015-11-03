@@ -76,8 +76,8 @@ func Key(uid uint64, attr string) []byte {
 	return buf.Bytes()
 }
 
-func addTripleToPosting(b *flatbuffers.Builder,
-	t x.Triple, op byte) flatbuffers.UOffsetT {
+func addEdgeToPosting(b *flatbuffers.Builder,
+	t x.DirectedEdge, op byte) flatbuffers.UOffsetT {
 
 	var bo flatbuffers.UOffsetT
 	if t.Value != nil {
@@ -405,19 +405,19 @@ func (l *List) generateIndex() {
 }
 
 func (l *List) addIfValid(b *flatbuffers.Builder,
-	offsets *[]flatbuffers.UOffsetT, t x.Triple, op byte) {
+	offsets *[]flatbuffers.UOffsetT, t x.DirectedEdge, op byte) {
 
 	if op == Del {
 		if fi := l.find(t.ValueId); fi >= 0 {
 			// Delete. Only add it to the list if it exists in the posting list.
-			*offsets = append(*offsets, addTripleToPosting(b, t, op))
+			*offsets = append(*offsets, addEdgeToPosting(b, t, op))
 		}
 	} else {
-		*offsets = append(*offsets, addTripleToPosting(b, t, op))
+		*offsets = append(*offsets, addEdgeToPosting(b, t, op))
 	}
 }
 
-func (l *List) AddMutation(t x.Triple, op byte) error {
+func (l *List) AddMutation(t x.DirectedEdge, op byte) error {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
 
@@ -428,7 +428,7 @@ func (l *List) AddMutation(t x.Triple, op byte) error {
 	// 				- If yes, store the mutation.
 	// 				- If no, disregard this mutation.
 
-	// All triples with a value set, have the same uid. In other words,
+	// All edges with a value set, have the same uid. In other words,
 	// an (entity, attribute) can only have one interface{} value.
 	if t.Value != nil {
 		t.ValueId = math.MaxUint64
