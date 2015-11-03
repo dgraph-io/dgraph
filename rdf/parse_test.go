@@ -177,6 +177,14 @@ var testNQuads = []struct {
 		input:  `_:alice <knows> "stuff"^^<xs:string> "label" .`,
 		hasErr: true,
 	},
+	{
+		input: `_:alice <knows> <bob> . <bob>`, // ignores the <bob> after dot.
+		nq: NQuad{
+			Subject:   "_:alice",
+			Predicate: "knows",
+			ObjectId:  "bob",
+		},
+	},
 }
 
 func TestLex(t *testing.T) {
