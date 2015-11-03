@@ -17,9 +17,15 @@
 package rdf
 
 import (
+	"bufio"
 	"fmt"
+	"io"
+	"strings"
+	"time"
 
 	"github.com/dgraph-io/dgraph/lex"
+	"github.com/dgraph-io/dgraph/uid"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 type NQuad struct {
@@ -29,6 +35,27 @@ type NQuad struct {
 	ObjectValue interface{}
 	Label       string
 	Language    string
+}
+
+func (nq NQuad) ToEdge() (result x.DirectedEdge, rerr error) {
+	sid, err := uid.GetOrAssign(nq.Subject)
+	if err != nil {
+		return result, err
+	}
+	result.Entity = sid
+	if len(nq.ObjectId) > 0 {
+		oid, err := uid.GetOrAssign(nq.ObjectId)
+		if err != nil {
+			return result, err
+		}
+		result.ValueId = oid
+	} else {
+		result.Value = nq.ObjectValue
+	}
+	result.Attribute = nq.Predicate
+	result.Source = nq.Label
+	result.Timestamp = time.Now()
+	return result, nil
 }
 
 func stripBracketsIfPresent(val string) string {
@@ -93,4 +120,34 @@ func Parse(line string) (rnq NQuad, rerr error) {
 		return rnq, fmt.Errorf("No Object in NQuad")
 	}
 	return rnq, nil
+}
+
+func isNewline(r rune) bool {
+	return r == '\n' || r == '\r'
+}
+
+func ParseStream(reader io.Reader, cnq chan NQuad, done chan error) {
+	scanner := bufio.NewScanner(reader)
+	for scanner.Scan() {
+		line := scanner.Text()
+		line = strings.Trim(line, " \t")
+		if len(line) == 0 {
+			continue
+		}
+
+		glog.Debugf("Got line: %q", line)
+		nq, err := Parse(line)
+		if err != nil {
+			x.Err(glog, err).Errorf("While parsing: %q", line)
+			done <- err
+			return
+		}
+		cnq <- nq
+	}
+	if err := scanner.Err(); err != nil {
+		x.Err(glog, err).Error("While scanning input")
+		done <- err
+		return
+	}
+	done <- nil
 }

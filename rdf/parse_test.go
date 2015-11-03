@@ -18,6 +18,7 @@ package rdf
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -194,6 +195,39 @@ func TestLex(t *testing.T) {
 
 		if !reflect.DeepEqual(rnq, test.nq) {
 			t.Errorf("Expected %v. Got: %v", test.nq, rnq)
+		}
+	}
+}
+
+func TestParseStream(t *testing.T) {
+	cnq := make(chan NQuad, 10)
+	done := make(chan error)
+
+	data := `	
+
+		<alice> <follows> <bob> .
+		<bob> <follows> <fred> .
+		<bob> <status> "cool_person" .
+		<charlie> <follows> <bob> .
+		<charlie> <follows> <dani> .
+		<dani> <follows> <bob> .
+		<dani> <follows> <greg> .
+		<dani> <status> "cool_person" .
+		<emily> <follows> <fred> .
+		<fred> <follows> <greg> .
+		<greg> <status> "cool_person" .
+	`
+	go ParseStream(strings.NewReader(data), cnq, done)
+Loop:
+	for {
+		select {
+		case nq := <-cnq:
+			t.Logf("Got nquad: %v", nq)
+		case err := <-done:
+			if err != nil {
+				t.Errorf("While parsing data: %v", err)
+			}
+			break Loop
 		}
 	}
 }

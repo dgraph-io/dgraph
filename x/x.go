@@ -30,7 +30,6 @@ type Status struct {
 
 type DirectedEdge struct {
 	Entity    uint64
-	EntityEid string
 	Attribute string
 	Value     interface{}
 	ValueId   uint64
