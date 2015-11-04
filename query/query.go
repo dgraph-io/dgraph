@@ -19,11 +19,11 @@ package query
 import (
 	"fmt"
 
-	"github.com/google/flatbuffers/go"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/uid"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/google/flatbuffers/go"
 )
 
 /*
@@ -90,6 +90,77 @@ type SubGraph struct {
 
 	query  []byte
 	result []byte
+}
+
+func getChildren(r *task.Result, sg *SubGraph) (result interface{}, rerr error) {
+	var l []interface{}
+	for i := 0; i < r.UidsLength(); i++ {
+		m := make(map[string]interface{})
+		uid := r.Uids(i)
+		m["uid"] = uid
+		if len(sg.Children) > 0 {
+			for _, cg := range sg.Children {
+			}
+
+			// do something.
+		}
+
+		var v task.Value
+		if ok := r.Values(&v, i); !ok {
+			return nil, fmt.Errorf("While reading value at index: %v", i)
+		}
+		var i interface{}
+		if err := posting.ParseValue(i, v.ValBytes()); err != nil {
+			return nil, err
+		}
+
+		if r.UidsLength() == 0 {
+		}
+	}
+}
+
+func processChild(result *[]map[string]interface{}, g *SubGraph) error {
+	ro := flatbuffers.GetUOffsetT(g.result)
+	r := new(task.Result)
+	r.Init(g.result, ro)
+	if r.ValuesLength() > 0 {
+		var v task.Value
+		for i := 0; i < r.ValuesLength(); i++ {
+			if ok := r.Values(&v, i); !ok {
+				glog.WithField("idx", i).Error("While loading value")
+				return fmt.Errorf("While parsing value at index: %v", i)
+			}
+			var i interface{}
+			if err := posting.ParseValue(i, v.ValBytes()); err != nil {
+				x.Log(glog, err).Error("While parsing value")
+				return err
+			}
+			result[i][g.Attr] = i
+		}
+	}
+
+	if r.UidsLength() > 0 {
+		rlist := make([]map[string]interface{}, r.UidsLength())
+		for i := 0; i < r.UidsLength(); i++ {
+			rlist[i]["uid"] = r.Uids(i)
+			for _, cg := range g.Children {
+				if err := processChild(&rlist, cg); err != nil {
+					x.Log(glog, err).Error("While processing child with attr: %v", cg.Attr)
+					return err
+				}
+			}
+		}
+	}
+}
+
+func (sg SubGraph) ToJson() (result []byte, rerr error) {
+	ro := flatbuffers.GetUOffsetT(sg.result)
+	r := new(task.Result)
+	r.Init(sg.result, ro)
+	rlist := make([]map[string]interface{}, r.UidsLength())
+	for i := 0; i < r.UidsLength(); i++ {
+		rlist[i]["uid"] = r.Uids(i)
+	}
 }
 
 func NewGraph(euid uint64, exid string) (*SubGraph, error) {
