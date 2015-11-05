@@ -14,16 +14,22 @@ func (rcv *Result) Init(buf []byte, i flatbuffers.UOffsetT) {
 	rcv._tab.Pos = i
 }
 
-func (rcv *Result) Uids(j int) uint64 {
+func (rcv *Result) Uidmatrix(obj *UidList, j int) bool {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
 	if o != 0 {
-		a := rcv._tab.Vector(o)
-		return rcv._tab.GetUint64(a + flatbuffers.UOffsetT(j * 8))
+		x := rcv._tab.Vector(o)
+		x += flatbuffers.UOffsetT(j) * 4
+		x = rcv._tab.Indirect(x)
+	if obj == nil {
+		obj = new(UidList)
 	}
-	return 0
+		obj.Init(rcv._tab.Bytes, x)
+		return true
+	}
+	return false
 }
 
-func (rcv *Result) UidsLength() int {
+func (rcv *Result) UidmatrixLength() int {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
 	if o != 0 {
 		return rcv._tab.VectorLen(o)
@@ -55,8 +61,8 @@ func (rcv *Result) ValuesLength() int {
 }
 
 func ResultStart(builder *flatbuffers.Builder) { builder.StartObject(2) }
-func ResultAddUids(builder *flatbuffers.Builder, uids flatbuffers.UOffsetT) { builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(uids), 0) }
-func ResultStartUidsVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT { return builder.StartVector(8, numElems, 8)
+func ResultAddUidmatrix(builder *flatbuffers.Builder, uidmatrix flatbuffers.UOffsetT) { builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(uidmatrix), 0) }
+func ResultStartUidmatrixVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT { return builder.StartVector(4, numElems, 4)
 }
 func ResultAddValues(builder *flatbuffers.Builder, values flatbuffers.UOffsetT) { builder.PrependUOffsetTSlot(1, flatbuffers.UOffsetT(values), 0) }
 func ResultStartValuesVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT { return builder.StartVector(4, numElems, 4)

@@ -9,7 +9,11 @@ table Value {
 	val:[ubyte];
 }
 
-table Result {
+table UidList {
 	uids:[ulong];
+}
+
+table Result {
+	uidmatrix:[UidList];
 	values:[Value];
 }

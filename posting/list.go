@@ -26,10 +26,10 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/google/flatbuffers/go"
 	"github.com/dgraph-io/dgraph/posting/types"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/google/flatbuffers/go"
 
 	linked "container/list"
 )
@@ -597,18 +597,20 @@ func (l *List) CommitIfDirty() error {
 
 // This is a blocking function. It would block when the channel buffer capacity
 // has been reached.
-func (l *List) StreamUids(ch chan uint64) {
+func (l *List) GetUids() []uint64 {
 	l.mutex.RLock()
 	defer l.mutex.RUnlock()
 
+	result := make([]uint64, l.length())
+	result = result[:0]
 	var p types.Posting
 	for i := 0; i < l.length(); i++ {
 		if ok := l.get(&p, i); !ok || p.Uid() == math.MaxUint64 {
 			break
 		}
-		ch <- p.Uid()
+		result = append(result, p.Uid())
 	}
-	close(ch)
+	return result
 }
 
 func (l *List) Value() (result []byte, rerr error) {

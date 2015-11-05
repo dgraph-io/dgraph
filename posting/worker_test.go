@@ -1,71 +1,41 @@
 package posting
 
 import (
-	"container/heap"
+	"fmt"
 	"os"
 	"testing"
 	"time"
 
 	"github.com/Sirupsen/logrus"
-	"github.com/google/flatbuffers/go"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/google/flatbuffers/go"
 )
-
-func TestPush(t *testing.T) {
-	h := &elemHeap{}
-	heap.Init(h)
-
-	e := elem{Uid: 5}
-	heap.Push(h, e)
-	e.Uid = 3
-	heap.Push(h, e)
-	e.Uid = 4
-	heap.Push(h, e)
-
-	if h.Len() != 3 {
-		t.Errorf("Expected len 3. Found: %v", h.Len())
-	}
-	if (*h)[0].Uid != 3 {
-		t.Errorf("Expected min 3. Found: %+v", (*h)[0])
-	}
-	e.Uid = 10
-	(*h)[0] = e
-	heap.Fix(h, 0)
-	if (*h)[0].Uid != 4 {
-		t.Errorf("Expected min 4. Found: %+v", (*h)[0])
-	}
-	e.Uid = 11
-	(*h)[0] = e
-	heap.Fix(h, 0)
-	if (*h)[0].Uid != 5 {
-		t.Errorf("Expected min 5. Found: %+v", (*h)[0])
-	}
-
-	e = heap.Pop(h).(elem)
-	if e.Uid != 5 {
-		t.Errorf("Expected min 5. Found %+v", e)
-	}
-
-	e = heap.Pop(h).(elem)
-	if e.Uid != 10 {
-		t.Errorf("Expected min 10. Found: %+v", e)
-	}
-	e = heap.Pop(h).(elem)
-	if e.Uid != 11 {
-		t.Errorf("Expected min 11. Found: %+v", e)
-	}
-
-	if h.Len() != 0 {
-		t.Errorf("Expected len 0. Found: %v, values: %+v", h.Len(), h)
-	}
-}
 
 func addEdge(t *testing.T, edge x.DirectedEdge, l *List) {
 	if err := l.AddMutation(edge, Set); err != nil {
 		t.Error(err)
 	}
+}
+
+func check(r *task.Result, idx int, expected []uint64) error {
+	var m task.UidList
+	if ok := r.Uidmatrix(&m, idx); !ok {
+		return fmt.Errorf("Unable to retrieve uidlist")
+	}
+
+	if m.UidsLength() != len(expected) {
+		return fmt.Errorf("Expected length: %v. Got: %v",
+			len(expected), m.UidsLength())
+	}
+	for i, uid := range expected {
+		if m.Uids(i) != uid {
+			return fmt.Errorf("Uid mismatch at index: %v. Expected: %v. Got: %v",
+				i, uid, m.Uids(i))
+		}
+	}
+	return nil
 }
 
 func TestProcessTask(t *testing.T) {
@@ -114,27 +84,31 @@ func TestProcessTask(t *testing.T) {
 	r := new(task.Result)
 	r.Init(result, ro)
 
-	if r.UidsLength() != 4 {
-		t.Errorf("Expected 4. Got uids length: %v", r.UidsLength())
+	if r.UidmatrixLength() != 3 {
+		t.Errorf("Expected 3. Got uidmatrix length: %v", r.UidmatrixLength())
 	}
-	if r.Uids(0) != 23 {
-		t.Errorf("Expected 23. Got: %v", r.Uids(0))
+	if err := check(r, 0, []uint64{23, 31}); err != nil {
+		t.Error(err)
 	}
-	if r.Uids(1) != 25 {
-		t.Errorf("Expected 25. Got: %v", r.Uids(0))
+	if err := check(r, 1, []uint64{23}); err != nil {
+		t.Error(err)
 	}
-	if r.Uids(2) != 26 {
-		t.Errorf("Expected 26. Got: %v", r.Uids(0))
+	if err := check(r, 2, []uint64{23, 25, 26, 31}); err != nil {
+		t.Error(err)
 	}
-	if r.Uids(3) != 31 {
-		t.Errorf("Expected 31. Got: %v", r.Uids(0))
-	}
+
 	if r.ValuesLength() != 3 {
 		t.Errorf("Expected 3. Got values length: %v", r.ValuesLength())
 	}
-
 	var tval task.Value
 	if ok := r.Values(&tval, 0); !ok {
+		t.Errorf("Unable to retrieve value")
+	}
+	if tval.ValLength() != 1 ||
+		tval.ValBytes()[0] != 0x00 {
+		t.Errorf("Invalid byte value at index 0")
+	}
+	if ok := r.Values(&tval, 1); !ok {
 		t.Errorf("Unable to retrieve value")
 	}
 	if tval.ValLength() != 1 ||
@@ -145,7 +119,6 @@ func TestProcessTask(t *testing.T) {
 	if ok := r.Values(&tval, 2); !ok {
 		t.Errorf("Unable to retrieve value")
 	}
-
 	var v string
 	if err := ParseValue(&v, tval.ValBytes()); err != nil {
 		t.Error(err)

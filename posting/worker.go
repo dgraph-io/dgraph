@@ -1,12 +1,11 @@
 package posting
 
 import (
-	"container/heap"
-
-	"github.com/google/flatbuffers/go"
 	"github.com/dgraph-io/dgraph/task"
+	"github.com/google/flatbuffers/go"
 )
 
+/*
 type elem struct {
 	Uid   uint64
 	Chidx int // channel index
@@ -27,7 +26,9 @@ func (h *elemHeap) Pop() interface{} {
 	*h = old[0 : n-1]
 	return x
 }
+*/
 
+/*
 func addUids(b *flatbuffers.Builder, sorted []uint64) flatbuffers.UOffsetT {
 	// Invert the sorted uids to maintain same order in flatbuffers.
 	task.ResultStartUidsVector(b, len(sorted))
@@ -36,6 +37,20 @@ func addUids(b *flatbuffers.Builder, sorted []uint64) flatbuffers.UOffsetT {
 	}
 	return b.EndVector(len(sorted))
 }
+*/
+
+func uidlistOffset(b *flatbuffers.Builder,
+	sorted []uint64) flatbuffers.UOffsetT {
+
+	task.UidListStartUidsVector(b, len(sorted))
+	for i := len(sorted) - 1; i >= 0; i-- {
+		b.PrependUint64(sorted[i])
+	}
+	ulist := b.EndVector(len(sorted))
+	task.UidListStart(b)
+	task.UidListAddUids(b, ulist)
+	return task.UidListEnd(b)
+}
 
 func ProcessTask(query []byte) (result []byte, rerr error) {
 	uo := flatbuffers.GetUOffsetT(query)
@@ -43,9 +58,9 @@ func ProcessTask(query []byte) (result []byte, rerr error) {
 	q.Init(query, uo)
 
 	b := flatbuffers.NewBuilder(0)
-	var voffsets []flatbuffers.UOffsetT
+	voffsets := make([]flatbuffers.UOffsetT, q.UidsLength())
+	uoffsets := make([]flatbuffers.UOffsetT, q.UidsLength())
 
-	var channels []chan uint64
 	attr := string(q.Attr())
 	for i := 0; i < q.UidsLength(); i++ {
 		uid := q.Uids(i)
@@ -60,11 +75,10 @@ func ProcessTask(query []byte) (result []byte, rerr error) {
 			valoffset = b.CreateByteVector(val)
 		}
 		task.ValueAddVal(b, valoffset)
-		voffsets = append(voffsets, task.ValueEnd(b))
+		voffsets[i] = task.ValueEnd(b)
 
-		ch := make(chan uint64, 1000)
-		go pl.StreamUids(ch)
-		channels = append(channels, ch)
+		ulist := pl.GetUids()
+		uoffsets[i] = uidlistOffset(b, ulist)
 	}
 	task.ResultStartValuesVector(b, len(voffsets))
 	for i := len(voffsets) - 1; i >= 0; i-- {
@@ -72,44 +86,15 @@ func ProcessTask(query []byte) (result []byte, rerr error) {
 	}
 	valuesVent := b.EndVector(len(voffsets))
 
-	h := &elemHeap{}
-	heap.Init(h)
-	for i, ch := range channels {
-		e := elem{Chidx: i}
-		if uid, ok := <-ch; ok {
-			e.Uid = uid
-			heap.Push(h, e)
-		}
+	task.ResultStartUidmatrixVector(b, len(uoffsets))
+	for i := len(uoffsets) - 1; i >= 0; i-- {
+		b.PrependUOffsetT(uoffsets[i])
 	}
-
-	var last uint64
-	var ruids []uint64
-	last = 0
-	for h.Len() > 0 {
-		// Pick the minimum uid.
-		me := (*h)[0]
-		if me.Uid != last {
-			// We're iterating over sorted streams of uint64s. Avoid adding duplicates.
-			ruids = append(ruids, me.Uid)
-			last = me.Uid
-		}
-
-		// Now pick the next element from the channel which had the min uid.
-		ch := channels[me.Chidx]
-		if uid, ok := <-ch; !ok {
-			heap.Pop(h)
-
-		} else {
-			me.Uid = uid
-			(*h)[0] = me
-			heap.Fix(h, 0) // Faster than Pop() followed by Push().
-		}
-	}
-	uidsVend := addUids(b, ruids)
+	matrixVent := b.EndVector(len(uoffsets))
 
 	task.ResultStart(b)
 	task.ResultAddValues(b, valuesVent)
-	task.ResultAddUids(b, uidsVend)
+	task.ResultAddUidmatrix(b, matrixVent)
 	rend := task.ResultEnd(b)
 	b.Finish(rend)
 	return b.Bytes[b.Head():], nil
