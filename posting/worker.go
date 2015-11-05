@@ -2,55 +2,9 @@ package posting
 
 import (
 	"github.com/dgraph-io/dgraph/task"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/google/flatbuffers/go"
 )
-
-/*
-type elem struct {
-	Uid   uint64
-	Chidx int // channel index
-}
-
-type elemHeap []elem
-
-func (h elemHeap) Len() int           { return len(h) }
-func (h elemHeap) Less(i, j int) bool { return h[i].Uid < h[j].Uid }
-func (h elemHeap) Swap(i, j int)      { h[i], h[j] = h[j], h[i] }
-func (h *elemHeap) Push(x interface{}) {
-	*h = append(*h, x.(elem))
-}
-func (h *elemHeap) Pop() interface{} {
-	old := *h
-	n := len(old)
-	x := old[n-1]
-	*h = old[0 : n-1]
-	return x
-}
-*/
-
-/*
-func addUids(b *flatbuffers.Builder, sorted []uint64) flatbuffers.UOffsetT {
-	// Invert the sorted uids to maintain same order in flatbuffers.
-	task.ResultStartUidsVector(b, len(sorted))
-	for i := len(sorted) - 1; i >= 0; i-- {
-		b.PrependUint64(sorted[i])
-	}
-	return b.EndVector(len(sorted))
-}
-*/
-
-func uidlistOffset(b *flatbuffers.Builder,
-	sorted []uint64) flatbuffers.UOffsetT {
-
-	task.UidListStartUidsVector(b, len(sorted))
-	for i := len(sorted) - 1; i >= 0; i-- {
-		b.PrependUint64(sorted[i])
-	}
-	ulist := b.EndVector(len(sorted))
-	task.UidListStart(b)
-	task.UidListAddUids(b, ulist)
-	return task.UidListEnd(b)
-}
 
 func ProcessTask(query []byte) (result []byte, rerr error) {
 	uo := flatbuffers.GetUOffsetT(query)
@@ -78,7 +32,7 @@ func ProcessTask(query []byte) (result []byte, rerr error) {
 		voffsets[i] = task.ValueEnd(b)
 
 		ulist := pl.GetUids()
-		uoffsets[i] = uidlistOffset(b, ulist)
+		uoffsets[i] = x.UidlistOffset(b, ulist)
 	}
 	task.ResultStartValuesVector(b, len(voffsets))
 	for i := len(voffsets) - 1; i >= 0; i-- {

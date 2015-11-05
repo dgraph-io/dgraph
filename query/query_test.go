@@ -23,11 +23,11 @@ import (
 	"time"
 
 	"github.com/Sirupsen/logrus"
-	"github.com/google/flatbuffers/go"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/google/flatbuffers/go"
 )
 
 func setErr(err *error, nerr error) {
@@ -155,12 +155,46 @@ func checkSingleValue(t *testing.T, child *SubGraph,
 	r := new(task.Result)
 	r.Init(child.result, uo)
 	if r.ValuesLength() != 1 {
-		t.Error("Expected value length 1. Got: %v", r.ValuesLength())
+		t.Errorf("Expected value length 1. Got: %v", r.ValuesLength())
 	}
-	if r.UidsLength() != 0 {
-		t.Error("Expected uids length 0. Got: %v", r.UidsLength())
+	if r.UidmatrixLength() != 1 {
+		t.Errorf("Expected uidmatrix length 1. Got: %v", r.UidmatrixLength())
+	}
+	var ul task.UidList
+	if ok := r.Uidmatrix(&ul, 0); !ok {
+		t.Errorf("While parsing uidlist")
+	}
+
+	if ul.UidsLength() != 0 {
+		t.Error("Expected uids length 0. Got: %v", ul.UidsLength())
 	}
 	checkName(t, r, 0, value)
+}
+
+func TestNewGraph(t *testing.T) {
+	var ex uint64
+	ex = 101
+	sg, err := NewGraph(ex, "")
+	if err != nil {
+		t.Error(err)
+	}
+
+	uo := flatbuffers.GetUOffsetT(sg.result)
+	r := new(task.Result)
+	r.Init(sg.result, uo)
+	if r.UidmatrixLength() != 1 {
+		t.Errorf("Expected length 1. Got: %v", r.UidmatrixLength())
+	}
+	var ul task.UidList
+	if ok := r.Uidmatrix(&ul, 0); !ok {
+		t.Errorf("Unable to parse uidlist at index 0")
+	}
+	if ul.UidsLength() != 1 {
+		t.Errorf("Expected length 1. Got: %v", ul.UidsLength())
+	}
+	if ul.Uids(0) != ex {
+		t.Errorf("Expected uid: %v. Got: %v", ex, ul.Uids(0))
+	}
 }
 
 func TestProcessGraph(t *testing.T) {
@@ -262,16 +296,25 @@ func TestProcessGraph(t *testing.T) {
 	}
 	if len(child.result) == 0 {
 		t.Errorf("Expected some result.")
+		return
 	}
 	uo := flatbuffers.GetUOffsetT(child.result)
 	r := new(task.Result)
 	r.Init(child.result, uo)
 
-	if r.UidsLength() != 5 {
-		t.Errorf("Expected 5 friends. Got: %v", r.UidsLength())
+	if r.UidmatrixLength() != 1 {
+		t.Errorf("Expected 1 matrix. Got: %v", r.UidmatrixLength())
 	}
-	if r.Uids(0) != 23 || r.Uids(1) != 24 || r.Uids(2) != 25 ||
-		r.Uids(3) != 31 || r.Uids(4) != 101 {
+	var ul task.UidList
+	if ok := r.Uidmatrix(&ul, 0); !ok {
+		t.Errorf("While parsing uidlist")
+	}
+
+	if ul.UidsLength() != 5 {
+		t.Errorf("Expected 5 friends. Got: %v", ul.UidsLength())
+	}
+	if ul.Uids(0) != 23 || ul.Uids(1) != 24 || ul.Uids(2) != 25 ||
+		ul.Uids(3) != 31 || ul.Uids(4) != 101 {
 		t.Errorf("Friend ids don't match")
 	}
 	if len(child.Children) != 1 || child.Children[0].Attr != "name" {

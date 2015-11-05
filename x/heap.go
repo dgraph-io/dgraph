@@ -16,18 +16,18 @@
 
 package x
 
-type elem struct {
-	Uid   uint64
-	Chidx int // channel index
+type Elem struct {
+	Uid uint64
+	Idx int // channel index
 }
 
-type Uint64Heap []elem
+type Uint64Heap []Elem
 
 func (h Uint64Heap) Len() int           { return len(h) }
 func (h Uint64Heap) Less(i, j int) bool { return h[i].Uid < h[j].Uid }
 func (h Uint64Heap) Swap(i, j int)      { h[i], h[j] = h[j], h[i] }
 func (h *Uint64Heap) Push(x interface{}) {
-	*h = append(*h, x.(elem))
+	*h = append(*h, x.(Elem))
 }
 func (h *Uint64Heap) Pop() interface{} {
 	old := *h

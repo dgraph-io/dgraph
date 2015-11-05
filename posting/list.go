@@ -595,8 +595,6 @@ func (l *List) CommitIfDirty() error {
 	return nil
 }
 
-// This is a blocking function. It would block when the channel buffer capacity
-// has been reached.
 func (l *List) GetUids() []uint64 {
 	l.mutex.RLock()
 	defer l.mutex.RUnlock()

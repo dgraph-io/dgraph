@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/Sirupsen/logrus"
+	"github.com/dgraph-io/dgraph/task"
+	"github.com/google/flatbuffers/go"
 )
 
 const (
@@ -74,4 +76,17 @@ func ParseRequest(w http.ResponseWriter, r *http.Request, data interface{}) bool
 		return false
 	}
 	return true
+}
+
+func UidlistOffset(b *flatbuffers.Builder,
+	sorted []uint64) flatbuffers.UOffsetT {
+
+	task.UidListStartUidsVector(b, len(sorted))
+	for i := len(sorted) - 1; i >= 0; i-- {
+		b.PrependUint64(sorted[i])
+	}
+	ulist := b.EndVector(len(sorted))
+	task.UidListStart(b)
+	task.UidListAddUids(b, ulist)
+	return task.UidListEnd(b)
 }

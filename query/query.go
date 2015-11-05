@@ -17,8 +17,10 @@
 package query
 
 import (
+	"container/heap"
 	"fmt"
 
+	"github.com/Sirupsen/logrus"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/uid"
@@ -79,7 +81,7 @@ import (
  * Return errors, if any.
  */
 
-var log = x.Log("query")
+var glog = x.Log("query")
 
 // SubGraph is the way to represent data internally. It contains both the
 // query and the response. Once generated, this can then be encoded to other
@@ -92,6 +94,7 @@ type SubGraph struct {
 	result []byte
 }
 
+/*
 func getChildren(r *task.Result, sg *SubGraph) (result interface{}, rerr error) {
 	var l []interface{}
 	for i := 0; i < r.UidsLength(); i++ {
@@ -118,7 +121,9 @@ func getChildren(r *task.Result, sg *SubGraph) (result interface{}, rerr error) 
 		}
 	}
 }
+*/
 
+/*
 func processChild(result *[]map[string]interface{}, g *SubGraph) error {
 	ro := flatbuffers.GetUOffsetT(g.result)
 	r := new(task.Result)
@@ -152,7 +157,9 @@ func processChild(result *[]map[string]interface{}, g *SubGraph) error {
 		}
 	}
 }
+*/
 
+/*
 func (sg SubGraph) ToJson() (result []byte, rerr error) {
 	ro := flatbuffers.GetUOffsetT(sg.result)
 	r := new(task.Result)
@@ -162,6 +169,7 @@ func (sg SubGraph) ToJson() (result []byte, rerr error) {
 		rlist[i]["uid"] = r.Uids(i)
 	}
 }
+*/
 
 func NewGraph(euid uint64, exid string) (*SubGraph, error) {
 	// This would set the Result field in SubGraph,
@@ -169,45 +177,49 @@ func NewGraph(euid uint64, exid string) (*SubGraph, error) {
 	if len(exid) > 0 {
 		u, err := uid.GetOrAssign(exid)
 		if err != nil {
-			x.Err(log, err).WithField("xid", exid).Error(
+			x.Err(glog, err).WithField("xid", exid).Error(
 				"While GetOrAssign uid from external id")
 			return nil, err
 		}
-		log.WithField("xid", exid).WithField("uid", u).Debug("GetOrAssign")
+		glog.WithField("xid", exid).WithField("uid", u).Debug("GetOrAssign")
 		euid = u
 	}
 
 	if euid == 0 {
 		err := fmt.Errorf("Query internal id is zero")
-		x.Err(log, err).Error("Invalid query")
+		x.Err(glog, err).Error("Invalid query")
 		return nil, err
 	}
 
 	// Encode uid into result flatbuffer.
 	b := flatbuffers.NewBuilder(0)
-	task.ResultStartUidsVector(b, 1)
-	b.PrependUint64(euid)
-	vend := b.EndVector(1)
+	omatrix := x.UidlistOffset(b, []uint64{euid})
+
+	task.ResultStartUidmatrixVector(b, 1)
+	b.PrependUOffsetT(omatrix)
+	mend := b.EndVector(1)
+
 	task.ResultStart(b)
-	task.ResultAddUids(b, vend)
+	task.ResultAddUidmatrix(b, mend)
 	rend := task.ResultEnd(b)
 	b.Finish(rend)
 
 	sg := new(SubGraph)
+	sg.Attr = "_root_"
 	sg.result = b.Bytes[b.Head():]
 	return sg, nil
 }
 
-func createTaskQuery(attr string, r *task.Result) []byte {
+// createTaskQuery generates the query buffer.
+func createTaskQuery(attr string, sorted []uint64) []byte {
 	b := flatbuffers.NewBuilder(0)
 	ao := b.CreateString(attr)
 
-	task.QueryStartUidsVector(b, r.UidsLength())
-	for i := r.UidsLength() - 1; i >= 0; i-- {
-		uid := r.Uids(i)
-		b.PrependUint64(uid)
+	task.QueryStartUidsVector(b, len(sorted))
+	for i := len(sorted) - 1; i >= 0; i-- {
+		b.PrependUint64(sorted[i])
 	}
-	vend := b.EndVector(r.UidsLength())
+	vend := b.EndVector(len(sorted))
 
 	task.QueryStart(b)
 	task.QueryAddAttr(b, ao)
@@ -217,12 +229,69 @@ func createTaskQuery(attr string, r *task.Result) []byte {
 	return b.Bytes[b.Head():]
 }
 
+type ListChannel struct {
+	TList *task.UidList
+	Idx   int
+}
+
+func sortedUniqueUids(r *task.Result) (sorted []uint64, rerr error) {
+	// Let's serialize the matrix of uids in result to a
+	// sorted unique list of uids.
+	h := &x.Uint64Heap{}
+	heap.Init(h)
+
+	channels := make([]*ListChannel, r.UidmatrixLength())
+	for i := 0; i < r.UidmatrixLength(); i++ {
+		tlist := new(task.UidList)
+		if ok := r.Uidmatrix(tlist, i); !ok {
+			return sorted, fmt.Errorf("While parsing Uidmatrix")
+		}
+		if tlist.UidsLength() > 0 {
+			e := x.Elem{
+				Uid: tlist.Uids(0),
+				Idx: i,
+			}
+			heap.Push(h, e)
+		}
+		channels[i] = &ListChannel{TList: tlist, Idx: 1}
+	}
+
+	// The resulting list of uids will be stored here.
+	sorted = make([]uint64, 100)
+	sorted = sorted[:0]
+
+	var last uint64
+	last = 0
+	// Itearate over the heap.
+	for h.Len() > 0 {
+		me := (*h)[0] // Peek at the top element in heap.
+		if me.Uid != last {
+			sorted = append(sorted, me.Uid) // Add if unique.
+			last = me.Uid
+		}
+		lc := channels[me.Idx]
+		if lc.Idx >= lc.TList.UidsLength() {
+			heap.Pop(h)
+
+		} else {
+			uid := lc.TList.Uids(lc.Idx)
+			lc.Idx += 1
+
+			me.Uid = uid
+			(*h)[0] = me
+			heap.Fix(h, 0) // Faster than Pop() followed by Push().
+		}
+	}
+	return sorted, nil
+}
+
 func ProcessGraph(sg *SubGraph, rch chan error) {
 	var err error
 	if len(sg.query) > 0 {
 		// This task execution would go over the wire in later versions.
 		sg.result, err = posting.ProcessTask(sg.query)
 		if err != nil {
+			x.Err(glog, err).Error("While processing task.")
 			rch <- err
 			return
 		}
@@ -231,10 +300,21 @@ func ProcessGraph(sg *SubGraph, rch chan error) {
 	uo := flatbuffers.GetUOffsetT(sg.result)
 	r := new(task.Result)
 	r.Init(sg.result, uo)
-	if r.UidsLength() == 0 {
+
+	sorted, err := sortedUniqueUids(r)
+	if err != nil {
+		x.Err(glog, err).Error("While processing task.")
+		rch <- err
+		return
+	}
+
+	if len(sorted) == 0 {
 		// Looks like we're done here.
 		if len(sg.Children) > 0 {
-			log.Debug("Have some children but no results. Life got cut short early.")
+			glog.Debugf("Have some children but no results. Life got cut short early."+
+				"Current attribute: %q", sg.Attr)
+		} else {
+			glog.Debugf("No more things to process for Attr: %v", sg.Attr)
 		}
 		rch <- nil
 		return
@@ -247,14 +327,20 @@ func ProcessGraph(sg *SubGraph, rch chan error) {
 	childchan := make(chan error, len(sg.Children))
 	for i := 0; i < len(sg.Children); i++ {
 		child := sg.Children[i]
-		child.query = createTaskQuery(child.Attr, r)
+		child.query = createTaskQuery(child.Attr, sorted)
 		go ProcessGraph(child, childchan)
 	}
 
 	// Now get all the results back.
 	for i := 0; i < len(sg.Children); i++ {
 		err = <-childchan
+		glog.WithFields(logrus.Fields{
+			"num_children": len(sg.Children),
+			"index":        i,
+			"attr":         sg.Children[i].Attr,
+		}).Debug("Reply from child")
 		if err != nil {
+			x.Err(glog, err).Error("While processing child task.")
 			rch <- err
 			return
 		}

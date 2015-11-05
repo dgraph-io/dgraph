@@ -9,7 +9,7 @@ func TestPush(t *testing.T) {
 	h := &Uint64Heap{}
 	heap.Init(h)
 
-	e := elem{Uid: 5}
+	e := Elem{Uid: 5}
 	heap.Push(h, e)
 	e.Uid = 3
 	heap.Push(h, e)
@@ -35,16 +35,16 @@ func TestPush(t *testing.T) {
 		t.Errorf("Expected min 5. Found: %+v", (*h)[0])
 	}
 
-	e = heap.Pop(h).(elem)
+	e = heap.Pop(h).(Elem)
 	if e.Uid != 5 {
 		t.Errorf("Expected min 5. Found %+v", e)
 	}
 
-	e = heap.Pop(h).(elem)
+	e = heap.Pop(h).(Elem)
 	if e.Uid != 10 {
 		t.Errorf("Expected min 10. Found: %+v", e)
 	}
-	e = heap.Pop(h).(elem)
+	e = heap.Pop(h).(Elem)
 	if e.Uid != 11 {
 		t.Errorf("Expected min 11. Found: %+v", e)
 	}
