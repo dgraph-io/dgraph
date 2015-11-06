@@ -256,9 +256,6 @@ func populateGraph(t *testing.T) {
 
 	edge.Value = "Andrea"
 	addEdge(t, edge, posting.Get(posting.Key(31, "name")))
-
-	edge.Value = "The Russian Mafia"
-	addEdge(t, edge, posting.Get(posting.Key(101, "name")))
 }
 
 func TestProcessGraph(t *testing.T) {
