@@ -17,6 +17,7 @@
 package query
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -343,4 +344,10 @@ func TestProcessGraph(t *testing.T) {
 	checkSingleValue(t, sg.Children[1], "name", "Michonne")
 	checkSingleValue(t, sg.Children[2], "gender", "female")
 	checkSingleValue(t, sg.Children[3], "status", "alive")
+
+	js, err := sg.ToJson()
+	if err != nil {
+		t.Error(err)
+	}
+	fmt.Printf(string(js))
 }

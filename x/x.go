@@ -90,3 +90,10 @@ func UidlistOffset(b *flatbuffers.Builder,
 	task.UidListAddUids(b, ulist)
 	return task.UidListEnd(b)
 }
+
+var Nilbyte []byte
+
+func init() {
+	Nilbyte = make([]byte, 1)
+	Nilbyte[0] = 0x00
+}

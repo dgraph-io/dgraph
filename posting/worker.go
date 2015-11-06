@@ -24,7 +24,7 @@ func ProcessTask(query []byte) (result []byte, rerr error) {
 		task.ValueStart(b)
 		var valoffset flatbuffers.UOffsetT
 		if val, err := pl.Value(); err != nil {
-			valoffset = b.CreateByteVector(nilbyte)
+			valoffset = b.CreateByteVector(x.Nilbyte)
 		} else {
 			valoffset = b.CreateByteVector(val)
 		}
@@ -69,11 +69,4 @@ func NewQuery(attr string, uids []uint64) []byte {
 	qend := task.QueryEnd(b)
 	b.Finish(qend)
 	return b.Bytes[b.Head():]
-}
-
-var nilbyte []byte
-
-func init() {
-	nilbyte = make([]byte, 1)
-	nilbyte[0] = 0x00
 }

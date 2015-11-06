@@ -18,6 +18,7 @@ package query
 
 import (
 	"container/heap"
+	"encoding/json"
 	"fmt"
 
 	"github.com/Sirupsen/logrus"
@@ -92,6 +93,109 @@ type SubGraph struct {
 
 	query  []byte
 	result []byte
+}
+
+func mergeInterfaces(i1 interface{}, i2 interface{}) interface{} {
+	return []interface{}{i1, i2}
+}
+
+func postTraverse(g *SubGraph) (result map[uint64]interface{}, rerr error) {
+	result = make(map[uint64]interface{})
+	// Get results from all children first.
+	cResult := make(map[uint64]interface{})
+
+	for _, child := range g.Children {
+		m, err := postTraverse(child)
+		if err != nil {
+			x.Err(glog, err).Error("Error while traversal")
+			return result, err
+		}
+		// Merge results from all children, one by one.
+		for k, v := range m {
+			if val, present := cResult[k]; !present {
+				cResult[k] = v
+			} else {
+				cResult[k] = mergeInterfaces(val, v)
+			}
+		}
+	}
+
+	// Now read the query and results at current node.
+	uo := flatbuffers.GetUOffsetT(g.query)
+	q := new(task.Query)
+	q.Init(g.query, uo)
+
+	ro := flatbuffers.GetUOffsetT(g.result)
+	r := new(task.Result)
+	r.Init(g.result, ro)
+
+	if q.UidsLength() != r.UidmatrixLength() {
+		glog.Fatal("Result uidmatrixlength: %v. Query uidslength: %v",
+			r.UidmatrixLength(), q.UidsLength())
+	}
+	if q.UidsLength() != r.ValuesLength() {
+		glog.Fatalf("Result valuelength: %v. Query uidslength: %v",
+			r.ValuesLength(), q.UidsLength())
+	}
+
+	var empty map[string]bool
+	var ul task.UidList
+	for i := 0; i < r.UidmatrixLength(); i++ {
+		if ok := r.Uidmatrix(&ul, i); !ok {
+			return result, fmt.Errorf("While parsing UidList")
+		}
+		l := make([]interface{}, ul.UidsLength())
+		for j := 0; j < ul.UidsLength(); j++ {
+			uid := ul.Uids(j)
+			if ival, present := cResult[uid]; !present {
+				l[j] = empty
+			} else {
+				l[j] = ival
+			}
+		}
+		if len(l) > 0 {
+			result[q.Uids(i)] = l
+		}
+	}
+
+	var tv task.Value
+	for i := 0; i < r.ValuesLength(); i++ {
+		if ok := r.Values(&tv, i); !ok {
+			return result, fmt.Errorf("While parsing value")
+		}
+		if tv.ValLength() == 1 && tv.ValBytes()[0] == 0x00 {
+			continue
+		}
+		var ival interface{}
+		if err := posting.ParseValue(ival, tv.ValBytes()); err != nil {
+			return result, err
+		}
+		if pval, present := result[q.Uids(i)]; present {
+			glog.WithField("prev", pval).Fatal("Previous value detected.")
+		}
+		m := make(map[string]interface{})
+		m["uid"] = q.Uids(i)
+		m[g.Attr] = ival
+		result[q.Uids(i)] = m
+	}
+	return result, nil
+}
+
+func (g *SubGraph) ToJson() (js []byte, rerr error) {
+	r, err := postTraverse(g)
+	if err != nil {
+		x.Err(glog, err).Error("While doing traversal")
+		return js, err
+	}
+	if len(r) == 1 {
+		for _, ival := range r {
+			return json.Marshal(ival)
+		}
+	} else {
+		glog.Fatal("We don't currently support more than 1 uid at root.")
+	}
+
+	return json.Marshal(r)
 }
 
 /*
@@ -195,18 +299,34 @@ func NewGraph(euid uint64, exid string) (*SubGraph, error) {
 	b := flatbuffers.NewBuilder(0)
 	omatrix := x.UidlistOffset(b, []uint64{euid})
 
+	// Also need to add nil value to keep this consistent.
+	var voffset flatbuffers.UOffsetT
+	{
+		task.ValueStart(b)
+		bvo := b.CreateByteVector(x.Nilbyte)
+		task.ValueAddVal(b, bvo)
+		voffset = task.ValueEnd(b)
+	}
+
 	task.ResultStartUidmatrixVector(b, 1)
 	b.PrependUOffsetT(omatrix)
 	mend := b.EndVector(1)
 
+	task.ResultStartValuesVector(b, 1)
+	b.PrependUOffsetT(voffset)
+	vend := b.EndVector(1)
+
 	task.ResultStart(b)
 	task.ResultAddUidmatrix(b, mend)
+	task.ResultAddValues(b, vend)
 	rend := task.ResultEnd(b)
 	b.Finish(rend)
 
 	sg := new(SubGraph)
 	sg.Attr = "_root_"
 	sg.result = b.Bytes[b.Head():]
+	// Also add query for consistency and to allow for ToJson() later.
+	sg.query = createTaskQuery(sg.Attr, []uint64{euid})
 	return sg, nil
 }
 
@@ -287,7 +407,7 @@ func sortedUniqueUids(r *task.Result) (sorted []uint64, rerr error) {
 
 func ProcessGraph(sg *SubGraph, rch chan error) {
 	var err error
-	if len(sg.query) > 0 {
+	if len(sg.query) > 0 && sg.Attr != "_root_" {
 		// This task execution would go over the wire in later versions.
 		sg.result, err = posting.ProcessTask(sg.query)
 		if err != nil {
