@@ -20,6 +20,7 @@ import (
 	"container/heap"
 	"encoding/json"
 	"fmt"
+	"reflect"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/dgraph-io/dgraph/posting"
@@ -96,6 +97,21 @@ type SubGraph struct {
 }
 
 func mergeInterfaces(i1 interface{}, i2 interface{}) interface{} {
+	switch i1.(type) {
+	case map[string]interface{}:
+		glog.Debug("Got map[string] interface")
+		m1 := i1.(map[string]interface{})
+		if m2, ok := i2.(map[string]interface{}); ok {
+			for k1, v1 := range m1 {
+				m2[k1] = v1
+			}
+			return m2
+		}
+		break
+	}
+	glog.Debugf("Got type: %v %v", reflect.TypeOf(i1), reflect.TypeOf(i2))
+	glog.Debugf("Got values: %v %v", i1, i2)
+
 	return []interface{}{i1, i2}
 }
 
@@ -138,7 +154,6 @@ func postTraverse(g *SubGraph) (result map[uint64]interface{}, rerr error) {
 			r.ValuesLength(), q.UidsLength())
 	}
 
-	var empty map[string]bool
 	var ul task.UidList
 	for i := 0; i < r.UidmatrixLength(); i++ {
 		if ok := r.Uidmatrix(&ul, i); !ok {
@@ -147,14 +162,18 @@ func postTraverse(g *SubGraph) (result map[uint64]interface{}, rerr error) {
 		l := make([]interface{}, ul.UidsLength())
 		for j := 0; j < ul.UidsLength(); j++ {
 			uid := ul.Uids(j)
+			m := make(map[string]interface{})
+			m["uid"] = uid
 			if ival, present := cResult[uid]; !present {
-				l[j] = empty
+				l[j] = m
 			} else {
-				l[j] = ival
+				l[j] = mergeInterfaces(m, ival)
 			}
 		}
 		if len(l) > 0 {
-			result[q.Uids(i)] = l
+			m := make(map[string]interface{})
+			m[g.Attr] = l
+			result[q.Uids(i)] = m
 		}
 	}
 
@@ -163,18 +182,26 @@ func postTraverse(g *SubGraph) (result map[uint64]interface{}, rerr error) {
 		if ok := r.Values(&tv, i); !ok {
 			return result, fmt.Errorf("While parsing value")
 		}
-		if tv.ValLength() == 1 && tv.ValBytes()[0] == 0x00 {
-			continue
-		}
 		var ival interface{}
-		if err := posting.ParseValue(ival, tv.ValBytes()); err != nil {
+		if err := posting.ParseValue(&ival, tv.ValBytes()); err != nil {
 			return result, err
 		}
+		if ival == nil {
+			continue
+		}
+
 		if pval, present := result[q.Uids(i)]; present {
-			glog.WithField("prev", pval).Fatal("Previous value detected.")
+			glog.WithField("prev", pval).
+				WithField("uid", q.Uids(i)).
+				WithField("new", ival).
+				Fatal("Previous value detected.")
 		}
 		m := make(map[string]interface{})
 		m["uid"] = q.Uids(i)
+		glog.WithFields(logrus.Fields{
+			"uid": q.Uids(i),
+			"val": ival,
+		}).Debug("Got value")
 		m[g.Attr] = ival
 		result[q.Uids(i)] = m
 	}
@@ -195,6 +222,7 @@ func (g *SubGraph) ToJson() (js []byte, rerr error) {
 		glog.Fatal("We don't currently support more than 1 uid at root.")
 	}
 
+	glog.Fatal("Shouldn't reach here.")
 	return json.Marshal(r)
 }
 
@@ -458,6 +486,7 @@ func ProcessGraph(sg *SubGraph, rch chan error) {
 			"num_children": len(sg.Children),
 			"index":        i,
 			"attr":         sg.Children[i].Attr,
+			"err":          err,
 		}).Debug("Reply from child")
 		if err != nil {
 			x.Err(glog, err).Error("While processing child task.")

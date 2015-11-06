@@ -22,10 +22,10 @@ import (
 	"math"
 	"time"
 
-	"github.com/dgryski/go-farm"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/posting/types"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgryski/go-farm"
 )
 
 var log = x.Log("uid")
@@ -49,9 +49,9 @@ func allocateNew(xid string) (uid uint64, rerr error) {
 			var p types.Posting
 			pl.Get(&p, 0)
 
-			var tmp string
+			var tmp interface{}
 			posting.ParseValue(&tmp, p.ValueBytes())
-			log.Debug("Found existing xid: [%q]. Continuing...", tmp)
+			log.Debug("Found existing xid: [%q]. Continuing...", tmp.(string))
 			continue
 		}
 
@@ -136,6 +136,8 @@ func ExternalId(uid uint64) (xid string, rerr error) {
 	if p.Uid() != math.MaxUint64 {
 		log.WithField("uid", uid).Fatal("Value uid must be MaxUint64.")
 	}
-	rerr = posting.ParseValue(&xid, p.ValueBytes())
+	var t interface{}
+	rerr = posting.ParseValue(&t, p.ValueBytes())
+	xid = t.(string)
 	return xid, rerr
 }

@@ -138,10 +138,11 @@ func checkName(t *testing.T, r *task.Result, idx int, expected string) {
 	if ok := r.Values(&tv, idx); !ok {
 		t.Error("Unable to retrieve value")
 	}
-	var name string
-	if err := posting.ParseValue(&name, tv.ValBytes()); err != nil {
+	var iname interface{}
+	if err := posting.ParseValue(&iname, tv.ValBytes()); err != nil {
 		t.Error(err)
 	}
+	name := iname.(string)
 	if name != expected {
 		t.Errorf("Expected: %v. Got: %v", expected, name)
 	}
@@ -198,7 +199,7 @@ func TestNewGraph(t *testing.T) {
 	}
 }
 
-func TestProcessGraph(t *testing.T) {
+func populateGraph(t *testing.T) {
 	logrus.SetLevel(logrus.DebugLevel)
 
 	pdir := NewStore(t)
@@ -255,6 +256,13 @@ func TestProcessGraph(t *testing.T) {
 
 	edge.Value = "Andrea"
 	addEdge(t, edge, posting.Get(posting.Key(31, "name")))
+
+	edge.Value = "The Russian Mafia"
+	addEdge(t, edge, posting.Get(posting.Key(101, "name")))
+}
+
+func TestProcessGraph(t *testing.T) {
+	populateGraph(t)
 
 	// Alright. Now we have everything set up. Let's create the query.
 	sg, err := NewGraph(1, "")
@@ -344,6 +352,41 @@ func TestProcessGraph(t *testing.T) {
 	checkSingleValue(t, sg.Children[1], "name", "Michonne")
 	checkSingleValue(t, sg.Children[2], "gender", "female")
 	checkSingleValue(t, sg.Children[3], "status", "alive")
+}
+
+func TestToJson(t *testing.T) {
+	populateGraph(t)
+
+	// Alright. Now we have everything set up. Let's create the query.
+	sg, err := NewGraph(1, "")
+	if err != nil {
+		t.Error(err)
+	}
+
+	// Retireve profile information for uid:1.
+	csg := new(SubGraph)
+	csg.Attr = "name"
+	sg.Children = append(sg.Children, csg)
+	csg = new(SubGraph)
+	csg.Attr = "gender"
+	sg.Children = append(sg.Children, csg)
+	csg = new(SubGraph)
+	csg.Attr = "status"
+	sg.Children = append(sg.Children, csg)
+
+	gsg := new(SubGraph)
+	gsg.Attr = "name"
+	csg = new(SubGraph)
+	csg.Attr = "friend"
+	csg.Children = append(csg.Children, gsg)
+	sg.Children = append(sg.Children, csg)
+
+	ch := make(chan error)
+	go ProcessGraph(sg, ch)
+	err = <-ch
+	if err != nil {
+		t.Error(err)
+	}
 
 	js, err := sg.ToJson()
 	if err != nil {

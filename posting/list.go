@@ -19,7 +19,7 @@ package posting
 import (
 	"bytes"
 	"encoding/binary"
-	"encoding/gob"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -84,13 +84,12 @@ func addEdgeToPosting(b *flatbuffers.Builder,
 		if t.ValueId != math.MaxUint64 {
 			log.Fatal("This should have already been set by the caller.")
 		}
-		var buf bytes.Buffer
-		enc := gob.NewEncoder(&buf)
-		if err := enc.Encode(t.Value); err != nil {
-			x.Err(log, err).Fatal("Unable to encode interface")
+		bytes, err := json.Marshal(t.Value)
+		if err != nil {
+			x.Err(log, err).Fatal("Unable to marshal value")
 			return 0
 		}
-		bo = b.CreateByteVector(buf.Bytes())
+		bo = b.CreateByteVector(bytes)
 	}
 	so := b.CreateString(t.Source) // Do this before posting start.
 
@@ -149,14 +148,17 @@ func init() {
 		len(empty), len(emptyPosting))
 }
 
-func ParseValue(i interface{}, value []byte) error {
+func ParseValue(i *interface{}, value []byte) error {
 	if len(value) == 0 {
 		return errors.New("No value found in posting")
 	}
-	var buf bytes.Buffer
-	buf.Write(value)
-	dec := gob.NewDecoder(&buf)
-	return dec.Decode(i)
+
+	if len(value) == 1 && value[0] == 0x00 {
+		i = nil
+		return nil
+	}
+
+	return json.Unmarshal(value, i)
 }
 
 func (l *List) init(key []byte, pstore, mstore *store.Store) {
