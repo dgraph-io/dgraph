@@ -220,10 +220,11 @@ func TestAddMutation_Value(t *testing.T) {
 	if p.Uid() != math.MaxUint64 {
 		t.Errorf("All value uids should go to MaxUint64. Got: %v", p.Uid())
 	}
-	var out string
-	if err := ParseValue(&out, p.ValueBytes()); err != nil {
+	var iout interface{}
+	if err := ParseValue(&iout, p.ValueBytes()); err != nil {
 		t.Error(err)
 	}
+	out := iout.(string)
 	if out != "oh hey there" {
 		t.Errorf("Expected a value. Got: [%q]", out)
 	}
@@ -237,9 +238,10 @@ func TestAddMutation_Value(t *testing.T) {
 		if ok := ol.Get(&tp, 0); !ok {
 			t.Error("While retrieving posting")
 		}
-		if err := ParseValue(&out, tp.ValueBytes()); err != nil {
+		if err := ParseValue(&iout, tp.ValueBytes()); err != nil {
 			t.Error(err)
 		}
+		out := iout.(string)
 		if out != "oh hey there" {
 			t.Errorf("Expected a value. Got: [%q]", out)
 		}
@@ -256,11 +258,11 @@ func TestAddMutation_Value(t *testing.T) {
 	if ok := ol.Get(&p, 0); !ok {
 		t.Error("While retrieving posting")
 	}
-	var iout int
 	if err := ParseValue(&iout, p.ValueBytes()); err != nil {
 		t.Error(err)
 	}
-	if iout != 119 {
-		t.Errorf("Expected 119. Got: %v", iout)
+	intout := iout.(float64)
+	if intout != 119 {
+		t.Errorf("Expected 119. Got: %v", intout)
 	}
 }

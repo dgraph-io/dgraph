@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"unicode/utf8"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -87,11 +86,6 @@ func (l *Lexer) Errorf(format string,
 func (l *Lexer) Emit(t ItemType) {
 	if t != ItemEOF && l.Pos <= l.Start {
 		// Let ItemEOF go through.
-		glog.WithFields(logrus.Fields{
-			"start": l.Start,
-			"pos":   l.Pos,
-			"typ":   t,
-		}).Debug("Invalid emit")
 		return
 	}
 	l.Items <- item{

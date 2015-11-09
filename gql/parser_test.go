@@ -33,12 +33,11 @@ func checkAttr(g *query.SubGraph, attr string) error {
 func TestParse(t *testing.T) {
 	query := `
 	query {
-		me(uid:0x0a) {
+		me(_uid_:0x0a) {
 			friends {
 				name
 			}
-			gender
-			age
+			gender,age
 			hometown
 		}
 	}
@@ -76,11 +75,10 @@ func TestParse(t *testing.T) {
 	}
 }
 
-/*
 func TestParse_error1(t *testing.T) {
 	query := `
 		mutation {
-			me(uid:0x0a) {
+			me(_uid_:0x0a) {
 				name
 			}
 		}
@@ -112,7 +110,7 @@ func TestParse_error2(t *testing.T) {
 func TestParse_pass1(t *testing.T) {
 	query := `
 		{
-			me(uid:0x0a) {
+			me(_uid_:0x0a) {
 				name,
 				friends(xid:what) {  # xid would be ignored.
 				}
@@ -137,4 +135,3 @@ func TestParse_pass1(t *testing.T) {
 		t.Errorf("Expected 0. Got: %v", len(sg.Children))
 	}
 }
-*/

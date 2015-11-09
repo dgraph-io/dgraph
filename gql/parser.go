@@ -97,15 +97,15 @@ func getRoot(l *lex.Lexer) (sg *query.SubGraph, rerr error) {
 			return nil, fmt.Errorf("Expecting argument va Got: %v", item)
 		}
 
-		if key == "uid" {
+		if key == "_uid_" {
 			uid, rerr = strconv.ParseUint(val, 0, 64)
 			if rerr != nil {
 				return nil, rerr
 			}
-		} else if key == "xid" {
+		} else if key == "_xid_" {
 			xid = val
 		} else {
-			return nil, fmt.Errorf("Expecting uid or xid. Got: %v", item)
+			return nil, fmt.Errorf("Expecting _uid_ or _xid_. Got: %v", item)
 		}
 	}
 	if item.Typ != itemRightRound {

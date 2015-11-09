@@ -163,7 +163,7 @@ func postTraverse(g *SubGraph) (result map[uint64]interface{}, rerr error) {
 		for j := 0; j < ul.UidsLength(); j++ {
 			uid := ul.Uids(j)
 			m := make(map[string]interface{})
-			m["uid"] = uid
+			m["_uid_"] = fmt.Sprintf("%#x", uid)
 			if ival, present := cResult[uid]; !present {
 				l[j] = m
 			} else {
@@ -192,15 +192,15 @@ func postTraverse(g *SubGraph) (result map[uint64]interface{}, rerr error) {
 
 		if pval, present := result[q.Uids(i)]; present {
 			glog.WithField("prev", pval).
-				WithField("uid", q.Uids(i)).
+				WithField("_uid_", q.Uids(i)).
 				WithField("new", ival).
 				Fatal("Previous value detected.")
 		}
 		m := make(map[string]interface{})
-		m["uid"] = q.Uids(i)
+		m["_uid_"] = fmt.Sprintf("%#x", q.Uids(i))
 		glog.WithFields(logrus.Fields{
-			"uid": q.Uids(i),
-			"val": ival,
+			"_uid_": q.Uids(i),
+			"val":   ival,
 		}).Debug("Got value")
 		m[g.Attr] = ival
 		result[q.Uids(i)] = m
@@ -226,83 +226,6 @@ func (g *SubGraph) ToJson() (js []byte, rerr error) {
 	return json.Marshal(r)
 }
 
-/*
-func getChildren(r *task.Result, sg *SubGraph) (result interface{}, rerr error) {
-	var l []interface{}
-	for i := 0; i < r.UidsLength(); i++ {
-		m := make(map[string]interface{})
-		uid := r.Uids(i)
-		m["uid"] = uid
-		if len(sg.Children) > 0 {
-			for _, cg := range sg.Children {
-			}
-
-			// do something.
-		}
-
-		var v task.Value
-		if ok := r.Values(&v, i); !ok {
-			return nil, fmt.Errorf("While reading value at index: %v", i)
-		}
-		var i interface{}
-		if err := posting.ParseValue(i, v.ValBytes()); err != nil {
-			return nil, err
-		}
-
-		if r.UidsLength() == 0 {
-		}
-	}
-}
-*/
-
-/*
-func processChild(result *[]map[string]interface{}, g *SubGraph) error {
-	ro := flatbuffers.GetUOffsetT(g.result)
-	r := new(task.Result)
-	r.Init(g.result, ro)
-	if r.ValuesLength() > 0 {
-		var v task.Value
-		for i := 0; i < r.ValuesLength(); i++ {
-			if ok := r.Values(&v, i); !ok {
-				glog.WithField("idx", i).Error("While loading value")
-				return fmt.Errorf("While parsing value at index: %v", i)
-			}
-			var i interface{}
-			if err := posting.ParseValue(i, v.ValBytes()); err != nil {
-				x.Log(glog, err).Error("While parsing value")
-				return err
-			}
-			result[i][g.Attr] = i
-		}
-	}
-
-	if r.UidsLength() > 0 {
-		rlist := make([]map[string]interface{}, r.UidsLength())
-		for i := 0; i < r.UidsLength(); i++ {
-			rlist[i]["uid"] = r.Uids(i)
-			for _, cg := range g.Children {
-				if err := processChild(&rlist, cg); err != nil {
-					x.Log(glog, err).Error("While processing child with attr: %v", cg.Attr)
-					return err
-				}
-			}
-		}
-	}
-}
-*/
-
-/*
-func (sg SubGraph) ToJson() (result []byte, rerr error) {
-	ro := flatbuffers.GetUOffsetT(sg.result)
-	r := new(task.Result)
-	r.Init(sg.result, ro)
-	rlist := make([]map[string]interface{}, r.UidsLength())
-	for i := 0; i < r.UidsLength(); i++ {
-		rlist[i]["uid"] = r.Uids(i)
-	}
-}
-*/
-
 func NewGraph(euid uint64, exid string) (*SubGraph, error) {
 	// This would set the Result field in SubGraph,
 	// and populate the children for attributes.
@@ -313,7 +236,7 @@ func NewGraph(euid uint64, exid string) (*SubGraph, error) {
 				"While GetOrAssign uid from external id")
 			return nil, err
 		}
-		glog.WithField("xid", exid).WithField("uid", u).Debug("GetOrAssign")
+		glog.WithField("xid", exid).WithField("_uid_", u).Debug("GetOrAssign")
 		euid = u
 	}
 
