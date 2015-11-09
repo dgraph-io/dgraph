@@ -28,14 +28,8 @@ import (
 	"github.com/dgraph-io/dgraph/store"
 )
 
-func NewStore(t *testing.T) string {
-	path, err := ioutil.TempDir("", "storetest_")
-	if err != nil {
-		t.Error(err)
-		t.Fail()
-		return ""
-	}
-	return path
+func NewStore() (string, error) {
+	return ioutil.TempDir("", "storetest_")
 }
 
 var q0 = `
@@ -51,13 +45,19 @@ var q0 = `
 	}
 `
 
-func TestQuery(t *testing.T) {
-	pdir := NewStore(t)
+func prepare() error {
+	pdir, err := NewStore()
+	if err != nil {
+		return err
+	}
 	defer os.RemoveAll(pdir)
 	ps := new(store.Store)
 	ps.Init(pdir)
 
-	mdir := NewStore(t)
+	mdir, err := NewStore()
+	if err != nil {
+		return err
+	}
 	defer os.RemoveAll(mdir)
 	ms := new(store.Store)
 	ms.Init(mdir)
@@ -65,16 +65,21 @@ func TestQuery(t *testing.T) {
 
 	f, err := os.Open("testdata.nq")
 	if err != nil {
-		t.Error(err)
-		return
+		return err
 	}
 	defer f.Close()
-	count, err := handleRdfReader(f)
+	_, err = handleRdfReader(f)
 	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func TestQuery(t *testing.T) {
+	if err := prepare(); err != nil {
 		t.Error(err)
 		return
 	}
-	t.Logf("Parsed %v RDFs", count)
 
 	// Parse GQL into internal query representation.
 	g, err := gql.Parse(q0)
@@ -131,4 +136,54 @@ func TestQuery(t *testing.T) {
 		return
 	}
 	fmt.Println(string(js))
+}
+
+var q1 = `
+{
+	al(_xid_: alice) {
+		status
+		_xid_
+		follows {
+			status
+			_xid_
+			follows {
+				status
+				_xid_
+				follows {
+					_xid_
+					status
+				}
+			}
+		}
+		status
+		_xid_
+	}
+}
+`
+
+func BenchmarkQuery(b *testing.B) {
+	if err := prepare(); err != nil {
+		b.Error(err)
+		return
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		g, err := gql.Parse(q1)
+		if err != nil {
+			b.Error(err)
+			return
+		}
+		ch := make(chan error)
+		go query.ProcessGraph(g, ch)
+		if err := <-ch; err != nil {
+			b.Error(err)
+			return
+		}
+		_, err = g.ToJson()
+		if err != nil {
+			b.Error(err)
+			return
+		}
+	}
 }

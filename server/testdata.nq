@@ -1,11 +1,11 @@
 <alice> <follows> <bob> .
 <bob> <follows> <fred> .
-<bob> <status> "cool_person" .
+<bob> <status> "I'm your Uncle Bob!" .
 <charlie> <follows> <bob> .
 <charlie> <follows> <dani> .
 <dani> <follows> <bob> .
 <dani> <follows> <greg> .
-<dani> <status> "cool_person" .
+<dani> <status> "Smart Dani" .
 <emily> <follows> <fred> .
 <fred> <follows> <greg> .
-<greg> <status> "cool_person" .
+<greg> <status> "Mr. Cool greg" .
