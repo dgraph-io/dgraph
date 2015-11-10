@@ -51,6 +51,7 @@ func (nq NQuad) ToEdge() (result x.DirectedEdge, rerr error) {
 		result.ValueId = oid
 	} else {
 		result.Value = nq.ObjectValue
+		// TODO: Handle Language
 	}
 	result.Attribute = nq.Predicate
 	result.Source = nq.Label
