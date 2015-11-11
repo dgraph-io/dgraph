@@ -22,9 +22,13 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/Sirupsen/logrus"
 )
 
 func TestHandleFile(t *testing.T) {
+	logrus.SetLevel(logrus.DebugLevel)
+
 	dir, err := ioutil.TempDir("", "dgraph-log")
 	if err != nil {
 		t.Error(err)
@@ -35,8 +39,7 @@ func TestHandleFile(t *testing.T) {
 	l := NewLogger(dir, "dgraph", 50<<20)
 	ts := time.Now().UnixNano()
 	for i := 0; i < 10; i++ {
-		ts += 1
-		fp := filepath.Join(dir, l.filepath(ts))
+		fp := filepath.Join(dir, l.filepath(ts+int64(i)))
 		if err := ioutil.WriteFile(fp, []byte("test calling"),
 			os.ModeAppend); err != nil {
 			t.Error(err)
@@ -44,4 +47,40 @@ func TestHandleFile(t *testing.T) {
 		}
 	}
 	l.Init()
+	for i, lf := range l.list {
+		exp := ts + int64(i)
+		if lf.endTs != exp {
+			t.Errorf("Expected %v. Got: %v", exp, lf.endTs)
+		}
+	}
+}
+
+func TestAddLog(t *testing.T) {
+	dir, err := ioutil.TempDir("", "dgraph-log")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer os.RemoveAll(dir)
+
+	l := NewLogger(dir, "dgraph", 50<<20)
+	l.Init()
+
+	ts := time.Now().UnixNano()
+	for i := 0; i < 10; i++ {
+		curts := ts + int64(i)
+		if err := l.AddLog(curts, 0, []byte("hey")); err != nil {
+			t.Error(err)
+			return
+		}
+	}
+
+	glog.Debugf("Test curfile path: %v", l.curFile.Name())
+	last, err := lastTimestamp(l.curFile.Name())
+	if err != nil {
+		t.Error(err)
+	}
+	if last != ts+9 {
+		t.Errorf("Expected %v. Got: %v\n", ts+9, last)
+	}
 }
