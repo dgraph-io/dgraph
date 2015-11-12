@@ -25,6 +25,7 @@ import (
 	"os"
 
 	"github.com/Sirupsen/logrus"
+	"github.com/dgraph-io/dgraph/commit"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/query"
@@ -131,9 +132,10 @@ func main() {
 
 	ps := new(store.Store)
 	ps.Init(*postingDir)
-	ms := new(store.Store)
-	ms.Init(*mutationDir)
-	posting.Init(ps, ms)
+	clog := commit.NewLogger(*mutationDir, "dgraph", 50<<20)
+	clog.Init()
+	defer clog.Close()
+	posting.Init(ps, clog)
 
 	if len(*rdfData) > 0 {
 		f, err := os.Open(*rdfData)

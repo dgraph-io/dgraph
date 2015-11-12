@@ -22,33 +22,27 @@ import (
 	"testing"
 
 	"github.com/Sirupsen/logrus"
+	"github.com/dgraph-io/dgraph/commit"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/store"
 )
 
-func NewStore(t *testing.T) string {
-	path, err := ioutil.TempDir("", "storetest_")
-	if err != nil {
-		t.Error(err)
-		t.Fail()
-		return ""
-	}
-	return path
-}
-
 func TestGetOrAssign(t *testing.T) {
 	logrus.SetLevel(logrus.DebugLevel)
 
-	pdir := NewStore(t)
-	defer os.RemoveAll(pdir)
+	dir, err := ioutil.TempDir("", "storetest_")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer os.RemoveAll(dir)
 	ps := new(store.Store)
-	ps.Init(pdir)
+	ps.Init(dir)
+	clog := commit.NewLogger(dir, "mutations", 50<<20)
+	clog.Init()
+	defer clog.Close()
 
-	mdir := NewStore(t)
-	defer os.RemoveAll(mdir)
-	ms := new(store.Store)
-	ms.Init(mdir)
-	posting.Init(ps, ms)
+	posting.Init(ps, clog)
 
 	var u1, u2 uint64
 	{

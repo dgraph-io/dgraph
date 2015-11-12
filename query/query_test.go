@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/Sirupsen/logrus"
+	"github.com/dgraph-io/dgraph/commit"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/task"
@@ -117,16 +118,6 @@ func TestRun(t *testing.T) {
 }
 */
 
-func NewStore(t *testing.T) string {
-	path, err := ioutil.TempDir("", "storetest_")
-	if err != nil {
-		t.Error(err)
-		t.Fail()
-		return ""
-	}
-	return path
-}
-
 func addEdge(t *testing.T, edge x.DirectedEdge, l *posting.List) {
 	if err := l.AddMutation(edge, posting.Set); err != nil {
 		t.Error(err)
@@ -201,17 +192,20 @@ func TestNewGraph(t *testing.T) {
 
 func populateGraph(t *testing.T) {
 	logrus.SetLevel(logrus.DebugLevel)
+	dir, err := ioutil.TempDir("", "storetest_")
+	if err != nil {
+		t.Error(err)
+		return
+	}
 
-	pdir := NewStore(t)
-	defer os.RemoveAll(pdir)
+	defer os.RemoveAll(dir)
 	ps := new(store.Store)
-	ps.Init(pdir)
+	ps.Init(dir)
 
-	mdir := NewStore(t)
-	defer os.RemoveAll(mdir)
-	ms := new(store.Store)
-	ms.Init(mdir)
-	posting.Init(ps, ms)
+	clog := commit.NewLogger(dir, "mutations", 50<<20)
+	clog.Init()
+	defer clog.Close()
+	posting.Init(ps, clog)
 
 	// So, user we're interested in has uid: 1.
 	// She has 4 friends: 23, 24, 25, 31, and 101

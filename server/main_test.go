@@ -22,6 +22,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/dgraph-io/dgraph/commit"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/query"
@@ -46,22 +47,20 @@ var q0 = `
 `
 
 func prepare() error {
-	pdir, err := NewStore()
+	dir, err := ioutil.TempDir("", "storetest_")
 	if err != nil {
 		return err
 	}
-	defer os.RemoveAll(pdir)
-	ps := new(store.Store)
-	ps.Init(pdir)
 
-	mdir, err := NewStore()
-	if err != nil {
-		return err
-	}
-	defer os.RemoveAll(mdir)
-	ms := new(store.Store)
-	ms.Init(mdir)
-	posting.Init(ps, ms)
+	defer os.RemoveAll(dir)
+	ps := new(store.Store)
+	ps.Init(dir)
+
+	clog := commit.NewLogger(dir, "mutations", 50<<20)
+	clog.Init()
+	defer clog.Close()
+
+	posting.Init(ps, clog)
 
 	f, err := os.Open("testdata.nq")
 	if err != nil {
@@ -73,6 +72,8 @@ func prepare() error {
 		return err
 	}
 	return nil
+	// Even though all files would be closed and the directory deleted,
+	// postings would still be present in memory.
 }
 
 func TestQuery(t *testing.T) {

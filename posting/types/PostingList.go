@@ -21,8 +21,16 @@ func (rcv *PostingList) Init(buf []byte, i flatbuffers.UOffsetT) {
 	rcv._tab.Pos = i
 }
 
-func (rcv *PostingList) Postings(obj *Posting, j int) bool {
+func (rcv *PostingList) CommitTs() int64 {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
+	if o != 0 {
+		return rcv._tab.GetInt64(o + rcv._tab.Pos)
+	}
+	return 0
+}
+
+func (rcv *PostingList) Postings(obj *Posting, j int) bool {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
 	if o != 0 {
 		x := rcv._tab.Vector(o)
 		x += flatbuffers.UOffsetT(j) * 4
@@ -37,15 +45,16 @@ func (rcv *PostingList) Postings(obj *Posting, j int) bool {
 }
 
 func (rcv *PostingList) PostingsLength() int {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
 	if o != 0 {
 		return rcv._tab.VectorLen(o)
 	}
 	return 0
 }
 
-func PostingListStart(builder *flatbuffers.Builder) { builder.StartObject(1) }
-func PostingListAddPostings(builder *flatbuffers.Builder, postings flatbuffers.UOffsetT) { builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(postings), 0) }
+func PostingListStart(builder *flatbuffers.Builder) { builder.StartObject(2) }
+func PostingListAddCommitTs(builder *flatbuffers.Builder, commitTs int64) { builder.PrependInt64Slot(0, commitTs, 0) }
+func PostingListAddPostings(builder *flatbuffers.Builder, postings flatbuffers.UOffsetT) { builder.PrependUOffsetTSlot(1, flatbuffers.UOffsetT(postings), 0) }
 func PostingListStartPostingsVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT { return builder.StartVector(4, numElems, 4)
 }
 func PostingListEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT { return builder.EndObject() }

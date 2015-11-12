@@ -2,11 +2,12 @@ package posting
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
 	"testing"
 	"time"
 
-	"github.com/Sirupsen/logrus"
+	"github.com/dgraph-io/dgraph/commit"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/x"
@@ -39,18 +40,23 @@ func check(r *task.Result, idx int, expected []uint64) error {
 }
 
 func TestProcessTask(t *testing.T) {
-	logrus.SetLevel(logrus.DebugLevel)
+	// logrus.SetLevel(logrus.DebugLevel)
 
-	pdir := NewStore(t)
-	defer os.RemoveAll(pdir)
+	dir, err := ioutil.TempDir("", "storetest_")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	defer os.RemoveAll(dir)
 	ps := new(store.Store)
-	ps.Init(pdir)
+	ps.Init(dir)
 
-	mdir := NewStore(t)
-	defer os.RemoveAll(mdir)
-	ms := new(store.Store)
-	ms.Init(mdir)
-	Init(ps, ms)
+	clog := commit.NewLogger(dir, "mutations", 50<<20)
+	clog.Init()
+	defer clog.Close()
+
+	Init(ps, clog)
 
 	edge := x.DirectedEdge{
 		ValueId:   23,

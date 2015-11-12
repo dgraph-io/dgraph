@@ -24,6 +24,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dgraph-io/dgraph/commit"
 	"github.com/dgraph-io/dgraph/posting/types"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/x"
@@ -45,30 +46,25 @@ func checkUids(t *testing.T, l List, uids ...uint64) error {
 	return nil
 }
 
-func NewStore(t *testing.T) string {
-	path, err := ioutil.TempDir("", "storetest_")
-	if err != nil {
-		t.Error(err)
-		t.Fail()
-		return ""
-	}
-	return path
-}
-
 func TestAddMutation(t *testing.T) {
+	// logrus.SetLevel(logrus.DebugLevel)
 	var l List
 	key := Key(1, "name")
-	pdir := NewStore(t)
-	defer os.RemoveAll(pdir)
+	dir, err := ioutil.TempDir("", "storetest_")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	defer os.RemoveAll(dir)
 	ps := new(store.Store)
-	ps.Init(pdir)
+	ps.Init(dir)
 
-	mdir := NewStore(t)
-	defer os.RemoveAll(mdir)
-	ms := new(store.Store)
-	ms.Init(mdir)
+	clog := commit.NewLogger(dir, "mutations", 50<<20)
+	clog.Init()
+	defer clog.Close()
 
-	l.init(key, ps, ms)
+	l.init(key, ps, clog)
 
 	edge := x.DirectedEdge{
 		ValueId:   9,
@@ -179,7 +175,7 @@ func TestAddMutation(t *testing.T) {
 	*/
 	// Try reading the same data in another PostingList.
 	var dl List
-	dl.init(key, ps, ms)
+	dl.init(key, ps, clog)
 	if err := checkUids(t, dl, uids...); err != nil {
 		t.Error(err)
 	}
@@ -193,19 +189,26 @@ func TestAddMutation(t *testing.T) {
 }
 
 func TestAddMutation_Value(t *testing.T) {
+	// logrus.SetLevel(logrus.DebugLevel)
+	glog.Debug("Running init...")
 	var ol List
 	key := Key(10, "value")
-	pdir := NewStore(t)
-	defer os.RemoveAll(pdir)
+	dir, err := ioutil.TempDir("", "storetest_")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	defer os.RemoveAll(dir)
 	ps := new(store.Store)
-	ps.Init(pdir)
+	ps.Init(dir)
 
-	mdir := NewStore(t)
-	defer os.RemoveAll(mdir)
-	ms := new(store.Store)
-	ms.Init(mdir)
+	clog := commit.NewLogger(dir, "mutations", 50<<20)
+	clog.Init()
+	defer clog.Close()
 
-	ol.init(key, ps, ms)
+	ol.init(key, ps, clog)
+	glog.Debug("Init successful.")
 
 	edge := x.DirectedEdge{
 		Value:     "oh hey there",
@@ -265,4 +268,49 @@ func TestAddMutation_Value(t *testing.T) {
 	if intout != 119 {
 		t.Errorf("Expected 119. Got: %v", intout)
 	}
+}
+
+func benchmarkAddMutations(n int, b *testing.B) {
+	var l List
+	key := Key(1, "name")
+	dir, err := ioutil.TempDir("", "storetest_")
+	if err != nil {
+		b.Error(err)
+		return
+	}
+
+	defer os.RemoveAll(dir)
+	ps := new(store.Store)
+	ps.Init(dir)
+
+	clog := commit.NewLogger(dir, "mutations", 50<<20)
+	clog.SyncEvery = n
+	clog.Init()
+	defer clog.Close()
+	l.init(key, ps, clog)
+	b.ResetTimer()
+
+	ts := time.Now()
+	for i := 0; i < b.N; i++ {
+		edge := x.DirectedEdge{
+			ValueId:   uint64(i),
+			Source:    "testing",
+			Timestamp: ts.Add(time.Microsecond),
+		}
+		if err := l.AddMutation(edge, Set); err != nil {
+			b.Error(err)
+		}
+	}
+}
+
+func BenchmarkAddMutations_SyncEveryLogEntry(b *testing.B) {
+	benchmarkAddMutations(0, b)
+}
+
+func BenchmarkAddMutations_SyncEvery10LogEntry(b *testing.B) {
+	benchmarkAddMutations(10, b)
+}
+
+func BenchmarkAddMutations_SyncEvery100LogEntry(b *testing.B) {
+	benchmarkAddMutations(100, b)
 }

@@ -92,7 +92,7 @@ func (l *Logger) resetCounters() {
 func (l *Logger) periodicSync() {
 	glog.WithField("dur", l.SyncDur).Debug("Periodic sync.")
 	if l.SyncDur == 0 {
-		glog.Info("No Periodic Sync for commit log.")
+		glog.Debug("No Periodic Sync for commit log.")
 		return
 	}
 
@@ -169,6 +169,7 @@ func (l *Logger) Init() {
 	l.Lock()
 	defer l.Unlock()
 
+	glog.Debug("Logger init started.")
 	{
 		// First check if we have a current file.
 		path := filepath.Join(l.dir, fmt.Sprintf("%s-current.log", l.filePrefix))
@@ -199,6 +200,7 @@ func (l *Logger) Init() {
 		l.createNew()
 	}
 	go l.periodicSync()
+	glog.Debug("Logger init finished.")
 }
 
 func (l *Logger) filepath(ts int64) string {
@@ -419,6 +421,8 @@ func streamEntriesInFile(path string,
 	return nil
 }
 
+// Always run this method in it's own goroutine. Otherwise, your program
+// will just hang waiting on channels.
 func (l *Logger) StreamEntries(afterTs int64, hash uint32,
 	ch chan []byte, done chan error) {
 
@@ -433,7 +437,9 @@ func (l *Logger) StreamEntries(afterTs int64, hash uint32,
 
 	{
 		cur := filepath.Join(l.dir, fmt.Sprintf("%s-current.log", l.filePrefix))
-		paths = append(paths, cur)
+		if _, err := os.Stat(cur); err == nil {
+			paths = append(paths, cur)
+		}
 	}
 	for _, path := range paths {
 		if err := streamEntriesInFile(path, afterTs, hash, ch); err != nil {

@@ -19,22 +19,23 @@ package posting
 import (
 	"sync"
 
-	"github.com/dgryski/go-farm"
+	"github.com/dgraph-io/dgraph/commit"
 	"github.com/dgraph-io/dgraph/store"
+	"github.com/dgryski/go-farm"
 )
 
 var lmutex sync.RWMutex
 var lcache map[uint64]*List
 var pstore *store.Store
-var mstore *store.Store
+var clog *commit.Logger
 
-func Init(posting *store.Store, mutation *store.Store) {
+func Init(posting *store.Store, log *commit.Logger) {
 	lmutex.Lock()
 	defer lmutex.Unlock()
 
 	lcache = make(map[uint64]*List)
 	pstore = posting
-	mstore = mutation
+	clog = log
 }
 
 func Get(key []byte) *List {
@@ -56,7 +57,7 @@ func Get(key []byte) *List {
 	}
 
 	list := new(List)
-	list.init(key, pstore, mstore)
+	list.init(key, pstore, clog)
 	lcache[uid] = list
 	return list
 }
