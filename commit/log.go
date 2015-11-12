@@ -46,7 +46,6 @@ type logFile struct {
 	sync.RWMutex
 	endTs int64 // never modified after creation.
 	path  string
-	f     *os.File
 	size  int64
 }
 
@@ -247,7 +246,7 @@ func lastTimestamp(path string) (int64, error) {
 			glog.WithField("n", n).Fatal("Unable to read the full 16 byte header.")
 		}
 		if err != nil {
-			glog.WithError(err).Error("While peeking into reader.")
+			glog.WithError(err).Error("While reading header.")
 			return 0, err
 		}
 		count += 1
@@ -368,4 +367,81 @@ func (l *Logger) AddLog(ts int64, hash uint32, value []byte) error {
 		return l.curFile.Sync()
 	}
 	return nil
+}
+
+func streamEntriesInFile(path string,
+	afterTs int64, hash uint32, ch chan []byte) error {
+
+	flog := glog.WithField("path", path)
+	f, err := os.Open(path)
+	if err != nil {
+		flog.WithError(err).Error("While opening file.")
+		return err
+	}
+	defer f.Close()
+
+	reader := bufio.NewReaderSize(f, 5<<20)
+	header := make([]byte, 16)
+	for {
+		n, err := reader.Read(header)
+		if err == io.EOF {
+			flog.Debug("File read complete.")
+			break
+		}
+		if n != len(header) {
+			flog.WithField("n", n).Fatal("Unable to read header.")
+		}
+		if err != nil {
+			flog.WithError(err).Error("While reading header.")
+			return err
+		}
+		hdr, err := parseHeader(header)
+		if err != nil {
+			flog.WithError(err).Error("While parsing header.")
+			return err
+		}
+		if hdr.hash == hash && hdr.ts >= afterTs {
+			data := make([]byte, hdr.size)
+			n, err := reader.Read(data)
+			if err != nil {
+				flog.WithError(err).Error("While reading data.")
+				return err
+			}
+			if int32(n) != hdr.size {
+				flog.WithField("n", n).Fatal("Unable to read data.")
+			}
+			ch <- data
+
+		} else {
+			reader.Discard(int(hdr.size))
+		}
+	}
+	return nil
+}
+
+func (l *Logger) StreamEntries(afterTs int64, hash uint32,
+	ch chan []byte, done chan error) {
+
+	var paths []string
+	l.Lock()
+	for _, lf := range l.list {
+		if afterTs < lf.endTs {
+			paths = append(paths, lf.path)
+		}
+	}
+	l.Unlock()
+
+	{
+		cur := filepath.Join(l.dir, fmt.Sprintf("%s-current.log", l.filePrefix))
+		paths = append(paths, cur)
+	}
+	for _, path := range paths {
+		if err := streamEntriesInFile(path, afterTs, hash, ch); err != nil {
+			close(ch)
+			done <- err
+			return
+		}
+	}
+	close(ch)
+	done <- nil
 }

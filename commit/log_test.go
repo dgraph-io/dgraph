@@ -17,6 +17,7 @@
 package commit
 
 import (
+	"bytes"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -141,6 +142,9 @@ func TestRotatingLog(t *testing.T) {
 	if nl.size != 416 {
 		t.Errorf("Expected size 416. Got: %v", nl.size)
 	}
+	if err := nl.AddLog(ts, 0, data); err == nil {
+		t.Error("Adding an entry with older ts should fail.")
+	}
 	if err := nl.AddLog(ts+int64(100), 0, data); err != nil {
 		t.Error(err)
 		return
@@ -163,5 +167,89 @@ func TestRotatingLog(t *testing.T) {
 	}
 	if nl.lastLogTs != ts+int64(113) {
 		t.Errorf("Expected last log ts: %v. Got: %v", ts+int64(113), nl.lastLogTs)
+	}
+}
+
+func TestReadEntries(t *testing.T) {
+	dir, err := ioutil.TempDir("", "dgraph-log")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer os.RemoveAll(dir)
+
+	l := NewLogger(dir, "dgraph", 1024) // 1 kB
+	l.SyncDur = 0
+	l.SyncEvery = 0
+	l.Init()
+	defer l.Close()
+
+	data := make([]byte, 400)
+	ts := time.Now().UnixNano()
+	for i := 0; i < 9; i++ {
+		curts := ts + int64(i)
+		if err := l.AddLog(curts, uint32(i%3), data); err != nil {
+			t.Error(err)
+			return
+		}
+	}
+	// This should have created 4 files of 832 bytes each (header + data), and
+	// the current file should be of size 416.
+	if len(l.list) != 4 {
+		t.Errorf("Expected 4 files. Got: %v", len(l.list))
+	}
+	for i, lf := range l.list {
+		exp := ts + int64(2*i+1)
+		if lf.endTs != exp {
+			t.Errorf("Expected end ts: %v. Got: %v", exp, lf.endTs)
+		}
+	}
+	if l.size != 416 {
+		t.Errorf("Expected size 416. Got: %v", l.size)
+	}
+	if l.lastLogTs != ts+int64(8) {
+		t.Errorf("Expected ts: %v. Got: %v", ts+int64(8), l.lastLogTs)
+	}
+
+	{
+		// Check for hash = 1, ts >= 2.
+		ch := make(chan []byte, 10)
+		done := make(chan error)
+		go l.StreamEntries(ts+2, uint32(1), ch, done)
+		count := 0
+		for val := range ch {
+			count += 1
+			if bytes.Compare(data, val) != 0 {
+				t.Error("Data doesn't equate.")
+			}
+		}
+		if err := <-done; err != nil {
+			t.Error(err)
+		}
+		if count != 2 {
+			t.Errorf("Expected 2 entries. Got: %v", count)
+		}
+	}
+	{
+		if err := l.AddLog(ts+int64(9), 1, data); err != nil {
+			t.Error(err)
+		}
+		// Check for hash = 1, ts >= 2.
+		ch := make(chan []byte, 10)
+		done := make(chan error)
+		go l.StreamEntries(ts, uint32(1), ch, done)
+		count := 0
+		for val := range ch {
+			count += 1
+			if bytes.Compare(data, val) != 0 {
+				t.Error("Data doesn't equate.")
+			}
+		}
+		if err := <-done; err != nil {
+			t.Error(err)
+		}
+		if count != 4 {
+			t.Errorf("Expected 4 entries. Got: %v", count)
+		}
 	}
 }
