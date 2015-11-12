@@ -152,22 +152,6 @@ func (l *Logger) handleFile(path string, info os.FileInfo, err error) error {
 
 	// Handle if we find the current log file.
 	if tstring == "current" {
-		var err error
-		l.size = info.Size()
-		l.curFile, err = os.OpenFile(path, os.O_APPEND|os.O_WRONLY, os.FileMode(0644))
-		if err != nil {
-			glog.WithError(err).Fatal("Unable to open file in write mode.")
-		}
-		/*
-			ret, err := l.curFile.Seek(info.Size(), 0)
-			if err != nil || ret != info.Size() {
-				glog.WithError(err).Fatal("Unable to seek to end of file.")
-			}
-		*/
-		l.lastLogTs, err = lastTimestamp(path)
-		if err != nil {
-			glog.WithError(err).Fatal("Unable to read last log timestamp.")
-		}
 		return nil
 	}
 
@@ -185,6 +169,28 @@ func (l *Logger) handleFile(path string, info os.FileInfo, err error) error {
 func (l *Logger) Init() {
 	l.Lock()
 	defer l.Unlock()
+
+	{
+		// First check if we have a current file.
+		path := filepath.Join(l.dir, fmt.Sprintf("%s-current.log", l.filePrefix))
+		fi, err := os.Stat(path)
+		if err == nil {
+			// we have the file. Derive information for counters.
+			l.size = fi.Size()
+			l.logsSinceLastSync = 0
+			l.lastLogTs, err = lastTimestamp(path)
+			if err != nil {
+				glog.WithError(err).Fatal("Unable to read last log timestamp.")
+			}
+
+			// Open file for append.
+			l.curFile, err = os.OpenFile(path, os.O_APPEND|os.O_WRONLY,
+				os.FileMode(0644))
+			if err != nil {
+				glog.WithError(err).Fatal("Unable to open current file in append mode.")
+			}
+		}
+	}
 
 	if err := filepath.Walk(l.dir, l.handleFile); err != nil {
 		glog.WithError(err).Fatal("While walking over directory")

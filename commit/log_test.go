@@ -129,29 +129,31 @@ func TestRotatingLog(t *testing.T) {
 		t.Errorf("Expected ts: %v. Got: %v", ts+int64(8), l.lastLogTs)
 	}
 	l.Close()
+	l = nil // Important to avoid re-use later.
 
 	// Now, let's test a re-init of logger.
 	nl := NewLogger(dir, "dgraph", 1024)
 	nl.Init()
+	defer nl.Close()
 	if len(nl.list) != 4 {
 		t.Errorf("Expected 4 files. Got: %v", len(nl.list))
 	}
 	if nl.size != 416 {
 		t.Errorf("Expected size 416. Got: %v", nl.size)
 	}
-	if err := l.AddLog(ts+int64(100), 0, data); err != nil {
+	if err := nl.AddLog(ts+int64(100), 0, data); err != nil {
 		t.Error(err)
 		return
 	}
 	if nl.size != 832 {
 		t.Errorf("Expected size 832. Got: %v", nl.size)
 	}
-	if err := l.AddLog(ts+int64(113), 0, data); err != nil {
+	if err := nl.AddLog(ts+int64(113), 0, data); err != nil {
 		t.Error(err)
 		return
 	}
 	if len(nl.list) != 5 {
-		t.Errorf("Expected 4 files. Got: %v", len(nl.list))
+		t.Errorf("Expected 5 files. Got: %v", len(nl.list))
 	}
 	if nl.list[4].endTs != ts+int64(100) {
 		t.Errorf("Expected ts: %v. Got: %v", ts+int64(100), nl.list[4].endTs)
