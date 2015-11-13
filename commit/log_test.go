@@ -19,17 +19,14 @@ package commit
 import (
 	"bytes"
 	"io/ioutil"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
-
-	"github.com/Sirupsen/logrus"
 )
 
 func TestHandleFile(t *testing.T) {
-	logrus.SetLevel(logrus.DebugLevel)
-
 	dir, err := ioutil.TempDir("", "dgraph-log")
 	if err != nil {
 		t.Error(err)
@@ -253,3 +250,32 @@ func TestReadEntries(t *testing.T) {
 		}
 	}
 }
+
+func benchmarkAddLog(n int, b *testing.B) {
+	dir, err := ioutil.TempDir("", "dgraph-log")
+	if err != nil {
+		b.Error(err)
+		return
+	}
+	defer os.RemoveAll(dir)
+
+	l := NewLogger(dir, "dgraph", 50<<20)
+	l.SyncEvery = n
+	l.Init()
+
+	data := make([]byte, 100)
+	b.ResetTimer()
+	ts := time.Now().UnixNano()
+	for i := 0; i < b.N; i++ {
+		end := rand.Intn(50)
+		if err := l.AddLog(ts+int64(i), 0, data[:50+end]); err != nil {
+			b.Error(err)
+		}
+	}
+	l.Close()
+}
+
+func BenchmarkAddLog_SyncEveryRecord(b *testing.B)      { benchmarkAddLog(0, b) }
+func BenchmarkAddLog_SyncEvery10Records(b *testing.B)   { benchmarkAddLog(10, b) }
+func BenchmarkAddLog_SyncEvery100Records(b *testing.B)  { benchmarkAddLog(100, b) }
+func BenchmarkAddLog_SyncEvery1000Records(b *testing.B) { benchmarkAddLog(1000, b) }

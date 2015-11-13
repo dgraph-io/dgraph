@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"math"
+	"math/rand"
 	"os"
 	"testing"
 	"time"
@@ -271,6 +272,7 @@ func TestAddMutation_Value(t *testing.T) {
 }
 
 func benchmarkAddMutations(n int, b *testing.B) {
+	// logrus.SetLevel(logrus.DebugLevel)
 	var l List
 	key := Key(1, "name")
 	dir, err := ioutil.TempDir("", "storetest_")
@@ -293,7 +295,7 @@ func benchmarkAddMutations(n int, b *testing.B) {
 	ts := time.Now()
 	for i := 0; i < b.N; i++ {
 		edge := x.DirectedEdge{
-			ValueId:   uint64(i),
+			ValueId:   uint64(rand.Intn(b.N) + 1),
 			Source:    "testing",
 			Timestamp: ts.Add(time.Microsecond),
 		}
@@ -313,4 +315,8 @@ func BenchmarkAddMutations_SyncEvery10LogEntry(b *testing.B) {
 
 func BenchmarkAddMutations_SyncEvery100LogEntry(b *testing.B) {
 	benchmarkAddMutations(100, b)
+}
+
+func BenchmarkAddMutations_SyncEvery1000LogEntry(b *testing.B) {
+	benchmarkAddMutations(1000, b)
 }
