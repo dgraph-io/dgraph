@@ -32,8 +32,6 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgryski/go-farm"
 	"github.com/google/flatbuffers/go"
-
-	linked "container/list"
 )
 
 var glog = x.Log("posting")
@@ -569,37 +567,6 @@ func (l *List) AddMutation(t x.DirectedEdge, op byte) error {
 	l.mergeMutation(mpost)
 	l.maxMutationTs = t.Timestamp.UnixNano()
 	return l.clog.AddLog(t.Timestamp.UnixNano(), l.hash, mbuf)
-}
-
-func addOrSet(ll *linked.List, p *types.Posting) {
-	added := false
-	for e := ll.Front(); e != nil; e = e.Next() {
-		pe := e.Value.(*types.Posting)
-		if pe == nil {
-			glog.Fatal("Posting shouldn't be nil!")
-		}
-
-		if !added && pe.Uid() > p.Uid() {
-			ll.InsertBefore(p, e)
-			added = true
-
-		} else if pe.Uid() == p.Uid() {
-			added = true
-			e.Value = p
-		}
-	}
-	if !added {
-		ll.PushBack(p)
-	}
-}
-
-func remove(ll *linked.List, p *types.Posting) {
-	for e := ll.Front(); e != nil; e = e.Next() {
-		pe := e.Value.(*types.Posting)
-		if pe.Uid() == p.Uid() {
-			ll.Remove(e)
-		}
-	}
 }
 
 func (l *List) isDirty() bool {
