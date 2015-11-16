@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"math"
 	"sync"
+	"time"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/dgraph-io/dgraph/commit"
@@ -47,11 +48,12 @@ type MutationLink struct {
 
 type List struct {
 	sync.RWMutex
-	key    []byte
-	hash   uint32
-	buffer []byte
-	pstore *store.Store // postinglist store
-	clog   *commit.Logger
+	key         []byte
+	hash        uint32
+	buffer      []byte
+	pstore      *store.Store // postinglist store
+	clog        *commit.Logger
+	lastCompact time.Time
 
 	// Mutations
 	mlayer        map[int]types.Posting // stores only replace instructions.
@@ -569,20 +571,37 @@ func (l *List) AddMutation(t x.DirectedEdge, op byte) error {
 	return l.clog.AddLog(t.Timestamp.UnixNano(), l.hash, mbuf)
 }
 
-func (l *List) isDirty() bool {
+func (l *List) IsDirty() bool {
 	l.RLock()
 	defer l.RUnlock()
 	return len(l.mindex)+len(l.mlayer) > 0
 }
 
-func (l *List) CommitIfDirty() error {
-	if !l.isDirty() {
+func (l *List) DirtyRatio() float64 {
+	l.RLock()
+	defer l.RUnlock()
+
+	d := len(l.mindex) + len(l.mlayer)
+	plist := types.GetRootAsPostingList(l.buffer, 0)
+	ln := plist.PostingsLength()
+	if ln == 0 {
+		return math.MaxFloat64
+	}
+
+	return float64(d) / float64(ln)
+}
+
+func (l *List) CompactIfDirty() error {
+	if !l.IsDirty() {
 		glog.WithField("dirty", false).Debug("Not Committing")
 		return nil
 	} else {
 		glog.WithField("dirty", true).Debug("Committing")
 	}
+	return l.compact()
+}
 
+func (l *List) compact() error {
 	l.Lock()
 	defer l.Unlock()
 
@@ -615,10 +634,17 @@ func (l *List) CommitIfDirty() error {
 	}
 
 	// Now reset the mutation variables.
+	l.lastCompact = time.Now()
 	l.mlayer = make(map[int]types.Posting)
 	l.mdelta = 0
 	l.mindex = nil
 	return nil
+}
+
+func (l *List) LastCompactionTs() time.Time {
+	l.RLock()
+	defer l.RUnlock()
+	return l.lastCompact
 }
 
 func (l *List) GetUids() []uint64 {

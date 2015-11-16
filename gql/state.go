@@ -234,5 +234,8 @@ func isNameSuffix(r rune) bool {
 	if r >= '0' && r <= '9' {
 		return true
 	}
+	if r == '.' {
+		return true
+	}
 	return false
 }

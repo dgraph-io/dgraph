@@ -65,9 +65,6 @@ func allocateNew(xid string) (uid uint64, rerr error) {
 		if rerr != nil {
 			x.Err(log, rerr).Error("While adding mutation")
 		}
-		if err := pl.CommitIfDirty(); err != nil {
-			x.Err(log, err).Error("While commiting")
-		}
 		return uid, rerr
 	}
 	return 0, errors.New("Some unhandled route lead me here." +

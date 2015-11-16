@@ -184,7 +184,19 @@ func lexLanguage(l *lex.Lexer) lex.StateFn {
 
 // Assumes '"' has already been encountered.
 func lexLiteral(l *lex.Lexer) lex.StateFn {
-	l.AcceptUntil(isEndLiteral)
+	for {
+		r := l.Next()
+		if r == '\u005c' { // backslash
+			r = l.Next()
+			continue // This would skip over the escaped rune.
+		}
+
+		if r == lex.EOF || isEndLiteral(r) {
+			break
+		}
+	}
+	l.Backup()
+
 	l.Emit(itemLiteral)
 	l.Next()   // Move to end literal.
 	l.Ignore() // Ignore end literal.

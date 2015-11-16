@@ -51,9 +51,12 @@ func (nq NQuad) ToEdge() (result x.DirectedEdge, rerr error) {
 		result.ValueId = oid
 	} else {
 		result.Value = nq.ObjectValue
-		// TODO: Handle Language
 	}
-	result.Attribute = nq.Predicate
+	if len(nq.Language) > 0 {
+		result.Attribute = nq.Predicate + "." + nq.Language
+	} else {
+		result.Attribute = nq.Predicate
+	}
 	result.Source = nq.Label
 	result.Timestamp = time.Now()
 	return result, nil

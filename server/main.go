@@ -17,12 +17,16 @@
 package main
 
 import (
+	"compress/gzip"
 	"flag"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"os"
+	"strings"
+	"sync/atomic"
+	"time"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/dgraph-io/dgraph/commit"
@@ -32,24 +36,54 @@ import (
 	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgryski/go-farm"
 )
 
 var glog = x.Log("rdf")
 
 var postingDir = flag.String("postings", "", "Directory to store posting lists")
 var mutationDir = flag.String("mutations", "", "Directory to store mutations")
-var rdfData = flag.String("rdfdata", "", "File containing RDF data")
+var rdfGzips = flag.String("rdfgzips", "",
+	"Comma separated gzip files containing RDF data")
+var mod = flag.Uint64("mod", 1, "Only pick entities, where uid % mod == 0.")
+var port = flag.String("port", "8080", "Port to run server on.")
 
-func handleRdfReader(reader io.Reader) (int, error) {
+type counters struct {
+	read      uint64
+	processed uint64
+	ignored   uint64
+}
+
+func printCounters(ticker *time.Ticker, c *counters) {
+	for _ = range ticker.C {
+		glog.WithFields(logrus.Fields{
+			"read":      atomic.LoadUint64(&c.read),
+			"processed": atomic.LoadUint64(&c.processed),
+			"ignored":   atomic.LoadUint64(&c.ignored),
+		}).Info("Counters")
+	}
+}
+
+// Blocking function.
+func handleRdfReader(reader io.Reader) (uint64, error) {
 	cnq := make(chan rdf.NQuad, 1000)
 	done := make(chan error)
+	ctr := new(counters)
+	ticker := time.NewTicker(time.Second)
 	go rdf.ParseStream(reader, cnq, done)
-
-	count := 0
+	go printCounters(ticker, ctr)
 Loop:
 	for {
 		select {
 		case nq := <-cnq:
+			atomic.AddUint64(&ctr.read, 1)
+
+			if farm.Fingerprint64([]byte(nq.Subject))%*mod != 0 {
+				// Ignore due to mod sampling.
+				atomic.AddUint64(&ctr.ignored, 1)
+				break
+			}
+
 			edge, err := nq.ToEdge()
 			if err != nil {
 				x.Err(glog, err).WithField("nq", nq).Error("While converting to edge")
@@ -58,7 +92,8 @@ Loop:
 			key := posting.Key(edge.Entity, edge.Attribute)
 			plist := posting.Get(key)
 			plist.AddMutation(edge, posting.Set)
-			count += 1
+			atomic.AddUint64(&ctr.processed, 1)
+
 		case err := <-done:
 			if err != nil {
 				x.Err(glog, err).Error("While reading request")
@@ -67,7 +102,8 @@ Loop:
 			break Loop
 		}
 	}
-	return count, nil
+	ticker.Stop()
+	return atomic.LoadUint64(&ctr.processed), nil
 }
 
 func rdfHandler(w http.ResponseWriter, r *http.Request) {
@@ -99,12 +135,14 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		x.SetStatus(w, x.E_INVALID_REQUEST, "Invalid request encountered.")
 		return
 	}
+	glog.WithField("q", string(q)).Info("Query received.")
 	sg, err := gql.Parse(string(q))
 	if err != nil {
 		x.Err(glog, err).Error("While parsing query")
 		x.SetStatus(w, x.E_INVALID_REQUEST, err.Error())
 		return
 	}
+	glog.WithField("q", string(q)).Info("Query parsed.")
 	rch := make(chan error)
 	go query.ProcessGraph(sg, rch)
 	err = <-rch
@@ -113,6 +151,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		x.SetStatus(w, x.E_ERROR, err.Error())
 		return
 	}
+	glog.WithField("q", string(q)).Info("Graph processed.")
 	js, err := sg.ToJson()
 	if err != nil {
 		x.Err(glog, err).Error("While converting to Json.")
@@ -128,32 +167,47 @@ func main() {
 	if !flag.Parsed() {
 		glog.Fatal("Unable to parse flags")
 	}
-	logrus.SetLevel(logrus.DebugLevel)
+	logrus.SetLevel(logrus.InfoLevel)
 
 	ps := new(store.Store)
 	ps.Init(*postingDir)
 	clog := commit.NewLogger(*mutationDir, "dgraph", 50<<20)
+	clog.SyncEvery = 1000
 	clog.Init()
 	defer clog.Close()
 	posting.Init(ps, clog)
 
-	if len(*rdfData) > 0 {
-		f, err := os.Open(*rdfData)
-		if err != nil {
-			glog.Fatal(err)
-		}
-		defer f.Close()
+	if len(*rdfGzips) > 0 {
+		files := strings.Split(*rdfGzips, ",")
+		for _, path := range files {
+			if len(path) == 0 {
+				continue
+			}
+			glog.WithField("path", path).Info("Handling...")
+			f, err := os.Open(path)
+			if err != nil {
+				glog.WithError(err).Fatal("Unable to open rdf file.")
+			}
 
-		count, err := handleRdfReader(f)
-		if err != nil {
-			glog.Fatal(err)
+			r, err := gzip.NewReader(f)
+			if err != nil {
+				glog.WithError(err).Fatal("Unable to create gzip reader.")
+			}
+
+			count, err := handleRdfReader(r)
+			if err != nil {
+				glog.Fatal(err)
+			}
+			glog.WithField("count", count).Info("RDFs parsed")
+			r.Close()
+			f.Close()
 		}
-		glog.WithField("count", count).Debug("RDFs parsed")
 	}
 
 	http.HandleFunc("/rdf", rdfHandler)
 	http.HandleFunc("/query", queryHandler)
-	if err := http.ListenAndServe(":8080", nil); err != nil {
+	glog.WithField("port", *port).Info("Listening for requests...")
+	if err := http.ListenAndServe(":"+*port, nil); err != nil {
 		x.Err(glog, err).Fatal("ListenAndServe")
 	}
 }

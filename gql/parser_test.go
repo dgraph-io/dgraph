@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/Sirupsen/logrus"
 	"github.com/dgraph-io/dgraph/query"
 )
 
@@ -71,6 +72,31 @@ func TestParse(t *testing.T) {
 		t.Errorf("Expected 1 child of friends. Got: %v", len(child.Children))
 	}
 	if err := checkAttr(child.Children[0], "name"); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestParseXid(t *testing.T) {
+	logrus.SetLevel(logrus.DebugLevel)
+	query := `
+	query {
+		user(_uid_: 0x11) {
+			type.object.name
+		}
+	}`
+	sg, err := Parse(query)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	if sg == nil {
+		t.Error("subgraph is nil")
+		return
+	}
+	if len(sg.Children) != 1 {
+		t.Errorf("Expected 1 children. Got: %v", len(sg.Children))
+	}
+	if err := checkAttr(sg.Children[0], "type.object.name"); err != nil {
 		t.Error(err)
 	}
 }
