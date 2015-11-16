@@ -17,21 +17,29 @@
 package store
 
 import (
+	"github.com/dgraph-io/dgraph/store/rocksdb"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/syndtr/goleveldb/leveldb"
-	"github.com/syndtr/goleveldb/leveldb/opt"
 )
 
 var log = x.Log("store")
 
 type Store struct {
-	db  *leveldb.DB
-	opt *opt.Options
+	db   *rocksdb.DB
+	opt  *rocksdb.Options
+	ropt *rocksdb.ReadOptions
+	wopt *rocksdb.WriteOptions
 }
 
 func (s *Store) Init(filepath string) {
+	s.opt = rocksdb.NewOptions()
+	s.opt.SetCreateIfMissing(true)
+
+	s.ropt = rocksdb.NewReadOptions()
+	s.wopt = rocksdb.NewWriteOptions()
+	s.wopt.SetSync(true)
+
 	var err error
-	s.db, err = leveldb.OpenFile(filepath, s.opt)
+	s.db, err = rocksdb.Open(filepath, s.opt)
 	if err != nil {
 		x.Err(log, err).WithField("filepath", filepath).
 			Fatal("While opening store")
@@ -39,24 +47,24 @@ func (s *Store) Init(filepath string) {
 	}
 }
 
+/*
 func (s *Store) IsNew(id uint64) bool {
 	return false
 }
+*/
 
-func (s *Store) Get(k []byte) (val []byte, rerr error) {
-	return s.db.Get(k, nil)
+func (s *Store) Get(key []byte) (val []byte, rerr error) {
+	return s.db.Get(s.ropt, key)
 }
 
 func (s *Store) SetOne(k []byte, val []byte) error {
-	wb := new(leveldb.Batch)
-	wb.Put(k, val)
-	return s.db.Write(wb, nil)
+	return s.db.Put(s.wopt, k, val)
 }
 
 func (s *Store) Delete(k []byte) error {
-	return s.db.Delete(k, nil)
+	return s.db.Delete(s.wopt, k)
 }
 
-func (s *Store) Close() error {
-	return s.db.Close()
+func (s *Store) Close() {
+	s.db.Close()
 }

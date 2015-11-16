@@ -17,7 +17,9 @@
 package store
 
 import (
+	"fmt"
 	"io/ioutil"
+	"math/rand"
 	"os"
 	"testing"
 )
@@ -58,3 +60,71 @@ func TestGet(t *testing.T) {
 		t.Errorf("Expected 'the one'. Found: %s", string(val))
 	}
 }
+
+func benchmarkGet(valSize int, b *testing.B) {
+	path, err := ioutil.TempDir("", "storetest_")
+	if err != nil {
+		b.Error(err)
+		b.Fail()
+		return
+	}
+	defer os.RemoveAll(path)
+
+	var s Store
+	s.Init(path)
+	buf := make([]byte, valSize)
+
+	nkeys := 100
+	for i := 0; i < nkeys; i++ {
+		key := []byte(fmt.Sprintf("key_%d", i))
+		if err := s.SetOne(key, buf); err != nil {
+			b.Error(err)
+			return
+		}
+	}
+	b.Logf("Wrote %d keys.", nkeys)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		k := rand.Int() % nkeys
+		key := []byte(fmt.Sprintf("key_%d", k))
+		val, err := s.Get(key)
+		if err != nil {
+			b.Error(err)
+		}
+		if len(val) != valSize {
+			b.Errorf("Value size expected: %d. Found: %d", valSize, len(val))
+		}
+	}
+}
+
+func BenchmarkGet_valsize100(b *testing.B)   { benchmarkGet(100, b) }
+func BenchmarkGet_valsize1000(b *testing.B)  { benchmarkGet(1000, b) }
+func BenchmarkGet_valsize10000(b *testing.B) { benchmarkGet(10000, b) }
+
+func benchmarkSet(valSize int, b *testing.B) {
+	path, err := ioutil.TempDir("", "storetest_")
+	if err != nil {
+		b.Error(err)
+		b.Fail()
+		return
+	}
+	defer os.RemoveAll(path)
+
+	var s Store
+	s.Init(path)
+	buf := make([]byte, valSize)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		key := []byte(fmt.Sprintf("key_%d", i))
+		if err := s.SetOne(key, buf); err != nil {
+			b.Error(err)
+			return
+		}
+	}
+}
+
+func BenchmarkSet_valsize100(b *testing.B)   { benchmarkSet(100, b) }
+func BenchmarkSet_valsize1000(b *testing.B)  { benchmarkSet(1000, b) }
+func BenchmarkSet_valsize10000(b *testing.B) { benchmarkSet(10000, b) }
