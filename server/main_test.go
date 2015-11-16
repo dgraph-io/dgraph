@@ -29,10 +29,6 @@ import (
 	"github.com/dgraph-io/dgraph/store"
 )
 
-func NewStore() (string, error) {
-	return ioutil.TempDir("", "storetest_")
-}
-
 var q0 = `
 	{
 		user(_xid_:alice) {
@@ -46,41 +42,49 @@ var q0 = `
 	}
 `
 
-func prepare() error {
-	dir, err := ioutil.TempDir("", "storetest_")
+func prepare() (dir1, dir2 string, clog *commit.Logger, rerr error) {
+	var err error
+	dir1, err = ioutil.TempDir("", "storetest_")
 	if err != nil {
-		return err
+		return "", "", nil, err
 	}
-
-	defer os.RemoveAll(dir)
 	ps := new(store.Store)
-	ps.Init(dir)
+	ps.Init(dir1)
 
-	clog := commit.NewLogger(dir, "mutations", 50<<20)
+	dir2, err = ioutil.TempDir("", "storemuts_")
+	if err != nil {
+		return dir1, "", nil, err
+	}
+	clog = commit.NewLogger(dir2, "mutations", 50<<20)
 	clog.Init()
-	defer clog.Close()
 
 	posting.Init(ps, clog)
 
 	f, err := os.Open("testdata.nq")
 	if err != nil {
-		return err
+		return dir1, dir2, clog, err
 	}
 	defer f.Close()
 	_, err = handleRdfReader(f)
 	if err != nil {
-		return err
+		return dir1, dir2, clog, err
 	}
-	return nil
-	// Even though all files would be closed and the directory deleted,
-	// postings would still be present in memory.
+	return dir1, dir2, clog, nil
+}
+
+func closeAll(dir1, dir2 string, clog *commit.Logger) {
+	clog.Close()
+	os.RemoveAll(dir2)
+	os.RemoveAll(dir1)
 }
 
 func TestQuery(t *testing.T) {
-	if err := prepare(); err != nil {
+	dir1, dir2, clog, err := prepare()
+	if err != nil {
 		t.Error(err)
 		return
 	}
+	defer closeAll(dir1, dir2, clog)
 
 	// Parse GQL into internal query representation.
 	g, err := gql.Parse(q0)
@@ -163,10 +167,12 @@ var q1 = `
 `
 
 func BenchmarkQuery(b *testing.B) {
-	if err := prepare(); err != nil {
+	dir1, dir2, clog, err := prepare()
+	if err != nil {
 		b.Error(err)
 		return
 	}
+	defer closeAll(dir1, dir2, clog)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

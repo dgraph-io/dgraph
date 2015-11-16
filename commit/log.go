@@ -124,6 +124,7 @@ func (l *Logger) Close() {
 		if err := l.curFile.Close(); err != nil {
 			glog.WithError(err).Error("While closing current file.")
 		}
+		l.curFile = nil
 	}
 }
 
@@ -162,6 +163,10 @@ func (l *Logger) handleFile(path string, info os.FileInfo, err error) error {
 	lf.endTs = ts
 	lf.path = path
 	l.list = append(l.list, lf)
+
+	if l.lastLogTs < lf.endTs {
+		l.lastLogTs = lf.endTs
+	}
 	return nil
 }
 

@@ -116,6 +116,10 @@ func mergeInterfaces(i1 interface{}, i2 interface{}) interface{} {
 }
 
 func postTraverse(g *SubGraph) (result map[uint64]interface{}, rerr error) {
+	if len(g.query) == 0 {
+		return result, nil
+	}
+
 	result = make(map[uint64]interface{})
 	// Get results from all children first.
 	cResult := make(map[uint64]interface{})

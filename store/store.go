@@ -17,6 +17,8 @@
 package store
 
 import (
+	"fmt"
+
 	"github.com/dgraph-io/dgraph/store/rocksdb"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -47,14 +49,12 @@ func (s *Store) Init(filepath string) {
 	}
 }
 
-/*
-func (s *Store) IsNew(id uint64) bool {
-	return false
-}
-*/
-
 func (s *Store) Get(key []byte) (val []byte, rerr error) {
-	return s.db.Get(s.ropt, key)
+	val, rerr = s.db.Get(s.ropt, key)
+	if rerr == nil && val == nil {
+		return []byte(""), fmt.Errorf("E_KEY_NOT_FOUND")
+	}
+	return val, rerr
 }
 
 func (s *Store) SetOne(k []byte, val []byte) error {
