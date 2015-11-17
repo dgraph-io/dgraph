@@ -55,6 +55,7 @@ var lcache map[uint64]*entry
 var pstore *store.Store
 var clog *commit.Logger
 var ch chan uint64
+var lc *lcounters
 
 func Init(posting *store.Store, log *commit.Logger) {
 	lmutex.Lock()
@@ -64,6 +65,8 @@ func Init(posting *store.Store, log *commit.Logger) {
 	pstore = posting
 	clog = log
 	ch = make(chan uint64, 10000)
+	lc = new(lcounters)
+	go lc.periodicLog()
 }
 
 func get(k uint64) *List {
@@ -75,12 +78,29 @@ func get(k uint64) *List {
 	return nil
 }
 
+type lcounters struct {
+	hit     uint64
+	miss    uint64
+	misshit uint64
+}
+
+func (lc *lcounters) periodicLog() {
+	for _ = range time.Tick(10 * time.Second) {
+		glog.WithFields(logrus.Fields{
+			"hit":     atomic.LoadUint64(&lc.hit),
+			"miss":    atomic.LoadUint64(&lc.miss),
+			"misshit": atomic.LoadUint64(&lc.misshit),
+		}).Info("Lists counters")
+	}
+}
+
 func Get(key []byte) *List {
 	// Acquire read lock and check if list is available.
 	lmutex.RLock()
 	uid := farm.Fingerprint64(key)
 	if e, ok := lcache[uid]; ok {
 		lmutex.RUnlock()
+		atomic.AddUint64(&lc.hit, 1)
 		return e.l
 	}
 	lmutex.RUnlock()
@@ -90,9 +110,11 @@ func Get(key []byte) *List {
 	defer lmutex.Unlock()
 	// Check again after acquiring write lock.
 	if e, ok := lcache[uid]; ok {
+		atomic.AddUint64(&lc.misshit, 1)
 		return e.l
 	}
 
+	atomic.AddUint64(&lc.miss, 1)
 	e := new(entry)
 	e.l = new(List)
 	e.l.init(key, pstore, clog)

@@ -22,7 +22,8 @@ const (
 // To prevent memory leaks, Close must be called on an Options when the
 // program no longer needs it.
 type Options struct {
-	Opt *C.rocksdb_options_t
+	Opt  *C.rocksdb_options_t
+	Bopt *C.rocksdb_block_based_table_options_t
 }
 
 // ReadOptions represent all of the available options when reading from a
@@ -45,8 +46,10 @@ type WriteOptions struct {
 
 // NewOptions allocates a new Options object.
 func NewOptions() *Options {
-	opt := C.rocksdb_options_create()
-	return &Options{opt}
+	o := new(Options)
+	o.Opt = C.rocksdb_options_create()
+	o.Bopt = C.rocksdb_block_based_options_create()
+	return o
 }
 
 // NewReadOptions allocates a new ReadOptions object.
@@ -64,6 +67,7 @@ func NewWriteOptions() *WriteOptions {
 // Close deallocates the Options, freeing its underlying C struct.
 func (o *Options) Close() {
 	C.rocksdb_options_destroy(o.Opt)
+	C.rocksdb_block_based_options_destroy(o.Bopt)
 }
 
 // SetComparator sets the comparator to be used for all read and write
@@ -170,15 +174,13 @@ func (o *Options) SetCreateIfMissing(b bool) {
 
 // SetFilterPolicy causes Open to create a new database that will uses filter
 // created from the filter policy passed in.
-/*
 func (o *Options) SetFilterPolicy(fp *FilterPolicy) {
 	var policy *C.rocksdb_filterpolicy_t
 	if fp != nil {
 		policy = fp.Policy
 	}
-	C.rocksdb_options_set_filter_policy(o.Opt, policy)
+	C.rocksdb_block_based_options_set_filter_policy(o.Bopt, policy)
 }
-*/
 
 // Close deallocates the ReadOptions, freeing its underlying C struct.
 func (ro *ReadOptions) Close() {

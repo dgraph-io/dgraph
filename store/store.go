@@ -35,6 +35,8 @@ type Store struct {
 func (s *Store) Init(filepath string) {
 	s.opt = rocksdb.NewOptions()
 	s.opt.SetCreateIfMissing(true)
+	fp := rocksdb.NewBloomFilter(16)
+	s.opt.SetFilterPolicy(fp)
 
 	s.ropt = rocksdb.NewReadOptions()
 	s.wopt = rocksdb.NewWriteOptions()

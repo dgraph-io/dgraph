@@ -76,6 +76,7 @@ func Open(dbname string, o *Options) (*DB, error) {
 	ldbname := C.CString(dbname)
 	defer C.free(unsafe.Pointer(ldbname))
 
+	C.rocksdb_options_set_block_based_table_factory(o.Opt, o.Bopt)
 	rocksdb := C.rocksdb_open(o.Opt, ldbname, &errStr)
 	if errStr != nil {
 		gs := C.GoString(errStr)
