@@ -19,6 +19,7 @@ package loader
 import (
 	"bufio"
 	"io"
+	"math/rand"
 	"runtime"
 	"strings"
 	"sync"
@@ -48,25 +49,46 @@ type state struct {
 	mod   uint64
 }
 
-func printCounters(ticker *time.Ticker, c *counters) {
+func (s *state) printCounters(ticker *time.Ticker) {
 	for _ = range ticker.C {
+		parsed := atomic.LoadUint64(&s.ctr.parsed)
+		ignored := atomic.LoadUint64(&s.ctr.ignored)
+		processed := atomic.LoadUint64(&s.ctr.processed)
+		pending := parsed - ignored - processed
 		glog.WithFields(logrus.Fields{
-			"read":      atomic.LoadUint64(&c.read),
-			"parsed":    atomic.LoadUint64(&c.parsed),
-			"processed": atomic.LoadUint64(&c.processed),
-			"ignored":   atomic.LoadUint64(&c.ignored),
+			"read":      atomic.LoadUint64(&s.ctr.read),
+			"processed": processed,
+			"parsed":    parsed,
+			"ignored":   ignored,
+			"pending":   pending,
+			"len_cnq":   len(s.cnq),
 		}).Info("Counters")
 	}
 }
 
 func (s *state) readLines(r io.Reader) {
+	var buf []string
 	scanner := bufio.NewScanner(r)
+	// Randomize lines to avoid contention on same subject.
+	for i := 0; i < 1000; i++ {
+		if scanner.Scan() {
+			buf = append(buf, scanner.Text())
+		} else {
+			break
+		}
+	}
+	ln := len(buf)
 	for scanner.Scan() {
-		s.input <- scanner.Text()
+		k := rand.Intn(ln)
+		s.input <- buf[k]
+		buf[k] = scanner.Text()
 		atomic.AddUint64(&s.ctr.read, 1)
 	}
 	if err := scanner.Err(); err != nil {
 		glog.WithError(err).Fatal("While reading file.")
+	}
+	for i := 0; i < len(buf); i++ {
+		s.input <- buf[i]
 	}
 	close(s.input)
 }
@@ -119,29 +141,33 @@ func HandleRdfReader(reader io.Reader, mod uint64) (uint64, error) {
 	s := new(state)
 	s.ctr = new(counters)
 	ticker := time.NewTicker(time.Second)
-	go printCounters(ticker, s.ctr)
+	go s.printCounters(ticker)
 
 	// Producer: Start buffering input to channel.
 	s.mod = mod
 	s.input = make(chan string, 10000)
 	go s.readLines(reader)
 
-	numr := runtime.GOMAXPROCS(-1)
 	s.cnq = make(chan rdf.NQuad, 10000)
+	numr := runtime.GOMAXPROCS(-1)
 	done := make(chan error, numr)
-	wg := new(sync.WaitGroup)
 	for i := 0; i < numr; i++ {
-		wg.Add(1)
 		go s.parseStream(done) // Input --> NQuads
-		go s.handleNQuads(wg)  // NQuads --> Posting list [slow].
 	}
 
-	// The following will block until all ParseStream goroutines finish.
+	wg := new(sync.WaitGroup)
+	for i := 0; i < 100; i++ {
+		wg.Add(1)
+		go s.handleNQuads(wg) // NQuads --> Posting list [slow].
+	}
+
+	// Block until all parseStream goroutines are finished.
 	for i := 0; i < numr; i++ {
 		if err := <-done; err != nil {
 			glog.WithError(err).Fatal("While reading input.")
 		}
 	}
+
 	close(s.cnq)
 	// Okay, we've stopped input to cnq, and closed it.
 	// Now wait for handleNQuads to finish.

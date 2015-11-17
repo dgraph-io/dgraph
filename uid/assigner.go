@@ -89,7 +89,7 @@ func (lm *lockManager) clean() {
 func init() {
 	lmgr = new(lockManager)
 	lmgr.locks = make(map[string]*entry)
-	go lmgr.clean()
+	// go lmgr.clean()
 }
 
 func allocateUniqueUid(xid string) (uid uint64, rerr error) {
