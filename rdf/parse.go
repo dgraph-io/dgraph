@@ -17,10 +17,7 @@
 package rdf
 
 import (
-	"bufio"
 	"fmt"
-	"io"
-	"strings"
 	"time"
 
 	"github.com/dgraph-io/dgraph/lex"
@@ -128,30 +125,4 @@ func Parse(line string) (rnq NQuad, rerr error) {
 
 func isNewline(r rune) bool {
 	return r == '\n' || r == '\r'
-}
-
-func ParseStream(reader io.Reader, cnq chan NQuad, done chan error) {
-	scanner := bufio.NewScanner(reader)
-	for scanner.Scan() {
-		line := scanner.Text()
-		line = strings.Trim(line, " \t")
-		if len(line) == 0 {
-			continue
-		}
-
-		glog.Debugf("Got line: %q", line)
-		nq, err := Parse(line)
-		if err != nil {
-			x.Err(glog, err).Errorf("While parsing: %q", line)
-			done <- err
-			return
-		}
-		cnq <- nq
-	}
-	if err := scanner.Err(); err != nil {
-		x.Err(glog, err).Error("While scanning input")
-		done <- err
-		return
-	}
-	done <- nil
 }

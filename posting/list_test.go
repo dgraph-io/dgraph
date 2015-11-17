@@ -181,7 +181,7 @@ func TestAddMutation(t *testing.T) {
 		t.Error(err)
 	}
 
-	if err := dl.CommitIfDirty(); err != nil {
+	if err := dl.MergeIfDirty(); err != nil {
 		t.Error(err)
 	}
 	if err := checkUids(t, dl, uids...); err != nil {
@@ -234,7 +234,7 @@ func TestAddMutation_Value(t *testing.T) {
 	}
 
 	// Run the same check after committing.
-	if err := ol.CommitIfDirty(); err != nil {
+	if err := ol.MergeIfDirty(); err != nil {
 		t.Error(err)
 	}
 	{

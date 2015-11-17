@@ -75,6 +75,9 @@ type Logger struct {
 	// Sync every d duration.
 	SyncDur time.Duration
 
+	// Skip write to commit log to allow for testing.
+	SkipWrite bool
+
 	sync.RWMutex
 	list              []*logFile
 	curFile           *os.File
@@ -331,6 +334,9 @@ func setError(prev *error, n error) {
 func (l *Logger) AddLog(ts int64, hash uint32, value []byte) error {
 	if ts < l.lastLogTs {
 		return fmt.Errorf("Timestamp lower than last log timestamp.")
+	}
+	if l.SkipWrite {
+		return nil
 	}
 
 	buf := new(bytes.Buffer)

@@ -591,17 +591,17 @@ func (l *List) DirtyRatio() float64 {
 	return float64(d) / float64(ln)
 }
 
-func (l *List) CompactIfDirty() error {
+func (l *List) MergeIfDirty() error {
 	if !l.IsDirty() {
 		glog.WithField("dirty", false).Debug("Not Committing")
 		return nil
 	} else {
 		glog.WithField("dirty", true).Debug("Committing")
 	}
-	return l.compact()
+	return l.merge()
 }
 
-func (l *List) compact() error {
+func (l *List) merge() error {
 	l.Lock()
 	defer l.Unlock()
 

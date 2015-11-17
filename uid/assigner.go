@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"errors"
 	"math"
+	"sync"
 	"time"
 
 	"github.com/dgraph-io/dgraph/posting"
@@ -28,15 +29,76 @@ import (
 	"github.com/dgryski/go-farm"
 )
 
-var log = x.Log("uid")
+var glog = x.Log("uid")
+var lmgr *lockManager
 
-func allocateNew(xid string) (uid uint64, rerr error) {
+type entry struct {
+	sync.Mutex
+	ts time.Time
+}
+
+func (e entry) isOld() bool {
+	e.Lock()
+	defer e.Unlock()
+	return time.Now().Sub(e.ts) > time.Minute
+}
+
+type lockManager struct {
+	sync.RWMutex
+	locks map[string]*entry
+}
+
+func (lm *lockManager) newOrExisting(xid string) *entry {
+	lm.RLock()
+	if e, ok := lm.locks[xid]; ok {
+		lm.RUnlock()
+		return e
+	}
+	lm.RUnlock()
+
+	lm.Lock()
+	defer lm.Unlock()
+	if e, ok := lm.locks[xid]; ok {
+		return e
+	}
+	e := new(entry)
+	e.ts = time.Now()
+	lm.locks[xid] = e
+	return e
+}
+
+func (lm *lockManager) clean() {
+	ticker := time.NewTicker(time.Minute)
+	for _ = range ticker.C {
+		count := 0
+		lm.Lock()
+		for xid, e := range lm.locks {
+			if e.isOld() {
+				count += 1
+				delete(lm.locks, xid)
+			}
+		}
+		lm.Unlock()
+		// A minute is enough to avoid the race condition issue for
+		// uid allocation to an xid.
+		glog.WithField("count", count).Info("Deleted old locks.")
+	}
+}
+
+// package level init
+func init() {
+	lmgr = new(lockManager)
+	lmgr.locks = make(map[string]*entry)
+	go lmgr.clean()
+}
+
+func allocateUniqueUid(xid string) (uid uint64, rerr error) {
 	for sp := ""; ; sp += " " {
 		txid := xid + sp
 		uid = farm.Fingerprint64([]byte(txid)) // Generate from hash.
-		log.WithField("txid", txid).WithField("uid", uid).Debug("Generated")
+		glog.WithField("txid", txid).WithField("uid", uid).Debug("Generated")
 		if uid == math.MaxUint64 {
-			log.Debug("Hit uint64max while generating fingerprint. Ignoring...")
+			glog.Debug("Hit uint64max while generating fingerprint. Ignoring...")
 			continue
 		}
 
@@ -51,7 +113,7 @@ func allocateNew(xid string) (uid uint64, rerr error) {
 
 			var tmp interface{}
 			posting.ParseValue(&tmp, p.ValueBytes())
-			log.Debug("Found existing xid: [%q]. Continuing...", tmp.(string))
+			glog.Debug("Found existing xid: [%q]. Continuing...", tmp.(string))
 			continue
 		}
 
@@ -63,12 +125,44 @@ func allocateNew(xid string) (uid uint64, rerr error) {
 		}
 		rerr = pl.AddMutation(t, posting.Set)
 		if rerr != nil {
-			x.Err(log, rerr).Error("While adding mutation")
+			glog.WithError(rerr).Error("While adding mutation")
 		}
 		return uid, rerr
 	}
 	return 0, errors.New("Some unhandled route lead me here." +
 		" Wake the stupid developer up.")
+}
+
+func assignNew(pl *posting.List, xid string) (uint64, error) {
+	entry := lmgr.newOrExisting(xid)
+	entry.Lock()
+	entry.ts = time.Now()
+	defer entry.Unlock()
+
+	if pl.Length() > 1 {
+		glog.Fatalf("We shouldn't have more than 1 uid for xid: %v\n", xid)
+
+	} else if pl.Length() > 0 {
+		var p types.Posting
+		if ok := pl.Get(&p, 0); !ok {
+			return 0, errors.New("While retrieving entry from posting list.")
+		}
+		return p.Uid(), nil
+	}
+
+	// No current id exists. Create one.
+	uid, err := allocateUniqueUid(xid)
+	if err != nil {
+		return 0, err
+	}
+
+	t := x.DirectedEdge{
+		ValueId:   uid,
+		Source:    "_assigner_",
+		Timestamp: time.Now(),
+	}
+	rerr := pl.AddMutation(t, posting.Set)
+	return uid, rerr
 }
 
 func stringKey(xid string) []byte {
@@ -79,26 +173,14 @@ func stringKey(xid string) []byte {
 	return buf.Bytes()
 }
 
-// TODO: Currently one posting list is modified after another, without
 func GetOrAssign(xid string) (uid uint64, rerr error) {
 	key := stringKey(xid)
 	pl := posting.Get(key)
 	if pl.Length() == 0 {
-		// No current id exists. Create one.
-		uid, err := allocateNew(xid)
-		if err != nil {
-			return 0, err
-		}
-		t := x.DirectedEdge{
-			ValueId:   uid,
-			Source:    "_assigner_",
-			Timestamp: time.Now(),
-		}
-		rerr = pl.AddMutation(t, posting.Set)
-		return uid, rerr
+		return assignNew(pl, xid)
 
 	} else if pl.Length() > 1 {
-		log.Fatalf("We shouldn't have more than 1 uid for xid: %v\n", xid)
+		glog.Fatalf("We shouldn't have more than 1 uid for xid: %v\n", xid)
 
 	} else {
 		// We found one posting.
@@ -120,18 +202,18 @@ func ExternalId(uid uint64) (xid string, rerr error) {
 	}
 
 	if pl.Length() > 1 {
-		log.WithField("uid", uid).Fatal("This shouldn't be happening.")
+		glog.WithField("uid", uid).Fatal("This shouldn't be happening.")
 		return "", errors.New("Multiple external ids for this uid.")
 	}
 
 	var p types.Posting
 	if ok := pl.Get(&p, 0); !ok {
-		log.WithField("uid", uid).Error("While retrieving posting")
+		glog.WithField("uid", uid).Error("While retrieving posting")
 		return "", errors.New("While retrieving posting")
 	}
 
 	if p.Uid() != math.MaxUint64 {
-		log.WithField("uid", uid).Fatal("Value uid must be MaxUint64.")
+		glog.WithField("uid", uid).Fatal("Value uid must be MaxUint64.")
 	}
 	var t interface{}
 	rerr = posting.ParseValue(&t, p.ValueBytes())

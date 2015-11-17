@@ -124,7 +124,7 @@ func process() {
 		}
 		glog.WithField("eid", eid).WithField("pending", len(ch)).
 			Info("Commiting list")
-		if err := l.CompactIfDirty(); err != nil {
+		if err := l.MergeIfDirty(); err != nil {
 			glog.WithError(err).Error("While commiting dirty list.")
 		}
 	}
