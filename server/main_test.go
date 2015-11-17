@@ -24,6 +24,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/commit"
 	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/loader"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/store"
@@ -65,7 +66,7 @@ func prepare() (dir1, dir2 string, clog *commit.Logger, rerr error) {
 		return dir1, dir2, clog, err
 	}
 	defer f.Close()
-	_, err = handleRdfReader(f)
+	_, err = loader.HandleRdfReader(f, 1)
 	if err != nil {
 		return dir1, dir2, clog, err
 	}

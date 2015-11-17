@@ -18,6 +18,7 @@ package posting
 
 import (
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/Sirupsen/logrus"
@@ -28,6 +29,25 @@ import (
 
 type entry struct {
 	l *List
+}
+
+type counters struct {
+	added  uint64
+	merged uint64
+}
+
+func (c *counters) periodicLog() {
+	for _ = range time.Tick(time.Second) {
+		added := atomic.LoadUint64(&c.added)
+		merged := atomic.LoadUint64(&c.merged)
+		pending := added - merged
+
+		glog.WithFields(logrus.Fields{
+			"added":   added,
+			"merged":  merged,
+			"pending": pending,
+		}).Info("Merge counters")
+	}
 }
 
 var lmutex sync.RWMutex
@@ -43,9 +63,7 @@ func Init(posting *store.Store, log *commit.Logger) {
 	lcache = make(map[uint64]*entry)
 	pstore = posting
 	clog = log
-	ch = make(chan uint64, 1000)
-	go queueForProcessing()
-	go process()
+	ch = make(chan uint64, 10000)
 }
 
 func get(k uint64) *List {
@@ -82,50 +100,75 @@ func Get(key []byte) *List {
 	return e.l
 }
 
-func queueForProcessing() {
+func queueForProcessing(c *counters) {
+	lmutex.RLock()
+	for eid, e := range lcache {
+		if len(ch) >= cap(ch) {
+			break
+		}
+		if e.l.IsDirty() {
+			ch <- eid
+			atomic.AddUint64(&c.added, 1)
+		}
+	}
+	lmutex.RUnlock()
+}
+
+func periodicQueueForProcessing(c *counters) {
 	ticker := time.NewTicker(time.Minute)
 	for _ = range ticker.C {
-		count := 0
-		skipped := 0
-		lmutex.RLock()
-		now := time.Now()
-		for eid, e := range lcache {
-			if len(ch) >= cap(ch) {
-				break
-			}
-			if len(ch) < int(0.3*float32(cap(ch))) && e.l.IsDirty() {
-				// Let's add some work here.
-				ch <- eid
-				count += 1
-			} else if now.Sub(e.l.LastCompactionTs()) > 10*time.Minute {
-				// Only queue lists which haven't been processed for a while.
-				ch <- eid
-				count += 1
-			} else {
-				skipped += 1
-			}
-		}
-		lmutex.RUnlock()
-		glog.WithFields(logrus.Fields{
-			"added":   count,
-			"skipped": skipped,
-			"pending": len(ch),
-		}).Info("Added for compaction")
+		queueForProcessing(c)
 	}
 }
 
-func process() {
-	ticker := time.NewTicker(100 * time.Millisecond)
-	for _ = range ticker.C {
-		eid := <-ch // blocking.
+func process(c *counters, wg *sync.WaitGroup) {
+	for eid := range ch {
 		l := get(eid)
 		if l == nil {
 			continue
 		}
-		glog.WithField("eid", eid).WithField("pending", len(ch)).
-			Info("Commiting list")
+		atomic.AddUint64(&c.merged, 1)
 		if err := l.MergeIfDirty(); err != nil {
 			glog.WithError(err).Error("While commiting dirty list.")
 		}
 	}
+	if wg != nil {
+		wg.Done()
+	}
+}
+
+func periodicProcess(c *counters) {
+	ticker := time.NewTicker(100 * time.Millisecond)
+	for _ = range ticker.C {
+		process(c, nil)
+	}
+}
+
+func queueAll(c *counters) {
+	lmutex.RLock()
+	for hid, _ := range lcache {
+		ch <- hid
+		atomic.AddUint64(&c.added, 1)
+	}
+	close(ch)
+	lmutex.RUnlock()
+}
+
+func StartPeriodicMerging() {
+	ctr := new(counters)
+	go periodicQueueForProcessing(ctr)
+	go periodicProcess(ctr)
+}
+
+func MergeLists(numRoutines int) {
+	c := new(counters)
+	go c.periodicLog()
+	go queueAll(c)
+
+	wg := new(sync.WaitGroup)
+	for i := 0; i < numRoutines; i++ {
+		wg.Add(1)
+		go process(c, wg)
+	}
+	wg.Wait()
 }
