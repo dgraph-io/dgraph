@@ -98,5 +98,5 @@ func main() {
 		f.Close()
 	}
 	glog.Info("Calling merge lists")
-	posting.MergeLists(100)
+	posting.MergeLists(10000)
 }

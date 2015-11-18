@@ -13,3 +13,6 @@ In this case, u1 has 110K Gets, while u10 has only ~3000. So, that's good.
 But we see a sudden jump to 37k Gets (16%), which took over 1 millisecond!
 And 24k requests (~10%) took over a second to return. That's very erratic behaviour.
 Overall, only 72% of Gets took under 10 microseconds.
+
+Using my own concurrent map, without mutex locks is *really* *really* fast. Able to
+load a million edges in under 30 seconds. Memory usage is now a concern.

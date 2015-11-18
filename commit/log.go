@@ -385,6 +385,9 @@ func (l *Logger) AddLog(ts int64, hash uint32, value []byte) error {
 func streamEntriesInFile(path string,
 	afterTs int64, hash uint32, ch chan []byte) error {
 
+	// HACK HACK HACK
+	return nil
+
 	flog := glog.WithField("path", path)
 	f, err := os.Open(path)
 	if err != nil {

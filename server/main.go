@@ -97,7 +97,7 @@ func main() {
 	defer clog.Close()
 
 	posting.Init(ps, clog)
-	posting.StartPeriodicMerging()
+	// posting.StartPeriodicMerging()
 
 	http.HandleFunc("/query", queryHandler)
 	glog.WithField("port", *port).Info("Listening for requests...")

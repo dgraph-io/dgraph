@@ -20,9 +20,11 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"unsafe"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/dgraph-io/dgraph/commit"
+	"github.com/dgraph-io/dgraph/concurrent"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgryski/go-farm"
 )
@@ -46,14 +48,14 @@ func (c *counters) periodicLog() {
 	}
 }
 
-var lmap *Map
+var lcmap *concurrent.Map
 var pstore *store.Store
 var clog *commit.Logger
 var ch chan uint64
 var lc *lcounters
 
 func Init(posting *store.Store, log *commit.Logger) {
-	lmap = NewMap(true)
+	lcmap = concurrent.NewMap(1 << 20)
 	pstore = posting
 	clog = log
 	ch = make(chan uint64, 10000)
@@ -77,31 +79,33 @@ func (lc *lcounters) periodicLog() {
 
 func Get(key []byte) *List {
 	uid := farm.Fingerprint64(key)
-	l, added := lmap.Get(uid)
-	if added {
-		atomic.AddUint64(&lc.miss, 1)
+	lp := lcmap.Get(uid)
+	if lp == nil {
+		l := NewList()
 		l.init(key, pstore, clog)
-
-	} else {
-		atomic.AddUint64(&lc.hit, 1)
+		lcmap.Put(uid, unsafe.Pointer(l))
+		return l
 	}
-	return l
+	return (*List)(lp)
 }
 
+/*
 func periodicQueueForProcessing(c *counters) {
 	ticker := time.NewTicker(time.Minute)
 	for _ = range ticker.C {
 		lmap.StreamUntilCap(ch)
 	}
 }
+*/
 
 func process(c *counters, wg *sync.WaitGroup) {
 	for eid := range ch {
-		l, added := lmap.Get(eid)
-		if l == nil || added {
+		lp := lcmap.Get(eid)
+		if lp == nil {
 			continue
 		}
 		atomic.AddUint64(&c.merged, 1)
+		l := (*List)(lp)
 		if err := l.MergeIfDirty(); err != nil {
 			glog.WithError(err).Error("While commiting dirty list.")
 		}
@@ -119,15 +123,17 @@ func periodicProcess(c *counters) {
 }
 
 func queueAll(c *counters) {
-	lmap.StreamAllKeys(ch)
+	lcmap.StreamAll(ch)
 	close(ch)
 }
 
+/*
 func StartPeriodicMerging() {
 	ctr := new(counters)
 	go periodicQueueForProcessing(ctr)
 	go periodicProcess(ctr)
 }
+*/
 
 func MergeLists(numRoutines int) {
 	c := new(counters)
