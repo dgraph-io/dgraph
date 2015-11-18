@@ -54,12 +54,20 @@ type List struct {
 	pstore      *store.Store // postinglist store
 	clog        *commit.Logger
 	lastCompact time.Time
+	wg          sync.WaitGroup
 
 	// Mutations
 	mlayer        map[int]types.Posting // stores only replace instructions.
 	mdelta        int                   // len(plist) + mdelta = final length.
 	maxMutationTs int64                 // Track maximum mutation ts.
 	mindex        []*MutationLink
+}
+
+func NewList() *List {
+	l := new(List)
+	l.wg.Add(1)
+	l.mlayer = make(map[int]types.Posting)
+	return l
 }
 
 type ByUid []*types.Posting
@@ -195,6 +203,7 @@ func ParseValue(i *interface{}, value []byte) error {
 func (l *List) init(key []byte, pstore *store.Store, clog *commit.Logger) {
 	l.Lock()
 	defer l.Unlock()
+	defer l.wg.Done()
 
 	if len(empty) == 0 {
 		glog.Fatal("empty should have some bytes.")
@@ -443,12 +452,16 @@ func (l *List) length() int {
 }
 
 func (l *List) Length() int {
+	l.wg.Wait()
+
 	l.RLock()
 	defer l.RUnlock()
 	return l.length()
 }
 
 func (l *List) Get(p *types.Posting, i int) bool {
+	l.wg.Wait()
+
 	l.RLock()
 	defer l.RUnlock()
 	return l.get(p, i)
@@ -532,6 +545,7 @@ func (l *List) get(p *types.Posting, i int) bool {
 // BenchmarkAddMutations_SyncEvery1000LogEntry-6	   30000	     63544 ns/op
 // ok  	github.com/dgraph-io/dgraph/posting	10.291s
 func (l *List) AddMutation(t x.DirectedEdge, op byte) error {
+	l.wg.Wait()
 	l.Lock()
 	defer l.Unlock()
 
@@ -572,23 +586,10 @@ func (l *List) AddMutation(t x.DirectedEdge, op byte) error {
 }
 
 func (l *List) IsDirty() bool {
+	// We can avoid checking for init here.
 	l.RLock()
 	defer l.RUnlock()
 	return len(l.mindex)+len(l.mlayer) > 0
-}
-
-func (l *List) DirtyRatio() float64 {
-	l.RLock()
-	defer l.RUnlock()
-
-	d := len(l.mindex) + len(l.mlayer)
-	plist := types.GetRootAsPostingList(l.buffer, 0)
-	ln := plist.PostingsLength()
-	if ln == 0 {
-		return math.MaxFloat64
-	}
-
-	return float64(d) / float64(ln)
 }
 
 func (l *List) MergeIfDirty() error {
@@ -602,6 +603,7 @@ func (l *List) MergeIfDirty() error {
 }
 
 func (l *List) merge() error {
+	l.wg.Wait()
 	l.Lock()
 	defer l.Unlock()
 
@@ -648,6 +650,7 @@ func (l *List) LastCompactionTs() time.Time {
 }
 
 func (l *List) GetUids() []uint64 {
+	l.wg.Wait()
 	l.RLock()
 	defer l.RUnlock()
 
@@ -664,6 +667,7 @@ func (l *List) GetUids() []uint64 {
 }
 
 func (l *List) Value() (result []byte, rerr error) {
+	l.wg.Wait()
 	l.RLock()
 	defer l.RUnlock()
 

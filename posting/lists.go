@@ -27,10 +27,6 @@ import (
 	"github.com/dgryski/go-farm"
 )
 
-type entry struct {
-	l *List
-}
-
 type counters struct {
 	added  uint64
 	merged uint64
@@ -50,18 +46,14 @@ func (c *counters) periodicLog() {
 	}
 }
 
-var lmutex sync.RWMutex
-var lcache map[uint64]*entry
+var lmap *Map
 var pstore *store.Store
 var clog *commit.Logger
 var ch chan uint64
 var lc *lcounters
 
 func Init(posting *store.Store, log *commit.Logger) {
-	lmutex.Lock()
-	defer lmutex.Unlock()
-
-	lcache = make(map[uint64]*entry)
+	lmap = NewMap(true)
 	pstore = posting
 	clog = log
 	ch = make(chan uint64, 10000)
@@ -69,84 +61,44 @@ func Init(posting *store.Store, log *commit.Logger) {
 	go lc.periodicLog()
 }
 
-func get(k uint64) *List {
-	lmutex.RLock()
-	defer lmutex.RUnlock()
-	if e, ok := lcache[k]; ok {
-		return e.l
-	}
-	return nil
-}
-
 type lcounters struct {
-	hit     uint64
-	miss    uint64
-	misshit uint64
+	hit  uint64
+	miss uint64
 }
 
 func (lc *lcounters) periodicLog() {
 	for _ = range time.Tick(10 * time.Second) {
 		glog.WithFields(logrus.Fields{
-			"hit":     atomic.LoadUint64(&lc.hit),
-			"miss":    atomic.LoadUint64(&lc.miss),
-			"misshit": atomic.LoadUint64(&lc.misshit),
+			"hit":  atomic.LoadUint64(&lc.hit),
+			"miss": atomic.LoadUint64(&lc.miss),
 		}).Info("Lists counters")
 	}
 }
 
 func Get(key []byte) *List {
-	// Acquire read lock and check if list is available.
-	lmutex.RLock()
 	uid := farm.Fingerprint64(key)
-	if e, ok := lcache[uid]; ok {
-		lmutex.RUnlock()
+	l, added := lmap.Get(uid)
+	if added {
+		atomic.AddUint64(&lc.miss, 1)
+		l.init(key, pstore, clog)
+
+	} else {
 		atomic.AddUint64(&lc.hit, 1)
-		return e.l
 	}
-	lmutex.RUnlock()
-
-	// Couldn't find it. Acquire write lock.
-	lmutex.Lock()
-	defer lmutex.Unlock()
-	// Check again after acquiring write lock.
-	if e, ok := lcache[uid]; ok {
-		atomic.AddUint64(&lc.misshit, 1)
-		return e.l
-	}
-
-	atomic.AddUint64(&lc.miss, 1)
-	e := new(entry)
-	e.l = new(List)
-	e.l.init(key, pstore, clog)
-	lcache[uid] = e
-	return e.l
-}
-
-func queueForProcessing(c *counters) {
-	lmutex.RLock()
-	for eid, e := range lcache {
-		if len(ch) >= cap(ch) {
-			break
-		}
-		if e.l.IsDirty() {
-			ch <- eid
-			atomic.AddUint64(&c.added, 1)
-		}
-	}
-	lmutex.RUnlock()
+	return l
 }
 
 func periodicQueueForProcessing(c *counters) {
 	ticker := time.NewTicker(time.Minute)
 	for _ = range ticker.C {
-		queueForProcessing(c)
+		lmap.StreamUntilCap(ch)
 	}
 }
 
 func process(c *counters, wg *sync.WaitGroup) {
 	for eid := range ch {
-		l := get(eid)
-		if l == nil {
+		l, added := lmap.Get(eid)
+		if l == nil || added {
 			continue
 		}
 		atomic.AddUint64(&c.merged, 1)
@@ -167,13 +119,8 @@ func periodicProcess(c *counters) {
 }
 
 func queueAll(c *counters) {
-	lmutex.RLock()
-	for hid, _ := range lcache {
-		ch <- hid
-		atomic.AddUint64(&c.added, 1)
-	}
+	lmap.StreamAllKeys(ch)
 	close(ch)
-	lmutex.RUnlock()
 }
 
 func StartPeriodicMerging() {

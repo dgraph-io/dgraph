@@ -31,7 +31,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-func checkUids(t *testing.T, l List, uids ...uint64) error {
+func checkUids(t *testing.T, l *List, uids ...uint64) error {
 	if l.Length() != len(uids) {
 		return fmt.Errorf("Length: %d", l.Length())
 	}
@@ -49,7 +49,7 @@ func checkUids(t *testing.T, l List, uids ...uint64) error {
 
 func TestAddMutation(t *testing.T) {
 	// logrus.SetLevel(logrus.DebugLevel)
-	var l List
+	l := NewList()
 	key := Key(1, "name")
 	dir, err := ioutil.TempDir("", "storetest_")
 	if err != nil {
@@ -175,7 +175,7 @@ func TestAddMutation(t *testing.T) {
 		}
 	*/
 	// Try reading the same data in another PostingList.
-	var dl List
+	dl := NewList()
 	dl.init(key, ps, clog)
 	if err := checkUids(t, dl, uids...); err != nil {
 		t.Error(err)
@@ -192,7 +192,7 @@ func TestAddMutation(t *testing.T) {
 func TestAddMutation_Value(t *testing.T) {
 	// logrus.SetLevel(logrus.DebugLevel)
 	glog.Debug("Running init...")
-	var ol List
+	ol := NewList()
 	key := Key(10, "value")
 	dir, err := ioutil.TempDir("", "storetest_")
 	if err != nil {
@@ -273,7 +273,7 @@ func TestAddMutation_Value(t *testing.T) {
 
 func benchmarkAddMutations(n int, b *testing.B) {
 	// logrus.SetLevel(logrus.DebugLevel)
-	var l List
+	l := NewList()
 	key := Key(1, "name")
 	dir, err := ioutil.TempDir("", "storetest_")
 	if err != nil {

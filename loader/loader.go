@@ -156,7 +156,7 @@ func HandleRdfReader(reader io.Reader, mod uint64) (uint64, error) {
 	}
 
 	wg := new(sync.WaitGroup)
-	for i := 0; i < 100; i++ {
+	for i := 0; i < 3000; i++ {
 		wg.Add(1)
 		go s.handleNQuads(wg) // NQuads --> Posting list [slow].
 	}
