@@ -58,7 +58,8 @@ func main() {
 	}
 
 	logrus.SetLevel(logrus.InfoLevel)
-	glog.WithField("gomaxprocs", runtime.GOMAXPROCS(-1)).Info("Number of CPUs")
+	numCpus := runtime.GOMAXPROCS(-1)
+	glog.WithField("gomaxprocs", numCpus).Info("Number of CPUs")
 
 	if len(*rdfGzips) == 0 {
 		glog.Fatal("No RDF GZIP files specified")
@@ -98,5 +99,5 @@ func main() {
 		f.Close()
 	}
 	glog.Info("Calling merge lists")
-	posting.MergeLists(10000)
+	posting.MergeLists(100 * numCpus) // 100 per core.
 }

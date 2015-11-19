@@ -33,7 +33,7 @@ import (
 
 func checkUids(t *testing.T, l *List, uids ...uint64) error {
 	if l.Length() != len(uids) {
-		return fmt.Errorf("Length: %d", l.Length())
+		return fmt.Errorf("Expected: %d. Length: %d", len(uids), l.Length())
 	}
 	for i := 0; i < len(uids); i++ {
 		var p types.Posting

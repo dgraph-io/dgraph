@@ -104,7 +104,7 @@ func allocateUniqueUid(xid string) (uid uint64, rerr error) {
 
 		// Check if this uid has already been allocated.
 		key := posting.Key(uid, "_xid_") // uid -> "_xid_" -> xid
-		pl := posting.Get(key)
+		pl := posting.GetOrCreate(key)
 
 		if pl.Length() > 0 {
 			// Something already present here.
@@ -175,7 +175,7 @@ func stringKey(xid string) []byte {
 
 func GetOrAssign(xid string) (uid uint64, rerr error) {
 	key := stringKey(xid)
-	pl := posting.Get(key)
+	pl := posting.GetOrCreate(key)
 	if pl.Length() == 0 {
 		return assignNew(pl, xid)
 
@@ -196,7 +196,7 @@ func GetOrAssign(xid string) (uid uint64, rerr error) {
 
 func ExternalId(uid uint64) (xid string, rerr error) {
 	key := posting.Key(uid, "_xid_") // uid -> "_xid_" -> xid
-	pl := posting.Get(key)
+	pl := posting.GetOrCreate(key)
 	if pl.Length() == 0 {
 		return "", errors.New("NO external id")
 	}

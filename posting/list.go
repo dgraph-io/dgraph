@@ -24,7 +24,9 @@ import (
 	"fmt"
 	"math"
 	"sync"
+	"sync/atomic"
 	"time"
+	"unsafe"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/dgraph-io/dgraph/commit"
@@ -40,6 +42,12 @@ var glog = x.Log("posting")
 const Set = 0x01
 const Del = 0x02
 
+var E_TMP_ERROR = errors.New("Temporary Error. Please retry.")
+
+type buffer struct {
+	d []byte
+}
+
 type MutationLink struct {
 	idx     int
 	moveidx int
@@ -50,11 +58,12 @@ type List struct {
 	sync.RWMutex
 	key         []byte
 	hash        uint32
-	buffer      []byte
+	pbuffer     unsafe.Pointer
 	pstore      *store.Store // postinglist store
 	clog        *commit.Logger
 	lastCompact time.Time
 	wg          sync.WaitGroup
+	deleteMe    bool
 
 	// Mutations
 	mlayer        map[int]types.Posting // stores only replace instructions.
@@ -212,15 +221,7 @@ func (l *List) init(key []byte, pstore *store.Store, clog *commit.Logger) {
 	l.pstore = pstore
 	l.clog = clog
 
-	var err error
-	if l.buffer, err = pstore.Get(key); err != nil {
-		// glog.Debugf("While retrieving posting list from db: %v\n", err)
-		// Error. Just set to empty.
-		l.buffer = make([]byte, len(empty))
-		copy(l.buffer, empty)
-	}
-
-	posting := types.GetRootAsPostingList(l.buffer, 0)
+	posting := l.getPostingList()
 	l.maxMutationTs = posting.CommitTs()
 	l.hash = farm.Fingerprint32(key)
 	l.mlayer = make(map[int]types.Posting)
@@ -248,12 +249,36 @@ func (l *List) init(key []byte, pstore *store.Store, clog *commit.Logger) {
 		glog.WithError(err).Error("While streaming entries.")
 	}
 	glog.Debug("Done streaming entries.")
-	// l.regenerateIndex()
+}
+
+// There's no need for lock acquisition for this.
+func (l *List) getPostingList() *types.PostingList {
+	pb := atomic.LoadPointer(&l.pbuffer)
+	buf := (*buffer)(pb)
+
+	if buf == nil || len(buf.d) == 0 {
+		nbuf := new(buffer)
+		var err error
+		if nbuf.d, err = l.pstore.Get(l.key); err != nil {
+			// glog.Debugf("While retrieving posting list from db: %v\n", err)
+			// Error. Just set to empty.
+			nbuf.d = make([]byte, len(empty))
+			copy(nbuf.d, empty)
+		}
+		if atomic.CompareAndSwapPointer(&l.pbuffer, pb, unsafe.Pointer(nbuf)) {
+			return types.GetRootAsPostingList(nbuf.d, 0)
+
+		} else {
+			// Someone else replaced the pointer in the meantime. Retry recursively.
+			return l.getPostingList()
+		}
+	}
+	return types.GetRootAsPostingList(buf.d, 0)
 }
 
 // Caller must hold at least a read lock.
 func (l *List) lePostingIndex(maxUid uint64) (int, uint64) {
-	posting := types.GetRootAsPostingList(l.buffer, 0)
+	posting := l.getPostingList()
 	left, right := 0, posting.PostingsLength()-1
 	sofar := -1
 	p := new(types.Posting)
@@ -447,7 +472,7 @@ func (l *List) mergeMutation(mp *types.Posting) {
 
 // Caller must hold at least a read lock.
 func (l *List) length() int {
-	plist := types.GetRootAsPostingList(l.buffer, 0)
+	plist := l.getPostingList()
 	return plist.PostingsLength() + l.mdelta
 }
 
@@ -469,7 +494,7 @@ func (l *List) Get(p *types.Posting, i int) bool {
 
 // Caller must hold at least a read lock.
 func (l *List) get(p *types.Posting, i int) bool {
-	plist := types.GetRootAsPostingList(l.buffer, 0)
+	plist := l.getPostingList()
 	if len(l.mindex) == 0 {
 		if val, ok := l.mlayer[i]; ok {
 			*p = val
@@ -529,6 +554,13 @@ func (l *List) get(p *types.Posting, i int) bool {
 	return plist.Postings(p, newidx)
 }
 
+func (l *List) SetForDeletion() {
+	l.wg.Wait()
+	l.Lock()
+	defer l.Unlock()
+	l.deleteMe = true
+}
+
 // In benchmarks, the time taken per AddMutation before was
 // plateauing at 2.5 ms with sync per 10 log entries, and increasing
 // for sync per 100 log entries (to 3 ms per AddMutation), largely because
@@ -548,6 +580,9 @@ func (l *List) AddMutation(t x.DirectedEdge, op byte) error {
 	l.wg.Wait()
 	l.Lock()
 	defer l.Unlock()
+	if l.deleteMe {
+		return E_TMP_ERROR
+	}
 
 	if t.Timestamp.UnixNano() < l.maxMutationTs {
 		return fmt.Errorf("Mutation ts lower than committed ts.")
@@ -629,13 +664,13 @@ func (l *List) merge() error {
 	end := types.PostingListEnd(b)
 	b.Finish(end)
 
-	l.buffer = b.Bytes[b.Head():]
-	if err := l.pstore.SetOne(l.key, l.buffer); err != nil {
+	if err := l.pstore.SetOne(l.key, b.Bytes[b.Head():]); err != nil {
 		glog.WithField("error", err).Errorf("While storing posting list")
 		return err
 	}
 
 	// Now reset the mutation variables.
+	atomic.StorePointer(&l.pbuffer, nil) // Make prev buffer eligible for GC.
 	l.lastCompact = time.Now()
 	l.mlayer = make(map[int]types.Posting)
 	l.mdelta = 0

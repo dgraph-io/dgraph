@@ -50,10 +50,15 @@ type state struct {
 }
 
 func (s *state) printCounters(ticker *time.Ticker) {
+	var prev uint64
 	for _ = range ticker.C {
+		processed := atomic.LoadUint64(&s.ctr.processed)
+		if prev == processed {
+			continue
+		}
+		prev = processed
 		parsed := atomic.LoadUint64(&s.ctr.parsed)
 		ignored := atomic.LoadUint64(&s.ctr.ignored)
-		processed := atomic.LoadUint64(&s.ctr.processed)
 		pending := parsed - ignored - processed
 		glog.WithFields(logrus.Fields{
 			"read":      atomic.LoadUint64(&s.ctr.read),
@@ -123,13 +128,21 @@ func (s *state) handleNQuads(wg *sync.WaitGroup) {
 		}
 
 		edge, err := nq.ToEdge()
-		if err != nil {
-			glog.WithError(err).WithField("nq", nq).Error("While converting to edge")
-			return
+		for err != nil {
+			// Just put in a retry loop to tackle temporary errors.
+			if err == posting.E_TMP_ERROR {
+				time.Sleep(time.Microsecond)
+
+			} else {
+				glog.WithError(err).WithField("nq", nq).
+					Error("While converting to edge")
+				return
+			}
+			edge, err = nq.ToEdge()
 		}
 
 		key := posting.Key(edge.Entity, edge.Attribute)
-		plist := posting.Get(key)
+		plist := posting.GetOrCreate(key)
 		plist.AddMutation(edge, posting.Set)
 		atomic.AddUint64(&s.ctr.processed, 1)
 	}

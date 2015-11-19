@@ -19,7 +19,7 @@ func ProcessTask(query []byte) (result []byte, rerr error) {
 	for i := 0; i < q.UidsLength(); i++ {
 		uid := q.Uids(i)
 		key := Key(uid, attr)
-		pl := Get(key)
+		pl := GetOrCreate(key)
 
 		task.ValueStart(b)
 		var valoffset flatbuffers.UOffsetT

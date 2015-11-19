@@ -214,42 +214,42 @@ func populateGraph(t *testing.T) {
 		Source:    "testing",
 		Timestamp: time.Now(),
 	}
-	addEdge(t, edge, posting.Get(posting.Key(1, "friend")))
+	addEdge(t, edge, posting.GetOrCreate(posting.Key(1, "friend")))
 
 	edge.ValueId = 24
-	addEdge(t, edge, posting.Get(posting.Key(1, "friend")))
+	addEdge(t, edge, posting.GetOrCreate(posting.Key(1, "friend")))
 
 	edge.ValueId = 25
-	addEdge(t, edge, posting.Get(posting.Key(1, "friend")))
+	addEdge(t, edge, posting.GetOrCreate(posting.Key(1, "friend")))
 
 	edge.ValueId = 31
-	addEdge(t, edge, posting.Get(posting.Key(1, "friend")))
+	addEdge(t, edge, posting.GetOrCreate(posting.Key(1, "friend")))
 
 	edge.ValueId = 101
-	addEdge(t, edge, posting.Get(posting.Key(1, "friend")))
+	addEdge(t, edge, posting.GetOrCreate(posting.Key(1, "friend")))
 
 	// Now let's add a few properties for the main user.
 	edge.Value = "Michonne"
-	addEdge(t, edge, posting.Get(posting.Key(1, "name")))
+	addEdge(t, edge, posting.GetOrCreate(posting.Key(1, "name")))
 
 	edge.Value = "female"
-	addEdge(t, edge, posting.Get(posting.Key(1, "gender")))
+	addEdge(t, edge, posting.GetOrCreate(posting.Key(1, "gender")))
 
 	edge.Value = "alive"
-	addEdge(t, edge, posting.Get(posting.Key(1, "status")))
+	addEdge(t, edge, posting.GetOrCreate(posting.Key(1, "status")))
 
 	// Now let's add a name for each of the friends, except 101.
 	edge.Value = "Rick Grimes"
-	addEdge(t, edge, posting.Get(posting.Key(23, "name")))
+	addEdge(t, edge, posting.GetOrCreate(posting.Key(23, "name")))
 
 	edge.Value = "Glenn Rhee"
-	addEdge(t, edge, posting.Get(posting.Key(24, "name")))
+	addEdge(t, edge, posting.GetOrCreate(posting.Key(24, "name")))
 
 	edge.Value = "Daryl Dixon"
-	addEdge(t, edge, posting.Get(posting.Key(25, "name")))
+	addEdge(t, edge, posting.GetOrCreate(posting.Key(25, "name")))
 
 	edge.Value = "Andrea"
-	addEdge(t, edge, posting.Get(posting.Key(31, "name")))
+	addEdge(t, edge, posting.GetOrCreate(posting.Key(31, "name")))
 }
 
 func TestProcessGraph(t *testing.T) {

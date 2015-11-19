@@ -63,22 +63,22 @@ func TestProcessTask(t *testing.T) {
 		Source:    "author0",
 		Timestamp: time.Now(),
 	}
-	addEdge(t, edge, Get(Key(10, "friend")))
-	addEdge(t, edge, Get(Key(11, "friend")))
-	addEdge(t, edge, Get(Key(12, "friend")))
+	addEdge(t, edge, GetOrCreate(Key(10, "friend")))
+	addEdge(t, edge, GetOrCreate(Key(11, "friend")))
+	addEdge(t, edge, GetOrCreate(Key(12, "friend")))
 
 	edge.ValueId = 25
-	addEdge(t, edge, Get(Key(12, "friend")))
+	addEdge(t, edge, GetOrCreate(Key(12, "friend")))
 
 	edge.ValueId = 26
-	addEdge(t, edge, Get(Key(12, "friend")))
+	addEdge(t, edge, GetOrCreate(Key(12, "friend")))
 
 	edge.ValueId = 31
-	addEdge(t, edge, Get(Key(10, "friend")))
-	addEdge(t, edge, Get(Key(12, "friend")))
+	addEdge(t, edge, GetOrCreate(Key(10, "friend")))
+	addEdge(t, edge, GetOrCreate(Key(12, "friend")))
 
 	edge.Value = "photon"
-	addEdge(t, edge, Get(Key(12, "friend")))
+	addEdge(t, edge, GetOrCreate(Key(12, "friend")))
 
 	query := NewQuery("friend", []uint64{10, 11, 12})
 	result, err := ProcessTask(query)
