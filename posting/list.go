@@ -85,6 +85,22 @@ func (pa ByUid) Len() int           { return len(pa) }
 func (pa ByUid) Swap(i, j int)      { pa[i], pa[j] = pa[j], pa[i] }
 func (pa ByUid) Less(i, j int) bool { return pa[i].Uid() < pa[j].Uid() }
 
+func samePosting(a *types.Posting, b *types.Posting) bool {
+	if a.Uid() != b.Uid() {
+		return false
+	}
+	if a.ValueLength() != b.ValueLength() {
+		return false
+	}
+	if !bytes.Equal(a.ValueBytes(), b.ValueBytes()) {
+		return false
+	}
+	if !bytes.Equal(a.Source(), b.Source()) {
+		return false
+	}
+	return true
+}
+
 // key = (entity uid, attribute)
 func Key(uid uint64, attr string) []byte {
 	buf := new(bytes.Buffer)
@@ -455,6 +471,15 @@ func (l *List) mergeMutation(mp *types.Posting) {
 
 		} else { // curUid not found in mindex.
 			if inPlist { // In plist, so just set it in mlayer.
+				// If this posting matches what we already have in posting list,
+				// we don't need to `dirty` this by adding to mlayer.
+				plist := l.getPostingList()
+				var cp types.Posting
+				if ok := plist.Postings(&cp, pi); ok {
+					if samePosting(&cp, mp) {
+						return // do nothing.
+					}
+				}
 				l.mlayer[pi] = *mp
 
 			} else { // not in plist, not in mindex, so insert in mindex.

@@ -22,6 +22,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"runtime"
+	"time"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/dgraph-io/dgraph/commit"
@@ -51,14 +52,16 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		x.SetStatus(w, x.E_INVALID_REQUEST, "Invalid request encountered.")
 		return
 	}
-	glog.WithField("q", string(q)).Info("Query received.")
+	glog.WithField("q", string(q)).Debug("Query received.")
+	now := time.Now()
 	sg, err := gql.Parse(string(q))
 	if err != nil {
 		x.Err(glog, err).Error("While parsing query")
 		x.SetStatus(w, x.E_INVALID_REQUEST, err.Error())
 		return
 	}
-	glog.WithField("q", string(q)).Info("Query parsed.")
+	parseLat := time.Since(now)
+	glog.WithField("q", string(q)).Debug("Query parsed.")
 	rch := make(chan error)
 	go query.ProcessGraph(sg, rch)
 	err = <-rch
@@ -67,13 +70,23 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		x.SetStatus(w, x.E_ERROR, err.Error())
 		return
 	}
-	glog.WithField("q", string(q)).Info("Graph processed.")
+	processLat := time.Since(now)
+	glog.WithField("q", string(q)).Debug("Graph processed.")
 	js, err := sg.ToJson()
 	if err != nil {
 		x.Err(glog, err).Error("While converting to Json.")
 		x.SetStatus(w, x.E_ERROR, err.Error())
 		return
 	}
+	jsonLat := time.Since(now)
+	glog.WithFields(logrus.Fields{
+		"total":   time.Since(now),
+		"parsing": parseLat.String(),
+		"process": processLat - parseLat,
+		"json":    jsonLat - processLat,
+	}).Info("Query Latencies")
+
+	glog.WithField("latency", time.Since(now).String()).Info("Query Latency")
 	w.Header().Set("Content-Type", "application/json")
 	fmt.Fprint(w, string(js))
 }
@@ -84,7 +97,11 @@ func main() {
 		glog.Fatal("Unable to parse flags")
 	}
 	logrus.SetLevel(logrus.InfoLevel)
-	glog.WithField("gomaxprocs", runtime.GOMAXPROCS(-1)).Info("Number of CPUs")
+	numCpus := runtime.NumCPU()
+	prev := runtime.GOMAXPROCS(numCpus)
+	glog.WithField("num_cpu", numCpus).
+		WithField("prev_maxprocs", prev).
+		Info("Set max procs to num cpus")
 
 	ps := new(store.Store)
 	ps.Init(*postingDir)

@@ -243,6 +243,7 @@ func lastTimestamp(path string) (int64, error) {
 		return 0, err
 	}
 
+	discard := make([]byte, 4096)
 	reader := bufio.NewReaderSize(f, 2<<20)
 	var maxTs int64
 	header := make([]byte, 16)
@@ -277,7 +278,10 @@ func lastTimestamp(path string) (int64, error) {
 			}).Fatal("Log file doesn't have monotonically increasing records.")
 		}
 
-		reader.Discard(int(h.size))
+		for int(h.size) > len(discard) {
+			discard = make([]byte, len(discard)*2)
+		}
+		reader.Read(discard[:int(h.size)])
 	}
 	return maxTs, nil
 }
@@ -396,6 +400,7 @@ func streamEntriesInFile(path string,
 	}
 	defer f.Close()
 
+	discard := make([]byte, 4096)
 	reader := bufio.NewReaderSize(f, 5<<20)
 	header := make([]byte, 16)
 	for {
@@ -429,7 +434,10 @@ func streamEntriesInFile(path string,
 			ch <- data
 
 		} else {
-			reader.Discard(int(hdr.size))
+			for int(hdr.size) > len(discard) {
+				discard = make([]byte, len(discard)*2)
+			}
+			reader.Read(discard[:int(hdr.size)])
 		}
 	}
 	return nil

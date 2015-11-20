@@ -58,8 +58,11 @@ func main() {
 	}
 
 	logrus.SetLevel(logrus.InfoLevel)
-	numCpus := runtime.GOMAXPROCS(-1)
-	glog.WithField("gomaxprocs", numCpus).Info("Number of CPUs")
+	numCpus := runtime.NumCPU()
+	prevProcs := runtime.GOMAXPROCS(numCpus)
+	glog.WithField("num_cpu", numCpus).
+		WithField("prev_maxprocs", prevProcs).
+		Info("Set max procs to num cpus")
 
 	if len(*rdfGzips) == 0 {
 		glog.Fatal("No RDF GZIP files specified")

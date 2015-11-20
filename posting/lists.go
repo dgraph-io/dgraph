@@ -19,6 +19,7 @@ package posting
 import (
 	"math/rand"
 	"runtime"
+	"runtime/debug"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -57,7 +58,7 @@ var MIB uint64
 
 func checkMemoryUsage() {
 	MIB = 1 << 20
-	MAX_MEMORY = 2 * (1 << 30)
+	MAX_MEMORY = 3 * (1 << 30)
 
 	for _ = range time.Tick(5 * time.Second) {
 		var ms runtime.MemStats
@@ -78,6 +79,8 @@ func checkMemoryUsage() {
 
 		glog.Info("Merged lists. Calling GC.")
 		runtime.GC() // Call GC to do some cleanup.
+		glog.Info("Trying to free OS memory")
+		debug.FreeOSMemory()
 
 		runtime.ReadMemStats(&ms)
 		megs = ms.Alloc / MIB
