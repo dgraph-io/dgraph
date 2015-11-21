@@ -17,6 +17,7 @@
 package posting
 
 import (
+	"flag"
 	"math/rand"
 	"runtime"
 	"runtime/debug"
@@ -30,6 +31,9 @@ import (
 	"github.com/dgryski/go-farm"
 	"github.com/zond/gotomic"
 )
+
+var maxmemory = flag.Uint64("threshold_ram_mb", 3072,
+	"If RAM usage exceeds this, we stop the world, and flush our buffers.")
 
 type counters struct {
 	ticker *time.Ticker
@@ -58,7 +62,7 @@ var MIB uint64
 
 func checkMemoryUsage() {
 	MIB = 1 << 20
-	MAX_MEMORY = 3 * (1 << 30)
+	MAX_MEMORY = *maxmemory * (1 << 20)
 
 	for _ = range time.Tick(5 * time.Second) {
 		var ms runtime.MemStats
@@ -126,6 +130,9 @@ func GetOrCreate(key []byte) *List {
 
 func processOne(k gotomic.Hashable, c *counters) {
 	ret, _ := lhmap.Delete(k)
+	if ret == nil {
+		return
+	}
 	l := ret.(*List)
 	if l == nil {
 		return
