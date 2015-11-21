@@ -94,29 +94,13 @@ var stopTheWorld sync.RWMutex
 var lhmap *gotomic.Hash
 var pstore *store.Store
 var clog *commit.Logger
-var lc *lcounters
 
 func Init(posting *store.Store, log *commit.Logger) {
 	lhmap = gotomic.NewHash()
 	pstore = posting
 	clog = log
 	lc = new(lcounters)
-	go lc.periodicLog()
 	go checkMemoryUsage()
-}
-
-type lcounters struct {
-	hit  uint64
-	miss uint64
-}
-
-func (lc *lcounters) periodicLog() {
-	for _ = range time.Tick(10 * time.Second) {
-		glog.WithFields(logrus.Fields{
-			"hit":  atomic.LoadUint64(&lc.hit),
-			"miss": atomic.LoadUint64(&lc.miss),
-		}).Info("Lists counters")
-	}
 }
 
 func GetOrCreate(key []byte) *List {
