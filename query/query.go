@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"time"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/dgraph-io/dgraph/posting"
@@ -84,6 +85,23 @@ import (
  */
 
 var glog = x.Log("query")
+
+type Latency struct {
+	Start      time.Time     `json:"-"`
+	Parsing    time.Duration `json:"query_parsing"`
+	Processing time.Duration `json:"processing"`
+	Json       time.Duration `json:"json_conversion"`
+}
+
+func (l *Latency) ToMap() map[string]string {
+	m := make(map[string]string)
+	j := time.Since(l.Start) - l.Processing - l.Parsing
+	m["parsing"] = l.Parsing.String()
+	m["processing"] = l.Processing.String()
+	m["json"] = j.String()
+	m["total"] = time.Since(l.Start).String()
+	return m
+}
 
 // SubGraph is the way to represent data internally. It contains both the
 // query and the response. Once generated, this can then be encoded to other
@@ -212,15 +230,18 @@ func postTraverse(g *SubGraph) (result map[uint64]interface{}, rerr error) {
 	return result, nil
 }
 
-func (g *SubGraph) ToJson() (js []byte, rerr error) {
+func (g *SubGraph) ToJson(l *Latency) (js []byte, rerr error) {
 	r, err := postTraverse(g)
 	if err != nil {
 		x.Err(glog, err).Error("While doing traversal")
 		return js, err
 	}
+	l.Json = time.Since(l.Start) - l.Parsing - l.Processing
 	if len(r) == 1 {
 		for _, ival := range r {
-			return json.Marshal(ival)
+			m := ival.(map[string]interface{})
+			m["server_latency"] = l.ToMap()
+			return json.Marshal(m)
 		}
 	} else {
 		glog.Fatal("We don't currently support more than 1 uid at root.")

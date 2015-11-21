@@ -103,7 +103,6 @@ func Init(posting *store.Store, log *commit.Logger) {
 	lhmap = gotomic.NewHash()
 	pstore = posting
 	clog = log
-	lc = new(lcounters)
 	go checkMemoryUsage()
 }
 

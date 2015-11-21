@@ -21,13 +21,13 @@ func ProcessTask(query []byte) (result []byte, rerr error) {
 		key := Key(uid, attr)
 		pl := GetOrCreate(key)
 
-		task.ValueStart(b)
 		var valoffset flatbuffers.UOffsetT
 		if val, err := pl.Value(); err != nil {
 			valoffset = b.CreateByteVector(x.Nilbyte)
 		} else {
 			valoffset = b.CreateByteVector(val)
 		}
+		task.ValueStart(b)
 		task.ValueAddVal(b, valoffset)
 		voffsets[i] = task.ValueEnd(b)
 

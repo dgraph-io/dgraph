@@ -2,14 +2,17 @@ curl localhost:8080/query -XPOST -d '{
 me(_xid_: m.06pj8) {
         type.object.name.en
         film.director.film {
-                type.object.name.en
                 film.film.starring {
+												type.object.name.en
                         film.performance.actor {
                                 film.director.film {
                                         type.object.name.en
                                 }
                                 type.object.name.en
                         }
+												film.performance.character {
+														type.object.name.en
+												}
                 }
                 film.film.initial_release_date
                 film.film.country

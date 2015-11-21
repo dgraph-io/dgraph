@@ -40,6 +40,8 @@ var mutationDir = flag.String("mutations", "", "Directory to store mutations")
 var port = flag.String("port", "8080", "Port to run server on.")
 
 func queryHandler(w http.ResponseWriter, r *http.Request) {
+	var l query.Latency
+	l.Start = time.Now()
 	if r.Method != "POST" {
 		x.SetStatus(w, x.E_INVALID_METHOD, "Invalid method")
 		return
@@ -53,14 +55,13 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	glog.WithField("q", string(q)).Debug("Query received.")
-	now := time.Now()
 	sg, err := gql.Parse(string(q))
 	if err != nil {
 		x.Err(glog, err).Error("While parsing query")
 		x.SetStatus(w, x.E_INVALID_REQUEST, err.Error())
 		return
 	}
-	parseLat := time.Since(now)
+	l.Parsing = time.Since(l.Start)
 	glog.WithField("q", string(q)).Debug("Query parsed.")
 	rch := make(chan error)
 	go query.ProcessGraph(sg, rch)
@@ -70,23 +71,21 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		x.SetStatus(w, x.E_ERROR, err.Error())
 		return
 	}
-	processLat := time.Since(now)
+	l.Processing = time.Since(l.Start) - l.Parsing
 	glog.WithField("q", string(q)).Debug("Graph processed.")
-	js, err := sg.ToJson()
+	js, err := sg.ToJson(&l)
 	if err != nil {
 		x.Err(glog, err).Error("While converting to Json.")
 		x.SetStatus(w, x.E_ERROR, err.Error())
 		return
 	}
-	jsonLat := time.Since(now)
 	glog.WithFields(logrus.Fields{
-		"total":   time.Since(now),
-		"parsing": parseLat.String(),
-		"process": processLat - parseLat,
-		"json":    jsonLat - processLat,
+		"total":   time.Since(l.Start),
+		"parsing": l.Parsing,
+		"process": l.Processing,
+		"json":    l.Json,
 	}).Info("Query Latencies")
 
-	glog.WithField("latency", time.Since(now).String()).Info("Query Latency")
 	w.Header().Set("Content-Type", "application/json")
 	fmt.Fprint(w, string(js))
 }
