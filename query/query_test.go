@@ -23,7 +23,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/dgraph-io/dgraph/commit"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/store"
@@ -190,21 +189,19 @@ func TestNewGraph(t *testing.T) {
 	}
 }
 
-func populateGraph(t *testing.T) {
-	logrus.SetLevel(logrus.DebugLevel)
+func populateGraph(t *testing.T) string {
+	// logrus.SetLevel(logrus.DebugLevel)
 	dir, err := ioutil.TempDir("", "storetest_")
 	if err != nil {
 		t.Error(err)
-		return
+		return ""
 	}
 
-	defer os.RemoveAll(dir)
 	ps := new(store.Store)
 	ps.Init(dir)
 
 	clog := commit.NewLogger(dir, "mutations", 50<<20)
 	clog.Init()
-	defer clog.Close()
 	posting.Init(ps, clog)
 
 	// So, user we're interested in has uid: 1.
@@ -250,10 +247,13 @@ func populateGraph(t *testing.T) {
 
 	edge.Value = "Andrea"
 	addEdge(t, edge, posting.GetOrCreate(posting.Key(31, "name")))
+
+	return dir
 }
 
 func TestProcessGraph(t *testing.T) {
-	populateGraph(t)
+	dir := populateGraph(t)
+	defer os.RemoveAll(dir)
 
 	// Alright. Now we have everything set up. Let's create the query.
 	sg, err := NewGraph(1, "")
@@ -346,7 +346,8 @@ func TestProcessGraph(t *testing.T) {
 }
 
 func TestToJson(t *testing.T) {
-	populateGraph(t)
+	dir := populateGraph(t)
+	defer os.RemoveAll(dir)
 
 	// Alright. Now we have everything set up. Let's create the query.
 	sg, err := NewGraph(1, "")
@@ -379,7 +380,8 @@ func TestToJson(t *testing.T) {
 		t.Error(err)
 	}
 
-	js, err := sg.ToJson()
+	var l Latency
+	js, err := sg.ToJson(&l)
 	if err != nil {
 		t.Error(err)
 	}

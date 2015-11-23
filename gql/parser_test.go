@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/dgraph-io/dgraph/query"
 )
 
@@ -77,7 +76,7 @@ func TestParse(t *testing.T) {
 }
 
 func TestParseXid(t *testing.T) {
-	logrus.SetLevel(logrus.DebugLevel)
+	// logrus.SetLevel(logrus.DebugLevel)
 	query := `
 	query {
 		user(_uid_: 0x11) {

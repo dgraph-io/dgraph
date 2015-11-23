@@ -23,13 +23,13 @@
 package commit
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/binary"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"sort"
 	"strconv"
 	"strings"
@@ -52,6 +52,25 @@ type logFile struct {
 	cache *Cache
 }
 
+func (lf *logFile) Cache() *Cache {
+	lf.RLock()
+	defer lf.RUnlock()
+	return lf.cache
+}
+
+func (lf *logFile) FillIfEmpty(wg *sync.WaitGroup) {
+	lf.Lock()
+	defer lf.Unlock()
+	defer wg.Done()
+	if lf.cache != nil {
+		return
+	}
+	lf.cache = new(Cache)
+	if err := FillCache(lf.cache, lf.path); err != nil {
+		glog.WithError(err).WithField("path", lf.path).Fatal("Unable to fill cache.")
+	}
+}
+
 type CurFile struct {
 	sync.RWMutex
 	f         *os.File
@@ -61,6 +80,11 @@ type CurFile struct {
 }
 
 func (c *CurFile) cache() *Cache {
+	if c == nil {
+		debug.PrintStack()
+		// This got triggered due to a premature cleanup in query_test.go
+	}
+
 	v := atomic.LoadPointer(&c.cch)
 	if v == nil {
 		return nil
@@ -133,6 +157,19 @@ func (l *Logger) updateLastLogTs(val int64) {
 		}
 		if atomic.CompareAndSwapInt64(&l.lastLogTs, prev, val) {
 			return
+		}
+	}
+}
+
+func (l *Logger) DeleteCacheOlderThan(v time.Duration) {
+	l.RLock()
+	defer l.RUnlock()
+	s := int64(v.Seconds())
+	for _, lf := range l.list {
+		if lf.Cache().LastAccessedInSeconds() > s {
+			lf.Lock()
+			lf.cache = nil
+			lf.Unlock()
 		}
 	}
 }
@@ -447,87 +484,82 @@ func (l *Logger) AddLog(ts int64, hash uint32, value []byte) error {
 	return nil
 }
 
-func streamEntriesInFile(path string,
-	afterTs int64, hash uint32, ch chan []byte) error {
+func streamEntries(cache *Cache,
+	afterTs int64, hash uint32, iter LogIterator) error {
 
-	flog := glog.WithField("path", path)
-	f, err := os.Open(path)
-	if err != nil {
-		flog.WithError(err).Error("While opening file.")
-		return err
-	}
-	defer f.Close()
-
-	discard := make([]byte, 4096)
-	reader := bufio.NewReaderSize(f, 5<<20)
+	flog := glog
+	reader := NewReader(cache)
 	header := make([]byte, 16)
 	for {
-		n, err := reader.Read(header)
+		_, err := reader.Read(header)
 		if err == io.EOF {
-			flog.Debug("File read complete.")
+			flog.Debug("Cache read complete.")
 			break
 		}
-		if n != len(header) {
-			flog.WithField("n", n).Fatal("Unable to read header.")
-		}
 		if err != nil {
-			flog.WithError(err).Error("While reading header.")
+			flog.WithError(err).Fatal("While reading header.")
 			return err
 		}
+
 		hdr, err := parseHeader(header)
 		if err != nil {
 			flog.WithError(err).Error("While parsing header.")
 			return err
 		}
+
 		if hdr.hash == hash && hdr.ts >= afterTs {
 			data := make([]byte, hdr.size)
-			n, err := reader.Read(data)
+			_, err := reader.Read(data)
 			if err != nil {
-				flog.WithError(err).Error("While reading data.")
+				flog.WithError(err).Fatal("While reading data.")
 				return err
 			}
-			if int32(n) != hdr.size {
-				flog.WithField("n", n).Fatal("Unable to read data.")
-			}
-			ch <- data
+			iter(data)
 
 		} else {
-			for int(hdr.size) > len(discard) {
-				discard = make([]byte, len(discard)*2)
-			}
-			reader.Read(discard[:int(hdr.size)])
+			reader.Discard(int(hdr.size))
 		}
 	}
 	return nil
 }
 
+type LogIterator func(record []byte)
+
 // Always run this method in it's own goroutine. Otherwise, your program
 // will just hang waiting on channels.
 func (l *Logger) StreamEntries(afterTs int64, hash uint32,
-	ch chan []byte, done chan error) {
+	iter LogIterator) error {
 
-	var paths []string
+	var wg sync.WaitGroup
 	l.RLock()
 	for _, lf := range l.list {
 		if afterTs < lf.endTs {
-			paths = append(paths, lf.path)
+			wg.Add(1)
+			go lf.FillIfEmpty(&wg)
+		}
+	}
+	l.RUnlock()
+	wg.Wait()
+
+	l.RLock()
+	var caches []*Cache
+	for _, lf := range l.list {
+		if afterTs < lf.endTs {
+			caches = append(caches, lf.Cache())
 		}
 	}
 	l.RUnlock()
 
-	{
-		cur := filepath.Join(l.dir, fmt.Sprintf("%s-current.log", l.filePrefix))
-		if _, err := os.Stat(cur); err == nil {
-			paths = append(paths, cur)
+	// Add current cache.
+	caches = append(caches, l.curFile().cache())
+	for _, cache := range caches {
+		if cache == nil {
+			glog.Error("Cache is nil")
+			continue
+		}
+		if err := streamEntries(cache, afterTs, hash, iter); err != nil {
+			return err
 		}
 	}
-	for _, path := range paths {
-		if err := streamEntriesInFile(path, afterTs, hash, ch); err != nil {
-			close(ch)
-			done <- err
-			return
-		}
-	}
-	close(ch)
-	done <- nil
+	return nil
 }

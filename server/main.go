@@ -107,7 +107,7 @@ func main() {
 	defer ps.Close()
 
 	clog := commit.NewLogger(*mutationDir, "dgraph", 50<<20)
-	clog.SkipWrite = false
+	clog.SetSkipWrite(false)
 	clog.SyncEvery = 1
 	clog.Init()
 	defer clog.Close()

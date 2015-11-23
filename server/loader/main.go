@@ -72,7 +72,7 @@ func main() {
 	defer ps.Close()
 
 	clog := commit.NewLogger(*mutationDir, "dgraph", 50<<20)
-	clog.SkipWrite = true // Don't write to commit logs.
+	clog.SetSkipWrite(true) // Don't write to commit logs.
 	clog.Init()
 	defer clog.Close()
 	posting.Init(ps, clog)

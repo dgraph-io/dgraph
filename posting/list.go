@@ -242,12 +242,8 @@ func (l *List) init(key []byte, pstore *store.Store, clog *commit.Logger) {
 	l.hash = farm.Fingerprint32(key)
 	l.mlayer = make(map[int]types.Posting)
 
-	ch := make(chan []byte, 100)
-	done := make(chan error)
 	glog.Debug("Starting stream entries...")
-	go clog.StreamEntries(posting.CommitTs()+1, l.hash, ch, done)
-
-	for buffer := range ch {
+	err := clog.StreamEntries(posting.CommitTs()+1, l.hash, func(buffer []byte) {
 		uo := flatbuffers.GetUOffsetT(buffer)
 		m := new(types.Posting)
 		m.Init(buffer, uo)
@@ -260,8 +256,8 @@ func (l *List) init(key []byte, pstore *store.Store, clog *commit.Logger) {
 			"ts":     m.Ts(),
 		}).Debug("Got entry from log")
 		l.mergeMutation(m)
-	}
-	if err := <-done; err != nil {
+	})
+	if err != nil {
 		glog.WithError(err).Error("While streaming entries.")
 	}
 	glog.Debug("Done streaming entries.")

@@ -21,16 +21,22 @@ import (
 	"io"
 	"io/ioutil"
 	"sync"
+	"sync/atomic"
+	"time"
 )
 
+var E_READ = errors.New("Unable to read")
 var E_WRITE = errors.New("Unable to write")
 
 type Cache struct {
 	sync.RWMutex
-	buf []byte
+	buf        []byte
+	lastAccess int64
 }
 
 func (c *Cache) Write(p []byte) (n int, err error) {
+	atomic.StoreInt64(&c.lastAccess, time.Now().UnixNano())
+
 	c.Lock()
 	defer c.Unlock()
 	c.buf = append(c.buf, p...)
@@ -38,6 +44,8 @@ func (c *Cache) Write(p []byte) (n int, err error) {
 }
 
 func (c *Cache) ReadAt(pos int, p []byte) (n int, err error) {
+	atomic.StoreInt64(&c.lastAccess, time.Now().UnixNano())
+
 	c.RLock()
 	defer c.RUnlock()
 
@@ -46,7 +54,15 @@ func (c *Cache) ReadAt(pos int, p []byte) (n int, err error) {
 	}
 
 	n = copy(p, c.buf[pos:])
+	if n < len(p) {
+		return n, E_READ
+	}
 	return n, nil
+}
+
+func (c *Cache) LastAccessedInSeconds() int64 {
+	d := atomic.LoadInt64(&c.lastAccess)
+	return (time.Now().UnixNano() - d) / 1000000000
 }
 
 // Reader isn't thread-safe. But multiple readers can be used to read the
