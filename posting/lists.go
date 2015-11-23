@@ -118,8 +118,8 @@ func GetOrCreate(key []byte) *List {
 	}
 
 	l := NewList()
-	l.init(key, pstore, clog)
 	if inserted := lhmap.PutIfMissing(ukey, l); inserted {
+		l.init(key, pstore, clog)
 		return l
 	} else {
 		lp, _ = lhmap.Get(ukey)
