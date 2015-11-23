@@ -22,6 +22,7 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -77,8 +78,8 @@ func TestAddLog(t *testing.T) {
 		time.Sleep(500 * time.Microsecond)
 	}
 
-	glog.Debugf("Test curfile path: %v", l.curFile.Name())
-	last, err := lastTimestamp(l.curFile.Name())
+	glog.Debugf("Test curfile path: %v", l.cf.f.Name())
+	last, err := lastTimestamp(l.cf.cache())
 	if err != nil {
 		t.Error(err)
 	}
@@ -120,10 +121,10 @@ func TestRotatingLog(t *testing.T) {
 			t.Errorf("Expected end ts: %v. Got: %v", exp, lf.endTs)
 		}
 	}
-	if l.size != 416 {
-		t.Errorf("Expected size 416. Got: %v", l.size)
+	if l.curFile().Size() != 416 {
+		t.Errorf("Expected size 416. Got: %v", l.curFile().Size())
 	}
-	if l.lastLogTs != ts+int64(8) {
+	if atomic.LoadInt64(&l.lastLogTs) != ts+int64(8) {
 		t.Errorf("Expected ts: %v. Got: %v", ts+int64(8), l.lastLogTs)
 	}
 	l.Close()
@@ -136,8 +137,8 @@ func TestRotatingLog(t *testing.T) {
 	if len(nl.list) != 4 {
 		t.Errorf("Expected 4 files. Got: %v", len(nl.list))
 	}
-	if nl.size != 416 {
-		t.Errorf("Expected size 416. Got: %v", nl.size)
+	if nl.curFile().Size() != 416 {
+		t.Errorf("Expected size 416. Got: %v", nl.curFile().Size())
 	}
 	if err := nl.AddLog(ts, 0, data); err == nil {
 		t.Error("Adding an entry with older ts should fail.")
@@ -146,8 +147,8 @@ func TestRotatingLog(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	if nl.size != 832 {
-		t.Errorf("Expected size 832. Got: %v", nl.size)
+	if nl.curFile().Size() != 832 {
+		t.Errorf("Expected size 832. Got: %v", nl.curFile().Size())
 	}
 	if err := nl.AddLog(ts+int64(113), 0, data); err != nil {
 		t.Error(err)
@@ -159,8 +160,8 @@ func TestRotatingLog(t *testing.T) {
 	if nl.list[4].endTs != ts+int64(100) {
 		t.Errorf("Expected ts: %v. Got: %v", ts+int64(100), nl.list[4].endTs)
 	}
-	if nl.size != 416 {
-		t.Errorf("Expected size 416. Got: %v", nl.size)
+	if nl.curFile().Size() != 416 {
+		t.Errorf("Expected size 416. Got: %v", nl.curFile().Size())
 	}
 	if nl.lastLogTs != ts+int64(113) {
 		t.Errorf("Expected last log ts: %v. Got: %v", ts+int64(113), nl.lastLogTs)
@@ -201,8 +202,8 @@ func TestReadEntries(t *testing.T) {
 			t.Errorf("Expected end ts: %v. Got: %v", exp, lf.endTs)
 		}
 	}
-	if l.size != 416 {
-		t.Errorf("Expected size 416. Got: %v", l.size)
+	if l.curFile().Size() != 416 {
+		t.Errorf("Expected size 416. Got: %v", l.curFile().Size())
 	}
 	if l.lastLogTs != ts+int64(8) {
 		t.Errorf("Expected ts: %v. Got: %v", ts+int64(8), l.lastLogTs)
