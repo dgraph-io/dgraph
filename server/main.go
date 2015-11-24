@@ -107,13 +107,11 @@ func main() {
 	defer ps.Close()
 
 	clog := commit.NewLogger(*mutationDir, "dgraph", 50<<20)
-	clog.SetSkipWrite(false)
 	clog.SyncEvery = 1
 	clog.Init()
 	defer clog.Close()
 
 	posting.Init(ps, clog)
-	// posting.StartPeriodicMerging()
 
 	http.HandleFunc("/query", queryHandler)
 	glog.WithField("port", *port).Info("Listening for requests...")

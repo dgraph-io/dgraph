@@ -70,6 +70,7 @@ type List struct {
 	mdelta        int                   // len(plist) + mdelta = final length.
 	maxMutationTs int64                 // Track maximum mutation ts.
 	mindex        []*MutationLink
+	dirtyTs       int64 // Use atomics for this.
 }
 
 func NewList() *List {
@@ -242,6 +243,9 @@ func (l *List) init(key []byte, pstore *store.Store, clog *commit.Logger) {
 	l.hash = farm.Fingerprint32(key)
 	l.mlayer = make(map[int]types.Posting)
 
+	if clog == nil {
+		return
+	}
 	glog.Debug("Starting stream entries...")
 	err := clog.StreamEntries(posting.CommitTs()+1, l.hash, func(buffer []byte) {
 		uo := flatbuffers.GetUOffsetT(buffer)
@@ -638,30 +642,37 @@ func (l *List) AddMutation(t x.DirectedEdge, op byte) error {
 
 	l.mergeMutation(mpost)
 	l.maxMutationTs = t.Timestamp.UnixNano()
+	if len(l.mindex)+len(l.mlayer) > 0 {
+		atomic.StoreInt64(&l.dirtyTs, time.Now().UnixNano())
+		if dirtyList != nil {
+			dirtyList.Push(l)
+		}
+	}
+	if l.clog == nil {
+		return nil
+	}
 	return l.clog.AddLog(t.Timestamp.UnixNano(), l.hash, mbuf)
 }
 
-func (l *List) IsDirty() bool {
-	// We can avoid checking for init here.
-	l.RLock()
-	defer l.RUnlock()
-	return len(l.mindex)+len(l.mlayer) > 0
-}
-
-func (l *List) MergeIfDirty() error {
-	if !l.IsDirty() {
+func (l *List) MergeIfDirty() (merged bool, err error) {
+	if atomic.LoadInt64(&l.dirtyTs) == 0 {
 		glog.WithField("dirty", false).Debug("Not Committing")
-		return nil
+		return false, nil
 	} else {
 		glog.WithField("dirty", true).Debug("Committing")
 	}
 	return l.merge()
 }
 
-func (l *List) merge() error {
+func (l *List) merge() (merged bool, rerr error) {
 	l.wg.Wait()
 	l.Lock()
 	defer l.Unlock()
+
+	if len(l.mindex)+len(l.mlayer) == 0 {
+		atomic.StoreInt64(&l.dirtyTs, 0)
+		return false, nil
+	}
 
 	var p types.Posting
 	sz := l.length()
@@ -686,17 +697,18 @@ func (l *List) merge() error {
 	b.Finish(end)
 
 	if err := l.pstore.SetOne(l.key, b.Bytes[b.Head():]); err != nil {
-		glog.WithField("error", err).Errorf("While storing posting list")
-		return err
+		glog.WithField("error", err).Fatal("While storing posting list")
+		return true, err
 	}
 
 	// Now reset the mutation variables.
 	atomic.StorePointer(&l.pbuffer, nil) // Make prev buffer eligible for GC.
+	atomic.StoreInt64(&l.dirtyTs, 0)     // Set as clean.
 	l.lastCompact = time.Now()
 	l.mlayer = make(map[int]types.Posting)
 	l.mdelta = 0
 	l.mindex = nil
-	return nil
+	return true, nil
 }
 
 func (l *List) LastCompactionTs() time.Time {

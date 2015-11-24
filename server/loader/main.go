@@ -25,7 +25,6 @@ import (
 	"strings"
 
 	"github.com/Sirupsen/logrus"
-	"github.com/dgraph-io/dgraph/commit"
 	"github.com/dgraph-io/dgraph/loader"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/store"
@@ -40,7 +39,6 @@ var mod = flag.Uint64("mod", 1, "Only pick entities, where uid % mod == 0.")
 var numgo = flag.Int("numgo", 4,
 	"Number of goroutines to use for reading file.")
 var postingDir = flag.String("postings", "", "Directory to store posting lists")
-var mutationDir = flag.String("mutations", "", "Directory to store mutations")
 var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
 
 func main() {
@@ -71,11 +69,7 @@ func main() {
 	ps.Init(*postingDir)
 	defer ps.Close()
 
-	clog := commit.NewLogger(*mutationDir, "dgraph", 50<<20)
-	clog.SetSkipWrite(true) // Don't write to commit logs.
-	clog.Init()
-	defer clog.Close()
-	posting.Init(ps, clog)
+	posting.Init(ps, nil)
 
 	files := strings.Split(*rdfGzips, ",")
 	for _, path := range files {
@@ -95,7 +89,7 @@ func main() {
 
 		count, err := loader.HandleRdfReader(r, *mod)
 		if err != nil {
-			glog.Fatal(err)
+			glog.WithError(err).Fatal("While handling rdf reader.")
 		}
 		glog.WithField("count", count).Info("RDFs parsed")
 		r.Close()

@@ -124,9 +124,6 @@ type Logger struct {
 	// Sync every d duration.
 	SyncDur time.Duration
 
-	// Skip write to commit log to allow for testing.
-	skipWrite int32
-
 	sync.RWMutex
 	list      []*logFile
 	cf        *CurFile
@@ -138,15 +135,6 @@ func (l *Logger) curFile() *CurFile {
 	l.RLock()
 	defer l.RUnlock()
 	return l.cf
-}
-
-func (l *Logger) SetSkipWrite(val bool) {
-	var v int32
-	v = 0
-	if val {
-		v = 1
-	}
-	atomic.StoreInt32(&l.skipWrite, v)
 }
 
 func (l *Logger) updateLastLogTs(val int64) {
@@ -434,9 +422,6 @@ func (l *Logger) AddLog(ts int64, hash uint32, value []byte) error {
 	if ts < atomic.LoadInt64(&l.lastLogTs) {
 		return fmt.Errorf("Timestamp lower than last log timestamp.")
 	}
-	if atomic.LoadInt32(&l.skipWrite) == 1 {
-		return nil
-	}
 
 	buf := new(bytes.Buffer)
 	var err error
@@ -525,10 +510,12 @@ func streamEntries(cache *Cache,
 
 type LogIterator func(record []byte)
 
-// Always run this method in it's own goroutine. Otherwise, your program
-// will just hang waiting on channels.
 func (l *Logger) StreamEntries(afterTs int64, hash uint32,
 	iter LogIterator) error {
+
+	if atomic.LoadInt64(&l.lastLogTs) < afterTs {
+		return nil
+	}
 
 	var wg sync.WaitGroup
 	l.RLock()

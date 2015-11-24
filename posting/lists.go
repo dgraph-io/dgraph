@@ -18,7 +18,6 @@ package posting
 
 import (
 	"flag"
-	"math/rand"
 	"runtime"
 	"runtime/debug"
 	"sync"
@@ -32,13 +31,17 @@ import (
 	"github.com/zond/gotomic"
 )
 
-var maxmemory = flag.Uint64("threshold_ram_mb", 3072,
+var minmemory = flag.Uint64("min_ram_mb", 2048,
+	"If RAM usage exceeds this, start periodically evicting posting lists"+
+		" from memory.")
+var maxmemory = flag.Uint64("max_ram_mb", 4096,
 	"If RAM usage exceeds this, we stop the world, and flush our buffers.")
 
 type counters struct {
 	ticker *time.Ticker
 	added  uint64
 	merged uint64
+	clean  uint64
 }
 
 func (c *counters) periodicLog() {
@@ -51,56 +54,100 @@ func (c *counters) periodicLog() {
 		glog.WithFields(logrus.Fields{
 			"added":   added,
 			"merged":  merged,
+			"clean":   atomic.LoadUint64(&c.clean),
 			"pending": pending,
 			"mapsize": mapSize,
 		}).Info("List Merge counters")
 	}
 }
 
-var MAX_MEMORY uint64
-var MIB uint64
+func NewCounters() *counters {
+	c := new(counters)
+	c.ticker = time.NewTicker(time.Second)
+	go c.periodicLog()
+	return c
+}
+
+var MIB, MAX_MEMORY, MIN_MEMORY uint64
+
+func aggressivelyEvict(ms runtime.MemStats) {
+	// Okay, we exceed the max memory threshold.
+	// Stop the world, and deal with this first.
+	stopTheWorld.Lock()
+	defer stopTheWorld.Unlock()
+
+	megs := ms.Alloc / MIB
+	glog.WithField("allocated_MB", megs).
+		Info("Memory usage over threshold. STOPPED THE WORLD!")
+
+	glog.Info("Calling merge on all lists.")
+	MergeLists(100 * runtime.GOMAXPROCS(-1))
+
+	glog.Info("Merged lists. Calling GC.")
+	runtime.GC() // Call GC to do some cleanup.
+	glog.Info("Trying to free OS memory")
+	debug.FreeOSMemory()
+
+	runtime.ReadMemStats(&ms)
+	megs = ms.Alloc / MIB
+	glog.WithField("allocated_MB", megs).
+		Info("Memory Usage after calling GC.")
+}
+
+func gentlyMerge(ms runtime.MemStats) {
+	ctr := NewCounters()
+	defer ctr.ticker.Stop()
+
+	count := 0
+	t := time.NewTicker(10 * time.Millisecond)
+	defer t.Stop()
+	for _ = range t.C {
+		count += 1
+		if count > 400 {
+			break // We're doing 100 per second. So, stop after 4 seconds.
+		}
+		ret, ok := dirtyList.Pop()
+		if !ok || ret == nil {
+			break
+		}
+		// Not calling processOne, because we don't want to
+		// remove the postings list from the map, to avoid
+		// a race condition, where another caller re-creates the
+		// posting list before a merge happens.
+		l := ret.(*List)
+		if l == nil {
+			continue
+		}
+		mergeAndUpdate(l, ctr)
+	}
+}
 
 func checkMemoryUsage() {
 	MIB = 1 << 20
-	MAX_MEMORY = *maxmemory * (1 << 20)
+	MAX_MEMORY = *maxmemory * MIB
+	MIN_MEMORY = *minmemory * MIB // Not being used right now.
 
 	for _ = range time.Tick(5 * time.Second) {
 		var ms runtime.MemStats
 		runtime.ReadMemStats(&ms)
-		if ms.Alloc < MAX_MEMORY {
-			continue
+		if ms.Alloc > MAX_MEMORY {
+			aggressivelyEvict(ms)
+
+		} else {
+			gentlyMerge(ms)
 		}
-
-		// Okay, we exceed the max memory threshold.
-		// Stop the world, and deal with this first.
-		stopTheWorld.Lock()
-		megs := ms.Alloc / MIB
-		glog.WithField("allocated_MB", megs).
-			Info("Memory usage over threshold. STOPPED THE WORLD!")
-
-		glog.Info("Calling merge on all lists.")
-		MergeLists(100 * runtime.GOMAXPROCS(-1))
-
-		glog.Info("Merged lists. Calling GC.")
-		runtime.GC() // Call GC to do some cleanup.
-		glog.Info("Trying to free OS memory")
-		debug.FreeOSMemory()
-
-		runtime.ReadMemStats(&ms)
-		megs = ms.Alloc / MIB
-		glog.WithField("allocated_MB", megs).
-			Info("Memory Usage after calling GC.")
-		stopTheWorld.Unlock()
 	}
 }
 
 var stopTheWorld sync.RWMutex
 var lhmap *gotomic.Hash
+var dirtyList *gotomic.List
 var pstore *store.Store
 var clog *commit.Logger
 
 func Init(posting *store.Store, log *commit.Logger) {
 	lhmap = gotomic.NewHash()
+	dirtyList = gotomic.NewList()
 	pstore = posting
 	clog = log
 	go checkMemoryUsage()
@@ -127,28 +174,48 @@ func GetOrCreate(key []byte) *List {
 	}
 }
 
+func mergeAndUpdate(l *List, c *counters) {
+	if l == nil {
+		return
+	}
+	if merged, err := l.MergeIfDirty(); err != nil {
+		glog.WithError(err).Error("While commiting dirty list.")
+	} else if merged {
+		atomic.AddUint64(&c.merged, 1)
+	} else {
+		atomic.AddUint64(&c.clean, 1)
+	}
+}
+
 func processOne(k gotomic.Hashable, c *counters) {
 	ret, _ := lhmap.Delete(k)
 	if ret == nil {
 		return
 	}
 	l := ret.(*List)
+
 	if l == nil {
 		return
 	}
-
 	l.SetForDeletion() // No more AddMutation.
-	if err := l.MergeIfDirty(); err != nil {
-		glog.WithError(err).Error("While commiting dirty list.")
-	}
-	atomic.AddUint64(&c.merged, 1)
+	mergeAndUpdate(l, c)
 }
 
 // For on-demand merging of all lists.
 func process(ch chan gotomic.Hashable, c *counters, wg *sync.WaitGroup) {
-	for l := range ch {
-		processOne(l, c)
+	for dirtyList.Size() > 0 {
+		ret, ok := dirtyList.Pop()
+		if !ok || ret == nil {
+			continue
+		}
+		l := ret.(*List)
+		mergeAndUpdate(l, c)
 	}
+
+	for k := range ch {
+		processOne(k, c)
+	}
+
 	if wg != nil {
 		wg.Done()
 	}
@@ -165,9 +232,7 @@ func queueAll(ch chan gotomic.Hashable, c *counters) {
 
 func MergeLists(numRoutines int) {
 	ch := make(chan gotomic.Hashable, 10000)
-	c := new(counters)
-	c.ticker = time.NewTicker(time.Second)
-	go c.periodicLog()
+	c := NewCounters()
 	go queueAll(ch, c)
 
 	wg := new(sync.WaitGroup)
@@ -177,56 +242,4 @@ func MergeLists(numRoutines int) {
 	}
 	wg.Wait()
 	c.ticker.Stop()
-}
-
-// For periodic merging of lists.
-func queueRandomLists(ch chan gotomic.Hashable, c *counters) {
-	var buf []gotomic.Hashable
-	var count int
-	needed := cap(ch) - len(ch)
-	if needed < 100 {
-		return
-	}
-
-	// Generate a random list of
-	lhmap.Each(func(k gotomic.Hashable, v gotomic.Thing) bool {
-		if count < needed {
-			buf = append(buf, k)
-
-		} else {
-			j := rand.Intn(count)
-			if j < len(buf) {
-				buf[j] = k
-			}
-		}
-		count += 1
-		return false
-	})
-
-	for _, k := range buf {
-		ch <- k
-		atomic.AddUint64(&c.added, 1)
-	}
-}
-
-func periodicQueueForProcessing(ch chan gotomic.Hashable, c *counters) {
-	ticker := time.NewTicker(time.Minute)
-	for _ = range ticker.C {
-		queueRandomLists(ch, c)
-	}
-}
-
-func periodicProcess(ch chan gotomic.Hashable, c *counters) {
-	ticker := time.NewTicker(100 * time.Millisecond)
-	for _ = range ticker.C {
-		hid := <-ch
-		processOne(hid, c)
-	}
-}
-
-func StartPeriodicMerging() {
-	ctr := new(counters)
-	ch := make(chan gotomic.Hashable, 10000)
-	go periodicQueueForProcessing(ch, ctr)
-	go periodicProcess(ch, ctr)
 }
