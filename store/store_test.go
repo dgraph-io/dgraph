@@ -82,7 +82,6 @@ func benchmarkGet(valSize int, b *testing.B) {
 			return
 		}
 	}
-	b.Logf("Wrote %d keys.", nkeys)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -98,9 +97,10 @@ func benchmarkGet(valSize int, b *testing.B) {
 	}
 }
 
-func BenchmarkGet_valsize100(b *testing.B)   { benchmarkGet(100, b) }
-func BenchmarkGet_valsize1000(b *testing.B)  { benchmarkGet(1000, b) }
-func BenchmarkGet_valsize10000(b *testing.B) { benchmarkGet(10000, b) }
+func BenchmarkGet_valsize1024(b *testing.B)  { benchmarkGet(1024, b) }
+func BenchmarkGet_valsize10KB(b *testing.B)  { benchmarkGet(10240, b) }
+func BenchmarkGet_valsize500KB(b *testing.B) { benchmarkGet(1<<19, b) }
+func BenchmarkGet_valsize1MB(b *testing.B)   { benchmarkGet(1<<20, b) }
 
 func benchmarkSet(valSize int, b *testing.B) {
 	path, err := ioutil.TempDir("", "storetest_")
@@ -125,6 +125,7 @@ func benchmarkSet(valSize int, b *testing.B) {
 	}
 }
 
-func BenchmarkSet_valsize100(b *testing.B)   { benchmarkSet(100, b) }
-func BenchmarkSet_valsize1000(b *testing.B)  { benchmarkSet(1000, b) }
-func BenchmarkSet_valsize10000(b *testing.B) { benchmarkSet(10000, b) }
+func BenchmarkSet_valsize1024(b *testing.B)  { benchmarkSet(1024, b) }
+func BenchmarkSet_valsize10KB(b *testing.B)  { benchmarkSet(10240, b) }
+func BenchmarkSet_valsize500KB(b *testing.B) { benchmarkSet(1<<19, b) }
+func BenchmarkSet_valsize1MB(b *testing.B)   { benchmarkSet(1<<20, b) }
