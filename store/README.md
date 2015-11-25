@@ -84,3 +84,7 @@ many writes get commited by the end user.
 Hence, BoltDB is a better choice. It performs better for reads/seeks, despite DGraph needing
 a value copy. Writes are somewhat slower, but that shouldn't be a problem because of the
 above mentioned reasons.
+
+**Update**: Just realized that BoltDB only allows a SINGLE writer at any point in time.
+This is equivalent to a global mutex lock. That'd essentially kill DGraph's performance. So,
+BoltDB is out!
