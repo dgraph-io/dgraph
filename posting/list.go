@@ -35,6 +35,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgryski/go-farm"
 	"github.com/google/flatbuffers/go"
+	"github.com/zond/gotomic"
 )
 
 var glog = x.Log("posting")
@@ -57,6 +58,7 @@ type MutationLink struct {
 type List struct {
 	sync.RWMutex
 	key         []byte
+	ghash       gotomic.Hashable
 	hash        uint32
 	pbuffer     unsafe.Pointer
 	pstore      *store.Store // postinglist store
@@ -241,6 +243,7 @@ func (l *List) init(key []byte, pstore *store.Store, clog *commit.Logger) {
 	posting := l.getPostingList()
 	l.maxMutationTs = posting.CommitTs()
 	l.hash = farm.Fingerprint32(key)
+	l.ghash = gotomic.IntKey(farm.Fingerprint64(key))
 	l.mlayer = make(map[int]types.Posting)
 
 	if clog == nil {
@@ -647,8 +650,8 @@ func (l *List) AddMutation(t x.DirectedEdge, op byte) error {
 	l.maxMutationTs = t.Timestamp.UnixNano()
 	if len(l.mindex)+len(l.mlayer) > 0 {
 		atomic.StoreInt64(&l.dirtyTs, time.Now().UnixNano())
-		if dirtyList != nil {
-			dirtyList.Push(l)
+		if dirtymap != nil {
+			dirtymap.Put(l.ghash, true)
 		}
 	}
 	if l.clog == nil {

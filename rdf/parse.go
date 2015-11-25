@@ -18,6 +18,8 @@ package rdf
 
 import (
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/dgraph-io/dgraph/lex"
@@ -34,14 +36,21 @@ type NQuad struct {
 	Language    string
 }
 
+func getUid(s string) (uint64, error) {
+	if strings.HasPrefix(s, "_uid_:") {
+		return strconv.ParseUint(s[6:], 0, 64)
+	}
+	return uid.GetOrAssign(s)
+}
+
 func (nq NQuad) ToEdge() (result x.DirectedEdge, rerr error) {
-	sid, err := uid.GetOrAssign(nq.Subject)
+	sid, err := getUid(nq.Subject)
 	if err != nil {
 		return result, err
 	}
 	result.Entity = sid
 	if len(nq.ObjectId) > 0 {
-		oid, err := uid.GetOrAssign(nq.ObjectId)
+		oid, err := getUid(nq.ObjectId)
 		if err != nil {
 			return result, err
 		}

@@ -46,17 +46,20 @@ type counters struct {
 
 func (c *counters) periodicLog() {
 	for _ = range c.ticker.C {
-		mapSize := lhmap.Size()
 		added := atomic.LoadUint64(&c.added)
 		merged := atomic.LoadUint64(&c.merged)
-		pending := added - merged
+		var pending uint64
+		if added > merged {
+			pending = added - merged
+		}
 
 		glog.WithFields(logrus.Fields{
-			"added":   added,
-			"merged":  merged,
-			"clean":   atomic.LoadUint64(&c.clean),
-			"pending": pending,
-			"mapsize": mapSize,
+			"added":     added,
+			"merged":    merged,
+			"clean":     atomic.LoadUint64(&c.clean),
+			"pending":   pending,
+			"mapsize":   lhmap.Size(),
+			"dirtysize": dirtymap.Size(),
 		}).Info("List Merge counters")
 	}
 }
@@ -98,17 +101,27 @@ func gentlyMerge(ms runtime.MemStats) {
 	ctr := NewCounters()
 	defer ctr.ticker.Stop()
 
-	count := 0
+	// Pick 400 keys from dirty map.
+	var hs []gotomic.Hashable
+	dirtymap.Each(func(k gotomic.Hashable, v gotomic.Thing) bool {
+		hs = append(hs, k)
+		return len(hs) > 400
+	})
+
+	idx := 0
 	t := time.NewTicker(10 * time.Millisecond)
 	defer t.Stop()
 	for _ = range t.C {
-		count += 1
-		if count > 400 {
-			break // We're doing 100 per second. So, stop after 4 seconds.
-		}
-		ret, ok := dirtyList.Pop()
-		if !ok || ret == nil {
+		if idx >= len(hs) {
 			break
+		}
+		hid := hs[idx]
+		idx += 1
+		dirtymap.Delete(hid)
+
+		ret, ok := lhmap.Get(hid)
+		if !ok || ret == nil {
+			continue
 		}
 		// Not calling processOne, because we don't want to
 		// remove the postings list from the map, to avoid
@@ -128,6 +141,10 @@ func checkMemoryUsage() {
 	MIN_MEMORY = *minmemory * MIB // Not being used right now.
 
 	for _ = range time.Tick(5 * time.Second) {
+		if atomic.LoadInt32(&pauseCheckMemory) == 1 {
+			continue
+		}
+
 		var ms runtime.MemStats
 		runtime.ReadMemStats(&ms)
 		if ms.Alloc > MAX_MEMORY {
@@ -139,15 +156,16 @@ func checkMemoryUsage() {
 	}
 }
 
+var pauseCheckMemory int32
 var stopTheWorld sync.RWMutex
 var lhmap *gotomic.Hash
-var dirtyList *gotomic.List
+var dirtymap *gotomic.Hash
 var pstore *store.Store
 var clog *commit.Logger
 
 func Init(posting *store.Store, log *commit.Logger) {
 	lhmap = gotomic.NewHash()
-	dirtyList = gotomic.NewList()
+	dirtymap = gotomic.NewHash()
 	pstore = posting
 	clog = log
 	go checkMemoryUsage()
@@ -203,15 +221,8 @@ func processOne(k gotomic.Hashable, c *counters) {
 
 // For on-demand merging of all lists.
 func process(ch chan gotomic.Hashable, c *counters, wg *sync.WaitGroup) {
-	for dirtyList.Size() > 0 {
-		ret, ok := dirtyList.Pop()
-		if !ok || ret == nil {
-			continue
-		}
-		l := ret.(*List)
-		mergeAndUpdate(l, c)
-	}
-
+	// No need to go through dirtymap, because we're going through
+	// everything right now anyways.
 	for k := range ch {
 		processOne(k, c)
 	}
@@ -231,6 +242,8 @@ func queueAll(ch chan gotomic.Hashable, c *counters) {
 }
 
 func MergeLists(numRoutines int) {
+	atomic.StoreInt32(&pauseCheckMemory, 1)
+
 	ch := make(chan gotomic.Hashable, 10000)
 	c := NewCounters()
 	go queueAll(ch, c)
@@ -242,4 +255,5 @@ func MergeLists(numRoutines int) {
 	}
 	wg.Wait()
 	c.ticker.Stop()
+	atomic.StoreInt32(&pauseCheckMemory, 0)
 }
