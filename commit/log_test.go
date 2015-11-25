@@ -212,7 +212,7 @@ func TestReadEntries(t *testing.T) {
 	{
 		// Check for hash = 1, ts >= 2.
 		count := 0
-		err := l.StreamEntries(ts+2, uint32(1), func(entry []byte) {
+		err := l.StreamEntries(ts+2, uint32(1), func(hdr Header, entry []byte) {
 			count += 1
 			if bytes.Compare(data, entry) != 0 {
 				t.Error("Data doesn't equate.")
@@ -231,7 +231,7 @@ func TestReadEntries(t *testing.T) {
 		}
 		// Check for hash = 1, ts >= 2.
 		count := 0
-		err := l.StreamEntries(ts, uint32(1), func(entry []byte) {
+		err := l.StreamEntries(ts, uint32(1), func(hdr Header, entry []byte) {
 			count += 1
 			if bytes.Compare(data, entry) != 0 {
 				t.Error("Data doesn't equate.")

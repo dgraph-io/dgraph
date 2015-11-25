@@ -247,20 +247,23 @@ func (l *List) init(key []byte, pstore *store.Store, clog *commit.Logger) {
 		return
 	}
 	glog.Debug("Starting stream entries...")
-	err := clog.StreamEntries(posting.CommitTs()+1, l.hash, func(buffer []byte) {
-		uo := flatbuffers.GetUOffsetT(buffer)
-		m := new(types.Posting)
-		m.Init(buffer, uo)
-		if m.Ts() > l.maxMutationTs {
-			l.maxMutationTs = m.Ts()
-		}
-		glog.WithFields(logrus.Fields{
-			"uid":    m.Uid(),
-			"source": string(m.Source()),
-			"ts":     m.Ts(),
-		}).Debug("Got entry from log")
-		l.mergeMutation(m)
-	})
+
+	err := clog.StreamEntries(posting.CommitTs()+1, l.hash,
+		func(hdr commit.Header, buffer []byte) {
+
+			uo := flatbuffers.GetUOffsetT(buffer)
+			m := new(types.Posting)
+			m.Init(buffer, uo)
+			if m.Ts() > l.maxMutationTs {
+				l.maxMutationTs = m.Ts()
+			}
+			glog.WithFields(logrus.Fields{
+				"uid":    m.Uid(),
+				"source": string(m.Source()),
+				"ts":     m.Ts(),
+			}).Debug("Got entry from log")
+			l.mergeMutation(m)
+		})
 	if err != nil {
 		glog.WithError(err).Error("While streaming entries.")
 	}

@@ -493,13 +493,15 @@ func streamEntries(cache *Cache,
 		}
 
 		if hdr.hash == hash && hdr.ts >= afterTs {
+			// Iterator expects a copy of the buffer, so create one, instead of
+			// creating a big buffer upfront and reusing it.
 			data := make([]byte, hdr.size)
 			_, err := reader.Read(data)
 			if err != nil {
 				flog.WithError(err).Fatal("While reading data.")
 				return err
 			}
-			iter(data)
+			iter(hdr, data)
 
 		} else {
 			reader.Discard(int(hdr.size))
@@ -508,7 +510,7 @@ func streamEntries(cache *Cache,
 	return nil
 }
 
-type LogIterator func(record []byte)
+type LogIterator func(hdr Header, record []byte)
 
 func (l *Logger) StreamEntries(afterTs int64, hash uint32,
 	iter LogIterator) error {
