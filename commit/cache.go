@@ -17,12 +17,15 @@
 package commit
 
 import (
+	"encoding/binary"
 	"errors"
 	"io"
 	"io/ioutil"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/willf/bloom"
 )
 
 var E_READ = errors.New("Unable to read")
@@ -32,13 +35,31 @@ type Cache struct {
 	sync.RWMutex
 	buf        []byte
 	lastAccess int64
+	bf         *bloom.BloomFilter
 }
 
-func (c *Cache) Write(p []byte) (n int, err error) {
+func toBytes(hash uint32) []byte {
+	n := make([]byte, 8)
+	nlen := binary.PutUvarint(n, uint64(hash))
+	return n[:nlen]
+}
+
+func (c *Cache) Present(hash uint32) bool {
+	c.RLock()
+	defer c.RUnlock()
+
+	if c.bf == nil {
+		return true
+	}
+	return c.bf.Test(toBytes(hash))
+}
+
+func (c *Cache) Write(hash uint32, p []byte) (n int, err error) {
 	atomic.StoreInt64(&c.lastAccess, time.Now().UnixNano())
 
 	c.Lock()
 	defer c.Unlock()
+	c.bf.Add(toBytes(hash))
 	c.buf = append(c.buf, p...)
 	return len(p), nil
 }
@@ -93,12 +114,8 @@ func FillCache(c *Cache, path string) error {
 	if err != nil {
 		return err
 	}
-	n, err := c.Write(buf)
-	if err != nil {
-		return err
-	}
-	if n < len(buf) {
-		return E_WRITE
-	}
+	c.Lock()
+	c.buf = buf
+	c.Unlock()
 	return nil
 }
