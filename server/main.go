@@ -39,14 +39,27 @@ var postingDir = flag.String("postings", "", "Directory to store posting lists")
 var mutationDir = flag.String("mutations", "", "Directory to store mutations")
 var port = flag.String("port", "8080", "Port to run server on.")
 
+func addCorsHeaders(w http.ResponseWriter) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers",
+		"Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, X-Auth-Token, Cache-Control, X-Requested-With")
+	w.Header().Set("Access-Control-Allow-Credentials", "true")
+	w.Header().Set("Connection", "close")
+}
+
 func queryHandler(w http.ResponseWriter, r *http.Request) {
-	var l query.Latency
-	l.Start = time.Now()
+	addCorsHeaders(w)
+	if r.Method == "OPTIONS" {
+		return
+	}
 	if r.Method != "POST" {
 		x.SetStatus(w, x.E_INVALID_METHOD, "Invalid method")
 		return
 	}
 
+	var l query.Latency
+	l.Start = time.Now()
 	defer r.Body.Close()
 	q, err := ioutil.ReadAll(r.Body)
 	if err != nil || len(q) == 0 {
