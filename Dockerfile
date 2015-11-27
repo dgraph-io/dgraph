@@ -21,11 +21,11 @@ ENV LD_LIBRARY_PATH "/usr/local/lib"
 # Install DGraph and update dependencies to right versions.
 RUN go get -v github.com/robfig/glock && \
 	go get -v github.com/dgraph-io/dgraph/... && \
-	glock sync github.com/dgraph-io/dgraph
+	glock sync github.com/dgraph-io/dgraph && echo "v0.1"
 
 # Run some tests, don't build an image if we're failing tests.
 RUN go test github.com/dgraph-io/dgraph/...
 
-# Create the data directory. This directory should be mapped
+# Create the dgraph and data directory. These directories should be mapped
 # to host machine for persistence.
-RUN mkdir /data
+RUN mkdir /dgraph && mkdir /data
