@@ -36,8 +36,6 @@ var glog = x.Log("loader_main")
 var rdfGzips = flag.String("rdfgzips", "",
 	"Comma separated gzip files containing RDF data")
 var mod = flag.Uint64("mod", 1, "Only pick entities, where uid % mod == 0.")
-var numgo = flag.Int("numgo", 4,
-	"Number of goroutines to use for reading file.")
 var postingDir = flag.String("postings", "", "Directory to store posting lists")
 var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
 

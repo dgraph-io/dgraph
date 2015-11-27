@@ -47,7 +47,7 @@ Loader needs 2 directories:
 
 ```
 $ cd $GOPATH/src/github.com/dgraph-io/dgraph/server/loader
-$ go build . && ./loader --rdfgzips=path_of_benchmarks_dir/data/rdf-films.gz,path_of_benchmarks_dir/data/names.gz --mutations DIRPATH/m --postings DIRPATH/p
+$ go build . && ./loader --rdfgzips=path_of_benchmarks_dir/data/rdf-films.gz,path_of_benchmarks_dir/data/names.gz --postings DIRPATH/p
 ```
 
 ## Querying
