@@ -1,0 +1,6 @@
+github.com/Sirupsen/logrus 23521f1364a267387df2b99234134003e0a4486d
+github.com/dgryski/go-farm d1e51a4af19092715f4ce7d8257fe5bc8f8be727
+github.com/google/flatbuffers b4db88808f5c1f8f36d2f67952c8b7b3022e28ea
+github.com/willf/bitset 28a4168144bb8ac95454e1f51c84da1933681ad4
+github.com/willf/bloom 73320a6e73f3e139842058d7e4886e09ca83ac9b
+github.com/zond/gotomic 5b217c5578228ff3979c9f9459959176fb54c388
