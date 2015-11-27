@@ -15,7 +15,7 @@ func init() {
 }
 
 // This testcase is a port of rocksdb's c_test.c.
-func TestC(t *testing.T) {
+func DisableTestC(t *testing.T) {
 	dbname := tempDir(t)
 	defer deleteDBDirectory(t, dbname)
 	env := NewDefaultEnv()
