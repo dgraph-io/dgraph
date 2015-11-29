@@ -41,14 +41,26 @@ $ git clone https://github.com/dgraph-io/benchmarks.git
 ```
 
 To load the data in bulk, use the data loader binary in dgraph/server/loader.
-Loader needs 2 directories:
-- mutations, where mutation commit logs are stored and
-- postings, where posting lists are stored.
+Loader needs a postings directory, where posting lists are stored.
 
 ```
 $ cd $GOPATH/src/github.com/dgraph-io/dgraph/server/loader
 $ go build . && ./loader --rdfgzips=path_of_benchmarks_dir/data/rdf-films.gz,path_of_benchmarks_dir/data/names.gz --postings DIRPATH/p
 ```
+
+### Loading performance
+Loader is memory bound. Every mutation loads a posting list in memory, where mutations
+are applied in layers above posting lists.
+While loader doesn't write to disk every time a mutation happens, it does periodically
+merge all the mutations to posting lists, and writes them to rocksdb which persists them.
+How often this merging happens can be fine tuned by specifying `max_ram_mb`.
+Every time loader determines it exceeds this threshold, it would *stop the world*, and start the merge process.
+The more memory is available for loader to work with, the less merging needs to be done, the faster the loading.
+
+Thus, loader performance is highly dependent on merging performance, which depends on how fast the underlying persistent storage is.
+So, *RAMFS/TMPFS > SSD > Hard disk*, when it comes to loading performance.
+
+As a reference point, it takes 220 seconds to load 4.1M RDFs from `names.gz`(from benchmarks repository) on my 6-core Intel Xeon Dell Precision T3500, using 1G TMPFS for postings directory, and with `max_ram_mb=3000` flag set.
 
 ## Querying
 Once data is loaded, point the dgraph server to the postings and mutations directory.
