@@ -135,28 +135,28 @@ This would now run dgraph server at port 8080. If you want to run it at some oth
 Now you can run GraphQL queries over freebase film data like so:
 ```
 curl localhost:8080/query -XPOST -d '{
-me(_xid_: m.06pj8) {
-        type.object.name.en
-        film.director.film {
-                type.object.name.en
-                film.film.starring {
-                        film.performance.character {
-                          type.object.name.en
-                        }
-                        film.performance.actor {
-                                film.director.film {
-                                        type.object.name.en
-                                }
-                                type.object.name.en
-                        }
-                }
-                film.film.initial_release_date
-                film.film.country
-                film.film.genre {
-                        type.object.name.en
-                }
-        }
-}
+	me(_xid_: m.06pj8) {
+		type.object.name.en
+		film.director.film {
+			type.object.name.en
+			film.film.starring {
+				film.performance.character {
+					type.object.name.en
+				}
+				film.performance.actor {
+					type.object.name.en
+					film.director.film {
+						type.object.name.en
+					}
+				}
+			}
+			film.film.initial_release_date
+			film.film.country
+			film.film.genre {
+				type.object.name.en
+			}
+		}
+	}
 }' > output.json
 ```
 This query would find all movies directed by Steven Spielberg, their names, initial release dates, countries, genres, and the cast of these movies, i.e. characteres and actors playing those characters; and all the movies directed by these actors, if any.
