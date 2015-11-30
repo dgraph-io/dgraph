@@ -50,7 +50,7 @@ func (i item) String() string {
 	case 0:
 		return "EOF"
 	}
-	return fmt.Sprintf("[%v] %q", i.Typ, i.Val)
+	return fmt.Sprintf("lex.Item [%v] %q", i.Typ, i.Val)
 }
 
 type Lexer struct {
@@ -68,7 +68,7 @@ type Lexer struct {
 func NewLexer(input string) *Lexer {
 	l := &Lexer{
 		Input: input,
-		Items: make(chan item),
+		Items: make(chan item, 100),
 	}
 	return l
 }

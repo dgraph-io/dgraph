@@ -28,7 +28,7 @@ const (
 	itemLeftCurl                           // left curly bracket
 	itemRightCurl                          // right curly bracket
 	itemComment                            // comment
-	itemName                               // names
+	itemName                               // [9] names
 	itemOpType                             // operation type
 	itemString                             // quoted string
 	itemLeftRound                          // left round bracket
@@ -234,7 +234,7 @@ func isNameSuffix(r rune) bool {
 	if r >= '0' && r <= '9' {
 		return true
 	}
-	if r == '.' {
+	if r == '.' || r == '-' { // Use by freebase.
 		return true
 	}
 	return false

@@ -53,6 +53,7 @@ func TestParse(t *testing.T) {
 	}
 	if len(sg.Children) != 4 {
 		t.Errorf("Expected 4 children. Got: %v", len(sg.Children))
+		return
 	}
 	if err := checkAttr(sg.Children[0], "friends"); err != nil {
 		t.Error(err)
@@ -158,5 +159,25 @@ func TestParse_pass1(t *testing.T) {
 	f := sg.Children[1]
 	if len(f.Children) != 0 {
 		t.Errorf("Expected 0. Got: %v", len(sg.Children))
+	}
+}
+
+func TestParse_block(t *testing.T) {
+	query := `
+		{
+			root(_uid_: 0x0a) {
+				type.object.name.es-419
+			}
+		}
+	`
+	sg, err := Parse(query)
+	if err != nil {
+		t.Error(err)
+	}
+	if len(sg.Children) != 1 {
+		t.Errorf("Expected 1. Got: %v", len(sg.Children))
+	}
+	if err := checkAttr(sg.Children[0], "type.object.name.es-419"); err != nil {
+		t.Error(err)
 	}
 }

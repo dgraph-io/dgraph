@@ -57,7 +57,9 @@ func Parse(input string) (sg *query.SubGraph, rerr error) {
 					return nil, rerr
 				}
 			} else {
-				godeep(l, sg)
+				if err := godeep(l, sg); err != nil {
+					return sg, err
+				}
 			}
 		}
 	}
@@ -114,29 +116,37 @@ func getRoot(l *lex.Lexer) (sg *query.SubGraph, rerr error) {
 	return query.NewGraph(uid, xid)
 }
 
-func godeep(l *lex.Lexer, sg *query.SubGraph) {
-	curp := sg // stores current pointer.
-	for {
-		switch item := <-l.Items; {
-		case item.Typ == itemName:
+func godeep(l *lex.Lexer, sg *query.SubGraph) error {
+	curp := sg // Used to track current node, for nesting.
+	for item := range l.Items {
+		if item.Typ == lex.ItemError {
+			return errors.New(item.Val)
+
+		} else if item.Typ == lex.ItemEOF {
+			return nil
+
+		} else if item.Typ == itemName {
 			child := new(query.SubGraph)
 			child.Attr = item.Val
 			sg.Children = append(sg.Children, child)
 			curp = child
-		case item.Typ == itemLeftCurl:
-			godeep(l, curp) // recursive iteration
-		case item.Typ == itemRightCurl:
-			return
-		case item.Typ == itemLeftRound:
-			// absorb all these, we don't care right now.
-			for {
-				item = <-l.Items
-				if item.Typ == itemRightRound || item.Typ == lex.ItemEOF {
-					break
+
+		} else if item.Typ == itemLeftCurl {
+			if err := godeep(l, curp); err != nil {
+				return err
+			}
+
+		} else if item.Typ == itemRightCurl {
+			return nil
+
+		} else if item.Typ == itemLeftRound {
+			// absorb all these, we don't use them right now.
+			for ti := range l.Items {
+				if ti.Typ == itemRightRound || ti.Typ == lex.ItemEOF {
+					return nil
 				}
 			}
-		default:
-			// continue
 		}
 	}
+	return nil
 }
