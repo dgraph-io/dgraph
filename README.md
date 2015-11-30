@@ -1,13 +1,15 @@
 # DGraph
 **Open Source, Distributed, Low Latency, High Throughput Graph Database.**
 
+![logo](https://img.shields.io/badge/status-alpha-red.svg)
+[![logo](https://img.shields.io/badge/Mailing%20List-dgraph-brightgreen.svg)](https://groups.google.com/forum/#!forum/dgraph)
+
 DGraph's goal is to provide [Google](https://www.google.com) level production latency and scale,
 with low enough latency to be serving real time user queries, over terabytes of structured data.
 
 View [5 min presentation](http://go-talks.appspot.com/github.com/dgraph-io/dgraph/present/sydney5mins/g.slide#1) at Go meetup, Sydney.
 
 # Current Status
-![logo](https://img.shields.io/badge/status-alpha-red.svg)
 
 `MVP launch - Dec 2015`
 This is a minimum viable product, alpha release of DGraph. **It's not meant for production use.**
@@ -15,6 +17,10 @@ See the [Roadmap](https://github.com/dgraph-io/dgraph/issues/1) for list of work
 
 Your feedback is welcome. Feel free to [file an issue](https://github.com/dgraph-io/dgraph/issues)
 to direct the development of DGraph.
+
+There's an instance of DGraph running at http://dgraph.xyz, that you can query without installing DGraph.
+This instance contains 21M facts from Freebase Film Data. See the [query section below](#querying) for a sample query.
+`curl dgraph.xyz/query -XPOST -d '{}'`
 
 # Installation
 
@@ -25,14 +31,14 @@ $ docker pull dgraph/dgraph:latest
 $ docker run -t -i -v /somedir:/dgraph -v $HOME/go/src/github.com/dgraph-io/benchmarks/data:/data -p 8080:8080 dgraph/dgraph:latest
 ```
 
-Once into the dgraph container, you can now load your data. Also see [Data Loading](#data-loading) below.
-You can also skip this step, if you just want to play with DGraph. See [Use Freebase Film data](#use-freebase-film-data).
+Once into the dgraph container, you can now load your data. See [Data Loading](#data-loading) below.
+Also, you can skip this step, if you just want to play with DGraph. See [Use Freebase Film data](#use-freebase-film-data).
 ```
 $ loader --postings /dgraph/p --rdfgzips /data/rdf-data.gzip --max_ram_mb 3000
 ```
 Once done, you can start the server
 ```
-$ mkdir /dgraph/m  # Create the mutations directory first.
+$ mkdir /dgraph/m  # Ensure mutations directory exists.
 $ server --postings /dgraph/p --mutations /dgraph/m  --max_ram_mb 3000
 ```
 
