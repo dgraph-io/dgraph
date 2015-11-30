@@ -11,6 +11,7 @@ $ docker run -t -i -v /somedir:/dgraph -v $HOME/go/src/github.com/dgraph-io/benc
 ```
 
 Once into the dgraph container, you can now load your data. Also see [Data Loading](#data-loading) below.
+You can also skip this step, if you just want to play with DGraph. See [Use Freebase Film data](#use-freebase-film-data).
 ```
 $ loader --postings /dgraph/p --rdfgzips /data/rdf-data.gzip --max_ram_mb 3000
 ```
@@ -69,6 +70,11 @@ go test github.com/dgraph-io/dgraph/...
 # Usage
 
 ## Data Loading
+### Use Freebase Film data
+If you just want to play with the system, you can [download this postings directory](https://www.dropbox.com/s/o0lghhd6u7e9eiq/dgraph-p.tar.gz?dl=0),
+unzip/untar it and skip right to [Querying](#querying). This directory contains all the Freebase film data in DGraph posting lists format.
+
+### Bulk Loading
 Let's load up data first. If you have RDF data, you can use that.
 Or, there's [Freebase film rdf data here](https://github.com/dgraph-io/benchmarks).
 
@@ -86,7 +92,7 @@ $ cd $GOPATH/src/github.com/dgraph-io/dgraph/server/loader
 $ go build . && ./loader --rdfgzips=path_of_benchmarks_dir/data/rdf-films.gz,path_of_benchmarks_dir/data/names.gz --postings DIRPATH/p
 ```
 
-### Loading performance
+#### Loading performance
 Loader is memory bound. Every mutation loads a posting list in memory, where mutations
 are applied in layers above posting lists.
 While loader doesn't write to disk every time a mutation happens, it does periodically
