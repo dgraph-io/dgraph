@@ -141,8 +141,8 @@ me(_xid_: m.06pj8) {
                 type.object.name.en
                 film.film.starring {
                         film.performance.character {
-													type.object.name.en
-												}
+                          type.object.name.en
+                        }
                         film.performance.actor {
                                 film.director.film {
                                         type.object.name.en
