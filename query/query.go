@@ -278,8 +278,8 @@ func NewGraph(euid uint64, exid string) (*SubGraph, error) {
 	// Also need to add nil value to keep this consistent.
 	var voffset flatbuffers.UOffsetT
 	{
-		task.ValueStart(b)
 		bvo := b.CreateByteVector(x.Nilbyte)
+		task.ValueStart(b)
 		task.ValueAddVal(b, bvo)
 		voffset = task.ValueEnd(b)
 	}
