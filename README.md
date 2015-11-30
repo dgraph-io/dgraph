@@ -1,5 +1,20 @@
-# dgraph
-Distributed Graph Serving System
+# DGraph
+**Open Source, Distributed, Low Latency, High Throughput Graph Database.**
+
+DGraph's goal is to provide [Google](https://www.google.com) level production latency and scale,
+with low enough latency to be serving real time user queries, over terabytes of structured data.
+
+View [5 min presentation](http://go-talks.appspot.com/github.com/dgraph-io/dgraph/present/sydney5mins/g.slide#1) at Go meetup, Sydney.
+
+# Current Status
+![logo](https://img.shields.io/badge/status-alpha-red.svg)
+
+`MVP launch - Dec 2015`
+This is a minimum viable product, alpha release of DGraph. **It's not meant for production use.**
+See the [Roadmap](https://github.com/dgraph-io/dgraph/issues/1) for list of working and planned features.
+
+Your feedback is welcome. Feel free to [file an issue](https://github.com/dgraph-io/dgraph/issues)
+to direct the development of DGraph.
 
 # Installation
 
@@ -143,6 +158,6 @@ me(_xid_: m.06pj8) {
 ```
 This query would find all movies directed by Steven Spielberg, their names, initial release dates, countries, genres, and the cast of these movies, i.e. characteres and actors playing those characters; and all the movies directed by these actors, if any.
 
-The support for GraphQL is very limited right now. In particular, mutations, fragments etc. via GraphQL aren't supported.
+The support for GraphQL is [very limited right now](https://github.com/dgraph-io/dgraph/issues/1). In particular, mutations, fragments etc. via GraphQL aren't supported.
 You can conveniently browse [Freebase film schema here](http://www.freebase.com/film/film?schema=&lang=en).
 There're also some schema pointers in [README](https://github.com/dgraph-io/benchmarks/blob/master/data/README.md).
