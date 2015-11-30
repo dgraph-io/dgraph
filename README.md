@@ -140,6 +140,9 @@ me(_xid_: m.06pj8) {
         film.director.film {
                 type.object.name.en
                 film.film.starring {
+                        film.performance.character {
+													type.object.name.en
+												}
                         film.performance.actor {
                                 film.director.film {
                                         type.object.name.en
@@ -161,3 +164,6 @@ This query would find all movies directed by Steven Spielberg, their names, init
 The support for GraphQL is [very limited right now](https://github.com/dgraph-io/dgraph/issues/1). In particular, mutations, fragments etc. via GraphQL aren't supported.
 You can conveniently browse [Freebase film schema here](http://www.freebase.com/film/film?schema=&lang=en).
 There're also some schema pointers in [README](https://github.com/dgraph-io/benchmarks/blob/master/data/README.md).
+
+# Contact
+- Please direct your questions to [dgraph@googlegroups.com](mailto:dgraph@googlegroups.com).
