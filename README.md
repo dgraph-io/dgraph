@@ -16,7 +16,7 @@ This is a minimum viable product, alpha release of DGraph. **It's not meant for 
 See the [Roadmap](https://github.com/dgraph-io/dgraph/issues/1) for list of working and planned features.
 
 Your feedback is welcome. Feel free to [file an issue](https://github.com/dgraph-io/dgraph/issues)
-to direct the development of DGraph.
+when you encounter bugs and to direct the development of DGraph.
 
 There's an instance of DGraph running at http://dgraph.xyz, that you can query without installing DGraph.
 This instance contains 21M facts from Freebase Film Data. See the [query section below](#querying) for a sample query.
