@@ -3,6 +3,7 @@
 
 ![logo](https://img.shields.io/badge/status-alpha-red.svg)
 [![logo](https://img.shields.io/badge/Mailing%20List-dgraph-brightgreen.svg)](https://groups.google.com/forum/#!forum/dgraph)
+[![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/dgraph-io/dgraph?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
 
 DGraph's goal is to provide [Google](https://www.google.com) production level scale and throughput,
 with low enough latency to be serving real time user queries, over terabytes of structured data.
@@ -200,3 +201,4 @@ Consecutive runs of the same query took much lesser time (100ms), due to posting
 
 # Contact
 - Please direct your questions to [dgraph@googlegroups.com](mailto:dgraph@googlegroups.com).
+- Or, join [Gitter chat](https://gitter.im/dgraph-io/dgraph?utm_source=share-link&utm_medium=link&utm_campaign=share-link).
