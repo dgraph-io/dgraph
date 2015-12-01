@@ -28,7 +28,7 @@ This instance contains 21M facts from Freebase Film Data. See the [query section
 There's a docker image that you can readily use.
 ```
 $ docker pull dgraph/dgraph:latest
-$ docker run -t -i -v /somedir:/dgraph -v $HOME/go/src/github.com/dgraph-io/benchmarks/data:/data -p 8080:8080 dgraph/dgraph:latest
+$ docker run -t -i -v /somedir:/dgraph -v $HOME/go/src/github.com/dgraph-io/benchmarks/data:/data -p 80:8080 dgraph/dgraph:latest
 ```
 
 Once into the dgraph container, you can now load your data. See [Data Loading](#data-loading) below.
@@ -170,6 +170,33 @@ This query would find all movies directed by Steven Spielberg, their names, init
 The support for GraphQL is [very limited right now](https://github.com/dgraph-io/dgraph/issues/1). In particular, mutations, fragments etc. via GraphQL aren't supported.
 You can conveniently browse [Freebase film schema here](http://www.freebase.com/film/film?schema=&lang=en).
 There're also some schema pointers in [README](https://github.com/dgraph-io/benchmarks/blob/master/data/README.md).
+
+#### Query Performance
+With the [data loaded above](#loading-performance) on the same hardware,
+it took **270ms to run** the pretty complicated query above the first time after server run.
+Note that the json conversion step has a bit more overhead than captured here.
+```json
+{
+  "server_latency": {
+    "json": "57.937316ms",
+    "parsing": "1.329821ms",
+    "processing": "187.590137ms",
+    "total": "246.859704ms"
+  }
+}
+```
+
+Consecutive runs of the same query took much lesser time (100ms), due to posting lists being available in memory.
+```json
+{
+  "server_latency": {
+    "json": "60.419897ms",
+    "parsing": "143.126\u00b5s",
+    "processing": "32.235855ms",
+    "total": "92.820966ms"
+  }
+}
+```
 
 # Contact
 - Please direct your questions to [dgraph@googlegroups.com](mailto:dgraph@googlegroups.com).
