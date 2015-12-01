@@ -1,4 +1,6 @@
 # DGraph
+
+[![Join the chat at https://gitter.im/dgraph-io/dgraph](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/dgraph-io/dgraph?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 **Open Source, Distributed, Low Latency, High Throughput Graph Database.**
 
 ![logo](https://img.shields.io/badge/status-alpha-red.svg)
