@@ -12,7 +12,7 @@ View [5 min presentation](http://go-talks.appspot.com/github.com/dgraph-io/dgrap
 
 # Current Status
 
-`MVP launch - Dec 2015`
+`MVP launch - Dec 2015 - Branch v0.1`
 This is a minimum viable product, alpha release of DGraph. **It's not meant for production use.**
 See the [Roadmap](https://github.com/dgraph-io/dgraph/issues/1) for list of working and planned features.
 
