@@ -7,14 +7,14 @@
 
 DGraph's goal is to provide [Google](https://www.google.com) production level scale and throughput,
 with low enough latency to be serving real time user queries, over terabytes of structured data.
-
-View [5 min presentation](http://go-talks.appspot.com/github.com/dgraph-io/dgraph/present/sydney5mins/g.slide#1) at Go meetup, Sydney.
+DGraph supports [GraphQL](http://graphql.org/) as query language, and responds in [JSON](http://www.json.org/).
 
 # Current Status
 
 `MVP launch - Dec 2015 - Branch v0.1`
 This is a minimum viable product, alpha release of DGraph. **It's not meant for production use.**
-See the [Roadmap](https://github.com/dgraph-io/dgraph/issues/1) for list of working and planned features.
+This version is not distributed and support for GraphQL is partial.
+[See the Roadmap](https://github.com/dgraph-io/dgraph/issues/1) for list of working and planned features.
 
 Your feedback is welcome. Feel free to [file an issue](https://github.com/dgraph-io/dgraph/issues)
 when you encounter bugs and to direct the development of DGraph.
@@ -201,5 +201,13 @@ Consecutive runs of the same query took much lesser time (100ms), due to posting
 ```
 
 # Contact
-- Please direct your questions to [dgraph@googlegroups.com](mailto:dgraph@googlegroups.com).
-- Or, join [Gitter chat](https://gitter.im/dgraph-io/dgraph?utm_source=share-link&utm_medium=link&utm_campaign=share-link).
+- Please use [Github issue tracker](https://github.com/dgraph-io/dgraph/issues) to file bugs, or request features.
+- You can direct your questions to [dgraph@googlegroups.com](mailto:dgraph@googlegroups.com).
+- Or, just join [Gitter chat](https://gitter.im/dgraph-io/dgraph?utm_source=share-link&utm_medium=link&utm_campaign=share-link).
+
+# Talks
+- [Lightening Talk](http://go-talks.appspot.com/github.com/dgraph-io/dgraph/present/sydney5mins/g.slide#1) on 29th Oct, 2015 at Go meetup, Sydney.
+
+# About
+I, [Manish R Jain](https://twitter.com/manishrjain), the author of DGraph, used to work on Google Knowledge Graph.
+My experience building large scale, distributed (Web Search and) Graph systems at Google is what inspired me to build this.
