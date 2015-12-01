@@ -1,5 +1,5 @@
 # DGraph
-**Open Source, Distributed, Low Latency, High Throughput Graph Database.**
+**Scalable, Distributed, Low Latency, High Throughput Graph Database.**
 
 ![logo](https://img.shields.io/badge/status-alpha-red.svg)
 [![logo](https://img.shields.io/badge/Mailing%20List-dgraph-brightgreen.svg)](https://groups.google.com/forum/#!forum/dgraph)
