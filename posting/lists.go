@@ -31,7 +31,7 @@ import (
 	"github.com/zond/gotomic"
 )
 
-var maxmemory = flag.Uint64("max_ram_mb", 4096,
+var maxmemory = flag.Uint64("stw_ram_mb", 4096,
 	"If RAM usage exceeds this, we stop the world, and flush our buffers.")
 
 type counters struct {

@@ -4,7 +4,7 @@
 ![logo](https://img.shields.io/badge/status-alpha-red.svg)
 [![logo](https://img.shields.io/badge/Mailing%20List-dgraph-brightgreen.svg)](https://groups.google.com/forum/#!forum/dgraph)
 
-DGraph's goal is to provide [Google](https://www.google.com) level production latency and scale,
+DGraph's goal is to provide [Google](https://www.google.com) production level scale and throughput,
 with low enough latency to be serving real time user queries, over terabytes of structured data.
 
 View [5 min presentation](http://go-talks.appspot.com/github.com/dgraph-io/dgraph/present/sydney5mins/g.slide#1) at Go meetup, Sydney.
@@ -34,12 +34,12 @@ $ docker run -t -i -v /somedir:/dgraph -v $HOME/go/src/github.com/dgraph-io/benc
 Once into the dgraph container, you can now load your data. See [Data Loading](#data-loading) below.
 Also, you can skip this step, if you just want to play with DGraph. See [Use Freebase Film data](#use-freebase-film-data).
 ```
-$ loader --postings /dgraph/p --rdfgzips /data/rdf-data.gzip --max_ram_mb 3000
+$ loader --postings /dgraph/p --rdfgzips /data/rdf-data.gzip --stw_ram_mb 3000
 ```
 Once done, you can start the server
 ```
 $ mkdir /dgraph/m  # Ensure mutations directory exists.
-$ server --postings /dgraph/p --mutations /dgraph/m  --max_ram_mb 3000
+$ server --postings /dgraph/p --mutations /dgraph/m  --stw_ram_mb 3000
 ```
 
 Now you can query the server, like so:
@@ -91,11 +91,6 @@ go test github.com/dgraph-io/dgraph/...
 # Usage
 
 ## Data Loading
-### Use Freebase Film data
-If you just want to play with the system, you can [download this postings directory](https://www.dropbox.com/s/o0lghhd6u7e9eiq/dgraph-p.tar.gz?dl=0),
-unzip/untar it and skip right to [Querying](#querying). This directory contains all the Freebase film data in DGraph posting lists format.
-
-### Bulk Loading
 Let's load up data first. If you have RDF data, you can use that.
 Or, there's [Freebase film rdf data here](https://github.com/dgraph-io/benchmarks).
 
@@ -118,7 +113,7 @@ Loader is memory bound. Every mutation loads a posting list in memory, where mut
 are applied in layers above posting lists.
 While loader doesn't write to disk every time a mutation happens, it does periodically
 merge all the mutations to posting lists, and writes them to rocksdb which persists them.
-How often this merging happens can be fine tuned by specifying `max_ram_mb`.
+How often this merging happens can be fine tuned by specifying `stw_ram_mb`.
 Periodically loader checks it's memory usage and if determines it exceeds this threshold,
 it would *stop the world*, and start the merge process.
 The more memory is available for loader to work with, the less frequently merging needs to be done, the faster the loading.
@@ -126,7 +121,12 @@ The more memory is available for loader to work with, the less frequently mergin
 In other words, loader performance is highly dependent on merging performance, which depends on how fast the underlying persistent storage is.
 So, *Ramfs/Tmpfs > SSD > Hard disk*, when it comes to loading performance.
 
-As a reference point, it takes 220 seconds to load 4.1M RDFs from `names.gz`(from benchmarks repository) on my 6-core Intel Xeon Dell Precision T3500, using 1G TMPFS for postings directory, and with `max_ram_mb=3000` flag set.
+As a reference point, it took **2028 seconds (33.8 minutes) to load 21M RDFs** from `rdf-films.gz` and `names.gz`
+(from [benchmarks repository](https://github.com/dgraph-io/benchmarks/tree/master/data)) on
+[n1-standard-4 GCE instance](https://cloud.google.com/compute/docs/machine-types)
+using a `2G tmpfs` as the dgraph directory for output, with `stw_ram_mb=8196` flag set.
+The final output was 1.3GB.
+Note that `stw_ram_mb` is based on the memory usage perceived by Golang, the actual usage is higher.
 
 ## Querying
 Once data is loaded, point the dgraph server to the postings and mutations directory.
