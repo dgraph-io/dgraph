@@ -20,7 +20,8 @@ Your feedback is welcome. Feel free to [file an issue](https://github.com/dgraph
 when you encounter bugs and to direct the development of DGraph.
 
 There's an instance of DGraph running at http://dgraph.xyz, that you can query without installing DGraph.
-This instance contains 21M facts from Freebase Film Data. See the [query section below](#querying) for a sample query.
+This instance contains 21M facts from [Freebase Film Data](http://www.freebase.com/film).
+See the [query section below](#querying) for a sample query.
 `curl dgraph.xyz/query -XPOST -d '{}'`
 
 # Installation
