@@ -191,7 +191,7 @@ Consecutive runs of the same query took much lesser time (100ms), due to posting
 {
   "server_latency": {
     "json": "60.419897ms",
-    "parsing": "143.126\u00b5s",
+    "parsing": "143.126µs",
     "processing": "32.235855ms",
     "total": "92.820966ms"
   }
