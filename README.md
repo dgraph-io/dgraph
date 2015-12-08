@@ -2,6 +2,7 @@
 **Scalable, Distributed, Low Latency, High Throughput Graph Database.**
 
 ![logo](https://img.shields.io/badge/status-alpha-red.svg)
+[![Wiki](https://img.shields.io/badge/res-wiki-blue.svg)](https://github.com/dgraph-io/dgraph/wiki)
 [![logo](https://img.shields.io/badge/Mailing%20List-dgraph-brightgreen.svg)](https://groups.google.com/forum/#!forum/dgraph)
 [![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/dgraph-io/dgraph?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
 
@@ -201,6 +202,7 @@ Consecutive runs of the same query took much lesser time (100ms), due to posting
 ```
 
 # Contact
+- Check out [the wiki pages](https://github.com/dgraph-io/dgraph/wiki) for documentation.
 - Please use [Github issue tracker](https://github.com/dgraph-io/dgraph/issues) to file bugs, or request features.
 - You can direct your questions to [dgraph@googlegroups.com](mailto:dgraph@googlegroups.com).
 - Or, just join [Gitter chat](https://gitter.im/dgraph-io/dgraph?utm_source=share-link&utm_medium=link&utm_campaign=share-link).
