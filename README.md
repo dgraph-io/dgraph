@@ -201,6 +201,9 @@ Consecutive runs of the same query took much lesser time (100ms), due to posting
 }
 ```
 
+# Contributing to DGraph
+- Please see [this wiki page](https://github.com/dgraph-io/dgraph/wiki/Contributing-to-DGraph) for guidelines on contributions.
+
 # Contact
 - Check out [the wiki pages](https://github.com/dgraph-io/dgraph/wiki) for documentation.
 - Please use [Github issue tracker](https://github.com/dgraph-io/dgraph/issues) to file bugs, or request features.
