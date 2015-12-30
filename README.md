@@ -10,7 +10,10 @@ DGraph's goal is to provide [Google](https://www.google.com) production level sc
 with low enough latency to be serving real time user queries, over terabytes of structured data.
 DGraph supports [GraphQL](http://graphql.org/) as query language, and responds in [JSON](http://www.json.org/).
 
+
 # Current Status
+
+*Check out [the demo at dgraph.io](http://dgraph.io).*
 
 `MVP launch - Dec 2015 - Branch v0.1`
 This is a minimum viable product, alpha release of DGraph. **It's not meant for production use.**
@@ -24,6 +27,7 @@ There's an instance of DGraph running at http://dgraph.xyz, that you can query w
 This instance contains 21M facts from [Freebase Film Data](http://www.freebase.com/film).
 See the [query section below](#querying) for a sample query.
 `curl dgraph.xyz/query -XPOST -d '{}'`
+
 
 # Installation
 
