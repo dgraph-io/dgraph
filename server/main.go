@@ -38,6 +38,7 @@ var glog = x.Log("server")
 var postingDir = flag.String("postings", "", "Directory to store posting lists")
 var mutationDir = flag.String("mutations", "", "Directory to store mutations")
 var port = flag.String("port", "8080", "Port to run server on.")
+var numcpu = flag.Int("numCpu", runtime.NumCPU(), "Number of cores to be used by the process")
 
 func addCorsHeaders(w http.ResponseWriter) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -109,7 +110,7 @@ func main() {
 		glog.Fatal("Unable to parse flags")
 	}
 	logrus.SetLevel(logrus.InfoLevel)
-	numCpus := runtime.NumCPU()
+	numCpus :=  *numcpu
 	prev := runtime.GOMAXPROCS(numCpus)
 	glog.WithField("num_cpu", numCpus).
 		WithField("prev_maxprocs", prev).

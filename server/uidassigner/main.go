@@ -22,6 +22,7 @@ var rdfGzips = flag.String("rdfgzips", "",
 var mod = flag.Uint64("mod", 1, "Only pick entities, where uid % mod == 0.")
 var uidDir = flag.String("uidpostings", "", "Directory to store xid to uid posting lists")
 var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
+var numcpu = flag.Int("numCpu", runtime.NumCPU(), "Number of cores to be used by the process")
 
 func main() {
         flag.Parse()
@@ -39,7 +40,7 @@ func main() {
 
 
 	logrus.SetLevel(logrus.InfoLevel)
-	numCpus := runtime.NumCPU()
+	numCpus := *numcpu
 	prevProcs := runtime.GOMAXPROCS(numCpus)
 	glog.WithField("num_cpus", numCpus).
 		WithField("prev_maxprocs", prevProcs).
