@@ -46,7 +46,7 @@ func main() {
 	}
 	if len(*cpuprofile) > 0 {
 		f, err := os.Create(*cpuprofile)
-		if err != nil {
+i		if err != nil {
 			glog.Fatal(err)
 		}
 		pprof.StartCPUProfile(f)
