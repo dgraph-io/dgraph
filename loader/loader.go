@@ -149,6 +149,32 @@ func (s *state) handleNQuads(wg *sync.WaitGroup) {
 	wg.Done()
 }
 
+func (s *state) handleNQuadsWhileAssign(wg *sync.WaitGroup) {
+	for nq := range s.cnq {
+		if farm.Fingerprint64([]byte(nq.Subject))%s.mod != 0 {
+			// Ignore due to mod sampling.
+			atomic.AddUint64(&s.ctr.ignored, 1)
+			continue
+		}
+
+		edge, err := nq.ToEdge()
+		for err != nil {
+			// Just put in a retry loop to tackle temporary errors.
+			if err == posting.E_TMP_ERROR {
+				time.Sleep(time.Microsecond)
+
+			} else {
+				glog.WithError(err).WithField("nq", nq).
+					Error("While converting to edge")
+				return
+			}
+			edge, err = nq.ToEdge()
+		}
+		glog.Info(edge);
+	}
+	wg.Done()
+}
+
 // Blocking function.
 func HandleRdfReader(reader io.Reader, mod uint64) (uint64, error) {
 	s := new(state)
@@ -189,3 +215,45 @@ func HandleRdfReader(reader io.Reader, mod uint64) (uint64, error) {
 	ticker.Stop()
 	return atomic.LoadUint64(&s.ctr.processed), nil
 }
+
+// Blocking function.
+func HandleRdfReaderWhileAssign(reader io.Reader, mod uint64) (uint64, error) {
+	s := new(state)
+	s.ctr = new(counters)
+	ticker := time.NewTicker(time.Second)
+	go s.printCounters(ticker)
+
+	// Producer: Start buffering input to channel.
+	s.mod = mod
+	s.input = make(chan string, 10000)
+	go s.readLines(reader)
+
+	s.cnq = make(chan rdf.NQuad, 10000)
+	numr := runtime.GOMAXPROCS(-1)
+	done := make(chan error, numr)
+	for i := 0; i < numr; i++ {
+		go s.parseStream(done) // Input --> NQuads
+	}
+
+	wg := new(sync.WaitGroup)
+	for i := 0; i < 3000; i++ {
+		wg.Add(1)
+		go s.handleNQuadsWhileAssign(wg) //Different compared to HandleRdfReader
+	}
+
+	// Block until all parseStream goroutines are finished.
+	for i := 0; i < numr; i++ {
+		if err := <-done; err != nil {
+			glog.WithError(err).Fatal("While reading input.")
+		}
+	}
+
+	close(s.cnq)
+	// Okay, we've stopped input to cnq, and closed it.
+	// Now wait for handleNQuads to finish.
+	wg.Wait()
+
+	ticker.Stop()
+	return atomic.LoadUint64(&s.ctr.processed), nil
+}
+
