@@ -175,9 +175,9 @@ func (s *state) handleNQuadsWhileAssign(wg *sync.WaitGroup) {
                                 // Just put in a retry loop to tackle temporary errors.
                                 if err == posting.E_TMP_ERROR {
                                         time.Sleep(time.Microsecond)
-                			glog.WithError(err).WithField("nq.Subject", nq.Subject).
-                                                Error("Temporary error") 
-		               } else {
+		 			glog.WithError(err).WithField("nq.Subject", nq.Subject).
+                                                Error("Temporary error")
+				} else {
                                         glog.WithError(err).WithField("nq.ObjectId", nq.ObjectId).
                                                 Error("While getting UID")
                                         return
