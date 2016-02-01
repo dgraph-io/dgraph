@@ -36,7 +36,7 @@ type NQuad struct {
 	Language    string
 }
 
-func getUid(s string) (uint64, error) {
+func GetUid(s string) (uint64, error) {
 	if strings.HasPrefix(s, "_uid_:") {
 		return strconv.ParseUint(s[6:], 0, 64)
 	}
@@ -44,13 +44,13 @@ func getUid(s string) (uint64, error) {
 }
 
 func (nq NQuad) ToEdge() (result x.DirectedEdge, rerr error) {
-	sid, err := getUid(nq.Subject)
+	sid, err := GetUid(nq.Subject)
 	if err != nil {
 		return result, err
 	}
 	result.Entity = sid
 	if len(nq.ObjectId) > 0 {
-		oid, err := getUid(nq.ObjectId)
+		oid, err := GetUid(nq.ObjectId)
 		if err != nil {
 			return result, err
 		}

@@ -152,25 +152,42 @@ func (s *state) handleNQuads(wg *sync.WaitGroup) {
 func (s *state) handleNQuadsWhileAssign(wg *sync.WaitGroup) {
 	for nq := range s.cnq {
 		if farm.Fingerprint64([]byte(nq.Subject))%s.mod != 0 {
-			// Ignore due to mod sampling.
+			// This instance shouldnt assign UID to this string
 			atomic.AddUint64(&s.ctr.ignored, 1)
 			continue
-		}
-
-		edge, err := nq.ToEdge()
-		for err != nil {
-			// Just put in a retry loop to tackle temporary errors.
-			if err == posting.E_TMP_ERROR {
-				time.Sleep(time.Microsecond)
-
-			} else {
-				glog.WithError(err).WithField("nq", nq).
-					Error("While converting to edge")
-				return
+		} else {
+			_, err := rdf.GetUid(nq.Subject)
+			for err != nil {
+				// Just put in a retry loop to tackle temporary errors.
+				if err == posting.E_TMP_ERROR {
+					time.Sleep(time.Microsecond)
+				} else {
+					glog.WithError(err).WithField("nq.Subject", nq.Subject).
+						Error("While getting UID")
+					return
+				}
+				_, err = rdf.GetUid(nq.Subject)
 			}
-			edge, err = nq.ToEdge()
 		}
-		glog.Info(edge);
+
+		if len(nq.ObjectId) == 0 || farm.Fingerprint64([]byte(nq.ObjectId))%s.mod != 0 {
+                        // This instance shouldnt or cant assign UID to this string
+                        atomic.AddUint64(&s.ctr.ignored, 1)
+                        continue
+                } else {
+                        _, err := rdf.GetUid(nq.ObjectId)
+                        for err != nil {
+                                // Just put in a retry loop to tackle temporary errors.
+                                if err == posting.E_TMP_ERROR {
+                                        time.Sleep(time.Microsecond)
+                                } else {
+                                        glog.WithError(err).WithField("nq.ObjectId", nq.ObjectId).
+                                                Error("While getting UID")
+                                        return
+                                }
+                                _, err = rdf.GetUid(nq.ObjectId)
+                        }
+                }
 	}
 	wg.Done()
 }
