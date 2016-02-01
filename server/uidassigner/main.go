@@ -19,7 +19,7 @@ var glog = x.Log("uidassigner_main")
 
 var rdfGzips = flag.String("rdfgzips", "",
         "Comma separated gzip files containing RDF data")
-var mod = flag.Uint64("machineid", 1, "Only pick entities, where uid % mod == 0.")
+var instanceIdx  = flag.Uint64("instanceIdx", 0, "Only pick entities, where Fingerprint % numInstance == instanceIdx.")
 var numInstance = flag.Uint64("numInstance", 1, "Total number of instances among which uid assigning is shared")
 var uidDir = flag.String("uidpostings", "", "Directory to store xid to uid posting lists")
 var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
@@ -73,7 +73,7 @@ func main() {
 			glog.WithError(err).Fatal("Unable to create gzip reader.")
 		}
 
-		count, err := loader.HandleRdfReaderWhileAssign(r, *mod, *numInstance)
+		count, err := loader.HandleRdfReaderWhileAssign(r, *instanceIdx, *numInstance)
 		if err != nil {
 			glog.WithError(err).Fatal("While handling rdf reader.")
 		}

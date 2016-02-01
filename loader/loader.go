@@ -46,7 +46,7 @@ type state struct {
 	input chan string
 	cnq   chan rdf.NQuad
 	ctr   *counters
-	mod   uint64
+	instanceIdx   uint64
 	numInstance uint64
 }
 
@@ -122,7 +122,7 @@ func (s *state) parseStream(done chan error) {
 
 func (s *state) handleNQuads(wg *sync.WaitGroup) {
 	for nq := range s.cnq {
-		edge, err := nq.ToEdge(s.mod, s.numInstance)
+		edge, err := nq.ToEdge(s.instanceIdx, s.numInstance)
 		for err != nil {
 			// Just put in a retry loop to tackle temporary errors.
 			if err == posting.E_TMP_ERROR {
@@ -133,7 +133,7 @@ func (s *state) handleNQuads(wg *sync.WaitGroup) {
 					Error("While converting to edge")
 				return
 			}
-			edge, err = nq.ToEdge(s.mod, s.numInstance)
+			edge, err = nq.ToEdge(s.instanceIdx, s.numInstance)
 		}
 
 		key := posting.Key(edge.Entity, edge.Attribute)
@@ -146,11 +146,11 @@ func (s *state) handleNQuads(wg *sync.WaitGroup) {
 
 func (s *state) handleNQuadsWhileAssign(wg *sync.WaitGroup) {
 	for nq := range s.cnq {
-		if farm.Fingerprint64([]byte(nq.Subject))%s.numInstance != s.mod {
+		if farm.Fingerprint64([]byte(nq.Subject))%s.numInstance != s.instanceIdx {
 			// This instance shouldnt assign UID to this string
 			atomic.AddUint64(&s.ctr.ignored, 1)
 		} else {
-			_, err := rdf.GetUid(nq.Subject, s.mod, s.numInstance)
+			_, err := rdf.GetUid(nq.Subject, s.instanceIdx, s.numInstance)
 			for err != nil {
 				// Just put in a retry loop to tackle temporary errors.
 				if err == posting.E_TMP_ERROR {
@@ -162,27 +162,27 @@ func (s *state) handleNQuadsWhileAssign(wg *sync.WaitGroup) {
 						Error("While getting UID")
 					return
 				}
-				_, err = rdf.GetUid(nq.Subject, s.mod, s.numInstance)
+				_, err = rdf.GetUid(nq.Subject, s.instanceIdx, s.numInstance)
 			}
 		}
 
-		if len(nq.ObjectId) == 0 || farm.Fingerprint64([]byte(nq.ObjectId))%s.numInstance != s.mod {
+		if len(nq.ObjectId) == 0 || farm.Fingerprint64([]byte(nq.ObjectId))%s.numInstance != s.instanceIdx {
                         // This instance shouldnt or cant assign UID to this string
                         atomic.AddUint64(&s.ctr.ignored, 1)
                 } else {
-                        _, err := rdf.GetUid(nq.ObjectId, s.mod, s.numInstance)
+                        _, err := rdf.GetUid(nq.ObjectId, s.instanceIdx, s.numInstance)
                         for err != nil {
                                 // Just put in a retry loop to tackle temporary errors.
                                 if err == posting.E_TMP_ERROR {
                                         time.Sleep(time.Microsecond)
-		 			glog.WithError(err).WithField("nq.Subject", nq.Subject).
+					glog.WithError(err).WithField("nq.Subject", nq.Subject).
                                                 Error("Temporary error")
 				} else {
                                         glog.WithError(err).WithField("nq.ObjectId", nq.ObjectId).
                                                 Error("While getting UID")
                                         return
                                 }
-                                _, err = rdf.GetUid(nq.ObjectId, s.mod, s.numInstance)
+                                _, err = rdf.GetUid(nq.ObjectId, s.instanceIdx, s.numInstance)
                         }
                 }
 	}
@@ -190,14 +190,14 @@ func (s *state) handleNQuadsWhileAssign(wg *sync.WaitGroup) {
 }
 
 // Blocking function.
-func HandleRdfReader(reader io.Reader, mod uint64) (uint64, error) {
+func HandleRdfReader(reader io.Reader, instanceIdx uint64) (uint64, error) {
 	s := new(state)
 	s.ctr = new(counters)
 	ticker := time.NewTicker(time.Second)
 	go s.printCounters(ticker)
 
 	// Producer: Start buffering input to channel.
-	s.mod = mod
+	s.instanceIdx = instanceIdx
 	s.input = make(chan string, 10000)
 	go s.readLines(reader)
 
@@ -231,14 +231,14 @@ func HandleRdfReader(reader io.Reader, mod uint64) (uint64, error) {
 }
 
 // Blocking function.
-func HandleRdfReaderWhileAssign(reader io.Reader, mod uint64, numInstance uint64) (uint64, error) {
+func HandleRdfReaderWhileAssign(reader io.Reader, instanceIdx uint64, numInstance uint64) (uint64, error) {
 	s := new(state)
 	s.ctr = new(counters)
 	ticker := time.NewTicker(time.Second)
 	go s.printCounters(ticker)
 
 	// Producer: Start buffering input to channel.
-	s.mod = mod
+	s.instanceIdx = instanceIdx
 	s.numInstance = numInstance
 	s.input = make(chan string, 10000)
 	go s.readLines(reader)
