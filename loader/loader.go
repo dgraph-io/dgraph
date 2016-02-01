@@ -47,6 +47,7 @@ type state struct {
 	cnq   chan rdf.NQuad
 	ctr   *counters
 	mod   uint64
+	numInstance uint64
 }
 
 func (s *state) printCounters(ticker *time.Ticker) {
@@ -127,7 +128,7 @@ func (s *state) handleNQuads(wg *sync.WaitGroup) {
 			continue
 		}
 
-		edge, err := nq.ToEdge()
+		edge, err := nq.ToEdge(s.mod, s.numInstance)
 		for err != nil {
 			// Just put in a retry loop to tackle temporary errors.
 			if err == posting.E_TMP_ERROR {
@@ -138,7 +139,7 @@ func (s *state) handleNQuads(wg *sync.WaitGroup) {
 					Error("While converting to edge")
 				return
 			}
-			edge, err = nq.ToEdge()
+			edge, err = nq.ToEdge(s.mod, s.numInstance)
 		}
 
 		key := posting.Key(edge.Entity, edge.Attribute)
@@ -151,12 +152,11 @@ func (s *state) handleNQuads(wg *sync.WaitGroup) {
 
 func (s *state) handleNQuadsWhileAssign(wg *sync.WaitGroup) {
 	for nq := range s.cnq {
-		if farm.Fingerprint64([]byte(nq.Subject))%s.mod != 0 {
+		if farm.Fingerprint64([]byte(nq.Subject))%s.numInstance != s.mod {
 			// This instance shouldnt assign UID to this string
 			atomic.AddUint64(&s.ctr.ignored, 1)
-			continue
 		} else {
-			_, err := rdf.GetUid(nq.Subject)
+			_, err := rdf.GetUid(nq.Subject, s.mod, s.numInstance)
 			for err != nil {
 				// Just put in a retry loop to tackle temporary errors.
 				if err == posting.E_TMP_ERROR {
@@ -166,16 +166,15 @@ func (s *state) handleNQuadsWhileAssign(wg *sync.WaitGroup) {
 						Error("While getting UID")
 					return
 				}
-				_, err = rdf.GetUid(nq.Subject)
+				_, err = rdf.GetUid(nq.Subject, s.mod, s.numInstance)
 			}
 		}
 
-		if len(nq.ObjectId) == 0 || farm.Fingerprint64([]byte(nq.ObjectId))%s.mod != 0 {
+		if len(nq.ObjectId) == 0 || farm.Fingerprint64([]byte(nq.ObjectId))%s.numInstance != s.mod {
                         // This instance shouldnt or cant assign UID to this string
                         atomic.AddUint64(&s.ctr.ignored, 1)
-                        continue
                 } else {
-                        _, err := rdf.GetUid(nq.ObjectId)
+                        _, err := rdf.GetUid(nq.ObjectId, s.mod, s.numInstance)
                         for err != nil {
                                 // Just put in a retry loop to tackle temporary errors.
                                 if err == posting.E_TMP_ERROR {
@@ -185,7 +184,7 @@ func (s *state) handleNQuadsWhileAssign(wg *sync.WaitGroup) {
                                                 Error("While getting UID")
                                         return
                                 }
-                                _, err = rdf.GetUid(nq.ObjectId)
+                                _, err = rdf.GetUid(nq.ObjectId, s.mod, s.numInstance)
                         }
                 }
 	}
@@ -234,7 +233,7 @@ func HandleRdfReader(reader io.Reader, mod uint64) (uint64, error) {
 }
 
 // Blocking function.
-func HandleRdfReaderWhileAssign(reader io.Reader, mod uint64) (uint64, error) {
+func HandleRdfReaderWhileAssign(reader io.Reader, mod uint64, numInstance uint64) (uint64, error) {
 	s := new(state)
 	s.ctr = new(counters)
 	ticker := time.NewTicker(time.Second)
@@ -242,6 +241,7 @@ func HandleRdfReaderWhileAssign(reader io.Reader, mod uint64) (uint64, error) {
 
 	// Producer: Start buffering input to channel.
 	s.mod = mod
+	s.numInstance = numInstance
 	s.input = make(chan string, 10000)
 	go s.readLines(reader)
 

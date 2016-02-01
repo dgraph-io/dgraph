@@ -36,21 +36,21 @@ type NQuad struct {
 	Language    string
 }
 
-func GetUid(s string) (uint64, error) {
+func GetUid(s string, mod uint64, numInst uint64) (uint64, error) {
 	if strings.HasPrefix(s, "_uid_:") {
 		return strconv.ParseUint(s[6:], 0, 64)
 	}
-	return uid.GetOrAssign(s)
+	return uid.GetOrAssign(s, mod, numInst)
 }
 
-func (nq NQuad) ToEdge() (result x.DirectedEdge, rerr error) {
-	sid, err := GetUid(nq.Subject)
+func (nq NQuad) ToEdge(mod, numInst uint64) (result x.DirectedEdge, rerr error) {
+	sid, err := GetUid(nq.Subject, mod, numInst)
 	if err != nil {
 		return result, err
 	}
 	result.Entity = sid
 	if len(nq.ObjectId) > 0 {
-		oid, err := GetUid(nq.ObjectId)
+		oid, err := GetUid(nq.ObjectId, mod, numInst)
 		if err != nil {
 			return result, err
 		}
