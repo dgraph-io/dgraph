@@ -43,10 +43,10 @@ type counters struct {
 }
 
 type state struct {
-	input chan string
-	cnq   chan rdf.NQuad
-	ctr   *counters
-	instanceIdx   uint64
+	input       chan string
+	cnq         chan rdf.NQuad
+	ctr         *counters
+	instanceIdx uint64
 	numInstance uint64
 }
 
@@ -156,7 +156,7 @@ func (s *state) handleNQuadsWhileAssign(wg *sync.WaitGroup) {
 				if err == posting.E_TMP_ERROR {
 					time.Sleep(time.Microsecond)
 					glog.WithError(err).WithField("nq.Subject", nq.Subject).
-                                                Error("Temporary error")
+						Error("Temporary error")
 				} else {
 					glog.WithError(err).WithField("nq.Subject", nq.Subject).
 						Error("While getting UID")
@@ -167,30 +167,30 @@ func (s *state) handleNQuadsWhileAssign(wg *sync.WaitGroup) {
 		}
 
 		if len(nq.ObjectId) == 0 || farm.Fingerprint64([]byte(nq.ObjectId))%s.numInstance != s.instanceIdx {
-                        // This instance shouldnt or cant assign UID to this string
-                        atomic.AddUint64(&s.ctr.ignored, 1)
-                } else {
-                        _, err := rdf.GetUid(nq.ObjectId, s.instanceIdx, s.numInstance)
-                        for err != nil {
-                                // Just put in a retry loop to tackle temporary errors.
-                                if err == posting.E_TMP_ERROR {
-                                        time.Sleep(time.Microsecond)
+			// This instance shouldnt or cant assign UID to this string
+			atomic.AddUint64(&s.ctr.ignored, 1)
+		} else {
+			_, err := rdf.GetUid(nq.ObjectId, s.instanceIdx, s.numInstance)
+			for err != nil {
+				// Just put in a retry loop to tackle temporary errors.
+				if err == posting.E_TMP_ERROR {
+					time.Sleep(time.Microsecond)
 					glog.WithError(err).WithField("nq.Subject", nq.Subject).
-                                                Error("Temporary error")
+						Error("Temporary error")
 				} else {
-                                        glog.WithError(err).WithField("nq.ObjectId", nq.ObjectId).
-                                                Error("While getting UID")
-                                        return
-                                }
-                                _, err = rdf.GetUid(nq.ObjectId, s.instanceIdx, s.numInstance)
-                        }
-                }
+					glog.WithError(err).WithField("nq.ObjectId", nq.ObjectId).
+						Error("While getting UID")
+					return
+				}
+				_, err = rdf.GetUid(nq.ObjectId, s.instanceIdx, s.numInstance)
+			}
+		}
 	}
 	wg.Done()
 }
 
 // Blocking function.
-func HandleRdfReader(reader io.Reader, instanceIdx uint64) (uint64, error) {
+func HandleRdfReader(reader io.Reader, instanceIdx uint64, numInstance uint64) (uint64, error) {
 	s := new(state)
 	s.ctr = new(counters)
 	ticker := time.NewTicker(time.Second)
@@ -198,6 +198,7 @@ func HandleRdfReader(reader io.Reader, instanceIdx uint64) (uint64, error) {
 
 	// Producer: Start buffering input to channel.
 	s.instanceIdx = instanceIdx
+	s.numInstance = numInstance
 	s.input = make(chan string, 10000)
 	go s.readLines(reader)
 
@@ -271,4 +272,3 @@ func HandleRdfReaderWhileAssign(reader io.Reader, instanceIdx uint64, numInstanc
 	ticker.Stop()
 	return atomic.LoadUint64(&s.ctr.processed), nil
 }
-

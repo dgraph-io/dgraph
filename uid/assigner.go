@@ -93,9 +93,16 @@ func init() {
 }
 
 func allocateUniqueUid(xid string, instanceIdx uint64, numInst uint64) (uid uint64, rerr error) {
+
+	minIdx := instanceIdx * math.MaxUint64 / numInst
+	mod := math.MaxUint64 / numInst
+
 	for sp := ""; ; sp += " " {
 		txid := xid + sp
-		uid = farm.Fingerprint64([]byte(txid)) // Generate from hash.
+
+		uid1 := farm.Fingerprint64([]byte(txid)) // Generate from hash.
+		uid = (uid1 % mod) + minIdx
+
 		glog.WithField("txid", txid).WithField("uid", uid).Debug("Generated")
 		if uid == math.MaxUint64 {
 			glog.Debug("Hit uint64max while generating fingerprint. Ignoring...")
