@@ -144,48 +144,40 @@ func (s *state) handleNQuads(wg *sync.WaitGroup) {
 	wg.Done()
 }
 
+func (s *state) getUidForString(str string) {
+	_, err := rdf.GetUid(str, s.instanceIdx, s.numInstances)
+	for err != nil {
+		// Just put in a retry loop to tackle temporary errors.
+		if err == posting.E_TMP_ERROR {
+			time.Sleep(time.Microsecond)
+			glog.WithError(err).WithField("nq.Subject", str).
+				Error("Temporary error")
+		} else {
+			glog.WithError(err).WithField("nq.Subject", str).
+				Error("While getting UID")
+			return
+		}
+		_, err = rdf.GetUid(str, s.instanceIdx, s.numInstances)
+	}
+}
+
 func (s *state) handleNQuadsWhileAssign(wg *sync.WaitGroup) {
 	for nq := range s.cnq {
 		if farm.Fingerprint64([]byte(nq.Subject))%s.numInstances != s.instanceIdx {
 			// This instance shouldnt assign UID to this string
 			atomic.AddUint64(&s.ctr.ignored, 1)
 		} else {
-			_, err := rdf.GetUid(nq.Subject, s.instanceIdx, s.numInstances)
-			for err != nil {
-				// Just put in a retry loop to tackle temporary errors.
-				if err == posting.E_TMP_ERROR {
-					time.Sleep(time.Microsecond)
-					glog.WithError(err).WithField("nq.Subject", nq.Subject).
-						Error("Temporary error")
-				} else {
-					glog.WithError(err).WithField("nq.Subject", nq.Subject).
-						Error("While getting UID")
-					return
-				}
-				_, err = rdf.GetUid(nq.Subject, s.instanceIdx, s.numInstances)
-			}
+			s.getUidForString(nq.Subject)
 		}
 
 		if len(nq.ObjectId) == 0 || farm.Fingerprint64([]byte(nq.ObjectId))%s.numInstances != s.instanceIdx {
 			// This instance shouldnt or cant assign UID to this string
 			atomic.AddUint64(&s.ctr.ignored, 1)
 		} else {
-			_, err := rdf.GetUid(nq.ObjectId, s.instanceIdx, s.numInstances)
-			for err != nil {
-				// Just put in a retry loop to tackle temporary errors.
-				if err == posting.E_TMP_ERROR {
-					time.Sleep(time.Microsecond)
-					glog.WithError(err).WithField("nq.Subject", nq.Subject).
-						Error("Temporary error")
-				} else {
-					glog.WithError(err).WithField("nq.ObjectId", nq.ObjectId).
-						Error("While getting UID")
-					return
-				}
-				_, err = rdf.GetUid(nq.ObjectId, s.instanceIdx, s.numInstances)
-			}
+			s.getUidForString(nq.ObjectId)
 		}
 	}
+
 	wg.Done()
 }
 

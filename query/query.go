@@ -255,7 +255,7 @@ func NewGraph(euid uint64, exid string) (*SubGraph, error) {
 	// This would set the Result field in SubGraph,
 	// and populate the children for attributes.
 	if len(exid) > 0 {
-		u, err := uid.GetOrAssign(exid, 0, 1)  // mod = 0, numInstances = 1 by default
+		u, err := uid.GetOrAssign(exid, 0, 1) // instanceIdx = 0, numInstances = 1 by default
 		if err != nil {
 			x.Err(glog, err).WithField("xid", exid).Error(
 				"While GetOrAssign uid from external id")
