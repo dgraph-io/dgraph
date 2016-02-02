@@ -92,10 +92,10 @@ func init() {
 	// go lmgr.clean()
 }
 
-func allocateUniqueUid(xid string, instanceIdx uint64, numInst uint64) (uid uint64, rerr error) {
+func allocateUniqueUid(xid string, instanceIdx uint64, numInstances uint64) (uid uint64, rerr error) {
 
-	minIdx := instanceIdx * math.MaxUint64 / numInst
-	mod := math.MaxUint64 / numInst
+	minIdx := instanceIdx * math.MaxUint64 / numInstances
+	mod := math.MaxUint64 / numInstances
 
 	for sp := ""; ; sp += " " {
 		txid := xid + sp
@@ -140,7 +140,7 @@ func allocateUniqueUid(xid string, instanceIdx uint64, numInst uint64) (uid uint
 		" Wake the stupid developer up.")
 }
 
-func assignNew(pl *posting.List, xid string, instanceIdx uint64, numInst uint64) (uint64, error) {
+func assignNew(pl *posting.List, xid string, instanceIdx uint64, numInstances uint64) (uint64, error) {
 	entry := lmgr.newOrExisting(xid)
 	entry.Lock()
 	entry.ts = time.Now()
@@ -158,7 +158,7 @@ func assignNew(pl *posting.List, xid string, instanceIdx uint64, numInst uint64)
 	}
 
 	// No current id exists. Create one.
-	uid, err := allocateUniqueUid(xid, instanceIdx, numInst)
+	uid, err := allocateUniqueUid(xid, instanceIdx, numInstances)
 	if err != nil {
 		return 0, err
 	}
@@ -180,11 +180,11 @@ func stringKey(xid string) []byte {
 	return buf.Bytes()
 }
 
-func GetOrAssign(xid string, instanceIdx uint64, numInst uint64) (uid uint64, rerr error) {
+func GetOrAssign(xid string, instanceIdx uint64, numInstances uint64) (uid uint64, rerr error) {
 	key := stringKey(xid)
 	pl := posting.GetOrCreate(key)
 	if pl.Length() == 0 {
-		return assignNew(pl, xid, instanceIdx, numInst)
+		return assignNew(pl, xid, instanceIdx, numInstances)
 
 	} else if pl.Length() > 1 {
 		glog.Fatalf("We shouldn't have more than 1 uid for xid: %v\n", xid)
