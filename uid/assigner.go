@@ -92,10 +92,17 @@ func init() {
 	// go lmgr.clean()
 }
 
-func allocateUniqueUid(xid string) (uid uint64, rerr error) {
+func allocateUniqueUid(xid string, instanceIdx uint64, numInstances uint64) (uid uint64, rerr error) {
+
+	mod := math.MaxUint64 / numInstances
+	minIdx := instanceIdx * mod
+
 	for sp := ""; ; sp += " " {
 		txid := xid + sp
-		uid = farm.Fingerprint64([]byte(txid)) // Generate from hash.
+
+		uid1 := farm.Fingerprint64([]byte(txid)) // Generate from hash.
+		uid = (uid1 % mod) + minIdx
+
 		glog.WithField("txid", txid).WithField("uid", uid).Debug("Generated")
 		if uid == math.MaxUint64 {
 			glog.Debug("Hit uint64max while generating fingerprint. Ignoring...")
@@ -133,7 +140,7 @@ func allocateUniqueUid(xid string) (uid uint64, rerr error) {
 		" Wake the stupid developer up.")
 }
 
-func assignNew(pl *posting.List, xid string) (uint64, error) {
+func assignNew(pl *posting.List, xid string, instanceIdx uint64, numInstances uint64) (uint64, error) {
 	entry := lmgr.newOrExisting(xid)
 	entry.Lock()
 	entry.ts = time.Now()
@@ -151,7 +158,7 @@ func assignNew(pl *posting.List, xid string) (uint64, error) {
 	}
 
 	// No current id exists. Create one.
-	uid, err := allocateUniqueUid(xid)
+	uid, err := allocateUniqueUid(xid, instanceIdx, numInstances)
 	if err != nil {
 		return 0, err
 	}
@@ -173,11 +180,11 @@ func stringKey(xid string) []byte {
 	return buf.Bytes()
 }
 
-func GetOrAssign(xid string) (uid uint64, rerr error) {
+func GetOrAssign(xid string, instanceIdx uint64, numInstances uint64) (uid uint64, rerr error) {
 	key := stringKey(xid)
 	pl := posting.GetOrCreate(key)
 	if pl.Length() == 0 {
-		return assignNew(pl, xid)
+		return assignNew(pl, xid, instanceIdx, numInstances)
 
 	} else if pl.Length() > 1 {
 		glog.Fatalf("We shouldn't have more than 1 uid for xid: %v\n", xid)

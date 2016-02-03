@@ -66,7 +66,7 @@ func prepare() (dir1, dir2 string, clog *commit.Logger, rerr error) {
 		return dir1, dir2, clog, err
 	}
 	defer f.Close()
-	_, err = loader.HandleRdfReader(f, 1)
+	_, err = loader.HandleRdfReader(f, 0, 1)
 	if err != nil {
 		return dir1, dir2, clog, err
 	}

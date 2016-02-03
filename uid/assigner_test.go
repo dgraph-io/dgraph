@@ -46,7 +46,7 @@ func TestGetOrAssign(t *testing.T) {
 
 	var u1, u2 uint64
 	{
-		uid, err := GetOrAssign("externalid0")
+		uid, err := GetOrAssign("externalid0", 0, 1)
 		if err != nil {
 			t.Error(err)
 		}
@@ -55,7 +55,7 @@ func TestGetOrAssign(t *testing.T) {
 	}
 
 	{
-		uid, err := GetOrAssign("externalid1")
+		uid, err := GetOrAssign("externalid1", 0, 1)
 		if err != nil {
 			t.Error(err)
 		}
@@ -69,7 +69,7 @@ func TestGetOrAssign(t *testing.T) {
 	// return
 
 	{
-		uid, err := GetOrAssign("externalid0")
+		uid, err := GetOrAssign("externalid0", 0, 1)
 		if err != nil {
 			t.Error(err)
 		}
