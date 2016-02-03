@@ -95,7 +95,7 @@ func init() {
 func allocateUniqueUid(xid string, instanceIdx uint64, numInstances uint64) (uid uint64, rerr error) {
 
 	mod := math.MaxUint64 / numInstances
-	minIdx := instanceIdx * math.MaxUint64 / numInstances
+	minIdx := instanceIdx * mod
 
 	for sp := ""; ; sp += " " {
 		txid := xid + sp
