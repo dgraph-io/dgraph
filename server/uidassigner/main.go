@@ -46,6 +46,10 @@ func main() {
 		WithField("prev_maxprocs", prevProcs).
 		Info("Set max procs to num  cpus")
 
+	glog.WithField("instanceIdx", *instanceIdx).
+		WithField("numInstances", *numInstances).
+		Info("Only those XIDs which satisfy FP(xid) % numInstance == instanceIdx will be given UID")
+
 	if len(*rdfGzips) == 0 {
 		glog.Fatal("No RDF GZIP files specified")
 	}
