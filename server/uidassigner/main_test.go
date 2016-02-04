@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"io/ioutil"
 	"math"
 	"os"
@@ -15,11 +16,12 @@ import (
 )
 
 func TestQuery(t *testing.T) {
-	var instanceIdx uint64 = 0
+
 	var numInstances uint64 = 2
 
 	var mod uint64 = math.MaxUint64 / numInstances
-	var minIdx uint64 = instanceIdx * mod
+	var minIdx0 uint64 = 0 * mod
+	var minIdx1 uint64 = 1 * mod
 
 	logrus.SetLevel(logrus.DebugLevel)
 
@@ -40,13 +42,19 @@ func TestQuery(t *testing.T) {
 	list := []string{"alice", "bob", "mallory", "ash", "man", "dgraph"}
 
 	for _, str := range list {
-		if farm.Fingerprint64([]byte(str))%numInstances != instanceIdx {
-			continue
-		} else {
-			uid, err := rdf.GetUid(str, instanceIdx, numInstances)
-			if uid < minIdx || uid > minIdx+mod-1 {
+		if farm.Fingerprint64([]byte(str))%numInstances == 0 {
+			uid, err := rdf.GetUid(str, 0, numInstances)
+			if uid < minIdx0 || uid > minIdx0+mod-1 {
 				t.Error("Not the correct UID", err)
 			}
+			fmt.Println("Instance-0", str, uid)
+			t.Logf("Correct UID")
+		} else {
+			uid, err := rdf.GetUid(str, 1, numInstances)
+			if uid < minIdx1 || uid > minIdx1+mod-1 {
+				t.Error("Not the correct UID", err)
+			}
+			fmt.Println("Instance-1", str, uid)
 			t.Logf("Correct UID")
 		}
 	}
