@@ -42,16 +42,14 @@ func TestQuery(t *testing.T) {
 			if uid < minIdx0 || uid > minIdx0+mod-1 {
 				t.Error("Not the correct UID", err)
 			}
-			t.Logf("Instance-0", str, uid)
-			t.Logf("Correct UID")
+			t.Logf("Instance-0 Correct UID", str, uid)
 
 		} else {
 			uid, err := rdf.GetUid(str, 1, numInstances)
 			if uid < minIdx1 || uid > minIdx1+mod-1 {
 				t.Error("Not the correct UID", err)
 			}
-			t.Logf("Instance-1", str, uid)
-			t.Logf("Correct UID")
+			t.Logf("Instance-1 Correct UID", str, uid)
 		}
 	}
 }
