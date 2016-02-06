@@ -10,6 +10,7 @@
 #include <cstdio>
 #include <iostream>
 #include <string>
+#include <unordered_map>
 
 #include "rocksdb/db.h"
 #include "rocksdb/options.h"
@@ -22,8 +23,10 @@ namespace fs = std::experimental::filesystem;
 int main(int argc, char* argv[]) {
   if(argc != 3) {
     std::cerr << "Wrong number of arguments\nusage : ./<executable> <folder_having_rocksDB_directories_to_be_merged> <destination_folder>\n";
-    return 1;
+    exit(0);
   }
+  
+  std::unordered_map<std::string, std::string> xid_uid_mp;
   std::string destinationDB = argv[2];
   DB* db;
   Options options;
@@ -52,9 +55,14 @@ int main(int argc, char* argv[]) {
 
     rocksdb::Iterator* it = cur_db->NewIterator(rocksdb::ReadOptions());
     for (it->SeekToFirst(); it->Valid(); it->Next()) {
-      std::cout << it->key().ToString() << ": " << it->value().ToString() << std::endl;
-      s = db->Put(WriteOptions(), it->key().ToString(), it->value().ToString());
-      assert(s.ok());
+      if(xid_uid_mp.count(it->key().ToString()) != 0 && xid_uid_mp[it->key().ToString()] != it->value().ToString()) {
+      	std::cerr << "FATAL : Different value for same key : " << it->key().ToString() << std::endl;
+	exit(0);
+      } else {
+        xid_uid_mp[it->key().ToString()] = it->value().ToString();
+	s = db->Put(WriteOptions(), it->key().ToString(), it->value().ToString());
+        assert(s.ok());
+      }
     }
     assert(it->status().ok()); // Check for any errors found during the scan
     delete it;
