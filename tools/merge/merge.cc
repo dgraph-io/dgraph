@@ -1,5 +1,15 @@
 /*
- *  Author : Ashwin <ashwin2007ray@gmail.com>
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *
  *  compile : g++ rocks_merge.cc <path_to_rocksDB_installation>/librocksdb.so.4.1 --std=c++11 -lstdc++fs
  *  usage : ./<executable> <folder_having_rocksDB_directories_to_be_merged> <destination_folder>
@@ -10,7 +20,6 @@
 #include <cstdio>
 #include <iostream>
 #include <string>
-#include <unordered_map>
 
 #include "rocksdb/db.h"
 #include "rocksdb/options.h"
@@ -22,12 +31,12 @@ namespace fs = std::experimental::filesystem;
 
 int main(int argc, char* argv[]) {
   if(argc != 3) {
-    std::cerr << "Wrong number of arguments\nusage : ./<executable> <folder_having_rocksDB_directories_to_be_merged> <destination_folder>\n";
+    std::cerr << "Wrong number of arguments\nusage : ./<executable>\
+ <folder_having_rocksDB_directories_to_be_merged> <destination_folder>\n";
     exit(0);
   }
   
-  std::unordered_map<std::string, std::string> xid_uid_mp;
-  std::string destinationDB = argv[2];
+  std::string destinationDB = argv[2], mergeDir = argv[1];
   DB* db;
   Options options;
   // Optimize RocksDB. This is the easiest way to get RocksDB to perform well
@@ -40,8 +49,8 @@ int main(int argc, char* argv[]) {
   Status s = DB::Open(options, destinationDB, &db);
   assert(s.ok());
 
-  for (auto& dirEntry : fs::directory_iterator(argv[1])) {
-    std::cout << dirEntry << "\n" ;
+  for (auto& dirEntry : fs::directory_iterator(mergeDir)) {
+    std::cout << dirEntry << std::endl;
     DB* cur_db;
     Options options;
     options.IncreaseParallelism();
@@ -55,12 +64,14 @@ int main(int argc, char* argv[]) {
 
     rocksdb::Iterator* it = cur_db->NewIterator(rocksdb::ReadOptions());
     for (it->SeekToFirst(); it->Valid(); it->Next()) {
-      if(xid_uid_mp.count(it->key().ToString()) != 0 && xid_uid_mp[it->key().ToString()] != it->value().ToString()) {
-      	std::cerr << "FATAL : Different value for same key : " << it->key().ToString() << std::endl;
-	exit(0);
+      std::string key_s = it->key().ToString();
+      std::string val_s = it->value().ToString();    
+      std::string val_t;
+      Status s = db->Get(ReadOptions(), key_s, &val_t);
+      if(s.ok()) { 
+        assert(val_t == val_s && "Same key has different value");
       } else {
-        xid_uid_mp[it->key().ToString()] = it->value().ToString();
-	s = db->Put(WriteOptions(), it->key().ToString(), it->value().ToString());
+        s = db->Put(WriteOptions(), key_s, val_s);
         assert(s.ok());
       }
     }
