@@ -33,10 +33,10 @@ namespace fs = std::experimental::filesystem;
 
 class node {
 public:
-  std::string key;
-  std::string value;
+  Slice key;
+  Slice value;
   int idx;
-  node(std::string k, std::string v, int id) {
+  node(Slice k, Slice v, int id) {
     key = k;
     value = v;
     idx = id;
@@ -46,14 +46,14 @@ public:
 class compare {
   public:
     bool operator()(node &a, node &b) {
-      return a.key < b.key;
+      return a.key.compare(b.key) <= 0;
     }
 };
 
 int main(int argc, char* argv[]) {
   if(argc != 3) {
     std::cerr << "Wrong number of arguments\nusage : ./<executable>\
- <folder_having_rocksDB_directories_to_be_merged> <destination_folder>\n";
+    <folder_having_rocksDB_directories_to_be_merged> <destination_folder>\n";
     exit(0);
   }
   
@@ -91,15 +91,15 @@ int main(int argc, char* argv[]) {
     if(!it->Valid()) {
       continue;
     } 
-    struct node tnode(it->key().ToString(), it->value().ToString(), counter++);
+    struct node tnode(it->key(), it->value(), counter++);
     itVec.push_back(it);
     pq.push(tnode);
   }
 
-  std::string lastKey = "", lastValue = "";
+  Slice lastKey, lastValue;
 
   while(!pq.empty()) {
-    struct node top = pq.top();
+    const struct node &top = pq.top();
     pq.pop();
     
     if(top.key == lastKey) {
@@ -115,7 +115,7 @@ int main(int argc, char* argv[]) {
     if(!itVec[top.idx]->Valid()) {    
       continue;
     }
-    struct node tnode(itVec[top.idx]->key().ToString(), itVec[top.idx]->value().ToString(), top.idx);
+    struct node tnode(itVec[top.idx]->key(), itVec[top.idx]->value(), top.idx);
     pq.push(tnode);
   }
 

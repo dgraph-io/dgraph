@@ -64,12 +64,12 @@ int main(int argc, char* argv[]) {
 
     rocksdb::Iterator* it = cur_db->NewIterator(rocksdb::ReadOptions());
     for (it->SeekToFirst(); it->Valid(); it->Next()) {
-      std::string key_s = it->key().ToString();
-      std::string val_s = it->value().ToString();    
+      Slice key_s = it->key();
+      Slice val_s = it->value();    
       std::string val_t;
       Status s = db->Get(ReadOptions(), key_s, &val_t);
       if(s.ok()) { 
-        assert(val_t == val_s && "Same key has different value");
+        assert(val_t == val_s.ToString() && "Same key has different value");
       } else {
         s = db->Put(WriteOptions(), key_s, val_s);
         assert(s.ok());
