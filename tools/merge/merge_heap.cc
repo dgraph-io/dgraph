@@ -92,7 +92,7 @@ int main(int argc, char* argv[]) {
     it->SeekToFirst();
     if(!it->Valid()) {
       continue;
-    } 
+    }
     struct node tnode(it->key(), it->value(), counter++);
     itVec.push_back(it);
     pq.push(tnode);

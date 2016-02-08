@@ -37,7 +37,7 @@ int main(int argc, char* argv[]) {
         <folder_having_rocksDB_directories_to_be_merged> <destination_folder>\n";
     exit(0);
   }
-  
+
   std::string destinationDB = argv[2], mergeDir = argv[1];
   DB* db;
   Options options;
@@ -46,7 +46,7 @@ int main(int argc, char* argv[]) {
   options.OptimizeLevelStyleCompaction();
   // create the DB if it's not already present
   options.create_if_missing = true;
-             
+
   // open DB
   Status s = DB::Open(options, destinationDB, &db);
   assert(s.ok());
@@ -59,7 +59,7 @@ int main(int argc, char* argv[]) {
     options.OptimizeLevelStyleCompaction();
     // Don't create the DB if it's not already present
     options.create_if_missing = false;
-    
+
     // open DB
     Status s1 = DB::Open(options, dirEntry.path().c_str(), &cur_db);
     assert(s1.ok());
@@ -67,10 +67,10 @@ int main(int argc, char* argv[]) {
     rocksdb::Iterator* it = cur_db->NewIterator(rocksdb::ReadOptions());
     for (it->SeekToFirst(); it->Valid(); it->Next()) {
       Slice key_s = it->key();
-      Slice val_s = it->value();    
+      Slice val_s = it->value();
       std::string val_t;
       Status s = db->Get(ReadOptions(), key_s, &val_t);
-      if(s.ok()) { 
+      if(s.ok()) {
         assert(val_t == val_s.ToString() && "Same key has different value");
       } else {
         s = db->Put(WriteOptions(), key_s, val_s);
@@ -82,6 +82,6 @@ int main(int argc, char* argv[]) {
     delete cur_db;
   }
 
-  delete db;  
+  delete db;
   return 0;
 }
