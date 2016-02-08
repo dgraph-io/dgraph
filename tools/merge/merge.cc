@@ -1,4 +1,6 @@
 /*
+ * Copyright 2015 Manish R Jain <manishrjain@gmail.com>
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -32,7 +34,7 @@ namespace fs = std::experimental::filesystem;
 int main(int argc, char* argv[]) {
   if(argc != 3) {
     std::cerr << "Wrong number of arguments\nusage : ./<executable>\
- <folder_having_rocksDB_directories_to_be_merged> <destination_folder>\n";
+        <folder_having_rocksDB_directories_to_be_merged> <destination_folder>\n";
     exit(0);
   }
   

@@ -1,4 +1,6 @@
 /*
+ * Copyright 2015 Manish R Jain <manishrjain@gmail.com>
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -53,10 +55,10 @@ class compare {
 int main(int argc, char* argv[]) {
   if(argc != 3) {
     std::cerr << "Wrong number of arguments\nusage : ./<executable>\
-    <folder_having_rocksDB_directories_to_be_merged> <destination_folder>\n";
+        <folder_having_rocksDB_directories_to_be_merged> <destination_folder>\n";
     exit(0);
   }
-  
+
   int counter = 0;
   std::priority_queue<struct node, std::vector<node>, compare> pq;
   std::vector<rocksdb::Iterator*> itVec;
@@ -68,7 +70,7 @@ int main(int argc, char* argv[]) {
   options.OptimizeLevelStyleCompaction();
   // create the DB if it's not already present
   options.create_if_missing = true;
-             
+
   // open DB
   Status s = DB::Open(options, destinationDB, &db);
   assert(s.ok());
@@ -81,7 +83,7 @@ int main(int argc, char* argv[]) {
     options.OptimizeLevelStyleCompaction();
     // Don't create the DB if it's not already present
     options.create_if_missing = false;
-    
+
     // open DB
     Status s1 = DB::Open(options, dirEntry.path().c_str(), &cur_db);
     assert(s1.ok());
@@ -101,7 +103,7 @@ int main(int argc, char* argv[]) {
   while(!pq.empty()) {
     const struct node &top = pq.top();
     pq.pop();
-    
+
     if(top.key == lastKey) {
       assert(top.value == lastValue);
     } else {
@@ -110,15 +112,15 @@ int main(int argc, char* argv[]) {
       lastKey = top.key;
       lastValue = top.value;
     }
-    
+
     itVec[top.idx]->Next();
-    if(!itVec[top.idx]->Valid()) {    
+    if(!itVec[top.idx]->Valid()) {
       continue;
     }
     struct node tnode(itVec[top.idx]->key(), itVec[top.idx]->value(), top.idx);
     pq.push(tnode);
   }
 
-  delete db;  
+  delete db;
   return 0;
 }
