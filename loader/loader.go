@@ -170,7 +170,8 @@ func (s *state) handleNQuadsWhileAssign(wg *sync.WaitGroup) {
 			s.getUidForString(nq.Subject)
 		}
 
-		if len(nq.ObjectId) == 0 || farm.Fingerprint64([]byte(nq.ObjectId))%s.numInstances != s.instanceIdx {
+		if len(nq.ObjectId) == 0 ||
+			farm.Fingerprint64([]byte(nq.ObjectId))%s.numInstances != s.instanceIdx {
 			// This instance shouldnt or cant assign UID to this string
 			atomic.AddUint64(&s.ctr.ignored, 1)
 		} else {
@@ -182,7 +183,9 @@ func (s *state) handleNQuadsWhileAssign(wg *sync.WaitGroup) {
 }
 
 // Blocking function.
-func HandleRdfReader(reader io.Reader, instanceIdx uint64, numInstances uint64) (uint64, error) {
+func HandleRdfReader(reader io.Reader,
+	instanceIdx uint64, numInstances uint64) (uint64, error) {
+
 	s := new(state)
 	s.ctr = new(counters)
 	ticker := time.NewTicker(time.Second)
@@ -224,7 +227,9 @@ func HandleRdfReader(reader io.Reader, instanceIdx uint64, numInstances uint64) 
 }
 
 // Blocking function.
-func HandleRdfReaderWhileAssign(reader io.Reader, instanceIdx uint64, numInstances uint64) (uint64, error) {
+func HandleRdfReaderWhileAssign(reader io.Reader,
+	instanceIdx uint64, numInstances uint64) (uint64, error) {
+
 	s := new(state)
 	s.ctr = new(counters)
 	ticker := time.NewTicker(time.Second)
