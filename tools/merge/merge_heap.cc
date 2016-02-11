@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  *
- *  compile : g++ rocks_merge.cc <path_to_rocksDB_installation>/librocksdb.so.4.1 --std=c++11 -lstdc++fs
+ *  compile : g++ merge_heap.cc <path_to_rocksDB_installation>/librocksdb.so.4.1 --std=c++11 -lstdc++fs
  *  usage : ./<executable> <folder_having_rocksDB_directories_to_be_merged> <destination_folder>
  *
  */
@@ -24,7 +24,7 @@
 #include <string>
 #include <queue>
 #include <vector>
-
+//rocksdb headers can be found here https://github.com/facebook/rocksdb/tree/master/include/rocksdb
 #include "rocksdb/db.h"
 #include "rocksdb/options.h"
 
