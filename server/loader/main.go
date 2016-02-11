@@ -38,6 +38,7 @@ var rdfGzips = flag.String("rdfgzips", "",
 var instanceIdx = flag.Uint64("instanceIdx", 0, "Only pick entities, where Fingerprint % numInstance == instanceIdx.")
 var numInstances = flag.Uint64("numInstances", 1, "Total number of instances among which uid assigning is shared")
 var postingDir = flag.String("postings", "", "Directory to store posting lists")
+var uidDir = flag.String("uidDir", "", "Directory to read UID posting lists")
 var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
 var numcpu = flag.Int("numCpu", runtime.NumCPU(), "Number of cores to be used by the process")
 
@@ -69,7 +70,11 @@ func main() {
 	ps.Init(*postingDir)
 	defer ps.Close()
 
-	posting.Init(ps, nil)
+	uidS := new(store.Store)
+	uidS.Init(*uidDir)
+	defer uidS.Close()
+
+	posting.Init(nil)
 
 	files := strings.Split(*rdfGzips, ",")
 	for _, path := range files {
@@ -87,7 +92,7 @@ func main() {
 			glog.WithError(err).Fatal("Unable to create gzip reader.")
 		}
 
-		count, err := loader.HandleRdfReader(r, *instanceIdx, *numInstances)
+		count, err := loader.HandleRdfReader(r, *instanceIdx, *numInstances, ps, uidS)
 		if err != nil {
 			glog.WithError(err).Fatal("While handling rdf reader.")
 		}

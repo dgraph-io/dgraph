@@ -42,11 +42,11 @@ func TestGetOrAssign(t *testing.T) {
 	clog.Init()
 	defer clog.Close()
 
-	posting.Init(ps, clog)
+	posting.Init(clog)
 
 	var u1, u2 uint64
 	{
-		uid, err := GetOrAssign("externalid0", 0, 1)
+		uid, err := GetOrAssign("externalid0", 0, 1, ps)
 		if err != nil {
 			t.Error(err)
 		}
@@ -55,7 +55,7 @@ func TestGetOrAssign(t *testing.T) {
 	}
 
 	{
-		uid, err := GetOrAssign("externalid1", 0, 1)
+		uid, err := GetOrAssign("externalid1", 0, 1, ps)
 		if err != nil {
 			t.Error(err)
 		}
@@ -69,7 +69,7 @@ func TestGetOrAssign(t *testing.T) {
 	// return
 
 	{
-		uid, err := GetOrAssign("externalid0", 0, 1)
+		uid, err := GetOrAssign("externalid0", 0, 1, ps)
 		if err != nil {
 			t.Error(err)
 		}
@@ -81,7 +81,7 @@ func TestGetOrAssign(t *testing.T) {
 	// return
 
 	{
-		xid, err := ExternalId(u1)
+		xid, err := ExternalId(u1, ps)
 		if err != nil {
 			t.Error(err)
 		}
@@ -91,7 +91,7 @@ func TestGetOrAssign(t *testing.T) {
 	}
 	return
 	{
-		xid, err := ExternalId(u2)
+		xid, err := ExternalId(u2, ps)
 		if err != nil {
 			t.Error(err)
 		}

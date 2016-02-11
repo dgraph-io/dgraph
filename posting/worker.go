@@ -1,12 +1,13 @@
 package posting
 
 import (
+	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/google/flatbuffers/go"
 )
 
-func ProcessTask(query []byte) (result []byte, rerr error) {
+func ProcessTask(query []byte, pstore *store.Store) (result []byte, rerr error) {
 	uo := flatbuffers.GetUOffsetT(query)
 	q := new(task.Query)
 	q.Init(query, uo)
@@ -19,7 +20,7 @@ func ProcessTask(query []byte) (result []byte, rerr error) {
 	for i := 0; i < q.UidsLength(); i++ {
 		uid := q.Uids(i)
 		key := Key(uid, attr)
-		pl := GetOrCreate(key)
+		pl := GetOrCreate(key, pstore)
 
 		var valoffset flatbuffers.UOffsetT
 		if val, err := pl.Value(); err != nil {

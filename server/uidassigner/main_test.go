@@ -33,19 +33,19 @@ func TestQuery(t *testing.T) {
 	clog := commit.NewLogger(dir, "mutations", 50<<20)
 	clog.Init()
 	defer clog.Close()
-	posting.Init(ps, clog)
+	posting.Init(clog)
 
 	list := []string{"alice", "bob", "mallory", "ash", "man", "dgraph"}
 	for _, str := range list {
 		if farm.Fingerprint64([]byte(str))%numInstances == 0 {
-			uid, err := rdf.GetUid(str, 0, numInstances)
+			uid, err := rdf.GetUid(str, 0, numInstances, ps)
 			if uid < minIdx0 || uid > minIdx0+mod-1 {
 				t.Error("Not the correct UID", err)
 			}
 			t.Logf("Instance-0 Correct UID", str, uid)
 
 		} else {
-			uid, err := rdf.GetUid(str, 1, numInstances)
+			uid, err := rdf.GetUid(str, 1, numInstances, ps)
 			if uid < minIdx1 || uid > minIdx1+mod-1 {
 				t.Error("Not the correct UID", err)
 			}

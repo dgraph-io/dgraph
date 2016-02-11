@@ -58,7 +58,7 @@ func main() {
 	ps.Init(*uidDir)
 	defer ps.Close()
 
-	posting.Init(ps, nil)
+	posting.Init(nil)
 
 	files := strings.Split(*rdfGzips, ",")
 	for _, path := range files {
@@ -76,7 +76,7 @@ func main() {
 			glog.WithError(err).Fatal("Unable to create gzip reader.")
 		}
 
-		count, err := loader.HandleRdfReaderWhileAssign(r, *instanceIdx, *numInstances)
+		count, err := loader.HandleRdfReaderWhileAssign(r, *instanceIdx, *numInstances, ps)
 		if err != nil {
 			glog.WithError(err).Fatal("While handling rdf reader.")
 		}

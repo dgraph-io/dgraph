@@ -29,6 +29,7 @@ import (
 	"github.com/Sirupsen/logrus"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/rdf"
+	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgryski/go-farm"
 )
@@ -120,9 +121,9 @@ func (s *state) parseStream(done chan error) {
 	done <- nil
 }
 
-func (s *state) handleNQuads(wg *sync.WaitGroup) {
+func (s *state) handleNQuads(wg *sync.WaitGroup, rwStore, rStore *store.Store) {
 	for nq := range s.cnq {
-		edge, err := nq.ToEdge(s.instanceIdx, s.numInstances)
+		edge, err := nq.ToEdge(s.instanceIdx, s.numInstances, rStore)
 		for err != nil {
 			// Just put in a retry loop to tackle temporary errors.
 			if err == posting.E_TMP_ERROR {
@@ -133,19 +134,19 @@ func (s *state) handleNQuads(wg *sync.WaitGroup) {
 					Error("While converting to edge")
 				return
 			}
-			edge, err = nq.ToEdge(s.instanceIdx, s.numInstances)
+			edge, err = nq.ToEdge(s.instanceIdx, s.numInstances, rStore)
 		}
 
 		key := posting.Key(edge.Entity, edge.Attribute)
-		plist := posting.GetOrCreate(key)
+		plist := posting.GetOrCreate(key, rwStore)
 		plist.AddMutation(edge, posting.Set)
 		atomic.AddUint64(&s.ctr.processed, 1)
 	}
 	wg.Done()
 }
 
-func (s *state) getUidForString(str string) {
-	_, err := rdf.GetUid(str, s.instanceIdx, s.numInstances)
+func (s *state) getUidForString(str string, rwStore *store.Store) {
+	_, err := rdf.GetUid(str, s.instanceIdx, s.numInstances, rwStore)
 	for err != nil {
 		// Just put in a retry loop to tackle temporary errors.
 		if err == posting.E_TMP_ERROR {
@@ -157,24 +158,24 @@ func (s *state) getUidForString(str string) {
 				Error("While getting UID")
 			return
 		}
-		_, err = rdf.GetUid(str, s.instanceIdx, s.numInstances)
+		_, err = rdf.GetUid(str, s.instanceIdx, s.numInstances, rwStore)
 	}
 }
 
-func (s *state) handleNQuadsWhileAssign(wg *sync.WaitGroup) {
+func (s *state) handleNQuadsWhileAssign(wg *sync.WaitGroup, rwStore *store.Store) {
 	for nq := range s.cnq {
 		if farm.Fingerprint64([]byte(nq.Subject))%s.numInstances != s.instanceIdx {
 			// This instance shouldnt assign UID to this string
 			atomic.AddUint64(&s.ctr.ignored, 1)
 		} else {
-			s.getUidForString(nq.Subject)
+			s.getUidForString(nq.Subject, rwStore)
 		}
 
 		if len(nq.ObjectId) == 0 || farm.Fingerprint64([]byte(nq.ObjectId))%s.numInstances != s.instanceIdx {
 			// This instance shouldnt or cant assign UID to this string
 			atomic.AddUint64(&s.ctr.ignored, 1)
 		} else {
-			s.getUidForString(nq.ObjectId)
+			s.getUidForString(nq.ObjectId, rwStore)
 		}
 	}
 
@@ -182,7 +183,7 @@ func (s *state) handleNQuadsWhileAssign(wg *sync.WaitGroup) {
 }
 
 // Blocking function.
-func HandleRdfReader(reader io.Reader, instanceIdx uint64, numInstances uint64) (uint64, error) {
+func HandleRdfReader(reader io.Reader, instanceIdx uint64, numInstances uint64, rwStore, rStore *store.Store) (uint64, error) {
 	s := new(state)
 	s.ctr = new(counters)
 	ticker := time.NewTicker(time.Second)
@@ -204,7 +205,7 @@ func HandleRdfReader(reader io.Reader, instanceIdx uint64, numInstances uint64) 
 	wg := new(sync.WaitGroup)
 	for i := 0; i < 3000; i++ {
 		wg.Add(1)
-		go s.handleNQuads(wg) // NQuads --> Posting list [slow].
+		go s.handleNQuads(wg, rwStore, rStore) // NQuads --> Posting list [slow].
 	}
 
 	// Block until all parseStream goroutines are finished.
@@ -224,7 +225,7 @@ func HandleRdfReader(reader io.Reader, instanceIdx uint64, numInstances uint64) 
 }
 
 // Blocking function.
-func HandleRdfReaderWhileAssign(reader io.Reader, instanceIdx uint64, numInstances uint64) (uint64, error) {
+func HandleRdfReaderWhileAssign(reader io.Reader, instanceIdx uint64, numInstances uint64, rwStore *store.Store) (uint64, error) {
 	s := new(state)
 	s.ctr = new(counters)
 	ticker := time.NewTicker(time.Second)
@@ -246,7 +247,7 @@ func HandleRdfReaderWhileAssign(reader io.Reader, instanceIdx uint64, numInstanc
 	wg := new(sync.WaitGroup)
 	for i := 0; i < 3000; i++ {
 		wg.Add(1)
-		go s.handleNQuadsWhileAssign(wg) //Different compared to HandleRdfReader
+		go s.handleNQuadsWhileAssign(wg, rwStore) //Different compared to HandleRdfReader
 	}
 
 	// Block until all parseStream goroutines are finished.

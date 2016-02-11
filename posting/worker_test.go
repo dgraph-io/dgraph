@@ -56,32 +56,32 @@ func TestProcessTask(t *testing.T) {
 	clog.Init()
 	defer clog.Close()
 
-	Init(ps, clog)
+	Init(clog)
 
 	edge := x.DirectedEdge{
 		ValueId:   23,
 		Source:    "author0",
 		Timestamp: time.Now(),
 	}
-	addEdge(t, edge, GetOrCreate(Key(10, "friend")))
-	addEdge(t, edge, GetOrCreate(Key(11, "friend")))
-	addEdge(t, edge, GetOrCreate(Key(12, "friend")))
+	addEdge(t, edge, GetOrCreate(Key(10, "friend"), ps))
+	addEdge(t, edge, GetOrCreate(Key(11, "friend"), ps))
+	addEdge(t, edge, GetOrCreate(Key(12, "friend"), ps))
 
 	edge.ValueId = 25
-	addEdge(t, edge, GetOrCreate(Key(12, "friend")))
+	addEdge(t, edge, GetOrCreate(Key(12, "friend"), ps))
 
 	edge.ValueId = 26
-	addEdge(t, edge, GetOrCreate(Key(12, "friend")))
+	addEdge(t, edge, GetOrCreate(Key(12, "friend"), ps))
 
 	edge.ValueId = 31
-	addEdge(t, edge, GetOrCreate(Key(10, "friend")))
-	addEdge(t, edge, GetOrCreate(Key(12, "friend")))
+	addEdge(t, edge, GetOrCreate(Key(10, "friend"), ps))
+	addEdge(t, edge, GetOrCreate(Key(12, "friend"), ps))
 
 	edge.Value = "photon"
-	addEdge(t, edge, GetOrCreate(Key(12, "friend")))
+	addEdge(t, edge, GetOrCreate(Key(12, "friend"), ps))
 
 	query := NewQuery("friend", []uint64{10, 11, 12})
-	result, err := ProcessTask(query)
+	result, err := ProcessTask(query, ps)
 	if err != nil {
 		t.Error(err)
 	}

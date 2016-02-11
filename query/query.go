@@ -25,6 +25,7 @@ import (
 
 	"github.com/Sirupsen/logrus"
 	"github.com/dgraph-io/dgraph/posting"
+	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/uid"
 	"github.com/dgraph-io/dgraph/x"
@@ -251,11 +252,11 @@ func (g *SubGraph) ToJson(l *Latency) (js []byte, rerr error) {
 	return json.Marshal(r)
 }
 
-func NewGraph(euid uint64, exid string) (*SubGraph, error) {
+func NewGraph(euid uint64, exid string, pstore *store.Store) (*SubGraph, error) {
 	// This would set the Result field in SubGraph,
 	// and populate the children for attributes.
 	if len(exid) > 0 {
-		u, err := uid.GetOrAssign(exid, 0, 1) // instanceIdx = 0, numInstances = 1 by default
+		u, err := uid.GetOrAssign(exid, 0, 1, pstore) // instanceIdx = 0, numInstances = 1 by default
 		if err != nil {
 			x.Err(glog, err).WithField("xid", exid).Error(
 				"While GetOrAssign uid from external id")
@@ -381,11 +382,11 @@ func sortedUniqueUids(r *task.Result) (sorted []uint64, rerr error) {
 	return sorted, nil
 }
 
-func ProcessGraph(sg *SubGraph, rch chan error) {
+func ProcessGraph(sg *SubGraph, rch chan error, pstore *store.Store) {
 	var err error
 	if len(sg.query) > 0 && sg.Attr != "_root_" {
 		// This task execution would go over the wire in later versions.
-		sg.result, err = posting.ProcessTask(sg.query)
+		sg.result, err = posting.ProcessTask(sg.query, pstore)
 		if err != nil {
 			x.Err(glog, err).Error("While processing task.")
 			rch <- err
@@ -424,7 +425,7 @@ func ProcessGraph(sg *SubGraph, rch chan error) {
 	for i := 0; i < len(sg.Children); i++ {
 		child := sg.Children[i]
 		child.query = createTaskQuery(child.Attr, sorted)
-		go ProcessGraph(child, childchan)
+		go ProcessGraph(child, childchan, pstore)
 	}
 
 	// Now get all the results back.

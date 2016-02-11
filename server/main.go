@@ -110,7 +110,7 @@ func main() {
 		glog.Fatal("Unable to parse flags")
 	}
 	logrus.SetLevel(logrus.InfoLevel)
-	numCpus :=  *numcpu
+	numCpus := *numcpu
 	prev := runtime.GOMAXPROCS(numCpus)
 	glog.WithField("num_cpu", numCpus).
 		WithField("prev_maxprocs", prev).
@@ -125,7 +125,7 @@ func main() {
 	clog.Init()
 	defer clog.Close()
 
-	posting.Init(ps, clog)
+	posting.Init(clog)
 
 	http.HandleFunc("/query", queryHandler)
 	glog.WithField("port", *port).Info("Listening for requests...")

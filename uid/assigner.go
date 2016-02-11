@@ -25,6 +25,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/posting/types"
+	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgryski/go-farm"
 )
@@ -92,7 +93,7 @@ func init() {
 	// go lmgr.clean()
 }
 
-func allocateUniqueUid(xid string, instanceIdx uint64, numInstances uint64) (uid uint64, rerr error) {
+func allocateUniqueUid(xid string, instanceIdx uint64, numInstances uint64, rStore *store.Store) (uid uint64, rerr error) {
 
 	mod := math.MaxUint64 / numInstances
 	minIdx := instanceIdx * mod
@@ -111,7 +112,7 @@ func allocateUniqueUid(xid string, instanceIdx uint64, numInstances uint64) (uid
 
 		// Check if this uid has already been allocated.
 		key := posting.Key(uid, "_xid_") // uid -> "_xid_" -> xid
-		pl := posting.GetOrCreate(key)
+		pl := posting.GetOrCreate(key, rStore)
 
 		if pl.Length() > 0 {
 			// Something already present here.
@@ -140,7 +141,7 @@ func allocateUniqueUid(xid string, instanceIdx uint64, numInstances uint64) (uid
 		" Wake the stupid developer up.")
 }
 
-func assignNew(pl *posting.List, xid string, instanceIdx uint64, numInstances uint64) (uint64, error) {
+func assignNew(pl *posting.List, xid string, instanceIdx uint64, numInstances uint64, rStore *store.Store) (uint64, error) {
 	entry := lmgr.newOrExisting(xid)
 	entry.Lock()
 	entry.ts = time.Now()
@@ -158,7 +159,7 @@ func assignNew(pl *posting.List, xid string, instanceIdx uint64, numInstances ui
 	}
 
 	// No current id exists. Create one.
-	uid, err := allocateUniqueUid(xid, instanceIdx, numInstances)
+	uid, err := allocateUniqueUid(xid, instanceIdx, numInstances, rStore)
 	if err != nil {
 		return 0, err
 	}
@@ -180,11 +181,11 @@ func stringKey(xid string) []byte {
 	return buf.Bytes()
 }
 
-func GetOrAssign(xid string, instanceIdx uint64, numInstances uint64) (uid uint64, rerr error) {
+func GetOrAssign(xid string, instanceIdx uint64, numInstances uint64, rStore *store.Store) (uid uint64, rerr error) {
 	key := stringKey(xid)
-	pl := posting.GetOrCreate(key)
+	pl := posting.GetOrCreate(key, rStore)
 	if pl.Length() == 0 {
-		return assignNew(pl, xid, instanceIdx, numInstances)
+		return assignNew(pl, xid, instanceIdx, numInstances, rStore)
 
 	} else if pl.Length() > 1 {
 		glog.Fatalf("We shouldn't have more than 1 uid for xid: %v\n", xid)
@@ -201,9 +202,9 @@ func GetOrAssign(xid string, instanceIdx uint64, numInstances uint64) (uid uint6
 		" Wake the stupid developer up.")
 }
 
-func ExternalId(uid uint64) (xid string, rerr error) {
+func ExternalId(uid uint64, rStore *store.Store) (xid string, rerr error) {
 	key := posting.Key(uid, "_xid_") // uid -> "_xid_" -> xid
-	pl := posting.GetOrCreate(key)
+	pl := posting.GetOrCreate(key, rStore)
 	if pl.Length() == 0 {
 		return "", errors.New("NO external id")
 	}
