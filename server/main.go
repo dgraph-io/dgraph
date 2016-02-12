@@ -30,6 +30,7 @@ import (
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/store"
+	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -138,6 +139,7 @@ func main() {
 	defer clog.Close()
 
 	posting.Init(clog)
+	worker.Init(ps)
 
 	http.HandleFunc("/query", queryHandler(ps))
 	glog.WithField("port", *port).Info("Listening for requests...")

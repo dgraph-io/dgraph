@@ -29,6 +29,7 @@ import (
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/uid"
+	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/google/flatbuffers/go"
 )
@@ -405,7 +406,7 @@ func ProcessGraph(sg *SubGraph, rch chan error, pstore *store.Store) {
 	var err error
 	if len(sg.query) > 0 && sg.Attr != "_root_" {
 		// This task execution would go over the wire in later versions.
-		sg.result, err = posting.ProcessTask(sg.query, pstore)
+		sg.result, err = worker.ProcessTask(sg.query)
 		if err != nil {
 			x.Err(glog, err).Error("While processing task.")
 			rch <- err

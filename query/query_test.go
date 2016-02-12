@@ -28,6 +28,7 @@ import (
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/task"
+	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/google/flatbuffers/go"
 )
@@ -102,6 +103,8 @@ func TestNewGraph(t *testing.T) {
 		t.Error(err)
 	}
 
+	worker.Init(ps)
+
 	uo := flatbuffers.GetUOffsetT(sg.result)
 	r := new(task.Result)
 	r.Init(sg.result, uo)
@@ -130,6 +133,8 @@ func populateGraph(t *testing.T) (string, *store.Store) {
 
 	ps := new(store.Store)
 	ps.Init(dir)
+
+	worker.Init(ps)
 
 	clog := commit.NewLogger(dir, "mutations", 50<<20)
 	clog.Init()

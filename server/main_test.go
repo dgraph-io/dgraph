@@ -28,6 +28,7 @@ import (
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/store"
+	"github.com/dgraph-io/dgraph/worker"
 )
 
 var q0 = `
@@ -60,6 +61,7 @@ func prepare() (dir1, dir2 string, ps *store.Store, clog *commit.Logger, rerr er
 	clog.Init()
 
 	posting.Init(clog)
+	worker.Init(ps)
 
 	f, err := os.Open("testdata.nq")
 	if err != nil {
