@@ -125,7 +125,7 @@ func main() {
 	clog.Init()
 	defer clog.Close()
 
-	posting.Init(clog)
+	posting.Init(ps, clog)
 
 	http.HandleFunc("/query", queryHandler)
 	glog.WithField("port", *port).Info("Listening for requests...")

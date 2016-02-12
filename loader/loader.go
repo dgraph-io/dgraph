@@ -137,10 +137,16 @@ func (s *state) handleNQuads(wg *sync.WaitGroup, rwStore, rStore *store.Store) {
 			edge, err = nq.ToEdge(s.instanceIdx, s.numInstances, rStore)
 		}
 
-		key := posting.Key(edge.Entity, edge.Attribute)
-		plist := posting.GetOrCreate(key, rwStore)
-		plist.AddMutation(edge, posting.Set)
-		atomic.AddUint64(&s.ctr.processed, 1)
+		// Only handle this edge if the attribute satisfies the modulo rule
+		if farm.Fingerprint64([]byte(nq.Attribute))%s.numInstances != s.instanceIdx {
+			key := posting.Key(edge.Entity, edge.Attribute)
+			plist := posting.GetOrCreate(key, rwStore)
+			plist.AddMutation(edge, posting.Set)
+			atomic.AddUint64(&s.ctr.processed, 1)
+		} else {
+			atomic.AddUint64(&s.ctr.ignored, 1)
+		}
+
 	}
 	wg.Done()
 }
