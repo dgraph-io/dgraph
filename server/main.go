@@ -38,13 +38,15 @@ var glog = x.Log("server")
 var postingDir = flag.String("postings", "", "Directory to store posting lists")
 var mutationDir = flag.String("mutations", "", "Directory to store mutations")
 var port = flag.String("port", "8080", "Port to run server on.")
-var numcpu = flag.Int("numCpu", runtime.NumCPU(), "Number of cores to be used by the process")
+var numcpu = flag.Int("numCpu", runtime.NumCPU(),
+	"Number of cores to be used by the process")
 
 func addCorsHeaders(w http.ResponseWriter) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers",
-		"Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, X-Auth-Token, Cache-Control, X-Requested-With")
+		"Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token,"+
+			"X-Auth-Token, Cache-Control, X-Requested-With")
 	w.Header().Set("Access-Control-Allow-Credentials", "true")
 	w.Header().Set("Connection", "close")
 }
@@ -68,15 +70,23 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		x.SetStatus(w, x.E_INVALID_REQUEST, "Invalid request encountered.")
 		return
 	}
+
 	glog.WithField("q", string(q)).Debug("Query received.")
-	sg, err := gql.Parse(string(q))
+	gq, err := gql.Parse(string(q))
 	if err != nil {
 		x.Err(glog, err).Error("While parsing query")
 		x.SetStatus(w, x.E_INVALID_REQUEST, err.Error())
 		return
 	}
+	sg, err := query.ToSubGraph(gq)
+	if err != nil {
+		x.Err(glog, err).Error("While conversion to internal format")
+		x.SetStatus(w, x.E_INVALID_REQUEST, err.Error())
+		return
+	}
 	l.Parsing = time.Since(l.Start)
 	glog.WithField("q", string(q)).Debug("Query parsed.")
+
 	rch := make(chan error)
 	go query.ProcessGraph(sg, rch)
 	err = <-rch

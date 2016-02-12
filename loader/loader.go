@@ -138,7 +138,7 @@ func (s *state) handleNQuads(wg *sync.WaitGroup, rwStore, rStore *store.Store) {
 		}
 
 		// Only handle this edge if the attribute satisfies the modulo rule
-		if farm.Fingerprint64([]byte(nq.Attribute))%s.numInstances != s.instanceIdx {
+		if farm.Fingerprint64([]byte(edge.Attribute))%s.numInstances == s.instanceIdx {
 			key := posting.Key(edge.Entity, edge.Attribute)
 			plist := posting.GetOrCreate(key, rwStore)
 			plist.AddMutation(edge, posting.Set)
@@ -177,7 +177,8 @@ func (s *state) handleNQuadsWhileAssign(wg *sync.WaitGroup, rwStore *store.Store
 			s.getUidForString(nq.Subject, rwStore)
 		}
 
-		if len(nq.ObjectId) == 0 || farm.Fingerprint64([]byte(nq.ObjectId))%s.numInstances != s.instanceIdx {
+		if len(nq.ObjectId) == 0 ||
+			farm.Fingerprint64([]byte(nq.ObjectId))%s.numInstances != s.instanceIdx {
 			// This instance shouldnt or cant assign UID to this string
 			atomic.AddUint64(&s.ctr.ignored, 1)
 		} else {

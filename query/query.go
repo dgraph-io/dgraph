@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/Sirupsen/logrus"
+	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/task"
@@ -252,7 +253,25 @@ func (g *SubGraph) ToJson(l *Latency) (js []byte, rerr error) {
 	return json.Marshal(r)
 }
 
-func NewGraph(euid uint64, exid string) (*SubGraph, error) {
+func treeCopy(gq *gql.GraphQuery, sg *SubGraph) {
+	for _, gchild := range gq.Children {
+		dst := new(SubGraph)
+		dst.Attr = gchild.Attr
+		sg.Children = append(sg.Children, dst)
+		treeCopy(gchild, dst)
+	}
+}
+
+func ToSubGraph(gq *gql.GraphQuery) (*SubGraph, error) {
+	sg, err := newGraph(gq.UID, gq.XID)
+	if err != nil {
+		return nil, err
+	}
+	treeCopy(gq, sg)
+	return sg, nil
+}
+
+func newGraph(euid uint64, exid string) (*SubGraph, error) {
 	// This would set the Result field in SubGraph,
 	// and populate the children for attributes.
 	if len(exid) > 0 {

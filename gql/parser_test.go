@@ -19,11 +19,9 @@ package gql
 import (
 	"fmt"
 	"testing"
-
-	"github.com/dgraph-io/dgraph/query"
 )
 
-func checkAttr(g *query.SubGraph, attr string) error {
+func checkAttr(g *GraphQuery, attr string) error {
 	if g.Attr != attr {
 		return fmt.Errorf("Expected: %v. Got: %v", attr, g.Attr)
 	}
@@ -43,31 +41,31 @@ func TestParse(t *testing.T) {
 	}
 `
 
-	sg, err := Parse(query)
+	gq, err := Parse(query)
 	if err != nil {
 		t.Error(err)
 	}
-	if sg == nil {
+	if gq == nil {
 		t.Error("subgraph is nil")
 		return
 	}
-	if len(sg.Children) != 4 {
-		t.Errorf("Expected 4 children. Got: %v", len(sg.Children))
+	if len(gq.Children) != 4 {
+		t.Errorf("Expected 4 children. Got: %v", len(gq.Children))
 		return
 	}
-	if err := checkAttr(sg.Children[0], "friends"); err != nil {
+	if err := checkAttr(gq.Children[0], "friends"); err != nil {
 		t.Error(err)
 	}
-	if err := checkAttr(sg.Children[1], "gender"); err != nil {
+	if err := checkAttr(gq.Children[1], "gender"); err != nil {
 		t.Error(err)
 	}
-	if err := checkAttr(sg.Children[2], "age"); err != nil {
+	if err := checkAttr(gq.Children[2], "age"); err != nil {
 		t.Error(err)
 	}
-	if err := checkAttr(sg.Children[3], "hometown"); err != nil {
+	if err := checkAttr(gq.Children[3], "hometown"); err != nil {
 		t.Error(err)
 	}
-	child := sg.Children[0]
+	child := gq.Children[0]
 	if len(child.Children) != 1 {
 		t.Errorf("Expected 1 child of friends. Got: %v", len(child.Children))
 	}
@@ -84,19 +82,19 @@ func TestParseXid(t *testing.T) {
 			type.object.name
 		}
 	}`
-	sg, err := Parse(query)
+	gq, err := Parse(query)
 	if err != nil {
 		t.Error(err)
 		return
 	}
-	if sg == nil {
+	if gq == nil {
 		t.Error("subgraph is nil")
 		return
 	}
-	if len(sg.Children) != 1 {
-		t.Errorf("Expected 1 children. Got: %v", len(sg.Children))
+	if len(gq.Children) != 1 {
+		t.Errorf("Expected 1 children. Got: %v", len(gq.Children))
 	}
-	if err := checkAttr(sg.Children[0], "type.object.name"); err != nil {
+	if err := checkAttr(gq.Children[0], "type.object.name"); err != nil {
 		t.Error(err)
 	}
 }
@@ -143,22 +141,22 @@ func TestParse_pass1(t *testing.T) {
 			}
 		}
 	`
-	sg, err := Parse(query)
+	gq, err := Parse(query)
 	if err != nil {
 		t.Error(err)
 	}
-	if len(sg.Children) != 2 {
-		t.Errorf("Expected 2. Got: %v", len(sg.Children))
+	if len(gq.Children) != 2 {
+		t.Errorf("Expected 2. Got: %v", len(gq.Children))
 	}
-	if err := checkAttr(sg.Children[0], "name"); err != nil {
+	if err := checkAttr(gq.Children[0], "name"); err != nil {
 		t.Error(err)
 	}
-	if err := checkAttr(sg.Children[1], "friends"); err != nil {
+	if err := checkAttr(gq.Children[1], "friends"); err != nil {
 		t.Error(err)
 	}
-	f := sg.Children[1]
+	f := gq.Children[1]
 	if len(f.Children) != 0 {
-		t.Errorf("Expected 0. Got: %v", len(sg.Children))
+		t.Errorf("Expected 0. Got: %v", len(gq.Children))
 	}
 }
 
@@ -170,14 +168,14 @@ func TestParse_block(t *testing.T) {
 			}
 		}
 	`
-	sg, err := Parse(query)
+	gq, err := Parse(query)
 	if err != nil {
 		t.Error(err)
 	}
-	if len(sg.Children) != 1 {
-		t.Errorf("Expected 1. Got: %v", len(sg.Children))
+	if len(gq.Children) != 1 {
+		t.Errorf("Expected 1. Got: %v", len(gq.Children))
 	}
-	if err := checkAttr(sg.Children[0], "type.object.name.es-419"); err != nil {
+	if err := checkAttr(gq.Children[0], "type.object.name.es-419"); err != nil {
 		t.Error(err)
 	}
 }

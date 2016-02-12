@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgraph/commit"
+	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/task"
@@ -37,85 +38,6 @@ func setErr(err *error, nerr error) {
 	}
 	*err = nerr
 }
-
-/*
-func populateList(key []byte) error {
-	pl := posting.Get(key)
-
-	t := x.DirectedEdge{
-		ValueId:   9,
-		Source:    "query_test",
-		Timestamp: time.Now(),
-	}
-	var err error
-	setErr(&err, pl.AddMutation(t, posting.Set))
-
-	t.ValueId = 19
-	setErr(&err, pl.AddMutation(t, posting.Set))
-
-	t.ValueId = 29
-	setErr(&err, pl.AddMutation(t, posting.Set))
-
-	t.Value = "abracadabra"
-	setErr(&err, pl.AddMutation(t, posting.Set))
-
-	return err
-}
-
-func TestRun(t *testing.T) {
-	logrus.SetLevel(logrus.DebugLevel)
-
-	pdir := NewStore(t)
-	defer os.RemoveAll(pdir)
-	ps := new(store.Store)
-	ps.Init(pdir)
-
-	mdir := NewStore(t)
-	defer os.RemoveAll(mdir)
-	ms := new(store.Store)
-	ms.Init(mdir)
-	posting.Init(ps, ms)
-
-	key := posting.Key(11, "testing")
-	if err := populateList(key); err != nil {
-		t.Error(err)
-	}
-	key = posting.Key(9, "name")
-
-	m := Message{Id: 11}
-	ma := Mattr{Attr: "testing"}
-	m.Attrs = append(m.Attrs, ma)
-
-	if err := Run(&m); err != nil {
-		t.Error(err)
-	}
-	ma = m.Attrs[0]
-	uids := result.GetRootAsUids(ma.ResultUids, 0)
-	if uids.UidLength() != 3 {
-		t.Errorf("Expected 3. Got: %v", uids.UidLength())
-	}
-	var v uint64
-	v = 9
-	for i := 0; i < uids.UidLength(); i++ {
-		if uids.Uid(i) == math.MaxUint64 {
-			t.Error("Value posting encountered at index:", i)
-		}
-		if v != uids.Uid(i) {
-			t.Errorf("Expected: %v. Got: %v", v, uids.Uid(i))
-		}
-		v += 10
-	}
-	log.Debugf("ResultUid buffer size: %v", len(ma.ResultUids))
-
-	var val string
-	if err := posting.ParseValue(&val, ma.ResultValue); err != nil {
-		t.Error(err)
-	}
-	if val != "abracadabra" {
-		t.Errorf("Expected abracadabra. Got: [%q]", val)
-	}
-}
-*/
 
 func addEdge(t *testing.T, edge x.DirectedEdge, l *posting.List) {
 	if err := l.AddMutation(edge, posting.Set); err != nil {
@@ -166,7 +88,7 @@ func checkSingleValue(t *testing.T, child *SubGraph,
 func TestNewGraph(t *testing.T) {
 	var ex uint64
 	ex = 101
-	sg, err := NewGraph(ex, "")
+	sg, err := newGraph(ex, "")
 	if err != nil {
 		t.Error(err)
 	}
@@ -256,29 +178,26 @@ func TestProcessGraph(t *testing.T) {
 	defer os.RemoveAll(dir)
 
 	// Alright. Now we have everything set up. Let's create the query.
-	sg, err := NewGraph(1, "")
+	query := `
+		{
+			me(_uid_: 0x01) {
+				friend {
+					name
+				}
+				name
+				gender
+				status
+			}
+		}
+	`
+	gq, err := gql.Parse(query)
 	if err != nil {
 		t.Error(err)
 	}
-
-	// Retrieve friends, and their names.
-	csg := new(SubGraph)
-	csg.Attr = "friend"
-	gsg := new(SubGraph)
-	gsg.Attr = "name"
-	csg.Children = append(csg.Children, gsg)
-	sg.Children = append(sg.Children, csg)
-
-	// Retireve profile information for uid:1.
-	csg = new(SubGraph)
-	csg.Attr = "name"
-	sg.Children = append(sg.Children, csg)
-	csg = new(SubGraph)
-	csg.Attr = "gender"
-	sg.Children = append(sg.Children, csg)
-	csg = new(SubGraph)
-	csg.Attr = "status"
-	sg.Children = append(sg.Children, csg)
+	sg, err := ToSubGraph(gq)
+	if err != nil {
+		t.Error(err)
+	}
 
 	ch := make(chan error)
 	go ProcessGraph(sg, ch)
@@ -350,28 +269,27 @@ func TestToJson(t *testing.T) {
 	defer os.RemoveAll(dir)
 
 	// Alright. Now we have everything set up. Let's create the query.
-	sg, err := NewGraph(1, "")
+	query := `
+		{
+			me(_uid_:0x01) {
+				name
+				gender
+				status
+				friend {
+					name
+				}
+			}
+		}
+	`
+
+	gq, err := gql.Parse(query)
 	if err != nil {
 		t.Error(err)
 	}
-
-	// Retireve profile information for uid:1.
-	csg := new(SubGraph)
-	csg.Attr = "name"
-	sg.Children = append(sg.Children, csg)
-	csg = new(SubGraph)
-	csg.Attr = "gender"
-	sg.Children = append(sg.Children, csg)
-	csg = new(SubGraph)
-	csg.Attr = "status"
-	sg.Children = append(sg.Children, csg)
-
-	gsg := new(SubGraph)
-	gsg.Attr = "name"
-	csg = new(SubGraph)
-	csg.Attr = "friend"
-	csg.Children = append(csg.Children, gsg)
-	sg.Children = append(sg.Children, csg)
+	sg, err := ToSubGraph(gq)
+	if err != nil {
+		t.Error(err)
+	}
 
 	ch := make(chan error)
 	go ProcessGraph(sg, ch)
