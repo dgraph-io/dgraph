@@ -43,34 +43,34 @@ var q0 = `
 	}
 `
 
-func prepare() (dir1, dir2 string, clog *commit.Logger, rerr error) {
+func prepare() (dir1, dir2 string, ps *store.Store, clog *commit.Logger, rerr error) {
 	var err error
 	dir1, err = ioutil.TempDir("", "storetest_")
 	if err != nil {
-		return "", "", nil, err
+		return "", "", nil, nil, err
 	}
-	ps := new(store.Store)
+	ps = new(store.Store)
 	ps.Init(dir1)
 
 	dir2, err = ioutil.TempDir("", "storemuts_")
 	if err != nil {
-		return dir1, "", nil, err
+		return dir1, "", nil, nil, err
 	}
 	clog = commit.NewLogger(dir2, "mutations", 50<<20)
 	clog.Init()
 
-	posting.Init(ps, clog)
+	posting.Init(clog)
 
 	f, err := os.Open("testdata.nq")
 	if err != nil {
-		return dir1, dir2, clog, err
+		return dir1, dir2, nil, clog, err
 	}
 	defer f.Close()
-	_, err = loader.HandleRdfReader(f, 0, 1)
+	_, err = loader.HandleRdfReader(f, 0, 1, ps, ps)
 	if err != nil {
-		return dir1, dir2, clog, err
+		return dir1, dir2, nil, clog, err
 	}
-	return dir1, dir2, clog, nil
+	return dir1, dir2, ps, clog, nil
 }
 
 func closeAll(dir1, dir2 string, clog *commit.Logger) {
@@ -80,7 +80,7 @@ func closeAll(dir1, dir2 string, clog *commit.Logger) {
 }
 
 func TestQuery(t *testing.T) {
-	dir1, dir2, clog, err := prepare()
+	dir1, dir2, ps, clog, err := prepare()
 	if err != nil {
 		t.Error(err)
 		return
@@ -93,7 +93,7 @@ func TestQuery(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	g, err := query.ToSubGraph(gq)
+	g, err := query.ToSubGraph(gq, ps)
 	if err != nil {
 		t.Error(err)
 		return
@@ -137,7 +137,7 @@ func TestQuery(t *testing.T) {
 	}
 
 	ch := make(chan error)
-	go query.ProcessGraph(g, ch)
+	go query.ProcessGraph(g, ch, ps)
 	if err := <-ch; err != nil {
 		t.Error(err)
 		return
@@ -175,7 +175,7 @@ var q1 = `
 `
 
 func BenchmarkQuery(b *testing.B) {
-	dir1, dir2, clog, err := prepare()
+	dir1, dir2, ps, clog, err := prepare()
 	if err != nil {
 		b.Error(err)
 		return
@@ -189,14 +189,14 @@ func BenchmarkQuery(b *testing.B) {
 			b.Error(err)
 			return
 		}
-		g, err := query.ToSubGraph(gq)
+		g, err := query.ToSubGraph(gq, ps)
 		if err != nil {
 			b.Error(err)
 			return
 		}
 
 		ch := make(chan error)
-		go query.ProcessGraph(g, ch)
+		go query.ProcessGraph(g, ch, ps)
 		if err := <-ch; err != nil {
 			b.Error(err)
 			return
