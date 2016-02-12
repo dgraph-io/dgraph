@@ -88,11 +88,17 @@ func TestQuery(t *testing.T) {
 	defer closeAll(dir1, dir2, clog)
 
 	// Parse GQL into internal query representation.
-	g, err := gql.Parse(q0)
+	gq, err := gql.Parse(q0)
 	if err != nil {
 		t.Error(err)
 		return
 	}
+	g, err := query.ToSubGraph(gq)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
 	// Test internal query representation.
 	if len(g.Children) != 3 {
 		t.Errorf("Expected 3 children. Got: %v", len(g.Children))
@@ -178,11 +184,17 @@ func BenchmarkQuery(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		g, err := gql.Parse(q1)
+		gq, err := gql.Parse(q1)
 		if err != nil {
 			b.Error(err)
 			return
 		}
+		g, err := query.ToSubGraph(gq)
+		if err != nil {
+			b.Error(err)
+			return
+		}
+
 		ch := make(chan error)
 		go query.ProcessGraph(g, ch)
 		if err := <-ch; err != nil {

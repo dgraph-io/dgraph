@@ -70,15 +70,23 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		x.SetStatus(w, x.E_INVALID_REQUEST, "Invalid request encountered.")
 		return
 	}
+
 	glog.WithField("q", string(q)).Debug("Query received.")
-	sg, err := gql.Parse(string(q))
+	gq, err := gql.Parse(string(q))
 	if err != nil {
 		x.Err(glog, err).Error("While parsing query")
 		x.SetStatus(w, x.E_INVALID_REQUEST, err.Error())
 		return
 	}
+	sg, err := query.ToSubGraph(gq)
+	if err != nil {
+		x.Err(glog, err).Error("While conversion to internal format")
+		x.SetStatus(w, x.E_INVALID_REQUEST, err.Error())
+		return
+	}
 	l.Parsing = time.Since(l.Start)
 	glog.WithField("q", string(q)).Debug("Query parsed.")
+
 	rch := make(chan error)
 	go query.ProcessGraph(sg, rch)
 	err = <-rch

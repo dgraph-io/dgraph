@@ -22,11 +22,19 @@ import (
 	"strconv"
 
 	"github.com/dgraph-io/dgraph/lex"
-	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/x"
 )
 
 var glog = x.Log("gql")
+
+// GraphQuery stores the parsed Query in a tree format. This gets
+// converted to internally used query.SubGraph before processing the query.
+type GraphQuery struct {
+	UID      uint64
+	XID      string
+	Attr     string
+	Children []*GraphQuery
+}
 
 func run(l *lex.Lexer) {
 	for state := lexText; state != nil; {
@@ -35,11 +43,11 @@ func run(l *lex.Lexer) {
 	close(l.Items) // No more tokens.
 }
 
-func Parse(input string) (sg *query.SubGraph, rerr error) {
+func Parse(input string) (gq *GraphQuery, rerr error) {
 	l := lex.NewLexer(input)
 	go run(l)
 
-	sg = nil
+	gq = nil
 	for item := range l.Items {
 		if item.Typ == itemText {
 			continue
@@ -50,23 +58,23 @@ func Parse(input string) (sg *query.SubGraph, rerr error) {
 			}
 		}
 		if item.Typ == itemLeftCurl {
-			if sg == nil {
-				sg, rerr = getRoot(l)
+			if gq == nil {
+				gq, rerr = getRoot(l)
 				if rerr != nil {
 					x.Err(glog, rerr).Error("While retrieving subgraph root")
 					return nil, rerr
 				}
 			} else {
-				if err := godeep(l, sg); err != nil {
-					return sg, err
+				if err := godeep(l, gq); err != nil {
+					return gq, err
 				}
 			}
 		}
 	}
-	return sg, nil
+	return gq, nil
 }
 
-func getRoot(l *lex.Lexer) (sg *query.SubGraph, rerr error) {
+func getRoot(l *lex.Lexer) (gq *GraphQuery, rerr error) {
 	item := <-l.Items
 	if item.Typ != itemName {
 		return nil, fmt.Errorf("Expected some name. Got: %v", item)
@@ -113,11 +121,14 @@ func getRoot(l *lex.Lexer) (sg *query.SubGraph, rerr error) {
 	if item.Typ != itemRightRound {
 		return nil, fmt.Errorf("Unexpected token. Got: %v", item)
 	}
-	return query.NewGraph(uid, xid)
+	gq = new(GraphQuery)
+	gq.UID = uid
+	gq.XID = xid
+	return gq, nil
 }
 
-func godeep(l *lex.Lexer, sg *query.SubGraph) error {
-	curp := sg // Used to track current node, for nesting.
+func godeep(l *lex.Lexer, gq *GraphQuery) error {
+	curp := gq // Used to track current node, for nesting.
 	for item := range l.Items {
 		if item.Typ == lex.ItemError {
 			return errors.New(item.Val)
@@ -126,9 +137,9 @@ func godeep(l *lex.Lexer, sg *query.SubGraph) error {
 			return nil
 
 		} else if item.Typ == itemName {
-			child := new(query.SubGraph)
+			child := new(GraphQuery)
 			child.Attr = item.Val
-			sg.Children = append(sg.Children, child)
+			gq.Children = append(gq.Children, child)
 			curp = child
 
 		} else if item.Typ == itemLeftCurl {
