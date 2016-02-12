@@ -15,9 +15,9 @@
  *
  *  compile : g++ merge.cc <path_to_rocksDB_installation>/librocksdb.so.4.1 --std=c++11 -lstdc++fs
  *  usage : ./<executable> <folder_having_rocksDB_directories_to_be_merged> <destination_folder>
- *  
+ *
  *  find the rocksdb headers here https://github.com/facebook/rocksdb/tree/master/include/rocksdb
- *           
+ *
  */
 
 #include <fstream>
@@ -26,7 +26,6 @@
 #include <string>
 #include "rocksdb/db.h"
 #include "rocksdb/options.h"
-
 #include <experimental/filesystem>
 
 using namespace rocksdb;
