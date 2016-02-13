@@ -28,6 +28,7 @@ import (
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/store"
+	"github.com/dgraph-io/dgraph/uid"
 	"github.com/dgraph-io/dgraph/worker"
 )
 
@@ -62,13 +63,15 @@ func prepare() (dir1, dir2 string, ps *store.Store, clog *commit.Logger, rerr er
 
 	posting.Init(clog)
 	worker.Init(ps)
+	uid.Init(ps)
+	loader.Init(ps, ps)
 
 	f, err := os.Open("testdata.nq")
 	if err != nil {
 		return dir1, dir2, nil, clog, err
 	}
 	defer f.Close()
-	_, err = loader.HandleRdfReader(f, 0, 1, ps, ps)
+	_, err = loader.HandleRdfReader(f, 0, 1)
 	if err != nil {
 		return dir1, dir2, nil, clog, err
 	}

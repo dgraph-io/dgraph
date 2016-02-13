@@ -28,6 +28,7 @@ import (
 	"github.com/dgraph-io/dgraph/loader"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/store"
+	"github.com/dgraph-io/dgraph/uid"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -75,6 +76,8 @@ func main() {
 	defer uidS.Close()
 
 	posting.Init(nil)
+	uid.Init(uidS)
+	loader.Init(uidS, ps)
 
 	files := strings.Split(*rdfGzips, ",")
 	for _, path := range files {
@@ -92,7 +95,7 @@ func main() {
 			glog.WithError(err).Fatal("Unable to create gzip reader.")
 		}
 
-		count, err := loader.HandleRdfReader(r, *instanceIdx, *numInstances, ps, uidS)
+		count, err := loader.HandleRdfReader(r, *instanceIdx, *numInstances)
 		if err != nil {
 			glog.WithError(err).Fatal("While handling rdf reader.")
 		}

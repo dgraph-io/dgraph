@@ -41,7 +41,7 @@ func GetUid(s string, instanceIdx uint64, numInstances uint64, rStore *store.Sto
 	if strings.HasPrefix(s, "_uid_:") {
 		return strconv.ParseUint(s[6:], 0, 64)
 	}
-	return uid.GetOrAssign(s, instanceIdx, numInstances, rStore)
+	return uid.GetOrAssign(s, instanceIdx, numInstances)
 }
 
 func (nq NQuad) ToEdge(instanceIdx, numInstances uint64, rStore *store.Store) (result x.DirectedEdge, rerr error) {

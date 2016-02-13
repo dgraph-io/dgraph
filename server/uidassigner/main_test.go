@@ -11,6 +11,7 @@ import (
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/store"
+	"github.com/dgraph-io/dgraph/uid"
 	"github.com/dgryski/go-farm"
 )
 
@@ -34,6 +35,8 @@ func TestQuery(t *testing.T) {
 	clog.Init()
 	defer clog.Close()
 	posting.Init(clog)
+
+	uid.Init(ps)
 
 	list := []string{"alice", "bob", "mallory", "ash", "man", "dgraph"}
 	for _, str := range list {

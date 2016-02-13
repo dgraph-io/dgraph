@@ -32,6 +32,7 @@ import (
 
 var glog = x.Log("uid")
 var lmgr *lockManager
+var rStore *store.Store
 
 type entry struct {
 	sync.Mutex
@@ -93,7 +94,11 @@ func init() {
 	// go lmgr.clean()
 }
 
-func allocateUniqueUid(xid string, instanceIdx uint64, numInstances uint64, rStore *store.Store) (uid uint64, rerr error) {
+func Init(ps *store.Store) {
+	rStore = ps
+}
+
+func allocateUniqueUid(xid string, instanceIdx uint64, numInstances uint64) (uid uint64, rerr error) {
 
 	mod := math.MaxUint64 / numInstances
 	minIdx := instanceIdx * mod
@@ -141,7 +146,7 @@ func allocateUniqueUid(xid string, instanceIdx uint64, numInstances uint64, rSto
 		" Wake the stupid developer up.")
 }
 
-func assignNew(pl *posting.List, xid string, instanceIdx uint64, numInstances uint64, rStore *store.Store) (uint64, error) {
+func assignNew(pl *posting.List, xid string, instanceIdx uint64, numInstances uint64) (uint64, error) {
 	entry := lmgr.newOrExisting(xid)
 	entry.Lock()
 	entry.ts = time.Now()
@@ -159,7 +164,7 @@ func assignNew(pl *posting.List, xid string, instanceIdx uint64, numInstances ui
 	}
 
 	// No current id exists. Create one.
-	uid, err := allocateUniqueUid(xid, instanceIdx, numInstances, rStore)
+	uid, err := allocateUniqueUid(xid, instanceIdx, numInstances)
 	if err != nil {
 		return 0, err
 	}
@@ -181,11 +186,11 @@ func stringKey(xid string) []byte {
 	return buf.Bytes()
 }
 
-func GetOrAssign(xid string, instanceIdx uint64, numInstances uint64, rStore *store.Store) (uid uint64, rerr error) {
+func GetOrAssign(xid string, instanceIdx uint64, numInstances uint64) (uid uint64, rerr error) {
 	key := stringKey(xid)
 	pl := posting.GetOrCreate(key, rStore)
 	if pl.Length() == 0 {
-		return assignNew(pl, xid, instanceIdx, numInstances, rStore)
+		return assignNew(pl, xid, instanceIdx, numInstances)
 
 	} else if pl.Length() > 1 {
 		glog.Fatalf("We shouldn't have more than 1 uid for xid: %v\n", xid)
@@ -202,7 +207,7 @@ func GetOrAssign(xid string, instanceIdx uint64, numInstances uint64, rStore *st
 		" Wake the stupid developer up.")
 }
 
-func ExternalId(uid uint64, rStore *store.Store) (xid string, rerr error) {
+func ExternalId(uid uint64) (xid string, rerr error) {
 	key := posting.Key(uid, "_xid_") // uid -> "_xid_" -> xid
 	pl := posting.GetOrCreate(key, rStore)
 	if pl.Length() == 0 {

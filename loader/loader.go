@@ -35,6 +35,7 @@ import (
 )
 
 var glog = x.Log("loader")
+var rStore, rwStore *store.Store
 
 type counters struct {
 	read      uint64
@@ -49,6 +50,11 @@ type state struct {
 	ctr          *counters
 	instanceIdx  uint64
 	numInstances uint64
+}
+
+func Init(rs, rws *store.Store) {
+	rStore = rs
+	rwStore = rws
 }
 
 func (s *state) printCounters(ticker *time.Ticker) {
@@ -121,7 +127,7 @@ func (s *state) parseStream(done chan error) {
 	done <- nil
 }
 
-func (s *state) handleNQuads(wg *sync.WaitGroup, rwStore, rStore *store.Store) {
+func (s *state) handleNQuads(wg *sync.WaitGroup) {
 	for nq := range s.cnq {
 		edge, err := nq.ToEdge(s.instanceIdx, s.numInstances, rStore)
 		for err != nil {
@@ -151,7 +157,7 @@ func (s *state) handleNQuads(wg *sync.WaitGroup, rwStore, rStore *store.Store) {
 	wg.Done()
 }
 
-func (s *state) getUidForString(str string, rwStore *store.Store) {
+func (s *state) getUidForString(str string) {
 	_, err := rdf.GetUid(str, s.instanceIdx, s.numInstances, rwStore)
 	for err != nil {
 		// Just put in a retry loop to tackle temporary errors.
@@ -168,13 +174,13 @@ func (s *state) getUidForString(str string, rwStore *store.Store) {
 	}
 }
 
-func (s *state) handleNQuadsWhileAssign(wg *sync.WaitGroup, rwStore *store.Store) {
+func (s *state) handleNQuadsWhileAssign(wg *sync.WaitGroup) {
 	for nq := range s.cnq {
 		if farm.Fingerprint64([]byte(nq.Subject))%s.numInstances != s.instanceIdx {
 			// This instance shouldnt assign UID to this string
 			atomic.AddUint64(&s.ctr.ignored, 1)
 		} else {
-			s.getUidForString(nq.Subject, rwStore)
+			s.getUidForString(nq.Subject)
 		}
 
 		if len(nq.ObjectId) == 0 ||
@@ -182,7 +188,7 @@ func (s *state) handleNQuadsWhileAssign(wg *sync.WaitGroup, rwStore *store.Store
 			// This instance shouldnt or cant assign UID to this string
 			atomic.AddUint64(&s.ctr.ignored, 1)
 		} else {
-			s.getUidForString(nq.ObjectId, rwStore)
+			s.getUidForString(nq.ObjectId)
 		}
 	}
 
@@ -190,7 +196,7 @@ func (s *state) handleNQuadsWhileAssign(wg *sync.WaitGroup, rwStore *store.Store
 }
 
 // Blocking function.
-func HandleRdfReader(reader io.Reader, instanceIdx uint64, numInstances uint64, rwStore, rStore *store.Store) (uint64, error) {
+func HandleRdfReader(reader io.Reader, instanceIdx uint64, numInstances uint64) (uint64, error) {
 	s := new(state)
 	s.ctr = new(counters)
 	ticker := time.NewTicker(time.Second)
@@ -212,7 +218,7 @@ func HandleRdfReader(reader io.Reader, instanceIdx uint64, numInstances uint64, 
 	wg := new(sync.WaitGroup)
 	for i := 0; i < 3000; i++ {
 		wg.Add(1)
-		go s.handleNQuads(wg, rwStore, rStore) // NQuads --> Posting list [slow].
+		go s.handleNQuads(wg) // NQuads --> Posting list [slow].
 	}
 
 	// Block until all parseStream goroutines are finished.
@@ -232,7 +238,7 @@ func HandleRdfReader(reader io.Reader, instanceIdx uint64, numInstances uint64, 
 }
 
 // Blocking function.
-func HandleRdfReaderWhileAssign(reader io.Reader, instanceIdx uint64, numInstances uint64, rwStore *store.Store) (uint64, error) {
+func HandleRdfReaderWhileAssign(reader io.Reader, instanceIdx uint64, numInstances uint64) (uint64, error) {
 	s := new(state)
 	s.ctr = new(counters)
 	ticker := time.NewTicker(time.Second)
@@ -254,7 +260,7 @@ func HandleRdfReaderWhileAssign(reader io.Reader, instanceIdx uint64, numInstanc
 	wg := new(sync.WaitGroup)
 	for i := 0; i < 3000; i++ {
 		wg.Add(1)
-		go s.handleNQuadsWhileAssign(wg, rwStore) //Different compared to HandleRdfReader
+		go s.handleNQuadsWhileAssign(wg) //Different compared to HandleRdfReader
 	}
 
 	// Block until all parseStream goroutines are finished.
