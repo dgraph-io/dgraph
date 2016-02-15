@@ -88,7 +88,7 @@ func TestQuery(t *testing.T) {
 	defer closeAll(dir1, dir2, clog)
 
 	// Parse GQL into internal query representation.
-	gq, err := gql.Parse(q0)
+	gq, _, err := gql.Parse(q0)
 	if err != nil {
 		t.Error(err)
 		return
@@ -184,7 +184,7 @@ func BenchmarkQuery(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		gq, err := gql.Parse(q1)
+		gq, _, err := gql.Parse(q1)
 		if err != nil {
 			b.Error(err)
 			return

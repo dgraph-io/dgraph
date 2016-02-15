@@ -18,6 +18,7 @@ package gql
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 )
 
@@ -41,7 +42,7 @@ func TestParse(t *testing.T) {
 	}
 `
 
-	gq, err := Parse(query)
+	gq, _, err := Parse(query)
 	if err != nil {
 		t.Error(err)
 	}
@@ -82,7 +83,7 @@ func TestParseXid(t *testing.T) {
 			type.object.name
 		}
 	}`
-	gq, err := Parse(query)
+	gq, _, err := Parse(query)
 	if err != nil {
 		t.Error(err)
 		return
@@ -99,22 +100,6 @@ func TestParseXid(t *testing.T) {
 	}
 }
 
-func TestParse_error1(t *testing.T) {
-	query := `
-		mutation {
-			me(_uid_:0x0a) {
-				name
-			}
-		}
-	`
-	var err error
-	_, err = Parse(query)
-	t.Log(err)
-	if err == nil {
-		t.Error("Expected error")
-	}
-}
-
 func TestParse_error2(t *testing.T) {
 	query := `
 		query {
@@ -124,7 +109,7 @@ func TestParse_error2(t *testing.T) {
 		}
 	`
 	var err error
-	_, err = Parse(query)
+	_, _, err = Parse(query)
 	t.Log(err)
 	if err == nil {
 		t.Error("Expected error")
@@ -141,7 +126,7 @@ func TestParse_pass1(t *testing.T) {
 			}
 		}
 	`
-	gq, err := Parse(query)
+	gq, _, err := Parse(query)
 	if err != nil {
 		t.Error(err)
 	}
@@ -168,7 +153,7 @@ func TestParse_block(t *testing.T) {
 			}
 		}
 	`
-	gq, err := Parse(query)
+	gq, _, err := Parse(query)
 	if err != nil {
 		t.Error(err)
 	}
@@ -176,6 +161,137 @@ func TestParse_block(t *testing.T) {
 		t.Errorf("Expected 1. Got: %v", len(gq.Children))
 	}
 	if err := checkAttr(gq.Children[0], "type.object.name.es-419"); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestParseMutation(t *testing.T) {
+	query := `
+		mutation {
+			set {
+				<name> <is> <something> .
+				<hometown> <is> <san francisco> .
+			}
+			delete {
+				<name> <is> <something-else> .
+			}
+		}
+	`
+	_, mu, err := Parse(query)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	if strings.Index(mu.Set, "<name> <is> <something> .") == -1 {
+		t.Error("Unable to find mutation content.")
+	}
+	if strings.Index(mu.Set, "<hometown> <is> <san francisco> .") == -1 {
+		t.Error("Unable to find mutation content.")
+	}
+	if strings.Index(mu.Del, "<name> <is> <something-else> .") == -1 {
+		t.Error("Unable to find mutation content.")
+	}
+}
+
+func TestParseMutation_error(t *testing.T) {
+	query := `
+		mutation {
+			set {
+				<name> <is> <something> .
+				<hometown> <is> <san francisco> .
+			}
+			delete {
+				<name> <is> <something-else> .
+		}
+	`
+	_, _, err := Parse(query)
+	if err == nil {
+		t.Error(err)
+		return
+	}
+	t.Log(err)
+}
+
+func TestParseMutation_error2(t *testing.T) {
+	query := `
+		mutation {
+			set {
+				<name> <is> <something> .
+				<hometown> <is> <san francisco> .
+			}
+			delete {
+				<name> <is> <something-else> .
+			}
+		}
+		mutation {
+			set {
+				another one?
+			}
+		}
+
+	`
+	_, _, err := Parse(query)
+	if err == nil {
+		t.Error(err)
+		return
+	}
+	t.Log(err)
+}
+
+func TestParseMutationAndQuery(t *testing.T) {
+	query := `
+		mutation {
+			set {
+				<name> <is> <something> .
+				<hometown> <is> <san francisco> .
+			}
+			delete {
+				<name> <is> <something-else> .
+			}
+		}
+		query {
+			me(_xid_: tomhanks) {
+				name
+				hometown
+			}
+		}
+	`
+	gq, mu, err := Parse(query)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	if mu == nil {
+		t.Error("mutation is nil")
+		return
+	}
+	if strings.Index(mu.Set, "<name> <is> <something> .") == -1 {
+		t.Error("Unable to find mutation content.")
+	}
+	if strings.Index(mu.Set, "<hometown> <is> <san francisco> .") == -1 {
+		t.Error("Unable to find mutation content.")
+	}
+	if strings.Index(mu.Del, "<name> <is> <something-else> .") == -1 {
+		t.Error("Unable to find mutation content.")
+	}
+
+	if gq == nil {
+		t.Error("subgraph is nil")
+		return
+	}
+	if gq.XID != "tomhanks" {
+		t.Error("Expected: tomhanks. Got: %v", gq.XID)
+		return
+	}
+	if len(gq.Children) != 2 {
+		t.Errorf("Expected 2 children. Got: %v", len(gq.Children))
+		return
+	}
+	if err := checkAttr(gq.Children[0], "name"); err != nil {
+		t.Error(err)
+	}
+	if err := checkAttr(gq.Children[1], "hometown"); err != nil {
 		t.Error(err)
 	}
 }

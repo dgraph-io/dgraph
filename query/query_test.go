@@ -190,7 +190,7 @@ func TestProcessGraph(t *testing.T) {
 			}
 		}
 	`
-	gq, err := gql.Parse(query)
+	gq, _, err := gql.Parse(query)
 	if err != nil {
 		t.Error(err)
 	}
@@ -282,7 +282,7 @@ func TestToJson(t *testing.T) {
 		}
 	`
 
-	gq, err := gql.Parse(query)
+	gq, _, err := gql.Parse(query)
 	if err != nil {
 		t.Error(err)
 	}
