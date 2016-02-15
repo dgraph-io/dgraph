@@ -19,22 +19,26 @@ package gql
 import "github.com/dgraph-io/dgraph/lex"
 
 const (
-	leftCurl  = '{'
-	rightCurl = '}'
+	leftCurl     = '{'
+	rightCurl    = '}'
+	queryMode    = 1
+	mutationMode = 2
 )
 
 const (
-	itemText       lex.ItemType = 5 + iota // plain text
-	itemLeftCurl                           // left curly bracket
-	itemRightCurl                          // right curly bracket
-	itemComment                            // comment
-	itemName                               // [9] names
-	itemOpType                             // operation type
-	itemString                             // quoted string
-	itemLeftRound                          // left round bracket
-	itemRightRound                         // right round bracket
-	itemArgName                            // argument name
-	itemArgVal                             // argument val
+	itemText            lex.ItemType = 5 + iota // plain text
+	itemLeftCurl                                // left curly bracket
+	itemRightCurl                               // right curly bracket
+	itemComment                                 // comment
+	itemName                                    // [9] names
+	itemOpType                                  // operation type
+	itemString                                  // quoted string
+	itemLeftRound                               // left round bracket
+	itemRightRound                              // right round bracket
+	itemArgName                                 // argument name
+	itemArgVal                                  // argument val
+	itemMutationOp                              // mutation operation
+	itemMutationContent                         // mutation content
 )
 
 func lexText(l *lex.Lexer) lex.StateFn {
@@ -47,7 +51,11 @@ Loop:
 			l.Next()         // advance one to get back to where we saw leftCurl.
 			l.Depth += 1     // one level down.
 			l.Emit(itemLeftCurl)
-			return lexInside // we're in.
+			if l.Mode == mutationMode {
+				return lexInsideMutation
+			} else {
+				return lexInside
+			}
 
 		case r == rightCurl:
 			return l.Errorf("Too many right characters")
@@ -79,7 +87,7 @@ func lexInside(l *lex.Lexer) lex.StateFn {
 			l.Depth += 1
 			l.Emit(itemLeftCurl)
 		case r == lex.EOF:
-			return l.Errorf("unclosed action")
+			return l.Errorf("Unclosed action")
 		case isSpace(r) || isEndOfLine(r) || r == ',':
 			l.Ignore()
 		case isNameBegin(r):
@@ -128,6 +136,64 @@ func lexComment(l *lex.Lexer) lex.StateFn {
 	return nil // Stop the run loop.
 }
 
+func lexInsideMutation(l *lex.Lexer) lex.StateFn {
+	for {
+		switch r := l.Next(); {
+		case r == rightCurl:
+			l.Depth -= 1
+			l.Emit(itemRightCurl)
+			if l.Depth == 0 {
+				return lexText
+			}
+		case r == leftCurl:
+			l.Depth += 1
+			l.Emit(itemLeftCurl)
+			if l.Depth >= 2 {
+				return lexTextMutation
+			}
+		case r == lex.EOF:
+			return l.Errorf("Unclosed mutation action")
+		case isSpace(r) || isEndOfLine(r):
+			l.Ignore()
+		case isNameBegin(r):
+			return lexNameMutation
+		default:
+			return l.Errorf("Unrecognized character in lexInsideMutation: %#U", r)
+		}
+	}
+}
+
+func lexNameMutation(l *lex.Lexer) lex.StateFn {
+	for {
+		// The caller already checked isNameBegin, and absorbed one rune.
+		r := l.Next()
+		if isNameBegin(r) {
+			continue
+		}
+		l.Backup()
+		l.Emit(itemMutationOp)
+		break
+	}
+	return lexInsideMutation
+}
+
+func lexTextMutation(l *lex.Lexer) lex.StateFn {
+	for {
+		r := l.Next()
+		if r == lex.EOF {
+			return l.Errorf("Unclosed mutation text")
+		}
+		if r != rightCurl {
+			// Absorb everything until we find '}'.
+			continue
+		}
+		l.Backup()
+		l.Emit(itemMutationContent)
+		break
+	}
+	return lexInsideMutation
+}
+
 func lexOperationType(l *lex.Lexer) lex.StateFn {
 	for {
 		r := l.Next()
@@ -136,8 +202,13 @@ func lexOperationType(l *lex.Lexer) lex.StateFn {
 		}
 		l.Backup()
 		word := l.Input[l.Start:l.Pos]
-		if word == "query" || word == "mutation" {
+		if word == "mutation" {
 			l.Emit(itemOpType)
+			l.Mode = mutationMode
+
+		} else if word == "query" {
+			l.Emit(itemOpType)
+			l.Mode = queryMode
 		}
 		break
 	}
