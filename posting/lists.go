@@ -155,18 +155,16 @@ func checkMemoryUsage() {
 var stopTheWorld sync.RWMutex
 var lhmap *gotomic.Hash
 var dirtymap *gotomic.Hash
-var pstore *store.Store
 var clog *commit.Logger
 
-func Init(posting *store.Store, log *commit.Logger) {
+func Init(log *commit.Logger) {
 	lhmap = gotomic.NewHash()
 	dirtymap = gotomic.NewHash()
-	pstore = posting
 	clog = log
 	go checkMemoryUsage()
 }
 
-func GetOrCreate(key []byte) *List {
+func GetOrCreate(key []byte, pstore *store.Store) *List {
 	stopTheWorld.RLock()
 	defer stopTheWorld.RUnlock()
 

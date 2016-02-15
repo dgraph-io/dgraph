@@ -28,6 +28,7 @@ import (
 	"github.com/dgraph-io/dgraph/loader"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/store"
+	"github.com/dgraph-io/dgraph/uid"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -35,9 +36,12 @@ var glog = x.Log("loader_main")
 
 var rdfGzips = flag.String("rdfgzips", "",
 	"Comma separated gzip files containing RDF data")
-var instanceIdx = flag.Uint64("instanceIdx", 0, "Only pick entities, where Fingerprint % numInstance == instanceIdx.")
-var numInstances = flag.Uint64("numInstances", 1, "Total number of instances among which uid assigning is shared")
+var instanceIdx = flag.Uint64("instanceIdx", 0,
+	"Only pick entities, where Fingerprint % numInstance == instanceIdx.")
+var numInstances = flag.Uint64("numInstances", 1,
+	"Total number of instances among which uid assigning is shared")
 var postingDir = flag.String("postings", "", "Directory to store posting lists")
+var uidDir = flag.String("uidDir", "", "Directory to read UID posting lists")
 var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
 var numcpu = flag.Int("numCpu", runtime.NumCPU(), "Number of cores to be used by the process")
 
@@ -65,11 +69,17 @@ func main() {
 	if len(*rdfGzips) == 0 {
 		glog.Fatal("No RDF GZIP files specified")
 	}
-	ps := new(store.Store)
-	ps.Init(*postingDir)
-	defer ps.Close()
+	dataStore := new(store.Store)
+	dataStore.Init(*postingDir)
+	defer dataStore.Close()
 
-	posting.Init(ps, nil)
+	uidStore := new(store.Store)
+	uidStore.Init(*uidDir)
+	defer uidStore.Close()
+
+	posting.Init(nil)
+	uid.Init(uidStore)
+	loader.Init(uidStore, dataStore)
 
 	files := strings.Split(*rdfGzips, ",")
 	for _, path := range files {
