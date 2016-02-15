@@ -36,8 +36,10 @@ var glog = x.Log("loader_main")
 
 var rdfGzips = flag.String("rdfgzips", "",
 	"Comma separated gzip files containing RDF data")
-var instanceIdx = flag.Uint64("instanceIdx", 0, "Only pick entities, where Fingerprint % numInstance == instanceIdx.")
-var numInstances = flag.Uint64("numInstances", 1, "Total number of instances among which uid assigning is shared")
+var instanceIdx = flag.Uint64("instanceIdx", 0,
+	"Only pick entities, where Fingerprint % numInstance == instanceIdx.")
+var numInstances = flag.Uint64("numInstances", 1,
+	"Total number of instances among which uid assigning is shared")
 var postingDir = flag.String("postings", "", "Directory to store posting lists")
 var uidDir = flag.String("uidDir", "", "Directory to read UID posting lists")
 var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
