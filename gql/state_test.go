@@ -17,7 +17,6 @@
 package gql
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/dgraph-io/dgraph/lex"
@@ -25,7 +24,7 @@ import (
 
 func TestNewLexer(t *testing.T) {
 	input := `
-	mutation {
+	query {
 		me( id: 10, xid: rick ) {
 			name0 # my name
 			_city, # 0what would fail lex.
@@ -38,6 +37,56 @@ func TestNewLexer(t *testing.T) {
 	l := lex.NewLexer(input)
 	go run(l)
 	for item := range l.Items {
-		fmt.Println(item.String())
+		if item.Typ == lex.ItemError {
+			t.Error(item.String())
+		}
+		t.Log(item.String())
+	}
+}
+
+func TestNewLexerMutation(t *testing.T) {
+	input := `
+	mutation {
+		set {
+			What is <this> .
+			Why is this #!!?
+			How is this?
+		}
+		delete {
+			Why is this
+		}
+	}
+	query {
+		me(xid: rick) {
+			_city
+		}
+	}`
+	l := lex.NewLexer(input)
+	go run(l)
+	for item := range l.Items {
+		if item.Typ == lex.ItemError {
+			t.Error(item.String())
+		}
+		t.Log(item.String())
+	}
+}
+
+func TestAbruptMutation(t *testing.T) {
+	input := `
+	mutation {
+		set {
+			What is <this> .
+			Why is this #!!?
+			How is this?
+	}`
+	l := lex.NewLexer(input)
+	go run(l)
+	var typ lex.ItemType
+	for item := range l.Items {
+		t.Log(item.String())
+		typ = item.Typ
+	}
+	if typ != lex.ItemError {
+		t.Error("This should fail.")
 	}
 }

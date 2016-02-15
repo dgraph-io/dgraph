@@ -63,6 +63,7 @@ type Lexer struct {
 	Width int       // width of last rune read from input.
 	Items chan item // channel of scanned items.
 	Depth int       // nesting of {}
+	Mode  int       // mode based on information so far.
 }
 
 func NewLexer(input string) *Lexer {

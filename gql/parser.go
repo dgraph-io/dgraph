@@ -36,6 +36,11 @@ type GraphQuery struct {
 	Children []*GraphQuery
 }
 
+type Mutation struct {
+	Set string
+	Del string
+}
+
 func run(l *lex.Lexer) {
 	for state := lexText; state != nil; {
 		state = state(l)
@@ -43,10 +48,11 @@ func run(l *lex.Lexer) {
 	close(l.Items) // No more tokens.
 }
 
-func Parse(input string) (gq *GraphQuery, rerr error) {
+func Parse(input string) (gq *GraphQuery, mu *Mutation, rerr error) {
 	l := lex.NewLexer(input)
 	go run(l)
 
+	mu = nil
 	gq = nil
 	for item := range l.Items {
 		if item.Typ == itemText {
@@ -54,7 +60,13 @@ func Parse(input string) (gq *GraphQuery, rerr error) {
 		}
 		if item.Typ == itemOpType {
 			if item.Val == "mutation" {
-				return nil, errors.New("Mutations not supported")
+				if mu != nil {
+					return nil, nil, errors.New("Only one mutation block allowed.")
+				}
+				mu, rerr = getMutation(l)
+				if rerr != nil {
+					return nil, nil, rerr
+				}
 			}
 		}
 		if item.Typ == itemLeftCurl {
@@ -62,16 +74,71 @@ func Parse(input string) (gq *GraphQuery, rerr error) {
 				gq, rerr = getRoot(l)
 				if rerr != nil {
 					x.Err(glog, rerr).Error("While retrieving subgraph root")
-					return nil, rerr
+					return nil, nil, rerr
 				}
 			} else {
 				if err := godeep(l, gq); err != nil {
-					return gq, err
+					return nil, nil, err
 				}
 			}
 		}
 	}
-	return gq, nil
+	return gq, mu, nil
+}
+
+func getMutation(l *lex.Lexer) (mu *Mutation, rerr error) {
+	for item := range l.Items {
+		if item.Typ == itemText {
+			continue
+		}
+		if item.Typ == itemLeftCurl {
+			mu = new(Mutation)
+		}
+		if item.Typ == itemRightCurl {
+			return mu, nil
+		}
+		if item.Typ == itemMutationOp {
+			if err := parseMutationOp(l, item.Val, mu); err != nil {
+				return nil, err
+			}
+		}
+	}
+	return nil, errors.New("Invalid mutation.")
+}
+
+func parseMutationOp(l *lex.Lexer, op string, mu *Mutation) error {
+	if mu == nil {
+		return errors.New("Mutation is nil.")
+	}
+
+	parse := false
+	for item := range l.Items {
+		if item.Typ == itemText {
+			continue
+		}
+		if item.Typ == itemLeftCurl {
+			if parse {
+				return errors.New("Too many left curls in set mutation.")
+			}
+			parse = true
+		}
+		if item.Typ == itemMutationContent {
+			if !parse {
+				return errors.New("Mutation syntax invalid.")
+			}
+			if op == "set" {
+				mu.Set = item.Val
+			} else if op == "delete" {
+				mu.Del = item.Val
+			} else {
+				return errors.New("Invalid mutation operation.")
+			}
+		}
+		if item.Typ == itemRightCurl {
+			return nil
+		}
+	}
+	return errors.New("Invalid mutation formatting.")
 }
 
 func getRoot(l *lex.Lexer) (gq *GraphQuery, rerr error) {
