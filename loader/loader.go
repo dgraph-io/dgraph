@@ -52,9 +52,9 @@ type state struct {
 	numInstances uint64
 }
 
-func Init(rs, rws *store.Store) {
-	uidStore = rs
-	dataStore = rws
+func Init(uidstore, datastore *store.Store) {
+	uidStore = uidstore
+	dataStore = datastore
 }
 
 func (s *state) printCounters(ticker *time.Ticker) {
@@ -239,7 +239,8 @@ func HandleRdfReader(reader io.Reader, instanceIdx uint64, numInstances uint64) 
 }
 
 // Blocking function.
-func HandleRdfReaderWhileAssign(reader io.Reader, instanceIdx uint64, numInstances uint64) (uint64, error) {
+func HandleRdfReaderWhileAssign(reader io.Reader, instanceIdx uint64,
+	numInstances uint64) (uint64, error) {
 	s := new(state)
 	s.ctr = new(counters)
 	ticker := time.NewTicker(time.Second)

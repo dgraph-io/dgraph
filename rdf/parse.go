@@ -37,14 +37,16 @@ type NQuad struct {
 	Language    string
 }
 
-func GetUid(s string, instanceIdx uint64, numInstances uint64, rStore *store.Store) (uint64, error) {
+func GetUid(s string, instanceIdx uint64, numInstances uint64,
+	rStore *store.Store) (uint64, error) {
 	if strings.HasPrefix(s, "_uid_:") {
 		return strconv.ParseUint(s[6:], 0, 64)
 	}
 	return uid.GetOrAssign(s, instanceIdx, numInstances)
 }
 
-func (nq NQuad) ToEdge(instanceIdx, numInstances uint64, rStore *store.Store) (result x.DirectedEdge, rerr error) {
+func (nq NQuad) ToEdge(instanceIdx, numInstances uint64,
+	rStore *store.Store) (result x.DirectedEdge, rerr error) {
 	sid, err := GetUid(nq.Subject, instanceIdx, numInstances, rStore)
 	if err != nil {
 		return result, err
@@ -104,7 +106,8 @@ func Parse(line string) (rnq NQuad, rerr error) {
 			// TODO: Strictly parse common types like integers, floats etc.
 			if len(oval) == 0 {
 				glog.Fatalf(
-					"itemObject should be emitted before itemObjectType. Input: %q", line)
+					"itemObject should be emitted before itemObjectType. Input: %q",
+					line)
 			}
 			oval += "@@" + stripBracketsIfPresent(item.Val)
 		}
