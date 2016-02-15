@@ -8,10 +8,10 @@ import (
 	"github.com/google/flatbuffers/go"
 )
 
-var pstore *store.Store
+var dataStore *store.Store
 
 func Init(ps *store.Store) {
-	pstore = ps
+	dataStore = ps
 }
 
 func ProcessTask(query []byte) (result []byte, rerr error) {
@@ -27,7 +27,7 @@ func ProcessTask(query []byte) (result []byte, rerr error) {
 	for i := 0; i < q.UidsLength(); i++ {
 		uid := q.Uids(i)
 		key := posting.Key(uid, attr)
-		pl := posting.GetOrCreate(key, pstore)
+		pl := posting.GetOrCreate(key, dataStore)
 
 		var valoffset flatbuffers.UOffsetT
 		if val, err := pl.Value(); err != nil {

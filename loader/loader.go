@@ -35,7 +35,7 @@ import (
 )
 
 var glog = x.Log("loader")
-var rStore, rwStore *store.Store
+var uidStore, dataStore *store.Store
 
 type counters struct {
 	read      uint64
@@ -53,8 +53,8 @@ type state struct {
 }
 
 func Init(rs, rws *store.Store) {
-	rStore = rs
-	rwStore = rws
+	uidStore = rs
+	dataStore = rws
 }
 
 func (s *state) printCounters(ticker *time.Ticker) {
@@ -129,7 +129,7 @@ func (s *state) parseStream(done chan error) {
 
 func (s *state) handleNQuads(wg *sync.WaitGroup) {
 	for nq := range s.cnq {
-		edge, err := nq.ToEdge(s.instanceIdx, s.numInstances, rStore)
+		edge, err := nq.ToEdge(s.instanceIdx, s.numInstances, uidStore)
 		for err != nil {
 			// Just put in a retry loop to tackle temporary errors.
 			if err == posting.E_TMP_ERROR {
@@ -140,13 +140,14 @@ func (s *state) handleNQuads(wg *sync.WaitGroup) {
 					Error("While converting to edge")
 				return
 			}
-			edge, err = nq.ToEdge(s.instanceIdx, s.numInstances, rStore)
+			edge, err = nq.ToEdge(s.instanceIdx, s.numInstances, uidStore)
 		}
 
 		// Only handle this edge if the attribute satisfies the modulo rule
-		if farm.Fingerprint64([]byte(edge.Attribute))%s.numInstances == s.instanceIdx {
+		if farm.Fingerprint64([]byte(edge.Attribute))%s.numInstances ==
+			s.instanceIdx {
 			key := posting.Key(edge.Entity, edge.Attribute)
-			plist := posting.GetOrCreate(key, rwStore)
+			plist := posting.GetOrCreate(key, dataStore)
 			plist.AddMutation(edge, posting.Set)
 			atomic.AddUint64(&s.ctr.processed, 1)
 		} else {
@@ -158,7 +159,7 @@ func (s *state) handleNQuads(wg *sync.WaitGroup) {
 }
 
 func (s *state) getUidForString(str string) {
-	_, err := rdf.GetUid(str, s.instanceIdx, s.numInstances, rwStore)
+	_, err := rdf.GetUid(str, s.instanceIdx, s.numInstances, dataStore)
 	for err != nil {
 		// Just put in a retry loop to tackle temporary errors.
 		if err == posting.E_TMP_ERROR {
@@ -170,7 +171,7 @@ func (s *state) getUidForString(str string) {
 				Error("While getting UID")
 			return
 		}
-		_, err = rdf.GetUid(str, s.instanceIdx, s.numInstances, rwStore)
+		_, err = rdf.GetUid(str, s.instanceIdx, s.numInstances, dataStore)
 	}
 }
 

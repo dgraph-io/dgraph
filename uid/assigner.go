@@ -32,7 +32,7 @@ import (
 
 var glog = x.Log("uid")
 var lmgr *lockManager
-var rStore *store.Store
+var uidStore *store.Store
 
 type entry struct {
 	sync.Mutex
@@ -95,7 +95,7 @@ func init() {
 }
 
 func Init(ps *store.Store) {
-	rStore = ps
+	uidStore = ps
 }
 
 func allocateUniqueUid(xid string, instanceIdx uint64, numInstances uint64) (uid uint64, rerr error) {
@@ -117,7 +117,7 @@ func allocateUniqueUid(xid string, instanceIdx uint64, numInstances uint64) (uid
 
 		// Check if this uid has already been allocated.
 		key := posting.Key(uid, "_xid_") // uid -> "_xid_" -> xid
-		pl := posting.GetOrCreate(key, rStore)
+		pl := posting.GetOrCreate(key, uidStore)
 
 		if pl.Length() > 0 {
 			// Something already present here.
@@ -146,7 +146,8 @@ func allocateUniqueUid(xid string, instanceIdx uint64, numInstances uint64) (uid
 		" Wake the stupid developer up.")
 }
 
-func assignNew(pl *posting.List, xid string, instanceIdx uint64, numInstances uint64) (uint64, error) {
+func assignNew(pl *posting.List, xid string, instanceIdx uint64,
+	numInstances uint64) (uint64, error) {
 	entry := lmgr.newOrExisting(xid)
 	entry.Lock()
 	entry.ts = time.Now()
@@ -188,7 +189,7 @@ func stringKey(xid string) []byte {
 
 func GetOrAssign(xid string, instanceIdx uint64, numInstances uint64) (uid uint64, rerr error) {
 	key := stringKey(xid)
-	pl := posting.GetOrCreate(key, rStore)
+	pl := posting.GetOrCreate(key, uidStore)
 	if pl.Length() == 0 {
 		return assignNew(pl, xid, instanceIdx, numInstances)
 
@@ -209,7 +210,7 @@ func GetOrAssign(xid string, instanceIdx uint64, numInstances uint64) (uid uint6
 
 func ExternalId(uid uint64) (xid string, rerr error) {
 	key := posting.Key(uid, "_xid_") // uid -> "_xid_" -> xid
-	pl := posting.GetOrCreate(key, rStore)
+	pl := posting.GetOrCreate(key, uidStore)
 	if pl.Length() == 0 {
 		return "", errors.New("NO external id")
 	}

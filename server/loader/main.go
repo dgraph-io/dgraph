@@ -67,17 +67,17 @@ func main() {
 	if len(*rdfGzips) == 0 {
 		glog.Fatal("No RDF GZIP files specified")
 	}
-	ps := new(store.Store)
-	ps.Init(*postingDir)
-	defer ps.Close()
+	dataStore := new(store.Store)
+	dataStore.Init(*postingDir)
+	defer dataStore.Close()
 
-	uidS := new(store.Store)
-	uidS.Init(*uidDir)
-	defer uidS.Close()
+	uidStore := new(store.Store)
+	uidStore.Init(*uidDir)
+	defer uidStore.Close()
 
 	posting.Init(nil)
-	uid.Init(uidS)
-	loader.Init(uidS, ps)
+	uid.Init(uidStore)
+	loader.Init(uidStore, dataStore)
 
 	files := strings.Split(*rdfGzips, ",")
 	for _, path := range files {
