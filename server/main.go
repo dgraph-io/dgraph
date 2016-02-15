@@ -75,7 +75,7 @@ func queryHandler(ps *store.Store) http.HandlerFunc {
 		}
 
 		glog.WithField("q", string(q)).Debug("Query received.")
-		gq, err := gql.Parse(string(q))
+		gq, _, err := gql.Parse(string(q))
 		if err != nil {
 			x.Err(glog, err).Error("While parsing query")
 			x.SetStatus(w, x.E_INVALID_REQUEST, err.Error())
