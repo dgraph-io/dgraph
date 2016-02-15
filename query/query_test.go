@@ -28,6 +28,7 @@ import (
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/task"
+	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/google/flatbuffers/go"
 )
@@ -88,10 +89,21 @@ func checkSingleValue(t *testing.T, child *SubGraph,
 func TestNewGraph(t *testing.T) {
 	var ex uint64
 	ex = 101
-	sg, err := newGraph(ex, "")
+
+	dir, err := ioutil.TempDir("", "storetest_")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	ps := new(store.Store)
+	ps.Init(dir)
+	sg, err := newGraph(ex, "", ps)
 	if err != nil {
 		t.Error(err)
 	}
+
+	worker.Init(ps)
 
 	uo := flatbuffers.GetUOffsetT(sg.result)
 	r := new(task.Result)
@@ -111,20 +123,22 @@ func TestNewGraph(t *testing.T) {
 	}
 }
 
-func populateGraph(t *testing.T) string {
+func populateGraph(t *testing.T) (string, *store.Store) {
 	// logrus.SetLevel(logrus.DebugLevel)
 	dir, err := ioutil.TempDir("", "storetest_")
 	if err != nil {
 		t.Error(err)
-		return ""
+		return "", nil
 	}
 
 	ps := new(store.Store)
 	ps.Init(dir)
 
+	worker.Init(ps)
+
 	clog := commit.NewLogger(dir, "mutations", 50<<20)
 	clog.Init()
-	posting.Init(ps, clog)
+	posting.Init(clog)
 
 	// So, user we're interested in has uid: 1.
 	// She has 4 friends: 23, 24, 25, 31, and 101
@@ -133,48 +147,48 @@ func populateGraph(t *testing.T) string {
 		Source:    "testing",
 		Timestamp: time.Now(),
 	}
-	addEdge(t, edge, posting.GetOrCreate(posting.Key(1, "friend")))
+	addEdge(t, edge, posting.GetOrCreate(posting.Key(1, "friend"), ps))
 
 	edge.ValueId = 24
-	addEdge(t, edge, posting.GetOrCreate(posting.Key(1, "friend")))
+	addEdge(t, edge, posting.GetOrCreate(posting.Key(1, "friend"), ps))
 
 	edge.ValueId = 25
-	addEdge(t, edge, posting.GetOrCreate(posting.Key(1, "friend")))
+	addEdge(t, edge, posting.GetOrCreate(posting.Key(1, "friend"), ps))
 
 	edge.ValueId = 31
-	addEdge(t, edge, posting.GetOrCreate(posting.Key(1, "friend")))
+	addEdge(t, edge, posting.GetOrCreate(posting.Key(1, "friend"), ps))
 
 	edge.ValueId = 101
-	addEdge(t, edge, posting.GetOrCreate(posting.Key(1, "friend")))
+	addEdge(t, edge, posting.GetOrCreate(posting.Key(1, "friend"), ps))
 
 	// Now let's add a few properties for the main user.
 	edge.Value = "Michonne"
-	addEdge(t, edge, posting.GetOrCreate(posting.Key(1, "name")))
+	addEdge(t, edge, posting.GetOrCreate(posting.Key(1, "name"), ps))
 
 	edge.Value = "female"
-	addEdge(t, edge, posting.GetOrCreate(posting.Key(1, "gender")))
+	addEdge(t, edge, posting.GetOrCreate(posting.Key(1, "gender"), ps))
 
 	edge.Value = "alive"
-	addEdge(t, edge, posting.GetOrCreate(posting.Key(1, "status")))
+	addEdge(t, edge, posting.GetOrCreate(posting.Key(1, "status"), ps))
 
 	// Now let's add a name for each of the friends, except 101.
 	edge.Value = "Rick Grimes"
-	addEdge(t, edge, posting.GetOrCreate(posting.Key(23, "name")))
+	addEdge(t, edge, posting.GetOrCreate(posting.Key(23, "name"), ps))
 
 	edge.Value = "Glenn Rhee"
-	addEdge(t, edge, posting.GetOrCreate(posting.Key(24, "name")))
+	addEdge(t, edge, posting.GetOrCreate(posting.Key(24, "name"), ps))
 
 	edge.Value = "Daryl Dixon"
-	addEdge(t, edge, posting.GetOrCreate(posting.Key(25, "name")))
+	addEdge(t, edge, posting.GetOrCreate(posting.Key(25, "name"), ps))
 
 	edge.Value = "Andrea"
-	addEdge(t, edge, posting.GetOrCreate(posting.Key(31, "name")))
+	addEdge(t, edge, posting.GetOrCreate(posting.Key(31, "name"), ps))
 
-	return dir
+	return dir, ps
 }
 
 func TestProcessGraph(t *testing.T) {
-	dir := populateGraph(t)
+	dir, ps := populateGraph(t)
 	defer os.RemoveAll(dir)
 
 	// Alright. Now we have everything set up. Let's create the query.
@@ -194,13 +208,13 @@ func TestProcessGraph(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	sg, err := ToSubGraph(gq)
+	sg, err := ToSubGraph(gq, ps)
 	if err != nil {
 		t.Error(err)
 	}
 
 	ch := make(chan error)
-	go ProcessGraph(sg, ch)
+	go ProcessGraph(sg, ch, ps)
 	err = <-ch
 	if err != nil {
 		t.Error(err)
@@ -265,7 +279,7 @@ func TestProcessGraph(t *testing.T) {
 }
 
 func TestToJson(t *testing.T) {
-	dir := populateGraph(t)
+	dir, ps := populateGraph(t)
 	defer os.RemoveAll(dir)
 
 	// Alright. Now we have everything set up. Let's create the query.
@@ -286,13 +300,13 @@ func TestToJson(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	sg, err := ToSubGraph(gq)
+	sg, err := ToSubGraph(gq, ps)
 	if err != nil {
 		t.Error(err)
 	}
 
 	ch := make(chan error)
-	go ProcessGraph(sg, ch)
+	go ProcessGraph(sg, ch, ps)
 	err = <-ch
 	if err != nil {
 		t.Error(err)

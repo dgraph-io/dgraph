@@ -12,6 +12,7 @@ import (
 	"github.com/dgraph-io/dgraph/loader"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/store"
+	"github.com/dgraph-io/dgraph/uid"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -19,8 +20,10 @@ var glog = x.Log("uidassigner_main")
 
 var rdfGzips = flag.String("rdfgzips", "",
 	"Comma separated gzip files containing RDF data")
-var instanceIdx = flag.Uint64("instanceIdx", 0, "Only pick entities, where Fingerprint % numInstance == instanceIdx.")
-var numInstances = flag.Uint64("numInstances", 1, "Total number of instances among which uid assigning is shared")
+var instanceIdx = flag.Uint64("instanceIdx", 0,
+	"Only pick entities, where Fingerprint % numInstance == instanceIdx.")
+var numInstances = flag.Uint64("numInstances", 1,
+	"Total number of instances among which uid assigning is shared")
 var uidDir = flag.String("uidpostings", "", "Directory to store xid to uid posting lists")
 var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
 var numcpu = flag.Int("numCpu", runtime.NumCPU(), "Number of cores to be used by the process")
@@ -48,7 +51,7 @@ func main() {
 
 	glog.WithField("instanceIdx", *instanceIdx).
 		WithField("numInstances", *numInstances).
-		Info("Only those XIDs which satisfy FP(xid) % numInstance == instanceIdx will be given UID")
+		Info("Only those XIDs with FP(xid) % numInstance == instanceIdx will be given UID")
 
 	if len(*rdfGzips) == 0 {
 		glog.Fatal("No RDF GZIP files specified")
@@ -58,7 +61,9 @@ func main() {
 	ps.Init(*uidDir)
 	defer ps.Close()
 
-	posting.Init(ps, nil)
+	posting.Init(nil)
+	uid.Init(ps)
+	loader.Init(nil, ps)
 
 	files := strings.Split(*rdfGzips, ",")
 	for _, path := range files {

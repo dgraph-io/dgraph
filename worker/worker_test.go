@@ -1,4 +1,4 @@
-package posting
+package worker
 
 import (
 	"fmt"
@@ -8,14 +8,15 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgraph/commit"
+	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/google/flatbuffers/go"
 )
 
-func addEdge(t *testing.T, edge x.DirectedEdge, l *List) {
-	if err := l.AddMutation(edge, Set); err != nil {
+func addEdge(t *testing.T, edge x.DirectedEdge, l *posting.List) {
+	if err := l.AddMutation(edge, posting.Set); err != nil {
 		t.Error(err)
 	}
 }
@@ -56,29 +57,30 @@ func TestProcessTask(t *testing.T) {
 	clog.Init()
 	defer clog.Close()
 
-	Init(ps, clog)
+	posting.Init(clog)
+	Init(ps)
 
 	edge := x.DirectedEdge{
 		ValueId:   23,
 		Source:    "author0",
 		Timestamp: time.Now(),
 	}
-	addEdge(t, edge, GetOrCreate(Key(10, "friend")))
-	addEdge(t, edge, GetOrCreate(Key(11, "friend")))
-	addEdge(t, edge, GetOrCreate(Key(12, "friend")))
+	addEdge(t, edge, posting.GetOrCreate(posting.Key(10, "friend"), ps))
+	addEdge(t, edge, posting.GetOrCreate(posting.Key(11, "friend"), ps))
+	addEdge(t, edge, posting.GetOrCreate(posting.Key(12, "friend"), ps))
 
 	edge.ValueId = 25
-	addEdge(t, edge, GetOrCreate(Key(12, "friend")))
+	addEdge(t, edge, posting.GetOrCreate(posting.Key(12, "friend"), ps))
 
 	edge.ValueId = 26
-	addEdge(t, edge, GetOrCreate(Key(12, "friend")))
+	addEdge(t, edge, posting.GetOrCreate(posting.Key(12, "friend"), ps))
 
 	edge.ValueId = 31
-	addEdge(t, edge, GetOrCreate(Key(10, "friend")))
-	addEdge(t, edge, GetOrCreate(Key(12, "friend")))
+	addEdge(t, edge, posting.GetOrCreate(posting.Key(10, "friend"), ps))
+	addEdge(t, edge, posting.GetOrCreate(posting.Key(12, "friend"), ps))
 
 	edge.Value = "photon"
-	addEdge(t, edge, GetOrCreate(Key(12, "friend")))
+	addEdge(t, edge, posting.GetOrCreate(posting.Key(12, "friend"), ps))
 
 	query := NewQuery("friend", []uint64{10, 11, 12})
 	result, err := ProcessTask(query)
@@ -126,7 +128,7 @@ func TestProcessTask(t *testing.T) {
 		t.Errorf("Unable to retrieve value")
 	}
 	var iout interface{}
-	if err := ParseValue(&iout, tval.ValBytes()); err != nil {
+	if err := posting.ParseValue(&iout, tval.ValBytes()); err != nil {
 		t.Error(err)
 	}
 	v := iout.(string)

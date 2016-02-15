@@ -25,12 +25,14 @@ import (
 
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/posting/types"
+	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgryski/go-farm"
 )
 
 var glog = x.Log("uid")
 var lmgr *lockManager
+var uidStore *store.Store
 
 type entry struct {
 	sync.Mutex
@@ -92,6 +94,10 @@ func init() {
 	// go lmgr.clean()
 }
 
+func Init(ps *store.Store) {
+	uidStore = ps
+}
+
 func allocateUniqueUid(xid string, instanceIdx uint64, numInstances uint64) (uid uint64, rerr error) {
 
 	mod := math.MaxUint64 / numInstances
@@ -111,7 +117,7 @@ func allocateUniqueUid(xid string, instanceIdx uint64, numInstances uint64) (uid
 
 		// Check if this uid has already been allocated.
 		key := posting.Key(uid, "_xid_") // uid -> "_xid_" -> xid
-		pl := posting.GetOrCreate(key)
+		pl := posting.GetOrCreate(key, uidStore)
 
 		if pl.Length() > 0 {
 			// Something already present here.
@@ -140,7 +146,8 @@ func allocateUniqueUid(xid string, instanceIdx uint64, numInstances uint64) (uid
 		" Wake the stupid developer up.")
 }
 
-func assignNew(pl *posting.List, xid string, instanceIdx uint64, numInstances uint64) (uint64, error) {
+func assignNew(pl *posting.List, xid string, instanceIdx uint64,
+	numInstances uint64) (uint64, error) {
 	entry := lmgr.newOrExisting(xid)
 	entry.Lock()
 	entry.ts = time.Now()
@@ -182,7 +189,7 @@ func stringKey(xid string) []byte {
 
 func GetOrAssign(xid string, instanceIdx uint64, numInstances uint64) (uid uint64, rerr error) {
 	key := stringKey(xid)
-	pl := posting.GetOrCreate(key)
+	pl := posting.GetOrCreate(key, uidStore)
 	if pl.Length() == 0 {
 		return assignNew(pl, xid, instanceIdx, numInstances)
 
@@ -203,7 +210,7 @@ func GetOrAssign(xid string, instanceIdx uint64, numInstances uint64) (uid uint6
 
 func ExternalId(uid uint64) (xid string, rerr error) {
 	key := posting.Key(uid, "_xid_") // uid -> "_xid_" -> xid
-	pl := posting.GetOrCreate(key)
+	pl := posting.GetOrCreate(key, uidStore)
 	if pl.Length() == 0 {
 		return "", errors.New("NO external id")
 	}
