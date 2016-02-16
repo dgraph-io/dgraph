@@ -43,7 +43,8 @@ var numInstances = flag.Uint64("numInstances", 1,
 var postingDir = flag.String("postings", "", "Directory to store posting lists")
 var uidDir = flag.String("uidDir", "", "Directory to read UID posting lists")
 var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
-var numcpu = flag.Int("numCpu", runtime.NumCPU(), "Number of cores to be used by the process")
+var numcpu = flag.Int("numCpu", runtime.NumCPU(),
+	"Number of cores to be used by the process")
 
 func main() {
 	flag.Parse()

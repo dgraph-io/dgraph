@@ -98,11 +98,11 @@ func Init(ps *store.Store) {
 	uidStore = ps
 }
 
-func allocateUniqueUid(xid string, instanceIdx uint64, numInstances uint64) (uid uint64, rerr error) {
+func allocateUniqueUid(xid string, instanceIdx uint64,
+	numInstances uint64) (uid uint64, rerr error) {
 
 	mod := math.MaxUint64 / numInstances
 	minIdx := instanceIdx * mod
-
 	for sp := ""; ; sp += " " {
 		txid := xid + sp
 
@@ -148,6 +148,7 @@ func allocateUniqueUid(xid string, instanceIdx uint64, numInstances uint64) (uid
 
 func assignNew(pl *posting.List, xid string, instanceIdx uint64,
 	numInstances uint64) (uint64, error) {
+
 	entry := lmgr.newOrExisting(xid)
 	entry.Lock()
 	entry.ts = time.Now()
@@ -187,7 +188,9 @@ func stringKey(xid string) []byte {
 	return buf.Bytes()
 }
 
-func GetOrAssign(xid string, instanceIdx uint64, numInstances uint64) (uid uint64, rerr error) {
+func GetOrAssign(xid string, instanceIdx uint64,
+	numInstances uint64) (uid uint64, rerr error) {
+
 	key := stringKey(xid)
 	pl := posting.GetOrCreate(key, uidStore)
 	if pl.Length() == 0 {

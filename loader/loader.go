@@ -197,7 +197,9 @@ func (s *state) handleNQuadsWhileAssign(wg *sync.WaitGroup) {
 }
 
 // Blocking function.
-func HandleRdfReader(reader io.Reader, instanceIdx uint64, numInstances uint64) (uint64, error) {
+func HandleRdfReader(reader io.Reader, instanceIdx uint64,
+	numInstances uint64) (uint64, error) {
+
 	s := new(state)
 	s.ctr = new(counters)
 	ticker := time.NewTicker(time.Second)
