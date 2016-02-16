@@ -24,9 +24,11 @@ var instanceIdx = flag.Uint64("instanceIdx", 0,
 	"Only pick entities, where Fingerprint % numInstance == instanceIdx.")
 var numInstances = flag.Uint64("numInstances", 1,
 	"Total number of instances among which uid assigning is shared")
-var uidDir = flag.String("uidpostings", "", "Directory to store xid to uid posting lists")
+var uidDir = flag.String("uidpostings", "",
+	"Directory to store xid to uid posting lists")
 var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
-var numcpu = flag.Int("numCpu", runtime.NumCPU(), "Number of cores to be used by the process")
+var numcpu = flag.Int("numCpu", runtime.NumCPU(),
+	"Number of cores to be used by the process")
 
 func main() {
 	flag.Parse()
@@ -51,7 +53,7 @@ func main() {
 
 	glog.WithField("instanceIdx", *instanceIdx).
 		WithField("numInstances", *numInstances).
-		Info("Only those XIDs with FP(xid) % numInstance == instanceIdx will be given UID")
+		Info("Only XIDs with FP(xid)%numInstance == instanceIdx will be given UID")
 
 	if len(*rdfGzips) == 0 {
 		glog.Fatal("No RDF GZIP files specified")
@@ -81,7 +83,8 @@ func main() {
 			glog.WithError(err).Fatal("Unable to create gzip reader.")
 		}
 
-		count, err := loader.HandleRdfReaderWhileAssign(r, *instanceIdx, *numInstances)
+		count, err := loader.HandleRdfReaderWhileAssign(r, *instanceIdx,
+			*numInstances)
 		if err != nil {
 			glog.WithError(err).Fatal("While handling rdf reader.")
 		}

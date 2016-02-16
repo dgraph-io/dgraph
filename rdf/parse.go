@@ -23,7 +23,6 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgraph/lex"
-	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/uid"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -37,23 +36,23 @@ type NQuad struct {
 	Language    string
 }
 
-func GetUid(s string, instanceIdx uint64, numInstances uint64,
-	rStore *store.Store) (uint64, error) {
+func GetUid(s string, instanceIdx uint64, numInstances uint64) (uint64, error) {
 	if strings.HasPrefix(s, "_uid_:") {
 		return strconv.ParseUint(s[6:], 0, 64)
 	}
 	return uid.GetOrAssign(s, instanceIdx, numInstances)
 }
 
-func (nq NQuad) ToEdge(instanceIdx, numInstances uint64,
-	rStore *store.Store) (result x.DirectedEdge, rerr error) {
-	sid, err := GetUid(nq.Subject, instanceIdx, numInstances, rStore)
+func (nq NQuad) ToEdge(instanceIdx,
+	numInstances uint64) (result x.DirectedEdge, rerr error) {
+
+	sid, err := GetUid(nq.Subject, instanceIdx, numInstances)
 	if err != nil {
 		return result, err
 	}
 	result.Entity = sid
 	if len(nq.ObjectId) > 0 {
-		oid, err := GetUid(nq.ObjectId, instanceIdx, numInstances, rStore)
+		oid, err := GetUid(nq.ObjectId, instanceIdx, numInstances)
 		if err != nil {
 			return result, err
 		}

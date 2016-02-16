@@ -129,7 +129,7 @@ func (s *state) parseStream(done chan error) {
 
 func (s *state) handleNQuads(wg *sync.WaitGroup) {
 	for nq := range s.cnq {
-		edge, err := nq.ToEdge(s.instanceIdx, s.numInstances, uidStore)
+		edge, err := nq.ToEdge(s.instanceIdx, s.numInstances)
 		for err != nil {
 			// Just put in a retry loop to tackle temporary errors.
 			if err == posting.E_TMP_ERROR {
@@ -140,7 +140,7 @@ func (s *state) handleNQuads(wg *sync.WaitGroup) {
 					Error("While converting to edge")
 				return
 			}
-			edge, err = nq.ToEdge(s.instanceIdx, s.numInstances, uidStore)
+			edge, err = nq.ToEdge(s.instanceIdx, s.numInstances)
 		}
 
 		// Only handle this edge if the attribute satisfies the modulo rule
@@ -159,7 +159,7 @@ func (s *state) handleNQuads(wg *sync.WaitGroup) {
 }
 
 func (s *state) getUidForString(str string) {
-	_, err := rdf.GetUid(str, s.instanceIdx, s.numInstances, dataStore)
+	_, err := rdf.GetUid(str, s.instanceIdx, s.numInstances)
 	for err != nil {
 		// Just put in a retry loop to tackle temporary errors.
 		if err == posting.E_TMP_ERROR {
@@ -171,7 +171,7 @@ func (s *state) getUidForString(str string) {
 				Error("While getting UID")
 			return
 		}
-		_, err = rdf.GetUid(str, s.instanceIdx, s.numInstances, dataStore)
+		_, err = rdf.GetUid(str, s.instanceIdx, s.numInstances)
 	}
 }
 
@@ -197,7 +197,9 @@ func (s *state) handleNQuadsWhileAssign(wg *sync.WaitGroup) {
 }
 
 // Blocking function.
-func HandleRdfReader(reader io.Reader, instanceIdx uint64, numInstances uint64) (uint64, error) {
+func HandleRdfReader(reader io.Reader, instanceIdx uint64,
+	numInstances uint64) (uint64, error) {
+
 	s := new(state)
 	s.ctr = new(counters)
 	ticker := time.NewTicker(time.Second)
