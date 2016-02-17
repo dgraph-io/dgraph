@@ -127,6 +127,7 @@ func (s *state) parseStream(done chan error) {
 	done <- nil
 }
 
+// converts the nQuads into posting lists (Uses the UID given by UID assigner)
 func (s *state) handleNQuads(wg *sync.WaitGroup) {
 	for nq := range s.cnq {
 		edge, err := nq.ToEdge(s.instanceIdx, s.numInstances)
@@ -175,6 +176,7 @@ func (s *state) getUidForString(str string) {
 	}
 }
 
+// Assigns UID for the subject and object in the nQuad
 func (s *state) handleNQuadsWhileAssign(wg *sync.WaitGroup) {
 	for nq := range s.cnq {
 		if farm.Fingerprint64([]byte(nq.Subject))%s.numInstances != s.instanceIdx {
