@@ -175,7 +175,7 @@ func (s *state) getUidForString(str string) {
 	}
 }
 
-func (s *state) handleNQuadsWhileAssign(wg *sync.WaitGroup) {
+func (s *state) assignUidsOnly(wg *sync.WaitGroup) {
 	for nq := range s.cnq {
 		if farm.Fingerprint64([]byte(nq.Subject))%s.numInstances != s.instanceIdx {
 			// This instance shouldnt assign UID to this string
@@ -240,8 +240,10 @@ func HandleRdfReader(reader io.Reader, instanceIdx uint64,
 	return atomic.LoadUint64(&s.ctr.processed), nil
 }
 
-// Blocking function.
-func HandleRdfReaderWhileAssign(reader io.Reader, instanceIdx uint64,
+// AssignUids would pick up all the external ids in RDFs read,
+// and assign unique integer ids for them. This function would
+// not load the edges, only assign UIDs.
+func AssignUids(reader io.Reader, instanceIdx uint64,
 	numInstances uint64) (uint64, error) {
 	s := new(state)
 	s.ctr = new(counters)
@@ -264,7 +266,7 @@ func HandleRdfReaderWhileAssign(reader io.Reader, instanceIdx uint64,
 	wg := new(sync.WaitGroup)
 	for i := 0; i < 3000; i++ {
 		wg.Add(1)
-		go s.handleNQuadsWhileAssign(wg) //Different compared to HandleRdfReader
+		go s.assignUidsOnly(wg)
 	}
 
 	// Block until all parseStream goroutines are finished.

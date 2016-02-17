@@ -83,8 +83,7 @@ func main() {
 			glog.WithError(err).Fatal("Unable to create gzip reader.")
 		}
 
-		count, err := loader.HandleRdfReaderWhileAssign(r, *instanceIdx,
-			*numInstances)
+		count, err := loader.AssignUids(r, *instanceIdx, *numInstances)
 		if err != nil {
 			glog.WithError(err).Fatal("While handling rdf reader.")
 		}
