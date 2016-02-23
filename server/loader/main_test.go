@@ -20,8 +20,7 @@ func TestQuery(t *testing.T) {
 	dir, err := ioutil.TempDir("", "storetest_")
 	dir1, err1 := ioutil.TempDir("", "storetest1_")
 	if err != nil || err1 != nil {
-		t.Error(err)
-		return
+		t.Fail()
 	}
 	defer os.RemoveAll(dir)
 	defer os.RemoveAll(dir1)
