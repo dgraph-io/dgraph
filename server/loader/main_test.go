@@ -1,8 +1,8 @@
 package main
 
 import (
+	"bufio"
 	"io/ioutil"
-	"math"
 	"os"
 	"testing"
 
@@ -12,16 +12,10 @@ import (
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/uid"
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgryski/go-farm"
 )
 
 func TestQuery(t *testing.T) {
-	var numInstances uint64 = 2
-	mod := math.MaxUint64 / numInstances
-	minIdx0 := 0 * mod
-	minIdx1 := 1 * mod
-
 	logrus.SetLevel(logrus.DebugLevel)
 	dir, err := ioutil.TempDir("", "storetest_")
 	dir1, err1 := ioutil.TempDir("", "storetest1_")
@@ -46,30 +40,16 @@ func TestQuery(t *testing.T) {
 	uid.Init(ps)
 	loader.Init(ps, ps1)
 
-	list := []x.DirectedEdge{
-		{1, "friend", 2},
-		{2, "frined", 3},
-		{1, "friend", 3},
-	}
+	f, err := os.Open("test_input")
+	r := bufio.NewReader(f)
+	count, err := loader.HandleRdfReader(r, 1, 2)
+	t.Logf("count", count)
 
-	for _, obj := range list {
-		if farm.Fingerprint64([]byte(obj.Attribute))%numInstances == 0 {
-			key := posting.Key(edge.Entity, edge.Attribute)
-			plist := posting.GetOrCreate(key, ps1)
-			plist.AddMutation(edge, posting.Set)
-			if uid < minIdx0 || uid > minIdx0+mod-1 {
-				t.Error("Not the correct UID", err)
-			}
-			t.Logf("Instance-0 Correct UID", str, uid)
+	posting.MergeLists(100)
 
-		} else {
-			key := posting.Key(edge.Entity, edge.Attribute)
-			plist := posting.GetOrCreate(key, ps1)
-			plist.AddMutation(edge, posting.Set)
-			if uid < minIdx1 || uid > minIdx1+mod-1 {
-				t.Error("Not the correct UID", err)
-			}
-			t.Logf("Instance-1 Correct UID", str, uid)
+	if farm.Fingerprint64([]byte("follows"))%2 == 1 {
+		if count != 4 {
+			t.Error("loader assignment not as expected")
 		}
 	}
 }
