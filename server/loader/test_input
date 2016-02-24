@@ -1,0 +1,7 @@
+`_:alice1 <follows> _:bob0 .`
+`_:alice2 <follows> _:bob1 .`
+`_:alice3 <follows> _:bob2 .`
+`_:alice4 <follows> _:bob3 .`
+`_:alice1 <friend1> _:bob5 .`
+`_:alice2 <friend1> _:bob6 .`
+`_:alice3 <friend1> _:bob7 .`
