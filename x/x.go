@@ -39,6 +39,12 @@ type DirectedEdge struct {
 	Timestamp time.Time
 }
 
+func SetError(prev *error, n error) {
+	if prev == nil {
+		prev = &n
+	}
+}
+
 func Log(p string) *logrus.Entry {
 	l := logrus.WithFields(logrus.Fields{
 		"package": p,

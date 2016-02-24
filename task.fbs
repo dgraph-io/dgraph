@@ -9,6 +9,10 @@ table Value {
 	val:[ubyte];
 }
 
+table XidList {
+	xids:[string];
+}
+
 table UidList {
 	uids:[ulong];
 }
