@@ -141,6 +141,7 @@ func main() {
 
 	posting.Init(clog)
 	worker.Init(ps)
+	worker.Connect()
 	uid.Init(ps)
 
 	http.HandleFunc("/query", queryHandler(ps))
