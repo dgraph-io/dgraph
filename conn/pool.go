@@ -38,16 +38,17 @@ func (p *Pool) dialNew() (*rpc.Client, error) {
 	return rpc.NewClientWithCodec(cc), nil
 }
 
-func (p *Pool) Get() (*rpc.Client, error) {
-	select {
-	case client := <-p.clients:
-		return client, nil
-	default:
-		return p.dialNew()
-	}
-}
+func (p *Pool) Call(serviceMethod string, args interface{},
+	reply interface{}) error {
 
-func (p *Pool) Put(client *rpc.Client) error {
+	client, err := p.get()
+	if err != nil {
+		return err
+	}
+	if err = client.Call(serviceMethod, args, reply); err != nil {
+		return err
+	}
+
 	select {
 	case p.clients <- client:
 		return nil
@@ -56,9 +57,18 @@ func (p *Pool) Put(client *rpc.Client) error {
 	}
 }
 
+func (p *Pool) get() (*rpc.Client, error) {
+	select {
+	case client := <-p.clients:
+		return client, nil
+	default:
+		return p.dialNew()
+	}
+}
+
 func (p *Pool) Close() error {
 	// We're not doing a clean exit here. A clean exit here would require
-	// mutex locks around conns; which seems unnecessary just to shut down
-	// the server.
+	// synchronization, which seems unnecessary for now. But, we should
+	// add one if required later.
 	return nil
 }

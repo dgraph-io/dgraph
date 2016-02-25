@@ -44,14 +44,10 @@ func Connect() {
 			continue
 		}
 		pool := conn.NewPool(addr, 5)
-		client, err := pool.Get()
-		if err != nil {
-			glog.Fatal(err)
-		}
 		query := new(conn.Query)
 		query.Data = []byte("hello")
 		reply := new(conn.Reply)
-		if err = client.Call("Worker.Hello", query, reply); err != nil {
+		if err := pool.Call("Worker.Hello", query, reply); err != nil {
 			glog.WithField("call", "Worker.Hello").Fatal(err)
 		}
 		glog.WithField("reply", string(reply.Data)).WithField("addr", addr).
