@@ -147,10 +147,10 @@ func main() {
 		xiduidStore := new(store.Store)
 		xiduidStore.Init(*xiduidDir)
 		defer xiduidStore.Close()
-		worker.Init(ps, xiduidStore) //Only server instance 0 will have xiduidStore
+		worker.Init(ps, xiduidStore, *instanceIdx, *numInstances) //Only server instance 0 will have xiduidStore
 		uid.Init(xiduidStore)
 	} else {
-		worker.Init(ps, nil)
+		worker.Init(ps, nil, *instanceIdx, *numInstances)
 	}
 	worker.Connect()
 

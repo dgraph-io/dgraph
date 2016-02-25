@@ -12,6 +12,7 @@ import (
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgryski/go-farm"
 	"github.com/google/flatbuffers/go"
 )
 
@@ -23,10 +24,14 @@ var workerPort = flag.String("workerport", ":12345",
 var glog = x.Log("worker")
 var dataStore, xiduidStore *store.Store
 var pools []*conn.Pool
+var addrs = strings.Split(*workers, ",")
+var numInstances, instanceIdx uint64
 
-func Init(ps, xuStore *store.Store) {
+func Init(ps, xuStore *store.Store, idx, numInst uint64) {
 	dataStore = ps
 	xiduidStore = xuStore
+	numInstances = numInst
+	instanceIdx = idx
 }
 
 func Connect() {
@@ -63,6 +68,26 @@ func Connect() {
 	glog.Info("Server started. Clients connected.")
 }
 
+// TODO:The format of worker IP input has to be discussed
+func ProcessTaskOverNetwork(qu []byte, idx uint64) (result []byte, rerr error) {
+	pool := pools[idx]
+	addr := addrs[idx]
+	client, err := pool.Get()
+	if err != nil {
+		glog.Fatal(err)
+	}
+	query := new(conn.Query)
+	query.Data = qu
+	reply := new(conn.Reply)
+	if err = client.Call("Worker.ServeTask", query, reply); err != nil {
+		glog.WithField("call", "Worker.ServeTask").Fatal(err)
+	}
+	glog.WithField("reply", string(reply.Data)).WithField("addr", addr).
+		Info("Got reply from server")
+
+	return reply.Data, nil
+}
+
 func ProcessTask(query []byte) (result []byte, rerr error) {
 	uo := flatbuffers.GetUOffsetT(query)
 	q := new(task.Query)
@@ -73,42 +98,47 @@ func ProcessTask(query []byte) (result []byte, rerr error) {
 	uoffsets := make([]flatbuffers.UOffsetT, q.UidsLength())
 
 	attr := string(q.Attr())
-	for i := 0; i < q.UidsLength(); i++ {
-		uid := q.Uids(i)
-		key := posting.Key(uid, attr)
-		pl := posting.GetOrCreate(key, dataStore)
+	if farm.Fingerprint64([]byte(attr))%numInstances == instanceIdx {
+		for i := 0; i < q.UidsLength(); i++ {
+			uid := q.Uids(i)
+			key := posting.Key(uid, attr)
+			pl := posting.GetOrCreate(key, dataStore)
 
-		var valoffset flatbuffers.UOffsetT
-		if val, err := pl.Value(); err != nil {
-			valoffset = b.CreateByteVector(x.Nilbyte)
-		} else {
-			valoffset = b.CreateByteVector(val)
+			var valoffset flatbuffers.UOffsetT
+			if val, err := pl.Value(); err != nil {
+				valoffset = b.CreateByteVector(x.Nilbyte)
+			} else {
+				valoffset = b.CreateByteVector(val)
+			}
+			task.ValueStart(b)
+			task.ValueAddVal(b, valoffset)
+			voffsets[i] = task.ValueEnd(b)
+
+			ulist := pl.GetUids()
+			uoffsets[i] = x.UidlistOffset(b, ulist)
 		}
-		task.ValueStart(b)
-		task.ValueAddVal(b, valoffset)
-		voffsets[i] = task.ValueEnd(b)
+		task.ResultStartValuesVector(b, len(voffsets))
+		for i := len(voffsets) - 1; i >= 0; i-- {
+			b.PrependUOffsetT(voffsets[i])
+		}
+		valuesVent := b.EndVector(len(voffsets))
 
-		ulist := pl.GetUids()
-		uoffsets[i] = x.UidlistOffset(b, ulist)
-	}
-	task.ResultStartValuesVector(b, len(voffsets))
-	for i := len(voffsets) - 1; i >= 0; i-- {
-		b.PrependUOffsetT(voffsets[i])
-	}
-	valuesVent := b.EndVector(len(voffsets))
+		task.ResultStartUidmatrixVector(b, len(uoffsets))
+		for i := len(uoffsets) - 1; i >= 0; i-- {
+			b.PrependUOffsetT(uoffsets[i])
+		}
+		matrixVent := b.EndVector(len(uoffsets))
 
-	task.ResultStartUidmatrixVector(b, len(uoffsets))
-	for i := len(uoffsets) - 1; i >= 0; i-- {
-		b.PrependUOffsetT(uoffsets[i])
+		task.ResultStart(b)
+		task.ResultAddValues(b, valuesVent)
+		task.ResultAddUidmatrix(b, matrixVent)
+		rend := task.ResultEnd(b)
+		b.Finish(rend)
+		return b.Bytes[b.Head():], nil
+	} else {
+		return ProcessTaskOverNetwork(query,
+			farm.Fingerprint64([]byte(attr))%numInstances)
 	}
-	matrixVent := b.EndVector(len(uoffsets))
-
-	task.ResultStart(b)
-	task.ResultAddValues(b, valuesVent)
-	task.ResultAddUidmatrix(b, matrixVent)
-	rend := task.ResultEnd(b)
-	b.Finish(rend)
-	return b.Bytes[b.Head():], nil
 }
 
 func NewQuery(attr string, uids []uint64) []byte {
@@ -138,6 +168,11 @@ func (w *Worker) Hello(query *conn.Query, reply *conn.Reply) error {
 		reply.Data = []byte("Hey stranger!")
 	}
 	return nil
+}
+
+func (w *Worker) ServeTask(query *conn.Query, reply *conn.Reply) (rerr error) {
+	reply.Data, rerr = ProcessTask(query.Data)
+	return rerr
 }
 
 func serveRequests(irwc io.ReadWriteCloser) {

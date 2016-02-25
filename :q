@@ -1,0 +1,5 @@
+worker/worker.go|30 col 62| : expected type, found ')'
+worker/worker.go|31 col 12| : expected ';', found '='
+worker/worker.go|39 col 2| : expected declaration, found 'if'
+worker/worker.go|48 col 2| : expected declaration, found 'for'
+worker/worker.go|107 col 4| : expected declaration, found 'if'
