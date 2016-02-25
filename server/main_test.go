@@ -85,7 +85,7 @@ func closeAll(dir1, dir2 string, clog *commit.Logger) {
 }
 
 func TestQuery(t *testing.T) {
-	dir1, dir2, ps, clog, err := prepare()
+	dir1, dir2, _, clog, err := prepare()
 	if err != nil {
 		t.Error(err)
 		return
@@ -98,7 +98,7 @@ func TestQuery(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	g, err := query.ToSubGraph(gq, ps)
+	g, err := query.ToSubGraph(gq)
 	if err != nil {
 		t.Error(err)
 		return
@@ -142,7 +142,7 @@ func TestQuery(t *testing.T) {
 	}
 
 	ch := make(chan error)
-	go query.ProcessGraph(g, ch, ps)
+	go query.ProcessGraph(g, ch)
 	if err := <-ch; err != nil {
 		t.Error(err)
 		return
@@ -180,7 +180,7 @@ var q1 = `
 `
 
 func BenchmarkQuery(b *testing.B) {
-	dir1, dir2, ps, clog, err := prepare()
+	dir1, dir2, _, clog, err := prepare()
 	if err != nil {
 		b.Error(err)
 		return
@@ -194,14 +194,14 @@ func BenchmarkQuery(b *testing.B) {
 			b.Error(err)
 			return
 		}
-		g, err := query.ToSubGraph(gq, ps)
+		g, err := query.ToSubGraph(gq)
 		if err != nil {
 			b.Error(err)
 			return
 		}
 
 		ch := make(chan error)
-		go query.ProcessGraph(g, ch, ps)
+		go query.ProcessGraph(g, ch)
 		if err := <-ch; err != nil {
 			b.Error(err)
 			return
