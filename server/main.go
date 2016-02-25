@@ -38,10 +38,15 @@ import (
 var glog = x.Log("server")
 
 var postingDir = flag.String("postings", "", "Directory to store posting lists")
+var xiduidDir = flag.String("xiduid", "", "XID UID posting lists directory")
 var mutationDir = flag.String("mutations", "", "Directory to store mutations")
 var port = flag.String("port", "8080", "Port to run server on.")
 var numcpu = flag.Int("numCpu", runtime.NumCPU(),
 	"Number of cores to be used by the process")
+var instanceIdx = flag.Uint64("instanceIdx", 0,
+	"serves only entities whose Fingerprint % numInstance == instanceIdx.")
+var numInstances = flag.Uint64("numInstances", 1,
+	"Total number of server instances")
 
 func addCorsHeaders(w http.ResponseWriter) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -140,7 +145,14 @@ func main() {
 	defer clog.Close()
 
 	posting.Init(clog)
-	worker.Init(ps)
+	if *instanceIdx == 0 {
+		xiduidStore := new(store.Store)
+		xiduidStore.Init(*xiduidDir)
+		defer xiduidStore.Close()
+		worker.Init(ps, xiduidStore) //Only server instance 0 will have xiduidStore
+	} else {
+		worker.Init(ps, nil)
+	}
 	worker.Connect()
 	uid.Init(ps)
 

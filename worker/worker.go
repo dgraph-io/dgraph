@@ -21,11 +21,12 @@ var workerPort = flag.String("workerport", ":12345",
 	"Port used by worker for internal communication.")
 
 var glog = x.Log("worker")
-var dataStore *store.Store
+var dataStore, xiduidStore *store.Store
 var pools []*conn.Pool
 
-func Init(ps *store.Store) {
+func Init(ps, xuStore *store.Store) {
 	dataStore = ps
+	xiduidStore = xuStore
 }
 
 func Connect() {
