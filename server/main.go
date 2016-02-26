@@ -144,18 +144,19 @@ func main() {
 	defer clog.Close()
 
 	addrs := strings.Split(*workers, ",")
+	len := uint64(len(addrs))
 
 	posting.Init(clog)
 
 	if *instanceIdx != 0 {
-		worker.Init(ps, nil, addrs, *instanceIdx, len(addrs))
+		worker.Init(ps, nil, addrs, *instanceIdx, len)
 		uid.Init(nil)
 	} else {
 		uidStore := new(store.Store)
 		uidStore.Init(*uidDir)
 		defer uidStore.Close()
 		// Only server instance 0 will have uidStore
-		worker.Init(ps, uidStore, addrs, *instanceIdx, len(addrs))
+		worker.Init(ps, uidStore, addrs, *instanceIdx, len)
 		uid.Init(uidStore)
 	}
 
