@@ -22,6 +22,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/Sirupsen/logrus"
@@ -38,10 +39,15 @@ import (
 var glog = x.Log("server")
 
 var postingDir = flag.String("postings", "", "Directory to store posting lists")
+var uidDir = flag.String("uids", "", "XID UID posting lists directory")
 var mutationDir = flag.String("mutations", "", "Directory to store mutations")
 var port = flag.String("port", "8080", "Port to run server on.")
 var numcpu = flag.Int("numCpu", runtime.NumCPU(),
 	"Number of cores to be used by the process")
+var instanceIdx = flag.Uint64("instanceIdx", 0,
+	"serves only entities whose Fingerprint % numInstance == instanceIdx.")
+var workers = flag.String("workers", "",
+	"Comma separated list of IP addresses of workers")
 
 func addCorsHeaders(w http.ResponseWriter) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -53,69 +59,67 @@ func addCorsHeaders(w http.ResponseWriter) {
 	w.Header().Set("Connection", "close")
 }
 
-func queryHandler(ps *store.Store) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		addCorsHeaders(w)
-		if r.Method == "OPTIONS" {
-			return
-		}
-		if r.Method != "POST" {
-			x.SetStatus(w, x.E_INVALID_METHOD, "Invalid method")
-			return
-		}
-
-		var l query.Latency
-		l.Start = time.Now()
-		defer r.Body.Close()
-		q, err := ioutil.ReadAll(r.Body)
-		if err != nil || len(q) == 0 {
-			x.Err(glog, err).Error("While reading query")
-			x.SetStatus(w, x.E_INVALID_REQUEST, "Invalid request encountered.")
-			return
-		}
-
-		glog.WithField("q", string(q)).Debug("Query received.")
-		gq, _, err := gql.Parse(string(q))
-		if err != nil {
-			x.Err(glog, err).Error("While parsing query")
-			x.SetStatus(w, x.E_INVALID_REQUEST, err.Error())
-			return
-		}
-		sg, err := query.ToSubGraph(gq, ps)
-		if err != nil {
-			x.Err(glog, err).Error("While conversion to internal format")
-			x.SetStatus(w, x.E_INVALID_REQUEST, err.Error())
-			return
-		}
-		l.Parsing = time.Since(l.Start)
-		glog.WithField("q", string(q)).Debug("Query parsed.")
-
-		rch := make(chan error)
-		go query.ProcessGraph(sg, rch, ps)
-		err = <-rch
-		if err != nil {
-			x.Err(glog, err).Error("While executing query")
-			x.SetStatus(w, x.E_ERROR, err.Error())
-			return
-		}
-		l.Processing = time.Since(l.Start) - l.Parsing
-		glog.WithField("q", string(q)).Debug("Graph processed.")
-		js, err := sg.ToJson(&l)
-		if err != nil {
-			x.Err(glog, err).Error("While converting to Json.")
-			x.SetStatus(w, x.E_ERROR, err.Error())
-			return
-		}
-		glog.WithFields(logrus.Fields{
-			"total":   time.Since(l.Start),
-			"parsing": l.Parsing,
-			"process": l.Processing,
-			"json":    l.Json,
-		}).Info("Query Latencies")
-
-		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprint(w, string(js))
+func queryHandler(w http.ResponseWriter, r *http.Request) {
+	addCorsHeaders(w)
+	if r.Method == "OPTIONS" {
+		return
 	}
+	if r.Method != "POST" {
+		x.SetStatus(w, x.E_INVALID_METHOD, "Invalid method")
+		return
+	}
+
+	var l query.Latency
+	l.Start = time.Now()
+	defer r.Body.Close()
+	q, err := ioutil.ReadAll(r.Body)
+	if err != nil || len(q) == 0 {
+		x.Err(glog, err).Error("While reading query")
+		x.SetStatus(w, x.E_INVALID_REQUEST, "Invalid request encountered.")
+		return
+	}
+
+	glog.WithField("q", string(q)).Debug("Query received.")
+	gq, _, err := gql.Parse(string(q))
+	if err != nil {
+		x.Err(glog, err).Error("While parsing query")
+		x.SetStatus(w, x.E_INVALID_REQUEST, err.Error())
+		return
+	}
+	sg, err := query.ToSubGraph(gq)
+	if err != nil {
+		x.Err(glog, err).Error("While conversion to internal format")
+		x.SetStatus(w, x.E_INVALID_REQUEST, err.Error())
+		return
+	}
+	l.Parsing = time.Since(l.Start)
+	glog.WithField("q", string(q)).Debug("Query parsed.")
+
+	rch := make(chan error)
+	go query.ProcessGraph(sg, rch)
+	err = <-rch
+	if err != nil {
+		x.Err(glog, err).Error("While executing query")
+		x.SetStatus(w, x.E_ERROR, err.Error())
+		return
+	}
+	l.Processing = time.Since(l.Start) - l.Parsing
+	glog.WithField("q", string(q)).Debug("Graph processed.")
+	js, err := sg.ToJson(&l)
+	if err != nil {
+		x.Err(glog, err).Error("While converting to Json.")
+		x.SetStatus(w, x.E_ERROR, err.Error())
+		return
+	}
+	glog.WithFields(logrus.Fields{
+		"total":   time.Since(l.Start),
+		"parsing": l.Parsing,
+		"process": l.Processing,
+		"json":    l.Json,
+	}).Info("Query Latencies")
+
+	w.Header().Set("Content-Type", "application/json")
+	fmt.Fprint(w, string(js))
 }
 
 func main() {
@@ -139,12 +143,24 @@ func main() {
 	clog.Init()
 	defer clog.Close()
 
-	posting.Init(clog)
-	worker.Init(ps)
-	worker.Connect()
-	uid.Init(ps)
+	addrs := strings.Split(*workers, ",")
 
-	http.HandleFunc("/query", queryHandler(ps))
+	posting.Init(clog)
+	if *instanceIdx != 0 {
+		worker.Init(ps, nil, addrs)
+		uid.Init(nil)
+	} else {
+		uidStore := new(store.Store)
+		uidStore.Init(*uidDir)
+		defer uidStore.Close()
+		// Only server instance 0 will have uidStore
+		worker.Init(ps, uidStore, addrs)
+		uid.Init(uidStore)
+	}
+
+	worker.Connect()
+
+	http.HandleFunc("/query", queryHandler)
 	glog.WithField("port", *port).Info("Listening for requests...")
 	if err := http.ListenAndServe(":"+*port, nil); err != nil {
 		x.Err(glog, err).Fatal("ListenAndServe")

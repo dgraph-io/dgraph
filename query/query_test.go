@@ -98,12 +98,12 @@ func TestNewGraph(t *testing.T) {
 
 	ps := new(store.Store)
 	ps.Init(dir)
-	sg, err := newGraph(ex, "", ps)
+	sg, err := newGraph(ex, "")
 	if err != nil {
 		t.Error(err)
 	}
 
-	worker.Init(ps)
+	worker.Init(ps, nil, nil)
 
 	uo := flatbuffers.GetUOffsetT(sg.result)
 	r := new(task.Result)
@@ -134,7 +134,7 @@ func populateGraph(t *testing.T) (string, *store.Store) {
 	ps := new(store.Store)
 	ps.Init(dir)
 
-	worker.Init(ps)
+	worker.Init(ps, nil, nil)
 
 	clog := commit.NewLogger(dir, "mutations", 50<<20)
 	clog.Init()
@@ -188,7 +188,7 @@ func populateGraph(t *testing.T) (string, *store.Store) {
 }
 
 func TestProcessGraph(t *testing.T) {
-	dir, ps := populateGraph(t)
+	dir, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
 
 	// Alright. Now we have everything set up. Let's create the query.
@@ -208,13 +208,13 @@ func TestProcessGraph(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	sg, err := ToSubGraph(gq, ps)
+	sg, err := ToSubGraph(gq)
 	if err != nil {
 		t.Error(err)
 	}
 
 	ch := make(chan error)
-	go ProcessGraph(sg, ch, ps)
+	go ProcessGraph(sg, ch)
 	err = <-ch
 	if err != nil {
 		t.Error(err)
@@ -279,7 +279,7 @@ func TestProcessGraph(t *testing.T) {
 }
 
 func TestToJson(t *testing.T) {
-	dir, ps := populateGraph(t)
+	dir, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
 
 	// Alright. Now we have everything set up. Let's create the query.
@@ -300,13 +300,13 @@ func TestToJson(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	sg, err := ToSubGraph(gq, ps)
+	sg, err := ToSubGraph(gq)
 	if err != nil {
 		t.Error(err)
 	}
 
 	ch := make(chan error)
-	go ProcessGraph(sg, ch, ps)
+	go ProcessGraph(sg, ch)
 	err = <-ch
 	if err != nil {
 		t.Error(err)
