@@ -26,7 +26,6 @@ import (
 	"github.com/Sirupsen/logrus"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/uid"
 	"github.com/dgraph-io/dgraph/worker"
@@ -263,8 +262,8 @@ func treeCopy(gq *gql.GraphQuery, sg *SubGraph) {
 	}
 }
 
-func ToSubGraph(gq *gql.GraphQuery, pstore *store.Store) (*SubGraph, error) {
-	sg, err := newGraph(gq.UID, gq.XID, pstore)
+func ToSubGraph(gq *gql.GraphQuery) (*SubGraph, error) {
+	sg, err := newGraph(gq.UID, gq.XID)
 	if err != nil {
 		return nil, err
 	}
@@ -272,11 +271,12 @@ func ToSubGraph(gq *gql.GraphQuery, pstore *store.Store) (*SubGraph, error) {
 	return sg, nil
 }
 
-func newGraph(euid uint64, exid string, pstore *store.Store) (*SubGraph, error) {
+func newGraph(euid uint64, exid string) (*SubGraph, error) {
 	// This would set the Result field in SubGraph,
 	// and populate the children for attributes.
 	if len(exid) > 0 {
-		u, err := uid.GetOrAssign(exid, 0, 1) // instanceIdx = 0, numInstances = 1 by default
+		// instanceIdx = 0, numInstances = 1 by default
+		u, err := uid.GetOrAssign(exid, 0, 1)
 		if err != nil {
 			x.Err(glog, err).WithField("xid", exid).Error(
 				"While GetOrAssign uid from external id")
@@ -402,7 +402,7 @@ func sortedUniqueUids(r *task.Result) (sorted []uint64, rerr error) {
 	return sorted, nil
 }
 
-func ProcessGraph(sg *SubGraph, rch chan error, pstore *store.Store) {
+func ProcessGraph(sg *SubGraph, rch chan error) {
 	var err error
 	if len(sg.query) > 0 && sg.Attr != "_root_" {
 		// This task execution would go over the wire in later versions.
@@ -445,7 +445,7 @@ func ProcessGraph(sg *SubGraph, rch chan error, pstore *store.Store) {
 	for i := 0; i < len(sg.Children); i++ {
 		child := sg.Children[i]
 		child.query = createTaskQuery(child.Attr, sorted)
-		go ProcessGraph(child, childchan, pstore)
+		go ProcessGraph(child, childchan)
 	}
 
 	// Now get all the results back.

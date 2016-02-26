@@ -5,7 +5,6 @@ import (
 	"io"
 	"net"
 	"net/rpc"
-	"strings"
 
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/posting"
@@ -15,17 +14,18 @@ import (
 	"github.com/google/flatbuffers/go"
 )
 
-var workers = flag.String("workers", "",
-	"Comma separated list of IP addresses of workers")
 var workerPort = flag.String("workerport", ":12345",
 	"Port used by worker for internal communication.")
 
 var glog = x.Log("worker")
-var dataStore *store.Store
+var dataStore, xiduidStore *store.Store
 var pools []*conn.Pool
+var addrs []string
 
-func Init(ps *store.Store) {
+func Init(ps, xuStore *store.Store, workerList []string) {
 	dataStore = ps
+	xiduidStore = xuStore
+	addrs = workerList
 }
 
 func Connect() {
@@ -37,7 +37,6 @@ func Connect() {
 		glog.Fatal(err)
 	}
 
-	addrs := strings.Split(*workers, ",")
 	for _, addr := range addrs {
 		if len(addr) == 0 {
 			continue
