@@ -171,7 +171,7 @@ func postTraverse(g *SubGraph) (result map[uint64]interface{}, rerr error) {
 	r.Init(g.result, ro)
 
 	if q.UidsLength() != r.UidmatrixLength() {
-		glog.Fatal("Result uidmatrixlength: %v. Query uidslength: %v",
+		glog.Fatalf("Result uidmatrixlength: %v. Query uidslength: %v",
 			r.UidmatrixLength(), q.UidsLength())
 	}
 	if q.UidsLength() != r.ValuesLength() {

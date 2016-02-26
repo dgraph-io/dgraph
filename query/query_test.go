@@ -81,7 +81,7 @@ func checkSingleValue(t *testing.T, child *SubGraph,
 	}
 
 	if ul.UidsLength() != 0 {
-		t.Error("Expected uids length 0. Got: %v", ul.UidsLength())
+		t.Errorf("Expected uids length 0. Got: %v", ul.UidsLength())
 	}
 	checkName(t, r, 0, value)
 }
