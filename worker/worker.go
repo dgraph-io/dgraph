@@ -5,7 +5,6 @@ import (
 	"io"
 	"net"
 	"net/rpc"
-	"strings"
 
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/posting"
@@ -16,22 +15,22 @@ import (
 	"github.com/google/flatbuffers/go"
 )
 
-var workers = flag.String("workers", "",
-	"Comma separated list of IP addresses of workers")
 var workerPort = flag.String("workerport", ":12345",
 	"Port used by worker for internal communication.")
 
 var glog = x.Log("worker")
-var dataStore, xiduidStore *store.Store
+var dataStore, uidStore *store.Store
 var pools []*conn.Pool
-var addrs = strings.Split(*workers, ",")
 var numInstances, instanceIdx uint64
 
-func Init(ps, xuStore *store.Store, idx, numInst uint64) {
+var addrs []string
+
+func Init(ps, uStore *store.Store, workerList []string, idx, numInst uint64) {
 	dataStore = ps
-	xiduidStore = xuStore
-	numInstances = numInst
+	uidStore = xuStore
+	addrs = workerList
 	instanceIdx = idx
+	numInstances = numInst
 }
 
 func Connect() {
@@ -43,21 +42,15 @@ func Connect() {
 		glog.Fatal(err)
 	}
 
-	addrs := strings.Split(*workers, ",")
-	var pools []*conn.Pool
 	for _, addr := range addrs {
 		if len(addr) == 0 {
 			continue
 		}
 		pool := conn.NewPool(addr, 5)
-		client, err := pool.Get()
-		if err != nil {
-			glog.Fatal(err)
-		}
 		query := new(conn.Query)
 		query.Data = []byte("hello")
 		reply := new(conn.Reply)
-		if err = client.Call("Worker.Hello", query, reply); err != nil {
+		if err := pool.Call("Worker.Hello", query, reply); err != nil {
 			glog.WithField("call", "Worker.Hello").Fatal(err)
 		}
 		glog.WithField("reply", string(reply.Data)).WithField("addr", addr).
