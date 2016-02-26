@@ -2,6 +2,7 @@ package worker
 
 import (
 	"flag"
+	"fmt"
 	"io"
 	"net"
 	"net/rpc"
@@ -11,6 +12,7 @@ import (
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgryski/go-farm"
 	"github.com/google/flatbuffers/go"
 )
 
@@ -21,11 +23,13 @@ var glog = x.Log("worker")
 var dataStore, xiduidStore *store.Store
 var pools []*conn.Pool
 var addrs []string
+var instanceIdx uint64
 
-func Init(ps, xuStore *store.Store, workerList []string) {
+func Init(ps, xuStore *store.Store, workerList []string, idx uint64) {
 	dataStore = ps
 	xiduidStore = xuStore
 	addrs = workerList
+	instanceIdx = idx
 }
 
 func Connect() {
@@ -131,6 +135,36 @@ func (w *Worker) Hello(query *conn.Query, reply *conn.Reply) error {
 		reply.Data = []byte("Hey stranger!")
 	}
 	return nil
+}
+
+func (w *Worker) Mutate(query *conn.Query, reply *conn.Reply) (rerr error) {
+	m := new(Mutations)
+	if err := m.Decode(query.Data); err != nil {
+		return err
+	}
+
+	left := new(Mutations)
+	// For now, assume it's all only Set instructions.
+	for _, edge := range m.Set {
+		if farm.Fingerprint64(
+			[]byte(edge.Attribute))%uint64(len(addrs)) != instanceIdx {
+
+			glog.WithField("instanceIdx", instanceIdx).
+				WithField("attr", edge.Attribute).
+				Info("Predicate fingerprint doesn't match instanceIdx")
+			return fmt.Errorf("predicate fingerprint doesn't match this instance.")
+		}
+
+		key := posting.Key(edge.Entity, edge.Attribute)
+		plist := posting.GetOrCreate(key, dataStore)
+		if err := plist.AddMutation(edge, posting.Set); err != nil {
+			left.Set = append(left.Set, edge)
+			glog.WithError(err).WithField("edge", edge).Error("While adding mutation.")
+			continue
+		}
+	}
+	reply.Data, rerr = left.Encode()
+	return
 }
 
 func serveRequests(irwc io.ReadWriteCloser) {

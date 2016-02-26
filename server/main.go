@@ -50,6 +50,7 @@ var instanceIdx = flag.Uint64("instanceIdx", 0,
 	"serves only entities whose Fingerprint % numInstance == instanceIdx.")
 var workers = flag.String("workers", "",
 	"Comma separated list of IP addresses of workers")
+var numInstances uint64
 
 func addCorsHeaders(w http.ResponseWriter) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -166,17 +167,17 @@ func main() {
 	defer clog.Close()
 
 	addrs := strings.Split(*workers, ",")
-
+	numInstances = len(addrs)
 	posting.Init(clog)
 	if *instanceIdx != 0 {
-		worker.Init(ps, nil, addrs)
+		worker.Init(ps, nil, addrs, *instanceIdx)
 		uid.Init(nil)
 	} else {
 		uidStore := new(store.Store)
 		uidStore.Init(*uidDir)
 		defer uidStore.Close()
 		// Only server instance 0 will have uidStore
-		worker.Init(ps, uidStore, addrs)
+		worker.Init(ps, uidStore, addrs, *instanceIdx)
 		uid.Init(uidStore)
 	}
 
