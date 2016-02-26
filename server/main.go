@@ -22,6 +22,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/Sirupsen/logrus"
@@ -45,8 +46,8 @@ var numcpu = flag.Int("numCpu", runtime.NumCPU(),
 	"Number of cores to be used by the process")
 var instanceIdx = flag.Uint64("instanceIdx", 0,
 	"serves only entities whose Fingerprint % numInstance == instanceIdx.")
-var numInstances = flag.Uint64("numInstances", 1,
-	"Total number of server instances")
+var workers = flag.String("workers", "",
+	"Comma separated list of IP addresses of workers")
 
 func addCorsHeaders(w http.ResponseWriter) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -142,16 +143,18 @@ func main() {
 	clog.Init()
 	defer clog.Close()
 
+	addrs := strings.Split(*workers, ",")
+
 	posting.Init(clog)
 	if *instanceIdx != 0 {
-		worker.Init(ps, nil)
+		worker.Init(ps, nil, addrs)
 		uid.Init(nil)
 	} else {
 		uidStore := new(store.Store)
 		uidStore.Init(*uidDir)
 		defer uidStore.Close()
 		// Only server instance 0 will have uidStore
-		worker.Init(ps, uidStore)
+		worker.Init(ps, uidStore, addrs)
 		uid.Init(uidStore)
 	}
 

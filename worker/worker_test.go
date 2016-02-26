@@ -58,7 +58,7 @@ func TestProcessTask(t *testing.T) {
 	defer clog.Close()
 
 	posting.Init(clog)
-	Init(ps, nil)
+	Init(ps, nil, nil)
 
 	edge := x.DirectedEdge{
 		ValueId:   23,
