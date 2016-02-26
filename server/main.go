@@ -38,7 +38,7 @@ import (
 var glog = x.Log("server")
 
 var postingDir = flag.String("postings", "", "Directory to store posting lists")
-var xiduidDir = flag.String("xiduid", "", "XID UID posting lists directory")
+var uidDir = flag.String("uids", "", "XID UID posting lists directory")
 var mutationDir = flag.String("mutations", "", "Directory to store mutations")
 var port = flag.String("port", "8080", "Port to run server on.")
 var numcpu = flag.Int("numCpu", runtime.NumCPU(),
@@ -143,15 +143,18 @@ func main() {
 	defer clog.Close()
 
 	posting.Init(clog)
-	if *instanceIdx == 0 {
-		xiduidStore := new(store.Store)
-		xiduidStore.Init(*xiduidDir)
-		defer xiduidStore.Close()
-		worker.Init(ps, xiduidStore) //Only server instance 0 will have xiduidStore
-		uid.Init(xiduidStore)
-	} else {
+	if *instanceIdx != 0 {
 		worker.Init(ps, nil)
+		uid.Init(nil)
+	} else {
+		uidStore := new(store.Store)
+		uidStore.Init(*uidDir)
+		defer uidStore.Close()
+		// Only server instance 0 will have uidStore
+		worker.Init(ps, uidStore)
+		uid.Init(uidStore)
 	}
+
 	worker.Connect()
 
 	http.HandleFunc("/query", queryHandler)
