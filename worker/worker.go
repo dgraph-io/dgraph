@@ -38,7 +38,6 @@ func Connect() {
 	}
 
 	addrs := strings.Split(*workers, ",")
-	var pools []*conn.Pool
 	for _, addr := range addrs {
 		if len(addr) == 0 {
 			continue
