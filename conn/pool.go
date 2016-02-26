@@ -3,6 +3,8 @@ package conn
 import (
 	"net"
 	"net/rpc"
+	"strings"
+	"time"
 
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -28,7 +30,24 @@ func NewPool(addr string, maxCap int) *Pool {
 }
 
 func (p *Pool) dialNew() (*rpc.Client, error) {
-	nconn, err := net.Dial("tcp", p.addr)
+	d := &net.Dialer{
+		Timeout: 3 * time.Minute,
+	}
+	var nconn net.Conn
+	var err error
+	for i := 0; i < 10; i++ {
+		nconn, err = d.Dial("tcp", p.addr)
+		if err == nil {
+			break
+		}
+		if !strings.Contains(err.Error(), "refused") {
+			break
+		}
+
+		glog.WithField("error", err).WithField("addr", p.addr).
+			Info("Retrying connection...")
+		time.Sleep(10 * time.Second)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -38,16 +57,17 @@ func (p *Pool) dialNew() (*rpc.Client, error) {
 	return rpc.NewClientWithCodec(cc), nil
 }
 
-func (p *Pool) Get() (*rpc.Client, error) {
-	select {
-	case client := <-p.clients:
-		return client, nil
-	default:
-		return p.dialNew()
-	}
-}
+func (p *Pool) Call(serviceMethod string, args interface{},
+	reply interface{}) error {
 
-func (p *Pool) Put(client *rpc.Client) error {
+	client, err := p.get()
+	if err != nil {
+		return err
+	}
+	if err = client.Call(serviceMethod, args, reply); err != nil {
+		return err
+	}
+
 	select {
 	case p.clients <- client:
 		return nil
@@ -56,9 +76,18 @@ func (p *Pool) Put(client *rpc.Client) error {
 	}
 }
 
+func (p *Pool) get() (*rpc.Client, error) {
+	select {
+	case client := <-p.clients:
+		return client, nil
+	default:
+		return p.dialNew()
+	}
+}
+
 func (p *Pool) Close() error {
 	// We're not doing a clean exit here. A clean exit here would require
-	// mutex locks around conns; which seems unnecessary just to shut down
-	// the server.
+	// synchronization, which seems unnecessary for now. But, we should
+	// add one if required later.
 	return nil
 }
