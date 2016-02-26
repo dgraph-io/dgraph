@@ -68,21 +68,41 @@ func ProcessTaskOverNetwork(qu []byte) (result []byte, rerr error) {
 
 	attr := string(q.Attr())
 	idx := farm.Fingerprint64([]byte(attr)) % numInstances
-	if idx == instanceIdx {
-		return ProcessTask(qu)
-	} else {
-		pool := pools[idx]
-		addr := addrs[idx]
-		query := new(conn.Query)
-		query.Data = qu
-		reply := new(conn.Reply)
-		if err := pool.Call("Worker.ServeTask", query, reply); err != nil {
-			glog.WithField("call", "Worker.ServeTask").Fatal(err)
-		}
-		glog.WithField("reply", string(reply.Data)).WithField("addr", addr).
-			Info("Got reply from server")
 
-		return reply.Data, nil
+	if attr == "_xid_" || attr == "_uid_" {
+		if instanceIdx == 0 {
+			return ProcessTask(qu)
+		} else { // Send the request to instance 0 which has uidstore
+			pool := pools[0]
+			addr := addrs[0]
+			query := new(conn.Query)
+			query.Data = qu
+			reply := new(conn.Reply)
+			if err := pool.Call("Worker.ServeTask", query, reply); err != nil {
+				glog.WithField("call", "Worker.ServeTask").Fatal(err)
+			}
+			glog.WithField("reply", string(reply.Data)).WithField("addr", addr).
+				Info("Got reply from server")
+
+			return reply.Data, nil
+		}
+	} else {
+		if idx == instanceIdx {
+			return ProcessTask(qu)
+		} else {
+			pool := pools[idx]
+			addr := addrs[idx]
+			query := new(conn.Query)
+			query.Data = qu
+			reply := new(conn.Reply)
+			if err := pool.Call("Worker.ServeTask", query, reply); err != nil {
+				glog.WithField("call", "Worker.ServeTask").Fatal(err)
+			}
+			glog.WithField("reply", string(reply.Data)).WithField("addr", addr).
+				Info("Got reply from server")
+
+			return reply.Data, nil
+		}
 	}
 }
 
