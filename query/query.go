@@ -406,7 +406,7 @@ func ProcessGraph(sg *SubGraph, rch chan error) {
 	var err error
 	if len(sg.query) > 0 && sg.Attr != "_root_" {
 		// This task execution would go over the wire in later versions.
-		sg.result, err = worker.ProcessTask(sg.query)
+		sg.result, err = worker.ProcessTaskOverNetwork(sg.query)
 		if err != nil {
 			x.Err(glog, err).Error("While processing task.")
 			rch <- err
