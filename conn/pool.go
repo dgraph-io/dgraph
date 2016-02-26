@@ -3,6 +3,8 @@ package conn
 import (
 	"net"
 	"net/rpc"
+	"strings"
+	"time"
 
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -28,7 +30,24 @@ func NewPool(addr string, maxCap int) *Pool {
 }
 
 func (p *Pool) dialNew() (*rpc.Client, error) {
-	nconn, err := net.Dial("tcp", p.addr)
+	d := &net.Dialer{
+		Timeout: 3 * time.Minute,
+	}
+	var nconn net.Conn
+	var err error
+	for i := 0; i < 10; i++ {
+		nconn, err = d.Dial("tcp", p.addr)
+		if err == nil {
+			break
+		}
+		if !strings.Contains(err.Error(), "refused") {
+			break
+		}
+
+		glog.WithField("error", err).WithField("addr", p.addr).
+			Info("Retrying connection...")
+		time.Sleep(10 * time.Second)
+	}
 	if err != nil {
 		return nil, err
 	}
