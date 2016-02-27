@@ -71,7 +71,7 @@ func ProcessTaskOverNetwork(qu []byte) (result []byte, rerr error) {
 	attr := string(q.Attr())
 	idx := farm.Fingerprint64([]byte(attr)) % numInstances
 
-	var runHere bool = false
+	var runHere bool
 	if attr == "_xid_" || attr == "_uid_" {
 		idx = 0
 		runHere = (instanceIdx == 0)
