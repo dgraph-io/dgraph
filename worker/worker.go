@@ -22,7 +22,6 @@ var glog = x.Log("worker")
 var dataStore, uidStore *store.Store
 var pools []*conn.Pool
 var numInstances, instanceIdx uint64
-var addrs []string
 
 func Init(ps, uStore *store.Store, idx, numInst uint64) {
 	dataStore = ps
@@ -45,8 +44,7 @@ func Connect(workerList []string) {
 			Fatalf("Wrong number of instances in workerList")
 	}
 
-	addrs = workerList
-	for _, addr := range addrs {
+	for _, addr := range workerList {
 		if len(addr) == 0 {
 			continue
 		}
@@ -73,7 +71,7 @@ func ProcessTaskOverNetwork(qu []byte) (result []byte, rerr error) {
 	attr := string(q.Attr())
 	idx := farm.Fingerprint64([]byte(attr)) % numInstances
 
-	runHere := false
+	var runHere bool = false
 	if attr == "_xid_" || attr == "_uid_" {
 		idx = 0
 		runHere = (instanceIdx == 0)
@@ -86,7 +84,7 @@ func ProcessTaskOverNetwork(qu []byte) (result []byte, rerr error) {
 	}
 
 	pool := pools[idx]
-	addr := addrs[idx]
+	addr := pool.Addr
 	query := new(conn.Query)
 	query.Data = qu
 	reply := new(conn.Reply)
