@@ -22,18 +22,16 @@ var glog = x.Log("worker")
 var dataStore, uidStore *store.Store
 var pools []*conn.Pool
 var numInstances, instanceIdx uint64
-
 var addrs []string
 
-func Init(ps, uStore *store.Store, workerList []string, idx, numInst uint64) {
+func Init(ps, uStore *store.Store, idx, numInst uint64) {
 	dataStore = ps
 	uidStore = uStore
-	addrs = workerList
 	instanceIdx = idx
 	numInstances = numInst
 }
 
-func Connect() {
+func Connect(workerList []string) {
 	w := new(Worker)
 	if err := rpc.Register(w); err != nil {
 		glog.Fatal(err)
@@ -41,7 +39,13 @@ func Connect() {
 	if err := runServer(*workerPort); err != nil {
 		glog.Fatal(err)
 	}
+	if uint64(len(workerList)) != numInstances {
+		glog.WithField("len(list)", len(workerList)).
+			WithField("numInstances", numInstances).
+			Fatalf("Wrong number of instances in workerList")
+	}
 
+	addrs = workerList
 	for _, addr := range addrs {
 		if len(addr) == 0 {
 			continue
@@ -69,40 +73,28 @@ func ProcessTaskOverNetwork(qu []byte) (result []byte, rerr error) {
 	attr := string(q.Attr())
 	idx := farm.Fingerprint64([]byte(attr)) % numInstances
 
+	runHere := false
 	if attr == "_xid_" || attr == "_uid_" {
-		if instanceIdx == 0 {
-			return ProcessTask(qu)
-		} else { // Send the request to instance 0 which has uidstore
-			pool := pools[0]
-			addr := addrs[0]
-			query := new(conn.Query)
-			query.Data = qu
-			reply := new(conn.Reply)
-			if err := pool.Call("Worker.ServeTask", query, reply); err != nil {
-				glog.WithField("call", "Worker.ServeTask").Fatal(err)
-			}
-			glog.WithField("reply", string(reply.Data)).WithField("addr", addr).
-				Info("Got reply from server")
-
-			return reply.Data, nil
-		}
+		idx = 0
+		runHere = (instanceIdx == 0)
 	} else {
-		if idx == instanceIdx {
-			return ProcessTask(qu)
-		} else {
-			pool := pools[idx]
-			addr := addrs[idx]
-			query := new(conn.Query)
-			query.Data = qu
-			reply := new(conn.Reply)
-			if err := pool.Call("Worker.ServeTask", query, reply); err != nil {
-				glog.WithField("call", "Worker.ServeTask").Fatal(err)
-			}
-			glog.WithField("reply", string(reply.Data)).WithField("addr", addr).
-				Info("Got reply from server")
+		runHere = (instanceIdx == idx)
+	}
 
-			return reply.Data, nil
+	if runHere {
+		return ProcessTask(qu)
+	} else { // Send the request to instance 0 which has uidstore
+		pool := pools[idx]
+		addr := addrs[idx]
+		query := new(conn.Query)
+		query.Data = qu
+		reply := new(conn.Reply)
+		if err := pool.Call("Worker.ServeTask", query, reply); err != nil {
+			glog.WithField("call", "Worker.ServeTask").Fatal(err)
 		}
+		glog.WithField("reply", string(reply.Data)).WithField("addr", addr).
+			Info("Got reply from server")
+		return reply.Data, nil
 	}
 }
 
@@ -193,7 +185,9 @@ func (w *Worker) ServeTask(query *conn.Query, reply *conn.Reply) (rerr error) {
 	if farm.Fingerprint64([]byte(attr))%numInstances == instanceIdx {
 		reply.Data, rerr = ProcessTask(query.Data)
 	} else {
-		glog.Fatalf("Request sent to wrong server")
+		glog.WithField("attribute", attr).
+			WithField("instanceIdx", instanceIdx).
+			Fatalf("Request sent to wrong server")
 	}
 	return rerr
 }

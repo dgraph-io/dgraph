@@ -144,23 +144,23 @@ func main() {
 	defer clog.Close()
 
 	addrs := strings.Split(*workers, ",")
-	len := uint64(len(addrs))
+	lenAddr := uint64(len(addrs))
 
 	posting.Init(clog)
 
 	if *instanceIdx != 0 {
-		worker.Init(ps, nil, addrs, *instanceIdx, len)
+		worker.Init(ps, nil, *instanceIdx, lenAddr)
 		uid.Init(nil)
 	} else {
 		uidStore := new(store.Store)
 		uidStore.Init(*uidDir)
 		defer uidStore.Close()
 		// Only server instance 0 will have uidStore
-		worker.Init(ps, uidStore, addrs, *instanceIdx, len)
+		worker.Init(ps, uidStore, *instanceIdx, lenAddr)
 		uid.Init(uidStore)
 	}
 
-	worker.Connect()
+	worker.Connect(addrs)
 
 	http.HandleFunc("/query", queryHandler)
 	glog.WithField("port", *port).Info("Listening for requests...")

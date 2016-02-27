@@ -103,7 +103,7 @@ func TestNewGraph(t *testing.T) {
 		t.Error(err)
 	}
 
-	worker.Init(ps, nil, nil, 0, 1)
+	worker.Init(ps, nil, 0, 1)
 
 	uo := flatbuffers.GetUOffsetT(sg.result)
 	r := new(task.Result)
@@ -134,7 +134,7 @@ func populateGraph(t *testing.T) (string, *store.Store) {
 	ps := new(store.Store)
 	ps.Init(dir)
 
-	worker.Init(ps, nil, nil, 0, 1)
+	worker.Init(ps, nil, 0, 1)
 
 	clog := commit.NewLogger(dir, "mutations", 50<<20)
 	clog.Init()
