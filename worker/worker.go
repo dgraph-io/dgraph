@@ -11,6 +11,7 @@ import (
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgryski/go-farm"
 	"github.com/google/flatbuffers/go"
 )
 
@@ -18,17 +19,18 @@ var workerPort = flag.String("workerport", ":12345",
 	"Port used by worker for internal communication.")
 
 var glog = x.Log("worker")
-var dataStore, xiduidStore *store.Store
+var dataStore, uidStore *store.Store
 var pools []*conn.Pool
-var addrs []string
+var numInstances, instanceIdx uint64
 
-func Init(ps, xuStore *store.Store, workerList []string) {
+func Init(ps, uStore *store.Store, idx, numInst uint64) {
 	dataStore = ps
-	xiduidStore = xuStore
-	addrs = workerList
+	uidStore = uStore
+	instanceIdx = idx
+	numInstances = numInst
 }
 
-func Connect() {
+func Connect(workerList []string) {
 	w := new(Worker)
 	if err := rpc.Register(w); err != nil {
 		glog.Fatal(err)
@@ -36,8 +38,13 @@ func Connect() {
 	if err := runServer(*workerPort); err != nil {
 		glog.Fatal(err)
 	}
+	if uint64(len(workerList)) != numInstances {
+		glog.WithField("len(list)", len(workerList)).
+			WithField("numInstances", numInstances).
+			Fatalf("Wrong number of instances in workerList")
+	}
 
-	for _, addr := range addrs {
+	for _, addr := range workerList {
 		if len(addr) == 0 {
 			continue
 		}
@@ -56,16 +63,49 @@ func Connect() {
 	glog.Info("Server started. Clients connected.")
 }
 
+func ProcessTaskOverNetwork(qu []byte) (result []byte, rerr error) {
+	uo := flatbuffers.GetUOffsetT(qu)
+	q := new(task.Query)
+	q.Init(qu, uo)
+
+	attr := string(q.Attr())
+	idx := farm.Fingerprint64([]byte(attr)) % numInstances
+
+	var runHere bool
+	if attr == "_xid_" || attr == "_uid_" {
+		idx = 0
+		runHere = (instanceIdx == 0)
+	} else {
+		runHere = (instanceIdx == idx)
+	}
+
+	if runHere {
+		return ProcessTask(qu)
+	}
+
+	pool := pools[idx]
+	addr := pool.Addr
+	query := new(conn.Query)
+	query.Data = qu
+	reply := new(conn.Reply)
+	if err := pool.Call("Worker.ServeTask", query, reply); err != nil {
+		glog.WithField("call", "Worker.ServeTask").Fatal(err)
+	}
+	glog.WithField("reply", string(reply.Data)).WithField("addr", addr).
+		Info("Got reply from server")
+	return reply.Data, nil
+}
+
 func ProcessTask(query []byte) (result []byte, rerr error) {
 	uo := flatbuffers.GetUOffsetT(query)
 	q := new(task.Query)
 	q.Init(query, uo)
+	attr := string(q.Attr())
 
 	b := flatbuffers.NewBuilder(0)
 	voffsets := make([]flatbuffers.UOffsetT, q.UidsLength())
 	uoffsets := make([]flatbuffers.UOffsetT, q.UidsLength())
 
-	attr := string(q.Attr())
 	for i := 0; i < q.UidsLength(); i++ {
 		uid := q.Uids(i)
 		key := posting.Key(uid, attr)
@@ -131,6 +171,22 @@ func (w *Worker) Hello(query *conn.Query, reply *conn.Reply) error {
 		reply.Data = []byte("Hey stranger!")
 	}
 	return nil
+}
+
+func (w *Worker) ServeTask(query *conn.Query, reply *conn.Reply) (rerr error) {
+	uo := flatbuffers.GetUOffsetT(query.Data)
+	q := new(task.Query)
+	q.Init(query.Data, uo)
+	attr := string(q.Attr())
+
+	if farm.Fingerprint64([]byte(attr))%numInstances == instanceIdx {
+		reply.Data, rerr = ProcessTask(query.Data)
+	} else {
+		glog.WithField("attribute", attr).
+			WithField("instanceIdx", instanceIdx).
+			Fatalf("Request sent to wrong server")
+	}
+	return rerr
 }
 
 func serveRequests(irwc io.ReadWriteCloser) {
