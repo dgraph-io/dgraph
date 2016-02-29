@@ -17,6 +17,7 @@
 package main
 
 import (
+	"bufio"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -30,6 +31,7 @@ import (
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/query"
+	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/uid"
 	"github.com/dgraph-io/dgraph/worker"
@@ -59,6 +61,23 @@ func addCorsHeaders(w http.ResponseWriter) {
 	w.Header().Set("Connection", "close")
 }
 
+func mutationHandler(mu *gql.Mutation) error {
+	r := strings.NewReader(mu.Set)
+	scanner := bufio.NewScanner(r)
+	for scanner.Scan() {
+		ln := strings.Trim(scanner.Text(), " \t")
+		if len(ln) == 0 {
+			continue
+		}
+		_, err := rdf.Parse(ln)
+		if err != nil {
+			glog.WithError(err).Error("While parsing RDF.")
+			return err
+		}
+	}
+	return nil
+}
+
 func queryHandler(w http.ResponseWriter, r *http.Request) {
 	addCorsHeaders(w)
 	if r.Method == "OPTIONS" {
@@ -80,12 +99,14 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	glog.WithField("q", string(q)).Debug("Query received.")
-	gq, _, err := gql.Parse(string(q))
+	gq, mu, err := gql.Parse(string(q))
 	if err != nil {
 		x.Err(glog, err).Error("While parsing query")
 		x.SetStatus(w, x.E_INVALID_REQUEST, err.Error())
 		return
 	}
+	mutationHandler(mu)
+
 	sg, err := query.ToSubGraph(gq)
 	if err != nil {
 		x.Err(glog, err).Error("While conversion to internal format")

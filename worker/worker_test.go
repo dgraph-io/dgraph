@@ -83,7 +83,7 @@ func TestProcessTask(t *testing.T) {
 	addEdge(t, edge, posting.GetOrCreate(posting.Key(12, "friend"), ps))
 
 	query := NewQuery("friend", []uint64{10, 11, 12})
-	result, err := ProcessTask(query)
+	result, err := processTask(query)
 	if err != nil {
 		t.Error(err)
 	}

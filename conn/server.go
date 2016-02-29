@@ -35,7 +35,9 @@ func (c *ServerCodec) ReadRequestBody(data interface{}) error {
 	return nil
 }
 
-func (c *ServerCodec) WriteResponse(resp *rpc.Response, data interface{}) error {
+func (c *ServerCodec) WriteResponse(resp *rpc.Response,
+	data interface{}) error {
+
 	if len(resp.Error) > 0 {
 		log.Fatal("Response has error: " + resp.Error)
 	}
