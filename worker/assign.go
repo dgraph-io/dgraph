@@ -3,12 +3,13 @@ package worker
 import (
 	"sync"
 
+	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/uid"
 	"github.com/google/flatbuffers/go"
 )
 
-func createXidListBuffer(xids map[string]bool) []byte {
+func createXidListBuffer(xids map[string]uint64) []byte {
 	b := flatbuffers.NewBuilder(0)
 	var offsets []flatbuffers.UOffsetT
 	for xid := range xids {
@@ -68,4 +69,47 @@ func getOrAssignUids(
 	uend := task.UidListEnd(b)
 	b.Finish(uend)
 	return b.Bytes[b.Head():], nil
+}
+
+func GetOrAssignUidsOverNetwork(xidToUid *map[string]uint64) (rerr error) {
+	query := new(conn.Query)
+	query.Data = createXidListBuffer(*xidToUid)
+	uo := flatbuffers.GetUOffsetT(query.Data)
+	xidList := new(task.XidList)
+	xidList.Init(query.Data, uo)
+
+	reply := new(conn.Reply)
+	if instanceIdx == 0 {
+		uo := flatbuffers.GetUOffsetT(query.Data)
+		xidList := new(task.XidList)
+		xidList.Init(query.Data, uo)
+
+		reply.Data, rerr = getOrAssignUids(xidList)
+		if rerr != nil {
+			return rerr
+		}
+	} else {
+		pool := pools[0]
+		if err := pool.Call("Worker.GetOrAssign", query, reply); err != nil {
+			glog.WithField("method", "GetOrAssign").WithError(err).
+				Error("While getting uids")
+			return err
+		}
+	}
+
+	uidList := new(task.UidList)
+	uo = flatbuffers.GetUOffsetT(reply.Data)
+	uidList.Init(reply.Data, uo)
+
+	if xidList.XidsLength() != uidList.UidsLength() {
+		glog.WithField("num_xids", xidList.XidsLength()).
+			WithField("num_uids", uidList.UidsLength()).
+			Fatal("Num xids don't match num uids")
+	}
+	for i := 0; i < xidList.XidsLength(); i++ {
+		xid := string(xidList.Xids(i))
+		uid := uidList.Uids(i)
+		(*xidToUid)[xid] = uid
+	}
+	return nil
 }

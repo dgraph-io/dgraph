@@ -70,6 +70,45 @@ func (nq NQuad) ToEdge(instanceIdx,
 	return result, nil
 }
 
+func toUid(xid string, xidToUid map[string]uint64) (uid uint64, rerr error) {
+	id, present := xidToUid[xid]
+	if present {
+		return id, nil
+	}
+
+	if !strings.HasPrefix(xid, "_uid_:") {
+		return 0, fmt.Errorf("Unable to find xid: %v", xid)
+	}
+	return strconv.ParseUint(xid[6:], 0, 64)
+}
+
+func (nq NQuad) ToEdgeUsing(
+	xidToUid map[string]uint64) (result x.DirectedEdge, rerr error) {
+	uid, err := toUid(nq.Subject, xidToUid)
+	if err != nil {
+		return result, err
+	}
+	result.Entity = uid
+
+	if len(nq.ObjectId) == 0 {
+		result.Value = nq.ObjectValue
+	} else {
+		uid, err = toUid(nq.ObjectId, xidToUid)
+		if err != nil {
+			return result, err
+		}
+		result.ValueId = uid
+	}
+	if len(nq.Language) > 0 {
+		result.Attribute = nq.Predicate + "." + nq.Language
+	} else {
+		result.Attribute = nq.Predicate
+	}
+	result.Source = nq.Label
+	result.Timestamp = time.Now()
+	return result, nil
+}
+
 func stripBracketsIfPresent(val string) string {
 	if val[0] != '<' {
 		return val

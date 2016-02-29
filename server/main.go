@@ -64,16 +64,54 @@ func addCorsHeaders(w http.ResponseWriter) {
 func mutationHandler(mu *gql.Mutation) error {
 	r := strings.NewReader(mu.Set)
 	scanner := bufio.NewScanner(r)
+	var nquads []rdf.NQuad
 	for scanner.Scan() {
 		ln := strings.Trim(scanner.Text(), " \t")
 		if len(ln) == 0 {
 			continue
 		}
-		_, err := rdf.Parse(ln)
+		nq, err := rdf.Parse(ln)
 		if err != nil {
 			glog.WithError(err).Error("While parsing RDF.")
 			return err
 		}
+		nquads = append(nquads, nq)
+	}
+
+	xidToUid := make(map[string]uint64)
+	for _, nq := range nquads {
+		if !strings.HasPrefix("_uid_:", nq.Subject) {
+			xidToUid[nq.Subject] = 0
+		}
+		if !strings.HasPrefix("_uid_:", nq.ObjectId) {
+			xidToUid[nq.ObjectId] = 0
+		}
+	}
+	if err := worker.GetOrAssignUidsOverNetwork(&xidToUid); err != nil {
+		return err
+	}
+
+	var edges []x.DirectedEdge
+	for _, nq := range nquads {
+		edge, err := nq.ToEdgeUsing(xidToUid)
+		if err != nil {
+			glog.WithField("nquad", nq).WithError(err).
+				Error("While converting to edge")
+			return err
+		}
+		edges = append(edges, edge)
+	}
+
+	left, err := worker.MutateOverNetwork(edges)
+	if err != nil {
+		return err
+	}
+	if len(left) > 0 {
+		glog.WithField("left", len(left)).Error("Some edges couldn't be applied")
+		for _, e := range left {
+			glog.WithField("edge", e).Debug("Unable to apply mutation")
+		}
+		return fmt.Errorf("Unapplied mutations")
 	}
 	return nil
 }

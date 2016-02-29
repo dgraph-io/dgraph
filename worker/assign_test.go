@@ -8,10 +8,10 @@ import (
 )
 
 func TestXidListBuffer(t *testing.T) {
-	xids := map[string]bool{
-		"b.0453": true,
-		"d.z1sz": true,
-		"e.abcd": true,
+	xids := map[string]uint64{
+		"b.0453": 0,
+		"d.z1sz": 0,
+		"e.abcd": 0,
 	}
 
 	buf := createXidListBuffer(xids)
@@ -26,10 +26,10 @@ func TestXidListBuffer(t *testing.T) {
 	for i := 0; i < xl.XidsLength(); i++ {
 		xid := string(xl.Xids(i))
 		t.Logf("Found: %v", xid)
-		xids[xid] = false
+		xids[xid] = 7
 	}
-	for xid, untouched := range xids {
-		if untouched {
+	for xid, val := range xids {
+		if val != 7 {
 			t.Errorf("Expected xid: %v to be part of the buffer.", xid)
 		}
 	}
