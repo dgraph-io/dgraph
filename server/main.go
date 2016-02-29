@@ -69,12 +69,11 @@ func mutationHandler(mu *gql.Mutation) error {
 		if len(ln) == 0 {
 			continue
 		}
-		nq, err := rdf.Parse(ln)
+		_, err := rdf.Parse(ln)
 		if err != nil {
 			glog.WithError(err).Error("While parsing RDF.")
 			return err
 		}
-		_ = nq
 	}
 	return nil
 }
