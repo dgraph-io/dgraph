@@ -91,6 +91,22 @@ func (w *Worker) Hello(query *conn.Query, reply *conn.Reply) error {
 	return nil
 }
 
+func (w *Worker) GetOrAssign(query *conn.Query,
+	reply *conn.Reply) (rerr error) {
+
+	uo := flatbuffers.GetUOffsetT(query.Data)
+	xids := new(task.XidList)
+	xids.Init(query.Data, uo)
+
+	if instanceIdx != 0 {
+		glog.WithField("instanceIdx", instanceIdx).
+			WithField("GetOrAssign", true).
+			Fatal("We shouldn't be receiving this request.")
+	}
+	reply.Data, rerr = getOrAssignUids(xids)
+	return
+}
+
 func (w *Worker) Mutate(query *conn.Query, reply *conn.Reply) (rerr error) {
 	m := new(Mutations)
 	if err := m.Decode(query.Data); err != nil {
