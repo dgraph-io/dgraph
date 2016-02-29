@@ -15,6 +15,8 @@ type Query struct {
 
 type Reply struct {
 	Data []byte
+	// TODO(manishrjain): Add an error here.
+	// Error string
 }
 
 func writeHeader(rwc io.ReadWriteCloser, seq uint64,
