@@ -184,7 +184,7 @@ func (w *Worker) Mutate(query *conn.Query, reply *conn.Reply) (rerr error) {
 	// For now, assume it's all only Set instructions.
 	for _, edge := range m.Set {
 		if farm.Fingerprint64(
-			[]byte(edge.Attribute))%uint64(len(addrs)) != instanceIdx {
+			[]byte(edge.Attribute))%numInstances != instanceIdx {
 
 			glog.WithField("instanceIdx", instanceIdx).
 				WithField("attr", edge.Attribute).
