@@ -13,12 +13,12 @@ var glog = x.Log("conn")
 
 type Pool struct {
 	clients chan *rpc.Client
-	addr    string
+	Addr    string
 }
 
 func NewPool(addr string, maxCap int) *Pool {
 	p := new(Pool)
-	p.addr = addr
+	p.Addr = addr
 	p.clients = make(chan *rpc.Client, maxCap)
 	client, err := p.dialNew()
 	if err != nil {
@@ -36,7 +36,7 @@ func (p *Pool) dialNew() (*rpc.Client, error) {
 	var nconn net.Conn
 	var err error
 	for i := 0; i < 10; i++ {
-		nconn, err = d.Dial("tcp", p.addr)
+		nconn, err = d.Dial("tcp", p.Addr)
 		if err == nil {
 			break
 		}
@@ -44,7 +44,7 @@ func (p *Pool) dialNew() (*rpc.Client, error) {
 			break
 		}
 
-		glog.WithField("error", err).WithField("addr", p.addr).
+		glog.WithField("error", err).WithField("addr", p.Addr).
 			Info("Retrying connection...")
 		time.Sleep(10 * time.Second)
 	}

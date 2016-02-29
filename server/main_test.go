@@ -62,7 +62,7 @@ func prepare() (dir1, dir2 string, ps *store.Store, clog *commit.Logger, rerr er
 	clog.Init()
 
 	posting.Init(clog)
-	worker.Init(ps, nil, nil)
+	worker.Init(ps, nil, 0, 1)
 	uid.Init(ps)
 	loader.Init(ps, ps)
 
