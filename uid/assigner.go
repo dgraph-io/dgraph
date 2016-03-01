@@ -33,6 +33,11 @@ import (
 var glog = x.Log("uid")
 var lmgr *lockManager
 var uidStore *store.Store
+var eidPool = sync.Pool{
+	New: func() interface{} {
+		return new(entry)
+	},
+}
 
 type entry struct {
 	sync.Mutex
@@ -63,7 +68,7 @@ func (lm *lockManager) newOrExisting(xid string) *entry {
 	if e, ok := lm.locks[xid]; ok {
 		return e
 	}
-	e := new(entry)
+	e := eidPool.Get().(*entry)
 	e.ts = time.Now()
 	lm.locks[xid] = e
 	return e
@@ -78,6 +83,7 @@ func (lm *lockManager) clean() {
 			if e.isOld() {
 				count += 1
 				delete(lm.locks, xid)
+				eidPool.Put(e)
 			}
 		}
 		lm.Unlock()
@@ -181,9 +187,8 @@ func assignNew(pl *posting.List, xid string, instanceIdx uint64,
 }
 
 func stringKey(xid string) []byte {
-	buf := new(bytes.Buffer)
-	buf.WriteString("_uid_")
-	buf.WriteString("|")
+	var buf bytes.Buffer
+	buf.WriteString("_uid_|")
 	buf.WriteString(xid)
 	return buf.Bytes()
 }
