@@ -42,6 +42,7 @@ func mutate(m *Mutations, left *Mutations) error {
 			return fmt.Errorf("predicate fingerprint doesn't match this instance.")
 		}
 
+		glog.WithField("edge", edge).Debug("mutate")
 		key := posting.Key(edge.Entity, edge.Attribute)
 		plist := posting.GetOrCreate(key, dataStore)
 		if err := plist.AddMutation(edge, posting.Set); err != nil {
@@ -93,6 +94,7 @@ func MutateOverNetwork(
 		mu := mutationArray[idx]
 		if mu == nil {
 			mu = new(Mutations)
+			mutationArray[idx] = mu
 		}
 		mu.Set = append(mu.Set, edge)
 	}
