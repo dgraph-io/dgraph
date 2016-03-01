@@ -97,6 +97,7 @@ func (lm *lockManager) clean() {
 func init() {
 	lmgr = new(lockManager)
 	lmgr.locks = make(map[string]*entry)
+	// TODO(manishrjain): This map should be cleaned up.
 	// go lmgr.clean()
 }
 
