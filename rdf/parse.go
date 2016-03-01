@@ -120,7 +120,9 @@ func stripBracketsIfPresent(val string) string {
 }
 
 func Parse(line string) (rnq NQuad, rerr error) {
-	l := lex.NewLexer(line)
+	l := &lex.Lexer{}
+	l.Init(line)
+
 	go run(l)
 	var oval string
 	var vend bool

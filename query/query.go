@@ -27,7 +27,6 @@ import (
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/task"
-	"github.com/dgraph-io/dgraph/uid"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/google/flatbuffers/go"
@@ -275,15 +274,15 @@ func newGraph(euid uint64, exid string) (*SubGraph, error) {
 	// This would set the Result field in SubGraph,
 	// and populate the children for attributes.
 	if len(exid) > 0 {
-		// instanceIdx = 0, numInstances = 1 by default
-		u, err := uid.GetOrAssign(exid, 0, 1)
-		if err != nil {
-			x.Err(glog, err).WithField("xid", exid).Error(
-				"While GetOrAssign uid from external id")
+		xidToUid := make(map[string]uint64)
+		xidToUid[exid] = 0
+		if err := worker.GetOrAssignUidsOverNetwork(&xidToUid); err != nil {
+			glog.WithError(err).Error("While getting uids over network")
 			return nil, err
 		}
-		glog.WithField("xid", exid).WithField("_uid_", u).Debug("GetOrAssign")
-		euid = u
+
+		euid = xidToUid[exid]
+		glog.WithField("xid", exid).WithField("uid", euid).Debug("GetOrAssign")
 	}
 
 	if euid == 0 {

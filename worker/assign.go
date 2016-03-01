@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"fmt"
 	"sync"
 
 	"github.com/dgraph-io/dgraph/conn"
@@ -33,6 +34,10 @@ func createXidListBuffer(xids map[string]uint64) []byte {
 func getOrAssignUids(
 	xidList *task.XidList) (uidList []byte, rerr error) {
 
+	if xidList.XidsLength() == 0 {
+		return uidList, fmt.Errorf("Empty xid list")
+	}
+
 	wg := new(sync.WaitGroup)
 	uids := make([]uint64, xidList.XidsLength())
 	che := make(chan error, xidList.XidsLength())
@@ -40,15 +45,15 @@ func getOrAssignUids(
 		wg.Add(1)
 		xid := string(xidList.Xids(i))
 
-		go func() {
+		go func(idx int) {
 			defer wg.Done()
 			u, err := uid.GetOrAssign(xid, 0, 1)
 			if err != nil {
 				che <- err
 				return
 			}
-			uids[i] = u
-		}()
+			uids[idx] = u
+		}(i)
 	}
 	wg.Wait()
 	close(che)

@@ -88,6 +88,7 @@ func mutationHandler(mu *gql.Mutation) error {
 		}
 	}
 	if err := worker.GetOrAssignUidsOverNetwork(&xidToUid); err != nil {
+		glog.WithError(err).Error("GetOrAssignUidsOverNetwork")
 		return err
 	}
 
@@ -143,7 +144,20 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		x.SetStatus(w, x.E_INVALID_REQUEST, err.Error())
 		return
 	}
-	mutationHandler(mu)
+
+	// If we have mutations, run them first.
+	if mu != nil && len(mu.Set) > 0 {
+		if err = mutationHandler(mu); err != nil {
+			glog.WithError(err).Error("While handling mutations.")
+			x.SetStatus(w, x.E_ERROR, err.Error())
+			return
+		}
+	}
+
+	if gq == nil || (gq.UID == 0 && len(gq.XID) == 0) {
+		x.SetStatus(w, x.E_OK, "Done")
+		return
+	}
 
 	sg, err := query.ToSubGraph(gq)
 	if err != nil {
@@ -204,6 +218,10 @@ func main() {
 
 	addrs := strings.Split(*workers, ",")
 	lenAddr := uint64(len(addrs))
+	if lenAddr == 0 {
+		// If no worker is specified, then we're it.
+		lenAddr = 1
+	}
 
 	posting.Init(clog)
 

@@ -66,12 +66,9 @@ type Lexer struct {
 	Mode  int       // mode based on information so far.
 }
 
-func NewLexer(input string) *Lexer {
-	l := &Lexer{
-		Input: input,
-		Items: make(chan item, 100),
-	}
-	return l
+func (l *Lexer) Init(input string) {
+	l.Input = input
+	l.Items = make(chan item, 5)
 }
 
 func (l *Lexer) Errorf(format string,

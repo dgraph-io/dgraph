@@ -39,11 +39,10 @@ import (
 )
 
 var glog = x.Log("posting")
+var E_TMP_ERROR = fmt.Errorf("Temporary Error. Please retry.")
 
 const Set = 0x01
 const Del = 0x02
-
-var E_TMP_ERROR = errors.New("Temporary Error. Please retry.")
 
 type buffer struct {
 	d []byte
