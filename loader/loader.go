@@ -158,7 +158,7 @@ func (s *state) handleNQuads(wg *sync.WaitGroup) {
 	wg.Done()
 }
 
-func (s *state) getUidForString(str string) {
+func (s *state) getUidForString(str string) error {
 	_, err := rdf.GetUid(str, s.instanceIdx, s.numInstances)
 	for err != nil {
 		// Just put in a retry loop to tackle temporary errors.
@@ -169,31 +169,39 @@ func (s *state) getUidForString(str string) {
 		} else {
 			glog.WithError(err).WithField("nq.Subject", str).
 				Error("While getting UID")
-			return
+			return err
 		}
 		_, err = rdf.GetUid(str, s.instanceIdx, s.numInstances)
 	}
+	return nil
 }
 
 func (s *state) assignUidsOnly(wg *sync.WaitGroup) {
+	defer wg.Done()
+
 	for nq := range s.cnq {
-		if farm.Fingerprint64([]byte(nq.Subject))%s.numInstances != s.instanceIdx {
-			// This instance shouldnt assign UID to this string
-			atomic.AddUint64(&s.ctr.ignored, 1)
-		} else {
-			s.getUidForString(nq.Subject)
+		ignored := true
+		if farm.Fingerprint64([]byte(nq.Subject))%s.numInstances == s.instanceIdx {
+			if err := s.getUidForString(nq.Subject); err != nil {
+				glog.WithError(err).Fatal("While assigning Uid to subject.")
+			}
+			ignored = false
 		}
 
-		if len(nq.ObjectId) == 0 ||
-			farm.Fingerprint64([]byte(nq.ObjectId))%s.numInstances != s.instanceIdx {
-			// This instance shouldnt or cant assign UID to this string
+		if len(nq.ObjectId) > 0 &&
+			farm.Fingerprint64([]byte(nq.ObjectId))%s.numInstances == s.instanceIdx {
+			if err := s.getUidForString(nq.ObjectId); err != nil {
+				glog.WithError(err).Fatal("While assigning Uid to object.")
+			}
+			ignored = false
+		}
+
+		if ignored {
 			atomic.AddUint64(&s.ctr.ignored, 1)
 		} else {
-			s.getUidForString(nq.ObjectId)
+			atomic.AddUint64(&s.ctr.processed, 1)
 		}
 	}
-
-	wg.Done()
 }
 
 // Blocking function.
