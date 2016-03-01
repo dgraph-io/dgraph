@@ -18,18 +18,12 @@ package lex
 
 import (
 	"fmt"
-	"sync"
 	"unicode/utf8"
 
 	"github.com/dgraph-io/dgraph/x"
 )
 
 var glog = x.Log("lexer")
-var LexerPool = sync.Pool{
-	New: func() interface{} {
-		return &Lexer{}
-	},
-}
 
 const EOF = -1
 
@@ -72,12 +66,9 @@ type Lexer struct {
 	Mode  int       // mode based on information so far.
 }
 
-func NewLexer(input string) *Lexer {
-	l := LexerPool.Get().(*Lexer)
-	*l = Lexer{}
+func (l *Lexer) Init(input string) {
 	l.Input = input
 	l.Items = make(chan item, 5)
-	return l
 }
 
 func (l *Lexer) Errorf(format string,

@@ -51,3 +51,26 @@ Showing top 10 nodes out of 62 (cum >= 18180150)
   25895676  4.62% 68.91%   25895676  4.62%  github.com/zond/gotomic.(*element).search
   18546971  3.31% 72.22%   72863016 13.00%  github.com/dgraph-io/dgraph/loader.(*state).parseStream
   18090764  3.23% 75.45%   18180150  3.24%  github.com/dgraph-io/dgraph/loader.(*state).readLines
+
+After a few more discussions, I realized that lexer didn't need to be allocated on the heap.
+So, I switched it to be allocated on stack. These are the results.
+
+$ go tool pprof uidassigner heap.prof 
+Entering interactive mode (type "help" for commands)
+(pprof) top10
+1308.70MB of 1696.59MB total (77.14%)
+Dropped 73 nodes (cum <= 8.48MB)
+Showing top 10 nodes out of 52 (cum >= 161.50MB)
+      flat  flat%   sum%        cum   cum%
+  304.56MB 17.95% 17.95%   304.56MB 17.95%  github.com/dgraph-io/dgraph/posting.NewList
+  209.55MB 12.35% 30.30%   209.55MB 12.35%  github.com/Sirupsen/logrus.(*Entry).WithFields
+  207.55MB 12.23% 42.54%   417.10MB 24.58%  github.com/Sirupsen/logrus.(*Entry).WithField
+     108MB  6.37% 48.90%      108MB  6.37%  github.com/dgraph-io/dgraph/uid.(*lockManager).newOrExisting
+      88MB  5.19% 54.09%       88MB  5.19%  github.com/zond/gotomic.newMockEntry
+   85.51MB  5.04% 59.13%    85.51MB  5.04%  github.com/google/flatbuffers/go.(*Builder).growByteBuffer
+   78.01MB  4.60% 63.73%    78.01MB  4.60%  github.com/dgraph-io/dgraph/posting.Key
+   78.01MB  4.60% 68.32%    78.51MB  4.63%  github.com/dgraph-io/dgraph/uid.stringKey
+      76MB  4.48% 72.80%       76MB  4.48%  github.com/zond/gotomic.newRealEntryWithHashCode
+   73.50MB  4.33% 77.14%   161.50MB  9.52%  github.com/zond/gotomic.(*Hash).getBucketByIndex
+
+Now, rdf.Parse is no longer shows up in memory profiler. Win!
