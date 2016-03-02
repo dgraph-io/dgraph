@@ -165,7 +165,7 @@ func (s *state) getUidForString(str string) error {
 		if err == posting.E_TMP_ERROR {
 			time.Sleep(time.Microsecond)
 			glog.WithError(err).WithField("nq.Subject", str).
-				Error("Temporary error")
+				Debug("Temporary error")
 		} else {
 			glog.WithError(err).WithField("nq.Subject", str).
 				Error("While getting UID")
