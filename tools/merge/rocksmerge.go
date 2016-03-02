@@ -21,7 +21,6 @@ import (
 	"bytes"
 	"container/heap"
 	"flag"
-	"fmt"
 	"io/ioutil"
 
 	"github.com/dgraph-io/dgraph/store/rocksdb"
@@ -90,7 +89,7 @@ func main() {
 
 	var itVec []*rocksdb.Iterator
 	var db *rocksdb.DB
-	var lastKey, lastValue []bytes
+	var lastKey, lastValue []byte
 	count := 0
 	for range files {
 		count++
@@ -109,7 +108,6 @@ func main() {
 		if !it.Valid() {
 			continue
 		}
-		fmt.Println(it.Key(), it.Value())
 		pq[i] = &Item{
 			key:   it.Key(),
 			value: it.Value(),
@@ -127,7 +125,6 @@ func main() {
 			Fatal("While opening store")
 	}
 
-	fmt.Println(count)
 	for pq.Len() > 0 {
 		top := heap.Pop(&pq).(*Item)
 
@@ -137,7 +134,6 @@ func main() {
 			}
 		} else {
 			db.Put(wopt, top.key, top.value)
-			fmt.Println(top.key, top.value)
 			lastKey = top.key
 			lastValue = top.value
 		}
@@ -153,6 +149,5 @@ func main() {
 		}
 		heap.Push(&pq, item)
 	}
-	fmt.Println(count)
 	db.Close()
 }
