@@ -49,7 +49,8 @@ func run(l *lex.Lexer) {
 }
 
 func Parse(input string) (gq *GraphQuery, mu *Mutation, rerr error) {
-	l := lex.NewLexer(input)
+	l := &lex.Lexer{}
+	l.Init(input)
 	go run(l)
 
 	mu = nil
