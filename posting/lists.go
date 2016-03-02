@@ -101,22 +101,18 @@ func gentlyMerge(ms runtime.MemStats) {
 	ctr := NewCounters()
 	defer ctr.ticker.Stop()
 
-	// Pick 400 keys from dirty map.
+	// Pick 1% of the dirty map or 400 keys, whichever is higher.
+	pick := int(float64(dirtymap.Size()) * 0.01)
+	if pick < 400 {
+		pick = 400
+	}
 	var hs []gotomic.Hashable
 	dirtymap.Each(func(k gotomic.Hashable, v gotomic.Thing) bool {
 		hs = append(hs, k)
-		return len(hs) >= 400
+		return len(hs) >= pick
 	})
 
-	idx := 0
-	t := time.NewTicker(10 * time.Millisecond)
-	defer t.Stop()
-	for _ = range t.C {
-		if idx >= len(hs) {
-			break
-		}
-		hid := hs[idx]
-		idx += 1
+	for _, hid := range hs {
 		dirtymap.Delete(hid)
 
 		ret, ok := lhmap.Get(hid)
