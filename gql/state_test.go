@@ -34,7 +34,8 @@ func TestNewLexer(t *testing.T) {
 			}
 		}
 	}`
-	l := lex.NewLexer(input)
+	l := &lex.Lexer{}
+	l.Init(input)
 	go run(l)
 	for item := range l.Items {
 		if item.Typ == lex.ItemError {
@@ -61,7 +62,8 @@ func TestNewLexerMutation(t *testing.T) {
 			_city
 		}
 	}`
-	l := lex.NewLexer(input)
+	l := &lex.Lexer{}
+	l.Init(input)
 	go run(l)
 	for item := range l.Items {
 		if item.Typ == lex.ItemError {
@@ -79,7 +81,8 @@ func TestAbruptMutation(t *testing.T) {
 			Why is this #!!?
 			How is this?
 	}`
-	l := lex.NewLexer(input)
+	l := &lex.Lexer{}
+	l.Init(input)
 	go run(l)
 	var typ lex.ItemType
 	for item := range l.Items {

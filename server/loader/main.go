@@ -41,8 +41,9 @@ var instanceIdx = flag.Uint64("instanceIdx", 0,
 var numInstances = flag.Uint64("numInstances", 1,
 	"Total number of instances among which uid assigning is shared")
 var postingDir = flag.String("postings", "", "Directory to store posting lists")
-var uidDir = flag.String("uidDir", "", "Directory to read UID posting lists")
+var uidDir = flag.String("uids", "", "Directory to read UID posting lists")
 var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
+var memprofile = flag.String("memprofile", "", "write memory profile to file")
 var numcpu = flag.Int("numCpu", runtime.NumCPU(),
 	"Number of cores to be used by the process")
 
@@ -108,4 +109,13 @@ func main() {
 	}
 	glog.Info("Calling merge lists")
 	posting.MergeLists(100 * numCpus) // 100 per core.
+
+	if len(*memprofile) > 0 {
+		f, err := os.Create(*memprofile)
+		if err != nil {
+			glog.Fatal(err)
+		}
+		pprof.WriteHeapProfile(f)
+		f.Close()
+	}
 }
