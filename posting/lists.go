@@ -98,12 +98,12 @@ func aggressivelyEvict(ms runtime.MemStats) {
 		Info("Memory Usage after calling GC.")
 }
 
-func gentlyMerge(ms runtime.MemStats) {
+func gentlyMerge() {
 	ctr := NewCounters()
 	defer ctr.ticker.Stop()
 
-	// Pick 1% of the dirty map or 400 keys, whichever is higher.
-	pick := int(float64(dirtymap.Size()) * 0.1)
+	// Pick 5% of the dirty map or 400 keys, whichever is higher.
+	pick := int(float64(dirtymap.Size()) * 0.05)
 	if pick < 400 {
 		pick = 400
 	}
@@ -161,7 +161,8 @@ func checkMemoryUsage() {
 			aggressivelyEvict(ms)
 
 		} else {
-			gentlyMerge(ms)
+			// gentlyMerge can take a while to finish. So, run it in a goroutine.
+			go gentlyMerge()
 		}
 	}
 }
