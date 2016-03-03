@@ -17,7 +17,6 @@
 package uid
 
 import (
-	"bytes"
 	"errors"
 	"math"
 	"sync"
@@ -188,10 +187,7 @@ func assignNew(pl *posting.List, xid string, instanceIdx uint64,
 }
 
 func stringKey(xid string) []byte {
-	var buf bytes.Buffer
-	buf.WriteString("_uid_|")
-	buf.WriteString(xid)
-	return buf.Bytes()
+	return []byte("_uid_|" + xid)
 }
 
 func GetOrAssign(xid string, instanceIdx uint64,

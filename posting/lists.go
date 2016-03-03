@@ -18,6 +18,7 @@ package posting
 
 import (
 	"flag"
+	"math/rand"
 	"runtime"
 	"runtime/debug"
 	"sync"
@@ -102,12 +103,29 @@ func gentlyMerge(ms runtime.MemStats) {
 	defer ctr.ticker.Stop()
 
 	// Pick 1% of the dirty map or 400 keys, whichever is higher.
-	pick := int(float64(dirtymap.Size()) * 0.01)
+	pick := int(float64(dirtymap.Size()) * 0.1)
 	if pick < 400 {
 		pick = 400
 	}
+	// We should start picking up elements from a randomly selected index,
+	// otherwise, the same keys would keep on getting merged, while the
+	// rest would never get a chance.
+	var start int
+	n := dirtymap.Size() - pick
+	if n <= 0 {
+		start = 0
+	} else {
+		start = rand.Intn(n)
+	}
+
 	var hs []gotomic.Hashable
+	idx := 0
 	dirtymap.Each(func(k gotomic.Hashable, v gotomic.Thing) bool {
+		if idx < start {
+			idx += 1
+			return false
+		}
+
 		hs = append(hs, k)
 		return len(hs) >= pick
 	})
