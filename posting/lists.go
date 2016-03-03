@@ -35,6 +35,23 @@ import (
 var maxmemory = flag.Uint64("stw_ram_mb", 4096,
 	"If RAM usage exceeds this, we stop the world, and flush our buffers.")
 
+type mergeRoutines struct {
+	sync.RWMutex
+	count int
+}
+
+func (mr *mergeRoutines) Count() int {
+	mr.RLock()
+	defer mr.RUnlock()
+	return mr.count
+}
+
+func (mr *mergeRoutines) Add(delta int) {
+	mr.Lock()
+	mr.count += delta
+	mr.Unlock()
+}
+
 type counters struct {
 	ticker *time.Ticker
 	added  uint64
@@ -98,7 +115,8 @@ func aggressivelyEvict(ms runtime.MemStats) {
 		Info("Memory Usage after calling GC.")
 }
 
-func gentlyMerge() {
+func gentlyMerge(mr *mergeRoutines) {
+	defer mr.Add(-1)
 	ctr := NewCounters()
 	defer ctr.ticker.Stop()
 
@@ -154,6 +172,7 @@ func checkMemoryUsage() {
 	MIB = 1 << 20
 	MAX_MEMORY = *maxmemory * MIB
 
+	var mr mergeRoutines
 	for _ = range time.Tick(5 * time.Second) {
 		var ms runtime.MemStats
 		runtime.ReadMemStats(&ms)
@@ -161,8 +180,15 @@ func checkMemoryUsage() {
 			aggressivelyEvict(ms)
 
 		} else {
+			// If merging is slow, we don't want to end up having too many goroutines
+			// merging the dirty list. This should keep them in check.
+			if mr.Count() > 25 {
+				glog.Info("Skipping gentle merging.")
+				continue
+			}
+			mr.Add(1)
 			// gentlyMerge can take a while to finish. So, run it in a goroutine.
-			go gentlyMerge()
+			go gentlyMerge(&mr)
 		}
 	}
 }
