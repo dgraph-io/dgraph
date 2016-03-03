@@ -99,7 +99,7 @@ func main() {
 			glog.WithError(err).Fatal("Unable to create gzip reader.")
 		}
 
-		count, err := loader.HandleRdfReader(r, *instanceIdx, *numInstances)
+		count, err := loader.LoadEdges(r, *instanceIdx, *numInstances)
 		if err != nil {
 			glog.WithError(err).Fatal("While handling rdf reader.")
 		}

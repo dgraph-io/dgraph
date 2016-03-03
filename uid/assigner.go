@@ -18,6 +18,7 @@ package uid
 
 import (
 	"errors"
+	"fmt"
 	"math"
 	"sync"
 	"time"
@@ -188,6 +189,22 @@ func assignNew(pl *posting.List, xid string, instanceIdx uint64,
 
 func stringKey(xid string) []byte {
 	return []byte("_uid_|" + xid)
+}
+
+func Get(xid string) (uid uint64, rerr error) {
+	key := stringKey(xid)
+	pl := posting.GetOrCreate(key, uidStore)
+	if pl.Length() == 0 {
+		return 0, fmt.Errorf("xid: %v doesn't have any uid assigned.", xid)
+	}
+	if pl.Length() > 1 {
+		glog.Fatalf("We shouldn't have more than 1 uid for xid: %v\n", xid)
+	}
+	var p types.Posting
+	if ok := pl.Get(&p, 0); !ok {
+		return 0, fmt.Errorf("While retrieving entry from posting list")
+	}
+	return p.Uid(), nil
 }
 
 func GetOrAssign(xid string, instanceIdx uint64,

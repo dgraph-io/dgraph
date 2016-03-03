@@ -21,6 +21,7 @@ import (
 	"io"
 	"math/rand"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -30,6 +31,7 @@ import (
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/store"
+	"github.com/dgraph-io/dgraph/uid"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgryski/go-farm"
 )
@@ -129,7 +131,7 @@ func (s *state) parseStream(done chan error) {
 
 func (s *state) handleNQuads(wg *sync.WaitGroup) {
 	for nq := range s.cnq {
-		edge, err := nq.ToEdge(s.instanceIdx, s.numInstances)
+		edge, err := nq.ToEdge()
 		for err != nil {
 			// Just put in a retry loop to tackle temporary errors.
 			if err == posting.E_TMP_ERROR {
@@ -140,7 +142,7 @@ func (s *state) handleNQuads(wg *sync.WaitGroup) {
 					Error("While converting to edge")
 				return
 			}
-			edge, err = nq.ToEdge(s.instanceIdx, s.numInstances)
+			edge, err = nq.ToEdge()
 		}
 
 		// Only handle this edge if the attribute satisfies the modulo rule
@@ -158,20 +160,25 @@ func (s *state) handleNQuads(wg *sync.WaitGroup) {
 	wg.Done()
 }
 
-func (s *state) getUidForString(str string) error {
-	_, err := rdf.GetUid(str, s.instanceIdx, s.numInstances)
+func (s *state) assignUid(xid string) error {
+	if strings.HasPrefix(xid, "_uid_:") {
+		_, err := strconv.ParseUint(xid[6:], 0, 64)
+		return err
+	}
+
+	_, err := uid.GetOrAssign(xid, s.instanceIdx, s.numInstances)
 	for err != nil {
 		// Just put in a retry loop to tackle temporary errors.
 		if err == posting.E_TMP_ERROR {
 			time.Sleep(time.Microsecond)
-			glog.WithError(err).WithField("nq.Subject", str).
+			glog.WithError(err).WithField("xid", xid).
 				Debug("Temporary error")
 		} else {
-			glog.WithError(err).WithField("nq.Subject", str).
+			glog.WithError(err).WithField("xid", xid).
 				Error("While getting UID")
 			return err
 		}
-		_, err = rdf.GetUid(str, s.instanceIdx, s.numInstances)
+		_, err = uid.GetOrAssign(xid, s.instanceIdx, s.numInstances)
 	}
 	return nil
 }
@@ -182,7 +189,7 @@ func (s *state) assignUidsOnly(wg *sync.WaitGroup) {
 	for nq := range s.cnq {
 		ignored := true
 		if farm.Fingerprint64([]byte(nq.Subject))%s.numInstances == s.instanceIdx {
-			if err := s.getUidForString(nq.Subject); err != nil {
+			if err := s.assignUid(nq.Subject); err != nil {
 				glog.WithError(err).Fatal("While assigning Uid to subject.")
 			}
 			ignored = false
@@ -190,7 +197,7 @@ func (s *state) assignUidsOnly(wg *sync.WaitGroup) {
 
 		if len(nq.ObjectId) > 0 &&
 			farm.Fingerprint64([]byte(nq.ObjectId))%s.numInstances == s.instanceIdx {
-			if err := s.getUidForString(nq.ObjectId); err != nil {
+			if err := s.assignUid(nq.ObjectId); err != nil {
 				glog.WithError(err).Fatal("While assigning Uid to object.")
 			}
 			ignored = false
@@ -205,7 +212,7 @@ func (s *state) assignUidsOnly(wg *sync.WaitGroup) {
 }
 
 // Blocking function.
-func HandleRdfReader(reader io.Reader, instanceIdx uint64,
+func LoadEdges(reader io.Reader, instanceIdx uint64,
 	numInstances uint64) (uint64, error) {
 
 	s := new(state)
