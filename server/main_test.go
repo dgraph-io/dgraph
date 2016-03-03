@@ -66,15 +66,31 @@ func prepare() (dir1, dir2 string, ps *store.Store, clog *commit.Logger, rerr er
 	uid.Init(ps)
 	loader.Init(ps, ps)
 
-	f, err := os.Open("testdata.nq")
-	if err != nil {
-		return dir1, dir2, nil, clog, err
+	{
+		// Assign Uids first.
+		f, err := os.Open("testdata.nq")
+		if err != nil {
+			return dir1, dir2, nil, clog, err
+		}
+		_, err = loader.AssignUids(f, 0, 1)
+		f.Close()
+		if err != nil {
+			return dir1, dir2, nil, clog, err
+		}
 	}
-	defer f.Close()
-	_, err = loader.HandleRdfReader(f, 0, 1)
-	if err != nil {
-		return dir1, dir2, nil, clog, err
+	{
+		// Then load data.
+		f, err := os.Open("testdata.nq")
+		if err != nil {
+			return dir1, dir2, nil, clog, err
+		}
+		_, err = loader.LoadEdges(f, 0, 1)
+		f.Close()
+		if err != nil {
+			return dir1, dir2, nil, clog, err
+		}
 	}
+
 	return dir1, dir2, ps, clog, nil
 }
 

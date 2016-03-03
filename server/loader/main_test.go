@@ -39,16 +39,58 @@ func TestQuery(t *testing.T) {
 	uid.Init(ps)
 	loader.Init(ps, ps1)
 
-	f, err := os.Open("test_input")
-	r := bufio.NewReader(f)
-	count, err := loader.HandleRdfReader(r, 1, 2)
-	t.Logf("count", count)
-
-	posting.MergeLists(100)
-
-	if farm.Fingerprint64([]byte("follows"))%2 == 1 {
-		if count != 4 {
-			t.Error("loader assignment not as expected")
+	var count uint64
+	{
+		f, err := os.Open("test_input")
+		if err != nil {
+			t.Error(err)
+			t.Fail()
 		}
+		r := bufio.NewReader(f)
+		count, err = loader.AssignUids(r, 0, 1) // Assign uids for everything.
+		t.Logf("count: %v", count)
+		f.Close()
+		posting.MergeLists(100)
+	}
+	{
+		f, err := os.Open("test_input")
+		if err != nil {
+			t.Error(err)
+			t.Fail()
+		}
+		r := bufio.NewReader(f)
+		count, err = loader.LoadEdges(r, 1, 2)
+		t.Logf("count: %v", count)
+		f.Close()
+		posting.MergeLists(100)
+	}
+
+	if farm.Fingerprint64([]byte("follows"))%2 != 1 {
+		t.Error("Expected fp to be 1.")
+		t.Fail()
+	}
+	if count != 4 {
+		t.Error("loader assignment not as expected")
+	}
+
+	{
+		f, err := os.Open("test_input")
+		if err != nil {
+			t.Error(err)
+			t.Fail()
+		}
+		r := bufio.NewReader(f)
+		count, err = loader.LoadEdges(r, 0, 2)
+		t.Logf("count: %v", count)
+		f.Close()
+		posting.MergeLists(100)
+	}
+
+	if farm.Fingerprint64([]byte("enemy"))%2 != 0 {
+		t.Error("Expected fp to be 0.")
+		t.Fail()
+	}
+	if count != 4 {
+		t.Error("loader assignment not as expected")
 	}
 }

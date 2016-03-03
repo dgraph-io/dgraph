@@ -21,6 +21,7 @@ import (
 	"io"
 	"math/rand"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -30,6 +31,7 @@ import (
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/store"
+	"github.com/dgraph-io/dgraph/uid"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgryski/go-farm"
 )
@@ -45,16 +47,32 @@ type counters struct {
 }
 
 type state struct {
+	sync.RWMutex
 	input        chan string
 	cnq          chan rdf.NQuad
 	ctr          *counters
 	instanceIdx  uint64
 	numInstances uint64
+	err          error
 }
 
 func Init(uidstore, datastore *store.Store) {
 	uidStore = uidstore
 	dataStore = datastore
+}
+
+func (s *state) Error() error {
+	s.RLock()
+	defer s.RUnlock()
+	return s.err
+}
+
+func (s *state) SetError(err error) {
+	s.Lock()
+	defer s.Unlock()
+	if s.err == nil {
+		s.err = err
+	}
 }
 
 func (s *state) printCounters(ticker *time.Ticker) {
@@ -79,6 +97,7 @@ func (s *state) printCounters(ticker *time.Ticker) {
 	}
 }
 
+// Only run this in a single goroutine. This function closes s.input channel.
 func (s *state) readLines(r io.Reader) {
 	var buf []string
 	scanner := bufio.NewScanner(r)
@@ -106,8 +125,14 @@ func (s *state) readLines(r io.Reader) {
 	close(s.input)
 }
 
-func (s *state) parseStream(done chan error) {
+func (s *state) parseStream(wg *sync.WaitGroup) {
+	defer wg.Done()
+
 	for line := range s.input {
+		if s.Error() != nil {
+			return
+		}
+
 		line = strings.Trim(line, " \t")
 		if len(line) == 0 {
 			glog.Info("Empty line.")
@@ -117,30 +142,34 @@ func (s *state) parseStream(done chan error) {
 		glog.Debugf("Got line: %q", line)
 		nq, err := rdf.Parse(line)
 		if err != nil {
-			glog.WithError(err).Errorf("While parsing: %q", line)
-			done <- err
+			s.SetError(err)
 			return
 		}
 		s.cnq <- nq
 		atomic.AddUint64(&s.ctr.parsed, 1)
 	}
-	done <- nil
 }
 
 func (s *state) handleNQuads(wg *sync.WaitGroup) {
+	defer wg.Done()
+
 	for nq := range s.cnq {
-		edge, err := nq.ToEdge(s.instanceIdx, s.numInstances)
+		if s.Error() != nil {
+			return
+		}
+		edge, err := nq.ToEdge()
 		for err != nil {
 			// Just put in a retry loop to tackle temporary errors.
 			if err == posting.E_TMP_ERROR {
 				time.Sleep(time.Microsecond)
 
 			} else {
+				s.SetError(err)
 				glog.WithError(err).WithField("nq", nq).
 					Error("While converting to edge")
 				return
 			}
-			edge, err = nq.ToEdge(s.instanceIdx, s.numInstances)
+			edge, err = nq.ToEdge()
 		}
 
 		// Only handle this edge if the attribute satisfies the modulo rule
@@ -153,25 +182,28 @@ func (s *state) handleNQuads(wg *sync.WaitGroup) {
 		} else {
 			atomic.AddUint64(&s.ctr.ignored, 1)
 		}
-
 	}
-	wg.Done()
 }
 
-func (s *state) getUidForString(str string) error {
-	_, err := rdf.GetUid(str, s.instanceIdx, s.numInstances)
+func (s *state) assignUid(xid string) error {
+	if strings.HasPrefix(xid, "_uid_:") {
+		_, err := strconv.ParseUint(xid[6:], 0, 64)
+		return err
+	}
+
+	_, err := uid.GetOrAssign(xid, s.instanceIdx, s.numInstances)
 	for err != nil {
 		// Just put in a retry loop to tackle temporary errors.
 		if err == posting.E_TMP_ERROR {
 			time.Sleep(time.Microsecond)
-			glog.WithError(err).WithField("nq.Subject", str).
+			glog.WithError(err).WithField("xid", xid).
 				Debug("Temporary error")
 		} else {
-			glog.WithError(err).WithField("nq.Subject", str).
+			glog.WithError(err).WithField("xid", xid).
 				Error("While getting UID")
 			return err
 		}
-		_, err = rdf.GetUid(str, s.instanceIdx, s.numInstances)
+		_, err = uid.GetOrAssign(xid, s.instanceIdx, s.numInstances)
 	}
 	return nil
 }
@@ -180,18 +212,25 @@ func (s *state) assignUidsOnly(wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	for nq := range s.cnq {
+		if s.Error() != nil {
+			return
+		}
 		ignored := true
 		if farm.Fingerprint64([]byte(nq.Subject))%s.numInstances == s.instanceIdx {
-			if err := s.getUidForString(nq.Subject); err != nil {
-				glog.WithError(err).Fatal("While assigning Uid to subject.")
+			if err := s.assignUid(nq.Subject); err != nil {
+				s.SetError(err)
+				glog.WithError(err).Error("While assigning Uid to subject.")
+				return
 			}
 			ignored = false
 		}
 
 		if len(nq.ObjectId) > 0 &&
 			farm.Fingerprint64([]byte(nq.ObjectId))%s.numInstances == s.instanceIdx {
-			if err := s.getUidForString(nq.ObjectId); err != nil {
-				glog.WithError(err).Fatal("While assigning Uid to object.")
+			if err := s.assignUid(nq.ObjectId); err != nil {
+				s.SetError(err)
+				glog.WithError(err).Error("While assigning Uid to object.")
+				return
 			}
 			ignored = false
 		}
@@ -205,7 +244,7 @@ func (s *state) assignUidsOnly(wg *sync.WaitGroup) {
 }
 
 // Blocking function.
-func HandleRdfReader(reader io.Reader, instanceIdx uint64,
+func LoadEdges(reader io.Reader, instanceIdx uint64,
 	numInstances uint64) (uint64, error) {
 
 	s := new(state)
@@ -221,31 +260,28 @@ func HandleRdfReader(reader io.Reader, instanceIdx uint64,
 
 	s.cnq = make(chan rdf.NQuad, 10000)
 	numr := runtime.GOMAXPROCS(-1)
-	done := make(chan error, numr)
+	var pwg sync.WaitGroup
+	pwg.Add(numr)
 	for i := 0; i < numr; i++ {
-		go s.parseStream(done) // Input --> NQuads
+		go s.parseStream(&pwg) // Input --> NQuads
 	}
 
-	wg := new(sync.WaitGroup)
-	for i := 0; i < 3000; i++ {
-		wg.Add(1)
-		go s.handleNQuads(wg) // NQuads --> Posting list [slow].
+	nrt := 3000
+	var wg sync.WaitGroup
+	wg.Add(nrt)
+	for i := 0; i < nrt; i++ {
+		go s.handleNQuads(&wg) // NQuads --> Posting list [slow].
 	}
 
 	// Block until all parseStream goroutines are finished.
-	for i := 0; i < numr; i++ {
-		if err := <-done; err != nil {
-			glog.WithError(err).Fatal("While reading input.")
-		}
-	}
-
+	pwg.Wait()
 	close(s.cnq)
 	// Okay, we've stopped input to cnq, and closed it.
 	// Now wait for handleNQuads to finish.
 	wg.Wait()
 
 	ticker.Stop()
-	return atomic.LoadUint64(&s.ctr.processed), nil
+	return atomic.LoadUint64(&s.ctr.processed), s.Error()
 }
 
 // AssignUids would pick up all the external ids in RDFs read,
@@ -266,9 +302,10 @@ func AssignUids(reader io.Reader, instanceIdx uint64,
 
 	s.cnq = make(chan rdf.NQuad, 10000)
 	numr := runtime.GOMAXPROCS(-1)
-	done := make(chan error, numr)
+	var pwg sync.WaitGroup
+	pwg.Add(numr)
 	for i := 0; i < numr; i++ {
-		go s.parseStream(done) // Input --> NQuads
+		go s.parseStream(&pwg) // Input --> NQuads
 	}
 
 	wg := new(sync.WaitGroup)
@@ -278,17 +315,12 @@ func AssignUids(reader io.Reader, instanceIdx uint64,
 	}
 
 	// Block until all parseStream goroutines are finished.
-	for i := 0; i < numr; i++ {
-		if err := <-done; err != nil {
-			glog.WithError(err).Fatal("While reading input.")
-		}
-	}
-
+	pwg.Wait()
 	close(s.cnq)
 	// Okay, we've stopped input to cnq, and closed it.
 	// Now wait for handleNQuads to finish.
 	wg.Wait()
 
 	ticker.Stop()
-	return atomic.LoadUint64(&s.ctr.processed), nil
+	return atomic.LoadUint64(&s.ctr.processed), s.Error()
 }

@@ -18,6 +18,7 @@ package posting
 
 import (
 	"flag"
+	"math/rand"
 	"runtime"
 	"runtime/debug"
 	"sync"
@@ -33,6 +34,23 @@ import (
 
 var maxmemory = flag.Uint64("stw_ram_mb", 4096,
 	"If RAM usage exceeds this, we stop the world, and flush our buffers.")
+
+type mergeRoutines struct {
+	sync.RWMutex
+	count int
+}
+
+func (mr *mergeRoutines) Count() int {
+	mr.RLock()
+	defer mr.RUnlock()
+	return mr.count
+}
+
+func (mr *mergeRoutines) Add(delta int) {
+	mr.Lock()
+	mr.count += delta
+	mr.Unlock()
+}
 
 type counters struct {
 	ticker *time.Ticker
@@ -97,17 +115,35 @@ func aggressivelyEvict(ms runtime.MemStats) {
 		Info("Memory Usage after calling GC.")
 }
 
-func gentlyMerge(ms runtime.MemStats) {
+func gentlyMerge(mr *mergeRoutines) {
+	defer mr.Add(-1)
 	ctr := NewCounters()
 	defer ctr.ticker.Stop()
 
-	// Pick 1% of the dirty map or 400 keys, whichever is higher.
-	pick := int(float64(dirtymap.Size()) * 0.01)
+	// Pick 5% of the dirty map or 400 keys, whichever is higher.
+	pick := int(float64(dirtymap.Size()) * 0.05)
 	if pick < 400 {
 		pick = 400
 	}
+	// We should start picking up elements from a randomly selected index,
+	// otherwise, the same keys would keep on getting merged, while the
+	// rest would never get a chance.
+	var start int
+	n := dirtymap.Size() - pick
+	if n <= 0 {
+		start = 0
+	} else {
+		start = rand.Intn(n)
+	}
+
 	var hs []gotomic.Hashable
+	idx := 0
 	dirtymap.Each(func(k gotomic.Hashable, v gotomic.Thing) bool {
+		if idx < start {
+			idx += 1
+			return false
+		}
+
 		hs = append(hs, k)
 		return len(hs) >= pick
 	})
@@ -136,6 +172,7 @@ func checkMemoryUsage() {
 	MIB = 1 << 20
 	MAX_MEMORY = *maxmemory * MIB
 
+	var mr mergeRoutines
 	for _ = range time.Tick(5 * time.Second) {
 		var ms runtime.MemStats
 		runtime.ReadMemStats(&ms)
@@ -143,7 +180,17 @@ func checkMemoryUsage() {
 			aggressivelyEvict(ms)
 
 		} else {
-			gentlyMerge(ms)
+			// If merging is slow, we don't want to end up having too many goroutines
+			// merging the dirty list. This should keep them in check.
+			// With a value of 18 and duration of 5 seconds, some goroutines are
+			// taking over 1.5 mins to finish.
+			if mr.Count() > 18 {
+				glog.Info("Skipping gentle merging.")
+				continue
+			}
+			mr.Add(1)
+			// gentlyMerge can take a while to finish. So, run it in a goroutine.
+			go gentlyMerge(&mr)
 		}
 	}
 }

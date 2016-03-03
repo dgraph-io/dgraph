@@ -9,7 +9,6 @@ import (
 	"github.com/Sirupsen/logrus"
 	"github.com/dgraph-io/dgraph/commit"
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/uid"
 	"github.com/dgryski/go-farm"
@@ -41,18 +40,18 @@ func TestQuery(t *testing.T) {
 	list := []string{"alice", "bob", "mallory", "ash", "man", "dgraph"}
 	for _, str := range list {
 		if farm.Fingerprint64([]byte(str))%numInstances == 0 {
-			uid, err := rdf.GetUid(str, 0, numInstances)
-			if uid < minIdx0 || uid > minIdx0+mod-1 {
+			u, err := uid.GetOrAssign(str, 0, numInstances)
+			if u < minIdx0 || u > minIdx0+mod-1 {
 				t.Error("Not the correct UID", err)
 			}
-			t.Logf("Instance-0 Correct UID", str, uid)
+			t.Logf("Instance-0 Correct UID", str, u)
 
 		} else {
-			uid, err := rdf.GetUid(str, 1, numInstances)
-			if uid < minIdx1 || uid > minIdx1+mod-1 {
+			u, err := uid.GetOrAssign(str, 1, numInstances)
+			if u < minIdx1 || u > minIdx1+mod-1 {
 				t.Error("Not the correct UID", err)
 			}
-			t.Logf("Instance-1 Correct UID", str, uid)
+			t.Logf("Instance-1 Correct UID", str, u)
 		}
 	}
 }

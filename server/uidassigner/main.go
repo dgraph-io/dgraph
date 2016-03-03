@@ -24,7 +24,7 @@ var instanceIdx = flag.Uint64("instanceIdx", 0,
 	"Only pick entities, where Fingerprint % numInstance == instanceIdx.")
 var numInstances = flag.Uint64("numInstances", 1,
 	"Total number of instances among which uid assigning is shared")
-var uidDir = flag.String("uidpostings", "",
+var uidDir = flag.String("uids", "",
 	"Directory to store xid to uid posting lists")
 var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
 var memprofile = flag.String("memprofile", "", "write memory profile to file")

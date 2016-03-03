@@ -36,23 +36,26 @@ type NQuad struct {
 	Language    string
 }
 
-func GetUid(s string, instanceIdx uint64, numInstances uint64) (uint64, error) {
-	if strings.HasPrefix(s, "_uid_:") {
-		return strconv.ParseUint(s[6:], 0, 64)
+func getUid(xid string) (uint64, error) {
+	if strings.HasPrefix(xid, "_uid_:") {
+		return strconv.ParseUint(xid[6:], 0, 64)
 	}
-	return uid.GetOrAssign(s, instanceIdx, numInstances)
+	return uid.Get(xid)
 }
 
-func (nq NQuad) ToEdge(instanceIdx,
-	numInstances uint64) (result x.DirectedEdge, rerr error) {
+// ToEdge is useful when you want to find the UID corresponding to XID for
+// just one edge. ToEdgeUsing(map) is useful when you do this conversion
+// in bulk, say over a network call. None of these methods generate a UID
+// for an XID.
+func (nq NQuad) ToEdge() (result x.DirectedEdge, rerr error) {
 
-	sid, err := GetUid(nq.Subject, instanceIdx, numInstances)
+	sid, err := getUid(nq.Subject)
 	if err != nil {
 		return result, err
 	}
 	result.Entity = sid
 	if len(nq.ObjectId) > 0 {
-		oid, err := GetUid(nq.ObjectId, instanceIdx, numInstances)
+		oid, err := getUid(nq.ObjectId)
 		if err != nil {
 			return result, err
 		}
