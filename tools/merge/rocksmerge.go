@@ -23,13 +23,15 @@ import (
 	"flag"
 	"io/ioutil"
 
+	"github.com/dgraph-io/dgraph/posting"
+	"github.com/dgraph-io/dgraph/posting/types"
 	"github.com/dgraph-io/dgraph/store/rocksdb"
 	"github.com/dgraph-io/dgraph/x"
 )
 
 type Item struct {
 	key, value []byte
-	storeIdx   int
+	storeIdx   int // index of the store among the K stores
 }
 
 type PriorityQueue []*Item
@@ -57,6 +59,20 @@ func (pq *PriorityQueue) Pop() interface{} {
 	item := old[n-1]
 	*pq = old[0 : n-1]
 	return item
+}
+
+func compareValue(a, b interface{}) bool {
+	var x, y types.Posting
+	p1 := a.(*posting.List)
+	if ok := p1.Get(&x, 0); !ok {
+		glog.Fatal("While retrieving entry from posting list")
+	}
+	p2 := b.(*posting.List)
+	if ok := p2.Get(&y, 0); !ok {
+		glog.Fatal("While retrieving entry from posting list")
+	}
+
+	return x.Uid() == y.Uid()
 }
 
 func main() {
@@ -95,6 +111,8 @@ func main() {
 		it := curDb.NewIterator(ropt)
 		it.SeekToFirst()
 		if !it.Valid() {
+			itVec = append(itVec, it)
+			glog.Infof("Store empty() %v", *stores+f.Name())
 			continue
 		}
 		pq[i] = &Item{
@@ -119,8 +137,7 @@ func main() {
 		top := heap.Pop(&pq).(*Item)
 
 		if bytes.Compare(top.key, lastKey) == 0 {
-			if bytes.Compare(top.value, lastValue) != 0 {
-				// TODO::value comparison considering timestamps
+			if compareValue(top.value, lastValue) == false {
 				glog.Fatalf("different value for same key %s", lastKey)
 			}
 		} else {
