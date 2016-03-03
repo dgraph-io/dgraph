@@ -182,7 +182,9 @@ func checkMemoryUsage() {
 		} else {
 			// If merging is slow, we don't want to end up having too many goroutines
 			// merging the dirty list. This should keep them in check.
-			if mr.Count() > 25 {
+			// With a value of 12 and duration of 5 seconds, some goroutines are
+			// taking over a minute to finish.
+			if mr.Count() > 12 {
 				glog.Info("Skipping gentle merging.")
 				continue
 			}
