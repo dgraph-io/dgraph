@@ -75,12 +75,8 @@ func compareValue(a, b interface{}) bool {
 	return x.Uid() == y.Uid()
 }
 
-func main() {
-	flag.Parse()
-	if len(*stores) == 0 {
-		glog.Fatal("No Directory specified")
-	}
-	files, err := ioutil.ReadDir(*stores)
+func MergeFolders(mergePath, destPath string) {
+	files, err := ioutil.ReadDir(mergePath)
 	if err != nil {
 		glog.Fatal("Cannot open stores directory")
 	}
@@ -99,20 +95,24 @@ func main() {
 		count++
 	}
 
+	if mergePath[len(mergePath)-1] == '/' {
+		mergePath = mergePath[:len(mergePath)-1]
+	}
+
 	pq := make(PriorityQueue, count)
 	var itVec []*rocksdb.Iterator
 	for i, f := range files {
-		curDb, err := rocksdb.Open(*stores+f.Name(), opt)
+		curDb, err := rocksdb.Open(mergePath+"/"+f.Name(), opt)
 		defer curDb.Close()
 		if err != nil {
-			glog.WithField("filepath", *stores+f.Name()).
+			glog.WithField("filepath", mergePath+"/"+f.Name()).
 				Fatal("While opening store")
 		}
 		it := curDb.NewIterator(ropt)
 		it.SeekToFirst()
 		if !it.Valid() {
 			itVec = append(itVec, it)
-			glog.Infof("Store empty() %v", *stores+f.Name())
+			glog.WithField("path", mergePath+"/"+f.Name()).Info("Store empty")
 			continue
 		}
 		pq[i] = &Item{
@@ -125,10 +125,10 @@ func main() {
 	heap.Init(&pq)
 
 	var db *rocksdb.DB
-	db, err = rocksdb.Open(*destinationDB, opt)
+	db, err = rocksdb.Open(destPath, opt)
 	defer db.Close()
 	if err != nil {
-		glog.WithField("filepath", *destinationDB).
+		glog.WithField("filepath", destPath).
 			Fatal("While opening store")
 	}
 
@@ -137,14 +137,14 @@ func main() {
 		top := heap.Pop(&pq).(*Item)
 
 		if bytes.Compare(top.key, lastKey) == 0 {
-			if compareValue(top.value, lastValue) == false {
-				glog.Fatalf("different value for same key %s", lastKey)
+			if !compareValue(top.value, lastValue) {
+				glog.WithField("key", lastKey).
+					Fatal("different value for same key")
 			}
-		} else {
-			db.Put(wopt, top.key, top.value)
-			lastKey = top.key
-			lastValue = top.value
 		}
+		db.Put(wopt, top.key, top.value)
+		lastKey = top.key
+		lastValue = top.value
 
 		itVec[top.storeIdx].Next()
 		if !itVec[top.storeIdx].Valid() {
@@ -157,4 +157,13 @@ func main() {
 		}
 		heap.Push(&pq, item)
 	}
+}
+
+func main() {
+	flag.Parse()
+	if len(*stores) == 0 {
+		glog.Fatal("No Directory specified")
+	}
+
+	MergeFolders(*stores, *destinationDB)
 }
