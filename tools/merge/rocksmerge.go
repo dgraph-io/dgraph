@@ -22,6 +22,8 @@ import (
 	"container/heap"
 	"flag"
 	"io/ioutil"
+	"math"
+	"path"
 
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/posting/types"
@@ -42,6 +44,7 @@ var destinationDB = flag.String("dest", "",
 	"Folder to store merged rocksDB")
 
 var glog = x.Log("rocksmerge")
+var pq PriorityQueue
 
 func (pq PriorityQueue) Len() int { return len(pq) }
 func (pq PriorityQueue) Swap(i, j int) {
@@ -61,7 +64,7 @@ func (pq *PriorityQueue) Pop() interface{} {
 	return item
 }
 
-func compareValue(a, b interface{}) bool {
+func equalValue(a, b interface{}) bool {
 	var x, y types.Posting
 	p1 := a.(*posting.List)
 	if ok := p1.Get(&x, 0); !ok {
@@ -72,11 +75,16 @@ func compareValue(a, b interface{}) bool {
 		glog.Fatal("While retrieving entry from posting list")
 	}
 
-	return x.Uid() == y.Uid()
+	aUid := x.Uid()
+	bUid := y.Uid()
+
+	return aUid == bUid ||
+		((x.Uid() == math.MaxUint64 && y.Uid() == math.MaxUint64) &&
+			bytes.Compare(x.ValueBytes(), y.ValueBytes()) == 0)
 }
 
 func MergeFolders(mergePath, destPath string) {
-	files, err := ioutil.ReadDir(mergePath)
+	dirList, err := ioutil.ReadDir(mergePath)
 	if err != nil {
 		glog.Fatal("Cannot open stores directory")
 	}
@@ -91,28 +99,25 @@ func MergeFolders(mergePath, destPath string) {
 	wopt.SetSync(true)
 
 	count := 0
-	for range files {
+	for range dirList {
 		count++
 	}
 
-	if mergePath[len(mergePath)-1] == '/' {
-		mergePath = mergePath[:len(mergePath)-1]
-	}
-
-	pq := make(PriorityQueue, count)
-	var itVec []*rocksdb.Iterator
-	for i, f := range files {
-		curDb, err := rocksdb.Open(mergePath+"/"+f.Name(), opt)
+	pq = make(PriorityQueue, count)
+	var storeIters []*rocksdb.Iterator
+	for i, dir := range dirList {
+		mPath := path.Join(mergePath, dir.Name())
+		curDb, err := rocksdb.Open(mPath, opt)
 		defer curDb.Close()
 		if err != nil {
-			glog.WithField("filepath", mergePath+"/"+f.Name()).
+			glog.WithField("filepath", mPath).
 				Fatal("While opening store")
 		}
 		it := curDb.NewIterator(ropt)
 		it.SeekToFirst()
 		if !it.Valid() {
-			itVec = append(itVec, it)
-			glog.WithField("path", mergePath+"/"+f.Name()).Info("Store empty")
+			storeIters = append(storeIters, it)
+			glog.WithField("path", mPath).Info("Store empty")
 			continue
 		}
 		pq[i] = &Item{
@@ -120,12 +125,22 @@ func MergeFolders(mergePath, destPath string) {
 			value:    it.Value(),
 			storeIdx: i,
 		}
-		itVec = append(itVec, it)
+		storeIters = append(storeIters, it)
 	}
 	heap.Init(&pq)
+	mergeUsingHeap(destPath, storeIters)
+}
+
+func mergeUsingHeap(destPath string, storeIters []*rocksdb.Iterator) {
+	var opt *rocksdb.Options
+	var wopt *rocksdb.WriteOptions
+	opt = rocksdb.NewOptions()
+	opt.SetCreateIfMissing(true)
+	wopt = rocksdb.NewWriteOptions()
+	wopt.SetSync(true)
 
 	var db *rocksdb.DB
-	db, err = rocksdb.Open(destPath, opt)
+	db, err := rocksdb.Open(destPath, opt)
 	defer db.Close()
 	if err != nil {
 		glog.WithField("filepath", destPath).
@@ -137,7 +152,7 @@ func MergeFolders(mergePath, destPath string) {
 		top := heap.Pop(&pq).(*Item)
 
 		if bytes.Compare(top.key, lastKey) == 0 {
-			if !compareValue(top.value, lastValue) {
+			if !equalValue(top.value, lastValue) {
 				glog.WithField("key", lastKey).
 					Fatal("different value for same key")
 			}
@@ -146,13 +161,13 @@ func MergeFolders(mergePath, destPath string) {
 		lastKey = top.key
 		lastValue = top.value
 
-		itVec[top.storeIdx].Next()
-		if !itVec[top.storeIdx].Valid() {
+		storeIters[top.storeIdx].Next()
+		if !storeIters[top.storeIdx].Valid() {
 			continue
 		}
 		item := &Item{
-			key:      itVec[top.storeIdx].Key(),
-			value:    itVec[top.storeIdx].Value(),
+			key:      storeIters[top.storeIdx].Key(),
+			value:    storeIters[top.storeIdx].Value(),
 			storeIdx: top.storeIdx,
 		}
 		heap.Push(&pq, item)
