@@ -81,7 +81,7 @@ func TestMergeFolders(t *testing.T) {
 	ps1.Close()
 	ps2.Close()
 
-	MergeFolders(rootDir, destDir)
+	mergeFolders(rootDir, destDir)
 
 	var opt *rocksdb.Options
 	var ropt *rocksdb.ReadOptions

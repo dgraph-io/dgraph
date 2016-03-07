@@ -83,7 +83,7 @@ func equalValue(a, b interface{}) bool {
 			bytes.Compare(x.ValueBytes(), y.ValueBytes()) == 0)
 }
 
-func MergeFolders(mergePath, destPath string) {
+func mergeFolders(mergePath, destPath string) {
 	dirList, err := ioutil.ReadDir(mergePath)
 	if err != nil {
 		glog.Fatal("Cannot open stores directory")
@@ -167,5 +167,5 @@ func main() {
 		glog.Fatal("No Directory specified")
 	}
 
-	MergeFolders(*stores, *destinationDB)
+	mergeFolders(*stores, *destinationDB)
 }
