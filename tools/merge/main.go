@@ -78,7 +78,7 @@ func equalValue(a, b interface{}) bool {
 	aUid := x.Uid()
 	bUid := y.Uid()
 
-	return aUid == bUid ||
+	return (x.ValueBytes() == nil && y.ValueBytes() == nil && (aUid == bUid)) ||
 		((x.Uid() == math.MaxUint64 && y.Uid() == math.MaxUint64) &&
 			bytes.Compare(x.ValueBytes(), y.ValueBytes()) == 0)
 }
@@ -98,12 +98,8 @@ func MergeFolders(mergePath, destPath string) {
 	wopt = rocksdb.NewWriteOptions()
 	wopt.SetSync(true)
 
-	count := 0
-	for range dirList {
-		count++
-	}
-
-	pq = make(PriorityQueue, count)
+	pq = make(PriorityQueue, 0)
+	heap.Init(&pq)
 	var storeIters []*rocksdb.Iterator
 	for i, dir := range dirList {
 		mPath := path.Join(mergePath, dir.Name())
@@ -120,33 +116,24 @@ func MergeFolders(mergePath, destPath string) {
 			glog.WithField("path", mPath).Info("Store empty")
 			continue
 		}
-		pq[i] = &Item{
+		item := &Item{
 			key:      it.Key(),
 			value:    it.Value(),
 			storeIdx: i,
 		}
+		heap.Push(&pq, item)
 		storeIters = append(storeIters, it)
 	}
-	heap.Init(&pq)
-	mergeUsingHeap(destPath, storeIters)
-}
-
-func mergeUsingHeap(destPath string, storeIters []*rocksdb.Iterator) {
-	var opt *rocksdb.Options
-	var wopt *rocksdb.WriteOptions
-	opt = rocksdb.NewOptions()
-	opt.SetCreateIfMissing(true)
-	wopt = rocksdb.NewWriteOptions()
-	wopt.SetSync(true)
 
 	var db *rocksdb.DB
-	db, err := rocksdb.Open(destPath, opt)
+	db, err = rocksdb.Open(destPath, opt)
 	defer db.Close()
 	if err != nil {
 		glog.WithField("filepath", destPath).
 			Fatal("While opening store")
 	}
 
+	heap.Init(&pq)
 	var lastKey, lastValue []byte
 	for pq.Len() > 0 {
 		top := heap.Pop(&pq).(*Item)

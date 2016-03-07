@@ -11,12 +11,11 @@ import (
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/store/rocksdb"
-	"github.com/dgraph-io/dgraph/tools/merge"
 	"github.com/dgraph-io/dgraph/uid"
 	"github.com/dgryski/go-farm"
 )
 
-func TestQuery(t *testing.T) {
+func TestMergeFolders(t *testing.T) {
 	logrus.SetLevel(logrus.DebugLevel)
 	rootDir, err := ioutil.TempDir("", "storetest_")
 	if err != nil {
@@ -82,7 +81,7 @@ func TestQuery(t *testing.T) {
 	ps1.Close()
 	ps2.Close()
 
-	main.MergeFolders(rootDir, destDir)
+	MergeFolders(rootDir, destDir)
 
 	var opt *rocksdb.Options
 	var ropt *rocksdb.ReadOptions
