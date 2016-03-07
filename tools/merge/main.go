@@ -133,7 +133,6 @@ func mergeFolders(mergePath, destPath string) {
 			Fatal("While opening store")
 	}
 
-	heap.Init(&pq)
 	var lastKey, lastValue []byte
 	for pq.Len() > 0 {
 		top := heap.Pop(&pq).(*Item)
