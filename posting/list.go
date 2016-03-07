@@ -247,7 +247,6 @@ func (l *List) init(key []byte, pstore *store.Store, clog *commit.Logger) {
 	if clog == nil {
 		return
 	}
-	glog.Debug("Starting stream entries...")
 
 	err := clog.StreamEntries(posting.CommitTs()+1, l.hash,
 		func(hdr commit.Header, buffer []byte) {
@@ -268,7 +267,6 @@ func (l *List) init(key []byte, pstore *store.Store, clog *commit.Logger) {
 	if err != nil {
 		glog.WithError(err).Error("While streaming entries.")
 	}
-	glog.Debug("Done streaming entries.")
 }
 
 // There's no need for lock acquisition for this.

@@ -1,6 +1,6 @@
 # Dockerfile for DGraph
 
-FROM golang:1.5.3
+FROM golang:1.6
 MAINTAINER Manish Jain <manishrjain@gmail.com>
 
 # Get the necessary packages.
@@ -14,7 +14,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Install and set up RocksDB.
 RUN mkdir /installs && cd /installs && \
-	git clone --branch v4.1 https://github.com/facebook/rocksdb.git
+	git clone --branch v4.2 https://github.com/facebook/rocksdb.git
 RUN cd /installs/rocksdb && make shared_lib && make install
 ENV LD_LIBRARY_PATH "/usr/local/lib"
 

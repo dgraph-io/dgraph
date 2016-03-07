@@ -118,7 +118,6 @@ type SubGraph struct {
 func mergeInterfaces(i1 interface{}, i2 interface{}) interface{} {
 	switch i1.(type) {
 	case map[string]interface{}:
-		glog.Debug("Got map[string] interface")
 		m1 := i1.(map[string]interface{})
 		if m2, ok := i2.(map[string]interface{}); ok {
 			for k1, v1 := range m1 {

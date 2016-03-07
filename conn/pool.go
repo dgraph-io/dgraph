@@ -35,7 +35,8 @@ func (p *Pool) dialNew() (*rpc.Client, error) {
 	}
 	var nconn net.Conn
 	var err error
-	for i := 0; i < 10; i++ {
+	// This loop will retry for 10 minutes before giving up.
+	for i := 0; i < 60; i++ {
 		nconn, err = d.Dial("tcp", p.Addr)
 		if err == nil {
 			break

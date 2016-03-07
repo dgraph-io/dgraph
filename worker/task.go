@@ -16,8 +16,6 @@ func ProcessTaskOverNetwork(qu []byte) (result []byte, rerr error) {
 
 	attr := string(q.Attr())
 	idx := farm.Fingerprint64([]byte(attr)) % numInstances
-	glog.WithField("idx", idx).WithField("attr", attr).
-		WithField("numInstances", numInstances).Debug("ProcessTaskOverNetwork")
 
 	var runHere bool
 	if attr == "_xid_" || attr == "_uid_" {
@@ -26,6 +24,9 @@ func ProcessTaskOverNetwork(qu []byte) (result []byte, rerr error) {
 	} else {
 		runHere = (instanceIdx == idx)
 	}
+	glog.WithField("runHere", runHere).WithField("attr", attr).
+		WithField("instanceIdx", instanceIdx).
+		WithField("numInstances", numInstances).Info("ProcessTaskOverNetwork")
 
 	if runHere {
 		// No need for a network call, as this should be run from within
@@ -42,7 +43,7 @@ func ProcessTaskOverNetwork(qu []byte) (result []byte, rerr error) {
 		glog.WithField("call", "Worker.ServeTask").Fatal(err)
 	}
 	glog.WithField("reply_len", len(reply.Data)).WithField("addr", addr).
-		Debug("Got reply from server")
+		WithField("attr", attr).Info("Got reply from server")
 	return reply.Data, nil
 }
 

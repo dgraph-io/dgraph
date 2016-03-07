@@ -53,10 +53,11 @@ func (mr *mergeRoutines) Add(delta int) {
 }
 
 type counters struct {
-	ticker *time.Ticker
-	added  uint64
-	merged uint64
-	clean  uint64
+	ticker  *time.Ticker
+	added   uint64
+	merged  uint64
+	clean   uint64
+	lastVal uint64
 }
 
 func (c *counters) periodicLog() {
@@ -68,6 +69,13 @@ func (c *counters) periodicLog() {
 func (c *counters) log() {
 	added := atomic.LoadUint64(&c.added)
 	merged := atomic.LoadUint64(&c.merged)
+	lastVal := atomic.LoadUint64(&c.lastVal)
+	if merged == lastVal {
+		// Ignore.
+		return
+	}
+	atomic.StoreUint64(&c.lastVal, merged)
+
 	var pending uint64
 	if added > merged {
 		pending = added - merged
