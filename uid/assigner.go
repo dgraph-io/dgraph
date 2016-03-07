@@ -187,12 +187,12 @@ func assignNew(pl *posting.List, xid string, instanceIdx uint64,
 	return uid, rerr
 }
 
-func stringKey(xid string) []byte {
+func StringKey(xid string) []byte {
 	return []byte("_uid_|" + xid)
 }
 
 func Get(xid string) (uid uint64, rerr error) {
-	key := stringKey(xid)
+	key := StringKey(xid)
 	pl := posting.GetOrCreate(key, uidStore)
 	if pl.Length() == 0 {
 		return 0, fmt.Errorf("xid: %v doesn't have any uid assigned.", xid)
@@ -210,7 +210,7 @@ func Get(xid string) (uid uint64, rerr error) {
 func GetOrAssign(xid string, instanceIdx uint64,
 	numInstances uint64) (uid uint64, rerr error) {
 
-	key := stringKey(xid)
+	key := StringKey(xid)
 	pl := posting.GetOrCreate(key, uidStore)
 	if pl.Length() == 0 {
 		return assignNew(pl, xid, instanceIdx, numInstances)
