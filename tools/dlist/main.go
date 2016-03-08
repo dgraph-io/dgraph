@@ -101,5 +101,8 @@ func main() {
 	if err != nil {
 		glog.WithError(err).Fatal("Unable to get key")
 	}
+	if len(val) == 0 {
+		glog.Fatal("Unable to find posting list")
+	}
 	output(val)
 }

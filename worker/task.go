@@ -51,7 +51,12 @@ func processTask(query []byte) (result []byte, rerr error) {
 	uo := flatbuffers.GetUOffsetT(query)
 	q := new(task.Query)
 	q.Init(query, uo)
+
 	attr := string(q.Attr())
+	store := dataStore
+	if attr == "_xid_" {
+		store = uidStore
+	}
 
 	b := flatbuffers.NewBuilder(0)
 	voffsets := make([]flatbuffers.UOffsetT, q.UidsLength())
@@ -60,7 +65,7 @@ func processTask(query []byte) (result []byte, rerr error) {
 	for i := 0; i < q.UidsLength(); i++ {
 		uid := q.Uids(i)
 		key := posting.Key(uid, attr)
-		pl := posting.GetOrCreate(key, dataStore)
+		pl := posting.GetOrCreate(key, store)
 
 		var valoffset flatbuffers.UOffsetT
 		if val, err := pl.Value(); err != nil {
