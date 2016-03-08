@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"container/heap"
 	"flag"
+	"fmt"
 	"io/ioutil"
 	"math"
 	"path"
@@ -96,7 +97,8 @@ func mergeFolders(mergePath, destPath string) {
 	opt.SetCreateIfMissing(true)
 	ropt = rocksdb.NewReadOptions()
 	wopt = rocksdb.NewWriteOptions()
-	wopt.SetSync(true)
+	wopt.SetSync(false)
+	wb := rocksdb.NewWriteBatch()
 
 	pq = make(PriorityQueue, 0)
 	heap.Init(&pq)
@@ -134,6 +136,7 @@ func mergeFolders(mergePath, destPath string) {
 	}
 
 	var lastKey, lastValue []byte
+	count := 0
 	for pq.Len() > 0 {
 		top := heap.Pop(&pq).(*Item)
 
@@ -143,7 +146,12 @@ func mergeFolders(mergePath, destPath string) {
 					Fatal("different value for same key")
 			}
 		}
-		db.Put(wopt, top.key, top.value)
+		wb.Put(top.key, top.value)
+		count++
+		if count%1000 == 0 {
+			db.Write(wopt, wb)
+			wb.Clear()
+		}
 		lastKey = top.key
 		lastValue = top.value
 
@@ -158,6 +166,11 @@ func mergeFolders(mergePath, destPath string) {
 		}
 		heap.Push(&pq, item)
 	}
+
+	db.Write(wopt, wb)
+	wb.Close()
+
+	fmt.Println("Count : ", count)
 }
 
 func main() {
