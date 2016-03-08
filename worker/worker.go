@@ -126,9 +126,10 @@ func (w *Worker) ServeTask(query *conn.Query, reply *conn.Reply) (rerr error) {
 	q := new(task.Query)
 	q.Init(query.Data, uo)
 	attr := string(q.Attr())
-	glog.WithField("attr", attr).WithField("instanceIdx", instanceIdx).Info("ServeTask")
+	glog.WithField("attr", attr).WithField("num_uids", q.UidsLength()).
+		WithField("instanceIdx", instanceIdx).Info("ServeTask")
 
-	if attr == "_xid_" ||
+	if (instanceIdx == 0 && attr == "_xid_") ||
 		farm.Fingerprint64([]byte(attr))%numInstances == instanceIdx {
 
 		reply.Data, rerr = processTask(query.Data)

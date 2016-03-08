@@ -403,7 +403,6 @@ func sortedUniqueUids(r *task.Result) (sorted []uint64, rerr error) {
 func ProcessGraph(sg *SubGraph, rch chan error) {
 	var err error
 	if len(sg.query) > 0 && sg.Attr != "_root_" {
-		// This task execution would go over the wire in later versions.
 		sg.result, err = worker.ProcessTaskOverNetwork(sg.query)
 		if err != nil {
 			x.Err(glog, err).Error("While processing task.")
@@ -415,6 +414,14 @@ func ProcessGraph(sg *SubGraph, rch chan error) {
 	uo := flatbuffers.GetUOffsetT(sg.result)
 	r := new(task.Result)
 	r.Init(sg.result, uo)
+
+	if r.ValuesLength() > 0 {
+		var v task.Value
+		if r.Values(&v, 0) {
+			glog.WithField("attr", sg.Attr).WithField("val", string(v.ValBytes())).
+				Info("Sample value")
+		}
+	}
 
 	sorted, err := sortedUniqueUids(r)
 	if err != nil {
