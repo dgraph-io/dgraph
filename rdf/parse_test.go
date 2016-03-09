@@ -66,10 +66,9 @@ var testNQuads = []struct {
 		input: `_:alice <name> "Alice In Wonderland"@en-0 .`,
 		nq: NQuad{
 			Subject:     "_:alice",
-			Predicate:   "name",
+			Predicate:   "name.en-0",
 			ObjectId:    "",
 			ObjectValue: "Alice In Wonderland",
-			Language:    "en-0",
 		},
 	},
 	{
@@ -85,10 +84,9 @@ var testNQuads = []struct {
 		input: `<http://www.w3.org/2001/sw/RDFCore/nedges/> <http://purl.org/dc/terms/title> "N-Edges"@en-US .`,
 		nq: NQuad{
 			Subject:     "http://www.w3.org/2001/sw/RDFCore/nedges/",
-			Predicate:   "http://purl.org/dc/terms/title",
+			Predicate:   "http://purl.org/dc/terms/title.en-US",
 			ObjectId:    "",
 			ObjectValue: "N-Edges",
-			Language:    "en-US",
 		},
 	},
 	{

@@ -1,7 +1,6 @@
 package conn
 
 import (
-	"errors"
 	"io"
 	"log"
 	"net/rpc"
@@ -18,12 +17,9 @@ func (c *ServerCodec) ReadRequestHeader(r *rpc.Request) error {
 
 func (c *ServerCodec) ReadRequestBody(data interface{}) error {
 	b := make([]byte, c.payloadLen)
-	n, err := c.Rwc.Read(b)
+	_, err := io.ReadFull(c.Rwc, b)
 	if err != nil {
-		log.Fatal("server", err)
-	}
-	if n != int(c.payloadLen) {
-		return errors.New("ServerCodec unable to read request.")
+		return err
 	}
 
 	if data == nil {

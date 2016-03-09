@@ -157,6 +157,12 @@ func (s *state) handleNQuads(wg *sync.WaitGroup) {
 		if s.Error() != nil {
 			return
 		}
+		// Only handle this edge if the attribute satisfies the modulo rule
+		if farm.Fingerprint64([]byte(nq.Predicate))%s.numInstances != s.instanceIdx {
+			atomic.AddUint64(&s.ctr.ignored, 1)
+			continue
+		}
+
 		edge, err := nq.ToEdge()
 		for err != nil {
 			// Just put in a retry loop to tackle temporary errors.
@@ -172,16 +178,10 @@ func (s *state) handleNQuads(wg *sync.WaitGroup) {
 			edge, err = nq.ToEdge()
 		}
 
-		// Only handle this edge if the attribute satisfies the modulo rule
-		if farm.Fingerprint64([]byte(edge.Attribute))%s.numInstances ==
-			s.instanceIdx {
-			key := posting.Key(edge.Entity, edge.Attribute)
-			plist := posting.GetOrCreate(key, dataStore)
-			plist.AddMutation(edge, posting.Set)
-			atomic.AddUint64(&s.ctr.processed, 1)
-		} else {
-			atomic.AddUint64(&s.ctr.ignored, 1)
-		}
+		key := posting.Key(edge.Entity, edge.Attribute)
+		plist := posting.GetOrCreate(key, dataStore)
+		plist.AddMutation(edge, posting.Set)
+		atomic.AddUint64(&s.ctr.processed, 1)
 	}
 }
 

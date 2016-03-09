@@ -40,7 +40,7 @@ func (s *Store) Init(filepath string) {
 
 	s.ropt = rocksdb.NewReadOptions()
 	s.wopt = rocksdb.NewWriteOptions()
-	s.wopt.SetSync(true)
+	s.wopt.SetSync(false) // We don't need to do synchronous writes.
 
 	var err error
 	s.db, err = rocksdb.Open(filepath, s.opt)
