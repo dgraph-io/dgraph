@@ -42,11 +42,7 @@ func (c *ClientCodec) ReadResponseHeader(r *rpc.Response) error {
 
 func (c *ClientCodec) ReadResponseBody(body interface{}) error {
 	buf := make([]byte, c.payloadLen)
-	n, err := c.Rwc.Read(buf)
-	if n != int(c.payloadLen) {
-		return fmt.Errorf("ClientCodec expected: %d. Got: %d\n", c.payloadLen, n)
-	}
-
+	_, err := io.ReadFull(c.Rwc, buf)
 	reply := body.(*Reply)
 	reply.Data = buf
 	return err
