@@ -128,8 +128,8 @@ func gentlyMerge(mr *mergeRoutines) {
 	ctr := NewCounters()
 	defer ctr.ticker.Stop()
 
-	// Pick 5% of the dirty map or 400 keys, whichever is higher.
-	pick := int(float64(dirtymap.Size()) * 0.05)
+	// Pick 7% of the dirty map or 400 keys, whichever is higher.
+	pick := int(float64(dirtymap.Size()) * 0.07)
 	if pick < 400 {
 		pick = 400
 	}
