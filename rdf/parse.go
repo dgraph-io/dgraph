@@ -33,7 +33,6 @@ type NQuad struct {
 	ObjectId    string
 	ObjectValue interface{}
 	Label       string
-	Language    string
 }
 
 func getUid(xid string) (uint64, error) {
@@ -63,11 +62,7 @@ func (nq NQuad) ToEdge() (result x.DirectedEdge, rerr error) {
 	} else {
 		result.Value = nq.ObjectValue
 	}
-	if len(nq.Language) > 0 {
-		result.Attribute = nq.Predicate + "." + nq.Language
-	} else {
-		result.Attribute = nq.Predicate
-	}
+	result.Attribute = nq.Predicate
 	result.Source = nq.Label
 	result.Timestamp = time.Now()
 	return result, nil
@@ -102,11 +97,7 @@ func (nq NQuad) ToEdgeUsing(
 		}
 		result.ValueId = uid
 	}
-	if len(nq.Language) > 0 {
-		result.Attribute = nq.Predicate + "." + nq.Language
-	} else {
-		result.Attribute = nq.Predicate
-	}
+	result.Attribute = nq.Predicate
 	result.Source = nq.Label
 	result.Timestamp = time.Now()
 	return result, nil
@@ -143,7 +134,7 @@ func Parse(line string) (rnq NQuad, rerr error) {
 			oval = item.Val
 		}
 		if item.Typ == itemLanguage {
-			rnq.Language = item.Val
+			rnq.Predicate += "." + item.Val
 		}
 		if item.Typ == itemObjectType {
 			// TODO: Strictly parse common types like integers, floats etc.
@@ -176,6 +167,7 @@ func Parse(line string) (rnq NQuad, rerr error) {
 	if len(rnq.ObjectId) == 0 && rnq.ObjectValue == nil {
 		return rnq, fmt.Errorf("No Object in NQuad")
 	}
+
 	return rnq, nil
 }
 

@@ -145,8 +145,13 @@ func (s *state) parseStream(wg *sync.WaitGroup) {
 			s.SetError(err)
 			return
 		}
-		s.cnq <- nq
-		atomic.AddUint64(&s.ctr.parsed, 1)
+		if farm.Fingerprint64([]byte(nq.Predicate))%s.numInstances ==
+			s.instanceIdx {
+			s.cnq <- nq
+			atomic.AddUint64(&s.ctr.parsed, 1)
+		} else {
+			atomic.AddUint64(&s.ctr.ignored, 1)
+		}
 	}
 }
 
@@ -173,15 +178,14 @@ func (s *state) handleNQuads(wg *sync.WaitGroup) {
 		}
 
 		// Only handle this edge if the attribute satisfies the modulo rule
-		if farm.Fingerprint64([]byte(edge.Attribute))%s.numInstances ==
+		if farm.Fingerprint64([]byte(edge.Attribute))%s.numInstances !=
 			s.instanceIdx {
-			key := posting.Key(edge.Entity, edge.Attribute)
-			plist := posting.GetOrCreate(key, dataStore)
-			plist.AddMutation(edge, posting.Set)
-			atomic.AddUint64(&s.ctr.processed, 1)
-		} else {
-			atomic.AddUint64(&s.ctr.ignored, 1)
+			glog.WithField("edge", edge).Fatal("We shouldn't be receiving this edge.")
 		}
+		key := posting.Key(edge.Entity, edge.Attribute)
+		plist := posting.GetOrCreate(key, dataStore)
+		plist.AddMutation(edge, posting.Set)
+		atomic.AddUint64(&s.ctr.processed, 1)
 	}
 }
 
