@@ -15,6 +15,10 @@ DGraph supports [GraphQL](http://graphql.org/) as query language, and responds i
 
 *Check out [the demo at dgraph.io](http://dgraph.io).*
 
+`Mar 2016 - Branch v0.2`
+This is the first truly distributed version of DGraph.
+Please see the [release notes here](https://github.com/dgraph-io/dgraph/wiki/DGraph-v0.2-Release).
+
 `MVP launch - Dec 2015 - Branch v0.1`
 This is a minimum viable product, alpha release of DGraph. **It's not meant for production use.**
 This version is not distributed and support for GraphQL is partial.
@@ -29,30 +33,58 @@ See the [query section below](#querying) for a sample query.
 `curl dgraph.xyz/query -XPOST -d '{}'`
 
 
-# Installation
+# Quick Testing
 
 ## Via Docker
-There's a docker image that you can readily use.
+There's a docker image that you can readily use for playing with DGraph.
 ```
 $ docker pull dgraph/dgraph:latest
-$ docker run -t -i -v /somedir:/dgraph -v $HOME/go/src/github.com/dgraph-io/benchmarks/data:/data -p 80:8080 dgraph/dgraph:latest
+# Setting a `somedir` volume on the host will persist your data.
+$ docker run -t -i -v /somedir:/dgraph -p 80:8080 dgraph/dgraph:latest
 ```
 
-Once into the dgraph container, you can now load your data. See [Data Loading](#data-loading) below.
-Also, you can skip this step, if you just want to play with DGraph. See [Use Freebase Film data](#use-freebase-film-data).
+You that you're within the Docker instance, you can start the server.
 ```
-$ loader --postings /dgraph/p --rdfgzips /data/rdf-data.gzip --stw_ram_mb 3000
+$ mkdir /dgraph/m # Ensure mutations directory exists.
+$ server --mutations /dgraph/m --postings /dgraph/p --uids /dgraph/u
 ```
-Once done, you can start the server
-```
-$ mkdir /dgraph/m  # Ensure mutations directory exists.
-$ server --postings /dgraph/p --mutations /dgraph/m  --stw_ram_mb 3000
-```
+There are some more options that you can change. Run `server --help` to look at them.
 
-Now you can query the server, like so:
+Run some mutations and query the server, like so:
 ```
-$ curl localhost:8080/query -XPOST -d '{root(_xid_: g.11b7nwjrxk) {type.object.name.en}}'
+# Make Alice follow Bob, and give them names.
+$ curl localhost:80/query -X POST -d $'mutation { set {<alice> <follows> <bob> . \n <alice> <name> "Alice" . \n <bob> <name> "Bob" . }}'
+
+# Now run a query to find all the people Alice follows 2 levels deep. The query would only result in 1 connection, Alice to Bob.
+$ curl localhost:80/query -X POST -d '{me(_xid_: alice) { name _xid_ follows { name _xid_ follows {name _xid_ } } }}'
+
+# Make Bob follow Greg.
+$ curl localhost:80/query -X POST -d $'mutation { set {<bob> <follows> <greg> . \n <greg> <name> "Greg" .}}'
+
+# The same query as above now would now show 2 connections, one from Alice to Bob, another from Bob to Greg.
+$ curl localhost:80/query -X POST -d '{me(_xid_: alice) { name _xid_ follows { name _xid_ follows {name _xid_ } } }}'
 ```
+Note how we can retrieve XIDs by using `_xid_` identifier.
+
+## Mutations
+Note that the mutation syntax uses [RDF NQuad format](https://www.w3.org/TR/n-quads/).
+mutation {
+  set {
+		<subject> <predicate> <objectid> .
+		<subject> <predicate> "Object Value" .
+		<subject> <predicate> "объект"@ru .
+		_uid_:0xabcdef <predicate> <objectid> .
+	}
+}
+
+You can batch multiple mutations in a single GraphQL query.
+DGraph would assume that any data in `<>` is an external id (XID),
+and it would retrieve or assign unique internal ids (UID) automatically for these.
+You can also directly specify the UID like so: `_uid_: 0xhexval` or `_uid_: intval`.
+
+Note that a `delete` operation isn't supported yet.
+
+# Installation
 
 ## Directly on host machine
 Best way to do this is to refer to [Dockerfile](Dockerfile), which has the most complete
