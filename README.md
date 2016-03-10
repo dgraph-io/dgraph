@@ -11,7 +11,7 @@ with low enough latency to be serving real time user queries, over terabytes of 
 DGraph supports [GraphQL](http://graphql.org/) as query language, and responds in [JSON](http://www.json.org/).
 
 
-# Current Status
+## Current Status
 
 *Check out [the demo at dgraph.io](http://dgraph.io).*
 
@@ -33,9 +33,9 @@ See the [query section below](#querying) for a sample query.
 `curl dgraph.xyz/query -XPOST -d '{}'`
 
 
-# Quick Testing
+## Quick Testing
 
-## Via Docker
+### Single instance via Docker
 There's a docker image that you can readily use for playing with DGraph.
 ```
 $ docker pull dgraph/dgraph:latest
@@ -66,8 +66,33 @@ $ curl localhost:80/query -X POST -d '{me(_xid_: alice) { name _xid_ follows { n
 ```
 Note how we can retrieve XIDs by using `_xid_` identifier.
 
+### Multiple distributed instances
+We have loaded 21M RDFs from Freebase Films data along with their names into 3 shards.
+They're located in dgraph-io/benchmarks repository.
+To use it, install [Git LFS first](https://git-lfs.github.com/).
+I've found the Linux download to be the easiest way to install.
+Note that this repository has over 1GB worth of data.
+```
+$ git clone https://github.com/dgraph-io/benchmarks.git
+$ cd benchmarks/rocks
+$ tar -xzvf uids.async.tar.gz -C $DIR
+$ tar -xzvf postings.tar.gz -C $DIR
+# You should now see directories p0, p1, p2 and uasync.final. The last directory name is unfortunate, but made sense at the time.
+```
+For quick testing, you can bring up 3 different processes of DGraph. You can of course, also set this up across multiple machines.
+```
+go build . && ./server --instanceIdx 0 --mutations $DIR/m0 --port "8080" --postings $DIR/p0 --workers ":12345,:12346,:12347" --uids $DIR/uasync.final --workerport ":12345" &
+go build . && ./server --instanceIdx 1 --mutations $DIR/m1 --port "8081" --postings $DIR/p1 --workers ":12345,:12346,:12347" --workerport ":12346" &
+go build . && ./server --instanceIdx 2 --mutations $DIR/m2 --port "8082" --postings $DIR/p2 --workers ":12345,:12346,:12347" --workerport ":12347" &
+```
+Now you can run any of the queries mentioned in [Test Queries](https://github.com/dgraph-io/dgraph/wiki/Test-Queries).
+You can hit any of the 3 processes, they'll produce the same results.
+
+`curl localhost:8081/query -XPOST -d '{}'`
+
 ## Mutations
 Note that the mutation syntax uses [RDF NQuad format](https://www.w3.org/TR/n-quads/).
+```
 mutation {
   set {
 		<subject> <predicate> <objectid> .
@@ -76,6 +101,7 @@ mutation {
 		_uid_:0xabcdef <predicate> <objectid> .
 	}
 }
+```
 
 You can batch multiple mutations in a single GraphQL query.
 DGraph would assume that any data in `<>` is an external id (XID),
@@ -91,9 +117,8 @@ Best way to do this is to refer to [Dockerfile](Dockerfile), which has the most 
 instructions on getting the right setup.
 All the instructions below are based on a Debian/Ubuntu system.
 
-### Install Go 1.4
-Go 1.5 has a regression bug in `cgo`, due to which DGraph is dependent on Go1.4.
-So [download and install Go 1.4.3](https://golang.org/dl/).
+### Install Go 1.6
+Download and install [Go 1.6 from here](https://golang.org/dl/).
 
 ### Install RocksDB
 DGraph depends on [RocksDB](https://github.com/facebook/rocksdb) for storing posting lists.
@@ -101,10 +126,10 @@ DGraph depends on [RocksDB](https://github.com/facebook/rocksdb) for storing pos
 ```
 # First install dependencies.
 # For Ubuntu, follow the ones below. For others, refer to INSTALL file in rocksdb.
-$ sudo apt-get install libgflags-dev libsnappy-dev zlib1g-dev libbz2-dev
+$ sudo apt-get update && apt-get install libgflags-dev libsnappy-dev zlib1g-dev libbz2-dev
 $ git clone https://github.com/facebook/rocksdb.git
 $ cd rocksdb
-$ git checkout v4.1
+$ git checkout v4.2
 $ make shared_lib
 $ sudo make install
 ```
@@ -126,6 +151,8 @@ glock sync github.com/dgraph-io/dgraph
 # Optional
 go test github.com/dgraph-io/dgraph/...
 ```
+
+TODO(manish): Update from below.
 
 # Usage
 
