@@ -199,7 +199,7 @@ using SSD persistent disk. Instance 2 took a bit longer, and finished in 15 mins
 Note that `stw_ram_mb` is based on the memory usage perceived by Golang. It currently doesn't take into account the memory usage by RocksDB. So, the actual usage is higher.
 
 ### Server
-Now that data is loader, you can run DGraph servers. To serve the 3 shards above, you can follow the [same steps as here](#multiple-distributed-instances).
+Now that the data is loaded, you can run the DGraph servers. To serve the 3 shards above, you can follow the [same steps as here](#multiple-distributed-instances).
 Now you can run GraphQL queries over freebase film data like so:
 ```
 curl localhost:8080/query -XPOST -d '{
