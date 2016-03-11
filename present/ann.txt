@@ -13,7 +13,7 @@ Features:
 - (planned) Shard replication, High availability, Crash resilience.
 - (roadmap) https://github.com/dgraph-io/dgraph/issues/1
 
-Performance:
+Performance (GCE n1-standard-4, SSD):
 - Loads up 21M RDFs from Freebase Film data in 20 mins.
 - Runs complex queries about Steven Spielberg in ~200ms.
 
