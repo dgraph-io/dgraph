@@ -50,7 +50,7 @@ $ docker pull dgraph/dgraph:latest
 $ docker run -t -i -v /somedir:/dgraph -p 80:8080 dgraph/dgraph:latest
 ```
 
-You that you're within the Docker instance, you can start the server.
+Now that you're within the Docker instance, you can start the server.
 ```
 $ mkdir /dgraph/m # Ensure mutations directory exists.
 $ server --mutations /dgraph/m --postings /dgraph/p --uids /dgraph/u
@@ -187,7 +187,7 @@ merge all the mutations to posting lists, and writes them to rocksdb which persi
 There're 2 types of merging going on: Gentle merge, and Aggressive merge.
 Gentle merging picks up N% of `dirty` posting lists, where N is currently 7, and merges them. This happens every 5 seconds.
 
-Aggressive merging hapepns when the memory usage goes above `stw_ram_mb`.
+Aggressive merging happens when the memory usage goes above `stw_ram_mb`.
 When that happens, the loader would *stop the world*, start the merge process, and evict all posting lists from memory.
 The more memory is available for loader to work with, the less frequently aggressive merging needs to be done, the faster the loading.
 
