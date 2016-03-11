@@ -152,58 +152,69 @@ glock sync github.com/dgraph-io/dgraph
 go test github.com/dgraph-io/dgraph/...
 ```
 
-TODO(manish): Update from below.
-
 # Usage
 
-## Data Loading
+## Distributed Bulk Data Loading
 Let's load up data first. If you have RDF data, you can use that.
 Or, there's [Freebase film rdf data here](https://github.com/dgraph-io/benchmarks).
 
-To use the above mentioned Film RDF data, install [Git LFS first](https://git-lfs.github.com/). I've found the Linux download to be the easiest way to install.
-Once installed, clone the repository:
+Bulk data loading happens in 2 passes.
+
+### First Pass: UID Assignment
+We first find all the entities in the data, and allocate UIDs for them.
+You can run this either as a single instance, or over multiple instances.
+
+Here we set number of instances to 2.
 ```
-$ git clone https://github.com/dgraph-io/benchmarks.git
+$ cd $GOPATH/src/github.com/dgraph-io/dgraph/server/uidassigner
+
+# Run instance 0.
+$ go build . && ./uidassigner --numInstances 2 --instanceIdx 0 --rdfgzips $BENCHMARK_REPO/data/rdf-films.gz,$BENCHMARK_REPO/data/names.gz --uids ~/dgraph/uids/u0
+
+# And either later, or on another server, run instance 1.
+$ go build . && ./uidassigner --numInstances 2 --instanceIdx 1 --rdfgzips $BENCHMARK_REPO/data/rdf-films.gz,$BENCHMARK_REPO/data/names.gz --uids ~/dgraph/uids/u1
 ```
 
-To load the data in bulk, use the data loader binary in dgraph/server/loader.
-Loader needs a postings directory, where posting lists are stored.
+Once the shards are generated, you need to merge them before the second pass. If you ran this as a single instance, merging isn't required.
+```
+$ cd $GOPATH/src/github.com/dgraph-io/dgraph/tools/merge
+$ go build . && ./merge --stores ~/dgraph/uids --dest ~/dgraph/final.uids
+```
 
+### Second Pass: Data Loader
+Now that we have assigned UIDs for all the entities, the data is ready to be loaded.
+
+Let's do this step with 3 instances.
 ```
 $ cd $GOPATH/src/github.com/dgraph-io/dgraph/server/loader
-$ go build . && ./loader --rdfgzips=path_of_benchmarks_dir/data/rdf-films.gz,path_of_benchmarks_dir/data/names.gz --postings DIRPATH/p
+$ go build . && ./loader --numInstances 3 --instanceIdx 0 --rdfgzips $BENCHMARK_REPO/data/names.gz,$BENCHMARK_REPO/data/rdf-films.gz --uids ~/dgraph/uasync.final --postings ~/dgraph/p0
+$ go build . && ./loader --numInstances 3 --instanceIdx 1 --rdfgzips $BENCHMARK_REPO/data/names.gz,$BENCHMARK_REPO/data/rdf-films.gz --uids ~/dgraph/uasync.final --postings ~/dgraph/p1
+$ go build . && ./loader --numInstances 3 --instanceIdx 2 --rdfgzips $BENCHMARK_REPO/data/names.gz,$BENCHMARK_REPO/data/rdf-films.gz --uids ~/dgraph/uasync.final --postings ~/dgraph/p2
 ```
+You can run these over multiple machines, or just one after another.
 
 #### Loading performance
-Loader is memory bound. Every mutation loads a posting list in memory, where mutations
+Loader is typically memory bound. Every mutation loads a posting list in memory, where mutations
 are applied in layers above posting lists.
 While loader doesn't write to disk every time a mutation happens, it does periodically
 merge all the mutations to posting lists, and writes them to rocksdb which persists them.
-How often this merging happens can be fine tuned by specifying `stw_ram_mb`.
-Periodically loader checks it's memory usage and if determines it exceeds this threshold,
-it would *stop the world*, and start the merge process.
-The more memory is available for loader to work with, the less frequently merging needs to be done, the faster the loading.
 
-In other words, loader performance is highly dependent on merging performance, which depends on how fast the underlying persistent storage is.
-So, *Ramfs/Tmpfs > SSD > Hard disk*, when it comes to loading performance.
+There're 2 types of merging going on: Gentle merge, and Aggressive merge.
+Gentle merging picks up N% of `dirty` posting lists, where N is currently 7, and merges them. This happens every 5 seconds.
 
-As a reference point, it took **2028 seconds (33.8 minutes) to load 21M RDFs** from `rdf-films.gz` and `names.gz`
+Aggressive merging hapepns when the memory usage goes above `stw_ram_mb`.
+When that happens, the loader would *stop the world*, start the merge process, and evict all posting lists from memory.
+The more memory is available for loader to work with, the less frequently aggressive merging needs to be done, the faster the loading.
+
+As a reference point, for instance 0 and 1, it took **11 minutes each to load 21M RDFs** from `rdf-films.gz` and `names.gz`
 (from [benchmarks repository](https://github.com/dgraph-io/benchmarks/tree/master/data)) on
 [n1-standard-4 GCE instance](https://cloud.google.com/compute/docs/machine-types)
-using a `2G tmpfs` as the dgraph directory for output, with `stw_ram_mb=8196` flag set.
-The final output was 1.3GB.
-Note that `stw_ram_mb` is based on the memory usage perceived by Golang, the actual usage is higher.
+using SSD persistent disk. Instance 2 took a bit longer, and finished in 15 mins. The total output including uids was 1.3GB.
 
-## Querying
-Once data is loaded, point the dgraph server to the postings and mutations directory.
-```
-$ cd $GOPATH/src/github.com/dgraph-io/dgraph/server
-$ go build .
-$ ./server --mutations DIRPATH/m --postings DIRPATH/p
-```
+Note that `stw_ram_mb` is based on the memory usage perceived by Golang. It currently doesn't take into account the memory usage by RocksDB. So, the actual usage is higher.
 
-This would now run dgraph server at port 8080. If you want to run it at some other port, you can change that with the `--port` flag.
-
+## Server
+Now that data is loader, you can run DGraph servers. To serve the 3 shards above, you can follow the [same steps as here](#multiple-distributed-instances).
 Now you can run GraphQL queries over freebase film data like so:
 ```
 curl localhost:8080/query -XPOST -d '{
@@ -233,34 +244,34 @@ curl localhost:8080/query -XPOST -d '{
 ```
 This query would find all movies directed by Steven Spielberg, their names, initial release dates, countries, genres, and the cast of these movies, i.e. characteres and actors playing those characters; and all the movies directed by these actors, if any.
 
-The support for GraphQL is [very limited right now](https://github.com/dgraph-io/dgraph/issues/1). In particular, mutations, fragments etc. via GraphQL aren't supported.
+The support for GraphQL is [very limited right now](https://github.com/dgraph-io/dgraph/issues/1).
 You can conveniently browse [Freebase film schema here](http://www.freebase.com/film/film?schema=&lang=en).
 There're also some schema pointers in [README](https://github.com/dgraph-io/benchmarks/blob/master/data/README.md).
 
 #### Query Performance
 With the [data loaded above](#loading-performance) on the same hardware,
-it took **270ms to run** the pretty complicated query above the first time after server run.
+it took **218ms to run** the pretty complicated query above the first time after server run.
 Note that the json conversion step has a bit more overhead than captured here.
 ```json
 {
   "server_latency": {
-    "json": "57.937316ms",
-    "parsing": "1.329821ms",
-    "processing": "187.590137ms",
-    "total": "246.859704ms"
+      "json": "37.864027ms",
+      "parsing": "1.141712ms",
+      "processing": "163.136465ms",
+      "total": "202.144938ms"
   }
 }
 ```
 
-Consecutive runs of the same query took much lesser time (100ms), due to posting lists being available in memory.
+Consecutive runs of the same query took much lesser time (80 to 100ms), due to posting lists being available in memory.
 ```json
 {
   "server_latency": {
-    "json": "60.419897ms",
-    "parsing": "143.126µs",
-    "processing": "32.235855ms",
-    "total": "92.820966ms"
-  }
+    "json": "38.3306ms",
+    "parsing": "506.708µs",
+    "processing": "32.239213ms",
+    "total": "71.079022ms"
+	}
 }
 ```
 
