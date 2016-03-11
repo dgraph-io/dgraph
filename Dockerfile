@@ -21,7 +21,7 @@ ENV LD_LIBRARY_PATH "/usr/local/lib"
 # Install DGraph and update dependencies to right versions.
 RUN go get -v github.com/robfig/glock && \
 	go get -v github.com/dgraph-io/dgraph/... && \
-	glock sync github.com/dgraph-io/dgraph && echo "v0.2.0"
+	glock sync github.com/dgraph-io/dgraph && echo "v0.2.2"
 
 # Run some tests, don't build an image if we're failing tests.
 RUN go test github.com/dgraph-io/dgraph/...
