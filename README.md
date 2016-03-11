@@ -86,7 +86,7 @@ $ tar -xzvf uids.async.tar.gz -C $DIR
 $ tar -xzvf postings.tar.gz -C $DIR
 # You should now see directories p0, p1, p2 and uasync.final. The last directory name is unfortunate, but made sense at the time.
 ```
-For quick testing, you can bring up 3 different processes of DGraph. You can of course, also set this up across multiple machines.
+For quick testing, you can bring up 3 different processes of DGraph. You can of course, also set this up across multiple servers.
 ```
 go build . && ./server --instanceIdx 0 --mutations $DIR/m0 --port "8080" --postings $DIR/p0 --workers ":12345,:12346,:12347" --uids $DIR/uasync.final --workerport ":12345" &
 go build . && ./server --instanceIdx 1 --mutations $DIR/m1 --port "8081" --postings $DIR/p1 --workers ":12345,:12346,:12347" --workerport ":12346" &
