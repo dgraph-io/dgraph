@@ -97,9 +97,7 @@ You can hit any of the 3 processes, they'll produce the same results.
 
 `curl localhost:8081/query -XPOST -d '{}'`
 
-# Installation
-
-## Directly on host machine
+## Installation
 Best way to do this is to refer to [Dockerfile](Dockerfile), which has the most complete
 instructions on getting the right setup.
 All the instructions below are based on a Debian/Ubuntu system.
@@ -139,15 +137,15 @@ glock sync github.com/dgraph-io/dgraph
 go test github.com/dgraph-io/dgraph/...
 ```
 
-# Usage
+## Usage
 
-## Distributed Bulk Data Loading
+### Distributed Bulk Data Loading
 Let's load up data first. If you have RDF data, you can use that.
 Or, there's [Freebase film rdf data here](https://github.com/dgraph-io/benchmarks).
 
 Bulk data loading happens in 2 passes.
 
-### First Pass: UID Assignment
+#### First Pass: UID Assignment
 We first find all the entities in the data, and allocate UIDs for them.
 You can run this either as a single instance, or over multiple instances.
 
@@ -168,7 +166,7 @@ $ cd $GOPATH/src/github.com/dgraph-io/dgraph/tools/merge
 $ go build . && ./merge --stores ~/dgraph/uids --dest ~/dgraph/final.uids
 ```
 
-### Second Pass: Data Loader
+#### Second Pass: Data Loader
 Now that we have assigned UIDs for all the entities, the data is ready to be loaded.
 
 Let's do this step with 3 instances.
@@ -180,7 +178,7 @@ $ go build . && ./loader --numInstances 3 --instanceIdx 2 --rdfgzips $BENCHMARK_
 ```
 You can run these over multiple machines, or just one after another.
 
-#### Loading performance
+#### Loader performance
 Loader is typically memory bound. Every mutation loads a posting list in memory, where mutations
 are applied in layers above posting lists.
 While loader doesn't write to disk every time a mutation happens, it does periodically
@@ -200,7 +198,7 @@ using SSD persistent disk. Instance 2 took a bit longer, and finished in 15 mins
 
 Note that `stw_ram_mb` is based on the memory usage perceived by Golang. It currently doesn't take into account the memory usage by RocksDB. So, the actual usage is higher.
 
-## Server
+### Server
 Now that data is loader, you can run DGraph servers. To serve the 3 shards above, you can follow the [same steps as here](#multiple-distributed-instances).
 Now you can run GraphQL queries over freebase film data like so:
 ```
@@ -300,18 +298,18 @@ query {
 The query portion is executed after the mutation, so this would return `greg` as one of the results.
 
 
-# Contributing to DGraph
+## Contributing to DGraph
 - Please see [this wiki page](https://github.com/dgraph-io/dgraph/wiki/Contributing-to-DGraph) for guidelines on contributions.
 
-# Contact
+## Contact
 - Check out [the wiki pages](https://github.com/dgraph-io/dgraph/wiki) for documentation.
 - Please use [Github issue tracker](https://github.com/dgraph-io/dgraph/issues) to file bugs, or request features.
 - You can direct your questions to [dgraph@googlegroups.com](mailto:dgraph@googlegroups.com).
 - Or, just join [Gitter chat](https://gitter.im/dgraph-io/dgraph?utm_source=share-link&utm_medium=link&utm_campaign=share-link).
 
-# Talks
+## Talks
 - [Lightening Talk](http://go-talks.appspot.com/github.com/dgraph-io/dgraph/present/sydney5mins/g.slide#1) on 29th Oct, 2015 at Go meetup, Sydney.
 
-# About
+## About
 I, [Manish R Jain](https://twitter.com/manishrjain), the author of DGraph, used to work on Google Knowledge Graph.
 My experience building large scale, distributed (Web Search and) Graph systems at Google is what inspired me to build this.
