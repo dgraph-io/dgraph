@@ -1,0 +1,23 @@
+This is a post to announce DGraph, an open source, distributed, scalable native graph database. DGraph is designed to handle terabytes of structured data, over commodity hardware.
+
+The design and inspiration is drawn from my experiences working in Google Knowledge Infra group. DGraph is under active development, and is looking to hire talented engineers.
+
+Github page: https://github.com/dgraph-io/dgraph
+
+Features:
+- Aimed at real time user queries.
+- Low Latency, High Throughput.
+- Distributed Native Graph database.
+- Network calls are proportional to complexity of query, not number of results.
+- Supports GraphQL as query language.
+- (planned) Shard replication, High availability, Crash resilience.
+- (roadmap) https://github.com/dgraph-io/dgraph/issues/1
+
+Performance:
+- Loads up 21M RDFs from Freebase Film data in 20 mins.
+- Runs complex queries about Steven Spielberg in ~200ms.
+
+Happy to answer any questions!
+
+Cheers,
+Manish
