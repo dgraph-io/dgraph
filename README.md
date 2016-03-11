@@ -10,6 +10,13 @@ DGraph's goal is to provide [Google](https://www.google.com) production level sc
 with low enough latency to be serving real time user queries, over terabytes of structured data.
 DGraph supports [GraphQL](http://graphql.org/) as query language, and responds in [JSON](http://www.json.org/).
 
+The README is divided into these sections:
+- [Current Status](#current-status)
+- [Quick Testing](#quick-testing)
+- [Installation](#installation)
+- [Usage](#usage)
+- [Queries and Mutations](#queries-and-mutations)
+- [Contact](#contact)
 
 ## Current Status
 
@@ -89,26 +96,6 @@ Now you can run any of the queries mentioned in [Test Queries](https://github.co
 You can hit any of the 3 processes, they'll produce the same results.
 
 `curl localhost:8081/query -XPOST -d '{}'`
-
-## Mutations
-Note that the mutation syntax uses [RDF NQuad format](https://www.w3.org/TR/n-quads/).
-```
-mutation {
-  set {
-		<subject> <predicate> <objectid> .
-		<subject> <predicate> "Object Value" .
-		<subject> <predicate> "объект"@ru .
-		_uid_:0xabcdef <predicate> <objectid> .
-	}
-}
-```
-
-You can batch multiple mutations in a single GraphQL query.
-DGraph would assume that any data in `<>` is an external id (XID),
-and it would retrieve or assign unique internal ids (UID) automatically for these.
-You can also directly specify the UID like so: `_uid_: 0xhexval` or `_uid_: intval`.
-
-Note that a `delete` operation isn't supported yet.
 
 # Installation
 
@@ -274,6 +261,44 @@ Consecutive runs of the same query took much lesser time (80 to 100ms), due to p
 	}
 }
 ```
+
+## Queries and Mutations
+You can see a list of [sample queries here](https://github.com/dgraph-io/dgraph/wiki/Test-Queries).
+DGraph also supports mutations via GraphQL syntax.
+Because GraphQL mutations don't contain complete data, the mutation syntax uses [RDF NQuad format](https://www.w3.org/TR/n-quads/).
+```
+mutation {
+  set {
+		<subject> <predicate> <objectid> .
+		<subject> <predicate> "Object Value" .
+		<subject> <predicate> "объект"@ru .
+		_uid_:0xabcdef <predicate> <objectid> .
+	}
+}
+```
+
+You can batch multiple NQuads in a single GraphQL query.
+DGraph would assume that any data in `<>` is an external id (XID),
+and it would retrieve or assign unique internal ids (UID) automatically for these.
+You can also directly specify the UID like so: `_uid_: 0xhexval` or `_uid_: intval`.
+
+Note that a `delete` operation isn't supported yet.
+
+In addition, you could couple a mutation with a follow up query, in a single GraphQL query like so.
+```
+mutation {
+  set {
+		<alice> <follows> <greg> .
+	}
+}
+query {
+	me(_xid_: alice) {
+		follows
+	}
+}
+```
+The query portion is executed after the mutation, so this would return `greg` as one of the results.
+
 
 # Contributing to DGraph
 - Please see [this wiki page](https://github.com/dgraph-io/dgraph/wiki/Contributing-to-DGraph) for guidelines on contributions.
