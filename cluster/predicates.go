@@ -21,11 +21,17 @@ import (
 	"bytes"
 
 	"github.com/dgraph-io/dgraph/store"
+	"github.com/dgraph-io/dgraph/x"
 )
+
+var glog = x.Log("cluster")
 
 func getPredicate(b []byte) string {
 	buf := bytes.NewBuffer(b)
-	a, _ := buf.ReadString('|')
+	a, err := buf.ReadString('|')
+	if err != nil {
+		glog.WithField("byte", b).Fatal("error retreiving predicate")
+	}
 	str := string(a[:len(a)-1]) // omit the trailing '|'
 	return str
 }
