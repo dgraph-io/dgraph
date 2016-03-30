@@ -21,6 +21,6 @@ and sharing it with other nodes in the cluster.
 
 A RAFT backed key-value store will maintain a globally consistent
 mapping from a given predicate to the information of the node
-that serves that predicate
+that serves that predicate.
 */
 package cluster
