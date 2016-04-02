@@ -67,6 +67,10 @@ func (s *Store) Delete(k []byte) error {
 	return s.db.Delete(s.wopt, k)
 }
 
+func (s *Store) GetIterator() *rocksdb.Iterator {
+	return s.db.NewIterator(s.ropt)
+}
+
 func (s *Store) Close() {
 	s.db.Close()
 }
