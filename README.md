@@ -302,9 +302,8 @@ The query portion is executed after the mutation, so this would return `greg` as
 - Please see [this wiki page](https://github.com/dgraph-io/dgraph/wiki/Contributing-to-DGraph) for guidelines on contributions.
 
 ## Contact
-- Check out [the wiki pages](https://github.com/dgraph-io/dgraph/wiki) for documentation.
+- Please use [discuss.dgraph.io](https://discuss.dgraph.io) for documentation, questions and discussions.
 - Please use [Github issue tracker](https://github.com/dgraph-io/dgraph/issues) to file bugs, or request features.
-- You can direct your questions to [dgraph@googlegroups.com](mailto:dgraph@googlegroups.com).
 - Or, just join [Gitter chat](https://gitter.im/dgraph-io/dgraph?utm_source=share-link&utm_medium=link&utm_campaign=share-link).
 
 ## Talks
