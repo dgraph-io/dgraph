@@ -496,9 +496,9 @@ var (
 		"Port used by worker for internal communication.")
 	instanceIdx = flag.Uint64("idx", 1,
 		"raft instance id")
-	uiddir    = flag.String("uiddir", "", "UID directory")
-	clusterIP = flag.String("clusterIP", "", "IP of a node in cluster")
-	cur_node  *node
+	postingdir = flag.String("posting", "", "UID directory")
+	clusterIP  = flag.String("clusterIP", "", "IP of a node in cluster")
+	cur_node   *node
 )
 
 func main() {
@@ -512,7 +512,7 @@ func main() {
 	}
 
 	ps1 := new(store.Store)
-	ps1.Init(*uiddir)
+	ps1.Init(*postingdir)
 	defer ps1.Close()
 
 	predList := cluster.GetPredicateList(ps1)
