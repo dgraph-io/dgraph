@@ -80,16 +80,18 @@ func mutationHandler(mu *gql.Mutation) error {
 
 	xidToUid := make(map[string]uint64)
 	for _, nq := range nquads {
-		if !strings.HasPrefix("_uid_:", nq.Subject) {
+		if !strings.HasPrefix(nq.Subject, "_uid_:") {
 			xidToUid[nq.Subject] = 0
 		}
-		if !strings.HasPrefix("_uid_:", nq.ObjectId) {
+		if len(nq.ObjectId) > 0 && !strings.HasPrefix(nq.ObjectId, "_uid_:") {
 			xidToUid[nq.ObjectId] = 0
 		}
 	}
-	if err := worker.GetOrAssignUidsOverNetwork(&xidToUid); err != nil {
-		glog.WithError(err).Error("GetOrAssignUidsOverNetwork")
-		return err
+	if len(xidToUid) > 0 {
+		if err := worker.GetOrAssignUidsOverNetwork(&xidToUid); err != nil {
+			glog.WithError(err).Error("GetOrAssignUidsOverNetwork")
+			return err
+		}
 	}
 
 	var edges []x.DirectedEdge
