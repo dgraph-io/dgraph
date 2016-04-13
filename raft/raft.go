@@ -166,6 +166,12 @@ func (n *node) run() {
 					var cc raftpb.ConfChange
 					cc.Unmarshal(entry.Data)
 					n.raft.ApplyConfChange(cc)
+					if cc.Type == raftpb.ConfChangeRemoveNode {
+						glog.Infof("Removing node %v", cc.NodeID)
+						RemoveStaleKeys(peers[cc.NodeID])
+						delete(peers, cc.NodeID)
+						delete(pools, cc.NodeID)
+					}
 				}
 			}
 			n.raft.Advance()
@@ -200,6 +206,7 @@ func sendOverNetwork(ctx context.Context, message raftpb.Message) {
 	if !ok {
 		glog.WithField("From", cur_node.id).WithField("To", message.To).
 			Error("Error in making connetions")
+		cur_node.raft.ReportUnreachable(message.To)
 		return
 	}
 	addr := pool.Addr
@@ -219,14 +226,12 @@ func sendOverNetwork(ctx context.Context, message raftpb.Message) {
 	if err := pool.Call("Worker.ReceiveOverNetwork", query, reply); err != nil {
 		glog.WithField("call", "Worker.ReceiveOverNetwork").Error(err)
 		if cur_node.id == cur_node.raft.Status().Lead {
-			glog.WithField("Id", message.To).Infof("Removing a node")
-			RemoveNodeFromCluster(message.To)
+			glog.WithField("Id", message.To).Infof("")
+			cur_node.raft.ReportUnreachable(message.To)
+			//RemoveNodeFromCluster(message.To)
 		}
 		return
 	}
-	glog.WithField("reply_len", len(reply.Data)).WithField("addr", addr).
-		Info("Got reply from server")
-
 }
 
 func RemoveNodeFromCluster(id uint64) {
@@ -237,9 +242,35 @@ func RemoveNodeFromCluster(id uint64) {
 		NodeID:  id,
 		Context: []byte(""),
 	})
-	delete(peers, id)
-	delete(pools, id)
-	requestOtherNodesToRemove(id)
+	//RemoveStaleKeys(peers[id])
+	// Has to be done through raft message
+	/*
+		delete(peers, id)
+		delete(pools, id)
+		requestOtherNodesToRemove(id)
+	*/
+}
+
+func RemoveStaleKeys(addr string) {
+	glog.Infof("%v", addr)
+	for k, v := range cur_node.pstore {
+		if addr == v {
+			prop := &keyvalRequest{
+				Op:  "Del",
+				Key: k,
+				Val: "",
+			}
+
+			var buf bytes.Buffer
+			enc := gob.NewEncoder(&buf)
+			err := enc.Encode(prop)
+			if err != nil {
+				glog.Fatalf("encode:", err)
+			}
+			propByte := buf.Bytes()
+			cur_node.raft.Propose(cur_node.ctx, propByte)
+		}
+	}
 }
 
 func requestOtherNodesToRemove(id uint64) {
@@ -258,6 +289,7 @@ func removeFromPeerList(id string, idRem uint64) {
 	}
 }
 
+/*
 func (w *Worker) RemovePeer(query *conn.Query, reply *conn.Reply) error {
 	id, _ := strconv.Atoi(string(query.Data))
 	id1 := uint64(id)
@@ -265,6 +297,7 @@ func (w *Worker) RemovePeer(query *conn.Query, reply *conn.Reply) error {
 	delete(pools, id1)
 	return nil
 }
+*/
 
 func (w *Worker) ReceiveOverNetwork(query *conn.Query, reply *conn.Reply) error {
 	buf := bytes.NewBuffer(query.Data)
@@ -343,13 +376,12 @@ func proposeJoin(id uint64) {
 	reply := new(conn.Reply)
 
 	co := 0
-	for cur_node.raft.Status().Lead != id && co < 3330 {
+	for cur_node.raft.Status().Lead != id && co < 30 {
 		glog.Info("Trying to connect with master")
 		if err := pool.Call("Worker.JoinCluster", query, reply); err != nil {
 			glog.WithField("call", "Worker.JoinCluster").Fatal(err)
 		}
-		glog.WithField("reply_len", len(reply.Data)).WithField("addr", addr).
-			Info("Got reply from server")
+		glog.WithField("addr", addr).Info("Trying to join master")
 		time.Sleep(1000 * time.Millisecond) // sleep for a second and rety joining the cluster
 		co++
 	}
@@ -494,6 +526,7 @@ var (
 	w          = new(Worker)
 	workerPort = flag.String("workerport", ":12345",
 		"Port used by worker for internal communication.")
+	restart     = flag.Bool("restart", false, "True if the node is being restarted after failure")
 	instanceIdx = flag.Uint64("idx", 1,
 		"raft instance id")
 	postingdir = flag.String("posting", "", "UID directory")
@@ -503,7 +536,9 @@ var (
 
 func main() {
 	flag.Parse()
+
 	cur_node = newNode(*instanceIdx, "", []raft.Peer{{ID: *instanceIdx}})
+
 	if err := rpc.Register(w); err != nil {
 		glog.Fatal(err)
 	}
@@ -511,11 +546,14 @@ func main() {
 		glog.Fatal(err)
 	}
 
-	ps1 := new(store.Store)
-	ps1.Init(*postingdir)
-	defer ps1.Close()
+	var predList []string
+	if *postingdir != "" {
+		ps1 := new(store.Store)
+		ps1.Init(*postingdir)
+		defer ps1.Close()
 
-	predList := cluster.GetPredicateList(ps1)
+		predList = cluster.GetPredicateList(ps1)
+	}
 
 	peers[*instanceIdx] = *workerPort
 
@@ -525,22 +563,42 @@ func main() {
 		getPeerListFrom(master_id)
 		connectWithPeers()
 		go cur_node.run()
-		proposeJoin(master_id)
+		if !*restart {
+			proposeJoin(master_id)
+		}
 	} else {
 		connectWithPeers()
 		go cur_node.run()
 		cur_node.raft.Campaign(cur_node.ctx)
 	}
 
-	go trackPeerList()
+	//go trackPeerList()
 
 	fmt.Println("proposal by node ", cur_node.id)
-	//nodeID := strconv.Itoa(int(cur_node.id))
+	nodeID := strconv.Itoa(int(cur_node.id))
 
-	for _, pred := range predList {
+	if *postingdir != "" {
+		for _, pred := range predList {
+			prop := &keyvalRequest{
+				Op:  "Set",
+				Key: pred,
+				Val: *workerPort,
+			}
+
+			var buf bytes.Buffer
+			enc := gob.NewEncoder(&buf)
+			err := enc.Encode(prop)
+			if err != nil {
+				glog.Fatalf("encode:", err)
+			}
+			propByte := buf.Bytes()
+			cur_node.raft.Propose(cur_node.ctx, propByte)
+		}
+	} else {
+		fmt.Println(predList)
 		prop := &keyvalRequest{
 			Op:  "Set",
-			Key: pred,
+			Key: nodeID,
 			Val: *workerPort,
 		}
 
@@ -551,7 +609,8 @@ func main() {
 			glog.Fatalf("encode:", err)
 		}
 		propByte := buf.Bytes()
-		cur_node.raft.Propose(cur_node.ctx, []byte(propByte))
+		cur_node.raft.Propose(cur_node.ctx, propByte)
+
 	}
 
 	for {
