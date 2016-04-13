@@ -267,7 +267,13 @@ func lexObject(l *lex.Lexer) lex.StateFn {
 	}
 	if r == '_' {
 		l.Depth += 1
-		return lexBlankNode(l, itemObject, lexText)
+		r = l.Next()
+		if r == 'u' {
+			return lexUidNode(l, itemObject, lexText)
+
+		} else if r == ':' {
+			return lexBlankNode(l, itemObject, lexText)
+		}
 	}
 	if r == '"' {
 		l.Ignore()

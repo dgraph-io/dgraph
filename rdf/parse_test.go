@@ -54,6 +54,24 @@ var testNQuads = []struct {
 		},
 	},
 	{
+		input: `<some_subject_id> <predicate> _uid_:0x01 .`,
+		nq: NQuad{
+			Subject:     "some_subject_id",
+			Predicate:   "predicate",
+			ObjectId:    "_uid_:0x01",
+			ObjectValue: nil,
+		},
+	},
+	{
+		input: `_uid_:0x01 <predicate> _uid_:0x02 .`,
+		nq: NQuad{
+			Subject:     "_uid_:0x01",
+			Predicate:   "predicate",
+			ObjectId:    "_uid_:0x02",
+			ObjectValue: nil,
+		},
+	},
+	{
 		input: `_:alice <follows> _:bob0 .`,
 		nq: NQuad{
 			Subject:     "_:alice",
@@ -117,6 +135,10 @@ var testNQuads = []struct {
 	},
 	{
 		input:  "_uid_: 0x01 <knows> <something> .",
+		hasErr: true,
+	},
+	{
+		input:  "<alice> <knows> _uid_: 0x01 .",
 		hasErr: true,
 	},
 	{
