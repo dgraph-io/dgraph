@@ -26,10 +26,12 @@ import (
 	"github.com/dgraph-io/dgraph/commit"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
+	"github.com/dgraph-io/dgraph/query/protocolbuffer"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/protobuf/proto"
 	"github.com/google/flatbuffers/go"
 )
 
@@ -318,4 +320,80 @@ func TestToJson(t *testing.T) {
 		t.Error(err)
 	}
 	fmt.Printf(string(js))
+}
+
+func TestToProtocolBuffer(t *testing.T) {
+	dir, _ := populateGraph(t)
+	defer os.RemoveAll(dir)
+
+	query := `
+		{
+			me(_uid_:0x01) {
+				name
+				gender
+				status
+				friend {
+					name
+				}
+			}
+		}
+	`
+
+	gq, _, err := gql.Parse(query)
+	if err != nil {
+		t.Error(err)
+	}
+	sg, err := ToSubGraph(gq)
+	if err != nil {
+		t.Error(err)
+	}
+
+	ch := make(chan error)
+	go ProcessGraph(sg, ch)
+	err = <-ch
+	if err != nil {
+		t.Error(err)
+	}
+
+	pb, err := sg.ToProtocolBuffer()
+	if err != nil {
+		t.Error(err)
+	}
+
+	// Unmarshalling to a protocol buffer subgraph for testing
+	usg := &protocolbuffer.SubGraph{}
+	err = proto.Unmarshal(pb, usg)
+	if err != nil {
+		t.Error(err)
+	}
+
+	if len(usg.Children) != 4 {
+		t.Errorf("Expected len 4. Got: %v", usg.Children)
+	}
+	child := usg.Children[0]
+	if child.Attr != "name" {
+		t.Errorf("Expected attr name. Got: %v", child.Attr)
+	}
+	if string(child.Result.Values[0]) != "Michonne" {
+		t.Errorf("Expected value Michonne. Got %v", string(child.Result.Values[0]))
+	}
+	child = usg.Children[3]
+	if child.Attr != "friend" {
+		t.Errorf("Expected attr friend. Got: %v", child.Attr)
+	}
+	uids := child.Result.Uidmatrix[0].Uids
+	if uids[0] != 23 || uids[1] != 24 || uids[2] != 25 || uids[3] != 31 || uids[4] != 101 {
+		t.Errorf("Friend ids don't match")
+	}
+	// To check for name of friends
+	child = child.Children[0]
+	if child.Attr != "name" {
+		t.Errorf("Expected attr friend. Got: %v", child.Attr)
+	}
+
+	names := child.Result.Values
+
+	if string(names[0]) != "Rick Grimes" || string(names[1]) != "Glenn Rhee" || string(names[2]) != "Daryl Dixon" || string(names[3]) != "Andrea" {
+		t.Errorf("Names don't match")
+	}
 }

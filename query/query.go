@@ -26,9 +26,11 @@ import (
 	"github.com/Sirupsen/logrus"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
+	"github.com/dgraph-io/dgraph/query/protocolbuffer"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/protobuf/proto"
 	"github.com/google/flatbuffers/go"
 )
 
@@ -249,6 +251,70 @@ func (g *SubGraph) ToJson(l *Latency) (js []byte, rerr error) {
 
 	glog.Fatal("Shouldn't reach here.")
 	return json.Marshal(r)
+}
+
+func preTraverse(g *SubGraph) (sg *protocolbuffer.SubGraph, rerr error) {
+	sg = &protocolbuffer.SubGraph{}
+	sg.Attr = g.Attr
+
+	ro := flatbuffers.GetUOffsetT(g.result)
+	r := new(task.Result)
+	r.Init(g.result, ro)
+
+	var ul task.UidList
+	result := &protocolbuffer.Result{}
+	for i := 0; i < r.UidmatrixLength(); i++ {
+		if ok := r.Uidmatrix(&ul, i); !ok {
+			return sg, fmt.Errorf("While parsing UidList")
+		}
+		uidList := &protocolbuffer.UidList{}
+		for j := 0; j < ul.UidsLength(); j++ {
+			uid := ul.Uids(j)
+			uidList.Uids = append(uidList.Uids, uid)
+		}
+		result.Uidmatrix = append(result.Uidmatrix, uidList)
+	}
+
+	var tv task.Value
+	for i := 0; i < r.ValuesLength(); i++ {
+		if ok := r.Values(&tv, i); !ok {
+			return sg, fmt.Errorf("While parsing value")
+		}
+		var ival interface{}
+		if err := posting.ParseValue(&ival, tv.ValBytes()); err != nil {
+			return sg, err
+		}
+		if ival == nil {
+			continue
+		}
+		result.Values = append(result.Values, []byte(ival.(string)))
+	}
+
+	sg.Result = result
+
+	for _, child := range g.Children {
+		childSg, err := preTraverse(child)
+		if err != nil {
+			x.Err(glog, err).Error("Error while traversal")
+			return sg, err
+		}
+		sg.Children = append(sg.Children, childSg)
+	}
+	return sg, nil
+}
+
+func (g *SubGraph) ToProtocolBuffer() (pb []byte, rerr error) {
+	sg, err := preTraverse(g)
+	if err != nil {
+		x.Err(glog, err).Error("Error while traversal")
+		return pb, err
+	}
+	pb, err = proto.Marshal(sg)
+	if err != nil {
+		x.Err(glog, err).Error("Error while marshalling to protocol buffer")
+		return pb, err
+	}
+	return pb, nil
 }
 
 func treeCopy(gq *gql.GraphQuery, sg *SubGraph) {
