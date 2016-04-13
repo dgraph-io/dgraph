@@ -21,6 +21,7 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"runtime"
 	"strings"
@@ -195,6 +196,72 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, string(js))
 }
 
+func pbQueryHandler(q []byte) (pb []byte, rerr error) {
+	fmt.Println("in pbQueryHandler")
+	glog.WithField("q", string(q)).Debug("Query received.")
+	gq, _, err := gql.Parse(string(q))
+	if err != nil {
+		x.Err(glog, err).Error("While parsing query")
+		return pb, err
+	}
+
+	sg, err := query.ToSubGraph(gq)
+	if err != nil {
+		x.Err(glog, err).Error("While conversion to internal format")
+		return pb, err
+	}
+	glog.WithField("q", string(q)).Debug("Query parsed.")
+
+	rch := make(chan error)
+	go query.ProcessGraph(sg, rch)
+	err = <-rch
+	if err != nil {
+		x.Err(glog, err).Error("While executing query")
+		return pb, err
+	}
+
+	glog.WithField("q", string(q)).Debug("Graph processed.")
+	pb, err = sg.ToProtocolBuffer()
+	if err != nil {
+		x.Err(glog, err).Error("While converting to Json.")
+		return pb, err
+	}
+
+	return pb, err
+}
+
+func runServerForClient(address string) error {
+	ln, err := net.Listen("tcp", address)
+	if err != nil {
+		glog.Fatalf("While running server for client: %v", err)
+		return err
+	}
+	glog.WithField("address", ln.Addr()).Info("Client Worker listening")
+
+	go func() {
+		for {
+			cxn, err := ln.Accept()
+			if err != nil {
+				glog.Fatalf("listen(%q): %s\n", address, err)
+				return
+			}
+			glog.WithField("local", cxn.LocalAddr()).
+				WithField("remote", cxn.RemoteAddr()).
+				Debug("Client Worker accepted connection")
+
+			q := make([]byte, 1024000)
+			// Move to separate function
+			go func(c net.Conn) {
+				_, _ = c.Read(q)
+				fmt.Println("query received: ", string(q))
+				r, _ := pbQueryHandler(q)
+				c.Write(r)
+			}(cxn)
+		}
+	}()
+	return nil
+}
+
 func main() {
 	flag.Parse()
 	if !flag.Parsed() {
@@ -238,6 +305,8 @@ func main() {
 	}
 
 	worker.Connect(addrs)
+
+	runServerForClient(":3000")
 
 	http.HandleFunc("/query", queryHandler)
 	glog.WithField("port", *port).Info("Listening for requests...")
