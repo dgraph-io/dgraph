@@ -163,8 +163,10 @@ $ go build . && ./uidassigner --numInstances 2 --instanceIdx 1 --rdfgzips $BENCH
 Once the shards are generated, you need to merge them before the second pass. If you ran this as a single instance, merging isn't required.
 ```
 $ cd $GOPATH/src/github.com/dgraph-io/dgraph/tools/merge
-$ go build . && ./merge --stores ~/dgraph/uids --dest ~/dgraph/final.uids
+$ go build . && ./merge --stores ~/dgraph/uids --dest ~/dgraph/uasync.final
 ```
+The above command would iterate over all the directories in `~/dgraph/uids`, and merge their data into one `~/dgraph/uasync.final`.
+Note that this merge step is important if you're generating multiple uid intances, because all the loader instances need to have access to global uids list.
 
 #### Second Pass: Data Loader
 Now that we have assigned UIDs for all the entities, the data is ready to be loaded.
