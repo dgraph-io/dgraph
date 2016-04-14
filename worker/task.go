@@ -56,7 +56,8 @@ func ProcessTaskOverNetwork(qu []byte) (result []byte, rerr error) {
 	query.Data = qu
 	reply := new(conn.Reply)
 	if err := pool.Call("Worker.ServeTask", query, reply); err != nil {
-		glog.WithField("call", "Worker.ServeTask").Fatal(err)
+		glog.WithField("call", "Worker.ServeTask").Error(err)
+		return []byte(""), err
 	}
 	glog.WithField("reply_len", len(reply.Data)).WithField("addr", addr).
 		WithField("attr", attr).Info("Got reply from server")
