@@ -22,6 +22,10 @@ The README is divided into these sections:
 
 *Check out [the demo at dgraph.io](http://dgraph.io).*
 
+`Upcoming v0.3`
+Track progress on [our Trello Board](https://trello.com/b/PF4nZ1vH).
+Got questions or issues? Talk to us [via discuss](https://discuss.dgraph.io).
+
 `Mar 2016 - Branch v0.2`
 This is the first truly distributed version of DGraph.
 Please see the [release notes here](https://github.com/dgraph-io/dgraph/wiki/DGraph-v0.2-Release).
