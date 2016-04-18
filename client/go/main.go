@@ -32,6 +32,7 @@ var port = flag.String("port", "8090", "Port to communicate with server")
 
 func main() {
 
+	// TODO(pawan) - Remove hardcoded query. Give helper methods to user for building query.
 	var q0 = `{
     me(_xid_: m.06pj8) {
         type.object.name.en
@@ -57,6 +58,7 @@ func main() {
     }
 }`
 
+	// TODO(pawan): Pick address for server from config
 	conn, err := net.Dial("tcp", "127.0.0.1:"+*port)
 	if err != nil {
 		x.Err(glog, err).Fatal("DialTCPConnection")
