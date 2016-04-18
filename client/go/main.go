@@ -19,6 +19,7 @@ package main
 import (
 	"bytes"
 	"flag"
+	"fmt"
 	"net"
 
 	"github.com/dgraph-io/dgraph/query/protocolbuffer"
@@ -34,28 +35,12 @@ func main() {
 
 	// TODO(pawan) - Remove hardcoded query. Give helper methods to user for building query.
 	var q0 = `{
-    me(_xid_: m.06pj8) {
-        type.object.name.en
-        film.director.film {
-            type.object.name.en
-            film.film.starring {
-                film.performance.character {
-                    type.object.name.en
-                }
-                film.performance.actor {
-                    type.object.name.en
-                    film.director.film {
-                        type.object.name.en
-                    }
-                }
-            }
-            film.film.initial_release_date
-            film.film.country
-            film.film.genre {
-                type.object.name.en
-            }
-        }
+  me(_xid_: m.0f4vbz) {
+    type.object.name.en
+    film.actor.film {
+      type.object.name.en
     }
+  }
 }`
 
 	// TODO(pawan): Pick address for server from config
@@ -70,11 +55,12 @@ func main() {
 	}
 
 	// TODO(pawan): Discuss and implement a better way of doing this.
-	reply := make([]byte, 4096)
+	reply := make([]byte, 32768)
 	_, err = conn.Read(reply)
 	if err != nil {
 		x.Err(glog, err).Fatal("Error in reading response from server")
 	}
+
 	// Trimming null bytes
 	reply = bytes.Trim(reply, "\000")
 
@@ -82,6 +68,9 @@ func main() {
 	if err := proto.Unmarshal(reply, usg); err != nil {
 		x.Err(glog, err).Fatal("Error in umarshalling protocol buffer")
 	}
+
+	// TODO(pawan): Remove this later
+	fmt.Printf("Subgraph %+v", usg)
 
 	conn.Close()
 }
