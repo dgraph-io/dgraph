@@ -17,50 +17,69 @@
 package main
 
 import (
+	"bytes"
 	"flag"
-	"fmt"
 	"net"
 
+	"github.com/dgraph-io/dgraph/query/protocolbuffer"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/protobuf/proto"
 )
 
 var glog = x.Log("client")
 
-var port = flag.String("port", "3000", "Port to communicate with server")
+var port = flag.String("port", "8090", "Port to communicate with server")
 
 func main() {
 
-	var q0 = `
-  {
-    user(_xid_:alice) {
-      follows {
-        _xid_
-        status
-      }
-      _xid_
-      status
+	var q0 = `{
+    me(_xid_: m.06pj8) {
+        type.object.name.en
+        film.director.film {
+            type.object.name.en
+            film.film.starring {
+                film.performance.character {
+                    type.object.name.en
+                }
+                film.performance.actor {
+                    type.object.name.en
+                    film.director.film {
+                        type.object.name.en
+                    }
+                }
+            }
+            film.film.initial_release_date
+            film.film.country
+            film.film.genre {
+                type.object.name.en
+            }
+        }
     }
-  }
-`
+}`
 
 	conn, err := net.Dial("tcp", "127.0.0.1:"+*port)
 	if err != nil {
-		glog.Fatalf("While running server: %v", err)
+		x.Err(glog, err).Fatal("DialTCPConnection")
 	}
 
-	fmt.Println("sending data", []byte(q0))
 	_, err = conn.Write([]byte(q0))
 	if err != nil {
 		x.Err(glog, err).Fatal("Error in writing to server")
 	}
 
-	reply := []byte{}
+	// TODO(pawan): Discuss and implement a better way of doing this.
+	reply := make([]byte, 4096)
 	_, err = conn.Read(reply)
 	if err != nil {
 		x.Err(glog, err).Fatal("Error in reading response from server")
 	}
-	fmt.Println(string(reply))
+	// Trimming null bytes
+	reply = bytes.Trim(reply, "\000")
+
+	usg := &protocolbuffer.SubGraph{}
+	if err := proto.Unmarshal(reply, usg); err != nil {
+		x.Err(glog, err).Fatal("Error in umarshalling protocol buffer")
+	}
 
 	conn.Close()
-
 }

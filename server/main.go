@@ -24,6 +24,7 @@ import (
 	"net"
 	"net/http"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -197,7 +198,10 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func pbQueryHandler(q []byte) (pb []byte, rerr error) {
-	fmt.Println("in pbQueryHandler")
+	if len(q) == 0 {
+		return
+	}
+
 	glog.WithField("q", string(q)).Debug("Query received.")
 	gq, _, err := gql.Parse(string(q))
 	if err != nil {
@@ -249,11 +253,11 @@ func runServerForClient(address string) error {
 				WithField("remote", cxn.RemoteAddr()).
 				Debug("Client Worker accepted connection")
 
-			q := make([]byte, 1024000)
-			// Move to separate function
+			// TODO(pawan) - Find a better way to do this, byte slice shouldn't be of fixed size
+			q := make([]byte, 4096)
+			// TODO(pawan) - Move to separate function
 			go func(c net.Conn) {
-				_, _ = c.Read(q)
-				fmt.Println("query received: ", string(q))
+				c.Read(q)
 				r, _ := pbQueryHandler(q)
 				c.Write(r)
 			}(cxn)
@@ -306,7 +310,9 @@ func main() {
 
 	worker.Connect(addrs)
 
-	runServerForClient(":3000")
+	// TODO(pawan): Have a better way to do this, pick port for client from a flag
+	clientPort, _ := strconv.Atoi(*port)
+	runServerForClient(":" + strconv.Itoa(clientPort+10))
 
 	http.HandleFunc("/query", queryHandler)
 	glog.WithField("port", *port).Info("Listening for requests...")

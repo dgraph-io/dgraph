@@ -255,6 +255,9 @@ func (g *SubGraph) ToJson(l *Latency) (js []byte, rerr error) {
 
 func preTraverse(g *SubGraph) (sg *protocolbuffer.SubGraph, rerr error) {
 	sg = &protocolbuffer.SubGraph{}
+	if len(g.query) == 0 {
+		return sg, nil
+	}
 	sg.Attr = g.Attr
 
 	ro := flatbuffers.GetUOffsetT(g.result)
