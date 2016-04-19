@@ -50,7 +50,7 @@ var postingDir = flag.String("postings", "", "Directory to store posting lists")
 var uidDir = flag.String("uids", "", "XID UID posting lists directory")
 var mutationDir = flag.String("mutations", "", "Directory to store mutations")
 var port = flag.String("port", "8080", "Port to run server on.")
-var clientPort = flag.String("port", "9090", "Port used to communicate with client on tcp")
+var clientPort = flag.String("clientPort", "9090", "Port used to communicate with client on tcp")
 var numcpu = flag.Int("numCpu", runtime.NumCPU(),
 	"Number of cores to be used by the process")
 var instanceIdx = flag.Uint64("instanceIdx", 0,
@@ -256,7 +256,10 @@ func runServerForClient(address string) error {
 
 	s := grpc.NewServer()
 	pb.RegisterDGraphServer(s, &server{})
-	s.Serve(ln)
+	if err = s.Serve(ln); err != nil {
+		glog.Fatalf("While serving gRpc requests", err)
+	}
+	return nil
 }
 
 func main() {
