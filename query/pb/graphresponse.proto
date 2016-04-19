@@ -2,7 +2,7 @@ syntax="proto3";
 package pb;
 
 message UidList {
-  repeated fixed64 uids = 1;
+  repeated uint64 uids = 1;
 }
 
 message Result {
@@ -12,6 +12,6 @@ message Result {
 
 message GraphResponse {
   string attribute = 1;
-  repeated GraphResponse children = 2; //Each node can have multiple children
-  Result result = 3;
+  Result result = 2;
+  repeated GraphResponse children = 3; // Each node can have multiple children
 }

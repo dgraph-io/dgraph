@@ -375,7 +375,8 @@ func TestToProtocolBuffer(t *testing.T) {
 		t.Errorf("Expected attr name. Got: %v", child.Attribute)
 	}
 	if string(child.Result.Values[0]) != "Michonne" {
-		t.Errorf("Expected value Michonne. Got %v", string(child.Result.Values[0]))
+		t.Errorf("Expected value Michonne. Got %v",
+			string(child.Result.Values[0]))
 	}
 	child = ugr.Children[3]
 	if child.Attribute != "friend" {
