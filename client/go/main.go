@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 DGraph Labs, Inc.
+ * Copyright 2016 DGraph Labs, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,11 +28,9 @@ import (
 )
 
 var glog = x.Log("client")
-
 var port = flag.String("port", "8090", "Port to communicate with server")
 
 func main() {
-
 	// TODO(pawan) - Remove hardcoded query. Give helper methods to user for building query.
 	var q0 = `{
   me(_xid_: m.0f4vbz) {

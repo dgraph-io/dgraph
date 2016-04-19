@@ -1,0 +1,17 @@
+syntax="proto3";
+package pb;
+
+message UidList {
+  repeated fixed64 uids = 1;
+}
+
+message Result {
+  repeated bytes values = 1;
+  repeated UidList uidmatrix = 2;
+}
+
+message GraphResponse {
+  string attribute = 1;
+  repeated GraphResponse children = 2; //Each node can have multiple children
+  Result result = 3;
+}

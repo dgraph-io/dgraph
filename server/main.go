@@ -199,9 +199,12 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 
 func pbQueryHandler(q []byte) (pb []byte, rerr error) {
 	if len(q) == 0 {
-		return
+		glog.Error("While reading query")
+		return pb, fmt.Errorf("Empty query")
 	}
 
+	// TODO(pawan): Refactor query parsing and graph processing code to a common
+	// function used by pbQueryHandler and queryHandler
 	glog.WithField("q", string(q)).Debug("Query received.")
 	gq, _, err := gql.Parse(string(q))
 	if err != nil {

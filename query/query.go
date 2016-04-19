@@ -26,7 +26,7 @@ import (
 	"github.com/Sirupsen/logrus"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/query/protocolbuffer"
+	"github.com/dgraph-io/dgraph/query/pb"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
@@ -253,24 +253,25 @@ func (g *SubGraph) ToJson(l *Latency) (js []byte, rerr error) {
 	return json.Marshal(r)
 }
 
-func preTraverse(g *SubGraph) (sg *protocolbuffer.SubGraph, rerr error) {
-	sg = &protocolbuffer.SubGraph{}
+func preTraverse(g *SubGraph) (gr *pb.GraphResponse, rerr error) {
+	gr = &pb.GraphResponse{}
 	if len(g.query) == 0 {
-		return sg, nil
+		return gr, nil
 	}
-	sg.Attr = g.Attr
 
+	gr.Attribute = g.Attr
 	ro := flatbuffers.GetUOffsetT(g.result)
 	r := new(task.Result)
 	r.Init(g.result, ro)
 
 	var ul task.UidList
-	result := &protocolbuffer.Result{}
+	result := &pb.Result{}
 	for i := 0; i < r.UidmatrixLength(); i++ {
 		if ok := r.Uidmatrix(&ul, i); !ok {
-			return sg, fmt.Errorf("While parsing UidList")
+			return gr, fmt.Errorf("While parsing UidList")
 		}
-		uidList := &protocolbuffer.UidList{}
+
+		uidList := &pb.UidList{}
 		for j := 0; j < ul.UidsLength(); j++ {
 			uid := ul.Uids(j)
 			uidList.Uids = append(uidList.Uids, uid)
@@ -281,43 +282,48 @@ func preTraverse(g *SubGraph) (sg *protocolbuffer.SubGraph, rerr error) {
 	var tv task.Value
 	for i := 0; i < r.ValuesLength(); i++ {
 		if ok := r.Values(&tv, i); !ok {
-			return sg, fmt.Errorf("While parsing value")
+			return gr, fmt.Errorf("While parsing value")
 		}
+
 		var ival interface{}
 		if err := posting.ParseValue(&ival, tv.ValBytes()); err != nil {
-			return sg, err
+			return gr, err
 		}
+
 		if ival == nil {
-			continue
+			ival = ""
 		}
 		result.Values = append(result.Values, []byte(ival.(string)))
 	}
 
-	sg.Result = result
+	gr.Result = result
 
 	for _, child := range g.Children {
-		childSg, err := preTraverse(child)
+		childPb, err := preTraverse(child)
 		if err != nil {
 			x.Err(glog, err).Error("Error while traversal")
-			return sg, err
+			return gr, err
 		}
-		sg.Children = append(sg.Children, childSg)
+
+		gr.Children = append(gr.Children, childPb)
 	}
-	return sg, nil
+	return gr, nil
 }
 
-func (g *SubGraph) ToProtocolBuffer() (pb []byte, rerr error) {
-	sg, err := preTraverse(g)
+func (g *SubGraph) ToProtocolBuffer() (pbuffer []byte, rerr error) {
+	gr, err := preTraverse(g)
 	if err != nil {
 		x.Err(glog, err).Error("Error while traversal")
-		return pb, err
+		return pbuffer, err
 	}
-	pb, err = proto.Marshal(sg)
+
+	pbuffer, err = proto.Marshal(gr)
 	if err != nil {
 		x.Err(glog, err).Error("Error while marshalling to protocol buffer")
-		return pb, err
+		return pbuffer, err
 	}
-	return pb, nil
+
+	return pbuffer, nil
 }
 
 func treeCopy(gq *gql.GraphQuery, sg *SubGraph) {
