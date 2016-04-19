@@ -17,18 +17,19 @@
 package main
 
 import (
-	"bytes"
 	"flag"
 	"fmt"
-	"net"
 
-	"github.com/dgraph-io/dgraph/query/protocolbuffer"
+	"golang.org/x/net/context"
+
+	"google.golang.org/grpc"
+
+	"github.com/dgraph-io/dgraph/query/pb"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/golang/protobuf/proto"
 )
 
 var glog = x.Log("client")
-var port = flag.String("port", "8090", "Port to communicate with server")
+var port = flag.String("port", "9090", "Port to communicate with server")
 
 func main() {
 	// TODO(pawan) - Remove hardcoded query. Give helper methods to user for building query.
@@ -42,33 +43,20 @@ func main() {
 }`
 
 	// TODO(pawan): Pick address for server from config
-	conn, err := net.Dial("tcp", "127.0.0.1:"+*port)
+	conn, err := grpc.Dial("127.0.0.1:"+*port, grpc.WithInsecure())
 	if err != nil {
 		x.Err(glog, err).Fatal("DialTCPConnection")
 	}
+	defer conn.Close()
 
-	_, err = conn.Write([]byte(q0))
+	c := pb.NewDGraphClient(conn)
+
+	r, err := c.GetGraphResponse(context.Background(), &pb.GraphRequest{Query: q0})
 	if err != nil {
-		x.Err(glog, err).Fatal("Error in writing to server")
-	}
-
-	// TODO(pawan): Discuss and implement a better way of doing this.
-	reply := make([]byte, 32768)
-	_, err = conn.Read(reply)
-	if err != nil {
-		x.Err(glog, err).Fatal("Error in reading response from server")
-	}
-
-	// Trimming null bytes
-	reply = bytes.Trim(reply, "\000")
-
-	usg := &protocolbuffer.SubGraph{}
-	if err := proto.Unmarshal(reply, usg); err != nil {
-		x.Err(glog, err).Fatal("Error in umarshalling protocol buffer")
+		x.Err(glog, err).Fatal("Error in getting response from server")
 	}
 
 	// TODO(pawan): Remove this later
-	fmt.Printf("Subgraph %+v", usg)
+	fmt.Printf("Subgraph %+v", r)
 
-	conn.Close()
 }

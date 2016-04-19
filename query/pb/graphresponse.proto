@@ -1,6 +1,10 @@
 syntax="proto3";
 package pb;
 
+service DGraph {
+  rpc GetResponse (GraphRequest) returns (GraphResponse) {}
+}
+
 message UidList {
   repeated uint64 uids = 1;
 }
@@ -8,6 +12,10 @@ message UidList {
 message Result {
   repeated bytes values = 1;
   repeated UidList uidmatrix = 2;
+}
+
+message GraphRequest {
+  string query = 1;
 }
 
 message GraphResponse {

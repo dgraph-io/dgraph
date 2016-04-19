@@ -24,15 +24,19 @@ import (
 	"net"
 	"net/http"
 	"runtime"
-	"strconv"
 	"strings"
 	"time"
+
+	"golang.org/x/net/context"
+
+	"google.golang.org/grpc"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/dgraph-io/dgraph/commit"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/query"
+	"github.com/dgraph-io/dgraph/query/pb"
 	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/uid"
@@ -46,6 +50,7 @@ var postingDir = flag.String("postings", "", "Directory to store posting lists")
 var uidDir = flag.String("uids", "", "XID UID posting lists directory")
 var mutationDir = flag.String("mutations", "", "Directory to store mutations")
 var port = flag.String("port", "8080", "Port to run server on.")
+var clientPort = flag.String("port", "9090", "Port used to communicate with client on tcp")
 var numcpu = flag.Int("numCpu", runtime.NumCPU(),
 	"Number of cores to be used by the process")
 var instanceIdx = flag.Uint64("instanceIdx", 0,
@@ -197,10 +202,14 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, string(js))
 }
 
-func pbQueryHandler(q []byte) (pb []byte, rerr error) {
+// server is used to implement pb.DGraphServer
+type server struct{}
+
+func (s *server) GetResponse(ctx context.Context, r *pb.GraphRequest) (gr *pb.GraphResponse, rerr error) {
+	q := []byte(r.Query)
 	if len(q) == 0 {
 		glog.Error("While reading query")
-		return pb, fmt.Errorf("Empty query")
+		return gr, fmt.Errorf("Empty query")
 	}
 
 	// TODO(pawan): Refactor query parsing and graph processing code to a common
@@ -209,13 +218,13 @@ func pbQueryHandler(q []byte) (pb []byte, rerr error) {
 	gq, _, err := gql.Parse(string(q))
 	if err != nil {
 		x.Err(glog, err).Error("While parsing query")
-		return pb, err
+		return gr, err
 	}
 
 	sg, err := query.ToSubGraph(gq)
 	if err != nil {
 		x.Err(glog, err).Error("While conversion to internal format")
-		return pb, err
+		return gr, err
 	}
 	glog.WithField("q", string(q)).Debug("Query parsed.")
 
@@ -224,17 +233,17 @@ func pbQueryHandler(q []byte) (pb []byte, rerr error) {
 	err = <-rch
 	if err != nil {
 		x.Err(glog, err).Error("While executing query")
-		return pb, err
+		return gr, err
 	}
 
 	glog.WithField("q", string(q)).Debug("Graph processed.")
-	pb, err = sg.ToProtocolBuffer()
+	gr, err = sg.ToProtocolBuffer()
 	if err != nil {
 		x.Err(glog, err).Error("While converting to Json.")
-		return pb, err
+		return gr, err
 	}
 
-	return pb, err
+	return gr, err
 }
 
 func runServerForClient(address string) error {
@@ -245,28 +254,9 @@ func runServerForClient(address string) error {
 	}
 	glog.WithField("address", ln.Addr()).Info("Client Worker listening")
 
-	go func() {
-		for {
-			cxn, err := ln.Accept()
-			if err != nil {
-				glog.Fatalf("listen(%q): %s\n", address, err)
-				return
-			}
-			glog.WithField("local", cxn.LocalAddr()).
-				WithField("remote", cxn.RemoteAddr()).
-				Debug("Client Worker accepted connection")
-
-			// TODO(pawan) - Find a better way to do this, byte slice shouldn't be of fixed size
-			q := make([]byte, 4096)
-			// TODO(pawan) - Move to separate function
-			go func(c net.Conn) {
-				c.Read(q)
-				r, _ := pbQueryHandler(q)
-				c.Write(r)
-			}(cxn)
-		}
-	}()
-	return nil
+	s := grpc.NewServer()
+	pb.RegisterDGraphServer(s, &server{})
+	s.Serve(ln)
 }
 
 func main() {
@@ -313,9 +303,7 @@ func main() {
 
 	worker.Connect(addrs)
 
-	// TODO(pawan): Have a better way to do this, pick port for client from a flag
-	clientPort, _ := strconv.Atoi(*port)
-	runServerForClient(":" + strconv.Itoa(clientPort+10))
+	runServerForClient(":" + *clientPort)
 
 	http.HandleFunc("/query", queryHandler)
 	glog.WithField("port", *port).Info("Listening for requests...")

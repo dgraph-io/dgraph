@@ -30,7 +30,6 @@ import (
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/golang/protobuf/proto"
 	"github.com/google/flatbuffers/go"
 )
 
@@ -310,20 +309,14 @@ func preTraverse(g *SubGraph) (gr *pb.GraphResponse, rerr error) {
 	return gr, nil
 }
 
-func (g *SubGraph) ToProtocolBuffer() (pbuffer []byte, rerr error) {
+func (g *SubGraph) ToProtocolBuffer() (gr *pb.GraphResponse, rerr error) {
 	gr, err := preTraverse(g)
 	if err != nil {
 		x.Err(glog, err).Error("Error while traversal")
-		return pbuffer, err
+		return gr, err
 	}
 
-	pbuffer, err = proto.Marshal(gr)
-	if err != nil {
-		x.Err(glog, err).Error("Error while marshalling to protocol buffer")
-		return pbuffer, err
-	}
-
-	return pbuffer, nil
+	return gr, nil
 }
 
 func treeCopy(gq *gql.GraphQuery, sg *SubGraph) {

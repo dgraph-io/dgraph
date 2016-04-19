@@ -26,12 +26,10 @@ import (
 	"github.com/dgraph-io/dgraph/commit"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/query/pb"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/golang/protobuf/proto"
 	"github.com/google/flatbuffers/go"
 )
 
@@ -355,14 +353,7 @@ func TestToProtocolBuffer(t *testing.T) {
 		t.Error(err)
 	}
 
-	pbuffer, err := sg.ToProtocolBuffer()
-	if err != nil {
-		t.Error(err)
-	}
-
-	// Unmarshalling to a protocol buffer graph response for testing
-	ugr := &pb.GraphResponse{}
-	err = proto.Unmarshal(pbuffer, ugr)
+	ugr, err := sg.ToProtocolBuffer()
 	if err != nil {
 		t.Error(err)
 	}
