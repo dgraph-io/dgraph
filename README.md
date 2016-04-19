@@ -22,6 +22,10 @@ The README is divided into these sections:
 
 *Check out [the demo at dgraph.io](http://dgraph.io).*
 
+`Upcoming v0.3`
+Track progress on [our Trello Board](https://trello.com/b/PF4nZ1vH).
+Got questions or issues? Talk to us [via discuss](https://discuss.dgraph.io).
+
 `Mar 2016 - Branch v0.2`
 This is the first truly distributed version of DGraph.
 Please see the [release notes here](https://github.com/dgraph-io/dgraph/wiki/DGraph-v0.2-Release).
@@ -163,8 +167,10 @@ $ go build . && ./uidassigner --numInstances 2 --instanceIdx 1 --rdfgzips $BENCH
 Once the shards are generated, you need to merge them before the second pass. If you ran this as a single instance, merging isn't required.
 ```
 $ cd $GOPATH/src/github.com/dgraph-io/dgraph/tools/merge
-$ go build . && ./merge --stores ~/dgraph/uids --dest ~/dgraph/final.uids
+$ go build . && ./merge --stores ~/dgraph/uids --dest ~/dgraph/uasync.final
 ```
+The above command would iterate over all the directories in `~/dgraph/uids`, and merge their data into one `~/dgraph/uasync.final`.
+Note that this merge step is important if you're generating multiple uid intances, because all the loader instances need to have access to global uids list.
 
 #### Second Pass: Data Loader
 Now that we have assigned UIDs for all the entities, the data is ready to be loaded.

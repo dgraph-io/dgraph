@@ -19,6 +19,9 @@
 package rdf
 
 import (
+	"strconv"
+	"strings"
+
 	"github.com/dgraph-io/dgraph/lex"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -120,19 +123,38 @@ func lexUntilClosing(l *lex.Lexer, styp lex.ItemType,
 	return l.Errorf("Invalid character %v found for itemType: %v", r, styp)
 }
 
+func lexUidNode(l *lex.Lexer, styp lex.ItemType, sfn lex.StateFn) lex.StateFn {
+
+	l.AcceptUntil(isSpace)
+	r := l.Peek()
+	if r == lex.EOF {
+		return l.Errorf("Unexpected end of uid subject")
+	}
+	in := l.Input[l.Start:l.Pos]
+	if !strings.HasPrefix(in, "_uid_:") {
+		return l.Errorf("Expected _uid_: Found: %v", l.Input[l.Start:l.Pos])
+	}
+	if _, err := strconv.ParseUint(in[6:], 0, 64); err != nil {
+		return l.Errorf("Unable to convert '%v' to UID", in[6:])
+	}
+
+	if isSpace(r) {
+		l.Emit(styp)
+		return sfn
+	}
+	return l.Errorf(
+		"Invalid character %v found for UID node itemType: %v", r, styp)
+}
+
 // Assumes that the current rune is '_'.
 func lexBlankNode(l *lex.Lexer, styp lex.ItemType,
 	sfn lex.StateFn) lex.StateFn {
 
-	r := l.Next()
-	if r != ':' {
-		return l.Errorf("Invalid input RDF Blank Node found at pos: %v", r)
-	}
 	// RDF Blank Node.
 	// TODO: At some point do checkings based on the guidelines. For now,
 	// just accept everything until space.
 	l.AcceptUntil(isSpace)
-	r = l.Peek()
+	r := l.Peek()
 	if r == lex.EOF {
 		return l.Errorf("Unexpected end of subject")
 	}
@@ -152,7 +174,13 @@ func lexSubject(l *lex.Lexer) lex.StateFn {
 
 	if r == '_' {
 		l.Depth += 1
-		return lexBlankNode(l, itemSubject, lexText)
+		r = l.Next()
+		if r == 'u' {
+			return lexUidNode(l, itemSubject, lexText)
+
+		} else if r == ':' {
+			return lexBlankNode(l, itemSubject, lexText)
+		} // else go to error
 	}
 
 	return l.Errorf("Invalid character during lexSubject: %v", r)
@@ -239,7 +267,13 @@ func lexObject(l *lex.Lexer) lex.StateFn {
 	}
 	if r == '_' {
 		l.Depth += 1
-		return lexBlankNode(l, itemObject, lexText)
+		r = l.Next()
+		if r == 'u' {
+			return lexUidNode(l, itemObject, lexText)
+
+		} else if r == ':' {
+			return lexBlankNode(l, itemObject, lexText)
+		}
 	}
 	if r == '"' {
 		l.Ignore()

@@ -69,8 +69,7 @@ func (nq NQuad) ToEdge() (result x.DirectedEdge, rerr error) {
 }
 
 func toUid(xid string, xidToUid map[string]uint64) (uid uint64, rerr error) {
-	id, present := xidToUid[xid]
-	if present {
+	if id, present := xidToUid[xid]; present {
 		return id, nil
 	}
 
