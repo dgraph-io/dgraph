@@ -50,7 +50,8 @@ var postingDir = flag.String("postings", "", "Directory to store posting lists")
 var uidDir = flag.String("uids", "", "XID UID posting lists directory")
 var mutationDir = flag.String("mutations", "", "Directory to store mutations")
 var port = flag.String("port", "8080", "Port to run server on.")
-var clientPort = flag.String("clientPort", "9090", "Port used to communicate with client on tcp")
+var clientPort = flag.String("clientPort", "9090",
+	"Port used to communicate with client.")
 var numcpu = flag.Int("numCpu", runtime.NumCPU(),
 	"Number of cores to be used by the process")
 var instanceIdx = flag.Uint64("instanceIdx", 0,
@@ -205,7 +206,11 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 // server is used to implement pb.DGraphServer
 type server struct{}
 
-func (s *server) Query(ctx context.Context, r *pb.GraphRequest) (gr *pb.GraphResponse, rerr error) {
+// This method is used to execute the query and return the response to the
+// client as a protocol buffer message.
+func (s *server) Query(ctx context.Context,
+	r *pb.GraphRequest) (*pb.GraphResponse, error) {
+	gr := *pb.GraphResponse{}
 	if len(r.Query) == 0 {
 		glog.Error("While reading query")
 		return gr, fmt.Errorf("Empty query")
@@ -245,6 +250,8 @@ func (s *server) Query(ctx context.Context, r *pb.GraphRequest) (gr *pb.GraphRes
 	return gr, err
 }
 
+// This function register a DGraph grpc server on the address, which is used
+// exchanging protocol buffer messages.
 func runGrpcServer(address string) error {
 	ln, err := net.Listen("tcp", address)
 	if err != nil {

@@ -289,6 +289,8 @@ func extract(r *task.Result) (*pb.Result, error) {
 	return result, nil
 }
 
+// This method performs a pre traversal on a subgraph and converts it to a
+// protocol buffer Graph Response.
 func (g *SubGraph) PreTraverse() (gr *pb.GraphResponse, rerr error) {
 	gr = &pb.GraphResponse{}
 	if len(g.query) == 0 {
