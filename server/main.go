@@ -205,17 +205,16 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 // server is used to implement pb.DGraphServer
 type server struct{}
 
-func (s *server) GetResponse(ctx context.Context, r *pb.GraphRequest) (gr *pb.GraphResponse, rerr error) {
-	q := []byte(r.Query)
-	if len(q) == 0 {
+func (s *server) Query(ctx context.Context, r *pb.GraphRequest) (gr *pb.GraphResponse, rerr error) {
+	if len(r.Query) == 0 {
 		glog.Error("While reading query")
 		return gr, fmt.Errorf("Empty query")
 	}
 
 	// TODO(pawan): Refactor query parsing and graph processing code to a common
-	// function used by pbQueryHandler and queryHandler
-	glog.WithField("q", string(q)).Debug("Query received.")
-	gq, _, err := gql.Parse(string(q))
+	// function used by Query and queryHandler
+	glog.WithField("q", r.Query).Debug("Query received.")
+	gq, _, err := gql.Parse(r.Query)
 	if err != nil {
 		x.Err(glog, err).Error("While parsing query")
 		return gr, err
@@ -226,7 +225,7 @@ func (s *server) GetResponse(ctx context.Context, r *pb.GraphRequest) (gr *pb.Gr
 		x.Err(glog, err).Error("While conversion to internal format")
 		return gr, err
 	}
-	glog.WithField("q", string(q)).Debug("Query parsed.")
+	glog.WithField("q", r.Query).Debug("Query parsed.")
 
 	rch := make(chan error)
 	go query.ProcessGraph(sg, rch)
@@ -236,17 +235,17 @@ func (s *server) GetResponse(ctx context.Context, r *pb.GraphRequest) (gr *pb.Gr
 		return gr, err
 	}
 
-	glog.WithField("q", string(q)).Debug("Graph processed.")
-	gr, err = sg.ToProtocolBuffer()
+	glog.WithField("q", r.Query).Debug("Graph processed.")
+	gr, err = sg.PreTraverse()
 	if err != nil {
-		x.Err(glog, err).Error("While converting to Json.")
+		x.Err(glog, err).Error("While converting to protocol buffer.")
 		return gr, err
 	}
 
 	return gr, err
 }
 
-func runServerForClient(address string) error {
+func runGrpcServer(address string) error {
 	ln, err := net.Listen("tcp", address)
 	if err != nil {
 		glog.Fatalf("While running server for client: %v", err)
@@ -306,7 +305,7 @@ func main() {
 
 	worker.Connect(addrs)
 
-	runServerForClient(":" + *clientPort)
+	runGrpcServer(":" + *clientPort)
 
 	http.HandleFunc("/query", queryHandler)
 	glog.WithField("port", *port).Info("Listening for requests...")

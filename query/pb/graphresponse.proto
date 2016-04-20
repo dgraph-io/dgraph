@@ -2,7 +2,7 @@ syntax="proto3";
 package pb;
 
 service DGraph {
-  rpc GetResponse (GraphRequest) returns (GraphResponse) {}
+  rpc Query (GraphRequest) returns (GraphResponse) {}
 }
 
 message UidList {

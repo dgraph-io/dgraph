@@ -28,13 +28,13 @@ import (
 )
 
 var glog = x.Log("client")
-var port = flag.String("port", "9090", "Port to communicate with server")
+var ip = flag.String("ip", "127.0.0.1:9090", "Port to communicate with server")
 var query = flag.String("query", "", "Query sent to the server")
 
 func main() {
 	flag.Parse()
 	// TODO(pawan): Pick address for server from config
-	conn, err := grpc.Dial("127.0.0.1:"+*port, grpc.WithInsecure())
+	conn, err := grpc.Dial(*ip, grpc.WithInsecure())
 	if err != nil {
 		x.Err(glog, err).Fatal("DialTCPConnection")
 	}
@@ -42,7 +42,7 @@ func main() {
 
 	c := pb.NewDGraphClient(conn)
 
-	r, err := c.GetResponse(context.Background(), &pb.GraphRequest{Query: *query})
+	r, err := c.Query(context.Background(), &pb.GraphRequest{Query: *query})
 	if err != nil {
 		x.Err(glog, err).Fatal("Error in getting response from server")
 	}

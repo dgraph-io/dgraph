@@ -252,22 +252,14 @@ func (g *SubGraph) ToJson(l *Latency) (js []byte, rerr error) {
 	return json.Marshal(r)
 }
 
-func preTraverse(g *SubGraph) (gr *pb.GraphResponse, rerr error) {
-	gr = &pb.GraphResponse{}
-	if len(g.query) == 0 {
-		return gr, nil
-	}
-
-	gr.Attribute = g.Attr
-	ro := flatbuffers.GetUOffsetT(g.result)
-	r := new(task.Result)
-	r.Init(g.result, ro)
-
+// This method take in a flatbuffer result, extracts values and uids from it
+// and converts it to a protocol buffer result
+func extract(r *task.Result) (*pb.Result, error) {
+	var result = &pb.Result{}
 	var ul task.UidList
-	result := &pb.Result{}
 	for i := 0; i < r.UidmatrixLength(); i++ {
 		if ok := r.Uidmatrix(&ul, i); !ok {
-			return gr, fmt.Errorf("While parsing UidList")
+			return result, fmt.Errorf("While parsing UidList")
 		}
 
 		uidList := &pb.UidList{}
@@ -281,12 +273,12 @@ func preTraverse(g *SubGraph) (gr *pb.GraphResponse, rerr error) {
 	var tv task.Value
 	for i := 0; i < r.ValuesLength(); i++ {
 		if ok := r.Values(&tv, i); !ok {
-			return gr, fmt.Errorf("While parsing value")
+			return result, fmt.Errorf("While parsing value")
 		}
 
 		var ival interface{}
 		if err := posting.ParseValue(&ival, tv.ValBytes()); err != nil {
-			return gr, err
+			return result, err
 		}
 
 		if ival == nil {
@@ -294,11 +286,29 @@ func preTraverse(g *SubGraph) (gr *pb.GraphResponse, rerr error) {
 		}
 		result.Values = append(result.Values, []byte(ival.(string)))
 	}
+	return result, nil
+}
+
+func (g *SubGraph) PreTraverse() (gr *pb.GraphResponse, rerr error) {
+	gr = &pb.GraphResponse{}
+	if len(g.query) == 0 {
+		return gr, nil
+	}
+
+	gr.Attribute = g.Attr
+	ro := flatbuffers.GetUOffsetT(g.result)
+	r := new(task.Result)
+	r.Init(g.result, ro)
+
+	result, err := extract(r)
+	if err != nil {
+		return gr, err
+	}
 
 	gr.Result = result
 
 	for _, child := range g.Children {
-		childPb, err := preTraverse(child)
+		childPb, err := child.PreTraverse()
 		if err != nil {
 			x.Err(glog, err).Error("Error while traversal")
 			return gr, err
@@ -306,16 +316,6 @@ func preTraverse(g *SubGraph) (gr *pb.GraphResponse, rerr error) {
 
 		gr.Children = append(gr.Children, childPb)
 	}
-	return gr, nil
-}
-
-func (g *SubGraph) ToProtocolBuffer() (gr *pb.GraphResponse, rerr error) {
-	gr, err := preTraverse(g)
-	if err != nil {
-		x.Err(glog, err).Error("Error while traversal")
-		return gr, err
-	}
-
 	return gr, nil
 }
 

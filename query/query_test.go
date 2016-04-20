@@ -320,7 +320,7 @@ func TestToJson(t *testing.T) {
 	fmt.Printf(string(js))
 }
 
-func TestToProtocolBuffer(t *testing.T) {
+func TestPreTraverse(t *testing.T) {
 	dir, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
 
@@ -353,7 +353,7 @@ func TestToProtocolBuffer(t *testing.T) {
 		t.Error(err)
 	}
 
-	ugr, err := sg.ToProtocolBuffer()
+	ugr, err := sg.PreTraverse()
 	if err != nil {
 		t.Error(err)
 	}
