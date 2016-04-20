@@ -28,7 +28,7 @@ import (
 )
 
 var glog = x.Log("client")
-var ip = flag.String("ip", "127.0.0.1:9090", "Port to communicate with server")
+var ip = flag.String("ip", "127.0.0.1:8081", "Port to communicate with server")
 var query = flag.String("query", "", "Query sent to the server")
 
 func main() {
