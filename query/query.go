@@ -26,6 +26,7 @@ import (
 	"github.com/Sirupsen/logrus"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
+	"github.com/dgraph-io/dgraph/query/pb"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
@@ -249,6 +250,75 @@ func (g *SubGraph) ToJson(l *Latency) (js []byte, rerr error) {
 
 	glog.Fatal("Shouldn't reach here.")
 	return json.Marshal(r)
+}
+
+// This method take in a flatbuffer result, extracts values and uids from it
+// and converts it to a protocol buffer result
+func extract(r *task.Result) (*pb.Result, error) {
+	var result = &pb.Result{}
+	var ul task.UidList
+	for i := 0; i < r.UidmatrixLength(); i++ {
+		if ok := r.Uidmatrix(&ul, i); !ok {
+			return result, fmt.Errorf("While parsing UidList")
+		}
+
+		uidList := &pb.UidList{}
+		for j := 0; j < ul.UidsLength(); j++ {
+			uid := ul.Uids(j)
+			uidList.Uids = append(uidList.Uids, uid)
+		}
+		result.Uidmatrix = append(result.Uidmatrix, uidList)
+	}
+
+	var tv task.Value
+	for i := 0; i < r.ValuesLength(); i++ {
+		if ok := r.Values(&tv, i); !ok {
+			return result, fmt.Errorf("While parsing value")
+		}
+
+		var ival interface{}
+		if err := posting.ParseValue(&ival, tv.ValBytes()); err != nil {
+			return result, err
+		}
+
+		if ival == nil {
+			ival = ""
+		}
+		result.Values = append(result.Values, []byte(ival.(string)))
+	}
+	return result, nil
+}
+
+// This method performs a pre traversal on a subgraph and converts it to a
+// protocol buffer Graph Response.
+func (g *SubGraph) PreTraverse() (gr *pb.GraphResponse, rerr error) {
+	gr = &pb.GraphResponse{}
+	if len(g.query) == 0 {
+		return gr, nil
+	}
+
+	gr.Attribute = g.Attr
+	ro := flatbuffers.GetUOffsetT(g.result)
+	r := new(task.Result)
+	r.Init(g.result, ro)
+
+	result, err := extract(r)
+	if err != nil {
+		return gr, err
+	}
+
+	gr.Result = result
+
+	for _, child := range g.Children {
+		childPb, err := child.PreTraverse()
+		if err != nil {
+			x.Err(glog, err).Error("Error while traversal")
+			return gr, err
+		}
+
+		gr.Children = append(gr.Children, childPb)
+	}
+	return gr, nil
 }
 
 func treeCopy(gq *gql.GraphQuery, sg *SubGraph) {

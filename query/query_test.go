@@ -319,3 +319,75 @@ func TestToJson(t *testing.T) {
 	}
 	fmt.Printf(string(js))
 }
+
+func TestPreTraverse(t *testing.T) {
+	dir, _ := populateGraph(t)
+	defer os.RemoveAll(dir)
+
+	query := `
+		{
+			me(_uid_:0x01) {
+				name
+				gender
+				status
+				friend {
+					name
+				}
+			}
+		}
+	`
+
+	gq, _, err := gql.Parse(query)
+	if err != nil {
+		t.Error(err)
+	}
+	sg, err := ToSubGraph(gq)
+	if err != nil {
+		t.Error(err)
+	}
+
+	ch := make(chan error)
+	go ProcessGraph(sg, ch)
+	err = <-ch
+	if err != nil {
+		t.Error(err)
+	}
+
+	ugr, err := sg.PreTraverse()
+	if err != nil {
+		t.Error(err)
+	}
+
+	if len(ugr.Children) != 4 {
+		t.Errorf("Expected len 4. Got: %v", ugr.Children)
+	}
+	child := ugr.Children[0]
+	if child.Attribute != "name" {
+		t.Errorf("Expected attr name. Got: %v", child.Attribute)
+	}
+	if string(child.Result.Values[0]) != "Michonne" {
+		t.Errorf("Expected value Michonne. Got %v",
+			string(child.Result.Values[0]))
+	}
+	child = ugr.Children[3]
+	if child.Attribute != "friend" {
+		t.Errorf("Expected attr friend. Got: %v", child.Attribute)
+	}
+	uids := child.Result.Uidmatrix[0].Uids
+	if uids[0] != 23 || uids[1] != 24 || uids[2] != 25 || uids[3] != 31 ||
+		uids[4] != 101 {
+		t.Errorf("Friend ids don't match")
+	}
+	// To check for name of friends
+	child = child.Children[0]
+	if child.Attribute != "name" {
+		t.Errorf("Expected attr friend. Got: %v", child.Attribute)
+	}
+
+	names := child.Result.Values
+
+	if string(names[0]) != "Rick Grimes" || string(names[1]) != "Glenn Rhee" ||
+		string(names[2]) != "Daryl Dixon" || string(names[3]) != "Andrea" {
+		t.Errorf("Names don't match")
+	}
+}

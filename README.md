@@ -92,14 +92,14 @@ $ tar -xzvf postings.tar.gz -C $DIR
 ```
 For quick testing, you can bring up 3 different processes of DGraph. You can of course, also set this up across multiple servers.
 ```
-go build . && ./server --instanceIdx 0 --mutations $DIR/m0 --port "8080" --postings $DIR/p0 --workers ":12345,:12346,:12347" --uids $DIR/uasync.final --workerport ":12345" &
-go build . && ./server --instanceIdx 1 --mutations $DIR/m1 --port "8081" --postings $DIR/p1 --workers ":12345,:12346,:12347" --workerport ":12346" &
-go build . && ./server --instanceIdx 2 --mutations $DIR/m2 --port "8082" --postings $DIR/p2 --workers ":12345,:12346,:12347" --workerport ":12347" &
+go build . && ./server --instanceIdx 0 --mutations $DIR/m0 --port 8080 --postings $DIR/p0 --workers ":12345,:12346,:12347" --uids $DIR/uasync.final --workerport ":12345" &
+go build . && ./server --instanceIdx 1 --mutations $DIR/m1 --port 8082 --postings $DIR/p1 --workers ":12345,:12346,:12347" --workerport ":12346" &
+go build . && ./server --instanceIdx 2 --mutations $DIR/m2 --port 8084 --postings $DIR/p2 --workers ":12345,:12346,:12347" --workerport ":12347" &
 ```
 Now you can run any of the queries mentioned in [Test Queries](https://github.com/dgraph-io/dgraph/wiki/Test-Queries).
 You can hit any of the 3 processes, they'll produce the same results.
 
-`curl localhost:8081/query -XPOST -d '{}'`
+`curl localhost:8080/query -XPOST -d '{}'`
 
 ## Installation
 Best way to do this is to refer to [Dockerfile](Dockerfile), which has the most complete
