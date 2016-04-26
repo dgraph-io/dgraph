@@ -162,7 +162,11 @@ func serveRequests(irwc io.ReadWriteCloser) {
 		sc := &conn.ServerCodec{
 			Rwc: irwc,
 		}
-		rpc.ServeRequest(sc)
+		glog.Info("Serving request from serveRequests")
+		if err := rpc.ServeRequest(sc); err != nil {
+			glog.WithField("method", "serveRequests").Info(err)
+			break
+		}
 	}
 }
 

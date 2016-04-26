@@ -252,11 +252,11 @@ func (s *server) Query(ctx context.Context,
 
 // This function register a DGraph grpc server on the address, which is used
 // exchanging protocol buffer messages.
-func runGrpcServer(address string) error {
+func runGrpcServer(address string) {
 	ln, err := net.Listen("tcp", address)
 	if err != nil {
 		glog.Fatalf("While running server for client: %v", err)
-		return err
+		return
 	}
 	glog.WithField("address", ln.Addr()).Info("Client Worker listening")
 
@@ -265,7 +265,7 @@ func runGrpcServer(address string) error {
 	if err = s.Serve(ln); err != nil {
 		glog.Fatalf("While serving gRpc requests", err)
 	}
-	return nil
+	return
 }
 
 func main() {
@@ -313,7 +313,7 @@ func main() {
 
 	worker.Connect(addrs)
 	// Grpc server runs on (port + 1)
-	runGrpcServer(fmt.Sprintf(":%d", *port+1))
+	go runGrpcServer(fmt.Sprintf(":%d", *port+1))
 
 	http.HandleFunc("/query", queryHandler)
 	glog.WithField("port", *port).Info("Listening for requests...")
