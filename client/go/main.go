@@ -31,29 +31,6 @@ var glog = x.Log("client")
 var ip = flag.String("ip", "127.0.0.1:8081", "Port to communicate with server")
 var q = flag.String("query", "", "Query sent to the server")
 
-func NumChildren(resp *pb.GraphResponse) int {
-	return len(resp.Children)
-}
-
-func HasValue(resp *pb.GraphResponse) bool {
-	for _, val := range resp.Result.Values {
-		if len(val) > 0 {
-			return true
-		}
-	}
-	return false
-}
-
-func Values(resp *pb.GraphResponse) []string {
-	values := []string{}
-	for _, val := range resp.Result.Values {
-		if len(val) > 0 {
-			values = append(values, string(val))
-		}
-	}
-	return values
-}
-
 func main() {
 	flag.Parse()
 	// TODO(pawan): Pick address for server from config
