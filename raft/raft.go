@@ -10,11 +10,14 @@ import (
 	"math"
 	"net"
 	"net/rpc"
+	"os"
 	"strconv"
 	"time"
 
 	"github.com/coreos/etcd/raft"
 	"github.com/coreos/etcd/raft/raftpb"
+	"github.com/coreos/etcd/wal"
+	"github.com/coreos/etcd/wal/walpb"
 	"github.com/dgraph-io/dgraph/cluster"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/store"
@@ -31,15 +34,18 @@ var (
 )
 
 type node struct {
-	id     uint64
-	addr   string
-	ctx    context.Context
-	pstore map[string]string
-	store  *raft.MemoryStorage
-	cfg    *raft.Config
-	raft   raft.Node
-	ticker <-chan time.Time
-	done   <-chan struct{}
+	id        uint64
+	addr      string
+	ctx       context.Context
+	pstore    map[string]string
+	store     *raft.MemoryStorage
+	cfg       *raft.Config
+	raft      raft.Node
+	wal       *wal.WAL
+	waldir    string
+	lastIndex uint64
+	ticker    <-chan time.Time
+	done      <-chan struct{}
 }
 
 type Worker struct {
@@ -125,13 +131,55 @@ func runServer(address string) error {
 	return nil
 }
 
+// openWAL returns a WAL ready for reading.
+func (n *node) openWAL() *wal.WAL {
+	if !wal.Exist(n.waldir) {
+		if err := os.Mkdir(n.waldir, 0750); err != nil {
+			log.Fatalf("raftexample: cannot create dir for wal (%v)", err)
+		}
+
+		w, err := wal.Create(n.waldir, nil)
+		if err != nil {
+			log.Fatalf("raftexample: create wal error (%v)", err)
+		}
+		w.Close()
+	}
+
+	w, err := wal.Open(n.waldir, walpb.Snapshot{})
+	if err != nil {
+		log.Fatalf("raftexample: error loading wal (%v)", err)
+	}
+
+	return w
+}
+
+// replayWAL replays WAL entries into the raft instance.
+func (n *node) replayWAL() *wal.WAL {
+	w := n.openWAL()
+	_, st, ents, err := w.ReadAll()
+	if err != nil {
+		log.Fatalf("raftexample: failed to read WAL (%v)", err)
+	}
+	// append to storage so raft starts at the right place in log
+	n.store.Append(ents)
+	// send nil once lastIndex is published so client knows commit channel is current
+	if len(ents) > 0 {
+		n.lastIndex = ents[len(ents)-1].Index
+	} /*else {
+		n.commitC <- nil
+	}*/
+	n.store.SetHardState(st)
+	return w
+}
+
 func newNode(id uint64, addr string, peers []raft.Peer) *node {
 	store := raft.NewMemoryStorage()
 	n := &node{
-		id:    id,
-		addr:  addr,
-		ctx:   context.TODO(),
-		store: store,
+		id:     id,
+		addr:   addr,
+		ctx:    context.TODO(),
+		store:  store,
+		waldir: fmt.Sprintf("raftexample-%d", id),
 		cfg: &raft.Config{
 			ID:              id,
 			ElectionTick:    5 * hb,
@@ -145,11 +193,20 @@ func newNode(id uint64, addr string, peers []raft.Peer) *node {
 		done:   make(chan struct{}),
 	}
 
-	n.raft = raft.StartNode(n.cfg, peers)
+	oldwal := wal.Exist(n.waldir)
+	n.wal = n.replayWAL()
+
+	if oldwal {
+		n.raft = raft.RestartNode(n.cfg)
+	} else {
+		n.raft = raft.StartNode(n.cfg, peers)
+	}
+
 	return n
 }
 
 func (n *node) run() {
+	defer n.wal.Close()
 	for {
 		select {
 		case <-n.ticker:
@@ -167,12 +224,27 @@ func (n *node) run() {
 					cc.Unmarshal(entry.Data)
 					n.raft.ApplyConfChange(cc)
 					if cc.Type == raftpb.ConfChangeRemoveNode {
+						// Make sure the node doesn't use the same NodeId as the one that crashed
+						/*
+							if cur_node.id == cc.NodeID {
+								RemoveNodeFromCluster(cur_node.id)
+								cur_node.raft.Stop()
+								cur_node = newNode(*instanceIdx*1000, "", []raft.Peer{{ID: *instanceIdx}})
+								master_ip := getMasterIp(*clusterIP)
+								master_id := connectWith(master_ip)
+								getPeerListFrom(master_id)
+								connectWithPeers()
+								go cur_node.run()
+								proposeJoin(master_id)
+								glog.Infof("Joined with a new NodeID %v", cur_node.id)
+							}*/
 						glog.Infof("Removing node %v", cc.NodeID)
 						RemoveStaleKeys(peers[cc.NodeID])
 						delete(peers, cc.NodeID)
 						delete(pools, cc.NodeID)
 					}
 				}
+
 			}
 			n.raft.Advance()
 		case <-n.done:
@@ -182,6 +254,7 @@ func (n *node) run() {
 }
 
 func (n *node) saveToStorage(hardState raftpb.HardState, entries []raftpb.Entry, snapshot raftpb.Snapshot) {
+	n.wal.Save(hardState, entries)
 	n.store.Append(entries)
 
 	if !raft.IsEmptyHardState(hardState) {
@@ -228,7 +301,7 @@ func sendOverNetwork(ctx context.Context, message raftpb.Message) {
 		if cur_node.id == cur_node.raft.Status().Lead {
 			glog.WithField("Id", message.To).Infof("")
 			cur_node.raft.ReportUnreachable(message.To)
-			//RemoveNodeFromCluster(message.To)
+			RemoveNodeFromCluster(message.To)
 		}
 		return
 	}
@@ -273,6 +346,7 @@ func RemoveStaleKeys(addr string) {
 	}
 }
 
+/*
 func requestOtherNodesToRemove(id uint64) {
 	for idRem, _ := range peers {
 		go removeFromPeerList(strconv.Itoa(int(id)), idRem)
@@ -288,7 +362,7 @@ func removeFromPeerList(id string, idRem uint64) {
 		glog.WithField("call", "Worker.RemovePeer").Fatal(err)
 	}
 }
-
+*/
 /*
 func (w *Worker) RemovePeer(query *conn.Query, reply *conn.Reply) error {
 	id, _ := strconv.Atoi(string(query.Data))
@@ -563,9 +637,7 @@ func main() {
 		getPeerListFrom(master_id)
 		connectWithPeers()
 		go cur_node.run()
-		if !*restart {
-			proposeJoin(master_id)
-		}
+		proposeJoin(master_id)
 	} else {
 		connectWithPeers()
 		go cur_node.run()
