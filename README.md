@@ -28,7 +28,7 @@ Got questions or issues? Talk to us [via discuss](https://discuss.dgraph.io).
 
 `Mar 2016 - Branch v0.2`
 This is the first truly distributed version of DGraph.
-Please see the [release notes here](https://github.com/dgraph-io/dgraph/wiki/DGraph-v0.2-Release).
+Please see the [release notes here](https://discuss.dgraph.io/t/dgraph-v0-2-release/17).
 
 `MVP launch - Dec 2015 - Branch v0.1`
 This is a minimum viable product, alpha release of DGraph. **It's not meant for production use.**
@@ -267,7 +267,7 @@ Consecutive runs of the same query took much lesser time (80 to 100ms), due to p
 ```
 
 ## Queries and Mutations
-You can see a list of [sample queries here](https://github.com/dgraph-io/dgraph/wiki/Test-Queries).
+You can see a list of [sample queries here](https://discuss.dgraph.io/t/list-of-test-queries/22).
 DGraph also supports mutations via GraphQL syntax.
 Because GraphQL mutations don't contain complete data, the mutation syntax uses [RDF NQuad format](https://www.w3.org/TR/n-quads/).
 ```
@@ -305,7 +305,7 @@ The query portion is executed after the mutation, so this would return `greg` as
 
 
 ## Contributing to DGraph
-- Please see [this wiki page](https://github.com/dgraph-io/dgraph/wiki/Contributing-to-DGraph) for guidelines on contributions.
+- Please see [this wiki page](https://discuss.dgraph.io/t/contributing-to-dgraph/20) for guidelines on contributions.
 
 ## Contact
 - Please use [discuss.dgraph.io](https://discuss.dgraph.io) for documentation, questions and discussions.
