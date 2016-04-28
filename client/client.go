@@ -91,19 +91,18 @@ func (e *Entity) HasValue(property string) bool {
 // This method returns the value corresponding to a property if one exists.
 func (e *Entity) Value(property string) []byte {
 	for _, predChild := range e.gr.Children {
-		if len(predChild.Children) > 0 || predChild.Attribute != property {
-			continue
+		if predChild.Attribute == property {
+			idx := indexOf(e.uid, predChild.Query.Uids)
+			if idx == -1 {
+				glog.WithFields(logrus.Fields{
+					"uid":            e.uid,
+					"attribute":      e.Attribute,
+					"childAttribute": predChild.Attribute,
+				}).Fatal("Attribute with uid not found in child Query uids")
+				return []byte{}
+			}
+			return predChild.Result.Values[idx]
 		}
-		idx := indexOf(e.uid, predChild.Query.Uids)
-		if idx == -1 {
-			glog.WithFields(logrus.Fields{
-				"uid":            e.uid,
-				"attribute":      e.Attribute,
-				"childAttribute": predChild.Attribute,
-			}).Fatal("Attribute with uid not found in child Query uids")
-			return []byte{}
-		}
-		return predChild.Result.Values[idx]
 	}
 	return []byte{}
 }
