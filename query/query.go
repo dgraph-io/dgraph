@@ -240,7 +240,10 @@ func (g *SubGraph) ToJson(l *Latency) (js []byte, rerr error) {
 	l.Json = time.Since(l.Start) - l.Parsing - l.Processing
 	if len(r) == 1 {
 		for _, ival := range r {
-			m := ival.(map[string]interface{})
+			var m map[string]interface{}
+			if ival != nil {
+				m = ival.(map[string]interface{})
+			}
 			m["server_latency"] = l.ToMap()
 			return json.Marshal(m)
 		}
