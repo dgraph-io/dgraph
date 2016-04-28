@@ -142,43 +142,59 @@ func TestQuery(t *testing.T) {
 		return
 	}
 
-	if NumChildren(resp) != 4 {
-		t.Errorf("Expected 4 children, Got: %v", NumChildren(resp))
+	root := NewEntity(resp)
+
+	if root.Attribute != "_root_" {
+		t.Errorf("Expected attribute _root_, Got: %v", root.Attribute)
 	}
-	if HasValue(resp) {
-		t.Errorf("Expected HasValue to return false, Got: true")
+	if len(root.Properties()) != 3 {
+		t.Errorf("Expected 3 properties for entity, Got: %v",
+			len(root.Properties()))
+	}
+	if !root.HasValue("name") {
+		t.Errorf("Expected entity to have value for name, Got: false")
+	}
+	if root.HasValue("names") {
+		t.Errorf("Expected entity to not have value for names, Got: true")
+	}
+	if string(root.Value("name")) != "Michonne" {
+		t.Errorf("Expected value for name to be Michonne, Got: %v",
+			string(root.Value("name")))
+	}
+	if len(root.Value("names")) != 0 {
+		t.Errorf("Expected values for names to return empty byte slice, Got: len",
+			len(root.Value("names")))
+	}
+	if root.NumChildren() != 5 {
+		t.Errorf("Expected entity to have 5 children, Got: %v", root.NumChildren())
 	}
 
-	child := resp.Children[0]
-	if child.Attribute != "name" {
-		t.Errorf("Expected attribute name, Got: %v", child.Attribute)
+	child := root.Children()[0]
+	if !child.HasValue("name") {
+		t.Errorf("Expected entity to have value for name, Got: false")
 	}
-	if !HasValue(child) {
-		t.Errorf("Expected HasValue to return true, Got: false")
+	if string(child.Value("name")) != "Rick Grimes" {
+		t.Errorf("Expected child to have name value Rick Grimes, Got: ",
+			string(child.Value("name")))
 	}
-	if Values(child)[0] != "Michonne" {
-		t.Errorf("Expected Value to return Michonee, Got %v", Values(child)[0])
+	child = root.Children()[1]
+	if string(child.Value("name")) != "Glenn Rhee" {
+		t.Errorf("Expected child to have name value Glenn Rhee, Got: ",
+			string(child.Value("name")))
 	}
-
-	child = resp.Children[3]
-	if child.Attribute != "friend" {
-		t.Errorf("Expected attribute friend, Got: %v", child.Attribute)
+	child = root.Children()[2]
+	if string(child.Value("name")) != "Daryl Dixon" {
+		t.Errorf("Expected child to have name value Daryl Dixon, Got: ",
+			string(child.Value("name")))
 	}
-	if NumChildren(child) != 1 {
-		t.Errorf("Expected 1 child, Got: %v", NumChildren(child))
+	child = root.Children()[3]
+	if string(child.Value("name")) != "Andrea" {
+		t.Errorf("Expected child to have name value Andrea, Got: ",
+			string(child.Value("name")))
 	}
-	if HasValue(child) {
-		t.Errorf("Expected HasValue to return false, Got: true")
-	}
-
-	child = child.Children[0]
-	if child.Attribute != "name" {
-		t.Errorf("Expected attribute name, Got: %v", child.Attribute)
-	}
-	if !HasValue(child) {
-		t.Errorf("Expected HasValue to return true, Got: false")
-	}
-	if len(Values(child)) != 4 {
-		t.Errorf("Expected 4 Values. Got: %v", len(Values(child)))
+	child = root.Children()[4]
+	if string(child.Value("name")) != "" {
+		t.Errorf("Expected child to have name empty name value, Got: ",
+			string(child.Value("name")))
 	}
 }

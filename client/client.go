@@ -18,25 +18,104 @@ package client
 
 import "github.com/dgraph-io/dgraph/query/pb"
 
-func NumChildren(resp *pb.GraphResponse) int {
-	return len(resp.Children)
+type Entity struct {
+	Attribute string
+	values    map[string][]byte
+	gr        *pb.GraphResponse // Reference to iteratively build the entity
+	uid       uint64
+	children  []*Entity
 }
 
-func HasValue(resp *pb.GraphResponse) bool {
-	for _, val := range resp.Result.Values {
-		if len(val) > 0 {
-			return true
+// This function performs a binary search on the uids slice and returns the
+// index at which it finds the uid, else returns -1
+func search(uid uint64, uids []uint64) int {
+	low, mid, high := 0, 0, len(uids)-1
+	for low <= high {
+		mid = (low + high) / 2
+		if uids[mid] == uid {
+			return mid
+		} else if uids[mid] > uid {
+			high = mid - 1
+		} else {
+			low = mid + 1
 		}
 	}
-	return false
+	return -1
 }
 
-func Values(resp *pb.GraphResponse) []string {
-	values := []string{}
-	for _, val := range resp.Result.Values {
-		if len(val) > 0 {
-			values = append(values, string(val))
+// This method populates the values and children for an entity
+func (e *Entity) populate() {
+	m := make(map[string][]byte)
+	for _, grChild := range e.gr.Children {
+		// Index of the uid of the parent node in the query uids of the child. This
+		// is used to get the appropriate value or uidlist for the child.
+		// TODO(pawan) - Log error if i == -1
+		i := search(e.uid, grChild.Query.Uids)
+		// This means its a leaf node
+		if len(grChild.Children) == 0 {
+			m[grChild.Attribute] = grChild.Result.Values[i]
+		} else {
+			// An entity would have as many children as the length of UidList for its
+			// child node.
+			for _, uid := range grChild.Result.Uidmatrix[i].Uids {
+				cEntity := new(Entity)
+				cEntity.gr = grChild
+				cEntity.Attribute = grChild.Attribute
+				cEntity.uid = uid
+				e.children = append(e.children, cEntity)
+			}
 		}
 	}
-	return values
+	e.values = m
+}
+
+// This method is used to initialize the root entity
+func NewEntity(root *pb.GraphResponse) *Entity {
+	e := new(Entity)
+	e.Attribute = root.Attribute
+	e.uid = root.Result.Uidmatrix[0].Uids[0]
+	e.gr = root
+	e.populate()
+	return e
+}
+
+// This method returns the list of properties for an entity.
+func (e *Entity) Properties() []string {
+	properties := make([]string, len(e.values))
+	i := 0
+	for k := range e.values {
+		properties[i] = k
+		i++
+	}
+	return properties
+}
+
+// This method returns whether a property exists for an entity or not.
+func (e *Entity) HasValue(property string) bool {
+	_, ok := e.values[property]
+	return ok
+}
+
+// This method returns the value corresponding to a property if one exists.
+func (e *Entity) Value(property string) []byte {
+	val, _ := e.values[property]
+	return val
+}
+
+// This method populates the children for an entity and returns them.
+func (e *Entity) Children() []*Entity {
+	for _, child := range e.children {
+		// This makes sure that children are populated only once.
+		// TODO(pawan) - Discuss with Manish if it makes sense to have a flag for
+		// this.
+		if len(child.children) == 0 && child.values == nil {
+			child.populate()
+		}
+	}
+	return e.children
+}
+
+// This method returns the number of children for an entity.
+func (e *Entity) NumChildren() int {
+	return len(e.children)
 }
