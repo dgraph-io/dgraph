@@ -16,7 +16,12 @@
 
 package client
 
-import "github.com/dgraph-io/dgraph/query/pb"
+import (
+	"github.com/dgraph-io/dgraph/query/pb"
+	"github.com/dgraph-io/dgraph/x"
+)
+
+var glog = x.Log("client")
 
 type Entity struct {
 	Attribute string
@@ -28,7 +33,7 @@ type Entity struct {
 
 // This function performs a binary search on the uids slice and returns the
 // index at which it finds the uid, else returns -1
-func search(uid uint64, uids []uint64) int {
+func indexOf(uid uint64, uids []uint64) int {
 	low, mid, high := 0, 0, len(uids)-1
 	for low <= high {
 		mid = (low + high) / 2
@@ -43,44 +48,39 @@ func search(uid uint64, uids []uint64) int {
 	return -1
 }
 
-// This method populates the values and children for an entity
-func (e *Entity) populate() {
-	m := make(map[string][]byte)
-	for _, grChild := range e.gr.Children {
-		// Index of the uid of the parent node in the query uids of the child. This
-		// is used to get the appropriate value or uidlist for the child.
-		// TODO(pawan) - Log error if i == -1
-		i := search(e.uid, grChild.Query.Uids)
-		// This means its a leaf node
-		if len(grChild.Children) == 0 {
-			m[grChild.Attribute] = grChild.Result.Values[i]
-		} else {
-			// An entity would have as many children as the length of UidList for its
-			// child node.
-			for _, uid := range grChild.Result.Uidmatrix[i].Uids {
-				cEntity := new(Entity)
-				cEntity.gr = grChild
-				cEntity.Attribute = grChild.Attribute
-				cEntity.uid = uid
-				e.children = append(e.children, cEntity)
-			}
-		}
-	}
-	e.values = m
-}
-
 // This method is used to initialize the root entity
 func NewEntity(root *pb.GraphResponse) *Entity {
 	e := new(Entity)
 	e.Attribute = root.Attribute
 	e.uid = root.Result.Uidmatrix[0].Uids[0]
 	e.gr = root
-	e.populate()
 	return e
 }
 
-// This method returns the list of properties for an entity.
+// This method populates and returns the list of properties for an entity.
 func (e *Entity) Properties() []string {
+	// This means properties have not been populated yet or the entity doesn't
+	// have any properties.
+	if len(e.values) == 0 {
+		m := make(map[string][]byte)
+		if e.gr == nil {
+			glog.Fatalf("Nil graphResponse for entity with Attribute: %v",
+				e.Attribute)
+		}
+		for _, grChild := range e.gr.Children {
+			idx := indexOf(e.uid, grChild.Query.Uids)
+			if idx == -1 {
+				glog.Fatalf("Expected uid: %v to exist for Entity: %v in query uids"+
+					"for child: %v", e.uid, e.Attribute, grChild.Attribute)
+			}
+			// This means its a leaf node and can be added as a property for enity.
+			if len(grChild.Children) == 0 {
+				m[grChild.Attribute] = grChild.Result.Values[idx]
+			}
+		}
+		e.values = m
+	}
+
 	properties := make([]string, len(e.values))
 	i := 0
 	for k := range e.values {
@@ -92,24 +92,45 @@ func (e *Entity) Properties() []string {
 
 // This method returns whether a property exists for an entity or not.
 func (e *Entity) HasValue(property string) bool {
+	e.Properties()
 	_, ok := e.values[property]
 	return ok
 }
 
 // This method returns the value corresponding to a property if one exists.
 func (e *Entity) Value(property string) []byte {
+	e.Properties()
 	val, _ := e.values[property]
 	return val
 }
 
-// This method populates the children for an entity and returns them.
+// This method creates the children for an entity and returns them.
 func (e *Entity) Children() []*Entity {
-	for _, child := range e.children {
-		// This makes sure that children are populated only once.
-		// TODO(pawan) - Discuss with Manish if it makes sense to have a flag for
-		// this.
-		if len(child.children) == 0 && child.values == nil {
-			child.populate()
+	// If length of children is zero, that means children have not been created
+	// yet or no Child nodes exist
+	if len(e.children) == 0 {
+		if e.gr == nil {
+			glog.Fatalf("Nil graphResponse for entity with Attribute: %v",
+				e.Attribute)
+		}
+		for _, grChild := range e.gr.Children {
+			// Index of the uid of the parent node in the query uids of the child.
+			// This is used to get the appropriate uidList for the child
+			idx := indexOf(e.uid, grChild.Query.Uids)
+			if idx == -1 {
+				glog.Fatalf("Expected uid: %v to exist for Entity: %v in query uids"+
+					"for child: %v", e.uid, e.Attribute, grChild.Attribute)
+			}
+			if len(grChild.Children) != 0 {
+				// Creating a child for each entry in the uidList
+				for _, uid := range grChild.Result.Uidmatrix[idx].Uids {
+					cEntity := new(Entity)
+					cEntity.gr = grChild
+					cEntity.Attribute = grChild.Attribute
+					cEntity.uid = uid
+					e.children = append(e.children, cEntity)
+				}
+			}
 		}
 	}
 	return e.children
@@ -117,5 +138,5 @@ func (e *Entity) Children() []*Entity {
 
 // This method returns the number of children for an entity.
 func (e *Entity) NumChildren() int {
-	return len(e.children)
+	return len(e.Children())
 }
