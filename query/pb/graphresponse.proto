@@ -1,3 +1,6 @@
+// To compile this file run the command below from inside the pb directory
+// protoc --go_out=plugins=grpc:. *.proto
+
 syntax="proto3";
 package pb;
 
@@ -21,5 +24,6 @@ message GraphRequest {
 message GraphResponse {
   string attribute = 1;
   Result result = 2;
-  repeated GraphResponse children = 3; // Each node can have multiple children
+  UidList query = 3;
+  repeated GraphResponse children = 4; // Each node can have multiple children
 }

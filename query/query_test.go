@@ -383,6 +383,9 @@ func TestPreTraverse(t *testing.T) {
 	if child.Attribute != "name" {
 		t.Errorf("Expected attr friend. Got: %v", child.Attribute)
 	}
+	if len(child.Query.Uids) != 5 {
+		t.Errorf("Expected 5 uids in query. Got: %v", len(child.Query.Uids))
+	}
 
 	names := child.Result.Values
 

@@ -254,12 +254,19 @@ func (g *SubGraph) ToJson(l *Latency) (js []byte, rerr error) {
 
 // This method take in a flatbuffer result, extracts values and uids from it
 // and converts it to a protocol buffer result
-func extract(r *task.Result) (*pb.Result, error) {
-	var result = &pb.Result{}
+func extract(q *task.Query, r *task.Result) (*pb.UidList, *pb.Result, error) {
+	result := &pb.Result{}
+	query := &pb.UidList{}
 	var ul task.UidList
+
+	for i := 0; i < q.UidsLength(); i++ {
+		uid := q.Uids(i)
+		query.Uids = append(query.Uids, uid)
+	}
+
 	for i := 0; i < r.UidmatrixLength(); i++ {
 		if ok := r.Uidmatrix(&ul, i); !ok {
-			return result, fmt.Errorf("While parsing UidList")
+			return query, result, fmt.Errorf("While parsing UidList")
 		}
 
 		uidList := &pb.UidList{}
@@ -273,12 +280,12 @@ func extract(r *task.Result) (*pb.Result, error) {
 	var tv task.Value
 	for i := 0; i < r.ValuesLength(); i++ {
 		if ok := r.Values(&tv, i); !ok {
-			return result, fmt.Errorf("While parsing value")
+			return query, result, fmt.Errorf("While parsing value")
 		}
 
 		var ival interface{}
 		if err := posting.ParseValue(&ival, tv.ValBytes()); err != nil {
-			return result, err
+			return query, result, err
 		}
 
 		if ival == nil {
@@ -286,7 +293,7 @@ func extract(r *task.Result) (*pb.Result, error) {
 		}
 		result.Values = append(result.Values, []byte(ival.(string)))
 	}
-	return result, nil
+	return query, result, nil
 }
 
 // This method performs a pre traversal on a subgraph and converts it to a
@@ -302,11 +309,16 @@ func (g *SubGraph) PreTraverse() (gr *pb.GraphResponse, rerr error) {
 	r := new(task.Result)
 	r.Init(g.result, ro)
 
-	result, err := extract(r)
+	uo := flatbuffers.GetUOffsetT(g.query)
+	q := new(task.Query)
+	q.Init(g.query, uo)
+
+	query, result, err := extract(q, r)
 	if err != nil {
 		return gr, err
 	}
 
+	gr.Query = query
 	gr.Result = result
 
 	for _, child := range g.Children {
