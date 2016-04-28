@@ -151,6 +151,10 @@ func TestQuery(t *testing.T) {
 		t.Errorf("Expected 3 properties for entity, Got: %v",
 			len(root.Properties()))
 	}
+	if root.Properties()[0] != "name" {
+		t.Errorf("Expected first property to be name, Got: %v",
+			root.Properties()[0])
+	}
 	if !root.HasValue("name") {
 		t.Errorf("Expected entity to have value for name, Got: false")
 	}
@@ -172,6 +176,13 @@ func TestQuery(t *testing.T) {
 	child := root.Children()[0]
 	if !child.HasValue("name") {
 		t.Errorf("Expected entity to have value for name, Got: false")
+	}
+	if child.HasValue("gender") {
+		t.Errorf("Expected entity to not have value for gender, Got: true")
+	}
+	if child.NumChildren() != 0 {
+		t.Errorf("Expected entity to have zero children, Got: %v",
+			child.NumChildren())
 	}
 	if string(child.Value("name")) != "Rick Grimes" {
 		t.Errorf("Expected child to have name value Rick Grimes, Got: ",

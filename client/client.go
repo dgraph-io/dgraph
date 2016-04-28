@@ -17,6 +17,7 @@
 package client
 
 import (
+	"github.com/Sirupsen/logrus"
 	"github.com/dgraph-io/dgraph/query/pb"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -25,7 +26,6 @@ var glog = x.Log("client")
 
 type Entity struct {
 	Attribute string
-	values    map[string][]byte
 	gr        *pb.GraphResponse // Reference to iteratively build the entity
 	uid       uint64
 	children  []*Entity
@@ -57,83 +57,94 @@ func NewEntity(root *pb.GraphResponse) *Entity {
 	return e
 }
 
-// This method populates and returns the list of properties for an entity.
+// This method returns the list of properties for an entity.
 func (e *Entity) Properties() []string {
-	// This means properties have not been populated yet or the entity doesn't
-	// have any properties.
-	if len(e.values) == 0 {
-		m := make(map[string][]byte)
-		if e.gr == nil {
-			glog.Fatalf("Nil graphResponse for entity with Attribute: %v",
-				e.Attribute)
-		}
-		for _, grChild := range e.gr.Children {
-			idx := indexOf(e.uid, grChild.Query.Uids)
-			if idx == -1 {
-				glog.Fatalf("Expected uid: %v to exist for Entity: %v in query uids"+
-					"for child: %v", e.uid, e.Attribute, grChild.Attribute)
-			}
-			// This means its a leaf node and can be added as a property for enity.
-			if len(grChild.Children) == 0 {
-				m[grChild.Attribute] = grChild.Result.Values[idx]
-			}
-		}
-		e.values = m
+	m := []string{}
+	if e.gr == nil {
+		glog.WithField("attribute", e.Attribute).Fatal("Nil graphResponse")
+		return m
 	}
 
-	properties := make([]string, len(e.values))
-	i := 0
-	for k := range e.values {
-		properties[i] = k
-		i++
+	for _, predChild := range e.gr.Children {
+		// Skipping non-leaf nodes.
+		if len(predChild.Children) > 0 {
+			continue
+		}
+		m = append(m, predChild.Attribute)
 	}
-	return properties
+	return m
 }
 
 // This method returns whether a property exists for an entity or not.
 func (e *Entity) HasValue(property string) bool {
-	e.Properties()
-	_, ok := e.values[property]
-	return ok
+	for _, predChild := range e.gr.Children {
+		if len(predChild.Children) > 0 {
+			continue
+		}
+		if predChild.Attribute == property {
+			return true
+		}
+	}
+	return false
 }
 
 // This method returns the value corresponding to a property if one exists.
 func (e *Entity) Value(property string) []byte {
-	e.Properties()
-	val, _ := e.values[property]
-	return val
+	for _, predChild := range e.gr.Children {
+		if len(predChild.Children) > 0 || predChild.Attribute != property {
+			continue
+		}
+		idx := indexOf(e.uid, predChild.Query.Uids)
+		if idx == -1 {
+			glog.WithFields(logrus.Fields{
+				"uid":            e.uid,
+				"attribute":      e.Attribute,
+				"childAttribute": predChild.Attribute,
+			}).Fatal("Attribute with uid not found in child Query uids")
+			return []byte{}
+		}
+		return predChild.Result.Values[idx]
+	}
+	return []byte{}
 }
 
 // This method creates the children for an entity and returns them.
 func (e *Entity) Children() []*Entity {
+	var children []*Entity
 	// If length of children is zero, that means children have not been created
 	// yet or no Child nodes exist
-	if len(e.children) == 0 {
-		if e.gr == nil {
-			glog.Fatalf("Nil graphResponse for entity with Attribute: %v",
-				e.Attribute)
+	if len(e.children) > 0 {
+		return e.children
+	}
+	if e.gr == nil {
+		glog.WithField("attribute", e.Attribute).Fatal("Nil graphResponse")
+		return children
+	}
+	for _, predChild := range e.gr.Children {
+		// Index of the uid of the parent node in the query uids of the child.
+		// This is used to get the appropriate uidList for the child
+		idx := indexOf(e.uid, predChild.Query.Uids)
+		if idx == -1 {
+			glog.WithFields(logrus.Fields{
+				"uid":            e.uid,
+				"attribute":      e.Attribute,
+				"childAttribute": predChild.Attribute,
+			}).Fatal("Attribute with uid not found in child Query uids")
+			return children
 		}
-		for _, grChild := range e.gr.Children {
-			// Index of the uid of the parent node in the query uids of the child.
-			// This is used to get the appropriate uidList for the child
-			idx := indexOf(e.uid, grChild.Query.Uids)
-			if idx == -1 {
-				glog.Fatalf("Expected uid: %v to exist for Entity: %v in query uids"+
-					"for child: %v", e.uid, e.Attribute, grChild.Attribute)
-			}
-			if len(grChild.Children) != 0 {
-				// Creating a child for each entry in the uidList
-				for _, uid := range grChild.Result.Uidmatrix[idx].Uids {
-					cEntity := new(Entity)
-					cEntity.gr = grChild
-					cEntity.Attribute = grChild.Attribute
-					cEntity.uid = uid
-					e.children = append(e.children, cEntity)
-				}
+		if len(predChild.Children) != 0 {
+			// Creating a child for each entry in the uidList
+			for _, uid := range predChild.Result.Uidmatrix[idx].Uids {
+				cEntity := new(Entity)
+				cEntity.gr = predChild
+				cEntity.Attribute = predChild.Attribute
+				cEntity.uid = uid
+				children = append(children, cEntity)
 			}
 		}
 	}
-	return e.children
+	e.children = children
+	return children
 }
 
 // This method returns the number of children for an entity.
