@@ -473,7 +473,9 @@ func sortedUniqueUids(r *task.Result) (sorted []uint64, rerr error) {
 	return sorted, nil
 }
 
-func ProcessGraph(sg *SubGraph, rch chan error) {
+func ProcessGraph(sg *SubGraph, rch chan error, td time.Duration) {
+	timeout := time.Now().Add(td)
+
 	var err error
 	if len(sg.query) > 0 && sg.Attr != "_root_" {
 		sg.result, err = worker.ProcessTaskOverNetwork(sg.query)
@@ -515,6 +517,13 @@ func ProcessGraph(sg *SubGraph, rch chan error) {
 		return
 	}
 
+	timeleft := timeout.Sub(time.Now())
+	if timeleft < 0 {
+		glog.WithField("attr", sg.Attr).Error("Query timeout before children")
+		rch <- fmt.Errorf("Query timeout before children")
+		return
+	}
+
 	// Let's execute it in a tree fashion. Each SubGraph would break off
 	// as many goroutines as it's children; which would then recursively
 	// do the same thing.
@@ -523,21 +532,28 @@ func ProcessGraph(sg *SubGraph, rch chan error) {
 	for i := 0; i < len(sg.Children); i++ {
 		child := sg.Children[i]
 		child.query = createTaskQuery(child.Attr, sorted)
-		go ProcessGraph(child, childchan)
+		go ProcessGraph(child, childchan, timeleft)
 	}
 
+	tchan := time.After(timeleft)
 	// Now get all the results back.
 	for i := 0; i < len(sg.Children); i++ {
-		err = <-childchan
-		glog.WithFields(logrus.Fields{
-			"num_children": len(sg.Children),
-			"index":        i,
-			"attr":         sg.Children[i].Attr,
-			"err":          err,
-		}).Debug("Reply from child")
-		if err != nil {
-			x.Err(glog, err).Error("While processing child task.")
-			rch <- err
+		select {
+		case err = <-childchan:
+			glog.WithFields(logrus.Fields{
+				"num_children": len(sg.Children),
+				"index":        i,
+				"attr":         sg.Children[i].Attr,
+				"err":          err,
+			}).Debug("Reply from child")
+			if err != nil {
+				x.Err(glog, err).Error("While processing child task.")
+				rch <- err
+				return
+			}
+		case <-tchan:
+			glog.WithField("attr", sg.Attr).Error("Query timeout after children")
+			rch <- fmt.Errorf("Query timeout after children")
 			return
 		}
 	}

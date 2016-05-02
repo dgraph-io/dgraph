@@ -214,7 +214,7 @@ func TestProcessGraph(t *testing.T) {
 	}
 
 	ch := make(chan error)
-	go ProcessGraph(sg, ch)
+	go ProcessGraph(sg, ch, time.Minute)
 	err = <-ch
 	if err != nil {
 		t.Error(err)
@@ -306,7 +306,7 @@ func TestToJson(t *testing.T) {
 	}
 
 	ch := make(chan error)
-	go ProcessGraph(sg, ch)
+	go ProcessGraph(sg, ch, time.Minute)
 	err = <-ch
 	if err != nil {
 		t.Error(err)
@@ -347,7 +347,7 @@ func TestPreTraverse(t *testing.T) {
 	}
 
 	ch := make(chan error)
-	go ProcessGraph(sg, ch)
+	go ProcessGraph(sg, ch, time.Minute)
 	err = <-ch
 	if err != nil {
 		t.Error(err)

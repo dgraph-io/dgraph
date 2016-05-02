@@ -177,7 +177,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	glog.WithField("q", string(q)).Debug("Query parsed.")
 
 	rch := make(chan error)
-	go query.ProcessGraph(sg, rch)
+	go query.ProcessGraph(sg, rch, time.Minute)
 	err = <-rch
 	if err != nil {
 		x.Err(glog, err).Error("While executing query")
@@ -233,7 +233,7 @@ func (s *server) Query(ctx context.Context,
 	glog.WithField("q", req.Query).Debug("Query parsed.")
 
 	rch := make(chan error)
-	go query.ProcessGraph(sg, rch)
+	go query.ProcessGraph(sg, rch, time.Minute)
 	err = <-rch
 	if err != nil {
 		x.Err(glog, err).Error("While executing query")
