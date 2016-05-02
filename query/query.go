@@ -253,13 +253,14 @@ func (g *SubGraph) ToJson(l *Latency) (js []byte, rerr error) {
 	return json.Marshal(r)
 }
 
+// Struct to retrieve values from flatbuffers, so that they can later be used
+// to control the entity based protocol buffer subgraph.
 type result struct {
 	values    [][]byte
 	uidmatrix [][]uint64
 }
 
-// This method take in a flatbuffer result, extracts values and uids from it
-// and converts it to a protocol buffer result
+// This method takes in a flatbuffer query and result extracts values.
 func extract(q *task.Query, r *task.Result) ([]uint64, *result, error) {
 	re := new(result)
 	var qu []uint64
@@ -303,8 +304,8 @@ func extract(q *task.Query, r *task.Result) ([]uint64, *result, error) {
 }
 
 // Struct to store reference to the subgraph associated with a protocol buffer
-// response
-type sgreference struct {
+// graph response
+type sgReference struct {
 	uid uint64
 	sg  *SubGraph
 }
@@ -315,7 +316,6 @@ func (g *SubGraph) ToProtocolBuffer(l *Latency) (gr *pb.GraphResponse,
 	rerr error) {
 	gr = &pb.GraphResponse{}
 	gr.Attribute = g.Attr
-
 	if len(g.query) == 0 {
 		return gr, nil
 	}
@@ -330,21 +330,22 @@ func (g *SubGraph) ToProtocolBuffer(l *Latency) (gr *pb.GraphResponse,
 
 	_, result, err := extract(q, r)
 	if err != nil {
+		x.Err(glog, err).Error("Error while extracting query, result")
 		return gr, err
 	}
 
-	re := &sgreference{}
+	re := &sgReference{}
+	// Storing reference to root node.
 	re.sg = g
 	// Stores the uid for the root node in the reference struct.
 	re.uid = result.uidmatrix[0][0]
-
-	gr.Values, gr.Children, rerr = re.pretraverse()
+	gr.Values, gr.Children, rerr = re.preTraverse()
 	if rerr != nil {
 		x.Err(glog, rerr).Error("Error while traversal")
 		return gr, rerr
 	}
-	l.ProtocolBuffer = time.Since(l.Start) - l.Parsing - l.Processing
 
+	l.ProtocolBuffer = time.Since(l.Start) - l.Parsing - l.Processing
 	return gr, nil
 }
 
@@ -366,9 +367,9 @@ func indexOf(uid uint64, uids []uint64) int {
 }
 
 // This method gets the values and children for a GraphResponse.
-func (re *sgreference) pretraverse() (map[string]*pb.Value,
+func (re *sgReference) preTraverse() (map[string]*pb.Value,
 	[]*pb.GraphResponse, error) {
-	vals := make(map[string]*pb.Value)
+	values := make(map[string]*pb.Value)
 	var children []*pb.GraphResponse
 
 	for _, child := range re.sg.Children {
@@ -383,7 +384,7 @@ func (re *sgreference) pretraverse() (map[string]*pb.Value,
 		query, result, err := extract(q, r)
 		if err != nil {
 			x.Err(glog, err).Error("Error while extracting query, result")
-			return vals, children, fmt.Errorf("While extracting query, result")
+			return values, children, fmt.Errorf("While extracting query, result")
 		}
 
 		idx := indexOf(re.uid, query)
@@ -393,13 +394,14 @@ func (re *sgreference) pretraverse() (map[string]*pb.Value,
 				"attribute":      re.sg.Attr,
 				"childAttribute": child.Attr,
 			}).Fatal("Attribute with uid not found in child Query uids")
-			return vals, children, fmt.Errorf("Attribute with uid not found")
+			return values, children, fmt.Errorf("Attribute with uid not found")
 		}
 
+		// This means the child is a leaf node hence we just extract its value.
 		if len(child.Children) == 0 {
-			val := new(pb.Value)
-			val.Byte = result.values[idx]
-			vals[child.Attr] = val
+			v := new(pb.Value)
+			v.Byte = result.values[idx]
+			values[child.Attr] = v
 		} else {
 			uids := result.uidmatrix[idx]
 			// We create as many predicate children as the number of uids.
@@ -407,14 +409,14 @@ func (re *sgreference) pretraverse() (map[string]*pb.Value,
 				predChild := new(pb.GraphResponse)
 				predChild.Attribute = child.Attr
 
-				ref := new(sgreference)
+				ref := new(sgReference)
 				ref.sg = child
 				ref.uid = uid
 
-				vals, ch, rerr := ref.pretraverse()
+				vals, ch, rerr := ref.preTraverse()
 				if rerr != nil {
 					x.Err(glog, rerr).Error("Error while traversal")
-					return vals, children, rerr
+					return values, children, rerr
 				}
 
 				predChild.Values, predChild.Children = vals, ch
@@ -422,7 +424,7 @@ func (re *sgreference) pretraverse() (map[string]*pb.Value,
 			}
 		}
 	}
-	return vals, children, nil
+	return values, children, nil
 }
 
 func treeCopy(gq *gql.GraphQuery, sg *SubGraph) {
