@@ -320,7 +320,7 @@ func TestToJson(t *testing.T) {
 	fmt.Printf(string(js))
 }
 
-func TestPreTraverse(t *testing.T) {
+func TestToProtocolBuffer(t *testing.T) {
 	dir, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
 
@@ -353,44 +353,39 @@ func TestPreTraverse(t *testing.T) {
 		t.Error(err)
 	}
 
-	ugr, err := sg.PreTraverse()
+	gr, err := sg.ToProtocolBuffer()
 	if err != nil {
 		t.Error(err)
 	}
 
-	if len(ugr.Children) != 4 {
-		t.Errorf("Expected len 4. Got: %v", ugr.Children)
+	if gr.Attribute != "_root_" {
+		t.Errorf("Expected attribute _root_, Got: %v", gr.Attribute)
 	}
-	child := ugr.Children[0]
-	if child.Attribute != "name" {
-		t.Errorf("Expected attr name. Got: %v", child.Attribute)
+	if len(gr.Values) != 3 {
+		t.Errorf("Expected values map to contain 3 properties, Got: %v",
+			len(gr.Values))
 	}
-	if string(child.Result.Values[0]) != "Michonne" {
-		t.Errorf("Expected value Michonne. Got %v",
-			string(child.Result.Values[0]))
+	if string(gr.Values["name"]) != "Michonne" {
+		t.Errorf("Expected property name to have value Michonne, Got: %v",
+			string(gr.Values["name"]))
 	}
-	child = ugr.Children[3]
+	if len(gr.Children) != 5 {
+		t.Errorf("Expected 5 children, Got: %v", len(gr.Children))
+	}
+
+	child := gr.Children[0]
 	if child.Attribute != "friend" {
-		t.Errorf("Expected attr friend. Got: %v", child.Attribute)
+		t.Errorf("Expected attribute friend, Got: %v", child.Attribute)
 	}
-	uids := child.Result.Uidmatrix[0].Uids
-	if uids[0] != 23 || uids[1] != 24 || uids[2] != 25 || uids[3] != 31 ||
-		uids[4] != 101 {
-		t.Errorf("Friend ids don't match")
+	if len(child.Values) != 1 {
+		t.Errorf("Expected values map to contain 1 property, Got: %v",
+			len(child.Values))
 	}
-	// To check for name of friends
-	child = child.Children[0]
-	if child.Attribute != "name" {
-		t.Errorf("Expected attr friend. Got: %v", child.Attribute)
+	if string(child.Values["name"]) != "Rick Grimes" {
+		t.Errorf("Expected property name to have value Rick Grimes, Got: %v",
+			string(child.Values["name"]))
 	}
-	if len(child.Query.Uids) != 5 {
-		t.Errorf("Expected 5 uids in query. Got: %v", len(child.Query.Uids))
-	}
-
-	names := child.Result.Values
-
-	if string(names[0]) != "Rick Grimes" || string(names[1]) != "Glenn Rhee" ||
-		string(names[2]) != "Daryl Dixon" || string(names[3]) != "Andrea" {
-		t.Errorf("Names don't match")
+	if len(child.Children) != 0 {
+		t.Errorf("Expected 0 children, Got: %v", len(child.Children))
 	}
 }

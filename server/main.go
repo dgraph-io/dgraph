@@ -241,7 +241,7 @@ func (s *server) Query(ctx context.Context,
 	}
 
 	glog.WithField("q", req.Query).Debug("Graph processed.")
-	resp, err = sg.PreTraverse()
+	resp, err = sg.ToProtocolBuffer()
 	if err != nil {
 		x.Err(glog, err).Error("While converting to protocol buffer.")
 		return resp, err

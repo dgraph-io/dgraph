@@ -252,59 +252,72 @@ func (g *SubGraph) ToJson(l *Latency) (js []byte, rerr error) {
 	return json.Marshal(r)
 }
 
+type result struct {
+	values    [][]byte
+	uidmatrix [][]uint64
+}
+
 // This method take in a flatbuffer result, extracts values and uids from it
 // and converts it to a protocol buffer result
-func extract(q *task.Query, r *task.Result) (*pb.UidList, *pb.Result, error) {
-	result := &pb.Result{}
-	query := &pb.UidList{}
+func extract(q *task.Query, r *task.Result) ([]uint64, *result, error) {
+	re := new(result)
+	var qu []uint64
 	var ul task.UidList
 
 	for i := 0; i < q.UidsLength(); i++ {
 		uid := q.Uids(i)
-		query.Uids = append(query.Uids, uid)
+		qu = append(qu, uid)
 	}
 
 	for i := 0; i < r.UidmatrixLength(); i++ {
 		if ok := r.Uidmatrix(&ul, i); !ok {
-			return query, result, fmt.Errorf("While parsing UidList")
+			return qu, re, fmt.Errorf("While parsing UidList")
 		}
 
-		uidList := &pb.UidList{}
+		var uidList []uint64
 		for j := 0; j < ul.UidsLength(); j++ {
 			uid := ul.Uids(j)
-			uidList.Uids = append(uidList.Uids, uid)
+			uidList = append(uidList, uid)
 		}
-		result.Uidmatrix = append(result.Uidmatrix, uidList)
+		re.uidmatrix = append(re.uidmatrix, uidList)
 	}
 
 	var tv task.Value
 	for i := 0; i < r.ValuesLength(); i++ {
 		if ok := r.Values(&tv, i); !ok {
-			return query, result, fmt.Errorf("While parsing value")
+			return qu, re, fmt.Errorf("While parsing value")
 		}
 
 		var ival interface{}
 		if err := posting.ParseValue(&ival, tv.ValBytes()); err != nil {
-			return query, result, err
+			return qu, re, err
 		}
 
 		if ival == nil {
 			ival = ""
 		}
-		result.Values = append(result.Values, []byte(ival.(string)))
+		re.values = append(re.values, []byte(ival.(string)))
 	}
-	return query, result, nil
+	return qu, re, nil
 }
 
-// This method performs a pre traversal on a subgraph and converts it to a
-// protocol buffer Graph Response.
-func (g *SubGraph) PreTraverse() (gr *pb.GraphResponse, rerr error) {
+// Struct to store reference to the subgraph associated with a protocol buffer
+// response
+type sgreference struct {
+	uid uint64
+	sg  *SubGraph
+}
+
+// This method converts a subgraph to a protocol buffer response. It transforms
+// the predicate based subgraph to an entity based protocol buffer subgraph.
+func (g *SubGraph) ToProtocolBuffer() (gr *pb.GraphResponse, rerr error) {
 	gr = &pb.GraphResponse{}
+	gr.Attribute = g.Attr
+
 	if len(g.query) == 0 {
 		return gr, nil
 	}
 
-	gr.Attribute = g.Attr
 	ro := flatbuffers.GetUOffsetT(g.result)
 	r := new(task.Result)
 	r.Init(g.result, ro)
@@ -313,24 +326,89 @@ func (g *SubGraph) PreTraverse() (gr *pb.GraphResponse, rerr error) {
 	q := new(task.Query)
 	q.Init(g.query, uo)
 
-	query, result, err := extract(q, r)
+	_, result, err := extract(q, r)
 	if err != nil {
 		return gr, err
 	}
 
-	gr.Query = query
-	gr.Result = result
+	re := &sgreference{}
+	re.sg = g
+	// Stores the uid for the root node in the reference struct.
+	re.uid = result.uidmatrix[0][0]
 
-	for _, child := range g.Children {
-		childPb, err := child.PreTraverse()
-		if err != nil {
-			x.Err(glog, err).Error("Error while traversal")
-			return gr, err
-		}
-
-		gr.Children = append(gr.Children, childPb)
+	gr.Values, gr.Children, rerr = re.pretraverse()
+	if rerr != nil {
+		x.Err(glog, rerr).Error("Error while traversal")
+		return gr, rerr
 	}
 	return gr, nil
+}
+
+// This function performs a binary search on the uids slice and returns the
+// index at which it finds the uid, else returns -1
+func indexOf(uid uint64, uids []uint64) int {
+	low, mid, high := 0, 0, len(uids)-1
+	for low <= high {
+		mid = (low + high) / 2
+		if uids[mid] == uid {
+			return mid
+		} else if uids[mid] > uid {
+			high = mid - 1
+		} else {
+			low = mid + 1
+		}
+	}
+	return -1
+}
+
+// This method gets the values and children for a GraphResponse.
+func (re *sgreference) pretraverse() (map[string][]byte,
+	[]*pb.GraphResponse, error) {
+	vals := make(map[string][]byte)
+	var children []*pb.GraphResponse
+
+	for _, child := range re.sg.Children {
+		ro := flatbuffers.GetUOffsetT(child.result)
+		r := new(task.Result)
+		r.Init(child.result, ro)
+
+		uo := flatbuffers.GetUOffsetT(child.query)
+		q := new(task.Query)
+		q.Init(child.query, uo)
+
+		query, result, err := extract(q, r)
+		if err != nil {
+			x.Err(glog, err).Error("Error while extracting query, result")
+			return vals, children, fmt.Errorf("While extracting query, result")
+		}
+
+		idx := indexOf(re.uid, query)
+
+		if len(child.Children) == 0 {
+			vals[child.Attr] = result.values[idx]
+		} else {
+			uids := result.uidmatrix[idx]
+			// We create as many predicate children as the number of uids.
+			for _, uid := range uids {
+				predChild := new(pb.GraphResponse)
+				predChild.Attribute = child.Attr
+
+				ref := new(sgreference)
+				ref.sg = child
+				ref.uid = uid
+
+				vals, ch, rerr := ref.pretraverse()
+				if rerr != nil {
+					x.Err(glog, rerr).Error("Error while traversal")
+					return vals, children, rerr
+				}
+
+				predChild.Values, predChild.Children = vals, ch
+				children = append(children, predChild)
+			}
+		}
+	}
+	return vals, children, nil
 }
 
 func treeCopy(gq *gql.GraphQuery, sg *SubGraph) {

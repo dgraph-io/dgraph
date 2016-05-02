@@ -8,22 +8,12 @@ service DGraph {
   rpc Query (GraphRequest) returns (GraphResponse) {}
 }
 
-message UidList {
-  repeated uint64 uids = 1;
-}
-
-message Result {
-  repeated bytes values = 1;
-  repeated UidList uidmatrix = 2;
-}
-
 message GraphRequest {
   string query = 1;
 }
 
 message GraphResponse {
   string attribute = 1;
-  Result result = 2;
-  UidList query = 3;
-  repeated GraphResponse children = 4; // Each node can have multiple children
+  map<string, bytes> values = 2;
+  repeated GraphResponse children = 3; // Each node can have multiple children
 }
