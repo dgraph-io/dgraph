@@ -216,6 +216,8 @@ func (s *server) Query(ctx context.Context,
 		return resp, fmt.Errorf("Empty query")
 	}
 
+	var l query.Latency
+	l.Start = time.Now()
 	// TODO(pawan): Refactor query parsing and graph processing code to a common
 	// function used by Query and queryHandler
 	glog.WithField("q", req.Query).Debug("Query received.")
@@ -230,6 +232,7 @@ func (s *server) Query(ctx context.Context,
 		x.Err(glog, err).Error("While conversion to internal format")
 		return resp, err
 	}
+	l.Parsing = time.Since(l.Start)
 	glog.WithField("q", req.Query).Debug("Query parsed.")
 
 	rch := make(chan error)
@@ -239,9 +242,10 @@ func (s *server) Query(ctx context.Context,
 		x.Err(glog, err).Error("While executing query")
 		return resp, err
 	}
-
+	l.Processing = time.Since(l.Start) - l.Parsing
 	glog.WithField("q", req.Query).Debug("Graph processed.")
-	resp, err = sg.ToProtocolBuffer()
+
+	resp, err = sg.ToProtocolBuffer(&l)
 	if err != nil {
 		x.Err(glog, err).Error("While converting to protocol buffer.")
 		return resp, err

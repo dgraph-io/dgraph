@@ -89,10 +89,11 @@ import (
 var glog = x.Log("query")
 
 type Latency struct {
-	Start      time.Time     `json:"-"`
-	Parsing    time.Duration `json:"query_parsing"`
-	Processing time.Duration `json:"processing"`
-	Json       time.Duration `json:"json_conversion"`
+	Start          time.Time     `json:"-"`
+	Parsing        time.Duration `json:"query_parsing"`
+	Processing     time.Duration `json:"processing"`
+	Json           time.Duration `json:"json_conversion"`
+	ProtocolBuffer time.Duration `json:"pb_conversion"`
 }
 
 func (l *Latency) ToMap() map[string]string {
@@ -310,7 +311,8 @@ type sgreference struct {
 
 // This method converts a subgraph to a protocol buffer response. It transforms
 // the predicate based subgraph to an entity based protocol buffer subgraph.
-func (g *SubGraph) ToProtocolBuffer() (gr *pb.GraphResponse, rerr error) {
+func (g *SubGraph) ToProtocolBuffer(l *Latency) (gr *pb.GraphResponse,
+	rerr error) {
 	gr = &pb.GraphResponse{}
 	gr.Attribute = g.Attr
 
@@ -341,6 +343,8 @@ func (g *SubGraph) ToProtocolBuffer() (gr *pb.GraphResponse, rerr error) {
 		x.Err(glog, rerr).Error("Error while traversal")
 		return gr, rerr
 	}
+	l.ProtocolBuffer = time.Since(l.Start) - l.Parsing - l.Processing
+
 	return gr, nil
 }
 
@@ -362,9 +366,9 @@ func indexOf(uid uint64, uids []uint64) int {
 }
 
 // This method gets the values and children for a GraphResponse.
-func (re *sgreference) pretraverse() (map[string][]byte,
+func (re *sgreference) pretraverse() (map[string]*pb.Value,
 	[]*pb.GraphResponse, error) {
-	vals := make(map[string][]byte)
+	vals := make(map[string]*pb.Value)
 	var children []*pb.GraphResponse
 
 	for _, child := range re.sg.Children {
@@ -383,9 +387,19 @@ func (re *sgreference) pretraverse() (map[string][]byte,
 		}
 
 		idx := indexOf(re.uid, query)
+		if idx == -1 {
+			glog.WithFields(logrus.Fields{
+				"uid":            re.uid,
+				"attribute":      re.sg.Attr,
+				"childAttribute": child.Attr,
+			}).Fatal("Attribute with uid not found in child Query uids")
+			return vals, children, fmt.Errorf("Attribute with uid not found")
+		}
 
 		if len(child.Children) == 0 {
-			vals[child.Attr] = result.values[idx]
+			val := new(pb.Value)
+			val.Byte = result.values[idx]
+			vals[child.Attr] = val
 		} else {
 			uids := result.uidmatrix[idx]
 			// We create as many predicate children as the number of uids.

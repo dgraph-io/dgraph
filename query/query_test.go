@@ -353,7 +353,8 @@ func TestToProtocolBuffer(t *testing.T) {
 		t.Error(err)
 	}
 
-	gr, err := sg.ToProtocolBuffer()
+	var l Latency
+	gr, err := sg.ToProtocolBuffer(&l)
 	if err != nil {
 		t.Error(err)
 	}
@@ -365,9 +366,9 @@ func TestToProtocolBuffer(t *testing.T) {
 		t.Errorf("Expected values map to contain 3 properties, Got: %v",
 			len(gr.Values))
 	}
-	if string(gr.Values["name"]) != "Michonne" {
+	if string(gr.Values["name"].Byte) != "Michonne" {
 		t.Errorf("Expected property name to have value Michonne, Got: %v",
-			string(gr.Values["name"]))
+			string(gr.Values["name"].Byte))
 	}
 	if len(gr.Children) != 5 {
 		t.Errorf("Expected 5 children, Got: %v", len(gr.Children))
@@ -381,9 +382,9 @@ func TestToProtocolBuffer(t *testing.T) {
 		t.Errorf("Expected values map to contain 1 property, Got: %v",
 			len(child.Values))
 	}
-	if string(child.Values["name"]) != "Rick Grimes" {
+	if string(child.Values["name"].Byte) != "Rick Grimes" {
 		t.Errorf("Expected property name to have value Rick Grimes, Got: %v",
-			string(child.Values["name"]))
+			string(child.Values["name"].Byte))
 	}
 	if len(child.Children) != 0 {
 		t.Errorf("Expected 0 children, Got: %v", len(child.Children))

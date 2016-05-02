@@ -12,8 +12,12 @@ message GraphRequest {
   string query = 1;
 }
 
+message Value {
+  bytes byte = 1;
+}
+
 message GraphResponse {
   string attribute = 1;
-  map<string, bytes> values = 2;
+  map<string, Value> values = 2;
   repeated GraphResponse children = 3; // Each node can have multiple children
 }
