@@ -77,6 +77,7 @@ func TestParse(t *testing.T) {
 
 func TestParseXid(t *testing.T) {
 	// logrus.SetLevel(logrus.DebugLevel)
+	// TODO: Why does the query not have _xid_ attribute?
 	query := `
 	query {
 		user(_uid_: 0x11) {
@@ -99,6 +100,35 @@ func TestParseXid(t *testing.T) {
 		t.Error(err)
 	}
 }
+
+/*
+func TestParseFirst(t *testing.T) {
+	// logrus.SetLevel(logrus.DebugLevel)
+	query := `
+	query {
+		user(_xid_: m.abcd) {
+			type.object.name
+			friends (first: 10) {
+			}
+		}
+	}`
+	gq, _, err := Parse(query)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	if gq == nil {
+		t.Error("subgraph is nil")
+		return
+	}
+	if len(gq.Children) != 1 {
+		t.Errorf("Expected 1 children. Got: %v", len(gq.Children))
+	}
+	if err := checkAttr(gq.Children[0], "type.object.name"); err != nil {
+		t.Error(err)
+	}
+}
+*/
 
 func TestParse_error2(t *testing.T) {
 	query := `
