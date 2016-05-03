@@ -21,16 +21,22 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"runtime"
 	"strings"
 	"time"
+
+	"golang.org/x/net/context"
+
+	"google.golang.org/grpc"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/dgraph-io/dgraph/commit"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/query"
+	"github.com/dgraph-io/dgraph/query/graph"
 	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/uid"
@@ -43,7 +49,7 @@ var glog = x.Log("server")
 var postingDir = flag.String("postings", "", "Directory to store posting lists")
 var uidDir = flag.String("uids", "", "XID UID posting lists directory")
 var mutationDir = flag.String("mutations", "", "Directory to store mutations")
-var port = flag.String("port", "8080", "Port to run server on.")
+var port = flag.Int("port", 8080, "Port to run server on.")
 var numcpu = flag.Int("numCpu", runtime.NumCPU(),
 	"Number of cores to be used by the process")
 var instanceIdx = flag.Uint64("instanceIdx", 0,
@@ -171,7 +177,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	glog.WithField("q", string(q)).Debug("Query parsed.")
 
 	rch := make(chan error)
-	go query.ProcessGraph(sg, rch)
+	go query.ProcessGraph(sg, rch, time.Minute)
 	err = <-rch
 	if err != nil {
 		x.Err(glog, err).Error("While executing query")
@@ -197,6 +203,75 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, string(js))
 }
 
+// server is used to implement graph.DGraphServer
+type server struct{}
+
+// This method is used to execute the query and return the response to the
+// client as a protocol buffer message.
+func (s *server) Query(ctx context.Context,
+	req *graph.Request) (*graph.Node, error) {
+	resp := new(graph.Node)
+	if len(req.Query) == 0 {
+		glog.Error("While reading query")
+		return resp, fmt.Errorf("Empty query")
+	}
+
+	var l query.Latency
+	l.Start = time.Now()
+	// TODO(pawan): Refactor query parsing and graph processing code to a common
+	// function used by Query and queryHandler
+	glog.WithField("q", req.Query).Debug("Query received.")
+	gq, _, err := gql.Parse(req.Query)
+	if err != nil {
+		x.Err(glog, err).Error("While parsing query")
+		return resp, err
+	}
+
+	sg, err := query.ToSubGraph(gq)
+	if err != nil {
+		x.Err(glog, err).Error("While conversion to internal format")
+		return resp, err
+	}
+	l.Parsing = time.Since(l.Start)
+	glog.WithField("q", req.Query).Debug("Query parsed.")
+
+	rch := make(chan error)
+	go query.ProcessGraph(sg, rch, time.Minute)
+	err = <-rch
+	if err != nil {
+		x.Err(glog, err).Error("While executing query")
+		return resp, err
+	}
+	l.Processing = time.Since(l.Start) - l.Parsing
+	glog.WithField("q", req.Query).Debug("Graph processed.")
+
+	resp, err = sg.ToProtocolBuffer(&l)
+	if err != nil {
+		x.Err(glog, err).Error("While converting to protocol buffer.")
+		return resp, err
+	}
+
+	return resp, err
+}
+
+// This function register a DGraph grpc server on the address, which is used
+// exchanging protocol buffer messages.
+func runGrpcServer(address string) {
+	ln, err := net.Listen("tcp", address)
+	if err != nil {
+		glog.Fatalf("While running server for client: %v", err)
+		return
+	}
+	glog.WithField("address", ln.Addr()).Info("Client Worker listening")
+
+	s := grpc.NewServer()
+	graph.RegisterDGraphServer(s, &server{})
+	if err = s.Serve(ln); err != nil {
+		glog.Fatalf("While serving gRpc requests", err)
+	}
+	return
+}
+
 func main() {
 	flag.Parse()
 	if !flag.Parsed() {
@@ -205,9 +280,11 @@ func main() {
 	logrus.SetLevel(logrus.InfoLevel)
 	numCpus := *numcpu
 	prev := runtime.GOMAXPROCS(numCpus)
-	glog.WithField("num_cpu", numCpus).
-		WithField("prev_maxprocs", prev).
+	glog.WithField("num_cpu", numCpus).WithField("prev_maxprocs", prev).
 		Info("Set max procs to num cpus")
+	if *port%2 != 0 {
+		glog.Fatalf("Port should be an even number: %v", *port)
+	}
 
 	ps := new(store.Store)
 	ps.Init(*postingDir)
@@ -226,7 +303,6 @@ func main() {
 	}
 
 	posting.Init(clog)
-
 	if *instanceIdx != 0 {
 		worker.Init(ps, nil, *instanceIdx, lenAddr)
 		uid.Init(nil)
@@ -240,10 +316,12 @@ func main() {
 	}
 
 	worker.Connect(addrs)
+	// Grpc server runs on (port + 1)
+	go runGrpcServer(fmt.Sprintf(":%d", *port+1))
 
 	http.HandleFunc("/query", queryHandler)
 	glog.WithField("port", *port).Info("Listening for requests...")
-	if err := http.ListenAndServe(":"+*port, nil); err != nil {
+	if err := http.ListenAndServe(fmt.Sprintf(":%d", *port), nil); err != nil {
 		x.Err(glog, err).Fatal("ListenAndServe")
 	}
 }

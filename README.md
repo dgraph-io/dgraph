@@ -6,9 +6,13 @@
 [![logo](https://img.shields.io/badge/Mailing%20List-dgraph-brightgreen.svg)](https://groups.google.com/forum/#!forum/dgraph)
 [![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/dgraph-io/dgraph?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
 
+
 DGraph's goal is to provide [Google](https://www.google.com) production level scale and throughput,
 with low enough latency to be serving real time user queries, over terabytes of structured data.
 DGraph supports [GraphQL](http://graphql.org/) as query language, and responds in [JSON](http://www.json.org/).
+
+**Note that we use the Github Issue Tracker for bug reports only.**
+**For feature requests or questions, visit [https://discuss.dgraph.io](https://discuss.dgraph.io).**
 
 The README is divided into these sections:
 - [Current Status](#current-status)
@@ -28,7 +32,7 @@ Got questions or issues? Talk to us [via discuss](https://discuss.dgraph.io).
 
 `Mar 2016 - Branch v0.2`
 This is the first truly distributed version of DGraph.
-Please see the [release notes here](https://github.com/dgraph-io/dgraph/wiki/DGraph-v0.2-Release).
+Please see the [release notes here](https://discuss.dgraph.io/t/dgraph-v0-2-release/17).
 
 `MVP launch - Dec 2015 - Branch v0.1`
 This is a minimum viable product, alpha release of DGraph. **It's not meant for production use.**
@@ -92,14 +96,14 @@ $ tar -xzvf postings.tar.gz -C $DIR
 ```
 For quick testing, you can bring up 3 different processes of DGraph. You can of course, also set this up across multiple servers.
 ```
-go build . && ./server --instanceIdx 0 --mutations $DIR/m0 --port "8080" --postings $DIR/p0 --workers ":12345,:12346,:12347" --uids $DIR/uasync.final --workerport ":12345" &
-go build . && ./server --instanceIdx 1 --mutations $DIR/m1 --port "8081" --postings $DIR/p1 --workers ":12345,:12346,:12347" --workerport ":12346" &
-go build . && ./server --instanceIdx 2 --mutations $DIR/m2 --port "8082" --postings $DIR/p2 --workers ":12345,:12346,:12347" --workerport ":12347" &
+go build . && ./server --instanceIdx 0 --mutations $DIR/m0 --port 8080 --postings $DIR/p0 --workers ":12345,:12346,:12347" --uids $DIR/uasync.final --workerport ":12345" &
+go build . && ./server --instanceIdx 1 --mutations $DIR/m1 --port 8082 --postings $DIR/p1 --workers ":12345,:12346,:12347" --workerport ":12346" &
+go build . && ./server --instanceIdx 2 --mutations $DIR/m2 --port 8084 --postings $DIR/p2 --workers ":12345,:12346,:12347" --workerport ":12347" &
 ```
 Now you can run any of the queries mentioned in [Test Queries](https://github.com/dgraph-io/dgraph/wiki/Test-Queries).
 You can hit any of the 3 processes, they'll produce the same results.
 
-`curl localhost:8081/query -XPOST -d '{}'`
+`curl localhost:8080/query -XPOST -d '{}'`
 
 ## Installation
 Best way to do this is to refer to [Dockerfile](Dockerfile), which has the most complete
@@ -267,7 +271,7 @@ Consecutive runs of the same query took much lesser time (80 to 100ms), due to p
 ```
 
 ## Queries and Mutations
-You can see a list of [sample queries here](https://github.com/dgraph-io/dgraph/wiki/Test-Queries).
+You can see a list of [sample queries here](https://discuss.dgraph.io/t/list-of-test-queries/22).
 DGraph also supports mutations via GraphQL syntax.
 Because GraphQL mutations don't contain complete data, the mutation syntax uses [RDF NQuad format](https://www.w3.org/TR/n-quads/).
 ```
@@ -305,11 +309,11 @@ The query portion is executed after the mutation, so this would return `greg` as
 
 
 ## Contributing to DGraph
-- Please see [this wiki page](https://github.com/dgraph-io/dgraph/wiki/Contributing-to-DGraph) for guidelines on contributions.
+- Please see [this wiki page](https://discuss.dgraph.io/t/contributing-to-dgraph/20) for guidelines on contributions.
 
 ## Contact
-- Please use [discuss.dgraph.io](https://discuss.dgraph.io) for documentation, questions and discussions.
-- Please use [Github issue tracker](https://github.com/dgraph-io/dgraph/issues) to file bugs, or request features.
+- Please use [discuss.dgraph.io](https://discuss.dgraph.io) for documentation, questions, feature requests and discussions.
+- Please use [Github issue tracker](https://github.com/dgraph-io/dgraph/issues) **ONLY to file bugs.** Any feature request should go to discuss.
 - Or, just join [Gitter chat](https://gitter.im/dgraph-io/dgraph?utm_source=share-link&utm_medium=link&utm_campaign=share-link).
 
 ## Talks

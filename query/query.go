@@ -26,6 +26,7 @@ import (
 	"github.com/Sirupsen/logrus"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
+	"github.com/dgraph-io/dgraph/query/graph"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
@@ -88,10 +89,11 @@ import (
 var glog = x.Log("query")
 
 type Latency struct {
-	Start      time.Time     `json:"-"`
-	Parsing    time.Duration `json:"query_parsing"`
-	Processing time.Duration `json:"processing"`
-	Json       time.Duration `json:"json_conversion"`
+	Start          time.Time     `json:"-"`
+	Parsing        time.Duration `json:"query_parsing"`
+	Processing     time.Duration `json:"processing"`
+	Json           time.Duration `json:"json_conversion"`
+	ProtocolBuffer time.Duration `json:"pb_conversion"`
 }
 
 func (l *Latency) ToMap() map[string]string {
@@ -109,6 +111,8 @@ func (l *Latency) ToMap() map[string]string {
 // client convenient formats, like GraphQL / JSON.
 type SubGraph struct {
 	Attr     string
+	Count    int
+	Offset   int
 	Children []*SubGraph
 
 	query  []byte
@@ -239,7 +243,10 @@ func (g *SubGraph) ToJson(l *Latency) (js []byte, rerr error) {
 	l.Json = time.Since(l.Start) - l.Parsing - l.Processing
 	if len(r) == 1 {
 		for _, ival := range r {
-			m := ival.(map[string]interface{})
+			var m map[string]interface{}
+			if ival != nil {
+				m = ival.(map[string]interface{})
+			}
 			m["server_latency"] = l.ToMap()
 			return json.Marshal(m)
 		}
@@ -251,10 +258,132 @@ func (g *SubGraph) ToJson(l *Latency) (js []byte, rerr error) {
 	return json.Marshal(r)
 }
 
+// This function performs a binary search on the uids slice and returns the
+// index at which it finds the uid, else returns -1
+func indexOf(uid uint64, q *task.Query) int {
+	low, mid, high := 0, 0, q.UidsLength()-1
+	for low <= high {
+		mid = (low + high) / 2
+		if q.Uids(mid) == uid {
+			return mid
+		} else if q.Uids(mid) > uid {
+			high = mid - 1
+		} else {
+			low = mid + 1
+		}
+	}
+	return -1
+}
+
+// This method gets the values and children for a subgraph.
+func (g *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
+	properties := make(map[string]*graph.Value)
+	var children []*graph.Node
+
+	// We go through all predicate children of the subgraph.
+	for _, pc := range g.Children {
+		ro := flatbuffers.GetUOffsetT(pc.result)
+		r := new(task.Result)
+		r.Init(pc.result, ro)
+
+		uo := flatbuffers.GetUOffsetT(pc.query)
+		q := new(task.Query)
+		q.Init(pc.query, uo)
+
+		idx := indexOf(uid, q)
+
+		if idx == -1 {
+			glog.WithFields(logrus.Fields{
+				"uid":            uid,
+				"attribute":      g.Attr,
+				"childAttribute": pc.Attr,
+			}).Fatal("Attribute with uid not found in child Query uids")
+			return fmt.Errorf("Attribute with uid not found")
+		}
+
+		var ul task.UidList
+		var tv task.Value
+		if ok := r.Uidmatrix(&ul, idx); !ok {
+			return fmt.Errorf("While parsing UidList")
+		}
+
+		if ul.UidsLength() > 0 {
+			// We create as many predicate entity children as the length of uids for
+			// this predicate.
+			for i := 0; i < ul.UidsLength(); i++ {
+				uid := ul.Uids(i)
+				uc := new(graph.Node)
+				uc.Attribute = pc.Attr
+				uc.Uid = uid
+				if rerr := pc.preTraverse(uid, uc); rerr != nil {
+					x.Err(glog, rerr).Error("Error while traversal")
+					return rerr
+				}
+
+				children = append(children, uc)
+			}
+		} else {
+			v := new(graph.Value)
+			if ok := r.Values(&tv, idx); !ok {
+				return fmt.Errorf("While parsing value")
+			}
+
+			var ival interface{}
+			if err := posting.ParseValue(&ival, tv.ValBytes()); err != nil {
+				return err
+			}
+
+			if ival == nil {
+				ival = ""
+			}
+
+			v.Str = ival.(string)
+			properties[pc.Attr] = v
+		}
+	}
+	if val, ok := properties["_xid_"]; ok {
+		dst.Xid = val.Str
+		delete(properties, "_xid_")
+	}
+	dst.Properties, dst.Children = properties, children
+	return nil
+}
+
+// This method transforms the predicate based subgraph to an
+// predicate-entity based protocol buffer subgraph.
+func (g *SubGraph) ToProtocolBuffer(l *Latency) (n *graph.Node, rerr error) {
+	n = &graph.Node{}
+	n.Attribute = g.Attr
+	if len(g.query) == 0 {
+		return n, nil
+	}
+
+	ro := flatbuffers.GetUOffsetT(g.result)
+	r := new(task.Result)
+	r.Init(g.result, ro)
+
+	var ul task.UidList
+	r.Uidmatrix(&ul, 0)
+	n.Uid = ul.Uids(0)
+
+	if rerr = g.preTraverse(n.Uid, n); rerr != nil {
+		x.Err(glog, rerr).Error("Error while traversal")
+		return n, rerr
+	}
+
+	l.ProtocolBuffer = time.Since(l.Start) - l.Parsing - l.Processing
+	return n, nil
+}
+
 func treeCopy(gq *gql.GraphQuery, sg *SubGraph) {
+	// Typically you act on the current node, and leave recursion to deal with
+	// children. But, in this case, we don't want to muck with the current
+	// node, because of the way we're dealing with the root node.
+	// So, we work on the children, and then recurse for grand children.
 	for _, gchild := range gq.Children {
 		dst := new(SubGraph)
 		dst.Attr = gchild.Attr
+		dst.Count = gchild.First
 		sg.Children = append(sg.Children, dst)
 		treeCopy(gchild, dst)
 	}
@@ -321,14 +450,14 @@ func newGraph(euid uint64, exid string) (*SubGraph, error) {
 	sg.Attr = "_root_"
 	sg.result = b.Bytes[b.Head():]
 	// Also add query for consistency and to allow for ToJson() later.
-	sg.query = createTaskQuery(sg.Attr, []uint64{euid})
+	sg.query = createTaskQuery(sg, []uint64{euid})
 	return sg, nil
 }
 
 // createTaskQuery generates the query buffer.
-func createTaskQuery(attr string, sorted []uint64) []byte {
+func createTaskQuery(sg *SubGraph, sorted []uint64) []byte {
 	b := flatbuffers.NewBuilder(0)
-	ao := b.CreateString(attr)
+	ao := b.CreateString(sg.Attr)
 
 	task.QueryStartUidsVector(b, len(sorted))
 	for i := len(sorted) - 1; i >= 0; i-- {
@@ -339,6 +468,8 @@ func createTaskQuery(attr string, sorted []uint64) []byte {
 	task.QueryStart(b)
 	task.QueryAddAttr(b, ao)
 	task.QueryAddUids(b, vend)
+	task.QueryAddCount(b, int32(sg.Count))
+
 	qend := task.QueryEnd(b)
 	b.Finish(qend)
 	return b.Bytes[b.Head():]
@@ -400,7 +531,9 @@ func sortedUniqueUids(r *task.Result) (sorted []uint64, rerr error) {
 	return sorted, nil
 }
 
-func ProcessGraph(sg *SubGraph, rch chan error) {
+func ProcessGraph(sg *SubGraph, rch chan error, td time.Duration) {
+	timeout := time.Now().Add(td)
+
 	var err error
 	if len(sg.query) > 0 && sg.Attr != "_root_" {
 		sg.result, err = worker.ProcessTaskOverNetwork(sg.query)
@@ -442,6 +575,13 @@ func ProcessGraph(sg *SubGraph, rch chan error) {
 		return
 	}
 
+	timeleft := timeout.Sub(time.Now())
+	if timeleft < 0 {
+		glog.WithField("attr", sg.Attr).Error("Query timeout before children")
+		rch <- fmt.Errorf("Query timeout before children")
+		return
+	}
+
 	// Let's execute it in a tree fashion. Each SubGraph would break off
 	// as many goroutines as it's children; which would then recursively
 	// do the same thing.
@@ -449,22 +589,29 @@ func ProcessGraph(sg *SubGraph, rch chan error) {
 	childchan := make(chan error, len(sg.Children))
 	for i := 0; i < len(sg.Children); i++ {
 		child := sg.Children[i]
-		child.query = createTaskQuery(child.Attr, sorted)
-		go ProcessGraph(child, childchan)
+		child.query = createTaskQuery(child, sorted)
+		go ProcessGraph(child, childchan, timeleft)
 	}
 
+	tchan := time.After(timeleft)
 	// Now get all the results back.
 	for i := 0; i < len(sg.Children); i++ {
-		err = <-childchan
-		glog.WithFields(logrus.Fields{
-			"num_children": len(sg.Children),
-			"index":        i,
-			"attr":         sg.Children[i].Attr,
-			"err":          err,
-		}).Debug("Reply from child")
-		if err != nil {
-			x.Err(glog, err).Error("While processing child task.")
-			rch <- err
+		select {
+		case err = <-childchan:
+			glog.WithFields(logrus.Fields{
+				"num_children": len(sg.Children),
+				"index":        i,
+				"attr":         sg.Children[i].Attr,
+				"err":          err,
+			}).Debug("Reply from child")
+			if err != nil {
+				x.Err(glog, err).Error("While processing child task.")
+				rch <- err
+				return
+			}
+		case <-tchan:
+			glog.WithField("attr", sg.Attr).Error("Query timeout after children")
+			rch <- fmt.Errorf("Query timeout after children")
 			return
 		}
 	}

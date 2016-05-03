@@ -21,6 +21,7 @@ import (
 	"io/ioutil"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/dgraph-io/dgraph/commit"
 	"github.com/dgraph-io/dgraph/gql"
@@ -158,7 +159,7 @@ func TestQuery(t *testing.T) {
 	}
 
 	ch := make(chan error)
-	go query.ProcessGraph(g, ch)
+	go query.ProcessGraph(g, ch, time.Minute)
 	if err := <-ch; err != nil {
 		t.Error(err)
 		return
@@ -217,7 +218,7 @@ func BenchmarkQuery(b *testing.B) {
 		}
 
 		ch := make(chan error)
-		go query.ProcessGraph(g, ch)
+		go query.ProcessGraph(g, ch, time.Minute)
 		if err := <-ch; err != nil {
 			b.Error(err)
 			return

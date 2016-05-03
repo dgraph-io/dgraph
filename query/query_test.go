@@ -184,6 +184,9 @@ func populateGraph(t *testing.T) (string, *store.Store) {
 	edge.Value = "Andrea"
 	addEdge(t, edge, posting.GetOrCreate(posting.Key(31, "name"), ps))
 
+	edge.Value = "mich"
+	addEdge(t, edge, posting.GetOrCreate(posting.Key(1, "_xid_"), ps))
+
 	return dir, ps
 }
 
@@ -214,7 +217,7 @@ func TestProcessGraph(t *testing.T) {
 	}
 
 	ch := make(chan error)
-	go ProcessGraph(sg, ch)
+	go ProcessGraph(sg, ch, time.Minute)
 	err = <-ch
 	if err != nil {
 		t.Error(err)
@@ -306,7 +309,7 @@ func TestToJson(t *testing.T) {
 	}
 
 	ch := make(chan error)
-	go ProcessGraph(sg, ch)
+	go ProcessGraph(sg, ch, time.Minute)
 	err = <-ch
 	if err != nil {
 		t.Error(err)
@@ -318,4 +321,102 @@ func TestToJson(t *testing.T) {
 		t.Error(err)
 	}
 	fmt.Printf(string(js))
+}
+
+func TestToProtocolBuffer(t *testing.T) {
+	dir, _ := populateGraph(t)
+	defer os.RemoveAll(dir)
+
+	query := `
+		{
+			me(_uid_:0x01) {
+				_xid_
+				name
+				gender
+				status
+				friend {
+					name
+				}
+				friend {
+				}
+			}
+		}
+	`
+
+	gq, _, err := gql.Parse(query)
+	if err != nil {
+		t.Error(err)
+	}
+	sg, err := ToSubGraph(gq)
+	if err != nil {
+		t.Error(err)
+	}
+
+	ch := make(chan error)
+	go ProcessGraph(sg, ch, time.Minute)
+	err = <-ch
+	if err != nil {
+		t.Error(err)
+	}
+
+	var l Latency
+	gr, err := sg.ToProtocolBuffer(&l)
+	if err != nil {
+		t.Error(err)
+	}
+
+	if gr.Attribute != "_root_" {
+		t.Errorf("Expected attribute _root_, Got: %v", gr.Attribute)
+	}
+	if gr.Uid != 1 {
+		t.Errorf("Expected uid 1, Got: %v", gr.Uid)
+	}
+	if gr.Xid != "mich" {
+		t.Errorf("Expected xid mich, Got: %v", gr.Xid)
+	}
+	if len(gr.Properties) != 3 {
+		t.Errorf("Expected values map to contain 3 properties, Got: %v",
+			len(gr.Properties))
+	}
+	if gr.Properties["name"].Str != "Michonne" {
+		t.Errorf("Expected property name to have value Michonne, Got: %v",
+			gr.Properties["name"].Str)
+	}
+	if len(gr.Children) != 10 {
+		t.Errorf("Expected 10 children, Got: %v", len(gr.Children))
+	}
+
+	child := gr.Children[0]
+	if child.Uid != 23 {
+		t.Errorf("Expected uid 23, Got: %v", gr.Uid)
+	}
+	if child.Attribute != "friend" {
+		t.Errorf("Expected attribute friend, Got: %v", child.Attribute)
+	}
+	if len(child.Properties) != 1 {
+		t.Errorf("Expected values map to contain 1 property, Got: %v",
+			len(child.Properties))
+	}
+	if child.Properties["name"].Str != "Rick Grimes" {
+		t.Errorf("Expected property name to have value Rick Grimes, Got: %v",
+			child.Properties["name"].Str)
+	}
+	if len(child.Children) != 0 {
+		t.Errorf("Expected 0 children, Got: %v", len(child.Children))
+	}
+
+	child = gr.Children[5]
+	if child.Uid != 23 {
+		t.Errorf("Expected uid 23, Got: %v", gr.Uid)
+	}
+	if child.Attribute != "friend" {
+		t.Errorf("Expected attribute friend, Got: %v", child.Attribute)
+	}
+	if len(child.Properties) != 0 {
+		t.Errorf("Expected values map to contain 0 properties, Got: %v",
+			len(child.Properties))
+	}
+	if len(child.Children) != 0 {
+		t.Errorf("Expected 0 children, Got: %v", len(child.Children))
+	}
 }
