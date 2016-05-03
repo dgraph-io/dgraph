@@ -332,12 +332,12 @@ func (g *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 				ival = ""
 			}
 
-			v.Binary = []byte(ival.(string))
+			v.Str = ival.(string)
 			properties[pc.Attr] = v
 		}
 	}
 	if val, ok := properties["_xid_"]; ok {
-		dst.Xid = string(val.Binary)
+		dst.Xid = val.Str
 		delete(properties, "_xid_")
 	}
 	dst.Properties, dst.Children = properties, children

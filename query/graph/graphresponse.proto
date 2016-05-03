@@ -13,7 +13,7 @@ message Request {
 }
 
 message Value {
-  bytes binary = 1;
+  string str = 1;
 }
 
 message Node {
