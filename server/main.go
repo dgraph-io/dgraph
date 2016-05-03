@@ -36,7 +36,7 @@ import (
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/query"
-	"github.com/dgraph-io/dgraph/query/pb"
+	"github.com/dgraph-io/dgraph/query/graph"
 	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/uid"
@@ -203,14 +203,14 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, string(js))
 }
 
-// server is used to implement pb.DGraphServer
+// server is used to implement graph.DGraphServer
 type server struct{}
 
 // This method is used to execute the query and return the response to the
 // client as a protocol buffer message.
 func (s *server) Query(ctx context.Context,
-	req *pb.GraphRequest) (*pb.GraphResponse, error) {
-	resp := new(pb.GraphResponse)
+	req *graph.Request) (*graph.Node, error) {
+	resp := new(graph.Node)
 	if len(req.Query) == 0 {
 		glog.Error("While reading query")
 		return resp, fmt.Errorf("Empty query")
@@ -265,7 +265,7 @@ func runGrpcServer(address string) error {
 	glog.WithField("address", ln.Addr()).Info("Client Worker listening")
 
 	s := grpc.NewServer()
-	pb.RegisterDGraphServer(s, &server{})
+	graph.RegisterDGraphServer(s, &server{})
 	if err = s.Serve(ln); err != nil {
 		glog.Fatalf("While serving gRpc requests", err)
 	}

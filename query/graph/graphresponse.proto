@@ -1,0 +1,24 @@
+// To compile this file run the command below from inside the graph directory
+// protoc --go_out=plugins=grpc:. *.proto
+
+syntax="proto3";
+package graph;
+
+service DGraph {
+  rpc Query (Request) returns (Node) {}
+}
+
+message Request {
+  string query = 1;
+}
+
+message Value {
+  bytes binary = 1;
+}
+
+message Node {
+  uint64 uid = 1;
+  string attribute = 2;
+  map<string, Value> properties = 3;
+  repeated Node children = 4; // Each node can have multiple children
+}

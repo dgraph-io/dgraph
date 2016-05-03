@@ -23,7 +23,7 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
-	"github.com/dgraph-io/dgraph/query/pb"
+	"github.com/dgraph-io/dgraph/query/graph"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -40,9 +40,9 @@ func main() {
 	}
 	defer conn.Close()
 
-	c := pb.NewDGraphClient(conn)
+	c := graph.NewDGraphClient(conn)
 
-	r, err := c.Query(context.Background(), &pb.GraphRequest{Query: *q})
+	r, err := c.Query(context.Background(), &graph.Request{Query: *q})
 	if err != nil {
 		x.Err(glog, err).Fatal("Error in getting response from server")
 	}

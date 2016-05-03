@@ -333,6 +333,8 @@ func TestToProtocolBuffer(t *testing.T) {
 				friend {
 					name
 				}
+				friend {
+				}
 			}
 		}
 	`
@@ -362,29 +364,50 @@ func TestToProtocolBuffer(t *testing.T) {
 	if gr.Attribute != "_root_" {
 		t.Errorf("Expected attribute _root_, Got: %v", gr.Attribute)
 	}
-	if len(gr.Values) != 3 {
+	if gr.Uid != 1 {
+		t.Errorf("Expected uid 1, Got: %v", gr.Uid)
+	}
+	if len(gr.Properties) != 3 {
 		t.Errorf("Expected values map to contain 3 properties, Got: %v",
-			len(gr.Values))
+			len(gr.Properties))
 	}
-	if string(gr.Values["name"].Byte) != "Michonne" {
+	if string(gr.Properties["name"].Binary) != "Michonne" {
 		t.Errorf("Expected property name to have value Michonne, Got: %v",
-			string(gr.Values["name"].Byte))
+			string(gr.Properties["name"].Binary))
 	}
-	if len(gr.Children) != 5 {
-		t.Errorf("Expected 5 children, Got: %v", len(gr.Children))
+	if len(gr.Children) != 10 {
+		t.Errorf("Expected 10 children, Got: %v", len(gr.Children))
 	}
 
 	child := gr.Children[0]
+	if child.Uid != 23 {
+		t.Errorf("Expected uid 23, Got: %v", gr.Uid)
+	}
 	if child.Attribute != "friend" {
 		t.Errorf("Expected attribute friend, Got: %v", child.Attribute)
 	}
-	if len(child.Values) != 1 {
+	if len(child.Properties) != 1 {
 		t.Errorf("Expected values map to contain 1 property, Got: %v",
-			len(child.Values))
+			len(child.Properties))
 	}
-	if string(child.Values["name"].Byte) != "Rick Grimes" {
+	if string(child.Properties["name"].Binary) != "Rick Grimes" {
 		t.Errorf("Expected property name to have value Rick Grimes, Got: %v",
-			string(child.Values["name"].Byte))
+			string(child.Properties["name"].Binary))
+	}
+	if len(child.Children) != 0 {
+		t.Errorf("Expected 0 children, Got: %v", len(child.Children))
+	}
+
+	child = gr.Children[5]
+	if child.Uid != 23 {
+		t.Errorf("Expected uid 23, Got: %v", gr.Uid)
+	}
+	if child.Attribute != "friend" {
+		t.Errorf("Expected attribute friend, Got: %v", child.Attribute)
+	}
+	if len(child.Properties) != 0 {
+		t.Errorf("Expected values map to contain 0 properties, Got: %v",
+			len(child.Properties))
 	}
 	if len(child.Children) != 0 {
 		t.Errorf("Expected 0 children, Got: %v", len(child.Children))
