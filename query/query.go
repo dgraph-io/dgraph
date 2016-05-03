@@ -336,8 +336,9 @@ func (g *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 			properties[pc.Attr] = v
 		}
 	}
-	if val, ok := properties["xid"]; ok {
+	if val, ok := properties["_xid_"]; ok {
 		dst.Xid = string(val.Binary)
+		delete(properties, "_xid_")
 	}
 	dst.Properties, dst.Children = properties, children
 	return nil
