@@ -6,9 +6,13 @@
 [![logo](https://img.shields.io/badge/Mailing%20List-dgraph-brightgreen.svg)](https://groups.google.com/forum/#!forum/dgraph)
 [![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/dgraph-io/dgraph?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
 
+
 DGraph's goal is to provide [Google](https://www.google.com) production level scale and throughput,
 with low enough latency to be serving real time user queries, over terabytes of structured data.
 DGraph supports [GraphQL](http://graphql.org/) as query language, and responds in [JSON](http://www.json.org/).
+
+**Note that we use the Github Issue Tracker for bug reports only.**
+**For feature requests or questions, visit [https://discuss.dgraph.io](https://discuss.dgraph.io).**
 
 The README is divided into these sections:
 - [Current Status](#current-status)
