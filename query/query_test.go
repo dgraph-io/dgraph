@@ -378,9 +378,9 @@ func TestToProtocolBuffer(t *testing.T) {
 		t.Errorf("Expected values map to contain 3 properties, Got: %v",
 			len(gr.Properties))
 	}
-	if string(gr.Properties["name"].Str) != "Michonne" {
+	if gr.Properties["name"].Str != "Michonne" {
 		t.Errorf("Expected property name to have value Michonne, Got: %v",
-			string(gr.Properties["name"].Str))
+			gr.Properties["name"].Str)
 	}
 	if len(gr.Children) != 10 {
 		t.Errorf("Expected 10 children, Got: %v", len(gr.Children))
@@ -397,9 +397,9 @@ func TestToProtocolBuffer(t *testing.T) {
 		t.Errorf("Expected values map to contain 1 property, Got: %v",
 			len(child.Properties))
 	}
-	if string(child.Properties["name"].Str) != "Rick Grimes" {
+	if child.Properties["name"].Str != "Rick Grimes" {
 		t.Errorf("Expected property name to have value Rick Grimes, Got: %v",
-			string(child.Properties["name"].Str))
+			child.Properties["name"].Str)
 	}
 	if len(child.Children) != 0 {
 		t.Errorf("Expected 0 children, Got: %v", len(child.Children))
