@@ -36,7 +36,7 @@ import (
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/query"
-	"github.com/dgraph-io/dgraph/query/pb"
+	"github.com/dgraph-io/dgraph/query/graph"
 	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/uid"
@@ -203,19 +203,21 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, string(js))
 }
 
-// server is used to implement pb.DGraphServer
+// server is used to implement graph.DGraphServer
 type server struct{}
 
 // This method is used to execute the query and return the response to the
 // client as a protocol buffer message.
 func (s *server) Query(ctx context.Context,
-	req *pb.GraphRequest) (*pb.GraphResponse, error) {
-	resp := new(pb.GraphResponse)
+	req *graph.Request) (*graph.Node, error) {
+	resp := new(graph.Node)
 	if len(req.Query) == 0 {
 		glog.Error("While reading query")
 		return resp, fmt.Errorf("Empty query")
 	}
 
+	var l query.Latency
+	l.Start = time.Now()
 	// TODO(pawan): Refactor query parsing and graph processing code to a common
 	// function used by Query and queryHandler
 	glog.WithField("q", req.Query).Debug("Query received.")
@@ -230,6 +232,7 @@ func (s *server) Query(ctx context.Context,
 		x.Err(glog, err).Error("While conversion to internal format")
 		return resp, err
 	}
+	l.Parsing = time.Since(l.Start)
 	glog.WithField("q", req.Query).Debug("Query parsed.")
 
 	rch := make(chan error)
@@ -239,9 +242,10 @@ func (s *server) Query(ctx context.Context,
 		x.Err(glog, err).Error("While executing query")
 		return resp, err
 	}
-
+	l.Processing = time.Since(l.Start) - l.Parsing
 	glog.WithField("q", req.Query).Debug("Graph processed.")
-	resp, err = sg.PreTraverse()
+
+	resp, err = sg.ToProtocolBuffer(&l)
 	if err != nil {
 		x.Err(glog, err).Error("While converting to protocol buffer.")
 		return resp, err
@@ -261,7 +265,7 @@ func runGrpcServer(address string) {
 	glog.WithField("address", ln.Addr()).Info("Client Worker listening")
 
 	s := grpc.NewServer()
-	pb.RegisterDGraphServer(s, &server{})
+	graph.RegisterDGraphServer(s, &server{})
 	if err = s.Serve(ln); err != nil {
 		glog.Fatalf("While serving gRpc requests", err)
 	}

@@ -23,13 +23,13 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
-	"github.com/dgraph-io/dgraph/query/pb"
+	"github.com/dgraph-io/dgraph/query/graph"
 	"github.com/dgraph-io/dgraph/x"
 )
 
 var glog = x.Log("client")
 var ip = flag.String("ip", "127.0.0.1:8081", "Port to communicate with server")
-var query = flag.String("query", "", "Query sent to the server")
+var q = flag.String("query", "", "Query sent to the server")
 
 func main() {
 	flag.Parse()
@@ -40,9 +40,9 @@ func main() {
 	}
 	defer conn.Close()
 
-	c := pb.NewDGraphClient(conn)
+	c := graph.NewDGraphClient(conn)
 
-	r, err := c.Query(context.Background(), &pb.GraphRequest{Query: *query})
+	r, err := c.Query(context.Background(), &graph.Request{Query: *q})
 	if err != nil {
 		x.Err(glog, err).Fatal("Error in getting response from server")
 	}
