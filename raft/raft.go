@@ -77,7 +77,9 @@ func (w *Worker) Hello(query *conn.Query, reply *conn.Reply) error {
 	}
 
 	if _, ok := pools[v.Id]; !ok {
-		go connectWith(v.Addr)
+		if cur_node.id != v.Id {
+			go connectWith(v.Addr)
+		}
 	}
 	reply.Data = []byte(strconv.Itoa(int(cur_node.id)))
 
@@ -145,10 +147,12 @@ func (n *node) openWAL() *wal.WAL {
 		w.Close()
 	}
 
+	fmt.Println("Here in openWAL")
 	w, err := wal.Open(n.waldir, walpb.Snapshot{})
 	if err != nil {
 		log.Fatalf("raftexample: error loading wal (%v)", err)
 	}
+	fmt.Println("Here in openWAL")
 
 	return w
 }
@@ -156,24 +160,30 @@ func (n *node) openWAL() *wal.WAL {
 // replayWAL replays WAL entries into the raft instance.
 func (n *node) replayWAL() *wal.WAL {
 	w := n.openWAL()
+	fmt.Println("Here in openWAL")
 	_, st, ents, err := w.ReadAll()
 	if err != nil {
 		log.Fatalf("raftexample: failed to read WAL (%v)", err)
 	}
 	// append to storage so raft starts at the right place in log
+	fmt.Println("Here")
 	n.store.Append(ents)
+	fmt.Println("Here")
 	// send nil once lastIndex is published so client knows commit channel is current
 	if len(ents) > 0 {
 		n.lastIndex = ents[len(ents)-1].Index
 	} /*else {
 		n.commitC <- nil
 	}*/
+	fmt.Println("Here")
 	n.store.SetHardState(st)
+	fmt.Println("Here")
 	return w
 }
 
-func newNode(id uint64, addr string, peers []raft.Peer) *node {
+func newNode(id uint64, addr string) (*node, bool) {
 	store := raft.NewMemoryStorage()
+	var restart bool
 	n := &node{
 		id:     id,
 		addr:   addr,
@@ -193,21 +203,23 @@ func newNode(id uint64, addr string, peers []raft.Peer) *node {
 		done:   make(chan struct{}),
 	}
 
+	fmt.Println("opening wal dir")
 	oldwal := wal.Exist(n.waldir)
 	n.wal = n.replayWAL()
 
 	if oldwal {
-		n.raft = raft.RestartNode(n.cfg)
-	} else {
-		n.raft = raft.StartNode(n.cfg, peers)
+		fmt.Println("found wal dir")
+		restart = true
 	}
 
-	return n
+	return n, restart
 }
 
 func (n *node) run() {
 	defer n.wal.Close()
+	fmt.Println("Starting RAFT")
 	for {
+		fmt.Println("...")
 		select {
 		case <-n.ticker:
 			n.raft.Tick()
@@ -225,19 +237,9 @@ func (n *node) run() {
 					n.raft.ApplyConfChange(cc)
 					if cc.Type == raftpb.ConfChangeRemoveNode {
 						// Make sure the node doesn't use the same NodeId as the one that crashed
-						/*
-							if cur_node.id == cc.NodeID {
-								RemoveNodeFromCluster(cur_node.id)
-								cur_node.raft.Stop()
-								cur_node = newNode(*instanceIdx*1000, "", []raft.Peer{{ID: *instanceIdx}})
-								master_ip := getMasterIp(*clusterIP)
-								master_id := connectWith(master_ip)
-								getPeerListFrom(master_id)
-								connectWithPeers()
-								go cur_node.run()
-								proposeJoin(master_id)
-								glog.Infof("Joined with a new NodeID %v", cur_node.id)
-							}*/
+						if cur_node.id == cc.NodeID {
+							glog.Fatalf("Cannot join with the ID %v, as this was removed from the cluster", cur_node.id)
+						}
 						glog.Infof("Removing node %v", cc.NodeID)
 						RemoveStaleKeys(peers[cc.NodeID])
 						delete(peers, cc.NodeID)
@@ -279,7 +281,8 @@ func sendOverNetwork(ctx context.Context, message raftpb.Message) {
 	if !ok {
 		glog.WithField("From", cur_node.id).WithField("To", message.To).
 			Error("Error in making connetions")
-		cur_node.raft.ReportUnreachable(message.To)
+		RemoveNodeFromCluster(message.To)
+		//cur_node.raft.ReportUnreachable(message.To)
 		return
 	}
 	addr := pool.Addr
@@ -298,12 +301,25 @@ func sendOverNetwork(ctx context.Context, message raftpb.Message) {
 	reply := new(conn.Reply)
 	if err := pool.Call("Worker.ReceiveOverNetwork", query, reply); err != nil {
 		glog.WithField("call", "Worker.ReceiveOverNetwork").Error(err)
-		if cur_node.id == cur_node.raft.Status().Lead {
-			glog.WithField("Id", message.To).Infof("")
-			cur_node.raft.ReportUnreachable(message.To)
-			RemoveNodeFromCluster(message.To)
+		for i := 0; i < 1; i++ {
+			err = pool.Call("Worker.ReceiveOverNetwork", query, reply)
+			if err == nil {
+				break
+			}
+
+			glog.WithField("error", err).
+				WithField("call", "Worker.ReceiveOverNetwork").
+				Info("Retrying connection...")
+			time.Sleep(10 * time.Second)
 		}
-		return
+		if err != nil {
+			if cur_node.id == cur_node.raft.Status().Lead {
+				glog.WithField("Id", message.To).Infof("cant reach node")
+				//cur_node.raft.ReportUnreachable(message.To)
+				RemoveNodeFromCluster(message.To)
+			}
+			return
+		}
 	}
 }
 
@@ -436,6 +452,7 @@ func connectWith(addr string) uint64 {
 	glog.WithField("reply", i).WithField("addr", addr).
 		Info("Got reply from server")
 
+	fmt.Println(i)
 	pools[uint64(i)] = pool
 	peers[uint64(i)] = pool.Addr
 	return uint64(i)
@@ -548,6 +565,7 @@ func updatePeerList(pl map[uint64]string) {
 func connectWithPeers() {
 	for k, v := range peers {
 		if _, ok := pools[k]; !ok {
+			fmt.Println(k, v)
 			go connectWith(v)
 		}
 	}
@@ -600,18 +618,18 @@ var (
 	w          = new(Worker)
 	workerPort = flag.String("workerport", ":12345",
 		"Port used by worker for internal communication.")
-	restart     = flag.Bool("restart", false, "True if the node is being restarted after failure")
 	instanceIdx = flag.Uint64("idx", 1,
 		"raft instance id")
 	postingdir = flag.String("posting", "", "UID directory")
 	clusterIP  = flag.String("clusterIP", "", "IP of a node in cluster")
 	cur_node   *node
+	isRestart  bool
 )
 
 func main() {
 	flag.Parse()
 
-	cur_node = newNode(*instanceIdx, "", []raft.Peer{{ID: *instanceIdx}})
+	cur_node, isRestart = newNode(*instanceIdx, "")
 
 	if err := rpc.Register(w); err != nil {
 		glog.Fatal(err)
@@ -636,13 +654,41 @@ func main() {
 		master_id := connectWith(master_ip)
 		getPeerListFrom(master_id)
 		connectWithPeers()
+
+		if isRestart {
+			fmt.Println("found wal dir")
+			cur_node.raft = raft.RestartNode(cur_node.cfg)
+		} else {
+			cur_node.raft = raft.StartNode(cur_node.cfg, []raft.Peer{{ID: *instanceIdx}})
+		}
 		go cur_node.run()
-		proposeJoin(master_id)
+		if !isRestart {
+			proposeJoin(master_id)
+		}
 	} else {
+		fmt.Println("Master")
 		connectWithPeers()
+		fmt.Println("Master")
+		cur_node.raft = raft.StartNode(cur_node.cfg, []raft.Peer{{ID: *instanceIdx}})
 		go cur_node.run()
+		fmt.Println("Master")
+		/*prop := &keyvalRequest{
+			Op:  "Set",
+			Key: "maxIdx",
+			Val: strconv.Itoa(int(maxIdx)),
+		}
+		var buf bytes.Buffer
+		enc := gob.NewEncoder(&buf)
+		err := enc.Encode(prop)
+		if err != nil {
+			glog.Fatalf("encode:", err)
+		}
+		propByte := buf.Bytes()
+		cur_node.raft.Propose(cur_node.ctx, propByte)
+		*/
 		cur_node.raft.Campaign(cur_node.ctx)
 	}
+	fmt.Println("Master")
 
 	//go trackPeerList()
 
