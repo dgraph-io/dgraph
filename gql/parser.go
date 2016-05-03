@@ -33,12 +33,18 @@ type GraphQuery struct {
 	UID      uint64
 	XID      string
 	Attr     string
+	First    int
 	Children []*GraphQuery
 }
 
 type Mutation struct {
 	Set string
 	Del string
+}
+
+type pair struct {
+	Key string
+	Val string
 }
 
 func run(l *lex.Lexer) {
@@ -142,6 +148,35 @@ func parseMutationOp(l *lex.Lexer, op string, mu *Mutation) error {
 	return errors.New("Invalid mutation formatting.")
 }
 
+func parseArguments(l *lex.Lexer) (result []pair, rerr error) {
+	for {
+		var p pair
+
+		// Get key
+		item := <-l.Items
+		if item.Typ == itemArgName {
+			p.Key = item.Val
+
+		} else if item.Typ == itemRightRound {
+			break
+
+		} else {
+			return result, fmt.Errorf("Expecting argument name. Got: %v", item)
+		}
+
+		// Get value
+		item = <-l.Items
+		if item.Typ == itemArgVal {
+			p.Val = item.Val
+		} else {
+			return result, fmt.Errorf("Expecting argument value. Got: %v", item)
+		}
+
+		result = append(result, p)
+	}
+	return result, nil
+}
+
 func getRoot(l *lex.Lexer) (gq *GraphQuery, rerr error) {
 	item := <-l.Items
 	if item.Typ != itemName {
@@ -155,40 +190,24 @@ func getRoot(l *lex.Lexer) (gq *GraphQuery, rerr error) {
 
 	var uid uint64
 	var xid string
-	for {
-		var key, val string
-		// Get key or close bracket
-		item = <-l.Items
-		if item.Typ == itemArgName {
-			key = item.Val
-		} else if item.Typ == itemRightRound {
-			break
-		} else {
-			return nil, fmt.Errorf("Expecting argument name. Got: %v", item)
-		}
-
-		// Get corresponding value.
-		item = <-l.Items
-		if item.Typ == itemArgVal {
-			val = item.Val
-		} else {
-			return nil, fmt.Errorf("Expecting argument va Got: %v", item)
-		}
-
-		if key == "_uid_" {
-			uid, rerr = strconv.ParseUint(val, 0, 64)
+	args, err := parseArguments(l)
+	if err != nil {
+		return nil, err
+	}
+	for _, p := range args {
+		if p.Key == "_uid_" {
+			uid, rerr = strconv.ParseUint(p.Val, 0, 64)
 			if rerr != nil {
 				return nil, rerr
 			}
-		} else if key == "_xid_" {
-			xid = val
+		} else if p.Key == "_xid_" {
+			xid = p.Val
+
 		} else {
-			return nil, fmt.Errorf("Expecting _uid_ or _xid_. Got: %v", item)
+			return nil, fmt.Errorf("Expecting _uid_ or _xid_. Got: %+v", p)
 		}
 	}
-	if item.Typ != itemRightRound {
-		return nil, fmt.Errorf("Unexpected token. Got: %v", item)
-	}
+
 	gq = new(GraphQuery)
 	gq.UID = uid
 	gq.XID = xid
@@ -219,10 +238,18 @@ func godeep(l *lex.Lexer, gq *GraphQuery) error {
 			return nil
 
 		} else if item.Typ == itemLeftRound {
-			// absorb all these, we don't use them right now.
-			for ti := range l.Items {
-				if ti.Typ == itemRightRound || ti.Typ == lex.ItemEOF {
-					return nil
+			args, err := parseArguments(l)
+			if err != nil {
+				return err
+			}
+			// We only use argument 'first' for now.
+			for _, p := range args {
+				if p.Key == "first" {
+					count, err := strconv.ParseInt(p.Val, 0, 32)
+					if err != nil {
+						return err
+					}
+					curp.First = int(count)
 				}
 			}
 		}

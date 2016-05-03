@@ -111,6 +111,8 @@ func (l *Latency) ToMap() map[string]string {
 // client convenient formats, like GraphQL / JSON.
 type SubGraph struct {
 	Attr     string
+	Count    int
+	Offset   int
 	Children []*SubGraph
 
 	query  []byte
@@ -374,9 +376,14 @@ func (g *SubGraph) ToProtocolBuffer(l *Latency) (n *graph.Node, rerr error) {
 }
 
 func treeCopy(gq *gql.GraphQuery, sg *SubGraph) {
+	// Typically you act on the current node, and leave recursion to deal with
+	// children. But, in this case, we don't want to muck with the current
+	// node, because of the way we're dealing with the root node.
+	// So, we work on the children, and then recurse for grand children.
 	for _, gchild := range gq.Children {
 		dst := new(SubGraph)
 		dst.Attr = gchild.Attr
+		dst.Count = gchild.First
 		sg.Children = append(sg.Children, dst)
 		treeCopy(gchild, dst)
 	}
@@ -443,14 +450,14 @@ func newGraph(euid uint64, exid string) (*SubGraph, error) {
 	sg.Attr = "_root_"
 	sg.result = b.Bytes[b.Head():]
 	// Also add query for consistency and to allow for ToJson() later.
-	sg.query = createTaskQuery(sg.Attr, []uint64{euid})
+	sg.query = createTaskQuery(sg, []uint64{euid})
 	return sg, nil
 }
 
 // createTaskQuery generates the query buffer.
-func createTaskQuery(attr string, sorted []uint64) []byte {
+func createTaskQuery(sg *SubGraph, sorted []uint64) []byte {
 	b := flatbuffers.NewBuilder(0)
-	ao := b.CreateString(attr)
+	ao := b.CreateString(sg.Attr)
 
 	task.QueryStartUidsVector(b, len(sorted))
 	for i := len(sorted) - 1; i >= 0; i-- {
@@ -461,6 +468,8 @@ func createTaskQuery(attr string, sorted []uint64) []byte {
 	task.QueryStart(b)
 	task.QueryAddAttr(b, ao)
 	task.QueryAddUids(b, vend)
+	task.QueryAddCount(b, int32(sg.Count))
+
 	qend := task.QueryEnd(b)
 	b.Finish(qend)
 	return b.Bytes[b.Head():]
@@ -580,7 +589,7 @@ func ProcessGraph(sg *SubGraph, rch chan error, td time.Duration) {
 	childchan := make(chan error, len(sg.Children))
 	for i := 0; i < len(sg.Children); i++ {
 		child := sg.Children[i]
-		child.query = createTaskQuery(child.Attr, sorted)
+		child.query = createTaskQuery(child, sorted)
 		go ProcessGraph(child, childchan, timeleft)
 	}
 

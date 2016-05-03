@@ -44,6 +44,32 @@ func checkUids(t *testing.T, l *List, uids ...uint64) error {
 			return fmt.Errorf("Expected: %v. Got: %v", uids[i], p.Uid())
 		}
 	}
+	if len(uids) >= 3 {
+		ruids := l.GetUids(1, 2)
+		if len(ruids) != 2 {
+			return fmt.Errorf("Expected result of length: 2. Got: %v", len(ruids))
+		}
+
+		for i := 0; i < len(ruids); i++ {
+			if ruids[i] != uids[1+i] {
+				return fmt.Errorf("GetUids expected: %v. Got: %v", uids[1+i], ruids[i])
+			}
+		}
+
+		ruids = l.GetUids(1, -2) // offset should be ignored.
+		ulen := len(uids)
+		if ulen > 2 && len(ruids) != 2 {
+			return fmt.Errorf("Expected result of length: 2. Got: %v", len(ruids))
+		}
+
+		for i := 0; i < len(ruids); i++ {
+			if ruids[i] != uids[ulen-2+i] {
+				return fmt.Errorf("GetUids neg count expected: %v. Got: %v",
+					uids[ulen-2+i], ruids[i])
+			}
+		}
+	}
+
 	return nil
 }
 

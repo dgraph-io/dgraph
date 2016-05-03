@@ -77,6 +77,7 @@ func TestParse(t *testing.T) {
 
 func TestParseXid(t *testing.T) {
 	// logrus.SetLevel(logrus.DebugLevel)
+	// TODO: Why does the query not have _xid_ attribute?
 	query := `
 	query {
 		user(_uid_: 0x11) {
@@ -97,6 +98,58 @@ func TestParseXid(t *testing.T) {
 	}
 	if err := checkAttr(gq.Children[0], "type.object.name"); err != nil {
 		t.Error(err)
+	}
+}
+
+func TestParseFirst(t *testing.T) {
+	query := `
+	query {
+		user(_xid_: m.abcd) {
+			type.object.name
+			friends (first: 10) {
+			}
+		}
+	}`
+	gq, _, err := Parse(query)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	if gq == nil {
+		t.Error("subgraph is nil")
+		return
+	}
+	if len(gq.Children) != 2 {
+		t.Errorf("Expected 2 children. Got: %v", len(gq.Children))
+	}
+	if err := checkAttr(gq.Children[0], "type.object.name"); err != nil {
+		t.Error(err)
+	}
+	if gq.Children[0].First != 0 {
+		t.Errorf("Expected count 0. Got: %v", gq.Children[0].First)
+	}
+	if err := checkAttr(gq.Children[1], "friends"); err != nil {
+		t.Error(err)
+	}
+	if gq.Children[1].First != 10 {
+		t.Errorf("Expected count 10. Got: %v", gq.Children[1].First)
+	}
+}
+
+func TestParseFirst_error(t *testing.T) {
+	query := `
+	query {
+		user(_xid_: m.abcd) {
+			type.object.name
+			friends (first: ) {
+			}
+		}
+	}`
+	var err error
+	_, _, err = Parse(query)
+	t.Log(err)
+	if err == nil {
+		t.Error("Expected error")
 	}
 }
 

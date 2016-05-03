@@ -3,6 +3,8 @@ namespace task;
 table Query {
 	attr:string;
 	uids:[ulong];
+	count:int;
+	offset:int;
 }
 
 table Value {
