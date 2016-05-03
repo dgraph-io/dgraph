@@ -720,15 +720,35 @@ func (l *List) LastCompactionTs() time.Time {
 	return l.lastCompact
 }
 
-func (l *List) GetUids() []uint64 {
+func (l *List) GetUids(offset, count int) []uint64 {
 	l.wg.Wait()
 	l.RLock()
 	defer l.RUnlock()
 
-	result := make([]uint64, l.length())
+	if offset < 0 {
+		glog.WithField("offset", offset).Fatal("Unexpected offset")
+		return make([]uint64, 0)
+	}
+
+	if count < 0 {
+		count = 0 - count
+		offset = l.length() - count
+	}
+
+	if count == 0 {
+		count = l.length() - offset
+
+	} else if count > l.length()-offset {
+		count = l.length() - offset
+	}
+	if count < 0 {
+		count = 0
+	}
+
+	result := make([]uint64, count)
 	result = result[:0]
 	var p types.Posting
-	for i := 0; i < l.length(); i++ {
+	for i := offset; i < count+offset && i < l.length(); i++ {
 		if ok := l.get(&p, i); !ok || p.Uid() == math.MaxUint64 {
 			break
 		}

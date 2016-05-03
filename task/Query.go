@@ -39,9 +39,27 @@ func (rcv *Query) UidsLength() int {
 	return 0
 }
 
-func QueryStart(builder *flatbuffers.Builder) { builder.StartObject(2) }
+func (rcv *Query) Count() int32 {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
+	if o != 0 {
+		return rcv._tab.GetInt32(o + rcv._tab.Pos)
+	}
+	return 0
+}
+
+func (rcv *Query) Offset() int32 {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
+	if o != 0 {
+		return rcv._tab.GetInt32(o + rcv._tab.Pos)
+	}
+	return 0
+}
+
+func QueryStart(builder *flatbuffers.Builder) { builder.StartObject(4) }
 func QueryAddAttr(builder *flatbuffers.Builder, attr flatbuffers.UOffsetT) { builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(attr), 0) }
 func QueryAddUids(builder *flatbuffers.Builder, uids flatbuffers.UOffsetT) { builder.PrependUOffsetTSlot(1, flatbuffers.UOffsetT(uids), 0) }
 func QueryStartUidsVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT { return builder.StartVector(8, numElems, 8)
 }
+func QueryAddCount(builder *flatbuffers.Builder, count int32) { builder.PrependInt32Slot(2, count, 0) }
+func QueryAddOffset(builder *flatbuffers.Builder, offset int32) { builder.PrependInt32Slot(3, offset, 0) }
 func QueryEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT { return builder.EndObject() }

@@ -152,7 +152,7 @@ func parseArguments(l *lex.Lexer) (result []pair, rerr error) {
 	for {
 		var p pair
 
-		// Get key.
+		// Get key
 		item := <-l.Items
 		if item.Typ == itemArgName {
 			p.Key = item.Val
@@ -164,7 +164,7 @@ func parseArguments(l *lex.Lexer) (result []pair, rerr error) {
 			return result, fmt.Errorf("Expecting argument name. Got: %v", item)
 		}
 
-		// Get value.
+		// Get value
 		item = <-l.Items
 		if item.Typ == itemArgVal {
 			p.Val = item.Val
@@ -238,7 +238,6 @@ func godeep(l *lex.Lexer, gq *GraphQuery) error {
 			return nil
 
 		} else if item.Typ == itemLeftRound {
-
 			args, err := parseArguments(l)
 			if err != nil {
 				return err
