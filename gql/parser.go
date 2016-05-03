@@ -238,24 +238,19 @@ func godeep(l *lex.Lexer, gq *GraphQuery) error {
 			return nil
 
 		} else if item.Typ == itemLeftRound {
-			// absorb all these, we don't use them right now.
-			/*
-				for {
-					var key, val string
-					item = <-l.Items
-					if item.Typ == itemArgName {
-						key = item.Val
-					} else if item.Typ == itemRightRound {
-						break
-					} else {
-						return nil, fmt.Errorf("Expecting argument name. Got: %v", item)
+
+			args, err := parseArguments(l)
+			if err != nil {
+				return err
+			}
+			// We only use argument 'first' for now.
+			for _, p := range args {
+				if p.Key == "first" {
+					count, err := strconv.ParseInt(p.Val, 0, 32)
+					if err != nil {
+						return err
 					}
-				}
-			*/
-			for ti := range l.Items {
-				fmt.Println(ti.String())
-				if ti.Typ == itemRightRound || ti.Typ == lex.ItemEOF {
-					return nil
+					curp.First = int(count)
 				}
 			}
 		}
