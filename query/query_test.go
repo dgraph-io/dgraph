@@ -184,6 +184,9 @@ func populateGraph(t *testing.T) (string, *store.Store) {
 	edge.Value = "Andrea"
 	addEdge(t, edge, posting.GetOrCreate(posting.Key(31, "name"), ps))
 
+	edge.Value = "mich"
+	addEdge(t, edge, posting.GetOrCreate(posting.Key(1, "_xid_"), ps))
+
 	return dir, ps
 }
 
@@ -320,18 +323,21 @@ func TestToJson(t *testing.T) {
 	fmt.Printf(string(js))
 }
 
-func TestPreTraverse(t *testing.T) {
+func TestToProtocolBuffer(t *testing.T) {
 	dir, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
 
 	query := `
 		{
 			me(_uid_:0x01) {
+				_xid_
 				name
 				gender
 				status
 				friend {
 					name
+				}
+				friend {
 				}
 			}
 		}
@@ -353,41 +359,64 @@ func TestPreTraverse(t *testing.T) {
 		t.Error(err)
 	}
 
-	ugr, err := sg.PreTraverse()
+	var l Latency
+	gr, err := sg.ToProtocolBuffer(&l)
 	if err != nil {
 		t.Error(err)
 	}
 
-	if len(ugr.Children) != 4 {
-		t.Errorf("Expected len 4. Got: %v", ugr.Children)
+	if gr.Attribute != "_root_" {
+		t.Errorf("Expected attribute _root_, Got: %v", gr.Attribute)
 	}
-	child := ugr.Children[0]
-	if child.Attribute != "name" {
-		t.Errorf("Expected attr name. Got: %v", child.Attribute)
+	if gr.Uid != 1 {
+		t.Errorf("Expected uid 1, Got: %v", gr.Uid)
 	}
-	if string(child.Result.Values[0]) != "Michonne" {
-		t.Errorf("Expected value Michonne. Got %v",
-			string(child.Result.Values[0]))
+	if gr.Xid != "mich" {
+		t.Errorf("Expected xid mich, Got: %v", gr.Xid)
 	}
-	child = ugr.Children[3]
+	if len(gr.Properties) != 3 {
+		t.Errorf("Expected values map to contain 3 properties, Got: %v",
+			len(gr.Properties))
+	}
+	if gr.Properties["name"].Str != "Michonne" {
+		t.Errorf("Expected property name to have value Michonne, Got: %v",
+			gr.Properties["name"].Str)
+	}
+	if len(gr.Children) != 10 {
+		t.Errorf("Expected 10 children, Got: %v", len(gr.Children))
+	}
+
+	child := gr.Children[0]
+	if child.Uid != 23 {
+		t.Errorf("Expected uid 23, Got: %v", gr.Uid)
+	}
 	if child.Attribute != "friend" {
-		t.Errorf("Expected attr friend. Got: %v", child.Attribute)
+		t.Errorf("Expected attribute friend, Got: %v", child.Attribute)
 	}
-	uids := child.Result.Uidmatrix[0].Uids
-	if uids[0] != 23 || uids[1] != 24 || uids[2] != 25 || uids[3] != 31 ||
-		uids[4] != 101 {
-		t.Errorf("Friend ids don't match")
+	if len(child.Properties) != 1 {
+		t.Errorf("Expected values map to contain 1 property, Got: %v",
+			len(child.Properties))
 	}
-	// To check for name of friends
-	child = child.Children[0]
-	if child.Attribute != "name" {
-		t.Errorf("Expected attr friend. Got: %v", child.Attribute)
+	if child.Properties["name"].Str != "Rick Grimes" {
+		t.Errorf("Expected property name to have value Rick Grimes, Got: %v",
+			child.Properties["name"].Str)
+	}
+	if len(child.Children) != 0 {
+		t.Errorf("Expected 0 children, Got: %v", len(child.Children))
 	}
 
-	names := child.Result.Values
-
-	if string(names[0]) != "Rick Grimes" || string(names[1]) != "Glenn Rhee" ||
-		string(names[2]) != "Daryl Dixon" || string(names[3]) != "Andrea" {
-		t.Errorf("Names don't match")
+	child = gr.Children[5]
+	if child.Uid != 23 {
+		t.Errorf("Expected uid 23, Got: %v", gr.Uid)
+	}
+	if child.Attribute != "friend" {
+		t.Errorf("Expected attribute friend, Got: %v", child.Attribute)
+	}
+	if len(child.Properties) != 0 {
+		t.Errorf("Expected values map to contain 0 properties, Got: %v",
+			len(child.Properties))
+	}
+	if len(child.Children) != 0 {
+		t.Errorf("Expected 0 children, Got: %v", len(child.Children))
 	}
 }
