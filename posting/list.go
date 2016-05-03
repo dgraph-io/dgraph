@@ -734,6 +734,9 @@ func (l *List) GetUids(offset, count int) []uint64 {
 		count = 0 - count
 		offset = l.length() - count
 	}
+	if offset < 0 {
+		offset = 0
+	}
 
 	if count == 0 {
 		count = l.length() - offset
