@@ -271,18 +271,19 @@ func indexOf(uid uint64, q *task.Query) int {
 }
 
 // This method gets the values and children for a subgraph.
-func preTraverse(uid uint64, g *SubGraph) (map[string]*graph.Value, []*graph.Node, error) {
-	values := make(map[string]*graph.Value)
+func (g *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
+	properties := make(map[string]*graph.Value)
 	var children []*graph.Node
 
-	for _, predChild := range g.Children {
-		ro := flatbuffers.GetUOffsetT(predChild.result)
+	// We go through all predicate children of the subgraph.
+	for _, pc := range g.Children {
+		ro := flatbuffers.GetUOffsetT(pc.result)
 		r := new(task.Result)
-		r.Init(predChild.result, ro)
+		r.Init(pc.result, ro)
 
-		uo := flatbuffers.GetUOffsetT(predChild.query)
+		uo := flatbuffers.GetUOffsetT(pc.query)
 		q := new(task.Query)
-		q.Init(predChild.query, uo)
+		q.Init(pc.query, uo)
 
 		idx := indexOf(uid, q)
 
@@ -290,15 +291,15 @@ func preTraverse(uid uint64, g *SubGraph) (map[string]*graph.Value, []*graph.Nod
 			glog.WithFields(logrus.Fields{
 				"uid":            uid,
 				"attribute":      g.Attr,
-				"childAttribute": predChild.Attr,
+				"childAttribute": pc.Attr,
 			}).Fatal("Attribute with uid not found in child Query uids")
-			return values, children, fmt.Errorf("Attribute with uid not found")
+			return fmt.Errorf("Attribute with uid not found")
 		}
 
 		var ul task.UidList
 		var tv task.Value
 		if ok := r.Uidmatrix(&ul, idx); !ok {
-			return values, children, fmt.Errorf("While parsing UidList")
+			return fmt.Errorf("While parsing UidList")
 		}
 
 		if ul.UidsLength() > 0 {
@@ -306,28 +307,25 @@ func preTraverse(uid uint64, g *SubGraph) (map[string]*graph.Value, []*graph.Nod
 			// this predicate.
 			for i := 0; i < ul.UidsLength(); i++ {
 				uid := ul.Uids(i)
-				uidChild := new(graph.Node)
-				uidChild.Attribute = predChild.Attr
-				uidChild.Uid = uid
-
-				vals, ch, rerr := preTraverse(uid, predChild)
-				if rerr != nil {
+				uc := new(graph.Node)
+				uc.Attribute = pc.Attr
+				uc.Uid = uid
+				if rerr := pc.preTraverse(uid, uc); rerr != nil {
 					x.Err(glog, rerr).Error("Error while traversal")
-					return values, children, rerr
+					return rerr
 				}
 
-				uidChild.Properties, uidChild.Children = vals, ch
-				children = append(children, uidChild)
+				children = append(children, uc)
 			}
 		} else {
 			v := new(graph.Value)
 			if ok := r.Values(&tv, idx); !ok {
-				return values, children, fmt.Errorf("While parsing value")
+				return fmt.Errorf("While parsing value")
 			}
 
 			var ival interface{}
 			if err := posting.ParseValue(&ival, tv.ValBytes()); err != nil {
-				return values, children, err
+				return err
 			}
 
 			if ival == nil {
@@ -335,10 +333,14 @@ func preTraverse(uid uint64, g *SubGraph) (map[string]*graph.Value, []*graph.Nod
 			}
 
 			v.Binary = []byte(ival.(string))
-			values[predChild.Attr] = v
+			properties[pc.Attr] = v
 		}
 	}
-	return values, children, nil
+	if val, ok := properties["xid"]; ok {
+		dst.Xid = string(val.Binary)
+	}
+	dst.Properties, dst.Children = properties, children
+	return nil
 }
 
 // This method transforms the predicate based subgraph to an
@@ -358,8 +360,7 @@ func (g *SubGraph) ToProtocolBuffer(l *Latency) (n *graph.Node, rerr error) {
 	r.Uidmatrix(&ul, 0)
 	n.Uid = ul.Uids(0)
 
-	n.Properties, n.Children, rerr = preTraverse(n.Uid, g)
-	if rerr != nil {
+	if rerr = g.preTraverse(n.Uid, n); rerr != nil {
 		x.Err(glog, rerr).Error("Error while traversal")
 		return n, rerr
 	}

@@ -184,6 +184,9 @@ func populateGraph(t *testing.T) (string, *store.Store) {
 	edge.Value = "Andrea"
 	addEdge(t, edge, posting.GetOrCreate(posting.Key(31, "name"), ps))
 
+	edge.Value = "mich"
+	addEdge(t, edge, posting.GetOrCreate(posting.Key(1, "xid"), ps))
+
 	return dir, ps
 }
 
@@ -327,6 +330,7 @@ func TestToProtocolBuffer(t *testing.T) {
 	query := `
 		{
 			me(_uid_:0x01) {
+				xid
 				name
 				gender
 				status
@@ -367,8 +371,11 @@ func TestToProtocolBuffer(t *testing.T) {
 	if gr.Uid != 1 {
 		t.Errorf("Expected uid 1, Got: %v", gr.Uid)
 	}
-	if len(gr.Properties) != 3 {
-		t.Errorf("Expected values map to contain 3 properties, Got: %v",
+	if gr.Xid != "mich" {
+		t.Errorf("Expected xid mich, Got: %v", gr.Xid)
+	}
+	if len(gr.Properties) != 4 {
+		t.Errorf("Expected values map to contain 4 properties, Got: %v",
 			len(gr.Properties))
 	}
 	if string(gr.Properties["name"].Binary) != "Michonne" {
