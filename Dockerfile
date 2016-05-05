@@ -21,12 +21,8 @@ ENV LD_LIBRARY_PATH "/usr/local/lib"
 # Install DGraph and update dependencies to right versions.
 RUN go get -v github.com/robfig/glock && \
 	go get -v github.com/dgraph-io/dgraph/... && \
-	glock sync github.com/dgraph-io/dgraph && echo "v0.2.3"
-
-# Run some tests, don't build an image if we're failing tests.
-# TODO(pawan): Please uncomment this once the tests run okay on Docker.
-# https://trello.com/c/3lKdXE5f
-# RUN go test github.com/dgraph-io/dgraph/...
+	glock sync github.com/dgraph-io/dgraph && echo "v0.2.3" && \
+  go test github.com/dgraph-io/dgraph/...
 
 # Create the dgraph and data directory. These directories should be mapped
 # to host machine for persistence.
