@@ -102,7 +102,6 @@ func (w *Worker) Hello(query *conn.Query, reply *conn.Reply) error {
 
 	if _, ok := pools[v.Id]; !ok {
 		if v.Id != cur_node.id {
-			fmt.Println("$\n$\n$\n$\n$\n$\n", cur_node.id, v.Id, "$\n$\n$\n$\n$\n$\n")
 			go connectWith(v.Addr)
 		}
 	}
@@ -251,7 +250,6 @@ func (n *node) run() {
 	defer n.wal.Close()
 	fmt.Println("Starting RAFT")
 	for {
-		fmt.Println("...")
 		select {
 		case <-n.ticker:
 			n.raft.Tick()
@@ -648,6 +646,7 @@ var (
 func main() {
 	flag.Parse()
 
+	// isRestart is true if we have a valid WAL directory
 	cur_node, isRestart = newNode(maxIdx, "", *walDir)
 
 	if err := rpc.Register(w); err != nil {
@@ -657,6 +656,7 @@ func main() {
 		glog.Fatal(err)
 	}
 
+	// Read the posting list directory and get the predicates
 	var predList []string
 	if *postingdir != "" {
 		ps1 := new(store.Store)
@@ -690,8 +690,12 @@ func main() {
 		go cur_node.run()
 		if !isRestart {
 			proposeJoin(master_id)
-			maxIdx = assignId + 1
 
+			// If the node is started for the first time,
+			// increase the MaxId to AssignedId + 1
+
+			// TODO : This proposal can be moved to a function
+			maxIdx = assignId + 1
 			prop := &keyvalRequest{
 				Op:  "Set",
 				Key: "maxIdx",
@@ -705,6 +709,7 @@ func main() {
 			}
 			propByte := buf.Bytes()
 			cur_node.raft.Propose(cur_node.ctx, propByte)
+
 		}
 	} else {
 		peers[maxIdx] = *workerPort
@@ -713,8 +718,8 @@ func main() {
 		go cur_node.run()
 		cur_node.raft.Campaign(cur_node.ctx)
 
+		//increase the maxIdx after master starts and propose it to the RAFT cluster
 		maxIdx++
-
 		prop := &keyvalRequest{
 			Op:  "Set",
 			Key: "maxIdx",
@@ -730,6 +735,7 @@ func main() {
 		cur_node.raft.Propose(cur_node.ctx, propByte)
 	}
 
+	// (For testing purpose) propose a key val
 	fmt.Println("proposal by node ", cur_node.id)
 	nodeID := strconv.Itoa(int(cur_node.id))
 
@@ -769,6 +775,7 @@ func main() {
 
 	}
 
+	// every 5 seconds, print the global store
 	for {
 		fmt.Printf("** Node %v **\n", cur_node.id)
 		for k, v := range cur_node.pstore {
