@@ -17,6 +17,8 @@
 package query
 
 import (
+	"bytes"
+	"encoding/gob"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -63,12 +65,12 @@ func checkName(t *testing.T, r *task.Result, idx int, expected string) {
 
 func checkSingleValue(t *testing.T, child *SubGraph,
 	attr string, value string) {
-	if child.Attr != attr || len(child.result) == 0 {
-		t.Error("Expected attr name with some result")
+	if child.Attr != attr || len(child.Result) == 0 {
+		t.Error("Expected attr name with some.Result")
 	}
-	uo := flatbuffers.GetUOffsetT(child.result)
+	uo := flatbuffers.GetUOffsetT(child.Result)
 	r := new(task.Result)
-	r.Init(child.result, uo)
+	r.Init(child.Result, uo)
 	if r.ValuesLength() != 1 {
 		t.Errorf("Expected value length 1. Got: %v", r.ValuesLength())
 	}
@@ -105,9 +107,9 @@ func TestNewGraph(t *testing.T) {
 
 	worker.Init(ps, nil, 0, 1)
 
-	uo := flatbuffers.GetUOffsetT(sg.result)
+	uo := flatbuffers.GetUOffsetT(sg.Result)
 	r := new(task.Result)
-	r.Init(sg.result, uo)
+	r.Init(sg.Result, uo)
 	if r.UidmatrixLength() != 1 {
 		t.Errorf("Expected length 1. Got: %v", r.UidmatrixLength())
 	}
@@ -230,13 +232,13 @@ func TestProcessGraph(t *testing.T) {
 	if child.Attr != "friend" {
 		t.Errorf("Expected attr friend. Got: %v", child.Attr)
 	}
-	if len(child.result) == 0 {
-		t.Errorf("Expected some result.")
+	if len(child.Result) == 0 {
+		t.Errorf("Expected some.Result.")
 		return
 	}
-	uo := flatbuffers.GetUOffsetT(child.result)
+	uo := flatbuffers.GetUOffsetT(child.Result)
 	r := new(task.Result)
-	r.Init(child.result, uo)
+	r.Init(child.Result, uo)
 
 	if r.UidmatrixLength() != 1 {
 		t.Errorf("Expected 1 matrix. Got: %v", r.UidmatrixLength())
@@ -257,8 +259,8 @@ func TestProcessGraph(t *testing.T) {
 		t.Errorf("Expected attr name")
 	}
 	child = child.Children[0]
-	uo = flatbuffers.GetUOffsetT(child.result)
-	r.Init(child.result, uo)
+	uo = flatbuffers.GetUOffsetT(child.Result)
+	r.Init(child.Result, uo)
 	if r.ValuesLength() != 5 {
 		t.Errorf("Expected 5 names of 5 friends")
 	}
@@ -419,4 +421,72 @@ func TestToProtocolBuffer(t *testing.T) {
 	if len(child.Children) != 0 {
 		t.Errorf("Expected 0 children, Got: %v", len(child.Children))
 	}
+}
+
+func benchmarkToJson(file string, b *testing.B) {
+	b.ReportAllocs()
+	var sg SubGraph
+	var l Latency
+
+	f, err := ioutil.ReadFile(file)
+	if err != nil {
+		b.Error(err)
+	}
+
+	buf := bytes.NewBuffer(f)
+	dec := gob.NewDecoder(buf)
+	err = dec.Decode(&sg)
+	if err != nil {
+		b.Error(err)
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if _, err := sg.ToJson(&l); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkToJson(b *testing.B) {
+	benchmarkToJson("benchmark/actors10.txt", b)
+	benchmarkToJson("benchmark/actors100.txt", b)
+	benchmarkToJson("benchmark/actors1000.txt", b)
+	benchmarkToJson("benchmark/directors10.txt", b)
+	benchmarkToJson("benchmark/directors100.txt", b)
+	benchmarkToJson("benchmark/directors1000.txt", b)
+}
+
+func benchmarkToProtocolBuffer(file string, b *testing.B) {
+	b.ReportAllocs()
+	var sg SubGraph
+	var l Latency
+
+	f, err := ioutil.ReadFile(file)
+	if err != nil {
+		b.Error(err)
+	}
+
+	buf := bytes.NewBuffer(f)
+	dec := gob.NewDecoder(buf)
+	err = dec.Decode(&sg)
+	if err != nil {
+		b.Error(err)
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if _, err := sg.ToProtocolBuffer(&l); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkToProtocolBuffer(b *testing.B) {
+	benchmarkToProtocolBuffer("benchmark/actors10.txt", b)
+	benchmarkToProtocolBuffer("benchmark/actors100.txt", b)
+	benchmarkToProtocolBuffer("benchmark/actors1000.txt", b)
+	benchmarkToProtocolBuffer("benchmark/directors10.txt", b)
+	benchmarkToProtocolBuffer("benchmark/directors100.txt", b)
+	benchmarkToProtocolBuffer("benchmark/directors1000.txt", b)
 }
