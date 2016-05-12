@@ -28,6 +28,7 @@ import (
 	"github.com/dgraph-io/dgraph/commit"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
+	"github.com/dgraph-io/dgraph/query/graph"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/worker"
@@ -325,6 +326,15 @@ func TestToJson(t *testing.T) {
 	fmt.Printf(string(js))
 }
 
+func getProperty(properties []*graph.Property, prop string) (v *graph.Value) {
+	for _, p := range properties {
+		if p.Prop == prop {
+			return p.Val
+		}
+	}
+	return v
+}
+
 func TestToProtocolBuffer(t *testing.T) {
 	dir, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
@@ -380,9 +390,9 @@ func TestToProtocolBuffer(t *testing.T) {
 		t.Errorf("Expected values map to contain 3 properties, Got: %v",
 			len(gr.Properties))
 	}
-	if gr.Properties["name"].Str != "Michonne" {
+	if getProperty(gr.Properties, "name").Str != "Michonne" {
 		t.Errorf("Expected property name to have value Michonne, Got: %v",
-			gr.Properties["name"].Str)
+			getProperty(gr.Properties, "name").Str)
 	}
 	if len(gr.Children) != 10 {
 		t.Errorf("Expected 10 children, Got: %v", len(gr.Children))
@@ -399,9 +409,9 @@ func TestToProtocolBuffer(t *testing.T) {
 		t.Errorf("Expected values map to contain 1 property, Got: %v",
 			len(child.Properties))
 	}
-	if child.Properties["name"].Str != "Rick Grimes" {
+	if getProperty(child.Properties, "name").Str != "Rick Grimes" {
 		t.Errorf("Expected property name to have value Rick Grimes, Got: %v",
-			child.Properties["name"].Str)
+			getProperty(child.Properties, "name").Str)
 	}
 	if len(child.Children) != 0 {
 		t.Errorf("Expected 0 children, Got: %v", len(child.Children))

@@ -22,11 +22,16 @@ message Latency {
   string pb = 3;
 }
 
+message Property {
+  string prop = 1;
+  Value val = 2;
+}
+
 message Node {
   uint64 uid = 1;
   string xid = 2;
   string attribute = 3;
-  map<string, Value> properties = 4;
+  repeated Property properties = 4;
   repeated Node children = 5; // Each node can have multiple children
 }
 

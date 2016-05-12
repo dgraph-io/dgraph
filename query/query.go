@@ -277,8 +277,7 @@ func indexOf(uid uint64, q *task.Query) int {
 
 // This method gets the values and children for a subgraph.
 func (g *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
-	var properties map[string]*graph.Value
-	properties = make(map[string]*graph.Value)
+	var properties []*graph.Property
 	var children []*graph.Node
 
 	// We go through all predicate children of the subgraph.
@@ -339,12 +338,18 @@ func (g *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 			}
 
 			v.Str = ival.(string)
-			properties[pc.Attr] = v
+			properties = append(properties,
+				&graph.Property{Prop: pc.Attr, Val: v})
 		}
 	}
-	if val, ok := properties["_xid_"]; ok {
-		dst.Xid = val.Str
-		delete(properties, "_xid_")
+
+	for i, p := range properties {
+		if p.Prop == "_xid_" {
+			dst.Xid = p.Val.Str
+			// Deleting the _xid_ property if it exists
+			properties = append(properties[:i], properties[i+1:]...)
+			break
+		}
 	}
 	dst.Properties, dst.Children = properties, children
 	return nil

@@ -29,8 +29,14 @@ Directors query
 Benchmarking tests were run for ToJson and ToProtocolBuffer methods. Results
 from the `go test` command are tabulated below.
 
-BenchmarkToJson                500       3939003 ns/op      957723 B/op      16115 allocs/op
-BenchmarkToProtocolBuffer     1000       2288681 ns/op      566287 B/op       7542 allocs/op
+BenchmarkToJson                500       3583970 ns/op      957747 B/op      16115 allocs/op
+BenchmarkToProtocolBuffer     1000       2299409 ns/op      566288 B/op       7542 allocs/op
 
 We can see that ToProtocolBuffer method allocates less memory and takes lesser
 time than ToJson method.
+
+After changing properties inside a graph.Node from a map to a slice, we can see
+further improvements.
+
+BenchmarkToJson                500       3726982 ns/op      957679 B/op      16115 allocs/op
+BenchmarkToProtocolBuffer     1000       1954618 ns/op      395603 B/op       7377 allocs/op
