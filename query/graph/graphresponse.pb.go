@@ -88,10 +88,6 @@ func init() {
 var _ context.Context
 var _ grpc.ClientConn
 
-// This is a compile-time assertion to ensure that this generated file
-// is compatible with the grpc package it is being compiled against.
-const _ = grpc.SupportPackageIsVersion2
-
 // Client API for DGraph service
 
 type DGraphClient interface {
@@ -125,22 +121,16 @@ func RegisterDGraphServer(s *grpc.Server, srv DGraphServer) {
 	s.RegisterService(&_DGraph_serviceDesc, srv)
 }
 
-func _DGraph_Query_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _DGraph_Query_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
 	in := new(Request)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
-	if interceptor == nil {
-		return srv.(DGraphServer).Query(ctx, in)
+	out, err := srv.(DGraphServer).Query(ctx, in)
+	if err != nil {
+		return nil, err
 	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/graph.DGraph/Query",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(DGraphServer).Query(ctx, req.(*Request))
-	}
-	return interceptor(ctx, in, info, handler)
+	return out, nil
 }
 
 var _DGraph_serviceDesc = grpc.ServiceDesc{
