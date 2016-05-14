@@ -209,7 +209,8 @@ type server struct{}
 // This method is used to execute the query and return the response to the
 // client as a protocol buffer message.
 func (s *server) Query(ctx context.Context,
-	req *graph.Request) (resp *graph.Response, err error) {
+	req *graph.Request) (*graph.Response, error) {
+	resp := new(graph.Response)
 	if len(req.Query) == 0 {
 		glog.Error("While reading query")
 		return resp, fmt.Errorf("Empty query")
