@@ -143,11 +143,10 @@ func TestProcessTask(t *testing.T) {
 	if ok := r.Values(&tval, 2); !ok {
 		t.Errorf("Unable to retrieve value")
 	}
-	var iout interface{}
-	if err := posting.ParseValue(&iout, tval.ValBytes()); err != nil {
+	var v string
+	if v, err = posting.ParseValue(tval.ValBytes()); err != nil {
 		t.Error(err)
 	}
-	v := iout.(string)
 	if v != "photon" {
 		t.Errorf("Expected photon. Got: %q", v)
 	}

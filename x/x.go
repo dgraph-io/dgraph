@@ -49,7 +49,7 @@ type Status struct {
 type DirectedEdge struct {
 	Entity    uint64
 	Attribute string
-	Value     interface{}
+	Value     []byte
 	ValueId   uint64
 	Source    string
 	Timestamp time.Time

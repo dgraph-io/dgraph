@@ -31,7 +31,7 @@ type NQuad struct {
 	Subject     string
 	Predicate   string
 	ObjectId    string
-	ObjectValue interface{}
+	ObjectValue []byte
 	Label       string
 }
 

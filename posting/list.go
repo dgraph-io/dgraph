@@ -19,7 +19,6 @@ package posting
 import (
 	"bytes"
 	"encoding/binary"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -116,16 +115,11 @@ func Key(uid uint64, attr string) []byte {
 func newPosting(t x.DirectedEdge, op byte) []byte {
 	b := flatbuffers.NewBuilder(0)
 	var bo flatbuffers.UOffsetT
-	if t.Value != nil {
+	if bytes.Equal(t.Value, nil) {
 		if t.ValueId != math.MaxUint64 {
 			glog.Fatal("This should have already been set by the caller.")
 		}
-		bytes, err := json.Marshal(t.Value)
-		if err != nil {
-			glog.WithError(err).Fatal("Unable to marshal value")
-			return []byte{}
-		}
-		bo = b.CreateByteVector(bytes)
+		bo = b.CreateByteVector(t.Value)
 	}
 	so := b.CreateString(t.Source)
 	types.PostingStart(b)
@@ -146,16 +140,11 @@ func addEdgeToPosting(b *flatbuffers.Builder,
 	t x.DirectedEdge, op byte) flatbuffers.UOffsetT {
 
 	var bo flatbuffers.UOffsetT
-	if t.Value != nil {
+	if bytes.Equal(t.Value, nil) {
 		if t.ValueId != math.MaxUint64 {
 			glog.Fatal("This should have already been set by the caller.")
 		}
-		bytes, err := json.Marshal(t.Value)
-		if err != nil {
-			glog.WithError(err).Fatal("Unable to marshal value")
-			return 0
-		}
-		bo = b.CreateByteVector(bytes)
+		bo = b.CreateByteVector(t.Value)
 	}
 	so := b.CreateString(t.Source) // Do this before posting start.
 
@@ -214,17 +203,16 @@ func init() {
 		len(empty), len(emptyPosting))
 }
 
-func ParseValue(i *interface{}, value []byte) error {
+func ParseValue(value []byte) ([]byte, error) {
 	if len(value) == 0 {
-		return errors.New("No value found in posting")
+		return []byte{}, errors.New("No value found in posting")
 	}
 
 	if len(value) == 1 && value[0] == 0x00 {
-		i = nil
-		return nil
+		return []byte{}, nil
 	}
 
-	return json.Unmarshal(value, i)
+	return value, nil
 }
 
 func (l *List) init(key []byte, pstore *store.Store, clog *commit.Logger) {
@@ -625,7 +613,7 @@ func (l *List) AddMutation(t x.DirectedEdge, op byte) error {
 
 	// All edges with a value set, have the same uid. In other words,
 	// an (entity, attribute) can only have one interface{} value.
-	if t.Value != nil {
+	if bytes.Equal(t.Value, nil) {
 		t.ValueId = math.MaxUint64
 	}
 	if t.ValueId == 0 {

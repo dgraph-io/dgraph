@@ -17,6 +17,7 @@
 package query
 
 import (
+	"bytes"
 	"container/heap"
 	"encoding/json"
 	"fmt"
@@ -208,27 +209,27 @@ func postTraverse(g *SubGraph) (result map[uint64]interface{}, rerr error) {
 		if ok := r.Values(&tv, i); !ok {
 			return result, fmt.Errorf("While parsing value")
 		}
-		var ival interface{}
-		if err := posting.ParseValue(&ival, tv.ValBytes()); err != nil {
-			return result, err
+		var val []byte
+		if val, rerr = posting.ParseValue(tv.ValBytes()); rerr != nil {
+			return result, rerr
 		}
-		if ival == nil {
+		if bytes.Equal(val, nil) {
 			continue
 		}
 
 		if pval, present := result[q.Uids(i)]; present {
 			glog.WithField("prev", pval).
 				WithField("_uid_", q.Uids(i)).
-				WithField("new", ival).
+				WithField("new", val).
 				Fatal("Previous value detected.")
 		}
 		m := make(map[string]interface{})
 		m["_uid_"] = fmt.Sprintf("%#x", q.Uids(i))
 		glog.WithFields(logrus.Fields{
 			"_uid_": q.Uids(i),
-			"val":   ival,
+			"val":   val,
 		}).Debug("Got value")
-		m[g.Attr] = ival
+		m[g.Attr] = val
 		result[q.Uids(i)] = m
 	}
 	return result, nil
@@ -328,16 +329,11 @@ func (g *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 				return fmt.Errorf("While parsing value")
 			}
 
-			var ival interface{}
-			if err := posting.ParseValue(&ival, tv.ValBytes()); err != nil {
+			val, err := posting.ParseValue(tv.ValBytes())
+			if err != nil {
 				return err
 			}
-
-			if ival == nil {
-				ival = ""
-			}
-
-			v.Str = ival.(string)
+			v.Str = string(val)
 			properties[pc.Attr] = v
 		}
 	}

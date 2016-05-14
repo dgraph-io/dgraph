@@ -17,6 +17,8 @@
 package posting
 
 import (
+	"bytes"
+	"encoding/binary"
 	"fmt"
 	"io/ioutil"
 	"math"
@@ -238,7 +240,7 @@ func TestAddMutation_Value(t *testing.T) {
 	glog.Debug("Init successful.")
 
 	edge := x.DirectedEdge{
-		Value:     "oh hey there",
+		Value:     []byte("oh hey there"),
 		Source:    "new-testing",
 		Timestamp: time.Now(),
 	}
@@ -250,12 +252,11 @@ func TestAddMutation_Value(t *testing.T) {
 	if p.Uid() != math.MaxUint64 {
 		t.Errorf("All value uids should go to MaxUint64. Got: %v", p.Uid())
 	}
-	var iout interface{}
-	if err := ParseValue(&iout, p.ValueBytes()); err != nil {
+	var out []byte
+	if out, err = ParseValue(p.ValueBytes()); err != nil {
 		t.Error(err)
 	}
-	out := iout.(string)
-	if out != "oh hey there" {
+	if !bytes.Equal(out, []byte("oh hey there")) {
 		t.Errorf("Expected a value. Got: [%q]", out)
 	}
 
@@ -268,17 +269,19 @@ func TestAddMutation_Value(t *testing.T) {
 		if ok := ol.Get(&tp, 0); !ok {
 			t.Error("While retrieving posting")
 		}
-		if err := ParseValue(&iout, tp.ValueBytes()); err != nil {
+		var out []byte
+		if out, err = ParseValue(tp.ValueBytes()); err != nil {
 			t.Error(err)
 		}
-		out := iout.(string)
-		if out != "oh hey there" {
+		if !bytes.Equal(out, []byte("oh hey there")) {
 			t.Errorf("Expected a value. Got: [%q]", out)
 		}
 	}
 
 	// The value made it to the posting list. Changing it now.
-	edge.Value = 119
+	buf := new(bytes.Buffer)
+	binary.Write(buf, binary.LittleEndian, 119)
+	edge.Value = buf.Bytes()
 	if err := ol.AddMutation(edge, Set); err != nil {
 		t.Error(err)
 	}
@@ -288,10 +291,11 @@ func TestAddMutation_Value(t *testing.T) {
 	if ok := ol.Get(&p, 0); !ok {
 		t.Error("While retrieving posting")
 	}
-	if err := ParseValue(&iout, p.ValueBytes()); err != nil {
+	if out, err = ParseValue(p.ValueBytes()); err != nil {
 		t.Error(err)
 	}
-	intout := iout.(float64)
+	var intout int
+	binary.Read(buf, binary.LittleEndian, intout)
 	if intout != 119 {
 		t.Errorf("Expected 119. Got: %v", intout)
 	}

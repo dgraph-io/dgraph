@@ -131,15 +131,17 @@ func allocateUniqueUid(xid string, instanceIdx uint64,
 			var p types.Posting
 			pl.Get(&p, 0)
 
-			var tmp interface{}
-			posting.ParseValue(&tmp, p.ValueBytes())
-			glog.Debug("Found existing xid: [%q]. Continuing...", tmp.(string))
+			tmp, err := posting.ParseValue(p.ValueBytes())
+			if err != nil {
+				glog.WithError(err).Error("While parsing value")
+			}
+			glog.Debug("Found existing xid: [%q]. Continuing...", tmp)
 			continue
 		}
 
 		// Uid hasn't been assigned yet.
 		t := x.DirectedEdge{
-			Value:     xid, // not txid
+			Value:     []byte(xid), // not txid
 			Source:    "_assigner_",
 			Timestamp: time.Now(),
 		}
@@ -251,8 +253,10 @@ func ExternalId(uid uint64) (xid string, rerr error) {
 	if p.Uid() != math.MaxUint64 {
 		glog.WithField("uid", uid).Fatal("Value uid must be MaxUint64.")
 	}
-	var t interface{}
-	rerr = posting.ParseValue(&t, p.ValueBytes())
-	xid = t.(string)
-	return xid, rerr
+	val, rerr := posting.ParseValue(p.ValueBytes())
+	if rerr != nil {
+		glog.WithField("err", rerr).Error("While parsing value")
+		return "", rerr
+	}
+	return string(val), rerr
 }
