@@ -17,11 +17,13 @@
 package posting
 
 import (
+	"bytes"
 	"fmt"
 	"io/ioutil"
 	"math"
 	"math/rand"
 	"os"
+	"strconv"
 	"testing"
 	"time"
 
@@ -238,7 +240,7 @@ func TestAddMutation_Value(t *testing.T) {
 	glog.Debug("Init successful.")
 
 	edge := x.DirectedEdge{
-		Value:     "oh hey there",
+		Value:     []byte("oh hey there"),
 		Source:    "new-testing",
 		Timestamp: time.Now(),
 	}
@@ -250,13 +252,8 @@ func TestAddMutation_Value(t *testing.T) {
 	if p.Uid() != math.MaxUint64 {
 		t.Errorf("All value uids should go to MaxUint64. Got: %v", p.Uid())
 	}
-	var iout interface{}
-	if err := ParseValue(&iout, p.ValueBytes()); err != nil {
-		t.Error(err)
-	}
-	out := iout.(string)
-	if out != "oh hey there" {
-		t.Errorf("Expected a value. Got: [%q]", out)
+	if !bytes.Equal(p.ValueBytes(), []byte("oh hey there")) {
+		t.Errorf("Expected a value. Got: [%q]", string(p.ValueBytes()))
 	}
 
 	// Run the same check after committing.
@@ -268,17 +265,13 @@ func TestAddMutation_Value(t *testing.T) {
 		if ok := ol.Get(&tp, 0); !ok {
 			t.Error("While retrieving posting")
 		}
-		if err := ParseValue(&iout, tp.ValueBytes()); err != nil {
-			t.Error(err)
-		}
-		out := iout.(string)
-		if out != "oh hey there" {
-			t.Errorf("Expected a value. Got: [%q]", out)
+		if !bytes.Equal(tp.ValueBytes(), []byte("oh hey there")) {
+			t.Errorf("Expected a value. Got: [%q]", string(tp.ValueBytes()))
 		}
 	}
 
 	// The value made it to the posting list. Changing it now.
-	edge.Value = 119
+	edge.Value = []byte(strconv.Itoa(119))
 	if err := ol.AddMutation(edge, Set); err != nil {
 		t.Error(err)
 	}
@@ -288,10 +281,10 @@ func TestAddMutation_Value(t *testing.T) {
 	if ok := ol.Get(&p, 0); !ok {
 		t.Error("While retrieving posting")
 	}
-	if err := ParseValue(&iout, p.ValueBytes()); err != nil {
+	var intout int
+	if intout, err = strconv.Atoi(string(p.ValueBytes())); err != nil {
 		t.Error(err)
 	}
-	intout := iout.(float64)
 	if intout != 119 {
 		t.Errorf("Expected 119. Got: %v", intout)
 	}

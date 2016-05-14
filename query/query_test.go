@@ -54,13 +54,9 @@ func checkName(t *testing.T, r *task.Result, idx int, expected string) {
 	if ok := r.Values(&tv, idx); !ok {
 		t.Error("Unable to retrieve value")
 	}
-	var iname interface{}
-	if err := posting.ParseValue(&iname, tv.ValBytes()); err != nil {
-		t.Error(err)
-	}
-	name := iname.(string)
-	if name != expected {
-		t.Errorf("Expected: %v. Got: %v", expected, name)
+	name := tv.ValBytes()
+	if string(name) != expected {
+		t.Errorf("Expected: %v. Got: %v", expected, string(name))
 	}
 }
 
@@ -165,29 +161,29 @@ func populateGraph(t *testing.T) (string, *store.Store) {
 	addEdge(t, edge, posting.GetOrCreate(posting.Key(1, "friend"), ps))
 
 	// Now let's add a few properties for the main user.
-	edge.Value = "Michonne"
+	edge.Value = []byte("Michonne")
 	addEdge(t, edge, posting.GetOrCreate(posting.Key(1, "name"), ps))
 
-	edge.Value = "female"
+	edge.Value = []byte("female")
 	addEdge(t, edge, posting.GetOrCreate(posting.Key(1, "gender"), ps))
 
-	edge.Value = "alive"
+	edge.Value = []byte("alive")
 	addEdge(t, edge, posting.GetOrCreate(posting.Key(1, "status"), ps))
 
 	// Now let's add a name for each of the friends, except 101.
-	edge.Value = "Rick Grimes"
+	edge.Value = []byte("Rick Grimes")
 	addEdge(t, edge, posting.GetOrCreate(posting.Key(23, "name"), ps))
 
-	edge.Value = "Glenn Rhee"
+	edge.Value = []byte("Glenn Rhee")
 	addEdge(t, edge, posting.GetOrCreate(posting.Key(24, "name"), ps))
 
-	edge.Value = "Daryl Dixon"
+	edge.Value = []byte("Daryl Dixon")
 	addEdge(t, edge, posting.GetOrCreate(posting.Key(25, "name"), ps))
 
-	edge.Value = "Andrea"
+	edge.Value = []byte("Andrea")
 	addEdge(t, edge, posting.GetOrCreate(posting.Key(31, "name"), ps))
 
-	edge.Value = "mich"
+	edge.Value = []byte("mich")
 	addEdge(t, edge, posting.GetOrCreate(posting.Key(1, "_xid_"), ps))
 
 	return dir, ps
@@ -274,8 +270,8 @@ func TestProcessGraph(t *testing.T) {
 		if ok := r.Values(&tv, 4); !ok {
 			t.Error("Unable to retrieve value")
 		}
-		if tv.ValLength() != 1 || tv.ValBytes()[0] != 0x00 {
-			t.Error("Expected a null byte")
+		if !bytes.Equal(tv.ValBytes(), []byte{}) {
+			t.Error("Expected a null byte slice")
 		}
 	}
 
@@ -383,15 +379,14 @@ func TestToPB(t *testing.T) {
 	if gr.Uid != 1 {
 		t.Errorf("Expected uid 1, Got: %v", gr.Uid)
 	}
-	// TODO(pawan) - Fix "" being stored in the the flatbuffer val.
-	if gr.Xid != `"mich"` {
+	if gr.Xid != "mich" {
 		t.Errorf("Expected xid mich, Got: %v", gr.Xid)
 	}
 	if len(gr.Properties) != 3 {
 		t.Errorf("Expected values map to contain 3 properties, Got: %v",
 			len(gr.Properties))
 	}
-	if string(getProperty(gr.Properties, "name")) != `"Michonne"` {
+	if string(getProperty(gr.Properties, "name")) != "Michonne" {
 		t.Errorf("Expected property name to have value Michonne, Got: %v",
 			string(getProperty(gr.Properties, "name")))
 	}
@@ -410,7 +405,7 @@ func TestToPB(t *testing.T) {
 		t.Errorf("Expected values map to contain 1 property, Got: %v",
 			len(child.Properties))
 	}
-	if string(getProperty(child.Properties, "name")) != `"Rick Grimes"` {
+	if string(getProperty(child.Properties, "name")) != "Rick Grimes" {
 		t.Errorf("Expected property name to have value Rick Grimes, Got: %v",
 			string(getProperty(child.Properties, "name")))
 	}

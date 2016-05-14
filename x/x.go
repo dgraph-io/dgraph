@@ -49,7 +49,7 @@ type Status struct {
 type DirectedEdge struct {
 	Entity    uint64
 	Attribute string
-	Value     interface{}
+	Value     []byte
 	ValueId   uint64
 	Source    string
 	Timestamp time.Time
@@ -114,8 +114,3 @@ func UidlistOffset(b *flatbuffers.Builder,
 }
 
 var Nilbyte []byte
-
-func init() {
-	Nilbyte = make([]byte, 1)
-	Nilbyte[0] = 0x00
-}

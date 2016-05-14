@@ -17,6 +17,7 @@
 package worker
 
 import (
+	"bytes"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -95,7 +96,7 @@ func TestProcessTask(t *testing.T) {
 	addEdge(t, edge, posting.GetOrCreate(posting.Key(10, "friend"), ps))
 	addEdge(t, edge, posting.GetOrCreate(posting.Key(12, "friend"), ps))
 
-	edge.Value = "photon"
+	edge.Value = []byte("photon")
 	addEdge(t, edge, posting.GetOrCreate(posting.Key(12, "friend"), ps))
 
 	query := NewQuery("friend", []uint64{10, 11, 12})
@@ -128,27 +129,21 @@ func TestProcessTask(t *testing.T) {
 	if ok := r.Values(&tval, 0); !ok {
 		t.Errorf("Unable to retrieve value")
 	}
-	if tval.ValLength() != 1 ||
-		tval.ValBytes()[0] != 0x00 {
-		t.Errorf("Invalid byte value at index 0")
+	if !bytes.Equal(tval.ValBytes(), []byte{}) {
+		t.Errorf("Invalid value")
 	}
+
 	if ok := r.Values(&tval, 1); !ok {
 		t.Errorf("Unable to retrieve value")
 	}
-	if tval.ValLength() != 1 ||
-		tval.ValBytes()[0] != 0x00 {
-		t.Errorf("Invalid byte value at index 0")
+	if !bytes.Equal(tval.ValBytes(), []byte{}) {
+		t.Errorf("Invalid value")
 	}
 
 	if ok := r.Values(&tval, 2); !ok {
 		t.Errorf("Unable to retrieve value")
 	}
-	var iout interface{}
-	if err := posting.ParseValue(&iout, tval.ValBytes()); err != nil {
-		t.Error(err)
-	}
-	v := iout.(string)
-	if v != "photon" {
-		t.Errorf("Expected photon. Got: %q", v)
+	if string(tval.ValBytes()) != "photon" {
+		t.Errorf("Expected photon. Got: %q", string(tval.ValBytes()))
 	}
 }

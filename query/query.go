@@ -17,6 +17,7 @@
 package query
 
 import (
+	"bytes"
 	"container/heap"
 	"encoding/json"
 	"fmt"
@@ -25,7 +26,6 @@ import (
 
 	"github.com/Sirupsen/logrus"
 	"github.com/dgraph-io/dgraph/gql"
-	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/query/graph"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/worker"
@@ -208,27 +208,24 @@ func postTraverse(g *SubGraph) (result map[uint64]interface{}, rerr error) {
 		if ok := r.Values(&tv, i); !ok {
 			return result, fmt.Errorf("While parsing value")
 		}
-		var ival interface{}
-		if err := posting.ParseValue(&ival, tv.ValBytes()); err != nil {
-			return result, err
-		}
-		if ival == nil {
+		val := tv.ValBytes()
+		if bytes.Equal(val, nil) {
 			continue
 		}
 
 		if pval, present := result[q.Uids(i)]; present {
 			glog.WithField("prev", pval).
 				WithField("_uid_", q.Uids(i)).
-				WithField("new", ival).
+				WithField("new", val).
 				Fatal("Previous value detected.")
 		}
 		m := make(map[string]interface{})
 		m["_uid_"] = fmt.Sprintf("%#x", q.Uids(i))
 		glog.WithFields(logrus.Fields{
 			"_uid_": q.Uids(i),
-			"val":   ival,
+			"val":   val,
 		}).Debug("Got value")
-		m[g.Attr] = ival
+		m[g.Attr] = val
 		result[q.Uids(i)] = m
 	}
 	return result, nil
@@ -335,7 +332,6 @@ func (g *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 				p := &graph.Property{Prop: pc.Attr, Val: v}
 				properties = append(properties, p)
 			}
-
 		}
 	}
 	dst.Properties, dst.Children = properties, children
