@@ -26,17 +26,22 @@ Directors query
     }
 }
 
+14 May 2016
 Benchmarking tests were run for ToJson and ToProtocolBuffer methods. Results
 from the `go test` command are tabulated below.
 
-BenchmarkToJson                500       3583970 ns/op      957747 B/op      16115 allocs/op
-BenchmarkToProtocolBuffer     1000       2299409 ns/op      566288 B/op       7542 allocs/op
+BenchmarkToJSON_10_Actor         20000       92797 ns/op     22616 B/op      319 allocs/op
+BenchmarkToJSON_10_Director      20000       87246 ns/op     21111 B/op      303 allocs/op
+BenchmarkToJSON_100_Actor         2000      774767 ns/op    207893 B/op     2670 allocs/op
+BenchmarkToJSON_100_Director      2000      579467 ns/op    142811 B/op     2103 allocs/op
+BenchmarkToJSON_1000_Actor         200     7903001 ns/op   1904863 B/op    24712 allocs/op
+BenchmarkToJSON_1000_Director      300     4335375 ns/op    957728 B/op    16115 allocs/op
+BenchmarkToPB_10_Actor          100000       19672 ns/op      3176 B/op       60 allocs/op
+BenchmarkToPB_10_Director       100000       17891 ns/op      3096 B/op       60 allocs/op
+BenchmarkToPB_100_Actor          10000      372288 ns/op     30728 B/op      556 allocs/op
+BenchmarkToPB_100_Director        5000      221506 ns/op     37272 B/op      701 allocs/op
+BenchmarkToPB_1000_Actor           500     2612757 ns/op    296486 B/op     5383 allocs/op
+BenchmarkToPB_1000_Director        300     3980677 ns/op    395600 B/op     7376 allocs/op
 
 We can see that ToProtocolBuffer method allocates less memory and takes lesser
 time than ToJson method.
-
-After changing properties inside a graph.Node from a map to a slice, we can see
-further improvements.
-
-BenchmarkToJson                500       3726982 ns/op      957679 B/op      16115 allocs/op
-BenchmarkToProtocolBuffer     1000       1954618 ns/op      395603 B/op       7377 allocs/op

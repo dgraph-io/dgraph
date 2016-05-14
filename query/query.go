@@ -338,17 +338,14 @@ func (g *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 			}
 
 			v.Str = ival.(string)
-			properties = append(properties,
-				&graph.Property{Prop: pc.Attr, Val: v})
-		}
-	}
 
-	for i, p := range properties {
-		if p.Prop == "_xid_" {
-			dst.Xid = p.Val.Str
-			// Deleting the _xid_ property if it exists
-			properties = append(properties[:i], properties[i+1:]...)
-			break
+			if pc.Attr == "_xid_" {
+				dst.Xid = v.Str
+			} else {
+				p := &graph.Property{Prop: pc.Attr, Val: v}
+				properties = append(properties, p)
+			}
+
 		}
 	}
 	dst.Properties, dst.Children = properties, children

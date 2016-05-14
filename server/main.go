@@ -209,10 +209,7 @@ type server struct{}
 // This method is used to execute the query and return the response to the
 // client as a protocol buffer message.
 func (s *server) Query(ctx context.Context,
-	req *graph.Request) (*graph.Response, error) {
-	node := new(graph.Node)
-	gl := new(graph.Latency)
-	resp := new(graph.Response)
+	req *graph.Request) (resp *graph.Response, err error) {
 	if len(req.Query) == 0 {
 		glog.Error("While reading query")
 		return resp, fmt.Errorf("Empty query")
@@ -247,13 +244,14 @@ func (s *server) Query(ctx context.Context,
 	l.Processing = time.Since(l.Start) - l.Parsing
 	glog.WithField("q", req.Query).Debug("Graph processed.")
 
-	node, err = sg.ToProtocolBuffer(&l)
+	node, err := sg.ToProtocolBuffer(&l)
 	if err != nil {
 		x.Err(glog, err).Error("While converting to protocol buffer.")
 		return resp, err
 	}
 	resp.N = node
 
+	gl := new(graph.Latency)
 	gl.Parsing, gl.Processing, gl.Pb = l.Parsing.String(), l.Processing.String(),
 		l.ProtocolBuffer.String()
 	resp.L = gl

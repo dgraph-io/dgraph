@@ -326,16 +326,16 @@ func TestToJson(t *testing.T) {
 	fmt.Printf(string(js))
 }
 
-func getProperty(properties []*graph.Property, prop string) (v *graph.Value) {
+func getProperty(properties []*graph.Property, prop string) *graph.Value {
 	for _, p := range properties {
 		if p.Prop == prop {
 			return p.Val
 		}
 	}
-	return v
+	return nil
 }
 
-func TestToProtocolBuffer(t *testing.T) {
+func TestToPB(t *testing.T) {
 	dir, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
 
@@ -458,16 +458,14 @@ func benchmarkToJson(file string, b *testing.B) {
 	}
 }
 
-func BenchmarkToJson(b *testing.B) {
-	benchmarkToJson("benchmark/actors10.txt", b)
-	benchmarkToJson("benchmark/actors100.txt", b)
-	benchmarkToJson("benchmark/actors1000.txt", b)
-	benchmarkToJson("benchmark/directors10.txt", b)
-	benchmarkToJson("benchmark/directors100.txt", b)
-	benchmarkToJson("benchmark/directors1000.txt", b)
-}
+func BenchmarkToJSON_10_Actor(b *testing.B)      { benchmarkToJson("benchmark/actors10.bin", b) }
+func BenchmarkToJSON_10_Director(b *testing.B)   { benchmarkToJson("benchmark/directors10.bin", b) }
+func BenchmarkToJSON_100_Actor(b *testing.B)     { benchmarkToJson("benchmark/actors100.bin", b) }
+func BenchmarkToJSON_100_Director(b *testing.B)  { benchmarkToJson("benchmark/directors100.bin", b) }
+func BenchmarkToJSON_1000_Actor(b *testing.B)    { benchmarkToJson("benchmark/actors1000.bin", b) }
+func BenchmarkToJSON_1000_Director(b *testing.B) { benchmarkToJson("benchmark/directors1000.bin", b) }
 
-func benchmarkToProtocolBuffer(file string, b *testing.B) {
+func benchmarkToPB(file string, b *testing.B) {
 	b.ReportAllocs()
 	var sg SubGraph
 	var l Latency
@@ -492,11 +490,9 @@ func benchmarkToProtocolBuffer(file string, b *testing.B) {
 	}
 }
 
-func BenchmarkToProtocolBuffer(b *testing.B) {
-	benchmarkToProtocolBuffer("benchmark/actors10.txt", b)
-	benchmarkToProtocolBuffer("benchmark/actors100.txt", b)
-	benchmarkToProtocolBuffer("benchmark/actors1000.txt", b)
-	benchmarkToProtocolBuffer("benchmark/directors10.txt", b)
-	benchmarkToProtocolBuffer("benchmark/directors100.txt", b)
-	benchmarkToProtocolBuffer("benchmark/directors1000.txt", b)
-}
+func BenchmarkToPB_10_Actor(b *testing.B)      { benchmarkToPB("benchmark/actors10.bin", b) }
+func BenchmarkToPB_10_Director(b *testing.B)   { benchmarkToPB("benchmark/directors10.bin", b) }
+func BenchmarkToPB_100_Actor(b *testing.B)     { benchmarkToPB("benchmark/actors100.bin", b) }
+func BenchmarkToPB_100_Director(b *testing.B)  { benchmarkToPB("benchmark/directors100.bin", b) }
+func BenchmarkToPB_1000_Actor(b *testing.B)    { benchmarkToPB("benchmark/actors1000.bin", b) }
+func BenchmarkToPB_1000_Director(b *testing.B) { benchmarkToPB("benchmark/directors1000.bin", b) }
