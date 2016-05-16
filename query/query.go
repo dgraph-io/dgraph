@@ -323,7 +323,6 @@ func (g *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 				children = append(children, uc)
 			}
 		} else {
-			v := new(graph.Value)
 			if ok := r.Values(&tv, idx); !ok {
 				return fmt.Errorf("While parsing value")
 			}
@@ -337,12 +336,12 @@ func (g *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 				ival = ""
 			}
 
-			v.Str = ival.(string)
+			v := ival.(string)
 
 			if pc.Attr == "_xid_" {
-				dst.Xid = v.Str
+				dst.Xid = v
 			} else {
-				p := &graph.Property{Prop: pc.Attr, Val: v}
+				p := &graph.Property{Prop: pc.Attr, Val: []byte(v)}
 				properties = append(properties, p)
 			}
 

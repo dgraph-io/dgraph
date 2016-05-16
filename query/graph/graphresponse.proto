@@ -12,10 +12,6 @@ message Request {
   string query = 1;
 }
 
-message Value {
-  string str = 1;
-}
-
 message Latency {
   string parsing = 1;
   string processing = 2;
@@ -24,7 +20,7 @@ message Latency {
 
 message Property {
   string prop = 1;
-  Value val = 2;
+  bytes val = 2;
 }
 
 message Node {

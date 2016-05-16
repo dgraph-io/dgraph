@@ -326,7 +326,7 @@ func TestToJson(t *testing.T) {
 	fmt.Printf(string(js))
 }
 
-func getProperty(properties []*graph.Property, prop string) *graph.Value {
+func getProperty(properties []*graph.Property, prop string) []byte {
 	for _, p := range properties {
 		if p.Prop == prop {
 			return p.Val
@@ -390,9 +390,9 @@ func TestToPB(t *testing.T) {
 		t.Errorf("Expected values map to contain 3 properties, Got: %v",
 			len(gr.Properties))
 	}
-	if getProperty(gr.Properties, "name").Str != "Michonne" {
+	if string(getProperty(gr.Properties, "name")) != "Michonne" {
 		t.Errorf("Expected property name to have value Michonne, Got: %v",
-			getProperty(gr.Properties, "name").Str)
+			string(getProperty(gr.Properties, "name")))
 	}
 	if len(gr.Children) != 10 {
 		t.Errorf("Expected 10 children, Got: %v", len(gr.Children))
@@ -409,9 +409,9 @@ func TestToPB(t *testing.T) {
 		t.Errorf("Expected values map to contain 1 property, Got: %v",
 			len(child.Properties))
 	}
-	if getProperty(child.Properties, "name").Str != "Rick Grimes" {
+	if string(getProperty(child.Properties, "name")) != "Rick Grimes" {
 		t.Errorf("Expected property name to have value Rick Grimes, Got: %v",
-			getProperty(child.Properties, "name").Str)
+			string(getProperty(child.Properties, "name")))
 	}
 	if len(child.Children) != 0 {
 		t.Errorf("Expected 0 children, Got: %v", len(child.Children))
