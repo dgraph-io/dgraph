@@ -11,8 +11,12 @@ DGraph's goal is to provide [Google](https://www.google.com) production level sc
 with low enough latency to be serving real time user queries, over terabytes of structured data.
 DGraph supports [GraphQL](http://graphql.org/) as query language, and responds in [JSON](http://www.json.org/).
 
+---
+
 **Note that we use the Github Issue Tracker for bug reports only.**
 **For feature requests or questions, visit [https://discuss.dgraph.io](https://discuss.dgraph.io).**
+
+---
 
 The README is divided into these sections:
 - [Current Status](#current-status)
