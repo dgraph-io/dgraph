@@ -327,21 +327,12 @@ func (g *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 				return fmt.Errorf("While parsing value")
 			}
 
-			var ival interface{}
-			if err := posting.ParseValue(&ival, tv.ValBytes()); err != nil {
-				return err
-			}
-
-			if ival == nil {
-				ival = ""
-			}
-
-			v := ival.(string)
+			v := tv.ValBytes()
 
 			if pc.Attr == "_xid_" {
-				dst.Xid = v
+				dst.Xid = string(v)
 			} else {
-				p := &graph.Property{Prop: pc.Attr, Val: []byte(v)}
+				p := &graph.Property{Prop: pc.Attr, Val: v}
 				properties = append(properties, p)
 			}
 
