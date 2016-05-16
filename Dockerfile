@@ -19,9 +19,10 @@ RUN cd /installs/rocksdb && make shared_lib && make install
 ENV LD_LIBRARY_PATH "/usr/local/lib"
 
 # Install DGraph and update dependencies to right versions.
-RUN go get -v github.com/robfig/glock && \
+RUN go get -v github.com/kardianos/govendor && \
        go get -v github.com/dgraph-io/dgraph/... && \
-       glock sync github.com/dgraph-io/dgraph && \
+       cd $GOPATH/src/github.com/dgraph-io/dgraph && \
+       govendor sync && \
        go test github.com/dgraph-io/dgraph/... && echo "v0.2.3"
 
 # Create the dgraph and data directory. These directories should be mapped
