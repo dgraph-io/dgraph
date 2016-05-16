@@ -135,15 +135,18 @@ export LD_LIBRARY_PATH="/usr/local/lib"
 ```
 
 ### Install DGraph
-Now get [DGraph](https://github.com/dgraph-io/dgraph) code. DGraph uses `glock` to fix dependency versions.
+Now get [DGraph](https://github.com/dgraph-io/dgraph) code. DGraph uses `govendor` to fix dependency versions. Version information for these dependencies is included in the `github.com/dgraph-io/dgraph/vendor` directory under the `vendor.json` file.  
+
 ```
-go get -v github.com/robfig/glock
-go get -v github.com/dgraph-io/dgraph/...
-glock sync github.com/dgraph-io/dgraph
+go get -u github.com/kardianos/govendor
+# cd to dgraph codebase root directory e.g. $GOPATH/src/github.com/dgraph-io/dgraph
+govendor sync
 
 # Optional
 go test github.com/dgraph-io/dgraph/...
+
 ```
+See [govendor](https://github.com/kardianos/govendor) for more information.
 
 ## Usage
 
