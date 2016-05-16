@@ -383,6 +383,7 @@ func TestToPB(t *testing.T) {
 	if gr.Uid != 1 {
 		t.Errorf("Expected uid 1, Got: %v", gr.Uid)
 	}
+	// TODO(pawan) - Fix "" being stored in the the flatbuffer val.
 	if gr.Xid != `"mich"` {
 		t.Errorf("Expected xid mich, Got: %v", gr.Xid)
 	}
