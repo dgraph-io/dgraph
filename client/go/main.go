@@ -42,12 +42,12 @@ func main() {
 
 	c := graph.NewDGraphClient(conn)
 
-	r, err := c.Query(context.Background(), &graph.Request{Query: *q})
+	resp, err := c.Query(context.Background(), &graph.Request{Query: *q})
 	if err != nil {
 		x.Err(glog, err).Fatal("Error in getting response from server")
 	}
 
 	// TODO(pawan): Remove this later
-	fmt.Printf("Subgraph %+v", r)
+	fmt.Printf("Subgraph %+v", resp.N)
 
 }

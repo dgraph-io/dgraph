@@ -115,8 +115,8 @@ type SubGraph struct {
 	Offset   int
 	Children []*SubGraph
 
-	query  []byte
-	result []byte
+	Query  []byte
+	Result []byte
 }
 
 func mergeInterfaces(i1 interface{}, i2 interface{}) interface{} {
@@ -138,7 +138,7 @@ func mergeInterfaces(i1 interface{}, i2 interface{}) interface{} {
 }
 
 func postTraverse(g *SubGraph) (result map[uint64]interface{}, rerr error) {
-	if len(g.query) == 0 {
+	if len(g.Query) == 0 {
 		return result, nil
 	}
 
@@ -163,13 +163,13 @@ func postTraverse(g *SubGraph) (result map[uint64]interface{}, rerr error) {
 	}
 
 	// Now read the query and results at current node.
-	uo := flatbuffers.GetUOffsetT(g.query)
+	uo := flatbuffers.GetUOffsetT(g.Query)
 	q := new(task.Query)
-	q.Init(g.query, uo)
+	q.Init(g.Query, uo)
 
-	ro := flatbuffers.GetUOffsetT(g.result)
+	ro := flatbuffers.GetUOffsetT(g.Result)
 	r := new(task.Result)
-	r.Init(g.result, ro)
+	r.Init(g.Result, ro)
 
 	if q.UidsLength() != r.UidmatrixLength() {
 		glog.Fatalf("Result uidmatrixlength: %v. Query uidslength: %v",
@@ -277,18 +277,18 @@ func indexOf(uid uint64, q *task.Query) int {
 
 // This method gets the values and children for a subgraph.
 func (g *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
-	properties := make(map[string]*graph.Value)
+	var properties []*graph.Property
 	var children []*graph.Node
 
 	// We go through all predicate children of the subgraph.
 	for _, pc := range g.Children {
-		ro := flatbuffers.GetUOffsetT(pc.result)
+		ro := flatbuffers.GetUOffsetT(pc.Result)
 		r := new(task.Result)
-		r.Init(pc.result, ro)
+		r.Init(pc.Result, ro)
 
-		uo := flatbuffers.GetUOffsetT(pc.query)
+		uo := flatbuffers.GetUOffsetT(pc.Query)
 		q := new(task.Query)
-		q.Init(pc.query, uo)
+		q.Init(pc.Query, uo)
 
 		idx := indexOf(uid, q)
 
@@ -323,27 +323,20 @@ func (g *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 				children = append(children, uc)
 			}
 		} else {
-			v := new(graph.Value)
 			if ok := r.Values(&tv, idx); !ok {
 				return fmt.Errorf("While parsing value")
 			}
 
-			var ival interface{}
-			if err := posting.ParseValue(&ival, tv.ValBytes()); err != nil {
-				return err
+			v := tv.ValBytes()
+
+			if pc.Attr == "_xid_" {
+				dst.Xid = string(v)
+			} else {
+				p := &graph.Property{Prop: pc.Attr, Val: v}
+				properties = append(properties, p)
 			}
 
-			if ival == nil {
-				ival = ""
-			}
-
-			v.Str = ival.(string)
-			properties[pc.Attr] = v
 		}
-	}
-	if val, ok := properties["_xid_"]; ok {
-		dst.Xid = val.Str
-		delete(properties, "_xid_")
 	}
 	dst.Properties, dst.Children = properties, children
 	return nil
@@ -354,13 +347,13 @@ func (g *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 func (g *SubGraph) ToProtocolBuffer(l *Latency) (n *graph.Node, rerr error) {
 	n = &graph.Node{}
 	n.Attribute = g.Attr
-	if len(g.query) == 0 {
+	if len(g.Query) == 0 {
 		return n, nil
 	}
 
-	ro := flatbuffers.GetUOffsetT(g.result)
+	ro := flatbuffers.GetUOffsetT(g.Result)
 	r := new(task.Result)
-	r.Init(g.result, ro)
+	r.Init(g.Result, ro)
 
 	var ul task.UidList
 	r.Uidmatrix(&ul, 0)
@@ -448,9 +441,9 @@ func newGraph(euid uint64, exid string) (*SubGraph, error) {
 
 	sg := new(SubGraph)
 	sg.Attr = "_root_"
-	sg.result = b.Bytes[b.Head():]
+	sg.Result = b.Bytes[b.Head():]
 	// Also add query for consistency and to allow for ToJson() later.
-	sg.query = createTaskQuery(sg, []uint64{euid})
+	sg.Query = createTaskQuery(sg, []uint64{euid})
 	return sg, nil
 }
 
@@ -535,8 +528,8 @@ func ProcessGraph(sg *SubGraph, rch chan error, td time.Duration) {
 	timeout := time.Now().Add(td)
 
 	var err error
-	if len(sg.query) > 0 && sg.Attr != "_root_" {
-		sg.result, err = worker.ProcessTaskOverNetwork(sg.query)
+	if len(sg.Query) > 0 && sg.Attr != "_root_" {
+		sg.Result, err = worker.ProcessTaskOverNetwork(sg.Query)
 		if err != nil {
 			x.Err(glog, err).Error("While processing task.")
 			rch <- err
@@ -544,9 +537,9 @@ func ProcessGraph(sg *SubGraph, rch chan error, td time.Duration) {
 		}
 	}
 
-	uo := flatbuffers.GetUOffsetT(sg.result)
+	uo := flatbuffers.GetUOffsetT(sg.Result)
 	r := new(task.Result)
-	r.Init(sg.result, uo)
+	r.Init(sg.Result, uo)
 
 	if r.ValuesLength() > 0 {
 		var v task.Value
@@ -589,7 +582,7 @@ func ProcessGraph(sg *SubGraph, rch chan error, td time.Duration) {
 	childchan := make(chan error, len(sg.Children))
 	for i := 0; i < len(sg.Children); i++ {
 		child := sg.Children[i]
-		child.query = createTaskQuery(child, sorted)
+		child.Query = createTaskQuery(child, sorted)
 		go ProcessGraph(child, childchan, timeleft)
 	}
 

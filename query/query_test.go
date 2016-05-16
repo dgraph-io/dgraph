@@ -17,6 +17,8 @@
 package query
 
 import (
+	"bytes"
+	"encoding/gob"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -26,6 +28,7 @@ import (
 	"github.com/dgraph-io/dgraph/commit"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
+	"github.com/dgraph-io/dgraph/query/graph"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/worker"
@@ -63,12 +66,12 @@ func checkName(t *testing.T, r *task.Result, idx int, expected string) {
 
 func checkSingleValue(t *testing.T, child *SubGraph,
 	attr string, value string) {
-	if child.Attr != attr || len(child.result) == 0 {
-		t.Error("Expected attr name with some result")
+	if child.Attr != attr || len(child.Result) == 0 {
+		t.Error("Expected attr name with some.Result")
 	}
-	uo := flatbuffers.GetUOffsetT(child.result)
+	uo := flatbuffers.GetUOffsetT(child.Result)
 	r := new(task.Result)
-	r.Init(child.result, uo)
+	r.Init(child.Result, uo)
 	if r.ValuesLength() != 1 {
 		t.Errorf("Expected value length 1. Got: %v", r.ValuesLength())
 	}
@@ -105,9 +108,9 @@ func TestNewGraph(t *testing.T) {
 
 	worker.Init(ps, nil, 0, 1)
 
-	uo := flatbuffers.GetUOffsetT(sg.result)
+	uo := flatbuffers.GetUOffsetT(sg.Result)
 	r := new(task.Result)
-	r.Init(sg.result, uo)
+	r.Init(sg.Result, uo)
 	if r.UidmatrixLength() != 1 {
 		t.Errorf("Expected length 1. Got: %v", r.UidmatrixLength())
 	}
@@ -230,13 +233,13 @@ func TestProcessGraph(t *testing.T) {
 	if child.Attr != "friend" {
 		t.Errorf("Expected attr friend. Got: %v", child.Attr)
 	}
-	if len(child.result) == 0 {
-		t.Errorf("Expected some result.")
+	if len(child.Result) == 0 {
+		t.Errorf("Expected some.Result.")
 		return
 	}
-	uo := flatbuffers.GetUOffsetT(child.result)
+	uo := flatbuffers.GetUOffsetT(child.Result)
 	r := new(task.Result)
-	r.Init(child.result, uo)
+	r.Init(child.Result, uo)
 
 	if r.UidmatrixLength() != 1 {
 		t.Errorf("Expected 1 matrix. Got: %v", r.UidmatrixLength())
@@ -257,8 +260,8 @@ func TestProcessGraph(t *testing.T) {
 		t.Errorf("Expected attr name")
 	}
 	child = child.Children[0]
-	uo = flatbuffers.GetUOffsetT(child.result)
-	r.Init(child.result, uo)
+	uo = flatbuffers.GetUOffsetT(child.Result)
+	r.Init(child.Result, uo)
 	if r.ValuesLength() != 5 {
 		t.Errorf("Expected 5 names of 5 friends")
 	}
@@ -323,7 +326,16 @@ func TestToJson(t *testing.T) {
 	fmt.Printf(string(js))
 }
 
-func TestToProtocolBuffer(t *testing.T) {
+func getProperty(properties []*graph.Property, prop string) []byte {
+	for _, p := range properties {
+		if p.Prop == prop {
+			return p.Val
+		}
+	}
+	return nil
+}
+
+func TestToPB(t *testing.T) {
 	dir, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
 
@@ -371,16 +383,17 @@ func TestToProtocolBuffer(t *testing.T) {
 	if gr.Uid != 1 {
 		t.Errorf("Expected uid 1, Got: %v", gr.Uid)
 	}
-	if gr.Xid != "mich" {
+	// TODO(pawan) - Fix "" being stored in the the flatbuffer val.
+	if gr.Xid != `"mich"` {
 		t.Errorf("Expected xid mich, Got: %v", gr.Xid)
 	}
 	if len(gr.Properties) != 3 {
 		t.Errorf("Expected values map to contain 3 properties, Got: %v",
 			len(gr.Properties))
 	}
-	if gr.Properties["name"].Str != "Michonne" {
+	if string(getProperty(gr.Properties, "name")) != `"Michonne"` {
 		t.Errorf("Expected property name to have value Michonne, Got: %v",
-			gr.Properties["name"].Str)
+			string(getProperty(gr.Properties, "name")))
 	}
 	if len(gr.Children) != 10 {
 		t.Errorf("Expected 10 children, Got: %v", len(gr.Children))
@@ -397,9 +410,9 @@ func TestToProtocolBuffer(t *testing.T) {
 		t.Errorf("Expected values map to contain 1 property, Got: %v",
 			len(child.Properties))
 	}
-	if child.Properties["name"].Str != "Rick Grimes" {
+	if string(getProperty(child.Properties, "name")) != `"Rick Grimes"` {
 		t.Errorf("Expected property name to have value Rick Grimes, Got: %v",
-			child.Properties["name"].Str)
+			string(getProperty(child.Properties, "name")))
 	}
 	if len(child.Children) != 0 {
 		t.Errorf("Expected 0 children, Got: %v", len(child.Children))
@@ -420,3 +433,67 @@ func TestToProtocolBuffer(t *testing.T) {
 		t.Errorf("Expected 0 children, Got: %v", len(child.Children))
 	}
 }
+
+func benchmarkToJson(file string, b *testing.B) {
+	b.ReportAllocs()
+	var sg SubGraph
+	var l Latency
+
+	f, err := ioutil.ReadFile(file)
+	if err != nil {
+		b.Error(err)
+	}
+
+	buf := bytes.NewBuffer(f)
+	dec := gob.NewDecoder(buf)
+	err = dec.Decode(&sg)
+	if err != nil {
+		b.Error(err)
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if _, err := sg.ToJson(&l); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkToJSON_10_Actor(b *testing.B)      { benchmarkToJson("benchmark/actors10.bin", b) }
+func BenchmarkToJSON_10_Director(b *testing.B)   { benchmarkToJson("benchmark/directors10.bin", b) }
+func BenchmarkToJSON_100_Actor(b *testing.B)     { benchmarkToJson("benchmark/actors100.bin", b) }
+func BenchmarkToJSON_100_Director(b *testing.B)  { benchmarkToJson("benchmark/directors100.bin", b) }
+func BenchmarkToJSON_1000_Actor(b *testing.B)    { benchmarkToJson("benchmark/actors1000.bin", b) }
+func BenchmarkToJSON_1000_Director(b *testing.B) { benchmarkToJson("benchmark/directors1000.bin", b) }
+
+func benchmarkToPB(file string, b *testing.B) {
+	b.ReportAllocs()
+	var sg SubGraph
+	var l Latency
+
+	f, err := ioutil.ReadFile(file)
+	if err != nil {
+		b.Error(err)
+	}
+
+	buf := bytes.NewBuffer(f)
+	dec := gob.NewDecoder(buf)
+	err = dec.Decode(&sg)
+	if err != nil {
+		b.Error(err)
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if _, err := sg.ToProtocolBuffer(&l); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkToPB_10_Actor(b *testing.B)      { benchmarkToPB("benchmark/actors10.bin", b) }
+func BenchmarkToPB_10_Director(b *testing.B)   { benchmarkToPB("benchmark/directors10.bin", b) }
+func BenchmarkToPB_100_Actor(b *testing.B)     { benchmarkToPB("benchmark/actors100.bin", b) }
+func BenchmarkToPB_100_Director(b *testing.B)  { benchmarkToPB("benchmark/directors100.bin", b) }
+func BenchmarkToPB_1000_Actor(b *testing.B)    { benchmarkToPB("benchmark/actors1000.bin", b) }
+func BenchmarkToPB_1000_Director(b *testing.B) { benchmarkToPB("benchmark/directors1000.bin", b) }
