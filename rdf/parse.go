@@ -139,7 +139,7 @@ func Parse(line string) (rnq NQuad, rerr error) {
 			// TODO: Strictly parse common types like integers, floats etc.
 			if len(oval) == 0 {
 				glog.Fatalf(
-					"itemObject should be emitted before itemObjectType. Input: %q",
+					"itemObject should be emitted before itemObjectType. Input: [%s]",
 					line)
 			}
 			oval += "@@" + stripBracketsIfPresent(item.Val)
@@ -155,16 +155,16 @@ func Parse(line string) (rnq NQuad, rerr error) {
 		}
 	}
 	if !vend {
-		return rnq, fmt.Errorf("Invalid end of input")
+		return rnq, fmt.Errorf("Invalid end of input. Input: [%s]", line)
 	}
 	if len(oval) > 0 {
 		rnq.ObjectValue = []byte(oval)
 	}
 	if len(rnq.Subject) == 0 || len(rnq.Predicate) == 0 {
-		return rnq, fmt.Errorf("Empty required fields in NQuad")
+		return rnq, fmt.Errorf("Empty required fields in NQuad. Input: [%s]", line)
 	}
 	if len(rnq.ObjectId) == 0 && rnq.ObjectValue == nil {
-		return rnq, fmt.Errorf("No Object in NQuad")
+		return rnq, fmt.Errorf("No Object in NQuad. Input: [%s]", line)
 	}
 
 	return rnq, nil

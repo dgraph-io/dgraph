@@ -1,1 +1,0 @@
-Have to increase the file limit set in Ubuntu to avoid the "too many open files" issue, probably caused by goroutines opening up RocksDB SST files.
