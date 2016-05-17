@@ -158,7 +158,7 @@ func Parse(line string) (rnq NQuad, rerr error) {
 		return rnq, fmt.Errorf("Invalid end of input")
 	}
 	if len(oval) > 0 {
-		rnq.ObjectValue = oval
+		rnq.ObjectValue = []byte(oval)
 	}
 	if len(rnq.Subject) == 0 || len(rnq.Predicate) == 0 {
 		return rnq, fmt.Errorf("Empty required fields in NQuad")

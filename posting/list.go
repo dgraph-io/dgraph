@@ -115,7 +115,7 @@ func Key(uid uint64, attr string) []byte {
 func newPosting(t x.DirectedEdge, op byte) []byte {
 	b := flatbuffers.NewBuilder(0)
 	var bo flatbuffers.UOffsetT
-	if bytes.Equal(t.Value, nil) {
+	if !bytes.Equal(t.Value, nil) {
 		if t.ValueId != math.MaxUint64 {
 			glog.Fatal("This should have already been set by the caller.")
 		}
@@ -140,7 +140,7 @@ func addEdgeToPosting(b *flatbuffers.Builder,
 	t x.DirectedEdge, op byte) flatbuffers.UOffsetT {
 
 	var bo flatbuffers.UOffsetT
-	if bytes.Equal(t.Value, nil) {
+	if !bytes.Equal(t.Value, nil) {
 		if t.ValueId != math.MaxUint64 {
 			glog.Fatal("This should have already been set by the caller.")
 		}
@@ -612,8 +612,8 @@ func (l *List) AddMutation(t x.DirectedEdge, op byte) error {
 	// 				- If no, disregard this mutation.
 
 	// All edges with a value set, have the same uid. In other words,
-	// an (entity, attribute) can only have one interface{} value.
-	if bytes.Equal(t.Value, nil) {
+	// an (entity, attribute) can only have one value.
+	if !bytes.Equal(t.Value, nil) {
 		t.ValueId = math.MaxUint64
 	}
 	if t.ValueId == 0 {

@@ -95,7 +95,7 @@ func TestProcessTask(t *testing.T) {
 	addEdge(t, edge, posting.GetOrCreate(posting.Key(10, "friend"), ps))
 	addEdge(t, edge, posting.GetOrCreate(posting.Key(12, "friend"), ps))
 
-	edge.Value = "photon"
+	edge.Value = []byte("photon")
 	addEdge(t, edge, posting.GetOrCreate(posting.Key(12, "friend"), ps))
 
 	query := NewQuery("friend", []uint64{10, 11, 12})
@@ -143,11 +143,11 @@ func TestProcessTask(t *testing.T) {
 	if ok := r.Values(&tval, 2); !ok {
 		t.Errorf("Unable to retrieve value")
 	}
-	var v string
+	var v []byte
 	if v, err = posting.ParseValue(tval.ValBytes()); err != nil {
 		t.Error(err)
 	}
-	if v != "photon" {
+	if string(v) != "photon" {
 		t.Errorf("Expected photon. Got: %q", v)
 	}
 }

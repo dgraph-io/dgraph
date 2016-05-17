@@ -18,12 +18,12 @@ package posting
 
 import (
 	"bytes"
-	"encoding/binary"
 	"fmt"
 	"io/ioutil"
 	"math"
 	"math/rand"
 	"os"
+	"strconv"
 	"testing"
 	"time"
 
@@ -279,9 +279,7 @@ func TestAddMutation_Value(t *testing.T) {
 	}
 
 	// The value made it to the posting list. Changing it now.
-	buf := new(bytes.Buffer)
-	binary.Write(buf, binary.LittleEndian, 119)
-	edge.Value = buf.Bytes()
+	edge.Value = []byte(strconv.Itoa(119))
 	if err := ol.AddMutation(edge, Set); err != nil {
 		t.Error(err)
 	}
@@ -295,7 +293,9 @@ func TestAddMutation_Value(t *testing.T) {
 		t.Error(err)
 	}
 	var intout int
-	binary.Read(buf, binary.LittleEndian, intout)
+	if intout, err = strconv.Atoi(string(out)); err != nil {
+		t.Error(err)
+	}
 	if intout != 119 {
 		t.Errorf("Expected 119. Got: %v", intout)
 	}
