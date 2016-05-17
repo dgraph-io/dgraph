@@ -56,6 +56,7 @@ var instanceIdx = flag.Uint64("instanceIdx", 0,
 	"serves only entities whose Fingerprint % numInstance == instanceIdx.")
 var workers = flag.String("workers", "",
 	"Comma separated list of IP addresses of workers")
+var nomutations = flag.Bool("nomutations", false, "Don't allow mutations on this server.")
 
 func addCorsHeaders(w http.ResponseWriter) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -68,6 +69,10 @@ func addCorsHeaders(w http.ResponseWriter) {
 }
 
 func mutationHandler(mu *gql.Mutation) error {
+	if *nomutations {
+		return fmt.Errorf("Mutations are forbidden on this server.")
+	}
+
 	r := strings.NewReader(mu.Set)
 	scanner := bufio.NewScanner(r)
 	var nquads []rdf.NQuad
