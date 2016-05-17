@@ -225,7 +225,7 @@ func postTraverse(g *SubGraph) (result map[uint64]interface{}, rerr error) {
 			"_uid_": q.Uids(i),
 			"val":   val,
 		}).Debug("Got value")
-		m[g.Attr] = val
+		m[g.Attr] = string(val)
 		result[q.Uids(i)] = m
 	}
 	return result, nil
