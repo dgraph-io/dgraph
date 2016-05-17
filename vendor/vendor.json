@@ -128,5 +128,6 @@
 			"revision": "4c4ed377c72e199edd16a87011f13a56fd519119",
 			"revisionTime": "2016-05-13T02:30:22Z"
 		}
-	]
+	],
+	"rootPath": "github.com/dgraph-io/dgraph"
 }
