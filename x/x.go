@@ -114,8 +114,3 @@ func UidlistOffset(b *flatbuffers.Builder,
 }
 
 var Nilbyte []byte
-
-func init() {
-	Nilbyte = make([]byte, 1)
-	Nilbyte[0] = 0x00
-}

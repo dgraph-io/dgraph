@@ -17,6 +17,7 @@
 package worker
 
 import (
+	"bytes"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -128,26 +129,21 @@ func TestProcessTask(t *testing.T) {
 	if ok := r.Values(&tval, 0); !ok {
 		t.Errorf("Unable to retrieve value")
 	}
-	if tval.ValLength() != 1 ||
-		tval.ValBytes()[0] != 0x00 {
-		t.Errorf("Invalid byte value at index 0")
+	if !bytes.Equal(tval.ValBytes(), []byte{}) {
+		t.Errorf("Invalid value")
 	}
+
 	if ok := r.Values(&tval, 1); !ok {
 		t.Errorf("Unable to retrieve value")
 	}
-	if tval.ValLength() != 1 ||
-		tval.ValBytes()[0] != 0x00 {
-		t.Errorf("Invalid byte value at index 0")
+	if !bytes.Equal(tval.ValBytes(), []byte{}) {
+		t.Errorf("Invalid value")
 	}
 
 	if ok := r.Values(&tval, 2); !ok {
 		t.Errorf("Unable to retrieve value")
 	}
-	var v []byte
-	if v, err = posting.ParseValue(tval.ValBytes()); err != nil {
-		t.Error(err)
-	}
-	if string(v) != "photon" {
-		t.Errorf("Expected photon. Got: %q", v)
+	if string(tval.ValBytes()) != "photon" {
+		t.Errorf("Expected photon. Got: %q", string(tval.ValBytes()))
 	}
 }

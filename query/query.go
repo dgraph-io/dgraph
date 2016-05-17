@@ -26,7 +26,6 @@ import (
 
 	"github.com/Sirupsen/logrus"
 	"github.com/dgraph-io/dgraph/gql"
-	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/query/graph"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/worker"
@@ -209,10 +208,7 @@ func postTraverse(g *SubGraph) (result map[uint64]interface{}, rerr error) {
 		if ok := r.Values(&tv, i); !ok {
 			return result, fmt.Errorf("While parsing value")
 		}
-		var val []byte
-		if val, rerr = posting.ParseValue(tv.ValBytes()); rerr != nil {
-			return result, rerr
-		}
+		val := tv.ValBytes()
 		if bytes.Equal(val, nil) {
 			continue
 		}

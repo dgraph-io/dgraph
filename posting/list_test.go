@@ -252,12 +252,8 @@ func TestAddMutation_Value(t *testing.T) {
 	if p.Uid() != math.MaxUint64 {
 		t.Errorf("All value uids should go to MaxUint64. Got: %v", p.Uid())
 	}
-	var out []byte
-	if out, err = ParseValue(p.ValueBytes()); err != nil {
-		t.Error(err)
-	}
-	if !bytes.Equal(out, []byte("oh hey there")) {
-		t.Errorf("Expected a value. Got: [%q]", out)
+	if !bytes.Equal(p.ValueBytes(), []byte("oh hey there")) {
+		t.Errorf("Expected a value. Got: [%q]", string(p.ValueBytes()))
 	}
 
 	// Run the same check after committing.
@@ -269,12 +265,8 @@ func TestAddMutation_Value(t *testing.T) {
 		if ok := ol.Get(&tp, 0); !ok {
 			t.Error("While retrieving posting")
 		}
-		var out []byte
-		if out, err = ParseValue(tp.ValueBytes()); err != nil {
-			t.Error(err)
-		}
-		if !bytes.Equal(out, []byte("oh hey there")) {
-			t.Errorf("Expected a value. Got: [%q]", out)
+		if !bytes.Equal(tp.ValueBytes(), []byte("oh hey there")) {
+			t.Errorf("Expected a value. Got: [%q]", string(tp.ValueBytes()))
 		}
 	}
 
@@ -289,11 +281,8 @@ func TestAddMutation_Value(t *testing.T) {
 	if ok := ol.Get(&p, 0); !ok {
 		t.Error("While retrieving posting")
 	}
-	if out, err = ParseValue(p.ValueBytes()); err != nil {
-		t.Error(err)
-	}
 	var intout int
-	if intout, err = strconv.Atoi(string(out)); err != nil {
+	if intout, err = strconv.Atoi(string(p.ValueBytes())); err != nil {
 		t.Error(err)
 	}
 	if intout != 119 {

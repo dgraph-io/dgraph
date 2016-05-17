@@ -54,10 +54,7 @@ func checkName(t *testing.T, r *task.Result, idx int, expected string) {
 	if ok := r.Values(&tv, idx); !ok {
 		t.Error("Unable to retrieve value")
 	}
-	name, err := posting.ParseValue(tv.ValBytes())
-	if err != nil {
-		t.Error(err)
-	}
+	name := tv.ValBytes()
 	if string(name) != expected {
 		t.Errorf("Expected: %v. Got: %v", expected, string(name))
 	}
@@ -273,8 +270,8 @@ func TestProcessGraph(t *testing.T) {
 		if ok := r.Values(&tv, 4); !ok {
 			t.Error("Unable to retrieve value")
 		}
-		if tv.ValLength() != 1 || tv.ValBytes()[0] != 0x00 {
-			t.Error("Expected a null byte")
+		if !bytes.Equal(tv.ValBytes(), []byte{}) {
+			t.Error("Expected a null byte slice")
 		}
 	}
 

@@ -19,7 +19,6 @@ package posting
 import (
 	"bytes"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"math"
 	"sync"
@@ -201,18 +200,6 @@ func init() {
 
 	glog.Infof("Empty size: [%d] EmptyPosting size: [%d]",
 		len(empty), len(emptyPosting))
-}
-
-func ParseValue(value []byte) ([]byte, error) {
-	if len(value) == 0 {
-		return []byte{}, errors.New("No value found in posting")
-	}
-
-	if len(value) == 1 && value[0] == 0x00 {
-		return []byte{}, nil
-	}
-
-	return value, nil
 }
 
 func (l *List) init(key []byte, pstore *store.Store, clog *commit.Logger) {
