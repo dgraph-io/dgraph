@@ -226,9 +226,21 @@ func (s *server) Query(ctx context.Context,
 	// TODO(pawan): Refactor query parsing and graph processing code to a common
 	// function used by Query and queryHandler
 	glog.WithField("q", req.Query).Debug("Query received.")
-	gq, _, err := gql.Parse(req.Query)
+	gq, mu, err := gql.Parse(req.Query)
 	if err != nil {
 		x.Err(glog, err).Error("While parsing query")
+		return resp, err
+	}
+
+	// If we have mutations, run them first.
+	if mu != nil && len(mu.Set) > 0 {
+		if err = mutationHandler(mu); err != nil {
+			glog.WithError(err).Error("While handling mutations.")
+			return resp, err
+		}
+	}
+
+	if gq == nil || (gq.UID == 0 && len(gq.XID) == 0) {
 		return resp, err
 	}
 
