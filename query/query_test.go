@@ -382,15 +382,14 @@ func TestToPB(t *testing.T) {
 	if gr.Uid != 1 {
 		t.Errorf("Expected uid 1, Got: %v", gr.Uid)
 	}
-	// TODO(pawan) - Fix "" being stored in the the flatbuffer val.
-	if gr.Xid != `"mich"` {
+	if gr.Xid != "mich" {
 		t.Errorf("Expected xid mich, Got: %v", gr.Xid)
 	}
 	if len(gr.Properties) != 3 {
 		t.Errorf("Expected values map to contain 3 properties, Got: %v",
 			len(gr.Properties))
 	}
-	if string(getProperty(gr.Properties, "name")) != `"Michonne"` {
+	if string(getProperty(gr.Properties, "name")) != "Michonne" {
 		t.Errorf("Expected property name to have value Michonne, Got: %v",
 			string(getProperty(gr.Properties, "name")))
 	}
@@ -409,7 +408,7 @@ func TestToPB(t *testing.T) {
 		t.Errorf("Expected values map to contain 1 property, Got: %v",
 			len(child.Properties))
 	}
-	if string(getProperty(child.Properties, "name")) != `"Rick Grimes"` {
+	if string(getProperty(child.Properties, "name")) != "Rick Grimes" {
 		t.Errorf("Expected property name to have value Rick Grimes, Got: %v",
 			string(getProperty(child.Properties, "name")))
 	}
