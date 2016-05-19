@@ -589,7 +589,14 @@ func (l *List) AddMutation(t x.DirectedEdge, op byte) error {
 	if t.ValueId == 0 {
 		return fmt.Errorf("ValueId cannot be zero.")
 	}
-
+	mbuf := newPosting(t, op)
+	if l.clog == nil {
+		return nil
+	}
+	ts, err := l.clog.AddLog(l.hash, mbuf)
+	if err != nil {
+		return err
+	}
 	// Mutation arrives:
 	// - Check if we had any(SET/DEL) before this, stored in the mutation list.
 	//		- If yes, then replace that mutation. Jump to a)
@@ -602,7 +609,6 @@ func (l *List) AddMutation(t x.DirectedEdge, op byte) error {
 	if l.deleteMe {
 		return E_TMP_ERROR
 	}
-	mbuf := newPosting(t, op)
 	uo := flatbuffers.GetUOffsetT(mbuf)
 	mpost := new(types.Posting)
 	mpost.Init(mbuf, uo)
@@ -619,13 +625,6 @@ func (l *List) AddMutation(t x.DirectedEdge, op byte) error {
 		if dirtymap != nil {
 			dirtymap.Put(l.ghash, true)
 		}
-	}
-	if l.clog == nil {
-		return nil
-	}
-	ts, err := l.clog.AddLog(l.hash, mbuf)
-	if err != nil {
-		return err
 	}
 	l.maxMutationTs = ts
 	return nil

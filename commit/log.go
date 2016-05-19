@@ -466,8 +466,9 @@ func (l *Logger) AddLog(hash uint32, value []byte) (int64, error) {
 	defer cf.Unlock()
 
 	ts := time.Now().UnixNano()
-	if ts < atomic.LoadInt64(&l.lastLogTs) {
-		return ts, fmt.Errorf("Timestamp lower than last log timestamp.")
+	lts := atomic.LoadInt64(&l.lastLogTs)
+	if ts < lts {
+		ts = lts + 1
 	}
 
 	var err error
