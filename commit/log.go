@@ -379,7 +379,6 @@ func lastTimestamp(c *Cache) (int64, error) {
 				"numrecords": count,
 			}).Fatal("Log file doesn't have monotonically increasing records.")
 		}
-
 		reader.Discard(int(h.size))
 	}
 	return maxTs, nil
@@ -448,28 +447,13 @@ func setError(prev *error, n error) {
 	return
 }
 
-func (l *Logger) AddLog(ts int64, hash uint32, value []byte) error {
-	if ts < atomic.LoadInt64(&l.lastLogTs) {
-		return fmt.Errorf("Timestamp lower than last log timestamp.")
-	}
-
+func (l *Logger) AddLog(hash uint32, value []byte) (int64, error) {
 	buf := new(bytes.Buffer)
-	var err error
-	setError(&err, binary.Write(buf, binary.LittleEndian, ts))
-	setError(&err, binary.Write(buf, binary.LittleEndian, hash))
-	setError(&err, binary.Write(buf, binary.LittleEndian, int32(len(value))))
-	_, nerr := buf.Write(value)
-	setError(&err, nerr)
-	if err != nil {
-		return err
-	}
-	glog.WithField("bytes", buf.Len()).WithField("ts", ts).
-		Debug("Log entry buffer.")
-
-	if l.curFile().Size()+int64(buf.Len()) > l.maxSize {
-		if err = l.rotateCurrent(); err != nil {
+	lbuf := int64(len(value)) + 4 + 8
+	if l.curFile().Size()+lbuf > l.maxSize {
+		if err := l.rotateCurrent(); err != nil {
 			glog.WithError(err).Error("While rotating current file out.")
-			return err
+			return 0, err
 		}
 	}
 
@@ -480,13 +464,30 @@ func (l *Logger) AddLog(ts int64, hash uint32, value []byte) error {
 
 	cf.Lock()
 	defer cf.Unlock()
+
+	ts := time.Now().UnixNano()
+	if ts < atomic.LoadInt64(&l.lastLogTs) {
+		return ts, fmt.Errorf("Timestamp lower than last log timestamp.")
+	}
+
+	var err error
+	setError(&err, binary.Read(buf, binary.LittleEndian, ts))
+	setError(&err, binary.Write(buf, binary.LittleEndian, hash))
+	setError(&err, binary.Write(buf, binary.LittleEndian, int32(len(value))))
+	_, nerr := buf.Write(value)
+	setError(&err, nerr)
+	if err != nil {
+		return ts, err
+	}
+	glog.WithField("bytes", buf.Len()).Debug("Log entry buffer.")
+
 	if _, err = cf.f.Write(buf.Bytes()); err != nil {
 		glog.WithError(err).Error("While writing to current file.")
-		return err
+		return ts, err
 	}
 	if _, err = cf.cache().Write(hash, buf.Bytes()); err != nil {
 		glog.WithError(err).Error("While writing to current cache.")
-		return err
+		return ts, err
 	}
 	cf.dirtyLogs += 1
 	cf.size += int64(buf.Len())
@@ -494,9 +495,9 @@ func (l *Logger) AddLog(ts int64, hash uint32, value []byte) error {
 	if l.SyncEvery <= 0 || cf.dirtyLogs >= l.SyncEvery {
 		cf.dirtyLogs = 0
 		glog.Debug("Syncing file")
-		return cf.f.Sync()
+		return ts, cf.f.Sync()
 	}
-	return nil
+	return ts, nil
 }
 
 // streamEntries allows for hash to be zero.

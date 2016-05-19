@@ -581,23 +581,6 @@ func (l *List) SetForDeletion() {
 // ok  	github.com/dgraph-io/dgraph/posting	10.291s
 func (l *List) AddMutation(t x.DirectedEdge, op byte) error {
 	l.wg.Wait()
-	l.Lock()
-	defer l.Unlock()
-	if l.deleteMe {
-		return E_TMP_ERROR
-	}
-
-	if t.Timestamp.UnixNano() < l.maxMutationTs {
-		return fmt.Errorf("Mutation ts lower than committed ts.")
-	}
-
-	// Mutation arrives:
-	// - Check if we had any(SET/DEL) before this, stored in the mutation list.
-	//		- If yes, then replace that mutation. Jump to a)
-	// a)		check if the entity exists in main posting list.
-	// 				- If yes, store the mutation.
-	// 				- If no, disregard this mutation.
-
 	// All edges with a value set, have the same uid. In other words,
 	// an (entity, attribute) can only have one value.
 	if !bytes.Equal(t.Value, nil) {
@@ -607,6 +590,18 @@ func (l *List) AddMutation(t x.DirectedEdge, op byte) error {
 		return fmt.Errorf("ValueId cannot be zero.")
 	}
 
+	// Mutation arrives:
+	// - Check if we had any(SET/DEL) before this, stored in the mutation list.
+	//		- If yes, then replace that mutation. Jump to a)
+	// a)		check if the entity exists in main posting list.
+	// 				- If yes, store the mutation.
+	// 				- If no, disregard this mutation.
+	l.Lock()
+	defer l.Unlock()
+
+	if l.deleteMe {
+		return E_TMP_ERROR
+	}
 	mbuf := newPosting(t, op)
 	uo := flatbuffers.GetUOffsetT(mbuf)
 	mpost := new(types.Posting)
@@ -619,7 +614,6 @@ func (l *List) AddMutation(t x.DirectedEdge, op byte) error {
 	}).Debug("Add mutation")
 
 	l.mergeMutation(mpost)
-	l.maxMutationTs = t.Timestamp.UnixNano()
 	if len(l.mindex)+len(l.mlayer) > 0 {
 		atomic.StoreInt64(&l.dirtyTs, time.Now().UnixNano())
 		if dirtymap != nil {
@@ -629,7 +623,12 @@ func (l *List) AddMutation(t x.DirectedEdge, op byte) error {
 	if l.clog == nil {
 		return nil
 	}
-	return l.clog.AddLog(t.Timestamp.UnixNano(), l.hash, mbuf)
+	ts, err := l.clog.AddLog(l.hash, mbuf)
+	if err != nil {
+		return err
+	}
+	l.maxMutationTs = ts
+	return nil
 }
 
 func (l *List) MergeIfDirty() (merged bool, err error) {
