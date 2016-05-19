@@ -22,7 +22,6 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
-	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -68,23 +67,18 @@ func TestAddLog(t *testing.T) {
 	l.Init()
 	defer l.Close()
 
-	ts := time.Now().UnixNano()
 	for i := 0; i < 10; i++ {
-		curts := ts + int64(i)
-		if err := l.AddLog(curts, 0, []byte("hey")); err != nil {
+		if _, err := l.AddLog(0, []byte("hey")); err != nil {
 			t.Error(err)
-			return
+			t.Fail()
 		}
 		time.Sleep(500 * time.Microsecond)
 	}
 
 	glog.Debugf("Test curfile path: %v", l.cf.f.Name())
-	last, err := lastTimestamp(l.cf.cache())
+	_, err = lastTimestamp(l.cf.cache())
 	if err != nil {
 		t.Error(err)
-	}
-	if last != ts+9 {
-		t.Errorf("Expected %v. Got: %v\n", ts+9, last)
 	}
 }
 
@@ -102,12 +96,13 @@ func TestRotatingLog(t *testing.T) {
 	l.Init()
 
 	data := make([]byte, 400)
-	ts := time.Now().UnixNano()
+	var ts []int64
 	for i := 0; i < 9; i++ {
-		curts := ts + int64(i)
-		if err := l.AddLog(curts, 0, data); err != nil {
+		if logts, err := l.AddLog(0, data); err != nil {
 			t.Error(err)
 			return
+		} else {
+			ts = append(ts, logts)
 		}
 	}
 	// This should have created 4 files of 832 bytes each (header + data), and
@@ -116,16 +111,13 @@ func TestRotatingLog(t *testing.T) {
 		t.Errorf("Expected 4 files. Got: %v", len(l.list))
 	}
 	for i, lf := range l.list {
-		exp := ts + int64(2*i+1)
+		exp := ts[i*2+1]
 		if lf.endTs != exp {
 			t.Errorf("Expected end ts: %v. Got: %v", exp, lf.endTs)
 		}
 	}
 	if l.curFile().Size() != 416 {
 		t.Errorf("Expected size 416. Got: %v", l.curFile().Size())
-	}
-	if atomic.LoadInt64(&l.lastLogTs) != ts+int64(8) {
-		t.Errorf("Expected ts: %v. Got: %v", ts+int64(8), l.lastLogTs)
 	}
 	l.Close()
 	l = nil // Important to avoid re-use later.
@@ -140,31 +132,30 @@ func TestRotatingLog(t *testing.T) {
 	if nl.curFile().Size() != 416 {
 		t.Errorf("Expected size 416. Got: %v", nl.curFile().Size())
 	}
-	if err := nl.AddLog(ts, 0, data); err == nil {
-		t.Error("Adding an entry with older ts should fail.")
-	}
-	if err := nl.AddLog(ts+int64(100), 0, data); err != nil {
+	secondlast, err := nl.AddLog(0, data)
+	if err != nil {
 		t.Error(err)
 		return
 	}
 	if nl.curFile().Size() != 832 {
 		t.Errorf("Expected size 832. Got: %v", nl.curFile().Size())
 	}
-	if err := nl.AddLog(ts+int64(113), 0, data); err != nil {
+	last, err := nl.AddLog(0, data)
+	if err != nil {
 		t.Error(err)
 		return
 	}
 	if len(nl.list) != 5 {
 		t.Errorf("Expected 5 files. Got: %v", len(nl.list))
 	}
-	if nl.list[4].endTs != ts+int64(100) {
-		t.Errorf("Expected ts: %v. Got: %v", ts+int64(100), nl.list[4].endTs)
+	if nl.list[4].endTs != secondlast {
+		t.Errorf("Expected ts: %v. Got: %v", secondlast, nl.list[4].endTs)
 	}
 	if nl.curFile().Size() != 416 {
 		t.Errorf("Expected size 416. Got: %v", nl.curFile().Size())
 	}
-	if nl.lastLogTs != ts+int64(113) {
-		t.Errorf("Expected last log ts: %v. Got: %v", ts+int64(113), nl.lastLogTs)
+	if nl.lastLogTs != last {
+		t.Errorf("Expected last log ts: %v. Got: %v", last, nl.lastLogTs)
 	}
 }
 
@@ -183,12 +174,13 @@ func TestReadEntries(t *testing.T) {
 	defer l.Close()
 
 	data := make([]byte, 400)
-	ts := time.Now().UnixNano()
+	var ts []int64
 	for i := 0; i < 9; i++ {
-		curts := ts + int64(i)
-		if err := l.AddLog(curts, uint32(i%3), data); err != nil {
+		if lts, err := l.AddLog(uint32(i%3), data); err != nil {
 			t.Error(err)
 			return
+		} else {
+			ts = append(ts, lts)
 		}
 	}
 	// This should have created 4 files of 832 bytes each (header + data), and
@@ -197,7 +189,7 @@ func TestReadEntries(t *testing.T) {
 		t.Errorf("Expected 4 files. Got: %v", len(l.list))
 	}
 	for i, lf := range l.list {
-		exp := ts + int64(2*i+1)
+		exp := ts[i*2+1]
 		if lf.endTs != exp {
 			t.Errorf("Expected end ts: %v. Got: %v", exp, lf.endTs)
 		}
@@ -205,14 +197,14 @@ func TestReadEntries(t *testing.T) {
 	if l.curFile().Size() != 416 {
 		t.Errorf("Expected size 416. Got: %v", l.curFile().Size())
 	}
-	if l.lastLogTs != ts+int64(8) {
-		t.Errorf("Expected ts: %v. Got: %v", ts+int64(8), l.lastLogTs)
+	if l.lastLogTs != ts[8] {
+		t.Errorf("Expected ts: %v. Got: %v", ts[8], l.lastLogTs)
 	}
 
 	{
 		// Check for hash = 1, ts >= 2.
 		count := 0
-		err := l.StreamEntries(ts+2, uint32(1), func(hdr Header, entry []byte) {
+		err := l.StreamEntries(ts[2], uint32(1), func(hdr Header, entry []byte) {
 			count += 1
 			if bytes.Compare(data, entry) != 0 {
 				t.Error("Data doesn't equate.")
@@ -226,12 +218,13 @@ func TestReadEntries(t *testing.T) {
 		}
 	}
 	{
-		if err := l.AddLog(ts+int64(9), 1, data); err != nil {
+		// Add another entry for hash = 1.
+		if _, err := l.AddLog(1, data); err != nil {
 			t.Error(err)
 		}
-		// Check for hash = 1, ts >= 2.
+		// Check for hash = 1, ts >= 0.
 		count := 0
-		err := l.StreamEntries(ts, uint32(1), func(hdr Header, entry []byte) {
+		err := l.StreamEntries(ts[0], uint32(1), func(hdr Header, entry []byte) {
 			count += 1
 			if bytes.Compare(data, entry) != 0 {
 				t.Error("Data doesn't equate.")
@@ -260,10 +253,9 @@ func benchmarkAddLog(n int, b *testing.B) {
 
 	data := make([]byte, 100)
 	b.ResetTimer()
-	ts := time.Now().UnixNano()
 	for i := 0; i < b.N; i++ {
 		end := rand.Intn(50)
-		if err := l.AddLog(ts+int64(i), 0, data[:50+end]); err != nil {
+		if _, err := l.AddLog(0, data[:50+end]); err != nil {
 			b.Error(err)
 		}
 	}
