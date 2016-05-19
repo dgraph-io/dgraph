@@ -1,7 +1,7 @@
 package rocksdb
 
 // #cgo LDFLAGS: -lrocksdb
-// #include "rocksdb/c.h"
+// #include "/usr/include/rocksdb/c.h"
 import "C"
 
 // DestroyComparator deallocates a *C.rocksdb_comparator_t.

@@ -1,6 +1,6 @@
 package rocksdb
 
-// #include "rocksdb/c.h"
+// #include "/usr/include/rocksdb/c.h"
 import "C"
 
 func boolToUchar(b bool) C.uchar {
