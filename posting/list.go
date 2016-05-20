@@ -62,7 +62,7 @@ type List struct {
 	clog        *commit.Logger
 	lastCompact time.Time
 	wg          sync.WaitGroup
-	deleteMe    bool
+	deleteMe    int32
 
 	// Mutations
 	mlayer        map[int]types.Posting // stores only replace instructions.
@@ -559,9 +559,7 @@ func (l *List) get(p *types.Posting, i int) bool {
 
 func (l *List) SetForDeletion() {
 	l.wg.Wait()
-	l.Lock()
-	defer l.Unlock()
-	l.deleteMe = true
+	atomic.StoreInt32(&l.deleteMe, 1)
 }
 
 // In benchmarks, the time taken per AddMutation before was
@@ -581,6 +579,10 @@ func (l *List) SetForDeletion() {
 // ok  	github.com/dgraph-io/dgraph/posting	10.291s
 func (l *List) AddMutation(t x.DirectedEdge, op byte) error {
 	l.wg.Wait()
+	if atomic.LoadInt32(&l.deleteMe) == 1 {
+		return E_TMP_ERROR
+	}
+
 	// All edges with a value set, have the same uid. In other words,
 	// an (entity, attribute) can only have one value.
 	if !bytes.Equal(t.Value, nil) {
@@ -590,12 +592,13 @@ func (l *List) AddMutation(t x.DirectedEdge, op byte) error {
 		return fmt.Errorf("ValueId cannot be zero.")
 	}
 	mbuf := newPosting(t, op)
-	if l.clog == nil {
-		return nil
-	}
-	ts, err := l.clog.AddLog(l.hash, mbuf)
-	if err != nil {
-		return err
+	var err error
+	var ts int64
+	if l.clog != nil {
+		ts, err = l.clog.AddLog(l.hash, mbuf)
+		if err != nil {
+			return err
+		}
 	}
 	// Mutation arrives:
 	// - Check if we had any(SET/DEL) before this, stored in the mutation list.
@@ -606,9 +609,6 @@ func (l *List) AddMutation(t x.DirectedEdge, op byte) error {
 	l.Lock()
 	defer l.Unlock()
 
-	if l.deleteMe {
-		return E_TMP_ERROR
-	}
 	uo := flatbuffers.GetUOffsetT(mbuf)
 	mpost := new(types.Posting)
 	mpost.Init(mbuf, uo)
