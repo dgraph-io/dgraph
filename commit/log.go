@@ -448,8 +448,7 @@ func setError(prev *error, n error) {
 }
 
 func (l *Logger) AddLog(hash uint32, value []byte) (int64, error) {
-	buf := new(bytes.Buffer)
-	lbuf := int64(len(value)) + 4 + 8
+	lbuf := int64(len(value)) + 16
 	if l.curFile().Size()+lbuf > l.maxSize {
 		if err := l.rotateCurrent(); err != nil {
 			glog.WithError(err).Error("While rotating current file out.")
@@ -469,10 +468,12 @@ func (l *Logger) AddLog(hash uint32, value []byte) (int64, error) {
 	lts := atomic.LoadInt64(&l.lastLogTs)
 	if ts < lts {
 		ts = lts + 1
+		// We don't have to do CompareAndSwap because we've a mutex lock.
 	}
 
+	buf := new(bytes.Buffer)
 	var err error
-	setError(&err, binary.Read(buf, binary.LittleEndian, ts))
+	setError(&err, binary.Write(buf, binary.LittleEndian, ts))
 	setError(&err, binary.Write(buf, binary.LittleEndian, hash))
 	setError(&err, binary.Write(buf, binary.LittleEndian, int32(len(value))))
 	_, nerr := buf.Write(value)
