@@ -180,6 +180,17 @@ func postTraverse(g *SubGraph) (result map[uint64]interface{}, rerr error) {
 			r.ValuesLength(), q.UidsLength())
 	}
 
+	// Generate a matrix of maps
+	// Row -> .....
+	// Col
+	//  |
+	//  v
+	//  map{_uid_ = uid}
+	// If some result is present from children results, then merge.
+	// Otherwise, this would only contain the _uid_ property.
+	// result[uid in row] = map[cur attribute ->
+	//                          list of maps of {uid, uid + children result}]
+	//
 	var ul task.UidList
 	for i := 0; i < r.UidmatrixLength(); i++ {
 		if ok := r.Uidmatrix(&ul, i); !ok {
@@ -201,6 +212,7 @@ func postTraverse(g *SubGraph) (result map[uint64]interface{}, rerr error) {
 			m[g.Attr] = l
 			result[q.Uids(i)] = m
 		}
+		// TODO(manish): Check what happens if we handle len(l) == 1 separately.
 	}
 
 	var tv task.Value
@@ -210,6 +222,9 @@ func postTraverse(g *SubGraph) (result map[uint64]interface{}, rerr error) {
 		}
 		val := tv.ValBytes()
 		if bytes.Equal(val, nil) {
+			// We do this, because we typically do set values, even though
+			// they might be nil. This is to ensure that the index of the query uids
+			// and the index of the results can remain in sync.
 			continue
 		}
 
@@ -217,7 +232,7 @@ func postTraverse(g *SubGraph) (result map[uint64]interface{}, rerr error) {
 			glog.WithField("prev", pval).
 				WithField("_uid_", q.Uids(i)).
 				WithField("new", val).
-				Fatal("Previous value detected.")
+				Fatal("Previous value detected. A uid -> list of uids / value. Not both.")
 		}
 		m := make(map[string]interface{})
 		m["_uid_"] = fmt.Sprintf("%#x", q.Uids(i))
