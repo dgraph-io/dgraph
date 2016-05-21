@@ -1,28 +1,21 @@
 # Dockerfile for DGraph
+FROM golang:1.6.2-alpine
 
-FROM golang:1.6.2
 MAINTAINER Manish Jain <manishrjain@gmail.com>
 
-# Get the necessary packages.
-RUN apt-get update && apt-get install -y --no-install-recommends \
-	git \
-	libbz2-dev \
-	libgflags-dev \
-	libsnappy-dev \
-	zlib1g-dev \
-	&& rm -rf /var/lib/apt/lists/*
+ENV DGRAPH github.com/dgraph-io/dgraph
 
-# Install and set up RocksDB.
-RUN mkdir /installs && cd /installs && \
-	git clone --branch v4.2 https://github.com/facebook/rocksdb.git
-RUN cd /installs/rocksdb && make shared_lib && make install
-ENV LD_LIBRARY_PATH "/usr/local/lib"
+COPY . $GOPATH/src/$DGRAPH
+RUN mkdir -p $GOPATH/src/$DGRAPH && \
+    mkdir /dgraph && mkdir /data && \
+    sed -i -e 's/v3\.3/edge/g' /etc/apk/repositories; \
+    echo 'http://dl-4.alpinelinux.org/alpine/edge/community' >> /etc/apk/repositories && \
+    echo 'http://dl-4.alpinelinux.org/alpine/edge/main' >> /etc/apk/repositories && \
+    echo 'http://dl-4.alpinelinux.org/alpine/edge/testing' >> /etc/apk/repositories && \
+    apk update; \
+    apk add rocksdb rocksdb-dev build-base
 
-# Install DGraph and update dependencies to right versions.
-RUN go get -v github.com/dgraph-io/dgraph/... && \
-    go build -v github.com/dgraph-io/dgraph/... && \
-    go test github.com/dgraph-io/dgraph/... && echo "v0.2.3"
-
-# Create the dgraph and data directory. These directories should be mapped
-# to host machine for persistence.
-RUN mkdir /dgraph && mkdir /data
+# Install DGraph, test, and clean up.
+RUN go build -v $DGRAPH/... && \
+    go test $DGRAPH/... && echo "v0.2.3" && \
+    apk del rocksdb-dev build-base go && rm -rf /var/cache/apk/*
