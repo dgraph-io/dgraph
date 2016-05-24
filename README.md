@@ -30,9 +30,14 @@ The README is divided into these sections:
 
 *Check out [the demo at dgraph.io](http://dgraph.io).*
 
-`Upcoming v0.3`
-Track progress on [our Trello Board](https://trello.com/b/PF4nZ1vH).
+`Upcoming - v0.4`
+[Follow our Trello board](https://trello.com/b/TRVKizWt) for progress.
 Got questions or issues? Talk to us [via discuss](https://discuss.dgraph.io).
+
+`May 2016 - Tag v0.3`
+This release contains more efficient binary protocol client and ability to query `first:N` results.
+Please see [Release notes](https://github.com/dgraph-io/dgraph/releases/tag/v0.3)
+and [Trello board](https://trello.com/b/PF4nZ1vH) for more information.
 
 `Mar 2016 - Branch v0.2`
 This is the first truly distributed version of DGraph.
