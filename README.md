@@ -70,9 +70,9 @@ $ docker run -t -i -v /somedir:/dgraph -p 80:8080 dgraph/dgraph:latest
 Now that you're within the Docker instance, you can start the server.
 ```
 $ mkdir /dgraph/m # Ensure mutations directory exists.
-$ server --mutations /dgraph/m --postings /dgraph/p --uids /dgraph/u
+$ dgraph --mutations /dgraph/m --postings /dgraph/p --uids /dgraph/u
 ```
-There are some more options that you can change. Run `server --help` to look at them.
+There are some more options that you can change. Run `dgraph --help` to look at them.
 
 Run some mutations and query the server, like so:
 ```
@@ -105,9 +105,9 @@ $ tar -xzvf postings.tar.gz -C $DIR
 ```
 For quick testing, you can bring up 3 different processes of DGraph. You can of course, also set this up across multiple servers.
 ```
-go build . && ./server --instanceIdx 0 --mutations $DIR/m0 --port 8080 --postings $DIR/p0 --workers ":12345,:12346,:12347" --uids $DIR/uasync.final --workerport ":12345" &
-go build . && ./server --instanceIdx 1 --mutations $DIR/m1 --port 8082 --postings $DIR/p1 --workers ":12345,:12346,:12347" --workerport ":12346" &
-go build . && ./server --instanceIdx 2 --mutations $DIR/m2 --port 8084 --postings $DIR/p2 --workers ":12345,:12346,:12347" --workerport ":12347" &
+go build . && ./dgraph --instanceIdx 0 --mutations $DIR/m0 --port 8080 --postings $DIR/p0 --workers ":12345,:12346,:12347" --uids $DIR/uasync.final --workerport ":12345" &
+go build . && ./dgraph --instanceIdx 1 --mutations $DIR/m1 --port 8082 --postings $DIR/p1 --workers ":12345,:12346,:12347" --workerport ":12346" &
+go build . && ./dgraph --instanceIdx 2 --mutations $DIR/m2 --port 8084 --postings $DIR/p2 --workers ":12345,:12346,:12347" --workerport ":12347" &
 ```
 Now you can run any of the queries mentioned in [Test Queries](https://github.com/dgraph-io/dgraph/wiki/Test-Queries).
 You can hit any of the 3 processes, they'll produce the same results.
@@ -171,7 +171,7 @@ You can run this either as a single instance, or over multiple instances.
 
 Here we set number of instances to 2.
 ```
-$ cd $GOPATH/src/github.com/dgraph-io/dgraph/server/uidassigner
+$ cd $GOPATH/src/github.com/dgraph-io/dgraph/dgraph/uidassigner
 
 # Run instance 0.
 $ go build . && ./uidassigner --numInstances 2 --instanceIdx 0 --rdfgzips $BENCHMARK_REPO/data/rdf-films.gz,$BENCHMARK_REPO/data/names.gz --uids ~/dgraph/uids/u0
@@ -193,7 +193,7 @@ Now that we have assigned UIDs for all the entities, the data is ready to be loa
 
 Let's do this step with 3 instances.
 ```
-$ cd $GOPATH/src/github.com/dgraph-io/dgraph/server/loader
+$ cd $GOPATH/src/github.com/dgraph-io/dgraph/dgraph/loader
 $ go build . && ./loader --numInstances 3 --instanceIdx 0 --rdfgzips $BENCHMARK_REPO/data/names.gz,$BENCHMARK_REPO/data/rdf-films.gz --uids ~/dgraph/uasync.final --postings ~/dgraph/p0
 $ go build . && ./loader --numInstances 3 --instanceIdx 1 --rdfgzips $BENCHMARK_REPO/data/names.gz,$BENCHMARK_REPO/data/rdf-films.gz --uids ~/dgraph/uasync.final --postings ~/dgraph/p1
 $ go build . && ./loader --numInstances 3 --instanceIdx 2 --rdfgzips $BENCHMARK_REPO/data/names.gz,$BENCHMARK_REPO/data/rdf-films.gz --uids ~/dgraph/uasync.final --postings ~/dgraph/p2
