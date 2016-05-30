@@ -311,6 +311,11 @@ func (l *Logger) Init() {
 		}
 	}
 
+	if _, err := os.Stat(l.dir); err != nil {
+		if os.IsNotExist(err) {
+			glog.WithError(err).Fatal("Unable to find mutations dir.")
+		}
+	}
 	if err := filepath.Walk(l.dir, l.handleFile); err != nil {
 		glog.WithError(err).Fatal("While walking over directory")
 	}
