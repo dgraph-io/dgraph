@@ -19,31 +19,33 @@ package store
 import (
 	"fmt"
 
-	"github.com/dgraph-io/dgraph/store/rocksdb"
+	rocksdb "github.com/dgraph-io/dgraph/store/gorocksdb"
 	"github.com/dgraph-io/dgraph/x"
 )
 
 var log = x.Log("store")
 
 type Store struct {
-	db   *rocksdb.DB
-	opt  *rocksdb.Options
-	ropt *rocksdb.ReadOptions
-	wopt *rocksdb.WriteOptions
+	db       *rocksdb.DB
+	opt      *rocksdb.Options
+	blockopt *rocksdb.BlockBasedTableOptions
+	ropt     *rocksdb.ReadOptions
+	wopt     *rocksdb.WriteOptions
 }
 
 func (s *Store) Init(filepath string) {
-	s.opt = rocksdb.NewOptions()
+	s.opt = rocksdb.NewDefaultOptions()
+	s.blockopt = rocksdb.NewDefaultBlockBasedTableOptions()
 	s.opt.SetCreateIfMissing(true)
 	fp := rocksdb.NewBloomFilter(16)
-	s.opt.SetFilterPolicy(fp)
+	s.blockopt.SetFilterPolicy(fp)
 
-	s.ropt = rocksdb.NewReadOptions()
-	s.wopt = rocksdb.NewWriteOptions()
+	s.ropt = rocksdb.NewDefaultReadOptions()
+	s.wopt = rocksdb.NewDefaultWriteOptions()
 	s.wopt.SetSync(false) // We don't need to do synchronous writes.
 
 	var err error
-	s.db, err = rocksdb.Open(filepath, s.opt)
+	s.db, err = rocksdb.OpenDb(s.opt, filepath)
 	if err != nil {
 		x.Err(log, err).WithField("filepath", filepath).
 			Fatal("While opening store")
@@ -52,7 +54,8 @@ func (s *Store) Init(filepath string) {
 }
 
 func (s *Store) Get(key []byte) (val []byte, rerr error) {
-	val, rerr = s.db.Get(s.ropt, key)
+	valS, rerr := s.db.Get(s.ropt, key)
+	val = valS.Data()
 	if rerr == nil && val == nil {
 		return []byte(""), fmt.Errorf("E_KEY_NOT_FOUND")
 	}

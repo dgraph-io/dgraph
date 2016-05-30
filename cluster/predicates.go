@@ -42,7 +42,7 @@ func GetPredicateList(ps *store.Store) []string {
 
 	it := ps.GetIterator()
 	for it.SeekToFirst(); it.Valid(); it.Next() {
-		predicate = getPredicate(it.Key())
+		predicate = getPredicate(it.Key().Data())
 		if predicate != lastPredicate {
 			predicateList = append(predicateList, predicate)
 			lastPredicate = predicate
