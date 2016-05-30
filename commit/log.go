@@ -282,6 +282,12 @@ func (l *Logger) Init() {
 
 	glog.Debug("Logger init started.")
 	{
+		// Checking if the directory exists.
+		if _, err := os.Stat(l.dir); err != nil {
+			if os.IsNotExist(err) {
+				glog.WithError(err).Fatal("Unable to find dir.")
+			}
+		}
 		// First check if we have a current file.
 		path := filepath.Join(l.dir, fmt.Sprintf("%s-current.log", l.filePrefix))
 		fi, err := os.Stat(path)
