@@ -76,7 +76,7 @@ func main() {
 	defer dataStore.Close()
 
 	uidStore := new(store.Store)
-	uidStore.Init(*uidDir)
+	uidStore.InitReadOnly(*uidDir)
 	defer uidStore.Close()
 
 	posting.Init(nil)

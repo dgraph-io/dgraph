@@ -28,8 +28,8 @@ import (
 
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/posting/types"
-	"github.com/dgraph-io/dgraph/store/rocksdb"
 	"github.com/dgraph-io/dgraph/x"
+	rocksdb "github.com/tecbot/gorocksdb"
 )
 
 type Item struct {
@@ -93,10 +93,10 @@ func mergeFolders(mergePath, destPath string) {
 	var opt *rocksdb.Options
 	var ropt *rocksdb.ReadOptions
 	var wopt *rocksdb.WriteOptions
-	opt = rocksdb.NewOptions()
+	opt = rocksdb.NewDefaultOptions()
 	opt.SetCreateIfMissing(true)
-	ropt = rocksdb.NewReadOptions()
-	wopt = rocksdb.NewWriteOptions()
+	ropt = rocksdb.NewDefaultReadOptions()
+	wopt = rocksdb.NewDefaultWriteOptions()
 	wopt.SetSync(false)
 	wb := rocksdb.NewWriteBatch()
 
@@ -105,7 +105,7 @@ func mergeFolders(mergePath, destPath string) {
 	var storeIters []*rocksdb.Iterator
 	for i, dir := range dirList {
 		mPath := path.Join(mergePath, dir.Name())
-		curDb, err := rocksdb.Open(mPath, opt)
+		curDb, err := rocksdb.OpenDb(opt, mPath)
 		defer curDb.Close()
 		if err != nil {
 			glog.WithField("filepath", mPath).
@@ -119,8 +119,8 @@ func mergeFolders(mergePath, destPath string) {
 			continue
 		}
 		item := &Item{
-			key:      it.Key(),
-			value:    it.Value(),
+			key:      it.Key().Data(),
+			value:    it.Value().Data(),
 			storeIdx: i,
 		}
 		heap.Push(&pq, item)
@@ -128,7 +128,7 @@ func mergeFolders(mergePath, destPath string) {
 	}
 
 	var db *rocksdb.DB
-	db, err = rocksdb.Open(destPath, opt)
+	db, err = rocksdb.OpenDb(opt, destPath)
 	defer db.Close()
 	if err != nil {
 		glog.WithField("filepath", destPath).
@@ -160,15 +160,15 @@ func mergeFolders(mergePath, destPath string) {
 			continue
 		}
 		item := &Item{
-			key:      storeIters[top.storeIdx].Key(),
-			value:    storeIters[top.storeIdx].Value(),
+			key:      storeIters[top.storeIdx].Key().Data(),
+			value:    storeIters[top.storeIdx].Value().Data(),
 			storeIdx: top.storeIdx,
 		}
 		heap.Push(&pq, item)
 	}
 
 	db.Write(wopt, wb)
-	wb.Close()
+	wb.Destroy()
 
 	fmt.Println("Count : ", count)
 }
