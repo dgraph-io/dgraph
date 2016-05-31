@@ -171,13 +171,13 @@ You can run this either as a single instance, or over multiple instances.
 
 Here we set number of instances to 2.
 ```
-$ cd $GOPATH/src/github.com/dgraph-io/dgraph/dgraph/uidassigner
+$ cd $GOPATH/src/github.com/dgraph-io/dgraph/dgraph/dgraphassigner
 
 # Run instance 0.
-$ go build . && ./uidassigner --numInstances 2 --instanceIdx 0 --rdfgzips $BENCHMARK_REPO/data/rdf-films.gz,$BENCHMARK_REPO/data/names.gz --uids ~/dgraph/uids/u0
+$ go build . && ./dgraphassigner --numInstances 2 --instanceIdx 0 --rdfgzips $BENCHMARK_REPO/data/rdf-films.gz,$BENCHMARK_REPO/data/names.gz --uids ~/dgraph/uids/u0
 
 # And either later, or on another server, run instance 1.
-$ go build . && ./uidassigner --numInstances 2 --instanceIdx 1 --rdfgzips $BENCHMARK_REPO/data/rdf-films.gz,$BENCHMARK_REPO/data/names.gz --uids ~/dgraph/uids/u1
+$ go build . && ./dgraphassigner --numInstances 2 --instanceIdx 1 --rdfgzips $BENCHMARK_REPO/data/rdf-films.gz,$BENCHMARK_REPO/data/names.gz --uids ~/dgraph/uids/u1
 ```
 
 Once the shards are generated, you need to merge them before the second pass. If you ran this as a single instance, merging isn't required.
@@ -193,10 +193,10 @@ Now that we have assigned UIDs for all the entities, the data is ready to be loa
 
 Let's do this step with 3 instances.
 ```
-$ cd $GOPATH/src/github.com/dgraph-io/dgraph/dgraph/loader
-$ go build . && ./loader --numInstances 3 --instanceIdx 0 --rdfgzips $BENCHMARK_REPO/data/names.gz,$BENCHMARK_REPO/data/rdf-films.gz --uids ~/dgraph/uasync.final --postings ~/dgraph/p0
-$ go build . && ./loader --numInstances 3 --instanceIdx 1 --rdfgzips $BENCHMARK_REPO/data/names.gz,$BENCHMARK_REPO/data/rdf-films.gz --uids ~/dgraph/uasync.final --postings ~/dgraph/p1
-$ go build . && ./loader --numInstances 3 --instanceIdx 2 --rdfgzips $BENCHMARK_REPO/data/names.gz,$BENCHMARK_REPO/data/rdf-films.gz --uids ~/dgraph/uasync.final --postings ~/dgraph/p2
+$ cd $GOPATH/src/github.com/dgraph-io/dgraph/dgraph/dgraphloader
+$ go build . && ./dgraphloader --numInstances 3 --instanceIdx 0 --rdfgzips $BENCHMARK_REPO/data/names.gz,$BENCHMARK_REPO/data/rdf-films.gz --uids ~/dgraph/uasync.final --postings ~/dgraph/p0
+$ go build . && ./dgraphloader --numInstances 3 --instanceIdx 1 --rdfgzips $BENCHMARK_REPO/data/names.gz,$BENCHMARK_REPO/data/rdf-films.gz --uids ~/dgraph/uasync.final --postings ~/dgraph/p1
+$ go build . && ./dgraphloader --numInstances 3 --instanceIdx 2 --rdfgzips $BENCHMARK_REPO/data/names.gz,$BENCHMARK_REPO/data/rdf-films.gz --uids ~/dgraph/uasync.final --postings ~/dgraph/p2
 ```
 You can run these over multiple machines, or just one after another.
 
