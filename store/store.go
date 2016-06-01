@@ -53,6 +53,26 @@ func (s *Store) Init(filepath string) {
 	}
 }
 
+func (s *Store) InitReadOnly(filepath string) {
+	s.opt = rocksdb.NewDefaultOptions()
+	s.blockopt = rocksdb.NewDefaultBlockBasedTableOptions()
+	s.opt.SetCreateIfMissing(true)
+	fp := rocksdb.NewBloomFilter(16)
+	s.blockopt.SetFilterPolicy(fp)
+
+	s.ropt = rocksdb.NewDefaultReadOptions()
+	s.wopt = rocksdb.NewDefaultWriteOptions()
+	s.wopt.SetSync(false) // We don't need to do synchronous writes.
+
+	var err error
+	s.db, err = rocksdb.OpenDbForReadOnly(s.opt, filepath, false) //TODO(Ashwin):When will it be true
+	if err != nil {
+		x.Err(log, err).WithField("filepath", filepath).
+			Fatal("While opening store")
+		return
+	}
+}
+
 func (s *Store) Get(key []byte) (val []byte, rerr error) {
 	valS, rerr := s.db.Get(s.ropt, key)
 	val = valS.Data()

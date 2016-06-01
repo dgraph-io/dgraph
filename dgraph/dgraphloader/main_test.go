@@ -2,7 +2,9 @@ package main
 
 import (
 	"bufio"
+	"flag"
 	"io/ioutil"
+	"math/rand"
 	"os"
 	"testing"
 
@@ -92,5 +94,72 @@ func TestQuery(t *testing.T) {
 	}
 	if count != 4 {
 		t.Error("loader assignment not as expected")
+	}
+}
+
+var uiddir = flag.String("uid", "", "UID directory")
+var rdffile = flag.String("rdf", "", "RDF file")
+
+func BenchmarkLoadRW(b *testing.B) {
+	flag.Parse()
+	logrus.SetLevel(logrus.ErrorLevel)
+	var nameL []string
+
+	uidStore := new(store.Store)
+	uidStore.Init(*uiddir)
+	defer uidStore.Close()
+
+	posting.Init(nil)
+	uid.Init(uidStore)
+
+	f, err := os.Open("nameslist")
+	if err != nil {
+		b.Error("Error opening file")
+	}
+	defer f.Close()
+	scanner := bufio.NewScanner(f)
+
+	for scanner.Scan() {
+		nameL = append(nameL, scanner.Text())
+	}
+
+	lenL := len(nameL)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		it := nameL[rand.Intn(lenL)]
+		uidStore.Get(uid.StringKey(it))
+	}
+}
+
+func BenchmarkLoadReadOnly(b *testing.B) {
+	flag.Parse()
+	logrus.SetLevel(logrus.ErrorLevel)
+	var nameL []string
+
+	uidStore := new(store.Store)
+	uidStore.InitReadOnly(*uiddir)
+	defer uidStore.Close()
+
+	posting.Init(nil)
+	uid.Init(uidStore)
+
+	f, err := os.Open("nameslist")
+	if err != nil {
+		b.Error("Error opening file")
+	}
+	defer f.Close()
+	scanner := bufio.NewScanner(f)
+
+	for scanner.Scan() {
+		nameL = append(nameL, scanner.Text())
+	}
+
+	lenL := len(nameL)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		it := nameL[rand.Intn(lenL)]
+		uidStore.Get(uid.StringKey(it))
 	}
 }
