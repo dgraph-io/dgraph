@@ -4,7 +4,7 @@
 ![logo](https://img.shields.io/badge/status-alpha-red.svg)
 [![Wiki](https://img.shields.io/badge/res-wiki-blue.svg)](https://github.com/dgraph-io/dgraph/wiki)
 [![logo](https://img.shields.io/badge/Mailing%20List-dgraph-brightgreen.svg)](https://groups.google.com/forum/#!forum/dgraph)
-[![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/dgraph-io/dgraph?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
+[![Slack Status](http://slack.dgraph.io/badge.svg)](http://slack.dgraph.io)
 
 
 DGraph's goal is to provide [Google](https://www.google.com) production level scale and throughput,
@@ -326,7 +326,7 @@ The query portion is executed after the mutation, so this would return `greg` as
 ## Contact
 - Please use [discuss.dgraph.io](https://discuss.dgraph.io) for documentation, questions, feature requests and discussions.
 - Please use [Github issue tracker](https://github.com/dgraph-io/dgraph/issues) **ONLY to file bugs.** Any feature request should go to discuss.
-- Or, just join [Gitter chat](https://gitter.im/dgraph-io/dgraph?utm_source=share-link&utm_medium=link&utm_campaign=share-link).
+- Or, just join [![Slack Status](http://slack.dgraph.io/badge.svg)](http://slack.dgraph.io).
 
 ## Talks
 - [Lightening Talk](http://go-talks.appspot.com/github.com/dgraph-io/dgraph/present/sydney5mins/g.slide#1) on 29th Oct, 2015 at Go meetup, Sydney.
