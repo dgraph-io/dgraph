@@ -19,8 +19,8 @@ package store
 import (
 	"fmt"
 
-	rocksdb "github.com/dgraph-io/dgraph/store/gorocksdb"
 	"github.com/dgraph-io/dgraph/x"
+	rocksdb "github.com/tecbot/gorocksdb"
 )
 
 var log = x.Log("store")
@@ -33,7 +33,7 @@ type Store struct {
 	wopt     *rocksdb.WriteOptions
 }
 
-func (s *Store) Init(filepath string) {
+func (s *Store) setOpts() {
 	s.opt = rocksdb.NewDefaultOptions()
 	s.blockopt = rocksdb.NewDefaultBlockBasedTableOptions()
 	s.opt.SetCreateIfMissing(true)
@@ -43,7 +43,10 @@ func (s *Store) Init(filepath string) {
 	s.ropt = rocksdb.NewDefaultReadOptions()
 	s.wopt = rocksdb.NewDefaultWriteOptions()
 	s.wopt.SetSync(false) // We don't need to do synchronous writes.
+}
 
+func (s *Store) Init(filepath string) {
+	s.setOpts()
 	var err error
 	s.db, err = rocksdb.OpenDb(s.opt, filepath)
 	if err != nil {
@@ -54,18 +57,10 @@ func (s *Store) Init(filepath string) {
 }
 
 func (s *Store) InitReadOnly(filepath string) {
-	s.opt = rocksdb.NewDefaultOptions()
-	s.blockopt = rocksdb.NewDefaultBlockBasedTableOptions()
-	s.opt.SetCreateIfMissing(true)
-	fp := rocksdb.NewBloomFilter(16)
-	s.blockopt.SetFilterPolicy(fp)
-
-	s.ropt = rocksdb.NewDefaultReadOptions()
-	s.wopt = rocksdb.NewDefaultWriteOptions()
-	s.wopt.SetSync(false) // We don't need to do synchronous writes.
-
+	s.setOpts()
 	var err error
-	s.db, err = rocksdb.OpenDbForReadOnly(s.opt, filepath, false) //TODO(Ashwin):When will it be true
+	s.db, err = rocksdb.OpenDbForReadOnly(s.opt, filepath, false)
+	//TODO(Ashwin):When will it be true
 	if err != nil {
 		x.Err(log, err).WithField("filepath", filepath).
 			Fatal("While opening store")

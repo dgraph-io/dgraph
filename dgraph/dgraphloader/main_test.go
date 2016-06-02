@@ -118,7 +118,6 @@ func BenchmarkLoadRW(b *testing.B) {
 	}
 	defer f.Close()
 	scanner := bufio.NewScanner(f)
-
 	for scanner.Scan() {
 		nameL = append(nameL, scanner.Text())
 	}

@@ -10,9 +10,9 @@ import (
 	"github.com/dgraph-io/dgraph/loader"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/store"
-	"github.com/dgraph-io/dgraph/store/rocksdb"
 	"github.com/dgraph-io/dgraph/uid"
 	"github.com/dgryski/go-farm"
+	rocksdb "github.com/tecbot/gorocksdb"
 )
 
 func TestMergeFolders(t *testing.T) {
@@ -85,9 +85,9 @@ func TestMergeFolders(t *testing.T) {
 
 	var opt *rocksdb.Options
 	var ropt *rocksdb.ReadOptions
-	opt = rocksdb.NewOptions()
-	ropt = rocksdb.NewReadOptions()
-	db, err := rocksdb.Open(destDir, opt)
+	opt = rocksdb.NewDefaultOptions()
+	ropt = rocksdb.NewDefaultReadOptions()
+	db, err := rocksdb.OpenDb(opt, destDir)
 	it := db.NewIterator(ropt)
 
 	count := 0

@@ -9,9 +9,9 @@ import (
 	"github.com/Sirupsen/logrus"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/posting/types"
-	"github.com/dgraph-io/dgraph/store/rocksdb"
 	"github.com/dgraph-io/dgraph/uid"
 	"github.com/dgraph-io/dgraph/x"
+	rocksdb "github.com/tecbot/gorocksdb"
 )
 
 var glog = x.Log("dlist")
@@ -37,7 +37,7 @@ func output(val []byte) {
 }
 
 func scanOverAttr(db *rocksdb.DB) {
-	ro := rocksdb.NewReadOptions()
+	ro := rocksdb.NewDefaultReadOptions()
 	ro.SetFillCache(false)
 
 	prefix := []byte(*attr)
@@ -46,16 +46,16 @@ func scanOverAttr(db *rocksdb.DB) {
 
 	num := 0
 	for itr = itr; itr.Valid(); itr.Next() {
-		if !bytes.HasPrefix(itr.Key(), prefix) {
+		if !bytes.HasPrefix(itr.Key().Data(), prefix) {
 			break
 		}
 		if !*count {
 			fmt.Printf("\nkey: %#x\n", itr.Key())
-			output(itr.Value())
+			output(itr.Value().Data())
 		}
 		num += 1
 	}
-	if err := itr.GetError(); err != nil {
+	if err := itr.Err(); err != nil {
 		glog.WithError(err).Fatal("While iterating")
 	}
 	fmt.Printf("Number of keys found: %v\n", num)
@@ -65,8 +65,8 @@ func main() {
 	logrus.SetLevel(logrus.ErrorLevel)
 
 	flag.Parse()
-	opt := rocksdb.NewOptions()
-	db, err := rocksdb.Open(*dir, opt)
+	opt := rocksdb.NewDefaultOptions()
+	db, err := rocksdb.OpenDb(opt, *dir)
 	defer db.Close()
 
 	var key []byte
@@ -96,13 +96,13 @@ func main() {
 	}
 	fmt.Printf("key: %#x\n", key)
 
-	ropt := rocksdb.NewReadOptions()
+	ropt := rocksdb.NewDefaultReadOptions()
 	val, err := db.Get(ropt, key)
 	if err != nil {
 		glog.WithError(err).Fatal("Unable to get key")
 	}
-	if len(val) == 0 {
+	if val.Size() == 0 {
 		glog.Fatal("Unable to find posting list")
 	}
-	output(val)
+	output(val.Data())
 }
