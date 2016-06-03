@@ -321,7 +321,9 @@ The query portion is executed after the mutation, so this would return `greg` as
 
 
 ## Contributing to DGraph
-- Please see [this wiki page](https://discuss.dgraph.io/t/contributing-to-dgraph/20) for guidelines on contributions.
+- See a list of issues [that we need help with](https://github.com/dgraph-io/dgraph/issues?q=is%3Aissue+is%3Aopen+label%3Ahelp_wanted).
+- Please see [contributing to Dgraph](https://discuss.dgraph.io/t/contributing-to-dgraph/20) for guidelines on contributions.
+- *Alpha Program*: If you want to contribute to Dgraph on a continuous basis and need some Bitcoins to pay for healthy food, talk to us.
 
 ## Contact
 - Please use [discuss.dgraph.io](https://discuss.dgraph.io) for documentation, questions, feature requests and discussions.
