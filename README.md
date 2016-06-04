@@ -144,7 +144,15 @@ export LD_LIBRARY_PATH="/usr/local/lib"
 ```
 
 ### Install DGraph
-Now get [DGraph](https://github.com/dgraph-io/dgraph) code. DGraph uses `govendor` to fix dependency versions. Version information for these dependencies is included in the `github.com/dgraph-io/dgraph/vendor` directory under the `vendor.json` file.  
+Now get [DGraph](https://github.com/dgraph-io/dgraph) code.
+```
+# Fetch the source
+go get -u github.com/dgraph-io/dgraph
+
+# Install the binaries. 
+go install github.com/dgraph-io/dgraph/...
+```
+DGraph uses `govendor` to fix dependency versions. Version information for these dependencies is included in the `github.com/dgraph-io/dgraph/vendor` directory under the `vendor.json` file.  
 
 ```
 go get -u github.com/kardianos/govendor
