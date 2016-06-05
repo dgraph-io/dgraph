@@ -66,13 +66,13 @@ func TestWriteAndParseHeader(t *testing.T) {
 		t.Fail()
 	}
 	if seq != 11 {
-		t.Error("Sequence number. Expected 11. Got: %v", seq)
+		t.Errorf("Sequence number. Expected 11. Got: %v", seq)
 	}
 	if method != "testing.T" {
-		t.Error("Method name. Expected: testing.T. Got: %v", method)
+		t.Errorf("Method name. Expected: testing.T. Got: %v", method)
 	}
 	if plen != int32(len(data)) {
-		t.Error("Payload length. Expected: %v. Got: %v", len(data), plen)
+		t.Errorf("Payload length. Expected: %v. Got: %v", len(data), plen)
 	}
 }
 
@@ -101,10 +101,10 @@ func TestClientToServer(t *testing.T) {
 		t.Error(err)
 	}
 	if sr.Seq != r.Seq {
-		t.Error("RPC Seq. Expected: %v. Got: %v", r.Seq, sr.Seq)
+		t.Errorf("RPC Seq. Expected: %v. Got: %v", r.Seq, sr.Seq)
 	}
 	if sr.ServiceMethod != r.ServiceMethod {
-		t.Error("ServiceMethod. Expected: %v. Got: %v",
+		t.Errorf("ServiceMethod. Expected: %v. Got: %v",
 			r.ServiceMethod, sr.ServiceMethod)
 	}
 
@@ -113,7 +113,7 @@ func TestClientToServer(t *testing.T) {
 		t.Error(err)
 	}
 	if !bytes.Equal(squery.Data, query.Data) {
-		t.Error("Queries don't match. Expected: %v Got: %v",
+		t.Errorf("Queries don't match. Expected: %v Got: %v",
 			string(query.Data), string(squery.Data))
 	}
 }
@@ -143,10 +143,10 @@ func TestServerToClient(t *testing.T) {
 		t.Error(err)
 	}
 	if cr.Seq != r.Seq {
-		t.Error("RPC Seq. Expected: %v. Got: %v", r.Seq, cr.Seq)
+		t.Errorf("RPC Seq. Expected: %v. Got: %v", r.Seq, cr.Seq)
 	}
 	if cr.ServiceMethod != r.ServiceMethod {
-		t.Error("ServiceMethod. Expected: %v. Got: %v",
+		t.Errorf("ServiceMethod. Expected: %v. Got: %v",
 			r.ServiceMethod, cr.ServiceMethod)
 	}
 
@@ -155,7 +155,7 @@ func TestServerToClient(t *testing.T) {
 		t.Error(err)
 	}
 	if !bytes.Equal(creply.Data, reply.Data) {
-		t.Error("Replies don't match. Expected: %v Got: %v",
+		t.Errorf("Replies don't match. Expected: %v Got: %v",
 			string(reply.Data), string(creply.Data))
 	}
 }

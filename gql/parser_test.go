@@ -334,7 +334,7 @@ func TestParseMutationAndQuery(t *testing.T) {
 		return
 	}
 	if gq.XID != "tomhanks" {
-		t.Error("Expected: tomhanks. Got: %v", gq.XID)
+		t.Errorf("Expected: tomhanks. Got: %v", gq.XID)
 		return
 	}
 	if len(gq.Children) != 2 {
