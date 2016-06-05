@@ -44,7 +44,7 @@ type entry struct {
 	ts time.Time
 }
 
-func (e entry) isOld() bool {
+func (e *entry) isOld() bool {
 	e.Lock()
 	defer e.Unlock()
 	return time.Now().Sub(e.ts) > time.Minute

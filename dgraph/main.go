@@ -290,7 +290,7 @@ func runGrpcServer(address string) {
 	s := grpc.NewServer()
 	graph.RegisterDGraphServer(s, &server{})
 	if err = s.Serve(ln); err != nil {
-		glog.Fatalf("While serving gRpc requests", err)
+		glog.Fatal("While serving gRpc requests", err)
 	}
 	return
 }

@@ -118,7 +118,7 @@ func TestAddMutation(t *testing.T) {
 		t.Fail()
 	}
 	if p.Uid() != 9 {
-		t.Errorf("Expected 9. Got: %v", p.Uid)
+		t.Errorf("Expected 9. Got: %v", p.Uid())
 	}
 	if string(p.Source()) != "testing" {
 		t.Errorf("Expected testing. Got: %v", string(p.Source()))

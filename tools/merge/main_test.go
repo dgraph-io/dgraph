@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -61,7 +60,7 @@ func TestMergeFolders(t *testing.T) {
 		if farm.Fingerprint64([]byte(str))%numInstances == 0 {
 			_, err := uid.GetOrAssign(str, 0, numInstances)
 			if err != nil {
-				fmt.Errorf("error while assigning uid")
+				t.Error("error while assigning uid")
 			}
 		}
 	}
@@ -72,7 +71,7 @@ func TestMergeFolders(t *testing.T) {
 			uid.Init(ps2)
 			_, err := uid.GetOrAssign(str, 1, numInstances)
 			if err != nil {
-				fmt.Errorf("error while assigning uid")
+				t.Error("error while assigning uid")
 			}
 
 		}
@@ -96,6 +95,6 @@ func TestMergeFolders(t *testing.T) {
 	}
 
 	if count != 6 { // There are totally 6 unique strings
-		fmt.Errorf("Not all the items have been assigned uid")
+		t.Error("Not all the items have been assigned uid")
 	}
 }

@@ -44,14 +44,14 @@ func TestQuery(t *testing.T) {
 			if u < minIdx0 || u > minIdx0+mod-1 {
 				t.Error("Not the correct UID", err)
 			}
-			t.Logf("Instance-0 Correct UID", str, u)
+			t.Log("Instance-0 Correct UID", str, u)
 
 		} else {
 			u, err := uid.GetOrAssign(str, 1, numInstances)
 			if u < minIdx1 || u > minIdx1+mod-1 {
 				t.Error("Not the correct UID", err)
 			}
-			t.Logf("Instance-1 Correct UID", str, u)
+			t.Log("Instance-1 Correct UID", str, u)
 		}
 	}
 }
