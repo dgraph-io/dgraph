@@ -45,7 +45,7 @@ func scanOverAttr(db *rocksdb.DB) {
 	itr.Seek(prefix)
 
 	num := 0
-	for itr = itr; itr.Valid(); itr.Next() {
+	for ; itr.Valid(); itr.Next() {
 		if !bytes.HasPrefix(itr.Key().Data(), prefix) {
 			break
 		}
