@@ -264,7 +264,6 @@ func lexArgVal(l *lex.Lexer) lex.StateFn {
 				l.Input[l.Start:l.Pos])
 		}
 	}
-	glog.Fatal("This shouldn't be reached.")
 	return nil
 }
 
