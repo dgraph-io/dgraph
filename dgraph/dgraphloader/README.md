@@ -1,3 +1,14 @@
+### 6 June 2016
+
+### Comparison of read write and read only configuration of rocksDB
+
+Random XIDs in XID-UID RocksDB were accessed using a list of XIDs that 
+were obtanied from the names.gz dataset in both Read-Write as well as
+Read-only configurations and the comparisions are shown below
+
+BenchmarkLoadRW-2        1000000              2033 ns/op
+BenchmarkLoadReadOnly-2  1000000              1649 ns/op
+
 ### 17 May 2016
 
 #### Loader CPU and MEM performance
