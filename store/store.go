@@ -60,7 +60,7 @@ func (s *Store) InitReadOnly(filepath string) {
 	s.setOpts()
 	var err error
 	s.db, err = rocksdb.OpenDbForReadOnly(s.opt, filepath, false)
-	//TODO(Ashwin):When will it be true
+	// TODO(Ashwin):When will it be true
 	if err != nil {
 		x.Err(log, err).WithField("filepath", filepath).
 			Fatal("While opening store")
