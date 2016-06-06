@@ -27,6 +27,12 @@
 			"revisionTime": "2015-10-08T07:23:26Z"
 		},
 		{
+			"checksumSHA1": "W1EGygayPbG7X+UK13VHKl0XOy8=",
+			"path": "github.com/tecbot/gorocksdb",
+			"revision": "59ab8def01399fb7ded1c3bff5e3e4cbd14b6348",
+			"revisionTime": "2016-03-10T21:12:00Z"
+		},
+		{
 			"checksumSHA1": "7LaLud3qlAQZ+xftxLTbYg3cGpo=",
 			"path": "github.com/willf/bitset",
 			"revision": "28a4168144bb8ac95454e1f51c84da1933681ad4",
