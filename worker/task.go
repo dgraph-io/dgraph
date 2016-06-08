@@ -17,12 +17,12 @@
 package worker
 
 import (
-	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgryski/go-farm"
 	"github.com/google/flatbuffers/go"
+	"golang.org/x/net/context"
 )
 
 func ProcessTaskOverNetwork(qu []byte) (result []byte, rerr error) {
@@ -52,13 +52,21 @@ func ProcessTaskOverNetwork(qu []byte) (result []byte, rerr error) {
 
 	pool := pools[idx]
 	addr := pool.Addr
-	query := new(conn.Query)
+	query := new(Payload)
 	query.Data = qu
-	reply := new(conn.Reply)
-	if err := pool.Call("Worker.ServeTask", query, reply); err != nil {
+
+	conn, err := pool.Get()
+	if err != nil {
+		return []byte(""), err
+	}
+	defer pool.Put(conn)
+	c := NewWorkerClient(conn)
+	reply, err := c.ServeTask(context.Background(), query)
+	if err != nil {
 		glog.WithField("call", "Worker.ServeTask").Error(err)
 		return []byte(""), err
 	}
+
 	glog.WithField("reply_len", len(reply.Data)).WithField("addr", addr).
 		WithField("attr", attr).Info("Got reply from server")
 	return reply.Data, nil
