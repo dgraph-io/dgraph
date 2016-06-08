@@ -18,11 +18,12 @@ package worker
 
 import (
 	"flag"
-	"io"
 	"net"
-	"net/rpc"
 
-	"github.com/dgraph-io/dgraph/conn"
+	"google.golang.org/grpc"
+
+	"golang.org/x/net/context"
+
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/x"
@@ -35,7 +36,7 @@ var workerPort = flag.String("workerport", ":12345",
 
 var glog = x.Log("worker")
 var dataStore, uidStore *store.Store
-var pools []*conn.Pool
+var pools []*Pool
 var numInstances, instanceIdx uint64
 
 func Init(ps, uStore *store.Store, idx, numInst uint64) {
@@ -43,39 +44,6 @@ func Init(ps, uStore *store.Store, idx, numInst uint64) {
 	uidStore = uStore
 	instanceIdx = idx
 	numInstances = numInst
-}
-
-func Connect(workerList []string) {
-	w := new(Worker)
-	if err := rpc.Register(w); err != nil {
-		glog.Fatal(err)
-	}
-	if err := runServer(*workerPort); err != nil {
-		glog.Fatal(err)
-	}
-	if uint64(len(workerList)) != numInstances {
-		glog.WithField("len(list)", len(workerList)).
-			WithField("numInstances", numInstances).
-			Fatalf("Wrong number of instances in workerList")
-	}
-
-	for _, addr := range workerList {
-		if len(addr) == 0 {
-			continue
-		}
-		pool := conn.NewPool(addr, 5)
-		query := new(conn.Query)
-		query.Data = []byte("hello")
-		reply := new(conn.Reply)
-		if err := pool.Call("Worker.Hello", query, reply); err != nil {
-			glog.WithField("call", "Worker.Hello").Fatal(err)
-		}
-		glog.WithField("reply", string(reply.Data)).WithField("addr", addr).
-			Info("Got reply from server")
-		pools = append(pools, pool)
-	}
-
-	glog.Info("Server started. Clients connected.")
 }
 
 func NewQuery(attr string, uids []uint64) []byte {
@@ -95,21 +63,20 @@ func NewQuery(attr string, uids []uint64) []byte {
 	return b.Bytes[b.Head():]
 }
 
-type Worker struct {
-}
+type worker struct{}
 
-func (w *Worker) Hello(query *conn.Query, reply *conn.Reply) error {
-	if string(query.Data) == "hello" {
-		reply.Data = []byte("Oh hello there!")
+func (w *worker) Hello(ctx context.Context, in *Payload) (*Payload, error) {
+	out := new(Payload)
+	if string(in.Data) == "hello" {
+		out.Data = []byte("Oh hello there!")
 	} else {
-		reply.Data = []byte("Hey stranger!")
+		out.Data = []byte("Hey stranger!")
 	}
-	return nil
+
+	return out, nil
 }
 
-func (w *Worker) GetOrAssign(query *conn.Query,
-	reply *conn.Reply) (rerr error) {
-
+func (w *worker) GetOrAssign(ctx context.Context, query *Payload) (*Payload, error) {
 	uo := flatbuffers.GetUOffsetT(query.Data)
 	xids := new(task.XidList)
 	xids.Init(query.Data, uo)
@@ -119,25 +86,31 @@ func (w *Worker) GetOrAssign(query *conn.Query,
 			WithField("GetOrAssign", true).
 			Fatal("We shouldn't be receiving this request.")
 	}
+
+	reply := new(Payload)
+	var rerr error
 	reply.Data, rerr = getOrAssignUids(xids)
-	return
+	return reply, rerr
 }
 
-func (w *Worker) Mutate(query *conn.Query, reply *conn.Reply) (rerr error) {
+func (w *worker) Mutate(ctx context.Context, query *Payload) (*Payload, error) {
 	m := new(Mutations)
 	if err := m.Decode(query.Data); err != nil {
-		return err
+		return nil, err
 	}
 
 	left := new(Mutations)
 	if err := mutate(m, left); err != nil {
-		return err
+		return nil, err
 	}
+
+	reply := new(Payload)
+	var rerr error
 	reply.Data, rerr = left.Encode()
-	return
+	return reply, rerr
 }
 
-func (w *Worker) ServeTask(query *conn.Query, reply *conn.Reply) (rerr error) {
+func (w *worker) ServeTask(ctx context.Context, query *Payload) (*Payload, error) {
 	uo := flatbuffers.GetUOffsetT(query.Data)
 	q := new(task.Query)
 	q.Init(query.Data, uo)
@@ -145,51 +118,62 @@ func (w *Worker) ServeTask(query *conn.Query, reply *conn.Reply) (rerr error) {
 	glog.WithField("attr", attr).WithField("num_uids", q.UidsLength()).
 		WithField("instanceIdx", instanceIdx).Info("ServeTask")
 
+	reply := new(Payload)
+	var rerr error
 	if (instanceIdx == 0 && attr == "_xid_") ||
 		farm.Fingerprint64([]byte(attr))%numInstances == instanceIdx {
 
 		reply.Data, rerr = processTask(query.Data)
+
 	} else {
 		glog.WithField("attribute", attr).
 			WithField("instanceIdx", instanceIdx).
 			Fatalf("Request sent to wrong server")
 	}
-	return rerr
+	return reply, rerr
 }
 
-func serveRequests(irwc io.ReadWriteCloser) {
-	for {
-		sc := &conn.ServerCodec{
-			Rwc: irwc,
-		}
-		glog.Info("Serving request from serveRequests")
-		if err := rpc.ServeRequest(sc); err != nil {
-			glog.WithField("method", "serveRequests").Info(err)
-			break
-		}
-	}
-}
-
-func runServer(address string) error {
-	ln, err := net.Listen("tcp", address)
+func runServer(port string) {
+	ln, err := net.Listen("tcp", port)
 	if err != nil {
 		glog.Fatalf("While running server: %v", err)
-		return err
+		return
 	}
 	glog.WithField("address", ln.Addr()).Info("Worker listening")
 
-	go func() {
-		for {
-			cxn, err := ln.Accept()
-			if err != nil {
-				glog.Fatalf("listen(%q): %s\n", address, err)
-				return
-			}
-			glog.WithField("local", cxn.LocalAddr()).
-				WithField("remote", cxn.RemoteAddr()).
-				Debug("Worker accepted connection")
-			go serveRequests(cxn)
+	s := grpc.NewServer(grpc.CustomCodec(&PayloadCodec{}))
+	RegisterWorkerServer(s, &worker{})
+	s.Serve(ln)
+}
+
+func Connect(workerList []string) {
+	go runServer(*workerPort)
+
+	for _, addr := range workerList {
+		if len(addr) == 0 {
+			continue
 		}
-	}()
-	return nil
+
+		pool := NewPool(addr, 5)
+		query := new(Payload)
+		query.Data = []byte("hello")
+
+		conn, err := pool.Get()
+		if err != nil {
+			glog.WithError(err).Fatal("Unable to connect.")
+		}
+
+		c := NewWorkerClient(conn)
+		reply, err := c.Hello(context.Background(), query)
+		if err != nil {
+			glog.WithError(err).Fatal("Unable to contact.")
+		}
+		_ = pool.Put(conn)
+
+		glog.WithField("reply", string(reply.Data)).WithField("addr", addr).
+			Info("Got reply from server")
+		pools = append(pools, pool)
+	}
+
+	glog.Info("Server started. Clients connected.")
 }

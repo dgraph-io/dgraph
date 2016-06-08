@@ -20,7 +20,8 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/dgraph-io/dgraph/conn"
+	"golang.org/x/net/context"
+
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/uid"
 	"github.com/google/flatbuffers/go"
@@ -93,13 +94,13 @@ func getOrAssignUids(
 }
 
 func GetOrAssignUidsOverNetwork(xidToUid *map[string]uint64) (rerr error) {
-	query := new(conn.Query)
+	query := new(Payload)
 	query.Data = createXidListBuffer(*xidToUid)
 	uo := flatbuffers.GetUOffsetT(query.Data)
 	xidList := new(task.XidList)
 	xidList.Init(query.Data, uo)
 
-	reply := new(conn.Reply)
+	reply := new(Payload)
 	if instanceIdx == 0 {
 		uo := flatbuffers.GetUOffsetT(query.Data)
 		xidList := new(task.XidList)
@@ -109,12 +110,21 @@ func GetOrAssignUidsOverNetwork(xidToUid *map[string]uint64) (rerr error) {
 		if rerr != nil {
 			return rerr
 		}
+
 	} else {
 		pool := pools[0]
-		if err := pool.Call("Worker.GetOrAssign", query, reply); err != nil {
-			glog.WithField("method", "GetOrAssign").WithError(err).
-				Error("While getting uids")
+		conn, err := pool.Get()
+		if err != nil {
+			glog.WithError(err).Error("Unable to retrieve connection.")
 			return err
+		}
+		c := NewWorkerClient(conn)
+
+		reply, rerr = c.GetOrAssign(context.Background(), query)
+		if rerr != nil {
+			glog.WithField("method", "GetOrAssign").WithError(rerr).
+				Error("While getting uids")
+			return rerr
 		}
 	}
 
