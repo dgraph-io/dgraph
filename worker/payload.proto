@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+package worker;
+
+message Payload {
+	bytes Data = 1;
+}
+
+service Worker {
+	rpc Hello (Payload) returns (Payload) {}
+}

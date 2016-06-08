@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgryski/go-farm"

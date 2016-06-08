@@ -18,15 +18,17 @@ package worker
 
 import (
 	"flag"
-	"io"
 	"net"
 	"net/rpc"
+
+	"google.golang.org/grpc"
+
+	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgryski/go-farm"
 	"github.com/google/flatbuffers/go"
 )
 
@@ -45,28 +47,34 @@ func Init(ps, uStore *store.Store, idx, numInst uint64) {
 	numInstances = numInst
 }
 
+func runServer(port string) {
+	ln, err := net.Listen("tcp", port)
+	if err != nil {
+		glog.Fatalf("While running server: %v", err)
+		return err
+	}
+	glog.WithField("address", ln.Addr()).Info("Worker listening")
+
+	s := grpc.NewServer(grpc.CustomCodec(&PayloadCodec{}))
+	RegisterWorkerServer(s, &Worker{})
+	s.Serve(ln)
+}
+
 func Connect(workerList []string) {
 	w := new(Worker)
 	if err := rpc.Register(w); err != nil {
 		glog.Fatal(err)
 	}
-	if err := runServer(*workerPort); err != nil {
-		glog.Fatal(err)
-	}
-	if uint64(len(workerList)) != numInstances {
-		glog.WithField("len(list)", len(workerList)).
-			WithField("numInstances", numInstances).
-			Fatalf("Wrong number of instances in workerList")
-	}
+	go runServer(*workerPort)
 
 	for _, addr := range workerList {
 		if len(addr) == 0 {
 			continue
 		}
-		pool := conn.NewPool(addr, 5)
-		query := new(conn.Query)
+		pool := NewPool(addr, 5)
+		query := new(Payload)
 		query.Data = []byte("hello")
-		reply := new(conn.Reply)
+		reply := new(Payload)
 		if err := pool.Call("Worker.Hello", query, reply); err != nil {
 			glog.WithField("call", "Worker.Hello").Fatal(err)
 		}
@@ -95,18 +103,29 @@ func NewQuery(attr string, uids []uint64) []byte {
 	return b.Bytes[b.Head():]
 }
 
-type Worker struct {
-}
+type Worker struct{}
 
-func (w *Worker) Hello(query *conn.Query, reply *conn.Reply) error {
-	if string(query.Data) == "hello" {
-		reply.Data = []byte("Oh hello there!")
+func (w *Worker) Hello(ctx context.Context, in *Payload) (*Payload, error) {
+	out := new(Payload)
+	if string(in.Data) == "hello" {
+		out.Data = []byte("Oh hello there!")
 	} else {
-		reply.Data = []byte("Hey stranger!")
+		out.Data = []byte("Hey stranger!")
 	}
-	return nil
+
+	return out, nil
 }
 
+// func (w *Worker) Hello(query *conn.Query, reply *conn.Reply) error {
+// 	if string(query.Data) == "hello" {
+// 		reply.Data = []byte("Oh hello there!")
+// 	} else {
+// 		reply.Data = []byte("Hey stranger!")
+// 	}
+// 	return nil
+// }
+
+/*
 func (w *Worker) GetOrAssign(query *conn.Query,
 	reply *conn.Reply) (rerr error) {
 
@@ -156,40 +175,4 @@ func (w *Worker) ServeTask(query *conn.Query, reply *conn.Reply) (rerr error) {
 	}
 	return rerr
 }
-
-func serveRequests(irwc io.ReadWriteCloser) {
-	for {
-		sc := &conn.ServerCodec{
-			Rwc: irwc,
-		}
-		glog.Info("Serving request from serveRequests")
-		if err := rpc.ServeRequest(sc); err != nil {
-			glog.WithField("method", "serveRequests").Info(err)
-			break
-		}
-	}
-}
-
-func runServer(address string) error {
-	ln, err := net.Listen("tcp", address)
-	if err != nil {
-		glog.Fatalf("While running server: %v", err)
-		return err
-	}
-	glog.WithField("address", ln.Addr()).Info("Worker listening")
-
-	go func() {
-		for {
-			cxn, err := ln.Accept()
-			if err != nil {
-				glog.Fatalf("listen(%q): %s\n", address, err)
-				return
-			}
-			glog.WithField("local", cxn.LocalAddr()).
-				WithField("remote", cxn.RemoteAddr()).
-				Debug("Worker accepted connection")
-			go serveRequests(cxn)
-		}
-	}()
-	return nil
-}
+*/

@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/uid"
 	"github.com/google/flatbuffers/go"
