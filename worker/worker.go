@@ -19,7 +19,6 @@ package worker
 import (
 	"flag"
 	"net"
-	"net/rpc"
 
 	"google.golang.org/grpc"
 
@@ -47,6 +46,93 @@ func Init(ps, uStore *store.Store, idx, numInst uint64) {
 	numInstances = numInst
 }
 
+func NewQuery(attr string, uids []uint64) []byte {
+	b := flatbuffers.NewBuilder(0)
+	task.QueryStartUidsVector(b, len(uids))
+	for i := len(uids) - 1; i >= 0; i-- {
+		b.PrependUint64(uids[i])
+	}
+	vend := b.EndVector(len(uids))
+
+	ao := b.CreateString(attr)
+	task.QueryStart(b)
+	task.QueryAddAttr(b, ao)
+	task.QueryAddUids(b, vend)
+	qend := task.QueryEnd(b)
+	b.Finish(qend)
+	return b.Bytes[b.Head():]
+}
+
+type worker struct{}
+
+func (w *worker) Hello(ctx context.Context, in *Payload) (*Payload, error) {
+	out := new(Payload)
+	if string(in.Data) == "hello" {
+		out.Data = []byte("Oh hello there!")
+	} else {
+		out.Data = []byte("Hey stranger!")
+	}
+
+	return out, nil
+}
+
+func (w *worker) GetOrAssign(ctx context.Context, query *Payload) (*Payload, error) {
+	uo := flatbuffers.GetUOffsetT(query.Data)
+	xids := new(task.XidList)
+	xids.Init(query.Data, uo)
+
+	if instanceIdx != 0 {
+		glog.WithField("instanceIdx", instanceIdx).
+			WithField("GetOrAssign", true).
+			Fatal("We shouldn't be receiving this request.")
+	}
+
+	reply := new(Payload)
+	var rerr error
+	reply.Data, rerr = getOrAssignUids(xids)
+	return reply, rerr
+}
+
+func (w *worker) Mutate(ctx context.Context, query *Payload) (*Payload, error) {
+	m := new(Mutations)
+	if err := m.Decode(query.Data); err != nil {
+		return nil, err
+	}
+
+	left := new(Mutations)
+	if err := mutate(m, left); err != nil {
+		return nil, err
+	}
+
+	reply := new(Payload)
+	var rerr error
+	reply.Data, rerr = left.Encode()
+	return reply, rerr
+}
+
+func (w *worker) ServeTask(ctx context.Context, query *Payload) (*Payload, error) {
+	uo := flatbuffers.GetUOffsetT(query.Data)
+	q := new(task.Query)
+	q.Init(query.Data, uo)
+	attr := string(q.Attr())
+	glog.WithField("attr", attr).WithField("num_uids", q.UidsLength()).
+		WithField("instanceIdx", instanceIdx).Info("ServeTask")
+
+	reply := new(Payload)
+	var rerr error
+	if (instanceIdx == 0 && attr == "_xid_") ||
+		farm.Fingerprint64([]byte(attr))%numInstances == instanceIdx {
+
+		reply.Data, rerr = processTask(query.Data)
+
+	} else {
+		glog.WithField("attribute", attr).
+			WithField("instanceIdx", instanceIdx).
+			Fatalf("Request sent to wrong server")
+	}
+	return reply, rerr
+}
+
 func runServer(port string) {
 	ln, err := net.Listen("tcp", port)
 	if err != nil {
@@ -56,15 +142,11 @@ func runServer(port string) {
 	glog.WithField("address", ln.Addr()).Info("Worker listening")
 
 	s := grpc.NewServer(grpc.CustomCodec(&PayloadCodec{}))
-	RegisterWorkerServer(s, &Worker{})
+	RegisterWorkerServer(s, &worker{})
 	s.Serve(ln)
 }
 
 func Connect(workerList []string) {
-	w := new(Worker)
-	if err := rpc.Register(w); err != nil {
-		glog.Fatal(err)
-	}
 	go runServer(*workerPort)
 
 	for _, addr := range workerList {
@@ -94,91 +176,4 @@ func Connect(workerList []string) {
 	}
 
 	glog.Info("Server started. Clients connected.")
-}
-
-func NewQuery(attr string, uids []uint64) []byte {
-	b := flatbuffers.NewBuilder(0)
-	task.QueryStartUidsVector(b, len(uids))
-	for i := len(uids) - 1; i >= 0; i-- {
-		b.PrependUint64(uids[i])
-	}
-	vend := b.EndVector(len(uids))
-
-	ao := b.CreateString(attr)
-	task.QueryStart(b)
-	task.QueryAddAttr(b, ao)
-	task.QueryAddUids(b, vend)
-	qend := task.QueryEnd(b)
-	b.Finish(qend)
-	return b.Bytes[b.Head():]
-}
-
-type Worker struct{}
-
-func (w *Worker) Hello(ctx context.Context, in *Payload) (*Payload, error) {
-	out := new(Payload)
-	if string(in.Data) == "hello" {
-		out.Data = []byte("Oh hello there!")
-	} else {
-		out.Data = []byte("Hey stranger!")
-	}
-
-	return out, nil
-}
-
-func (w *Worker) GetOrAssign(ctx context.Context, query *Payload) (*Payload, error) {
-	uo := flatbuffers.GetUOffsetT(query.Data)
-	xids := new(task.XidList)
-	xids.Init(query.Data, uo)
-
-	if instanceIdx != 0 {
-		glog.WithField("instanceIdx", instanceIdx).
-			WithField("GetOrAssign", true).
-			Fatal("We shouldn't be receiving this request.")
-	}
-
-	reply := new(Payload)
-	var rerr error
-	reply.Data, rerr = getOrAssignUids(xids)
-	return reply, rerr
-}
-
-func (w *Worker) Mutate(ctx context.Context, query *Payload) (*Payload, error) {
-	m := new(Mutations)
-	if err := m.Decode(query.Data); err != nil {
-		return nil, err
-	}
-
-	left := new(Mutations)
-	if err := mutate(m, left); err != nil {
-		return nil, err
-	}
-
-	reply := new(Payload)
-	var rerr error
-	reply.Data, rerr = left.Encode()
-	return reply, rerr
-}
-
-func (w *Worker) ServeTask(ctx context.Context, query *Payload) (*Payload, error) {
-	uo := flatbuffers.GetUOffsetT(query.Data)
-	q := new(task.Query)
-	q.Init(query.Data, uo)
-	attr := string(q.Attr())
-	glog.WithField("attr", attr).WithField("num_uids", q.UidsLength()).
-		WithField("instanceIdx", instanceIdx).Info("ServeTask")
-
-	reply := new(Payload)
-	var rerr error
-	if (instanceIdx == 0 && attr == "_xid_") ||
-		farm.Fingerprint64([]byte(attr))%numInstances == instanceIdx {
-
-		reply.Data, rerr = processTask(query.Data)
-
-	} else {
-		glog.WithField("attribute", attr).
-			WithField("instanceIdx", instanceIdx).
-			Fatalf("Request sent to wrong server")
-	}
-	return reply, rerr
 }

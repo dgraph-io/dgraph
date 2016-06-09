@@ -1,7 +1,6 @@
 package worker
 
 import (
-	"fmt"
 	"log"
 
 	"google.golang.org/grpc"
@@ -10,7 +9,6 @@ import (
 type PayloadCodec struct{}
 
 func (cb *PayloadCodec) Marshal(v interface{}) ([]byte, error) {
-	fmt.Println("Marshal")
 	p, ok := v.(*Payload)
 	if !ok {
 		log.Fatal("Invalid type of struct")
@@ -19,7 +17,6 @@ func (cb *PayloadCodec) Marshal(v interface{}) ([]byte, error) {
 }
 
 func (cb *PayloadCodec) Unmarshal(data []byte, v interface{}) error {
-	fmt.Println("Unmarshal")
 	p, ok := v.(*Payload)
 	if !ok {
 		log.Fatal("Invalid type of struct")
@@ -29,7 +26,6 @@ func (cb *PayloadCodec) Unmarshal(data []byte, v interface{}) error {
 }
 
 func (cb *PayloadCodec) String() string {
-	fmt.Println("String")
 	return "worker.PayloadCodec"
 }
 
