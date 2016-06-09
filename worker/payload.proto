@@ -8,4 +8,7 @@ message Payload {
 
 service Worker {
 	rpc Hello (Payload) returns (Payload) {}
+	rpc GetOrAssign (Payload) returns (Payload) {}
+	rpc Mutate (Payload) returns (Payload) {}
+	rpc ServeTask (Payload) returns (Payload) {}
 }

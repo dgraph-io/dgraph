@@ -25,10 +25,10 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgryski/go-farm"
 	"github.com/google/flatbuffers/go"
 )
 
@@ -37,7 +37,7 @@ var workerPort = flag.String("workerport", ":12345",
 
 var glog = x.Log("worker")
 var dataStore, uidStore *store.Store
-var pools []*conn.Pool
+var pools []*Pool
 var numInstances, instanceIdx uint64
 
 func Init(ps, uStore *store.Store, idx, numInst uint64) {
@@ -51,7 +51,7 @@ func runServer(port string) {
 	ln, err := net.Listen("tcp", port)
 	if err != nil {
 		glog.Fatalf("While running server: %v", err)
-		return err
+		return
 	}
 	glog.WithField("address", ln.Addr()).Info("Worker listening")
 
@@ -71,13 +71,23 @@ func Connect(workerList []string) {
 		if len(addr) == 0 {
 			continue
 		}
+
 		pool := NewPool(addr, 5)
 		query := new(Payload)
 		query.Data = []byte("hello")
-		reply := new(Payload)
-		if err := pool.Call("Worker.Hello", query, reply); err != nil {
-			glog.WithField("call", "Worker.Hello").Fatal(err)
+
+		conn, err := pool.Get()
+		if err != nil {
+			glog.WithError(err).Fatal("Unable to connect.")
 		}
+
+		c := NewWorkerClient(conn)
+		reply, err := c.Hello(context.Background(), query)
+		if err != nil {
+			glog.WithError(err).Fatal("Unable to contact.")
+		}
+		pool.Put(conn)
+
 		glog.WithField("reply", string(reply.Data)).WithField("addr", addr).
 			Info("Got reply from server")
 		pools = append(pools, pool)
@@ -116,19 +126,7 @@ func (w *Worker) Hello(ctx context.Context, in *Payload) (*Payload, error) {
 	return out, nil
 }
 
-// func (w *Worker) Hello(query *conn.Query, reply *conn.Reply) error {
-// 	if string(query.Data) == "hello" {
-// 		reply.Data = []byte("Oh hello there!")
-// 	} else {
-// 		reply.Data = []byte("Hey stranger!")
-// 	}
-// 	return nil
-// }
-
-/*
-func (w *Worker) GetOrAssign(query *conn.Query,
-	reply *conn.Reply) (rerr error) {
-
+func (w *Worker) GetOrAssign(ctx context.Context, query *Payload) (*Payload, error) {
 	uo := flatbuffers.GetUOffsetT(query.Data)
 	xids := new(task.XidList)
 	xids.Init(query.Data, uo)
@@ -138,25 +136,31 @@ func (w *Worker) GetOrAssign(query *conn.Query,
 			WithField("GetOrAssign", true).
 			Fatal("We shouldn't be receiving this request.")
 	}
+
+	reply := new(Payload)
+	var rerr error
 	reply.Data, rerr = getOrAssignUids(xids)
-	return
+	return reply, rerr
 }
 
-func (w *Worker) Mutate(query *conn.Query, reply *conn.Reply) (rerr error) {
+func (w *Worker) Mutate(ctx context.Context, query *Payload) (*Payload, error) {
 	m := new(Mutations)
 	if err := m.Decode(query.Data); err != nil {
-		return err
+		return nil, err
 	}
 
 	left := new(Mutations)
 	if err := mutate(m, left); err != nil {
-		return err
+		return nil, err
 	}
+
+	reply := new(Payload)
+	var rerr error
 	reply.Data, rerr = left.Encode()
-	return
+	return reply, rerr
 }
 
-func (w *Worker) ServeTask(query *conn.Query, reply *conn.Reply) (rerr error) {
+func (w *Worker) ServeTask(ctx context.Context, query *Payload) (*Payload, error) {
 	uo := flatbuffers.GetUOffsetT(query.Data)
 	q := new(task.Query)
 	q.Init(query.Data, uo)
@@ -164,15 +168,17 @@ func (w *Worker) ServeTask(query *conn.Query, reply *conn.Reply) (rerr error) {
 	glog.WithField("attr", attr).WithField("num_uids", q.UidsLength()).
 		WithField("instanceIdx", instanceIdx).Info("ServeTask")
 
+	reply := new(Payload)
+	var rerr error
 	if (instanceIdx == 0 && attr == "_xid_") ||
 		farm.Fingerprint64([]byte(attr))%numInstances == instanceIdx {
 
 		reply.Data, rerr = processTask(query.Data)
+
 	} else {
 		glog.WithField("attribute", attr).
 			WithField("instanceIdx", instanceIdx).
 			Fatalf("Request sent to wrong server")
 	}
-	return rerr
+	return reply, rerr
 }
-*/

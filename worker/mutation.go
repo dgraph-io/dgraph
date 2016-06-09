@@ -22,6 +22,8 @@ import (
 	"fmt"
 	"sync"
 
+	"golang.org/x/net/context"
+
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgryski/go-farm"
@@ -71,7 +73,7 @@ func mutate(m *Mutations, left *Mutations) error {
 }
 
 func runMutate(idx int, m *Mutations, wg *sync.WaitGroup,
-	replies chan *conn.Reply, che chan error) {
+	replies chan *Payload, che chan error) {
 
 	defer wg.Done()
 	left := new(Mutations)
@@ -80,17 +82,25 @@ func runMutate(idx int, m *Mutations, wg *sync.WaitGroup,
 		return
 	}
 
-	var err error
 	pool := pools[idx]
-	query := new(conn.Query)
+	var err error
+	query := new(Payload)
 	query.Data, err = m.Encode()
 	if err != nil {
 		che <- err
 		return
 	}
 
-	reply := new(conn.Reply)
-	if err := pool.Call("Worker.Mutate", query, reply); err != nil {
+	conn, err := pool.Get()
+	if err != nil {
+		che <- err
+		return
+	}
+	defer pool.Put(conn)
+	c := NewWorkerClient(conn)
+
+	reply, err := c.Mutate(context.Background(), query)
+	if err != nil {
 		glog.WithField("call", "Worker.Mutate").
 			WithField("addr", pool.Addr).
 			WithError(err).Error("While calling mutate")
@@ -115,7 +125,7 @@ func MutateOverNetwork(
 	}
 
 	var wg sync.WaitGroup
-	replies := make(chan *conn.Reply, numInstances)
+	replies := make(chan *Payload, numInstances)
 	errors := make(chan error, numInstances)
 	for idx, mu := range mutationArray {
 		if mu == nil || len(mu.Set) == 0 {

@@ -58,6 +58,9 @@ const _ = grpc.SupportPackageIsVersion2
 
 type WorkerClient interface {
 	Hello(ctx context.Context, in *Payload, opts ...grpc.CallOption) (*Payload, error)
+	GetOrAssign(ctx context.Context, in *Payload, opts ...grpc.CallOption) (*Payload, error)
+	Mutate(ctx context.Context, in *Payload, opts ...grpc.CallOption) (*Payload, error)
+	ServeTask(ctx context.Context, in *Payload, opts ...grpc.CallOption) (*Payload, error)
 }
 
 type workerClient struct {
@@ -77,10 +80,40 @@ func (c *workerClient) Hello(ctx context.Context, in *Payload, opts ...grpc.Call
 	return out, nil
 }
 
+func (c *workerClient) GetOrAssign(ctx context.Context, in *Payload, opts ...grpc.CallOption) (*Payload, error) {
+	out := new(Payload)
+	err := grpc.Invoke(ctx, "/worker.Worker/GetOrAssign", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *workerClient) Mutate(ctx context.Context, in *Payload, opts ...grpc.CallOption) (*Payload, error) {
+	out := new(Payload)
+	err := grpc.Invoke(ctx, "/worker.Worker/Mutate", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *workerClient) ServeTask(ctx context.Context, in *Payload, opts ...grpc.CallOption) (*Payload, error) {
+	out := new(Payload)
+	err := grpc.Invoke(ctx, "/worker.Worker/ServeTask", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // Server API for Worker service
 
 type WorkerServer interface {
 	Hello(context.Context, *Payload) (*Payload, error)
+	GetOrAssign(context.Context, *Payload) (*Payload, error)
+	Mutate(context.Context, *Payload) (*Payload, error)
+	ServeTask(context.Context, *Payload) (*Payload, error)
 }
 
 func RegisterWorkerServer(s *grpc.Server, srv WorkerServer) {
@@ -105,6 +138,60 @@ func _Worker_Hello_Handler(srv interface{}, ctx context.Context, dec func(interf
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Worker_GetOrAssign_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Payload)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WorkerServer).GetOrAssign(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/worker.Worker/GetOrAssign",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WorkerServer).GetOrAssign(ctx, req.(*Payload))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Worker_Mutate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Payload)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WorkerServer).Mutate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/worker.Worker/Mutate",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WorkerServer).Mutate(ctx, req.(*Payload))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Worker_ServeTask_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Payload)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WorkerServer).ServeTask(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/worker.Worker/ServeTask",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WorkerServer).ServeTask(ctx, req.(*Payload))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 var _Worker_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "worker.Worker",
 	HandlerType: (*WorkerServer)(nil),
@@ -113,17 +200,32 @@ var _Worker_serviceDesc = grpc.ServiceDesc{
 			MethodName: "Hello",
 			Handler:    _Worker_Hello_Handler,
 		},
+		{
+			MethodName: "GetOrAssign",
+			Handler:    _Worker_GetOrAssign_Handler,
+		},
+		{
+			MethodName: "Mutate",
+			Handler:    _Worker_Mutate_Handler,
+		},
+		{
+			MethodName: "ServeTask",
+			Handler:    _Worker_ServeTask_Handler,
+		},
 	},
 	Streams: []grpc.StreamDesc{},
 }
 
 var fileDescriptor0 = []byte{
-	// 107 bytes of a gzipped FileDescriptorProto
+	// 151 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0xe2, 0xe2, 0x2d, 0x48, 0xac, 0xcc,
 	0xc9, 0x4f, 0x4c, 0xd1, 0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x17, 0x62, 0x2b, 0xcf, 0x2f, 0xca, 0x4e,
 	0x2d, 0x52, 0x92, 0xe5, 0x62, 0x0f, 0x80, 0x48, 0x08, 0x09, 0x71, 0xb1, 0xb8, 0x24, 0x96, 0x24,
-	0x4a, 0x30, 0x2a, 0x30, 0x6a, 0xf0, 0x04, 0xb1, 0xa4, 0x00, 0xd9, 0x46, 0xa6, 0x5c, 0x6c, 0xe1,
-	0x60, 0x85, 0x42, 0xda, 0x5c, 0xac, 0x1e, 0xa9, 0x39, 0x39, 0xf9, 0x42, 0xfc, 0x7a, 0x10, 0xad,
-	0x7a, 0x50, 0x7d, 0x52, 0xe8, 0x02, 0x4a, 0x0c, 0x49, 0x6c, 0x60, 0x4b, 0x8c, 0x01, 0x01, 0x00,
-	0x00, 0xff, 0xff, 0x18, 0xa7, 0x3a, 0x26, 0x75, 0x00, 0x00, 0x00,
+	0x4a, 0x30, 0x2a, 0x30, 0x6a, 0xf0, 0x04, 0xb1, 0xa4, 0x00, 0xd9, 0x46, 0xc7, 0x19, 0xb9, 0xd8,
+	0xc2, 0xc1, 0x2a, 0x85, 0xb4, 0xb9, 0x58, 0x3d, 0x52, 0x73, 0x72, 0xf2, 0x85, 0xf8, 0xf5, 0x20,
+	0x7a, 0xf5, 0xa0, 0x1a, 0xa5, 0xd0, 0x05, 0x94, 0x18, 0x84, 0x0c, 0xb9, 0xb8, 0xdd, 0x53, 0x4b,
+	0xfc, 0x8b, 0x1c, 0x8b, 0x8b, 0x33, 0xd3, 0xf3, 0x88, 0xd2, 0xa2, 0xc3, 0xc5, 0xe6, 0x5b, 0x5a,
+	0x92, 0x58, 0x92, 0x4a, 0x94, 0x6a, 0x7d, 0x2e, 0xce, 0xe0, 0xd4, 0xa2, 0xb2, 0xd4, 0x90, 0xc4,
+	0xe2, 0x6c, 0x62, 0x34, 0x24, 0xb1, 0x81, 0xfd, 0x6d, 0x0c, 0x08, 0x00, 0x00, 0xff, 0xff, 0x53,
+	0x6e, 0x7b, 0x2e, 0x08, 0x01, 0x00, 0x00,
 }

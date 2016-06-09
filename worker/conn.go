@@ -55,3 +55,21 @@ func (p *Pool) dialNew() (*grpc.ClientConn, error) {
 	return grpc.Dial(p.Addr, grpc.WithInsecure(), grpc.WithInsecure(),
 		grpc.WithCodec(&PayloadCodec{}))
 }
+
+func (p *Pool) Get() (*grpc.ClientConn, error) {
+	select {
+	case conn := <-p.conns:
+		return conn, nil
+	default:
+		return p.dialNew()
+	}
+}
+
+func (p *Pool) Put(conn *grpc.ClientConn) error {
+	select {
+	case p.conns <- conn:
+		return nil
+	default:
+		return conn.Close()
+	}
+}
