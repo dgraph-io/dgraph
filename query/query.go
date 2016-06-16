@@ -21,10 +21,11 @@ import (
 	"container/heap"
 	"encoding/json"
 	"fmt"
-	"reflect"
+	"log"
 	"time"
 
-	"github.com/Sirupsen/logrus"
+	"golang.org/x/net/context"
+
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/query/graph"
 	"github.com/dgraph-io/dgraph/task"
@@ -86,8 +87,6 @@ import (
  * Return errors, if any.
  */
 
-var glog = x.Log("query")
-
 type Latency struct {
 	Start          time.Time     `json:"-"`
 	Parsing        time.Duration `json:"query_parsing"`
@@ -131,8 +130,6 @@ func mergeInterfaces(i1 interface{}, i2 interface{}) interface{} {
 		}
 		break
 	}
-	glog.Debugf("Got type: %v %v", reflect.TypeOf(i1), reflect.TypeOf(i2))
-	glog.Debugf("Got values: %v %v", i1, i2)
 
 	return []interface{}{i1, i2}
 }
@@ -149,7 +146,6 @@ func postTraverse(g *SubGraph) (result map[uint64]interface{}, rerr error) {
 	for _, child := range g.Children {
 		m, err := postTraverse(child)
 		if err != nil {
-			x.Err(glog, err).Error("Error while traversal")
 			return result, err
 		}
 		// Merge results from all children, one by one.
@@ -172,11 +168,11 @@ func postTraverse(g *SubGraph) (result map[uint64]interface{}, rerr error) {
 	r.Init(g.Result, ro)
 
 	if q.UidsLength() != r.UidmatrixLength() {
-		glog.Fatalf("Result uidmatrixlength: %v. Query uidslength: %v",
+		log.Fatalf("Result uidmatrixlength: %v. Query uidslength: %v",
 			r.UidmatrixLength(), q.UidsLength())
 	}
 	if q.UidsLength() != r.ValuesLength() {
-		glog.Fatalf("Result valuelength: %v. Query uidslength: %v",
+		log.Fatalf("Result valuelength: %v. Query uidslength: %v",
 			r.ValuesLength(), q.UidsLength())
 	}
 
@@ -229,17 +225,12 @@ func postTraverse(g *SubGraph) (result map[uint64]interface{}, rerr error) {
 		}
 
 		if pval, present := result[q.Uids(i)]; present {
-			glog.WithField("prev", pval).
-				WithField("_uid_", q.Uids(i)).
-				WithField("new", val).
-				Fatal("Previous value detected. A uid -> list of uids / value. Not both.")
+			log.Fatalf("prev: %v _uid_: %v new: %v"+
+				" Previous value detected. A uid -> list of uids / value. Not both",
+				pval, q.Uids(i), val)
 		}
 		m := make(map[string]interface{})
 		m["_uid_"] = fmt.Sprintf("%#x", q.Uids(i))
-		glog.WithFields(logrus.Fields{
-			"_uid_": q.Uids(i),
-			"val":   val,
-		}).Debug("Got value")
 		m[g.Attr] = string(val)
 		result[q.Uids(i)] = m
 	}
@@ -249,7 +240,6 @@ func postTraverse(g *SubGraph) (result map[uint64]interface{}, rerr error) {
 func (g *SubGraph) ToJson(l *Latency) (js []byte, rerr error) {
 	r, err := postTraverse(g)
 	if err != nil {
-		x.Err(glog, err).Error("While doing traversal")
 		return js, err
 	}
 	l.Json = time.Since(l.Start) - l.Parsing - l.Processing
@@ -263,10 +253,10 @@ func (g *SubGraph) ToJson(l *Latency) (js []byte, rerr error) {
 			return json.Marshal(m)
 		}
 	} else {
-		glog.Fatal("We don't currently support more than 1 uid at root.")
+		log.Fatal("We don't currently support more than 1 uid at root.")
 	}
 
-	glog.Fatal("Shouldn't reach here.")
+	log.Fatal("Shouldn't reach here.")
 	return json.Marshal(r)
 }
 
@@ -305,11 +295,7 @@ func (g *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 		idx := indexOf(uid, q)
 
 		if idx == -1 {
-			glog.WithFields(logrus.Fields{
-				"uid":            uid,
-				"attribute":      g.Attr,
-				"childAttribute": pc.Attr,
-			}).Fatal("Attribute with uid not found in child Query uids")
+			log.Fatal("Attribute with uid not found in child Query uids.")
 			return fmt.Errorf("Attribute with uid not found")
 		}
 
@@ -328,7 +314,7 @@ func (g *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 				uc.Attribute = pc.Attr
 				uc.Uid = uid
 				if rerr := pc.preTraverse(uid, uc); rerr != nil {
-					x.Err(glog, rerr).Error("Error while traversal")
+					log.Printf("Error while traversal: %v", rerr)
 					return rerr
 				}
 
@@ -371,7 +357,6 @@ func (g *SubGraph) ToProtocolBuffer(l *Latency) (n *graph.Node, rerr error) {
 	n.Uid = ul.Uids(0)
 
 	if rerr = g.preTraverse(n.Uid, n); rerr != nil {
-		x.Err(glog, rerr).Error("Error while traversal")
 		return n, rerr
 	}
 
@@ -393,8 +378,8 @@ func treeCopy(gq *gql.GraphQuery, sg *SubGraph) {
 	}
 }
 
-func ToSubGraph(gq *gql.GraphQuery) (*SubGraph, error) {
-	sg, err := newGraph(gq.UID, gq.XID)
+func ToSubGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
+	sg, err := newGraph(ctx, gq.UID, gq.XID)
 	if err != nil {
 		return nil, err
 	}
@@ -402,24 +387,24 @@ func ToSubGraph(gq *gql.GraphQuery) (*SubGraph, error) {
 	return sg, nil
 }
 
-func newGraph(euid uint64, exid string) (*SubGraph, error) {
+func newGraph(ctx context.Context, euid uint64, exid string) (*SubGraph, error) {
 	// This would set the Result field in SubGraph,
 	// and populate the children for attributes.
 	if len(exid) > 0 {
 		xidToUid := make(map[string]uint64)
 		xidToUid[exid] = 0
-		if err := worker.GetOrAssignUidsOverNetwork(&xidToUid); err != nil {
-			glog.WithError(err).Error("While getting uids over network")
+		if err := worker.GetOrAssignUidsOverNetwork(ctx, &xidToUid); err != nil {
+			x.Trace(ctx, "Error while getting uids over network: %v", err)
 			return nil, err
 		}
 
 		euid = xidToUid[exid]
-		glog.WithField("xid", exid).WithField("uid", euid).Debug("GetOrAssign")
+		x.Trace(ctx, "Xid: %v Uid: %v", exid, euid)
 	}
 
 	if euid == 0 {
 		err := fmt.Errorf("Query internal id is zero")
-		x.Err(glog, err).Error("Invalid query")
+		x.Trace(ctx, "Invalid query: %v", err)
 		return nil, err
 	}
 
@@ -535,14 +520,12 @@ func sortedUniqueUids(r *task.Result) (sorted []uint64, rerr error) {
 	return sorted, nil
 }
 
-func ProcessGraph(sg *SubGraph, rch chan error, td time.Duration) {
-	timeout := time.Now().Add(td)
-
+func ProcessGraph(ctx context.Context, sg *SubGraph, rch chan error) {
 	var err error
 	if len(sg.Query) > 0 && sg.Attr != "_root_" {
-		sg.Result, err = worker.ProcessTaskOverNetwork(sg.Query)
+		sg.Result, err = worker.ProcessTaskOverNetwork(ctx, sg.Query)
 		if err != nil {
-			x.Err(glog, err).Error("While processing task.")
+			x.Trace(ctx, "Error while processing task: %v", err)
 			rch <- err
 			return
 		}
@@ -555,34 +538,21 @@ func ProcessGraph(sg *SubGraph, rch chan error, td time.Duration) {
 	if r.ValuesLength() > 0 {
 		var v task.Value
 		if r.Values(&v, 0) {
-			glog.WithField("attr", sg.Attr).WithField("val", string(v.ValBytes())).
-				Info("Sample value")
+			x.Trace(ctx, "Sample value for attr: %v Val: %v", sg.Attr, string(v.ValBytes()))
 		}
 	}
 
 	sorted, err := sortedUniqueUids(r)
 	if err != nil {
-		x.Err(glog, err).Error("While processing task.")
+		x.Trace(ctx, "Error while processing task: %v", err)
 		rch <- err
 		return
 	}
 
 	if len(sorted) == 0 {
 		// Looks like we're done here.
-		if len(sg.Children) > 0 {
-			glog.Debugf("Have some children but no results. Life got cut short early."+
-				"Current attribute: %q", sg.Attr)
-		} else {
-			glog.Debugf("No more things to process for Attr: %v", sg.Attr)
-		}
+		x.Trace(ctx, "Zero uids. Num attr children: %v", len(sg.Children))
 		rch <- nil
-		return
-	}
-
-	timeleft := timeout.Sub(time.Now())
-	if timeleft < 0 {
-		glog.WithField("attr", sg.Attr).Error("Query timeout before children")
-		rch <- fmt.Errorf("Query timeout before children")
 		return
 	}
 
@@ -594,28 +564,22 @@ func ProcessGraph(sg *SubGraph, rch chan error, td time.Duration) {
 	for i := 0; i < len(sg.Children); i++ {
 		child := sg.Children[i]
 		child.Query = createTaskQuery(child, sorted)
-		go ProcessGraph(child, childchan, timeleft)
+		go ProcessGraph(ctx, child, childchan)
 	}
 
-	tchan := time.After(timeleft)
 	// Now get all the results back.
 	for i := 0; i < len(sg.Children); i++ {
 		select {
 		case err = <-childchan:
-			glog.WithFields(logrus.Fields{
-				"num_children": len(sg.Children),
-				"index":        i,
-				"attr":         sg.Children[i].Attr,
-				"err":          err,
-			}).Debug("Reply from child")
+			x.Trace(ctx, "Reply from child. Index: %v Attr: %v", i, sg.Children[i].Attr)
 			if err != nil {
-				x.Err(glog, err).Error("While processing child task.")
+				x.Trace(ctx, "Error while processing child task: %v", err)
 				rch <- err
 				return
 			}
-		case <-tchan:
-			glog.WithField("attr", sg.Attr).Error("Query timeout after children")
-			rch <- fmt.Errorf("Query timeout after children")
+		case <-ctx.Done():
+			x.Trace(ctx, "Context done before full execution: %v", ctx.Err())
+			rch <- ctx.Err()
 			return
 		}
 	}
