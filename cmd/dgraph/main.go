@@ -97,7 +97,7 @@ func mutationHandler(ctx context.Context, mu *gql.Mutation) error {
 		}
 	}
 	if len(xidToUid) > 0 {
-		if err := worker.GetOrAssignUidsOverNetwork(&xidToUid); err != nil {
+		if err := worker.GetOrAssignUidsOverNetwork(ctx, &xidToUid); err != nil {
 			x.Trace(ctx, "Error while GetOrAssignUidsOverNetwork: %v", err)
 			return err
 		}
@@ -113,7 +113,7 @@ func mutationHandler(ctx context.Context, mu *gql.Mutation) error {
 		edges = append(edges, edge)
 	}
 
-	left, err := worker.MutateOverNetwork(edges)
+	left, err := worker.MutateOverNetwork(ctx, edges)
 	if err != nil {
 		x.Trace(ctx, "Error while MutateOverNetwork: %v", err)
 		return err
@@ -173,7 +173,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sg, err := query.ToSubGraph(gq)
+	sg, err := query.ToSubGraph(ctx, gq)
 	if err != nil {
 		x.Trace(ctx, "Error while conversion to internal format: %v", err)
 		x.SetStatus(w, x.E_INVALID_REQUEST, err.Error())
@@ -183,7 +183,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	x.Trace(ctx, "Query parsed")
 
 	rch := make(chan error)
-	go query.ProcessGraph(sg, rch, time.Minute)
+	go query.ProcessGraph(ctx, sg, rch)
 	err = <-rch
 	if err != nil {
 		x.Trace(ctx, "Error while executing query: %v", err)
@@ -241,7 +241,7 @@ func (s *server) Query(ctx context.Context,
 		return resp, err
 	}
 
-	sg, err := query.ToSubGraph(gq)
+	sg, err := query.ToSubGraph(ctx, gq)
 	if err != nil {
 		x.Trace(ctx, "Error while conversion to internal format: %v", err)
 		return resp, err
@@ -250,7 +250,7 @@ func (s *server) Query(ctx context.Context,
 	x.Trace(ctx, "Query parsed")
 
 	rch := make(chan error)
-	go query.ProcessGraph(sg, rch, time.Minute)
+	go query.ProcessGraph(ctx, sg, rch)
 	err = <-rch
 	if err != nil {
 		x.Trace(ctx, "Error while executing query: %v", err)
