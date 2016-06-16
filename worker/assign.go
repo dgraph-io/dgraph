@@ -18,12 +18,14 @@ package worker
 
 import (
 	"fmt"
+	"log"
 	"sync"
 
 	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/uid"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/google/flatbuffers/go"
 )
 
@@ -48,7 +50,7 @@ func createXidListBuffer(xids map[string]uint64) []byte {
 	return b.Bytes[b.Head():]
 }
 
-func getOrAssignUids(
+func getOrAssignUids(ctx context.Context,
 	xidList *task.XidList) (uidList []byte, rerr error) {
 
 	if xidList.XidsLength() == 0 {
@@ -75,7 +77,7 @@ func getOrAssignUids(
 	wg.Wait()
 	close(che)
 	for err := range che {
-		glog.WithError(err).Error("Encountered errors while getOrAssignUids")
+		x.Trace(ctx, "Error while getOrAssignUids: %v", err)
 		return uidList, err
 	}
 
@@ -93,7 +95,7 @@ func getOrAssignUids(
 	return b.Bytes[b.Head():], nil
 }
 
-func GetOrAssignUidsOverNetwork(xidToUid *map[string]uint64) (rerr error) {
+func GetOrAssignUidsOverNetwork(ctx context.Context, xidToUid *map[string]uint64) (rerr error) {
 	query := new(Payload)
 	query.Data = createXidListBuffer(*xidToUid)
 	uo := flatbuffers.GetUOffsetT(query.Data)
@@ -106,7 +108,7 @@ func GetOrAssignUidsOverNetwork(xidToUid *map[string]uint64) (rerr error) {
 		xidList := new(task.XidList)
 		xidList.Init(query.Data, uo)
 
-		reply.Data, rerr = getOrAssignUids(xidList)
+		reply.Data, rerr = getOrAssignUids(ctx, xidList)
 		if rerr != nil {
 			return rerr
 		}
@@ -115,15 +117,14 @@ func GetOrAssignUidsOverNetwork(xidToUid *map[string]uint64) (rerr error) {
 		pool := pools[0]
 		conn, err := pool.Get()
 		if err != nil {
-			glog.WithError(err).Error("Unable to retrieve connection.")
+			x.Trace(ctx, "Error while retrieving connection: %v", err)
 			return err
 		}
 		c := NewWorkerClient(conn)
 
 		reply, rerr = c.GetOrAssign(context.Background(), query)
 		if rerr != nil {
-			glog.WithField("method", "GetOrAssign").WithError(rerr).
-				Error("While getting uids")
+			x.Trace(ctx, "Error while getting uids: %v", rerr)
 			return rerr
 		}
 	}
@@ -133,9 +134,7 @@ func GetOrAssignUidsOverNetwork(xidToUid *map[string]uint64) (rerr error) {
 	uidList.Init(reply.Data, uo)
 
 	if xidList.XidsLength() != uidList.UidsLength() {
-		glog.WithField("num_xids", xidList.XidsLength()).
-			WithField("num_uids", uidList.UidsLength()).
-			Fatal("Num xids don't match num uids")
+		log.Fatal("Xids: %d != Uids: %d", xidList.XidsLength(), uidList.UidsLength())
 	}
 	for i := 0; i < xidList.XidsLength(); i++ {
 		xid := string(xidList.Xids(i))
