@@ -21,7 +21,6 @@ import (
 	"encoding/gob"
 	"fmt"
 	"log"
-	"sync"
 
 	"golang.org/x/net/context"
 
@@ -48,7 +47,7 @@ func (m *Mutations) Decode(data []byte) error {
 	return dec.Decode(m)
 }
 
-func mutate(m *Mutations, left *Mutations) error {
+func mutate(ctx context.Context, m *Mutations, left *Mutations) error {
 	// For now, assume it's all only Set instructions.
 	for _, edge := range m.Set {
 		if farm.Fingerprint64(
@@ -59,7 +58,7 @@ func mutate(m *Mutations, left *Mutations) error {
 
 		key := posting.Key(edge.Entity, edge.Attribute)
 		plist := posting.GetOrCreate(key, dataStore)
-		if err := plist.AddMutation(edge, posting.Set); err != nil {
+		if err := plist.AddMutation(ctx, edge, posting.Set); err != nil {
 			left.Set = append(left.Set, edge)
 			log.Printf("Error while adding mutation: %v %v", edge, err)
 			continue
@@ -68,10 +67,9 @@ func mutate(m *Mutations, left *Mutations) error {
 	return nil
 }
 
-func runMutate(idx int, m *Mutations, wg *sync.WaitGroup,
+func runMutate(ctx context.Context, idx int, m *Mutations,
 	replies chan *Payload, che chan error) {
 
-	defer wg.Done()
 	left := new(Mutations)
 	if idx == int(instanceIdx) {
 		che <- mutate(m, left)
@@ -95,12 +93,13 @@ func runMutate(idx int, m *Mutations, wg *sync.WaitGroup,
 	defer pool.Put(conn)
 	c := NewWorkerClient(conn)
 
-	reply, err := c.Mutate(context.Background(), query)
+	reply, err := c.Mutate(ctx, query)
 	if err != nil {
 		che <- err
 		return
 	}
 	replies <- reply
+	che <- nil
 }
 
 func MutateOverNetwork(ctx context.Context,
@@ -117,26 +116,32 @@ func MutateOverNetwork(ctx context.Context,
 		mu.Set = append(mu.Set, edge)
 	}
 
-	var wg sync.WaitGroup
 	replies := make(chan *Payload, numInstances)
 	errors := make(chan error, numInstances)
+	count := 0
 	for idx, mu := range mutationArray {
 		if mu == nil || len(mu.Set) == 0 {
 			continue
 		}
-		wg.Add(1)
-		go runMutate(idx, mu, &wg, replies, errors)
+		count += 1
+		go runMutate(ctx, idx, mu, replies, errors)
 	}
-	wg.Wait()
+
+	// Wait for all the goroutines to reply back.
+	for i := 0; i < count; i++ {
+		select {
+		case err := <-errors:
+			if err != nil {
+				x.Trace(ctx, "Error while running all mutations: %v", err)
+				return left, err
+			}
+		case <-ctx.Done():
+			return left, ctx.Err()
+		}
+	}
 	close(replies)
 	close(errors)
 
-	for err := range errors {
-		if err != nil {
-			x.Trace(ctx, "Error while running all mutations: %v", err)
-			return left, err
-		}
-	}
 	for reply := range replies {
 		l := new(Mutations)
 		if err := l.Decode(reply.Data); err != nil {

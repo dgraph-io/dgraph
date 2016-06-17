@@ -20,12 +20,15 @@ import (
 	"bytes"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"math"
 	"math/rand"
 	"os"
 	"strconv"
 	"testing"
 	"time"
+
+	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/dgraph/commit"
 	"github.com/dgraph-io/dgraph/posting/types"
@@ -76,7 +79,6 @@ func checkUids(t *testing.T, l *List, uids ...uint64) error {
 }
 
 func TestAddMutation(t *testing.T) {
-	// logrus.SetLevel(logrus.DebugLevel)
 	l := NewList()
 	key := Key(1, "name")
 	dir, err := ioutil.TempDir("", "storetest_")
@@ -100,7 +102,8 @@ func TestAddMutation(t *testing.T) {
 		Source:    "testing",
 		Timestamp: time.Now(),
 	}
-	if err := l.AddMutation(edge, Set); err != nil {
+	ctx := context.Background()
+	if err := l.AddMutation(ctx, edge, Set); err != nil {
 		t.Error(err)
 	}
 	/*
@@ -127,7 +130,7 @@ func TestAddMutation(t *testing.T) {
 
 	// Add another edge now.
 	edge.ValueId = 81
-	l.AddMutation(edge, Set)
+	l.AddMutation(ctx, edge, Set)
 	// l.CommitIfDirty()
 	if l.Length() != 2 {
 		t.Errorf("Length: %d", l.Length())
@@ -152,7 +155,7 @@ func TestAddMutation(t *testing.T) {
 		9, 49, 81,
 	}
 	edge.ValueId = 49
-	if err := l.AddMutation(edge, Set); err != nil {
+	if err := l.AddMutation(ctx, edge, Set); err != nil {
 		t.Error(err)
 	}
 	/*
@@ -167,18 +170,18 @@ func TestAddMutation(t *testing.T) {
 
 	// Delete an edge, add an edge, replace an edge
 	edge.ValueId = 49
-	if err := l.AddMutation(edge, Del); err != nil {
+	if err := l.AddMutation(ctx, edge, Del); err != nil {
 		t.Error(err)
 	}
 
 	edge.ValueId = 69
-	if err := l.AddMutation(edge, Set); err != nil {
+	if err := l.AddMutation(ctx, edge, Set); err != nil {
 		t.Error(err)
 	}
 
 	edge.ValueId = 9
 	edge.Source = "anti-testing"
-	if err := l.AddMutation(edge, Set); err != nil {
+	if err := l.AddMutation(ctx, edge, Set); err != nil {
 		t.Error(err)
 	}
 	/*
@@ -209,7 +212,7 @@ func TestAddMutation(t *testing.T) {
 		t.Error(err)
 	}
 
-	if _, err := dl.MergeIfDirty(); err != nil {
+	if _, err := dl.MergeIfDirty(ctx); err != nil {
 		t.Error(err)
 	}
 	if err := checkUids(t, dl, uids...); err != nil {
@@ -218,8 +221,6 @@ func TestAddMutation(t *testing.T) {
 }
 
 func TestAddMutation_Value(t *testing.T) {
-	// logrus.SetLevel(logrus.DebugLevel)
-	glog.Debug("Running init...")
 	ol := NewList()
 	key := Key(10, "value")
 	dir, err := ioutil.TempDir("", "storetest_")
@@ -237,14 +238,15 @@ func TestAddMutation_Value(t *testing.T) {
 	defer clog.Close()
 
 	ol.init(key, ps, clog)
-	glog.Debug("Init successful.")
+	log.Println("Init successful.")
 
 	edge := x.DirectedEdge{
 		Value:     []byte("oh hey there"),
 		Source:    "new-testing",
 		Timestamp: time.Now(),
 	}
-	if err := ol.AddMutation(edge, Set); err != nil {
+	ctx := context.Background()
+	if err := ol.AddMutation(ctx, edge, Set); err != nil {
 		t.Error(err)
 	}
 	var p types.Posting
@@ -257,7 +259,7 @@ func TestAddMutation_Value(t *testing.T) {
 	}
 
 	// Run the same check after committing.
-	if _, err := ol.MergeIfDirty(); err != nil {
+	if _, err := ol.MergeIfDirty(ctx); err != nil {
 		t.Error(err)
 	}
 	{
@@ -272,7 +274,7 @@ func TestAddMutation_Value(t *testing.T) {
 
 	// The value made it to the posting list. Changing it now.
 	edge.Value = []byte(strconv.Itoa(119))
-	if err := ol.AddMutation(edge, Set); err != nil {
+	if err := ol.AddMutation(ctx, edge, Set); err != nil {
 		t.Error(err)
 	}
 	if ol.Length() != 1 {
@@ -312,13 +314,14 @@ func benchmarkAddMutations(n int, b *testing.B) {
 	b.ResetTimer()
 
 	ts := time.Now()
+	ctx := context.Background()
 	for i := 0; i < b.N; i++ {
 		edge := x.DirectedEdge{
 			ValueId:   uint64(rand.Intn(b.N) + 1),
 			Source:    "testing",
 			Timestamp: ts.Add(time.Microsecond),
 		}
-		if err := l.AddMutation(edge, Set); err != nil {
+		if err := l.AddMutation(ctx, edge, Set); err != nil {
 			b.Error(err)
 		}
 	}

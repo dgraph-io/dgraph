@@ -98,7 +98,7 @@ func (w *worker) Mutate(ctx context.Context, query *Payload) (*Payload, error) {
 	}
 
 	left := new(Mutations)
-	if err := mutate(m, left); err != nil {
+	if err := mutate(ctx, m, left); err != nil {
 		return nil, err
 	}
 

@@ -23,6 +23,8 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/net/context"
+
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/posting/types"
 	"github.com/dgraph-io/dgraph/store"
@@ -140,7 +142,7 @@ func allocateUniqueUid(xid string, instanceIdx uint64,
 			Source:    "_assigner_",
 			Timestamp: time.Now(),
 		}
-		rerr = pl.AddMutation(t, posting.Set)
+		rerr = pl.AddMutation(context.Background(), t, posting.Set)
 		if rerr != nil {
 			glog.WithError(rerr).Error("While adding mutation")
 		}
@@ -180,7 +182,7 @@ func assignNew(pl *posting.List, xid string, instanceIdx uint64,
 		Source:    "_assigner_",
 		Timestamp: time.Now(),
 	}
-	rerr := pl.AddMutation(t, posting.Set)
+	rerr := pl.AddMutation(context.Background(), t, posting.Set)
 	return uid, rerr
 }
 
