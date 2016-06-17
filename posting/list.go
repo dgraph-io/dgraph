@@ -247,7 +247,6 @@ func (l *List) getPostingList() *types.PostingList {
 		nbuf := new(buffer)
 		var err error
 		if nbuf.d, err = l.pstore.Get(l.key); err != nil {
-			// glog.Debugf("While retrieving posting list from db: %v\n", err)
 			// Error. Just set to empty.
 			nbuf.d = make([]byte, len(empty))
 			copy(nbuf.d, empty)
