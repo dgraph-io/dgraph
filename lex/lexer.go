@@ -19,11 +19,7 @@ package lex
 import (
 	"fmt"
 	"unicode/utf8"
-
-	"github.com/dgraph-io/dgraph/x"
 )
-
-var glog = x.Log("lexer")
 
 const EOF = -1
 
