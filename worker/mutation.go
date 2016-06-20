@@ -72,7 +72,7 @@ func runMutate(ctx context.Context, idx int, m *Mutations,
 
 	left := new(Mutations)
 	if idx == int(instanceIdx) {
-		che <- mutate(m, left)
+		che <- mutate(ctx, m, left)
 		return
 	}
 
