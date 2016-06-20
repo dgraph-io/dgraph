@@ -75,7 +75,6 @@ func TestAddLog(t *testing.T) {
 		time.Sleep(500 * time.Microsecond)
 	}
 
-	glog.Debugf("Test curfile path: %v", l.cf.f.Name())
 	_, err = lastTimestamp(l.cf.cache())
 	if err != nil {
 		t.Error(err)

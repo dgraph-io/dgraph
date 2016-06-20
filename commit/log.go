@@ -27,6 +27,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"runtime/debug"
@@ -38,12 +39,10 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/Sirupsen/logrus"
-	"github.com/dgraph-io/dgraph/x"
+	"golang.org/x/net/trace"
+
 	"github.com/willf/bloom"
 )
-
-var glog = x.Log("commitlog")
 
 type logFile struct {
 	sync.RWMutex
@@ -69,8 +68,7 @@ func (lf *logFile) FillIfEmpty(wg *sync.WaitGroup) {
 	}
 	cache := new(Cache)
 	if err := FillCache(cache, lf.path); err != nil {
-		glog.WithError(err).WithField("path", lf.path).
-			Fatal("Unable to fill cache.")
+		log.Fatalf("Unable to fill cache for path: %v. Err: %v", lf.path, err)
 	}
 	// No need to acquire lock on cache, because it just
 	// got created.
@@ -85,7 +83,7 @@ func createAndUpdateBloomFilter(cache *Cache) {
 	if err := streamEntries(cache, 0, 0, func(hdr Header, record []byte) {
 		hashes = append(hashes, hdr.hash)
 	}); err != nil {
-		glog.WithError(err).Fatal("Unable to create bloom filters.")
+		log.Fatalf("Unable to create bloom filters: %v", err)
 	}
 
 	n := 100000
@@ -156,6 +154,8 @@ type Logger struct {
 	cf        *CurFile
 	lastLogTs int64 // handled via atomics.
 	ticker    *time.Ticker
+
+	events trace.EventLog
 }
 
 func (l *Logger) curFile() *CurFile {
@@ -190,11 +190,11 @@ func (l *Logger) DeleteCacheOlderThan(v time.Duration) {
 }
 
 func (l *Logger) periodicSync() {
-	glog.WithField("dur", l.SyncDur).Debug("Periodic sync.")
 	if l.SyncDur == 0 {
-		glog.Debug("No Periodic Sync for commit log.")
+		l.events.Printf("No Periodic Sync for commit log.")
 		return
 	}
+	l.events.Printf("Periodic Sync at duration: %v", l.SyncDur)
 
 	l.ticker = time.NewTicker(l.SyncDur)
 	for _ = range l.ticker.C {
@@ -207,13 +207,13 @@ func (l *Logger) periodicSync() {
 			cf.Lock()
 			if cf.dirtyLogs > 0 {
 				if err := cf.f.Sync(); err != nil {
-					glog.WithError(err).Error("While periodically syncing.")
+					l.events.Errorf("While periodically syncing: %v", err)
 				} else {
 					cf.dirtyLogs = 0
-					glog.Debug("Successful periodic sync.")
+					l.events.Printf("Successful periodic sync.")
 				}
 			} else {
-				glog.Debug("Skipping periodic sync.")
+				l.events.Printf("Skipping periodic sync.")
 			}
 			cf.Unlock()
 		}
@@ -229,10 +229,11 @@ func (l *Logger) Close() {
 	}
 	if l.cf != nil {
 		if err := l.cf.f.Close(); err != nil {
-			glog.WithError(err).Error("While closing current file.")
+			l.events.Errorf("Error while closing current file: %v", err)
 		}
 		l.cf = nil
 	}
+	l.events.Finish()
 }
 
 func NewLogger(dir string, fileprefix string, maxSize int64) *Logger {
@@ -240,6 +241,7 @@ func NewLogger(dir string, fileprefix string, maxSize int64) *Logger {
 	l.dir = dir
 	l.filePrefix = fileprefix
 	l.maxSize = maxSize
+	l.events = trace.NewEventLog("commit", "Logger")
 	return l
 }
 
@@ -256,7 +258,7 @@ func (l *Logger) handleFile(path string, info os.FileInfo, err error) error {
 	}
 	lidx := strings.LastIndex(info.Name(), ".log")
 	tstring := info.Name()[len(l.filePrefix)+1 : lidx]
-	glog.WithField("log_ts", tstring).Debug("Found log.")
+	l.events.Printf("Found log with ts: %v", tstring)
 
 	// Handle if we find the current log file.
 	if tstring == "current" {
@@ -280,12 +282,12 @@ func (l *Logger) Init() {
 	l.Lock()
 	defer l.Unlock()
 
-	glog.Debug("Logger init started.")
+	l.events.Printf("Logger init started")
 	{
 		// Checking if the directory exists.
 		if _, err := os.Stat(l.dir); err != nil {
 			if os.IsNotExist(err) {
-				glog.WithError(err).Fatal("Unable to find dir.")
+				log.Fatalf("Unable to find dir: %v", err)
 			}
 		}
 		// First check if we have a current file.
@@ -298,13 +300,13 @@ func (l *Logger) Init() {
 			l.cf.dirtyLogs = 0
 			cache := new(Cache)
 			if ferr := FillCache(cache, path); ferr != nil {
-				glog.WithError(ferr).Fatal("Unable to write to cache.")
+				log.Fatalf("Unable to write to cache: %v", ferr)
 			}
 			createAndUpdateBloomFilter(cache)
 			atomic.StorePointer(&l.cf.cch, unsafe.Pointer(cache))
 			lastTs, err := lastTimestamp(cache)
 			if err != nil {
-				glog.WithError(err).Fatal("Unable to read last log timestamp.")
+				log.Fatalf("Unable to read last log ts: %v", err)
 			}
 			l.updateLastLogTs(lastTs)
 
@@ -312,20 +314,20 @@ func (l *Logger) Init() {
 			l.cf.f, err = os.OpenFile(path, os.O_APPEND|os.O_WRONLY,
 				os.FileMode(0644))
 			if err != nil {
-				glog.WithError(err).Fatal("Unable to open current file in append mode.")
+				log.Fatalf("Unable to open current file in append mode: %v", err)
 			}
 		}
 	}
 
 	if err := filepath.Walk(l.dir, l.handleFile); err != nil {
-		glog.WithError(err).Fatal("While walking over directory")
+		log.Fatal("While walking over directory: %v", err)
 	}
 	sort.Sort(ByTimestamp(l.list))
 	if l.cf == nil {
 		l.createNew()
 	}
 	go l.periodicSync()
-	glog.Debug("Logger init finished.")
+	l.events.Printf("Logger init finished.")
 }
 
 func (l *Logger) filepath(ts int64) string {
@@ -346,7 +348,6 @@ func parseHeader(hdr []byte) (Header, error) {
 	setError(&err, binary.Read(buf, binary.LittleEndian, &h.hash))
 	setError(&err, binary.Read(buf, binary.LittleEndian, &h.size))
 	if err != nil {
-		glog.WithError(err).Error("While parsing header.")
 		return h, err
 	}
 	return h, nil
@@ -363,10 +364,9 @@ func lastTimestamp(c *Cache) (int64, error) {
 			break
 		}
 		if n < len(header) {
-			glog.WithField("n", n).Fatal("Unable to read the full 16 byte header.")
+			log.Fatalf("Unable to read full 16 byte header. Read %v", n)
 		}
 		if err != nil {
-			glog.WithError(err).Error("While reading header.")
 			return 0, err
 		}
 		count += 1
@@ -379,11 +379,8 @@ func lastTimestamp(c *Cache) (int64, error) {
 			maxTs = h.ts
 
 		} else if h.ts < maxTs {
-			glog.WithFields(logrus.Fields{
-				"ts":         h.ts,
-				"maxts":      maxTs,
-				"numrecords": count,
-			}).Fatal("Log file doesn't have monotonically increasing records.")
+			log.Fatalf("Log file doesn't have monotonically increasing records."+
+				" ts: %v. maxts: %v. numrecords: %v", h.ts, maxTs, count)
 		}
 		reader.Discard(int(h.size))
 	}
@@ -411,8 +408,7 @@ func (l *Logger) rotateCurrent() error {
 		return err
 	}
 	if err := os.Rename(cf.f.Name(), newpath); err != nil {
-		glog.WithError(err).WithField("curfile", l.cf.f.Name()).
-			WithField("newfile", newpath).Error("While renaming.")
+		l.events.Errorf("Error while renaming: %v", err)
 		return err
 	}
 
@@ -432,12 +428,12 @@ func (l *Logger) rotateCurrent() error {
 func (l *Logger) createNew() {
 	path := filepath.Join(l.dir, fmt.Sprintf("%s-current.log", l.filePrefix))
 	if err := os.MkdirAll(l.dir, 0744); err != nil {
-		glog.WithError(err).Fatal("Unable to create directory.")
+		log.Fatalf("Unable to create directory: %v", err)
 	}
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC,
 		os.FileMode(0644))
 	if err != nil {
-		glog.WithError(err).Fatal("Unable to create a new file.")
+		log.Fatalf("Unable to create a new file: %v", err)
 	}
 	l.cf = new(CurFile)
 	l.cf.f = f
@@ -457,14 +453,14 @@ func (l *Logger) AddLog(hash uint32, value []byte) (int64, error) {
 	lbuf := int64(len(value)) + 16
 	if l.curFile().Size()+lbuf > l.maxSize {
 		if err := l.rotateCurrent(); err != nil {
-			glog.WithError(err).Error("While rotating current file out.")
+			l.events.Errorf("Error while rotating current file out: %v", err)
 			return 0, err
 		}
 	}
 
 	cf := l.curFile()
 	if cf == nil {
-		glog.Fatalf("Current file isn't initialized.")
+		log.Fatalf("Current file isn't initialized.")
 	}
 
 	cf.Lock()
@@ -487,14 +483,13 @@ func (l *Logger) AddLog(hash uint32, value []byte) (int64, error) {
 	if err != nil {
 		return ts, err
 	}
-	glog.WithField("bytes", buf.Len()).Debug("Log entry buffer.")
 
 	if _, err = cf.f.Write(buf.Bytes()); err != nil {
-		glog.WithError(err).Error("While writing to current file.")
+		l.events.Errorf("Error while writing to current file: %v", err)
 		return ts, err
 	}
 	if _, err = cf.cache().Write(hash, buf.Bytes()); err != nil {
-		glog.WithError(err).Error("While writing to current cache.")
+		l.events.Errorf("Error while writing to current cache: %v", err)
 		return ts, err
 	}
 	cf.dirtyLogs += 1
@@ -502,7 +497,7 @@ func (l *Logger) AddLog(hash uint32, value []byte) (int64, error) {
 	l.updateLastLogTs(ts)
 	if l.SyncEvery <= 0 || cf.dirtyLogs >= l.SyncEvery {
 		cf.dirtyLogs = 0
-		glog.Debug("Syncing file")
+		l.events.Printf("Syncing file")
 		return ts, cf.f.Sync()
 	}
 	return ts, nil
@@ -513,23 +508,20 @@ func (l *Logger) AddLog(hash uint32, value []byte) (int64, error) {
 func streamEntries(cache *Cache,
 	afterTs int64, hash uint32, iter LogIterator) error {
 
-	flog := glog
 	reader := NewReader(cache)
 	header := make([]byte, 16)
 	for {
 		_, err := reader.Read(header)
 		if err == io.EOF {
-			flog.Debug("Cache read complete.")
 			break
 		}
 		if err != nil {
-			flog.WithError(err).Fatal("While reading header.")
+			log.Fatalf("While reading header: %v", err)
 			return err
 		}
 
 		hdr, err := parseHeader(header)
 		if err != nil {
-			flog.WithError(err).Error("While parsing header.")
 			return err
 		}
 
@@ -539,7 +531,7 @@ func streamEntries(cache *Cache,
 			data := make([]byte, hdr.size)
 			_, err := reader.Read(data)
 			if err != nil {
-				flog.WithError(err).Fatal("While reading data.")
+				log.Fatalf("While reading data: %v", err)
 				return err
 			}
 			iter(hdr, data)
@@ -586,7 +578,7 @@ func (l *Logger) StreamEntries(afterTs int64, hash uint32,
 	}
 	for _, cache := range caches {
 		if cache == nil {
-			glog.Error("Cache is nil")
+			l.events.Errorf("Cache is nil")
 			continue
 		}
 		if err := streamEntries(cache, afterTs, hash, iter); err != nil {
