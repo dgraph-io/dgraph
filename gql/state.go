@@ -16,7 +16,11 @@
 
 package gql
 
-import "github.com/dgraph-io/dgraph/lex"
+import (
+	"log"
+
+	"github.com/dgraph-io/dgraph/lex"
+)
 
 const (
 	leftCurl     = '{'
@@ -264,7 +268,7 @@ func lexArgVal(l *lex.Lexer) lex.StateFn {
 				l.Input[l.Start:l.Pos])
 		}
 	}
-	glog.Fatal("This shouldn't be reached.")
+	log.Fatal("This shouldn't be reached.")
 	return nil
 }
 

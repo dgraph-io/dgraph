@@ -21,6 +21,8 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"log"
+	"math/rand"
 	"net"
 	"net/http"
 	"runtime"
@@ -28,10 +30,10 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
+	"golang.org/x/net/trace"
 
 	"google.golang.org/grpc"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/dgraph-io/dgraph/commit"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
@@ -44,8 +46,6 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-var glog = x.Log("server")
-
 var postingDir = flag.String("postings", "", "Directory to store posting lists")
 var uidDir = flag.String("uids", "", "XID UID posting lists directory")
 var mutationDir = flag.String("mutations", "", "Directory to store mutations")
@@ -57,6 +57,7 @@ var instanceIdx = flag.Uint64("instanceIdx", 0,
 var workers = flag.String("workers", "",
 	"Comma separated list of IP addresses of workers")
 var nomutations = flag.Bool("nomutations", false, "Don't allow mutations on this server.")
+var tracing = flag.Float64("trace", 0.5, "The ratio of queries to trace.")
 
 func addCorsHeaders(w http.ResponseWriter) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -68,7 +69,7 @@ func addCorsHeaders(w http.ResponseWriter) {
 	w.Header().Set("Connection", "close")
 }
 
-func mutationHandler(mu *gql.Mutation) error {
+func mutationHandler(ctx context.Context, mu *gql.Mutation) error {
 	if *nomutations {
 		return fmt.Errorf("Mutations are forbidden on this server.")
 	}
@@ -83,7 +84,7 @@ func mutationHandler(mu *gql.Mutation) error {
 		}
 		nq, err := rdf.Parse(ln)
 		if err != nil {
-			glog.WithError(err).Error("While parsing RDF.")
+			x.Trace(ctx, "Error while parsing RDF: %v", err)
 			return err
 		}
 		nquads = append(nquads, nq)
@@ -99,8 +100,8 @@ func mutationHandler(mu *gql.Mutation) error {
 		}
 	}
 	if len(xidToUid) > 0 {
-		if err := worker.GetOrAssignUidsOverNetwork(&xidToUid); err != nil {
-			glog.WithError(err).Error("GetOrAssignUidsOverNetwork")
+		if err := worker.GetOrAssignUidsOverNetwork(ctx, &xidToUid); err != nil {
+			x.Trace(ctx, "Error while GetOrAssignUidsOverNetwork: %v", err)
 			return err
 		}
 	}
@@ -109,21 +110,21 @@ func mutationHandler(mu *gql.Mutation) error {
 	for _, nq := range nquads {
 		edge, err := nq.ToEdgeUsing(xidToUid)
 		if err != nil {
-			glog.WithField("nquad", nq).WithError(err).
-				Error("While converting to edge")
+			x.Trace(ctx, "Error while converting to edge: %v %v", nq, err)
 			return err
 		}
 		edges = append(edges, edge)
 	}
 
-	left, err := worker.MutateOverNetwork(edges)
+	left, err := worker.MutateOverNetwork(ctx, edges)
 	if err != nil {
+		x.Trace(ctx, "Error while MutateOverNetwork: %v", err)
 		return err
 	}
 	if len(left) > 0 {
-		glog.WithField("left", len(left)).Error("Some edges couldn't be applied")
+		x.Trace(ctx, "%d edges couldn't be applied", len(left))
 		for _, e := range left {
-			glog.WithField("edge", e).Debug("Unable to apply mutation")
+			x.Trace(ctx, "Unable to apply mutation for edge: %v", e)
 		}
 		return fmt.Errorf("Unapplied mutations")
 	}
@@ -140,28 +141,37 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+
+	if rand.Float64() < *tracing {
+		tr := trace.New("Dgraph", "Query")
+		defer tr.Finish()
+		ctx = trace.NewContext(ctx, tr)
+	}
+
 	var l query.Latency
 	l.Start = time.Now()
 	defer r.Body.Close()
 	q, err := ioutil.ReadAll(r.Body)
 	if err != nil || len(q) == 0 {
-		x.Err(glog, err).Error("While reading query")
+		x.Trace(ctx, "Error while reading query: %v", err)
 		x.SetStatus(w, x.E_INVALID_REQUEST, "Invalid request encountered.")
 		return
 	}
 
-	glog.WithField("q", string(q)).Debug("Query received.")
+	x.Trace(ctx, "Query received: %v", string(q))
 	gq, mu, err := gql.Parse(string(q))
 	if err != nil {
-		x.Err(glog, err).Error("While parsing query")
+		x.Trace(ctx, "Error while parsing query: %v", err)
 		x.SetStatus(w, x.E_INVALID_REQUEST, err.Error())
 		return
 	}
 
 	// If we have mutations, run them first.
 	if mu != nil && len(mu.Set) > 0 {
-		if err = mutationHandler(mu); err != nil {
-			glog.WithError(err).Error("While handling mutations.")
+		if err = mutationHandler(ctx, mu); err != nil {
+			x.Trace(ctx, "Error while handling mutations: %v", err)
 			x.SetStatus(w, x.E_ERROR, err.Error())
 			return
 		}
@@ -172,37 +182,33 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sg, err := query.ToSubGraph(gq)
+	sg, err := query.ToSubGraph(ctx, gq)
 	if err != nil {
-		x.Err(glog, err).Error("While conversion to internal format")
+		x.Trace(ctx, "Error while conversion to internal format: %v", err)
 		x.SetStatus(w, x.E_INVALID_REQUEST, err.Error())
 		return
 	}
 	l.Parsing = time.Since(l.Start)
-	glog.WithField("q", string(q)).Debug("Query parsed.")
+	x.Trace(ctx, "Query parsed")
 
 	rch := make(chan error)
-	go query.ProcessGraph(sg, rch, time.Minute)
+	go query.ProcessGraph(ctx, sg, rch)
 	err = <-rch
 	if err != nil {
-		x.Err(glog, err).Error("While executing query")
+		x.Trace(ctx, "Error while executing query: %v", err)
 		x.SetStatus(w, x.E_ERROR, err.Error())
 		return
 	}
 	l.Processing = time.Since(l.Start) - l.Parsing
-	glog.WithField("q", string(q)).Debug("Graph processed.")
+	x.Trace(ctx, "Graph processed")
 	js, err := sg.ToJson(&l)
 	if err != nil {
-		x.Err(glog, err).Error("While converting to Json.")
+		x.Trace(ctx, "Error while converting to Json: %v", err)
 		x.SetStatus(w, x.E_ERROR, err.Error())
 		return
 	}
-	glog.WithFields(logrus.Fields{
-		"total":   time.Since(l.Start),
-		"parsing": l.Parsing,
-		"process": l.Processing,
-		"json":    l.Json,
-	}).Info("Query Latencies")
+	x.Trace(ctx, "Latencies: Total: %v Parsing: %v Process: %v Json: %v",
+		time.Since(l.Start), l.Parsing, l.Processing, l.Json)
 
 	w.Header().Set("Content-Type", "application/json")
 	fmt.Fprint(w, string(js))
@@ -215,9 +221,16 @@ type server struct{}
 // client as a protocol buffer message.
 func (s *server) Query(ctx context.Context,
 	req *graph.Request) (*graph.Response, error) {
+
+	if rand.Float64() < *tracing {
+		tr := trace.New("Dgraph", "GrpcQuery")
+		defer tr.Finish()
+		ctx = trace.NewContext(ctx, tr)
+	}
+
 	resp := new(graph.Response)
 	if len(req.Query) == 0 {
-		glog.Error("While reading query")
+		x.Trace(ctx, "Empty query")
 		return resp, fmt.Errorf("Empty query")
 	}
 
@@ -225,17 +238,17 @@ func (s *server) Query(ctx context.Context,
 	l.Start = time.Now()
 	// TODO(pawan): Refactor query parsing and graph processing code to a common
 	// function used by Query and queryHandler
-	glog.WithField("q", req.Query).Debug("Query received.")
+	x.Trace(ctx, "Query received: %v", req.Query)
 	gq, mu, err := gql.Parse(req.Query)
 	if err != nil {
-		x.Err(glog, err).Error("While parsing query")
+		x.Trace(ctx, "Error while parsing query: %v", err)
 		return resp, err
 	}
 
 	// If we have mutations, run them first.
 	if mu != nil && len(mu.Set) > 0 {
-		if err = mutationHandler(mu); err != nil {
-			glog.WithError(err).Error("While handling mutations.")
+		if err = mutationHandler(ctx, mu); err != nil {
+			x.Trace(ctx, "Error while handling mutations: %v", err)
 			return resp, err
 		}
 	}
@@ -244,27 +257,27 @@ func (s *server) Query(ctx context.Context,
 		return resp, err
 	}
 
-	sg, err := query.ToSubGraph(gq)
+	sg, err := query.ToSubGraph(ctx, gq)
 	if err != nil {
-		x.Err(glog, err).Error("While conversion to internal format")
+		x.Trace(ctx, "Error while conversion to internal format: %v", err)
 		return resp, err
 	}
 	l.Parsing = time.Since(l.Start)
-	glog.WithField("q", req.Query).Debug("Query parsed.")
+	x.Trace(ctx, "Query parsed")
 
 	rch := make(chan error)
-	go query.ProcessGraph(sg, rch, time.Minute)
+	go query.ProcessGraph(ctx, sg, rch)
 	err = <-rch
 	if err != nil {
-		x.Err(glog, err).Error("While executing query")
+		x.Trace(ctx, "Error while executing query: %v", err)
 		return resp, err
 	}
 	l.Processing = time.Since(l.Start) - l.Parsing
-	glog.WithField("q", req.Query).Debug("Graph processed.")
+	x.Trace(ctx, "Graph processed")
 
 	node, err := sg.ToProtocolBuffer(&l)
 	if err != nil {
-		x.Err(glog, err).Error("While converting to protocol buffer.")
+		x.Trace(ctx, "Error while converting to ProtocolBuffer: %v", err)
 		return resp, err
 	}
 	resp.N = node
@@ -282,15 +295,15 @@ func (s *server) Query(ctx context.Context,
 func runGrpcServer(address string) {
 	ln, err := net.Listen("tcp", address)
 	if err != nil {
-		glog.Fatalf("While running server for client: %v", err)
+		log.Fatalf("While running server for client: %v", err)
 		return
 	}
-	glog.WithField("address", ln.Addr()).Info("Client Worker listening")
+	log.Printf("Client worker listening: %v", ln.Addr())
 
 	s := grpc.NewServer()
 	graph.RegisterDGraphServer(s, &server{})
 	if err = s.Serve(ln); err != nil {
-		glog.Fatalf("While serving gRpc requests", err)
+		log.Fatalf("While serving gRpc requests", err)
 	}
 	return
 }
@@ -298,15 +311,13 @@ func runGrpcServer(address string) {
 func main() {
 	flag.Parse()
 	if !flag.Parsed() {
-		glog.Fatal("Unable to parse flags")
+		log.Fatal("Unable to parse flags")
 	}
-	logrus.SetLevel(logrus.InfoLevel)
 	numCpus := *numcpu
 	prev := runtime.GOMAXPROCS(numCpus)
-	glog.WithField("num_cpu", numCpus).WithField("prev_maxprocs", prev).
-		Info("Set max procs to num cpus")
+	log.Printf("num_cpu: %v. prev_maxprocs: %v. Set max procs to num cpus", numCpus, prev)
 	if *port%2 != 0 {
-		glog.Fatalf("Port should be an even number: %v", *port)
+		log.Fatalf("Port should be an even number: %v", *port)
 	}
 
 	ps := new(store.Store)
@@ -343,8 +354,8 @@ func main() {
 	go runGrpcServer(fmt.Sprintf(":%d", *port+1))
 
 	http.HandleFunc("/query", queryHandler)
-	glog.WithField("port", *port).Info("Listening for requests...")
+	log.Printf("Listening for requests at port: %v", *port)
 	if err := http.ListenAndServe(fmt.Sprintf(":%d", *port), nil); err != nil {
-		x.Err(glog, err).Fatal("ListenAndServe")
+		log.Fatalf("ListenAndServe: %v", err)
 	}
 }

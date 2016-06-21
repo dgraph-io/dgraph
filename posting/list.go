@@ -20,13 +20,15 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"log"
 	"math"
 	"sync"
 	"sync/atomic"
 	"time"
 	"unsafe"
 
-	"github.com/Sirupsen/logrus"
+	"golang.org/x/net/context"
+
 	"github.com/dgraph-io/dgraph/commit"
 	"github.com/dgraph-io/dgraph/posting/types"
 	"github.com/dgraph-io/dgraph/store"
@@ -36,7 +38,6 @@ import (
 	"github.com/zond/gotomic"
 )
 
-var glog = x.Log("posting")
 var E_TMP_ERROR = fmt.Errorf("Temporary Error. Please retry.")
 
 const Set = 0x01
@@ -106,7 +107,7 @@ func Key(uid uint64, attr string) []byte {
 	buf := bytes.NewBufferString(attr)
 	buf.WriteRune('|')
 	if err := binary.Write(buf, binary.LittleEndian, uid); err != nil {
-		glog.Fatalf("Error while creating key with attr: %v uid: %v\n", attr, uid)
+		log.Fatalf("Error while creating key with attr: %v uid: %v\n", attr, uid)
 	}
 	return buf.Bytes()
 }
@@ -116,7 +117,7 @@ func newPosting(t x.DirectedEdge, op byte) []byte {
 	var bo flatbuffers.UOffsetT
 	if !bytes.Equal(t.Value, nil) {
 		if t.ValueId != math.MaxUint64 {
-			glog.Fatal("This should have already been set by the caller.")
+			log.Fatal("This should have already been set by the caller.")
 		}
 		bo = b.CreateByteVector(t.Value)
 	}
@@ -141,7 +142,7 @@ func addEdgeToPosting(b *flatbuffers.Builder,
 	var bo flatbuffers.UOffsetT
 	if !bytes.Equal(t.Value, nil) {
 		if t.ValueId != math.MaxUint64 {
-			glog.Fatal("This should have already been set by the caller.")
+			log.Fatal("This should have already been set by the caller.")
 		}
 		bo = b.CreateByteVector(t.Value)
 	}
@@ -197,9 +198,6 @@ func init() {
 		b.Finish(of)
 		emptyPosting = b.Bytes[b.Head():]
 	}
-
-	glog.Infof("Empty size: [%d] EmptyPosting size: [%d]",
-		len(empty), len(emptyPosting))
 }
 
 func (l *List) init(key []byte, pstore *store.Store, clog *commit.Logger) {
@@ -208,7 +206,7 @@ func (l *List) init(key []byte, pstore *store.Store, clog *commit.Logger) {
 	defer l.wg.Done()
 
 	if len(empty) == 0 {
-		glog.Fatal("empty should have some bytes.")
+		log.Fatal("empty should have some bytes.")
 	}
 	l.key = key
 	l.pstore = pstore
@@ -233,15 +231,10 @@ func (l *List) init(key []byte, pstore *store.Store, clog *commit.Logger) {
 			if m.Ts() > l.maxMutationTs {
 				l.maxMutationTs = m.Ts()
 			}
-			glog.WithFields(logrus.Fields{
-				"uid":    m.Uid(),
-				"source": string(m.Source()),
-				"ts":     m.Ts(),
-			}).Debug("Got entry from log")
 			l.mergeMutation(m)
 		})
 	if err != nil {
-		glog.WithError(err).Error("While streaming entries.")
+		log.Fatalf("Error while streaming entries: %v", err)
 	}
 }
 
@@ -254,7 +247,6 @@ func (l *List) getPostingList() *types.PostingList {
 		nbuf := new(buffer)
 		var err error
 		if nbuf.d, err = l.pstore.Get(l.key); err != nil {
-			// glog.Debugf("While retrieving posting list from db: %v\n", err)
 			// Error. Just set to empty.
 			nbuf.d = make([]byte, len(empty))
 			copy(nbuf.d, empty)
@@ -280,7 +272,7 @@ func (l *List) lePostingIndex(maxUid uint64) (int, uint64) {
 	for left <= right {
 		pos := (left + right) / 2
 		if ok := posting.Postings(p, pos); !ok {
-			glog.WithField("idx", pos).Fatal("Unable to parse posting from list.")
+			log.Fatalf("Unable to parse posting from list idx: %v", pos)
 		}
 		val := p.Uid()
 		if val > maxUid {
@@ -297,7 +289,7 @@ func (l *List) lePostingIndex(maxUid uint64) (int, uint64) {
 		return -1, 0
 	}
 	if ok := posting.Postings(p, sofar); !ok {
-		glog.WithField("idx", sofar).Fatal("Unable to parse posting from list.")
+		log.Fatalf("Unable to parse posting from list idx: %v", sofar)
 	}
 	return sofar, p.Uid()
 }
@@ -335,8 +327,6 @@ func (l *List) mindexInsertAt(mlink *MutationLink, mi int) {
 }
 
 func (l *List) mindexDeleteAt(mi int) {
-	glog.WithField("mi", mi).WithField("size", len(l.mindex)).
-		Debug("mindexDeleteAt")
 	l.mindex = append(l.mindex[:mi], l.mindex[mi+1:]...)
 	for i := mi; i < len(l.mindex); i++ {
 		l.mindex[i].idx -= 1
@@ -469,7 +459,7 @@ func (l *List) mergeMutation(mp *types.Posting) {
 		}
 
 	} else {
-		glog.WithField("op", mp.Op()).Fatal("Invalid operation.")
+		log.Fatalf("Invalid operation: %v", mp.Op())
 	}
 }
 
@@ -519,10 +509,6 @@ func (l *List) get(p *types.Posting, i int) bool {
 			// Found an instruction. Check what is says.
 			if mlink.posting.Op() == Set {
 				// ADD
-				glog.WithField("idx", i).
-					WithField("uid", mlink.posting.Uid()).
-					WithField("source", string(mlink.posting.Source())).
-					Debug("Returning from mlink")
 				*p = *mlink.posting
 				return true
 
@@ -532,18 +518,13 @@ func (l *List) get(p *types.Posting, i int) bool {
 				// variable.
 
 			} else {
-				glog.Fatal("Someone, I mean you, forgot to tackle" +
+				log.Fatal("Someone, I mean you, forgot to tackle" +
 					" this operation. Stop drinking.")
 			}
 		}
 		move += mlink.moveidx
 	}
 	newidx := i + move
-	glog.WithFields(logrus.Fields{
-		"newidx": newidx,
-		"idx":    i,
-		"move":   move,
-	}).Debug("Final Indices")
 
 	// Check if we have any replace instruction in mlayer.
 	if val, ok := l.mlayer[newidx]; ok {
@@ -577,9 +558,10 @@ func (l *List) SetForDeletion() {
 // BenchmarkAddMutations_SyncEvery100LogEntry-6 	   10000	    298352 ns/op
 // BenchmarkAddMutations_SyncEvery1000LogEntry-6	   30000	     63544 ns/op
 // ok  	github.com/dgraph-io/dgraph/posting	10.291s
-func (l *List) AddMutation(t x.DirectedEdge, op byte) error {
+func (l *List) AddMutation(ctx context.Context, t x.DirectedEdge, op byte) error {
 	l.wg.Wait()
 	if atomic.LoadInt32(&l.deleteMe) == 1 {
+		x.Trace(ctx, "DELETEME set to true. Temporary error.")
 		return E_TMP_ERROR
 	}
 
@@ -589,6 +571,7 @@ func (l *List) AddMutation(t x.DirectedEdge, op byte) error {
 		t.ValueId = math.MaxUint64
 	}
 	if t.ValueId == 0 {
+		x.Trace(ctx, "ValueId cannot be zero")
 		return fmt.Errorf("ValueId cannot be zero.")
 	}
 	mbuf := newPosting(t, op)
@@ -597,6 +580,7 @@ func (l *List) AddMutation(t x.DirectedEdge, op byte) error {
 	if l.clog != nil {
 		ts, err = l.clog.AddLog(l.hash, mbuf)
 		if err != nil {
+			x.Trace(ctx, "Error while adding log: %v", err)
 			return err
 		}
 	}
@@ -606,18 +590,14 @@ func (l *List) AddMutation(t x.DirectedEdge, op byte) error {
 	// a)		check if the entity exists in main posting list.
 	// 				- If yes, store the mutation.
 	// 				- If no, disregard this mutation.
+	x.Trace(ctx, "Acquiring lock")
 	l.Lock()
 	defer l.Unlock()
+	x.Trace(ctx, "Lock acquired")
 
 	uo := flatbuffers.GetUOffsetT(mbuf)
 	mpost := new(types.Posting)
 	mpost.Init(mbuf, uo)
-
-	glog.WithFields(logrus.Fields{
-		"uid":    mpost.Uid(),
-		"source": string(mpost.Source()),
-		"ts":     mpost.Ts(),
-	}).Debug("Add mutation")
 
 	l.mergeMutation(mpost)
 	if len(l.mindex)+len(l.mlayer) > 0 {
@@ -627,15 +607,16 @@ func (l *List) AddMutation(t x.DirectedEdge, op byte) error {
 		}
 	}
 	l.maxMutationTs = ts
+	x.Trace(ctx, "Mutation done")
 	return nil
 }
 
-func (l *List) MergeIfDirty() (merged bool, err error) {
+func (l *List) MergeIfDirty(ctx context.Context) (merged bool, err error) {
 	if atomic.LoadInt64(&l.dirtyTs) == 0 {
-		glog.WithField("dirty", false).Debug("Not Committing")
+		x.Trace(ctx, "Not committing")
 		return false, nil
 	} else {
-		glog.WithField("dirty", true).Debug("Committing")
+		x.Trace(ctx, "Committing")
 	}
 	return l.merge()
 }
@@ -656,7 +637,7 @@ func (l *List) merge() (merged bool, rerr error) {
 	offsets := make([]flatbuffers.UOffsetT, sz)
 	for i := 0; i < sz; i++ {
 		if ok := l.get(&p, i); !ok {
-			glog.WithField("idx", i).Fatal("Unable to parse posting.")
+			log.Fatalf("Idx: %d. Unable to parse posting.", i)
 		}
 		offsets[i] = addPosting(b, p)
 	}
@@ -673,7 +654,7 @@ func (l *List) merge() (merged bool, rerr error) {
 	b.Finish(end)
 
 	if err := l.pstore.SetOne(l.key, b.Bytes[b.Head():]); err != nil {
-		glog.WithField("error", err).Fatal("While storing posting list")
+		log.Fatalf("Error while storing posting list: %v", err)
 		return true, err
 	}
 
@@ -699,7 +680,7 @@ func (l *List) GetUids(offset, count int) []uint64 {
 	defer l.RUnlock()
 
 	if offset < 0 {
-		glog.WithField("offset", offset).Fatal("Unexpected offset")
+		log.Fatalf("Unexpected offset: %v", offset)
 		return make([]uint64, 0)
 	}
 

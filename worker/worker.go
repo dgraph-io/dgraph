@@ -18,6 +18,7 @@ package worker
 
 import (
 	"flag"
+	"log"
 	"net"
 
 	"google.golang.org/grpc"
@@ -34,7 +35,6 @@ import (
 var workerPort = flag.String("workerport", ":12345",
 	"Port used by worker for internal communication.")
 
-var glog = x.Log("worker")
 var dataStore, uidStore *store.Store
 var pools []*Pool
 var numInstances, instanceIdx uint64
@@ -82,14 +82,12 @@ func (w *worker) GetOrAssign(ctx context.Context, query *Payload) (*Payload, err
 	xids.Init(query.Data, uo)
 
 	if instanceIdx != 0 {
-		glog.WithField("instanceIdx", instanceIdx).
-			WithField("GetOrAssign", true).
-			Fatal("We shouldn't be receiving this request.")
+		log.Fatalf("instanceIdx: %v. GetOrAssign. We shouldn't be getting this req", instanceIdx)
 	}
 
 	reply := new(Payload)
 	var rerr error
-	reply.Data, rerr = getOrAssignUids(xids)
+	reply.Data, rerr = getOrAssignUids(ctx, xids)
 	return reply, rerr
 }
 
@@ -100,7 +98,7 @@ func (w *worker) Mutate(ctx context.Context, query *Payload) (*Payload, error) {
 	}
 
 	left := new(Mutations)
-	if err := mutate(m, left); err != nil {
+	if err := mutate(ctx, m, left); err != nil {
 		return nil, err
 	}
 
@@ -115,8 +113,8 @@ func (w *worker) ServeTask(ctx context.Context, query *Payload) (*Payload, error
 	q := new(task.Query)
 	q.Init(query.Data, uo)
 	attr := string(q.Attr())
-	glog.WithField("attr", attr).WithField("num_uids", q.UidsLength()).
-		WithField("instanceIdx", instanceIdx).Info("ServeTask")
+	x.Trace(ctx, "Attribute: %v NumUids: %v InstanceIdx: %v ServeTask",
+		attr, q.UidsLength(), instanceIdx)
 
 	reply := new(Payload)
 	var rerr error
@@ -126,9 +124,7 @@ func (w *worker) ServeTask(ctx context.Context, query *Payload) (*Payload, error
 		reply.Data, rerr = processTask(query.Data)
 
 	} else {
-		glog.WithField("attribute", attr).
-			WithField("instanceIdx", instanceIdx).
-			Fatalf("Request sent to wrong server")
+		log.Fatalf("attr: %v instanceIdx: %v Request sent to wrong server.", attr, instanceIdx)
 	}
 	return reply, rerr
 }
@@ -136,10 +132,10 @@ func (w *worker) ServeTask(ctx context.Context, query *Payload) (*Payload, error
 func runServer(port string) {
 	ln, err := net.Listen("tcp", port)
 	if err != nil {
-		glog.Fatalf("While running server: %v", err)
+		log.Fatalf("While running server: %v", err)
 		return
 	}
-	glog.WithField("address", ln.Addr()).Info("Worker listening")
+	log.Printf("Worker listening at address: %v", ln.Addr())
 
 	s := grpc.NewServer(grpc.CustomCodec(&PayloadCodec{}))
 	RegisterWorkerServer(s, &worker{})
@@ -160,20 +156,18 @@ func Connect(workerList []string) {
 
 		conn, err := pool.Get()
 		if err != nil {
-			glog.WithError(err).Fatal("Unable to connect.")
+			log.Fatalf("Unable to connect: %v", err)
 		}
 
 		c := NewWorkerClient(conn)
-		reply, err := c.Hello(context.Background(), query)
+		_, err = c.Hello(context.Background(), query)
 		if err != nil {
-			glog.WithError(err).Fatal("Unable to contact.")
+			log.Fatalf("Unable to connect: %v", err)
 		}
 		_ = pool.Put(conn)
 
-		glog.WithField("reply", string(reply.Data)).WithField("addr", addr).
-			Info("Got reply from server")
 		pools = append(pools, pool)
 	}
 
-	glog.Info("Server started. Clients connected.")
+	log.Print("Server started. Clients connected.")
 }

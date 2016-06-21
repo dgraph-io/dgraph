@@ -23,7 +23,6 @@ import (
 	"strings"
 
 	"github.com/dgraph-io/dgraph/lex"
-	"github.com/dgraph-io/dgraph/x"
 )
 
 const (
@@ -44,8 +43,6 @@ const (
 	AT_OBJECT
 	AT_LABEL
 )
-
-var glog = x.Log("rdf")
 
 func run(l *lex.Lexer) {
 	for state := lexText; state != nil; {

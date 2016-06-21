@@ -40,7 +40,7 @@ func NewPool(addr string, maxCap int) *Pool {
 	p.conns = make(chan *grpc.ClientConn, maxCap)
 	conn, err := p.dialNew()
 	if err != nil {
-		glog.Fatal(err)
+		log.Fatal(err)
 		return nil
 	}
 	p.conns <- conn

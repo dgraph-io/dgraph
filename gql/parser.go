@@ -19,13 +19,11 @@ package gql
 import (
 	"errors"
 	"fmt"
+	"log"
 	"strconv"
 
 	"github.com/dgraph-io/dgraph/lex"
-	"github.com/dgraph-io/dgraph/x"
 )
-
-var glog = x.Log("gql")
 
 // GraphQuery stores the parsed Query in a tree format. This gets
 // converted to internally used query.SubGraph before processing the query.
@@ -80,7 +78,7 @@ func Parse(input string) (gq *GraphQuery, mu *Mutation, rerr error) {
 			if gq == nil {
 				gq, rerr = getRoot(l)
 				if rerr != nil {
-					x.Err(glog, rerr).Error("While retrieving subgraph root")
+					log.Printf("Error while retrieving subgraph root: %v", rerr)
 					return nil, nil, rerr
 				}
 			} else {

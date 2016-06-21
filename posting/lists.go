@@ -18,6 +18,7 @@ package posting
 
 import (
 	"flag"
+	"log"
 	"math/rand"
 	"runtime"
 	"runtime/debug"
@@ -25,7 +26,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/Sirupsen/logrus"
+	"golang.org/x/net/context"
+
 	"github.com/dgraph-io/dgraph/commit"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgryski/go-farm"
@@ -81,14 +83,10 @@ func (c *counters) log() {
 		pending = added - merged
 	}
 
-	glog.WithFields(logrus.Fields{
-		"added":     added,
-		"merged":    merged,
-		"clean":     atomic.LoadUint64(&c.clean),
-		"pending":   pending,
-		"mapsize":   lhmap.Size(),
-		"dirtysize": dirtymap.Size(),
-	}).Info("List Merge counters")
+	log.Printf("List merge counters. added: %d merged: %d clean: %d"+
+		" pending: %d mapsize: %d dirtysize: %d\n",
+		added, merged, atomic.LoadUint64(&c.clean),
+		pending, lhmap.Size(), dirtymap.Size())
 }
 
 func NewCounters() *counters {
@@ -106,21 +104,19 @@ func aggressivelyEvict(ms runtime.MemStats) {
 	defer stopTheWorld.Unlock()
 
 	megs := ms.Alloc / MIB
-	glog.WithField("allocated_MB", megs).
-		Info("Memory usage over threshold. STOPPED THE WORLD!")
+	log.Printf("Memory usage over threshold. STW. Allocated MB: %v\n", megs)
 
-	glog.Info("Calling merge on all lists.")
+	log.Println("Calling merge on all lists.")
 	MergeLists(100 * runtime.GOMAXPROCS(-1))
 
-	glog.Info("Merged lists. Calling GC.")
+	log.Println("Merged lists. Calling GC.")
 	runtime.GC() // Call GC to do some cleanup.
-	glog.Info("Trying to free OS memory")
+	log.Println("Trying to free OS memory")
 	debug.FreeOSMemory()
 
 	runtime.ReadMemStats(&ms)
 	megs = ms.Alloc / MIB
-	glog.WithField("allocated_MB", megs).
-		Info("Memory Usage after calling GC.")
+	log.Printf("Memory usage after calling GC. Allocated MB: %v", megs)
 }
 
 func gentlyMerge(mr *mergeRoutines) {
@@ -193,7 +189,7 @@ func checkMemoryUsage() {
 			// With a value of 18 and duration of 5 seconds, some goroutines are
 			// taking over 1.5 mins to finish.
 			if mr.Count() > 18 {
-				glog.Info("Skipping gentle merging.")
+				log.Println("Skipping gentle merging.")
 				continue
 			}
 			mr.Add(1)
@@ -240,8 +236,8 @@ func mergeAndUpdate(l *List, c *counters) {
 	if l == nil {
 		return
 	}
-	if merged, err := l.MergeIfDirty(); err != nil {
-		glog.WithError(err).Error("While commiting dirty list.")
+	if merged, err := l.MergeIfDirty(context.Background()); err != nil {
+		log.Printf("Error while commiting dirty list: %v\n", err)
 	} else if merged {
 		atomic.AddUint64(&c.merged, 1)
 	} else {

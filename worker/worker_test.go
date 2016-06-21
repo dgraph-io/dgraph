@@ -24,6 +24,8 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/net/context"
+
 	"github.com/dgraph-io/dgraph/commit"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/store"
@@ -33,7 +35,7 @@ import (
 )
 
 func addEdge(t *testing.T, edge x.DirectedEdge, l *posting.List) {
-	if err := l.AddMutation(edge, posting.Set); err != nil {
+	if err := l.AddMutation(context.Background(), edge, posting.Set); err != nil {
 		t.Error(err)
 	}
 }

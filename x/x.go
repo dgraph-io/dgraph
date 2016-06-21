@@ -22,6 +22,9 @@ import (
 	"net/http"
 	"time"
 
+	"golang.org/x/net/context"
+	"golang.org/x/net/trace"
+
 	"github.com/Sirupsen/logrus"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/google/flatbuffers/go"
@@ -114,3 +117,11 @@ func UidlistOffset(b *flatbuffers.Builder,
 }
 
 var Nilbyte []byte
+
+func Trace(ctx context.Context, format string, args ...interface{}) {
+	tr, ok := trace.FromContext(ctx)
+	if !ok {
+		return
+	}
+	tr.LazyPrintf(format, args...)
+}

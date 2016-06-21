@@ -25,6 +25,8 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/net/context"
+
 	"github.com/dgraph-io/dgraph/commit"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
@@ -44,7 +46,7 @@ func setErr(err *error, nerr error) {
 }
 
 func addEdge(t *testing.T, edge x.DirectedEdge, l *posting.List) {
-	if err := l.AddMutation(edge, posting.Set); err != nil {
+	if err := l.AddMutation(context.Background(), edge, posting.Set); err != nil {
 		t.Error(err)
 	}
 }
@@ -97,7 +99,8 @@ func TestNewGraph(t *testing.T) {
 
 	ps := new(store.Store)
 	ps.Init(dir)
-	sg, err := newGraph(ex, "")
+	ctx := context.Background()
+	sg, err := newGraph(ctx, ex, "")
 	if err != nil {
 		t.Error(err)
 	}
@@ -210,13 +213,14 @@ func TestProcessGraph(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	sg, err := ToSubGraph(gq)
+	ctx := context.Background()
+	sg, err := ToSubGraph(ctx, gq)
 	if err != nil {
 		t.Error(err)
 	}
 
 	ch := make(chan error)
-	go ProcessGraph(sg, ch, time.Minute)
+	go ProcessGraph(ctx, sg, ch)
 	err = <-ch
 	if err != nil {
 		t.Error(err)
@@ -302,13 +306,14 @@ func TestToJson(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	sg, err := ToSubGraph(gq)
+	ctx := context.Background()
+	sg, err := ToSubGraph(ctx, gq)
 	if err != nil {
 		t.Error(err)
 	}
 
 	ch := make(chan error)
-	go ProcessGraph(sg, ch, time.Minute)
+	go ProcessGraph(ctx, sg, ch)
 	err = <-ch
 	if err != nil {
 		t.Error(err)
@@ -355,13 +360,14 @@ func TestToPB(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	sg, err := ToSubGraph(gq)
+	ctx := context.Background()
+	sg, err := ToSubGraph(ctx, gq)
 	if err != nil {
 		t.Error(err)
 	}
 
 	ch := make(chan error)
-	go ProcessGraph(sg, ch, time.Minute)
+	go ProcessGraph(ctx, sg, ch)
 	err = <-ch
 	if err != nil {
 		t.Error(err)

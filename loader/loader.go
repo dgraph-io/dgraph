@@ -27,6 +27,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"golang.org/x/net/context"
+
 	"github.com/Sirupsen/logrus"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/rdf"
@@ -153,6 +155,7 @@ func (s *state) parseStream(wg *sync.WaitGroup) {
 func (s *state) handleNQuads(wg *sync.WaitGroup) {
 	defer wg.Done()
 
+	ctx := context.Background()
 	for nq := range s.cnq {
 		if s.Error() != nil {
 			return
@@ -180,7 +183,7 @@ func (s *state) handleNQuads(wg *sync.WaitGroup) {
 
 		key := posting.Key(edge.Entity, edge.Attribute)
 		plist := posting.GetOrCreate(key, dataStore)
-		plist.AddMutation(edge, posting.Set)
+		plist.AddMutation(ctx, edge, posting.Set)
 		atomic.AddUint64(&s.ctr.processed, 1)
 	}
 }

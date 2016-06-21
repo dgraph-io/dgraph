@@ -20,7 +20,7 @@ import (
 	"bytes"
 	"encoding/gob"
 	"fmt"
-	"sync"
+	"log"
 
 	"golang.org/x/net/context"
 
@@ -47,38 +47,32 @@ func (m *Mutations) Decode(data []byte) error {
 	return dec.Decode(m)
 }
 
-func mutate(m *Mutations, left *Mutations) error {
+func mutate(ctx context.Context, m *Mutations, left *Mutations) error {
 	// For now, assume it's all only Set instructions.
 	for _, edge := range m.Set {
 		if farm.Fingerprint64(
 			[]byte(edge.Attribute))%numInstances != instanceIdx {
 
-			glog.WithField("instanceIdx", instanceIdx).
-				WithField("attr", edge.Attribute).
-				Info("Predicate fingerprint doesn't match instanceIdx")
 			return fmt.Errorf("predicate fingerprint doesn't match this instance.")
 		}
 
-		glog.WithField("edge", edge).Debug("mutate")
 		key := posting.Key(edge.Entity, edge.Attribute)
 		plist := posting.GetOrCreate(key, dataStore)
-		if err := plist.AddMutation(edge, posting.Set); err != nil {
+		if err := plist.AddMutation(ctx, edge, posting.Set); err != nil {
 			left.Set = append(left.Set, edge)
-			glog.WithError(err).WithField("edge", edge).
-				Error("While adding mutation.")
+			log.Printf("Error while adding mutation: %v %v", edge, err)
 			continue
 		}
 	}
 	return nil
 }
 
-func runMutate(idx int, m *Mutations, wg *sync.WaitGroup,
+func runMutate(ctx context.Context, idx int, m *Mutations,
 	replies chan *Payload, che chan error) {
 
-	defer wg.Done()
 	left := new(Mutations)
 	if idx == int(instanceIdx) {
-		che <- mutate(m, left)
+		che <- mutate(ctx, m, left)
 		return
 	}
 
@@ -99,18 +93,16 @@ func runMutate(idx int, m *Mutations, wg *sync.WaitGroup,
 	defer pool.Put(conn)
 	c := NewWorkerClient(conn)
 
-	reply, err := c.Mutate(context.Background(), query)
+	reply, err := c.Mutate(ctx, query)
 	if err != nil {
-		glog.WithField("call", "Worker.Mutate").
-			WithField("addr", pool.Addr).
-			WithError(err).Error("While calling mutate")
 		che <- err
 		return
 	}
 	replies <- reply
+	che <- nil
 }
 
-func MutateOverNetwork(
+func MutateOverNetwork(ctx context.Context,
 	edges []x.DirectedEdge) (left []x.DirectedEdge, rerr error) {
 
 	mutationArray := make([]*Mutations, numInstances)
@@ -124,26 +116,32 @@ func MutateOverNetwork(
 		mu.Set = append(mu.Set, edge)
 	}
 
-	var wg sync.WaitGroup
 	replies := make(chan *Payload, numInstances)
 	errors := make(chan error, numInstances)
+	count := 0
 	for idx, mu := range mutationArray {
 		if mu == nil || len(mu.Set) == 0 {
 			continue
 		}
-		wg.Add(1)
-		go runMutate(idx, mu, &wg, replies, errors)
+		count += 1
+		go runMutate(ctx, idx, mu, replies, errors)
 	}
-	wg.Wait()
+
+	// Wait for all the goroutines to reply back.
+	for i := 0; i < count; i++ {
+		select {
+		case err := <-errors:
+			if err != nil {
+				x.Trace(ctx, "Error while running all mutations: %v", err)
+				return left, err
+			}
+		case <-ctx.Done():
+			return left, ctx.Err()
+		}
+	}
 	close(replies)
 	close(errors)
 
-	for err := range errors {
-		if err != nil {
-			glog.WithError(err).Error("While running all mutations")
-			return left, err
-		}
-	}
 	for reply := range replies {
 		l := new(Mutations)
 		if err := l.Decode(reply.Data); err != nil {

@@ -19,9 +19,12 @@ package uid
 import (
 	"errors"
 	"fmt"
+	"log"
 	"math"
 	"sync"
 	"time"
+
+	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/posting/types"
@@ -30,7 +33,6 @@ import (
 	"github.com/dgryski/go-farm"
 )
 
-var glog = x.Log("uid")
 var lmgr *lockManager
 var uidStore *store.Store
 var eidPool = sync.Pool{
@@ -89,7 +91,6 @@ func (lm *lockManager) clean() {
 		lm.Unlock()
 		// A minute is enough to avoid the race condition issue for
 		// uid allocation to an xid.
-		glog.WithField("count", count).Info("Deleted old locks.")
 	}
 }
 
@@ -116,9 +117,7 @@ func allocateUniqueUid(xid string, instanceIdx uint64,
 		uid1 := farm.Fingerprint64([]byte(txid)) // Generate from hash.
 		uid = (uid1 % mod) + minIdx
 
-		glog.WithField("txid", txid).WithField("uid", uid).Debug("Generated")
 		if uid == math.MaxUint64 {
-			glog.Debug("Hit uint64max while generating fingerprint. Ignoring...")
 			continue
 		}
 
@@ -130,7 +129,6 @@ func allocateUniqueUid(xid string, instanceIdx uint64,
 			// Something already present here.
 			var p types.Posting
 			pl.Get(&p, 0)
-			glog.Debug("Found existing xid: [%q]. Continuing...", string(p.ValueBytes()))
 			continue
 		}
 
@@ -140,10 +138,7 @@ func allocateUniqueUid(xid string, instanceIdx uint64,
 			Source:    "_assigner_",
 			Timestamp: time.Now(),
 		}
-		rerr = pl.AddMutation(t, posting.Set)
-		if rerr != nil {
-			glog.WithError(rerr).Error("While adding mutation")
-		}
+		rerr = pl.AddMutation(context.Background(), t, posting.Set)
 		return uid, rerr
 	}
 	return 0, errors.New("Some unhandled route lead me here." +
@@ -159,7 +154,7 @@ func assignNew(pl *posting.List, xid string, instanceIdx uint64,
 	defer entry.Unlock()
 
 	if pl.Length() > 1 {
-		glog.Fatalf("We shouldn't have more than 1 uid for xid: %v\n", xid)
+		log.Fatalf("We shouldn't have more than 1 uid for xid: %v\n", xid)
 
 	} else if pl.Length() > 0 {
 		var p types.Posting
@@ -180,7 +175,7 @@ func assignNew(pl *posting.List, xid string, instanceIdx uint64,
 		Source:    "_assigner_",
 		Timestamp: time.Now(),
 	}
-	rerr := pl.AddMutation(t, posting.Set)
+	rerr := pl.AddMutation(context.Background(), t, posting.Set)
 	return uid, rerr
 }
 
@@ -195,7 +190,7 @@ func Get(xid string) (uid uint64, rerr error) {
 		return 0, fmt.Errorf("xid: %v doesn't have any uid assigned.", xid)
 	}
 	if pl.Length() > 1 {
-		glog.Fatalf("We shouldn't have more than 1 uid for xid: %v\n", xid)
+		log.Fatalf("We shouldn't have more than 1 uid for xid: %v\n", xid)
 	}
 	var p types.Posting
 	if ok := pl.Get(&p, 0); !ok {
@@ -213,7 +208,7 @@ func GetOrAssign(xid string, instanceIdx uint64,
 		return assignNew(pl, xid, instanceIdx, numInstances)
 
 	} else if pl.Length() > 1 {
-		glog.Fatalf("We shouldn't have more than 1 uid for xid: %v\n", xid)
+		log.Fatalf("We shouldn't have more than 1 uid for xid: %v\n", xid)
 
 	} else {
 		// We found one posting.
@@ -235,18 +230,17 @@ func ExternalId(uid uint64) (xid string, rerr error) {
 	}
 
 	if pl.Length() > 1 {
-		glog.WithField("uid", uid).Fatal("This shouldn't be happening.")
+		log.Fatalf("This shouldn't be happening. Uid: %v", uid)
 		return "", errors.New("Multiple external ids for this uid.")
 	}
 
 	var p types.Posting
 	if ok := pl.Get(&p, 0); !ok {
-		glog.WithField("uid", uid).Error("While retrieving posting")
 		return "", errors.New("While retrieving posting")
 	}
 
 	if p.Uid() != math.MaxUint64 {
-		glog.WithField("uid", uid).Fatal("Value uid must be MaxUint64.")
+		log.Fatalf("Value uid must be MaxUint64. Uid: %v", p.Uid())
 	}
 	return string(p.ValueBytes()), rerr
 }

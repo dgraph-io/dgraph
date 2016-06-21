@@ -25,7 +25,7 @@ import (
 	"golang.org/x/net/context"
 )
 
-func ProcessTaskOverNetwork(qu []byte) (result []byte, rerr error) {
+func ProcessTaskOverNetwork(ctx context.Context, qu []byte) (result []byte, rerr error) {
 	uo := flatbuffers.GetUOffsetT(qu)
 	q := new(task.Query)
 	q.Init(qu, uo)
@@ -40,9 +40,8 @@ func ProcessTaskOverNetwork(qu []byte) (result []byte, rerr error) {
 	} else {
 		runHere = (instanceIdx == idx)
 	}
-	glog.WithField("runHere", runHere).WithField("attr", attr).
-		WithField("instanceIdx", instanceIdx).
-		WithField("numInstances", numInstances).Info("ProcessTaskOverNetwork")
+	x.Trace(ctx, "runHere: %v attr: %v instanceIdx: %v numInstances: %v",
+		runHere, attr, instanceIdx, numInstances)
 
 	if runHere {
 		// No need for a network call, as this should be run from within
@@ -63,12 +62,12 @@ func ProcessTaskOverNetwork(qu []byte) (result []byte, rerr error) {
 	c := NewWorkerClient(conn)
 	reply, err := c.ServeTask(context.Background(), query)
 	if err != nil {
-		glog.WithField("call", "Worker.ServeTask").Error(err)
+		x.Trace(ctx, "Error while calling Worker.ServeTask: %v", err)
 		return []byte(""), err
 	}
 
-	glog.WithField("reply_len", len(reply.Data)).WithField("addr", addr).
-		WithField("attr", attr).Info("Got reply from server")
+	x.Trace(ctx, "Reply from server. length: %v Addr: %v Attr: %v",
+		len(reply.Data), addr, attr)
 	return reply.Data, nil
 }
 

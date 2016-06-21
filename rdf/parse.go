@@ -18,6 +18,7 @@ package rdf
 
 import (
 	"fmt"
+	"log"
 	"strconv"
 	"strings"
 	"time"
@@ -138,7 +139,7 @@ func Parse(line string) (rnq NQuad, rerr error) {
 		if item.Typ == itemObjectType {
 			// TODO: Strictly parse common types like integers, floats etc.
 			if len(oval) == 0 {
-				glog.Fatalf(
+				log.Fatalf(
 					"itemObject should be emitted before itemObjectType. Input: [%s]",
 					line)
 			}
