@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"math/rand"
 	"net"
 	"net/http"
 	"runtime"
@@ -29,6 +30,7 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
+	"golang.org/x/net/trace"
 
 	"google.golang.org/grpc"
 
@@ -55,6 +57,7 @@ var instanceIdx = flag.Uint64("instanceIdx", 0,
 var workers = flag.String("workers", "",
 	"Comma separated list of IP addresses of workers")
 var nomutations = flag.Bool("nomutations", false, "Don't allow mutations on this server.")
+var tracing = flag.Float64("trace", 0.5, "The ratio of queries to trace.")
 
 func addCorsHeaders(w http.ResponseWriter) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -141,6 +144,12 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
+	if rand.Float64() < *tracing {
+		tr := trace.New("Dgraph", "Query")
+		defer tr.Finish()
+		ctx = trace.NewContext(ctx, tr)
+	}
+
 	var l query.Latency
 	l.Start = time.Now()
 	defer r.Body.Close()
@@ -212,6 +221,13 @@ type server struct{}
 // client as a protocol buffer message.
 func (s *server) Query(ctx context.Context,
 	req *graph.Request) (*graph.Response, error) {
+
+	if rand.Float64() < *tracing {
+		tr := trace.New("Dgraph", "GrpcQuery")
+		defer tr.Finish()
+		ctx = trace.NewContext(ctx, tr)
+	}
+
 	resp := new(graph.Response)
 	if len(req.Query) == 0 {
 		x.Trace(ctx, "Empty query")

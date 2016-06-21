@@ -123,5 +123,5 @@ func Trace(ctx context.Context, format string, args ...interface{}) {
 	if !ok {
 		return
 	}
-	tr.LazyPrintf(format, args)
+	tr.LazyPrintf(format, args...)
 }
