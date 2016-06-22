@@ -19,9 +19,9 @@ package query
 import (
 	"bytes"
 	"encoding/gob"
-	"fmt"
 	"io/ioutil"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -324,7 +324,10 @@ func TestToJson(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	fmt.Printf(string(js))
+	s := string(js)
+	if !strings.Contains(s, "Michonne") {
+		t.Errorf("Unable to find Michonne in this result: %v", s)
+	}
 }
 
 func getProperty(properties []*graph.Property, prop string) []byte {
