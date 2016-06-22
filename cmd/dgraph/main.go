@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 DGraph Labs, Inc.
+ * Copyright 2015 Dgraph Labs, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -214,7 +214,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, string(js))
 }
 
-// server is used to implement graph.DGraphServer
+// server is used to implement graph.DgraphServer
 type server struct{}
 
 // This method is used to execute the query and return the response to the
@@ -290,7 +290,7 @@ func (s *server) Query(ctx context.Context,
 	return resp, err
 }
 
-// This function register a DGraph grpc server on the address, which is used
+// This function register a Dgraph grpc server on the address, which is used
 // exchanging protocol buffer messages.
 func runGrpcServer(address string) {
 	ln, err := net.Listen("tcp", address)
@@ -301,7 +301,7 @@ func runGrpcServer(address string) {
 	log.Printf("Client worker listening: %v", ln.Addr())
 
 	s := grpc.NewServer()
-	graph.RegisterDGraphServer(s, &server{})
+	graph.RegisterDgraphServer(s, &server{})
 	if err = s.Serve(ln); err != nil {
 		log.Fatalf("While serving gRpc requests", err)
 	}

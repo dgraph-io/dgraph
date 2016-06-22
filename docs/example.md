@@ -1,6 +1,6 @@
 # Dgraph Design Doc
 
-To explain DGraph working, let's start with an example query we should be able
+To explain Dgraph working, let's start with an example query we should be able
 to run.
 
 Query to answer:

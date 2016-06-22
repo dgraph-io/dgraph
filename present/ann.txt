@@ -1,6 +1,6 @@
-This is a post to announce DGraph, an open source, distributed, scalable native graph database. DGraph is designed to handle terabytes of structured data, over commodity hardware.
+This is a post to announce Dgraph, an open source, distributed, scalable native graph database. Dgraph is designed to handle terabytes of structured data, over commodity hardware.
 
-The design and inspiration is drawn from my experiences working in Google Knowledge Infra group. DGraph is under active development, and is looking to hire talented engineers.
+The design and inspiration is drawn from my experiences working in Google Knowledge Infra group. Dgraph is under active development, and is looking to hire talented engineers.
 
 Github page: https://github.com/dgraph-io/dgraph
 

@@ -1,4 +1,4 @@
-# DGraph
+# Dgraph
 **Scalable, Distributed, Low Latency, High Throughput Graph Database.**
 
 ![logo](https://img.shields.io/badge/status-alpha-red.svg)
@@ -7,9 +7,9 @@
 [![Slack Status](http://slack.dgraph.io/badge.svg)](http://slack.dgraph.io)
 
 
-DGraph's goal is to provide [Google](https://www.google.com) production level scale and throughput,
+Dgraph's goal is to provide [Google](https://www.google.com) production level scale and throughput,
 with low enough latency to be serving real time user queries, over terabytes of structured data.
-DGraph supports [GraphQL](http://graphql.org/) as query language, and responds in [JSON](http://www.json.org/).
+Dgraph supports [GraphQL](http://graphql.org/) as query language, and responds in [JSON](http://www.json.org/).
 
 ---
 
@@ -40,18 +40,18 @@ Please see [Release notes](https://github.com/dgraph-io/dgraph/releases/tag/v0.3
 and [Trello board](https://trello.com/b/PF4nZ1vH) for more information.
 
 `Mar 2016 - Branch v0.2`
-This is the first truly distributed version of DGraph.
+This is the first truly distributed version of Dgraph.
 Please see the [release notes here](https://discuss.dgraph.io/t/dgraph-v0-2-release/17).
 
 `MVP launch - Dec 2015 - Branch v0.1`
-This is a minimum viable product, alpha release of DGraph. **It's not meant for production use.**
+This is a minimum viable product, alpha release of Dgraph. **It's not meant for production use.**
 This version is not distributed and support for GraphQL is partial.
 [See the Roadmap](https://github.com/dgraph-io/dgraph/issues/1) for list of working and planned features.
 
 Your feedback is welcome. Feel free to [file an issue](https://github.com/dgraph-io/dgraph/issues)
-when you encounter bugs and to direct the development of DGraph.
+when you encounter bugs and to direct the development of Dgraph.
 
-There's an instance of DGraph running at http://dgraph.xyz, that you can query without installing DGraph.
+There's an instance of Dgraph running at http://dgraph.xyz, that you can query without installing Dgraph.
 This instance contains 21M facts from [Freebase Film Data](http://www.freebase.com/film).
 See [Queries and Mutations below](#queries-and-mutations) for sample queries.
 `curl dgraph.xyz/query -XPOST -d '{}'`
@@ -60,7 +60,7 @@ See [Queries and Mutations below](#queries-and-mutations) for sample queries.
 ## Quick Testing
 
 ### Single instance via Docker
-There's a docker image that you can readily use for playing with DGraph.
+There's a docker image that you can readily use for playing with Dgraph.
 ```
 $ docker pull dgraph/dgraph:latest
 # Setting a `somedir` volume on the host will persist your data.
@@ -103,7 +103,7 @@ $ tar -xzvf uids.async.tar.gz -C $DIR
 $ tar -xzvf postings.tar.gz -C $DIR
 # You should now see directories p0, p1, p2 and uasync.final. The last directory name is unfortunate, but made sense at the time.
 ```
-For quick testing, you can bring up 3 different processes of DGraph. You can of course, also set this up across multiple servers.
+For quick testing, you can bring up 3 different processes of Dgraph. You can of course, also set this up across multiple servers.
 ```
 go build . && ./dgraph --instanceIdx 0 --mutations $DIR/m0 --port 8080 --postings $DIR/p0 --workers ":12345,:12346,:12347" --uids $DIR/uasync.final --workerport ":12345" &
 go build . && ./dgraph --instanceIdx 1 --mutations $DIR/m1 --port 8082 --postings $DIR/p1 --workers ":12345,:12346,:12347" --workerport ":12346" &
@@ -123,7 +123,7 @@ All the instructions below are based on a Debian/Ubuntu system.
 Download and install [Go 1.6 from here](https://golang.org/dl/).
 
 ### Install RocksDB
-DGraph depends on [RocksDB](https://github.com/facebook/rocksdb) for storing posting lists.
+Dgraph depends on [RocksDB](https://github.com/facebook/rocksdb) for storing posting lists.
 
 ```
 # First install dependencies.
@@ -143,8 +143,8 @@ This would install RocksDB library in `/usr/local/lib`. Make sure that your `LD_
 export LD_LIBRARY_PATH="/usr/local/lib"
 ```
 
-### Install DGraph
-Now get [DGraph](https://github.com/dgraph-io/dgraph) code. DGraph uses `govendor` to fix dependency versions. Version information for these dependencies is included in the `github.com/dgraph-io/dgraph/vendor` directory under the `vendor.json` file.  
+### Install Dgraph
+Now get [Dgraph](https://github.com/dgraph-io/dgraph) code. Dgraph uses `govendor` to fix dependency versions. Version information for these dependencies is included in the `github.com/dgraph-io/dgraph/vendor` directory under the `vendor.json` file.  
 
 ```
 go get -u github.com/kardianos/govendor
@@ -221,7 +221,7 @@ using SSD persistent disk. Instance 2 took a bit longer, and finished in 15 mins
 Note that `stw_ram_mb` is based on the memory usage perceived by Golang. It currently doesn't take into account the memory usage by RocksDB. So, the actual usage is higher.
 
 ### Server
-Now that the data is loaded, you can run the DGraph servers. To serve the 3 shards above, you can follow the [same steps as here](#multiple-distributed-instances).
+Now that the data is loaded, you can run the Dgraph servers. To serve the 3 shards above, you can follow the [same steps as here](#multiple-distributed-instances).
 Now you can run GraphQL queries over freebase film data like so:
 ```
 curl localhost:8080/query -XPOST -d '{
@@ -284,7 +284,7 @@ Consecutive runs of the same query took much lesser time (80 to 100ms), due to p
 
 ## Queries and Mutations
 You can see a list of [sample queries here](https://discuss.dgraph.io/t/list-of-test-queries/22).
-DGraph also supports mutations via GraphQL syntax.
+Dgraph also supports mutations via GraphQL syntax.
 Because GraphQL mutations don't contain complete data, the mutation syntax uses [RDF NQuad format](https://www.w3.org/TR/n-quads/).
 ```
 mutation {
@@ -298,7 +298,7 @@ mutation {
 ```
 
 You can batch multiple NQuads in a single GraphQL query.
-DGraph would assume that any data in `<>` is an external id (XID),
+Dgraph would assume that any data in `<>` is an external id (XID),
 and it would retrieve or assign unique internal ids (UID) automatically for these.
 You can also directly specify the UID like so: `_uid_: 0xhexval` or `_uid_: intval`.
 
@@ -320,7 +320,7 @@ query {
 The query portion is executed after the mutation, so this would return `greg` as one of the results.
 
 
-## Contributing to DGraph
+## Contributing to Dgraph
 - See a list of issues [that we need help with](https://github.com/dgraph-io/dgraph/issues?q=is%3Aissue+is%3Aopen+label%3Ahelp_wanted).
 - Please see [contributing to Dgraph](https://discuss.dgraph.io/t/contributing-to-dgraph/20) for guidelines on contributions.
 - *Alpha Program*: If you want to contribute to Dgraph on a continuous basis and need some Bitcoins to pay for healthy food, talk to us.
@@ -334,5 +334,5 @@ The query portion is executed after the mutation, so this would return `greg` as
 - [Lightening Talk](http://go-talks.appspot.com/github.com/dgraph-io/dgraph/present/sydney5mins/g.slide#1) on 29th Oct, 2015 at Go meetup, Sydney.
 
 ## About
-I, [Manish R Jain](https://twitter.com/manishrjain), the author of DGraph, used to work on Google Knowledge Graph.
+I, [Manish R Jain](https://twitter.com/manishrjain), the author of Dgraph, used to work on Google Knowledge Graph.
 My experience building large scale, distributed (Web Search and) Graph systems at Google is what inspired me to build this.

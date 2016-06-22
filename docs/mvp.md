@@ -60,7 +60,7 @@ as the mode of communication.
 - Versioning of data wouldn't be provided in this, or later versions. The best way I can
 currently think of to do versioning would involve writing the deltas, and reading them back
 to generate the final state. This would be too slow and memory consuming for generating the
-long posting lists that we'll encounter in DGraph.
+long posting lists that we'll encounter in Dgraph.
 
 ## Terminology
 
