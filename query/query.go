@@ -247,15 +247,19 @@ func (g *SubGraph) ToJson(l *Latency) (js []byte, rerr error) {
 		log.Fatal("We don't currently support more than 1 uid at root.")
 	}
 
-	ival := r[0]
-	var m map[string]interface{}
-	if ival != nil {
-		m = ival.(map[string]interface{})
-	} else {
-		m = make(map[string]interface{})
+	// r is a map, and we don't know it's key. So iterate over it, even though it only has 1 result.
+	for _, ival := range r {
+		var m map[string]interface{}
+		if ival != nil {
+			m = ival.(map[string]interface{})
+		} else {
+			m = make(map[string]interface{})
+		}
+		m["server_latency"] = l.ToMap()
+		return json.Marshal(m)
 	}
-	m["server_latency"] = l.ToMap()
-	return json.Marshal(m)
+	log.Fatal("Runtime should never reach here.")
+	return []byte(""), fmt.Errorf("Runtime should never reach here.")
 }
 
 // This function performs a binary search on the uids slice and returns the
