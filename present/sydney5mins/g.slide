@@ -1,4 +1,4 @@
-DGraph
+Dgraph
 Go Meetup Sydney
 29 Oct 2015
 Tags: go golang dgraph graph
@@ -20,11 +20,11 @@ manishrjain@gmail.com
 
 .image graph.png
 
-* What is DGraph
+* What is Dgraph
 
 [[https://github.com/dgraph-io/dgraph][https://github.com/dgraph-io/dgraph]]
 
-DGraph is an open source, distributed, low-latency graph serving system written in Go.
+Dgraph is an open source, distributed, low-latency graph serving system written in Go.
 
 - *Low*Latency*: Minimize the latency of query execution.
 

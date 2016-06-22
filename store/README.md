@@ -75,16 +75,16 @@ ok  	github.com/dgraph-io/dgraph/store	55.029s
 ```
 
 ### Thoughts
-DGraph uses append only commit log to sync new mutations to disk before returning.
+Dgraph uses append only commit log to sync new mutations to disk before returning.
 Every time a posting list gets init, it checks for both the stored posting list and
 the mutations committed after the posting list was written. Hence, our access pattern
 from store is largely read-only, with fewer writes. This is true, irrespective of how
 many writes get commited by the end user.
 
-Hence, BoltDB is a better choice. It performs better for reads/seeks, despite DGraph needing
+Hence, BoltDB is a better choice. It performs better for reads/seeks, despite Dgraph needing
 a value copy. Writes are somewhat slower, but that shouldn't be a problem because of the
 above mentioned reasons.
 
 **Update**: Just realized that BoltDB only allows a SINGLE writer at any point in time.
-This is equivalent to a global mutex lock. That'd essentially kill DGraph's performance. So,
+This is equivalent to a global mutex lock. That'd essentially kill Dgraph's performance. So,
 BoltDB is out!

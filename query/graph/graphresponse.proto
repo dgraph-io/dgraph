@@ -4,7 +4,7 @@
 syntax="proto3";
 package graph;
 
-service DGraph {
+service Dgraph {
   rpc Query (Request) returns (Response) {}
 }
 

@@ -1,4 +1,4 @@
-# Dockerfile for DGraph
+# Dockerfile for Dgraph
 
 FROM golang:1.6.2
 MAINTAINER Manish Jain <manishrjain@gmail.com>
@@ -18,7 +18,7 @@ RUN mkdir /installs && cd /installs && \
 RUN cd /installs/rocksdb && make shared_lib && make install
 ENV LD_LIBRARY_PATH "/usr/local/lib"
 
-# Install DGraph and update dependencies to right versions.
+# Install Dgraph and update dependencies to right versions.
 RUN go get -v github.com/dgraph-io/dgraph/... && \
     go build -v github.com/dgraph-io/dgraph/... && \
     go test github.com/dgraph-io/dgraph/... && echo "v0.3"
