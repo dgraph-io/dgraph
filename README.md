@@ -70,9 +70,9 @@ $ docker run -t -i -v /somedir:/dgraph -p 80:8080 dgraph/dgraph:latest
 Now that you're within the Docker instance, you can start the server.
 ```
 $ mkdir /dgraph/m # Ensure mutations directory exists.
-$ dgraph --mutations /dgraph/m --postings /dgraph/p --uids /dgraph/u
+$ server --mutations /dgraph/m --postings /dgraph/p --uids /dgraph/u
 ```
-There are some more options that you can change. Run `dgraph --help` to look at them.
+There are some more options that you can change. Run `server --help` to look at them.
 
 Run some mutations and query the server, like so:
 ```
