@@ -1,0 +1,33 @@
+language: go
+go:
+  - 1.6
+#  - tip # broken for 1.7
+sudo: false
+#notifications:
+#  slack:
+#    secure: <INSERT ENCRYPTED SLACK KEY HERE>
+addons:
+  apt:
+    sources:
+      - ubuntu-toolchain-r-test
+      - llvm-toolchain-precise-3.8
+    packages:
+      - clang-3.8
+      - libbz2-dev
+      - libsnappy-dev
+      - zlib1g-dev
+env:
+  - CC=clang-3.8 CXX=clang++-3.8
+cache:
+  apt: true
+  directories:
+    - $HOME/build
+install:
+  - bash contrib/build-rocksdb.sh $HOME/build
+before_script:
+  - go get github.com/mattn/goveralls
+  - go get github.com/kardianos/govendor
+script:
+  - govendor sync
+  - bash contrib/cover.sh $HOME/build coverage.out
+  - goveralls -service=travis-ci -coverprofile=coverage.out
