@@ -2,8 +2,9 @@
 **Scalable, Distributed, Low Latency, High Throughput Graph Database.**
 
 ![logo](https://img.shields.io/badge/status-alpha-red.svg)
-[![Wiki](https://img.shields.io/badge/res-wiki-blue.svg)](https://github.com/dgraph-io/dgraph/wiki)
-[![logo](https://img.shields.io/badge/Mailing%20List-dgraph-brightgreen.svg)](https://groups.google.com/forum/#!forum/dgraph)
+[![Wiki](https://img.shields.io/badge/res-wiki-blue.svg)](http://wiki.dgraph.io)
+[![Build Status](https://travis-ci.org/dgraph-io/dgraph.svg?branch=master)](https://travis-ci.org/dgraph-io/dgraph)
+[![Coverage Status](https://coveralls.io/repos/github/dgraph-io/dgraph/badge.svg?branch=master)](https://coveralls.io/github/dgraph-io/dgraph?branch=master)
 [![Slack Status](http://slack.dgraph.io/badge.svg)](http://slack.dgraph.io)
 
 
