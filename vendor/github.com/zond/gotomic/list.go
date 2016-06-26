@@ -67,7 +67,7 @@ func (self *List) Pop() (rval Thing, ok bool) {
 
 /*
  Each will run i on each element.
- 
+
  It returns true if the iteration was interrupted.
  This is the case when one of the ListIterator calls returned true, indicating
  the iteration should be stopped.
@@ -113,8 +113,8 @@ type element struct {
 	/*
 	 The next element in the list. If this pointer has the deleted flag set it means THIS element, not the next one, is deleted.
 	*/
-	unsafe.Pointer
-	value Thing
+	Pointer unsafe.Pointer
+	value   Thing
 }
 
 func (self *element) next() *element {
@@ -122,7 +122,7 @@ func (self *element) next() *element {
 	for next != nil {
 		nextElement := (*element)(next)
 		/*
-		 If our next element contains &deletedElement that means WE are deleted, and 
+		 If our next element contains &deletedElement that means WE are deleted, and
 		 we can just return the next-next element. It will make it impossible to add
 		 stuff to us, since we will always lie about our next(), but then again, deleted
 		 elements shouldn't get new children anyway.

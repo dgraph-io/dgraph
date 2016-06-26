@@ -1,7 +1,7 @@
 language: go
 go:
   - 1.6
-#  - tip # broken for 1.7
+  - tip
 sudo: false
 #notifications:
 #  slack:

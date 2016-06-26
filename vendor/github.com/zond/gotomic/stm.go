@@ -1,10 +1,10 @@
 package gotomic
 
 import (
+	"bytes"
 	"fmt"
 	"sort"
 	"sync/atomic"
-	"bytes"
 	"unsafe"
 )
 
@@ -32,7 +32,7 @@ type Handle struct {
 	/*
 	 Will point to a version.
 	*/
-	unsafe.Pointer
+	Pointer unsafe.Pointer
 }
 
 /*
@@ -101,10 +101,10 @@ func (self writes) Less(i, j int) bool {
 
  It has a few tweaks that I don't believe break it (but I haven't even tried proving it):
 
- 1) It has an ever increasing counter for the last transaction to commit. 
+ 1) It has an ever increasing counter for the last transaction to commit.
 
- It uses this counter to fail transactions fast when they try to read a value that another 
- transaction has changed since the first transaction began. 
+ It uses this counter to fail transactions fast when they try to read a value that another
+ transaction has changed since the first transaction began.
 
  2) It copies the data not only on write opening, but also on read opening.
 
