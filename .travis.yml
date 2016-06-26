@@ -1,0 +1,26 @@
+language: go
+go:
+  - 1.5
+  - 1.6
+#  - tip # broken for 1.7
+sudo: false # allow travis-ci to use container infrastructure
+#notifications:
+#  slack:
+#    secure: <INSERT ENCRYPTED SLACK KEY HERE>
+apt:
+  packages:
+  - libbz2-dev
+  - libgflags-dev
+  - libsnappy-dev
+  - zlib1g-dev
+cache:
+  directories:
+  - $HOME/build
+before_install:
+  - go get github.com/mattn/goveralls
+  - go get github.com/kardianos/govendor
+  - $HOME/contrib/build-rocksdb.sh
+script:
+  - govendor sync
+  - $HOME/contrib/cover.sh $HOME/coverage.out
+  - goveralls -service=travis-ci -coverprofile=$HOME/coverage.out
