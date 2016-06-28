@@ -19,6 +19,10 @@ Dgraph supports [GraphQL](http://graphql.org/) as query language, and responds i
 
 ---
 
+**We are using [Git Flow](https://github.com/nvie/gitflow) branching model. So, please send out your pull requests against `develop` branch.**
+
+---
+
 The README is divided into these sections:
 - [Current Status](#current-status)
 - [Quick Testing](#quick-testing)
