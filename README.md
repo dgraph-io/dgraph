@@ -26,7 +26,7 @@ Dgraph supports [GraphQL](http://graphql.org/) as query language, and responds i
 The README is divided into these sections:
 - [Current Status](#current-status)
 - [Quick Testing](#quick-testing)
-- [Installation](#installation)
+- [Installation: Moved to wiki](https://wiki.dgraph.io/index.php?title=Beginners%27_guide)
 - [Usage](#usage)
 - [Queries and Mutations](#queries-and-mutations)
 - [Contact](#contact)
@@ -118,49 +118,6 @@ Now you can run any of the queries mentioned in [Test Queries](https://github.co
 You can hit any of the 3 processes, they'll produce the same results.
 
 `curl localhost:8080/query -XPOST -d '{}'`
-
-## Installation
-Best way to do this is to refer to [Dockerfile](Dockerfile), which has the most complete
-instructions on getting the right setup.
-All the instructions below are based on a Debian/Ubuntu system.
-
-### Install Go 1.6
-Download and install [Go 1.6 from here](https://golang.org/dl/).
-
-### Install RocksDB
-Dgraph depends on [RocksDB](https://github.com/facebook/rocksdb) for storing posting lists.
-
-```
-# First install dependencies.
-# For Ubuntu, follow the ones below. For others, refer to INSTALL file in rocksdb.
-$ sudo apt-get update && apt-get install libgflags-dev libsnappy-dev zlib1g-dev libbz2-dev
-$ git clone https://github.com/facebook/rocksdb.git
-$ cd rocksdb
-$ git checkout v4.2
-$ make shared_lib
-$ sudo make install
-```
-
-This would install RocksDB library in `/usr/local/lib`. Make sure that your `LD_LIBRARY_PATH` is correctly pointing to it.
-
-```
-# In ~/.bashrc
-export LD_LIBRARY_PATH="/usr/local/lib"
-```
-
-### Install Dgraph
-Now get [Dgraph](https://github.com/dgraph-io/dgraph) code. Dgraph uses `govendor` to fix dependency versions. Version information for these dependencies is included in the `github.com/dgraph-io/dgraph/vendor` directory under the `vendor.json` file.  
-
-```
-go get -u github.com/kardianos/govendor
-# cd to dgraph codebase root directory e.g. $GOPATH/src/github.com/dgraph-io/dgraph
-govendor sync
-
-# Optional
-go test github.com/dgraph-io/dgraph/...
-
-```
-See [govendor](https://github.com/kardianos/govendor) for more information.
 
 ## Usage
 
@@ -280,7 +237,7 @@ The query portion is executed after the mutation, so this would return `greg` as
 
 ## Contributing to Dgraph
 - See a list of issues [that we need help with](https://github.com/dgraph-io/dgraph/issues?q=is%3Aissue+is%3Aopen+label%3Ahelp_wanted).
-- Please see [contributing to Dgraph](https://discuss.dgraph.io/t/contributing-to-dgraph/20) for guidelines on contributions.
+- Please see [contributing to Dgraph](https://wiki.dgraph.io/index.php?title=Contributing_to_Dgraph) for guidelines on contributions.
 - *Alpha Program*: If you want to contribute to Dgraph on a continuous basis and need some Bitcoins to pay for healthy food, talk to us.
 
 ## Contact
