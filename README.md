@@ -27,7 +27,7 @@ The README is divided into these sections:
 - [Current Status](#current-status)
 - [Quick Testing](#quick-testing)
 - [Installation: Moved to wiki](https://wiki.dgraph.io/index.php?title=Beginners%27_guide)
-- [Usage](#usage)
+- [Data Loading: Moved to Wiki](https://wiki.dgraph.io/index.php?title=Beginners%27_guide#Data_Loading)
 - [Queries and Mutations: Moved to wiki](https://wiki.dgraph.io/index.php?title=Beginners%27_guide#Queries_and_Mutations)
 - [Contact](#contact)
 
@@ -117,45 +117,6 @@ Now you can run any of the queries mentioned in [Test Queries](https://github.co
 You can hit any of the 3 processes, they'll produce the same results.
 
 `curl localhost:8080/query -XPOST -d '{}'`
-
-## Usage
-
-[Data Loading: Moved to Wiki](https://wiki.dgraph.io/index.php?title=Beginners%27_guide#Data_Loading)
-
-### Server
-Now that the data is loaded, you can run the Dgraph servers. To serve the 3 shards above, you can follow the [same steps as here](#multiple-distributed-instances).
-Now you can run GraphQL queries over freebase film data like so:
-```
-curl localhost:8080/query -XPOST -d '{
-	me(_xid_: m.06pj8) {
-		type.object.name.en
-		film.director.film {
-			type.object.name.en
-			film.film.starring {
-				film.performance.character {
-					type.object.name.en
-				}
-				film.performance.actor {
-					type.object.name.en
-					film.director.film {
-						type.object.name.en
-					}
-				}
-			}
-			film.film.initial_release_date
-			film.film.country
-			film.film.genre {
-				type.object.name.en
-			}
-		}
-	}
-}' > output.json
-```
-This query would find all movies directed by Steven Spielberg, their names, initial release dates, countries, genres, and the cast of these movies, i.e. characteres and actors playing those characters; and all the movies directed by these actors, if any.
-
-The support for GraphQL is [very limited right now](https://github.com/dgraph-io/dgraph/issues/1).
-You can conveniently browse [Freebase film schema here](http://www.freebase.com/film/film?schema=&lang=en).
-There're also some schema pointers in [README](https://github.com/dgraph-io/benchmarks/blob/master/data/README.md).
 
 ## Contributing to Dgraph
 - See a list of issues [that we need help with](https://github.com/dgraph-io/dgraph/issues?q=is%3Aissue+is%3Aopen+label%3Ahelp_wanted).
