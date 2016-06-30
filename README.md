@@ -120,46 +120,7 @@ You can hit any of the 3 processes, they'll produce the same results.
 
 ## Usage
 
-### Distributed Bulk Data Loading
-Let's load up data first. If you have RDF data, you can use that.
-Or, there's [Freebase film rdf data here](https://github.com/dgraph-io/benchmarks).
-
-Bulk data loading happens in 2 passes.
-
-#### First Pass: UID Assignment
-We first find all the entities in the data, and allocate UIDs for them.
-You can run this either as a single instance, or over multiple instances.
-
-Here we set number of instances to 2.
-```
-$ cd $GOPATH/src/github.com/dgraph-io/dgraph/dgraph/dgraphassigner
-
-# Run instance 0.
-$ go build . && ./dgraphassigner --numInstances 2 --instanceIdx 0 --rdfgzips $BENCHMARK_REPO/data/rdf-films.gz,$BENCHMARK_REPO/data/names.gz --uids ~/dgraph/uids/u0
-
-# And either later, or on another server, run instance 1.
-$ go build . && ./dgraphassigner --numInstances 2 --instanceIdx 1 --rdfgzips $BENCHMARK_REPO/data/rdf-films.gz,$BENCHMARK_REPO/data/names.gz --uids ~/dgraph/uids/u1
-```
-
-Once the shards are generated, you need to merge them before the second pass. If you ran this as a single instance, merging isn't required.
-```
-$ cd $GOPATH/src/github.com/dgraph-io/dgraph/tools/merge
-$ go build . && ./merge --stores ~/dgraph/uids --dest ~/dgraph/uasync.final
-```
-The above command would iterate over all the directories in `~/dgraph/uids`, and merge their data into one `~/dgraph/uasync.final`.
-Note that this merge step is important if you're generating multiple uid intances, because all the loader instances need to have access to global uids list.
-
-#### Second Pass: Data Loader
-Now that we have assigned UIDs for all the entities, the data is ready to be loaded.
-
-Let's do this step with 3 instances.
-```
-$ cd $GOPATH/src/github.com/dgraph-io/dgraph/dgraph/dgraphloader
-$ go build . && ./dgraphloader --numInstances 3 --instanceIdx 0 --rdfgzips $BENCHMARK_REPO/data/names.gz,$BENCHMARK_REPO/data/rdf-films.gz --uids ~/dgraph/uasync.final --postings ~/dgraph/p0
-$ go build . && ./dgraphloader --numInstances 3 --instanceIdx 1 --rdfgzips $BENCHMARK_REPO/data/names.gz,$BENCHMARK_REPO/data/rdf-films.gz --uids ~/dgraph/uasync.final --postings ~/dgraph/p1
-$ go build . && ./dgraphloader --numInstances 3 --instanceIdx 2 --rdfgzips $BENCHMARK_REPO/data/names.gz,$BENCHMARK_REPO/data/rdf-films.gz --uids ~/dgraph/uasync.final --postings ~/dgraph/p2
-```
-You can run these over multiple machines, or just one after another.
+[Data Loading: Moved to Wiki](https://wiki.dgraph.io/index.php?title=Beginners%27_guide#Data_Loading)
 
 ### Server
 Now that the data is loaded, you can run the Dgraph servers. To serve the 3 shards above, you can follow the [same steps as here](#multiple-distributed-instances).
