@@ -205,26 +205,6 @@ $ go build . && ./dgraphloader --numInstances 3 --instanceIdx 2 --rdfgzips $BENC
 ```
 You can run these over multiple machines, or just one after another.
 
-#### Loader performance
-Loader is typically memory bound. Every mutation loads a posting list in memory, where mutations
-are applied in layers above posting lists.
-While loader doesn't write to disk every time a mutation happens, it does periodically
-merge all the mutations to posting lists, and writes them to rocksdb which persists them.
-
-There're 2 types of merging going on: Gentle merge, and Aggressive merge.
-Gentle merging picks up N% of `dirty` posting lists, where N is currently 7, and merges them. This happens every 5 seconds.
-
-Aggressive merging happens when the memory usage goes above `stw_ram_mb`.
-When that happens, the loader would *stop the world*, start the merge process, and evict all posting lists from memory.
-The more memory is available for loader to work with, the less frequently aggressive merging needs to be done, the faster the loading.
-
-As a reference point, for instance 0 and 1, it took **11 minutes each to load 21M RDFs** from `rdf-films.gz` and `names.gz`
-(from [benchmarks repository](https://github.com/dgraph-io/benchmarks/tree/master/data)) on
-[n1-standard-4 GCE instance](https://cloud.google.com/compute/docs/machine-types)
-using SSD persistent disk. Instance 2 took a bit longer, and finished in 15 mins. The total output including uids was 1.3GB.
-
-Note that `stw_ram_mb` is based on the memory usage perceived by Golang. It currently doesn't take into account the memory usage by RocksDB. So, the actual usage is higher.
-
 ### Server
 Now that the data is loaded, you can run the Dgraph servers. To serve the 3 shards above, you can follow the [same steps as here](#multiple-distributed-instances).
 Now you can run GraphQL queries over freebase film data like so:
@@ -259,33 +239,6 @@ This query would find all movies directed by Steven Spielberg, their names, init
 The support for GraphQL is [very limited right now](https://github.com/dgraph-io/dgraph/issues/1).
 You can conveniently browse [Freebase film schema here](http://www.freebase.com/film/film?schema=&lang=en).
 There're also some schema pointers in [README](https://github.com/dgraph-io/benchmarks/blob/master/data/README.md).
-
-#### Query Performance
-With the [data loaded above](#loading-performance) on the same hardware,
-it took **218ms to run** the pretty complicated query above the first time after server run.
-Note that the json conversion step has a bit more overhead than captured here.
-```json
-{
-  "server_latency": {
-      "json": "37.864027ms",
-      "parsing": "1.141712ms",
-      "processing": "163.136465ms",
-      "total": "202.144938ms"
-  }
-}
-```
-
-Consecutive runs of the same query took much lesser time (80 to 100ms), due to posting lists being available in memory.
-```json
-{
-  "server_latency": {
-    "json": "38.3306ms",
-    "parsing": "506.708µs",
-    "processing": "32.239213ms",
-    "total": "71.079022ms"
-	}
-}
-```
 
 ## Queries and Mutations
 You can see a list of [sample queries here](https://discuss.dgraph.io/t/list-of-test-queries/22).
