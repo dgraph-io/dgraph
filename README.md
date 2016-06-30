@@ -28,7 +28,7 @@ The README is divided into these sections:
 - [Quick Testing](#quick-testing)
 - [Installation: Moved to wiki](https://wiki.dgraph.io/index.php?title=Beginners%27_guide)
 - [Usage](#usage)
-- [Queries and Mutations](#queries-and-mutations)
+- [Queries and Mutations: Moved to wiki](https://wiki.dgraph.io/index.php?title=Beginners%27_guide#Queries_and_Mutations)
 - [Contact](#contact)
 
 ## Current Status
@@ -58,7 +58,6 @@ when you encounter bugs and to direct the development of Dgraph.
 
 There's an instance of Dgraph running at http://dgraph.xyz, that you can query without installing Dgraph.
 This instance contains 21M facts from [Freebase Film Data](http://www.freebase.com/film).
-See [Queries and Mutations below](#queries-and-mutations) for sample queries.
 `curl dgraph.xyz/query -XPOST -d '{}'`
 
 
@@ -196,44 +195,6 @@ This query would find all movies directed by Steven Spielberg, their names, init
 The support for GraphQL is [very limited right now](https://github.com/dgraph-io/dgraph/issues/1).
 You can conveniently browse [Freebase film schema here](http://www.freebase.com/film/film?schema=&lang=en).
 There're also some schema pointers in [README](https://github.com/dgraph-io/benchmarks/blob/master/data/README.md).
-
-## Queries and Mutations
-You can see a list of [sample queries here](https://discuss.dgraph.io/t/list-of-test-queries/22).
-Dgraph also supports mutations via GraphQL syntax.
-Because GraphQL mutations don't contain complete data, the mutation syntax uses [RDF NQuad format](https://www.w3.org/TR/n-quads/).
-```
-mutation {
-  set {
-		<subject> <predicate> <objectid> .
-		<subject> <predicate> "Object Value" .
-		<subject> <predicate> "объект"@ru .
-		_uid_:0xabcdef <predicate> <objectid> .
-	}
-}
-```
-
-You can batch multiple NQuads in a single GraphQL query.
-Dgraph would assume that any data in `<>` is an external id (XID),
-and it would retrieve or assign unique internal ids (UID) automatically for these.
-You can also directly specify the UID like so: `_uid_: 0xhexval` or `_uid_: intval`.
-
-Note that a `delete` operation isn't supported yet.
-
-In addition, you could couple a mutation with a follow up query, in a single GraphQL query like so.
-```
-mutation {
-  set {
-		<alice> <follows> <greg> .
-	}
-}
-query {
-	me(_xid_: alice) {
-		follows
-	}
-}
-```
-The query portion is executed after the mutation, so this would return `greg` as one of the results.
-
 
 ## Contributing to Dgraph
 - See a list of issues [that we need help with](https://github.com/dgraph-io/dgraph/issues?q=is%3Aissue+is%3Aopen+label%3Ahelp_wanted).
