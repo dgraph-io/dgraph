@@ -39,7 +39,7 @@ import (
 )
 
 var glog = x.Log("loader")
-var uidStore, dataStore *store.Store
+var uidStore, dataStore store.Store
 
 type counters struct {
 	read      uint64
@@ -58,7 +58,7 @@ type state struct {
 	err          error
 }
 
-func Init(uidstore, datastore *store.Store) {
+func Init(uidstore, datastore store.Store) {
 	uidStore = uidstore
 	dataStore = datastore
 }

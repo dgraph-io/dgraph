@@ -59,7 +59,7 @@ type List struct {
 	ghash       gotomic.Hashable
 	hash        uint32
 	pbuffer     unsafe.Pointer
-	pstore      *store.Store // postinglist store
+	pstore      store.Store // postinglist store
 	clog        *commit.Logger
 	lastCompact time.Time
 	wg          sync.WaitGroup
@@ -200,7 +200,7 @@ func init() {
 	}
 }
 
-func (l *List) init(key []byte, pstore *store.Store, clog *commit.Logger) {
+func (l *List) init(key []byte, pstore store.Store, clog *commit.Logger) {
 	l.Lock()
 	defer l.Unlock()
 	defer l.wg.Done()

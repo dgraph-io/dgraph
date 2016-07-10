@@ -1,3 +1,5 @@
+// +build rocksdb,cgo
+
 /*
  * Copyright 2015 DGraph Labs, Inc.
  *
@@ -14,7 +16,7 @@
  * limitations under the License.
  */
 
-package store
+package rocksdb
 
 import (
 	"fmt"
