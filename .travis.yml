@@ -2,6 +2,7 @@ language: go
 go:
   - 1.6
   - tip
+gobuild_args: -v -tags rocksdb
 sudo: false
 #notifications:
 #  slack:

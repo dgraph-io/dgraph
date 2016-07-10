@@ -34,7 +34,7 @@ import (
 )
 
 var lmgr *lockManager
-var uidStore *store.Store
+var uidStore store.Store
 var eidPool = sync.Pool{
 	New: func() interface{} {
 		return new(entry)
@@ -102,7 +102,7 @@ func init() {
 	// go lmgr.clean()
 }
 
-func Init(ps *store.Store) {
+func Init(ps store.Store) {
 	uidStore = ps
 }
 

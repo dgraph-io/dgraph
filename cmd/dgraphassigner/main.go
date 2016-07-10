@@ -3,6 +3,7 @@ package main
 import (
 	"compress/gzip"
 	"flag"
+	"log"
 	"os"
 	"runtime"
 	"runtime/pprof"
@@ -12,8 +13,11 @@ import (
 	"github.com/dgraph-io/dgraph/loader"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/store"
+	"github.com/dgraph-io/dgraph/store/boltdb"
 	"github.com/dgraph-io/dgraph/uid"
 	"github.com/dgraph-io/dgraph/x"
+
+	_ "github.com/dgraph-io/dgraph/store/rocksdb"
 )
 
 var glog = x.Log("uidassigner_main")
@@ -30,6 +34,7 @@ var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
 var memprofile = flag.String("memprofile", "", "write memory profile to file")
 var numcpu = flag.Int("numCpu", runtime.NumCPU(),
 	"Number of cores to be used by the process")
+var storeType = flag.String("store", boltdb.Name, "Backend store type.")
 
 func main() {
 	flag.Parse()
@@ -60,7 +65,10 @@ func main() {
 		glog.Fatal("No RDF GZIP files specified")
 	}
 
-	ps := new(store.Store)
+	ps, err := store.Registry.Get(*storeType)
+	if err != nil {
+		log.Fatalln(err)
+	}
 	ps.Init(*uidDir)
 	defer ps.Close()
 

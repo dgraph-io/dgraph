@@ -34,6 +34,9 @@ import (
 	"github.com/dgraph-io/dgraph/posting/types"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/x"
+
+	_ "github.com/dgraph-io/dgraph/store/boltdb"
+	_ "github.com/dgraph-io/dgraph/store/rocksdb"
 )
 
 func checkUids(t *testing.T, l *List, uids ...uint64) error {
@@ -79,250 +82,279 @@ func checkUids(t *testing.T, l *List, uids ...uint64) error {
 }
 
 func TestAddMutation(t *testing.T) {
-	l := NewList()
-	key := Key(1, "name")
-	dir, err := ioutil.TempDir("", "storetest_")
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	stores := store.Registry.Registered()
+	for _, storeName := range stores {
+		t.Log(`Store:`, storeName)
 
-	defer os.RemoveAll(dir)
-	ps := new(store.Store)
-	ps.Init(dir)
+		l := NewList()
+		key := Key(1, "name")
 
-	clog := commit.NewLogger(dir, "mutations", 50<<20)
-	clog.Init()
-	defer clog.Close()
+		dir, err := ioutil.TempDir("", "storetest_")
+		if err != nil {
+			t.Error(err)
+			return
+		}
 
-	l.init(key, ps, clog)
+		defer os.RemoveAll(dir)
 
-	edge := x.DirectedEdge{
-		ValueId:   9,
-		Source:    "testing",
-		Timestamp: time.Now(),
-	}
-	ctx := context.Background()
-	if err := l.AddMutation(ctx, edge, Set); err != nil {
-		t.Error(err)
-	}
-	/*
-		if err := l.CommitIfDirty(); err != nil {
+		ps, err := store.Registry.Get(storeName)
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		ps.Init(dir)
+
+		clog := commit.NewLogger(dir, "mutations", 50<<20)
+		clog.Init()
+		defer clog.Close()
+
+		l.init(key, ps, clog)
+
+		edge := x.DirectedEdge{
+			ValueId:   9,
+			Source:    "testing",
+			Timestamp: time.Now(),
+		}
+		ctx := context.Background()
+		if err := l.AddMutation(ctx, edge, Set); err != nil {
 			t.Error(err)
 		}
-	*/
+		/*
+			if err := l.CommitIfDirty(); err != nil {
+				t.Error(err)
+			}
+		*/
 
-	if l.Length() != 1 {
-		t.Error("Unable to find added elements in posting list")
-	}
-	var p types.Posting
-	if ok := l.Get(&p, 0); !ok {
-		t.Error("Unable to retrieve posting at 1st iter")
-		t.Fail()
-	}
-	if p.Uid() != 9 {
-		t.Errorf("Expected 9. Got: %v", p.Uid)
-	}
-	if string(p.Source()) != "testing" {
-		t.Errorf("Expected testing. Got: %v", string(p.Source()))
-	}
-	// return // Test 1.
-
-	// Add another edge now.
-	edge.ValueId = 81
-	l.AddMutation(ctx, edge, Set)
-	// l.CommitIfDirty()
-	if l.Length() != 2 {
-		t.Errorf("Length: %d", l.Length())
-		t.Fail()
-	}
-
-	var uid uint64
-	uid = 1
-	for i := 0; i < l.Length(); i++ {
-		if ok := l.Get(&p, i); !ok {
-			t.Error("Unable to retrieve posting at 2nd iter")
+		if l.Length() != 1 {
+			t.Error("Unable to find added elements in posting list")
 		}
-		uid *= 9
-		if p.Uid() != uid {
-			t.Logf("Expected: %v. Got: %v", uid, p.Uid())
+		var p types.Posting
+		if ok := l.Get(&p, 0); !ok {
+			t.Error("Unable to retrieve posting at 1st iter")
+			t.Fail()
 		}
-	}
-	// return // Test 2.
+		if p.Uid() != 9 {
+			t.Errorf("Expected 9. Got: %v", p.Uid)
+		}
+		if string(p.Source()) != "testing" {
+			t.Errorf("Expected testing. Got: %v", string(p.Source()))
+		}
+		// return // Test 1.
 
-	// Add another edge, in between the two above.
-	uids := []uint64{
-		9, 49, 81,
-	}
-	edge.ValueId = 49
-	if err := l.AddMutation(ctx, edge, Set); err != nil {
-		t.Error(err)
-	}
-	/*
-		if err := l.CommitIfDirty(); err != nil {
+		// Add another edge now.
+		edge.ValueId = 81
+		l.AddMutation(ctx, edge, Set)
+		// l.CommitIfDirty()
+		if l.Length() != 2 {
+			t.Errorf("Length: %d", l.Length())
+			t.Fail()
+		}
+
+		var uid uint64
+		uid = 1
+		for i := 0; i < l.Length(); i++ {
+			if ok := l.Get(&p, i); !ok {
+				t.Error("Unable to retrieve posting at 2nd iter")
+			}
+			uid *= 9
+			if p.Uid() != uid {
+				t.Logf("Expected: %v. Got: %v", uid, p.Uid())
+			}
+		}
+		// return // Test 2.
+
+		// Add another edge, in between the two above.
+		uids := []uint64{
+			9, 49, 81,
+		}
+		edge.ValueId = 49
+		if err := l.AddMutation(ctx, edge, Set); err != nil {
 			t.Error(err)
 		}
-	*/
-	if err := checkUids(t, l, uids...); err != nil {
-		t.Error(err)
-	}
-	// return // Test 3.
-
-	// Delete an edge, add an edge, replace an edge
-	edge.ValueId = 49
-	if err := l.AddMutation(ctx, edge, Del); err != nil {
-		t.Error(err)
-	}
-
-	edge.ValueId = 69
-	if err := l.AddMutation(ctx, edge, Set); err != nil {
-		t.Error(err)
-	}
-
-	edge.ValueId = 9
-	edge.Source = "anti-testing"
-	if err := l.AddMutation(ctx, edge, Set); err != nil {
-		t.Error(err)
-	}
-	/*
-		if err := l.CommitIfDirty(); err != nil {
+		/*
+			if err := l.CommitIfDirty(); err != nil {
+				t.Error(err)
+			}
+		*/
+		if err := checkUids(t, l, uids...); err != nil {
 			t.Error(err)
 		}
-	*/
+		// return // Test 3.
 
-	uids = []uint64{9, 69, 81}
-	if err := checkUids(t, l, uids...); err != nil {
-		t.Error(err)
-	}
-
-	l.Get(&p, 0)
-	if string(p.Source()) != "anti-testing" {
-		t.Errorf("Expected: anti-testing. Got: %v", string(p.Source()))
-	}
-
-	/*
-		if err := l.CommitIfDirty(); err != nil {
+		// Delete an edge, add an edge, replace an edge
+		edge.ValueId = 49
+		if err := l.AddMutation(ctx, edge, Del); err != nil {
 			t.Error(err)
 		}
-	*/
-	// Try reading the same data in another PostingList.
-	dl := NewList()
-	dl.init(key, ps, clog)
-	if err := checkUids(t, dl, uids...); err != nil {
-		t.Error(err)
-	}
 
-	if _, err := dl.MergeIfDirty(ctx); err != nil {
-		t.Error(err)
-	}
-	if err := checkUids(t, dl, uids...); err != nil {
-		t.Error(err)
+		edge.ValueId = 69
+		if err := l.AddMutation(ctx, edge, Set); err != nil {
+			t.Error(err)
+		}
+
+		edge.ValueId = 9
+		edge.Source = "anti-testing"
+		if err := l.AddMutation(ctx, edge, Set); err != nil {
+			t.Error(err)
+		}
+		/*
+			if err := l.CommitIfDirty(); err != nil {
+				t.Error(err)
+			}
+		*/
+
+		uids = []uint64{9, 69, 81}
+		if err := checkUids(t, l, uids...); err != nil {
+			t.Error(err)
+		}
+
+		l.Get(&p, 0)
+		if string(p.Source()) != "anti-testing" {
+			t.Errorf("Expected: anti-testing. Got: %v", string(p.Source()))
+		}
+
+		/*
+			if err := l.CommitIfDirty(); err != nil {
+				t.Error(err)
+			}
+		*/
+		// Try reading the same data in another PostingList.
+		dl := NewList()
+		dl.init(key, ps, clog)
+		if err := checkUids(t, dl, uids...); err != nil {
+			t.Error(err)
+		}
+
+		if _, err := dl.MergeIfDirty(ctx); err != nil {
+			t.Error(err)
+		}
+		if err := checkUids(t, dl, uids...); err != nil {
+			t.Error(err)
+		}
 	}
 }
 
 func TestAddMutation_Value(t *testing.T) {
-	ol := NewList()
-	key := Key(10, "value")
-	dir, err := ioutil.TempDir("", "storetest_")
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	stores := store.Registry.Registered()
+	for _, storeName := range stores {
+		t.Log(`Store:`, storeName)
 
-	defer os.RemoveAll(dir)
-	ps := new(store.Store)
-	ps.Init(dir)
+		ol := NewList()
+		key := Key(10, "value")
+		dir, err := ioutil.TempDir("", "storetest_")
+		if err != nil {
+			t.Error(err)
+			return
+		}
 
-	clog := commit.NewLogger(dir, "mutations", 50<<20)
-	clog.Init()
-	defer clog.Close()
+		defer os.RemoveAll(dir)
+		ps, err := store.Registry.Get(storeName)
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		ps.Init(dir)
 
-	ol.init(key, ps, clog)
-	log.Println("Init successful.")
+		clog := commit.NewLogger(dir, "mutations", 50<<20)
+		clog.Init()
+		defer clog.Close()
 
-	edge := x.DirectedEdge{
-		Value:     []byte("oh hey there"),
-		Source:    "new-testing",
-		Timestamp: time.Now(),
-	}
-	ctx := context.Background()
-	if err := ol.AddMutation(ctx, edge, Set); err != nil {
-		t.Error(err)
-	}
-	var p types.Posting
-	ol.Get(&p, 0)
-	if p.Uid() != math.MaxUint64 {
-		t.Errorf("All value uids should go to MaxUint64. Got: %v", p.Uid())
-	}
-	if !bytes.Equal(p.ValueBytes(), []byte("oh hey there")) {
-		t.Errorf("Expected a value. Got: [%q]", string(p.ValueBytes()))
-	}
+		ol.init(key, ps, clog)
+		log.Println("Init successful.")
 
-	// Run the same check after committing.
-	if _, err := ol.MergeIfDirty(ctx); err != nil {
-		t.Error(err)
-	}
-	{
-		var tp types.Posting
-		if ok := ol.Get(&tp, 0); !ok {
+		edge := x.DirectedEdge{
+			Value:     []byte("oh hey there"),
+			Source:    "new-testing",
+			Timestamp: time.Now(),
+		}
+		ctx := context.Background()
+		if err := ol.AddMutation(ctx, edge, Set); err != nil {
+			t.Error(err)
+		}
+		var p types.Posting
+		ol.Get(&p, 0)
+		if p.Uid() != math.MaxUint64 {
+			t.Errorf("All value uids should go to MaxUint64. Got: %v", p.Uid())
+		}
+		if !bytes.Equal(p.ValueBytes(), []byte("oh hey there")) {
+			t.Errorf("Expected a value. Got: [%q]", string(p.ValueBytes()))
+		}
+
+		// Run the same check after committing.
+		if _, err := ol.MergeIfDirty(ctx); err != nil {
+			t.Error(err)
+		}
+		{
+			var tp types.Posting
+			if ok := ol.Get(&tp, 0); !ok {
+				t.Error("While retrieving posting")
+			}
+			if !bytes.Equal(tp.ValueBytes(), []byte("oh hey there")) {
+				t.Errorf("Expected a value. Got: [%q]", string(tp.ValueBytes()))
+			}
+		}
+
+		// The value made it to the posting list. Changing it now.
+		edge.Value = []byte(strconv.Itoa(119))
+		if err := ol.AddMutation(ctx, edge, Set); err != nil {
+			t.Error(err)
+		}
+		if ol.Length() != 1 {
+			t.Errorf("Length should be one. Got: %v", ol.Length())
+		}
+		if ok := ol.Get(&p, 0); !ok {
 			t.Error("While retrieving posting")
 		}
-		if !bytes.Equal(tp.ValueBytes(), []byte("oh hey there")) {
-			t.Errorf("Expected a value. Got: [%q]", string(tp.ValueBytes()))
+		var intout int
+		if intout, err = strconv.Atoi(string(p.ValueBytes())); err != nil {
+			t.Error(err)
 		}
-	}
-
-	// The value made it to the posting list. Changing it now.
-	edge.Value = []byte(strconv.Itoa(119))
-	if err := ol.AddMutation(ctx, edge, Set); err != nil {
-		t.Error(err)
-	}
-	if ol.Length() != 1 {
-		t.Errorf("Length should be one. Got: %v", ol.Length())
-	}
-	if ok := ol.Get(&p, 0); !ok {
-		t.Error("While retrieving posting")
-	}
-	var intout int
-	if intout, err = strconv.Atoi(string(p.ValueBytes())); err != nil {
-		t.Error(err)
-	}
-	if intout != 119 {
-		t.Errorf("Expected 119. Got: %v", intout)
+		if intout != 119 {
+			t.Errorf("Expected 119. Got: %v", intout)
+		}
 	}
 }
 
 func benchmarkAddMutations(n int, b *testing.B) {
 	// logrus.SetLevel(logrus.DebugLevel)
-	l := NewList()
-	key := Key(1, "name")
-	dir, err := ioutil.TempDir("", "storetest_")
-	if err != nil {
-		b.Error(err)
-		return
-	}
+	stores := store.Registry.Registered()
+	for _, storeName := range stores {
+		b.Log(`Store:`, storeName)
 
-	defer os.RemoveAll(dir)
-	ps := new(store.Store)
-	ps.Init(dir)
-
-	clog := commit.NewLogger(dir, "mutations", 50<<20)
-	clog.SyncEvery = n
-	clog.Init()
-	defer clog.Close()
-	l.init(key, ps, clog)
-	b.ResetTimer()
-
-	ts := time.Now()
-	ctx := context.Background()
-	for i := 0; i < b.N; i++ {
-		edge := x.DirectedEdge{
-			ValueId:   uint64(rand.Intn(b.N) + 1),
-			Source:    "testing",
-			Timestamp: ts.Add(time.Microsecond),
-		}
-		if err := l.AddMutation(ctx, edge, Set); err != nil {
+		l := NewList()
+		key := Key(1, "name")
+		dir, err := ioutil.TempDir("", "storetest_")
+		if err != nil {
 			b.Error(err)
+			return
+		}
+
+		defer os.RemoveAll(dir)
+		ps, err := store.Registry.Get(storeName)
+		if err != nil {
+			b.Error(err)
+			return
+		}
+		ps.Init(dir)
+
+		clog := commit.NewLogger(dir, "mutations", 50<<20)
+		clog.SyncEvery = n
+		clog.Init()
+		defer clog.Close()
+		l.init(key, ps, clog)
+		b.ResetTimer()
+
+		ts := time.Now()
+		ctx := context.Background()
+		for i := 0; i < b.N; i++ {
+			edge := x.DirectedEdge{
+				ValueId:   uint64(rand.Intn(b.N) + 1),
+				Source:    "testing",
+				Timestamp: ts.Add(time.Microsecond),
+			}
+			if err := l.AddMutation(ctx, edge, Set); err != nil {
+				b.Error(err)
+			}
 		}
 	}
 }
