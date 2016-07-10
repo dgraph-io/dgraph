@@ -1,3 +1,5 @@
+// +build rocksdb,cgo
+
 /*
  * Copyright 2015 DGraph Labs, Inc.
  *

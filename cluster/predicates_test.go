@@ -27,6 +27,9 @@ import (
 	"github.com/Sirupsen/logrus"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/store"
+
+	_ "github.com/dgraph-io/dgraph/store/boltdb"
+	_ "github.com/dgraph-io/dgraph/store/rocksdb"
 )
 
 func TestgetPredicate(t *testing.T) {
@@ -46,30 +49,40 @@ func TestgetPredicate(t *testing.T) {
 
 func TestGetPredicateList(t *testing.T) {
 	logrus.SetLevel(logrus.DebugLevel)
-	dir1, err := ioutil.TempDir("", "dir_")
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	defer os.RemoveAll(dir1)
-	ps1 := new(store.Store)
-	ps1.Init(dir1)
-	defer ps1.Close()
+	stores := store.Registry.Registered()
 
-	k1 := posting.Key(1000, "friend")
-	k2 := posting.Key(1010, "friend")
-	k3 := posting.Key(1020, "friend")
-	k4 := posting.Key(1030, "follow")
-	k5 := posting.Key(1040, "follow")
-	ps1.SetOne(k1, []byte("alice"))
-	ps1.SetOne(k2, []byte("bob"))
-	ps1.SetOne(k3, []byte("ram"))
-	ps1.SetOne(k4, []byte("ash"))
-	ps1.SetOne(k5, []byte("mallory"))
+	for _, storeName := range stores {
+		t.Log(`Store:`, storeName)
+		dir1, err := ioutil.TempDir("", "dir_")
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		defer os.RemoveAll(dir1)
 
-	list := GetPredicateList(ps1)
+		ps1, err := store.Registry.Get(storeName)
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		ps1.Init(dir1)
+		defer ps1.Close()
 
-	if len(list) != 2 {
-		t.Errorf("Predicate List incorrect %v", len(list))
+		k1 := posting.Key(1000, "friend")
+		k2 := posting.Key(1010, "friend")
+		k3 := posting.Key(1020, "friend")
+		k4 := posting.Key(1030, "follow")
+		k5 := posting.Key(1040, "follow")
+		ps1.SetOne(k1, []byte("alice"))
+		ps1.SetOne(k2, []byte("bob"))
+		ps1.SetOne(k3, []byte("ram"))
+		ps1.SetOne(k4, []byte("ash"))
+		ps1.SetOne(k5, []byte("mallory"))
+
+		list := GetPredicateList(ps1)
+
+		if len(list) != 2 {
+			t.Errorf("Predicate List incorrect %v", len(list))
+		}
 	}
 }

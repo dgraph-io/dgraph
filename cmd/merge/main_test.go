@@ -1,3 +1,5 @@
+// +build rocksdb,cgo
+
 package main
 
 import (
@@ -9,10 +11,10 @@ import (
 	"github.com/Sirupsen/logrus"
 	"github.com/dgraph-io/dgraph/loader"
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/store"
+	"github.com/dgraph-io/dgraph/store/rocksdb"
 	"github.com/dgraph-io/dgraph/uid"
 	"github.com/dgryski/go-farm"
-	rocksdb "github.com/tecbot/gorocksdb"
+	"github.com/tecbot/gorocksdb"
 )
 
 func TestMergeFolders(t *testing.T) {
@@ -45,10 +47,10 @@ func TestMergeFolders(t *testing.T) {
 	}
 	defer os.RemoveAll(destDir)
 
-	ps1 := new(store.Store)
+	ps1 := new(rocksdb.Store)
 	ps1.Init(dir1)
 
-	ps2 := new(store.Store)
+	ps2 := new(rocksdb.Store)
 	ps2.Init(dir2)
 
 	list := []string{"alice", "bob", "mallory", "ash", "man", "dgraph",
@@ -83,11 +85,11 @@ func TestMergeFolders(t *testing.T) {
 
 	mergeFolders(rootDir, destDir)
 
-	var opt *rocksdb.Options
-	var ropt *rocksdb.ReadOptions
-	opt = rocksdb.NewDefaultOptions()
-	ropt = rocksdb.NewDefaultReadOptions()
-	db, err := rocksdb.OpenDb(opt, destDir)
+	var opt *gorocksdb.Options
+	var ropt *gorocksdb.ReadOptions
+	opt = gorocksdb.NewDefaultOptions()
+	ropt = gorocksdb.NewDefaultReadOptions()
+	db, err := gorocksdb.OpenDb(opt, destDir)
 	it := db.NewIterator(ropt)
 
 	count := 0

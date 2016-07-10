@@ -36,6 +36,9 @@ import (
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/google/flatbuffers/go"
+
+	_ "github.com/dgraph-io/dgraph/store/boltdb"
+	_ "github.com/dgraph-io/dgraph/store/rocksdb"
 )
 
 func setErr(err *error, nerr error) {
@@ -91,41 +94,50 @@ func TestNewGraph(t *testing.T) {
 	var ex uint64
 	ex = 101
 
-	dir, err := ioutil.TempDir("", "storetest_")
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	stores := store.Registry.Registered()
 
-	ps := new(store.Store)
-	ps.Init(dir)
-	ctx := context.Background()
-	sg, err := newGraph(ctx, ex, "")
-	if err != nil {
-		t.Error(err)
-	}
+	for _, storeName := range stores {
+		t.Log(`Store:`, storeName)
+		dir, err := ioutil.TempDir("", "storetest_")
+		if err != nil {
+			t.Error(err)
+			return
+		}
 
-	worker.Init(ps, nil, 0, 1)
+		ps, err := store.Registry.Get(storeName)
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		ps.Init(dir)
+		ctx := context.Background()
+		sg, err := newGraph(ctx, ex, "")
+		if err != nil {
+			t.Error(err)
+		}
 
-	uo := flatbuffers.GetUOffsetT(sg.Result)
-	r := new(task.Result)
-	r.Init(sg.Result, uo)
-	if r.UidmatrixLength() != 1 {
-		t.Errorf("Expected length 1. Got: %v", r.UidmatrixLength())
-	}
-	var ul task.UidList
-	if ok := r.Uidmatrix(&ul, 0); !ok {
-		t.Errorf("Unable to parse uidlist at index 0")
-	}
-	if ul.UidsLength() != 1 {
-		t.Errorf("Expected length 1. Got: %v", ul.UidsLength())
-	}
-	if ul.Uids(0) != ex {
-		t.Errorf("Expected uid: %v. Got: %v", ex, ul.Uids(0))
+		worker.Init(ps, nil, 0, 1)
+
+		uo := flatbuffers.GetUOffsetT(sg.Result)
+		r := new(task.Result)
+		r.Init(sg.Result, uo)
+		if r.UidmatrixLength() != 1 {
+			t.Errorf("Expected length 1. Got: %v", r.UidmatrixLength())
+		}
+		var ul task.UidList
+		if ok := r.Uidmatrix(&ul, 0); !ok {
+			t.Errorf("Unable to parse uidlist at index 0")
+		}
+		if ul.UidsLength() != 1 {
+			t.Errorf("Expected length 1. Got: %v", ul.UidsLength())
+		}
+		if ul.Uids(0) != ex {
+			t.Errorf("Expected uid: %v. Got: %v", ex, ul.Uids(0))
+		}
 	}
 }
 
-func populateGraph(t *testing.T) (string, *store.Store) {
+func populateGraph(t *testing.T, storeName string) (string, store.Store) {
 	// logrus.SetLevel(logrus.DebugLevel)
 	dir, err := ioutil.TempDir("", "storetest_")
 	if err != nil {
@@ -133,7 +145,11 @@ func populateGraph(t *testing.T) (string, *store.Store) {
 		return "", nil
 	}
 
-	ps := new(store.Store)
+	ps, err := store.Registry.Get(storeName)
+	if err != nil {
+		t.Error(err)
+		return "", nil
+	}
 	ps.Init(dir)
 
 	worker.Init(ps, nil, 0, 1)
@@ -193,11 +209,15 @@ func populateGraph(t *testing.T) (string, *store.Store) {
 }
 
 func TestProcessGraph(t *testing.T) {
-	dir, _ := populateGraph(t)
-	defer os.RemoveAll(dir)
+	stores := store.Registry.Registered()
 
-	// Alright. Now we have everything set up. Let's create the query.
-	query := `
+	for _, storeName := range stores {
+		t.Log(`Store:`, storeName)
+		dir, _ := populateGraph(t, storeName)
+		defer os.RemoveAll(dir)
+
+		// Alright. Now we have everything set up. Let's create the query.
+		query := `
 		{
 			me(_uid_: 0x01) {
 				friend {
@@ -209,87 +229,92 @@ func TestProcessGraph(t *testing.T) {
 			}
 		}
 	`
-	gq, _, err := gql.Parse(query)
-	if err != nil {
-		t.Error(err)
-	}
-	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, gq)
-	if err != nil {
-		t.Error(err)
-	}
-
-	ch := make(chan error)
-	go ProcessGraph(ctx, sg, ch)
-	err = <-ch
-	if err != nil {
-		t.Error(err)
-	}
-
-	if len(sg.Children) != 4 {
-		t.Errorf("Expected len 4. Got: %v", len(sg.Children))
-	}
-	child := sg.Children[0]
-	if child.Attr != "friend" {
-		t.Errorf("Expected attr friend. Got: %v", child.Attr)
-	}
-	if len(child.Result) == 0 {
-		t.Errorf("Expected some.Result.")
-		return
-	}
-	uo := flatbuffers.GetUOffsetT(child.Result)
-	r := new(task.Result)
-	r.Init(child.Result, uo)
-
-	if r.UidmatrixLength() != 1 {
-		t.Errorf("Expected 1 matrix. Got: %v", r.UidmatrixLength())
-	}
-	var ul task.UidList
-	if ok := r.Uidmatrix(&ul, 0); !ok {
-		t.Errorf("While parsing uidlist")
-	}
-
-	if ul.UidsLength() != 5 {
-		t.Errorf("Expected 5 friends. Got: %v", ul.UidsLength())
-	}
-	if ul.Uids(0) != 23 || ul.Uids(1) != 24 || ul.Uids(2) != 25 ||
-		ul.Uids(3) != 31 || ul.Uids(4) != 101 {
-		t.Errorf("Friend ids don't match")
-	}
-	if len(child.Children) != 1 || child.Children[0].Attr != "name" {
-		t.Errorf("Expected attr name")
-	}
-	child = child.Children[0]
-	uo = flatbuffers.GetUOffsetT(child.Result)
-	r.Init(child.Result, uo)
-	if r.ValuesLength() != 5 {
-		t.Errorf("Expected 5 names of 5 friends")
-	}
-	checkName(t, r, 0, "Rick Grimes")
-	checkName(t, r, 1, "Glenn Rhee")
-	checkName(t, r, 2, "Daryl Dixon")
-	checkName(t, r, 3, "Andrea")
-	{
-		var tv task.Value
-		if ok := r.Values(&tv, 4); !ok {
-			t.Error("Unable to retrieve value")
+		gq, _, err := gql.Parse(query)
+		if err != nil {
+			t.Error(err)
 		}
-		if !bytes.Equal(tv.ValBytes(), []byte{}) {
-			t.Error("Expected a null byte slice")
+		ctx := context.Background()
+		sg, err := ToSubGraph(ctx, gq)
+		if err != nil {
+			t.Error(err)
 		}
-	}
 
-	checkSingleValue(t, sg.Children[1], "name", "Michonne")
-	checkSingleValue(t, sg.Children[2], "gender", "female")
-	checkSingleValue(t, sg.Children[3], "status", "alive")
+		ch := make(chan error)
+		go ProcessGraph(ctx, sg, ch)
+		err = <-ch
+		if err != nil {
+			t.Error(err)
+		}
+
+		if len(sg.Children) != 4 {
+			t.Errorf("Expected len 4. Got: %v", len(sg.Children))
+		}
+		child := sg.Children[0]
+		if child.Attr != "friend" {
+			t.Errorf("Expected attr friend. Got: %v", child.Attr)
+		}
+		if len(child.Result) == 0 {
+			t.Errorf("Expected some.Result.")
+			return
+		}
+		uo := flatbuffers.GetUOffsetT(child.Result)
+		r := new(task.Result)
+		r.Init(child.Result, uo)
+
+		if r.UidmatrixLength() != 1 {
+			t.Errorf("Expected 1 matrix. Got: %v", r.UidmatrixLength())
+		}
+		var ul task.UidList
+		if ok := r.Uidmatrix(&ul, 0); !ok {
+			t.Errorf("While parsing uidlist")
+		}
+
+		if ul.UidsLength() != 5 {
+			t.Errorf("Expected 5 friends. Got: %v", ul.UidsLength())
+		}
+		if ul.Uids(0) != 23 || ul.Uids(1) != 24 || ul.Uids(2) != 25 ||
+			ul.Uids(3) != 31 || ul.Uids(4) != 101 {
+			t.Errorf("Friend ids don't match")
+		}
+		if len(child.Children) != 1 || child.Children[0].Attr != "name" {
+			t.Errorf("Expected attr name")
+		}
+		child = child.Children[0]
+		uo = flatbuffers.GetUOffsetT(child.Result)
+		r.Init(child.Result, uo)
+		if r.ValuesLength() != 5 {
+			t.Errorf("Expected 5 names of 5 friends")
+		}
+		checkName(t, r, 0, "Rick Grimes")
+		checkName(t, r, 1, "Glenn Rhee")
+		checkName(t, r, 2, "Daryl Dixon")
+		checkName(t, r, 3, "Andrea")
+		{
+			var tv task.Value
+			if ok := r.Values(&tv, 4); !ok {
+				t.Error("Unable to retrieve value")
+			}
+			if !bytes.Equal(tv.ValBytes(), []byte{}) {
+				t.Error("Expected a null byte slice")
+			}
+		}
+
+		checkSingleValue(t, sg.Children[1], "name", "Michonne")
+		checkSingleValue(t, sg.Children[2], "gender", "female")
+		checkSingleValue(t, sg.Children[3], "status", "alive")
+	}
 }
 
 func TestToJson(t *testing.T) {
-	dir, _ := populateGraph(t)
-	defer os.RemoveAll(dir)
+	stores := store.Registry.Registered()
 
-	// Alright. Now we have everything set up. Let's create the query.
-	query := `
+	for _, storeName := range stores {
+		t.Log(`Store:`, storeName)
+		dir, _ := populateGraph(t, storeName)
+		defer os.RemoveAll(dir)
+
+		// Alright. Now we have everything set up. Let's create the query.
+		query := `
 		{
 			me(_uid_:0x01) {
 				name
@@ -302,31 +327,32 @@ func TestToJson(t *testing.T) {
 		}
 	`
 
-	gq, _, err := gql.Parse(query)
-	if err != nil {
-		t.Error(err)
-	}
-	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, gq)
-	if err != nil {
-		t.Error(err)
-	}
+		gq, _, err := gql.Parse(query)
+		if err != nil {
+			t.Error(err)
+		}
+		ctx := context.Background()
+		sg, err := ToSubGraph(ctx, gq)
+		if err != nil {
+			t.Error(err)
+		}
 
-	ch := make(chan error)
-	go ProcessGraph(ctx, sg, ch)
-	err = <-ch
-	if err != nil {
-		t.Error(err)
-	}
+		ch := make(chan error)
+		go ProcessGraph(ctx, sg, ch)
+		err = <-ch
+		if err != nil {
+			t.Error(err)
+		}
 
-	var l Latency
-	js, err := sg.ToJson(&l)
-	if err != nil {
-		t.Error(err)
-	}
-	s := string(js)
-	if !strings.Contains(s, "Michonne") {
-		t.Errorf("Unable to find Michonne in this result: %v", s)
+		var l Latency
+		js, err := sg.ToJson(&l)
+		if err != nil {
+			t.Error(err)
+		}
+		s := string(js)
+		if !strings.Contains(s, "Michonne") {
+			t.Errorf("Unable to find Michonne in this result: %v", s)
+		}
 	}
 }
 
@@ -340,10 +366,14 @@ func getProperty(properties []*graph.Property, prop string) []byte {
 }
 
 func TestToPB(t *testing.T) {
-	dir, _ := populateGraph(t)
-	defer os.RemoveAll(dir)
+	stores := store.Registry.Registered()
 
-	query := `
+	for _, storeName := range stores {
+		t.Log(`Store:`, storeName)
+		dir, _ := populateGraph(t, storeName)
+		defer os.RemoveAll(dir)
+
+		query := `
 		{
 			me(_uid_:0x01) {
 				_xid_
@@ -359,82 +389,83 @@ func TestToPB(t *testing.T) {
 		}
 	`
 
-	gq, _, err := gql.Parse(query)
-	if err != nil {
-		t.Error(err)
-	}
-	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, gq)
-	if err != nil {
-		t.Error(err)
-	}
+		gq, _, err := gql.Parse(query)
+		if err != nil {
+			t.Error(err)
+		}
+		ctx := context.Background()
+		sg, err := ToSubGraph(ctx, gq)
+		if err != nil {
+			t.Error(err)
+		}
 
-	ch := make(chan error)
-	go ProcessGraph(ctx, sg, ch)
-	err = <-ch
-	if err != nil {
-		t.Error(err)
-	}
+		ch := make(chan error)
+		go ProcessGraph(ctx, sg, ch)
+		err = <-ch
+		if err != nil {
+			t.Error(err)
+		}
 
-	var l Latency
-	gr, err := sg.ToProtocolBuffer(&l)
-	if err != nil {
-		t.Error(err)
-	}
+		var l Latency
+		gr, err := sg.ToProtocolBuffer(&l)
+		if err != nil {
+			t.Error(err)
+		}
 
-	if gr.Attribute != "_root_" {
-		t.Errorf("Expected attribute _root_, Got: %v", gr.Attribute)
-	}
-	if gr.Uid != 1 {
-		t.Errorf("Expected uid 1, Got: %v", gr.Uid)
-	}
-	if gr.Xid != "mich" {
-		t.Errorf("Expected xid mich, Got: %v", gr.Xid)
-	}
-	if len(gr.Properties) != 3 {
-		t.Errorf("Expected values map to contain 3 properties, Got: %v",
-			len(gr.Properties))
-	}
-	if string(getProperty(gr.Properties, "name")) != "Michonne" {
-		t.Errorf("Expected property name to have value Michonne, Got: %v",
-			string(getProperty(gr.Properties, "name")))
-	}
-	if len(gr.Children) != 10 {
-		t.Errorf("Expected 10 children, Got: %v", len(gr.Children))
-	}
+		if gr.Attribute != "_root_" {
+			t.Errorf("Expected attribute _root_, Got: %v", gr.Attribute)
+		}
+		if gr.Uid != 1 {
+			t.Errorf("Expected uid 1, Got: %v", gr.Uid)
+		}
+		if gr.Xid != "mich" {
+			t.Errorf("Expected xid mich, Got: %v", gr.Xid)
+		}
+		if len(gr.Properties) != 3 {
+			t.Errorf("Expected values map to contain 3 properties, Got: %v",
+				len(gr.Properties))
+		}
+		if string(getProperty(gr.Properties, "name")) != "Michonne" {
+			t.Errorf("Expected property name to have value Michonne, Got: %v",
+				string(getProperty(gr.Properties, "name")))
+		}
+		if len(gr.Children) != 10 {
+			t.Errorf("Expected 10 children, Got: %v", len(gr.Children))
+		}
 
-	child := gr.Children[0]
-	if child.Uid != 23 {
-		t.Errorf("Expected uid 23, Got: %v", gr.Uid)
-	}
-	if child.Attribute != "friend" {
-		t.Errorf("Expected attribute friend, Got: %v", child.Attribute)
-	}
-	if len(child.Properties) != 1 {
-		t.Errorf("Expected values map to contain 1 property, Got: %v",
-			len(child.Properties))
-	}
-	if string(getProperty(child.Properties, "name")) != "Rick Grimes" {
-		t.Errorf("Expected property name to have value Rick Grimes, Got: %v",
-			string(getProperty(child.Properties, "name")))
-	}
-	if len(child.Children) != 0 {
-		t.Errorf("Expected 0 children, Got: %v", len(child.Children))
-	}
+		child := gr.Children[0]
+		if child.Uid != 23 {
+			t.Errorf("Expected uid 23, Got: %v", gr.Uid)
+		}
+		if child.Attribute != "friend" {
+			t.Errorf("Expected attribute friend, Got: %v", child.Attribute)
+		}
+		if len(child.Properties) != 1 {
+			t.Errorf("Expected values map to contain 1 property, Got: %v",
+				len(child.Properties))
+		}
+		if string(getProperty(child.Properties, "name")) != "Rick Grimes" {
+			t.Errorf("Expected property name to have value Rick Grimes, Got: %v",
+				string(getProperty(child.Properties, "name")))
+		}
+		if len(child.Children) != 0 {
+			t.Errorf("Expected 0 children, Got: %v", len(child.Children))
+		}
 
-	child = gr.Children[5]
-	if child.Uid != 23 {
-		t.Errorf("Expected uid 23, Got: %v", gr.Uid)
-	}
-	if child.Attribute != "friend" {
-		t.Errorf("Expected attribute friend, Got: %v", child.Attribute)
-	}
-	if len(child.Properties) != 0 {
-		t.Errorf("Expected values map to contain 0 properties, Got: %v",
-			len(child.Properties))
-	}
-	if len(child.Children) != 0 {
-		t.Errorf("Expected 0 children, Got: %v", len(child.Children))
+		child = gr.Children[5]
+		if child.Uid != 23 {
+			t.Errorf("Expected uid 23, Got: %v", gr.Uid)
+		}
+		if child.Attribute != "friend" {
+			t.Errorf("Expected attribute friend, Got: %v", child.Attribute)
+		}
+		if len(child.Properties) != 0 {
+			t.Errorf("Expected values map to contain 0 properties, Got: %v",
+				len(child.Properties))
+		}
+		if len(child.Children) != 0 {
+			t.Errorf("Expected 0 children, Got: %v", len(child.Children))
+		}
 	}
 }
 

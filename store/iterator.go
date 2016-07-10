@@ -16,12 +16,9 @@
 
 package store
 
-type Store interface {
-	Init(filepath string)
-	InitReadOnly(filepath string)
-	Get(key []byte) (val []byte, rerr error)
-	SetOne(k []byte, val []byte) error
-	Delete(k []byte) error
-	GetIterator() Iterator
+type Iterator interface {
+	First() (key, value []byte)
+	Valid() bool
+	Next() (key, value []byte)
 	Close()
 }

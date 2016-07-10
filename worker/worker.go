@@ -35,11 +35,11 @@ import (
 var workerPort = flag.String("workerport", ":12345",
 	"Port used by worker for internal communication.")
 
-var dataStore, uidStore *store.Store
+var dataStore, uidStore store.Store
 var pools []*Pool
 var numInstances, instanceIdx uint64
 
-func Init(ps, uStore *store.Store, idx, numInst uint64) {
+func Init(ps, uStore store.Store, idx, numInst uint64) {
 	dataStore = ps
 	uidStore = uStore
 	instanceIdx = idx

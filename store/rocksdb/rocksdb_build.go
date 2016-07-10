@@ -1,3 +1,5 @@
+// +build !rocksdb
+
 /*
  * Copyright 2015 DGraph Labs, Inc.
  *
@@ -14,14 +16,4 @@
  * limitations under the License.
  */
 
-package store
-
-type Store interface {
-	Init(filepath string)
-	InitReadOnly(filepath string)
-	Get(key []byte) (val []byte, rerr error)
-	SetOne(k []byte, val []byte) error
-	Delete(k []byte) error
-	GetIterator() Iterator
-	Close()
-}
+package rocksdb

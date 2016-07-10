@@ -34,17 +34,18 @@ func getPredicate(b []byte) string {
 	return str
 }
 
-func GetPredicateList(ps *store.Store) []string {
+func GetPredicateList(ps store.Store) []string {
 	var predicateList []string
 	var lastPredicate, predicate string
 
 	it := ps.GetIterator()
-	for it.SeekToFirst(); it.Valid(); it.Next() {
-		predicate = getPredicate(it.Key().Data())
+	for k, _ := it.First(); it.Valid(); k, _ = it.Next() {
+		predicate = getPredicate(k)
 		if predicate != lastPredicate {
 			predicateList = append(predicateList, predicate)
 			lastPredicate = predicate
 		}
 	}
+	it.Close()
 	return predicateList
 }

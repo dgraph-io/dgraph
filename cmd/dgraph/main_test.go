@@ -47,13 +47,16 @@ var q0 = `
 	}
 `
 
-func prepare() (dir1, dir2 string, ps *store.Store, clog *commit.Logger, rerr error) {
+func prepare(storeType string) (dir1, dir2 string, ps store.Store, clog *commit.Logger, rerr error) {
 	var err error
 	dir1, err = ioutil.TempDir("", "storetest_")
 	if err != nil {
 		return "", "", nil, nil, err
 	}
-	ps = new(store.Store)
+	ps, err = store.Registry.Get(storeType)
+	if err != nil {
+		return ``, ``, nil, nil, err
+	}
 	ps.Init(dir1)
 
 	dir2, err = ioutil.TempDir("", "storemuts_")
@@ -103,76 +106,80 @@ func closeAll(dir1, dir2 string, clog *commit.Logger) {
 }
 
 func TestQuery(t *testing.T) {
-	dir1, dir2, _, clog, err := prepare()
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	defer closeAll(dir1, dir2, clog)
-
-	// Parse GQL into internal query representation.
-	gq, _, err := gql.Parse(q0)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	ctx := context.Background()
-	g, err := query.ToSubGraph(ctx, gq)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-
-	// Test internal query representation.
-	if len(g.Children) != 3 {
-		t.Errorf("Expected 3 children. Got: %v", len(g.Children))
-	}
-
-	{
-		child := g.Children[0]
-		if child.Attr != "follows" {
-			t.Errorf("Expected follows. Got: %q", child.Attr)
+	stores := store.Registry.Registered()
+	for _, storeName := range stores {
+		t.Log(`Store:`, storeName)
+		dir1, dir2, _, clog, err := prepare(storeName)
+		if err != nil {
+			t.Error(err)
+			return
 		}
-		if len(child.Children) != 2 {
-			t.Errorf("Expected 2 child. Got: %v", len(child.Children))
-		}
-		gc := child.Children[0]
-		if gc.Attr != "_xid_" {
-			t.Errorf("Expected _xid_. Got: %q", gc.Attr)
-		}
-		gc = child.Children[1]
-		if gc.Attr != "status" {
-			t.Errorf("Expected status. Got: %q", gc.Attr)
-		}
-	}
+		defer closeAll(dir1, dir2, clog)
 
-	{
-		child := g.Children[1]
-		if child.Attr != "_xid_" {
-			t.Errorf("Expected _xid_. Got: %q", child.Attr)
+		// Parse GQL into internal query representation.
+		gq, _, err := gql.Parse(q0)
+		if err != nil {
+			t.Error(err)
+			return
 		}
-	}
-
-	{
-		child := g.Children[2]
-		if child.Attr != "status" {
-			t.Errorf("Expected status. Got: %q", child.Attr)
+		ctx := context.Background()
+		g, err := query.ToSubGraph(ctx, gq)
+		if err != nil {
+			t.Error(err)
+			return
 		}
-	}
 
-	ch := make(chan error)
-	go query.ProcessGraph(ctx, g, ch)
-	if err := <-ch; err != nil {
-		t.Error(err)
-		return
+		// Test internal query representation.
+		if len(g.Children) != 3 {
+			t.Errorf("Expected 3 children. Got: %v", len(g.Children))
+		}
+
+		{
+			child := g.Children[0]
+			if child.Attr != "follows" {
+				t.Errorf("Expected follows. Got: %q", child.Attr)
+			}
+			if len(child.Children) != 2 {
+				t.Errorf("Expected 2 child. Got: %v", len(child.Children))
+			}
+			gc := child.Children[0]
+			if gc.Attr != "_xid_" {
+				t.Errorf("Expected _xid_. Got: %q", gc.Attr)
+			}
+			gc = child.Children[1]
+			if gc.Attr != "status" {
+				t.Errorf("Expected status. Got: %q", gc.Attr)
+			}
+		}
+
+		{
+			child := g.Children[1]
+			if child.Attr != "_xid_" {
+				t.Errorf("Expected _xid_. Got: %q", child.Attr)
+			}
+		}
+
+		{
+			child := g.Children[2]
+			if child.Attr != "status" {
+				t.Errorf("Expected status. Got: %q", child.Attr)
+			}
+		}
+
+		ch := make(chan error)
+		go query.ProcessGraph(ctx, g, ch)
+		if err := <-ch; err != nil {
+			t.Error(err)
+			return
+		}
+		var l query.Latency
+		js, err := g.ToJson(&l)
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		fmt.Println(string(js))
 	}
-	var l query.Latency
-	js, err := g.ToJson(&l)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	fmt.Println(string(js))
 }
 
 var q1 = `
@@ -199,38 +206,42 @@ var q1 = `
 `
 
 func BenchmarkQuery(b *testing.B) {
-	dir1, dir2, _, clog, err := prepare()
-	if err != nil {
-		b.Error(err)
-		return
-	}
-	defer closeAll(dir1, dir2, clog)
+	stores := store.Registry.Registered()
+	for _, storeName := range stores {
+		b.Log(`Store:`, storeName)
+		dir1, dir2, _, clog, err := prepare(storeName)
+		if err != nil {
+			b.Error(err)
+			return
+		}
+		defer closeAll(dir1, dir2, clog)
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		gq, _, err := gql.Parse(q1)
-		if err != nil {
-			b.Error(err)
-			return
-		}
-		ctx := context.Background()
-		g, err := query.ToSubGraph(ctx, gq)
-		if err != nil {
-			b.Error(err)
-			return
-		}
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			gq, _, err := gql.Parse(q1)
+			if err != nil {
+				b.Error(err)
+				return
+			}
+			ctx := context.Background()
+			g, err := query.ToSubGraph(ctx, gq)
+			if err != nil {
+				b.Error(err)
+				return
+			}
 
-		ch := make(chan error)
-		go query.ProcessGraph(ctx, g, ch)
-		if err := <-ch; err != nil {
-			b.Error(err)
-			return
-		}
-		var l query.Latency
-		_, err = g.ToJson(&l)
-		if err != nil {
-			b.Error(err)
-			return
+			ch := make(chan error)
+			go query.ProcessGraph(ctx, g, ch)
+			if err := <-ch; err != nil {
+				b.Error(err)
+				return
+			}
+			var l query.Latency
+			_, err = g.ToJson(&l)
+			if err != nil {
+				b.Error(err)
+				return
+			}
 		}
 	}
 }

@@ -25,79 +25,92 @@ import (
 	"github.com/dgraph-io/dgraph/commit"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/store"
+
+	_ "github.com/dgraph-io/dgraph/store/boltdb"
+	_ "github.com/dgraph-io/dgraph/store/rocksdb"
 )
 
 func TestGetOrAssign(t *testing.T) {
 	logrus.SetLevel(logrus.DebugLevel)
 
-	dir, err := ioutil.TempDir("", "storetest_")
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	defer os.RemoveAll(dir)
-	ps := new(store.Store)
-	ps.Init(dir)
-	clog := commit.NewLogger(dir, "mutations", 50<<20)
-	clog.Init()
-	defer clog.Close()
+	stores := store.Registry.Registered()
+	for _, storeName := range stores {
+		t.Log(`Store:`, storeName)
 
-	posting.Init(clog)
-	Init(ps)
-
-	var u1, u2 uint64
-	{
-		uid, err := GetOrAssign("externalid0", 0, 1)
+		dir, err := ioutil.TempDir("", "storetest_")
 		if err != nil {
 			t.Error(err)
+			return
 		}
-		t.Logf("Found uid: [%x]", uid)
-		u1 = uid
-	}
+		defer os.RemoveAll(dir)
 
-	{
-		uid, err := GetOrAssign("externalid1", 0, 1)
+		ps, err := store.Registry.Get(storeName)
 		if err != nil {
 			t.Error(err)
+			return
 		}
-		t.Logf("Found uid: [%x]", uid)
-		u2 = uid
-	}
+		ps.Init(dir)
+		clog := commit.NewLogger(dir, "mutations", 50<<20)
+		clog.Init()
+		defer clog.Close()
 
-	if u1 == u2 {
-		t.Error("Uid1 and Uid2 shouldn't be the same")
-	}
-	// return
+		posting.Init(clog)
+		Init(ps)
 
-	{
-		uid, err := GetOrAssign("externalid0", 0, 1)
-		if err != nil {
-			t.Error(err)
+		var u1, u2 uint64
+		{
+			uid, err := GetOrAssign("externalid0", 0, 1)
+			if err != nil {
+				t.Error(err)
+			}
+			t.Logf("Found uid: [%x]", uid)
+			u1 = uid
 		}
-		t.Logf("Found uid: [%x]", uid)
-		if u1 != uid {
-			t.Error("Uid should be the same.")
-		}
-	}
-	// return
 
-	{
-		xid, err := ExternalId(u1)
-		if err != nil {
-			t.Error(err)
+		{
+			uid, err := GetOrAssign("externalid1", 0, 1)
+			if err != nil {
+				t.Error(err)
+			}
+			t.Logf("Found uid: [%x]", uid)
+			u2 = uid
 		}
-		if xid != "externalid0" {
-			t.Errorf("Expected externalid0. Found: [%q]", xid)
+
+		if u1 == u2 {
+			t.Error("Uid1 and Uid2 shouldn't be the same")
 		}
-	}
-	return
-	{
-		xid, err := ExternalId(u2)
-		if err != nil {
-			t.Error(err)
+		// continue
+
+		{
+			uid, err := GetOrAssign("externalid0", 0, 1)
+			if err != nil {
+				t.Error(err)
+			}
+			t.Logf("Found uid: [%x]", uid)
+			if u1 != uid {
+				t.Error("Uid should be the same.")
+			}
 		}
-		if xid != "externalid1" {
-			t.Errorf("Expected externalid1. Found: [%q]", xid)
+		// continue
+
+		{
+			xid, err := ExternalId(u1)
+			if err != nil {
+				t.Error(err)
+			}
+			if xid != "externalid0" {
+				t.Errorf("Expected externalid0. Found: [%q]", xid)
+			}
+		}
+		// continue
+		{
+			xid, err := ExternalId(u2)
+			if err != nil {
+				t.Error(err)
+			}
+			if xid != "externalid1" {
+				t.Errorf("Expected externalid1. Found: [%q]", xid)
+			}
 		}
 	}
 }
