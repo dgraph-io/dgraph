@@ -41,9 +41,12 @@ import (
 	"github.com/dgraph-io/dgraph/query/graph"
 	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/store"
+	"github.com/dgraph-io/dgraph/store/boltdb"
 	"github.com/dgraph-io/dgraph/uid"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
+
+	_ "github.com/dgraph-io/dgraph/store/rocksdb"
 )
 
 var postingDir = flag.String("postings", "", "Directory to store posting lists")
@@ -58,6 +61,7 @@ var workers = flag.String("workers", "",
 	"Comma separated list of IP addresses of workers")
 var nomutations = flag.Bool("nomutations", false, "Don't allow mutations on this server.")
 var tracing = flag.Float64("trace", 0.5, "The ratio of queries to trace.")
+var storeType = flag.String("store", boltdb.Name, "Backend store type.")
 
 func addCorsHeaders(w http.ResponseWriter) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -320,7 +324,10 @@ func main() {
 		log.Fatalf("Port should be an even number: %v", *port)
 	}
 
-	ps := new(store.Store)
+	ps, err := store.Registry.Get(*storeType)
+	if err != nil {
+		log.Fatalln(err)
+	}
 	ps.Init(*postingDir)
 	defer ps.Close()
 
@@ -341,7 +348,10 @@ func main() {
 		worker.Init(ps, nil, *instanceIdx, lenAddr)
 		uid.Init(nil)
 	} else {
-		uidStore := new(store.Store)
+		uidStore, err := store.Registry.Get(*storeType)
+		if err != nil {
+			log.Fatalln(err)
+		}
 		uidStore.Init(*uidDir)
 		defer uidStore.Close()
 		// Only server instance 0 will have uidStore

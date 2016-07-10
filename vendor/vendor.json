@@ -9,6 +9,12 @@
 			"revisionTime": "2015-10-07T14:14:16Z"
 		},
 		{
+			"checksumSHA1": "QztRTESYrMbbGofkfaR5980DYLc=",
+			"path": "github.com/boltdb/bolt",
+			"revision": "acc803f0ced151102ed51bf824f8709ebd6602bc",
+			"revisionTime": "2016-07-07T16:56:50Z"
+		},
+		{
 			"checksumSHA1": "a29TtOU87eZA0S6wL+rAkpqUEzc=",
 			"path": "github.com/dgryski/go-farm",
 			"revision": "d1e51a4af19092715f4ce7d8257fe5bc8f8be727",

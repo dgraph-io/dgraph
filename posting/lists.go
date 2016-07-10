@@ -211,7 +211,7 @@ func Init(log *commit.Logger) {
 	go checkMemoryUsage()
 }
 
-func GetOrCreate(key []byte, pstore *store.Store) *List {
+func GetOrCreate(key []byte, pstore store.Store) *List {
 	stopTheWorld.RLock()
 	defer stopTheWorld.RUnlock()
 

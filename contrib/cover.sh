@@ -29,7 +29,7 @@ export LD_LIBRARY_PATH="${ROCKSDBDIR}:${LD_LIBRARY_PATH}"
 echo 'mode: atomic' > $OUT
 for PKG in $(go list ./...|grep -v '/vendor/'); do
   echo "TESTING: $PKG"
-  go test -v -covermode=atomic -coverprofile=$TMP $PKG
+  go test -v -tags rocksdb -covermode=atomic -coverprofile=$TMP $PKG
   tail -n +2 $TMP >> $OUT
 done
 
