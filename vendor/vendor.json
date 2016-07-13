@@ -9,6 +9,34 @@
 			"revisionTime": "2015-10-07T14:14:16Z"
 		},
 		{
+			"checksumSHA1": "6cHn7qM5LA4k8teHz7m3LubWTLI=",
+			"path": "github.com/cockroachdb/c-jemalloc",
+			"revision": "9716a86928311cee3633f1773035ce9f0cf9f9e9",
+			"revisionTime": "2016-06-22T00:34:45Z",
+			"tree": true
+		},
+		{
+			"checksumSHA1": "OS4JlP+CrEfE8iE5ANNXVMuhuN8=",
+			"path": "github.com/cockroachdb/c-lz4",
+			"revision": "e0b69c0fc9001ac0b5573439496671c4229888b8",
+			"revisionTime": "2016-04-25T08:08:34Z",
+			"tree": true
+		},
+		{
+			"checksumSHA1": "Kyb6mG7/ItsCf2QzSnWVVkEhnLc=",
+			"path": "github.com/cockroachdb/c-rocksdb",
+			"revision": "88fbafdb85bc940dfcef995d57213d2dac231d3d",
+			"revisionTime": "2016-05-26T18:29:39Z",
+			"tree": true
+		},
+		{
+			"checksumSHA1": "uxxPGd9rOYhdC92WoA05tK6tIRc=",
+			"path": "github.com/cockroachdb/c-snappy",
+			"revision": "36be97020133fa143426c56cc975a415417fc3fb",
+			"revisionTime": "2016-04-25T18:11:20Z",
+			"tree": true
+		},
+		{
 			"checksumSHA1": "a29TtOU87eZA0S6wL+rAkpqUEzc=",
 			"path": "github.com/dgryski/go-farm",
 			"revision": "d1e51a4af19092715f4ce7d8257fe5bc8f8be727",
