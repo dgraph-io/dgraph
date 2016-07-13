@@ -1,7 +1,7 @@
 GO ?= go
 
 .PHONY: build 
-build: BUILDMODE = build
+build: BUILDMODE = build --tags=embed
 build: install
 	mkdir dgraph-build;\
 	cd dgraph-build;\
