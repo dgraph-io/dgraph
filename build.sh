@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Exit script in case an error is encountered.
+set -e
+
 cur_dir=$(pwd);
 tmp_dir=/tmp/dgraph-build;
 release_version=0.4.2;
@@ -7,6 +10,11 @@ release_version=0.4.2;
 # If temporary directory already exists delete it.
 if [ -d "$tmp_dir" ]; then
   rm -rf $tmp_dir
+fi
+
+if ! type strip > /dev/null; then
+  echo -e "\033[0;31mYou don't have strip command line tool available. Download it and try again.\033[0m"
+  exit 1
 fi
 
 mkdir $tmp_dir;
@@ -29,10 +37,8 @@ cd $dgraph_cmd/dgraphmerge && go build $build_flags .;
 echo -e "\n\033[1;33mCopying binaries to tmp folder\033[0m"
 cd $tmp_dir;
 cp $dgraph_cmd/dgraph/dgraph $dgraph_cmd/dgraphassigner/dgraphassigner $dgraph_cmd/dgraphlist/dgraphlist $dgraph_cmd/dgraphmerge/dgraphmerge $dgraph_cmd/dgraphloader/dgraphloader .;
-# Stripping the binaries if strip command is available.
-if type strip > /dev/null; then
-	strip dgraph dgraphassigner dgraphloader dgraphmerge dgraphlist
-fi
+# Stripping the binaries.
+strip dgraph dgraphassigner dgraphloader dgraphmerge dgraphlist
 echo -e "\n\033[1;34mSize of files after strip: $(du -sh)\033[0m"
 
 echo -e "\n\033[1;33mCreating tar file\033[0m"
