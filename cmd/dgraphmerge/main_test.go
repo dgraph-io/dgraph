@@ -54,7 +54,8 @@ func TestMergeFolders(t *testing.T) {
 	list := []string{"alice", "bob", "mallory", "ash", "man", "dgraph",
 		"ash", "alice"}
 	var numInstances uint64 = 2
-	posting.Init(nil)
+	stores := []*store.Store{ps1, ps2}
+	posting.Init(nil, stores)
 	uid.Init(ps1)
 	loader.Init(nil, ps1)
 	for _, str := range list {

@@ -64,7 +64,8 @@ func main() {
 	ps.Init(*uidDir)
 	defer ps.Close()
 
-	posting.Init(nil)
+	stores := []*store.Store{ps}
+	posting.Init(nil, stores)
 	uid.Init(ps)
 	loader.Init(nil, ps)
 

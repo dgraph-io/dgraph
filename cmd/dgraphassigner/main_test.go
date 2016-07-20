@@ -33,7 +33,8 @@ func TestQuery(t *testing.T) {
 	clog := commit.NewLogger(dir, "mutations", 50<<20)
 	clog.Init()
 	defer clog.Close()
-	posting.Init(clog)
+	stores := []*store.Store{ps}
+	posting.Init(clog, stores)
 
 	uid.Init(ps)
 

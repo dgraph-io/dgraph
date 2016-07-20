@@ -172,7 +172,7 @@ func gentlyMerge(mr *mergeRoutines) {
 	ctr.log()
 }
 
-func checkMemoryUsage() {
+func checkMemoryUsage(stores []*store.Store) {
 	MIB = 1 << 20
 	MAX_MEMORY = *maxmemory * MIB
 
@@ -180,7 +180,12 @@ func checkMemoryUsage() {
 	for _ = range time.Tick(5 * time.Second) {
 		var ms runtime.MemStats
 		runtime.ReadMemStats(&ms)
-		if ms.Alloc > MAX_MEMORY {
+		totMemory := ms.Alloc
+		for _, st := range stores {
+			totMemory += st.MemtableSize() + st.IndexFilterblockSize()
+		}
+
+		if totMemory > MAX_MEMORY {
 			aggressivelyEvict(ms)
 
 		} else {
@@ -204,11 +209,11 @@ var lhmap *gotomic.Hash
 var dirtymap *gotomic.Hash
 var clog *commit.Logger
 
-func Init(log *commit.Logger) {
+func Init(log *commit.Logger, stores []*store.Store) {
 	lhmap = gotomic.NewHash()
 	dirtymap = gotomic.NewHash()
 	clog = log
-	go checkMemoryUsage()
+	go checkMemoryUsage(stores)
 }
 
 func GetOrCreate(key []byte, pstore *store.Store) *List {

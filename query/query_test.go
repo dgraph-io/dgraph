@@ -140,7 +140,9 @@ func populateGraph(t *testing.T) (string, *store.Store) {
 
 	clog := commit.NewLogger(dir, "mutations", 50<<20)
 	clog.Init()
-	posting.Init(clog)
+
+	stores := []*store.Store{ps}
+	posting.Init(clog, stores)
 
 	// So, user we're interested in has uid: 1.
 	// She has 4 friends: 23, 24, 25, 31, and 101

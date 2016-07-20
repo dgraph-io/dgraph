@@ -42,7 +42,8 @@ func TestGetOrAssign(t *testing.T) {
 	clog.Init()
 	defer clog.Close()
 
-	posting.Init(clog)
+	stores := []*store.Store{ps}
+	posting.Init(clog, stores)
 	Init(ps)
 
 	var u1, u2 uint64

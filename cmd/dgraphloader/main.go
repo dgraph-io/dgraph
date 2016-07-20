@@ -79,7 +79,8 @@ func main() {
 	uidStore.InitReadOnly(*uidDir)
 	defer uidStore.Close()
 
-	posting.Init(nil)
+	stores := []*store.Store{uidStore, dataStore}
+	posting.Init(nil, stores)
 	uid.Init(uidStore)
 	loader.Init(uidStore, dataStore)
 

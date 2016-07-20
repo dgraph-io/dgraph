@@ -336,7 +336,7 @@ func main() {
 		lenAddr = 1
 	}
 
-	posting.Init(clog)
+	stores := []*store.Store{ps}
 	if *instanceIdx != 0 {
 		worker.Init(ps, nil, *instanceIdx, lenAddr)
 		uid.Init(nil)
@@ -347,7 +347,9 @@ func main() {
 		// Only server instance 0 will have uidStore
 		worker.Init(ps, uidStore, *instanceIdx, lenAddr)
 		uid.Init(uidStore)
+		stores = append(stores, uidStore)
 	}
+	posting.Init(clog, stores)
 
 	worker.Connect(addrs)
 	// Grpc server runs on (port + 1)
