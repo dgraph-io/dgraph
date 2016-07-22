@@ -322,16 +322,16 @@ func main() {
 	}
 	// Create parent directories for postings, uids and mutations
 	var err error
-	err = os.MkdirAll(*postingDir, os.ModePerm)
+	err = os.MkdirAll(*postingDir, 0700)
 	if err != nil {
 		log.Fatal("Error while creating the filepath: %v", *postingDir)
 		return
 	}
-	err = os.MkdirAll(*mutationDir, os.ModePerm)
+	err = os.MkdirAll(*mutationDir, 0700)
 	if err != nil {
 		log.Fatal("Error while creating the filepath: %v", *mutationDir)
 	}
-	err = os.MkdirAll(*uidDir, os.ModePerm)
+	err = os.MkdirAll(*uidDir, 0700)
 	if err != nil {
 		log.Fatal("Error while creating the filepath: %v", *uidDir)
 	}
