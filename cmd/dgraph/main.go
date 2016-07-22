@@ -44,6 +44,7 @@ import (
 	"github.com/dgraph-io/dgraph/uid"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
+	"os"
 )
 
 var postingDir = flag.String("postings", "", "Directory to store posting lists")
@@ -319,6 +320,21 @@ func main() {
 	if *port%2 != 0 {
 		log.Fatalf("Port should be an even number: %v", *port)
 	}
+	// Create parent directories for postings, uids and mutations
+	var err error
+	err = os.MkdirAll(*postingDir, os.ModePerm)
+	if err != nil {
+		log.Fatal("Error while creating the filepath: %v", *postingDir)
+		return
+	}
+	err = os.MkdirAll(*mutationDir, os.ModePerm)
+	if err != nil {
+		log.Fatal("Error while creating the filepath: %v", *mutationDir)
+	}
+	err = os.MkdirAll(*uidDir, os.ModePerm)
+	if err != nil {
+		log.Fatal("Error while creating the filepath: %v", *uidDir)
+	}
 
 	ps := new(store.Store)
 	ps.Init(*postingDir)
@@ -337,6 +353,7 @@ func main() {
 	}
 
 	posting.Init(clog)
+
 	if *instanceIdx != 0 {
 		worker.Init(ps, nil, *instanceIdx, lenAddr)
 		uid.Init(nil)
