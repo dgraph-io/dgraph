@@ -324,16 +324,15 @@ func main() {
 	var err error
 	err = os.MkdirAll(*postingDir, 0700)
 	if err != nil {
-		log.Fatal("Error while creating the filepath: %v", *postingDir)
-		return
+		log.Fatal("Error while creating the filepath for postings: %v", err)
 	}
 	err = os.MkdirAll(*mutationDir, 0700)
 	if err != nil {
-		log.Fatal("Error while creating the filepath: %v", *mutationDir)
+		log.Fatal("Error while creating the filepath for mutations: %v", err)
 	}
 	err = os.MkdirAll(*uidDir, 0700)
 	if err != nil {
-		log.Fatal("Error while creating the filepath: %v", *uidDir)
+		log.Fatal("Error while creating the filepath for uids: %v", err)
 	}
 
 	ps := new(store.Store)
