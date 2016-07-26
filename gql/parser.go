@@ -32,6 +32,7 @@ type GraphQuery struct {
 	XID      string
 	Attr     string
 	First    int
+	AfterN   int
 	Children []*GraphQuery
 }
 
@@ -248,6 +249,16 @@ func godeep(l *lex.Lexer, gq *GraphQuery) error {
 						return err
 					}
 					curp.First = int(count)
+				}
+				if p.Key == "afterN" {
+					count, err := strconv.ParseInt(p.Val, 0, 32)
+					if err != nil {
+						return err
+					}
+					if count < 0 {
+						return errors.New("afterN cannot be less than 0")
+					}
+					curp.AfterN = int(count)
 				}
 			}
 		}
