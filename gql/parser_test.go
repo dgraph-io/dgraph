@@ -153,12 +153,12 @@ func TestParseFirst_error(t *testing.T) {
 	}
 }
 
-func TestParseAfterN(t *testing.T) {
+func TestParseOffset(t *testing.T) {
 	query := `
 	query {
 		user(_xid_: m.abcd) {
 			type.object.name
-			friends (first: 10, afterN: 3) {
+			friends (first: 10, offset: 3) {
 			}
 		}
 	}`
@@ -186,17 +186,17 @@ func TestParseAfterN(t *testing.T) {
 	if gq.Children[1].First != 10 {
 		t.Errorf("Expected count 10. Got: %v", gq.Children[1].First)
 	}
-	if gq.Children[1].AfterN != 3 {
-		t.Errorf("Expected AfterN 3. Got: %v", gq.Children[1].AfterN)
+	if gq.Children[1].Offset != 3 {
+		t.Errorf("Expected Offset 3. Got: %v", gq.Children[1].Offset)
 	}
 }
 
-func TestParseAfterN_error(t *testing.T) {
+func TestParseOffset_error(t *testing.T) {
 	query := `
 	query {
 		user(_xid_: m.abcd) {
 			type.object.name
-			friends (first: 10, afterN: -3) {
+			friends (first: 10, offset: -3) {
 			}
 		}
 	}`

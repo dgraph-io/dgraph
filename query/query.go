@@ -374,7 +374,7 @@ func treeCopy(gq *gql.GraphQuery, sg *SubGraph) {
 	for _, gchild := range gq.Children {
 		dst := new(SubGraph)
 		dst.Attr = gchild.Attr
-		dst.Offset = gchild.AfterN
+		dst.Offset = gchild.Offset
 		dst.Count = gchild.First
 		sg.Children = append(sg.Children, dst)
 		treeCopy(gchild, dst)
