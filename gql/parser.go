@@ -33,6 +33,7 @@ type GraphQuery struct {
 	Attr     string
 	First    int
 	Offset   int
+	After    uint64
 	Children []*GraphQuery
 }
 
@@ -259,6 +260,13 @@ func godeep(l *lex.Lexer, gq *GraphQuery) error {
 						return errors.New("offset cannot be less than 0")
 					}
 					curp.Offset = int(count)
+				}
+				if p.Key == "after" {
+					afterUid, err := strconv.ParseUint(p.Val, 0, 64)
+					if err != nil {
+						return err
+					}
+					curp.After = uint64(afterUid)
 				}
 			}
 		}

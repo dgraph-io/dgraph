@@ -5,6 +5,7 @@ table Query {
 	uids:[ulong];
 	count:int;
 	offset:int;
+	offsetUid:ulong;
 }
 
 table Value {
