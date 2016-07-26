@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -674,7 +675,7 @@ func (l *List) LastCompactionTs() time.Time {
 	return l.lastCompact
 }
 
-func (l *List) GetUids(offset, count int) []uint64 {
+func (l *List) GetUids(offset, count int, offsetUid uint64) []uint64 {
 	l.wg.Wait()
 	l.RLock()
 	defer l.RUnlock()
@@ -699,9 +700,16 @@ func (l *List) GetUids(offset, count int) []uint64 {
 		count = 0
 	}
 
+	var p types.Posting
+	if offsetUid > 0 {
+		offset = sort.Search(l.length(), func(i int) bool {
+			l.get(&p, i)
+			return p.Uid() > offsetUid
+		})
+	}
+
 	result := make([]uint64, count)
 	result = result[:0]
-	var p types.Posting
 	for i := offset; i < count+offset && i < l.length(); i++ {
 		if ok := l.get(&p, i); !ok || p.Uid() == math.MaxUint64 {
 			break
