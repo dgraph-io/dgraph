@@ -109,11 +109,11 @@ func (l *Latency) ToMap() map[string]string {
 // query and the response. Once generated, this can then be encoded to other
 // client convenient formats, like GraphQL / JSON.
 type SubGraph struct {
-	Attr      string
-	Count     int
-	Offset    int
-	OffsetUid uint64
-	Children  []*SubGraph
+	Attr     string
+	Count    int
+	Offset   int
+	AfterUid uint64
+	Children []*SubGraph
 
 	Query  []byte
 	Result []byte
@@ -376,7 +376,7 @@ func treeCopy(gq *gql.GraphQuery, sg *SubGraph) {
 		dst := new(SubGraph)
 		dst.Attr = gchild.Attr
 		dst.Offset = gchild.Offset
-		dst.OffsetUid = gchild.After
+		dst.AfterUid = gchild.After
 		dst.Count = gchild.First
 		sg.Children = append(sg.Children, dst)
 		treeCopy(gchild, dst)
@@ -464,7 +464,7 @@ func createTaskQuery(sg *SubGraph, sorted []uint64) []byte {
 	task.QueryAddUids(b, vend)
 	task.QueryAddCount(b, int32(sg.Count))
 	task.QueryAddOffset(b, int32(sg.Offset))
-	task.QueryAddOffsetUid(b, uint64(sg.OffsetUid))
+	task.QueryAddAfterUid(b, uint64(sg.AfterUid))
 
 	qend := task.QueryEnd(b)
 	b.Finish(qend)

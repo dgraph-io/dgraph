@@ -63,7 +63,7 @@ func (rcv *Query) MutateOffset(n int32) bool {
 	return rcv._tab.MutateInt32Slot(10, n)
 }
 
-func (rcv *Query) OffsetUid() uint64 {
+func (rcv *Query) AfterUid() uint64 {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(12))
 	if o != 0 {
 		return rcv._tab.GetUint64(o + rcv._tab.Pos)
@@ -71,7 +71,7 @@ func (rcv *Query) OffsetUid() uint64 {
 	return 0
 }
 
-func (rcv *Query) MutateOffsetUid(n uint64) bool {
+func (rcv *Query) MutateAfterUid(n uint64) bool {
 	return rcv._tab.MutateUint64Slot(12, n)
 }
 
@@ -82,5 +82,5 @@ func QueryStartUidsVector(builder *flatbuffers.Builder, numElems int) flatbuffer
 }
 func QueryAddCount(builder *flatbuffers.Builder, count int32) { builder.PrependInt32Slot(2, count, 0) }
 func QueryAddOffset(builder *flatbuffers.Builder, offset int32) { builder.PrependInt32Slot(3, offset, 0) }
-func QueryAddOffsetUid(builder *flatbuffers.Builder, offsetUid uint64) { builder.PrependUint64Slot(4, offsetUid, 0) }
+func QueryAddAfterUid(builder *flatbuffers.Builder, afterUid uint64) { builder.PrependUint64Slot(4, afterUid, 0) }
 func QueryEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT { return builder.EndObject() }

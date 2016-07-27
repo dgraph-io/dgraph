@@ -101,7 +101,12 @@ func processTask(query []byte) (result []byte, rerr error) {
 		task.ValueAddVal(b, valoffset)
 		voffsets[i] = task.ValueEnd(b)
 
-		ulist := pl.GetUids(int(q.Offset()), int(q.Count()), uint64(q.OffsetUid()))
+		opts := posting.GetUidsOptions{
+			int(q.Offset()),
+			int(q.Count()),
+			uint64(q.AfterUid()),
+		}
+		ulist := pl.GetUids(opts)
 		uoffsets[i] = x.UidlistOffset(b, ulist)
 	}
 	task.ResultStartValuesVector(b, len(voffsets))
