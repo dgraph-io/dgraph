@@ -241,7 +241,7 @@ var testNQuads = []struct {
 		},
 	},
 	{
-		input: `_:alice <likes> "mov\"enpick" .`, // ignores the <bob> after dot.
+		input: `_:alice <likes> "mov\"enpick" .`,
 		nq: NQuad{
 			Subject:     "_:alice",
 			Predicate:   "likes",
