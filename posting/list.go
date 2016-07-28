@@ -81,7 +81,7 @@ func NewList() *List {
 	return l
 }
 
-type GetUidsOptions struct {
+type UidsOptions struct {
 	Offset   int
 	Count    int
 	AfterUid uint64
@@ -681,7 +681,7 @@ func (l *List) LastCompactionTs() time.Time {
 	return l.lastCompact
 }
 
-func (l *List) GetUids(opt GetUidsOptions) []uint64 {
+func (l *List) Uids(opt UidsOptions) []uint64 {
 	l.wg.Wait()
 	l.RLock()
 	defer l.RUnlock()
