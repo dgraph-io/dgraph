@@ -242,7 +242,6 @@ func godeep(l *lex.Lexer, gq *GraphQuery) error {
 			if err != nil {
 				return err
 			}
-			// We only use argument 'first' for now.
 			for _, p := range args {
 				if p.Key == "first" {
 					count, err := strconv.ParseInt(p.Val, 0, 32)
