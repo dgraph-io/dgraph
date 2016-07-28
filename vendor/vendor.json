@@ -49,10 +49,10 @@
 			"revisionTime": "2016-06-01T15:17:05Z"
 		},
 		{
-			"checksumSHA1": "bAXE13JoHB8GZ5svBJpzCWiuZBQ=",
+			"checksumSHA1": "DWpjU6gH7pFWn/CWPC4GE7OiiVY=",
 			"path": "github.com/google/flatbuffers/go",
-			"revision": "b4db88808f5c1f8f36d2f67952c8b7b3022e28ea",
-			"revisionTime": "2015-10-08T07:23:26Z"
+			"revision": "fc19f746b02cd12d4586c56b0695d4601a66559f",
+			"revisionTime": "2016-07-26T03:44:33Z"
 		},
 		{
 			"checksumSHA1": "W1EGygayPbG7X+UK13VHKl0XOy8=",

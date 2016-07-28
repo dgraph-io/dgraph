@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -78,6 +79,12 @@ func NewList() *List {
 	l.wg.Add(1)
 	l.mlayer = make(map[int]types.Posting)
 	return l
+}
+
+type ListOptions struct {
+	Offset   int
+	Count    int
+	AfterUid uint64
 }
 
 type ByUid []*types.Posting
@@ -674,35 +681,42 @@ func (l *List) LastCompactionTs() time.Time {
 	return l.lastCompact
 }
 
-func (l *List) GetUids(offset, count int) []uint64 {
+func (l *List) Uids(opt ListOptions) []uint64 {
 	l.wg.Wait()
 	l.RLock()
 	defer l.RUnlock()
 
-	if offset < 0 {
-		log.Fatalf("Unexpected offset: %v", offset)
+	if opt.Offset < 0 {
+		log.Fatalf("Unexpected offset: %v", opt.Offset)
 		return make([]uint64, 0)
 	}
 
-	if count < 0 {
-		count = 0 - count
-		offset = l.length() - count
-	}
-	if offset < 0 {
-		offset = 0
-	}
-
-	if count == 0 || count > l.length()-offset {
-		count = l.length() - offset
-	}
-	if count < 0 {
-		count = 0
-	}
-
-	result := make([]uint64, count)
-	result = result[:0]
 	var p types.Posting
-	for i := offset; i < count+offset && i < l.length(); i++ {
+	if opt.AfterUid > 0 {
+		// sort.Search returns the index of the first element > AfterUid.
+		opt.Offset = sort.Search(l.length(), func(i int) bool {
+			l.get(&p, i)
+			return p.Uid() > opt.AfterUid
+		})
+	}
+	if opt.Count < 0 {
+		opt.Count = 0 - opt.Count
+		opt.Offset = l.length() - opt.Count
+	}
+	if opt.Offset < 0 {
+		opt.Offset = 0
+	}
+
+	if opt.Count == 0 || opt.Count > l.length()-opt.Offset {
+		opt.Count = l.length() - opt.Offset
+	}
+	if opt.Count < 0 {
+		opt.Count = 0
+	}
+
+	result := make([]uint64, opt.Count)
+	result = result[:0]
+	for i := opt.Offset; i < opt.Count+opt.Offset && i < l.length(); i++ {
 		if ok := l.get(&p, i); !ok || p.Uid() == math.MaxUint64 {
 			break
 		}

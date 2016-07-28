@@ -50,18 +50,20 @@ func checkUids(t *testing.T, l *List, uids ...uint64) error {
 		}
 	}
 	if len(uids) >= 3 {
-		ruids := l.GetUids(1, 2)
+		opts := ListOptions{1, 2, 0}
+		ruids := l.Uids(opts)
 		if len(ruids) != 2 {
 			return fmt.Errorf("Expected result of length: 2. Got: %v", len(ruids))
 		}
 
 		for i := 0; i < len(ruids); i++ {
 			if ruids[i] != uids[1+i] {
-				return fmt.Errorf("GetUids expected: %v. Got: %v", uids[1+i], ruids[i])
+				return fmt.Errorf("Uids expected: %v. Got: %v", uids[1+i], ruids[i])
 			}
 		}
 
-		ruids = l.GetUids(1, -2) // offset should be ignored.
+		opts = ListOptions{1, -2, 0}
+		ruids = l.Uids(opts) // offset should be ignored.
 		ulen := len(uids)
 		if ulen > 2 && len(ruids) != 2 {
 			return fmt.Errorf("Expected result of length: 2. Got: %v", len(ruids))
@@ -69,9 +71,36 @@ func checkUids(t *testing.T, l *List, uids ...uint64) error {
 
 		for i := 0; i < len(ruids); i++ {
 			if ruids[i] != uids[ulen-2+i] {
-				return fmt.Errorf("GetUids neg count expected: %v. Got: %v",
+				return fmt.Errorf("Uids neg count expected: %v. Got: %v",
 					uids[ulen-2+i], ruids[i])
 			}
+		}
+
+		// Tests for "after"
+		opts = ListOptions{0, 2, 10}
+		ruids = l.Uids(opts)
+		if len(ruids) != 2 {
+			return fmt.Errorf("Expected result of length: 2. Got: %v", len(ruids))
+		}
+		for i := 0; i < len(ruids); i++ {
+			if ruids[i] != uids[1+i] {
+				return fmt.Errorf("Uids expected: %v. Got: %v", uids[1+i], ruids[i])
+			}
+		}
+
+		opts = ListOptions{0, 2, 80}
+		ruids = l.Uids(opts)
+		if len(ruids) != 1 {
+			return fmt.Errorf("Expected result of length: 1. Got: %v", len(ruids))
+		}
+		if ruids[0] != 81 {
+			return fmt.Errorf("Uids expected: %v. Got: %v", uids[2], ruids[0])
+		}
+
+		opts = ListOptions{0, 2, 82}
+		ruids = l.Uids(opts)
+		if len(ruids) != 0 {
+			return fmt.Errorf("Expected result of length: 0. Got: %v", len(ruids))
 		}
 	}
 

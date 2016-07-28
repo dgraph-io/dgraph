@@ -112,6 +112,7 @@ type SubGraph struct {
 	Attr     string
 	Count    int
 	Offset   int
+	AfterUid uint64
 	Children []*SubGraph
 
 	Query  []byte
@@ -374,6 +375,8 @@ func treeCopy(gq *gql.GraphQuery, sg *SubGraph) {
 	for _, gchild := range gq.Children {
 		dst := new(SubGraph)
 		dst.Attr = gchild.Attr
+		dst.Offset = gchild.Offset
+		dst.AfterUid = gchild.After
 		dst.Count = gchild.First
 		sg.Children = append(sg.Children, dst)
 		treeCopy(gchild, dst)
@@ -460,6 +463,8 @@ func createTaskQuery(sg *SubGraph, sorted []uint64) []byte {
 	task.QueryAddAttr(b, ao)
 	task.QueryAddUids(b, vend)
 	task.QueryAddCount(b, int32(sg.Count))
+	task.QueryAddOffset(b, int32(sg.Offset))
+	task.QueryAddAfterUid(b, uint64(sg.AfterUid))
 
 	qend := task.QueryEnd(b)
 	b.Finish(qend)

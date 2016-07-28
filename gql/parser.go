@@ -32,6 +32,8 @@ type GraphQuery struct {
 	XID      string
 	Attr     string
 	First    int
+	Offset   int
+	After    uint64
 	Children []*GraphQuery
 }
 
@@ -240,7 +242,6 @@ func godeep(l *lex.Lexer, gq *GraphQuery) error {
 			if err != nil {
 				return err
 			}
-			// We only use argument 'first' for now.
 			for _, p := range args {
 				if p.Key == "first" {
 					count, err := strconv.ParseInt(p.Val, 0, 32)
@@ -248,6 +249,23 @@ func godeep(l *lex.Lexer, gq *GraphQuery) error {
 						return err
 					}
 					curp.First = int(count)
+				}
+				if p.Key == "offset" {
+					count, err := strconv.ParseInt(p.Val, 0, 32)
+					if err != nil {
+						return err
+					}
+					if count < 0 {
+						return errors.New("offset cannot be less than 0")
+					}
+					curp.Offset = int(count)
+				}
+				if p.Key == "after" {
+					afterUid, err := strconv.ParseUint(p.Val, 0, 64)
+					if err != nil {
+						return err
+					}
+					curp.After = uint64(afterUid)
 				}
 			}
 		}
