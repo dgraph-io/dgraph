@@ -55,7 +55,6 @@ func lexText(l *lex.Lexer) lex.StateFn {
 Loop:
 	for {
 		switch r := l.Next(); {
-
 		case r == '<' || r == '_':
 			if l.Depth == AT_SUBJECT {
 				l.Backup()
