@@ -77,7 +77,7 @@ Loop:
 				return lexLabel
 
 			} else {
-				return l.Errorf("Invalid input: %v at lexText", r)
+				return l.Errorf("Invalid input: %c at lexText", r)
 			}
 
 		case r == '"':
@@ -96,6 +96,11 @@ Loop:
 				l.Emit(itemValidEnd)
 			}
 			break Loop
+
+		case r == ' ':
+			continue
+		default:
+			l.Errorf("Invalid input: %c at lexText", r)
 		}
 	}
 	if l.Pos > l.Start {
@@ -288,6 +293,11 @@ func lexLabel(l *lex.Lexer) lex.StateFn {
 	}
 	if r == '_' {
 		l.Depth += 1
+		r = l.Next()
+		if r != ':' {
+			return l.Errorf("Invalid char: %c at lexLabel", r)
+		}
+		l.Backup()
 		return lexBlankNode(l, itemLabel, lexText)
 	}
 	return l.Errorf("Invalid char: %v at lexLabel", r)
