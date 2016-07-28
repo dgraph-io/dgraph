@@ -101,7 +101,7 @@ func processTask(query []byte) (result []byte, rerr error) {
 		task.ValueAddVal(b, valoffset)
 		voffsets[i] = task.ValueEnd(b)
 
-		opts := posting.UidsOptions{
+		opts := posting.ListOptions{
 			int(q.Offset()),
 			int(q.Count()),
 			uint64(q.AfterUid()),

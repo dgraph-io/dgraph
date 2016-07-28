@@ -81,7 +81,7 @@ func NewList() *List {
 	return l
 }
 
-type UidsOptions struct {
+type ListOptions struct {
 	Offset   int
 	Count    int
 	AfterUid uint64
@@ -681,7 +681,7 @@ func (l *List) LastCompactionTs() time.Time {
 	return l.lastCompact
 }
 
-func (l *List) Uids(opt UidsOptions) []uint64 {
+func (l *List) Uids(opt ListOptions) []uint64 {
 	l.wg.Wait()
 	l.RLock()
 	defer l.RUnlock()
@@ -693,7 +693,7 @@ func (l *List) Uids(opt UidsOptions) []uint64 {
 
 	var p types.Posting
 	if opt.AfterUid > 0 {
-		// sort.Search returns the index of the first element > AfterUid
+		// sort.Search returns the index of the first element > AfterUid.
 		opt.Offset = sort.Search(l.length(), func(i int) bool {
 			l.get(&p, i)
 			return p.Uid() > opt.AfterUid
