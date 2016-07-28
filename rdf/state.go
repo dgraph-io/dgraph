@@ -293,6 +293,11 @@ func lexLabel(l *lex.Lexer) lex.StateFn {
 	}
 	if r == '_' {
 		l.Depth += 1
+		r = l.Next()
+		if r != ':' {
+			return l.Errorf("Invalid char: %c at lexLabel", r)
+		}
+		l.Backup()
 		return lexBlankNode(l, itemLabel, lexText)
 	}
 	return l.Errorf("Invalid char: %v at lexLabel", r)

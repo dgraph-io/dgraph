@@ -221,6 +221,10 @@ var testNQuads = []struct {
 		hasErr: true,
 	},
 	{
+		input:  `_:alice <knows> "stuff"^^<xs:string> _uid_:0x01 .`,
+		hasErr: true,
+	},
+	{
 		input:  `_:alice <knows> "stuff"^^<xs:string> <quad> <pentagon> .`,
 		hasErr: true,
 	},
