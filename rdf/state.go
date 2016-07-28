@@ -55,6 +55,7 @@ func lexText(l *lex.Lexer) lex.StateFn {
 Loop:
 	for {
 		switch r := l.Next(); {
+
 		case r == '<' || r == '_':
 			if l.Depth == AT_SUBJECT {
 				l.Backup()
@@ -77,7 +78,7 @@ Loop:
 				return lexLabel
 
 			} else {
-				return l.Errorf("Invalid input: %v at lexText", r)
+				return l.Errorf("Invalid input: %c at lexText", r)
 			}
 
 		case r == '"':
@@ -96,6 +97,11 @@ Loop:
 				l.Emit(itemValidEnd)
 			}
 			break Loop
+
+		case r == ' ':
+			continue
+		default:
+			l.Errorf("Invalid input: %c at lexText", r)
 		}
 	}
 	if l.Pos > l.Start {
