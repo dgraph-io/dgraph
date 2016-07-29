@@ -35,6 +35,7 @@ import (
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/gogo/protobuf/proto"
 	"github.com/google/flatbuffers/go"
 )
 
@@ -501,3 +502,46 @@ func BenchmarkToPB_100_Actor(b *testing.B)     { benchmarkToPB("benchmark/actors
 func BenchmarkToPB_100_Director(b *testing.B)  { benchmarkToPB("benchmark/directors100.bin", b) }
 func BenchmarkToPB_1000_Actor(b *testing.B)    { benchmarkToPB("benchmark/actors1000.bin", b) }
 func BenchmarkToPB_1000_Director(b *testing.B) { benchmarkToPB("benchmark/directors1000.bin", b) }
+
+func benchmarkToPBMarshal(file string, b *testing.B) {
+	b.ReportAllocs()
+	var sg SubGraph
+	var l Latency
+
+	f, err := ioutil.ReadFile(file)
+	if err != nil {
+		b.Error(err)
+	}
+
+	buf := bytes.NewBuffer(f)
+	dec := gob.NewDecoder(buf)
+	err = dec.Decode(&sg)
+	if err != nil {
+		b.Error(err)
+	}
+	p, err := sg.ToProtocolBuffer(&l)
+	if err != nil {
+		b.Fatal(err)
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if _, err = proto.Marshal(p); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkToPBMarshal_10_Actor(b *testing.B) { benchmarkToPBMarshal("benchmark/actors10.bin", b) }
+func BenchmarkToPBMarshal_10_Director(b *testing.B) {
+	benchmarkToPBMarshal("benchmark/directors10.bin", b)
+}
+func BenchmarkToPBMarshal_100_Actor(b *testing.B) { benchmarkToPBMarshal("benchmark/actors100.bin", b) }
+func BenchmarkToPBMarshal_100_Director(b *testing.B) {
+	benchmarkToPBMarshal("benchmark/directors100.bin", b)
+}
+func BenchmarkToPBMarshal_1000_Actor(b *testing.B) {
+	benchmarkToPBMarshal("benchmark/actors1000.bin", b)
+}
+func BenchmarkToPBMarshal_1000_Director(b *testing.B) {
+	benchmarkToPBMarshal("benchmark/directors1000.bin", b)
+}
