@@ -29,16 +29,19 @@ import (
 	"github.com/dgryski/go-farm"
 )
 
+// Mutations stores the directed edges for both the set and delete operations.
 type Mutations struct {
 	Set []x.DirectedEdge
 	Del []x.DirectedEdge
 }
 
 const (
-	Set = "set"
-	Del = "delete"
+	set = "set"
+	del = "delete"
 )
 
+// Encode gob encodes the mutation which is then sent over to the instance which
+// is supposed to run it.
 func (m *Mutations) Encode() (data []byte, rerr error) {
 	var b bytes.Buffer
 	enc := gob.NewEncoder(&b)
@@ -46,17 +49,19 @@ func (m *Mutations) Encode() (data []byte, rerr error) {
 	return b.Bytes(), rerr
 }
 
+// Decode decodes the mutation from a byte slice after receiving the byte slie over
+// the network.
 func (m *Mutations) Decode(data []byte) error {
 	r := bytes.NewReader(data)
 	dec := gob.NewDecoder(r)
 	return dec.Decode(m)
 }
 
-func runMutation(ctx context.Context, edges []x.DirectedEdge, op byte, left *Mutations) error {
+func runMutations(ctx context.Context, edges []x.DirectedEdge, op byte, left *Mutations) error {
 	for _, edge := range edges {
 		if farm.Fingerprint64(
 			[]byte(edge.Attribute))%numInstances != instanceIdx {
-			return fmt.Errorf("predicate fingerprint doesn't match this instance.")
+			return fmt.Errorf("Predicate fingerprint doesn't match this instance")
 		}
 
 		key := posting.Key(edge.Entity, edge.Attribute)
@@ -76,10 +81,10 @@ func runMutation(ctx context.Context, edges []x.DirectedEdge, op byte, left *Mut
 
 func mutate(ctx context.Context, m *Mutations, left *Mutations) error {
 	// Running the set instructions first.
-	if err := runMutation(ctx, m.Set, posting.Set, left); err != nil {
+	if err := runMutations(ctx, m.Set, posting.Set, left); err != nil {
 		return err
 	}
-	if err := runMutation(ctx, m.Del, posting.Del, left); err != nil {
+	if err := runMutations(ctx, m.Del, posting.Del, left); err != nil {
 		return err
 	}
 	return nil
@@ -129,20 +134,22 @@ func addToMutationArray(mutationArray []*Mutations, edges []x.DirectedEdge, op s
 			mutationArray[idx] = mu
 		}
 
-		if op == Set {
+		if op == set {
 			mu.Set = append(mu.Set, edge)
-		} else if op == Del {
+		} else if op == del {
 			mu.Del = append(mu.Del, edge)
 		}
 	}
 }
 
+// MutateOverNetwork checks which instance should be running the mutations
+// according to fingerprint of the predicate and sends it to that instance.
 func MutateOverNetwork(ctx context.Context, setEdges []x.DirectedEdge,
 	delEdges []x.DirectedEdge) (left []x.DirectedEdge, rerr error) {
-
 	mutationArray := make([]*Mutations, numInstances)
-	addToMutationArray(mutationArray, setEdges, Set)
-	addToMutationArray(mutationArray, delEdges, Del)
+
+	addToMutationArray(mutationArray, setEdges, set)
+	addToMutationArray(mutationArray, delEdges, del)
 
 	replies := make(chan *Payload, numInstances)
 	errors := make(chan error, numInstances)
@@ -151,7 +158,7 @@ func MutateOverNetwork(ctx context.Context, setEdges []x.DirectedEdge,
 		if mu == nil || (len(mu.Set) == 0 && len(mu.Del) == 0) {
 			continue
 		}
-		count += 1
+		count++
 		go runMutate(ctx, idx, mu, replies, errors)
 	}
 

@@ -34,13 +34,13 @@ func TestAddToMutationArray(t *testing.T) {
 		Timestamp: time.Now(),
 	})
 
-	addToMutationArray(mutationsArray, edges, Set)
+	addToMutationArray(mutationsArray, edges, set)
 	mu := mutationsArray[0]
 	if mu == nil || mu.Set == nil {
 		t.Errorf("Expected mu.Set to not be nil")
 	}
 
-	addToMutationArray(mutationsArray, edges, Del)
+	addToMutationArray(mutationsArray, edges, del)
 	mu = mutationsArray[0]
 	if mu == nil || mu.Del == nil {
 		t.Errorf("Expected mu.Del to not be nil")

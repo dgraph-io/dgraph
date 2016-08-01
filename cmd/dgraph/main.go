@@ -318,7 +318,7 @@ func runGrpcServer(address string) {
 	s := grpc.NewServer()
 	graph.RegisterDgraphServer(s, &server{})
 	if err = s.Serve(ln); err != nil {
-		log.Fatalf("While serving gRpc requests", err)
+		log.Fatalf("While serving gRpc requests: %v", err)
 	}
 	return
 }
@@ -338,15 +338,15 @@ func main() {
 	var err error
 	err = os.MkdirAll(*postingDir, 0700)
 	if err != nil {
-		log.Fatal("Error while creating the filepath for postings: %v", err)
+		log.Fatalf("Error while creating the filepath for postings: %v", err)
 	}
 	err = os.MkdirAll(*mutationDir, 0700)
 	if err != nil {
-		log.Fatal("Error while creating the filepath for mutations: %v", err)
+		log.Fatalf("Error while creating the filepath for mutations: %v", err)
 	}
 	err = os.MkdirAll(*uidDir, 0700)
 	if err != nil {
-		log.Fatal("Error while creating the filepath for uids: %v", err)
+		log.Fatalf("Error while creating the filepath for uids: %v", err)
 	}
 
 	ps := new(store.Store)
