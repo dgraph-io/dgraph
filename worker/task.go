@@ -83,31 +83,47 @@ func processTask(query []byte) (result []byte, rerr error) {
 	}
 
 	b := flatbuffers.NewBuilder(0)
-	voffsets := make([]flatbuffers.UOffsetT, q.UidsLength())
-	uoffsets := make([]flatbuffers.UOffsetT, q.UidsLength())
+	var voffsets, uoffsets []flatbuffers.UOffsetT
 
-	for i := 0; i < q.UidsLength(); i++ {
-		uid := q.Uids(i)
-		key := posting.Key(uid, attr)
-		pl := posting.GetOrCreate(key, store)
+	if attr == "count" {
+		voffsets = make([]flatbuffers.UOffsetT, 1)
+		uoffsets = make([]flatbuffers.UOffsetT, 1)
 
 		var valoffset flatbuffers.UOffsetT
-		if val, err := pl.Value(); err != nil {
-			valoffset = b.CreateByteVector(x.Nilbyte)
-		} else {
-			valoffset = b.CreateByteVector(val)
-		}
+		valoffset = b.CreateByteVector(x.Nilbyte)
 		task.ValueStart(b)
 		task.ValueAddVal(b, valoffset)
-		voffsets[i] = task.ValueEnd(b)
+		voffsets[0] = task.ValueEnd(b)
 
-		opts := posting.ListOptions{
-			int(q.Offset()),
-			int(q.Count()),
-			uint64(q.AfterUid()),
+		count := []uint64{uint64(q.UidsLength())}
+		uoffsets[0] = x.UidlistOffset(b, count)
+	} else {
+		voffsets = make([]flatbuffers.UOffsetT, q.UidsLength())
+		uoffsets = make([]flatbuffers.UOffsetT, q.UidsLength())
+
+		for i := 0; i < q.UidsLength(); i++ {
+			uid := q.Uids(i)
+			key := posting.Key(uid, attr)
+			pl := posting.GetOrCreate(key, store)
+
+			var valoffset flatbuffers.UOffsetT
+			if val, err := pl.Value(); err != nil {
+				valoffset = b.CreateByteVector(x.Nilbyte)
+			} else {
+				valoffset = b.CreateByteVector(val)
+			}
+			task.ValueStart(b)
+			task.ValueAddVal(b, valoffset)
+			voffsets[i] = task.ValueEnd(b)
+
+			opts := posting.ListOptions{
+				int(q.Offset()),
+				int(q.Count()),
+				uint64(q.AfterUid()),
+			}
+			ulist := pl.Uids(opts)
+			uoffsets[i] = x.UidlistOffset(b, ulist)
 		}
-		ulist := pl.Uids(opts)
-		uoffsets[i] = x.UidlistOffset(b, ulist)
 	}
 	task.ResultStartValuesVector(b, len(voffsets))
 	for i := len(voffsets) - 1; i >= 0; i-- {
