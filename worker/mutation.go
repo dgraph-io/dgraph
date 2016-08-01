@@ -34,6 +34,11 @@ type Mutations struct {
 	Del []x.DirectedEdge
 }
 
+const (
+	Set = "set"
+	Del = "delete"
+)
+
 func (m *Mutations) Encode() (data []byte, rerr error) {
 	var b bytes.Buffer
 	enc := gob.NewEncoder(&b)
@@ -47,22 +52,35 @@ func (m *Mutations) Decode(data []byte) error {
 	return dec.Decode(m)
 }
 
-func mutate(ctx context.Context, m *Mutations, left *Mutations) error {
-	// For now, assume it's all only Set instructions.
-	for _, edge := range m.Set {
+func runMutation(ctx context.Context, edges []x.DirectedEdge, op byte, left *Mutations) error {
+	for _, edge := range edges {
 		if farm.Fingerprint64(
 			[]byte(edge.Attribute))%numInstances != instanceIdx {
-
 			return fmt.Errorf("predicate fingerprint doesn't match this instance.")
 		}
 
 		key := posting.Key(edge.Entity, edge.Attribute)
 		plist := posting.GetOrCreate(key, dataStore)
-		if err := plist.AddMutation(ctx, edge, posting.Set); err != nil {
-			left.Set = append(left.Set, edge)
+		if err := plist.AddMutation(ctx, edge, op); err != nil {
+			if op == posting.Set {
+				left.Set = append(left.Set, edge)
+			} else if op == posting.Del {
+				left.Del = append(left.Del, edge)
+			}
 			log.Printf("Error while adding mutation: %v %v", edge, err)
 			continue
 		}
+	}
+	return nil
+}
+
+func mutate(ctx context.Context, m *Mutations, left *Mutations) error {
+	// Running the set instructions first.
+	if err := runMutation(ctx, m.Set, posting.Set, left); err != nil {
+		return err
+	}
+	if err := runMutation(ctx, m.Del, posting.Del, left); err != nil {
+		return err
 	}
 	return nil
 }
@@ -102,10 +120,7 @@ func runMutate(ctx context.Context, idx int, m *Mutations,
 	che <- nil
 }
 
-func MutateOverNetwork(ctx context.Context,
-	edges []x.DirectedEdge) (left []x.DirectedEdge, rerr error) {
-
-	mutationArray := make([]*Mutations, numInstances)
+func addToMutationArray(mutationArray []*Mutations, edges []x.DirectedEdge, op string) {
 	for _, edge := range edges {
 		idx := farm.Fingerprint64([]byte(edge.Attribute)) % numInstances
 		mu := mutationArray[idx]
@@ -113,14 +128,27 @@ func MutateOverNetwork(ctx context.Context,
 			mu = new(Mutations)
 			mutationArray[idx] = mu
 		}
-		mu.Set = append(mu.Set, edge)
+
+		if op == Set {
+			mu.Set = append(mu.Set, edge)
+		} else if op == Del {
+			mu.Del = append(mu.Del, edge)
+		}
 	}
+}
+
+func MutateOverNetwork(ctx context.Context, setEdges []x.DirectedEdge,
+	delEdges []x.DirectedEdge) (left []x.DirectedEdge, rerr error) {
+
+	mutationArray := make([]*Mutations, numInstances)
+	addToMutationArray(mutationArray, setEdges, Set)
+	addToMutationArray(mutationArray, delEdges, Del)
 
 	replies := make(chan *Payload, numInstances)
 	errors := make(chan error, numInstances)
 	count := 0
 	for idx, mu := range mutationArray {
-		if mu == nil || len(mu.Set) == 0 {
+		if mu == nil || (len(mu.Set) == 0 && len(mu.Del) == 0) {
 			continue
 		}
 		count += 1
