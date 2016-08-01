@@ -36,8 +36,7 @@ func TestQuery(t *testing.T) {
 	clog := commit.NewLogger(dir, "mutations", 50<<20)
 	clog.Init()
 	defer clog.Close()
-	stores := []*store.Store{ps, ps1}
-	posting.Init(clog, stores)
+	posting.Init(clog)
 
 	uid.Init(ps)
 	loader.Init(ps, ps1)
@@ -110,8 +109,7 @@ func BenchmarkLoadRW(b *testing.B) {
 	uidStore.Init(*uiddir)
 	defer uidStore.Close()
 
-	stores := []*store.Store{uidStore}
-	posting.Init(nil, stores)
+	posting.Init(nil)
 	uid.Init(uidStore)
 
 	f, err := os.Open("nameslist")
@@ -142,8 +140,7 @@ func BenchmarkLoadReadOnly(b *testing.B) {
 	uidStore.InitReadOnly(*uiddir)
 	defer uidStore.Close()
 
-	stores := []*store.Store{uidStore}
-	posting.Init(nil, stores)
+	posting.Init(nil)
 	uid.Init(uidStore)
 
 	f, err := os.Open("nameslist")

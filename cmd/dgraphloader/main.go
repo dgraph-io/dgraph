@@ -79,10 +79,10 @@ func main() {
 	uidStore.InitReadOnly(*uidDir)
 	defer uidStore.Close()
 
-	stores := []*store.Store{uidStore, dataStore}
-	posting.Init(nil, stores)
+	posting.Init(nil)
 	uid.Init(uidStore)
 	loader.Init(uidStore, dataStore)
+	go posting.CheckMemoryUsage(uidStore, dataStore)
 
 	files := strings.Split(*rdfGzips, ",")
 	for _, path := range files {

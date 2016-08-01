@@ -63,8 +63,7 @@ func prepare() (dir1, dir2 string, ps *store.Store, clog *commit.Logger, rerr er
 	clog = commit.NewLogger(dir2, "mutations", 50<<20)
 	clog.Init()
 
-	stores := []*store.Store{ps}
-	posting.Init(clog, stores)
+	posting.Init(clog)
 	worker.Init(ps, nil, 0, 1)
 	uid.Init(ps)
 	loader.Init(ps, ps)
