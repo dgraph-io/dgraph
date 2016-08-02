@@ -67,12 +67,20 @@ func (s *Store) InitReadOnly(filepath string) {
 }
 
 func (s *Store) Get(key []byte) (val []byte, rerr error) {
-	valS, rerr := s.db.Get(s.ropt, key)
-	val = valS.Data()
-	if rerr == nil && val == nil {
+	valSlice, rerr := s.db.Get(s.ropt, key)
+	if rerr != nil {
+		return []byte(""), rerr
+	}
+
+	if valSlice == nil {
 		return []byte(""), fmt.Errorf("E_KEY_NOT_FOUND")
 	}
-	return val, rerr
+
+	val = valSlice.Data()
+	if val == nil {
+		return []byte(""), fmt.Errorf("E_KEY_NOT_FOUND")
+	}
+	return val, nil
 }
 
 func (s *Store) SetOne(k []byte, val []byte) error {
