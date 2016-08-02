@@ -6,7 +6,7 @@ table Query {
 	count:int;
 	offset:int;
 	afterUid:ulong;
-	isCount:int;
+	isCount:ushort;
 }
 
 table Value {

@@ -114,7 +114,7 @@ type SubGraph struct {
 	Count    int
 	Offset   int
 	AfterUid uint64
-	IsCount  int
+	IsCount  uint16
 	Children []*SubGraph
 
 	Query  []byte
@@ -199,17 +199,27 @@ func postTraverse(g *SubGraph) (result map[uint64]interface{}, rerr error) {
 		for j := 0; j < ul.UidsLength(); j++ {
 			uid := ul.Uids(j)
 			m := make(map[string]interface{})
-			m["_uid_"] = fmt.Sprintf("%#x", uid)
+			if g.IsCount == 1 {
+				m["count"] = fmt.Sprintf("%d", uid)
+			} else {
+				m["_uid_"] = fmt.Sprintf("%#x", uid)
+			}
 			if ival, present := cResult[uid]; !present {
 				l[j] = m
 			} else {
 				l[j] = mergeInterfaces(m, ival)
 			}
 		}
-		if len(l) > 0 {
+		if g.IsCount == 1 {
 			m := make(map[string]interface{})
-			m[g.Attr] = l
+			m[g.Attr] = l[0]
 			result[q.Uids(i)] = m
+		} else {
+			if len(l) > 0 {
+				m := make(map[string]interface{})
+				m[g.Attr] = l
+				result[q.Uids(i)] = m
+			}
 		}
 		// TODO(manish): Check what happens if we handle len(l) == 1 separately.
 	}
@@ -478,7 +488,7 @@ func createTaskQuery(sg *SubGraph, sorted []uint64) []byte {
 	task.QueryAddCount(b, int32(sg.Count))
 	task.QueryAddOffset(b, int32(sg.Offset))
 	task.QueryAddAfterUid(b, uint64(sg.AfterUid))
-	task.QueryAddIsCount(b, int32(sg.IsCount))
+	task.QueryAddIsCount(b, sg.IsCount)
 
 	qend := task.QueryEnd(b)
 	b.Finish(qend)
