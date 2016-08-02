@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"container/heap"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"time"
@@ -113,6 +114,7 @@ type SubGraph struct {
 	Count    int
 	Offset   int
 	AfterUid uint64
+	IsCount  int
 	Children []*SubGraph
 
 	Query  []byte
@@ -367,20 +369,31 @@ func (g *SubGraph) ToProtocolBuffer(l *Latency) (n *graph.Node, rerr error) {
 	return n, nil
 }
 
-func treeCopy(gq *gql.GraphQuery, sg *SubGraph) {
+func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
 	// Typically you act on the current node, and leave recursion to deal with
 	// children. But, in this case, we don't want to muck with the current
 	// node, because of the way we're dealing with the root node.
 	// So, we work on the children, and then recurse for grand children.
 	for _, gchild := range gq.Children {
+		if gchild.Attr == "count" {
+			if len(gq.Children) > 1 {
+				return errors.New("Cannot have other attributes with count")
+			}
+			sg.IsCount = 1
+			break
+		}
 		dst := new(SubGraph)
 		dst.Attr = gchild.Attr
 		dst.Offset = gchild.Offset
 		dst.AfterUid = gchild.After
 		dst.Count = gchild.First
 		sg.Children = append(sg.Children, dst)
-		treeCopy(gchild, dst)
+		err := treeCopy(gchild, dst)
+		if err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
 func ToSubGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
@@ -388,8 +401,8 @@ func ToSubGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	if err != nil {
 		return nil, err
 	}
-	treeCopy(gq, sg)
-	return sg, nil
+	err = treeCopy(gq, sg)
+	return sg, err
 }
 
 func newGraph(ctx context.Context, euid uint64, exid string) (*SubGraph, error) {
@@ -465,6 +478,7 @@ func createTaskQuery(sg *SubGraph, sorted []uint64) []byte {
 	task.QueryAddCount(b, int32(sg.Count))
 	task.QueryAddOffset(b, int32(sg.Offset))
 	task.QueryAddAfterUid(b, uint64(sg.AfterUid))
+	task.QueryAddIsCount(b, int32(sg.IsCount))
 
 	qend := task.QueryEnd(b)
 	b.Finish(qend)

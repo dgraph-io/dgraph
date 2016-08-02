@@ -192,6 +192,33 @@ func populateGraph(t *testing.T) (string, *store.Store) {
 	return dir, ps
 }
 
+func TestCountError(t *testing.T) {
+
+	// Alright. Now we have everything set up. Let's create the query.
+	query := `
+		{
+			me(_uid_: 0x01) {
+				friend {
+					name
+					count
+				}
+				name
+				gender
+				status
+			}
+		}
+	`
+	gq, _, err := gql.Parse(query)
+	if err != nil {
+		t.Error(err)
+	}
+	ctx := context.Background()
+	_, err = ToSubGraph(ctx, gq)
+	if err == nil {
+		t.Error("Expected error")
+	}
+}
+
 func TestProcessGraph(t *testing.T) {
 	dir, _ := populateGraph(t)
 	defer os.RemoveAll(dir)

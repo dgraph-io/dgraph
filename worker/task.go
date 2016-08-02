@@ -83,47 +83,36 @@ func processTask(query []byte) (result []byte, rerr error) {
 	}
 
 	b := flatbuffers.NewBuilder(0)
-	var voffsets, uoffsets []flatbuffers.UOffsetT
+	voffsets := make([]flatbuffers.UOffsetT, q.UidsLength())
+	uoffsets := make([]flatbuffers.UOffsetT, q.UidsLength())
 
-	if attr == "count" {
-		voffsets = make([]flatbuffers.UOffsetT, 1)
-		uoffsets = make([]flatbuffers.UOffsetT, 1)
+	for i := 0; i < q.UidsLength(); i++ {
+		uid := q.Uids(i)
+		key := posting.Key(uid, attr)
+		pl := posting.GetOrCreate(key, store)
 
 		var valoffset flatbuffers.UOffsetT
-		valoffset = b.CreateByteVector(x.Nilbyte)
+		if val, err := pl.Value(); err != nil {
+			valoffset = b.CreateByteVector(x.Nilbyte)
+		} else {
+			valoffset = b.CreateByteVector(val)
+		}
 		task.ValueStart(b)
 		task.ValueAddVal(b, valoffset)
-		voffsets[0] = task.ValueEnd(b)
+		voffsets[i] = task.ValueEnd(b)
 
-		count := []uint64{uint64(q.UidsLength())}
-		uoffsets[0] = x.UidlistOffset(b, count)
-	} else {
-		voffsets = make([]flatbuffers.UOffsetT, q.UidsLength())
-		uoffsets = make([]flatbuffers.UOffsetT, q.UidsLength())
-
-		for i := 0; i < q.UidsLength(); i++ {
-			uid := q.Uids(i)
-			key := posting.Key(uid, attr)
-			pl := posting.GetOrCreate(key, store)
-
-			var valoffset flatbuffers.UOffsetT
-			if val, err := pl.Value(); err != nil {
-				valoffset = b.CreateByteVector(x.Nilbyte)
-			} else {
-				valoffset = b.CreateByteVector(val)
-			}
-			task.ValueStart(b)
-			task.ValueAddVal(b, valoffset)
-			voffsets[i] = task.ValueEnd(b)
-
-			opts := posting.ListOptions{
-				int(q.Offset()),
-				int(q.Count()),
-				uint64(q.AfterUid()),
-			}
-			ulist := pl.Uids(opts)
-			uoffsets[i] = x.UidlistOffset(b, ulist)
+		opts := posting.ListOptions{
+			int(q.Offset()),
+			int(q.Count()),
+			uint64(q.AfterUid()),
 		}
+		var ulist []uint64
+		if q.IsCount() == 1 {
+			ulist = []uint64{uint64(pl.Length())}
+		} else {
+			ulist = pl.Uids(opts)
+		}
+		uoffsets[i] = x.UidlistOffset(b, ulist)
 	}
 	task.ResultStartValuesVector(b, len(voffsets))
 	for i := len(voffsets) - 1; i >= 0; i-- {
