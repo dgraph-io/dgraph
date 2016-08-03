@@ -316,7 +316,7 @@ func runGrpcServer(ln net.Listener) {
 	s := grpc.NewServer()
 	graph.RegisterDgraphServer(s, &server{})
 	if err := s.Serve(ln); err != nil {
-		log.Fatalf("While serving gRpc requests", err)
+		log.Fatal("While serving gRpc requests: %v", err)
 	}
 	return
 }
