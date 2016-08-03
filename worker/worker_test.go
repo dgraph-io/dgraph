@@ -76,8 +76,7 @@ func TestProcessTask(t *testing.T) {
 	clog.Init()
 	defer clog.Close()
 
-	stores := []*store.Store{ps}
-	posting.Init(clog, stores)
+	posting.Init(clog)
 	Init(ps, nil, 0, 1)
 
 	edge := x.DirectedEdge{
