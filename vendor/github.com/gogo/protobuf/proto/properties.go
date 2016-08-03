@@ -1,3 +1,8 @@
+// Extensions for Protocol Buffers to create more go like structures.
+//
+// Copyright (c) 2013, Vastech SA (PTY) LTD. All rights reserved.
+// http://github.com/gogo/protobuf/gogoproto
+//
 // Go support for Protocol Buffers - Google's data interchange format
 //
 // Copyright 2010 The Go Authors.  All rights reserved.
@@ -187,6 +192,7 @@ type Properties struct {
 
 	Default    string // default value
 	HasDefault bool   // whether an explicit default was provided
+	CustomType string
 	def_uint64 uint64
 
 	enc           encoder
@@ -195,6 +201,8 @@ type Properties struct {
 	tagcode       []byte // encoding of EncodeVarint((Tag<<3)|WireType)
 	tagbuf        [8]byte
 	stype         reflect.Type      // set for struct types only
+	sstype        reflect.Type      // set for slices of structs types only
+	ctype         reflect.Type      // set for custom types only
 	sprop         *StructProperties // set for struct types only
 	isMarshaler   bool
 	isUnmarshaler bool
@@ -328,6 +336,10 @@ func (p *Properties) Parse(s string) {
 				p.Default += "," + strings.Join(fields[i+1:], ",")
 				break
 			}
+		case strings.HasPrefix(f, "embedded="):
+			p.OrigName = strings.Split(f, "=")[1]
+		case strings.HasPrefix(f, "customtype="):
+			p.CustomType = strings.Split(f, "=")[1]
 		}
 	}
 }
@@ -343,7 +355,11 @@ func (p *Properties) setEncAndDec(typ reflect.Type, f *reflect.StructField, lock
 	p.enc = nil
 	p.dec = nil
 	p.size = nil
-
+	if len(p.CustomType) > 0 {
+		p.setCustomEncAndDec(typ)
+		p.setTag(lockGetProp)
+		return
+	}
 	switch t1 := typ; t1.Kind() {
 	default:
 		fmt.Fprintf(os.Stderr, "proto: no coders for %v\n", t1)
@@ -351,33 +367,86 @@ func (p *Properties) setEncAndDec(typ reflect.Type, f *reflect.StructField, lock
 	// proto3 scalar types
 
 	case reflect.Bool:
-		p.enc = (*Buffer).enc_proto3_bool
-		p.dec = (*Buffer).dec_proto3_bool
-		p.size = size_proto3_bool
+		if p.proto3 {
+			p.enc = (*Buffer).enc_proto3_bool
+			p.dec = (*Buffer).dec_proto3_bool
+			p.size = size_proto3_bool
+		} else {
+			p.enc = (*Buffer).enc_ref_bool
+			p.dec = (*Buffer).dec_proto3_bool
+			p.size = size_ref_bool
+		}
 	case reflect.Int32:
-		p.enc = (*Buffer).enc_proto3_int32
-		p.dec = (*Buffer).dec_proto3_int32
-		p.size = size_proto3_int32
+		if p.proto3 {
+			p.enc = (*Buffer).enc_proto3_int32
+			p.dec = (*Buffer).dec_proto3_int32
+			p.size = size_proto3_int32
+		} else {
+			p.enc = (*Buffer).enc_ref_int32
+			p.dec = (*Buffer).dec_proto3_int32
+			p.size = size_ref_int32
+		}
 	case reflect.Uint32:
-		p.enc = (*Buffer).enc_proto3_uint32
-		p.dec = (*Buffer).dec_proto3_int32 // can reuse
-		p.size = size_proto3_uint32
+		if p.proto3 {
+			p.enc = (*Buffer).enc_proto3_uint32
+			p.dec = (*Buffer).dec_proto3_int32 // can reuse
+			p.size = size_proto3_uint32
+		} else {
+			p.enc = (*Buffer).enc_ref_uint32
+			p.dec = (*Buffer).dec_proto3_int32 // can reuse
+			p.size = size_ref_uint32
+		}
 	case reflect.Int64, reflect.Uint64:
-		p.enc = (*Buffer).enc_proto3_int64
-		p.dec = (*Buffer).dec_proto3_int64
-		p.size = size_proto3_int64
+		if p.proto3 {
+			p.enc = (*Buffer).enc_proto3_int64
+			p.dec = (*Buffer).dec_proto3_int64
+			p.size = size_proto3_int64
+		} else {
+			p.enc = (*Buffer).enc_ref_int64
+			p.dec = (*Buffer).dec_proto3_int64
+			p.size = size_ref_int64
+		}
 	case reflect.Float32:
-		p.enc = (*Buffer).enc_proto3_uint32 // can just treat them as bits
-		p.dec = (*Buffer).dec_proto3_int32
-		p.size = size_proto3_uint32
+		if p.proto3 {
+			p.enc = (*Buffer).enc_proto3_uint32 // can just treat them as bits
+			p.dec = (*Buffer).dec_proto3_int32
+			p.size = size_proto3_uint32
+		} else {
+			p.enc = (*Buffer).enc_ref_uint32 // can just treat them as bits
+			p.dec = (*Buffer).dec_proto3_int32
+			p.size = size_ref_uint32
+		}
 	case reflect.Float64:
-		p.enc = (*Buffer).enc_proto3_int64 // can just treat them as bits
-		p.dec = (*Buffer).dec_proto3_int64
-		p.size = size_proto3_int64
+		if p.proto3 {
+			p.enc = (*Buffer).enc_proto3_int64 // can just treat them as bits
+			p.dec = (*Buffer).dec_proto3_int64
+			p.size = size_proto3_int64
+		} else {
+			p.enc = (*Buffer).enc_ref_int64 // can just treat them as bits
+			p.dec = (*Buffer).dec_proto3_int64
+			p.size = size_ref_int64
+		}
 	case reflect.String:
-		p.enc = (*Buffer).enc_proto3_string
-		p.dec = (*Buffer).dec_proto3_string
-		p.size = size_proto3_string
+		if p.proto3 {
+			p.enc = (*Buffer).enc_proto3_string
+			p.dec = (*Buffer).dec_proto3_string
+			p.size = size_proto3_string
+		} else {
+			p.enc = (*Buffer).enc_ref_string
+			p.dec = (*Buffer).dec_proto3_string
+			p.size = size_ref_string
+		}
+	case reflect.Struct:
+		p.stype = typ
+		p.isMarshaler = isMarshaler(typ)
+		p.isUnmarshaler = isUnmarshaler(typ)
+		if p.Wire == "bytes" {
+			p.enc = (*Buffer).enc_ref_struct_message
+			p.dec = (*Buffer).dec_ref_struct_message
+			p.size = size_ref_struct_message
+		} else {
+			fmt.Fprintf(os.Stderr, "proto: no coders for struct %T\n", typ)
+		}
 
 	case reflect.Ptr:
 		switch t2 := t1.Elem(); t2.Kind() {
@@ -473,13 +542,17 @@ func (p *Properties) setEncAndDec(typ reflect.Type, f *reflect.StructField, lock
 			p.dec = (*Buffer).dec_slice_int64
 			p.packedDec = (*Buffer).dec_slice_packed_int64
 		case reflect.Uint8:
+			p.enc = (*Buffer).enc_slice_byte
 			p.dec = (*Buffer).dec_slice_byte
-			if p.proto3 {
+			p.size = size_slice_byte
+			// This is a []byte, which is either a bytes field,
+			// or the value of a map field. In the latter case,
+			// we always encode an empty []byte, so we should not
+			// use the proto3 enc/size funcs.
+			// f == nil iff this is the key/value of a map field.
+			if p.proto3 && f != nil {
 				p.enc = (*Buffer).enc_proto3_slice_byte
 				p.size = size_proto3_slice_byte
-			} else {
-				p.enc = (*Buffer).enc_slice_byte
-				p.size = size_slice_byte
 			}
 		case reflect.Float32, reflect.Float64:
 			switch t2.Bits() {
@@ -542,6 +615,8 @@ func (p *Properties) setEncAndDec(typ reflect.Type, f *reflect.StructField, lock
 				p.dec = (*Buffer).dec_slice_slice_byte
 				p.size = size_slice_slice_byte
 			}
+		case reflect.Struct:
+			p.setSliceOfNonPointerStructs(t1)
 		}
 
 	case reflect.Map:
@@ -561,7 +636,10 @@ func (p *Properties) setEncAndDec(typ reflect.Type, f *reflect.StructField, lock
 		}
 		p.mvalprop.init(vtype, "Value", f.Tag.Get("protobuf_val"), nil, lockGetProp)
 	}
+	p.setTag(lockGetProp)
+}
 
+func (p *Properties) setTag(lockGetProp bool) {
 	// precalculate tag code
 	wire := p.WireType
 	if p.Packed {
@@ -592,23 +670,11 @@ var (
 
 // isMarshaler reports whether type t implements Marshaler.
 func isMarshaler(t reflect.Type) bool {
-	// We're checking for (likely) pointer-receiver methods
-	// so if t is not a pointer, something is very wrong.
-	// The calls above only invoke isMarshaler on pointer types.
-	if t.Kind() != reflect.Ptr {
-		panic("proto: misuse of isMarshaler")
-	}
 	return t.Implements(marshalerType)
 }
 
 // isUnmarshaler reports whether type t implements Unmarshaler.
 func isUnmarshaler(t reflect.Type) bool {
-	// We're checking for (likely) pointer-receiver methods
-	// so if t is not a pointer, something is very wrong.
-	// The calls above only invoke isUnmarshaler on pointer types.
-	if t.Kind() != reflect.Ptr {
-		panic("proto: misuse of isUnmarshaler")
-	}
 	return t.Implements(unmarshalerType)
 }
 
@@ -678,31 +744,35 @@ func getPropertiesLocked(t reflect.Type) *StructProperties {
 	propertiesMap[t] = prop
 
 	// build properties
-	prop.extendable = reflect.PtrTo(t).Implements(extendableProtoType) ||
-		reflect.PtrTo(t).Implements(extendableProtoV1Type)
+	prop.extendable = reflect.PtrTo(t).Implements(extendableProtoType)
 	prop.unrecField = invalidField
 	prop.Prop = make([]*Properties, t.NumField())
 	prop.order = make([]int, t.NumField())
 
+	isOneofMessage := false
 	for i := 0; i < t.NumField(); i++ {
 		f := t.Field(i)
 		p := new(Properties)
 		name := f.Name
 		p.init(f.Type, name, f.Tag.Get("protobuf"), &f, false)
 
-		if f.Name == "XXX_InternalExtensions" { // special case
-			p.enc = (*Buffer).enc_exts
-			p.dec = nil // not needed
-			p.size = size_exts
-		} else if f.Name == "XXX_extensions" { // special case
-			p.enc = (*Buffer).enc_map
-			p.dec = nil // not needed
-			p.size = size_map
-		} else if f.Name == "XXX_unrecognized" { // special case
+		if f.Name == "XXX_extensions" { // special case
+			if len(f.Tag.Get("protobuf")) > 0 {
+				p.enc = (*Buffer).enc_ext_slice_byte
+				p.dec = nil // not needed
+				p.size = size_ext_slice_byte
+			} else {
+				p.enc = (*Buffer).enc_map
+				p.dec = nil // not needed
+				p.size = size_map
+			}
+		}
+		if f.Name == "XXX_unrecognized" { // special case
 			prop.unrecField = toField(&f)
 		}
 		oneof := f.Tag.Get("protobuf_oneof") // special case
 		if oneof != "" {
+			isOneofMessage = true
 			// Oneof fields don't use the traditional protobuf tag.
 			p.OrigName = oneof
 		}
@@ -726,7 +796,7 @@ func getPropertiesLocked(t reflect.Type) *StructProperties {
 	type oneofMessage interface {
 		XXX_OneofFuncs() (func(Message, *Buffer) error, func(Message, int, int, *Buffer) (bool, error), func(Message) int, []interface{})
 	}
-	if om, ok := reflect.Zero(reflect.PtrTo(t)).Interface().(oneofMessage); ok {
+	if om, ok := reflect.Zero(reflect.PtrTo(t)).Interface().(oneofMessage); isOneofMessage && ok {
 		var oots []interface{}
 		prop.oneofMarshaler, prop.oneofUnmarshaler, prop.oneofSizer, oots = om.XXX_OneofFuncs()
 		prop.stype = t
@@ -807,6 +877,7 @@ func getbase(pb Message) (t reflect.Type, b structPointer, err error) {
 // The generated code will register the generated maps by calling RegisterEnum.
 
 var enumValueMaps = make(map[string]map[string]int32)
+var enumStringMaps = make(map[string]map[int32]string)
 
 // RegisterEnum is called from the generated code to install the enum descriptor
 // maps into the global table to aid parsing text format protocol buffers.
@@ -815,6 +886,10 @@ func RegisterEnum(typeName string, unusedNameMap map[int32]string, valueMap map[
 		panic("proto: duplicate enum registered: " + typeName)
 	}
 	enumValueMaps[typeName] = valueMap
+	if _, ok := enumStringMaps[typeName]; ok {
+		panic("proto: duplicate enum registered: " + typeName)
+	}
+	enumStringMaps[typeName] = unusedNameMap
 }
 
 // EnumValueMap returns the mapping from names to integers of the
