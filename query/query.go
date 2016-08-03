@@ -114,7 +114,7 @@ type SubGraph struct {
 	Count    int
 	Offset   int
 	AfterUid uint64
-	IsCount  uint16
+	GetCount uint16
 	Children []*SubGraph
 
 	Query  []byte
@@ -199,8 +199,8 @@ func postTraverse(g *SubGraph) (result map[uint64]interface{}, rerr error) {
 		for j := 0; j < ul.UidsLength(); j++ {
 			uid := ul.Uids(j)
 			m := make(map[string]interface{})
-			if g.IsCount == 1 {
-				m["count"] = fmt.Sprintf("%d", uid)
+			if g.GetCount == 1 {
+				m["_count_"] = fmt.Sprintf("%d", uid)
 			} else {
 				m["_uid_"] = fmt.Sprintf("%#x", uid)
 			}
@@ -210,7 +210,7 @@ func postTraverse(g *SubGraph) (result map[uint64]interface{}, rerr error) {
 				l[j] = mergeInterfaces(m, ival)
 			}
 		}
-		if g.IsCount == 1 {
+		if g.GetCount == 1 {
 			m := make(map[string]interface{})
 			m[g.Attr] = l[0]
 			result[q.Uids(i)] = m
@@ -237,7 +237,7 @@ func postTraverse(g *SubGraph) (result map[uint64]interface{}, rerr error) {
 			continue
 		}
 
-		if pval, present := result[q.Uids(i)]; present && g.IsCount == 0 {
+		if pval, present := result[q.Uids(i)]; present && g.GetCount == 0 {
 			log.Fatalf("prev: %v _uid_: %v new: %v"+
 				" Previous value detected. A uid -> list of uids / value. Not both",
 				pval, q.Uids(i), val)
@@ -385,11 +385,14 @@ func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
 	// node, because of the way we're dealing with the root node.
 	// So, we work on the children, and then recurse for grand children.
 	for _, gchild := range gq.Children {
-		if gchild.Attr == "count" {
+		if gchild.Attr == "_count_" {
 			if len(gq.Children) > 1 {
 				return errors.New("Cannot have other attributes with count")
 			}
-			sg.IsCount = 1
+			if gchild.Children != nil {
+				return errors.New("Count cannot have other attributes")
+			}
+			sg.GetCount = 1
 			break
 		}
 		dst := new(SubGraph)
@@ -488,7 +491,7 @@ func createTaskQuery(sg *SubGraph, sorted []uint64) []byte {
 	task.QueryAddCount(b, int32(sg.Count))
 	task.QueryAddOffset(b, int32(sg.Offset))
 	task.QueryAddAfterUid(b, uint64(sg.AfterUid))
-	task.QueryAddIsCount(b, sg.IsCount)
+	task.QueryAddGetCount(b, sg.GetCount)
 
 	qend := task.QueryEnd(b)
 	b.Finish(qend)

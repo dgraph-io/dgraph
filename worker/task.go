@@ -107,7 +107,7 @@ func processTask(query []byte) (result []byte, rerr error) {
 			uint64(q.AfterUid()),
 		}
 		var ulist []uint64
-		if q.IsCount() == 1 {
+		if q.GetCount() == 1 {
 			ulist = []uint64{uint64(pl.Length())}
 		} else {
 			ulist = pl.Uids(opts)

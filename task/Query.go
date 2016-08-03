@@ -75,7 +75,7 @@ func (rcv *Query) MutateAfterUid(n uint64) bool {
 	return rcv._tab.MutateUint64Slot(12, n)
 }
 
-func (rcv *Query) IsCount() uint16 {
+func (rcv *Query) GetCount() uint16 {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(14))
 	if o != 0 {
 		return rcv._tab.GetUint16(o + rcv._tab.Pos)
@@ -83,7 +83,7 @@ func (rcv *Query) IsCount() uint16 {
 	return 0
 }
 
-func (rcv *Query) MutateIsCount(n uint16) bool {
+func (rcv *Query) MutateGetCount(n uint16) bool {
 	return rcv._tab.MutateUint16Slot(14, n)
 }
 
@@ -95,5 +95,5 @@ func QueryStartUidsVector(builder *flatbuffers.Builder, numElems int) flatbuffer
 func QueryAddCount(builder *flatbuffers.Builder, count int32) { builder.PrependInt32Slot(2, count, 0) }
 func QueryAddOffset(builder *flatbuffers.Builder, offset int32) { builder.PrependInt32Slot(3, offset, 0) }
 func QueryAddAfterUid(builder *flatbuffers.Builder, afterUid uint64) { builder.PrependUint64Slot(4, afterUid, 0) }
-func QueryAddIsCount(builder *flatbuffers.Builder, isCount uint16) { builder.PrependUint16Slot(5, isCount, 0) }
+func QueryAddGetCount(builder *flatbuffers.Builder, getCount uint16) { builder.PrependUint16Slot(5, getCount, 0) }
 func QueryEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT { return builder.EndObject() }
