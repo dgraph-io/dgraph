@@ -99,6 +99,8 @@ Loop:
 
 		case r == ' ':
 			continue
+		case r == '\t':
+			continue
 		default:
 			l.Errorf("Invalid input: %c at lexText", r)
 		}

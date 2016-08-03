@@ -36,6 +36,15 @@ var testNQuads = []struct {
 		},
 	},
 	{
+		input: "<some_subject_id>\t<predicate>\t<object_id>\t.",
+		nq: NQuad{
+			Subject:     "some_subject_id",
+			Predicate:   "predicate",
+			ObjectId:    "object_id",
+			ObjectValue: []byte(nil),
+		},
+	},
+	{
 		input: `_:alice <predicate> <object_id> .`,
 		nq: NQuad{
 			Subject:     "_:alice",
