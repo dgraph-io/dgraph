@@ -106,6 +106,7 @@ func runMutate(ctx context.Context, idx int, m *Mutations,
 			return
 		}
 		replies <- reply
+		che <- nil
 		return
 	}
 
