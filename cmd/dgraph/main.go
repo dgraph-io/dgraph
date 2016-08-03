@@ -34,6 +34,8 @@ import (
 
 	"google.golang.org/grpc"
 
+	"os"
+
 	"github.com/dgraph-io/dgraph/commit"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
@@ -44,7 +46,6 @@ import (
 	"github.com/dgraph-io/dgraph/uid"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
-	"os"
 )
 
 var postingDir = flag.String("postings", "", "Directory to store posting lists")
@@ -70,12 +71,10 @@ func addCorsHeaders(w http.ResponseWriter) {
 	w.Header().Set("Connection", "close")
 }
 
-func mutationHandler(ctx context.Context, mu *gql.Mutation) error {
-	if *nomutations {
-		return fmt.Errorf("Mutations are forbidden on this server.")
-	}
+func convertToEdges(ctx context.Context, mutation string) ([]x.DirectedEdge, error) {
+	var edges []x.DirectedEdge
 
-	r := strings.NewReader(mu.Set)
+	r := strings.NewReader(mutation)
 	scanner := bufio.NewScanner(r)
 	var nquads []rdf.NQuad
 	for scanner.Scan() {
@@ -86,7 +85,7 @@ func mutationHandler(ctx context.Context, mu *gql.Mutation) error {
 		nq, err := rdf.Parse(ln)
 		if err != nil {
 			x.Trace(ctx, "Error while parsing RDF: %v", err)
-			return err
+			return edges, err
 		}
 		nquads = append(nquads, nq)
 	}
@@ -103,29 +102,47 @@ func mutationHandler(ctx context.Context, mu *gql.Mutation) error {
 	if len(xidToUid) > 0 {
 		if err := worker.GetOrAssignUidsOverNetwork(ctx, &xidToUid); err != nil {
 			x.Trace(ctx, "Error while GetOrAssignUidsOverNetwork: %v", err)
-			return err
+			return edges, err
 		}
 	}
 
-	var edges []x.DirectedEdge
 	for _, nq := range nquads {
 		edge, err := nq.ToEdgeUsing(xidToUid)
 		if err != nil {
 			x.Trace(ctx, "Error while converting to edge: %v %v", nq, err)
-			return err
+			return edges, err
 		}
 		edges = append(edges, edge)
 	}
+	return edges, nil
+}
 
-	left, err := worker.MutateOverNetwork(ctx, edges)
+func mutationHandler(ctx context.Context, mu *gql.Mutation) error {
+	if *nomutations {
+		return fmt.Errorf("Mutations are forbidden on this server.")
+	}
+
+	var m worker.Mutations
+	var err error
+	if m.Set, err = convertToEdges(ctx, mu.Set); err != nil {
+		return err
+	}
+	if m.Del, err = convertToEdges(ctx, mu.Del); err != nil {
+		return err
+	}
+
+	left, err := worker.MutateOverNetwork(ctx, m)
 	if err != nil {
 		x.Trace(ctx, "Error while MutateOverNetwork: %v", err)
 		return err
 	}
-	if len(left) > 0 {
-		x.Trace(ctx, "%d edges couldn't be applied", len(left))
-		for _, e := range left {
-			x.Trace(ctx, "Unable to apply mutation for edge: %v", e)
+	if len(left.Set) > 0 || len(left.Del) > 0 {
+		x.Trace(ctx, "%d edges couldn't be applied", len(left.Del)+len(left.Set))
+		for _, e := range left.Set {
+			x.Trace(ctx, "Unable to apply set mutation for edge: %v", e)
+		}
+		for _, e := range left.Del {
+			x.Trace(ctx, "Unable to apply delete mutation for edge: %v", e)
 		}
 		return fmt.Errorf("Unapplied mutations")
 	}
@@ -170,7 +187,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// If we have mutations, run them first.
-	if mu != nil && len(mu.Set) > 0 {
+	if mu != nil && (len(mu.Set) > 0 || len(mu.Del) > 0) {
 		if err = mutationHandler(ctx, mu); err != nil {
 			x.Trace(ctx, "Error while handling mutations: %v", err)
 			x.SetStatus(w, x.E_ERROR, err.Error())
@@ -247,7 +264,7 @@ func (s *server) Query(ctx context.Context,
 	}
 
 	// If we have mutations, run them first.
-	if mu != nil && len(mu.Set) > 0 {
+	if mu != nil && (len(mu.Set) > 0 || len(mu.Del) > 0) {
 		if err = mutationHandler(ctx, mu); err != nil {
 			x.Trace(ctx, "Error while handling mutations: %v", err)
 			return resp, err
@@ -304,7 +321,7 @@ func runGrpcServer(address string) {
 	s := grpc.NewServer()
 	graph.RegisterDgraphServer(s, &server{})
 	if err = s.Serve(ln); err != nil {
-		log.Fatalf("While serving gRpc requests", err)
+		log.Fatalf("While serving gRpc requests: %v", err)
 	}
 	return
 }
@@ -324,15 +341,15 @@ func main() {
 	var err error
 	err = os.MkdirAll(*postingDir, 0700)
 	if err != nil {
-		log.Fatal("Error while creating the filepath for postings: %v", err)
+		log.Fatalf("Error while creating the filepath for postings: %v", err)
 	}
 	err = os.MkdirAll(*mutationDir, 0700)
 	if err != nil {
-		log.Fatal("Error while creating the filepath for mutations: %v", err)
+		log.Fatalf("Error while creating the filepath for mutations: %v", err)
 	}
 	err = os.MkdirAll(*uidDir, 0700)
 	if err != nil {
-		log.Fatal("Error while creating the filepath for uids: %v", err)
+		log.Fatalf("Error while creating the filepath for uids: %v", err)
 	}
 
 	ps := new(store.Store)

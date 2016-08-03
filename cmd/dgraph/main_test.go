@@ -32,6 +32,7 @@ import (
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/uid"
 	"github.com/dgraph-io/dgraph/worker"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 var q0 = `
@@ -173,6 +174,21 @@ func TestQuery(t *testing.T) {
 		return
 	}
 	fmt.Println(string(js))
+}
+
+func TestConvertToEdges(t *testing.T) {
+	q1 := `_uid_:0x01 <type> _uid_:0x02 .
+	       _uid_:0x01 <character> _uid_:0x03 .`
+
+	var edges []x.DirectedEdge
+	var err error
+	edges, err = convertToEdges(context.Background(), q1)
+	if err != nil {
+		t.Errorf("Expected err to be nil. Got: %v", err)
+	}
+	if len(edges) != 2 {
+		t.Errorf("Expected len of edges to be: %v. Got: %v", 2, len(edges))
+	}
 }
 
 var q1 = `

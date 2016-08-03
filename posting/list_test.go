@@ -135,11 +135,6 @@ func TestAddMutation(t *testing.T) {
 	if err := l.AddMutation(ctx, edge, Set); err != nil {
 		t.Error(err)
 	}
-	/*
-		if err := l.CommitIfDirty(); err != nil {
-			t.Error(err)
-		}
-	*/
 
 	if l.Length() != 1 {
 		t.Error("Unable to find added elements in posting list")

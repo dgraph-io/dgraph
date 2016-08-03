@@ -134,7 +134,7 @@ func GetOrAssignUidsOverNetwork(ctx context.Context, xidToUid *map[string]uint64
 	uidList.Init(reply.Data, uo)
 
 	if xidList.XidsLength() != uidList.UidsLength() {
-		log.Fatal("Xids: %d != Uids: %d", xidList.XidsLength(), uidList.UidsLength())
+		log.Fatalf("Xids: %d != Uids: %d", xidList.XidsLength(), uidList.UidsLength())
 	}
 	for i := 0; i < xidList.XidsLength(); i++ {
 		xid := string(xidList.Xids(i))
