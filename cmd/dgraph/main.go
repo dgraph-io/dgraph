@@ -122,24 +122,27 @@ func mutationHandler(ctx context.Context, mu *gql.Mutation) error {
 		return fmt.Errorf("Mutations are forbidden on this server.")
 	}
 
-	var setEdges, delEdges []x.DirectedEdge
+	var m worker.Mutations
 	var err error
-	if setEdges, err = convertToEdges(ctx, mu.Set); err != nil {
+	if m.Set, err = convertToEdges(ctx, mu.Set); err != nil {
 		return err
 	}
-	if delEdges, err = convertToEdges(ctx, mu.Del); err != nil {
+	if m.Del, err = convertToEdges(ctx, mu.Del); err != nil {
 		return err
 	}
 
-	left, err := worker.MutateOverNetwork(ctx, setEdges, delEdges)
+	left, err := worker.MutateOverNetwork(ctx, m)
 	if err != nil {
 		x.Trace(ctx, "Error while MutateOverNetwork: %v", err)
 		return err
 	}
-	if len(left) > 0 {
-		x.Trace(ctx, "%d edges couldn't be applied", len(left))
-		for _, e := range left {
-			x.Trace(ctx, "Unable to apply mutation for edge: %v", e)
+	if len(left.Set) > 0 || len(left.Del) > 0 {
+		x.Trace(ctx, "%d edges couldn't be applied", len(left.Del)+len(left.Set))
+		for _, e := range left.Set {
+			x.Trace(ctx, "Unable to apply set mutation for edge: %v", e)
+		}
+		for _, e := range left.Del {
+			x.Trace(ctx, "Unable to apply delete mutation for edge: %v", e)
 		}
 		return fmt.Errorf("Unapplied mutations")
 	}

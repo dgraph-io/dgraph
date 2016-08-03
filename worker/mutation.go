@@ -92,15 +92,24 @@ func mutate(ctx context.Context, m *Mutations, left *Mutations) error {
 
 func runMutate(ctx context.Context, idx int, m *Mutations,
 	replies chan *Payload, che chan error) {
-
 	left := new(Mutations)
+	var err error
 	if idx == int(instanceIdx) {
-		che <- mutate(ctx, m, left)
+		if err = mutate(ctx, m, left); err != nil {
+			che <- err
+			return
+		}
+		reply := new(Payload)
+		// Encoding and sending back the mutations which were not applied.
+		if reply.Data, err = left.Encode(); err != nil {
+			che <- err
+			return
+		}
+		replies <- reply
 		return
 	}
 
 	pool := pools[idx]
-	var err error
 	query := new(Payload)
 	query.Data, err = m.Encode()
 	if err != nil {
@@ -144,12 +153,11 @@ func addToMutationArray(mutationArray []*Mutations, edges []x.DirectedEdge, op s
 
 // MutateOverNetwork checks which instance should be running the mutations
 // according to fingerprint of the predicate and sends it to that instance.
-func MutateOverNetwork(ctx context.Context, setEdges []x.DirectedEdge,
-	delEdges []x.DirectedEdge) (left []x.DirectedEdge, rerr error) {
+func MutateOverNetwork(ctx context.Context, m Mutations) (left Mutations, rerr error) {
 	mutationArray := make([]*Mutations, numInstances)
 
-	addToMutationArray(mutationArray, setEdges, set)
-	addToMutationArray(mutationArray, delEdges, del)
+	addToMutationArray(mutationArray, m.Set, set)
+	addToMutationArray(mutationArray, m.Del, del)
 
 	replies := make(chan *Payload, numInstances)
 	errors := make(chan error, numInstances)
@@ -182,7 +190,8 @@ func MutateOverNetwork(ctx context.Context, setEdges []x.DirectedEdge,
 		if err := l.Decode(reply.Data); err != nil {
 			return left, err
 		}
-		left = append(left, l.Set...)
+		left.Set = append(left.Set, l.Set...)
+		left.Del = append(left.Del, l.Del...)
 	}
 	return left, nil
 }
