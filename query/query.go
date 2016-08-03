@@ -237,7 +237,7 @@ func postTraverse(g *SubGraph) (result map[uint64]interface{}, rerr error) {
 			continue
 		}
 
-		if pval, present := result[q.Uids(i)]; present {
+		if pval, present := result[q.Uids(i)]; present && g.IsCount == 0 {
 			log.Fatalf("prev: %v _uid_: %v new: %v"+
 				" Previous value detected. A uid -> list of uids / value. Not both",
 				pval, q.Uids(i), val)
