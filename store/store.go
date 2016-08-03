@@ -18,9 +18,9 @@ package store
 
 import (
 	"fmt"
-
 	"github.com/dgraph-io/dgraph/x"
 	rocksdb "github.com/tecbot/gorocksdb"
+	"strconv"
 )
 
 var log = x.Log("store")
@@ -97,4 +97,14 @@ func (s *Store) GetIterator() *rocksdb.Iterator {
 
 func (s *Store) Close() {
 	s.db.Close()
+}
+
+func (s *Store) MemtableSize() uint64 {
+	memTableSize, _ := strconv.ParseUint(s.db.GetProperty("rocksdb.cur-size-all-mem-tables"), 10, 64)
+	return memTableSize
+}
+
+func (s *Store) IndexFilterblockSize() uint64 {
+	blockSize, _ := strconv.ParseUint(s.db.GetProperty("rocksdb.estimate-table-readers-mem"), 10, 64)
+	return blockSize
 }

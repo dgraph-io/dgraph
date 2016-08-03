@@ -369,10 +369,10 @@ func main() {
 	}
 
 	posting.Init(clog)
-
 	if *instanceIdx != 0 {
 		worker.Init(ps, nil, *instanceIdx, lenAddr)
 		uid.Init(nil)
+		go posting.CheckMemoryUsage(ps, nil)
 	} else {
 		uidStore := new(store.Store)
 		uidStore.Init(*uidDir)
@@ -380,6 +380,7 @@ func main() {
 		// Only server instance 0 will have uidStore
 		worker.Init(ps, uidStore, *instanceIdx, lenAddr)
 		uid.Init(uidStore)
+		go posting.CheckMemoryUsage(ps, uidStore)
 	}
 
 	worker.Connect(addrs)

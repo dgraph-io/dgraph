@@ -172,7 +172,7 @@ func gentlyMerge(mr *mergeRoutines) {
 	ctr.log()
 }
 
-func checkMemoryUsage() {
+func CheckMemoryUsage(ps1, ps2 *store.Store) {
 	MIB = 1 << 20
 	MAX_MEMORY = *maxmemory * MIB
 
@@ -180,9 +180,17 @@ func checkMemoryUsage() {
 	for _ = range time.Tick(5 * time.Second) {
 		var ms runtime.MemStats
 		runtime.ReadMemStats(&ms)
-		if ms.Alloc > MAX_MEMORY {
-			aggressivelyEvict(ms)
+		totMemory := ms.Alloc
+		if ps1 != nil {
+			totMemory += ps1.MemtableSize() + ps1.IndexFilterblockSize()
+		}
 
+		if ps2 != nil {
+			totMemory += ps2.MemtableSize() + ps2.IndexFilterblockSize()
+		}
+
+		if totMemory > MAX_MEMORY {
+			aggressivelyEvict(ms)
 		} else {
 			// If merging is slow, we don't want to end up having too many goroutines
 			// merging the dirty list. This should keep them in check.
@@ -208,7 +216,6 @@ func Init(log *commit.Logger) {
 	lhmap = gotomic.NewHash()
 	dirtymap = gotomic.NewHash()
 	clog = log
-	go checkMemoryUsage()
 }
 
 func GetOrCreate(key []byte, pstore *store.Store) *List {

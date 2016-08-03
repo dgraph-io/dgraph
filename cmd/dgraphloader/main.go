@@ -82,6 +82,7 @@ func main() {
 	posting.Init(nil)
 	uid.Init(uidStore)
 	loader.Init(uidStore, dataStore)
+	go posting.CheckMemoryUsage(uidStore, dataStore)
 
 	files := strings.Split(*rdfGzips, ",")
 	for _, path := range files {
