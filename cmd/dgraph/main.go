@@ -310,18 +310,13 @@ func (s *server) Query(ctx context.Context,
 
 // This function register a Dgraph grpc server on the address, which is used
 // exchanging protocol buffer messages.
-func runGrpcServer(address string) {
-	ln, err := net.Listen("tcp", address)
-	if err != nil {
-		log.Fatalf("While running server for client: %v", err)
-		return
-	}
+func runGrpcServer(ln net.Listener) {
 	log.Printf("Client worker listening: %v", ln.Addr())
 
 	s := grpc.NewServer()
 	graph.RegisterDgraphServer(s, &server{})
-	if err = s.Serve(ln); err != nil {
-		log.Fatalf("While serving gRpc requests: %v", err)
+	if err := s.Serve(ln); err != nil {
+		log.Fatalf("While serving gRpc requests", err)
 	}
 	return
 }
@@ -383,12 +378,15 @@ func main() {
 	}
 
 	worker.Connect(addrs)
-	// Grpc server runs on (port + 1)
-	go runGrpcServer(fmt.Sprintf(":%d", *port+1))
+	ln, err := net.Listen("tcp", fmt.Sprintf(":%d", *port))
+	if err != nil {
+		log.Fatalf("While running server for client: %v", err)
+	}
+	go runGrpcServer(ln)
 
 	http.HandleFunc("/query", queryHandler)
-	log.Printf("Listening for requests at port: %v", *port)
-	if err := http.ListenAndServe(fmt.Sprintf(":%d", *port), nil); err != nil {
+	log.Printf("Listening for http requests at port: %v", *port)
+	if err := http.Serve(ln, nil); err != nil {
 		log.Fatalf("ListenAndServe: %v", err)
 	}
 }
