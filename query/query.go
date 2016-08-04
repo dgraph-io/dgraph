@@ -314,6 +314,7 @@ func (g *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 			log.Fatal("Attribute with uid not found in child Query uids.")
 			return fmt.Errorf("Attribute with uid not found")
 		}
+
 		var ul task.UidList
 		var tv task.Value
 		if ok := r.Uidmatrix(&ul, idx); !ok {
