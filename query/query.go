@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strconv"
 	"time"
 
 	"golang.org/x/net/context"
@@ -313,7 +314,6 @@ func (g *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 			log.Fatal("Attribute with uid not found in child Query uids.")
 			return fmt.Errorf("Attribute with uid not found")
 		}
-
 		var ul task.UidList
 		var tv task.Value
 		if ok := r.Uidmatrix(&ul, idx); !ok {
@@ -323,17 +323,26 @@ func (g *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 		if ul.UidsLength() > 0 {
 			// We create as many predicate entity children as the length of uids for
 			// this predicate.
-			for i := 0; i < ul.UidsLength(); i++ {
-				uid := ul.Uids(i)
+			if pc.GetCount == 1 {
 				uc := new(graph.Node)
 				uc.Attribute = pc.Attr
-				uc.Uid = uid
-				if rerr := pc.preTraverse(uid, uc); rerr != nil {
-					log.Printf("Error while traversal: %v", rerr)
-					return rerr
-				}
-
+				count := strconv.Itoa(int(ul.Uids(0)))
+				p := &graph.Property{Prop: "_count_", Val: []byte(count)}
+				uc.Properties = []*graph.Property{p}
 				children = append(children, uc)
+			} else {
+				for i := 0; i < ul.UidsLength(); i++ {
+					uid := ul.Uids(i)
+					uc := new(graph.Node)
+					uc.Attribute = pc.Attr
+					uc.Uid = uid
+					if rerr := pc.preTraverse(uid, uc); rerr != nil {
+						log.Printf("Error while traversal: %v", rerr)
+						return rerr
+					}
+
+					children = append(children, uc)
+				}
 			}
 		} else {
 			if ok := r.Values(&tv, idx); !ok {
