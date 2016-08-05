@@ -459,9 +459,11 @@ func benchmarkToJson(file string, b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if _, err := sg.ToJson(&l); err != nil {
+		js, err := sg.ToJson(&l)
+		if err != nil {
 			b.Fatal(err)
 		}
+		_ = string(js)
 	}
 }
 
@@ -491,7 +493,11 @@ func benchmarkToPB(file string, b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if _, err := sg.ToProtocolBuffer(&l); err != nil {
+		pb, err := sg.ToProtocolBuffer(&l)
+		if err != nil {
+			b.Fatal(err)
+		}
+		if _, err = proto.Marshal(pb); err != nil {
 			b.Fatal(err)
 		}
 	}
