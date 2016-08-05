@@ -459,11 +459,9 @@ func benchmarkToJson(file string, b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		js, err := sg.ToJson(&l)
-		if err != nil {
+		if _, err := sg.ToJson(&l); err != nil {
 			b.Fatal(err)
 		}
-		_ = string(js)
 	}
 }
 

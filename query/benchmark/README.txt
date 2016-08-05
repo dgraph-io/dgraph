@@ -68,20 +68,21 @@ BenchmarkToPB_1000_Director-4       2000      908611 ns/op    150163 B/op     30
 
 5 August 2016
 -------------
-These are the benchmarking results after including the Portocol buffer Marshalling
-step which was missing in the previous benchmarks and conversion of json byte array to string.
-So, this would be the true coparison of Json vs Protocol buffers. 
-Also the proto library was changed to gogo protobuf from go protobuf.
+These are the benchmarking results after including the protocol buffer Marshalling
+step which was missing in the previous benchmarks. So, this would be the true 
+comparison of Json vs Protocol buffers. Also, the proto library was changed to 
+gogo protobuf from go protobuf.
 
-BenchmarkToJSON_10_Actor-2                 50000             29559 ns/op            7153 B/op        106 allocs/op
-BenchmarkToJSON_10_Director-2              30000             53964 ns/op           13635 B/op        197 allocs/op
-BenchmarkToJSON_100_Actor-2                10000            141343 ns/op           38201 B/op        612 allocs/op
-BenchmarkToJSON_100_Director-2              5000            318730 ns/op           84097 B/op       1293 allocs/op
-BenchmarkToJSON_1000_Actor-2                2000            837214 ns/op          250090 B/op       3855 allocs/op
-BenchmarkToJSON_1000_Director-2              500           3703767 ns/op         1029910 B/op      15643 allocs/op
-BenchmarkToPB_10_Actor-2                  300000              4093 ns/op             888 B/op         16 allocs/op
-BenchmarkToPB_10_Director-2               200000              6173 ns/op            1328 B/op         22 allocs/op
-BenchmarkToPB_100_Actor-2                  30000             49327 ns/op           10568 B/op        146 allocs/op
-BenchmarkToPB_100_Director-2               20000             69849 ns/op           14768 B/op        219 allocs/op
-BenchmarkToPB_1000_Actor-2                  5000            385905 ns/op           72856 B/op        959 allocs/op
-BenchmarkToPB_1000_Director-2               2000           1030696 ns/op          207506 B/op       3081 allocs/op
+BenchmarkToJSON_10_Actor-2                 50000             29130 ns/op            6833 B/op        105 allocs/op
+BenchmarkToJSON_10_Director-2              30000             53121 ns/op           13059 B/op        196 allocs/op
+BenchmarkToJSON_100_Actor-2                10000            139344 ns/op           36536 B/op        611 allocs/op
+BenchmarkToJSON_100_Director-2              5000            319138 ns/op           79486 B/op       1292 allocs/op
+BenchmarkToJSON_1000_Actor-2                2000            831543 ns/op          239592 B/op       3854 allocs/op
+BenchmarkToJSON_1000_Director-2              500           3646994 ns/op          964339 B/op      15642 allocs/op
+BenchmarkToPB_10_Actor-2                  300000              4124 ns/op             888 B/op         16 allocs/op
+BenchmarkToPB_10_Director-2               200000              6183 ns/op            1328 B/op         22 allocs/op
+BenchmarkToPB_100_Actor-2                  30000             49610 ns/op           10568 B/op        146 allocs/op
+BenchmarkToPB_100_Director-2               20000             70183 ns/op           14768 B/op        219 allocs/op
+BenchmarkToPB_1000_Actor-2                  5000            389853 ns/op           72856 B/op        959 allocs/op
+BenchmarkToPB_1000_Director-2               2000           1036647 ns/op          207506 B/op       3081 allocs/op
+
