@@ -229,7 +229,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		time.Since(l.Start), l.Parsing, l.Processing, l.Json)
 
 	w.Header().Set("Content-Type", "application/json")
-	fmt.Fprint(w, string(js))
+	w.Write(js)
 }
 
 // server is used to implement graph.DgraphServer
