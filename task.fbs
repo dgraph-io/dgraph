@@ -24,4 +24,5 @@ table UidList {
 table Result {
 	uidmatrix:[UidList];
 	values:[Value];
+	count:[ulong];
 }

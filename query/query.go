@@ -191,38 +191,40 @@ func postTraverse(g *SubGraph) (result map[uint64]interface{}, rerr error) {
 	// result[uid in row] = map[cur attribute ->
 	//                          list of maps of {uid, uid + children result}]
 	//
-	var ul task.UidList
-	for i := 0; i < r.UidmatrixLength(); i++ {
-		if ok := r.Uidmatrix(&ul, i); !ok {
-			return result, fmt.Errorf("While parsing UidList")
-		}
-		l := make([]interface{}, ul.UidsLength())
-		for j := 0; j < ul.UidsLength(); j++ {
-			uid := ul.Uids(j)
+
+	if g.GetCount == 1 {
+		for i := 0; i < r.CountLength(); i++ {
+			co := r.Count(i)
 			m := make(map[string]interface{})
-			if g.GetCount == 1 {
-				m["_count_"] = fmt.Sprintf("%d", uid)
-			} else {
+			m["_count_"] = co
+			mp := make(map[string]interface{})
+			mp[g.Attr] = m
+			result[q.Uids(i)] = mp
+		}
+	} else {
+		var ul task.UidList
+		for i := 0; i < r.UidmatrixLength(); i++ {
+			if ok := r.Uidmatrix(&ul, i); !ok {
+				return result, fmt.Errorf("While parsing UidList")
+			}
+			l := make([]interface{}, ul.UidsLength())
+			for j := 0; j < ul.UidsLength(); j++ {
+				uid := ul.Uids(j)
+				m := make(map[string]interface{})
 				m["_uid_"] = fmt.Sprintf("%#x", uid)
+				if ival, present := cResult[uid]; !present {
+					l[j] = m
+				} else {
+					l[j] = mergeInterfaces(m, ival)
+				}
 			}
-			if ival, present := cResult[uid]; !present {
-				l[j] = m
-			} else {
-				l[j] = mergeInterfaces(m, ival)
-			}
-		}
-		if g.GetCount == 1 {
-			m := make(map[string]interface{})
-			m[g.Attr] = l[0]
-			result[q.Uids(i)] = m
-		} else {
 			if len(l) > 0 {
 				m := make(map[string]interface{})
 				m[g.Attr] = l
 				result[q.Uids(i)] = m
 			}
+			// TODO(manish): Check what happens if we handle len(l) == 1 separately.
 		}
-		// TODO(manish): Check what happens if we handle len(l) == 1 separately.
 	}
 
 	var tv task.Value
@@ -320,18 +322,17 @@ func (g *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 		if ok := r.Uidmatrix(&ul, idx); !ok {
 			return fmt.Errorf("While parsing UidList")
 		}
-
-		if ul.UidsLength() > 0 {
-			// We create as many predicate entity children as the length of uids for
-			// this predicate.
-			if pc.GetCount == 1 {
-				uc := new(graph.Node)
-				uc.Attribute = pc.Attr
-				count := strconv.Itoa(int(ul.Uids(0)))
-				p := &graph.Property{Prop: "_count_", Val: []byte(count)}
-				uc.Properties = []*graph.Property{p}
-				children = append(children, uc)
-			} else {
+		if pc.GetCount == 1 {
+			uc := new(graph.Node)
+			uc.Attribute = pc.Attr
+			count := strconv.Itoa(int(r.Count(idx)))
+			p := &graph.Property{Prop: "_count_", Val: []byte(count)}
+			uc.Properties = []*graph.Property{p}
+			children = append(children, uc)
+		} else {
+			if ul.UidsLength() > 0 {
+				// We create as many predicate entity children as the length of uids for
+				// this predicate.
 				for i := 0; i < ul.UidsLength(); i++ {
 					uid := ul.Uids(i)
 					uc := new(graph.Node)
@@ -344,19 +345,19 @@ func (g *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 
 					children = append(children, uc)
 				}
-			}
-		} else {
-			if ok := r.Values(&tv, idx); !ok {
-				return fmt.Errorf("While parsing value")
-			}
-
-			v := tv.ValBytes()
-
-			if pc.Attr == "_xid_" {
-				dst.Xid = string(v)
 			} else {
-				p := &graph.Property{Prop: pc.Attr, Val: v}
-				properties = append(properties, p)
+				if ok := r.Values(&tv, idx); !ok {
+					return fmt.Errorf("While parsing value")
+				}
+
+				v := tv.ValBytes()
+
+				if pc.Attr == "_xid_" {
+					dst.Xid = string(v)
+				} else {
+					p := &graph.Property{Prop: pc.Attr, Val: v}
+					properties = append(properties, p)
+				}
 			}
 		}
 	}
@@ -586,16 +587,23 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, rch chan error) {
 		}
 	}
 
-	sorted, err := sortedUniqueUids(r)
-	if err != nil {
-		x.Trace(ctx, "Error while processing task: %v", err)
-		rch <- err
-		return
-	}
+	var sorted []uint64
+	if sg.GetCount == 0 {
+		sorted, err = sortedUniqueUids(r)
+		if err != nil {
+			x.Trace(ctx, "Error while processing task: %v", err)
+			rch <- err
+			return
+		}
 
-	if len(sorted) == 0 {
-		// Looks like we're done here.
-		x.Trace(ctx, "Zero uids. Num attr children: %v", len(sg.Children))
+		if len(sorted) == 0 {
+			// Looks like we're done here.
+			x.Trace(ctx, "Zero uids. Num attr children: %v", len(sg.Children))
+			rch <- nil
+			return
+		}
+	} else {
+		x.Trace(ctx, "Zero uids. Only count requested")
 		rch <- nil
 		return
 	}

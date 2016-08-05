@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/gob"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"strings"
@@ -235,10 +236,12 @@ func TestCount(t *testing.T) {
 	}
 	var mp map[string]interface{}
 	err = json.Unmarshal(js, &mp)
+
+	fmt.Println(mp)
 	resp := mp["_root_"].([]interface{})[0]
 	friend := resp.(map[string]interface{})["friend"]
-	count := friend.(map[string]interface{})["_count_"].(string)
-	if count != "5" {
+	count := int(friend.(map[string]interface{})["_count_"].(float64))
+	if count != 5 {
 		t.Errorf("Expected count 1. Got %s", count)
 	}
 }
@@ -277,7 +280,7 @@ func TestCountError2(t *testing.T) {
 		{
 			me(_uid_: 0x01) {
 				friend {
-					_count_{
+					_count_ {
 						friend
 					}
 				}
