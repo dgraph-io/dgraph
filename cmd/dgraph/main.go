@@ -47,9 +47,9 @@ import (
 )
 
 var (
-	postingDir  = flag.String("postings", "", "Directory to store posting lists")
-	uidDir      = flag.String("uids", "", "XID UID posting lists directory")
-	mutationDir = flag.String("mutations", "", "Directory to store mutations")
+	postingDir  = flag.String("postings", "p", "Directory to store posting lists")
+	uidDir      = flag.String("uids", "u", "XID UID posting lists directory")
+	mutationDir = flag.String("mutations", "m", "Directory to store mutations")
 	port        = flag.Int("port", 8080, "Port to run server on.")
 	numcpu      = flag.Int("numCpu", runtime.NumCPU(),
 		"Number of cores to be used by the process")
