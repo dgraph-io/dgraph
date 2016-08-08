@@ -327,6 +327,7 @@ func runGrpcServer(address string) {
 }
 
 func main() {
+	log.SetFlags(log.Lshortfile | log.Flags())
 	flag.Parse()
 	if !flag.Parsed() {
 		log.Fatal("Unable to parse flags")
