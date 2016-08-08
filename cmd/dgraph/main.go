@@ -353,7 +353,9 @@ func main() {
 	}
 
 	ps := new(store.Store)
-	ps.Init(*postingDir)
+	if err := ps.Init(*postingDir); err != nil {
+		log.Fatalf("error initializing postings store: %s", err)
+	}
 	defer ps.Close()
 
 	clog := commit.NewLogger(*mutationDir, "dgraph", 50<<20)

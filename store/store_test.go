@@ -22,6 +22,8 @@ import (
 	"math/rand"
 	"os"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestGet(t *testing.T) {
@@ -34,7 +36,7 @@ func TestGet(t *testing.T) {
 	defer os.RemoveAll(path)
 
 	var s Store
-	s.Init(path)
+	require.NoError(t, s.Init(path))
 	k := []byte("mykey")
 	if err := s.SetOne(k, []byte("neo")); err != nil {
 		t.Error(err)

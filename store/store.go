@@ -47,25 +47,16 @@ func (s *Store) setOpts() {
 	s.wopt.SetSync(false) // We don't need to do synchronous writes.
 }
 
-func (s *Store) Init(filepath string) {
+func (s *Store) Init(filepath string) (err error) {
 	s.setOpts()
-	var err error
 	s.db, err = rocksdb.OpenDb(s.opt, filepath)
-	if err != nil {
-		log.Fatalf("Error while opening filepath: %q", filepath)
-		return
-	}
+	return
 }
 
-func (s *Store) InitReadOnly(filepath string) {
+func (s *Store) InitReadOnly(filepath string) (err error) {
 	s.setOpts()
-	var err error
 	s.db, err = rocksdb.OpenDbForReadOnly(s.opt, filepath, false)
-	// TODO(Ashwin):When will it be true
-	if err != nil {
-		log.Fatalf("Error while opening filepath: %q", filepath)
-		return
-	}
+	return
 }
 
 func (s *Store) Get(key []byte) (val []byte, rerr error) {
