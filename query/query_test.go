@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"encoding/gob"
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"os"
 	"strings"
@@ -237,7 +236,6 @@ func TestCount(t *testing.T) {
 	var mp map[string]interface{}
 	err = json.Unmarshal(js, &mp)
 
-	fmt.Println(mp)
 	resp := mp["_root_"].([]interface{})[0]
 	friend := resp.(map[string]interface{})["friend"]
 	count := int(friend.(map[string]interface{})["_count_"].(float64))

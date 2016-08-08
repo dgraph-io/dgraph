@@ -328,6 +328,7 @@ func (g *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 			p := &graph.Property{Prop: "_count_", Val: []byte(count)}
 			uc.Properties = []*graph.Property{p}
 			children = append(children, uc)
+
 		} else if ul.UidsLength() > 0 {
 			// We create as many predicate entity children as the length of uids for
 			// this predicate.
