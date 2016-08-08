@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"sync"
 	"time"
 
 	"golang.org/x/net/context"
@@ -280,6 +281,21 @@ func indexOf(uid uint64, q *task.Query) int {
 	return -1
 }
 
+var nodePool = sync.Pool{
+	New: func() interface{} {
+		return &graph.Node{}
+	},
+}
+
+func newGraphNode() *graph.Node {
+	return nodePool.Get().(*graph.Node)
+}
+
+func release(n *graph.Node) {
+	*n = graph.Node{}
+	nodePool.Put(n)
+}
+
 // This method gets the values and children for a subgraph.
 func (g *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 	var properties []*graph.Property
@@ -313,15 +329,16 @@ func (g *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 			// this predicate.
 			for i := 0; i < ul.UidsLength(); i++ {
 				uid := ul.Uids(i)
-				uc := new(graph.Node)
+				uc := newGraphNode()
+				// uc := new(graph.Node)
 				uc.Attribute = pc.Attr
 				uc.Uid = uid
 				if rerr := pc.preTraverse(uid, uc); rerr != nil {
 					log.Printf("Error while traversal: %v", rerr)
 					return rerr
 				}
-
 				children = append(children, uc)
+				release(uc)
 			}
 		} else {
 			if ok := r.Values(&tv, idx); !ok {
