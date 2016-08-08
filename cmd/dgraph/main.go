@@ -46,18 +46,20 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-var postingDir = flag.String("postings", "", "Directory to store posting lists")
-var uidDir = flag.String("uids", "", "XID UID posting lists directory")
-var mutationDir = flag.String("mutations", "", "Directory to store mutations")
-var port = flag.Int("port", 8080, "Port to run server on.")
-var numcpu = flag.Int("numCpu", runtime.NumCPU(),
-	"Number of cores to be used by the process")
-var instanceIdx = flag.Uint64("instanceIdx", 0,
-	"serves only entities whose Fingerprint % numInstance == instanceIdx.")
-var workers = flag.String("workers", "",
-	"Comma separated list of IP addresses of workers")
-var nomutations = flag.Bool("nomutations", false, "Don't allow mutations on this server.")
-var tracing = flag.Float64("trace", 0.5, "The ratio of queries to trace.")
+var (
+	postingDir  = flag.String("postings", "", "Directory to store posting lists")
+	uidDir      = flag.String("uids", "", "XID UID posting lists directory")
+	mutationDir = flag.String("mutations", "", "Directory to store mutations")
+	port        = flag.Int("port", 8080, "Port to run server on.")
+	numcpu      = flag.Int("numCpu", runtime.NumCPU(),
+		"Number of cores to be used by the process")
+	instanceIdx = flag.Uint64("instanceIdx", 0,
+		"serves only entities whose Fingerprint % numInstance == instanceIdx.")
+	workers = flag.String("workers", "",
+		"Comma separated list of IP addresses of workers")
+	nomutations = flag.Bool("nomutations", false, "Don't allow mutations on this server.")
+	tracing     = flag.Float64("trace", 0.5, "The ratio of queries to trace.")
+)
 
 func addCorsHeaders(w http.ResponseWriter) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
