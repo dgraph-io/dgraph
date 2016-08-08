@@ -52,7 +52,7 @@ func (s *Store) Init(filepath string) {
 	var err error
 	s.db, err = rocksdb.OpenDb(s.opt, filepath)
 	if err != nil {
-		log.Fatalf("Error while opening filepath: %v", filepath)
+		log.Fatalf("Error while opening filepath: %q", filepath)
 		return
 	}
 }
@@ -63,7 +63,7 @@ func (s *Store) InitReadOnly(filepath string) {
 	s.db, err = rocksdb.OpenDbForReadOnly(s.opt, filepath, false)
 	// TODO(Ashwin):When will it be true
 	if err != nil {
-		log.Fatalf("Error while opening filepath: %v", filepath)
+		log.Fatalf("Error while opening filepath: %q", filepath)
 		return
 	}
 }
