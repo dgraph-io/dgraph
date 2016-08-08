@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"log"
 	"strconv"
+	"sync"
 	"time"
 
 	"golang.org/x/net/context"
@@ -120,6 +121,29 @@ type SubGraph struct {
 
 	Query  []byte
 	Result []byte
+}
+
+var sgPool = sync.Pool{
+	New: func() interface{} {
+		return &SubGraph{}
+	},
+}
+
+func newSubgraphNode() *SubGraph {
+	node := sgPool.Get().(*SubGraph)
+	*node = SubGraph{}
+	return node
+}
+
+func releaseSubgraph(root *SubGraph) {
+	if root == nil {
+		return
+	}
+
+	for _, child := range root.Children {
+		go releaseSubgraph(child)
+	}
+	sgPool.Put(root)
 }
 
 func mergeInterfaces(i1 interface{}, i2 interface{}) interface{} {
@@ -253,6 +277,7 @@ func postTraverse(g *SubGraph) (result map[uint64]interface{}, rerr error) {
 
 func (g *SubGraph) ToJson(l *Latency) (js []byte, rerr error) {
 	r, err := postTraverse(g)
+	go releaseSubgraph(g)
 	if err != nil {
 		return js, err
 	}
@@ -385,6 +410,7 @@ func (g *SubGraph) ToProtocolBuffer(l *Latency) (n *graph.Node, rerr error) {
 		return n, rerr
 	}
 
+	go releaseSubgraph(g)
 	l.ProtocolBuffer = time.Since(l.Start) - l.Parsing - l.Processing
 	return n, nil
 }
@@ -405,7 +431,7 @@ func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
 			sg.GetCount = 1
 			break
 		}
-		dst := new(SubGraph)
+		dst := newSubgraphNode()
 		dst.Attr = gchild.Attr
 		dst.Offset = gchild.Offset
 		dst.AfterUid = gchild.After
@@ -476,7 +502,7 @@ func newGraph(ctx context.Context, euid uint64, exid string) (*SubGraph, error) 
 	rend := task.ResultEnd(b)
 	b.Finish(rend)
 
-	sg := new(SubGraph)
+	sg := newSubgraphNode()
 	sg.Attr = "_root_"
 	sg.Result = b.Bytes[b.Head():]
 	// Also add query for consistency and to allow for ToJson() later.
