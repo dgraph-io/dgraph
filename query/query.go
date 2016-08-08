@@ -288,12 +288,26 @@ var nodePool = sync.Pool{
 }
 
 func newGraphNode() *graph.Node {
-	return nodePool.Get().(*graph.Node)
+	n := nodePool.Get().(*graph.Node)
+	*n = graph.Node{}
+	return n
 }
 
-func release(n *graph.Node) {
-	*n = graph.Node{}
-	nodePool.Put(n)
+func release(root *graph.Node) {
+	var nodes []*graph.Node
+
+	nodes = append(nodes, root)
+	for len(nodes) > 0 {
+		n := nodes[len(nodes)-1]
+		nodes = nodes[:len(nodes)-1]
+		nodePool.Put(n)
+		for i := 0; i < len(n.Children); i++ {
+			if n.Children[i] == nil {
+				continue
+			}
+			nodes = append(nodes, n.Children[i])
+		}
+	}
 }
 
 // This method gets the values and children for a subgraph.
@@ -330,7 +344,6 @@ func (g *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 			for i := 0; i < ul.UidsLength(); i++ {
 				uid := ul.Uids(i)
 				uc := newGraphNode()
-				// uc := new(graph.Node)
 				uc.Attribute = pc.Attr
 				uc.Uid = uid
 				if rerr := pc.preTraverse(uid, uc); rerr != nil {
@@ -338,7 +351,6 @@ func (g *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 					return rerr
 				}
 				children = append(children, uc)
-				release(uc)
 			}
 		} else {
 			if ok := r.Values(&tv, idx); !ok {
@@ -380,6 +392,7 @@ func (g *SubGraph) ToProtocolBuffer(l *Latency) (n *graph.Node, rerr error) {
 		return n, rerr
 	}
 
+	release(n)
 	l.ProtocolBuffer = time.Since(l.Start) - l.Parsing - l.Processing
 	return n, nil
 }
