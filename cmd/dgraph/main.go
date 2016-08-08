@@ -335,7 +335,7 @@ func main() {
 	prev := runtime.GOMAXPROCS(numCpus)
 	log.Printf("num_cpu: %v. prev_maxprocs: %v. Set max procs to num cpus", numCpus, prev)
 	if *port%2 != 0 {
-		log.Fatalf("Port should be an even number: %v", *port)
+		log.Fatalf("Port must be an even number: %v", *port)
 	}
 	// Create parent directories for postings, uids and mutations
 	var err error
