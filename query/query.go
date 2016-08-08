@@ -192,16 +192,13 @@ func postTraverse(g *SubGraph) (result map[uint64]interface{}, rerr error) {
 	//                          list of maps of {uid, uid + children result}]
 	//
 
-	if r.CountLength() > 0 {
-		for i := 0; i < r.CountLength(); i++ {
-			co := r.Count(i)
-			m := make(map[string]interface{})
-			m["_count_"] = co
-			mp := make(map[string]interface{})
-			mp[g.Attr] = m
-			result[q.Uids(i)] = mp
-		}
-		return result, nil
+	for i := 0; i < r.CountLength(); i++ {
+		co := r.Count(i)
+		m := make(map[string]interface{})
+		m["_count_"] = co
+		mp := make(map[string]interface{})
+		mp[g.Attr] = m
+		result[q.Uids(i)] = mp
 	}
 
 	var ul task.UidList

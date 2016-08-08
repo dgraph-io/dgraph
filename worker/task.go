@@ -102,16 +102,17 @@ func processTask(query []byte) (result []byte, rerr error) {
 		task.ValueAddVal(b, valoffset)
 		voffsets[i] = task.ValueEnd(b)
 
-		opts := posting.ListOptions{
-			int(q.Offset()),
-			int(q.Count()),
-			uint64(q.AfterUid()),
-		}
-
 		if q.GetCount() == 1 {
 			count := uint64(pl.Length())
 			counts = append(counts, count)
+			// Add an emty UID list to make later processing consistent
+			uoffsets[i] = x.UidlistOffset(b, []uint64{})
 		} else {
+			opts := posting.ListOptions{
+				int(q.Offset()),
+				int(q.Count()),
+				uint64(q.AfterUid()),
+			}
 			ulist := pl.Uids(opts)
 			uoffsets[i] = x.UidlistOffset(b, ulist)
 		}
