@@ -20,8 +20,10 @@ import (
 	"bytes"
 	"container/heap"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
+	"strconv"
 	"time"
 
 	"golang.org/x/net/context"
@@ -113,6 +115,7 @@ type SubGraph struct {
 	Count    int
 	Offset   int
 	AfterUid uint64
+	GetCount uint16
 	Children []*SubGraph
 
 	Query  []byte
@@ -188,6 +191,16 @@ func postTraverse(g *SubGraph) (result map[uint64]interface{}, rerr error) {
 	// result[uid in row] = map[cur attribute ->
 	//                          list of maps of {uid, uid + children result}]
 	//
+
+	for i := 0; i < r.CountLength(); i++ {
+		co := r.Count(i)
+		m := make(map[string]interface{})
+		m["_count_"] = co
+		mp := make(map[string]interface{})
+		mp[g.Attr] = m
+		result[q.Uids(i)] = mp
+	}
+
 	var ul task.UidList
 	for i := 0; i < r.UidmatrixLength(); i++ {
 		if ok := r.Uidmatrix(&ul, i); !ok {
@@ -308,7 +321,15 @@ func (g *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 			return fmt.Errorf("While parsing UidList")
 		}
 
-		if ul.UidsLength() > 0 {
+		if r.CountLength() > 0 {
+			uc := new(graph.Node)
+			uc.Attribute = pc.Attr
+			count := strconv.Itoa(int(r.Count(idx)))
+			p := &graph.Property{Prop: "_count_", Val: []byte(count)}
+			uc.Properties = []*graph.Property{p}
+			children = append(children, uc)
+
+		} else if ul.UidsLength() > 0 {
 			// We create as many predicate entity children as the length of uids for
 			// this predicate.
 			for i := 0; i < ul.UidsLength(); i++ {
@@ -338,6 +359,7 @@ func (g *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 			}
 		}
 	}
+
 	dst.Properties, dst.Children = properties, children
 	return nil
 }
@@ -367,20 +389,34 @@ func (g *SubGraph) ToProtocolBuffer(l *Latency) (n *graph.Node, rerr error) {
 	return n, nil
 }
 
-func treeCopy(gq *gql.GraphQuery, sg *SubGraph) {
+func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
 	// Typically you act on the current node, and leave recursion to deal with
 	// children. But, in this case, we don't want to muck with the current
 	// node, because of the way we're dealing with the root node.
 	// So, we work on the children, and then recurse for grand children.
 	for _, gchild := range gq.Children {
+		if gchild.Attr == "_count_" {
+			if len(gq.Children) > 1 {
+				return errors.New("Cannot have other attributes with count")
+			}
+			if gchild.Children != nil {
+				return errors.New("Count cannot have other attributes")
+			}
+			sg.GetCount = 1
+			break
+		}
 		dst := new(SubGraph)
 		dst.Attr = gchild.Attr
 		dst.Offset = gchild.Offset
 		dst.AfterUid = gchild.After
 		dst.Count = gchild.First
 		sg.Children = append(sg.Children, dst)
-		treeCopy(gchild, dst)
+		err := treeCopy(gchild, dst)
+		if err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
 func ToSubGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
@@ -388,8 +424,8 @@ func ToSubGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	if err != nil {
 		return nil, err
 	}
-	treeCopy(gq, sg)
-	return sg, nil
+	err = treeCopy(gq, sg)
+	return sg, err
 }
 
 func newGraph(ctx context.Context, euid uint64, exid string) (*SubGraph, error) {
@@ -465,6 +501,7 @@ func createTaskQuery(sg *SubGraph, sorted []uint64) []byte {
 	task.QueryAddCount(b, int32(sg.Count))
 	task.QueryAddOffset(b, int32(sg.Offset))
 	task.QueryAddAfterUid(b, uint64(sg.AfterUid))
+	task.QueryAddGetCount(b, sg.GetCount)
 
 	qend := task.QueryEnd(b)
 	b.Finish(qend)
@@ -547,6 +584,12 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, rch chan error) {
 		if r.Values(&v, 0) {
 			x.Trace(ctx, "Sample value for attr: %v Val: %v", sg.Attr, string(v.ValBytes()))
 		}
+	}
+
+	if sg.GetCount == 1 {
+		x.Trace(ctx, "Zero uids. Only count requested")
+		rch <- nil
+		return
 	}
 
 	sorted, err := sortedUniqueUids(r)

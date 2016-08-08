@@ -6,6 +6,7 @@ table Query {
 	count:int;
 	offset:int;
 	afterUid:ulong;
+	getCount:ushort;
 }
 
 table Value {
@@ -23,4 +24,5 @@ table UidList {
 table Result {
 	uidmatrix:[UidList];
 	values:[Value];
+	count:[ulong];
 }

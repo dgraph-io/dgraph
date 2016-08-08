@@ -19,6 +19,7 @@ package query
 import (
 	"bytes"
 	"encoding/gob"
+	"encoding/json"
 	"io/ioutil"
 	"os"
 	"strings"
@@ -192,6 +193,112 @@ func populateGraph(t *testing.T) (string, *store.Store) {
 	addEdge(t, edge, posting.GetOrCreate(posting.Key(1, "_xid_"), ps))
 
 	return dir, ps
+}
+
+func TestCount(t *testing.T) {
+	dir, _ := populateGraph(t)
+	defer os.RemoveAll(dir)
+
+	// Alright. Now we have everything set up. Let's create the query.
+	query := `
+		{
+			me(_uid_:0x01) {
+				name
+				gender
+				status
+				friend {
+					_count_
+				}
+			}
+		}
+	`
+
+	gq, _, err := gql.Parse(query)
+	if err != nil {
+		t.Error(err)
+	}
+	ctx := context.Background()
+	sg, err := ToSubGraph(ctx, gq)
+	if err != nil {
+		t.Error(err)
+	}
+
+	ch := make(chan error)
+	go ProcessGraph(ctx, sg, ch)
+	err = <-ch
+	if err != nil {
+		t.Error(err)
+	}
+
+	var l Latency
+	js, err := sg.ToJson(&l)
+	if err != nil {
+		t.Error(err)
+	}
+	var mp map[string]interface{}
+	err = json.Unmarshal(js, &mp)
+
+	resp := mp["_root_"].([]interface{})[0]
+	friend := resp.(map[string]interface{})["friend"]
+	count := int(friend.(map[string]interface{})["_count_"].(float64))
+	if count != 5 {
+		t.Errorf("Expected count 1. Got %s", count)
+	}
+}
+
+func TestCountError1(t *testing.T) {
+
+	// Alright. Now we have everything set up. Let's create the query.
+	query := `
+		{
+			me(_uid_: 0x01) {
+				friend {
+					name
+					_count_
+				}
+				name
+				gender
+				status
+			}
+		}
+	`
+	gq, _, err := gql.Parse(query)
+	if err != nil {
+		t.Error(err)
+	}
+	ctx := context.Background()
+	_, err = ToSubGraph(ctx, gq)
+	if err == nil {
+		t.Error("Expected error")
+	}
+}
+
+func TestCountError2(t *testing.T) {
+
+	// Alright. Now we have everything set up. Let's create the query.
+	query := `
+		{
+			me(_uid_: 0x01) {
+				friend {
+					_count_ {
+						friend
+					}
+				}
+				name
+				gender
+				status
+			}
+		}
+	`
+	gq, _, err := gql.Parse(query)
+	if err != nil {
+		t.Error(err)
+	}
+	ctx := context.Background()
+	_, err = ToSubGraph(ctx, gq)
+	if err == nil {
+		t.Error("Expected error")
+	}
 }
 
 func TestProcessGraph(t *testing.T) {

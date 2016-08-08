@@ -85,6 +85,7 @@ func processTask(query []byte) (result []byte, rerr error) {
 	b := flatbuffers.NewBuilder(0)
 	voffsets := make([]flatbuffers.UOffsetT, q.UidsLength())
 	uoffsets := make([]flatbuffers.UOffsetT, q.UidsLength())
+	var counts []uint64
 
 	for i := 0; i < q.UidsLength(); i++ {
 		uid := q.Uids(i)
@@ -101,14 +102,22 @@ func processTask(query []byte) (result []byte, rerr error) {
 		task.ValueAddVal(b, valoffset)
 		voffsets[i] = task.ValueEnd(b)
 
-		opts := posting.ListOptions{
-			int(q.Offset()),
-			int(q.Count()),
-			uint64(q.AfterUid()),
+		if q.GetCount() == 1 {
+			count := uint64(pl.Length())
+			counts = append(counts, count)
+			// Add an emty UID list to make later processing consistent
+			uoffsets[i] = x.UidlistOffset(b, []uint64{})
+		} else {
+			opts := posting.ListOptions{
+				int(q.Offset()),
+				int(q.Count()),
+				uint64(q.AfterUid()),
+			}
+			ulist := pl.Uids(opts)
+			uoffsets[i] = x.UidlistOffset(b, ulist)
 		}
-		ulist := pl.Uids(opts)
-		uoffsets[i] = x.UidlistOffset(b, ulist)
 	}
+
 	task.ResultStartValuesVector(b, len(voffsets))
 	for i := len(voffsets) - 1; i >= 0; i-- {
 		b.PrependUOffsetT(voffsets[i])
@@ -121,9 +130,16 @@ func processTask(query []byte) (result []byte, rerr error) {
 	}
 	matrixVent := b.EndVector(len(uoffsets))
 
+	task.ResultStartCountVector(b, len(counts))
+	for i := len(counts) - 1; i >= 0; i-- {
+		b.PrependUint64(counts[i])
+	}
+	countsVent := b.EndVector(len(counts))
+
 	task.ResultStart(b)
 	task.ResultAddValues(b, valuesVent)
 	task.ResultAddUidmatrix(b, matrixVent)
+	task.ResultAddCount(b, countsVent)
 	rend := task.ResultEnd(b)
 	b.Finish(rend)
 	return b.Bytes[b.Head():], nil
