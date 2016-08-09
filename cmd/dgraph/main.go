@@ -318,7 +318,7 @@ func runGrpcServer(address string) {
 	}
 	log.Printf("Client worker listening: %v", ln.Addr())
 
-	s := grpc.NewServer()
+	s := grpc.NewServer(grpc.CustomCodec(&query.Codec{}))
 	graph.RegisterDgraphServer(s, &server{})
 	if err = s.Serve(ln); err != nil {
 		log.Fatalf("While serving gRpc requests: %v", err)

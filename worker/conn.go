@@ -48,8 +48,7 @@ func NewPool(addr string, maxCap int) *Pool {
 }
 
 func (p *Pool) dialNew() (*grpc.ClientConn, error) {
-	return grpc.Dial(p.Addr, grpc.WithInsecure(), grpc.WithInsecure(),
-		grpc.WithCodec(&PayloadCodec{}))
+	return grpc.Dial(p.Addr, grpc.WithInsecure(), grpc.WithCodec(&PayloadCodec{}))
 }
 
 func (p *Pool) Get() (*grpc.ClientConn, error) {

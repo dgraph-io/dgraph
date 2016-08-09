@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"log"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/google/flatbuffers/go"
@@ -293,6 +294,33 @@ func indexOf(uid uint64, q *task.Query) int {
 	return -1
 }
 
+var nodePool = sync.Pool{
+	New: func() interface{} {
+		return &graph.Node{}
+	},
+}
+
+var nodeCh chan *graph.Node
+
+func release() {
+	for n := range nodeCh {
+		// In case of mutations, n is nil
+		if n == nil {
+			continue
+		}
+		for i := 0; i < len(n.Children); i++ {
+			nodeCh <- n.Children[i]
+		}
+		*n = graph.Node{}
+		nodePool.Put(n)
+	}
+}
+
+func init() {
+	nodeCh = make(chan *graph.Node, 1000)
+	go release()
+}
+
 // This method gets the values and children for a subgraph.
 func (g *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 	var properties []*graph.Property
@@ -334,14 +362,13 @@ func (g *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 			// this predicate.
 			for i := 0; i < ul.UidsLength(); i++ {
 				uid := ul.Uids(i)
-				uc := new(graph.Node)
+				uc := nodePool.Get().(*graph.Node)
 				uc.Attribute = pc.Attr
 				uc.Uid = uid
 				if rerr := pc.preTraverse(uid, uc); rerr != nil {
 					log.Printf("Error while traversal: %v", rerr)
 					return rerr
 				}
-
 				children = append(children, uc)
 			}
 		} else {
