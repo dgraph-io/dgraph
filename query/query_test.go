@@ -474,6 +474,7 @@ func BenchmarkToJSON_1000_Director(b *testing.B) { benchmarkToJson("benchmark/di
 
 func benchmarkToPB(file string, b *testing.B) {
 	b.ReportAllocs()
+	go InitRelease()
 	var sg SubGraph
 	var l Latency
 
@@ -495,7 +496,10 @@ func benchmarkToPB(file string, b *testing.B) {
 		if err != nil {
 			b.Fatal(err)
 		}
-		if _, err = proto.Marshal(pb); err != nil {
+		r := new(graph.Response)
+		r.N = pb
+		var c Codec
+		if _, err = c.Marshal(r); err != nil {
 			b.Fatal(err)
 		}
 	}

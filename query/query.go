@@ -303,6 +303,7 @@ func release() {
 	}
 }
 
+// InitRelease intialises the channel and calls release function.
 func InitRelease() {
 	nodeCh = make(chan *graph.Node, 1000)
 	release()

@@ -7,8 +7,10 @@ import (
 	"github.com/gogo/protobuf/proto"
 )
 
+// Codec implements the custom codec interface.
 type Codec struct{}
 
+// Marshal release the graph.Node pointers after marshalling the response.
 func (c *Codec) Marshal(v interface{}) ([]byte, error) {
 	r, ok := v.(*graph.Response)
 	if !ok {
@@ -29,6 +31,7 @@ func (c *Codec) Marshal(v interface{}) ([]byte, error) {
 	return b, nil
 }
 
+// Unmarshal constructs graph.Request from the byte slice.
 func (c *Codec) Unmarshal(data []byte, v interface{}) error {
 	n, ok := v.(*graph.Request)
 	if !ok {
