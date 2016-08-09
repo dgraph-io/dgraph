@@ -196,6 +196,57 @@ func populateGraph(t *testing.T) (string, *store.Store) {
 	return dir, ps
 }
 
+func TestGetUid(t *testing.T) {
+	dir, _ := populateGraph(t)
+	defer os.RemoveAll(dir)
+
+	// Alright. Now we have everything set up. Let's create the query.
+	query := `
+		{
+			me(_uid_:0x01) {
+				name
+				_uid_
+				gender
+				status
+				friend {
+					_count_
+				}
+			}
+		}
+	`
+
+	gq, _, err := gql.Parse(query)
+	if err != nil {
+		t.Error(err)
+	}
+	ctx := context.Background()
+	sg, err := ToSubGraph(ctx, gq)
+	if err != nil {
+		t.Error(err)
+	}
+
+	ch := make(chan error)
+	go ProcessGraph(ctx, sg, ch)
+	err = <-ch
+	if err != nil {
+		t.Error(err)
+	}
+
+	var l Latency
+	js, err := sg.ToJson(&l)
+	if err != nil {
+		t.Error(err)
+	}
+	var mp map[string]interface{}
+	err = json.Unmarshal(js, &mp)
+
+	resp := mp["me"].([]interface{})[0]
+	uid := resp.(map[string]interface{})["_uid_"].(string)
+	if uid != "0x1" {
+		t.Errorf("Expected uid 0x01. Got %s", uid)
+	}
+}
+
 func TestCount(t *testing.T) {
 	dir, _ := populateGraph(t)
 	defer os.RemoveAll(dir)

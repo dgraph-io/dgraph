@@ -118,6 +118,7 @@ type SubGraph struct {
 	GetCount uint16
 	Children []*SubGraph
 	IsRoot   bool
+	GetUid   bool
 
 	Query  []byte
 	Result []byte
@@ -211,6 +212,9 @@ func postTraverse(g *SubGraph) (result map[uint64]interface{}, rerr error) {
 		for j := 0; j < ul.UidsLength(); j++ {
 			uid := ul.Uids(j)
 			m := make(map[string]interface{})
+			if g.GetUid {
+				m["_uid_"] = fmt.Sprintf("%#x", uid)
+			}
 			if ival, present := cResult[uid]; !present {
 				l[j] = m
 			} else {
@@ -244,6 +248,9 @@ func postTraverse(g *SubGraph) (result map[uint64]interface{}, rerr error) {
 				pval, q.Uids(i), val)
 		}
 		m := make(map[string]interface{})
+		if g.GetUid {
+			m["_uid_"] = fmt.Sprintf("%#x", q.Uids(i))
+		}
 		m[g.Attr] = string(val)
 		result[q.Uids(i)] = m
 	}
@@ -403,6 +410,9 @@ func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
 			}
 			sg.GetCount = 1
 			break
+		}
+		if gchild.Attr == "_uid_" {
+			sg.GetUid = true
 		}
 		dst := new(SubGraph)
 		dst.Attr = gchild.Attr
