@@ -287,27 +287,25 @@ var nodePool = sync.Pool{
 	},
 }
 
-func newGraphNode() *graph.Node {
-	n := nodePool.Get().(*graph.Node)
-	*n = graph.Node{}
-	return n
+var nodeCh chan *graph.Node
+
+func release() {
+	for n := range nodeCh {
+		// In case of mutations, n is nil
+		if n == nil {
+			continue
+		}
+		for i := 0; i < len(n.Children); i++ {
+			nodeCh <- n.Children[i]
+		}
+		*n = graph.Node{}
+		nodePool.Put(n)
+	}
 }
 
-func release(root *graph.Node) {
-	var nodes []*graph.Node
-
-	nodes = append(nodes, root)
-	for len(nodes) > 0 {
-		n := nodes[len(nodes)-1]
-		nodes = nodes[:len(nodes)-1]
-		nodePool.Put(n)
-		for i := 0; i < len(n.Children); i++ {
-			if n.Children[i] == nil {
-				continue
-			}
-			nodes = append(nodes, n.Children[i])
-		}
-	}
+func InitRelease() {
+	nodeCh = make(chan *graph.Node, 1000)
+	release()
 }
 
 // This method gets the values and children for a subgraph.
@@ -343,7 +341,7 @@ func (g *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 			// this predicate.
 			for i := 0; i < ul.UidsLength(); i++ {
 				uid := ul.Uids(i)
-				uc := newGraphNode()
+				uc := nodePool.Get().(*graph.Node)
 				uc.Attribute = pc.Attr
 				uc.Uid = uid
 				if rerr := pc.preTraverse(uid, uc); rerr != nil {
@@ -392,7 +390,6 @@ func (g *SubGraph) ToProtocolBuffer(l *Latency) (n *graph.Node, rerr error) {
 		return n, rerr
 	}
 
-	release(n)
 	l.ProtocolBuffer = time.Since(l.Start) - l.Parsing - l.Processing
 	return n, nil
 }
