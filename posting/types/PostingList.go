@@ -5,6 +5,7 @@ package types
 import (
 	flatbuffers "github.com/google/flatbuffers/go"
 )
+
 type PostingList struct {
 	_tab flatbuffers.Table
 }
@@ -12,7 +13,7 @@ type PostingList struct {
 func GetRootAsPostingList(buf []byte, offset flatbuffers.UOffsetT) *PostingList {
 	n := flatbuffers.GetUOffsetT(buf[offset:])
 	x := &PostingList{}
-	x.Init(buf, n + offset)
+	x.Init(buf, n+offset)
 	return x
 }
 
@@ -35,9 +36,9 @@ func (rcv *PostingList) Postings(obj *Posting, j int) bool {
 		x := rcv._tab.Vector(o)
 		x += flatbuffers.UOffsetT(j) * 4
 		x = rcv._tab.Indirect(x)
-	if obj == nil {
-		obj = new(Posting)
-	}
+		if obj == nil {
+			obj = new(Posting)
+		}
 		obj.Init(rcv._tab.Bytes, x)
 		return true
 	}
@@ -53,8 +54,13 @@ func (rcv *PostingList) PostingsLength() int {
 }
 
 func PostingListStart(builder *flatbuffers.Builder) { builder.StartObject(2) }
-func PostingListAddCommitTs(builder *flatbuffers.Builder, commitTs int64) { builder.PrependInt64Slot(0, commitTs, 0) }
-func PostingListAddPostings(builder *flatbuffers.Builder, postings flatbuffers.UOffsetT) { builder.PrependUOffsetTSlot(1, flatbuffers.UOffsetT(postings), 0) }
-func PostingListStartPostingsVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT { return builder.StartVector(4, numElems, 4)
+func PostingListAddCommitTs(builder *flatbuffers.Builder, commitTs int64) {
+	builder.PrependInt64Slot(0, commitTs, 0)
+}
+func PostingListAddPostings(builder *flatbuffers.Builder, postings flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(1, flatbuffers.UOffsetT(postings), 0)
+}
+func PostingListStartPostingsVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
+	return builder.StartVector(4, numElems, 4)
 }
 func PostingListEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT { return builder.EndObject() }

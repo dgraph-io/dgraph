@@ -18,9 +18,11 @@ package store
 
 import (
 	"fmt"
-	"github.com/dgraph-io/dgraph/x"
-	rocksdb "github.com/tecbot/gorocksdb"
 	"strconv"
+
+	rocksdb "github.com/tecbot/gorocksdb"
+
+	"github.com/dgraph-io/dgraph/x"
 )
 
 var log = x.Log("store")

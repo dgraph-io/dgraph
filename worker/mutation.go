@@ -22,11 +22,11 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/dgryski/go-farm"
 	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgryski/go-farm"
 )
 
 // Mutations stores the directed edges for both the set and delete operations.

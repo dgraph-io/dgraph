@@ -25,6 +25,7 @@ import (
 	"testing"
 
 	"github.com/Sirupsen/logrus"
+
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/store"
 )

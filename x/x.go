@@ -22,12 +22,12 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/Sirupsen/logrus"
+	"github.com/google/flatbuffers/go"
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/dgraph-io/dgraph/task"
-	"github.com/google/flatbuffers/go"
 )
 
 const (
