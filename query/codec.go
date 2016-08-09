@@ -22,6 +22,7 @@ func (c *Codec) Marshal(v interface{}) ([]byte, error) {
 		return []byte{}, err
 	}
 
+	*r.N = graph.Node{}
 	select {
 	// Passing onto to channel which would put it into the sync pool.
 	case nodeCh <- r.N:

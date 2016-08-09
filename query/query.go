@@ -22,7 +22,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"sync"
 	"time"
 
 	"golang.org/x/net/context"
@@ -281,13 +280,16 @@ func indexOf(uid uint64, q *task.Query) int {
 	return -1
 }
 
-var nodePool = sync.Pool{
-	New: func() interface{} {
-		return &graph.Node{}
-	},
-}
-
 var nodeCh chan *graph.Node
+
+func newGraphNode() *graph.Node {
+	select {
+	case n := <-nodeCh:
+		return n
+	default:
+		return new(graph.Node)
+	}
+}
 
 func release() {
 	for n := range nodeCh {
@@ -296,15 +298,14 @@ func release() {
 			continue
 		}
 		for i := 0; i < len(n.Children); i++ {
+			*n.Children[i] = graph.Node{}
 			nodeCh <- n.Children[i]
 		}
-		*n = graph.Node{}
-		nodePool.Put(n)
 	}
 }
 
 func init() {
-	nodeCh = make(chan *graph.Node, 1000)
+	nodeCh = make(chan *graph.Node, 1000000)
 	go release()
 }
 
@@ -341,7 +342,7 @@ func (g *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 			// this predicate.
 			for i := 0; i < ul.UidsLength(); i++ {
 				uid := ul.Uids(i)
-				uc := nodePool.Get().(*graph.Node)
+				uc := newGraphNode()
 				uc.Attribute = pc.Attr
 				uc.Uid = uid
 				if rerr := pc.preTraverse(uid, uc); rerr != nil {
