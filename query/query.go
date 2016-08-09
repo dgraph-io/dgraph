@@ -294,9 +294,6 @@ func newGraphNode() *graph.Node {
 func release() {
 	for n := range nodeCh {
 		// In case of mutations, n is nil
-		if n == nil {
-			continue
-		}
 		for i := 0; i < len(n.Children); i++ {
 			*n.Children[i] = graph.Node{}
 			nodeCh <- n.Children[i]
