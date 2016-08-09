@@ -474,7 +474,6 @@ func BenchmarkToJSON_1000_Director(b *testing.B) { benchmarkToJson("benchmark/di
 
 func benchmarkToPB(file string, b *testing.B) {
 	b.ReportAllocs()
-	go InitRelease()
 	var sg SubGraph
 	var l Latency
 
