@@ -1,0 +1,26 @@
+PASS
+BenchmarkToJSON_10_Actor-4            	   50000	     44648 ns/op	    6834 B/op	     105 allocs/op
+BenchmarkToJSON_10_Director-4         	   20000	     80631 ns/op	   13060 B/op	     196 allocs/op
+BenchmarkToJSON_100_Actor-4           	   10000	    242584 ns/op	   36540 B/op	     611 allocs/op
+BenchmarkToJSON_100_Director-4        	    3000	    508401 ns/op	   79492 B/op	    1292 allocs/op
+BenchmarkToJSON_1000_Actor-4          	    1000	   1808388 ns/op	  239619 B/op	    3854 allocs/op
+BenchmarkToJSON_1000_Director-4       	     200	   9665894 ns/op	  964343 B/op	   15642 allocs/op
+BenchmarkToPB_10_Actor-4              	  200000	      7444 ns/op	     888 B/op	      16 allocs/op
+BenchmarkToPB_10_Director-4           	  200000	      8823 ns/op	    1328 B/op	      22 allocs/op
+BenchmarkToPB_100_Actor-4             	   20000	     64972 ns/op	   10568 B/op	     146 allocs/op
+BenchmarkToPB_100_Director-4          	   20000	    110617 ns/op	   14768 B/op	     219 allocs/op
+BenchmarkToPB_1000_Actor-4            	    2000	    630266 ns/op	   72857 B/op	     959 allocs/op
+BenchmarkToPB_1000_Director-4         	    1000	   1597286 ns/op	  207508 B/op	    3081 allocs/op
+BenchmarkToPBMarshal_10_Actor-4       	 2000000	      1091 ns/op	     224 B/op	       1 allocs/op
+BenchmarkToPBMarshal_10_Director-4    	 1000000	      1693 ns/op	     352 B/op	       1 allocs/op
+BenchmarkToPBMarshal_100_Actor-4      	  200000	     13729 ns/op	    2560 B/op	       1 allocs/op
+BenchmarkToPBMarshal_100_Director-4   	  100000	     22592 ns/op	    4096 B/op	       1 allocs/op
+BenchmarkToPBMarshal_1000_Actor-4     	   20000	     67901 ns/op	   16640 B/op	       1 allocs/op
+BenchmarkToPBMarshal_1000_Director-4  	    5000	    350876 ns/op	   57345 B/op	       1 allocs/op
+BenchmarkToPBUnmarshal_10_Actor-4     	  500000	      3419 ns/op	     768 B/op	      23 allocs/op
+BenchmarkToPBUnmarshal_10_Director-4  	  300000	      5452 ns/op	    1208 B/op	      35 allocs/op
+BenchmarkToPBUnmarshal_100_Actor-4    	   50000	     40070 ns/op	   10128 B/op	     237 allocs/op
+BenchmarkToPBUnmarshal_100_Director-4 	   20000	    106075 ns/op	   14144 B/op	     386 allocs/op
+BenchmarkToPBUnmarshal_1000_Actor-4   	    5000	    249539 ns/op	   71297 B/op	    1590 allocs/op
+BenchmarkToPBUnmarshal_1000_Director-4	    2000	    914241 ns/op	  202260 B/op	    5522 allocs/op
+ok  	github.com/dgraph-io/dgraph/query	53.433s

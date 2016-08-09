@@ -602,7 +602,10 @@ func benchmarkToPB(file string, b *testing.B) {
 		if err != nil {
 			b.Fatal(err)
 		}
-		if _, err = proto.Marshal(pb); err != nil {
+		r := new(graph.Response)
+		r.N = pb
+		var c Codec
+		if _, err = c.Marshal(r); err != nil {
 			b.Fatal(err)
 		}
 	}

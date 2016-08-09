@@ -293,6 +293,32 @@ func indexOf(uid uint64, q *task.Query) int {
 	return -1
 }
 
+var nodeCh chan *graph.Node
+
+func newGraphNode() *graph.Node {
+	select {
+	case n := <-nodeCh:
+		return n
+	default:
+		return new(graph.Node)
+	}
+}
+
+func release() {
+	for n := range nodeCh {
+		// In case of mutations, n is nil
+		for i := 0; i < len(n.Children); i++ {
+			*n.Children[i] = graph.Node{}
+			nodeCh <- n.Children[i]
+		}
+	}
+}
+
+func init() {
+	nodeCh = make(chan *graph.Node, 1000000)
+	go release()
+}
+
 // This method gets the values and children for a subgraph.
 func (g *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 	var properties []*graph.Property
@@ -334,14 +360,13 @@ func (g *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 			// this predicate.
 			for i := 0; i < ul.UidsLength(); i++ {
 				uid := ul.Uids(i)
-				uc := new(graph.Node)
+				uc := newGraphNode()
 				uc.Attribute = pc.Attr
 				uc.Uid = uid
 				if rerr := pc.preTraverse(uid, uc); rerr != nil {
 					log.Printf("Error while traversal: %v", rerr)
 					return rerr
 				}
-
 				children = append(children, uc)
 			}
 		} else {
