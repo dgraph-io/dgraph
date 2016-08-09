@@ -90,19 +90,20 @@ func checkSingleValue(t *testing.T, child *SubGraph,
 }
 
 func TestNewGraph(t *testing.T) {
-	var ex uint64
-	ex = 101
-
 	dir, err := ioutil.TempDir("", "storetest_")
 	if err != nil {
 		t.Error(err)
 		return
 	}
 
+	gq := &gql.GraphQuery{
+		UID:  101,
+		Attr: "me",
+	}
 	ps := new(store.Store)
 	ps.Init(dir)
 	ctx := context.Background()
-	sg, err := newGraph(ctx, ex, "")
+	sg, err := newGraph(ctx, gq)
 	if err != nil {
 		t.Error(err)
 	}
@@ -122,8 +123,8 @@ func TestNewGraph(t *testing.T) {
 	if ul.UidsLength() != 1 {
 		t.Errorf("Expected length 1. Got: %v", ul.UidsLength())
 	}
-	if ul.Uids(0) != ex {
-		t.Errorf("Expected uid: %v. Got: %v", ex, ul.Uids(0))
+	if ul.Uids(0) != 101 {
+		t.Errorf("Expected uid: %v. Got: %v", 101, ul.Uids(0))
 	}
 }
 
@@ -195,6 +196,57 @@ func populateGraph(t *testing.T) (string, *store.Store) {
 	return dir, ps
 }
 
+func TestGetUid(t *testing.T) {
+	dir, _ := populateGraph(t)
+	defer os.RemoveAll(dir)
+
+	// Alright. Now we have everything set up. Let's create the query.
+	query := `
+		{
+			me(_uid_:0x01) {
+				name
+				_uid_
+				gender
+				status
+				friend {
+					_count_
+				}
+			}
+		}
+	`
+
+	gq, _, err := gql.Parse(query)
+	if err != nil {
+		t.Error(err)
+	}
+	ctx := context.Background()
+	sg, err := ToSubGraph(ctx, gq)
+	if err != nil {
+		t.Error(err)
+	}
+
+	ch := make(chan error)
+	go ProcessGraph(ctx, sg, ch)
+	err = <-ch
+	if err != nil {
+		t.Error(err)
+	}
+
+	var l Latency
+	js, err := sg.ToJson(&l)
+	if err != nil {
+		t.Error(err)
+	}
+	var mp map[string]interface{}
+	err = json.Unmarshal(js, &mp)
+
+	resp := mp["me"].([]interface{})[0]
+	uid := resp.(map[string]interface{})["_uid_"].(string)
+	if uid != "0x1" {
+		t.Errorf("Expected uid 0x01. Got %s", uid)
+	}
+}
+
 func TestCount(t *testing.T) {
 	dir, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
@@ -238,7 +290,7 @@ func TestCount(t *testing.T) {
 	var mp map[string]interface{}
 	err = json.Unmarshal(js, &mp)
 
-	resp := mp["_root_"].([]interface{})[0]
+	resp := mp["me"].([]interface{})[0]
 	friend := resp.(map[string]interface{})["friend"]
 	count := int(friend.(map[string]interface{})["_count_"].(float64))
 	if count != 5 {
@@ -491,8 +543,8 @@ func TestToPB(t *testing.T) {
 		t.Error(err)
 	}
 
-	if gr.Attribute != "_root_" {
-		t.Errorf("Expected attribute _root_, Got: %v", gr.Attribute)
+	if gr.Attribute != "me" {
+		t.Errorf("Expected attribute me, Got: %v", gr.Attribute)
 	}
 	if gr.Uid != 1 {
 		t.Errorf("Expected uid 1, Got: %v", gr.Uid)

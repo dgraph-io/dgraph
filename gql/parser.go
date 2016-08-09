@@ -178,11 +178,13 @@ func parseArguments(l *lex.Lexer) (result []pair, rerr error) {
 }
 
 func getRoot(l *lex.Lexer) (gq *GraphQuery, rerr error) {
+	gq = new(GraphQuery)
 	item := <-l.Items
 	if item.Typ != itemName {
 		return nil, fmt.Errorf("Expected some name. Got: %v", item)
 	}
-	// ignore itemName for now.
+
+	gq.Attr = item.Val
 	item = <-l.Items
 	if item.Typ != itemLeftRound {
 		return nil, fmt.Errorf("Expected variable start. Got: %v", item)
@@ -208,9 +210,9 @@ func getRoot(l *lex.Lexer) (gq *GraphQuery, rerr error) {
 		}
 	}
 
-	gq = new(GraphQuery)
 	gq.UID = uid
 	gq.XID = xid
+
 	return gq, nil
 }
 
