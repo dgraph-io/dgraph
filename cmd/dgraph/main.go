@@ -386,7 +386,6 @@ func main() {
 	worker.Connect(addrs)
 	// Grpc server runs on (port + 1)
 	go runGrpcServer(fmt.Sprintf(":%d", *port+1))
-	go query.InitRelease()
 
 	http.HandleFunc("/query", queryHandler)
 	log.Printf("Listening for requests at port: %v", *port)

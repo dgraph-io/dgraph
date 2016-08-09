@@ -303,10 +303,9 @@ func release() {
 	}
 }
 
-// InitRelease intialises the channel and calls release function.
-func InitRelease() {
+func init() {
 	nodeCh = make(chan *graph.Node, 1000)
-	release()
+	go release()
 }
 
 // This method gets the values and children for a subgraph.
