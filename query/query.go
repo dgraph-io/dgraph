@@ -117,6 +117,7 @@ type SubGraph struct {
 	AfterUid uint64
 	GetCount uint16
 	Children []*SubGraph
+	IsRoot   bool
 
 	Query  []byte
 	Result []byte
@@ -210,7 +211,6 @@ func postTraverse(g *SubGraph) (result map[uint64]interface{}, rerr error) {
 		for j := 0; j < ul.UidsLength(); j++ {
 			uid := ul.Uids(j)
 			m := make(map[string]interface{})
-			m["_uid_"] = fmt.Sprintf("%#x", uid)
 			if ival, present := cResult[uid]; !present {
 				l[j] = m
 			} else {
@@ -244,7 +244,6 @@ func postTraverse(g *SubGraph) (result map[uint64]interface{}, rerr error) {
 				pval, q.Uids(i), val)
 		}
 		m := make(map[string]interface{})
-		m["_uid_"] = fmt.Sprintf("%#x", q.Uids(i))
 		m[g.Attr] = string(val)
 		result[q.Uids(i)] = m
 	}
@@ -420,7 +419,7 @@ func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
 }
 
 func ToSubGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
-	sg, err := newGraph(ctx, gq.UID, gq.XID)
+	sg, err := newGraph(ctx, gq)
 	if err != nil {
 		return nil, err
 	}
@@ -428,7 +427,8 @@ func ToSubGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	return sg, err
 }
 
-func newGraph(ctx context.Context, euid uint64, exid string) (*SubGraph, error) {
+func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
+	euid, exid := gq.UID, gq.XID
 	// This would set the Result field in SubGraph,
 	// and populate the children for attributes.
 	if len(exid) > 0 {
@@ -477,7 +477,8 @@ func newGraph(ctx context.Context, euid uint64, exid string) (*SubGraph, error) 
 	b.Finish(rend)
 
 	sg := new(SubGraph)
-	sg.Attr = "_root_"
+	sg.Attr = gq.Attr
+	sg.IsRoot = true
 	sg.Result = b.Bytes[b.Head():]
 	// Also add query for consistency and to allow for ToJson() later.
 	sg.Query = createTaskQuery(sg, []uint64{euid})
@@ -566,7 +567,7 @@ func sortedUniqueUids(r *task.Result) (sorted []uint64, rerr error) {
 
 func ProcessGraph(ctx context.Context, sg *SubGraph, rch chan error) {
 	var err error
-	if len(sg.Query) > 0 && sg.Attr != "_root_" {
+	if len(sg.Query) > 0 && !sg.IsRoot {
 		sg.Result, err = worker.ProcessTaskOverNetwork(ctx, sg.Query)
 		if err != nil {
 			x.Trace(ctx, "Error while processing task: %v", err)
