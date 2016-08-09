@@ -21,15 +21,14 @@ import (
 	"log"
 	"net"
 
-	"google.golang.org/grpc"
-
+	"github.com/dgryski/go-farm"
+	"github.com/google/flatbuffers/go"
 	"golang.org/x/net/context"
+	"google.golang.org/grpc"
 
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgryski/go-farm"
-	"github.com/google/flatbuffers/go"
 )
 
 var workerPort = flag.String("workerport", ":12345",

@@ -26,12 +26,12 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/dgryski/go-farm"
+	"github.com/zond/gotomic"
 	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/dgraph/commit"
 	"github.com/dgraph-io/dgraph/store"
-	"github.com/dgryski/go-farm"
-	"github.com/zond/gotomic"
 )
 
 var maxmemory = flag.Uint64("stw_ram_mb", 4096,

@@ -25,16 +25,14 @@ import (
 	"math/rand"
 	"net"
 	"net/http"
+	"os"
 	"runtime"
 	"strings"
 	"time"
 
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
-
 	"google.golang.org/grpc"
-
-	"os"
 
 	"github.com/dgraph-io/dgraph/commit"
 	"github.com/dgraph-io/dgraph/gql"

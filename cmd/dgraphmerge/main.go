@@ -26,10 +26,11 @@ import (
 	"math"
 	"path"
 
+	rocksdb "github.com/tecbot/gorocksdb"
+
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/posting/types"
 	"github.com/dgraph-io/dgraph/x"
-	rocksdb "github.com/tecbot/gorocksdb"
 )
 
 type Item struct {

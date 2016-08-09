@@ -39,9 +39,8 @@ import (
 	"time"
 	"unsafe"
 
-	"golang.org/x/net/trace"
-
 	"github.com/willf/bloom"
+	"golang.org/x/net/trace"
 )
 
 type logFile struct {

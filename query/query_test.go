@@ -26,6 +26,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gogo/protobuf/proto"
+	"github.com/google/flatbuffers/go"
 	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/dgraph/commit"
@@ -36,8 +38,6 @@ import (
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/gogo/protobuf/proto"
-	"github.com/google/flatbuffers/go"
 )
 
 func setErr(err *error, nerr error) {

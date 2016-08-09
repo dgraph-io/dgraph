@@ -7,12 +7,13 @@ import (
 	"testing"
 
 	"github.com/Sirupsen/logrus"
+	"github.com/dgryski/go-farm"
+	rocksdb "github.com/tecbot/gorocksdb"
+
 	"github.com/dgraph-io/dgraph/loader"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/uid"
-	"github.com/dgryski/go-farm"
-	rocksdb "github.com/tecbot/gorocksdb"
 )
 
 func TestMergeFolders(t *testing.T) {
