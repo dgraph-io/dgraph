@@ -26,6 +26,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/google/flatbuffers/go"
 	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/dgraph/gql"
@@ -33,7 +34,6 @@ import (
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/google/flatbuffers/go"
 )
 
 /*

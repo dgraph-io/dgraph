@@ -27,15 +27,15 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Sirupsen/logrus"
+	"github.com/dgryski/go-farm"
 	"golang.org/x/net/context"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/uid"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgryski/go-farm"
 )
 
 var glog = x.Log("loader")

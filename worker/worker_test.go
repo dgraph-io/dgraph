@@ -24,6 +24,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/flatbuffers/go"
 	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/dgraph/commit"
@@ -31,7 +32,6 @@ import (
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/google/flatbuffers/go"
 )
 
 func addEdge(t *testing.T, edge x.DirectedEdge, l *posting.List) {
