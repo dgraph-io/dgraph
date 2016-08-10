@@ -14,13 +14,10 @@
  * limitations under the License.
  */
 
+// Package gql is responsible for lexing and parsing a GraphQL query/mutation.
 package gql
 
-import (
-	"log"
-
-	"github.com/dgraph-io/dgraph/lex"
-)
+import "github.com/dgraph-io/dgraph/lex"
 
 const (
 	leftCurl     = '{'
@@ -29,6 +26,7 @@ const (
 	mutationMode = 2
 )
 
+// Constants representing type of different graphql lexed items.
 const (
 	itemText            lex.ItemType = 5 + iota // plain text
 	itemLeftCurl                                // left curly bracket
@@ -45,6 +43,7 @@ const (
 	itemMutationContent                         // mutation content
 )
 
+// lexText lexes the input string and calls other lex functions.
 func lexText(l *lex.Lexer) lex.StateFn {
 Loop:
 	for {
@@ -53,13 +52,12 @@ Loop:
 			l.Backup()
 			l.Emit(itemText) // emit whatever we have so far.
 			l.Next()         // advance one to get back to where we saw leftCurl.
-			l.Depth += 1     // one level down.
+			l.Depth++        // one level down.
 			l.Emit(itemLeftCurl)
 			if l.Mode == mutationMode {
 				return lexInsideMutation
-			} else {
-				return lexInside
 			}
+			return lexInside
 
 		case r == rightCurl:
 			return l.Errorf("Too many right characters")
@@ -78,17 +76,18 @@ Loop:
 	return nil
 }
 
+// lexInside lexes the content inside a query block.
 func lexInside(l *lex.Lexer) lex.StateFn {
 	for {
 		switch r := l.Next(); {
 		case r == rightCurl:
-			l.Depth -= 1
+			l.Depth--
 			l.Emit(itemRightCurl)
 			if l.Depth == 0 {
 				return lexText
 			}
 		case r == leftCurl:
-			l.Depth += 1
+			l.Depth++
 			l.Emit(itemLeftCurl)
 		case r == lex.EOF:
 			return l.Errorf("Unclosed action")
@@ -122,6 +121,7 @@ func lexName(l *lex.Lexer) lex.StateFn {
 	return lexInside
 }
 
+// lexComment lexes a comment text.
 func lexComment(l *lex.Lexer) lex.StateFn {
 	for {
 		r := l.Next()
@@ -140,17 +140,18 @@ func lexComment(l *lex.Lexer) lex.StateFn {
 	return nil // Stop the run loop.
 }
 
+// lexInsideMutation lexes the text inside a mutation block.
 func lexInsideMutation(l *lex.Lexer) lex.StateFn {
 	for {
 		switch r := l.Next(); {
 		case r == rightCurl:
-			l.Depth -= 1
+			l.Depth--
 			l.Emit(itemRightCurl)
 			if l.Depth == 0 {
 				return lexText
 			}
 		case r == leftCurl:
-			l.Depth += 1
+			l.Depth++
 			l.Emit(itemLeftCurl)
 			if l.Depth >= 2 {
 				return lexTextMutation
@@ -167,6 +168,7 @@ func lexInsideMutation(l *lex.Lexer) lex.StateFn {
 	}
 }
 
+// lexNameMutation lexes the itemMutationOp, which could be set or delete.
 func lexNameMutation(l *lex.Lexer) lex.StateFn {
 	for {
 		// The caller already checked isNameBegin, and absorbed one rune.
@@ -181,6 +183,7 @@ func lexNameMutation(l *lex.Lexer) lex.StateFn {
 	return lexInsideMutation
 }
 
+// lexTextMutation lexes and absorbs the text inside a mutation operation block.
 func lexTextMutation(l *lex.Lexer) lex.StateFn {
 	for {
 		r := l.Next()
@@ -198,6 +201,7 @@ func lexTextMutation(l *lex.Lexer) lex.StateFn {
 	return lexInsideMutation
 }
 
+// lexOperationType lexes a query or mutation operation type.
 func lexOperationType(l *lex.Lexer) lex.StateFn {
 	for {
 		r := l.Next()
@@ -205,11 +209,11 @@ func lexOperationType(l *lex.Lexer) lex.StateFn {
 			continue // absorb
 		}
 		l.Backup()
+		// l.Pos would be index of the end of operation type + 1.
 		word := l.Input[l.Start:l.Pos]
 		if word == "mutation" {
 			l.Emit(itemOpType)
 			l.Mode = mutationMode
-
 		} else if word == "query" {
 			l.Emit(itemOpType)
 			l.Mode = queryMode
@@ -219,6 +223,7 @@ func lexOperationType(l *lex.Lexer) lex.StateFn {
 	return lexText
 }
 
+// lexArgInside is used to lex the arguments inside ().
 func lexArgInside(l *lex.Lexer) lex.StateFn {
 	for {
 		switch r := l.Next(); {
@@ -240,6 +245,7 @@ func lexArgInside(l *lex.Lexer) lex.StateFn {
 	}
 }
 
+// lexArgName lexes and emits the name part of an argument.
 func lexArgName(l *lex.Lexer) lex.StateFn {
 	for {
 		r := l.Next()
@@ -253,6 +259,7 @@ func lexArgName(l *lex.Lexer) lex.StateFn {
 	return lexArgInside
 }
 
+// lexArgVal lexes and emits the value part of an argument.
 func lexArgVal(l *lex.Lexer) lex.StateFn {
 	l.AcceptRun(isSpace)
 	l.Ignore() // Any spaces encountered.
@@ -268,27 +275,19 @@ func lexArgVal(l *lex.Lexer) lex.StateFn {
 				l.Input[l.Start:l.Pos])
 		}
 	}
-	log.Fatal("This shouldn't be reached.")
-	return nil
 }
 
-func lexArgumentVal(l *lex.Lexer) lex.StateFn {
-	for {
-		switch r := l.Next(); {
-		case isSpace(r):
-			l.Ignore()
-		}
-	}
-}
-
+// isSpace returns true if the rune is a tab or space.
 func isSpace(r rune) bool {
 	return r == '\u0009' || r == '\u0020'
 }
 
+// isEndOfLine returns true if the rune is a Linefeed or a Carriage return.
 func isEndOfLine(r rune) bool {
 	return r == '\u000A' || r == '\u000D'
 }
 
+// isNameBegin returns true if the rune is an alphabet or an '_'.
 func isNameBegin(r rune) bool {
 	switch {
 	case r >= 'a' && r <= 'z':
