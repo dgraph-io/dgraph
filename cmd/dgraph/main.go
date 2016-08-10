@@ -91,14 +91,15 @@ func convertToEdges(ctx context.Context, mutation string) ([]x.DirectedEdge, err
 		nquads = append(nquads, nq)
 	}
 
-	// xidToUid is used to store ids which are not uids. It is sent to the instance which has the xid <-> uid mapping to get uids.
+	// xidToUid is used to store ids which are not uids. It is sent to the instance
+	// which has the xid <-> uid mapping to get uids.
 	xidToUid := make(map[string]uint64)
 	for _, nq := range nquads {
 		if !strings.HasPrefix(nq.Subject, "_uid_:") {
 			xidToUid[nq.Subject] = 0
 		}
-		if len(nq.ObjectID) > 0 && !strings.HasPrefix(nq.ObjectID, "_uid_:") {
-			xidToUid[nq.ObjectID] = 0
+		if len(nq.ObjectId) > 0 && !strings.HasPrefix(nq.ObjectId, "_uid_:") {
+			xidToUid[nq.ObjectId] = 0
 		}
 	}
 	if len(xidToUid) > 0 {

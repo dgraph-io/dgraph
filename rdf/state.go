@@ -190,7 +190,7 @@ func lexSubject(l *lex.Lexer) lex.StateFn {
 	if r == '_' {
 		l.Depth++
 		r = l.Next()
-		//TODO - Remove this, doesn't conform with the spec.
+		// TODO - Remove this, doesn't conform with the spec.
 		if r == 'u' {
 			return lexUIDNode(l, itemSubject, lexText)
 		}
@@ -294,7 +294,7 @@ func lexObject(l *lex.Lexer) lex.StateFn {
 	if r == '_' {
 		l.Depth++
 		r = l.Next()
-		//TODO - Remove this, doesn't conform with the spec.
+		// TODO - Remove this, doesn't conform with the spec.
 		if r == 'u' {
 			return lexUIDNode(l, itemObject, lexText)
 		}
@@ -336,7 +336,7 @@ func isClosingBracket(r rune) bool {
 	return r == '>'
 }
 
-// Checks for tab or space.
+// isSpace returns true if the rune is a tab or a space.
 func isSpace(r rune) bool {
 	return r == '\u0009' || r == '\u0020'
 }
@@ -356,7 +356,7 @@ func isLangTagPrefix(r rune) bool {
 	}
 }
 
-// Checks for language tag according to the spec.
+// isLangTag returns true if the rune is allowed by the RDF spec.
 func isLangTag(r rune) bool {
 	if isLangTagPrefix(r) {
 		return true
