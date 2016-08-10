@@ -25,7 +25,7 @@ import (
 	"github.com/dgraph-io/dgraph/lex"
 )
 
-// The constants represent different types of lexed Items possible for a rdf N-Quad.
+// The constants represent different types of lexed Items possible for an rdf N-Quad.
 const (
 	itemText       lex.ItemType = 5 + iota // plain text
 	itemSubject                            // subject, 6
@@ -132,7 +132,7 @@ func lexUntilClosing(l *lex.Lexer, styp lex.ItemType,
 	return l.Errorf("Invalid character %v found for itemType: %v", r, styp)
 }
 
-func lexUIDNode(l *lex.Lexer, styp lex.ItemType, sfn lex.StateFn) lex.StateFn {
+func lexUidNode(l *lex.Lexer, styp lex.ItemType, sfn lex.StateFn) lex.StateFn {
 	l.AcceptUntil(isSpace)
 	r := l.Peek()
 	if r == lex.EOF {
@@ -190,9 +190,9 @@ func lexSubject(l *lex.Lexer) lex.StateFn {
 	if r == '_' {
 		l.Depth++
 		r = l.Next()
-		// TODO - Remove this, doesn't conform with the spec.
+		// TODO - Remove this, doesn't conform to the spec.
 		if r == 'u' {
-			return lexUIDNode(l, itemSubject, lexText)
+			return lexUidNode(l, itemSubject, lexText)
 		}
 
 		if r == ':' {
@@ -205,7 +205,7 @@ func lexSubject(l *lex.Lexer) lex.StateFn {
 
 func lexPredicate(l *lex.Lexer) lex.StateFn {
 	r := l.Next()
-	// Predicate can only be an IRI according to the spec.
+	// The predicate can only be an IRI according to the spec.
 	if r != '<' {
 		return l.Errorf("Invalid character in lexPredicate: %v", r)
 	}
@@ -285,7 +285,7 @@ func lexObjectType(l *lex.Lexer) lex.StateFn {
 
 func lexObject(l *lex.Lexer) lex.StateFn {
 	r := l.Next()
-	// Object can be an IRI, blank node or a literal.
+	// The object can be an IRI, blank node or a literal.
 	if r == '<' {
 		l.Depth++
 		return lexUntilClosing(l, itemObject, lexText)
@@ -294,9 +294,9 @@ func lexObject(l *lex.Lexer) lex.StateFn {
 	if r == '_' {
 		l.Depth++
 		r = l.Next()
-		// TODO - Remove this, doesn't conform with the spec.
+		// TODO - Remove this, doesn't conform to the spec.
 		if r == 'u' {
-			return lexUIDNode(l, itemObject, lexText)
+			return lexUidNode(l, itemObject, lexText)
 		}
 
 		if r == ':' {
@@ -336,7 +336,7 @@ func isClosingBracket(r rune) bool {
 	return r == '>'
 }
 
-// isSpace returns true if the rune is a tab or a space.
+// isSpace returns true if the rune is a tab or space.
 func isSpace(r rune) bool {
 	return r == '\u0009' || r == '\u0020'
 }

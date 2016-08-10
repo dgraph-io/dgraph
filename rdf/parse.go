@@ -57,7 +57,7 @@ func (nq NQuad) ToEdge() (result x.DirectedEdge, rerr error) {
 	}
 
 	result.Entity = sid
-	// An edge can have a id or value.
+	// An edge can have an id or a value.
 	if len(nq.ObjectId) > 0 {
 		oid, err := getUid(nq.ObjectId)
 		if err != nil {
@@ -84,7 +84,8 @@ func toUid(xid string, xidToUID map[string]uint64) (uid uint64, rerr error) {
 	return strconv.ParseUint(xid[6:], 0, 64)
 }
 
-// ToEdgeUsing determines the UIDs for the provided XIDs, and populates xidToUid map.
+// ToEdgeUsing determines the UIDs for the provided XIDs and populates the
+// xidToUid map.
 func (nq NQuad) ToEdgeUsing(
 	xidToUID map[string]uint64) (result x.DirectedEdge, rerr error) {
 	uid, err := toUid(nq.Subject, xidToUID)
@@ -116,7 +117,7 @@ func stripBracketsIfPresent(val string) string {
 	return val[1 : len(val)-1]
 }
 
-// Parse parses a mutation string and returns the NQuad reprsentation for it.
+// Parse parses a mutation string and returns the NQuad representation for it.
 func Parse(line string) (rnq NQuad, rerr error) {
 	l := &lex.Lexer{}
 	l.Init(line)
