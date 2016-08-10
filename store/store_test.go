@@ -34,7 +34,10 @@ func TestGet(t *testing.T) {
 	defer os.RemoveAll(path)
 
 	var s Store
-	s.Init(path)
+	err = s.Init(path)
+	if err != nil {
+		t.Fatal(err)
+	}
 	k := []byte("mykey")
 	if err := s.SetOne(k, []byte("neo")); err != nil {
 		t.Error(err)

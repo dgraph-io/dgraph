@@ -278,17 +278,17 @@ func (l *Logger) handleFile(path string, info os.FileInfo, err error) error {
 }
 
 func (l *Logger) Init() {
+	os.MkdirAll(l.dir, 0700)
+	// Check the directory exists.
+	if fi, err := os.Stat(l.dir); err != nil || !fi.IsDir() {
+		log.Fatalf("Dir %q not found", l.dir)
+	}
+
 	l.Lock()
 	defer l.Unlock()
 
 	l.events.Printf("Logger init started")
 	{
-		// Checking if the directory exists.
-		if _, err := os.Stat(l.dir); err != nil {
-			if os.IsNotExist(err) {
-				log.Fatalf("Unable to find dir: %v", err)
-			}
-		}
 		// First check if we have a current file.
 		path := filepath.Join(l.dir, fmt.Sprintf("%s-current.log", l.filePrefix))
 		fi, err := os.Stat(path)

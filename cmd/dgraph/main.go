@@ -47,9 +47,9 @@ import (
 )
 
 var (
-	postingDir  = flag.String("postings", "", "Directory to store posting lists")
-	uidDir      = flag.String("uids", "", "XID UID posting lists directory")
-	mutationDir = flag.String("mutations", "", "Directory to store mutations")
+	postingDir  = flag.String("postings", "p", "Directory to store posting lists")
+	uidDir      = flag.String("uids", "u", "XID UID posting lists directory")
+	mutationDir = flag.String("mutations", "m", "Directory to store mutations")
 	port        = flag.Int("port", 8080, "Port to run server on.")
 	numcpu      = flag.Int("numCpu", runtime.NumCPU(),
 		"Number of cores to be used by the process")
@@ -327,6 +327,7 @@ func runGrpcServer(address string) {
 }
 
 func main() {
+	log.SetFlags(log.Lshortfile | log.Flags())
 	flag.Parse()
 	if !flag.Parsed() {
 		log.Fatal("Unable to parse flags")
@@ -335,7 +336,7 @@ func main() {
 	prev := runtime.GOMAXPROCS(numCpus)
 	log.Printf("num_cpu: %v. prev_maxprocs: %v. Set max procs to num cpus", numCpus, prev)
 	if *port%2 != 0 {
-		log.Fatalf("Port should be an even number: %v", *port)
+		log.Fatalf("Port must be an even number: %v", *port)
 	}
 	// Create parent directories for postings, uids and mutations
 	var err error
@@ -353,7 +354,9 @@ func main() {
 	}
 
 	ps := new(store.Store)
-	ps.Init(*postingDir)
+	if err := ps.Init(*postingDir); err != nil {
+		log.Fatalf("error initializing postings store: %s", err)
+	}
 	defer ps.Close()
 
 	clog := commit.NewLogger(*mutationDir, "dgraph", 50<<20)
