@@ -78,7 +78,6 @@ func (l *Lexer) Errorf(format string,
 
 // Emit emits the item with it's type information.
 func (l *Lexer) Emit(t ItemType) {
-	fmt.Printf("emitting %+q\n", l.Input[l.Start:l.Pos])
 	if t != ItemEOF && l.Pos <= l.Start {
 		// Let ItemEOF go through.
 		return
