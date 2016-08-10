@@ -159,7 +159,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Method != "POST" {
-		x.SetStatus(w, x.E_INVALID_METHOD, "Invalid method")
+		x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
 		return
 	}
 
@@ -178,7 +178,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	q, err := ioutil.ReadAll(r.Body)
 	if err != nil || len(q) == 0 {
 		x.Trace(ctx, "Error while reading query: %v", err)
-		x.SetStatus(w, x.E_INVALID_REQUEST, "Invalid request encountered.")
+		x.SetStatus(w, x.ErrorInvalidRequest, "Invalid request encountered.")
 		return
 	}
 
@@ -186,7 +186,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	gq, mu, err := gql.Parse(string(q))
 	if err != nil {
 		x.Trace(ctx, "Error while parsing query: %v", err)
-		x.SetStatus(w, x.E_INVALID_REQUEST, err.Error())
+		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
 		return
 	}
 
@@ -194,20 +194,20 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	if mu != nil && (len(mu.Set) > 0 || len(mu.Del) > 0) {
 		if err = mutationHandler(ctx, mu); err != nil {
 			x.Trace(ctx, "Error while handling mutations: %v", err)
-			x.SetStatus(w, x.E_ERROR, err.Error())
+			x.SetStatus(w, x.Error, err.Error())
 			return
 		}
 	}
 
 	if gq == nil || (gq.UID == 0 && len(gq.XID) == 0) {
-		x.SetStatus(w, x.E_OK, "Done")
+		x.SetStatus(w, x.ErrorOk, "Done")
 		return
 	}
 
 	sg, err := query.ToSubGraph(ctx, gq)
 	if err != nil {
 		x.Trace(ctx, "Error while conversion to internal format: %v", err)
-		x.SetStatus(w, x.E_INVALID_REQUEST, err.Error())
+		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
 		return
 	}
 	l.Parsing = time.Since(l.Start)
@@ -218,7 +218,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	err = <-rch
 	if err != nil {
 		x.Trace(ctx, "Error while executing query: %v", err)
-		x.SetStatus(w, x.E_ERROR, err.Error())
+		x.SetStatus(w, x.Error, err.Error())
 		return
 	}
 	l.Processing = time.Since(l.Start) - l.Parsing
@@ -226,7 +226,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	js, err := sg.ToJson(&l)
 	if err != nil {
 		x.Trace(ctx, "Error while converting to Json: %v", err)
-		x.SetStatus(w, x.E_ERROR, err.Error())
+		x.SetStatus(w, x.Error, err.Error())
 		return
 	}
 	x.Trace(ctx, "Latencies: Total: %v Parsing: %v Process: %v Json: %v",
@@ -336,6 +336,10 @@ func main() {
 	if !flag.Parsed() {
 		log.Fatal("Unable to parse flags")
 	}
+	if ok := x.PrintVersionOnly(); ok {
+		return
+	}
+
 	numCpus := *numcpu
 	prev := runtime.GOMAXPROCS(numCpus)
 	log.Printf("num_cpu: %v. prev_maxprocs: %v. Set max procs to num cpus", numCpus, prev)

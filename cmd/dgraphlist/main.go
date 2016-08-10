@@ -66,6 +66,10 @@ func main() {
 	logrus.SetLevel(logrus.ErrorLevel)
 
 	flag.Parse()
+	if ok := x.PrintVersionOnly(); ok {
+		return
+	}
+
 	opt := rocksdb.NewDefaultOptions()
 	db, err := rocksdb.OpenDb(opt, *dir)
 	defer db.Close()

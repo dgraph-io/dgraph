@@ -176,6 +176,10 @@ func mergeFolders(mergePath, destPath string) {
 
 func main() {
 	flag.Parse()
+	if ok := x.PrintVersionOnly(); ok {
+		return
+	}
+
 	if len(*stores) == 0 {
 		glog.Fatal("No Directory specified")
 	}
