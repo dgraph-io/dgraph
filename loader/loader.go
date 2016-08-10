@@ -228,9 +228,9 @@ func (s *state) assignUidsOnly(wg *sync.WaitGroup) {
 			ignored = false
 		}
 
-		if len(nq.ObjectId) > 0 &&
-			farm.Fingerprint64([]byte(nq.ObjectId))%s.numInstances == s.instanceIdx {
-			if err := s.assignUid(nq.ObjectId); err != nil {
+		if len(nq.ObjectID) > 0 &&
+			farm.Fingerprint64([]byte(nq.ObjectID))%s.numInstances == s.instanceIdx {
+			if err := s.assignUid(nq.ObjectID); err != nil {
 				s.SetError(err)
 				glog.WithError(err).Error("While assigning Uid to object.")
 				return

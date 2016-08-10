@@ -31,7 +31,7 @@ var testNQuads = []struct {
 		nq: NQuad{
 			Subject:     "some_subject_id",
 			Predicate:   "predicate",
-			ObjectId:    "object_id",
+			ObjectID:    "object_id",
 			ObjectValue: []byte(nil),
 		},
 	},
@@ -40,7 +40,7 @@ var testNQuads = []struct {
 		nq: NQuad{
 			Subject:     "some_subject_id",
 			Predicate:   "predicate",
-			ObjectId:    "object_id",
+			ObjectID:    "object_id",
 			ObjectValue: []byte(nil),
 		},
 	},
@@ -49,7 +49,7 @@ var testNQuads = []struct {
 		nq: NQuad{
 			Subject:     "_:alice",
 			Predicate:   "predicate",
-			ObjectId:    "object_id",
+			ObjectID:    "object_id",
 			ObjectValue: []byte(nil),
 		},
 	},
@@ -58,7 +58,7 @@ var testNQuads = []struct {
 		nq: NQuad{
 			Subject:     "_uid_:0x01",
 			Predicate:   "predicate",
-			ObjectId:    "object_id",
+			ObjectID:    "object_id",
 			ObjectValue: []byte(nil),
 		},
 	},
@@ -67,7 +67,7 @@ var testNQuads = []struct {
 		nq: NQuad{
 			Subject:     "some_subject_id",
 			Predicate:   "predicate",
-			ObjectId:    "_uid_:0x01",
+			ObjectID:    "_uid_:0x01",
 			ObjectValue: []byte(nil),
 		},
 	},
@@ -76,7 +76,7 @@ var testNQuads = []struct {
 		nq: NQuad{
 			Subject:     "_uid_:0x01",
 			Predicate:   "predicate",
-			ObjectId:    "_uid_:0x02",
+			ObjectID:    "_uid_:0x02",
 			ObjectValue: []byte(nil),
 		},
 	},
@@ -85,7 +85,7 @@ var testNQuads = []struct {
 		nq: NQuad{
 			Subject:     "_:alice",
 			Predicate:   "follows",
-			ObjectId:    "_:bob0",
+			ObjectID:    "_:bob0",
 			ObjectValue: []byte(nil),
 		},
 	},
@@ -94,7 +94,7 @@ var testNQuads = []struct {
 		nq: NQuad{
 			Subject:     "_:alice",
 			Predicate:   "name",
-			ObjectId:    "",
+			ObjectID:    "",
 			ObjectValue: []byte("Alice In Wonderland"),
 		},
 	},
@@ -103,7 +103,7 @@ var testNQuads = []struct {
 		nq: NQuad{
 			Subject:     "_:alice",
 			Predicate:   "name.en-0",
-			ObjectId:    "",
+			ObjectID:    "",
 			ObjectValue: []byte("Alice In Wonderland"),
 		},
 	},
@@ -112,7 +112,7 @@ var testNQuads = []struct {
 		nq: NQuad{
 			Subject:     "_:alice",
 			Predicate:   "age",
-			ObjectId:    "",
+			ObjectID:    "",
 			ObjectValue: []byte("013@@integer"),
 		},
 	},
@@ -121,7 +121,7 @@ var testNQuads = []struct {
 		nq: NQuad{
 			Subject:     "http://www.w3.org/2001/sw/RDFCore/nedges/",
 			Predicate:   "http://purl.org/dc/terms/title.en-US",
-			ObjectId:    "",
+			ObjectID:    "",
 			ObjectValue: []byte("N-Edges"),
 		},
 	},
@@ -130,7 +130,7 @@ var testNQuads = []struct {
 		nq: NQuad{
 			Subject:     "_:art",
 			Predicate:   "http://www.w3.org/1999/02/22-rdf-syntax-ns#type",
-			ObjectId:    "http://xmlns.com/foaf/0.1/Person",
+			ObjectID:    "http://xmlns.com/foaf/0.1/Person",
 			ObjectValue: []byte(nil),
 		},
 	},
@@ -187,7 +187,7 @@ var testNQuads = []struct {
 		nq: NQuad{
 			Subject:     "_:alice",
 			Predicate:   "knows",
-			ObjectId:    "",
+			ObjectID:    "",
 			ObjectValue: []byte("stuff@@xs:string"),
 		},
 		hasErr: false,
@@ -197,7 +197,7 @@ var testNQuads = []struct {
 		nq: NQuad{
 			Subject:     "_:alice",
 			Predicate:   "knows",
-			ObjectId:    "",
+			ObjectID:    "",
 			ObjectValue: []byte("stuff@@xs:string"),
 			Label:       "label",
 		},
@@ -208,7 +208,7 @@ var testNQuads = []struct {
 		nq: NQuad{
 			Subject:     "_:alice",
 			Predicate:   "knows",
-			ObjectId:    "",
+			ObjectID:    "",
 			ObjectValue: []byte("stuff@@xs:string"),
 			Label:       "_:label",
 		},
@@ -219,7 +219,7 @@ var testNQuads = []struct {
 		nq: NQuad{
 			Subject:     "_:alice",
 			Predicate:   "knows",
-			ObjectId:    "",
+			ObjectID:    "",
 			ObjectValue: []byte("stuff@@xs:string"),
 			Label:       "_:label",
 		},
@@ -246,7 +246,7 @@ var testNQuads = []struct {
 		nq: NQuad{
 			Subject:   "_:alice",
 			Predicate: "knows",
-			ObjectId:  "bob",
+			ObjectID:  "bob",
 		},
 	},
 	{

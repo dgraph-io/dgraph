@@ -73,10 +73,11 @@ func addCorsHeaders(w http.ResponseWriter) {
 
 func convertToEdges(ctx context.Context, mutation string) ([]x.DirectedEdge, error) {
 	var edges []x.DirectedEdge
-
+	var nquads []rdf.NQuad
 	r := strings.NewReader(mutation)
 	scanner := bufio.NewScanner(r)
-	var nquads []rdf.NQuad
+
+	// Scanning the mutation string, one line at a time.
 	for scanner.Scan() {
 		ln := strings.Trim(scanner.Text(), " \t")
 		if len(ln) == 0 {
@@ -90,13 +91,14 @@ func convertToEdges(ctx context.Context, mutation string) ([]x.DirectedEdge, err
 		nquads = append(nquads, nq)
 	}
 
+	// xidToUid is used to store ids which are not uids. It is sent to the instance which has the xid <-> uid mapping to get uids.
 	xidToUid := make(map[string]uint64)
 	for _, nq := range nquads {
 		if !strings.HasPrefix(nq.Subject, "_uid_:") {
 			xidToUid[nq.Subject] = 0
 		}
-		if len(nq.ObjectId) > 0 && !strings.HasPrefix(nq.ObjectId, "_uid_:") {
-			xidToUid[nq.ObjectId] = 0
+		if len(nq.ObjectID) > 0 && !strings.HasPrefix(nq.ObjectID, "_uid_:") {
+			xidToUid[nq.ObjectID] = 0
 		}
 	}
 	if len(xidToUid) > 0 {
@@ -107,6 +109,7 @@ func convertToEdges(ctx context.Context, mutation string) ([]x.DirectedEdge, err
 	}
 
 	for _, nq := range nquads {
+		// Get edges from nquad using xidToUid.
 		edge, err := nq.ToEdgeUsing(xidToUid)
 		if err != nil {
 			x.Trace(ctx, "Error while converting to edge: %v %v", nq, err)

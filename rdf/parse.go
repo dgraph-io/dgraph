@@ -28,34 +28,38 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
+//NQuad is the data structure used for storing rdf N-Quads.
 type NQuad struct {
 	Subject     string
 	Predicate   string
-	ObjectId    string
+	ObjectID    string
 	ObjectValue []byte
 	Label       string
 }
 
-func getUid(xid string) (uint64, error) {
+// Gets the uid corresponding to an xid from the posting list which stores the
+// mapping.
+func getUID(xid string) (uint64, error) {
+	// If string represents a UID, convert to uint64 and return.
 	if strings.HasPrefix(xid, "_uid_:") {
 		return strconv.ParseUint(xid[6:], 0, 64)
 	}
+	// Get uid from posting list in UidStore.
 	return uid.Get(xid)
 }
 
 // ToEdge is useful when you want to find the UID corresponding to XID for
-// just one edge. ToEdgeUsing(map) is useful when you do this conversion
-// in bulk, say over a network call. None of these methods generate a UID
-// for an XID.
+// just one edge. The method doen't generate a UID for an XID.
 func (nq NQuad) ToEdge() (result x.DirectedEdge, rerr error) {
-
-	sid, err := getUid(nq.Subject)
+	sid, err := getUID(nq.Subject)
 	if err != nil {
 		return result, err
 	}
+
 	result.Entity = sid
-	if len(nq.ObjectId) > 0 {
-		oid, err := getUid(nq.ObjectId)
+	// An edge can have a id or value.
+	if len(nq.ObjectID) > 0 {
+		oid, err := getUID(nq.ObjectID)
 		if err != nil {
 			return result, err
 		}
@@ -69,8 +73,8 @@ func (nq NQuad) ToEdge() (result x.DirectedEdge, rerr error) {
 	return result, nil
 }
 
-func toUid(xid string, xidToUid map[string]uint64) (uid uint64, rerr error) {
-	if id, present := xidToUid[xid]; present {
+func toUID(xid string, xidToUID map[string]uint64) (uid uint64, rerr error) {
+	if id, present := xidToUID[xid]; present {
 		return id, nil
 	}
 
@@ -80,18 +84,22 @@ func toUid(xid string, xidToUid map[string]uint64) (uid uint64, rerr error) {
 	return strconv.ParseUint(xid[6:], 0, 64)
 }
 
+// ToEdgeUsing is useful when you do find the UID corresponding to XID
+// in bulk, say over a network call. First xidToUID is populated over network
+// and the then used to to generate an edge. The method doen't generate a UID
+// for an XID.
 func (nq NQuad) ToEdgeUsing(
-	xidToUid map[string]uint64) (result x.DirectedEdge, rerr error) {
-	uid, err := toUid(nq.Subject, xidToUid)
+	xidToUID map[string]uint64) (result x.DirectedEdge, rerr error) {
+	uid, err := toUID(nq.Subject, xidToUID)
 	if err != nil {
 		return result, err
 	}
 	result.Entity = uid
 
-	if len(nq.ObjectId) == 0 {
+	if len(nq.ObjectID) == 0 {
 		result.Value = nq.ObjectValue
 	} else {
-		uid, err = toUid(nq.ObjectId, xidToUid)
+		uid, err = toUID(nq.ObjectID, xidToUID)
 		if err != nil {
 			return result, err
 		}
@@ -103,16 +111,15 @@ func (nq NQuad) ToEdgeUsing(
 	return result, nil
 }
 
+// This function is used to extract an IRI from an IRIREF.
 func stripBracketsIfPresent(val string) string {
-	if val[0] != '<' {
-		return val
-	}
-	if val[len(val)-1] != '>' {
+	if val[0] != '<' && val[len(val)-1] != '>' {
 		return val
 	}
 	return val[1 : len(val)-1]
 }
 
+// Parse parses a mutation string and returns the NQuad reprsentation for it.
 func Parse(line string) (rnq NQuad, rerr error) {
 	l := &lex.Lexer{}
 	l.Init(line)
@@ -120,6 +127,7 @@ func Parse(line string) (rnq NQuad, rerr error) {
 	go run(l)
 	var oval string
 	var vend bool
+	// We read items from the l.Items channel to which the lexer sends items.
 	for item := range l.Items {
 		if item.Typ == itemSubject {
 			rnq.Subject = stripBracketsIfPresent(item.Val)
@@ -128,7 +136,7 @@ func Parse(line string) (rnq NQuad, rerr error) {
 			rnq.Predicate = stripBracketsIfPresent(item.Val)
 		}
 		if item.Typ == itemObject {
-			rnq.ObjectId = stripBracketsIfPresent(item.Val)
+			rnq.ObjectID = stripBracketsIfPresent(item.Val)
 		}
 		if item.Typ == itemLiteral {
 			oval = item.Val
@@ -164,7 +172,7 @@ func Parse(line string) (rnq NQuad, rerr error) {
 	if len(rnq.Subject) == 0 || len(rnq.Predicate) == 0 {
 		return rnq, fmt.Errorf("Empty required fields in NQuad. Input: [%s]", line)
 	}
-	if len(rnq.ObjectId) == 0 && rnq.ObjectValue == nil {
+	if len(rnq.ObjectID) == 0 && rnq.ObjectValue == nil {
 		return rnq, fmt.Errorf("No Object in NQuad. Input: [%s]", line)
 	}
 

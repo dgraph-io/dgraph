@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-// rdf package parses N-Quad statements based on
+// Package rdf package parses N-Quad statements based on
 // http://www.w3.org/TR/n-quads/
 package rdf
 
@@ -25,6 +25,7 @@ import (
 	"github.com/dgraph-io/dgraph/lex"
 )
 
+// The constants represent different types of lexed Items possible for a rdf N-Quad.
 const (
 	itemText       lex.ItemType = 5 + iota // plain text
 	itemSubject                            // subject, 6
@@ -37,11 +38,12 @@ const (
 	itemValidEnd                           // end with dot, 13
 )
 
+// These constants keep a track of the depth while parsing an rdf N-Quad.
 const (
-	AT_SUBJECT int = iota
-	AT_PREDICATE
-	AT_OBJECT
-	AT_LABEL
+	atSubject int = iota
+	atPredicate
+	atObject
+	atLabel
 )
 
 func run(l *lex.Lexer) {
@@ -51,37 +53,40 @@ func run(l *lex.Lexer) {
 	close(l.Items) // No more tokens.
 }
 
+// This function inspects the next rune and calls the appropriate stateFn.
 func lexText(l *lex.Lexer) lex.StateFn {
 Loop:
 	for {
 		switch r := l.Next(); {
 		case r == '<' || r == '_':
-			if l.Depth == AT_SUBJECT {
+			if l.Depth == atSubject {
 				l.Backup()
 				l.Emit(itemText) // emit whatever we have so far.
 				return lexSubject
+			}
 
-			} else if l.Depth == AT_PREDICATE {
+			if l.Depth == atPredicate {
 				l.Backup()
 				l.Emit(itemText)
 				return lexPredicate
+			}
 
-			} else if l.Depth == AT_OBJECT {
+			if l.Depth == atObject {
 				l.Backup()
 				l.Emit(itemText)
 				return lexObject
+			}
 
-			} else if l.Depth == AT_LABEL {
+			if l.Depth == atLabel {
 				l.Backup()
 				l.Emit(itemText)
 				return lexLabel
-
-			} else {
-				return l.Errorf("Invalid input: %c at lexText", r)
 			}
 
+			return l.Errorf("Invalid input: %c at lexText", r)
+
 		case r == '"':
-			if l.Depth != AT_OBJECT {
+			if l.Depth != atObject {
 				return l.Errorf("Invalid quote for non-object.")
 			}
 			l.Backup()
@@ -92,14 +97,12 @@ Loop:
 			break Loop
 
 		case r == '.':
-			if l.Depth > AT_OBJECT {
+			if l.Depth > atObject {
 				l.Emit(itemValidEnd)
 			}
 			break Loop
 
-		case r == ' ':
-			continue
-		case r == '\t':
+		case isSpace(r):
 			continue
 		default:
 			l.Errorf("Invalid input: %c at lexText", r)
@@ -112,32 +115,35 @@ Loop:
 	return nil
 }
 
+// This function lexes text until it finds the '>' bracket.
 func lexUntilClosing(l *lex.Lexer, styp lex.ItemType,
 	sfn lex.StateFn) lex.StateFn {
-
 	l.AcceptUntil(isClosingBracket)
 	r := l.Next()
 	if r == lex.EOF {
 		return l.Errorf("Unexpected end of subject")
 	}
+
 	if r == '>' {
 		l.Emit(styp)
 		return sfn
 	}
+
 	return l.Errorf("Invalid character %v found for itemType: %v", r, styp)
 }
 
-func lexUidNode(l *lex.Lexer, styp lex.ItemType, sfn lex.StateFn) lex.StateFn {
-
+func lexUIDNode(l *lex.Lexer, styp lex.ItemType, sfn lex.StateFn) lex.StateFn {
 	l.AcceptUntil(isSpace)
 	r := l.Peek()
 	if r == lex.EOF {
 		return l.Errorf("Unexpected end of uid subject")
 	}
+
 	in := l.Input[l.Start:l.Pos]
 	if !strings.HasPrefix(in, "_uid_:") {
 		return l.Errorf("Expected _uid_: Found: %v", l.Input[l.Start:l.Pos])
 	}
+
 	if _, err := strconv.ParseUint(in[6:], 0, 64); err != nil {
 		return l.Errorf("Unable to convert '%v' to UID", in[6:])
 	}
@@ -146,8 +152,9 @@ func lexUidNode(l *lex.Lexer, styp lex.ItemType, sfn lex.StateFn) lex.StateFn {
 		l.Emit(styp)
 		return sfn
 	}
-	return l.Errorf(
-		"Invalid character %v found for UID node itemType: %v", r, styp)
+
+	return l.Errorf("Invalid character %v found for UID node itemType: %v", r,
+		styp)
 }
 
 // Assumes that the current rune is '_'.
@@ -162,40 +169,48 @@ func lexBlankNode(l *lex.Lexer, styp lex.ItemType,
 	if r == lex.EOF {
 		return l.Errorf("Unexpected end of subject")
 	}
+
 	if isSpace(r) {
 		l.Emit(styp)
 		return sfn
 	}
+
 	return l.Errorf("Invalid character %v found for itemType: %v", r, styp)
 }
 
 func lexSubject(l *lex.Lexer) lex.StateFn {
 	r := l.Next()
+	// The subject is an IRI, so we lex till we encounter '>'.
 	if r == '<' {
-		l.Depth += 1
+		l.Depth++
 		return lexUntilClosing(l, itemSubject, lexText)
 	}
 
+	// The subject represents a blank node.
 	if r == '_' {
-		l.Depth += 1
+		l.Depth++
 		r = l.Next()
+		//TODO - Remove this, doesn't conform with the spec.
 		if r == 'u' {
-			return lexUidNode(l, itemSubject, lexText)
+			return lexUIDNode(l, itemSubject, lexText)
+		}
 
-		} else if r == ':' {
+		if r == ':' {
 			return lexBlankNode(l, itemSubject, lexText)
-		} // else go to error
+		}
 	}
-
+	// else go to error
 	return l.Errorf("Invalid character during lexSubject: %v", r)
 }
 
 func lexPredicate(l *lex.Lexer) lex.StateFn {
 	r := l.Next()
+	// Predicate can only be an IRI according to the spec.
 	if r != '<' {
 		return l.Errorf("Invalid character in lexPredicate: %v", r)
 	}
-	l.Depth += 1
+
+	l.Depth++
 	return lexUntilClosing(l, itemPredicate, lexText)
 }
 
@@ -204,11 +219,13 @@ func lexLanguage(l *lex.Lexer) lex.StateFn {
 	if r != '@' {
 		return l.Errorf("Expected @ prefix for lexLanguage")
 	}
+
 	l.Ignore()
 	r = l.Next()
 	if !isLangTagPrefix(r) {
 		return l.Errorf("Invalid language tag prefix: %v", r)
 	}
+
 	l.AcceptRun(isLangTag)
 	l.Emit(itemLanguage)
 	return lexText
@@ -232,18 +249,18 @@ func lexLiteral(l *lex.Lexer) lex.StateFn {
 	l.Emit(itemLiteral)
 	l.Next()   // Move to end literal.
 	l.Ignore() // Ignore end literal.
-	l.Depth += 1
+	l.Depth++
 
 	r := l.Peek()
 	if r == '@' {
 		return lexLanguage(l)
-
-	} else if r == '^' {
-		return lexObjectType(l)
-
-	} else {
-		return lexText
 	}
+
+	if r == '^' {
+		return lexObjectType(l)
+	}
+
+	return lexText
 }
 
 func lexObjectType(l *lex.Lexer) lex.StateFn {
@@ -251,31 +268,38 @@ func lexObjectType(l *lex.Lexer) lex.StateFn {
 	if r != '^' {
 		return l.Errorf("Expected ^ for lexObjectType")
 	}
+
 	r = l.Next()
 	if r != '^' {
 		return l.Errorf("Expected ^^ for lexObjectType")
 	}
+
 	l.Ignore()
 	r = l.Next()
 	if r != '<' {
 		return l.Errorf("Expected < for lexObjectType")
 	}
+
 	return lexUntilClosing(l, itemObjectType, lexText)
 }
 
 func lexObject(l *lex.Lexer) lex.StateFn {
 	r := l.Next()
+	// Object can be an IRI, blank node or a literal.
 	if r == '<' {
-		l.Depth += 1
+		l.Depth++
 		return lexUntilClosing(l, itemObject, lexText)
 	}
-	if r == '_' {
-		l.Depth += 1
-		r = l.Next()
-		if r == 'u' {
-			return lexUidNode(l, itemObject, lexText)
 
-		} else if r == ':' {
+	if r == '_' {
+		l.Depth++
+		r = l.Next()
+		//TODO - Remove this, doesn't conform with the spec.
+		if r == 'u' {
+			return lexUIDNode(l, itemObject, lexText)
+		}
+
+		if r == ':' {
 			return lexBlankNode(l, itemObject, lexText)
 		}
 	}
@@ -289,16 +313,19 @@ func lexObject(l *lex.Lexer) lex.StateFn {
 
 func lexLabel(l *lex.Lexer) lex.StateFn {
 	r := l.Next()
+	// Graph label can either be an IRI or a blank node according to spec.
 	if r == '<' {
-		l.Depth += 1
+		l.Depth++
 		return lexUntilClosing(l, itemLabel, lexText)
 	}
+
 	if r == '_' {
-		l.Depth += 1
+		l.Depth++
 		r = l.Next()
 		if r != ':' {
 			return l.Errorf("Invalid char: %c at lexLabel", r)
 		}
+
 		l.Backup()
 		return lexBlankNode(l, itemLabel, lexText)
 	}
@@ -309,6 +336,7 @@ func isClosingBracket(r rune) bool {
 	return r == '>'
 }
 
+// Checks for tab or space.
 func isSpace(r rune) bool {
 	return r == '\u0009' || r == '\u0020'
 }
@@ -328,6 +356,7 @@ func isLangTagPrefix(r rune) bool {
 	}
 }
 
+// Checks for language tag according to the spec.
 func isLangTag(r rune) bool {
 	if isLangTagPrefix(r) {
 		return true
