@@ -272,7 +272,7 @@ func godeep(l *lex.Lexer, gq *GraphQuery) error {
 					if err != nil {
 						return err
 					}
-					curp.After = uint64(afterUid)
+					curp.After = afterUid
 				}
 			}
 		}
