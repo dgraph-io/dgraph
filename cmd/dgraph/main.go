@@ -332,6 +332,11 @@ func main() {
 	if !flag.Parsed() {
 		log.Fatal("Unable to parse flags")
 	}
+	if *x.Version {
+		x.PrintVersion()
+		return
+	}
+
 	numCpus := *numcpu
 	prev := runtime.GOMAXPROCS(numCpus)
 	log.Printf("num_cpu: %v. prev_maxprocs: %v. Set max procs to num cpus", numCpus, prev)

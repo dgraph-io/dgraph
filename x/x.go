@@ -18,6 +18,7 @@ package x
 
 import (
 	"encoding/json"
+	"flag"
 	"fmt"
 	"net/http"
 	"time"
@@ -41,8 +42,11 @@ const (
 	E_UPTODATE         = "E_UPTODATE"
 	E_NOPERMISSION     = "E_NOPERMISSION"
 
-	DUMMY_UUID = "00000000-0000-0000-0000-000000000000"
+	DUMMY_UUID    = "00000000-0000-0000-0000-000000000000"
+	DGRAPHVERSION = "0.4.2"
 )
+
+var Version = flag.Bool("version", false, "Prints the version of Dgraph")
 
 type Status struct {
 	Code    string `json:"code"`
@@ -56,6 +60,10 @@ type DirectedEdge struct {
 	ValueId   uint64
 	Source    string
 	Timestamp time.Time
+}
+
+func PrintVersion() {
+	fmt.Println("Dgraph version", DGRAPHVERSION)
 }
 
 func SetError(prev *error, n error) {

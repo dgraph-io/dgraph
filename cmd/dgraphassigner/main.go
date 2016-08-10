@@ -37,6 +37,11 @@ func main() {
 	if !flag.Parsed() {
 		glog.Fatal("Unable to parse flags")
 	}
+	if *x.Version {
+		x.PrintVersion()
+		return
+	}
+
 	if len(*cpuprofile) > 0 {
 		f, err := os.Create(*cpuprofile)
 		if err != nil {
