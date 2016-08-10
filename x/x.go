@@ -62,7 +62,8 @@ type DirectedEdge struct {
 	Timestamp time.Time
 }
 
-// Prints version and other helpful information if versoin flag is set to true.
+// PrintVersionOnly prints version and other helpful information
+// if version flag is set to true.
 func PrintVersionOnly() bool {
 	if *version {
 		fmt.Printf("Dgraph version %s\n", DgraphVersion)
