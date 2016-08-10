@@ -31,8 +31,8 @@ import (
 	"github.com/dgraph-io/dgraph/task"
 )
 
+// Error constants representing different types of errors.
 const (
-	// Error constants representing different types of errors.
 	ErrorOk              = "ErrorOk"
 	ErrorUnauthorized    = "ErrorUnauthorized"
 	ErrorInvalidMethod   = "ErrorInvalidMethod"
@@ -42,9 +42,9 @@ const (
 	ErrorNoData          = "ErrorNoData"
 	ErrorUptodate        = "ErrorUptodate"
 	ErrorNoPermission    = "ErrorNoPermission"
-
-	dgraphVersion = "0.4.2"
 )
+
+const dgraphVersion = "0.4.2"
 
 var version = flag.Bool("version", false, "Prints the version of Dgraph")
 
