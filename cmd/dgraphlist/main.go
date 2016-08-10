@@ -66,8 +66,7 @@ func main() {
 	logrus.SetLevel(logrus.ErrorLevel)
 
 	flag.Parse()
-	if *x.Version {
-		x.PrintVersion()
+	if ok := x.PrintVersionOnly(); ok {
 		return
 	}
 

@@ -46,7 +46,7 @@ const (
 	DGRAPHVERSION = "0.4.2"
 )
 
-var Version = flag.Bool("version", false, "Prints the version of Dgraph")
+var version = flag.Bool("version", false, "Prints the version of Dgraph")
 
 type Status struct {
 	Code    string `json:"code"`
@@ -62,8 +62,18 @@ type DirectedEdge struct {
 	Timestamp time.Time
 }
 
-func PrintVersion() {
-	fmt.Println("Dgraph version", DGRAPHVERSION)
+func PrintVersionOnly() bool {
+	if *version {
+		fmt.Printf("Dgraph version %s\n", DGRAPHVERSION)
+		fmt.Println("\nCopyright 2016 Dgraph Labs, Inc.")
+		fmt.Println("Licensed under the Apache License, Version 2.0")
+		fmt.Println("\nFor more information on Dgraph, visit: https://wiki.dgraph.io")
+		fmt.Println("For discussions about Dgraph, visit: https://discuss.dgraph.io")
+		fmt.Println("To say hi to the community, visit: https://dgraph.slack.com\n")
+		return true
+	}
+
+	return false
 }
 
 func SetError(prev *error, n error) {

@@ -53,8 +53,7 @@ func main() {
 	if !flag.Parsed() {
 		glog.Fatal("Unable to parse flags")
 	}
-	if *x.Version {
-		x.PrintVersion()
+	if ok := x.PrintVersionOnly(); ok {
 		return
 	}
 
