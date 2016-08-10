@@ -19,7 +19,6 @@ package gql
 import (
 	"errors"
 	"fmt"
-	"log"
 	"strconv"
 
 	"github.com/dgraph-io/dgraph/lex"
@@ -37,11 +36,13 @@ type GraphQuery struct {
 	Children []*GraphQuery
 }
 
+// Mutation stores the set and delete parts as strings.
 type Mutation struct {
 	Set string
 	Del string
 }
 
+// Denotes the key value pair that is part of the GraphQL query root in paranthesis.
 type pair struct {
 	Key string
 	Val string
@@ -54,6 +55,8 @@ func run(l *lex.Lexer) {
 	close(l.Items) // No more tokens.
 }
 
+// Parse initializes, runs the lexer. It also constructs the GraphQuery subgraph
+// from the lexed items.
 func Parse(input string) (gq *GraphQuery, mu *Mutation, rerr error) {
 	l := &lex.Lexer{}
 	l.Init(input)
@@ -80,7 +83,6 @@ func Parse(input string) (gq *GraphQuery, mu *Mutation, rerr error) {
 			if gq == nil {
 				gq, rerr = getRoot(l)
 				if rerr != nil {
-					log.Printf("Error while retrieving subgraph root: %v", rerr)
 					return nil, nil, rerr
 				}
 			} else {
@@ -93,6 +95,8 @@ func Parse(input string) (gq *GraphQuery, mu *Mutation, rerr error) {
 	return gq, mu, nil
 }
 
+// This function parses and stores the set and delete operation
+// in Mutation.
 func getMutation(l *lex.Lexer) (mu *Mutation, rerr error) {
 	for item := range l.Items {
 		if item.Typ == itemText {
@@ -113,6 +117,7 @@ func getMutation(l *lex.Lexer) (mu *Mutation, rerr error) {
 	return nil, errors.New("Invalid mutation.")
 }
 
+// This function parses and stores set or delete operation string in Mutation.
 func parseMutationOp(l *lex.Lexer, op string, mu *Mutation) error {
 	if mu == nil {
 		return errors.New("Mutation is nil.")
@@ -148,6 +153,8 @@ func parseMutationOp(l *lex.Lexer, op string, mu *Mutation) error {
 	return errors.New("Invalid mutation formatting.")
 }
 
+// parseArguments parses the arguments part of the GraphQL query root
+// and returns a slice of pair for them.
 func parseArguments(l *lex.Lexer) (result []pair, rerr error) {
 	for {
 		var p pair
@@ -166,17 +173,17 @@ func parseArguments(l *lex.Lexer) (result []pair, rerr error) {
 
 		// Get value
 		item = <-l.Items
-		if item.Typ == itemArgVal {
-			p.Val = item.Val
-		} else {
+		if item.Typ != itemArgVal {
 			return result, fmt.Errorf("Expecting argument value. Got: %v", item)
 		}
 
+		p.Val = item.Val
 		result = append(result, p)
 	}
 	return result, nil
 }
 
+// This function gets the root graph query object after parsing the args.
 func getRoot(l *lex.Lexer) (gq *GraphQuery, rerr error) {
 	gq = new(GraphQuery)
 	item := <-l.Items
@@ -190,42 +197,44 @@ func getRoot(l *lex.Lexer) (gq *GraphQuery, rerr error) {
 		return nil, fmt.Errorf("Expected variable start. Got: %v", item)
 	}
 
-	var uid uint64
-	var xid string
 	args, err := parseArguments(l)
 	if err != nil {
 		return nil, err
 	}
 	for _, p := range args {
 		if p.Key == "_uid_" {
-			uid, rerr = strconv.ParseUint(p.Val, 0, 64)
+			gq.UID, rerr = strconv.ParseUint(p.Val, 0, 64)
 			if rerr != nil {
 				return nil, rerr
 			}
 		} else if p.Key == "_xid_" {
-			xid = p.Val
-
+			gq.XID = p.Val
 		} else {
 			return nil, fmt.Errorf("Expecting _uid_ or _xid_. Got: %+v", p)
 		}
 	}
 
-	gq.UID = uid
-	gq.XID = xid
-
 	return gq, nil
 }
 
+// This function constructs the subgraph from the lexed items and the root
+// GraphQuery node.
 func godeep(l *lex.Lexer, gq *GraphQuery) error {
 	curp := gq // Used to track current node, for nesting.
 	for item := range l.Items {
 		if item.Typ == lex.ItemError {
 			return errors.New(item.Val)
+		}
 
-		} else if item.Typ == lex.ItemEOF {
+		if item.Typ == lex.ItemEOF {
 			return nil
+		}
 
-		} else if item.Typ == itemName {
+		if item.Typ == itemRightCurl {
+			return nil
+		}
+
+		if item.Typ == itemName {
 			child := new(GraphQuery)
 			child.Attr = item.Val
 			gq.Children = append(gq.Children, child)
@@ -235,9 +244,6 @@ func godeep(l *lex.Lexer, gq *GraphQuery) error {
 			if err := godeep(l, curp); err != nil {
 				return err
 			}
-
-		} else if item.Typ == itemRightCurl {
-			return nil
 
 		} else if item.Typ == itemLeftRound {
 			args, err := parseArguments(l)

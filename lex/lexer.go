@@ -78,6 +78,7 @@ func (l *Lexer) Errorf(format string,
 
 // Emit emits the item with it's type information.
 func (l *Lexer) Emit(t ItemType) {
+	fmt.Printf("emitting %+q\n", l.Input[l.Start:l.Pos])
 	if t != ItemEOF && l.Pos <= l.Start {
 		// Let ItemEOF go through.
 		return
@@ -89,6 +90,7 @@ func (l *Lexer) Emit(t ItemType) {
 	l.Start = l.Pos
 }
 
+// Next reads the next rune from the Input, sets the Width and advances Pos.
 func (l *Lexer) Next() (result rune) {
 	if l.Pos >= len(l.Input) {
 		l.Width = 0
