@@ -32,18 +32,17 @@ import (
 )
 
 const (
-	E_Ok              = "E_OK"
-	E_Unauthorized    = "E_UNAUTHORIZED"
-	E_InvalidMethod   = "E_INVALID_METHOD"
-	E_InvalidRequest  = "E_INVALID_REQUEST"
-	E_MissingRequired = "E_MISSING_REQUIRED"
-	E_Error           = "E_ERROR"
-	E_NoData          = "E_NODATA"
-	E_Uptodate        = "E_UPTODATE"
-	E_NoPermission    = "E_NOPERMISSION"
+	ErrorOk              = "ErrorOk"
+	ErrorUnauthorized    = "ErrorUnauthorized"
+	ErrorInvalidMethod   = "ErrorInvalidMethod"
+	ErrorInvalidRequest  = "ErrorInvalidRequest"
+	ErrorMissingRequired = "ErrorMissingRequired"
+	Error                = "Error"
+	ErrorNoData          = "ErrorNoData"
+	ErrorUptodate        = "ErrorUptodate"
+	ErrorNoPermission    = "ErrorNoPermission"
 
-	DummyUUID     = "00000000-0000-0000-0000-000000000000"
-	DgraphVersion = "0.4.2"
+	dgraphVersion = "0.4.2"
 )
 
 var version = flag.Bool("version", false, "Prints the version of Dgraph")
@@ -66,12 +65,12 @@ type DirectedEdge struct {
 // if version flag is set to true.
 func PrintVersionOnly() bool {
 	if *version {
-		fmt.Printf("Dgraph version %s\n", DgraphVersion)
+		fmt.Printf("Dgraph version %s\n", dgraphVersion)
 		fmt.Println("\nCopyright 2016 Dgraph Labs, Inc.")
-		fmt.Println("Licensed under the Apache License, Version 2.0")
-		fmt.Println("\nFor more information on Dgraph, visit: https://wiki.dgraph.io")
-		fmt.Println("For discussions about Dgraph, visit: https://discuss.dgraph.io")
-		fmt.Println("To say hi to the community, visit: https://dgraph.slack.com\n")
+		fmt.Println("Licensed under the Apache License, Version 2.0.")
+		fmt.Println("\nFor Dgraph official documentation, visit https://wiki.dgraph.io.")
+		fmt.Println("For discussions about Dgraph, visit https://discuss.dgraph.io.")
+		fmt.Println("To say hi to the community, visit https://dgraph.slack.com.\n")
 		return true
 	}
 
@@ -109,7 +108,7 @@ func Reply(w http.ResponseWriter, rep interface{}) {
 		w.Header().Set("Content-Type", "application/json")
 		fmt.Fprint(w, string(js))
 	} else {
-		SetStatus(w, E_Error, "Internal server error")
+		SetStatus(w, Error, "Internal server error")
 	}
 }
 
@@ -117,7 +116,7 @@ func ParseRequest(w http.ResponseWriter, r *http.Request, data interface{}) bool
 	defer r.Body.Close()
 	decoder := json.NewDecoder(r.Body)
 	if err := decoder.Decode(&data); err != nil {
-		SetStatus(w, E_Error, fmt.Sprintf("While parsing request: %v", err))
+		SetStatus(w, Error, fmt.Sprintf("While parsing request: %v", err))
 		return false
 	}
 	return true
