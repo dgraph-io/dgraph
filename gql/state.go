@@ -282,6 +282,7 @@ func isSpace(r rune) bool {
 	return r == '\u0009' || r == '\u0020'
 }
 
+// isEndOfLine returns true if the rune is a Linefeed or a Carriage return.
 func isEndOfLine(r rune) bool {
 	return r == '\u000A' || r == '\u000D'
 }

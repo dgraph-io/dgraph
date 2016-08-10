@@ -24,8 +24,8 @@ import (
 	"github.com/dgraph-io/dgraph/lex"
 )
 
-// GraphQuery stores the parsed Query in a tree format. This gets
-// converted to internally used query.SubGraph before processing the query.
+// GraphQuery stores the parsed Query in a tree format. This gets converted to
+// internally used query.SubGraph before processing the query.
 type GraphQuery struct {
 	UID      uint64
 	XID      string
@@ -36,18 +36,19 @@ type GraphQuery struct {
 	Children []*GraphQuery
 }
 
-// Mutation stores the set and delete parts as strings.
+// Mutation stores the strings corresponding to set and delete operations.
 type Mutation struct {
 	Set string
 	Del string
 }
 
-// Denotes the key value pair that is part of the GraphQL query root in paranthesis.
+// pair denotes the key value pair that is part of the GraphQL query root in parenthesis.
 type pair struct {
 	Key string
 	Val string
 }
 
+// run is used to run the lexer until we encounter nil state.
 func run(l *lex.Lexer) {
 	for state := lexText; state != nil; {
 		state = state(l)
@@ -55,7 +56,7 @@ func run(l *lex.Lexer) {
 	close(l.Items) // No more tokens.
 }
 
-// Parse initializes, runs the lexer. It also constructs the GraphQuery subgraph
+// Parse initializes and runs the lexer. It also constructs the GraphQuery subgraph
 // from the lexed items.
 func Parse(input string) (gq *GraphQuery, mu *Mutation, rerr error) {
 	l := &lex.Lexer{}
@@ -95,8 +96,7 @@ func Parse(input string) (gq *GraphQuery, mu *Mutation, rerr error) {
 	return gq, mu, nil
 }
 
-// This function parses and stores the set and delete operation
-// in Mutation.
+// getMutation function parses and stores the set and delete operation in Mutation.
 func getMutation(l *lex.Lexer) (mu *Mutation, rerr error) {
 	for item := range l.Items {
 		if item.Typ == itemText {
@@ -117,7 +117,7 @@ func getMutation(l *lex.Lexer) (mu *Mutation, rerr error) {
 	return nil, errors.New("Invalid mutation.")
 }
 
-// This function parses and stores set or delete operation string in Mutation.
+// parseMutationOp parses and stores set or delete operation string in Mutation.
 func parseMutationOp(l *lex.Lexer, op string, mu *Mutation) error {
 	if mu == nil {
 		return errors.New("Mutation is nil.")
@@ -153,8 +153,7 @@ func parseMutationOp(l *lex.Lexer, op string, mu *Mutation) error {
 	return errors.New("Invalid mutation formatting.")
 }
 
-// parseArguments parses the arguments part of the GraphQL query root
-// and returns a slice of pair for them.
+// parseArguments parses the arguments part of the GraphQL query root.
 func parseArguments(l *lex.Lexer) (result []pair, rerr error) {
 	for {
 		var p pair
@@ -183,7 +182,7 @@ func parseArguments(l *lex.Lexer) (result []pair, rerr error) {
 	return result, nil
 }
 
-// This function gets the root graph query object after parsing the args.
+// getRoot gets the root graph query object after parsing the args.
 func getRoot(l *lex.Lexer) (gq *GraphQuery, rerr error) {
 	gq = new(GraphQuery)
 	item := <-l.Items
@@ -217,8 +216,7 @@ func getRoot(l *lex.Lexer) (gq *GraphQuery, rerr error) {
 	return gq, nil
 }
 
-// This function constructs the subgraph from the lexed items and the root
-// GraphQuery node.
+// godeep constructs the subgraph from the lexed items and a GraphQuery node.
 func godeep(l *lex.Lexer, gq *GraphQuery) error {
 	curp := gq // Used to track current node, for nesting.
 	for item := range l.Items {
@@ -250,6 +248,7 @@ func godeep(l *lex.Lexer, gq *GraphQuery) error {
 			if err != nil {
 				return err
 			}
+			// Stores args in GraphQuery, will be used later while retrieving results.
 			for _, p := range args {
 				if p.Key == "first" {
 					count, err := strconv.ParseInt(p.Val, 0, 32)
