@@ -32,18 +32,18 @@ import (
 )
 
 const (
-	E_OK               = "E_OK"
-	E_UNAUTHORIZED     = "E_UNAUTHORIZED"
-	E_INVALID_METHOD   = "E_INVALID_METHOD"
-	E_INVALID_REQUEST  = "E_INVALID_REQUEST"
-	E_MISSING_REQUIRED = "E_MISSING_REQUIRED"
-	E_ERROR            = "E_ERROR"
-	E_NODATA           = "E_NODATA"
-	E_UPTODATE         = "E_UPTODATE"
-	E_NOPERMISSION     = "E_NOPERMISSION"
+	E_Ok              = "E_OK"
+	E_Unauthorized    = "E_UNAUTHORIZED"
+	E_InvalidMethod   = "E_INVALID_METHOD"
+	E_InvalidRequest  = "E_INVALID_REQUEST"
+	E_MissingRequired = "E_MISSING_REQUIRED"
+	E_Error           = "E_ERROR"
+	E_NoData          = "E_NODATA"
+	E_Uptodate        = "E_UPTODATE"
+	E_NoPermission    = "E_NOPERMISSION"
 
-	DUMMY_UUID    = "00000000-0000-0000-0000-000000000000"
-	DGRAPHVERSION = "0.4.2"
+	DummyUUID     = "00000000-0000-0000-0000-000000000000"
+	DgraphVersion = "0.4.2"
 )
 
 var version = flag.Bool("version", false, "Prints the version of Dgraph")
@@ -64,7 +64,7 @@ type DirectedEdge struct {
 
 func PrintVersionOnly() bool {
 	if *version {
-		fmt.Printf("Dgraph version %s\n", DGRAPHVERSION)
+		fmt.Printf("Dgraph version %s\n", DgraphVersion)
 		fmt.Println("\nCopyright 2016 Dgraph Labs, Inc.")
 		fmt.Println("Licensed under the Apache License, Version 2.0")
 		fmt.Println("\nFor more information on Dgraph, visit: https://wiki.dgraph.io")
@@ -107,7 +107,7 @@ func Reply(w http.ResponseWriter, rep interface{}) {
 		w.Header().Set("Content-Type", "application/json")
 		fmt.Fprint(w, string(js))
 	} else {
-		SetStatus(w, E_ERROR, "Internal server error")
+		SetStatus(w, E_Error, "Internal server error")
 	}
 }
 
@@ -115,7 +115,7 @@ func ParseRequest(w http.ResponseWriter, r *http.Request, data interface{}) bool
 	defer r.Body.Close()
 	decoder := json.NewDecoder(r.Body)
 	if err := decoder.Decode(&data); err != nil {
-		SetStatus(w, E_ERROR, fmt.Sprintf("While parsing request: %v", err))
+		SetStatus(w, E_Error, fmt.Sprintf("While parsing request: %v", err))
 		return false
 	}
 	return true
