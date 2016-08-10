@@ -32,6 +32,7 @@ import (
 )
 
 const (
+	// Error constants representing different types of errors.
 	ErrorOk              = "ErrorOk"
 	ErrorUnauthorized    = "ErrorUnauthorized"
 	ErrorInvalidMethod   = "ErrorInvalidMethod"
