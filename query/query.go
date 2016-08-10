@@ -129,12 +129,6 @@ var sgPool = sync.Pool{
 	},
 }
 
-func newSubgraphNode() *SubGraph {
-	node := sgPool.Get().(*SubGraph)
-	*node = SubGraph{}
-	return node
-}
-
 func releaseSubgraph(root *SubGraph) {
 	if root == nil {
 		return
@@ -143,6 +137,7 @@ func releaseSubgraph(root *SubGraph) {
 	for _, child := range root.Children {
 		go releaseSubgraph(child)
 	}
+	*root = SubGraph{}
 	sgPool.Put(root)
 }
 
@@ -277,7 +272,7 @@ func postTraverse(g *SubGraph) (result map[uint64]interface{}, rerr error) {
 
 func (g *SubGraph) ToJson(l *Latency) (js []byte, rerr error) {
 	r, err := postTraverse(g)
-	go releaseSubgraph(g)
+	defer releaseSubgraph(g)
 	if err != nil {
 		return js, err
 	}
@@ -392,6 +387,7 @@ func (g *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 // This method transforms the predicate based subgraph to an
 // predicate-entity based protocol buffer subgraph.
 func (g *SubGraph) ToProtocolBuffer(l *Latency) (n *graph.Node, rerr error) {
+	defer releaseSubgraph(g)
 	n = &graph.Node{}
 	n.Attribute = g.Attr
 	if len(g.Query) == 0 {
@@ -410,7 +406,6 @@ func (g *SubGraph) ToProtocolBuffer(l *Latency) (n *graph.Node, rerr error) {
 		return n, rerr
 	}
 
-	go releaseSubgraph(g)
 	l.ProtocolBuffer = time.Since(l.Start) - l.Parsing - l.Processing
 	return n, nil
 }
@@ -431,7 +426,7 @@ func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
 			sg.GetCount = 1
 			break
 		}
-		dst := newSubgraphNode()
+		dst := sgPool.Get().(*SubGraph)
 		dst.Attr = gchild.Attr
 		dst.Offset = gchild.Offset
 		dst.AfterUid = gchild.After
@@ -502,7 +497,7 @@ func newGraph(ctx context.Context, euid uint64, exid string) (*SubGraph, error) 
 	rend := task.ResultEnd(b)
 	b.Finish(rend)
 
-	sg := newSubgraphNode()
+	sg := sgPool.Get().(*SubGraph)
 	sg.Attr = "_root_"
 	sg.Result = b.Bytes[b.Head():]
 	// Also add query for consistency and to allow for ToJson() later.
