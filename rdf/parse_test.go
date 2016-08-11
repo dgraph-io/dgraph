@@ -54,29 +54,41 @@ var testNQuads = []struct {
 		},
 	},
 	{
-		input: `_uid_:0x01 <predicate> <object_id> .`,
+		input:  `_uid_:0x01 <predicate> <object_id> .`,
+		hasErr: true,
+	},
+	{
+		input: `_:_uid_:0x01 <predicate> <object_id> .`,
 		nq: NQuad{
-			Subject:     "_uid_:0x01",
+			Subject:     "_:_uid_:0x01",
 			Predicate:   "predicate",
 			ObjectId:    "object_id",
 			ObjectValue: []byte(nil),
 		},
 	},
 	{
-		input: `<some_subject_id> <predicate> _uid_:0x01 .`,
+		input:  `<some_subject_id> <predicate> _uid_:0x01 .`,
+		hasErr: true,
+	},
+	{
+		input: `<some_subject_id> <predicate> _:_uid_:0x01 .`,
 		nq: NQuad{
 			Subject:     "some_subject_id",
 			Predicate:   "predicate",
-			ObjectId:    "_uid_:0x01",
+			ObjectId:    "_:_uid_:0x01",
 			ObjectValue: []byte(nil),
 		},
 	},
 	{
-		input: `_uid_:0x01 <predicate> _uid_:0x02 .`,
+		input:  `_uid_:0x01 <predicate> _uid_:0x02 .`,
+		hasErr: true,
+	},
+	{
+		input: `_:_uid_:0x01 <predicate> _:_uid_:0x02 .`,
 		nq: NQuad{
-			Subject:     "_uid_:0x01",
+			Subject:     "_:_uid_:0x01",
 			Predicate:   "predicate",
-			ObjectId:    "_uid_:0x02",
+			ObjectId:    "_:_uid_:0x02",
 			ObjectValue: []byte(nil),
 		},
 	},
@@ -265,17 +277,16 @@ func TestLex(t *testing.T) {
 		rnq, err := Parse(test.input)
 		if test.hasErr {
 			if err == nil {
-				t.Errorf("Expected error for input: %q. Output: %+v", test.input, rnq)
+				t.Error("expected error, but didn't get one")
 			}
 			continue
-		} else {
-			if err != nil {
-				t.Errorf("Unexpected error: %v", err)
-			}
 		}
-
+		if err != nil {
+			t.Errorf("unexpected error: %s", err)
+			continue
+		}
 		if !reflect.DeepEqual(rnq, test.nq) {
-			t.Errorf("Expected %v. Got: %v", test.nq, rnq)
+			t.Errorf("expected: %#v\n got     : %#v", test.nq, rnq)
 		}
 	}
 }
