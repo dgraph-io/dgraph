@@ -247,6 +247,105 @@ func TestGetUid(t *testing.T) {
 	}
 }
 
+func TestDebug1(t *testing.T) {
+	dir, _ := populateGraph(t)
+	defer os.RemoveAll(dir)
+
+	// Alright. Now we have everything set up. Let's create the query.
+	query := `
+		{
+			debug(_uid_:0x01) {
+				name
+				gender
+				status
+				friend {
+					_count_
+				}
+			}
+		}
+	`
+
+	gq, _, err := gql.Parse(query)
+	if err != nil {
+		t.Error(err)
+	}
+	ctx := context.Background()
+	sg, err := ToSubGraph(ctx, gq)
+	if err != nil {
+		t.Error(err)
+	}
+
+	ch := make(chan error)
+	go ProcessGraph(ctx, sg, ch)
+	err = <-ch
+	if err != nil {
+		t.Error(err)
+	}
+
+	var l Latency
+	js, err := sg.ToJson(&l)
+	if err != nil {
+		t.Error(err)
+	}
+	var mp map[string]interface{}
+	err = json.Unmarshal(js, &mp)
+
+	resp := mp["debug"].([]interface{})[0]
+	uid := resp.(map[string]interface{})["_uid_"].(string)
+	if uid != "0x1" {
+		t.Errorf("Expected uid 0x1. Got %s", uid)
+	}
+}
+
+func TestDebug2(t *testing.T) {
+	dir, _ := populateGraph(t)
+	defer os.RemoveAll(dir)
+
+	query := `
+		{
+			me(_uid_:0x01) {
+				name
+				gender
+				status
+				friend {
+					_count_
+				}
+			}
+		}
+	`
+
+	gq, _, err := gql.Parse(query)
+	if err != nil {
+		t.Error(err)
+	}
+	ctx := context.Background()
+	sg, err := ToSubGraph(ctx, gq)
+	if err != nil {
+		t.Error(err)
+	}
+
+	ch := make(chan error)
+	go ProcessGraph(ctx, sg, ch)
+	err = <-ch
+	if err != nil {
+		t.Error(err)
+	}
+
+	var l Latency
+	var mp map[string]interface{}
+	js, err := sg.ToJson(&l)
+	if err != nil {
+		t.Error(err)
+	}
+	err = json.Unmarshal(js, &mp)
+	resp := mp["me"].([]interface{})[0]
+	uid, ok := resp.(map[string]interface{})["_uid_"].(string)
+	if ok {
+		t.Errorf("No uid expected but got one %s", uid)
+	}
+
+}
+
 func TestCount(t *testing.T) {
 	dir, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
