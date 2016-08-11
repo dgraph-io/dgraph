@@ -108,8 +108,6 @@ func (l *Latency) ToMap() map[string]string {
 	return m
 }
 
-var isDebug bool
-
 // SubGraph is the way to represent data internally. It contains both the
 // query and the response. Once generated, this can then be encoded to other
 // client convenient formats, like GraphQL / JSON.
@@ -122,6 +120,7 @@ type SubGraph struct {
 	Children []*SubGraph
 	IsRoot   bool
 	GetUid   bool
+	isDebug  bool
 
 	Query  []byte
 	Result []byte
@@ -215,7 +214,7 @@ func postTraverse(g *SubGraph) (result map[uint64]interface{}, rerr error) {
 		for j := 0; j < ul.UidsLength(); j++ {
 			uid := ul.Uids(j)
 			m := make(map[string]interface{})
-			if g.GetUid || isDebug {
+			if g.GetUid || g.isDebug {
 				m["_uid_"] = fmt.Sprintf("%#x", uid)
 			}
 			if ival, present := cResult[uid]; !present {
@@ -251,7 +250,7 @@ func postTraverse(g *SubGraph) (result map[uint64]interface{}, rerr error) {
 				pval, q.Uids(i), val)
 		}
 		m := make(map[string]interface{})
-		if g.GetUid || isDebug {
+		if g.GetUid || g.isDebug {
 			m["_uid_"] = fmt.Sprintf("%#x", q.Uids(i))
 		}
 		m[g.Attr] = string(val)
@@ -278,7 +277,7 @@ func (g *SubGraph) ToJson(l *Latency) (js []byte, rerr error) {
 		} else {
 			m = make(map[string]interface{})
 		}
-		if isDebug {
+		if g.isDebug {
 			m["server_latency"] = l.ToMap()
 		}
 		return json.Marshal(m)
@@ -445,7 +444,11 @@ func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
 		if gchild.Attr == "_uid_" {
 			sg.GetUid = true
 		}
+
 		dst := new(SubGraph)
+		if sg.isDebug {
+			dst.isDebug = true
+		}
 		dst.Attr = gchild.Attr
 		dst.Offset = gchild.Offset
 		dst.AfterUid = gchild.After
@@ -519,7 +522,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 
 	sg := new(SubGraph)
 	if gq.Attr == "debug" {
-		isDebug = true
+		sg.isDebug = true
 	}
 	sg.Attr = gq.Attr
 	sg.IsRoot = true
