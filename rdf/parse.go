@@ -205,9 +205,21 @@ var pLangTag = p.Seq{
 	Initial: func() p.Value { return "" },
 	Steps: []p.SeqStep{
 		ssByte('@'),
-		ssStringWhilePred(func(b byte) bool {
-			return !unicode.IsSpace(rune(b))
-		}),
+		{Prod: p.MinTimes{
+			Initial: func() p.Value { return "" },
+			Min:     1,
+			Prod: pPred(func(b byte) bool {
+				return unicode.IsLetter(rune(b))
+			}),
+			Reduce: appendStringByteReducer,
+		}, Reduce: p.StringReducer},
+		{Prod: p.MinTimes{
+			Initial: func() p.Value { return "" },
+			Prod: pPred(func(b byte) bool {
+				return b == '-' || unicode.IsLetter(rune(b)) || unicode.IsNumber(rune(b))
+			}),
+			Reduce: appendStringByteReducer,
+		}, Reduce: p.StringReducer},
 	},
 }
 
@@ -339,6 +351,10 @@ var optWS = p.SeqStep{
 	}),
 }
 
+var period = p.SeqStep{Prod: p.MatchFunc(func(s p.Stream) (p.Stream, p.Value, bool) {
+	return s.Next(), '.', s.Err() == nil && s.Token().Value().(byte) == '.'
+})}
+
 var nquadStatement = p.Seq{
 	Steps: []p.SeqStep{
 		subject,
@@ -346,6 +362,8 @@ var nquadStatement = p.Seq{
 		predicate,
 		optWS,
 		object,
+		optWS,
+		period,
 	},
 	Initial: func() p.Value { return NQuad{} },
 	// predicate,

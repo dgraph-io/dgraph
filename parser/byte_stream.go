@@ -22,7 +22,7 @@ func (bs byteStream) Err() error {
 
 func (bs *byteStream) Next() Stream {
 	if bs.err != nil {
-		panic("stream has err")
+		return bs
 	}
 	if bs.next == nil {
 		bs.next = &byteStream{
