@@ -261,6 +261,7 @@ var testNQuads = []struct {
 
 func TestLex(t *testing.T) {
 	for _, test := range testNQuads {
+		t.Logf("parsing %q", test.input)
 		rnq, err := Parse(test.input)
 		if test.hasErr {
 			if err == nil {

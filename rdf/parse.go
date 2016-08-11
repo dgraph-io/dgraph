@@ -17,13 +17,14 @@
 package rdf
 
 import (
+	"bytes"
 	"fmt"
-	"log"
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
-	"github.com/dgraph-io/dgraph/lex"
+	p "github.com/dgraph-io/dgraph/parser"
 	"github.com/dgraph-io/dgraph/uid"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -117,65 +118,195 @@ func stripBracketsIfPresent(val string) string {
 	return val[1 : len(val)-1]
 }
 
-// Parse parses a mutation string and returns the NQuad representation for it.
-func Parse(line string) (rnq NQuad, rerr error) {
-	l := &lex.Lexer{}
-	l.Init(line)
+type bnLabel struct{}
 
-	go run(l)
-	var oval string
-	var vend bool
-	// We read items from the l.Items channel to which the lexer sends items.
-	for item := range l.Items {
-		if item.Typ == itemSubject {
-			rnq.Subject = stripBracketsIfPresent(item.Val)
-		}
-		if item.Typ == itemPredicate {
-			rnq.Predicate = stripBracketsIfPresent(item.Val)
-		}
-		if item.Typ == itemObject {
-			rnq.ObjectId = stripBracketsIfPresent(item.Val)
-		}
-		if item.Typ == itemLiteral {
-			oval = item.Val
-		}
-		if item.Typ == itemLanguage {
-			rnq.Predicate += "." + item.Val
-		}
-		if item.Typ == itemObjectType {
-			// TODO: Strictly parse common types like integers, floats etc.
-			if len(oval) == 0 {
-				log.Fatalf(
-					"itemObject should be emitted before itemObjectType. Input: [%s]",
-					line)
-			}
-			oval += "@@" + stripBracketsIfPresent(item.Val)
-		}
-		if item.Typ == lex.ItemError {
-			return rnq, fmt.Errorf(item.Val)
-		}
-		if item.Typ == itemValidEnd {
-			vend = true
-		}
-		if item.Typ == itemLabel {
-			rnq.Label = stripBracketsIfPresent(item.Val)
-		}
-	}
-	if !vend {
-		return rnq, fmt.Errorf("Invalid end of input. Input: [%s]", line)
-	}
-	if len(oval) > 0 {
-		rnq.ObjectValue = []byte(oval)
-	}
-	if len(rnq.Subject) == 0 || len(rnq.Predicate) == 0 {
-		return rnq, fmt.Errorf("Empty required fields in NQuad. Input: [%s]", line)
-	}
-	if len(rnq.ObjectId) == 0 && rnq.ObjectValue == nil {
-		return rnq, fmt.Errorf("No Object in NQuad. Input: [%s]", line)
-	}
-
-	return rnq, nil
+var subject = p.SeqStep{
+	Prod: p.OneOf{pIriRef, pBNLabel},
+	Reduce: func(v, v1 p.Value) p.Value {
+		r := v.(NQuad)
+		r.Subject = v1.(string)
+		return r
+	},
 }
+
+var predicate = p.SeqStep{
+	Prod: p.OneOf{pIriRef, pBNLabel},
+	Reduce: func(v, v1 p.Value) p.Value {
+		r := v.(NQuad)
+		r.Predicate = v1.(string)
+		return r
+	},
+}
+
+var object = p.SeqStep{
+	Prod: p.OneOf{pIriRef, pBNLabel},
+	Reduce: func(v, v1 p.Value) p.Value {
+		r := v.(NQuad)
+		r.ObjectId = v1.(string)
+		return r
+	},
+}
+
+var pIriRef = p.Seq{
+	Steps: []p.SeqStep{
+		{pByte('<'), nil},
+		{p.MinTimes{
+			Prod:    pNotByte('>'),
+			Initial: func() p.Value { return "" },
+			Reduce: func(v, v1 p.Value) p.Value {
+				return v.(string) + string(v1.(byte))
+			},
+		}, p.StringReducer},
+		{pByte('>'), nil}},
+	Initial: func() p.Value { return "" },
+}
+
+func pByte(b byte) p.Prod {
+	return p.MatchFunc(func(s p.Stream) (p.Stream, p.Value, bool) {
+		_b := s.Token().Value().(byte)
+		return s.Next(), _b, _b == b
+	})
+}
+
+func pNotByte(b byte) p.Prod {
+	return p.MatchFunc(func(s p.Stream) (p.Stream, p.Value, bool) {
+		_b := s.Token().Value().(byte)
+		return s.Next(), _b, _b != b
+	})
+}
+
+type iriRef string
+
+var pBNLabel = p.Seq{
+	Steps:   []p.SeqStep{pBytes("_:"), {notWS, p.StringReducer}},
+	Initial: func() p.Value { return "_:" },
+}
+
+var notWS = predStar(func(b byte) bool {
+	return !unicode.IsSpace(rune(b))
+})
+
+func pBytes(bs string) p.SeqStep {
+	return p.SeqStep{
+		Prod: p.MatchFunc(func(_s p.Stream) (s p.Stream, v p.Value, ok bool) {
+			s = _s
+			for _, b := range []byte(bs) {
+				if s.Err() != nil || s.Token().Value().(byte) != b {
+					return
+				}
+				s = s.Next()
+			}
+			ok = true
+			return
+		}),
+	}
+}
+
+func predStar(pred func(b byte) bool) p.Prod {
+	return p.MatchFunc(func(s p.Stream) (p.Stream, p.Value, bool) {
+		v := ""
+		for {
+			if s.Err() != nil {
+				break
+			}
+			b1 := s.Token().Value().(byte)
+			if !pred(b1) {
+				break
+			}
+			v += string(b1)
+			s = s.Next()
+		}
+		return s, v, true
+	})
+}
+
+var optWS = p.SeqStep{
+	Prod: predStar(func(b byte) bool {
+		return unicode.IsSpace(rune(b))
+	}),
+}
+
+var nquadStatement = p.Seq{
+	Steps: []p.SeqStep{
+		subject,
+		optWS,
+		predicate,
+		optWS,
+		object,
+	},
+	Initial: func() p.Value { return NQuad{} },
+	// predicate,
+	// object,
+	// p.Maybe(graphLabel),
+	// period,
+}
+
+func Parse(line string) (rnq NQuad, err error) {
+	s := p.NewByteStream(bytes.NewBufferString(line))
+	_, v, err := p.Parse(s, nquadStatement)
+	rnq = v.(NQuad)
+	return
+}
+
+// // Parse parses a mutation string and returns the NQuad representation for it.
+// func Parse(line string) (rnq NQuad, rerr error) {
+// 	l := &lex.Lexer{}
+// 	l.Init(line)
+
+// 	go run(l)
+// 	var oval string
+// 	var vend bool
+// 	// We read items from the l.Items channel to which the lexer sends items.
+// 	for item := range l.Items {
+// 		if item.Typ == itemSubject {
+// 			rnq.Subject = stripBracketsIfPresent(item.Val)
+// 		}
+// 		if item.Typ == itemPredicate {
+// 			rnq.Predicate = stripBracketsIfPresent(item.Val)
+// 		}
+// 		if item.Typ == itemObject {
+// 			rnq.ObjectId = stripBracketsIfPresent(item.Val)
+// 		}
+// 		if item.Typ == itemLiteral {
+// 			oval = item.Val
+// 		}
+// 		if item.Typ == itemLanguage {
+// 			rnq.Predicate += "." + item.Val
+// 		}
+// 		if item.Typ == itemObjectType {
+// 			// TODO: Strictly parse common types like integers, floats etc.
+// 			if len(oval) == 0 {
+// 				log.Fatalf(
+// 					"itemObject should be emitted before itemObjectType. Input: [%s]",
+// 					line)
+// 			}
+// 			oval += "@@" + stripBracketsIfPresent(item.Val)
+// 		}
+// 		if item.Typ == lex.ItemError {
+// 			return rnq, fmt.Errorf(item.Val)
+// 		}
+// 		if item.Typ == itemValidEnd {
+// 			vend = true
+// 		}
+// 		if item.Typ == itemLabel {
+// 			rnq.Label = stripBracketsIfPresent(item.Val)
+// 		}
+// 	}
+// 	if !vend {
+// 		return rnq, fmt.Errorf("Invalid end of input. Input: [%s]", line)
+// 	}
+// 	if len(oval) > 0 {
+// 		rnq.ObjectValue = []byte(oval)
+// 	}
+// 	if len(rnq.Subject) == 0 || len(rnq.Predicate) == 0 {
+// 		return rnq, fmt.Errorf("Empty required fields in NQuad. Input: [%s]", line)
+// 	}
+// 	if len(rnq.ObjectId) == 0 && rnq.ObjectValue == nil {
+// 		return rnq, fmt.Errorf("No Object in NQuad. Input: [%s]", line)
+// 	}
+
+// 	return rnq, nil
+// }
 
 func isNewline(r rune) bool {
 	return r == '\n' || r == '\r'
