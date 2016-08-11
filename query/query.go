@@ -108,6 +108,8 @@ func (l *Latency) ToMap() map[string]string {
 	return m
 }
 
+var isDebug bool
+
 // SubGraph is the way to represent data internally. It contains both the
 // query and the response. Once generated, this can then be encoded to other
 // client convenient formats, like GraphQL / JSON.
@@ -213,7 +215,7 @@ func postTraverse(g *SubGraph) (result map[uint64]interface{}, rerr error) {
 		for j := 0; j < ul.UidsLength(); j++ {
 			uid := ul.Uids(j)
 			m := make(map[string]interface{})
-			if g.GetUid {
+			if g.GetUid || isDebug {
 				m["_uid_"] = fmt.Sprintf("%#x", uid)
 			}
 			if ival, present := cResult[uid]; !present {
@@ -249,7 +251,7 @@ func postTraverse(g *SubGraph) (result map[uint64]interface{}, rerr error) {
 				pval, q.Uids(i), val)
 		}
 		m := make(map[string]interface{})
-		if g.GetUid {
+		if g.GetUid || isDebug {
 			m["_uid_"] = fmt.Sprintf("%#x", q.Uids(i))
 		}
 		m[g.Attr] = string(val)
@@ -276,7 +278,9 @@ func (g *SubGraph) ToJson(l *Latency) (js []byte, rerr error) {
 		} else {
 			m = make(map[string]interface{})
 		}
-		m["server_latency"] = l.ToMap()
+		if isDebug {
+			m["server_latency"] = l.ToMap()
+		}
 		return json.Marshal(m)
 	}
 	log.Fatal("Runtime should never reach here.")
@@ -514,6 +518,9 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	b.Finish(rend)
 
 	sg := new(SubGraph)
+	if gq.Attr == "debug" {
+		isDebug = true
+	}
 	sg.Attr = gq.Attr
 	sg.IsRoot = true
 	sg.Result = b.Bytes[b.Head():]
