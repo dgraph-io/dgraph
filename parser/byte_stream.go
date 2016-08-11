@@ -38,6 +38,9 @@ type byteToken byte
 func (bt byteToken) Value() interface{} { return byte(bt) }
 
 func (bs *byteStream) Token() Token {
+	if bs.err != nil {
+		panic(bs.err)
+	}
 	return byteToken(bs.b)
 }
 

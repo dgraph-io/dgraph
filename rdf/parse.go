@@ -115,45 +115,164 @@ var subject = p.SeqStep{
 	Prod: p.OneOf{pIriRef, pBNLabel},
 	Reduce: func(v, v1 p.Value) p.Value {
 		r := v.(NQuad)
-		r.Subject = v1.(string)
+		switch _v1 := v1.(type) {
+		case string:
+			r.Subject = _v1
+		case iriRef:
+			r.Subject = string(_v1)
+		default:
+			panic(v1)
+		}
 		return r
 	},
 }
 
 var predicate = p.SeqStep{
-	Prod: p.OneOf{pIriRef, pBNLabel},
+	Prod: pIriRef,
 	Reduce: func(v, v1 p.Value) p.Value {
 		r := v.(NQuad)
-		r.Predicate = v1.(string)
+		r.Predicate = string(v1.(iriRef))
 		return r
 	},
 }
 
 var object = p.SeqStep{
-	Prod: p.OneOf{pIriRef, pBNLabel},
+	Prod: p.OneOf{pIriRef, pBNLabel, pLiteral},
 	Reduce: func(v, v1 p.Value) p.Value {
 		r := v.(NQuad)
-		r.ObjectId = v1.(string)
+		switch _v1 := v1.(type) {
+		case string:
+			r.ObjectId = _v1
+		case literal:
+			r.ObjectValue = []byte(_v1.Value)
+			if _v1.LangTag != "" {
+				r.Predicate += "." + _v1.LangTag
+			}
+		case iriRef:
+			r.ObjectId = string(_v1)
+		default:
+			panic(v1)
+		}
 		return r
 	},
+}
+
+type literal struct {
+	Value   string
+	LangTag string
+}
+
+var pLiteral = p.Seq{
+	Initial: func() p.Value { return literal{} },
+	Steps: []p.SeqStep{
+		{Prod: pByte('"')},
+		{Prod: pStringUntilByte('"'), Reduce: func(v, v1 p.Value) p.Value {
+			_v := v.(literal)
+			_v.Value = v1.(string)
+			return _v
+		}},
+		{Prod: pByte('"')},
+		{
+			Prod: p.Maybe{
+				Prod: p.OneOf([]p.Prod{
+					pLangTag,
+					p.Seq{
+						Steps: []p.SeqStep{
+							pBytes("^^"),
+							{Prod: pIriRef, Reduce: p.ClobberReducer},
+						},
+					},
+				}),
+				IfNot: "",
+			},
+			Reduce: func(v, v1 p.Value) p.Value {
+				_v := v.(literal)
+				switch _v1 := v1.(type) {
+				case string:
+					_v.LangTag = _v1
+				case iriRef:
+					_v.Value += "@@" + string(_v1)
+				default:
+					panic(_v1)
+				}
+				return _v
+			},
+		},
+	},
+}
+
+var pLangTag = p.Seq{
+	Initial: func() p.Value { return "" },
+	Steps: []p.SeqStep{
+		ssByte('@'),
+		ssStringWhilePred(func(b byte) bool {
+			return !unicode.IsSpace(rune(b))
+		}),
+	},
+}
+
+func pStringUntilByte(b byte) p.Prod {
+	return p.MinTimes{
+		Prod:    pNotByte(b),
+		Initial: func() p.Value { return "" },
+		Reduce: func(v, v1 p.Value) p.Value {
+			return v.(string) + string(v1.(byte))
+		},
+	}
+}
+
+func pPred(pred func(byte) bool) p.Prod {
+	return p.MatchFunc(func(s p.Stream) (p.Stream, p.Value, bool) {
+		_b := s.Token().Value().(byte)
+		return s.Next(), _b, pred(_b)
+	})
+}
+
+func pWhilePred(pred func(b byte) bool) p.Prod {
+	return p.MinTimes{
+		Prod:    pPred(pred),
+		Initial: func() p.Value { return "" },
+		Reduce:  appendStringByteReducer,
+	}
+}
+
+func appendStringByteReducer(v, v1 p.Value) p.Value {
+	return v.(string) + string(v1.(byte))
+}
+
+func ssStringUntilByte(b byte) p.SeqStep {
+	return p.SeqStep{pStringUntilByte(b), p.StringReducer}
+}
+
+func ssStringWhilePred(pred func(b byte) bool) p.SeqStep {
+	return p.SeqStep{
+		Prod: p.MinTimes{
+			Prod:    pPred(pred),
+			Initial: func() p.Value { return "" },
+			Reduce:  appendStringByteReducer,
+		},
+		Reduce: p.StringReducer,
+	}
+}
+
+func ssByte(b byte) p.SeqStep {
+	return p.SeqStep{pByte(b), nil}
 }
 
 var pIriRef = p.Seq{
 	Steps: []p.SeqStep{
 		{pByte('<'), nil},
-		{p.MinTimes{
-			Prod:    pNotByte('>'),
-			Initial: func() p.Value { return "" },
-			Reduce: func(v, v1 p.Value) p.Value {
-				return v.(string) + string(v1.(byte))
-			},
-		}, p.StringReducer},
+		ssStringUntilByte('>'),
 		{pByte('>'), nil}},
 	Initial: func() p.Value { return "" },
+	Finally: func(v p.Value) p.Value { return iriRef(v.(string)) },
 }
 
 func pByte(b byte) p.Prod {
 	return p.MatchFunc(func(s p.Stream) (p.Stream, p.Value, bool) {
+		if s.Err() != nil {
+			return nil, nil, false
+		}
 		_b := s.Token().Value().(byte)
 		return s.Next(), _b, _b == b
 	})
@@ -161,6 +280,9 @@ func pByte(b byte) p.Prod {
 
 func pNotByte(b byte) p.Prod {
 	return p.MatchFunc(func(s p.Stream) (p.Stream, p.Value, bool) {
+		if s.Err() != nil {
+			return nil, nil, false
+		}
 		_b := s.Token().Value().(byte)
 		return s.Next(), _b, _b != b
 	})

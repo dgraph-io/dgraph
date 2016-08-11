@@ -72,6 +72,7 @@ type SeqStep struct {
 type Seq struct {
 	Steps   []SeqStep
 	Initial func() Value
+	Finally func(Value) Value
 }
 
 func (sq Seq) Match(_sm Stream) (sm Stream, v Value, ok bool) {
@@ -90,6 +91,9 @@ func (sq Seq) Match(_sm Stream) (sm Stream, v Value, ok bool) {
 			v = ss.Reduce(v, v1)
 		}
 	}
+	if sq.Finally != nil {
+		v = sq.Finally(v)
+	}
 	return
 }
 
@@ -103,4 +107,21 @@ func Parse(s Stream, p Prod) (_s Stream, v Value, err error) {
 
 func StringReducer(v, v1 Value) Value {
 	return v.(string) + v1.(string)
+}
+
+type Maybe struct {
+	Prod  Prod
+	IfNot Value
+}
+
+func (m Maybe) Match(_s Stream) (s Stream, v Value, ok bool) {
+	s, v, ok = m.Prod.Match(_s)
+	if ok {
+		return
+	}
+	return _s, m.IfNot, true
+}
+
+func ClobberReducer(v, v1 Value) Value {
+	return v1
 }
