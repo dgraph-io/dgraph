@@ -54,29 +54,41 @@ var testNQuads = []struct {
 		},
 	},
 	{
-		input: `_uid_:0x01 <predicate> <object_id> .`,
+		input:  `_uid_:0x01 <predicate> <object_id> .`,
+		hasErr: true,
+	},
+	{
+		input: `_:_uid_:0x01 <predicate> <object_id> .`,
 		nq: NQuad{
-			Subject:     "_uid_:0x01",
+			Subject:     "_:_uid_:0x01",
 			Predicate:   "predicate",
 			ObjectId:    "object_id",
 			ObjectValue: []byte(nil),
 		},
 	},
 	{
-		input: `<some_subject_id> <predicate> _uid_:0x01 .`,
+		input:  `<some_subject_id> <predicate> _uid_:0x01 .`,
+		hasErr: true,
+	},
+	{
+		input: `<some_subject_id> <predicate> _:_uid_:0x01 .`,
 		nq: NQuad{
 			Subject:     "some_subject_id",
 			Predicate:   "predicate",
-			ObjectId:    "_uid_:0x01",
+			ObjectId:    "_:_uid_:0x01",
 			ObjectValue: []byte(nil),
 		},
 	},
 	{
-		input: `_uid_:0x01 <predicate> _uid_:0x02 .`,
+		input:  `_uid_:0x01 <predicate> _uid_:0x02 .`,
+		hasErr: true,
+	},
+	{
+		input: `_:_uid_:0x01 <predicate> _:_uid_:0x02 .`,
 		nq: NQuad{
-			Subject:     "_uid_:0x01",
+			Subject:     "_:_uid_:0x01",
 			Predicate:   "predicate",
-			ObjectId:    "_uid_:0x02",
+			ObjectId:    "_:_uid_:0x02",
 			ObjectValue: []byte(nil),
 		},
 	},
