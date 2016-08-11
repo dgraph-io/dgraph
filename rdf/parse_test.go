@@ -286,7 +286,7 @@ func TestLex(t *testing.T) {
 			continue
 		}
 		if !reflect.DeepEqual(rnq, test.nq) {
-			t.Errorf("expected: %#v\n got     : %#v", test.nq, rnq)
+			t.Errorf("\nexpected: %#v\ngot     : %#v", test.nq, rnq)
 		}
 	}
 }
