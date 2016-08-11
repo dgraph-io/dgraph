@@ -273,20 +273,20 @@ var testNQuads = []struct {
 
 func TestLex(t *testing.T) {
 	for _, test := range testNQuads {
+		t.Logf("parsing %q", test.input)
 		rnq, err := Parse(test.input)
 		if test.hasErr {
 			if err == nil {
-				t.Errorf("Expected error for input: %q. Output: %+v", test.input, rnq)
+				t.Error("expected error, but didn't get one")
 			}
 			continue
-		} else {
-			if err != nil {
-				t.Errorf("Unexpected error: %v", err)
-			}
 		}
-
+		if err != nil {
+			t.Errorf("unexpected error: %s", err)
+			continue
+		}
 		if !reflect.DeepEqual(rnq, test.nq) {
-			t.Errorf("Expected %v. Got: %v", test.nq, rnq)
+			t.Errorf("expected: %#v\n got     : %#v", test.nq, rnq)
 		}
 	}
 }
