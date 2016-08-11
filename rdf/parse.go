@@ -28,15 +28,6 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-// NQuad is the data structure used for storing rdf N-Quads.
-type NQuad struct {
-	Subject     string
-	Predicate   string
-	ObjectId    string
-	ObjectValue []byte
-	Label       string
-}
-
 // Gets the uid corresponding to an xid from the posting list which stores the
 // mapping.
 func getUid(xid string) (uint64, error) {
