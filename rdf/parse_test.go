@@ -36,6 +36,15 @@ var testNQuads = []struct {
 		},
 	},
 	{
+		input: "<some_subject_id>\t<predicate>\t<object_id>\t.",
+		nq: NQuad{
+			Subject:     "some_subject_id",
+			Predicate:   "predicate",
+			ObjectId:    "object_id",
+			ObjectValue: []byte(nil),
+		},
+	},
+	{
 		input: `_:alice <predicate> <object_id> .`,
 		nq: NQuad{
 			Subject:     "_:alice",
@@ -206,7 +215,30 @@ var testNQuads = []struct {
 		hasErr: false,
 	},
 	{
+		input: `_:alice <knows> "stuff"^^<xs:string> _:label . # comment`,
+		nq: NQuad{
+			Subject:     "_:alice",
+			Predicate:   "knows",
+			ObjectId:    "",
+			ObjectValue: []byte("stuff@@xs:string"),
+			Label:       "_:label",
+		},
+		hasErr: false,
+	},
+	{
 		input:  `_:alice <knows> "stuff"^^<xs:string> "label" .`,
+		hasErr: true,
+	},
+	{
+		input:  `_:alice <knows> "stuff"^^<xs:string> _uid_:0x01 .`,
+		hasErr: true,
+	},
+	{
+		input:  `_:alice <knows> "stuff"^^<xs:string> <quad> <pentagon> .`,
+		hasErr: true,
+	},
+	{
+		input:  `_:alice <knows> "stuff"^^<xs:string> quad .`,
 		hasErr: true,
 	},
 	{
@@ -218,7 +250,7 @@ var testNQuads = []struct {
 		},
 	},
 	{
-		input: `_:alice <likes> "mov\"enpick" .`, // ignores the <bob> after dot.
+		input: `_:alice <likes> "mov\"enpick" .`,
 		nq: NQuad{
 			Subject:     "_:alice",
 			Predicate:   "likes",

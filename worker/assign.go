@@ -21,12 +21,12 @@ import (
 	"log"
 	"sync"
 
+	"github.com/google/flatbuffers/go"
 	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/uid"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/google/flatbuffers/go"
 )
 
 func createXidListBuffer(xids map[string]uint64) []byte {
@@ -134,7 +134,7 @@ func GetOrAssignUidsOverNetwork(ctx context.Context, xidToUid *map[string]uint64
 	uidList.Init(reply.Data, uo)
 
 	if xidList.XidsLength() != uidList.UidsLength() {
-		log.Fatal("Xids: %d != Uids: %d", xidList.XidsLength(), uidList.UidsLength())
+		log.Fatalf("Xids: %d != Uids: %d", xidList.XidsLength(), uidList.UidsLength())
 	}
 	for i := 0; i < xidList.XidsLength(); i++ {
 		xid := string(xidList.Xids(i))

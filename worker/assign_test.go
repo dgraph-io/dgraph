@@ -19,8 +19,9 @@ package worker
 import (
 	"testing"
 
-	"github.com/dgraph-io/dgraph/task"
 	"github.com/google/flatbuffers/go"
+
+	"github.com/dgraph-io/dgraph/task"
 )
 
 func TestXidListBuffer(t *testing.T) {

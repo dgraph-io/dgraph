@@ -25,13 +25,13 @@ import (
 	"math/rand"
 	"net"
 	"net/http"
+	"os"
 	"runtime"
 	"strings"
 	"time"
 
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
-
 	"google.golang.org/grpc"
 
 	"github.com/dgraph-io/dgraph/commit"
@@ -46,18 +46,20 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-var postingDir = flag.String("postings", "", "Directory to store posting lists")
-var uidDir = flag.String("uids", "", "XID UID posting lists directory")
-var mutationDir = flag.String("mutations", "", "Directory to store mutations")
-var port = flag.Int("port", 8080, "Port to run server on.")
-var numcpu = flag.Int("numCpu", runtime.NumCPU(),
-	"Number of cores to be used by the process")
-var instanceIdx = flag.Uint64("instanceIdx", 0,
-	"serves only entities whose Fingerprint % numInstance == instanceIdx.")
-var workers = flag.String("workers", "",
-	"Comma separated list of IP addresses of workers")
-var nomutations = flag.Bool("nomutations", false, "Don't allow mutations on this server.")
-var tracing = flag.Float64("trace", 0.5, "The ratio of queries to trace.")
+var (
+	postingDir  = flag.String("postings", "p", "Directory to store posting lists")
+	uidDir      = flag.String("uids", "u", "XID UID posting lists directory")
+	mutationDir = flag.String("mutations", "m", "Directory to store mutations")
+	port        = flag.Int("port", 8080, "Port to run server on.")
+	numcpu      = flag.Int("numCpu", runtime.NumCPU(),
+		"Number of cores to be used by the process")
+	instanceIdx = flag.Uint64("instanceIdx", 0,
+		"serves only entities whose Fingerprint % numInstance == instanceIdx.")
+	workers = flag.String("workers", "",
+		"Comma separated list of IP addresses of workers")
+	nomutations = flag.Bool("nomutations", false, "Don't allow mutations on this server.")
+	tracing     = flag.Float64("trace", 0.5, "The ratio of queries to trace.")
+)
 
 func addCorsHeaders(w http.ResponseWriter) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -69,14 +71,13 @@ func addCorsHeaders(w http.ResponseWriter) {
 	w.Header().Set("Connection", "close")
 }
 
-func mutationHandler(ctx context.Context, mu *gql.Mutation) error {
-	if *nomutations {
-		return fmt.Errorf("Mutations are forbidden on this server.")
-	}
-
-	r := strings.NewReader(mu.Set)
-	scanner := bufio.NewScanner(r)
+func convertToEdges(ctx context.Context, mutation string) ([]x.DirectedEdge, error) {
+	var edges []x.DirectedEdge
 	var nquads []rdf.NQuad
+	r := strings.NewReader(mutation)
+	scanner := bufio.NewScanner(r)
+
+	// Scanning the mutation string, one line at a time.
 	for scanner.Scan() {
 		ln := strings.Trim(scanner.Text(), " \t")
 		if len(ln) == 0 {
@@ -85,11 +86,13 @@ func mutationHandler(ctx context.Context, mu *gql.Mutation) error {
 		nq, err := rdf.Parse(ln)
 		if err != nil {
 			x.Trace(ctx, "Error while parsing RDF: %v", err)
-			return err
+			return edges, err
 		}
 		nquads = append(nquads, nq)
 	}
 
+	// xidToUid is used to store ids which are not uids. It is sent to the instance
+	// which has the xid <-> uid mapping to get uids.
 	xidToUid := make(map[string]uint64)
 	for _, nq := range nquads {
 		if !strings.HasPrefix(nq.Subject, "_uid_:") {
@@ -102,29 +105,48 @@ func mutationHandler(ctx context.Context, mu *gql.Mutation) error {
 	if len(xidToUid) > 0 {
 		if err := worker.GetOrAssignUidsOverNetwork(ctx, &xidToUid); err != nil {
 			x.Trace(ctx, "Error while GetOrAssignUidsOverNetwork: %v", err)
-			return err
+			return edges, err
 		}
 	}
 
-	var edges []x.DirectedEdge
 	for _, nq := range nquads {
+		// Get edges from nquad using xidToUid.
 		edge, err := nq.ToEdgeUsing(xidToUid)
 		if err != nil {
 			x.Trace(ctx, "Error while converting to edge: %v %v", nq, err)
-			return err
+			return edges, err
 		}
 		edges = append(edges, edge)
 	}
+	return edges, nil
+}
 
-	left, err := worker.MutateOverNetwork(ctx, edges)
+func mutationHandler(ctx context.Context, mu *gql.Mutation) error {
+	if *nomutations {
+		return fmt.Errorf("Mutations are forbidden on this server.")
+	}
+
+	var m worker.Mutations
+	var err error
+	if m.Set, err = convertToEdges(ctx, mu.Set); err != nil {
+		return err
+	}
+	if m.Del, err = convertToEdges(ctx, mu.Del); err != nil {
+		return err
+	}
+
+	left, err := worker.MutateOverNetwork(ctx, m)
 	if err != nil {
 		x.Trace(ctx, "Error while MutateOverNetwork: %v", err)
 		return err
 	}
-	if len(left) > 0 {
-		x.Trace(ctx, "%d edges couldn't be applied", len(left))
-		for _, e := range left {
-			x.Trace(ctx, "Unable to apply mutation for edge: %v", e)
+	if len(left.Set) > 0 || len(left.Del) > 0 {
+		x.Trace(ctx, "%d edges couldn't be applied", len(left.Del)+len(left.Set))
+		for _, e := range left.Set {
+			x.Trace(ctx, "Unable to apply set mutation for edge: %v", e)
+		}
+		for _, e := range left.Del {
+			x.Trace(ctx, "Unable to apply delete mutation for edge: %v", e)
 		}
 		return fmt.Errorf("Unapplied mutations")
 	}
@@ -137,7 +159,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Method != "POST" {
-		x.SetStatus(w, x.E_INVALID_METHOD, "Invalid method")
+		x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
 		return
 	}
 
@@ -156,7 +178,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	q, err := ioutil.ReadAll(r.Body)
 	if err != nil || len(q) == 0 {
 		x.Trace(ctx, "Error while reading query: %v", err)
-		x.SetStatus(w, x.E_INVALID_REQUEST, "Invalid request encountered.")
+		x.SetStatus(w, x.ErrorInvalidRequest, "Invalid request encountered.")
 		return
 	}
 
@@ -164,28 +186,28 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	gq, mu, err := gql.Parse(string(q))
 	if err != nil {
 		x.Trace(ctx, "Error while parsing query: %v", err)
-		x.SetStatus(w, x.E_INVALID_REQUEST, err.Error())
+		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
 		return
 	}
 
 	// If we have mutations, run them first.
-	if mu != nil && len(mu.Set) > 0 {
+	if mu != nil && (len(mu.Set) > 0 || len(mu.Del) > 0) {
 		if err = mutationHandler(ctx, mu); err != nil {
 			x.Trace(ctx, "Error while handling mutations: %v", err)
-			x.SetStatus(w, x.E_ERROR, err.Error())
+			x.SetStatus(w, x.Error, err.Error())
 			return
 		}
 	}
 
 	if gq == nil || (gq.UID == 0 && len(gq.XID) == 0) {
-		x.SetStatus(w, x.E_OK, "Done")
+		x.SetStatus(w, x.ErrorOk, "Done")
 		return
 	}
 
 	sg, err := query.ToSubGraph(ctx, gq)
 	if err != nil {
 		x.Trace(ctx, "Error while conversion to internal format: %v", err)
-		x.SetStatus(w, x.E_INVALID_REQUEST, err.Error())
+		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
 		return
 	}
 	l.Parsing = time.Since(l.Start)
@@ -196,7 +218,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	err = <-rch
 	if err != nil {
 		x.Trace(ctx, "Error while executing query: %v", err)
-		x.SetStatus(w, x.E_ERROR, err.Error())
+		x.SetStatus(w, x.Error, err.Error())
 		return
 	}
 	l.Processing = time.Since(l.Start) - l.Parsing
@@ -204,14 +226,14 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	js, err := sg.ToJson(&l)
 	if err != nil {
 		x.Trace(ctx, "Error while converting to Json: %v", err)
-		x.SetStatus(w, x.E_ERROR, err.Error())
+		x.SetStatus(w, x.Error, err.Error())
 		return
 	}
 	x.Trace(ctx, "Latencies: Total: %v Parsing: %v Process: %v Json: %v",
 		time.Since(l.Start), l.Parsing, l.Processing, l.Json)
 
 	w.Header().Set("Content-Type", "application/json")
-	fmt.Fprint(w, string(js))
+	w.Write(js)
 }
 
 // server is used to implement graph.DgraphServer
@@ -246,7 +268,7 @@ func (s *server) Query(ctx context.Context,
 	}
 
 	// If we have mutations, run them first.
-	if mu != nil && len(mu.Set) > 0 {
+	if mu != nil && (len(mu.Set) > 0 || len(mu.Del) > 0) {
 		if err = mutationHandler(ctx, mu); err != nil {
 			x.Trace(ctx, "Error while handling mutations: %v", err)
 			return resp, err
@@ -300,28 +322,49 @@ func runGrpcServer(address string) {
 	}
 	log.Printf("Client worker listening: %v", ln.Addr())
 
-	s := grpc.NewServer()
+	s := grpc.NewServer(grpc.CustomCodec(&query.Codec{}))
 	graph.RegisterDgraphServer(s, &server{})
 	if err = s.Serve(ln); err != nil {
-		log.Fatalf("While serving gRpc requests", err)
+		log.Fatalf("While serving gRpc requests: %v", err)
 	}
 	return
 }
 
 func main() {
+	log.SetFlags(log.Lshortfile | log.Flags())
 	flag.Parse()
 	if !flag.Parsed() {
 		log.Fatal("Unable to parse flags")
 	}
+	if ok := x.PrintVersionOnly(); ok {
+		return
+	}
+
 	numCpus := *numcpu
 	prev := runtime.GOMAXPROCS(numCpus)
 	log.Printf("num_cpu: %v. prev_maxprocs: %v. Set max procs to num cpus", numCpus, prev)
 	if *port%2 != 0 {
-		log.Fatalf("Port should be an even number: %v", *port)
+		log.Fatalf("Port must be an even number: %v", *port)
+	}
+	// Create parent directories for postings, uids and mutations
+	var err error
+	err = os.MkdirAll(*postingDir, 0700)
+	if err != nil {
+		log.Fatalf("Error while creating the filepath for postings: %v", err)
+	}
+	err = os.MkdirAll(*mutationDir, 0700)
+	if err != nil {
+		log.Fatalf("Error while creating the filepath for mutations: %v", err)
+	}
+	err = os.MkdirAll(*uidDir, 0700)
+	if err != nil {
+		log.Fatalf("Error while creating the filepath for uids: %v", err)
 	}
 
 	ps := new(store.Store)
-	ps.Init(*postingDir)
+	if err := ps.Init(*postingDir); err != nil {
+		log.Fatalf("error initializing postings store: %s", err)
+	}
 	defer ps.Close()
 
 	clog := commit.NewLogger(*mutationDir, "dgraph", 50<<20)
@@ -340,6 +383,7 @@ func main() {
 	if *instanceIdx != 0 {
 		worker.Init(ps, nil, *instanceIdx, lenAddr)
 		uid.Init(nil)
+		go posting.CheckMemoryUsage(ps, nil)
 	} else {
 		uidStore := new(store.Store)
 		uidStore.Init(*uidDir)
@@ -347,6 +391,7 @@ func main() {
 		// Only server instance 0 will have uidStore
 		worker.Init(ps, uidStore, *instanceIdx, lenAddr)
 		uid.Init(uidStore)
+		go posting.CheckMemoryUsage(ps, uidStore)
 	}
 
 	worker.Connect(addrs)

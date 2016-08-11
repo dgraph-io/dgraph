@@ -89,6 +89,7 @@ func (l *Lexer) Emit(t ItemType) {
 	l.Start = l.Pos
 }
 
+// Next reads the next rune from the Input, sets the Width and advances Pos.
 func (l *Lexer) Next() (result rune) {
 	if l.Pos >= len(l.Input) {
 		l.Width = 0

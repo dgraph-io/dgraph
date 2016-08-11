@@ -18,9 +18,11 @@ package store
 
 import (
 	"fmt"
+	"strconv"
+
+	rocksdb "github.com/tecbot/gorocksdb"
 
 	"github.com/dgraph-io/dgraph/x"
-	rocksdb "github.com/tecbot/gorocksdb"
 )
 
 var log = x.Log("store")
@@ -45,34 +47,33 @@ func (s *Store) setOpts() {
 	s.wopt.SetSync(false) // We don't need to do synchronous writes.
 }
 
-func (s *Store) Init(filepath string) {
+func (s *Store) Init(filepath string) (err error) {
 	s.setOpts()
-	var err error
 	s.db, err = rocksdb.OpenDb(s.opt, filepath)
-	if err != nil {
-		log.Fatalf("Error while opening filepath: %v", filepath)
-		return
-	}
+	return
 }
 
-func (s *Store) InitReadOnly(filepath string) {
+func (s *Store) InitReadOnly(filepath string) (err error) {
 	s.setOpts()
-	var err error
 	s.db, err = rocksdb.OpenDbForReadOnly(s.opt, filepath, false)
-	// TODO(Ashwin):When will it be true
-	if err != nil {
-		log.Fatalf("Error while opening filepath: %v", filepath)
-		return
-	}
+	return
 }
 
 func (s *Store) Get(key []byte) (val []byte, rerr error) {
-	valS, rerr := s.db.Get(s.ropt, key)
-	val = valS.Data()
-	if rerr == nil && val == nil {
+	valSlice, rerr := s.db.Get(s.ropt, key)
+	if rerr != nil {
+		return []byte(""), rerr
+	}
+
+	if valSlice == nil {
 		return []byte(""), fmt.Errorf("E_KEY_NOT_FOUND")
 	}
-	return val, rerr
+
+	val = valSlice.Data()
+	if val == nil {
+		return []byte(""), fmt.Errorf("E_KEY_NOT_FOUND")
+	}
+	return val, nil
 }
 
 func (s *Store) SetOne(k []byte, val []byte) error {
@@ -89,4 +90,14 @@ func (s *Store) GetIterator() *rocksdb.Iterator {
 
 func (s *Store) Close() {
 	s.db.Close()
+}
+
+func (s *Store) MemtableSize() uint64 {
+	memTableSize, _ := strconv.ParseUint(s.db.GetProperty("rocksdb.cur-size-all-mem-tables"), 10, 64)
+	return memTableSize
+}
+
+func (s *Store) IndexFilterblockSize() uint64 {
+	blockSize, _ := strconv.ParseUint(s.db.GetProperty("rocksdb.estimate-table-readers-mem"), 10, 64)
+	return blockSize
 }

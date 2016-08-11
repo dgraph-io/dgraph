@@ -7,11 +7,12 @@ import (
 	"strconv"
 
 	"github.com/Sirupsen/logrus"
+	rocksdb "github.com/tecbot/gorocksdb"
+
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/posting/types"
 	"github.com/dgraph-io/dgraph/uid"
 	"github.com/dgraph-io/dgraph/x"
-	rocksdb "github.com/tecbot/gorocksdb"
 )
 
 var glog = x.Log("dlist")
@@ -65,6 +66,10 @@ func main() {
 	logrus.SetLevel(logrus.ErrorLevel)
 
 	flag.Parse()
+	if ok := x.PrintVersionOnly(); ok {
+		return
+	}
+
 	opt := rocksdb.NewDefaultOptions()
 	db, err := rocksdb.OpenDb(opt, *dir)
 	defer db.Close()

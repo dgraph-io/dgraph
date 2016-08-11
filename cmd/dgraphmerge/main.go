@@ -26,10 +26,11 @@ import (
 	"math"
 	"path"
 
+	rocksdb "github.com/tecbot/gorocksdb"
+
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/posting/types"
 	"github.com/dgraph-io/dgraph/x"
-	rocksdb "github.com/tecbot/gorocksdb"
 )
 
 type Item struct {
@@ -175,6 +176,10 @@ func mergeFolders(mergePath, destPath string) {
 
 func main() {
 	flag.Parse()
+	if ok := x.PrintVersionOnly(); ok {
+		return
+	}
+
 	if len(*stores) == 0 {
 		glog.Fatal("No Directory specified")
 	}

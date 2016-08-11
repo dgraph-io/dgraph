@@ -20,10 +20,14 @@ import (
 	"bytes"
 	"container/heap"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
+	"strconv"
+	"sync"
 	"time"
 
+	"github.com/google/flatbuffers/go"
 	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/dgraph/gql"
@@ -31,7 +35,6 @@ import (
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/google/flatbuffers/go"
 )
 
 /*
@@ -112,7 +115,12 @@ type SubGraph struct {
 	Attr     string
 	Count    int
 	Offset   int
+	AfterUid uint64
+	GetCount uint16
 	Children []*SubGraph
+	IsRoot   bool
+	GetUid   bool
+	isDebug  bool
 
 	Query  []byte
 	Result []byte
@@ -187,6 +195,16 @@ func postTraverse(g *SubGraph) (result map[uint64]interface{}, rerr error) {
 	// result[uid in row] = map[cur attribute ->
 	//                          list of maps of {uid, uid + children result}]
 	//
+
+	for i := 0; i < r.CountLength(); i++ {
+		co := r.Count(i)
+		m := make(map[string]interface{})
+		m["_count_"] = co
+		mp := make(map[string]interface{})
+		mp[g.Attr] = m
+		result[q.Uids(i)] = mp
+	}
+
 	var ul task.UidList
 	for i := 0; i < r.UidmatrixLength(); i++ {
 		if ok := r.Uidmatrix(&ul, i); !ok {
@@ -196,7 +214,9 @@ func postTraverse(g *SubGraph) (result map[uint64]interface{}, rerr error) {
 		for j := 0; j < ul.UidsLength(); j++ {
 			uid := ul.Uids(j)
 			m := make(map[string]interface{})
-			m["_uid_"] = fmt.Sprintf("%#x", uid)
+			if g.GetUid || g.isDebug {
+				m["_uid_"] = fmt.Sprintf("%#x", uid)
+			}
 			if ival, present := cResult[uid]; !present {
 				l[j] = m
 			} else {
@@ -230,7 +250,9 @@ func postTraverse(g *SubGraph) (result map[uint64]interface{}, rerr error) {
 				pval, q.Uids(i), val)
 		}
 		m := make(map[string]interface{})
-		m["_uid_"] = fmt.Sprintf("%#x", q.Uids(i))
+		if g.GetUid || g.isDebug {
+			m["_uid_"] = fmt.Sprintf("%#x", q.Uids(i))
+		}
 		m[g.Attr] = string(val)
 		result[q.Uids(i)] = m
 	}
@@ -255,7 +277,9 @@ func (g *SubGraph) ToJson(l *Latency) (js []byte, rerr error) {
 		} else {
 			m = make(map[string]interface{})
 		}
-		m["server_latency"] = l.ToMap()
+		if g.isDebug {
+			m["server_latency"] = l.ToMap()
+		}
 		return json.Marshal(m)
 	}
 	log.Fatal("Runtime should never reach here.")
@@ -277,6 +301,33 @@ func indexOf(uid uint64, q *task.Query) int {
 		}
 	}
 	return -1
+}
+
+var nodePool = sync.Pool{
+	New: func() interface{} {
+		return &graph.Node{}
+	},
+}
+
+var nodeCh chan *graph.Node
+
+func release() {
+	for n := range nodeCh {
+		// In case of mutations, n is nil
+		if n == nil {
+			continue
+		}
+		for i := 0; i < len(n.Children); i++ {
+			nodeCh <- n.Children[i]
+		}
+		*n = graph.Node{}
+		nodePool.Put(n)
+	}
+}
+
+func init() {
+	nodeCh = make(chan *graph.Node, 1000)
+	go release()
 }
 
 // This method gets the values and children for a subgraph.
@@ -307,19 +358,26 @@ func (g *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 			return fmt.Errorf("While parsing UidList")
 		}
 
-		if ul.UidsLength() > 0 {
+		if r.CountLength() > 0 {
+			uc := new(graph.Node)
+			uc.Attribute = pc.Attr
+			count := strconv.Itoa(int(r.Count(idx)))
+			p := &graph.Property{Prop: "_count_", Val: []byte(count)}
+			uc.Properties = []*graph.Property{p}
+			children = append(children, uc)
+
+		} else if ul.UidsLength() > 0 {
 			// We create as many predicate entity children as the length of uids for
 			// this predicate.
 			for i := 0; i < ul.UidsLength(); i++ {
 				uid := ul.Uids(i)
-				uc := new(graph.Node)
+				uc := nodePool.Get().(*graph.Node)
 				uc.Attribute = pc.Attr
 				uc.Uid = uid
 				if rerr := pc.preTraverse(uid, uc); rerr != nil {
 					log.Printf("Error while traversal: %v", rerr)
 					return rerr
 				}
-
 				children = append(children, uc)
 			}
 		} else {
@@ -337,6 +395,7 @@ func (g *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 			}
 		}
 	}
+
 	dst.Properties, dst.Children = properties, children
 	return nil
 }
@@ -366,30 +425,54 @@ func (g *SubGraph) ToProtocolBuffer(l *Latency) (n *graph.Node, rerr error) {
 	return n, nil
 }
 
-func treeCopy(gq *gql.GraphQuery, sg *SubGraph) {
+func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
 	// Typically you act on the current node, and leave recursion to deal with
 	// children. But, in this case, we don't want to muck with the current
 	// node, because of the way we're dealing with the root node.
 	// So, we work on the children, and then recurse for grand children.
 	for _, gchild := range gq.Children {
+		if gchild.Attr == "_count_" {
+			if len(gq.Children) > 1 {
+				return errors.New("Cannot have other attributes with count")
+			}
+			if gchild.Children != nil {
+				return errors.New("Count cannot have other attributes")
+			}
+			sg.GetCount = 1
+			break
+		}
+		if gchild.Attr == "_uid_" {
+			sg.GetUid = true
+		}
+
 		dst := new(SubGraph)
+		if sg.isDebug {
+			dst.isDebug = true
+		}
 		dst.Attr = gchild.Attr
+		dst.Offset = gchild.Offset
+		dst.AfterUid = gchild.After
 		dst.Count = gchild.First
 		sg.Children = append(sg.Children, dst)
-		treeCopy(gchild, dst)
+		err := treeCopy(gchild, dst)
+		if err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
 func ToSubGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
-	sg, err := newGraph(ctx, gq.UID, gq.XID)
+	sg, err := newGraph(ctx, gq)
 	if err != nil {
 		return nil, err
 	}
-	treeCopy(gq, sg)
-	return sg, nil
+	err = treeCopy(gq, sg)
+	return sg, err
 }
 
-func newGraph(ctx context.Context, euid uint64, exid string) (*SubGraph, error) {
+func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
+	euid, exid := gq.UID, gq.XID
 	// This would set the Result field in SubGraph,
 	// and populate the children for attributes.
 	if len(exid) > 0 {
@@ -438,7 +521,11 @@ func newGraph(ctx context.Context, euid uint64, exid string) (*SubGraph, error) 
 	b.Finish(rend)
 
 	sg := new(SubGraph)
-	sg.Attr = "_root_"
+	if gq.Attr == "debug" {
+		sg.isDebug = true
+	}
+	sg.Attr = gq.Attr
+	sg.IsRoot = true
 	sg.Result = b.Bytes[b.Head():]
 	// Also add query for consistency and to allow for ToJson() later.
 	sg.Query = createTaskQuery(sg, []uint64{euid})
@@ -460,6 +547,9 @@ func createTaskQuery(sg *SubGraph, sorted []uint64) []byte {
 	task.QueryAddAttr(b, ao)
 	task.QueryAddUids(b, vend)
 	task.QueryAddCount(b, int32(sg.Count))
+	task.QueryAddOffset(b, int32(sg.Offset))
+	task.QueryAddAfterUid(b, uint64(sg.AfterUid))
+	task.QueryAddGetCount(b, sg.GetCount)
 
 	qend := task.QueryEnd(b)
 	b.Finish(qend)
@@ -524,7 +614,7 @@ func sortedUniqueUids(r *task.Result) (sorted []uint64, rerr error) {
 
 func ProcessGraph(ctx context.Context, sg *SubGraph, rch chan error) {
 	var err error
-	if len(sg.Query) > 0 && sg.Attr != "_root_" {
+	if len(sg.Query) > 0 && !sg.IsRoot {
 		sg.Result, err = worker.ProcessTaskOverNetwork(ctx, sg.Query)
 		if err != nil {
 			x.Trace(ctx, "Error while processing task: %v", err)
@@ -542,6 +632,12 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, rch chan error) {
 		if r.Values(&v, 0) {
 			x.Trace(ctx, "Sample value for attr: %v Val: %v", sg.Attr, string(v.ValBytes()))
 		}
+	}
+
+	if sg.GetCount == 1 {
+		x.Trace(ctx, "Zero uids. Only count requested")
+		rch <- nil
+		return
 	}
 
 	sorted, err := sortedUniqueUids(r)

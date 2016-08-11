@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/Sirupsen/logrus"
+
 	"github.com/dgraph-io/dgraph/loader"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/store"
@@ -36,6 +37,10 @@ func main() {
 	if !flag.Parsed() {
 		glog.Fatal("Unable to parse flags")
 	}
+	if ok := x.PrintVersionOnly(); ok {
+		return
+	}
+
 	if len(*cpuprofile) > 0 {
 		f, err := os.Create(*cpuprofile)
 		if err != nil {
@@ -67,6 +72,7 @@ func main() {
 	posting.Init(nil)
 	uid.Init(ps)
 	loader.Init(nil, ps)
+	go posting.CheckMemoryUsage(ps, nil)
 
 	files := strings.Split(*rdfGzips, ",")
 	for _, path := range files {

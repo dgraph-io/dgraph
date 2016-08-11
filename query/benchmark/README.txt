@@ -65,3 +65,35 @@ BenchmarkToPB_100_Actor-4          30000       44771 ns/op      8008 B/op      1
 BenchmarkToPB_100_Director-4       20000       60952 ns/op     10672 B/op      218 allocs/op
 BenchmarkToPB_1000_Actor-4          5000      366134 ns/op     56217 B/op      958 allocs/op
 BenchmarkToPB_1000_Director-4       2000      908611 ns/op    150163 B/op     3080 allocs/op
+
+5 August 2016
+-------------
+These are the benchmarking results after including the protocol buffer Marshalling
+step which was missing in the previous benchmarks. So, this would be the true
+comparison of Json vs Protocol buffers. Also, the proto library was changed to
+gogo protobuf from go protobuf.
+
+BenchmarkToJSON_10_Actor-2                 50000             29130 ns/op            6833 B/op        105 allocs/op
+BenchmarkToJSON_10_Director-2              30000             53121 ns/op           13059 B/op        196 allocs/op
+BenchmarkToJSON_100_Actor-2                10000            139344 ns/op           36536 B/op        611 allocs/op
+BenchmarkToJSON_100_Director-2              5000            319138 ns/op           79486 B/op       1292 allocs/op
+BenchmarkToJSON_1000_Actor-2                2000            831543 ns/op          239592 B/op       3854 allocs/op
+BenchmarkToJSON_1000_Director-2              500           3646994 ns/op          964339 B/op      15642 allocs/op
+BenchmarkToPB_10_Actor-2                  300000              4124 ns/op             888 B/op         16 allocs/op
+BenchmarkToPB_10_Director-2               200000              6183 ns/op            1328 B/op         22 allocs/op
+BenchmarkToPB_100_Actor-2                  30000             49610 ns/op           10568 B/op        146 allocs/op
+BenchmarkToPB_100_Director-2               20000             70183 ns/op           14768 B/op        219 allocs/op
+BenchmarkToPB_1000_Actor-2                  5000            389853 ns/op           72856 B/op        959 allocs/op
+BenchmarkToPB_1000_Director-2               2000           1036647 ns/op          207506 B/op       3081 allocs/op
+
+9 August 2016
+-------------
+
+On using sync.Pool to manage the graph.Node in ToProtocolBuffer, we can see improvements
+in the amount of memory used. On generating a memory profile from PB benchmarks like
+
+go test -run=xx -bench=BenchmarkToPB_ -memprofile=syncpool.mem
+go tool pprof --alloc_space query.test syncpool.mem
+
+We observe that 1.28GB memory is allocated in total compared to 1.76GB before the change.
+Most of the reduction comes from the preTraverse function.

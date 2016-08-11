@@ -24,13 +24,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dgryski/go-farm"
 	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/posting/types"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgryski/go-farm"
 )
 
 var lmgr *lockManager

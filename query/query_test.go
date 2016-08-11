@@ -19,12 +19,15 @@ package query
 import (
 	"bytes"
 	"encoding/gob"
+	"encoding/json"
 	"io/ioutil"
 	"os"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/gogo/protobuf/proto"
+	"github.com/google/flatbuffers/go"
 	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/dgraph/commit"
@@ -35,7 +38,6 @@ import (
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/google/flatbuffers/go"
 )
 
 func setErr(err *error, nerr error) {
@@ -88,19 +90,20 @@ func checkSingleValue(t *testing.T, child *SubGraph,
 }
 
 func TestNewGraph(t *testing.T) {
-	var ex uint64
-	ex = 101
-
 	dir, err := ioutil.TempDir("", "storetest_")
 	if err != nil {
 		t.Error(err)
 		return
 	}
 
+	gq := &gql.GraphQuery{
+		UID:  101,
+		Attr: "me",
+	}
 	ps := new(store.Store)
 	ps.Init(dir)
 	ctx := context.Background()
-	sg, err := newGraph(ctx, ex, "")
+	sg, err := newGraph(ctx, gq)
 	if err != nil {
 		t.Error(err)
 	}
@@ -120,8 +123,8 @@ func TestNewGraph(t *testing.T) {
 	if ul.UidsLength() != 1 {
 		t.Errorf("Expected length 1. Got: %v", ul.UidsLength())
 	}
-	if ul.Uids(0) != ex {
-		t.Errorf("Expected uid: %v. Got: %v", ex, ul.Uids(0))
+	if ul.Uids(0) != 101 {
+		t.Errorf("Expected uid: %v. Got: %v", 101, ul.Uids(0))
 	}
 }
 
@@ -140,6 +143,7 @@ func populateGraph(t *testing.T) (string, *store.Store) {
 
 	clog := commit.NewLogger(dir, "mutations", 50<<20)
 	clog.Init()
+
 	posting.Init(clog)
 
 	// So, user we're interested in has uid: 1.
@@ -190,6 +194,262 @@ func populateGraph(t *testing.T) (string, *store.Store) {
 	addEdge(t, edge, posting.GetOrCreate(posting.Key(1, "_xid_"), ps))
 
 	return dir, ps
+}
+
+func TestGetUid(t *testing.T) {
+	dir, _ := populateGraph(t)
+	defer os.RemoveAll(dir)
+
+	// Alright. Now we have everything set up. Let's create the query.
+	query := `
+		{
+			me(_uid_:0x01) {
+				name
+				_uid_
+				gender
+				status
+				friend {
+					_count_
+				}
+			}
+		}
+	`
+
+	gq, _, err := gql.Parse(query)
+	if err != nil {
+		t.Error(err)
+	}
+	ctx := context.Background()
+	sg, err := ToSubGraph(ctx, gq)
+	if err != nil {
+		t.Error(err)
+	}
+
+	ch := make(chan error)
+	go ProcessGraph(ctx, sg, ch)
+	err = <-ch
+	if err != nil {
+		t.Error(err)
+	}
+
+	var l Latency
+	js, err := sg.ToJson(&l)
+	if err != nil {
+		t.Error(err)
+	}
+	var mp map[string]interface{}
+	err = json.Unmarshal(js, &mp)
+
+	resp := mp["me"].([]interface{})[0]
+	uid := resp.(map[string]interface{})["_uid_"].(string)
+	if uid != "0x1" {
+		t.Errorf("Expected uid 0x01. Got %s", uid)
+	}
+}
+
+func TestDebug1(t *testing.T) {
+	dir, _ := populateGraph(t)
+	defer os.RemoveAll(dir)
+
+	// Alright. Now we have everything set up. Let's create the query.
+	query := `
+		{
+			debug(_uid_:0x01) {
+				name
+				gender
+				status
+				friend {
+					_count_
+				}
+			}
+		}
+	`
+
+	gq, _, err := gql.Parse(query)
+	if err != nil {
+		t.Error(err)
+	}
+	ctx := context.Background()
+	sg, err := ToSubGraph(ctx, gq)
+	if err != nil {
+		t.Error(err)
+	}
+
+	ch := make(chan error)
+	go ProcessGraph(ctx, sg, ch)
+	err = <-ch
+	if err != nil {
+		t.Error(err)
+	}
+
+	var l Latency
+	js, err := sg.ToJson(&l)
+	if err != nil {
+		t.Error(err)
+	}
+	var mp map[string]interface{}
+	err = json.Unmarshal(js, &mp)
+
+	resp := mp["debug"].([]interface{})[0]
+	uid := resp.(map[string]interface{})["_uid_"].(string)
+	if uid != "0x1" {
+		t.Errorf("Expected uid 0x1. Got %s", uid)
+	}
+}
+
+func TestDebug2(t *testing.T) {
+	dir, _ := populateGraph(t)
+	defer os.RemoveAll(dir)
+
+	query := `
+		{
+			me(_uid_:0x01) {
+				name
+				gender
+				status
+				friend {
+					_count_
+				}
+			}
+		}
+	`
+
+	gq, _, err := gql.Parse(query)
+	if err != nil {
+		t.Error(err)
+	}
+	ctx := context.Background()
+	sg, err := ToSubGraph(ctx, gq)
+	if err != nil {
+		t.Error(err)
+	}
+
+	ch := make(chan error)
+	go ProcessGraph(ctx, sg, ch)
+	err = <-ch
+	if err != nil {
+		t.Error(err)
+	}
+
+	var l Latency
+	var mp map[string]interface{}
+	js, err := sg.ToJson(&l)
+	if err != nil {
+		t.Error(err)
+	}
+	err = json.Unmarshal(js, &mp)
+	resp := mp["me"].([]interface{})[0]
+	uid, ok := resp.(map[string]interface{})["_uid_"].(string)
+	if ok {
+		t.Errorf("No uid expected but got one %s", uid)
+	}
+
+}
+
+func TestCount(t *testing.T) {
+	dir, _ := populateGraph(t)
+	defer os.RemoveAll(dir)
+
+	// Alright. Now we have everything set up. Let's create the query.
+	query := `
+		{
+			me(_uid_:0x01) {
+				name
+				gender
+				status
+				friend {
+					_count_
+				}
+			}
+		}
+	`
+
+	gq, _, err := gql.Parse(query)
+	if err != nil {
+		t.Error(err)
+	}
+	ctx := context.Background()
+	sg, err := ToSubGraph(ctx, gq)
+	if err != nil {
+		t.Error(err)
+	}
+
+	ch := make(chan error)
+	go ProcessGraph(ctx, sg, ch)
+	err = <-ch
+	if err != nil {
+		t.Error(err)
+	}
+
+	var l Latency
+	js, err := sg.ToJson(&l)
+	if err != nil {
+		t.Error(err)
+	}
+	var mp map[string]interface{}
+	err = json.Unmarshal(js, &mp)
+
+	resp := mp["me"].([]interface{})[0]
+	friend := resp.(map[string]interface{})["friend"]
+	count := int(friend.(map[string]interface{})["_count_"].(float64))
+	if count != 5 {
+		t.Errorf("Expected count 1. Got %s", count)
+	}
+}
+
+func TestCountError1(t *testing.T) {
+
+	// Alright. Now we have everything set up. Let's create the query.
+	query := `
+		{
+			me(_uid_: 0x01) {
+				friend {
+					name
+					_count_
+				}
+				name
+				gender
+				status
+			}
+		}
+	`
+	gq, _, err := gql.Parse(query)
+	if err != nil {
+		t.Error(err)
+	}
+	ctx := context.Background()
+	_, err = ToSubGraph(ctx, gq)
+	if err == nil {
+		t.Error("Expected error")
+	}
+}
+
+func TestCountError2(t *testing.T) {
+
+	// Alright. Now we have everything set up. Let's create the query.
+	query := `
+		{
+			me(_uid_: 0x01) {
+				friend {
+					_count_ {
+						friend
+					}
+				}
+				name
+				gender
+				status
+			}
+		}
+	`
+	gq, _, err := gql.Parse(query)
+	if err != nil {
+		t.Error(err)
+	}
+	ctx := context.Background()
+	_, err = ToSubGraph(ctx, gq)
+	if err == nil {
+		t.Error("Expected error")
+	}
 }
 
 func TestProcessGraph(t *testing.T) {
@@ -382,8 +642,8 @@ func TestToPB(t *testing.T) {
 		t.Error(err)
 	}
 
-	if gr.Attribute != "_root_" {
-		t.Errorf("Expected attribute _root_, Got: %v", gr.Attribute)
+	if gr.Attribute != "me" {
+		t.Errorf("Expected attribute me, Got: %v", gr.Attribute)
 	}
 	if gr.Uid != 1 {
 		t.Errorf("Expected uid 1, Got: %v", gr.Uid)
@@ -489,7 +749,14 @@ func benchmarkToPB(file string, b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if _, err := sg.ToProtocolBuffer(&l); err != nil {
+		pb, err := sg.ToProtocolBuffer(&l)
+		if err != nil {
+			b.Fatal(err)
+		}
+		r := new(graph.Response)
+		r.N = pb
+		var c Codec
+		if _, err = c.Marshal(r); err != nil {
 			b.Fatal(err)
 		}
 	}
@@ -501,3 +768,106 @@ func BenchmarkToPB_100_Actor(b *testing.B)     { benchmarkToPB("benchmark/actors
 func BenchmarkToPB_100_Director(b *testing.B)  { benchmarkToPB("benchmark/directors100.bin", b) }
 func BenchmarkToPB_1000_Actor(b *testing.B)    { benchmarkToPB("benchmark/actors1000.bin", b) }
 func BenchmarkToPB_1000_Director(b *testing.B) { benchmarkToPB("benchmark/directors1000.bin", b) }
+
+func benchmarkToPBMarshal(file string, b *testing.B) {
+	b.ReportAllocs()
+	var sg SubGraph
+	var l Latency
+
+	f, err := ioutil.ReadFile(file)
+	if err != nil {
+		b.Error(err)
+	}
+
+	buf := bytes.NewBuffer(f)
+	dec := gob.NewDecoder(buf)
+	err = dec.Decode(&sg)
+	if err != nil {
+		b.Error(err)
+	}
+	p, err := sg.ToProtocolBuffer(&l)
+	if err != nil {
+		b.Fatal(err)
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if _, err = proto.Marshal(p); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkToPBMarshal_10_Actor(b *testing.B) {
+	benchmarkToPBMarshal("benchmark/actors10.bin", b)
+}
+func BenchmarkToPBMarshal_10_Director(b *testing.B) {
+	benchmarkToPBMarshal("benchmark/directors10.bin", b)
+}
+func BenchmarkToPBMarshal_100_Actor(b *testing.B) {
+	benchmarkToPBMarshal("benchmark/actors100.bin", b)
+}
+func BenchmarkToPBMarshal_100_Director(b *testing.B) {
+	benchmarkToPBMarshal("benchmark/directors100.bin", b)
+}
+func BenchmarkToPBMarshal_1000_Actor(b *testing.B) {
+	benchmarkToPBMarshal("benchmark/actors1000.bin", b)
+}
+func BenchmarkToPBMarshal_1000_Director(b *testing.B) {
+	benchmarkToPBMarshal("benchmark/directors1000.bin", b)
+}
+
+func benchmarkToPBUnmarshal(file string, b *testing.B) {
+	b.ReportAllocs()
+	var sg SubGraph
+	var l Latency
+
+	f, err := ioutil.ReadFile(file)
+	if err != nil {
+		b.Error(err)
+	}
+
+	buf := bytes.NewBuffer(f)
+	dec := gob.NewDecoder(buf)
+	err = dec.Decode(&sg)
+	if err != nil {
+		b.Error(err)
+	}
+	p, err := sg.ToProtocolBuffer(&l)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	pbb, err := proto.Marshal(p)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	pdu := &graph.Node{}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		err = proto.Unmarshal(pbb, pdu)
+		if err != nil {
+			b.Fatal(err)
+		}
+
+	}
+}
+
+func BenchmarkToPBUnmarshal_10_Actor(b *testing.B) {
+	benchmarkToPBUnmarshal("benchmark/actors10.bin", b)
+}
+func BenchmarkToPBUnmarshal_10_Director(b *testing.B) {
+	benchmarkToPBUnmarshal("benchmark/directors10.bin", b)
+}
+func BenchmarkToPBUnmarshal_100_Actor(b *testing.B) {
+	benchmarkToPBUnmarshal("benchmark/actors100.bin", b)
+}
+func BenchmarkToPBUnmarshal_100_Director(b *testing.B) {
+	benchmarkToPBUnmarshal("benchmark/directors100.bin", b)
+}
+func BenchmarkToPBUnmarshal_1000_Actor(b *testing.B) {
+	benchmarkToPBUnmarshal("benchmark/actors1000.bin", b)
+}
+func BenchmarkToPBUnmarshal_1000_Director(b *testing.B) {
+	benchmarkToPBUnmarshal("benchmark/directors1000.bin", b)
+}
