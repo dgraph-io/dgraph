@@ -19,6 +19,6 @@ func TestByteStream(t *testing.T) {
 	assert.Equal(t, byte('<'), bs.Token().Value())
 	bsEOF := bs1.Next().Next().Next().Next().Next()
 	assert.Equal(t, io.EOF, bsEOF.Err())
-	assert.Panics(t, func() { bsEOF.Next() })
+	assert.Equal(t, io.EOF, bsEOF.Next().Err())
 	// assert.Panics(t, func() { bsEOF.Token() })
 }
