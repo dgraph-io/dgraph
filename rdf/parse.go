@@ -363,6 +363,31 @@ var nquadStatement = p.Seq{
 		optWS,
 		object,
 		optWS,
+		p.SeqStep{
+			Prod: p.Maybe{
+				Prod: p.Seq{
+					Steps: []p.SeqStep{
+						{Prod: p.OneOf([]p.Prod{pBNLabel, pIriRef}), Reduce: p.ClobberReducer},
+						optWS,
+					},
+				},
+			},
+			Reduce: func(v, v1 p.Value) p.Value {
+				if v1 == nil {
+					return v
+				}
+				_v := v.(NQuad)
+				switch _v1 := v1.(type) {
+				case iriRef:
+					_v.Label = string(_v1)
+				case string:
+					_v.Label = _v1
+				default:
+					panic(v1)
+				}
+				return _v
+			},
+		},
 		period,
 	},
 	Initial: func() p.Value { return NQuad{} },
