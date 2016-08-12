@@ -120,6 +120,7 @@ type SubGraph struct {
 	Children []*SubGraph
 	IsRoot   bool
 	GetUid   bool
+	isDebug  bool
 
 	Query  []byte
 	Result []byte
@@ -213,7 +214,7 @@ func postTraverse(g *SubGraph) (result map[uint64]interface{}, rerr error) {
 		for j := 0; j < ul.UidsLength(); j++ {
 			uid := ul.Uids(j)
 			m := make(map[string]interface{})
-			if g.GetUid {
+			if g.GetUid || g.isDebug {
 				m["_uid_"] = fmt.Sprintf("%#x", uid)
 			}
 			if ival, present := cResult[uid]; !present {
@@ -249,7 +250,7 @@ func postTraverse(g *SubGraph) (result map[uint64]interface{}, rerr error) {
 				pval, q.Uids(i), val)
 		}
 		m := make(map[string]interface{})
-		if g.GetUid {
+		if g.GetUid || g.isDebug {
 			m["_uid_"] = fmt.Sprintf("%#x", q.Uids(i))
 		}
 		m[g.Attr] = string(val)
@@ -276,7 +277,9 @@ func (g *SubGraph) ToJson(l *Latency) (js []byte, rerr error) {
 		} else {
 			m = make(map[string]interface{})
 		}
-		m["server_latency"] = l.ToMap()
+		if g.isDebug {
+			m["server_latency"] = l.ToMap()
+		}
 		return json.Marshal(m)
 	}
 	log.Fatal("Runtime should never reach here.")
@@ -441,7 +444,11 @@ func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
 		if gchild.Attr == "_uid_" {
 			sg.GetUid = true
 		}
+
 		dst := new(SubGraph)
+		if sg.isDebug {
+			dst.isDebug = true
+		}
 		dst.Attr = gchild.Attr
 		dst.Offset = gchild.Offset
 		dst.AfterUid = gchild.After
@@ -514,6 +521,9 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	b.Finish(rend)
 
 	sg := new(SubGraph)
+	if gq.Attr == "debug" {
+		sg.isDebug = true
+	}
 	sg.Attr = gq.Attr
 	sg.IsRoot = true
 	sg.Result = b.Bytes[b.Head():]
