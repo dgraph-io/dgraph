@@ -24,7 +24,16 @@ import (
 
 func checkAttr(g *GraphQuery, attr string) error {
 	if g.Attr != attr {
-		return fmt.Errorf("Expected: %v. Got: %v", attr, g.Attr)
+		return fmt.Errorf("Expected attr: %v. Got: %v", attr, g.Attr)
+	}
+	return nil
+}
+
+// Check whether fragment spread / reference is in query.
+func checkFragment(g *GraphQuery, fragment string) error {
+	if g.Fragment != fragment {
+		return fmt.Errorf("Expected fragment: %v. Got: %v",
+			fragment, g.Fragment)
 	}
 	return nil
 }
@@ -41,8 +50,7 @@ func TestParse(t *testing.T) {
 		}
 	}
 `
-
-	gq, _, err := Parse(query)
+	gq, _, _, err := Parse(query)
 	if err != nil {
 		t.Error(err)
 	}
@@ -84,7 +92,7 @@ func TestParseXid(t *testing.T) {
 			type.object.name
 		}
 	}`
-	gq, _, err := Parse(query)
+	gq, _, _, err := Parse(query)
 	if err != nil {
 		t.Error(err)
 		return
@@ -110,7 +118,7 @@ func TestParseFirst(t *testing.T) {
 			}
 		}
 	}`
-	gq, _, err := Parse(query)
+	gq, _, _, err := Parse(query)
 	if err != nil {
 		t.Error(err)
 		return
@@ -146,7 +154,7 @@ func TestParseFirst_error(t *testing.T) {
 		}
 	}`
 	var err error
-	_, _, err = Parse(query)
+	_, _, _, err = Parse(query)
 	t.Log(err)
 	if err == nil {
 		t.Error("Expected error")
@@ -162,7 +170,7 @@ func TestParseAfter(t *testing.T) {
 			}
 		}
 	}`
-	gq, _, err := Parse(query)
+	gq, _, _, err := Parse(query)
 	if err != nil {
 		t.Error(err)
 		return
@@ -200,7 +208,7 @@ func TestParseOffset(t *testing.T) {
 			}
 		}
 	}`
-	gq, _, err := Parse(query)
+	gq, _, _, err := Parse(query)
 	if err != nil {
 		t.Error(err)
 		return
@@ -238,7 +246,7 @@ func TestParseOffset_error(t *testing.T) {
 			}
 		}
 	}`
-	_, _, err := Parse(query)
+	_, _, _, err := Parse(query)
 	if err == nil {
 		t.Error("Expected error on negative offset")
 		return
@@ -254,7 +262,7 @@ func TestParse_error2(t *testing.T) {
 		}
 	`
 	var err error
-	_, _, err = Parse(query)
+	_, _, _, err = Parse(query)
 	t.Log(err)
 	if err == nil {
 		t.Error("Expected error")
@@ -271,7 +279,7 @@ func TestParse_pass1(t *testing.T) {
 			}
 		}
 	`
-	gq, _, err := Parse(query)
+	gq, _, _, err := Parse(query)
 	if err != nil {
 		t.Error(err)
 	}
@@ -298,7 +306,7 @@ func TestParse_block(t *testing.T) {
 			}
 		}
 	`
-	gq, _, err := Parse(query)
+	gq, _, _, err := Parse(query)
 	if err != nil {
 		t.Error(err)
 	}
@@ -322,7 +330,7 @@ func TestParseMutation(t *testing.T) {
 			}
 		}
 	`
-	_, mu, err := Parse(query)
+	_, mu, _, err := Parse(query)
 	if err != nil {
 		t.Error(err)
 		return
@@ -349,7 +357,7 @@ func TestParseMutation_error(t *testing.T) {
 				<name> <is> <something-else> .
 		}
 	`
-	_, _, err := Parse(query)
+	_, _, _, err := Parse(query)
 	if err == nil {
 		t.Error(err)
 		return
@@ -375,7 +383,7 @@ func TestParseMutation_error2(t *testing.T) {
 		}
 
 	`
-	_, _, err := Parse(query)
+	_, _, _, err := Parse(query)
 	if err == nil {
 		t.Error(err)
 		return
@@ -401,7 +409,7 @@ func TestParseMutationAndQuery(t *testing.T) {
 			}
 		}
 	`
-	gq, mu, err := Parse(query)
+	gq, mu, _, err := Parse(query)
 	if err != nil {
 		t.Error(err)
 		return
@@ -438,5 +446,143 @@ func TestParseMutationAndQuery(t *testing.T) {
 	}
 	if err := checkAttr(gq.Children[1], "hometown"); err != nil {
 		t.Error(err)
+	}
+}
+
+func TestParseFragment(t *testing.T) {
+	query := `
+		fragment TestFragment on whatever {
+			name
+			id
+			friend {
+				nickname
+			}
+		}
+		fragment MyFragment on something else {
+		}
+	`
+	q, mu, fragments, err := Parse(query)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	if q != nil {
+		t.Error("graphquery is not nil")
+		return
+	}
+
+	if mu != nil {
+		t.Error("mutation is nil")
+		return
+	}
+
+	if fragments == nil {
+		t.Error("fragments is nil")
+		return
+	}
+
+	if len(fragments) != 2 {
+		t.Errorf("Expected 1 child. Got: %v", len(fragments))
+		return
+	}
+
+	gq, found := fragments["MyFragment"]
+	if !found {
+		t.Error("Expected key in fragments map")
+		return
+	}
+
+	if len(gq.Children) != 0 {
+		t.Errorf("Expected 0 children. Got: %v", len(gq.Children))
+		return
+	}
+
+	gq, found = fragments["TestFragment"]
+	if !found {
+		t.Error("Expected key in fragments map")
+		return
+	}
+
+	if len(gq.Children) != 3 {
+		t.Errorf("Expected 3 children. Got: %v", len(gq.Children))
+		return
+	}
+
+	if err := checkAttr(gq.Children[0], "name"); err != nil {
+		t.Error(err)
+		return
+	}
+
+	if err := checkAttr(gq.Children[1], "id"); err != nil {
+		t.Error(err)
+		return
+	}
+
+	if err := checkAttr(gq.Children[2], "friend"); err != nil {
+		t.Error(err)
+		return
+	}
+
+	child := gq.Children[2]
+	if len(child.Children) != 1 {
+		t.Errorf("Expected 1 child of friends. Got: %v", len(child.Children))
+		return
+	}
+	if err := checkAttr(child.Children[0], "nickname"); err != nil {
+		t.Error(err)
+		return
+	}
+}
+
+func TestParseFragmentSpread(t *testing.T) {
+	query := `
+	query {
+		user(_uid_:0x0a) {
+			...fragmenta,...fragmentb
+			friends {
+				name
+			}
+			...fragmentc
+			hobbies
+			...fragmentd
+		}
+	}
+`
+	gq, _, _, err := Parse(query)
+	if err != nil {
+		t.Error(err)
+	}
+	if gq == nil {
+		t.Error("subgraph is nil")
+		return
+	}
+	if len(gq.Children) != 6 {
+		t.Errorf("Expected 4 children. Got: %v", len(gq.Children))
+		return
+	}
+	if err := checkFragment(gq.Children[0], "fragmenta"); err != nil {
+		t.Error(err)
+		return
+	}
+	if err := checkFragment(gq.Children[1], "fragmentb"); err != nil {
+		t.Error(err)
+		return
+	}
+	if err := checkAttr(gq.Children[2], "friends"); err != nil {
+		t.Error(err)
+		return
+	}
+	if err := checkFragment(gq.Children[3], "fragmentc"); err != nil {
+		t.Error(err)
+		return
+	}
+	if err := checkAttr(gq.Children[4], "hobbies"); err != nil {
+		t.Error(err)
+		return
+	}
+	if err := checkFragment(gq.Children[5], "fragmentd"); err != nil {
+		t.Error(err)
+		return
 	}
 }
