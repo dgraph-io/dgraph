@@ -16,7 +16,7 @@ func (mt MinTimes) Parse(_c Context) (c Context, vs []Value) {
 		_c = mt.Parser.Parse(c)
 		if !_c.Good() {
 			if i < mt.Count {
-				c = c.WithError(fmt.Errorf("%d repetitions, minimum is %d", i+1, mt.Count))
+				c = c.WithError(fmt.Errorf("%d repetitions, minimum is %d", i, mt.Count))
 				return
 			}
 			break

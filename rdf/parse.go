@@ -2,7 +2,6 @@ package rdf
 
 import (
 	"fmt"
-	"log"
 	"strconv"
 	"unicode"
 
@@ -21,7 +20,6 @@ type literal struct {
 func pStringWhile(pred func(b byte) bool) p.Parser {
 	return p.ParseFunc(func(c p.Context) p.Context {
 		c, vs := p.MinTimes{0, pPred(pred)}.Parse(c)
-		log.Printf("%q", catBytes(vs))
 		return c.WithValue(catBytes(vs))
 	})
 }
@@ -176,6 +174,13 @@ func predStar(pred func(b byte) bool) p.Parser {
 	})
 }
 
+func predPlus(pred func(b byte) bool) p.Parser {
+	return p.ParseFunc(func(c p.Context) p.Context {
+		c, vs := p.MinTimes{1, pPred(pred)}.Parse(c)
+		return c.WithValue(catBytes(vs))
+	})
+}
+
 var pPredicate = pIriRef
 
 var notWS = predStar(func(b byte) bool {
@@ -198,7 +203,7 @@ func pBytes(bs string) p.Parser {
 	})
 }
 
-var pWS = predStar(func(b byte) bool {
+var pWS = predPlus(func(b byte) bool {
 	return unicode.IsSpace(rune(b))
 })
 
@@ -212,10 +217,10 @@ var pNQuadStatement = p.ParseFunc(func(c p.Context) p.Context {
 	}
 	ret.Subject = c.Value().(string)
 	c = c.Parse(pWS)
-	c = c.Parse(pPredicate)
+	c = c.ParseName("predicate", pPredicate)
 	ret.Predicate = c.Value().(string)
 	c = c.Parse(pWS)
-	c = c.Parse(pObject)
+	c = c.ParseName("object", pObject)
 	switch v := c.Value().(type) {
 	case string:
 		ret.ObjectId = v
@@ -226,12 +231,11 @@ var pNQuadStatement = p.ParseFunc(func(c p.Context) p.Context {
 		}
 	}
 	c = c.Parse(pWS)
-	_c := c.Parse(pLabel)
-	if _c.Good() {
+	if _c := c.Parse(pLabel); _c.Good() {
 		c = _c
 		ret.Label = c.Value().(string)
+		c = c.Parse(pWS)
 	}
-	c = c.Parse(pWS)
 	c = c.Parse(pByte('.'))
 	return c.WithValue(ret)
 })

@@ -1,11 +1,15 @@
 package parser
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+)
 
 type Context struct {
-	s   Stream
-	err error
-	v   Value
+	s    Stream
+	err  error
+	v    Value
+	name string
 }
 
 func (c Context) NextToken() Context {
@@ -30,11 +34,28 @@ func (c Context) Err() error {
 	if c.err == nil {
 		return nil
 	}
-	return fmt.Errorf("%s: %s", c.Stream().Position(), c.err)
+	s := fmt.Sprintf("%s:", c.Stream().Position())
+	if c.name != "" {
+		s += fmt.Sprintf(" error parsing production %q", c.name)
+	}
+	s += fmt.Sprintf(" %s", c.err)
+	return errors.New(s)
 }
 
 func (c Context) Stream() Stream {
 	return c.s
+}
+
+func (c Context) ParseName(name string, p Parser) Context {
+	hadErr := c.err != nil
+	c = p.Parse(c)
+	if hadErr {
+		return c
+	}
+	if c.err != nil {
+		c.name = name
+	}
+	return c
 }
 
 func (c Context) Parse(p Parser) Context {
