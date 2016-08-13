@@ -64,37 +64,24 @@ func (me OneOf) Match(_s Stream) (s Stream, v Value, ok bool) {
 	return
 }
 
-type SeqStep struct {
-	Prod   Prod
-	Reduce func(Value, Value) Value
+func Seq(prods ...Prod) seq {
+	return seq(prods)
 }
 
-type Seq struct {
-	Steps   []SeqStep
-	Initial func() Value
-	Finally func(Value) Value
-}
+type seq []Prod
 
-func (sq Seq) Match(_sm Stream) (sm Stream, v Value, ok bool) {
-	sm = _sm
-	if sq.Initial != nil {
-		v = sq.Initial()
-	}
-	ok = true
-	for _, ss := range sq.Steps {
+func (sq seq) Match(sm Stream) (Stream, Value, bool) {
+	ok := true
+	v := make([]Value, 0, len(sq))
+	for _, p := range sq {
 		var v1 Value
-		sm, v1, ok = ss.Prod.Match(sm)
+		sm, v1, ok = p.Match(sm)
 		if !ok {
 			break
 		}
-		if ss.Reduce != nil {
-			v = ss.Reduce(v, v1)
-		}
+		v = append(v, v1)
 	}
-	if sq.Finally != nil {
-		v = sq.Finally(v)
-	}
-	return
+	return sm, v, ok
 }
 
 func Parse(s Stream, p Prod) (_s Stream, v Value, err error) {
@@ -109,17 +96,22 @@ func StringReducer(v, v1 Value) Value {
 	return v.(string) + v1.(string)
 }
 
-type Maybe struct {
-	Prod  Prod
-	IfNot Value
+func Maybe(p Prod) maybe {
+	return maybe{p}
 }
 
-func (m Maybe) Match(_s Stream) (s Stream, v Value, ok bool) {
+type maybe struct {
+	Prod Prod
+}
+
+var NoMatch = &struct{}{}
+
+func (m maybe) Match(_s Stream) (s Stream, v Value, ok bool) {
 	s, v, ok = m.Prod.Match(_s)
 	if ok {
 		return
 	}
-	return _s, m.IfNot, true
+	return _s, NoMatch, true
 }
 
 func ClobberReducer(v, v1 Value) Value {

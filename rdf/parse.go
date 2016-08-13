@@ -111,117 +111,43 @@ func stripBracketsIfPresent(val string) string {
 
 type bnLabel struct{}
 
-var subject = p.SeqStep{
-	Prod: p.OneOf{pIriRef, pBNLabel},
-	Reduce: func(v, v1 p.Value) p.Value {
-		r := v.(NQuad)
-		switch _v1 := v1.(type) {
-		case string:
-			r.Subject = _v1
-		case iriRef:
-			r.Subject = string(_v1)
-		default:
-			panic(v1)
-		}
-		return r
-	},
-}
+var subject = p.OneOf{pIriRef, pBNLabel}
 
-var predicate = p.SeqStep{
-	Prod: pIriRef,
-	Reduce: func(v, v1 p.Value) p.Value {
-		r := v.(NQuad)
-		r.Predicate = string(v1.(iriRef))
-		return r
-	},
-}
+var predicate = pIriRef
 
-var object = p.SeqStep{
-	Prod: p.OneOf{pIriRef, pBNLabel, pLiteral},
-	Reduce: func(v, v1 p.Value) p.Value {
-		r := v.(NQuad)
-		switch _v1 := v1.(type) {
-		case string:
-			r.ObjectId = _v1
-		case literal:
-			r.ObjectValue = []byte(_v1.Value)
-			if _v1.LangTag != "" {
-				r.Predicate += "." + _v1.LangTag
-			}
-		case iriRef:
-			r.ObjectId = string(_v1)
-		default:
-			panic(v1)
-		}
-		return r
-	},
-}
+var object = p.OneOf{pIriRef, pBNLabel, pLiteral}
 
 type literal struct {
 	Value   string
 	LangTag string
 }
 
-var pLiteral = p.Seq{
-	Initial: func() p.Value { return literal{} },
-	Steps: []p.SeqStep{
-		{Prod: pByte('"')},
-		{Prod: pStringUntilByte('"'), Reduce: func(v, v1 p.Value) p.Value {
-			_v := v.(literal)
-			_v.Value = v1.(string)
-			return _v
-		}},
-		{Prod: pByte('"')},
-		{
-			Prod: p.Maybe{
-				Prod: p.OneOf([]p.Prod{
-					pLangTag,
-					p.Seq{
-						Steps: []p.SeqStep{
-							pBytes("^^"),
-							{Prod: pIriRef, Reduce: p.ClobberReducer},
-						},
-					},
-				}),
-				IfNot: "",
-			},
-			Reduce: func(v, v1 p.Value) p.Value {
-				_v := v.(literal)
-				switch _v1 := v1.(type) {
-				case string:
-					_v.LangTag = _v1
-				case iriRef:
-					_v.Value += "@@" + string(_v1)
-				default:
-					panic(_v1)
-				}
-				return _v
-			},
-		},
-	},
-}
+var pLiteral = p.Seq(
+	pByte('"'),
+	pStringUntilByte('"'),
+	pByte('"'),
+	p.Maybe(
+		p.OneOf([]p.Prod{
+			pLangTag,
+			p.Seq(pBytes("^^"), pIriRef),
+		}),
+	),
+)
 
-var pLangTag = p.Seq{
-	Initial: func() p.Value { return "" },
-	Steps: []p.SeqStep{
-		ssByte('@'),
-		{Prod: p.MinTimes{
-			Initial: func() p.Value { return "" },
-			Min:     1,
-			Prod: pPred(func(b byte) bool {
-				return unicode.IsLetter(rune(b))
-			}),
-			Reduce: appendStringByteReducer,
-		}, Reduce: p.StringReducer},
-		{Prod: p.MinTimes{
-			Initial: func() p.Value { return "" },
-			Prod: pPred(func(b byte) bool {
-				return b == '-' || unicode.IsLetter(rune(b)) || unicode.IsNumber(rune(b))
-			}),
-			Reduce: appendStringByteReducer,
-		}, Reduce: p.StringReducer},
+var pLangTag = p.Seq(
+	pByte('@'),
+	p.MinTimes{
+		Min: 1,
+		Prod: pPred(func(b byte) bool {
+			return unicode.IsLetter(rune(b))
+		}),
 	},
-}
+	p.MinTimes{
+		Prod: pPred(func(b byte) bool {
+			return b == '-' || unicode.IsLetter(rune(b)) || unicode.IsNumber(rune(b))
+		}),
+	},
+)
 
 func pStringUntilByte(b byte) p.Prod {
 	return p.MinTimes{
@@ -252,33 +178,11 @@ func appendStringByteReducer(v, v1 p.Value) p.Value {
 	return v.(string) + string(v1.(byte))
 }
 
-func ssStringUntilByte(b byte) p.SeqStep {
-	return p.SeqStep{pStringUntilByte(b), p.StringReducer}
-}
-
-func ssStringWhilePred(pred func(b byte) bool) p.SeqStep {
-	return p.SeqStep{
-		Prod: p.MinTimes{
-			Prod:    pPred(pred),
-			Initial: func() p.Value { return "" },
-			Reduce:  appendStringByteReducer,
-		},
-		Reduce: p.StringReducer,
-	}
-}
-
-func ssByte(b byte) p.SeqStep {
-	return p.SeqStep{pByte(b), nil}
-}
-
-var pIriRef = p.Seq{
-	Steps: []p.SeqStep{
-		{pByte('<'), nil},
-		ssStringUntilByte('>'),
-		{pByte('>'), nil}},
-	Initial: func() p.Value { return "" },
-	Finally: func(v p.Value) p.Value { return iriRef(v.(string)) },
-}
+var pIriRef = p.Seq(
+	pByte('<'),
+	pStringUntilByte('>'),
+	pByte('>'),
+)
 
 func pByte(b byte) p.Prod {
 	return p.MatchFunc(func(s p.Stream) (p.Stream, p.Value, bool) {
@@ -302,29 +206,27 @@ func pNotByte(b byte) p.Prod {
 
 type iriRef string
 
-var pBNLabel = p.Seq{
-	Steps:   []p.SeqStep{pBytes("_:"), {notWS, p.StringReducer}},
-	Initial: func() p.Value { return "_:" },
-}
+var pBNLabel = p.Seq(
+	pBytes("_:"),
+	notWS,
+)
 
 var notWS = predStar(func(b byte) bool {
 	return !unicode.IsSpace(rune(b))
 })
 
-func pBytes(bs string) p.SeqStep {
-	return p.SeqStep{
-		Prod: p.MatchFunc(func(_s p.Stream) (s p.Stream, v p.Value, ok bool) {
-			s = _s
-			for _, b := range []byte(bs) {
-				if s.Err() != nil || s.Token().Value().(byte) != b {
-					return
-				}
-				s = s.Next()
+func pBytes(bs string) p.Prod {
+	return p.MatchFunc(func(_s p.Stream) (s p.Stream, v p.Value, ok bool) {
+		s = _s
+		for _, b := range []byte(bs) {
+			if s.Err() != nil || s.Token().Value().(byte) != b {
+				return
 			}
-			ok = true
-			return
-		}),
-	}
+			s = s.Next()
+		}
+		ok = true
+		return
+	})
 }
 
 func predStar(pred func(b byte) bool) p.Prod {
@@ -345,62 +247,37 @@ func predStar(pred func(b byte) bool) p.Prod {
 	})
 }
 
-var optWS = p.SeqStep{
-	Prod: predStar(func(b byte) bool {
-		return unicode.IsSpace(rune(b))
-	}),
-}
+var optWS = predStar(func(b byte) bool {
+	return unicode.IsSpace(rune(b))
+})
 
-var period = p.SeqStep{Prod: p.MatchFunc(func(s p.Stream) (p.Stream, p.Value, bool) {
+var period = p.MatchFunc(func(s p.Stream) (p.Stream, p.Value, bool) {
 	return s.Next(), '.', s.Err() == nil && s.Token().Value().(byte) == '.'
-})}
+})
 
-var nquadStatement = p.Seq{
-	Steps: []p.SeqStep{
-		subject,
+var nquadStatement = p.Seq(
+	subject,
+	optWS,
+	predicate,
+	optWS,
+	object,
+	optWS,
+	p.Maybe(p.Seq(
+		p.OneOf{pBNLabel, pIriRef},
 		optWS,
-		predicate,
-		optWS,
-		object,
-		optWS,
-		p.SeqStep{
-			Prod: p.Maybe{
-				Prod: p.Seq{
-					Steps: []p.SeqStep{
-						{Prod: p.OneOf([]p.Prod{pBNLabel, pIriRef}), Reduce: p.ClobberReducer},
-						optWS,
-					},
-				},
-			},
-			Reduce: func(v, v1 p.Value) p.Value {
-				if v1 == nil {
-					return v
-				}
-				_v := v.(NQuad)
-				switch _v1 := v1.(type) {
-				case iriRef:
-					_v.Label = string(_v1)
-				case string:
-					_v.Label = _v1
-				default:
-					panic(v1)
-				}
-				return _v
-			},
-		},
-		period,
-	},
-	Initial: func() p.Value { return NQuad{} },
-	// predicate,
-	// object,
-	// p.Maybe(graphLabel),
-	// period,
+	)),
+	period,
+)
+
+func nquadFromAST(ast p.Value) (ret NQuad) {
+	ret.Subject = ast.([]p.Value)[0].(p.OneOf).Value
+	return
 }
 
 func Parse(line string) (rnq NQuad, err error) {
 	s := p.NewByteStream(bytes.NewBufferString(line))
 	_, v, err := p.Parse(s, nquadStatement)
-	rnq = v.(NQuad)
+	rnq = nquadFromAST(v)
 	return
 }
 
