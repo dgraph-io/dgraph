@@ -1,15 +1,11 @@
 package parser
 
 type Stream interface {
-	Token() Token
+	Token() interface{}
 	Next() Stream
 	Err() error
 	Good() bool
-}
-
-type Token interface {
-	// Origin() interface{}
-	Value() interface{}
+	Position() interface{}
 }
 
 type Parser interface {

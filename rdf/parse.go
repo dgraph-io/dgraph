@@ -2,45 +2,35 @@ package rdf
 
 import (
 	"fmt"
+	"log"
 	"strconv"
 	"unicode"
 
 	p "github.com/dgraph-io/dgraph/parser"
 )
 
-var pSubject = p.ParseFunc(func(c p.Context) p.Context {
-	var i int
-	i, c = p.OneOf{pIriRef, pBNLabel}.ParseIndex(c)
-	var v string
-	switch i {
-	case 0:
-		v = c.Value().(string)
-	case 1:
-		v = "_:" + c.Value().(string)
-	}
-	return c.WithValue(v)
-})
+var pSubject = p.OneOf{pIriRef, pBNLabel}
 
-var pObject = p.ParseFunc(func(c p.Context) p.Context {
-	var i int
-	i, c = p.OneOf{pIriRef, pBNLabel, pLiteral}.ParseIndex(c)
-	switch i {
-	case 1:
-		c = c.WithValue("_:" + c.Value().(string))
-	}
-	return c
-})
+var pObject = p.OneOf{pIriRef, pBNLabel, pLiteral}
 
 type literal struct {
 	Value   string
 	LangTag string
 }
 
+func pStringWhile(pred func(b byte) bool) p.Parser {
+	return p.ParseFunc(func(c p.Context) p.Context {
+		c, vs := p.MinTimes{0, pPred(pred)}.Parse(c)
+		log.Printf("%q", catBytes(vs))
+		return c.WithValue(catBytes(vs))
+	})
+}
+
 func pStringUntilByte(b byte) p.Parser {
 	return p.ParseFunc(func(c p.Context) p.Context {
 		v := ""
 		for c.Stream().Good() {
-			_b := c.Stream().Token().Value().(byte)
+			_b := c.Stream().Token().(byte)
 			if _b == b {
 				break
 			}
@@ -67,11 +57,13 @@ var pEChar = p.ParseFunc(func(c p.Context) p.Context {
 	if c.Stream().Err() != nil {
 		return c.WithError(fmt.Errorf("incomplete echar: %s", c.Stream().Err()))
 	}
-	s, err := strconv.Unquote(`"\` + string(c.Stream().Token().Value().(byte)) + `"`)
-	if err == nil && len(s) != 1 {
-		panic(s)
+	s, err := strconv.Unquote(`"\` + string(c.Stream().Token().(byte)) + `"`)
+	c = c.NextToken()
+	if err != nil {
+		return c.WithError(err)
+	} else {
+		return c.WithValue(s[0])
 	}
-	return c.NextToken().WithValue(s[0]).WithError(err)
 })
 
 var pQuotedStringLiteral = p.ParseFunc(func(c p.Context) p.Context {
@@ -114,15 +106,11 @@ var pLangTag = p.ParseFunc(func(c p.Context) p.Context {
 	c, vs := p.MinTimes{1, pPred(func(b byte) bool {
 		return unicode.IsLetter(rune(b))
 	})}.Parse(c)
-	for _, v := range vs {
-		s += string(v.(byte))
-	}
+	s += catBytes(vs)
 	c, vs = p.MinTimes{0, pPred(func(b byte) bool {
 		return b == '-' || unicode.IsLetter(rune(b)) || unicode.IsNumber(rune(b))
 	})}.Parse(c)
-	for _, v := range vs {
-		s += string(v.(byte))
-	}
+	s += catBytes(vs)
 	return c.WithValue(s)
 })
 
@@ -131,7 +119,7 @@ func pPred(pred func(byte) bool) p.Parser {
 		if c.Stream().Err() != nil {
 			return c.WithError(c.Stream().Err())
 		}
-		_b := c.Stream().Token().Value().(byte)
+		_b := c.Stream().Token().(byte)
 		if pred(_b) {
 			return c.WithValue(_b).NextToken()
 		}
@@ -144,7 +132,7 @@ func pByte(b byte) p.Parser {
 		if c.Stream().Err() != nil {
 			return c.WithError(c.Stream().Err())
 		}
-		_b := c.Stream().Token().Value().(byte)
+		_b := c.Stream().Token().(byte)
 		if _b != b {
 			return c.WithError(fmt.Errorf("expected %q but got %q", b, _b))
 		}
@@ -161,16 +149,23 @@ var pIriRef = p.ParseFunc(func(c p.Context) p.Context {
 })
 
 var pBNLabel = p.ParseFunc(func(c p.Context) p.Context {
-	c = c.Parse(pBytes("_:"))
+	v := "_"
+	c = c.Parse(pByte('_'))
+	c = c.Parse(pStringWhile(func(b byte) bool {
+		return b != ':' && !unicode.IsSpace(rune(b))
+	}))
+	v += c.Value().(string) + ":"
+	c = c.Parse(pByte(':'))
 	c = c.Parse(notWS)
-	return c
+	v += c.Value().(string)
+	return c.WithValue(v)
 })
 
 func predStar(pred func(b byte) bool) p.Parser {
 	return p.ParseFunc(func(c p.Context) p.Context {
 		v := ""
 		for c.Stream().Err() == nil {
-			_b := c.Stream().Token().Value().(byte)
+			_b := c.Stream().Token().(byte)
 			if !pred(_b) {
 				break
 			}
@@ -193,7 +188,7 @@ func pBytes(bs string) p.Parser {
 			if err := c.Stream().Err(); err != nil {
 				return c.WithError(fmt.Errorf("expected %q but got %s", b, err))
 			}
-			_b := c.Stream().Token().Value().(byte)
+			_b := c.Stream().Token().(byte)
 			if _b != b {
 				return c.WithError(fmt.Errorf("expected %q but saw %q", b, _b))
 			}
@@ -212,6 +207,9 @@ var pLabel = pSubject
 var pNQuadStatement = p.ParseFunc(func(c p.Context) p.Context {
 	var ret NQuad
 	c = c.Parse(pSubject)
+	if !c.Good() {
+		return c
+	}
 	ret.Subject = c.Value().(string)
 	c = c.Parse(pWS)
 	c = c.Parse(pPredicate)

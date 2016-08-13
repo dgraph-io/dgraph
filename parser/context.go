@@ -1,5 +1,7 @@
 package parser
 
+import "fmt"
+
 type Context struct {
 	s   Stream
 	err error
@@ -25,7 +27,10 @@ func (c Context) Good() bool {
 }
 
 func (c Context) Err() error {
-	return c.err
+	if c.err == nil {
+		return nil
+	}
+	return fmt.Errorf("%s: %s", c.Stream().Position(), c.err)
 }
 
 func (c Context) Stream() Stream {
@@ -33,9 +38,9 @@ func (c Context) Stream() Stream {
 }
 
 func (c Context) Parse(p Parser) Context {
-	if c.err != nil {
-		return c
-	}
+	// if c.err != nil {
+	// 	return c
+	// }
 	return p.Parse(c)
 }
 

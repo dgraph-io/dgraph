@@ -2,14 +2,18 @@ package parser
 
 import (
 	"bufio"
+	"fmt"
 	"io"
 )
 
 type byteStream struct {
-	r    *bufio.Reader
-	err  error
-	next *byteStream
-	b    byte
+	r          *bufio.Reader
+	err        error
+	next       *byteStream
+	b          byte
+	sourceName string
+	line       int
+	col        int
 }
 
 func (bs *byteStream) init() {
@@ -29,28 +33,36 @@ func (bs *byteStream) Next() Stream {
 		return bs
 	}
 	if bs.next == nil {
-		bs.next = &byteStream{
-			r: bs.r,
+		next := *bs
+		if bs.b == '\n' {
+			next.line++
+			next.col = 1
+		} else {
+			next.col++
 		}
-		bs.next.init()
+		next.init()
+		bs.next = &next
 	}
 	return bs.next
 }
 
-type byteToken byte
+type byteToken struct {
+	b byte
+	s *byteStream
+}
 
-func (bt byteToken) Value() interface{} { return byte(bt) }
+func (bs *byteStream) Position() interface{} {
+	return fmt.Sprintf("%s:%d:%d", bs.sourceName, bs.line, bs.col)
+}
 
-func (bs *byteStream) Token() Token {
-	if bs.err != nil {
-		panic(bs.err)
-	}
-	return byteToken(bs.b)
+func (bs *byteStream) Token() interface{} {
+	return bs.b
 }
 
 func NewByteStream(r io.Reader) Stream {
 	bs := byteStream{
-		r: bufio.NewReader(r),
+		r:    bufio.NewReader(r),
+		line: 1,
 	}
 	bs.init()
 	return &bs

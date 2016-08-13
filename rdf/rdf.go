@@ -35,7 +35,9 @@ func toUid(xid string, xidToUID map[string]uint64) (uid uint64, rerr error) {
 func Parse(line string) (rnq NQuad, err error) {
 	s := p.NewByteStream(bytes.NewBufferString(line))
 	c := p.NewContext(s).Parse(pNQuadStatement)
-	rnq = c.Value().(NQuad)
+	if c.Good() {
+		rnq = c.Value().(NQuad)
+	}
 	err = c.Err()
 	return
 }
