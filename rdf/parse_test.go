@@ -230,8 +230,13 @@ var testNQuads = []struct {
 		hasErr: true,
 	},
 	{
-		input:  `_:alice <knows> "stuff"^^<xs:string> _uid_:0x01 .`,
-		hasErr: true,
+		input: `_:alice <knows> "stuff"^^<xs:string> _uid_:0x01 .`,
+		nq: NQuad{
+			Subject:     "_:alice",
+			Predicate:   "knows",
+			ObjectValue: []byte("stuff@@xs:string"),
+			Label:       "_uid_:0x01",
+		},
 	},
 	{
 		input:  `_:alice <knows> "stuff"^^<xs:string> <quad> <pentagon> .`,
@@ -265,8 +270,9 @@ func TestLex(t *testing.T) {
 		rnq, err := Parse(test.input)
 		if test.hasErr {
 			if err == nil {
-				t.Error("expected error, but didn't get one")
+				t.Error("expected error, but got %#v", rnq)
 			}
+			t.Logf("got expected error: %s", err)
 			continue
 		}
 		if err != nil {
