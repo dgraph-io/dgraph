@@ -20,6 +20,10 @@ func (bs byteStream) Err() error {
 	return bs.err
 }
 
+func (bs byteStream) Good() bool {
+	return bs.err == nil
+}
+
 func (bs *byteStream) Next() Stream {
 	if bs.err != nil {
 		return bs
