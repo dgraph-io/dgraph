@@ -266,7 +266,7 @@ var testNQuads = []struct {
 		nq: NQuad{
 			Subject:     "_:alice",
 			Predicate:   "likes",
-			ObjectValue: []byte(`mov\"enpick`),
+			ObjectValue: []byte(`mov"enpick`),
 		},
 	},
 }
