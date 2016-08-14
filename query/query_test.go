@@ -639,6 +639,110 @@ func TestProcessGraph(t *testing.T) {
 	checkSingleValue(t, sg.Children[3], "status", "alive")
 }
 
+func TestProcessGraphWithFragments(t *testing.T) {
+	dir, _ := populateGraph(t)
+	defer os.RemoveAll(dir)
+
+	// Alright. Now we have everything set up. Let's create the query.
+	query := `
+		query {
+			me(_uid_: 0x01) {
+				...MyFragmentA
+				name
+				...MyFragmentC
+			}
+		}
+		
+		fragment MyFragmentA {
+			...MyFragmentB
+		}
+		
+		fragment MyFragmentB {
+			friend {
+				name
+			}
+		}
+		
+		fragment MyFragmentC {
+			gender
+			status
+		}
+	`
+	gq, _, frm, err := gql.Parse(query)
+	if err != nil {
+		t.Error(err)
+	}
+	ctx := context.Background()
+	sg, err := ToSubGraph(ctx, gq, frm)
+	if err != nil {
+		t.Error(err)
+	}
+
+	ch := make(chan error)
+	go ProcessGraph(ctx, sg, ch)
+	err = <-ch
+	if err != nil {
+		t.Error(err)
+	}
+
+	if len(sg.Children) != 4 {
+		t.Errorf("Expected len 4. Got: %v", len(sg.Children))
+	}
+	child := sg.Children[0]
+	if child.Attr != "friend" {
+		t.Errorf("Expected attr friend. Got: %v", child.Attr)
+	}
+	if len(child.Result) == 0 {
+		t.Errorf("Expected some.Result.")
+		return
+	}
+	uo := flatbuffers.GetUOffsetT(child.Result)
+	r := new(task.Result)
+	r.Init(child.Result, uo)
+
+	if r.UidmatrixLength() != 1 {
+		t.Errorf("Expected 1 matrix. Got: %v", r.UidmatrixLength())
+	}
+	var ul task.UidList
+	if ok := r.Uidmatrix(&ul, 0); !ok {
+		t.Errorf("While parsing uidlist")
+	}
+
+	if ul.UidsLength() != 5 {
+		t.Errorf("Expected 5 friends. Got: %v", ul.UidsLength())
+	}
+	if ul.Uids(0) != 23 || ul.Uids(1) != 24 || ul.Uids(2) != 25 ||
+		ul.Uids(3) != 31 || ul.Uids(4) != 101 {
+		t.Errorf("Friend ids don't match")
+	}
+	if len(child.Children) != 1 || child.Children[0].Attr != "name" {
+		t.Errorf("Expected attr name")
+	}
+	child = child.Children[0]
+	uo = flatbuffers.GetUOffsetT(child.Result)
+	r.Init(child.Result, uo)
+	if r.ValuesLength() != 5 {
+		t.Errorf("Expected 5 names of 5 friends")
+	}
+	checkName(t, r, 0, "Rick Grimes")
+	checkName(t, r, 1, "Glenn Rhee")
+	checkName(t, r, 2, "Daryl Dixon")
+	checkName(t, r, 3, "Andrea")
+	{
+		var tv task.Value
+		if ok := r.Values(&tv, 4); !ok {
+			t.Error("Unable to retrieve value")
+		}
+		if !bytes.Equal(tv.ValBytes(), []byte{}) {
+			t.Error("Expected a null byte slice")
+		}
+	}
+
+	checkSingleValue(t, sg.Children[1], "name", "Michonne")
+	checkSingleValue(t, sg.Children[2], "gender", "female")
+	checkSingleValue(t, sg.Children[3], "status", "alive")
+}
+
 func TestToJson(t *testing.T) {
 	dir, _ := populateGraph(t)
 	defer os.RemoveAll(dir)

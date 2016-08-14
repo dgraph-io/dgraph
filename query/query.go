@@ -441,19 +441,19 @@ func treeCopy(gq *gql.GraphQuery, sg *SubGraph, frm gql.FragmentMap) error {
 			sg.GetCount = 1
 			break
 		}
-		if gchild.Attr == "_uid_" {
-			sg.GetUid = true
-		}
 		if gchild.Fragment != "" {
 			// If this is a fragment spread, look up fragment map.
 			fr := frm[gchild.Fragment]
 			if fr == nil {
 				return fmt.Errorf("Fragment undefined: %s", gchild.Fragment)
 			}
-			fmt.Printf("Loaded fragment: %s\n", gchild.Fragment)
 			if err := treeCopy(fr, sg, frm); err != nil {
 				return err
 			}
+			continue
+		}
+		if gchild.Attr == "_uid_" {
+			sg.GetUid = true
 		}
 
 		dst := &SubGraph{
