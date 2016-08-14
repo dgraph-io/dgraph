@@ -425,7 +425,7 @@ func (g *SubGraph) ToProtocolBuffer(l *Latency) (n *graph.Node, rerr error) {
 	return n, nil
 }
 
-func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
+func treeCopy(gq *gql.GraphQuery, sg *SubGraph, frm gql.FragmentMap) error {
 	// Typically you act on the current node, and leave recursion to deal with
 	// children. But, in this case, we don't want to muck with the current
 	// node, because of the way we're dealing with the root node.
@@ -444,30 +444,39 @@ func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
 		if gchild.Attr == "_uid_" {
 			sg.GetUid = true
 		}
-
-		dst := new(SubGraph)
-		if sg.isDebug {
-			dst.isDebug = true
+		if gchild.Fragment != "" {
+			// If this is a fragment spread, look up fragment map.
+			fr := frm[gchild.Fragment]
+			if fr == nil {
+				return fmt.Errorf("Fragment undefined: %s", gchild.Fragment)
+			}
+			fmt.Printf("Loaded fragment: %s\n", gchild.Fragment)
+			if err := treeCopy(fr, sg, frm); err != nil {
+				return err
+			}
 		}
-		dst.Attr = gchild.Attr
-		dst.Offset = gchild.Offset
-		dst.AfterUid = gchild.After
-		dst.Count = gchild.First
+
+		dst := &SubGraph{
+			isDebug:  sg.isDebug,
+			Attr:     gchild.Attr,
+			Offset:   gchild.Offset,
+			AfterUid: gchild.After,
+			Count:    gchild.First,
+		}
 		sg.Children = append(sg.Children, dst)
-		err := treeCopy(gchild, dst)
-		if err != nil {
+		if err := treeCopy(gchild, dst, frm); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func ToSubGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
+func ToSubGraph(ctx context.Context, gq *gql.GraphQuery, frm gql.FragmentMap) (*SubGraph, error) {
 	sg, err := newGraph(ctx, gq)
 	if err != nil {
 		return nil, err
 	}
-	err = treeCopy(gq, sg)
+	err = treeCopy(gq, sg, frm)
 	return sg, err
 }
 

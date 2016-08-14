@@ -215,12 +215,12 @@ func TestGetUid(t *testing.T) {
 		}
 	`
 
-	gq, _, err := gql.Parse(query)
+	gq, _, _, err := gql.Parse(query)
 	if err != nil {
 		t.Error(err)
 	}
 	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, gq)
+	sg, err := ToSubGraph(ctx, gq, nil)
 	if err != nil {
 		t.Error(err)
 	}
@@ -247,6 +247,101 @@ func TestGetUid(t *testing.T) {
 	}
 }
 
+func TestGetFragment(t *testing.T) {
+	dir, _ := populateGraph(t)
+	defer os.RemoveAll(dir)
+
+	// Alright. Now we have everything set up. Let's create the query.
+	query := `
+		query {
+			me(_uid_:0x01) {
+				name
+				_uid_
+				...MyFragment
+			}
+		}
+		
+		fragment MyFragment {
+			gender
+			status
+			...AnotherFragment
+		}
+		
+		fragment AnotherFragment {
+			friend {
+				_count_
+			}
+		}
+	`
+	gq, _, frm, err := gql.Parse(query)
+	if err != nil {
+		t.Error(err)
+	}
+	ctx := context.Background()
+	sg, err := ToSubGraph(ctx, gq, frm)
+	if err != nil {
+		t.Error(err)
+	}
+
+	ch := make(chan error)
+	go ProcessGraph(ctx, sg, ch)
+	err = <-ch
+	if err != nil {
+		t.Error(err)
+	}
+
+	var l Latency
+	js, err := sg.ToJson(&l)
+	if err != nil {
+		t.Error(err)
+	}
+	var mp map[string]interface{}
+	err = json.Unmarshal(js, &mp)
+
+	resp := mp["me"].([]interface{})[0]
+	uid := resp.(map[string]interface{})["_uid_"].(string)
+	if uid != "0x1" {
+		t.Errorf("Expected uid 0x01. Got %s", uid)
+	}
+}
+
+func TestGetFragmentMissing(t *testing.T) {
+	dir, _ := populateGraph(t)
+	defer os.RemoveAll(dir)
+
+	// Alright. Now we have everything set up. Let's create the query.
+	query := `
+		query {
+			me(_uid_:0x01) {
+				name
+				_uid_
+				...MyFragment
+			}
+		}
+		
+		fragment MyFragmentA {
+			gender
+			status
+			...AnotherFragmentB
+		}
+		
+		fragment AnotherFragment {
+			friend {
+				_count_
+			}
+		}
+	`
+	gq, _, frm, err := gql.Parse(query)
+	if err != nil {
+		t.Error(err)
+	}
+	ctx := context.Background()
+	_, err = ToSubGraph(ctx, gq, frm)
+	if err == nil {
+		t.Error("Expected error due to missing fragment")
+	}
+}
+
 func TestDebug1(t *testing.T) {
 	dir, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
@@ -265,12 +360,12 @@ func TestDebug1(t *testing.T) {
 		}
 	`
 
-	gq, _, err := gql.Parse(query)
+	gq, _, _, err := gql.Parse(query)
 	if err != nil {
 		t.Error(err)
 	}
 	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, gq)
+	sg, err := ToSubGraph(ctx, gq, nil)
 	if err != nil {
 		t.Error(err)
 	}
@@ -314,12 +409,12 @@ func TestDebug2(t *testing.T) {
 		}
 	`
 
-	gq, _, err := gql.Parse(query)
+	gq, _, _, err := gql.Parse(query)
 	if err != nil {
 		t.Error(err)
 	}
 	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, gq)
+	sg, err := ToSubGraph(ctx, gq, nil)
 	if err != nil {
 		t.Error(err)
 	}
@@ -364,12 +459,12 @@ func TestCount(t *testing.T) {
 		}
 	`
 
-	gq, _, err := gql.Parse(query)
+	gq, _, _, err := gql.Parse(query)
 	if err != nil {
 		t.Error(err)
 	}
 	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, gq)
+	sg, err := ToSubGraph(ctx, gq, nil)
 	if err != nil {
 		t.Error(err)
 	}
@@ -413,12 +508,12 @@ func TestCountError1(t *testing.T) {
 			}
 		}
 	`
-	gq, _, err := gql.Parse(query)
+	gq, _, _, err := gql.Parse(query)
 	if err != nil {
 		t.Error(err)
 	}
 	ctx := context.Background()
-	_, err = ToSubGraph(ctx, gq)
+	_, err = ToSubGraph(ctx, gq, nil)
 	if err == nil {
 		t.Error("Expected error")
 	}
@@ -441,12 +536,12 @@ func TestCountError2(t *testing.T) {
 			}
 		}
 	`
-	gq, _, err := gql.Parse(query)
+	gq, _, _, err := gql.Parse(query)
 	if err != nil {
 		t.Error(err)
 	}
 	ctx := context.Background()
-	_, err = ToSubGraph(ctx, gq)
+	_, err = ToSubGraph(ctx, gq, nil)
 	if err == nil {
 		t.Error("Expected error")
 	}
@@ -469,12 +564,12 @@ func TestProcessGraph(t *testing.T) {
 			}
 		}
 	`
-	gq, _, err := gql.Parse(query)
+	gq, _, _, err := gql.Parse(query)
 	if err != nil {
 		t.Error(err)
 	}
 	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, gq)
+	sg, err := ToSubGraph(ctx, gq, nil)
 	if err != nil {
 		t.Error(err)
 	}
@@ -562,12 +657,12 @@ func TestToJson(t *testing.T) {
 		}
 	`
 
-	gq, _, err := gql.Parse(query)
+	gq, _, _, err := gql.Parse(query)
 	if err != nil {
 		t.Error(err)
 	}
 	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, gq)
+	sg, err := ToSubGraph(ctx, gq, nil)
 	if err != nil {
 		t.Error(err)
 	}
@@ -619,12 +714,12 @@ func TestToPB(t *testing.T) {
 		}
 	`
 
-	gq, _, err := gql.Parse(query)
+	gq, _, _, err := gql.Parse(query)
 	if err != nil {
 		t.Error(err)
 	}
 	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, gq)
+	sg, err := ToSubGraph(ctx, gq, nil)
 	if err != nil {
 		t.Error(err)
 	}

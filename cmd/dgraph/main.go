@@ -183,7 +183,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	x.Trace(ctx, "Query received: %v", string(q))
-	gq, mu, err := gql.Parse(string(q))
+	gq, mu, frm, err := gql.Parse(string(q))
 	if err != nil {
 		x.Trace(ctx, "Error while parsing query: %v", err)
 		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
@@ -204,7 +204,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sg, err := query.ToSubGraph(ctx, gq)
+	sg, err := query.ToSubGraph(ctx, gq, frm)
 	if err != nil {
 		x.Trace(ctx, "Error while conversion to internal format: %v", err)
 		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
@@ -261,7 +261,7 @@ func (s *server) Query(ctx context.Context,
 	// TODO(pawan): Refactor query parsing and graph processing code to a common
 	// function used by Query and queryHandler
 	x.Trace(ctx, "Query received: %v", req.Query)
-	gq, mu, err := gql.Parse(req.Query)
+	gq, mu, _, err := gql.Parse(req.Query)
 	if err != nil {
 		x.Trace(ctx, "Error while parsing query: %v", err)
 		return resp, err
@@ -279,7 +279,7 @@ func (s *server) Query(ctx context.Context,
 		return resp, err
 	}
 
-	sg, err := query.ToSubGraph(ctx, gq)
+	sg, err := query.ToSubGraph(ctx, gq, nil)
 	if err != nil {
 		x.Trace(ctx, "Error while conversion to internal format: %v", err)
 		return resp, err

@@ -112,13 +112,13 @@ func TestQuery(t *testing.T) {
 	defer closeAll(dir1, dir2, clog)
 
 	// Parse GQL into internal query representation.
-	gq, _, err := gql.Parse(q0)
+	gq, _, _, err := gql.Parse(q0)
 	if err != nil {
 		t.Error(err)
 		return
 	}
 	ctx := context.Background()
-	g, err := query.ToSubGraph(ctx, gq)
+	g, err := query.ToSubGraph(ctx, gq, nil)
 	if err != nil {
 		t.Error(err)
 		return
@@ -224,13 +224,13 @@ func BenchmarkQuery(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		gq, _, err := gql.Parse(q1)
+		gq, _, _, err := gql.Parse(q1)
 		if err != nil {
 			b.Error(err)
 			return
 		}
 		ctx := context.Background()
-		g, err := query.ToSubGraph(ctx, gq)
+		g, err := query.ToSubGraph(ctx, gq, nil)
 		if err != nil {
 			b.Error(err)
 			return

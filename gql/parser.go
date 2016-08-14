@@ -55,6 +55,8 @@ type pair struct {
 	Val string
 }
 
+type FragmentMap map[string]*GraphQuery
+
 // run is used to run the lexer until we encounter nil state.
 func run(l *lex.Lexer) {
 	for state := lexText; state != nil; {
@@ -65,15 +67,12 @@ func run(l *lex.Lexer) {
 
 // Parse initializes and runs the lexer. It also constructs the GraphQuery subgraph
 // from the lexed items.
-func Parse(input string) (gq *GraphQuery, mu *Mutation, fragments map[string]*GraphQuery, rerr error) {
+func Parse(input string) (gq *GraphQuery, mu *Mutation, frm FragmentMap, rerr error) {
 	l := &lex.Lexer{}
 	l.Init(input)
 	go run(l)
 
-	mu = nil
-	gq = nil
-	fragments = make(map[string]*GraphQuery)
-
+	frm = make(FragmentMap)
 	for item := range l.Items {
 		if item.Typ == itemText {
 			continue
@@ -82,8 +81,7 @@ func Parse(input string) (gq *GraphQuery, mu *Mutation, fragments map[string]*Gr
 				if mu != nil {
 					return nil, nil, nil, errors.New("Only one mutation block allowed.")
 				}
-				mu, rerr = getMutation(l)
-				if rerr != nil {
+				if mu, rerr = getMutation(l); rerr != nil {
 					return nil, nil, nil, rerr
 				}
 			} else if item.Val == "fragment" {
@@ -91,12 +89,11 @@ func Parse(input string) (gq *GraphQuery, mu *Mutation, fragments map[string]*Gr
 				if rerr != nil {
 					return nil, nil, nil, rerr
 				}
-				fragments[fr.Name] = fr.Gq
+				frm[fr.Name] = fr.Gq
 			}
 		} else if item.Typ == itemLeftCurl {
 			if gq == nil {
-				gq, rerr = getRoot(l)
-				if rerr != nil {
+				if gq, rerr = getRoot(l); rerr != nil {
 					return nil, nil, nil, rerr
 				}
 			} else {
@@ -106,7 +103,7 @@ func Parse(input string) (gq *GraphQuery, mu *Mutation, fragments map[string]*Gr
 			}
 		}
 	}
-	return gq, mu, fragments, nil
+	return gq, mu, frm, nil
 }
 
 func getFragment(l *lex.Lexer) (*Fragment, error) {
