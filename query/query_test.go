@@ -508,12 +508,12 @@ func TestCountError1(t *testing.T) {
 			}
 		}
 	`
-	gq, _, _, err := gql.Parse(query)
+	gq, _, frm, err := gql.Parse(query)
 	if err != nil {
 		t.Error(err)
 	}
 	ctx := context.Background()
-	_, err = ToSubGraph(ctx, gq, nil)
+	_, err = ToSubGraph(ctx, gq, frm)
 	if err == nil {
 		t.Error("Expected error")
 	}
@@ -536,12 +536,12 @@ func TestCountError2(t *testing.T) {
 			}
 		}
 	`
-	gq, _, _, err := gql.Parse(query)
+	gq, _, frm, err := gql.Parse(query)
 	if err != nil {
 		t.Error(err)
 	}
 	ctx := context.Background()
-	_, err = ToSubGraph(ctx, gq, nil)
+	_, err = ToSubGraph(ctx, gq, frm)
 	if err == nil {
 		t.Error("Expected error")
 	}
@@ -564,12 +564,12 @@ func TestProcessGraph(t *testing.T) {
 			}
 		}
 	`
-	gq, _, _, err := gql.Parse(query)
+	gq, _, frm, err := gql.Parse(query)
 	if err != nil {
 		t.Error(err)
 	}
 	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, gq, nil)
+	sg, err := ToSubGraph(ctx, gq, frm)
 	if err != nil {
 		t.Error(err)
 	}
