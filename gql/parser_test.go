@@ -461,7 +461,7 @@ func TestParseFragment(t *testing.T) {
 		fragment MyFragment on something else {
 		}
 	`
-	q, mu, fragments, err := Parse(query)
+	q, mu, frm, err := Parse(query)
 	if err != nil {
 		t.Error(err)
 		return
@@ -477,17 +477,17 @@ func TestParseFragment(t *testing.T) {
 		return
 	}
 
-	if fragments == nil {
+	if frm == nil {
 		t.Error("fragments is nil")
 		return
 	}
 
-	if len(fragments) != 2 {
-		t.Errorf("Expected 1 child. Got: %v", len(fragments))
+	if len(frm) != 2 {
+		t.Errorf("Expected 1 child. Got: %v", len(frm))
 		return
 	}
 
-	gq, found := fragments["MyFragment"]
+	gq, found := frm["MyFragment"]
 	if !found {
 		t.Error("Expected key in fragments map")
 		return
@@ -498,7 +498,7 @@ func TestParseFragment(t *testing.T) {
 		return
 	}
 
-	gq, found = fragments["TestFragment"]
+	gq, found = frm["TestFragment"]
 	if !found {
 		t.Error("Expected key in fragments map")
 		return

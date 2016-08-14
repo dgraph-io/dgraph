@@ -215,12 +215,12 @@ func TestGetUid(t *testing.T) {
 		}
 	`
 
-	gq, _, _, err := gql.Parse(query)
+	gq, _, frm, err := gql.Parse(query)
 	if err != nil {
 		t.Error(err)
 	}
 	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, gq, nil)
+	sg, err := ToSubGraph(ctx, gq, frm)
 	if err != nil {
 		t.Error(err)
 	}
@@ -360,12 +360,12 @@ func TestDebug1(t *testing.T) {
 		}
 	`
 
-	gq, _, _, err := gql.Parse(query)
+	gq, _, frm, err := gql.Parse(query)
 	if err != nil {
 		t.Error(err)
 	}
 	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, gq, nil)
+	sg, err := ToSubGraph(ctx, gq, frm)
 	if err != nil {
 		t.Error(err)
 	}
@@ -409,12 +409,12 @@ func TestDebug2(t *testing.T) {
 		}
 	`
 
-	gq, _, _, err := gql.Parse(query)
+	gq, _, frm, err := gql.Parse(query)
 	if err != nil {
 		t.Error(err)
 	}
 	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, gq, nil)
+	sg, err := ToSubGraph(ctx, gq, frm)
 	if err != nil {
 		t.Error(err)
 	}
@@ -459,12 +459,12 @@ func TestCount(t *testing.T) {
 		}
 	`
 
-	gq, _, _, err := gql.Parse(query)
+	gq, _, frm, err := gql.Parse(query)
 	if err != nil {
 		t.Error(err)
 	}
 	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, gq, nil)
+	sg, err := ToSubGraph(ctx, gq, frm)
 	if err != nil {
 		t.Error(err)
 	}
@@ -761,12 +761,12 @@ func TestToJson(t *testing.T) {
 		}
 	`
 
-	gq, _, _, err := gql.Parse(query)
+	gq, _, frm, err := gql.Parse(query)
 	if err != nil {
 		t.Error(err)
 	}
 	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, gq, nil)
+	sg, err := ToSubGraph(ctx, gq, frm)
 	if err != nil {
 		t.Error(err)
 	}
@@ -818,12 +818,12 @@ func TestToPB(t *testing.T) {
 		}
 	`
 
-	gq, _, _, err := gql.Parse(query)
+	gq, _, frm, err := gql.Parse(query)
 	if err != nil {
 		t.Error(err)
 	}
 	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, gq, nil)
+	sg, err := ToSubGraph(ctx, gq, frm)
 	if err != nil {
 		t.Error(err)
 	}
