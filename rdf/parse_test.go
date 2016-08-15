@@ -266,7 +266,7 @@ var testNQuads = []struct {
 	},
 }
 
-func tbParse(t testing.TB) {
+func TestParse(t *testing.T) {
 	for _, test := range testNQuads {
 		rnq, err := Parse(test.input)
 		if test.hasErr {
@@ -285,12 +285,13 @@ func tbParse(t testing.TB) {
 	}
 }
 
-func TestParse(t *testing.T) {
-	tbParse(t)
-}
-
 func BenchmarkParse(b *testing.B) {
 	for range iter.N(b.N) {
-		tbParse(b)
+		for _, tc := range testNQuads {
+			if tc.hasErr {
+				continue
+			}
+			Parse(tc.input)
+		}
 	}
 }
