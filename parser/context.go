@@ -34,11 +34,15 @@ func (c Context) Err() error {
 	if c.err == nil {
 		return nil
 	}
-	s := fmt.Sprintf("%s:", c.Stream().Position())
-	if c.name != "" {
-		s += fmt.Sprintf(" error parsing production %q", c.name)
+	s := ""
+	if c.Stream().Err() == nil {
+		s = fmt.Sprintf("%q at ", c.Stream().Token())
 	}
-	s += fmt.Sprintf(" %s", c.err)
+	s += fmt.Sprintf("%s: ", c.Stream().Position())
+	if c.name != "" {
+		s += fmt.Sprintf("error parsing production %q: ", c.name)
+	}
+	s += fmt.Sprintf("%s", c.err)
 	return errors.New(s)
 }
 
