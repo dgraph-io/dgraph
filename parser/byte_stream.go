@@ -63,6 +63,7 @@ func NewByteStream(r io.Reader) Stream {
 	bs := byteStream{
 		r:    bufio.NewReader(r),
 		line: 1,
+		col:  1,
 	}
 	bs.init()
 	return &bs

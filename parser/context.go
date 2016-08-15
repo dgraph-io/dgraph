@@ -63,10 +63,11 @@ func (c Context) ParseName(name string, p Parser) Context {
 }
 
 func (c Context) Parse(p Parser) Context {
-	// if c.err != nil {
-	// 	return c
-	// }
-	return p.Parse(c)
+	_c := p.Parse(c)
+	if c.err != nil {
+		return c.WithValue(_c.Value())
+	}
+	return _c
 }
 
 func NewContext(s Stream) Context {
