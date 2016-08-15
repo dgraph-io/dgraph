@@ -41,3 +41,17 @@ func Parse(line string) (rnq NQuad, err error) {
 	err = c.Err()
 	return
 }
+
+func ParseDoc(doc string) (ret []NQuad, err error) {
+	s := p.NewByteStream(bytes.NewBufferString(doc))
+	c := p.NewContext(s).Parse(pNQuadsDoc)
+	ret = c.Value().([]NQuad)
+	err = c.Err()
+	if err != nil {
+		return
+	}
+	if c.Stream().Good() {
+		err = fmt.Errorf("trailing data at %s", c.Stream().Position())
+	}
+	return
+}

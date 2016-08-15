@@ -238,3 +238,19 @@ var pNQuadStatement = p.ParseFunc(func(c p.Context) p.Context {
 	c = c.Parse(pByte('.'))
 	return c.WithValue(ret)
 })
+
+var pInterNQuadWS = pPred(func(b byte) bool {
+	return unicode.IsSpace(rune(b))
+})
+
+var pNQuadsDoc = p.ParseFunc(func(c p.Context) p.Context {
+	c, vs := p.MinTimes{0, p.ParseFunc(func(c p.Context) p.Context {
+		c = c.Parse(p.MinTimes{0, pInterNQuadWS})
+		return c.Parse(pNQuadStatement)
+	})}.ParseValues(c)
+	var rv []NQuad
+	for _, v := range vs {
+		rv = append(rv, v.(NQuad))
+	}
+	return c.Parse(p.MinTimes{0, pInterNQuadWS}).WithValue(rv)
+})
