@@ -93,7 +93,7 @@ func (fn *fragmentNode) expand(fmap fragmentMap) error {
 }
 
 func (gq *GraphQuery) expandFragments(fmap fragmentMap) error {
-	// We have to made a copy of children to preserve order and replace
+	// We have to make a copy of children to preserve order and replace
 	// fragment references with fragment content. The copy is newChildren.
 	var newChildren []*GraphQuery
 	// Expand non-fragments. Do not append to gq.Children.
