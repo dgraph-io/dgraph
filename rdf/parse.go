@@ -26,16 +26,16 @@ func pStringWhile(pred func(b byte) bool) p.Parser {
 
 func pStringUntilByte(b byte) p.Parser {
 	return p.ParseFunc(func(c p.Context) p.Context {
-		v := ""
+		var v []byte
 		for c.Stream().Good() {
 			_b := c.Stream().Token().(byte)
 			if _b == b {
 				break
 			}
-			v += string(_b)
+			v = append(v, _b)
 			c = c.NextToken()
 		}
-		return c.WithValue(v)
+		return c.WithValue(string(v))
 	})
 }
 
