@@ -196,25 +196,7 @@ func populateGraph(t *testing.T) (string, *store.Store) {
 	return dir, ps
 }
 
-func TestGetUid(t *testing.T) {
-	dir, _ := populateGraph(t)
-	defer os.RemoveAll(dir)
-
-	// Alright. Now we have everything set up. Let's create the query.
-	query := `
-		{
-			me(_uid_:0x01) {
-				name
-				_uid_
-				gender
-				status
-				friend {
-					_count_
-				}
-			}
-		}
-	`
-
+func processToJson(t *testing.T, query string) map[string]interface{} {
 	gq, _, err := gql.Parse(query)
 	if err != nil {
 		t.Error(err)
@@ -239,7 +221,31 @@ func TestGetUid(t *testing.T) {
 	}
 	var mp map[string]interface{}
 	err = json.Unmarshal(js, &mp)
+	if err != nil {
+		t.Error(err)
+	}
+	return mp
+}
 
+func TestGetUid(t *testing.T) {
+	dir, _ := populateGraph(t)
+	defer os.RemoveAll(dir)
+
+	// Alright. Now we have everything set up. Let's create the query.
+	query := `
+		{
+			me(_uid_:0x01) {
+				name
+				_uid_
+				gender
+				status
+				friend {
+					_count_
+				}
+			}
+		}
+	`
+	mp := processToJson(t, query)
 	resp := mp["me"].([]interface{})[0]
 	uid := resp.(map[string]interface{})["_uid_"].(string)
 	if uid != "0x1" {
@@ -265,31 +271,7 @@ func TestDebug1(t *testing.T) {
 		}
 	`
 
-	gq, _, err := gql.Parse(query)
-	if err != nil {
-		t.Error(err)
-	}
-	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, gq)
-	if err != nil {
-		t.Error(err)
-	}
-
-	ch := make(chan error)
-	go ProcessGraph(ctx, sg, ch)
-	err = <-ch
-	if err != nil {
-		t.Error(err)
-	}
-
-	var l Latency
-	js, err := sg.ToJson(&l)
-	if err != nil {
-		t.Error(err)
-	}
-	var mp map[string]interface{}
-	err = json.Unmarshal(js, &mp)
-
+	mp := processToJson(t, query)
 	resp := mp["debug"].([]interface{})[0]
 	uid := resp.(map[string]interface{})["_uid_"].(string)
 	if uid != "0x1" {
@@ -314,30 +296,7 @@ func TestDebug2(t *testing.T) {
 		}
 	`
 
-	gq, _, err := gql.Parse(query)
-	if err != nil {
-		t.Error(err)
-	}
-	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, gq)
-	if err != nil {
-		t.Error(err)
-	}
-
-	ch := make(chan error)
-	go ProcessGraph(ctx, sg, ch)
-	err = <-ch
-	if err != nil {
-		t.Error(err)
-	}
-
-	var l Latency
-	var mp map[string]interface{}
-	js, err := sg.ToJson(&l)
-	if err != nil {
-		t.Error(err)
-	}
-	err = json.Unmarshal(js, &mp)
+	mp := processToJson(t, query)
 	resp := mp["me"].([]interface{})[0]
 	uid, ok := resp.(map[string]interface{})["_uid_"].(string)
 	if ok {
@@ -364,36 +323,12 @@ func TestCount(t *testing.T) {
 		}
 	`
 
-	gq, _, err := gql.Parse(query)
-	if err != nil {
-		t.Error(err)
-	}
-	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, gq)
-	if err != nil {
-		t.Error(err)
-	}
-
-	ch := make(chan error)
-	go ProcessGraph(ctx, sg, ch)
-	err = <-ch
-	if err != nil {
-		t.Error(err)
-	}
-
-	var l Latency
-	js, err := sg.ToJson(&l)
-	if err != nil {
-		t.Error(err)
-	}
-	var mp map[string]interface{}
-	err = json.Unmarshal(js, &mp)
-
+	mp := processToJson(t, query)
 	resp := mp["me"].([]interface{})[0]
 	friend := resp.(map[string]interface{})["friend"]
 	count := int(friend.(map[string]interface{})["_count_"].(float64))
 	if count != 5 {
-		t.Errorf("Expected count 1. Got %s", count)
+		t.Errorf("Expected count 1. Got %d", count)
 	}
 }
 

@@ -103,7 +103,7 @@ func convertToEdges(ctx context.Context, mutation string) ([]x.DirectedEdge, err
 		}
 	}
 	if len(xidToUid) > 0 {
-		if err := worker.GetOrAssignUidsOverNetwork(ctx, &xidToUid); err != nil {
+		if err := worker.GetOrAssignUidsOverNetwork(ctx, xidToUid); err != nil {
 			x.Trace(ctx, "Error while GetOrAssignUidsOverNetwork: %v", err)
 			return edges, err
 		}

@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+// Package worker contains code for internal worker communication to perform
+// queries and mutations.
 package worker
 
 import (
@@ -35,9 +37,13 @@ var workerPort = flag.String("workerport", ":12345",
 	"Port used by worker for internal communication.")
 
 var dataStore, uidStore *store.Store
+
+// pools stores the pool for all the instances which is then used to send queries
+// and mutations to the appropriate instance.
 var pools []*Pool
 var numInstances, instanceIdx uint64
 
+// Init initializes a worker on an instance with a data and a uid store.
 func Init(ps, uStore *store.Store, idx, numInst uint64) {
 	dataStore = ps
 	uidStore = uStore
@@ -45,6 +51,7 @@ func Init(ps, uStore *store.Store, idx, numInst uint64) {
 	numInstances = numInst
 }
 
+// NewQuery creates a Query flatbuffer table, serializes and returns it.
 func NewQuery(attr string, uids []uint64) []byte {
 	b := flatbuffers.NewBuilder(0)
 	task.QueryStartUidsVector(b, len(uids))
@@ -64,6 +71,8 @@ func NewQuery(attr string, uids []uint64) []byte {
 
 type worker struct{}
 
+// Hello rpc call is used to check connection with other workers after worker
+// tcp server for this instance starts.
 func (w *worker) Hello(ctx context.Context, in *Payload) (*Payload, error) {
 	out := new(Payload)
 	if string(in.Data) == "hello" {
@@ -75,6 +84,7 @@ func (w *worker) Hello(ctx context.Context, in *Payload) (*Payload, error) {
 	return out, nil
 }
 
+// GetOrAssign is used to get uids for a set of xids by communicating with other workers.
 func (w *worker) GetOrAssign(ctx context.Context, query *Payload) (*Payload, error) {
 	uo := flatbuffers.GetUOffsetT(query.Data)
 	xids := new(task.XidList)
@@ -90,6 +100,7 @@ func (w *worker) GetOrAssign(ctx context.Context, query *Payload) (*Payload, err
 	return reply, rerr
 }
 
+// Mutate is used to apply mutations over the network on other instances.
 func (w *worker) Mutate(ctx context.Context, query *Payload) (*Payload, error) {
 	m := new(Mutations)
 	if err := m.Decode(query.Data); err != nil {
@@ -107,6 +118,7 @@ func (w *worker) Mutate(ctx context.Context, query *Payload) (*Payload, error) {
 	return reply, rerr
 }
 
+// ServeTask is used to respond to a query.
 func (w *worker) ServeTask(ctx context.Context, query *Payload) (*Payload, error) {
 	uo := flatbuffers.GetUOffsetT(query.Data)
 	q := new(task.Query)
@@ -117,7 +129,9 @@ func (w *worker) ServeTask(ctx context.Context, query *Payload) (*Payload, error
 
 	reply := new(Payload)
 	var rerr error
-	if (instanceIdx == 0 && attr == "_xid_") ||
+	// Request for xid <-> uid conversion should be handled by instance 0 and all
+	// other requests should be handled according to modulo sharding of the predicate.
+	if (instanceIdx == 0 && attr == _xid_) ||
 		farm.Fingerprint64([]byte(attr))%numInstances == instanceIdx {
 
 		reply.Data, rerr = processTask(query.Data)
@@ -128,6 +142,8 @@ func (w *worker) ServeTask(ctx context.Context, query *Payload) (*Payload, error
 	return reply, rerr
 }
 
+// runServer initializes a tcp server on port which listens to requests from
+// other workers for internal communication.
 func runServer(port string) {
 	ln, err := net.Listen("tcp", port)
 	if err != nil {
@@ -141,6 +157,8 @@ func runServer(port string) {
 	s.Serve(ln)
 }
 
+// Connect establishes a connection with other workers and sends the Hello rpc
+// call to them.
 func Connect(workerList []string) {
 	go runServer(*workerPort)
 
