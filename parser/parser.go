@@ -10,7 +10,7 @@ type MinTimes struct {
 	Parser Parser
 }
 
-func (mt MinTimes) Parse(_c Context) (c Context, vs []Value) {
+func (mt MinTimes) ParseValues(_c Context) (c Context, vs []Value) {
 	c = _c
 	for i := 0; ; i++ {
 		_c = mt.Parser.Parse(c)
@@ -26,6 +26,11 @@ func (mt MinTimes) Parse(_c Context) (c Context, vs []Value) {
 	}
 	c = c.WithValue(vs)
 	return
+}
+
+func (mt MinTimes) Parse(c Context) Context {
+	c, _ = mt.ParseValues(c)
+	return c
 }
 
 type Value interface{}

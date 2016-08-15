@@ -19,7 +19,7 @@ type literal struct {
 
 func pStringWhile(pred func(b byte) bool) p.Parser {
 	return p.ParseFunc(func(c p.Context) p.Context {
-		c, vs := p.MinTimes{0, pPred(pred)}.Parse(c)
+		c, vs := p.MinTimes{0, pPred(pred)}.ParseValues(c)
 		return c.WithValue(appendBytes(nil, vs))
 	})
 }
@@ -66,7 +66,7 @@ var pEChar = p.ParseFunc(func(c p.Context) p.Context {
 
 var pQuotedStringLiteral = p.ParseFunc(func(c p.Context) p.Context {
 	c = c.Parse(pByte('"'))
-	c, vs := p.MinTimes{0, p.OneOf{pNotByteIn(`\"`), pEChar}}.Parse(c)
+	c, vs := p.MinTimes{0, p.OneOf{pNotByteIn(`\"`), pEChar}}.ParseValues(c)
 	return c.Parse(pByte('"')).WithValue(appendBytes(nil, vs))
 })
 
@@ -104,11 +104,11 @@ var pLangTag = p.ParseFunc(func(c p.Context) p.Context {
 	c = c.Parse(pByte('@'))
 	c, vs := p.MinTimes{1, pPred(func(b byte) bool {
 		return unicode.IsLetter(rune(b))
-	})}.Parse(c)
+	})}.ParseValues(c)
 	rv := appendBytes(nil, vs)
 	c, vs = p.MinTimes{0, pPred(func(b byte) bool {
 		return b == '-' || unicode.IsLetter(rune(b)) || unicode.IsNumber(rune(b))
-	})}.Parse(c)
+	})}.ParseValues(c)
 	rv = appendBytes(rv, vs)
 	return c.WithValue(rv)
 })
@@ -175,7 +175,7 @@ func predStar(pred func(b byte) bool) p.Parser {
 
 func predPlus(pred func(b byte) bool) p.Parser {
 	return p.ParseFunc(func(c p.Context) p.Context {
-		c, vs := p.MinTimes{1, pPred(pred)}.Parse(c)
+		c, vs := p.MinTimes{1, pPred(pred)}.ParseValues(c)
 		return c.WithValue(appendBytes(nil, vs))
 	})
 }
