@@ -19,6 +19,8 @@ package rdf
 import (
 	"reflect"
 	"testing"
+
+	"github.com/bradfitz/iter"
 )
 
 var testNQuads = []struct {
@@ -259,22 +261,31 @@ var testNQuads = []struct {
 	},
 }
 
-func TestLex(t *testing.T) {
+func tbParse(t testing.TB) {
 	for _, test := range testNQuads {
-		t.Logf("parsing %q", test.input)
 		rnq, err := Parse(test.input)
 		if test.hasErr {
 			if err == nil {
-				t.Error("expected error, but didn't get one")
+				t.Errorf("expected error parsing %q", test.input)
 			}
 			continue
 		}
 		if err != nil {
-			t.Errorf("unexpected error: %s", err)
+			t.Errorf("unexpected error parsing %q: %s", err)
 			continue
 		}
 		if !reflect.DeepEqual(rnq, test.nq) {
 			t.Errorf("expected: %#v\n got     : %#v", test.nq, rnq)
 		}
+	}
+}
+
+func TestParse(t *testing.T) {
+	tbParse(t)
+}
+
+func BenchmarkParse(b *testing.B) {
+	for range iter.N(b.N) {
+		tbParse(b)
 	}
 }
