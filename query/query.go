@@ -471,6 +471,7 @@ func treeCopy(gq *gql.GraphQuery, sg *SubGraph, frm gql.FragmentMap) error {
 	return nil
 }
 
+// Convert gql.GraphQuery to SubGraph, frm is map from fragment names to gql.GraphQuery.
 func ToSubGraph(ctx context.Context, gq *gql.GraphQuery, frm gql.FragmentMap) (*SubGraph, error) {
 	sg, err := newGraph(ctx, gq)
 	if err != nil {

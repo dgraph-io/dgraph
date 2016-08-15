@@ -483,7 +483,7 @@ func TestParseFragment(t *testing.T) {
 	}
 
 	if len(frm) != 2 {
-		t.Errorf("Expected 1 child. Got: %v", len(frm))
+		t.Errorf("Expected 2 children. Got: %v", len(frm))
 		return
 	}
 

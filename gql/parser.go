@@ -44,17 +44,13 @@ type Mutation struct {
 	Del string
 }
 
-type Fragment struct {
-	Name string
-	Gq   *GraphQuery
-}
-
 // pair denotes the key value pair that is part of the GraphQL query root in parenthesis.
 type pair struct {
 	Key string
 	Val string
 }
 
+// FragmentMap is a map from fragment names to GraphQuery containing queried fields.
 type FragmentMap map[string]*GraphQuery
 
 // run is used to run the lexer until we encounter nil state.
@@ -85,11 +81,11 @@ func Parse(input string) (gq *GraphQuery, mu *Mutation, frm FragmentMap, rerr er
 					return nil, nil, nil, rerr
 				}
 			} else if item.Val == "fragment" {
-				fr, rerr := getFragment(l)
+				fragmentName, fragmentGq, rerr := getFragment(l)
 				if rerr != nil {
 					return nil, nil, nil, rerr
 				}
-				frm[fr.Name] = fr.Gq
+				frm[fragmentName] = fragmentGq
 			}
 		} else if item.Typ == itemLeftCurl {
 			if gq == nil {
@@ -106,7 +102,7 @@ func Parse(input string) (gq *GraphQuery, mu *Mutation, frm FragmentMap, rerr er
 	return gq, mu, frm, nil
 }
 
-func getFragment(l *lex.Lexer) (*Fragment, error) {
+func getFragment(l *lex.Lexer) (string, *GraphQuery, error) {
 	name := ""
 	for item := range l.Items {
 		if item.Typ == itemText {
@@ -120,22 +116,18 @@ func getFragment(l *lex.Lexer) (*Fragment, error) {
 		} else if item.Typ == itemLeftCurl {
 			break
 		} else {
-			return nil, fmt.Errorf("Unexpected item in fragment: %v %v",
+			return "", nil, fmt.Errorf("Unexpected item in fragment: %v %v",
 				item.Typ, item.Val)
 		}
 	}
 	if name == "" {
-		return nil, errors.New("Empty fragment name")
+		return "", nil, errors.New("Empty fragment name")
 	}
 	gq := new(GraphQuery)
 	if err := godeep(l, gq); err != nil {
-		return nil, err
+		return "", nil, err
 	}
-	fr := &Fragment{
-		Name: name,
-		Gq:   gq,
-	}
-	return fr, nil
+	return name, gq, nil
 }
 
 // getMutation function parses and stores the set and delete operation in Mutation.
