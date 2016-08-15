@@ -50,6 +50,8 @@ func createXidListBuffer(xids map[string]uint64) []byte {
 	return b.Bytes[b.Head():]
 }
 
+// getOrAssignUids returns a byte slice containing uids corresponding to the
+// xids in the xidList.
 func getOrAssignUids(ctx context.Context,
 	xidList *task.XidList) (uidList []byte, rerr error) {
 
@@ -64,6 +66,7 @@ func getOrAssignUids(ctx context.Context,
 		wg.Add(1)
 		xid := string(xidList.Xids(i))
 
+		// Start a goroutine to get uid for a xid.
 		go func(idx int) {
 			defer wg.Done()
 			u, err := uid.GetOrAssign(xid, 0, 1)
@@ -74,6 +77,7 @@ func getOrAssignUids(ctx context.Context,
 			uids[idx] = u
 		}(i)
 	}
+	// We want for goroutines to finish and then we create the uidlist vector.
 	wg.Wait()
 	close(che)
 	for err := range che {
@@ -95,25 +99,27 @@ func getOrAssignUids(ctx context.Context,
 	return b.Bytes[b.Head():], nil
 }
 
-func GetOrAssignUidsOverNetwork(ctx context.Context, xidToUid *map[string]uint64) (rerr error) {
+// GetOrAssignUidsOverNetwork gets or assigns uids corresponding to xids and
+// writes them to the xidToUid map.
+func GetOrAssignUidsOverNetwork(ctx context.Context, xidToUid map[string]uint64) (rerr error) {
 	query := new(Payload)
-	query.Data = createXidListBuffer(*xidToUid)
+	query.Data = createXidListBuffer(xidToUid)
 	uo := flatbuffers.GetUOffsetT(query.Data)
 	xidList := new(task.XidList)
 	xidList.Init(query.Data, uo)
 
 	reply := new(Payload)
+	// If instance number 0 called this and then it already has posting list for
+	// xid <-> uid conversion, hence call getOrAssignUids locally else call
+	// GetOrAssign using worker client.
 	if instanceIdx == 0 {
-		uo := flatbuffers.GetUOffsetT(query.Data)
-		xidList := new(task.XidList)
-		xidList.Init(query.Data, uo)
-
 		reply.Data, rerr = getOrAssignUids(ctx, xidList)
 		if rerr != nil {
 			return rerr
 		}
 
 	} else {
+		// Get pool for worker on instance 0.
 		pool := pools[0]
 		conn, err := pool.Get()
 		if err != nil {
@@ -139,7 +145,8 @@ func GetOrAssignUidsOverNetwork(ctx context.Context, xidToUid *map[string]uint64
 	for i := 0; i < xidList.XidsLength(); i++ {
 		xid := string(xidList.Xids(i))
 		uid := uidList.Uids(i)
-		(*xidToUid)[xid] = uid
+		// Writing uids to the map.
+		xidToUid[xid] = uid
 	}
 	return nil
 }

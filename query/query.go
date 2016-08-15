@@ -478,7 +478,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	if len(exid) > 0 {
 		xidToUid := make(map[string]uint64)
 		xidToUid[exid] = 0
-		if err := worker.GetOrAssignUidsOverNetwork(ctx, &xidToUid); err != nil {
+		if err := worker.GetOrAssignUidsOverNetwork(ctx, xidToUid); err != nil {
 			x.Trace(ctx, "Error while getting uids over network: %v", err)
 			return nil, err
 		}
