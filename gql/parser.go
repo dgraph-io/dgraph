@@ -37,6 +37,7 @@ type GraphQuery struct {
 	Children []*GraphQuery
 
 	// Internal fields below.
+	// If gq.fragment is nonempty, then it is a fragment reference / spread.
 	fragment string
 }
 
@@ -92,8 +93,8 @@ func (fn *fragmentNode) expand(fmap fragmentMap) error {
 }
 
 func (gq *GraphQuery) expandFragments(fmap fragmentMap) error {
-	// We have to made a copy just to preserve ordering of fields.
-
+	// We have to made a copy of children to preserve order and replace
+	// fragment references with fragment content. The copy is newChildren.
 	var newChildren []*GraphQuery
 	// Expand non-fragments. Do not append to gq.Children.
 	for _, child := range gq.Children {
@@ -140,6 +141,7 @@ func Parse(input string) (gq *GraphQuery, mu *Mutation, rerr error) {
 					return nil, nil, rerr
 				}
 			} else if item.Val == "fragment" {
+				// TODO(jchiu0): This is to be done in ParseSchema once it is ready.
 				fnode, rerr := getFragment(l)
 				if rerr != nil {
 					return nil, nil, rerr
@@ -161,6 +163,7 @@ func Parse(input string) (gq *GraphQuery, mu *Mutation, rerr error) {
 	}
 
 	if gq != nil {
+		// Try expanding fragments using fragment map.
 		if err := gq.expandFragments(fmap); err != nil {
 			return nil, nil, err
 		}
