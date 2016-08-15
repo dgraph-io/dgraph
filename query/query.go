@@ -555,7 +555,7 @@ func createTaskQuery(sg *SubGraph, sorted []uint64) []byte {
 	task.QueryAddUids(b, vend)
 	task.QueryAddCount(b, int32(sg.Count))
 	task.QueryAddOffset(b, int32(sg.Offset))
-	task.QueryAddAfterUid(b, uint64(sg.AfterUid))
+	task.QueryAddAfterUid(b, sg.AfterUid)
 	task.QueryAddGetCount(b, sg.GetCount)
 
 	qend := task.QueryEnd(b)
