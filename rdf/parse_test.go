@@ -273,7 +273,6 @@ func tbParse(t testing.TB) {
 			if err == nil {
 				t.Errorf("expected error parsing %q", test.input)
 			}
-			t.Logf("got expected error: %s", err)
 			continue
 		}
 		if err != nil {
