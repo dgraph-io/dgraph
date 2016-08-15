@@ -44,7 +44,7 @@ const (
 	ErrorNoPermission    = "ErrorNoPermission"
 )
 
-const dgraphVersion = "0.4.2"
+const dgraphVersion = "0.4.3"
 
 var version = flag.Bool("version", false, "Prints the version of Dgraph")
 

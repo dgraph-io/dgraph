@@ -16,37 +16,15 @@ Dgraph supports [GraphQL](http://graphql.org/) as query language, and responds i
 - Note that we use the Github Issue Tracker for bug reports only.
 - For feature requests or questions, visit [https://discuss.dgraph.io](https://discuss.dgraph.io).
 - Check out [the demo at dgraph.io](http://dgraph.io).
-- There's an instance of Dgraph running at http://dgraph.xyz, that you can query without installing Dgraph.
-This instance contains 21M facts from [Freebase Film Data](http://www.freebase.com/film).
-`curl dgraph.xyz/query -XPOST -d '{}'`
 
 ## Developers
-- We are using [Git Flow](https://github.com/nvie/gitflow) branching model. So, please send out your pull requests against `develop` branch.
 - See a list of issues [that we need help with](https://github.com/dgraph-io/dgraph/issues?q=is%3Aissue+is%3Aopen+label%3Ahelp_wanted).
 - Please see [contributing to Dgraph](https://wiki.dgraph.io/Contributing_to_Dgraph) for guidelines on contributions.
 - *Alpha Program*: If you want to contribute to Dgraph on a continuous basis and need some Bitcoins to pay for healthy food, talk to us.
 
 ## Current Status
 
-**Latest Release: v0.4.1**
-
-Master branch contains the latest stable release.
-
-`Jul 2016 - v0.4`
-This release allows for better debugging via net/tracer and provides binaries for Linux and Mac.
-[Follow our Trello board](https://trello.com/b/TRVKizWt) for progress.
-
-`May 2016 - v0.3`
-This release contains more efficient binary protocol client and ability to query `first:N` results.
-[See our Trello board](https://trello.com/b/PF4nZ1vH) for more information.
-
-`Mar 2016 - v0.2`
-This is the first truly distributed version of Dgraph.
-Please see the [release notes here](https://discuss.dgraph.io/t/dgraph-v0-2-release/17).
-
-`MVP launch - Dec 2015 - v0.1`
-This is a minimum viable product, alpha release of Dgraph.
-This version is not distributed and support for GraphQL is partial.
+**Please see releases tab to find the latest release and corresponding release notes.**
 [See the Roadmap](https://github.com/dgraph-io/dgraph/issues/1) for list of working and planned features.
 
 

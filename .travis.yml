@@ -26,8 +26,6 @@ install:
   - bash contrib/build-rocksdb.sh $HOME/build
 before_script:
   - go get github.com/mattn/goveralls
-  - go get github.com/kardianos/govendor
 script:
-  - govendor sync
   - bash contrib/cover.sh $HOME/build coverage.out
   - goveralls -service=travis-ci -coverprofile=coverage.out
