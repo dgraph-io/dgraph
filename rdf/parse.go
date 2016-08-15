@@ -20,7 +20,7 @@ type literal struct {
 func pStringWhile(pred func(b byte) bool) p.Parser {
 	return p.ParseFunc(func(c p.Context) p.Context {
 		c, vs := p.MinTimes{0, pPred(pred)}.Parse(c)
-		return c.WithValue(catBytes(vs))
+		return c.WithValue(appendBytes(nil, vs))
 	})
 }
 
@@ -35,7 +35,7 @@ func pStringUntilByte(b byte) p.Parser {
 			v = append(v, _b)
 			c = c.NextToken()
 		}
-		return c.WithValue(string(v))
+		return c.WithValue(v)
 	})
 }
 
@@ -67,29 +67,31 @@ var pEChar = p.ParseFunc(func(c p.Context) p.Context {
 var pQuotedStringLiteral = p.ParseFunc(func(c p.Context) p.Context {
 	c = c.Parse(pByte('"'))
 	c, vs := p.MinTimes{0, p.OneOf{pNotByteIn(`\"`), pEChar}}.Parse(c)
-	return c.Parse(pByte('"')).WithValue(catBytes(vs))
+	return c.Parse(pByte('"')).WithValue(appendBytes(nil, vs))
 })
 
-func catBytes(vs []p.Value) (ret string) {
+func appendBytes(bs []byte, vs []p.Value) []byte {
 	for _, v := range vs {
-		ret += string(v.(byte))
+		bs = append(bs, v.(byte))
 	}
-	return
+	return bs
 }
 
 var pLiteral = p.ParseFunc(func(c p.Context) p.Context {
 	c = pQuotedStringLiteral.Parse(c)
 	l := literal{
-		Value: c.Value().(string),
+		Value: string(c.Value().([]byte)),
 	}
-	i, _c := p.OneOf{pLangTag, p.ParseFunc(func(c p.Context) p.Context {
-		c = c.Parse(pBytes("^^"))
-		return c.Parse(pIriRef)
-	})}.ParseIndex(c)
+	i, _c := p.OneOf{
+		pLangTag,
+		p.ParseFunc(func(c p.Context) p.Context {
+			c = c.Parse(pBytes("^^"))
+			return c.Parse(pIriRef)
+		})}.ParseIndex(c)
 	if _c.Good() {
 		switch i {
 		case 0:
-			l.LangTag = _c.Value().(string)
+			l.LangTag = string(_c.Value().([]byte))
 		case 1:
 			l.Value += "@@" + _c.Value().(string)
 		}
@@ -100,16 +102,15 @@ var pLiteral = p.ParseFunc(func(c p.Context) p.Context {
 
 var pLangTag = p.ParseFunc(func(c p.Context) p.Context {
 	c = c.Parse(pByte('@'))
-	s := ""
 	c, vs := p.MinTimes{1, pPred(func(b byte) bool {
 		return unicode.IsLetter(rune(b))
 	})}.Parse(c)
-	s += catBytes(vs)
+	rv := appendBytes(nil, vs)
 	c, vs = p.MinTimes{0, pPred(func(b byte) bool {
 		return b == '-' || unicode.IsLetter(rune(b)) || unicode.IsNumber(rune(b))
 	})}.Parse(c)
-	s += catBytes(vs)
-	return c.WithValue(s)
+	rv = appendBytes(rv, vs)
+	return c.WithValue(rv)
 })
 
 func pPred(pred func(byte) bool) p.Parser {
@@ -143,31 +144,29 @@ var pIriRef = p.ParseFunc(func(c p.Context) p.Context {
 	c = c.Parse(pStringUntilByte('>'))
 	v := c.Value()
 	c = c.Parse(pByte('>'))
-	return c.WithValue(v)
+	return c.WithValue(string(v.([]byte)))
 })
 
 var pBNLabel = p.ParseFunc(func(c p.Context) p.Context {
-	v := "_"
 	c = c.Parse(pByte('_'))
 	c = c.Parse(pStringWhile(func(b byte) bool {
 		return b != ':' && !unicode.IsSpace(rune(b))
 	}))
-	v += c.Value().(string) + ":"
+	beforeColon := c.Value().([]byte)
 	c = c.Parse(pByte(':'))
 	c = c.Parse(notWS)
-	v += c.Value().(string)
-	return c.WithValue(v)
+	return c.WithValue(fmt.Sprintf("_%s:%s", string(beforeColon), string(c.Value().([]byte))))
 })
 
 func predStar(pred func(b byte) bool) p.Parser {
 	return p.ParseFunc(func(c p.Context) p.Context {
-		v := ""
+		var v []byte
 		for c.Stream().Err() == nil {
 			_b := c.Stream().Token().(byte)
 			if !pred(_b) {
 				break
 			}
-			v += string(_b)
+			v = append(v, _b)
 			c = c.NextToken()
 		}
 		return c.WithValue(v)
@@ -177,7 +176,7 @@ func predStar(pred func(b byte) bool) p.Parser {
 func predPlus(pred func(b byte) bool) p.Parser {
 	return p.ParseFunc(func(c p.Context) p.Context {
 		c, vs := p.MinTimes{1, pPred(pred)}.Parse(c)
-		return c.WithValue(catBytes(vs))
+		return c.WithValue(appendBytes(nil, vs))
 	})
 }
 
