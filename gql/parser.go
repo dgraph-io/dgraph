@@ -52,6 +52,7 @@ type pair struct {
 	Val string
 }
 
+// Internal structure for doing dfs on fragments.
 type fragmentNode struct {
 	Name    string
 	Gq      *GraphQuery
@@ -126,9 +127,11 @@ func Parse(input string) (gq *GraphQuery, mu *Mutation, rerr error) {
 
 	fmap := make(fragmentMap)
 	for item := range l.Items {
-		if item.Typ == itemText {
+		switch item.Typ {
+		case itemText:
 			continue
-		} else if item.Typ == itemOpType {
+
+		case itemOpType:
 			if item.Val == "mutation" {
 				if mu != nil {
 					return nil, nil, errors.New("Only one mutation block allowed.")
@@ -143,7 +146,8 @@ func Parse(input string) (gq *GraphQuery, mu *Mutation, rerr error) {
 				}
 				fmap[fnode.Name] = fnode
 			}
-		} else if item.Typ == itemLeftCurl {
+
+		case itemLeftCurl:
 			if gq == nil {
 				if gq, rerr = getRoot(l); rerr != nil {
 					return nil, nil, rerr
@@ -164,6 +168,7 @@ func Parse(input string) (gq *GraphQuery, mu *Mutation, rerr error) {
 	return gq, mu, nil
 }
 
+// getFragment parses a fragment definition (not reference).
 func getFragment(l *lex.Lexer) (*fragmentNode, error) {
 	var name string
 	for item := range l.Items {
