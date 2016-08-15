@@ -29,15 +29,6 @@ func checkAttr(g *GraphQuery, attr string) error {
 	return nil
 }
 
-// Check whether fragment spread / reference is in query.
-func checkFragment(g *GraphQuery, fragment string) error {
-	if g.Fragment != fragment {
-		return fmt.Errorf("Expected fragment: %v. Got: %v",
-			fragment, g.Fragment)
-	}
-	return nil
-}
-
 func TestParse(t *testing.T) {
 	query := `
 	query {
@@ -50,7 +41,7 @@ func TestParse(t *testing.T) {
 		}
 	}
 `
-	gq, _, _, err := Parse(query)
+	gq, _, err := Parse(query)
 	if err != nil {
 		t.Error(err)
 	}
@@ -92,7 +83,7 @@ func TestParseXid(t *testing.T) {
 			type.object.name
 		}
 	}`
-	gq, _, _, err := Parse(query)
+	gq, _, err := Parse(query)
 	if err != nil {
 		t.Error(err)
 		return
@@ -118,7 +109,7 @@ func TestParseFirst(t *testing.T) {
 			}
 		}
 	}`
-	gq, _, _, err := Parse(query)
+	gq, _, err := Parse(query)
 	if err != nil {
 		t.Error(err)
 		return
@@ -154,7 +145,7 @@ func TestParseFirst_error(t *testing.T) {
 		}
 	}`
 	var err error
-	_, _, _, err = Parse(query)
+	_, _, err = Parse(query)
 	t.Log(err)
 	if err == nil {
 		t.Error("Expected error")
@@ -170,7 +161,7 @@ func TestParseAfter(t *testing.T) {
 			}
 		}
 	}`
-	gq, _, _, err := Parse(query)
+	gq, _, err := Parse(query)
 	if err != nil {
 		t.Error(err)
 		return
@@ -208,7 +199,7 @@ func TestParseOffset(t *testing.T) {
 			}
 		}
 	}`
-	gq, _, _, err := Parse(query)
+	gq, _, err := Parse(query)
 	if err != nil {
 		t.Error(err)
 		return
@@ -246,7 +237,7 @@ func TestParseOffset_error(t *testing.T) {
 			}
 		}
 	}`
-	_, _, _, err := Parse(query)
+	_, _, err := Parse(query)
 	if err == nil {
 		t.Error("Expected error on negative offset")
 		return
@@ -262,7 +253,7 @@ func TestParse_error2(t *testing.T) {
 		}
 	`
 	var err error
-	_, _, _, err = Parse(query)
+	_, _, err = Parse(query)
 	t.Log(err)
 	if err == nil {
 		t.Error("Expected error")
@@ -279,7 +270,7 @@ func TestParse_pass1(t *testing.T) {
 			}
 		}
 	`
-	gq, _, _, err := Parse(query)
+	gq, _, err := Parse(query)
 	if err != nil {
 		t.Error(err)
 	}
@@ -306,7 +297,7 @@ func TestParse_block(t *testing.T) {
 			}
 		}
 	`
-	gq, _, _, err := Parse(query)
+	gq, _, err := Parse(query)
 	if err != nil {
 		t.Error(err)
 	}
@@ -330,7 +321,7 @@ func TestParseMutation(t *testing.T) {
 			}
 		}
 	`
-	_, mu, _, err := Parse(query)
+	_, mu, err := Parse(query)
 	if err != nil {
 		t.Error(err)
 		return
@@ -357,7 +348,7 @@ func TestParseMutation_error(t *testing.T) {
 				<name> <is> <something-else> .
 		}
 	`
-	_, _, _, err := Parse(query)
+	_, _, err := Parse(query)
 	if err == nil {
 		t.Error(err)
 		return
@@ -383,7 +374,7 @@ func TestParseMutation_error2(t *testing.T) {
 		}
 
 	`
-	_, _, _, err := Parse(query)
+	_, _, err := Parse(query)
 	if err == nil {
 		t.Error(err)
 		return
@@ -409,7 +400,7 @@ func TestParseMutationAndQuery(t *testing.T) {
 			}
 		}
 	`
-	gq, mu, _, err := Parse(query)
+	gq, mu, err := Parse(query)
 	if err != nil {
 		t.Error(err)
 		return
@@ -449,93 +440,7 @@ func TestParseMutationAndQuery(t *testing.T) {
 	}
 }
 
-func TestParseFragment(t *testing.T) {
-	query := `
-		fragment TestFragment on whatever {
-			name
-			id
-			friend {
-				nickname
-			}
-		}
-		fragment MyFragment on something else {
-		}
-	`
-	q, mu, frm, err := Parse(query)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-
-	if q != nil {
-		t.Error("graphquery is not nil")
-		return
-	}
-
-	if mu != nil {
-		t.Error("mutation is nil")
-		return
-	}
-
-	if frm == nil {
-		t.Error("fragments is nil")
-		return
-	}
-
-	if len(frm) != 2 {
-		t.Errorf("Expected 2 children. Got: %v", len(frm))
-		return
-	}
-
-	gq, found := frm["MyFragment"]
-	if !found {
-		t.Error("Expected key in fragments map")
-		return
-	}
-
-	if len(gq.Children) != 0 {
-		t.Errorf("Expected 0 children. Got: %v", len(gq.Children))
-		return
-	}
-
-	gq, found = frm["TestFragment"]
-	if !found {
-		t.Error("Expected key in fragments map")
-		return
-	}
-
-	if len(gq.Children) != 3 {
-		t.Errorf("Expected 3 children. Got: %v", len(gq.Children))
-		return
-	}
-
-	if err := checkAttr(gq.Children[0], "name"); err != nil {
-		t.Error(err)
-		return
-	}
-
-	if err := checkAttr(gq.Children[1], "id"); err != nil {
-		t.Error(err)
-		return
-	}
-
-	if err := checkAttr(gq.Children[2], "friend"); err != nil {
-		t.Error(err)
-		return
-	}
-
-	child := gq.Children[2]
-	if len(child.Children) != 1 {
-		t.Errorf("Expected 1 child of friends. Got: %v", len(child.Children))
-		return
-	}
-	if err := checkAttr(child.Children[0], "nickname"); err != nil {
-		t.Error(err)
-		return
-	}
-}
-
-func TestParseFragmentSpread(t *testing.T) {
+func TestParseFragmentNoNesting(t *testing.T) {
 	query := `
 	query {
 		user(_uid_:0x0a) {
@@ -548,8 +453,24 @@ func TestParseFragmentSpread(t *testing.T) {
 			...fragmentd
 		}
 	}
+	
+	fragment fragmenta {
+		name
+	}
+	
+	fragment fragmentb {
+		id
+	}
+	
+	fragment fragmentc {
+		name
+	}
+	
+	fragment fragmentd {
+		id
+	}
 `
-	gq, _, _, err := Parse(query)
+	gq, _, err := Parse(query)
 	if err != nil {
 		t.Error(err)
 	}
@@ -558,31 +479,129 @@ func TestParseFragmentSpread(t *testing.T) {
 		return
 	}
 	if len(gq.Children) != 6 {
-		t.Errorf("Expected 4 children. Got: %v", len(gq.Children))
+		t.Errorf("Expected 6 children. Got: %v", len(gq.Children))
 		return
 	}
-	if err := checkFragment(gq.Children[0], "fragmenta"); err != nil {
+
+	// Notice that the order is preserved.
+	expectedFields := []string{"name", "id", "friends", "name", "hobbies", "id"}
+	for i, v := range expectedFields {
+		if err := checkAttr(gq.Children[i], v); err != nil {
+			t.Error(err)
+			return
+		}
+	}
+}
+
+func TestParseFragmentNest1(t *testing.T) {
+	query := `
+	query {
+		user(_uid_:0x0a) {
+			...fragmenta
+			friends {
+				name
+			}
+		}
+	}
+	
+	fragment fragmenta {
+		id
+		...fragmentb
+	}
+	
+	fragment fragmentb {
+		hobbies
+	}
+`
+	gq, _, err := Parse(query)
+	if err != nil {
 		t.Error(err)
+	}
+	if gq == nil {
+		t.Error("subgraph is nil")
 		return
 	}
-	if err := checkFragment(gq.Children[1], "fragmentb"); err != nil {
-		t.Error(err)
+	if len(gq.Children) != 3 {
+		t.Errorf("Expected 3 children. Got: %v", len(gq.Children))
 		return
 	}
-	if err := checkAttr(gq.Children[2], "friends"); err != nil {
+
+	// Notice that the order is preserved.
+	expectedFields := []string{"id", "hobbies", "friends"}
+	for i, v := range expectedFields {
+		if err := checkAttr(gq.Children[i], v); err != nil {
+			t.Error(err)
+			return
+		}
+	}
+}
+
+func TestParseFragmentNest2(t *testing.T) {
+	query := `
+	query {
+		user(_uid_:0x0a) {
+			friends {
+				...fragmenta
+			}
+		}
+	}
+	fragment fragmenta {
+		name
+		...fragmentb
+	}
+	fragment fragmentb {
+		nickname
+	}
+`
+	gq, _, err := Parse(query)
+	if err != nil {
 		t.Error(err)
+	}
+	if gq == nil {
+		t.Error("subgraph is nil")
 		return
 	}
-	if err := checkFragment(gq.Children[3], "fragmentc"); err != nil {
-		t.Error(err)
+	if len(gq.Children) != 1 {
+		t.Errorf("Expected 1 child. Got: %v", len(gq.Children))
 		return
 	}
-	if err := checkAttr(gq.Children[4], "hobbies"); err != nil {
-		t.Error(err)
+
+	gq = gq.Children[0]
+	if len(gq.Children) != 2 {
+		t.Errorf("Expected 2 child. Got: %v", len(gq.Children))
 		return
 	}
-	if err := checkFragment(gq.Children[5], "fragmentd"); err != nil {
-		t.Error(err)
-		return
+
+	expectedFields := []string{"name", "nickname"}
+	for i, v := range expectedFields {
+		if err := checkAttr(gq.Children[i], v); err != nil {
+			t.Error(err)
+			return
+		}
+	}
+}
+
+func TestParseFragmentCycle(t *testing.T) {
+	query := `
+	query {
+		user(_uid_:0x0a) {
+			...fragmenta
+		}
+	}
+	fragment fragmenta {
+		name
+		...fragmentb
+	}
+	fragment fragmentb {
+		...fragmentc
+	}
+	fragment fragmentc {
+		id
+		...fragmenta
+	}
+`
+	_, _, err := Parse(query)
+	if err == nil {
+		t.Error("Expected error with cycle")
 	}
 }

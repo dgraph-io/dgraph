@@ -32,10 +32,12 @@ type GraphQuery struct {
 	XID      string
 	Attr     string
 	First    int
-	Fragment string // Reference to a fragment
 	Offset   int
 	After    uint64
 	Children []*GraphQuery
+
+	// Internal fields below.
+	fragment string
 }
 
 // Mutation stores the strings corresponding to set and delete operations.
@@ -50,8 +52,15 @@ type pair struct {
 	Val string
 }
 
-// FragmentMap is a map from fragment names to GraphQuery containing queried fields.
-type FragmentMap map[string]*GraphQuery
+type fragmentNode struct {
+	Name    string
+	Gq      *GraphQuery
+	Entered bool // Entered in dfs.
+	Exited  bool // Exited in dfs.
+}
+
+// Key is fragment names.
+type fragmentMap map[string]*fragmentNode
 
 // run is used to run the lexer until we encounter nil state.
 func run(l *lex.Lexer) {
@@ -61,49 +70,102 @@ func run(l *lex.Lexer) {
 	close(l.Items) // No more tokens.
 }
 
+func (gq *GraphQuery) isFragment() bool {
+	return gq.fragment != ""
+}
+
+func (fn *fragmentNode) expand(fmap fragmentMap) error {
+	if fn.Exited {
+		// This fragment node has already been expanded.
+		return nil
+	}
+	if fn.Entered {
+		return fmt.Errorf("Cycle detected: %s", fn.Name)
+	}
+	fn.Entered = true
+	if err := fn.Gq.expandFragments(fmap); err != nil {
+		return err
+	}
+	fn.Exited = true
+	return nil
+}
+
+func (gq *GraphQuery) expandFragments(fmap fragmentMap) error {
+	// We have to made a copy just to preserve ordering of fields.
+
+	var newChildren []*GraphQuery
+	// Expand non-fragments. Do not append to gq.Children.
+	for _, child := range gq.Children {
+		if child.isFragment() {
+			fname := child.fragment // Name of fragment being referenced.
+			fchild := fmap[fname]
+			if fchild == nil {
+				return fmt.Errorf("Missing fragment: %s", fname)
+			}
+			if err := fchild.expand(fmap); err != nil {
+				return err
+			}
+			newChildren = append(newChildren, fchild.Gq.Children...)
+		} else {
+			if err := child.expandFragments(fmap); err != nil {
+				return err
+			}
+			newChildren = append(newChildren, child)
+		}
+	}
+	gq.Children = newChildren
+	return nil
+}
+
 // Parse initializes and runs the lexer. It also constructs the GraphQuery subgraph
 // from the lexed items.
-func Parse(input string) (gq *GraphQuery, mu *Mutation, frm FragmentMap, rerr error) {
+func Parse(input string) (gq *GraphQuery, mu *Mutation, rerr error) {
 	l := &lex.Lexer{}
 	l.Init(input)
 	go run(l)
 
-	frm = make(FragmentMap)
+	fmap := make(fragmentMap)
 	for item := range l.Items {
 		if item.Typ == itemText {
 			continue
 		} else if item.Typ == itemOpType {
 			if item.Val == "mutation" {
 				if mu != nil {
-					return nil, nil, nil, errors.New("Only one mutation block allowed.")
+					return nil, nil, errors.New("Only one mutation block allowed.")
 				}
 				if mu, rerr = getMutation(l); rerr != nil {
-					return nil, nil, nil, rerr
+					return nil, nil, rerr
 				}
 			} else if item.Val == "fragment" {
-				fragmentName, fragmentGq, rerr := getFragment(l)
+				fnode, rerr := getFragment(l)
 				if rerr != nil {
-					return nil, nil, nil, rerr
+					return nil, nil, rerr
 				}
-				frm[fragmentName] = fragmentGq
+				fmap[fnode.Name] = fnode
 			}
 		} else if item.Typ == itemLeftCurl {
 			if gq == nil {
 				if gq, rerr = getRoot(l); rerr != nil {
-					return nil, nil, nil, rerr
+					return nil, nil, rerr
 				}
 			} else {
 				if err := godeep(l, gq); err != nil {
-					return nil, nil, nil, err
+					return nil, nil, err
 				}
 			}
 		}
 	}
-	return gq, mu, frm, nil
+
+	if gq != nil {
+		if err := gq.expandFragments(fmap); err != nil {
+			return nil, nil, err
+		}
+	}
+	return gq, mu, nil
 }
 
-func getFragment(l *lex.Lexer) (string, *GraphQuery, error) {
-	name := ""
+func getFragment(l *lex.Lexer) (*fragmentNode, error) {
+	var name string
 	for item := range l.Items {
 		if item.Typ == itemText {
 			v := strings.TrimSpace(item.Val)
@@ -116,18 +178,22 @@ func getFragment(l *lex.Lexer) (string, *GraphQuery, error) {
 		} else if item.Typ == itemLeftCurl {
 			break
 		} else {
-			return "", nil, fmt.Errorf("Unexpected item in fragment: %v %v",
+			return nil, fmt.Errorf("Unexpected item in fragment: %v %v",
 				item.Typ, item.Val)
 		}
 	}
 	if name == "" {
-		return "", nil, errors.New("Empty fragment name")
+		return nil, errors.New("Empty fragment name")
 	}
 	gq := new(GraphQuery)
 	if err := godeep(l, gq); err != nil {
-		return "", nil, err
+		return nil, err
 	}
-	return name, gq, nil
+	fn := &fragmentNode{
+		Name: name,
+		Gq:   gq,
+	}
+	return fn, nil
 }
 
 // getMutation function parses and stores the set and delete operation in Mutation.
@@ -272,13 +338,10 @@ func godeep(l *lex.Lexer, gq *GraphQuery) error {
 				return fmt.Errorf("Fragment name invalid: %s", item.Val)
 			}
 
-			child := new(GraphQuery)
-			child.Fragment = item.Val[3:]
-			gq.Children = append(gq.Children, child)
+			gq.Children = append(gq.Children, &GraphQuery{fragment: item.Val[3:]})
 			// Unlike itemName, there is no nesting, so do not change "curp".
-		}
 
-		if item.Typ == itemName {
+		} else if item.Typ == itemName {
 			child := new(GraphQuery)
 			child.Attr = item.Val
 			gq.Children = append(gq.Children, child)
