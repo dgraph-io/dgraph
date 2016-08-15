@@ -131,7 +131,7 @@ func (w *worker) ServeTask(ctx context.Context, query *Payload) (*Payload, error
 	var rerr error
 	// Request for xid <-> uid conversion should be handled by instance 0 and all
 	// other requests should be handled according to modulo sharding of the predicate.
-	if (instanceIdx == 0 && attr == _xid) ||
+	if (instanceIdx == 0 && attr == _xid_) ||
 		farm.Fingerprint64([]byte(attr))%numInstances == instanceIdx {
 
 		reply.Data, rerr = processTask(query.Data)

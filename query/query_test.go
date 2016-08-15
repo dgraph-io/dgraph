@@ -196,7 +196,7 @@ func populateGraph(t *testing.T) (string, *store.Store) {
 	return dir, ps
 }
 
-func getJSON(t *testing.T, query string) map[string]interface{} {
+func processToJson(t *testing.T, query string) map[string]interface{} {
 	gq, _, err := gql.Parse(query)
 	if err != nil {
 		t.Error(err)
@@ -245,7 +245,7 @@ func TestGetUid(t *testing.T) {
 			}
 		}
 	`
-	mp := getJSON(t, query)
+	mp := processToJson(t, query)
 	resp := mp["me"].([]interface{})[0]
 	uid := resp.(map[string]interface{})["_uid_"].(string)
 	if uid != "0x1" {
@@ -271,7 +271,7 @@ func TestDebug1(t *testing.T) {
 		}
 	`
 
-	mp := getJSON(t, query)
+	mp := processToJson(t, query)
 	resp := mp["debug"].([]interface{})[0]
 	uid := resp.(map[string]interface{})["_uid_"].(string)
 	if uid != "0x1" {
@@ -296,7 +296,7 @@ func TestDebug2(t *testing.T) {
 		}
 	`
 
-	mp := getJSON(t, query)
+	mp := processToJson(t, query)
 	resp := mp["me"].([]interface{})[0]
 	uid, ok := resp.(map[string]interface{})["_uid_"].(string)
 	if ok {
@@ -323,7 +323,7 @@ func TestCount(t *testing.T) {
 		}
 	`
 
-	mp := getJSON(t, query)
+	mp := processToJson(t, query)
 	resp := mp["me"].([]interface{})[0]
 	friend := resp.(map[string]interface{})["friend"]
 	count := int(friend.(map[string]interface{})["_count_"].(float64))

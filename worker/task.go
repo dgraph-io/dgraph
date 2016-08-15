@@ -27,8 +27,8 @@ import (
 )
 
 const (
-	_xid = "_xid"
-	_uid = "_uid"
+	_xid_ = "_xid_"
+	_uid_ = "_uid_"
 )
 
 // ProcessTaskOverNetwork is used to process the query and get the result from
@@ -44,7 +44,7 @@ func ProcessTaskOverNetwork(ctx context.Context, qu []byte) (result []byte, rerr
 
 	var runHere bool
 	// Posting list with xid -> uid and uid -> xid mapping is stored on instance 0.
-	if attr == _xid || attr == _uid {
+	if attr == _xid_ || attr == _uid_ {
 		idx = 0
 		runHere = (instanceIdx == 0)
 	} else {
@@ -90,7 +90,7 @@ func processTask(query []byte) (result []byte, rerr error) {
 
 	attr := string(q.Attr())
 	store := dataStore
-	if attr == _xid {
+	if attr == _xid_ {
 		store = uidStore
 	}
 
