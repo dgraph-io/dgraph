@@ -2,255 +2,330 @@ package rdf
 
 import (
 	"fmt"
-	"strconv"
 	"unicode"
 
 	p "github.com/dgraph-io/dgraph/parser"
 )
 
-var pSubject = p.OneOf{pIriRef, pBNLabel}
+type subject string
 
-var pObject = p.OneOf{pIriRef, pBNLabel, pLiteral}
+func (me *subject) Parse(s p.Stream) p.Stream {
+	var (
+		iriRef  iriRef
+		bnLabel bnLabel
+	)
+	s, i := p.OneOf(s, &iriRef, &bnLabel)
+	switch i {
+	case 0:
+		*me = subject(iriRef)
+	case 1:
+		*me = subject(bnLabel)
+	}
+	return s
+}
+
+type object struct {
+	Id      string
+	Literal literal
+}
+
+func (me *object) Parse(s p.Stream) p.Stream {
+	var (
+		iriRef  iriRef
+		bnLabel bnLabel
+	)
+	s, i := p.OneOf(s, &iriRef, &bnLabel, &me.Literal)
+	switch i {
+	case 0:
+		me.Id = string(iriRef)
+	case 1:
+		me.Id = string(bnLabel)
+	}
+	return s
+}
+
+// var pObject = p.OneOf{pIriRef, pBNLabel, pLiteral}
+
+func pByte(s p.Stream, b byte) p.Stream {
+	if !s.Good() {
+		panic(p.SyntaxError{s, s.Err()})
+	}
+	_b := s.Token().(byte)
+	if _b != b {
+		panic(p.SyntaxError{s, fmt.Errorf("got %q but wanted %q", _b, b)})
+	}
+	return s.Next()
+}
+
+type eChar byte
+
+func (me *eChar) Parse(s p.Stream) p.Stream {
+	s = pByte(s, '\\')
+	if !s.Good() {
+		panic(p.SyntaxError{s, s.Err()})
+	}
+	b := s.Token()
+	// ECHAR ::= '\' [tbnrf"'\]
+	switch b {
+	case 't':
+		*me = '\t'
+	case 'b':
+		*me = '\b'
+	case 'n':
+		*me = '\n'
+	case 'r':
+		*me = '\r'
+	case 'f':
+		*me = '\f'
+	case '"':
+		*me = '"'
+	case '\'':
+		*me = '\''
+	default:
+		panic(p.SyntaxError{s, fmt.Errorf("can't escape %q", b)})
+	}
+	return s.Next()
+}
+
+type quotedStringLiteral string
+
+func (me *quotedStringLiteral) Parse(s p.Stream) p.Stream {
+	s = pByte(s, '"')
+	var bs []byte
+	for s.Good() {
+		b := s.Token().(byte)
+		switch b {
+		case '"':
+			*me = quotedStringLiteral(string(bs))
+			return s.Next()
+		case '\\':
+			var e eChar
+			s = p.Parse(s, &e)
+			bs = append(bs, byte(e))
+		default:
+			bs = append(bs, b)
+			s = s.Next()
+		}
+	}
+	panic(p.SyntaxError{s, s.Err()})
+}
 
 type literal struct {
 	Value   string
 	LangTag string
 }
 
-func pStringWhile(pred func(b byte) bool) p.Parser {
-	return p.ParseFunc(func(c p.Context) p.Context {
-		c, vs := p.MinTimes{0, pPred(pred)}.ParseValues(c)
-		return c.WithValue(appendBytes(nil, vs))
-	})
+func (l *literal) Parse(s p.Stream) p.Stream {
+	var qsl quotedStringLiteral
+	s = p.Parse(s, &qsl)
+	l.Value = string(qsl)
+	var (
+		langTag langTag
+		iriRef  iriRef
+	)
+	var i int
+	s, i = p.OneOf(s,
+		&langTag,
+		p.ParseFunc(func(s p.Stream) p.Stream {
+			s = pBytes(s, "^^")
+			return p.Parse(s, &iriRef)
+		}))
+	switch i {
+	case 0:
+		l.LangTag = string(langTag)
+	case 1:
+		l.Value += "@@" + string(iriRef)
+	}
+	return s
 }
 
-func pStringUntilByte(b byte) p.Parser {
-	return p.ParseFunc(func(c p.Context) p.Context {
-		var v []byte
-		for c.Stream().Good() {
-			_b := c.Stream().Token().(byte)
-			if _b == b {
-				break
-			}
-			v = append(v, _b)
-			c = c.NextToken()
+type bytesWhile struct {
+	b    []byte
+	pred func(byte) bool
+}
+
+func (me *bytesWhile) Parse(s p.Stream) p.Stream {
+	for s.Good() {
+		b := s.Token().(byte)
+		if !me.pred(b) {
+			break
 		}
-		return c.WithValue(v)
-	})
+		me.b = append(me.b, b)
+		s = s.Next()
+	}
+	return s
 }
 
-func pNotByteIn(s string) p.Parser {
-	return pPred(func(b byte) bool {
-		for _, _b := range []byte(s) {
-			if b == _b {
-				return false
-			}
+type untilByte struct {
+	b  byte
+	bs []byte
+}
+
+func (me *untilByte) Parse(s p.Stream) p.Stream {
+	for s.Good() {
+		b := s.Token().(byte)
+		s = s.Next()
+		if b == me.b {
+			return s
 		}
-		return true
-	})
+		me.bs = append(me.bs, b)
+	}
+	panic(p.SyntaxError{s, s.Err()})
 }
 
-var pEChar = p.ParseFunc(func(c p.Context) p.Context {
-	c = c.Parse(pByte('\\'))
-	if c.Stream().Err() != nil {
-		return c.WithError(fmt.Errorf("incomplete echar: %s", c.Stream().Err()))
-	}
-	s, err := strconv.Unquote(`"\` + string(c.Stream().Token().(byte)) + `"`)
-	c = c.NextToken()
-	if err != nil {
-		return c.WithError(err)
-	} else {
-		return c.WithValue(s[0])
-	}
-})
+type langTag string
 
-var pQuotedStringLiteral = p.ParseFunc(func(c p.Context) p.Context {
-	c = c.Parse(pByte('"'))
-	c, vs := p.MinTimes{0, p.OneOf{pNotByteIn(`\"`), pEChar}}.ParseValues(c)
-	return c.Parse(pByte('"')).WithValue(appendBytes(nil, vs))
-})
-
-func appendBytes(bs []byte, vs []p.Value) []byte {
-	for _, v := range vs {
-		bs = append(bs, v.(byte))
+func (me *langTag) Parse(s p.Stream) p.Stream {
+	s = pByte(s, '@')
+	bw := bytesWhile{
+		pred: func(b byte) bool { return unicode.IsLetter(rune(b)) },
 	}
-	return bs
-}
-
-var pLiteral = p.ParseFunc(func(c p.Context) p.Context {
-	c = pQuotedStringLiteral.Parse(c)
-	l := literal{
-		Value: string(c.Value().([]byte)),
-	}
-	i, _c := p.OneOf{
-		pLangTag,
-		p.ParseFunc(func(c p.Context) p.Context {
-			c = c.Parse(pBytes("^^"))
-			return c.Parse(pIriRef)
-		})}.ParseIndex(c)
-	if _c.Good() {
-		switch i {
-		case 0:
-			l.LangTag = string(_c.Value().([]byte))
-		case 1:
-			l.Value += "@@" + _c.Value().(string)
-		}
-		c = _c
-	}
-	return c.WithValue(l)
-})
-
-var pLangTag = p.ParseFunc(func(c p.Context) p.Context {
-	c = c.Parse(pByte('@'))
-	c, vs := p.MinTimes{1, pPred(func(b byte) bool {
-		return unicode.IsLetter(rune(b))
-	})}.ParseValues(c)
-	rv := appendBytes(nil, vs)
-	c, vs = p.MinTimes{0, pPred(func(b byte) bool {
+	s = p.Parse(s, &bw)
+	bw.pred = func(b byte) bool {
 		return b == '-' || unicode.IsLetter(rune(b)) || unicode.IsNumber(rune(b))
-	})}.ParseValues(c)
-	rv = appendBytes(rv, vs)
-	return c.WithValue(rv)
-})
-
-func pPred(pred func(byte) bool) p.Parser {
-	return p.ParseFunc(func(c p.Context) p.Context {
-		if c.Stream().Err() != nil {
-			return c.WithError(c.Stream().Err())
-		}
-		_b := c.Stream().Token().(byte)
-		if pred(_b) {
-			return c.WithValue(_b).NextToken()
-		}
-		return c.WithError(fmt.Errorf("%q does not satisfy %s", _b, pred))
-	})
+	}
+	s = p.Parse(s, &bw)
+	*me = langTag(bw.b)
+	return s
 }
 
-func pByte(b byte) p.Parser {
-	return p.ParseFunc(func(c p.Context) p.Context {
-		if c.Stream().Err() != nil {
-			return c.WithError(c.Stream().Err())
+type iriRef string
+
+func (me *iriRef) Parse(s p.Stream) p.Stream {
+	s = pByte(s, '<')
+	ub := untilByte{
+		b: '>',
+	}
+	s = p.Parse(s, &ub)
+	*me = iriRef(ub.bs)
+	return s
+}
+
+type bnLabel string
+
+func (me *bnLabel) Parse(s p.Stream) p.Stream {
+	s = pByte(s, '_')
+	beforeColon := bytesWhile{
+		pred: func(b byte) bool {
+			return b != ':' && !unicode.IsSpace(rune(b))
+		},
+	}
+	s = beforeColon.Parse(s)
+	s = pByte(s, ':')
+	rest := bytesWhile{
+		pred: func(b byte) bool {
+			return !unicode.IsSpace(rune(b))
+		},
+	}
+	s = rest.Parse(s)
+	*me = bnLabel(fmt.Sprintf("_%s:%s", beforeColon.b, rest.b))
+	return s
+}
+
+// var pBNLabel = p.ParseFunc(func(c p.Context) p.Context {
+// 	c = c.Parse(pByte('_'))
+// 	c = c.Parse(pStringWhile(func(b byte) bool {
+// 		return b != ':' && !unicode.IsSpace(rune(b))
+// 	}))
+// 	beforeColon := c.Value().([]byte)
+// 	c = c.Parse(pByte(':'))
+// 	c = c.Parse(notWS)
+// 	return c.WithValue(fmt.Sprintf("_%s:%s", string(beforeColon), string(c.Value().([]byte))))
+// })
+
+type predicate struct {
+	iriRef
+}
+
+func pBytes(s p.Stream, bs string) p.Stream {
+	for _, b := range []byte(bs) {
+		if !s.Good() {
+			panic(p.SyntaxError{s, fmt.Errorf("expected %q but got %s", b, s.Err())})
 		}
-		_b := c.Stream().Token().(byte)
+		_b := s.Token().(byte)
 		if _b != b {
-			return c.WithError(fmt.Errorf("expected %q but got %q", b, _b))
+			panic(p.SyntaxError{s, fmt.Errorf("expected %q but got %q", b, _b)})
 		}
-		return c.WithValue(b).NextToken()
-	})
+		s = s.Next()
+	}
+	return s
 }
 
-var pIriRef = p.ParseFunc(func(c p.Context) p.Context {
-	c = c.Parse(pByte('<'))
-	c = c.Parse(pStringUntilByte('>'))
-	v := c.Value()
-	c = c.Parse(pByte('>'))
-	return c.WithValue(string(v.([]byte)))
-})
+type label struct {
+	subject
+}
 
-var pBNLabel = p.ParseFunc(func(c p.Context) p.Context {
-	c = c.Parse(pByte('_'))
-	c = c.Parse(pStringWhile(func(b byte) bool {
-		return b != ':' && !unicode.IsSpace(rune(b))
+type nQuadParser NQuad
+
+func (me *nQuadParser) Parse(s p.Stream) p.Stream {
+	var (
+		sub   subject
+		pred  predicate
+		obj   object
+		label label
+	)
+	s = p.Parse(s, &sub)
+	betweenNQuadFields(&s)
+	s = p.Parse(s, &pred)
+	betweenNQuadFields(&s)
+	s = p.Parse(s, &obj)
+	betweenNQuadFields(&s)
+	s = p.Maybe(s, p.ParseFunc(func(s p.Stream) p.Stream {
+		s = p.Parse(s, &label)
+		betweenNQuadFields(&s)
+		return s
 	}))
-	beforeColon := c.Value().([]byte)
-	c = c.Parse(pByte(':'))
-	c = c.Parse(notWS)
-	return c.WithValue(fmt.Sprintf("_%s:%s", string(beforeColon), string(c.Value().([]byte))))
-})
+	s = pByte(s, '.')
+	me.Subject = string(sub)
+	me.Predicate = string(pred.iriRef)
+	me.ObjectId = obj.Id
+	if obj.Literal.Value != "" {
+		me.ObjectValue = []byte(obj.Literal.Value)
+	}
+	if obj.Literal.LangTag != "" {
+		me.Predicate += "." + obj.Literal.LangTag
+	}
+	me.Label = string(label.subject)
+	return s
+}
 
-func predStar(pred func(b byte) bool) p.Parser {
-	return p.ParseFunc(func(c p.Context) p.Context {
-		var v []byte
-		for c.Stream().Err() == nil {
-			_b := c.Stream().Token().(byte)
-			if !pred(_b) {
-				break
-			}
-			v = append(v, _b)
-			c = c.NextToken()
+func discardWhitespace(s *p.Stream) {
+	for (*s).Good() {
+		if !unicode.IsSpace(rune((*s).Token().(byte))) {
+			break
 		}
-		return c.WithValue(v)
+		(*s) = (*s).Next()
+	}
+}
+
+func betweenNQuadFields(s *p.Stream) {
+	discardWhilePred(s, func(b byte) bool {
+		return unicode.IsSpace(rune(b)) && b != '\n'
 	})
 }
 
-func predPlus(pred func(b byte) bool) p.Parser {
-	return p.ParseFunc(func(c p.Context) p.Context {
-		c, vs := p.MinTimes{1, pPred(pred)}.ParseValues(c)
-		return c.WithValue(appendBytes(nil, vs))
-	})
+func discardWhilePred(s *p.Stream, pred func(byte) bool) {
+	_s := *s
+	for _s.Good() {
+		b := _s.Token().(byte)
+		if !pred(b) {
+			break
+		}
+		_s = _s.Next()
+	}
+	*s = _s
 }
 
-var pPredicate = pIriRef
+type nQuadsDoc []NQuad
 
-var notWS = predStar(func(b byte) bool {
-	return !unicode.IsSpace(rune(b))
-})
-
-func pBytes(bs string) p.Parser {
-	return p.ParseFunc(func(c p.Context) p.Context {
-		for _, b := range []byte(bs) {
-			if err := c.Stream().Err(); err != nil {
-				return c.WithError(fmt.Errorf("expected %q but got %s", b, err))
-			}
-			_b := c.Stream().Token().(byte)
-			if _b != b {
-				return c.WithError(fmt.Errorf("expected %q but saw %q", b, _b))
-			}
-			c = c.NextToken()
-		}
-		return c
-	})
+func (me *nQuadsDoc) Parse(s p.Stream) p.Stream {
+	s, _ = p.Star(s, p.ParseFunc(func(s p.Stream) p.Stream {
+		discardWhitespace(&s)
+		var nqp nQuadParser
+		s = p.Parse(s, &nqp)
+		*me = append(*me, NQuad(nqp))
+		return s
+	}))
+	discardWhitespace(&s)
+	return s
 }
-
-var pWS = predPlus(func(b byte) bool {
-	return unicode.IsSpace(rune(b))
-})
-
-var pLabel = pSubject
-
-var pNQuadStatement = p.ParseFunc(func(c p.Context) p.Context {
-	var ret NQuad
-	c = c.Parse(pSubject)
-	if !c.Good() {
-		return c
-	}
-	ret.Subject = c.Value().(string)
-	c = c.Parse(pWS)
-	c = c.ParseName("predicate", pPredicate)
-	ret.Predicate = c.Value().(string)
-	c = c.Parse(pWS)
-	c = c.ParseName("object", pObject)
-	switch v := c.Value().(type) {
-	case string:
-		ret.ObjectId = v
-	case literal:
-		ret.ObjectValue = []byte(v.Value)
-		if v.LangTag != "" {
-			ret.Predicate += "." + v.LangTag
-		}
-	}
-	c = c.Parse(pWS)
-	if _c := c.Parse(pLabel); _c.Good() {
-		c = _c
-		ret.Label = c.Value().(string)
-		c = c.Parse(pWS)
-	}
-	c = c.Parse(pByte('.'))
-	return c.WithValue(ret)
-})
-
-var pInterNQuadWS = pPred(func(b byte) bool {
-	return unicode.IsSpace(rune(b))
-})
-
-var pNQuadsDoc = p.ParseFunc(func(c p.Context) p.Context {
-	c, vs := p.MinTimes{0, p.ParseFunc(func(c p.Context) p.Context {
-		c = c.Parse(p.MinTimes{0, pInterNQuadWS})
-		return c.Parse(pNQuadStatement)
-	})}.ParseValues(c)
-	var rv []NQuad
-	for _, v := range vs {
-		rv = append(rv, v.(NQuad))
-	}
-	return c.Parse(p.MinTimes{0, pInterNQuadWS}).WithValue(rv)
-})

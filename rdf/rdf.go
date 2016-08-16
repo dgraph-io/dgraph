@@ -34,24 +34,22 @@ func toUid(xid string, xidToUID map[string]uint64) (uid uint64, rerr error) {
 
 func Parse(line string) (rnq NQuad, err error) {
 	s := p.NewByteStream(bytes.NewBufferString(line))
-	c := p.NewContext(s).Parse(pNQuadStatement)
-	if c.Good() {
-		rnq = c.Value().(NQuad)
-	}
-	err = c.Err()
+	var nqp nQuadParser
+	s, err = p.ParseErr(s, &nqp)
+	rnq = NQuad(nqp)
 	return
 }
 
 func ParseDoc(doc string) (ret []NQuad, err error) {
 	s := p.NewByteStream(bytes.NewBufferString(doc))
-	c := p.NewContext(s).Parse(pNQuadsDoc)
-	ret = c.Value().([]NQuad)
-	err = c.Err()
+	var nqd nQuadsDoc
+	s, err = p.ParseErr(s, &nqd)
+	ret = nqd
 	if err != nil {
 		return
 	}
-	if c.Stream().Good() {
-		err = fmt.Errorf("trailing data at %s", c.Stream().Position())
+	if s.Good() {
+		err = fmt.Errorf("trailing data at %s", s.Position())
 	}
 	return
 }

@@ -277,7 +277,7 @@ func TestParse(t *testing.T) {
 			continue
 		}
 		if err != nil {
-			t.Errorf("unexpected error parsing %q: %s", err)
+			t.Errorf("unexpected parsing error: %s", err)
 			continue
 		}
 		if !reflect.DeepEqual(rnq, test.nq) {
