@@ -127,31 +127,23 @@ func Parse(line string) (rnq NQuad, rerr error) {
 	var vend bool
 	// We read items from the l.Items channel to which the lexer sends items.
 	for item := range l.Items {
-		if item.Typ == itemSubject {
+		switch item.Typ {
+		case itemSubject:
 			rnq.Subject = stripBracketsIfPresent(item.Val)
-			if rnq.Subject[0] == '*' {
-				return rnq, fmt.Errorf("Subject can't be *")
-			}
-		}
-		if item.Typ == itemPredicate {
+
+		case itemPredicate:
 			rnq.Predicate = stripBracketsIfPresent(item.Val)
-			if rnq.Predicate[0] == '*' {
-				return rnq, fmt.Errorf("Predicate can't be *")
-			}
-		}
-		if item.Typ == itemObject {
+
+		case itemObject:
 			rnq.ObjectId = stripBracketsIfPresent(item.Val)
-			if rnq.ObjectId[0] == '*' {
-				return rnq, fmt.Errorf("Object can't be *")
-			}
-		}
-		if item.Typ == itemLiteral {
+
+		case itemLiteral:
 			oval = item.Val
-		}
-		if item.Typ == itemLanguage {
+
+		case itemLanguage:
 			rnq.Predicate += "." + item.Val
-		}
-		if item.Typ == itemObjectType {
+
+		case itemObjectType:
 			// TODO: Strictly parse common types like integers, floats etc.
 			if len(oval) == 0 {
 				log.Fatalf(
@@ -159,24 +151,22 @@ func Parse(line string) (rnq NQuad, rerr error) {
 					line)
 			}
 			val := stripBracketsIfPresent(item.Val)
-			if val[0] == '*' {
-				return rnq, fmt.Errorf("Object type can't be *")
+			if strings.Trim(val, " ") == "*" {
+				return rnq, fmt.Errorf("itemObject can't be *")
 			}
 			oval += "@@" + val
-		}
-		if item.Typ == lex.ItemError {
+
+		case lex.ItemError:
 			return rnq, fmt.Errorf(item.Val)
-		}
-		if item.Typ == itemValidEnd {
+
+		case itemValidEnd:
 			vend = true
-		}
-		if item.Typ == itemLabel {
+
+		case itemLabel:
 			rnq.Label = stripBracketsIfPresent(item.Val)
-			if rnq.Label[0] == '*' {
-				return rnq, fmt.Errorf("Label can't be *")
-			}
 		}
 	}
+
 	if !vend {
 		return rnq, fmt.Errorf("Invalid end of input. Input: [%s]", line)
 	}
@@ -188,6 +178,10 @@ func Parse(line string) (rnq NQuad, rerr error) {
 	}
 	if len(rnq.ObjectId) == 0 && rnq.ObjectValue == nil {
 		return rnq, fmt.Errorf("No Object in NQuad. Input: [%s]", line)
+	}
+	if strings.Trim(rnq.Subject, " ") == "*" || strings.Trim(rnq.Predicate, " ") == "*" ||
+		strings.Trim(rnq.ObjectId, " ") == "*" || strings.Trim(rnq.Label, " ") == "*" {
+		return rnq, fmt.Errorf("IRI can't be *")
 	}
 
 	return rnq, nil

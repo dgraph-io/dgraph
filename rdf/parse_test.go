@@ -203,7 +203,15 @@ var testNQuads = []struct {
 		hasErr: true,
 	},
 	{
-		input:  `_:alice <knows> "stuff"^^<*> .`,
+		input:  `<alice> < * > "stuff" .`,
+		hasErr: true,
+	},
+	{
+		input:  `<alice> <*> "stuff" .`,
+		hasErr: true,
+	},
+	{
+		input:  `_:alice <knows> "stuff"^^< * > .`,
 		hasErr: true,
 	},
 	{
@@ -213,6 +221,16 @@ var testNQuads = []struct {
 			Predicate:   "knows",
 			ObjectId:    "",
 			ObjectValue: []byte("stuff@@xs:string"),
+		},
+		hasErr: false,
+	},
+	{
+		input: `<alice> <knows> "*" .`,
+		nq: NQuad{
+			Subject:     "alice",
+			Predicate:   "knows",
+			ObjectId:    "",
+			ObjectValue: []byte("*"),
 		},
 		hasErr: false,
 	},
