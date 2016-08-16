@@ -191,6 +191,10 @@ var testNQuads = []struct {
 		hasErr: true,
 	},
 	{
+		input:  `<alice> <knows> <*> .`,
+		hasErr: true,
+	},
+	{
 		input: `_:alice <knows> "stuff"^^<xs:string> .`,
 		nq: NQuad{
 			Subject:     "_:alice",

@@ -110,11 +110,14 @@ func (nq NQuad) ToEdgeUsing(
 }
 
 // This function is used to extract an IRI from an IRIREF.
-func stripBracketsIfPresent(val string) string {
-	if val[0] != '<' && val[len(val)-1] != '>' {
-		return val
+func stripBracketsIfPresent(val string) (string, error) {
+	if val[0] == '<' && val[len(val)-1] == '>' {
+		if val[1] == '*' {
+			return "", fmt.Errorf("Entity id can't be * for val :%v", val)
+		}
+		return val[1 : len(val)-1], nil
 	}
-	return val[1 : len(val)-1]
+	return val, nil
 }
 
 // Parse parses a mutation string and returns the NQuad representation for it.
@@ -125,16 +128,23 @@ func Parse(line string) (rnq NQuad, rerr error) {
 	go run(l)
 	var oval string
 	var vend bool
+	var err error
 	// We read items from the l.Items channel to which the lexer sends items.
 	for item := range l.Items {
 		if item.Typ == itemSubject {
-			rnq.Subject = stripBracketsIfPresent(item.Val)
+			if rnq.Subject, err = stripBracketsIfPresent(item.Val); err != nil {
+				return rnq, err
+			}
 		}
 		if item.Typ == itemPredicate {
-			rnq.Predicate = stripBracketsIfPresent(item.Val)
+			if rnq.Predicate, err = stripBracketsIfPresent(item.Val); err != nil {
+				return rnq, err
+			}
 		}
 		if item.Typ == itemObject {
-			rnq.ObjectId = stripBracketsIfPresent(item.Val)
+			if rnq.ObjectId, err = stripBracketsIfPresent(item.Val); err != nil {
+				return rnq, err
+			}
 		}
 		if item.Typ == itemLiteral {
 			oval = item.Val
@@ -149,7 +159,11 @@ func Parse(line string) (rnq NQuad, rerr error) {
 					"itemObject should be emitted before itemObjectType. Input: [%s]",
 					line)
 			}
-			oval += "@@" + stripBracketsIfPresent(item.Val)
+			var val string
+			if val, err = stripBracketsIfPresent(item.Val); err != nil {
+				return rnq, err
+			}
+			oval += "@@" + val
 		}
 		if item.Typ == lex.ItemError {
 			return rnq, fmt.Errorf(item.Val)
@@ -158,7 +172,9 @@ func Parse(line string) (rnq NQuad, rerr error) {
 			vend = true
 		}
 		if item.Typ == itemLabel {
-			rnq.Label = stripBracketsIfPresent(item.Val)
+			if rnq.Label, err = stripBracketsIfPresent(item.Val); err != nil {
+				return rnq, err
+			}
 		}
 	}
 	if !vend {
