@@ -1,0 +1,6 @@
+#!/bin/bash
+
+sh .git/hooks/golint.sh
+sh .git/hooks/govet.sh
+
+
