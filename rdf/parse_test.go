@@ -191,6 +191,22 @@ var testNQuads = []struct {
 		hasErr: true,
 	},
 	{
+		input:  `<alice> <knows> <*> .`,
+		hasErr: true,
+	},
+	{
+		input:  `<*> <knows> "stuff" .`,
+		hasErr: true,
+	},
+	{
+		input:  `<alice> <*> "stuff" .`,
+		hasErr: true,
+	},
+	{
+		input:  `_:alice <knows> "stuff"^^<*> .`,
+		hasErr: true,
+	},
+	{
 		input: `_:alice <knows> "stuff"^^<xs:string> .`,
 		nq: NQuad{
 			Subject:     "_:alice",
@@ -247,6 +263,10 @@ var testNQuads = []struct {
 	},
 	{
 		input:  `_:alice <knows> "stuff"^^<xs:string> quad .`,
+		hasErr: true,
+	},
+	{
+		input:  `_:alice <knows> "stuff"^^<xs:string> <*> .`,
 		hasErr: true,
 	},
 	{

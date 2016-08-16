@@ -129,12 +129,21 @@ func Parse(line string) (rnq NQuad, rerr error) {
 	for item := range l.Items {
 		if item.Typ == itemSubject {
 			rnq.Subject = stripBracketsIfPresent(item.Val)
+			if rnq.Subject[0] == '*' {
+				return rnq, fmt.Errorf("Subject can't be *")
+			}
 		}
 		if item.Typ == itemPredicate {
 			rnq.Predicate = stripBracketsIfPresent(item.Val)
+			if rnq.Predicate[0] == '*' {
+				return rnq, fmt.Errorf("Predicate can't be *")
+			}
 		}
 		if item.Typ == itemObject {
 			rnq.ObjectId = stripBracketsIfPresent(item.Val)
+			if rnq.ObjectId[0] == '*' {
+				return rnq, fmt.Errorf("Object can't be *")
+			}
 		}
 		if item.Typ == itemLiteral {
 			oval = item.Val
@@ -149,7 +158,11 @@ func Parse(line string) (rnq NQuad, rerr error) {
 					"itemObject should be emitted before itemObjectType. Input: [%s]",
 					line)
 			}
-			oval += "@@" + stripBracketsIfPresent(item.Val)
+			val := stripBracketsIfPresent(item.Val)
+			if val[0] == '*' {
+				return rnq, fmt.Errorf("Object type can't be *")
+			}
+			oval += "@@" + val
 		}
 		if item.Typ == lex.ItemError {
 			return rnq, fmt.Errorf(item.Val)
@@ -159,6 +172,9 @@ func Parse(line string) (rnq NQuad, rerr error) {
 		}
 		if item.Typ == itemLabel {
 			rnq.Label = stripBracketsIfPresent(item.Val)
+			if rnq.Label[0] == '*' {
+				return rnq, fmt.Errorf("Label can't be *")
+			}
 		}
 	}
 	if !vend {
