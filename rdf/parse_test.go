@@ -143,6 +143,10 @@ var testNQuads = []struct {
 		hasErr: true,
 	},
 	{
+		input:  "<alice> <knows> .",
+		hasErr: true,
+	},
+	{
 		input:  "_uid_: 0x01 <knows> <something> .",
 		hasErr: true,
 	},
@@ -180,6 +184,10 @@ var testNQuads = []struct {
 	},
 	{
 		input:  `_:alice <knows> "stuff"^^xs:string .`,
+		hasErr: true,
+	},
+	{
+		input:  `<alice> <knows> * .`,
 		hasErr: true,
 	},
 	{
