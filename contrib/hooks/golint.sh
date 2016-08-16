@@ -11,7 +11,7 @@ if [ -z "$(which golint)" ]; then
 fi
 
 # This script does not handle file names that contain spaces.
-gofiles=$(git diff --cached --name-only --diff-filter=ACM | grep '\.go$')
+gofiles=$(git diff --cached --name-only --diff-filter=ACM | grep '\.go$' | grep -v '^vendor/')
 
 errors=
 

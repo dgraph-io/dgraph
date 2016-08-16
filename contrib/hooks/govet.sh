@@ -17,7 +17,7 @@ if [ -z "$GOPATH" ]; then
 fi
 
 # This script does not handle file names that contain spaces.
-gofiles=$(git diff --cached --name-only --diff-filter=ACM | grep '\.go$')
+gofiles=$(git diff --cached --name-only --diff-filter=ACM | grep '\.go$' | grep -v '^vendor/')
 
 # If any checks are found to be useless, they can be disabled here.
 # See the output of "go tool vet" for a list of flags.
