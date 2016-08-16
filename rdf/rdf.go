@@ -45,11 +45,5 @@ func ParseDoc(doc string) (ret []NQuad, err error) {
 	var nqd nQuadsDoc
 	s, err = p.ParseErr(s, &nqd)
 	ret = nqd
-	if err != nil {
-		return
-	}
-	if s.Good() {
-		err = fmt.Errorf("trailing data at %s", s.Position())
-	}
 	return
 }

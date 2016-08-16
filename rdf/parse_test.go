@@ -21,6 +21,9 @@ import (
 	"testing"
 
 	"github.com/bradfitz/iter"
+	"github.com/stretchr/testify/assert"
+
+	p "github.com/dgraph-io/dgraph/parser"
 )
 
 var testNQuads = []struct {
@@ -264,24 +267,31 @@ var testNQuads = []struct {
 			ObjectValue: []byte(`mov"enpick`),
 		},
 	},
+	{
+		input: "<universe> <answer> \"42\"@en .",
+		nq: NQuad{
+			Subject:     "universe",
+			Predicate:   "answer.en",
+			ObjectValue: []byte("42"),
+		},
+	},
 }
 
 func TestParse(t *testing.T) {
 	for _, test := range testNQuads {
-		rnq, err := Parse(test.input)
 		t.Logf("parsing %q", test.input)
+		rnq, err := Parse(test.input)
 		if test.hasErr {
 			if err == nil {
 				t.Errorf("expected error parsing %q", test.input)
 			}
-			continue
-		}
-		if err != nil {
-			t.Errorf("unexpected parsing error: %s", err)
-			continue
-		}
-		if !reflect.DeepEqual(rnq, test.nq) {
-			t.Errorf("\nexpected: %#v\ngot     : %#v", test.nq, rnq)
+		} else {
+			if err != nil {
+				t.Errorf("unexpected parsing error: %s", err)
+			}
+			if !reflect.DeepEqual(rnq, test.nq) {
+				t.Errorf("\nexpected: %#v\ngot     : %#v", test.nq, rnq)
+			}
 		}
 	}
 }
@@ -295,4 +305,8 @@ func BenchmarkParse(b *testing.B) {
 			Parse(tc.input)
 		}
 	}
+}
+
+func TestParserName(t *testing.T) {
+	assert.Equal(t, "literal", p.ParserName(&literal{}))
 }

@@ -19,11 +19,16 @@ type parseDocTestCase struct {
 }
 
 func testParseDoc(t *testing.T, tc parseDocTestCase) {
+	t.Logf("parsing %q", tc.Input)
 	ret, err := ParseDoc(tc.Input)
 	if tc.Err {
-		assert.Error(t, err)
-	} else {
-		assert.NoError(t, err)
+		if err != nil {
+			t.Logf("got error %s", err)
+		} else {
+			t.Error("expected error but got none")
+		}
+	} else if err != nil {
+		t.Errorf("got unexpected error: %s", err)
 	}
 	assert.EqualValues(t, tc.Output, ret)
 }

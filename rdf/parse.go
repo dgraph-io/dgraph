@@ -1,6 +1,7 @@
 package rdf
 
 import (
+	"errors"
 	"fmt"
 	"unicode"
 
@@ -64,7 +65,7 @@ func (me *eChar) Parse(s p.Stream) p.Stream {
 	if !s.Good() {
 		panic(p.SyntaxError{s, s.Err()})
 	}
-	b := s.Token()
+	b := s.Token().(byte)
 	// ECHAR ::= '\' [tbnrf"'\]
 	switch b {
 	case 't':
@@ -123,19 +124,22 @@ func (l *literal) Parse(s p.Stream) p.Stream {
 		langTag langTag
 		iriRef  iriRef
 	)
-	var i int
-	s, i = p.OneOf(s,
-		&langTag,
-		p.ParseFunc(func(s p.Stream) p.Stream {
-			s = pBytes(s, "^^")
-			return p.Parse(s, &iriRef)
-		}))
-	switch i {
-	case 0:
-		l.LangTag = string(langTag)
-	case 1:
-		l.Value += "@@" + string(iriRef)
-	}
+	s = p.Maybe(s, p.ParseFunc(func(s p.Stream) p.Stream {
+		s, i := p.OneOf(s,
+			&langTag,
+			p.ParseFunc(func(s p.Stream) p.Stream {
+				s = pBytes(s, "^^")
+				return p.Parse(s, &iriRef)
+			}),
+		)
+		switch i {
+		case 0:
+			l.LangTag = string(langTag)
+		case 1:
+			l.Value += "@@" + string(iriRef)
+		}
+		return s
+	}))
 	return s
 }
 
@@ -181,6 +185,9 @@ func (me *langTag) Parse(s p.Stream) p.Stream {
 		pred: func(b byte) bool { return unicode.IsLetter(rune(b)) },
 	}
 	s = p.Parse(s, &bw)
+	if len(bw.b) < 1 {
+		panic(p.SyntaxError{s, errors.New("require at least one letter")})
+	}
 	bw.pred = func(b byte) bool {
 		return b == '-' || unicode.IsLetter(rune(b)) || unicode.IsNumber(rune(b))
 	}
@@ -265,19 +272,12 @@ func (me *nQuadParser) Parse(s p.Stream) p.Stream {
 		label label
 	)
 	s = p.Parse(s, &sub)
+	me.Subject = string(sub)
 	betweenNQuadFields(&s)
 	s = p.Parse(s, &pred)
+	me.Predicate = string(pred.iriRef)
 	betweenNQuadFields(&s)
 	s = p.Parse(s, &obj)
-	betweenNQuadFields(&s)
-	s = p.Maybe(s, p.ParseFunc(func(s p.Stream) p.Stream {
-		s = p.Parse(s, &label)
-		betweenNQuadFields(&s)
-		return s
-	}))
-	s = pByte(s, '.')
-	me.Subject = string(sub)
-	me.Predicate = string(pred.iriRef)
 	me.ObjectId = obj.Id
 	if obj.Literal.Value != "" {
 		me.ObjectValue = []byte(obj.Literal.Value)
@@ -285,17 +285,21 @@ func (me *nQuadParser) Parse(s p.Stream) p.Stream {
 	if obj.Literal.LangTag != "" {
 		me.Predicate += "." + obj.Literal.LangTag
 	}
-	me.Label = string(label.subject)
+	betweenNQuadFields(&s)
+	s = p.Maybe(s, p.ParseFunc(func(s p.Stream) p.Stream {
+		s = p.Parse(s, &label)
+		me.Label = string(label.subject)
+		betweenNQuadFields(&s)
+		return s
+	}))
+	s = pByte(s, '.')
 	return s
 }
 
 func discardWhitespace(s *p.Stream) {
-	for (*s).Good() {
-		if !unicode.IsSpace(rune((*s).Token().(byte))) {
-			break
-		}
-		(*s) = (*s).Next()
-	}
+	discardWhilePred(s, func(b byte) bool {
+		return unicode.IsSpace(rune(b))
+	})
 }
 
 func betweenNQuadFields(s *p.Stream) {
@@ -319,13 +323,20 @@ func discardWhilePred(s *p.Stream, pred func(byte) bool) {
 type nQuadsDoc []NQuad
 
 func (me *nQuadsDoc) Parse(s p.Stream) p.Stream {
-	s, _ = p.Star(s, p.ParseFunc(func(s p.Stream) p.Stream {
+	var err error
+	for {
 		discardWhitespace(&s)
 		var nqp nQuadParser
-		s = p.Parse(s, &nqp)
+		var s1 p.Stream
+		s1, err = p.ParseErr(s, &nqp)
+		if err != nil {
+			break
+		}
 		*me = append(*me, NQuad(nqp))
-		return s
-	}))
-	discardWhitespace(&s)
+		s = s1
+	}
+	if s.Good() {
+		panic(p.SyntaxError{s, err})
+	}
 	return s
 }

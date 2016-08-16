@@ -1,6 +1,19 @@
 package parser
 
-import "testing"
+import (
+	"testing"
 
-func TestParser(t *testing.T) {
+	"github.com/stretchr/testify/assert"
+)
+
+type someParser struct{}
+
+func (*someParser) Parse(Stream) Stream {
+	return nil
+}
+
+func TestParserName(t *testing.T) {
+	p := ParseFunc(func(Stream) Stream { return nil })
+	assert.Equal(t, "ParseFunc", ParserName(p))
+	assert.Equal(t, "someParser", ParserName(&someParser{}))
 }

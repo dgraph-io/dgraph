@@ -1,8 +1,8 @@
 package parser
 
 import (
-	"errors"
 	"fmt"
+	"reflect"
 )
 
 func Plus(s Stream, p Parser) (Stream, []Value) {
@@ -54,7 +54,33 @@ func ParseErr(s Stream, p Parser) (_s Stream, err error) {
 	return
 }
 
+func ParserName(p Parser) string {
+	t := reflect.ValueOf(p).Type()
+	if t.Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
+	if t.Name() == "" {
+		panic(p)
+	}
+	return t.Name()
+}
+
+func recoverSyntaxError(f func(SyntaxError)) {
+	r := recover()
+	if r == nil {
+		return
+	}
+	se, ok := r.(SyntaxError)
+	if !ok {
+		panic(r)
+	}
+	f(se)
+}
+
 func Parse(s Stream, p Parser) Stream {
+	defer recoverSyntaxError(func(se SyntaxError) {
+		panic(SyntaxError{s, fmt.Errorf("while parsing %q at %s: %s", ParserName(p), s.Position(), se.Err)})
+	})
 	return p.Parse(s)
 }
 
@@ -67,7 +93,7 @@ func OneOf(s Stream, ps ...Parser) (Stream, int) {
 			return s1, i
 		}
 	}
-	panic(SyntaxError{s, errors.New("no match in one of")})
+	panic(SyntaxError{s, fmt.Errorf("couldn't match one of %s", ps)})
 }
 
 type ParseFunc func(Stream) Stream
