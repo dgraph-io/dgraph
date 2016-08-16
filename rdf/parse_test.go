@@ -269,6 +269,7 @@ var testNQuads = []struct {
 func TestParse(t *testing.T) {
 	for _, test := range testNQuads {
 		rnq, err := Parse(test.input)
+		t.Logf("parsing %q", test.input)
 		if test.hasErr {
 			if err == nil {
 				t.Errorf("expected error parsing %q", test.input)
