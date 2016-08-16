@@ -163,10 +163,10 @@
 			"revisionTime": "2016-06-24T20:21:16Z"
 		},
 		{
-			"checksumSHA1": "h/4MgY+Mz/K20Hce+QAD64y4Y58=",
+			"checksumSHA1": "MhC4FXm/VNmBQoVvlZrBV85rRrY=",
 			"path": "google.golang.org/grpc/transport",
-			"revision": "c2781963b3af261a37e0f14fdcb7c1fa13259e1f",
-			"revisionTime": "2016-08-15T21:45:04Z"
+			"revision": "0eb7c5dcd059d77bde1eb5bc7d953940170d0d18",
+			"revisionTime": "2016-06-24T20:21:16Z"
 		}
 	],
 	"rootPath": "github.com/dgraph-io/dgraph"
