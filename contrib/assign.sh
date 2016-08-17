@@ -28,13 +28,16 @@ popd &> /dev/null
 
 git clone https://github.com/dgraph-io/benchmarks.git
 benchmark=$(pwd)/data
-
+echo $(pwd)
+echo $benchmark
 popd &> /dev/null
+echo $(pwd)
 
 # Run the assigner.
-dgraphcmd=$GOPATH/src/dgraph-io/dgraph/cmd/
+dgraphcmd=$GOPATH/src/dgraph-io/dgraph/cmd
 
 pushd $dgraphcmd/dgraphassigner &> /dev/null
+echo $(pwd)
 
 go build .
 
