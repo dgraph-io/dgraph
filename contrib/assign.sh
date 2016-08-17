@@ -8,7 +8,7 @@ if [ -z "$1" ]; then
 	  BUILD=$SRC/build
 fi
 
-ROCKSDBDIR=$BUILD/rocksdb-${ROCKSDBVER}
+ROCKSDBDIR=$BUILD/rocksdb-4.2
 
 set -e
 
