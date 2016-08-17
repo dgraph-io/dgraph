@@ -9,6 +9,18 @@
 			"revisionTime": "2015-10-07T14:14:16Z"
 		},
 		{
+			"checksumSHA1": "lPfCUV/SDqdG2cHcdJcvs44Cwo4=",
+			"path": "github.com/anacrolix/envpprof",
+			"revision": "0383bfe017e02efb418ffd595fc54777a35e48b0",
+			"revisionTime": "2016-05-28T12:03:20Z"
+		},
+		{
+			"checksumSHA1": "c1lrLhhegA7fiaMWAmTXKTWHvmY=",
+			"path": "github.com/bradfitz/iter",
+			"revision": "454541ec3da2a73fc34fd049b19ee5777bf19345",
+			"revisionTime": "2014-01-24T04:19:15Z"
+		},
+		{
 			"checksumSHA1": "6cHn7qM5LA4k8teHz7m3LubWTLI=",
 			"path": "github.com/cockroachdb/c-jemalloc",
 			"revision": "9716a86928311cee3633f1773035ce9f0cf9f9e9",
@@ -37,6 +49,13 @@
 			"tree": true
 		},
 		{
+			"checksumSHA1": "5rPfda8jFccr3A6heL+JAmi9K9g=",
+			"origin": "github.com/stretchr/testify/vendor/github.com/davecgh/go-spew/spew",
+			"path": "github.com/davecgh/go-spew/spew",
+			"revision": "d77da356e56a7428ad25149ca77381849a6a5232",
+			"revisionTime": "2016-06-15T09:26:46Z"
+		},
+		{
 			"checksumSHA1": "a29TtOU87eZA0S6wL+rAkpqUEzc=",
 			"path": "github.com/dgryski/go-farm",
 			"revision": "d1e51a4af19092715f4ce7d8257fe5bc8f8be727",
@@ -59,6 +78,25 @@
 			"path": "github.com/google/flatbuffers/go",
 			"revision": "fc19f746b02cd12d4586c56b0695d4601a66559f",
 			"revisionTime": "2016-07-26T03:44:33Z"
+		},
+		{
+			"checksumSHA1": "aruaEo5weL1eV12UZJcfXO5Gy9g=",
+			"path": "github.com/joeshaw/gengen/generic",
+			"revision": "a91064a26cca4fa203f59a9b3b0ce850de1c3e16",
+			"revisionTime": "2016-01-25T19:18:09Z"
+		},
+		{
+			"checksumSHA1": "zKKp5SZ3d3ycKe4EKMNT0BqAWBw=",
+			"origin": "github.com/stretchr/testify/vendor/github.com/pmezard/go-difflib/difflib",
+			"path": "github.com/pmezard/go-difflib/difflib",
+			"revision": "d77da356e56a7428ad25149ca77381849a6a5232",
+			"revisionTime": "2016-06-15T09:26:46Z"
+		},
+		{
+			"checksumSHA1": "iydUphwYqZRq3WhstEdGsbvBAKs=",
+			"path": "github.com/stretchr/testify/assert",
+			"revision": "d77da356e56a7428ad25149ca77381849a6a5232",
+			"revisionTime": "2016-06-15T09:26:46Z"
 		},
 		{
 			"checksumSHA1": "W1EGygayPbG7X+UK13VHKl0XOy8=",
