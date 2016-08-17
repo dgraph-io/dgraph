@@ -26,8 +26,8 @@ fi
 
 if [ ! -d "benchmarks" ]; then
   git clone https://github.com/dgraph-io/benchmarks.git
-  benchmark=$(pwd)/benchmarks/data
 fi
+benchmark=$(pwd)/benchmarks/data
 popd &> /dev/null
 # We are back in the Dgraph repo.
 
