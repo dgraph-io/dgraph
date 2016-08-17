@@ -90,6 +90,9 @@ import (
  * Return errors, if any.
  */
 
+// Latency is used to keep track of the latency involved in parsing and processing
+// the query. It also contains information about the time it took to convert the
+// result into a format(JSON/Protocol Buffer) that the client expects.
 type Latency struct {
 	Start          time.Time     `json:"-"`
 	Parsing        time.Duration `json:"query_parsing"`
@@ -98,6 +101,7 @@ type Latency struct {
 	ProtocolBuffer time.Duration `json:"pb_conversion"`
 }
 
+// ToMap converts the latency object to a map.
 func (l *Latency) ToMap() map[string]string {
 	m := make(map[string]string)
 	j := time.Since(l.Start) - l.Processing - l.Parsing
@@ -259,6 +263,8 @@ func postTraverse(g *SubGraph) (result map[uint64]interface{}, rerr error) {
 	return result, nil
 }
 
+// ToJson converts the internal subgraph object to JSON format which is then sent
+// to the HTTP client.
 func (g *SubGraph) ToJson(l *Latency) (js []byte, rerr error) {
 	r, err := postTraverse(g)
 	if err != nil {
@@ -400,7 +406,7 @@ func (g *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 	return nil
 }
 
-// This method transforms the predicate based subgraph to an
+// ToProtocolBuffer method transforms the predicate based subgraph to an
 // predicate-entity based protocol buffer subgraph.
 func (g *SubGraph) ToProtocolBuffer(l *Latency) (n *graph.Node, rerr error) {
 	n = &graph.Node{}
@@ -462,6 +468,7 @@ func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
 	return nil
 }
 
+// ToSubGraph converts the GraphQuery into the internal SubGraph instance type.
 func ToSubGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	sg, err := newGraph(ctx, gq)
 	if err != nil {
@@ -478,7 +485,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	if len(exid) > 0 {
 		xidToUid := make(map[string]uint64)
 		xidToUid[exid] = 0
-		if err := worker.GetOrAssignUidsOverNetwork(ctx, &xidToUid); err != nil {
+		if err := worker.GetOrAssignUidsOverNetwork(ctx, xidToUid); err != nil {
 			x.Trace(ctx, "Error while getting uids over network: %v", err)
 			return nil, err
 		}
@@ -548,7 +555,7 @@ func createTaskQuery(sg *SubGraph, sorted []uint64) []byte {
 	task.QueryAddUids(b, vend)
 	task.QueryAddCount(b, int32(sg.Count))
 	task.QueryAddOffset(b, int32(sg.Offset))
-	task.QueryAddAfterUid(b, uint64(sg.AfterUid))
+	task.QueryAddAfterUid(b, sg.AfterUid)
 	task.QueryAddGetCount(b, sg.GetCount)
 
 	qend := task.QueryEnd(b)
@@ -602,7 +609,7 @@ func sortedUniqueUids(r *task.Result) (sorted []uint64, rerr error) {
 
 		} else {
 			uid := lc.TList.Uids(lc.Idx)
-			lc.Idx += 1
+			lc.Idx++
 
 			me.Uid = uid
 			(*h)[0] = me
@@ -612,6 +619,8 @@ func sortedUniqueUids(r *task.Result) (sorted []uint64, rerr error) {
 	return sorted, nil
 }
 
+// ProcessGraph processes the SubGraph instance accumulating result for the query
+// from different instances.
 func ProcessGraph(ctx context.Context, sg *SubGraph, rch chan error) {
 	var err error
 	if len(sg.Query) > 0 && !sg.IsRoot {

@@ -1,0 +1,4 @@
+#!/bin/bash
+
+echo -e "\nRunning tests for you"
+go test $(go list github.com/dgraph-io/dgraph/...| grep -v vendor)

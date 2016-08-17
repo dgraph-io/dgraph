@@ -26,6 +26,14 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
+const (
+	_xid_ = "_xid_"
+	_uid_ = "_uid_"
+)
+
+// ProcessTaskOverNetwork is used to process the query and get the result from
+// the instance which stores posting list corresponding to the predicate in the
+// query.
 func ProcessTaskOverNetwork(ctx context.Context, qu []byte) (result []byte, rerr error) {
 	uo := flatbuffers.GetUOffsetT(qu)
 	q := new(task.Query)
@@ -35,7 +43,8 @@ func ProcessTaskOverNetwork(ctx context.Context, qu []byte) (result []byte, rerr
 	idx := farm.Fingerprint64([]byte(attr)) % numInstances
 
 	var runHere bool
-	if attr == "_xid_" || attr == "_uid_" {
+	// Posting list with xid -> uid and uid -> xid mapping is stored on instance 0.
+	if attr == _xid_ || attr == _uid_ {
 		idx = 0
 		runHere = (instanceIdx == 0)
 	} else {
@@ -50,6 +59,7 @@ func ProcessTaskOverNetwork(ctx context.Context, qu []byte) (result []byte, rerr
 		return processTask(qu)
 	}
 
+	// Using a worker client for the instance idx, we get the result of the query.
 	pool := pools[idx]
 	addr := pool.Addr
 	query := new(Payload)
@@ -72,6 +82,7 @@ func ProcessTaskOverNetwork(ctx context.Context, qu []byte) (result []byte, rerr
 	return reply.Data, nil
 }
 
+// processTask processes the query, accumulates and returns the result.
 func processTask(query []byte) (result []byte, rerr error) {
 	uo := flatbuffers.GetUOffsetT(query)
 	q := new(task.Query)
@@ -79,7 +90,7 @@ func processTask(query []byte) (result []byte, rerr error) {
 
 	attr := string(q.Attr())
 	store := dataStore
-	if attr == "_xid_" {
+	if attr == _xid_ {
 		store = uidStore
 	}
 
@@ -91,9 +102,12 @@ func processTask(query []byte) (result []byte, rerr error) {
 	for i := 0; i < q.UidsLength(); i++ {
 		uid := q.Uids(i)
 		key := posting.Key(uid, attr)
+		// Get or create the posting list for an entity, attribute combination.
 		pl := posting.GetOrCreate(key, store)
 
 		var valoffset flatbuffers.UOffsetT
+		// If a posting list contains a value, we store that or else we store a nil
+		// byte so that processing is consistent later.
 		if val, err := pl.Value(); err != nil {
 			valoffset = b.CreateByteVector(x.Nilbyte)
 		} else {
@@ -106,13 +120,13 @@ func processTask(query []byte) (result []byte, rerr error) {
 		if q.GetCount() == 1 {
 			count := uint64(pl.Length())
 			counts = append(counts, count)
-			// Add an emty UID list to make later processing consistent
+			// Add an empty UID list to make later processing consistent
 			uoffsets[i] = x.UidlistOffset(b, []uint64{})
 		} else {
 			opts := posting.ListOptions{
-				int(q.Offset()),
-				int(q.Count()),
-				uint64(q.AfterUid()),
+				Offset:   int(q.Offset()),
+				Count:    int(q.Count()),
+				AfterUid: uint64(q.AfterUid()),
 			}
 			ulist := pl.Uids(opts)
 			uoffsets[i] = x.UidlistOffset(b, ulist)

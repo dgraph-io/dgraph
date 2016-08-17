@@ -22,8 +22,10 @@ import "github.com/dgraph-io/dgraph/lex"
 const (
 	leftCurl     = '{'
 	rightCurl    = '}'
+	period       = '.'
 	queryMode    = 1
 	mutationMode = 2
+	fragmentMode = 3
 )
 
 // Constants representing type of different graphql lexed items.
@@ -41,6 +43,7 @@ const (
 	itemArgVal                                  // argument val
 	itemMutationOp                              // mutation operation
 	itemMutationContent                         // mutation content
+	itemFragmentSpread                          // three dots and name
 )
 
 // lexText lexes the input string and calls other lex functions.
@@ -57,8 +60,8 @@ Loop:
 			if l.Mode == mutationMode {
 				return lexInsideMutation
 			}
+			// Both queryMode and fragmentMode are handled by lexInside.
 			return lexInside
-
 		case r == rightCurl:
 			return l.Errorf("Too many right characters")
 		case r == lex.EOF:
@@ -80,6 +83,13 @@ Loop:
 func lexInside(l *lex.Lexer) lex.StateFn {
 	for {
 		switch r := l.Next(); {
+		case r == period:
+			if l.Next() == period && l.Next() == period {
+				return lexFragmentSpread
+			}
+			// We do not expect a period at all. If you do, you may want to
+			// backup the two extra periods we try to read.
+			return l.Errorf("Unrecognized character in lexInside: %#U", r)
 		case r == rightCurl:
 			l.Depth--
 			l.Emit(itemRightCurl)
@@ -105,6 +115,19 @@ func lexInside(l *lex.Lexer) lex.StateFn {
 			return l.Errorf("Unrecognized character in lexInside: %#U", r)
 		}
 	}
+}
+
+func lexFragmentSpread(l *lex.Lexer) lex.StateFn {
+	for {
+		r := l.Next()
+		if isNameSuffix(r) {
+			continue
+		}
+		l.Backup()
+		l.Emit(itemFragmentSpread)
+		break
+	}
+	return lexInside
 }
 
 func lexName(l *lex.Lexer) lex.StateFn {
@@ -214,6 +237,9 @@ func lexOperationType(l *lex.Lexer) lex.StateFn {
 		if word == "mutation" {
 			l.Emit(itemOpType)
 			l.Mode = mutationMode
+		} else if word == "fragment" {
+			l.Emit(itemOpType)
+			l.Mode = fragmentMode
 		} else if word == "query" {
 			l.Emit(itemOpType)
 			l.Mode = queryMode

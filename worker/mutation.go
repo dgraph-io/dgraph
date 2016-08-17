@@ -57,6 +57,8 @@ func (m *Mutations) Decode(data []byte) error {
 	return dec.Decode(m)
 }
 
+// runMutations goes through all the edges and applies them. It returns the
+// mutations which were not applied in left.
 func runMutations(ctx context.Context, edges []x.DirectedEdge, op byte, left *Mutations) error {
 	for _, edge := range edges {
 		if farm.Fingerprint64(
@@ -79,6 +81,7 @@ func runMutations(ctx context.Context, edges []x.DirectedEdge, op byte, left *Mu
 	return nil
 }
 
+// mutate runs the set and delete mutations.
 func mutate(ctx context.Context, m *Mutations, left *Mutations) error {
 	// Running the set instructions first.
 	if err := runMutations(ctx, m.Set, posting.Set, left); err != nil {
@@ -90,10 +93,12 @@ func mutate(ctx context.Context, m *Mutations, left *Mutations) error {
 	return nil
 }
 
+// runMutate is used to run the mutations on an instance.
 func runMutate(ctx context.Context, idx int, m *Mutations,
 	replies chan *Payload, che chan error) {
 	left := new(Mutations)
 	var err error
+	// We run them locally if idx == instanceIdx
 	if idx == int(instanceIdx) {
 		if err = mutate(ctx, m, left); err != nil {
 			che <- err
@@ -110,6 +115,7 @@ func runMutate(ctx context.Context, idx int, m *Mutations,
 		return
 	}
 
+	// Get a connection from the pool and run mutations over the network.
 	pool := pools[idx]
 	query := new(Payload)
 	query.Data, err = m.Encode()
@@ -135,6 +141,8 @@ func runMutate(ctx context.Context, idx int, m *Mutations,
 	che <- nil
 }
 
+// addToMutationArray adds the edges to the appropriate index in the mutationArray,
+// taking into account the op(operation) and the attribute.
 func addToMutationArray(mutationArray []*Mutations, edges []x.DirectedEdge, op string) {
 	for _, edge := range edges {
 		idx := farm.Fingerprint64([]byte(edge.Attribute)) % numInstances
@@ -172,6 +180,7 @@ func MutateOverNetwork(ctx context.Context, m Mutations) (left Mutations, rerr e
 	}
 
 	// Wait for all the goroutines to reply back.
+	// We return if an error was returned or the parent called ctx.Done()
 	for i := 0; i < count; i++ {
 		select {
 		case err := <-errors:
@@ -186,6 +195,7 @@ func MutateOverNetwork(ctx context.Context, m Mutations) (left Mutations, rerr e
 	close(replies)
 	close(errors)
 
+	// Any mutations which weren't applied are added to left which is returned.
 	for reply := range replies {
 		l := new(Mutations)
 		if err := l.Decode(reply.Data); err != nil {
