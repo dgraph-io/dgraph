@@ -246,7 +246,7 @@ func TestGetUid(t *testing.T) {
 		}
 	`
 	mp := processToJson(t, query)
-	resp := mp["me"].([]interface{})[0]
+	resp := mp["me"]
 	uid := resp.(map[string]interface{})["_uid_"].(string)
 	if uid != "0x1" {
 		t.Errorf("Expected uid 0x01. Got %s", uid)
@@ -272,7 +272,7 @@ func TestDebug1(t *testing.T) {
 	`
 
 	mp := processToJson(t, query)
-	resp := mp["debug"].([]interface{})[0]
+	resp := mp["debug"]
 	uid := resp.(map[string]interface{})["_uid_"].(string)
 	if uid != "0x1" {
 		t.Errorf("Expected uid 0x1. Got %s", uid)
@@ -297,7 +297,7 @@ func TestDebug2(t *testing.T) {
 	`
 
 	mp := processToJson(t, query)
-	resp := mp["me"].([]interface{})[0]
+	resp := mp["me"]
 	uid, ok := resp.(map[string]interface{})["_uid_"].(string)
 	if ok {
 		t.Errorf("No uid expected but got one %s", uid)
@@ -324,7 +324,7 @@ func TestCount(t *testing.T) {
 	`
 
 	mp := processToJson(t, query)
-	resp := mp["me"].([]interface{})[0]
+	resp := mp["me"]
 	friend := resp.(map[string]interface{})["friend"]
 	count := int(friend.(map[string]interface{})["_count_"].(float64))
 	if count != 5 {
