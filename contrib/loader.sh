@@ -24,5 +24,5 @@ export LD_LIBRARY_PATH="${ROCKSDBDIR}:${LD_LIBRARY_PATH}"
 pushd cmd/dgraphloader &> /dev/null
 go build .
 mkdir -p ~/dgraph/p
-./dgraphloader --numInstances 1 --instanceIdx 0 --rdfgzips $benchmark/actor-director.gz --uids ~/dgraph/u --postings ~/dgraph/p
+./dgraphloader --numInstances 1 --instanceIdx 0 --rdfgzips $benchmark/actor-director.gz --uids ~/dgraph/u --postings ~/dgraph/p --stw_ram_mb 6000
 popd &> /dev/null
