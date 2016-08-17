@@ -40,6 +40,6 @@ pushd cmd/dgraphassigner &> /dev/null
 go build .
 
 mkdir -p ~/dgraph/u
-./dgraphassigner --numInstances 1 --instanceIdx 0 --rdfgzips $benchmark/rdf-films.gz,$benchmark/names.gz --uids ~/dgraph/u
+./dgraphassigner --numInstances 1 --instanceIdx 0 --rdfgzips $benchmark/actor-director.gz --uids ~/dgraph/u
 
 popd &> /dev/null
