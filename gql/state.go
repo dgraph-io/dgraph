@@ -23,6 +23,8 @@ const (
 	leftCurl     = '{'
 	rightCurl    = '}'
 	period       = '.'
+	bang         = '!'
+	dollar       = '$'
 	queryMode    = 1
 	mutationMode = 2
 	fragmentMode = 3
@@ -44,6 +46,7 @@ const (
 	itemMutationOp                              // mutation operation
 	itemMutationContent                         // mutation content
 	itemFragmentSpread                          // three dots and name
+	itemVariable                                // dollar followed by a name
 )
 
 // lexText lexes the input string and calls other lex functions.
@@ -247,6 +250,27 @@ func lexOperationType(l *lex.Lexer) lex.StateFn {
 		break
 	}
 	return lexText
+}
+
+func lexVariables(l *lex.Lexer) lex.StateFn {
+	for {
+		switch r := l.Next(); {
+		case r == lex.EOF:
+			return l.Errorf("unclosed argument")
+		case isSpace(r) || isEndOfLine(r):
+			l.Ignore()
+		case isDollar(r):
+			return lexArgName
+		case r == ':':
+			l.Ignore()
+			return lexVarType
+		case r == ')':
+			l.Emit(itemRightRound)
+			return lexText
+		case r == ',':
+			l.Ignore()
+		}
+	}
 }
 
 // lexArgInside is used to lex the arguments inside ().
