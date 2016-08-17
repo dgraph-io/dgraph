@@ -1,4 +1,4 @@
-package parser
+package parsing
 
 import "github.com/joeshaw/gengen/generic"
 

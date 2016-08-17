@@ -23,7 +23,7 @@ import (
 	"github.com/bradfitz/iter"
 	"github.com/stretchr/testify/assert"
 
-	p "github.com/dgraph-io/dgraph/parser"
+	p "github.com/dgraph-io/dgraph/parsing"
 )
 
 var testNQuads = []struct {
