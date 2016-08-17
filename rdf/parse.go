@@ -49,11 +49,14 @@ func (me *object) Parse(s p.Stream) p.Stream {
 
 func pByte(s p.Stream, b byte) p.Stream {
 	if !s.Good() {
-		panic(p.SyntaxError{s, s.Err()})
+		panic(p.NewSyntaxError(p.SyntaxErrorContext{Err: s.Err()}))
 	}
 	_b := s.Token().(byte)
 	if _b != b {
-		panic(p.SyntaxError{s, fmt.Errorf("got %q but wanted %q", _b, b)})
+		panic(p.NewSyntaxError(p.SyntaxErrorContext{
+			Err:    fmt.Errorf("wanted %q", b),
+			Stream: s,
+		}))
 	}
 	return s.Next()
 }
@@ -63,7 +66,10 @@ type eChar byte
 func (me *eChar) Parse(s p.Stream) p.Stream {
 	s = pByte(s, '\\')
 	if !s.Good() {
-		panic(p.SyntaxError{s, s.Err()})
+		panic(p.NewSyntaxError(p.SyntaxErrorContext{
+			Stream: s,
+			Err:    s.Err(),
+		}))
 	}
 	b := s.Token().(byte)
 	// ECHAR ::= '\' [tbnrf"'\]
@@ -83,7 +89,10 @@ func (me *eChar) Parse(s p.Stream) p.Stream {
 	case '\'':
 		*me = '\''
 	default:
-		panic(p.SyntaxError{s, fmt.Errorf("can't escape %q", b)})
+		panic(p.NewSyntaxError(p.SyntaxErrorContext{
+			Stream: s,
+			Err:    fmt.Errorf("can't escape %q", b),
+		}))
 	}
 	return s.Next()
 }
@@ -108,7 +117,10 @@ func (me *quotedStringLiteral) Parse(s p.Stream) p.Stream {
 			s = s.Next()
 		}
 	}
-	panic(p.SyntaxError{s, s.Err()})
+	panic(p.NewSyntaxError(p.SyntaxErrorContext{
+		Stream: s,
+		Err:    s.Err(),
+	}))
 }
 
 type literal struct {
@@ -174,7 +186,10 @@ func (me *untilByte) Parse(s p.Stream) p.Stream {
 		}
 		me.bs = append(me.bs, b)
 	}
-	panic(p.SyntaxError{s, s.Err()})
+	panic(p.NewSyntaxError(p.SyntaxErrorContext{
+		Stream: s,
+		Err:    s.Err(),
+	}))
 }
 
 type langTag string
@@ -186,7 +201,10 @@ func (me *langTag) Parse(s p.Stream) p.Stream {
 	}
 	s = p.Parse(s, &bw)
 	if len(bw.b) < 1 {
-		panic(p.SyntaxError{s, errors.New("require at least one letter")})
+		panic(p.NewSyntaxError(p.SyntaxErrorContext{
+			Stream: s,
+			Err:    errors.New("require at least one letter"),
+		}))
 	}
 	bw.pred = func(b byte) bool {
 		return b == '-' || unicode.IsLetter(rune(b)) || unicode.IsNumber(rune(b))
@@ -229,17 +247,6 @@ func (me *bnLabel) Parse(s p.Stream) p.Stream {
 	return s
 }
 
-// var pBNLabel = p.ParseFunc(func(c p.Context) p.Context {
-// 	c = c.Parse(pByte('_'))
-// 	c = c.Parse(pStringWhile(func(b byte) bool {
-// 		return b != ':' && !unicode.IsSpace(rune(b))
-// 	}))
-// 	beforeColon := c.Value().([]byte)
-// 	c = c.Parse(pByte(':'))
-// 	c = c.Parse(notWS)
-// 	return c.WithValue(fmt.Sprintf("_%s:%s", string(beforeColon), string(c.Value().([]byte))))
-// })
-
 type predicate struct {
 	iriRef
 }
@@ -247,11 +254,17 @@ type predicate struct {
 func pBytes(s p.Stream, bs string) p.Stream {
 	for _, b := range []byte(bs) {
 		if !s.Good() {
-			panic(p.SyntaxError{s, fmt.Errorf("expected %q but got %s", b, s.Err())})
+			panic(p.NewSyntaxError(p.SyntaxErrorContext{
+				Stream: s,
+				Err:    fmt.Errorf("expected %q but got %s", b, s.Err()),
+			}))
 		}
 		_b := s.Token().(byte)
 		if _b != b {
-			panic(p.SyntaxError{s, fmt.Errorf("expected %q but got %q", b, _b)})
+			panic(p.NewSyntaxError(p.SyntaxErrorContext{
+				Stream: s,
+				Err:    fmt.Errorf("expected %q but got %q", b, _b),
+			}))
 		}
 		s = s.Next()
 	}
@@ -323,7 +336,7 @@ func discardWhilePred(s *p.Stream, pred func(byte) bool) {
 type nQuadsDoc []NQuad
 
 func (me *nQuadsDoc) Parse(s p.Stream) p.Stream {
-	var err error
+	var err p.SyntaxError
 	for {
 		discardWhitespace(&s)
 		var nqp nQuadParser
@@ -336,7 +349,7 @@ func (me *nQuadsDoc) Parse(s p.Stream) p.Stream {
 		s = s1
 	}
 	if s.Good() {
-		panic(p.SyntaxError{s, err})
+		panic(err)
 	}
 	return s
 }

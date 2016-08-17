@@ -3,6 +3,7 @@ package parser
 import (
 	"fmt"
 	"reflect"
+	"strings"
 )
 
 func Plus(s Stream, p Parser) (Stream, []Value) {
@@ -19,7 +20,11 @@ func Repeat(s Stream, min, max int, p Parser) (Stream, []Value) {
 		s1, err := ParseErr(s, p)
 		if err != nil {
 			if i < min {
-				panic(SyntaxError{s, fmt.Errorf("repetition %d failed: %s", err)})
+				err.AddContext(SyntaxErrorContext{
+					Err:    fmt.Errorf("repetition %d failed", i),
+					Stream: s,
+				})
+				panic(err)
 			}
 			break
 		}
@@ -29,16 +34,54 @@ func Repeat(s Stream, min, max int, p Parser) (Stream, []Value) {
 	return s, vs
 }
 
-type SyntaxError struct {
+type SyntaxError interface {
+	error
+	AddContext(SyntaxErrorContext)
+}
+
+type syntaxError struct {
+	Err   error
+	Stack []SyntaxErrorContext
+}
+
+func (se *syntaxError) AddContext(c SyntaxErrorContext) {
+	se.Stack = append(se.Stack, c)
+}
+
+func NewSyntaxError(c SyntaxErrorContext) SyntaxError {
+	se := new(syntaxError)
+	se.Stack = append(se.Stack, c)
+	return se
+}
+
+type SyntaxErrorContext struct {
 	Stream Stream
+	Parser Parser
 	Err    error
 }
 
-func (se SyntaxError) Error() string {
-	return fmt.Sprintf("syntax error at %s: %s", se.Stream.Position(), se.Err)
+func (se *syntaxError) Error() string {
+	var ss []string
+	for _, c := range se.Stack {
+		if c.Err != nil {
+			ss = append(ss, c.Err.Error())
+		}
+		if c.Parser != nil {
+			ss = append(ss, fmt.Sprintf("while parsing %s", ParserName(c.Parser)))
+		}
+		if c.Stream != nil {
+			ss = append(ss, fmt.Sprintf("starting with %q at %s", c.Stream.Token(), c.Stream.Position()))
+		}
+	}
+	s := strings.Join(ss, " ")
+	ret := "syntax error"
+	if s != "" {
+		ret += ": " + s
+	}
+	return ret
 }
 
-func ParseErr(s Stream, p Parser) (_s Stream, err error) {
+func ParseErr(s Stream, p Parser) (_s Stream, err SyntaxError) {
 	defer func() {
 		r := recover()
 		if r == nil {
@@ -79,7 +122,11 @@ func recoverSyntaxError(f func(SyntaxError)) {
 
 func Parse(s Stream, p Parser) Stream {
 	defer recoverSyntaxError(func(se SyntaxError) {
-		panic(SyntaxError{s, fmt.Errorf("while parsing %q at %s: %s", ParserName(p), s.Position(), se.Err)})
+		se.AddContext(SyntaxErrorContext{
+			Parser: p,
+			Stream: s,
+		})
+		panic(se)
 	})
 	return p.Parse(s)
 }
@@ -93,7 +140,7 @@ func OneOf(s Stream, ps ...Parser) (Stream, int) {
 			return s1, i
 		}
 	}
-	panic(SyntaxError{s, fmt.Errorf("couldn't match one of %s", ps)})
+	panic(NewSyntaxError(SyntaxErrorContext{Err: fmt.Errorf("couldn't match one of %s", ps)}))
 }
 
 type ParseFunc func(Stream) Stream

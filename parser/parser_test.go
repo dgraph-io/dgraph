@@ -16,4 +16,6 @@ func TestParserName(t *testing.T) {
 	p := ParseFunc(func(Stream) Stream { return nil })
 	assert.Equal(t, "ParseFunc", ParserName(p))
 	assert.Equal(t, "someParser", ParserName(&someParser{}))
+	// var i Parser
+	// assert.Equal(t, "", ParserName(i))
 }
