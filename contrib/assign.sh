@@ -15,6 +15,7 @@ set -e
 pushd $BUILD &> /dev/null
 
 gitlfsfile="git-lfs-1.3.1"
+rm -rf $gitlfsfile
 if [ ! -d $gitlfsfile ]; then
   # Get git-lfs and benchmark data.
   wget https://github.com/github/git-lfs/releases/download/v1.3.1/git-lfs-linux-amd64-1.3.1.tar.gz
