@@ -23,7 +23,7 @@ pushd $SRC &> /dev/null
 wget https://github.com/github/git-lfs/releases/download/v1.3.1/git-lfs-linux-amd64-1.3.1.tar.gz
 tar -xzf git-lfs-linux-amd64-1.3.1.tar.gz
 pushd git-lfs-1.3.1 &> /dev/null
-sh install.sh
+sudo sh install.sh
 popd &> /dev/null
 
 git clone https://github.com/dgraph-io/benchmarks.git
