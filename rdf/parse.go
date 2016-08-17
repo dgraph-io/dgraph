@@ -46,8 +46,6 @@ func (me *object) Parse(s p.Stream) p.Stream {
 	return s
 }
 
-// var pObject = p.OneOf{pIriRef, pBNLabel, pLiteral}
-
 func pByte(s p.Stream, b byte) p.Stream {
 	if !s.Good() {
 		panic(p.NewSyntaxError(p.SyntaxErrorContext{Err: s.Err()}))
