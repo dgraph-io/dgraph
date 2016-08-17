@@ -1,7 +1,9 @@
 package parser
 
+import "github.com/joeshaw/gengen/generic"
+
 type Stream interface {
-	Token() interface{}
+	Token() generic.T
 	Next() Stream
 	Err() error
 	Good() bool
