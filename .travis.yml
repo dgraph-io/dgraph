@@ -31,5 +31,6 @@ before_script:
 script:
   - bash contrib/assign.sh $HOME/build
   - bash contrib/loader.sh $HOME/build
+  - bash contrib/queries.sh $HOME/build
   - bash contrib/cover.sh $HOME/build coverage.out
   - goveralls -service=travis-ci -coverprofile=coverage.out
