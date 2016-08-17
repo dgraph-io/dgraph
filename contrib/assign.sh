@@ -10,11 +10,6 @@ fi
 
 ROCKSDBDIR=$BUILD/rocksdb-${ROCKSDBVER}
 
-# build flags needed for rocksdb
-export CGO_CFLAGS="-I${ROCKSDBDIR}/include"
-export CGO_LDFLAGS="-L${ROCKSDBDIR}"
-export LD_LIBRARY_PATH="${ROCKSDBDIR}:${LD_LIBRARY_PATH}"
-
 set -e
 
 pushd $BUILD &> /dev/null
@@ -36,9 +31,13 @@ fi
 popd &> /dev/null
 # We are back in the Dgraph repo.
 
-pushd cmd/dgraphassigner &> /dev/null
-echo $(pwd)
+echo "rocksdbdir" $ROCKSDBDIR
+# build flags needed for rocksdb
+export CGO_CFLAGS="-I${ROCKSDBDIR}/include"
+export CGO_LDFLAGS="-L${ROCKSDBDIR}"
+export LD_LIBRARY_PATH="${ROCKSDBDIR}:${LD_LIBRARY_PATH}"
 
+pushd cmd/dgraphassigner &> /dev/null
 go build .
 
 ./dgraphassigner --numInstances 1 --instanceIdx 0 --rdfgzips $benchmark/rdf-films.gz,$benchmark/names.gz --uids ~/dgraph/u
