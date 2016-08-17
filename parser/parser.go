@@ -85,6 +85,14 @@ func Parse(s Stream, p Parser) Stream {
 
 type Value interface{}
 
+type errNoMatch struct {
+	ps []Parser
+}
+
+func (me errNoMatch) Error() string {
+	return fmt.Sprintf("couldn't match on of %s", me.ps)
+}
+
 func OneOf(s Stream, ps ...Parser) (Stream, int) {
 	for i, p := range ps {
 		s1, err := ParseErr(s, p)
@@ -92,7 +100,7 @@ func OneOf(s Stream, ps ...Parser) (Stream, int) {
 			return s1, i
 		}
 	}
-	panic(NewSyntaxError(SyntaxErrorContext{Err: fmt.Errorf("couldn't match one of %s", ps)}))
+	panic(NewSyntaxError(SyntaxErrorContext{Err: errNoMatch{ps}}))
 }
 
 type ParseFunc func(Stream) Stream
