@@ -18,8 +18,8 @@ export LD_LIBRARY_PATH="${ROCKSDBDIR}:${LD_LIBRARY_PATH}"
 set -e
 
 echo "before src" $(pwd)
-pushd $SRC &> /dev/null
-echo "after src" $SRC $(pwd)
+pushd $BUILD &> /dev/null
+echo "after src" $BUILD $(pwd)
 
 # Get git-lfs and benchmark data.
 wget https://github.com/github/git-lfs/releases/download/v1.3.1/git-lfs-linux-amd64-1.3.1.tar.gz
@@ -31,7 +31,7 @@ popd &> /dev/null
 echo "after pop git-lfs" $(pwd)
 
 git clone https://github.com/dgraph-io/benchmarks.git
-benchmark=$(pwd)/data
+benchmark=$(pwd)/benchmarks/data
 echo $(pwd)
 echo $benchmark
 popd &> /dev/null
