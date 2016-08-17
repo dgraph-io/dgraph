@@ -31,7 +31,6 @@ benchmark=$(pwd)/benchmarks/data
 popd &> /dev/null
 # We are back in the Dgraph repo.
 
-echo "rocksdbdir" $ROCKSDBDIR
 # build flags needed for rocksdb
 export CGO_CFLAGS="-I${ROCKSDBDIR}/include"
 export CGO_LDFLAGS="-L${ROCKSDBDIR}"
@@ -40,6 +39,7 @@ export LD_LIBRARY_PATH="${ROCKSDBDIR}:${LD_LIBRARY_PATH}"
 pushd cmd/dgraphassigner &> /dev/null
 go build .
 
+mkdir -p ~/dgraph/u
 ./dgraphassigner --numInstances 1 --instanceIdx 0 --rdfgzips $benchmark/rdf-films.gz,$benchmark/names.gz --uids ~/dgraph/u
 
 popd &> /dev/null
