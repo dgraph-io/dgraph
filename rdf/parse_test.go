@@ -196,23 +196,31 @@ var testNQuads = []struct {
 		hasErr: true,
 	},
 	{
-		input:  `<alice> <knows> <*> .`,
-		hasErr: true,
+		input: `<alice> <knows> <*> .`,
+		nq: NQuad{
+			Subject:   "alice",
+			Predicate: "knows",
+			ObjectId:  "*",
+		},
 	},
 	{
-		input:  `<*> <knows> "stuff" .`,
-		hasErr: true,
+		input: `<*> <knows> "stuff" .`,
+		nq: NQuad{
+			Subject:     "*",
+			Predicate:   "knows",
+			ObjectValue: []byte("stuff"),
+		},
 	},
 	{
-		input:  `<alice> <*> "stuff" .`,
-		hasErr: true,
+		input: `<alice> <*> "stuff" .`,
+		nq: NQuad{
+			Subject:     "alice",
+			Predicate:   "*",
+			ObjectValue: []byte("stuff"),
+		},
 	},
 	{
 		input:  `<alice> < * > "stuff" .`,
-		hasErr: true,
-	},
-	{
-		input:  `<alice> <*> "stuff" .`,
 		hasErr: true,
 	},
 	{
@@ -294,8 +302,13 @@ var testNQuads = []struct {
 		hasErr: true,
 	},
 	{
-		input:  `_:alice <knows> "stuff"^^<xs:string> <*> .`,
-		hasErr: true,
+		input: `_:alice <knows> "stuff"^^<xs:string> <*> .`,
+		nq: NQuad{
+			Subject:     "_:alice",
+			Predicate:   "knows",
+			ObjectValue: []byte("stuff@@xs:string"),
+			Label:       "*",
+		},
 	},
 	{
 		input: `_:alice <knows> <bob> . <bob>`, // ignores the <bob> after dot.

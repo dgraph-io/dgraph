@@ -3,6 +3,7 @@ package rdf
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"unicode"
 
 	p "github.com/dgraph-io/dgraph/parser"
@@ -218,11 +219,14 @@ type iriRef string
 
 func (me *iriRef) Parse(s p.Stream) p.Stream {
 	s = pByte(s, '<')
-	ub := untilByte{
-		b: '>',
+	bw := bytesWhile{
+		pred: func(b byte) bool {
+			return b > 0x20 && !strings.ContainsRune("<>\"{}|^`\\", rune(b))
+		},
 	}
-	s = p.Parse(s, &ub)
-	*me = iriRef(ub.bs)
+	s = p.Parse(s, &bw)
+	s = pByte(s, '>')
+	*me = iriRef(bw.b)
 	return s
 }
 
