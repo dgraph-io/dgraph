@@ -25,7 +25,8 @@ if [ ! -d $gitlfsfile ]; then
 fi
 
 if [ ! -f "benchmarks/data/actor-director.gz" ]; then
-  git clone https://github.com/dgraph-io/benchmarks.git
+  rm -rf benchmarks
+	git clone https://github.com/dgraph-io/benchmarks.git
 fi
 benchmark=$(pwd)/benchmarks/data
 popd &> /dev/null
