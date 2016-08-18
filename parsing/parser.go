@@ -8,6 +8,7 @@ func ParseErr(s Stream, p Parser) (_s Stream, err SyntaxError) {
 		if r == nil {
 			return
 		}
+		_s = s
 		if se, ok := r.(SyntaxError); ok {
 			err = se
 			return
