@@ -93,3 +93,59 @@ func TestAbruptMutation(t *testing.T) {
 		t.Error("This should fail.")
 	}
 }
+
+func TestVariables1(t *testing.T) {
+	input := `
+	query testQuery($username: String!) {
+		me(xid: rick) {
+			_city
+		}
+	}`
+	l := &lex.Lexer{}
+	l.Init(input)
+	go run(l)
+	for item := range l.Items {
+		if item.Typ == lex.ItemError {
+			t.Error(item.String())
+		}
+		t.Log(item.String(), item.Typ)
+	}
+}
+
+func TestVariables2(t *testing.T) {
+	input := `
+	query testQuery ($username: String!, $id: int!, $email: string) {
+		me(xid: rick) {
+			_city
+		}
+	}`
+	l := &lex.Lexer{}
+	l.Init(input)
+	go run(l)
+	for item := range l.Items {
+		if item.Typ == lex.ItemError {
+			t.Error(item.String())
+		}
+		t.Log(item.String(), item.Typ)
+	}
+}
+
+func TestVariablesError(t *testing.T) {
+	input := `
+	query testQuery($username: String! {
+		me(xid: rick) {
+			_city
+		}
+	}`
+	l := &lex.Lexer{}
+	l.Init(input)
+	go run(l)
+	var typ lex.ItemType
+	for item := range l.Items {
+		t.Log(item.String())
+		typ = item.Typ
+	}
+	if typ != lex.ItemError {
+		t.Error("This should fail.")
+	}
+}

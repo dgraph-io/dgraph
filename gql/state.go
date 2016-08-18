@@ -22,6 +22,8 @@ import "github.com/dgraph-io/dgraph/lex"
 const (
 	leftCurl     = '{'
 	rightCurl    = '}'
+	leftBra      = '('
+	rightBra     = ')'
 	period       = '.'
 	bang         = '!'
 	dollar       = '$'
@@ -46,7 +48,8 @@ const (
 	itemMutationOp                              // mutation operation
 	itemMutationContent                         // mutation content
 	itemFragmentSpread                          // three dots and name
-	itemVariable                                // dollar followed by a name
+	itemVarName                                 // dollar followed by a name
+	itemVarType                                 // type a variable
 )
 
 // lexText lexes the input string and calls other lex functions.
@@ -69,6 +72,12 @@ Loop:
 			return l.Errorf("Too many right characters")
 		case r == lex.EOF:
 			break Loop
+		case r == leftBra:
+			l.Backup()
+			l.Emit(itemText)
+			l.Next()
+			l.Emit(itemLeftRound)
+			return lexVarInside
 		case isNameBegin(r):
 			l.Backup()
 			l.Emit(itemText)
@@ -252,7 +261,7 @@ func lexOperationType(l *lex.Lexer) lex.StateFn {
 	return lexText
 }
 
-func lexVariables(l *lex.Lexer) lex.StateFn {
+func lexVarInside(l *lex.Lexer) lex.StateFn {
 	for {
 		switch r := l.Next(); {
 		case r == lex.EOF:
@@ -260,7 +269,7 @@ func lexVariables(l *lex.Lexer) lex.StateFn {
 		case isSpace(r) || isEndOfLine(r):
 			l.Ignore()
 		case isDollar(r):
-			return lexArgName
+			return lexVarName
 		case r == ':':
 			l.Ignore()
 			return lexVarType
@@ -269,6 +278,40 @@ func lexVariables(l *lex.Lexer) lex.StateFn {
 			return lexText
 		case r == ',':
 			l.Ignore()
+		default:
+			return l.Errorf("variable list invalid")
+		}
+	}
+}
+
+// lexVarName lexes and emits the name of a variable.
+func lexVarName(l *lex.Lexer) lex.StateFn {
+	for {
+		r := l.Next()
+		if isNameSuffix(r) {
+			continue
+		}
+		l.Backup()
+		l.Emit(itemVarName)
+		break
+	}
+	return lexVarInside
+}
+
+// lexVarType lexes and emits the type of a variable.
+func lexVarType(l *lex.Lexer) lex.StateFn {
+	l.AcceptRun(isSpace)
+	l.Ignore() // Any spaces encountered.
+	for {
+		r := l.Next()
+		if isSpace(r) || isEndOfLine(r) || r == ')' || r == ',' {
+			l.Backup()
+			l.Emit(itemVarType)
+			return lexVarInside
+		}
+		if r == lex.EOF {
+			return l.Errorf("Reached lex.EOF while reading var value: %v",
+				l.Input[l.Start:l.Pos])
 		}
 	}
 }
@@ -291,6 +334,8 @@ func lexArgInside(l *lex.Lexer) lex.StateFn {
 			return lexInside
 		case r == ',':
 			l.Ignore()
+		default:
+			return l.Errorf("argument list invalid")
 		}
 	}
 }
@@ -325,6 +370,11 @@ func lexArgVal(l *lex.Lexer) lex.StateFn {
 				l.Input[l.Start:l.Pos])
 		}
 	}
+}
+
+// isDollar returns true if the rune is a Dollar($).
+func isDollar(r rune) bool {
+	return r == '\u0024'
 }
 
 // isSpace returns true if the rune is a tab or space.

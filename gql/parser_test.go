@@ -605,3 +605,17 @@ func TestParseFragmentCycle(t *testing.T) {
 		t.Error("Expected error with cycle")
 	}
 }
+
+func TestParseVariables(t *testing.T) {
+	query := `
+	query testQuery($a: string, $b: int){
+			root(_uid_: 0x0a) {
+				type.object.name.es-419
+			}
+		}
+	`
+	_, _, err := Parse(query)
+	if err != nil {
+		t.Error(err)
+	}
+}

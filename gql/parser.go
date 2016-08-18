@@ -64,6 +64,9 @@ type fragmentNode struct {
 // Key is fragment names.
 type fragmentMap map[string]*fragmentNode
 
+// Key is variable name.
+type VarMap map[string]string
+
 // run is used to run the lexer until we encounter nil state.
 func run(l *lex.Lexer) {
 	for state := lexText; state != nil; {
@@ -127,6 +130,7 @@ func Parse(input string) (gq *GraphQuery, mu *Mutation, rerr error) {
 	go run(l)
 
 	fmap := make(fragmentMap)
+	varMap := make(VarMap)
 	for item := range l.Items {
 		switch item.Typ {
 		case itemText:
@@ -159,6 +163,10 @@ func Parse(input string) (gq *GraphQuery, mu *Mutation, rerr error) {
 					return nil, nil, err
 				}
 			}
+
+		case itemLeftRound:
+			parseVariables(l, varMap)
+			fmt.Println(varMap)
 		}
 	}
 
@@ -259,6 +267,31 @@ func parseMutationOp(l *lex.Lexer, op string, mu *Mutation) error {
 		}
 	}
 	return errors.New("Invalid mutation formatting.")
+}
+
+func parseVariables(l *lex.Lexer, varMap VarMap) error {
+	for {
+		var varName string
+		// Get variable name
+		item := <-l.Items
+		if item.Typ == itemVarName {
+			varName = item.Val
+		} else if item.Typ == itemRightRound {
+			break
+
+		} else {
+			return fmt.Errorf("Expecting a variable name. Got: %v", item)
+		}
+
+		// Get variable type
+		item = <-l.Items
+		if item.Typ != itemVarType {
+			return fmt.Errorf("Expecting a variable type. Got: %v", item)
+		}
+
+		varMap[varName] = item.Val
+	}
+	return nil
 }
 
 // parseArguments parses the arguments part of the GraphQL query root.
@@ -367,6 +400,7 @@ func godeep(l *lex.Lexer, gq *GraphQuery) error {
 			}
 			// Stores args in GraphQuery, will be used later while retrieving results.
 			for _, p := range args {
+				// if the p.val is a variable(Starts with a $), Replace with the value.
 				if p.Key == "first" {
 					count, err := strconv.ParseInt(p.Val, 0, 32)
 					if err != nil {
