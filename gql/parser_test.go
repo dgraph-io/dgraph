@@ -607,6 +607,17 @@ func TestParseFragmentCycle(t *testing.T) {
 }
 
 func TestParseVariables(t *testing.T) {
+	query := `{
+		"query": "query testQuery($a: int, $b: int){root(_uid_: 0x0a) {name(first: $b, after: $a){english}}}", 
+		"variables": {"$a": "6", "$b": "5" } 
+	}`
+	_, _, err := Parse(query)
+	if err != nil {
+		t.Error(err)
+	}
+}
+
+func TestParseVariablesError1(t *testing.T) {
 	query := `
 	query testQuery($a: string, $b: int){
 			root(_uid_: 0x0a) {
@@ -615,7 +626,29 @@ func TestParseVariables(t *testing.T) {
 		}
 	`
 	_, _, err := Parse(query)
-	if err != nil {
-		t.Error(err)
+	if err == nil {
+		t.Error("Incomplete variable list")
+	}
+}
+
+func TestParseVariablesiError2(t *testing.T) {
+	query := `{
+		"query": "query testQuery($a: int, $b: int, $c: int){root(_uid_: 0x0a) {name(first: $b, after: $a){english}}}", 
+		"variables": {"$a": "6", "$b": "5" } 
+	}`
+	_, _, err := Parse(query)
+	if err == nil {
+		t.Error("Expected incomplete variable list")
+	}
+}
+
+func TestParseVariablesiError3(t *testing.T) {
+	query := `{
+		"query": "query testQuery($a: int, $b: int, $c: int){root(_uid_: 0x0a) {name(first: $b, after: $a){english}}}", 
+		"variables": {"$a": "6", "$b": "5", "$c": "9" } 
+	}`
+	_, _, err := Parse(query)
+	if err == nil {
+		t.Error("Expected variable unused error")
 	}
 }

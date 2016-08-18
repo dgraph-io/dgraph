@@ -17,6 +17,7 @@
 package gql
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -122,15 +123,69 @@ func (gq *GraphQuery) expandFragments(fmap fragmentMap) error {
 	return nil
 }
 
+type JsonQuery struct {
+	Variables map[string]string `json:"variables"`
+	Query     string            `json:"query"`
+}
+
+func checkForVariableList(str string) (string, VarMap, error) {
+	var mp JsonQuery
+	err := json.Unmarshal([]byte(str), &mp)
+	fmt.Println(mp)
+	if err != nil {
+		return str, nil, nil // It does not obey GraphiQL format but valid
+	}
+
+	return mp.Query, mp.Variables, nil
+}
+
+func checkValidityOfVariables(mp1, mp2 VarMap) error {
+	if len(mp1) != len(mp2) {
+		return errors.New("Variable list incomplete")
+	}
+
+	for k, _ := range mp1 {
+		if _, ok := mp2[k]; !ok {
+			return errors.New("Variable list incomplete")
+		}
+	}
+
+	for k, _ := range mp2 {
+		if _, ok := mp1[k]; !ok {
+			return errors.New("Variable list incomplete")
+		}
+	}
+	return nil
+}
+
+func areAllVarsUsed(mp1 VarMap, mp2 map[string]bool) error {
+	for k, _ := range mp1 {
+		if _, ok := mp2[k]; !ok {
+			return errors.New(fmt.Sprintf("Variable %s declared and not used", k))
+		}
+	}
+
+	return nil
+}
+
 // Parse initializes and runs the lexer. It also constructs the GraphQuery subgraph
 // from the lexed items.
 func Parse(input string) (gq *GraphQuery, mu *Mutation, rerr error) {
 	l := &lex.Lexer{}
-	l.Init(input)
+	query, varValuesMap, err := checkForVariableList(input)
+	fmt.Println(query)
+	fmt.Println(varValuesMap)
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	l.Init(query)
 	go run(l)
 
 	fmap := make(fragmentMap)
 	varMap := make(VarMap)
+	varUsed := make(map[string]bool)
 	for item := range l.Items {
 		switch item.Typ {
 		case itemText:
@@ -146,7 +201,7 @@ func Parse(input string) (gq *GraphQuery, mu *Mutation, rerr error) {
 				}
 			} else if item.Val == "fragment" {
 				// TODO(jchiu0): This is to be done in ParseSchema once it is ready.
-				fnode, rerr := getFragment(l)
+				fnode, rerr := getFragment(l, varValuesMap, varUsed)
 				if rerr != nil {
 					return nil, nil, rerr
 				}
@@ -155,11 +210,11 @@ func Parse(input string) (gq *GraphQuery, mu *Mutation, rerr error) {
 
 		case itemLeftCurl:
 			if gq == nil {
-				if gq, rerr = getRoot(l); rerr != nil {
+				if gq, rerr = getRoot(l, varValuesMap, varUsed); rerr != nil {
 					return nil, nil, rerr
 				}
 			} else {
-				if err := godeep(l, gq); err != nil {
+				if err := godeep(l, gq, varValuesMap, varUsed); err != nil {
 					return nil, nil, err
 				}
 			}
@@ -169,18 +224,25 @@ func Parse(input string) (gq *GraphQuery, mu *Mutation, rerr error) {
 			fmt.Println(varMap)
 		}
 	}
-
+	if err := checkValidityOfVariables(varMap, varValuesMap); err != nil {
+		return nil, nil, err
+	}
 	if gq != nil {
 		// Try expanding fragments using fragment map.
 		if err := gq.expandFragments(fmap); err != nil {
 			return nil, nil, err
 		}
 	}
+
+	if err := areAllVarsUsed(varMap, varUsed); err != nil {
+		return nil, nil, err
+	}
+
 	return gq, mu, nil
 }
 
 // getFragment parses a fragment definition (not reference).
-func getFragment(l *lex.Lexer) (*fragmentNode, error) {
+func getFragment(l *lex.Lexer, varValuesMap VarMap, varUsed map[string]bool) (*fragmentNode, error) {
 	var name string
 	for item := range l.Items {
 		if item.Typ == itemText {
@@ -202,7 +264,7 @@ func getFragment(l *lex.Lexer) (*fragmentNode, error) {
 		return nil, errors.New("Empty fragment name")
 	}
 	gq := new(GraphQuery)
-	if err := godeep(l, gq); err != nil {
+	if err := godeep(l, gq, varValuesMap, varUsed); err != nil {
 		return nil, err
 	}
 	fn := &fragmentNode{
@@ -324,7 +386,7 @@ func parseArguments(l *lex.Lexer) (result []pair, rerr error) {
 }
 
 // getRoot gets the root graph query object after parsing the args.
-func getRoot(l *lex.Lexer) (gq *GraphQuery, rerr error) {
+func getRoot(l *lex.Lexer, varValuesMap VarMap, varUsed map[string]bool) (gq *GraphQuery, rerr error) {
 	gq = new(GraphQuery)
 	item := <-l.Items
 	if item.Typ != itemName {
@@ -358,7 +420,7 @@ func getRoot(l *lex.Lexer) (gq *GraphQuery, rerr error) {
 }
 
 // godeep constructs the subgraph from the lexed items and a GraphQuery node.
-func godeep(l *lex.Lexer, gq *GraphQuery) error {
+func godeep(l *lex.Lexer, gq *GraphQuery, varValuesMap VarMap, varUsed map[string]bool) error {
 	curp := gq // Used to track current node, for nesting.
 	for item := range l.Items {
 		if item.Typ == lex.ItemError {
@@ -389,7 +451,7 @@ func godeep(l *lex.Lexer, gq *GraphQuery) error {
 			curp = child
 
 		} else if item.Typ == itemLeftCurl {
-			if err := godeep(l, curp); err != nil {
+			if err := godeep(l, curp, varValuesMap, varUsed); err != nil {
 				return err
 			}
 
@@ -401,15 +463,20 @@ func godeep(l *lex.Lexer, gq *GraphQuery) error {
 			// Stores args in GraphQuery, will be used later while retrieving results.
 			for _, p := range args {
 				// if the p.val is a variable(Starts with a $), Replace with the value.
+				val := p.Val
+				if p.Val[0] == '$' {
+					val = varValuesMap[p.Val]
+					varUsed[p.Val] = true
+				}
 				if p.Key == "first" {
-					count, err := strconv.ParseInt(p.Val, 0, 32)
+					count, err := strconv.ParseInt(val, 0, 32)
 					if err != nil {
 						return err
 					}
 					curp.First = int(count)
 				}
 				if p.Key == "offset" {
-					count, err := strconv.ParseInt(p.Val, 0, 32)
+					count, err := strconv.ParseInt(val, 0, 32)
 					if err != nil {
 						return err
 					}
@@ -419,7 +486,7 @@ func godeep(l *lex.Lexer, gq *GraphQuery) error {
 					curp.Offset = int(count)
 				}
 				if p.Key == "after" {
-					afterUid, err := strconv.ParseUint(p.Val, 0, 64)
+					afterUid, err := strconv.ParseUint(val, 0, 64)
 					if err != nil {
 						return err
 					}
