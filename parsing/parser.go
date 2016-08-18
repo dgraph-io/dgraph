@@ -1,9 +1,6 @@
 package parsing
 
-import (
-	"fmt"
-	"reflect"
-)
+import "reflect"
 
 func ParseErr(s Stream, p Parser) (_s Stream, err SyntaxError) {
 	defer func() {
@@ -53,26 +50,6 @@ func Parse(s Stream, p Parser) Stream {
 		panic(se)
 	})
 	return p.Parse(s)
-}
-
-type Value interface{}
-
-type errNoMatch struct {
-	ps []Parser
-}
-
-func (me errNoMatch) Error() string {
-	return fmt.Sprintf("couldn't match on of %s", me.ps)
-}
-
-func OneOf(s Stream, ps ...Parser) (Stream, int) {
-	for i, p := range ps {
-		s1, err := ParseErr(s, p)
-		if err == nil {
-			return s1, i
-		}
-	}
-	panic(NewSyntaxError(SyntaxErrorContext{Err: errNoMatch{ps}}))
 }
 
 type ParseFunc func(Stream) Stream

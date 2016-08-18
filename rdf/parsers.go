@@ -16,8 +16,9 @@ func (me *subject) Parse(s p.Stream) p.Stream {
 		iriRef  iriRef
 		bnLabel bnLabel
 	)
-	s, i := p.OneOf(s, &iriRef, &bnLabel)
-	switch i {
+	oo := p.OneOf(&iriRef, &bnLabel)
+	s = p.Parse(s, &oo)
+	switch oo.Index {
 	case 0:
 		*me = subject(iriRef)
 	case 1:
@@ -36,8 +37,9 @@ func (me *object) Parse(s p.Stream) p.Stream {
 		iriRef  iriRef
 		bnLabel bnLabel
 	)
-	s, i := p.OneOf(s, &iriRef, &bnLabel, &me.Literal)
-	switch i {
+	oo := p.OneOf(&iriRef, &bnLabel, &me.Literal)
+	s = p.Parse(s, &oo)
+	switch oo.Index {
 	case 0:
 		me.Id = string(iriRef)
 	case 1:
@@ -135,22 +137,22 @@ func (l *literal) Parse(s p.Stream) p.Stream {
 		langTag langTag
 		iriRef  iriRef
 	)
-	s = p.Maybe(s, p.ParseFunc(func(s p.Stream) p.Stream {
-		s, i := p.OneOf(s,
-			&langTag,
-			p.ParseFunc(func(s p.Stream) p.Stream {
-				s = pBytes(s, "^^")
-				return p.Parse(s, &iriRef)
-			}),
-		)
-		switch i {
+	oo := p.OneOf(
+		&langTag,
+		p.ParseFunc(func(s p.Stream) p.Stream {
+			s = p.Bytes(s, "^^")
+			return p.Parse(s, &iriRef)
+		}),
+	)
+	s, err := p.ParseErr(s, &oo)
+	if err == nil {
+		switch oo.Index {
 		case 0:
 			l.LangTag = string(langTag)
 		case 1:
 			l.Value += "@@" + string(iriRef)
 		}
-		return s
-	}))
+	}
 	return s
 }
 
