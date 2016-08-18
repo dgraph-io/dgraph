@@ -253,26 +253,6 @@ type predicate struct {
 	iriRef
 }
 
-func pBytes(s p.Stream, bs string) p.Stream {
-	for _, b := range []byte(bs) {
-		if !s.Good() {
-			panic(p.NewSyntaxError(p.SyntaxErrorContext{
-				Stream: s,
-				Err:    fmt.Errorf("expected %q but got %s", b, s.Err()),
-			}))
-		}
-		_b := s.Token().(byte)
-		if _b != b {
-			panic(p.NewSyntaxError(p.SyntaxErrorContext{
-				Stream: s,
-				Err:    fmt.Errorf("expected %q but got %q", b, _b),
-			}))
-		}
-		s = s.Next()
-	}
-	return s
-}
-
 type label struct {
 	subject
 }
