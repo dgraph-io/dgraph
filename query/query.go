@@ -120,6 +120,7 @@ type SubGraph struct {
 	Children []*SubGraph
 	IsRoot   bool
 	GetUid   bool
+	Filters  []gql.Pair
 	isDebug  bool
 
 	Query  []byte
@@ -453,6 +454,7 @@ func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
 		dst.Offset = gchild.Offset
 		dst.AfterUid = gchild.After
 		dst.Count = gchild.First
+		dst.Filters = gchild.Filters
 		sg.Children = append(sg.Children, dst)
 		err := treeCopy(gchild, dst)
 		if err != nil {
@@ -529,6 +531,10 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	sg.Result = b.Bytes[b.Head():]
 	// Also add query for consistency and to allow for ToJson() later.
 	sg.Query = createTaskQuery(sg, []uint64{euid})
+
+	// Copy filters.
+	sg.Filters = gq.Filters
+
 	return sg, nil
 }
 

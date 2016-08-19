@@ -68,9 +68,14 @@ func TestParse(t *testing.T) {
 	child := gq.Children[0]
 	if len(child.Children) != 1 {
 		t.Errorf("Expected 1 child of friends. Got: %v", len(child.Children))
+		return
 	}
 	if err := checkAttr(child.Children[0], "name"); err != nil {
 		t.Error(err)
+	}
+
+	if len(gq.Filters) != 0 {
+		t.Error("Expected 0 filter")
 	}
 }
 
@@ -94,9 +99,13 @@ func TestParseXid(t *testing.T) {
 	}
 	if len(gq.Children) != 1 {
 		t.Errorf("Expected 1 children. Got: %v", len(gq.Children))
+		return
 	}
 	if err := checkAttr(gq.Children[0], "type.object.name"); err != nil {
 		t.Error(err)
+	}
+	if len(gq.Filters) != 0 {
+		t.Error("Expected 0 filter")
 	}
 }
 
@@ -120,6 +129,7 @@ func TestParseFirst(t *testing.T) {
 	}
 	if len(gq.Children) != 2 {
 		t.Errorf("Expected 2 children. Got: %v", len(gq.Children))
+		return
 	}
 	if err := checkAttr(gq.Children[0], "type.object.name"); err != nil {
 		t.Error(err)
@@ -132,6 +142,9 @@ func TestParseFirst(t *testing.T) {
 	}
 	if gq.Children[1].First != 10 {
 		t.Errorf("Expected count 10. Got: %v", gq.Children[1].First)
+	}
+	if len(gq.Filters) != 0 {
+		t.Error("Expected 0 filter")
 	}
 }
 
@@ -172,6 +185,7 @@ func TestParseAfter(t *testing.T) {
 	}
 	if len(gq.Children) != 2 {
 		t.Errorf("Expected 2 children. Got: %v", len(gq.Children))
+		return
 	}
 	if err := checkAttr(gq.Children[0], "type.object.name"); err != nil {
 		t.Error(err)
@@ -187,6 +201,9 @@ func TestParseAfter(t *testing.T) {
 	}
 	if gq.Children[1].After != 3 {
 		t.Errorf("Expected after to be 3. Got: %v", gq.Children[1].Offset)
+	}
+	if len(gq.Filters) != 0 {
+		t.Error("Expected 0 filter")
 	}
 }
 
@@ -210,6 +227,7 @@ func TestParseOffset(t *testing.T) {
 	}
 	if len(gq.Children) != 2 {
 		t.Errorf("Expected 2 children. Got: %v", len(gq.Children))
+		return
 	}
 	if err := checkAttr(gq.Children[0], "type.object.name"); err != nil {
 		t.Error(err)
@@ -225,6 +243,9 @@ func TestParseOffset(t *testing.T) {
 	}
 	if gq.Children[1].Offset != 3 {
 		t.Errorf("Expected Offset 3. Got: %v", gq.Children[1].Offset)
+	}
+	if len(gq.Filters) != 0 {
+		t.Error("Expected 0 filter")
 	}
 }
 
@@ -265,7 +286,7 @@ func TestParse_pass1(t *testing.T) {
 		{
 			me(_uid_:0x0a) {
 				name,
-				friends(xid:what) {  # xid would be ignored.
+				friends {
 				}
 			}
 		}
@@ -273,9 +294,11 @@ func TestParse_pass1(t *testing.T) {
 	gq, _, err := Parse(query)
 	if err != nil {
 		t.Error(err)
+		return
 	}
 	if len(gq.Children) != 2 {
 		t.Errorf("Expected 2. Got: %v", len(gq.Children))
+		return
 	}
 	if err := checkAttr(gq.Children[0], "name"); err != nil {
 		t.Error(err)
@@ -286,6 +309,9 @@ func TestParse_pass1(t *testing.T) {
 	f := gq.Children[1]
 	if len(f.Children) != 0 {
 		t.Errorf("Expected 0. Got: %v", len(gq.Children))
+	}
+	if len(gq.Filters) != 0 {
+		t.Error("Expected 0 filter")
 	}
 }
 
@@ -303,9 +329,13 @@ func TestParse_block(t *testing.T) {
 	}
 	if len(gq.Children) != 1 {
 		t.Errorf("Expected 1. Got: %v", len(gq.Children))
+		return
 	}
 	if err := checkAttr(gq.Children[0], "type.object.name.es-419"); err != nil {
 		t.Error(err)
+	}
+	if len(gq.Filters) != 0 {
+		t.Error("Expected 0 filter")
 	}
 }
 
@@ -438,6 +468,9 @@ func TestParseMutationAndQuery(t *testing.T) {
 	if err := checkAttr(gq.Children[1], "hometown"); err != nil {
 		t.Error(err)
 	}
+	if len(gq.Filters) != 0 {
+		t.Error("Expected 0 filter")
+	}
 }
 
 func TestParseFragmentNoNesting(t *testing.T) {
@@ -491,6 +524,9 @@ func TestParseFragmentNoNesting(t *testing.T) {
 			return
 		}
 	}
+	if len(gq.Filters) != 0 {
+		t.Error("Expected 0 filter")
+	}
 }
 
 func TestParseFragmentNest1(t *testing.T) {
@@ -534,6 +570,10 @@ func TestParseFragmentNest1(t *testing.T) {
 			return
 		}
 	}
+
+	if len(gq.Filters) != 0 {
+		t.Error("Expected 0 filter")
+	}
 }
 
 func TestParseFragmentNest2(t *testing.T) {
@@ -556,6 +596,7 @@ func TestParseFragmentNest2(t *testing.T) {
 	gq, _, err := Parse(query)
 	if err != nil {
 		t.Error(err)
+		return
 	}
 	if gq == nil {
 		t.Error("subgraph is nil")
@@ -578,6 +619,10 @@ func TestParseFragmentNest2(t *testing.T) {
 			t.Error(err)
 			return
 		}
+	}
+
+	if len(gq.Filters) != 0 {
+		t.Error("Expected 0 filter")
 	}
 }
 
@@ -603,5 +648,75 @@ func TestParseFragmentCycle(t *testing.T) {
 	_, _, err := Parse(query)
 	if err == nil {
 		t.Error("Expected error with cycle")
+	}
+}
+
+func TestParseFragmentMissing(t *testing.T) {
+	query := `
+	query {
+		user(_uid_:0x0a) {
+			...fragmenta
+		}
+	}
+	fragment fragmentb {
+		name
+	}
+`
+	_, _, err := Parse(query)
+	if err == nil {
+		t.Error("Expected error about missing fragment")
+	}
+}
+
+func TestParseFilters(t *testing.T) {
+	query := `
+	query {
+		me(_uid_:0x0a) {
+			friends(name: "john") {
+				name
+			}
+			gender,age
+			hometown
+		}
+	}
+`
+	gq, _, err := Parse(query)
+	if err != nil {
+		t.Error(err)
+	}
+	if gq == nil {
+		t.Error("subgraph is nil")
+		return
+	}
+	if len(gq.Children) != 4 {
+		t.Errorf("Expected 4 children. Got: %v", len(gq.Children))
+		return
+	}
+	if err := checkAttr(gq.Children[0], "friends"); err != nil {
+		t.Error(err)
+		return
+	}
+	friends := gq.Children[0]
+	if len(friends.Filters) != 1 {
+		t.Error("Expected 1 filter")
+		return
+	}
+}
+
+func TestParseFiltersInvalid(t *testing.T) {
+	query := `
+	query {
+		me(_uid_:0x0a) {
+			friends(randomattr: "john") {
+				name
+			}
+			gender,age
+			hometown
+		}
+	}
+`
+	_, _, err := Parse(query)
+	if err == nil {
+		t.Error("Expected error on missing attr in filters")
 	}
 }
