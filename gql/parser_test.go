@@ -617,6 +617,31 @@ func TestParseVariables(t *testing.T) {
 	}
 }
 
+func TestParseVariablesFragments(t *testing.T) {
+	query := `{
+	"query": "query test($a: int){user(_uid_:0x0a) {...fragmentd,friends(first: $a, offset: $a) {name}}} fragment fragmentd {id(first: $a)}",
+	"variables": {"$a": "5"}
+}`
+	gq, _, err := Parse(query)
+	if err != nil {
+		t.Error(err)
+	}
+	if gq == nil {
+		t.Error("subgraph is nil")
+		return
+	}
+	if len(gq.Children) != 2 {
+		t.Errorf("Expected 2 children. Got: %v", len(gq.Children))
+		return
+	}
+
+	// Notice that the order is preserved.
+
+	if gq.Children[0].First != 5 {
+		t.Error("Expected first to be 5. Got %v", gq.Children[2].First)
+	}
+}
+
 func TestParseVariablesError1(t *testing.T) {
 	query := `
 	query testQuery($a: string, $b: int){
@@ -631,9 +656,11 @@ func TestParseVariablesError1(t *testing.T) {
 	}
 }
 
-func TestParseVariablesiError2(t *testing.T) {
+func TestParseVariablesError2(t *testing.T) {
 	query := `{
-		"query": "query testQuery($a: int, $b: int, $c: int){root(_uid_: 0x0a) {name(first: $b, after: $a){english}}}", 
+		"query": "query testQuery($a: int, $b: int, $c: int){
+			root(_uid_: 0x0a) {name(first: $b, after: $a){english}}
+		}", 
 		"variables": {"$a": "6", "$b": "5" } 
 	}`
 	_, _, err := Parse(query)
