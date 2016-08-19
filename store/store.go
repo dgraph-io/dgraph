@@ -101,3 +101,7 @@ func (s *Store) IndexFilterblockSize() uint64 {
 	blockSize, _ := strconv.ParseUint(s.db.GetProperty("rocksdb.estimate-table-readers-mem"), 10, 64)
 	return blockSize
 }
+
+func (s *Store) BlockCacheSize() uint64 {
+	return s.blockopt.BlockCacheSize()
+}
