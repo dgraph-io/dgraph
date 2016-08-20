@@ -108,6 +108,11 @@ func (l *Latency) ToMap() map[string]string {
 	return m
 }
 
+type filterInfo struct {
+	Sg    *SubGraph
+	Value string
+}
+
 // SubGraph is the way to represent data internally. It contains both the
 // query and the response. Once generated, this can then be encoded to other
 // client convenient formats, like GraphQL / JSON.
@@ -120,11 +125,22 @@ type SubGraph struct {
 	Children []*SubGraph
 	IsRoot   bool
 	GetUid   bool
-	Filters  []gql.Pair
 	isDebug  bool
 
-	Query  []byte
-	Result []byte
+	Query     []byte
+	Result    []byte
+	filterMap map[string]*filterInfo
+	uidKeep   map[uint64]struct{} // If nil, we keep everything. Otherwise, only those in map are kept.
+}
+
+func newFilterMap(plist []gql.Pair) map[string]*filterInfo {
+	out := make(map[string]*filterInfo)
+	for _, p := range plist {
+		out[p.Key] = &filterInfo{
+			Value: p.Val,
+		}
+	}
+	return out
 }
 
 func mergeInterfaces(i1 interface{}, i2 interface{}) interface{} {
@@ -454,7 +470,7 @@ func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
 		dst.Offset = gchild.Offset
 		dst.AfterUid = gchild.After
 		dst.Count = gchild.First
-		dst.Filters = gchild.Filters
+		dst.filterMap = newFilterMap(gchild.Filters)
 		sg.Children = append(sg.Children, dst)
 		err := treeCopy(gchild, dst)
 		if err != nil {
@@ -533,7 +549,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	sg.Query = createTaskQuery(sg, []uint64{euid})
 
 	// Copy filters.
-	sg.Filters = gq.Filters
+	sg.filterMap = newFilterMap(gq.Filters)
 
 	return sg, nil
 }
@@ -562,40 +578,40 @@ func createTaskQuery(sg *SubGraph, sorted []uint64) []byte {
 	return b.Bytes[b.Head():]
 }
 
-type ListChannel struct {
+type listChannel struct {
 	TList *task.UidList
 	Idx   int
 }
 
+// task.Result.uidmatrix is a list of N UIDLists.
+// From this, build a sorted list of unique UIDs.
+// Use a heap to merge N sorted lists.
 func sortedUniqueUids(r *task.Result) (sorted []uint64, rerr error) {
-	// Let's serialize the matrix of uids in result to a
-	// sorted unique list of uids.
 	h := &x.Uint64Heap{}
 	heap.Init(h)
 
-	channels := make([]*ListChannel, r.UidmatrixLength())
+	channels := make([]*listChannel, r.UidmatrixLength())
 	for i := 0; i < r.UidmatrixLength(); i++ {
-		tlist := new(task.UidList)
+		tlist := new(task.UidList) // tlist = result.Uidmatrix[i].
 		if ok := r.Uidmatrix(tlist, i); !ok {
 			return sorted, fmt.Errorf("While parsing Uidmatrix")
 		}
 		if tlist.UidsLength() > 0 {
 			e := x.Elem{
-				Uid: tlist.Uids(0),
-				Idx: i,
+				Uid: tlist.Uids(0), // Store only the smallest element in this uidlist.
+				Idx: i,             // i tells us which uidlist this is, in the uidmatrix.
 			}
 			heap.Push(h, e)
 		}
-		channels[i] = &ListChannel{TList: tlist, Idx: 1}
+		channels[i] = &listChannel{TList: tlist, Idx: 1}
 	}
 
 	// The resulting list of uids will be stored here.
-	sorted = make([]uint64, 100)
-	sorted = sorted[:0]
+	sorted = make([]uint64, 0, 100)
 
 	var last uint64
 	last = 0
-	// Itearate over the heap.
+	// Iterate over the heap.
 	for h.Len() > 0 {
 		me := (*h)[0] // Peek at the top element in heap.
 		if me.Uid != last {
@@ -608,7 +624,7 @@ func sortedUniqueUids(r *task.Result) (sorted []uint64, rerr error) {
 
 		} else {
 			uid := lc.TList.Uids(lc.Idx)
-			lc.Idx += 1
+			lc.Idx++
 
 			me.Uid = uid
 			(*h)[0] = me
@@ -618,9 +634,107 @@ func sortedUniqueUids(r *task.Result) (sorted []uint64, rerr error) {
 	return sorted, nil
 }
 
+func (sg *SubGraph) applyFilters(ctx context.Context, sorted []uint64) ([]uint64, error) {
+	if len(sg.filterMap) == 0 {
+		return sorted, nil
+	}
+	for i := 0; i < len(sg.Children); i++ {
+		child := sg.Children[i]
+		if fi, found := sg.filterMap[child.Attr]; found {
+			fi.Sg = child
+		}
+	}
+	for k, fi := range sg.filterMap {
+		if fi.Sg == nil {
+			err := fmt.Errorf("Nil filter %s", k)
+			x.Trace(ctx, "Error while processing filters: %v", err)
+			return sorted, err
+		}
+	}
+	// All filters are valid. Let's open a channel then and get their data.
+	childchan := make(chan error)
+	for _, fi := range sg.filterMap {
+		// Assume fi.Sg not null.
+		child := fi.Sg
+		child.Query = createTaskQuery(child, sorted)
+		go ProcessGraph(ctx, child, childchan)
+	}
+
+	// Block until all results are returned.
+	for i := 0; i < len(sg.filterMap); i++ {
+		select {
+		case err := <-childchan:
+			x.Trace(ctx, "Reply from child. Index: %v Attr: %v", i, sg.Children[i].Attr)
+			if err != nil {
+				x.Trace(ctx, "Error while processing child task: %v", err)
+				return sorted, nil
+			}
+		case <-ctx.Done():
+			x.Trace(ctx, "Context done before full execution: %v", ctx.Err())
+			return sorted, ctx.Err()
+		}
+	}
+
+	// Check results.
+	fmt.Printf("~~len(sorted)=%d\n", len(sorted))
+	fmt.Println(sorted)
+	rejectUID := make([]bool, len(sorted))
+	for k, fi := range sg.filterMap { // For each filter attribute.
+		child := fi.Sg
+		r := new(task.Result)
+		r.Init(child.Result, flatbuffers.GetUOffsetT(child.Result))
+
+		fmt.Printf("~~[%s]~~~%d\n", k, r.ValuesLength())
+		fmt.Printf("~~[%s]~~~%d\n", k, r.UidmatrixLength())
+		//			var ul task.UidList
+		//			for i := 0; i < r.UidmatrixLength(); i++ {
+		//				if ok := r.Uidmatrix(&ul, i); !ok {
+		//					rch <- fmt.Errorf("While parsing UidList")
+		//					return
+		//				}
+		//				fmt.Printf("~~~%d\n", ul.UidsLength())
+		//			}
+
+		var tv task.Value
+		for i := 0; i < r.ValuesLength(); i++ {
+			if ok := r.Values(&tv, i); !ok {
+				return sorted, fmt.Errorf("While parsing value")
+			}
+			val := tv.ValBytes()
+			if val == nil || string(val) != fi.Value {
+				rejectUID[i] = true
+			}
+		}
+
+	}
+
+	var newSorted []uint64
+	for i := 0; i < len(sorted); i++ {
+		if !rejectUID[i] {
+			newSorted = append(newSorted, sorted[i])
+		}
+	}
+	fmt.Printf("~~~~~~afterFilter: %d\n", len(newSorted))
+	fmt.Println(newSorted)
+
+	// We can choose to update sg.Result and sg.Query using newSorted. But this
+	// requires re-generating of those two buffers, which is not good. We like to
+	// have a redesign of "query" package to support all these new operations.
+	// For now, we opt for a set of kept UIDs. Note that sg.uidKeep=nil implies
+	// everything is kept. This is a common case.
+	if len(newSorted) < len(sorted) {
+		sg.uidKeep = make(map[uint64]struct{})
+		for _, uid := range newSorted {
+			sg.uidKeep[uid] = struct{}{}
+		}
+	}
+	return newSorted, nil
+}
+
 func ProcessGraph(ctx context.Context, sg *SubGraph, rch chan error) {
 	var err error
 	if len(sg.Query) > 0 && !sg.IsRoot {
+		// This is where we look up RocksDB for posting lists data.
 		sg.Result, err = worker.ProcessTaskOverNetwork(ctx, sg.Query)
 		if err != nil {
 			x.Trace(ctx, "Error while processing task: %v", err)
@@ -629,9 +743,8 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, rch chan error) {
 		}
 	}
 
-	uo := flatbuffers.GetUOffsetT(sg.Result)
 	r := new(task.Result)
-	r.Init(sg.Result, uo)
+	r.Init(sg.Result, flatbuffers.GetUOffsetT(sg.Result))
 
 	if r.ValuesLength() > 0 {
 		var v task.Value
@@ -659,6 +772,14 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, rch chan error) {
 		rch <- nil
 		return
 	}
+
+	// Apply filters if any.
+	if sorted, err = sg.applyFilters(ctx, sorted); err != nil {
+		rch <- err
+		return
+	}
+
+	fmt.Printf("~~~~@@ %d\n", len(sorted))
 
 	// Let's execute it in a tree fashion. Each SubGraph would break off
 	// as many goroutines as it's children; which would then recursively
