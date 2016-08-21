@@ -374,12 +374,12 @@ func init() {
 
 // This method gets the values and children for a subgraph.
 // This is used for conversion to proto.
-func (g *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
+func (sg *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 	var properties []*graph.Property
 	var children []*graph.Node
 
 	// We go through all predicate children of the subgraph.
-	for _, pc := range g.Children {
+	for _, pc := range sg.Children {
 		ro := flatbuffers.GetUOffsetT(pc.Result)
 		r := new(task.Result)
 		r.Init(pc.Result, ro)
