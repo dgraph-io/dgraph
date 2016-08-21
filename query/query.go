@@ -301,8 +301,8 @@ func postTraverse(sg *SubGraph) (result map[uint64]interface{}, rerr error) {
 	return result, nil
 }
 
-func (g *SubGraph) ToJson(l *Latency) (js []byte, rerr error) {
-	r, err := postTraverse(g)
+func (sg *SubGraph) ToJson(l *Latency) (js []byte, rerr error) {
+	r, err := postTraverse(sg)
 	if err != nil {
 		return js, err
 	}
@@ -319,7 +319,7 @@ func (g *SubGraph) ToJson(l *Latency) (js []byte, rerr error) {
 		} else {
 			m = make(map[string]interface{})
 		}
-		if g.isDebug {
+		if sg.isDebug {
 			m["server_latency"] = l.ToMap()
 		}
 		return json.Marshal(m)
@@ -448,22 +448,23 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 
 // This method transforms the predicate based subgraph to an
 // predicate-entity based protocol buffer subgraph.
-func (g *SubGraph) ToProtocolBuffer(l *Latency) (n *graph.Node, rerr error) {
-	n = &graph.Node{}
-	n.Attribute = g.Attr
-	if len(g.Query) == 0 {
+func (sg *SubGraph) ToProtocolBuffer(l *Latency) (n *graph.Node, rerr error) {
+	n = &graph.Node{
+		Attribute: sg.Attr,
+	}
+	if len(sg.Query) == 0 {
 		return n, nil
 	}
 
-	ro := flatbuffers.GetUOffsetT(g.Result)
+	ro := flatbuffers.GetUOffsetT(sg.Result)
 	r := new(task.Result)
-	r.Init(g.Result, ro)
+	r.Init(sg.Result, ro)
 
 	var ul task.UidList
 	r.Uidmatrix(&ul, 0)
 	n.Uid = ul.Uids(0)
 
-	if rerr = g.preTraverse(n.Uid, n); rerr != nil {
+	if rerr = sg.preTraverse(n.Uid, n); rerr != nil {
 		return n, rerr
 	}
 
