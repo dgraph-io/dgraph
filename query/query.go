@@ -639,7 +639,6 @@ func sortedUniqueUids(r *task.Result) (sorted []uint64, rerr error) {
 	sorted = make([]uint64, 0, 100)
 
 	var last uint64
-	last = 0
 	// Iterate over the heap.
 	for h.Len() > 0 {
 		me := (*h)[0] // Peek at the top element in heap.
