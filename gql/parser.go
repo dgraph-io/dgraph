@@ -168,32 +168,8 @@ func Parse(input string) (gq *GraphQuery, mu *Mutation, rerr error) {
 		if err := gq.expandFragments(fmap); err != nil {
 			return nil, nil, err
 		}
-		// Validate query.
-		if err := validate(gq); err != nil {
-			return nil, nil, err
-		}
 	}
 	return gq, mu, nil
-}
-
-func validate(gq *GraphQuery) error {
-	attrMap := make(map[string]bool)
-	for _, child := range gq.Children {
-		if child.Attr != "" {
-			attrMap[child.Attr] = true
-		}
-	}
-	for _, f := range gq.Filters {
-		if !attrMap[f.Key] {
-			return fmt.Errorf("Filter on missing attr: %s", f.Key)
-		}
-	}
-	for _, child := range gq.Children {
-		if err := validate(child); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 // getFragment parses a fragment definition (not reference).

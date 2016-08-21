@@ -702,21 +702,3 @@ func TestParseFilters(t *testing.T) {
 		return
 	}
 }
-
-func TestParseFiltersInvalid(t *testing.T) {
-	query := `
-	query {
-		me(_uid_:0x0a) {
-			friends(randomattr: "john") {
-				name
-			}
-			gender,age
-			hometown
-		}
-	}
-`
-	_, _, err := Parse(query)
-	if err == nil {
-		t.Error("Expected error on missing attr in filters")
-	}
-}

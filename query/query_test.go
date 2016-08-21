@@ -626,19 +626,10 @@ func TestProcessGraphFilter(t *testing.T) {
 		t.Errorf("Expected 1 name of 5 friends")
 	}
 	checkName(t, r, 0, "Andrea")
-	//	{
-	//		var tv task.Value
-	//		if ok := r.Values(&tv, 4); !ok {
-	//			t.Error("Unable to retrieve value")
-	//		}
-	//		if !bytes.Equal(tv.ValBytes(), []byte{}) {
-	//			t.Error("Expected a null byte slice")
-	//		}
-	//	}
 
-	//	checkSingleValue(t, sg.Children[1], "name", "Michonne")
-	//	checkSingleValue(t, sg.Children[2], "gender", "female")
-	//	checkSingleValue(t, sg.Children[3], "status", "alive")
+	checkSingleValue(t, sg.Children[1], "name", "Michonne")
+	checkSingleValue(t, sg.Children[2], "gender", "female")
+	checkSingleValue(t, sg.Children[3], "status", "alive")
 }
 
 func TestToJson(t *testing.T) {
@@ -684,6 +675,127 @@ func TestToJson(t *testing.T) {
 	s := string(js)
 	if !strings.Contains(s, "Michonne") {
 		t.Errorf("Unable to find Michonne in this result: %v", s)
+	}
+}
+
+func TestToJsonFilter(t *testing.T) {
+	dir, _ := populateGraph(t)
+	defer os.RemoveAll(dir)
+
+	// Alright. Now we have everything set up. Let's create the query.
+	query := `
+		{
+			me(_uid_:0x01) {
+				name
+				gender
+				status
+				friend(name: Andrea) {
+					name
+				}
+			}
+		}
+	`
+
+	gq, _, err := gql.Parse(query)
+	if err != nil {
+		t.Error(err)
+	}
+	ctx := context.Background()
+	sg, err := ToSubGraph(ctx, gq)
+	if err != nil {
+		t.Error(err)
+	}
+
+	ch := make(chan error)
+	go ProcessGraph(ctx, sg, ch)
+	err = <-ch
+	if err != nil {
+		t.Error(err)
+	}
+
+	var l Latency
+	js, err := sg.ToJson(&l)
+	if err != nil {
+		t.Error(err)
+	}
+	s := string(js)
+	if s != `{"me":[{"friend":[{"name":"Andrea"}],"gender":"female","name":"Michonne","status":"alive"}]}` {
+		t.Errorf("Wrong output: %s", s)
+	}
+}
+
+func TestToPBFilter(t *testing.T) {
+	dir, _ := populateGraph(t)
+	defer os.RemoveAll(dir)
+
+	// Alright. Now we have everything set up. Let's create the query.
+	query := `
+		{
+			me(_uid_:0x01) {
+				name
+				gender
+				status
+				friend(name: Andrea) {
+					name
+				}
+			}
+		}
+	`
+
+	gq, _, err := gql.Parse(query)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	ctx := context.Background()
+	sg, err := ToSubGraph(ctx, gq)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	ch := make(chan error)
+	go ProcessGraph(ctx, sg, ch)
+	err = <-ch
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	var l Latency
+	pb, err := sg.ToProtocolBuffer(&l)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	expectedPb := `uid: 1
+attribute: "me"
+properties: <
+  prop: "name"
+  val: "Michonne"
+>
+properties: <
+  prop: "gender"
+  val: "female"
+>
+properties: <
+  prop: "status"
+  val: "alive"
+>
+children: <
+  uid: 31
+  attribute: "friend"
+  properties: <
+    prop: "name"
+    val: "Andrea"
+  >
+>
+`
+	pbText := proto.MarshalTextString(pb)
+	if pbText != expectedPb {
+		t.Errorf("Output wrong: %v", pbText)
+		return
 	}
 }
 

@@ -127,10 +127,10 @@ type SubGraph struct {
 	GetUid   bool
 	isDebug  bool
 
-	Query     []byte
-	Result    []byte
-	filterMap map[string]*filterInfo
-	uidKeep   map[uint64]struct{} // If nil, we keep everything. Otherwise, only those in map are kept.
+	Query      []byte
+	Result     []byte
+	filterMap  map[string]*filterInfo
+	keepUIDMap map[uint64]struct{} // If nil, we keep everything. Otherwise, only those in map are kept.
 }
 
 func newFilterMap(plist []gql.Pair) map[string]*filterInfo {
@@ -138,6 +138,9 @@ func newFilterMap(plist []gql.Pair) map[string]*filterInfo {
 	for _, p := range plist {
 		out[p.Key] = &filterInfo{
 			Value: p.Val,
+			Sg: &SubGraph{
+				Attr: p.Key,
+			},
 		}
 	}
 	return out
@@ -159,6 +162,16 @@ func mergeInterfaces(i1 interface{}, i2 interface{}) interface{} {
 	return []interface{}{i1, i2}
 }
 
+func (sg *SubGraph) keepUID(uid uint64) bool {
+	if sg.keepUIDMap == nil {
+		return true
+	}
+	_, found := sg.keepUIDMap[uid]
+	return found
+}
+
+// This method gets the values and children for a subgraph.
+// This is used for conversion to JSON.
 func postTraverse(g *SubGraph) (result map[uint64]interface{}, rerr error) {
 	if len(g.Query) == 0 {
 		return result, nil
@@ -182,6 +195,9 @@ func postTraverse(g *SubGraph) (result map[uint64]interface{}, rerr error) {
 			}
 		}
 	}
+	// Note: If some UIDs at this level are filtered, children will not have results
+	// for those UIDs. However, at this level, g.Query, g.Result would still have
+	// these removed UIDs. We need to check against g's keepUID.
 
 	// Now read the query and results at current node.
 	uo := flatbuffers.GetUOffsetT(g.Query)
@@ -216,6 +232,12 @@ func postTraverse(g *SubGraph) (result map[uint64]interface{}, rerr error) {
 	for i := 0; i < r.CountLength(); i++ {
 		co := r.Count(i)
 		m := make(map[string]interface{})
+		if len(g.filterMap) > 0 {
+			// Currently, if _count_ is defined, we will not query deeper and we will
+			// not have the UIDMatrix to work with!
+			// A refactoring / redesign will fix this.
+			log.Print("_count_ currently does not work with filters!")
+		}
 		m["_count_"] = co
 		mp := make(map[string]interface{})
 		mp[g.Attr] = m
@@ -227,17 +249,20 @@ func postTraverse(g *SubGraph) (result map[uint64]interface{}, rerr error) {
 		if ok := r.Uidmatrix(&ul, i); !ok {
 			return result, fmt.Errorf("While parsing UidList")
 		}
-		l := make([]interface{}, ul.UidsLength())
+		l := make([]interface{}, 0, ul.UidsLength())
 		for j := 0; j < ul.UidsLength(); j++ {
 			uid := ul.Uids(j)
+			if !g.keepUID(uid) {
+				continue
+			}
 			m := make(map[string]interface{})
 			if g.GetUid || g.isDebug {
 				m["_uid_"] = fmt.Sprintf("%#x", uid)
 			}
 			if ival, present := cResult[uid]; !present {
-				l[j] = m
+				l = append(l, m)
 			} else {
-				l[j] = mergeInterfaces(m, ival)
+				l = append(l, mergeInterfaces(m, ival))
 			}
 		}
 		if len(l) > 0 {
@@ -348,6 +373,7 @@ func init() {
 }
 
 // This method gets the values and children for a subgraph.
+// This is used for conversion to proto.
 func (g *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 	var properties []*graph.Property
 	var children []*graph.Node
@@ -388,6 +414,9 @@ func (g *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 			// this predicate.
 			for i := 0; i < ul.UidsLength(); i++ {
 				uid := ul.Uids(i)
+				if !pc.keepUID(uid) {
+					continue
+				}
 				uc := nodePool.Get().(*graph.Node)
 				uc.Attribute = pc.Attr
 				uc.Uid = uid
@@ -638,19 +667,7 @@ func (sg *SubGraph) applyFilters(ctx context.Context, sorted []uint64) ([]uint64
 	if len(sg.filterMap) == 0 {
 		return sorted, nil
 	}
-	for i := 0; i < len(sg.Children); i++ {
-		child := sg.Children[i]
-		if fi, found := sg.filterMap[child.Attr]; found {
-			fi.Sg = child
-		}
-	}
-	for k, fi := range sg.filterMap {
-		if fi.Sg == nil {
-			err := fmt.Errorf("Nil filter %s", k)
-			x.Trace(ctx, "Error while processing filters: %v", err)
-			return sorted, err
-		}
-	}
+
 	// All filters are valid. Let's open a channel then and get their data.
 	childchan := make(chan error)
 	for _, fi := range sg.filterMap {
@@ -676,24 +693,11 @@ func (sg *SubGraph) applyFilters(ctx context.Context, sorted []uint64) ([]uint64
 	}
 
 	// Check results.
-	fmt.Printf("~~len(sorted)=%d\n", len(sorted))
-	fmt.Println(sorted)
 	rejectUID := make([]bool, len(sorted))
-	for k, fi := range sg.filterMap { // For each filter attribute.
+	for _, fi := range sg.filterMap { // For each filter attribute.
 		child := fi.Sg
 		r := new(task.Result)
 		r.Init(child.Result, flatbuffers.GetUOffsetT(child.Result))
-
-		fmt.Printf("~~[%s]~~~%d\n", k, r.ValuesLength())
-		fmt.Printf("~~[%s]~~~%d\n", k, r.UidmatrixLength())
-		//			var ul task.UidList
-		//			for i := 0; i < r.UidmatrixLength(); i++ {
-		//				if ok := r.Uidmatrix(&ul, i); !ok {
-		//					rch <- fmt.Errorf("While parsing UidList")
-		//					return
-		//				}
-		//				fmt.Printf("~~~%d\n", ul.UidsLength())
-		//			}
 
 		var tv task.Value
 		for i := 0; i < r.ValuesLength(); i++ {
@@ -705,7 +709,6 @@ func (sg *SubGraph) applyFilters(ctx context.Context, sorted []uint64) ([]uint64
 				rejectUID[i] = true
 			}
 		}
-
 	}
 
 	var newSorted []uint64
@@ -714,18 +717,18 @@ func (sg *SubGraph) applyFilters(ctx context.Context, sorted []uint64) ([]uint64
 			newSorted = append(newSorted, sorted[i])
 		}
 	}
-	fmt.Printf("~~~~~~afterFilter: %d\n", len(newSorted))
-	fmt.Println(newSorted)
 
 	// We can choose to update sg.Result and sg.Query using newSorted. But this
 	// requires re-generating of those two buffers, which is not good. We like to
 	// have a redesign of "query" package to support all these new operations.
-	// For now, we opt for a set of kept UIDs. Note that sg.uidKeep=nil implies
-	// everything is kept. This is a common case.
+	// For now, we opt for a set of kept UIDs. If sg.uidKeep=nil, then everything
+	// is kept. This is a common case. We choose to maintain a list of kept UIDs,
+	// not filtered UIDs because we expect that if there is a filter, most UIDs will
+	// be filtered away.
 	if len(newSorted) < len(sorted) {
-		sg.uidKeep = make(map[uint64]struct{})
+		sg.keepUIDMap = make(map[uint64]struct{})
 		for _, uid := range newSorted {
-			sg.uidKeep[uid] = struct{}{}
+			sg.keepUIDMap[uid] = struct{}{}
 		}
 	}
 	return newSorted, nil
@@ -778,8 +781,6 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, rch chan error) {
 		rch <- err
 		return
 	}
-
-	fmt.Printf("~~~~@@ %d\n", len(sorted))
 
 	// Let's execute it in a tree fashion. Each SubGraph would break off
 	// as many goroutines as it's children; which would then recursively
