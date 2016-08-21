@@ -172,8 +172,8 @@ func (sg *SubGraph) keepUID(uid uint64) bool {
 
 // This method gets the values and children for a subgraph.
 // This is used for conversion to JSON.
-func postTraverse(g *SubGraph) (result map[uint64]interface{}, rerr error) {
-	if len(g.Query) == 0 {
+func postTraverse(sg *SubGraph) (result map[uint64]interface{}, rerr error) {
+	if len(sg.Query) == 0 {
 		return result, nil
 	}
 
@@ -181,7 +181,7 @@ func postTraverse(g *SubGraph) (result map[uint64]interface{}, rerr error) {
 	// Get results from all children first.
 	cResult := make(map[uint64]interface{})
 
-	for _, child := range g.Children {
+	for _, child := range sg.Children {
 		m, err := postTraverse(child)
 		if err != nil {
 			return result, err
@@ -200,13 +200,13 @@ func postTraverse(g *SubGraph) (result map[uint64]interface{}, rerr error) {
 	// these removed UIDs. We need to check against g's keepUID.
 
 	// Now read the query and results at current node.
-	uo := flatbuffers.GetUOffsetT(g.Query)
+	uo := flatbuffers.GetUOffsetT(sg.Query)
 	q := new(task.Query)
-	q.Init(g.Query, uo)
+	q.Init(sg.Query, uo)
 
-	ro := flatbuffers.GetUOffsetT(g.Result)
+	ro := flatbuffers.GetUOffsetT(sg.Result)
 	r := new(task.Result)
-	r.Init(g.Result, ro)
+	r.Init(sg.Result, ro)
 
 	if q.UidsLength() != r.UidmatrixLength() {
 		log.Fatalf("Result uidmatrixlength: %v. Query uidslength: %v",
@@ -232,7 +232,7 @@ func postTraverse(g *SubGraph) (result map[uint64]interface{}, rerr error) {
 	for i := 0; i < r.CountLength(); i++ {
 		co := r.Count(i)
 		m := make(map[string]interface{})
-		if len(g.filterMap) > 0 {
+		if len(sg.filterMap) > 0 {
 			// Currently, if _count_ is defined, we will not query deeper and we will
 			// not have the UIDMatrix to work with!
 			// A refactoring / redesign will fix this.
@@ -240,7 +240,7 @@ func postTraverse(g *SubGraph) (result map[uint64]interface{}, rerr error) {
 		}
 		m["_count_"] = co
 		mp := make(map[string]interface{})
-		mp[g.Attr] = m
+		mp[sg.Attr] = m
 		result[q.Uids(i)] = mp
 	}
 
@@ -252,11 +252,11 @@ func postTraverse(g *SubGraph) (result map[uint64]interface{}, rerr error) {
 		l := make([]interface{}, 0, ul.UidsLength())
 		for j := 0; j < ul.UidsLength(); j++ {
 			uid := ul.Uids(j)
-			if !g.keepUID(uid) {
+			if !sg.keepUID(uid) {
 				continue
 			}
 			m := make(map[string]interface{})
-			if g.GetUid || g.isDebug {
+			if sg.GetUid || sg.isDebug {
 				m["_uid_"] = fmt.Sprintf("%#x", uid)
 			}
 			if ival, present := cResult[uid]; !present {
@@ -267,7 +267,7 @@ func postTraverse(g *SubGraph) (result map[uint64]interface{}, rerr error) {
 		}
 		if len(l) > 0 {
 			m := make(map[string]interface{})
-			m[g.Attr] = l
+			m[sg.Attr] = l
 			result[q.Uids(i)] = m
 		}
 		// TODO(manish): Check what happens if we handle len(l) == 1 separately.
@@ -292,10 +292,10 @@ func postTraverse(g *SubGraph) (result map[uint64]interface{}, rerr error) {
 				pval, q.Uids(i), val)
 		}
 		m := make(map[string]interface{})
-		if g.GetUid || g.isDebug {
+		if sg.GetUid || sg.isDebug {
 			m["_uid_"] = fmt.Sprintf("%#x", q.Uids(i))
 		}
-		m[g.Attr] = string(val)
+		m[sg.Attr] = string(val)
 		result[q.Uids(i)] = m
 	}
 	return result, nil
