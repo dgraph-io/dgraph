@@ -118,9 +118,10 @@ func stripBracketsAndTrim(val string) string {
 	return strings.Trim(val[1:len(val)-1], " ")
 }
 
-// Function to do sanity check for subject, predicate,object and label strings.
+// Function to do sanity check for subject, predicate, object and label strings.
 func sane(s string) bool {
-	// Labels and ObjectId can be "", we already check for subject and predicate before this.
+	// Label and ObjectId can be "", we already check that subject and predicate
+	// shouldn't be empty.
 	if len(s) == 0 {
 		return true
 	}
