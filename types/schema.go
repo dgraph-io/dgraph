@@ -19,6 +19,7 @@ package types
 import "github.com/dgraph-io/dgraph/gql"
 
 // TODO(akhil): validator for client uploaded schema as well, to ensure it declares all types.
+
 // GraphQLSchema declares the schema structure the GraphQL queries.
 type GraphQLSchema struct {
 	Query    GraphQLObject
