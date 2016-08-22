@@ -41,9 +41,11 @@ import (
 	"github.com/dgraph-io/dgraph/query/graph"
 	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/store"
+	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/uid"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
+
 )
 
 var (
@@ -189,6 +191,15 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
 		return
 	}
+
+	x.Trace(ctx, "Starting Schema validation")
+	err = types.ValidateSchema(gq, types.TestSchema)
+	if err != nil {
+		x.Trace(ctx, "Error while validating schema: %v", err)
+		x.SetStatus(w, x.ErrorInvalidQuery, err.Error())
+		return
+	}
+	x.Trace(ctx, "Schema is valid")
 
 	// If we have mutations, run them first.
 	if mu != nil && (len(mu.Set) > 0 || len(mu.Del) > 0) {
