@@ -29,7 +29,7 @@ const maxInt int32 = 1<<31 - 1
 
 /**
  * coerceInt coerces the input value to appropriate type according to GraphQL specification.
- * TODO(akhil): handle error thrown from here
+ * TODO(akhil): handle error thrown from here.
  * Note:
  * 		-although, in most cases, input will be string/boot/int/float types but,
  * 			coercion has been done for all available types for demonstration.
@@ -38,7 +38,7 @@ const maxInt int32 = 1<<31 - 1
  * 		-if input value cannot be coerced, "nil" is retuned.
  */
 func coerceInt(input interface{}) interface{} {
-	//use a 'type switch' to find out the type of the input value
+	// use a 'type switch' to find out the type of the input value
 	switch v := input.(type) {
 	case bool:
 		if v {
@@ -46,13 +46,13 @@ func coerceInt(input interface{}) interface{} {
 		}
 		return 0
 	case string:
-		//TODO(akhil): Test if this works for all inputs. HINT: Atoi didn't work here for float input
+		// TODO(akhil): Test if this works for all inputs. HINT: Atoi didn't work here for float input
 		val, err := strconv.ParseFloat(v, 32)
 		if err != nil {
 			return nil
 		}
 		return coerceInt(val)
-	//TODO(akhil): check if this works correctly, Golang tutorial mentioned it could be int64 on 64 bit systems
+	// TODO(akhil): check if this works correctly, Golang tutorial mentioned it could be int64 on 64 bit systems
 	case int:
 		return v
 	case int8:
@@ -95,7 +95,7 @@ func coerceInt(input interface{}) interface{} {
 	}
 }
 
-
+// Int scalar type.
 var Int = MakeScalarType(
 	&ScalarConfig{
 		Name:			"Int",
@@ -132,6 +132,7 @@ func coerceFloat(input interface{}) interface{} {
 	}
 }
 
+// Float scalar type.
 var Float = MakeScalarType(
 	&ScalarConfig{
 		Name:			"Float",
@@ -158,7 +159,7 @@ func coerceString(input interface{}) interface{} {
 	}
 }
 
-
+// String scalar type.
 var String = MakeScalarType(
 	&ScalarConfig{
 		Name:			"String",
@@ -202,7 +203,7 @@ func coerceBool(input interface{}) interface{} {
 	}
 }
 
-
+// Boolean scalar type.
 var Boolean = MakeScalarType(
 	&ScalarConfig{
 		Name:			"Boolean",
@@ -213,6 +214,7 @@ var Boolean = MakeScalarType(
 	},
 )
 
+// ID scalar type.
 var ID = MakeScalarType(
 	&ScalarConfig{
 		Name:			"ID",
@@ -228,4 +230,4 @@ var ID = MakeScalarType(
 	},
 )
 
-// TODO(akhil): define two more types here: Time and URL
+// TODO(akhil): define two more types here: Time and URL.

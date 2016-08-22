@@ -16,8 +16,8 @@
 
 package types
 
-//User object to denote basic demo object.
-var User GraphQLObject = GraphQLObject{
+// User object to denote basic demo object.
+var User = GraphQLObject{
 	Name:			"User",
 	Desc:			"User object in the system",
 	Fields:			FieldMap{
