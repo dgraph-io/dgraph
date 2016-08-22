@@ -18,32 +18,33 @@ package types
 
 import "github.com/dgraph-io/dgraph/gql"
 
-
+// TODO(akhil): validator for client uploaded schema as well, to ensure it declares all types.
+// GraphQLSchema declares the schema structure the GraphQL queries.
 type GraphQLSchema struct {
-	Query		GraphQLObject
-	Mutation	GraphQLObject
+	Query    GraphQLObject
+	Mutation GraphQLObject
 }
 
+// TestSchema defines a dummy schema to test type and validaiton system.
+var TestSchema = &GraphQLSchema{Query: queryType}
 
-var TestSchema = &GraphQLSchema { Query:	queryType } 
-
-//sample basic schema
-var queryType GraphQLObject = GraphQLObject{
-	Name:		"Oh My Query",
-	Desc:		"Investiture of a Shard",
-	Fields:		FieldMap{
+// queryType defines sample basic schema.
+var queryType = GraphQLObject{
+	Name: "Oh My Query",
+	Desc: "Investiture of a Shard",
+	Fields: FieldMap{
 		"Work": &Field{
 			Type: String,
-			Resolve: func (rp ResolveParams) interface{} {
+			Resolve: func(rp ResolveParams) interface{} {
 				return "In progress"
 			},
 		},
 	},
 }
 
-//ValidateSchema validates the parsed query tree against the present schema
-//TODO(akhil): traverse the GraphQuery and compare each node with corresponding schema struct
-//TODO(akhil): implement error function (extending error interface)
+// ValidateSchema validates the parsed query tree against the present schema.
+// TODO(akhil): traverse GraphQuery and compare each node with corresponding schema struct.
+// TODO(akhil): implement error function (extending error interface).
 func ValidateSchema(gq *gql.GraphQuery, s *GraphQLSchema) error {
 	return nil
 }
