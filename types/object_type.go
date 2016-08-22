@@ -16,29 +16,26 @@
 
 package types
 
-//User object to denote basic demo object.
-var User GraphQLObject = GraphQLObject{
-	Name:			"User",
-	Desc:			"User object in the system",
-	Fields:			FieldMap{
-		"uid":		&Field{
-			Type:		String,
-			Resolve:	func (rp ResolveParams) interface{} { return "uid" },
+// User object to denote basic demo object.
+var User = GraphQLObject{
+	Name: "User",
+	Desc: "User object in the system",
+	Fields: FieldMap{
+		"uid": &Field{
+			Type:    String,
+			Resolve: func(rp ResolveParams) interface{} { return "uid" },
 		},
-		"xid":		&Field{
-			Type:		String,
-			Resolve:	func (rp ResolveParams) interface{} { return "xid"	},
+		"xid": &Field{
+			Type:    String,
+			Resolve: func(rp ResolveParams) interface{} { return "xid" },
 		},
-		"age":		&Field{
-			Type:		Int,
-			Resolve:	func (rp ResolveParams) interface{} { return 1	},
+		"age": &Field{
+			Type:    Int,
+			Resolve: func(rp ResolveParams) interface{} { return 1 },
 		},
-		"hometown":	&Field{
-			Type:		String,
-			Resolve:	func (rp ResolveParams) interface{} { return "hometown_name" },
+		"hometown": &Field{
+			Type:    String,
+			Resolve: func(rp ResolveParams) interface{} { return "hometown_name" },
 		},
 	},
 }
-
-
-	

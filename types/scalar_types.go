@@ -21,15 +21,14 @@ import (
 	"strconv"
 )
 
-
 // As per the GraphQL Spec, Integers are only treated as valid when a valid.
 // 32-bit signed integer, providing the broadest support across platforms.
-const minInt int32 = -1<<31
+const minInt int32 = -1 << 31
 const maxInt int32 = 1<<31 - 1
 
 /**
  * coerceInt coerces the input value to appropriate type according to GraphQL specification.
- * TODO(akhil): handle error thrown from here
+ * TODO(akhil): handle error thrown from here.
  * Note:
  * 		-although, in most cases, input will be string/boot/int/float types but,
  * 			coercion has been done for all available types for demonstration.
@@ -38,7 +37,7 @@ const maxInt int32 = 1<<31 - 1
  * 		-if input value cannot be coerced, "nil" is retuned.
  */
 func coerceInt(input interface{}) interface{} {
-	//use a 'type switch' to find out the type of the input value
+	// use a 'type switch' to find out the type of the input value
 	switch v := input.(type) {
 	case bool:
 		if v {
@@ -46,13 +45,13 @@ func coerceInt(input interface{}) interface{} {
 		}
 		return 0
 	case string:
-		//TODO(akhil): Test if this works for all inputs. HINT: Atoi didn't work here for float input
+		// TODO(akhil): Test if this works for all inputs. HINT: Atoi didn't work here for float input
 		val, err := strconv.ParseFloat(v, 32)
 		if err != nil {
 			return nil
 		}
 		return coerceInt(val)
-	//TODO(akhil): check if this works correctly, Golang tutorial mentioned it could be int64 on 64 bit systems
+	// TODO(akhil): check if this works correctly, Golang tutorial mentioned it could be int64 on 64 bit systems
 	case int:
 		return v
 	case int8:
@@ -95,14 +94,14 @@ func coerceInt(input interface{}) interface{} {
 	}
 }
 
-
+// Int scalar type.
 var Int = MakeScalarType(
 	&ScalarConfig{
-		Name:			"Int",
-		Description:	"The 'Int' scalar type represents non-fractional signed whole" +
-						" numeric values. Int can represent values between -(2^31)" +
-						" and 2^31 - 1.",
-		Serialize:		coerceInt,
+		Name: "Int",
+		Description: "The 'Int' scalar type represents non-fractional signed whole" +
+			" numeric values. Int can represent values between -(2^31)" +
+			" and 2^31 - 1.",
+		Serialize: coerceInt,
 		// parseValue:		coerceInt,
 		// parseLiteral:	coerceInt
 	},
@@ -132,19 +131,18 @@ func coerceFloat(input interface{}) interface{} {
 	}
 }
 
+// Float scalar type.
 var Float = MakeScalarType(
 	&ScalarConfig{
-		Name:			"Float",
-		Description:	"The 'Float' scalar type represents signed double-precision" +
-						" fractional values	as specified by [IEEE 754]" +
-						" (http://en.wikipedia.org/wiki/IEEE_floating_point).",
-		Serialize:		coerceFloat,
+		Name: "Float",
+		Description: "The 'Float' scalar type represents signed double-precision" +
+			" fractional values	as specified by [IEEE 754]" +
+			" (http://en.wikipedia.org/wiki/IEEE_floating_point).",
+		Serialize: coerceFloat,
 		// parseValue:		coerceFloat,
 		// parseLiteral:	coerceFloat
 	},
 )
-
-
 
 func coerceString(input interface{}) interface{} {
 	switch v := input.(type) {
@@ -158,20 +156,18 @@ func coerceString(input interface{}) interface{} {
 	}
 }
 
-
+// String scalar type.
 var String = MakeScalarType(
 	&ScalarConfig{
-		Name:			"String",
-		Description:	"The 'String' scalar type represents textual data, represented" +
-						" as UTF-8 character sequences. The String type is most often" +
-						" used by GraphQL to represent free-form human-readable text.",
-		Serialize:		coerceString,
+		Name: "String",
+		Description: "The 'String' scalar type represents textual data, represented" +
+			" as UTF-8 character sequences. The String type is most often" +
+			" used by GraphQL to represent free-form human-readable text.",
+		Serialize: coerceString,
 		// parseValue:		coerceString,
 		// parseLiteral:	coerceString
 	},
 )
-
-
 
 func coerceBool(input interface{}) interface{} {
 	switch v := input.(type) {
@@ -202,30 +198,31 @@ func coerceBool(input interface{}) interface{} {
 	}
 }
 
-
+// Boolean scalar type.
 var Boolean = MakeScalarType(
 	&ScalarConfig{
-		Name:			"Boolean",
-		Description:	"The 'Boolean' scalar type represents 'true' or 'false'.",
-		Serialize:		coerceBool,
+		Name:        "Boolean",
+		Description: "The 'Boolean' scalar type represents 'true' or 'false'.",
+		Serialize:   coerceBool,
 		// parseValue:		coerceBool,
 		// parseLiteral:	coerceBool
 	},
 )
 
+// ID scalar type.
 var ID = MakeScalarType(
 	&ScalarConfig{
-		Name:			"ID",
-		Description:	"The 'ID' scalar type represents a unique identifier, often" +
-						" used to refetch an object or as key for a cache. The ID type" +
-						" appears in a JSON response as a String; however, it is not" +
-						" intended to be human-readable. When expected as an input" +
-						" type, any string (such as '4') or integer (such as '4')" +
-						" input value will be accepted as an ID.",
-		Serialize:		coerceString,
+		Name: "ID",
+		Description: "The 'ID' scalar type represents a unique identifier, often" +
+			" used to refetch an object or as key for a cache. The ID type" +
+			" appears in a JSON response as a String; however, it is not" +
+			" intended to be human-readable. When expected as an input" +
+			" type, any string (such as '4') or integer (such as '4')" +
+			" input value will be accepted as an ID.",
+		Serialize: coerceString,
 		// parseValue:		coerceString,
 		// parseLiteral:	coerceString
 	},
 )
 
-// TODO(akhil): define two more types here: Time and URL
+// TODO(akhil): define two more types here: Time and URL.
