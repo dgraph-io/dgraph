@@ -19,7 +19,6 @@ export LD_LIBRARY_PATH="${ROCKSDBDIR}:${LD_LIBRARY_PATH}"
 
 pushd cmd/dgraph &> /dev/null
 go build .
-mkdir -p ~/dgraph/m
 # Start dgraph in the background.
 ./dgraph --mutations ~/dgraph/m --postings ~/dgraph/p --uids ~/dgraph/u &
 
