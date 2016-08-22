@@ -23,7 +23,7 @@ go build .
 ./dgraph --mutations ~/dgraph/m --postings ~/dgraph/p --uids ~/dgraph/u &
 
 pushd $BUILD/benchmarks/throughputtest &> /dev/null
-go build . && ./throughputtest --numsec 60 --ip "http://127.0.0.1:8080/query"  --numuser 1000
+go build . && ./throughputtest --numsec 30 --ip "http://127.0.0.1:8080/query"  --numuser 1000
 popd &> /dev/null
 
 popd &>/dev/null
