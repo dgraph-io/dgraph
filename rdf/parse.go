@@ -19,6 +19,7 @@ package rdf
 import (
 	"fmt"
 	"log"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -110,11 +111,25 @@ func (nq NQuad) ToEdgeUsing(
 }
 
 // This function is used to extract an IRI from an IRIREF.
-func stripBracketsIfPresent(val string) string {
+func stripBracketsAndTrim(val string) string {
 	if val[0] != '<' && val[len(val)-1] != '>' {
-		return val
+		return strings.Trim(val, " ")
 	}
-	return val[1 : len(val)-1]
+	return strings.Trim(val[1:len(val)-1], " ")
+}
+
+// Function to do sanity check for subject, predicate,object and label strings.
+func sane(s string) bool {
+	// Labels and ObjectId can be "", we already check for subject and predicate before this.
+	if len(s) == 0 {
+		return true
+	}
+	// s should have atleast one alphanumeric character.
+	matched, err := regexp.MatchString("[a-zA-Z0-9]", s)
+	if err != nil {
+		log.Fatalf("Error while doing a regex string match: %v", err)
+	}
+	return matched
 }
 
 // Parse parses a mutation string and returns the NQuad representation for it.
@@ -129,13 +144,13 @@ func Parse(line string) (rnq NQuad, rerr error) {
 	for item := range l.Items {
 		switch item.Typ {
 		case itemSubject:
-			rnq.Subject = stripBracketsIfPresent(item.Val)
+			rnq.Subject = stripBracketsAndTrim(item.Val)
 
 		case itemPredicate:
-			rnq.Predicate = stripBracketsIfPresent(item.Val)
+			rnq.Predicate = stripBracketsAndTrim(item.Val)
 
 		case itemObject:
-			rnq.ObjectId = stripBracketsIfPresent(item.Val)
+			rnq.ObjectId = stripBracketsAndTrim(item.Val)
 
 		case itemLiteral:
 			oval = item.Val
@@ -150,7 +165,7 @@ func Parse(line string) (rnq NQuad, rerr error) {
 					"itemObject should be emitted before itemObjectType. Input: [%s]",
 					line)
 			}
-			val := stripBracketsIfPresent(item.Val)
+			val := stripBracketsAndTrim(item.Val)
 			if strings.Trim(val, " ") == "*" {
 				return rnq, fmt.Errorf("itemObject can't be *")
 			}
@@ -163,7 +178,7 @@ func Parse(line string) (rnq NQuad, rerr error) {
 			vend = true
 
 		case itemLabel:
-			rnq.Label = stripBracketsIfPresent(item.Val)
+			rnq.Label = stripBracketsAndTrim(item.Val)
 		}
 	}
 
@@ -179,9 +194,9 @@ func Parse(line string) (rnq NQuad, rerr error) {
 	if len(rnq.ObjectId) == 0 && rnq.ObjectValue == nil {
 		return rnq, fmt.Errorf("No Object in NQuad. Input: [%s]", line)
 	}
-	if strings.Trim(rnq.Subject, " ") == "*" || strings.Trim(rnq.Predicate, " ") == "*" ||
-		strings.Trim(rnq.ObjectId, " ") == "*" || strings.Trim(rnq.Label, " ") == "*" {
-		return rnq, fmt.Errorf("IRI can't be *")
+	if !sane(rnq.Subject) || !sane(rnq.Predicate) || !sane(rnq.ObjectId) ||
+		!sane(rnq.Label) {
+		return rnq, fmt.Errorf("NQuad: %+v failed sanity check", rnq)
 	}
 
 	return rnq, nil

@@ -207,6 +207,10 @@ var testNQuads = []struct {
 		hasErr: true,
 	},
 	{
+		input:  `<alice> <* *> "stuff" .`,
+		hasErr: true,
+	},
+	{
 		input:  `<alice> <*> "stuff" .`,
 		hasErr: true,
 	},
