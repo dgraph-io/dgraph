@@ -26,4 +26,7 @@ pushd $BUILD/benchmarks/throughputtest &> /dev/null
 go build . && ./throughputtest --numsec 30 --ip "http://127.0.0.1:8080/query"  --numuser 1000
 popd &> /dev/null
 
+# TODO - Have a way to upload cpu and memory profiles after adding the functionality
+# to stop the server from the client.
+
 popd &>/dev/null
