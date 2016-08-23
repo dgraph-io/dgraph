@@ -19,10 +19,10 @@ package rdf
 import (
 	"fmt"
 	"log"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/dgraph-io/dgraph/lex"
 	"github.com/dgraph-io/dgraph/uid"
@@ -126,11 +126,12 @@ func sane(s string) bool {
 		return true
 	}
 	// s should have atleast one alphanumeric character.
-	matched, err := regexp.MatchString("[a-zA-Z0-9]", s)
-	if err != nil {
-		log.Fatalf("Error while doing a regex string match: %v", err)
+	for _, r := range s {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			return true
+		}
 	}
-	return matched
+	return false
 }
 
 // Parse parses a mutation string and returns the NQuad representation for it.
@@ -197,7 +198,7 @@ func Parse(line string) (rnq NQuad, rerr error) {
 	}
 	if !sane(rnq.Subject) || !sane(rnq.Predicate) || !sane(rnq.ObjectId) ||
 		!sane(rnq.Label) {
-		return rnq, fmt.Errorf("NQuad: %+v failed sanity check", rnq)
+		return rnq, fmt.Errorf("NQuad failed sanity check:%+v", rnq)
 	}
 
 	return rnq, nil
