@@ -70,8 +70,8 @@ type varInfo struct {
 	Type  string
 }
 
-// VarMap is a string map with key as variable name.
-type VarMap map[string]varInfo
+// varMap is a string map with key as variable name.
+type varMap map[string]varInfo
 
 // run is used to run the lexer until we encounter nil state.
 func run(l *lex.Lexer) {
@@ -133,9 +133,9 @@ type decodeQuery struct {
 	Query     string            `json:"query"`
 }
 
-func checkForVariableList(str string) (string, VarMap, error) {
+func checkForVariableList(str string) (string, varMap, error) {
 	var p decodeQuery
-	tempMap := make(VarMap)
+	tempMap := make(varMap)
 	err := json.Unmarshal([]byte(str), &p)
 	if err != nil {
 		return str, tempMap, nil // It does not obey GraphiQL format but valid
@@ -149,9 +149,8 @@ func checkForVariableList(str string) (string, VarMap, error) {
 	return p.Query, tempMap, nil
 }
 
-func checkValidityOfVariables(mp VarMap) error {
+func checkValidityOfVariables(mp varMap) error {
 	for k, v := range mp {
-		fmt.Println(k, v)
 		typ := v.Type
 		if v.Type[len(v.Type)-1] == '!' {
 			if v.Value == "" {
@@ -161,7 +160,6 @@ func checkValidityOfVariables(mp VarMap) error {
 		}
 
 		if v.Value != "" {
-			fmt.Println("...", typ, v.Value)
 			switch typ {
 			case "int":
 				{
@@ -263,7 +261,7 @@ func Parse(input string) (gq *GraphQuery, mu *Mutation, rerr error) {
 }
 
 // getFragment parses a fragment definition (not reference).
-func getFragment(l *lex.Lexer, vMap VarMap) (*fragmentNode, error) {
+func getFragment(l *lex.Lexer, vMap varMap) (*fragmentNode, error) {
 	var name string
 	for item := range l.Items {
 		if item.Typ == itemText {
@@ -352,7 +350,7 @@ func parseMutationOp(l *lex.Lexer, op string, mu *Mutation) error {
 	return errors.New("Invalid mutation formatting.")
 }
 
-func parseVariables(l *lex.Lexer, vMap VarMap) error {
+func parseVariables(l *lex.Lexer, vMap varMap) error {
 	for {
 		var varName string
 		// Get variable name
@@ -443,7 +441,7 @@ func parseArguments(l *lex.Lexer) (result []pair, rerr error) {
 }
 
 // getRoot gets the root graph query object after parsing the args.
-func getRoot(l *lex.Lexer, vMap VarMap) (gq *GraphQuery, rerr error) {
+func getRoot(l *lex.Lexer, vMap varMap) (gq *GraphQuery, rerr error) {
 	gq = new(GraphQuery)
 	item := <-l.Items
 	if item.Typ != itemName {
@@ -477,7 +475,7 @@ func getRoot(l *lex.Lexer, vMap VarMap) (gq *GraphQuery, rerr error) {
 }
 
 // godeep constructs the subgraph from the lexed items and a GraphQuery node.
-func godeep(l *lex.Lexer, gq *GraphQuery, vMap VarMap) error {
+func godeep(l *lex.Lexer, gq *GraphQuery, vMap varMap) error {
 	curp := gq // Used to track current node, for nesting.
 	for item := range l.Items {
 		if item.Typ == lex.ItemError {
