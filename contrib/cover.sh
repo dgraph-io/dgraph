@@ -15,7 +15,7 @@ if [ -z "$OUT" ]; then
 fi
 rm -f $OUT
 
-ROCKSDBDIR=$BUILD/rocksdb-4.2
+ROCKSDBDIR=$BUILD/rocksdb-4.6.1
 
 # build flags needed for rocksdb
 export CGO_CFLAGS="-I${ROCKSDBDIR}/include"
