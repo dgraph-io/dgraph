@@ -361,9 +361,8 @@ func main() {
 		log.Fatalf("Error while creating the filepath for uids: %v", err)
 	}
 
-	ps := new(store.Store)
-
-	if err := ps.Init(*postingDir); err != nil {
+	ps, err := store.NewStore(*postingDir, store.NewDefaultOptions())
+	if err != nil {
 		log.Fatalf("error initializing postings store: %s", err)
 	}
 	defer ps.Close()
@@ -386,8 +385,10 @@ func main() {
 		uid.Init(nil)
 		go posting.CheckMemoryUsage(ps, nil)
 	} else {
-		uidStore := new(store.Store)
-		uidStore.Init(*uidDir)
+		uidStore, err := store.NewStore(*uidDir, store.NewDefaultOptions())
+		if err != nil {
+			log.Fatalf("error initializing uid store: %s", err)
+		}
 		defer uidStore.Close()
 		// Only server instance 0 will have uidStore
 		worker.Init(ps, uidStore, *instanceIdx, lenAddr)

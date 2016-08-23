@@ -76,12 +76,17 @@ func main() {
 	if len(*rdfGzips) == 0 {
 		glog.Fatal("No RDF GZIP files specified")
 	}
-	dataStore := new(store.Store)
-	dataStore.Init(*postingDir)
+
+	dataStore, err := store.NewStore(*postingDir, store.NewDefaultOptions())
+	if err != nil {
+		glog.Fatal("Fail to initialize dataStore")
+	}
 	defer dataStore.Close()
 
-	uidStore := new(store.Store)
-	uidStore.InitReadOnly(*uidDir)
+	uidStore, err := store.NewReadOnlyStore(*uidDir, store.NewDefaultOptions())
+	if err != nil {
+		glog.Fatal("Fail to initialize uidStore")
+	}
 	defer uidStore.Close()
 
 	posting.Init(nil)

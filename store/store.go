@@ -17,6 +17,7 @@
 package store
 
 import (
+	"flag"
 	"fmt"
 	"strconv"
 
@@ -25,7 +26,15 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-var log = x.Log("store")
+var (
+	log = x.Log("store")
+
+	// It is not advisable to put flags not in mains, but in this case, it reduces
+	// quite a bit of typing and it should be clear (and remain clear) that all
+	// RocksDB flags are found here and here only.
+	enableBlockCache = flag.Bool("enableBlockCache", false, "use block cache for RocksDB")
+	blockCacheSize   = flag.Int("blockCacheSize", 8<<20, "block cache size for RocksDB")
+)
 
 type Store struct {
 	db       *rocksdb.DB
@@ -33,20 +42,34 @@ type Store struct {
 	blockopt *rocksdb.BlockBasedTableOptions
 	ropt     *rocksdb.ReadOptions
 	wopt     *rocksdb.WriteOptions
-
-	cache           *rocksdb.Cache
-	compressedCache *rocksdb.Cache
 }
 
-func (s *Store) setOpts() {
+type Options struct {
+	EnableBlockCache bool
+	BlockCacheSize   int // In bytes. A good number is 8 << 20 or 8M.
+}
+
+func NewDefaultOptions() *Options {
+	return &Options{
+		EnableBlockCache: *enableBlockCache,
+		BlockCacheSize:   *blockCacheSize,
+	}
+}
+
+func (s *Store) setOpts(opt *Options) {
 	s.opt = rocksdb.NewDefaultOptions()
+
+	// Initialize BlockBasedTableOptions.
 	s.blockopt = rocksdb.NewDefaultBlockBasedTableOptions()
-
-	//	s.cache = rocksdb.NewLRUCache(8 << 20)
-	//	s.blockopt.SetBlockCache(s.cache)
-
-	//	s.compressedCache = rocksdb.NewLRUCache(8 << 20)
-	//	s.blockopt.SetBlockCacheCompressed(s.compressedCache)
+	if opt.EnableBlockCache {
+		s.blockopt.SetBlockCache(rocksdb.NewLRUCache(opt.BlockCacheSize))
+		s.blockopt.SetBlockCacheCompressed(rocksdb.NewLRUCache(opt.BlockCacheSize))
+		s.blockopt.SetNoBlockCache(false)
+	} else {
+		s.blockopt.SetNoBlockCache(true)
+	}
+	// It is crucial to link s.blockopt to s.opt.
+	s.opt.SetBlockBasedTableFactory(s.blockopt)
 
 	s.opt.SetCreateIfMissing(true)
 	fp := rocksdb.NewBloomFilter(16)
@@ -57,16 +80,30 @@ func (s *Store) setOpts() {
 	s.wopt.SetSync(false) // We don't need to do synchronous writes.
 }
 
-func (s *Store) Init(filepath string) (err error) {
-	s.setOpts()
-	s.db, err = rocksdb.OpenDb(s.opt, filepath)
-	return
+func newStore(opt *Options) *Store {
+	s := &Store{}
+	s.setOpts(opt)
+	return s
 }
 
-func (s *Store) InitReadOnly(filepath string) (err error) {
-	s.setOpts()
+func NewStore(filepath string, opt *Options) (*Store, error) {
+	s := newStore(opt)
+	var err error
+	s.db, err = rocksdb.OpenDb(s.opt, filepath)
+	if err != nil {
+		return nil, err
+	}
+	return s, nil
+}
+
+func NewReadOnlyStore(filepath string, opt *Options) (*Store, error) {
+	s := newStore(opt)
+	var err error
 	s.db, err = rocksdb.OpenDbForReadOnly(s.opt, filepath, false)
-	return
+	if err != nil {
+		return nil, err
+	}
+	return s, nil
 }
 
 func (s *Store) Get(key []byte) (val []byte, rerr error) {
