@@ -65,8 +65,10 @@ func main() {
 		glog.Fatal("No RDF GZIP files specified")
 	}
 
-	ps := new(store.Store)
-	ps.Init(*uidDir)
+	ps, err := store.NewStore(*uidDir, store.NewDefaultOptions())
+	if err != nil {
+		glog.Fatal("Fail to initialize ps")
+	}
 	defer ps.Close()
 
 	posting.Init(nil)
