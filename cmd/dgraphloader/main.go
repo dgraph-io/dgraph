@@ -19,6 +19,7 @@ package main
 import (
 	"compress/gzip"
 	"flag"
+	"log"
 	"os"
 	"runtime"
 	"runtime/pprof"
@@ -72,6 +73,13 @@ func main() {
 	glog.WithField("num_cpu", numCpus).
 		WithField("prev_maxprocs", prevProcs).
 		Info("Set max procs to num cpus")
+
+	// Create parent directory for postings.
+	var err error
+	err = os.MkdirAll(*postingDir, 0700)
+	if err != nil {
+		log.Fatalf("Error while creating the filepath for postings: %v", err)
+	}
 
 	if len(*rdfGzips) == 0 {
 		glog.Fatal("No RDF GZIP files specified")

@@ -4,6 +4,7 @@ SRC="$( cd -P "$( dirname "${BASH_SOURCE[0]}" )" && pwd )/.."
 TMP=$(mktemp -p /tmp dgraph-coverage-XXXXX.txt)
 
 BUILD=$1
+# If build variable is empty then we set it.
 if [ -z "$1" ]; then
   BUILD=$SRC/build
 fi
@@ -14,16 +15,16 @@ if [ -z "$OUT" ]; then
 fi
 rm -f $OUT
 
-ROCKSDBDIR=$BUILD/rocksdb-4.2
-
-set -e
-
-pushd $SRC &> /dev/null
+ROCKSDBDIR=$BUILD/rocksdb-4.6.1
 
 # build flags needed for rocksdb
 export CGO_CFLAGS="-I${ROCKSDBDIR}/include"
 export CGO_LDFLAGS="-L${ROCKSDBDIR}"
 export LD_LIBRARY_PATH="${ROCKSDBDIR}:${LD_LIBRARY_PATH}"
+
+set -e
+
+pushd $SRC &> /dev/null
 
 # create coverage output
 echo 'mode: atomic' > $OUT
