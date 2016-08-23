@@ -130,9 +130,27 @@ func TestVariables2(t *testing.T) {
 	}
 }
 
+func TestVariablesDefault(t *testing.T) {
+	input := `
+	query testQuery ($username: string = abc, $id: int = 5, $email: string!) {
+		me(xid: rick) {
+			_city
+		}
+	}`
+	l := &lex.Lexer{}
+	l.Init(input)
+	go run(l)
+	for item := range l.Items {
+		if item.Typ == lex.ItemError {
+			t.Error(item.String())
+		}
+		t.Log(item.String(), item.Typ)
+	}
+}
+
 func TestVariablesError(t *testing.T) {
 	input := `
-	query testQuery($username: String! {
+	query testQuery($username: string! {
 		me(xid: rick) {
 			_city
 		}

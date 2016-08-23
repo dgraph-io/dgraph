@@ -617,6 +617,27 @@ func TestParseVariables(t *testing.T) {
 	}
 }
 
+func TestParseVariablesDefault(t *testing.T) {
+	query := `{
+		"query": "query testQuery($a: int = 5, $b: int){root(_uid_: 0x0a) {name(first: $b, after: $a){english}}}", 
+		"variables": {"$b": "5" } 
+	}`
+	_, _, err := Parse(query)
+	if err != nil {
+		t.Error(err)
+	}
+}
+
+func TestParseVariablesDefault1(t *testing.T) {
+	query := `{
+		"query": "query testQuery($a: int = 3, $b: int = 4, $c : int = 3){root(_uid_: 0x0a) {name(first: $b, after: $a, offset: $c){english}}}", 
+		"variables": {"$b": "5" } 
+	}`
+	_, _, err := Parse(query)
+	if err != nil {
+		t.Error(err)
+	}
+}
 func TestParseVariablesFragments(t *testing.T) {
 	query := `{
 	"query": "query test($a: int){user(_uid_:0x0a) {...fragmentd,friends(first: $a, offset: $a) {name}}} fragment fragmentd {id(first: $a)}",

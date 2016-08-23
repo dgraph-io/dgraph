@@ -65,7 +65,7 @@ type fragmentNode struct {
 // Key is fragment names.
 type fragmentMap map[string]*fragmentNode
 
-// Key is variable name.
+// VarMap is a string map with key as variable name.
 type VarMap map[string]string
 
 // run is used to run the lexer until we encounter nil state.
@@ -123,17 +123,17 @@ func (gq *GraphQuery) expandFragments(fmap fragmentMap) error {
 	return nil
 }
 
-type JsonQuery struct {
+type jsonQuery struct {
 	Variables map[string]string `json:"variables"`
 	Query     string            `json:"query"`
 }
 
 func checkForVariableList(str string) (string, VarMap, error) {
-	var mp JsonQuery
+	var mp jsonQuery
+	tempMap := make(VarMap)
 	err := json.Unmarshal([]byte(str), &mp)
-	fmt.Println(mp)
 	if err != nil {
-		return str, nil, nil // It does not obey GraphiQL format but valid
+		return str, tempMap, nil // It does not obey GraphiQL format but valid
 	}
 
 	return mp.Query, mp.Variables, nil
@@ -141,27 +141,28 @@ func checkForVariableList(str string) (string, VarMap, error) {
 
 func checkValidityOfVariables(mp1, mp2 VarMap) error {
 	if len(mp1) != len(mp2) {
-		return errors.New("Variable list incomplete")
+		return fmt.Errorf("Variable list incomplete. lengths are %v and %v",
+			len(mp1), len(mp2))
 	}
 
-	for k, _ := range mp1 {
+	for k := range mp1 {
 		if _, ok := mp2[k]; !ok {
-			return errors.New("Variable list incomplete")
+			return fmt.Errorf("Variable list incomplete. Missing: %v", k)
 		}
 	}
 
-	for k, _ := range mp2 {
+	for k := range mp2 {
 		if _, ok := mp1[k]; !ok {
-			return errors.New("Variable list incomplete")
+			return fmt.Errorf("Variable list incomplete. Missing: %v", k)
 		}
 	}
 	return nil
 }
 
 func areAllVarsUsed(mp1 VarMap, mp2 map[string]bool) error {
-	for k, _ := range mp1 {
+	for k := range mp1 {
 		if _, ok := mp2[k]; !ok {
-			return errors.New(fmt.Sprintf("Variable %s declared and not used", k))
+			return fmt.Errorf("Variable %s declared and not used", k)
 		}
 	}
 
@@ -173,8 +174,6 @@ func areAllVarsUsed(mp1 VarMap, mp2 map[string]bool) error {
 func Parse(input string) (gq *GraphQuery, mu *Mutation, rerr error) {
 	l := &lex.Lexer{}
 	query, varValuesMap, err := checkForVariableList(input)
-	fmt.Println(query)
-	fmt.Println(varValuesMap)
 
 	if err != nil {
 		return nil, nil, err
@@ -220,10 +219,10 @@ func Parse(input string) (gq *GraphQuery, mu *Mutation, rerr error) {
 			}
 
 		case itemLeftRound:
-			parseVariables(l, varMap)
-			fmt.Println(varMap)
+			parseVariables(l, varMap, varValuesMap)
 		}
 	}
+
 	if err := checkValidityOfVariables(varMap, varValuesMap); err != nil {
 		return nil, nil, err
 	}
@@ -331,7 +330,7 @@ func parseMutationOp(l *lex.Lexer, op string, mu *Mutation) error {
 	return errors.New("Invalid mutation formatting.")
 }
 
-func parseVariables(l *lex.Lexer, varMap VarMap) error {
+func parseVariables(l *lex.Lexer, varMap, varValuesMap VarMap) error {
 	for {
 		var varName string
 		// Get variable name
@@ -340,7 +339,6 @@ func parseVariables(l *lex.Lexer, varMap VarMap) error {
 			varName = item.Val
 		} else if item.Typ == itemRightRound {
 			break
-
 		} else {
 			return fmt.Errorf("Expecting a variable name. Got: %v", item)
 		}
@@ -352,6 +350,25 @@ func parseVariables(l *lex.Lexer, varMap VarMap) error {
 		}
 
 		varMap[varName] = item.Val
+		item = <-l.Items
+		if item.Typ == itemEqual {
+			it := <-l.Items
+			if it.Typ != itemVarDefault {
+				return fmt.Errorf("Expecting default value of a variable. Got: %v", item)
+			}
+
+			if _, ok := varValuesMap[varName]; !ok {
+				varValuesMap[varName] = it.Val
+			}
+			item = <-l.Items
+		}
+
+		if item.Typ == itemComma {
+			continue
+		} else if item.Typ == itemRightRound {
+			break
+		}
+
 	}
 	return nil
 }

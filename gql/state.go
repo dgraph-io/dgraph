@@ -22,14 +22,15 @@ import "github.com/dgraph-io/dgraph/lex"
 const (
 	leftCurl     = '{'
 	rightCurl    = '}'
-	leftBra      = '('
-	rightBra     = ')'
+	leftRound    = '('
+	rightRound   = ')'
 	period       = '.'
 	bang         = '!'
 	dollar       = '$'
 	queryMode    = 1
 	mutationMode = 2
 	fragmentMode = 3
+	equal        = '='
 )
 
 // Constants representing type of different graphql lexed items.
@@ -37,6 +38,8 @@ const (
 	itemText            lex.ItemType = 5 + iota // plain text
 	itemLeftCurl                                // left curly bracket
 	itemRightCurl                               // right curly bracket
+	itemComma                                   // a comma
+	itemEqual                                   // equals to symbol
 	itemComment                                 // comment
 	itemName                                    // [9] names
 	itemOpType                                  // operation type
@@ -50,6 +53,7 @@ const (
 	itemFragmentSpread                          // three dots and name
 	itemVarName                                 // dollar followed by a name
 	itemVarType                                 // type a variable
+	itemVarDefault                              // default value of a variable
 )
 
 // lexText lexes the input string and calls other lex functions.
@@ -72,7 +76,7 @@ Loop:
 			return l.Errorf("Too many right characters")
 		case r == lex.EOF:
 			break Loop
-		case r == leftBra:
+		case r == leftRound:
 			l.Backup()
 			l.Emit(itemText)
 			l.Next()
@@ -273,10 +277,15 @@ func lexVarInside(l *lex.Lexer) lex.StateFn {
 		case r == ':':
 			l.Ignore()
 			return lexVarType
+		case r == equal:
+			l.Emit(itemEqual)
+			l.Ignore()
+			return lexVarDefault
 		case r == ')':
 			l.Emit(itemRightRound)
 			return lexText
 		case r == ',':
+			l.Emit(itemComma)
 			l.Ignore()
 		default:
 			return l.Errorf("variable list invalid")
@@ -311,6 +320,24 @@ func lexVarType(l *lex.Lexer) lex.StateFn {
 		}
 		if r == lex.EOF {
 			return l.Errorf("Reached lex.EOF while reading var value: %v",
+				l.Input[l.Start:l.Pos])
+		}
+	}
+}
+
+// lexVarDefault lexes and emits the Default value of a variable.
+func lexVarDefault(l *lex.Lexer) lex.StateFn {
+	l.AcceptRun(isSpace)
+	l.Ignore() // Any spaces encountered.
+	for {
+		r := l.Next()
+		if isSpace(r) || isEndOfLine(r) || r == ')' || r == ',' {
+			l.Backup()
+			l.Emit(itemVarDefault)
+			return lexVarInside
+		}
+		if r == lex.EOF {
+			return l.Errorf("Reached lex.EOF while reading default value: %v",
 				l.Input[l.Start:l.Pos])
 		}
 	}
