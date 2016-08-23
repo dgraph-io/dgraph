@@ -143,6 +143,10 @@ var testNQuads = []struct {
 		hasErr: true,
 	},
 	{
+		input:  "<alice> <knows> .",
+		hasErr: true,
+	},
+	{
 		input:  "_uid_: 0x01 <knows> <something> .",
 		hasErr: true,
 	},
@@ -183,12 +187,54 @@ var testNQuads = []struct {
 		hasErr: true,
 	},
 	{
+		input:  `<alice> <knows> * .`,
+		hasErr: true,
+	},
+	{
+		input:  `<alice> <knows> <*> .`,
+		hasErr: true,
+	},
+	{
+		input:  `<*> <knows> "stuff" .`,
+		hasErr: true,
+	},
+	{
+		input:  `<alice> <*> "stuff" .`,
+		hasErr: true,
+	},
+	{
+		input:  `<alice> < * > "stuff" .`,
+		hasErr: true,
+	},
+	{
+		input:  `<alice> <* *> "stuff" .`,
+		hasErr: true,
+	},
+	{
+		input:  `<alice> <*> "stuff" .`,
+		hasErr: true,
+	},
+	{
+		input:  `_:alice <knows> "stuff"^^< * > .`,
+		hasErr: true,
+	},
+	{
 		input: `_:alice <knows> "stuff"^^<xs:string> .`,
 		nq: NQuad{
 			Subject:     "_:alice",
 			Predicate:   "knows",
 			ObjectId:    "",
 			ObjectValue: []byte("stuff@@xs:string"),
+		},
+		hasErr: false,
+	},
+	{
+		input: `<alice> <knows> "*" .`,
+		nq: NQuad{
+			Subject:     "alice",
+			Predicate:   "knows",
+			ObjectId:    "",
+			ObjectValue: []byte("*"),
 		},
 		hasErr: false,
 	},
@@ -239,6 +285,10 @@ var testNQuads = []struct {
 	},
 	{
 		input:  `_:alice <knows> "stuff"^^<xs:string> quad .`,
+		hasErr: true,
+	},
+	{
+		input:  `_:alice <knows> "stuff"^^<xs:string> <*> .`,
 		hasErr: true,
 	},
 	{
