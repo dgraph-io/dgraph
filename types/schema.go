@@ -30,7 +30,7 @@ var TestSchema = &GraphQLSchema{Query: queryType}
 
 // queryType defines sample basic schema.
 var queryType = GraphQLObject{
-	Name: "Oh My Query",
+	Name: "My Query",
 	Desc: "Investiture of a Shard",
 	Fields: FieldMap{
 		"Work": &Field{
