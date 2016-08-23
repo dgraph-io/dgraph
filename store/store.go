@@ -33,11 +33,21 @@ type Store struct {
 	blockopt *rocksdb.BlockBasedTableOptions
 	ropt     *rocksdb.ReadOptions
 	wopt     *rocksdb.WriteOptions
+
+	cache           *rocksdb.Cache
+	compressedCache *rocksdb.Cache
 }
 
 func (s *Store) setOpts() {
 	s.opt = rocksdb.NewDefaultOptions()
 	s.blockopt = rocksdb.NewDefaultBlockBasedTableOptions()
+
+	//	s.cache = rocksdb.NewLRUCache(8 << 20)
+	//	s.blockopt.SetBlockCache(s.cache)
+
+	//	s.compressedCache = rocksdb.NewLRUCache(8 << 20)
+	//	s.blockopt.SetBlockCacheCompressed(s.compressedCache)
+
 	s.opt.SetCreateIfMissing(true)
 	fp := rocksdb.NewBloomFilter(16)
 	s.blockopt.SetFilterPolicy(fp)

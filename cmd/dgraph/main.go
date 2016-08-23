@@ -362,6 +362,7 @@ func main() {
 	}
 
 	ps := new(store.Store)
+
 	if err := ps.Init(*postingDir); err != nil {
 		log.Fatalf("error initializing postings store: %s", err)
 	}

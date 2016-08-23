@@ -18,6 +18,7 @@ package posting
 
 import (
 	"flag"
+	"fmt"
 	"log"
 	"math/rand"
 	"runtime"
@@ -182,11 +183,13 @@ func CheckMemoryUsage(ps1, ps2 *store.Store) {
 		runtime.ReadMemStats(&ms)
 		totMemory := ms.Alloc
 		if ps1 != nil {
-			totMemory += ps1.MemtableSize() + ps1.IndexFilterblockSize()
+			fmt.Printf("~~CheckMemoryUsage: usage %d\n", ps1.BlockCacheSize())
+			totMemory += ps1.MemtableSize() + ps1.IndexFilterblockSize() + ps1.BlockCacheSize()
 		}
 
 		if ps2 != nil {
-			totMemory += ps2.MemtableSize() + ps2.IndexFilterblockSize()
+			fmt.Printf("~~CheckMemoryUsage: usage %d\n", ps2.BlockCacheSize())
+			totMemory += ps2.MemtableSize() + ps2.IndexFilterblockSize() + ps2.BlockCacheSize()
 		}
 
 		if totMemory > MAX_MEMORY {

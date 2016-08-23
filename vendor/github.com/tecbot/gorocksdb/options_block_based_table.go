@@ -2,8 +2,6 @@ package gorocksdb
 
 // #include "rocksdb/c.h"
 // #include "gorocksdb.h"
-// #cgo LDFLAGS: -lstdc++ -L./extralib -lrocksdbextra
-// #include "extralib/rocksdbextra.h"
 import "C"
 
 // BlockBasedTableOptions represents block-based table options.
@@ -113,5 +111,5 @@ func (opts *BlockBasedTableOptions) SetWholeKeyFiltering(value bool) {
 }
 
 func (opts *BlockBasedTableOptions) BlockCacheSize() uint64 {
-	return uint64(C.rocksdb_block_based_options_usage(opts.c))
+	return uint64(C.rocksdb_block_based_options_get_usage(opts.c))
 }
