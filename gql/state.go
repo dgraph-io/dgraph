@@ -25,6 +25,7 @@ const (
 	leftRound    = '('
 	rightRound   = ')'
 	period       = '.'
+	comma        = ','
 	bang         = '!'
 	dollar       = '$'
 	queryMode    = 1
@@ -117,14 +118,14 @@ func lexInside(l *lex.Lexer) lex.StateFn {
 			l.Emit(itemLeftCurl)
 		case r == lex.EOF:
 			return l.Errorf("Unclosed action")
-		case isSpace(r) || isEndOfLine(r) || r == ',':
+		case isSpace(r) || isEndOfLine(r) || r == comma:
 			l.Ignore()
 		case isNameBegin(r):
 			return lexName
 		case r == '#':
 			l.Backup()
 			return lexComment
-		case r == '(':
+		case r == leftRound:
 			l.Emit(itemLeftRound)
 			return lexArgInside
 		default:
@@ -281,10 +282,10 @@ func lexVarInside(l *lex.Lexer) lex.StateFn {
 			l.Emit(itemEqual)
 			l.Ignore()
 			return lexVarDefault
-		case r == ')':
+		case r == rightRound:
 			l.Emit(itemRightRound)
 			return lexText
-		case r == ',':
+		case r == comma:
 			l.Emit(itemComma)
 			l.Ignore()
 		default:
@@ -313,7 +314,7 @@ func lexVarType(l *lex.Lexer) lex.StateFn {
 	l.Ignore() // Any spaces encountered.
 	for {
 		r := l.Next()
-		if isSpace(r) || isEndOfLine(r) || r == ')' || r == ',' {
+		if isSpace(r) || isEndOfLine(r) || r == rightRound || r == comma {
 			l.Backup()
 			l.Emit(itemVarType)
 			return lexVarInside
@@ -331,7 +332,7 @@ func lexVarDefault(l *lex.Lexer) lex.StateFn {
 	l.Ignore() // Any spaces encountered.
 	for {
 		r := l.Next()
-		if isSpace(r) || isEndOfLine(r) || r == ')' || r == ',' {
+		if isSpace(r) || isEndOfLine(r) || r == rightRound || r == comma {
 			l.Backup()
 			l.Emit(itemVarDefault)
 			return lexVarInside
@@ -356,10 +357,10 @@ func lexArgInside(l *lex.Lexer) lex.StateFn {
 		case r == ':':
 			l.Ignore()
 			return lexArgVal
-		case r == ')':
+		case r == rightRound:
 			l.Emit(itemRightRound)
 			return lexInside
-		case r == ',':
+		case r == comma:
 			l.Ignore()
 		default:
 			return l.Errorf("argument list invalid")
@@ -387,7 +388,7 @@ func lexArgVal(l *lex.Lexer) lex.StateFn {
 	l.Ignore() // Any spaces encountered.
 	for {
 		r := l.Next()
-		if isSpace(r) || isEndOfLine(r) || r == ')' || r == ',' {
+		if isSpace(r) || isEndOfLine(r) || r == rightRound || r == comma {
 			l.Backup()
 			l.Emit(itemArgVal)
 			return lexArgInside
