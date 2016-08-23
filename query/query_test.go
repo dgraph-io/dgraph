@@ -215,7 +215,7 @@ func processToJson(t *testing.T, query string) map[string]interface{} {
 	}
 
 	var l Latency
-	js, err := sg.ToJson(&l)
+	js, err := sg.ToJSON(&l)
 	if err != nil {
 		t.Error(err)
 	}
@@ -515,7 +515,7 @@ func TestToJson(t *testing.T) {
 	}
 
 	var l Latency
-	js, err := sg.ToJson(&l)
+	js, err := sg.ToJSON(&l)
 	if err != nil {
 		t.Error(err)
 	}
@@ -652,7 +652,7 @@ func benchmarkToJson(file string, b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if _, err := sg.ToJson(&l); err != nil {
+		if _, err := sg.ToJSON(&l); err != nil {
 			b.Fatal(err)
 		}
 	}
