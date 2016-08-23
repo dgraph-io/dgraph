@@ -3,6 +3,7 @@ package main
 import (
 	"compress/gzip"
 	"flag"
+	"log"
 	"os"
 	"runtime"
 	"runtime/pprof"
@@ -63,6 +64,13 @@ func main() {
 
 	if len(*rdfGzips) == 0 {
 		glog.Fatal("No RDF GZIP files specified")
+	}
+
+	// Create parent directory for uids.
+	var err error
+	err = os.MkdirAll(*uidDir, 0700)
+	if err != nil {
+		log.Fatalf("Error while creating the filepath for uids: %v", err)
 	}
 
 	ps := new(store.Store)

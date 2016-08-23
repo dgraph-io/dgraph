@@ -1,11 +1,12 @@
 #!/bin/bash
 
-ROCKSDBVER="4.2"
+export ROCKSDBVER="4.6.1"
 ROCKSDBURL="https://github.com/facebook/rocksdb/archive/v${ROCKSDBVER}.tar.gz"
 ROCKSDBFILE="rocksdb-${ROCKSDBVER}.tar.gz"
 ROCKSDBDIR=rocksdb-${ROCKSDBVER}
 ROCKSDBLIB=librocksdb.so.${ROCKSDBVER}
 
+# Gets the path of the directory from which the script is executed.
 SRC="$( cd -P "$( dirname "${BASH_SOURCE[0]}" )" && pwd )/.."
 
 BUILD=$1
@@ -17,6 +18,7 @@ fi
 
 set -e
 
+# Push build directory to stack, checkout and don't display output.
 pushd $BUILD &> /dev/null
 
 # download
@@ -35,4 +37,5 @@ if [ ! -e $ROCKSDBDIR/${ROCKSDBLIB} ]; then
   make shared_lib
 fi
 
+# check back out to the directory you were in earlier.
 popd &> /dev/null
