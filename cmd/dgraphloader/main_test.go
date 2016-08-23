@@ -30,11 +30,13 @@ func TestQuery(t *testing.T) {
 
 	ps, err := store.NewStore(dir, store.NewDefaultOptions())
 	if err != nil {
+		t.Error(err)
 		t.Fail()
 	}
 
 	ps1, err := store.NewStore(dir1, store.NewDefaultOptions())
 	if err != nil {
+		t.Error(err)
 		t.Fail()
 	}
 
