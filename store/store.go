@@ -62,6 +62,7 @@ func (s *Store) setOpts(opt *Options) {
 	// Initialize BlockBasedTableOptions.
 	s.blockopt = rocksdb.NewDefaultBlockBasedTableOptions()
 	if opt.EnableBlockCache {
+		// This gives us handles to the cache so that we can query its usage.
 		s.blockopt.SetBlockCache(rocksdb.NewLRUCache(opt.BlockCacheSize))
 		s.blockopt.SetBlockCacheCompressed(rocksdb.NewLRUCache(opt.BlockCacheSize))
 		s.blockopt.SetNoBlockCache(false)
@@ -148,7 +149,3 @@ func (s *Store) IndexFilterblockSize() uint64 {
 	blockSize, _ := strconv.ParseUint(s.db.GetProperty("rocksdb.estimate-table-readers-mem"), 10, 64)
 	return blockSize
 }
-
-//func (s *Store) BlockCacheSize() uint64 {
-//	return s.blockopt.BlockCacheSize()
-//}
