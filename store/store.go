@@ -36,19 +36,22 @@ var (
 	blockCacheSize   = flag.Int("blockCacheSize", 8<<20, "block cache size for RocksDB")
 )
 
+// Store contains some handles to RocksDB.
 type Store struct {
 	db       *rocksdb.DB
-	opt      *rocksdb.Options
+	opt      *rocksdb.Options // Contains blockopt.
 	blockopt *rocksdb.BlockBasedTableOptions
 	ropt     *rocksdb.ReadOptions
 	wopt     *rocksdb.WriteOptions
 }
 
+// Options is a set of options to configure RocksDB usage in Dgraph only.
 type Options struct {
 	EnableBlockCache bool
 	BlockCacheSize   int // In bytes. A good number is 8 << 20 or 8M.
 }
 
+// NewDefaultOptions creates default options for RocksDB in Dgraph.
 func NewDefaultOptions() *Options {
 	return &Options{
 		EnableBlockCache: *enableBlockCache,
@@ -87,6 +90,7 @@ func newStore(opt *Options) *Store {
 	return s
 }
 
+// NewStore constructs a Store object at filepath, given some options.
 func NewStore(filepath string, opt *Options) (*Store, error) {
 	s := newStore(opt)
 	var err error
@@ -97,6 +101,7 @@ func NewStore(filepath string, opt *Options) (*Store, error) {
 	return s, nil
 }
 
+// NewReadOnlyStore constructs a readonly Store object at filepath, given options.
 func NewReadOnlyStore(filepath string, opt *Options) (*Store, error) {
 	s := newStore(opt)
 	var err error
