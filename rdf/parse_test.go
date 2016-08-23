@@ -19,6 +19,11 @@ package rdf
 import (
 	"reflect"
 	"testing"
+
+	"github.com/bradfitz/iter"
+	"github.com/stretchr/testify/assert"
+
+	p "github.com/dgraph-io/dgraph/parsing"
 )
 
 var testNQuads = []struct {
@@ -143,6 +148,10 @@ var testNQuads = []struct {
 		hasErr: true,
 	},
 	{
+		input:  "<alice> <knows> .",
+		hasErr: true,
+	},
+	{
 		input:  "_uid_: 0x01 <knows> <something> .",
 		hasErr: true,
 	},
@@ -183,12 +192,58 @@ var testNQuads = []struct {
 		hasErr: true,
 	},
 	{
+		input:  `<alice> <knows> * .`,
+		hasErr: true,
+	},
+	{
+		input: `<alice> <knows> <*> .`,
+		nq: NQuad{
+			Subject:   "alice",
+			Predicate: "knows",
+			ObjectId:  "*",
+		},
+	},
+	{
+		input: `<*> <knows> "stuff" .`,
+		nq: NQuad{
+			Subject:     "*",
+			Predicate:   "knows",
+			ObjectValue: []byte("stuff"),
+		},
+	},
+	{
+		input: `<alice> <*> "stuff" .`,
+		nq: NQuad{
+			Subject:     "alice",
+			Predicate:   "*",
+			ObjectValue: []byte("stuff"),
+		},
+	},
+	{
+		input:  `<alice> < * > "stuff" .`,
+		hasErr: true,
+	},
+	{
+		input:  `_:alice <knows> "stuff"^^< * > .`,
+		hasErr: true,
+	},
+	{
 		input: `_:alice <knows> "stuff"^^<xs:string> .`,
 		nq: NQuad{
 			Subject:     "_:alice",
 			Predicate:   "knows",
 			ObjectId:    "",
 			ObjectValue: []byte("stuff@@xs:string"),
+		},
+		hasErr: false,
+	},
+	{
+		input: `<alice> <knows> "*" .`,
+		nq: NQuad{
+			Subject:     "alice",
+			Predicate:   "knows",
+			ObjectId:    "",
+			ObjectValue: []byte("*"),
 		},
 		hasErr: false,
 	},
@@ -230,8 +285,13 @@ var testNQuads = []struct {
 		hasErr: true,
 	},
 	{
-		input:  `_:alice <knows> "stuff"^^<xs:string> _uid_:0x01 .`,
-		hasErr: true,
+		input: `_:alice <knows> "stuff"^^<xs:string> _uid_:0x01 .`,
+		nq: NQuad{
+			Subject:     "_:alice",
+			Predicate:   "knows",
+			ObjectValue: []byte("stuff@@xs:string"),
+			Label:       "_uid_:0x01",
+		},
 	},
 	{
 		input:  `_:alice <knows> "stuff"^^<xs:string> <quad> <pentagon> .`,
@@ -240,6 +300,15 @@ var testNQuads = []struct {
 	{
 		input:  `_:alice <knows> "stuff"^^<xs:string> quad .`,
 		hasErr: true,
+	},
+	{
+		input: `_:alice <knows> "stuff"^^<xs:string> <*> .`,
+		nq: NQuad{
+			Subject:     "_:alice",
+			Predicate:   "knows",
+			ObjectValue: []byte("stuff@@xs:string"),
+			Label:       "*",
+		},
 	},
 	{
 		input: `_:alice <knows> <bob> . <bob>`, // ignores the <bob> after dot.
@@ -254,27 +323,91 @@ var testNQuads = []struct {
 		nq: NQuad{
 			Subject:     "_:alice",
 			Predicate:   "likes",
-			ObjectValue: []byte(`mov\"enpick`),
+			ObjectValue: []byte(`mov"enpick`),
+		},
+	},
+	{
+		input: "<universe> <answer> \"42\"@en .",
+		nq: NQuad{
+			Subject:     "universe",
+			Predicate:   "answer.en",
+			ObjectValue: []byte("42"),
 		},
 	},
 }
 
-func TestLex(t *testing.T) {
+func TestParse(t *testing.T) {
 	for _, test := range testNQuads {
+		t.Logf("parsing %q", test.input)
 		rnq, err := Parse(test.input)
 		if test.hasErr {
 			if err == nil {
-				t.Errorf("Expected error for input: %q. Output: %+v", test.input, rnq)
+				t.Errorf("expected error parsing %q", test.input)
 			}
-			continue
 		} else {
 			if err != nil {
-				t.Errorf("Unexpected error: %v", err)
+				t.Errorf("unexpected parsing error: %s", err)
+			}
+			if !reflect.DeepEqual(rnq, test.nq) {
+				t.Errorf("\nexpected: %#v\ngot     : %#v", test.nq, rnq)
 			}
 		}
+	}
+}
 
-		if !reflect.DeepEqual(rnq, test.nq) {
-			t.Errorf("Expected %v. Got: %v", test.nq, rnq)
+func BenchmarkParse(b *testing.B) {
+	for range iter.N(b.N) {
+		for _, tc := range testNQuads {
+			if tc.hasErr {
+				continue
+			}
+			Parse(tc.input)
 		}
 	}
+}
+
+func TestParserName(t *testing.T) {
+	assert.Equal(t, "literal", p.ParserName(&literal{}))
+}
+
+type parseDocTestCase struct {
+	Input  string
+	Output []NQuad
+	Err    bool
+}
+
+func testParseDoc(t *testing.T, tc parseDocTestCase) {
+	t.Logf("parsing %q", tc.Input)
+	ret, err := ParseDoc(tc.Input)
+	if tc.Err {
+		if err != nil {
+			t.Logf("got error %s", err)
+		} else {
+			t.Error("expected error but got none")
+		}
+	} else if err != nil {
+		t.Errorf("got unexpected error: %s", err)
+	}
+	assert.EqualValues(t, tc.Output, ret)
+}
+
+func TestParseDoc(t *testing.T) {
+	testParseDoc(t, parseDocTestCase{})
+	testParseDoc(t, parseDocTestCase{
+		Input: "wah??",
+		Err:   true,
+	})
+	testParseDoc(t, parseDocTestCase{
+		Input: ` <universe> <answer> "42"@en .\n`,
+		Output: []NQuad{
+			{Subject: "universe", Predicate: "answer.en", ObjectValue: []byte("42")},
+		},
+		Err: true,
+	})
+	testParseDoc(t, parseDocTestCase{
+		Input: " <universe> <answer> \"42\"@en .\n",
+		Output: []NQuad{
+			{Subject: "universe", Predicate: "answer.en", ObjectValue: []byte("42")},
+		},
+	})
 }

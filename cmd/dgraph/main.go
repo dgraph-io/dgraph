@@ -17,7 +17,6 @@
 package main
 
 import (
-	"bufio"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -71,24 +70,11 @@ func addCorsHeaders(w http.ResponseWriter) {
 	w.Header().Set("Connection", "close")
 }
 
-func convertToEdges(ctx context.Context, mutation string) ([]x.DirectedEdge, error) {
-	var edges []x.DirectedEdge
-	var nquads []rdf.NQuad
-	r := strings.NewReader(mutation)
-	scanner := bufio.NewScanner(r)
-
-	// Scanning the mutation string, one line at a time.
-	for scanner.Scan() {
-		ln := strings.Trim(scanner.Text(), " \t")
-		if len(ln) == 0 {
-			continue
-		}
-		nq, err := rdf.Parse(ln)
-		if err != nil {
-			x.Trace(ctx, "Error while parsing RDF: %v", err)
-			return edges, err
-		}
-		nquads = append(nquads, nq)
+func convertToEdges(ctx context.Context, mutation string) (edges []x.DirectedEdge, err error) {
+	nquads, err := rdf.ParseDoc(mutation)
+	if err != nil {
+		x.Trace(ctx, "error parsing rdf: %v", err)
+		return
 	}
 
 	// xidToUid is used to store ids which are not uids. It is sent to the instance
@@ -228,6 +214,9 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		x.Trace(ctx, "Error while converting to Json: %v", err)
 		x.SetStatus(w, x.Error, err.Error())
 		return
+	}
+	if len(js) == 0 || js[len(js)-1] != '\n' {
+		js = append(js, '\n')
 	}
 	x.Trace(ctx, "Latencies: Total: %v Parsing: %v Process: %v Json: %v",
 		time.Since(l.Start), l.Parsing, l.Processing, l.Json)
