@@ -126,8 +126,8 @@ type SubGraph struct {
 	GetUid   bool
 	isDebug  bool
 
-	Query  []byte
-	Result []byte
+	Query  []byte // Contains list of source UIDs.
+	Result []byte // Contains UID matrix or list of values for child attributes.
 }
 
 func mergeInterfaces(i1 interface{}, i2 interface{}) interface{} {
@@ -142,20 +142,19 @@ func mergeInterfaces(i1 interface{}, i2 interface{}) interface{} {
 		}
 		break
 	}
-
 	return []interface{}{i1, i2}
 }
 
-func postTraverse(g *SubGraph) (result map[uint64]interface{}, rerr error) {
-	if len(g.Query) == 0 {
-		return result, nil
+func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
+	if len(sg.Query) == 0 {
+		return nil, nil
 	}
 
-	result = make(map[uint64]interface{})
+	result := make(map[uint64]interface{})
 	// Get results from all children first.
 	cResult := make(map[uint64]interface{})
 
-	for _, child := range g.Children {
+	for _, child := range sg.Children {
 		m, err := postTraverse(child)
 		if err != nil {
 			return result, err
@@ -171,13 +170,13 @@ func postTraverse(g *SubGraph) (result map[uint64]interface{}, rerr error) {
 	}
 
 	// Now read the query and results at current node.
-	uo := flatbuffers.GetUOffsetT(g.Query)
+	uo := flatbuffers.GetUOffsetT(sg.Query)
 	q := new(task.Query)
-	q.Init(g.Query, uo)
+	q.Init(sg.Query, uo)
 
-	ro := flatbuffers.GetUOffsetT(g.Result)
+	ro := flatbuffers.GetUOffsetT(sg.Result)
 	r := new(task.Result)
-	r.Init(g.Result, ro)
+	r.Init(sg.Result, ro)
 
 	if q.UidsLength() != r.UidmatrixLength() {
 		log.Fatalf("Result uidmatrixlength: %v. Query uidslength: %v",
@@ -205,7 +204,7 @@ func postTraverse(g *SubGraph) (result map[uint64]interface{}, rerr error) {
 		m := make(map[string]interface{})
 		m["_count_"] = co
 		mp := make(map[string]interface{})
-		mp[g.Attr] = m
+		mp[sg.Attr] = m
 		result[q.Uids(i)] = mp
 	}
 
@@ -218,7 +217,7 @@ func postTraverse(g *SubGraph) (result map[uint64]interface{}, rerr error) {
 		for j := 0; j < ul.UidsLength(); j++ {
 			uid := ul.Uids(j)
 			m := make(map[string]interface{})
-			if g.GetUid || g.isDebug {
+			if sg.GetUid || sg.isDebug {
 				m["_uid_"] = fmt.Sprintf("%#x", uid)
 			}
 			if ival, present := cResult[uid]; !present {
@@ -229,7 +228,7 @@ func postTraverse(g *SubGraph) (result map[uint64]interface{}, rerr error) {
 		}
 		if len(l) > 0 {
 			m := make(map[string]interface{})
-			m[g.Attr] = l
+			m[sg.Attr] = l
 			result[q.Uids(i)] = m
 		}
 		// TODO(manish): Check what happens if we handle len(l) == 1 separately.
@@ -254,21 +253,21 @@ func postTraverse(g *SubGraph) (result map[uint64]interface{}, rerr error) {
 				pval, q.Uids(i), val)
 		}
 		m := make(map[string]interface{})
-		if g.GetUid || g.isDebug {
+		if sg.GetUid || sg.isDebug {
 			m["_uid_"] = fmt.Sprintf("%#x", q.Uids(i))
 		}
-		m[g.Attr] = string(val)
+		m[sg.Attr] = string(val)
 		result[q.Uids(i)] = m
 	}
 	return result, nil
 }
 
-// ToJson converts the internal subgraph object to JSON format which is then sent
+// ToJSON converts the internal subgraph object to JSON format which is then sent
 // to the HTTP client.
-func (g *SubGraph) ToJson(l *Latency) (js []byte, rerr error) {
-	r, err := postTraverse(g)
+func (sg *SubGraph) ToJSON(l *Latency) ([]byte, error) {
+	r, err := postTraverse(sg)
 	if err != nil {
-		return js, err
+		return nil, err
 	}
 	l.Json = time.Since(l.Start) - l.Parsing - l.Processing
 	if len(r) != 1 {
@@ -283,13 +282,13 @@ func (g *SubGraph) ToJson(l *Latency) (js []byte, rerr error) {
 		} else {
 			m = make(map[string]interface{})
 		}
-		if g.isDebug {
+		if sg.isDebug {
 			m["server_latency"] = l.ToMap()
 		}
 		return json.Marshal(m)
 	}
 	log.Fatal("Runtime should never reach here.")
-	return []byte(""), fmt.Errorf("Runtime should never reach here.")
+	return nil, fmt.Errorf("Runtime should never reach here.")
 }
 
 // This function performs a binary search on the uids slice and returns the
@@ -337,12 +336,12 @@ func init() {
 }
 
 // This method gets the values and children for a subgraph.
-func (g *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
+func (sg *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 	var properties []*graph.Property
 	var children []*graph.Node
 
 	// We go through all predicate children of the subgraph.
-	for _, pc := range g.Children {
+	for _, pc := range sg.Children {
 		ro := flatbuffers.GetUOffsetT(pc.Result)
 		r := new(task.Result)
 		r.Init(pc.Result, ro)
@@ -365,11 +364,12 @@ func (g *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 		}
 
 		if r.CountLength() > 0 {
-			uc := new(graph.Node)
-			uc.Attribute = pc.Attr
 			count := strconv.Itoa(int(r.Count(idx)))
 			p := &graph.Property{Prop: "_count_", Val: []byte(count)}
-			uc.Properties = []*graph.Property{p}
+			uc := &graph.Node{
+				Attribute:  pc.Attr,
+				Properties: []*graph.Property{p},
+			}
 			children = append(children, uc)
 
 		} else if ul.UidsLength() > 0 {
@@ -408,22 +408,23 @@ func (g *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 
 // ToProtocolBuffer method transforms the predicate based subgraph to an
 // predicate-entity based protocol buffer subgraph.
-func (g *SubGraph) ToProtocolBuffer(l *Latency) (n *graph.Node, rerr error) {
-	n = &graph.Node{}
-	n.Attribute = g.Attr
-	if len(g.Query) == 0 {
+func (sg *SubGraph) ToProtocolBuffer(l *Latency) (*graph.Node, error) {
+	n := &graph.Node{
+		Attribute: sg.Attr,
+	}
+	if len(sg.Query) == 0 {
 		return n, nil
 	}
 
-	ro := flatbuffers.GetUOffsetT(g.Result)
+	ro := flatbuffers.GetUOffsetT(sg.Result)
 	r := new(task.Result)
-	r.Init(g.Result, ro)
+	r.Init(sg.Result, ro)
 
 	var ul task.UidList
 	r.Uidmatrix(&ul, 0)
 	n.Uid = ul.Uids(0)
 
-	if rerr = g.preTraverse(n.Uid, n); rerr != nil {
+	if rerr := sg.preTraverse(n.Uid, n); rerr != nil {
 		return n, rerr
 	}
 
@@ -451,14 +452,13 @@ func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
 			sg.GetUid = true
 		}
 
-		dst := new(SubGraph)
-		if sg.isDebug {
-			dst.isDebug = true
+		dst := &SubGraph{
+			isDebug:  sg.isDebug,
+			Attr:     gchild.Attr,
+			Offset:   gchild.Offset,
+			AfterUid: gchild.After,
+			Count:    gchild.First,
 		}
-		dst.Attr = gchild.Attr
-		dst.Offset = gchild.Offset
-		dst.AfterUid = gchild.After
-		dst.Count = gchild.First
 		sg.Children = append(sg.Children, dst)
 		err := treeCopy(gchild, dst)
 		if err != nil {
@@ -527,13 +527,12 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	rend := task.ResultEnd(b)
 	b.Finish(rend)
 
-	sg := new(SubGraph)
-	if gq.Attr == "debug" {
-		sg.isDebug = true
+	sg := &SubGraph{
+		isDebug: gq.Attr == "debug",
+		Attr:    gq.Attr,
+		IsRoot:  true,
+		Result:  b.Bytes[b.Head():],
 	}
-	sg.Attr = gq.Attr
-	sg.IsRoot = true
-	sg.Result = b.Bytes[b.Head():]
 	// Also add query for consistency and to allow for ToJson() later.
 	sg.Query = createTaskQuery(sg, []uint64{euid})
 	return sg, nil
@@ -568,7 +567,7 @@ type ListChannel struct {
 	Idx   int
 }
 
-func sortedUniqueUids(r *task.Result) (sorted []uint64, rerr error) {
+func sortedUniqueUids(r *task.Result) ([]uint64, error) {
 	// Let's serialize the matrix of uids in result to a
 	// sorted unique list of uids.
 	h := &x.Uint64Heap{}
@@ -578,7 +577,7 @@ func sortedUniqueUids(r *task.Result) (sorted []uint64, rerr error) {
 	for i := 0; i < r.UidmatrixLength(); i++ {
 		tlist := new(task.UidList)
 		if ok := r.Uidmatrix(tlist, i); !ok {
-			return sorted, fmt.Errorf("While parsing Uidmatrix")
+			return nil, fmt.Errorf("While parsing Uidmatrix")
 		}
 		if tlist.UidsLength() > 0 {
 			e := x.Elem{
@@ -591,12 +590,10 @@ func sortedUniqueUids(r *task.Result) (sorted []uint64, rerr error) {
 	}
 
 	// The resulting list of uids will be stored here.
-	sorted = make([]uint64, 100)
-	sorted = sorted[:0]
+	sorted := make([]uint64, 0, 100)
 
 	var last uint64
-	last = 0
-	// Itearate over the heap.
+	// Iterate over the heap.
 	for h.Len() > 0 {
 		me := (*h)[0] // Peek at the top element in heap.
 		if me.Uid != last {
