@@ -79,13 +79,13 @@ func main() {
 
 	dataStore, err := store.NewStore(*postingDir, store.NewDefaultOptions())
 	if err != nil {
-		glog.Fatal("Fail to initialize dataStore")
+		glog.Fatalf("Fail to initialize dataStore: %v", err)
 	}
 	defer dataStore.Close()
 
 	uidStore, err := store.NewReadOnlyStore(*uidDir, store.NewDefaultOptions())
 	if err != nil {
-		glog.Fatal("Fail to initialize uidStore")
+		glog.Fatalf("Fail to initialize uidStore: %v", err)
 	}
 	defer uidStore.Close()
 

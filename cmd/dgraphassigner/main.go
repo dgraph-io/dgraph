@@ -67,7 +67,7 @@ func main() {
 
 	ps, err := store.NewStore(*uidDir, store.NewDefaultOptions())
 	if err != nil {
-		glog.Fatal("Fail to initialize ps")
+		glog.Fatalf("Fail to initialize ps: %v", err)
 	}
 	defer ps.Close()
 

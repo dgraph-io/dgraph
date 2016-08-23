@@ -363,7 +363,7 @@ func main() {
 
 	ps, err := store.NewStore(*postingDir, store.NewDefaultOptions())
 	if err != nil {
-		log.Fatalf("error initializing postings store: %s", err)
+		log.Fatalf("error initializing postings store: %v", err)
 	}
 	defer ps.Close()
 
