@@ -25,7 +25,7 @@ import (
 func TestNewLexer(t *testing.T) {
 	input := `
 	query {
-		me( id: 10, xid: rick ) {
+		me( id: 10, _xid_: rick ) {
 			name0 # my name
 			_city, # 0what would fail lex.
 			profilePic(width: 100, height: 100)
@@ -58,7 +58,7 @@ func TestNewLexerMutation(t *testing.T) {
 		}
 	}
 	query {
-		me(xid: rick) {
+		me(_xid_: rick) {
 			_city
 		}
 	}`
@@ -97,7 +97,7 @@ func TestAbruptMutation(t *testing.T) {
 func TestVariables1(t *testing.T) {
 	input := `
 	query testQuery($username: String!) {
-		me(xid: rick) {
+		me(_xid_: rick) {
 			_city
 		}
 	}`
@@ -114,8 +114,8 @@ func TestVariables1(t *testing.T) {
 
 func TestVariables2(t *testing.T) {
 	input := `
-	query testQuery ($username: String!, $id: int!, $email: string) {
-		me(xid: rick) {
+	query testQuery ($username: String, $id: int, $email: string) {
+		me(_xid_: rick) {
 			_city
 		}
 	}`
@@ -132,8 +132,8 @@ func TestVariables2(t *testing.T) {
 
 func TestVariablesDefault(t *testing.T) {
 	input := `
-	query testQuery ($username: string = abc, $id: int = 5, $email: string!) {
-		me(xid: rick) {
+	query testQuery ($username: string = abc, $id: int = 5, $email: string) {
+		me(_xid_: rick) {
 			_city
 		}
 	}`
@@ -150,8 +150,8 @@ func TestVariablesDefault(t *testing.T) {
 
 func TestVariablesError(t *testing.T) {
 	input := `
-	query testQuery($username: string! {
-		me(xid: rick) {
+	query testQuery($username: string {
+		me(_xid_: rick) {
 			_city
 		}
 	}`
