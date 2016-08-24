@@ -70,7 +70,7 @@ type varInfo struct {
 	Type  string
 }
 
-// varMap is a string map with key as variable name.
+// varMap is a map with key as variable name.
 type varMap map[string]varInfo
 
 // run is used to run the lexer until we encounter nil state.
@@ -152,6 +152,8 @@ func checkForVariableList(str string) (string, varMap, error) {
 func checkValidityOfVariables(mp varMap) error {
 	for k, v := range mp {
 		typ := v.Type
+
+		// Ensure value is not nil if the variable is required
 		if v.Type[len(v.Type)-1] == '!' {
 			if v.Value == "" {
 				return fmt.Errorf("Variable %v should be initialised", k)
@@ -159,6 +161,7 @@ func checkValidityOfVariables(mp varMap) error {
 			typ = v.Type[:len(v.Type)-1]
 		}
 
+		// Type check the values
 		if v.Value != "" {
 			switch typ {
 			case "int":
@@ -194,7 +197,6 @@ func checkValidityOfVariables(mp varMap) error {
 func Parse(input string) (gq *GraphQuery, mu *Mutation, rerr error) {
 	l := &lex.Lexer{}
 	query, vMap, err := checkForVariableList(input)
-
 	if err != nil {
 		return nil, nil, err
 	}
@@ -227,8 +229,7 @@ func Parse(input string) (gq *GraphQuery, mu *Mutation, rerr error) {
 
 		case itemLeftCurl:
 			if gq == nil {
-				err := checkValidityOfVariables(vMap)
-				if err != nil {
+				if err = checkValidityOfVariables(vMap); err != nil {
 					return nil, nil, err
 				}
 
@@ -245,11 +246,7 @@ func Parse(input string) (gq *GraphQuery, mu *Mutation, rerr error) {
 			parseVariables(l, vMap)
 		}
 	}
-	/*
-		if err := checkValidityOfVariables(vMap); err != nil {
-			return nil, nil, err
-		}
-	*/
+
 	if gq != nil {
 		// Try expanding fragments using fragment map.
 		if err := gq.expandFragments(fmap); err != nil {
