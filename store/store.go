@@ -103,24 +103,30 @@ func (s *Store) IndexFilterblockSize() uint64 {
 	return blockSize
 }
 
+// SetSnapshot creates a snapshot and stores it in store so that it can be
+// released later.
 func (s *Store) SetSnapshot() {
 	snap := s.db.NewSnapshot()
-
-	// SetFillCache should be set to false for bulk reads to avoid caching data while doing bulk scans.
+	// SetFillCache should be set to false for bulk reads to avoid caching data
+	// while doing bulk scans.
 	s.ropt.SetFillCache(false)
 	s.ropt.SetSnapshot(snap)
 	s.snap = snap
 }
 
+// ReleaseSnapshot releases a snapshot.
 func (s *Store) ReleaseSnapshot() {
+	s.ropt.SetFillCache(true)
 	s.snap.Release()
 }
 
+// KV is used to represent a key value pair in RocksDB.
 type KV struct {
 	K []byte
 	V []byte
 }
 
+// WriteBatch performs a batch write of key value pairs to RocksDB.
 func (s *Store) WriteBatch(kv []KV) error {
 	wb := rocksdb.NewWriteBatch()
 	for _, i := range kv {

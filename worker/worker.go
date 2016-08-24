@@ -143,6 +143,8 @@ func (w *worker) ServeTask(ctx context.Context, query *Payload) (*Payload, error
 	return reply, rerr
 }
 
+// PredicateData can be used to return data corresponding to a predicate over
+// a stream.
 func (w *worker) PredicateData(query *Payload, stream Worker_PredicateDataServer) error {
 	qp := query.Data
 	// TODO(pawan) - Shift to CheckPoints once we figure out how to add them to the
@@ -162,7 +164,7 @@ func (w *worker) PredicateData(query *Payload, stream Worker_PredicateDataServer
 
 		// Key is of type predicate|uid
 		pred := bytes.Split(k.Data(), []byte("|"))[0]
-		// As keys are sorted, when we get a key that doesn't have pred as substring
+		// As keys are sorted, when we get a pred that doesn't match the query pred
 		// we can return.
 		if !bytes.Equal(qp, pred) {
 			return nil
