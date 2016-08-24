@@ -228,7 +228,7 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 		}
 		if len(l) == 1 {
 			m := make(map[string]interface{})
-			m[g.Attr] = l[0]
+			m[sg.Attr] = l[0]
 			result[q.Uids(i)] = m
 		} else if len(l) > 1 {
 			m := make(map[string]interface{})
