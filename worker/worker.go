@@ -19,7 +19,9 @@
 package worker
 
 import (
+	"bytes"
 	"flag"
+	"io"
 	"log"
 	"net"
 
@@ -140,6 +142,45 @@ func (w *worker) ServeTask(ctx context.Context, query *Payload) (*Payload, error
 		log.Fatalf("attr: %v instanceIdx: %v Request sent to wrong server.", attr, instanceIdx)
 	}
 	return reply, rerr
+}
+
+func (w *worker) PredicateData(query *Payload, stream Worker_PredicateDataServer) error {
+	pred := query.Data
+	dataStore.SetSnapshot()
+	defer dataStore.ReleaseSnapshot()
+
+	it := dataStore.GetIterator()
+	it.Seek(pred)
+	defer it.Close()
+
+	for it; it.Valid(); it.Next() {
+		k, v := it.Key(), it.Value()
+		defer k.Free()
+		defer v.Free()
+
+		// As keys are sorted, when we get a key that doesn't have pred as substring
+		// we can return.
+		if !bytes.Contains(k.Data(), pred) {
+			return io.EOF
+		}
+
+		d := &Data{Key: k.Data(),
+			Value: v.Data(),
+		}
+		b, err := d.encode()
+		if err != nil {
+			return err
+		}
+
+		p := Payload{Data: b}
+		if err := stream.Send(&p); err != nil {
+			return err
+		}
+	}
+	if err := it.Err(); err != nil {
+		return err
+	}
+	return nil
 }
 
 // runServer initializes a tcp server on port which listens to requests from

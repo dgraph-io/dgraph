@@ -33,6 +33,7 @@ type Store struct {
 	blockopt *rocksdb.BlockBasedTableOptions
 	ropt     *rocksdb.ReadOptions
 	wopt     *rocksdb.WriteOptions
+	snap     *rocksdb.Snapshot
 }
 
 func (s *Store) setOpts() {
@@ -100,4 +101,17 @@ func (s *Store) MemtableSize() uint64 {
 func (s *Store) IndexFilterblockSize() uint64 {
 	blockSize, _ := strconv.ParseUint(s.db.GetProperty("rocksdb.estimate-table-readers-mem"), 10, 64)
 	return blockSize
+}
+
+func (s *Store) SetSnapshot() {
+	snap := s.db.NewSnapshot()
+
+	// SetFillCache should be set to false for bulk reads to avoid caching data while doing bulk scans.
+	s.ropt.SetFillCache(false)
+	s.ropt.SetSnapshot(snap)
+	s.snap = snap
+}
+
+func (s *Store) ReleaseSnapshot() {
+	s.snap.Release()
 }
