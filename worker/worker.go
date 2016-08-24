@@ -21,7 +21,6 @@ package worker
 import (
 	"bytes"
 	"flag"
-	"io"
 	"log"
 	"net"
 
@@ -166,7 +165,7 @@ func (w *worker) PredicateData(query *Payload, stream Worker_PredicateDataServer
 		// As keys are sorted, when we get a key that doesn't have pred as substring
 		// we can return.
 		if !bytes.Equal(qp, pred) {
-			return io.EOF
+			return nil
 		}
 
 		d := &Data{Key: k.Data(),
