@@ -115,3 +115,19 @@ func (s *Store) SetSnapshot() {
 func (s *Store) ReleaseSnapshot() {
 	s.snap.Release()
 }
+
+type KV struct {
+	K []byte
+	V []byte
+}
+
+func (s *Store) WriteBatch(kv []KV) error {
+	wb := rocksdb.NewWriteBatch()
+	for _, i := range kv {
+		wb.Put(i.K, i.V)
+	}
+	if err := s.db.Write(s.wopt, wb); err != nil {
+		return err
+	}
+	return nil
+}

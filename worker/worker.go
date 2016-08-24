@@ -145,12 +145,15 @@ func (w *worker) ServeTask(ctx context.Context, query *Payload) (*Payload, error
 }
 
 func (w *worker) PredicateData(query *Payload, stream Worker_PredicateDataServer) error {
-	pred := query.Data
+	qp := query.Data
+	// TODO(pawan) - Shift to CheckPoints once we figure out how to add them to the
+	// RocksDB library we are using.
+	// http://rocksdb.org/blog/2609/use-checkpoints-for-efficient-snapshots/
 	dataStore.SetSnapshot()
 	defer dataStore.ReleaseSnapshot()
 
 	it := dataStore.GetIterator()
-	it.Seek(pred)
+	it.Seek(qp)
 	defer it.Close()
 
 	for ; it.Valid(); it.Next() {
@@ -158,9 +161,11 @@ func (w *worker) PredicateData(query *Payload, stream Worker_PredicateDataServer
 		defer k.Free()
 		defer v.Free()
 
+		// Key is of type predicate|uid
+		pred := bytes.Split(k.Data(), []byte("|"))[0]
 		// As keys are sorted, when we get a key that doesn't have pred as substring
 		// we can return.
-		if !bytes.Contains(k.Data(), pred) {
+		if !bytes.Equal(qp, pred) {
 			return io.EOF
 		}
 

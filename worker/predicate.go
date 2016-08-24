@@ -20,8 +20,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/gob"
-	"fmt"
 	"io"
+
+	"github.com/dgraph-io/dgraph/store"
 )
 
 // Data represents key-value data stored in RocksDB.
@@ -46,6 +47,8 @@ func (d *Data) decode(data []byte) error {
 // Predicate gets data for a predicate p from another instance and writes it to RocksDB.
 func Predicate(p string, idx int) error {
 	var err error
+	var kvs []store.KV
+
 	pool := pools[idx]
 	query := new(Payload)
 	query.Data = []byte(p)
@@ -77,7 +80,20 @@ func Predicate(p string, idx int) error {
 		if err := d.decode(b.Data); err != nil {
 			return err
 		}
-		fmt.Printf("Got some data: %+v\n", d)
+		kvs = append(kvs, store.KV{K: d.Key, V: d.Value})
+		// We do a batch write once we have 100 key value pairs.
+		if len(kvs) == 100 {
+			if err := dataStore.WriteBatch(kvs); err != nil {
+				return err
+			}
+			kvs = nil
+		}
+	}
+	// As we write only every 100 key value pairs, there would be some left usually.
+	if len(kvs) > 0 {
+		if err := dataStore.WriteBatch(kvs); err != nil {
+			return err
+		}
 	}
 	return nil
 }
