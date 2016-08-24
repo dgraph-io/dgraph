@@ -617,10 +617,32 @@ func TestParseVariables(t *testing.T) {
 	}
 }
 
-func TestParseVariablesDefault(t *testing.T) {
+func TestParseVariables1(t *testing.T) {
 	query := `{
 		"query": "query testQuery($a: int , $b: int!){root(_uid_: 0x0a) {name(first: $b){english}}}", 
 		"variables": {"$b": "5" } 
+	}`
+	_, _, err := Parse(query)
+	if err != nil {
+		t.Error(err)
+	}
+}
+
+func TestParseVariables2(t *testing.T) {
+	query := `{
+		"query": "query testQuery($a: float , $b: bool!){root(_uid_: 0x0a) {name{english}}}", 
+		"variables": {"$b": "false", "$a": "3.33" } 
+	}`
+	_, _, err := Parse(query)
+	if err != nil {
+		t.Error(err)
+	}
+}
+
+func TestParseVariables3(t *testing.T) {
+	query := `{
+		"query": "query testQuery($a: int , $b: int! = 3){root(_uid_: 0x0a) {name(first: $b){english}}}", 
+		"variables": {"$a": "5" } 
 	}`
 	_, _, err := Parse(query)
 	if err != nil {
@@ -700,5 +722,16 @@ func TestParseVariablesError3(t *testing.T) {
 	_, _, err := Parse(query)
 	if err == nil {
 		t.Error("Expected type for variable $b")
+	}
+}
+
+func TestParseVariablesError4(t *testing.T) {
+	query := `{
+		"query": "query testQuery($a: bool , $b: float! = 3){root(_uid_: 0x0a) {name(first: $b){english}}}", 
+		"variables": {"$a": "5" } 
+	}`
+	_, _, err := Parse(query)
+	if err == nil {
+		t.Error("Expected type error")
 	}
 }
