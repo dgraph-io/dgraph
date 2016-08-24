@@ -168,7 +168,7 @@ func TestQuery(t *testing.T) {
 		return
 	}
 	var l query.Latency
-	js, err := g.ToJson(&l)
+	js, err := g.ToJSON(&l)
 	if err != nil {
 		t.Error(err)
 		return
@@ -243,7 +243,7 @@ func BenchmarkQuery(b *testing.B) {
 			return
 		}
 		var l query.Latency
-		_, err = g.ToJson(&l)
+		_, err = g.ToJSON(&l)
 		if err != nil {
 			b.Error(err)
 			return

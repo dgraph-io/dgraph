@@ -22,6 +22,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/dgraph-io/dgraph/lex"
 	"github.com/dgraph-io/dgraph/uid"
@@ -110,11 +111,27 @@ func (nq NQuad) ToEdgeUsing(
 }
 
 // This function is used to extract an IRI from an IRIREF.
-func stripBracketsIfPresent(val string) string {
+func stripBracketsAndTrim(val string) string {
 	if val[0] != '<' && val[len(val)-1] != '>' {
-		return val
+		return strings.Trim(val, " ")
 	}
-	return val[1 : len(val)-1]
+	return strings.Trim(val[1:len(val)-1], " ")
+}
+
+// Function to do sanity check for subject, predicate, object and label strings.
+func sane(s string) bool {
+	// Label and ObjectId can be "", we already check that subject and predicate
+	// shouldn't be empty.
+	if len(s) == 0 {
+		return true
+	}
+	// s should have atleast one alphanumeric character.
+	for _, r := range s {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			return true
+		}
+	}
+	return false
 }
 
 // Parse parses a mutation string and returns the NQuad representation for it.
@@ -127,40 +144,46 @@ func Parse(line string) (rnq NQuad, rerr error) {
 	var vend bool
 	// We read items from the l.Items channel to which the lexer sends items.
 	for item := range l.Items {
-		if item.Typ == itemSubject {
-			rnq.Subject = stripBracketsIfPresent(item.Val)
-		}
-		if item.Typ == itemPredicate {
-			rnq.Predicate = stripBracketsIfPresent(item.Val)
-		}
-		if item.Typ == itemObject {
-			rnq.ObjectId = stripBracketsIfPresent(item.Val)
-		}
-		if item.Typ == itemLiteral {
+		switch item.Typ {
+		case itemSubject:
+			rnq.Subject = stripBracketsAndTrim(item.Val)
+
+		case itemPredicate:
+			rnq.Predicate = stripBracketsAndTrim(item.Val)
+
+		case itemObject:
+			rnq.ObjectId = stripBracketsAndTrim(item.Val)
+
+		case itemLiteral:
 			oval = item.Val
-		}
-		if item.Typ == itemLanguage {
+
+		case itemLanguage:
 			rnq.Predicate += "." + item.Val
-		}
-		if item.Typ == itemObjectType {
+
+		case itemObjectType:
 			// TODO: Strictly parse common types like integers, floats etc.
 			if len(oval) == 0 {
 				log.Fatalf(
 					"itemObject should be emitted before itemObjectType. Input: [%s]",
 					line)
 			}
-			oval += "@@" + stripBracketsIfPresent(item.Val)
-		}
-		if item.Typ == lex.ItemError {
+			val := stripBracketsAndTrim(item.Val)
+			if strings.Trim(val, " ") == "*" {
+				return rnq, fmt.Errorf("itemObject can't be *")
+			}
+			oval += "@@" + val
+
+		case lex.ItemError:
 			return rnq, fmt.Errorf(item.Val)
-		}
-		if item.Typ == itemValidEnd {
+
+		case itemValidEnd:
 			vend = true
-		}
-		if item.Typ == itemLabel {
-			rnq.Label = stripBracketsIfPresent(item.Val)
+
+		case itemLabel:
+			rnq.Label = stripBracketsAndTrim(item.Val)
 		}
 	}
+
 	if !vend {
 		return rnq, fmt.Errorf("Invalid end of input. Input: [%s]", line)
 	}
@@ -172,6 +195,10 @@ func Parse(line string) (rnq NQuad, rerr error) {
 	}
 	if len(rnq.ObjectId) == 0 && rnq.ObjectValue == nil {
 		return rnq, fmt.Errorf("No Object in NQuad. Input: [%s]", line)
+	}
+	if !sane(rnq.Subject) || !sane(rnq.Predicate) || !sane(rnq.ObjectId) ||
+		!sane(rnq.Label) {
+		return rnq, fmt.Errorf("NQuad failed sanity check:%+v", rnq)
 	}
 
 	return rnq, nil

@@ -1,8 +1,8 @@
 language: go
 go:
   - 1.7
-  - tip
-sudo: false
+dist: trusty
+sudo: required
 #notifications:
 #  slack:
 #    secure: <INSERT ENCRYPTED SLACK KEY HERE>
@@ -23,9 +23,12 @@ cache:
   directories:
     - $HOME/build
 install:
+  # Passing the directory in which RocksDB is to be installed as an argument
+  # to the bash script.
   - bash contrib/build-rocksdb.sh $HOME/build
 before_script:
   - go get github.com/mattn/goveralls
 script:
+  - bash contrib/load-test.sh $HOME/build
   - bash contrib/cover.sh $HOME/build coverage.out
   - goveralls -service=travis-ci -coverprofile=coverage.out
