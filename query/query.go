@@ -533,7 +533,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		IsRoot:  true,
 		Result:  b.Bytes[b.Head():],
 	}
-	// Also add query for consistency and to allow for ToJson() later.
+	// Also add query for consistency and to allow for ToJSON() later.
 	sg.Query = createTaskQuery(sg, []uint64{euid})
 	return sg, nil
 }
