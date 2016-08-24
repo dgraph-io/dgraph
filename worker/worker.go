@@ -153,7 +153,7 @@ func (w *worker) PredicateData(query *Payload, stream Worker_PredicateDataServer
 	it.Seek(pred)
 	defer it.Close()
 
-	for it; it.Valid(); it.Next() {
+	for ; it.Valid(); it.Next() {
 		k, v := it.Key(), it.Value()
 		defer k.Free()
 		defer v.Free()
