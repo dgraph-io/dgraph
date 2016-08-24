@@ -223,7 +223,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	l.Processing = time.Since(l.Start) - l.Parsing
 	x.Trace(ctx, "Graph processed")
-	js, err := sg.ToJson(&l)
+	js, err := sg.ToJSON(&l)
 	if err != nil {
 		x.Trace(ctx, "Error while converting to Json: %v", err)
 		x.SetStatus(w, x.Error, err.Error())
