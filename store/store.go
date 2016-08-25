@@ -138,6 +138,8 @@ func (s *Store) WriteBatch(kv chan x.KV, che chan error) {
 			fmt.Println("len after write", len(wb.Data()))
 		}
 	}
+	// After channel is closed the above loop would exit, we write the data in
+	// write batch here.
 	if len(wb.Data()) > 0 {
 		if err := s.db.Write(s.wopt, wb); err != nil {
 			che <- err

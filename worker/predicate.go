@@ -51,7 +51,6 @@ func Predicate(p string, idx int) error {
 	kvs := make(chan x.KV, 10000)
 	che := make(chan error)
 	go dataStore.WriteBatch(kvs, che)
-	defer close(kvs)
 
 	for {
 		b, err := stream.Recv()
@@ -59,6 +58,7 @@ func Predicate(p string, idx int) error {
 			break
 		}
 		if err != nil {
+			close(kvs)
 			return err
 		}
 
@@ -67,7 +67,7 @@ func Predicate(p string, idx int) error {
 		kv.Init(b.Data, uo)
 		kvs <- x.KV{Key: kv.KeyBytes(), Val: kv.ValBytes()}
 	}
-
+	close(kvs)
 	if err := <-che; err != nil {
 		return err
 	}
