@@ -605,3 +605,144 @@ func TestParseFragmentCycle(t *testing.T) {
 		t.Error("Expected error with cycle")
 	}
 }
+
+func TestParseVariables(t *testing.T) {
+	query := `{
+		"query": "query testQuery($a: int, $b: int){root(_uid_: 0x0a) {name(first: $b, after: $a){english}}}", 
+		"variables": {"$a": "6", "$b": "5" } 
+	}`
+	_, _, err := Parse(query)
+	if err != nil {
+		t.Error(err)
+	}
+}
+
+func TestParseVariables1(t *testing.T) {
+	query := `{
+		"query": "query testQuery($a: int , $b: int!){root(_uid_: 0x0a) {name(first: $b){english}}}", 
+		"variables": {"$b": "5" } 
+	}`
+	_, _, err := Parse(query)
+	if err != nil {
+		t.Error(err)
+	}
+}
+
+func TestParseVariables2(t *testing.T) {
+	query := `{
+		"query": "query testQuery($a: float , $b: bool!){root(_uid_: 0x0a) {name{english}}}", 
+		"variables": {"$b": "false", "$a": "3.33" } 
+	}`
+	_, _, err := Parse(query)
+	if err != nil {
+		t.Error(err)
+	}
+}
+
+func TestParseVariables3(t *testing.T) {
+	query := `{
+		"query": "query testQuery($a: int , $b: int! = 3){root(_uid_: 0x0a) {name(first: $b){english}}}", 
+		"variables": {"$a": "5" } 
+	}`
+	_, _, err := Parse(query)
+	if err != nil {
+		t.Error(err)
+	}
+}
+
+func TestParseVariablesDefault1(t *testing.T) {
+	query := `{
+		"query": "query testQuery($a: int = 3, $b: int = 4, $c : int = 3){root(_uid_: 0x0a) {name(first: $b, after: $a, offset: $c){english}}}", 
+		"variables": {"$b": "5" } 
+	}`
+	_, _, err := Parse(query)
+	if err != nil {
+		t.Error(err)
+	}
+}
+func TestParseVariablesFragments(t *testing.T) {
+	query := `{
+	"query": "query test($a: int){user(_uid_:0x0a) {...fragmentd,friends(first: $a, offset: $a) {name}}} fragment fragmentd {id(first: $a)}",
+	"variables": {"$a": "5"}
+}`
+	gq, _, err := Parse(query)
+	if err != nil {
+		t.Error(err)
+	}
+	if gq == nil {
+		t.Error("subgraph is nil")
+		return
+	}
+	if len(gq.Children) != 2 {
+		t.Errorf("Expected 2 children. Got: %v", len(gq.Children))
+		return
+	}
+
+	// Notice that the order is preserved.
+
+	if gq.Children[0].First != 5 {
+		t.Error("Expected first to be 5. Got %v", gq.Children[2].First)
+	}
+}
+
+func TestParseVariablesError1(t *testing.T) {
+	query := `
+	query testQuery($a: string, $b: int!){
+			root(_uid_: 0x0a) {
+				type.object.name.es-419
+			}
+		}
+	`
+	_, _, err := Parse(query)
+	if err == nil {
+		t.Error("Expected error")
+	}
+}
+
+func TestParseVariablesError2(t *testing.T) {
+	query := `{
+		"query": "query testQuery($a: int, $b: int, $c: int!){
+			root(_uid_: 0x0a) {name(first: $b, after: $a){english}}
+		}", 
+		"variables": {"$a": "6", "$b": "5" } 
+	}`
+	_, _, err := Parse(query)
+	if err == nil {
+		t.Error("Expected value for variable $c")
+	}
+}
+
+func TestParseVariablesError3(t *testing.T) {
+	query := `{
+		"query": "query testQuery($a: int, $b: , $c: int!){
+			root(_uid_: 0x0a) {name(first: $b, after: $a){english}}
+		}", 
+		"variables": {"$a": "6", "$b": "5" } 
+	}`
+	_, _, err := Parse(query)
+	if err == nil {
+		t.Error("Expected type for variable $b")
+	}
+}
+
+func TestParseVariablesError4(t *testing.T) {
+	query := `{
+		"query": "query testQuery($a: bool , $b: float! = 3){root(_uid_: 0x0a) {name(first: $b){english}}}", 
+		"variables": {"$a": "5" } 
+	}`
+	_, _, err := Parse(query)
+	if err == nil {
+		t.Error("Expected type error")
+	}
+}
+
+func TestParseVariablesError5(t *testing.T) {
+	query := `{
+		"query": "query ($a: int, $b: int){root(_uid_: 0x0a) {name(first: $b, after: $a){english}}}", 
+		"variables": {"$a": "6", "$b": "5" } 
+	}`
+	_, _, err := Parse(query)
+	if err == nil {
+		t.Error("Expected error: Query with variables should be named")
+	}
+}
