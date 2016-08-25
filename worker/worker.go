@@ -158,8 +158,6 @@ func (w *worker) PredicateData(query *Payload, stream Worker_PredicateDataServer
 
 	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
 		k, v := it.Key(), it.Value()
-		defer k.Free()
-		defer v.Free()
 
 		b := flatbuffers.NewBuilder(0)
 		bko := b.CreateByteVector(k.Data())
@@ -174,6 +172,9 @@ func (w *worker) PredicateData(query *Payload, stream Worker_PredicateDataServer
 		if err := stream.Send(&p); err != nil {
 			return err
 		}
+		k.Free()
+		v.Free()
+
 	}
 	if err := it.Err(); err != nil {
 		return err
