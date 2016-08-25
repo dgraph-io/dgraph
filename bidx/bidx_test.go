@@ -50,25 +50,28 @@ func search(index bleve.Index, text string) {
 }
 
 func Test1(t *testing.T) {
-	//index, err := createIndex()
-	index, err := openIndex()
+	index, err := createIndex()
+	if err != nil {
+		index, err = openIndex()
+	}
 	if err != nil {
 		t.Error(err)
 		return
 	}
 
-	printStats(index)
-	index.Index("id1", &Data{
-		V: "nothing",
-	})
-	index.Index("id2", &Data{
-		V: "nothing",
-	})
-
+	index.Index("id1", &Data{"nothing"})
+	index.Index("id2", &Data{"nothing"})
 	search(index, "nothing")
-	printStats(index)
 
 	index.Delete("id2")
 	search(index, "nothing")
-	printStats(index)
+
+	bb := index.NewBatch()
+	bb.Index("id3", &Data{"nothing"})
+	bb.Index("id4", &Data{"nothing"})
+	search(index, "nothing")
+
+	index.Batch(bb)
+	search(index, "nothing")
+
 }
