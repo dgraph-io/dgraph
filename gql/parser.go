@@ -128,28 +128,28 @@ func (gq *GraphQuery) expandFragments(fmap fragmentMap) error {
 	return nil
 }
 
-type decodeQuery struct {
+type query struct {
 	Variables map[string]string `json:"variables"`
 	Query     string            `json:"query"`
 }
 
-func checkForVariableList(str string) (string, varMap, error) {
-	var p decodeQuery
-	tempMap := make(varMap)
+func parseQueryWithVariables(str string) (string, varMap, error) {
+	var p query
+	vm := make(varMap)
 	err := json.Unmarshal([]byte(str), &p)
 	if err != nil {
-		return str, tempMap, nil // It does not obey GraphiQL format but valid
+		return str, vm, nil // It does not obey GraphiQL format but valid
 	}
 
 	for k, v := range p.Variables {
-		tempMap[k] = varInfo{
+		vm[k] = varInfo{
 			Value: v,
 		}
 	}
-	return p.Query, tempMap, nil
+	return p.Query, vm, nil
 }
 
-func checkValidityOfVariables(mp varMap) error {
+func checkValidity(mp varMap) error {
 	for k, v := range mp {
 		typ := v.Type
 
@@ -158,7 +158,7 @@ func checkValidityOfVariables(mp varMap) error {
 			if v.Value == "" {
 				return fmt.Errorf("Variable %v should be initialised", k)
 			}
-			typ = v.Type[:len(v.Type)-1]
+			typ = strings.Trim(v.Type, "!")
 		}
 
 		// Type check the values
@@ -166,22 +166,19 @@ func checkValidityOfVariables(mp varMap) error {
 			switch typ {
 			case "int":
 				{
-					_, err := strconv.ParseInt(v.Value, 0, 64)
-					if err != nil {
+					if _, err := strconv.ParseInt(v.Value, 0, 64); err != nil {
 						return fmt.Errorf("Expected an int but got %v", v.Value)
 					}
 				}
 			case "float":
 				{
-					_, err := strconv.ParseFloat(v.Value, 64)
-					if err != nil {
+					if _, err := strconv.ParseFloat(v.Value, 64); err != nil {
 						return fmt.Errorf("Expected a float but got %v", v.Value)
 					}
 				}
 			case "bool":
 				{
-					_, err := strconv.ParseBool(v.Value)
-					if err != nil {
+					if _, err := strconv.ParseBool(v.Value); err != nil {
 						return fmt.Errorf("Expected a bool but got %v", v.Value)
 					}
 				}
@@ -196,7 +193,7 @@ func checkValidityOfVariables(mp varMap) error {
 // from the lexed items.
 func Parse(input string) (gq *GraphQuery, mu *Mutation, rerr error) {
 	l := &lex.Lexer{}
-	query, vMap, err := checkForVariableList(input)
+	query, vmap, err := parseQueryWithVariables(input)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -220,30 +217,20 @@ func Parse(input string) (gq *GraphQuery, mu *Mutation, rerr error) {
 				}
 			} else if item.Val == "fragment" {
 				// TODO(jchiu0): This is to be done in ParseSchema once it is ready.
-				fnode, rerr := getFragment(l, vMap)
+				fnode, rerr := getFragment(l, vmap)
 				if rerr != nil {
 					return nil, nil, rerr
 				}
 				fmap[fnode.Name] = fnode
-			}
-
-		case itemLeftCurl:
-			if gq == nil {
-				if err = checkValidityOfVariables(vMap); err != nil {
-					return nil, nil, err
-				}
-
-				if gq, rerr = getRoot(l, vMap); rerr != nil {
+			} else if item.Val == "query" {
+				if gq, rerr = getVariablesAndQuery(l, vmap); rerr != nil {
 					return nil, nil, rerr
 				}
-			} else {
-				if err := godeep(l, gq, vMap); err != nil {
-					return nil, nil, err
-				}
 			}
-
-		case itemLeftRound:
-			parseVariables(l, vMap)
+		case itemLeftCurl:
+			if gq, rerr = getQuery(l, vmap); rerr != nil {
+				return nil, nil, rerr
+			}
 		}
 	}
 
@@ -257,8 +244,65 @@ func Parse(input string) (gq *GraphQuery, mu *Mutation, rerr error) {
 	return gq, mu, nil
 }
 
+func getVariablesAndQuery(l *lex.Lexer, vmap varMap) (gq *GraphQuery, rerr error) {
+	var name string
+L2:
+	for item := range l.Items {
+		switch item.Typ {
+		case itemText:
+			v := strings.TrimSpace(item.Val)
+			if len(v) > 0 {
+				if name != "" {
+					return nil, fmt.Errorf("Multiple word queryt name not allowed.")
+				}
+				name = item.Val
+			}
+		case itemLeftRound:
+			if name == "" {
+				return nil, fmt.Errorf("Variables can be defiend only in named queries.")
+			}
+
+			if rerr = parseVariables(l, vmap); rerr != nil {
+				return nil, rerr
+			}
+		case itemLeftCurl:
+			if gq, rerr = getQuery(l, vmap); rerr != nil {
+				return nil, rerr
+			}
+			break L2
+		}
+	}
+	return gq, nil
+}
+
+func getQuery(l *lex.Lexer, vmap varMap) (gq *GraphQuery, rerr error) {
+	if rerr = checkValidity(vmap); rerr != nil {
+		return nil, rerr
+	}
+
+	gq, rerr = getRoot(l, vmap)
+	if rerr != nil {
+		return nil, rerr
+	}
+
+L:
+	for item := range l.Items {
+		switch item.Typ {
+		case itemText:
+			continue
+
+		case itemLeftCurl:
+			if rerr = godeep(l, gq, vmap); rerr != nil {
+				return nil, rerr
+			}
+			break L
+		}
+	}
+	return gq, nil
+}
+
 // getFragment parses a fragment definition (not reference).
-func getFragment(l *lex.Lexer, vMap varMap) (*fragmentNode, error) {
+func getFragment(l *lex.Lexer, vmap varMap) (*fragmentNode, error) {
 	var name string
 	for item := range l.Items {
 		if item.Typ == itemText {
@@ -280,7 +324,7 @@ func getFragment(l *lex.Lexer, vMap varMap) (*fragmentNode, error) {
 		return nil, errors.New("Empty fragment name")
 	}
 	gq := new(GraphQuery)
-	if err := godeep(l, gq, vMap); err != nil {
+	if err := godeep(l, gq, vmap); err != nil {
 		return nil, err
 	}
 	fn := &fragmentNode{
@@ -347,7 +391,7 @@ func parseMutationOp(l *lex.Lexer, op string, mu *Mutation) error {
 	return errors.New("Invalid mutation formatting.")
 }
 
-func parseVariables(l *lex.Lexer, vMap varMap) error {
+func parseVariables(l *lex.Lexer, vmap varMap) error {
 	for {
 		var varName string
 		// Get variable name
@@ -371,13 +415,13 @@ func parseVariables(l *lex.Lexer, vMap varMap) error {
 			return fmt.Errorf("Type of a variable can't be empty")
 		}
 
-		if _, ok := vMap[varName]; ok {
-			vMap[varName] = varInfo{
-				Value: vMap[varName].Value,
+		if _, ok := vmap[varName]; ok {
+			vmap[varName] = varInfo{
+				Value: vmap[varName].Value,
 				Type:  varType,
 			}
 		} else {
-			vMap[varName] = varInfo{
+			vmap[varName] = varInfo{
 				Type: varType,
 			}
 		}
@@ -389,8 +433,8 @@ func parseVariables(l *lex.Lexer, vMap varMap) error {
 				return fmt.Errorf("Expecting default value of a variable. Got: %v", item)
 			}
 
-			if vMap[varName].Value == "" {
-				vMap[varName] = varInfo{
+			if vmap[varName].Value == "" {
+				vmap[varName] = varInfo{
 					Value: it.Val,
 					Type:  varType,
 				}
@@ -438,7 +482,7 @@ func parseArguments(l *lex.Lexer) (result []pair, rerr error) {
 }
 
 // getRoot gets the root graph query object after parsing the args.
-func getRoot(l *lex.Lexer, vMap varMap) (gq *GraphQuery, rerr error) {
+func getRoot(l *lex.Lexer, vmap varMap) (gq *GraphQuery, rerr error) {
 	gq = new(GraphQuery)
 	item := <-l.Items
 	if item.Typ != itemName {
@@ -472,7 +516,7 @@ func getRoot(l *lex.Lexer, vMap varMap) (gq *GraphQuery, rerr error) {
 }
 
 // godeep constructs the subgraph from the lexed items and a GraphQuery node.
-func godeep(l *lex.Lexer, gq *GraphQuery, vMap varMap) error {
+func godeep(l *lex.Lexer, gq *GraphQuery, vmap varMap) error {
 	curp := gq // Used to track current node, for nesting.
 	for item := range l.Items {
 		if item.Typ == lex.ItemError {
@@ -503,7 +547,7 @@ func godeep(l *lex.Lexer, gq *GraphQuery, vMap varMap) error {
 			curp = child
 
 		} else if item.Typ == itemLeftCurl {
-			if err := godeep(l, curp, vMap); err != nil {
+			if err := godeep(l, curp, vmap); err != nil {
 				return err
 			}
 
@@ -517,7 +561,7 @@ func godeep(l *lex.Lexer, gq *GraphQuery, vMap varMap) error {
 				// if the p.val is a variable(Starts with a $), Replace with the value.
 				val := p.Val
 				if p.Val[0] == '$' {
-					val = vMap[p.Val].Value
+					val = vmap[p.Val].Value
 				}
 				if p.Key == "first" {
 					count, err := strconv.ParseInt(val, 0, 32)

@@ -735,3 +735,14 @@ func TestParseVariablesError4(t *testing.T) {
 		t.Error("Expected type error")
 	}
 }
+
+func TestParseVariablesError5(t *testing.T) {
+	query := `{
+		"query": "query ($a: int, $b: int){root(_uid_: 0x0a) {name(first: $b, after: $a){english}}}", 
+		"variables": {"$a": "6", "$b": "5" } 
+	}`
+	_, _, err := Parse(query)
+	if err == nil {
+		t.Error("Expected error: Query with variables should be named")
+	}
+}
