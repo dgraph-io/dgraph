@@ -130,12 +130,10 @@ func (s *Store) WriteBatch(kv chan x.KV, che chan error) {
 	for i := range kv {
 		wb.Put(i.Key, i.Val)
 		if len(wb.Data()) > 32*MB {
-			fmt.Println("len before write", len(wb.Data()))
 			if err := s.db.Write(s.wopt, wb); err != nil {
 				che <- err
 				return
 			}
-			fmt.Println("len after write", len(wb.Data()))
 		}
 	}
 	// After channel is closed the above loop would exit, we write the data in
