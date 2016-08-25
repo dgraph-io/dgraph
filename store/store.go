@@ -120,20 +120,29 @@ func (s *Store) ReleaseSnapshot() {
 	s.snap.Release()
 }
 
-// KV is used to represent a key value pair in RocksDB.
-type KV struct {
-	K []byte
-	V []byte
-}
+const (
+	MB = 1 << 20
+)
 
 // WriteBatch performs a batch write of key value pairs to RocksDB.
-func (s *Store) WriteBatch(kv []KV) error {
+func (s *Store) WriteBatch(kv chan x.KV, che chan error) {
 	wb := rocksdb.NewWriteBatch()
-	for _, i := range kv {
-		wb.Put(i.K, i.V)
+	for i := range kv {
+		wb.Put(i.Key, i.Val)
+		if len(wb.Data()) > 32*MB {
+			fmt.Println("len before write", len(wb.Data()))
+			if err := s.db.Write(s.wopt, wb); err != nil {
+				che <- err
+				return
+			}
+			fmt.Println("len after write", len(wb.Data()))
+		}
 	}
-	if err := s.db.Write(s.wopt, wb); err != nil {
-		return err
+	if len(wb.Data()) > 0 {
+		if err := s.db.Write(s.wopt, wb); err != nil {
+			che <- err
+			return
+		}
 	}
-	return nil
+	che <- nil
 }

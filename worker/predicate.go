@@ -17,37 +17,17 @@
 package worker
 
 import (
-	"bytes"
 	"context"
-	"encoding/gob"
 	"io"
 
-	"github.com/dgraph-io/dgraph/store"
+	"github.com/dgraph-io/dgraph/task"
+	"github.com/dgraph-io/dgraph/x"
+	flatbuffers "github.com/google/flatbuffers/go"
 )
-
-// Data represents key-value data stored in RocksDB.
-type Data struct {
-	Key   []byte
-	Value []byte
-}
-
-func (d *Data) encode() ([]byte, error) {
-	var b bytes.Buffer
-	enc := gob.NewEncoder(&b)
-	rerr := enc.Encode(*d)
-	return b.Bytes(), rerr
-}
-
-func (d *Data) decode(data []byte) error {
-	r := bytes.NewReader(data)
-	dec := gob.NewDecoder(r)
-	return dec.Decode(d)
-}
 
 // Predicate gets data for a predicate p from another instance and writes it to RocksDB.
 func Predicate(p string, idx int) error {
 	var err error
-	var kvs []store.KV
 
 	pool := pools[idx]
 	query := new(Payload)
@@ -67,6 +47,12 @@ func Predicate(p string, idx int) error {
 	if err != nil {
 		return err
 	}
+
+	kvs := make(chan x.KV, 10000)
+	che := make(chan error)
+	go dataStore.WriteBatch(kvs, che)
+	defer close(kvs)
+
 	for {
 		b, err := stream.Recv()
 		if err == io.EOF {
@@ -76,24 +62,14 @@ func Predicate(p string, idx int) error {
 			return err
 		}
 
-		d := new(Data)
-		if err := d.decode(b.Data); err != nil {
-			return err
-		}
-		kvs = append(kvs, store.KV{K: d.Key, V: d.Value})
-		// We do a batch write once we have 100 key value pairs.
-		if len(kvs) == 100 {
-			if err := dataStore.WriteBatch(kvs); err != nil {
-				return err
-			}
-			kvs = nil
-		}
+		uo := flatbuffers.GetUOffsetT(b.Data)
+		kv := new(task.KV)
+		kv.Init(b.Data, uo)
+		kvs <- x.KV{Key: kv.KeyBytes(), Val: kv.ValBytes()}
 	}
-	// As we write only every 100 key value pairs, there would be some left usually.
-	if len(kvs) > 0 {
-		if err := dataStore.WriteBatch(kvs); err != nil {
-			return err
-		}
+
+	if err := <-che; err != nil {
+		return err
 	}
 	return nil
 }

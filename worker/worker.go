@@ -19,7 +19,6 @@
 package worker
 
 import (
-	"bytes"
 	"flag"
 	"log"
 	"net"
@@ -147,6 +146,7 @@ func (w *worker) ServeTask(ctx context.Context, query *Payload) (*Payload, error
 // a stream.
 func (w *worker) PredicateData(query *Payload, stream Worker_PredicateDataServer) error {
 	qp := query.Data
+	prefix := append(qp, '|')
 	// TODO(pawan) - Shift to CheckPoints once we figure out how to add them to the
 	// RocksDB library we are using.
 	// http://rocksdb.org/blog/2609/use-checkpoints-for-efficient-snapshots/
@@ -154,31 +154,25 @@ func (w *worker) PredicateData(query *Payload, stream Worker_PredicateDataServer
 	defer dataStore.ReleaseSnapshot()
 
 	it := dataStore.GetIterator()
-	it.Seek(qp)
 	defer it.Close()
 
-	for ; it.Valid(); it.Next() {
+	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
 		k, v := it.Key(), it.Value()
 		defer k.Free()
 		defer v.Free()
 
-		// Key is of type predicate|uid
-		pred := bytes.Split(k.Data(), []byte("|"))[0]
-		// As keys are sorted, when we get a pred that doesn't match the query pred
-		// we can return.
-		if !bytes.Equal(qp, pred) {
-			return nil
-		}
+		b := flatbuffers.NewBuilder(0)
+		task.KVStart(b)
+		// task.KVStartKeyVector(b, len(k.Data()))
+		bko := b.CreateByteVector(k.Data())
+		task.KVAddKey(b, bko)
+		// task.KVStartValVector(b, len(v.Data()))
+		bvo := b.CreateByteVector(v.Data())
+		task.KVAddVal(b, bvo)
+		kvoffset := task.KVEnd(b)
+		b.Finish(kvoffset)
 
-		d := &Data{Key: k.Data(),
-			Value: v.Data(),
-		}
-		b, err := d.encode()
-		if err != nil {
-			return err
-		}
-
-		p := Payload{Data: b}
+		p := Payload{Data: b.Bytes[b.Head():]}
 		if err := stream.Send(&p); err != nil {
 			return err
 		}
