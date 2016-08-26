@@ -43,12 +43,12 @@ func writeBatch(kv chan *task.KV, che chan error) {
 				che <- err
 				return
 			}
+			// Resetting batch size after a batch write.
+			batchSize = 0
+			// Since we are writing data in batches, we need to clear up items enqueued
+			// for batch write after every successful write.
+			wb.Clear()
 		}
-		// Resetting batch size after a batch write.
-		batchSize = 0
-		// Since we are writing data in batches, we need to clear up items enqueued
-		// for batch write after every successful write.
-		wb.Clear()
 	}
 	// After channel is closed the above loop would exit, we write the data in
 	// write batch here.
@@ -87,7 +87,6 @@ func PopulateShard(ctx context.Context, pred string, serverId int) error {
 	x.Trace(ctx, "Streaming data for pred: %v from server with id: %v", pred, serverId)
 
 	kvs := make(chan *task.KV, 1000)
-	defer close(kvs)
 	che := make(chan error)
 	go writeBatch(kvs, che)
 
@@ -97,20 +96,26 @@ func PopulateShard(ctx context.Context, pred string, serverId int) error {
 			break
 		}
 		if err != nil {
+			close(kvs)
 			return err
 		}
 
 		uo := flatbuffers.GetUOffsetT(payload.Data)
 		kv := new(task.KV)
 		kv.Init(payload.Data, uo)
+
+		// We check for errors, if there are no errors we send value to channel.
 		select {
 		case <-ctx.Done():
+			close(kvs)
 			return ctx.Err()
 		case err := <-che:
+			close(kvs)
 			return err
 		case kvs <- kv:
 		}
 	}
+	close(kvs)
 
 	if err := <-che; err != nil {
 		return err

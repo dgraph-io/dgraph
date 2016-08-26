@@ -175,7 +175,6 @@ func (w *worker) PredicateData(query *Payload, stream Worker_PredicateDataServer
 		}
 		k.Free()
 		v.Free()
-
 	}
 	if err := it.Err(); err != nil {
 		return err
