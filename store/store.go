@@ -89,6 +89,22 @@ func (s *Store) GetIterator() *rocksdb.Iterator {
 	return s.db.NewIterator(s.ropt)
 }
 
+// GetSnapIterator creates a snapshot and initializes an iterator with the
+// snapshot in the read options.
+func (s *Store) GetSnapIterator() *rocksdb.Iterator {
+	// We shouldn't use the s.db.ropt because it would affect read operations
+	// after taking a snapshot.
+	ro := rocksdb.NewDefaultReadOptions()
+	snap := s.db.NewSnapshot()
+	// SetFillCache should be set to false for bulk reads to avoid caching data
+	// while doing bulk scans.
+	ro.SetFillCache(false)
+	s.ropt.SetSnapshot(snap)
+	// So that we can release it later.
+	s.snap = snap
+	return s.db.NewIterator(ro)
+}
+
 func (s *Store) Close() {
 	s.db.Close()
 }
@@ -103,20 +119,8 @@ func (s *Store) IndexFilterblockSize() uint64 {
 	return blockSize
 }
 
-// SetSnapshot creates a snapshot and stores it in store so that it can be
-// released later.
-func (s *Store) SetSnapshot() {
-	snap := s.db.NewSnapshot()
-	// SetFillCache should be set to false for bulk reads to avoid caching data
-	// while doing bulk scans.
-	s.ropt.SetFillCache(false)
-	s.ropt.SetSnapshot(snap)
-	s.snap = snap
-}
-
 // ReleaseSnapshot releases a snapshot.
 func (s *Store) ReleaseSnapshot() {
-	s.ropt.SetFillCache(true)
 	s.snap.Release()
 }
 
