@@ -120,10 +120,12 @@ func (s *Store) ReleaseSnapshot() {
 	s.snap.Release()
 }
 
+// NewWriteBatch creates a new WriteBatch object and returns a pointer to it.
 func (s *Store) NewWriteBatch() *rocksdb.WriteBatch {
 	return rocksdb.NewWriteBatch()
 }
 
+// WriteBatch does a batch write to RocksDB from the data in WriteBatch object.
 func (s *Store) WriteBatch(wb *rocksdb.WriteBatch) error {
 	if err := s.db.Write(s.wopt, wb); err != nil {
 		return err
