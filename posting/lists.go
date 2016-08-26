@@ -181,32 +181,29 @@ func getMemUsage() int {
 		runtime.ReadMemStats(&ms)
 		megs := ms.Alloc / (1 << 20)
 		return int(megs)
-
-	} else {
-		contents, err := ioutil.ReadFile("/proc/self/stat")
-		if err != nil {
-			log.Println("Can't read the proc file", err)
-			return 0
-		}
-
-		cont := strings.Split(string(contents), " ")
-		// 24th entry of the file is the RSS which denotes the number of pages
-		// used by the process.
-		if len(cont) < 24 {
-			log.Println("Error in RSS from stat")
-			return 0
-		}
-
-		rss, err := strconv.Atoi(cont[23])
-		if err != nil {
-			log.Println(err)
-			return 0
-		}
-
-		return rss * os.Getpagesize() / (1 << 20)
 	}
 
-	return 0
+	contents, err := ioutil.ReadFile("/proc/self/stat")
+	if err != nil {
+		log.Println("Can't read the proc file", err)
+		return 0
+	}
+
+	cont := strings.Split(string(contents), " ")
+	// 24th entry of the file is the RSS which denotes the number of pages
+	// used by the process.
+	if len(cont) < 24 {
+		log.Println("Error in RSS from stat")
+		return 0
+	}
+
+	rss, err := strconv.Atoi(cont[23])
+	if err != nil {
+		log.Println(err)
+		return 0
+	}
+
+	return rss * os.Getpagesize() / (1 << 20)
 }
 
 func CheckMemoryUsage(ps1, ps2 *store.Store) {
