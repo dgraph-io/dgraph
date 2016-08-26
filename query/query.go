@@ -456,9 +456,27 @@ func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
 			dst.isDebug = true
 		}
 		dst.Attr = gchild.Attr
-		dst.Offset = gchild.Offset
-		dst.AfterUid = gchild.After
-		dst.Count = gchild.First
+		if gchild.Args["offset"] != "" {
+			offset, err := strconv.ParseInt(gchild.Args["offset"], 0, 32)
+			if err != nil {
+				return err
+			}
+			dst.Offset = int(offset)
+		}
+		if gchild.Args["after"] != "" {
+			after, err := strconv.ParseInt(gchild.Args["after"], 0, 32)
+			if err != nil {
+				return err
+			}
+			dst.AfterUid = uint64(after)
+		}
+		if gchild.Args["first"] != "" {
+			first, err := strconv.ParseInt(gchild.Args["first"], 0, 32)
+			if err != nil {
+				return err
+			}
+			dst.Count = int(first)
+		}
 		sg.Children = append(sg.Children, dst)
 		err := treeCopy(gchild, dst)
 		if err != nil {

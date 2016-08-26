@@ -32,9 +32,7 @@ type GraphQuery struct {
 	UID      uint64
 	XID      string
 	Attr     string
-	First    int
-	Offset   int
-	After    uint64
+	Args     map[string]string
 	Children []*GraphQuery
 
 	// Internal fields below.
@@ -134,31 +132,31 @@ type query struct {
 }
 
 func parseQueryWithVariables(str string) (string, varMap, error) {
-	var p query
+	var q query
 	vm := make(varMap)
-	err := json.Unmarshal([]byte(str), &p)
+	err := json.Unmarshal([]byte(str), &q)
 	if err != nil {
 		return str, vm, nil // It does not obey GraphiQL format but valid
 	}
 
-	for k, v := range p.Variables {
+	for k, v := range q.Variables {
 		vm[k] = varInfo{
 			Value: v,
 		}
 	}
-	return p.Query, vm, nil
+	return q.Query, vm, nil
 }
 
-func checkValidity(mp varMap) error {
-	for k, v := range mp {
-		typ := v.Type
+func checkValidity(vm varMap) error {
+	for k, v := range vm {
+		typ := strings.Trim(v.Type, " ")
 
 		// Ensure value is not nil if the variable is required
-		if v.Type[len(v.Type)-1] == '!' {
+		if typ[len(typ)-1] == '!' {
 			if v.Value == "" {
 				return fmt.Errorf("Variable %v should be initialised", k)
 			}
-			typ = strings.Trim(v.Type, "!")
+			typ = strings.Trim(typ, "!")
 		}
 
 		// Type check the values
@@ -184,6 +182,20 @@ func checkValidity(mp varMap) error {
 				}
 			}
 		}
+	}
+
+	return nil
+}
+
+func substituteVariables(gq *GraphQuery, vmap varMap) error {
+	for k, v := range gq.Args {
+		if v[0] == '$' {
+			gq.Args[k] = vmap[v].Value
+		}
+	}
+
+	for _, child := range gq.Children {
+		substituteVariables(child, vmap)
 	}
 
 	return nil
@@ -217,7 +229,7 @@ func Parse(input string) (gq *GraphQuery, mu *Mutation, rerr error) {
 				}
 			} else if item.Val == "fragment" {
 				// TODO(jchiu0): This is to be done in ParseSchema once it is ready.
-				fnode, rerr := getFragment(l, vmap)
+				fnode, rerr := getFragment(l)
 				if rerr != nil {
 					return nil, nil, rerr
 				}
@@ -228,7 +240,7 @@ func Parse(input string) (gq *GraphQuery, mu *Mutation, rerr error) {
 				}
 			}
 		case itemLeftCurl:
-			if gq, rerr = getQuery(l, vmap); rerr != nil {
+			if gq, rerr = getQuery(l); rerr != nil {
 				return nil, nil, rerr
 			}
 		}
@@ -239,6 +251,7 @@ func Parse(input string) (gq *GraphQuery, mu *Mutation, rerr error) {
 		if err := gq.expandFragments(fmap); err != nil {
 			return nil, nil, err
 		}
+		substituteVariables(gq, vmap)
 	}
 
 	return gq, mu, nil
@@ -265,8 +278,12 @@ L2:
 			if rerr = parseVariables(l, vmap); rerr != nil {
 				return nil, rerr
 			}
+
+			if rerr = checkValidity(vmap); rerr != nil {
+				return nil, rerr
+			}
 		case itemLeftCurl:
-			if gq, rerr = getQuery(l, vmap); rerr != nil {
+			if gq, rerr = getQuery(l); rerr != nil {
 				return nil, rerr
 			}
 			break L2
@@ -275,12 +292,8 @@ L2:
 	return gq, nil
 }
 
-func getQuery(l *lex.Lexer, vmap varMap) (gq *GraphQuery, rerr error) {
-	if rerr = checkValidity(vmap); rerr != nil {
-		return nil, rerr
-	}
-
-	gq, rerr = getRoot(l, vmap)
+func getQuery(l *lex.Lexer) (gq *GraphQuery, rerr error) {
+	gq, rerr = getRoot(l)
 	if rerr != nil {
 		return nil, rerr
 	}
@@ -292,7 +305,7 @@ L:
 			continue
 
 		case itemLeftCurl:
-			if rerr = godeep(l, gq, vmap); rerr != nil {
+			if rerr = godeep(l, gq); rerr != nil {
 				return nil, rerr
 			}
 			break L
@@ -302,7 +315,7 @@ L:
 }
 
 // getFragment parses a fragment definition (not reference).
-func getFragment(l *lex.Lexer, vmap varMap) (*fragmentNode, error) {
+func getFragment(l *lex.Lexer) (*fragmentNode, error) {
 	var name string
 	for item := range l.Items {
 		if item.Typ == itemText {
@@ -324,7 +337,7 @@ func getFragment(l *lex.Lexer, vmap varMap) (*fragmentNode, error) {
 		return nil, errors.New("Empty fragment name")
 	}
 	gq := new(GraphQuery)
-	if err := godeep(l, gq, vmap); err != nil {
+	if err := godeep(l, gq); err != nil {
 		return nil, err
 	}
 	fn := &fragmentNode{
@@ -482,8 +495,9 @@ func parseArguments(l *lex.Lexer) (result []pair, rerr error) {
 }
 
 // getRoot gets the root graph query object after parsing the args.
-func getRoot(l *lex.Lexer, vmap varMap) (gq *GraphQuery, rerr error) {
+func getRoot(l *lex.Lexer) (gq *GraphQuery, rerr error) {
 	gq = new(GraphQuery)
+	gq.Args = make(map[string]string)
 	item := <-l.Items
 	if item.Typ != itemName {
 		return nil, fmt.Errorf("Expected some name. Got: %v", item)
@@ -516,7 +530,7 @@ func getRoot(l *lex.Lexer, vmap varMap) (gq *GraphQuery, rerr error) {
 }
 
 // godeep constructs the subgraph from the lexed items and a GraphQuery node.
-func godeep(l *lex.Lexer, gq *GraphQuery, vmap varMap) error {
+func godeep(l *lex.Lexer, gq *GraphQuery) error {
 	curp := gq // Used to track current node, for nesting.
 	for item := range l.Items {
 		if item.Typ == lex.ItemError {
@@ -542,12 +556,13 @@ func godeep(l *lex.Lexer, gq *GraphQuery, vmap varMap) error {
 
 		} else if item.Typ == itemName {
 			child := new(GraphQuery)
+			child.Args = make(map[string]string)
 			child.Attr = item.Val
 			gq.Children = append(gq.Children, child)
 			curp = child
 
 		} else if item.Typ == itemLeftCurl {
-			if err := godeep(l, curp, vmap); err != nil {
+			if err := godeep(l, curp); err != nil {
 				return err
 			}
 
@@ -558,35 +573,11 @@ func godeep(l *lex.Lexer, gq *GraphQuery, vmap varMap) error {
 			}
 			// Stores args in GraphQuery, will be used later while retrieving results.
 			for _, p := range args {
-				// if the p.val is a variable(Starts with a $), Replace with the value.
-				val := p.Val
-				if p.Val[0] == '$' {
-					val = vmap[p.Val].Value
+				if p.Val == "" {
+					return fmt.Errorf("Got empty argument")
 				}
-				if p.Key == "first" {
-					count, err := strconv.ParseInt(val, 0, 32)
-					if err != nil {
-						return err
-					}
-					curp.First = int(count)
-				}
-				if p.Key == "offset" {
-					count, err := strconv.ParseInt(val, 0, 32)
-					if err != nil {
-						return err
-					}
-					if count < 0 {
-						return errors.New("offset cannot be less than 0")
-					}
-					curp.Offset = int(count)
-				}
-				if p.Key == "after" {
-					afterUid, err := strconv.ParseUint(val, 0, 64)
-					if err != nil {
-						return err
-					}
-					curp.After = afterUid
-				}
+
+				curp.Args[p.Key] = p.Val
 			}
 		}
 	}

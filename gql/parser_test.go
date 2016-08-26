@@ -124,14 +124,11 @@ func TestParseFirst(t *testing.T) {
 	if err := checkAttr(gq.Children[0], "type.object.name"); err != nil {
 		t.Error(err)
 	}
-	if gq.Children[0].First != 0 {
-		t.Errorf("Expected count 0. Got: %v", gq.Children[0].First)
-	}
 	if err := checkAttr(gq.Children[1], "friends"); err != nil {
 		t.Error(err)
 	}
-	if gq.Children[1].First != 10 {
-		t.Errorf("Expected count 10. Got: %v", gq.Children[1].First)
+	if gq.Children[1].Args["first"] != "10" {
+		t.Errorf("Expected count 10. Got: %v", gq.Children[1].Args["first"])
 	}
 }
 
@@ -176,17 +173,14 @@ func TestParseAfter(t *testing.T) {
 	if err := checkAttr(gq.Children[0], "type.object.name"); err != nil {
 		t.Error(err)
 	}
-	if gq.Children[0].First != 0 {
-		t.Errorf("Expected count 0. Got: %v", gq.Children[0].First)
-	}
 	if err := checkAttr(gq.Children[1], "friends"); err != nil {
 		t.Error(err)
 	}
-	if gq.Children[1].First != 10 {
-		t.Errorf("Expected count 10. Got: %v", gq.Children[1].First)
+	if gq.Children[1].Args["first"] != "10" {
+		t.Errorf("Expected count 10. Got: %v", gq.Children[1].Args["first"])
 	}
-	if gq.Children[1].After != 3 {
-		t.Errorf("Expected after to be 3. Got: %v", gq.Children[1].Offset)
+	if gq.Children[1].Args["after"] != "3" {
+		t.Errorf("Expected after to be 3. Got: %v", gq.Children[1].Args["after"])
 	}
 }
 
@@ -214,17 +208,14 @@ func TestParseOffset(t *testing.T) {
 	if err := checkAttr(gq.Children[0], "type.object.name"); err != nil {
 		t.Error(err)
 	}
-	if gq.Children[0].First != 0 {
-		t.Errorf("Expected count 0. Got: %v", gq.Children[0].First)
-	}
 	if err := checkAttr(gq.Children[1], "friends"); err != nil {
 		t.Error(err)
 	}
-	if gq.Children[1].First != 10 {
-		t.Errorf("Expected count 10. Got: %v", gq.Children[1].First)
+	if gq.Children[1].Args["first"] != "10" {
+		t.Errorf("Expected count 10. Got: %v", gq.Children[1].Args["First"])
 	}
-	if gq.Children[1].Offset != 3 {
-		t.Errorf("Expected Offset 3. Got: %v", gq.Children[1].Offset)
+	if gq.Children[1].Args["offset"] != "3" {
+		t.Errorf("Expected Offset 3. Got: %v", gq.Children[1].Args["offset"])
 	}
 }
 
@@ -233,7 +224,7 @@ func TestParseOffset_error(t *testing.T) {
 	query {
 		user(_xid_: m.abcd) {
 			type.object.name
-			friends (first: 10, offset: -3) {
+			friends (first: 10, offset: ) {
 			}
 		}
 	}`
@@ -680,8 +671,8 @@ func TestParseVariablesFragments(t *testing.T) {
 
 	// Notice that the order is preserved.
 
-	if gq.Children[0].First != 5 {
-		t.Error("Expected first to be 5. Got %v", gq.Children[2].First)
+	if gq.Children[0].Args["first"] != "5" {
+		t.Error("Expected first to be 5. Got %v", gq.Children[2].Args["first"])
 	}
 }
 
