@@ -99,8 +99,6 @@ func NewCounters() *counters {
 	return c
 }
 
-var MAX_MEMORY int
-
 func aggressivelyEvict() {
 	// Okay, we exceed the max memory threshold.
 	// Stop the world, and deal with this first.
@@ -177,26 +175,45 @@ func gentlyMerge(mr *mergeRoutines) {
 
 // getMemUsage returns the amount of memory used by the process in MB
 func getMemUsage() int {
-	pid := os.Getpid()
-	contents, err := ioutil.ReadFile("/proc/" + strconv.Itoa(pid) + "/stat")
-	if err != nil {
-		log.Println("Can't read the proc file", err)
-	}
-	cont := strings.Split(string(contents), " ")
+	if runtime.GOOS != "linux" {
+		// For non-linux OS we just get approx memory usage from runtime
+		var ms runtime.MemStats
+		runtime.ReadMemStats(&ms)
+		megs := ms.Alloc / (1 << 20)
+		return int(megs)
 
-	// 24th entry of the file is the RSS which denotes the number of pages
-	// used by the process. Each page is 4KB in size
-	a, _ := strconv.Atoi(cont[23])
-	return a * 4 / (1 << 10)
+	} else {
+		contents, err := ioutil.ReadFile("/proc/self/stat")
+		if err != nil {
+			log.Println("Can't read the proc file", err)
+			return 0
+		}
+
+		cont := strings.Split(string(contents), " ")
+		// 24th entry of the file is the RSS which denotes the number of pages
+		// used by the process.
+		if len(cont) < 24 {
+			log.Println("Error in RSS from stat")
+			return 0
+		}
+
+		rss, err := strconv.Atoi(cont[23])
+		if err != nil {
+			log.Println(err)
+			return 0
+		}
+
+		return rss * os.Getpagesize() / (1 << 20)
+	}
+
+	return 0
 }
 
 func CheckMemoryUsage(ps1, ps2 *store.Store) {
-	MAX_MEMORY = *maxmemory
 	var mr mergeRoutines
 	for _ = range time.Tick(5 * time.Second) {
 		totMemory := getMemUsage()
-		log.Println("Memory usage (MB): ", totMemory)
-		if totMemory > MAX_MEMORY {
+		if totMemory > *maxmemory {
 			aggressivelyEvict()
 		} else {
 			// If merging is slow, we don't want to end up having too many goroutines
