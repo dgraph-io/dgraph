@@ -31,7 +31,7 @@ const (
 )
 
 // writeBatch performs a batch write of key value pairs to RocksDB.
-func writeBatch(kv chan *task.KV, che chan error) {
+func writeBatch(ctx context.Context, kv chan *task.KV, che chan error) {
 	wb := dataStore.NewWriteBatch()
 	batchSize := 0
 	for i := range kv {
@@ -39,10 +39,13 @@ func writeBatch(kv chan *task.KV, che chan error) {
 		batchSize += len(i.KeyBytes()) + len(i.ValBytes())
 		// We write in batches of size 32MB.
 		if batchSize >= 32*MB {
+			x.Trace(ctx, "Starting batch write.")
 			if err := dataStore.WriteBatch(wb); err != nil {
 				che <- err
 				return
 			}
+			x.Trace(ctx, "Completed batch write.")
+
 			// Resetting batch size after a batch write.
 			batchSize = 0
 			// Since we are writing data in batches, we need to clear up items enqueued
@@ -53,10 +56,10 @@ func writeBatch(kv chan *task.KV, che chan error) {
 	// After channel is closed the above loop would exit, we write the data in
 	// write batch here.
 	if batchSize > 0 {
-		if err := dataStore.WriteBatch(wb); err != nil {
-			che <- err
-			return
-		}
+		x.Trace(ctx, "Starting batch write.")
+		che <- dataStore.WriteBatch(wb)
+		x.Trace(ctx, "Completed batch write.")
+		return
 	}
 	che <- nil
 }
@@ -88,7 +91,7 @@ func PopulateShard(ctx context.Context, pred string, serverId int) error {
 
 	kvs := make(chan *task.KV, 1000)
 	che := make(chan error)
-	go writeBatch(kvs, che)
+	go writeBatch(ctx, kvs, che)
 
 	for {
 		payload, err := stream.Recv()
@@ -107,9 +110,12 @@ func PopulateShard(ctx context.Context, pred string, serverId int) error {
 		// We check for errors, if there are no errors we send value to channel.
 		select {
 		case <-ctx.Done():
+			x.Trace(ctx, "Context timed out while streaming pred: %v from instance: %v",
+				pred, serverId)
 			close(kvs)
 			return ctx.Err()
 		case err := <-che:
+			x.Trace(ctx, "Error while doing a batch write for pred: %v", pred)
 			close(kvs)
 			return err
 		case kvs <- kv:
@@ -118,6 +124,7 @@ func PopulateShard(ctx context.Context, pred string, serverId int) error {
 	close(kvs)
 
 	if err := <-che; err != nil {
+		x.Trace(ctx, "Error while doing a batch write for pred: %v", pred)
 		return err
 	}
 	x.Trace(ctx, "Streaming complete for pred: %v from server with id: %v", pred, serverId)
