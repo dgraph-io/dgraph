@@ -120,29 +120,13 @@ func (s *Store) ReleaseSnapshot() {
 	s.snap.Release()
 }
 
-const (
-	MB = 1 << 20
-)
+func (s *Store) NewWriteBatch() *rocksdb.WriteBatch {
+	return rocksdb.NewWriteBatch()
+}
 
-// WriteBatch performs a batch write of key value pairs to RocksDB.
-func (s *Store) WriteBatch(kv chan x.KV, che chan error) {
-	wb := rocksdb.NewWriteBatch()
-	for i := range kv {
-		wb.Put(i.Key, i.Val)
-		if len(wb.Data()) > 32*MB {
-			if err := s.db.Write(s.wopt, wb); err != nil {
-				che <- err
-				return
-			}
-		}
+func (s *Store) WriteBatch(wb *rocksdb.WriteBatch) error {
+	if err := s.db.Write(s.wopt, wb); err != nil {
+		return err
 	}
-	// After channel is closed the above loop would exit, we write the data in
-	// write batch here.
-	if len(wb.Data()) > 0 {
-		if err := s.db.Write(s.wopt, wb); err != nil {
-			che <- err
-			return
-		}
-	}
-	che <- nil
+	return nil
 }

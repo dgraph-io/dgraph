@@ -145,9 +145,3 @@ func Trace(ctx context.Context, format string, args ...interface{}) {
 	}
 	tr.LazyPrintf(format, args...)
 }
-
-// KV is used to represent a key value pair in rocksdb.
-type KV struct {
-	Key []byte
-	Val []byte
-}

@@ -25,13 +25,50 @@ import (
 	flatbuffers "github.com/google/flatbuffers/go"
 )
 
-// Predicate gets data for a predicate p from another instance and writes it to RocksDB.
-func Predicate(p string, idx int) error {
+const (
+	// MB represents a megabyte.
+	MB = 1 << 20
+)
+
+// writeBatch performs a batch write of key value pairs to RocksDB.
+func writeBatch(kv chan *task.KV, che chan error) {
+	wb := dataStore.NewWriteBatch()
+	batchSize := 0
+	for i := range kv {
+		wb.Put(i.KeyBytes(), i.ValBytes())
+		batchSize += len(i.KeyBytes()) + len(i.ValBytes())
+		// We write in batches of size 32MB.
+		if batchSize >= 32*MB {
+			if err := dataStore.WriteBatch(wb); err != nil {
+				che <- err
+				return
+			}
+		}
+		// Resetting batch size after a batch write.
+		batchSize = 0
+		// Since we are writing data in batches, we need to clear up items enqueued
+		// for batch write after every successful write.
+		wb.Clear()
+	}
+	// After channel is closed the above loop would exit, we write the data in
+	// write batch here.
+	if batchSize > 0 {
+		if err := dataStore.WriteBatch(wb); err != nil {
+			che <- err
+			return
+		}
+	}
+	che <- nil
+}
+
+// PopulateShard gets data for predicate pred from server with id serverId and
+// writes it to RocksDB.
+func PopulateShard(ctx context.Context, pred string, serverId int) error {
 	var err error
 
-	pool := pools[idx]
+	pool := pools[serverId]
 	query := new(Payload)
-	query.Data = []byte(p)
+	query.Data = []byte(pred)
 	if err != nil {
 		return err
 	}
@@ -47,29 +84,37 @@ func Predicate(p string, idx int) error {
 	if err != nil {
 		return err
 	}
+	x.Trace(ctx, "Streaming data for pred: %v from server with id: %v", pred, serverId)
 
-	kvs := make(chan x.KV, 10000)
+	kvs := make(chan *task.KV, 1000)
+	defer close(kvs)
 	che := make(chan error)
-	go dataStore.WriteBatch(kvs, che)
+	go writeBatch(kvs, che)
 
 	for {
-		b, err := stream.Recv()
+		payload, err := stream.Recv()
 		if err == io.EOF {
 			break
 		}
 		if err != nil {
-			close(kvs)
 			return err
 		}
 
-		uo := flatbuffers.GetUOffsetT(b.Data)
+		uo := flatbuffers.GetUOffsetT(payload.Data)
 		kv := new(task.KV)
-		kv.Init(b.Data, uo)
-		kvs <- x.KV{Key: kv.KeyBytes(), Val: kv.ValBytes()}
+		kv.Init(payload.Data, uo)
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case err := <-che:
+			return err
+		case kvs <- kv:
+		}
 	}
-	close(kvs)
+
 	if err := <-che; err != nil {
 		return err
 	}
+	x.Trace(ctx, "Streaming complete for pred: %v from server with id: %v", pred, serverId)
 	return nil
 }
