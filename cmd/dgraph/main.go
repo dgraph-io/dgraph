@@ -41,7 +41,6 @@ import (
 	"github.com/dgraph-io/dgraph/query/graph"
 	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/store"
-	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/uid"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
@@ -193,14 +192,15 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 
 	// If we have mutations, run them first.
 	if mu != nil && (len(mu.Set) > 0 || len(mu.Del) > 0) {
-		x.Trace(ctx, "Starting Mutation validation using Schema")
-		err = types.ValidateMutation(mu, types.TestSchema)
-		if err != nil {
-			x.Trace(ctx, "Error while validating mutation: %v", err)
-			x.SetStatus(w, x.ErrorInvalidMutation, err.Error())
-			return
-		}
-		x.Trace(ctx, "Mutation is valid")
+		// TODO(akhil): next step in type validation, validate mutation types
+		// x.Trace(ctx, "Starting Mutation validation using Schema")
+		// err = types.ValidateMutation(mu, types.TestSchema)
+		// if err != nil {
+		// 	x.Trace(ctx, "Error while validating mutation: %v", err)
+		// 	x.SetStatus(w, x.ErrorInvalidMutation, err.Error())
+		// 	return
+		// }
+		// x.Trace(ctx, "Mutation is valid")
 		if err = mutationHandler(ctx, mu); err != nil {
 			x.Trace(ctx, "Error while handling mutations: %v", err)
 			x.SetStatus(w, x.Error, err.Error())
