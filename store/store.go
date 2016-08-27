@@ -33,7 +33,6 @@ type Store struct {
 	blockopt *rocksdb.BlockBasedTableOptions
 	ropt     *rocksdb.ReadOptions
 	wopt     *rocksdb.WriteOptions
-	snap     *rocksdb.Snapshot
 }
 
 func (s *Store) setOpts() {
@@ -85,23 +84,12 @@ func (s *Store) Delete(k []byte) error {
 	return s.db.Delete(s.wopt, k)
 }
 
+// GetIterator initializes a new iterator and returns it.
 func (s *Store) GetIterator() *rocksdb.Iterator {
-	return s.db.NewIterator(s.ropt)
-}
-
-// GetSnapIterator creates a snapshot and initializes an iterator with the
-// snapshot in the read options.
-func (s *Store) GetSnapIterator() *rocksdb.Iterator {
-	// We shouldn't use the s.db.ropt because it would affect read operations
-	// after taking a snapshot.
 	ro := rocksdb.NewDefaultReadOptions()
-	snap := s.db.NewSnapshot()
 	// SetFillCache should be set to false for bulk reads to avoid caching data
 	// while doing bulk scans.
 	ro.SetFillCache(false)
-	s.ropt.SetSnapshot(snap)
-	// So that we can release it later.
-	s.snap = snap
 	return s.db.NewIterator(ro)
 }
 
@@ -117,11 +105,6 @@ func (s *Store) MemtableSize() uint64 {
 func (s *Store) IndexFilterblockSize() uint64 {
 	blockSize, _ := strconv.ParseUint(s.db.GetProperty("rocksdb.estimate-table-readers-mem"), 10, 64)
 	return blockSize
-}
-
-// ReleaseSnapshot releases a snapshot.
-func (s *Store) ReleaseSnapshot() {
-	s.snap.Release()
 }
 
 // NewWriteBatch creates a new WriteBatch object and returns a pointer to it.
