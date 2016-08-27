@@ -101,7 +101,7 @@ func MakeScalarType(sc *ScalarConfig) *GraphQLScalar {
 
 // String function to implement string interface
 func (s *GraphQLScalar) String() string {
-	return s.Name
+	return fmt.Sprintf("ScalarTypeName is:%v\n", s.Name)
 }
 
 // Error function to implement error interface
@@ -131,15 +131,11 @@ type Field struct {
 	Resolve ResolveFunc
 }
 
-/**
- * ResolveFunc fetches the result data for the specified field.
- */
+// ResolveFunc fetches the result data for the specified field.
 type ResolveFunc func(rp ResolveParams) interface{}
 
-/**
- * ResolveParams is the set of input params available to fetch query result from backend.
- * Could also pass current context (like user info) and source info (about root, field) here.
- */
+// ResolveParams is the set of input params available to fetch query result from backend.
+// Could also pass current context (like user info) and source info (about root, field) here.
 type ResolveParams struct {
 	InputVal string
 }
