@@ -33,18 +33,46 @@ var queryType = GraphQLObject{
 	Name: "My Query",
 	Desc: "Investiture of a Shard",
 	Fields: FieldMap{
-		"Work": &Field{
+		"work": &Field{
 			Type: String,
 			Resolve: func(rp ResolveParams) interface{} {
 				return "In progress"
 			},
 		},
+		"actor": &Field{
+			Type: PersonType,
+		},
 	},
 }
 
-// ValidateSchema validates the parsed query tree against the present schema.
-// TODO(akhil): traverse GraphQuery and compare each node with corresponding schema struct.
+var PersonType = GraphQLObject{
+	Name: "Person",
+	Desc: "object to represent a person type",
+	Fields: FieldMap{
+		"name": &Field{
+			Type: String,
+			Resolve: func(rp ResolveParams) interface{} {
+				return "name_person"
+			},
+		},
+		"gender": &Field{
+			Type: String,
+			Resolve: func(rp ResolveParams) interface{} {
+				return "gender_person"
+			},
+		},
+		"status": &Field{
+			Type: Int,
+			Resolve: func(rp ResolveParams) interface{} {
+				return "status_person"
+			},
+		},
+	},
+}
+
+// ValidateSchema validates the parsed mutation string against the present schema.
+// TODO(akhil): traverse Mutation and compare each node with corresponding schema struct.
 // TODO(akhil): implement error function (extending error interface).
-func ValidateSchema(gq *gql.GraphQuery, s *GraphQLSchema) error {
+func ValidateMutation(mu *gql.Mutation, s *GraphQLSchema) error {
 	return nil
 }

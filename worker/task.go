@@ -42,14 +42,12 @@ func ProcessTaskOverNetwork(ctx context.Context, qu []byte) (result []byte, rerr
 	attr := string(q.Attr())
 	idx := farm.Fingerprint64([]byte(attr)) % numInstances
 
-	var runHere bool
 	// Posting list with xid -> uid and uid -> xid mapping is stored on instance 0.
 	if attr == _xid_ || attr == _uid_ {
 		idx = 0
-		runHere = (instanceIdx == 0)
-	} else {
-		runHere = (instanceIdx == idx)
 	}
+	runHere := (instanceIdx == idx)
+
 	x.Trace(ctx, "runHere: %v attr: %v instanceIdx: %v numInstances: %v",
 		runHere, attr, instanceIdx, numInstances)
 

@@ -42,7 +42,7 @@ const (
 	ErrorNoData          = "ErrorNoData"
 	ErrorUptodate        = "ErrorUptodate"
 	ErrorNoPermission    = "ErrorNoPermission"
-	ErrorInvalidQuery    = "ErrorInvalidQuery"
+	ErrorInvalidMutation = "ErrorInvalidMutation"
 )
 
 const dgraphVersion = "0.4.3"
