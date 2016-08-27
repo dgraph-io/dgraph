@@ -20,7 +20,7 @@ import (
 	"fmt"
 )
 
-// TODO(akhil): make underlying interfaces for stricter definitions of types.
+// TODO(akhil): make more underlying interfaces for stricter definitions of types.
 
 /**
  * GraphQLScalar type defines concrete structure for scalar types to use.
@@ -63,8 +63,8 @@ type ScalarConfig struct {
  * 		- Boolean
  * 		- ID
  */
-func MakeScalarType(sc *ScalarConfig) *GraphQLScalar {
-	scalarType := &GraphQLScalar{}
+func MakeScalarType(sc *ScalarConfig) GraphQLScalar {
+	scalarType := GraphQLScalar{}
 
 	// check if all essential config is present.
 	if sc.Name != "" && validName(sc.Name) {

@@ -26,11 +26,12 @@ type GraphQLSchema struct {
 }
 
 // TestSchema defines a dummy schema to test type and validaiton system.
-var TestSchema = &GraphQLSchema{Query: queryType}
+var Schema = &GraphQLSchema{Query: QueryType}
 
-// queryType defines sample basic schema.
-var queryType = GraphQLObject{
-	Name: "My Query",
+// QueryType defines sample basic schema.
+// TODO(akhil): move definition to query_test and have a generic schema and QueryType here
+var QueryType = GraphQLObject{
+	Name: "Query",
 	Desc: "Investiture of a Shard",
 	Fields: FieldMap{
 		"work": &Field{
@@ -40,12 +41,12 @@ var queryType = GraphQLObject{
 			},
 		},
 		"actor": &Field{
-			Type: PersonType,
+			Type: personType,
 		},
 	},
 }
 
-var PersonType = GraphQLObject{
+var personType = GraphQLObject{
 	Name: "Person",
 	Desc: "object to represent a person type",
 	Fields: FieldMap{
@@ -61,10 +62,10 @@ var PersonType = GraphQLObject{
 				return "gender_person"
 			},
 		},
-		"status": &Field{
+		"age": &Field{
 			Type: Int,
 			Resolve: func(rp ResolveParams) interface{} {
-				return "status_person"
+				return "age_person"
 			},
 		},
 	},
