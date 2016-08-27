@@ -538,7 +538,8 @@ func TestToJson(t *testing.T) {
 }
 
 // Checking for Type coercion errors.
-// TODO(akhil): Writing separate test since Marshal/Unmarshal process of ToJSON converts 'int' type to 'float64' and thus mucks up the tests. Figure out if merging tests is possible.
+// TODO(akhil): Writing separate test since Marshal/Unmarshal process of ToJSON converts
+// 'int' type to 'float64' and thus mucks up the tests. Figure out if merging is possible.
 // Thing to note here is now the query root 'MUST' have a subject name instead of just being
 // query, me, etc. to faciliate the identification of parent object.
 // TODO(akhil): In this case, 'debug' mode won't work with type system. Must fix that.
@@ -592,24 +593,24 @@ func TestPostTraverse(t *testing.T) {
 		} else {
 			m = make(map[string]interface{})
 		}
-		actor_map := m["actor"].(map[string]interface{})
+		actorMap := m["actor"].(map[string]interface{})
 
-		if _, success := actor_map["name"].(string); !success {
-			t.Errorf("Expected type coercion to string for: %v\n", actor_map["name"])
+		if _, success := actorMap["name"].(string); !success {
+			t.Errorf("Expected type coercion to string for: %v\n", actorMap["name"])
 		}
-		//Note: although, int and int32 have same size, they are treated as different types in go
+		// Note: although, int and int32 have same size, they are treated as different types in go
 		// GraphQL spec mentions integer type to be int32
-		if _, success := actor_map["age"].(int32); !success {
-			t.Errorf("Expected type coercion to int32 for: %v\n", actor_map["age"])
+		if _, success := actorMap["age"].(int32); !success {
+			t.Errorf("Expected type coercion to int32 for: %v\n", actorMap["age"])
 		}
-		if _, success := actor_map["sword_present"].(bool); !success {
-			t.Errorf("Expected type coercion to bool for: %v\n", actor_map["sword_present"])
+		if _, success := actorMap["sword_present"].(bool); !success {
+			t.Errorf("Expected type coercion to bool for: %v\n", actorMap["sword_present"])
 		}
-		if _, success := actor_map["is_zombie"].(bool); !success {
-			t.Errorf("Expected type coercion to bool for: %v\n", actor_map["is_zombie"])
+		if _, success := actorMap["is_zombie"].(bool); !success {
+			t.Errorf("Expected type coercion to bool for: %v\n", actorMap["is_zombie"])
 		}
-		if _, success := actor_map["survival_rate"].(float64); !success {
-			t.Errorf("Expected type coercion to float64 for: %v\n", actor_map["survival_rate"])
+		if _, success := actorMap["survival_rate"].(float64); !success {
+			t.Errorf("Expected type coercion to float64 for: %v\n", actorMap["survival_rate"])
 		}
 	}
 

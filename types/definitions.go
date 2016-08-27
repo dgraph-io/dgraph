@@ -22,11 +22,9 @@ import (
 
 // TODO(akhil): make more underlying interfaces for stricter definitions of types.
 
-/**
- * GraphQLScalar type defines concrete structure for scalar types to use.
- * Almost all scalar types can also act as input types.
- * Scalars (along with Enums) form leaf nodes of request or input values to arguements.
- */
+// GraphQLScalar type defines concrete structure for scalar types to use.
+// Almost all scalar types can also act as input types.
+// Scalars (along with Enums) form leaf nodes of request or input values to arguements.
 type GraphQLScalar struct {
 	Name        string       // name of scalar type
 	Description string       // short description, could be used for documentation in GraphiQL
@@ -52,17 +50,16 @@ type ScalarConfig struct {
 	// ParseLiteral	ParseLiteralFunc
 }
 
-/**
- * MakeScalarType declares a custom scalar type using the input configuration.
- * Custom scalar could directly be defined as well, but this function gives us flexibility
- * to do validations and catch errors.
- * Basic scalar types supported by GraphQL are:
- * 		- Int
- * 		- Float
- * 		- String
- * 		- Boolean
- * 		- ID
- */
+//
+// MakeScalarType declares a custom scalar type using the input configuration.
+// Custom scalar could directly be defined as well, but this function gives us flexibility
+// to do validations and catch errors.
+// Basic scalar types supported by GraphQL are:
+// - Int
+// - Float
+// - String
+// - Boolean
+// - ID
 func MakeScalarType(sc *ScalarConfig) GraphQLScalar {
 	scalarType := GraphQLScalar{}
 
@@ -109,11 +106,9 @@ func (s *GraphQLScalar) Error() error {
 	return s.Err
 }
 
-/**
- * GraphQLObject type defines skeleton for basic graphql objects.
- * They form the basis for most object in this system.
- * Object has a name and a set of fields.
- */
+// GraphQLObject type defines skeleton for basic graphql objects.
+// They form the basis for most object in this system.
+// Object has a name and a set of fields.
 type GraphQLObject struct {
 	// TODO(akhil): complete this impl.
 	// TODO(akhil): find out if not exporting struct fields causes issues (same for GraphQLScalar).
@@ -126,6 +121,8 @@ type GraphQLObject struct {
 type FieldMap map[string]*Field
 
 // Field declares the details for a field used for type inference, validation and execution.
+// Type field is an interface to account for the fact that fields can be of any object type
+// Could make it stricter with a wrapper interface
 type Field struct {
 	Type    interface{}
 	Resolve ResolveFunc
@@ -152,9 +149,7 @@ type ResolveParams struct {
 
 // TODO(akhil): GraphQLInputObjects type implementation.
 
-/**
- * validName matches valid name strings.
- */
+// validName matches valid name strings.
 func validName(name string) bool {
 	// TODO(akhil): impl using regexp.
 	return true

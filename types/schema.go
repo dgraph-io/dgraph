@@ -19,6 +19,7 @@ package types
 import "github.com/dgraph-io/dgraph/gql"
 
 // TODO(akhil): validator for client uploaded schema as well, to ensure it declares all types.
+
 // GraphQLSchema declares the schema structure the GraphQL queries.
 type GraphQLSchema struct {
 	Query    GraphQLObject
@@ -32,7 +33,7 @@ var Schema = &GraphQLSchema{Query: QueryType}
 // TODO(akhil): move definition to query_test and have a generic schema and QueryType here
 var QueryType = GraphQLObject{
 	Name: "Query",
-	Desc: "Investiture of a Shard",
+	Desc: "Sample query structure",
 	Fields: FieldMap{
 		"work": &Field{
 			Type: String,
@@ -46,59 +47,7 @@ var QueryType = GraphQLObject{
 	},
 }
 
-// personType for validating coersion system implementation
-// Resolve field is a redundant dummy for now
-// TODO(akhil): Recursive definition like Person -> friend(personType) will throw error, figure out solution.
-var personType = GraphQLObject{
-	Name: "Person",
-	Desc: "object to represent a person type",
-	Fields: FieldMap{
-		"name": &Field{
-			Type: String,
-			Resolve: func(rp ResolveParams) interface{} {
-				return "name_person"
-			},
-		},
-		"gender": &Field{
-			Type: String,
-			Resolve: func(rp ResolveParams) interface{} {
-				return "gender_person"
-			},
-		},
-		"age": &Field{
-			Type: Int,
-			Resolve: func(rp ResolveParams) interface{} {
-				return "age_person"
-			},
-		},
-		"status": &Field{
-			Type: String,
-			Resolve: func(rp ResolveParams) interface{} {
-				return "status_person"
-			},
-		},
-		"sword_present": &Field{
-			Type: Boolean,
-			Resolve: func(rp ResolveParams) interface{} {
-				return "sword_present_person"
-			},
-		},
-		"is_zombie": &Field{
-			Type: Boolean,
-			Resolve: func(rp ResolveParams) interface{} {
-				return "is_zombie_person"
-			},
-		},
-		"survival_rate": &Field{
-			Type: Float,
-			Resolve: func(rp ResolveParams) interface{} {
-				return "survival_rate_person"
-			},
-		},
-	},
-}
-
-// ValidateSchema validates the parsed mutation string against the present schema.
+// ValidateMutation validates the parsed mutation string against the present schema.
 // TODO(akhil): traverse Mutation and compare each node with corresponding schema struct.
 // TODO(akhil): implement error function (extending error interface).
 func ValidateMutation(mu *gql.Mutation, s *GraphQLSchema) error {
