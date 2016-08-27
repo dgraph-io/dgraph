@@ -149,15 +149,17 @@ func mergeInterfaces(i1 interface{}, i2 interface{}) interface{} {
 }
 
 // findScalarType returns leaf node type from define schema for type coercion
+// TODO(akhil): make a wrapping interface for schema object/scalar types
+// Then, will return stricter types instead of interface{}
 func findScalarType(tt []string) (interface{}, error) {
-	//we know the root will always be QueryType for a result graph
+	// we know the root will always be QueryType for a result graph
 	return findType(tt[1:], types.QueryType)
 }
 
 // findType recursively finds out type of leaf node
 func findType(tt []string, ptype interface{}) (interface{}, error) {
 
-	//Check if this could be done strictly instead of using interfaces as return types
+	// Check if this could be done strictly instead of using interfaces as return types
 	ftype, err := findFieldType(tt[0], ptype.(types.GraphQLObject))
 	if err != nil {
 		return nil, err
@@ -172,11 +174,11 @@ func findType(tt []string, ptype interface{}) (interface{}, error) {
 func findFieldType(f string, ptype types.GraphQLObject) (interface{}, error) {
 	// Assuming field names in defined objects will be lowercase, as will be the query fields
 	// Otherwise make field presence checking case-sensitive
-	if val, present := ptype.Fields[f]; !present {
+	val, present := ptype.Fields[f]
+	if !present {
 		return nil, fmt.Errorf("Field:%v not defined under type:%v in schema.\n", f, ptype.Name)
-	} else {
-		return val.Type, nil
 	}
+	return val.Type, nil
 }
 
 // coerceItemLiteral converts literals to appropriate supported types if possible
@@ -196,7 +198,7 @@ func coerceItemLiteral(itemString string, objectType string) (val interface{}, e
 		val = types.CoerceString(itemString)
 	}
 	if val == nil {
-		//apparantly, we don't support the type intended by the client
+		// apparantly, we don't support the type intended by the client
 		err = fmt.Errorf("Type coercion not supported for value:%v to type:%v\n", itemString, objectType)
 	}
 	return
@@ -323,9 +325,9 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 		// After that, 'string(val)' will be replaced by direct type inference/coercion
 		ltype, err := findScalarType(strings.Split(sg.TypeTree, ":"))
 		if err != nil {
-			//No type defined for present attribute in type schema, return string value
+			// No type defined for present attribute in type schema, return string value
 			m[sg.Attr] = string(val)
-			log.Printf("Type coersion warning: %v\n", err)
+			log.Printf("Type coercion warning: %v\n", err)
 		} else {
 			stype := ltype.(types.GraphQLScalar)
 			lval, err := coerceItemLiteral(string(val), stype.Name)

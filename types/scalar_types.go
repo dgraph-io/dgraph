@@ -26,16 +26,14 @@ import (
 const minInt int32 = -1 << 31
 const maxInt int32 = 1<<31 - 1
 
-/**
- * coerceInt coerces the input value to appropriate type according to GraphQL specification.
- * TODO(akhil): handle error thrown from here.
- * Note:
- * 		-although, in most cases, input will be string/boot/int/float types but,
- * 			coercion has been done for all available types for demonstration.
- * 		-byte and rune types are already covered by uint8 and int32, respectively.
- * 		-complex numbers and pointer type (uintptr) are not covered here.
- * 		-if input value cannot be coerced, "nil" is retuned.
- */
+// CoerceInt coerces the input value to appropriate type according to GraphQL specification.
+// TODO(akhil): handle error thrown from here.
+// Note:
+// -although, in most cases, input will be string/boot/int/float types but,
+// coercion has been done for all available types for demonstration.
+// -byte and rune types are already covered by uint8 and int32, respectively.
+// -complex numbers and pointer type (uintptr) are not covered here.
+// -if input value cannot be coerced, "nil" is retuned.
 func CoerceInt(input interface{}) interface{} {
 	// use a 'type switch' to find out the type of the input value
 	switch v := input.(type) {
@@ -102,11 +100,10 @@ var Int = MakeScalarType(
 			" numeric values. Int can represent values between -(2^31)" +
 			" and 2^31 - 1.",
 		Serialize: CoerceInt,
-		// parseValue:		coerceInt,
-		// parseLiteral:	coerceInt
 	},
 )
 
+// CoerceFloat converts different types to float object type
 func CoerceFloat(input interface{}) interface{} {
 	switch v := input.(type) {
 	case bool:
@@ -139,11 +136,10 @@ var Float = MakeScalarType(
 			" fractional values	as specified by [IEEE 754]" +
 			" (http://en.wikipedia.org/wiki/IEEE_floating_point).",
 		Serialize: CoerceFloat,
-		// parseValue:		coerceFloat,
-		// parseLiteral:	coerceFloat
 	},
 )
 
+// CoerceString converts objects
 func CoerceString(input interface{}) interface{} {
 	switch v := input.(type) {
 	case bool:
@@ -164,11 +160,10 @@ var String = MakeScalarType(
 			" as UTF-8 character sequences. The String type is most often" +
 			" used by GraphQL to represent free-form human-readable text.",
 		Serialize: CoerceString,
-		// parseValue:		coerceString,
-		// parseLiteral:	coerceString
 	},
 )
 
+// CoerceBool converts other object types to bool scalar type
 func CoerceBool(input interface{}) interface{} {
 	switch v := input.(type) {
 	case bool:
@@ -204,8 +199,6 @@ var Boolean = MakeScalarType(
 		Name:        "Boolean",
 		Description: "The 'Boolean' scalar type represents 'true' or 'false'.",
 		Serialize:   CoerceBool,
-		// parseValue:		coerceBool,
-		// parseLiteral:	coerceBool
 	},
 )
 
@@ -220,8 +213,6 @@ var ID = MakeScalarType(
 			" type, any string (such as '4') or integer (such as '4')" +
 			" input value will be accepted as an ID.",
 		Serialize: CoerceString,
-		// parseValue:		coerceString,
-		// parseLiteral:	coerceString
 	},
 )
 
