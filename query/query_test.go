@@ -177,6 +177,18 @@ func populateGraph(t *testing.T) (string, *store.Store) {
 	edge.Value = []byte("alive")
 	addEdge(t, edge, posting.GetOrCreate(posting.Key(1, "status"), ps))
 
+	edge.Value = []byte("38")
+	addEdge(t, edge, posting.GetOrCreate(posting.Key(1, "age"), ps))
+
+	edge.Value = []byte("0")
+	addEdge(t, edge, posting.GetOrCreate(posting.Key(1, "is_zombie"), ps))
+
+	edge.Value = []byte("98.99")
+	addEdge(t, edge, posting.GetOrCreate(posting.Key(1, "survival_rate"), ps))
+
+	edge.Value = []byte("true")
+	addEdge(t, edge, posting.GetOrCreate(posting.Key(1, "sword_present"), ps))
+
 	// Now let's add a name for each of the friends, except 101.
 	edge.Value = []byte("Rick Grimes")
 	addEdge(t, edge, posting.GetOrCreate(posting.Key(23, "name"), ps))
@@ -523,6 +535,84 @@ func TestToJson(t *testing.T) {
 	if !strings.Contains(s, "Michonne") {
 		t.Errorf("Unable to find Michonne in this result: %v", s)
 	}
+}
+
+// Checking for Type coercion errors.
+// TODO(akhil): Writing separate test since Marshal/Unmarshal process of ToJSON converts 'int' type to 'float64' and thus mucks up the tests. Figure out if merging tests is possible.
+// Thing to note here is now the query root 'MUST' have a subject name instead of just being
+// query, me, etc. to faciliate the identification of parent object.
+// TODO(akhil): In this case, 'debug' mode won't work with type system. Must fix that.
+func TestPostTraverse(t *testing.T) {
+	dir, _ := populateGraph(t)
+	defer os.RemoveAll(dir)
+
+	query := `
+		{
+			actor(_uid_:0x01) {
+				name
+				gender
+				age
+				sword_present
+				is_zombie
+				survival_rate
+				friend {
+					name
+				}
+			}
+		}
+	`
+
+	gq, _, err := gql.Parse(query)
+	if err != nil {
+		t.Error(err)
+	}
+	ctx := context.Background()
+	sg, err := ToSubGraph(ctx, gq)
+	if err != nil {
+		t.Error(err)
+	}
+
+	ch := make(chan error)
+	go ProcessGraph(ctx, sg, ch)
+	err = <-ch
+	if err != nil {
+		t.Error(err)
+	}
+
+	r, err := postTraverse(sg)
+	if err != nil {
+		t.Error(err)
+	}
+
+	// iterating over the map (as in ToJSON) to get the required values
+	for _, val := range r {
+		var m map[string]interface{}
+		if val != nil {
+			m = val.(map[string]interface{})
+		} else {
+			m = make(map[string]interface{})
+		}
+		actor_map := m["actor"].(map[string]interface{})
+
+		if _, success := actor_map["name"].(string); !success {
+			t.Errorf("Expected type coercion to string for: %v\n", actor_map["name"])
+		}
+		//Note: although, int and int32 have same size, they are treated as different types in go
+		// GraphQL spec mentions integer type to be int32
+		if _, success := actor_map["age"].(int32); !success {
+			t.Errorf("Expected type coercion to int32 for: %v\n", actor_map["age"])
+		}
+		if _, success := actor_map["sword_present"].(bool); !success {
+			t.Errorf("Expected type coercion to bool for: %v\n", actor_map["sword_present"])
+		}
+		if _, success := actor_map["is_zombie"].(bool); !success {
+			t.Errorf("Expected type coercion to bool for: %v\n", actor_map["is_zombie"])
+		}
+		if _, success := actor_map["survival_rate"].(float64); !success {
+			t.Errorf("Expected type coercion to float64 for: %v\n", actor_map["survival_rate"])
+		}
+	}
+
 }
 
 func getProperty(properties []*graph.Property, prop string) []byte {
