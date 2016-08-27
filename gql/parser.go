@@ -35,6 +35,7 @@ type GraphQuery struct {
 	Offset   int
 	After    uint64
 	Children []*GraphQuery
+	Filters  []Pair
 
 	// Internal fields below.
 	// If gq.fragment is nonempty, then it is a fragment reference / spread.
@@ -48,7 +49,7 @@ type Mutation struct {
 }
 
 // pair denotes the key value pair that is part of the GraphQL query root in parenthesis.
-type pair struct {
+type Pair struct {
 	Key string
 	Val string
 }
@@ -116,6 +117,14 @@ func (gq *GraphQuery) expandFragments(fmap fragmentMap) error {
 		}
 	}
 	gq.Children = newChildren
+	return nil
+}
+
+func (gq *GraphQuery) addFilter(p Pair) error {
+	// May add some processing based on p.
+	gq.Filters = append(gq.Filters, p)
+
+	// Check against indices.
 	return nil
 }
 
@@ -262,9 +271,9 @@ func parseMutationOp(l *lex.Lexer, op string, mu *Mutation) error {
 }
 
 // parseArguments parses the arguments part of the GraphQL query root.
-func parseArguments(l *lex.Lexer) (result []pair, rerr error) {
+func parseArguments(l *lex.Lexer) (result []Pair, rerr error) {
 	for {
-		var p pair
+		var p Pair
 
 		// Get key
 		item := <-l.Items
@@ -317,7 +326,9 @@ func getRoot(l *lex.Lexer) (gq *GraphQuery, rerr error) {
 		} else if p.Key == "_xid_" {
 			gq.XID = p.Val
 		} else {
-			return nil, fmt.Errorf("Expecting _uid_ or _xid_. Got: %+v", p)
+			if err = gq.addFilter(p); err != nil {
+				return nil, fmt.Errorf("Expecting _uid_ or _xid_. Got: %+v", p)
+			}
 		}
 	}
 
@@ -367,14 +378,14 @@ func godeep(l *lex.Lexer, gq *GraphQuery) error {
 			}
 			// Stores args in GraphQuery, will be used later while retrieving results.
 			for _, p := range args {
-				if p.Key == "first" {
+				switch p.Key {
+				case "first":
 					count, err := strconv.ParseInt(p.Val, 0, 32)
 					if err != nil {
 						return err
 					}
 					curp.First = int(count)
-				}
-				if p.Key == "offset" {
+				case "offset":
 					count, err := strconv.ParseInt(p.Val, 0, 32)
 					if err != nil {
 						return err
@@ -383,13 +394,15 @@ func godeep(l *lex.Lexer, gq *GraphQuery) error {
 						return errors.New("offset cannot be less than 0")
 					}
 					curp.Offset = int(count)
-				}
-				if p.Key == "after" {
+				case "after":
 					afterUid, err := strconv.ParseUint(p.Val, 0, 64)
 					if err != nil {
 						return err
 					}
 					curp.After = afterUid
+				default:
+					curp.addFilter(p)
+					// If there is an error, we ignore it for now. Should we log?
 				}
 			}
 		}

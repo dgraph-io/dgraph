@@ -18,7 +18,6 @@ package posting
 
 import (
 	"bytes"
-	"encoding/binary"
 	"fmt"
 	"log"
 	"math"
@@ -107,16 +106,6 @@ func samePosting(a *types.Posting, b *types.Posting) bool {
 		return false
 	}
 	return true
-}
-
-// key = (entity uid, attribute)
-func Key(uid uint64, attr string) []byte {
-	buf := bytes.NewBufferString(attr)
-	buf.WriteRune('|')
-	if err := binary.Write(buf, binary.LittleEndian, uid); err != nil {
-		log.Fatalf("Error while creating key with attr: %v uid: %v\n", attr, uid)
-	}
-	return buf.Bytes()
 }
 
 func newPosting(t x.DirectedEdge, op byte) []byte {
