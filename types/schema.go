@@ -47,6 +47,9 @@ var QueryType = GraphQLObject{
 	},
 }
 
+// personType for validating coersion system implementation
+// Resolve field is a redundant dummy for now
+// TODO(akhil): Recursive definition like Person -> friend(personType) will throw error, figure out solution.
 var personType = GraphQLObject{
 	Name: "Person",
 	Desc: "object to represent a person type",
@@ -67,6 +70,30 @@ var personType = GraphQLObject{
 			Type: Int,
 			Resolve: func(rp ResolveParams) interface{} {
 				return "age_person"
+			},
+		},
+		"status": &Field{
+			Type: String,
+			Resolve: func(rp ResolveParams) interface{} {
+				return "status_person"
+			},
+		},
+		"sword_present": &Field{
+			Type: Boolean,
+			Resolve: func(rp ResolveParams) interface{} {
+				return "sword_present_person"
+			},
+		},
+		"is_zombie": &Field{
+			Type: Boolean,
+			Resolve: func(rp ResolveParams) interface{} {
+				return "is_zombie_person"
+			},
+		},
+		"survival_rate": &Field{
+			Type: Float,
+			Resolve: func(rp ResolveParams) interface{} {
+				return "survival_rate_person"
 			},
 		},
 	},

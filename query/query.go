@@ -197,11 +197,12 @@ func coerceItemLiteral(itemString string, objectType string) (val interface{}, e
 	}
 	if val == nil {
 		//apparantly, we don't support the type intended by the client
-		err = fmt.Errorf("Type coercion not possible/supported for value:%v to type:%v\n", itemString, objectType)
+		err = fmt.Errorf("Type coercion not supported for value:%v to type:%v\n", itemString, objectType)
 	}
 	return
 }
 
+// postTraverse traverses the subgraph recursively and returns final result for the query
 func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 	if len(sg.Query) == 0 {
 		return nil, nil
@@ -315,6 +316,11 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 		if sg.GetUid || sg.isDebug {
 			m["_uid_"] = fmt.Sprintf("%#x", q.Uids(i))
 		}
+		// TODO(akhil): currently using string value after type-casting flatbuffer for
+		// type-assertion and coerison
+		// Direct type coercion only possible after mutation is also validated and values
+		// are stored according to correct types
+		// After that, 'string(val)' will be replaced by direct type inference/coercion
 		ltype, err := findScalarType(strings.Split(sg.TypeTree, ":"))
 		if err != nil {
 			//No type defined for present attribute in type schema, return string value
