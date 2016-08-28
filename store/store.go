@@ -84,8 +84,8 @@ func (s *Store) Delete(k []byte) error {
 	return s.db.Delete(s.wopt, k)
 }
 
-// GetIterator initializes a new iterator and returns it.
-func (s *Store) GetIterator() *rocksdb.Iterator {
+// NewIterator initializes a new iterator and returns it.
+func (s *Store) NewIterator() *rocksdb.Iterator {
 	ro := rocksdb.NewDefaultReadOptions()
 	// SetFillCache should be set to false for bulk reads to avoid caching data
 	// while doing bulk scans.

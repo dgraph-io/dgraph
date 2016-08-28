@@ -150,7 +150,7 @@ func (w *worker) PredicateData(query *Payload, stream Worker_PredicateDataServer
 	// TODO(pawan) - Shift to CheckPoints once we figure out how to add them to the
 	// RocksDB library we are using.
 	// http://rocksdb.org/blog/2609/use-checkpoints-for-efficient-snapshots/
-	it := dataStore.GetIterator()
+	it := dataStore.NewIterator()
 	defer it.Close()
 
 	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
