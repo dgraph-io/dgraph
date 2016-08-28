@@ -49,7 +49,7 @@ func (m *Mutations) Encode() (data []byte, rerr error) {
 	return b.Bytes(), rerr
 }
 
-// Decode decodes the mutation from a byte slice after receiving the byte slie over
+// Decode decodes the mutation from a byte slice after receiving the byte slice over
 // the network.
 func (m *Mutations) Decode(data []byte) error {
 	r := bytes.NewReader(data)

@@ -71,7 +71,7 @@ func PrintVersionOnly() bool {
 		fmt.Println("Licensed under the Apache License, Version 2.0.")
 		fmt.Println("\nFor Dgraph official documentation, visit https://wiki.dgraph.io.")
 		fmt.Println("For discussions about Dgraph, visit https://discuss.dgraph.io.")
-		fmt.Println("To say hi to the community, visit https://dgraph.slack.com.\n")
+		fmt.Println("To say hi to the community, visit https://dgraph.slack.com.")
 		return true
 	}
 
