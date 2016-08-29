@@ -24,8 +24,9 @@ import (
 	"testing"
 	"time"
 
+	"context"
+
 	"github.com/google/flatbuffers/go"
-	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/dgraph/commit"
 	"github.com/dgraph-io/dgraph/posting"

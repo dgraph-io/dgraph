@@ -24,8 +24,9 @@ import (
 	"sync"
 	"time"
 
+	"context"
+
 	"github.com/dgryski/go-farm"
-	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/posting/types"
@@ -46,7 +47,7 @@ type entry struct {
 	ts time.Time
 }
 
-func (e entry) isOld() bool {
+func (e *entry) isOld() bool {
 	e.Lock()
 	defer e.Unlock()
 	return time.Now().Sub(e.ts) > time.Minute
@@ -141,8 +142,6 @@ func allocateUniqueUid(xid string, instanceIdx uint64,
 		rerr = pl.AddMutation(context.Background(), t, posting.Set)
 		return uid, rerr
 	}
-	return 0, errors.New("Some unhandled route lead me here." +
-		" Wake the stupid developer up.")
 }
 
 func assignNew(pl *posting.List, xid string, instanceIdx uint64,

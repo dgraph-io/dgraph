@@ -22,7 +22,7 @@ import (
 	"os"
 	"testing"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"github.com/dgraph-io/dgraph/commit"
 	"github.com/dgraph-io/dgraph/gql"

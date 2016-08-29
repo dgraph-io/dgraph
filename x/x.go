@@ -23,9 +23,10 @@ import (
 	"net/http"
 	"time"
 
+	"context"
+
 	"github.com/Sirupsen/logrus"
 	"github.com/google/flatbuffers/go"
-	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/dgraph/task"

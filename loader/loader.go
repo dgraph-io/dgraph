@@ -27,9 +27,10 @@ import (
 	"sync/atomic"
 	"time"
 
+	"context"
+
 	"github.com/Sirupsen/logrus"
 	"github.com/dgryski/go-farm"
-	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/rdf"

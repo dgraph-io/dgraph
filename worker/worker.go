@@ -22,9 +22,10 @@ import (
 	"log"
 	"net"
 
+	"context"
+
 	"github.com/dgryski/go-farm"
 	"github.com/google/flatbuffers/go"
-	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
 	"github.com/dgraph-io/dgraph/store"
