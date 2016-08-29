@@ -18,10 +18,14 @@ package posting
 
 import (
 	"flag"
+	"io/ioutil"
 	"log"
 	"math/rand"
+	"os"
 	"runtime"
 	"runtime/debug"
+	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -34,7 +38,7 @@ import (
 	"github.com/dgraph-io/dgraph/store"
 )
 
-var maxmemory = flag.Uint64("stw_ram_mb", 4096,
+var maxmemory = flag.Int("stw_ram_mb", 4096,
 	"If RAM usage exceeds this, we stop the world, and flush our buffers.")
 
 type mergeRoutines struct {
@@ -95,15 +99,13 @@ func NewCounters() *counters {
 	return c
 }
 
-var MIB, MAX_MEMORY uint64
-
-func aggressivelyEvict(ms runtime.MemStats) {
+func aggressivelyEvict() {
 	// Okay, we exceed the max memory threshold.
 	// Stop the world, and deal with this first.
 	stopTheWorld.Lock()
 	defer stopTheWorld.Unlock()
 
-	megs := ms.Alloc / MIB
+	megs := getMemUsage()
 	log.Printf("Memory usage over threshold. STW. Allocated MB: %v\n", megs)
 
 	log.Println("Calling merge on all lists.")
@@ -114,8 +116,7 @@ func aggressivelyEvict(ms runtime.MemStats) {
 	log.Println("Trying to free OS memory")
 	debug.FreeOSMemory()
 
-	runtime.ReadMemStats(&ms)
-	megs = ms.Alloc / MIB
+	megs = getMemUsage()
 	log.Printf("Memory usage after calling GC. Allocated MB: %v", megs)
 }
 
@@ -172,25 +173,47 @@ func gentlyMerge(mr *mergeRoutines) {
 	ctr.log()
 }
 
-func CheckMemoryUsage(ps1, ps2 *store.Store) {
-	MIB = 1 << 20
-	MAX_MEMORY = *maxmemory * MIB
-
-	var mr mergeRoutines
-	for _ = range time.Tick(5 * time.Second) {
+// getMemUsage returns the amount of memory used by the process in MB
+func getMemUsage() int {
+	if runtime.GOOS != "linux" {
+		// For non-linux OS we just get approx memory usage from runtime
 		var ms runtime.MemStats
 		runtime.ReadMemStats(&ms)
-		totMemory := ms.Alloc
-		if ps1 != nil {
-			totMemory += ps1.MemtableSize() + ps1.IndexFilterblockSize()
-		}
+		megs := ms.Alloc / (1 << 20)
+		return int(megs)
+	}
 
-		if ps2 != nil {
-			totMemory += ps2.MemtableSize() + ps2.IndexFilterblockSize()
-		}
+	contents, err := ioutil.ReadFile("/proc/self/stat")
+	if err != nil {
+		log.Println("Can't read the proc file", err)
+		return 0
+	}
 
-		if totMemory > MAX_MEMORY {
-			aggressivelyEvict(ms)
+	cont := strings.Split(string(contents), " ")
+	// 24th entry of the file is the RSS which denotes the number of pages
+	// used by the process.
+	if len(cont) < 24 {
+		log.Println("Error in RSS from stat")
+		return 0
+	}
+
+	rss, err := strconv.Atoi(cont[23])
+	if err != nil {
+		log.Println(err)
+		return 0
+	}
+
+	return rss * os.Getpagesize() / (1 << 20)
+}
+
+// checkMeomeryUsage monitors the memory usage by the running process and
+// calls aggressively evict if the threshold is reached.
+func checkMemoryUsage() {
+	var mr mergeRoutines
+	for _ = range time.Tick(5 * time.Second) {
+		totMemory := getMemUsage()
+		if totMemory > *maxmemory {
+			aggressivelyEvict()
 		} else {
 			// If merging is slow, we don't want to end up having too many goroutines
 			// merging the dirty list. This should keep them in check.
@@ -216,6 +239,7 @@ func Init(log *commit.Logger) {
 	lhmap = gotomic.NewHash()
 	dirtymap = gotomic.NewHash()
 	clog = log
+	go checkMemoryUsage()
 }
 
 func GetOrCreate(key []byte, pstore *store.Store) *List {
