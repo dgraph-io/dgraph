@@ -44,7 +44,6 @@ type Worker struct {
 	pools []*Pool
 }
 
-// wo is a pointer to the Worker object.
 var wo *Worker
 
 // New initializes a worker on an instance with a data and a uid store.
@@ -76,11 +75,9 @@ func NewQuery(attr string, uids []uint64) []byte {
 	return b.Bytes[b.Head():]
 }
 
-type worker struct{}
-
 // Hello rpc call is used to check connection with other workers after worker
 // tcp server for this instance starts.
-func (w *worker) Hello(ctx context.Context, in *Payload) (*Payload, error) {
+func (w *Worker) Hello(ctx context.Context, in *Payload) (*Payload, error) {
 	out := new(Payload)
 	if string(in.Data) == "hello" {
 		out.Data = []byte("Oh hello there!")
@@ -92,13 +89,13 @@ func (w *worker) Hello(ctx context.Context, in *Payload) (*Payload, error) {
 }
 
 // GetOrAssign is used to get uids for a set of xids by communicating with other workers.
-func (w *worker) GetOrAssign(ctx context.Context, query *Payload) (*Payload, error) {
+func (w *Worker) GetOrAssign(ctx context.Context, query *Payload) (*Payload, error) {
 	uo := flatbuffers.GetUOffsetT(query.Data)
 	xids := new(task.XidList)
 	xids.Init(query.Data, uo)
 
-	if wo.instanceIdx != 0 {
-		log.Fatalf("instanceIdx: %v. GetOrAssign. We shouldn't be getting this req", wo.instanceIdx)
+	if w.instanceIdx != 0 {
+		log.Fatalf("instanceIdx: %v. GetOrAssign. We shouldn't be getting this req", w.instanceIdx)
 	}
 
 	reply := new(Payload)
@@ -108,7 +105,7 @@ func (w *worker) GetOrAssign(ctx context.Context, query *Payload) (*Payload, err
 }
 
 // Mutate is used to apply mutations over the network on other instances.
-func (w *worker) Mutate(ctx context.Context, query *Payload) (*Payload, error) {
+func (w *Worker) Mutate(ctx context.Context, query *Payload) (*Payload, error) {
 	m := new(Mutations)
 	if err := m.Decode(query.Data); err != nil {
 		return nil, err
@@ -126,38 +123,38 @@ func (w *worker) Mutate(ctx context.Context, query *Payload) (*Payload, error) {
 }
 
 // ServeTask is used to respond to a query.
-func (w *worker) ServeTask(ctx context.Context, query *Payload) (*Payload, error) {
+func (w *Worker) ServeTask(ctx context.Context, query *Payload) (*Payload, error) {
 	uo := flatbuffers.GetUOffsetT(query.Data)
 	q := new(task.Query)
 	q.Init(query.Data, uo)
 	attr := string(q.Attr())
 	x.Trace(ctx, "Attribute: %v NumUids: %v InstanceIdx: %v ServeTask",
-		attr, q.UidsLength(), wo.instanceIdx)
+		attr, q.UidsLength(), w.instanceIdx)
 
 	reply := new(Payload)
 	var rerr error
 	// Request for xid <-> uid conversion should be handled by instance 0 and all
 	// other requests should be handled according to modulo sharding of the predicate.
-	if (wo.instanceIdx == 0 && attr == _xid_) ||
-		farm.Fingerprint64([]byte(attr))%wo.numInstances == wo.instanceIdx {
+	if (w.instanceIdx == 0 && attr == _xid_) ||
+		farm.Fingerprint64([]byte(attr))%w.numInstances == w.instanceIdx {
 
 		reply.Data, rerr = processTask(query.Data)
 
 	} else {
-		log.Fatalf("attr: %v instanceIdx: %v Request sent to wrong server.", attr, wo.instanceIdx)
+		log.Fatalf("attr: %v instanceIdx: %v Request sent to wrong server.", attr, w.instanceIdx)
 	}
 	return reply, rerr
 }
 
 // PredicateData can be used to return data corresponding to a predicate over
 // a stream.
-func (w *worker) PredicateData(query *Payload, stream Worker_PredicateDataServer) error {
+func (w *Worker) PredicateData(query *Payload, stream Worker_PredicateDataServer) error {
 	qp := query.Data
 	prefix := append(qp, '|')
 	// TODO(pawan) - Shift to CheckPoints once we figure out how to add them to the
 	// RocksDB library we are using.
 	// http://rocksdb.org/blog/2609/use-checkpoints-for-efficient-snapshots/
-	it := wo.dataStore.NewIterator()
+	it := w.dataStore.NewIterator()
 	defer it.Close()
 
 	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
@@ -196,7 +193,7 @@ func runServer(port string) {
 	log.Printf("Worker listening at address: %v", ln.Addr())
 
 	s := grpc.NewServer(grpc.CustomCodec(&PayloadCodec{}))
-	RegisterWorkerServer(s, &worker{})
+	RegisterWorkerServer(s, wo)
 	s.Serve(ln)
 }
 
