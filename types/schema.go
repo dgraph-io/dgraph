@@ -84,9 +84,7 @@ func LoadSchema() error {
 			},
 		},
 	}
-
 	Schema = &GraphQLSchema{Query: QueryType}
-
 	return nil
 }
 

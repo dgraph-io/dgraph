@@ -171,7 +171,6 @@ func findType(tt []string, ptype interface{}) (interface{}, error) {
 
 // findFieldType returns type of the input field given the Parent Object Type
 func findFieldType(f string, ptype types.GraphQLObject) (interface{}, error) {
-
 	// Assuming field names in defined objects will be lowercase, as will be the query fields
 	// Otherwise make field presence checking case-sensitive
 	val, present := ptype.Fields[f]
