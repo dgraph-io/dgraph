@@ -599,7 +599,7 @@ func TestParseFragmentCycle(t *testing.T) {
 
 func TestParseVariables(t *testing.T) {
 	query := `{
-		"query": "query testQuery($a: int, $b: int){root(_uid_: 0x0a) {name(first: $b, after: $a){english}}}", 
+		"query": "query testQuery( $a  : int   , $b: int){root(_uid_: 0x0a) {name(first: $b, after: $a){english}}}", 
 		"variables": {"$a": "6", "$b": "5" } 
 	}`
 	_, _, err := Parse(query)

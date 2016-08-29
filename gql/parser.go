@@ -149,14 +149,14 @@ func parseQueryWithVariables(str string) (string, varMap, error) {
 
 func checkValidity(vm varMap) error {
 	for k, v := range vm {
-		typ := strings.Trim(v.Type, " ")
+		typ := v.Type
 
 		// Ensure value is not nil if the variable is required
 		if typ[len(typ)-1] == '!' {
 			if v.Value == "" {
 				return fmt.Errorf("Variable %v should be initialised", k)
 			}
-			typ = strings.Trim(typ, "!")
+			typ = typ[:len(typ)-1]
 		}
 
 		// Type check the values
@@ -190,7 +190,11 @@ func checkValidity(vm varMap) error {
 func substituteVariables(gq *GraphQuery, vmap varMap) error {
 	for k, v := range gq.Args {
 		if v[0] == '$' {
-			gq.Args[k] = vmap[v].Value
+			va, ok := vmap[v]
+			if !ok {
+				return fmt.Errorf("Variable not defined %v", v)
+			}
+			gq.Args[k] = va.Value
 		}
 	}
 
@@ -555,9 +559,10 @@ func godeep(l *lex.Lexer, gq *GraphQuery) error {
 			// Unlike itemName, there is no nesting, so do not change "curp".
 
 		} else if item.Typ == itemName {
-			child := new(GraphQuery)
-			child.Args = make(map[string]string)
-			child.Attr = item.Val
+			child := &GraphQuery{
+				Args: make(map[string]string),
+				Attr: item.Val,
+			}
 			gq.Children = append(gq.Children, child)
 			curp = child
 
