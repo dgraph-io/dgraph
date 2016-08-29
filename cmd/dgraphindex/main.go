@@ -5,7 +5,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"log"
 	"os"
 	"time"
 
@@ -21,13 +20,7 @@ var (
 )
 
 func main() {
-	log.SetFlags(log.Lshortfile | log.Flags())
-	flag.Parse()
-	x.Assertf(flag.Parsed(), "Unable to parse flags")
-
-	if ok := x.PrintVersionOnly(); ok {
-		return
-	}
+	x.Init()
 
 	// Open posting store as read-only.
 	ps := new(store.Store)

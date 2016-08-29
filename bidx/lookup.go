@@ -88,7 +88,9 @@ func (s *IndexShard) lookup(li *LookupSpec, results chan *LookupResult) {
 		log.Fatalf("Lookup category not handled: %d", li.Category)
 	}
 	search := bleve.NewSearchRequest(query)
+	s.bindexLock.RLock() // Read block might suffice? Index stats might be off.
 	searchResults, err := s.bindex.Search(search)
+	s.bindexLock.RUnlock()
 	if err != nil {
 		results <- &LookupResult{Err: err}
 		return

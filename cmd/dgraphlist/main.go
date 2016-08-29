@@ -64,11 +64,7 @@ func scanOverAttr(db *rocksdb.DB) {
 
 func main() {
 	logrus.SetLevel(logrus.ErrorLevel)
-
-	flag.Parse()
-	if ok := x.PrintVersionOnly(); ok {
-		return
-	}
+	x.Init()
 
 	opt := rocksdb.NewDefaultOptions()
 	db, err := rocksdb.OpenDb(opt, *dir)

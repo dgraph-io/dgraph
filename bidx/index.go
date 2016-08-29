@@ -6,6 +6,7 @@ import (
 	"os"
 	"path"
 	"strconv"
+	"sync"
 
 	"github.com/blevesearch/bleve"
 	"github.com/dgraph-io/dgraph/x"
@@ -37,7 +38,9 @@ type Indices struct {
 	basedir string
 	index   map[string]*Index
 	config  *IndicesConfig
-	done    chan error
+
+	// For backfill.
+	done chan error
 }
 
 // Index is a subobject of Indices. It should probably be internal, but that might
@@ -46,17 +49,25 @@ type Index struct {
 	filename string // Fingerprint of attribute.
 	config   *IndexConfig
 	shard    []*IndexShard
-	done     chan error
+
+	// For backfill.
+	done chan error
 }
 
 // IndexShard is a shard of Index. We run these shards in parallel.
 type IndexShard struct {
-	shard    int // Which shard is this.
-	bindex   bleve.Index
-	batch    *bleve.Batch
-	jobQueue chan indexJob
-	parser   valueParser
-	config   *IndexConfig
+	shard      int         // Which shard is this.
+	bindex     bleve.Index // Guarded by bindexLock.
+	config     *IndexConfig
+	bindexLock sync.RWMutex
+
+	// For backfill.
+	batch  *bleve.Batch
+	jobC   chan indexJob
+	parser valueParser
+
+	// For frontfill.
+	mutationC chan *mutation
 }
 
 func indexFilename(basedir, name string) string {
@@ -151,12 +162,12 @@ func newIndexShard(c *IndexConfig, filename string, shard int) (*IndexShard, err
 		return nil, x.Wrap(err)
 	}
 	is := &IndexShard{
-		shard:    shard,
-		bindex:   bi,
-		batch:    bi.NewBatch(),
-		jobQueue: make(chan indexJob, jobBufferSize),
-		parser:   getParser(c.Type),
-		config:   c,
+		shard:  shard,
+		bindex: bi,
+		batch:  bi.NewBatch(),
+		jobC:   make(chan indexJob, jobBufferSize),
+		parser: getParser(c.Type),
+		config: c,
 	}
 	return is, nil
 }

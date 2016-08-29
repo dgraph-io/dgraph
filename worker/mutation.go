@@ -25,6 +25,7 @@ import (
 	"github.com/dgryski/go-farm"
 	"golang.org/x/net/context"
 
+	"github.com/dgraph-io/dgraph/bidx"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -71,8 +72,14 @@ func runMutations(ctx context.Context, edges []x.DirectedEdge, op byte, left *Mu
 		if err := plist.AddMutation(ctx, edge, op); err != nil {
 			if op == posting.Set {
 				left.Set = append(left.Set, edge)
+				if edge.Value != nil {
+					bidx.FrontfillAdd(edge.Attribute, edge.Entity, string(edge.Value))
+				}
 			} else if op == posting.Del {
 				left.Del = append(left.Del, edge)
+				if edge.Value != nil {
+					bidx.FrontfillDel(edge.Attribute, edge.Entity)
+				}
 			}
 			log.Printf("Error while adding mutation: %v %v", edge, err)
 			continue

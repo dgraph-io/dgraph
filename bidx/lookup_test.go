@@ -12,7 +12,6 @@ import (
 	"github.com/dgraph-io/dgraph/commit"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/store"
-	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -121,7 +120,6 @@ func getIndices(t *testing.T) (string, *Indices) {
 
 	ps := new(store.Store)
 	ps.Init(dir)
-	worker.Init(ps, ps, 0, 1)
 	clog := commit.NewLogger(dir, "mutations", 50<<20)
 	clog.Init()
 	posting.Init(clog)
@@ -179,7 +177,8 @@ func getIndices(t *testing.T) (string, *Indices) {
 	return dir, indices
 }
 
-func TestLookup(t *testing.T) {
+// Backfill only. No frontfill.
+func TestBackfill(t *testing.T) {
 	dir, indices := getIndices(t)
 	defer os.RemoveAll(dir)
 
@@ -198,5 +197,83 @@ func TestLookup(t *testing.T) {
 	}
 	if lr.UID[0] != 24 {
 		t.Error(fmt.Errorf("Expected UID 24, got %d", lr.UID[0]))
+	}
+}
+
+// Backfill followed by frontfill del.
+func TestFrontfillDel(t *testing.T) {
+	dir, indices := getIndices(t)
+	defer os.RemoveAll(dir)
+
+	li := &LookupSpec{
+		Attr:     "name",
+		Param:    []string{"Glenn"},
+		Category: LookupMatch,
+	}
+	lr := indices.Lookup(li)
+	if lr.Err != nil {
+		t.Error(lr.Err)
+	}
+	if len(lr.UID) != 1 {
+		t.Error(fmt.Errorf("Expected 1 hit, got %d", len(lr.UID)))
+		return
+	}
+	if lr.UID[0] != 24 {
+		t.Error(fmt.Errorf("Expected UID 24, got %d", lr.UID[0]))
+	}
+
+	// Do frontfill now.
+	indices.Frontfill(NewFrontfillDel("name", 24))
+
+	// Do a pause to make sure frontfill changes go through before we do a lookup.
+	time.Sleep(200 * time.Millisecond)
+	lr = indices.Lookup(li)
+	if lr.Err != nil {
+		t.Error(lr.Err)
+	}
+	if len(lr.UID) != 0 {
+		t.Error(fmt.Errorf("Expected 0 hit, got %d", len(lr.UID)))
+		return
+	}
+}
+
+// Backfill followed by frontfill add.
+func TestFrontfillAdd(t *testing.T) {
+	dir, indices := getIndices(t)
+	defer os.RemoveAll(dir)
+
+	li := &LookupSpec{
+		Attr:     "name",
+		Param:    []string{"Glenn"},
+		Category: LookupMatch,
+	}
+	lr := indices.Lookup(li)
+	if lr.Err != nil {
+		t.Error(lr.Err)
+	}
+	if len(lr.UID) != 1 {
+		t.Error(fmt.Errorf("Expected 1 hit, got %d", len(lr.UID)))
+		return
+	}
+	if lr.UID[0] != 24 {
+		t.Error(fmt.Errorf("Expected UID 24, got %d", lr.UID[0]))
+	}
+
+	// Do frontfill now.
+	indices.Frontfill(NewFrontfillAdd("name", 24, "NotGlenn"))
+	// Let a different UID take the name Glenn.
+	indices.Frontfill(NewFrontfillAdd("name", 23, "Glenn"))
+	// Do a pause to make sure frontfill changes go through before we do a lookup.
+	time.Sleep(200 * time.Millisecond)
+	lr = indices.Lookup(li)
+	if lr.Err != nil {
+		t.Error(lr.Err)
+	}
+	if len(lr.UID) != 1 {
+		t.Error(fmt.Errorf("Expected 1 hit, got %d", len(lr.UID)))
+		return
+	}
+	if lr.UID[0] != 23 {
+		t.Error(fmt.Errorf("Expected UID 23, got %d", lr.UID[0]))
 	}
 }

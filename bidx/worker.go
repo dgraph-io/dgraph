@@ -6,23 +6,28 @@ package bidx
 import (
 	"log"
 	"os"
+
+	"github.com/dgraph-io/dgraph/x"
 )
 
 var (
 	globalIndices *Indices
 )
 
-// InitWorker initializes Bleve indices for this instance.
+// InitWorker initializes Bleve indices for this instance. Returns the Indices
+// constructed. You may need this in tests. Most of the time, you can ignore.
 func InitWorker(indicesDir string) *Indices {
+	// Create indices directory if it is missing.
 	err := os.MkdirAll(indicesDir, 0700)
 	if err != nil {
 		log.Fatalf("Error while creating the filepath for indices: %v", err)
 	}
 
+	// Read in the indices.
 	globalIndices, err = NewIndices(indicesDir)
-	if err != nil {
-		log.Fatalf("Error initializing indices store: %s", err)
-	}
+	x.Check(err)
+
+	globalIndices.initFrontfill()
 	return globalIndices
 }
 

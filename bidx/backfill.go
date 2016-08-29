@@ -48,7 +48,7 @@ func (s *Index) backfill(ps *store.Store, done chan error) {
 				continue
 			}
 			value := string(p.ValueBytes())
-			s.shard[whichShard].jobQueue <- indexJob{
+			s.shard[whichShard].jobC <- indexJob{
 				op:    jobOpAdd,
 				uid:   uid,
 				value: value,
@@ -57,7 +57,7 @@ func (s *Index) backfill(ps *store.Store, done chan error) {
 	}
 
 	for i := 0; i < s.config.NumShards; i++ {
-		close(s.shard[i].jobQueue)
+		close(s.shard[i].jobC)
 	}
 	for i := 0; i < s.config.NumShards; i++ {
 		if err := <-s.done; err != nil {
@@ -83,7 +83,7 @@ func (s *IndexShard) doIndex(count uint64) uint64 {
 
 func (s *IndexShard) backfill(ps *store.Store, done chan error) {
 	var count uint64
-	for job := range s.jobQueue {
+	for job := range s.jobC {
 		if job.op == jobOpAdd {
 			s.batch.Index(string(posting.UID(job.uid)), job.value)
 		} else {
