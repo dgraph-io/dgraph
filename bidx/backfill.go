@@ -24,8 +24,8 @@ func (s *Indices) Backfill(ps *store.Store) error {
 
 func (s *Index) backfill(ps *store.Store, done chan error) {
 	log.Printf("Backfilling attribute: %s\n", s.config.Attribute)
-	for i := 0; i < s.config.NumShards; i++ {
-		go s.shard[i].backfill(ps, s.done)
+	for _, shard := range s.shard {
+		go shard.backfill(ps, s.done)
 	}
 
 	it := ps.NewIterator()
