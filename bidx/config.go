@@ -11,12 +11,15 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
+// IndexConfig defines the index for a single predicate. Each predicate should
+// have at most one index.
 type IndexConfig struct {
 	Type      string
 	Attribute string
 	NumShards int
 }
 
+// IndicesConfig is a list of IndexConfig. We may add more fields in future.
 type IndicesConfig struct {
 	Config []*IndexConfig
 }

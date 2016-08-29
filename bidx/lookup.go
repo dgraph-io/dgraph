@@ -10,27 +10,34 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
+// LookupCategory describes type of lookup query. For now, we default to
+// LookupMatch. It is not so clear how GraphQL can be modified to do more
+// elaborate filtering.
 type LookupCategory int
 
 const (
-	LookupTerm        = iota
-	LookupMatch       = iota
-	LookupMatchPhrase = iota
-	LookupPrefix      = iota
+	lookupUnknown = iota
+	// LookupTerm is exact match.
+	LookupTerm
+	// LookupMatch allows a partial match. Default.
+	LookupMatch
 	// More to come. See http://www.blevesearch.com/docs/Query/
 )
 
+// LookupSpec defines a index lookup query.
 type LookupSpec struct {
 	Attr     string
 	Param    []string
 	Category LookupCategory
 }
 
+// LookupResult defines a index lookup result.
 type LookupResult struct {
 	UID []uint64
 	Err error
 }
 
+// Lookup does a lookup into Bleve indices.
 func (s *Indices) Lookup(li *LookupSpec) *LookupResult {
 	if s == nil {
 		return &LookupResult{

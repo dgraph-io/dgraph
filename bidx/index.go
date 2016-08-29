@@ -32,6 +32,7 @@ type indexJob struct {
 	value string
 }
 
+// Indices is the core object for working with Bleve indices.
 type Indices struct {
 	basedir string
 	index   map[string]*Index
@@ -39,6 +40,8 @@ type Indices struct {
 	done    chan error
 }
 
+// Index is a subobject of Indices. It should probably be internal, but that might
+// cause a lot of name conflicts.
 type Index struct {
 	filename string // Fingerprint of attribute.
 	config   *IndexConfig
@@ -46,6 +49,7 @@ type Index struct {
 	done     chan error
 }
 
+// IndexShard is a shard of Index. We run these shards in parallel.
 type IndexShard struct {
 	shard    int // Which shard is this.
 	bindex   bleve.Index
@@ -94,6 +98,8 @@ func createIndexShard(c *IndexConfig, filename string, shard int) error {
 	return nil
 }
 
+// NewIndices constructs Indices from basedir which contains Bleve indices. We
+// expect a config file in basedir
 func NewIndices(basedir string) (*Indices, error) {
 	// Read default config at basedir.
 	configFilename := getDefaultConfig(basedir)
