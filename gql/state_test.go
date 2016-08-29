@@ -25,7 +25,7 @@ import (
 func TestNewLexer(t *testing.T) {
 	input := `
 	query {
-		me( id: 10, xid: rick ) {
+		me( id: 10, _xid_: rick ) {
 			name0 # my name
 			_city, # 0what would fail lex.
 			profilePic(width: 100, height: 100)
@@ -58,7 +58,7 @@ func TestNewLexerMutation(t *testing.T) {
 		}
 	}
 	query {
-		me(xid: rick) {
+		me(_xid_: rick) {
 			_city
 		}
 	}`
@@ -80,6 +80,80 @@ func TestAbruptMutation(t *testing.T) {
 			What is <this> .
 			Why is this #!!?
 			How is this?
+	}`
+	l := &lex.Lexer{}
+	l.Init(input)
+	go run(l)
+	var typ lex.ItemType
+	for item := range l.Items {
+		t.Log(item.String())
+		typ = item.Typ
+	}
+	if typ != lex.ItemError {
+		t.Error("This should fail.")
+	}
+}
+
+func TestVariables1(t *testing.T) {
+	input := `
+	query testQuery($username: String!) {
+		me(_xid_: rick) {
+			_city
+		}
+	}`
+	l := &lex.Lexer{}
+	l.Init(input)
+	go run(l)
+	for item := range l.Items {
+		if item.Typ == lex.ItemError {
+			t.Error(item.String())
+		}
+		t.Log(item.String(), item.Typ)
+	}
+}
+
+func TestVariables2(t *testing.T) {
+	input := `
+	query testQuery ($username: String, $id: int, $email: string) {
+		me(_xid_: rick) {
+			_city
+		}
+	}`
+	l := &lex.Lexer{}
+	l.Init(input)
+	go run(l)
+	for item := range l.Items {
+		if item.Typ == lex.ItemError {
+			t.Error(item.String())
+		}
+		t.Log(item.String(), item.Typ)
+	}
+}
+
+func TestVariablesDefault(t *testing.T) {
+	input := `
+	query testQuery ($username: string = abc, $id: int = 5, $email: string) {
+		me(_xid_: rick) {
+			_city
+		}
+	}`
+	l := &lex.Lexer{}
+	l.Init(input)
+	go run(l)
+	for item := range l.Items {
+		if item.Typ == lex.ItemError {
+			t.Error(item.String())
+		}
+		t.Log(item.String(), item.Typ)
+	}
+}
+
+func TestVariablesError(t *testing.T) {
+	input := `
+	query testQuery($username: string {
+		me(_xid_: rick) {
+			_city
+		}
 	}`
 	l := &lex.Lexer{}
 	l.Init(input)
