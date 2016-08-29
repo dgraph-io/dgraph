@@ -355,7 +355,7 @@ func getFragment(l *lex.Lexer) (*fragmentNode, error) {
 		return nil, errors.New("Empty fragment name")
 	}
 
-	gq = &GraphQuery{
+	gq := &GraphQuery{
 		Args: make(map[string]string),
 	}
 	if err := godeep(l, gq); err != nil {
