@@ -34,6 +34,7 @@ import (
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc"
 
+	"github.com/dgraph-io/dgraph/bidx"
 	"github.com/dgraph-io/dgraph/commit"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
@@ -50,6 +51,7 @@ var (
 	postingDir  = flag.String("postings", "p", "Directory to store posting lists")
 	uidDir      = flag.String("uids", "u", "XID UID posting lists directory")
 	mutationDir = flag.String("mutations", "m", "Directory to store mutations")
+	indicesDir  = flag.String("indices", "i", "Directory to store indices")
 	port        = flag.Int("port", 8080, "Port to run server on.")
 	numcpu      = flag.Int("numCpu", runtime.NumCPU(),
 		"Number of cores to be used by the process")
@@ -360,6 +362,8 @@ func main() {
 	if err != nil {
 		log.Fatalf("Error while creating the filepath for uids: %v", err)
 	}
+
+	bidx.InitWorker(*indicesDir)
 
 	ps := new(store.Store)
 	if err := ps.Init(*postingDir); err != nil {

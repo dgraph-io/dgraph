@@ -30,6 +30,7 @@ import (
 	"github.com/google/flatbuffers/go"
 	"golang.org/x/net/context"
 
+	"github.com/dgraph-io/dgraph/bidx"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/query/graph"
 	"github.com/dgraph-io/dgraph/task"
@@ -126,8 +127,11 @@ type SubGraph struct {
 	GetUid   bool
 	isDebug  bool
 
-	Query  []byte // Contains list of source UIDs.
-	Result []byte // Contains UID matrix or list of values for child attributes.
+	Query         []byte // Contains list of source UIDs.
+	Result        []byte // Contains UID matrix or list of values for child attributes.
+	filters       []gql.Pair
+	filterResults chan *bidx.LookupResult // Same size as Filters.
+	sorted        []uint64                // After filtering, this is what we got.
 }
 
 func mergeInterfaces(i1 interface{}, i2 interface{}) interface{} {
@@ -213,17 +217,23 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 		if ok := r.Uidmatrix(&ul, i); !ok {
 			return result, fmt.Errorf("While parsing UidList")
 		}
-		l := make([]interface{}, ul.UidsLength())
+		l := make([]interface{}, 0, ul.UidsLength())
+		var sortedPtr int // Pointer into sg.sorted.
 		for j := 0; j < ul.UidsLength(); j++ {
 			uid := ul.Uids(j)
+			for ; sortedPtr < len(sg.sorted) && sg.sorted[sortedPtr] < uid; sortedPtr++ {
+			}
+			if sortedPtr >= len(sg.sorted) || sg.sorted[sortedPtr] > uid {
+				continue
+			}
 			m := make(map[string]interface{})
 			if sg.GetUid || sg.isDebug {
 				m["_uid_"] = fmt.Sprintf("%#x", uid)
 			}
 			if ival, present := cResult[uid]; !present {
-				l[j] = m
+				l = append(l, m)
 			} else {
-				l[j] = mergeInterfaces(m, ival)
+				l = append(l, mergeInterfaces(m, ival))
 			}
 		}
 		if len(l) == 1 {
@@ -379,8 +389,14 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 		} else if ul.UidsLength() > 0 {
 			// We create as many predicate entity children as the length of uids for
 			// this predicate.
+			var sortedPtr int // Index into pc.sorted.
 			for i := 0; i < ul.UidsLength(); i++ {
 				uid := ul.Uids(i)
+				for ; sortedPtr < len(pc.sorted) && pc.sorted[sortedPtr] < uid; sortedPtr++ {
+				}
+				if sortedPtr >= len(pc.sorted) || pc.sorted[sortedPtr] > uid {
+					continue
+				}
 				uc := nodePool.Get().(*graph.Node)
 				uc.Attribute = pc.Attr
 				uc.Uid = uid
@@ -392,7 +408,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 			}
 		} else {
 			if ok := r.Values(&tv, idx); !ok {
-				return fmt.Errorf("While parsing value")
+				return x.Errorf("While parsing value")
 			}
 
 			v := tv.ValBytes()
@@ -462,6 +478,7 @@ func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
 			Offset:   gchild.Offset,
 			AfterUid: gchild.After,
 			Count:    gchild.First,
+			filters:  gchild.Filters,
 		}
 		sg.Children = append(sg.Children, dst)
 		err := treeCopy(gchild, dst)
@@ -536,6 +553,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		Attr:    gq.Attr,
 		IsRoot:  true,
 		Result:  b.Bytes[b.Head():],
+		filters: gq.Filters,
 	}
 	// Also add query for consistency and to allow for ToJSON() later.
 	sg.Query = createTaskQuery(sg, []uint64{euid})
@@ -620,10 +638,48 @@ func sortedUniqueUids(r *task.Result) ([]uint64, error) {
 	return sorted, nil
 }
 
+func (sg *SubGraph) indicesLookup() {
+	if len(sg.filters) == 0 {
+		return
+	}
+	sg.filterResults = make(chan *bidx.LookupResult)
+	// For now, assume a match query.
+	for _, p := range sg.filters {
+		li := &bidx.LookupSpec{
+			Attr:     p.Key,
+			Param:    []string{p.Val},
+			Category: bidx.LookupMatch,
+		}
+		go bidx.WorkerLookup(li, sg.filterResults)
+	}
+}
+
+// postIndicesLookup returns the filtered list.
+func (sg *SubGraph) postIndicesLookup(sorted []uint64) []uint64 {
+	if len(sg.filters) == 0 {
+		// No filters. Don't touch the input.
+		return sorted
+	}
+
+	var toIntersect [][]uint64
+	for i := 0; i < len(sg.filters); i++ {
+		r := <-sg.filterResults
+		if r.Err != nil {
+			fmt.Printf("Error: %v\n", r.Err)
+			// If we encounter any error, we do not apply any filter?
+			return sorted
+		}
+		toIntersect = append(toIntersect, r.UID)
+	}
+	toIntersect = append(toIntersect, sorted)
+	return x.IntersectSorted(toIntersect)
+}
+
 // ProcessGraph processes the SubGraph instance accumulating result for the query
 // from different instances.
 func ProcessGraph(ctx context.Context, sg *SubGraph, rch chan error) {
 	var err error
+	sg.indicesLookup()
 	if len(sg.Query) > 0 && !sg.IsRoot {
 		sg.Result, err = worker.ProcessTaskOverNetwork(ctx, sg.Query)
 		if err != nil {
@@ -650,14 +706,17 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, rch chan error) {
 		return
 	}
 
-	sorted, err := sortedUniqueUids(r)
+	sg.sorted, err = sortedUniqueUids(r)
 	if err != nil {
 		x.Trace(ctx, "Error while processing task: %v", err)
 		rch <- err
 		return
 	}
 
-	if len(sorted) == 0 {
+	// Apply filters if any.
+	sg.sorted = sg.postIndicesLookup(sg.sorted)
+
+	if len(sg.sorted) == 0 {
 		// Looks like we're done here.
 		x.Trace(ctx, "Zero uids. Num attr children: %v", len(sg.Children))
 		rch <- nil
@@ -671,7 +730,7 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, rch chan error) {
 	childchan := make(chan error, len(sg.Children))
 	for i := 0; i < len(sg.Children); i++ {
 		child := sg.Children[i]
-		child.Query = createTaskQuery(child, sorted)
+		child.Query = createTaskQuery(child, sg.sorted)
 		go ProcessGraph(ctx, child, childchan)
 	}
 
