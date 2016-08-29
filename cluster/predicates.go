@@ -38,7 +38,7 @@ func GetPredicateList(ps *store.Store) []string {
 	var predicateList []string
 	var lastPredicate, predicate string
 
-	it := ps.GetIterator()
+	it := ps.NewIterator()
 	for it.SeekToFirst(); it.Valid(); it.Next() {
 		predicate = getPredicate(it.Key().Data())
 		if predicate != lastPredicate {

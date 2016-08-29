@@ -84,8 +84,13 @@ func (s *Store) Delete(k []byte) error {
 	return s.db.Delete(s.wopt, k)
 }
 
-func (s *Store) GetIterator() *rocksdb.Iterator {
-	return s.db.NewIterator(s.ropt)
+// NewIterator initializes a new iterator and returns it.
+func (s *Store) NewIterator() *rocksdb.Iterator {
+	ro := rocksdb.NewDefaultReadOptions()
+	// SetFillCache should be set to false for bulk reads to avoid caching data
+	// while doing bulk scans.
+	ro.SetFillCache(false)
+	return s.db.NewIterator(ro)
 }
 
 func (s *Store) Close() {
@@ -100,4 +105,17 @@ func (s *Store) MemtableSize() uint64 {
 func (s *Store) IndexFilterblockSize() uint64 {
 	blockSize, _ := strconv.ParseUint(s.db.GetProperty("rocksdb.estimate-table-readers-mem"), 10, 64)
 	return blockSize
+}
+
+// NewWriteBatch creates a new WriteBatch object and returns a pointer to it.
+func (s *Store) NewWriteBatch() *rocksdb.WriteBatch {
+	return rocksdb.NewWriteBatch()
+}
+
+// WriteBatch does a batch write to RocksDB from the data in WriteBatch object.
+func (s *Store) WriteBatch(wb *rocksdb.WriteBatch) error {
+	if err := s.db.Write(s.wopt, wb); err != nil {
+		return err
+	}
+	return nil
 }

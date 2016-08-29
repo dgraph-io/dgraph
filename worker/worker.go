@@ -142,6 +142,42 @@ func (w *worker) ServeTask(ctx context.Context, query *Payload) (*Payload, error
 	return reply, rerr
 }
 
+// PredicateData can be used to return data corresponding to a predicate over
+// a stream.
+func (w *worker) PredicateData(query *Payload, stream Worker_PredicateDataServer) error {
+	qp := query.Data
+	prefix := append(qp, '|')
+	// TODO(pawan) - Shift to CheckPoints once we figure out how to add them to the
+	// RocksDB library we are using.
+	// http://rocksdb.org/blog/2609/use-checkpoints-for-efficient-snapshots/
+	it := dataStore.NewIterator()
+	defer it.Close()
+
+	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+		k, v := it.Key(), it.Value()
+
+		b := flatbuffers.NewBuilder(0)
+		bko := b.CreateByteVector(k.Data())
+		bvo := b.CreateByteVector(v.Data())
+		task.KVStart(b)
+		task.KVAddKey(b, bko)
+		task.KVAddVal(b, bvo)
+		kvoffset := task.KVEnd(b)
+		b.Finish(kvoffset)
+
+		p := Payload{Data: b.Bytes[b.Head():]}
+		if err := stream.Send(&p); err != nil {
+			return err
+		}
+		k.Free()
+		v.Free()
+	}
+	if err := it.Err(); err != nil {
+		return err
+	}
+	return nil
+}
+
 // runServer initializes a tcp server on port which listens to requests from
 // other workers for internal communication.
 func runServer(port string) {

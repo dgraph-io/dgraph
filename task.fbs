@@ -26,3 +26,8 @@ table Result {
 	values:[Value];
 	count:[ulong];
 }
+
+table KV {
+	key: [ubyte];
+	val: [ubyte];
+}
