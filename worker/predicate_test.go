@@ -85,7 +85,8 @@ func TestPopulateShard(t *testing.T) {
 	// Wait for workers to be initialized and connected.
 	time.Sleep(5 * time.Second)
 
-	work = w
+	// Since PredicateData reads from the global variable wo, we change it to w.
+	wo = w
 	if err := w1.PopulateShard(context.Background(), "test", 0); err != nil {
 		t.Fatal(err)
 	}
