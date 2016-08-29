@@ -223,7 +223,7 @@ func TestFrontfillDel(t *testing.T) {
 	}
 
 	// Do frontfill now.
-	indices.Frontfill(NewFrontfillDel("name", 24))
+	indices.Frontfill(newFrontfillDel("name", 24))
 
 	// Do a pause to make sure frontfill changes go through before we do a lookup.
 	time.Sleep(200 * time.Millisecond)
@@ -260,9 +260,9 @@ func TestFrontfillAdd(t *testing.T) {
 	}
 
 	// Do frontfill now.
-	indices.Frontfill(NewFrontfillAdd("name", 24, "NotGlenn"))
+	indices.Frontfill(newFrontfillAdd("name", 24, "NotGlenn"))
 	// Let a different UID take the name Glenn.
-	indices.Frontfill(NewFrontfillAdd("name", 23, "Glenn"))
+	indices.Frontfill(newFrontfillAdd("name", 23, "Glenn"))
 	// Do a pause to make sure frontfill changes go through before we do a lookup.
 	time.Sleep(200 * time.Millisecond)
 	lr = indices.Lookup(li)

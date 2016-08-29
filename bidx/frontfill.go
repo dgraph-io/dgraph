@@ -12,7 +12,7 @@ type mutation struct {
 	Value  string
 }
 
-func NewFrontfillAdd(attr string, uid uint64, val string) *mutation {
+func newFrontfillAdd(attr string, uid uint64, val string) *mutation {
 	return &mutation{
 		Attr:  attr,
 		UID:   uid,
@@ -20,7 +20,7 @@ func NewFrontfillAdd(attr string, uid uint64, val string) *mutation {
 	}
 }
 
-func NewFrontfillDel(attr string, uid uint64) *mutation {
+func newFrontfillDel(attr string, uid uint64) *mutation {
 	return &mutation{
 		Delete: true,
 		Attr:   attr,
@@ -30,14 +30,15 @@ func NewFrontfillDel(attr string, uid uint64) *mutation {
 
 // FrontfillAdd inserts with overwrite (replace) key, value into our indices.
 func FrontfillAdd(attr string, uid uint64, val string) {
-	globalIndices.Frontfill(NewFrontfillAdd(attr, uid, val))
+	globalIndices.Frontfill(newFrontfillAdd(attr, uid, val))
 }
 
 // FrontfillDel deletes a key, value from our indices.
 func FrontfillDel(attr string, uid uint64) {
-	globalIndices.Frontfill(NewFrontfillDel(attr, uid))
+	globalIndices.Frontfill(newFrontfillDel(attr, uid))
 }
 
+// Frontfill updates indices given mutation.
 func (s *Indices) Frontfill(m *mutation) error {
 	index, found := s.index[m.Attr]
 	if !found {
