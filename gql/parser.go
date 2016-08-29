@@ -180,6 +180,9 @@ func checkValidity(vm varMap) error {
 						return fmt.Errorf("Expected a bool but got %v", v.Value)
 					}
 				}
+			case "string": // Value is a valid string. No checks required
+			default:
+				return fmt.Errorf("Type %v not supported", typ)
 			}
 		}
 	}
@@ -189,6 +192,7 @@ func checkValidity(vm varMap) error {
 
 func substituteVariables(gq *GraphQuery, vmap varMap) error {
 	for k, v := range gq.Args {
+		// v won't be empty as its handled in parseVariables
 		if v[0] == '$' {
 			va, ok := vmap[v]
 			if !ok {
@@ -199,7 +203,9 @@ func substituteVariables(gq *GraphQuery, vmap varMap) error {
 	}
 
 	for _, child := range gq.Children {
-		substituteVariables(child, vmap)
+		if err := substituteVariables(child, vmap); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -255,13 +261,21 @@ func Parse(input string) (gq *GraphQuery, mu *Mutation, rerr error) {
 		if err := gq.expandFragments(fmap); err != nil {
 			return nil, nil, err
 		}
-		substituteVariables(gq, vmap)
+
+		// Substitute all variables with corresponding values
+		if err := substituteVariables(gq, vmap); err != nil {
+			return nil, nil, err
+		}
 	}
 
 	return gq, mu, nil
 }
 
-func getVariablesAndQuery(l *lex.Lexer, vmap varMap) (gq *GraphQuery, rerr error) {
+// getVariablesAndQuery checks if the query has a variable list and stores it in
+// vmap. For variable list to be present, the query should have a name which is
+// also checked for. It also calls getQuery to create the GraphQuery object tree.
+func getVariablesAndQuery(l *lex.Lexer, vmap varMap) (gq *GraphQuery,
+	rerr error) {
 	var name string
 L2:
 	for item := range l.Items {
@@ -270,7 +284,7 @@ L2:
 			v := strings.TrimSpace(item.Val)
 			if len(v) > 0 {
 				if name != "" {
-					return nil, fmt.Errorf("Multiple word queryt name not allowed.")
+					return nil, fmt.Errorf("Multiple word query name not allowed.")
 				}
 				name = item.Val
 			}
@@ -296,25 +310,25 @@ L2:
 	return gq, nil
 }
 
+// getQuery creates a GraphQuery object tree by calling getRoot
+// and goDeep functions by looking at '{'.
 func getQuery(l *lex.Lexer) (gq *GraphQuery, rerr error) {
+	// First, get the root
 	gq, rerr = getRoot(l)
 	if rerr != nil {
 		return nil, rerr
 	}
 
-L:
-	for item := range l.Items {
-		switch item.Typ {
-		case itemText:
-			continue
-
-		case itemLeftCurl:
-			if rerr = godeep(l, gq); rerr != nil {
-				return nil, rerr
-			}
-			break L
+	// Recurse to deeper levels through godeep
+	item := <-l.Items
+	if item.Typ == itemLeftCurl {
+		if rerr = godeep(l, gq); rerr != nil {
+			return nil, rerr
 		}
+	} else {
+		return nil, fmt.Errorf("Malformed Query. Missing {")
 	}
+
 	return gq, nil
 }
 
@@ -411,7 +425,7 @@ func parseMutationOp(l *lex.Lexer, op string, mu *Mutation) error {
 func parseVariables(l *lex.Lexer, vmap varMap) error {
 	for {
 		var varName string
-		// Get variable name
+		// Get variable name.
 		item := <-l.Items
 		if item.Typ == itemVarName {
 			varName = item.Val
@@ -421,17 +435,20 @@ func parseVariables(l *lex.Lexer, vmap varMap) error {
 			return fmt.Errorf("Expecting a variable name. Got: %v", item)
 		}
 
-		// Get variable type
+		// Get variable type.
 		item = <-l.Items
 		if item.Typ != itemVarType {
 			return fmt.Errorf("Expecting a variable type. Got: %v", item)
 		}
 
+		// Ensure that the type is not nil.
 		varType := item.Val
 		if varType == "" {
 			return fmt.Errorf("Type of a variable can't be empty")
 		}
 
+		// Insert the variable into the map. The variable might already be defiend
+		// in the variable list passed with the query.
 		if _, ok := vmap[varName]; ok {
 			vmap[varName] = varInfo{
 				Value: vmap[varName].Value,
@@ -443,6 +460,7 @@ func parseVariables(l *lex.Lexer, vmap varMap) error {
 			}
 		}
 
+		// Check for '=' sign and optional default value.
 		item = <-l.Items
 		if item.Typ == itemEqual {
 			it := <-l.Items
@@ -450,6 +468,8 @@ func parseVariables(l *lex.Lexer, vmap varMap) error {
 				return fmt.Errorf("Expecting default value of a variable. Got: %v", item)
 			}
 
+			// If value is empty replace, otherwise ignore the default value
+			// as the intialised value will override the default value.
 			if vmap[varName].Value == "" {
 				vmap[varName] = varInfo{
 					Value: it.Val,
@@ -464,7 +484,6 @@ func parseVariables(l *lex.Lexer, vmap varMap) error {
 		} else if item.Typ == itemRightRound {
 			break
 		}
-
 	}
 	return nil
 }

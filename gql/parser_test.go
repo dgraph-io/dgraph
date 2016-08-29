@@ -643,7 +643,7 @@ func TestParseVariables3(t *testing.T) {
 
 func TestParseVariablesDefault1(t *testing.T) {
 	query := `{
-		"query": "query testQuery($a: int = 3, $b: int = 4, $c : int = 3){root(_uid_: 0x0a) {name(first: $b, after: $a, offset: $c){english}}}", 
+		"query": "query testQuery($a: int = 3  , $b: int =  4 ,  $c : int = 3){root(_uid_: 0x0a) {name(first: $b, after: $a, offset: $c){english}}}", 
 		"variables": {"$b": "5" } 
 	}`
 	_, _, err := Parse(query)
@@ -735,5 +735,16 @@ func TestParseVariablesError5(t *testing.T) {
 	_, _, err := Parse(query)
 	if err == nil {
 		t.Error("Expected error: Query with variables should be named")
+	}
+}
+
+func TestParseVariablesError6(t *testing.T) {
+	query := `{
+		"query": "query ($a: int, $b: random){root(_uid_: 0x0a) {name(first: $b, after: $a){english}}}", 
+		"variables": {"$a": "6", "$b": "5" } 
+	}`
+	_, _, err := Parse(query)
+	if err == nil {
+		t.Error("Expected error: Type random not supported")
 	}
 }
