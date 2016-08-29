@@ -235,7 +235,6 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 			m[sg.Attr] = l
 			result[q.Uids(i)] = m
 		}
-		// TODO(manish): Check what happens if we handle len(l) == 1 separately.
 	}
 
 	var tv task.Value
@@ -457,11 +456,29 @@ func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
 		}
 
 		dst := &SubGraph{
-			isDebug:  sg.isDebug,
-			Attr:     gchild.Attr,
-			Offset:   gchild.Offset,
-			AfterUid: gchild.After,
-			Count:    gchild.First,
+			isDebug: sg.isDebug,
+			Attr:    gchild.Attr,
+		}
+		if v, ok := gchild.Args["offset"]; ok {
+			offset, err := strconv.ParseInt(v, 0, 32)
+			if err != nil {
+				return err
+			}
+			dst.Offset = int(offset)
+		}
+		if v, ok := gchild.Args["after"]; ok {
+			after, err := strconv.ParseInt(v, 0, 32)
+			if err != nil {
+				return err
+			}
+			dst.AfterUid = uint64(after)
+		}
+		if v, ok := gchild.Args["first"]; ok {
+			first, err := strconv.ParseInt(v, 0, 32)
+			if err != nil {
+				return err
+			}
+			dst.Count = int(first)
 		}
 		sg.Children = append(sg.Children, dst)
 		err := treeCopy(gchild, dst)

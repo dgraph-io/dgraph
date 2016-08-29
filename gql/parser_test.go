@@ -124,14 +124,11 @@ func TestParseFirst(t *testing.T) {
 	if err := checkAttr(gq.Children[0], "type.object.name"); err != nil {
 		t.Error(err)
 	}
-	if gq.Children[0].First != 0 {
-		t.Errorf("Expected count 0. Got: %v", gq.Children[0].First)
-	}
 	if err := checkAttr(gq.Children[1], "friends"); err != nil {
 		t.Error(err)
 	}
-	if gq.Children[1].First != 10 {
-		t.Errorf("Expected count 10. Got: %v", gq.Children[1].First)
+	if gq.Children[1].Args["first"] != "10" {
+		t.Errorf("Expected count 10. Got: %v", gq.Children[1].Args["first"])
 	}
 }
 
@@ -176,17 +173,14 @@ func TestParseAfter(t *testing.T) {
 	if err := checkAttr(gq.Children[0], "type.object.name"); err != nil {
 		t.Error(err)
 	}
-	if gq.Children[0].First != 0 {
-		t.Errorf("Expected count 0. Got: %v", gq.Children[0].First)
-	}
 	if err := checkAttr(gq.Children[1], "friends"); err != nil {
 		t.Error(err)
 	}
-	if gq.Children[1].First != 10 {
-		t.Errorf("Expected count 10. Got: %v", gq.Children[1].First)
+	if gq.Children[1].Args["first"] != "10" {
+		t.Errorf("Expected count 10. Got: %v", gq.Children[1].Args["first"])
 	}
-	if gq.Children[1].After != 3 {
-		t.Errorf("Expected after to be 3. Got: %v", gq.Children[1].Offset)
+	if gq.Children[1].Args["after"] != "3" {
+		t.Errorf("Expected after to be 3. Got: %v", gq.Children[1].Args["after"])
 	}
 }
 
@@ -214,17 +208,14 @@ func TestParseOffset(t *testing.T) {
 	if err := checkAttr(gq.Children[0], "type.object.name"); err != nil {
 		t.Error(err)
 	}
-	if gq.Children[0].First != 0 {
-		t.Errorf("Expected count 0. Got: %v", gq.Children[0].First)
-	}
 	if err := checkAttr(gq.Children[1], "friends"); err != nil {
 		t.Error(err)
 	}
-	if gq.Children[1].First != 10 {
-		t.Errorf("Expected count 10. Got: %v", gq.Children[1].First)
+	if gq.Children[1].Args["first"] != "10" {
+		t.Errorf("Expected count 10. Got: %v", gq.Children[1].Args["First"])
 	}
-	if gq.Children[1].Offset != 3 {
-		t.Errorf("Expected Offset 3. Got: %v", gq.Children[1].Offset)
+	if gq.Children[1].Args["offset"] != "3" {
+		t.Errorf("Expected Offset 3. Got: %v", gq.Children[1].Args["offset"])
 	}
 }
 
@@ -233,7 +224,7 @@ func TestParseOffset_error(t *testing.T) {
 	query {
 		user(_xid_: m.abcd) {
 			type.object.name
-			friends (first: 10, offset: -3) {
+			friends (first: 10, offset: ) {
 			}
 		}
 	}`
@@ -603,5 +594,157 @@ func TestParseFragmentCycle(t *testing.T) {
 	_, _, err := Parse(query)
 	if err == nil {
 		t.Error("Expected error with cycle")
+	}
+}
+
+func TestParseVariables(t *testing.T) {
+	query := `{
+		"query": "query testQuery( $a  : int   , $b: int){root(_uid_: 0x0a) {name(first: $b, after: $a){english}}}", 
+		"variables": {"$a": "6", "$b": "5" } 
+	}`
+	_, _, err := Parse(query)
+	if err != nil {
+		t.Error(err)
+	}
+}
+
+func TestParseVariables1(t *testing.T) {
+	query := `{
+		"query": "query testQuery($a: int , $b: int!){root(_uid_: 0x0a) {name(first: $b){english}}}", 
+		"variables": {"$b": "5" } 
+	}`
+	_, _, err := Parse(query)
+	if err != nil {
+		t.Error(err)
+	}
+}
+
+func TestParseVariables2(t *testing.T) {
+	query := `{
+		"query": "query testQuery($a: float , $b: bool!){root(_uid_: 0x0a) {name{english}}}", 
+		"variables": {"$b": "false", "$a": "3.33" } 
+	}`
+	_, _, err := Parse(query)
+	if err != nil {
+		t.Error(err)
+	}
+}
+
+func TestParseVariables3(t *testing.T) {
+	query := `{
+		"query": "query testQuery($a: int , $b: int! = 3){root(_uid_: 0x0a) {name(first: $b){english}}}", 
+		"variables": {"$a": "5" } 
+	}`
+	_, _, err := Parse(query)
+	if err != nil {
+		t.Error(err)
+	}
+}
+
+func TestParseVariablesDefault1(t *testing.T) {
+	query := `{
+		"query": "query testQuery($a: int = 3  , $b: int =  4 ,  $c : int = 3){root(_uid_: 0x0a) {name(first: $b, after: $a, offset: $c){english}}}", 
+		"variables": {"$b": "5" } 
+	}`
+	_, _, err := Parse(query)
+	if err != nil {
+		t.Error(err)
+	}
+}
+func TestParseVariablesFragments(t *testing.T) {
+	query := `{
+	"query": "query test($a: int){user(_uid_:0x0a) {...fragmentd,friends(first: $a, offset: $a) {name}}} fragment fragmentd {id(first: $a)}",
+	"variables": {"$a": "5"}
+}`
+	gq, _, err := Parse(query)
+	if err != nil {
+		t.Error(err)
+	}
+	if gq == nil {
+		t.Error("subgraph is nil")
+		return
+	}
+	if len(gq.Children) != 2 {
+		t.Errorf("Expected 2 children. Got: %v", len(gq.Children))
+		return
+	}
+
+	// Notice that the order is preserved.
+
+	if gq.Children[0].Args["first"] != "5" {
+		t.Error("Expected first to be 5. Got %v", gq.Children[2].Args["first"])
+	}
+}
+
+func TestParseVariablesError1(t *testing.T) {
+	query := `
+	query testQuery($a: string, $b: int!){
+			root(_uid_: 0x0a) {
+				type.object.name.es-419
+			}
+		}
+	`
+	_, _, err := Parse(query)
+	if err == nil {
+		t.Error("Expected error")
+	}
+}
+
+func TestParseVariablesError2(t *testing.T) {
+	query := `{
+		"query": "query testQuery($a: int, $b: int, $c: int!){
+			root(_uid_: 0x0a) {name(first: $b, after: $a){english}}
+		}", 
+		"variables": {"$a": "6", "$b": "5" } 
+	}`
+	_, _, err := Parse(query)
+	if err == nil {
+		t.Error("Expected value for variable $c")
+	}
+}
+
+func TestParseVariablesError3(t *testing.T) {
+	query := `{
+		"query": "query testQuery($a: int, $b: , $c: int!){
+			root(_uid_: 0x0a) {name(first: $b, after: $a){english}}
+		}", 
+		"variables": {"$a": "6", "$b": "5" } 
+	}`
+	_, _, err := Parse(query)
+	if err == nil {
+		t.Error("Expected type for variable $b")
+	}
+}
+
+func TestParseVariablesError4(t *testing.T) {
+	query := `{
+		"query": "query testQuery($a: bool , $b: float! = 3){root(_uid_: 0x0a) {name(first: $b){english}}}", 
+		"variables": {"$a": "5" } 
+	}`
+	_, _, err := Parse(query)
+	if err == nil {
+		t.Error("Expected type error")
+	}
+}
+
+func TestParseVariablesError5(t *testing.T) {
+	query := `{
+		"query": "query ($a: int, $b: int){root(_uid_: 0x0a) {name(first: $b, after: $a){english}}}", 
+		"variables": {"$a": "6", "$b": "5" } 
+	}`
+	_, _, err := Parse(query)
+	if err == nil {
+		t.Error("Expected error: Query with variables should be named")
+	}
+}
+
+func TestParseVariablesError6(t *testing.T) {
+	query := `{
+		"query": "query ($a: int, $b: random){root(_uid_: 0x0a) {name(first: $b, after: $a){english}}}", 
+		"variables": {"$a": "6", "$b": "5" } 
+	}`
+	_, _, err := Parse(query)
+	if err == nil {
+		t.Error("Expected error: Type random not supported")
 	}
 }

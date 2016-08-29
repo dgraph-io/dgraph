@@ -22,10 +22,16 @@ import "github.com/dgraph-io/dgraph/lex"
 const (
 	leftCurl     = '{'
 	rightCurl    = '}'
+	leftRound    = '('
+	rightRound   = ')'
 	period       = '.'
+	comma        = ','
+	bang         = '!'
+	dollar       = '$'
 	queryMode    = 1
 	mutationMode = 2
 	fragmentMode = 3
+	equal        = '='
 )
 
 // Constants representing type of different graphql lexed items.
@@ -33,6 +39,8 @@ const (
 	itemText            lex.ItemType = 5 + iota // plain text
 	itemLeftCurl                                // left curly bracket
 	itemRightCurl                               // right curly bracket
+	itemComma                                   // a comma
+	itemEqual                                   // equals to symbol
 	itemComment                                 // comment
 	itemName                                    // [9] names
 	itemOpType                                  // operation type
@@ -44,6 +52,9 @@ const (
 	itemMutationOp                              // mutation operation
 	itemMutationContent                         // mutation content
 	itemFragmentSpread                          // three dots and name
+	itemVarName                                 // dollar followed by a name
+	itemVarType                                 // type a variable
+	itemVarDefault                              // default value of a variable
 )
 
 // lexText lexes the input string and calls other lex functions.
@@ -66,6 +77,12 @@ Loop:
 			return l.Errorf("Too many right characters")
 		case r == lex.EOF:
 			break Loop
+		case r == leftRound:
+			l.Backup()
+			l.Emit(itemText)
+			l.Next()
+			l.Emit(itemLeftRound)
+			return lexVarInside
 		case isNameBegin(r):
 			l.Backup()
 			l.Emit(itemText)
@@ -101,14 +118,14 @@ func lexInside(l *lex.Lexer) lex.StateFn {
 			l.Emit(itemLeftCurl)
 		case r == lex.EOF:
 			return l.Errorf("Unclosed action")
-		case isSpace(r) || isEndOfLine(r) || r == ',':
+		case isSpace(r) || isEndOfLine(r) || r == comma:
 			l.Ignore()
 		case isNameBegin(r):
 			return lexName
 		case r == '#':
 			l.Backup()
 			return lexComment
-		case r == '(':
+		case r == leftRound:
 			l.Emit(itemLeftRound)
 			return lexArgInside
 		default:
@@ -249,6 +266,84 @@ func lexOperationType(l *lex.Lexer) lex.StateFn {
 	return lexText
 }
 
+func lexVarInside(l *lex.Lexer) lex.StateFn {
+	for {
+		switch r := l.Next(); {
+		case r == lex.EOF:
+			return l.Errorf("unclosed argument")
+		case isSpace(r) || isEndOfLine(r):
+			l.Ignore()
+		case isDollar(r):
+			return lexVarName
+		case r == ':':
+			l.Ignore()
+			return lexVarType
+		case r == equal:
+			l.Emit(itemEqual)
+			l.Ignore()
+			return lexVarDefault
+		case r == rightRound:
+			l.Emit(itemRightRound)
+			return lexText
+		case r == comma:
+			l.Emit(itemComma)
+			l.Ignore()
+		default:
+			return l.Errorf("variable list invalid")
+		}
+	}
+}
+
+// lexVarName lexes and emits the name of a variable.
+func lexVarName(l *lex.Lexer) lex.StateFn {
+	for {
+		r := l.Next()
+		if isNameSuffix(r) {
+			continue
+		}
+		l.Backup()
+		l.Emit(itemVarName)
+		break
+	}
+	return lexVarInside
+}
+
+// lexVarType lexes and emits the type of a variable.
+func lexVarType(l *lex.Lexer) lex.StateFn {
+	l.AcceptRun(isSpace)
+	l.Ignore() // Any spaces encountered.
+	for {
+		r := l.Next()
+		if isSpace(r) || isEndOfLine(r) || r == rightRound || r == comma {
+			l.Backup()
+			l.Emit(itemVarType)
+			return lexVarInside
+		}
+		if r == lex.EOF {
+			return l.Errorf("Reached lex.EOF while reading var value: %v",
+				l.Input[l.Start:l.Pos])
+		}
+	}
+}
+
+// lexVarDefault lexes and emits the Default value of a variable.
+func lexVarDefault(l *lex.Lexer) lex.StateFn {
+	l.AcceptRun(isSpace)
+	l.Ignore() // Any spaces encountered.
+	for {
+		r := l.Next()
+		if isSpace(r) || isEndOfLine(r) || r == rightRound || r == comma {
+			l.Backup()
+			l.Emit(itemVarDefault)
+			return lexVarInside
+		}
+		if r == lex.EOF {
+			return l.Errorf("Reached lex.EOF while reading default value: %v",
+				l.Input[l.Start:l.Pos])
+		}
+	}
+}
+
 // lexArgInside is used to lex the arguments inside ().
 func lexArgInside(l *lex.Lexer) lex.StateFn {
 	for {
@@ -262,11 +357,13 @@ func lexArgInside(l *lex.Lexer) lex.StateFn {
 		case r == ':':
 			l.Ignore()
 			return lexArgVal
-		case r == ')':
+		case r == rightRound:
 			l.Emit(itemRightRound)
 			return lexInside
-		case r == ',':
+		case r == comma:
 			l.Ignore()
+		default:
+			return l.Errorf("argument list invalid")
 		}
 	}
 }
@@ -291,7 +388,7 @@ func lexArgVal(l *lex.Lexer) lex.StateFn {
 	l.Ignore() // Any spaces encountered.
 	for {
 		r := l.Next()
-		if isSpace(r) || isEndOfLine(r) || r == ')' || r == ',' {
+		if isSpace(r) || isEndOfLine(r) || r == rightRound || r == comma {
 			l.Backup()
 			l.Emit(itemArgVal)
 			return lexArgInside
@@ -301,6 +398,11 @@ func lexArgVal(l *lex.Lexer) lex.StateFn {
 				l.Input[l.Start:l.Pos])
 		}
 	}
+}
+
+// isDollar returns true if the rune is a Dollar($).
+func isDollar(r rune) bool {
+	return r == '\u0024'
 }
 
 // isSpace returns true if the rune is a tab or space.
