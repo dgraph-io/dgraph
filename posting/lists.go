@@ -206,7 +206,9 @@ func getMemUsage() int {
 	return rss * os.Getpagesize() / (1 << 20)
 }
 
-func CheckMemoryUsage(ps1, ps2 *store.Store) {
+// checkMeomeryUsage monitors the memory usage by the running process and
+// calls aggressively evict if the threshold is reached.
+func checkMemoryUsage() {
 	var mr mergeRoutines
 	for _ = range time.Tick(5 * time.Second) {
 		totMemory := getMemUsage()
@@ -237,6 +239,7 @@ func Init(log *commit.Logger) {
 	lhmap = gotomic.NewHash()
 	dirtymap = gotomic.NewHash()
 	clog = log
+	go checkMemoryUsage()
 }
 
 func GetOrCreate(key []byte, pstore *store.Store) *List {
