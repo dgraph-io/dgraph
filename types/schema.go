@@ -26,25 +26,68 @@ type GraphQLSchema struct {
 	Mutation GraphQLObject
 }
 
-// TestSchema defines a dummy schema to test type and validaiton system.
-var Schema = &GraphQLSchema{Query: QueryType}
+var (
+	// Schema defines a dummy schema to test type and validaiton system.
+	Schema *GraphQLSchema
+	// QueryType defines sample basic schema.
+	QueryType GraphQLObject
+	// personType for validating coercion system implementation.
+	personType GraphQLObject
+)
 
-// QueryType defines sample basic schema.
-// TODO(akhil): move definition to query_test and have a generic schema and QueryType here
-var QueryType = GraphQLObject{
-	Name: "Query",
-	Desc: "Sample query structure",
-	Fields: FieldMap{
-		"work": &Field{
-			Type: String,
-			Resolve: func(rp ResolveParams) interface{} {
-				return "In progress"
+// LoadSchema loads the schema
+func LoadSchema() error {
+
+	var err error
+	// load scalar types
+	if err = LoadScalarTypes(); err != nil {
+		return err
+	}
+
+	// TODO(akhil): implement mechanism for client to define and upload a schema.
+	// Client schema will be parsed and loaded here.
+
+	personType = GraphQLObject{
+		Name: "Person",
+		Desc: "object to represent a person type",
+		Fields: FieldMap{
+			"name": &Field{
+				Type: String,
+			},
+			"gender": &Field{
+				Type: String,
+			},
+			"age": &Field{
+				Type: Int,
+			},
+			"status": &Field{
+				Type: String,
+			},
+			"sword_present": &Field{
+				Type: Boolean,
+			},
+			"is_zombie": &Field{
+				Type: Boolean,
+			},
+			"survival_rate": &Field{
+				Type: Float,
 			},
 		},
-		"actor": &Field{
-			Type: personType,
+	}
+
+	QueryType = GraphQLObject{
+		Name: "Query",
+		Desc: "Sample query structure",
+		Fields: FieldMap{
+			"actor": &Field{
+				Type: personType,
+			},
 		},
-	},
+	}
+
+	Schema = &GraphQLSchema{Query: QueryType}
+
+	return nil
 }
 
 // ValidateMutation validates the parsed mutation string against the present schema.

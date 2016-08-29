@@ -20,11 +20,10 @@ import (
 	"fmt"
 )
 
-// TODO(akhil): make more underlying interfaces for stricter definitions of types.
-
 // GraphQLScalar type defines concrete structure for scalar types to use.
 // Almost all scalar types can also act as input types.
 // Scalars (along with Enums) form leaf nodes of request or input values to arguements.
+// TODO(akhil): make more underlying interfaces for stricter definitions of types.
 type GraphQLScalar struct {
 	Name        string       // name of scalar type
 	Description string       // short description, could be used for documentation in GraphiQL
@@ -32,25 +31,16 @@ type GraphQLScalar struct {
 	Err         error        // error object
 }
 
-// SerializeFunc is a function type that serializes GraphQL Scalar types.
-type SerializeFunc func(input interface{}) interface{}
-
-// ParseValueFunc is a function type that parses the value of GraphQL Scalar types.
-type ParseValueFunc func(input interface{}) interface{}
-
-// ParseLiteralFunc is a function type that parses literal value of GraphQL Scalar types.
-type ParseLiteralFunc func(input interface{}) interface{}
-
 // ScalarConfig to pass config params to scalar type constructor function.
 type ScalarConfig struct {
 	Name        string
 	Description string
-	Serialize   SerializeFunc
-	// ParseValue		ParseValueFunc
-	// ParseLiteral	ParseLiteralFunc
+	ParseType   ParseTypeFunc
 }
 
-//
+// ParseTypeFunc is a function type that parses and does coersion for GraphQL Scalar types.
+type ParseTypeFunc func(input interface{}) interface{}
+
 // MakeScalarType declares a custom scalar type using the input configuration.
 // Custom scalar could directly be defined as well, but this function gives us flexibility
 // to do validations and catch errors.
@@ -67,31 +57,16 @@ func MakeScalarType(sc *ScalarConfig) GraphQLScalar {
 	if sc.Name != "" && validName(sc.Name) {
 		scalarType.Name = sc.Name
 	} else {
-		scalarType.Err = makeTypeError("Type must be named.")
+		scalarType.Err = fmt.Errorf("Type must be named.")
 		return scalarType
 	}
 
 	scalarType.Description = sc.Description
 
-	if sc.Serialize == nil {
-		scalarType.Err = makeTypeError(
-			fmt.Sprintf("%v must provide 'serialize' function. If this custom Scalar "+
-				"is also used as an input type, ensure 'parseValue' and "+
-				"'parseLiteral' functions are also provided.", scalarType),
-		)
+	if sc.ParseType == nil {
+		scalarType.Err = fmt.Errorf("%v declared type must a provide 'ParseType' function"+
+			"which will be used for validation and type coercion if required. ", scalarType.Name)
 	}
-	/*
-		// TODO(akhil): uncomment when implementing input types.
-		// throw error if any one of parseValue or parseLiteral functions are not provided.
-		// (in the case that this scalar type is an input type)
-		if (sc.parseValue != nil && sc.parseLiteral == nil) ||
-			 (sc.parseValue == nil && sc.parseLiteral != nil) {
-			 	scalarType.err = makeTypeError(
-			 			fmt.Sprintf("%v must provide none (non-input type) or both (input type)
-			 				'parseValue' and 'parseLiteral' functions.",scalarType)
-			 		)
-		}
-	*/
 	scalarType.Config = *sc
 	return scalarType
 }
@@ -111,7 +86,6 @@ func (s *GraphQLScalar) Error() error {
 // Object has a name and a set of fields.
 type GraphQLObject struct {
 	// TODO(akhil): complete this impl.
-	// TODO(akhil): find out if not exporting struct fields causes issues (same for GraphQLScalar).
 	Name   string
 	Desc   string
 	Fields FieldMap

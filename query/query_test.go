@@ -36,6 +36,7 @@ import (
 	"github.com/dgraph-io/dgraph/query/graph"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/task"
+	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -546,6 +547,7 @@ func TestToJson(t *testing.T) {
 func TestPostTraverse(t *testing.T) {
 	dir, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
+	types.LoadSchema()
 
 	query := `
 		{

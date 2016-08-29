@@ -41,6 +41,7 @@ import (
 	"github.com/dgraph-io/dgraph/query/graph"
 	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/store"
+	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/uid"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
@@ -91,27 +92,27 @@ func convertToEdges(ctx context.Context, mutation string) ([]x.DirectedEdge, err
 		nquads = append(nquads, nq)
 	}
 
-	// xidToUid is used to store ids which are not uids. It is sent to the instance
+	// xidToUID is used to store ids which are not uids. It is sent to the instance
 	// which has the xid <-> uid mapping to get uids.
-	xidToUid := make(map[string]uint64)
+	xidToUID := make(map[string]uint64)
 	for _, nq := range nquads {
 		if !strings.HasPrefix(nq.Subject, "_uid_:") {
-			xidToUid[nq.Subject] = 0
+			xidToUID[nq.Subject] = 0
 		}
 		if len(nq.ObjectId) > 0 && !strings.HasPrefix(nq.ObjectId, "_uid_:") {
-			xidToUid[nq.ObjectId] = 0
+			xidToUID[nq.ObjectId] = 0
 		}
 	}
-	if len(xidToUid) > 0 {
-		if err := worker.GetOrAssignUidsOverNetwork(ctx, xidToUid); err != nil {
+	if len(xidToUID) > 0 {
+		if err := worker.GetOrAssignUidsOverNetwork(ctx, xidToUID); err != nil {
 			x.Trace(ctx, "Error while GetOrAssignUidsOverNetwork: %v", err)
 			return edges, err
 		}
 	}
 
 	for _, nq := range nquads {
-		// Get edges from nquad using xidToUid.
-		edge, err := nq.ToEdgeUsing(xidToUid)
+		// Get edges from nquad using xidToUID.
+		edge, err := nq.ToEdgeUsing(xidToUID)
 		if err != nil {
 			x.Trace(ctx, "Error while converting to edge: %v %v", nq, err)
 			return edges, err
@@ -337,6 +338,15 @@ func runGrpcServer(address string) {
 		log.Fatalf("While serving gRpc requests: %v", err)
 	}
 	return
+}
+
+// init function is used to setup application state and config variables
+// Currently, just loading schema and types
+// It is called after all import packages and variable declarations have been initialized
+func init() {
+	if err := types.LoadSchema(); err != nil {
+		log.Fatal(err)
+	}
 }
 
 func main() {
