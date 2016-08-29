@@ -18,10 +18,12 @@ package posting
 
 import (
 	"flag"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"math/rand"
 	"os"
+	"os/exec"
 	"runtime"
 	"runtime/debug"
 	"strconv"
@@ -176,11 +178,25 @@ func gentlyMerge(mr *mergeRoutines) {
 // getMemUsage returns the amount of memory used by the process in MB
 func getMemUsage() int {
 	if runtime.GOOS != "linux" {
-		// For non-linux OS we just get approx memory usage from runtime
-		var ms runtime.MemStats
-		runtime.ReadMemStats(&ms)
-		megs := ms.Alloc / (1 << 20)
-		return int(megs)
+		pid := os.Getpid()
+		cmd := fmt.Sprintf("ps -ao rss,pid | grep %v", pid)
+		c1, err := exec.Command("bash", "-c", cmd).Output()
+		if err != nil {
+			// In case of error running the command, resort to go way
+			var ms runtime.MemStats
+			runtime.ReadMemStats(&ms)
+			megs := ms.Alloc / (1 << 20)
+			return int(megs)
+		}
+
+		rss := strings.Split(string(c1), " ")[0]
+		kbs, err := strconv.Atoi(rss)
+		if err != nil {
+			return 0
+		}
+		megs := kbs / (1 << 10)
+		fmt.Println(megs)
+		return megs
 	}
 
 	contents, err := ioutil.ReadFile("/proc/self/stat")
