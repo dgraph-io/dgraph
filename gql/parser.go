@@ -136,7 +136,7 @@ func parseQueryWithVariables(str string) (string, varMap, error) {
 	vm := make(varMap)
 	err := json.Unmarshal([]byte(str), &q)
 	if err != nil {
-		return str, vm, nil // It does not obey GraphiQL format but valid
+		return str, vm, nil // It does not obey GraphiQL format but valid.
 	}
 
 	for k, v := range q.Variables {
@@ -151,7 +151,7 @@ func checkValidity(vm varMap) error {
 	for k, v := range vm {
 		typ := v.Type
 
-		// Ensure value is not nil if the variable is required
+		// Ensure value is not nil if the variable is required.
 		if typ[len(typ)-1] == '!' {
 			if v.Value == "" {
 				return fmt.Errorf("Variable %v should be initialised", k)
@@ -159,7 +159,7 @@ func checkValidity(vm varMap) error {
 			typ = typ[:len(typ)-1]
 		}
 
-		// Type check the values
+		// Type check the values.
 		if v.Value != "" {
 			switch typ {
 			case "int":
@@ -180,7 +180,7 @@ func checkValidity(vm varMap) error {
 						return fmt.Errorf("Expected a bool but got %v", v.Value)
 					}
 				}
-			case "string": // Value is a valid string. No checks required
+			case "string": // Value is a valid string. No checks required.
 			default:
 				return fmt.Errorf("Type %v not supported", typ)
 			}
@@ -192,7 +192,7 @@ func checkValidity(vm varMap) error {
 
 func substituteVariables(gq *GraphQuery, vmap varMap) error {
 	for k, v := range gq.Args {
-		// v won't be empty as its handled in parseVariables
+		// v won't be empty as its handled in parseVariables.
 		if v[0] == '$' {
 			va, ok := vmap[v]
 			if !ok {
@@ -290,7 +290,7 @@ L2:
 			}
 		case itemLeftRound:
 			if name == "" {
-				return nil, fmt.Errorf("Variables can be defiend only in named queries.")
+				return nil, fmt.Errorf("Variables can be defined only in named queries.")
 			}
 
 			if rerr = parseVariables(l, vmap); rerr != nil {
@@ -319,7 +319,7 @@ func getQuery(l *lex.Lexer) (gq *GraphQuery, rerr error) {
 		return nil, rerr
 	}
 
-	// Recurse to deeper levels through godeep
+	// Recurse to deeper levels through godeep.
 	item := <-l.Items
 	if item.Typ == itemLeftCurl {
 		if rerr = godeep(l, gq); rerr != nil {
@@ -368,7 +368,8 @@ func getFragment(l *lex.Lexer) (*fragmentNode, error) {
 	return fn, nil
 }
 
-// getMutation function parses and stores the set and delete operation in Mutation.
+// getMutation function parses and stores the set and delete
+// operation in Mutation.
 func getMutation(l *lex.Lexer) (mu *Mutation, rerr error) {
 	for item := range l.Items {
 		if item.Typ == itemText {
@@ -496,7 +497,7 @@ func parseArguments(l *lex.Lexer) (result []pair, rerr error) {
 	for {
 		var p pair
 
-		// Get key
+		// Get key.
 		item := <-l.Items
 		if item.Typ == itemArgName {
 			p.Key = item.Val
@@ -508,7 +509,7 @@ func parseArguments(l *lex.Lexer) (result []pair, rerr error) {
 			return result, fmt.Errorf("Expecting argument name. Got: %v", item)
 		}
 
-		// Get value
+		// Get value.
 		item = <-l.Items
 		if item.Typ != itemArgVal {
 			return result, fmt.Errorf("Expecting argument value. Got: %v", item)
