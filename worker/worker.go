@@ -22,7 +22,7 @@ import (
 	"log"
 	"net"
 
-	"context"
+	"golang.org/x/net/context"
 
 	"github.com/dgryski/go-farm"
 	"github.com/google/flatbuffers/go"
