@@ -1,9 +1,7 @@
-// Utilities with sorted uint64s / UIDs.
+// Package x includes some utilities with sorted UIDs.
 package x
 
-//	"fmt"
-//	"log"
-
+// IntersectSorted returns intersection of lists of sorted UIDs / uint64s.
 func IntersectSorted(a [][]uint64) []uint64 {
 	if len(a) == 0 {
 		return []uint64{}

@@ -22,7 +22,7 @@ import (
 	"log"
 )
 
-// EncodeKey serializes both UID and attribute into a []byte key.
+// Key serializes both UID and attribute into a []byte key.
 func Key(uid uint64, attr string) []byte {
 	buf := bytes.NewBufferString(attr)
 	buf.WriteRune('|')
