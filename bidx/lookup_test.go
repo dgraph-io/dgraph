@@ -2,6 +2,7 @@ package bidx
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -13,7 +14,6 @@ import (
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
-	"golang.org/x/net/context"
 )
 
 func arrayCompare(a []uint64, b []uint64) error {

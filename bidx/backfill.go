@@ -28,7 +28,7 @@ func (s *Index) backfill(ps *store.Store, done chan error) {
 		go s.shard[i].backfill(ps, s.done)
 	}
 
-	it := ps.GetIterator()
+	it := ps.NewIterator()
 	defer it.Close()
 	prefix := s.config.Attribute + "|"
 	for it.Seek([]byte(prefix)); it.Valid(); it.Next() {
