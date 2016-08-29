@@ -69,17 +69,20 @@ func runMutations(ctx context.Context, edges []x.DirectedEdge, op byte, left *Mu
 
 		key := posting.Key(edge.Entity, edge.Attribute)
 		plist := posting.GetOrCreate(key, dataStore)
+
+		// Update indices (frontfill).
+		if op == posting.Set && edge.Value != nil {
+			bidx.FrontfillAdd(edge.Attribute, edge.Entity, string(edge.Value))
+		} else if op == posting.Del {
+			bidx.FrontfillDel(edge.Attribute, edge.Entity)
+		}
+
+		// Try adding the mutation.
 		if err := plist.AddMutation(ctx, edge, op); err != nil {
 			if op == posting.Set {
 				left.Set = append(left.Set, edge)
-				if edge.Value != nil {
-					bidx.FrontfillAdd(edge.Attribute, edge.Entity, string(edge.Value))
-				}
 			} else if op == posting.Del {
 				left.Del = append(left.Del, edge)
-				if edge.Value != nil {
-					bidx.FrontfillDel(edge.Attribute, edge.Entity)
-				}
 			}
 			log.Printf("Error while adding mutation: %v %v", edge, err)
 			continue
