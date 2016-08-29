@@ -32,6 +32,7 @@ func Key(uid uint64, attr string) []byte {
 	return buf.Bytes()
 }
 
+// UID returns UID encoded as []byte.
 func UID(uid uint64) []byte {
 	out := make([]byte, 8)
 	binary.LittleEndian.PutUint64(out, uid)
@@ -66,6 +67,7 @@ func DecodeKeyPartial(b []byte) ([]byte, string) {
 	return uid, attr
 }
 
+// DecodeUID deserializes []byte into uint64.
 func DecodeUID(b []byte) uint64 {
 	return binary.LittleEndian.Uint64(b)
 }
