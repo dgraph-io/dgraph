@@ -519,8 +519,9 @@ func parseArguments(l *lex.Lexer) (result []pair, rerr error) {
 
 // getRoot gets the root graph query object after parsing the args.
 func getRoot(l *lex.Lexer) (gq *GraphQuery, rerr error) {
-	gq = new(GraphQuery)
-	gq.Args = make(map[string]string)
+	gq = &GraphQuery{
+		Args: make(map[string]string),
+	}
 	item := <-l.Items
 	if item.Typ != itemName {
 		return nil, fmt.Errorf("Expected some name. Got: %v", item)
