@@ -1,14 +1,7 @@
 package bidx
 
-// Frontfill updates the indices as mutations come in.
-//func (s *Indices) Frontfill() error {
-//	for _, index := range s.Index {
-//		go index.Backfill(ps, s.Done)
-//	}
-//	for i := 0; i < len(s.Index); i++ {
-//		if err := <-s.Done; err != nil {
-//			return err
-//		}
-//	}
-//	return nil
-//}
+// TODO
+// It is not clear how frontfill should be implemented.
+// Should it be hooked to commit logs? Or hooked to worker receiving mutations?
+// I would think it is better to connect to commit logs which runs every 1s and
+// we can batch indexing over one second.

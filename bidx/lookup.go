@@ -37,23 +37,23 @@ func (s *Indices) Lookup(li *LookupSpec) *LookupResult {
 			Err: x.Errorf("Indices is nil"),
 		}
 	}
-	index := s.Index[li.Attr]
+	index := s.index[li.Attr]
 	if index == nil {
 		return &LookupResult{
 			Err: x.Errorf("Attribute missing: %s", li.Attr),
 		}
 	}
-	return index.Lookup(li)
+	return index.lookup(li)
 }
 
-func (s *Index) Lookup(li *LookupSpec) *LookupResult {
+func (s *Index) lookup(li *LookupSpec) *LookupResult {
 	results := make(chan *LookupResult)
-	for _, ss := range s.Shard {
-		go ss.Lookup(li, results)
+	for _, ss := range s.shard {
+		go ss.lookup(li, results)
 	}
 
 	var lr []*LookupResult
-	for i := 0; i < len(s.Shard); i++ {
+	for i := 0; i < len(s.shard); i++ {
 		r := <-results
 		if r.Err != nil {
 			return r
@@ -64,7 +64,7 @@ func (s *Index) Lookup(li *LookupSpec) *LookupResult {
 	return mergeResults(lr)
 }
 
-func (s *IndexShard) Lookup(li *LookupSpec, results chan *LookupResult) {
+func (s *IndexShard) lookup(li *LookupSpec, results chan *LookupResult) {
 	var query bleve.Query
 	switch li.Category {
 	case LookupTerm:
@@ -81,7 +81,7 @@ func (s *IndexShard) Lookup(li *LookupSpec, results chan *LookupResult) {
 		log.Fatalf("Lookup category not handled: %d", li.Category)
 	}
 	search := bleve.NewSearchRequest(query)
-	searchResults, err := s.Bindex.Search(search)
+	searchResults, err := s.bindex.Search(search)
 	if err != nil {
 		results <- &LookupResult{Err: err}
 		return

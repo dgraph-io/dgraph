@@ -19,7 +19,10 @@ const (
 	jobOpDelete  = iota
 	jobOpReplace = iota
 
-	batchSize     = 10000
+	// We execute a batch when it exceeds this size.
+	batchSize = 10000
+
+	// For backfilling, we can store up to this many jobs / additions in channel.
 	jobBufferSize = 20000
 )
 
@@ -30,26 +33,26 @@ type indexJob struct {
 }
 
 type Indices struct {
-	Basedir string
-	Index   map[string]*Index
-	Config  *IndicesConfig
-	Done    chan error
+	basedir string
+	index   map[string]*Index
+	config  *IndicesConfig
+	done    chan error
 }
 
 type Index struct {
-	Filename string // Fingerprint of attribute.
-	Config   *IndexConfig
-	Shard    []*IndexShard
-	Done     chan error
+	filename string // Fingerprint of attribute.
+	config   *IndexConfig
+	shard    []*IndexShard
+	done     chan error
 }
 
 type IndexShard struct {
-	Shard    int // Which shard is this.
-	Bindex   bleve.Index
-	Batch    *bleve.Batch
-	JobQueue chan indexJob
-	Parser   valueParser
-	Config   *IndexConfig
+	shard    int // Which shard is this.
+	bindex   bleve.Index
+	batch    *bleve.Batch
+	jobQueue chan indexJob
+	parser   valueParser
+	config   *IndexConfig
 }
 
 func indexFilename(basedir, name string) string {
@@ -102,17 +105,17 @@ func NewIndices(basedir string) (*Indices, error) {
 		return nil, err
 	}
 	indices := &Indices{
-		Basedir: basedir,
-		Index:   make(map[string]*Index),
-		Config:  config,
-		Done:    make(chan error),
+		basedir: basedir,
+		index:   make(map[string]*Index),
+		config:  config,
+		done:    make(chan error),
 	}
 	for _, c := range config.Config {
 		index, err := newIndex(c, basedir)
 		if err != nil {
 			return nil, err
 		}
-		indices.Index[c.Attribute] = index
+		indices.index[c.Attribute] = index
 	}
 	log.Printf("Successfully loaded indices at [%s]\n", basedir)
 	return indices, nil
@@ -121,16 +124,16 @@ func NewIndices(basedir string) (*Indices, error) {
 func newIndex(c *IndexConfig, basedir string) (*Index, error) {
 	filename := indexFilename(basedir, c.Attribute)
 	index := &Index{
-		Filename: filename,
-		Config:   c,
-		Done:     make(chan error),
+		filename: filename,
+		config:   c,
+		done:     make(chan error),
 	}
 	for i := 0; i < c.NumShards; i++ {
 		shard, err := newIndexShard(c, filename, i)
 		if err != nil {
 			return nil, err
 		}
-		index.Shard = append(index.Shard, shard)
+		index.shard = append(index.shard, shard)
 	}
 	return index, nil
 }
@@ -142,12 +145,12 @@ func newIndexShard(c *IndexConfig, filename string, shard int) (*IndexShard, err
 		return nil, x.Wrap(err)
 	}
 	is := &IndexShard{
-		Shard:    shard,
-		Bindex:   bi,
-		Batch:    bi.NewBatch(),
-		JobQueue: make(chan indexJob, jobBufferSize),
-		Parser:   getParser(c.Type),
-		Config:   c,
+		shard:    shard,
+		bindex:   bi,
+		batch:    bi.NewBatch(),
+		jobQueue: make(chan indexJob, jobBufferSize),
+		parser:   getParser(c.Type),
+		config:   c,
 	}
 	return is, nil
 }

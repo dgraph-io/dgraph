@@ -1,4 +1,6 @@
-// TODO: Expand to multiserver. Use grpc.
+// TODO
+// This is supposed to send out RPC calls if server instance does not handle
+// given attribute / predicate.
 package bidx
 
 import (
