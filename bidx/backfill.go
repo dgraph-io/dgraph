@@ -12,7 +12,7 @@ import (
 // Backfill simply adds stuff from posting list into index.
 func (s *Indices) Backfill(ps *store.Store) error {
 	for _, index := range s.index {
-		go index.Backfill(ps, s.done)
+		go index.backfill(ps, s.done)
 	}
 	for i := 0; i < len(s.index); i++ {
 		if err := <-s.done; err != nil {
@@ -22,10 +22,10 @@ func (s *Indices) Backfill(ps *store.Store) error {
 	return nil
 }
 
-func (s *Index) Backfill(ps *store.Store, done chan error) {
+func (s *Index) backfill(ps *store.Store, done chan error) {
 	log.Printf("Backfilling attribute: %s\n", s.config.Attribute)
 	for i := 0; i < s.config.NumShards; i++ {
-		go s.shard[i].Backfill(ps, s.done)
+		go s.shard[i].backfill(ps, s.done)
 	}
 
 	it := ps.GetIterator()
@@ -81,7 +81,7 @@ func (s *IndexShard) doIndex(count uint64) uint64 {
 	return newCount
 }
 
-func (s *IndexShard) Backfill(ps *store.Store, done chan error) {
+func (s *IndexShard) backfill(ps *store.Store, done chan error) {
 	var count uint64
 	for job := range s.jobQueue {
 		if job.op == jobOpAdd {

@@ -64,7 +64,7 @@ func indexFilename(basedir, name string) string {
 // CreateIndices creates new empty dirs given config file and basedir.
 func CreateIndices(config *IndicesConfig, basedir string) error {
 	x.Check(os.MkdirAll(basedir, 0700))
-	config.Write(basedir) // Copy config to basedir.
+	config.write(basedir) // Copy config to basedir.
 	for _, c := range config.Config {
 		if err := createIndex(c, basedir); err != nil {
 			return err

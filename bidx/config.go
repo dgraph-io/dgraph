@@ -49,7 +49,7 @@ func NewIndicesConfig(reader io.Reader) (*IndicesConfig, error) {
 }
 
 func (is *IndicesConfig) validate() error {
-	// Add more checks here in the future.
+	// TODO(jchiu): Add more checks here in the future.
 	attrMap := make(map[string]bool)
 	for _, c := range is.Config {
 		// Check that there are no duplicates in attributes.
@@ -65,7 +65,7 @@ func (is *IndicesConfig) validate() error {
 	return nil
 }
 
-func (is *IndicesConfig) Write(basedir string) error {
+func (is *IndicesConfig) write(basedir string) error {
 	f, err := os.Create(getDefaultConfig(basedir))
 	if err != nil {
 		return x.Wrap(err)
