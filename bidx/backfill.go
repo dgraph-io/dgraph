@@ -6,6 +6,7 @@ import (
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/posting/types"
 	"github.com/dgraph-io/dgraph/store"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 // Backfill simply adds stuff from posting list into index.
@@ -42,10 +43,7 @@ func (s *Index) Backfill(ps *store.Store, done chan error) {
 		pl := types.GetRootAsPostingList(it.Value().Data(), 0)
 		var p types.Posting
 		for i := 0; i < pl.PostingsLength(); i++ {
-			if !pl.Postings(&p, i) {
-				log.Fatalf("Unable to get posting: %d %s", uid, attr)
-			}
-
+			x.Assertf(pl.Postings(&p, i), "Unable to get posting: %d %s", uid, attr)
 			if p.ValueLength() == 0 {
 				continue
 			}
@@ -70,6 +68,19 @@ func (s *Index) Backfill(ps *store.Store, done chan error) {
 	done <- nil
 }
 
+// Returns count incremented by batch size.
+func (s *IndexShard) doIndex(count uint64) uint64 {
+	if s.Batch.Size() == 0 {
+		return count
+	}
+	newCount := count + uint64(s.Batch.Size())
+	log.Printf("Attr[%s] shard %d batch[%d, %d]\n",
+		s.Config.Attribute, s.Shard, count, newCount)
+	s.Bindex.Batch(s.Batch)
+	s.Batch.Reset()
+	return newCount
+}
+
 func (s *IndexShard) Backfill(ps *store.Store, done chan error) {
 	var count uint64
 	for job := range s.JobQueue {
@@ -79,15 +90,9 @@ func (s *IndexShard) Backfill(ps *store.Store, done chan error) {
 			log.Fatalf("Unknown job operation for backfill: %d", job.op)
 		}
 		if s.Batch.Size() >= batchSize {
-			newCount := count + uint64(s.Batch.Size())
-			log.Printf("Attr[%s] shard %d batch[%d, %d]\n",
-				s.Config.Attribute, s.Shard, count, newCount)
-			s.Bindex.Batch(s.Batch)
-			s.Batch.Reset()
-			count = newCount
+			count = s.doIndex(count)
 		}
 	}
-	s.Bindex.Batch(s.Batch)
-	s.Batch.Reset()
+	s.doIndex(count)
 	done <- nil
 }

@@ -3,7 +3,6 @@ package bidx
 
 import (
 	"container/heap"
-	"fmt"
 	"log"
 
 	"github.com/blevesearch/bleve"
@@ -14,35 +13,40 @@ import (
 type LookupCategory int
 
 const (
-	lookupTerm        = iota
-	lookupMatch       = iota
-	lookupMatchPhrase = iota
-	lookupPrefix      = iota
+	LookupTerm        = iota
+	LookupMatch       = iota
+	LookupMatchPhrase = iota
+	LookupPrefix      = iota
 	// More to come. See http://www.blevesearch.com/docs/Query/
 )
 
-type LookupInfo struct {
-	attr     string
-	param    []string
-	category LookupCategory
+type LookupSpec struct {
+	Attr     string
+	Param    []string
+	Category LookupCategory
 }
 
 type LookupResult struct {
-	uid []uint64
-	err error
+	UID []uint64
+	Err error
 }
 
-func (s *Indices) Lookup(li *LookupInfo) *LookupResult {
-	index := s.Index[li.attr]
+func (s *Indices) Lookup(li *LookupSpec) *LookupResult {
+	if s == nil {
+		return &LookupResult{
+			Err: x.Errorf("Indices is nil"),
+		}
+	}
+	index := s.Index[li.Attr]
 	if index == nil {
 		return &LookupResult{
-			err: fmt.Errorf("Attribute missing: %s", li.attr),
+			Err: x.Errorf("Attribute missing: %s", li.Attr),
 		}
 	}
 	return index.Lookup(li)
 }
 
-func (s *Index) Lookup(li *LookupInfo) *LookupResult {
+func (s *Index) Lookup(li *LookupSpec) *LookupResult {
 	results := make(chan *LookupResult)
 	for _, ss := range s.Shard {
 		go ss.Lookup(li, results)
@@ -51,7 +55,7 @@ func (s *Index) Lookup(li *LookupInfo) *LookupResult {
 	var lr []*LookupResult
 	for i := 0; i < len(s.Shard); i++ {
 		r := <-results
-		if r.err != nil {
+		if r.Err != nil {
 			return r
 		}
 		lr = append(lr, r)
@@ -60,29 +64,29 @@ func (s *Index) Lookup(li *LookupInfo) *LookupResult {
 	return mergeResults(lr)
 }
 
-func (s *IndexShard) Lookup(li *LookupInfo, results chan *LookupResult) {
+func (s *IndexShard) Lookup(li *LookupSpec, results chan *LookupResult) {
 	var query bleve.Query
-	switch li.category {
-	case lookupTerm:
-		if len(li.param) != 1 {
-			log.Fatalf("LookupTerm: expected 1 param, got %d", len(li.param))
+	switch li.Category {
+	case LookupTerm:
+		if len(li.Param) != 1 {
+			log.Fatalf("LookupTerm: expected 1 param, got %d", len(li.Param))
 		}
-		query = bleve.NewTermQuery(li.param[0])
-	case lookupMatch:
-		if len(li.param) != 1 {
-			log.Fatalf("LookupTerm: expected 1 param, got %d", len(li.param))
+		query = bleve.NewTermQuery(li.Param[0])
+	case LookupMatch:
+		if len(li.Param) != 1 {
+			log.Fatalf("LookupTerm: expected 1 param, got %d", len(li.Param))
 		}
-		query = bleve.NewMatchQuery(li.param[0])
+		query = bleve.NewMatchQuery(li.Param[0])
 	default:
-		log.Fatalf("Lookup category not handled: %d", li.category)
+		log.Fatalf("Lookup category not handled: %d", li.Category)
 	}
 	search := bleve.NewSearchRequest(query)
 	searchResults, err := s.Bindex.Search(search)
 	if err != nil {
-		results <- &LookupResult{err: err}
+		results <- &LookupResult{Err: err}
 		return
 	}
-	results <- &LookupResult{uid: extractUIDs(searchResults)}
+	results <- &LookupResult{UID: extractUIDs(searchResults)}
 }
 
 func extractUIDs(r *bleve.SearchResult) []uint64 {
@@ -99,11 +103,11 @@ func mergeResults(lr []*LookupResult) *LookupResult {
 	heap.Init(h)
 
 	for i, r := range lr {
-		if len(r.uid) == 0 {
+		if len(r.UID) == 0 {
 			continue
 		}
 		e := x.Elem{
-			Uid: r.uid[0],
+			Uid: r.UID[0],
 			Idx: i,
 		}
 		heap.Push(h, e)
@@ -122,7 +126,7 @@ func mergeResults(lr []*LookupResult) *LookupResult {
 			sorted = append(sorted, me.Uid) // Add if unique.
 			last = me.Uid
 		}
-		uidList := lr[me.Idx].uid
+		uidList := lr[me.Idx].UID
 		if ptr[me.Idx] >= len(uidList)-1 {
 			heap.Pop(h)
 
@@ -133,5 +137,5 @@ func mergeResults(lr []*LookupResult) *LookupResult {
 			heap.Fix(h, 0) // Faster than Pop() followed by Push().
 		}
 	}
-	return &LookupResult{uid: sorted}
+	return &LookupResult{UID: sorted}
 }

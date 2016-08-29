@@ -7,6 +7,5 @@ Here are different ways of running it.
 * Assume `dgraph` runs all the time. Run `dgraphindex` only on a **snapshot** of the posting store. `dgraph` will keep a mutation log for a few days or so. Sequential access is fast, so no worries about efficiency. Once `dgraphindex` is done, ask `dgraph` to load in the indices. The indices contain timestamps and `dgraph` will automatically catch up with the indexing, using the mutation logs.
 
 
-./dgraphindex -postings /home/jchiu/dgraph/p \
--config /home/jchiu/dgraph/sample_index_config.json \
--indices /home/jchiu/dgraph/i
+dgraphindex -postings p -indices i \
+-config /home/jchiu/dgraph/sample_index_config.json

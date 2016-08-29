@@ -362,15 +362,8 @@ func main() {
 	if err != nil {
 		log.Fatalf("Error while creating the filepath for uids: %v", err)
 	}
-	err = os.MkdirAll(*indicesDir, 0700)
-	if err != nil {
-		log.Fatalf("Error while creating the filepath for indices: %v", err)
-	}
 
-	_, err = bidx.NewIndices(*indicesDir)
-	if err != nil {
-		log.Fatalf("Error initializing indices store: %s", err)
-	}
+	bidx.InitWorker(*indicesDir)
 
 	ps := new(store.Store)
 	if err := ps.Init(*postingDir); err != nil {

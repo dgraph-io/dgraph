@@ -4,6 +4,8 @@ import (
 	"log"
 	"strconv"
 	"strings"
+
+	"github.com/dgraph-io/dgraph/x"
 )
 
 type valueParser func(string) interface{}
@@ -26,17 +28,13 @@ func parseText(s string) interface{} {
 
 func parseInt(s string) interface{} {
 	v, err := strconv.Atoi(s)
-	if err != nil {
-		log.Fatal(err)
-	}
+	x.Check(err)
 	return v
 }
 
 func parseFloat(s string) interface{} {
 	v, err := strconv.ParseFloat(s, 64) // v is float64
-	if err != nil {
-		log.Fatal(err)
-	}
+	x.Check(err)
 	return v
 }
 
@@ -52,8 +50,6 @@ func parseDateTime(s string) interface{} {
 
 func getParser(s string) valueParser {
 	p, found := valueParserMap[s]
-	if !found {
-		log.Fatalf("No parser for type %s", s)
-	}
+	x.Assertf(found, "No parser for type %s", s)
 	return p
 }

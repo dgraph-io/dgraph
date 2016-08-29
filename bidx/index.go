@@ -1,13 +1,14 @@
 package bidx
 
 import (
-	"fmt"
+	"bufio"
 	"log"
 	"os"
 	"path"
 	"strconv"
 
 	"github.com/blevesearch/bleve"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgryski/go-farm"
 )
 
@@ -59,10 +60,7 @@ func indexFilename(basedir, name string) string {
 
 // CreateIndices creates new empty dirs given config file and basedir.
 func CreateIndices(config *IndicesConfig, basedir string) error {
-	if err := os.MkdirAll(basedir, 0700); err != nil {
-		log.Fatalf("Error while creating the filepath for indices: %s", err)
-	}
-
+	x.Check(os.MkdirAll(basedir, 0700))
 	config.Write(basedir) // Copy config to basedir.
 	for _, c := range config.Config {
 		if err := createIndex(c, basedir); err != nil {
@@ -87,7 +85,7 @@ func createIndexShard(c *IndexConfig, filename string, shard int) error {
 	filename = filename + "_" + strconv.Itoa(shard)
 	index, err := bleve.New(filename, indexMapping)
 	if err != nil {
-		return err
+		return x.Wrap(err)
 	}
 	index.Close()
 	return nil
@@ -95,9 +93,13 @@ func createIndexShard(c *IndexConfig, filename string, shard int) error {
 
 func NewIndices(basedir string) (*Indices, error) {
 	// Read default config at basedir.
-	config, err := NewIndicesConfig(getDefaultConfig(basedir))
+	configFilename := getDefaultConfig(basedir)
+	fin, err := os.Open(configFilename)
+	x.Check(err)
+	defer fin.Close()
+	config, err := NewIndicesConfig(bufio.NewReader(fin))
 	if err != nil {
-		return nil, fmt.Errorf("Error reading indices config json: %s", err)
+		return nil, err
 	}
 	indices := &Indices{
 		Basedir: basedir,
@@ -108,7 +110,7 @@ func NewIndices(basedir string) (*Indices, error) {
 	for _, c := range config.Config {
 		index, err := newIndex(c, basedir)
 		if err != nil {
-			return nil, fmt.Errorf("Index error %s: %s", c.Attribute, err)
+			return nil, err
 		}
 		indices.Index[c.Attribute] = index
 	}
@@ -137,9 +139,8 @@ func newIndexShard(c *IndexConfig, filename string, shard int) (*IndexShard, err
 	filename = filename + "_" + strconv.Itoa(shard)
 	bi, err := bleve.Open(filename)
 	if err != nil {
-		return nil, err
+		return nil, x.Wrap(err)
 	}
-
 	is := &IndexShard{
 		Shard:    shard,
 		Bindex:   bi,

@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"os"
 	"time"
 
 	"github.com/dgraph-io/dgraph/bidx"
@@ -14,44 +15,37 @@ import (
 )
 
 var (
-	indicesDir     = flag.String("indices", "i", "Directory to store indices.")
 	configFilename = flag.String("config", "", "Filename of JSON config file.")
 	postingDir     = flag.String("postings", "p", "Directory to store posting lists")
+	indicesDir     = flag.String("indices", "i", "Directory to store indices")
 )
 
 func main() {
 	log.SetFlags(log.Lshortfile | log.Flags())
 	flag.Parse()
-	if !flag.Parsed() {
-		log.Fatal("Unable to parse flags")
-	}
+	x.Assertf(flag.Parsed(), "Unable to parse flags")
+
 	if ok := x.PrintVersionOnly(); ok {
 		return
 	}
 
 	// Open posting store as read-only.
 	ps := new(store.Store)
-	if err := ps.InitReadOnly(*postingDir); err != nil {
-		log.Fatalf("Error initializing postings store: %s", err)
-	}
+	x.Check(ps.InitReadOnly(*postingDir))
 	defer ps.Close()
 
 	// Read in the config file.
-	config, err := bidx.NewIndicesConfig(*configFilename)
-	if err != nil {
-		log.Fatalf("Error opening JSON config: %s", err)
-	}
+	f, err := os.Open(*configFilename)
+	x.Check(err)
+	defer f.Close()
+	config, err := bidx.NewIndicesConfig(f)
+	x.Check(err)
 
 	// Try writing to index directory.
-	err = bidx.CreateIndices(config, *indicesDir)
-	if err != nil {
-		log.Fatal(err)
-	}
+	x.Check(bidx.CreateIndices(config, *indicesDir))
 
 	indices, err := bidx.NewIndices(*indicesDir)
-	if err != nil {
-		log.Fatalf("Failed to open indices: %s", err)
-	}
+	x.Check(err)
 
 	start := time.Now()
 	indices.Backfill(ps)
