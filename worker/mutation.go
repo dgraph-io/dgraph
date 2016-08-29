@@ -22,8 +22,9 @@ import (
 	"fmt"
 	"log"
 
+	"context"
+
 	"github.com/dgryski/go-farm"
-	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/x"
@@ -62,12 +63,12 @@ func (m *Mutations) Decode(data []byte) error {
 func runMutations(ctx context.Context, edges []x.DirectedEdge, op byte, left *Mutations) error {
 	for _, edge := range edges {
 		if farm.Fingerprint64(
-			[]byte(edge.Attribute))%numInstances != instanceIdx {
+			[]byte(edge.Attribute))%wo.numInstances != wo.instanceIdx {
 			return fmt.Errorf("Predicate fingerprint doesn't match this instance")
 		}
 
 		key := posting.Key(edge.Entity, edge.Attribute)
-		plist := posting.GetOrCreate(key, dataStore)
+		plist := posting.GetOrCreate(key, wo.dataStore)
 		if err := plist.AddMutation(ctx, edge, op); err != nil {
 			if op == posting.Set {
 				left.Set = append(left.Set, edge)
@@ -99,7 +100,7 @@ func runMutate(ctx context.Context, idx int, m *Mutations,
 	left := new(Mutations)
 	var err error
 	// We run them locally if idx == instanceIdx
-	if idx == int(instanceIdx) {
+	if idx == int(wo.instanceIdx) {
 		if err = mutate(ctx, m, left); err != nil {
 			che <- err
 			return
@@ -116,7 +117,7 @@ func runMutate(ctx context.Context, idx int, m *Mutations,
 	}
 
 	// Get a connection from the pool and run mutations over the network.
-	pool := pools[idx]
+	pool := wo.pools[idx]
 	query := new(Payload)
 	query.Data, err = m.Encode()
 	if err != nil {
@@ -145,7 +146,7 @@ func runMutate(ctx context.Context, idx int, m *Mutations,
 // taking into account the op(operation) and the attribute.
 func addToMutationArray(mutationArray []*Mutations, edges []x.DirectedEdge, op string) {
 	for _, edge := range edges {
-		idx := farm.Fingerprint64([]byte(edge.Attribute)) % numInstances
+		idx := farm.Fingerprint64([]byte(edge.Attribute)) % wo.numInstances
 		mu := mutationArray[idx]
 		if mu == nil {
 			mu = new(Mutations)
@@ -163,13 +164,13 @@ func addToMutationArray(mutationArray []*Mutations, edges []x.DirectedEdge, op s
 // MutateOverNetwork checks which instance should be running the mutations
 // according to fingerprint of the predicate and sends it to that instance.
 func MutateOverNetwork(ctx context.Context, m Mutations) (left Mutations, rerr error) {
-	mutationArray := make([]*Mutations, numInstances)
+	mutationArray := make([]*Mutations, wo.numInstances)
 
 	addToMutationArray(mutationArray, m.Set, set)
 	addToMutationArray(mutationArray, m.Del, del)
 
-	replies := make(chan *Payload, numInstances)
-	errors := make(chan error, numInstances)
+	replies := make(chan *Payload, wo.numInstances)
+	errors := make(chan error, wo.numInstances)
 	count := 0
 	for idx, mu := range mutationArray {
 		if mu == nil || (len(mu.Set) == 0 && len(mu.Del) == 0) {

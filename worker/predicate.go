@@ -32,7 +32,7 @@ const (
 
 // writeBatch performs a batch write of key value pairs to RocksDB.
 func writeBatch(ctx context.Context, kv chan *task.KV, che chan error) {
-	wb := dataStore.NewWriteBatch()
+	wb := wo.dataStore.NewWriteBatch()
 	batchSize := 0
 	batchWriteNum := 1
 	for i := range kv {
@@ -41,7 +41,7 @@ func writeBatch(ctx context.Context, kv chan *task.KV, che chan error) {
 		// We write in batches of size 32MB.
 		if batchSize >= 32*MB {
 			x.Trace(ctx, "Doing batch write %d.", batchWriteNum)
-			if err := dataStore.WriteBatch(wb); err != nil {
+			if err := wo.dataStore.WriteBatch(wb); err != nil {
 				che <- err
 				return
 			}
@@ -58,7 +58,7 @@ func writeBatch(ctx context.Context, kv chan *task.KV, che chan error) {
 	// write batch here.
 	if batchSize > 0 {
 		x.Trace(ctx, "Doing batch write %d.", batchWriteNum)
-		che <- dataStore.WriteBatch(wb)
+		che <- wo.dataStore.WriteBatch(wb)
 		return
 	}
 	che <- nil
@@ -69,7 +69,7 @@ func writeBatch(ctx context.Context, kv chan *task.KV, che chan error) {
 func PopulateShard(ctx context.Context, pred string, serverId int) error {
 	var err error
 
-	pool := pools[serverId]
+	pool := wo.pools[serverId]
 	query := new(Payload)
 	query.Data = []byte(pred)
 	if err != nil {

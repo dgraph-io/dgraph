@@ -57,6 +57,8 @@ var (
 		"serves only entities whose Fingerprint % numInstance == instanceIdx.")
 	workers = flag.String("workers", "",
 		"Comma separated list of IP addresses of workers")
+	workerPort = flag.String("workerport", ":12345",
+		"Port used by worker for internal communication.")
 	nomutations = flag.Bool("nomutations", false, "Don't allow mutations on this server.")
 	tracing     = flag.Float64("trace", 0.5, "The ratio of queries to trace.")
 )
@@ -380,8 +382,9 @@ func main() {
 	}
 
 	posting.Init(clog)
+	var w *worker.Worker
 	if *instanceIdx != 0 {
-		worker.Init(ps, nil, *instanceIdx, lenAddr)
+		w = worker.New(ps, nil, *instanceIdx, lenAddr)
 		uid.Init(nil)
 		go posting.CheckMemoryUsage(ps, nil)
 	} else {
@@ -389,12 +392,12 @@ func main() {
 		uidStore.Init(*uidDir)
 		defer uidStore.Close()
 		// Only server instance 0 will have uidStore
-		worker.Init(ps, uidStore, *instanceIdx, lenAddr)
+		w = worker.New(ps, uidStore, *instanceIdx, lenAddr)
 		uid.Init(uidStore)
 		go posting.CheckMemoryUsage(ps, uidStore)
 	}
 
-	worker.Connect(addrs)
+	w.Connect(addrs, *workerPort)
 	// Grpc server runs on (port + 1)
 	go runGrpcServer(fmt.Sprintf(":%d", *port+1))
 

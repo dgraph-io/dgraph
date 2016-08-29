@@ -60,8 +60,6 @@ func check(r *task.Result, idx int, expected []uint64) error {
 }
 
 func TestProcessTask(t *testing.T) {
-	// logrus.SetLevel(logrus.DebugLevel)
-
 	dir, err := ioutil.TempDir("", "storetest_")
 	if err != nil {
 		t.Error(err)
@@ -77,7 +75,7 @@ func TestProcessTask(t *testing.T) {
 	defer clog.Close()
 
 	posting.Init(clog)
-	Init(ps, nil, 0, 1)
+	New(ps, nil, 0, 1)
 
 	edge := x.DirectedEdge{
 		ValueId:   23,

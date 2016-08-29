@@ -21,8 +21,9 @@ import (
 	"log"
 	"sync"
 
+	"context"
+
 	"github.com/google/flatbuffers/go"
-	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/uid"
@@ -112,7 +113,7 @@ func GetOrAssignUidsOverNetwork(ctx context.Context, xidToUid map[string]uint64)
 	// If instance number 0 called this and then it already has posting list for
 	// xid <-> uid conversion, hence call getOrAssignUids locally else call
 	// GetOrAssign using worker client.
-	if instanceIdx == 0 {
+	if wo.instanceIdx == 0 {
 		reply.Data, rerr = getOrAssignUids(ctx, xidList)
 		if rerr != nil {
 			return rerr
@@ -120,7 +121,7 @@ func GetOrAssignUidsOverNetwork(ctx context.Context, xidToUid map[string]uint64)
 
 	} else {
 		// Get pool for worker on instance 0.
-		pool := pools[0]
+		pool := wo.pools[0]
 		conn, err := pool.Get()
 		if err != nil {
 			x.Trace(ctx, "Error while retrieving connection: %v", err)

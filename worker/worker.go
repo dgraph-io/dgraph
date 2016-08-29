@@ -19,7 +19,6 @@
 package worker
 
 import (
-	"flag"
 	"log"
 	"net"
 
@@ -33,22 +32,29 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-var workerPort = flag.String("workerport", ":12345",
-	"Port used by worker for internal communication.")
+// Worker stores information about the client workers.
+type Worker struct {
+	dataStore    *store.Store
+	uidStore     *store.Store
+	instanceIdx  uint64
+	numInstances uint64
+	// pools stores the pool for all the instances which is then used to send queries
+	// and mutations to the appropriate instance.
+	pools []*Pool
+}
 
-var dataStore, uidStore *store.Store
+// wo is a pointer to the Worker object.
+var wo *Worker
 
-// pools stores the pool for all the instances which is then used to send queries
-// and mutations to the appropriate instance.
-var pools []*Pool
-var numInstances, instanceIdx uint64
-
-// Init initializes a worker on an instance with a data and a uid store.
-func Init(ps, uStore *store.Store, idx, numInst uint64) {
-	dataStore = ps
-	uidStore = uStore
-	instanceIdx = idx
-	numInstances = numInst
+// New initializes a worker on an instance with a data and a uid store.
+func New(ps, uStore *store.Store, idx, numInst uint64) *Worker {
+	wo = &Worker{
+		dataStore:    ps,
+		uidStore:     uStore,
+		instanceIdx:  idx,
+		numInstances: numInst,
+	}
+	return wo
 }
 
 // NewQuery creates a Query flatbuffer table, serializes and returns it.
@@ -90,8 +96,8 @@ func (w *worker) GetOrAssign(ctx context.Context, query *Payload) (*Payload, err
 	xids := new(task.XidList)
 	xids.Init(query.Data, uo)
 
-	if instanceIdx != 0 {
-		log.Fatalf("instanceIdx: %v. GetOrAssign. We shouldn't be getting this req", instanceIdx)
+	if wo.instanceIdx != 0 {
+		log.Fatalf("instanceIdx: %v. GetOrAssign. We shouldn't be getting this req", wo.instanceIdx)
 	}
 
 	reply := new(Payload)
@@ -125,19 +131,19 @@ func (w *worker) ServeTask(ctx context.Context, query *Payload) (*Payload, error
 	q.Init(query.Data, uo)
 	attr := string(q.Attr())
 	x.Trace(ctx, "Attribute: %v NumUids: %v InstanceIdx: %v ServeTask",
-		attr, q.UidsLength(), instanceIdx)
+		attr, q.UidsLength(), wo.instanceIdx)
 
 	reply := new(Payload)
 	var rerr error
 	// Request for xid <-> uid conversion should be handled by instance 0 and all
 	// other requests should be handled according to modulo sharding of the predicate.
-	if (instanceIdx == 0 && attr == _xid_) ||
-		farm.Fingerprint64([]byte(attr))%numInstances == instanceIdx {
+	if (wo.instanceIdx == 0 && attr == _xid_) ||
+		farm.Fingerprint64([]byte(attr))%wo.numInstances == wo.instanceIdx {
 
 		reply.Data, rerr = processTask(query.Data)
 
 	} else {
-		log.Fatalf("attr: %v instanceIdx: %v Request sent to wrong server.", attr, instanceIdx)
+		log.Fatalf("attr: %v instanceIdx: %v Request sent to wrong server.", attr, wo.instanceIdx)
 	}
 	return reply, rerr
 }
@@ -150,7 +156,7 @@ func (w *worker) PredicateData(query *Payload, stream Worker_PredicateDataServer
 	// TODO(pawan) - Shift to CheckPoints once we figure out how to add them to the
 	// RocksDB library we are using.
 	// http://rocksdb.org/blog/2609/use-checkpoints-for-efficient-snapshots/
-	it := dataStore.NewIterator()
+	it := wo.dataStore.NewIterator()
 	defer it.Close()
 
 	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
@@ -195,8 +201,8 @@ func runServer(port string) {
 
 // Connect establishes a connection with other workers and sends the Hello rpc
 // call to them.
-func Connect(workerList []string) {
-	go runServer(*workerPort)
+func (w *Worker) Connect(workerList []string, workerPort string) {
+	go runServer(workerPort)
 
 	for _, addr := range workerList {
 		if len(addr) == 0 {
@@ -219,7 +225,7 @@ func Connect(workerList []string) {
 		}
 		_ = pool.Put(conn)
 
-		pools = append(pools, pool)
+		w.pools = append(w.pools, pool)
 	}
 
 	log.Print("Server started. Clients connected.")

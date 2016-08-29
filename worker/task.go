@@ -17,9 +17,10 @@
 package worker
 
 import (
+	"context"
+
 	"github.com/dgryski/go-farm"
 	"github.com/google/flatbuffers/go"
-	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/task"
@@ -40,18 +41,18 @@ func ProcessTaskOverNetwork(ctx context.Context, qu []byte) (result []byte, rerr
 	q.Init(qu, uo)
 
 	attr := string(q.Attr())
-	idx := farm.Fingerprint64([]byte(attr)) % numInstances
+	idx := farm.Fingerprint64([]byte(attr)) % wo.numInstances
 
 	var runHere bool
 	// Posting list with xid -> uid and uid -> xid mapping is stored on instance 0.
 	if attr == _xid_ || attr == _uid_ {
 		idx = 0
-		runHere = (instanceIdx == 0)
+		runHere = (wo.instanceIdx == 0)
 	} else {
-		runHere = (instanceIdx == idx)
+		runHere = (wo.instanceIdx == idx)
 	}
 	x.Trace(ctx, "runHere: %v attr: %v instanceIdx: %v numInstances: %v",
-		runHere, attr, instanceIdx, numInstances)
+		runHere, attr, wo.instanceIdx, wo.numInstances)
 
 	if runHere {
 		// No need for a network call, as this should be run from within
@@ -60,7 +61,7 @@ func ProcessTaskOverNetwork(ctx context.Context, qu []byte) (result []byte, rerr
 	}
 
 	// Using a worker client for the instance idx, we get the result of the query.
-	pool := pools[idx]
+	pool := wo.pools[idx]
 	addr := pool.Addr
 	query := new(Payload)
 	query.Data = qu
@@ -89,9 +90,9 @@ func processTask(query []byte) (result []byte, rerr error) {
 	q.Init(query, uo)
 
 	attr := string(q.Attr())
-	store := dataStore
+	store := wo.dataStore
 	if attr == _xid_ {
-		store = uidStore
+		store = wo.uidStore
 	}
 
 	b := flatbuffers.NewBuilder(0)
