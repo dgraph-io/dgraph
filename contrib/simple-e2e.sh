@@ -103,5 +103,4 @@ GREEN='\033[0;32m'
 NC='\033[0m'
 printf "${GREEN}Query results matched expected values${NC}\n" 
 
-killall dgraph
 popd &> /dev/null
