@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package bidx
+package index
 
 import (
 	"bufio"
