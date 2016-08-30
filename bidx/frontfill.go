@@ -32,32 +32,32 @@ type mutation struct {
 
 // FrontfillAdd inserts with overwrite (replace) key, value into our indices.
 func FrontfillAdd(ctx context.Context, attr string, uid uint64, val string) {
-	if err := globalIndices.Frontfill(ctx, newFrontfillAdd(attr, uid, val)); err != nil {
+	if err := globalIndices.FrontfillAdd(ctx, attr, uid, val); err != nil {
 		x.TraceError(ctx, err)
 	}
 }
 
 // FrontfillDel deletes a key, value from our indices.
 func FrontfillDel(ctx context.Context, attr string, uid uint64) {
-	if err := globalIndices.Frontfill(ctx, newFrontfillDel(attr, uid)); err != nil {
+	if err := globalIndices.FrontfillDel(ctx, attr, uid); err != nil {
 		x.TraceError(ctx, err)
 	}
 }
 
-func newFrontfillAdd(attr string, uid uint64, val string) *mutation {
-	return &mutation{
+func (s *Indices) FrontfillAdd(ctx context.Context, attr string, uid uint64, val string) error {
+	return s.Frontfill(ctx, &mutation{
 		Attr:  attr,
 		UID:   uid,
 		Value: val,
-	}
+	})
 }
 
-func newFrontfillDel(attr string, uid uint64) *mutation {
-	return &mutation{
+func (s *Indices) FrontfillDel(ctx context.Context, attr string, uid uint64) error {
+	return s.Frontfill(ctx, &mutation{
 		Delete: true,
 		Attr:   attr,
 		UID:    uid,
-	}
+	})
 }
 
 // Frontfill updates indices given mutation.
