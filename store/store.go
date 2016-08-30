@@ -17,7 +17,6 @@
 package store
 
 import (
-	"flag"
 	"fmt"
 	"strconv"
 
@@ -26,15 +25,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-var (
-	log = x.Log("store")
-
-	// It is not advisable to put flags not in mains, but in this case, it reduces
-	// quite a bit of typing and it should be clear (and remain clear) that all
-	// RocksDB flags are found here and here only.
-	enableBlockCache = flag.Bool("enableBlockCache", false, "use block cache for RocksDB")
-	blockCacheSize   = flag.Int("blockCacheSize", 8<<20, "block cache size for RocksDB")
-)
+var log = x.Log("store")
 
 // Store contains some handles to RocksDB.
 type Store struct {
@@ -45,34 +36,9 @@ type Store struct {
 	wopt     *rocksdb.WriteOptions
 }
 
-// Options is a set of options to configure RocksDB usage in Dgraph only.
-type Options struct {
-	EnableBlockCache bool
-	BlockCacheSize   int // In bytes. A good number is 8 << 20 or 8M.
-}
-
-// NewDefaultOptions creates default options for RocksDB in Dgraph.
-func NewDefaultOptions() *Options {
-	return &Options{
-		EnableBlockCache: *enableBlockCache,
-		BlockCacheSize:   *blockCacheSize,
-	}
-}
-
-func (s *Store) setOpts(opt *Options) {
+func (s *Store) setOpts() {
 	s.opt = rocksdb.NewDefaultOptions()
-
-	// Initialize BlockBasedTableOptions.
 	s.blockopt = rocksdb.NewDefaultBlockBasedTableOptions()
-	if opt.EnableBlockCache {
-		// This gives us handles to the cache so that we can query its usage.
-		s.blockopt.SetBlockCache(rocksdb.NewLRUCache(opt.BlockCacheSize))
-		s.blockopt.SetBlockCacheCompressed(rocksdb.NewLRUCache(opt.BlockCacheSize))
-		s.blockopt.SetNoBlockCache(false)
-	} else {
-		s.blockopt.SetNoBlockCache(true)
-	}
-	// It is crucial to link s.blockopt to s.opt.
 	s.opt.SetBlockBasedTableFactory(s.blockopt)
 
 	s.opt.SetCreateIfMissing(true)
@@ -84,15 +50,10 @@ func (s *Store) setOpts(opt *Options) {
 	s.wopt.SetSync(false) // We don't need to do synchronous writes.
 }
 
-func newStore(opt *Options) *Store {
-	s := &Store{}
-	s.setOpts(opt)
-	return s
-}
-
 // NewStore constructs a Store object at filepath, given some options.
-func NewStore(filepath string, opt *Options) (*Store, error) {
-	s := newStore(opt)
+func NewStore(filepath string) (*Store, error) {
+	s := &Store{}
+	s.setOpts()
 	var err error
 	s.db, err = rocksdb.OpenDb(s.opt, filepath)
 	if err != nil {
@@ -102,8 +63,9 @@ func NewStore(filepath string, opt *Options) (*Store, error) {
 }
 
 // NewReadOnlyStore constructs a readonly Store object at filepath, given options.
-func NewReadOnlyStore(filepath string, opt *Options) (*Store, error) {
-	s := newStore(opt)
+func NewReadOnlyStore(filepath string) (*Store, error) {
+	s := &Store{}
+	s.setOpts()
 	var err error
 	s.db, err = rocksdb.OpenDbForReadOnly(s.opt, filepath, false)
 	if err != nil {

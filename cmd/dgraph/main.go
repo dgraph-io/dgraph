@@ -361,7 +361,7 @@ func main() {
 		log.Fatalf("Error while creating the filepath for uids: %v", err)
 	}
 
-	ps, err := store.NewStore(*postingDir, store.NewDefaultOptions())
+	ps, err := store.NewStore(*postingDir)
 	if err != nil {
 		log.Fatalf("error initializing postings store: %v", err)
 	}
@@ -385,7 +385,7 @@ func main() {
 		uid.Init(nil)
 		go posting.CheckMemoryUsage(ps, nil)
 	} else {
-		uidStore, err := store.NewStore(*uidDir, store.NewDefaultOptions())
+		uidStore, err := store.NewStore(*uidDir)
 		if err != nil {
 			log.Fatalf("error initializing uid store: %s", err)
 		}

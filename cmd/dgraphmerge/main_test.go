@@ -46,13 +46,13 @@ func TestMergeFolders(t *testing.T) {
 	}
 	defer os.RemoveAll(destDir)
 
-	ps1, err := store.NewStore(dir1, store.NewDefaultOptions())
+	ps1, err := store.NewStore(dir1)
 	if err != nil {
 		t.Error(err)
 		return
 	}
 
-	ps2, err := store.NewStore(dir2, store.NewDefaultOptions())
+	ps2, err := store.NewStore(dir2)
 	if err != nil {
 		t.Error(err)
 		return

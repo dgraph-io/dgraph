@@ -28,13 +28,13 @@ func TestQuery(t *testing.T) {
 	defer os.RemoveAll(dir)
 	defer os.RemoveAll(dir1)
 
-	ps, err := store.NewStore(dir, store.NewDefaultOptions())
+	ps, err := store.NewStore(dir)
 	if err != nil {
 		t.Error(err)
 		t.Fail()
 	}
 
-	ps1, err := store.NewStore(dir1, store.NewDefaultOptions())
+	ps1, err := store.NewStore(dir1)
 	if err != nil {
 		t.Error(err)
 		t.Fail()
@@ -112,7 +112,7 @@ func BenchmarkLoadRW(b *testing.B) {
 	logrus.SetLevel(logrus.ErrorLevel)
 	var nameL []string
 
-	uidStore, err := store.NewStore(*uiddir, store.NewDefaultOptions())
+	uidStore, err := store.NewStore(*uiddir)
 	if err != nil {
 		b.Errorf("Error creating uidStore: %v", err)
 		return
@@ -146,7 +146,7 @@ func BenchmarkLoadReadOnly(b *testing.B) {
 	logrus.SetLevel(logrus.ErrorLevel)
 	var nameL []string
 
-	uidStore, err := store.NewReadOnlyStore(*uiddir, store.NewDefaultOptions())
+	uidStore, err := store.NewReadOnlyStore(*uiddir)
 	if err != nil {
 		b.Errorf("Error creating uidStore: %v", err)
 		return

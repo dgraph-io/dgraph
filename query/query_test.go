@@ -100,7 +100,7 @@ func TestNewGraph(t *testing.T) {
 		UID:  101,
 		Attr: "me",
 	}
-	ps, err := store.NewStore(dir, store.NewDefaultOptions())
+	ps, err := store.NewStore(dir)
 	if err != nil {
 		t.Error(err)
 		return
@@ -139,7 +139,7 @@ func populateGraph(t *testing.T) (string, *store.Store) {
 		return "", nil
 	}
 
-	ps, err := store.NewStore(dir, store.NewDefaultOptions())
+	ps, err := store.NewStore(dir)
 	if err != nil {
 		t.Error(err)
 		return "", nil

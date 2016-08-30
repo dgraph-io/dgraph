@@ -29,7 +29,7 @@ func TestQuery(t *testing.T) {
 	}
 	defer os.RemoveAll(dir)
 
-	ps, err := store.NewStore(dir, store.NewDefaultOptions())
+	ps, err := store.NewStore(dir)
 	if err != nil {
 		t.Error(err)
 		return

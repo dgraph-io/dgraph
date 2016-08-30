@@ -117,7 +117,7 @@ func TestAddMutation(t *testing.T) {
 	}
 
 	defer os.RemoveAll(dir)
-	ps, err := store.NewStore(dir, store.NewDefaultOptions())
+	ps, err := store.NewStore(dir)
 	if err != nil {
 		t.Error(err)
 		return
@@ -257,7 +257,7 @@ func TestAddMutation_Value(t *testing.T) {
 	}
 
 	defer os.RemoveAll(dir)
-	ps, err := store.NewStore(dir, store.NewDefaultOptions())
+	ps, err := store.NewStore(dir)
 	if err != nil {
 		t.Error(err)
 		return
@@ -333,7 +333,7 @@ func benchmarkAddMutations(n int, b *testing.B) {
 	}
 
 	defer os.RemoveAll(dir)
-	ps, err := store.NewStore(dir, store.NewDefaultOptions())
+	ps, err := store.NewStore(dir)
 	if err != nil {
 		b.Error(err)
 		return

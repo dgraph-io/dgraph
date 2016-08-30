@@ -65,7 +65,7 @@ func main() {
 		glog.Fatal("No RDF GZIP files specified")
 	}
 
-	ps, err := store.NewStore(*uidDir, store.NewDefaultOptions())
+	ps, err := store.NewStore(*uidDir)
 	if err != nil {
 		glog.Fatalf("Fail to initialize ps: %v", err)
 	}

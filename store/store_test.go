@@ -33,7 +33,7 @@ func TestGet(t *testing.T) {
 	}
 	defer os.RemoveAll(path)
 
-	s, err := NewStore(path, NewDefaultOptions())
+	s, err := NewStore(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -72,7 +72,7 @@ func benchmarkGet(valSize int, b *testing.B) {
 	}
 	defer os.RemoveAll(path)
 
-	s, err := NewStore(path, NewDefaultOptions())
+	s, err := NewStore(path)
 	if err != nil {
 		b.Error(err)
 		b.Fail()
@@ -117,7 +117,7 @@ func benchmarkSet(valSize int, b *testing.B) {
 	}
 	defer os.RemoveAll(path)
 
-	s, err := NewStore(path, NewDefaultOptions())
+	s, err := NewStore(path)
 	if err != nil {
 		b.Error(err)
 		b.Fail()

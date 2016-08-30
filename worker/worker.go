@@ -54,6 +54,7 @@ func Init(ps, uStore *store.Store, idx, numInst uint64) {
 // NewQuery creates a Query flatbuffer table, serializes and returns it.
 func NewQuery(attr string, uids []uint64) []byte {
 	b := flatbuffers.NewBuilder(0)
+
 	task.QueryStartUidsVector(b, len(uids))
 	for i := len(uids) - 1; i >= 0; i-- {
 		b.PrependUint64(uids[i])

@@ -53,7 +53,7 @@ func TestGetPredicateList(t *testing.T) {
 		return
 	}
 	defer os.RemoveAll(dir1)
-	ps1, err := store.NewStore(dir1, store.NewDefaultOptions())
+	ps1, err := store.NewStore(dir1)
 	if err != nil {
 		t.Error(err)
 		return
