@@ -133,11 +133,11 @@ type query struct {
 
 type queryAlt struct {
 	Variables string `json:"variables"`
-	Query     string
+	Query     string `json:"query"`
 }
 
 /*
-The query could be of the forms :
+The query could be of the following forms :
 
 # Normal query
 	`query test($a: int) { me(_xid_: alice-in-wonderland) {author(first:$a){name}}}`
