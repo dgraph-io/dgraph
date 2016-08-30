@@ -31,8 +31,8 @@ const (
 )
 
 // writeBatch performs a batch write of key value pairs to RocksDB.
-func (w *Worker) writeBatch(ctx context.Context, kv chan *task.KV, che chan error) {
-	wb := w.dataStore.NewWriteBatch()
+func (ws *state) writeBatch(ctx context.Context, kv chan *task.KV, che chan error) {
+	wb := ws.dataStore.NewWriteBatch()
 	batchSize := 0
 	batchWriteNum := 1
 	for i := range kv {
@@ -41,7 +41,7 @@ func (w *Worker) writeBatch(ctx context.Context, kv chan *task.KV, che chan erro
 		// We write in batches of size 32MB.
 		if batchSize >= 32*MB {
 			x.Trace(ctx, "Doing batch write %d.", batchWriteNum)
-			if err := w.dataStore.WriteBatch(wb); err != nil {
+			if err := ws.dataStore.WriteBatch(wb); err != nil {
 				che <- err
 				return
 			}
@@ -58,7 +58,7 @@ func (w *Worker) writeBatch(ctx context.Context, kv chan *task.KV, che chan erro
 	// write batch here.
 	if batchSize > 0 {
 		x.Trace(ctx, "Doing batch write %d.", batchWriteNum)
-		che <- w.dataStore.WriteBatch(wb)
+		che <- ws.dataStore.WriteBatch(wb)
 		return
 	}
 	che <- nil
@@ -66,10 +66,11 @@ func (w *Worker) writeBatch(ctx context.Context, kv chan *task.KV, che chan erro
 
 // PopulateShard gets data for predicate pred from server with id serverId and
 // writes it to RocksDB.
-func (w *Worker) PopulateShard(ctx context.Context, pred string, serverId int) error {
+func (ws *state) PopulateShard(ctx context.Context, pred string,
+	serverId int) error {
 	var err error
 
-	pool := w.pools[serverId]
+	pool := ws.pools[serverId]
 	query := new(Payload)
 	query.Data = []byte(pred)
 	if err != nil {
@@ -91,7 +92,7 @@ func (w *Worker) PopulateShard(ctx context.Context, pred string, serverId int) e
 
 	kvs := make(chan *task.KV, 1000)
 	che := make(chan error)
-	go w.writeBatch(ctx, kvs, che)
+	go ws.writeBatch(ctx, kvs, che)
 
 	for {
 		payload, err := stream.Recv()

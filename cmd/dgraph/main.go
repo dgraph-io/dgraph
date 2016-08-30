@@ -383,9 +383,8 @@ func main() {
 	}
 
 	posting.Init(clog)
-	var w *worker.Worker
 	if *instanceIdx != 0 {
-		w = worker.New(ps, nil, *instanceIdx, lenAddr)
+		worker.New(ps, nil, *instanceIdx, lenAddr)
 		uid.Init(nil)
 		go posting.CheckMemoryUsage(ps, nil)
 	} else {
@@ -393,12 +392,12 @@ func main() {
 		uidStore.Init(*uidDir)
 		defer uidStore.Close()
 		// Only server instance 0 will have uidStore
-		w = worker.New(ps, uidStore, *instanceIdx, lenAddr)
+		worker.New(ps, uidStore, *instanceIdx, lenAddr)
 		uid.Init(uidStore)
 		go posting.CheckMemoryUsage(ps, uidStore)
 	}
 
-	w.Connect(addrs, *workerPort)
+	worker.Connect(addrs, *workerPort)
 	// Grpc server runs on (port + 1)
 	go runGrpcServer(fmt.Sprintf(":%d", *port+1))
 

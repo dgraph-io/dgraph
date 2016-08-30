@@ -41,18 +41,18 @@ func ProcessTaskOverNetwork(ctx context.Context, qu []byte) (result []byte, rerr
 	q.Init(qu, uo)
 
 	attr := string(q.Attr())
-	idx := farm.Fingerprint64([]byte(attr)) % wo.numInstances
+	idx := farm.Fingerprint64([]byte(attr)) % ws.numInstances
 
 	var runHere bool
 	// Posting list with xid -> uid and uid -> xid mapping is stored on instance 0.
 	if attr == _xid_ || attr == _uid_ {
 		idx = 0
-		runHere = (wo.instanceIdx == 0)
+		runHere = (ws.instanceIdx == 0)
 	} else {
-		runHere = (wo.instanceIdx == idx)
+		runHere = (ws.instanceIdx == idx)
 	}
 	x.Trace(ctx, "runHere: %v attr: %v instanceIdx: %v numInstances: %v",
-		runHere, attr, wo.instanceIdx, wo.numInstances)
+		runHere, attr, ws.instanceIdx, ws.numInstances)
 
 	if runHere {
 		// No need for a network call, as this should be run from within
@@ -61,7 +61,7 @@ func ProcessTaskOverNetwork(ctx context.Context, qu []byte) (result []byte, rerr
 	}
 
 	// Using a worker client for the instance idx, we get the result of the query.
-	pool := wo.pools[idx]
+	pool := ws.pools[idx]
 	addr := pool.Addr
 	query := new(Payload)
 	query.Data = qu
@@ -90,9 +90,9 @@ func processTask(query []byte) (result []byte, rerr error) {
 	q.Init(query, uo)
 
 	attr := string(q.Attr())
-	store := wo.dataStore
+	store := ws.dataStore
 	if attr == _xid_ {
-		store = wo.uidStore
+		store = ws.uidStore
 	}
 
 	b := flatbuffers.NewBuilder(0)

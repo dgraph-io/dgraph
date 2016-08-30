@@ -67,7 +67,7 @@ func TestPopulateShard(t *testing.T) {
 	}
 
 	w := New(ps, nil, 0, 2)
-	go w.Connect(addrs, ":12345")
+	go Connect(addrs, ":12345")
 
 	dir1, err := ioutil.TempDir("", "store1")
 	if err != nil {
@@ -80,13 +80,13 @@ func TestPopulateShard(t *testing.T) {
 	defer ps1.Close()
 
 	w1 := New(ps1, nil, 1, 2)
-	go w1.Connect(addrs, ":12346")
+	go Connect(addrs, ":12346")
 
 	// Wait for workers to be initialized and connected.
 	time.Sleep(5 * time.Second)
 
 	// Since PredicateData reads from the global variable wo, we change it to w.
-	wo = w
+	ws = w
 	if err := w1.PopulateShard(context.Background(), "test", 0); err != nil {
 		t.Fatal(err)
 	}
