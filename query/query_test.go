@@ -241,53 +241,6 @@ func processToJSON(t *testing.T, query string) map[string]interface{} {
 	return mp
 }
 
-func TestToJSONFilter(t *testing.T) {
-	dir, _ := populateGraph(t)
-	defer os.RemoveAll(dir)
-
-	// Alright. Now we have everything set up. Let's create the query.
-	query := `
-		{
-			me(_uid_:0x01) {
-				name
-				gender
-				status
-				friend(name: Andrea) {
-					name
-				}
-			}
-		}
-	`
-
-	gq, _, err := gql.Parse(query)
-	if err != nil {
-		t.Error(err)
-	}
-	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, gq)
-	if err != nil {
-		t.Error(err)
-	}
-
-	ch := make(chan error)
-	go ProcessGraph(ctx, sg, ch)
-	err = <-ch
-	if err != nil {
-		t.Error(err)
-	}
-
-	var l Latency
-	js, err := sg.ToJSON(&l)
-	if err != nil {
-		t.Error(err)
-	}
-
-	s := string(js)
-	if s != `{"me":{"friend":{"name":"Andrea"},"gender":"female","name":"Michonne","status":"alive"}}` {
-		t.Errorf("Wrong output: %s", s)
-	}
-}
-
 func TestGetUID(t *testing.T) {
 	dir, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
@@ -588,6 +541,53 @@ func TestToJSON(t *testing.T) {
 	s := string(js)
 	if !strings.Contains(s, "Michonne") {
 		t.Errorf("Unable to find Michonne in this result: %v", s)
+	}
+}
+
+func TestToJSONFilter(t *testing.T) {
+	dir, _ := populateGraph(t)
+	defer os.RemoveAll(dir)
+
+	// Alright. Now we have everything set up. Let's create the query.
+	query := `
+		{
+			me(_uid_:0x01) {
+				name
+				gender
+				status
+				friend(name: Andrea) {
+					name
+				}
+			}
+		}
+	`
+
+	gq, _, err := gql.Parse(query)
+	if err != nil {
+		t.Error(err)
+	}
+	ctx := context.Background()
+	sg, err := ToSubGraph(ctx, gq)
+	if err != nil {
+		t.Error(err)
+	}
+
+	ch := make(chan error)
+	go ProcessGraph(ctx, sg, ch)
+	err = <-ch
+	if err != nil {
+		t.Error(err)
+	}
+
+	var l Latency
+	js, err := sg.ToJSON(&l)
+	if err != nil {
+		t.Error(err)
+	}
+
+	s := string(js)
+	if s != `{"me":{"friend":{"name":"Andrea"},"gender":"female","name":"Michonne","status":"alive"}}` {
+		t.Errorf("Wrong output: %s", s)
 	}
 }
 
