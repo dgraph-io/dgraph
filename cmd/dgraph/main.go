@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
+
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc"
 
@@ -57,6 +58,8 @@ var (
 		"serves only entities whose Fingerprint % numInstance == instanceIdx.")
 	workers = flag.String("workers", "",
 		"Comma separated list of IP addresses of workers")
+	workerPort = flag.String("workerport", ":12345",
+		"Port used by worker for internal communication.")
 	nomutations = flag.Bool("nomutations", false, "Don't allow mutations on this server.")
 	tracing     = flag.Float64("trace", 0.5, "The ratio of queries to trace.")
 )
@@ -381,18 +384,18 @@ func main() {
 
 	posting.Init(clog)
 	if *instanceIdx != 0 {
-		worker.Init(ps, nil, *instanceIdx, lenAddr)
+		worker.InitState(ps, nil, *instanceIdx, lenAddr)
 		uid.Init(nil)
 	} else {
 		uidStore := new(store.Store)
 		uidStore.Init(*uidDir)
 		defer uidStore.Close()
 		// Only server instance 0 will have uidStore
-		worker.Init(ps, uidStore, *instanceIdx, lenAddr)
+		worker.InitState(ps, uidStore, *instanceIdx, lenAddr)
 		uid.Init(uidStore)
 	}
 
-	worker.Connect(addrs)
+	worker.Connect(addrs, *workerPort)
 	// Grpc server runs on (port + 1)
 	go runGrpcServer(fmt.Sprintf(":%d", *port+1))
 

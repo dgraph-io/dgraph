@@ -92,13 +92,4 @@ func TestGetOrAssign(t *testing.T) {
 		}
 	}
 	return
-	{
-		xid, err := ExternalId(u2)
-		if err != nil {
-			t.Error(err)
-		}
-		if xid != "externalid1" {
-			t.Errorf("Expected externalid1. Found: [%q]", xid)
-		}
-	}
 }
