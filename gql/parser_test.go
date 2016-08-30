@@ -641,6 +641,17 @@ func TestParseVariables3(t *testing.T) {
 	}
 }
 
+func TestParseVariablesStringfiedJSON(t *testing.T) {
+	query := `{
+		"query": "query testQuery($a: int , $b: int! = 3){root(_uid_: 0x0a) {name(first: $b){english}}}", 
+		"variables": "{\"$a\": \"5\" }" 
+	}`
+	_, _, err := Parse(query)
+	if err != nil {
+		t.Error(err)
+	}
+}
+
 func TestParseVariablesDefault1(t *testing.T) {
 	query := `{
 		"query": "query testQuery($a: int = 3  , $b: int =  4 ,  $c : int = 3){root(_uid_: 0x0a) {name(first: $b, after: $a, offset: $c){english}}}", 
