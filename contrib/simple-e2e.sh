@@ -30,7 +30,10 @@ go build .
 ./dgraph --uids ~/dgraph/u0 --postings ~/dgraph/p0 --mutations ~/dgraph/m0 --stw_ram_mb 6000 &
 
 # Wait for server to start in the background.
-sleep 5
+until nc -z 127.0.0.1 8080;
+do
+	sleep 1
+done
 
 # Run the query.
 curl http://localhost:8080/query -XPOST -d $'mutation {
