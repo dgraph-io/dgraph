@@ -34,7 +34,7 @@ import (
 )
 
 // state stores the worker state.
-type state struct {
+type State struct {
 	dataStore    *store.Store
 	uidStore     *store.Store
 	instanceIdx  uint64
@@ -45,11 +45,11 @@ type state struct {
 }
 
 // Stores the worker state.
-var ws *state
+var ws *State
 
 // New initializes a worker on an instance with a data and a uid store.
-func New(ps, uStore *store.Store, idx, numInst uint64) *state {
-	ws = &state{
+func New(ps, uStore *store.Store, idx, numInst uint64) *State {
+	ws = &State{
 		dataStore:    ps,
 		uidStore:     uStore,
 		instanceIdx:  idx,
