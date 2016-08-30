@@ -39,6 +39,12 @@ type Store struct {
 func (s *Store) setOpts() {
 	s.opt = rocksdb.NewDefaultOptions()
 	s.blockopt = rocksdb.NewDefaultBlockBasedTableOptions()
+	// If you want to access blockopt.blockCache, you need to grab handles to them
+	// as well. Otherwise, they will be nil. However, for now, we do not really need
+	// to do this.
+	// s.blockopt.SetBlockCache(rocksdb.NewLRUCache(blockCacheSize))
+	// s.blockopt.SetBlockCacheCompressed(rocksdb.NewLRUCache(blockCacheSize))
+	s.blockopt.SetNoBlockCache(false)
 	s.opt.SetBlockBasedTableFactory(s.blockopt)
 
 	s.opt.SetCreateIfMissing(true)
