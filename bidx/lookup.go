@@ -1,4 +1,18 @@
-// Given attribute and value, look up index.
+/*
+ * Copyright 2016 DGraph Labs, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * 		http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package bidx
 
 import (
@@ -44,7 +58,7 @@ func (s *Indices) Lookup(li *LookupSpec) *LookupResult {
 			Err: x.Errorf("Indices is nil"),
 		}
 	}
-	index := s.index[li.Attr]
+	index := s.pred[li.Attr]
 	if index == nil {
 		return &LookupResult{
 			Err: x.Errorf("Attribute missing: %s", li.Attr),
@@ -53,14 +67,14 @@ func (s *Indices) Lookup(li *LookupSpec) *LookupResult {
 	return index.lookup(li)
 }
 
-func (s *Index) lookup(li *LookupSpec) *LookupResult {
+func (s *predIndex) lookup(li *LookupSpec) *LookupResult {
 	results := make(chan *LookupResult)
-	for _, ss := range s.shard {
+	for _, ss := range s.child {
 		go ss.lookup(li, results)
 	}
 
 	var lr []*LookupResult
-	for i := 0; i < len(s.shard); i++ {
+	for i := 0; i < len(s.child); i++ {
 		r := <-results
 		if r.Err != nil {
 			return r
@@ -71,7 +85,7 @@ func (s *Index) lookup(li *LookupSpec) *LookupResult {
 	return mergeResults(lr)
 }
 
-func (s *IndexShard) lookup(li *LookupSpec, results chan *LookupResult) {
+func (s *indexChild) lookup(li *LookupSpec, results chan *LookupResult) {
 	var query bleve.Query
 	switch li.Category {
 	case LookupTerm:
@@ -88,9 +102,9 @@ func (s *IndexShard) lookup(li *LookupSpec, results chan *LookupResult) {
 		log.Fatalf("Lookup category not handled: %d", li.Category)
 	}
 	search := bleve.NewSearchRequest(query)
-	s.bindexLock.RLock() // Read block might suffice? Index stats might be off.
-	searchResults, err := s.bindex.Search(search)
-	s.bindexLock.RUnlock()
+	s.bleveLock.RLock() // Read block might suffice? Index stats might be off.
+	searchResults, err := s.bleveIndex.Search(search)
+	s.bleveLock.RUnlock()
 	if err != nil {
 		results <- &LookupResult{Err: err}
 		return

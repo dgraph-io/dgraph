@@ -23,14 +23,14 @@ import (
 // Check logs fatal if err != nil.
 func Check(err error) {
 	if err != nil {
-		log.Fatalf("%+v\n", errors.Wrap(err, ""))
+		log.Fatalf("%+v", errors.Wrap(err, ""))
 	}
 }
 
 // Checkf is Check with extra info.
 func Checkf(err error, format string, args ...interface{}) {
 	if err != nil {
-		log.Fatalf("%+v\n", errors.Wrapf(err, format, args))
+		log.Fatalf("%+v", errors.Wrapf(err, format, args))
 	}
 }
 

@@ -17,17 +17,16 @@
 package x
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"time"
 
 	"github.com/Sirupsen/logrus"
-	"github.com/google/flatbuffers/go"
-	"golang.org/x/net/context"
-	"golang.org/x/net/trace"
-
 	"github.com/dgraph-io/dgraph/task"
+	"github.com/google/flatbuffers/go"
+	"golang.org/x/net/trace"
 )
 
 // Error constants representing different types of errors.
@@ -123,4 +122,15 @@ func Trace(ctx context.Context, format string, args ...interface{}) {
 		return
 	}
 	tr.LazyPrintf(format, args...)
+}
+
+// TraceError adds to trace an error. We add a stack trace.
+// We recommend that you use x.Errorf to create an error with stack trace before
+// passing the error here.
+func TraceError(ctx context.Context, err error) {
+	tr, ok := trace.FromContext(ctx)
+	if !ok {
+		return
+	}
+	tr.LazyPrintf("%+v", err)
 }

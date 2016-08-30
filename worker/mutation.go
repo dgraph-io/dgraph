@@ -72,9 +72,9 @@ func runMutations(ctx context.Context, edges []x.DirectedEdge, op byte, left *Mu
 
 		// Update indices (frontfill).
 		if op == posting.Set && edge.Value != nil {
-			bidx.FrontfillAdd(edge.Attribute, edge.Entity, string(edge.Value))
+			bidx.FrontfillAdd(ctx, edge.Attribute, edge.Entity, string(edge.Value))
 		} else if op == posting.Del {
-			bidx.FrontfillDel(edge.Attribute, edge.Entity)
+			bidx.FrontfillDel(ctx, edge.Attribute, edge.Entity)
 		}
 
 		// Try adding the mutation.

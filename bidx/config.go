@@ -1,8 +1,24 @@
+/*
+ * Copyright 2016 DGraph Labs, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * 		http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package bidx
 
 import (
 	"bufio"
 	"encoding/json"
+	"flag"
 	"io"
 	"io/ioutil"
 	"os"
@@ -11,12 +27,17 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
+var (
+	defaultConfigFile = flag.String("index_config", "config.json",
+		"Filename of JSON config file inside indices directory")
+)
+
 // IndexConfig defines the index for a single predicate. Each predicate should
 // have at most one index.
 type IndexConfig struct {
 	Type      string
 	Attribute string
-	NumShards int
+	NumChild  int
 }
 
 // IndicesConfig is a list of IndexConfig. We may add more fields in future.
@@ -24,13 +45,8 @@ type IndicesConfig struct {
 	Config []*IndexConfig
 }
 
-const (
-	// Default filename for storing config in indices base directory.
-	defaultConfigFile = "config.json"
-)
-
 func getDefaultConfig(basedir string) string {
-	return path.Join(basedir, defaultConfigFile)
+	return path.Join(basedir, *defaultConfigFile)
 }
 
 // NewIndicesConfig creates IndicesConfig from io.Reader object.
@@ -60,9 +76,8 @@ func (is *IndicesConfig) validate() error {
 			return x.Errorf("Duplicate attr %s", c.Attribute)
 		}
 		attrMap[c.Attribute] = true
-		// Check NumShards >= 1.
-		if c.NumShards < 1 {
-			return x.Errorf("NumShards too small %d", c.NumShards)
+		if c.NumChild < 1 {
+			return x.Errorf("NumChild too small %d", c.NumChild)
 		}
 	}
 	return nil

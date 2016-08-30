@@ -200,12 +200,12 @@ func populateGraph(t *testing.T) (string, *store.Store) {
 
 	// Create fake indices.
 	reader := bytes.NewReader([]byte(
-		`{"Config": [{"Type": "text", "Attribute": "name", "NumShards": 1}]}`))
+		`{"Config": [{"Type": "text", "Attribute": "name", "NumChild": 1}]}`))
 	indicesConfig, err := bidx.NewIndicesConfig(reader)
 	x.Check(err)
 	x.Check(bidx.CreateIndices(indicesConfig, dir))
 	indices := bidx.InitWorker(dir)
-	x.Check(indices.Backfill(ps))
+	x.Check(indices.Backfill(context.Background(), ps))
 
 	return dir, ps
 }

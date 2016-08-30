@@ -3,6 +3,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -41,6 +42,6 @@ func main() {
 	x.Check(err)
 
 	start := time.Now()
-	indices.Backfill(ps)
+	indices.Backfill(context.Background(), ps)
 	fmt.Printf("Elapsed %s\n", time.Since(start))
 }

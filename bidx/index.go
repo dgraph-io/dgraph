@@ -1,3 +1,18 @@
+/*
+ * Copyright 2016 DGraph Labs, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * 		http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package bidx
 
 import (
@@ -36,30 +51,27 @@ type indexJob struct {
 // Indices is the core object for working with Bleve indices.
 type Indices struct {
 	basedir string
-	index   map[string]*Index
+	pred    map[string]*predIndex // Maps predicate / attribute to predIndex.
 	config  *IndicesConfig
 
 	// For backfill.
-	done chan error
+	errC chan error
 }
 
-// Index is a subobject of Indices. It should probably be internal, but that might
-// cause a lot of name conflicts.
-type Index struct {
-	filename string // Fingerprint of attribute.
-	config   *IndexConfig
-	shard    []*IndexShard
+// predIndex is index for one predicate.
+type predIndex struct {
+	config *IndexConfig
+	child  []*indexChild
 
 	// For backfill.
-	done chan error
+	errC chan error
 }
 
-// IndexShard is a shard of Index. We run these shards in parallel.
-type IndexShard struct {
-	shard      int         // Which shard is this.
-	bindex     bleve.Index // Guarded by bindexLock.
+type indexChild struct {
+	childID    int         // Tell us which child this is, inside predIndex.
+	bleveIndex bleve.Index // Guarded by bleveLock.
 	config     *IndexConfig
-	bindexLock sync.RWMutex
+	bleveLock  sync.RWMutex
 
 	// For backfill.
 	batch  *bleve.Batch
@@ -70,8 +82,9 @@ type IndexShard struct {
 	mutationC chan *mutation
 }
 
-func indexFilename(basedir, name string) string {
-	lo, hi := farm.Fingerprint128([]byte(name))
+// predPrefix takes a predicate name, and generate a random-looking filename.
+func predPrefix(basedir, attr string) string {
+	lo, hi := farm.Fingerprint128([]byte(attr))
 	filename := strconv.FormatUint(lo, 36) + "_" + strconv.FormatUint(hi, 36)
 	return path.Join(basedir, filename)
 }
@@ -81,31 +94,24 @@ func CreateIndices(config *IndicesConfig, basedir string) error {
 	x.Check(os.MkdirAll(basedir, 0700))
 	config.write(basedir) // Copy config to basedir.
 	for _, c := range config.Config {
-		if err := createIndex(c, basedir); err != nil {
+		if err := createPredIndex(c, basedir); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func createIndex(c *IndexConfig, basedir string) error {
-	filename := indexFilename(basedir, c.Attribute)
-	for i := 0; i < c.NumShards; i++ {
-		if err := createIndexShard(c, filename, i); err != nil {
-			return err
+func createPredIndex(c *IndexConfig, basedir string) error {
+	prefix := predPrefix(basedir, c.Attribute)
+	for i := 0; i < c.NumChild; i++ {
+		indexMapping := bleve.NewIndexMapping()
+		filename := prefix + "_" + strconv.Itoa(i)
+		bleveIndex, err := bleve.New(filename, indexMapping)
+		if err != nil {
+			return x.Wrap(err)
 		}
+		bleveIndex.Close()
 	}
-	return nil
-}
-
-func createIndexShard(c *IndexConfig, filename string, shard int) error {
-	indexMapping := bleve.NewIndexMapping()
-	filename = filename + "_" + strconv.Itoa(shard)
-	index, err := bleve.New(filename, indexMapping)
-	if err != nil {
-		return x.Wrap(err)
-	}
-	index.Close()
 	return nil
 }
 
@@ -123,51 +129,42 @@ func NewIndices(basedir string) (*Indices, error) {
 	}
 	indices := &Indices{
 		basedir: basedir,
-		index:   make(map[string]*Index),
+		pred:    make(map[string]*predIndex),
 		config:  config,
-		done:    make(chan error),
+		errC:    make(chan error),
 	}
 	for _, c := range config.Config {
-		index, err := newIndex(c, basedir)
+		index, err := newPredIndex(c, basedir)
 		if err != nil {
 			return nil, err
 		}
-		indices.index[c.Attribute] = index
+		indices.pred[c.Attribute] = index
 	}
 	log.Printf("Successfully loaded indices at [%s]\n", basedir)
 	return indices, nil
 }
 
-func newIndex(c *IndexConfig, basedir string) (*Index, error) {
-	filename := indexFilename(basedir, c.Attribute)
-	index := &Index{
-		filename: filename,
-		config:   c,
-		done:     make(chan error),
+func newPredIndex(c *IndexConfig, basedir string) (*predIndex, error) {
+	prefix := predPrefix(basedir, c.Attribute)
+	index := &predIndex{
+		config: c,
+		errC:   make(chan error),
 	}
-	for i := 0; i < c.NumShards; i++ {
-		shard, err := newIndexShard(c, filename, i)
+	for i := 0; i < c.NumChild; i++ {
+		filename := prefix + "_" + strconv.Itoa(i)
+		bi, err := bleve.Open(filename)
 		if err != nil {
-			return nil, err
+			return nil, x.Wrap(err)
 		}
-		index.shard = append(index.shard, shard)
+		child := &indexChild{
+			childID:    i,
+			bleveIndex: bi,
+			batch:      bi.NewBatch(),
+			jobC:       make(chan indexJob, jobBufferSize),
+			parser:     getParser(c.Type),
+			config:     c,
+		}
+		index.child = append(index.child, child)
 	}
 	return index, nil
-}
-
-func newIndexShard(c *IndexConfig, filename string, shard int) (*IndexShard, error) {
-	filename = filename + "_" + strconv.Itoa(shard)
-	bi, err := bleve.Open(filename)
-	if err != nil {
-		return nil, x.Wrap(err)
-	}
-	is := &IndexShard{
-		shard:  shard,
-		bindex: bi,
-		batch:  bi.NewBatch(),
-		jobC:   make(chan indexJob, jobBufferSize),
-		parser: getParser(c.Type),
-		config: c,
-	}
-	return is, nil
 }
