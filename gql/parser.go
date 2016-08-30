@@ -139,16 +139,16 @@ type queryAlt struct {
 /*
 The query could be of the following forms :
 
-# Normal query
+# Normal query.
 	`query test($a: int) { me(_xid_: alice-in-wonderland) {author(first:$a){name}}}`
 
-# With stringified variables map
+# With stringified variables map.
  `{
    "query": "query test($a: int){ me(_xid_: alice-in-wonderland) {author(first:$a){name}}}",
 	 "variables": "{'$a':'2'}"
 	 }`
 
-# With a non-stringified variables map
+# With a non-stringified variables map.
   `{
    "query": "query test($a: int){ me(_xid_: alice-in-wonderland) {author(first:$a){name}}}",
 	 "variables": {'$a':'2'}
@@ -161,13 +161,13 @@ func parseQueryWithVariables(str string) (string, varMap, error) {
 	mp := make(map[string]string)
 	err := json.Unmarshal([]byte(str), &q)
 	if err != nil {
-		// Check if the json object is stringified
+		// Check if the json object is stringified.
 		var q1 queryAlt
 		err := json.Unmarshal([]byte(str), &q1)
 		if err != nil {
 			return str, vm, nil // It does not obey GraphiQL format but valid.
 		}
-		// Convert the stringified variables to map
+		// Convert the stringified variables to map.
 		err = json.Unmarshal([]byte(q1.Variables), &mp)
 		if err != nil {
 			return "", nil, err
