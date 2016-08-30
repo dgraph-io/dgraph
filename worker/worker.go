@@ -33,8 +33,8 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-// state stores the worker state.
-type state struct {
+// State stores the worker state.
+type State struct {
 	dataStore    *store.Store
 	uidStore     *store.Store
 	instanceIdx  uint64
@@ -45,21 +45,16 @@ type state struct {
 }
 
 // Stores the worker state.
-var ws *state
+var ws *State
 
 // InitState initializes the state on an instance with data,uid store and other meta.
 func InitState(ps, uStore *store.Store, idx, numInst uint64) {
-	ws = &state{
+	ws = &State{
 		dataStore:    ps,
 		uidStore:     uStore,
 		instanceIdx:  idx,
 		numInstances: numInst,
 	}
-}
-
-// State returns the worker state.
-func State() *state {
-	return ws
 }
 
 // NewQuery creates a Query flatbuffer table, serializes and returns it.

@@ -67,7 +67,7 @@ func TestPopulateShard(t *testing.T) {
 	}
 
 	InitState(ps, nil, 0, 2)
-	w := State()
+	w := ws
 	go Connect(addrs, ":12345")
 
 	dir1, err := ioutil.TempDir("", "store1")
@@ -81,7 +81,7 @@ func TestPopulateShard(t *testing.T) {
 	defer ps1.Close()
 
 	InitState(ps1, nil, 1, 2)
-	w1 := State()
+	w1 := ws
 	go Connect(addrs, ":12346")
 
 	// Wait for workers to be initialized and connected.
