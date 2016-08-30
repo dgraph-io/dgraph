@@ -194,8 +194,8 @@ func getMemUsage() int {
 		if err != nil {
 			return 0
 		}
+
 		megs := kbs / (1 << 10)
-		fmt.Println(megs)
 		return megs
 	}
 
