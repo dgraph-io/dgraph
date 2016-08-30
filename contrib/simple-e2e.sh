@@ -9,7 +9,7 @@ SRC="$( cd -P "$( dirname "${BASH_SOURCE[0]}" )" && pwd )/.."
 BUILD=$1
 # If build variable is empty then we set it.
 if [ -z "$1" ]; then
-  BUILD=$SRC/build
+        BUILD=$SRC/build
 fi
 
 ROCKSDBDIR=$BUILD/rocksdb-4.6.1
@@ -32,53 +32,53 @@ go build .
 # Wait for server to start in the background.
 until nc -z 127.0.0.1 8080;
 do
-	sleep 1
+        sleep 1
 done
 
 # Run the query.
 curl http://localhost:8080/query -XPOST -d $'mutation {
-  set {
-    <alice-in-wonderland> <type> <novel> .
-    <alice-in-wonderland> <character> <alice> .
-    <alice-in-wonderland> <author> <lewis-carrol> .
-    <alice-in-wonderland> <written-in> "1865" .
-    <alice-in-wonderland> <name> "Alice in Wonderland" .
-    <alice-in-wonderland> <sequel> <looking-glass> .
-    <alice> <name> "Alice" .
-    <alice> <name> "Алисия"@ru .
-    <alice> <name> "Adélaïde"@fr .
-    <lewis-carrol> <name> "Lewis Carroll" .
-    <lewis-carrol> <born> "1832" .
-    <lewis-carrol> <died> "1898" .
-	}
+        set {
+            <alice-in-wonderland> <type> <novel> .
+            <alice-in-wonderland> <character> <alice> .
+            <alice-in-wonderland> <author> <lewis-carrol> .
+            <alice-in-wonderland> <written-in> "1865" .
+            <alice-in-wonderland> <name> "Alice in Wonderland" .
+            <alice-in-wonderland> <sequel> <looking-glass> .
+            <alice> <name> "Alice" .
+            <alice> <name> "Алисия"@ru .
+            <alice> <name> "Adélaïde"@fr .
+            <lewis-carrol> <name> "Lewis Carroll" .
+            <lewis-carrol> <born> "1832" .
+            <lewis-carrol> <died> "1898" .
+        }
 }'
 
 resp=$(curl http://localhost:8080/query -XPOST -d '
 {
-				me(_xid_: alice-in-wonderland) {
-				  type
-				  written-in
-				  name
-				  character {
-				    name
-				    name.fr
-				    name.ru
-			    }
-			    author {
-			     name
-			     born
-			     died
-		     }
-	     }
+	me(_xid_: alice-in-wonderland) {
+		type
+		written-in
+		name
+		character {
+                        name
+			name.fr
+			name.ru
+		}
+		author {
+                        name
+                        born
+                        died
+		}
+	}
 }')
 
 check_val() {
-	expected="$1"
-  actual="$2"
-	if [ "$expected" != "$actual" ];then
-	  echo -e "Expected value: $expected. Got: $actual"
-		exit 1
-	fi
+        expected="$1"
+        actual="$2"
+        if [ "$expected" != "$actual" ];then
+                echo -e "Expected value: $expected. Got: $actual"
+                exit 1
+        fi
 }
 
 authname=$(echo $resp | jq '.me.author.name')
