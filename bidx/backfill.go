@@ -55,7 +55,7 @@ func (s *predIndex) backfill(ctx context.Context, ps *store.Store, errC chan err
 		}
 		uid, attr := posting.DecodeKey(it.Key().Data())
 
-		subID := uid % uint64(s.config.NumChild)
+		childID := uid % uint64(s.config.NumChild)
 		pl := types.GetRootAsPostingList(it.Value().Data(), 0)
 		var p types.Posting
 		for i := 0; i < pl.PostingsLength(); i++ {
@@ -64,7 +64,7 @@ func (s *predIndex) backfill(ctx context.Context, ps *store.Store, errC chan err
 				continue
 			}
 			value := string(p.ValueBytes())
-			s.child[subID].jobC <- indexJob{
+			s.child[childID].jobC <- indexJob{
 				op:    jobOpAdd,
 				uid:   uid,
 				value: value,
