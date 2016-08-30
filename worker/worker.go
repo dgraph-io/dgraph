@@ -33,7 +33,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-// state stores the worker state.
+// State stores the worker state.
 type State struct {
 	dataStore    *store.Store
 	uidStore     *store.Store
