@@ -165,9 +165,11 @@ func parseQueryWithVariables(str string) (string, varMap, error) {
 		if err := json.Unmarshal([]byte(str), &q1); err != nil {
 			return str, vm, nil // It does not obey GraphiQL format but valid.
 		}
-		// Convert the stringified variables to map.
-		if err = json.Unmarshal([]byte(q1.Variables), &mp); err != nil && q1.Variables != "" {
-			return "", nil, err
+		// Convert the stringified variables to map if it is not nil.
+		if q1.Variables != "" {
+			if err = json.Unmarshal([]byte(q1.Variables), &mp); err != nil {
+				return "", nil, err
+			}
 		}
 	} else {
 		mp = q.Variables
