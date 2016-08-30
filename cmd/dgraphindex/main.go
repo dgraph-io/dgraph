@@ -42,6 +42,9 @@ func main() {
 	x.Check(err)
 
 	start := time.Now()
-	indices.Backfill(context.Background(), ps)
+	err = indices.Backfill(context.Background(), ps)
+	if err != nil {
+		x.TraceError(context.Background(), err)
+	}
 	fmt.Printf("Elapsed %s\n", time.Since(start))
 }
