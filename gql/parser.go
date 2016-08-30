@@ -131,15 +131,52 @@ type query struct {
 	Query     string            `json:"query"`
 }
 
+type queryAlt struct {
+	Variables string `json:"variables"`
+	Query     string
+}
+
+/*
+The query could be of the forms :
+
+# Normal query
+	`query test($a: int) { me(_xid_: alice-in-wonderland) {author(first:$a){name}}}`
+
+# With stringified variables map
+ `{
+   "query": "query test($a: int){ me(_xid_: alice-in-wonderland) {author(first:$a){name}}}",
+	 "variables": "{'$a':'2'}"
+	 }`
+
+# With a non-stringified variables map
+  `{
+   "query": "query test($a: int){ me(_xid_: alice-in-wonderland) {author(first:$a){name}}}",
+	 "variables": {'$a':'2'}
+	 }`
+*/
+
 func parseQueryWithVariables(str string) (string, varMap, error) {
 	var q query
 	vm := make(varMap)
+	mp := make(map[string]string)
 	err := json.Unmarshal([]byte(str), &q)
 	if err != nil {
-		return str, vm, nil // It does not obey GraphiQL format but valid.
+		// Check if the json object is stringified
+		var q1 queryAlt
+		err := json.Unmarshal([]byte(str), &q1)
+		if err != nil {
+			return str, vm, nil // It does not obey GraphiQL format but valid.
+		}
+		// Convert the stringified variables to map
+		err = json.Unmarshal([]byte(q1.Variables), &mp)
+		if err != nil {
+			return "", nil, err
+		}
+	} else {
+		mp = q.Variables
 	}
 
-	for k, v := range q.Variables {
+	for k, v := range mp {
 		vm[k] = varInfo{
 			Value: v,
 		}
