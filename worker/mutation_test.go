@@ -35,7 +35,7 @@ func TestAddToMutationArray(t *testing.T) {
 	defer os.RemoveAll(dir)
 	ps := new(store.Store)
 	ps.Init(dir)
-	New(ps, nil, 0, 1)
+	InitState(ps, nil, 0, 1)
 
 	mutationsArray := make([]*Mutations, 1)
 	edges := []x.DirectedEdge{}

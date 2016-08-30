@@ -33,8 +33,8 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-// State stores the worker state.
-type State struct {
+// state stores the worker state.
+type state struct {
 	dataStore    *store.Store
 	uidStore     *store.Store
 	instanceIdx  uint64
@@ -45,16 +45,20 @@ type State struct {
 }
 
 // Stores the worker state.
-var ws *State
+var ws *state
 
-// New initializes a worker on an instance with a data and a uid store.
-func New(ps, uStore *store.Store, idx, numInst uint64) *State {
-	ws = &State{
+// InitState initializes the state on an instance with data,uid store and other meta.
+func InitState(ps, uStore *store.Store, idx, numInst uint64) {
+	ws = &state{
 		dataStore:    ps,
 		uidStore:     uStore,
 		instanceIdx:  idx,
 		numInstances: numInst,
 	}
+}
+
+// State returns the worker state.
+func State() *state {
 	return ws
 }
 

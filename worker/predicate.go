@@ -31,7 +31,7 @@ const (
 )
 
 // writeBatch performs a batch write of key value pairs to RocksDB.
-func (ws *State) writeBatch(ctx context.Context, kv chan *task.KV, che chan error) {
+func (ws *state) writeBatch(ctx context.Context, kv chan *task.KV, che chan error) {
 	wb := ws.dataStore.NewWriteBatch()
 	batchSize := 0
 	batchWriteNum := 1
@@ -66,7 +66,7 @@ func (ws *State) writeBatch(ctx context.Context, kv chan *task.KV, che chan erro
 
 // PopulateShard gets data for predicate pred from server with id serverId and
 // writes it to RocksDB.
-func (ws *State) PopulateShard(ctx context.Context, pred string,
+func (ws *state) PopulateShard(ctx context.Context, pred string,
 	serverId int) error {
 	var err error
 
