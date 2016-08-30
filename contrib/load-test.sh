@@ -7,3 +7,5 @@ if [[ $TRAVIS_BRANCH =~ master|release\/ ]] && [ $TRAVIS_EVENT_TYPE = "push" ] ;
   bash contrib/loader.sh $1
   bash contrib/queries.sh $1
 fi
+
+bash contrib/simple-e2e.sh

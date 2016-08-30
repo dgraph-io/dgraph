@@ -16,6 +16,7 @@ addons:
       - libbz2-dev
       - libsnappy-dev
       - zlib1g-dev
+      - jq
 env:
   - CC=clang-3.8 CXX=clang++-3.8
 cache:
