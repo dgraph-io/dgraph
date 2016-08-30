@@ -29,6 +29,9 @@ pushd cmd/dgraph &> /dev/null
 go build .
 ./dgraph --uids ~/dgraph/u0 --postings ~/dgraph/p0 --mutations ~/dgraph/m0 --stw_ram_mb 6000 &
 
+# Wait for server to start in the background.
+sleep 5
+
 # Run the query.
 curl http://localhost:8080/query -XPOST -d $'mutation {
   set {
