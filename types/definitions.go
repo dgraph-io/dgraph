@@ -28,7 +28,6 @@ type GraphQLScalar struct {
 	Name        string       // name of scalar type
 	Description string       // short description, could be used for documentation in GraphiQL
 	Config      ScalarConfig // config struct to construct a custom scalar
-	Err         error        // error object
 }
 
 // ScalarConfig to pass config params to scalar type constructor function.
@@ -50,35 +49,29 @@ type ParseTypeFunc func(input interface{}) interface{}
 // - String
 // - Boolean
 // - ID
-func MakeScalarType(sc *ScalarConfig) GraphQLScalar {
+func MakeScalarType(sc *ScalarConfig) (GraphQLScalar, error) {
 	scalarType := GraphQLScalar{}
 
 	// check if all essential config is present.
 	if sc.Name != "" && validName(sc.Name) {
 		scalarType.Name = sc.Name
 	} else {
-		scalarType.Err = fmt.Errorf("Type must be named.")
-		return scalarType
+		return scalarType, fmt.Errorf("Type must be named.")
 	}
 
 	scalarType.Description = sc.Description
 
 	if sc.ParseType == nil {
-		scalarType.Err = fmt.Errorf("%v declared type must a provide 'ParseType' function"+
-			"which will be used for validation and type coercion if required. ", scalarType.Name)
+		return scalarType, fmt.Errorf("'%v' type must a provide 'ParseType' function"+
+			" which will be used for validation and type coercion if required. ", scalarType.Name)
 	}
 	scalarType.Config = *sc
-	return scalarType
+	return scalarType, nil
 }
 
 // String function to implement string interface
 func (s *GraphQLScalar) String() string {
 	return fmt.Sprintf("ScalarTypeName is:%v\n", s.Name)
-}
-
-// Error function to implement error interface
-func (s *GraphQLScalar) Error() error {
-	return s.Err
 }
 
 // GraphQLObject type defines skeleton for basic graphql objects.
@@ -111,7 +104,15 @@ type ResolveParams struct {
 	InputVal string
 }
 
-// TODO(akhil): GraphQLInterface type implementation.
+// GraphQLInterface type defines skeleton for basic graphql objects.
+// They form the basis for most object in this system.
+// Object has a name and a set of fields.
+type GraphQLInterface struct {
+	// TODO(akhil): complete this impl.
+	Name   string
+	Desc   string
+	Fields FieldMap
+}
 
 // TODO(akhil): GraphQLUnion type implementation.
 

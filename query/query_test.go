@@ -181,9 +181,6 @@ func populateGraph(t *testing.T) (string, *store.Store) {
 	edge.Value = []byte("38")
 	addEdge(t, edge, posting.GetOrCreate(posting.Key(1, "age"), ps))
 
-	edge.Value = []byte("0")
-	addEdge(t, edge, posting.GetOrCreate(posting.Key(1, "is_zombie"), ps))
-
 	edge.Value = []byte("98.99")
 	addEdge(t, edge, posting.GetOrCreate(posting.Key(1, "survival_rate"), ps))
 
@@ -556,7 +553,6 @@ func TestPostTraverse(t *testing.T) {
 				gender
 				age
 				sword_present
-				is_zombie
 				survival_rate
 				friend {
 					name
@@ -607,9 +603,6 @@ func TestPostTraverse(t *testing.T) {
 		}
 		if _, success := actorMap["sword_present"].(bool); !success {
 			t.Errorf("Expected type coercion to bool for: %v\n", actorMap["sword_present"])
-		}
-		if _, success := actorMap["is_zombie"].(bool); !success {
-			t.Errorf("Expected type coercion to bool for: %v\n", actorMap["is_zombie"])
 		}
 		if _, success := actorMap["survival_rate"].(float64); !success {
 			t.Errorf("Expected type coercion to float64 for: %v\n", actorMap["survival_rate"])

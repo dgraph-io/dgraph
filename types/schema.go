@@ -16,7 +16,10 @@
 
 package types
 
-import "github.com/dgraph-io/dgraph/gql"
+import (
+	"fmt"
+	"github.com/dgraph-io/dgraph/gql"
+)
 
 // TODO(akhil): validator for client uploaded schema as well, to ensure it declares all types.
 
@@ -38,10 +41,12 @@ var (
 // LoadSchema loads the schema
 func LoadSchema() error {
 
+	var combinedError error
 	var err error
+
 	// load scalar types
 	if err = LoadScalarTypes(); err != nil {
-		return err
+		combinedError = err
 	}
 
 	// TODO(akhil): implement mechanism for client to define and upload a schema.
@@ -60,13 +65,7 @@ func LoadSchema() error {
 			"age": &Field{
 				Type: Int,
 			},
-			"status": &Field{
-				Type: String,
-			},
 			"sword_present": &Field{
-				Type: Boolean,
-			},
-			"is_zombie": &Field{
 				Type: Boolean,
 			},
 			"survival_rate": &Field{
@@ -85,7 +84,7 @@ func LoadSchema() error {
 		},
 	}
 	Schema = &GraphQLSchema{Query: QueryType}
-	return nil
+	return combinedError
 }
 
 // ValidateMutation validates the parsed mutation string against the present schema.
@@ -93,4 +92,8 @@ func LoadSchema() error {
 // TODO(akhil): implement error function (extending error interface).
 func ValidateMutation(mu *gql.Mutation, s *GraphQLSchema) error {
 	return nil
+}
+
+func joinError(e1 error, e2 error) error {
+	return fmt.Errorf("%v\n%v", e1.Error(), e2.Error())
 }

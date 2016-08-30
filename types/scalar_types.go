@@ -171,8 +171,11 @@ func CoerceBool(input interface{}) interface{} {
 // LoadScalarTypes defines and initializes all scalar types in system and checks for errors
 func LoadScalarTypes() error {
 	// TODO(akhil): collect and return all errors
+	var combinedError error
+	var err error
+
 	// Int scalar type.
-	Int = MakeScalarType(
+	Int, err = MakeScalarType(
 		&ScalarConfig{
 			Name: "Int",
 			Description: "The 'Int' scalar type represents non-fractional signed whole" +
@@ -181,9 +184,12 @@ func LoadScalarTypes() error {
 			ParseType: CoerceInt,
 		},
 	)
+	if err != nil {
+		combinedError = err
+	}
 
 	// Float scalar type.
-	Float = MakeScalarType(
+	Float, err = MakeScalarType(
 		&ScalarConfig{
 			Name: "Float",
 			Description: "The 'Float' scalar type represents signed double-precision" +
@@ -192,9 +198,12 @@ func LoadScalarTypes() error {
 			ParseType: CoerceFloat,
 		},
 	)
+	if err != nil {
+		combinedError = joinError(combinedError, err)
+	}
 
 	// String scalar type.
-	String = MakeScalarType(
+	String, err = MakeScalarType(
 		&ScalarConfig{
 			Name: "String",
 			Description: "The 'String' scalar type represents textual data, represented" +
@@ -203,18 +212,24 @@ func LoadScalarTypes() error {
 			ParseType: CoerceString,
 		},
 	)
+	if err != nil {
+		combinedError = joinError(combinedError, err)
+	}
 
 	// Boolean scalar type.
-	Boolean = MakeScalarType(
+	Boolean, err = MakeScalarType(
 		&ScalarConfig{
 			Name:        "Boolean",
 			Description: "The 'Boolean' scalar type represents 'true' or 'false'.",
 			ParseType:   CoerceBool,
 		},
 	)
+	if err != nil {
+		combinedError = joinError(combinedError, err)
+	}
 
 	// ID scalar type.
-	ID = MakeScalarType(
+	ID, err = MakeScalarType(
 		&ScalarConfig{
 			Name: "ID",
 			Description: "The 'ID' scalar type represents a unique identifier, often" +
@@ -226,7 +241,10 @@ func LoadScalarTypes() error {
 			ParseType: CoerceString,
 		},
 	)
-	return nil
+	if err != nil {
+		combinedError = joinError(combinedError, err)
+	}
+	return combinedError
 }
 
 // TODO(akhil): define two more types here: Time and URL.

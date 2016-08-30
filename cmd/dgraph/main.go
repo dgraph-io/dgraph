@@ -343,6 +343,7 @@ func runGrpcServer(address string) {
 // init function is used to setup application state and config variables
 // Currently, just loading schema and types
 // It is called after all import packages and variable declarations have been initialized
+// TODO(akhil): move out to types package and initialize there AFTER ensuring flags are initialized
 func init() {
 	if err := types.LoadSchema(); err != nil {
 		log.Fatal(err)
