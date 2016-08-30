@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-// package x provides some common utilities used by the entire library.
+// Package x provides some common utilities used by the entire library.
 package x
 
 import (
