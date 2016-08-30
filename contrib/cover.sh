@@ -1,6 +1,5 @@
 #!/bin/bash
 
-cat /proc/meminfo
 SRC="$( cd -P "$( dirname "${BASH_SOURCE[0]}" )" && pwd )/.."
 TMP=$(mktemp -p /tmp dgraph-coverage-XXXXX.txt)
 
