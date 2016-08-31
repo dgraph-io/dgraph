@@ -33,72 +33,72 @@ var (
 		"Filename of JSON config file inside indices directory")
 )
 
+// IndicesConfig is a list of IndexConfig. We may add more fields in future.
+type Configs struct {
+	Cfg []*Config `json:"Config"`
+}
+
 // IndexConfig defines the index for a single predicate. Each predicate should
 // have at most one index.
-type IndexConfig struct {
+type Config struct {
 	Type      string
 	Attribute string
 	NumChild  int
-}
-
-// IndicesConfig is a list of IndexConfig. We may add more fields in future.
-type IndicesConfig struct {
-	Config []*IndexConfig
 }
 
 func getDefaultConfig(basedir string) string {
 	return path.Join(basedir, *defaultConfigFile)
 }
 
-// NewIndicesConfig creates IndicesConfig from io.Reader object.
-func NewIndicesConfig(reader io.Reader) (*IndicesConfig, error) {
+// NewConfigs creates Configs object from io.Reader object.
+func NewConfigs(reader io.Reader) (*Configs, error) {
 	f, err := ioutil.ReadAll(reader)
 	if err != nil {
 		return nil, x.Wrap(err)
 	}
-	is := &IndicesConfig{}
-	err = json.Unmarshal(f, is)
+	cfg := &Configs{}
+	err = json.Unmarshal(f, cfg)
 	if err != nil {
 		return nil, x.Wrap(err)
 	}
-	err = is.validate()
+	err = cfg.validate()
 	if err != nil {
 		return nil, err
 	}
-	return is, nil
+	return cfg, nil
 }
 
-func (is *IndicesConfig) validate() error {
+func (c *Configs) validate() error {
 	// TODO(jchiu): Add more checks here in the future.
 	attrMap := make(map[string]bool)
-	for _, c := range is.Config {
+	for _, cfg := range c.Cfg {
 		// Check that there are no duplicates in attributes.
-		if attrMap[c.Attribute] {
-			return x.Errorf("Duplicate attr %s", c.Attribute)
+		if attrMap[cfg.Attribute] {
+			return x.Errorf("Duplicate attr %s", cfg.Attribute)
 		}
-		attrMap[c.Attribute] = true
-		if c.NumChild < 1 {
-			return x.Errorf("NumChild too small %d", c.NumChild)
+		attrMap[cfg.Attribute] = true
+		if cfg.NumChild < 1 {
+			return x.Errorf("NumChild too small %d", cfg.NumChild)
 		}
 	}
 	return nil
 }
 
-func (is *IndicesConfig) write(basedir string) error {
+// write writes to a directory's default config file location.
+func (c *Configs) write(basedir string) error {
 	f, err := os.Create(getDefaultConfig(basedir))
 	if err != nil {
 		return x.Wrap(err)
 	}
 	defer f.Close()
 
-	js, err := json.MarshalIndent(is, "", "    ")
+	js, err := json.MarshalIndent(c, "", "    ")
 	if err != nil {
 		return x.Wrap(err)
 	}
 
 	w := bufio.NewWriter(f)
 	defer w.Flush()
-
 	_, err = w.Write(js)
 	if err != nil {
 		return x.Wrap(err)

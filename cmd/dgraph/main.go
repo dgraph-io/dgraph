@@ -34,9 +34,9 @@ import (
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc"
 
-	"github.com/dgraph-io/dgraph/bidx"
 	"github.com/dgraph-io/dgraph/commit"
 	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/index"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/query/graph"
@@ -356,7 +356,7 @@ func main() {
 		log.Fatalf("Error while creating the filepath for uids: %v", err)
 	}
 
-	bidx.InitWorker(*indicesDir)
+	index.InitWorker(*indicesDir)
 
 	ps := new(store.Store)
 	if err := ps.Init(*postingDir); err != nil {

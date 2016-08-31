@@ -62,25 +62,25 @@ func (s *Indices) FrontfillDel(ctx context.Context, attr string, uid uint64) err
 
 // Frontfill updates indices given mutation.
 func (s *Indices) Frontfill(ctx context.Context, m *mutation) error {
-	index, found := s.pred[m.Attr]
+	index, found := s.idx[m.Attr]
 	if !found {
 		return nil // This predicate is not indexed, which can be common.
 	}
 	return index.frontfill(ctx, m)
 }
 
-func (s *predIndex) frontfill(ctx context.Context, m *mutation) error {
-	childID := m.UID % uint64(s.config.NumChild)
+func (s *index) frontfill(ctx context.Context, m *mutation) error {
+	childID := m.UID % uint64(s.cfg.NumChild)
 	child := s.child[childID]
 	if child.mutationC == nil {
-		return x.Errorf("mutationC nil for %s %d", child.config.Attribute, childID)
+		return x.Errorf("mutationC nil for %s %d", child.cfg.Attribute, childID)
 	}
 	child.mutationC <- m
 	return nil
 }
 
 func (s *Indices) initFrontfill() {
-	for _, pi := range s.pred {
+	for _, pi := range s.idx {
 		for _, child := range pi.child {
 			child.mutationC = make(chan *mutation, 100)
 			go child.handleFrontfill()
@@ -88,7 +88,7 @@ func (s *Indices) initFrontfill() {
 	}
 }
 
-func (s *indexChild) handleFrontfill() {
+func (s *childIndex) handleFrontfill() {
 	for m := range s.mutationC {
 		s.bleveLock.Lock()
 		if !m.Delete {

@@ -29,6 +29,7 @@ import (
 	"github.com/dgryski/go-farm"
 )
 
+// jobOp is used in both backfill and frontfill.
 type jobOp int
 
 const (
@@ -36,42 +37,43 @@ const (
 	jobOpDelete  = iota
 	jobOpReplace = iota
 
-	// We execute a batch when it exceeds this size.
+	// We try to batch our updates so that they are more efficient.
 	batchSize = 10000
 
 	// For backfilling, we can store up to this many jobs / additions in channel.
-	jobBufferSize = 20000
+	backfillBufSize = 20000
 )
 
 type indexJob struct {
 	op    jobOp
 	uid   uint64
 	value string
+	pred  string // Which predicate. Can be left empty if its value can be assumed.
 }
 
 // Indices is the core object for working with Bleve indices.
 type Indices struct {
 	basedir string
-	pred    map[string]*predIndex // Maps predicate / attribute to predIndex.
-	config  *IndicesConfig
+	idx     map[string]*index // Maps predicate / attribute to index.
+	cfg     *Configs
 
 	// For backfill.
 	errC chan error
 }
 
 // predIndex is index for one predicate.
-type predIndex struct {
-	config *IndexConfig
-	child  []*indexChild
+type index struct {
+	cfg   *Config
+	child []*childIndex
 
 	// For backfill.
 	errC chan error
 }
 
-type indexChild struct {
+type childIndex struct {
 	childID    int         // Tell us which child this is, inside predIndex.
 	bleveIndex bleve.Index // Guarded by bleveLock.
-	config     *IndexConfig
+	cfg        *Config
 	bleveLock  sync.RWMutex
 
 	// For backfill.
@@ -91,10 +93,10 @@ func predPrefix(basedir, attr string) string {
 }
 
 // CreateIndices creates new empty dirs given config file and basedir.
-func CreateIndices(config *IndicesConfig, basedir string) error {
+func CreateIndices(config *Configs, basedir string) error {
 	x.Check(os.MkdirAll(basedir, 0700))
 	config.write(basedir) // Copy config to basedir.
-	for _, c := range config.Config {
+	for _, c := range config.Cfg {
 		if err := createPredIndex(c, basedir); err != nil {
 			return err
 		}
@@ -102,7 +104,7 @@ func CreateIndices(config *IndicesConfig, basedir string) error {
 	return nil
 }
 
-func createPredIndex(c *IndexConfig, basedir string) error {
+func createPredIndex(c *Config, basedir string) error {
 	prefix := predPrefix(basedir, c.Attribute)
 	for i := 0; i < c.NumChild; i++ {
 		indexMapping := bleve.NewIndexMapping()
@@ -124,32 +126,32 @@ func NewIndices(basedir string) (*Indices, error) {
 	fin, err := os.Open(configFilename)
 	x.Check(err)
 	defer fin.Close()
-	config, err := NewIndicesConfig(bufio.NewReader(fin))
+	cfg, err := NewConfigs(bufio.NewReader(fin))
 	if err != nil {
 		return nil, err
 	}
 	indices := &Indices{
 		basedir: basedir,
-		pred:    make(map[string]*predIndex),
-		config:  config,
+		idx:     make(map[string]*index),
+		cfg:     cfg,
 		errC:    make(chan error),
 	}
-	for _, c := range config.Config {
+	for _, c := range cfg.Cfg {
 		index, err := newPredIndex(c, basedir)
 		if err != nil {
 			return nil, err
 		}
-		indices.pred[c.Attribute] = index
+		indices.idx[c.Attribute] = index
 	}
 	log.Printf("Successfully loaded indices at [%s]\n", basedir)
 	return indices, nil
 }
 
-func newPredIndex(c *IndexConfig, basedir string) (*predIndex, error) {
+func newPredIndex(c *Config, basedir string) (*index, error) {
 	prefix := predPrefix(basedir, c.Attribute)
-	index := &predIndex{
-		config: c,
-		errC:   make(chan error),
+	index := &index{
+		cfg:  c,
+		errC: make(chan error),
 	}
 	for i := 0; i < c.NumChild; i++ {
 		filename := prefix + "_" + strconv.Itoa(i)
@@ -157,13 +159,13 @@ func newPredIndex(c *IndexConfig, basedir string) (*predIndex, error) {
 		if err != nil {
 			return nil, x.Wrap(err)
 		}
-		child := &indexChild{
+		child := &childIndex{
 			childID:    i,
 			bleveIndex: bi,
 			batch:      bi.NewBatch(),
-			jobC:       make(chan indexJob, jobBufferSize),
+			jobC:       make(chan indexJob, backfillBufSize),
 			parser:     getParser(c.Type),
-			config:     c,
+			cfg:        c,
 		}
 		index.child = append(index.child, child)
 	}

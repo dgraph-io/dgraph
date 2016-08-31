@@ -18,6 +18,7 @@ package query
 
 import (
 	"bytes"
+	"context"
 	"encoding/gob"
 	"encoding/json"
 	"io/ioutil"
@@ -26,19 +27,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gogo/protobuf/proto"
-	"github.com/google/flatbuffers/go"
-	"golang.org/x/net/context"
-
-	"github.com/dgraph-io/dgraph/bidx"
 	"github.com/dgraph-io/dgraph/commit"
 	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/index"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/query/graph"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/gogo/protobuf/proto"
+	"github.com/google/flatbuffers/go"
 )
 
 func setErr(err *error, nerr error) {
@@ -201,10 +200,10 @@ func populateGraph(t *testing.T) (string, *store.Store) {
 	// Create fake indices.
 	reader := bytes.NewReader([]byte(
 		`{"Config": [{"Type": "text", "Attribute": "name", "NumChild": 1}]}`))
-	indicesConfig, err := bidx.NewIndicesConfig(reader)
+	indicesConfig, err := index.NewConfigs(reader)
 	x.Check(err)
-	x.Check(bidx.CreateIndices(indicesConfig, dir))
-	indices := bidx.InitWorker(dir)
+	x.Check(index.CreateIndices(indicesConfig, dir))
+	indices := index.InitWorker(dir)
 	x.Check(indices.Backfill(context.Background(), ps))
 
 	return dir, ps

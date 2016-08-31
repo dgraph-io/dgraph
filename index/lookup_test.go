@@ -184,7 +184,7 @@ func getIndices(t *testing.T) (string, *Indices) {
 	// Create fake indices.
 	reader := bytes.NewReader([]byte(
 		`{"Config": [{"Type": "text", "Attribute": "name", "NumChild": 1}]}`))
-	indicesConfig, err := NewIndicesConfig(reader)
+	indicesConfig, err := NewConfigs(reader)
 	x.Check(err)
 	x.Check(CreateIndices(indicesConfig, dir))
 	indices := InitWorker(dir)

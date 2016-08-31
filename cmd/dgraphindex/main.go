@@ -9,7 +9,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/dgraph-io/dgraph/bidx"
+	"github.com/dgraph-io/dgraph/index"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -32,13 +32,13 @@ func main() {
 	f, err := os.Open(*configFilename)
 	x.Check(err)
 	defer f.Close()
-	config, err := bidx.NewIndicesConfig(f)
+	config, err := index.NewConfigs(f)
 	x.Check(err)
 
 	// Try writing to index directory.
-	x.Check(bidx.CreateIndices(config, *indicesDir))
+	x.Check(index.CreateIndices(config, *indicesDir))
 
-	indices, err := bidx.NewIndices(*indicesDir)
+	indices, err := index.NewIndices(*indicesDir)
 	x.Check(err)
 
 	start := time.Now()

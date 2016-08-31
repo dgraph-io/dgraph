@@ -30,8 +30,8 @@ import (
 	"github.com/google/flatbuffers/go"
 	"golang.org/x/net/context"
 
-	"github.com/dgraph-io/dgraph/bidx"
 	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/index"
 	"github.com/dgraph-io/dgraph/query/graph"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/worker"
@@ -130,8 +130,8 @@ type SubGraph struct {
 	Query         []byte // Contains list of source UIDs.
 	Result        []byte // Contains UID matrix or list of values for child attributes.
 	filters       []gql.Pair
-	filterResults chan *bidx.LookupResult // Same size as Filters.
-	sorted        []uint64                // After filtering, this is what we got.
+	filterResults chan *index.LookupResult // Same size as Filters.
+	sorted        []uint64                 // After filtering, this is what we got.
 }
 
 func mergeInterfaces(i1 interface{}, i2 interface{}) interface{} {
@@ -642,15 +642,15 @@ func (sg *SubGraph) indicesLookup() {
 	if len(sg.filters) == 0 {
 		return
 	}
-	sg.filterResults = make(chan *bidx.LookupResult)
+	sg.filterResults = make(chan *index.LookupResult)
 	// For now, assume a match query.
 	for _, p := range sg.filters {
-		li := &bidx.LookupSpec{
+		li := &index.LookupSpec{
 			Attr:     p.Key,
 			Param:    []string{p.Val},
-			Category: bidx.LookupMatch,
+			Category: index.LookupMatch,
 		}
-		go bidx.WorkerLookup(li, sg.filterResults)
+		go index.WorkerLookup(li, sg.filterResults)
 	}
 }
 

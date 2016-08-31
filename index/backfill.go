@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
+// Package index does indexing of values in database.
 package index
 
 import (
@@ -27,10 +27,10 @@ import (
 
 // Backfill simply adds stuff from posting list into index.
 func (s *Indices) Backfill(ctx context.Context, ps *store.Store) error {
-	for _, index := range s.pred {
+	for _, index := range s.idx {
 		go index.backfill(ctx, ps, s.errC)
 	}
-	for i := 0; i < len(s.pred); i++ {
+	for i := 0; i < len(s.idx); i++ {
 		if err := <-s.errC; err != nil {
 			return err
 		}
@@ -38,24 +38,24 @@ func (s *Indices) Backfill(ctx context.Context, ps *store.Store) error {
 	return nil
 }
 
-func (s *predIndex) backfill(ctx context.Context, ps *store.Store, errC chan error) {
-	x.Trace(ctx, "Backfilling attribute: %s\n", s.config.Attribute)
+func (s *index) backfill(ctx context.Context, ps *store.Store, errC chan error) {
+	x.Trace(ctx, "Backfilling attribute: %s\n", s.cfg.Attribute)
 	for _, child := range s.child {
 		go child.backfill(ctx, ps, s.errC)
 	}
 
 	it := ps.NewIterator()
 	defer it.Close()
-	prefix := s.config.Attribute + "|"
+	prefix := s.cfg.Attribute + "|"
 	for it.Seek([]byte(prefix)); it.Valid(); it.Next() {
-		if !it.ValidForPrefix([]byte(s.config.Attribute)) {
+		if !it.ValidForPrefix([]byte(s.cfg.Attribute)) {
 			// Keys are of the form attr|uid and sorted. Once we hit a attr that is
 			// wrong, we are done.
 			break
 		}
 		uid, attr := posting.DecodeKey(it.Key().Data())
 
-		childID := uid % uint64(s.config.NumChild)
+		childID := uid % uint64(s.cfg.NumChild)
 		pl := types.GetRootAsPostingList(it.Value().Data(), 0)
 		var p types.Posting
 		for i := 0; i < pl.PostingsLength(); i++ {
@@ -72,10 +72,10 @@ func (s *predIndex) backfill(ctx context.Context, ps *store.Store, errC chan err
 		}
 	}
 
-	for i := 0; i < s.config.NumChild; i++ {
+	for i := 0; i < s.cfg.NumChild; i++ {
 		close(s.child[i].jobC)
 	}
-	for i := 0; i < s.config.NumChild; i++ {
+	for i := 0; i < s.cfg.NumChild; i++ {
 		if err := <-s.errC; err != nil {
 			errC <- err // Some child failed. Inform our parent and return.
 			return
@@ -84,7 +84,7 @@ func (s *predIndex) backfill(ctx context.Context, ps *store.Store, errC chan err
 	errC <- nil
 }
 
-func (s *indexChild) backfill(ctx context.Context, ps *store.Store, errC chan error) {
+func (s *childIndex) backfill(ctx context.Context, ps *store.Store, errC chan error) {
 	var count uint64
 	for job := range s.jobC {
 		if job.op == jobOpAdd {
@@ -107,13 +107,13 @@ func (s *indexChild) backfill(ctx context.Context, ps *store.Store, errC chan er
 }
 
 // doIndex apply the batch. count is incremented by batch size. Returns any error.
-func (s *indexChild) doIndex(ctx context.Context, count *uint64) error {
+func (s *childIndex) doIndex(ctx context.Context, count *uint64) error {
 	if s.batch.Size() == 0 {
 		return nil
 	}
 	newCount := *count + uint64(s.batch.Size())
 	x.Trace(ctx, "Attr[%s] child %d batch[%d, %d]\n",
-		s.config.Attribute, s.childID, count, newCount)
+		s.cfg.Attribute, s.childID, count, newCount)
 	err := s.bleveIndex.Batch(s.batch)
 	s.batch.Reset()
 	*count = newCount

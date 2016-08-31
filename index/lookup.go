@@ -59,7 +59,7 @@ func (s *Indices) Lookup(li *LookupSpec) *LookupResult {
 			Err: x.Errorf("Indices is nil"),
 		}
 	}
-	index := s.pred[li.Attr]
+	index := s.idx[li.Attr]
 	if index == nil {
 		return &LookupResult{
 			Err: x.Errorf("Attribute missing: %s", li.Attr),
@@ -68,7 +68,7 @@ func (s *Indices) Lookup(li *LookupSpec) *LookupResult {
 	return index.lookup(li)
 }
 
-func (s *predIndex) lookup(li *LookupSpec) *LookupResult {
+func (s *index) lookup(li *LookupSpec) *LookupResult {
 	results := make(chan *LookupResult)
 	for _, ss := range s.child {
 		go ss.lookup(li, results)
@@ -86,7 +86,7 @@ func (s *predIndex) lookup(li *LookupSpec) *LookupResult {
 	return mergeResults(lr)
 }
 
-func (s *indexChild) lookup(li *LookupSpec, results chan *LookupResult) {
+func (s *childIndex) lookup(li *LookupSpec, results chan *LookupResult) {
 	var query bleve.Query
 	switch li.Category {
 	case LookupTerm:
