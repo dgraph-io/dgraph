@@ -43,7 +43,6 @@ func InitWorker(indicesDir string) *Indices {
 	globalIndices, err = NewIndices(indicesDir)
 	x.Check(err)
 
-	globalIndices.initFrontfill()
 	return globalIndices
 }
 

@@ -41,9 +41,9 @@ type Configs struct {
 // IndexConfig defines the index for a single predicate. Each predicate should
 // have at most one index.
 type Config struct {
-	Type      string
-	Attribute string
-	NumChild  int
+	Type     string
+	Attr     string `json:"Attribute"`
+	NumChild int
 }
 
 func getDefaultConfig(basedir string) string {
@@ -73,10 +73,10 @@ func (c *Configs) validate() error {
 	attrMap := make(map[string]bool)
 	for _, cfg := range c.Cfg {
 		// Check that there are no duplicates in attributes.
-		if attrMap[cfg.Attribute] {
-			return x.Errorf("Duplicate attr %s", cfg.Attribute)
+		if attrMap[cfg.Attr] {
+			return x.Errorf("Duplicate attr %s", cfg.Attr)
 		}
-		attrMap[cfg.Attribute] = true
+		attrMap[cfg.Attr] = true
 		if cfg.NumChild < 1 {
 			return x.Errorf("NumChild too small %d", cfg.NumChild)
 		}

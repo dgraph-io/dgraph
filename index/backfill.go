@@ -39,16 +39,16 @@ func (s *Indices) Backfill(ctx context.Context, ps *store.Store) error {
 }
 
 func (s *index) backfill(ctx context.Context, ps *store.Store, errC chan error) {
-	x.Trace(ctx, "Backfilling attribute: %s\n", s.cfg.Attribute)
+	x.Trace(ctx, "Backfilling attribute: %s\n", s.cfg.Attr)
 	for _, child := range s.child {
 		go child.backfill(ctx, ps, s.errC)
 	}
 
 	it := ps.NewIterator()
 	defer it.Close()
-	prefix := s.cfg.Attribute + "|"
+	prefix := s.cfg.Attr + "|"
 	for it.Seek([]byte(prefix)); it.Valid(); it.Next() {
-		if !it.ValidForPrefix([]byte(s.cfg.Attribute)) {
+		if !it.ValidForPrefix([]byte(s.cfg.Attr)) {
 			// Keys are of the form attr|uid and sorted. Once we hit a attr that is
 			// wrong, we are done.
 			break
@@ -64,8 +64,7 @@ func (s *index) backfill(ctx context.Context, ps *store.Store, errC chan error) 
 				continue
 			}
 			value := string(p.ValueBytes())
-			s.child[childID].jobC <- indexJob{
-				op:    jobOpAdd,
+			s.child[childID].backfillC <- indexJob{
 				uid:   uid,
 				value: value,
 			}
@@ -73,7 +72,7 @@ func (s *index) backfill(ctx context.Context, ps *store.Store, errC chan error) 
 	}
 
 	for i := 0; i < s.cfg.NumChild; i++ {
-		close(s.child[i].jobC)
+		close(s.child[i].backfillC)
 	}
 	for i := 0; i < s.cfg.NumChild; i++ {
 		if err := <-s.errC; err != nil {
@@ -86,13 +85,11 @@ func (s *index) backfill(ctx context.Context, ps *store.Store, errC chan error) 
 
 func (s *childIndex) backfill(ctx context.Context, ps *store.Store, errC chan error) {
 	var count uint64
-	for job := range s.jobC {
-		if job.op == jobOpAdd {
+	for job := range s.backfillC {
+		if !job.del {
 			s.batch.Index(string(posting.UID(job.uid)), job.value)
 		} else {
-			err := x.Errorf("Unknown job operation for backfill: %d", job.op)
-			// We don't x.TraceError here. Let whoever wants to print the error call
-			// x.TraceError. Otherwise, we print the error twice.
+			err := x.Errorf("Backfill does not support deletes %s %d", job.attr, job.uid)
 			errC <- err
 			return
 		}
@@ -113,7 +110,7 @@ func (s *childIndex) doIndex(ctx context.Context, count *uint64) error {
 	}
 	newCount := *count + uint64(s.batch.Size())
 	x.Trace(ctx, "Attr[%s] child %d batch[%d, %d]\n",
-		s.cfg.Attribute, s.childID, count, newCount)
+		s.cfg.Attr, s.childID, count, newCount)
 	err := s.bleveIndex.Batch(s.batch)
 	s.batch.Reset()
 	*count = newCount

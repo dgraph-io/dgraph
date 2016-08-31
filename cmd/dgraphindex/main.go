@@ -30,7 +30,7 @@ func main() {
 
 	// Read in the config file.
 	f, err := os.Open(*configFilename)
-	x.Check(err)
+	x.Checkf(err, "Cannot open config file: %s", *configFilename)
 	defer f.Close()
 	config, err := index.NewConfigs(f)
 	x.Check(err)
