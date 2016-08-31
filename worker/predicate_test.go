@@ -51,8 +51,10 @@ func TestPopulateShard(t *testing.T) {
 	}
 	defer os.RemoveAll(dir)
 
-	ps := new(store.Store)
-	ps.Init(dir)
+	ps, err := store.NewStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer ps.Close()
 
 	// Batch writing dummy key value pairs which will be transferred to other
@@ -76,8 +78,10 @@ func TestPopulateShard(t *testing.T) {
 	}
 	defer os.RemoveAll(dir1)
 
-	ps1 := new(store.Store)
-	ps1.Init(dir1)
+	ps1, err := store.NewStore(dir1)
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer ps1.Close()
 
 	InitState(ps1, nil, 1, 2)
