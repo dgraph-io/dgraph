@@ -152,7 +152,7 @@ func mergeInterfaces(i1 interface{}, i2 interface{}) interface{} {
 // findScalarType returns leaf node type from define schema for type coercion
 func findScalarType(tt []string) (types.GraphQLType, error) {
 	// we know the root will always be QueryType for a result graph
-	return findType(tt[1:], types.QueryType)
+	return findType(tt[1:], types.Schema.Query)
 }
 
 // findType recursively finds out type of leaf node
@@ -175,11 +175,12 @@ func findFieldType(f string, ptype types.GraphQLObject) (types.GraphQLType, erro
 	if !present {
 		return nil, fmt.Errorf("Field:%v not defined under type:%v in schema.\n", f, ptype.Name)
 	}
-	switch val.Type.(type) {
+	switch val.(type) {
 	case types.GraphQLList:
-		return val.Type.(types.GraphQLList).HasType, nil
+		// separatly checking for list-type since we want it's element-type for next iteration
+		return val.(types.GraphQLList).HasType, nil
 	default:
-		return val.Type, nil
+		return val, nil
 	}
 }
 
@@ -297,18 +298,18 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 			m["_uid_"] = fmt.Sprintf("%#x", q.Uids(i))
 		}
 		// TODO(akhil): currently using string value after type-casting flatbuffer for
-		// type-assertion and coerison
+		// type-assertion and coercion
 		// Direct type coercion only possible after mutation is also validated and values
 		// are stored according to correct types
 		// After that, 'string(val)' will be replaced by direct type inference/coercion
-		ltype, err := findScalarType(strings.Split(sg.TypeTree, ":"))
-		if err != nil {
+
+		if ltype, err := findScalarType(strings.Split(sg.TypeTree, ":")); err != nil {
 			// No type defined for present attribute in type schema, return string value
 			m[sg.Attr] = string(val)
 			log.Printf("Type/Schema warning: %v\n", err)
 		} else {
 			stype := ltype.(types.GraphQLScalar)
-			lval, err := stype.Config.ParseType(string(val))
+			lval, err := stype.ParseType(string(val))
 			if err != nil {
 				return result, err
 			}

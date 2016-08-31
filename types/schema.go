@@ -16,78 +16,45 @@
 
 package types
 
-import (
-	"fmt"
-)
-
 // GraphQLSchema declares the schema structure the GraphQL queries.
 type GraphQLSchema struct {
 	Query    GraphQLObject
 	Mutation GraphQLObject
 }
 
-var (
-	// Schema defines a dummy schema to test type and validaiton system.
-	Schema *GraphQLSchema
-	// QueryType defines sample basic schema.
-	QueryType GraphQLObject
-	// personType for validating coercion system implementation.
-	personType GraphQLObject
-)
+// Schema defines a dummy schema to test type and validation system.
+var Schema GraphQLSchema
 
 // LoadSchema loads the schema
-func LoadSchema() error {
-
-	var combinedError error
-	var err error
+func LoadSchema() {
 
 	// load scalar types
-	if err = LoadScalarTypes(); err != nil {
-		combinedError = err
-	}
+	loadScalarTypes()
 
 	// TODO(akhil): implement mechanism for client to define and upload a schema.
 	// Client schema will be parsed and loaded here.
 
-	personType = GraphQLObject{
+	personType := GraphQLObject{
 		Name: "Person",
 		Desc: "object to represent a person type",
 		Fields: FieldMap{
-			"name": &Field{
-				Type: String,
-			},
-			"gender": &Field{
-				Type: String,
-			},
-			"age": &Field{
-				Type: Int,
-			},
-			"sword_present": &Field{
-				Type: Boolean,
-			},
-			"survival_rate": &Field{
-				Type: Float,
-			},
+			"name":          String,
+			"gender":        String,
+			"age":           Int,
+			"survival_rate": Float,
+			"sword_present": Boolean,
 		},
 	}
 
-	personType.Fields["friend"] = &Field{
-		Type: GraphQLList{HasType: personType},
-	}
+	// defined this field separately to let personType instantiate properly
+	personType.Fields["friend"] = GraphQLList{HasType: personType}
 
-	QueryType = GraphQLObject{
+	queryType := GraphQLObject{
 		Name: "Query",
 		Desc: "Sample query structure",
 		Fields: FieldMap{
-			"actor": &Field{
-				Type: personType,
-			},
+			"actor": personType,
 		},
 	}
-	Schema = &GraphQLSchema{Query: QueryType}
-	return combinedError
-}
-
-func joinError(e1 error, e2 error) error {
-	return fmt.Errorf("%v\n%v", e1.Error(), e2.Error())
+	Schema = GraphQLSchema{Query: queryType}
 }

@@ -339,9 +339,7 @@ func runGrpcServer(address string) {
 // It is called after all import packages and variable declarations have been initialized
 // TODO(akhil): move out to types package and initialize there AFTER ensuring flags are initialized
 func init() {
-	if err := types.LoadSchema(); err != nil {
-		log.Fatal(err)
-	}
+	types.LoadSchema()
 }
 
 func main() {
