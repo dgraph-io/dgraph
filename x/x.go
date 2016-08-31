@@ -18,14 +18,14 @@ package x
 
 import (
 	"encoding/json"
-	"flag"
 	"fmt"
 	"net/http"
 	"time"
 
+	"context"
+
 	"github.com/Sirupsen/logrus"
 	"github.com/google/flatbuffers/go"
-	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/dgraph/task"
@@ -45,10 +45,6 @@ const (
 	ErrorInvalidMutation = "ErrorInvalidMutation"
 )
 
-const dgraphVersion = "0.4.3"
-
-var version = flag.Bool("version", false, "Prints the version of Dgraph")
-
 type Status struct {
 	Code    string `json:"code"`
 	Message string `json:"message"`
@@ -61,22 +57,6 @@ type DirectedEdge struct {
 	ValueId   uint64
 	Source    string
 	Timestamp time.Time
-}
-
-// PrintVersionOnly prints version and other helpful information
-// if version flag is set to true.
-func PrintVersionOnly() bool {
-	if *version {
-		fmt.Printf("Dgraph version %s\n", dgraphVersion)
-		fmt.Println("\nCopyright 2016 Dgraph Labs, Inc.")
-		fmt.Println("Licensed under the Apache License, Version 2.0.")
-		fmt.Println("\nFor Dgraph official documentation, visit https://wiki.dgraph.io.")
-		fmt.Println("For discussions about Dgraph, visit https://discuss.dgraph.io.")
-		fmt.Println("To say hi to the community, visit https://dgraph.slack.com.")
-		return true
-	}
-
-	return false
 }
 
 func SetError(prev *error, n error) {

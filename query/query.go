@@ -28,8 +28,9 @@ import (
 	"sync"
 	"time"
 
+	"context"
+
 	"github.com/google/flatbuffers/go"
-	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/query/graph"

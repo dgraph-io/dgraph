@@ -34,13 +34,7 @@ var numcpu = flag.Int("numCpu", runtime.NumCPU(),
 	"Number of cores to be used by the process")
 
 func main() {
-	flag.Parse()
-	if !flag.Parsed() {
-		glog.Fatal("Unable to parse flags")
-	}
-	if ok := x.PrintVersionOnly(); ok {
-		return
-	}
+	x.Init()
 
 	if len(*cpuprofile) > 0 {
 		f, err := os.Create(*cpuprofile)
@@ -73,8 +67,10 @@ func main() {
 		log.Fatalf("Error while creating the filepath for uids: %v", err)
 	}
 
-	ps := new(store.Store)
-	ps.Init(*uidDir)
+	ps, err := store.NewStore(*uidDir)
+	if err != nil {
+		glog.Fatalf("Fail to initialize ps: %v", err)
+	}
 	defer ps.Close()
 
 	posting.Init(nil)

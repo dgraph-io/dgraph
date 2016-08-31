@@ -16,6 +16,7 @@ addons:
       - libbz2-dev
       - libsnappy-dev
       - zlib1g-dev
+      - jq
 env:
   - CC=clang-3.8 CXX=clang++-3.8
 cache:
@@ -29,6 +30,6 @@ install:
 before_script:
   - go get github.com/mattn/goveralls
 script:
-  - bash contrib/load-test.sh $HOME/build
   - bash contrib/cover.sh $HOME/build coverage.out
+  - bash contrib/load-test.sh $HOME/build
   - goveralls -service=travis-ci -coverprofile=coverage.out

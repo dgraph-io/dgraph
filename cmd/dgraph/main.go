@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
+
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc"
 
@@ -58,6 +59,8 @@ var (
 		"serves only entities whose Fingerprint % numInstance == instanceIdx.")
 	workers = flag.String("workers", "",
 		"Comma separated list of IP addresses of workers")
+	workerPort = flag.String("workerport", ":12345",
+		"Port used by worker for internal communication.")
 	nomutations = flag.Bool("nomutations", false, "Don't allow mutations on this server.")
 	tracing     = flag.Float64("trace", 0.5, "The ratio of queries to trace.")
 )
@@ -342,14 +345,7 @@ func init() {
 }
 
 func main() {
-	log.SetFlags(log.Lshortfile | log.Flags())
-	flag.Parse()
-	if !flag.Parsed() {
-		log.Fatal("Unable to parse flags")
-	}
-	if ok := x.PrintVersionOnly(); ok {
-		return
-	}
+	x.Init()
 
 	numCpus := *numcpu
 	prev := runtime.GOMAXPROCS(numCpus)
@@ -372,9 +368,9 @@ func main() {
 		log.Fatalf("Error while creating the filepath for uids: %v", err)
 	}
 
-	ps := new(store.Store)
-	if err := ps.Init(*postingDir); err != nil {
-		log.Fatalf("error initializing postings store: %s", err)
+	ps, err := store.NewStore(*postingDir)
+	if err != nil {
+		log.Fatalf("error initializing postings store: %v", err)
 	}
 	defer ps.Close()
 
@@ -392,18 +388,20 @@ func main() {
 
 	posting.Init(clog)
 	if *instanceIdx != 0 {
-		worker.Init(ps, nil, *instanceIdx, lenAddr)
+		worker.InitState(ps, nil, *instanceIdx, lenAddr)
 		uid.Init(nil)
 	} else {
-		uidStore := new(store.Store)
-		uidStore.Init(*uidDir)
+		uidStore, err := store.NewStore(*uidDir)
+		if err != nil {
+			log.Fatalf("error initializing uid store: %s", err)
+		}
 		defer uidStore.Close()
 		// Only server instance 0 will have uidStore
-		worker.Init(ps, uidStore, *instanceIdx, lenAddr)
+		worker.InitState(ps, uidStore, *instanceIdx, lenAddr)
 		uid.Init(uidStore)
 	}
 
-	worker.Connect(addrs)
+	worker.Connect(addrs, *workerPort)
 	// Grpc server runs on (port + 1)
 	go runGrpcServer(fmt.Sprintf(":%d", *port+1))
 
