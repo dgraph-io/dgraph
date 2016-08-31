@@ -38,7 +38,7 @@ func (s *Indices) Backfill(ctx context.Context, ps *store.Store) error {
 	return nil
 }
 
-func (s *index) backfill(ctx context.Context, ps *store.Store, errC chan error) {
+func (s *predIndex) backfill(ctx context.Context, ps *store.Store, errC chan error) {
 	x.Trace(ctx, "Backfilling attribute: %s\n", s.cfg.Attr)
 	for _, child := range s.child {
 		go child.backfill(ctx, ps, s.errC)
@@ -64,7 +64,7 @@ func (s *index) backfill(ctx context.Context, ps *store.Store, errC chan error) 
 				continue
 			}
 			value := string(p.ValueBytes())
-			s.child[childID].backfillC <- indexJob{
+			s.child[childID].backfillC <- &indexJob{
 				uid:   uid,
 				value: value,
 			}

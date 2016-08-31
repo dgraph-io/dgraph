@@ -68,7 +68,7 @@ func (s *Indices) Lookup(li *LookupSpec) *LookupResult {
 	return index.lookup(li)
 }
 
-func (s *index) lookup(li *LookupSpec) *LookupResult {
+func (s *predIndex) lookup(li *LookupSpec) *LookupResult {
 	results := make(chan *LookupResult)
 	for _, ss := range s.child {
 		go ss.lookup(li, results)

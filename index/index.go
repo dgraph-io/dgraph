@@ -50,7 +50,7 @@ type indexJob struct {
 // Indices is the core object for working with Bleve indices.
 type Indices struct {
 	basedir string
-	idx     map[string]*index // Maps predicate / attribute to index.
+	idx     map[string]*predIndex // Maps predicate / attribute to index.
 	cfg     *Configs
 
 	// For backfill.
@@ -58,7 +58,7 @@ type Indices struct {
 }
 
 // index is index for one predicate.
-type index struct {
+type predIndex struct {
 	cfg   *Config
 	child []*childIndex
 
@@ -74,8 +74,8 @@ type childIndex struct {
 	batch      *bleve.Batch
 	parser     valueParser
 
-	backfillC  chan indexJob
-	frontfillC chan indexJob
+	backfillC  chan *indexJob
+	frontfillC chan *indexJob
 }
 
 // predPrefix takes a predicate name, and generate a random-looking filename.
@@ -125,7 +125,7 @@ func NewIndices(basedir string) (*Indices, error) {
 	}
 	indices := &Indices{
 		basedir: basedir,
-		idx:     make(map[string]*index),
+		idx:     make(map[string]*predIndex),
 		cfg:     cfg,
 		errC:    make(chan error),
 	}
@@ -140,9 +140,9 @@ func NewIndices(basedir string) (*Indices, error) {
 	return indices, nil
 }
 
-func newIndex(c *Config, basedir string) (*index, error) {
+func newIndex(c *Config, basedir string) (*predIndex, error) {
 	prefix := predPrefix(basedir, c.Attr)
-	index := &index{
+	index := &predIndex{
 		cfg:  c,
 		errC: make(chan error),
 	}
@@ -158,8 +158,8 @@ func newIndex(c *Config, basedir string) (*index, error) {
 			batch:      bi.NewBatch(),
 			parser:     getParser(c.Type),
 			cfg:        c,
-			backfillC:  make(chan indexJob, backfillBufSize),
-			frontfillC: make(chan indexJob, frontfillBufSize),
+			backfillC:  make(chan *indexJob, backfillBufSize),
+			frontfillC: make(chan *indexJob, frontfillBufSize),
 		}
 		go child.handleFrontfill()
 		index.child = append(index.child, child)

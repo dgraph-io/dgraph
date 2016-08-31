@@ -62,31 +62,23 @@ func (s *Indices) Frontfill(ctx context.Context, job *indexJob) error {
 	return index.frontfill(ctx, job)
 }
 
-func (s *index) frontfill(ctx context.Context, job *indexJob) error {
+func (s *predIndex) frontfill(ctx context.Context, job *indexJob) error {
 	childID := job.uid % uint64(s.cfg.NumChild)
 	child := s.child[childID]
-	if child.jobC == nil {
-		return x.Errorf("jobC nil for %s %d", child.cfg.Attr, childID)
+	if child.frontfillC == nil {
+		return x.Errorf("Channel nil for %s %d", child.cfg.Attr, childID)
 	}
-	child.jobC <- job
+	child.frontfillC <- job
 	return nil
 }
 
-func (s *Indices) initFrontfill() {
-	for _, idx := range s.idx {
-		for _, child := range idx.child {
-			go child.handleFrontfill()
-		}
-	}
-}
-
 func (s *childIndex) handleFrontfill() {
-	for m := range s.jobC {
+	for m := range s.frontfillC {
 		s.bleveLock.Lock()
-		if !m.Delete {
-			s.bleveIndex.Index(string(posting.UID(m.UID)), m.Value)
+		if !m.del {
+			s.bleveIndex.Index(string(posting.UID(m.uid)), m.value)
 		} else {
-			s.bleveIndex.Delete(string(posting.UID(m.UID)))
+			s.bleveIndex.Delete(string(posting.UID(m.uid)))
 		}
 		s.bleveLock.Unlock()
 	}
