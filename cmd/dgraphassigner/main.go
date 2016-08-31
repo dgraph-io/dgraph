@@ -73,8 +73,10 @@ func main() {
 		log.Fatalf("Error while creating the filepath for uids: %v", err)
 	}
 
-	ps := new(store.Store)
-	ps.Init(*uidDir)
+	ps, err := store.NewStore(*uidDir)
+	if err != nil {
+		glog.Fatalf("Fail to initialize ps: %v", err)
+	}
 	defer ps.Close()
 
 	posting.Init(nil)

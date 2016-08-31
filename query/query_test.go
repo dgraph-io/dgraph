@@ -101,8 +101,11 @@ func TestNewGraph(t *testing.T) {
 		UID:  101,
 		Attr: "me",
 	}
-	ps := new(store.Store)
-	ps.Init(dir)
+	ps, err := store.NewStore(dir)
+	if err != nil {
+		t.Error(err)
+		return
+	}
 	ctx := context.Background()
 	sg, err := newGraph(ctx, gq)
 	if err != nil {
@@ -137,8 +140,11 @@ func populateGraph(t *testing.T) (string, *store.Store) {
 		return "", nil
 	}
 
-	ps := new(store.Store)
-	ps.Init(dir)
+	ps, err := store.NewStore(dir)
+	if err != nil {
+		t.Error(err)
+		return "", nil
+	}
 
 	worker.InitState(ps, nil, 0, 1)
 

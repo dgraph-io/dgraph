@@ -54,8 +54,10 @@ func prepare() (dir1, dir2 string, ps *store.Store, clog *commit.Logger, rerr er
 	if err != nil {
 		return "", "", nil, nil, err
 	}
-	ps = new(store.Store)
-	ps.Init(dir1)
+	ps, err = store.NewStore(dir1)
+	if err != nil {
+		return "", "", nil, nil, err
+	}
 
 	dir2, err = ioutil.TempDir("", "storemuts_")
 	if err != nil {

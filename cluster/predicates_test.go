@@ -53,8 +53,11 @@ func TestGetPredicateList(t *testing.T) {
 		return
 	}
 	defer os.RemoveAll(dir1)
-	ps1 := new(store.Store)
-	ps1.Init(dir1)
+	ps1, err := store.NewStore(dir1)
+	if err != nil {
+		t.Error(err)
+		return
+	}
 	defer ps1.Close()
 
 	k1 := posting.Key(1000, "friend")

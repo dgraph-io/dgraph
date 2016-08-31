@@ -68,8 +68,11 @@ func TestProcessTask(t *testing.T) {
 	}
 
 	defer os.RemoveAll(dir)
-	ps := new(store.Store)
-	ps.Init(dir)
+	ps, err := store.NewStore(dir)
+	if err != nil {
+		t.Error(err)
+		return
+	}
 
 	clog := commit.NewLogger(dir, "mutations", 50<<20)
 	clog.Init()

@@ -27,9 +27,10 @@ import (
 
 var log = x.Log("store")
 
+// Store contains some handles to RocksDB.
 type Store struct {
 	db       *rocksdb.DB
-	opt      *rocksdb.Options
+	opt      *rocksdb.Options // Contains blockopt.
 	blockopt *rocksdb.BlockBasedTableOptions
 	ropt     *rocksdb.ReadOptions
 	wopt     *rocksdb.WriteOptions
@@ -38,6 +39,14 @@ type Store struct {
 func (s *Store) setOpts() {
 	s.opt = rocksdb.NewDefaultOptions()
 	s.blockopt = rocksdb.NewDefaultBlockBasedTableOptions()
+	// If you want to access blockopt.blockCache, you need to grab handles to them
+	// as well. Otherwise, they will be nil. However, for now, we do not really need
+	// to do this.
+	// s.blockopt.SetBlockCache(rocksdb.NewLRUCache(blockCacheSize))
+	// s.blockopt.SetBlockCacheCompressed(rocksdb.NewLRUCache(blockCacheSize))
+	s.blockopt.SetNoBlockCache(false)
+	s.opt.SetBlockBasedTableFactory(s.blockopt)
+
 	s.opt.SetCreateIfMissing(true)
 	fp := rocksdb.NewBloomFilter(16)
 	s.blockopt.SetFilterPolicy(fp)
@@ -47,16 +56,28 @@ func (s *Store) setOpts() {
 	s.wopt.SetSync(false) // We don't need to do synchronous writes.
 }
 
-func (s *Store) Init(filepath string) (err error) {
+// NewStore constructs a Store object at filepath, given some options.
+func NewStore(filepath string) (*Store, error) {
+	s := &Store{}
 	s.setOpts()
+	var err error
 	s.db, err = rocksdb.OpenDb(s.opt, filepath)
-	return
+	if err != nil {
+		return nil, err
+	}
+	return s, nil
 }
 
-func (s *Store) InitReadOnly(filepath string) (err error) {
+// NewReadOnlyStore constructs a readonly Store object at filepath, given options.
+func NewReadOnlyStore(filepath string) (*Store, error) {
+	s := &Store{}
 	s.setOpts()
+	var err error
 	s.db, err = rocksdb.OpenDbForReadOnly(s.opt, filepath, false)
-	return
+	if err != nil {
+		return nil, err
+	}
+	return s, nil
 }
 
 func (s *Store) Get(key []byte) (val []byte, rerr error) {

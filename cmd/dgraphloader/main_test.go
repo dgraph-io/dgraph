@@ -28,11 +28,17 @@ func TestQuery(t *testing.T) {
 	defer os.RemoveAll(dir)
 	defer os.RemoveAll(dir1)
 
-	ps := new(store.Store)
-	ps.Init(dir)
+	ps, err := store.NewStore(dir)
+	if err != nil {
+		t.Error(err)
+		t.Fail()
+	}
 
-	ps1 := new(store.Store)
-	ps1.Init(dir1)
+	ps1, err := store.NewStore(dir1)
+	if err != nil {
+		t.Error(err)
+		t.Fail()
+	}
 
 	clog := commit.NewLogger(dir, "mutations", 50<<20)
 	clog.Init()
@@ -106,8 +112,11 @@ func BenchmarkLoadRW(b *testing.B) {
 	logrus.SetLevel(logrus.ErrorLevel)
 	var nameL []string
 
-	uidStore := new(store.Store)
-	uidStore.Init(*uiddir)
+	uidStore, err := store.NewStore(*uiddir)
+	if err != nil {
+		b.Errorf("Error creating uidStore: %v", err)
+		return
+	}
 	defer uidStore.Close()
 
 	posting.Init(nil)
@@ -137,8 +146,11 @@ func BenchmarkLoadReadOnly(b *testing.B) {
 	logrus.SetLevel(logrus.ErrorLevel)
 	var nameL []string
 
-	uidStore := new(store.Store)
-	uidStore.InitReadOnly(*uiddir)
+	uidStore, err := store.NewReadOnlyStore(*uiddir)
+	if err != nil {
+		b.Errorf("Error creating uidStore: %v", err)
+		return
+	}
 	defer uidStore.Close()
 
 	posting.Init(nil)

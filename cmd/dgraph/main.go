@@ -364,9 +364,9 @@ func main() {
 		log.Fatalf("Error while creating the filepath for uids: %v", err)
 	}
 
-	ps := new(store.Store)
-	if err := ps.Init(*postingDir); err != nil {
-		log.Fatalf("error initializing postings store: %s", err)
+	ps, err := store.NewStore(*postingDir)
+	if err != nil {
+		log.Fatalf("error initializing postings store: %v", err)
 	}
 	defer ps.Close()
 
@@ -387,8 +387,10 @@ func main() {
 		worker.InitState(ps, nil, *instanceIdx, lenAddr)
 		uid.Init(nil)
 	} else {
-		uidStore := new(store.Store)
-		uidStore.Init(*uidDir)
+		uidStore, err := store.NewStore(*uidDir)
+		if err != nil {
+			log.Fatalf("error initializing uid store: %s", err)
+		}
 		defer uidStore.Close()
 		// Only server instance 0 will have uidStore
 		worker.InitState(ps, uidStore, *instanceIdx, lenAddr)

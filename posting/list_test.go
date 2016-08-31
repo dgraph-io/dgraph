@@ -117,8 +117,11 @@ func TestAddMutation(t *testing.T) {
 	}
 
 	defer os.RemoveAll(dir)
-	ps := new(store.Store)
-	ps.Init(dir)
+	ps, err := store.NewStore(dir)
+	if err != nil {
+		t.Error(err)
+		return
+	}
 
 	clog := commit.NewLogger(dir, "mutations", 50<<20)
 	clog.Init()
@@ -254,8 +257,11 @@ func TestAddMutation_Value(t *testing.T) {
 	}
 
 	defer os.RemoveAll(dir)
-	ps := new(store.Store)
-	ps.Init(dir)
+	ps, err := store.NewStore(dir)
+	if err != nil {
+		t.Error(err)
+		return
+	}
 
 	clog := commit.NewLogger(dir, "mutations", 50<<20)
 	clog.Init()
@@ -327,8 +333,11 @@ func benchmarkAddMutations(n int, b *testing.B) {
 	}
 
 	defer os.RemoveAll(dir)
-	ps := new(store.Store)
-	ps.Init(dir)
+	ps, err := store.NewStore(dir)
+	if err != nil {
+		b.Error(err)
+		return
+	}
 
 	clog := commit.NewLogger(dir, "mutations", 50<<20)
 	clog.SyncEvery = n
