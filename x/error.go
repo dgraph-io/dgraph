@@ -46,7 +46,7 @@ func Check(err error) {
 // Checkf is Check with extra info.
 func Checkf(err error, format string, args ...interface{}) {
 	if err != nil {
-		log.Fatalf("%+v", errors.Wrapf(err, format, args))
+		log.Fatalf("%+v", errors.Wrapf(err, format, args...))
 	}
 }
 
@@ -60,7 +60,7 @@ func Assert(b bool) {
 // Assertf is Assert with extra info.
 func Assertf(b bool, format string, args ...interface{}) {
 	if !b {
-		log.Fatalf("%+v\n", errors.Errorf(format, args))
+		log.Fatalf("%+v\n", errors.Errorf(format, args...))
 	}
 }
 
@@ -71,10 +71,14 @@ func Wrap(err error) error {
 
 // Wrapf is Wrap with extra info.
 func Wrapf(err error, format string, args ...interface{}) error {
-	return errors.Wrapf(err, format, args)
+	return errors.Wrapf(err, format, args...)
 }
 
 // Errorf creates a new error with stack trace, etc.
 func Errorf(format string, args ...interface{}) error {
-	return errors.Errorf(format, args)
+	return errors.Errorf(format, args...)
+}
+
+func Fatalf(format string, args ...interface{}) {
+	log.Fatalf("%+v", errors.Errorf(format, args...))
 }
