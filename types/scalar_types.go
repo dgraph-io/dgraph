@@ -26,6 +26,7 @@ const minInt int32 = -1 << 31
 const maxInt int32 = 1<<31 - 1
 
 var (
+	// Int scalar type declaration
 	Int     GraphQLScalar
 	Float   GraphQLScalar
 	String  GraphQLScalar
@@ -34,14 +35,14 @@ var (
 )
 
 // coerceInt coerces the input value to appropriate type according to GraphQL specification.
-// Although, currently, input is of string type, later it will change to []byte
+// NOTE:
+// - Although, currently, input is of string type, later it will change to []byte
 func coerceInt(input string) (interface{}, error) {
-
-	if val, err := strconv.ParseFloat(input, 32); err != nil {
+	val, err := strconv.ParseFloat(input, 32)
+	if err != nil {
 		return 0, err
-	} else {
-		return int32(val), nil
 	}
+	return int32(val), nil
 }
 
 // coerceFloat converts different types to float object type
