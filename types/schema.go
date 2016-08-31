@@ -18,10 +18,7 @@ package types
 
 import (
 	"fmt"
-	"github.com/dgraph-io/dgraph/gql"
 )
-
-// TODO(akhil): validator for client uploaded schema as well, to ensure it declares all types.
 
 // GraphQLSchema declares the schema structure the GraphQL queries.
 type GraphQLSchema struct {
@@ -74,6 +71,10 @@ func LoadSchema() error {
 		},
 	}
 
+	personType.Fields["friend"] = &Field{
+		Type: GraphQLList{HasType: personType},
+	}
+
 	QueryType = GraphQLObject{
 		Name: "Query",
 		Desc: "Sample query structure",
@@ -85,13 +86,6 @@ func LoadSchema() error {
 	}
 	Schema = &GraphQLSchema{Query: QueryType}
 	return combinedError
-}
-
-// ValidateMutation validates the parsed mutation string against the present schema.
-// TODO(akhil): traverse Mutation and compare each node with corresponding schema struct.
-// TODO(akhil): implement error function (extending error interface).
-func ValidateMutation(mu *gql.Mutation, s *GraphQLSchema) error {
-	return nil
 }
 
 func joinError(e1 error, e2 error) error {

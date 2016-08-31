@@ -193,15 +193,6 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 
 	// If we have mutations, run them first.
 	if mu != nil && (len(mu.Set) > 0 || len(mu.Del) > 0) {
-		// TODO(akhil): next step in type validation, validate mutation types
-		// x.Trace(ctx, "Starting Mutation validation using Schema")
-		// err = types.ValidateMutation(mu, types.TestSchema)
-		// if err != nil {
-		// 	x.Trace(ctx, "Error while validating mutation: %v", err)
-		// 	x.SetStatus(w, x.ErrorInvalidMutation, err.Error())
-		// 	return
-		// }
-		// x.Trace(ctx, "Mutation is valid")
 		if err = mutationHandler(ctx, mu); err != nil {
 			x.Trace(ctx, "Error while handling mutations: %v", err)
 			x.SetStatus(w, x.Error, err.Error())

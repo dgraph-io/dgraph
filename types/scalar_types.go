@@ -34,143 +34,140 @@ var (
 	ID      GraphQLScalar
 )
 
-// CoerceInt coerces the input value to appropriate type according to GraphQL specification.
-// TODO(akhil): handle error thrown from here.
+// coerceInt coerces the input value to appropriate type according to GraphQL specification.
 // Note:
 // -although, in most cases, input will be string/boot/int/float types but,
 // coercion has been done for all available types for demonstration.
 // -byte and rune types are already covered by uint8 and int32, respectively.
 // -complex numbers and pointer type (uintptr) are not covered here.
 // -if input value cannot be coerced, "nil" is retuned.
-func CoerceInt(input interface{}) interface{} {
+func coerceInt(input interface{}) (interface{}, error) {
 	// use a 'type switch' to find out the type of the input value
 	switch v := input.(type) {
 	case bool:
 		if v {
-			return 1
+			return 1, nil
 		}
-		return 0
+		return 0, nil
 	case string:
-		// TODO(akhil): Test if this works for all inputs. HINT: Atoi didn't work here for float input
 		val, err := strconv.ParseFloat(v, 32)
 		if err != nil {
-			return nil
+			return nil, err
 		}
-		return CoerceInt(val)
-	// TODO(akhil): check if this works correctly, Golang tutorial mentioned it could be int64 on 64 bit systems
+		return coerceInt(val)
+	// TODO(akhil): Golang tutorial mentioned it could be int64 on 64 bit systems, verify
 	case int:
-		return v
+		return v, nil
 	case int8:
-		return int32(v)
+		return int32(v), nil
 	case int16:
-		return int32(v)
+		return int32(v), nil
 	case int32:
-		return v
+		return v, nil
 	case int64:
 		if int64(maxInt) < v || v < int64(minInt) {
-			return nil
+			return nil, fmt.Errorf("Value:%v out of int32 range for conversion.", v)
 		}
-		return int32(v)
+		return int32(v), nil
 	// TODO(akhil): check for potential issues here, same as 'int'
 	case uint:
-		return int32(v)
+		return int32(v), nil
 	case uint8:
-		return int32(v)
+		return int32(v), nil
 	case uint16:
-		return int32(v)
+		return int32(v), nil
 	case uint32:
-		return int32(v)
+		return int32(v), nil
 	case uint64:
 		if uint64(maxInt) < v {
-			return nil
+			return nil, fmt.Errorf("Value:%v out of int32 range for conversion.", v)
 		}
-		return int32(v)
+		return int32(v), nil
 	case float32:
 		if float32(maxInt) < v || v < float32(minInt) {
-			return nil
+			return nil, fmt.Errorf("Value:%v out of int32 range for conversion.", v)
 		}
-		return int32(v)
+		return int32(v), nil
 	case float64:
 		if float64(maxInt) < v || v < float64(minInt) {
-			return nil
+			return nil, fmt.Errorf("Value:%v out of int32 range for conversion.", v)
 		}
-		return int32(v)
+		return int32(v), nil
 	default:
-		return nil
+		return nil, fmt.Errorf("Value:%v cannot be coerced into an Int.", v)
 	}
 }
 
-// CoerceFloat converts different types to float object type
-func CoerceFloat(input interface{}) interface{} {
+// coerceFloat converts different types to float object type
+func coerceFloat(input interface{}) (interface{}, error) {
 	switch v := input.(type) {
 	case bool:
 		if v {
-			return 1.0
+			return 1.0, nil
 		}
-		return 0.0
+		return 0.0, nil
 	case string:
 		val, err := strconv.ParseFloat(v, 64)
 		if err != nil {
-			return nil
+			return nil, err
 		}
-		return CoerceFloat(val)
+		return coerceFloat(val)
 	case int:
-		return float64(v)
+		return float64(v), nil
 	case float32:
-		return float64(v)
+		return float64(v), nil
 	case float64:
-		return v
+		return v, nil
 	default:
-		return nil
+		return nil, fmt.Errorf("Value:%v cannot be coerced into a Float.", v)
 	}
 }
 
-// CoerceString converts objects
-func CoerceString(input interface{}) interface{} {
+// coerceString converts objects
+func coerceString(input interface{}) (interface{}, error) {
 	switch v := input.(type) {
 	case bool:
 		if v {
-			return "true"
+			return "true", nil
 		}
-		return "false"
+		return "false", nil
 	default:
-		return fmt.Sprintf("%v", v)
+		return fmt.Sprintf("%v", v), nil
 	}
 }
 
-// CoerceBool converts other object types to bool scalar type
-func CoerceBool(input interface{}) interface{} {
+// coerceBool converts other object types to bool scalar type
+func coerceBool(input interface{}) (interface{}, error) {
 	switch v := input.(type) {
 	case bool:
-		return v
+		return v, nil
 	case string:
 		if v == "false" || v == "0" {
-			return false
+			return false, nil
 		}
-		return true
+		return true, nil
 	case int:
 		if v == 0 {
-			return false
+			return false, nil
 		}
-		return true
+		return true, nil
 	case float32:
 		if v == 0.0 {
-			return false
+			return false, nil
 		}
-		return true
+		return true, nil
 	case float64:
 		if v == 0.0 {
-			return false
+			return false, nil
 		}
-		return true
+		return true, nil
 	default:
-		return nil
+		return nil, fmt.Errorf("Value:%v cannot be coerced into a Bool.", v)
 	}
 }
 
 // LoadScalarTypes defines and initializes all scalar types in system and checks for errors
 func LoadScalarTypes() error {
-	// TODO(akhil): collect and return all errors
 	var combinedError error
 	var err error
 
@@ -181,7 +178,7 @@ func LoadScalarTypes() error {
 			Description: "The 'Int' scalar type represents non-fractional signed whole" +
 				" numeric values. Int can represent values between -(2^31)" +
 				" and 2^31 - 1.",
-			ParseType: CoerceInt,
+			ParseType: coerceInt,
 		},
 	)
 	if err != nil {
@@ -195,7 +192,7 @@ func LoadScalarTypes() error {
 			Description: "The 'Float' scalar type represents signed double-precision" +
 				" fractional values	as specified by [IEEE 754]" +
 				" (http://en.wikipedia.org/wiki/IEEE_floating_point).",
-			ParseType: CoerceFloat,
+			ParseType: coerceFloat,
 		},
 	)
 	if err != nil {
@@ -209,7 +206,7 @@ func LoadScalarTypes() error {
 			Description: "The 'String' scalar type represents textual data, represented" +
 				" as UTF-8 character sequences. The String type is most often" +
 				" used by GraphQL to represent free-form human-readable text.",
-			ParseType: CoerceString,
+			ParseType: coerceString,
 		},
 	)
 	if err != nil {
@@ -221,7 +218,7 @@ func LoadScalarTypes() error {
 		&ScalarConfig{
 			Name:        "Boolean",
 			Description: "The 'Boolean' scalar type represents 'true' or 'false'.",
-			ParseType:   CoerceBool,
+			ParseType:   coerceBool,
 		},
 	)
 	if err != nil {
@@ -238,7 +235,7 @@ func LoadScalarTypes() error {
 				" intended to be human-readable. When expected as an input" +
 				" type, any string (such as '4') or integer (such as '4')" +
 				" input value will be accepted as an ID.",
-			ParseType: CoerceString,
+			ParseType: coerceString,
 		},
 	)
 	if err != nil {

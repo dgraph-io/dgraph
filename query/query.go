@@ -149,58 +149,37 @@ func mergeInterfaces(i1 interface{}, i2 interface{}) interface{} {
 }
 
 // findScalarType returns leaf node type from define schema for type coercion
-// TODO(akhil): make a wrapping interface for schema object/scalar types
-// Then, will return stricter types instead of interface{}
-func findScalarType(tt []string) (interface{}, error) {
+func findScalarType(tt []string) (types.GraphQLType, error) {
 	// we know the root will always be QueryType for a result graph
 	return findType(tt[1:], types.QueryType)
 }
 
 // findType recursively finds out type of leaf node
-func findType(tt []string, ptype interface{}) (interface{}, error) {
-	// Check if this could be done strictly instead of using interfaces as return types
-	ftype, err := findFieldType(tt[0], ptype.(types.GraphQLObject))
+func findType(tt []string, ptype types.GraphQLObject) (types.GraphQLType, error) {
+	ftype, err := findFieldType(tt[0], ptype)
 	if err != nil {
 		return nil, err
 	}
 	if len(tt) == 1 {
 		return ftype, nil
 	}
-	return findType(tt[1:], ftype)
+	return findType(tt[1:], ftype.(types.GraphQLObject))
 }
 
 // findFieldType returns type of the input field given the Parent Object Type
-func findFieldType(f string, ptype types.GraphQLObject) (interface{}, error) {
+func findFieldType(f string, ptype types.GraphQLObject) (types.GraphQLType, error) {
 	// Assuming field names in defined objects will be lowercase, as will be the query fields
 	// Otherwise make field presence checking case-sensitive
 	val, present := ptype.Fields[f]
 	if !present {
 		return nil, fmt.Errorf("Field:%v not defined under type:%v in schema.\n", f, ptype.Name)
 	}
-	return val.Type, nil
-}
-
-// coerceItemLiteral converts literals to appropriate supported types if possible
-// throw error otherwise
-// TODO(akhil): convert this to golang 'type switch'
-func coerceItemLiteral(itemString string, objectType string) (val interface{}, err error) {
-	switch objectType {
-	case "Int":
-		val = types.CoerceInt(itemString)
-	case "String":
-		val = types.CoerceString(itemString)
-	case "Float":
-		val = types.CoerceFloat(itemString)
-	case "Boolean":
-		val = types.CoerceBool(itemString)
-	case "ID":
-		val = types.CoerceString(itemString)
+	switch val.Type.(type) {
+	case types.GraphQLList:
+		return val.Type.(types.GraphQLList).HasType, nil
+	default:
+		return val.Type, nil
 	}
-	if val == nil {
-		// apparantly, we don't support the type intended by the client
-		err = fmt.Errorf("Type coercion not supported for value:%v to type:%v\n", itemString, objectType)
-	}
-	return
 }
 
 // postTraverse traverses the subgraph recursively and returns final result for the query
@@ -325,10 +304,10 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 		if err != nil {
 			// No type defined for present attribute in type schema, return string value
 			m[sg.Attr] = string(val)
-			log.Printf("Type coercion warning: %v\n", err)
+			log.Printf("Type/Schema warning: %v\n", err)
 		} else {
 			stype := ltype.(types.GraphQLScalar)
-			lval, err := coerceItemLiteral(string(val), stype.Name)
+			lval, err := stype.Config.ParseType(string(val))
 			if err != nil {
 				return result, err
 			}

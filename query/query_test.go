@@ -536,11 +536,11 @@ func TestToJson(t *testing.T) {
 }
 
 // Checking for Type coercion errors.
-// TODO(akhil): Writing separate test since Marshal/Unmarshal process of ToJSON converts
-// 'int' type to 'float64' and thus mucks up the tests. Figure out if merging is possible.
+// NOTE: Writing separate test since Marshal/Unmarshal process of ToJSON converts
+// 'int' type to 'float64' and thus mucks up the tests.
 // Thing to note here is now the query root 'MUST' have a subject name instead of just being
 // query, me, etc. to faciliate the identification of parent object.
-// TODO(akhil): In this case, 'debug' mode won't work with type system. Must fix that.
+// NOTE: In this case, type system won't work with 'debug' mode.
 func TestPostTraverse(t *testing.T) {
 	dir, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
@@ -550,7 +550,6 @@ func TestPostTraverse(t *testing.T) {
 		{
 			actor(_uid_:0x01) {
 				name
-				gender
 				age
 				sword_present
 				survival_rate
@@ -591,6 +590,7 @@ func TestPostTraverse(t *testing.T) {
 		} else {
 			m = make(map[string]interface{})
 		}
+
 		actorMap := m["actor"].(map[string]interface{})
 
 		if _, success := actorMap["name"].(string); !success {
@@ -607,8 +607,12 @@ func TestPostTraverse(t *testing.T) {
 		if _, success := actorMap["survival_rate"].(float64); !success {
 			t.Errorf("Expected type coercion to float64 for: %v\n", actorMap["survival_rate"])
 		}
+		friendMap := actorMap["friend"].([]interface{})
+		friend := friendMap[0].(map[string]interface{})
+		if _, success := friend["name"].(string); !success {
+			t.Errorf("Expected type coercion to string for: %v\n", friend["name"])
+		}
 	}
-
 }
 
 func getProperty(properties []*graph.Property, prop string) []byte {
