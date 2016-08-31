@@ -27,11 +27,15 @@ const maxInt int32 = 1<<31 - 1
 
 var (
 	// Int scalar type declaration
-	Int     GraphQLScalar
-	Float   GraphQLScalar
-	String  GraphQLScalar
+	Int GraphQLScalar
+	// Float scalar type declaration
+	Float GraphQLScalar
+	// String scalar type declaration
+	String GraphQLScalar
+	// Boolean scalar type declaration
 	Boolean GraphQLScalar
-	ID      GraphQLScalar
+	// ID scalar type declaration
+	ID GraphQLScalar
 )
 
 // coerceInt coerces the input value to appropriate type according to GraphQL specification.
