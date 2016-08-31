@@ -1,3 +1,4 @@
+/*
  * Copyright 2016 DGraph Labs, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -46,7 +47,7 @@ func ProcessTaskOverNetwork(ctx context.Context, qu []byte) (result []byte, rerr
 	if attr == _xid_ || attr == _uid_ {
 		idx = 0
 	}
-	runHere := (instanceIdx == idx)
+	runHere := (ws.instanceIdx == idx)
 
 	x.Trace(ctx, "runHere: %v attr: %v instanceIdx: %v numInstances: %v",
 		runHere, attr, ws.instanceIdx, ws.numInstances)
