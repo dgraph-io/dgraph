@@ -177,6 +177,12 @@ func gentlyMerge(mr *mergeRoutines) {
 
 // getMemUsage returns the amount of memory used by the process in MB
 func getMemUsage() int {
+	var ms runtime.MemStats
+	runtime.ReadMemStats(&ms)
+	megs := ms.Alloc / (1 << 20)
+	return int(megs)
+
+	// Sticking to ms.Alloc for now. Ignore below code.
 	if runtime.GOOS != "linux" {
 		pid := os.Getpid()
 		cmd := fmt.Sprintf("ps -ao rss,pid | grep %v", pid)
