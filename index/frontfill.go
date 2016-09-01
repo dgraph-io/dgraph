@@ -49,12 +49,8 @@ func (s *Indices) Frontfill(ctx context.Context, job *mutation) error {
 	if !found {
 		return nil // This predicate is not indexed, which can be common.
 	}
-	return index.frontfill(ctx, job)
-}
-
-func (s *predIndex) frontfill(ctx context.Context, job *mutation) error {
-	childID := job.uid % uint64(s.cfg.NumChild)
-	child := s.child[childID]
+	childID := job.uid % uint64(index.cfg.NumChild)
+	child := index.child[childID]
 	if child.frontfillC == nil {
 		return x.Errorf("Channel nil for %s %d", child.parent.cfg.Attr, childID)
 	}
