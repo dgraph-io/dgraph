@@ -184,7 +184,7 @@ func getMemUsage() int {
 
 	// Sticking to ms.Alloc temoprarily.
 	// TODO(Ashwin): Switch to total Memory(RSS) once we figure out
-	// how to release memory to OS (Currently only a small chunck
+	// how to release memory to OS (Currently only a small chunk
 	// is returned)
 	if runtime.GOOS != "linux" {
 		pid := os.Getpid()
