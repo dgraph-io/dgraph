@@ -32,6 +32,8 @@ var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
 var memprofile = flag.String("memprofile", "", "write memory profile to file")
 var numcpu = flag.Int("numCpu", runtime.NumCPU(),
 	"Number of cores to be used by the process")
+var numGoroutines = flag.Int("numGoroutines", 3000,
+	"Number of goroutines to execute concurrently")
 
 func main() {
 	x.Init()
@@ -56,6 +58,8 @@ func main() {
 		WithField("numInstances", *numInstances).
 		Info("Only XIDs with FP(xid)%numInstance == instanceIdx will be given UID")
 
+	glog.WithField("numGoroutines", *numGoroutines).
+		Info("Set max goroutines to num goroutines")
 	if len(*rdfGzips) == 0 {
 		glog.Fatal("No RDF GZIP files specified")
 	}
@@ -93,7 +97,7 @@ func main() {
 			glog.WithError(err).Fatal("Unable to create gzip reader.")
 		}
 
-		count, err := loader.AssignUids(r, *instanceIdx, *numInstances)
+		count, err := loader.AssignUids(r, *instanceIdx, *numInstances, *numGoroutines)
 		if err != nil {
 			glog.WithError(err).Fatal("While handling rdf reader.")
 		}

@@ -249,7 +249,7 @@ func (s *state) assignUidsOnly(wg *sync.WaitGroup) {
 
 // Blocking function.
 func LoadEdges(reader io.Reader, instanceIdx uint64,
-	numInstances uint64) (uint64, error) {
+	numInstances uint64, numGoroutines int) (uint64, error) {
 
 	s := new(state)
 	s.ctr = new(counters)
@@ -270,7 +270,7 @@ func LoadEdges(reader io.Reader, instanceIdx uint64,
 		go s.parseStream(&pwg) // Input --> NQuads
 	}
 
-	nrt := 3000
+	nrt := numGoroutines
 	var wg sync.WaitGroup
 	wg.Add(nrt)
 	for i := 0; i < nrt; i++ {
@@ -292,7 +292,8 @@ func LoadEdges(reader io.Reader, instanceIdx uint64,
 // and assign unique integer ids for them. This function would
 // not load the edges, only assign UIDs.
 func AssignUids(reader io.Reader, instanceIdx uint64,
-	numInstances uint64) (uint64, error) {
+	numInstances uint64, numGoroutines int) (uint64, error) {
+
 	s := new(state)
 	s.ctr = new(counters)
 	ticker := time.NewTicker(time.Second)
@@ -313,7 +314,7 @@ func AssignUids(reader io.Reader, instanceIdx uint64,
 	}
 
 	wg := new(sync.WaitGroup)
-	for i := 0; i < 3000; i++ {
+	for i := 0; i < numGoroutines; i++ {
 		wg.Add(1)
 		go s.assignUidsOnly(wg)
 	}
