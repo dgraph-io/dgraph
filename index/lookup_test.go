@@ -1,5 +1,5 @@
 /*
- * Copyright 2016 DGraph Labs, Inc.
+ * Copyright 2016 Dgraph Labs, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+// Package index indexes values in database. This can be used for filtering.
 package index
 
 import (
@@ -26,103 +27,11 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgraph/commit"
+	_ "github.com/dgraph-io/dgraph/index/indexer/memtable"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/x"
 )
-
-func arrayCompare(a []uint64, b []uint64) error {
-	if len(a) != len(b) {
-		return fmt.Errorf("Size mismatch %d vs %d", len(a), len(b))
-	}
-	for i := 0; i < len(a); i++ {
-		if a[i] != b[i] {
-			return fmt.Errorf("Element mismatch at index %d", i)
-		}
-	}
-	return nil
-}
-
-func TestMergeResults1(t *testing.T) {
-	l1 := &LookupResult{
-		UID: []uint64{1, 3, 6, 8, 10},
-	}
-	l2 := &LookupResult{
-		UID: []uint64{2, 4, 5, 7, 15},
-	}
-	lr := []*LookupResult{l1, l2}
-	results := mergeResults(lr)
-	arrayCompare(results.UID, []uint64{1, 2, 3, 4, 5, 6, 7, 8, 10, 15})
-}
-
-func TestMergeResults2(t *testing.T) {
-	l1 := &LookupResult{
-		UID: []uint64{1, 3, 6, 8, 10},
-	}
-	l2 := &LookupResult{
-		UID: []uint64{},
-	}
-	lr := []*LookupResult{l1, l2}
-	results := mergeResults(lr)
-	arrayCompare(results.UID, []uint64{1, 3, 6, 8, 10})
-}
-
-func TestMergeResults3(t *testing.T) {
-	l1 := &LookupResult{
-		UID: []uint64{},
-	}
-	l2 := &LookupResult{
-		UID: []uint64{1, 3, 6, 8, 10},
-	}
-	lr := []*LookupResult{l1, l2}
-	results := mergeResults(lr)
-	arrayCompare(results.UID, []uint64{1, 3, 6, 8, 10})
-}
-
-func TestMergeResults4(t *testing.T) {
-	l1 := &LookupResult{
-		UID: []uint64{},
-	}
-	l2 := &LookupResult{
-		UID: []uint64{},
-	}
-	lr := []*LookupResult{l1, l2}
-	results := mergeResults(lr)
-	arrayCompare(results.UID, []uint64{})
-}
-
-func TestMergeResults5(t *testing.T) {
-	l1 := &LookupResult{
-		UID: []uint64{11, 13, 16, 18, 20},
-	}
-	l2 := &LookupResult{
-		UID: []uint64{12, 14, 15, 17, 25},
-	}
-	l3 := &LookupResult{
-		UID: []uint64{1, 2},
-	}
-	lr := []*LookupResult{l1, l2, l3}
-	results := mergeResults(lr)
-	arrayCompare(results.UID, []uint64{1, 2, 11, 12, 13, 14, 15, 16, 17, 18, 20, 25})
-}
-
-func TestMergeResults6(t *testing.T) {
-	l1 := &LookupResult{
-		UID: []uint64{5, 6, 7},
-	}
-	l2 := &LookupResult{
-		UID: []uint64{3, 4},
-	}
-	l3 := &LookupResult{
-		UID: []uint64{1, 2},
-	}
-	l4 := &LookupResult{
-		UID: []uint64{},
-	}
-	lr := []*LookupResult{l1, l2, l3, l4}
-	results := mergeResults(lr)
-	arrayCompare(results.UID, []uint64{1, 2, 3, 4, 5, 6, 7})
-}
 
 func addEdge(t *testing.T, edge x.DirectedEdge, l *posting.List) {
 	if err := l.AddMutation(context.Background(), edge, posting.Set); err != nil {
@@ -183,11 +92,11 @@ func getIndices(t *testing.T) (string, *Indices) {
 
 	// Create fake indices.
 	reader := bytes.NewReader([]byte(
-		`{"Config": [{"Type": "text", "Attribute": "name", "NumChild": 1}]}`))
+		`{"Indexer": "memtable", "Config": [{"Type": "text", "Attribute": "name", "NumChild": 1}]}`))
 	indicesConfig, err := NewConfigs(reader)
 	x.Check(err)
-	x.Check(CreateIndices(indicesConfig, dir))
-	indices := InitWorker(dir)
+	indices, err := CreateIndices(indicesConfig, dir)
+	x.Check(err)
 	x.Check(indices.Backfill(context.Background(), ps))
 
 	return dir, indices
@@ -199,9 +108,8 @@ func TestBackfill(t *testing.T) {
 	defer os.RemoveAll(dir)
 
 	li := &LookupSpec{
-		Attr:     "name",
-		Param:    []string{"Glenn"},
-		Category: LookupMatch,
+		Attr:  "name",
+		Value: "Glenn Rhee",
 	}
 	lr := indices.Lookup(li)
 	if lr.Err != nil {
@@ -222,9 +130,8 @@ func TestFrontfillDel(t *testing.T) {
 	defer os.RemoveAll(dir)
 
 	li := &LookupSpec{
-		Attr:     "name",
-		Param:    []string{"Glenn"},
-		Category: LookupMatch,
+		Attr:  "name",
+		Value: "Glenn Rhee",
 	}
 	lr := indices.Lookup(li)
 	if lr.Err != nil {
@@ -259,9 +166,8 @@ func TestFrontfillAdd(t *testing.T) {
 	defer os.RemoveAll(dir)
 
 	li := &LookupSpec{
-		Attr:     "name",
-		Param:    []string{"Glenn"},
-		Category: LookupMatch,
+		Attr:  "name",
+		Value: "Glenn Rhee",
 	}
 	lr := indices.Lookup(li)
 	if lr.Err != nil {
@@ -278,7 +184,7 @@ func TestFrontfillAdd(t *testing.T) {
 	// Do frontfill now.
 	indices.FrontfillAdd(context.Background(), "name", 24, "NotGlenn")
 	// Let a different UID take the name Glenn.
-	indices.FrontfillAdd(context.Background(), "name", 23, "Glenn")
+	indices.FrontfillAdd(context.Background(), "name", 23, "Glenn Rhee")
 	// Do a pause to make sure frontfill changes go through before we do a lookup.
 	time.Sleep(200 * time.Millisecond)
 	lr = indices.Lookup(li)

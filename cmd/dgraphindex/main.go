@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgraph/index"
+	_ "github.com/dgraph-io/dgraph/index/indexer/memtable"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -36,9 +37,7 @@ func main() {
 	x.Check(err)
 
 	// Try writing to index directory.
-	x.Check(index.CreateIndices(config, *indicesDir))
-
-	indices, err := index.NewIndices(*indicesDir)
+	indices, err := index.CreateIndices(config, *indicesDir)
 	x.Check(err)
 
 	start := time.Now()

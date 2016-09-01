@@ -1,5 +1,5 @@
 /*
- * Copyright 2016 DGraph Labs, Inc.
+ * Copyright 2016 Dgraph Labs, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,7 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-// Package index does indexing of values in database.
+
+// Package index indexes values in database. This can be used for filtering.
 package index
 
 import (
@@ -64,7 +65,7 @@ func (s *predIndex) backfill(ctx context.Context, ps *store.Store, errC chan err
 				continue
 			}
 			value := string(p.ValueBytes())
-			s.child[childID].backfillC <- &indexJob{
+			s.child[childID].backfillC <- &mutation{
 				uid:   uid,
 				value: value,
 			}
@@ -86,8 +87,9 @@ func (s *predIndex) backfill(ctx context.Context, ps *store.Store, errC chan err
 func (s *childIndex) backfill(ctx context.Context, ps *store.Store, errC chan error) {
 	var count uint64
 	for job := range s.backfillC {
-		if !job.del {
-			s.batch.Index(string(posting.UID(job.uid)), job.value)
+		if !job.remove {
+			//			s.batch.Index(string(posting.UID(job.uid)), job.value)
+			s.batch.Insert(s.parent.cfg.Attr, string(posting.UID(job.uid)), job.value)
 		} else {
 			err := x.Errorf("Backfill does not support deletes %s %d", job.attr, job.uid)
 			errC <- err
@@ -110,9 +112,9 @@ func (s *childIndex) doIndex(ctx context.Context, count *uint64) error {
 	}
 	newCount := *count + uint64(s.batch.Size())
 	x.Trace(ctx, "Attr[%s] child %d batch[%d, %d]\n",
-		s.cfg.Attr, s.childID, count, newCount)
-	err := s.bleveIndex.Batch(s.batch)
+		s.parent.cfg.Attr, s.childID, count, newCount)
+	err := x.Wrap(s.parent.indexer.Batch(s.batch))
 	s.batch.Reset()
 	*count = newCount
-	return x.Wrap(err)
+	return err
 }

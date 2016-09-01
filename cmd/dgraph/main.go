@@ -356,7 +356,8 @@ func main() {
 		log.Fatalf("Error while creating the filepath for uids: %v", err)
 	}
 
-	index.InitWorker(*indicesDir)
+	indices, err := index.NewIndices(*indicesDir)
+	index.InitWorker(indices)
 
 	ps := new(store.Store)
 	if err := ps.Init(*postingDir); err != nil {

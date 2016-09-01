@@ -1,5 +1,5 @@
 /*
- * Copyright 2016 DGraph Labs, Inc.
+ * Copyright 2016 Dgraph Labs, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+// Package index indexes values in database. This can be used for filtering.
 package index
 
 import (
@@ -29,13 +30,15 @@ import (
 )
 
 var (
+	// Every directory containing index data will have this file.
 	defaultConfigFile = flag.String("index_config", "config.json",
 		"Filename of JSON config file inside indices directory")
 )
 
 // IndicesConfig is a list of IndexConfig. We may add more fields in future.
 type Configs struct {
-	Cfg []*Config `json:"Config"`
+	Cfg     []*Config `json:"Config"`
+	Indexer string
 }
 
 // IndexConfig defines the index for a single predicate. Each predicate should
@@ -46,8 +49,8 @@ type Config struct {
 	NumChild int
 }
 
-func getDefaultConfig(basedir string) string {
-	return path.Join(basedir, *defaultConfigFile)
+func getDefaultConfig(dir string) string {
+	return path.Join(dir, *defaultConfigFile)
 }
 
 // NewConfigs creates Configs object from io.Reader object.
@@ -85,8 +88,8 @@ func (c *Configs) validate() error {
 }
 
 // write writes to a directory's default config file location.
-func (c *Configs) write(basedir string) error {
-	f, err := os.Create(getDefaultConfig(basedir))
+func (c *Configs) write(dir string) error {
+	f, err := os.Create(getDefaultConfig(dir))
 	if err != nil {
 		return x.Wrap(err)
 	}

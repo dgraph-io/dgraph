@@ -1,3 +1,20 @@
+/*
+ * Copyright 2016 Dgraph Labs, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * 		http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+// Package indexer is an interface to indexing solutions such as Bleve.
 package indexer
 
 import (
@@ -72,14 +89,14 @@ func TestBasic(i Indexer, t *testing.T) {
 	}
 
 	// Delete something that is not present.
-	if err := i.Delete("p2", "k2", "v5"); err != nil {
+	if err := i.Remove("p2", "k2"); err != nil {
 		t.Fatal(err)
 	}
 	if err := checkQuery(i, "p1", "v1", []string{"k0", "k1", "k2"}); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := i.Delete("p1", "k1", "v1"); err != nil {
+	if err := i.Remove("p1", "k1"); err != nil {
 		t.Fatal(err)
 	}
 	if err := checkQuery(i, "p1", "v1", []string{"k0", "k2"}); err != nil {
@@ -119,7 +136,7 @@ func TestBatch(i Indexer, t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = b.Delete("p1", "k1", "v1")
+	err = b.Remove("p1", "k1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -133,4 +150,66 @@ func TestBatch(i Indexer, t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+}
+
+func TestOverwrite(i Indexer, t *testing.T) {
+	dir, err := ioutil.TempDir("", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+	err = i.Create(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer i.Close()
+
+	i.Insert("p1", "k1", "v1")
+	if err := checkQuery(i, "p1", "v1", []string{"k1"}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := i.Insert("p1", "k1", "v2"); err != nil {
+		t.Fatal(err)
+	}
+	if err := checkQuery(i, "p1", "v1", []string{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := checkQuery(i, "p1", "v2", []string{"k1"}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Let's add new keys.
+	if err := i.Insert("p1", "k0", "v2"); err != nil {
+		t.Fatal(err)
+	}
+	if err := i.Insert("p1", "k2", "v2"); err != nil {
+		t.Fatal(err)
+	}
+	if err := checkQuery(i, "p1", "v2", []string{"k0", "k1", "k2"}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Overwrite values of all keys.
+	if err := i.Insert("p1", "k0", "v3"); err != nil {
+		t.Fatal(err)
+	}
+	if err := i.Insert("p1", "k2", "v3"); err != nil {
+		t.Fatal(err)
+	}
+	if err := i.Insert("p1", "k1", "v3"); err != nil {
+		t.Fatal(err)
+	}
+	if err := checkQuery(i, "p1", "v2", []string{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := checkQuery(i, "p1", "v3", []string{"k0", "k1", "k2"}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestAll(f func() Indexer, t *testing.T) {
+	TestBasic(f(), t)
+	TestBatch(f(), t)
+	TestOverwrite(f(), t)
 }

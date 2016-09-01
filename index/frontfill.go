@@ -1,5 +1,5 @@
 /*
- * Copyright 2016 DGraph Labs, Inc.
+ * Copyright 2016 Dgraph Labs, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+// Package index indexes values in database. This can be used for filtering.
 package index
 
 import (
@@ -25,36 +26,37 @@ import (
 
 // FrontfillAdd inserts with overwrite (replace) key, value into our indices.
 func FrontfillAdd(ctx context.Context, attr string, uid uint64, val string) {
-	if err := globalIndices.FrontfillAdd(ctx, attr, uid, val); err != nil {
+	if err := workerIndices.FrontfillAdd(ctx, attr, uid, val); err != nil {
 		x.TraceError(ctx, err)
 	}
 }
 
 // FrontfillDel deletes a key, value from our indices.
 func FrontfillDel(ctx context.Context, attr string, uid uint64) {
-	if err := globalIndices.FrontfillDel(ctx, attr, uid); err != nil {
+	if err := workerIndices.FrontfillDel(ctx, attr, uid); err != nil {
 		x.TraceError(ctx, err)
 	}
 }
 
 func (s *Indices) FrontfillAdd(ctx context.Context, attr string, uid uint64, val string) error {
-	return s.Frontfill(ctx, &indexJob{
-		attr:  attr,
-		uid:   uid,
-		value: val,
+	return s.Frontfill(ctx, &mutation{
+		remove: false,
+		attr:   attr,
+		uid:    uid,
+		value:  val,
 	})
 }
 
 func (s *Indices) FrontfillDel(ctx context.Context, attr string, uid uint64) error {
-	return s.Frontfill(ctx, &indexJob{
-		del:  true,
-		attr: attr,
-		uid:  uid,
+	return s.Frontfill(ctx, &mutation{
+		remove: true,
+		attr:   attr,
+		uid:    uid,
 	})
 }
 
 // Frontfill updates indices given mutation.
-func (s *Indices) Frontfill(ctx context.Context, job *indexJob) error {
+func (s *Indices) Frontfill(ctx context.Context, job *mutation) error {
 	index, found := s.idx[job.attr]
 	if !found {
 		return nil // This predicate is not indexed, which can be common.
@@ -62,11 +64,11 @@ func (s *Indices) Frontfill(ctx context.Context, job *indexJob) error {
 	return index.frontfill(ctx, job)
 }
 
-func (s *predIndex) frontfill(ctx context.Context, job *indexJob) error {
+func (s *predIndex) frontfill(ctx context.Context, job *mutation) error {
 	childID := job.uid % uint64(s.cfg.NumChild)
 	child := s.child[childID]
 	if child.frontfillC == nil {
-		return x.Errorf("Channel nil for %s %d", child.cfg.Attr, childID)
+		return x.Errorf("Channel nil for %s %d", child.parent.cfg.Attr, childID)
 	}
 	child.frontfillC <- job
 	return nil
@@ -74,12 +76,11 @@ func (s *predIndex) frontfill(ctx context.Context, job *indexJob) error {
 
 func (s *childIndex) handleFrontfill() {
 	for m := range s.frontfillC {
-		s.bleveLock.Lock()
-		if !m.del {
-			s.bleveIndex.Index(string(posting.UID(m.uid)), m.value)
+		uid := string(posting.UID(m.uid))
+		if !m.remove {
+			s.parent.indexer.Insert(s.parent.cfg.Attr, uid, m.value)
 		} else {
-			s.bleveIndex.Delete(string(posting.UID(m.uid)))
+			s.parent.indexer.Remove(s.parent.cfg.Attr, uid)
 		}
-		s.bleveLock.Unlock()
 	}
 }

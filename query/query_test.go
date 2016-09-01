@@ -30,6 +30,7 @@ import (
 	"github.com/dgraph-io/dgraph/commit"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/index"
+	_ "github.com/dgraph-io/dgraph/index/indexer/memtable"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/query/graph"
 	"github.com/dgraph-io/dgraph/store"
@@ -199,11 +200,12 @@ func populateGraph(t *testing.T) (string, *store.Store) {
 
 	// Create fake indices.
 	reader := bytes.NewReader([]byte(
-		`{"Config": [{"Type": "text", "Attribute": "name", "NumChild": 1}]}`))
+		`{"Indexer": "memtable", "Config": [{"Type": "text", "Attribute": "name", "NumChild": 1}]}`))
 	indicesConfig, err := index.NewConfigs(reader)
 	x.Check(err)
-	x.Check(index.CreateIndices(indicesConfig, dir))
-	indices := index.InitWorker(dir)
+	indices, err := index.CreateIndices(indicesConfig, dir)
+	x.Check(err)
+	index.InitWorker(indices)
 	x.Check(indices.Backfill(context.Background(), ps))
 
 	return dir, ps

@@ -18,7 +18,6 @@ package query
 
 import (
 	"bytes"
-	"container/heap"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -30,6 +29,7 @@ import (
 	"github.com/google/flatbuffers/go"
 	"golang.org/x/net/context"
 
+	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/index"
 	"github.com/dgraph-io/dgraph/query/graph"
@@ -589,53 +589,41 @@ type ListChannel struct {
 	Idx   int
 }
 
+// Get returns i-th element.
+func (lc *ListChannel) Get(i int) uint64 {
+	return lc.TList.Uids(i)
+}
+
+// Size returns size of UID list.
+func (lc *ListChannel) Size() int {
+	return lc.TList.UidsLength()
+}
+
+type ListChannels []*ListChannel
+
+// Return i-th list.
+func (lc ListChannels) Get(i int) algo.Uint64List {
+	return lc[i]
+}
+
+// Return number of lists.
+func (lc ListChannels) Size() int {
+	return len(lc)
+}
+
 func sortedUniqueUids(r *task.Result) ([]uint64, error) {
 	// Let's serialize the matrix of uids in result to a
 	// sorted unique list of uids.
-	h := &x.Uint64Heap{}
-	heap.Init(h)
-
-	channels := make([]*ListChannel, r.UidmatrixLength())
+	channels := make(ListChannels, r.UidmatrixLength())
 	for i := 0; i < r.UidmatrixLength(); i++ {
 		tlist := new(task.UidList)
 		if ok := r.Uidmatrix(tlist, i); !ok {
 			return nil, fmt.Errorf("While parsing Uidmatrix")
 		}
-		if tlist.UidsLength() > 0 {
-			e := x.Elem{
-				Uid: tlist.Uids(0),
-				Idx: i,
-			}
-			heap.Push(h, e)
-		}
 		channels[i] = &ListChannel{TList: tlist, Idx: 1}
 	}
-
-	// The resulting list of uids will be stored here.
-	sorted := make([]uint64, 0, 100)
-
-	var last uint64
-	// Iterate over the heap.
-	for h.Len() > 0 {
-		me := (*h)[0] // Peek at the top element in heap.
-		if me.Uid != last {
-			sorted = append(sorted, me.Uid) // Add if unique.
-			last = me.Uid
-		}
-		lc := channels[me.Idx]
-		if lc.Idx >= lc.TList.UidsLength() {
-			heap.Pop(h)
-
-		} else {
-			uid := lc.TList.Uids(lc.Idx)
-			lc.Idx++
-
-			me.Uid = uid
-			(*h)[0] = me
-			heap.Fix(h, 0) // Faster than Pop() followed by Push().
-		}
-	}
-	return sorted, nil
+	// Invoke standard algorithm to merge sorted lists.
+	return algo.MergeSorted(channels), nil
 }
 
 func (sg *SubGraph) indicesLookup() {
@@ -646,9 +634,8 @@ func (sg *SubGraph) indicesLookup() {
 	// For now, assume a match query.
 	for _, p := range sg.filters {
 		li := &index.LookupSpec{
-			Attr:     p.Key,
-			Param:    []string{p.Val},
-			Category: index.LookupMatch,
+			Attr:  p.Key,
+			Value: p.Val,
 		}
 		go index.WorkerLookup(li, sg.filterResults)
 	}
@@ -661,7 +648,7 @@ func (sg *SubGraph) postIndicesLookup(sorted []uint64) []uint64 {
 		return sorted
 	}
 
-	var toIntersect [][]uint64
+	toIntersect := make(algo.PlainUintLists, 0, len(sg.filters))
 	for i := 0; i < len(sg.filters); i++ {
 		r := <-sg.filterResults
 		if r.Err != nil {
@@ -672,7 +659,7 @@ func (sg *SubGraph) postIndicesLookup(sorted []uint64) []uint64 {
 		toIntersect = append(toIntersect, r.UID)
 	}
 	toIntersect = append(toIntersect, sorted)
-	return x.IntersectSorted(toIntersect)
+	return algo.IntersectSorted(toIntersect)
 }
 
 // ProcessGraph processes the SubGraph instance accumulating result for the query
