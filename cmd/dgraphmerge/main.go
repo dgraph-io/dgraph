@@ -140,7 +140,7 @@ func mergeFolders(mergePath, destPath string) {
 			lastValue = make([]byte, len(top.value))
 		}
 		copy(lastValue, top.value)
-		lastValue = lastValue[:len(top.Value)]
+		lastValue = lastValue[:len(top.value)]
 
 		storeIters[top.storeIdx].Next()
 		if !storeIters[top.storeIdx].Valid() {
