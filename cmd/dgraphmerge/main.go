@@ -23,13 +23,10 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
-	"math"
 	"path"
 
 	rocksdb "github.com/tecbot/gorocksdb"
 
-	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/posting/types"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -64,25 +61,6 @@ func (pq *PriorityQueue) Pop() interface{} {
 	item := old[n-1]
 	*pq = old[0 : n-1]
 	return item
-}
-
-func equalValue(a, b interface{}) bool {
-	var x, y types.Posting
-	p1 := a.(*posting.List)
-	if ok := p1.Get(&x, 0); !ok {
-		glog.Fatal("While retrieving entry from posting list")
-	}
-	p2 := b.(*posting.List)
-	if ok := p2.Get(&y, 0); !ok {
-		glog.Fatal("While retrieving entry from posting list")
-	}
-
-	aUid := x.Uid()
-	bUid := y.Uid()
-
-	return (x.ValueBytes() == nil && y.ValueBytes() == nil && (aUid == bUid)) ||
-		((x.Uid() == math.MaxUint64 && y.Uid() == math.MaxUint64) &&
-			bytes.Compare(x.ValueBytes(), y.ValueBytes()) == 0)
 }
 
 func mergeFolders(mergePath, destPath string) {
@@ -142,10 +120,8 @@ func mergeFolders(mergePath, destPath string) {
 		top := heap.Pop(&pq).(*Item)
 
 		if bytes.Compare(top.key, lastKey) == 0 {
-			if !equalValue(top.value, lastValue) {
-				glog.WithField("key", lastKey).
-					Fatal("different value for same key")
-			}
+			glog.WithField("key", lastKey).
+				Fatal("Same key repeated")
 		}
 		wb.Put(top.key, top.value)
 		count++
@@ -153,8 +129,18 @@ func mergeFolders(mergePath, destPath string) {
 			db.Write(wopt, wb)
 			wb.Clear()
 		}
-		lastKey = top.key
-		lastValue = top.value
+
+		if cap(lastKey) < len(top.key) {
+			lastKey = make([]byte, len(top.key))
+		}
+		lastKey = lastKey[:len(top.key)]
+		copy(lastKey, top.key)
+
+		if cap(lastValue) < len(top.value) {
+			lastValue = make([]byte, len(top.value))
+		}
+		lastValue = lastValue[:len(top.value)]
+		copy(lastValue, top.value)
 
 		storeIters[top.storeIdx].Next()
 		if !storeIters[top.storeIdx].Valid() {
