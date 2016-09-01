@@ -44,7 +44,7 @@ func checkQuery(i Indexer, pred, val string, expected []string) error {
 	return arrayCompare(results, expected)
 }
 
-func TestBasic(i Indexer, t *testing.T) {
+func testBasic(i Indexer, t *testing.T) {
 	dir, err := ioutil.TempDir("", "")
 	if err != nil {
 		t.Fatal(err)
@@ -104,7 +104,7 @@ func TestBasic(i Indexer, t *testing.T) {
 	}
 }
 
-func TestBatch(i Indexer, t *testing.T) {
+func testBatch(i Indexer, t *testing.T) {
 	dir, err := ioutil.TempDir("", "")
 	if err != nil {
 		t.Fatal(err)
@@ -152,7 +152,7 @@ func TestBatch(i Indexer, t *testing.T) {
 	}
 }
 
-func TestOverwrite(i Indexer, t *testing.T) {
+func testOverwrite(i Indexer, t *testing.T) {
 	dir, err := ioutil.TempDir("", "")
 	if err != nil {
 		t.Fatal(err)
@@ -208,8 +208,9 @@ func TestOverwrite(i Indexer, t *testing.T) {
 	}
 }
 
+// TestAll tests the given indexer.
 func TestAll(f func() Indexer, t *testing.T) {
-	TestBasic(f(), t)
-	TestBatch(f(), t)
-	TestOverwrite(f(), t)
+	testBasic(f(), t)
+	testBatch(f(), t)
+	testOverwrite(f(), t)
 }

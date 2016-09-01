@@ -22,6 +22,8 @@ package index
 // given attribute / predicate.
 
 import (
+	"context"
+
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -39,4 +41,18 @@ func InitWorker(indices *Indices) {
 func WorkerLookup(li *LookupSpec, results chan *LookupResult) {
 	// Will check instance here next time.
 	results <- workerIndices.Lookup(li)
+}
+
+// FrontfillAdd inserts with overwrite (replace) key, value into our indices.
+func FrontfillAdd(ctx context.Context, attr string, uid uint64, val string) {
+	if err := workerIndices.FrontfillAdd(ctx, attr, uid, val); err != nil {
+		x.TraceError(ctx, err)
+	}
+}
+
+// FrontfillDel deletes a key, value from our indices.
+func FrontfillDel(ctx context.Context, attr string, uid uint64) {
+	if err := workerIndices.FrontfillDel(ctx, attr, uid); err != nil {
+		x.TraceError(ctx, err)
+	}
 }

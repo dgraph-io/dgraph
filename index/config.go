@@ -35,18 +35,16 @@ var (
 		"Filename of JSON config file inside indices directory")
 )
 
-// IndicesConfig is a list of IndexConfig. We may add more fields in future.
+// Configs is a list of configs.
 type Configs struct {
 	Cfg     []*Config `json:"Config"`
-	Indexer string
+	Indexer string    // Which indexer to use, e.g., memtable.
 }
 
-// IndexConfig defines the index for a single predicate. Each predicate should
-// have at most one index.
+// Config defines the index for a single predicate.
 type Config struct {
-	Type     string
 	Attr     string `json:"Attribute"`
-	NumChild int
+	NumChild int    // Number of goroutines doing backfill, etc.
 }
 
 func getDefaultConfig(dir string) string {

@@ -49,6 +49,7 @@ func Register(name string, f func() Indexer) {
 	registry[name] = f
 }
 
+// New returns a new Indexer object given the string name of the Indexer.
 func New(name string) Indexer {
 	x.Assertf(registry[name] != nil, "Unknown indexer %s", name)
 	return registry[name]()

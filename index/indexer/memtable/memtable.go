@@ -55,18 +55,25 @@ func init() {
 	indexer.Register("memtable", New)
 }
 
+// New creates our memtable indexer.
 func New() indexer.Indexer {
 	return &Indexer{
 		idx: make(map[string]*predIndex),
 	}
 }
 
+// NewBatch creates our own batch object.
 func (s *Indexer) NewBatch() (indexer.Batch, error) {
 	return &batch{}, nil
 }
 
-func (s *Indexer) Open(dir string) error   { return nil }
-func (s *Indexer) Close() error            { return nil }
+// Open opens a directory and creates indexer from it.
+func (s *Indexer) Open(dir string) error { return nil }
+
+// Close closes the indexer.
+func (s *Indexer) Close() error { return nil }
+
+// Create populates an empty directory and initializes an Indexer.
 func (s *Indexer) Create(dir string) error { return nil }
 
 func (s *Indexer) getOrNewPred(pred string) *predIndex {
@@ -88,6 +95,7 @@ func (s *predIndex) delBackward(key, val string) {
 	}
 }
 
+// Insert adds to the indexer a key, val pair. It can overwrite existing value.
 func (s *Indexer) Insert(pred, key, val string) error {
 	s.Lock()
 	defer s.Unlock()
@@ -114,6 +122,7 @@ func (s *Indexer) Insert(pred, key, val string) error {
 	return nil
 }
 
+// Remove removes from indexer a certain key. If missing, nothing is done.
 func (s *Indexer) Remove(pred, key string) error {
 	s.Lock()
 	defer s.Unlock()
@@ -136,6 +145,7 @@ func (s *Indexer) Remove(pred, key string) error {
 	return nil
 }
 
+// Query asks indexer for keys associated with a certain value. Output is sorted.
 func (s *Indexer) Query(pred, val string) ([]string, error) {
 	s.RLock()
 	defer s.RUnlock()
@@ -152,25 +162,28 @@ func (s *Indexer) Query(pred, val string) ([]string, error) {
 
 	// Return "us" as sorted keys.
 	keys := make([]string, 0, len(us))
-	for k, _ := range us {
+	for k := range us {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
 	return keys, nil
 }
 
+// Size returns size of batch.
 func (b *batch) Size() int {
 	b.RLock()
 	defer b.RUnlock()
 	return len(b.m)
 }
 
+// Reset resets the batch to hold nothing.
 func (b *batch) Reset() {
 	b.Lock()
 	defer b.Unlock()
 	b.m = nil
 }
 
+// Insert adds an insert operation to the batch.
 func (b *batch) Insert(pred, key, val string) error {
 	b.Lock()
 	defer b.Unlock()
@@ -183,6 +196,7 @@ func (b *batch) Insert(pred, key, val string) error {
 	return nil
 }
 
+// Remove adds a remove operation to the batch.
 func (b *batch) Remove(pred, key string) error {
 	b.Lock()
 	defer b.Unlock()
@@ -193,6 +207,8 @@ func (b *batch) Remove(pred, key string) error {
 	})
 	return nil
 }
+
+// Batch executes the batch of operations.
 func (s *Indexer) Batch(b indexer.Batch) error {
 	bb := b.(*batch)
 	bb.RLock()

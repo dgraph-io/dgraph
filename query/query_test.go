@@ -200,7 +200,7 @@ func populateGraph(t *testing.T) (string, *store.Store) {
 
 	// Create fake indices.
 	reader := bytes.NewReader([]byte(
-		`{"Indexer": "memtable", "Config": [{"Type": "text", "Attribute": "name", "NumChild": 1}]}`))
+		`{"Indexer": "memtable", "Config": [{"Attribute": "name", "NumChild": 1}]}`))
 	indicesConfig, err := index.NewConfigs(reader)
 	x.Check(err)
 	indices, err := index.CreateIndices(indicesConfig, dir)

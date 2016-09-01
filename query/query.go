@@ -98,7 +98,7 @@ type Latency struct {
 	Start          time.Time     `json:"-"`
 	Parsing        time.Duration `json:"query_parsing"`
 	Processing     time.Duration `json:"processing"`
-	Json           time.Duration `json:"json_conversion"`
+	JSON           time.Duration `json:"json_conversion"`
 	ProtocolBuffer time.Duration `json:"pb_conversion"`
 }
 
@@ -120,11 +120,11 @@ type SubGraph struct {
 	Attr     string
 	Count    int
 	Offset   int
-	AfterUid uint64
+	AfterUID uint64
 	GetCount uint16
 	Children []*SubGraph
 	IsRoot   bool
-	GetUid   bool
+	GetUID   bool
 	isDebug  bool
 
 	Query         []byte // Contains list of source UIDs.
@@ -227,7 +227,7 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 				continue
 			}
 			m := make(map[string]interface{})
-			if sg.GetUid || sg.isDebug {
+			if sg.GetUID || sg.isDebug {
 				m["_uid_"] = fmt.Sprintf("%#x", uid)
 			}
 			if ival, present := cResult[uid]; !present {
@@ -267,7 +267,7 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 				pval, q.Uids(i), val)
 		}
 		m := make(map[string]interface{})
-		if sg.GetUid || sg.isDebug {
+		if sg.GetUID || sg.isDebug {
 			m["_uid_"] = fmt.Sprintf("%#x", q.Uids(i))
 		}
 		m[sg.Attr] = string(val)
@@ -283,7 +283,7 @@ func (sg *SubGraph) ToJSON(l *Latency) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	l.Json = time.Since(l.Start) - l.Parsing - l.Processing
+	l.JSON = time.Since(l.Start) - l.Parsing - l.Processing
 	if len(r) != 1 {
 		log.Fatal("We don't currently support more than 1 uid at root.")
 	}
@@ -469,14 +469,14 @@ func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
 			break
 		}
 		if gchild.Attr == "_uid_" {
-			sg.GetUid = true
+			sg.GetUID = true
 		}
 
 		dst := &SubGraph{
 			isDebug:  sg.isDebug,
 			Attr:     gchild.Attr,
 			Offset:   gchild.Offset,
-			AfterUid: gchild.After,
+			AfterUID: gchild.After,
 			Count:    gchild.First,
 			filters:  gchild.Filters,
 		}
@@ -504,14 +504,14 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	// This would set the Result field in SubGraph,
 	// and populate the children for attributes.
 	if len(exid) > 0 {
-		xidToUid := make(map[string]uint64)
-		xidToUid[exid] = 0
-		if err := worker.GetOrAssignUidsOverNetwork(ctx, xidToUid); err != nil {
+		xidToUID := make(map[string]uint64)
+		xidToUID[exid] = 0
+		if err := worker.GetOrAssignUidsOverNetwork(ctx, xidToUID); err != nil {
 			x.Trace(ctx, "Error while getting uids over network: %v", err)
 			return nil, err
 		}
 
-		euid = xidToUid[exid]
+		euid = xidToUID[exid]
 		x.Trace(ctx, "Xid: %v Uid: %v", exid, euid)
 	}
 
@@ -576,7 +576,7 @@ func createTaskQuery(sg *SubGraph, sorted []uint64) []byte {
 	task.QueryAddUids(b, vend)
 	task.QueryAddCount(b, int32(sg.Count))
 	task.QueryAddOffset(b, int32(sg.Offset))
-	task.QueryAddAfterUid(b, sg.AfterUid)
+	task.QueryAddAfterUid(b, sg.AfterUID)
 	task.QueryAddGetCount(b, sg.GetCount)
 
 	qend := task.QueryEnd(b)
@@ -584,6 +584,7 @@ func createTaskQuery(sg *SubGraph, sorted []uint64) []byte {
 	return b.Bytes[b.Head():]
 }
 
+// ListChannel contains our results, a list of UIDs.
 type ListChannel struct {
 	TList *task.UidList
 	Idx   int
@@ -599,14 +600,15 @@ func (lc *ListChannel) Size() int {
 	return lc.TList.UidsLength()
 }
 
+// ListChannels is a list of ListChannel, a UID matrix.
 type ListChannels []*ListChannel
 
-// Return i-th list.
+// Get returns the i-th list.
 func (lc ListChannels) Get(i int) algo.Uint64List {
 	return lc[i]
 }
 
-// Return number of lists.
+// Size returns number of lists.
 func (lc ListChannels) Size() int {
 	return len(lc)
 }

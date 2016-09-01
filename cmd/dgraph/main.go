@@ -232,7 +232,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	x.Trace(ctx, "Latencies: Total: %v Parsing: %v Process: %v Json: %v",
-		time.Since(l.Start), l.Parsing, l.Processing, l.Json)
+		time.Since(l.Start), l.Parsing, l.Processing, l.JSON)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(js)

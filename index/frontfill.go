@@ -25,19 +25,6 @@ import (
 )
 
 // FrontfillAdd inserts with overwrite (replace) key, value into our indices.
-func FrontfillAdd(ctx context.Context, attr string, uid uint64, val string) {
-	if err := workerIndices.FrontfillAdd(ctx, attr, uid, val); err != nil {
-		x.TraceError(ctx, err)
-	}
-}
-
-// FrontfillDel deletes a key, value from our indices.
-func FrontfillDel(ctx context.Context, attr string, uid uint64) {
-	if err := workerIndices.FrontfillDel(ctx, attr, uid); err != nil {
-		x.TraceError(ctx, err)
-	}
-}
-
 func (s *Indices) FrontfillAdd(ctx context.Context, attr string, uid uint64, val string) error {
 	return s.Frontfill(ctx, &mutation{
 		remove: false,
@@ -47,6 +34,7 @@ func (s *Indices) FrontfillAdd(ctx context.Context, attr string, uid uint64, val
 	})
 }
 
+// FrontfillDel deletes a key, value from our indices.
 func (s *Indices) FrontfillDel(ctx context.Context, attr string, uid uint64) error {
 	return s.Frontfill(ctx, &mutation{
 		remove: true,
