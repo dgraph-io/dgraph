@@ -182,7 +182,10 @@ func getMemUsage() int {
 	megs := ms.Alloc / (1 << 20)
 	return int(megs)
 
-	// Sticking to ms.Alloc for now. Ignore below code.
+	// Sticking to ms.Alloc temoprarily.
+	// TODO(Ashwin): Switch to total Memory(RSS) once we figure out
+	// how to release memory to OS (Currently only a small chunck
+	// is returned)
 	if runtime.GOOS != "linux" {
 		pid := os.Getpid()
 		cmd := fmt.Sprintf("ps -ao rss,pid | grep %v", pid)
