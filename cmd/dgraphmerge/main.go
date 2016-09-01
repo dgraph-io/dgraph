@@ -130,17 +130,17 @@ func mergeFolders(mergePath, destPath string) {
 			wb.Clear()
 		}
 
-		if len(lastKey) < len(top.key) {
+		if cap(lastKey) < len(top.key) {
 			lastKey = make([]byte, len(top.key))
 		}
-		copy(lastKey, top.key)
 		lastKey = lastKey[:len(top.key)]
+		copy(lastKey, top.key)
 
-		if len(lastValue) < len(top.value) {
+		if cap(lastValue) < len(top.value) {
 			lastValue = make([]byte, len(top.value))
 		}
-		copy(lastValue, top.value)
 		lastValue = lastValue[:len(top.value)]
+		copy(lastValue, top.value)
 
 		storeIters[top.storeIdx].Next()
 		if !storeIters[top.storeIdx].Valid() {
