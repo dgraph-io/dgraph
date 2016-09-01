@@ -14,16 +14,6 @@
  * limitations under the License.
  */
 
-// Package indexer is an interface to indexing solutions such as Bleve.
-// There are 3 operations: Insert, Delete, Query. Let P=predicate, K=key, V=value.
-// Insert(P, K, V):
-//   (1) If K already exists with a different value, we expect Indexer to remove
-//       the old value from the index.
-//   (2) Otherwise, we insert (K, V) into the index.
-// Delete(P, K):
-//   (1) If K exists, we do the deletion.
-//   (2) If K does not exist, nothing happens. No error is returned.
-// Query(P, V): Return a sorted list of keys.
 package indexer
 
 import (
@@ -37,8 +27,7 @@ var (
 	registryLock sync.Mutex
 )
 
-// Register adds an Indexer constructor to registry. It is recommended that
-// you register
+// Register adds an Indexer constructor to registry.
 func Register(name string, f func() Indexer) {
 	registryLock.Lock()
 	defer registryLock.Unlock()
@@ -65,6 +54,7 @@ type Batch interface {
 
 // Indexer adds (key, val) to index. Given val, it returns matching keys.
 // We also assume that it has support for different predicates.
+// We expect Indexer to be a pointer to some struct.
 type Indexer interface {
 	Open(dir string) error
 	Close() error

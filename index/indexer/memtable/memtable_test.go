@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-// Package memtable contains an implementation of indexer.Indexer.
 package memtable
 
 import (

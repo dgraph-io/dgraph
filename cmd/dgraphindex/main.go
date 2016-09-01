@@ -33,7 +33,7 @@ func main() {
 	f, err := os.Open(*configFilename)
 	x.Checkf(err, "Cannot open config file: %s", *configFilename)
 	defer f.Close()
-	config, err := index.NewConfigs(f)
+	config, err := index.ReadConfigs(f)
 	x.Check(err)
 
 	// Try writing to index directory.

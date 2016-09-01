@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-// Package algo contains algorithms such as merging sorted lists.
 package algo
 
 import (

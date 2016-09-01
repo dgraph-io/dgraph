@@ -51,7 +51,7 @@ type DirectedEdge struct {
 	Entity    uint64
 	Attribute string
 	Value     []byte
-	ValueId   uint64
+	ValueID   uint64
 	Source    string
 	Timestamp time.Time
 }

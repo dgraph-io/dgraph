@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-// Package indexer is an interface to indexing solutions such as Bleve.
 package indexer
 
 import (

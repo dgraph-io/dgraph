@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-// Package index indexes values in database. This can be used for filtering.
 package index
 
 import (
@@ -30,8 +29,8 @@ type LookupSpec struct {
 
 // LookupResult defines a index lookup result.
 type LookupResult struct {
-	UID []uint64
-	Err error
+	UIDs []uint64
+	Err  error
 }
 
 // Lookup does a lookup using underlying Indexer object.
@@ -50,5 +49,5 @@ func (s *Indices) Lookup(li *LookupSpec) *LookupResult {
 	for i, k := range r {
 		uid[i] = posting.DecodeUID([]byte(k))
 	}
-	return &LookupResult{UID: uid}
+	return &LookupResult{UIDs: uid}
 }

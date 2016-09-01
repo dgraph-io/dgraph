@@ -64,7 +64,7 @@ func (nq NQuad) ToEdge() (result x.DirectedEdge, rerr error) {
 		if err != nil {
 			return result, err
 		}
-		result.ValueId = oid
+		result.ValueID = oid
 	} else {
 		result.Value = nq.ObjectValue
 	}
@@ -102,7 +102,7 @@ func (nq NQuad) ToEdgeUsing(
 		if err != nil {
 			return result, err
 		}
-		result.ValueId = uid
+		result.ValueID = uid
 	}
 	result.Attribute = nq.Predicate
 	result.Source = nq.Label

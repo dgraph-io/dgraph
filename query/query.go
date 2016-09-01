@@ -658,7 +658,7 @@ func (sg *SubGraph) postIndicesLookup(sorted []uint64) []uint64 {
 			// If we encounter any error, we do not apply any filter?
 			return sorted
 		}
-		toIntersect = append(toIntersect, r.UID)
+		toIntersect = append(toIntersect, r.UIDs)
 	}
 	toIntersect = append(toIntersect, sorted)
 	return algo.IntersectSorted(toIntersect)

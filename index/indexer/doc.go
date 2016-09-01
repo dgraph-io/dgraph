@@ -14,25 +14,14 @@
  * limitations under the License.
  */
 
-package algo
-
-type elem struct {
-	Val uint64
-	Idx int // channel index
-}
-
-type uint64Heap []elem
-
-func (h uint64Heap) Len() int           { return len(h) }
-func (h uint64Heap) Less(i, j int) bool { return h[i].Val < h[j].Val }
-func (h uint64Heap) Swap(i, j int)      { h[i], h[j] = h[j], h[i] }
-func (h *uint64Heap) Push(x interface{}) {
-	*h = append(*h, x.(elem))
-}
-func (h *uint64Heap) Pop() interface{} {
-	old := *h
-	n := len(old)
-	x := old[n-1]
-	*h = old[0 : n-1]
-	return x
-}
+// Package indexer is an interface to indexing solutions such as Bleve.
+// There are 3 operations: Insert, Delete, Query. Let P=predicate, K=key, V=value.
+// Insert(P, K, V):
+//   (1) If K already exists with a different value, we expect Indexer to remove
+//       the old value from the index.
+//   (2) Otherwise, we insert (K, V) into the index.
+// Delete(P, K):
+//   (1) If K exists, we do the deletion.
+//   (2) If K does not exist, nothing happens. No error is returned.
+// Query(P, V): Return a sorted list of keys.
+package indexer

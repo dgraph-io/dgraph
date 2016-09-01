@@ -112,7 +112,7 @@ func newPosting(t x.DirectedEdge, op byte) []byte {
 	b := flatbuffers.NewBuilder(0)
 	var bo flatbuffers.UOffsetT
 	if !bytes.Equal(t.Value, nil) {
-		if t.ValueId != math.MaxUint64 {
+		if t.ValueID != math.MaxUint64 {
 			log.Fatal("This should have already been set by the caller.")
 		}
 		bo = b.CreateByteVector(t.Value)
@@ -122,7 +122,7 @@ func newPosting(t x.DirectedEdge, op byte) []byte {
 	if bo > 0 {
 		types.PostingAddValue(b, bo)
 	}
-	types.PostingAddUid(b, t.ValueId)
+	types.PostingAddUid(b, t.ValueID)
 	types.PostingAddSource(b, so)
 	types.PostingAddTs(b, t.Timestamp.UnixNano())
 	types.PostingAddOp(b, op)
@@ -137,7 +137,7 @@ func addEdgeToPosting(b *flatbuffers.Builder,
 
 	var bo flatbuffers.UOffsetT
 	if !bytes.Equal(t.Value, nil) {
-		if t.ValueId != math.MaxUint64 {
+		if t.ValueID != math.MaxUint64 {
 			log.Fatal("This should have already been set by the caller.")
 		}
 		bo = b.CreateByteVector(t.Value)
@@ -148,7 +148,7 @@ func addEdgeToPosting(b *flatbuffers.Builder,
 	if bo > 0 {
 		types.PostingAddValue(b, bo)
 	}
-	types.PostingAddUid(b, t.ValueId)
+	types.PostingAddUid(b, t.ValueID)
 	types.PostingAddSource(b, so)
 	types.PostingAddTs(b, t.Timestamp.UnixNano())
 	types.PostingAddOp(b, op)
@@ -564,9 +564,9 @@ func (l *List) AddMutation(ctx context.Context, t x.DirectedEdge, op byte) error
 	// All edges with a value set, have the same uid. In other words,
 	// an (entity, attribute) can only have one value.
 	if !bytes.Equal(t.Value, nil) {
-		t.ValueId = math.MaxUint64
+		t.ValueID = math.MaxUint64
 	}
-	if t.ValueId == 0 {
+	if t.ValueID == 0 {
 		x.Trace(ctx, "ValueId cannot be zero")
 		return fmt.Errorf("ValueId cannot be zero.")
 	}

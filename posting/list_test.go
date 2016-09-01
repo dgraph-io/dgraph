@@ -127,7 +127,7 @@ func TestAddMutation(t *testing.T) {
 	l.init(key, ps, clog)
 
 	edge := x.DirectedEdge{
-		ValueId:   9,
+		ValueID:   9,
 		Source:    "testing",
 		Timestamp: time.Now(),
 	}
@@ -153,7 +153,7 @@ func TestAddMutation(t *testing.T) {
 	// return // Test 1.
 
 	// Add another edge now.
-	edge.ValueId = 81
+	edge.ValueID = 81
 	l.AddMutation(ctx, edge, Set)
 	// l.CommitIfDirty()
 	if l.Length() != 2 {
@@ -178,7 +178,7 @@ func TestAddMutation(t *testing.T) {
 	uids := []uint64{
 		9, 49, 81,
 	}
-	edge.ValueId = 49
+	edge.ValueID = 49
 	if err := l.AddMutation(ctx, edge, Set); err != nil {
 		t.Error(err)
 	}
@@ -193,17 +193,17 @@ func TestAddMutation(t *testing.T) {
 	// return // Test 3.
 
 	// Delete an edge, add an edge, replace an edge
-	edge.ValueId = 49
+	edge.ValueID = 49
 	if err := l.AddMutation(ctx, edge, Del); err != nil {
 		t.Error(err)
 	}
 
-	edge.ValueId = 69
+	edge.ValueID = 69
 	if err := l.AddMutation(ctx, edge, Set); err != nil {
 		t.Error(err)
 	}
 
-	edge.ValueId = 9
+	edge.ValueID = 9
 	edge.Source = "anti-testing"
 	if err := l.AddMutation(ctx, edge, Set); err != nil {
 		t.Error(err)
@@ -341,7 +341,7 @@ func benchmarkAddMutations(n int, b *testing.B) {
 	ctx := context.Background()
 	for i := 0; i < b.N; i++ {
 		edge := x.DirectedEdge{
-			ValueId:   uint64(rand.Intn(b.N) + 1),
+			ValueID:   uint64(rand.Intn(b.N) + 1),
 			Source:    "testing",
 			Timestamp: ts.Add(time.Microsecond),
 		}

@@ -80,7 +80,7 @@ func TestProcessTask(t *testing.T) {
 	Init(ps, nil, 0, 1)
 
 	edge := x.DirectedEdge{
-		ValueId:   23,
+		ValueID:   23,
 		Source:    "author0",
 		Timestamp: time.Now(),
 	}
@@ -88,13 +88,13 @@ func TestProcessTask(t *testing.T) {
 	addEdge(t, edge, posting.GetOrCreate(posting.Key(11, "friend"), ps))
 	addEdge(t, edge, posting.GetOrCreate(posting.Key(12, "friend"), ps))
 
-	edge.ValueId = 25
+	edge.ValueID = 25
 	addEdge(t, edge, posting.GetOrCreate(posting.Key(12, "friend"), ps))
 
-	edge.ValueId = 26
+	edge.ValueID = 26
 	addEdge(t, edge, posting.GetOrCreate(posting.Key(12, "friend"), ps))
 
-	edge.ValueId = 31
+	edge.ValueID = 31
 	addEdge(t, edge, posting.GetOrCreate(posting.Key(10, "friend"), ps))
 	addEdge(t, edge, posting.GetOrCreate(posting.Key(12, "friend"), ps))
 

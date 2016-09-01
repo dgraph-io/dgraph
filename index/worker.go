@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-// Package index indexes values in database. This can be used for filtering.
 package index
 
 // TODO(jiawei)

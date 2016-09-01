@@ -171,7 +171,7 @@ func assignNew(pl *posting.List, xid string, instanceIdx uint64,
 	}
 
 	t := x.DirectedEdge{
-		ValueId:   uid,
+		ValueID:   uid,
 		Source:    "_assigner_",
 		Timestamp: time.Now(),
 	}

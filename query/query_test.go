@@ -150,22 +150,22 @@ func populateGraph(t *testing.T) (string, *store.Store) {
 	// So, user we're interested in has uid: 1.
 	// She has 5 friends: 23, 24, 25, 31, and 101
 	edge := x.DirectedEdge{
-		ValueId:   23,
+		ValueID:   23,
 		Source:    "testing",
 		Timestamp: time.Now(),
 	}
 	addEdge(t, edge, posting.GetOrCreate(posting.Key(1, "friend"), ps))
 
-	edge.ValueId = 24
+	edge.ValueID = 24
 	addEdge(t, edge, posting.GetOrCreate(posting.Key(1, "friend"), ps))
 
-	edge.ValueId = 25
+	edge.ValueID = 25
 	addEdge(t, edge, posting.GetOrCreate(posting.Key(1, "friend"), ps))
 
-	edge.ValueId = 31
+	edge.ValueID = 31
 	addEdge(t, edge, posting.GetOrCreate(posting.Key(1, "friend"), ps))
 
-	edge.ValueId = 101
+	edge.ValueID = 101
 	addEdge(t, edge, posting.GetOrCreate(posting.Key(1, "friend"), ps))
 
 	// Now let's add a few properties for the main user.
@@ -201,7 +201,7 @@ func populateGraph(t *testing.T) (string, *store.Store) {
 	// Create fake indices.
 	reader := bytes.NewReader([]byte(
 		`{"Indexer": "memtable", "Config": [{"Attribute": "name", "NumChild": 1}]}`))
-	indicesConfig, err := index.NewConfigs(reader)
+	indicesConfig, err := index.ReadConfigs(reader)
 	x.Check(err)
 	indices, err := index.CreateIndices(indicesConfig, dir)
 	x.Check(err)

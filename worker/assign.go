@@ -17,16 +17,15 @@
 package worker
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"sync"
 
-	"github.com/google/flatbuffers/go"
-	"golang.org/x/net/context"
-
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/uid"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/google/flatbuffers/go"
 )
 
 func createXidListBuffer(xids map[string]uint64) []byte {

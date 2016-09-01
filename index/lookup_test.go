@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-// Package index indexes values in database. This can be used for filtering.
 package index
 
 import (
@@ -52,22 +51,22 @@ func getIndices(t *testing.T) (string, *Indices) {
 	// So, user we're interested in has uid: 1.
 	// She has 2 friends: 23, 24, 25, 31, and 101
 	edge := x.DirectedEdge{
-		ValueId:   23,
+		ValueID:   23,
 		Source:    "testing",
 		Timestamp: time.Now(),
 	}
 	addEdge(t, edge, posting.GetOrCreate(posting.Key(1, "friend"), ps))
 
-	edge.ValueId = 24
+	edge.ValueID = 24
 	addEdge(t, edge, posting.GetOrCreate(posting.Key(1, "friend"), ps))
 
-	edge.ValueId = 25
+	edge.ValueID = 25
 	addEdge(t, edge, posting.GetOrCreate(posting.Key(1, "friend"), ps))
 
-	edge.ValueId = 31
+	edge.ValueID = 31
 	addEdge(t, edge, posting.GetOrCreate(posting.Key(1, "friend"), ps))
 
-	edge.ValueId = 101
+	edge.ValueID = 101
 	addEdge(t, edge, posting.GetOrCreate(posting.Key(1, "friend"), ps))
 
 	// Now let's add a name for each of the friends, except 101.
@@ -92,8 +91,8 @@ func getIndices(t *testing.T) (string, *Indices) {
 
 	// Create fake indices.
 	reader := bytes.NewReader([]byte(
-		`{"Indexer": "memtable", "Config": [{"Attribute": "name", "NumChild": 1}]}`))
-	indicesConfig, err := NewConfigs(reader)
+		`{"Indexer": "memtable", "Config": [{"Attribute": "name"}]}`))
+	indicesConfig, err := ReadConfigs(reader)
 	x.Check(err)
 	indices, err := CreateIndices(indicesConfig, dir)
 	x.Check(err)
@@ -115,12 +114,12 @@ func TestBackfill(t *testing.T) {
 	if lr.Err != nil {
 		t.Error(lr.Err)
 	}
-	if len(lr.UID) != 1 {
-		t.Error(fmt.Errorf("Expected 1 hit, got %d", len(lr.UID)))
+	if len(lr.UIDs) != 1 {
+		t.Error(fmt.Errorf("Expected 1 hit, got %d", len(lr.UIDs)))
 		return
 	}
-	if lr.UID[0] != 24 {
-		t.Error(fmt.Errorf("Expected UID 24, got %d", lr.UID[0]))
+	if lr.UIDs[0] != 24 {
+		t.Error(fmt.Errorf("Expected UID 24, got %d", lr.UIDs[0]))
 	}
 }
 
@@ -137,12 +136,12 @@ func TestFrontfillDel(t *testing.T) {
 	if lr.Err != nil {
 		t.Error(lr.Err)
 	}
-	if len(lr.UID) != 1 {
-		t.Error(fmt.Errorf("Expected 1 hit, got %d", len(lr.UID)))
+	if len(lr.UIDs) != 1 {
+		t.Error(fmt.Errorf("Expected 1 hit, got %d", len(lr.UIDs)))
 		return
 	}
-	if lr.UID[0] != 24 {
-		t.Error(fmt.Errorf("Expected UID 24, got %d", lr.UID[0]))
+	if lr.UIDs[0] != 24 {
+		t.Error(fmt.Errorf("Expected UID 24, got %d", lr.UIDs[0]))
 	}
 
 	// Do frontfill now.
@@ -154,8 +153,8 @@ func TestFrontfillDel(t *testing.T) {
 	if lr.Err != nil {
 		t.Error(lr.Err)
 	}
-	if len(lr.UID) != 0 {
-		t.Error(fmt.Errorf("Expected 0 hit, got %d", len(lr.UID)))
+	if len(lr.UIDs) != 0 {
+		t.Error(fmt.Errorf("Expected 0 hit, got %d", len(lr.UIDs)))
 		return
 	}
 }
@@ -173,12 +172,12 @@ func TestFrontfillAdd(t *testing.T) {
 	if lr.Err != nil {
 		t.Error(lr.Err)
 	}
-	if len(lr.UID) != 1 {
-		t.Error(fmt.Errorf("Expected 1 hit, got %d", len(lr.UID)))
+	if len(lr.UIDs) != 1 {
+		t.Error(fmt.Errorf("Expected 1 hit, got %d", len(lr.UIDs)))
 		return
 	}
-	if lr.UID[0] != 24 {
-		t.Error(fmt.Errorf("Expected UID 24, got %d", lr.UID[0]))
+	if lr.UIDs[0] != 24 {
+		t.Error(fmt.Errorf("Expected UID 24, got %d", lr.UIDs[0]))
 	}
 
 	// Do frontfill now.
@@ -191,11 +190,11 @@ func TestFrontfillAdd(t *testing.T) {
 	if lr.Err != nil {
 		t.Error(lr.Err)
 	}
-	if len(lr.UID) != 1 {
-		t.Error(fmt.Errorf("Expected 1 hit, got %d", len(lr.UID)))
+	if len(lr.UIDs) != 1 {
+		t.Error(fmt.Errorf("Expected 1 hit, got %d", len(lr.UIDs)))
 		return
 	}
-	if lr.UID[0] != 23 {
-		t.Error(fmt.Errorf("Expected UID 23, got %d", lr.UID[0]))
+	if lr.UIDs[0] != 23 {
+		t.Error(fmt.Errorf("Expected UID 23, got %d", lr.UIDs[0]))
 	}
 }

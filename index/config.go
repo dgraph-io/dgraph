@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-// Package index indexes values in database. This can be used for filtering.
 package index
 
 import (
@@ -43,16 +42,16 @@ type Configs struct {
 
 // Config defines the index for a single predicate.
 type Config struct {
-	Attr     string `json:"Attribute"`
-	NumChild int    // Number of goroutines doing backfill, etc.
+	Attr string `json:"Attribute"`
+	// Might add more fields in the future, e.g., field can be datetime or numeric.
 }
 
 func getDefaultConfig(dir string) string {
 	return path.Join(dir, *defaultConfigFile)
 }
 
-// NewConfigs creates Configs object from io.Reader object.
-func NewConfigs(reader io.Reader) (*Configs, error) {
+// ReadConfigs creates Configs object from io.Reader object.
+func ReadConfigs(reader io.Reader) (*Configs, error) {
 	f, err := ioutil.ReadAll(reader)
 	if err != nil {
 		return nil, x.Wrap(err)
@@ -78,9 +77,6 @@ func (c *Configs) validate() error {
 			return x.Errorf("Duplicate attr %s", cfg.Attr)
 		}
 		attrMap[cfg.Attr] = true
-		if cfg.NumChild < 1 {
-			return x.Errorf("NumChild too small %d", cfg.NumChild)
-		}
 	}
 	return nil
 }
