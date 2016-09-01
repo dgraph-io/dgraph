@@ -9,7 +9,10 @@
 
 Dgraph's goal is to provide [Google](https://www.google.com) production level scale and throughput,
 with low enough latency to be serving real time user queries, over terabytes of structured data.
-Dgraph supports [GraphQL](http://graphql.org/) as query language, and responds in [JSON](http://www.json.org/).
+Dgraph supports [GraphQL-like query syntax^](http://graphql.org/), and responds in [JSON](http://www.json.org/).
+
+> ^ Dgraph is working towards supporting the entire feature set of GraphQL. We extend the spec to allow graph operations which GraphQL doesn't natively support and we try our best to maintain compatibility with the official GraphQL spec.
+
 
 ## Users
 - **Dgraph official documentation is present at [wiki.dgraph.io](https://wiki.dgraph.io).**
