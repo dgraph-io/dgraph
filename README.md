@@ -4,7 +4,7 @@
 ![logo](https://img.shields.io/badge/status-alpha-red.svg)
 [![Wiki](https://img.shields.io/badge/res-wiki-blue.svg)](http://wiki.dgraph.io)
 [![Build Status](https://travis-ci.org/dgraph-io/dgraph.svg?branch=master)](https://travis-ci.org/dgraph-io/dgraph)
-[![Coverage Status](https://coveralls.io/repos/github/dgraph-io/dgraph/badge.svg?branch=develop)](https://coveralls.io/github/dgraph-io/dgraph?branch=develop)
+[![Coverage Status](https://coveralls.io/repos/github/dgraph-io/dgraph/badge.svg?branch=master)](https://coveralls.io/github/dgraph-io/dgraph?branch=master)
 [![Slack Status](http://slack.dgraph.io/badge.svg)](http://slack.dgraph.io)
 
 Dgraph's goal is to provide [Google](https://www.google.com) production level scale and throughput,
