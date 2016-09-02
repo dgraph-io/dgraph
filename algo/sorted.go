@@ -37,32 +37,22 @@ type Uint64List interface {
 
 // UIDList is a list of UIDs. We might consider moving this to another package
 // that provides some wrapper around task.UidList.
-type UIDList struct {
-	task.UidList
-}
+type UIDList struct{ task.UidList }
 
 // Get returns i-th element.
-func (ul *UIDList) Get(i int) uint64 {
-	return ul.Uids(i)
-}
+func (ul *UIDList) Get(i int) uint64 { return ul.Uids(i) }
 
 // Size returns size of UID list.
-func (ul *UIDList) Size() int {
-	return ul.UidsLength()
-}
+func (ul *UIDList) Size() int { return ul.UidsLength() }
 
-// UidLists is a list of UidList.
+// UIDLists is a list of UIDList.
 type UIDLists []*UIDList
 
 // Get returns the i-th list.
-func (ul UIDLists) Get(i int) Uint64List {
-	return ul[i]
-}
+func (ul UIDLists) Get(i int) Uint64List { return ul[i] }
 
 // Size returns number of lists.
-func (ul UIDLists) Size() int {
-	return len(ul)
-}
+func (ul UIDLists) Size() int { return len(ul) }
 
 // MergeSorted merges sorted uint64 lists. Only unique numbers are returned.
 // In the future, we might have another interface for the output.
