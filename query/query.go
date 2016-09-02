@@ -18,7 +18,7 @@ package query
 
 import (
 	"bytes"
-	"container/heap"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -27,15 +27,13 @@ import (
 	"sync"
 	"time"
 
-	"context"
-
-	"github.com/google/flatbuffers/go"
-
+	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/query/graph"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/google/flatbuffers/go"
 )
 
 /*
@@ -584,58 +582,48 @@ func createTaskQuery(sg *SubGraph, sorted []uint64) []byte {
 	return b.Bytes[b.Head():]
 }
 
+// ListChannel contains our results, a list of UIDs.
 type ListChannel struct {
-	TList *task.UidList
-	Idx   int
+	tlist *task.UidList
+}
+
+// Get returns i-th element.
+func (lc ListChannel) Get(i int) uint64 {
+	return lc.tlist.Uids(i)
+}
+
+// Size returns size of UID list.
+func (lc ListChannel) Size() int {
+	return lc.tlist.UidsLength()
+}
+
+// ListChannels is a list of ListChannel, a UID matrix. Not using a pointer to
+// ListChannel because it contains only one pointer.
+type ListChannels []ListChannel
+
+// Get returns the i-th list.
+func (lc ListChannels) Get(i int) algo.Uint64List {
+	return lc[i]
+}
+
+// Size returns number of lists.
+func (lc ListChannels) Size() int {
+	return len(lc)
 }
 
 func sortedUniqueUids(r *task.Result) ([]uint64, error) {
 	// Let's serialize the matrix of uids in result to a
 	// sorted unique list of uids.
-	h := &x.Uint64Heap{}
-	heap.Init(h)
-
-	channels := make([]*ListChannel, r.UidmatrixLength())
+	channels := make(ListChannels, r.UidmatrixLength())
 	for i := 0; i < r.UidmatrixLength(); i++ {
 		tlist := new(task.UidList)
 		if ok := r.Uidmatrix(tlist, i); !ok {
 			return nil, fmt.Errorf("While parsing Uidmatrix")
 		}
-		if tlist.UidsLength() > 0 {
-			e := x.Elem{
-				Uid: tlist.Uids(0),
-				Idx: i,
-			}
-			heap.Push(h, e)
-		}
-		channels[i] = &ListChannel{TList: tlist, Idx: 1}
+		channels[i] = ListChannel{tlist}
 	}
-
-	// The resulting list of uids will be stored here.
-	sorted := make([]uint64, 0, 100)
-
-	var last uint64
-	// Iterate over the heap.
-	for h.Len() > 0 {
-		me := (*h)[0] // Peek at the top element in heap.
-		if me.Uid != last {
-			sorted = append(sorted, me.Uid) // Add if unique.
-			last = me.Uid
-		}
-		lc := channels[me.Idx]
-		if lc.Idx >= lc.TList.UidsLength() {
-			heap.Pop(h)
-
-		} else {
-			uid := lc.TList.Uids(lc.Idx)
-			lc.Idx++
-
-			me.Uid = uid
-			(*h)[0] = me
-			heap.Fix(h, 0) // Faster than Pop() followed by Push().
-		}
-	}
-	return sorted, nil
+	// Invoke standard algorithm to merge sorted lists.
+	return algo.MergeSorted(channels), nil
 }
 
 // ProcessGraph processes the SubGraph instance accumulating result for the query
