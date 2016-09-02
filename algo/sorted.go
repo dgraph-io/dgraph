@@ -18,6 +18,8 @@ package algo
 
 import (
 	"container/heap"
+
+	"github.com/dgraph-io/dgraph/task"
 )
 
 // Uint64Lists is a list of Uint64List. We need this because []X is not equal to
@@ -31,6 +33,35 @@ type Uint64Lists interface {
 type Uint64List interface {
 	Get(int) uint64
 	Size() int
+}
+
+// UIDList is a list of UIDs. We might consider moving this to another package
+// that provides some wrapper around task.UidList.
+type UIDList struct {
+	task.UidList
+}
+
+// Get returns i-th element.
+func (ul *UIDList) Get(i int) uint64 {
+	return ul.Uids(i)
+}
+
+// Size returns size of UID list.
+func (ul *UIDList) Size() int {
+	return ul.UidsLength()
+}
+
+// UidLists is a list of UidList.
+type UIDLists []*UIDList
+
+// Get returns the i-th list.
+func (ul UIDLists) Get(i int) Uint64List {
+	return ul[i]
+}
+
+// Size returns number of lists.
+func (ul UIDLists) Size() int {
+	return len(ul)
 }
 
 // MergeSorted merges sorted uint64 lists. Only unique numbers are returned.

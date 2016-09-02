@@ -189,34 +189,7 @@ func TestIntersectSorted5(t *testing.T) {
 	}
 }
 
-type uidList struct {
-	task.UidList
-}
-
-// Get returns i-th element.
-func (ul *uidList) Get(i int) uint64 {
-	return ul.Uids(i)
-}
-
-// Size returns size of UID list.
-func (ul *uidList) Size() int {
-	return ul.UidsLength()
-}
-
-// UidLists is a list of UidList.
-type uidLists []*uidList
-
-// Get returns the i-th list.
-func (ul uidLists) Get(i int) Uint64List {
-	return ul[i]
-}
-
-// Size returns number of lists.
-func (ul uidLists) Size() int {
-	return len(ul)
-}
-
-func newUIDList(a []uint64) *uidList {
+func newUIDList(a []uint64) *UIDList {
 	b := flatbuffers.NewBuilder(0)
 	task.UidListStartUidsVector(b, len(a))
 	for i := len(a) - 1; i >= 0; i-- {
@@ -228,7 +201,7 @@ func newUIDList(a []uint64) *uidList {
 	uend := task.UidListEnd(b)
 	b.Finish(uend)
 
-	ulist := new(uidList)
+	ulist := new(UIDList)
 	data := b.FinishedBytes()
 	uo := flatbuffers.GetUOffsetT(data)
 	ulist.Init(data, uo)
@@ -238,7 +211,7 @@ func newUIDList(a []uint64) *uidList {
 func TestTaskListMerge(t *testing.T) {
 	u1 := newUIDList([]uint64{1, 2, 3, 3, 6})
 	u2 := newUIDList([]uint64{4, 8, 9})
-	input := uidLists{u1, u2}
+	input := UIDLists{u1, u2}
 	expected := []uint64{1, 2, 3, 4, 6, 8, 9}
 	if err := arrayCompare(MergeSorted(input), expected); err != nil {
 		t.Fatal(err)

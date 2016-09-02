@@ -582,48 +582,16 @@ func createTaskQuery(sg *SubGraph, sorted []uint64) []byte {
 	return b.Bytes[b.Head():]
 }
 
-// ListChannel contains our results, a list of UIDs.
-type ListChannel struct {
-	tlist *task.UidList
-}
-
-// Get returns i-th element.
-func (lc ListChannel) Get(i int) uint64 {
-	return lc.tlist.Uids(i)
-}
-
-// Size returns size of UID list.
-func (lc ListChannel) Size() int {
-	return lc.tlist.UidsLength()
-}
-
-// ListChannels is a list of ListChannel, a UID matrix. Not using a pointer to
-// ListChannel because it contains only one pointer.
-type ListChannels []ListChannel
-
-// Get returns the i-th list.
-func (lc ListChannels) Get(i int) algo.Uint64List {
-	return lc[i]
-}
-
-// Size returns number of lists.
-func (lc ListChannels) Size() int {
-	return len(lc)
-}
-
 func sortedUniqueUids(r *task.Result) ([]uint64, error) {
-	// Let's serialize the matrix of uids in result to a
-	// sorted unique list of uids.
-	channels := make(ListChannels, r.UidmatrixLength())
+	uidLists := make(algo.UIDLists, r.UidmatrixLength())
 	for i := 0; i < r.UidmatrixLength(); i++ {
-		tlist := new(task.UidList)
-		if ok := r.Uidmatrix(tlist, i); !ok {
-			return nil, fmt.Errorf("While parsing Uidmatrix")
+		ul := new(algo.UIDList)
+		if ok := r.Uidmatrix(&ul.UidList, i); !ok {
+			return nil, x.Errorf("While parsing UID matrix")
 		}
-		channels[i] = ListChannel{tlist}
+		uidLists[i] = ul
 	}
-	// Invoke standard algorithm to merge sorted lists.
-	return algo.MergeSorted(channels), nil
+	return algo.MergeSorted(uidLists), nil
 }
 
 // ProcessGraph processes the SubGraph instance accumulating result for the query
