@@ -33,24 +33,6 @@ type Uint64List interface {
 	Size() int
 }
 
-// PlainUintLists is the simplest possible Uint64Lists.
-type PlainUintLists []PlainUintList
-
-// Size returns number of lists.
-func (s PlainUintLists) Size() int { return len(s) }
-
-// Get returns the i-th list.
-func (s PlainUintLists) Get(i int) Uint64List { return s[i] }
-
-// PlainUintList is the simplest possible Uint64List.
-type PlainUintList []uint64
-
-// Size returns size of list.
-func (s PlainUintList) Size() int { return len(s) }
-
-// Get returns i-th element of list.
-func (s PlainUintList) Get(i int) uint64 { return (s)[i] }
-
 // MergeSorted merges sorted uint64 lists. Only unique numbers are returned.
 // In the future, we might have another interface for the output.
 func MergeSorted(lists Uint64Lists) []uint64 {
@@ -66,32 +48,30 @@ func MergeSorted(lists Uint64Lists) []uint64 {
 		l := lists.Get(i)
 		if l.Size() > 0 {
 			heap.Push(h, elem{
-				Val: l.Get(0),
-				Idx: i,
+				val:     l.Get(0),
+				listIdx: i,
 			})
 		}
 	}
 
 	// Our final output. Give it some capacity.
 	output := make([]uint64, 0, 100)
-
-	// ptr[i] is the element we are looking at for lists[i].
-	ptr := make([]int, n)
-
+	// idx[i] is the element we are looking at for lists[i].
+	idx := make([]int, n)
 	var last uint64   // Last element added to sorted / final output.
 	for h.Len() > 0 { // While heap is not empty.
 		me := (*h)[0] // Peek at the top element in heap.
-		if len(output) == 0 || me.Val != last {
-			output = append(output, me.Val) // Add if unique.
-			last = me.Val
+		if len(output) == 0 || me.val != last {
+			output = append(output, me.val) // Add if unique.
+			last = me.val
 		}
-		l := lists.Get(me.Idx)
-		if ptr[me.Idx] >= l.Size()-1 {
+		l := lists.Get(me.listIdx)
+		if idx[me.listIdx] >= l.Size()-1 {
 			heap.Pop(h)
 		} else {
-			ptr[me.Idx]++
-			val := l.Get(ptr[me.Idx])
-			(*h)[0].Val = val
+			idx[me.listIdx]++
+			val := l.Get(idx[me.listIdx])
+			(*h)[0].val = val
 			heap.Fix(h, 0) // Faster than Pop() followed by Push().
 		}
 	}
@@ -124,10 +104,8 @@ func IntersectSorted(lists Uint64Lists) []uint64 {
 
 	// Our final output. Give it some capacity.
 	output := make([]uint64, 0, minLenIndex)
-
-	// ptr[i] is the element we are looking at for lists[i].
-	ptr := make([]int, n)
-
+	// idx[i] is the element we are looking at for lists[i].
+	idx := make([]int, n)
 	shortList := lists.Get(minLenIndex)
 	for i := 0; i < shortList.Size(); i++ {
 		val := shortList.Get(i)
@@ -142,10 +120,10 @@ func IntersectSorted(lists Uint64Lists) []uint64 {
 				continue
 			}
 			l := lists.Get(j)
-			k := ptr[j]
+			k := idx[j]
 			for ; k < l.Size() && l.Get(k) < val; k++ {
 			}
-			ptr[j] = k
+			idx[j] = k
 			if l.Get(k) > val {
 				skip = true
 				break

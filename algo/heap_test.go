@@ -25,43 +25,43 @@ func TestPush(t *testing.T) {
 	h := &uint64Heap{}
 	heap.Init(h)
 
-	e := elem{Val: 5}
+	e := elem{val: 5}
 	heap.Push(h, e)
-	e.Val = 3
+	e.val = 3
 	heap.Push(h, e)
-	e.Val = 4
+	e.val = 4
 	heap.Push(h, e)
 
 	if h.Len() != 3 {
 		t.Errorf("Expected len 3. Found: %v", h.Len())
 	}
-	if (*h)[0].Val != 3 {
+	if (*h)[0].val != 3 {
 		t.Errorf("Expected min 3. Found: %+v", (*h)[0])
 	}
-	e.Val = 10
+	e.val = 10
 	(*h)[0] = e
 	heap.Fix(h, 0)
-	if (*h)[0].Val != 4 {
+	if (*h)[0].val != 4 {
 		t.Errorf("Expected min 4. Found: %+v", (*h)[0])
 	}
-	e.Val = 11
+	e.val = 11
 	(*h)[0] = e
 	heap.Fix(h, 0)
-	if (*h)[0].Val != 5 {
+	if (*h)[0].val != 5 {
 		t.Errorf("Expected min 5. Found: %+v", (*h)[0])
 	}
 
 	e = heap.Pop(h).(elem)
-	if e.Val != 5 {
+	if e.val != 5 {
 		t.Errorf("Expected min 5. Found %+v", e)
 	}
 
 	e = heap.Pop(h).(elem)
-	if e.Val != 10 {
+	if e.val != 10 {
 		t.Errorf("Expected min 10. Found: %+v", e)
 	}
 	e = heap.Pop(h).(elem)
-	if e.Val != 11 {
+	if e.val != 11 {
 		t.Errorf("Expected min 11. Found: %+v", e)
 	}
 

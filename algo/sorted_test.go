@@ -37,10 +37,28 @@ func arrayCompare(a []uint64, b []uint64) error {
 	return nil
 }
 
+// plainUintLists is the simplest possible Uint64Lists.
+type plainUintLists []plainUintList
+
+// Size returns number of lists.
+func (s plainUintLists) Size() int { return len(s) }
+
+// Get returns the i-th list.
+func (s plainUintLists) Get(i int) Uint64List { return s[i] }
+
+// plainUintList is the simplest possible Uint64List.
+type plainUintList []uint64
+
+// Size returns size of list.
+func (s plainUintList) Size() int { return len(s) }
+
+// Get returns i-th element of list.
+func (s plainUintList) Get(i int) uint64 { return (s)[i] }
+
 func TestMergeSorted1(t *testing.T) {
-	input := PlainUintLists{
-		PlainUintList{1, 3, 6, 8, 10},
-		PlainUintList{2, 4, 5, 7, 15},
+	input := plainUintLists{
+		plainUintList{1, 3, 6, 8, 10},
+		plainUintList{2, 4, 5, 7, 15},
 	}
 	expected := []uint64{1, 2, 3, 4, 5, 6, 7, 8, 10, 15}
 	if err := arrayCompare(MergeSorted(input), expected); err != nil {
@@ -49,9 +67,9 @@ func TestMergeSorted1(t *testing.T) {
 }
 
 func TestMergeSorted2(t *testing.T) {
-	input := PlainUintLists{
-		PlainUintList{1, 3, 6, 8, 10},
-		PlainUintList{},
+	input := plainUintLists{
+		plainUintList{1, 3, 6, 8, 10},
+		plainUintList{},
 	}
 	expected := []uint64{1, 3, 6, 8, 10}
 	if err := arrayCompare(MergeSorted(input), expected); err != nil {
@@ -60,9 +78,9 @@ func TestMergeSorted2(t *testing.T) {
 }
 
 func TestMergeSorted3(t *testing.T) {
-	input := PlainUintLists{
-		PlainUintList{},
-		PlainUintList{1, 3, 6, 8, 10},
+	input := plainUintLists{
+		plainUintList{},
+		plainUintList{1, 3, 6, 8, 10},
 	}
 	expected := []uint64{1, 3, 6, 8, 10}
 	if err := arrayCompare(MergeSorted(input), expected); err != nil {
@@ -71,9 +89,9 @@ func TestMergeSorted3(t *testing.T) {
 }
 
 func TestMergeSorted4(t *testing.T) {
-	input := PlainUintLists{
-		PlainUintList{},
-		PlainUintList{},
+	input := plainUintLists{
+		plainUintList{},
+		plainUintList{},
 	}
 	expected := []uint64{}
 	if err := arrayCompare(MergeSorted(input), expected); err != nil {
@@ -82,10 +100,10 @@ func TestMergeSorted4(t *testing.T) {
 }
 
 func TestMergeSorted5(t *testing.T) {
-	input := PlainUintLists{
-		PlainUintList{11, 13, 16, 18, 20},
-		PlainUintList{12, 14, 15, 15, 16, 16, 17, 25},
-		PlainUintList{1, 2},
+	input := plainUintLists{
+		plainUintList{11, 13, 16, 18, 20},
+		plainUintList{12, 14, 15, 15, 16, 16, 17, 25},
+		plainUintList{1, 2},
 	}
 	expected := []uint64{1, 2, 11, 12, 13, 14, 15, 16, 17, 18, 20, 25}
 	if err := arrayCompare(MergeSorted(input), expected); err != nil {
@@ -94,11 +112,11 @@ func TestMergeSorted5(t *testing.T) {
 }
 
 func TestMergeSorted6(t *testing.T) {
-	input := PlainUintLists{
-		PlainUintList{5, 6, 7},
-		PlainUintList{3, 4},
-		PlainUintList{1, 2},
-		PlainUintList{},
+	input := plainUintLists{
+		plainUintList{5, 6, 7},
+		plainUintList{3, 4},
+		plainUintList{1, 2},
+		plainUintList{},
 	}
 	expected := []uint64{1, 2, 3, 4, 5, 6, 7}
 	if err := arrayCompare(MergeSorted(input), expected); err != nil {
@@ -107,7 +125,7 @@ func TestMergeSorted6(t *testing.T) {
 }
 
 func TestMergeSorted7(t *testing.T) {
-	input := PlainUintLists{}
+	input := plainUintLists{}
 	expected := []uint64{}
 	if err := arrayCompare(MergeSorted(input), expected); err != nil {
 		t.Fatal(err)
@@ -115,7 +133,7 @@ func TestMergeSorted7(t *testing.T) {
 }
 
 func TestMergeSorted8(t *testing.T) {
-	input := PlainUintLists{PlainUintList{1, 1, 1}}
+	input := plainUintLists{plainUintList{1, 1, 1}}
 	expected := []uint64{1}
 	if err := arrayCompare(MergeSorted(input), expected); err != nil {
 		t.Fatal(err)
@@ -123,9 +141,9 @@ func TestMergeSorted8(t *testing.T) {
 }
 
 func TestIntersectSorted1(t *testing.T) {
-	input := PlainUintLists{
-		PlainUintList{1, 2, 3},
-		PlainUintList{2, 3, 4, 5},
+	input := plainUintLists{
+		plainUintList{1, 2, 3},
+		plainUintList{2, 3, 4, 5},
 	}
 	expected := []uint64{2, 3}
 	if err := arrayCompare(IntersectSorted(input), expected); err != nil {
@@ -134,8 +152,8 @@ func TestIntersectSorted1(t *testing.T) {
 }
 
 func TestIntersectSorted2(t *testing.T) {
-	input := PlainUintLists{
-		PlainUintList{1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3},
+	input := plainUintLists{
+		plainUintList{1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3},
 	}
 	expected := []uint64{1, 2, 3}
 	if err := arrayCompare(IntersectSorted(input), expected); err != nil {
@@ -144,7 +162,7 @@ func TestIntersectSorted2(t *testing.T) {
 }
 
 func TestIntersectSorted3(t *testing.T) {
-	input := PlainUintLists{}
+	input := plainUintLists{}
 	expected := []uint64{}
 	if err := arrayCompare(IntersectSorted(input), expected); err != nil {
 		t.Error(err)
@@ -152,7 +170,7 @@ func TestIntersectSorted3(t *testing.T) {
 }
 
 func TestIntersectSorted4(t *testing.T) {
-	input := PlainUintLists{PlainUintList{100, 101}}
+	input := plainUintLists{plainUintList{100, 101}}
 	expected := []uint64{100, 101}
 	if err := arrayCompare(IntersectSorted(input), expected); err != nil {
 		t.Error(err)
@@ -160,10 +178,10 @@ func TestIntersectSorted4(t *testing.T) {
 }
 
 func TestIntersectSorted5(t *testing.T) {
-	input := PlainUintLists{
-		PlainUintList{1, 2, 3},
-		PlainUintList{2, 3, 4, 5},
-		PlainUintList{4, 5, 6},
+	input := plainUintLists{
+		plainUintList{1, 2, 3},
+		plainUintList{2, 3, 4, 5},
+		plainUintList{4, 5, 6},
 	}
 	expected := []uint64{}
 	if err := arrayCompare(IntersectSorted(input), expected); err != nil {
