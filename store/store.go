@@ -78,6 +78,7 @@ func NewReadOnlyStore(filepath string) (*Store, error) {
 	return s, nil
 }
 
+// Get returns the value given a key for RocksDB.
 func (s *Store) Get(key []byte) ([]byte, error) {
 	valSlice, err := s.db.Get(s.ropt, key)
 	if err != nil {
