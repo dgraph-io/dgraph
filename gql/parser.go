@@ -188,7 +188,7 @@ func checkValidity(vm varMap) error {
 		typ := v.Type
 
 		// Ensure value is not nil if the variable is required.
-		if typ[len(typ)-1] == '!' {
+		if len(typ) > 0 && typ[len(typ)-1] == '!' {
 			if v.Value == "" {
 				return fmt.Errorf("Variable %v should be initialised", k)
 			}
