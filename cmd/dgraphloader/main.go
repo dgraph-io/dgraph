@@ -48,8 +48,8 @@ var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
 var memprofile = flag.String("memprofile", "", "write memory profile to file")
 var numcpu = flag.Int("numCpu", runtime.NumCPU(),
 	"Number of cores to be used by the process")
-var numGoroutines = flag.Int("numGoroutines", 3000,
-	"Number of goroutines to execute concurrently")
+var maxroutines = flag.Int("maxroutines", 3000,
+	"Maximum number of goroutines to execute concurrently")
 
 func main() {
 	x.Init()
@@ -70,7 +70,7 @@ func main() {
 		WithField("prev_maxprocs", prevProcs).
 		Info("Set max procs to num cpus")
 
-	glog.WithField("numGoroutines", *numGoroutines).
+	glog.WithField("maxroutines", *maxroutines).
 		Info("Set max goroutines to num goroutines")
 
 	// Create parent directory for postings.
@@ -116,7 +116,7 @@ func main() {
 			glog.WithError(err).Fatal("Unable to create gzip reader.")
 		}
 
-		count, err := loader.LoadEdges(r, *instanceIdx, *numInstances, *numGoroutines)
+		count, err := loader.LoadEdges(r, *instanceIdx, *numInstances, *maxroutines)
 		if err != nil {
 			glog.WithError(err).Fatal("While handling rdf reader.")
 		}
