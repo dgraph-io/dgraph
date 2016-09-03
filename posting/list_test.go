@@ -322,6 +322,18 @@ func TestAddMutation_Value(t *testing.T) {
 	}
 }
 
+func TestDecodeKey(t *testing.T) {
+	b := Key(123623, "randomattr")
+	uid, attr := DecodeKey(b)
+
+	if attr != "randomattr" {
+		t.Errorf("Expected randomattr. Got: %s", attr)
+	}
+	if uid != 123623 {
+		t.Errorf("Expected 123623. Got: %d", uid)
+	}
+}
+
 func benchmarkAddMutations(n int, b *testing.B) {
 	// logrus.SetLevel(logrus.DebugLevel)
 	l := NewList()

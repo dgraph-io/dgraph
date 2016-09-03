@@ -19,26 +19,29 @@ package cluster
 
 import (
 	"bytes"
-	"encoding/binary"
 	"io/ioutil"
 	"os"
 	"testing"
 
 	"github.com/Sirupsen/logrus"
-
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/store"
+	"github.com/dgraph-io/dgraph/x"
 )
 
-func TestgetPredicate(t *testing.T) {
+func TestGetPredicate(t *testing.T) {
 	attr := "friends"
-	var uid uint64 = 12345
-
-	buf := bytes.NewBufferString(attr)
-	if err := binary.Write(buf, binary.LittleEndian, uid); err != nil {
-		t.Fatalf("Error while creating key with attr: %v uid: %v\n", attr, uid)
+	uidB, err := x.EncodeUint64(12345)
+	if err != nil {
+		t.Error(err)
+		return
 	}
-
+	buf := bytes.NewBufferString(attr + "|")
+	_, err = buf.Write(uidB)
+	if err != nil {
+		t.Error(err)
+		return
+	}
 	str := getPredicate(buf.Bytes())
 	if str != "friends" {
 		t.Error("Wrong predicate obtained")
@@ -72,7 +75,6 @@ func TestGetPredicateList(t *testing.T) {
 	ps1.SetOne(k5, []byte("mallory"))
 
 	list := GetPredicateList(ps1)
-
 	if len(list) != 2 {
 		t.Errorf("Predicate List incorrect %v", len(list))
 	}
