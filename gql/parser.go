@@ -187,6 +187,10 @@ func checkValidity(vm varMap) error {
 	for k, v := range vm {
 		typ := v.Type
 
+		if len(typ) == 0 {
+			return fmt.Errorf("Type of variable %v not specified", k)
+		}
+
 		// Ensure value is not nil if the variable is required.
 		if typ[len(typ)-1] == '!' {
 			if v.Value == "" {
