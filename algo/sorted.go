@@ -35,8 +35,7 @@ type Uint64List interface {
 	Size() int
 }
 
-// UIDList is a list of UIDs. We might consider moving this to another package
-// that provides some wrapper around task.UidList.
+// UIDList is a list of UIDs.
 type UIDList struct{ task.UidList }
 
 // Get returns i-th element.
