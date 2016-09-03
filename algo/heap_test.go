@@ -1,5 +1,5 @@
 /*
- * Copyright 2016 DGraph Labs, Inc.
+ * Copyright 2016 Dgraph Labs, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package x
+package algo
 
 import (
 	"container/heap"
@@ -22,46 +22,46 @@ import (
 )
 
 func TestPush(t *testing.T) {
-	h := &Uint64Heap{}
+	h := &uint64Heap{}
 	heap.Init(h)
 
-	e := Elem{Uid: 5}
+	e := elem{val: 5}
 	heap.Push(h, e)
-	e.Uid = 3
+	e.val = 3
 	heap.Push(h, e)
-	e.Uid = 4
+	e.val = 4
 	heap.Push(h, e)
 
 	if h.Len() != 3 {
 		t.Errorf("Expected len 3. Found: %v", h.Len())
 	}
-	if (*h)[0].Uid != 3 {
+	if (*h)[0].val != 3 {
 		t.Errorf("Expected min 3. Found: %+v", (*h)[0])
 	}
-	e.Uid = 10
+	e.val = 10
 	(*h)[0] = e
 	heap.Fix(h, 0)
-	if (*h)[0].Uid != 4 {
+	if (*h)[0].val != 4 {
 		t.Errorf("Expected min 4. Found: %+v", (*h)[0])
 	}
-	e.Uid = 11
+	e.val = 11
 	(*h)[0] = e
 	heap.Fix(h, 0)
-	if (*h)[0].Uid != 5 {
+	if (*h)[0].val != 5 {
 		t.Errorf("Expected min 5. Found: %+v", (*h)[0])
 	}
 
-	e = heap.Pop(h).(Elem)
-	if e.Uid != 5 {
+	e = heap.Pop(h).(elem)
+	if e.val != 5 {
 		t.Errorf("Expected min 5. Found %+v", e)
 	}
 
-	e = heap.Pop(h).(Elem)
-	if e.Uid != 10 {
+	e = heap.Pop(h).(elem)
+	if e.val != 10 {
 		t.Errorf("Expected min 10. Found: %+v", e)
 	}
-	e = heap.Pop(h).(Elem)
-	if e.Uid != 11 {
+	e = heap.Pop(h).(elem)
+	if e.val != 11 {
 		t.Errorf("Expected min 11. Found: %+v", e)
 	}
 
