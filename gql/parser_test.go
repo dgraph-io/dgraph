@@ -759,3 +759,16 @@ func TestParseVariablesError6(t *testing.T) {
 		t.Error("Expected error: Type random not supported")
 	}
 }
+
+func TestParseVariablesError7(t *testing.T) {
+	query := `{
+		"query": "query testQuery($a: int, $b: int, $c: int!){
+			root(_uid_: 0x0a) {name(first: $b, after: $a){english}}
+		}", 
+		"variables": {"$a": "6", "$b": "5", "$d": "abc" } 
+	}`
+	_, _, err := Parse(query)
+	if err == nil {
+		t.Error("Expected type for variable $d")
+	}
+}
