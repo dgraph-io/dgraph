@@ -1,8 +1,6 @@
 package x
 
 import (
-	//"bytes"
-	//	"fmt"
 	"testing"
 )
 
@@ -20,7 +18,7 @@ func TestEncodeDecode(t *testing.T) {
 			return
 		}
 		if w != v {
-			t.Errorf("Encode . Decode not identity %d %v %d", v, b, w)
+			t.Errorf("Encode . Decode is not identity function: %d %v %d", v, b, w)
 			return
 		}
 	}
@@ -40,7 +38,7 @@ func TestEncodeDecodeOrdered(t *testing.T) {
 			return
 		}
 		if w != v {
-			t.Error("Encode . Decode not identity %d %v %d", v, b, w)
+			t.Error("Encode . Decode is not identity function: %d %v %d", v, b, w)
 			return
 		}
 	}

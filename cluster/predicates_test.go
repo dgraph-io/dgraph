@@ -31,13 +31,18 @@ import (
 
 func TestGetPredicate(t *testing.T) {
 	attr := "friends"
-	uidB, err := x.EncodeUint64(12345)
+	uid, err := x.EncodeUint64(12345)
 	if err != nil {
 		t.Error(err)
 		return
 	}
-	buf := bytes.NewBufferString(attr + "|")
-	_, err = buf.Write(uidB)
+	buf := bytes.NewBufferString(attr)
+	_, err = buf.WriteRune('|')
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	_, err = buf.Write(uid)
 	if err != nil {
 		t.Error(err)
 		return

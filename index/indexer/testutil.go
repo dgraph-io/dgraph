@@ -55,7 +55,14 @@ func testBasic(i Indexer, t *testing.T) {
 	}
 	defer i.Close()
 
-	i.Insert("p1", "k1", "v1")
+	batch, err := i.NewBatch()
+	if err != nil {
+		t.Fatal(err)
+	}
+	batch.Insert("p1", "k1", "v1")
+	if err := i.Apply(batch); err != nil {
+		t.Fatal(err)
+	}
 	if err := checkQuery(i, "p2", "v1", []string{}); err != nil {
 		t.Fatal(err)
 	}
@@ -66,21 +73,27 @@ func testBasic(i Indexer, t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := i.Insert("p2", "k2", "v1"); err != nil {
+	batch.Reset()
+	batch.Insert("p2", "k2", "v1")
+	if err := i.Apply(batch); err != nil {
 		t.Fatal(err)
 	}
 	if err := checkQuery(i, "p1", "v1", []string{"k1"}); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := i.Insert("p1", "k2", "v1"); err != nil {
+	batch.Reset()
+	batch.Insert("p1", "k2", "v1")
+	if err := i.Apply(batch); err != nil {
 		t.Fatal(err)
 	}
 	if err := checkQuery(i, "p1", "v1", []string{"k1", "k2"}); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := i.Insert("p1", "k0", "v1"); err != nil {
+	batch.Reset()
+	batch.Insert("p1", "k0", "v1")
+	if err := i.Apply(batch); err != nil {
 		t.Fatal(err)
 	}
 	if err := checkQuery(i, "p1", "v1", []string{"k0", "k1", "k2"}); err != nil {
@@ -88,14 +101,18 @@ func testBasic(i Indexer, t *testing.T) {
 	}
 
 	// Delete something that is not present.
-	if err := i.Remove("p2", "k2"); err != nil {
+	batch.Reset()
+	batch.Remove("p2", "k2")
+	if err := i.Apply(batch); err != nil {
 		t.Fatal(err)
 	}
 	if err := checkQuery(i, "p1", "v1", []string{"k0", "k1", "k2"}); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := i.Remove("p1", "k1"); err != nil {
+	batch.Reset()
+	batch.Remove("p1", "k1")
+	if err := i.Apply(batch); err != nil {
 		t.Fatal(err)
 	}
 	if err := checkQuery(i, "p1", "v1", []string{"k0", "k2"}); err != nil {
@@ -140,7 +157,7 @@ func testBatch(i Indexer, t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = i.Batch(b)
+	err = i.Apply(b)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -163,12 +180,23 @@ func testOverwrite(i Indexer, t *testing.T) {
 	}
 	defer i.Close()
 
-	i.Insert("p1", "k1", "v1")
+	batch, err := i.NewBatch()
+	if err != nil {
+		t.Fatal(err)
+	}
+	batch.Remove("p1", "k1")
+	batch.Insert("p1", "k1", "v1")
+	err = i.Apply(batch)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := checkQuery(i, "p1", "v1", []string{"k1"}); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := i.Insert("p1", "k1", "v2"); err != nil {
+	batch.Reset()
+	batch.Insert("p1", "k1", "v2")
+	if err := i.Apply(batch); err != nil {
 		t.Fatal(err)
 	}
 	if err := checkQuery(i, "p1", "v1", []string{}); err != nil {
@@ -179,10 +207,10 @@ func testOverwrite(i Indexer, t *testing.T) {
 	}
 
 	// Let's add new keys.
-	if err := i.Insert("p1", "k0", "v2"); err != nil {
-		t.Fatal(err)
-	}
-	if err := i.Insert("p1", "k2", "v2"); err != nil {
+	batch.Reset()
+	batch.Insert("p1", "k0", "v2")
+	batch.Insert("p1", "k2", "v2")
+	if err := i.Apply(batch); err != nil {
 		t.Fatal(err)
 	}
 	if err := checkQuery(i, "p1", "v2", []string{"k0", "k1", "k2"}); err != nil {
@@ -190,13 +218,11 @@ func testOverwrite(i Indexer, t *testing.T) {
 	}
 
 	// Overwrite values of all keys.
-	if err := i.Insert("p1", "k0", "v3"); err != nil {
-		t.Fatal(err)
-	}
-	if err := i.Insert("p1", "k2", "v3"); err != nil {
-		t.Fatal(err)
-	}
-	if err := i.Insert("p1", "k1", "v3"); err != nil {
+	batch.Reset()
+	batch.Insert("p1", "k0", "v3")
+	batch.Insert("p1", "k2", "v3")
+	batch.Insert("p1", "k1", "v3")
+	if err := i.Apply(batch); err != nil {
 		t.Fatal(err)
 	}
 	if err := checkQuery(i, "p1", "v2", []string{}); err != nil {

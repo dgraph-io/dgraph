@@ -208,7 +208,7 @@ func (b *batch) Remove(pred, key string) error {
 }
 
 // Batch executes the batch of operations.
-func (s *Indexer) Batch(b indexer.Batch) error {
+func (s *Indexer) Apply(b indexer.Batch) error {
 	bb := b.(*batch)
 	bb.RLock()
 	defer bb.RUnlock()

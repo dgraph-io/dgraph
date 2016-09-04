@@ -69,7 +69,6 @@ func ReadConfigs(reader io.Reader) (*Configs, error) {
 }
 
 func (c *Configs) validate() error {
-	// TODO(jchiu): Add more checks here in the future.
 	attrMap := make(map[string]bool)
 	for _, cfg := range c.Cfg {
 		// Check that there are no duplicates in attributes.

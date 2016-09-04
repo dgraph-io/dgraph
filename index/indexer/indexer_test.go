@@ -31,10 +31,8 @@ func NewDummyIndexer() Indexer {
 func (d *DummyIndexer) Open(dir string) error                    { return nil }
 func (d *DummyIndexer) Close() error                             { return nil }
 func (d *DummyIndexer) Create(dir string) error                  { return nil }
-func (d *DummyIndexer) Insert(pred, key, val string) error       { return nil }
-func (d *DummyIndexer) Remove(pred, key string) error            { return nil }
 func (d *DummyIndexer) NewBatch() (Batch, error)                 { return nil, nil }
-func (d *DummyIndexer) Batch(b Batch) error                      { return nil }
+func (d *DummyIndexer) Apply(b Batch) error                      { return nil }
 func (d *DummyIndexer) Query(pred, val string) ([]string, error) { return nil, nil }
 
 func TestRegistry(t *testing.T) {

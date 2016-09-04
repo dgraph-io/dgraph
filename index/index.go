@@ -100,37 +100,39 @@ func initIndices(cfg *Configs, dir string, indexer indexer.Indexer) (*Indices, e
 	return indices, nil
 }
 
-///////////////////////////// FRONTFILL /////////////////////////////
-// FrontfillAdd inserts with overwrite (replace) key, value into our indices.
-func (s *Indices) FrontfillAdd(ctx context.Context, attr string, uid uint64, val string) error {
-	return s.frontfill(ctx, &mutation{false, attr, uid, val})
+// Insert inserts with overwrite (replace) key, value into our indices.
+func (s *Indices) Insert(ctx context.Context, attr string, uid uint64, val string) {
+	x.Trace(ctx, "Insert [%s] %d [%s]", attr, uid, val)
+	s.frontfill(&mutation{false, attr, uid, val})
 }
 
-// FrontfillDel deletes a key, value from our indices.
-func (s *Indices) FrontfillDel(ctx context.Context, attr string, uid uint64) error {
-	return s.frontfill(ctx, &mutation{true, attr, uid, ""})
+// Remove deletes a key, value from our indices.
+func (s *Indices) Remove(ctx context.Context, attr string, uid uint64) {
+	x.Trace(ctx, "Remove [%s] %d", attr, uid)
+	s.frontfill(&mutation{true, attr, uid, ""})
 }
 
 // Frontfill updates indices given mutation.
-func (s *Indices) frontfill(ctx context.Context, m *mutation) error {
-	x.Assertf(s.frontfillC != nil)
+func (s *Indices) frontfill(m *mutation) {
+	x.Assert(s.frontfillC != nil)
 	s.frontfillC <- m
-	return nil
 }
 
 func (s *Indices) processFrontfillC() {
 	for m := range s.frontfillC {
 		buf, err := x.EncodeUint64Ordered(m.uid)
 		x.Check(err)
+		batch, err := s.indexer.NewBatch()
+		x.Check(err)
 		if !m.remove {
-			s.indexer.Insert(m.attr, string(buf), m.value)
+			batch.Insert(m.attr, string(buf), m.value)
 		} else {
-			s.indexer.Remove(m.attr, string(buf))
+			batch.Remove(m.attr, string(buf))
 		}
+		s.indexer.Apply(batch)
 	}
 }
 
-///////////////////////////// BACKFILL /////////////////////////////
 // Backfill simply adds stuff from posting list into index.
 func (s *Indices) Backfill(ctx context.Context, ps *store.Store) error {
 	errC := make(chan error)
@@ -211,8 +213,27 @@ func (s *Indices) doIndex(ctx context.Context, cfg *Config, batch indexer.Batch,
 	}
 	newCount := *count + uint64(batch.Size())
 	x.Trace(ctx, "Attr[%s] batch[%d, %d]\n", cfg.Attr, count, newCount)
-	err := x.Wrap(s.indexer.Batch(batch))
+	err := x.Wrap(s.indexer.Apply(batch))
 	batch.Reset()
 	*count = newCount
 	return err
+}
+
+// Lookup does a lookup using underlying Indexer object.
+func (s *Indices) Lookup(ctx context.Context, pred, value string) ([]uint64, error) {
+	x.Trace(ctx, "Lookup: [%s] [%s]", pred, value)
+	if s == nil {
+		return nil, x.Errorf("Indices is nil")
+	}
+	r, err := s.indexer.Query(pred, value)
+	if err != nil {
+		return nil, err
+	}
+	// Extract UIDs from array of strings r.
+	uid := make([]uint64, len(r))
+	for i, k := range r {
+		uid[i], err = x.DecodeUint64Ordered([]byte(k))
+		x.Check(err)
+	}
+	return uid, nil
 }

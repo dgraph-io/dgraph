@@ -107,21 +107,17 @@ func TestBackfill(t *testing.T) {
 	dir, indices := getIndices(t)
 	defer os.RemoveAll(dir)
 
-	li := &LookupSpec{
-		Attr:  "name",
-		Value: "Glenn Rhee",
-	}
-	lr := indices.Lookup(li)
-	if lr.Err != nil {
-		t.Error(lr.Err)
+	uids, err := indices.Lookup(context.Background(), "name", "Glenn Rhee")
+	if err != nil {
+		t.Error(err)
 		return
 	}
-	if len(lr.UIDs) != 1 {
-		t.Errorf("Expected 1 hit, got %d", len(lr.UIDs))
+	if len(uids) != 1 {
+		t.Errorf("Expected 1 hit, got %d", len(uids))
 		return
 	}
-	if lr.UIDs[0] != 24<<16 {
-		t.Errorf("Expected UID 24<<16, got %d", lr.UIDs[0])
+	if uids[0] != 24<<16 {
+		t.Errorf("Expected UID 24<<16, got %d", uids[0])
 		return
 	}
 }
@@ -131,36 +127,32 @@ func TestFrontfillDel(t *testing.T) {
 	dir, indices := getIndices(t)
 	defer os.RemoveAll(dir)
 
-	li := &LookupSpec{
-		Attr:  "name",
-		Value: "Glenn Rhee",
-	}
-	lr := indices.Lookup(li)
-	if lr.Err != nil {
-		t.Error(lr.Err)
+	uids, err := indices.Lookup(context.Background(), "name", "Glenn Rhee")
+	if err != nil {
+		t.Error(err)
 		return
 	}
-	if len(lr.UIDs) != 1 {
-		t.Errorf("Expected 1 hit, got %d", len(lr.UIDs))
+	if len(uids) != 1 {
+		t.Errorf("Expected 1 hit, got %d", len(uids))
 		return
 	}
-	if lr.UIDs[0] != 24<<16 {
-		t.Errorf("Expected UID 24<<16, got %d", lr.UIDs[0])
+	if uids[0] != 24<<16 {
+		t.Errorf("Expected UID 24<<16, got %d", uids[0])
 		return
 	}
 
 	// Do frontfill now.
-	indices.FrontfillDel(context.Background(), "name", 24<<16)
+	indices.Remove(context.Background(), "name", 24<<16)
 
 	// Do a pause to make sure frontfill changes go through before we do a lookup.
 	time.Sleep(200 * time.Millisecond)
-	lr = indices.Lookup(li)
-	if lr.Err != nil {
-		t.Error(lr.Err)
+	uids, err = indices.Lookup(context.Background(), "name", "Glenn Rhee")
+	if err != nil {
+		t.Error(err)
 		return
 	}
-	if len(lr.UIDs) != 0 {
-		t.Errorf("Expected 0 hit, got %d", len(lr.UIDs))
+	if len(uids) != 0 {
+		t.Errorf("Expected 0 hit, got %d", len(uids))
 		return
 	}
 }
@@ -170,48 +162,44 @@ func TestFrontfillAdd(t *testing.T) {
 	dir, indices := getIndices(t)
 	defer os.RemoveAll(dir)
 
-	li := &LookupSpec{
-		Attr:  "name",
-		Value: "Glenn Rhee",
-	}
-	lr := indices.Lookup(li)
-	if lr.Err != nil {
-		t.Error(lr.Err)
+	uids, err := indices.Lookup(context.Background(), "name", "Glenn Rhee")
+	if err != nil {
+		t.Error(err)
 		return
 	}
-	if len(lr.UIDs) != 1 {
-		t.Errorf("Expected 1 hit, got %d", len(lr.UIDs))
+	if len(uids) != 1 {
+		t.Errorf("Expected 1 hit, got %d", len(uids))
 		return
 	}
-	if lr.UIDs[0] != 24<<16 {
-		t.Errorf("Expected UID 24<<16, got %d", lr.UIDs[0])
+	if uids[0] != 24<<16 {
+		t.Errorf("Expected UID 24<<16, got %d", uids)
 		return
 	}
 
 	// Do frontfill now.
-	indices.FrontfillAdd(context.Background(), "name", 24<<16, "NotGlenn")
+	indices.Insert(context.Background(), "name", 24<<16, "NotGlenn")
 	// Let a different UID take the name Glenn.
-	indices.FrontfillAdd(context.Background(), "name", 23<<16, "Glenn Rhee")
-	indices.FrontfillAdd(context.Background(), "name", 31, "Glenn Rhee")
+	indices.Insert(context.Background(), "name", 23<<16, "Glenn Rhee")
+	indices.Insert(context.Background(), "name", 31, "Glenn Rhee")
 	// Do a pause to make sure frontfill changes go through before we do a lookup.
 	time.Sleep(200 * time.Millisecond)
-	lr = indices.Lookup(li)
-	if lr.Err != nil {
-		t.Error(lr.Err)
+	uids, err = indices.Lookup(context.Background(), "name", "Glenn Rhee")
+	if err != nil {
+		t.Error(err)
 		return
 	}
-	if len(lr.UIDs) != 2 {
-		t.Errorf("Expected 2 hits, got %d", len(lr.UIDs))
+	if len(uids) != 2 {
+		t.Errorf("Expected 2 hits, got %d", len(uids))
 		return
 	}
 	// Returned UIDs should be sorted. We make sure that indices use big endian so
 	// that the string ordering is also the numeric ordering.
-	if lr.UIDs[0] != 31 {
-		t.Errorf("Expected UID 31, got %d", lr.UIDs[0])
+	if uids[0] != 31 {
+		t.Errorf("Expected UID 31, got %d", uids[0])
 		return
 	}
-	if lr.UIDs[1] != 23<<16 {
-		t.Errorf("Expected UID 23<<16, got %d", lr.UIDs[1])
+	if uids[1] != 23<<16 {
+		t.Errorf("Expected UID 23<<16, got %d", uids[1])
 		return
 	}
 }

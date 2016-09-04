@@ -29,13 +29,14 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/dgryski/go-farm"
+	"github.com/google/flatbuffers/go"
+	"github.com/zond/gotomic"
+
 	"github.com/dgraph-io/dgraph/commit"
 	"github.com/dgraph-io/dgraph/posting/types"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgryski/go-farm"
-	"github.com/google/flatbuffers/go"
-	"github.com/zond/gotomic"
 )
 
 var E_TMP_ERROR = fmt.Errorf("Temporary Error. Please retry.")

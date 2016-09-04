@@ -61,11 +61,8 @@ type Indexer interface {
 	Close() error
 	Create(dir string) error
 
-	// Updates.
-	Insert(pred, key, val string) error
-	Remove(pred, key string) error
 	NewBatch() (Batch, error)
-	Batch(b Batch) error
+	Apply(b Batch) error
 
 	// Query. Returns matching keys. The keys should be sorted.
 	Query(pred, val string) ([]string, error)

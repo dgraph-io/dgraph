@@ -41,7 +41,7 @@ func DecodeUint64(b []byte) (uint64, error) {
 }
 
 // EncodeUint64Ordered encodes value using big endian. String ordering will imply
-// that the uint64s sorted.
+// that the uint64s are sorted.
 func EncodeUint64Ordered(v uint64) ([]byte, error) {
 	buf := new(bytes.Buffer)
 	if err := binary.Write(buf, binary.BigEndian, v); err != nil {
@@ -50,7 +50,7 @@ func EncodeUint64Ordered(v uint64) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// DecodeUint64Ordered decodes value using little endian.
+// DecodeUint64Ordered decodes value using big endian.
 func DecodeUint64Ordered(b []byte) (uint64, error) {
 	buf := bytes.NewBuffer(b)
 	var v uint64
