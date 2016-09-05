@@ -27,8 +27,8 @@ import (
 
 // Schema stores the types for all predicates in the system.
 var (
-	schema     = make(map[string]Type)
-	schemaFile = flag.String("schemaFile", "../../types/schema.json", "Path to the file that specifies schema in json format")
+	schema  = make(map[string]Type)
+	schemaF = flag.String("schemaF", "../../types/schema.json", "Path to the file that specifies schema in json format")
 )
 
 // init function for types package
@@ -39,7 +39,7 @@ func init() {
 // LoadSchema loads the schema and checks for errors
 func LoadSchema() {
 
-	file, err := ioutil.ReadFile(*schemaFile)
+	file, err := ioutil.ReadFile(*schemaF)
 	if err != nil {
 		log.Fatalf("Schema load error:%v", err)
 	}

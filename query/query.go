@@ -148,43 +148,6 @@ func mergeInterfaces(i1 interface{}, i2 interface{}) interface{} {
 	return []interface{}{i1, i2}
 }
 
-/*
-// findScalarType returns leaf node type from define schema for type coercion
-func findScalarType(tt []string) (types.Type, error) {
-	// we know the root will always be QueryType for a result graph
-	return findType(tt[1:], types.S.Query)
-}
-
-// findType recursively finds out type of leaf node
-func findType(tt []string, ptype types.Object) (types.Type, error) {
-	ftype, err := findFieldType(tt[0], ptype)
-	if err != nil {
-		return nil, err
-	}
-	if len(tt) == 1 {
-		return ftype, nil
-	}
-	return findType(tt[1:], ftype.(types.Object))
-}
-
-// findFieldType returns type of the input field given the Parent Object Type
-func findFieldType(f string, ptype types.Object) (types.Type, error) {
-	// Assuming field names in defined objects will be lowercase, as will be the query fields
-	// Otherwise make field presence checking case-sensitive
-	val, present := ptype.Fields[f]
-	if !present {
-		return nil, fmt.Errorf("Field:%v not defined under type:%v in schema.\n", f, ptype.Name)
-	}
-	switch val.(type) {
-	case types.List:
-		// separatly checking for list-type since we want it's element-type for next iteration
-		return val.(types.List).HasType, nil
-	default:
-		return val, nil
-	}
-}
-*/
-
 // postTraverse traverses the subgraph recursively and returns final result for the query
 func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 	if len(sg.Query) == 0 {

@@ -17,10 +17,65 @@
 package types
 
 import (
+	"flag"
+	"os"
 	"testing"
 )
+
+func createSchemaFile() (*os.File, error) {
+	file, err := os.Create("test_schema.json")
+	if err != nil {
+		return nil, err
+	}
+	s := `
+		{
+			"_uid_": "id",
+			"name": "string",
+			"age": "int",
+			"friend": "object"
+		}
+	`
+	file.WriteString(s)
+
+	return file, nil
+}
 
 // TestLoadSchema tests schema reading and parsing from input schema file
 func TestLoadSchema(t *testing.T) {
 
+	file, err := createSchemaFile()
+	if err != nil {
+		t.Error(err)
+	}
+	defer file.Close()
+	defer os.Remove(file.Name())
+
+	// set test schema file path
+	flag.Set("schemaF", file.Name())
+
+	// load schema from json file
+	LoadSchema()
+}
+
+// TestGetTypeFromSchema tests fetching type info from schema map using predicate names
+func TestGetTypeFromSchema(t *testing.T) {
+	file, err := createSchemaFile()
+	if err != nil {
+		t.Error(err)
+	}
+	defer file.Close()
+	defer os.Remove(file.Name())
+
+	// set test schema file path
+	flag.Set("schemaF", file.Name())
+
+	typ := GetTypeFromSchema("name")
+
+	if _, ok := typ.(Scalar); !ok {
+		t.Error("Type assertion failed for predicate:name")
+	}
+	typ = GetTypeFromSchema("friend")
+	if _, ok := typ.(Object); !ok {
+		t.Error("Type assertion failed for predicate:age")
+	}
 }

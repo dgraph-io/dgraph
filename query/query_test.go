@@ -550,8 +550,28 @@ func TestPostTraverse(t *testing.T) {
 	dir, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
 
+	file, err := os.Create("test_schema.json")
+	if err != nil {
+		t.Error(err)
+	}
+	s := `
+		{
+			"_uid_": "id",
+			"actor": "object",
+			"name": "string",
+			"age": "int",
+			"friend": "object",
+			"survival_rate": "float",
+			"sword_present": "bool"
+		}
+	`
+	file.WriteString(s)
+
+	defer file.Close()
+	defer os.Remove(file.Name())
+
 	// set test schema file path
-	flag.Set("schemaFile", "./test_schema.json")
+	flag.Set("schemaF", file.Name())
 
 	// load schema from json file
 	types.LoadSchema()
