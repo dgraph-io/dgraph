@@ -24,7 +24,6 @@ import (
 	"fmt"
 	"log"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -120,7 +119,7 @@ func (l *Latency) ToMap() map[string]string {
 // client convenient formats, like GraphQL / JSON.
 type SubGraph struct {
 	Attr     string
-	TypeTree string
+	AttrType types.Type
 	Count    int
 	Offset   int
 	AfterUid uint64
@@ -149,14 +148,15 @@ func mergeInterfaces(i1 interface{}, i2 interface{}) interface{} {
 	return []interface{}{i1, i2}
 }
 
+/*
 // findScalarType returns leaf node type from define schema for type coercion
-func findScalarType(tt []string) (types.GraphQLType, error) {
+func findScalarType(tt []string) (types.Type, error) {
 	// we know the root will always be QueryType for a result graph
-	return findType(tt[1:], types.Schema.Query)
+	return findType(tt[1:], types.S.Query)
 }
 
 // findType recursively finds out type of leaf node
-func findType(tt []string, ptype types.GraphQLObject) (types.GraphQLType, error) {
+func findType(tt []string, ptype types.Object) (types.Type, error) {
 	ftype, err := findFieldType(tt[0], ptype)
 	if err != nil {
 		return nil, err
@@ -164,11 +164,11 @@ func findType(tt []string, ptype types.GraphQLObject) (types.GraphQLType, error)
 	if len(tt) == 1 {
 		return ftype, nil
 	}
-	return findType(tt[1:], ftype.(types.GraphQLObject))
+	return findType(tt[1:], ftype.(types.Object))
 }
 
 // findFieldType returns type of the input field given the Parent Object Type
-func findFieldType(f string, ptype types.GraphQLObject) (types.GraphQLType, error) {
+func findFieldType(f string, ptype types.Object) (types.Type, error) {
 	// Assuming field names in defined objects will be lowercase, as will be the query fields
 	// Otherwise make field presence checking case-sensitive
 	val, present := ptype.Fields[f]
@@ -176,13 +176,14 @@ func findFieldType(f string, ptype types.GraphQLObject) (types.GraphQLType, erro
 		return nil, fmt.Errorf("Field:%v not defined under type:%v in schema.\n", f, ptype.Name)
 	}
 	switch val.(type) {
-	case types.GraphQLList:
+	case types.List:
 		// separatly checking for list-type since we want it's element-type for next iteration
-		return val.(types.GraphQLList).HasType, nil
+		return val.(types.List).HasType, nil
 	default:
 		return val, nil
 	}
 }
+*/
 
 // postTraverse traverses the subgraph recursively and returns final result for the query
 func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
@@ -297,19 +298,12 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 		if sg.GetUid || sg.isDebug {
 			m["_uid_"] = fmt.Sprintf("%#x", q.Uids(i))
 		}
-		// TODO(akhil): currently using string value after type-casting flatbuffer for
-		// type-assertion and coercion
-		// Direct type coercion only possible after mutation is also validated and values
-		// are stored according to correct types
-		// After that, 'string(val)' will be replaced by direct type inference/coercion
-
-		if ltype, err := findScalarType(strings.Split(sg.TypeTree, ":")); err != nil {
-			// No type defined for present attribute in type schema, return string value
+		if sg.AttrType == nil {
+			// No type defined for present attr in type system/schema, return string value
 			m[sg.Attr] = string(val)
-			log.Printf("Type/Schema warning: %v\n", err)
 		} else {
-			stype := ltype.(types.GraphQLScalar)
-			lval, err := stype.ParseType(string(val))
+			stype := sg.AttrType.(types.Scalar)
+			lval, err := stype.ParseType(val)
 			if err != nil {
 				return result, err
 			}
@@ -513,7 +507,7 @@ func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
 		dst := &SubGraph{
 			isDebug:  sg.isDebug,
 			Attr:     gchild.Attr,
-			TypeTree: sg.TypeTree + ":" + gchild.Attr,
+			AttrType: types.GetTypeFromSchema(gchild.Attr),
 		}
 		if v, ok := gchild.Args["offset"]; ok {
 			offset, err := strconv.ParseInt(v, 0, 32)
@@ -607,7 +601,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	sg := &SubGraph{
 		isDebug:  gq.Attr == "debug",
 		Attr:     gq.Attr,
-		TypeTree: "query" + ":" + gq.Attr,
+		AttrType: types.GetTypeFromSchema(gq.Attr),
 		IsRoot:   true,
 		Result:   b.Bytes[b.Head():],
 	}

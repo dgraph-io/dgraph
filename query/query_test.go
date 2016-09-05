@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/gob"
 	"encoding/json"
+	"flag"
 	"io/ioutil"
 	"os"
 	"strings"
@@ -545,12 +546,14 @@ func TestToJson(t *testing.T) {
 // Checking for Type coercion errors.
 // NOTE: Writing separate test since Marshal/Unmarshal process of ToJSON converts
 // 'int' type to 'float64' and thus mucks up the tests.
-// Thing to note here is now the query root 'MUST' have a subject name instead of just being
-// query, me, etc. to faciliate the identification of parent object.
-// NOTE: In this case, type system won't work with 'debug' mode.
 func TestPostTraverse(t *testing.T) {
 	dir, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
+
+	// set test schema file path
+	flag.Set("schemaFile", "./test_schema.json")
+
+	// load schema from json file
 	types.LoadSchema()
 
 	query := `

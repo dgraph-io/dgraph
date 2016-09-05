@@ -1,0 +1,11 @@
+{
+	"_uid_": "id",
+	"_xid_": "string",
+	"name": "string",
+	"gender": "string",
+	"age": "int",
+	"survival_rate": "float",
+	"sword_present": "bool",
+	"actor": "object",
+	"friend": "object"
+}

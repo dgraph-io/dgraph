@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 DGraph Labs, Inc.
+ * Copyright 2016 DGraph Labs, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,47 +20,47 @@ import (
 	"fmt"
 )
 
-// GraphQLType interface is the wrapper interface for all types
-type GraphQLType interface {
+// Type interface is the wrapper interface for all types
+type Type interface {
 	// TODO(akhil): discuss and add a method to implement this interface (didn't want to add dummy method)
 }
 
-// GraphQLScalar type defines concrete structure for scalar types to use.
+// Scalar type defines concrete structure for scalar types to use.
 // Almost all scalar types can also act as input types.
 // Scalars (along with Enums) form leaf nodes of request or input values to arguements.
-type GraphQLScalar struct {
+type Scalar struct {
 	Name        string // name of scalar type
-	Description string // short description, could be used for documentation in GraphiQL
+	Description string // short description
 	ParseType   ParseTypeFunc
 }
 
-// ParseTypeFunc is a function type that parses and does coercion for GraphQL Scalar types.
-type ParseTypeFunc func(input string) (interface{}, error)
+// ParseTypeFunc is a function that parses and does coercion for Scalar types.
+type ParseTypeFunc func(input []byte) (interface{}, error)
 
 // String function to implement string interface
-func (s *GraphQLScalar) String() string {
+func (s *Scalar) String() string {
 	return fmt.Sprintf("ScalarTypeName is:%v\n", s.Name)
 }
 
-// GraphQLObject type defines skeleton for basic graphql objects.
+// Object type defines skeleton for basic objects.
 // They form the basis for most object in this system.
 // Object has a name and a set of fields.
-type GraphQLObject struct {
-	Name   string
-	Desc   string
-	Fields FieldMap
+type Object struct {
+	Name        string
+	Description string
+	Fields      FieldMap
 }
 
 // FieldMap maps field names to their corresponding types.
-type FieldMap map[string]GraphQLType
+type FieldMap map[string]Type
 
 // String function to implement string interface
-func (o *GraphQLObject) String() string {
+func (o *Object) String() string {
 	return fmt.Sprintf("ObjectTypeName is:%v\n", o.Name)
 }
 
-// GraphQLList type defines a wrapper for other grapql object types.
+// List type defines a wrapper for other grapql object types.
 // Mostly used while defining object fields
-type GraphQLList struct {
-	HasType GraphQLType
+type List struct {
+	HasType Type
 }

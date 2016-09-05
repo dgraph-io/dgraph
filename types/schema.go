@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 DGraph Labs, Inc.
+ * Copyright 2016 DGraph Labs, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,45 +16,72 @@
 
 package types
 
-// GraphQLSchema declares the schema structure the GraphQL queries.
-type GraphQLSchema struct {
-	Query    GraphQLObject
-	Mutation GraphQLObject
+import (
+	"encoding/json"
+	"flag"
+	"io/ioutil"
+	"log"
+
+	"github.com/dgraph-io/dgraph/x"
+)
+
+// Schema stores the types for all predicates in the system.
+var (
+	schema     = make(map[string]Type)
+	schemaFile = flag.String("schemaFile", "../../types/schema.json", "Path to the file that specifies schema in json format")
+)
+
+// init function for types package
+func init() {
+	x.AddInit(LoadSchema)
 }
 
-// Schema defines a dummy schema to test type and validation system.
-var Schema GraphQLSchema
-
-// LoadSchema loads the schema
+// LoadSchema loads the schema and checks for errors
 func LoadSchema() {
 
-	// load scalar types
-	loadScalarTypes()
-
-	// TODO(akhil): implement mechanism for client to define and upload a schema.
-	// Client schema will be parsed and loaded here.
-
-	personType := GraphQLObject{
-		Name: "Person",
-		Desc: "object to represent a person type",
+	file, err := ioutil.ReadFile(*schemaFile)
+	if err != nil {
+		log.Fatalf("Schema load error:%v", err)
+	}
+	sch := make(map[string]string)
+	if err = json.Unmarshal(file, &sch); err != nil {
+		log.Fatalf("Schema load error:%v", err)
+	}
+	// define object entity to denote all entities in the system (subject/object in RDF)
+	// In future, entities could be classified further into specific objects like user
+	objectType := Object{
+		Name:        "Object",
+		Description: "Denotes an entity in the system",
 		Fields: FieldMap{
-			"name":          String,
-			"gender":        String,
-			"age":           Int,
-			"survival_rate": Float,
-			"sword_present": Boolean,
+			"_uid_": idType,
 		},
 	}
-
-	// defined this field separately to let personType instantiate properly
-	personType.Fields["friend"] = GraphQLList{HasType: personType}
-
-	queryType := GraphQLObject{
-		Name: "Query",
-		Desc: "Sample query structure",
-		Fields: FieldMap{
-			"actor": personType,
-		},
+	// go over schema file values and assign appropriate types from type system
+	for k, v := range sch {
+		switch v {
+		case "int":
+			schema[k] = intType
+		case "float":
+			schema[k] = floatType
+		case "string":
+			schema[k] = stringType
+		case "bool":
+			schema[k] = booleanType
+		case "id":
+			schema[k] = idType
+		case "object":
+			schema[k] = objectType
+		default:
+			log.Fatalf("Unknown type:%v in input schema file for predicate:%v", v, k)
+		}
 	}
-	Schema = GraphQLSchema{Query: queryType}
+}
+
+// GetTypeFromSchema fetches types for a predicate from schema map
+func GetTypeFromSchema(p string) Type {
+	v, present := schema[p]
+	if !present {
+		log.Printf("Schema does not have type definition for:%v\n", p)
+	}
+	return v
 }
