@@ -108,7 +108,7 @@ func Init(ps *store.Store) {
 }
 
 // allocateUniqueUid returns an integer in range:
-// [minIdx, minIdx+(MAXUINT64/numInstances-1)].
+// [minIdx, maxIdx] derived based on numInstances and instanceIdx.
 // which hasn't already been allocated to other xids. It does this by
 // taking the fingerprint of the xid appended with zero or more spaces
 // until the obtained integer is unique.
