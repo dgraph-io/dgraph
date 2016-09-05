@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"log"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -31,6 +32,7 @@ import (
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/query/graph"
 	"github.com/dgraph-io/dgraph/task"
+	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/google/flatbuffers/go"
@@ -116,6 +118,7 @@ func (l *Latency) ToMap() map[string]string {
 // client convenient formats, like GraphQL / JSON.
 type SubGraph struct {
 	Attr     string
+	TypeTree string
 	Count    int
 	Offset   int
 	AfterUid uint64
@@ -144,11 +147,46 @@ func mergeInterfaces(i1 interface{}, i2 interface{}) interface{} {
 	return []interface{}{i1, i2}
 }
 
+// findScalarType returns leaf node type from define schema for type coercion
+func findScalarType(tt []string) (types.GraphQLType, error) {
+	// we know the root will always be QueryType for a result graph
+	return findType(tt[1:], types.Schema.Query)
+}
+
+// findType recursively finds out type of leaf node
+func findType(tt []string, ptype types.GraphQLObject) (types.GraphQLType, error) {
+	ftype, err := findFieldType(tt[0], ptype)
+	if err != nil {
+		return nil, err
+	}
+	if len(tt) == 1 {
+		return ftype, nil
+	}
+	return findType(tt[1:], ftype.(types.GraphQLObject))
+}
+
+// findFieldType returns type of the input field given the Parent Object Type
+func findFieldType(f string, ptype types.GraphQLObject) (types.GraphQLType, error) {
+	// Assuming field names in defined objects will be lowercase, as will be the query fields
+	// Otherwise make field presence checking case-sensitive
+	val, present := ptype.Fields[f]
+	if !present {
+		return nil, fmt.Errorf("Field:%v not defined under type:%v in schema.\n", f, ptype.Name)
+	}
+	switch val.(type) {
+	case types.GraphQLList:
+		// separatly checking for list-type since we want it's element-type for next iteration
+		return val.(types.GraphQLList).HasType, nil
+	default:
+		return val, nil
+	}
+}
+
+// postTraverse traverses the subgraph recursively and returns final result for the query
 func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 	if len(sg.Query) == 0 {
 		return nil, nil
 	}
-
 	result := make(map[uint64]interface{})
 	// Get results from all children first.
 	cResult := make(map[uint64]interface{})
@@ -235,7 +273,6 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 			result[q.Uids(i)] = m
 		}
 	}
-
 	var tv task.Value
 	for i := 0; i < r.ValuesLength(); i++ {
 		if ok := r.Values(&tv, i); !ok {
@@ -258,7 +295,24 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 		if sg.GetUid || sg.isDebug {
 			m["_uid_"] = fmt.Sprintf("%#x", q.Uids(i))
 		}
-		m[sg.Attr] = string(val)
+		// TODO(akhil): currently using string value after type-casting flatbuffer for
+		// type-assertion and coercion
+		// Direct type coercion only possible after mutation is also validated and values
+		// are stored according to correct types
+		// After that, 'string(val)' will be replaced by direct type inference/coercion
+
+		if ltype, err := findScalarType(strings.Split(sg.TypeTree, ":")); err != nil {
+			// No type defined for present attribute in type schema, return string value
+			m[sg.Attr] = string(val)
+			log.Printf("Type/Schema warning: %v\n", err)
+		} else {
+			stype := ltype.(types.GraphQLScalar)
+			lval, err := stype.ParseType(string(val))
+			if err != nil {
+				return result, err
+			}
+			m[sg.Attr] = lval
+		}
 		result[q.Uids(i)] = m
 	}
 	return result, nil
@@ -455,8 +509,9 @@ func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
 		}
 
 		dst := &SubGraph{
-			isDebug: sg.isDebug,
-			Attr:    gchild.Attr,
+			isDebug:  sg.isDebug,
+			Attr:     gchild.Attr,
+			TypeTree: sg.TypeTree + ":" + gchild.Attr,
 		}
 		if v, ok := gchild.Args["offset"]; ok {
 			offset, err := strconv.ParseInt(v, 0, 32)
@@ -548,10 +603,11 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	b.Finish(rend)
 
 	sg := &SubGraph{
-		isDebug: gq.Attr == "debug",
-		Attr:    gq.Attr,
-		IsRoot:  true,
-		Result:  b.Bytes[b.Head():],
+		isDebug:  gq.Attr == "debug",
+		Attr:     gq.Attr,
+		TypeTree: "query" + ":" + gq.Attr,
+		IsRoot:   true,
+		Result:   b.Bytes[b.Head():],
 	}
 	// Also add query for consistency and to allow for ToJSON() later.
 	sg.Query = createTaskQuery(sg, []uint64{euid})

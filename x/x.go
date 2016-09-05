@@ -42,6 +42,7 @@ const (
 	ErrorNoData          = "ErrorNoData"
 	ErrorUptodate        = "ErrorUptodate"
 	ErrorNoPermission    = "ErrorNoPermission"
+	ErrorInvalidMutation = "ErrorInvalidMutation"
 )
 
 type Status struct {
