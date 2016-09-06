@@ -45,8 +45,9 @@ const (
 )
 
 type Status struct {
-	Code    string `json:"code"`
-	Message string `json:"message"`
+	Code    string            `json:"code"`
+	Message string            `json:"message"`
+	Uids    map[string]uint64 `json:"uids"`
 }
 
 type DirectedEdge struct {
@@ -75,10 +76,10 @@ func Err(entry *logrus.Entry, err error) *logrus.Entry {
 	return entry.WithField("error", err)
 }
 
-func SetStatus(w http.ResponseWriter, code, msg string) {
-	r := &Status{Code: code, Message: msg}
+func SetStatus(w http.ResponseWriter, code, msg string, uidsMap map[string]uint64) {
+	r := &Status{Code: code, Message: msg, Uids: uidsMap}
 	if js, err := json.Marshal(r); err == nil {
-		fmt.Fprint(w, string(js))
+		w.Write(js)
 	} else {
 		panic(fmt.Sprintf("Unable to marshal: %+v", r))
 	}
@@ -89,7 +90,7 @@ func Reply(w http.ResponseWriter, rep interface{}) {
 		w.Header().Set("Content-Type", "application/json")
 		fmt.Fprint(w, string(js))
 	} else {
-		SetStatus(w, Error, "Internal server error")
+		SetStatus(w, Error, "Internal server error", nil)
 	}
 }
 
@@ -97,7 +98,7 @@ func ParseRequest(w http.ResponseWriter, r *http.Request, data interface{}) bool
 	defer r.Body.Close()
 	decoder := json.NewDecoder(r.Body)
 	if err := decoder.Decode(&data); err != nil {
-		SetStatus(w, Error, fmt.Sprintf("While parsing request: %v", err))
+		SetStatus(w, Error, fmt.Sprintf("While parsing request: %v", err), nil)
 		return false
 	}
 	return true

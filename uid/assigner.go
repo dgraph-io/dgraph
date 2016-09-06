@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"strings"
 	"sync"
 	"time"
 
@@ -114,6 +115,9 @@ func Init(ps *store.Store) {
 // until the obtained integer is unique.
 func allocateUniqueUid(xid string, instanceIdx uint64,
 	numInstances uint64) (uid uint64, rerr error) {
+
+	// TODO(Ashwin): Optimise the uid generation for `_new_` by
+	// reducing possible collisions.
 
 	mod := math.MaxUint64 / numInstances
 	minIdx := instanceIdx * mod
@@ -210,6 +214,10 @@ func Get(xid string) (uid uint64, rerr error) {
 // it already exists or assigns a new uid and returns it.
 func GetOrAssign(xid string, instanceIdx uint64,
 	numInstances uint64) (uid uint64, rerr error) {
+
+	if strings.HasPrefix(xid, "_new_:") {
+		return allocateUniqueUid(xid, instanceIdx, numInstances)
+	}
 
 	key := StringKey(xid)
 	pl := posting.GetOrCreate(key, uidStore)
