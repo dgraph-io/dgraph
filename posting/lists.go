@@ -260,8 +260,6 @@ var (
 	lhmap        *gotomic.Hash
 	dirtymap     *gotomic.Hash
 	clog         *commit.Logger
-
-//	indexC	han
 )
 
 func Init(log *commit.Logger) {
@@ -352,7 +350,6 @@ func MergeLists(numRoutines int) {
 	go queueAll(ch, c)
 
 	wg := new(sync.WaitGroup)
-
 	for i := 0; i < numRoutines; i++ {
 		wg.Add(1)
 		go process(ch, c, wg)
