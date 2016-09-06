@@ -410,6 +410,12 @@ func (l *List) mergeMutation(mp *types.Posting) {
 
 	if mp.Op() == Del {
 		if muid == curUid { // curUid found in mindex.
+			ml := l.mindex[mi]
+			if !samePosting(ml.posting, mp) {
+				// Not the same posting, so we should ignore this.
+				return
+			}
+
 			if inPlist { // In plist, so replace previous instruction in mindex.
 				mlink.moveidx = 1
 				mlink.idx = pi + mi
@@ -421,7 +427,17 @@ func (l *List) mergeMutation(mp *types.Posting) {
 			}
 
 		} else { // curUid not found in mindex.
+
 			if inPlist { // In plist, so insert in mindex.
+				plist := l.getPostingList()
+				var tp types.Posting
+				if ok := plist.Postings(&tp, pi); ok {
+					if !samePosting(&tp, mp) {
+						// Not the same posting as in plist. Ignore.
+						return
+					}
+				}
+
 				mlink.moveidx = 1
 				l.mdelta -= 1
 				mlink.idx = pi + mi + 1
@@ -437,6 +453,7 @@ func (l *List) mergeMutation(mp *types.Posting) {
 			if inPlist { // In plist, so delete previous instruction, set in mlayer.
 				l.mindexDeleteAt(mi)
 				l.mlayer[pi] = *mp
+				l.mdelta += 1
 
 			} else { // Not in plist, so replace previous set instruction in mindex.
 				// NOTE: This prev instruction couldn't have been a Del instruction.
@@ -447,15 +464,20 @@ func (l *List) mergeMutation(mp *types.Posting) {
 
 		} else { // curUid not found in mindex.
 			if inPlist { // In plist, so just set it in mlayer.
+
 				// If this posting matches what we already have in posting list,
 				// we don't need to `dirty` this by adding to mlayer.
+				// Note that this means that the timestamp of the posting would
+				// remain unchanged.
 				plist := l.getPostingList()
-				var cp types.Posting
-				if ok := plist.Postings(&cp, pi); ok {
-					if samePosting(&cp, mp) {
-						return // do nothing.
+				var tp types.Posting
+				if ok := plist.Postings(&tp, pi); ok {
+					if samePosting(&tp, mp) {
+						delete(l.mlayer, pi) // if exists.
+						return               // do nothing.
 					}
 				}
+				// Not found in plist. Set in mlayer.
 				l.mlayer[pi] = *mp
 
 			} else { // not in plist, not in mindex, so insert in mindex.
