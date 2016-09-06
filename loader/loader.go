@@ -258,7 +258,7 @@ func (s *state) assignUidsOnly(wg *sync.WaitGroup) {
 }
 
 // LoadEdges is called with the reader object of a file whose
-// contents are to be converted to posting lists(Loaded).
+// contents are to be converted to posting lists.
 func LoadEdges(reader io.Reader, instanceIdx uint64,
 	numInstances uint64) (uint64, error) {
 
