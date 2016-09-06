@@ -18,6 +18,7 @@ package loader
 
 import (
 	"bufio"
+	"flag"
 	"io"
 	"math/rand"
 	"runtime"
@@ -41,6 +42,9 @@ import (
 
 var glog = x.Log("loader")
 var uidStore, dataStore *store.Store
+
+var maxRoutines = flag.Int("maxroutines", 3000,
+	"Maximum number of goroutines to execute concurrently")
 
 type counters struct {
 	read      uint64
@@ -260,7 +264,7 @@ func (s *state) assignUidsOnly(wg *sync.WaitGroup) {
 // LoadEdges is called with the reader object of a file whose
 // contents are to be converted to posting lists.
 func LoadEdges(reader io.Reader, instanceIdx uint64,
-	numInstances uint64, numGoroutines int) (uint64, error) {
+	numInstances uint64) (uint64, error) {
 
 	s := new(state)
 	s.ctr = new(counters)
@@ -281,7 +285,7 @@ func LoadEdges(reader io.Reader, instanceIdx uint64,
 		go s.parseStream(&pwg) // Input --> NQuads
 	}
 
-	nrt := numGoroutines
+	nrt := *maxRoutines
 	var wg sync.WaitGroup
 	wg.Add(nrt)
 	for i := 0; i < nrt; i++ {
@@ -303,7 +307,7 @@ func LoadEdges(reader io.Reader, instanceIdx uint64,
 // and assign unique integer ids for them. This function would
 // not load the edges, only assign UIDs.
 func AssignUids(reader io.Reader, instanceIdx uint64,
-	numInstances uint64, numGoroutines int) (uint64, error) {
+	numInstances uint64) (uint64, error) {
 
 	s := new(state)
 	s.ctr = new(counters)
@@ -325,7 +329,8 @@ func AssignUids(reader io.Reader, instanceIdx uint64,
 	}
 
 	wg := new(sync.WaitGroup)
-	for i := 0; i < numGoroutines; i++ {
+	nrt := *maxRoutines
+	for i := 0; i < nrt; i++ {
 		wg.Add(1)
 		go s.assignUidsOnly(wg)
 	}

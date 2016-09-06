@@ -77,7 +77,7 @@ func prepare() (dir1, dir2 string, ps *store.Store, clog *commit.Logger, rerr er
 		if err != nil {
 			return dir1, dir2, nil, clog, err
 		}
-		_, err = loader.AssignUids(f, 0, 1, 10)
+		_, err = loader.AssignUids(f, 0, 1)
 		f.Close()
 		if err != nil {
 			return dir1, dir2, nil, clog, err
@@ -89,7 +89,7 @@ func prepare() (dir1, dir2 string, ps *store.Store, clog *commit.Logger, rerr er
 		if err != nil {
 			return dir1, dir2, nil, clog, err
 		}
-		_, err = loader.LoadEdges(f, 0, 1, 10)
+		_, err = loader.LoadEdges(f, 0, 1)
 		f.Close()
 		if err != nil {
 			return dir1, dir2, nil, clog, err
