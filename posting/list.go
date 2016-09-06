@@ -113,7 +113,9 @@ func samePosting(a *types.Posting, b *types.Posting) bool {
 // key = (entity uid, attribute)
 func Key(uid uint64, attr string) []byte {
 	buf := bytes.NewBufferString(attr)
-	buf.WriteRune('|')
+	if _, err := buf.WriteRune('|'); err != nil {
+		log.Fatalf("Error while writing |")
+	}
 	if err := binary.Write(buf, binary.LittleEndian, uid); err != nil {
 		log.Fatalf("Error while creating key with attr: %v uid: %v\n", attr, uid)
 	}
