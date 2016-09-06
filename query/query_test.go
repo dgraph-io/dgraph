@@ -556,7 +556,6 @@ func TestPostTraverse(t *testing.T) {
 	}
 	s := `
 		{
-			"_uid_": "id",
 			"actor": "object",
 			"name": "string",
 			"age": "int",
@@ -571,7 +570,7 @@ func TestPostTraverse(t *testing.T) {
 	defer os.Remove(file.Name())
 
 	// set test schema file path
-	flag.Set("schemaF", file.Name())
+	flag.Set("sfile", file.Name())
 
 	// load schema from json file
 	types.LoadSchema()

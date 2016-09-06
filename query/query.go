@@ -148,7 +148,7 @@ func mergeInterfaces(i1 interface{}, i2 interface{}) interface{} {
 	return []interface{}{i1, i2}
 }
 
-// postTraverse traverses the subgraph recursively and returns final result for the query
+// postTraverse traverses the subgraph recursively and returns final result for the query.
 func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 	if len(sg.Query) == 0 {
 		return nil, nil
@@ -265,6 +265,11 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 			// No type defined for present attr in type system/schema, return string value
 			m[sg.Attr] = string(val)
 		} else {
+			// the values should always be of scalar types here, do type assertion
+			if !sg.AttrType.OfType("scalar") {
+				return result, fmt.Errorf("Unknown Scalar:%v. Leaf predicate:'%v' must be"+
+					" one of the scalar types defined in the schema.", sg.AttrType, sg.Attr)
+			}
 			stype := sg.AttrType.(types.Scalar)
 			lval, err := stype.ParseType(val)
 			if err != nil {
@@ -470,7 +475,7 @@ func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
 		dst := &SubGraph{
 			isDebug:  sg.isDebug,
 			Attr:     gchild.Attr,
-			AttrType: types.GetTypeFromSchema(gchild.Attr),
+			AttrType: types.SchemaType(gchild.Attr),
 		}
 		if v, ok := gchild.Args["offset"]; ok {
 			offset, err := strconv.ParseInt(v, 0, 32)
@@ -564,7 +569,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	sg := &SubGraph{
 		isDebug:  gq.Attr == "debug",
 		Attr:     gq.Attr,
-		AttrType: types.GetTypeFromSchema(gq.Attr),
+		AttrType: types.SchemaType(gq.Attr),
 		IsRoot:   true,
 		Result:   b.Bytes[b.Head():],
 	}

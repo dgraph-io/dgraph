@@ -29,7 +29,6 @@ func createSchemaFile() (*os.File, error) {
 	}
 	s := `
 		{
-			"_uid_": "id",
 			"name": "string",
 			"age": "int",
 			"friend": "object"
@@ -42,7 +41,6 @@ func createSchemaFile() (*os.File, error) {
 
 // TestLoadSchema tests schema reading and parsing from input schema file
 func TestLoadSchema(t *testing.T) {
-
 	file, err := createSchemaFile()
 	if err != nil {
 		t.Error(err)
@@ -51,14 +49,14 @@ func TestLoadSchema(t *testing.T) {
 	defer os.Remove(file.Name())
 
 	// set test schema file path
-	flag.Set("schemaF", file.Name())
+	flag.Set("sfile", file.Name())
 
 	// load schema from json file
 	LoadSchema()
 }
 
-// TestGetTypeFromSchema tests fetching type info from schema map using predicate names
-func TestGetTypeFromSchema(t *testing.T) {
+// TestSchemaType tests fetching type info from schema map using predicate names
+func TestSchemaType(t *testing.T) {
 	file, err := createSchemaFile()
 	if err != nil {
 		t.Error(err)
@@ -67,14 +65,14 @@ func TestGetTypeFromSchema(t *testing.T) {
 	defer os.Remove(file.Name())
 
 	// set test schema file path
-	flag.Set("schemaF", file.Name())
+	flag.Set("sfile", file.Name())
 
-	typ := GetTypeFromSchema("name")
+	typ := SchemaType("name")
 
 	if _, ok := typ.(Scalar); !ok {
 		t.Error("Type assertion failed for predicate:name")
 	}
-	typ = GetTypeFromSchema("friend")
+	typ = SchemaType("friend")
 	if _, ok := typ.(Object); !ok {
 		t.Error("Type assertion failed for predicate:age")
 	}

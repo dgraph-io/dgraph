@@ -22,7 +22,7 @@ import (
 
 // Type interface is the wrapper interface for all types
 type Type interface {
-	// TODO(akhil): discuss and add a method to implement this interface (didn't want to add dummy method)
+	OfType(string) bool
 }
 
 // Scalar type defines concrete structure for scalar types to use.
@@ -38,29 +38,30 @@ type Scalar struct {
 type ParseTypeFunc func(input []byte) (interface{}, error)
 
 // String function to implement string interface
-func (s *Scalar) String() string {
-	return fmt.Sprintf("ScalarTypeName is:%v\n", s.Name)
+func (s Scalar) String() string {
+	return fmt.Sprint(s.Name)
+}
+
+// OfType function to assert scalar type
+func (s Scalar) OfType(name string) bool {
+	return name == "scalar"
 }
 
 // Object type defines skeleton for basic objects.
 // They form the basis for most object in this system.
-// Object has a name and a set of fields.
+// Object has a name and a set of attributes.
 type Object struct {
 	Name        string
 	Description string
-	Fields      FieldMap
+	Attributes  map[string]Type
 }
-
-// FieldMap maps field names to their corresponding types.
-type FieldMap map[string]Type
 
 // String function to implement string interface
-func (o *Object) String() string {
-	return fmt.Sprintf("ObjectTypeName is:%v\n", o.Name)
+func (o Object) String() string {
+	return fmt.Sprint(o.Name)
 }
 
-// List type defines a wrapper for other grapql object types.
-// Mostly used while defining object fields
-type List struct {
-	HasType Type
+// OfType function to assert object type
+func (o Object) OfType(name string) bool {
+	return name == "object"
 }

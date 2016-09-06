@@ -27,24 +27,23 @@ import (
 
 // Schema stores the types for all predicates in the system.
 var (
-	schema  = make(map[string]Type)
-	schemaF = flag.String("schemaF", "../../types/schema.json", "Path to the file that specifies schema in json format")
+	schema = make(map[string]Type)
+	sfile  = flag.String("sfile", "../../types/schema.json", "Path to the file that specifies schema in json format")
 )
 
-// init function for types package
+// init function for types package.
 func init() {
 	x.AddInit(LoadSchema)
 }
 
-// LoadSchema loads the schema and checks for errors
+// LoadSchema loads the schema and checks for errors.
 func LoadSchema() {
-
-	file, err := ioutil.ReadFile(*schemaF)
+	file, err := ioutil.ReadFile(*sfile)
 	if err != nil {
 		log.Fatalf("Schema load error:%v", err)
 	}
-	sch := make(map[string]string)
-	if err = json.Unmarshal(file, &sch); err != nil {
+	s := make(map[string]string)
+	if err = json.Unmarshal(file, &s); err != nil {
 		log.Fatalf("Schema load error:%v", err)
 	}
 	// define object entity to denote all entities in the system (subject/object in RDF)
@@ -52,12 +51,12 @@ func LoadSchema() {
 	objectType := Object{
 		Name:        "Object",
 		Description: "Denotes an entity in the system",
-		Fields: FieldMap{
+		Attributes: map[string]Type{
 			"_uid_": idType,
 		},
 	}
 	// go over schema file values and assign appropriate types from type system
-	for k, v := range sch {
+	for k, v := range s {
 		switch v {
 		case "int":
 			schema[k] = intType
@@ -77,8 +76,8 @@ func LoadSchema() {
 	}
 }
 
-// GetTypeFromSchema fetches types for a predicate from schema map
-func GetTypeFromSchema(p string) Type {
+// SchemaType fetches types for a predicate from schema map
+func SchemaType(p string) Type {
 	v, present := schema[p]
 	if !present {
 		log.Printf("Schema does not have type definition for:%v\n", p)
