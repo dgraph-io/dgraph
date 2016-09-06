@@ -687,8 +687,8 @@ func (l *List) AddMutation(ctx context.Context, t x.DirectedEdge, op byte) error
 			return err
 		}
 	}
-	// We want to do this after l is unlocked. See mergeMutation for notes on the
-	// potential deadlock that can happen if we don't do this.
+	// We want to process indexJobs only after l is unlocked. See mergeMutation for
+	// notes on the potential deadlock that can happen if we don't do this.
 	indexJobs := l.addMutationWhileLocked(ctx, mbuf, ts)
 	if indexJobC != nil {
 		for _, j := range indexJobs {
