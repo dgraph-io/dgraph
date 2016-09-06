@@ -67,11 +67,11 @@ type List struct {
 	lastCompact time.Time
 	wg          sync.WaitGroup
 	deleteMe    int32
-	keyAttr     string // Might start with ":". Might contain value instead of UID.
-	keyUID      uint64
+	keyAttr     string // Might start with ":" for index-related mutations.
+	keyUID      uint64 // Ignore for index-related mutations.
 
 	// Mutations
-	mlayer        map[int]types.Posting // stores only replace instructions.
+	mlayer        map[int]types.Posting // Stores only replace instructions.
 	mdelta        int                   // len(plist) + mdelta = final length.
 	maxMutationTs int64                 // Track maximum mutation ts.
 	mindex        []*MutationLink
@@ -138,10 +138,8 @@ func DecodeKey(b []byte) (uint64, string) {
 		return 0, attr
 	}
 	var uid uint64
-	err = binary.Read(buf, binary.LittleEndian, &uid)
-	if err != nil {
-		log.Fatalf("Error while decoding key [%s]", string(b))
-	}
+	x.Checkf(binary.Read(buf, binary.LittleEndian, &uid),
+		"Error while decoding key [%s]", string(b))
 	return uid, attr
 }
 

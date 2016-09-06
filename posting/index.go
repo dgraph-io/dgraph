@@ -60,8 +60,12 @@ func ReadIndexConfigs(f []byte) {
 	for _, c := range indexCfgs.Cfg {
 		indexedAttr[c.Attr] = true
 	}
-	for k := range indexedAttr {
-		log.Printf("Indexed attribute: %s\n", k)
+	if len(indexedAttr) == 0 {
+		log.Println("No indexed attributes!")
+	} else {
+		for k := range indexedAttr {
+			log.Printf("Indexed attribute [%s]\n", k)
+		}
 	}
 }
 

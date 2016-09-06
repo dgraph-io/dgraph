@@ -359,12 +359,14 @@ func main() {
 	ps, err := store.NewStore(*postingDir)
 	x.Checkf(err, "Error initializing postings store")
 	defer ps.Close()
-	posting.InitIndex(ps)
 
 	clog := commit.NewLogger(*mutationDir, "dgraph", 50<<20)
 	clog.SyncEvery = 1
 	clog.Init()
 	defer clog.Close()
+
+	posting.InitIndex(ps)
+	defer posting.CloseIndex()
 
 	addrs := strings.Split(*workers, ",")
 	lenAddr := uint64(len(addrs))
