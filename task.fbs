@@ -7,6 +7,7 @@ table Query {
 	offset:int;
 	afterUid:ulong;
 	getCount:ushort;
+	terms:[string];
 }
 
 table Value {

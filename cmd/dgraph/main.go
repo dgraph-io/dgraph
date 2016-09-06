@@ -31,7 +31,6 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
-
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc"
 
@@ -358,10 +357,9 @@ func main() {
 	}
 
 	ps, err := store.NewStore(*postingDir)
-	if err != nil {
-		log.Fatalf("error initializing postings store: %v", err)
-	}
+	x.Checkf(err, "Error initializing postings store")
 	defer ps.Close()
+	posting.InitIndex(ps)
 
 	clog := commit.NewLogger(*mutationDir, "dgraph", 50<<20)
 	clog.SyncEvery = 1

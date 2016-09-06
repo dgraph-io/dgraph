@@ -17,6 +17,7 @@
 package posting
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -31,8 +32,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-
-	"context"
 
 	"github.com/dgryski/go-farm"
 	"github.com/zond/gotomic"
@@ -256,10 +255,14 @@ func checkMemoryUsage() {
 	}
 }
 
-var stopTheWorld sync.RWMutex
-var lhmap *gotomic.Hash
-var dirtymap *gotomic.Hash
-var clog *commit.Logger
+var (
+	stopTheWorld sync.RWMutex
+	lhmap        *gotomic.Hash
+	dirtymap     *gotomic.Hash
+	clog         *commit.Logger
+
+//	indexC	han
+)
 
 func Init(log *commit.Logger) {
 	lhmap = gotomic.NewHash()
@@ -272,19 +275,19 @@ func GetOrCreate(key []byte, pstore *store.Store) *List {
 	stopTheWorld.RLock()
 	defer stopTheWorld.RUnlock()
 
-	uid := farm.Fingerprint64(key)
-	ukey := gotomic.IntKey(uid)
-	lp, _ := lhmap.Get(ukey)
+	fp := farm.Fingerprint64(key)
+	gotomicKey := gotomic.IntKey(fp)
+	lp, _ := lhmap.Get(gotomicKey)
 	if lp != nil {
 		return lp.(*List)
 	}
 
 	l := NewList()
-	if inserted := lhmap.PutIfMissing(ukey, l); inserted {
+	if inserted := lhmap.PutIfMissing(gotomicKey, l); inserted {
 		l.init(key, pstore, clog)
 		return l
 	} else {
-		lp, _ = lhmap.Get(ukey)
+		lp, _ = lhmap.Get(gotomicKey)
 		return lp.(*List)
 	}
 }
@@ -349,6 +352,7 @@ func MergeLists(numRoutines int) {
 	go queueAll(ch, c)
 
 	wg := new(sync.WaitGroup)
+
 	for i := 0; i < numRoutines; i++ {
 		wg.Add(1)
 		go process(ch, c, wg)

@@ -84,6 +84,7 @@ func main() {
 		glog.Fatalf("Fail to initialize dataStore: %v", err)
 	}
 	defer dataStore.Close()
+	posting.InitIndex(dataStore)
 
 	uidStore, err := store.NewReadOnlyStore(*uidDir)
 	if err != nil {
