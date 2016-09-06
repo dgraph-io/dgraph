@@ -330,14 +330,14 @@ func (l *List) mindexInsertAt(mlink *MutationLink, mi int) {
 	copy(l.mindex[mi+1:], l.mindex[mi:])
 	l.mindex[mi] = mlink
 	for i := mi + 1; i < len(l.mindex); i++ {
-		l.mindex[i].idx += 1
+		l.mindex[i].idx++
 	}
 }
 
 func (l *List) mindexDeleteAt(mi int) {
 	l.mindex = append(l.mindex[:mi], l.mindex[mi+1:]...)
 	for i := mi; i < len(l.mindex); i++ {
-		l.mindex[i].idx -= 1
+		l.mindex[i].idx--
 	}
 }
 
@@ -422,7 +422,7 @@ func (l *List) mergeMutation(mp *types.Posting) {
 				l.mindex[mi] = mlink
 
 			} else { // Not in plist, so delete previous instruction in mindex.
-				l.mdelta -= 1
+				l.mdelta--
 				l.mindexDeleteAt(mi)
 			}
 
@@ -439,7 +439,7 @@ func (l *List) mergeMutation(mp *types.Posting) {
 				}
 
 				mlink.moveidx = 1
-				l.mdelta -= 1
+				l.mdelta--
 				mlink.idx = pi + mi + 1
 				l.mindexInsertAt(mlink, mi+1)
 
@@ -453,7 +453,7 @@ func (l *List) mergeMutation(mp *types.Posting) {
 			if inPlist { // In plist, so delete previous instruction, set in mlayer.
 				l.mindexDeleteAt(mi)
 				l.mlayer[pi] = *mp
-				l.mdelta += 1
+				l.mdelta++
 
 			} else { // Not in plist, so replace previous set instruction in mindex.
 				// NOTE: This prev instruction couldn't have been a Del instruction.
@@ -482,7 +482,7 @@ func (l *List) mergeMutation(mp *types.Posting) {
 
 			} else { // not in plist, not in mindex, so insert in mindex.
 				mlink.moveidx = -1
-				l.mdelta += 1
+				l.mdelta++
 				mlink.idx = pi + 1 + mi + 1 // right of pi, and right of mi.
 				l.mindexInsertAt(mlink, mi+1)
 			}
