@@ -107,6 +107,11 @@ func Init(ps *store.Store) {
 	uidStore = ps
 }
 
+// allocateUniqueUid returns an integer in range:
+// [minIdx, maxIdx] derived based on numInstances and instanceIdx.
+// which hasn't already been allocated to other xids. It does this by
+// taking the fingerprint of the xid appended with zero or more spaces
+// until the obtained integer is unique.
 func allocateUniqueUid(xid string, instanceIdx uint64,
 	numInstances uint64) (uid uint64, rerr error) {
 
@@ -144,6 +149,8 @@ func allocateUniqueUid(xid string, instanceIdx uint64,
 	}
 }
 
+// assignNew assigns a uid to a given xid and writes it to the
+// posting list.
 func assignNew(pl *posting.List, xid string, instanceIdx uint64,
 	numInstances uint64) (uint64, error) {
 
@@ -182,6 +189,7 @@ func StringKey(xid string) []byte {
 	return []byte("_uid_|" + xid)
 }
 
+// Get returns the uid of the corresponding xid.
 func Get(xid string) (uid uint64, rerr error) {
 	key := StringKey(xid)
 	pl := posting.GetOrCreate(key, uidStore)
@@ -198,6 +206,8 @@ func Get(xid string) (uid uint64, rerr error) {
 	return p.Uid(), nil
 }
 
+// GetOrAssign returns a unique integer (uid) for a given xid if
+// it already exists or assigns a new uid and returns it.
 func GetOrAssign(xid string, instanceIdx uint64,
 	numInstances uint64) (uid uint64, rerr error) {
 
@@ -221,6 +231,8 @@ func GetOrAssign(xid string, instanceIdx uint64,
 		" Wake the stupid developer up.")
 }
 
+// ExternalId returns the xid of a given uid by reading from the uidstore.
+// It returns an error if there is no corresponding xid.
 func ExternalId(uid uint64) (xid string, rerr error) {
 	key := posting.Key(uid, "_xid_") // uid -> "_xid_" -> xid
 	pl := posting.GetOrCreate(key, uidStore)

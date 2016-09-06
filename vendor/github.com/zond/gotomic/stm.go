@@ -71,7 +71,7 @@ type version struct {
 }
 
 func (self *version) clone() *version {
-	return &version{self.commitNumber, nil, self.content.Clone()}
+	return &version{atomic.LoadUint64(&self.commitNumber), nil, self.content.Clone()}
 }
 
 type snapshot struct {
@@ -146,10 +146,10 @@ func (self *Transaction) objRead(h *Handle) (rval *version, err error) {
 		}
 		if other.getStatus() == successful {
 			version = other.writeHandles[h].neu
-			version.commitNumber = other.commitNumber
+			atomic.StoreUint64(&version.commitNumber, atomic.LoadUint64(&other.commitNumber))
 		}
 	}
-	if version.commitNumber > self.commitNumber {
+	if atomic.LoadUint64(&version.commitNumber) > atomic.LoadUint64(&self.commitNumber) {
 		err = fmt.Errorf("%v has changed", version.content)
 	} else {
 		rval = version
@@ -176,7 +176,7 @@ func (self *Transaction) release() {
 			wanted := w.snapshot.old
 			if stat == successful {
 				wanted = w.snapshot.neu
-				wanted.commitNumber = self.commitNumber
+				atomic.StoreUint64(&wanted.commitNumber, atomic.LoadUint64(&self.commitNumber))
 			}
 			w.handle.replace(current, wanted)
 		}
@@ -235,7 +235,7 @@ func (self *Transaction) commit() bool {
 	}
 	defer self.release()
 	if atomic.CompareAndSwapInt32(&self.status, undecided, read_check) {
-		self.commitNumber = atomic.AddUint64(&lastCommit, 1)
+		atomic.StoreUint64(&self.commitNumber, atomic.AddUint64(&lastCommit, 1))
 	}
 	if !self.readCheck() {
 		self.Abort()

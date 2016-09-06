@@ -17,12 +17,10 @@
 package store
 
 import (
-	"fmt"
 	"strconv"
 
-	rocksdb "github.com/tecbot/gorocksdb"
-
 	"github.com/dgraph-io/dgraph/x"
+	rocksdb "github.com/tecbot/gorocksdb"
 )
 
 var log = x.Log("store")
@@ -63,7 +61,7 @@ func NewStore(filepath string) (*Store, error) {
 	var err error
 	s.db, err = rocksdb.OpenDb(s.opt, filepath)
 	if err != nil {
-		return nil, err
+		return nil, x.Wrap(err)
 	}
 	return s, nil
 }
@@ -75,24 +73,25 @@ func NewReadOnlyStore(filepath string) (*Store, error) {
 	var err error
 	s.db, err = rocksdb.OpenDbForReadOnly(s.opt, filepath, false)
 	if err != nil {
-		return nil, err
+		return nil, x.Wrap(err)
 	}
 	return s, nil
 }
 
-func (s *Store) Get(key []byte) (val []byte, rerr error) {
-	valSlice, rerr := s.db.Get(s.ropt, key)
-	if rerr != nil {
-		return []byte(""), rerr
+// Get returns the value given a key for RocksDB.
+func (s *Store) Get(key []byte) ([]byte, error) {
+	valSlice, err := s.db.Get(s.ropt, key)
+	if err != nil {
+		return []byte(""), x.Wrap(err)
 	}
 
 	if valSlice == nil {
-		return []byte(""), fmt.Errorf("E_KEY_NOT_FOUND")
+		return []byte(""), x.Errorf("E_KEY_NOT_FOUND")
 	}
 
-	val = valSlice.Data()
+	val := valSlice.Data()
 	if val == nil {
-		return []byte(""), fmt.Errorf("E_KEY_NOT_FOUND")
+		return []byte(""), x.Errorf("E_KEY_NOT_FOUND")
 	}
 	return val, nil
 }
@@ -136,7 +135,7 @@ func (s *Store) NewWriteBatch() *rocksdb.WriteBatch {
 // WriteBatch does a batch write to RocksDB from the data in WriteBatch object.
 func (s *Store) WriteBatch(wb *rocksdb.WriteBatch) error {
 	if err := s.db.Write(s.wopt, wb); err != nil {
-		return err
+		return x.Wrap(err)
 	}
 	return nil
 }

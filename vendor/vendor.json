@@ -61,6 +61,12 @@
 			"revisionTime": "2016-07-26T03:44:33Z"
 		},
 		{
+			"checksumSHA1": "Hky3u+8Rqum+wB5BHMj0A8ZmT4g=",
+			"path": "github.com/pkg/errors",
+			"revision": "17b591df37844cde689f4d5813e5cea0927d8dd2",
+			"revisionTime": "2016-08-22T09:00:10Z"
+		},
+		{
 			"checksumSHA1": "W1EGygayPbG7X+UK13VHKl0XOy8=",
 			"path": "github.com/tecbot/gorocksdb",
 			"revision": "59ab8def01399fb7ded1c3bff5e3e4cbd14b6348",
@@ -79,10 +85,10 @@
 			"revisionTime": "2015-11-24T22:32:07Z"
 		},
 		{
-			"checksumSHA1": "0JL5ZeTzdHwXRYojBJHC06AnnBs=",
+			"checksumSHA1": "AbkwwrwLoURg4xUx9/iPtadihK8=",
 			"path": "github.com/zond/gotomic",
-			"revision": "25c7c0a9f89b58b13a08c2bb531363fa117159c2",
-			"revisionTime": "2016-06-26T07:37:22Z"
+			"revision": "0c6a291dd38de4e9543d10733ff4b1ad7bdecadd",
+			"revisionTime": "2016-08-30T06:32:58Z"
 		},
 		{
 			"checksumSHA1": "9jjO5GjLa0XF/nfWihF02RoH4qc=",

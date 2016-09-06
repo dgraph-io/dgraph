@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 DGraph Labs, Inc.
+ * Copyright 2016 Dgraph Labs, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,22 +14,23 @@
  * limitations under the License.
  */
 
-package x
+package algo
 
-type Elem struct {
-	Uid uint64
-	Idx int // channel index
+type elem struct {
+	val     uint64 // Value of this element.
+	listIdx int    // Which list this element comes from.
 }
 
-type Uint64Heap []Elem
+type uint64Heap []elem
 
-func (h Uint64Heap) Len() int           { return len(h) }
-func (h Uint64Heap) Less(i, j int) bool { return h[i].Uid < h[j].Uid }
-func (h Uint64Heap) Swap(i, j int)      { h[i], h[j] = h[j], h[i] }
-func (h *Uint64Heap) Push(x interface{}) {
-	*h = append(*h, x.(Elem))
+func (h uint64Heap) Len() int           { return len(h) }
+func (h uint64Heap) Less(i, j int) bool { return h[i].val < h[j].val }
+func (h uint64Heap) Swap(i, j int)      { h[i], h[j] = h[j], h[i] }
+func (h *uint64Heap) Push(x interface{}) {
+	*h = append(*h, x.(elem))
 }
-func (h *Uint64Heap) Pop() interface{} {
+
+func (h *uint64Heap) Pop() interface{} {
 	old := *h
 	n := len(old)
 	x := old[n-1]
