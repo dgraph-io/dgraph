@@ -17,12 +17,11 @@
 package x
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"time"
-
-	"context"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/google/flatbuffers/go"
