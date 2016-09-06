@@ -34,4 +34,5 @@ message Node {
 message Response {
   Node n = 1;
   Latency l = 2;
+	map<string, uint64> Uids = 3;
 }

@@ -289,6 +289,7 @@ func (s *server) Query(ctx context.Context,
 		}
 	}
 
+	resp.Uids = allocIds
 	if gq == nil || (gq.UID == 0 && len(gq.XID) == 0) {
 		return resp, err
 	}
@@ -322,10 +323,6 @@ func (s *server) Query(ctx context.Context,
 	gl.Parsing, gl.Processing, gl.Pb = l.Parsing.String(), l.Processing.String(),
 		l.ProtocolBuffer.String()
 	resp.L = gl
-
-	// TODO(Ashwin): Pass to client
-	_ = allocIds
-
 	return resp, err
 }
 
