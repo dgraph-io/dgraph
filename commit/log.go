@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-// Commit package provides commit logs for storing mutations, as they arrive
+// Package commit provides commit logs for storing mutations, as they arrive
 // at the server. Mutations also get stored in memory within posting.List.
 // So, commit logs are useful to handle machine crashes, and re-init of a
 // posting list.

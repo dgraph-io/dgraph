@@ -230,6 +230,8 @@ func (l *List) init(key []byte, pstore *store.Store, clog *commit.Logger) {
 		return
 	}
 
+	// TODO(pawan) - Decouple commit logs and posting lists. RAFT would supersede
+	// this functionality.
 	ch := make(chan []byte, 100)
 	done := make(chan error)
 	go clog.StreamEntries(posting.CommitTs()+1, l.hash, ch, done)
