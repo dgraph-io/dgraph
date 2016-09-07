@@ -76,6 +76,8 @@ func Err(entry *logrus.Entry, err error) *logrus.Entry {
 	return entry.WithField("error", err)
 }
 
+// SetStatus sets the error code, message and the newly assigned uids
+// in the http response.
 func SetStatus(w http.ResponseWriter, code, msg string, uidsMap map[string]uint64) {
 	r := &Status{Code: code, Message: msg, Uids: uidsMap}
 	if js, err := json.Marshal(r); err == nil {
