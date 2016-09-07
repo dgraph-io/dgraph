@@ -122,7 +122,10 @@ func allocateUniqueUid(xid string, instanceIdx uint64,
 	txid := xid
 	val := xid
 	if strings.HasPrefix(xid, "_new_:") {
-		txid = algo.RandStringBytesMask(10)
+		if txid, rerr = algo.RandStringBytesMask(10); rerr != nil {
+			return 0, rerr
+		}
+
 		val = "_new_"
 	}
 
