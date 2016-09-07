@@ -18,6 +18,7 @@ package loader
 
 import (
 	"bufio"
+	"flag"
 	"io"
 	"math/rand"
 	"runtime"
@@ -41,6 +42,9 @@ import (
 
 var glog = x.Log("loader")
 var uidStore, dataStore *store.Store
+
+var maxRoutines = flag.Int("maxroutines", 3000,
+	"Maximum number of goroutines to execute concurrently")
 
 type counters struct {
 	read      uint64
@@ -281,7 +285,7 @@ func LoadEdges(reader io.Reader, instanceIdx uint64,
 		go s.parseStream(&pwg) // Input --> NQuads
 	}
 
-	nrt := 3000
+	nrt := *maxRoutines
 	var wg sync.WaitGroup
 	wg.Add(nrt)
 	for i := 0; i < nrt; i++ {
@@ -304,6 +308,7 @@ func LoadEdges(reader io.Reader, instanceIdx uint64,
 // not load the edges, only assign UIDs.
 func AssignUids(reader io.Reader, instanceIdx uint64,
 	numInstances uint64) (uint64, error) {
+
 	s := new(state)
 	s.ctr = new(counters)
 	ticker := time.NewTicker(time.Second)
@@ -324,7 +329,8 @@ func AssignUids(reader io.Reader, instanceIdx uint64,
 	}
 
 	wg := new(sync.WaitGroup)
-	for i := 0; i < 3000; i++ {
+	nrt := *maxRoutines
+	for i := 0; i < nrt; i++ {
 		wg.Add(1)
 		go s.assignUidsOnly(wg)
 	}
