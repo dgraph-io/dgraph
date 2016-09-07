@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"log"
 	"math"
-	mrand "math/rand"
 	"strings"
 	"sync"
 	"time"
@@ -38,7 +37,6 @@ import (
 )
 
 var lmgr *lockManager
-var letterRunes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ "
 var uidStore *store.Store
 var eidPool = sync.Pool{
 	New: func() interface{} {
@@ -118,20 +116,26 @@ func Init(ps *store.Store) {
 // until the obtained integer is unique.
 func allocateUniqueUid(xid string, instanceIdx uint64,
 	numInstances uint64) (uid uint64, rerr error) {
-	mrand.Seed(time.Now().UnixNano())
 	mod := math.MaxUint64 / numInstances
 	minIdx := instanceIdx * mod
+
 	txid := []byte(xid)
 	val := xid
 	if strings.HasPrefix(xid, "_new_:") {
 		if _, err := rand.Read(txid); err != nil {
 			return 0, err
 		}
-
 		val = "_new_"
 	}
 
-	for ; ; txid = append(txid, letterRunes[mrand.Intn(len(letterRunes))]) {
+	suffix := make([]byte, 1)
+	for i := 0; ; i++ {
+		if i > 0 {
+			_, err := rand.Read(suffix)
+			x.Check(err)
+			txid = append(txid, suffix[0])
+		}
+
 		uid1 := farm.Fingerprint64(txid) // Generate from hash.
 		uid = (uid1 % mod) + minIdx
 		if uid == math.MaxUint64 {
