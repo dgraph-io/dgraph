@@ -14,15 +14,13 @@
  * limitations under the License.
  */
 
-package types
+package gql
 
-import (
-	"fmt"
-)
+import "fmt"
 
 // Type interface is the wrapper interface for all types
 type Type interface {
-	OfType(string) bool
+	IsScalar() bool
 }
 
 // Scalar type defines concrete structure for scalar types to use.
@@ -42,7 +40,7 @@ func (s Scalar) String() string {
 	return fmt.Sprint(s.Name)
 }
 
-// OfType function to assert scalar type
-func (s Scalar) OfType(name string) bool {
-	return name == "scalar"
+// IsScalar function to assert scalar type
+func (s Scalar) IsScalar() bool {
+	return true
 }

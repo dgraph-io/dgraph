@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
-package types
+package gql
 
 import (
-	"flag"
+	"context"
 	"os"
 	"testing"
 )
@@ -34,7 +34,6 @@ func createSchemaFile() (*os.File, error) {
 		}
 	`
 	file.WriteString(s)
-
 	return file, nil
 }
 
@@ -47,11 +46,11 @@ func TestLoadSchema(t *testing.T) {
 	defer file.Close()
 	defer os.Remove(file.Name())
 
-	// set test schema file path
-	flag.Set("sfile", file.Name())
-
 	// load schema from json file
-	LoadSchema()
+	err = LoadSchema(file.Name())
+	if err != nil {
+		t.Error(err)
+	}
 }
 
 // TestSchemaType tests fetching type info from schema map using predicate names
@@ -63,18 +62,18 @@ func TestSchemaType(t *testing.T) {
 	defer file.Close()
 	defer os.Remove(file.Name())
 
-	// set test schema file path
-	flag.Set("sfile", file.Name())
-
 	// load schema from json file
-	LoadSchema()
+	err = LoadSchema(file.Name())
+	if err != nil {
+		t.Error(err)
+	}
 
-	typ := SchemaType("name")
+	ctx := context.Background()
+	typ := SchemaType(ctx, "name")
 	if _, ok := typ.(Scalar); !ok {
 		t.Error("Type assertion failed for predicate:name")
 	}
-
-	typ = SchemaType("age")
+	typ = SchemaType(ctx, "age")
 	if _, ok := typ.(Scalar); !ok {
 		t.Error("Type assertion failed for predicate:age")
 	}

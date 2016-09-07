@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"encoding/gob"
 	"encoding/json"
-	"flag"
 	"io/ioutil"
 	"os"
 	"strings"
@@ -38,7 +37,6 @@ import (
 	"github.com/dgraph-io/dgraph/query/graph"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/task"
-	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -567,11 +565,11 @@ func TestPostTraverse(t *testing.T) {
 	defer file.Close()
 	defer os.Remove(file.Name())
 
-	// set test schema file path
-	flag.Set("sfile", file.Name())
-
 	// load schema from json file
-	types.LoadSchema()
+	err = gql.LoadSchema(file.Name())
+	if err != nil {
+		t.Error(err)
+	}
 
 	query := `
 		{

@@ -34,7 +34,6 @@ import (
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/query/graph"
 	"github.com/dgraph-io/dgraph/task"
-	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -119,7 +118,7 @@ func (l *Latency) ToMap() map[string]string {
 // client convenient formats, like GraphQL / JSON.
 type SubGraph struct {
 	Attr     string
-	AttrType types.Type
+	AttrType gql.Type
 	Count    int
 	Offset   int
 	AfterUid uint64
@@ -262,15 +261,15 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 			m["_uid_"] = fmt.Sprintf("%#x", q.Uids(i))
 		}
 		if sg.AttrType == nil {
-			// No type defined for present attr in type system/schema, return string value
+			// No type defined for attr in type system/schema, hence return string value
 			m[sg.Attr] = string(val)
 		} else {
-			// the values should always be of scalar types here, do type assertion
-			if !sg.AttrType.OfType("scalar") {
+			// type assertion for scalar type values
+			if !sg.AttrType.IsScalar() {
 				return result, fmt.Errorf("Unknown Scalar:%v. Leaf predicate:'%v' must be"+
 					" one of the scalar types defined in the schema.", sg.AttrType, sg.Attr)
 			}
-			stype := sg.AttrType.(types.Scalar)
+			stype := sg.AttrType.(gql.Scalar)
 			lval, err := stype.ParseType(val)
 			if err != nil {
 				return result, err
@@ -452,7 +451,7 @@ func (sg *SubGraph) ToProtocolBuffer(l *Latency) (*graph.Node, error) {
 	return n, nil
 }
 
-func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
+func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 	// Typically you act on the current node, and leave recursion to deal with
 	// children. But, in this case, we don't want to muck with the current
 	// node, because of the way we're dealing with the root node.
@@ -475,7 +474,7 @@ func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
 		dst := &SubGraph{
 			isDebug:  sg.isDebug,
 			Attr:     gchild.Attr,
-			AttrType: types.SchemaType(gchild.Attr),
+			AttrType: gql.SchemaType(ctx, gchild.Attr),
 		}
 		if v, ok := gchild.Args["offset"]; ok {
 			offset, err := strconv.ParseInt(v, 0, 32)
@@ -499,7 +498,7 @@ func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
 			dst.Count = int(first)
 		}
 		sg.Children = append(sg.Children, dst)
-		err := treeCopy(gchild, dst)
+		err := treeCopy(ctx, gchild, dst)
 		if err != nil {
 			return err
 		}
@@ -513,7 +512,7 @@ func ToSubGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	if err != nil {
 		return nil, err
 	}
-	err = treeCopy(gq, sg)
+	err = treeCopy(ctx, gq, sg)
 	return sg, err
 }
 
@@ -569,7 +568,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	sg := &SubGraph{
 		isDebug:  gq.Attr == "debug",
 		Attr:     gq.Attr,
-		AttrType: types.SchemaType(gq.Attr),
+		AttrType: gql.SchemaType(ctx, gq.Attr),
 		IsRoot:   true,
 		Result:   b.Bytes[b.Head():],
 	}

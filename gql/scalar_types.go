@@ -14,11 +14,9 @@
  * limitations under the License.
  */
 
-package types
+package gql
 
-import (
-	"strconv"
-)
+import "strconv"
 
 // added suffix 'type' to names to distinguish from Go types 'int' and 'string'
 var (

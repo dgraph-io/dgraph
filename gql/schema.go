@@ -14,37 +14,29 @@
  * limitations under the License.
  */
 
-package types
+package gql
 
 import (
+	"context"
 	"encoding/json"
-	"flag"
+	"fmt"
 	"io/ioutil"
-	"log"
 
 	"github.com/dgraph-io/dgraph/x"
 )
 
 // Schema stores the types for all predicates in the system.
-var (
-	schema = make(map[string]Type)
-	sfile  = flag.String("sfile", "../../types/schema.json", "Path to the file that specifies schema in json format")
-)
-
-// init function for types package.
-func init() {
-	x.AddInit(LoadSchema)
-}
+var schema = make(map[string]Type)
 
 // LoadSchema loads the schema and checks for errors.
-func LoadSchema() {
-	file, err := ioutil.ReadFile(*sfile)
+func LoadSchema(fileName string) error {
+	file, err := ioutil.ReadFile(fileName)
 	if err != nil {
-		log.Fatalf("Schema load error:%v", err)
+		return err
 	}
 	s := make(map[string]string)
 	if err = json.Unmarshal(file, &s); err != nil {
-		log.Fatalf("Schema load error:%v", err)
+		return err
 	}
 	// go over schema file values and assign appropriate types from type system
 	for k, v := range s {
@@ -60,16 +52,17 @@ func LoadSchema() {
 		case "id":
 			schema[k] = idType
 		default:
-			log.Fatalf("Unknown type:%v in input schema file for predicate:%v", v, k)
+			return fmt.Errorf("Unknown type:%v in input schema file for predicate:%v", v, k)
 		}
 	}
+	return nil
 }
 
 // SchemaType fetches types for a predicate from schema map
-func SchemaType(p string) Type {
+func SchemaType(ctx context.Context, p string) Type {
 	v, present := schema[p]
 	if !present {
-		log.Printf("Schema does not have type definition for:%v\n", p)
+		x.Trace(ctx, "Schema does not have type definition for:%v", p)
 	}
 	return v
 }
