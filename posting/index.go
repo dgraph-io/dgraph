@@ -153,10 +153,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t x.DirectedEdge, op by
 		return err
 	}
 
-	if !hasMutated {
-		// No mutation happened. No need to do anything for index.
-		// Another way to detect no mutation is to do a []bytes comparison after the
-		// mutation finishes, but this will cause additional copying.
+	if !hasMutated || !doUpdateIndex {
 		return nil
 	}
 
