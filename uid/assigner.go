@@ -130,7 +130,7 @@ func allocateUniqueUid(xid string, instanceIdx uint64,
 	}
 
 	for ; ; txid = append(txid, ' ') {
-		uid1 := farm.Fingerprint64([]byte(txid)) // Generate from hash.
+		uid1 := farm.Fingerprint64(txid) // Generate from hash.
 		uid = (uid1 % mod) + minIdx
 		if uid == math.MaxUint64 {
 			continue
