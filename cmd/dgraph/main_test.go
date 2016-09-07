@@ -178,6 +178,43 @@ func TestQuery(t *testing.T) {
 	fmt.Println(string(js))
 }
 
+var qm = `
+	mutation {
+		set {
+  	  <_uid_:0x0a> <pred.rel> <_new_:x> .
+    	<_new_:x> <pred.val> "value" .
+    	<_new_:x> <pred.rel> <_new_:y> .
+    	<_new_:y> <pred.val> "value2" .
+  	}	
+	}
+`
+
+func TestAssignUid(t *testing.T) {
+	dir1, dir2, _, clog, err := prepare()
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer closeAll(dir1, dir2, clog)
+
+	// Parse GQL into internal query representation.
+	_, mu, err := gql.Parse(qm)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	ctx := context.Background()
+	allocIds, err := mutationHandler(ctx, mu)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	if len(allocIds) != 2 {
+		t.Errorf("Expected two UIDs to be allocated")
+	}
+}
+
 func TestConvertToEdges(t *testing.T) {
 	q1 := `_uid_:0x01 <type> _uid_:0x02 .
 	       _uid_:0x01 <character> _uid_:0x03 .`
