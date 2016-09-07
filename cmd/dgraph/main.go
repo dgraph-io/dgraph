@@ -155,8 +155,7 @@ func mutationHandler(ctx context.Context, mu *gql.Mutation) (map[string]uint64, 
 	if edg, err = convertToEdges(ctx, mu.Set); err != nil {
 		return nil, err
 	}
-	m.Set = edg.edges
-	allocIds = edg.mp
+	m.Set, allocIds = edg.edges, edg.mp
 	if edg, err = convertToEdges(ctx, mu.Del); err != nil {
 		return nil, err
 	}
