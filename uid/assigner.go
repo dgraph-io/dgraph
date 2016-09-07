@@ -17,6 +17,7 @@
 package uid
 
 import (
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"log"
@@ -29,7 +30,6 @@ import (
 
 	"github.com/dgryski/go-farm"
 
-	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/posting/types"
 	"github.com/dgraph-io/dgraph/store"
@@ -119,22 +119,19 @@ func allocateUniqueUid(xid string, instanceIdx uint64,
 
 	mod := math.MaxUint64 / numInstances
 	minIdx := instanceIdx * mod
-	txid := xid
+	txid := []byte(xid)
 	val := xid
 	if strings.HasPrefix(xid, "_new_:") {
-		if txid, rerr = algo.RandStringBytesMask(10); rerr != nil {
-			return 0, rerr
+		if _, err := rand.Read(txid); err != nil {
+			return 0, err
 		}
 
 		val = "_new_"
 	}
 
-	for {
-		txid = txid + " "
-
+	for ; ; txid = append(txid, ' ') {
 		uid1 := farm.Fingerprint64([]byte(txid)) // Generate from hash.
 		uid = (uid1 % mod) + minIdx
-
 		if uid == math.MaxUint64 {
 			continue
 		}

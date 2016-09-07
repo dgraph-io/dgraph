@@ -140,7 +140,7 @@ func convertToEdges(ctx context.Context, mutation string) (mutationResult, error
 		edges:   edges,
 		newUids: allocatedIds,
 	}
-	return edg, nil
+	return mr, nil
 }
 
 func mutationHandler(ctx context.Context, mu *gql.Mutation) (map[string]uint64, error) {
