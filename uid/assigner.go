@@ -119,8 +119,15 @@ func allocateUniqueUid(xid string, instanceIdx uint64,
 
 	mod := math.MaxUint64 / numInstances
 	minIdx := instanceIdx * mod
-	for sp := ""; ; sp += " " {
-		txid := xid + sp
+	txid := xid
+	val := xid
+	if strings.HasPrefix(xid, "_new_:") {
+		txid = algo.RandStringBytesMask(10)
+		val = "_new_"
+	}
+
+	for {
+		txid = txid + " "
 
 		uid1 := farm.Fingerprint64([]byte(txid)) // Generate from hash.
 		uid = (uid1 % mod) + minIdx
@@ -142,7 +149,7 @@ func allocateUniqueUid(xid string, instanceIdx uint64,
 
 		// Uid hasn't been assigned yet.
 		t := x.DirectedEdge{
-			Value:     []byte(xid), // not txid
+			Value:     []byte(val), // not txid
 			Source:    "_assigner_",
 			Timestamp: time.Now(),
 		}
@@ -215,7 +222,6 @@ func GetOrAssign(xid string, instanceIdx uint64,
 
 	// Prefix _new_ requires us to create a new uid(entity).
 	if strings.HasPrefix(xid, "_new_:") {
-		xid = algo.RandStringBytesMask(10)
 		return allocateUniqueUid(xid, instanceIdx, numInstances)
 	}
 

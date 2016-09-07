@@ -1,6 +1,9 @@
 package algo
 
-import "math/rand"
+import (
+	"math/rand"
+	"time"
+)
 
 const (
 	letterBytes   = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ."
@@ -10,10 +13,11 @@ const (
 
 // RandStringBytesMask generates a random string of length n.
 func RandStringBytesMask(n int) string {
+	var src = rand.NewSource(time.Now().UnixNano())
 	str := make([]byte, n)
 	len := len(letterBytes)
 	for i := 0; i < n; {
-		if idx := int(rand.Int63() & letterIdxMask); idx < len {
+		if idx := int(src.Int63() & letterIdxMask); idx < len {
 			str[i] = letterBytes[idx]
 			i++
 		}

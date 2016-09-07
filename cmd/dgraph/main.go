@@ -65,9 +65,9 @@ var (
 	tracing     = flag.Float64("trace", 0.5, "The ratio of queries to trace.")
 )
 
-type edgesStruct struct {
-	edges []x.DirectedEdge
-	mp    map[string]uint64
+type mutationResult struct {
+	edges   []x.DirectedEdge
+	newUids map[string]uint64
 }
 
 func addCorsHeaders(w http.ResponseWriter) {
@@ -80,10 +80,10 @@ func addCorsHeaders(w http.ResponseWriter) {
 	w.Header().Set("Connection", "close")
 }
 
-func convertToEdges(ctx context.Context, mutation string) (edgesStruct, error) {
+func convertToEdges(ctx context.Context, mutation string) (mutationResult, error) {
 	var edges []x.DirectedEdge
 	var nquads []rdf.NQuad
-	var edg edgesStruct
+	var edg mutationResult
 	r := strings.NewReader(mutation)
 	scanner := bufio.NewScanner(r)
 	allocatedIds := make(map[string]uint64)
@@ -136,9 +136,9 @@ func convertToEdges(ctx context.Context, mutation string) (edgesStruct, error) {
 		}
 	}
 
-	edg = edgesStruct{
-		edges,
-		allocatedIds,
+	edg = mutationResult{
+		edges:   edges,
+		newUids: allocatedIds,
 	}
 	return edg, nil
 }
@@ -150,12 +150,12 @@ func mutationHandler(ctx context.Context, mu *gql.Mutation) (map[string]uint64, 
 
 	var allocIds map[string]uint64
 	var m worker.Mutations
-	var edg edgesStruct
+	var edg mutationResult
 	var err error
 	if edg, err = convertToEdges(ctx, mu.Set); err != nil {
 		return nil, err
 	}
-	m.Set, allocIds = edg.edges, edg.mp
+	m.Set, allocIds = edg.edges, edg.newUids
 	if edg, err = convertToEdges(ctx, mu.Del); err != nil {
 		return nil, err
 	}
@@ -235,7 +235,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		if js, err := json.Marshal(mp); err == nil {
 			w.Write(js)
 		} else {
-			x.SetStatus(w, "Error", "Unable to Mashal map")
+			x.SetStatus(w, "Error", "Unable to marshal map")
 		}
 		return
 	}
