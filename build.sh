@@ -5,7 +5,7 @@ set -e
 
 cur_dir=$(pwd);
 tmp_dir=/tmp/dgraph-build;
-release_version=0.4.3;
+release_version=0.4.4;
 
 # If temporary directory already exists delete it.
 if [ -d "$tmp_dir" ]; then
@@ -20,7 +20,7 @@ fi
 mkdir $tmp_dir;
 
 dgraph_cmd=$GOPATH/src/github.com/dgraph-io/dgraph/cmd;
-build_flags='-tags=embed'
+build_flags='-tags=embed -v'
 
 echo -e "\033[1;33mBuilding binaries\033[0m"
 echo "dgraph"
@@ -37,12 +37,18 @@ cd $dgraph_cmd/dgraphmerge && go build $build_flags .;
 echo -e "\n\033[1;33mCopying binaries to tmp folder\033[0m"
 cd $tmp_dir;
 cp $dgraph_cmd/dgraph/dgraph $dgraph_cmd/dgraphassigner/dgraphassigner $dgraph_cmd/dgraphlist/dgraphlist $dgraph_cmd/dgraphmerge/dgraphmerge $dgraph_cmd/dgraphloader/dgraphloader .;
+
+platform="$(uname | tr '[:upper:]' '[:lower:]')"
 # Stripping the binaries.
-strip dgraph dgraphassigner dgraphloader dgraphmerge dgraphlist
-echo -e "\n\033[1;34mSize of files after strip: $(du -sh)\033[0m"
+# Stripping binaries on Mac doesn't lead to much reduction in size and
+# instead gives an error.
+if [ "$platform" = "linux" ]; then
+  strip dgraph dgraphassigner dgraphloader dgraphmerge dgraphlist
+  echo -e "\n\033[1;34mSize of files after strip: $(du -sh)\033[0m"
+fi
 
 echo -e "\n\033[1;33mCreating tar file\033[0m"
-tar_file=dgraph-"$(uname | tr '[:upper:]' '[:lower:]')"-amd64-v$release_version
+tar_file=dgraph-"$platform"-amd64-v$release_version
 tar -zcf $tar_file.tar.gz dgraph dgraphassigner dgraphlist dgraphmerge dgraphloader;
 echo -e "\n\033[1;34mSize of tar file: $(du -sh $tar_file.tar.gz)\033[0m"
 

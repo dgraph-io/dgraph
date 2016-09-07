@@ -4,12 +4,15 @@
 ![logo](https://img.shields.io/badge/status-alpha-red.svg)
 [![Wiki](https://img.shields.io/badge/res-wiki-blue.svg)](http://wiki.dgraph.io)
 [![Build Status](https://travis-ci.org/dgraph-io/dgraph.svg?branch=master)](https://travis-ci.org/dgraph-io/dgraph)
-[![Coverage Status](https://coveralls.io/repos/github/dgraph-io/dgraph/badge.svg?branch=develop)](https://coveralls.io/github/dgraph-io/dgraph?branch=develop)
+[![Coverage Status](https://coveralls.io/repos/github/dgraph-io/dgraph/badge.svg?branch=master)](https://coveralls.io/github/dgraph-io/dgraph?branch=master)
 [![Slack Status](http://slack.dgraph.io/badge.svg)](http://slack.dgraph.io)
 
 Dgraph's goal is to provide [Google](https://www.google.com) production level scale and throughput,
 with low enough latency to be serving real time user queries, over terabytes of structured data.
-Dgraph supports [GraphQL](http://graphql.org/) as query language, and responds in [JSON](http://www.json.org/).
+Dgraph supports [GraphQL-like query syntax^](http://graphql.org/), and responds in [JSON](http://www.json.org/).
+
+> ^ Dgraph is working towards supporting the entire feature set of GraphQL. We extend the spec to allow graph operations which GraphQL doesn't natively support and we try our best to maintain compatibility with the official GraphQL spec.
+
 
 ## Users
 - **Dgraph official documentation is present at [wiki.dgraph.io](https://wiki.dgraph.io).**

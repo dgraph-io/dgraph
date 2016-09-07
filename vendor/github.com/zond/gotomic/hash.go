@@ -154,7 +154,7 @@ func (self *Hash) Size() int {
 
 /*
  Each will run i on each key and value.
- 
+
  It returns true if the iteration was interrupted.
  This is the case when one of the HashIterator calls returned true, indicating
  the iteration should be stopped.
@@ -208,7 +208,7 @@ func (self *Hash) isBucket(n *element) (isBucket bool, index, superIndex, subInd
 	e := n.value.(*entry)
 	index = e.hashCode & ((1 << self.exponent) - 1)
 	superIndex, subIndex = self.getBucketIndices(index)
-	subBucket := *(*[]unsafe.Pointer)(self.buckets[superIndex])
+	subBucket := *(*[]unsafe.Pointer)(atomic.LoadPointer(&self.buckets[superIndex]))
 	if subBucket[subIndex] == unsafe.Pointer(n) {
 		isBucket = true
 	}
@@ -216,7 +216,7 @@ func (self *Hash) isBucket(n *element) (isBucket bool, index, superIndex, subInd
 }
 
 /*
- Describe returns a multi line description of the contents of the map for 
+ Describe returns a multi line description of the contents of the map for
  those of you interested in debugging it or seeing an example of how split-ordered lists work.
 */
 func (self *Hash) Describe() string {
@@ -373,7 +373,7 @@ func (self *Hash) Put(k Hashable, v Thing) (rval Thing, ok bool) {
 }
 func (self *Hash) addSize(i int) {
 	atomic.AddInt64(&self.size, int64(i))
-	if atomic.LoadInt64(&self.size) > int64(self.loadFactor*float64(uint32(1)<<self.exponent)) {
+	if atomic.LoadInt64(&self.size) > int64(self.loadFactor*float64(uint32(1)<<atomic.LoadUint32(&self.exponent))) {
 		self.grow()
 	}
 }
@@ -390,7 +390,7 @@ func (self *Hash) getPreviousBucketIndex(bucketKey uint32) uint32 {
 	return reverse(((bucketKey >> (max_exponent - exp)) - 1) << (max_exponent - exp))
 }
 func (self *Hash) getBucketByHashCode(hashCode uint32) *element {
-	return self.getBucketByIndex(hashCode & ((1 << self.exponent) - 1))
+	return self.getBucketByIndex(hashCode & ((1 << atomic.LoadUint32(&self.exponent)) - 1))
 }
 func (self *Hash) getBucketIndices(index uint32) (superIndex, subIndex uint32) {
 	if index > 0 {
@@ -402,9 +402,9 @@ func (self *Hash) getBucketIndices(index uint32) (superIndex, subIndex uint32) {
 }
 func (self *Hash) getBucketByIndex(index uint32) (bucket *element) {
 	superIndex, subIndex := self.getBucketIndices(index)
-	subBuckets := *(*[]unsafe.Pointer)(self.buckets[superIndex])
+	subBuckets := *(*[]unsafe.Pointer)(atomic.LoadPointer(&self.buckets[superIndex]))
 	for {
-		bucket = (*element)(subBuckets[subIndex])
+		bucket = (*element)(atomic.LoadPointer(&subBuckets[subIndex]))
 		if bucket != nil {
 			break
 		}

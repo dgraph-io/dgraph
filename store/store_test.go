@@ -33,8 +33,7 @@ func TestGet(t *testing.T) {
 	}
 	defer os.RemoveAll(path)
 
-	var s Store
-	err = s.Init(path)
+	s, err := NewStore(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,8 +72,12 @@ func benchmarkGet(valSize int, b *testing.B) {
 	}
 	defer os.RemoveAll(path)
 
-	var s Store
-	s.Init(path)
+	s, err := NewStore(path)
+	if err != nil {
+		b.Error(err)
+		b.Fail()
+		return
+	}
 	buf := make([]byte, valSize)
 
 	nkeys := 100
@@ -114,8 +117,12 @@ func benchmarkSet(valSize int, b *testing.B) {
 	}
 	defer os.RemoveAll(path)
 
-	var s Store
-	s.Init(path)
+	s, err := NewStore(path)
+	if err != nil {
+		b.Error(err)
+		b.Fail()
+		return
+	}
 	buf := make([]byte, valSize)
 
 	b.ResetTimer()

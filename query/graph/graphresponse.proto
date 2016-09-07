@@ -1,5 +1,5 @@
 // To compile this file run the command below from inside the graph directory
-// protoc --go_out=plugins=grpc:. *.proto
+// protoc --gofast_out=plugins=grpc:. *.proto
 
 syntax="proto3";
 package graph;

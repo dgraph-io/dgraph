@@ -26,9 +26,10 @@ import (
 	"testing"
 	"time"
 
+	"context"
+
 	"github.com/gogo/protobuf/proto"
 	"github.com/google/flatbuffers/go"
-	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/dgraph/commit"
 	"github.com/dgraph-io/dgraph/gql"
@@ -100,15 +101,18 @@ func TestNewGraph(t *testing.T) {
 		UID:  101,
 		Attr: "me",
 	}
-	ps := new(store.Store)
-	ps.Init(dir)
+	ps, err := store.NewStore(dir)
+	if err != nil {
+		t.Error(err)
+		return
+	}
 	ctx := context.Background()
 	sg, err := newGraph(ctx, gq)
 	if err != nil {
 		t.Error(err)
 	}
 
-	worker.Init(ps, nil, 0, 1)
+	worker.InitState(ps, nil, 0, 1)
 
 	uo := flatbuffers.GetUOffsetT(sg.Result)
 	r := new(task.Result)
@@ -136,10 +140,13 @@ func populateGraph(t *testing.T) (string, *store.Store) {
 		return "", nil
 	}
 
-	ps := new(store.Store)
-	ps.Init(dir)
+	ps, err := store.NewStore(dir)
+	if err != nil {
+		t.Error(err)
+		return "", nil
+	}
 
-	worker.Init(ps, nil, 0, 1)
+	worker.InitState(ps, nil, 0, 1)
 
 	clog := commit.NewLogger(dir, "mutations", 50<<20)
 	clog.Init()

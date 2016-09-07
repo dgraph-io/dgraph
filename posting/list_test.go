@@ -28,7 +28,7 @@ import (
 	"testing"
 	"time"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"github.com/dgraph-io/dgraph/commit"
 	"github.com/dgraph-io/dgraph/posting/types"
@@ -117,8 +117,11 @@ func TestAddMutation(t *testing.T) {
 	}
 
 	defer os.RemoveAll(dir)
-	ps := new(store.Store)
-	ps.Init(dir)
+	ps, err := store.NewStore(dir)
+	if err != nil {
+		t.Error(err)
+		return
+	}
 
 	clog := commit.NewLogger(dir, "mutations", 50<<20)
 	clog.Init()
@@ -145,7 +148,7 @@ func TestAddMutation(t *testing.T) {
 		t.Fail()
 	}
 	if p.Uid() != 9 {
-		t.Errorf("Expected 9. Got: %v", p.Uid)
+		t.Errorf("Expected 9. Got: %v", p.Uid())
 	}
 	if string(p.Source()) != "testing" {
 		t.Errorf("Expected testing. Got: %v", string(p.Source()))
@@ -254,8 +257,11 @@ func TestAddMutation_Value(t *testing.T) {
 	}
 
 	defer os.RemoveAll(dir)
-	ps := new(store.Store)
-	ps.Init(dir)
+	ps, err := store.NewStore(dir)
+	if err != nil {
+		t.Error(err)
+		return
+	}
 
 	clog := commit.NewLogger(dir, "mutations", 50<<20)
 	clog.Init()
@@ -327,8 +333,11 @@ func benchmarkAddMutations(n int, b *testing.B) {
 	}
 
 	defer os.RemoveAll(dir)
-	ps := new(store.Store)
-	ps.Init(dir)
+	ps, err := store.NewStore(dir)
+	if err != nil {
+		b.Error(err)
+		return
+	}
 
 	clog := commit.NewLogger(dir, "mutations", 50<<20)
 	clog.SyncEvery = n

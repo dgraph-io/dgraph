@@ -18,6 +18,7 @@ package loader
 
 import (
 	"bufio"
+	"flag"
 	"io"
 	"math/rand"
 	"runtime"
@@ -27,9 +28,10 @@ import (
 	"sync/atomic"
 	"time"
 
+	"context"
+
 	"github.com/Sirupsen/logrus"
 	"github.com/dgryski/go-farm"
-	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/rdf"
@@ -40,6 +42,9 @@ import (
 
 var glog = x.Log("loader")
 var uidStore, dataStore *store.Store
+
+var maxRoutines = flag.Int("maxroutines", 3000,
+	"Maximum number of goroutines to execute concurrently")
 
 type counters struct {
 	read      uint64
@@ -77,6 +82,8 @@ func (s *state) SetError(err error) {
 	}
 }
 
+// printCounters prints the counter variables at intervals
+// specified by ticker.
 func (s *state) printCounters(ticker *time.Ticker) {
 	var prev uint64
 	for _ = range ticker.C {
@@ -99,7 +106,8 @@ func (s *state) printCounters(ticker *time.Ticker) {
 	}
 }
 
-// Only run this in a single goroutine. This function closes s.input channel.
+// readLines reads the file and pushes them onto a channel.
+// Run this in a single goroutine. This function closes s.input channel.
 func (s *state) readLines(r io.Reader) {
 	var buf []string
 	scanner := bufio.NewScanner(r)
@@ -127,6 +135,8 @@ func (s *state) readLines(r io.Reader) {
 	close(s.input)
 }
 
+// parseStream consumes the lines, converts them to nquad
+// and sends them into cnq channel.
 func (s *state) parseStream(wg *sync.WaitGroup) {
 	defer wg.Done()
 
@@ -152,6 +162,8 @@ func (s *state) parseStream(wg *sync.WaitGroup) {
 	}
 }
 
+// handleNQuads converts the nQuads that satisfy the modulo
+// rule into posting lists.
 func (s *state) handleNQuads(wg *sync.WaitGroup) {
 	defer wg.Done()
 
@@ -188,6 +200,7 @@ func (s *state) handleNQuads(wg *sync.WaitGroup) {
 	}
 }
 
+// assignUid assigns a unique integer for a given xid string.
 func (s *state) assignUid(xid string) error {
 	if strings.HasPrefix(xid, "_uid_:") {
 		_, err := strconv.ParseUint(xid[6:], 0, 64)
@@ -211,6 +224,8 @@ func (s *state) assignUid(xid string) error {
 	return nil
 }
 
+// assignUidsOnly assigns uid to those entities that satisfy the
+// modulo rule.
 func (s *state) assignUidsOnly(wg *sync.WaitGroup) {
 	defer wg.Done()
 
@@ -246,7 +261,8 @@ func (s *state) assignUidsOnly(wg *sync.WaitGroup) {
 	}
 }
 
-// Blocking function.
+// LoadEdges is called with the reader object of a file whose
+// contents are to be converted to posting lists.
 func LoadEdges(reader io.Reader, instanceIdx uint64,
 	numInstances uint64) (uint64, error) {
 
@@ -269,7 +285,7 @@ func LoadEdges(reader io.Reader, instanceIdx uint64,
 		go s.parseStream(&pwg) // Input --> NQuads
 	}
 
-	nrt := 3000
+	nrt := *maxRoutines
 	var wg sync.WaitGroup
 	wg.Add(nrt)
 	for i := 0; i < nrt; i++ {
@@ -292,6 +308,7 @@ func LoadEdges(reader io.Reader, instanceIdx uint64,
 // not load the edges, only assign UIDs.
 func AssignUids(reader io.Reader, instanceIdx uint64,
 	numInstances uint64) (uint64, error) {
+
 	s := new(state)
 	s.ctr = new(counters)
 	ticker := time.NewTicker(time.Second)
@@ -312,7 +329,8 @@ func AssignUids(reader io.Reader, instanceIdx uint64,
 	}
 
 	wg := new(sync.WaitGroup)
-	for i := 0; i < 3000; i++ {
+	nrt := *maxRoutines
+	for i := 0; i < nrt; i++ {
 		wg.Add(1)
 		go s.assignUidsOnly(wg)
 	}

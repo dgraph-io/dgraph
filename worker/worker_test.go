@@ -24,8 +24,9 @@ import (
 	"testing"
 	"time"
 
+	"context"
+
 	"github.com/google/flatbuffers/go"
-	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/dgraph/commit"
 	"github.com/dgraph-io/dgraph/posting"
@@ -60,8 +61,6 @@ func check(r *task.Result, idx int, expected []uint64) error {
 }
 
 func TestProcessTask(t *testing.T) {
-	// logrus.SetLevel(logrus.DebugLevel)
-
 	dir, err := ioutil.TempDir("", "storetest_")
 	if err != nil {
 		t.Error(err)
@@ -69,15 +68,18 @@ func TestProcessTask(t *testing.T) {
 	}
 
 	defer os.RemoveAll(dir)
-	ps := new(store.Store)
-	ps.Init(dir)
+	ps, err := store.NewStore(dir)
+	if err != nil {
+		t.Error(err)
+		return
+	}
 
 	clog := commit.NewLogger(dir, "mutations", 50<<20)
 	clog.Init()
 	defer clog.Close()
 
 	posting.Init(clog)
-	Init(ps, nil, 0, 1)
+	InitState(ps, nil, 0, 1)
 
 	edge := x.DirectedEdge{
 		ValueId:   23,

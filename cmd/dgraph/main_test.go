@@ -22,7 +22,7 @@ import (
 	"os"
 	"testing"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"github.com/dgraph-io/dgraph/commit"
 	"github.com/dgraph-io/dgraph/gql"
@@ -54,8 +54,10 @@ func prepare() (dir1, dir2 string, ps *store.Store, clog *commit.Logger, rerr er
 	if err != nil {
 		return "", "", nil, nil, err
 	}
-	ps = new(store.Store)
-	ps.Init(dir1)
+	ps, err = store.NewStore(dir1)
+	if err != nil {
+		return "", "", nil, nil, err
+	}
 
 	dir2, err = ioutil.TempDir("", "storemuts_")
 	if err != nil {
@@ -65,7 +67,7 @@ func prepare() (dir1, dir2 string, ps *store.Store, clog *commit.Logger, rerr er
 	clog.Init()
 
 	posting.Init(clog)
-	worker.Init(ps, nil, 0, 1)
+	worker.InitState(ps, nil, 0, 1)
 	uid.Init(ps)
 	loader.Init(ps, ps)
 

@@ -28,10 +28,11 @@ import (
 	"time"
 	"unsafe"
 
+	"context"
+
 	"github.com/dgryski/go-farm"
 	"github.com/google/flatbuffers/go"
 	"github.com/zond/gotomic"
-	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/dgraph/commit"
 	"github.com/dgraph-io/dgraph/posting/types"

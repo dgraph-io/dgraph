@@ -37,8 +37,11 @@ func TestGetOrAssign(t *testing.T) {
 		return
 	}
 	defer os.RemoveAll(dir)
-	ps := new(store.Store)
-	ps.Init(dir)
+	ps, err := store.NewStore(dir)
+	if err != nil {
+		t.Error(err)
+		return
+	}
 	clog := commit.NewLogger(dir, "mutations", 50<<20)
 	clog.Init()
 	defer clog.Close()
@@ -92,13 +95,4 @@ func TestGetOrAssign(t *testing.T) {
 		}
 	}
 	return
-	{
-		xid, err := ExternalId(u2)
-		if err != nil {
-			t.Error(err)
-		}
-		if xid != "externalid1" {
-			t.Errorf("Expected externalid1. Found: [%q]", xid)
-		}
-	}
 }
