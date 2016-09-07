@@ -18,6 +18,7 @@ package posting
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"fmt"
 	"log"
@@ -27,8 +28,6 @@ import (
 	"sync/atomic"
 	"time"
 	"unsafe"
-
-	"context"
 
 	"github.com/dgryski/go-farm"
 	"github.com/google/flatbuffers/go"
@@ -118,6 +117,22 @@ func Key(uid uint64, attr string) []byte {
 		log.Fatalf("Error while creating key with attr: %v uid: %v\n", attr, uid)
 	}
 	return buf.Bytes()
+}
+
+// DecodeKey deserializes the uid and attr.
+func DecodeKey(b []byte) (uint64, string) {
+	buf := bytes.NewBuffer(b)
+	attr, err := buf.ReadString('|')
+	if err != nil {
+		log.Fatalf("Error while decoding key: %v", b)
+	}
+	attr = attr[:len(attr)-1]
+	var uid uint64
+	err = binary.Read(buf, binary.LittleEndian, &uid)
+	if err != nil {
+		log.Fatalf("Error while decoding key: %v", b)
+	}
+	return uid, attr
 }
 
 func newPosting(t x.DirectedEdge, op byte) []byte {
