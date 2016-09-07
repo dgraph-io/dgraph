@@ -18,6 +18,7 @@ package main
 
 import (
 	"bufio"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -171,7 +172,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Method != "POST" {
-		x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method", nil)
+		x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
 		return
 	}
 
@@ -190,7 +191,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	q, err := ioutil.ReadAll(r.Body)
 	if err != nil || len(q) == 0 {
 		x.Trace(ctx, "Error while reading query: %v", err)
-		x.SetStatus(w, x.ErrorInvalidRequest, "Invalid request encountered.", nil)
+		x.SetStatus(w, x.ErrorInvalidRequest, "Invalid request encountered.")
 		return
 	}
 
@@ -198,7 +199,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	gq, mu, err := gql.Parse(string(q))
 	if err != nil {
 		x.Trace(ctx, "Error while parsing query: %v", err)
-		x.SetStatus(w, x.ErrorInvalidRequest, err.Error(), nil)
+		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
 		return
 	}
 
@@ -207,20 +208,29 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	if mu != nil && (len(mu.Set) > 0 || len(mu.Del) > 0) {
 		if allocIds, err = mutationHandler(ctx, mu); err != nil {
 			x.Trace(ctx, "Error while handling mutations: %v", err)
-			x.SetStatus(w, x.Error, err.Error(), nil)
+			x.SetStatus(w, x.Error, err.Error())
 			return
 		}
 	}
 
 	if gq == nil || (gq.UID == 0 && len(gq.XID) == 0) {
-		x.SetStatus(w, x.ErrorOk, "Done", allocIds)
+		mp := map[string]interface{}{
+			"code":    x.ErrorOk,
+			"message": "Done",
+			"uids":    allocIds,
+		}
+		if js, err := json.Marshal(mp); err == nil {
+			w.Write(js)
+		} else {
+			x.SetStatus(w, "Error", "Unable to Mashal map")
+		}
 		return
 	}
 
 	sg, err := query.ToSubGraph(ctx, gq)
 	if err != nil {
 		x.Trace(ctx, "Error while conversion o internal format: %v", err)
-		x.SetStatus(w, x.ErrorInvalidRequest, err.Error(), nil)
+		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
 		return
 	}
 	l.Parsing = time.Since(l.Start)
@@ -231,7 +241,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	err = <-rch
 	if err != nil {
 		x.Trace(ctx, "Error while executing query: %v", err)
-		x.SetStatus(w, x.Error, err.Error(), nil)
+		x.SetStatus(w, x.Error, err.Error())
 		return
 	}
 	l.Processing = time.Since(l.Start) - l.Parsing
@@ -239,7 +249,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	js, err := sg.ToJSON(&l)
 	if err != nil {
 		x.Trace(ctx, "Error while converting to Json: %v", err)
-		x.SetStatus(w, x.Error, err.Error(), nil)
+		x.SetStatus(w, x.Error, err.Error())
 		return
 	}
 	x.Trace(ctx, "Latencies: Total: %v Parsing: %v Process: %v Json: %v",
@@ -289,7 +299,7 @@ func (s *server) Query(ctx context.Context,
 		}
 	}
 
-	resp.Uids = allocIds
+	resp.AssignedUids = allocIds
 	if gq == nil || (gq.UID == 0 && len(gq.XID) == 0) {
 		return resp, err
 	}

@@ -29,6 +29,7 @@ import (
 
 	"github.com/dgryski/go-farm"
 
+	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/posting/types"
 	"github.com/dgraph-io/dgraph/store"
@@ -115,9 +116,6 @@ func Init(ps *store.Store) {
 // until the obtained integer is unique.
 func allocateUniqueUid(xid string, instanceIdx uint64,
 	numInstances uint64) (uid uint64, rerr error) {
-
-	// TODO(Ashwin): Optimise the uid generation for `_new_` by
-	// reducing possible collisions.
 
 	mod := math.MaxUint64 / numInstances
 	minIdx := instanceIdx * mod
@@ -215,7 +213,9 @@ func Get(xid string) (uid uint64, rerr error) {
 func GetOrAssign(xid string, instanceIdx uint64,
 	numInstances uint64) (uid uint64, rerr error) {
 
+	// Prefix _new_ requires us to create a new uid(entity).
 	if strings.HasPrefix(xid, "_new_:") {
+		xid = algo.RandStringBytesMask(10)
 		return allocateUniqueUid(xid, instanceIdx, numInstances)
 	}
 

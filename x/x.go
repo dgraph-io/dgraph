@@ -45,9 +45,8 @@ const (
 )
 
 type Status struct {
-	Code    string            `json:"code"`
-	Message string            `json:"message"`
-	Uids    map[string]uint64 `json:"uids"`
+	Code    string `json:"code"`
+	Message string `json:"message"`
 }
 
 type DirectedEdge struct {
@@ -78,8 +77,8 @@ func Err(entry *logrus.Entry, err error) *logrus.Entry {
 
 // SetStatus sets the error code, message and the newly assigned uids
 // in the http response.
-func SetStatus(w http.ResponseWriter, code, msg string, uidsMap map[string]uint64) {
-	r := &Status{Code: code, Message: msg, Uids: uidsMap}
+func SetStatus(w http.ResponseWriter, code, msg string) {
+	r := &Status{Code: code, Message: msg}
 	if js, err := json.Marshal(r); err == nil {
 		w.Write(js)
 	} else {
@@ -92,7 +91,7 @@ func Reply(w http.ResponseWriter, rep interface{}) {
 		w.Header().Set("Content-Type", "application/json")
 		fmt.Fprint(w, string(js))
 	} else {
-		SetStatus(w, Error, "Internal server error", nil)
+		SetStatus(w, Error, "Internal server error")
 	}
 }
 
@@ -100,7 +99,7 @@ func ParseRequest(w http.ResponseWriter, r *http.Request, data interface{}) bool
 	defer r.Body.Close()
 	decoder := json.NewDecoder(r.Body)
 	if err := decoder.Decode(&data); err != nil {
-		SetStatus(w, Error, fmt.Sprintf("While parsing request: %v", err), nil)
+		SetStatus(w, Error, fmt.Sprintf("While parsing request: %v", err))
 		return false
 	}
 	return true
