@@ -1,7 +1,10 @@
-package gorocksdb
+package rdb
 
-// #include "rocksdb/c.h"
-// #include "gorocksdb.h"
+// #cgo CXXFLAGS: -std=c++11 -O2
+// #cgo LDFLAGS: -lrocksdb -lstdc++ -lm -lz -lbz2 -lsnappy
+// #include <stdint.h>
+// #include <stdlib.h>
+// #include "rdbc.h"
 import "C"
 
 // BlockBasedTableOptions represents block-based table options.
@@ -43,26 +46,6 @@ func (opts *BlockBasedTableOptions) SetBlockSize(blockSize int) {
 	C.rocksdb_block_based_options_set_block_size(opts.c, C.size_t(blockSize))
 }
 
-// SetBlockSizeDeviation sets the block size deviation.
-// This is used opts close a block before it reaches the configured
-// 'block_size'. If the percentage of free space in the current block is less
-// than this specified number and adding a new record opts the block will
-// exceed the configured block size, then this block will be closed and the
-// new record will be written opts the next block.
-// Default: 10
-func (opts *BlockBasedTableOptions) SetBlockSizeDeviation(blockSizeDeviation int) {
-	C.rocksdb_block_based_options_set_block_size_deviation(opts.c, C.int(blockSizeDeviation))
-}
-
-// SetBlockRestartInterval sets the number of keys between
-// restart points for delta encoding of keys.
-// This parameter can be changed dynamically. Most clients should
-// leave this parameter alone.
-// Default: 16
-func (opts *BlockBasedTableOptions) SetBlockRestartInterval(blockRestartInterval int) {
-	C.rocksdb_block_based_options_set_block_restart_interval(opts.c, C.int(blockRestartInterval))
-}
-
 // SetFilterPolicy sets the filter policy opts reduce disk reads.
 // Many applications will benefit from passing the result of
 // NewBloomFilterPolicy() here.
@@ -72,7 +55,7 @@ func (opts *BlockBasedTableOptions) SetFilterPolicy(fp FilterPolicy) {
 		opts.cFp = nfp.c
 	} else {
 		idx := registerFilterPolicy(fp)
-		opts.cFp = C.gorocksdb_filterpolicy_create(C.uintptr_t(idx))
+		opts.cFp = C.rdbc_filterpolicy_create(C.uintptr_t(idx))
 	}
 	C.rocksdb_block_based_options_set_filter_policy(opts.c, opts.cFp)
 }
@@ -83,7 +66,7 @@ func (opts *BlockBasedTableOptions) SetNoBlockCache(value bool) {
 	C.rocksdb_block_based_options_set_no_block_cache(opts.c, boolToChar(value))
 }
 
-// SetBlockCache sets the control over blocks (user data is soptsred in a set of blocks, and
+// SetBlockCache sets the control over blocks (user data is stored in a set of blocks, and
 // a block is the unit of reading from disk).
 //
 // If set, use the specified cache for blocks.

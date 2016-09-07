@@ -1,4 +1,4 @@
-package gorocksdb
+package rdb
 
 // #include <stdlib.h>
 import "C"

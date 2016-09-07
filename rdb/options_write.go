@@ -1,6 +1,10 @@
-package gorocksdb
+package rdb
 
-// #include "rocksdb/c.h"
+// #cgo CXXFLAGS: -std=c++11 -O2
+// #cgo LDFLAGS: -lrocksdb -lstdc++ -lm -lz -lbz2 -lsnappy
+// #include <stdint.h>
+// #include <stdlib.h>
+// #include "rdbc.h"
 import "C"
 
 // WriteOptions represent all of the available options when writing to a
@@ -25,14 +29,6 @@ func NewNativeWriteOptions(c *C.rocksdb_writeoptions_t) *WriteOptions {
 // Default: false
 func (opts *WriteOptions) SetSync(value bool) {
 	C.rocksdb_writeoptions_set_sync(opts.c, boolToChar(value))
-}
-
-// DisableWAL sets whether WAL should be active or not.
-// If true, writes will not first go to the write ahead log,
-// and the write may got lost after a crash.
-// Default: false
-func (opts *WriteOptions) DisableWAL(value bool) {
-	C.rocksdb_writeoptions_disable_WAL(opts.c, C.int(btoi(value)))
 }
 
 // Destroy deallocates the WriteOptions object.

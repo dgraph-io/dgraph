@@ -1,6 +1,10 @@
-package gorocksdb
+package rdb
 
-// #include "rocksdb/c.h"
+// #cgo CXXFLAGS: -std=c++11 -O2
+// #cgo LDFLAGS: -lrocksdb -lstdc++ -lm -lz -lbz2 -lsnappy
+// #include <stdint.h>
+// #include <stdlib.h>
+// #include "rdbc.h"
 import "C"
 
 // FilterPolicy is a factory type that allows the RocksDB database to create a
@@ -57,8 +61,8 @@ func registerFilterPolicy(fp FilterPolicy) int {
 	return len(filterPolicies) - 1
 }
 
-//export gorocksdb_filterpolicy_create_filter
-func gorocksdb_filterpolicy_create_filter(idx int, cKeys **C.char, cKeysLen *C.size_t, cNumKeys C.int, cDstLen *C.size_t) *C.char {
+//export rdbc_filterpolicy_create_filter
+func rdbc_filterpolicy_create_filter(idx int, cKeys **C.char, cKeysLen *C.size_t, cNumKeys C.int, cDstLen *C.size_t) *C.char {
 	rawKeys := charSlice(cKeys, cNumKeys)
 	keysLen := sizeSlice(cKeysLen, cNumKeys)
 	keys := make([][]byte, int(cNumKeys))
@@ -71,14 +75,14 @@ func gorocksdb_filterpolicy_create_filter(idx int, cKeys **C.char, cKeysLen *C.s
 	return cByteSlice(dst)
 }
 
-//export gorocksdb_filterpolicy_key_may_match
-func gorocksdb_filterpolicy_key_may_match(idx int, cKey *C.char, cKeyLen C.size_t, cFilter *C.char, cFilterLen C.size_t) C.uchar {
+//export rdbc_filterpolicy_key_may_match
+func rdbc_filterpolicy_key_may_match(idx int, cKey *C.char, cKeyLen C.size_t, cFilter *C.char, cFilterLen C.size_t) C.uchar {
 	key := charToByte(cKey, cKeyLen)
 	filter := charToByte(cFilter, cFilterLen)
 	return boolToChar(filterPolicies[idx].KeyMayMatch(key, filter))
 }
 
-//export gorocksdb_filterpolicy_name
-func gorocksdb_filterpolicy_name(idx int) *C.char {
+//export rdbc_filterpolicy_name
+func rdbc_filterpolicy_name(idx int) *C.char {
 	return stringToChar(filterPolicies[idx].Name())
 }

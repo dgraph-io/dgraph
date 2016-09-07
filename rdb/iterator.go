@@ -1,7 +1,10 @@
-package gorocksdb
+package rdb
 
+// #cgo CXXFLAGS: -std=c++11 -O2
+// #cgo LDFLAGS: -lrocksdb -lstdc++ -lm -lz -lbz2 -lsnappy
+// #include <stdint.h>
 // #include <stdlib.h>
-// #include "rocksdb/c.h"
+// #include "rdbc.h"
 import "C"
 import (
 	"bytes"
@@ -14,18 +17,17 @@ import (
 //
 // For example:
 //
-//      it := db.NewIterator(readOpts)
-//      defer it.Close()
+//  it := rdb.NewIterator(readOpts)
+//  defer it.Close()
 //
-//      it.Seek([]byte("foo"))
+//  it.Seek([]byte("foo"))
 //		for ; it.Valid(); it.Next() {
-//          fmt.Printf("Key: %v Value: %v\n", it.Key().Data(), it.Value().Data())
-// 		}
+//    fmt.Printf("Key: %v Value: %v\n", it.Key().Data(), it.Value().Data())
+//  }
 //
-//      if err := it.Err(); err != nil {
-//          return err
-//      }
-//
+//  if err := it.Err(); err != nil {
+//    return err
+//  }
 type Iterator struct {
 	c *C.rocksdb_iterator_t
 }

@@ -7,10 +7,10 @@ import (
 	"strconv"
 
 	"github.com/Sirupsen/logrus"
-	rocksdb "github.com/tecbot/gorocksdb"
 
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/posting/types"
+	"github.com/dgraph-io/dgraph/rdb"
 	"github.com/dgraph-io/dgraph/uid"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -37,8 +37,8 @@ func output(val []byte) {
 	}
 }
 
-func scanOverAttr(db *rocksdb.DB) {
-	ro := rocksdb.NewDefaultReadOptions()
+func scanOverAttr(db *rdb.DB) {
+	ro := rdb.NewDefaultReadOptions()
 	ro.SetFillCache(false)
 
 	prefix := []byte(*attr)
@@ -66,8 +66,8 @@ func main() {
 	x.Init()
 	logrus.SetLevel(logrus.ErrorLevel)
 
-	opt := rocksdb.NewDefaultOptions()
-	db, err := rocksdb.OpenDb(opt, *dir)
+	opt := rdb.NewDefaultOptions()
+	db, err := rdb.OpenDb(opt, *dir)
 	defer db.Close()
 
 	var key []byte
@@ -97,7 +97,7 @@ func main() {
 	}
 	fmt.Printf("key: %#x\n", key)
 
-	ropt := rocksdb.NewDefaultReadOptions()
+	ropt := rdb.NewDefaultReadOptions()
 	val, err := db.Get(ropt, key)
 	if err != nil {
 		glog.WithError(err).Fatal("Unable to get key")

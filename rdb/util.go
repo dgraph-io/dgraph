@@ -1,4 +1,4 @@
-package gorocksdb
+package rdb
 
 import "C"
 import (

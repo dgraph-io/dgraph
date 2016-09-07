@@ -19,38 +19,38 @@ package store
 import (
 	"strconv"
 
+	"github.com/dgraph-io/dgraph/rdb"
 	"github.com/dgraph-io/dgraph/x"
-	rocksdb "github.com/tecbot/gorocksdb"
 )
 
 var log = x.Log("store")
 
 // Store contains some handles to RocksDB.
 type Store struct {
-	db       *rocksdb.DB
-	opt      *rocksdb.Options // Contains blockopt.
-	blockopt *rocksdb.BlockBasedTableOptions
-	ropt     *rocksdb.ReadOptions
-	wopt     *rocksdb.WriteOptions
+	db       *rdb.DB
+	opt      *rdb.Options // Contains blockopt.
+	blockopt *rdb.BlockBasedTableOptions
+	ropt     *rdb.ReadOptions
+	wopt     *rdb.WriteOptions
 }
 
 func (s *Store) setOpts() {
-	s.opt = rocksdb.NewDefaultOptions()
-	s.blockopt = rocksdb.NewDefaultBlockBasedTableOptions()
+	s.opt = rdb.NewDefaultOptions()
+	s.blockopt = rdb.NewDefaultBlockBasedTableOptions()
+	s.opt.SetBlockBasedTableFactory(s.blockopt)
+
 	// If you want to access blockopt.blockCache, you need to grab handles to them
 	// as well. Otherwise, they will be nil. However, for now, we do not really need
 	// to do this.
 	// s.blockopt.SetBlockCache(rocksdb.NewLRUCache(blockCacheSize))
 	// s.blockopt.SetBlockCacheCompressed(rocksdb.NewLRUCache(blockCacheSize))
-	s.blockopt.SetNoBlockCache(false)
-	s.opt.SetBlockBasedTableFactory(s.blockopt)
 
 	s.opt.SetCreateIfMissing(true)
-	fp := rocksdb.NewBloomFilter(16)
+	fp := rdb.NewBloomFilter(16)
 	s.blockopt.SetFilterPolicy(fp)
 
-	s.ropt = rocksdb.NewDefaultReadOptions()
-	s.wopt = rocksdb.NewDefaultWriteOptions()
+	s.ropt = rdb.NewDefaultReadOptions()
+	s.wopt = rdb.NewDefaultWriteOptions()
 	s.wopt.SetSync(false) // We don't need to do synchronous writes.
 }
 
@@ -59,7 +59,7 @@ func NewStore(filepath string) (*Store, error) {
 	s := &Store{}
 	s.setOpts()
 	var err error
-	s.db, err = rocksdb.OpenDb(s.opt, filepath)
+	s.db, err = rdb.OpenDb(s.opt, filepath)
 	if err != nil {
 		return nil, x.Wrap(err)
 	}
@@ -71,7 +71,7 @@ func NewReadOnlyStore(filepath string) (*Store, error) {
 	s := &Store{}
 	s.setOpts()
 	var err error
-	s.db, err = rocksdb.OpenDbForReadOnly(s.opt, filepath, false)
+	s.db, err = rdb.OpenDbForReadOnly(s.opt, filepath, false)
 	if err != nil {
 		return nil, x.Wrap(err)
 	}
@@ -105,8 +105,8 @@ func (s *Store) Delete(k []byte) error {
 }
 
 // NewIterator initializes a new iterator and returns it.
-func (s *Store) NewIterator() *rocksdb.Iterator {
-	ro := rocksdb.NewDefaultReadOptions()
+func (s *Store) NewIterator() *rdb.Iterator {
+	ro := rdb.NewDefaultReadOptions()
 	// SetFillCache should be set to false for bulk reads to avoid caching data
 	// while doing bulk scans.
 	ro.SetFillCache(false)
@@ -128,12 +128,12 @@ func (s *Store) IndexFilterblockSize() uint64 {
 }
 
 // NewWriteBatch creates a new WriteBatch object and returns a pointer to it.
-func (s *Store) NewWriteBatch() *rocksdb.WriteBatch {
-	return rocksdb.NewWriteBatch()
+func (s *Store) NewWriteBatch() *rdb.WriteBatch {
+	return rdb.NewWriteBatch()
 }
 
 // WriteBatch does a batch write to RocksDB from the data in WriteBatch object.
-func (s *Store) WriteBatch(wb *rocksdb.WriteBatch) error {
+func (s *Store) WriteBatch(wb *rdb.WriteBatch) error {
 	if err := s.db.Write(s.wopt, wb); err != nil {
 		return x.Wrap(err)
 	}
