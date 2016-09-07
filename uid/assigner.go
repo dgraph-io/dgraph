@@ -210,15 +210,14 @@ func Get(xid string) (uid uint64, rerr error) {
 // it already exists or assigns a new uid and returns it.
 func GetOrAssign(xid string, instanceIdx uint64,
 	numInstances uint64) (uid uint64, rerr error) {
-
 	key := StringKey(xid)
 	pl := posting.GetOrCreate(key, uidStore)
 	if pl.Length() == 0 {
 		return assignNew(pl, xid, instanceIdx, numInstances)
+	}
 
-	} else if pl.Length() > 1 {
+	if pl.Length() > 1 {
 		log.Fatalf("We shouldn't have more than 1 uid for xid: %v\n", xid)
-
 	} else {
 		// We found one posting.
 		var p types.Posting

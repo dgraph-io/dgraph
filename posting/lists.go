@@ -283,10 +283,10 @@ func GetOrCreate(key []byte, pstore *store.Store) *List {
 	if inserted := lhmap.PutIfMissing(ukey, l); inserted {
 		l.init(key, pstore, clog)
 		return l
-	} else {
-		lp, _ = lhmap.Get(ukey)
-		return lp.(*List)
 	}
+	lp, _ = lhmap.Get(ukey)
+	return lp.(*List)
+
 }
 
 func mergeAndUpdate(l *List, c *counters) {

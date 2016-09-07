@@ -230,18 +230,20 @@ func (l *List) init(key []byte, pstore *store.Store, clog *commit.Logger) {
 		return
 	}
 
-	err := clog.StreamEntries(posting.CommitTs()+1, l.hash,
-		func(hdr commit.Header, buffer []byte) {
+	ch := make(chan []byte, 100)
+	done := make(chan error)
+	go clog.StreamEntries(posting.CommitTs()+1, l.hash, ch, done)
 
-			uo := flatbuffers.GetUOffsetT(buffer)
-			m := new(types.Posting)
-			m.Init(buffer, uo)
-			if m.Ts() > l.maxMutationTs {
-				l.maxMutationTs = m.Ts()
-			}
-			l.mergeMutation(m)
-		})
-	if err != nil {
+	for buffer := range ch {
+		uo := flatbuffers.GetUOffsetT(buffer)
+		m := new(types.Posting)
+		m.Init(buffer, uo)
+		if m.Ts() > l.maxMutationTs {
+			l.maxMutationTs = m.Ts()
+		}
+		l.mergeMutation(m)
+	}
+	if err := <-done; err != nil {
 		log.Fatalf("Error while streaming entries: %v", err)
 	}
 }
