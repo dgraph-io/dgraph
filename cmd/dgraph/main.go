@@ -83,7 +83,7 @@ func addCorsHeaders(w http.ResponseWriter) {
 func convertToEdges(ctx context.Context, mutation string) (mutationResult, error) {
 	var edges []x.DirectedEdge
 	var nquads []rdf.NQuad
-	var edg mutationResult
+	var mr mutationResult
 	r := strings.NewReader(mutation)
 	scanner := bufio.NewScanner(r)
 	allocatedIds := make(map[string]uint64)
@@ -97,7 +97,7 @@ func convertToEdges(ctx context.Context, mutation string) (mutationResult, error
 		nq, err := rdf.Parse(ln)
 		if err != nil {
 			x.Trace(ctx, "Error while parsing RDF: %v", err)
-			return edg, err
+			return mr, err
 		}
 		nquads = append(nquads, nq)
 	}
@@ -116,7 +116,7 @@ func convertToEdges(ctx context.Context, mutation string) (mutationResult, error
 	if len(xidToUid) > 0 {
 		if err := worker.GetOrAssignUidsOverNetwork(ctx, xidToUid); err != nil {
 			x.Trace(ctx, "Error while GetOrAssignUidsOverNetwork: %v", err)
-			return edg, err
+			return mr, err
 		}
 	}
 
@@ -125,7 +125,7 @@ func convertToEdges(ctx context.Context, mutation string) (mutationResult, error
 		edge, err := nq.ToEdgeUsing(xidToUid)
 		if err != nil {
 			x.Trace(ctx, "Error while converting to edge: %v %v", nq, err)
-			return edg, err
+			return mr, err
 		}
 		edges = append(edges, edge)
 	}
@@ -136,7 +136,7 @@ func convertToEdges(ctx context.Context, mutation string) (mutationResult, error
 		}
 	}
 
-	edg = mutationResult{
+	mr = mutationResult{
 		edges:   edges,
 		newUids: allocatedIds,
 	}
@@ -150,16 +150,16 @@ func mutationHandler(ctx context.Context, mu *gql.Mutation) (map[string]uint64, 
 
 	var allocIds map[string]uint64
 	var m worker.Mutations
-	var edg mutationResult
+	var mr mutationResult
 	var err error
-	if edg, err = convertToEdges(ctx, mu.Set); err != nil {
+	if mr, err = convertToEdges(ctx, mu.Set); err != nil {
 		return nil, err
 	}
-	m.Set, allocIds = edg.edges, edg.newUids
-	if edg, err = convertToEdges(ctx, mu.Del); err != nil {
+	m.Set, allocIds = mr.edges, mr.newUids
+	if mr, err = convertToEdges(ctx, mu.Del); err != nil {
 		return nil, err
 	}
-	m.Del = edg.edges
+	m.Del = mr.edges
 
 	left, err := worker.MutateOverNetwork(ctx, m)
 	if err != nil {
