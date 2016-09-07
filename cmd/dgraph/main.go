@@ -65,6 +65,11 @@ var (
 	tracing     = flag.Float64("trace", 0.5, "The ratio of queries to trace.")
 )
 
+type edgesStruct struct {
+	edges []x.DirectedEdge
+	mp    map[string]uint64
+}
+
 func addCorsHeaders(w http.ResponseWriter) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
@@ -75,9 +80,10 @@ func addCorsHeaders(w http.ResponseWriter) {
 	w.Header().Set("Connection", "close")
 }
 
-func convertToEdges(ctx context.Context, mutation string) ([]x.DirectedEdge, map[string]uint64, error) {
+func convertToEdges(ctx context.Context, mutation string) (edgesStruct, error) {
 	var edges []x.DirectedEdge
 	var nquads []rdf.NQuad
+	var edg edgesStruct
 	r := strings.NewReader(mutation)
 	scanner := bufio.NewScanner(r)
 	allocatedIds := make(map[string]uint64)
@@ -91,7 +97,7 @@ func convertToEdges(ctx context.Context, mutation string) ([]x.DirectedEdge, map
 		nq, err := rdf.Parse(ln)
 		if err != nil {
 			x.Trace(ctx, "Error while parsing RDF: %v", err)
-			return edges, nil, err
+			return edg, err
 		}
 		nquads = append(nquads, nq)
 	}
@@ -110,7 +116,7 @@ func convertToEdges(ctx context.Context, mutation string) ([]x.DirectedEdge, map
 	if len(xidToUid) > 0 {
 		if err := worker.GetOrAssignUidsOverNetwork(ctx, xidToUid); err != nil {
 			x.Trace(ctx, "Error while GetOrAssignUidsOverNetwork: %v", err)
-			return edges, nil, err
+			return edg, err
 		}
 	}
 
@@ -119,7 +125,7 @@ func convertToEdges(ctx context.Context, mutation string) ([]x.DirectedEdge, map
 		edge, err := nq.ToEdgeUsing(xidToUid)
 		if err != nil {
 			x.Trace(ctx, "Error while converting to edge: %v %v", nq, err)
-			return edges, nil, err
+			return edg, err
 		}
 		edges = append(edges, edge)
 	}
@@ -130,7 +136,11 @@ func convertToEdges(ctx context.Context, mutation string) ([]x.DirectedEdge, map
 		}
 	}
 
-	return edges, allocatedIds, nil
+	edg = edgesStruct{
+		edges,
+		allocatedIds,
+	}
+	return edg, nil
 }
 
 func mutationHandler(ctx context.Context, mu *gql.Mutation) (map[string]uint64, error) {
@@ -140,13 +150,17 @@ func mutationHandler(ctx context.Context, mu *gql.Mutation) (map[string]uint64, 
 
 	var allocIds map[string]uint64
 	var m worker.Mutations
+	var edg edgesStruct
 	var err error
-	if m.Set, allocIds, err = convertToEdges(ctx, mu.Set); err != nil {
+	if edg, err = convertToEdges(ctx, mu.Set); err != nil {
 		return nil, err
 	}
-	if m.Del, _, err = convertToEdges(ctx, mu.Del); err != nil {
+	m.Set = edg.edges
+	allocIds = edg.mp
+	if edg, err = convertToEdges(ctx, mu.Del); err != nil {
 		return nil, err
 	}
+	m.Del = edg.edges
 
 	left, err := worker.MutateOverNetwork(ctx, m)
 	if err != nil {

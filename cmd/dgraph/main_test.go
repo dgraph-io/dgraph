@@ -220,8 +220,8 @@ func TestConvertToEdges(t *testing.T) {
 	       _uid_:0x01 <character> _uid_:0x03 .`
 
 	var edges []x.DirectedEdge
-	var err error
-	edges, _, err = convertToEdges(context.Background(), q1)
+	edg, err := convertToEdges(context.Background(), q1)
+	edges = edg.edges
 	if err != nil {
 		t.Errorf("Expected err to be nil. Got: %v", err)
 	}
