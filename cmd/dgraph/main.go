@@ -35,7 +35,6 @@ import (
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc"
 
-	"github.com/dgraph-io/dgraph/commit"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/query"
@@ -363,11 +362,6 @@ func main() {
 	}
 	defer ps.Close()
 
-	clog := commit.NewLogger(*mutationDir, "dgraph", 50<<20)
-	clog.SyncEvery = 1
-	clog.Init()
-	defer clog.Close()
-
 	addrs := strings.Split(*workers, ",")
 	lenAddr := uint64(len(addrs))
 	if lenAddr == 0 {
@@ -375,7 +369,7 @@ func main() {
 		lenAddr = 1
 	}
 
-	posting.Init(clog)
+	posting.Init()
 	if *instanceIdx != 0 {
 		worker.InitState(ps, nil, *instanceIdx, lenAddr)
 		uid.Init(nil)

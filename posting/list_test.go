@@ -30,7 +30,6 @@ import (
 
 	"context"
 
-	"github.com/dgraph-io/dgraph/commit"
 	"github.com/dgraph-io/dgraph/posting/types"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/x"
@@ -123,11 +122,7 @@ func TestAddMutation(t *testing.T) {
 		return
 	}
 
-	clog := commit.NewLogger(dir, "mutations", 50<<20)
-	clog.Init()
-	defer clog.Close()
-
-	l.init(key, ps, clog)
+	l.init(key, ps)
 
 	edge := x.DirectedEdge{
 		ValueId:   9,
@@ -153,12 +148,10 @@ func TestAddMutation(t *testing.T) {
 	if string(p.Source()) != "testing" {
 		t.Errorf("Expected testing. Got: %v", string(p.Source()))
 	}
-	// return // Test 1.
 
 	// Add another edge now.
 	edge.ValueId = 81
 	l.AddMutation(ctx, edge, Set)
-	// l.CommitIfDirty()
 	if l.Length() != 2 {
 		t.Errorf("Length: %d", l.Length())
 		t.Fail()
@@ -175,7 +168,6 @@ func TestAddMutation(t *testing.T) {
 			t.Logf("Expected: %v. Got: %v", uid, p.Uid())
 		}
 	}
-	// return // Test 2.
 
 	// Add another edge, in between the two above.
 	uids := []uint64{
@@ -185,15 +177,10 @@ func TestAddMutation(t *testing.T) {
 	if err := l.AddMutation(ctx, edge, Set); err != nil {
 		t.Error(err)
 	}
-	/*
-		if err := l.CommitIfDirty(); err != nil {
-			t.Error(err)
-		}
-	*/
+
 	if err := checkUids(t, l, uids...); err != nil {
 		t.Error(err)
 	}
-	// return // Test 3.
 
 	// Delete an edge, add an edge, replace an edge
 	edge.ValueId = 49
@@ -211,11 +198,6 @@ func TestAddMutation(t *testing.T) {
 	if err := l.AddMutation(ctx, edge, Set); err != nil {
 		t.Error(err)
 	}
-	/*
-		if err := l.CommitIfDirty(); err != nil {
-			t.Error(err)
-		}
-	*/
 
 	uids = []uint64{9, 69, 81}
 	if err := checkUids(t, l, uids...); err != nil {
@@ -226,15 +208,11 @@ func TestAddMutation(t *testing.T) {
 	if string(p.Source()) != "anti-testing" {
 		t.Errorf("Expected: anti-testing. Got: %v", string(p.Source()))
 	}
+	l.MergeIfDirty(ctx)
 
-	/*
-		if err := l.CommitIfDirty(); err != nil {
-			t.Error(err)
-		}
-	*/
 	// Try reading the same data in another PostingList.
 	dl := NewList()
-	dl.init(key, ps, clog)
+	dl.init(key, ps)
 	if err := checkUids(t, dl, uids...); err != nil {
 		t.Error(err)
 	}
@@ -263,11 +241,7 @@ func TestAddMutation_Value(t *testing.T) {
 		return
 	}
 
-	clog := commit.NewLogger(dir, "mutations", 50<<20)
-	clog.Init()
-	defer clog.Close()
-
-	ol.init(key, ps, clog)
+	ol.init(key, ps)
 	log.Println("Init successful.")
 
 	edge := x.DirectedEdge{
@@ -339,11 +313,7 @@ func benchmarkAddMutations(n int, b *testing.B) {
 		return
 	}
 
-	clog := commit.NewLogger(dir, "mutations", 50<<20)
-	clog.SyncEvery = n
-	clog.Init()
-	defer clog.Close()
-	l.init(key, ps, clog)
+	l.init(key, ps)
 	b.ResetTimer()
 
 	ts := time.Now()

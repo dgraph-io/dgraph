@@ -37,7 +37,6 @@ import (
 	"github.com/dgryski/go-farm"
 	"github.com/zond/gotomic"
 
-	"github.com/dgraph-io/dgraph/commit"
 	"github.com/dgraph-io/dgraph/store"
 )
 
@@ -259,15 +258,15 @@ func checkMemoryUsage() {
 var stopTheWorld sync.RWMutex
 var lhmap *gotomic.Hash
 var dirtymap *gotomic.Hash
-var clog *commit.Logger
 
-func Init(log *commit.Logger) {
+func Init() {
 	lhmap = gotomic.NewHash()
 	dirtymap = gotomic.NewHash()
-	clog = log
 	go checkMemoryUsage()
 }
 
+// GetOrCreate stores the List corresponding to key(if its not there already)
+// to lhmap and returns it.
 func GetOrCreate(key []byte, pstore *store.Store) *List {
 	stopTheWorld.RLock()
 	defer stopTheWorld.RUnlock()
@@ -281,7 +280,7 @@ func GetOrCreate(key []byte, pstore *store.Store) *List {
 
 	l := NewList()
 	if inserted := lhmap.PutIfMissing(ukey, l); inserted {
-		l.init(key, pstore, clog)
+		l.init(key, pstore)
 		return l
 	}
 	lp, _ = lhmap.Get(ukey)
