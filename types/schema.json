@@ -5,6 +5,4 @@
 	"age": "int",
 	"survival_rate": "float",
 	"sword_present": "bool",
-	"actor": "object",
-	"friend": "object"
 }

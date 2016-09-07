@@ -46,22 +46,3 @@ func (s Scalar) String() string {
 func (s Scalar) OfType(name string) bool {
 	return name == "scalar"
 }
-
-// Object type defines skeleton for basic objects.
-// They form the basis for most object in this system.
-// Object has a name and a set of attributes.
-type Object struct {
-	Name        string
-	Description string
-	Attributes  map[string]Type
-}
-
-// String function to implement string interface
-func (o Object) String() string {
-	return fmt.Sprint(o.Name)
-}
-
-// OfType function to assert object type
-func (o Object) OfType(name string) bool {
-	return name == "object"
-}

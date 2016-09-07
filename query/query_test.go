@@ -556,10 +556,8 @@ func TestPostTraverse(t *testing.T) {
 	}
 	s := `
 		{
-			"actor": "object",
 			"name": "string",
 			"age": "int",
-			"friend": "object",
 			"survival_rate": "float",
 			"sword_present": "bool"
 		}

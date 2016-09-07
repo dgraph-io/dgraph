@@ -46,15 +46,6 @@ func LoadSchema() {
 	if err = json.Unmarshal(file, &s); err != nil {
 		log.Fatalf("Schema load error:%v", err)
 	}
-	// define object entity to denote all entities in the system (subject/object in RDF)
-	// In future, entities could be classified further into specific objects like user
-	objectType := Object{
-		Name:        "Object",
-		Description: "Denotes an entity in the system",
-		Attributes: map[string]Type{
-			"_uid_": idType,
-		},
-	}
 	// go over schema file values and assign appropriate types from type system
 	for k, v := range s {
 		switch v {
@@ -68,8 +59,6 @@ func LoadSchema() {
 			schema[k] = booleanType
 		case "id":
 			schema[k] = idType
-		case "object":
-			schema[k] = objectType
 		default:
 			log.Fatalf("Unknown type:%v in input schema file for predicate:%v", v, k)
 		}

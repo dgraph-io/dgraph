@@ -30,8 +30,7 @@ func createSchemaFile() (*os.File, error) {
 	s := `
 		{
 			"name": "string",
-			"age": "int",
-			"friend": "object"
+			"age": "int"
 		}
 	`
 	file.WriteString(s)
@@ -67,13 +66,16 @@ func TestSchemaType(t *testing.T) {
 	// set test schema file path
 	flag.Set("sfile", file.Name())
 
-	typ := SchemaType("name")
+	// load schema from json file
+	LoadSchema()
 
+	typ := SchemaType("name")
 	if _, ok := typ.(Scalar); !ok {
 		t.Error("Type assertion failed for predicate:name")
 	}
-	typ = SchemaType("friend")
-	if _, ok := typ.(Object); !ok {
+
+	typ = SchemaType("age")
+	if _, ok := typ.(Scalar); !ok {
 		t.Error("Type assertion failed for predicate:age")
 	}
 }
