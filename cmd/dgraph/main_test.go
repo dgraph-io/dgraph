@@ -24,7 +24,6 @@ import (
 
 	"context"
 
-	"github.com/dgraph-io/dgraph/commit"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/loader"
 	"github.com/dgraph-io/dgraph/posting"
@@ -48,25 +47,23 @@ var q0 = `
 	}
 `
 
-func prepare() (dir1, dir2 string, ps *store.Store, clog *commit.Logger, rerr error) {
+func prepare() (dir1, dir2 string, ps *store.Store, rerr error) {
 	var err error
 	dir1, err = ioutil.TempDir("", "storetest_")
 	if err != nil {
-		return "", "", nil, nil, err
+		return "", "", nil, err
 	}
 	ps, err = store.NewStore(dir1)
 	if err != nil {
-		return "", "", nil, nil, err
+		return "", "", nil, err
 	}
 
 	dir2, err = ioutil.TempDir("", "storemuts_")
 	if err != nil {
-		return dir1, "", nil, nil, err
+		return dir1, "", nil, err
 	}
-	clog = commit.NewLogger(dir2, "mutations", 50<<20)
-	clog.Init()
 
-	posting.Init(clog)
+	posting.Init()
 	worker.InitState(ps, nil, 0, 1)
 	uid.Init(ps)
 	loader.Init(ps, ps)
@@ -75,43 +72,42 @@ func prepare() (dir1, dir2 string, ps *store.Store, clog *commit.Logger, rerr er
 		// Assign Uids first.
 		f, err := os.Open("testdata.nq")
 		if err != nil {
-			return dir1, dir2, nil, clog, err
+			return dir1, dir2, nil, err
 		}
 		_, err = loader.AssignUids(f, 0, 1)
 		f.Close()
 		if err != nil {
-			return dir1, dir2, nil, clog, err
+			return dir1, dir2, nil, err
 		}
 	}
 	{
 		// Then load data.
 		f, err := os.Open("testdata.nq")
 		if err != nil {
-			return dir1, dir2, nil, clog, err
+			return dir1, dir2, nil, err
 		}
 		_, err = loader.LoadEdges(f, 0, 1)
 		f.Close()
 		if err != nil {
-			return dir1, dir2, nil, clog, err
+			return dir1, dir2, nil, err
 		}
 	}
 
-	return dir1, dir2, ps, clog, nil
+	return dir1, dir2, ps, nil
 }
 
-func closeAll(dir1, dir2 string, clog *commit.Logger) {
-	clog.Close()
+func closeAll(dir1, dir2 string) {
 	os.RemoveAll(dir2)
 	os.RemoveAll(dir1)
 }
 
 func TestQuery(t *testing.T) {
-	dir1, dir2, _, clog, err := prepare()
+	dir1, dir2, _, err := prepare()
 	if err != nil {
 		t.Error(err)
 		return
 	}
-	defer closeAll(dir1, dir2, clog)
+	defer closeAll(dir1, dir2)
 
 	// Parse GQL into internal query representation.
 	gq, _, err := gql.Parse(q0)
@@ -217,12 +213,12 @@ var q1 = `
 `
 
 func BenchmarkQuery(b *testing.B) {
-	dir1, dir2, _, clog, err := prepare()
+	dir1, dir2, _, err := prepare()
 	if err != nil {
 		b.Error(err)
 		return
 	}
-	defer closeAll(dir1, dir2, clog)
+	defer closeAll(dir1, dir2)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

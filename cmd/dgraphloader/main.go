@@ -91,7 +91,7 @@ func main() {
 	}
 	defer uidStore.Close()
 
-	posting.Init(nil)
+	posting.Init()
 	uid.Init(uidStore)
 	loader.Init(uidStore, dataStore)
 

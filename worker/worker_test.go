@@ -28,7 +28,6 @@ import (
 
 	"github.com/google/flatbuffers/go"
 
-	"github.com/dgraph-io/dgraph/commit"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/task"
@@ -74,11 +73,7 @@ func TestProcessTask(t *testing.T) {
 		return
 	}
 
-	clog := commit.NewLogger(dir, "mutations", 50<<20)
-	clog.Init()
-	defer clog.Close()
-
-	posting.Init(clog)
+	posting.Init()
 	InitState(ps, nil, 0, 1)
 
 	edge := x.DirectedEdge{

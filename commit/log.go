@@ -309,8 +309,8 @@ func lastTimestamp(path string) (int64, error) {
 				" ts: %v. maxts: %v. numrecords: %v", h.ts, maxTs, count)
 		}
 
-		for int(h.size) > len(discard) {
-			discard = make([]byte, len(discard)*2)
+		for int(h.size) > cap(discard) {
+			discard = make([]byte, cap(discard)*2)
 		}
 		reader.Read(discard[:int(h.size)])
 	}
@@ -470,8 +470,8 @@ func streamEntriesInFile(path string,
 			ch <- data
 
 		} else {
-			for int(hdr.size) > len(discard) {
-				discard = make([]byte, len(discard)*2)
+			for int(hdr.size) > cap(discard) {
+				discard = make([]byte, cap(discard)*2)
 			}
 			reader.Read(discard[:int(hdr.size)])
 		}
