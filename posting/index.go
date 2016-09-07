@@ -135,26 +135,50 @@ func processIndexJob() {
 	indexDone <- struct{}{}
 }
 
-// needUpdateIndex determines whether we need to create any index jobs.
-func (l *List) needUpdateIndex(mp *types.Posting) bool {
-	if len(l.key) == 0 || l.key[0] == indexByte {
-		// Posting is not the normal kind of mutation.
-		return false
+// AddMutationWithIndex is AddMutation with support for indexing.
+func (l *List) AddMutationWithIndex(ctx context.Context, t x.DirectedEdge, op byte) error {
+	doUpdateIndex := t.Value != nil &&
+		(len(l.key) > 0 && l.key[0] != indexByte) && indexedAttr[l.keyAttr]
+	var lastPost *types.Posting
+	if doUpdateIndex {
+		// Check last posting for original value BEFORE any mutation actually happens.
+		if l.Length() >= 1 {
+			lastPost = new(types.Posting)
+			x.Assert(l.Get(lastPost, l.Length()-1))
+		}
 	}
-	if mp.ValueBytes() == nil {
-		// This is not setting any values. It is just changing UIDs which has nothing
-		// to do with index.
-		return false
+
+	hasMutated, err := l.AddMutation(ctx, t, op)
+	if err != nil {
+		return err
 	}
-	return indexedAttr[l.keyAttr]
+
+	if !hasMutated {
+		// No mutation happened. No need to do anything for index.
+		// Another way to detect no mutation is to do a []bytes comparison after the
+		// mutation finishes, but this will cause additional copying.
+		return nil
+	}
+
+	if lastPost != nil && lastPost.ValueBytes() != nil {
+		l.indexDel(lastPost.ValueBytes())
+	}
+	if op == Set {
+		l.indexAdd(t.Value)
+	}
+	return nil
 }
 
 // indexAdd adds to jobs an indexJob that is an insert.
-func (l *List) indexAdd(jobs []*indexJob, mp *types.Posting) []*indexJob {
-	return append(jobs, &indexJob{l.keyAttr, l.keyUID, mp.ValueBytes(), false})
+func (l *List) indexAdd(newValue []byte) {
+	if indexJobC != nil {
+		indexJobC <- indexJob{l.keyAttr, l.keyUID, newValue, false}
+	}
 }
 
 // indexDel adds to jobs an indexJob that is a delete.
-func (l *List) indexDel(jobs []*indexJob, mp *types.Posting) []*indexJob {
-	return append(jobs, &indexJob{l.keyAttr, l.keyUID, mp.ValueBytes(), true})
+func (l *List) indexDel(oldValue []byte) {
+	if indexJobC != nil {
+		indexJobC <- indexJob{l.keyAttr, l.keyUID, oldValue, true}
+	}
 }

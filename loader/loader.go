@@ -184,7 +184,7 @@ func (s *state) handleNQuads(wg *sync.WaitGroup) {
 
 		key := posting.Key(edge.Entity, edge.Attribute)
 		plist := posting.GetOrCreate(key, dataStore)
-		plist.AddMutation(ctx, edge, posting.Set)
+		plist.AddMutationWithIndex(ctx, edge, posting.Set)
 		atomic.AddUint64(&s.ctr.processed, 1)
 	}
 }

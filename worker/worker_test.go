@@ -33,13 +33,13 @@ import (
 )
 
 func addEdge(t *testing.T, edge x.DirectedEdge, l *posting.List) {
-	if err := l.AddMutation(context.Background(), edge, posting.Set); err != nil {
+	if err := l.AddMutationWithIndex(context.Background(), edge, posting.Set); err != nil {
 		t.Error(err)
 	}
 }
 
 func delEdge(t *testing.T, edge x.DirectedEdge, l *posting.List) {
-	if err := l.AddMutation(context.Background(), edge, posting.Del); err != nil {
+	if err := l.AddMutationWithIndex(context.Background(), edge, posting.Del); err != nil {
 		t.Error(err)
 	}
 }

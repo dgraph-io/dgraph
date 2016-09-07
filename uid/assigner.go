@@ -139,7 +139,7 @@ func allocateUniqueUid(xid string, instanceIdx uint64,
 			Source:    "_assigner_",
 			Timestamp: time.Now(),
 		}
-		rerr = pl.AddMutation(context.Background(), t, posting.Set)
+		_, rerr = pl.AddMutation(context.Background(), t, posting.Set)
 		return uid, rerr
 	}
 }
@@ -174,7 +174,7 @@ func assignNew(pl *posting.List, xid string, instanceIdx uint64,
 		Source:    "_assigner_",
 		Timestamp: time.Now(),
 	}
-	rerr := pl.AddMutation(context.Background(), t, posting.Set)
+	_, rerr := pl.AddMutation(context.Background(), t, posting.Set)
 	return uid, rerr
 }
 

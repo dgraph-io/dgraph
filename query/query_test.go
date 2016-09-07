@@ -47,7 +47,7 @@ func setErr(err *error, nerr error) {
 }
 
 func addEdge(t *testing.T, edge x.DirectedEdge, l *posting.List) {
-	if err := l.AddMutation(context.Background(), edge, posting.Set); err != nil {
+	if _, err := l.AddMutation(context.Background(), edge, posting.Set); err != nil {
 		t.Error(err)
 	}
 }

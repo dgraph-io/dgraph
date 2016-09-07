@@ -424,23 +424,11 @@ func (l *List) mindexDeleteAt(mi int) {
 // number of postings in the immutable posting list.
 //
 // NOTE: Strictly speaking, mergeMutation is not O(log M + log N). Any calls to
-// mindexInsertAt or mindexDeleteAt is O(M) time. However, in practice, M is
-// seldom big.
+// mindexInsertAt or mindexDeleteAt is O(M) time. However in practice, M is small.
 //
-// NOTE: We have a tricky situation that can easily lead to deadlocks. Caller of
-// mergeMutation is addMutation which locks the current list l while we are
-// inside mergeMutation. If mergeMutation calls addMutation via a channel or any
-// mechanism, it will make a call to GetOrCreate for a new PL. Now, this
-// GetOrCreate call needs to acquire the StopTheWorld lock, which is also needed
-// by AggressivelyEvict. If you dig into AggressivelyEvict, it might try to evict
-// this particular l, which requires l's lock! Previously, we don't have this
-// problem because l's addMutation would have exited and unlocked. To fix this,
-// we must not try to create new mutations while l is locked! To do that, we
-// return a list of indexJobs that will be pushed to a channel AFTER l unlocks.
-
 // mergeMutation is the function that merges a mutation into mutation layers. It
-// does not write anything to RocksDB.
-func (l *List) mergeMutation(mp *types.Posting) []*indexJob {
+// does not write anything to RocksDB. Returns whether a mutation did happen.
+func (l *List) mergeMutation(mp *types.Posting) bool {
 	curUid := mp.Uid()
 	pi, puid := l.lePostingIndex(curUid)  // O(log N)
 	mi, muid := l.leMutationIndex(curUid) // O(log M)
@@ -453,16 +441,8 @@ func (l *List) mergeMutation(mp *types.Posting) []*indexJob {
 	mlink := new(MutationLink)
 	mlink.posting = mp
 
-	indexJobs := make([]*indexJob, 0, 2)
-
 	if mp.Op() == Del {
 		if muid == curUid { // curUid found in mindex.
-			if l.needUpdateIndex(mp) {
-				// To get the original value being deleted, we trust the previous posting
-				// more than the current "mp".
-				indexJobs = l.indexDel(indexJobs, l.mindex[mi].posting)
-			}
-
 			if inPlist { // In plist, so replace previous instruction in mindex.
 				mlink.moveidx = 1
 				mlink.idx = pi + mi
@@ -475,12 +455,6 @@ func (l *List) mergeMutation(mp *types.Posting) []*indexJob {
 
 		} else { // curUid not found in mindex.
 			if inPlist { // In plist, so insert in mindex.
-				if l.needUpdateIndex(mp) {
-					var oldPost types.Posting
-					x.Assert(l.get(&oldPost, pi))
-					indexJobs = l.indexDel(indexJobs, &oldPost)
-				}
-
 				mlink.moveidx = 1
 				l.mdelta -= 1
 				mlink.idx = pi + mi + 1
@@ -493,12 +467,6 @@ func (l *List) mergeMutation(mp *types.Posting) []*indexJob {
 
 	} else if mp.Op() == Set {
 		if muid == curUid { // curUid found in mindex.
-			if l.needUpdateIndex(mp) {
-				// Delete previous value from index. Add new value to index.
-				indexJobs = l.indexDel(indexJobs, l.mindex[mi].posting)
-				indexJobs = l.indexAdd(indexJobs, mp)
-			}
-
 			if inPlist { // In plist, so delete previous instruction, set in mlayer.
 				l.mindexDeleteAt(mi)
 				l.mlayer[pi] = *mp
@@ -522,22 +490,8 @@ func (l *List) mergeMutation(mp *types.Posting) []*indexJob {
 						// such that mlayer is updated, then you quickly add another mutation
 						// that mutates it to the value in posting list? By this logic,
 						// the second mutation would be ignored which is not right?
-						return indexJobs // do nothing.
+						return false // do nothing.
 					}
-				}
-
-				if l.needUpdateIndex(mp) {
-					// Delete previous value from index. Add new value to index.
-					// Check if it is in mlayer. If so, use it. Otherwise, use posting.
-					oldPost, found := l.mlayer[pi]
-					if found {
-						// In mlayer, so let's take that as the original value.
-						indexJobs = l.indexDel(indexJobs, &oldPost)
-					} else {
-						// Not in mlayer, so use PL's value.
-						indexJobs = l.indexDel(indexJobs, &cp)
-					}
-					indexJobs = l.indexAdd(indexJobs, mp)
 				}
 
 				l.mlayer[pi] = *mp
@@ -547,19 +501,13 @@ func (l *List) mergeMutation(mp *types.Posting) []*indexJob {
 				l.mdelta += 1
 				mlink.idx = pi + 1 + mi + 1 // right of pi, and right of mi.
 				l.mindexInsertAt(mlink, mi+1)
-
-				if l.needUpdateIndex(mp) {
-					// No previous value. No need to delete anything for index, but still
-					// need to add the new value.
-					indexJobs = l.indexAdd(indexJobs, mp)
-				}
 			}
 		}
 
 	} else {
 		log.Fatalf("Invalid operation: %v", mp.Op())
 	}
-	return indexJobs
+	return true
 }
 
 // Caller must hold at least a read lock.
@@ -660,12 +608,12 @@ func (l *List) SetForDeletion() {
 
 // AddMutation adds mutation to mutation layers. Note that it does not write
 // anything to disk. Some other background routine will be responsible for merging
-// changes in mutation layers to RocksDB.
-func (l *List) AddMutation(ctx context.Context, t x.DirectedEdge, op byte) error {
+// changes in mutation layers to RocksDB. Returns whether any mutation happens.
+func (l *List) AddMutation(ctx context.Context, t x.DirectedEdge, op byte) (bool, error) {
 	l.wg.Wait()
 	if atomic.LoadInt32(&l.deleteMe) == 1 {
 		x.Trace(ctx, "DELETEME set to true. Temporary error.")
-		return E_TMP_ERROR
+		return false, E_TMP_ERROR
 	}
 
 	// All edges with a value set, have the same uid. In other words,
@@ -675,7 +623,7 @@ func (l *List) AddMutation(ctx context.Context, t x.DirectedEdge, op byte) error
 	}
 	if t.ValueId == 0 {
 		x.Trace(ctx, "ValueId cannot be zero")
-		return fmt.Errorf("ValueId cannot be zero.")
+		return false, fmt.Errorf("ValueId cannot be zero.")
 	}
 	mbuf := newPosting(t, op)
 	var err error
@@ -684,22 +632,10 @@ func (l *List) AddMutation(ctx context.Context, t x.DirectedEdge, op byte) error
 		ts, err = l.clog.AddLog(l.hash, mbuf)
 		if err != nil {
 			x.Trace(ctx, "Error while adding log: %v", err)
-			return err
+			return false, err
 		}
 	}
-	// We want to process indexJobs only after l is unlocked. See mergeMutation for
-	// notes on the potential deadlock that can happen if we don't do this.
-	indexJobs := l.addMutationWhileLocked(ctx, mbuf, ts)
-	if indexJobC != nil {
-		for _, j := range indexJobs {
-			indexJobC <- *j
-		}
-	}
-	return nil
-}
 
-// addMutationWhileLocked does some work while l is locked.
-func (l *List) addMutationWhileLocked(ctx context.Context, mbuf []byte, ts int64) []*indexJob {
 	// Mutation arrives:
 	// - Check if we had any(SET/DEL) before this, stored in the mutation list.
 	//		- If yes, then replace that mutation. Jump to a)
@@ -712,7 +648,7 @@ func (l *List) addMutationWhileLocked(ctx context.Context, mbuf []byte, ts int64
 	x.Trace(ctx, "Lock acquired")
 
 	mpost := x.NewPosting(mbuf)
-	indexJobs := l.mergeMutation(mpost)
+	hasMutated := l.mergeMutation(mpost)
 	if len(l.mindex)+len(l.mlayer) > 0 {
 		atomic.StoreInt64(&l.dirtyTs, time.Now().UnixNano())
 		if dirtymap != nil {
@@ -721,7 +657,7 @@ func (l *List) addMutationWhileLocked(ctx context.Context, mbuf []byte, ts int64
 	}
 	l.maxMutationTs = ts
 	x.Trace(ctx, "Mutation done")
-	return indexJobs
+	return hasMutated, nil
 }
 
 func (l *List) MergeIfDirty(ctx context.Context) (merged bool, err error) {
