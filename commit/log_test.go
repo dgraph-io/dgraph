@@ -202,17 +202,14 @@ func TestReadEntries(t *testing.T) {
 
 	{
 		// Check for hash = 1, ts >= 2.
-		ch := make(chan []byte, 10)
-		done := make(chan error)
-		go l.StreamEntries(ts[2], uint32(1), ch, done)
 		count := 0
-		for entry := range ch {
-			count += 1
+		err := l.StreamEntries(ts[2], uint32(1), func(hdr Header, entry []byte) {
+			count++
 			if bytes.Compare(data, entry) != 0 {
 				t.Error("Data doesn't equate.")
 			}
-		}
-		if err := <-done; err != nil {
+		})
+		if err != nil {
 			t.Error(err)
 		}
 		if count != 2 {
@@ -225,17 +222,14 @@ func TestReadEntries(t *testing.T) {
 			t.Error(err)
 		}
 		// Check for hash = 1, ts >= 0.
-		ch := make(chan []byte, 10)
-		done := make(chan error)
-		go l.StreamEntries(ts[0], uint32(1), ch, done)
 		count := 0
-		for entry := range ch {
-			count += 1
+		err := l.StreamEntries(ts[0], uint32(1), func(hdr Header, entry []byte) {
+			count++
 			if bytes.Compare(data, entry) != 0 {
 				t.Error("Data doesn't equate.")
 			}
-		}
-		if err := <-done; err != nil {
+		})
+		if err != nil {
 			t.Error(err)
 		}
 		if count != 4 {

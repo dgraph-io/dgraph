@@ -428,7 +428,7 @@ func (l *Logger) AddLog(hash uint32, value []byte) (int64, error) {
 // streamEntries allows for hash to be zero.
 // This means iterate over all the entries.
 func streamEntriesInFile(path string,
-	afterTs int64, hash uint32, ch chan []byte) error {
+	afterTs int64, hash uint32, iter LogIterator) error {
 	f, err := os.Open(path)
 	if err != nil {
 		return err
@@ -467,7 +467,7 @@ func streamEntriesInFile(path string,
 			if int32(n) != hdr.size {
 				log.Fatalf("Unable to read all data. Size: %v, expected: %v", n, hdr.size)
 			}
-			ch <- data
+			iter(hdr, data)
 
 		} else {
 			for int(hdr.size) > cap(discard) {
@@ -479,13 +479,13 @@ func streamEntriesInFile(path string,
 	return nil
 }
 
+type LogIterator func(hdr Header, record []byte)
+
 func (l *Logger) StreamEntries(afterTs int64, hash uint32,
-	ch chan []byte, done chan error) {
+	iter LogIterator) error {
 
 	if atomic.LoadInt64(&l.lastLogTs) < afterTs {
-		close(ch)
-		done <- nil
-		return
+		return nil
 	}
 
 	var paths []string
@@ -505,12 +505,9 @@ func (l *Logger) StreamEntries(afterTs int64, hash uint32,
 	}
 
 	for _, path := range paths {
-		if err := streamEntriesInFile(path, afterTs, hash, ch); err != nil {
-			close(ch)
-			done <- err
-			return
+		if err := streamEntriesInFile(path, afterTs, hash, iter); err != nil {
+			return err
 		}
 	}
-	close(ch)
-	done <- nil
+	return nil
 }
