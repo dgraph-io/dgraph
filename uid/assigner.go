@@ -17,10 +17,13 @@
 package uid
 
 import (
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"log"
 	"math"
+	mrand "math/rand"
+	"strings"
 	"sync"
 	"time"
 
@@ -35,6 +38,7 @@ import (
 )
 
 var lmgr *lockManager
+var letterRunes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ "
 var uidStore *store.Store
 var eidPool = sync.Pool{
 	New: func() interface{} {
@@ -114,15 +118,22 @@ func Init(ps *store.Store) {
 // until the obtained integer is unique.
 func allocateUniqueUid(xid string, instanceIdx uint64,
 	numInstances uint64) (uid uint64, rerr error) {
-
+	mrand.Seed(time.Now().UnixNano())
 	mod := math.MaxUint64 / numInstances
 	minIdx := instanceIdx * mod
-	for sp := ""; ; sp += " " {
-		txid := xid + sp
+	txid := []byte(xid)
+	val := xid
+	if strings.HasPrefix(xid, "_new_:") {
+		if _, err := rand.Read(txid); err != nil {
+			return 0, err
+		}
 
-		uid1 := farm.Fingerprint64([]byte(txid)) // Generate from hash.
+		val = "_new_"
+	}
+
+	for ; ; txid = append(txid, letterRunes[mrand.Intn(len(letterRunes))]) {
+		uid1 := farm.Fingerprint64(txid) // Generate from hash.
 		uid = (uid1 % mod) + minIdx
-
 		if uid == math.MaxUint64 {
 			continue
 		}
@@ -140,7 +151,7 @@ func allocateUniqueUid(xid string, instanceIdx uint64,
 
 		// Uid hasn't been assigned yet.
 		t := x.DirectedEdge{
-			Value:     []byte(xid), // not txid
+			Value:     []byte(val), // not txid
 			Source:    "_assigner_",
 			Timestamp: time.Now(),
 		}
@@ -210,6 +221,11 @@ func Get(xid string) (uid uint64, rerr error) {
 // it already exists or assigns a new uid and returns it.
 func GetOrAssign(xid string, instanceIdx uint64,
 	numInstances uint64) (uid uint64, rerr error) {
+
+	// Prefix _new_ requires us to create a new uid(entity).
+	if strings.HasPrefix(xid, "_new_:") {
+		return allocateUniqueUid(xid, instanceIdx, numInstances)
+	}
 
 	key := StringKey(xid)
 	pl := posting.GetOrCreate(key, uidStore)
