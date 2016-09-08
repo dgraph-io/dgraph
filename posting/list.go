@@ -260,9 +260,6 @@ func (l *List) getPostingList() *types.PostingList {
 		if nbuf.d, err = l.pstore.Get(l.key); err != nil {
 			// Error. Just set to empty.
 			nbuf.d = make([]byte, len(empty))
-			// C API does one copy to move from std::string to C char pointer.
-			// We do another copy here.
-			// TODO(jchiu): Look into reducing number of copies to <= 1.
 			copy(nbuf.d, empty)
 		}
 		if atomic.CompareAndSwapPointer(&l.pbuffer, pb, unsafe.Pointer(nbuf)) {
@@ -464,10 +461,6 @@ func (l *List) mergeMutation(mp *types.Posting) bool {
 				var cp types.Posting
 				if ok := plist.Postings(&cp, pi); ok {
 					if samePosting(&cp, mp) {
-						// POTENTIAL BUG: What if you add a mutation which is valid first,
-						// such that mlayer is updated, then you quickly add another mutation
-						// that mutates it to the value in posting list? By this logic,
-						// the second mutation would be ignored which is not right?
 						return false // do nothing.
 					}
 				}
