@@ -420,7 +420,7 @@ func setupServer() {
 
 func main() {
 	x.Init()
-	checkFlagsAndInitDir()
+	checkFlagsAndInitDirs()
 
 	ps, err := store.NewStore(*postingDir)
 	if err != nil {
