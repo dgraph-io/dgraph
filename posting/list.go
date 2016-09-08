@@ -218,7 +218,6 @@ func (l *List) init(key []byte, pstore *store.Store, clog *commit.Logger) {
 		log.Fatal("empty should have some bytes.")
 	}
 	l.key = key
-
 	l.pstore = pstore
 	l.clog = clog
 
