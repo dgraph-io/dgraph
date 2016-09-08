@@ -31,7 +31,7 @@ import (
 )
 
 const (
-	// Posting list keys are prefixed with this byte if it is a mutation meant for
+	// Posting list keys are prefixed with this rune if it is a mutation meant for
 	// the index.
 	indexRune = ':'
 )
@@ -105,8 +105,7 @@ func IndexKey(attr string, value []byte) []byte {
 	return buf.Bytes()
 }
 
-// processIndexJob consumes and processes jobs from indexJobC. It can create new
-// posting lists and will add new mutations.
+// processIndexJob adds mutations to maintain our index.
 func processIndexJob(attr string, uid uint64, term []byte, del bool) {
 	edge := x.DirectedEdge{
 		Timestamp: time.Now(),
@@ -136,22 +135,17 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t x.DirectedEdge, op by
 			x.Assert(l.Get(lastPost, l.Length()-1))
 		}
 	}
-
 	hasMutated, err := l.AddMutation(ctx, t, op)
 	if err != nil {
 		return err
 	}
-
 	if !hasMutated || !doUpdateIndex || indexStore == nil {
 		return nil
 	}
-
 	if lastPost != nil && lastPost.ValueBytes() != nil {
 		processIndexJob(keyAttr, keyUID, lastPost.ValueBytes(), true)
-		//		l.indexDel(lastPost.ValueBytes())
 	}
 	if op == Set {
-		//		l.indexAdd(t.Value)
 		processIndexJob(keyAttr, keyUID, t.Value, false)
 	}
 	return nil
