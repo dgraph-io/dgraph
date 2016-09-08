@@ -18,6 +18,7 @@ package loader
 
 import (
 	"bufio"
+	"context"
 	"flag"
 	"io"
 	"math/rand"
@@ -27,8 +28,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-
-	"context"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/dgryski/go-farm"

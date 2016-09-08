@@ -23,7 +23,10 @@ import (
 	"flag"
 	"io/ioutil"
 	"log"
+	"sync/atomic"
 	"time"
+
+	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/dgraph/posting/types"
 	"github.com/dgraph-io/dgraph/store"
@@ -45,14 +48,21 @@ type indexConfig struct {
 	// TODO(jchiu): Add other tokenizer here in future.
 }
 
+type indexCounters struct {
+	numDel, numSet uint64
+}
+
 var (
+	indexLog        trace.EventLog
 	indexStore      *store.Store
 	indexCfgs       indexConfigs
 	indexConfigFile = flag.String("indexconfig", "index.json", "File containing index config. If empty, we create an empty config.")
 	indexedAttr     = make(map[string]bool)
+	indexCtrs       indexCounters
 )
 
 func init() {
+	indexLog = trace.NewEventLog("index", "Logger")
 	x.AddInit(func() {
 		x.Assert(indexConfigFile != nil && len(*indexConfigFile) > 0)
 		f, err := ioutil.ReadFile(*indexConfigFile)
@@ -107,10 +117,20 @@ func processIndexJob(attr string, uid uint64, term []byte, del bool) {
 	key := IndexKey(edge.Attribute, term)
 	plist := GetOrCreate(key, indexStore)
 	x.Assertf(plist != nil, "plist is nil [%s] %d %s", key, edge.ValueId, edge.Attribute)
+
+	var numDel, numSet uint64
 	if del {
 		plist.AddMutation(context.Background(), edge, Del)
+		numDel = atomic.AddUint64(&indexCtrs.numDel, 1)
+		numSet = atomic.LoadUint64(&indexCtrs.numSet)
 	} else {
 		plist.AddMutation(context.Background(), edge, Set)
+		numSet = atomic.AddUint64(&indexCtrs.numSet, 1)
+		numDel = atomic.LoadUint64(&indexCtrs.numDel)
+	}
+	numOp := numSet + numDel
+	if (numOp % 100000) == 0 {
+		indexLog.Printf("IndexSet %d IndexDel %d IndexTotal", numSet, numDel, numSet+numDel)
 	}
 }
 
