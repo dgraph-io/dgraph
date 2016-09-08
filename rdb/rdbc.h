@@ -18,7 +18,7 @@ typedef struct rocksdb_filterpolicy_t rocksdb_filterpolicy_t;
 typedef struct rocksdb_cache_t rocksdb_cache_t;
 typedef struct rocksdb_block_based_table_options_t rocksdb_block_based_table_options_t;
 
-rocksdb_options_t* rocksdb_options_create();
+//////////////////////////// rocksdb_t
 rocksdb_t* rocksdb_open(
 	const rocksdb_options_t* options,
 	const char* name,
@@ -29,27 +29,28 @@ rocksdb_t* rocksdb_open_for_read_only(
 	unsigned char error_if_log_file_exist,
 	char** errptr);
 void rocksdb_close(rocksdb_t* db);
-
 char* rocksdb_get(
     rocksdb_t* db,
     const rocksdb_readoptions_t* options,
     const char* key, size_t keylen,
     size_t* vallen,
     char** errptr);
-    
 void rocksdb_put(
     rocksdb_t* db,
     const rocksdb_writeoptions_t* options,
     const char* key, size_t keylen,
     const char* val, size_t vallen,
     char** errptr);
-
 void rocksdb_delete(
     rocksdb_t* db,
     const rocksdb_writeoptions_t* options,
     const char* key, size_t keylen,
     char** errptr);
+char* rocksdb_property_value(
+    rocksdb_t* db,
+    const char* propname);
 
+//////////////////////////// rocksdb_writebatch_t
 rocksdb_writebatch_t* rocksdb_writebatch_create();
 rocksdb_writebatch_t* rocksdb_writebatch_create_from(const char* rep,
                                                      size_t size);
@@ -69,26 +70,27 @@ void rocksdb_write(
     rocksdb_writebatch_t* batch,
     char** errptr);
 
-char* rocksdb_property_value(
-    rocksdb_t* db,
-    const char* propname);
-
-rocksdb_readoptions_t* rocksdb_readoptions_create();
-void rocksdb_readoptions_destroy(rocksdb_readoptions_t* opt);
-void rocksdb_readoptions_set_fill_cache(
-    rocksdb_readoptions_t* opt, unsigned char v);
-
+//////////////////////////// rocksdb_options_t
+rocksdb_options_t* rocksdb_options_create();
 void rocksdb_options_set_create_if_missing(
     rocksdb_options_t* opt, unsigned char v);
 void rocksdb_options_set_block_based_table_factory(
     rocksdb_options_t *opt,
     rocksdb_block_based_table_options_t* table_options);
 
+//////////////////////////// rocksdb_readoptions_t
+rocksdb_readoptions_t* rocksdb_readoptions_create();
+void rocksdb_readoptions_destroy(rocksdb_readoptions_t* opt);
+void rocksdb_readoptions_set_fill_cache(
+    rocksdb_readoptions_t* opt, unsigned char v);
+
+//////////////////////////// rocksdb_writeoptions_t
 rocksdb_writeoptions_t* rocksdb_writeoptions_create();
 void rocksdb_writeoptions_destroy(rocksdb_writeoptions_t* opt);
 void rocksdb_writeoptions_set_sync(
     rocksdb_writeoptions_t* opt, unsigned char v);
 
+//////////////////////////// rocksdb_iterator_t
 rocksdb_iterator_t* rocksdb_create_iterator(
     rocksdb_t* db,
     const rocksdb_readoptions_t* options);
@@ -103,6 +105,7 @@ const char* rocksdb_iter_key(const rocksdb_iterator_t* iter, size_t* klen);
 const char* rocksdb_iter_value(const rocksdb_iterator_t* iter, size_t* vlen);
 void rocksdb_iter_get_error(const rocksdb_iterator_t* iter, char** errptr);
 
+//////////////////////////// rocksdb_filterpolicy_t
 rocksdb_filterpolicy_t* rocksdb_filterpolicy_create(
     void* state,
     void (*destructor)(void*),
@@ -122,10 +125,12 @@ rocksdb_filterpolicy_t* rocksdb_filterpolicy_create(
 rocksdb_filterpolicy_t* rdbc_filterpolicy_create(uintptr_t idx);
 rocksdb_filterpolicy_t* rocksdb_filterpolicy_create_bloom(int bits_per_key);
 
+//////////////////////////// rocksdb_cache_t
 rocksdb_cache_t* rocksdb_cache_create_lru(size_t capacity);
 void rocksdb_cache_destroy(rocksdb_cache_t* cache);
 void rocksdb_cache_set_capacity(rocksdb_cache_t* cache, size_t capacity);
 
+//////////////////////////// rocksdb_block_based_table_options_t
 rocksdb_block_based_table_options_t*
 rocksdb_block_based_options_create();
 void rocksdb_block_based_options_destroy(

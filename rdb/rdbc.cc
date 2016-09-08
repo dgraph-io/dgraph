@@ -65,10 +65,7 @@ static char* CopyString(const std::string& str) {
   return result;
 }
 
-rocksdb_options_t* rocksdb_options_create() {
-  return new rocksdb_options_t;
-}
-
+//////////////////////////// rocksdb_t
 rocksdb_t* rocksdb_open(
   const rocksdb_options_t* options,
   const char* name,
@@ -140,6 +137,19 @@ void rocksdb_delete(
   SaveError(errptr, db->rep->Delete(options->rep, Slice(key, keylen)));
 }
 
+char* rocksdb_property_value(
+    rocksdb_t* db,
+    const char* propname) {
+  std::string tmp;
+  if (db->rep->GetProperty(Slice(propname), &tmp)) {
+    // We use strdup() since we expect human readable output.
+    return strdup(tmp.c_str());
+  } else {
+    return nullptr;
+  }
+}
+
+//////////////////////////// rocksdb_writebatch_t
 rocksdb_writebatch_t* rocksdb_writebatch_create() {
   return new rocksdb_writebatch_t;
 }
@@ -184,29 +194,9 @@ void rocksdb_write(
   SaveError(errptr, db->rep->Write(options->rep, &batch->rep));
 }
 
-char* rocksdb_property_value(
-    rocksdb_t* db,
-    const char* propname) {
-  std::string tmp;
-  if (db->rep->GetProperty(Slice(propname), &tmp)) {
-    // We use strdup() since we expect human readable output.
-    return strdup(tmp.c_str());
-  } else {
-    return nullptr;
-  }
-}
-
-rocksdb_readoptions_t* rocksdb_readoptions_create() {
-  return new rocksdb_readoptions_t;
-}
-
-void rocksdb_readoptions_destroy(rocksdb_readoptions_t* opt) {
-  delete opt;
-}
-
-void rocksdb_readoptions_set_fill_cache(
-    rocksdb_readoptions_t* opt, unsigned char v) {
-  opt->rep.fill_cache = v;
+//////////////////////////// rocksdb_options_t
+rocksdb_options_t* rocksdb_options_create() {
+  return new rocksdb_options_t;
 }
 
 void rocksdb_options_set_create_if_missing(
@@ -223,6 +213,21 @@ void rocksdb_options_set_block_based_table_factory(
   }
 }
 
+//////////////////////////// rocksdb_readoptions_t
+rocksdb_readoptions_t* rocksdb_readoptions_create() {
+  return new rocksdb_readoptions_t;
+}
+
+void rocksdb_readoptions_destroy(rocksdb_readoptions_t* opt) {
+  delete opt;
+}
+
+void rocksdb_readoptions_set_fill_cache(
+    rocksdb_readoptions_t* opt, unsigned char v) {
+  opt->rep.fill_cache = v;
+}
+
+//////////////////////////// rocksdb_writeoptions_t
 rocksdb_writeoptions_t* rocksdb_writeoptions_create() {
   return new rocksdb_writeoptions_t;
 }
@@ -236,6 +241,7 @@ void rocksdb_writeoptions_set_sync(
   opt->rep.sync = v;
 }
 
+//////////////////////////// rocksdb_iterator_t
 rocksdb_iterator_t* rocksdb_create_iterator(
     rocksdb_t* db,
     const rocksdb_readoptions_t* options) {
@@ -289,6 +295,7 @@ void rocksdb_iter_get_error(const rocksdb_iterator_t* iter, char** errptr) {
   SaveError(errptr, iter->rep->status());
 }
 
+//////////////////////////// rocksdb_filterpolicy_t
 struct rocksdb_filterpolicy_t : public FilterPolicy {
   void* state_;
   void (*destructor_)(void*);
@@ -414,6 +421,7 @@ rocksdb_filterpolicy_t* rocksdb_filterpolicy_create_bloom(int bits_per_key) {
   return rocksdb_filterpolicy_create_bloom_format(bits_per_key, true);
 }
 
+//////////////////////////// rocksdb_cache_t
 rocksdb_cache_t* rocksdb_cache_create_lru(size_t capacity) {
   rocksdb_cache_t* c = new rocksdb_cache_t;
   c->rep = NewLRUCache(capacity);
@@ -428,6 +436,7 @@ void rocksdb_cache_set_capacity(rocksdb_cache_t* cache, size_t capacity) {
   cache->rep->SetCapacity(capacity);
 }
 
+//////////////////////////// rocksdb_block_based_table_options_t
 rocksdb_block_based_table_options_t*
 rocksdb_block_based_options_create() {
   return new rocksdb_block_based_table_options_t;
