@@ -259,6 +259,7 @@ var stopTheWorld sync.RWMutex
 var lhmap *gotomic.Hash
 var dirtymap *gotomic.Hash
 
+// Init initializes the posting lists package, the in memory and dirty list hash.
 func Init() {
 	lhmap = gotomic.NewHash()
 	dirtymap = gotomic.NewHash()

@@ -66,11 +66,10 @@ type List struct {
 	deleteMe    int32
 
 	// Mutations
-	mlayer        map[int]types.Posting // stores only replace instructions.
-	mdelta        int                   // len(plist) + mdelta = final length.
-	maxMutationTs int64                 // Track maximum mutation ts.
-	mindex        []*MutationLink
-	dirtyTs       int64 // Use atomics for this.
+	mlayer  map[int]types.Posting // stores only replace instructions.
+	mdelta  int                   // len(plist) + mdelta = final length.
+	mindex  []*MutationLink
+	dirtyTs int64 // Use atomics for this.
 }
 
 func NewList() *List {
@@ -217,8 +216,6 @@ func (l *List) init(key []byte, pstore *store.Store) {
 	l.key = key
 	l.pstore = pstore
 
-	posting := l.getPostingList()
-	l.maxMutationTs = posting.CommitTs()
 	l.hash = farm.Fingerprint32(key)
 	l.ghash = gotomic.IntKey(farm.Fingerprint64(key))
 	l.mlayer = make(map[int]types.Posting)
@@ -624,7 +621,6 @@ func (l *List) merge() (merged bool, rerr error) {
 
 	types.PostingListStart(b)
 	types.PostingListAddPostings(b, vend)
-	types.PostingListAddCommitTs(b, l.maxMutationTs)
 	end := types.PostingListEnd(b)
 	b.Finish(end)
 
