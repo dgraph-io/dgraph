@@ -50,8 +50,9 @@ var (
 	indexLog        trace.EventLog
 	indexStore      *store.Store
 	indexCfgs       indexConfigs
-	indexConfigFile = flag.String("indexconfig", "", "File containing index config. If empty, we assume no index.")
-	indexedAttr     = make(map[string]bool)
+	indexConfigFile = flag.String("indexconfig", "",
+		"File containing index config. If empty, we assume no index.")
+	indexedAttr = make(map[string]bool)
 )
 
 func init() {
