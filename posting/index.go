@@ -45,14 +45,6 @@ type indexConfig struct {
 	// TODO(jchiu): Add other tokenizer here in future.
 }
 
-// indexJob describes a mutation for a normal posting list.
-type indexJob struct {
-	attr string
-	uid  uint64 // Source entity / node.
-	term []byte
-	del  bool // Is this a delete or insert?
-}
-
 var (
 	indexStore      *store.Store
 	indexCfgs       indexConfigs
