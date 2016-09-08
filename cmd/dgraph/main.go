@@ -418,7 +418,7 @@ func setupServer() {
 
 func main() {
 	x.Init()
-	checkFlagsAndInitDir()
+	checkFlagsAndInitDirs()
 
 	ps, err := store.NewStore(*postingDir)
 	x.Checkf(err, "Error initializing postings store")
