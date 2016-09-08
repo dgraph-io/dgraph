@@ -117,13 +117,14 @@ func processIndexJob(attr string, uid uint64, term []byte, del bool) {
 	plist := GetOrCreate(key, indexStore)
 	x.Assertf(plist != nil, "plist is nil [%s] %d %s", key, edge.ValueId, edge.Attribute)
 
+	ctx := context.Background()
 	var numDel, numSet uint64
 	if del {
-		plist.AddMutation(context.Background(), edge, Del)
+		plist.AddMutation(ctx, edge, Del)
 		numDel = atomic.AddUint64(&indexCtrs.numDel, 1)
 		numSet = atomic.LoadUint64(&indexCtrs.numSet)
 	} else {
-		plist.AddMutation(context.Background(), edge, Set)
+		plist.AddMutation(ctx, edge, Set)
 		numSet = atomic.AddUint64(&indexCtrs.numSet, 1)
 		numDel = atomic.LoadUint64(&indexCtrs.numDel)
 	}
