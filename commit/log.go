@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-// commit package provides commit logs for storing mutations, as they arrive
+// Package commit provides commit logs for storing mutations, as they arrive
 // at the server. Mutations also get stored in memory within posting.List.
 // So, commit logs are useful to handle machine crashes, and re-init of a
 // posting list.
@@ -23,6 +23,7 @@
 package commit
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/binary"
 	"fmt"
@@ -30,16 +31,13 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"runtime/debug"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
-	"unsafe"
 
-	"github.com/willf/bloom"
 	"golang.org/x/net/trace"
 )
 
@@ -48,75 +46,16 @@ type logFile struct {
 	endTs int64 // never modified after creation.
 	path  string
 	size  int64
-	cache *Cache
-	bf    *bloom.BloomFilter
 }
 
-func (lf *logFile) Cache() *Cache {
-	lf.RLock()
-	defer lf.RUnlock()
-	return lf.cache
-}
-
-func (lf *logFile) FillIfEmpty(wg *sync.WaitGroup) {
-	lf.Lock()
-	defer lf.Unlock()
-	defer wg.Done()
-	if lf.cache != nil {
-		return
-	}
-	cache := new(Cache)
-	if err := FillCache(cache, lf.path); err != nil {
-		log.Fatalf("Unable to fill cache for path: %v. Err: %v", lf.path, err)
-	}
-	// No need to acquire lock on cache, because it just
-	// got created.
-	createAndUpdateBloomFilter(cache)
-	lf.cache = cache
-}
-
-// Lock must have been acquired.
-func createAndUpdateBloomFilter(cache *Cache) {
-	hashes := make([]uint32, 50000)
-	hashes = hashes[:0]
-	if err := streamEntries(cache, 0, 0, func(hdr Header, record []byte) {
-		hashes = append(hashes, hdr.hash)
-	}); err != nil {
-		log.Fatalf("Unable to create bloom filters: %v", err)
-	}
-
-	n := 100000
-	if len(hashes) > n {
-		n = len(hashes)
-	}
-	cache.bf = bloom.NewWithEstimates(uint(n), 0.0001)
-	for _, hash := range hashes {
-		cache.bf.Add(toBytes(hash))
-	}
-}
-
-type CurFile struct {
+type curFile struct {
 	sync.RWMutex
 	f         *os.File
 	size      int64
 	dirtyLogs int
-	cch       unsafe.Pointer // handled via atomics.
 }
 
-func (c *CurFile) cache() *Cache {
-	if c == nil {
-		debug.PrintStack()
-		// This got triggered due to a premature cleanup in query_test.go
-	}
-
-	v := atomic.LoadPointer(&c.cch)
-	if v == nil {
-		return nil
-	}
-	return (*Cache)(v)
-}
-
-func (c *CurFile) Size() int64 {
+func (c *curFile) Size() int64 {
 	c.RLock()
 	defer c.RUnlock()
 	return c.size
@@ -150,14 +89,14 @@ type Logger struct {
 
 	sync.RWMutex
 	list      []*logFile
-	cf        *CurFile
+	cf        *curFile
 	lastLogTs int64 // handled via atomics.
 	ticker    *time.Ticker
 
 	events trace.EventLog
 }
 
-func (l *Logger) curFile() *CurFile {
+func (l *Logger) curFile() *curFile {
 	l.RLock()
 	defer l.RUnlock()
 	return l.cf
@@ -171,19 +110,6 @@ func (l *Logger) updateLastLogTs(val int64) {
 		}
 		if atomic.CompareAndSwapInt64(&l.lastLogTs, prev, val) {
 			return
-		}
-	}
-}
-
-func (l *Logger) DeleteCacheOlderThan(v time.Duration) {
-	l.RLock()
-	defer l.RUnlock()
-	s := int64(v.Seconds())
-	for _, lf := range l.list {
-		if lf.Cache().LastAccessedInSeconds() > s {
-			lf.Lock()
-			lf.cache = nil
-			lf.Unlock()
 		}
 	}
 }
@@ -294,16 +220,10 @@ func (l *Logger) Init() {
 		fi, err := os.Stat(path)
 		if err == nil {
 			// we have the file. Derive information for counters.
-			l.cf = new(CurFile)
+			l.cf = new(curFile)
 			l.cf.size = fi.Size()
 			l.cf.dirtyLogs = 0
-			cache := new(Cache)
-			if ferr := FillCache(cache, path); ferr != nil {
-				log.Fatalf("Unable to write to cache: %v", ferr)
-			}
-			createAndUpdateBloomFilter(cache)
-			atomic.StorePointer(&l.cf.cch, unsafe.Pointer(cache))
-			lastTs, err := lastTimestamp(cache)
+			lastTs, err := lastTimestamp(path)
 			if err != nil {
 				log.Fatalf("Unable to read last log ts: %v", err)
 			}
@@ -319,7 +239,7 @@ func (l *Logger) Init() {
 	}
 
 	if err := filepath.Walk(l.dir, l.handleFile); err != nil {
-		log.Fatal("While walking over directory: %v", err)
+		log.Fatalf("While walking over directory: %v", err)
 	}
 	sort.Sort(ByTimestamp(l.list))
 	if l.cf == nil {
@@ -352,9 +272,16 @@ func parseHeader(hdr []byte) (Header, error) {
 	return h, nil
 }
 
-func lastTimestamp(c *Cache) (int64, error) {
+func lastTimestamp(path string) (int64, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return 0, err
+	}
+	defer f.Close()
+
+	discard := make([]byte, 4096)
+	reader := bufio.NewReaderSize(f, 2<<20)
 	var maxTs int64
-	reader := NewReader(c)
 	header := make([]byte, 16)
 	count := 0
 	for {
@@ -368,7 +295,7 @@ func lastTimestamp(c *Cache) (int64, error) {
 		if err != nil {
 			return 0, err
 		}
-		count += 1
+		count++
 		h, err := parseHeader(header)
 		if err != nil {
 			return 0, err
@@ -381,7 +308,11 @@ func lastTimestamp(c *Cache) (int64, error) {
 			log.Fatalf("Log file doesn't have monotonically increasing records."+
 				" ts: %v. maxts: %v. numrecords: %v", h.ts, maxTs, count)
 		}
-		reader.Discard(int(h.size))
+
+		for int(h.size) > cap(discard) {
+			discard = make([]byte, cap(discard)*2)
+		}
+		reader.Read(discard[:int(h.size)])
 	}
 	return maxTs, nil
 }
@@ -415,8 +346,6 @@ func (l *Logger) rotateCurrent() error {
 	lf.endTs = lastTs
 	lf.path = newpath
 	lf.size = cf.size
-	lf.cache = cf.cache()
-	createAndUpdateBloomFilter(lf.cache)
 	l.list = append(l.list, lf)
 
 	l.createNew()
@@ -434,11 +363,8 @@ func (l *Logger) createNew() {
 	if err != nil {
 		log.Fatalf("Unable to create a new file: %v", err)
 	}
-	l.cf = new(CurFile)
+	l.cf = new(curFile)
 	l.cf.f = f
-	cache := new(Cache)
-	createAndUpdateBloomFilter(cache)
-	atomic.StorePointer(&l.cf.cch, unsafe.Pointer(cache))
 }
 
 func setError(prev *error, n error) {
@@ -449,6 +375,7 @@ func setError(prev *error, n error) {
 }
 
 func (l *Logger) AddLog(hash uint32, value []byte) (int64, error) {
+	// 16 bytes to write the ts, hash and len(value) later.
 	lbuf := int64(len(value)) + 16
 	if l.curFile().Size()+lbuf > l.maxSize {
 		if err := l.rotateCurrent(); err != nil {
@@ -487,11 +414,7 @@ func (l *Logger) AddLog(hash uint32, value []byte) (int64, error) {
 		l.events.Errorf("Error while writing to current file: %v", err)
 		return ts, err
 	}
-	if _, err = cf.cache().Write(hash, buf.Bytes()); err != nil {
-		l.events.Errorf("Error while writing to current cache: %v", err)
-		return ts, err
-	}
-	cf.dirtyLogs += 1
+	cf.dirtyLogs++
 	cf.size += int64(buf.Len())
 	l.updateLastLogTs(ts)
 	if l.SyncEvery <= 0 || cf.dirtyLogs >= l.SyncEvery {
@@ -504,19 +427,29 @@ func (l *Logger) AddLog(hash uint32, value []byte) (int64, error) {
 
 // streamEntries allows for hash to be zero.
 // This means iterate over all the entries.
-func streamEntries(cache *Cache,
+func streamEntriesInFile(path string,
 	afterTs int64, hash uint32, iter LogIterator) error {
+	f, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
 
-	reader := NewReader(cache)
+	discard := make([]byte, 4096)
+	reader := bufio.NewReaderSize(f, 5<<20)
 	header := make([]byte, 16)
+
 	for {
-		_, err := reader.Read(header)
+		n, err := reader.Read(header)
 		if err == io.EOF {
 			break
 		}
 		if err != nil {
 			log.Fatalf("While reading header: %v", err)
 			return err
+		}
+		if n != len(header) {
+			log.Fatalf("Unable to read all data. Size: %v, expected: %v", n, len(header))
 		}
 
 		hdr, err := parseHeader(header)
@@ -525,18 +458,22 @@ func streamEntries(cache *Cache,
 		}
 
 		if (hash == 0 || hdr.hash == hash) && hdr.ts >= afterTs {
-			// Iterator expects a copy of the buffer, so create one, instead of
-			// creating a big buffer upfront and reusing it.
 			data := make([]byte, hdr.size)
-			_, err := reader.Read(data)
+			n, err := reader.Read(data)
 			if err != nil {
 				log.Fatalf("While reading data: %v", err)
 				return err
 			}
+			if int32(n) != hdr.size {
+				log.Fatalf("Unable to read all data. Size: %v, expected: %v", n, hdr.size)
+			}
 			iter(hdr, data)
 
 		} else {
-			reader.Discard(int(hdr.size))
+			for int(hdr.size) > cap(discard) {
+				discard = make([]byte, cap(discard)*2)
+			}
+			reader.Read(discard[:int(hdr.size)])
 		}
 	}
 	return nil
@@ -551,36 +488,24 @@ func (l *Logger) StreamEntries(afterTs int64, hash uint32,
 		return nil
 	}
 
-	var wg sync.WaitGroup
+	var paths []string
 	l.RLock()
 	for _, lf := range l.list {
 		if afterTs < lf.endTs {
-			wg.Add(1)
-			go lf.FillIfEmpty(&wg)
-		}
-	}
-	l.RUnlock()
-	wg.Wait()
-
-	l.RLock()
-	var caches []*Cache
-	for _, lf := range l.list {
-		if afterTs < lf.endTs && lf.cache.Present(hash) {
-			caches = append(caches, lf.Cache())
+			paths = append(paths, lf.path)
 		}
 	}
 	l.RUnlock()
 
-	// Add current cache.
-	if l.curFile().cache().Present(hash) {
-		caches = append(caches, l.curFile().cache())
-	}
-	for _, cache := range caches {
-		if cache == nil {
-			l.events.Errorf("Cache is nil")
-			continue
+	{
+		cur := filepath.Join(l.dir, fmt.Sprintf("%s-current.log", l.filePrefix))
+		if _, err := os.Stat(cur); err == nil {
+			paths = append(paths, cur)
 		}
-		if err := streamEntries(cache, afterTs, hash, iter); err != nil {
+	}
+
+	for _, path := range paths {
+		if err := streamEntriesInFile(path, afterTs, hash, iter); err != nil {
 			return err
 		}
 	}

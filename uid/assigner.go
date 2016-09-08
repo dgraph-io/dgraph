@@ -231,10 +231,10 @@ func GetOrAssign(xid string, instanceIdx uint64,
 	pl := posting.GetOrCreate(key, uidStore)
 	if pl.Length() == 0 {
 		return assignNew(pl, xid, instanceIdx, numInstances)
+	}
 
-	} else if pl.Length() > 1 {
+	if pl.Length() > 1 {
 		log.Fatalf("We shouldn't have more than 1 uid for xid: %v\n", xid)
-
 	} else {
 		// We found one posting.
 		var p types.Posting

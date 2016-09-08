@@ -33,7 +33,6 @@ import (
 	"github.com/google/flatbuffers/go"
 	"github.com/zond/gotomic"
 
-	"github.com/dgraph-io/dgraph/commit"
 	"github.com/dgraph-io/dgraph/posting/types"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/x"
@@ -63,17 +62,15 @@ type List struct {
 	hash        uint32
 	pbuffer     unsafe.Pointer
 	pstore      *store.Store // postinglist store
-	clog        *commit.Logger
 	lastCompact time.Time
 	wg          sync.WaitGroup
 	deleteMe    int32
 
 	// Mutations
-	mlayer        map[int]types.Posting // Stores only replace instructions.
-	mdelta        int                   // len(plist) + mdelta = final length.
-	maxMutationTs int64                 // Track maximum mutation ts.
-	mindex        []*MutationLink
-	dirtyTs       int64 // Use atomics for this.
+	mlayer  map[int]types.Posting // Stores only replace instructions.
+	mdelta  int                   // len(plist) + mdelta = final length.
+	mindex  []*MutationLink
+	dirtyTs int64 // Use atomics for this.
 }
 
 func NewList() *List {
@@ -209,7 +206,7 @@ func init() {
 	}
 }
 
-func (l *List) init(key []byte, pstore *store.Store, clog *commit.Logger) {
+func (l *List) init(key []byte, pstore *store.Store) {
 	l.Lock()
 	defer l.Unlock()
 	defer l.wg.Done()
@@ -219,32 +216,10 @@ func (l *List) init(key []byte, pstore *store.Store, clog *commit.Logger) {
 	}
 	l.key = key
 	l.pstore = pstore
-	l.clog = clog
 
-	posting := l.getPostingList()
-	l.maxMutationTs = posting.CommitTs()
 	l.hash = farm.Fingerprint32(key)
 	l.ghash = gotomic.IntKey(farm.Fingerprint64(key))
 	l.mlayer = make(map[int]types.Posting)
-
-	if clog == nil {
-		return
-	}
-
-	err := clog.StreamEntries(posting.CommitTs()+1, l.hash,
-		func(hdr commit.Header, buffer []byte) {
-			m := new(types.Posting)
-			x.ParsePosting(m, buffer)
-			if m.Ts() > l.maxMutationTs {
-				l.maxMutationTs = m.Ts()
-			}
-			// No need to process index jobs. They should have added their extra
-			// mutations to the commit logs.
-			l.mergeMutation(m)
-		})
-	if err != nil {
-		log.Fatalf("Error while streaming entries: %v", err)
-	}
 }
 
 // getPostingList tries to get posting list from l.pbuffer. If it is nil, then
@@ -263,7 +238,6 @@ func (l *List) getPostingList() *types.PostingList {
 		}
 		if atomic.CompareAndSwapPointer(&l.pbuffer, pb, unsafe.Pointer(nbuf)) {
 			return types.GetRootAsPostingList(nbuf.d, 0)
-
 		}
 		// Someone else replaced the pointer in the meantime. Retry recursively.
 		return l.getPostingList()
@@ -595,15 +569,6 @@ func (l *List) AddMutation(ctx context.Context, t x.DirectedEdge, op byte) (bool
 		return false, fmt.Errorf("ValueId cannot be zero.")
 	}
 	mbuf := newPosting(t, op)
-	var err error
-	var ts int64
-	if l.clog != nil {
-		ts, err = l.clog.AddLog(l.hash, mbuf)
-		if err != nil {
-			x.Trace(ctx, "Error while adding log: %v", err)
-			return false, err
-		}
-	}
 
 	// Mutation arrives:
 	// - Check if we had any(SET/DEL) before this, stored in the mutation list.
@@ -624,7 +589,6 @@ func (l *List) AddMutation(ctx context.Context, t x.DirectedEdge, op byte) (bool
 			dirtymap.Put(l.ghash, true)
 		}
 	}
-	l.maxMutationTs = ts
 	x.Trace(ctx, "Mutation done")
 	return hasMutated, nil
 }
@@ -667,7 +631,6 @@ func (l *List) merge() (merged bool, rerr error) {
 
 	types.PostingListStart(b)
 	types.PostingListAddPostings(b, vend)
-	types.PostingListAddCommitTs(b, l.maxMutationTs)
 	end := types.PostingListEnd(b)
 	b.Finish(end)
 

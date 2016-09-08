@@ -119,10 +119,7 @@ func TestProcessTask(t *testing.T) {
 
 	InitState(ps, nil, 0, 1)
 
-	clog := commit.NewLogger(dir, "mutations", 50<<20)
-	clog.Init()
-	defer clog.Close()
-	posting.Init(clog)
+	posting.Init()
 	posting.InitIndex(ps)
 	populateGraph(t, ps)
 
@@ -197,7 +194,7 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 	clog.Init()
 	defer clog.Close()
 
-	posting.Init(clog)
+	posting.Init()
 	InitState(ps, nil, 0, 1)
 
 	posting.InitIndex(ps)
@@ -343,11 +340,7 @@ func TestProcessTaskIndex(t *testing.T) {
 	defer ps.Close()
 	posting.InitIndex(ps)
 
-	clog := commit.NewLogger(dir, "mutations", 50<<20)
-	clog.Init()
-	defer clog.Close()
-
-	posting.Init(clog)
+	posting.Init()
 	InitState(ps, nil, 0, 1)
 
 	populateGraph(t, ps)

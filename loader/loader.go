@@ -143,7 +143,6 @@ func (s *state) parseStream(wg *sync.WaitGroup) {
 		if s.Error() != nil {
 			return
 		}
-
 		line = strings.Trim(line, " \t")
 		if len(line) == 0 {
 			glog.Info("Empty line.")

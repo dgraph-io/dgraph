@@ -262,13 +262,15 @@ var (
 	clog         *commit.Logger
 )
 
-func Init(log *commit.Logger) {
+// Init initializes the posting lists package, the in memory and dirty list hash.
+func Init() {
 	lhmap = gotomic.NewHash()
 	dirtymap = gotomic.NewHash()
-	clog = log
 	go checkMemoryUsage()
 }
 
+// GetOrCreate stores the List corresponding to key(if its not there already)
+// to lhmap and returns it.
 func GetOrCreate(key []byte, pstore *store.Store) *List {
 	stopTheWorld.RLock()
 	defer stopTheWorld.RUnlock()
@@ -282,12 +284,11 @@ func GetOrCreate(key []byte, pstore *store.Store) *List {
 
 	l := NewList()
 	if inserted := lhmap.PutIfMissing(gotomicKey, l); inserted {
-		l.init(key, pstore, clog)
+		l.init(key, pstore)
 		return l
-	} else {
-		lp, _ = lhmap.Get(gotomicKey)
-		return lp.(*List)
 	}
+	lp, _ = lhmap.Get(gotomicKey)
+	return lp.(*List)
 }
 
 func mergeAndUpdate(l *List, c *counters) {
