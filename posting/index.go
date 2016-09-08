@@ -84,15 +84,15 @@ func InitIndex(ds *store.Store) {
 	indexStore = ds
 }
 
-func IndexKey(attr string, value []byte) []byte {
-	buf := bytes.NewBuffer(make([]byte, 0, len(attr)+len(value)+2))
+func IndexKey(attr string, term []byte) []byte {
+	buf := bytes.NewBuffer(make([]byte, 0, len(attr)+len(term)+2))
 	_, err := buf.WriteRune(indexRune)
 	x.Check(err)
 	_, err = buf.WriteString(attr)
 	x.Check(err)
 	_, err = buf.WriteString("|")
 	x.Check(err)
-	_, err = buf.Write(value)
+	_, err = buf.Write(term)
 	x.Check(err)
 	return buf.Bytes()
 }
