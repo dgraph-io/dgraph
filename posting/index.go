@@ -22,7 +22,6 @@ import (
 	"encoding/json"
 	"flag"
 	"io/ioutil"
-	"sync/atomic"
 	"time"
 
 	"golang.org/x/net/trace"
@@ -47,17 +46,12 @@ type indexConfig struct {
 	// TODO(jchiu): Add other tokenizer here in future.
 }
 
-type indexCounters struct {
-	numDel, numSet uint64
-}
-
 var (
 	indexLog        trace.EventLog
 	indexStore      *store.Store
 	indexCfgs       indexConfigs
 	indexConfigFile = flag.String("indexconfig", "index.json", "File containing index config. If empty, we create an empty config.")
 	indexedAttr     = make(map[string]bool)
-	indexCtrs       indexCounters
 )
 
 func init() {
@@ -106,8 +100,8 @@ func IndexKey(attr string, term []byte) []byte {
 	return buf.Bytes()
 }
 
-// processIndexJob adds mutations to maintain our index.
-func processIndexJob(attr string, uid uint64, term []byte, del bool) {
+// processIndexTerm adds mutation(s) for a single term, to maintain index.
+func processIndexTerm(attr string, uid uint64, term []byte, del bool) {
 	edge := x.DirectedEdge{
 		Timestamp: time.Now(),
 		ValueId:   uid,
@@ -118,19 +112,12 @@ func processIndexJob(attr string, uid uint64, term []byte, del bool) {
 	x.Assertf(plist != nil, "plist is nil [%s] %d %s", key, edge.ValueId, edge.Attribute)
 
 	ctx := context.Background()
-	var numDel, numSet uint64
 	if del {
 		plist.AddMutation(ctx, edge, Del)
-		numDel = atomic.AddUint64(&indexCtrs.numDel, 1)
-		numSet = atomic.LoadUint64(&indexCtrs.numSet)
+		indexLog.Printf("SET [%s] [%d] OldTerm [%s]", edge.Attribute, edge.Entity, string(term))
 	} else {
 		plist.AddMutation(ctx, edge, Set)
-		numSet = atomic.AddUint64(&indexCtrs.numSet, 1)
-		numDel = atomic.LoadUint64(&indexCtrs.numDel)
-	}
-	numOp := numSet + numDel
-	if (numOp % 100000) == 0 {
-		indexLog.Printf("IndexSet:%d IndexDel:%d IndexTotal:%d", numSet, numDel, numSet+numDel)
+		indexLog.Printf("DEL [%s] [%d] NewTerm [%s]", edge.Attribute, edge.Entity, string(term))
 	}
 }
 
@@ -157,10 +144,10 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t x.DirectedEdge, op by
 		return nil
 	}
 	if hasLastPost && lastPost.ValueBytes() != nil {
-		processIndexJob(t.Attribute, t.Entity, lastPost.ValueBytes(), true)
+		processIndexTerm(t.Attribute, t.Entity, lastPost.ValueBytes(), true)
 	}
 	if op == Set {
-		processIndexJob(t.Attribute, t.Entity, t.Value, false)
+		processIndexTerm(t.Attribute, t.Entity, t.Value, false)
 	}
 	return nil
 }
