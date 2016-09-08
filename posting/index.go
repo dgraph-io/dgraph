@@ -22,7 +22,6 @@ import (
 	"encoding/json"
 	"flag"
 	"io/ioutil"
-	"log"
 	"sync/atomic"
 	"time"
 
@@ -67,7 +66,7 @@ func init() {
 		x.Assert(indexConfigFile != nil && len(*indexConfigFile) > 0)
 		f, err := ioutil.ReadFile(*indexConfigFile)
 		x.Check(err)
-		log.Printf("Reading index configs from [%s]\n", *indexConfigFile)
+		indexLog.Printf("Reading index configs from [%s]", *indexConfigFile)
 		ReadIndexConfigs(f)
 	})
 }
@@ -78,10 +77,10 @@ func ReadIndexConfigs(f []byte) {
 		indexedAttr[c.Attr] = true
 	}
 	if len(indexedAttr) == 0 {
-		log.Println("No indexed attributes!")
+		indexLog.Printf("No indexed attributes!")
 	} else {
 		for k := range indexedAttr {
-			log.Printf("Indexed attribute [%s]\n", k)
+			indexLog.Printf("Indexed attribute [%s]", k)
 		}
 	}
 }
@@ -130,31 +129,38 @@ func processIndexJob(attr string, uid uint64, term []byte, del bool) {
 	}
 	numOp := numSet + numDel
 	if (numOp % 100000) == 0 {
-		indexLog.Printf("IndexSet %d IndexDel %d IndexTotal", numSet, numDel, numSet+numDel)
+		indexLog.Printf("IndexSet:%d IndexDel:%d IndexTotal:%d", numSet, numDel, numSet+numDel)
 	}
 }
 
 // AddMutationWithIndex is AddMutation with support for indexing.
 func (l *List) AddMutationWithIndex(ctx context.Context, t x.DirectedEdge, op byte) error {
-	keyUID, keyAttr := DecodeKey(l.Key())
-	x.Assert(len(keyAttr) > 0 && keyAttr[0] != indexRune)
-	doUpdateIndex := t.Value != nil && indexedAttr[keyAttr]
-	var lastPost *types.Posting
+	var keyUID uint64
+	var keyAttr string
+	var lastPost types.Posting
+	var hasLastPost bool
+	doUpdateIndex := indexStore != nil && (t.Value != nil)
+
 	if doUpdateIndex {
-		// Check last posting for original value BEFORE any mutation actually happens.
-		if l.Length() >= 1 {
-			lastPost = new(types.Posting)
-			x.Assert(l.Get(lastPost, l.Length()-1))
+		keyUID, keyAttr = DecodeKey(l.Key())
+		x.Assert(len(keyAttr) > 0 && keyAttr[0] != indexRune)
+		doUpdateIndex = indexedAttr[keyAttr]
+		if doUpdateIndex {
+			// Check last posting for original value BEFORE any mutation actually happens.
+			if l.Length() >= 1 {
+				x.Assert(l.Get(&lastPost, l.Length()-1))
+				hasLastPost = true
+			}
 		}
 	}
 	hasMutated, err := l.AddMutation(ctx, t, op)
 	if err != nil {
 		return err
 	}
-	if !hasMutated || !doUpdateIndex || indexStore == nil {
+	if !hasMutated || !doUpdateIndex {
 		return nil
 	}
-	if lastPost != nil && lastPost.ValueBytes() != nil {
+	if hasLastPost && lastPost.ValueBytes() != nil {
 		processIndexJob(keyAttr, keyUID, lastPost.ValueBytes(), true)
 	}
 	if op == Set {
