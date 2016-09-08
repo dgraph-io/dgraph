@@ -234,7 +234,8 @@ func (l *List) init(key []byte, pstore *store.Store, clog *commit.Logger) {
 
 	err := clog.StreamEntries(posting.CommitTs()+1, l.hash,
 		func(hdr commit.Header, buffer []byte) {
-			m := x.NewPosting(buffer)
+			m := new(types.Posting)
+			x.ParsePosting(m, buffer)
 			if m.Ts() > l.maxMutationTs {
 				l.maxMutationTs = m.Ts()
 			}
@@ -245,15 +246,6 @@ func (l *List) init(key []byte, pstore *store.Store, clog *commit.Logger) {
 	if err != nil {
 		log.Fatalf("Error while streaming entries: %v", err)
 	}
-}
-
-// Key returns the key of posting list. You should try to use DirectedEdge if you
-// can for attribute, entity and other info.
-func (l *List) Key() []byte {
-	l.wg.Wait()
-	l.RLock()
-	defer l.RUnlock()
-	return l.key
 }
 
 // getPostingList tries to get posting list from l.pbuffer. If it is nil, then
