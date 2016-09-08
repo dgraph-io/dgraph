@@ -38,6 +38,7 @@ func TestQuery(t *testing.T) {
 	clog.Init()
 	defer clog.Close()
 	posting.Init(clog)
+	posting.InitIndex(ps)
 
 	uid.Init(ps)
 

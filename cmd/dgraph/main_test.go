@@ -70,6 +70,7 @@ func prepare() (dir1, dir2 string, ps *store.Store, clog *commit.Logger, rerr er
 	worker.InitState(ps, nil, 0, 1)
 	uid.Init(ps)
 	loader.Init(ps, ps)
+	posting.InitIndex(ps)
 
 	{
 		// Assign Uids first.

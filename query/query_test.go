@@ -18,6 +18,7 @@ package query
 
 import (
 	"bytes"
+	"context"
 	"encoding/gob"
 	"encoding/json"
 	"io/ioutil"
@@ -26,10 +27,7 @@ import (
 	"testing"
 	"time"
 
-	"context"
-
 	"github.com/gogo/protobuf/proto"
-	"github.com/google/flatbuffers/go"
 
 	"github.com/dgraph-io/dgraph/commit"
 	"github.com/dgraph-io/dgraph/gql"
@@ -49,7 +47,7 @@ func setErr(err *error, nerr error) {
 }
 
 func addEdge(t *testing.T, edge x.DirectedEdge, l *posting.List) {
-	if err := l.AddMutation(context.Background(), edge, posting.Set); err != nil {
+	if _, err := l.AddMutation(context.Background(), edge, posting.Set); err != nil {
 		t.Error(err)
 	}
 }
@@ -70,9 +68,7 @@ func checkSingleValue(t *testing.T, child *SubGraph,
 	if child.Attr != attr || len(child.Result) == 0 {
 		t.Error("Expected attr name with some.Result")
 	}
-	uo := flatbuffers.GetUOffsetT(child.Result)
-	r := new(task.Result)
-	r.Init(child.Result, uo)
+	r := x.NewTaskResult(child.Result)
 	if r.ValuesLength() != 1 {
 		t.Errorf("Expected value length 1. Got: %v", r.ValuesLength())
 	}
@@ -114,9 +110,7 @@ func TestNewGraph(t *testing.T) {
 
 	worker.InitState(ps, nil, 0, 1)
 
-	uo := flatbuffers.GetUOffsetT(sg.Result)
-	r := new(task.Result)
-	r.Init(sg.Result, uo)
+	r := x.NewTaskResult(sg.Result)
 	if r.UidmatrixLength() != 1 {
 		t.Errorf("Expected length 1. Got: %v", r.UidmatrixLength())
 	}
@@ -439,9 +433,7 @@ func TestProcessGraph(t *testing.T) {
 		t.Errorf("Expected some.Result.")
 		return
 	}
-	uo := flatbuffers.GetUOffsetT(child.Result)
-	r := new(task.Result)
-	r.Init(child.Result, uo)
+	r := x.NewTaskResult(child.Result)
 
 	if r.UidmatrixLength() != 1 {
 		t.Errorf("Expected 1 matrix. Got: %v", r.UidmatrixLength())
@@ -462,8 +454,7 @@ func TestProcessGraph(t *testing.T) {
 		t.Errorf("Expected attr name")
 	}
 	child = child.Children[0]
-	uo = flatbuffers.GetUOffsetT(child.Result)
-	r.Init(child.Result, uo)
+	x.ParseTaskResult(r, child.Result)
 	if r.ValuesLength() != 5 {
 		t.Errorf("Expected 5 names of 5 friends")
 	}

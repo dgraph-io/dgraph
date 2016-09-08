@@ -135,7 +135,7 @@ func TestAddMutation(t *testing.T) {
 		Timestamp: time.Now(),
 	}
 	ctx := context.Background()
-	if err := l.AddMutation(ctx, edge, Set); err != nil {
+	if _, err := l.AddMutation(ctx, edge, Set); err != nil {
 		t.Error(err)
 	}
 
@@ -182,7 +182,7 @@ func TestAddMutation(t *testing.T) {
 		9, 49, 81,
 	}
 	edge.ValueId = 49
-	if err := l.AddMutation(ctx, edge, Set); err != nil {
+	if _, err := l.AddMutation(ctx, edge, Set); err != nil {
 		t.Error(err)
 	}
 	/*
@@ -197,18 +197,18 @@ func TestAddMutation(t *testing.T) {
 
 	// Delete an edge, add an edge, replace an edge
 	edge.ValueId = 49
-	if err := l.AddMutation(ctx, edge, Del); err != nil {
+	if _, err := l.AddMutation(ctx, edge, Del); err != nil {
 		t.Error(err)
 	}
 
 	edge.ValueId = 69
-	if err := l.AddMutation(ctx, edge, Set); err != nil {
+	if _, err := l.AddMutation(ctx, edge, Set); err != nil {
 		t.Error(err)
 	}
 
 	edge.ValueId = 9
 	edge.Source = "anti-testing"
-	if err := l.AddMutation(ctx, edge, Set); err != nil {
+	if _, err := l.AddMutation(ctx, edge, Set); err != nil {
 		t.Error(err)
 	}
 	/*
@@ -276,7 +276,7 @@ func TestAddMutation_Value(t *testing.T) {
 		Timestamp: time.Now(),
 	}
 	ctx := context.Background()
-	if err := ol.AddMutation(ctx, edge, Set); err != nil {
+	if _, err := ol.AddMutation(ctx, edge, Set); err != nil {
 		t.Error(err)
 	}
 	var p types.Posting
@@ -304,7 +304,7 @@ func TestAddMutation_Value(t *testing.T) {
 
 	// The value made it to the posting list. Changing it now.
 	edge.Value = []byte(strconv.Itoa(119))
-	if err := ol.AddMutation(ctx, edge, Set); err != nil {
+	if _, err := ol.AddMutation(ctx, edge, Set); err != nil {
 		t.Error(err)
 	}
 	if ol.Length() != 1 {
@@ -354,7 +354,7 @@ func benchmarkAddMutations(n int, b *testing.B) {
 			Source:    "testing",
 			Timestamp: ts.Add(time.Microsecond),
 		}
-		if err := l.AddMutation(ctx, edge, Set); err != nil {
+		if _, err := l.AddMutation(ctx, edge, Set); err != nil {
 			b.Error(err)
 		}
 	}

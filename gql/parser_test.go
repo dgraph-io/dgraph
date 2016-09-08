@@ -597,6 +597,27 @@ func TestParseFragmentCycle(t *testing.T) {
 	}
 }
 
+func TestParseFragmentMissing(t *testing.T) {
+	query := `
+	query {
+		user(_uid_:0x0a) {
+			...fragmenta
+		}
+	}
+	fragment fragmentb {
+		...fragmentc
+	}
+	fragment fragmentc {
+		id
+		...fragmenta
+	}
+`
+	_, _, err := Parse(query)
+	if err == nil {
+		t.Error("Expected error with missing fragment")
+	}
+}
+
 func TestParseVariables(t *testing.T) {
 	query := `{
 		"query": "query testQuery( $a  : int   , $b: int){root(_uid_: 0x0a) {name(first: $b, after: $a){english}}}", 

@@ -58,19 +58,39 @@ func InitState(ps, uStore *store.Store, idx, numInst uint64) {
 }
 
 // NewQuery creates a Query flatbuffer table, serializes and returns it.
-func NewQuery(attr string, uids []uint64) []byte {
+func NewQuery(attr string, uids []uint64, terms []string) []byte {
 	b := flatbuffers.NewBuilder(0)
 
-	task.QueryStartUidsVector(b, len(uids))
-	for i := len(uids) - 1; i >= 0; i-- {
-		b.PrependUint64(uids[i])
+	x.Assert(uids == nil || terms == nil)
+
+	var vend flatbuffers.UOffsetT
+	if uids != nil {
+		task.QueryStartUidsVector(b, len(uids))
+		for i := len(uids) - 1; i >= 0; i-- {
+			b.PrependUint64(uids[i])
+		}
+		vend = b.EndVector(len(uids))
+	} else {
+		offsets := make([]flatbuffers.UOffsetT, 0, len(terms))
+		for _, term := range terms {
+			uo := b.CreateString(term)
+			offsets = append(offsets, uo)
+		}
+		task.QueryStartTermsVector(b, len(terms))
+		for i := len(terms) - 1; i >= 0; i-- {
+			b.PrependUOffsetT(offsets[i])
+		}
+		vend = b.EndVector(len(terms))
 	}
-	vend := b.EndVector(len(uids))
 
 	ao := b.CreateString(attr)
 	task.QueryStart(b)
 	task.QueryAddAttr(b, ao)
-	task.QueryAddUids(b, vend)
+	if uids != nil {
+		task.QueryAddUids(b, vend)
+	} else {
+		task.QueryAddTerms(b, vend)
+	}
 	qend := task.QueryEnd(b)
 	b.Finish(qend)
 	return b.Bytes[b.Head():]
@@ -128,9 +148,7 @@ func (w *grpcWorker) Mutate(ctx context.Context, query *Payload) (*Payload, erro
 
 // ServeTask is used to respond to a query.
 func (w *grpcWorker) ServeTask(ctx context.Context, query *Payload) (*Payload, error) {
-	uo := flatbuffers.GetUOffsetT(query.Data)
-	q := new(task.Query)
-	q.Init(query.Data, uo)
+	q := x.NewTaskQuery(query.Data)
 	attr := string(q.Attr())
 	x.Trace(ctx, "Attribute: %v NumUids: %v InstanceIdx: %v ServeTask",
 		attr, q.UidsLength(), ws.instanceIdx)
@@ -139,11 +157,9 @@ func (w *grpcWorker) ServeTask(ctx context.Context, query *Payload) (*Payload, e
 	var rerr error
 	// Request for xid <-> uid conversion should be handled by instance 0 and all
 	// other requests should be handled according to modulo sharding of the predicate.
-	if (ws.instanceIdx == 0 && attr == _xid_) ||
-		farm.Fingerprint64([]byte(attr))%ws.numInstances == ws.instanceIdx {
-
+	chosenInstance := farm.Fingerprint64([]byte(attr)) % ws.numInstances
+	if (ws.instanceIdx == 0 && attr == _xid_) || chosenInstance == ws.instanceIdx {
 		reply.Data, rerr = processTask(query.Data)
-
 	} else {
 		log.Fatalf("attr: %v instanceIdx: %v Request sent to wrong server.", attr, ws.instanceIdx)
 	}

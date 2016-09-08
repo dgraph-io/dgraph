@@ -169,13 +169,8 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 	}
 
 	// Now read the query and results at current node.
-	uo := flatbuffers.GetUOffsetT(sg.Query)
-	q := new(task.Query)
-	q.Init(sg.Query, uo)
-
-	ro := flatbuffers.GetUOffsetT(sg.Result)
-	r := new(task.Result)
-	r.Init(sg.Result, ro)
+	q := x.NewTaskQuery(sg.Query)
+	r := x.NewTaskResult(sg.Result)
 
 	if q.UidsLength() != r.UidmatrixLength() {
 		log.Fatalf("Result uidmatrixlength: %v. Query uidslength: %v",
@@ -344,13 +339,8 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 
 	// We go through all predicate children of the subgraph.
 	for _, pc := range sg.Children {
-		ro := flatbuffers.GetUOffsetT(pc.Result)
-		r := new(task.Result)
-		r.Init(pc.Result, ro)
-
-		uo := flatbuffers.GetUOffsetT(pc.Query)
-		q := new(task.Query)
-		q.Init(pc.Query, uo)
+		r := x.NewTaskResult(pc.Result)
+		q := x.NewTaskQuery(pc.Query)
 
 		idx := indexOf(uid, q)
 
@@ -418,9 +408,7 @@ func (sg *SubGraph) ToProtocolBuffer(l *Latency) (*graph.Node, error) {
 		return n, nil
 	}
 
-	ro := flatbuffers.GetUOffsetT(sg.Result)
-	r := new(task.Result)
-	r.Init(sg.Result, ro)
+	r := x.NewTaskResult(sg.Result)
 
 	var ul task.UidList
 	r.Uidmatrix(&ul, 0)
@@ -607,10 +595,7 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, rch chan error) {
 		}
 	}
 
-	uo := flatbuffers.GetUOffsetT(sg.Result)
-	r := new(task.Result)
-	r.Init(sg.Result, uo)
-
+	r := x.NewTaskResult(sg.Result)
 	if r.ValuesLength() > 0 {
 		var v task.Value
 		if r.Values(&v, 0) {

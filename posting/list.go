@@ -18,6 +18,7 @@ package posting
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"fmt"
 	"log"
@@ -27,8 +28,6 @@ import (
 	"sync/atomic"
 	"time"
 	"unsafe"
-
-	"context"
 
 	"github.com/dgryski/go-farm"
 	"github.com/google/flatbuffers/go"
@@ -42,8 +41,10 @@ import (
 
 var E_TMP_ERROR = fmt.Errorf("Temporary Error. Please retry.")
 
-const Set = 0x01
-const Del = 0x02
+const (
+	Set = 0x01
+	Del = 0x02
+)
 
 type buffer struct {
 	d []byte
@@ -68,7 +69,7 @@ type List struct {
 	deleteMe    int32
 
 	// Mutations
-	mlayer        map[int]types.Posting // stores only replace instructions.
+	mlayer        map[int]types.Posting // Stores only replace instructions.
 	mdelta        int                   // len(plist) + mdelta = final length.
 	maxMutationTs int64                 // Track maximum mutation ts.
 	mindex        []*MutationLink
@@ -232,13 +233,13 @@ func (l *List) init(key []byte, pstore *store.Store, clog *commit.Logger) {
 
 	err := clog.StreamEntries(posting.CommitTs()+1, l.hash,
 		func(hdr commit.Header, buffer []byte) {
-
-			uo := flatbuffers.GetUOffsetT(buffer)
 			m := new(types.Posting)
-			m.Init(buffer, uo)
+			x.ParsePosting(m, buffer)
 			if m.Ts() > l.maxMutationTs {
 				l.maxMutationTs = m.Ts()
 			}
+			// No need to process index jobs. They should have added their extra
+			// mutations to the commit logs.
 			l.mergeMutation(m)
 		})
 	if err != nil {
@@ -246,7 +247,8 @@ func (l *List) init(key []byte, pstore *store.Store, clog *commit.Logger) {
 	}
 }
 
-// There's no need for lock acquisition for this.
+// getPostingList tries to get posting list from l.pbuffer. If it is nil, then
+// we query RocksDB. There is no need for lock acquisition here.
 func (l *List) getPostingList() *types.PostingList {
 	pb := atomic.LoadPointer(&l.pbuffer)
 	buf := (*buffer)(pb)
@@ -262,10 +264,9 @@ func (l *List) getPostingList() *types.PostingList {
 		if atomic.CompareAndSwapPointer(&l.pbuffer, pb, unsafe.Pointer(nbuf)) {
 			return types.GetRootAsPostingList(nbuf.d, 0)
 
-		} else {
-			// Someone else replaced the pointer in the meantime. Retry recursively.
-			return l.getPostingList()
 		}
+		// Someone else replaced the pointer in the meantime. Retry recursively.
+		return l.getPostingList()
 	}
 	return types.GetRootAsPostingList(buf.d, 0)
 }
@@ -391,11 +392,17 @@ func (l *List) mindexDeleteAt(mi int) {
 // Thus we can provide mutation layers over immutable posting list, while
 // still ensuring fast lookup access.
 //
-// NOTE: This function expects the caller to hold a RW Lock.
+// NOTE: mergeMutation expects the caller to hold a RW Lock.
 // Update: With mergeMutation function, we're adding mutations with a cost
 // of O(log M + log N), where M = number of previous mutations, and N =
 // number of postings in the immutable posting list.
-func (l *List) mergeMutation(mp *types.Posting) {
+//
+// NOTE: Strictly speaking, mergeMutation is not O(log M + log N). Any calls to
+// mindexInsertAt or mindexDeleteAt is O(M) time. However in practice, M is small.
+//
+// mergeMutation is the function that merges a mutation into mutation layers. It
+// does not write anything to RocksDB. Returns whether a mutation did happen.
+func (l *List) mergeMutation(mp *types.Posting) bool {
 	curUid := mp.Uid()
 	pi, puid := l.lePostingIndex(curUid)  // O(log N)
 	mi, muid := l.leMutationIndex(curUid) // O(log M)
@@ -453,7 +460,7 @@ func (l *List) mergeMutation(mp *types.Posting) {
 				var cp types.Posting
 				if ok := plist.Postings(&cp, pi); ok {
 					if samePosting(&cp, mp) {
-						return // do nothing.
+						return false // do nothing.
 					}
 				}
 				l.mlayer[pi] = *mp
@@ -469,6 +476,7 @@ func (l *List) mergeMutation(mp *types.Posting) {
 	} else {
 		log.Fatalf("Invalid operation: %v", mp.Op())
 	}
+	return true
 }
 
 // Caller must hold at least a read lock.
@@ -566,11 +574,15 @@ func (l *List) SetForDeletion() {
 // BenchmarkAddMutations_SyncEvery100LogEntry-6 	   10000	    298352 ns/op
 // BenchmarkAddMutations_SyncEvery1000LogEntry-6	   30000	     63544 ns/op
 // ok  	github.com/dgraph-io/dgraph/posting	10.291s
-func (l *List) AddMutation(ctx context.Context, t x.DirectedEdge, op byte) error {
+
+// AddMutation adds mutation to mutation layers. Note that it does not write
+// anything to disk. Some other background routine will be responsible for merging
+// changes in mutation layers to RocksDB. Returns whether any mutation happens.
+func (l *List) AddMutation(ctx context.Context, t x.DirectedEdge, op byte) (bool, error) {
 	l.wg.Wait()
 	if atomic.LoadInt32(&l.deleteMe) == 1 {
 		x.Trace(ctx, "DELETEME set to true. Temporary error.")
-		return E_TMP_ERROR
+		return false, E_TMP_ERROR
 	}
 
 	// All edges with a value set, have the same uid. In other words,
@@ -580,7 +592,7 @@ func (l *List) AddMutation(ctx context.Context, t x.DirectedEdge, op byte) error
 	}
 	if t.ValueId == 0 {
 		x.Trace(ctx, "ValueId cannot be zero")
-		return fmt.Errorf("ValueId cannot be zero.")
+		return false, fmt.Errorf("ValueId cannot be zero.")
 	}
 	mbuf := newPosting(t, op)
 	var err error
@@ -589,9 +601,10 @@ func (l *List) AddMutation(ctx context.Context, t x.DirectedEdge, op byte) error
 		ts, err = l.clog.AddLog(l.hash, mbuf)
 		if err != nil {
 			x.Trace(ctx, "Error while adding log: %v", err)
-			return err
+			return false, err
 		}
 	}
+
 	// Mutation arrives:
 	// - Check if we had any(SET/DEL) before this, stored in the mutation list.
 	//		- If yes, then replace that mutation. Jump to a)
@@ -603,11 +616,8 @@ func (l *List) AddMutation(ctx context.Context, t x.DirectedEdge, op byte) error
 	defer l.Unlock()
 	x.Trace(ctx, "Lock acquired")
 
-	uo := flatbuffers.GetUOffsetT(mbuf)
-	mpost := new(types.Posting)
-	mpost.Init(mbuf, uo)
-
-	l.mergeMutation(mpost)
+	mpost := x.NewPosting(mbuf)
+	hasMutated := l.mergeMutation(mpost)
 	if len(l.mindex)+len(l.mlayer) > 0 {
 		atomic.StoreInt64(&l.dirtyTs, time.Now().UnixNano())
 		if dirtymap != nil {
@@ -616,7 +626,7 @@ func (l *List) AddMutation(ctx context.Context, t x.DirectedEdge, op byte) error
 	}
 	l.maxMutationTs = ts
 	x.Trace(ctx, "Mutation done")
-	return nil
+	return hasMutated, nil
 }
 
 func (l *List) MergeIfDirty(ctx context.Context) (merged bool, err error) {

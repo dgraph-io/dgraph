@@ -18,6 +18,7 @@ package loader
 
 import (
 	"bufio"
+	"context"
 	"flag"
 	"io"
 	"math/rand"
@@ -27,8 +28,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-
-	"context"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/dgryski/go-farm"
@@ -195,7 +194,7 @@ func (s *state) handleNQuads(wg *sync.WaitGroup) {
 
 		key := posting.Key(edge.Entity, edge.Attribute)
 		plist := posting.GetOrCreate(key, dataStore)
-		plist.AddMutation(ctx, edge, posting.Set)
+		plist.AddMutationWithIndex(ctx, edge, posting.Set)
 		atomic.AddUint64(&s.ctr.processed, 1)
 	}
 }
