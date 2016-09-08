@@ -23,7 +23,7 @@ import (
 )
 
 // Schema stores the types for all predicates in the system.
-var Schema = make(map[string]Type)
+var schema = make(map[string]Type)
 
 // LoadSchema loads the schema and checks for errors.
 func LoadSchema(fileName string) error {
@@ -39,18 +39,23 @@ func LoadSchema(fileName string) error {
 	for k, v := range s {
 		switch v {
 		case "int":
-			Schema[k] = intType
+			schema[k] = intType
 		case "float":
-			Schema[k] = floatType
+			schema[k] = floatType
 		case "string":
-			Schema[k] = stringType
+			schema[k] = stringType
 		case "bool":
-			Schema[k] = booleanType
+			schema[k] = booleanType
 		case "id":
-			Schema[k] = idType
+			schema[k] = idType
 		default:
 			return fmt.Errorf("Unknown type:%v in input schema file for predicate:%v", v, k)
 		}
 	}
 	return nil
+}
+
+// SchemaType fetches types for a predicate from schema map
+func SchemaType(p string) Type {
+	return schema[p]
 }

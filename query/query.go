@@ -487,7 +487,7 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 		dst := &SubGraph{
 			isDebug:  sg.isDebug,
 			Attr:     gchild.Attr,
-			AttrType: gql.Schema[gchild.Attr],
+			AttrType: gql.SchemaType(gchild.Attr),
 		}
 		if v, ok := gchild.Args["offset"]; ok {
 			offset, err := strconv.ParseInt(v, 0, 32)
@@ -581,7 +581,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	sg := &SubGraph{
 		isDebug:  gq.Attr == "debug",
 		Attr:     gq.Attr,
-		AttrType: gql.Schema[gq.Attr],
+		AttrType: gql.SchemaType(gq.Attr),
 		IsRoot:   true,
 		Result:   b.Bytes[b.Head():],
 	}

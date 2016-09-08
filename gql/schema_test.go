@@ -17,7 +17,6 @@
 package gql
 
 import (
-	"context"
 	"os"
 	"testing"
 )
@@ -50,5 +49,29 @@ func TestLoadSchema(t *testing.T) {
 	err = LoadSchema(file.Name())
 	if err != nil {
 		t.Error(err)
+	}
+}
+
+// TestSchemaType tests fetching type info from schema map using predicate names
+func TestSchemaType(t *testing.T) {
+	file, err := createSchemaFile()
+	if err != nil {
+		t.Error(err)
+	}
+	defer file.Close()
+	defer os.Remove(file.Name())
+
+	// load schema from json file
+	err = LoadSchema(file.Name())
+	if err != nil {
+		t.Error(err)
+	}
+	typ := SchemaType("name")
+	if _, ok := typ.(Scalar); !ok {
+		t.Error("Type assertion failed for predicate:name")
+	}
+	typ = SchemaType("age")
+	if _, ok := typ.(Scalar); !ok {
+		t.Error("Type assertion failed for predicate:age")
 	}
 }
