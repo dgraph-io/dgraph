@@ -121,26 +121,6 @@ func Key(uid uint64, attr string) []byte {
 	return buf.Bytes()
 }
 
-// DecodeKey deserializes the uid and attr.
-func DecodeKey(b []byte) (uint64, string) {
-	buf := bytes.NewBuffer(b)
-	attr, err := buf.ReadString('|')
-	if err != nil {
-		log.Fatalf("Error while decoding key: %v", b)
-	}
-	attr = attr[:len(attr)-1]
-	if attr == "_uid_" {
-		return 0, attr
-	}
-	if len(b) >= 1 && b[0] == indexRune {
-		return 0, attr
-	}
-	var uid uint64
-	x.Checkf(binary.Read(buf, binary.LittleEndian, &uid),
-		"Error while decoding key [%s]", string(b))
-	return uid, attr
-}
-
 func newPosting(t x.DirectedEdge, op byte) []byte {
 	b := flatbuffers.NewBuilder(0)
 	var bo flatbuffers.UOffsetT
@@ -267,6 +247,8 @@ func (l *List) init(key []byte, pstore *store.Store, clog *commit.Logger) {
 	}
 }
 
+// Key returns the key of posting list. You should try to use DirectedEdge if you
+// can for attribute, entity and other info.
 func (l *List) Key() []byte {
 	l.wg.Wait()
 	l.RLock()

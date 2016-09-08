@@ -136,22 +136,17 @@ func processIndexJob(attr string, uid uint64, term []byte, del bool) {
 
 // AddMutationWithIndex is AddMutation with support for indexing.
 func (l *List) AddMutationWithIndex(ctx context.Context, t x.DirectedEdge, op byte) error {
-	var keyUID uint64
-	var keyAttr string
+	x.Assertf(len(t.Attribute) > 0 && t.Attribute[0] != indexRune,
+		"[%s] [%d] [%s] %d %d\n", t.Attribute, t.Entity, string(t.Value), t.ValueId, op)
+
 	var lastPost types.Posting
 	var hasLastPost bool
-	doUpdateIndex := indexStore != nil && (t.Value != nil)
-
+	doUpdateIndex := indexStore != nil && (t.Value != nil) && indexedAttr[t.Attribute]
 	if doUpdateIndex {
-		keyUID, keyAttr = DecodeKey(l.Key())
-		x.Assert(len(keyAttr) > 0 && keyAttr[0] != indexRune)
-		doUpdateIndex = indexedAttr[keyAttr]
-		if doUpdateIndex {
-			// Check last posting for original value BEFORE any mutation actually happens.
-			if l.Length() >= 1 {
-				x.Assert(l.Get(&lastPost, l.Length()-1))
-				hasLastPost = true
-			}
+		// Check last posting for original value BEFORE any mutation actually happens.
+		if l.Length() >= 1 {
+			x.Assert(l.Get(&lastPost, l.Length()-1))
+			hasLastPost = true
 		}
 	}
 	hasMutated, err := l.AddMutation(ctx, t, op)
@@ -162,10 +157,10 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t x.DirectedEdge, op by
 		return nil
 	}
 	if hasLastPost && lastPost.ValueBytes() != nil {
-		processIndexJob(keyAttr, keyUID, lastPost.ValueBytes(), true)
+		processIndexJob(t.Attribute, t.Entity, lastPost.ValueBytes(), true)
 	}
 	if op == Set {
-		processIndexJob(keyAttr, keyUID, t.Value, false)
+		processIndexJob(t.Attribute, t.Entity, t.Value, false)
 	}
 	return nil
 }

@@ -68,9 +68,15 @@ func populateGraph(t *testing.T, ps *store.Store) {
 		ValueId:   23,
 		Source:    "author0",
 		Timestamp: time.Now(),
+		Attribute: "friend",
 	}
+	edge.Entity = 10
 	addEdge(t, edge, posting.GetOrCreate(posting.Key(10, "friend"), ps))
+
+	edge.Entity = 11
 	addEdge(t, edge, posting.GetOrCreate(posting.Key(11, "friend"), ps))
+
+	edge.Entity = 12
 	addEdge(t, edge, posting.GetOrCreate(posting.Key(12, "friend"), ps))
 
 	edge.ValueId = 25
@@ -79,13 +85,18 @@ func populateGraph(t *testing.T, ps *store.Store) {
 	edge.ValueId = 26
 	addEdge(t, edge, posting.GetOrCreate(posting.Key(12, "friend"), ps))
 
+	edge.Entity = 10
 	edge.ValueId = 31
 	addEdge(t, edge, posting.GetOrCreate(posting.Key(10, "friend"), ps))
+
+	edge.Entity = 12
 	addEdge(t, edge, posting.GetOrCreate(posting.Key(12, "friend"), ps))
 
+	edge.Entity = 12
 	edge.Value = []byte("photon")
 	addEdge(t, edge, posting.GetOrCreate(posting.Key(12, "friend"), ps))
 
+	edge.Entity = 10
 	addEdge(t, edge, posting.GetOrCreate(posting.Key(10, "friend"), ps))
 }
 
@@ -113,7 +124,6 @@ func TestProcessTask(t *testing.T) {
 	defer clog.Close()
 	posting.Init(clog)
 	posting.InitIndex(ps)
-
 	populateGraph(t, ps)
 
 	query := NewQuery("friend", []uint64{10, 11, 12}, nil)
@@ -218,6 +228,8 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 		Value:     []byte("notphoton_extra"),
 		Source:    "author0",
 		Timestamp: time.Now(),
+		Attribute: "friend",
+		Entity:    12,
 	}
 	addEdge(t, edge, posting.GetOrCreate(posting.Key(12, "friend"), ps))
 	edge.Value = []byte("notphoton")
@@ -253,12 +265,15 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 		Value:     []byte("ignored"),
 		Source:    "author0",
 		Timestamp: time.Now(),
+		Attribute: "friend",
+		Entity:    10,
 	}
 	// Redundant deletes.
 	delEdge(t, edge, posting.GetOrCreate(posting.Key(10, "friend"), ps))
 	delEdge(t, edge, posting.GetOrCreate(posting.Key(10, "friend"), ps))
 
 	// Set followed by delete.
+	edge.Entity = 12
 	delEdge(t, edge, posting.GetOrCreate(posting.Key(12, "friend"), ps))
 	addEdge(t, edge, posting.GetOrCreate(posting.Key(12, "friend"), ps))
 	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
@@ -364,6 +379,8 @@ func TestProcessTaskIndex(t *testing.T) {
 		Value:     []byte("notphoton_extra"),
 		Source:    "author0",
 		Timestamp: time.Now(),
+		Attribute: "friend",
+		Entity:    12,
 	}
 	addEdge(t, edge, posting.GetOrCreate(posting.Key(12, "friend"), ps))
 	edge.Value = []byte("notphoton")
@@ -402,12 +419,15 @@ func TestProcessTaskIndex(t *testing.T) {
 		Value:     []byte("ignored"),
 		Source:    "author0",
 		Timestamp: time.Now(),
+		Attribute: "friend",
+		Entity:    10,
 	}
 	// Redundant deletes.
 	delEdge(t, edge, posting.GetOrCreate(posting.Key(10, "friend"), ps))
 	delEdge(t, edge, posting.GetOrCreate(posting.Key(10, "friend"), ps))
 
 	// Set followed by delete.
+	edge.Entity = 12
 	delEdge(t, edge, posting.GetOrCreate(posting.Key(12, "friend"), ps))
 	addEdge(t, edge, posting.GetOrCreate(posting.Key(12, "friend"), ps))
 	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
