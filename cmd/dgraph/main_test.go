@@ -184,7 +184,11 @@ func TestConvertToEdges(t *testing.T) {
 
 	var edges []x.DirectedEdge
 	var err error
-	edges, err = convertToEdges(context.Background(), q1)
+	nquads, err := convertToNQuad(context.Background(), q1)
+	if err != nil {
+		t.Errorf("Expected err to be nil. Got: %v", err)
+	}
+	edges, err = convertToEdges(context.Background(), nquads)
 	if err != nil {
 		t.Errorf("Expected err to be nil. Got: %v", err)
 	}

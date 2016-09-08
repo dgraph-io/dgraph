@@ -5,33 +5,47 @@ syntax="proto3";
 package graph;
 
 service Dgraph {
-  rpc Query (Request) returns (Response) {}
+  rpc Query (Request) returns (Response) {};
+}
+
+message NQuad {
+	string sub = 1;
+	string pred = 2;
+	string objId = 3;
+	bytes objVal = 4;
+	string label = 5;
+}
+
+message Mutation {
+	repeated NQuad set = 1;
+	repeated NQuad del = 2;
 }
 
 message Request {
-  string query = 1;
+	string query = 1;
+	Mutation m = 2;
 }
 
 message Latency {
-  string parsing = 1;
-  string processing = 2;
-  string pb = 3;
+	string parsing = 1;
+	string processing = 2;
+	string pb = 3;
 }
 
 message Property {
-  string prop = 1;
-  bytes val = 2;
+	string prop = 1;
+	bytes val = 2;
 }
 
 message Node {
-  uint64 uid = 1;
-  string xid = 2;
-  string attribute = 3;
-  repeated Property properties = 4;
-  repeated Node children = 5; // Each node can have multiple children
+	uint64 uid = 1;
+	string xid = 2;
+	string attribute = 3;
+	repeated Property properties = 4;
+	repeated Node children = 5; // Each node can have multiple children
 }
 
 message Response {
-  Node n = 1;
-  Latency l = 2;
+	Node n = 1;
+	Latency l = 2;
 }
