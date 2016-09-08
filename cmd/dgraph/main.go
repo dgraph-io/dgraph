@@ -44,6 +44,7 @@ import (
 	"github.com/dgraph-io/dgraph/uid"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/soheilhy/cmux"
 )
 
 var (
@@ -177,7 +178,9 @@ func mutationHandler(ctx context.Context, mu *gql.Mutation) (map[string]uint64, 
 	return allocIds, nil
 }
 
-func queryHandler(w http.ResponseWriter, r *http.Request) {
+type httpServer struct{}
+
+func (s *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	addCorsHeaders(w)
 	if r.Method == "OPTIONS" {
 		return
@@ -271,11 +274,11 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // server is used to implement graph.DgraphServer
-type server struct{}
+type grpcServer struct{}
 
 // This method is used to execute the query and return the response to the
 // client as a protocol buffer message.
-func (s *server) Query(ctx context.Context,
+func (s *grpcServer) Query(ctx context.Context,
 	req *graph.Request) (*graph.Response, error) {
 
 	var allocIds map[string]uint64
@@ -347,33 +350,11 @@ func (s *server) Query(ctx context.Context,
 	return resp, err
 }
 
-// This function register a Dgraph grpc server on the address, which is used
-// exchanging protocol buffer messages.
-func runGrpcServer(address string) {
-	ln, err := net.Listen("tcp", address)
-	if err != nil {
-		log.Fatalf("While running server for client: %v", err)
-		return
-	}
-	log.Printf("Client worker listening: %v", ln.Addr())
-
-	s := grpc.NewServer(grpc.CustomCodec(&query.Codec{}))
-	graph.RegisterDgraphServer(s, &server{})
-	if err = s.Serve(ln); err != nil {
-		log.Fatalf("While serving gRpc requests: %v", err)
-	}
-	return
-}
-
-func main() {
-	x.Init()
-
+func checkFlagsAndInitDirs() {
 	numCpus := *numcpu
 	prev := runtime.GOMAXPROCS(numCpus)
-	log.Printf("num_cpu: %v. prev_maxprocs: %v. Set max procs to num cpus", numCpus, prev)
-	if *port%2 != 0 {
-		log.Fatalf("Port must be an even number: %v", *port)
-	}
+	log.Printf("num_cpu: %v. prev_maxprocs: %v. Set max procs to num cpus",
+		numCpus, prev)
 	// Create parent directories for postings, uids and mutations
 	var err error
 	err = os.MkdirAll(*postingDir, 0700)
@@ -388,6 +369,56 @@ func main() {
 	if err != nil {
 		log.Fatalf("Error while creating the filepath for uids: %v", err)
 	}
+}
+
+func serveGRPC(l net.Listener) {
+	s := grpc.NewServer(grpc.CustomCodec(&query.Codec{}))
+	graph.RegisterDgraphServer(s, &grpcServer{})
+	if err := s.Serve(l); err != nil {
+		log.Fatalf("While serving gRpc requests: %v", err)
+	}
+}
+
+func serveHTTP(l net.Listener) {
+	s := &http.Server{
+		Handler: &httpServer{},
+	}
+	if err := s.Serve(l); err != nil {
+		log.Fatalf("Serve: %v", err)
+	}
+}
+
+func setupServer() {
+	l, err := net.Listen("tcp", fmt.Sprintf(":%d", *port))
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	tcpm := cmux.New(l)
+	httpl := tcpm.Match(cmux.HTTP1Fast())
+	grpcl := tcpm.MatchWithWriters(
+		cmux.HTTP2MatchHeaderFieldSendSettings("content-type", "application/grpc"))
+	http2 := tcpm.Match(cmux.HTTP2())
+
+	// Initilize the servers.
+	go serveGRPC(grpcl)
+	go serveHTTP(httpl)
+	go serveHTTP(http2)
+
+	log.Println("grpc server started.")
+	log.Println("http server started.")
+	log.Println("Server listening on port", *port)
+
+	// Start cmux serving.
+	if err := tcpm.Serve(); !strings.Contains(err.Error(),
+		"use of closed network connection") {
+		log.Fatal(err)
+	}
+}
+
+func main() {
+	x.Init()
+	checkFlagsAndInitDir()
 
 	ps, err := store.NewStore(*postingDir)
 	x.Checkf(err, "Error initializing postings store")
@@ -417,13 +448,9 @@ func main() {
 		uid.Init(uidStore)
 	}
 
+	// Initiate internal worker communication.
 	worker.Connect(addrs, *workerPort)
-	// Grpc server runs on (port + 1)
-	go runGrpcServer(fmt.Sprintf(":%d", *port+1))
 
-	http.HandleFunc("/query", queryHandler)
-	log.Printf("Listening for requests at port: %v", *port)
-	if err := http.ListenAndServe(fmt.Sprintf(":%d", *port), nil); err != nil {
-		log.Fatalf("ListenAndServe: %v", err)
-	}
+	// Setup external communication.
+	setupServer()
 }
