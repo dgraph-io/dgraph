@@ -93,7 +93,7 @@ func IndexKey(attr string, term []byte) []byte {
 	x.Check(err)
 	_, err = buf.WriteString(attr)
 	x.Check(err)
-	_, err = buf.WriteString("|")
+	_, err = buf.WriteRune('|')
 	x.Check(err)
 	_, err = buf.Write(term)
 	x.Check(err)
