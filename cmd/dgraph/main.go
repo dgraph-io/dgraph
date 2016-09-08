@@ -352,11 +352,11 @@ func (s *grpcServer) Query(ctx context.Context,
 	return resp, err
 }
 
-func checkFlagsAndInitDir() {
+func checkFlagsAndInitDirs() {
 	numCpus := *numcpu
 	prev := runtime.GOMAXPROCS(numCpus)
-	log.Printf("num_cpu: %v. prev_maxprocs: %v. Set max procs to num cpus", numCpus, prev)
-
+	log.Printf("num_cpu: %v. prev_maxprocs: %v. Set max procs to num cpus",
+		numCpus, prev)
 	// Create parent directories for postings, uids and mutations
 	var err error
 	err = os.MkdirAll(*postingDir, 0700)
@@ -398,7 +398,8 @@ func setupServer() {
 
 	tcpm := cmux.New(l)
 	httpl := tcpm.Match(cmux.HTTP1Fast())
-	grpcl := tcpm.MatchWithWriters(cmux.HTTP2MatchHeaderFieldSendSettings("content-type", "application/grpc"))
+	grpcl := tcpm.MatchWithWriters(
+		cmux.HTTP2MatchHeaderFieldSendSettings("content-type", "application/grpc"))
 	http2 := tcpm.Match(cmux.HTTP2())
 
 	// Initilize the servers.
@@ -411,14 +412,14 @@ func setupServer() {
 	log.Println("Server listening on port", *port)
 
 	// Start cmux serving.
-	if err := tcpm.Serve(); !strings.Contains(err.Error(), "use of closed network connection") {
+	if err := tcpm.Serve(); !strings.Contains(err.Error(),
+		"use of closed network connection") {
 		log.Fatal(err)
 	}
 }
 
 func main() {
 	x.Init()
-
 	checkFlagsAndInitDir()
 
 	ps, err := store.NewStore(*postingDir)
