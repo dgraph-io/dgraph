@@ -464,7 +464,6 @@ func (l *List) mergeMutation(mp *types.Posting) bool {
 						return false // do nothing.
 					}
 				}
-
 				l.mlayer[pi] = *mp
 
 			} else { // not in plist, not in mindex, so insert in mindex.
