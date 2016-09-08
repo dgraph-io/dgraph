@@ -50,14 +50,17 @@ var (
 	indexLog        trace.EventLog
 	indexStore      *store.Store
 	indexCfgs       indexConfigs
-	indexConfigFile = flag.String("indexconfig", "index.json", "File containing index config. If empty, we create an empty config.")
+	indexConfigFile = flag.String("indexconfig", "", "File containing index config. If empty, we assume no index.")
 	indexedAttr     = make(map[string]bool)
 )
 
 func init() {
 	indexLog = trace.NewEventLog("index", "Logger")
 	x.AddInit(func() {
-		x.Assert(indexConfigFile != nil && len(*indexConfigFile) > 0)
+		if indexConfigFile == nil || len(*indexConfigFile) == 0 {
+			indexLog.Printf("No valid config file", *indexConfigFile)
+			return
+		}
 		f, err := ioutil.ReadFile(*indexConfigFile)
 		x.Check(err)
 		indexLog.Printf("Reading index configs from [%s]", *indexConfigFile)
