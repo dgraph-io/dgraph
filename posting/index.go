@@ -114,10 +114,10 @@ func processIndexTerm(attr string, uid uint64, term []byte, del bool) {
 	ctx := context.Background()
 	if del {
 		plist.AddMutation(ctx, edge, Del)
-		indexLog.Printf("SET [%s] [%d] OldTerm [%s]", edge.Attribute, edge.Entity, string(term))
+		indexLog.Printf("DEL [%s] [%d] OldTerm [%s]", edge.Attribute, edge.Entity, string(term))
 	} else {
 		plist.AddMutation(ctx, edge, Set)
-		indexLog.Printf("DEL [%s] [%d] NewTerm [%s]", edge.Attribute, edge.Entity, string(term))
+		indexLog.Printf("SET [%s] [%d] NewTerm [%s]", edge.Attribute, edge.Entity, string(term))
 	}
 }
 
