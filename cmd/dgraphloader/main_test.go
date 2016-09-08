@@ -48,7 +48,6 @@ func TestQuery(t *testing.T) {
 	uid.Init(ps)
 	loader.Init(ps, ps1)
 	posting.InitIndex(ps1)
-	defer posting.CloseIndex()
 
 	var count uint64
 	{

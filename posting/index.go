@@ -33,7 +33,7 @@ import (
 const (
 	// Posting list keys are prefixed with this byte if it is a mutation meant for
 	// the index.
-	indexByte = ':'
+	indexRune = ':'
 )
 
 type indexConfigs struct {
@@ -44,6 +44,21 @@ type indexConfig struct {
 	Attr string `json:"attribute"`
 	// TODO(jchiu): Add other tokenizer here in future.
 }
+
+// indexJob describes a mutation for a normal posting list.
+type indexJob struct {
+	attr string
+	uid  uint64 // Source entity / node.
+	term []byte
+	del  bool // Is this a delete or insert?
+}
+
+var (
+	indexStore      *store.Store
+	indexCfgs       indexConfigs
+	indexConfigFile = flag.String("indexconfig", "index.json", "File containing index config. If empty, we create an empty config.")
+	indexedAttr     = make(map[string]bool)
+)
 
 func init() {
 	x.AddInit(func() {
@@ -69,43 +84,19 @@ func ReadIndexConfigs(f []byte) {
 	}
 }
 
-// indexJob describes a mutation for a normal posting list.
-type indexJob struct {
-	attr string
-	uid  uint64 // Source entity / node.
-	term []byte
-	del  bool // Is this a delete or insert?
-}
-
-var (
-	indexJobC       chan indexJob
-	indexStore      *store.Store
-	indexDone       chan struct{}
-	indexCfgs       indexConfigs
-	indexConfigFile = flag.String("indexconfig", "index.json", "File containing index config. If empty, we create an empty config.")
-	indexedAttr     = make(map[string]bool)
-)
-
 // InitIndex initializes the index with the given data store.
 func InitIndex(ds *store.Store) {
 	if ds == nil {
 		return
 	}
 	indexStore = ds
-	indexJobC = make(chan indexJob, 100)
-	indexDone = make(chan struct{})
-	go processIndexJob()
-}
-
-func CloseIndex() {
-	close(indexJobC)
-	<-indexDone
 }
 
 func IndexKey(attr string, value []byte) []byte {
 	buf := bytes.NewBuffer(make([]byte, 0, len(attr)+len(value)+2))
-	x.Check(buf.WriteByte(indexByte))
-	_, err := buf.WriteString(attr)
+	_, err := buf.WriteRune(indexRune)
+	x.Check(err)
+	_, err = buf.WriteString(attr)
 	x.Check(err)
 	_, err = buf.WriteString("|")
 	x.Check(err)
@@ -116,29 +107,27 @@ func IndexKey(attr string, value []byte) []byte {
 
 // processIndexJob consumes and processes jobs from indexJobC. It can create new
 // posting lists and will add new mutations.
-func processIndexJob() {
-	for job := range indexJobC {
-		edge := x.DirectedEdge{
-			Timestamp: time.Now(),
-			ValueId:   job.uid,
-			Attribute: job.attr,
-		}
-		key := IndexKey(edge.Attribute, job.term)
-		plist := GetOrCreate(key, indexStore)
-		x.Assertf(plist != nil, "plist is nil [%s] %d %s", key, edge.ValueId, edge.Attribute)
-		if job.del {
-			plist.AddMutation(context.Background(), edge, Del)
-		} else {
-			plist.AddMutation(context.Background(), edge, Set)
-		}
+func processIndexJob(attr string, uid uint64, term []byte, del bool) {
+	edge := x.DirectedEdge{
+		Timestamp: time.Now(),
+		ValueId:   uid,
+		Attribute: attr,
 	}
-	indexDone <- struct{}{}
+	key := IndexKey(edge.Attribute, term)
+	plist := GetOrCreate(key, indexStore)
+	x.Assertf(plist != nil, "plist is nil [%s] %d %s", key, edge.ValueId, edge.Attribute)
+	if del {
+		plist.AddMutation(context.Background(), edge, Del)
+	} else {
+		plist.AddMutation(context.Background(), edge, Set)
+	}
 }
 
 // AddMutationWithIndex is AddMutation with support for indexing.
 func (l *List) AddMutationWithIndex(ctx context.Context, t x.DirectedEdge, op byte) error {
-	doUpdateIndex := t.Value != nil &&
-		(len(l.key) > 0 && l.key[0] != indexByte) && indexedAttr[l.keyAttr]
+	keyUID, keyAttr := DecodeKey(l.Key())
+	x.Assert(len(keyAttr) > 0 && keyAttr[0] != indexRune)
+	doUpdateIndex := t.Value != nil && indexedAttr[keyAttr]
 	var lastPost *types.Posting
 	if doUpdateIndex {
 		// Check last posting for original value BEFORE any mutation actually happens.
@@ -153,29 +142,17 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t x.DirectedEdge, op by
 		return err
 	}
 
-	if !hasMutated || !doUpdateIndex {
+	if !hasMutated || !doUpdateIndex || indexStore == nil {
 		return nil
 	}
 
 	if lastPost != nil && lastPost.ValueBytes() != nil {
-		l.indexDel(lastPost.ValueBytes())
+		processIndexJob(keyAttr, keyUID, lastPost.ValueBytes(), true)
+		//		l.indexDel(lastPost.ValueBytes())
 	}
 	if op == Set {
-		l.indexAdd(t.Value)
+		//		l.indexAdd(t.Value)
+		processIndexJob(keyAttr, keyUID, t.Value, false)
 	}
 	return nil
-}
-
-// indexAdd adds to jobs an indexJob that is an insert.
-func (l *List) indexAdd(newValue []byte) {
-	if indexJobC != nil {
-		indexJobC <- indexJob{l.keyAttr, l.keyUID, newValue, false}
-	}
-}
-
-// indexDel adds to jobs an indexJob that is a delete.
-func (l *List) indexDel(oldValue []byte) {
-	if indexJobC != nil {
-		indexJobC <- indexJob{l.keyAttr, l.keyUID, oldValue, true}
-	}
 }

@@ -71,7 +71,6 @@ func prepare() (dir1, dir2 string, ps *store.Store, clog *commit.Logger, rerr er
 	uid.Init(ps)
 	loader.Init(ps, ps)
 	posting.InitIndex(ps)
-	defer posting.CloseIndex()
 
 	{
 		// Assign Uids first.

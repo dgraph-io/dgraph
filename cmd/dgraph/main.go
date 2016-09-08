@@ -400,7 +400,6 @@ func main() {
 	defer clog.Close()
 
 	posting.InitIndex(ps)
-	defer posting.CloseIndex()
 
 	addrs := strings.Split(*workers, ",")
 	lenAddr := uint64(len(addrs))

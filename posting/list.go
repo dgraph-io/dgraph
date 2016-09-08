@@ -67,8 +67,6 @@ type List struct {
 	lastCompact time.Time
 	wg          sync.WaitGroup
 	deleteMe    int32
-	keyAttr     string // Might start with ":" for index-related mutations.
-	keyUID      uint64 // Ignore for index-related mutations.
 
 	// Mutations
 	mlayer        map[int]types.Posting // Stores only replace instructions.
@@ -134,7 +132,7 @@ func DecodeKey(b []byte) (uint64, string) {
 	if attr == "_uid_" {
 		return 0, attr
 	}
-	if len(b) >= 1 && b[0] == indexByte {
+	if len(b) >= 1 && b[0] == indexRune {
 		return 0, attr
 	}
 	var uid uint64
@@ -240,7 +238,6 @@ func (l *List) init(key []byte, pstore *store.Store, clog *commit.Logger) {
 		log.Fatal("empty should have some bytes.")
 	}
 	l.key = key
-	l.keyUID, l.keyAttr = DecodeKey(key)
 
 	l.pstore = pstore
 	l.clog = clog
@@ -268,6 +265,13 @@ func (l *List) init(key []byte, pstore *store.Store, clog *commit.Logger) {
 	if err != nil {
 		log.Fatalf("Error while streaming entries: %v", err)
 	}
+}
+
+func (l *List) Key() []byte {
+	l.wg.Wait()
+	l.RLock()
+	defer l.RUnlock()
+	return l.key
 }
 
 // getPostingList tries to get posting list from l.pbuffer. If it is nil, then

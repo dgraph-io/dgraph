@@ -85,7 +85,6 @@ func main() {
 	}
 	defer dataStore.Close()
 	posting.InitIndex(dataStore)
-	defer posting.CloseIndex()
 
 	uidStore, err := store.NewReadOnlyStore(*uidDir)
 	if err != nil {
