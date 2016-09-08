@@ -412,6 +412,19 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 
 			v := tv.ValBytes()
 
+			//do type checking on response values
+			if pc.AttrType != nil {
+				// type assertion for scalar type values
+				if !pc.AttrType.IsScalar() {
+					return fmt.Errorf("Unknown Scalar:%v. Leaf predicate:'%v' must be"+
+						" one of the scalar types defined in the schema.", pc.AttrType, pc.Attr)
+				}
+				stype := pc.AttrType.(gql.Scalar)
+				if _, err := stype.ParseType(v); err != nil {
+					return err
+				}
+			}
+
 			if pc.Attr == "_xid_" {
 				dst.Xid = string(v)
 			} else {
