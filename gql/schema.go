@@ -17,16 +17,13 @@
 package gql
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-
-	"github.com/dgraph-io/dgraph/x"
 )
 
 // Schema stores the types for all predicates in the system.
-var schema = make(map[string]Type)
+var Schema = make(map[string]Type)
 
 // LoadSchema loads the schema and checks for errors.
 func LoadSchema(fileName string) error {
@@ -42,27 +39,18 @@ func LoadSchema(fileName string) error {
 	for k, v := range s {
 		switch v {
 		case "int":
-			schema[k] = intType
+			Schema[k] = intType
 		case "float":
-			schema[k] = floatType
+			Schema[k] = floatType
 		case "string":
-			schema[k] = stringType
+			Schema[k] = stringType
 		case "bool":
-			schema[k] = booleanType
+			Schema[k] = booleanType
 		case "id":
-			schema[k] = idType
+			Schema[k] = idType
 		default:
 			return fmt.Errorf("Unknown type:%v in input schema file for predicate:%v", v, k)
 		}
 	}
 	return nil
-}
-
-// SchemaType fetches types for a predicate from schema map
-func SchemaType(ctx context.Context, p string) Type {
-	v, present := schema[p]
-	if !present {
-		x.Trace(ctx, "Schema does not have type definition for:%v", p)
-	}
-	return v
 }

@@ -52,29 +52,3 @@ func TestLoadSchema(t *testing.T) {
 		t.Error(err)
 	}
 }
-
-// TestSchemaType tests fetching type info from schema map using predicate names
-func TestSchemaType(t *testing.T) {
-	file, err := createSchemaFile()
-	if err != nil {
-		t.Error(err)
-	}
-	defer file.Close()
-	defer os.Remove(file.Name())
-
-	// load schema from json file
-	err = LoadSchema(file.Name())
-	if err != nil {
-		t.Error(err)
-	}
-
-	ctx := context.Background()
-	typ := SchemaType(ctx, "name")
-	if _, ok := typ.(Scalar); !ok {
-		t.Error("Type assertion failed for predicate:name")
-	}
-	typ = SchemaType(ctx, "age")
-	if _, ok := typ.(Scalar); !ok {
-		t.Error("Type assertion failed for predicate:age")
-	}
-}
