@@ -148,7 +148,7 @@ func applyMutations(ctx context.Context, m worker.Mutations) error {
 }
 
 func mutationToNQuad(nq []*graph.NQuad) []rdf.NQuad {
-	var resp []rdf.NQuad
+	resp := make([]rdf.NQuad, 0, len(nq))
 
 	for _, n := range nq {
 		resp = append(resp, rdf.NQuad{
@@ -162,9 +162,7 @@ func mutationToNQuad(nq []*graph.NQuad) []rdf.NQuad {
 	return resp
 }
 
-// This function is used to run mutations for the requests from different
-// language clients.
-func runMutations(ctx context.Context, mu *graph.Mutation) error {
+func convertAndApply(ctx context.Context, set []rdf.NQuad, del []rdf.NQuad) error {
 	if *nomutations {
 		return fmt.Errorf("Mutations are forbidden on this server.")
 	}
@@ -172,12 +170,10 @@ func runMutations(ctx context.Context, mu *graph.Mutation) error {
 	var m worker.Mutations
 	var err error
 
-	set := mutationToNQuad(mu.Set)
 	if m.Set, err = convertToEdges(ctx, set); err != nil {
 		return x.Wrap(err)
 	}
 
-	del := mutationToNQuad(mu.Del)
 	if m.Del, err = convertToEdges(ctx, del); err != nil {
 		return x.Wrap(err)
 	}
@@ -188,35 +184,33 @@ func runMutations(ctx context.Context, mu *graph.Mutation) error {
 	return nil
 }
 
+// This function is used to run mutations for the requests from different
+// language clients.
+func runMutations(ctx context.Context, mu *graph.Mutation) error {
+	set := mutationToNQuad(mu.Set)
+	del := mutationToNQuad(mu.Del)
+
+	if err := convertAndApply(ctx, set, del); err != nil {
+		return err
+	}
+	return nil
+}
+
 // This function is used to run mutations for the requests received from the
 // http client.
 func mutationHandler(ctx context.Context, mu *gql.Mutation) error {
-	if *nomutations {
-		return fmt.Errorf("Mutations are forbidden on this server.")
-	}
-
-	var m worker.Mutations
+	var set []rdf.NQuad
+	var del []rdf.NQuad
 	var err error
-	var nquads []rdf.NQuad
 
-	if nquads, err = convertToNQuad(ctx, mu.Set); err != nil {
+	if set, err = convertToNQuad(ctx, mu.Set); err != nil {
 		return x.Wrap(err)
 	}
-
-	if m.Set, err = convertToEdges(ctx, nquads); err != nil {
+	if del, err = convertToNQuad(ctx, mu.Del); err != nil {
 		return x.Wrap(err)
 	}
-
-	if nquads, err = convertToNQuad(ctx, mu.Del); err != nil {
-		return x.Wrap(err)
-	}
-
-	if m.Del, err = convertToEdges(ctx, nquads); err != nil {
-		return x.Wrap(err)
-	}
-
-	if err := applyMutations(ctx, m); err != nil {
-		return x.Wrap(err)
+	if err = convertAndApply(ctx, set, del); err != nil {
+		return err
 	}
 	return nil
 }
@@ -319,7 +313,7 @@ func (s *server) Query(ctx context.Context,
 	}
 
 	resp := new(graph.Response)
-	if len(req.Query) == 0 && req.M == nil {
+	if len(req.Query) == 0 && req.Mutation == nil {
 		x.Trace(ctx, "Empty query and mutation.")
 		return resp, fmt.Errorf("Empty query and mutation.")
 	}
@@ -327,15 +321,25 @@ func (s *server) Query(ctx context.Context,
 	var l query.Latency
 	l.Start = time.Now()
 	x.Trace(ctx, "Query received: %v", req.Query)
-	gq, _, err := gql.Parse(req.Query)
+	gq, mu, err := gql.Parse(req.Query)
 	if err != nil {
 		x.Trace(ctx, "Error while parsing query: %v", err)
 		return resp, err
 	}
 
-	// If we have mutations, run them first.
-	if req.M != nil && (len(req.M.Set) > 0 || len(req.M.Del) > 0) {
-		if err = runMutations(ctx, req.M); err != nil {
+	// If mutations are part of the query, we run them through the mutation handler
+	// same as the http client.
+	if mu != nil && (len(mu.Set) > 0 || len(mu.Del) > 0) {
+		if err = mutationHandler(ctx, mu); err != nil {
+			x.Trace(ctx, "Error while handling mutations: %v", err)
+			return resp, err
+		}
+	}
+
+	// If mutations are sent as part of the mutation object in the request we run
+	// them here.
+	if req.Mutation != nil && (len(req.Mutation.Set) > 0 || len(req.Mutation.Del) > 0) {
+		if err = runMutations(ctx, req.Mutation); err != nil {
 			x.Trace(ctx, "Error while handling mutations: %v", err)
 			return resp, err
 		}
