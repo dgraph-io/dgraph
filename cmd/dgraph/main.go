@@ -62,6 +62,7 @@ var (
 		"Port used by worker for internal communication.")
 	nomutations = flag.Bool("nomutations", false, "Don't allow mutations on this server.")
 	tracing     = flag.Float64("trace", 0.5, "The ratio of queries to trace.")
+	schemaFile  = flag.String("schema", "", "Path to the file that specifies schema in json format")
 )
 
 type mutationResult struct {
@@ -448,6 +449,12 @@ func main() {
 		uid.Init(uidStore)
 	}
 
+	if len(*schemaFile) > 0 {
+		err = gql.LoadSchema(*schemaFile)
+		if err != nil {
+			log.Fatalf("Error while loading schema:%v", err)
+		}
+	}
 	// Initiate internal worker communication.
 	worker.Connect(addrs, *workerPort)
 

@@ -178,6 +178,15 @@ func populateGraph(t *testing.T) (string, *store.Store) {
 	edge.Value = []byte("alive")
 	addEdge(t, edge, posting.GetOrCreate(posting.Key(1, "status"), ps))
 
+	edge.Value = []byte("38")
+	addEdge(t, edge, posting.GetOrCreate(posting.Key(1, "age"), ps))
+
+	edge.Value = []byte("98.99")
+	addEdge(t, edge, posting.GetOrCreate(posting.Key(1, "survival_rate"), ps))
+
+	edge.Value = []byte("true")
+	addEdge(t, edge, posting.GetOrCreate(posting.Key(1, "sword_present"), ps))
+
 	// Now let's add a name for each of the friends, except 101.
 	edge.Value = []byte("Rick Grimes")
 	addEdge(t, edge, posting.GetOrCreate(posting.Key(23, "name"), ps))
@@ -520,6 +529,105 @@ func TestToJson(t *testing.T) {
 	s := string(js)
 	if !strings.Contains(s, "Michonne") {
 		t.Errorf("Unable to find Michonne in this result: %v", s)
+	}
+}
+
+// Checking for Type coercion errors.
+// NOTE: Writing separate test since Marshal/Unmarshal process of ToJSON converts
+// 'int' type to 'float64' and thus mucks up the tests.
+func TestPostTraverse(t *testing.T) {
+	dir, _ := populateGraph(t)
+	defer os.RemoveAll(dir)
+
+	file, err := os.Create("test_schema.json")
+	if err != nil {
+		t.Error(err)
+	}
+	s := `
+		{
+			"name": "string",
+			"age": "int",
+			"survival_rate": "float",
+			"sword_present": "bool"
+		}
+	`
+	file.WriteString(s)
+
+	defer file.Close()
+	defer os.Remove(file.Name())
+
+	// load schema from json file
+	err = gql.LoadSchema(file.Name())
+	if err != nil {
+		t.Error(err)
+	}
+
+	query := `
+		{
+			actor(_uid_:0x01) {
+				name
+				age
+				sword_present
+				survival_rate
+				friend {
+					name
+				}
+			}
+		}
+	`
+
+	gq, _, err := gql.Parse(query)
+	if err != nil {
+		t.Error(err)
+	}
+	ctx := context.Background()
+	sg, err := ToSubGraph(ctx, gq)
+	if err != nil {
+		t.Error(err)
+	}
+
+	ch := make(chan error)
+	go ProcessGraph(ctx, sg, ch)
+	err = <-ch
+	if err != nil {
+		t.Error(err)
+	}
+
+	r, err := postTraverse(sg)
+	if err != nil {
+		t.Error(err)
+	}
+
+	// iterating over the map (as in ToJSON) to get the required values
+	for _, val := range r {
+		var m map[string]interface{}
+		if val != nil {
+			m = val.(map[string]interface{})
+		} else {
+			m = make(map[string]interface{})
+		}
+
+		actorMap := m["actor"].(map[string]interface{})
+
+		if _, success := actorMap["name"].(string); !success {
+			t.Errorf("Expected type coercion to string for: %v\n", actorMap["name"])
+		}
+		// Note: although, int and int32 have same size, they are treated as different types in go
+		// GraphQL spec mentions integer type to be int32
+		if _, success := actorMap["age"].(int32); !success {
+			t.Errorf("Expected type coercion to int32 for: %v\n", actorMap["age"])
+		}
+		if _, success := actorMap["sword_present"].(bool); !success {
+			t.Errorf("Expected type coercion to bool for: %v\n", actorMap["sword_present"])
+		}
+		if _, success := actorMap["survival_rate"].(float64); !success {
+			t.Errorf("Expected type coercion to float64 for: %v\n", actorMap["survival_rate"])
+		}
+		friendMap := actorMap["friend"].([]interface{})
+		friend := friendMap[0].(map[string]interface{})
+		if _, success := friend["name"].(string); !success {
+			t.Errorf("Expected type coercion to string for: %v\n", friend["name"])
+		}
 	}
 }
 
