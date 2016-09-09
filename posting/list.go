@@ -430,7 +430,19 @@ func (l *List) mergeMutation(mp *types.Posting) {
 
 		} else { // curUid not found in mindex.
 
-			if inPlist { // In plist, so insert in mindex.
+			// If present in mlayer, and matches with what we have, remove from it.
+			if tp, ok := l.mlayer[pi]; ok {
+				if !samePosting(&tp, mp) {
+					return
+				}
+				delete(l.mlayer, pi)
+
+				mlink.moveidx = 1
+				l.mdelta--
+				mlink.idx = pi + mi + 1
+				l.mindexInsertAt(mlink, mi+1)
+
+			} else if inPlist { // In plist, so insert in mindex.
 				plist := l.getPostingList()
 				var tp types.Posting
 				if ok := plist.Postings(&tp, pi); ok {

@@ -467,6 +467,107 @@ func TestAddMutation_jchiu2(t *testing.T) {
 	}
 }
 
+func TestAddMutation_jchiu3(t *testing.T) {
+	ol := NewList()
+	key := Key(10, "value")
+	dir, err := ioutil.TempDir("", "storetest_")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer os.RemoveAll(dir)
+
+	ps, err := store.NewStore(dir)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	ol.init(key, ps, nil)
+
+	// Set value to cars and merge to RocksDB.
+	edge := x.DirectedEdge{
+		Value:     []byte("cars"),
+		Source:    "jchiu",
+		Timestamp: time.Now(),
+	}
+	ctx := context.Background()
+	if err := ol.AddMutation(ctx, edge, Set); err != nil {
+		t.Error(err)
+	}
+	if merged, err := ol.MergeIfDirty(ctx); err != nil {
+		t.Error(err)
+	} else if !merged {
+		t.Error(x.Errorf("Unable to merge posting list."))
+	}
+	if err := checkValue(ol, "cars"); err != nil {
+		t.Error(err)
+	}
+
+	// Del a value cars and but don't merge.
+	edge = x.DirectedEdge{
+		Value:     []byte("cars"),
+		Source:    "jchiu",
+		Timestamp: time.Now(),
+	}
+	if err := ol.AddMutation(ctx, edge, Del); err != nil {
+		t.Error(err)
+	}
+	if ol.Length() > 0 {
+		t.Errorf("Length should be zero")
+	}
+
+	// Set value to newcars, but don't merge yet.
+	edge = x.DirectedEdge{
+		Value:     []byte("newcars"),
+		Source:    "jchiu",
+		Timestamp: time.Now(),
+	}
+	if err := ol.AddMutation(ctx, edge, Set); err != nil {
+		t.Error(err)
+	}
+	if err := checkValue(ol, "newcars"); err != nil {
+		t.Error(err)
+	}
+
+	// Del a value othercars and but don't merge.
+	edge = x.DirectedEdge{
+		Value:     []byte("othercars"),
+		Source:    "jchiu",
+		Timestamp: time.Now(),
+	}
+	if err := ol.AddMutation(ctx, edge, Del); err != nil {
+		t.Error(err)
+	}
+	if ol.Length() == 0 {
+		t.Errorf("Length shouldn't be zero")
+	}
+	var p types.Posting
+	if !ol.Get(&p, 0) {
+		t.Errorf("Error while retrieving posting")
+	}
+	if string(p.ValueBytes()) != "newcars" {
+		t.Errorf("Value expected: newcars. Got: %q", p.ValueBytes())
+	}
+
+	// Del a value newcars and but don't merge.
+	edge = x.DirectedEdge{
+		Value:     []byte("newcars"),
+		Source:    "jchiu",
+		Timestamp: time.Now(),
+	}
+	if err := ol.AddMutation(ctx, edge, Del); err != nil {
+		t.Error(err)
+	}
+	if ol.Length() > 0 {
+		var p types.Posting
+		if !ol.Get(&p, 0) {
+			t.Errorf("Error while retrieving posting")
+		}
+		t.Errorf("Length should be zero. Got: %q", p.ValueBytes())
+	}
+}
+
 func TestAddMutation_mrjn1(t *testing.T) {
 	ol := NewList()
 	key := Key(10, "value")
