@@ -17,16 +17,15 @@
 package uid
 
 import (
-	"crypto/rand"
+	"context"
 	"errors"
 	"fmt"
 	"log"
 	"math"
+	"math/rand"
 	"strings"
 	"sync"
 	"time"
-
-	"context"
 
 	"github.com/dgryski/go-farm"
 
@@ -99,6 +98,7 @@ func (lm *lockManager) clean() {
 
 // package level init
 func init() {
+	rand.Seed(time.Now().UnixNano())
 	lmgr = new(lockManager)
 	lmgr.locks = make(map[string]*entry)
 	// TODO(manishrjain): This map should be cleaned up.
