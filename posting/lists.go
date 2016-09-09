@@ -147,7 +147,7 @@ func gentlyMerge(mr *mergeRoutines) {
 	idx := 0
 	dirtymap.Each(func(k gotomic.Hashable, v gotomic.Thing) bool {
 		if idx < start {
-			idx += 1
+			idx++
 			return false
 		}
 

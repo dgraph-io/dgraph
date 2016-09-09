@@ -111,7 +111,9 @@ func samePosting(a *types.Posting, b *types.Posting) bool {
 // key = (entity uid, attribute)
 func Key(uid uint64, attr string) []byte {
 	buf := bytes.NewBufferString(attr)
-	buf.WriteRune('|')
+	if _, err := buf.WriteRune('|'); err != nil {
+		log.Fatalf("Error while writing |")
+	}
 	if err := binary.Write(buf, binary.LittleEndian, uid); err != nil {
 		log.Fatalf("Error while creating key with attr: %v uid: %v\n", attr, uid)
 	}
@@ -305,14 +307,14 @@ func (l *List) mindexInsertAt(mlink *MutationLink, mi int) {
 	copy(l.mindex[mi+1:], l.mindex[mi:])
 	l.mindex[mi] = mlink
 	for i := mi + 1; i < len(l.mindex); i++ {
-		l.mindex[i].idx += 1
+		l.mindex[i].idx++
 	}
 }
 
 func (l *List) mindexDeleteAt(mi int) {
 	l.mindex = append(l.mindex[:mi], l.mindex[mi+1:]...)
 	for i := mi; i < len(l.mindex); i++ {
-		l.mindex[i].idx -= 1
+		l.mindex[i].idx--
 	}
 }
 
@@ -391,20 +393,52 @@ func (l *List) mergeMutation(mp *types.Posting) bool {
 
 	if mp.Op() == Del {
 		if muid == curUid { // curUid found in mindex.
+			ml := l.mindex[mi]
+			if !samePosting(ml.posting, mp) {
+				// Not the same posting, so we should ignore this.
+				return false
+			}
+
 			if inPlist { // In plist, so replace previous instruction in mindex.
+				if _, inMlayer := l.mlayer[pi]; inMlayer {
+					x.Assertf(false, "Shouldn't be present in both mindex and mlayer. curUid = %v", curUid)
+				}
+
 				mlink.moveidx = 1
 				mlink.idx = pi + mi
 				l.mindex[mi] = mlink
 
 			} else { // Not in plist, so delete previous instruction in mindex.
-				l.mdelta -= 1
+				l.mdelta--
 				l.mindexDeleteAt(mi)
 			}
 
 		} else { // curUid not found in mindex.
-			if inPlist { // In plist, so insert in mindex.
+
+			// If present in mlayer, and matches with what we have, remove from it.
+			if tp, ok := l.mlayer[pi]; ok {
+				if !samePosting(&tp, mp) {
+					return false
+				}
+				delete(l.mlayer, pi)
+
 				mlink.moveidx = 1
-				l.mdelta -= 1
+				l.mdelta--
+				mlink.idx = pi + mi + 1
+				l.mindexInsertAt(mlink, mi+1)
+
+			} else if inPlist { // In plist, so insert in mindex.
+				plist := l.getPostingList()
+				var tp types.Posting
+				if ok := plist.Postings(&tp, pi); ok {
+					if !samePosting(&tp, mp) {
+						// Not the same posting as in plist. Ignore.
+						return false
+					}
+				}
+
+				mlink.moveidx = 1
+				l.mdelta--
 				mlink.idx = pi + mi + 1
 				l.mindexInsertAt(mlink, mi+1)
 
@@ -418,6 +452,7 @@ func (l *List) mergeMutation(mp *types.Posting) bool {
 			if inPlist { // In plist, so delete previous instruction, set in mlayer.
 				l.mindexDeleteAt(mi)
 				l.mlayer[pi] = *mp
+				l.mdelta++
 
 			} else { // Not in plist, so replace previous set instruction in mindex.
 				// NOTE: This prev instruction couldn't have been a Del instruction.
@@ -428,20 +463,25 @@ func (l *List) mergeMutation(mp *types.Posting) bool {
 
 		} else { // curUid not found in mindex.
 			if inPlist { // In plist, so just set it in mlayer.
+
 				// If this posting matches what we already have in posting list,
 				// we don't need to `dirty` this by adding to mlayer.
+				// Note that this means that the timestamp of the posting would
+				// remain unchanged.
 				plist := l.getPostingList()
-				var cp types.Posting
-				if ok := plist.Postings(&cp, pi); ok {
-					if samePosting(&cp, mp) {
-						return false // do nothing.
+				var tp types.Posting
+				if ok := plist.Postings(&tp, pi); ok {
+					if samePosting(&tp, mp) {
+						delete(l.mlayer, pi) // if exists.
+						return false         // do nothing.
 					}
 				}
+				// Not found in plist. Set in mlayer.
 				l.mlayer[pi] = *mp
 
 			} else { // not in plist, not in mindex, so insert in mindex.
 				mlink.moveidx = -1
-				l.mdelta += 1
+				l.mdelta++
 				mlink.idx = pi + 1 + mi + 1 // right of pi, and right of mi.
 				l.mindexInsertAt(mlink, mi+1)
 			}
@@ -581,7 +621,9 @@ func (l *List) AddMutation(ctx context.Context, t x.DirectedEdge, op byte) (bool
 	defer l.Unlock()
 	x.Trace(ctx, "Lock acquired")
 
-	mpost := x.NewPosting(mbuf)
+	uo := flatbuffers.GetUOffsetT(mbuf)
+	mpost := new(types.Posting)
+	mpost.Init(mbuf, uo)
 	hasMutated := l.mergeMutation(mpost)
 	if len(l.mindex)+len(l.mlayer) > 0 {
 		atomic.StoreInt64(&l.dirtyTs, time.Now().UnixNano())
