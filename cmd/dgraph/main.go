@@ -231,7 +231,6 @@ func (s *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	l.Start = time.Now()
 	defer r.Body.Close()
 	q, err := ioutil.ReadAll(r.Body)
-
 	if err != nil || len(q) == 0 {
 		x.Trace(ctx, "Error while reading query: %v", err)
 		x.SetStatus(w, x.ErrorInvalidRequest, "Invalid request encountered.")
@@ -326,6 +325,10 @@ func (s *grpcServer) Query(ctx context.Context,
 	if len(req.Query) == 0 {
 		x.Trace(ctx, "Empty query")
 		return resp, fmt.Errorf("Empty query")
+	}
+
+	if *shutdown && req.Query == "SHUTDOWN" {
+		exitWithProfiles()
 	}
 
 	var l query.Latency
