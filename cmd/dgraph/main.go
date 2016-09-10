@@ -28,6 +28,7 @@ import (
 	"net/http"
 	"os"
 	"runtime"
+	"runtime/pprof"
 	"strings"
 	"time"
 
@@ -61,13 +62,37 @@ var (
 	workerPort = flag.String("workerport", ":12345",
 		"Port used by worker for internal communication.")
 	nomutations = flag.Bool("nomutations", false, "Don't allow mutations on this server.")
+	shutdown    = flag.Bool("shutdown", false, "Allow client to send shutdown signal.")
 	tracing     = flag.Float64("trace", 0.5, "The ratio of queries to trace.")
 	schemaFile  = flag.String("schema", "", "Path to the file that specifies schema in json format")
+	cpuprofile  = flag.String("cpuprofile", "", "write cpu profile to file")
+	memprofile  = flag.String("memprofile", "", "write memory profile to file")
 )
 
 type mutationResult struct {
 	edges   []x.DirectedEdge
 	newUids map[string]uint64
+}
+
+func exitWithProfiles() {
+	log.Println("Got clean exit request")
+
+	// Stop the CPU profiling that was initiated.
+	if len(*cpuprofile) > 0 {
+		pprof.StopCPUProfile()
+	}
+
+	// Write memory profile before exit.
+	if len(*memprofile) > 0 {
+		f, err := os.Create(*memprofile)
+		if err != nil {
+			log.Println(err)
+		}
+		pprof.WriteHeapProfile(f)
+		f.Close()
+	}
+
+	os.Exit(0)
 }
 
 func addCorsHeaders(w http.ResponseWriter) {
@@ -183,9 +208,11 @@ type httpServer struct{}
 
 func (s *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	addCorsHeaders(w)
+
 	if r.Method == "OPTIONS" {
 		return
 	}
+
 	if r.Method != "POST" {
 		x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
 		return
@@ -204,9 +231,15 @@ func (s *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	l.Start = time.Now()
 	defer r.Body.Close()
 	q, err := ioutil.ReadAll(r.Body)
+
 	if err != nil || len(q) == 0 {
 		x.Trace(ctx, "Error while reading query: %v", err)
 		x.SetStatus(w, x.ErrorInvalidRequest, "Invalid request encountered.")
+		return
+	}
+
+	if *shutdown && string(q) == "SHUTDOWN" {
+		exitWithProfiles()
 		return
 	}
 
@@ -353,6 +386,14 @@ func (s *grpcServer) Query(ctx context.Context,
 
 func checkFlagsAndInitDirs() {
 	numCpus := *numcpu
+	if len(*cpuprofile) > 0 {
+		f, err := os.Create(*cpuprofile)
+		if err != nil {
+			log.Fatal(err)
+		}
+		pprof.StartCPUProfile(f)
+	}
+
 	prev := runtime.GOMAXPROCS(numCpus)
 	log.Printf("num_cpu: %v. prev_maxprocs: %v. Set max procs to num cpus",
 		numCpus, prev)
