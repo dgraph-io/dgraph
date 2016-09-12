@@ -217,12 +217,16 @@ func TestConvertToEdges(t *testing.T) {
 	       _uid_:0x01 <character> _uid_:0x03 .`
 
 	var edges []x.DirectedEdge
-	edg, err := convertToEdges(context.Background(), q1)
-	edges = edg.edges
+	var err error
+	nquads, err := convertToNQuad(context.Background(), q1)
 	if err != nil {
 		t.Errorf("Expected err to be nil. Got: %v", err)
 	}
-	if len(edges) != 2 {
+	mr, err := convertToEdges(context.Background(), nquads)
+	if err != nil {
+		t.Errorf("Expected err to be nil. Got: %v", err)
+	}
+	if len(mr.edges) != 2 {
 		t.Errorf("Expected len of edges to be: %v. Got: %v", 2, len(edges))
 	}
 }

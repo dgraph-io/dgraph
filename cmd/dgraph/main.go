@@ -105,13 +105,10 @@ func addCorsHeaders(w http.ResponseWriter) {
 	w.Header().Set("Connection", "close")
 }
 
-func convertToEdges(ctx context.Context, mutation string) (mutationResult, error) {
-	var edges []x.DirectedEdge
+func convertToNQuad(ctx context.Context, mutation string) ([]rdf.NQuad, error) {
 	var nquads []rdf.NQuad
-	var mr mutationResult
 	r := strings.NewReader(mutation)
 	scanner := bufio.NewScanner(r)
-	allocatedIds := make(map[string]uint64)
 
 	// Scanning the mutation string, one line at a time.
 	for scanner.Scan() {
@@ -122,10 +119,17 @@ func convertToEdges(ctx context.Context, mutation string) (mutationResult, error
 		nq, err := rdf.Parse(ln)
 		if err != nil {
 			x.Trace(ctx, "Error while parsing RDF: %v", err)
-			return mr, err
+			return nquads, err
 		}
 		nquads = append(nquads, nq)
 	}
+	return nquads, nil
+}
+
+func convertToEdges(ctx context.Context, nquads []rdf.NQuad) (mutationResult, error) {
+	var edges []x.DirectedEdge
+	var mr mutationResult
+	allocatedIds := make(map[string]uint64)
 
 	// xidToUid is used to store ids which are not uids. It is sent to the instance
 	// which has the xid <-> uid mapping to get uids.
@@ -168,28 +172,11 @@ func convertToEdges(ctx context.Context, mutation string) (mutationResult, error
 	return mr, nil
 }
 
-func mutationHandler(ctx context.Context, mu *gql.Mutation) (map[string]uint64, error) {
-	if *nomutations {
-		return nil, fmt.Errorf("Mutations are forbidden on this server.")
-	}
-
-	var allocIds map[string]uint64
-	var m worker.Mutations
-	var mr mutationResult
-	var err error
-	if mr, err = convertToEdges(ctx, mu.Set); err != nil {
-		return nil, err
-	}
-	m.Set, allocIds = mr.edges, mr.newUids
-	if mr, err = convertToEdges(ctx, mu.Del); err != nil {
-		return nil, err
-	}
-	m.Del = mr.edges
-
+func applyMutations(ctx context.Context, m worker.Mutations) error {
 	left, err := worker.MutateOverNetwork(ctx, m)
 	if err != nil {
 		x.Trace(ctx, "Error while MutateOverNetwork: %v", err)
-		return nil, err
+		return err
 	}
 	if len(left.Set) > 0 || len(left.Del) > 0 {
 		x.Trace(ctx, "%d edges couldn't be applied", len(left.Del)+len(left.Set))
@@ -199,7 +186,81 @@ func mutationHandler(ctx context.Context, mu *gql.Mutation) (map[string]uint64, 
 		for _, e := range left.Del {
 			x.Trace(ctx, "Unable to apply delete mutation for edge: %v", e)
 		}
-		return nil, fmt.Errorf("Unapplied mutations")
+		return fmt.Errorf("Unapplied mutations")
+	}
+	return nil
+}
+
+func mutationToNQuad(nq []*graph.NQuad) []rdf.NQuad {
+	resp := make([]rdf.NQuad, 0, len(nq))
+
+	for _, n := range nq {
+		resp = append(resp, rdf.NQuad{
+			Subject:     n.Sub,
+			Predicate:   n.Pred,
+			ObjectId:    n.ObjId,
+			ObjectValue: n.ObjVal,
+			Label:       n.Label,
+		})
+	}
+	return resp
+}
+
+func convertAndApply(ctx context.Context, set []rdf.NQuad, del []rdf.NQuad) (map[string]uint64, error) {
+	var allocIds map[string]uint64
+	var m worker.Mutations
+	var err error
+	var mr mutationResult
+
+	if *nomutations {
+		return nil, fmt.Errorf("Mutations are forbidden on this server.")
+	}
+
+	if mr, err = convertToEdges(ctx, set); err != nil {
+		return nil, err
+	}
+	m.Set, allocIds = mr.edges, mr.newUids
+	if mr, err = convertToEdges(ctx, del); err != nil {
+		return nil, err
+	}
+	m.Del = mr.edges
+
+	if err := applyMutations(ctx, m); err != nil {
+		return nil, x.Wrap(err)
+	}
+	return allocIds, nil
+}
+
+// This function is used to run mutations for the requests from different
+// language clients.
+func runMutations(ctx context.Context, mu *graph.Mutation) (map[string]uint64, error) {
+	var allocIds map[string]uint64
+	var err error
+
+	set := mutationToNQuad(mu.Set)
+	del := mutationToNQuad(mu.Del)
+	if allocIds, err = convertAndApply(ctx, set, del); err != nil {
+		return nil, err
+	}
+	return allocIds, nil
+}
+
+// This function is used to run mutations for the requests received from the
+// http client.
+func mutationHandler(ctx context.Context, mu *gql.Mutation) (map[string]uint64, error) {
+	var set []rdf.NQuad
+	var del []rdf.NQuad
+	var allocIds map[string]uint64
+	var err error
+
+	if set, err = convertToNQuad(ctx, mu.Set); err != nil {
+		return nil, x.Wrap(err)
+	}
+	if del, err = convertToNQuad(ctx, mu.Del); err != nil {
+		return nil, x.Wrap(err)
+	}
+	if allocIds, err = convertAndApply(ctx, set, del); err != nil {
+		return nil, err
 	}
 	return allocIds, nil
 }
@@ -320,9 +381,9 @@ func (s *grpcServer) Query(ctx context.Context,
 	}
 
 	resp := new(graph.Response)
-	if len(req.Query) == 0 {
-		x.Trace(ctx, "Empty query")
-		return resp, fmt.Errorf("Empty query")
+	if len(req.Query) == 0 && req.Mutation == nil {
+		x.Trace(ctx, "Empty query and mutation.")
+		return resp, fmt.Errorf("Empty query and mutation.")
 	}
 
 	if *shutdown && req.Query == "SHUTDOWN" {
@@ -332,8 +393,6 @@ func (s *grpcServer) Query(ctx context.Context,
 
 	var l query.Latency
 	l.Start = time.Now()
-	// TODO(pawan): Refactor query parsing and graph processing code to a common
-	// function used by Query and queryHandler
 	x.Trace(ctx, "Query received: %v", req.Query)
 	gq, mu, err := gql.Parse(req.Query)
 	if err != nil {
@@ -341,7 +400,8 @@ func (s *grpcServer) Query(ctx context.Context,
 		return resp, err
 	}
 
-	// If we have mutations, run them first.
+	// If mutations are part of the query, we run them through the mutation handler
+	// same as the http client.
 	if mu != nil && (len(mu.Set) > 0 || len(mu.Del) > 0) {
 		if allocIds, err = mutationHandler(ctx, mu); err != nil {
 			x.Trace(ctx, "Error while handling mutations: %v", err)
@@ -349,7 +409,16 @@ func (s *grpcServer) Query(ctx context.Context,
 		}
 	}
 
+	// If mutations are sent as part of the mutation object in the request we run
+	// them here.
+	if req.Mutation != nil && (len(req.Mutation.Set) > 0 || len(req.Mutation.Del) > 0) {
+		if allocIds, err = runMutations(ctx, req.Mutation); err != nil {
+			x.Trace(ctx, "Error while handling mutations: %v", err)
+			return resp, err
+		}
+	}
 	resp.AssignedUids = allocIds
+
 	if gq == nil || (gq.UID == 0 && len(gq.XID) == 0) {
 		return resp, err
 	}
