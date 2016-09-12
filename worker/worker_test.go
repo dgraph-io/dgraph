@@ -259,7 +259,7 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 
 	// Try deleting.
 	edge = x.DirectedEdge{
-		Value:     []byte("ignored"),
+		Value:     []byte("photon"),
 		Source:    "author0",
 		Timestamp: time.Now(),
 		Attribute: "friend",
@@ -269,9 +269,11 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 	delEdge(t, edge, posting.GetOrCreate(posting.Key(10, "friend"), ps))
 	delEdge(t, edge, posting.GetOrCreate(posting.Key(10, "friend"), ps))
 
-	// Set followed by delete.
+	// Delete followed by set.
 	edge.Entity = 12
+	edge.Value = []byte("notphoton")
 	delEdge(t, edge, posting.GetOrCreate(posting.Key(12, "friend"), ps))
+	edge.Value = []byte("ignored")
 	addEdge(t, edge, posting.GetOrCreate(posting.Key(12, "friend"), ps))
 	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
 
@@ -409,7 +411,7 @@ func TestProcessTaskIndex(t *testing.T) {
 
 	// Try deleting.
 	edge = x.DirectedEdge{
-		Value:     []byte("ignored"),
+		Value:     []byte("photon"),
 		Source:    "author0",
 		Timestamp: time.Now(),
 		Attribute: "friend",
@@ -419,9 +421,11 @@ func TestProcessTaskIndex(t *testing.T) {
 	delEdge(t, edge, posting.GetOrCreate(posting.Key(10, "friend"), ps))
 	delEdge(t, edge, posting.GetOrCreate(posting.Key(10, "friend"), ps))
 
-	// Set followed by delete.
+	// Delete followed by set.
 	edge.Entity = 12
+	edge.Value = []byte("notphoton")
 	delEdge(t, edge, posting.GetOrCreate(posting.Key(12, "friend"), ps))
+	edge.Value = []byte("ignored")
 	addEdge(t, edge, posting.GetOrCreate(posting.Key(12, "friend"), ps))
 	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
 
