@@ -21,6 +21,7 @@ package worker
 import (
 	"log"
 	"net"
+	"sync"
 
 	"golang.org/x/net/context"
 
@@ -41,7 +42,8 @@ type State struct {
 	numInstances uint64
 	// pools stores the pool for all the instances which is then used to send queries
 	// and mutations to the appropriate instance.
-	pools []*Pool
+	pools      []*Pool
+	poolsMutex sync.RWMutex
 }
 
 // Stores the worker state.
