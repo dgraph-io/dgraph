@@ -17,11 +17,10 @@
 package worker
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"sync"
-
-	"context"
 
 	"github.com/google/flatbuffers/go"
 
