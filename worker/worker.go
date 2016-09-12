@@ -23,10 +23,9 @@ import (
 	"net"
 	"sync"
 
-	"golang.org/x/net/context"
-
 	"github.com/dgryski/go-farm"
 	"github.com/google/flatbuffers/go"
+	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
 	"github.com/dgraph-io/dgraph/store"
@@ -49,9 +48,15 @@ type State struct {
 // Stores the worker state.
 var ws *State
 
-// InitState initializes the state on an instance with data,uid store and other meta.
-func InitState(ps, uStore *store.Store, idx, numInst uint64) {
-	ws = &State{
+// SetWorkerState sets the global worker state to the given state.
+func SetWorkerState(s *State) {
+	x.Assert(s != nil)
+	ws = s
+}
+
+// NewState initializes the state on an instance with data,uid store and other meta.
+func NewState(ps, uStore *store.Store, idx, numInst uint64) *State {
+	return &State{
 		dataStore:    ps,
 		uidStore:     uStore,
 		instanceIdx:  idx,
@@ -221,7 +226,7 @@ func runServer(port string) {
 
 // Connect establishes a connection with other workers and sends the Hello rpc
 // call to them.
-func Connect(workerList []string, workerPort string) {
+func (s *State) Connect(workerList []string, workerPort string) {
 	go runServer(workerPort)
 
 	for _, addr := range workerList {
@@ -245,8 +250,17 @@ func Connect(workerList []string, workerPort string) {
 		}
 		_ = pool.Put(conn)
 
-		ws.pools = append(ws.pools, pool)
+		s.poolsMutex.Lock()
+		s.pools = append(s.pools, pool)
+		s.poolsMutex.Unlock()
 	}
 
 	log.Print("Server started. Clients connected.")
+}
+
+// GetPool returns pool for given index.
+func (s *State) GetPool(k int) *Pool {
+	s.poolsMutex.RLock()
+	defer s.poolsMutex.RUnlock()
+	return s.pools[k]
 }

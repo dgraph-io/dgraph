@@ -121,7 +121,7 @@ func GetOrAssignUidsOverNetwork(ctx context.Context, xidToUid map[string]uint64)
 
 	} else {
 		// Get pool for worker on instance 0.
-		pool := ws.pools[0]
+		pool := ws.GetPool(0)
 		conn, err := pool.Get()
 		if err != nil {
 			x.Trace(ctx, "Error while retrieving connection: %v", err)

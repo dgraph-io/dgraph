@@ -108,7 +108,7 @@ func TestNewGraph(t *testing.T) {
 		t.Error(err)
 	}
 
-	worker.InitState(ps, nil, 0, 1)
+	worker.SetWorkerState(worker.NewState(ps, nil, 0, 1))
 
 	r := x.NewTaskResult(sg.Result)
 	if r.UidmatrixLength() != 1 {
@@ -140,7 +140,7 @@ func populateGraph(t *testing.T) (string, *store.Store) {
 		return "", nil
 	}
 
-	worker.InitState(ps, nil, 0, 1)
+	worker.SetWorkerState(worker.NewState(ps, nil, 0, 1))
 
 	clog := commit.NewLogger(dir, "mutations", 50<<20)
 	clog.Init()

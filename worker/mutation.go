@@ -117,7 +117,7 @@ func runMutate(ctx context.Context, idx int, m *Mutations,
 	}
 
 	// Get a connection from the pool and run mutations over the network.
-	pool := ws.pools[idx]
+	pool := ws.GetPool(idx)
 	query := new(Payload)
 	query.Data, err = m.Encode()
 	if err != nil {

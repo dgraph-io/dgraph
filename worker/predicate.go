@@ -70,7 +70,7 @@ func (ws *State) PopulateShard(ctx context.Context, pred string,
 	serverId int) error {
 	var err error
 
-	pool := ws.pools[serverId]
+	pool := ws.GetPool(serverId)
 	query := new(Payload)
 	query.Data = []byte(pred)
 	if err != nil {

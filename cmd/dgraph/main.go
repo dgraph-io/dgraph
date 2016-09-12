@@ -547,8 +547,10 @@ func main() {
 	}
 
 	posting.Init()
+	var ws *worker.State
 	if *instanceIdx != 0 {
-		worker.InitState(ps, nil, *instanceIdx, lenAddr)
+		ws = worker.NewState(ps, nil, *instanceIdx, lenAddr)
+		worker.SetWorkerState(ws)
 		uid.Init(nil)
 	} else {
 		uidStore, err := store.NewStore(*uidDir)
@@ -557,7 +559,8 @@ func main() {
 		}
 		defer uidStore.Close()
 		// Only server instance 0 will have uidStore
-		worker.InitState(ps, uidStore, *instanceIdx, lenAddr)
+		ws = worker.NewState(ps, uidStore, *instanceIdx, lenAddr)
+		worker.SetWorkerState(ws)
 		uid.Init(uidStore)
 	}
 
@@ -568,7 +571,7 @@ func main() {
 		}
 	}
 	// Initiate internal worker communication.
-	worker.Connect(addrs, *workerPort)
+	ws.Connect(addrs, *workerPort)
 
 	// Setup external communication.
 	setupServer()
