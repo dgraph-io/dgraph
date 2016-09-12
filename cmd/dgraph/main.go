@@ -65,8 +65,8 @@ var (
 	shutdown    = flag.Bool("shutdown", false, "Allow client to send shutdown signal.")
 	tracing     = flag.Float64("trace", 0.5, "The ratio of queries to trace.")
 	schemaFile  = flag.String("schema", "", "Path to the file that specifies schema in json format")
-	cpuprofile  = flag.String("cpuprofile", "", "write cpu profile to file")
-	memprofile  = flag.String("memprofile", "", "write memory profile to file")
+	cpuprofile  = flag.String("cpuprof", "", "write cpu profile to file")
+	memprofile  = flag.String("memprof", "", "write memory profile to file")
 )
 
 type mutationResult struct {
@@ -208,11 +208,9 @@ type httpServer struct{}
 
 func (s *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	addCorsHeaders(w)
-
 	if r.Method == "OPTIONS" {
 		return
 	}
-
 	if r.Method != "POST" {
 		x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
 		return
@@ -329,6 +327,7 @@ func (s *grpcServer) Query(ctx context.Context,
 
 	if *shutdown && req.Query == "SHUTDOWN" {
 		exitWithProfiles()
+		return nil, nil
 	}
 
 	var l query.Latency
