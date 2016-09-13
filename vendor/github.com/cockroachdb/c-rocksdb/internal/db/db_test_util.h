@@ -1,4 +1,4 @@
-// Copyright (c) 2013, Facebook, Inc.  All rights reserved.
+// Copyright (c) 2011-present, Facebook, Inc.  All rights reserved.
 // This source code is licensed under the BSD-style license found in the
 // LICENSE file in the root directory of this source tree. An additional grant
 // of patent rights can be found in the PATENTS file in the same directory.
@@ -19,6 +19,7 @@
 #endif
 
 #include <algorithm>
+#include <map>
 #include <set>
 #include <string>
 #include <thread>
@@ -27,7 +28,6 @@
 #include <vector>
 
 #include "db/db_impl.h"
-#include "db/db_test_util.h"
 #include "db/dbformat.h"
 #include "db/filename.h"
 #include "memtable/hash_linklist_rep.h"
@@ -39,6 +39,7 @@
 #include "rocksdb/filter_policy.h"
 #include "rocksdb/options.h"
 #include "rocksdb/slice.h"
+#include "rocksdb/statistics.h"
 #include "rocksdb/table.h"
 #include "rocksdb/utilities/checkpoint.h"
 #include "table/block_based_table_factory.h"
@@ -357,23 +358,30 @@ class SpecialEnv : public EnvWrapper {
     class CountingFile : public RandomAccessFile {
      public:
       CountingFile(unique_ptr<RandomAccessFile>&& target,
-                   anon::AtomicCounter* counter)
-          : target_(std::move(target)), counter_(counter) {}
+                   anon::AtomicCounter* counter,
+                   std::atomic<size_t>* bytes_read)
+          : target_(std::move(target)),
+            counter_(counter),
+            bytes_read_(bytes_read) {}
       virtual Status Read(uint64_t offset, size_t n, Slice* result,
                           char* scratch) const override {
         counter_->Increment();
-        return target_->Read(offset, n, result, scratch);
+        Status s = target_->Read(offset, n, result, scratch);
+        *bytes_read_ += result->size();
+        return s;
       }
 
      private:
       unique_ptr<RandomAccessFile> target_;
       anon::AtomicCounter* counter_;
+      std::atomic<size_t>* bytes_read_;
     };
 
     Status s = target()->NewRandomAccessFile(f, r, soptions);
     random_file_open_counter_++;
     if (s.ok() && count_random_reads_) {
-      r->reset(new CountingFile(std::move(*r), &random_read_counter_));
+      r->reset(new CountingFile(std::move(*r), &random_read_counter_,
+                                &random_read_bytes_counter_));
     }
     return s;
   }
@@ -463,6 +471,7 @@ class SpecialEnv : public EnvWrapper {
 
   bool count_random_reads_;
   anon::AtomicCounter random_read_counter_;
+  std::atomic<size_t> random_read_bytes_counter_;
   std::atomic<int> random_file_open_counter_;
 
   bool count_sequential_reads_;
@@ -490,6 +499,33 @@ class SpecialEnv : public EnvWrapper {
 
   std::atomic<bool> is_wal_sync_thread_safe_{true};
 };
+
+#ifndef ROCKSDB_LITE
+class OnFileDeletionListener : public EventListener {
+ public:
+  OnFileDeletionListener() : matched_count_(0), expected_file_name_("") {}
+
+  void SetExpectedFileName(const std::string file_name) {
+    expected_file_name_ = file_name;
+  }
+
+  void VerifyMatchedCount(size_t expected_value) {
+    ASSERT_EQ(matched_count_, expected_value);
+  }
+
+  void OnTableFileDeleted(const TableFileDeletionInfo& info) override {
+    if (expected_file_name_ != "") {
+      ASSERT_EQ(expected_file_name_, info.file_path);
+      expected_file_name_ = "";
+      matched_count_++;
+    }
+  }
+
+ private:
+  size_t matched_count_;
+  std::string expected_file_name_;
+};
+#endif
 
 class DBTestBase : public testing::Test {
  protected:
@@ -525,9 +561,11 @@ class DBTestBase : public testing::Test {
     kOptimizeFiltersForHits = 27,
     kRowCache = 28,
     kRecycleLogFiles = 29,
-    kLevelSubcompactions = 30,
-    kUniversalSubcompactions = 31,
-    kEnd = 30
+    kConcurrentSkipList = 30,
+    kEnd = 31,
+    kLevelSubcompactions = 31,
+    kUniversalSubcompactions = 32,
+    kBlockBasedTableWithIndexRestartInterval = 33,
   };
   int option_config_;
 
@@ -572,6 +610,8 @@ class DBTestBase : public testing::Test {
     snprintf(buf, sizeof(buf), "key%06d", i);
     return std::string(buf);
   }
+
+  static bool ShouldSkipOptions(int option_config, int skip_mask = kNoSkip);
 
   // Switch to a fresh database with the next option configuration to
   // test.  Return false if there are no more configurations to test.
@@ -661,12 +701,14 @@ class DBTestBase : public testing::Test {
 
   uint64_t SizeAtLevel(int level);
 
-  int TotalLiveFiles(int cf = 0);
+  size_t TotalLiveFiles(int cf = 0);
 
   size_t CountLiveFiles();
 #endif  // ROCKSDB_LITE
 
   int NumTableFilesAtLevel(int level, int cf = 0);
+
+  double CompressionRatioAtLevel(int level, int cf = 0);
 
   int TotalTableFiles(int cf = 0, int levels = -1);
 
@@ -749,6 +791,20 @@ class DBTestBase : public testing::Test {
 
   void CopyFile(const std::string& source, const std::string& destination,
                 uint64_t size = 0);
+
+  std::unordered_map<std::string, uint64_t> GetAllSSTFiles(
+      uint64_t* total_size = nullptr);
+
+  std::vector<std::uint64_t> ListTableFiles(Env* env, const std::string& path);
+
+#ifndef ROCKSDB_LITE
+  uint64_t GetNumberOfSstFilesForColumnFamily(DB* db,
+                                              std::string column_family_name);
+#endif  // ROCKSDB_LITE
+
+  uint64_t TestGetTickerCount(const Options& options, Tickers ticker_type) {
+    return options.statistics->getTickerCount(ticker_type);
+  }
 };
 
 }  // namespace rocksdb

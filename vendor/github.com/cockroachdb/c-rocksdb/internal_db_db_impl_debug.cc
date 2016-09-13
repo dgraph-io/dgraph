@@ -1,4 +1,4 @@
-//  Copyright (c) 2013, Facebook, Inc.  All rights reserved.
+//  Copyright (c) 2011-present, Facebook, Inc.  All rights reserved.
 //  This source code is licensed under the BSD-style license found in the
 //  LICENSE file in the root directory of this source tree. An additional grant
 //  of patent rights can be found in the PATENTS file in the same directory.
@@ -70,14 +70,21 @@ Status DBImpl::TEST_CompactRange(int level, const Slice* begin,
        cfd->ioptions()->compaction_style == kCompactionStyleFIFO)
           ? level
           : level + 1;
-  return RunManualCompaction(cfd, level, output_level, 0, begin, end,
+  return RunManualCompaction(cfd, level, output_level, 0, begin, end, true,
                              disallow_trivial_move);
 }
 
-Status DBImpl::TEST_FlushMemTable(bool wait) {
+Status DBImpl::TEST_FlushMemTable(bool wait, ColumnFamilyHandle* cfh) {
   FlushOptions fo;
   fo.wait = wait;
-  return FlushMemTable(default_cf_handle_->cfd(), fo);
+  ColumnFamilyData* cfd;
+  if (cfh == nullptr) {
+    cfd = default_cf_handle_->cfd();
+  } else {
+    auto cfhi = reinterpret_cast<ColumnFamilyHandleImpl*>(cfh);
+    cfd = cfhi->cfd();
+  }
+  return FlushMemTable(cfd, fo);
 }
 
 Status DBImpl::TEST_WaitForFlushMemTable(ColumnFamilyHandle* column_family) {
@@ -151,6 +158,23 @@ Status DBImpl::TEST_GetAllImmutableCFOptions(
     iopts_map->insert({cf_names[i], iopts[i]});
   }
 
+  return Status::OK();
+}
+
+uint64_t DBImpl::TEST_FindMinLogContainingOutstandingPrep() {
+  return FindMinLogContainingOutstandingPrep();
+}
+
+uint64_t DBImpl::TEST_FindMinPrepLogReferencedByMemTable() {
+  return FindMinPrepLogReferencedByMemTable();
+}
+
+Status DBImpl::TEST_GetLatestMutableCFOptions(
+    ColumnFamilyHandle* column_family, MutableCFOptions* mutable_cf_options) {
+  InstrumentedMutexLock l(&mutex_);
+
+  auto cfh = reinterpret_cast<ColumnFamilyHandleImpl*>(column_family);
+  *mutable_cf_options = *cfh->cfd()->GetLatestMutableCFOptions();
   return Status::OK();
 }
 

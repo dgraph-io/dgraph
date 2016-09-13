@@ -1,4 +1,4 @@
-//  Copyright (c) 2013, Facebook, Inc.  All rights reserved.
+//  Copyright (c) 2011-present, Facebook, Inc.  All rights reserved.
 //  This source code is licensed under the BSD-style license found in the
 //  LICENSE file in the root directory of this source tree. An additional grant
 //  of patent rights can be found in the PATENTS file in the same directory.
@@ -36,6 +36,7 @@ class TablePropertiesTest : public testing::Test,
 // Utilities test functions
 namespace {
 static const uint32_t kTestColumnFamilyId = 66;
+static const std::string kTestColumnFamilyName = "test_column_fam";
 
 void MakeBuilder(const Options& options, const ImmutableCFOptions& ioptions,
                  const InternalKeyComparator& internal_comparator,
@@ -48,8 +49,8 @@ void MakeBuilder(const Options& options, const ImmutableCFOptions& ioptions,
 
   builder->reset(NewTableBuilder(
       ioptions, internal_comparator, int_tbl_prop_collector_factories,
-      kTestColumnFamilyId /* column_family_id */, writable->get(),
-      options.compression, options.compression_opts));
+      kTestColumnFamilyId, kTestColumnFamilyName,
+      writable->get(), options.compression, options.compression_opts));
 }
 }  // namespace
 
@@ -367,6 +368,8 @@ void TestInternalKeyPropertiesCollector(
       InternalKey("Y       ", 5, ValueType::kTypeDeletion),
       InternalKey("Z       ", 6, ValueType::kTypeDeletion),
       InternalKey("a       ", 7, ValueType::kTypeSingleDeletion),
+      InternalKey("b       ", 8, ValueType::kTypeMerge),
+      InternalKey("c       ", 9, ValueType::kTypeMerge),
   };
 
   std::unique_ptr<TableBuilder> builder;
@@ -421,6 +424,11 @@ void TestInternalKeyPropertiesCollector(
     auto user_collected = props->user_collected_properties;
     uint64_t deleted = GetDeletedKeys(user_collected);
     ASSERT_EQ(5u, deleted);  // deletes + single-deletes
+
+    bool property_present;
+    uint64_t merges = GetMergeOperands(user_collected, &property_present);
+    ASSERT_TRUE(property_present);
+    ASSERT_EQ(2u, merges);
 
     if (sanitized) {
       uint32_t starts_with_A = 0;

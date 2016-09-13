@@ -1,4 +1,4 @@
-// Copyright (c) 2014, Facebook, Inc.  All rights reserved.
+// Copyright (c) 2011-present, Facebook, Inc.  All rights reserved.
 // This source code is licensed under the BSD-style license found in the
 // LICENSE file in the root directory of this source tree. An additional grant
 // of patent rights can be found in the PATENTS file in the same directory.
@@ -23,7 +23,7 @@ enum OptionsSanityCheckLevel : unsigned char {
 
 // The sanity check level for DB options
 static const std::unordered_map<std::string, OptionsSanityCheckLevel>
-    sanity_level_db_options;
+    sanity_level_db_options {};
 
 // The sanity check level for column-family options
 static const std::unordered_map<std::string, OptionsSanityCheckLevel>
@@ -35,7 +35,7 @@ static const std::unordered_map<std::string, OptionsSanityCheckLevel>
 
 // The sanity check level for block-based table options
 static const std::unordered_map<std::string, OptionsSanityCheckLevel>
-    sanity_level_bbt_options;
+    sanity_level_bbt_options {};
 
 OptionsSanityCheckLevel DBOptionSanityCheckLevel(
     const std::string& options_name);

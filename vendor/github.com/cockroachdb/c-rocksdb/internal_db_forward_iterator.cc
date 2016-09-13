@@ -1,4 +1,4 @@
-//  Copyright (c) 2013, Facebook, Inc.  All rights reserved.
+//  Copyright (c) 2011-present, Facebook, Inc.  All rights reserved.
 //  This source code is licensed under the BSD-style license found in the
 //  LICENSE file in the root directory of this source tree. An additional grant
 //  of patent rights can be found in the PATENTS file in the same directory.
@@ -10,15 +10,16 @@
 #include <string>
 #include <utility>
 
-#include "db/job_context.h"
+#include "db/column_family.h"
 #include "db/db_impl.h"
 #include "db/db_iter.h"
-#include "db/column_family.h"
+#include "db/dbformat.h"
+#include "db/job_context.h"
 #include "rocksdb/env.h"
 #include "rocksdb/slice.h"
 #include "rocksdb/slice_transform.h"
 #include "table/merger.h"
-#include "db/dbformat.h"
+#include "util/string_util.h"
 #include "util/sync_point.h"
 
 namespace rocksdb {
@@ -262,7 +263,7 @@ void ForwardIterator::SeekInternal(const Slice& internal_key,
     }
     const VersionStorageInfo* vstorage = sv_->current->storage_info();
     const std::vector<FileMetaData*>& l0 = vstorage->LevelFiles(0);
-    for (uint32_t i = 0; i < l0.size(); ++i) {
+    for (size_t i = 0; i < l0.size(); ++i) {
       if (!l0_iters_[i]) {
         continue;
       }
@@ -471,6 +472,15 @@ Status ForwardIterator::status() const {
   return immutable_status_;
 }
 
+Status ForwardIterator::GetProperty(std::string prop_name, std::string* prop) {
+  assert(prop != nullptr);
+  if (prop_name == "rocksdb.iterator.super-version-number") {
+    *prop = ToString(sv_->version_number);
+    return Status::OK();
+  }
+  return Status::InvalidArgument();
+}
+
 void ForwardIterator::RebuildIterators(bool refresh_sv) {
   // Clean up
   Cleanup(refresh_sv);
@@ -521,7 +531,7 @@ void ForwardIterator::RenewIterators() {
   const auto& l0_files = vstorage->LevelFiles(0);
   const auto* vstorage_new = svnew->current->storage_info();
   const auto& l0_files_new = vstorage_new->LevelFiles(0);
-  uint32_t iold, inew;
+  size_t iold, inew;
   bool found;
   std::vector<InternalIterator*> l0_iters_new;
   l0_iters_new.reserve(l0_files_new.size());
@@ -589,7 +599,7 @@ void ForwardIterator::BuildLevelIterators(const VersionStorageInfo* vstorage) {
 
 void ForwardIterator::ResetIncompleteIterators() {
   const auto& l0_files = sv_->current->storage_info()->LevelFiles(0);
-  for (uint32_t i = 0; i < l0_iters_.size(); ++i) {
+  for (size_t i = 0; i < l0_iters_.size(); ++i) {
     assert(i < l0_files.size());
     if (!l0_iters_[i] || !l0_iters_[i]->status().IsIncomplete()) {
       continue;
@@ -680,7 +690,7 @@ bool ForwardIterator::NeedToSeekImmutable(const Slice& target) {
 void ForwardIterator::DeleteCurrentIter() {
   const VersionStorageInfo* vstorage = sv_->current->storage_info();
   const std::vector<FileMetaData*>& l0 = vstorage->LevelFiles(0);
-  for (uint32_t i = 0; i < l0.size(); ++i) {
+  for (size_t i = 0; i < l0.size(); ++i) {
     if (!l0_iters_[i]) {
       continue;
     }
@@ -712,7 +722,7 @@ bool ForwardIterator::TEST_CheckDeletedIters(int* pdeleted_iters,
 
   const VersionStorageInfo* vstorage = sv_->current->storage_info();
   const std::vector<FileMetaData*>& l0 = vstorage->LevelFiles(0);
-  for (uint32_t i = 0; i < l0.size(); ++i) {
+  for (size_t i = 0; i < l0.size(); ++i) {
     if (!l0_iters_[i]) {
       retval = true;
       deleted_iters++;

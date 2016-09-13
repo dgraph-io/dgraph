@@ -7,7 +7,9 @@ set(USE_GFLAGS_DEFAULT 0)        # GFLAGS is disabled by default, enable with -D
 set(USE_SNAPPY_DEFAULT 0)        # SNAPPY is disabled by default, enable with -DSNAPPY=1 cmake command line agrument
 set(USE_LZ4_DEFAULT 0)           # LZ4 is disabled by default, enable with -DLZ4=1 cmake command line agrument
 set(USE_ZLIB_DEFAULT 0)          # ZLIB is disabled by default, enable with -DZLIB=1 cmake command line agrument
+set(USE_XPRESS_DEFAULT 0)        # XPRESS is disabled by default, enable with -DXPRESS=1 cmake command line agrument
 set(USE_JEMALLOC_DEFAULT 0)      # JEMALLOC is disabled by default, enable with -DJEMALLOC=1 cmake command line agrument
+set(USE_JENONINIT_DEFAULT 1)     # Default is enabled do not call je_init/je_uninit as the newer versions do not have it disable with -DJENONINIT=0
 
 #
 # This example assumes all the libraries locate in directories under THIRDPARTY_HOME environment variable
@@ -188,6 +190,23 @@ else ()
   message(STATUS "ZLIB library is disabled")
 endif ()
 
+if (DEFINED XPRESS)
+  set(USE_XPRESS ${XPRESS})
+else ()
+  set(USE_XPRESS ${USE_XPRESS_DEFAULT})
+endif ()
+
+if (${USE_XPRESS} EQUAL 1)
+  message(STATUS "XPRESS is enabled")
+
+  add_definitions(-DXPRESS)
+  
+  # We are using the implementation provided by the system
+  set (SYSTEM_LIBS ${SYSTEM_LIBS} Cabinet.lib)
+else ()
+  message(STATUS "XPRESS is disabled")
+endif ()
+
 #
 # Edit these 4 lines to define paths to Jemalloc
 #
@@ -208,7 +227,7 @@ endif ()
 
 if (${USE_JEMALLOC} EQUAL 1)
   message(STATUS "JEMALLOC library is enabled")
-  set(JEMALLOC_CXX_FLAGS -DJEMALLOC)
+  set(JEMALLOC_CXX_FLAGS "-DJEMALLOC -DJEMALLOC_EXPORT= ")
   
   if(DEFINED ENV{JEMALLOC_INCLUDE})
     set(JEMALLOC_INCLUDE $ENV{JEMALLOC_INCLUDE})
@@ -228,6 +247,18 @@ if (${USE_JEMALLOC} EQUAL 1)
   include_directories(${JEMALLOC_INCLUDE})
   set (THIRDPARTY_LIBS ${THIRDPARTY_LIBS} ${JEMALLOC_LIBS})
   set (ARTIFACT_SUFFIX "_je")
+  
+  set(USE_JENONINIT USE_JENONINIT_DEFAULT)
+ 
+  if(JENONINIT)
+    set(USE_JENONINIT ${JENONINIT})
+  endif()
+  
+  if(${USE_JENONINIT} EQUAL 1)
+    add_definitions(-DJEMALLOC_NON_INIT)
+    message(STATUS "JEMALLOC NONINIT version")
+  endif()
+  
 else ()
   set (ARTIFACT_SUFFIX "")
   message(STATUS "JEMALLOC library is disabled")

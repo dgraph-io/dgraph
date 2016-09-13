@@ -1,4 +1,4 @@
-// Copyright (c) 2014, Facebook, Inc.  All rights reserved.
+// Copyright (c) 2011-present, Facebook, Inc.  All rights reserved.
 // This source code is licensed under the BSD-style license found in the
 // LICENSE file in the root directory of this source tree. An additional grant
 // of patent rights can be found in the PATENTS file in the same directory.
@@ -6,8 +6,9 @@
 #pragma once
 
 #include <vector>
-#include "rocksdb/options.h"
 #include "rocksdb/immutable_options.h"
+#include "rocksdb/options.h"
+#include "util/compression.h"
 
 namespace rocksdb {
 
@@ -24,7 +25,8 @@ struct MutableCFOptions {
         filter_deletes(options.filter_deletes),
         inplace_update_num_locks(options.inplace_update_num_locks),
         disable_auto_compactions(options.disable_auto_compactions),
-        soft_rate_limit(options.soft_rate_limit),
+        soft_pending_compaction_bytes_limit(
+            options.soft_pending_compaction_bytes_limit),
         hard_pending_compaction_bytes_limit(
             options.hard_pending_compaction_bytes_limit),
         level0_file_num_compaction_trigger(
@@ -46,9 +48,10 @@ struct MutableCFOptions {
         max_sequential_skip_in_iterations(
             options.max_sequential_skip_in_iterations),
         paranoid_file_checks(options.paranoid_file_checks),
-        compaction_measure_io_stats(options.compaction_measure_io_stats)
-
-  {
+        report_bg_io_stats(options.report_bg_io_stats),
+        compression(options.compression),
+        min_partial_merge_operands(options.min_partial_merge_operands),
+        compaction_options_fifo(ioptions.compaction_options_fifo) {
     RefreshDerivedOptions(ioptions);
   }
   MutableCFOptions()
@@ -62,12 +65,12 @@ struct MutableCFOptions {
         filter_deletes(false),
         inplace_update_num_locks(0),
         disable_auto_compactions(false),
-        soft_rate_limit(0),
+        soft_pending_compaction_bytes_limit(0),
         hard_pending_compaction_bytes_limit(0),
         level0_file_num_compaction_trigger(0),
         level0_slowdown_writes_trigger(0),
         level0_stop_writes_trigger(0),
-        compaction_pri(kCompactionPriByCompensatedSize),
+        compaction_pri(kByCompensatedSize),
         max_grandparent_overlap_factor(0),
         expanded_compaction_factor(0),
         source_compaction_factor(0),
@@ -79,7 +82,9 @@ struct MutableCFOptions {
         max_subcompactions(1),
         max_sequential_skip_in_iterations(0),
         paranoid_file_checks(false),
-        compaction_measure_io_stats(false) {}
+        report_bg_io_stats(false),
+        compression(Snappy_Supported() ? kSnappyCompression : kNoCompression),
+        min_partial_merge_operands(2) {}
 
   // Must be called after any change to MutableCFOptions
   void RefreshDerivedOptions(const ImmutableCFOptions& ioptions);
@@ -114,7 +119,7 @@ struct MutableCFOptions {
 
   // Compaction related options
   bool disable_auto_compactions;
-  double soft_rate_limit;
+  uint64_t soft_pending_compaction_bytes_limit;
   uint64_t hard_pending_compaction_bytes_limit;
   int level0_file_num_compaction_trigger;
   int level0_slowdown_writes_trigger;
@@ -134,7 +139,10 @@ struct MutableCFOptions {
   // Misc options
   uint64_t max_sequential_skip_in_iterations;
   bool paranoid_file_checks;
-  bool compaction_measure_io_stats;
+  bool report_bg_io_stats;
+  CompressionType compression;
+  uint32_t min_partial_merge_operands;
+  CompactionOptionsFIFO compaction_options_fifo;
 
   // Derived options
   // Per-level target file size.

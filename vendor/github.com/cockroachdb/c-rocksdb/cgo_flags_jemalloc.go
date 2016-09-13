@@ -14,7 +14,7 @@
 //
 // Author: Marc Berhault (marc@cockroachlabs.com)
 
-// +build jemalloc
+// +build !stdmalloc
 
 package rocksdb
 

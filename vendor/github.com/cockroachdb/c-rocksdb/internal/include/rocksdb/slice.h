@@ -1,4 +1,4 @@
-// Copyright (c) 2013, Facebook, Inc.  All rights reserved.
+// Copyright (c) 2011-present, Facebook, Inc.  All rights reserved.
 // This source code is licensed under the BSD-style license found in the
 // LICENSE file in the root directory of this source tree. An additional grant
 // of patent rights can be found in the PATENTS file in the same directory.
@@ -79,7 +79,15 @@ class Slice {
   }
 
   // Return a string that contains the copy of the referenced data.
+  // when hex is true, returns a string of twice the length hex encoded (0-9A-F)
   std::string ToString(bool hex = false) const;
+
+  // Decodes the current slice interpreted as an hexadecimal string into result,
+  // if successful returns true, if this isn't a valid hex string
+  // (e.g not coming from Slice::ToString(true)) DecodeHex returns false.
+  // This slice is expected to have an even number of 0-9A-F characters
+  // also accepts lowercase (a-f)
+  bool DecodeHex(std::string* result) const;
 
   // Three-way comparison.  Returns value:
   //   <  0 iff "*this" <  "b",

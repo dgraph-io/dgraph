@@ -16,6 +16,5 @@ import _ "github.com/cockroachdb/c-rocksdb"
 import "C"
 ```
 
-To update the upstream version of RocksDB you'll want to update `./import.sh`
-to point to the new version (just change the URL), and then run it. Make sure
-the CockroachDB tests still pass!
+To update the upstream version of RocksDB you'll want to follow the instructions
+in and run  `./import.sh`.

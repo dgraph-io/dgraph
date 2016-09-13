@@ -1,4 +1,4 @@
-//  Copyright (c) 2013, Facebook, Inc.  All rights reserved.
+//  Copyright (c) 2011-present, Facebook, Inc.  All rights reserved.
 //  This source code is licensed under the BSD-style license found in the
 //  LICENSE file in the root directory of this source tree. An additional grant
 //  of patent rights can be found in the PATENTS file in the same directory.
@@ -15,11 +15,12 @@
 #include <string>
 
 #include "rocksdb/options.h"
+#include "rocksdb/persistent_cache.h"
 #include "rocksdb/statistics.h"
 #include "rocksdb/status.h"
 #include "rocksdb/table.h"
-#include "table/table_reader.h"
 #include "table/table_properties_internal.h"
+#include "table/table_reader.h"
 #include "util/coding.h"
 #include "util/file_reader_writer.h"
 
@@ -54,6 +55,9 @@ class BlockBasedTable : public TableReader {
  public:
   static const std::string kFilterBlockPrefix;
   static const std::string kFullFilterBlockPrefix;
+  // The longest prefix of the cache key used to identify blocks.
+  // For Posix files the unique ID is three varints.
+  static const size_t kMaxCacheKeyPrefixSize = kMaxVarint64Length * 3 + 1;
 
   // Attempt to open the table that is stored in bytes [0..file_size)
   // of "file", and read the metadata entries necessary to allow
@@ -64,30 +68,35 @@ class BlockBasedTable : public TableReader {
   // If there was an error while initializing the table, sets "*table_reader"
   // to nullptr and returns a non-ok status.
   //
-  // *file must remain live while this Table is in use.
-  // *prefetch_blocks can be used to disable prefetching of index and filter
-  //  blocks at statup
+  // @param file must remain live while this Table is in use.
+  // @param prefetch_index_and_filter can be used to disable prefetching of
+  //    index and filter blocks at startup
+  // @param skip_filters Disables loading/accessing the filter block. Overrides
+  //    prefetch_index_and_filter, so filter will be skipped if both are set.
   static Status Open(const ImmutableCFOptions& ioptions,
                      const EnvOptions& env_options,
                      const BlockBasedTableOptions& table_options,
                      const InternalKeyComparator& internal_key_comparator,
                      unique_ptr<RandomAccessFileReader>&& file,
                      uint64_t file_size, unique_ptr<TableReader>* table_reader,
-                     bool prefetch_index_and_filter = true);
+                     bool prefetch_index_and_filter = true,
+                     bool skip_filters = false, int level = -1);
 
   bool PrefixMayMatch(const Slice& internal_key);
 
   // Returns a new iterator over the table contents.
   // The result of NewIterator() is initially invalid (caller must
   // call one of the Seek methods on the iterator before using it).
-  InternalIterator* NewIterator(const ReadOptions&,
-                                Arena* arena = nullptr) override;
+  // @param skip_filters Disables loading/accessing the filter block
+  InternalIterator* NewIterator(const ReadOptions&, Arena* arena = nullptr,
+                                bool skip_filters = false) override;
 
+  // @param skip_filters Disables loading/accessing the filter block
   Status Get(const ReadOptions& readOptions, const Slice& key,
-             GetContext* get_context) override;
+             GetContext* get_context, bool skip_filters = false) override;
 
   // Pre-fetch the disk blocks that correspond to the key range specified by
-  // (kbegin, kend). The call will return return error status in the event of
+  // (kbegin, kend). The call will return error status in the event of
   // IO or iteration error.
   Status Prefetch(const Slice* begin, const Slice* end) override;
 
@@ -114,12 +123,18 @@ class BlockBasedTable : public TableReader {
   // convert SST file to a human readable form
   Status DumpTable(WritableFile* out_file) override;
 
+  void Close() override;
+
   ~BlockBasedTable();
 
   bool TEST_filter_block_preloaded() const;
   bool TEST_index_reader_preloaded() const;
   // Implementation of IndexReader will be exposed to internal cc file only.
   class IndexReader;
+
+  static Slice GetCacheKey(const char* cache_key_prefix,
+                           size_t cache_key_prefix_size,
+                           const BlockHandle& handle, char* cache_key);
 
  private:
   template <class TValue>
@@ -150,18 +165,23 @@ class BlockBasedTable : public TableReader {
   //  2. index is not present in block cache.
   //  3. We disallowed any io to be performed, that is, read_options ==
   //     kBlockCacheTier
-  InternalIterator* NewIndexIterator(const ReadOptions& read_options,
-                                     BlockIter* input_iter = nullptr);
+  InternalIterator* NewIndexIterator(
+      const ReadOptions& read_options, BlockIter* input_iter = nullptr,
+      CachableEntry<IndexReader>* index_entry = nullptr);
 
   // Read block cache from block caches (if set): block_cache and
   // block_cache_compressed.
   // On success, Status::OK with be returned and @block will be populated with
   // pointer to the block as well as its block handle.
+  // @param compression_dict Data for presetting the compression library's
+  //    dictionary.
   static Status GetDataBlockFromCache(
       const Slice& block_cache_key, const Slice& compressed_block_cache_key,
       Cache* block_cache, Cache* block_cache_compressed, Statistics* statistics,
       const ReadOptions& read_options,
-      BlockBasedTable::CachableEntry<Block>* block, uint32_t format_version);
+      BlockBasedTable::CachableEntry<Block>* block, uint32_t format_version,
+      const Slice& compression_dict);
+
   // Put a raw block (maybe compressed) to the corresponding block caches.
   // This method will perform decompression against raw_block if needed and then
   // populate the block caches.
@@ -170,11 +190,14 @@ class BlockBasedTable : public TableReader {
   //
   // REQUIRES: raw_block is heap-allocated. PutDataBlockToCache() will be
   // responsible for releasing its memory if error occurs.
+  // @param compression_dict Data for presetting the compression library's
+  //    dictionary.
   static Status PutDataBlockToCache(
       const Slice& block_cache_key, const Slice& compressed_block_cache_key,
       Cache* block_cache, Cache* block_cache_compressed,
       const ReadOptions& read_options, Statistics* statistics,
-      CachableEntry<Block>* block, Block* raw_block, uint32_t format_version);
+      CachableEntry<Block>* block, Block* raw_block, uint32_t format_version,
+      const Slice& compression_dict);
 
   // Calls (*handle_result)(arg, ...) repeatedly, starting with the entry found
   // after a call to Seek(key), until handle_result returns false.
@@ -192,7 +215,8 @@ class BlockBasedTable : public TableReader {
       IndexReader** index_reader,
       InternalIterator* preloaded_meta_index_iter = nullptr);
 
-  bool FullFilterKeyMayMatch(FilterBlockReader* filter,
+  bool FullFilterKeyMayMatch(const ReadOptions& read_options,
+                             FilterBlockReader* filter,
                              const Slice& user_key) const;
 
   // Read the meta block from sst.
@@ -200,9 +224,9 @@ class BlockBasedTable : public TableReader {
                               std::unique_ptr<InternalIterator>* iter);
 
   // Create the filter from the filter block.
-  static FilterBlockReader* ReadFilter(Rep* rep, size_t* filter_size = nullptr);
+  static FilterBlockReader* ReadFilter(Rep* rep);
 
-  static void SetupCacheKeyPrefix(Rep* rep);
+  static void SetupCacheKeyPrefix(Rep* rep, uint64_t file_size);
 
   explicit BlockBasedTable(Rep* rep)
       : rep_(rep), compaction_optimized_(false) {}
@@ -212,10 +236,6 @@ class BlockBasedTable : public TableReader {
     RandomAccessFile* file, char* buffer, size_t* size);
   static void GenerateCachePrefix(Cache* cc,
     WritableFile* file, char* buffer, size_t* size);
-
-  // The longest prefix of the cache key used to identify blocks.
-  // For Posix files the unique ID is three varints.
-  static const size_t kMaxCacheKeyPrefixSize = kMaxVarint64Length*3+1;
 
   // Helper functions for DumpTable()
   Status DumpIndexBlock(WritableFile* out_file);

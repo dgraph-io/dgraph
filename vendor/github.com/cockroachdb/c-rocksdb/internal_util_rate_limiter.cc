@@ -1,4 +1,4 @@
-//  Copyright (c) 2014, Facebook, Inc.  All rights reserved.
+//  Copyright (c) 2011-present, Facebook, Inc.  All rights reserved.
 //  This source code is licensed under the BSD-style license found in the
 //  LICENSE file in the root directory of this source tree. An additional grant
 //  of patent rights can be found in the PATENTS file in the same directory.
@@ -8,6 +8,7 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
 #include "util/rate_limiter.h"
+#include "port/port.h"
 #include "rocksdb/env.h"
 
 namespace rocksdb {
@@ -201,6 +202,18 @@ void GenericRateLimiter::Refill() {
         next_req->cv.Signal();
       }
     }
+  }
+}
+
+int64_t GenericRateLimiter::CalculateRefillBytesPerPeriod(
+    int64_t rate_bytes_per_sec) {
+  if (port::kMaxInt64 / rate_bytes_per_sec < refill_period_us_) {
+    // Avoid unexpected result in the overflow case. The result now is still
+    // inaccurate but is a number that is large enough.
+    return port::kMaxInt64 / 1000000;
+  } else {
+    return std::max(kMinRefillBytesPerPeriod,
+                    rate_bytes_per_sec * refill_period_us_ / 1000000);
   }
 }
 
