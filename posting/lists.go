@@ -113,8 +113,6 @@ func aggressivelyEvict() {
 	log.Println("Calling merge on all lists.")
 	MergeLists(100 * runtime.GOMAXPROCS(-1))
 
-	log.Println("Merged lists. Calling GC.")
-	runtime.GC() // Call GC to do some cleanup.
 	log.Println("Trying to free OS memory")
 	debug.FreeOSMemory()
 

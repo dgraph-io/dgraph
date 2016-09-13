@@ -639,9 +639,8 @@ func (l *List) MergeIfDirty(ctx context.Context) (merged bool, err error) {
 	if atomic.LoadInt64(&l.dirtyTs) == 0 {
 		x.Trace(ctx, "Not committing")
 		return false, nil
-	} else {
-		x.Trace(ctx, "Committing")
 	}
+	x.Trace(ctx, "Committing")
 	return l.merge()
 }
 

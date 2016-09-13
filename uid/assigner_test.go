@@ -17,15 +17,44 @@
 package uid
 
 import (
+	"errors"
 	"io/ioutil"
+	"log"
+	"math"
 	"os"
 	"testing"
 
 	"github.com/Sirupsen/logrus"
 
 	"github.com/dgraph-io/dgraph/posting"
+	"github.com/dgraph-io/dgraph/posting/types"
 	"github.com/dgraph-io/dgraph/store"
 )
+
+// externalId returns the xid of a given uid by reading from the uidstore.
+// It returns an error if there is no corresponding xid.
+func externalId(uid uint64) (xid string, rerr error) {
+	key := posting.Key(uid, "_xid_") // uid -> "_xid_" -> xid
+	pl := posting.GetOrCreate(key, uidStore)
+	if pl.Length() == 0 {
+		return "", errors.New("NO external id")
+	}
+
+	if pl.Length() > 1 {
+		log.Fatalf("This shouldn't be happening. Uid: %v", uid)
+		return "", errors.New("Multiple external ids for this uid.")
+	}
+
+	var p types.Posting
+	if ok := pl.Get(&p, 0); !ok {
+		return "", errors.New("While retrieving posting")
+	}
+
+	if p.Uid() != math.MaxUint64 {
+		log.Fatalf("Value uid must be MaxUint64. Uid: %v", p.Uid())
+	}
+	return string(p.ValueBytes()), rerr
+}
 
 func TestGetOrAssign(t *testing.T) {
 	logrus.SetLevel(logrus.DebugLevel)
@@ -82,7 +111,7 @@ func TestGetOrAssign(t *testing.T) {
 	// return
 
 	{
-		xid, err := ExternalId(u1)
+		xid, err := externalId(u1)
 		if err != nil {
 			t.Error(err)
 		}
