@@ -35,7 +35,7 @@ var (
 	memprofile = flag.String("memprofile", "", "write memory profile to file")
 	numcpu     = flag.Int("numCpu", runtime.NumCPU(),
 		"Number of cores to be used by the process")
-	prof = flag.Bool("profile", false, "Enable profiling through pprof")
+	prof = flag.String("profile", "", "Address at which profile is displayed")
 )
 
 func main() {
@@ -49,9 +49,9 @@ func main() {
 		pprof.StartCPUProfile(f)
 		defer pprof.StopCPUProfile()
 	}
-	if *prof {
+	if *prof != "" {
 		go func() {
-			log.Println(http.ListenAndServe("localhost:6060", nil))
+			log.Println(http.ListenAndServe(*prof, nil))
 		}()
 	}
 	logrus.SetLevel(logrus.InfoLevel)

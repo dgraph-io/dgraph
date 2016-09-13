@@ -68,7 +68,6 @@ var (
 	schemaFile  = flag.String("schema", "", "Path to the file that specifies schema in json format")
 	cpuprofile  = flag.String("cpuprof", "", "write cpu profile to file")
 	memprofile  = flag.String("memprof", "", "write memory profile to file")
-	prof        = flag.Bool("profile", false, "Enable profiling through pprof")
 )
 
 type mutationResult struct {
@@ -483,11 +482,6 @@ func checkFlagsAndInitDirs() {
 	err = os.MkdirAll(*uidDir, 0700)
 	if err != nil {
 		log.Fatalf("Error while creating the filepath for uids: %v", err)
-	}
-	if *prof {
-		go func() {
-			log.Println(http.ListenAndServe("localhost:6060", nil))
-		}()
 	}
 }
 
