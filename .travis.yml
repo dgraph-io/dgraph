@@ -1,40 +1,39 @@
 language: go
 go:
-  - 1.7
+- 1.7
 dist: trusty
 sudo: required
 notifications:
   email:
     recipients:
-      - minions@dgraph.io
+    - minions@dgraph.io
 addons:
+  artifacts:
+    paths:
+    - $HOME/gopath/src/github.com/dgraph-io/dgraph/cmd/dgraph
+    - cmd/dgraph
+    debug: true
   apt:
     sources:
-      - ubuntu-toolchain-r-test
-      - llvm-toolchain-precise-3.8
+    - ubuntu-toolchain-r-test
+    - llvm-toolchain-precise-3.8
     packages:
-      - clang-3.8
-      - libbz2-dev
-      - libsnappy-dev
-      - zlib1g-dev
-      - jq
-    artifacts:
-        paths:
-            - $HOME/gopath/src/github.com/dgraph-io/dgraph/cmd/dgraph
-        debug: true
+    - clang-3.8
+    - libbz2-dev
+    - libsnappy-dev
+    - zlib1g-dev
+    - jq
 env:
-  - CC=clang-3.8 CXX=clang++-3.8
+- CC=clang-3.8 CXX=clang++-3.8
 cache:
   apt: true
   directories:
-    - $HOME/build
+  - "$HOME/build"
 install:
-  # Passing the directory in which RocksDB is to be installed as an argument
-  # to the bash script.
-  - bash contrib/build-rocksdb.sh $HOME/build
+- bash contrib/build-rocksdb.sh $HOME/build
 before_script:
-  - go get github.com/mattn/goveralls
+- go get github.com/mattn/goveralls
 script:
-  - bash contrib/cover.sh $HOME/build coverage.out
-  - bash contrib/load-test.sh $HOME/build
-  - goveralls -service=travis-ci -coverprofile=coverage.out
+- bash contrib/cover.sh $HOME/build coverage.out
+- bash contrib/load-test.sh $HOME/build
+- goveralls -service=travis-ci -coverprofile=coverage.out
