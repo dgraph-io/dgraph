@@ -27,11 +27,6 @@ set -e
 
 pushd $SRC &> /dev/null
 
-echo "~~~~~~~~~~~~~~~~~~~~~"
-ls ${ROCKSDBDIR}
-echo "~~~~~~~~~~~~~~~~~~~~~"
-ls ${ROCKSDBDIR}/include
-
 # create coverage output
 echo 'mode: atomic' > $OUT
 for PKG in $(go list ./...|grep -v '/vendor/'); do
