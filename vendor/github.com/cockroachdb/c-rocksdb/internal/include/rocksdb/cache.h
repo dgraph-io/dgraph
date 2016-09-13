@@ -1,4 +1,4 @@
-// Copyright (c) 2013, Facebook, Inc.  All rights reserved.
+// Copyright (c) 2011-present, Facebook, Inc.  All rights reserved.
 // This source code is licensed under the BSD-style license found in the
 // LICENSE file in the root directory of this source tree. An additional grant
 // of patent rights can be found in the PATENTS file in the same directory.
@@ -22,46 +22,57 @@
 #ifndef STORAGE_ROCKSDB_INCLUDE_CACHE_H_
 #define STORAGE_ROCKSDB_INCLUDE_CACHE_H_
 
-#include <memory>
 #include <stdint.h>
+#include <memory>
 #include "rocksdb/slice.h"
+#include "rocksdb/status.h"
 
 namespace rocksdb {
-
-using std::shared_ptr;
 
 class Cache;
 
 // Create a new cache with a fixed size capacity. The cache is sharded
-// to 2^numShardBits shards, by hash of the key. The total capacity
+// to 2^num_shard_bits shards, by hash of the key. The total capacity
 // is divided and evenly assigned to each shard.
 //
-// The functions without parameter numShardBits uses default value, which is 4
-extern shared_ptr<Cache> NewLRUCache(size_t capacity);
-extern shared_ptr<Cache> NewLRUCache(size_t capacity, int numShardBits);
+// The parameter num_shard_bits defaults to 4, and strict_capacity_limit
+// defaults to false.
+extern std::shared_ptr<Cache> NewLRUCache(size_t capacity);
+extern std::shared_ptr<Cache> NewLRUCache(size_t capacity, int num_shard_bits);
+extern std::shared_ptr<Cache> NewLRUCache(size_t capacity, int num_shard_bits,
+                                          bool strict_capacity_limit);
 
 class Cache {
  public:
-  Cache() { }
+  Cache() {}
 
   // Destroys all existing entries by calling the "deleter"
-  // function that was passed to the constructor.
-  virtual ~Cache();
+  // function that was passed via the Insert() function.
+  //
+  // @See Insert
+  virtual ~Cache() {}
 
   // Opaque handle to an entry stored in the cache.
-  struct Handle { };
+  struct Handle {};
 
   // Insert a mapping from key->value into the cache and assign it
   // the specified charge against the total cache capacity.
+  // If strict_capacity_limit is true and cache reaches its full capacity,
+  // return Status::Incomplete.
   //
-  // Returns a handle that corresponds to the mapping.  The caller
-  // must call this->Release(handle) when the returned mapping is no
-  // longer needed.
+  // If handle is not nullptr, returns a handle that corresponds to the
+  // mapping. The caller must call this->Release(handle) when the returned
+  // mapping is no longer needed. In case of error caller is responsible to
+  // cleanup the value (i.e. calling "deleter").
+  //
+  // If handle is nullptr, it is as if Release is called immediately after
+  // insert. In case of error value will be cleanup.
   //
   // When the inserted entry is no longer needed, the key and
   // value will be passed to "deleter".
-  virtual Handle* Insert(const Slice& key, void* value, size_t charge,
-                         void (*deleter)(const Slice& key, void* value)) = 0;
+  virtual Status Insert(const Slice& key, void* value, size_t charge,
+                        void (*deleter)(const Slice& key, void* value),
+                        Handle** handle = nullptr) = 0;
 
   // If the cache has no mapping for "key", returns nullptr.
   //
@@ -85,9 +96,8 @@ class Cache {
   // underlying entry will be kept around until all existing handles
   // to it have been released.
   virtual void Erase(const Slice& key) = 0;
-
   // Return a new numeric id.  May be used by multiple clients who are
-  // sharing the same cache to partition the key space.  Typically the
+  // sharding the same cache to partition the key space.  Typically the
   // client will allocate a new id at startup and prepend the id to
   // its cache keys.
   virtual uint64_t NewId() = 0;
@@ -97,6 +107,14 @@ class Cache {
   // greater than new capacity, the implementation will do its best job to
   // purge the released entries from the cache in order to lower the usage
   virtual void SetCapacity(size_t capacity) = 0;
+
+  // Set whether to return error on insertion when cache reaches its full
+  // capacity.
+  virtual void SetStrictCapacityLimit(bool strict_capacity_limit) = 0;
+
+  // Set whether to return error on insertion when cache reaches its full
+  // capacity.
+  virtual bool HasStrictCapacityLimit() const = 0;
 
   // returns the maximum configured capacity of the cache
   virtual size_t GetCapacity() const = 0;
@@ -115,8 +133,8 @@ class Cache {
   // memory - call this only if you're shutting down the process.
   // Any attempts of using cache after this call will fail terribly.
   // Always delete the DB object before calling this method!
-  virtual void DisownData() {
-    // default implementation is noop
+  virtual void DisownData(){
+      // default implementation is noop
   };
 
   // Apply callback to all entries in the cache
@@ -125,6 +143,10 @@ class Cache {
   virtual void ApplyToAllCacheEntries(void (*callback)(void*, size_t),
                                       bool thread_safe) = 0;
 
+  // Remove all entries.
+  // Prerequisit: no entry is referenced.
+  virtual void EraseUnRefEntries() = 0;
+
  private:
   void LRU_Remove(Handle* e);
   void LRU_Append(Handle* e);
@@ -132,7 +154,7 @@ class Cache {
 
   // No copying allowed
   Cache(const Cache&);
-  void operator=(const Cache&);
+  Cache& operator=(const Cache&);
 };
 
 }  // namespace rocksdb

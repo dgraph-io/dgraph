@@ -1,4 +1,4 @@
-// Copyright (c) 2013, Facebook, Inc.  All rights reserved.
+// Copyright (c) 2011-present, Facebook, Inc.  All rights reserved.
 // This source code is licensed under the BSD-style license found in the
 // LICENSE file in the root directory of this source tree. An additional grant
 // of patent rights can be found in the PATENTS file in the same directory.
@@ -68,6 +68,12 @@ struct EnvOptions {
    // If true, then use mmap to write data
   bool use_mmap_writes = true;
 
+  // If true, then use O_DIRECT for reading data
+  bool use_direct_reads = false;
+
+  // If true, then use O_DIRECT for writing data
+  bool use_direct_writes = false;
+
   // If false, fallocate() calls are bypassed
   bool allow_fallocate = true;
 
@@ -103,6 +109,14 @@ struct EnvOptions {
 
 class Env {
  public:
+  struct FileAttributes {
+    // File name
+    std::string name;
+
+    // Size of file in bytes
+    uint64_t size_bytes;
+  };
+
   Env() : thread_status_updater_(nullptr) {}
 
   virtual ~Env();
@@ -177,6 +191,15 @@ class Env {
   virtual Status GetChildren(const std::string& dir,
                              std::vector<std::string>* result) = 0;
 
+  // Store in *result the attributes of the children of the specified directory.
+  // In case the implementation lists the directory prior to iterating the files
+  // and files are concurrently deleted, the deleted files will be omitted from
+  // result.
+  // The name attributes are relative to "dir".
+  // Original contents of *results are dropped.
+  virtual Status GetChildrenFileAttributes(const std::string& dir,
+                                           std::vector<FileAttributes>* result);
+
   // Delete the named file.
   virtual Status DeleteFile(const std::string& fname) = 0;
 
@@ -244,8 +267,11 @@ class Env {
   // added to the same Env may run concurrently in different threads.
   // I.e., the caller may not assume that background work items are
   // serialized.
+  // When the UnSchedule function is called, the unschedFunction
+  // registered at the time of Schedule is invoked with arg as a parameter.
   virtual void Schedule(void (*function)(void* arg), void* arg,
-                        Priority pri = LOW, void* tag = nullptr) = 0;
+                        Priority pri = LOW, void* tag = nullptr,
+                        void (*unschedFunction)(void* arg) = 0) = 0;
 
   // Arrange to remove jobs for given arg from the queue_ if they are not
   // already scheduled. Caller is expected to have exclusive lock on arg.
@@ -541,7 +567,7 @@ class WritableFile {
    * underlying storage of a file (generally via fallocate) if the Env
    * instance supports it.
    */
-  void SetPreallocationBlockSize(size_t size) {
+  virtual void SetPreallocationBlockSize(size_t size) {
     preallocation_block_size_ = size;
   }
 
@@ -577,7 +603,7 @@ class WritableFile {
   // of space on devices where it can result in less file
   // fragmentation and/or less waste from over-zealous filesystem
   // pre-allocation.
-  void PrepareWrite(size_t offset, size_t len) {
+  virtual void PrepareWrite(size_t offset, size_t len) {
     if (preallocation_block_size_ == 0) {
       return;
     }
@@ -615,6 +641,7 @@ class WritableFile {
 
  protected:
   friend class WritableFileWrapper;
+  friend class WritableFileMirror;
 
   Env::IOPriority io_priority_;
 };
@@ -785,6 +812,10 @@ class EnvWrapper : public Env {
                      std::vector<std::string>* r) override {
     return target_->GetChildren(dir, r);
   }
+  Status GetChildrenFileAttributes(
+      const std::string& dir, std::vector<FileAttributes>* result) override {
+    return target_->GetChildrenFileAttributes(dir, result);
+  }
   Status DeleteFile(const std::string& f) override {
     return target_->DeleteFile(f);
   }
@@ -821,8 +852,8 @@ class EnvWrapper : public Env {
   Status UnlockFile(FileLock* l) override { return target_->UnlockFile(l); }
 
   void Schedule(void (*f)(void* arg), void* a, Priority pri,
-                void* tag = nullptr) override {
-    return target_->Schedule(f, a, pri, tag);
+                void* tag = nullptr, void (*u)(void* arg) = 0) override {
+    return target_->Schedule(f, a, pri, tag, u);
   }
 
   int UnSchedule(void* tag, Priority pri) override {
@@ -925,6 +956,13 @@ class WritableFileWrapper : public WritableFile {
     return target_->InvalidateCache(offset, length);
   }
 
+  virtual void SetPreallocationBlockSize(size_t size) override {
+    target_->SetPreallocationBlockSize(size);
+  }
+  virtual void PrepareWrite(size_t offset, size_t len) override {
+    target_->PrepareWrite(offset, len);
+  }
+
  protected:
   Status Allocate(uint64_t offset, uint64_t len) override {
     return target_->Allocate(offset, len);
@@ -942,6 +980,10 @@ class WritableFileWrapper : public WritableFile {
 // when it is no longer needed.
 // *base_env must remain live while the result is in use.
 Env* NewMemEnv(Env* base_env);
+
+// Returns a new environment that is used for HDFS environment.
+// This is a factory method for HdfsEnv declared in hdfs/env_hdfs.h
+Status NewHdfsEnv(Env** hdfs_env, const std::string& fsname);
 
 }  // namespace rocksdb
 

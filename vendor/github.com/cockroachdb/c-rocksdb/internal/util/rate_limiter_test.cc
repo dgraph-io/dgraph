@@ -1,4 +1,4 @@
-//  Copyright (c) 2014, Facebook, Inc.  All rights reserved.
+//  Copyright (c) 2011-present, Facebook, Inc.  All rights reserved.
 //  This source code is licensed under the BSD-style license found in the
 //  LICENSE file in the root directory of this source tree. An additional grant
 //  of patent rights can be found in the PATENTS file in the same directory.
@@ -21,6 +21,11 @@
 namespace rocksdb {
 
 class RateLimiterTest : public testing::Test {};
+
+TEST_F(RateLimiterTest, OverflowRate) {
+  GenericRateLimiter limiter(port::kMaxInt64, 1000, 10);
+  ASSERT_GT(limiter.GetSingleBurstBytes(), 1000000000ll);
+}
 
 TEST_F(RateLimiterTest, StartStop) {
   std::unique_ptr<RateLimiter> limiter(new GenericRateLimiter(100, 100, 10));

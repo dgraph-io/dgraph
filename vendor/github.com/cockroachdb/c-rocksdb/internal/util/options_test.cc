@@ -1,4 +1,4 @@
-//  Copyright (c) 2013, Facebook, Inc.  All rights reserved.
+//  Copyright (c) 2011-present, Facebook, Inc.  All rights reserved.
 //  This source code is licensed under the BSD-style license found in the
 //  LICENSE file in the root directory of this source tree. An additional grant
 //  of patent rights can be found in the PATENTS file in the same directory.
@@ -12,6 +12,7 @@
 #endif
 
 #include <cctype>
+#include <cstring>
 #include <unordered_map>
 #include <inttypes.h>
 
@@ -23,6 +24,7 @@
 #include "util/options_parser.h"
 #include "util/options_sanity_check.h"
 #include "util/random.h"
+#include "util/stderr_logger.h"
 #include "util/testharness.h"
 #include "util/testutil.h"
 
@@ -36,62 +38,7 @@ DEFINE_bool(enable_print, false, "Print options generated to console.");
 
 namespace rocksdb {
 
-class StderrLogger : public Logger {
- public:
-  using Logger::Logv;
-  virtual void Logv(const char* format, va_list ap) override {
-    vprintf(format, ap);
-    printf("\n");
-  }
-};
-
-Options PrintAndGetOptions(size_t total_write_buffer_limit,
-                           int read_amplification_threshold,
-                           int write_amplification_threshold,
-                           uint64_t target_db_size = 68719476736) {
-  StderrLogger logger;
-
-  if (FLAGS_enable_print) {
-    printf("---- total_write_buffer_limit: %" ROCKSDB_PRIszt
-           " "
-           "read_amplification_threshold: %d write_amplification_threshold: %d "
-           "target_db_size %" PRIu64 " ----\n",
-           total_write_buffer_limit, read_amplification_threshold,
-           write_amplification_threshold, target_db_size);
-  }
-
-  Options options =
-      GetOptions(total_write_buffer_limit, read_amplification_threshold,
-                 write_amplification_threshold, target_db_size);
-  if (FLAGS_enable_print) {
-    options.Dump(&logger);
-    printf("-------------------------------------\n\n\n");
-  }
-  return options;
-}
-
 class OptionsTest : public testing::Test {};
-
-TEST_F(OptionsTest, LooseCondition) {
-  Options options;
-  PrintAndGetOptions(static_cast<size_t>(10) * 1024 * 1024 * 1024, 100, 100);
-
-  // Less mem table memory budget
-  PrintAndGetOptions(32 * 1024 * 1024, 100, 100);
-
-  // Tight read amplification
-  options = PrintAndGetOptions(128 * 1024 * 1024, 8, 100);
-  ASSERT_EQ(options.compaction_style, kCompactionStyleLevel);
-
-#ifndef ROCKSDB_LITE  // Universal compaction is not supported in ROCKSDB_LITE
-  // Tight write amplification
-  options = PrintAndGetOptions(128 * 1024 * 1024, 64, 10);
-  ASSERT_EQ(options.compaction_style, kCompactionStyleUniversal);
-#endif  // !ROCKSDB_LITE
-
-  // Both tight amplifications
-  PrintAndGetOptions(128 * 1024 * 1024, 4, 8);
-}
 
 #ifndef ROCKSDB_LITE  // GetOptionsFromMap is not supported in ROCKSDB_LITE
 TEST_F(OptionsTest, GetOptionsFromMapTest) {
@@ -108,9 +55,11 @@ TEST_F(OptionsTest, GetOptionsFromMapTest) {
        "kBZip2Compression:"
        "kLZ4Compression:"
        "kLZ4HCCompression:"
+       "kXpressCompression:"
        "kZSTDNotFinalCompression"},
-      {"compression_opts", "4:5:6"},
-      {"num_levels", "7"},
+      {"bottommost_compression", "kLZ4Compression"},
+      {"compression_opts", "4:5:6:7"},
+      {"num_levels", "8"},
       {"level0_file_num_compaction_trigger", "8"},
       {"level0_slowdown_writes_trigger", "9"},
       {"level0_stop_writes_trigger", "10"},
@@ -134,7 +83,8 @@ TEST_F(OptionsTest, GetOptionsFromMapTest) {
       {"filter_deletes", "0"},
       {"max_sequential_skip_in_iterations", "24"},
       {"inplace_update_support", "true"},
-      {"compaction_measure_io_stats", "true"},
+      {"report_bg_io_stats", "true"},
+      {"compaction_measure_io_stats", "false"},
       {"inplace_update_num_locks", "25"},
       {"memtable_prefix_bloom_bits", "26"},
       {"memtable_prefix_bloom_probes", "27"},
@@ -194,18 +144,21 @@ TEST_F(OptionsTest, GetOptionsFromMapTest) {
   ASSERT_EQ(new_cf_opt.min_write_buffer_number_to_merge, 3);
   ASSERT_EQ(new_cf_opt.max_write_buffer_number_to_maintain, 99);
   ASSERT_EQ(new_cf_opt.compression, kSnappyCompression);
-  ASSERT_EQ(new_cf_opt.compression_per_level.size(), 7U);
+  ASSERT_EQ(new_cf_opt.compression_per_level.size(), 8U);
   ASSERT_EQ(new_cf_opt.compression_per_level[0], kNoCompression);
   ASSERT_EQ(new_cf_opt.compression_per_level[1], kSnappyCompression);
   ASSERT_EQ(new_cf_opt.compression_per_level[2], kZlibCompression);
   ASSERT_EQ(new_cf_opt.compression_per_level[3], kBZip2Compression);
   ASSERT_EQ(new_cf_opt.compression_per_level[4], kLZ4Compression);
   ASSERT_EQ(new_cf_opt.compression_per_level[5], kLZ4HCCompression);
-  ASSERT_EQ(new_cf_opt.compression_per_level[6], kZSTDNotFinalCompression);
+  ASSERT_EQ(new_cf_opt.compression_per_level[6], kXpressCompression);
+  ASSERT_EQ(new_cf_opt.compression_per_level[7], kZSTDNotFinalCompression);
   ASSERT_EQ(new_cf_opt.compression_opts.window_bits, 4);
   ASSERT_EQ(new_cf_opt.compression_opts.level, 5);
   ASSERT_EQ(new_cf_opt.compression_opts.strategy, 6);
-  ASSERT_EQ(new_cf_opt.num_levels, 7);
+  ASSERT_EQ(new_cf_opt.compression_opts.max_dict_bytes, 7);
+  ASSERT_EQ(new_cf_opt.bottommost_compression, kLZ4Compression);
+  ASSERT_EQ(new_cf_opt.num_levels, 8);
   ASSERT_EQ(new_cf_opt.level0_file_num_compaction_trigger, 8);
   ASSERT_EQ(new_cf_opt.level0_slowdown_writes_trigger, 9);
   ASSERT_EQ(new_cf_opt.level0_stop_writes_trigger, 10);
@@ -603,9 +556,15 @@ TEST_F(OptionsTest, GetOptionsFromStringTest) {
       base_options,
       "write_buffer_size=10;max_write_buffer_number=16;"
       "block_based_table_factory={block_cache=1M;block_size=4;};"
-      "create_if_missing=true;max_open_files=1;rate_limiter_bytes_per_sec=1024",
+      "compression_opts=4:5:6;create_if_missing=true;max_open_files=1;"
+      "rate_limiter_bytes_per_sec=1024",
       &new_options));
 
+  ASSERT_EQ(new_options.compression_opts.window_bits, 4);
+  ASSERT_EQ(new_options.compression_opts.level, 5);
+  ASSERT_EQ(new_options.compression_opts.strategy, 6);
+  ASSERT_EQ(new_options.compression_opts.max_dict_bytes, 0);
+  ASSERT_EQ(new_options.bottommost_compression, kDisableCompressionOption);
   ASSERT_EQ(new_options.write_buffer_size, 10U);
   ASSERT_EQ(new_options.max_write_buffer_number, 16);
   BlockBasedTableOptions new_block_based_table_options =
@@ -830,6 +789,28 @@ TEST_F(OptionsTest, StringToMapRandomTest) {
     ASSERT_TRUE(s.ok() || s.IsInvalidArgument());
     opts_map.clear();
   }
+}
+
+TEST_F(OptionsTest, GetStringFromCompressionType) {
+  std::string res;
+
+  ASSERT_OK(GetStringFromCompressionType(&res, kNoCompression));
+  ASSERT_EQ(res, "kNoCompression");
+
+  ASSERT_OK(GetStringFromCompressionType(&res, kSnappyCompression));
+  ASSERT_EQ(res, "kSnappyCompression");
+
+  ASSERT_OK(GetStringFromCompressionType(&res, kDisableCompressionOption));
+  ASSERT_EQ(res, "kDisableCompressionOption");
+
+  ASSERT_OK(GetStringFromCompressionType(&res, kLZ4Compression));
+  ASSERT_EQ(res, "kLZ4Compression");
+
+  ASSERT_OK(GetStringFromCompressionType(&res, kZlibCompression));
+  ASSERT_EQ(res, "kZlibCompression");
+
+  ASSERT_NOK(
+      GetStringFromCompressionType(&res, static_cast<CompressionType>(-10)));
 }
 #endif  // !ROCKSDB_LITE
 
@@ -1269,6 +1250,59 @@ TEST_F(OptionsParserTest, DifferentDefault) {
 
   RocksDBOptionsParser parser;
   ASSERT_OK(parser.Parse(kOptionsFileName, env_.get()));
+
+  {
+    Options old_default_opts;
+    old_default_opts.OldDefaults();
+    ASSERT_EQ(10 * 1048576, old_default_opts.max_bytes_for_level_base);
+    ASSERT_EQ(5000, old_default_opts.max_open_files);
+    ASSERT_EQ(-1, old_default_opts.base_background_compactions);
+    ASSERT_EQ(WALRecoveryMode::kTolerateCorruptedTailRecords,
+              old_default_opts.wal_recovery_mode);
+  }
+  {
+    Options old_default_opts;
+    old_default_opts.OldDefaults(4, 6);
+    ASSERT_EQ(10 * 1048576, old_default_opts.max_bytes_for_level_base);
+    ASSERT_EQ(5000, old_default_opts.max_open_files);
+  }
+  {
+    Options old_default_opts;
+    old_default_opts.OldDefaults(4, 7);
+    ASSERT_NE(10 * 1048576, old_default_opts.max_bytes_for_level_base);
+    ASSERT_NE(4, old_default_opts.table_cache_numshardbits);
+    ASSERT_EQ(5000, old_default_opts.max_open_files);
+  }
+  {
+    ColumnFamilyOptions old_default_cf_opts;
+    old_default_cf_opts.OldDefaults();
+    ASSERT_EQ(2 * 1048576, old_default_cf_opts.target_file_size_base);
+    ASSERT_EQ(4 << 20, old_default_cf_opts.write_buffer_size);
+    ASSERT_EQ(2 * 1048576, old_default_cf_opts.target_file_size_base);
+    ASSERT_EQ(0, old_default_cf_opts.soft_pending_compaction_bytes_limit);
+    ASSERT_EQ(0, old_default_cf_opts.hard_pending_compaction_bytes_limit);
+    ASSERT_EQ(CompactionPri::kByCompensatedSize,
+              old_default_cf_opts.compaction_pri);
+  }
+  {
+    ColumnFamilyOptions old_default_cf_opts;
+    old_default_cf_opts.OldDefaults(4, 6);
+    ASSERT_EQ(2 * 1048576, old_default_cf_opts.target_file_size_base);
+    ASSERT_EQ(CompactionPri::kByCompensatedSize,
+              old_default_cf_opts.compaction_pri);
+  }
+  {
+    ColumnFamilyOptions old_default_cf_opts;
+    old_default_cf_opts.OldDefaults(4, 7);
+    ASSERT_NE(2 * 1048576, old_default_cf_opts.target_file_size_base);
+    ASSERT_EQ(CompactionPri::kByCompensatedSize,
+              old_default_cf_opts.compaction_pri);
+  }
+
+  Options small_opts;
+  small_opts.OptimizeForSmallDb();
+  ASSERT_EQ(2 << 20, small_opts.write_buffer_size);
+  ASSERT_EQ(5000, small_opts.max_open_files);
 }
 
 class OptionsSanityCheckTest : public OptionsParserTest {
@@ -1307,10 +1341,10 @@ TEST_F(OptionsSanityCheckTest, SanityCheck) {
 
   // prefix_extractor
   {
-    // change the prefix extractor and expect only pass when
-    // sanity-level == kSanityLevelNone
+    // Okay to change prefix_extractor form nullptr to non-nullptr
+    ASSERT_EQ(opts.prefix_extractor.get(), nullptr);
     opts.prefix_extractor.reset(NewCappedPrefixTransform(10));
-    ASSERT_NOK(SanityCheckCFOptions(opts, kSanityLevelLooselyCompatible));
+    ASSERT_OK(SanityCheckCFOptions(opts, kSanityLevelLooselyCompatible));
     ASSERT_OK(SanityCheckCFOptions(opts, kSanityLevelNone));
 
     // persist the change
@@ -1337,11 +1371,21 @@ TEST_F(OptionsSanityCheckTest, SanityCheck) {
     // expect pass only in kSanityLevelNone
     ASSERT_NOK(SanityCheckCFOptions(opts, kSanityLevelLooselyCompatible));
     ASSERT_OK(SanityCheckCFOptions(opts, kSanityLevelNone));
+
+    // Change prefix extractor from non-nullptr to nullptr
+    opts.prefix_extractor.reset();
+    // expect pass as it's safe to change prefix_extractor
+    // from non-null to null
+    ASSERT_OK(SanityCheckCFOptions(opts, kSanityLevelLooselyCompatible));
+    ASSERT_OK(SanityCheckCFOptions(opts, kSanityLevelNone));
   }
+  // persist the change
+  ASSERT_OK(PersistCFOptions(opts));
+  ASSERT_OK(SanityCheckCFOptions(opts, kSanityLevelExactMatch));
 
   // table_factory
   {
-    for (int tb = 2; tb >= 0; --tb) {
+    for (int tb = 0; tb <= 2; ++tb) {
       // change the table factory
       opts.table_factory.reset(test::RandomTableFactory(&rnd, tb));
       ASSERT_NOK(SanityCheckCFOptions(opts, kSanityLevelLooselyCompatible));
@@ -1473,9 +1517,7 @@ TEST_F(OptionsParserTest, EscapeOptionString) {
                 "Escape \\# and # comment together   ."),
             "Escape \\# and");
 }
-
 #endif  // !ROCKSDB_LITE
-
 }  // namespace rocksdb
 
 int main(int argc, char** argv) {

@@ -9,31 +9,35 @@
 			"revisionTime": "2015-10-07T14:14:16Z"
 		},
 		{
-			"checksumSHA1": "6cHn7qM5LA4k8teHz7m3LubWTLI=",
+			"checksumSHA1": "MtpYxrtNS/B3gvcV2bm/irGJsDo=",
 			"path": "github.com/cockroachdb/c-jemalloc",
-			"revision": "9716a86928311cee3633f1773035ce9f0cf9f9e9",
-			"revisionTime": "2016-06-22T00:34:45Z",
+			"revision": "42e6a32cd7a4dff9c70d80323681d46d046181ef",
+			"revisionTime": "2016-07-29T16:27:41Z",
 			"tree": true
 		},
 		{
-			"checksumSHA1": "OS4JlP+CrEfE8iE5ANNXVMuhuN8=",
+			"checksumSHA1": "Uz9RlVv0yacm5FHXuffE+4YQSWQ=",
 			"path": "github.com/cockroachdb/c-lz4",
-			"revision": "e0b69c0fc9001ac0b5573439496671c4229888b8",
-			"revisionTime": "2016-04-25T08:08:34Z",
+			"revision": "834d3303c9e84b1045bc57c3eb3723ee8cb4d33b",
+			"revisionTime": "2016-06-06T19:19:38Z",
 			"tree": true
 		},
 		{
-			"checksumSHA1": "Kyb6mG7/ItsCf2QzSnWVVkEhnLc=",
+			"path": "github.com/cockroachdb/c-lze4",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "/TtGA6GCE03N2fo5qQbvebptUBg=",
 			"path": "github.com/cockroachdb/c-rocksdb",
-			"revision": "88fbafdb85bc940dfcef995d57213d2dac231d3d",
-			"revisionTime": "2016-05-26T18:29:39Z",
+			"revision": "d869eb7bfa0d464deb838d591957797d1abf3b99",
+			"revisionTime": "2016-09-08T04:44:37Z",
 			"tree": true
 		},
 		{
-			"checksumSHA1": "uxxPGd9rOYhdC92WoA05tK6tIRc=",
+			"checksumSHA1": "pjTmyGU6EOYq7lrj3z+d7AkWkfE=",
 			"path": "github.com/cockroachdb/c-snappy",
-			"revision": "36be97020133fa143426c56cc975a415417fc3fb",
-			"revisionTime": "2016-04-25T18:11:20Z",
+			"revision": "d4e7b428fe7fc09e93573df3448567a62df8c9fa",
+			"revisionTime": "2016-06-06T19:20:24Z",
 			"tree": true
 		},
 		{
@@ -71,12 +75,6 @@
 			"path": "github.com/soheilhy/cmux",
 			"revision": "13f520d62c8e9514090ab9f170fa5df915f2d1bf",
 			"revisionTime": "2016-09-05T20:05:55Z"
-		},
-		{
-			"checksumSHA1": "W1EGygayPbG7X+UK13VHKl0XOy8=",
-			"path": "github.com/tecbot/gorocksdb",
-			"revision": "59ab8def01399fb7ded1c3bff5e3e4cbd14b6348",
-			"revisionTime": "2016-03-10T21:12:00Z"
 		},
 		{
 			"checksumSHA1": "7LaLud3qlAQZ+xftxLTbYg3cGpo=",

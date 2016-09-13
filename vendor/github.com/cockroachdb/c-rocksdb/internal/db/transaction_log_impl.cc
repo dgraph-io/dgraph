@@ -1,4 +1,4 @@
-//  Copyright (c) 2013, Facebook, Inc.  All rights reserved.
+//  Copyright (c) 2011-present, Facebook, Inc.  All rights reserved.
 //  This source code is licensed under the BSD-style license found in the
 //  LICENSE file in the root directory of this source tree. An additional grant
 //  of patent rights can be found in the PATENTS file in the same directory.
@@ -8,8 +8,8 @@
 #define __STDC_FORMAT_MACROS
 #endif
 
-#include <inttypes.h>
 #include "db/transaction_log_impl.h"
+#include <inttypes.h>
 #include "db/write_batch_internal.h"
 #include "util/file_reader_writer.h"
 
@@ -107,7 +107,7 @@ void TransactionLogIteratorImpl::SeekToStartSequence(
     return;
   }
   while (RestrictedRead(&record, &scratch)) {
-    if (record.size() < 12) {
+    if (record.size() < WriteBatchInternal::kHeader) {
       reporter_.Corruption(
         record.size(), Status::Corruption("very small log record"));
       continue;
@@ -167,7 +167,7 @@ void TransactionLogIteratorImpl::NextImpl(bool internal) {
       currentLogReader_->UnmarkEOF();
     }
     while (RestrictedRead(&record, &scratch)) {
-      if (record.size() < 12) {
+      if (record.size() < WriteBatchInternal::kHeader) {
         reporter_.Corruption(
           record.size(), Status::Corruption("very small log record"));
         continue;
@@ -250,7 +250,7 @@ void TransactionLogIteratorImpl::UpdateCurrentWriteBatch(const Slice& record) {
   // currentBatchSeq_ can only change here
   assert(currentLastSeq_ <= versions_->LastSequence());
 
-  currentBatch_ = move(batch);
+  currentBatch_ = std::move(batch);
   isValid_ = true;
   currentStatus_ = Status::OK();
 }
@@ -262,10 +262,9 @@ Status TransactionLogIteratorImpl::OpenLogReader(const LogFile* logFile) {
     return s;
   }
   assert(file);
-  currentLogReader_.reset(new log::Reader(options_->info_log,
-					  std::move(file), &reporter_,
-                                          read_options_.verify_checksums_, 0,
-                                          logFile->LogNumber()));
+  currentLogReader_.reset(new log::Reader(
+      options_->info_log, std::move(file), &reporter_,
+      read_options_.verify_checksums_, 0, logFile->LogNumber()));
   return Status::OK();
 }
 }  //  namespace rocksdb

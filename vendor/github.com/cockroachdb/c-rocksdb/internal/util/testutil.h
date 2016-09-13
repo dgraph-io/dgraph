@@ -1,4 +1,4 @@
-//  Copyright (c) 2013, Facebook, Inc.  All rights reserved.
+//  Copyright (c) 2011-present, Facebook, Inc.  All rights reserved.
 //  This source code is licensed under the BSD-style license found in the
 //  LICENSE file in the root directory of this source tree. An additional grant
 //  of patent rights can be found in the PATENTS file in the same directory.
@@ -13,7 +13,6 @@
 #include <string>
 #include <vector>
 
-#include "db/dbformat.h"
 #include "rocksdb/compaction_filter.h"
 #include "rocksdb/env.h"
 #include "rocksdb/iterator.h"
@@ -231,13 +230,57 @@ class StringSink: public WritableFile {
   size_t last_flush_;
 };
 
+// Like StringSink, this writes into a string.  Unlink StringSink, it
+// has some initial content and overwrites it, just like a recycled
+// log file.
+class OverwritingStringSink : public WritableFile {
+ public:
+  explicit OverwritingStringSink(Slice* reader_contents)
+      : WritableFile(),
+        contents_(""),
+        reader_contents_(reader_contents),
+        last_flush_(0) {}
+
+  const std::string& contents() const { return contents_; }
+
+  virtual Status Truncate(uint64_t size) override {
+    contents_.resize(static_cast<size_t>(size));
+    return Status::OK();
+  }
+  virtual Status Close() override { return Status::OK(); }
+  virtual Status Flush() override {
+    if (last_flush_ < contents_.size()) {
+      assert(reader_contents_->size() >= contents_.size());
+      memcpy((char*)reader_contents_->data() + last_flush_,
+             contents_.data() + last_flush_, contents_.size() - last_flush_);
+      last_flush_ = contents_.size();
+    }
+    return Status::OK();
+  }
+  virtual Status Sync() override { return Status::OK(); }
+  virtual Status Append(const Slice& slice) override {
+    contents_.append(slice.data(), slice.size());
+    return Status::OK();
+  }
+  void Drop(size_t bytes) {
+    contents_.resize(contents_.size() - bytes);
+    if (last_flush_ > contents_.size()) last_flush_ = contents_.size();
+  }
+
+ private:
+  std::string contents_;
+  Slice* reader_contents_;
+  size_t last_flush_;
+};
+
 class StringSource: public RandomAccessFile {
  public:
   explicit StringSource(const Slice& contents, uint64_t uniq_id = 0,
                         bool mmap = false)
       : contents_(contents.data(), contents.size()),
         uniq_id_(uniq_id),
-        mmap_(mmap) {}
+        mmap_(mmap),
+        total_reads_(0) {}
 
   virtual ~StringSource() { }
 
@@ -245,6 +288,7 @@ class StringSource: public RandomAccessFile {
 
   virtual Status Read(uint64_t offset, size_t n, Slice* result,
       char* scratch) const override {
+    total_reads_++;
     if (offset > contents_.size()) {
       return Status::InvalidArgument("invalid Read offset");
     }
@@ -271,10 +315,15 @@ class StringSource: public RandomAccessFile {
     return static_cast<size_t>(rid-id);
   }
 
+  int total_reads() const { return total_reads_; }
+
+  void set_total_reads(int tr) { total_reads_ = tr; }
+
  private:
   std::string contents_;
   uint64_t uniq_id_;
   bool mmap_;
+  mutable int total_reads_;
 };
 
 class NullLogger : public Logger {
@@ -316,7 +365,7 @@ class SleepingBackgroundTask {
   }
   void WaitUntilSleeping() {
     MutexLock l(&mutex_);
-    while (!sleeping_) {
+    while (!sleeping_ || !should_sleep_) {
       bg_cv_.Wait();
     }
   }

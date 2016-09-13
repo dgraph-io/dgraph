@@ -1,4 +1,4 @@
-// Copyright (c) 2014, Facebook, Inc.  All rights reserved.
+// Copyright (c) 2011-present, Facebook, Inc.  All rights reserved.
 // This source code is licensed under the BSD-style license found in the
 // LICENSE file in the root directory of this source tree. An additional grant
 // of patent rights can be found in the PATENTS file in the same directory.
@@ -22,9 +22,9 @@ public class Statistics {
     return getTickerCount0(tickerType.getValue(), statsHandle_);
   }
 
-  public HistogramData geHistogramData(final HistogramType histogramType) {
+  public HistogramData getHistogramData(final HistogramType histogramType) {
     assert(isInitialized());
-    return geHistogramData0(
+    return getHistogramData0(
         histogramType.getValue(), statsHandle_);
   }
 
@@ -33,5 +33,5 @@ public class Statistics {
   }
 
   private native long getTickerCount0(int tickerType, long handle);
-  private native HistogramData geHistogramData0(int histogramType, long handle);
+  private native HistogramData getHistogramData0(int histogramType, long handle);
 }

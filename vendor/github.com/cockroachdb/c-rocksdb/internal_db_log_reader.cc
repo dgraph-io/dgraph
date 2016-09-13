@@ -1,4 +1,4 @@
-//  Copyright (c) 2013, Facebook, Inc.  All rights reserved.
+//  Copyright (c) 2011-present, Facebook, Inc.  All rights reserved.
 //  This source code is licensed under the BSD-style license found in the
 //  LICENSE file in the root directory of this source tree. An additional grant
 //  of patent rights can be found in the PATENTS file in the same directory.
@@ -22,9 +22,8 @@ Reader::Reporter::~Reporter() {
 }
 
 Reader::Reader(std::shared_ptr<Logger> info_log,
-	       unique_ptr<SequentialFileReader>&& _file,
-               Reporter* reporter, bool checksum, uint64_t initial_offset,
-               uint64_t log_num)
+               unique_ptr<SequentialFileReader>&& _file, Reporter* reporter,
+               bool checksum, uint64_t initial_offset, uint64_t log_num)
     : info_log_(info_log),
       file_(std::move(_file)),
       reporter_(reporter),
@@ -37,7 +36,8 @@ Reader::Reader(std::shared_ptr<Logger> info_log,
       last_record_offset_(0),
       end_of_buffer_offset_(0),
       initial_offset_(initial_offset),
-      log_number_(log_num) {}
+      log_number_(log_num),
+      recycled_(false) {}
 
 Reader::~Reader() {
   delete[] backing_store_;
@@ -191,6 +191,25 @@ bool Reader::ReadRecord(Slice* record, std::string* scratch,
         }
         break;
 
+      case kBadRecordLen:
+      case kBadRecordChecksum:
+        if (recycled_ &&
+            wal_recovery_mode ==
+                WALRecoveryMode::kTolerateCorruptedTailRecords) {
+          scratch->clear();
+          return false;
+        }
+	if (record_type == kBadRecordLen)
+	  ReportCorruption(drop_size, "bad record length");
+	else
+	  ReportCorruption(drop_size, "checksum mismatch");
+        if (in_fragmented_record) {
+          ReportCorruption(scratch->size(), "error in middle of record");
+          in_fragmented_record = false;
+          scratch->clear();
+        }
+        break;
+
       default: {
         char buf[40];
         snprintf(buf, sizeof(buf), "unknown record type %u", record_type);
@@ -337,6 +356,9 @@ unsigned int Reader::ReadPhysicalRecord(Slice* result, size_t* drop_size) {
     const uint32_t length = a | (b << 8);
     int header_size = kHeaderSize;
     if (type >= kRecyclableFullType && type <= kRecyclableLastType) {
+      if (end_of_buffer_offset_ - buffer_.size() == 0) {
+        recycled_ = true;
+      }
       header_size = kRecyclableHeaderSize;
       // We need enough for the larger header
       if (buffer_.size() < (size_t)kRecyclableHeaderSize) {
@@ -355,8 +377,7 @@ unsigned int Reader::ReadPhysicalRecord(Slice* result, size_t* drop_size) {
       *drop_size = buffer_.size();
       buffer_.clear();
       if (!eof_) {
-        ReportCorruption(*drop_size, "bad record length");
-        return kBadRecord;
+        return kBadRecordLen;
       }
       // If the end of the file has been reached without reading |length| bytes
       // of payload, assume the writer died in the middle of writing the record.
@@ -388,8 +409,7 @@ unsigned int Reader::ReadPhysicalRecord(Slice* result, size_t* drop_size) {
         // like a valid log record.
         *drop_size = buffer_.size();
         buffer_.clear();
-        ReportCorruption(*drop_size, "checksum mismatch");
-        return kBadRecord;
+        return kBadRecordChecksum;
       }
     }
 

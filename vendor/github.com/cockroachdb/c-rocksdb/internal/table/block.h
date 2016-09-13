@@ -1,4 +1,4 @@
-//  Copyright (c) 2013, Facebook, Inc.  All rights reserved.
+//  Copyright (c) 2011-present, Facebook, Inc.  All rights reserved.
 //  This source code is licensed under the BSD-style license found in the
 //  LICENSE file in the root directory of this source tree. An additional grant
 //  of patent rights can be found in the PATENTS file in the same directory.
@@ -14,11 +14,11 @@
 #include <malloc.h>
 #endif
 
+#include "db/dbformat.h"
+#include "db/pinned_iterators_manager.h"
 #include "rocksdb/iterator.h"
 #include "rocksdb/options.h"
-#include "db/dbformat.h"
 #include "table/block_prefix_index.h"
-#include "table/block_hash_index.h"
 #include "table/internal_iterator.h"
 
 #include "format.h"
@@ -28,7 +28,6 @@ namespace rocksdb {
 struct BlockContents;
 class Comparator;
 class BlockIter;
-class BlockHashIndex;
 class BlockPrefixIndex;
 
 class Block {
@@ -70,7 +69,6 @@ class Block {
   InternalIterator* NewIterator(const Comparator* comparator,
                                 BlockIter* iter = nullptr,
                                 bool total_order_seek = true);
-  void SetBlockHashIndex(BlockHashIndex* hash_index);
   void SetBlockPrefixIndex(BlockPrefixIndex* prefix_index);
 
   // Report an approximation of how much memory has been used.
@@ -81,7 +79,6 @@ class Block {
   const char* data_;            // contents_.data.data()
   size_t size_;                 // contents_.data.size()
   uint32_t restart_offset_;     // Offset in data_ of restart array
-  std::unique_ptr<BlockHashIndex> hash_index_;
   std::unique_ptr<BlockPrefixIndex> prefix_index_;
 
   // No copying allowed
@@ -99,20 +96,17 @@ class BlockIter : public InternalIterator {
         current_(0),
         restart_index_(0),
         status_(Status::OK()),
-        hash_index_(nullptr),
         prefix_index_(nullptr) {}
 
   BlockIter(const Comparator* comparator, const char* data, uint32_t restarts,
-       uint32_t num_restarts, BlockHashIndex* hash_index,
-       BlockPrefixIndex* prefix_index)
+            uint32_t num_restarts, BlockPrefixIndex* prefix_index)
       : BlockIter() {
-    Initialize(comparator, data, restarts, num_restarts,
-        hash_index, prefix_index);
+    Initialize(comparator, data, restarts, num_restarts, prefix_index);
   }
 
   void Initialize(const Comparator* comparator, const char* data,
-      uint32_t restarts, uint32_t num_restarts, BlockHashIndex* hash_index,
-      BlockPrefixIndex* prefix_index) {
+                  uint32_t restarts, uint32_t num_restarts,
+                  BlockPrefixIndex* prefix_index) {
     assert(data_ == nullptr);           // Ensure it is called only once
     assert(num_restarts > 0);           // Ensure the param is valid
 
@@ -122,7 +116,6 @@ class BlockIter : public InternalIterator {
     num_restarts_ = num_restarts;
     current_ = restarts_;
     restart_index_ = num_restarts_;
-    hash_index_ = hash_index;
     prefix_index_ = prefix_index;
   }
 
@@ -151,6 +144,21 @@ class BlockIter : public InternalIterator {
 
   virtual void SeekToLast() override;
 
+#ifndef NDEBUG
+  ~BlockIter() {
+    // Assert that the BlockIter is never deleted while Pinning is Enabled.
+    assert(!pinned_iters_mgr_ ||
+           (pinned_iters_mgr_ && !pinned_iters_mgr_->PinningEnabled()));
+  }
+  virtual void SetPinnedItersMgr(
+      PinnedIteratorsManager* pinned_iters_mgr) override {
+    pinned_iters_mgr_ = pinned_iters_mgr;
+  }
+  PinnedIteratorsManager* pinned_iters_mgr_ = nullptr;
+#endif
+
+  virtual bool IsKeyPinned() const override { return key_.IsKeyPinned(); }
+
  private:
   const Comparator* comparator_;
   const char* data_;       // underlying block contents
@@ -163,7 +171,6 @@ class BlockIter : public InternalIterator {
   IterKey key_;
   Slice value_;
   Status status_;
-  BlockHashIndex* hash_index_;
   BlockPrefixIndex* prefix_index_;
 
   inline int Compare(const Slice& a, const Slice& b) const {
@@ -203,8 +210,6 @@ class BlockIter : public InternalIterator {
   bool BinaryBlockIndexSeek(const Slice& target, uint32_t* block_ids,
                             uint32_t left, uint32_t right,
                             uint32_t* index);
-
-  bool HashSeek(const Slice& target, uint32_t* index);
 
   bool PrefixSeek(const Slice& target, uint32_t* index);
 

@@ -25,8 +25,7 @@ import (
 	"io/ioutil"
 	"path"
 
-	rocksdb "github.com/tecbot/gorocksdb"
-
+	"github.com/dgraph-io/dgraph/rdb"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -69,22 +68,22 @@ func mergeFolders(mergePath, destPath string) {
 		glog.Fatal("Cannot open stores directory")
 	}
 
-	var opt *rocksdb.Options
-	var ropt *rocksdb.ReadOptions
-	var wopt *rocksdb.WriteOptions
-	opt = rocksdb.NewDefaultOptions()
+	var opt *rdb.Options
+	var ropt *rdb.ReadOptions
+	var wopt *rdb.WriteOptions
+	opt = rdb.NewDefaultOptions()
 	opt.SetCreateIfMissing(true)
-	ropt = rocksdb.NewDefaultReadOptions()
-	wopt = rocksdb.NewDefaultWriteOptions()
+	ropt = rdb.NewDefaultReadOptions()
+	wopt = rdb.NewDefaultWriteOptions()
 	wopt.SetSync(false)
-	wb := rocksdb.NewWriteBatch()
+	wb := rdb.NewWriteBatch()
 
 	pq = make(PriorityQueue, 0)
 	heap.Init(&pq)
-	var storeIters []*rocksdb.Iterator
+	var storeIters []*rdb.Iterator
 	for i, dir := range dirList {
 		mPath := path.Join(mergePath, dir.Name())
-		curDb, err := rocksdb.OpenDb(opt, mPath)
+		curDb, err := rdb.OpenDb(opt, mPath)
 		defer curDb.Close()
 		if err != nil {
 			glog.WithField("filepath", mPath).
@@ -106,8 +105,8 @@ func mergeFolders(mergePath, destPath string) {
 		storeIters = append(storeIters, it)
 	}
 
-	var db *rocksdb.DB
-	db, err = rocksdb.OpenDb(opt, destPath)
+	var db *rdb.DB
+	db, err = rdb.OpenDb(opt, destPath)
 	defer db.Close()
 	if err != nil {
 		glog.WithField("filepath", destPath).
