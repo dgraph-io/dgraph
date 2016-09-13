@@ -1,7 +1,5 @@
 package rdb
 
-// #cgo CXXFLAGS: -std=c++11 -O2
-// #cgo LDFLAGS: -lrocksdb -lstdc++
 // #include <stdint.h>
 // #include <stdlib.h>
 // #include "rdbc.h"
@@ -26,12 +24,12 @@ type FilterPolicy interface {
 }
 
 // NewNativeFilterPolicy creates a FilterPolicy object.
-func NewNativeFilterPolicy(c *C.rocksdb_filterpolicy_t) FilterPolicy {
+func NewNativeFilterPolicy(c *C.rdb_filterpolicy_t) FilterPolicy {
 	return nativeFilterPolicy{c}
 }
 
 type nativeFilterPolicy struct {
-	c *C.rocksdb_filterpolicy_t
+	c *C.rdb_filterpolicy_t
 }
 
 func (fp nativeFilterPolicy) CreateFilter(keys [][]byte) []byte          { return nil }
@@ -50,7 +48,7 @@ func (fp nativeFilterPolicy) Name() string                               { retur
 // FilterPolicy (like NewBloomFilterPolicy) that does not ignore
 // trailing spaces in keys.
 func NewBloomFilter(bitsPerKey int) FilterPolicy {
-	return NewNativeFilterPolicy(C.rocksdb_filterpolicy_create_bloom(C.int(bitsPerKey)))
+	return NewNativeFilterPolicy(C.rdb_filterpolicy_create_bloom(C.int(bitsPerKey)))
 }
 
 // Hold references to filter policies.

@@ -1,6 +1,8 @@
 package rdb
 
+// #include <stdint.h>
 // #include <stdlib.h>
+// #include "rdbc.h"
 import "C"
 import "unsafe"
 
