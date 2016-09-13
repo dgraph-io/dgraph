@@ -12,7 +12,7 @@ if [ -z "$1" ]; then
         BUILD=$SRC/build
 fi
 
-ROCKSDBDIR=$BUILD/rocksdb-4.6.1
+ROCKSDBDIR=$BUILD/rocksdb-4.9
 
 set -e
 
@@ -21,7 +21,8 @@ benchmark=$(pwd)/benchmarks/data
 popd &> /dev/null
 
 # build flags needed for rocksdb
-export CGO_CFLAGS="-I${ROCKSDBDIR}/include"
+
+export CGO_CPPFLAGS="-I${ROCKSDBDIR}/include"
 export CGO_LDFLAGS="-L${ROCKSDBDIR}"
 export LD_LIBRARY_PATH="${ROCKSDBDIR}:${LD_LIBRARY_PATH}"
 
