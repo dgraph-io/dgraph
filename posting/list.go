@@ -108,7 +108,7 @@ func samePosting(a *types.Posting, b *types.Posting) bool {
 	return true
 }
 
-// key = (entity uid, attribute)
+// key = attribute|uid
 func Key(uid uint64, attr string) []byte {
 	buf := bytes.NewBufferString(attr)
 	if _, err := buf.WriteRune('|'); err != nil {

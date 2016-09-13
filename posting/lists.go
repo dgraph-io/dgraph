@@ -36,7 +36,6 @@ import (
 	"github.com/dgryski/go-farm"
 	"github.com/zond/gotomic"
 
-	"github.com/dgraph-io/dgraph/commit"
 	"github.com/dgraph-io/dgraph/store"
 )
 
@@ -95,7 +94,7 @@ func (c *counters) log() {
 		pending, lhmap.Size(), dirtymap.Size())
 }
 
-func NewCounters() *counters {
+func newCounters() *counters {
 	c := new(counters)
 	c.ticker = time.NewTicker(time.Second)
 	return c
@@ -114,6 +113,8 @@ func aggressivelyEvict() {
 	MergeLists(100 * runtime.GOMAXPROCS(-1))
 
 	log.Println("Trying to free OS memory")
+	// Forces garbage collection followed by returning as much memory to the OS
+	// as possible.
 	debug.FreeOSMemory()
 
 	megs = getMemUsage()
@@ -122,7 +123,7 @@ func aggressivelyEvict() {
 
 func gentlyMerge(mr *mergeRoutines) {
 	defer mr.Add(-1)
-	ctr := NewCounters()
+	ctr := newCounters()
 	defer ctr.ticker.Stop()
 
 	// Pick 7% of the dirty map or 400 keys, whichever is higher.
@@ -135,14 +136,12 @@ func gentlyMerge(mr *mergeRoutines) {
 	// rest would never get a chance.
 	var start int
 	n := dirtymap.Size() - pick
-	if n <= 0 {
-		start = 0
-	} else {
+	if n > 0 {
 		start = rand.Intn(n)
 	}
 
-	var hs []gotomic.Hashable
 	idx := 0
+	var hs []gotomic.Hashable
 	dirtymap.Each(func(k gotomic.Hashable, v gotomic.Thing) bool {
 		if idx < start {
 			idx++
@@ -257,7 +256,6 @@ var (
 	stopTheWorld sync.RWMutex
 	lhmap        *gotomic.Hash
 	dirtymap     *gotomic.Hash
-	clog         *commit.Logger
 )
 
 // Init initializes the posting lists package, the in memory and dirty list hash.
@@ -270,11 +268,11 @@ func Init() {
 // GetOrCreate stores the List corresponding to key(if its not there already)
 // to lhmap and returns it.
 func GetOrCreate(key []byte, pstore *store.Store) *List {
-	stopTheWorld.RLock()
-	defer stopTheWorld.RUnlock()
-
 	fp := farm.Fingerprint64(key)
 	gotomicKey := gotomic.IntKey(fp)
+
+	stopTheWorld.RLock()
+	defer stopTheWorld.RUnlock()
 	lp, _ := lhmap.Get(gotomicKey)
 	if lp != nil {
 		return lp.(*List)
@@ -323,10 +321,7 @@ func process(ch chan gotomic.Hashable, c *counters, wg *sync.WaitGroup) {
 	for k := range ch {
 		processOne(k, c)
 	}
-
-	if wg != nil {
-		wg.Done()
-	}
+	wg.Done()
 }
 
 func queueAll(ch chan gotomic.Hashable, c *counters) {
@@ -341,9 +336,8 @@ func queueAll(ch chan gotomic.Hashable, c *counters) {
 func MergeLists(numRoutines int) {
 	// We're merging all the lists, so just create a new dirtymap.
 	dirtymap = gotomic.NewHash()
-
 	ch := make(chan gotomic.Hashable, 10000)
-	c := NewCounters()
+	c := newCounters()
 	go c.periodicLog()
 	defer c.ticker.Stop()
 	go queueAll(ch, c)

@@ -112,6 +112,7 @@ func main() {
 			glog.WithError(err).Fatal("Unable to create gzip reader.")
 		}
 
+		// Load NQuads and write them to internal storage.
 		count, err := loader.LoadEdges(r, *instanceIdx, *numInstances)
 		if err != nil {
 			glog.WithError(err).Fatal("While handling rdf reader.")
