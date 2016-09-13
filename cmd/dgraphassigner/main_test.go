@@ -9,7 +9,6 @@ import (
 	"github.com/Sirupsen/logrus"
 	"github.com/dgryski/go-farm"
 
-	"github.com/dgraph-io/dgraph/commit"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/uid"
@@ -34,10 +33,8 @@ func TestQuery(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	clog := commit.NewLogger(dir, "mutations", 50<<20)
-	clog.Init()
-	defer clog.Close()
-	posting.Init(clog)
+	posting.Init()
+	posting.InitIndex(ps)
 
 	uid.Init(ps)
 

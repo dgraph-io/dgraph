@@ -30,7 +30,6 @@ import (
 
 	"context"
 
-	"github.com/dgraph-io/dgraph/commit"
 	"github.com/dgraph-io/dgraph/posting/types"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/x"
@@ -123,11 +122,7 @@ func TestAddMutation(t *testing.T) {
 		return
 	}
 
-	clog := commit.NewLogger(dir, "mutations", 50<<20)
-	clog.Init()
-	defer clog.Close()
-
-	l.init(key, ps, clog)
+	l.init(key, ps)
 
 	edge := x.DirectedEdge{
 		ValueId:   9,
@@ -135,7 +130,7 @@ func TestAddMutation(t *testing.T) {
 		Timestamp: time.Now(),
 	}
 	ctx := context.Background()
-	if err := l.AddMutation(ctx, edge, Set); err != nil {
+	if _, err := l.AddMutation(ctx, edge, Set); err != nil {
 		t.Error(err)
 	}
 
@@ -153,12 +148,10 @@ func TestAddMutation(t *testing.T) {
 	if string(p.Source()) != "testing" {
 		t.Errorf("Expected testing. Got: %v", string(p.Source()))
 	}
-	// return // Test 1.
 
 	// Add another edge now.
 	edge.ValueId = 81
 	l.AddMutation(ctx, edge, Set)
-	// l.CommitIfDirty()
 	if l.Length() != 2 {
 		t.Errorf("Length: %d", l.Length())
 		t.Fail()
@@ -175,47 +168,36 @@ func TestAddMutation(t *testing.T) {
 			t.Logf("Expected: %v. Got: %v", uid, p.Uid())
 		}
 	}
-	// return // Test 2.
 
 	// Add another edge, in between the two above.
 	uids := []uint64{
 		9, 49, 81,
 	}
 	edge.ValueId = 49
-	if err := l.AddMutation(ctx, edge, Set); err != nil {
+	if _, err := l.AddMutation(ctx, edge, Set); err != nil {
 		t.Error(err)
 	}
-	/*
-		if err := l.CommitIfDirty(); err != nil {
-			t.Error(err)
-		}
-	*/
+
 	if err := checkUids(t, l, uids...); err != nil {
 		t.Error(err)
 	}
-	// return // Test 3.
 
 	// Delete an edge, add an edge, replace an edge
 	edge.ValueId = 49
-	if err := l.AddMutation(ctx, edge, Del); err != nil {
+	if _, err := l.AddMutation(ctx, edge, Del); err != nil {
 		t.Error(err)
 	}
 
 	edge.ValueId = 69
-	if err := l.AddMutation(ctx, edge, Set); err != nil {
+	if _, err := l.AddMutation(ctx, edge, Set); err != nil {
 		t.Error(err)
 	}
 
 	edge.ValueId = 9
 	edge.Source = "anti-testing"
-	if err := l.AddMutation(ctx, edge, Set); err != nil {
+	if _, err := l.AddMutation(ctx, edge, Set); err != nil {
 		t.Error(err)
 	}
-	/*
-		if err := l.CommitIfDirty(); err != nil {
-			t.Error(err)
-		}
-	*/
 
 	uids = []uint64{9, 69, 81}
 	if err := checkUids(t, l, uids...); err != nil {
@@ -226,15 +208,11 @@ func TestAddMutation(t *testing.T) {
 	if string(p.Source()) != "anti-testing" {
 		t.Errorf("Expected: anti-testing. Got: %v", string(p.Source()))
 	}
+	l.MergeIfDirty(ctx)
 
-	/*
-		if err := l.CommitIfDirty(); err != nil {
-			t.Error(err)
-		}
-	*/
 	// Try reading the same data in another PostingList.
 	dl := NewList()
-	dl.init(key, ps, clog)
+	dl.init(key, ps)
 	if err := checkUids(t, dl, uids...); err != nil {
 		t.Error(err)
 	}
@@ -247,6 +225,22 @@ func TestAddMutation(t *testing.T) {
 	}
 }
 
+func checkValue(ol *List, val string) error {
+	if ol.Length() == 0 {
+		return x.Errorf("List has length zero")
+	}
+
+	var p types.Posting
+	ol.Get(&p, 0)
+	if p.Uid() != math.MaxUint64 {
+		return x.Errorf("All value uids should go to MaxUint64. Got: %v", p.Uid())
+	}
+	if !bytes.Equal(p.ValueBytes(), []byte(val)) {
+		return x.Errorf("Expected a value. Got: [%q]", string(p.ValueBytes()))
+	}
+	return nil
+}
+
 func TestAddMutation_Value(t *testing.T) {
 	ol := NewList()
 	key := Key(10, "value")
@@ -255,19 +249,15 @@ func TestAddMutation_Value(t *testing.T) {
 		t.Error(err)
 		return
 	}
-
 	defer os.RemoveAll(dir)
+
 	ps, err := store.NewStore(dir)
 	if err != nil {
 		t.Error(err)
 		return
 	}
 
-	clog := commit.NewLogger(dir, "mutations", 50<<20)
-	clog.Init()
-	defer clog.Close()
-
-	ol.init(key, ps, clog)
+	ol.init(key, ps)
 	log.Println("Init successful.")
 
 	edge := x.DirectedEdge{
@@ -276,16 +266,11 @@ func TestAddMutation_Value(t *testing.T) {
 		Timestamp: time.Now(),
 	}
 	ctx := context.Background()
-	if err := ol.AddMutation(ctx, edge, Set); err != nil {
+	if _, err := ol.AddMutation(ctx, edge, Set); err != nil {
 		t.Error(err)
 	}
-	var p types.Posting
-	ol.Get(&p, 0)
-	if p.Uid() != math.MaxUint64 {
-		t.Errorf("All value uids should go to MaxUint64. Got: %v", p.Uid())
-	}
-	if !bytes.Equal(p.ValueBytes(), []byte("oh hey there")) {
-		t.Errorf("Expected a value. Got: [%q]", string(p.ValueBytes()))
+	if err := checkValue(ol, "oh hey there"); err != nil {
+		t.Error(err)
 	}
 
 	// Run the same check after committing.
@@ -304,12 +289,13 @@ func TestAddMutation_Value(t *testing.T) {
 
 	// The value made it to the posting list. Changing it now.
 	edge.Value = []byte(strconv.Itoa(119))
-	if err := ol.AddMutation(ctx, edge, Set); err != nil {
+	if _, err := ol.AddMutation(ctx, edge, Set); err != nil {
 		t.Error(err)
 	}
 	if ol.Length() != 1 {
 		t.Errorf("Length should be one. Got: %v", ol.Length())
 	}
+	var p types.Posting
 	if ok := ol.Get(&p, 0); !ok {
 		t.Error("While retrieving posting")
 	}
@@ -319,6 +305,342 @@ func TestAddMutation_Value(t *testing.T) {
 	}
 	if intout != 119 {
 		t.Errorf("Expected 119. Got: %v", intout)
+	}
+}
+
+func TestAddMutation_jchiu1(t *testing.T) {
+	ol := NewList()
+	key := Key(10, "value")
+	dir, err := ioutil.TempDir("", "storetest_")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer os.RemoveAll(dir)
+
+	ps, err := store.NewStore(dir)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	ol.init(key, ps)
+
+	// Set value to cars and merge to RocksDB.
+	edge := x.DirectedEdge{
+		Value:     []byte("cars"),
+		Source:    "jchiu",
+		Timestamp: time.Now(),
+	}
+	ctx := context.Background()
+	if _, err := ol.AddMutation(ctx, edge, Set); err != nil {
+		t.Error(err)
+	}
+	if merged, err := ol.MergeIfDirty(ctx); err != nil {
+		t.Error(err)
+	} else if !merged {
+		t.Error(x.Errorf("Unable to merge posting list."))
+	}
+	if err := checkValue(ol, "cars"); err != nil {
+		t.Error(err)
+	}
+
+	// Set value to newcars, but don't merge yet.
+	edge = x.DirectedEdge{
+		Value:     []byte("newcars"),
+		Source:    "jchiu",
+		Timestamp: time.Now(),
+	}
+	if _, err := ol.AddMutation(ctx, edge, Set); err != nil {
+		t.Error(err)
+	}
+	if err := checkValue(ol, "newcars"); err != nil {
+		t.Error(err)
+	}
+
+	// Set value to someothercars, but don't merge yet.
+	edge = x.DirectedEdge{
+		Value:     []byte("someothercars"),
+		Source:    "jchiu",
+		Timestamp: time.Now(),
+	}
+	if _, err := ol.AddMutation(ctx, edge, Set); err != nil {
+		t.Error(err)
+	}
+	if err := checkValue(ol, "someothercars"); err != nil {
+		t.Error(err)
+	}
+
+	// Set value back to the committed value cars, but don't merge yet.
+	edge = x.DirectedEdge{
+		Value:     []byte("cars"),
+		Source:    "jchiu",
+		Timestamp: time.Now(),
+	}
+	if _, err := ol.AddMutation(ctx, edge, Set); err != nil {
+		t.Error(err)
+	}
+	if err := checkValue(ol, "cars"); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestAddMutation_jchiu2(t *testing.T) {
+	ol := NewList()
+	key := Key(10, "value")
+	dir, err := ioutil.TempDir("", "storetest_")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer os.RemoveAll(dir)
+
+	ps, err := store.NewStore(dir)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	ol.init(key, ps)
+
+	// Del a value cars and but don't merge.
+	edge := x.DirectedEdge{
+		Value:     []byte("cars"),
+		Source:    "jchiu",
+		Timestamp: time.Now(),
+	}
+	ctx := context.Background()
+	if _, err := ol.AddMutation(ctx, edge, Del); err != nil {
+		t.Error(err)
+	}
+
+	// Set value to newcars, but don't merge yet.
+	edge = x.DirectedEdge{
+		Value:     []byte("newcars"),
+		Source:    "jchiu",
+		Timestamp: time.Now(),
+	}
+	if _, err := ol.AddMutation(ctx, edge, Set); err != nil {
+		t.Error(err)
+	}
+	if err := checkValue(ol, "newcars"); err != nil {
+		t.Error(err)
+	}
+
+	// Set value back to cars, but don't merge yet.
+	edge = x.DirectedEdge{
+		Value:     []byte("cars"),
+		Source:    "jchiu",
+		Timestamp: time.Now(),
+	}
+	if _, err := ol.AddMutation(ctx, edge, Del); err != nil {
+		t.Error(err)
+	}
+	if err := checkValue(ol, "newcars"); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestAddMutation_jchiu3(t *testing.T) {
+	ol := NewList()
+	key := Key(10, "value")
+	dir, err := ioutil.TempDir("", "storetest_")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer os.RemoveAll(dir)
+
+	ps, err := store.NewStore(dir)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	ol.init(key, ps)
+
+	// Set value to cars and merge to RocksDB.
+	edge := x.DirectedEdge{
+		Value:     []byte("cars"),
+		Source:    "jchiu",
+		Timestamp: time.Now(),
+	}
+	ctx := context.Background()
+	if _, err := ol.AddMutation(ctx, edge, Set); err != nil {
+		t.Error(err)
+	}
+	if merged, err := ol.MergeIfDirty(ctx); err != nil {
+		t.Error(err)
+	} else if !merged {
+		t.Error(x.Errorf("Unable to merge posting list."))
+	}
+	if err := checkValue(ol, "cars"); err != nil {
+		t.Error(err)
+	}
+
+	// Del a value cars and but don't merge.
+	edge = x.DirectedEdge{
+		Value:     []byte("cars"),
+		Source:    "jchiu",
+		Timestamp: time.Now(),
+	}
+	if _, err := ol.AddMutation(ctx, edge, Del); err != nil {
+		t.Error(err)
+	}
+	if ol.Length() > 0 {
+		t.Errorf("Length should be zero")
+	}
+
+	// Set value to newcars, but don't merge yet.
+	edge = x.DirectedEdge{
+		Value:     []byte("newcars"),
+		Source:    "jchiu",
+		Timestamp: time.Now(),
+	}
+	if _, err := ol.AddMutation(ctx, edge, Set); err != nil {
+		t.Error(err)
+	}
+	if err := checkValue(ol, "newcars"); err != nil {
+		t.Error(err)
+	}
+
+	// Del a value othercars and but don't merge.
+	edge = x.DirectedEdge{
+		Value:     []byte("othercars"),
+		Source:    "jchiu",
+		Timestamp: time.Now(),
+	}
+	if _, err := ol.AddMutation(ctx, edge, Del); err != nil {
+		t.Error(err)
+	}
+	if ol.Length() == 0 {
+		t.Errorf("Length shouldn't be zero")
+	}
+	var p types.Posting
+	if !ol.Get(&p, 0) {
+		t.Errorf("Error while retrieving posting")
+	}
+	if string(p.ValueBytes()) != "newcars" {
+		t.Errorf("Value expected: newcars. Got: %q", p.ValueBytes())
+	}
+
+	// Del a value newcars and but don't merge.
+	edge = x.DirectedEdge{
+		Value:     []byte("newcars"),
+		Source:    "jchiu",
+		Timestamp: time.Now(),
+	}
+	if _, err := ol.AddMutation(ctx, edge, Del); err != nil {
+		t.Error(err)
+	}
+	if ol.Length() > 0 {
+		var p types.Posting
+		if !ol.Get(&p, 0) {
+			t.Errorf("Error while retrieving posting")
+		}
+		t.Errorf("Length should be zero. Got: %q", p.ValueBytes())
+	}
+}
+
+func TestAddMutation_mrjn1(t *testing.T) {
+	ol := NewList()
+	key := Key(10, "value")
+	dir, err := ioutil.TempDir("", "storetest_")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer os.RemoveAll(dir)
+
+	ps, err := store.NewStore(dir)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	ol.init(key, ps)
+
+	// Set a value cars and merge.
+	edge := x.DirectedEdge{
+		Value:     []byte("cars"),
+		Source:    "jchiu",
+		Timestamp: time.Now(),
+	}
+	ctx := context.Background()
+	if _, err := ol.AddMutation(ctx, edge, Set); err != nil {
+		t.Error(err)
+	}
+	if merged, err := ol.MergeIfDirty(ctx); err != nil {
+		t.Error(err)
+	} else if !merged {
+		t.Error(x.Errorf("Unable to merge posting list."))
+	}
+
+	// Delete a non-existent value newcars. This should have no effect.
+	edge = x.DirectedEdge{
+		Value:     []byte("newcars"),
+		Source:    "jchiu",
+		Timestamp: time.Now(),
+	}
+	if _, err := ol.AddMutation(ctx, edge, Del); err != nil {
+		t.Error(err)
+	}
+	if err := checkValue(ol, "cars"); err != nil {
+		t.Error(err)
+	}
+
+	// Delete the previously committed value cars. But don't merge.
+	edge = x.DirectedEdge{
+		Value:     []byte("cars"),
+		Source:    "jchiu",
+		Timestamp: time.Now(),
+	}
+	if _, err := ol.AddMutation(ctx, edge, Del); err != nil {
+		t.Error(err)
+	}
+	if ol.Length() > 0 {
+		t.Errorf("Length should be zero after deletion")
+	}
+
+	// Do this again to cover Del, muid == curUid, inPlist test case.
+	// Delete the previously committed value cars. But don't merge.
+	edge = x.DirectedEdge{
+		Value:     []byte("cars"),
+		Source:    "jchiu",
+		Timestamp: time.Now(),
+	}
+	if _, err := ol.AddMutation(ctx, edge, Del); err != nil {
+		t.Error(err)
+	}
+	if ol.Length() > 0 {
+		t.Errorf("Length should be zero after deletion")
+	}
+
+	// Set the value again to cover Set, muid == curUid, inPlist test case.
+	// Set the previously committed value cars. But don't merge.
+	edge = x.DirectedEdge{
+		Value:     []byte("cars"),
+		Source:    "jchiu",
+		Timestamp: time.Now(),
+	}
+	if _, err := ol.AddMutation(ctx, edge, Set); err != nil {
+		t.Error(err)
+	}
+	if err := checkValue(ol, "cars"); err != nil {
+		t.Error(err)
+	}
+
+	// Delete it again, just for fun.
+	edge = x.DirectedEdge{
+		Value:     []byte("cars"),
+		Source:    "jchiu",
+		Timestamp: time.Now(),
+	}
+	if _, err := ol.AddMutation(ctx, edge, Del); err != nil {
+		t.Error(err)
+	}
+	if ol.Length() > 0 {
+		t.Errorf("Length should be zero after deletion")
 	}
 }
 
@@ -339,11 +661,7 @@ func benchmarkAddMutations(n int, b *testing.B) {
 		return
 	}
 
-	clog := commit.NewLogger(dir, "mutations", 50<<20)
-	clog.SyncEvery = n
-	clog.Init()
-	defer clog.Close()
-	l.init(key, ps, clog)
+	l.init(key, ps)
 	b.ResetTimer()
 
 	ts := time.Now()
@@ -354,7 +672,7 @@ func benchmarkAddMutations(n int, b *testing.B) {
 			Source:    "testing",
 			Timestamp: ts.Add(time.Microsecond),
 		}
-		if err := l.AddMutation(ctx, edge, Set); err != nil {
+		if _, err := l.AddMutation(ctx, edge, Set); err != nil {
 			b.Error(err)
 		}
 	}

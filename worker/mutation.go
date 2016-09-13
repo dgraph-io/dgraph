@@ -69,7 +69,7 @@ func runMutations(ctx context.Context, edges []x.DirectedEdge, op byte, left *Mu
 
 		key := posting.Key(edge.Entity, edge.Attribute)
 		plist := posting.GetOrCreate(key, ws.dataStore)
-		if err := plist.AddMutation(ctx, edge, op); err != nil {
+		if err := plist.AddMutationWithIndex(ctx, edge, op); err != nil {
 			if op == posting.Set {
 				left.Set = append(left.Set, edge)
 			} else if op == posting.Del {
@@ -117,7 +117,7 @@ func runMutate(ctx context.Context, idx int, m *Mutations,
 	}
 
 	// Get a connection from the pool and run mutations over the network.
-	pool := ws.pools[idx]
+	pool := ws.GetPool(idx)
 	query := new(Payload)
 	query.Data, err = m.Encode()
 	if err != nil {

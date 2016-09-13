@@ -23,7 +23,6 @@ import (
 
 	"github.com/Sirupsen/logrus"
 
-	"github.com/dgraph-io/dgraph/commit"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/store"
 )
@@ -42,11 +41,8 @@ func TestGetOrAssign(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	clog := commit.NewLogger(dir, "mutations", 50<<20)
-	clog.Init()
-	defer clog.Close()
 
-	posting.Init(clog)
+	posting.Init()
 	Init(ps)
 
 	var u1, u2 uint64

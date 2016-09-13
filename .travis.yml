@@ -3,9 +3,10 @@ go:
   - 1.7
 dist: trusty
 sudo: required
-#notifications:
-#  slack:
-#    secure: <INSERT ENCRYPTED SLACK KEY HERE>
+notifications:
+  email:
+    recipients:
+      - minions@dgraph.io
 addons:
   apt:
     sources:

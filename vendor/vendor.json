@@ -67,6 +67,12 @@
 			"revisionTime": "2016-08-22T09:00:10Z"
 		},
 		{
+			"checksumSHA1": "W2kMUxTFJybcc8NKlqEAM4jY7Mw=",
+			"path": "github.com/soheilhy/cmux",
+			"revision": "13f520d62c8e9514090ab9f170fa5df915f2d1bf",
+			"revisionTime": "2016-09-05T20:05:55Z"
+		},
+		{
 			"checksumSHA1": "7LaLud3qlAQZ+xftxLTbYg3cGpo=",
 			"path": "github.com/willf/bitset",
 			"revision": "28a4168144bb8ac95454e1f51c84da1933681ad4",
@@ -107,6 +113,12 @@
 			"path": "golang.org/x/net/internal/timeseries",
 			"revision": "ef00b378c73f107bf44d5c9b69875255ce89b79a",
 			"revisionTime": "2016-05-15T03:16:23Z"
+		},
+		{
+			"checksumSHA1": "yhndhWXMs/VSEDLks4dNyFMQStA=",
+			"path": "golang.org/x/net/lex/httplex",
+			"revision": "9313baa13d9262e49d07b20ed57dceafcd7240cc",
+			"revisionTime": "2016-09-07T15:25:26Z"
 		},
 		{
 			"checksumSHA1": "WpST9lFOHvWrjDVy0GJNqHe+R3E=",

@@ -17,14 +17,15 @@
 package uid
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log"
 	"math"
+	"math/rand"
+	"strings"
 	"sync"
 	"time"
-
-	"context"
 
 	"github.com/dgryski/go-farm"
 
@@ -97,6 +98,7 @@ func (lm *lockManager) clean() {
 
 // package level init
 func init() {
+	rand.Seed(time.Now().UnixNano())
 	lmgr = new(lockManager)
 	lmgr.locks = make(map[string]*entry)
 	// TODO(manishrjain): This map should be cleaned up.
@@ -114,15 +116,28 @@ func Init(ps *store.Store) {
 // until the obtained integer is unique.
 func allocateUniqueUid(xid string, instanceIdx uint64,
 	numInstances uint64) (uid uint64, rerr error) {
-
 	mod := math.MaxUint64 / numInstances
 	minIdx := instanceIdx * mod
-	for sp := ""; ; sp += " " {
-		txid := xid + sp
 
-		uid1 := farm.Fingerprint64([]byte(txid)) // Generate from hash.
+	txid := []byte(xid)
+	val := xid
+	if strings.HasPrefix(xid, "_new_:") {
+		if _, err := rand.Read(txid); err != nil {
+			return 0, err
+		}
+		val = "_new_"
+	}
+
+	suffix := make([]byte, 1)
+	for i := 0; ; i++ {
+		if i > 0 {
+			_, err := rand.Read(suffix)
+			x.Check(err)
+			txid = append(txid, suffix[0])
+		}
+
+		uid1 := farm.Fingerprint64(txid) // Generate from hash.
 		uid = (uid1 % mod) + minIdx
-
 		if uid == math.MaxUint64 {
 			continue
 		}
@@ -140,11 +155,11 @@ func allocateUniqueUid(xid string, instanceIdx uint64,
 
 		// Uid hasn't been assigned yet.
 		t := x.DirectedEdge{
-			Value:     []byte(xid), // not txid
+			Value:     []byte(val), // not txid
 			Source:    "_assigner_",
 			Timestamp: time.Now(),
 		}
-		rerr = pl.AddMutation(context.Background(), t, posting.Set)
+		_, rerr = pl.AddMutation(context.Background(), t, posting.Set)
 		return uid, rerr
 	}
 }
@@ -181,7 +196,7 @@ func assignNew(pl *posting.List, xid string, instanceIdx uint64,
 		Source:    "_assigner_",
 		Timestamp: time.Now(),
 	}
-	rerr := pl.AddMutation(context.Background(), t, posting.Set)
+	_, rerr := pl.AddMutation(context.Background(), t, posting.Set)
 	return uid, rerr
 }
 
@@ -211,14 +226,19 @@ func Get(xid string) (uid uint64, rerr error) {
 func GetOrAssign(xid string, instanceIdx uint64,
 	numInstances uint64) (uid uint64, rerr error) {
 
+	// Prefix _new_ requires us to create a new uid(entity).
+	if strings.HasPrefix(xid, "_new_:") {
+		return allocateUniqueUid(xid, instanceIdx, numInstances)
+	}
+
 	key := StringKey(xid)
 	pl := posting.GetOrCreate(key, uidStore)
 	if pl.Length() == 0 {
 		return assignNew(pl, xid, instanceIdx, numInstances)
+	}
 
-	} else if pl.Length() > 1 {
+	if pl.Length() > 1 {
 		log.Fatalf("We shouldn't have more than 1 uid for xid: %v\n", xid)
-
 	} else {
 		// We found one posting.
 		var p types.Posting

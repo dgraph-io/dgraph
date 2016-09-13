@@ -73,7 +73,7 @@ func main() {
 	}
 	defer ps.Close()
 
-	posting.Init(nil)
+	posting.Init()
 	uid.Init(ps)
 	loader.Init(nil, ps)
 

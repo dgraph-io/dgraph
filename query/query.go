@@ -116,6 +116,7 @@ func (l *Latency) ToMap() map[string]string {
 // client convenient formats, like GraphQL / JSON.
 type SubGraph struct {
 	Attr     string
+	AttrType gql.Type
 	Count    int
 	Offset   int
 	AfterUid uint64
@@ -144,11 +145,11 @@ func mergeInterfaces(i1 interface{}, i2 interface{}) interface{} {
 	return []interface{}{i1, i2}
 }
 
+// postTraverse traverses the subgraph recursively and returns final result for the query.
 func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 	if len(sg.Query) == 0 {
 		return nil, nil
 	}
-
 	result := make(map[uint64]interface{})
 	// Get results from all children first.
 	cResult := make(map[uint64]interface{})
@@ -169,13 +170,8 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 	}
 
 	// Now read the query and results at current node.
-	uo := flatbuffers.GetUOffsetT(sg.Query)
-	q := new(task.Query)
-	q.Init(sg.Query, uo)
-
-	ro := flatbuffers.GetUOffsetT(sg.Result)
-	r := new(task.Result)
-	r.Init(sg.Result, ro)
+	q := x.NewTaskQuery(sg.Query)
+	r := x.NewTaskResult(sg.Result)
 
 	if q.UidsLength() != r.UidmatrixLength() {
 		log.Fatalf("Result uidmatrixlength: %v. Query uidslength: %v",
@@ -235,7 +231,6 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 			result[q.Uids(i)] = m
 		}
 	}
-
 	var tv task.Value
 	for i := 0; i < r.ValuesLength(); i++ {
 		if ok := r.Values(&tv, i); !ok {
@@ -258,7 +253,22 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 		if sg.GetUid || sg.isDebug {
 			m["_uid_"] = fmt.Sprintf("%#x", q.Uids(i))
 		}
-		m[sg.Attr] = string(val)
+		if sg.AttrType == nil {
+			// No type defined for attr in type system/schema, hence return string value
+			m[sg.Attr] = string(val)
+		} else {
+			// type assertion for scalar type values
+			if !sg.AttrType.IsScalar() {
+				return result, fmt.Errorf("Unknown Scalar:%v. Leaf predicate:'%v' must be"+
+					" one of the scalar types defined in the schema.", sg.AttrType, sg.Attr)
+			}
+			stype := sg.AttrType.(gql.Scalar)
+			lval, err := stype.ParseType(val)
+			if err != nil {
+				return result, err
+			}
+			m[sg.Attr] = lval
+		}
 		result[q.Uids(i)] = m
 	}
 	return result, nil
@@ -344,13 +354,8 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 
 	// We go through all predicate children of the subgraph.
 	for _, pc := range sg.Children {
-		ro := flatbuffers.GetUOffsetT(pc.Result)
-		r := new(task.Result)
-		r.Init(pc.Result, ro)
-
-		uo := flatbuffers.GetUOffsetT(pc.Query)
-		q := new(task.Query)
-		q.Init(pc.Query, uo)
+		r := x.NewTaskResult(pc.Result)
+		q := x.NewTaskQuery(pc.Query)
 
 		idx := indexOf(uid, q)
 
@@ -395,6 +400,19 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 
 			v := tv.ValBytes()
 
+			//do type checking on response values
+			if pc.AttrType != nil {
+				// type assertion for scalar type values
+				if !pc.AttrType.IsScalar() {
+					return fmt.Errorf("Unknown Scalar:%v. Leaf predicate:'%v' must be"+
+						" one of the scalar types defined in the schema.", pc.AttrType, pc.Attr)
+				}
+				stype := pc.AttrType.(gql.Scalar)
+				if _, err := stype.ParseType(v); err != nil {
+					return err
+				}
+			}
+
 			if pc.Attr == "_xid_" {
 				dst.Xid = string(v)
 			} else {
@@ -418,9 +436,7 @@ func (sg *SubGraph) ToProtocolBuffer(l *Latency) (*graph.Node, error) {
 		return n, nil
 	}
 
-	ro := flatbuffers.GetUOffsetT(sg.Result)
-	r := new(task.Result)
-	r.Init(sg.Result, ro)
+	r := x.NewTaskResult(sg.Result)
 
 	var ul task.UidList
 	r.Uidmatrix(&ul, 0)
@@ -434,7 +450,7 @@ func (sg *SubGraph) ToProtocolBuffer(l *Latency) (*graph.Node, error) {
 	return n, nil
 }
 
-func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
+func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 	// Typically you act on the current node, and leave recursion to deal with
 	// children. But, in this case, we don't want to muck with the current
 	// node, because of the way we're dealing with the root node.
@@ -455,8 +471,9 @@ func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
 		}
 
 		dst := &SubGraph{
-			isDebug: sg.isDebug,
-			Attr:    gchild.Attr,
+			isDebug:  sg.isDebug,
+			Attr:     gchild.Attr,
+			AttrType: gql.SchemaType(gchild.Attr),
 		}
 		if v, ok := gchild.Args["offset"]; ok {
 			offset, err := strconv.ParseInt(v, 0, 32)
@@ -480,7 +497,7 @@ func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
 			dst.Count = int(first)
 		}
 		sg.Children = append(sg.Children, dst)
-		err := treeCopy(gchild, dst)
+		err := treeCopy(ctx, gchild, dst)
 		if err != nil {
 			return err
 		}
@@ -494,7 +511,7 @@ func ToSubGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	if err != nil {
 		return nil, err
 	}
-	err = treeCopy(gq, sg)
+	err = treeCopy(ctx, gq, sg)
 	return sg, err
 }
 
@@ -548,10 +565,11 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	b.Finish(rend)
 
 	sg := &SubGraph{
-		isDebug: gq.Attr == "debug",
-		Attr:    gq.Attr,
-		IsRoot:  true,
-		Result:  b.Bytes[b.Head():],
+		isDebug:  gq.Attr == "debug",
+		Attr:     gq.Attr,
+		AttrType: gql.SchemaType(gq.Attr),
+		IsRoot:   true,
+		Result:   b.Bytes[b.Head():],
 	}
 	// Also add query for consistency and to allow for ToJSON() later.
 	sg.Query = createTaskQuery(sg, []uint64{euid})
@@ -607,10 +625,7 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, rch chan error) {
 		}
 	}
 
-	uo := flatbuffers.GetUOffsetT(sg.Result)
-	r := new(task.Result)
-	r.Init(sg.Result, uo)
-
+	r := x.NewTaskResult(sg.Result)
 	if r.ValuesLength() > 0 {
 		var v task.Value
 		if r.Values(&v, 0) {

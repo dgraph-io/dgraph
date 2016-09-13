@@ -18,15 +18,12 @@ package worker
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"testing"
 	"time"
-
-	"context"
-
-	"github.com/google/flatbuffers/go"
 
 	"github.com/dgraph-io/dgraph/commit"
 	"github.com/dgraph-io/dgraph/posting"
@@ -36,7 +33,13 @@ import (
 )
 
 func addEdge(t *testing.T, edge x.DirectedEdge, l *posting.List) {
-	if err := l.AddMutation(context.Background(), edge, posting.Set); err != nil {
+	if err := l.AddMutationWithIndex(context.Background(), edge, posting.Set); err != nil {
+		t.Error(err)
+	}
+}
+
+func delEdge(t *testing.T, edge x.DirectedEdge, l *posting.List) {
+	if err := l.AddMutationWithIndex(context.Background(), edge, posting.Del); err != nil {
 		t.Error(err)
 	}
 }
@@ -60,7 +63,46 @@ func check(r *task.Result, idx int, expected []uint64) error {
 	return nil
 }
 
+func populateGraph(t *testing.T, ps *store.Store) {
+	edge := x.DirectedEdge{
+		ValueId:   23,
+		Source:    "author0",
+		Timestamp: time.Now(),
+		Attribute: "friend",
+	}
+	edge.Entity = 10
+	addEdge(t, edge, posting.GetOrCreate(posting.Key(10, "friend"), ps))
+
+	edge.Entity = 11
+	addEdge(t, edge, posting.GetOrCreate(posting.Key(11, "friend"), ps))
+
+	edge.Entity = 12
+	addEdge(t, edge, posting.GetOrCreate(posting.Key(12, "friend"), ps))
+
+	edge.ValueId = 25
+	addEdge(t, edge, posting.GetOrCreate(posting.Key(12, "friend"), ps))
+
+	edge.ValueId = 26
+	addEdge(t, edge, posting.GetOrCreate(posting.Key(12, "friend"), ps))
+
+	edge.Entity = 10
+	edge.ValueId = 31
+	addEdge(t, edge, posting.GetOrCreate(posting.Key(10, "friend"), ps))
+
+	edge.Entity = 12
+	addEdge(t, edge, posting.GetOrCreate(posting.Key(12, "friend"), ps))
+
+	edge.Entity = 12
+	edge.Value = []byte("photon")
+	addEdge(t, edge, posting.GetOrCreate(posting.Key(12, "friend"), ps))
+
+	edge.Entity = 10
+	addEdge(t, edge, posting.GetOrCreate(posting.Key(10, "friend"), ps))
+}
+
 func TestProcessTask(t *testing.T) {
+	posting.ReadIndexConfigs([]byte(`{"config": [{"attribute": "friend"}]}`))
+
 	dir, err := ioutil.TempDir("", "storetest_")
 	if err != nil {
 		t.Error(err)
@@ -73,48 +115,24 @@ func TestProcessTask(t *testing.T) {
 		t.Error(err)
 		return
 	}
+	defer ps.Close()
 
-	clog := commit.NewLogger(dir, "mutations", 50<<20)
-	clog.Init()
-	defer clog.Close()
+	SetWorkerState(NewState(ps, nil, 0, 1))
 
-	posting.Init(clog)
-	InitState(ps, nil, 0, 1)
+	posting.Init()
+	posting.InitIndex(ps)
+	populateGraph(t, ps)
 
-	edge := x.DirectedEdge{
-		ValueId:   23,
-		Source:    "author0",
-		Timestamp: time.Now(),
-	}
-	addEdge(t, edge, posting.GetOrCreate(posting.Key(10, "friend"), ps))
-	addEdge(t, edge, posting.GetOrCreate(posting.Key(11, "friend"), ps))
-	addEdge(t, edge, posting.GetOrCreate(posting.Key(12, "friend"), ps))
-
-	edge.ValueId = 25
-	addEdge(t, edge, posting.GetOrCreate(posting.Key(12, "friend"), ps))
-
-	edge.ValueId = 26
-	addEdge(t, edge, posting.GetOrCreate(posting.Key(12, "friend"), ps))
-
-	edge.ValueId = 31
-	addEdge(t, edge, posting.GetOrCreate(posting.Key(10, "friend"), ps))
-	addEdge(t, edge, posting.GetOrCreate(posting.Key(12, "friend"), ps))
-
-	edge.Value = []byte("photon")
-	addEdge(t, edge, posting.GetOrCreate(posting.Key(12, "friend"), ps))
-
-	query := NewQuery("friend", []uint64{10, 11, 12})
+	query := NewQuery("friend", []uint64{10, 11, 12}, nil)
 	result, err := processTask(query)
 	if err != nil {
 		t.Error(err)
 	}
 
-	ro := flatbuffers.GetUOffsetT(result)
-	r := new(task.Result)
-	r.Init(result, ro)
-
+	r := x.NewTaskResult(result)
 	if r.UidmatrixLength() != 3 {
 		t.Errorf("Expected 3. Got uidmatrix length: %v", r.UidmatrixLength())
+		return
 	}
 	if err := check(r, 0, []uint64{23, 31}); err != nil {
 		t.Error(err)
@@ -128,13 +146,14 @@ func TestProcessTask(t *testing.T) {
 
 	if r.ValuesLength() != 3 {
 		t.Errorf("Expected 3. Got values length: %v", r.ValuesLength())
+		return
 	}
 	var tval task.Value
 	if ok := r.Values(&tval, 0); !ok {
 		t.Errorf("Unable to retrieve value")
 	}
-	if !bytes.Equal(tval.ValBytes(), []byte{}) {
-		t.Errorf("Invalid value")
+	if string(tval.ValBytes()) != "photon" {
+		t.Errorf("Expected photon. Got: %q", string(tval.ValBytes()))
 	}
 
 	if ok := r.Values(&tval, 1); !ok {
@@ -149,5 +168,285 @@ func TestProcessTask(t *testing.T) {
 	}
 	if string(tval.ValBytes()) != "photon" {
 		t.Errorf("Expected photon. Got: %q", string(tval.ValBytes()))
+	}
+}
+
+// Check index. Similar to TestProcessTaskIndexMLayer but we call MergeLists
+// in between the test.
+func TestProcessTaskIndexMLayer(t *testing.T) {
+	posting.ReadIndexConfigs([]byte(`{"config": [{"attribute": "friend"}]}`))
+
+	dir, err := ioutil.TempDir("", "storetest_")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	defer os.RemoveAll(dir)
+	ps, err := store.NewStore(dir)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer ps.Close()
+
+	clog := commit.NewLogger(dir, "mutations", 50<<20)
+	clog.Init()
+	defer clog.Close()
+
+	posting.Init()
+	SetWorkerState(NewState(ps, nil, 0, 1))
+
+	posting.InitIndex(ps)
+
+	populateGraph(t, ps)
+	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
+
+	query := NewQuery("friend", nil, []string{"hey", "photon"})
+	result, err := processTask(query)
+	if err != nil {
+		t.Error(err)
+	}
+
+	r := x.NewTaskResult(result)
+	if r.UidmatrixLength() != 2 {
+		t.Errorf("Expected 2. Got uidmatrix length: %v", r.UidmatrixLength())
+	}
+	if err := check(r, 0, []uint64{}); err != nil {
+		t.Error(err)
+	}
+	if err := check(r, 1, []uint64{10, 12}); err != nil {
+		t.Error(err)
+	}
+
+	// Now try changing 12's friend value from "photon" to "notphoton_extra" to
+	// "notphoton".
+	edge := x.DirectedEdge{
+		Value:     []byte("notphoton_extra"),
+		Source:    "author0",
+		Timestamp: time.Now(),
+		Attribute: "friend",
+		Entity:    12,
+	}
+	addEdge(t, edge, posting.GetOrCreate(posting.Key(12, "friend"), ps))
+	edge.Value = []byte("notphoton")
+	addEdge(t, edge, posting.GetOrCreate(posting.Key(12, "friend"), ps))
+	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
+
+	// Issue a similar query.
+	query = NewQuery("friend", nil, []string{"hey", "photon", "notphoton", "notphoton_extra"})
+	result, err = processTask(query)
+	if err != nil {
+		t.Error(err)
+	}
+
+	r = x.NewTaskResult(result)
+	if r.UidmatrixLength() != 4 {
+		t.Errorf("Expected 4. Got uidmatrix length: %v", r.UidmatrixLength())
+	}
+	if err := check(r, 0, []uint64{}); err != nil {
+		t.Error(err)
+	}
+	if err := check(r, 1, []uint64{10}); err != nil {
+		t.Error(err)
+	}
+	if err := check(r, 2, []uint64{12}); err != nil {
+		t.Error(err)
+	}
+	if err := check(r, 3, []uint64{}); err != nil {
+		t.Error(err)
+	}
+
+	// Try deleting.
+	edge = x.DirectedEdge{
+		Value:     []byte("photon"),
+		Source:    "author0",
+		Timestamp: time.Now(),
+		Attribute: "friend",
+		Entity:    10,
+	}
+	// Redundant deletes.
+	delEdge(t, edge, posting.GetOrCreate(posting.Key(10, "friend"), ps))
+	delEdge(t, edge, posting.GetOrCreate(posting.Key(10, "friend"), ps))
+
+	// Delete followed by set.
+	edge.Entity = 12
+	edge.Value = []byte("notphoton")
+	delEdge(t, edge, posting.GetOrCreate(posting.Key(12, "friend"), ps))
+	edge.Value = []byte("ignored")
+	addEdge(t, edge, posting.GetOrCreate(posting.Key(12, "friend"), ps))
+	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
+
+	// Issue a similar query.
+	query = NewQuery("friend", nil, []string{"photon", "notphoton", "ignored"})
+	result, err = processTask(query)
+	if err != nil {
+		t.Error(err)
+	}
+
+	r = x.NewTaskResult(result)
+	if r.UidmatrixLength() != 3 {
+		t.Errorf("Expected 3. Got uidmatrix length: %v", r.UidmatrixLength())
+	}
+	if err := check(r, 0, []uint64{}); err != nil {
+		t.Error(err)
+	}
+	if err := check(r, 1, []uint64{}); err != nil {
+		t.Error(err)
+	}
+	if err := check(r, 2, []uint64{12}); err != nil {
+		t.Error(err)
+	}
+
+	// Final touch: Merge everything to RocksDB.
+	posting.MergeLists(10)
+	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
+
+	query = NewQuery("friend", nil, []string{"photon", "notphoton", "ignored"})
+	result, err = processTask(query)
+	if err != nil {
+		t.Error(err)
+	}
+	r = x.NewTaskResult(result)
+	if r.UidmatrixLength() != 3 {
+		t.Errorf("Expected 3. Got uidmatrix length: %v", r.UidmatrixLength())
+	}
+	if err := check(r, 0, []uint64{}); err != nil {
+		t.Error(err)
+	}
+	if err := check(r, 1, []uint64{}); err != nil {
+		t.Error(err)
+	}
+	if err := check(r, 2, []uint64{12}); err != nil {
+		t.Error(err)
+	}
+}
+
+// Check index. All operations happen in mutation layers for this test. We call
+// MergeLists only at the very end of the test.
+func TestProcessTaskIndex(t *testing.T) {
+	posting.ReadIndexConfigs([]byte(`{"config": [{"attribute": "friend"}]}`))
+
+	dir, err := ioutil.TempDir("", "storetest_")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	defer os.RemoveAll(dir)
+	ps, err := store.NewStore(dir)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer ps.Close()
+	posting.InitIndex(ps)
+
+	posting.Init()
+	SetWorkerState(NewState(ps, nil, 0, 1))
+
+	populateGraph(t, ps)
+	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
+
+	query := NewQuery("friend", nil, []string{"hey", "photon"})
+	result, err := processTask(query)
+	if err != nil {
+		t.Error(err)
+	}
+
+	r := x.NewTaskResult(result)
+	if r.UidmatrixLength() != 2 {
+		t.Errorf("Expected 2. Got uidmatrix length: %v", r.UidmatrixLength())
+	}
+	if err := check(r, 0, []uint64{}); err != nil {
+		t.Error(err)
+	}
+	if err := check(r, 1, []uint64{10, 12}); err != nil {
+		t.Error(err)
+	}
+
+	posting.MergeLists(10)
+	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
+
+	// Now try changing 12's friend value from "photon" to "notphoton_extra" to
+	// "notphoton".
+	edge := x.DirectedEdge{
+		Value:     []byte("notphoton_extra"),
+		Source:    "author0",
+		Timestamp: time.Now(),
+		Attribute: "friend",
+		Entity:    12,
+	}
+	addEdge(t, edge, posting.GetOrCreate(posting.Key(12, "friend"), ps))
+	edge.Value = []byte("notphoton")
+	addEdge(t, edge, posting.GetOrCreate(posting.Key(12, "friend"), ps))
+	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
+
+	// Issue a similar query.
+	query = NewQuery("friend", nil, []string{"hey", "photon", "notphoton", "notphoton_extra"})
+	result, err = processTask(query)
+	if err != nil {
+		t.Error(err)
+	}
+
+	r = x.NewTaskResult(result)
+	if r.UidmatrixLength() != 4 {
+		t.Errorf("Expected 4. Got uidmatrix length: %v", r.UidmatrixLength())
+	}
+	if err := check(r, 0, []uint64{}); err != nil {
+		t.Error(err)
+	}
+	if err := check(r, 1, []uint64{10}); err != nil {
+		t.Error(err)
+	}
+	if err := check(r, 2, []uint64{12}); err != nil {
+		t.Error(err)
+	}
+	if err := check(r, 3, []uint64{}); err != nil {
+		t.Error(err)
+	}
+
+	posting.MergeLists(10)
+	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
+
+	// Try deleting.
+	edge = x.DirectedEdge{
+		Value:     []byte("photon"),
+		Source:    "author0",
+		Timestamp: time.Now(),
+		Attribute: "friend",
+		Entity:    10,
+	}
+	// Redundant deletes.
+	delEdge(t, edge, posting.GetOrCreate(posting.Key(10, "friend"), ps))
+	delEdge(t, edge, posting.GetOrCreate(posting.Key(10, "friend"), ps))
+
+	// Delete followed by set.
+	edge.Entity = 12
+	edge.Value = []byte("notphoton")
+	delEdge(t, edge, posting.GetOrCreate(posting.Key(12, "friend"), ps))
+	edge.Value = []byte("ignored")
+	addEdge(t, edge, posting.GetOrCreate(posting.Key(12, "friend"), ps))
+	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
+
+	// Issue a similar query.
+	query = NewQuery("friend", nil, []string{"photon", "notphoton", "ignored"})
+	result, err = processTask(query)
+	if err != nil {
+		t.Error(err)
+	}
+
+	r = x.NewTaskResult(result)
+	if r.UidmatrixLength() != 3 {
+		t.Errorf("Expected 3. Got uidmatrix length: %v", r.UidmatrixLength())
+	}
+	if err := check(r, 0, []uint64{}); err != nil {
+		t.Error(err)
+	}
+	if err := check(r, 1, []uint64{}); err != nil {
+		t.Error(err)
+	}
+	if err := check(r, 2, []uint64{12}); err != nil {
+		t.Error(err)
 	}
 }

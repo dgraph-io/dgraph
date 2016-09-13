@@ -9,6 +9,8 @@
 		graphresponse.proto
 
 	It has these top-level messages:
+		NQuad
+		Mutation
 		Request
 		Latency
 		Property
@@ -35,16 +37,63 @@ var _ = math.Inf
 
 // This is a compile-time assertion to ensure that this generated file
 // is compatible with the proto package it is being compiled against.
-const _ = proto.ProtoPackageIsVersion1
+// A compilation error at this line likely means your copy of the
+// proto package needs to be updated.
+const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
+
+type NQuad struct {
+	Sub    string `protobuf:"bytes,1,opt,name=sub,proto3" json:"sub,omitempty"`
+	Pred   string `protobuf:"bytes,2,opt,name=pred,proto3" json:"pred,omitempty"`
+	ObjId  string `protobuf:"bytes,3,opt,name=objId,proto3" json:"objId,omitempty"`
+	ObjVal []byte `protobuf:"bytes,4,opt,name=objVal,proto3" json:"objVal,omitempty"`
+	Label  string `protobuf:"bytes,5,opt,name=label,proto3" json:"label,omitempty"`
+}
+
+func (m *NQuad) Reset()                    { *m = NQuad{} }
+func (m *NQuad) String() string            { return proto.CompactTextString(m) }
+func (*NQuad) ProtoMessage()               {}
+func (*NQuad) Descriptor() ([]byte, []int) { return fileDescriptorGraphresponse, []int{0} }
+
+type Mutation struct {
+	Set []*NQuad `protobuf:"bytes,1,rep,name=set" json:"set,omitempty"`
+	Del []*NQuad `protobuf:"bytes,2,rep,name=del" json:"del,omitempty"`
+}
+
+func (m *Mutation) Reset()                    { *m = Mutation{} }
+func (m *Mutation) String() string            { return proto.CompactTextString(m) }
+func (*Mutation) ProtoMessage()               {}
+func (*Mutation) Descriptor() ([]byte, []int) { return fileDescriptorGraphresponse, []int{1} }
+
+func (m *Mutation) GetSet() []*NQuad {
+	if m != nil {
+		return m.Set
+	}
+	return nil
+}
+
+func (m *Mutation) GetDel() []*NQuad {
+	if m != nil {
+		return m.Del
+	}
+	return nil
+}
 
 type Request struct {
-	Query string `protobuf:"bytes,1,opt,name=query,proto3" json:"query,omitempty"`
+	Query    string    `protobuf:"bytes,1,opt,name=query,proto3" json:"query,omitempty"`
+	Mutation *Mutation `protobuf:"bytes,2,opt,name=mutation" json:"mutation,omitempty"`
 }
 
 func (m *Request) Reset()                    { *m = Request{} }
 func (m *Request) String() string            { return proto.CompactTextString(m) }
 func (*Request) ProtoMessage()               {}
-func (*Request) Descriptor() ([]byte, []int) { return fileDescriptorGraphresponse, []int{0} }
+func (*Request) Descriptor() ([]byte, []int) { return fileDescriptorGraphresponse, []int{2} }
+
+func (m *Request) GetMutation() *Mutation {
+	if m != nil {
+		return m.Mutation
+	}
+	return nil
+}
 
 type Latency struct {
 	Parsing    string `protobuf:"bytes,1,opt,name=parsing,proto3" json:"parsing,omitempty"`
@@ -55,7 +104,7 @@ type Latency struct {
 func (m *Latency) Reset()                    { *m = Latency{} }
 func (m *Latency) String() string            { return proto.CompactTextString(m) }
 func (*Latency) ProtoMessage()               {}
-func (*Latency) Descriptor() ([]byte, []int) { return fileDescriptorGraphresponse, []int{1} }
+func (*Latency) Descriptor() ([]byte, []int) { return fileDescriptorGraphresponse, []int{3} }
 
 type Property struct {
 	Prop string `protobuf:"bytes,1,opt,name=prop,proto3" json:"prop,omitempty"`
@@ -65,7 +114,7 @@ type Property struct {
 func (m *Property) Reset()                    { *m = Property{} }
 func (m *Property) String() string            { return proto.CompactTextString(m) }
 func (*Property) ProtoMessage()               {}
-func (*Property) Descriptor() ([]byte, []int) { return fileDescriptorGraphresponse, []int{2} }
+func (*Property) Descriptor() ([]byte, []int) { return fileDescriptorGraphresponse, []int{4} }
 
 type Node struct {
 	Uid        uint64      `protobuf:"varint,1,opt,name=uid,proto3" json:"uid,omitempty"`
@@ -78,7 +127,7 @@ type Node struct {
 func (m *Node) Reset()                    { *m = Node{} }
 func (m *Node) String() string            { return proto.CompactTextString(m) }
 func (*Node) ProtoMessage()               {}
-func (*Node) Descriptor() ([]byte, []int) { return fileDescriptorGraphresponse, []int{3} }
+func (*Node) Descriptor() ([]byte, []int) { return fileDescriptorGraphresponse, []int{5} }
 
 func (m *Node) GetProperties() []*Property {
 	if m != nil {
@@ -95,14 +144,15 @@ func (m *Node) GetChildren() []*Node {
 }
 
 type Response struct {
-	N *Node    `protobuf:"bytes,1,opt,name=n" json:"n,omitempty"`
-	L *Latency `protobuf:"bytes,2,opt,name=l" json:"l,omitempty"`
+	N            *Node             `protobuf:"bytes,1,opt,name=n" json:"n,omitempty"`
+	L            *Latency          `protobuf:"bytes,2,opt,name=l" json:"l,omitempty"`
+	AssignedUids map[string]uint64 `protobuf:"bytes,3,rep,name=AssignedUids,json=assignedUids" json:"AssignedUids,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"varint,2,opt,name=value,proto3"`
 }
 
 func (m *Response) Reset()                    { *m = Response{} }
 func (m *Response) String() string            { return proto.CompactTextString(m) }
 func (*Response) ProtoMessage()               {}
-func (*Response) Descriptor() ([]byte, []int) { return fileDescriptorGraphresponse, []int{4} }
+func (*Response) Descriptor() ([]byte, []int) { return fileDescriptorGraphresponse, []int{6} }
 
 func (m *Response) GetN() *Node {
 	if m != nil {
@@ -118,7 +168,16 @@ func (m *Response) GetL() *Latency {
 	return nil
 }
 
+func (m *Response) GetAssignedUids() map[string]uint64 {
+	if m != nil {
+		return m.AssignedUids
+	}
+	return nil
+}
+
 func init() {
+	proto.RegisterType((*NQuad)(nil), "graph.NQuad")
+	proto.RegisterType((*Mutation)(nil), "graph.Mutation")
 	proto.RegisterType((*Request)(nil), "graph.Request")
 	proto.RegisterType((*Latency)(nil), "graph.Latency")
 	proto.RegisterType((*Property)(nil), "graph.Property")
@@ -198,6 +257,96 @@ var _Dgraph_serviceDesc = grpc.ServiceDesc{
 	Metadata: fileDescriptorGraphresponse,
 }
 
+func (m *NQuad) Marshal() (data []byte, err error) {
+	size := m.Size()
+	data = make([]byte, size)
+	n, err := m.MarshalTo(data)
+	if err != nil {
+		return nil, err
+	}
+	return data[:n], nil
+}
+
+func (m *NQuad) MarshalTo(data []byte) (int, error) {
+	var i int
+	_ = i
+	var l int
+	_ = l
+	if len(m.Sub) > 0 {
+		data[i] = 0xa
+		i++
+		i = encodeVarintGraphresponse(data, i, uint64(len(m.Sub)))
+		i += copy(data[i:], m.Sub)
+	}
+	if len(m.Pred) > 0 {
+		data[i] = 0x12
+		i++
+		i = encodeVarintGraphresponse(data, i, uint64(len(m.Pred)))
+		i += copy(data[i:], m.Pred)
+	}
+	if len(m.ObjId) > 0 {
+		data[i] = 0x1a
+		i++
+		i = encodeVarintGraphresponse(data, i, uint64(len(m.ObjId)))
+		i += copy(data[i:], m.ObjId)
+	}
+	if len(m.ObjVal) > 0 {
+		data[i] = 0x22
+		i++
+		i = encodeVarintGraphresponse(data, i, uint64(len(m.ObjVal)))
+		i += copy(data[i:], m.ObjVal)
+	}
+	if len(m.Label) > 0 {
+		data[i] = 0x2a
+		i++
+		i = encodeVarintGraphresponse(data, i, uint64(len(m.Label)))
+		i += copy(data[i:], m.Label)
+	}
+	return i, nil
+}
+
+func (m *Mutation) Marshal() (data []byte, err error) {
+	size := m.Size()
+	data = make([]byte, size)
+	n, err := m.MarshalTo(data)
+	if err != nil {
+		return nil, err
+	}
+	return data[:n], nil
+}
+
+func (m *Mutation) MarshalTo(data []byte) (int, error) {
+	var i int
+	_ = i
+	var l int
+	_ = l
+	if len(m.Set) > 0 {
+		for _, msg := range m.Set {
+			data[i] = 0xa
+			i++
+			i = encodeVarintGraphresponse(data, i, uint64(msg.Size()))
+			n, err := msg.MarshalTo(data[i:])
+			if err != nil {
+				return 0, err
+			}
+			i += n
+		}
+	}
+	if len(m.Del) > 0 {
+		for _, msg := range m.Del {
+			data[i] = 0x12
+			i++
+			i = encodeVarintGraphresponse(data, i, uint64(msg.Size()))
+			n, err := msg.MarshalTo(data[i:])
+			if err != nil {
+				return 0, err
+			}
+			i += n
+		}
+	}
+	return i, nil
+}
+
 func (m *Request) Marshal() (data []byte, err error) {
 	size := m.Size()
 	data = make([]byte, size)
@@ -218,6 +367,16 @@ func (m *Request) MarshalTo(data []byte) (int, error) {
 		i++
 		i = encodeVarintGraphresponse(data, i, uint64(len(m.Query)))
 		i += copy(data[i:], m.Query)
+	}
+	if m.Mutation != nil {
+		data[i] = 0x12
+		i++
+		i = encodeVarintGraphresponse(data, i, uint64(m.Mutation.Size()))
+		n1, err := m.Mutation.MarshalTo(data[i:])
+		if err != nil {
+			return 0, err
+		}
+		i += n1
 	}
 	return i, nil
 }
@@ -366,21 +525,37 @@ func (m *Response) MarshalTo(data []byte) (int, error) {
 		data[i] = 0xa
 		i++
 		i = encodeVarintGraphresponse(data, i, uint64(m.N.Size()))
-		n1, err := m.N.MarshalTo(data[i:])
+		n2, err := m.N.MarshalTo(data[i:])
 		if err != nil {
 			return 0, err
 		}
-		i += n1
+		i += n2
 	}
 	if m.L != nil {
 		data[i] = 0x12
 		i++
 		i = encodeVarintGraphresponse(data, i, uint64(m.L.Size()))
-		n2, err := m.L.MarshalTo(data[i:])
+		n3, err := m.L.MarshalTo(data[i:])
 		if err != nil {
 			return 0, err
 		}
-		i += n2
+		i += n3
+	}
+	if len(m.AssignedUids) > 0 {
+		for k, _ := range m.AssignedUids {
+			data[i] = 0x1a
+			i++
+			v := m.AssignedUids[k]
+			mapSize := 1 + len(k) + sovGraphresponse(uint64(len(k))) + 1 + sovGraphresponse(uint64(v))
+			i = encodeVarintGraphresponse(data, i, uint64(mapSize))
+			data[i] = 0xa
+			i++
+			i = encodeVarintGraphresponse(data, i, uint64(len(k)))
+			i += copy(data[i:], k)
+			data[i] = 0x10
+			i++
+			i = encodeVarintGraphresponse(data, i, uint64(v))
+		}
 	}
 	return i, nil
 }
@@ -412,11 +587,59 @@ func encodeVarintGraphresponse(data []byte, offset int, v uint64) int {
 	data[offset] = uint8(v)
 	return offset + 1
 }
+func (m *NQuad) Size() (n int) {
+	var l int
+	_ = l
+	l = len(m.Sub)
+	if l > 0 {
+		n += 1 + l + sovGraphresponse(uint64(l))
+	}
+	l = len(m.Pred)
+	if l > 0 {
+		n += 1 + l + sovGraphresponse(uint64(l))
+	}
+	l = len(m.ObjId)
+	if l > 0 {
+		n += 1 + l + sovGraphresponse(uint64(l))
+	}
+	l = len(m.ObjVal)
+	if l > 0 {
+		n += 1 + l + sovGraphresponse(uint64(l))
+	}
+	l = len(m.Label)
+	if l > 0 {
+		n += 1 + l + sovGraphresponse(uint64(l))
+	}
+	return n
+}
+
+func (m *Mutation) Size() (n int) {
+	var l int
+	_ = l
+	if len(m.Set) > 0 {
+		for _, e := range m.Set {
+			l = e.Size()
+			n += 1 + l + sovGraphresponse(uint64(l))
+		}
+	}
+	if len(m.Del) > 0 {
+		for _, e := range m.Del {
+			l = e.Size()
+			n += 1 + l + sovGraphresponse(uint64(l))
+		}
+	}
+	return n
+}
+
 func (m *Request) Size() (n int) {
 	var l int
 	_ = l
 	l = len(m.Query)
 	if l > 0 {
+		n += 1 + l + sovGraphresponse(uint64(l))
+	}
+	if m.Mutation != nil {
+		l = m.Mutation.Size()
 		n += 1 + l + sovGraphresponse(uint64(l))
 	}
 	return n
@@ -494,6 +717,14 @@ func (m *Response) Size() (n int) {
 		l = m.L.Size()
 		n += 1 + l + sovGraphresponse(uint64(l))
 	}
+	if len(m.AssignedUids) > 0 {
+		for k, v := range m.AssignedUids {
+			_ = k
+			_ = v
+			mapEntrySize := 1 + len(k) + sovGraphresponse(uint64(len(k))) + 1 + sovGraphresponse(uint64(v))
+			n += mapEntrySize + 1 + sovGraphresponse(uint64(mapEntrySize))
+		}
+	}
 	return n
 }
 
@@ -509,6 +740,315 @@ func sovGraphresponse(x uint64) (n int) {
 }
 func sozGraphresponse(x uint64) (n int) {
 	return sovGraphresponse(uint64((x << 1) ^ uint64((int64(x) >> 63))))
+}
+func (m *NQuad) Unmarshal(data []byte) error {
+	l := len(data)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowGraphresponse
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := data[iNdEx]
+			iNdEx++
+			wire |= (uint64(b) & 0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: NQuad: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: NQuad: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Sub", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowGraphresponse
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				stringLen |= (uint64(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthGraphresponse
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Sub = string(data[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Pred", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowGraphresponse
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				stringLen |= (uint64(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthGraphresponse
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Pred = string(data[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ObjId", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowGraphresponse
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				stringLen |= (uint64(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthGraphresponse
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.ObjId = string(data[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 4:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ObjVal", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowGraphresponse
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				byteLen |= (int(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthGraphresponse
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.ObjVal = append(m.ObjVal[:0], data[iNdEx:postIndex]...)
+			if m.ObjVal == nil {
+				m.ObjVal = []byte{}
+			}
+			iNdEx = postIndex
+		case 5:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Label", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowGraphresponse
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				stringLen |= (uint64(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthGraphresponse
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Label = string(data[iNdEx:postIndex])
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipGraphresponse(data[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthGraphresponse
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *Mutation) Unmarshal(data []byte) error {
+	l := len(data)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowGraphresponse
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := data[iNdEx]
+			iNdEx++
+			wire |= (uint64(b) & 0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: Mutation: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: Mutation: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Set", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowGraphresponse
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				msglen |= (int(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthGraphresponse
+			}
+			postIndex := iNdEx + msglen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Set = append(m.Set, &NQuad{})
+			if err := m.Set[len(m.Set)-1].Unmarshal(data[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Del", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowGraphresponse
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				msglen |= (int(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthGraphresponse
+			}
+			postIndex := iNdEx + msglen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Del = append(m.Del, &NQuad{})
+			if err := m.Del[len(m.Del)-1].Unmarshal(data[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipGraphresponse(data[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthGraphresponse
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
 }
 func (m *Request) Unmarshal(data []byte) error {
 	l := len(data)
@@ -567,6 +1107,39 @@ func (m *Request) Unmarshal(data []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			m.Query = string(data[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Mutation", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowGraphresponse
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				msglen |= (int(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthGraphresponse
+			}
+			postIndex := iNdEx + msglen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.Mutation == nil {
+				m.Mutation = &Mutation{}
+			}
+			if err := m.Mutation.Unmarshal(data[iNdEx:postIndex]); err != nil {
+				return err
+			}
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
@@ -1120,6 +1693,112 @@ func (m *Response) Unmarshal(data []byte) error {
 				return err
 			}
 			iNdEx = postIndex
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field AssignedUids", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowGraphresponse
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				msglen |= (int(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthGraphresponse
+			}
+			postIndex := iNdEx + msglen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			var keykey uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowGraphresponse
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				keykey |= (uint64(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			var stringLenmapkey uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowGraphresponse
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				stringLenmapkey |= (uint64(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLenmapkey := int(stringLenmapkey)
+			if intStringLenmapkey < 0 {
+				return ErrInvalidLengthGraphresponse
+			}
+			postStringIndexmapkey := iNdEx + intStringLenmapkey
+			if postStringIndexmapkey > l {
+				return io.ErrUnexpectedEOF
+			}
+			mapkey := string(data[iNdEx:postStringIndexmapkey])
+			iNdEx = postStringIndexmapkey
+			if m.AssignedUids == nil {
+				m.AssignedUids = make(map[string]uint64)
+			}
+			if iNdEx < postIndex {
+				var valuekey uint64
+				for shift := uint(0); ; shift += 7 {
+					if shift >= 64 {
+						return ErrIntOverflowGraphresponse
+					}
+					if iNdEx >= l {
+						return io.ErrUnexpectedEOF
+					}
+					b := data[iNdEx]
+					iNdEx++
+					valuekey |= (uint64(b) & 0x7F) << shift
+					if b < 0x80 {
+						break
+					}
+				}
+				var mapvalue uint64
+				for shift := uint(0); ; shift += 7 {
+					if shift >= 64 {
+						return ErrIntOverflowGraphresponse
+					}
+					if iNdEx >= l {
+						return io.ErrUnexpectedEOF
+					}
+					b := data[iNdEx]
+					iNdEx++
+					mapvalue |= (uint64(b) & 0x7F) << shift
+					if b < 0x80 {
+						break
+					}
+				}
+				m.AssignedUids[mapkey] = mapvalue
+			} else {
+				var mapvalue uint64
+				m.AssignedUids[mapkey] = mapvalue
+			}
+			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := skipGraphresponse(data[iNdEx:])
@@ -1249,26 +1928,37 @@ var (
 func init() { proto.RegisterFile("graphresponse.proto", fileDescriptorGraphresponse) }
 
 var fileDescriptorGraphresponse = []byte{
-	// 330 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0x5c, 0x51, 0xcd, 0x4e, 0x02, 0x31,
-	0x10, 0xa6, 0xb0, 0xcb, 0xcf, 0x60, 0x80, 0x8c, 0x1e, 0x56, 0x63, 0x90, 0xec, 0x45, 0xe2, 0x01,
-	0x0d, 0xfa, 0x04, 0xea, 0xd1, 0x18, 0xad, 0x4f, 0xb0, 0x40, 0x03, 0x9b, 0x90, 0x6e, 0x6d, 0x8b,
-	0x91, 0x37, 0xf1, 0xec, 0xd3, 0x78, 0xf4, 0x11, 0x8c, 0xbe, 0x88, 0xed, 0x6c, 0x41, 0xe2, 0xa1,
-	0xc9, 0x37, 0xdf, 0xf7, 0x65, 0xe6, 0xeb, 0x0c, 0xec, 0xcf, 0x75, 0xa6, 0x16, 0x5a, 0x18, 0x55,
-	0x48, 0x23, 0x46, 0x4a, 0x17, 0xb6, 0xc0, 0x98, 0xc8, 0xf4, 0x04, 0x1a, 0x5c, 0x3c, 0xaf, 0x84,
-	0xb1, 0x78, 0x00, 0xb1, 0x03, 0x7a, 0x9d, 0xb0, 0x01, 0x1b, 0xb6, 0x78, 0x59, 0xa4, 0x4f, 0xd0,
-	0xb8, 0xcb, 0xac, 0x90, 0xd3, 0x35, 0x26, 0xd0, 0x50, 0x99, 0x36, 0xb9, 0x9c, 0x07, 0xcb, 0xa6,
-	0xc4, 0x3e, 0x80, 0xeb, 0x3a, 0x15, 0x86, 0xc4, 0x2a, 0x89, 0x3b, 0x0c, 0x76, 0xa0, 0xaa, 0x26,
-	0x49, 0x8d, 0x78, 0x87, 0xd2, 0x0b, 0x68, 0x3e, 0xe8, 0x42, 0x09, 0x6d, 0xd7, 0x88, 0x10, 0x39,
-	0xa7, 0x0a, 0x2d, 0x09, 0x63, 0x0f, 0x6a, 0x2f, 0xd9, 0x92, 0x1a, 0xed, 0x71, 0x0f, 0xd3, 0x77,
-	0x06, 0xd1, 0x7d, 0x31, 0x13, 0x5e, 0x5a, 0xe5, 0x33, 0x72, 0x47, 0xdc, 0x43, 0xcf, 0xbc, 0x3a,
-	0xa6, 0x9c, 0xea, 0x21, 0x1e, 0x43, 0x2b, 0xb3, 0x56, 0xe7, 0x93, 0x95, 0x15, 0x61, 0xea, 0x1f,
-	0x81, 0xe7, 0x14, 0xd6, 0x0f, 0xcf, 0x85, 0x49, 0xa2, 0x41, 0x6d, 0xd8, 0x1e, 0x77, 0x47, 0xb4,
-	0x8e, 0xd1, 0x26, 0x15, 0xdf, 0xb1, 0xe0, 0x29, 0x34, 0xa7, 0x8b, 0x7c, 0x39, 0xd3, 0x42, 0x26,
-	0x31, 0xd9, 0xdb, 0xc1, 0xee, 0x13, 0xf1, 0xad, 0x98, 0xde, 0x40, 0x93, 0x87, 0x2d, 0xe3, 0x21,
-	0x30, 0x49, 0x29, 0xff, 0xb9, 0x99, 0x74, 0xf1, 0x58, 0xf9, 0xb7, 0xf6, 0xb8, 0x13, 0xa4, 0xb0,
-	0x62, 0xce, 0x96, 0xe3, 0x2b, 0xa8, 0xdf, 0x12, 0x89, 0x67, 0x10, 0x3f, 0xfa, 0x1b, 0xe0, 0xc6,
-	0x15, 0x2e, 0x75, 0xd4, 0xdd, 0xd6, 0xe5, 0xb0, 0xb4, 0x72, 0xdd, 0xfb, 0xf8, 0xee, 0xb3, 0x4f,
-	0xf7, 0xbe, 0xdc, 0x7b, 0xfb, 0xe9, 0x57, 0x26, 0x75, 0xba, 0xf3, 0xe5, 0x6f, 0x00, 0x00, 0x00,
-	0xff, 0xff, 0x6c, 0x0d, 0x32, 0x66, 0xfe, 0x01, 0x00, 0x00,
+	// 507 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0x6c, 0x53, 0xc1, 0x6e, 0xd3, 0x40,
+	0x10, 0xed, 0x26, 0x76, 0x92, 0x4e, 0xa2, 0xb4, 0x2c, 0x08, 0x2d, 0x55, 0x65, 0x05, 0x5f, 0x88,
+	0x40, 0x0a, 0x28, 0x70, 0x40, 0x5c, 0x10, 0x88, 0x1e, 0x40, 0xa5, 0xa2, 0x8b, 0xe0, 0xbe, 0xce,
+	0xae, 0x52, 0x17, 0xe3, 0x75, 0x76, 0xd7, 0x15, 0xf9, 0x13, 0xce, 0x7c, 0x0d, 0x12, 0x17, 0x3e,
+	0x01, 0x85, 0x1f, 0x41, 0x3b, 0x5e, 0x87, 0xa8, 0x70, 0x9b, 0x79, 0xef, 0x69, 0xe6, 0xed, 0xf3,
+	0x18, 0x6e, 0x2e, 0x8d, 0xa8, 0x2e, 0x8c, 0xb2, 0x95, 0x2e, 0xad, 0x9a, 0x55, 0x46, 0x3b, 0x4d,
+	0x63, 0x04, 0xd3, 0x15, 0xc4, 0x67, 0xe7, 0xb5, 0x90, 0xf4, 0x10, 0xba, 0xb6, 0xce, 0x18, 0x99,
+	0x90, 0xe9, 0x3e, 0xf7, 0x25, 0xa5, 0x10, 0x55, 0x46, 0x49, 0xd6, 0x41, 0x08, 0x6b, 0x7a, 0x0b,
+	0x62, 0x9d, 0x5d, 0xbe, 0x96, 0xac, 0x8b, 0x60, 0xd3, 0xd0, 0xdb, 0xd0, 0xd3, 0xd9, 0xe5, 0x47,
+	0x51, 0xb0, 0x68, 0x42, 0xa6, 0x23, 0x1e, 0x3a, 0xaf, 0x2e, 0x44, 0xa6, 0x0a, 0x16, 0x37, 0x6a,
+	0x6c, 0xd2, 0x37, 0x30, 0x78, 0x5b, 0x3b, 0xe1, 0x72, 0x5d, 0xd2, 0x04, 0xba, 0x56, 0x39, 0x46,
+	0x26, 0xdd, 0xe9, 0x70, 0x3e, 0x9a, 0xa1, 0xa7, 0x19, 0x1a, 0xe2, 0x9e, 0xf0, 0xbc, 0x54, 0x05,
+	0xeb, 0xfc, 0x8f, 0x97, 0xaa, 0x48, 0x4f, 0xa1, 0xcf, 0xd5, 0xaa, 0x56, 0xd6, 0xf9, 0x65, 0xab,
+	0x5a, 0x99, 0x75, 0x78, 0x42, 0xd3, 0xd0, 0x07, 0x30, 0xf8, 0x1c, 0x96, 0xe1, 0x43, 0x86, 0xf3,
+	0x83, 0x30, 0xa5, 0xf5, 0xc0, 0xb7, 0x82, 0xf4, 0x3d, 0xf4, 0x4f, 0x85, 0x53, 0xe5, 0x62, 0x4d,
+	0x19, 0xf4, 0x2b, 0x61, 0x6c, 0x5e, 0x2e, 0xc3, 0xbc, 0xb6, 0xa5, 0x09, 0x40, 0x65, 0xf4, 0x42,
+	0x59, 0x24, 0x9b, 0x70, 0x76, 0x10, 0x3a, 0x86, 0x4e, 0x95, 0x85, 0x7c, 0x3a, 0x55, 0x96, 0x3e,
+	0x82, 0xc1, 0x3b, 0xa3, 0x2b, 0x65, 0xdc, 0xba, 0x89, 0x54, 0x57, 0x61, 0x24, 0xd6, 0x3e, 0xf8,
+	0x2b, 0x51, 0xe0, 0xa0, 0x11, 0xf7, 0x65, 0xfa, 0x8d, 0x40, 0x74, 0xa6, 0xa5, 0xf2, 0x54, 0x9d,
+	0x4b, 0x54, 0x47, 0xdc, 0x97, 0x1e, 0xf9, 0x92, 0xb7, 0x9f, 0xc4, 0x97, 0xf4, 0x18, 0xf6, 0x85,
+	0x73, 0x26, 0xcf, 0x6a, 0xa7, 0xc2, 0xd6, 0xbf, 0x00, 0x7d, 0x88, 0x66, 0xfd, 0xf2, 0x5c, 0x59,
+	0x16, 0x61, 0x8c, 0x6d, 0x00, 0xad, 0x2b, 0xbe, 0x23, 0xa1, 0xf7, 0x60, 0xb0, 0xb8, 0xc8, 0x0b,
+	0x69, 0x54, 0xc9, 0x62, 0x94, 0x0f, 0xdb, 0xd4, 0xb5, 0x54, 0x7c, 0x4b, 0xa6, 0x3f, 0x08, 0x0c,
+	0x78, 0x38, 0x29, 0x7a, 0x07, 0x48, 0x89, 0x36, 0xaf, 0xc9, 0x49, 0x49, 0x8f, 0x81, 0x14, 0x21,
+	0xf9, 0x71, 0xa0, 0x42, 0xc6, 0x9c, 0x14, 0xf4, 0x04, 0x46, 0x2f, 0xac, 0xcd, 0x97, 0xa5, 0x92,
+	0x1f, 0x72, 0x69, 0x59, 0x17, 0x57, 0xde, 0x0d, 0xc2, 0x76, 0xfe, 0x6c, 0x57, 0x73, 0x52, 0x3a,
+	0xb3, 0xe6, 0x23, 0xb1, 0x03, 0x1d, 0x3d, 0x87, 0x1b, 0xff, 0x48, 0x7c, 0x56, 0x9f, 0x54, 0x7b,
+	0x0e, 0xbe, 0xf4, 0x27, 0x72, 0x25, 0x8a, 0x5a, 0xa1, 0x9f, 0x88, 0x37, 0xcd, 0xb3, 0xce, 0x53,
+	0x32, 0x7f, 0x02, 0xbd, 0x57, 0xb8, 0x93, 0xde, 0x87, 0xf8, 0x1c, 0x2f, 0x67, 0xbc, 0x35, 0x81,
+	0xf7, 0x75, 0x74, 0x70, 0xcd, 0x54, 0xba, 0xf7, 0xf2, 0xf0, 0xfb, 0x26, 0x21, 0x3f, 0x37, 0x09,
+	0xf9, 0xb5, 0x49, 0xc8, 0xd7, 0xdf, 0xc9, 0x5e, 0xd6, 0xc3, 0x9f, 0xeb, 0xf1, 0x9f, 0x00, 0x00,
+	0x00, 0xff, 0xff, 0x3b, 0x5e, 0x7b, 0x91, 0x73, 0x03, 0x00, 0x00,
 }

@@ -18,6 +18,7 @@ package main
 
 import (
 	"bufio"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -27,6 +28,7 @@ import (
 	"net/http"
 	"os"
 	"runtime"
+	"runtime/pprof"
 	"strings"
 	"time"
 
@@ -34,7 +36,6 @@ import (
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc"
 
-	"github.com/dgraph-io/dgraph/commit"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/query"
@@ -44,6 +45,7 @@ import (
 	"github.com/dgraph-io/dgraph/uid"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/soheilhy/cmux"
 )
 
 var (
@@ -60,8 +62,38 @@ var (
 	workerPort = flag.String("workerport", ":12345",
 		"Port used by worker for internal communication.")
 	nomutations = flag.Bool("nomutations", false, "Don't allow mutations on this server.")
+	shutdown    = flag.Bool("shutdown", false, "Allow client to send shutdown signal.")
 	tracing     = flag.Float64("trace", 0.5, "The ratio of queries to trace.")
+	schemaFile  = flag.String("schema", "", "Path to the file that specifies schema in json format")
+	cpuprofile  = flag.String("cpuprof", "", "write cpu profile to file")
+	memprofile  = flag.String("memprof", "", "write memory profile to file")
 )
+
+type mutationResult struct {
+	edges   []x.DirectedEdge
+	newUids map[string]uint64
+}
+
+func exitWithProfiles() {
+	log.Println("Got clean exit request")
+
+	// Stop the CPU profiling that was initiated.
+	if len(*cpuprofile) > 0 {
+		pprof.StopCPUProfile()
+	}
+
+	// Write memory profile before exit.
+	if len(*memprofile) > 0 {
+		f, err := os.Create(*memprofile)
+		if err != nil {
+			log.Println(err)
+		}
+		pprof.WriteHeapProfile(f)
+		f.Close()
+	}
+
+	os.Exit(0)
+}
 
 func addCorsHeaders(w http.ResponseWriter) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -73,8 +105,7 @@ func addCorsHeaders(w http.ResponseWriter) {
 	w.Header().Set("Connection", "close")
 }
 
-func convertToEdges(ctx context.Context, mutation string) ([]x.DirectedEdge, error) {
-	var edges []x.DirectedEdge
+func convertToNQuad(ctx context.Context, mutation string) ([]rdf.NQuad, error) {
 	var nquads []rdf.NQuad
 	r := strings.NewReader(mutation)
 	scanner := bufio.NewScanner(r)
@@ -88,10 +119,17 @@ func convertToEdges(ctx context.Context, mutation string) ([]x.DirectedEdge, err
 		nq, err := rdf.Parse(ln)
 		if err != nil {
 			x.Trace(ctx, "Error while parsing RDF: %v", err)
-			return edges, err
+			return nquads, err
 		}
 		nquads = append(nquads, nq)
 	}
+	return nquads, nil
+}
+
+func convertToEdges(ctx context.Context, nquads []rdf.NQuad) (mutationResult, error) {
+	var edges []x.DirectedEdge
+	var mr mutationResult
+	allocatedIds := make(map[string]uint64)
 
 	// xidToUid is used to store ids which are not uids. It is sent to the instance
 	// which has the xid <-> uid mapping to get uids.
@@ -107,7 +145,7 @@ func convertToEdges(ctx context.Context, mutation string) ([]x.DirectedEdge, err
 	if len(xidToUid) > 0 {
 		if err := worker.GetOrAssignUidsOverNetwork(ctx, xidToUid); err != nil {
 			x.Trace(ctx, "Error while GetOrAssignUidsOverNetwork: %v", err)
-			return edges, err
+			return mr, err
 		}
 	}
 
@@ -116,27 +154,25 @@ func convertToEdges(ctx context.Context, mutation string) ([]x.DirectedEdge, err
 		edge, err := nq.ToEdgeUsing(xidToUid)
 		if err != nil {
 			x.Trace(ctx, "Error while converting to edge: %v %v", nq, err)
-			return edges, err
+			return mr, err
 		}
 		edges = append(edges, edge)
 	}
-	return edges, nil
+
+	for k, v := range xidToUid {
+		if strings.HasPrefix(k, "_new_:") {
+			allocatedIds[k[6:]] = v
+		}
+	}
+
+	mr = mutationResult{
+		edges:   edges,
+		newUids: allocatedIds,
+	}
+	return mr, nil
 }
 
-func mutationHandler(ctx context.Context, mu *gql.Mutation) error {
-	if *nomutations {
-		return fmt.Errorf("Mutations are forbidden on this server.")
-	}
-
-	var m worker.Mutations
-	var err error
-	if m.Set, err = convertToEdges(ctx, mu.Set); err != nil {
-		return err
-	}
-	if m.Del, err = convertToEdges(ctx, mu.Del); err != nil {
-		return err
-	}
-
+func applyMutations(ctx context.Context, m worker.Mutations) error {
 	left, err := worker.MutateOverNetwork(ctx, m)
 	if err != nil {
 		x.Trace(ctx, "Error while MutateOverNetwork: %v", err)
@@ -155,7 +191,83 @@ func mutationHandler(ctx context.Context, mu *gql.Mutation) error {
 	return nil
 }
 
-func queryHandler(w http.ResponseWriter, r *http.Request) {
+func mutationToNQuad(nq []*graph.NQuad) []rdf.NQuad {
+	resp := make([]rdf.NQuad, 0, len(nq))
+
+	for _, n := range nq {
+		resp = append(resp, rdf.NQuad{
+			Subject:     n.Sub,
+			Predicate:   n.Pred,
+			ObjectId:    n.ObjId,
+			ObjectValue: n.ObjVal,
+			Label:       n.Label,
+		})
+	}
+	return resp
+}
+
+func convertAndApply(ctx context.Context, set []rdf.NQuad, del []rdf.NQuad) (map[string]uint64, error) {
+	var allocIds map[string]uint64
+	var m worker.Mutations
+	var err error
+	var mr mutationResult
+
+	if *nomutations {
+		return nil, fmt.Errorf("Mutations are forbidden on this server.")
+	}
+
+	if mr, err = convertToEdges(ctx, set); err != nil {
+		return nil, err
+	}
+	m.Set, allocIds = mr.edges, mr.newUids
+	if mr, err = convertToEdges(ctx, del); err != nil {
+		return nil, err
+	}
+	m.Del = mr.edges
+
+	if err := applyMutations(ctx, m); err != nil {
+		return nil, x.Wrap(err)
+	}
+	return allocIds, nil
+}
+
+// This function is used to run mutations for the requests from different
+// language clients.
+func runMutations(ctx context.Context, mu *graph.Mutation) (map[string]uint64, error) {
+	var allocIds map[string]uint64
+	var err error
+
+	set := mutationToNQuad(mu.Set)
+	del := mutationToNQuad(mu.Del)
+	if allocIds, err = convertAndApply(ctx, set, del); err != nil {
+		return nil, err
+	}
+	return allocIds, nil
+}
+
+// This function is used to run mutations for the requests received from the
+// http client.
+func mutationHandler(ctx context.Context, mu *gql.Mutation) (map[string]uint64, error) {
+	var set []rdf.NQuad
+	var del []rdf.NQuad
+	var allocIds map[string]uint64
+	var err error
+
+	if set, err = convertToNQuad(ctx, mu.Set); err != nil {
+		return nil, x.Wrap(err)
+	}
+	if del, err = convertToNQuad(ctx, mu.Del); err != nil {
+		return nil, x.Wrap(err)
+	}
+	if allocIds, err = convertAndApply(ctx, set, del); err != nil {
+		return nil, err
+	}
+	return allocIds, nil
+}
+
+type httpServer struct{}
+
+func (s *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	addCorsHeaders(w)
 	if r.Method == "OPTIONS" {
 		return
@@ -184,6 +296,11 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if *shutdown && string(q) == "SHUTDOWN" {
+		exitWithProfiles()
+		return
+	}
+
 	x.Trace(ctx, "Query received: %v", string(q))
 	gq, mu, err := gql.Parse(string(q))
 	if err != nil {
@@ -192,9 +309,10 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var allocIds map[string]uint64
 	// If we have mutations, run them first.
 	if mu != nil && (len(mu.Set) > 0 || len(mu.Del) > 0) {
-		if err = mutationHandler(ctx, mu); err != nil {
+		if allocIds, err = mutationHandler(ctx, mu); err != nil {
 			x.Trace(ctx, "Error while handling mutations: %v", err)
 			x.SetStatus(w, x.Error, err.Error())
 			return
@@ -202,13 +320,22 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if gq == nil || (gq.UID == 0 && len(gq.XID) == 0) {
-		x.SetStatus(w, x.ErrorOk, "Done")
+		mp := map[string]interface{}{
+			"code":    x.ErrorOk,
+			"message": "Done",
+			"uids":    allocIds,
+		}
+		if js, err := json.Marshal(mp); err == nil {
+			w.Write(js)
+		} else {
+			x.SetStatus(w, "Error", "Unable to marshal map")
+		}
 		return
 	}
 
 	sg, err := query.ToSubGraph(ctx, gq)
 	if err != nil {
-		x.Trace(ctx, "Error while conversion to internal format: %v", err)
+		x.Trace(ctx, "Error while conversion o internal format: %v", err)
 		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
 		return
 	}
@@ -239,13 +366,14 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // server is used to implement graph.DgraphServer
-type server struct{}
+type grpcServer struct{}
 
 // This method is used to execute the query and return the response to the
 // client as a protocol buffer message.
-func (s *server) Query(ctx context.Context,
+func (s *grpcServer) Query(ctx context.Context,
 	req *graph.Request) (*graph.Response, error) {
 
+	var allocIds map[string]uint64
 	if rand.Float64() < *tracing {
 		tr := trace.New("Dgraph", "GrpcQuery")
 		defer tr.Finish()
@@ -253,15 +381,18 @@ func (s *server) Query(ctx context.Context,
 	}
 
 	resp := new(graph.Response)
-	if len(req.Query) == 0 {
-		x.Trace(ctx, "Empty query")
-		return resp, fmt.Errorf("Empty query")
+	if len(req.Query) == 0 && req.Mutation == nil {
+		x.Trace(ctx, "Empty query and mutation.")
+		return resp, fmt.Errorf("Empty query and mutation.")
+	}
+
+	if *shutdown && req.Query == "SHUTDOWN" {
+		exitWithProfiles()
+		return nil, nil
 	}
 
 	var l query.Latency
 	l.Start = time.Now()
-	// TODO(pawan): Refactor query parsing and graph processing code to a common
-	// function used by Query and queryHandler
 	x.Trace(ctx, "Query received: %v", req.Query)
 	gq, mu, err := gql.Parse(req.Query)
 	if err != nil {
@@ -269,13 +400,24 @@ func (s *server) Query(ctx context.Context,
 		return resp, err
 	}
 
-	// If we have mutations, run them first.
+	// If mutations are part of the query, we run them through the mutation handler
+	// same as the http client.
 	if mu != nil && (len(mu.Set) > 0 || len(mu.Del) > 0) {
-		if err = mutationHandler(ctx, mu); err != nil {
+		if allocIds, err = mutationHandler(ctx, mu); err != nil {
 			x.Trace(ctx, "Error while handling mutations: %v", err)
 			return resp, err
 		}
 	}
+
+	// If mutations are sent as part of the mutation object in the request we run
+	// them here.
+	if req.Mutation != nil && (len(req.Mutation.Set) > 0 || len(req.Mutation.Del) > 0) {
+		if allocIds, err = runMutations(ctx, req.Mutation); err != nil {
+			x.Trace(ctx, "Error while handling mutations: %v", err)
+			return resp, err
+		}
+	}
+	resp.AssignedUids = allocIds
 
 	if gq == nil || (gq.UID == 0 && len(gq.XID) == 0) {
 		return resp, err
@@ -310,37 +452,22 @@ func (s *server) Query(ctx context.Context,
 	gl.Parsing, gl.Processing, gl.Pb = l.Parsing.String(), l.Processing.String(),
 		l.ProtocolBuffer.String()
 	resp.L = gl
-
 	return resp, err
 }
 
-// This function register a Dgraph grpc server on the address, which is used
-// exchanging protocol buffer messages.
-func runGrpcServer(address string) {
-	ln, err := net.Listen("tcp", address)
-	if err != nil {
-		log.Fatalf("While running server for client: %v", err)
-		return
-	}
-	log.Printf("Client worker listening: %v", ln.Addr())
-
-	s := grpc.NewServer(grpc.CustomCodec(&query.Codec{}))
-	graph.RegisterDgraphServer(s, &server{})
-	if err = s.Serve(ln); err != nil {
-		log.Fatalf("While serving gRpc requests: %v", err)
-	}
-	return
-}
-
-func main() {
-	x.Init()
-
+func checkFlagsAndInitDirs() {
 	numCpus := *numcpu
-	prev := runtime.GOMAXPROCS(numCpus)
-	log.Printf("num_cpu: %v. prev_maxprocs: %v. Set max procs to num cpus", numCpus, prev)
-	if *port%2 != 0 {
-		log.Fatalf("Port must be an even number: %v", *port)
+	if len(*cpuprofile) > 0 {
+		f, err := os.Create(*cpuprofile)
+		if err != nil {
+			log.Fatal(err)
+		}
+		pprof.StartCPUProfile(f)
 	}
+
+	prev := runtime.GOMAXPROCS(numCpus)
+	log.Printf("num_cpu: %v. prev_maxprocs: %v. Set max procs to num cpus",
+		numCpus, prev)
 	// Create parent directories for postings, uids and mutations
 	var err error
 	err = os.MkdirAll(*postingDir, 0700)
@@ -355,17 +482,62 @@ func main() {
 	if err != nil {
 		log.Fatalf("Error while creating the filepath for uids: %v", err)
 	}
+}
+
+func serveGRPC(l net.Listener) {
+	s := grpc.NewServer(grpc.CustomCodec(&query.Codec{}))
+	graph.RegisterDgraphServer(s, &grpcServer{})
+	if err := s.Serve(l); err != nil {
+		log.Fatalf("While serving gRpc requests: %v", err)
+	}
+}
+
+func serveHTTP(l net.Listener) {
+	s := &http.Server{
+		Handler: &httpServer{},
+	}
+	if err := s.Serve(l); err != nil {
+		log.Fatalf("Serve: %v", err)
+	}
+}
+
+func setupServer() {
+	l, err := net.Listen("tcp", fmt.Sprintf(":%d", *port))
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	tcpm := cmux.New(l)
+	httpl := tcpm.Match(cmux.HTTP1Fast())
+	grpcl := tcpm.MatchWithWriters(
+		cmux.HTTP2MatchHeaderFieldSendSettings("content-type", "application/grpc"))
+	http2 := tcpm.Match(cmux.HTTP2())
+
+	// Initilize the servers.
+	go serveGRPC(grpcl)
+	go serveHTTP(httpl)
+	go serveHTTP(http2)
+
+	log.Println("grpc server started.")
+	log.Println("http server started.")
+	log.Println("Server listening on port", *port)
+
+	// Start cmux serving.
+	if err := tcpm.Serve(); !strings.Contains(err.Error(),
+		"use of closed network connection") {
+		log.Fatal(err)
+	}
+}
+
+func main() {
+	x.Init()
+	checkFlagsAndInitDirs()
 
 	ps, err := store.NewStore(*postingDir)
-	if err != nil {
-		log.Fatalf("error initializing postings store: %v", err)
-	}
+	x.Checkf(err, "Error initializing postings store")
 	defer ps.Close()
 
-	clog := commit.NewLogger(*mutationDir, "dgraph", 50<<20)
-	clog.SyncEvery = 1
-	clog.Init()
-	defer clog.Close()
+	posting.InitIndex(ps)
 
 	addrs := strings.Split(*workers, ",")
 	lenAddr := uint64(len(addrs))
@@ -374,9 +546,11 @@ func main() {
 		lenAddr = 1
 	}
 
-	posting.Init(clog)
+	posting.Init()
+	var ws *worker.State
 	if *instanceIdx != 0 {
-		worker.InitState(ps, nil, *instanceIdx, lenAddr)
+		ws = worker.NewState(ps, nil, *instanceIdx, lenAddr)
+		worker.SetWorkerState(ws)
 		uid.Init(nil)
 	} else {
 		uidStore, err := store.NewStore(*uidDir)
@@ -385,17 +559,20 @@ func main() {
 		}
 		defer uidStore.Close()
 		// Only server instance 0 will have uidStore
-		worker.InitState(ps, uidStore, *instanceIdx, lenAddr)
+		ws = worker.NewState(ps, uidStore, *instanceIdx, lenAddr)
+		worker.SetWorkerState(ws)
 		uid.Init(uidStore)
 	}
 
-	worker.Connect(addrs, *workerPort)
-	// Grpc server runs on (port + 1)
-	go runGrpcServer(fmt.Sprintf(":%d", *port+1))
-
-	http.HandleFunc("/query", queryHandler)
-	log.Printf("Listening for requests at port: %v", *port)
-	if err := http.ListenAndServe(fmt.Sprintf(":%d", *port), nil); err != nil {
-		log.Fatalf("ListenAndServe: %v", err)
+	if len(*schemaFile) > 0 {
+		err = gql.LoadSchema(*schemaFile)
+		if err != nil {
+			log.Fatalf("Error while loading schema:%v", err)
+		}
 	}
+	// Initiate internal worker communication.
+	ws.Connect(addrs, *workerPort)
+
+	// Setup external communication.
+	setupServer()
 }

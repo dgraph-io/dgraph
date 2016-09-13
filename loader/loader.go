@@ -143,7 +143,6 @@ func (s *state) parseStream(wg *sync.WaitGroup) {
 		if s.Error() != nil {
 			return
 		}
-
 		line = strings.Trim(line, " \t")
 		if len(line) == 0 {
 			glog.Info("Empty line.")
@@ -194,7 +193,7 @@ func (s *state) handleNQuads(wg *sync.WaitGroup) {
 
 		key := posting.Key(edge.Entity, edge.Attribute)
 		plist := posting.GetOrCreate(key, dataStore)
-		plist.AddMutation(ctx, edge, posting.Set)
+		plist.AddMutationWithIndex(ctx, edge, posting.Set)
 		atomic.AddUint64(&s.ctr.processed, 1)
 	}
 }

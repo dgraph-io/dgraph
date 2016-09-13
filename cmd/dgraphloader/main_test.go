@@ -11,7 +11,6 @@ import (
 	"github.com/Sirupsen/logrus"
 	"github.com/dgryski/go-farm"
 
-	"github.com/dgraph-io/dgraph/commit"
 	"github.com/dgraph-io/dgraph/loader"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/store"
@@ -40,13 +39,11 @@ func TestQuery(t *testing.T) {
 		t.Fail()
 	}
 
-	clog := commit.NewLogger(dir, "mutations", 50<<20)
-	clog.Init()
-	defer clog.Close()
-	posting.Init(clog)
+	posting.Init()
 
 	uid.Init(ps)
 	loader.Init(ps, ps1)
+	posting.InitIndex(ps1)
 
 	var count uint64
 	{
@@ -119,7 +116,7 @@ func BenchmarkLoadRW(b *testing.B) {
 	}
 	defer uidStore.Close()
 
-	posting.Init(nil)
+	posting.Init()
 	uid.Init(uidStore)
 
 	f, err := os.Open("nameslist")
@@ -153,7 +150,7 @@ func BenchmarkLoadReadOnly(b *testing.B) {
 	}
 	defer uidStore.Close()
 
-	posting.Init(nil)
+	posting.Init()
 	uid.Init(uidStore)
 
 	f, err := os.Open("nameslist")

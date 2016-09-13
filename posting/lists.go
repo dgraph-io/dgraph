@@ -17,6 +17,7 @@
 package posting
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -31,8 +32,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-
-	"context"
 
 	"github.com/dgryski/go-farm"
 	"github.com/zond/gotomic"
@@ -148,7 +147,7 @@ func gentlyMerge(mr *mergeRoutines) {
 	idx := 0
 	dirtymap.Each(func(k gotomic.Hashable, v gotomic.Thing) bool {
 		if idx < start {
-			idx += 1
+			idx++
 			return false
 		}
 
@@ -256,37 +255,40 @@ func checkMemoryUsage() {
 	}
 }
 
-var stopTheWorld sync.RWMutex
-var lhmap *gotomic.Hash
-var dirtymap *gotomic.Hash
-var clog *commit.Logger
+var (
+	stopTheWorld sync.RWMutex
+	lhmap        *gotomic.Hash
+	dirtymap     *gotomic.Hash
+	clog         *commit.Logger
+)
 
-func Init(log *commit.Logger) {
+// Init initializes the posting lists package, the in memory and dirty list hash.
+func Init() {
 	lhmap = gotomic.NewHash()
 	dirtymap = gotomic.NewHash()
-	clog = log
 	go checkMemoryUsage()
 }
 
+// GetOrCreate stores the List corresponding to key(if its not there already)
+// to lhmap and returns it.
 func GetOrCreate(key []byte, pstore *store.Store) *List {
 	stopTheWorld.RLock()
 	defer stopTheWorld.RUnlock()
 
-	uid := farm.Fingerprint64(key)
-	ukey := gotomic.IntKey(uid)
-	lp, _ := lhmap.Get(ukey)
+	fp := farm.Fingerprint64(key)
+	gotomicKey := gotomic.IntKey(fp)
+	lp, _ := lhmap.Get(gotomicKey)
 	if lp != nil {
 		return lp.(*List)
 	}
 
 	l := NewList()
-	if inserted := lhmap.PutIfMissing(ukey, l); inserted {
-		l.init(key, pstore, clog)
+	if inserted := lhmap.PutIfMissing(gotomicKey, l); inserted {
+		l.init(key, pstore)
 		return l
-	} else {
-		lp, _ = lhmap.Get(ukey)
-		return lp.(*List)
 	}
+	lp, _ = lhmap.Get(gotomicKey)
+	return lp.(*List)
 }
 
 func mergeAndUpdate(l *List, c *counters) {

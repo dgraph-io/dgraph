@@ -80,7 +80,7 @@ func toUid(xid string, xidToUID map[string]uint64) (uid uint64, rerr error) {
 	}
 
 	if !strings.HasPrefix(xid, "_uid_:") {
-		return 0, fmt.Errorf("Unable to find xid: %v", xid)
+		return 0, fmt.Errorf("Unable to assign or find uid for: %v", xid)
 	}
 	return strconv.ParseUint(xid[6:], 0, 64)
 }

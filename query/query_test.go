@@ -18,6 +18,7 @@ package query
 
 import (
 	"bytes"
+	"context"
 	"encoding/gob"
 	"encoding/json"
 	"io/ioutil"
@@ -26,10 +27,7 @@ import (
 	"testing"
 	"time"
 
-	"context"
-
 	"github.com/gogo/protobuf/proto"
-	"github.com/google/flatbuffers/go"
 
 	"github.com/dgraph-io/dgraph/commit"
 	"github.com/dgraph-io/dgraph/gql"
@@ -49,7 +47,7 @@ func setErr(err *error, nerr error) {
 }
 
 func addEdge(t *testing.T, edge x.DirectedEdge, l *posting.List) {
-	if err := l.AddMutation(context.Background(), edge, posting.Set); err != nil {
+	if _, err := l.AddMutation(context.Background(), edge, posting.Set); err != nil {
 		t.Error(err)
 	}
 }
@@ -70,9 +68,7 @@ func checkSingleValue(t *testing.T, child *SubGraph,
 	if child.Attr != attr || len(child.Result) == 0 {
 		t.Error("Expected attr name with some.Result")
 	}
-	uo := flatbuffers.GetUOffsetT(child.Result)
-	r := new(task.Result)
-	r.Init(child.Result, uo)
+	r := x.NewTaskResult(child.Result)
 	if r.ValuesLength() != 1 {
 		t.Errorf("Expected value length 1. Got: %v", r.ValuesLength())
 	}
@@ -112,11 +108,9 @@ func TestNewGraph(t *testing.T) {
 		t.Error(err)
 	}
 
-	worker.InitState(ps, nil, 0, 1)
+	worker.SetWorkerState(worker.NewState(ps, nil, 0, 1))
 
-	uo := flatbuffers.GetUOffsetT(sg.Result)
-	r := new(task.Result)
-	r.Init(sg.Result, uo)
+	r := x.NewTaskResult(sg.Result)
 	if r.UidmatrixLength() != 1 {
 		t.Errorf("Expected length 1. Got: %v", r.UidmatrixLength())
 	}
@@ -146,12 +140,12 @@ func populateGraph(t *testing.T) (string, *store.Store) {
 		return "", nil
 	}
 
-	worker.InitState(ps, nil, 0, 1)
+	worker.SetWorkerState(worker.NewState(ps, nil, 0, 1))
 
 	clog := commit.NewLogger(dir, "mutations", 50<<20)
 	clog.Init()
 
-	posting.Init(clog)
+	posting.Init()
 
 	// So, user we're interested in has uid: 1.
 	// She has 4 friends: 23, 24, 25, 31, and 101
@@ -183,6 +177,15 @@ func populateGraph(t *testing.T) (string, *store.Store) {
 
 	edge.Value = []byte("alive")
 	addEdge(t, edge, posting.GetOrCreate(posting.Key(1, "status"), ps))
+
+	edge.Value = []byte("38")
+	addEdge(t, edge, posting.GetOrCreate(posting.Key(1, "age"), ps))
+
+	edge.Value = []byte("98.99")
+	addEdge(t, edge, posting.GetOrCreate(posting.Key(1, "survival_rate"), ps))
+
+	edge.Value = []byte("true")
+	addEdge(t, edge, posting.GetOrCreate(posting.Key(1, "sword_present"), ps))
 
 	// Now let's add a name for each of the friends, except 101.
 	edge.Value = []byte("Rick Grimes")
@@ -439,9 +442,7 @@ func TestProcessGraph(t *testing.T) {
 		t.Errorf("Expected some.Result.")
 		return
 	}
-	uo := flatbuffers.GetUOffsetT(child.Result)
-	r := new(task.Result)
-	r.Init(child.Result, uo)
+	r := x.NewTaskResult(child.Result)
 
 	if r.UidmatrixLength() != 1 {
 		t.Errorf("Expected 1 matrix. Got: %v", r.UidmatrixLength())
@@ -462,8 +463,7 @@ func TestProcessGraph(t *testing.T) {
 		t.Errorf("Expected attr name")
 	}
 	child = child.Children[0]
-	uo = flatbuffers.GetUOffsetT(child.Result)
-	r.Init(child.Result, uo)
+	x.ParseTaskResult(r, child.Result)
 	if r.ValuesLength() != 5 {
 		t.Errorf("Expected 5 names of 5 friends")
 	}
@@ -529,6 +529,105 @@ func TestToJson(t *testing.T) {
 	s := string(js)
 	if !strings.Contains(s, "Michonne") {
 		t.Errorf("Unable to find Michonne in this result: %v", s)
+	}
+}
+
+// Checking for Type coercion errors.
+// NOTE: Writing separate test since Marshal/Unmarshal process of ToJSON converts
+// 'int' type to 'float64' and thus mucks up the tests.
+func TestPostTraverse(t *testing.T) {
+	dir, _ := populateGraph(t)
+	defer os.RemoveAll(dir)
+
+	file, err := os.Create("test_schema.json")
+	if err != nil {
+		t.Error(err)
+	}
+	s := `
+		{
+			"name": "string",
+			"age": "int",
+			"survival_rate": "float",
+			"sword_present": "bool"
+		}
+	`
+	file.WriteString(s)
+
+	defer file.Close()
+	defer os.Remove(file.Name())
+
+	// load schema from json file
+	err = gql.LoadSchema(file.Name())
+	if err != nil {
+		t.Error(err)
+	}
+
+	query := `
+		{
+			actor(_uid_:0x01) {
+				name
+				age
+				sword_present
+				survival_rate
+				friend {
+					name
+				}
+			}
+		}
+	`
+
+	gq, _, err := gql.Parse(query)
+	if err != nil {
+		t.Error(err)
+	}
+	ctx := context.Background()
+	sg, err := ToSubGraph(ctx, gq)
+	if err != nil {
+		t.Error(err)
+	}
+
+	ch := make(chan error)
+	go ProcessGraph(ctx, sg, ch)
+	err = <-ch
+	if err != nil {
+		t.Error(err)
+	}
+
+	r, err := postTraverse(sg)
+	if err != nil {
+		t.Error(err)
+	}
+
+	// iterating over the map (as in ToJSON) to get the required values
+	for _, val := range r {
+		var m map[string]interface{}
+		if val != nil {
+			m = val.(map[string]interface{})
+		} else {
+			m = make(map[string]interface{})
+		}
+
+		actorMap := m["actor"].(map[string]interface{})
+
+		if _, success := actorMap["name"].(string); !success {
+			t.Errorf("Expected type coercion to string for: %v\n", actorMap["name"])
+		}
+		// Note: although, int and int32 have same size, they are treated as different types in go
+		// GraphQL spec mentions integer type to be int32
+		if _, success := actorMap["age"].(int32); !success {
+			t.Errorf("Expected type coercion to int32 for: %v\n", actorMap["age"])
+		}
+		if _, success := actorMap["sword_present"].(bool); !success {
+			t.Errorf("Expected type coercion to bool for: %v\n", actorMap["sword_present"])
+		}
+		if _, success := actorMap["survival_rate"].(float64); !success {
+			t.Errorf("Expected type coercion to float64 for: %v\n", actorMap["survival_rate"])
+		}
+		friendMap := actorMap["friend"].([]interface{})
+		friend := friendMap[0].(map[string]interface{})
+		if _, success := friend["name"].(string); !success {
+			t.Errorf("Expected type coercion to string for: %v\n", friend["name"])
+		}
 	}
 }
 

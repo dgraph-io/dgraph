@@ -18,6 +18,7 @@ package posting
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"fmt"
 	"log"
@@ -28,13 +29,10 @@ import (
 	"time"
 	"unsafe"
 
-	"context"
-
 	"github.com/dgryski/go-farm"
 	"github.com/google/flatbuffers/go"
 	"github.com/zond/gotomic"
 
-	"github.com/dgraph-io/dgraph/commit"
 	"github.com/dgraph-io/dgraph/posting/types"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/x"
@@ -42,8 +40,10 @@ import (
 
 var E_TMP_ERROR = fmt.Errorf("Temporary Error. Please retry.")
 
-const Set = 0x01
-const Del = 0x02
+const (
+	Set = 0x01
+	Del = 0x02
+)
 
 type buffer struct {
 	d []byte
@@ -62,17 +62,15 @@ type List struct {
 	hash        uint32
 	pbuffer     unsafe.Pointer
 	pstore      *store.Store // postinglist store
-	clog        *commit.Logger
 	lastCompact time.Time
 	wg          sync.WaitGroup
 	deleteMe    int32
 
 	// Mutations
-	mlayer        map[int]types.Posting // stores only replace instructions.
-	mdelta        int                   // len(plist) + mdelta = final length.
-	maxMutationTs int64                 // Track maximum mutation ts.
-	mindex        []*MutationLink
-	dirtyTs       int64 // Use atomics for this.
+	mlayer  map[int]types.Posting // Stores only replace instructions.
+	mdelta  int                   // len(plist) + mdelta = final length.
+	mindex  []*MutationLink
+	dirtyTs int64 // Use atomics for this.
 }
 
 func NewList() *List {
@@ -113,7 +111,9 @@ func samePosting(a *types.Posting, b *types.Posting) bool {
 // key = (entity uid, attribute)
 func Key(uid uint64, attr string) []byte {
 	buf := bytes.NewBufferString(attr)
-	buf.WriteRune('|')
+	if _, err := buf.WriteRune('|'); err != nil {
+		log.Fatalf("Error while writing |")
+	}
 	if err := binary.Write(buf, binary.LittleEndian, uid); err != nil {
 		log.Fatalf("Error while creating key with attr: %v uid: %v\n", attr, uid)
 	}
@@ -208,7 +208,7 @@ func init() {
 	}
 }
 
-func (l *List) init(key []byte, pstore *store.Store, clog *commit.Logger) {
+func (l *List) init(key []byte, pstore *store.Store) {
 	l.Lock()
 	defer l.Unlock()
 	defer l.wg.Done()
@@ -218,35 +218,14 @@ func (l *List) init(key []byte, pstore *store.Store, clog *commit.Logger) {
 	}
 	l.key = key
 	l.pstore = pstore
-	l.clog = clog
 
-	posting := l.getPostingList()
-	l.maxMutationTs = posting.CommitTs()
 	l.hash = farm.Fingerprint32(key)
 	l.ghash = gotomic.IntKey(farm.Fingerprint64(key))
 	l.mlayer = make(map[int]types.Posting)
-
-	if clog == nil {
-		return
-	}
-
-	err := clog.StreamEntries(posting.CommitTs()+1, l.hash,
-		func(hdr commit.Header, buffer []byte) {
-
-			uo := flatbuffers.GetUOffsetT(buffer)
-			m := new(types.Posting)
-			m.Init(buffer, uo)
-			if m.Ts() > l.maxMutationTs {
-				l.maxMutationTs = m.Ts()
-			}
-			l.mergeMutation(m)
-		})
-	if err != nil {
-		log.Fatalf("Error while streaming entries: %v", err)
-	}
 }
 
-// There's no need for lock acquisition for this.
+// getPostingList tries to get posting list from l.pbuffer. If it is nil, then
+// we query RocksDB. There is no need for lock acquisition here.
 func (l *List) getPostingList() *types.PostingList {
 	pb := atomic.LoadPointer(&l.pbuffer)
 	buf := (*buffer)(pb)
@@ -261,11 +240,9 @@ func (l *List) getPostingList() *types.PostingList {
 		}
 		if atomic.CompareAndSwapPointer(&l.pbuffer, pb, unsafe.Pointer(nbuf)) {
 			return types.GetRootAsPostingList(nbuf.d, 0)
-
-		} else {
-			// Someone else replaced the pointer in the meantime. Retry recursively.
-			return l.getPostingList()
 		}
+		// Someone else replaced the pointer in the meantime. Retry recursively.
+		return l.getPostingList()
 	}
 	return types.GetRootAsPostingList(buf.d, 0)
 }
@@ -330,14 +307,14 @@ func (l *List) mindexInsertAt(mlink *MutationLink, mi int) {
 	copy(l.mindex[mi+1:], l.mindex[mi:])
 	l.mindex[mi] = mlink
 	for i := mi + 1; i < len(l.mindex); i++ {
-		l.mindex[i].idx += 1
+		l.mindex[i].idx++
 	}
 }
 
 func (l *List) mindexDeleteAt(mi int) {
 	l.mindex = append(l.mindex[:mi], l.mindex[mi+1:]...)
 	for i := mi; i < len(l.mindex); i++ {
-		l.mindex[i].idx -= 1
+		l.mindex[i].idx--
 	}
 }
 
@@ -391,11 +368,17 @@ func (l *List) mindexDeleteAt(mi int) {
 // Thus we can provide mutation layers over immutable posting list, while
 // still ensuring fast lookup access.
 //
-// NOTE: This function expects the caller to hold a RW Lock.
+// NOTE: mergeMutation expects the caller to hold a RW Lock.
 // Update: With mergeMutation function, we're adding mutations with a cost
 // of O(log M + log N), where M = number of previous mutations, and N =
 // number of postings in the immutable posting list.
-func (l *List) mergeMutation(mp *types.Posting) {
+//
+// NOTE: Strictly speaking, mergeMutation is not O(log M + log N). Any calls to
+// mindexInsertAt or mindexDeleteAt is O(M) time. However in practice, M is small.
+//
+// mergeMutation is the function that merges a mutation into mutation layers. It
+// does not write anything to RocksDB. Returns whether a mutation did happen.
+func (l *List) mergeMutation(mp *types.Posting) bool {
 	curUid := mp.Uid()
 	pi, puid := l.lePostingIndex(curUid)  // O(log N)
 	mi, muid := l.leMutationIndex(curUid) // O(log M)
@@ -410,20 +393,52 @@ func (l *List) mergeMutation(mp *types.Posting) {
 
 	if mp.Op() == Del {
 		if muid == curUid { // curUid found in mindex.
+			ml := l.mindex[mi]
+			if !samePosting(ml.posting, mp) {
+				// Not the same posting, so we should ignore this.
+				return false
+			}
+
 			if inPlist { // In plist, so replace previous instruction in mindex.
+				if _, inMlayer := l.mlayer[pi]; inMlayer {
+					x.Assertf(false, "Shouldn't be present in both mindex and mlayer. curUid = %v", curUid)
+				}
+
 				mlink.moveidx = 1
 				mlink.idx = pi + mi
 				l.mindex[mi] = mlink
 
 			} else { // Not in plist, so delete previous instruction in mindex.
-				l.mdelta -= 1
+				l.mdelta--
 				l.mindexDeleteAt(mi)
 			}
 
 		} else { // curUid not found in mindex.
-			if inPlist { // In plist, so insert in mindex.
+
+			// If present in mlayer, and matches with what we have, remove from it.
+			if tp, ok := l.mlayer[pi]; ok {
+				if !samePosting(&tp, mp) {
+					return false
+				}
+				delete(l.mlayer, pi)
+
 				mlink.moveidx = 1
-				l.mdelta -= 1
+				l.mdelta--
+				mlink.idx = pi + mi + 1
+				l.mindexInsertAt(mlink, mi+1)
+
+			} else if inPlist { // In plist, so insert in mindex.
+				plist := l.getPostingList()
+				var tp types.Posting
+				if ok := plist.Postings(&tp, pi); ok {
+					if !samePosting(&tp, mp) {
+						// Not the same posting as in plist. Ignore.
+						return false
+					}
+				}
+
+				mlink.moveidx = 1
+				l.mdelta--
 				mlink.idx = pi + mi + 1
 				l.mindexInsertAt(mlink, mi+1)
 
@@ -437,6 +452,7 @@ func (l *List) mergeMutation(mp *types.Posting) {
 			if inPlist { // In plist, so delete previous instruction, set in mlayer.
 				l.mindexDeleteAt(mi)
 				l.mlayer[pi] = *mp
+				l.mdelta++
 
 			} else { // Not in plist, so replace previous set instruction in mindex.
 				// NOTE: This prev instruction couldn't have been a Del instruction.
@@ -447,20 +463,25 @@ func (l *List) mergeMutation(mp *types.Posting) {
 
 		} else { // curUid not found in mindex.
 			if inPlist { // In plist, so just set it in mlayer.
+
 				// If this posting matches what we already have in posting list,
 				// we don't need to `dirty` this by adding to mlayer.
+				// Note that this means that the timestamp of the posting would
+				// remain unchanged.
 				plist := l.getPostingList()
-				var cp types.Posting
-				if ok := plist.Postings(&cp, pi); ok {
-					if samePosting(&cp, mp) {
-						return // do nothing.
+				var tp types.Posting
+				if ok := plist.Postings(&tp, pi); ok {
+					if samePosting(&tp, mp) {
+						delete(l.mlayer, pi) // if exists.
+						return false         // do nothing.
 					}
 				}
+				// Not found in plist. Set in mlayer.
 				l.mlayer[pi] = *mp
 
 			} else { // not in plist, not in mindex, so insert in mindex.
 				mlink.moveidx = -1
-				l.mdelta += 1
+				l.mdelta++
 				mlink.idx = pi + 1 + mi + 1 // right of pi, and right of mi.
 				l.mindexInsertAt(mlink, mi+1)
 			}
@@ -469,6 +490,7 @@ func (l *List) mergeMutation(mp *types.Posting) {
 	} else {
 		log.Fatalf("Invalid operation: %v", mp.Op())
 	}
+	return true
 }
 
 // Caller must hold at least a read lock.
@@ -566,11 +588,15 @@ func (l *List) SetForDeletion() {
 // BenchmarkAddMutations_SyncEvery100LogEntry-6 	   10000	    298352 ns/op
 // BenchmarkAddMutations_SyncEvery1000LogEntry-6	   30000	     63544 ns/op
 // ok  	github.com/dgraph-io/dgraph/posting	10.291s
-func (l *List) AddMutation(ctx context.Context, t x.DirectedEdge, op byte) error {
+
+// AddMutation adds mutation to mutation layers. Note that it does not write
+// anything to disk. Some other background routine will be responsible for merging
+// changes in mutation layers to RocksDB. Returns whether any mutation happens.
+func (l *List) AddMutation(ctx context.Context, t x.DirectedEdge, op byte) (bool, error) {
 	l.wg.Wait()
 	if atomic.LoadInt32(&l.deleteMe) == 1 {
 		x.Trace(ctx, "DELETEME set to true. Temporary error.")
-		return E_TMP_ERROR
+		return false, E_TMP_ERROR
 	}
 
 	// All edges with a value set, have the same uid. In other words,
@@ -580,18 +606,10 @@ func (l *List) AddMutation(ctx context.Context, t x.DirectedEdge, op byte) error
 	}
 	if t.ValueId == 0 {
 		x.Trace(ctx, "ValueId cannot be zero")
-		return fmt.Errorf("ValueId cannot be zero.")
+		return false, fmt.Errorf("ValueId cannot be zero.")
 	}
 	mbuf := newPosting(t, op)
-	var err error
-	var ts int64
-	if l.clog != nil {
-		ts, err = l.clog.AddLog(l.hash, mbuf)
-		if err != nil {
-			x.Trace(ctx, "Error while adding log: %v", err)
-			return err
-		}
-	}
+
 	// Mutation arrives:
 	// - Check if we had any(SET/DEL) before this, stored in the mutation list.
 	//		- If yes, then replace that mutation. Jump to a)
@@ -606,17 +624,15 @@ func (l *List) AddMutation(ctx context.Context, t x.DirectedEdge, op byte) error
 	uo := flatbuffers.GetUOffsetT(mbuf)
 	mpost := new(types.Posting)
 	mpost.Init(mbuf, uo)
-
-	l.mergeMutation(mpost)
+	hasMutated := l.mergeMutation(mpost)
 	if len(l.mindex)+len(l.mlayer) > 0 {
 		atomic.StoreInt64(&l.dirtyTs, time.Now().UnixNano())
 		if dirtymap != nil {
 			dirtymap.Put(l.ghash, true)
 		}
 	}
-	l.maxMutationTs = ts
 	x.Trace(ctx, "Mutation done")
-	return nil
+	return hasMutated, nil
 }
 
 func (l *List) MergeIfDirty(ctx context.Context) (merged bool, err error) {
@@ -657,7 +673,6 @@ func (l *List) merge() (merged bool, rerr error) {
 
 	types.PostingListStart(b)
 	types.PostingListAddPostings(b, vend)
-	types.PostingListAddCommitTs(b, l.maxMutationTs)
 	end := types.PostingListEnd(b)
 	b.Finish(end)
 

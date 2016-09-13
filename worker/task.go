@@ -36,21 +36,17 @@ const (
 // the instance which stores posting list corresponding to the predicate in the
 // query.
 func ProcessTaskOverNetwork(ctx context.Context, qu []byte) (result []byte, rerr error) {
-	uo := flatbuffers.GetUOffsetT(qu)
-	q := new(task.Query)
-	q.Init(qu, uo)
+	q := x.NewTaskQuery(qu)
 
 	attr := string(q.Attr())
 	idx := farm.Fingerprint64([]byte(attr)) % ws.numInstances
 
-	var runHere bool
 	// Posting list with xid -> uid and uid -> xid mapping is stored on instance 0.
 	if attr == _xid_ || attr == _uid_ {
 		idx = 0
-		runHere = (ws.instanceIdx == 0)
-	} else {
-		runHere = (ws.instanceIdx == idx)
 	}
+	runHere := (ws.instanceIdx == idx)
+
 	x.Trace(ctx, "runHere: %v attr: %v instanceIdx: %v numInstances: %v",
 		runHere, attr, ws.instanceIdx, ws.numInstances)
 
@@ -61,7 +57,7 @@ func ProcessTaskOverNetwork(ctx context.Context, qu []byte) (result []byte, rerr
 	}
 
 	// Using a worker client for the instance idx, we get the result of the query.
-	pool := ws.pools[idx]
+	pool := ws.GetPool(int(idx))
 	addr := pool.Addr
 	query := new(Payload)
 	query.Data = qu
@@ -84,10 +80,8 @@ func ProcessTaskOverNetwork(ctx context.Context, qu []byte) (result []byte, rerr
 }
 
 // processTask processes the query, accumulates and returns the result.
-func processTask(query []byte) (result []byte, rerr error) {
-	uo := flatbuffers.GetUOffsetT(query)
-	q := new(task.Query)
-	q.Init(query, uo)
+func processTask(query []byte) ([]byte, error) {
+	q := x.NewTaskQuery(query)
 
 	attr := string(q.Attr())
 	store := ws.dataStore
@@ -95,14 +89,29 @@ func processTask(query []byte) (result []byte, rerr error) {
 		store = ws.uidStore
 	}
 
+	x.Assertf(q.UidsLength() == 0 || q.TermsLength() == 0,
+		"At least one of Uids and Term should be empty: %d vs %d", q.UidsLength(), q.TermsLength())
+
+	useTerm := q.TermsLength() > 0
+	var n int
+	if useTerm {
+		n = q.TermsLength()
+	} else {
+		n = q.UidsLength()
+	}
+
 	b := flatbuffers.NewBuilder(0)
-	voffsets := make([]flatbuffers.UOffsetT, q.UidsLength())
-	uoffsets := make([]flatbuffers.UOffsetT, q.UidsLength())
+	voffsets := make([]flatbuffers.UOffsetT, n)
+	uoffsets := make([]flatbuffers.UOffsetT, n)
 	var counts []uint64
 
-	for i := 0; i < q.UidsLength(); i++ {
-		uid := q.Uids(i)
-		key := posting.Key(uid, attr)
+	for i := 0; i < n; i++ {
+		var key []byte
+		if useTerm {
+			key = posting.IndexKey(attr, q.Terms(i))
+		} else {
+			key = posting.Key(q.Uids(i), attr)
+		}
 		// Get or create the posting list for an entity, attribute combination.
 		pl := posting.GetOrCreate(key, store)
 
