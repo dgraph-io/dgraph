@@ -38,5 +38,12 @@ export LD_LIBRARY_PATH="${ROCKSDBDIR}:${LD_LIBRARY_PATH}"
 
 pushd cmd/dgraphassigner &> /dev/null
 go build .
-./dgraphassigner --numInstances 1 --instanceIdx 0 --rdfgzips $benchmark/actor-director.gz --uids ~/dgraph/u --stw_ram_mb 3000
+i=0; ./dgraphassigner --numInstances 2 --instanceIdx $i --rdfgzips $benchmark/actor-director.gz --uids ~/dgraph/uids/u$i --stw_ram_mb 3000
+i=1; ./dgraphassigner --numInstances 2 --instanceIdx $i --rdfgzips $benchmark/actor-director.gz --uids ~/dgraph/uids/u$i --stw_ram_mb 3000
 popd &> /dev/null
+
+pushd cmd/dgraphmerge &> /dev/null
+go build .
+./dgraphmerge --stores ~/dgraph/uids --dest ~/dgraph/u
+popd &> /dev/null
+
