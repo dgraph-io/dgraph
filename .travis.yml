@@ -11,9 +11,7 @@ addons:
   # Uploading Dgraph binary, CPU and memory profiles.
   artifacts:
     paths:
-    - cmd/dgraph/dgraph
-    - cmd/dgraph/dmem.prof
-    - cmd/dgraph/dcpu.prof
+    - cmd/dgraph
   apt:
     sources:
     - ubuntu-toolchain-r-test
