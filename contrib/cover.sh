@@ -26,9 +26,9 @@ set -e
 
 pushd $SRC &> /dev/null
 
-ecgi "~~~~~~~~~~~~~~~~~~~~~"
+echo "~~~~~~~~~~~~~~~~~~~~~"
 ls ${ROCKSDBDIR}
-ecgi "~~~~~~~~~~~~~~~~~~~~~"
+echo "~~~~~~~~~~~~~~~~~~~~~"
 ls ${ROCKSDBDIR}/include
 
 # create coverage output
