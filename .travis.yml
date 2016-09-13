@@ -10,8 +10,9 @@ notifications:
 addons:
   artifacts:
     paths:
-    - $HOME/gopath/src/github.com/dgraph-io/dgraph/cmd/dgraph
-    - cmd/dgraph
+    - cmd/dgraph/dgraph
+    - cmd/dgraph/dmem.prof
+    - cmd/dgraph/dcpu.prof
     debug: true
   apt:
     sources:
