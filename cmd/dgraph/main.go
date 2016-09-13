@@ -259,10 +259,32 @@ func mutationHandler(ctx context.Context, mu *gql.Mutation) (map[string]uint64, 
 	if del, err = convertToNQuad(ctx, mu.Del); err != nil {
 		return nil, x.Wrap(err)
 	}
+	m := set
+	for _, nquad := range del {
+		m = append(m, nquad)
+	}
+	if err = validateTypes(m); err != nil {
+		return nil, x.Wrap(err)
+	}
 	if allocIds, err = convertAndApply(ctx, set, del); err != nil {
 		return nil, err
 	}
 	return allocIds, nil
+}
+
+// validateTypes checks for predicate types present in the schema and validates if the
+// input value is of the correct type
+func validateTypes(nquads []rdf.NQuad) error {
+	for _, nquad := range nquads {
+		if t := gql.SchemaType(nquad.Predicate); t != nil && t.IsScalar() {
+			// Currently, only scalar types are present
+			stype := t.(gql.Scalar)
+			if _, err := stype.ParseType(nquad.ObjectValue); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 type httpServer struct{}
