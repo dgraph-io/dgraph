@@ -22,9 +22,6 @@ popd &> /dev/null
 
 # build flags needed for rocksdb
 
-ecgi "~~~~~~~~~~~~~~~~~~~~~"
-ls ${ROCKSDBDIR}/include
-
 export CGO_CFLAGS="-I${ROCKSDBDIR}/include"
 export CGO_LDFLAGS="-L${ROCKSDBDIR}"
 export LD_LIBRARY_PATH="${ROCKSDBDIR}:${LD_LIBRARY_PATH}"
