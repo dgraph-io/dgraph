@@ -13,7 +13,6 @@ ROCKSDBDIR=$BUILD/rocksdb-4.9
 set -e
 
 # build flags needed for rocksdb
-export CGO_CFLAGS="-I${ROCKSDBDIR}/include"
 export CGO_CPPFLAGS="-I${ROCKSDBDIR}/include"
 export CGO_LDFLAGS="-L${ROCKSDBDIR}"
 export LD_LIBRARY_PATH="${ROCKSDBDIR}:${LD_LIBRARY_PATH}"

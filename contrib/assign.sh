@@ -32,7 +32,6 @@ popd &> /dev/null
 # We are back in the Dgraph repo.
 
 # build flags needed for rocksdb
-export CGO_CFLAGS="-I${ROCKSDBDIR}/include"
 export CGO_CPPFLAGS="-I${ROCKSDBDIR}/include"
 export CGO_LDFLAGS="-L${ROCKSDBDIR}"
 export LD_LIBRARY_PATH="${ROCKSDBDIR}:${LD_LIBRARY_PATH}"
