@@ -18,6 +18,10 @@ addons:
       - libsnappy-dev
       - zlib1g-dev
       - jq
+    artifacts:
+        paths:
+            - $HOME/gopath/src/github.com/dgraph-io/dgraph/cmd/dgraph
+        debug: true
 env:
   - CC=clang-3.8 CXX=clang++-3.8
 cache:
