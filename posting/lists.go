@@ -141,23 +141,18 @@ func gentlyMerge(mr *mergeRoutines) {
 	}
 
 	idx := 0
-	var hs []gotomic.Hashable
+	count := 0
 	dirtymap.Each(func(k gotomic.Hashable, v gotomic.Thing) bool {
 		if idx < start {
 			idx++
 			return false
 		}
 
-		hs = append(hs, k)
-		return len(hs) >= pick
-	})
+		dirtymap.Delete(k)
 
-	for _, hid := range hs {
-		dirtymap.Delete(hid)
-
-		ret, ok := lhmap.Get(hid)
+		ret, ok := lhmap.Get(k)
 		if !ok || ret == nil {
-			continue
+			return false
 		}
 		// Not calling processOne, because we don't want to
 		// remove the postings list from the map, to avoid
@@ -165,10 +160,13 @@ func gentlyMerge(mr *mergeRoutines) {
 		// posting list before a merge happens.
 		l := ret.(*List)
 		if l == nil {
-			continue
+			return false
 		}
 		mergeAndUpdate(l, ctr)
-	}
+		count++
+		return count >= pick
+	})
+
 	ctr.log()
 }
 
