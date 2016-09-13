@@ -285,7 +285,7 @@ func TestParse_alias(t *testing.T) {
 		{
 			me(_uid_:0x0a) {
 				name,
-				bestFriend: friends(first: 10) {  # xid would be ignored.
+				bestFriend: friends(first: 10) { 
 					name	
 				}
 			}
