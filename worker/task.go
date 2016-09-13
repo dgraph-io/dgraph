@@ -57,7 +57,7 @@ func ProcessTaskOverNetwork(ctx context.Context, qu []byte) (result []byte, rerr
 	}
 
 	// Using a worker client for the instance idx, we get the result of the query.
-	pool := ws.pools[idx]
+	pool := ws.GetPool(int(idx))
 	addr := pool.Addr
 	query := new(Payload)
 	query.Data = qu

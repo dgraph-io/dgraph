@@ -64,7 +64,7 @@ func prepare() (dir1, dir2 string, ps *store.Store, rerr error) {
 	}
 
 	posting.Init()
-	worker.InitState(ps, nil, 0, 1)
+	worker.SetWorkerState(worker.NewState(ps, nil, 0, 1))
 	uid.Init(ps)
 	loader.Init(ps, ps)
 	posting.InitIndex(ps)
