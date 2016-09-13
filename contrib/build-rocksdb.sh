@@ -1,8 +1,8 @@
 #!/bin/bash
 
-export ROCKSDBVER="4.9.0"
+export ROCKSDBVER="4.9"
 ROCKSDBURL="https://github.com/facebook/rocksdb/archive/v${ROCKSDBVER}.tar.gz"
-ROCKSDBFILE="rocksdb-4.9.tar.gz"  # Slightly different from ROCKSDBVER.
+ROCKSDBFILE="rocksdb-${ROCKSDBVER}.tar.gz"
 ROCKSDBDIR=rocksdb-${ROCKSDBVER}
 ROCKSDBLIB=librocksdb.so.${ROCKSDBVER}
 
