@@ -93,7 +93,10 @@ func exitWithProfiles() {
 		f.Close()
 	}
 
-	os.Exit(0)
+	go func() {
+		time.Sleep(1 * time.Second)
+		os.Exit(0)
+	}()
 }
 
 func addCorsHeaders(w http.ResponseWriter) {
@@ -297,6 +300,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 
 	if *shutdown && string(q) == "SHUTDOWN" {
 		exitWithProfiles()
+		x.SetStatus(w, x.ErrorOk, "Server has been shutdown")
 		return
 	}
 
