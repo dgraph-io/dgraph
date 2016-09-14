@@ -4,11 +4,9 @@ go:
 dist: trusty
 sudo: required
 notifications:
-  email:
-    recipients:
-    - minions@dgraph.io
+  slack:
+    secure: uezT1E7kSVRDC2El9g5syXb1I4JrUUJHW4PXAf0IhXDFqS1ewkrNMurbkltrsJp0OtH7r2rzewuZsxjZ8pz0D+9YPorQzCPUgSqHuYnplh5WJMiaImXVvyApOpVEIm/0mFitrhfGjtMDXegRw1Rk95ujKNokulCSlLqGT1GSKQXmRjBgPYPqPmWQUbzkvwgL6NcMODv1GLyslGGTVKY/WiSjYkiNsQbDjxED3w5rAoX1FG3pvcHAXGxSWbTEk2VzvjGuNwflK92FZZXS/NxXPdEa4lPjlFBRRTHWwEXS4qbaGrdQNJ1DFI/QWrKtw6sHpqt22ovXEk4qkVthaf6Yq8YxoBQ80ajY6gw72ZMXreN3AaHCi7thNKtj/v2e1qlxggNCA8WDnXQmQ0iCg+BYD63LsVbJqlAGq151GGGJXSTcci1DhsuT3JeYx2Vd+wIHNTuYRqFJACnA45KRyExejyzdAYvdBgMnbMbtKctKtFthB5g5P1evBvx/PmZxpXPxIhLKjlCwZgutfR2jy1YSFjIHDR3hBJGsPj1z0XLo36kTOUM/CpTzbNFe2xr3dZrNH/LwWiYO9NBeCHc6kCi6DKi7X7bvnlpk8tazHep7VDQputNWgwEu4flld8jy7QRnIDVIj+4qwT+YhUDG/2lPJ5/Agxjq7rGgkIpPc8Kd8sQ= 
 addons:
-  # Uploading Dgraph binary, CPU and memory profiles.
   artifacts:
     paths:
     - cmd/dgraph
