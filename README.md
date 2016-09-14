@@ -16,7 +16,6 @@ Dgraph supports [GraphQL-like query syntax^](http://graphql.org/), and responds 
 
 ## Users
 - **Dgraph official documentation is present at [wiki.dgraph.io](https://wiki.dgraph.io).**
-- Note that we use the Github Issue Tracker for bug reports only.
 - For feature requests or questions, visit [https://discuss.dgraph.io](https://discuss.dgraph.io).
 - Check out [the demo at dgraph.io](http://dgraph.io).
 
@@ -33,5 +32,5 @@ Dgraph supports [GraphQL-like query syntax^](http://graphql.org/), and responds 
 
 ## Contact
 - Please use [discuss.dgraph.io](https://discuss.dgraph.io) for documentation, questions, feature requests and discussions.
-- Please use [Github issue tracker](https://github.com/dgraph-io/dgraph/issues) **ONLY to file bugs.** Any feature request should go to discuss.
+- Please use [Github issue tracker](https://github.com/dgraph-io/dgraph/issues) for filing bugs or feature requests.
 - Or, just join [![Slack Status](http://slack.dgraph.io/badge.svg)](http://slack.dgraph.io).
