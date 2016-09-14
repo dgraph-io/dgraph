@@ -88,12 +88,7 @@ func (s *Store) Get(key []byte) ([]byte, error) {
 	if valSlice == nil {
 		return nil, nil
 	}
-
-	val := valSlice.Data()
-	if val == nil {
-		return nil, nil
-	}
-	return val, nil
+	return valSlice.Data(), nil
 }
 
 func (s *Store) SetOne(k []byte, val []byte) error {
