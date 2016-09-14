@@ -82,16 +82,16 @@ func NewReadOnlyStore(filepath string) (*Store, error) {
 func (s *Store) Get(key []byte) ([]byte, error) {
 	valSlice, err := s.db.Get(s.ropt, key)
 	if err != nil {
-		return nil, x.Wrap(err)
+		return []byte(""), x.Wrap(err)
 	}
 
 	if valSlice == nil {
-		return nil, nil
+		return []byte(""), x.Errorf("E_KEY_NOT_FOUND")
 	}
 
 	val := valSlice.Data()
 	if val == nil {
-		return nil, nil
+		return []byte(""), x.Errorf("E_KEY_NOT_FOUND")
 	}
 	return val, nil
 }

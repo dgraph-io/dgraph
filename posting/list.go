@@ -233,7 +233,7 @@ func (l *List) getPostingList() *types.PostingList {
 	if buf == nil || len(buf.d) == 0 {
 		nbuf := new(buffer)
 		var err error
-		if nbuf.d, err = l.pstore.Get(l.key); err != nil || nbuf.d == nil {
+		if nbuf.d, err = l.pstore.Get(l.key); err != nil {
 			// Error. Just set to empty.
 			nbuf.d = make([]byte, len(empty))
 			copy(nbuf.d, empty)
