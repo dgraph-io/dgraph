@@ -24,8 +24,6 @@ go build .
 
 pushd $BUILD/benchmarks/throughputtest &> /dev/null
 go build . && ./throughputtest --numsec 30 --ip "http://127.0.0.1:8080/query"  --numuser 1000
-popd &> /dev/null
 # shutdown Dgraph server.
 curl 127.0.0.1:8080/query -XPOST -d 'SHUTDOWN'
-
-popd &>/dev/null
+echo "done running throughput test"

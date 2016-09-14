@@ -4,11 +4,9 @@ go:
 dist: trusty
 sudo: required
 notifications:
-  email:
-    recipients:
-    - minions@dgraph.io
+  slack:
+    secure: uezT1E7kSVRDC2El9g5syXb1I4JrUUJHW4PXAf0IhXDFqS1ewkrNMurbkltrsJp0OtH7r2rzewuZsxjZ8pz0D+9YPorQzCPUgSqH
 addons:
-  # Uploading Dgraph binary, CPU and memory profiles.
   artifacts:
     paths:
     - cmd/dgraph
