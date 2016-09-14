@@ -92,7 +92,7 @@ func exitWithProfiles() {
 		pprof.WriteHeapProfile(f)
 		f.Close()
 	}
-
+	// To exit the server after the response is returned.
 	go func() {
 		time.Sleep(1 * time.Second)
 		os.Exit(0)
