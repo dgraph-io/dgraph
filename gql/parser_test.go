@@ -280,6 +280,40 @@ func TestParse_pass1(t *testing.T) {
 	}
 }
 
+func TestParse_alias(t *testing.T) {
+	query := `
+		{
+			me(_uid_:0x0a) {
+				name,
+				bestFriend: friends(first: 10) { 
+					name	
+				}
+			}
+		}
+	`
+	gq, _, err := Parse(query)
+	if err != nil {
+		t.Error(err)
+	}
+	if len(gq.Children) != 2 {
+		t.Errorf("Expected 2. Got: %v", len(gq.Children))
+	}
+	if err := checkAttr(gq.Children[0], "name"); err != nil {
+		t.Error(err)
+	}
+	if err := checkAttr(gq.Children[1], "friends"); err != nil {
+		t.Error(err)
+	}
+	if gq.Children[1].Alias != "bestFriend" {
+		t.Error("Alias incorrect")
+	}
+
+	f := gq.Children[1]
+	if len(f.Children) != 1 {
+		t.Errorf("Expected 1. Got: %v", len(gq.Children))
+	}
+}
+
 func TestParse_block(t *testing.T) {
 	query := `
 		{
