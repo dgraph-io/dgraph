@@ -17,6 +17,8 @@ typedef struct rdb_iterator_t rdb_iterator_t;
 typedef struct rdb_filterpolicy_t rdb_filterpolicy_t;
 typedef struct rdb_cache_t rdb_cache_t;
 typedef struct rdb_block_based_table_options_t rdb_block_based_table_options_t;
+typedef struct rdb_snapshot_t rdb_snapshot_t;
+typedef struct rdb_checkpoint_t rdb_checkpoint_t;
 
 //////////////////////////// rdb_t
 rdb_t* rdb_open(
@@ -52,8 +54,7 @@ char* rdb_property_value(
 
 //////////////////////////// rdb_writebatch_t
 rdb_writebatch_t* rdb_writebatch_create();
-rdb_writebatch_t* rdb_writebatch_create_from(const char* rep,
-                                                     size_t size);
+rdb_writebatch_t* rdb_writebatch_create_from(const char* rep, size_t size);
 void rdb_writebatch_destroy(rdb_writebatch_t* b);
 void rdb_writebatch_clear(rdb_writebatch_t* b);
 int rdb_writebatch_count(rdb_writebatch_t* b);
@@ -151,6 +152,21 @@ void rdb_block_based_options_set_block_cache_compressed(
     rdb_cache_t* block_cache_compressed);
 void rdb_block_based_options_set_whole_key_filtering(
     rdb_block_based_table_options_t* options, unsigned char v);
+
+//////////////////////////// rdb_snapshot_t
+const rdb_snapshot_t* rdb_create_snapshot(
+    rdb_t* db);
+void rdb_release_snapshot(
+    rdb_t* db,
+    const rdb_snapshot_t* snapshot);
+
+//////////////////////////// rdb_checkpoint_t
+rdb_checkpoint_t* rdb_create_checkpoint(rdb_t* db, char** errptr);
+void rdb_open_checkpoint(
+	rdb_checkpoint_t* checkpoint,
+  const char* checkpoint_dir,
+  char** errptr);
+void rdb_destroy_checkpoint(rdb_checkpoint_t* checkpoint);
 
 #ifdef __cplusplus
 }  /* end extern "C" */
