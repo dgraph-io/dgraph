@@ -653,7 +653,7 @@ func TestToPB(t *testing.T) {
 				}
 			}
 		}
-`
+  `
 
 	gq, _, err := gql.Parse(query)
 	if err != nil {
@@ -750,6 +750,7 @@ func benchmarkToJson(file string, b *testing.B) {
 	if err != nil {
 		b.Error(err)
 	}
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		if _, err := sg.ToJSON(&l); err != nil {
@@ -826,7 +827,7 @@ func benchmarkToPBMarshal(file string, b *testing.B) {
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if _, err := proto.Marshal(p); err != nil {
+		if _, err = proto.Marshal(p); err != nil {
 			b.Fatal(err)
 		}
 	}
