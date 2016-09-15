@@ -111,7 +111,7 @@ func (s *state) printCounters(ticker *time.Ticker) {
 // size of bufio.Scanner.
 func readLine(r *bufio.Reader) (string, error) {
 	isPrefix := true
-	var err error = nil
+	var err error
 	var buff bytes.Buffer
 	for isPrefix && err == nil {
 		var line []byte
