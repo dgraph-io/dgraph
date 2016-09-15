@@ -43,8 +43,11 @@ func TestGet(t *testing.T) {
 		t.Fail()
 	}
 
-	if val, err := s.Get(k); err != nil {
-		t.Error(err)
+	if val, err := s.Get(k); val == nil {
+		t.Error("No value")
+		if err != nil {
+			t.Error(err)
+		}
 		t.Fail()
 	} else if string(val) != "neo" {
 		t.Errorf("Expected 'neo'. Found: %s", string(val))
@@ -55,8 +58,11 @@ func TestGet(t *testing.T) {
 		t.Fail()
 	}
 
-	if val, err := s.Get(k); err != nil {
-		t.Error(err)
+	if val, err := s.Get(k); val == nil {
+		t.Error("No value")
+		if err != nil {
+			t.Error(err)
+		}
 		t.Fail()
 	} else if string(val) != "the one" {
 		t.Errorf("Expected 'the one'. Found: %s", string(val))
@@ -94,6 +100,9 @@ func benchmarkGet(valSize int, b *testing.B) {
 		k := rand.Int() % nkeys
 		key := []byte(fmt.Sprintf("key_%d", k))
 		val, err := s.Get(key)
+		if val == nil {
+			b.Error("Missing value")
+		}
 		if err != nil {
 			b.Error(err)
 		}
@@ -101,6 +110,7 @@ func benchmarkGet(valSize int, b *testing.B) {
 			b.Errorf("Value size expected: %d. Found: %d", valSize, len(val))
 		}
 	}
+	b.StopTimer()
 }
 
 func BenchmarkGet_valsize1024(b *testing.B)  { benchmarkGet(1024, b) }
@@ -133,6 +143,7 @@ func benchmarkSet(valSize int, b *testing.B) {
 			return
 		}
 	}
+	b.StopTimer()
 }
 
 func BenchmarkSet_valsize1024(b *testing.B)  { benchmarkSet(1024, b) }
