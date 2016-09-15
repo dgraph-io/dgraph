@@ -55,6 +55,7 @@ const (
 	itemVarName                                 // dollar followed by a name
 	itemVarType                                 // type a variable
 	itemVarDefault                              // default value of a variable
+	itemAlias                                   // Alias for a field
 )
 
 // lexText lexes the input string and calls other lex functions.
@@ -128,10 +129,27 @@ func lexInside(l *lex.Lexer) lex.StateFn {
 		case r == leftRound:
 			l.Emit(itemLeftRound)
 			return lexArgInside
+		case r == ':':
+			return lexAlias
 		default:
 			return l.Errorf("Unrecognized character in lexInside: %#U", r)
 		}
 	}
+}
+
+func lexAlias(l *lex.Lexer) lex.StateFn {
+	l.AcceptRun(isSpace)
+	l.Ignore() // Any spaces encountered.
+	for {
+		r := l.Next()
+		if isNameSuffix(r) {
+			continue
+		}
+		l.Backup()
+		l.Emit(itemAlias)
+		break
+	}
+	return lexInside
 }
 
 func lexFragmentSpread(l *lex.Lexer) lex.StateFn {

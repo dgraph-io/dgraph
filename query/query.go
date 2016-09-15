@@ -116,6 +116,7 @@ func (l *Latency) ToMap() map[string]string {
 // client convenient formats, like GraphQL / JSON.
 type SubGraph struct {
 	Attr     string
+	Alias    string
 	AttrType gql.Type
 	Count    int
 	Offset   int
@@ -199,7 +200,11 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 		m := make(map[string]interface{})
 		m["_count_"] = co
 		mp := make(map[string]interface{})
-		mp[sg.Attr] = m
+		if sg.Alias != "" {
+			mp[sg.Alias] = m
+		} else {
+			mp[sg.Attr] = m
+		}
 		result[q.Uids(i)] = mp
 	}
 
@@ -223,11 +228,19 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 		}
 		if len(l) == 1 {
 			m := make(map[string]interface{})
-			m[sg.Attr] = l[0]
+			if sg.Alias != "" {
+				m[sg.Alias] = l[0]
+			} else {
+				m[sg.Attr] = l[0]
+			}
 			result[q.Uids(i)] = m
 		} else if len(l) > 1 {
 			m := make(map[string]interface{})
-			m[sg.Attr] = l
+			if sg.Alias != "" {
+				m[sg.Alias] = l
+			} else {
+				m[sg.Attr] = l
+			}
 			result[q.Uids(i)] = m
 		}
 	}
@@ -255,7 +268,11 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 		}
 		if sg.AttrType == nil {
 			// No type defined for attr in type system/schema, hence return string value
-			m[sg.Attr] = string(val)
+			if sg.Alias != "" {
+				m[sg.Alias] = string(val)
+			} else {
+				m[sg.Attr] = string(val)
+			}
 		} else {
 			// type assertion for scalar type values
 			if !sg.AttrType.IsScalar() {
@@ -267,7 +284,11 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 			if err != nil {
 				return result, err
 			}
-			m[sg.Attr] = lval
+			if sg.Alias != "" {
+				m[sg.Alias] = lval
+			} else {
+				m[sg.Attr] = lval
+			}
 		}
 		result[q.Uids(i)] = m
 	}
@@ -474,6 +495,7 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 			isDebug:  sg.isDebug,
 			Attr:     gchild.Attr,
 			AttrType: gql.SchemaType(gchild.Attr),
+			Alias:    gchild.Alias,
 		}
 		if v, ok := gchild.Args["offset"]; ok {
 			offset, err := strconv.ParseInt(v, 0, 32)

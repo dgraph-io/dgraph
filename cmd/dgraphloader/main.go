@@ -20,6 +20,8 @@ import (
 	"compress/gzip"
 	"flag"
 	"log"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"runtime"
 	"runtime/pprof"
@@ -34,20 +36,23 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-var glog = x.Log("loader_main")
+var (
+	glog = x.Log("loader_main")
 
-var rdfGzips = flag.String("rdfgzips", "",
-	"Comma separated gzip files containing RDF data")
-var instanceIdx = flag.Uint64("instanceIdx", 0,
-	"Only pick entities, where Fingerprint % numInstance == instanceIdx.")
-var numInstances = flag.Uint64("numInstances", 1,
-	"Total number of instances among which uid assigning is shared")
-var postingDir = flag.String("postings", "", "Directory to store posting lists")
-var uidDir = flag.String("uids", "", "Directory to read UID posting lists")
-var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
-var memprofile = flag.String("memprofile", "", "write memory profile to file")
-var numcpu = flag.Int("numCpu", runtime.NumCPU(),
-	"Number of cores to be used by the process")
+	rdfGzips = flag.String("rdfgzips", "",
+		"Comma separated gzip files containing RDF data")
+	instanceIdx = flag.Uint64("instanceIdx", 0,
+		"Only pick entities, where Fingerprint % numInstance == instanceIdx.")
+	numInstances = flag.Uint64("numInstances", 1,
+		"Total number of instances among which uid assigning is shared")
+	postingDir = flag.String("postings", "", "Directory to store posting lists")
+	uidDir     = flag.String("uids", "", "Directory to read UID posting lists")
+	cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
+	memprofile = flag.String("memprofile", "", "write memory profile to file")
+	numcpu     = flag.Int("numCpu", runtime.NumCPU(),
+		"Number of cores to be used by the process")
+	prof = flag.String("profile", "", "Address at which profile is displayed")
+)
 
 func main() {
 	x.Init()
@@ -60,7 +65,12 @@ func main() {
 		pprof.StartCPUProfile(f)
 		defer pprof.StopCPUProfile()
 	}
-
+	if *prof != "" {
+		runtime.SetBlockProfileRate(1)
+		go func() {
+			log.Println(http.ListenAndServe(*prof, nil))
+		}()
+	}
 	logrus.SetLevel(logrus.InfoLevel)
 	numCpus := *numcpu
 	prevProcs := runtime.GOMAXPROCS(numCpus)
@@ -112,6 +122,7 @@ func main() {
 			glog.WithError(err).Fatal("Unable to create gzip reader.")
 		}
 
+		// Load NQuads and write them to internal storage.
 		count, err := loader.LoadEdges(r, *instanceIdx, *numInstances)
 		if err != nil {
 			glog.WithError(err).Fatal("While handling rdf reader.")

@@ -26,6 +26,7 @@ import (
 	"math/rand"
 	"net"
 	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"runtime"
 	"runtime/pprof"
@@ -91,8 +92,11 @@ func exitWithProfiles() {
 		pprof.WriteHeapProfile(f)
 		f.Close()
 	}
-
-	os.Exit(0)
+	// To exit the server after the response is returned.
+	go func() {
+		time.Sleep(1 * time.Second)
+		os.Exit(0)
+	}()
 }
 
 func addCorsHeaders(w http.ResponseWriter) {
@@ -287,9 +291,7 @@ func validateTypes(nquads []rdf.NQuad) error {
 	return nil
 }
 
-type httpServer struct{}
-
-func (s *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func queryHandler(w http.ResponseWriter, r *http.Request) {
 	addCorsHeaders(w)
 	if r.Method == "OPTIONS" {
 		return
@@ -320,6 +322,7 @@ func (s *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	if *shutdown && string(q) == "SHUTDOWN" {
 		exitWithProfiles()
+		x.SetStatus(w, x.ErrorOk, "Server has been shutdown")
 		return
 	}
 
@@ -510,16 +513,13 @@ func serveGRPC(l net.Listener) {
 	s := grpc.NewServer(grpc.CustomCodec(&query.Codec{}))
 	graph.RegisterDgraphServer(s, &grpcServer{})
 	if err := s.Serve(l); err != nil {
-		log.Fatalf("While serving gRpc requests: %v", err)
+		log.Fatalf("While serving gRpc request: %v", err)
 	}
 }
 
 func serveHTTP(l net.Listener) {
-	s := &http.Server{
-		Handler: &httpServer{},
-	}
-	if err := s.Serve(l); err != nil {
-		log.Fatalf("Serve: %v", err)
+	if err := http.Serve(l, nil); err != nil {
+		log.Fatalf("While serving http request: %v", err)
 	}
 }
 
@@ -535,6 +535,7 @@ func setupServer() {
 		cmux.HTTP2MatchHeaderFieldSendSettings("content-type", "application/grpc"))
 	http2 := tcpm.Match(cmux.HTTP2())
 
+	http.HandleFunc("/query", queryHandler)
 	// Initilize the servers.
 	go serveGRPC(grpcl)
 	go serveHTTP(httpl)
