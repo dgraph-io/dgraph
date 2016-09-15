@@ -489,12 +489,10 @@ func TestToJson(t *testing.T) {
 	query := `
 		{
 			me(_uid_:0x01) {
-				_uid_
 				name
 				gender
 				status
 				friend {
-					_uid_
 					name
 				}
 			}
@@ -827,9 +825,9 @@ func benchmarkToPBMarshal(file string, b *testing.B) {
 		b.Fatal(err)
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-		}
-		if _, err := proto.Marshal(p); err != nil {
-			b.Fatal(err)
+			if _, err := proto.Marshal(p); err != nil {
+				b.Fatal(err)
+			}
 		}
 	}
 }
@@ -846,7 +844,6 @@ func BenchmarkToPBMarshal_100_Actor(b *testing.B) {
 func BenchmarkToPBMarshal_100_Director(b *testing.B) {
 	benchmarkToPBMarshal("benchmark/directors100.bin", b)
 }
-
 func BenchmarkToPBMarshal_1000_Actor(b *testing.B) {
 	benchmarkToPBMarshal("benchmark/actors1000.bin", b)
 }
