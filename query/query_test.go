@@ -823,11 +823,11 @@ func benchmarkToPBMarshal(file string, b *testing.B) {
 	p, err := sg.ToProtocolBuffer(&l)
 	if err != nil {
 		b.Fatal(err)
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			if _, err := proto.Marshal(p); err != nil {
-				b.Fatal(err)
-			}
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if _, err := proto.Marshal(p); err != nil {
+			b.Fatal(err)
 		}
 	}
 }
