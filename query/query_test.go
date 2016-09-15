@@ -21,7 +21,6 @@ import (
 	"context"
 	"encoding/gob"
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"os"
 	"strings"
@@ -680,12 +679,6 @@ func TestToPB(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	fmt.Println(gr)
-	if buf, err := proto.Marshal(gr); err != nil {
-		t.Fatal(err)
-	} else {
-		fmt.Println(len(buf))
-	}
 
 	if gr.Attribute != "debug" {
 		t.Errorf("Expected attribute me, Got: %v", gr.Attribute)
@@ -760,8 +753,6 @@ func benchmarkToJson(file string, b *testing.B) {
 		b.Error(err)
 	}
 	b.ResetTimer()
-	js, _ := sg.ToJSON(&l)
-	fmt.Println(len(js))
 	for i := 0; i < b.N; i++ {
 		if _, err := sg.ToJSON(&l); err != nil {
 			b.Fatal(err)
@@ -775,7 +766,6 @@ func BenchmarkToJSON_100_Actor(b *testing.B)     { benchmarkToJson("benchmark/ac
 func BenchmarkToJSON_100_Director(b *testing.B)  { benchmarkToJson("benchmark/directors100.bin", b) }
 func BenchmarkToJSON_1000_Actor(b *testing.B)    { benchmarkToJson("benchmark/actors1000.bin", b) }
 func BenchmarkToJSON_1000_Director(b *testing.B) { benchmarkToJson("benchmark/directors1000.bin", b) }
-func BenchmarkToJSON_Complex(b *testing.B)       { benchmarkToJson("benchmark/complex.bin", b) }
 
 func benchmarkToPB(file string, b *testing.B) {
 	b.ReportAllocs()
@@ -793,11 +783,6 @@ func benchmarkToPB(file string, b *testing.B) {
 	if err != nil {
 		b.Error(err)
 	}
-	pb, err := sg.ToProtocolBuffer(&l)
-	if err != nil {
-		b.Fatal(err)
-	}
-	fmt.Println(pb.Size())
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -820,7 +805,6 @@ func BenchmarkToPB_100_Actor(b *testing.B)     { benchmarkToPB("benchmark/actors
 func BenchmarkToPB_100_Director(b *testing.B)  { benchmarkToPB("benchmark/directors100.bin", b) }
 func BenchmarkToPB_1000_Actor(b *testing.B)    { benchmarkToPB("benchmark/actors1000.bin", b) }
 func BenchmarkToPB_1000_Director(b *testing.B) { benchmarkToPB("benchmark/directors1000.bin", b) }
-func BenchmarkToPB_Complex(b *testing.B)       { benchmarkToPB("benchmark/complex.bin", b) }
 
 func benchmarkToPBMarshal(file string, b *testing.B) {
 	b.ReportAllocs()
@@ -838,13 +822,11 @@ func benchmarkToPBMarshal(file string, b *testing.B) {
 	if err != nil {
 		b.Error(err)
 	}
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		p, err := sg.ToProtocolBuffer(&l)
-		fmt.Println(p.Size())
-		if err != nil {
-			b.Fatal(err)
+	p, err := sg.ToProtocolBuffer(&l)
+	if err != nil {
+		b.Fatal(err)
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
 		}
 		if _, err := proto.Marshal(p); err != nil {
 			b.Fatal(err)
@@ -865,12 +847,12 @@ func BenchmarkToPBMarshal_100_Director(b *testing.B) {
 	benchmarkToPBMarshal("benchmark/directors100.bin", b)
 }
 
-// func BenchmarkToPBMarshal_1000_Actor(b *testing.B) {
-// 	benchmarkToPBMarshal("benchmark/actors1000.bin", b)
-// }
-// func BenchmarkToPBMarshal_1000_Director(b *testing.B) {
-// 	benchmarkToPBMarshal("benchmark/directors1000.bin", b)
-// }
+func BenchmarkToPBMarshal_1000_Actor(b *testing.B) {
+	benchmarkToPBMarshal("benchmark/actors1000.bin", b)
+}
+func BenchmarkToPBMarshal_1000_Director(b *testing.B) {
+	benchmarkToPBMarshal("benchmark/directors1000.bin", b)
+}
 
 func benchmarkToPBUnmarshal(file string, b *testing.B) {
 	b.ReportAllocs()
@@ -909,21 +891,21 @@ func benchmarkToPBUnmarshal(file string, b *testing.B) {
 	}
 }
 
-// func BenchmarkToPBUnmarshal_10_Actor(b *testing.B) {
-// 	benchmarkToPBUnmarshal("benchmark/actors10.bin", b)
-// }
-// func BenchmarkToPBUnmarshal_10_Director(b *testing.B) {
-// 	benchmarkToPBUnmarshal("benchmark/directors10.bin", b)
-// }
-// func BenchmarkToPBUnmarshal_100_Actor(b *testing.B) {
-// 	benchmarkToPBUnmarshal("benchmark/actors100.bin", b)
-// }
-// func BenchmarkToPBUnmarshal_100_Director(b *testing.B) {
-// 	benchmarkToPBUnmarshal("benchmark/directors100.bin", b)
-// }
-// func BenchmarkToPBUnmarshal_1000_Actor(b *testing.B) {
-// 	benchmarkToPBUnmarshal("benchmark/actors1000.bin", b)
-// }
-// func BenchmarkToPBUnmarshal_1000_Director(b *testing.B) {
-// 	benchmarkToPBUnmarshal("benchmark/directors1000.bin", b)
-// }
+func BenchmarkToPBUnmarshal_10_Actor(b *testing.B) {
+	benchmarkToPBUnmarshal("benchmark/actors10.bin", b)
+}
+func BenchmarkToPBUnmarshal_10_Director(b *testing.B) {
+	benchmarkToPBUnmarshal("benchmark/directors10.bin", b)
+}
+func BenchmarkToPBUnmarshal_100_Actor(b *testing.B) {
+	benchmarkToPBUnmarshal("benchmark/actors100.bin", b)
+}
+func BenchmarkToPBUnmarshal_100_Director(b *testing.B) {
+	benchmarkToPBUnmarshal("benchmark/directors100.bin", b)
+}
+func BenchmarkToPBUnmarshal_1000_Actor(b *testing.B) {
+	benchmarkToPBUnmarshal("benchmark/actors1000.bin", b)
+}
+func BenchmarkToPBUnmarshal_1000_Director(b *testing.B) {
+	benchmarkToPBUnmarshal("benchmark/directors1000.bin", b)
+}
