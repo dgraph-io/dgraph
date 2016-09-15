@@ -15,7 +15,7 @@ type Checkpoint struct {
 	cDb *C.rdb_t
 }
 
-// Release removes the snapshot from the database's list of snapshots.
+// Destroy removes the snapshot from the database's list of snapshots.
 func (s *Checkpoint) Destroy() {
 	C.rdb_destroy_checkpoint(s.c)
 	s.c, s.cDb = nil, nil
@@ -35,8 +35,8 @@ func (db *DB) NewCheckpoint() (*Checkpoint, error) {
 	}, nil
 }
 
-// OpenCheckpoint builds openable snapshot of RocksDB on disk.
-func (s *Checkpoint) OpenCheckpoint(checkpointDir string) error {
+// Open builds openable snapshot of RocksDB on disk.
+func (s *Checkpoint) Open(checkpointDir string) error {
 	var (
 		cErr *C.char
 		cDir = C.CString(checkpointDir)
