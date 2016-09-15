@@ -70,7 +70,7 @@ func Assertf(b bool, format string, args ...interface{}) {
 
 // Wrap wraps errors from external lib.
 func Wrap(err error) error {
-	if !*stackTrace {
+	if !*debugMode {
 		return err
 	}
 	return errors.Wrap(err, "")
@@ -78,7 +78,7 @@ func Wrap(err error) error {
 
 // Wrapf is Wrap with extra info.
 func Wrapf(err error, format string, args ...interface{}) error {
-	if !*stackTrace {
+	if !*debugMode {
 		return fmt.Errorf(format+" error: %+v", append(args, err)...)
 	}
 	return errors.Wrapf(err, format, args...)
@@ -86,7 +86,7 @@ func Wrapf(err error, format string, args ...interface{}) error {
 
 // Errorf creates a new error with stack trace, etc.
 func Errorf(format string, args ...interface{}) error {
-	if !*stackTrace {
+	if !*debugMode {
 		return fmt.Errorf(format, args...)
 	}
 	return errors.Errorf(format, args...)

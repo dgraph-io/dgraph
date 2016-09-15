@@ -19,6 +19,7 @@ package x
 import (
 	"context"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"net/http"
 	"time"
@@ -42,6 +43,11 @@ const (
 	ErrorUptodate        = "ErrorUptodate"
 	ErrorNoPermission    = "ErrorNoPermission"
 	ErrorInvalidMutation = "ErrorInvalidMutation"
+)
+
+var (
+	debugMode = flag.Bool("debugmode", false,
+		"enable debug mode for more debug information")
 )
 
 type Status struct {
