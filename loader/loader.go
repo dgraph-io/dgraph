@@ -18,6 +18,7 @@ package loader
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"flag"
 	"io"
@@ -105,27 +106,51 @@ func (s *state) printCounters(ticker *time.Ticker) {
 	}
 }
 
+// Reads a single line from a buffered reader. This is the preferred
+// method for loading long lines which could be longer than the buffer
+// size of bufio.Scanner.
+func readLine(r *bufio.Reader) (string, error) {
+	isPrefix := true
+	var err error = nil
+	var buff bytes.Buffer
+	for isPrefix && err == nil {
+		var line []byte
+		line, isPrefix, err = r.ReadLine()
+		if err == nil {
+			buff.Write(line)
+		}
+	}
+	return buff.String(), err
+}
+
 // readLines reads the file and pushes them onto a channel.
 // Run this in a single goroutine. This function closes s.input channel.
 func (s *state) readLines(r io.Reader) {
 	var buf []string
-	scanner := bufio.NewScanner(r)
+	var err error
+	var str string
+	bufReader := bufio.NewReader(r)
 	// Randomize lines to avoid contention on same subject.
 	for i := 0; i < 1000; i++ {
-		if scanner.Scan() {
-			buf = append(buf, scanner.Text())
+		str, err = readLine(bufReader)
+		if err == nil {
+			buf = append(buf, str)
+			atomic.AddUint64(&s.ctr.read, 1)
 		} else {
 			break
 		}
 	}
 	ln := len(buf)
-	for scanner.Scan() {
+	for err == nil {
 		k := rand.Intn(ln)
 		s.input <- buf[k]
-		buf[k] = scanner.Text()
-		atomic.AddUint64(&s.ctr.read, 1)
+		str, err = readLine(bufReader)
+		if err == nil {
+			buf[k] = str
+			atomic.AddUint64(&s.ctr.read, 1)
+		}
 	}
-	if err := scanner.Err(); err != nil {
+	if err != nil && err != io.EOF {
 		glog.WithError(err).Fatal("While reading file.")
 	}
 	for i := 0; i < len(buf); i++ {
