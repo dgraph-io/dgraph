@@ -38,7 +38,7 @@ message Property {
 }
 
 message Node {
-    string uid = 1;
+    uint64 uid = 1;
     string xid = 2;
     string attribute = 3;
     repeated Property properties = 4;

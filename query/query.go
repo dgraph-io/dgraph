@@ -387,7 +387,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 				uc := nodePool.Get().(*graph.Node)
 				uc.Attribute = pc.Attr
 				if sg.GetUid || sg.isDebug {
-					uc.Uid = fmt.Sprintf("%#x", uid)
+					uc.Uid = uid
 				}
 				if rerr := pc.preTraverse(uid, uc); rerr != nil {
 					log.Printf("Error while traversal: %v", rerr)
@@ -446,7 +446,7 @@ func (sg *SubGraph) ToProtocolBuffer(l *Latency) (*graph.Node, error) {
 	var ul task.UidList
 	r.Uidmatrix(&ul, 0)
 	if sg.GetUid || sg.isDebug {
-		n.Uid = fmt.Sprintf("%#x", ul.Uids(0))
+		n.Uid = ul.Uids(0)
 	}
 
 	if rerr := sg.preTraverse(ul.Uids(0), n); rerr != nil {
