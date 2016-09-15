@@ -386,7 +386,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 				uid := ul.Uids(i)
 				uc := nodePool.Get().(*graph.Node)
 				uc.Attribute = pc.Attr
-				uc.Uid = uid
+				uc.Uid = fmt.Sprintf("%#x", uid)
 				if rerr := pc.preTraverse(uid, uc); rerr != nil {
 					log.Printf("Error while traversal: %v", rerr)
 					return rerr
@@ -415,6 +415,9 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 
 			if pc.Attr == "_xid_" {
 				dst.Xid = string(v)
+				// We don't want to add _uid_ to properties map.
+			} else if pc.Attr == "_uid_" {
+				continue
 			} else {
 				p := &graph.Property{Prop: pc.Attr, Val: v}
 				properties = append(properties, p)
@@ -440,9 +443,9 @@ func (sg *SubGraph) ToProtocolBuffer(l *Latency) (*graph.Node, error) {
 
 	var ul task.UidList
 	r.Uidmatrix(&ul, 0)
-	n.Uid = ul.Uids(0)
+	n.Uid = fmt.Sprintf("%#x", ul.Uids(0))
 
-	if rerr := sg.preTraverse(n.Uid, n); rerr != nil {
+	if rerr := sg.preTraverse(ul.Uids(0), n); rerr != nil {
 		return n, rerr
 	}
 

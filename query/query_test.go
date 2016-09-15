@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/gob"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"strings"
@@ -29,7 +30,6 @@ import (
 
 	"github.com/gogo/protobuf/proto"
 
-	"github.com/dgraph-io/dgraph/commit"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/query/graph"
@@ -141,14 +141,10 @@ func populateGraph(t *testing.T) (string, *store.Store) {
 	}
 
 	worker.SetWorkerState(worker.NewState(ps, nil, 0, 1))
-
-	clog := commit.NewLogger(dir, "mutations", 50<<20)
-	clog.Init()
-
 	posting.Init()
 
 	// So, user we're interested in has uid: 1.
-	// She has 4 friends: 23, 24, 25, 31, and 101
+	// She has 5 friends: 23, 24, 25, 31, and 101
 	edge := x.DirectedEdge{
 		ValueId:   23,
 		Source:    "testing",
@@ -494,10 +490,12 @@ func TestToJson(t *testing.T) {
 	query := `
 		{
 			me(_uid_:0x01) {
+				_uid_
 				name
 				gender
 				status
 				friend {
+					_uid_
 					name
 				}
 			}
@@ -646,7 +644,7 @@ func TestToPB(t *testing.T) {
 
 	query := `
 		{
-			me(_uid_:0x01) {
+			me(_uid_:0x1) {
 				_xid_
 				name
 				gender
@@ -658,7 +656,7 @@ func TestToPB(t *testing.T) {
 				}
 			}
 		}
-	`
+`
 
 	gq, _, err := gql.Parse(query)
 	if err != nil {
@@ -682,11 +680,17 @@ func TestToPB(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
+	fmt.Println(gr)
+	if buf, err := proto.Marshal(gr); err != nil {
+		t.Fatal(err)
+	} else {
+		fmt.Println(len(buf))
+	}
 
 	if gr.Attribute != "me" {
 		t.Errorf("Expected attribute me, Got: %v", gr.Attribute)
 	}
-	if gr.Uid != 1 {
+	if gr.Uid != "0x1" {
 		t.Errorf("Expected uid 1, Got: %v", gr.Uid)
 	}
 	if gr.Xid != "mich" {
@@ -705,7 +709,8 @@ func TestToPB(t *testing.T) {
 	}
 
 	child := gr.Children[0]
-	if child.Uid != 23 {
+	fmt.Println(child.Uid)
+	if child.Uid != "0x17" {
 		t.Errorf("Expected uid 23, Got: %v", gr.Uid)
 	}
 	if child.Attribute != "friend" {
@@ -724,7 +729,7 @@ func TestToPB(t *testing.T) {
 	}
 
 	child = gr.Children[5]
-	if child.Uid != 23 {
+	if child.Uid != "0x17" {
 		t.Errorf("Expected uid 23, Got: %v", gr.Uid)
 	}
 	if child.Attribute != "friend" {
@@ -755,8 +760,9 @@ func benchmarkToJson(file string, b *testing.B) {
 	if err != nil {
 		b.Error(err)
 	}
-
 	b.ResetTimer()
+	js, _ := sg.ToJSON(&l)
+	fmt.Println(string(js))
 	for i := 0; i < b.N; i++ {
 		if _, err := sg.ToJSON(&l); err != nil {
 			b.Fatal(err)
@@ -764,12 +770,13 @@ func benchmarkToJson(file string, b *testing.B) {
 	}
 }
 
-func BenchmarkToJSON_10_Actor(b *testing.B)      { benchmarkToJson("benchmark/actors10.bin", b) }
+func BenchmarkToJSON_10_Actor(b *testing.B)      { benchmarkToJson("benchmark/actor10.bin", b) }
 func BenchmarkToJSON_10_Director(b *testing.B)   { benchmarkToJson("benchmark/directors10.bin", b) }
 func BenchmarkToJSON_100_Actor(b *testing.B)     { benchmarkToJson("benchmark/actors100.bin", b) }
 func BenchmarkToJSON_100_Director(b *testing.B)  { benchmarkToJson("benchmark/directors100.bin", b) }
 func BenchmarkToJSON_1000_Actor(b *testing.B)    { benchmarkToJson("benchmark/actors1000.bin", b) }
 func BenchmarkToJSON_1000_Director(b *testing.B) { benchmarkToJson("benchmark/directors1000.bin", b) }
+func BenchmarkToJSON_Complex(b *testing.B)       { benchmarkToJson("benchmark/complex.bin", b) }
 
 func benchmarkToPB(file string, b *testing.B) {
 	b.ReportAllocs()
@@ -827,19 +834,20 @@ func benchmarkToPBMarshal(file string, b *testing.B) {
 		b.Error(err)
 	}
 	p, err := sg.ToProtocolBuffer(&l)
+	fmt.Println(p)
 	if err != nil {
 		b.Fatal(err)
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if _, err = proto.Marshal(p); err != nil {
+		if _, err := proto.Marshal(p); err != nil {
 			b.Fatal(err)
 		}
 	}
 }
 
 func BenchmarkToPBMarshal_10_Actor(b *testing.B) {
-	benchmarkToPBMarshal("benchmark/actors10.bin", b)
+	benchmarkToPBMarshal("benchmark/actor10.bin", b)
 }
 func BenchmarkToPBMarshal_10_Director(b *testing.B) {
 	benchmarkToPBMarshal("benchmark/directors10.bin", b)
@@ -856,6 +864,7 @@ func BenchmarkToPBMarshal_1000_Actor(b *testing.B) {
 func BenchmarkToPBMarshal_1000_Director(b *testing.B) {
 	benchmarkToPBMarshal("benchmark/directors1000.bin", b)
 }
+func BenchmarkToPB_Complex(b *testing.B) { benchmarkToPBMarshal("benchmark/complex.bin", b) }
 
 func benchmarkToPBUnmarshal(file string, b *testing.B) {
 	b.ReportAllocs()
