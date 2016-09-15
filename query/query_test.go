@@ -644,7 +644,7 @@ func TestToPB(t *testing.T) {
 
 	query := `
 		{
-			me(_uid_:0x1) {
+			debug(_uid_:0x1) {
 				_xid_
 				name
 				gender
@@ -687,7 +687,7 @@ func TestToPB(t *testing.T) {
 		fmt.Println(len(buf))
 	}
 
-	if gr.Attribute != "me" {
+	if gr.Attribute != "debug" {
 		t.Errorf("Expected attribute me, Got: %v", gr.Attribute)
 	}
 	if gr.Uid != "0x1" {
@@ -762,7 +762,7 @@ func benchmarkToJson(file string, b *testing.B) {
 	}
 	b.ResetTimer()
 	js, _ := sg.ToJSON(&l)
-	fmt.Println(string(js))
+	fmt.Println(len(js))
 	for i := 0; i < b.N; i++ {
 		if _, err := sg.ToJSON(&l); err != nil {
 			b.Fatal(err)
@@ -770,13 +770,12 @@ func benchmarkToJson(file string, b *testing.B) {
 	}
 }
 
-func BenchmarkToJSON_10_Actor(b *testing.B)      { benchmarkToJson("benchmark/actor10.bin", b) }
+func BenchmarkToJSON_10_Actor(b *testing.B)      { benchmarkToJson("benchmark/actors10.bin", b) }
 func BenchmarkToJSON_10_Director(b *testing.B)   { benchmarkToJson("benchmark/directors10.bin", b) }
 func BenchmarkToJSON_100_Actor(b *testing.B)     { benchmarkToJson("benchmark/actors100.bin", b) }
 func BenchmarkToJSON_100_Director(b *testing.B)  { benchmarkToJson("benchmark/directors100.bin", b) }
 func BenchmarkToJSON_1000_Actor(b *testing.B)    { benchmarkToJson("benchmark/actors1000.bin", b) }
 func BenchmarkToJSON_1000_Director(b *testing.B) { benchmarkToJson("benchmark/directors1000.bin", b) }
-func BenchmarkToJSON_Complex(b *testing.B)       { benchmarkToJson("benchmark/complex.bin", b) }
 
 func benchmarkToPB(file string, b *testing.B) {
 	b.ReportAllocs()
@@ -847,7 +846,7 @@ func benchmarkToPBMarshal(file string, b *testing.B) {
 }
 
 func BenchmarkToPBMarshal_10_Actor(b *testing.B) {
-	benchmarkToPBMarshal("benchmark/actor10.bin", b)
+	benchmarkToPBMarshal("benchmark/actors10.bin", b)
 }
 func BenchmarkToPBMarshal_10_Director(b *testing.B) {
 	benchmarkToPBMarshal("benchmark/directors10.bin", b)
@@ -864,7 +863,6 @@ func BenchmarkToPBMarshal_1000_Actor(b *testing.B) {
 func BenchmarkToPBMarshal_1000_Director(b *testing.B) {
 	benchmarkToPBMarshal("benchmark/directors1000.bin", b)
 }
-func BenchmarkToPB_Complex(b *testing.B) { benchmarkToPBMarshal("benchmark/complex.bin", b) }
 
 func benchmarkToPBUnmarshal(file string, b *testing.B) {
 	b.ReportAllocs()
