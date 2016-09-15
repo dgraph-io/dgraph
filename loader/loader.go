@@ -105,7 +105,7 @@ func (s *state) printCounters(ticker *time.Ticker) {
 	}
 }
 
-// readLines reads the file and pushes them onto a channel.
+// readLines reads the file and pushes the nquads onto a channel.
 // Run this in a single goroutine. This function closes s.input channel.
 func (s *state) readLines(r io.Reader) {
 	var buf []string

@@ -108,7 +108,7 @@ func samePosting(a *types.Posting, b *types.Posting) bool {
 	return true
 }
 
-// key = (entity uid, attribute)
+// key = attribute|uid
 func Key(uid uint64, attr string) []byte {
 	buf := bytes.NewBufferString(attr)
 	if _, err := buf.WriteRune('|'); err != nil {
@@ -639,9 +639,8 @@ func (l *List) MergeIfDirty(ctx context.Context) (merged bool, err error) {
 	if atomic.LoadInt64(&l.dirtyTs) == 0 {
 		x.Trace(ctx, "Not committing")
 		return false, nil
-	} else {
-		x.Trace(ctx, "Committing")
 	}
+	x.Trace(ctx, "Committing")
 	return l.merge()
 }
 
