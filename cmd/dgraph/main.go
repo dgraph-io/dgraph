@@ -519,6 +519,7 @@ func setupServer() {
 
 	go func() {
 		<-closeCh
+		// Stops listening further but already Accepted connections are not closed.
 		l.Close()
 	}()
 
