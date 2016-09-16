@@ -111,21 +111,25 @@ func (l *Latency) ToMap() map[string]string {
 	return m
 }
 
+type sgArgs struct {
+	AttrType gql.Type
+	Alias    string
+	Count    int
+	Offset   int
+	AfterUid uint64
+	GetCount uint16
+	IsRoot   bool
+	GetUid   bool
+	isDebug  bool
+}
+
 // SubGraph is the way to represent data internally. It contains both the
 // query and the response. Once generated, this can then be encoded to other
 // client convenient formats, like GraphQL / JSON.
 type SubGraph struct {
 	Attr     string
-	Alias    string
-	AttrType gql.Type
-	Count    int
-	Offset   int
-	AfterUid uint64
-	GetCount uint16
 	Children []*SubGraph
-	IsRoot   bool
-	GetUid   bool
-	isDebug  bool
+	Args     sgArgs
 
 	Query  []byte // Contains list of source UIDs.
 	Result []byte // Contains UID matrix or list of values for child attributes.
@@ -200,8 +204,8 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 		m := make(map[string]interface{})
 		m["_count_"] = co
 		mp := make(map[string]interface{})
-		if sg.Alias != "" {
-			mp[sg.Alias] = m
+		if sg.Args.Alias != "" {
+			mp[sg.Args.Alias] = m
 		} else {
 			mp[sg.Attr] = m
 		}
@@ -217,7 +221,7 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 		for j := 0; j < ul.UidsLength(); j++ {
 			uid := ul.Uids(j)
 			m := make(map[string]interface{})
-			if sg.GetUid || sg.isDebug {
+			if sg.Args.GetUid || sg.Args.isDebug {
 				m["_uid_"] = fmt.Sprintf("%#x", uid)
 			}
 			if ival, present := cResult[uid]; !present {
@@ -228,16 +232,16 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 		}
 		if len(l) == 1 {
 			m := make(map[string]interface{})
-			if sg.Alias != "" {
-				m[sg.Alias] = l[0]
+			if sg.Args.Alias != "" {
+				m[sg.Args.Alias] = l[0]
 			} else {
 				m[sg.Attr] = l[0]
 			}
 			result[q.Uids(i)] = m
 		} else if len(l) > 1 {
 			m := make(map[string]interface{})
-			if sg.Alias != "" {
-				m[sg.Alias] = l
+			if sg.Args.Alias != "" {
+				m[sg.Args.Alias] = l
 			} else {
 				m[sg.Attr] = l
 			}
@@ -263,29 +267,29 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 				pval, q.Uids(i), val)
 		}
 		m := make(map[string]interface{})
-		if sg.GetUid || sg.isDebug {
+		if sg.Args.GetUid || sg.Args.isDebug {
 			m["_uid_"] = fmt.Sprintf("%#x", q.Uids(i))
 		}
-		if sg.AttrType == nil {
+		if sg.Args.AttrType == nil {
 			// No type defined for attr in type system/schema, hence return string value
-			if sg.Alias != "" {
-				m[sg.Alias] = string(val)
+			if sg.Args.Alias != "" {
+				m[sg.Args.Alias] = string(val)
 			} else {
 				m[sg.Attr] = string(val)
 			}
 		} else {
 			// type assertion for scalar type values
-			if !sg.AttrType.IsScalar() {
+			if !sg.Args.AttrType.IsScalar() {
 				return result, fmt.Errorf("Unknown Scalar:%v. Leaf predicate:'%v' must be"+
-					" one of the scalar types defined in the schema.", sg.AttrType, sg.Attr)
+					" one of the scalar types defined in the schema.", sg.Args.AttrType, sg.Attr)
 			}
-			stype := sg.AttrType.(gql.Scalar)
+			stype := sg.Args.AttrType.(gql.Scalar)
 			lval, err := stype.ParseType(val)
 			if err != nil {
 				return result, err
 			}
-			if sg.Alias != "" {
-				m[sg.Alias] = lval
+			if sg.Args.Alias != "" {
+				m[sg.Args.Alias] = lval
 			} else {
 				m[sg.Attr] = lval
 			}
@@ -315,7 +319,7 @@ func (sg *SubGraph) ToJSON(l *Latency) ([]byte, error) {
 		} else {
 			m = make(map[string]interface{})
 		}
-		if sg.isDebug {
+		if sg.Args.isDebug {
 			m["server_latency"] = l.ToMap()
 		}
 		return json.Marshal(m)
@@ -422,13 +426,13 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 			v := tv.ValBytes()
 
 			//do type checking on response values
-			if pc.AttrType != nil {
+			if pc.Args.AttrType != nil {
 				// type assertion for scalar type values
-				if !pc.AttrType.IsScalar() {
+				if !pc.Args.AttrType.IsScalar() {
 					return fmt.Errorf("Unknown Scalar:%v. Leaf predicate:'%v' must be"+
-						" one of the scalar types defined in the schema.", pc.AttrType, pc.Attr)
+						" one of the scalar types defined in the schema.", pc.Args.AttrType, pc.Attr)
 				}
-				stype := pc.AttrType.(gql.Scalar)
+				stype := pc.Args.AttrType.(gql.Scalar)
 				if _, err := stype.ParseType(v); err != nil {
 					return err
 				}
@@ -484,39 +488,42 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 			if gchild.Children != nil {
 				return errors.New("Count cannot have other attributes")
 			}
-			sg.GetCount = 1
+			sg.Args.GetCount = 1
 			break
 		}
 		if gchild.Attr == "_uid_" {
-			sg.GetUid = true
+			sg.Args.GetUid = true
 		}
 
-		dst := &SubGraph{
-			isDebug:  sg.isDebug,
-			Attr:     gchild.Attr,
+		args := sgArgs{
 			AttrType: gql.SchemaType(gchild.Attr),
 			Alias:    gchild.Alias,
+			isDebug:  sg.Args.isDebug,
+		}
+		dst := &SubGraph{
+			Attr: gchild.Attr,
+			Args: args,
 		}
 		if v, ok := gchild.Args["offset"]; ok {
 			offset, err := strconv.ParseInt(v, 0, 32)
 			if err != nil {
 				return err
 			}
-			dst.Offset = int(offset)
+			dst.Args.Offset = int(offset)
 		}
 		if v, ok := gchild.Args["after"]; ok {
 			after, err := strconv.ParseInt(v, 0, 32)
 			if err != nil {
 				return err
 			}
-			dst.AfterUid = uint64(after)
+			dst.Args.AfterUid = uint64(after)
 		}
 		if v, ok := gchild.Args["first"]; ok {
 			first, err := strconv.ParseInt(v, 0, 32)
 			if err != nil {
 				return err
 			}
-			dst.Count = int(first)
+			dst.Args.Count = int(first)
 		}
 		sg.Children = append(sg.Children, dst)
 		err := treeCopy(ctx, gchild, dst)
@@ -586,12 +593,15 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	rend := task.ResultEnd(b)
 	b.Finish(rend)
 
-	sg := &SubGraph{
-		isDebug:  gq.Attr == "debug",
-		Attr:     gq.Attr,
+	args := sgArgs{
 		AttrType: gql.SchemaType(gq.Attr),
 		IsRoot:   true,
-		Result:   b.Bytes[b.Head():],
+		isDebug:  gq.Attr == "debug",
+	}
+	sg := &SubGraph{
+		Attr:   gq.Attr,
+		Result: b.Bytes[b.Head():],
+		Args:   args,
 	}
 	// Also add query for consistency and to allow for ToJSON() later.
 	sg.Query = createTaskQuery(sg, []uint64{euid})
@@ -612,10 +622,10 @@ func createTaskQuery(sg *SubGraph, sorted []uint64) []byte {
 	task.QueryStart(b)
 	task.QueryAddAttr(b, ao)
 	task.QueryAddUids(b, vend)
-	task.QueryAddCount(b, int32(sg.Count))
-	task.QueryAddOffset(b, int32(sg.Offset))
-	task.QueryAddAfterUid(b, sg.AfterUid)
-	task.QueryAddGetCount(b, sg.GetCount)
+	task.QueryAddCount(b, int32(sg.Args.Count))
+	task.QueryAddOffset(b, int32(sg.Args.Offset))
+	task.QueryAddAfterUid(b, sg.Args.AfterUid)
+	task.QueryAddGetCount(b, sg.Args.GetCount)
 
 	qend := task.QueryEnd(b)
 	b.Finish(qend)
@@ -638,7 +648,7 @@ func sortedUniqueUids(r *task.Result) ([]uint64, error) {
 // from different instances.
 func ProcessGraph(ctx context.Context, sg *SubGraph, rch chan error) {
 	var err error
-	if len(sg.Query) > 0 && !sg.IsRoot {
+	if len(sg.Query) > 0 && !sg.Args.IsRoot {
 		sg.Result, err = worker.ProcessTaskOverNetwork(ctx, sg.Query)
 		if err != nil {
 			x.Trace(ctx, "Error while processing task: %v", err)
@@ -655,7 +665,7 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, rch chan error) {
 		}
 	}
 
-	if sg.GetCount == 1 {
+	if sg.Args.GetCount == 1 {
 		x.Trace(ctx, "Zero uids. Only count requested")
 		rch <- nil
 		return
