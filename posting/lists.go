@@ -42,6 +42,9 @@ import (
 var maxmemory = flag.Int("stw_ram_mb", 4096,
 	"If RAM usage exceeds this, we stop the world, and flush our buffers.")
 
+var maxLists = flag.Int("maxlists", 50000, "We clear lhmap until we have less than this number of posting lists left.")
+var bufferedKeysSize = flag.Int("bufferedkeysize", 1000, "Number of keys to be buffered for deletion.")
+
 type mergeRoutines struct {
 	sync.RWMutex
 	count int
@@ -150,7 +153,7 @@ func gentlyMerge(mr *mergeRoutines) {
 
 		dirtymap.Delete(k)
 
-		ret, ok := lhmap.Get(k)
+		ret, ok := lhmap.Get(k.(gotomic.IntKey))
 		if !ok || ret == nil {
 			return false
 		}
@@ -252,13 +255,15 @@ func checkMemoryUsage() {
 
 var (
 	stopTheWorld sync.RWMutex
-	lhmap        *gotomic.Hash
-	dirtymap     *gotomic.Hash
+	//	lhmap        *gotomic.Hash
+	lhmap    *shardedListHash
+	dirtymap *gotomic.Hash
 )
 
 // Init initializes the posting lists package, the in memory and dirty list hash.
 func Init() {
-	lhmap = gotomic.NewHash()
+	//	lhmap = gotomic.NewHash()
+	lhmap = newShardedListHash(32)
 	dirtymap = gotomic.NewHash()
 	go checkMemoryUsage()
 }
@@ -299,10 +304,12 @@ func mergeAndUpdate(l *List, c *counters) {
 }
 
 func processOne(k gotomic.Hashable, c *counters) {
-	ret, _ := lhmap.Delete(k)
+	ret, _ := lhmap.Delete(k.(gotomic.IntKey))
 	if ret == nil {
+		//		log.Printf("Deletion failed! %d\n", k)
 		return
 	}
+	//	log.Println("Deletion successful!")
 	l := ret.(*List)
 
 	if l == nil {
@@ -313,38 +320,52 @@ func processOne(k gotomic.Hashable, c *counters) {
 }
 
 // For on-demand merging of all lists.
-func process(ch chan gotomic.Hashable, c *counters, wg *sync.WaitGroup) {
+func process(bufferedKeys []gotomic.Hashable, idx *uint64, c *counters, wg *sync.WaitGroup) {
 	// No need to go through dirtymap, because we're going through
 	// everything right now anyways.
-	for k := range ch {
-		processOne(k, c)
+	const grainSize = 100
+	var done bool
+	for !done {
+		last := atomic.AddUint64(idx, grainSize) // Take a batch of elements.
+		start := last - grainSize
+		if last >= uint64(len(bufferedKeys)) {
+			// Do not exceeed buffer.
+			last = uint64(len(bufferedKeys))
+			done = true
+		}
+		for i := start; i < last; i++ {
+			processOne(bufferedKeys[i], c)
+		}
 	}
 	wg.Done()
-}
-
-func queueAll(ch chan gotomic.Hashable, c *counters) {
-	lhmap.Each(func(k gotomic.Hashable, v gotomic.Thing) bool {
-		ch <- k
-		atomic.AddUint64(&c.added, 1)
-		return false // If this returns true, Each would break.
-	})
-	close(ch)
 }
 
 func MergeLists(numRoutines int) {
 	// We're merging all the lists, so just create a new dirtymap.
 	dirtymap = gotomic.NewHash()
-	ch := make(chan gotomic.Hashable, 10000)
 	c := newCounters()
 	go c.periodicLog()
 	defer c.ticker.Stop()
-	go queueAll(ch, c)
 
-	wg := new(sync.WaitGroup)
-	for i := 0; i < numRoutines; i++ {
-		wg.Add(1)
-		go process(ch, c, wg)
+	bufferedKeys := make([]gotomic.Hashable, *bufferedKeysSize)
+	for lhmap.Size() >= *maxLists {
+		size := lhmap.MultiGet(bufferedKeys, *bufferedKeysSize)
+		var idx uint64
+
+		//		ch := make(chan gotomic.Hashable, 5000)
+		//		go func() {
+		//			for i := 0; i < size; i++ {
+		//				ch <- bufferedKeys[i]
+		//			}
+		//			close(ch)
+		//		}()
+		var wg sync.WaitGroup
+		for i := 0; i < numRoutines; i++ {
+			wg.Add(1)
+			go process(bufferedKeys[:size], &idx, c, &wg)
+		}
+		wg.Wait()
 	}
-	wg.Wait()
+
 	c.ticker.Stop()
 }
