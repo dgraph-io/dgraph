@@ -347,18 +347,11 @@ func MergeLists(numRoutines int) {
 	go c.periodicLog()
 	defer c.ticker.Stop()
 
+	// Could make global?
 	bufferedKeys := make([]gotomic.Hashable, *bufferedKeysSize)
 	for lhmap.Size() >= *maxLists {
 		size := lhmap.MultiGet(bufferedKeys, *bufferedKeysSize)
-		var idx uint64
-
-		//		ch := make(chan gotomic.Hashable, 5000)
-		//		go func() {
-		//			for i := 0; i < size; i++ {
-		//				ch <- bufferedKeys[i]
-		//			}
-		//			close(ch)
-		//		}()
+		var idx uint64 // Only atomic adds allowed for this!
 		var wg sync.WaitGroup
 		for i := 0; i < numRoutines; i++ {
 			wg.Add(1)
