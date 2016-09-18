@@ -133,7 +133,7 @@ func gentlyMerge(mr *mergeRoutines) {
 	defer ctr.ticker.Stop()
 
 	shardSizes := dirtymap.GetShardSizes()
-	for i := 0; i < *gentlyMergeNumShards; i++ {
+	for i := 0; i < *gentlyMergeNumShards && i < len(shardSizes); i++ {
 		idx := shardSizes[i].idx // Shard that we are emptying.
 		selectedShard := dirtymap.shard[idx]
 		bufferedKeys := make([]uint64, *bufferedKeysSize)
