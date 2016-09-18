@@ -31,11 +31,16 @@ import (
 	"github.com/dgraph-io/dgraph/store"
 )
 
+func getOrCreate(key []byte, ps *store.Store) *posting.List {
+	l, _ := posting.GetOrCreate(key, ps)
+	return l
+}
+
 // externalId returns the xid of a given uid by reading from the uidstore.
 // It returns an error if there is no corresponding xid.
 func externalId(uid uint64) (xid string, rerr error) {
 	key := posting.Key(uid, "_xid_") // uid -> "_xid_" -> xid
-	pl := posting.GetOrCreate(key, uidStore)
+	pl := getOrCreate(key, uidStore)
 	if pl.Length() == 0 {
 		return "", errors.New("NO external id")
 	}
