@@ -133,8 +133,12 @@ func gentlyMerge(mr *mergeRoutines) {
 	defer ctr.ticker.Stop()
 
 	dirtymapBuffer := make([]uint64, *bufferedKeysSize)
-	shardSizes := dirtymap.GetShardSizes()
-	for i := 0; i < *gentlyMergeNumShards && i < len(shardSizes); i++ {
+	shardSizes := dirtymap.GetShardSizes() // List of shard sizes.
+	n := *gentlyMergeNumShards
+	if n > len(shardSizes) {
+		n = len(shardSizes)
+	}
+	for i := 0; i < n; i++ {
 		idx := shardSizes[i].idx // Shard that we are emptying.
 		selectedShard := dirtymap.shard[idx]
 		for selectedShard.Size() > 0 {
@@ -297,18 +301,14 @@ func process(bufferedKeys []uint64, idx *uint64, c *counters, wg *sync.WaitGroup
 	// No need to go through dirtymap, because we're going through
 	// everything right now anyways.
 	const grainSize = 100
-	var done bool
-	for !done {
+	for {
 		last := atomic.AddUint64(idx, grainSize) // Take a batch of elements.
 		start := last - grainSize
 		if start >= uint64(len(bufferedKeys)) {
-			done = true // To be consistent.
 			break
 		}
-		if last >= uint64(len(bufferedKeys)) {
-			// Do not exceeed buffer.
+		if last > uint64(len(bufferedKeys)) {
 			last = uint64(len(bufferedKeys))
-			done = true
 		}
 		for i := start; i < last; i++ {
 			processOne(bufferedKeys[i], c)
