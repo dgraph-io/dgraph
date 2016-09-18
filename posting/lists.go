@@ -132,14 +132,14 @@ func gentlyMerge(mr *mergeRoutines) {
 	ctr := newCounters()
 	defer ctr.ticker.Stop()
 
+	dirtymapBuffer := make([]uint64, *bufferedKeysSize)
 	shardSizes := dirtymap.GetShardSizes()
 	for i := 0; i < *gentlyMergeNumShards && i < len(shardSizes); i++ {
 		idx := shardSizes[i].idx // Shard that we are emptying.
 		selectedShard := dirtymap.shard[idx]
-		bufferedKeys := make([]uint64, *bufferedKeysSize)
 		for selectedShard.Size() > 0 {
-			selectedShard.MultiGet(bufferedKeys, *bufferedKeysSize)
-			for _, k := range bufferedKeys {
+			size := selectedShard.MultiGet(dirtymapBuffer, *bufferedKeysSize)
+			for _, k := range dirtymapBuffer[:size] {
 				selectedShard.Delete(k)
 				l, ok := lhmap.Get(k)
 				if !ok || l == nil {
@@ -320,14 +320,14 @@ func MergeLists(numRoutines int) {
 	go c.periodicLog()
 	defer c.ticker.Stop()
 
-	bufferedKeys := make([]uint64, *bufferedKeysSize)
+	lhmapBuffer := make([]uint64, *bufferedKeysSize) // Better to allocate locally.
 	for lhmap.Size() > 0 {
-		size := lhmap.MultiGet(bufferedKeys, *bufferedKeysSize)
+		size := lhmap.MultiGet(lhmapBuffer, *bufferedKeysSize)
 		var idx uint64 // Only atomic adds allowed for this!
 		var wg sync.WaitGroup
 		for i := 0; i < numRoutines; i++ {
 			wg.Add(1)
-			go process(bufferedKeys[:size], &idx, c, &wg)
+			go process(lhmapBuffer[:size], &idx, c, &wg)
 		}
 		wg.Wait()
 	}
