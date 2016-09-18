@@ -42,7 +42,7 @@ var (
 		"If RAM usage exceeds this, we stop the world, and flush our buffers.")
 
 	bufferedKeysSize     = flag.Int("bufferedkeysize", 10000, "Number of keys to be buffered for deletion.")
-	gentlyMergeNumShards = flag.Int("gentlymerge", 2, "Scan how many shards of dirtymap for each gentle merge.")
+	gentlyMergeNumShards = flag.Int("gentlymerge", 4, "Scan how many shards of dirtymap for each gentle merge.")
 	dirtymapNumShards    = flag.Int("dirtymap", 32, "Number of shards for dirtymap.")
 	lhmapNumShards       = flag.Int("lhmap", 32, "Number of shards for lhmap.")
 )
@@ -134,7 +134,6 @@ func gentlyMerge(mr *mergeRoutines) {
 
 	shardSizes := dirtymap.GetShardSizes()
 	for i := 0; i < *gentlyMergeNumShards; i++ {
-		log.Printf("~~Gently merge %d %d\n", i, shardSizes[i].size)
 		idx := shardSizes[i].idx // Shard that we are emptying.
 		selectedShard := dirtymap.shard[idx]
 		bufferedKeys := make([]uint64, *bufferedKeysSize)
@@ -332,6 +331,4 @@ func MergeLists(numRoutines int) {
 		}
 		wg.Wait()
 	}
-
-	c.ticker.Stop()
 }
