@@ -301,6 +301,10 @@ func process(bufferedKeys []uint64, idx *uint64, c *counters, wg *sync.WaitGroup
 	for !done {
 		last := atomic.AddUint64(idx, grainSize) // Take a batch of elements.
 		start := last - grainSize
+		if start >= uint64(len(bufferedKeys)) {
+			done = true // To be consistent.
+			break
+		}
 		if last >= uint64(len(bufferedKeys)) {
 			// Do not exceeed buffer.
 			last = uint64(len(bufferedKeys))
