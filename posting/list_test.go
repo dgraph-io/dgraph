@@ -107,7 +107,7 @@ func checkUids(t *testing.T, l *List, uids ...uint64) error {
 }
 
 func TestAddMutation(t *testing.T) {
-	l := NewList()
+	l := getNew()
 	key := Key(1, "name")
 	dir, err := ioutil.TempDir("", "storetest_")
 	if err != nil {
@@ -211,7 +211,7 @@ func TestAddMutation(t *testing.T) {
 	l.MergeIfDirty(ctx)
 
 	// Try reading the same data in another PostingList.
-	dl := NewList()
+	dl := getNew()
 	dl.init(key, ps)
 	if err := checkUids(t, dl, uids...); err != nil {
 		t.Error(err)
@@ -242,7 +242,7 @@ func checkValue(ol *List, val string) error {
 }
 
 func TestAddMutation_Value(t *testing.T) {
-	ol := NewList()
+	ol := getNew()
 	key := Key(10, "value")
 	dir, err := ioutil.TempDir("", "storetest_")
 	if err != nil {
@@ -309,7 +309,7 @@ func TestAddMutation_Value(t *testing.T) {
 }
 
 func TestAddMutation_jchiu1(t *testing.T) {
-	ol := NewList()
+	ol := getNew()
 	key := Key(10, "value")
 	dir, err := ioutil.TempDir("", "storetest_")
 	if err != nil {
@@ -386,7 +386,7 @@ func TestAddMutation_jchiu1(t *testing.T) {
 }
 
 func TestAddMutation_jchiu2(t *testing.T) {
-	ol := NewList()
+	ol := getNew()
 	key := Key(10, "value")
 	dir, err := ioutil.TempDir("", "storetest_")
 	if err != nil {
@@ -442,7 +442,7 @@ func TestAddMutation_jchiu2(t *testing.T) {
 }
 
 func TestAddMutation_jchiu3(t *testing.T) {
-	ol := NewList()
+	ol := getNew()
 	key := Key(10, "value")
 	dir, err := ioutil.TempDir("", "storetest_")
 	if err != nil {
@@ -543,7 +543,7 @@ func TestAddMutation_jchiu3(t *testing.T) {
 }
 
 func TestAddMutation_mrjn1(t *testing.T) {
-	ol := NewList()
+	ol := getNew()
 	key := Key(10, "value")
 	dir, err := ioutil.TempDir("", "storetest_")
 	if err != nil {
@@ -646,7 +646,7 @@ func TestAddMutation_mrjn1(t *testing.T) {
 
 func benchmarkAddMutations(n int, b *testing.B) {
 	// logrus.SetLevel(logrus.DebugLevel)
-	l := NewList()
+	l := getNew()
 	key := Key(1, "name")
 	dir, err := ioutil.TempDir("", "storetest_")
 	if err != nil {

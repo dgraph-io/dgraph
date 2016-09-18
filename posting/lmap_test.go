@@ -27,7 +27,7 @@ func BenchmarkGet(b *testing.B) {
 		for pb.Next() {
 			// i := uint64(rand.Int63())
 			_ = uint64(rand.Int63())
-			NewList()
+			getNew()
 			// lmap.Get(i)
 		}
 	})
@@ -38,7 +38,7 @@ func BenchmarkGetLinear(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		k := uint64(i)
 		if l, ok := m[k]; !ok {
-			l = NewList()
+			l = getNew()
 			m[k] = l
 		}
 	}

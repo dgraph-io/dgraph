@@ -31,6 +31,7 @@ import (
 
 	"github.com/dgryski/go-farm"
 	"github.com/google/flatbuffers/go"
+	"github.com/pkg/errors"
 	"github.com/zond/gotomic"
 
 	"github.com/dgraph-io/dgraph/posting/types"
@@ -74,16 +75,21 @@ type List struct {
 	dirtyTs int64 // Use atomics for this.
 }
 
-func (l *List) Incr() {
-	atomic.AddInt32(&l.refcount, 1)
+func (l *List) refCount() int32 {
+	return atomic.LoadInt32(&l.refcount)
 }
-func (l *List) Decr() {
+
+func (l *List) incr() int32 {
+	return atomic.AddInt32(&l.refcount, 1)
+}
+func (l *List) decr() {
 	val := atomic.AddInt32(&l.refcount, -1)
 	if val > 0 {
 		return
 	}
 	if val < 0 {
-		log.Fatalf("List reference should never be less than zero: %v", val)
+		err := errors.Errorf("List reference should never be less than zero: %v", val)
+		log.Fatalf("%+v", err)
 	}
 	listPool.Put(l)
 }
@@ -100,7 +106,7 @@ func getNew() *List {
 	l.wg.Add(1)
 	l.mlayer = make(map[int]types.Posting)
 	x.Assert(len(l.key) == 0)
-	l.Incr()
+	l.refcount = 1
 	return l
 }
 

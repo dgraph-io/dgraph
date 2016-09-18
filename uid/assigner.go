@@ -144,8 +144,8 @@ func allocateUniqueUid(xid string, instanceIdx uint64,
 
 		// Check if this uid has already been allocated.
 		key := posting.Key(uid, "_xid_") // uid -> "_xid_" -> xid
-		pl := posting.GetOrCreate(key, uidStore)
-		defer pl.Decr()
+		pl, decr := posting.GetOrCreate(key, uidStore)
+		defer decr()
 
 		if pl.Length() > 0 {
 			// Something already present here.
@@ -208,8 +208,8 @@ func StringKey(xid string) []byte {
 // Get returns the uid of the corresponding xid.
 func Get(xid string) (uid uint64, rerr error) {
 	key := StringKey(xid)
-	pl := posting.GetOrCreate(key, uidStore)
-	defer pl.Decr()
+	pl, decr := posting.GetOrCreate(key, uidStore)
+	defer decr()
 
 	if pl.Length() == 0 {
 		return 0, fmt.Errorf("xid: %v doesn't have any uid assigned.", xid)
@@ -235,8 +235,8 @@ func GetOrAssign(xid string, instanceIdx uint64,
 	}
 
 	key := StringKey(xid)
-	pl := posting.GetOrCreate(key, uidStore)
-	defer pl.Decr()
+	pl, decr := posting.GetOrCreate(key, uidStore)
+	defer decr()
 
 	if pl.Length() == 0 {
 		return assignNew(pl, xid, instanceIdx, numInstances)

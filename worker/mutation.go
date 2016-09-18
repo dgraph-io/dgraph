@@ -68,8 +68,8 @@ func runMutations(ctx context.Context, edges []x.DirectedEdge, op byte, left *Mu
 		}
 
 		key := posting.Key(edge.Entity, edge.Attribute)
-		plist := posting.GetOrCreate(key, ws.dataStore)
-		defer plist.Decr()
+		plist, decr := posting.GetOrCreate(key, ws.dataStore)
+		defer decr()
 
 		if err := plist.AddMutationWithIndex(ctx, edge, op); err != nil {
 			if op == posting.Set {

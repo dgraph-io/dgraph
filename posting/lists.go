@@ -269,32 +269,37 @@ func getFromMap(gotomicKey gotomic.IntKey) *List {
 		return nil
 	}
 	result := lp.(*List)
-	result.Incr()
+	result.incr()
 	return result
 }
 
 // GetOrCreate stores the List corresponding to key(if its not there already)
-// to lhmap and returns it.
-func GetOrCreate(key []byte, pstore *store.Store) *List {
+// to lhmap and returns it. It also returns a reference decrement function to be called by caller.
+//
+// plist, decr := GetOrCreate(key, store)
+// defer decr()
+// ... // Use plist
+func GetOrCreate(key []byte, pstore *store.Store) (rlist *List, decr func()) {
 	fp := farm.Fingerprint64(key)
 	gotomicKey := gotomic.IntKey(fp)
 
 	stopTheWorld.RLock()
 	defer stopTheWorld.RUnlock()
 	if lp := getFromMap(gotomicKey); lp != nil {
-		return lp
+		return lp, lp.decr
 	}
 
 	l := getNew() // This retrieves a new *List and increments it's ref count.
 	if inserted := lhmap.PutIfMissing(gotomicKey, l); inserted {
+		l.incr() // Prepare this for return to caller.
 		l.init(key, pstore)
-		return l
+		return l, l.decr
 
 	} else {
 		// If we're unable to insert this, decrement the reference count.
-		l.Decr()
+		l.decr()
 	}
-	return getFromMap(gotomicKey)
+	return getFromMap(gotomicKey), l.decr
 }
 
 func mergeAndUpdate(l *List, c *counters) {
@@ -320,7 +325,7 @@ func processOne(k gotomic.Hashable, c *counters) {
 	if l == nil {
 		return
 	}
-	defer l.Decr()
+	defer l.decr()
 	l.SetForDeletion() // No more AddMutation.
 	mergeAndUpdate(l, c)
 }
