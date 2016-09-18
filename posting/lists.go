@@ -292,7 +292,7 @@ func processOne(k uint64, c *counters) {
 	mergeAndUpdate(l, c)
 }
 
-// For on-demand merging of all lists.
+// For on-demand merging of all lists, bufferedKeys is read-only.
 func process(bufferedKeys []uint64, idx *uint64, c *counters, wg *sync.WaitGroup) {
 	// No need to go through dirtymap, because we're going through
 	// everything right now anyways.
