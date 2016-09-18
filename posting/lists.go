@@ -263,6 +263,16 @@ func Init() {
 	go checkMemoryUsage()
 }
 
+func getFromMap(gotomicKey gotomic.IntKey) *List {
+	lp, _ := lhmap.Get(gotomicKey)
+	if lp == nil {
+		return nil
+	}
+	result := lp.(*List)
+	result.Incr()
+	return result
+}
+
 // GetOrCreate stores the List corresponding to key(if its not there already)
 // to lhmap and returns it.
 func GetOrCreate(key []byte, pstore *store.Store) *List {
@@ -271,18 +281,20 @@ func GetOrCreate(key []byte, pstore *store.Store) *List {
 
 	stopTheWorld.RLock()
 	defer stopTheWorld.RUnlock()
-	lp, _ := lhmap.Get(gotomicKey)
-	if lp != nil {
-		return lp.(*List)
+	if lp := getFromMap(gotomicKey); lp != nil {
+		return lp
 	}
 
-	l := NewList()
+	l := getNew() // This retrieves a new *List and increments it's ref count.
 	if inserted := lhmap.PutIfMissing(gotomicKey, l); inserted {
 		l.init(key, pstore)
 		return l
+
+	} else {
+		// If we're unable to insert this, decrement the reference count.
+		l.Decr()
 	}
-	lp, _ = lhmap.Get(gotomicKey)
-	return lp.(*List)
+	return getFromMap(gotomicKey)
 }
 
 func mergeAndUpdate(l *List, c *counters) {
@@ -308,6 +320,7 @@ func processOne(k gotomic.Hashable, c *counters) {
 	if l == nil {
 		return
 	}
+	defer l.Decr()
 	l.SetForDeletion() // No more AddMutation.
 	mergeAndUpdate(l, c)
 }

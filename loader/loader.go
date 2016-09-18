@@ -192,8 +192,11 @@ func (s *state) handleNQuads(wg *sync.WaitGroup) {
 		}
 
 		key := posting.Key(edge.Entity, edge.Attribute)
+
 		plist := posting.GetOrCreate(key, dataStore)
 		plist.AddMutationWithIndex(ctx, edge, posting.Set)
+		plist.Decr() // Don't defer, just call because we're in a channel loop.
+
 		atomic.AddUint64(&s.ctr.processed, 1)
 	}
 }

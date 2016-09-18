@@ -114,6 +114,7 @@ func processTask(query []byte) ([]byte, error) {
 		}
 		// Get or create the posting list for an entity, attribute combination.
 		pl := posting.GetOrCreate(key, store)
+		defer pl.Decr()
 
 		var valoffset flatbuffers.UOffsetT
 		// If a posting list contains a value, we store that or else we store a nil
