@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
-	"math/rand"
 	"os"
 	"os/exec"
 	"runtime"
@@ -34,16 +33,19 @@ import (
 	"time"
 
 	"github.com/dgryski/go-farm"
-	"github.com/zond/gotomic"
 
 	"github.com/dgraph-io/dgraph/store"
 )
 
-var maxmemory = flag.Int("stw_ram_mb", 4096,
-	"If RAM usage exceeds this, we stop the world, and flush our buffers.")
+var (
+	maxmemory = flag.Int("stw_ram_mb", 4096,
+		"If RAM usage exceeds this, we stop the world, and flush our buffers.")
 
-var maxLists = flag.Int("maxlists", 50000, "We clear lhmap until we have less than this number of posting lists left.")
-var bufferedKeysSize = flag.Int("bufferedkeysize", 1000, "Number of keys to be buffered for deletion.")
+	bufferedKeysSize     = flag.Int("bufferedkeysize", 10000, "Number of keys to be buffered for deletion.")
+	gentlyMergeNumShards = flag.Int("gentlymerge", 2, "Scan how many shards of dirtymap for each gentle merge.")
+	dirtymapNumShards    = flag.Int("dirtymap", 32, "Number of shards for dirtymap.")
+	lhmapNumShards       = flag.Int("lhmap", 32, "Number of shards for lhmap.")
+)
 
 type mergeRoutines struct {
 	sync.RWMutex
@@ -112,7 +114,7 @@ func aggressivelyEvict() {
 	megs := getMemUsage()
 	log.Printf("Memory usage over threshold. STW. Allocated MB: %v\n", megs)
 
-	log.Println("Calling merge on all lists.")
+	log.Println("Aggressive evict, committing to RocksDB")
 	MergeLists(100 * runtime.GOMAXPROCS(-1))
 
 	log.Println("Trying to free OS memory")
@@ -124,52 +126,34 @@ func aggressivelyEvict() {
 	log.Printf("Memory usage after calling GC. Allocated MB: %v", megs)
 }
 
+// gentlyMerge will select a few shards of dirtymap to be merged/commited.
 func gentlyMerge(mr *mergeRoutines) {
 	defer mr.Add(-1)
 	ctr := newCounters()
 	defer ctr.ticker.Stop()
 
-	// Pick 7% of the dirty map or 400 keys, whichever is higher.
-	pick := int(float64(dirtymap.Size()) * 0.07)
-	if pick < 400 {
-		pick = 400
+	shardSizes := dirtymap.GetShardSizes()
+	for i := 0; i < *gentlyMergeNumShards; i++ {
+		log.Printf("~~Gently merge %d %d\n", i, shardSizes[i].size)
+		idx := shardSizes[i].idx // Shard that we are emptying.
+		selectedShard := dirtymap.shard[idx]
+		bufferedKeys := make([]uint64, *bufferedKeysSize)
+		for selectedShard.Size() > 0 {
+			selectedShard.MultiGet(bufferedKeys, *bufferedKeysSize)
+			for _, k := range bufferedKeys {
+				selectedShard.Delete(k)
+				l, ok := lhmap.Get(k)
+				if !ok || l == nil {
+					continue
+				}
+				// Not calling processOne, because we don't want to
+				// remove the postings list from the map, to avoid
+				// a race condition, where another caller re-creates the
+				// posting list before a merge happens.
+				mergeAndUpdate(l, ctr)
+			}
+		}
 	}
-	// We should start picking up elements from a randomly selected index,
-	// otherwise, the same keys would keep on getting merged, while the
-	// rest would never get a chance.
-	var start int
-	n := dirtymap.Size() - pick
-	if n > 0 {
-		start = rand.Intn(n)
-	}
-
-	idx := 0
-	count := 0
-	dirtymap.Each(func(k gotomic.Hashable, v gotomic.Thing) bool {
-		if idx < start {
-			idx++
-			return false
-		}
-
-		dirtymap.Delete(k)
-
-		ret, ok := lhmap.Get(k.(gotomic.IntKey))
-		if !ok || ret == nil {
-			return false
-		}
-		// Not calling processOne, because we don't want to
-		// remove the postings list from the map, to avoid
-		// a race condition, where another caller re-creates the
-		// posting list before a merge happens.
-		l := ret.(*List)
-		if l == nil {
-			return false
-		}
-		mergeAndUpdate(l, ctr)
-		count++
-		return count >= pick
-	})
-
 	ctr.log()
 }
 
@@ -255,16 +239,14 @@ func checkMemoryUsage() {
 
 var (
 	stopTheWorld sync.RWMutex
-	//	lhmap        *gotomic.Hash
-	lhmap    *shardedListHash
-	dirtymap *gotomic.Hash
+	lhmap        *listMap
+	dirtymap     *listSet
 )
 
 // Init initializes the posting lists package, the in memory and dirty list hash.
 func Init() {
-	//	lhmap = gotomic.NewHash()
-	lhmap = newShardedListHash(32)
-	dirtymap = gotomic.NewHash()
+	lhmap = newShardedListMap(*lhmapNumShards)
+	dirtymap = newShardedListSet(*dirtymapNumShards)
 	go checkMemoryUsage()
 }
 
@@ -272,22 +254,21 @@ func Init() {
 // to lhmap and returns it.
 func GetOrCreate(key []byte, pstore *store.Store) *List {
 	fp := farm.Fingerprint64(key)
-	gotomicKey := gotomic.IntKey(fp)
 
 	stopTheWorld.RLock()
 	defer stopTheWorld.RUnlock()
-	lp, _ := lhmap.Get(gotomicKey)
+	lp, _ := lhmap.Get(fp)
 	if lp != nil {
-		return lp.(*List)
+		return lp
 	}
 
 	l := NewList()
-	if inserted := lhmap.PutIfMissing(gotomicKey, l); inserted {
+	if inserted := lhmap.PutIfMissing(fp, l); inserted {
 		l.init(key, pstore)
 		return l
 	}
-	lp, _ = lhmap.Get(gotomicKey)
-	return lp.(*List)
+	lp, _ = lhmap.Get(fp)
+	return lp
 }
 
 func mergeAndUpdate(l *List, c *counters) {
@@ -303,15 +284,8 @@ func mergeAndUpdate(l *List, c *counters) {
 	}
 }
 
-func processOne(k gotomic.Hashable, c *counters) {
-	ret, _ := lhmap.Delete(k.(gotomic.IntKey))
-	if ret == nil {
-		//		log.Printf("Deletion failed! %d\n", k)
-		return
-	}
-	//	log.Println("Deletion successful!")
-	l := ret.(*List)
-
+func processOne(k uint64, c *counters) {
+	l, _ := lhmap.Delete(k)
 	if l == nil {
 		return
 	}
@@ -320,7 +294,7 @@ func processOne(k gotomic.Hashable, c *counters) {
 }
 
 // For on-demand merging of all lists.
-func process(bufferedKeys []gotomic.Hashable, idx *uint64, c *counters, wg *sync.WaitGroup) {
+func process(bufferedKeys []uint64, idx *uint64, c *counters, wg *sync.WaitGroup) {
 	// No need to go through dirtymap, because we're going through
 	// everything right now anyways.
 	const grainSize = 100
@@ -342,14 +316,13 @@ func process(bufferedKeys []gotomic.Hashable, idx *uint64, c *counters, wg *sync
 
 func MergeLists(numRoutines int) {
 	// We're merging all the lists, so just create a new dirtymap.
-	dirtymap = gotomic.NewHash()
+	dirtymap = newShardedListSet(*dirtymapNumShards)
 	c := newCounters()
 	go c.periodicLog()
 	defer c.ticker.Stop()
 
-	// Could make global?
-	bufferedKeys := make([]gotomic.Hashable, *bufferedKeysSize)
-	for lhmap.Size() >= *maxLists {
+	bufferedKeys := make([]uint64, *bufferedKeysSize)
+	for lhmap.Size() > 0 {
 		size := lhmap.MultiGet(bufferedKeys, *bufferedKeysSize)
 		var idx uint64 // Only atomic adds allowed for this!
 		var wg sync.WaitGroup
