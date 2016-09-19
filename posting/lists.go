@@ -311,7 +311,6 @@ func process(keysBuffer []uint64, idx *uint64, c *counters, wg *sync.WaitGroup) 
 
 func MergeLists(numRoutines int) {
 	// We're merging all the lists, so just create a new dirtymap.
-	//dirtymap = newShardedListSet(*dirtymapNumShards)
 	resetDirtyChan <- struct{}{}
 
 	c := newCounters()
