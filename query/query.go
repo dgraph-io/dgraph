@@ -111,7 +111,7 @@ func (l *Latency) ToMap() map[string]string {
 	return m
 }
 
-type Params struct {
+type params struct {
 	AttrType gql.Type
 	Alias    string
 	Count    int
@@ -129,7 +129,7 @@ type Params struct {
 type SubGraph struct {
 	Attr     string
 	Children []*SubGraph
-	Params   Params
+	Params   params
 
 	Query  []byte // Contains list of source UIDs.
 	Result []byte // Contains UID matrix or list of values for child attributes.
@@ -495,7 +495,7 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 			sg.Params.GetUid = true
 		}
 
-		args := Params{
+		args := params{
 			AttrType: gql.SchemaType(gchild.Attr),
 			Alias:    gchild.Alias,
 			isDebug:  sg.Params.isDebug,
@@ -593,7 +593,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	rend := task.ResultEnd(b)
 	b.Finish(rend)
 
-	args := Params{
+	args := params{
 		AttrType: gql.SchemaType(gq.Attr),
 		IsRoot:   true,
 		isDebug:  gq.Attr == "debug",
