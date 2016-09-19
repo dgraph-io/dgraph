@@ -41,7 +41,7 @@ var (
 	maxmemory = flag.Int("stw_ram_mb", 4096,
 		"If RAM usage exceeds this, we stop the world, and flush our buffers.")
 
-	bufferedKeysSize     = flag.Int("bufferedkeysize", 10000, "Number of keys to be buffered for deletion.")
+	keysBufferSize       = flag.Int("keysbuffer", 10000, "Number of keys to be buffered for deletion.")
 	gentlyMergeNumShards = flag.Int("gentlymerge", 4, "Scan how many shards of dirtymap for each gentle merge.")
 	dirtymapNumShards    = flag.Int("dirtymap", 32, "Number of shards for dirtymap.")
 	lhmapNumShards       = flag.Int("lhmap", 32, "Number of shards for lhmap.")
@@ -132,7 +132,7 @@ func gentlyMerge(mr *mergeRoutines) {
 	ctr := newCounters()
 	defer ctr.ticker.Stop()
 
-	dirtymapBuffer := make([]uint64, *bufferedKeysSize)
+	dirtymapBuffer := make([]uint64, *keysBufferSize)
 	shardSizes := dirtymap.GetShardSizes() // List of shard sizes.
 	n := *gentlyMergeNumShards
 	if n > len(shardSizes) {
@@ -142,7 +142,7 @@ func gentlyMerge(mr *mergeRoutines) {
 		idx := shardSizes[i].idx // Shard that we are emptying.
 		selectedShard := dirtymap.shard[idx]
 		for selectedShard.Size() > 0 {
-			size := selectedShard.MultiGet(dirtymapBuffer, *bufferedKeysSize)
+			size := selectedShard.MultiGet(dirtymapBuffer, *keysBufferSize)
 			for _, k := range dirtymapBuffer[:size] {
 				selectedShard.Delete(k)
 				l, ok := lhmap.Get(k)
@@ -296,22 +296,22 @@ func processOne(k uint64, c *counters) {
 	mergeAndUpdate(l, c)
 }
 
-// For on-demand merging of all lists, bufferedKeys is read-only.
-func process(bufferedKeys []uint64, idx *uint64, c *counters, wg *sync.WaitGroup) {
+// For on-demand merging of all lists, keysBuffer is read-only - do not touch.
+func process(keysBuffer []uint64, idx *uint64, c *counters, wg *sync.WaitGroup) {
 	// No need to go through dirtymap, because we're going through
 	// everything right now anyways.
 	const grainSize = 100
 	for {
 		last := atomic.AddUint64(idx, grainSize) // Take a batch of elements.
 		start := last - grainSize
-		if start >= uint64(len(bufferedKeys)) {
+		if start >= uint64(len(keysBuffer)) {
 			break
 		}
-		if last > uint64(len(bufferedKeys)) {
-			last = uint64(len(bufferedKeys))
+		if last > uint64(len(keysBuffer)) {
+			last = uint64(len(keysBuffer))
 		}
 		for i := start; i < last; i++ {
-			processOne(bufferedKeys[i], c)
+			processOne(keysBuffer[i], c)
 		}
 	}
 	wg.Done()
@@ -324,14 +324,14 @@ func MergeLists(numRoutines int) {
 	go c.periodicLog()
 	defer c.ticker.Stop()
 
-	lhmapBuffer := make([]uint64, *bufferedKeysSize) // Better to allocate locally.
+	keysBuffer := make([]uint64, *keysBufferSize) // Better to allocate locally.
 	for lhmap.Size() > 0 {
-		size := lhmap.MultiGet(lhmapBuffer, *bufferedKeysSize)
+		size := lhmap.MultiGet(keysBuffer, *keysBufferSize)
 		var idx uint64 // Only atomic adds allowed for this!
 		var wg sync.WaitGroup
 		for i := 0; i < numRoutines; i++ {
 			wg.Add(1)
-			go process(lhmapBuffer[:size], &idx, c, &wg)
+			go process(keysBuffer[:size], &idx, c, &wg)
 		}
 		wg.Wait()
 	}
