@@ -1,5 +1,5 @@
 /*
- * Copyright 2016 DGraph Labs, Inc.
+ * Copyright 2016 Dgraph Labs, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,50 +29,65 @@ package x
 // (3) You want to generate a new error with stack trace info. Use x.Errorf.
 
 import (
+	"flag"
+	"fmt"
 	"log"
 
 	"github.com/pkg/errors"
 )
 
+var (
+	stackTrace = flag.Bool("stacktrace", false, "enable stacktrace for errors")
+)
+
 // Check logs fatal if err != nil.
 func Check(err error) {
 	if err != nil {
-		log.Fatalf("%+v", errors.Wrap(err, ""))
+		log.Fatalf("%+v", Wrap(err))
 	}
 }
 
 // Checkf is Check with extra info.
 func Checkf(err error, format string, args ...interface{}) {
 	if err != nil {
-		log.Fatalf("%+v", errors.Wrapf(err, format, args...))
+		log.Fatalf("%+v", Wrapf(err, format, args...))
 	}
 }
 
 // Assert logs fatal if b is false.
 func Assert(b bool) {
 	if !b {
-		log.Fatalf("%+v\n", errors.Errorf("Assert failed"))
+		log.Fatalf("%+v", Errorf("Assert failed"))
 	}
 }
 
 // Assertf is Assert with extra info.
 func Assertf(b bool, format string, args ...interface{}) {
 	if !b {
-		log.Fatalf("%+v\n", errors.Errorf(format, args...))
+		log.Fatalf("%+v", Errorf(format, args...))
 	}
 }
 
 // Wrap wraps errors from external lib.
 func Wrap(err error) error {
+	if !*debugMode {
+		return err
+	}
 	return errors.Wrap(err, "")
 }
 
 // Wrapf is Wrap with extra info.
 func Wrapf(err error, format string, args ...interface{}) error {
+	if !*debugMode {
+		return fmt.Errorf(format+" error: %+v", append(args, err)...)
+	}
 	return errors.Wrapf(err, format, args...)
 }
 
 // Errorf creates a new error with stack trace, etc.
 func Errorf(format string, args ...interface{}) error {
+	if !*debugMode {
+		return fmt.Errorf(format, args...)
+	}
 	return errors.Errorf(format, args...)
 }

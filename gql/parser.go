@@ -32,6 +32,7 @@ type GraphQuery struct {
 	UID      uint64
 	XID      string
 	Attr     string
+	Alias    string
 	Args     map[string]string
 	Children []*GraphQuery
 
@@ -630,6 +631,9 @@ func godeep(l *lex.Lexer, gq *GraphQuery) error {
 			gq.Children = append(gq.Children, child)
 			curp = child
 
+		} else if item.Typ == itemAlias {
+			curp.Alias = curp.Attr
+			curp.Attr = item.Val
 		} else if item.Typ == itemLeftCurl {
 			if err := godeep(l, curp); err != nil {
 				return err
