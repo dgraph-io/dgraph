@@ -69,6 +69,7 @@ func init() {
 	})
 }
 
+// ReadIndexConfigs parses configs from given byte array.
 func ReadIndexConfigs(f []byte) {
 	x.Check(json.Unmarshal(f, &indexCfgs))
 	for _, c := range indexCfgs.Cfg {
@@ -91,6 +92,7 @@ func InitIndex(ds *store.Store) {
 	indexStore = ds
 }
 
+// IndexKey creates a key for indexing the term for given attribute.
 func IndexKey(attr string, term []byte) []byte {
 	buf := bytes.NewBuffer(make([]byte, 0, len(attr)+len(term)+2))
 	_, err := buf.WriteRune(indexRune)
