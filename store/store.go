@@ -136,7 +136,7 @@ func (s *Store) WriteBatch(wb *rdb.WriteBatch) error {
 func (s *Store) NewCheckpoint() (*rdb.Checkpoint, error) { return s.db.NewCheckpoint() }
 
 // NewSnapshot creates new snapshot from current store.
-func (s *Store) NewSnapshot() (*rdb.Snapshot, error) { return s.db.NewSnapshot(), nil }
+func (s *Store) NewSnapshot() *rdb.Snapshot { return s.db.NewSnapshot() }
 
-// UseSnapshot updates default read options to use the given snapshot.
-func (s *Store) UseSnapshot(snapshot *rdb.Snapshot) { s.ropt.SetSnapshot(snapshot) }
+// SetSnapshot updates default read options to use the given snapshot.
+func (s *Store) SetSnapshot(snapshot *rdb.Snapshot) { s.ropt.SetSnapshot(snapshot) }
