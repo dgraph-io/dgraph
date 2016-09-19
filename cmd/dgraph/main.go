@@ -54,9 +54,9 @@ var (
 	uidDir      = flag.String("uids", "u", "XID UID posting lists directory")
 	mutationDir = flag.String("mutations", "m", "Directory to store mutations")
 	port        = flag.Int("port", 8080, "Port to run server on.")
-	numcpu      = flag.Int("numCpu", runtime.NumCPU(),
+	numcpu      = flag.Int("cores", runtime.NumCPU(),
 		"Number of cores to be used by the process")
-	instanceIdx = flag.Uint64("instanceIdx", 0,
+	instanceIdx = flag.Uint64("idx", 0,
 		"serves only entities whose Fingerprint % numInstance == instanceIdx.")
 	workers = flag.String("workers", "",
 		"Comma separated list of IP addresses of workers")
