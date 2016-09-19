@@ -36,10 +36,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-var (
-	stackTrace = flag.Bool("stacktrace", false, "enable stacktrace for errors")
-)
-
 // Check logs fatal if err != nil.
 func Check(err error) {
 	if err != nil {

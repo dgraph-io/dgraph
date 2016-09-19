@@ -106,6 +106,7 @@ func (s *Store) NewIterator() *rdb.Iterator {
 	return s.db.NewIterator(ro)
 }
 
+// Close closes our data store.
 func (s *Store) Close() { s.db.Close() }
 
 func (s *Store) MemtableSize() uint64 {
