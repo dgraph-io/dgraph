@@ -34,3 +34,7 @@ func (opts *ReadOptions) Destroy() {
 func (opts *ReadOptions) SetFillCache(value bool) {
 	C.rdb_readoptions_set_fill_cache(opts.c, boolToChar(value))
 }
+
+func (opts *ReadOptions) SetSnapshot(snapshot *Snapshot) {
+	C.rdb_readoptions_set_snapshot(opts.c, snapshot.c)
+}

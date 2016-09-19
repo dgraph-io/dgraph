@@ -84,6 +84,9 @@ rdb_readoptions_t* rdb_readoptions_create();
 void rdb_readoptions_destroy(rdb_readoptions_t* opt);
 void rdb_readoptions_set_fill_cache(
     rdb_readoptions_t* opt, unsigned char v);
+void rdb_readoptions_set_snapshot(
+    rdb_readoptions_t* opt,
+    const rdb_snapshot_t* snap);
 
 //////////////////////////// rdb_writeoptions_t
 rdb_writeoptions_t* rdb_writeoptions_create();

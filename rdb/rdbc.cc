@@ -233,6 +233,12 @@ void rdb_readoptions_set_fill_cache(
   opt->rep.fill_cache = v;
 }
 
+void rdb_readoptions_set_snapshot(
+    rdb_readoptions_t* opt,
+    const rdb_snapshot_t* snap) {
+  opt->rep.snapshot = (snap ? snap->rep : nullptr);
+}
+
 //////////////////////////// rdb_writeoptions_t
 rdb_writeoptions_t* rdb_writeoptions_create() {
   return new rdb_writeoptions_t;
