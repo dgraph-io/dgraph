@@ -626,8 +626,8 @@ func (l *List) AddMutation(ctx context.Context, t x.DirectedEdge, op byte) (bool
 	hasMutated := l.mergeMutation(mpost)
 	if len(l.mindex)+len(l.mlayer) > 0 {
 		atomic.StoreInt64(&l.dirtyTs, time.Now().UnixNano())
-		if dirtymap != nil {
-			dirtymap.Put(l.ghash)
+		if dirtyChannel != nil {
+			dirtyChannel <- l.ghash
 		}
 	}
 	x.Trace(ctx, "Mutation done")

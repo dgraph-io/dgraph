@@ -41,28 +41,12 @@ var (
 	maxmemory = flag.Int("stw_ram_mb", 4096,
 		"If RAM usage exceeds this, we stop the world, and flush our buffers.")
 
-	keysBufferSize       = flag.Int("keysbuffer", 10000, "Number of keys to be buffered for deletion.")
-	gentlyMergeNumShards = flag.Int("gentlymerge", 4, "Scan how many shards of dirtymap for each gentle merge.")
-	dirtymapNumShards    = flag.Int("dirtymap", 32, "Number of shards for dirtymap.")
-	lhmapNumShards       = flag.Int("lhmap", 32, "Number of shards for lhmap.")
+	keysBufferSize = flag.Int("keysbuffer", 10000, "Number of keys to be buffered for deletion.")
+	lhmapNumShards = flag.Int("lhmap", 32, "Number of shards for lhmap.")
+	dirtyChannel   chan uint64
+	dirtyMap       map[uint64]struct{} // Made global for log().
+	resetDirtyChan chan struct{}
 )
-
-type mergeRoutines struct {
-	sync.RWMutex
-	count int
-}
-
-func (mr *mergeRoutines) Count() int {
-	mr.RLock()
-	defer mr.RUnlock()
-	return mr.count
-}
-
-func (mr *mergeRoutines) Add(delta int) {
-	mr.Lock()
-	mr.count += delta
-	mr.Unlock()
-}
 
 type counters struct {
 	ticker  *time.Ticker
@@ -96,7 +80,7 @@ func (c *counters) log() {
 	log.Printf("List merge counters. added: %d merged: %d clean: %d"+
 		" pending: %d mapsize: %d dirtysize: %d\n",
 		added, merged, atomic.LoadUint64(&c.clean),
-		pending, lhmap.Size(), dirtymap.Size())
+		pending, lhmap.Size(), len(dirtyMap))
 }
 
 func newCounters() *counters {
@@ -126,38 +110,57 @@ func aggressivelyEvict() {
 	log.Printf("Memory usage after calling GC. Allocated MB: %v", megs)
 }
 
-// gentlyMerge will select a few shards of dirtymap to be merged/commited.
-func gentlyMerge(mr *mergeRoutines) {
-	defer mr.Add(-1)
+// mergeAndUpdateKeys calls mergeAndUpdate for each key in array "keys".
+func mergeAndUpdateKeys(keys []uint64, gentleMergeChan chan struct{}) {
 	ctr := newCounters()
 	defer ctr.ticker.Stop()
-
-	dirtymapBuffer := make([]uint64, *keysBufferSize)
-	shardSizes := dirtymap.GetShardSizes() // List of shard sizes.
-	n := *gentlyMergeNumShards
-	if n > len(shardSizes) {
-		n = len(shardSizes)
-	}
-	for i := 0; i < n; i++ {
-		idx := shardSizes[i].idx // Shard that we are emptying.
-		selectedShard := dirtymap.shard[idx]
-		for selectedShard.Size() > 0 {
-			size := selectedShard.MultiGet(dirtymapBuffer, *keysBufferSize)
-			for _, k := range dirtymapBuffer[:size] {
-				selectedShard.Delete(k)
-				l, ok := lhmap.Get(k)
-				if !ok || l == nil {
-					continue
-				}
-				// Not calling processOne, because we don't want to
-				// remove the postings list from the map, to avoid
-				// a race condition, where another caller re-creates the
-				// posting list before a merge happens.
-				mergeAndUpdate(l, ctr)
-			}
+	for _, key := range keys {
+		l, ok := lhmap.Get(key)
+		if !ok || l == nil {
+			continue
 		}
+		// Not calling processOne, because we don't want to
+		// remove the postings list from the map, to avoid
+		// a race condition, where another caller re-creates the
+		// posting list before a merge happens.
+		mergeAndUpdate(l, ctr)
 	}
 	ctr.log()
+	<-gentleMergeChan
+}
+
+// processDirtyChan passes contents from dirty channel into dirty map.
+// All write operations to dirtyMap should be contained in this function.
+func processDirtyChan() {
+	// Max number of gentle merges in parallel.
+	gentleMergeChan := make(chan struct{}, 18)
+	timer := time.Tick(5 * time.Second)
+	for {
+		select {
+		case <-timer:
+			select {
+			case gentleMergeChan <- struct{}{}:
+				n := int(float64(len(dirtyMap)) * 0.07) // Clear 7% of dirty lists.
+				keysBuffer := make([]uint64, 0, 10000)
+				for key := range dirtyMap {
+					delete(dirtyMap, key)
+					keysBuffer = append(keysBuffer, key)
+					if len(keysBuffer) > n {
+						break
+					}
+				}
+				go mergeAndUpdateKeys(keysBuffer, gentleMergeChan)
+			default:
+				log.Println("Skipping gentle merge")
+			}
+
+		case key := <-dirtyChannel:
+			dirtyMap[key] = struct{}{}
+
+		case <-resetDirtyChan:
+			dirtyMap = make(map[uint64]struct{}, 10000)
+		}
+	}
 }
 
 // getMemUsage returns the amount of memory used by the process in MB
@@ -219,23 +222,10 @@ func getMemUsage() int {
 // checkMeomeryUsage monitors the memory usage by the running process and
 // calls aggressively evict if the threshold is reached.
 func checkMemoryUsage() {
-	var mr mergeRoutines
 	for _ = range time.Tick(5 * time.Second) {
 		totMemory := getMemUsage()
 		if totMemory > *maxmemory {
 			aggressivelyEvict()
-		} else {
-			// If merging is slow, we don't want to end up having too many goroutines
-			// merging the dirty list. This should keep them in check.
-			// With a value of 18 and duration of 5 seconds, some goroutines are
-			// taking over 1.5 mins to finish.
-			if mr.Count() > 18 {
-				log.Println("Skipping gentle merging.")
-				continue
-			}
-			mr.Add(1)
-			// gentlyMerge can take a while to finish. So, run it in a goroutine.
-			go gentlyMerge(&mr)
 		}
 	}
 }
@@ -243,14 +233,16 @@ func checkMemoryUsage() {
 var (
 	stopTheWorld sync.RWMutex
 	lhmap        *listMap
-	dirtymap     *listSet
 )
 
 // Init initializes the posting lists package, the in memory and dirty list hash.
 func Init() {
 	lhmap = newShardedListMap(*lhmapNumShards)
-	dirtymap = newShardedListSet(*dirtymapNumShards)
+	dirtyChannel = make(chan uint64, 10000)
+	dirtyMap = make(map[uint64]struct{}, 10000)
+	resetDirtyChan = make(chan struct{})
 	go checkMemoryUsage()
+	go processDirtyChan()
 }
 
 // GetOrCreate stores the List corresponding to key(if its not there already)
@@ -319,7 +311,9 @@ func process(keysBuffer []uint64, idx *uint64, c *counters, wg *sync.WaitGroup) 
 
 func MergeLists(numRoutines int) {
 	// We're merging all the lists, so just create a new dirtymap.
-	dirtymap = newShardedListSet(*dirtymapNumShards)
+	//dirtymap = newShardedListSet(*dirtymapNumShards)
+	resetDirtyChan <- struct{}{}
+
 	c := newCounters()
 	go c.periodicLog()
 	defer c.ticker.Stop()

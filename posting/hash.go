@@ -1,7 +1,6 @@
 package posting
 
 import (
-	"sort"
 	"sync"
 )
 
@@ -141,104 +140,4 @@ func (s *listMap) MultiGet(buf []uint64, size int) int {
 		idx += s.shard[i].MultiGet(buf[idx:], size/s.numShards)
 	}
 	return idx
-}
-
-func newListSetShard() *listSetShard {
-	return &listSetShard{m: make(map[uint64]struct{})}
-}
-
-// Size returns size of map.
-func (s *listSetShard) Size() int {
-	s.RLock()
-	defer s.RUnlock()
-	return len(s.m)
-}
-
-// Get returns true if found.
-func (s *listSetShard) Get(key uint64) bool {
-	s.RLock()
-	defer s.RUnlock()
-	_, found := s.m[key]
-	return found
-}
-
-// Put puts key into set.
-func (s *listSetShard) Put(key uint64) {
-	s.Lock()
-	defer s.Unlock()
-	s.m[key] = struct{}{}
-}
-
-// Delete deletes key from hash set.
-func (s *listSetShard) Delete(key uint64) {
-	s.Lock()
-	defer s.Unlock()
-	delete(s.m, key)
-}
-
-// MultiGet returns number of items written to buf. Number of items written is
-// guaranteed to be <= size.
-func (s *listSetShard) MultiGet(buf []uint64, size int) int {
-	s.RLock()
-	defer s.RUnlock()
-	var idx int
-	for k := range s.m {
-		buf[idx] = k
-		idx++
-		if idx >= size {
-			break
-		}
-	}
-	return idx
-}
-
-func newShardedListSet(numShards int) *listSet {
-	out := &listSet{
-		numShards: numShards,
-		shard:     make([]*listSetShard, numShards),
-	}
-	for i := 0; i < numShards; i++ {
-		out.shard[i] = newListSetShard()
-	}
-	return out
-}
-
-// Size returns size of map.
-func (s *listSet) Size() int {
-	var size int
-	for i := 0; i < s.numShards; i++ {
-		size += s.shard[i].Size()
-	}
-	return size
-}
-
-// Get returns true if found.
-func (s *listSet) Get(key uint64) bool {
-	return s.shard[getShard(s.numShards, key)].Get(key)
-}
-
-// Put puts key into set.
-func (s *listSet) Put(key uint64) {
-	s.shard[getShard(s.numShards, key)].Put(key)
-}
-
-// Delete deletes key from hash set.
-func (s *listSet) Delete(key uint64) {
-	s.shard[getShard(s.numShards, key)].Delete(key)
-}
-
-type BySize []shardSize
-
-func (s BySize) Len() int           { return len(s) }
-func (s BySize) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
-func (s BySize) Less(i, j int) bool { return s[i].size > s[j].size }
-
-// GetShardSizes return shard sizes in descending order of sizes.
-func (s *listSet) GetShardSizes() []shardSize {
-	out := make([]shardSize, s.numShards)
-	for i := 0; i < dirtymap.numShards; i++ {
-		out[i] = shardSize{dirtymap.shard[i].Size(), i}
-	}
-	sort.Sort(BySize(out))
-	return out
 }
