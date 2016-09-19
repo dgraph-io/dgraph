@@ -11,9 +11,11 @@
 #include "rocksdb/filter_policy.h"
 #include "rocksdb/iterator.h"
 #include "rocksdb/options.h"
+#include "rocksdb/snapshot.h"
 #include "rocksdb/status.h"
 #include "rocksdb/table.h"
 #include "rocksdb/write_batch.h"
+#include "rocksdb/utilities/checkpoint.h"
 
 #include "rdbc.h"
 #include "_cgo_export.h"
@@ -31,6 +33,8 @@ using rocksdb::NewBloomFilterPolicy;
 using rocksdb::Cache;
 using rocksdb::NewLRUCache;
 using rocksdb::BlockBasedTableOptions;
+using rocksdb::Snapshot;
+using rocksdb::Checkpoint;
 
 struct rdb_t { DB* rep; };
 struct rdb_options_t { Options rep; };
@@ -43,6 +47,8 @@ struct rdb_writebatch_t { WriteBatch rep; };
 struct rdb_iterator_t { Iterator* rep; };
 struct rdb_cache_t { std::shared_ptr<Cache> rep; };
 struct rdb_block_based_table_options_t { BlockBasedTableOptions rep; };
+struct rdb_snapshot_t { const Snapshot* rep; };
+struct rdb_checkpoint_t { Checkpoint* rep; };
 
 bool SaveError(char** errptr, const Status& s) {
   assert(errptr != nullptr);
@@ -225,6 +231,12 @@ void rdb_readoptions_destroy(rdb_readoptions_t* opt) {
 void rdb_readoptions_set_fill_cache(
     rdb_readoptions_t* opt, unsigned char v) {
   opt->rep.fill_cache = v;
+}
+
+void rdb_readoptions_set_snapshot(
+    rdb_readoptions_t* opt,
+    const rdb_snapshot_t* snap) {
+  opt->rep.snapshot = (snap ? snap->rep : nullptr);
 }
 
 //////////////////////////// rdb_writeoptions_t
@@ -483,4 +495,40 @@ void rdb_block_based_options_set_block_cache_compressed(
 void rdb_block_based_options_set_whole_key_filtering(
     rdb_block_based_table_options_t* options, unsigned char v) {
   options->rep.whole_key_filtering = v;
+}
+
+//////////////////////////// rdb_snapshot_t
+const rdb_snapshot_t* rdb_create_snapshot(rdb_t* db) {
+  rdb_snapshot_t* result = new rdb_snapshot_t;
+  result->rep = db->rep->GetSnapshot();
+  return result;
+}
+
+void rdb_release_snapshot(
+    rdb_t* db,
+    const rdb_snapshot_t* snapshot) {
+  db->rep->ReleaseSnapshot(snapshot->rep);
+  delete snapshot;
+}
+
+//////////////////////////// rdb_checkpoint_t
+rdb_checkpoint_t* rdb_create_checkpoint(rdb_t* db, char** errptr) {
+  Checkpoint* checkpoint;
+  if (SaveError(errptr, Checkpoint::Create(db->rep, &checkpoint))) {
+    return nullptr;
+  }
+  rdb_checkpoint_t* result = new rdb_checkpoint_t;
+  result->rep = checkpoint;
+  return result;
+}
+
+void rdb_open_checkpoint(
+	rdb_checkpoint_t* checkpoint,
+  const char* checkpoint_dir,
+  char** errptr) {
+  SaveError(errptr, checkpoint->rep->CreateCheckpoint(std::string(checkpoint_dir)));
+}
+
+void rdb_destroy_checkpoint(rdb_checkpoint_t* checkpoint) {
+	delete checkpoint->rep;
 }
