@@ -35,6 +35,11 @@ func (opts *ReadOptions) SetFillCache(value bool) {
 	C.rdb_readoptions_set_fill_cache(opts.c, boolToChar(value))
 }
 
+// SetSnapshot updates the default read options to use the given snapshot.
 func (opts *ReadOptions) SetSnapshot(snapshot *Snapshot) {
+	if snapshot == nil {
+		C.rdb_readoptions_set_snapshot(opts.c, nil)
+		return
+	}
 	C.rdb_readoptions_set_snapshot(opts.c, snapshot.c)
 }
