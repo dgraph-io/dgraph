@@ -29,7 +29,6 @@ import (
 
 	"github.com/gogo/protobuf/proto"
 
-	"github.com/dgraph-io/dgraph/commit"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/query/graph"
@@ -141,14 +140,10 @@ func populateGraph(t *testing.T) (string, *store.Store) {
 	}
 
 	worker.SetWorkerState(worker.NewState(ps, nil, 0, 1))
-
-	clog := commit.NewLogger(dir, "mutations", 50<<20)
-	clog.Init()
-
 	posting.Init()
 
 	// So, user we're interested in has uid: 1.
-	// She has 4 friends: 23, 24, 25, 31, and 101
+	// She has 5 friends: 23, 24, 25, 31, and 101
 	edge := x.DirectedEdge{
 		ValueId:   23,
 		Source:    "testing",
@@ -646,7 +641,7 @@ func TestToPB(t *testing.T) {
 
 	query := `
 		{
-			me(_uid_:0x01) {
+			debug(_uid_:0x1) {
 				_xid_
 				name
 				gender
@@ -658,7 +653,7 @@ func TestToPB(t *testing.T) {
 				}
 			}
 		}
-	`
+  `
 
 	gq, _, err := gql.Parse(query)
 	if err != nil {
@@ -683,7 +678,7 @@ func TestToPB(t *testing.T) {
 		t.Error(err)
 	}
 
-	if gr.Attribute != "me" {
+	if gr.Attribute != "debug" {
 		t.Errorf("Expected attribute me, Got: %v", gr.Attribute)
 	}
 	if gr.Uid != 1 {
