@@ -29,7 +29,6 @@ package x
 // (3) You want to generate a new error with stack trace info. Use x.Errorf.
 
 import (
-	"flag"
 	"fmt"
 	"log"
 

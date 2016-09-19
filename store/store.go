@@ -109,11 +109,13 @@ func (s *Store) NewIterator() *rdb.Iterator {
 // Close closes our data store.
 func (s *Store) Close() { s.db.Close() }
 
+// Memtable returns the memtable size.
 func (s *Store) MemtableSize() uint64 {
 	memTableSize, _ := strconv.ParseUint(s.db.GetProperty("rocksdb.cur-size-all-mem-tables"), 10, 64)
 	return memTableSize
 }
 
+// IndexFilterblockSize returns the filter block size.
 func (s *Store) IndexFilterblockSize() uint64 {
 	blockSize, _ := strconv.ParseUint(s.db.GetProperty("rocksdb.estimate-table-readers-mem"), 10, 64)
 	return blockSize
