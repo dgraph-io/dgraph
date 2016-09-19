@@ -59,7 +59,7 @@ func init() {
 	indexLog = trace.NewEventLog("index", "Logger")
 	x.AddInit(func() {
 		if indexConfigFile == nil || len(*indexConfigFile) == 0 {
-			indexLog.Printf("No valid config file", *indexConfigFile)
+			indexLog.Printf("No valid config file: %v", *indexConfigFile)
 			return
 		}
 		f, err := ioutil.ReadFile(*indexConfigFile)

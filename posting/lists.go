@@ -297,17 +297,15 @@ func GetOrCreate(key []byte, pstore *store.Store) (rlist *List, decr func()) {
 			l.init(key, pstore)
 			return l, l.decr
 
-		} else {
-			// If we're unable to insert this, decrement the reference count.
-			l.decr()
 		}
+		// If we're unable to insert this, decrement the reference count.
+		l.decr()
 	}
 	if lp := getFromMap(gotomicKey); lp != nil {
 		return lp, lp.decr
-	} else {
-		err := errors.Errorf("Key should be present.")
-		log.Fatalf("%+v", err)
 	}
+	err := errors.Errorf("Key should be present.")
+	log.Fatalf("%+v", err)
 	return nil, nil
 }
 
