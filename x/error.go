@@ -29,15 +29,10 @@ package x
 // (3) You want to generate a new error with stack trace info. Use x.Errorf.
 
 import (
-	"flag"
 	"fmt"
 	"log"
 
 	"github.com/pkg/errors"
-)
-
-var (
-	stackTrace = flag.Bool("stacktrace", false, "enable stacktrace for errors")
 )
 
 // Check logs fatal if err != nil.

@@ -28,7 +28,7 @@ export LD_LIBRARY_PATH="${ROCKSDBDIR}:${LD_LIBRARY_PATH}"
 
 pushd cmd/dgraph &> /dev/null
 go build .
-./dgraph --uids ~/dgraph/u0 --postings ~/dgraph/p0 --mutations ~/dgraph/m0 &
+./dgraph --u ~/dgraph/u0 --p ~/dgraph/p0 --m ~/dgraph/m0 &
 
 # Wait for server to start in the background.
 until nc -z 127.0.0.1 8080;

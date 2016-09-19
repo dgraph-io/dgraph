@@ -25,15 +25,15 @@ var (
 
 	rdfGzips = flag.String("rdfgzips", "",
 		"Comma separated gzip files containing RDF data")
-	instanceIdx = flag.Uint64("instanceIdx", 0,
+	instanceIdx = flag.Uint64("idx", 0,
 		"Only pick entities, where Fingerprint % numInstance == instanceIdx.")
-	numInstances = flag.Uint64("numInstances", 1,
+	numInstances = flag.Uint64("num", 1,
 		"Total number of instances among which uid assigning is shared")
-	uidDir = flag.String("uids", "",
+	uidDir = flag.String("u", "",
 		"Directory to store xid to uid posting lists")
-	cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
-	memprofile = flag.String("memprofile", "", "write memory profile to file")
-	numcpu     = flag.Int("numCpu", runtime.NumCPU(),
+	cpuprofile = flag.String("cpu", "", "write cpu profile to file")
+	memprofile = flag.String("mem", "", "write memory profile to file")
+	numcpu     = flag.Int("cores", runtime.NumCPU(),
 		"Number of cores to be used by the process")
 	prof = flag.String("profile", "", "Address at which profile is displayed")
 )

@@ -91,13 +91,11 @@ func (s *Store) Get(key []byte) ([]byte, error) {
 	return valSlice.Data(), nil
 }
 
-func (s *Store) SetOne(k []byte, val []byte) error {
-	return s.db.Put(s.wopt, k, val)
-}
+// SetOne adds a key-value to data store.
+func (s *Store) SetOne(k []byte, val []byte) error { return s.db.Put(s.wopt, k, val) }
 
-func (s *Store) Delete(k []byte) error {
-	return s.db.Delete(s.wopt, k)
-}
+// Delete deletes a key from data store.
+func (s *Store) Delete(k []byte) error { return s.db.Delete(s.wopt, k) }
 
 // NewIterator initializes a new iterator and returns it.
 func (s *Store) NewIterator() *rdb.Iterator {
@@ -108,24 +106,23 @@ func (s *Store) NewIterator() *rdb.Iterator {
 	return s.db.NewIterator(ro)
 }
 
-func (s *Store) Close() {
-	s.db.Close()
-}
+// Close closes our data store.
+func (s *Store) Close() { s.db.Close() }
 
+// Memtable returns the memtable size.
 func (s *Store) MemtableSize() uint64 {
 	memTableSize, _ := strconv.ParseUint(s.db.GetProperty("rocksdb.cur-size-all-mem-tables"), 10, 64)
 	return memTableSize
 }
 
+// IndexFilterblockSize returns the filter block size.
 func (s *Store) IndexFilterblockSize() uint64 {
 	blockSize, _ := strconv.ParseUint(s.db.GetProperty("rocksdb.estimate-table-readers-mem"), 10, 64)
 	return blockSize
 }
 
 // NewWriteBatch creates a new WriteBatch object and returns a pointer to it.
-func (s *Store) NewWriteBatch() *rdb.WriteBatch {
-	return rdb.NewWriteBatch()
-}
+func (s *Store) NewWriteBatch() *rdb.WriteBatch { return rdb.NewWriteBatch() }
 
 // WriteBatch does a batch write to RocksDB from the data in WriteBatch object.
 func (s *Store) WriteBatch(wb *rdb.WriteBatch) error {
@@ -134,3 +131,12 @@ func (s *Store) WriteBatch(wb *rdb.WriteBatch) error {
 	}
 	return nil
 }
+
+// NewCheckpoint creates new checkpoint from current store.
+func (s *Store) NewCheckpoint() (*rdb.Checkpoint, error) { return s.db.NewCheckpoint() }
+
+// NewSnapshot creates new snapshot from current store.
+func (s *Store) NewSnapshot() *rdb.Snapshot { return s.db.NewSnapshot() }
+
+// SetSnapshot updates default read options to use the given snapshot.
+func (s *Store) SetSnapshot(snapshot *rdb.Snapshot) { s.ropt.SetSnapshot(snapshot) }
