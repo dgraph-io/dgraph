@@ -50,13 +50,13 @@ import (
 )
 
 var (
-	postingDir  = flag.String("postings", "p", "Directory to store posting lists")
-	uidDir      = flag.String("uids", "u", "XID UID posting lists directory")
-	mutationDir = flag.String("mutations", "m", "Directory to store mutations")
+	postingDir  = flag.String("p", "p", "Directory to store posting lists")
+	uidDir      = flag.String("u", "u", "XID UID posting lists directory")
+	mutationDir = flag.String("m", "m", "Directory to store mutations")
 	port        = flag.Int("port", 8080, "Port to run server on.")
-	numcpu      = flag.Int("numCpu", runtime.NumCPU(),
+	numcpu      = flag.Int("cores", runtime.NumCPU(),
 		"Number of cores to be used by the process")
-	instanceIdx = flag.Uint64("instanceIdx", 0,
+	instanceIdx = flag.Uint64("idx", 0,
 		"serves only entities whose Fingerprint % numInstance == instanceIdx.")
 	workers = flag.String("workers", "",
 		"Comma separated list of IP addresses of workers")
@@ -66,8 +66,8 @@ var (
 	shutdown    = flag.Bool("shutdown", false, "Allow client to send shutdown signal.")
 	tracing     = flag.Float64("trace", 0.5, "The ratio of queries to trace.")
 	schemaFile  = flag.String("schema", "", "Path to the file that specifies schema in json format")
-	cpuprofile  = flag.String("cpuprof", "", "write cpu profile to file")
-	memprofile  = flag.String("memprof", "", "write memory profile to file")
+	cpuprofile  = flag.String("cpu", "", "write cpu profile to file")
+	memprofile  = flag.String("mem", "", "write memory profile to file")
 	closeCh     = make(chan struct{})
 )
 
