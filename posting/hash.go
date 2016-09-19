@@ -14,20 +14,6 @@ type listMap struct {
 	shard     []*listMapShard
 }
 
-type listSetShard struct {
-	sync.RWMutex
-	m map[uint64]struct{}
-}
-
-type listSet struct {
-	numShards int
-	shard     []*listSetShard
-}
-
-type shardSize struct {
-	size, idx int
-}
-
 func getShard(numShards int, key uint64) int {
 	return int(key % uint64(numShards))
 }

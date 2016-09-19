@@ -43,9 +43,9 @@ var (
 
 	keysBufferSize = flag.Int("keysbuffer", 10000, "Number of keys to be buffered for deletion.")
 	lhmapNumShards = flag.Int("lhmap", 32, "Number of shards for lhmap.")
-	dirtyChannel   chan uint64
 	dirtyMap       map[uint64]struct{} // Made global for log().
-	resetDirtyChan chan struct{}
+	dirtyChannel   chan uint64         // Puts to dirtyMap has to go through this channel.
+	resetDirtyChan chan struct{}       // To clear dirtyMap, push to this channel.
 )
 
 type counters struct {
