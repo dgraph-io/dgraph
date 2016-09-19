@@ -36,6 +36,7 @@ func (db *DB) NewCheckpoint() (*Checkpoint, error) {
 }
 
 // Save builds openable snapshot of RocksDB on disk.
+// CAUTION: checkpointDir should not already exist. If so, nothing will happen.
 func (s *Checkpoint) Save(checkpointDir string) error {
 	var (
 		cErr *C.char
