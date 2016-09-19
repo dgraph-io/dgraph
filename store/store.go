@@ -96,13 +96,11 @@ func (s *Store) Get(key []byte) ([]byte, error) {
 	return val, nil
 }
 
-func (s *Store) SetOne(k []byte, val []byte) error {
-	return s.db.Put(s.wopt, k, val)
-}
+// SetOne adds a key-value to data store.
+func (s *Store) SetOne(k []byte, val []byte) error { return s.db.Put(s.wopt, k, val) }
 
-func (s *Store) Delete(k []byte) error {
-	return s.db.Delete(s.wopt, k)
-}
+// Delete deletes a key from data store.
+func (s *Store) Delete(k []byte) error { return s.db.Delete(s.wopt, k) }
 
 // NewIterator initializes a new iterator and returns it.
 func (s *Store) NewIterator() *rdb.Iterator {
@@ -113,9 +111,7 @@ func (s *Store) NewIterator() *rdb.Iterator {
 	return s.db.NewIterator(ro)
 }
 
-func (s *Store) Close() {
-	s.db.Close()
-}
+func (s *Store) Close() { s.db.Close() }
 
 func (s *Store) MemtableSize() uint64 {
 	memTableSize, _ := strconv.ParseUint(s.db.GetProperty("rocksdb.cur-size-all-mem-tables"), 10, 64)
@@ -128,9 +124,7 @@ func (s *Store) IndexFilterblockSize() uint64 {
 }
 
 // NewWriteBatch creates a new WriteBatch object and returns a pointer to it.
-func (s *Store) NewWriteBatch() *rdb.WriteBatch {
-	return rdb.NewWriteBatch()
-}
+func (s *Store) NewWriteBatch() *rdb.WriteBatch { return rdb.NewWriteBatch() }
 
 // WriteBatch does a batch write to RocksDB from the data in WriteBatch object.
 func (s *Store) WriteBatch(wb *rdb.WriteBatch) error {
@@ -139,3 +133,6 @@ func (s *Store) WriteBatch(wb *rdb.WriteBatch) error {
 	}
 	return nil
 }
+
+// NewCheckpoint creates new checkpoint from current store.
+func (s *Store) NewCheckpoint() (*rdb.Checkpoint, error) { return s.db.NewCheckpoint() }
