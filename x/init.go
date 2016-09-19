@@ -55,10 +55,12 @@ func printVersionOnly() {
 	if *version {
 		fmt.Printf("Dgraph version %s\n", dgraphVersion)
 		fmt.Println("\nCopyright 2016 Dgraph Labs, Inc.")
-		fmt.Println("Licensed under the Apache License, Version 2.0.")
-		fmt.Println("\nFor Dgraph official documentation, visit https://wiki.dgraph.io.")
-		fmt.Println("For discussions about Dgraph       , visit https://discuss.dgraph.io.")
-		fmt.Println("To say hi to the community         , visit https://dgraph.slack.com.")
+		fmt.Println(`
+Licensed under the Apache License, version 2.0.
+For Dgraph official documentation, visit https://wiki.dgraph.io.
+For discussions about Dgraph     , visit https://discuss.dgraph.io.
+To say hi to the community       , visit https://dgraph.slack.com.
+`)
 		os.Exit(0)
 	}
 }
