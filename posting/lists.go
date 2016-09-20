@@ -34,10 +34,10 @@ import (
 	"time"
 
 	"github.com/dgryski/go-farm"
-	"github.com/pkg/errors"
 	"github.com/zond/gotomic"
 
 	"github.com/dgraph-io/dgraph/store"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 var maxmemory = flag.Int("stw_ram_mb", 4096,
@@ -274,7 +274,7 @@ func getFromMap(gotomicKey gotomic.IntKey) *List {
 	return result
 }
 
-// GetOrCreate stores the List corresponding to key(if its not there already)
+// GetOrCreate stores the List corresponding to key, if it's not there already.
 // to lhmap and returns it. It also returns a reference decrement function to be called by caller.
 //
 // plist, decr := GetOrCreate(key, store)
@@ -291,21 +291,21 @@ func GetOrCreate(key []byte, pstore *store.Store) (rlist *List, decr func()) {
 	}
 
 	{
-		l := getNew() // This retrieves a new *List and increments it's ref count.
+		l := getNew() // This retrieves a new *List and increments its ref count.
 		if inserted := lhmap.PutIfMissing(gotomicKey, l); inserted {
-			l.incr() // Prepare this for return to caller.
+			l.incr() // Increment reference counter for the caller.
 			l.init(key, pstore)
 			return l, l.decr
 
 		}
 		// If we're unable to insert this, decrement the reference count.
+		// This would undo the increment in the newList() call, and allow this list to be reused.
 		l.decr()
 	}
 	if lp := getFromMap(gotomicKey); lp != nil {
 		return lp, lp.decr
 	}
-	err := errors.Errorf("Key should be present.")
-	log.Fatalf("%+v", err)
+	x.Assertf(false, "Key should be present.")
 	return nil, nil
 }
 
