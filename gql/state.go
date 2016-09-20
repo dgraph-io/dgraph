@@ -17,7 +17,12 @@
 // Package gql is responsible for lexing and parsing a GraphQL query/mutation.
 package gql
 
-import "github.com/dgraph-io/dgraph/lex"
+import (
+	"bytes"
+
+	"github.com/dgraph-io/dgraph/lex"
+	"github.com/dgraph-io/dgraph/x"
+)
 
 const (
 	leftCurl     = '{'
@@ -56,7 +61,16 @@ const (
 	itemVarType                                 // type a variable
 	itemVarDefault                              // default value of a variable
 	itemAlias                                   // Alias for a field
+	itemDirectiveName                           // Name starting with @
+	itemFilterAnd                               // And inside a filter.
+	itemFilterOr                                // Or inside a filter.
+	itemFilterFunc                              // Function inside a filter.
+	itemFilterFuncArg                           // Function args inside a filter.
 )
+
+func init() {
+	x.Printf("~~~~%d\n", itemFilterFunc)
+}
 
 // lexText lexes the input string and calls other lex functions.
 func lexText(l *lex.Lexer) lex.StateFn {
@@ -131,8 +145,125 @@ func lexInside(l *lex.Lexer) lex.StateFn {
 			return lexArgInside
 		case r == ':':
 			return lexAlias
+		case r == '@':
+			return lexDirective
 		default:
 			return l.Errorf("Unrecognized character in lexInside: %#U", r)
+		}
+	}
+}
+
+// lexFilterFuncInside expects input to look like ("...", "...").
+func lexFilterFuncInside(l *lex.Lexer) lex.StateFn {
+	l.AcceptRun(isSpace)
+	l.Ignore() // Any spaces encountered.
+
+	r := l.Next()
+	if r != leftRound {
+		return l.Errorf("Expected ( after filter func")
+	}
+	l.Ignore()
+
+	for {
+		r := l.Next()
+		if isSpace(r) || r == ',' {
+			l.Ignore()
+		} else if r == rightRound {
+			l.Ignore()
+			return lexFilterInside
+		} else if isEndLiteral(r) {
+			l.Ignore()
+			l.AcceptUntil(isEndLiteral) // This call will backup the ending ".
+			l.Emit(itemFilterFuncArg)
+			l.Next() // Consume " and ignore it.
+			l.Ignore()
+		} else {
+			return l.Errorf("Expected quotation mark in lexFilterFuncArgs")
+		}
+	}
+}
+
+// lexFilterFuncName expects input to look like equal("...", "...").
+func lexFilterFuncName(l *lex.Lexer) lex.StateFn {
+	for {
+		// The caller already checked isNameBegin, and absorbed one rune.
+		r := l.Next()
+		if isNameSuffix(r) {
+			continue
+		}
+		l.Backup()
+		l.Emit(itemFilterFunc)
+		break
+	}
+	return lexFilterFuncInside
+}
+
+// lexFilterInside expects input like (  (equal(...) && f(...)) || g(...)  ).
+func lexFilterInside(l *lex.Lexer) lex.StateFn {
+	for {
+		r := l.Next()
+		switch {
+		case r == leftRound:
+			l.Emit(itemLeftRound)
+			l.FilterDepth++
+		case r == rightRound:
+			if l.FilterDepth == 0 {
+				return l.Errorf("Unexpected )")
+			}
+			l.FilterDepth--
+			l.Emit(itemRightRound)
+			if l.FilterDepth == 0 {
+				return lexInside // Filter directive is done.
+			}
+		case r == lex.EOF:
+			return l.Errorf("Unclosed directive")
+		case isSpace(r) || isEndOfLine(r):
+			l.Ignore()
+		case isNameBegin(r):
+			return lexFilterFuncName
+		case r == '&':
+			l.Emit(itemFilterAnd)
+			return lexFilterInside
+		case r == '|':
+			l.Emit(itemFilterOr)
+			return lexFilterInside
+		default:
+			return l.Errorf("Unrecognized character in lexInside: %#U", r)
+		}
+	}
+}
+
+// lexDirectiveName is similar to lexName but for directives.
+func lexDirectiveName(l *lex.Lexer) lex.StateFn {
+	buf := bytes.NewBuffer(make([]byte, 0, 15))
+	for {
+		// The caller already checked isNameBegin, and absorbed one rune.
+		r := l.Next()
+		buf.WriteRune(r)
+		if isNameSuffix(r) {
+			continue
+		}
+		l.Backup()
+		l.Emit(itemDirectiveName)
+
+		directive := buf.Bytes()[:buf.Len()-1]
+		// The lexer behaves differently for different directives.
+		if string(directive) == "filter" {
+			return lexFilterInside
+		}
+		return l.Errorf("Unhandled directive %s", directive)
+	}
+	return lexInside
+}
+
+func lexDirective(l *lex.Lexer) lex.StateFn {
+	for {
+		switch r := l.Next(); {
+		case isNameBegin(r):
+			l.Backup()
+			return lexDirectiveName
+		default:
+			return l.Errorf("Unrecognized character in lexDirective: %#U", r)
 		}
 	}
 }
@@ -368,7 +499,7 @@ func lexArgInside(l *lex.Lexer) lex.StateFn {
 		switch r := l.Next(); {
 		case r == lex.EOF:
 			return l.Errorf("unclosed argument")
-		case isSpace(r) || isEndOfLine(r):
+		case isSpace(r) || isEndOfLine(r) || r == comma:
 			l.Ignore()
 		case isNameBegin(r):
 			return lexArgName
@@ -378,8 +509,6 @@ func lexArgInside(l *lex.Lexer) lex.StateFn {
 		case r == rightRound:
 			l.Emit(itemRightRound)
 			return lexInside
-		case r == comma:
-			l.Ignore()
 		default:
 			return l.Errorf("argument list invalid")
 		}
@@ -431,6 +560,11 @@ func isSpace(r rune) bool {
 // isEndOfLine returns true if the rune is a Linefeed or a Carriage return.
 func isEndOfLine(r rune) bool {
 	return r == '\u000A' || r == '\u000D'
+}
+
+// isEndLiteral returns true if rune is quotation mark.
+func isEndLiteral(r rune) bool {
+	return r == '"' || r == '\u000d' || r == '\u000a'
 }
 
 // isNameBegin returns true if the rune is an alphabet or an '_'.

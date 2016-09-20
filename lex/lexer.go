@@ -53,13 +53,14 @@ type Lexer struct {
 	// NOTE: Using a text scanner wouldn't work because it's designed for parsing
 	// Golang. It won't keep track of start position, or allow us to retrieve
 	// slice from [start:pos]. Better to just use normal string.
-	Input string    // string being scanned.
-	Start int       // start position of this item.
-	Pos   int       // current position of this item.
-	Width int       // width of last rune read from input.
-	Items chan item // channel of scanned items.
-	Depth int       // nesting of {}
-	Mode  int       // mode based on information so far.
+	Input       string    // string being scanned.
+	Start       int       // start position of this item.
+	Pos         int       // current position of this item.
+	Width       int       // width of last rune read from input.
+	Items       chan item // channel of scanned items.
+	Depth       int       // nesting of {}
+	FilterDepth int       // nesting of () inside filter directive.
+	Mode        int       // mode based on information so far.
 }
 
 func (l *Lexer) Init(input string) {
@@ -67,8 +68,7 @@ func (l *Lexer) Init(input string) {
 	l.Items = make(chan item, 5)
 }
 
-func (l *Lexer) Errorf(format string,
-	args ...interface{}) StateFn {
+func (l *Lexer) Errorf(format string, args ...interface{}) StateFn {
 	l.Items <- item{
 		Typ: ItemError,
 		Val: fmt.Sprintf(format, args...),
