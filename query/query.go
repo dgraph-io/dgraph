@@ -280,8 +280,8 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 					" one of the scalar types defined in the schema.", sg.AttrType, sg.Attr)
 			}
 			stype := sg.AttrType.(gql.Scalar)
-			lval, err := stype.ParseType(val)
-			if err != nil {
+			lval := stype.NewValue()
+			if err := lval.UnmarshalText(val); err != nil {
 				return result, err
 			}
 			if sg.Alias != "" {
@@ -431,7 +431,8 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 						" one of the scalar types defined in the schema.", pc.AttrType, pc.Attr)
 				}
 				stype := pc.AttrType.(gql.Scalar)
-				if _, err := stype.ParseType(v); err != nil {
+				val := stype.NewValue()
+				if err := val.UnmarshalText(v); err != nil {
 					return err
 				}
 			}
