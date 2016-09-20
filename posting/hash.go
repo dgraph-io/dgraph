@@ -99,7 +99,7 @@ func (s *listMap) Delete(key uint64) (*List, bool) {
 
 // StreamUntilCap pushes keys into channel until it reaches capacity. Returns true
 // if we reach cap.
-func (s *listMapShard) StreamUntilCap(out chan uint64) bool {
+func (s *listMapShard) streamUntilCap(out chan uint64) bool {
 	s.RLock()
 	defer s.RUnlock()
 	for key := range s.m {
@@ -113,14 +113,14 @@ func (s *listMapShard) StreamUntilCap(out chan uint64) bool {
 
 // StreamUntilCap pushes keys into channel until it reaches capacity. Returns true
 // if we reach cap.
-func (s *listMap) StreamUntilCap(out chan uint64) {
+func (s *listMap) streamUntilCap(out chan uint64) {
 	if len(out) == cap(out) {
 		return
 	}
 	// We have tried using multiple goroutines to push into the channel, but has
 	// seen little to no improvement in running time.
 	for _, shard := range s.shard {
-		if shard.StreamUntilCap(out) {
+		if shard.streamUntilCap(out) {
 			break
 		}
 	}

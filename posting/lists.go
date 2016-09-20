@@ -296,6 +296,7 @@ func processOne(k uint64, c *counters) {
 	mergeAndUpdate(l, c)
 }
 
+// MergeLists commit all posting lists in lhmap to RocksDB.
 func MergeLists(numRoutines int) {
 	// We're merging all the lists, so just create a new dirtymap.
 	resetDirtyChan <- struct{}{}
@@ -320,7 +321,7 @@ func MergeLists(numRoutines int) {
 	keysChan := make(chan uint64, n) // Allocate channel only once.
 	defer close(keysChan)
 	for lhmap.Size() > 0 {
-		lhmap.StreamUntilCap(keysChan) // Don't close keysChan yet. We can reuse it.
+		lhmap.streamUntilCap(keysChan) // Don't close keysChan yet. We can reuse it.
 
 		var wg sync.WaitGroup
 		for i := 0; i < numRoutines; i++ {
