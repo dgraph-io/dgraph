@@ -296,7 +296,6 @@ func GetOrCreate(key []byte, pstore *store.Store) (rlist *List, decr func()) {
 			l.incr() // Increment reference counter for the caller.
 			l.init(key, pstore)
 			return l, l.decr
-
 		}
 		// If we're unable to insert this, decrement the reference count.
 		// This would undo the increment in the newList() call, and allow this list to be reused.

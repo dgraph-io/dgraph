@@ -78,10 +78,10 @@ func (l *List) refCount() int32 { return atomic.LoadInt32(&l.refcount) }
 func (l *List) incr() int32     { return atomic.AddInt32(&l.refcount, 1) }
 func (l *List) decr() {
 	val := atomic.AddInt32(&l.refcount, -1)
+	x.Assertf(val >= 0, "List reference should never be less than zero: %v", val)
 	if val > 0 {
 		return
 	}
-	x.Assertf(val < 0, "List reference should never be less than zero:")
 	listPool.Put(l)
 }
 
