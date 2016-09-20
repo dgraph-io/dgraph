@@ -97,25 +97,6 @@ func (s *listMap) Delete(key uint64) (*List, bool) {
 	return s.shard[getShard(s.numShards, key)].Delete(key)
 }
 
-// RetrieveNKeys returns number of items written to buf. Number of items written
-// is guaranteed to be <= size.
-func (s *listMap) RetrieveNKeys(buf []uint64, size int) int {
-	var idx int
-	n := size / s.numShards // Read n items from each shard.
-	for _, shard := range s.shard {
-		shard.RLock()
-		for key := range shard.m {
-			buf[idx] = key
-			idx++
-			if idx >= n {
-				break
-			}
-		}
-		shard.RUnlock()
-	}
-	return idx
-}
-
 // StreamUntilCap pushes keys into channel until it reaches capacity. Returns true
 // if we reach cap.
 func (s *listMapShard) StreamUntilCap(out chan uint64) bool {
