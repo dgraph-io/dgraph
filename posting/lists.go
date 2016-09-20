@@ -41,7 +41,7 @@ var (
 	maxmemory = flag.Int("stw_ram_mb", 4096,
 		"If RAM usage exceeds this, we stop the world, and flush our buffers.")
 
-	keysBufferSize = flag.Int("keysbuffer", 10000, "Number of keys to be buffered for deletion.")
+	keysBufferFrac = flag.Float64("keysbuffer", 0.07, "Number of keys to be buffered for deletion as fraction of lhmap.")
 	lhmapNumShards = flag.Int("lhmap", 32, "Number of shards for lhmap.")
 	dirtyMap       map[uint64]struct{} // Made global for log().
 	dirtyChannel   chan uint64         // Puts to dirtyMap has to go through this channel.
@@ -112,8 +112,13 @@ func aggressivelyEvict() {
 
 // mergeAndUpdateKeys calls mergeAndUpdate for each key in array "keys".
 func mergeAndUpdateKeys(keys []uint64, gentleMergeChan chan struct{}) {
+	defer func() { <-gentleMergeChan }()
+	if len(keys) == 0 {
+		return
+	}
 	ctr := newCounters()
 	defer ctr.ticker.Stop()
+
 	for _, key := range keys {
 		l, ok := lhmap.Get(key)
 		if !ok || l == nil {
@@ -126,7 +131,6 @@ func mergeAndUpdateKeys(keys []uint64, gentleMergeChan chan struct{}) {
 		mergeAndUpdate(l, ctr)
 	}
 	ctr.log()
-	<-gentleMergeChan
 }
 
 // processDirtyChan passes contents from dirty channel into dirty map.
@@ -134,14 +138,14 @@ func mergeAndUpdateKeys(keys []uint64, gentleMergeChan chan struct{}) {
 func processDirtyChan() {
 	// Max number of gentle merges in parallel.
 	gentleMergeChan := make(chan struct{}, 18)
-	timer := time.Tick(5 * time.Second)
+	timer := time.NewTicker(5 * time.Second)
 	for {
 		select {
-		case <-timer:
+		case <-timer.C:
 			select {
 			case gentleMergeChan <- struct{}{}:
-				n := int(float64(len(dirtyMap)) * 0.07) // Clear 7% of dirty lists.
-				keysBuffer := make([]uint64, 0, 10000)
+				n := int(float64(len(dirtyMap)) * 0.10) // Clear 10% of dirty lists.
+				keysBuffer := make([]uint64, 0, n)
 				for key := range dirtyMap {
 					delete(dirtyMap, key)
 					keysBuffer = append(keysBuffer, key)
@@ -158,7 +162,9 @@ func processDirtyChan() {
 			dirtyMap[key] = struct{}{}
 
 		case <-resetDirtyChan:
-			dirtyMap = make(map[uint64]struct{}, 10000)
+			for k := range dirtyMap {
+				delete(dirtyMap, k)
+			}
 		}
 	}
 }
@@ -219,7 +225,7 @@ func getMemUsage() int {
 	return rss * os.Getpagesize() / (1 << 20)
 }
 
-// checkMeomeryUsage monitors the memory usage by the running process and
+// checkMemoryUsage monitors the memory usage by the running process and
 // calls aggressively evict if the threshold is reached.
 func checkMemoryUsage() {
 	for _ = range time.Tick(5 * time.Second) {
@@ -239,8 +245,8 @@ var (
 func Init() {
 	lhmap = newShardedListMap(*lhmapNumShards)
 	dirtyChannel = make(chan uint64, 10000)
-	dirtyMap = make(map[uint64]struct{}, 10000)
-	resetDirtyChan = make(chan struct{})
+	dirtyMap = make(map[uint64]struct{}, 1000)
+	resetDirtyChan = make(chan struct{}, 1)
 	go checkMemoryUsage()
 	go processDirtyChan()
 }
@@ -258,11 +264,11 @@ func GetOrCreate(key []byte, pstore *store.Store) *List {
 	}
 
 	l := NewList()
-	if inserted := lhmap.PutIfMissing(fp, l); inserted {
+	lp = lhmap.PutIfMissing(fp, l)
+	if lp == l {
 		l.init(key, pstore)
 		return l
 	}
-	lp, _ = lhmap.Get(fp)
 	return lp
 }
 
@@ -317,14 +323,40 @@ func MergeLists(numRoutines int) {
 	go c.periodicLog()
 	defer c.ticker.Stop()
 
-	keysBuffer := make([]uint64, *keysBufferSize) // Better to allocate locally.
+	// Read n items each time by iterating over list map.
+	n := int(*keysBufferFrac * float64(lhmap.Size()))
+	if n < 1000 {
+		n = 1000
+	}
+
+	// Main idea: While iterating, we do not call processOne at all. The reason is
+	// that when iterating, we lock big parts of the map, and we want to do it as
+	// fast as possible, and without distraction from processOne which is also
+	// trying to lock parts of the map. On one machine, the loading times goes from
+	// 8 mins to <5 mins. We have also tried pushing to keysChan while consuming it
+	// with processOne calls.  That seems to increase running time back to 7 mins.
+
+	keysChan := make(chan uint64, n) // Allocate channel only once.
+	defer close(keysChan)
 	for lhmap.Size() > 0 {
-		size := lhmap.MultiGet(keysBuffer, *keysBufferSize)
-		var idx uint64 // Only atomic adds allowed for this!
+		lhmap.StreamUntilCap(keysChan) // Don't close keysChan yet. We can reuse it.
+
 		var wg sync.WaitGroup
 		for i := 0; i < numRoutines; i++ {
 			wg.Add(1)
-			go process(keysBuffer[:size], &idx, c, &wg)
+			go func() {
+				defer wg.Done()
+				// Note: we don't do a range loop here because it will block when channel
+				// becomes empty. Instead, we exit the goroutine once channel is empty.
+				for {
+					select {
+					case k := <-keysChan:
+						processOne(k, c)
+					default:
+						return
+					}
+				}
+			}()
 		}
 		wg.Wait()
 	}
