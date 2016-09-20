@@ -145,20 +145,24 @@ func (s *state) readLines(r io.Reader) {
 		atomic.AddUint64(&s.ctr.read, 1)
 	}
 
-	if err == nil {
-		// If we haven't yet finished reading the file
-		// read the rest of the rows.
-		for {
-			err = readLine(bufReader, &strBuf)
-			if err != nil {
-				break
-			}
-			k := rand.Intn(len(buf))
-			s.input <- buf[k]
-			buf[k] = strBuf.String()
-			atomic.AddUint64(&s.ctr.read, 1)
-		}
+	if err != nil && err != io.EOF {
+		err := x.Errorf("Error while reading file: %v", err)
+		log.Fatalf("%+v", err)
 	}
+
+	// If we haven't yet finished reading the file
+	// read the rest of the rows.
+	for {
+		err = readLine(bufReader, &strBuf)
+		if err != nil {
+			break
+		}
+		k := rand.Intn(len(buf))
+		s.input <- buf[k]
+		buf[k] = strBuf.String()
+		atomic.AddUint64(&s.ctr.read, 1)
+	}
+
 	if err != io.EOF {
 		err := x.Errorf("Error while reading file: %v", err)
 		log.Fatalf("%+v", err)
