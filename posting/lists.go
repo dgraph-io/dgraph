@@ -285,6 +285,8 @@ func mergeAndUpdate(l *List, c *counters) {
 	}
 }
 
+// processOne commits one list to RocksDB. (It is short and used at only one
+// location, maybe we can remove it.)
 func processOne(k uint64, c *counters) {
 	l, _ := lhmap.Delete(k)
 	if l == nil {
@@ -292,27 +294,6 @@ func processOne(k uint64, c *counters) {
 	}
 	l.SetForDeletion() // No more AddMutation.
 	mergeAndUpdate(l, c)
-}
-
-// For on-demand merging of all lists, keysBuffer is read-only - do not touch.
-func process(keysBuffer []uint64, idx *uint64, c *counters, wg *sync.WaitGroup) {
-	// No need to go through dirtymap, because we're going through
-	// everything right now anyways.
-	const grainSize = 100
-	for {
-		last := atomic.AddUint64(idx, grainSize) // Take a batch of elements.
-		start := last - grainSize
-		if start >= uint64(len(keysBuffer)) {
-			break
-		}
-		if last > uint64(len(keysBuffer)) {
-			last = uint64(len(keysBuffer))
-		}
-		for i := start; i < last; i++ {
-			processOne(keysBuffer[i], c)
-		}
-	}
-	wg.Done()
 }
 
 func MergeLists(numRoutines int) {
