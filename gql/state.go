@@ -213,6 +213,7 @@ func lexFilterInside(l *lex.Lexer) lex.StateFn {
 			l.FilterDepth--
 			l.Emit(itemRightRound)
 			if l.FilterDepth == 0 {
+				x.Printf("~~~hahaha\n")
 				return lexInside // Filter directive is done.
 			}
 		case r == lex.EOF:
@@ -222,23 +223,37 @@ func lexFilterInside(l *lex.Lexer) lex.StateFn {
 		case isNameBegin(r):
 			return lexFilterFuncName
 		case r == '&':
-			l.Emit(itemFilterAnd)
-			return lexFilterInside
+			r2 := l.Next()
+			if r2 == '&' {
+				l.Emit(itemFilterAnd)
+				return lexFilterInside
+			}
+			return l.Errorf("Expected & but got %v", r2)
 		case r == '|':
-			l.Emit(itemFilterOr)
-			return lexFilterInside
+			r2 := l.Next()
+			if r2 == '|' {
+				l.Emit(itemFilterOr)
+				return lexFilterInside
+			}
+			return l.Errorf("Expected | but got %v", r2)
 		default:
 			return l.Errorf("Unrecognized character in lexInside: %#U", r)
 		}
 	}
 }
 
-// lexDirectiveName is similar to lexName but for directives.
-func lexDirectiveName(l *lex.Lexer) lex.StateFn {
+// lexDirective is called right after we see a @.
+func lexDirective(l *lex.Lexer) lex.StateFn {
+	r := l.Next()
+	if !isNameBegin(r) {
+		return l.Errorf("Unrecognized character in lexDirective: %#U", r)
+	}
+
+	l.Backup()
 	buf := bytes.NewBuffer(make([]byte, 0, 15))
 	for {
 		// The caller already checked isNameBegin, and absorbed one rune.
-		r := l.Next()
+		r = l.Next()
 		buf.WriteRune(r)
 		if isNameSuffix(r) {
 			continue
@@ -247,25 +262,14 @@ func lexDirectiveName(l *lex.Lexer) lex.StateFn {
 		l.Emit(itemDirectiveName)
 
 		directive := buf.Bytes()[:buf.Len()-1]
-		// The lexer behaves differently for different directives.
+		// The lexer may behave differently for different directives. Hence, we need
+		// to check the directive here and go into the right state.
 		if string(directive) == "filter" {
 			return lexFilterInside
 		}
 		return l.Errorf("Unhandled directive %s", directive)
 	}
 	return lexInside
-}
-
-func lexDirective(l *lex.Lexer) lex.StateFn {
-	for {
-		switch r := l.Next(); {
-		case isNameBegin(r):
-			l.Backup()
-			return lexDirectiveName
-		default:
-			return l.Errorf("Unrecognized character in lexDirective: %#U", r)
-		}
-	}
 }
 
 func lexAlias(l *lex.Lexer) lex.StateFn {

@@ -561,21 +561,37 @@ func parseArguments(l *lex.Lexer) (result []pair, rerr error) {
 	return result, nil
 }
 
+// QueryFilter is a parse tree. For now, the nodes can be leaf or AND or OR.
 type QueryFilter struct {
 }
 
-// parseFilter parses the filter directive.
+// parseFilter parses the filter directive to produce a QueryFilter / parse tree.
 func parseFilter(l *lex.Lexer) (*QueryFilter, error) {
 	qf := &QueryFilter{}
 	item := <-l.Items
+
 	if item.Typ != itemLeftRound {
 		return nil, x.Errorf("Expected ( after filter directive")
 	}
+
+	// filterDepth is number of ( - number of ).
+	// It's initially 1 because we read a ( above.
+	filterDepth := 1
+
+	// Use a stack to build the parse tree. Currently, we support only &&, ||. Note
+	// that && takes precedence over ||.
 	for item = range l.Items {
-		if item.Typ == itemRightRound {
-			return qf, nil
-		}
 		x.Printf("%v\n", item)
+		if item.Typ == itemLeftRound {
+			filterDepth++
+		} else if item.Typ == itemRightRound {
+			filterDepth--
+			if filterDepth == 0 {
+				return qf, nil
+			} else if filterDepth < 0 {
+				return nil, x.Errorf("Too many )")
+			}
+		}
 	}
 	return nil, x.Errorf("Expected ) to end filter directive")
 }

@@ -13,7 +13,7 @@ func main() {
 	query := `
 	query {
 		me(_uid_:0x0a) {
-			friends @filter ( equal("type.object.name.en", "john") ) {
+			friends @filter(  equal("type.object.name.en","john") && ( equal() || what("haha") )    ) {
 				name
 			}
 			gender,age
