@@ -16,7 +16,10 @@
 
 package gql
 
-import "fmt"
+import (
+	"encoding"
+	"fmt"
+)
 
 // Type interface is the wrapper interface for all types
 type Type interface {
@@ -27,13 +30,21 @@ type Type interface {
 // Almost all scalar types can also act as input types.
 // Scalars (along with Enums) form leaf nodes of request or input values to arguements.
 type Scalar struct {
-	Name        string // name of scalar type
-	Description string // short description
-	ParseType   ParseTypeFunc
+	Name        string        // name of scalar type
+	Description string        // short description
+	NewValue    TypeValueFunc // An function to get an object of the given type
 }
 
-// ParseTypeFunc is a function that parses and does coercion for Scalar types.
-type ParseTypeFunc func(input []byte) (interface{}, error)
+// This is the interface that all scalar type values need to able
+// implement.
+type TypeValue interface {
+	encoding.BinaryMarshaler
+	encoding.BinaryUnmarshaler
+	encoding.TextMarshaler
+	encoding.TextUnmarshaler
+}
+
+type TypeValueFunc func() TypeValue
 
 // String function to implement string interface
 func (s Scalar) String() string {
