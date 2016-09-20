@@ -144,7 +144,7 @@ func (s *state) readLines(r io.Reader) {
 		buf = append(buf, strBuf.String())
 		atomic.AddUint64(&s.ctr.read, 1)
 	}
-	ln := len(buf)
+
 	if err == nil {
 		// If we haven't yet finished reading the file
 		// read the rest of the rows.
@@ -153,7 +153,7 @@ func (s *state) readLines(r io.Reader) {
 			if err != nil {
 				break
 			}
-			k := rand.Intn(ln)
+			k := rand.Intn(len(buf))
 			s.input <- buf[k]
 			buf[k] = strBuf.String()
 			atomic.AddUint64(&s.ctr.read, 1)
