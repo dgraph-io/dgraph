@@ -63,6 +63,11 @@ func check(r *task.Result, idx int, expected []uint64) error {
 	return nil
 }
 
+func getOrCreate(key []byte, ps *store.Store) *posting.List {
+	l, _ := posting.GetOrCreate(key, ps)
+	return l
+}
+
 func populateGraph(t *testing.T, ps *store.Store) {
 	edge := x.DirectedEdge{
 		ValueId:   23,
@@ -71,33 +76,33 @@ func populateGraph(t *testing.T, ps *store.Store) {
 		Attribute: "friend",
 	}
 	edge.Entity = 10
-	addEdge(t, edge, posting.GetOrCreate(posting.Key(10, "friend"), ps))
+	addEdge(t, edge, getOrCreate(posting.Key(10, "friend"), ps))
 
 	edge.Entity = 11
-	addEdge(t, edge, posting.GetOrCreate(posting.Key(11, "friend"), ps))
+	addEdge(t, edge, getOrCreate(posting.Key(11, "friend"), ps))
 
 	edge.Entity = 12
-	addEdge(t, edge, posting.GetOrCreate(posting.Key(12, "friend"), ps))
+	addEdge(t, edge, getOrCreate(posting.Key(12, "friend"), ps))
 
 	edge.ValueId = 25
-	addEdge(t, edge, posting.GetOrCreate(posting.Key(12, "friend"), ps))
+	addEdge(t, edge, getOrCreate(posting.Key(12, "friend"), ps))
 
 	edge.ValueId = 26
-	addEdge(t, edge, posting.GetOrCreate(posting.Key(12, "friend"), ps))
+	addEdge(t, edge, getOrCreate(posting.Key(12, "friend"), ps))
 
 	edge.Entity = 10
 	edge.ValueId = 31
-	addEdge(t, edge, posting.GetOrCreate(posting.Key(10, "friend"), ps))
+	addEdge(t, edge, getOrCreate(posting.Key(10, "friend"), ps))
 
 	edge.Entity = 12
-	addEdge(t, edge, posting.GetOrCreate(posting.Key(12, "friend"), ps))
+	addEdge(t, edge, getOrCreate(posting.Key(12, "friend"), ps))
 
 	edge.Entity = 12
 	edge.Value = []byte("photon")
-	addEdge(t, edge, posting.GetOrCreate(posting.Key(12, "friend"), ps))
+	addEdge(t, edge, getOrCreate(posting.Key(12, "friend"), ps))
 
 	edge.Entity = 10
-	addEdge(t, edge, posting.GetOrCreate(posting.Key(10, "friend"), ps))
+	addEdge(t, edge, getOrCreate(posting.Key(10, "friend"), ps))
 }
 
 func TestProcessTask(t *testing.T) {
@@ -228,9 +233,9 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 		Attribute: "friend",
 		Entity:    12,
 	}
-	addEdge(t, edge, posting.GetOrCreate(posting.Key(12, "friend"), ps))
+	addEdge(t, edge, getOrCreate(posting.Key(12, "friend"), ps))
 	edge.Value = []byte("notphoton")
-	addEdge(t, edge, posting.GetOrCreate(posting.Key(12, "friend"), ps))
+	addEdge(t, edge, getOrCreate(posting.Key(12, "friend"), ps))
 	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
 
 	// Issue a similar query.
@@ -266,15 +271,15 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 		Entity:    10,
 	}
 	// Redundant deletes.
-	delEdge(t, edge, posting.GetOrCreate(posting.Key(10, "friend"), ps))
-	delEdge(t, edge, posting.GetOrCreate(posting.Key(10, "friend"), ps))
+	delEdge(t, edge, getOrCreate(posting.Key(10, "friend"), ps))
+	delEdge(t, edge, getOrCreate(posting.Key(10, "friend"), ps))
 
 	// Delete followed by set.
 	edge.Entity = 12
 	edge.Value = []byte("notphoton")
-	delEdge(t, edge, posting.GetOrCreate(posting.Key(12, "friend"), ps))
+	delEdge(t, edge, getOrCreate(posting.Key(12, "friend"), ps))
 	edge.Value = []byte("ignored")
-	addEdge(t, edge, posting.GetOrCreate(posting.Key(12, "friend"), ps))
+	addEdge(t, edge, getOrCreate(posting.Key(12, "friend"), ps))
 	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
 
 	// Issue a similar query.
@@ -377,9 +382,9 @@ func TestProcessTaskIndex(t *testing.T) {
 		Attribute: "friend",
 		Entity:    12,
 	}
-	addEdge(t, edge, posting.GetOrCreate(posting.Key(12, "friend"), ps))
+	addEdge(t, edge, getOrCreate(posting.Key(12, "friend"), ps))
 	edge.Value = []byte("notphoton")
-	addEdge(t, edge, posting.GetOrCreate(posting.Key(12, "friend"), ps))
+	addEdge(t, edge, getOrCreate(posting.Key(12, "friend"), ps))
 	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
 
 	// Issue a similar query.
@@ -418,15 +423,15 @@ func TestProcessTaskIndex(t *testing.T) {
 		Entity:    10,
 	}
 	// Redundant deletes.
-	delEdge(t, edge, posting.GetOrCreate(posting.Key(10, "friend"), ps))
-	delEdge(t, edge, posting.GetOrCreate(posting.Key(10, "friend"), ps))
+	delEdge(t, edge, getOrCreate(posting.Key(10, "friend"), ps))
+	delEdge(t, edge, getOrCreate(posting.Key(10, "friend"), ps))
 
 	// Delete followed by set.
 	edge.Entity = 12
 	edge.Value = []byte("notphoton")
-	delEdge(t, edge, posting.GetOrCreate(posting.Key(12, "friend"), ps))
+	delEdge(t, edge, getOrCreate(posting.Key(12, "friend"), ps))
 	edge.Value = []byte("ignored")
-	addEdge(t, edge, posting.GetOrCreate(posting.Key(12, "friend"), ps))
+	addEdge(t, edge, getOrCreate(posting.Key(12, "friend"), ps))
 	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
 
 	// Issue a similar query.
