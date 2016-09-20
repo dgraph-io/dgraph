@@ -30,7 +30,7 @@ func newShardedListMap(numShards int) *listMap {
 }
 
 // Size returns size of map.
-func (s *listMapShard) Size() int {
+func (s *listMapShard) size() int {
 	s.RLock()
 	defer s.RUnlock()
 	return len(s.m)
@@ -40,13 +40,13 @@ func (s *listMapShard) Size() int {
 func (s *listMap) Size() int {
 	var size int
 	for i := 0; i < s.numShards; i++ {
-		size += s.shard[i].Size()
+		size += s.shard[i].size()
 	}
 	return size
 }
 
 // Get returns value for given key. Returns true if found.
-func (s *listMapShard) Get(key uint64) (*List, bool) {
+func (s *listMapShard) get(key uint64) (*List, bool) {
 	s.RLock()
 	defer s.RUnlock()
 	val, found := s.m[key]
@@ -55,12 +55,12 @@ func (s *listMapShard) Get(key uint64) (*List, bool) {
 
 // Get returns value for given key. Returns true if found.
 func (s *listMap) Get(key uint64) (*List, bool) {
-	return s.shard[getShard(s.numShards, key)].Get(key)
+	return s.shard[getShard(s.numShards, key)].get(key)
 }
 
 // PutIfMissing puts item into list. If key is missing, insertion happens and we
 // return the new value. Otherwise, nothing happens and we return the old value.
-func (s *listMapShard) PutIfMissing(key uint64, val *List) *List {
+func (s *listMapShard) putIfMissing(key uint64, val *List) *List {
 	s.Lock()
 	defer s.Unlock()
 	oldVal := s.m[key]
@@ -74,12 +74,12 @@ func (s *listMapShard) PutIfMissing(key uint64, val *List) *List {
 // PutIfMissing puts item into list. If key is missing, insertion happens and we
 // return the new value. Otherwise, nothing happens and we return the old value.
 func (s *listMap) PutIfMissing(key uint64, val *List) *List {
-	return s.shard[getShard(s.numShards, key)].PutIfMissing(key, val)
+	return s.shard[getShard(s.numShards, key)].putIfMissing(key, val)
 }
 
 // Delete deletes item from list if it is present. If not present, we return
 // nil, false. Otherwise, we return the deleted value, true.
-func (s *listMapShard) Delete(key uint64) (*List, bool) {
+func (s *listMapShard) del(key uint64) (*List, bool) {
 	s.Lock()
 	defer s.Unlock()
 	val, found := s.m[key]
@@ -94,7 +94,7 @@ func (s *listMapShard) Delete(key uint64) (*List, bool) {
 // Delete deletes item from list if it is present. If not present, we return
 // nil, false. Otherwise, we return the deleted value, true.
 func (s *listMap) Delete(key uint64) (*List, bool) {
-	return s.shard[getShard(s.numShards, key)].Delete(key)
+	return s.shard[getShard(s.numShards, key)].del(key)
 }
 
 // StreamUntilCap pushes keys into channel until it reaches capacity. Returns true
