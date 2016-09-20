@@ -29,15 +29,10 @@ package x
 // (3) You want to generate a new error with stack trace info. Use x.Errorf.
 
 import (
-	"flag"
 	"fmt"
 	"log"
 
 	"github.com/pkg/errors"
-)
-
-var (
-	stackTrace = flag.Bool("stacktrace", false, "enable stacktrace for errors")
 )
 
 // Check logs fatal if err != nil.
@@ -54,7 +49,7 @@ func Checkf(err error, format string, args ...interface{}) {
 	}
 }
 
-// Assert logs fatal if b is false.
+// Assert asserts that b is true. Otherwise, it would log fatal.
 func Assert(b bool) {
 	if !b {
 		log.Fatalf("%+v", Errorf("Assert failed"))

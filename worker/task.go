@@ -113,7 +113,8 @@ func processTask(query []byte) ([]byte, error) {
 			key = posting.Key(q.Uids(i), attr)
 		}
 		// Get or create the posting list for an entity, attribute combination.
-		pl := posting.GetOrCreate(key, store)
+		pl, decr := posting.GetOrCreate(key, store)
+		defer decr()
 
 		var valoffset flatbuffers.UOffsetT
 		// If a posting list contains a value, we store that or else we store a nil

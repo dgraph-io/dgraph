@@ -29,7 +29,6 @@ import (
 
 	"github.com/gogo/protobuf/proto"
 
-	"github.com/dgraph-io/dgraph/commit"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/query/graph"
@@ -126,6 +125,11 @@ func TestNewGraph(t *testing.T) {
 	}
 }
 
+func getOrCreate(key []byte, ps *store.Store) *posting.List {
+	l, _ := posting.GetOrCreate(key, ps)
+	return l
+}
+
 func populateGraph(t *testing.T) (string, *store.Store) {
 	// logrus.SetLevel(logrus.DebugLevel)
 	dir, err := ioutil.TempDir("", "storetest_")
@@ -141,67 +145,63 @@ func populateGraph(t *testing.T) (string, *store.Store) {
 	}
 
 	worker.SetWorkerState(worker.NewState(ps, nil, 0, 1))
-
-	clog := commit.NewLogger(dir, "mutations", 50<<20)
-	clog.Init()
-
 	posting.Init()
 
 	// So, user we're interested in has uid: 1.
-	// She has 4 friends: 23, 24, 25, 31, and 101
+	// She has 5 friends: 23, 24, 25, 31, and 101
 	edge := x.DirectedEdge{
 		ValueId:   23,
 		Source:    "testing",
 		Timestamp: time.Now(),
 	}
-	addEdge(t, edge, posting.GetOrCreate(posting.Key(1, "friend"), ps))
+	addEdge(t, edge, getOrCreate(posting.Key(1, "friend"), ps))
 
 	edge.ValueId = 24
-	addEdge(t, edge, posting.GetOrCreate(posting.Key(1, "friend"), ps))
+	addEdge(t, edge, getOrCreate(posting.Key(1, "friend"), ps))
 
 	edge.ValueId = 25
-	addEdge(t, edge, posting.GetOrCreate(posting.Key(1, "friend"), ps))
+	addEdge(t, edge, getOrCreate(posting.Key(1, "friend"), ps))
 
 	edge.ValueId = 31
-	addEdge(t, edge, posting.GetOrCreate(posting.Key(1, "friend"), ps))
+	addEdge(t, edge, getOrCreate(posting.Key(1, "friend"), ps))
 
 	edge.ValueId = 101
-	addEdge(t, edge, posting.GetOrCreate(posting.Key(1, "friend"), ps))
+	addEdge(t, edge, getOrCreate(posting.Key(1, "friend"), ps))
 
 	// Now let's add a few properties for the main user.
 	edge.Value = []byte("Michonne")
-	addEdge(t, edge, posting.GetOrCreate(posting.Key(1, "name"), ps))
+	addEdge(t, edge, getOrCreate(posting.Key(1, "name"), ps))
 
 	edge.Value = []byte("female")
-	addEdge(t, edge, posting.GetOrCreate(posting.Key(1, "gender"), ps))
+	addEdge(t, edge, getOrCreate(posting.Key(1, "gender"), ps))
 
 	edge.Value = []byte("alive")
-	addEdge(t, edge, posting.GetOrCreate(posting.Key(1, "status"), ps))
+	addEdge(t, edge, getOrCreate(posting.Key(1, "status"), ps))
 
 	edge.Value = []byte("38")
-	addEdge(t, edge, posting.GetOrCreate(posting.Key(1, "age"), ps))
+	addEdge(t, edge, getOrCreate(posting.Key(1, "age"), ps))
 
 	edge.Value = []byte("98.99")
-	addEdge(t, edge, posting.GetOrCreate(posting.Key(1, "survival_rate"), ps))
+	addEdge(t, edge, getOrCreate(posting.Key(1, "survival_rate"), ps))
 
 	edge.Value = []byte("true")
-	addEdge(t, edge, posting.GetOrCreate(posting.Key(1, "sword_present"), ps))
+	addEdge(t, edge, getOrCreate(posting.Key(1, "sword_present"), ps))
 
 	// Now let's add a name for each of the friends, except 101.
 	edge.Value = []byte("Rick Grimes")
-	addEdge(t, edge, posting.GetOrCreate(posting.Key(23, "name"), ps))
+	addEdge(t, edge, getOrCreate(posting.Key(23, "name"), ps))
 
 	edge.Value = []byte("Glenn Rhee")
-	addEdge(t, edge, posting.GetOrCreate(posting.Key(24, "name"), ps))
+	addEdge(t, edge, getOrCreate(posting.Key(24, "name"), ps))
 
 	edge.Value = []byte("Daryl Dixon")
-	addEdge(t, edge, posting.GetOrCreate(posting.Key(25, "name"), ps))
+	addEdge(t, edge, getOrCreate(posting.Key(25, "name"), ps))
 
 	edge.Value = []byte("Andrea")
-	addEdge(t, edge, posting.GetOrCreate(posting.Key(31, "name"), ps))
+	addEdge(t, edge, getOrCreate(posting.Key(31, "name"), ps))
 
 	edge.Value = []byte("mich")
-	addEdge(t, edge, posting.GetOrCreate(posting.Key(1, "_xid_"), ps))
+	addEdge(t, edge, getOrCreate(posting.Key(1, "_xid_"), ps))
 
 	return dir, ps
 }
@@ -646,7 +646,7 @@ func TestToPB(t *testing.T) {
 
 	query := `
 		{
-			me(_uid_:0x01) {
+			debug(_uid_:0x1) {
 				_xid_
 				name
 				gender
@@ -658,7 +658,7 @@ func TestToPB(t *testing.T) {
 				}
 			}
 		}
-	`
+  `
 
 	gq, _, err := gql.Parse(query)
 	if err != nil {
@@ -683,7 +683,7 @@ func TestToPB(t *testing.T) {
 		t.Error(err)
 	}
 
-	if gr.Attribute != "me" {
+	if gr.Attribute != "debug" {
 		t.Errorf("Expected attribute me, Got: %v", gr.Attribute)
 	}
 	if gr.Uid != 1 {

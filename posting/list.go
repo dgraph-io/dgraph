@@ -65,6 +65,7 @@ type List struct {
 	lastCompact time.Time
 	wg          sync.WaitGroup
 	deleteMe    int32
+	refcount    int32
 
 	// Mutations
 	mlayer  map[int]types.Posting // Stores only replace instructions.
@@ -73,10 +74,30 @@ type List struct {
 	dirtyTs int64 // Use atomics for this.
 }
 
-func NewList() *List {
-	l := new(List)
+func (l *List) refCount() int32 { return atomic.LoadInt32(&l.refcount) }
+func (l *List) incr() int32     { return atomic.AddInt32(&l.refcount, 1) }
+func (l *List) decr() {
+	val := atomic.AddInt32(&l.refcount, -1)
+	x.Assertf(val >= 0, "List reference should never be less than zero: %v", val)
+	if val > 0 {
+		return
+	}
+	listPool.Put(l)
+}
+
+var listPool = sync.Pool{
+	New: func() interface{} {
+		return &List{}
+	},
+}
+
+func getNew() *List {
+	l := listPool.Get().(*List)
+	*l = List{}
 	l.wg.Add(1)
 	l.mlayer = make(map[int]types.Posting)
+	x.Assert(len(l.key) == 0)
+	l.refcount = 1
 	return l
 }
 

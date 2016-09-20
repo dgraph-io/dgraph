@@ -59,7 +59,7 @@ func init() {
 	indexLog = trace.NewEventLog("index", "Logger")
 	x.AddInit(func() {
 		if indexConfigFile == nil || len(*indexConfigFile) == 0 {
-			indexLog.Printf("No valid config file", *indexConfigFile)
+			indexLog.Printf("No valid config file: %v", *indexConfigFile)
 			return
 		}
 		f, err := ioutil.ReadFile(*indexConfigFile)
@@ -69,6 +69,7 @@ func init() {
 	})
 }
 
+// ReadIndexConfigs parses configs from given byte array.
 func ReadIndexConfigs(f []byte) {
 	x.Check(json.Unmarshal(f, &indexCfgs))
 	for _, c := range indexCfgs.Cfg {
@@ -91,6 +92,7 @@ func InitIndex(ds *store.Store) {
 	indexStore = ds
 }
 
+// IndexKey creates a key for indexing the term for given attribute.
 func IndexKey(attr string, term []byte) []byte {
 	buf := bytes.NewBuffer(make([]byte, 0, len(attr)+len(term)+2))
 	_, err := buf.WriteRune(indexRune)
@@ -105,22 +107,30 @@ func IndexKey(attr string, term []byte) []byte {
 }
 
 // processIndexTerm adds mutation(s) for a single term, to maintain index.
-func processIndexTerm(attr string, uid uint64, term []byte, del bool) {
+func processIndexTerm(ctx context.Context, attr string, uid uint64, term []byte, del bool) {
 	edge := x.DirectedEdge{
 		Timestamp: time.Now(),
 		ValueId:   uid,
 		Attribute: attr,
 	}
 	key := IndexKey(edge.Attribute, term)
-	plist := GetOrCreate(key, indexStore)
+	plist, decr := GetOrCreate(key, indexStore)
+	defer decr()
 	x.Assertf(plist != nil, "plist is nil [%s] %d %s", key, edge.ValueId, edge.Attribute)
 
-	ctx := context.Background()
 	if del {
-		plist.AddMutation(ctx, edge, Del)
+		_, err := plist.AddMutation(ctx, edge, Del)
+		if err != nil {
+			x.Trace(ctx, "Error deleting %s for attr %s entity %d: %v",
+				string(term), edge.Attribute, edge.Entity, err)
+		}
 		indexLog.Printf("DEL [%s] [%d] OldTerm [%s]", edge.Attribute, edge.Entity, string(term))
 	} else {
-		plist.AddMutation(ctx, edge, Set)
+		_, err := plist.AddMutation(ctx, edge, Set)
+		if err != nil {
+			x.Trace(ctx, "Error adding %s for attr %s entity %d: %v",
+				string(term), edge.Attribute, edge.Entity, err)
+		}
 		indexLog.Printf("SET [%s] [%d] NewTerm [%s]", edge.Attribute, edge.Entity, string(term))
 	}
 }
@@ -148,10 +158,10 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t x.DirectedEdge, op by
 		return nil
 	}
 	if hasLastPost && lastPost.ValueBytes() != nil {
-		processIndexTerm(t.Attribute, t.Entity, lastPost.ValueBytes(), true)
+		processIndexTerm(ctx, t.Attribute, t.Entity, lastPost.ValueBytes(), true)
 	}
 	if op == Set {
-		processIndexTerm(t.Attribute, t.Entity, t.Value, false)
+		processIndexTerm(ctx, t.Attribute, t.Entity, t.Value, false)
 	}
 	return nil
 }
