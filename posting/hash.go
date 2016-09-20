@@ -136,7 +136,8 @@ func (s *listMap) StreamUntilCap(out chan uint64) {
 	if len(out) == cap(out) {
 		return
 	}
-	// We see little to no improvement when pushing using multiple goroutines.
+	// We have tried using multiple goroutines to push into the channel, but has
+	// seen little to no improvement in running time.
 	for _, shard := range s.shard {
 		if shard.StreamUntilCap(out) {
 			break
