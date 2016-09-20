@@ -1,0 +1,19 @@
+#!/bin/bash
+
+function run {
+  stdbuf -oL go test $@ |
+		while IFS= read -r line
+			do
+				echo $line | GREP_COLORS='mt=00;32' egrep --color=always '^ok\ .*|' |\
+					GREP_COLORS='mt=01;32' egrep --color=always '^x\ .*|' |\
+					GREP_COLORS='mt=00;31' egrep --color=always '.*FAIL.*|'
+			done
+}
+
+echo
+echo "Running tests. Ignoring vendor folder."
+run "$(go list ./... | grep -v vendor | grep -v cmd)"
+
+echo
+echo "Running tests in cmd directory."
+run "$(go list ./... | grep -v vendor | grep cmd) --args --debugmode"
