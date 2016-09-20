@@ -21,7 +21,6 @@ import (
 	"bytes"
 	"context"
 	"flag"
-	"fmt"
 	"io"
 	"log"
 	"math/rand"
@@ -160,8 +159,8 @@ func (s *state) readLines(r io.Reader) {
 			atomic.AddUint64(&s.ctr.read, 1)
 		}
 	}
-	if err != nil && err != io.EOF {
-		err := fmt.Errorf("Error while reading file: %v", err)
+	if err != io.EOF {
+		err := x.Errorf("Error while reading file: %v", err)
 		log.Fatalf("%+v", err)
 	}
 	for i := 0; i < len(buf); i++ {
