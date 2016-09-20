@@ -15,4 +15,6 @@ $ cd .git
 $ ln -s ../contrib/hooks hooks
 ```
 
-Now everytime you do a `git push`, tests should be run for you. And before a commit, you'd have the option to see results from go vet and golint.
+Now everytime you do a `git push`, tests should be run for you.
+And before a commit, you'd have the option to see results from and golint.
+Also, if go vet shows any errors you won't be allowed to commit without correcting them.
