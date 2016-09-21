@@ -41,13 +41,12 @@ var (
 	maxmemory = flag.Int("stw_ram_mb", 4096,
 		"If RAM usage exceeds this, we stop the world, and flush our buffers.")
 
-	keysBufferFrac = flag.Float64("keysbuffer", 0.10, "Fraction of dirty posting lists to merge every few seconds.")
-	lhmapNumShards = flag.Int("lhmap", 32, "Number of shards for lhmap.")
+	gentleMergeFrac = flag.Float64("gentlemerge", 0.10, "Fraction of dirty posting lists to merge every few seconds.")
+	lhmapNumShards  = flag.Int("lhmap", 32, "Number of shards for lhmap.")
 
-	dirtyMap       map[uint64]struct{} // Made global for log().
-	dirtyChan      chan uint64         // Puts to dirtyMap has to go through here.
-	dirtyMapOpChan chan dirtyMapOp     // Ops on dirtyMap except puts go in here.
-	// Capacity is max number of gentle merges that can happen in parallel.
+	dirtyMap        map[uint64]struct{} // Made global for log().
+	dirtyChan       chan uint64         // Puts to dirtyMap has to go through here.
+	dirtyMapOpChan  chan dirtyMapOp     // Ops on dirtyMap except puts go in here.
 	gentleMergeChan chan struct{}
 )
 
@@ -156,7 +155,7 @@ func processDirtyChan() {
 			case dirtyMapOpGentleMerge:
 				select {
 				case gentleMergeChan <- struct{}{}:
-					n := int(float64(len(dirtyMap)) * *keysBufferFrac)
+					n := int(float64(len(dirtyMap)) * *gentleMergeFrac)
 					keysBuffer := make([]uint64, 0, n)
 					for key := range dirtyMap {
 						delete(dirtyMap, key)
@@ -262,6 +261,7 @@ func Init() {
 	dirtyChan = make(chan uint64, 10000)
 	dirtyMap = make(map[uint64]struct{}, 1000)
 	dirtyMapOpChan = make(chan dirtyMapOp, 1)
+	// Capacity is max number of gentle merges that can happen in parallel.
 	gentleMergeChan = make(chan struct{}, 18)
 	go checkMemoryUsage()
 	go processDirtyChan()
