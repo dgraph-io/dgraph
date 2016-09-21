@@ -34,7 +34,7 @@ var (
 		Description: "The 'Int' scalar type represents non-fractional signed whole" +
 			" numeric values. Int can represent values between -(2^31)" +
 			" and 2^31 - 1.",
-		NewValue: newInt32Val,
+		Unmarshaler: int32Unmarsh,
 	}
 	// Float scalar type.
 	floatType = Scalar{
@@ -42,7 +42,7 @@ var (
 		Description: "The 'Float' scalar type represents signed double-precision" +
 			" fractional values	as specified by [IEEE 754]" +
 			" (http://en.wikipedia.org/wiki/IEEE_floating_point).",
-		NewValue: newFloatVal,
+		Unmarshaler: floatUnmarsh,
 	}
 	// String scalar type.
 	stringType = Scalar{
@@ -50,13 +50,13 @@ var (
 		Description: "The 'String' scalar type represents textual data, represented" +
 			" as UTF-8 character sequences. The String type is most often" +
 			" used by GraphQL to represent free-form human-readable text.",
-		NewValue: newStringVal,
+		Unmarshaler: stringUnmarsh,
 	}
 	// Boolean scalar type.
 	booleanType = Scalar{
 		Name:        "Boolean",
 		Description: "The 'Boolean' scalar type represents 'true' or 'false'.",
-		NewValue:    newBoolVal,
+		Unmarshaler: boolUnmarsh,
 	}
 	// ID scalar type.
 	idType = Scalar{
@@ -67,13 +67,14 @@ var (
 			" intended to be human-readable. When expected as an input" +
 			" type, any string (such as '4') or integer (such as '4')" +
 			" input value will be accepted as an ID.",
+		Unmarshaler: stringUnmarsh,
 	}
 	// DateTime scalar type.
 	dateTimeType = Scalar{
 		Name: "DateTime",
 		Description: "The 'DateTime' scalar type an instant in time with nanosecond" +
 			" precision. Each DateTime is associated with a timezone.",
-		NewValue: newDateTimeVal,
+		Unmarshaler: timeUnmarsh,
 	}
 )
 
@@ -94,25 +95,22 @@ func (v Int32Type) MarshalJSON() ([]byte, error) {
 	return json.Marshal(int32(v))
 }
 
-func (v *Int32Type) UnmarshalBinary(data []byte) error {
+type int32Unmarshaler struct{}
+
+func (v int32Unmarshaler) UnmarshalBinary(data []byte) (TypeValue, error) {
 	val := binary.LittleEndian.Uint32(data)
-	*v = Int32Type(val)
-	return nil
+	return Int32Type(val), nil
 }
 
-func (v *Int32Type) UnmarshalText(text []byte) error {
+func (v int32Unmarshaler) UnmarshalText(text []byte) (TypeValue, error) {
 	val, err := strconv.ParseInt(string(text), 10, 32)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	*v = Int32Type(val)
-	return nil
+	return Int32Type(val), nil
 }
 
-func newInt32Val() TypeValue {
-	var v Int32Type
-	return &v
-}
+var int32Unmarsh int32Unmarshaler
 
 type FloatType float64
 
@@ -132,26 +130,23 @@ func (v FloatType) MarshalJSON() ([]byte, error) {
 	return json.Marshal(float64(v))
 }
 
-func (v *FloatType) UnmarshalBinary(data []byte) error {
+type floatUnmarshaler struct{}
+
+func (v floatUnmarshaler) UnmarshalBinary(data []byte) (TypeValue, error) {
 	u := binary.LittleEndian.Uint64(data)
 	val := math.Float64frombits(u)
-	*v = FloatType(val)
-	return nil
+	return FloatType(val), nil
 }
 
-func (v *FloatType) UnmarshalText(text []byte) error {
+func (v floatUnmarshaler) UnmarshalText(text []byte) (TypeValue, error) {
 	val, err := strconv.ParseFloat(string(text), 64)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	*v = FloatType(val)
-	return nil
+	return FloatType(val), nil
 }
 
-func newFloatVal() TypeValue {
-	var v FloatType
-	return &v
-}
+var floatUnmarsh floatUnmarshaler
 
 type StringType string
 
@@ -167,20 +162,17 @@ func (v StringType) MarshalJSON() ([]byte, error) {
 	return json.Marshal(string(v))
 }
 
-func (v *StringType) UnmarshalBinary(data []byte) error {
-	s := string(data)
-	*v = StringType(s)
-	return nil
+type stringUnmarshaler struct{}
+
+func (v stringUnmarshaler) UnmarshalBinary(data []byte) (TypeValue, error) {
+	return StringType(data), nil
 }
 
-func (v *StringType) UnmarshalText(text []byte) error {
+func (v stringUnmarshaler) UnmarshalText(text []byte) (TypeValue, error) {
 	return v.UnmarshalBinary(text)
 }
 
-func newStringVal() TypeValue {
-	var v StringType
-	return &v
-}
+var stringUnmarsh stringUnmarshaler
 
 type BoolType bool
 
@@ -203,32 +195,44 @@ func (v BoolType) MarshalJSON() ([]byte, error) {
 	return json.Marshal(bool(v))
 }
 
-func (v *BoolType) UnmarshalBinary(data []byte) error {
+type boolUnmarshaler struct{}
+
+func (v boolUnmarshaler) UnmarshalBinary(data []byte) (TypeValue, error) {
 	if data[0] == 0 {
-		*v = false
+		return BoolType(false), nil
 	} else if data[0] == 1 {
-		*v = true
+		return BoolType(true), nil
 	} else {
-		return x.Errorf("Invalid value for bool %v", data[0])
+		return nil, x.Errorf("Invalid value for bool %v", data[0])
 	}
-	return nil
 }
 
-func (v *BoolType) UnmarshalText(text []byte) error {
+func (v boolUnmarshaler) UnmarshalText(text []byte) (TypeValue, error) {
 	val, err := strconv.ParseBool(string(text))
 	if err != nil {
-		return err
+		return nil, err
 	}
-	*v = BoolType(val)
-	return nil
+	return BoolType(val), nil
 }
 
-func newBoolVal() TypeValue {
-	var v BoolType
-	return &v
-}
+var boolUnmarsh boolUnmarshaler
 
-func newDateTimeVal() TypeValue {
+type timeUnmarshaler struct{}
+
+func (u timeUnmarshaler) UnmarshalBinary(data []byte) (TypeValue, error) {
 	var v time.Time
-	return &v
+	if err := v.UnmarshalBinary(data); err != nil {
+		return nil, err
+	}
+	return v, nil
 }
+
+func (u timeUnmarshaler) UnmarshalText(text []byte) (TypeValue, error) {
+	var v time.Time
+	if err := v.UnmarshalText(text); err != nil {
+		return nil, err
+	}
+	return v, nil
+}
+
+var timeUnmarsh timeUnmarshaler

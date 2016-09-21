@@ -31,22 +31,24 @@ type Type interface {
 // Almost all scalar types can also act as input types.
 // Scalars (along with Enums) form leaf nodes of request or input values to arguements.
 type Scalar struct {
-	Name        string        // name of scalar type
-	Description string        // short description
-	NewValue    TypeValueFunc // An function to get an object of the given type
+	Name        string // name of scalar type
+	Description string // short description
+	// to unmarshal the binary/text representation of the type.
+	Unmarshaler TypeValueUnmarshaler
 }
 
 // This is the interface that all scalar type values need to able
 // implement.
 type TypeValue interface {
-	encoding.BinaryMarshaler
-	encoding.BinaryUnmarshaler
 	encoding.TextMarshaler
-	encoding.TextUnmarshaler
+	encoding.BinaryMarshaler
 	json.Marshaler
 }
 
-type TypeValueFunc func() TypeValue
+type TypeValueUnmarshaler interface {
+	UnmarshalBinary(data []byte) (TypeValue, error)
+	UnmarshalText(data []byte) (TypeValue, error)
+}
 
 // String function to implement string interface
 func (s Scalar) String() string {
