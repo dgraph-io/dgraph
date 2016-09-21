@@ -1,8 +1,9 @@
 #!/bin/bash
 
-echo "Running go vet on staged files. Any errors won't allow you to commit"
+echo -e "\033[32m Running go vet on staged files. Any errors won't allow you to commit.\033[0m"
 /bin/bash .git/hooks/govet.sh
 echo
+echo -e "\033[32m Running golint on staged files. You can either acknowledge the warnings or step through them.\033[0m"
 /bin/bash .git/hooks/golint.sh
 
 
