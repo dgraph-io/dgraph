@@ -73,12 +73,21 @@ type varInfo struct {
 // varMap is a map with key as variable name.
 type varMap map[string]varInfo
 
+var filterOpPrecedence map[lex.ItemType]int
+
 // FilterTree is the result of parsing the filter directive.
 type FilterTree struct {
 	FuncName string   // For leaf nodes only.
 	FuncArgs []string // For leaf nodes only.
 	Op       lex.ItemType
 	Child    []*FilterTree
+}
+
+func init() {
+	filterOpPrecedence = map[lex.ItemType]int{
+		itemFilterAnd: 2,
+		itemFilterOr:  1,
+	}
 }
 
 // run is used to run the lexer until we encounter nil state.
@@ -660,11 +669,6 @@ func parseFilter(l *lex.Lexer) (*FilterTree, error) {
 	opStack.push(&FilterTree{Op: itemLeftRound}) // Push ( onto operator stack.
 	valueStack := new(filterTreeStack)
 
-	precedence := map[lex.ItemType]int{
-		itemFilterAnd: 2,
-		itemFilterOr:  1,
-	}
-
 	for item = range l.Items {
 		if item.Typ == itemFilterFunc { // Value.
 			leaf := &FilterTree{FuncName: item.Val}
@@ -705,11 +709,11 @@ func parseFilter(l *lex.Lexer) (*FilterTree, error) {
 				break
 			}
 
-		} else if opPred := precedence[item.Typ]; opPred > 0 { // Op.
+		} else if opPred := filterOpPrecedence[item.Typ]; opPred > 0 { // Op.
 			// Evaluate the stack until we see an operator with strictly lower pred.
 			for !opStack.empty() {
 				topOp := opStack.peek()
-				if precedence[topOp.Op] < opPred {
+				if filterOpPrecedence[topOp.Op] < opPred {
 					break
 				}
 				evalStack(opStack, valueStack)
@@ -720,13 +724,14 @@ func parseFilter(l *lex.Lexer) (*FilterTree, error) {
 
 	// For filters, we start with ( and end with ). We expect to break out of loop
 	// when the parentheses balance off, and at that point, opStack should be empty.
-	// For other applications, typically we do another loop after all items are
-	// consumed that goes like: "while opStack is nonempty, evalStack."
+	// For other applications, typically after all items are
+	// consumed, we will run a loop like "while opStack is nonempty, evalStack".
+	// This is not needed here.
 	x.Assertf(opStack.empty(), "Op stack should be empty when we exit")
 
 	if valueStack.empty() {
 		// This happens when we have @filter(). We can either return an error or
-		// ignore. Currently, let's just ignore.
+		// ignore. Currently, let's just ignore and pretend there is no filter.
 		return nil, nil
 	}
 
