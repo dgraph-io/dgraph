@@ -111,30 +111,6 @@ func (s *listMapShard) streamUntilCap(out chan uint64) bool {
 	return false
 }
 
-// StreamUntilCap pushes keys into channel until it reaches capacity. Returns true
-// if we reach cap.
-func (s *listMap) streamUntilCap(out chan uint64) {
-	if len(out) == cap(out) {
-		return
-	}
-	// We have tried using multiple goroutines to push into the channel, but has
-	// seen little to no improvement in running time.
-	for _, shard := range s.shard {
-		if shard.streamUntilCap(out) {
-			break
-		}
-	}
-}
-
-func (s *listMapShard) eachWithDelete(f func(key uint64, val *List)) {
-	s.Lock()
-	defer s.Unlock()
-	for k, v := range s.m {
-		delete(s.m, k)
-		f(k, v)
-	}
-}
-
 // EachWithDelete iterates over listMap and for each key, value pair, deletes the
 // key and calls the given function.
 func (s *listMap) EachWithDelete(f func(key uint64, val *List)) {
