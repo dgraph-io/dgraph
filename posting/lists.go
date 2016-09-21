@@ -37,6 +37,7 @@ import (
 	"github.com/zond/gotomic"
 
 	"github.com/dgraph-io/dgraph/store"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 var maxmemory = flag.Int("stw_ram_mb", 4096,
@@ -263,26 +264,48 @@ func Init() {
 	go checkMemoryUsage()
 }
 
-// GetOrCreate stores the List corresponding to key(if its not there already)
-// to lhmap and returns it.
-func GetOrCreate(key []byte, pstore *store.Store) *List {
+func getFromMap(gotomicKey gotomic.IntKey) *List {
+	lp, _ := lhmap.Get(gotomicKey)
+	if lp == nil {
+		return nil
+	}
+	result := lp.(*List)
+	result.incr()
+	return result
+}
+
+// GetOrCreate stores the List corresponding to key, if it's not there already.
+// to lhmap and returns it. It also returns a reference decrement function to be called by caller.
+//
+// plist, decr := GetOrCreate(key, store)
+// defer decr()
+// ... // Use plist
+func GetOrCreate(key []byte, pstore *store.Store) (rlist *List, decr func()) {
 	fp := farm.Fingerprint64(key)
 	gotomicKey := gotomic.IntKey(fp)
 
 	stopTheWorld.RLock()
 	defer stopTheWorld.RUnlock()
-	lp, _ := lhmap.Get(gotomicKey)
-	if lp != nil {
-		return lp.(*List)
+	if lp := getFromMap(gotomicKey); lp != nil {
+		return lp, lp.decr
 	}
 
-	l := NewList()
-	if inserted := lhmap.PutIfMissing(gotomicKey, l); inserted {
-		l.init(key, pstore)
-		return l
+	{
+		l := getNew() // This retrieves a new *List and increments its ref count.
+		if inserted := lhmap.PutIfMissing(gotomicKey, l); inserted {
+			l.incr() // Increment reference counter for the caller.
+			l.init(key, pstore)
+			return l, l.decr
+		}
+		// If we're unable to insert this, decrement the reference count.
+		// This would undo the increment in the newList() call, and allow this list to be reused.
+		l.decr()
 	}
-	lp, _ = lhmap.Get(gotomicKey)
-	return lp.(*List)
+	if lp := getFromMap(gotomicKey); lp != nil {
+		return lp, lp.decr
+	}
+	x.Assertf(false, "Key should be present.")
+	return nil, nil
 }
 
 func mergeAndUpdate(l *List, c *counters) {
@@ -308,6 +331,7 @@ func processOne(k gotomic.Hashable, c *counters) {
 	if l == nil {
 		return
 	}
+	defer l.decr()
 	l.SetForDeletion() // No more AddMutation.
 	mergeAndUpdate(l, c)
 }

@@ -59,7 +59,7 @@ func init() {
 	indexLog = trace.NewEventLog("index", "Logger")
 	x.AddInit(func() {
 		if indexConfigFile == nil || len(*indexConfigFile) == 0 {
-			indexLog.Printf("No valid config file", *indexConfigFile)
+			indexLog.Printf("No valid config file: %v", *indexConfigFile)
 			return
 		}
 		f, err := ioutil.ReadFile(*indexConfigFile)
@@ -114,7 +114,8 @@ func processIndexTerm(ctx context.Context, attr string, uid uint64, term []byte,
 		Attribute: attr,
 	}
 	key := IndexKey(edge.Attribute, term)
-	plist := GetOrCreate(key, indexStore)
+	plist, decr := GetOrCreate(key, indexStore)
+	defer decr()
 	x.Assertf(plist != nil, "plist is nil [%s] %d %s", key, edge.ValueId, edge.Attribute)
 
 	if del {
