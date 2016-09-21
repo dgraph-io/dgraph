@@ -1,6 +1,8 @@
 #!/bin/bash
 
-/bin/bash .git/hooks/golint.sh
+echo "Running go vet on staged files. Any errors won't allow you to commit"
 /bin/bash .git/hooks/govet.sh
+echo
+/bin/bash .git/hooks/golint.sh
 
 
