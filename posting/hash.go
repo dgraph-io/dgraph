@@ -97,18 +97,13 @@ func (s *listMap) Delete(key uint64) (*List, bool) {
 	return s.shard[getShard(s.numShards, key)].del(key)
 }
 
-// StreamUntilCap pushes keys into channel until it reaches capacity. Returns true
-// if we reach cap.
-func (s *listMapShard) streamUntilCap(out chan uint64) bool {
-	s.RLock()
-	defer s.RUnlock()
-	for key := range s.m {
-		out <- key
-		if len(out) == cap(out) {
-			return true
-		}
+func (s *listMapShard) eachWithDelete(f func(key uint64, val *List)) {
+	s.Lock()
+	defer s.Unlock()
+	for k, v := range s.m {
+		delete(s.m, k)
+		f(k, v)
 	}
-	return false
 }
 
 // EachWithDelete iterates over listMap and for each key, value pair, deletes the
