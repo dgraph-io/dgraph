@@ -125,3 +125,20 @@ func (s *listMap) streamUntilCap(out chan uint64) {
 		}
 	}
 }
+
+func (s *listMapShard) eachWithDelete(f func(key uint64, val *List)) {
+	s.Lock()
+	defer s.Unlock()
+	for k, v := range s.m {
+		delete(s.m, k)
+		f(k, v)
+	}
+}
+
+// EachWithDelete iterates over listMap and for each key, value pair, deletes the
+// key and calls the given function.
+func (s *listMap) EachWithDelete(f func(key uint64, val *List)) {
+	for _, shard := range s.shard {
+		shard.eachWithDelete(f)
+	}
+}

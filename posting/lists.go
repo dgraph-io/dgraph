@@ -47,6 +47,8 @@ var (
 	dirtyMap       map[uint64]struct{} // Made global for log().
 	dirtyChan      chan uint64         // Puts to dirtyMap has to go through here.
 	dirtyMapOpChan chan dirtyMapOp     // Ops on dirtyMap except puts go in here.
+	// Capacity is max number of gentle merges that can happen in parallel.
+	gentleMergeChan chan struct{}
 )
 
 type dirtyMapOp int
@@ -119,7 +121,7 @@ func aggressivelyEvict() {
 }
 
 // mergeAndUpdateKeys calls mergeAndUpdate for each key in array "keys".
-func mergeAndUpdateKeys(keys []uint64, gentleMergeChan chan struct{}) {
+func mergeAndUpdateKeys(keys []uint64) {
 	defer func() { <-gentleMergeChan }()
 	if len(keys) == 0 {
 		return
@@ -144,8 +146,6 @@ func mergeAndUpdateKeys(keys []uint64, gentleMergeChan chan struct{}) {
 // processDirtyChan passes contents from dirty channel into dirty map.
 // All write operations to dirtyMap should be contained in this function.
 func processDirtyChan() {
-	// Capacity is max number of gentle merges that can happen in parallel.
-	gentleMergeChan := make(chan struct{}, 18)
 	for {
 		select {
 		case key := <-dirtyChan:
@@ -156,7 +156,6 @@ func processDirtyChan() {
 			case dirtyMapOpGentleMerge:
 				select {
 				case gentleMergeChan <- struct{}{}:
-					log.Println("~~~~~~Starting gentle merge")
 					n := int(float64(len(dirtyMap)) * *keysBufferFrac)
 					keysBuffer := make([]uint64, 0, n)
 					for key := range dirtyMap {
@@ -166,7 +165,7 @@ func processDirtyChan() {
 							break
 						}
 					}
-					go mergeAndUpdateKeys(keysBuffer, gentleMergeChan)
+					go mergeAndUpdateKeys(keysBuffer)
 				default:
 					log.Println("Skipping gentle merge")
 				}
@@ -242,6 +241,8 @@ func checkMemoryUsage() {
 	for _ = range time.Tick(5 * time.Second) {
 		totMemory := getMemUsage()
 		if totMemory > *maxmemory {
+			// Although gentle merges cannot start after aggressive evict, some of them
+			// might still be running and try to lock lhmap.
 			aggressivelyEvict()
 		} else {
 			// Gentle merge should not happen during an aggressive evict.
@@ -261,6 +262,7 @@ func Init() {
 	dirtyChan = make(chan uint64, 10000)
 	dirtyMap = make(map[uint64]struct{}, 1000)
 	dirtyMapOpChan = make(chan dirtyMapOp, 1)
+	gentleMergeChan = make(chan struct{}, 18)
 	go checkMemoryUsage()
 	go processDirtyChan()
 }
@@ -320,10 +322,10 @@ func MergeLists(numRoutines int) {
 	defer c.ticker.Stop()
 
 	// Read n items each time by iterating over list map.
-	n := int(0.07 * float64(lhmap.Size()))
-	if n < 1000 {
-		n = 1000
-	}
+	//	n := int(0.07 * float64(lhmap.Size()))
+	//	if n < 1000 {
+	//		n = 1000
+	//	}
 
 	// Main idea: While iterating, we do not call processOne at all. The reason is
 	// that when iterating, we lock big parts of the map, and we want to do it as
@@ -332,28 +334,52 @@ func MergeLists(numRoutines int) {
 	// 8 mins to <5 mins. We have also tried pushing to keysChan while consuming it
 	// with processOne calls.  That seems to increase running time back to 7 mins.
 
-	keysChan := make(chan uint64, n) // Allocate channel only once.
-	defer close(keysChan)
-	for lhmap.Size() > 0 {
-		lhmap.streamUntilCap(keysChan) // Don't close keysChan yet. We can reuse it.
+	//	keysChan := make(chan uint64, n) // Allocate channel only once.
+	//	defer close(keysChan)
+	//	for lhmap.Size() > 0 {
+	//		lhmap.streamUntilCap(keysChan) // Don't close keysChan yet. We can reuse it.
 
-		var wg sync.WaitGroup
-		for i := 0; i < numRoutines; i++ {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				// Note: we don't do a range loop here because it will block when channel
-				// becomes empty. Instead, we exit the goroutine once channel is empty.
-				for {
-					select {
-					case k := <-keysChan:
-						processOne(k, c)
-					default:
-						return
-					}
-				}
-			}()
-		}
-		wg.Wait()
+	//		var wg sync.WaitGroup
+	//		for i := 0; i < numRoutines; i++ {
+	//			wg.Add(1)
+	//			go func() {
+	//				defer wg.Done()
+	//				// Note: we don't do a range loop here because it will block when channel
+	//				// becomes empty. Instead, we exit the goroutine once channel is empty.
+	//				for {
+	//					select {
+	//					case k := <-keysChan:
+	//						processOne(k, c)
+	//					default:
+	//						return
+	//					}
+	//				}
+	//			}()
+	//		}
+	//		wg.Wait()
+	//	}
+
+	workChan := make(chan *List, 10000)
+
+	var wg sync.WaitGroup
+	for i := 0; i < numRoutines; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for l := range workChan {
+				l.SetForDeletion() // No more AddMutation.
+				mergeAndUpdate(l, c)
+			}
+		}()
 	}
+
+	lhmap.EachWithDelete(func(k uint64, v *List) {
+		if v == nil {
+			return
+		}
+		workChan <- v
+	})
+	close(workChan)
+
+	wg.Wait()
 }
