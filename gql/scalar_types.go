@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"math"
 	"strconv"
+	"time"
 
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -66,6 +67,13 @@ var (
 			" intended to be human-readable. When expected as an input" +
 			" type, any string (such as '4') or integer (such as '4')" +
 			" input value will be accepted as an ID.",
+	}
+	// DateTime scalar type.
+	dateTimeType = Scalar{
+		Name: "DateTime",
+		Description: "The 'DateTime' scalar type an instant in time with nanosecond" +
+			" precision. Each DateTime is associated with a timezone.",
+		NewValue: newDateTimeVal,
 	}
 )
 
@@ -217,5 +225,10 @@ func (v *BoolType) UnmarshalText(text []byte) error {
 
 func newBoolVal() TypeValue {
 	var v BoolType
+	return &v
+}
+
+func newDateTimeVal() TypeValue {
+	var v time.Time
 	return &v
 }
