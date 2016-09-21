@@ -301,17 +301,6 @@ func mergeAndUpdate(l *List, c *counters) {
 	}
 }
 
-// processOne commits one list to RocksDB. (It is short and used at only one
-// location, maybe we can remove it.)
-func processOne(k uint64, c *counters) {
-	l, _ := lhmap.Delete(k)
-	if l == nil {
-		return
-	}
-	l.SetForDeletion() // No more AddMutation.
-	mergeAndUpdate(l, c)
-}
-
 // MergeLists commit all posting lists in lhmap to RocksDB.
 func MergeLists(numRoutines int) {
 	// We're merging all the lists, so just create a new dirtymap.

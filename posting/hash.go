@@ -77,26 +77,6 @@ func (s *listMap) PutIfMissing(key uint64, val *List) *List {
 	return s.shard[getShard(s.numShards, key)].putIfMissing(key, val)
 }
 
-// Delete deletes item from list if it is present. If not present, we return
-// nil, false. Otherwise, we return the deleted value, true.
-func (s *listMapShard) del(key uint64) (*List, bool) {
-	s.Lock()
-	defer s.Unlock()
-	val, found := s.m[key]
-	if !found {
-		// Not found, nothing to delete!
-		return nil, false
-	}
-	delete(s.m, key)
-	return val, true
-}
-
-// Delete deletes item from list if it is present. If not present, we return
-// nil, false. Otherwise, we return the deleted value, true.
-func (s *listMap) Delete(key uint64) (*List, bool) {
-	return s.shard[getShard(s.numShards, key)].del(key)
-}
-
 func (s *listMapShard) eachWithDelete(f func(key uint64, val *List)) {
 	s.Lock()
 	defer s.Unlock()
