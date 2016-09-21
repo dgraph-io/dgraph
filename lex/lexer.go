@@ -68,6 +68,7 @@ func (l *Lexer) Init(input string) {
 	l.Items = make(chan item, 5)
 }
 
+// Errorf returns the error state function.
 func (l *Lexer) Errorf(format string, args ...interface{}) StateFn {
 	l.Items <- item{
 		Typ: ItemError,
