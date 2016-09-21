@@ -28,6 +28,7 @@ const dgraphVersion = "0.4.4"
 var (
 	version  = flag.Bool("version", false, "Prints the version of Dgraph")
 	initFunc []func()
+	logger   *log.Logger
 )
 
 // AddInit adds a function to be run in x.Init, which should be called at the
@@ -43,6 +44,8 @@ func Init() {
 	if !flag.Parsed() {
 		log.Fatal("Unable to parse flags")
 	}
+	logger = log.New(os.Stderr, "", log.Lshortfile|log.Flags())
+	Assert(logger != nil)
 	printVersionOnly()
 	// Next, run all the init functions that have been added.
 	for _, f := range initFunc {
@@ -63,4 +66,13 @@ To say hi to the community       , visit https://dgraph.slack.com.
 `)
 		os.Exit(0)
 	}
+}
+
+// Printf does a log.Printf. We often do printf for debugging but has to keep
+// adding import "fmt" or "log" and removing them after we are done.
+// Let's include "x" in all packages and have access to log.Printf all the time.
+func Printf(format string, args ...interface{}) {
+	Assert(logger != nil)
+	// Call depth is one higher than default.
+	logger.Output(3, fmt.Sprintf(format, args...))
 }

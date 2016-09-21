@@ -17,6 +17,7 @@
 package gql
 
 import (
+	"bytes"
 	"encoding/json"
 	"strconv"
 	"strings"
@@ -34,6 +35,7 @@ type GraphQuery struct {
 	Alias    string
 	Args     map[string]string
 	Children []*GraphQuery
+	Filter   *FilterTree
 
 	// Internal fields below.
 	// If gq.fragment is nonempty, then it is a fragment reference / spread.
@@ -70,6 +72,14 @@ type varInfo struct {
 
 // varMap is a map with key as variable name.
 type varMap map[string]varInfo
+
+// FilterTree is the result of parsing the filter directive.
+type FilterTree struct {
+	FuncName string   // For leaf nodes only.
+	FuncArgs []string // For leaf nodes only.
+	Op       lex.ItemType
+	Child    []*FilterTree
+}
 
 // run is used to run the lexer until we encounter nil state.
 func run(l *lex.Lexer) {
@@ -561,39 +571,170 @@ func parseArguments(l *lex.Lexer) (result []pair, rerr error) {
 	return result, nil
 }
 
-// QueryFilter is a parse tree. For now, the nodes can be leaf or AND or OR.
-type QueryFilter struct {
+// String converts FilterTree to a string. Good for testing, debugging.
+func (t *FilterTree) String() string {
+	buf := bytes.NewBuffer(make([]byte, 0, 20))
+	t.stringHelper(buf)
+	return buf.String()
+}
+
+func (t *FilterTree) stringHelper(buf *bytes.Buffer) {
+	if t == nil {
+		return
+	}
+	if len(t.FuncName) > 0 {
+		// Leaf node.
+		_, err := buf.WriteRune('(')
+		x.Check(err)
+		_, err = buf.WriteString(t.FuncName)
+		x.Check(err)
+		for _, arg := range t.FuncArgs {
+			_, err = buf.WriteString(" \"")
+			x.Check(err)
+			_, err = buf.WriteString(arg)
+			x.Check(err)
+			_, err := buf.WriteRune('"')
+			x.Check(err)
+		}
+		_, err = buf.WriteRune(')')
+		x.Check(err)
+		return
+	}
+	// Non-leaf node.
+	_, err := buf.WriteRune('(')
+	x.Check(err)
+	switch t.Op {
+	case itemFilterAnd:
+		_, err = buf.WriteString("AND")
+	case itemFilterOr:
+		_, err = buf.WriteString("OR")
+	default:
+		err = x.Errorf("Unknown operator")
+	}
+	x.Check(err)
+	_, err = buf.WriteRune(' ')
+	x.Check(err)
+
+	for _, c := range t.Child {
+		c.stringHelper(buf)
+	}
+	_, err = buf.WriteRune(')')
+	x.Check(err)
+}
+
+type filterTreeStack struct{ a []*FilterTree }
+
+func (s *filterTreeStack) empty() bool        { return len(s.a) == 0 }
+func (s *filterTreeStack) size() int          { return len(s.a) }
+func (s *filterTreeStack) push(t *FilterTree) { s.a = append(s.a, t) }
+
+func (s *filterTreeStack) pop() *FilterTree {
+	x.Assertf(!s.empty(), "Trying to pop empty stack")
+	last := s.a[len(s.a)-1]
+	s.a = s.a[:len(s.a)-1]
+	return last
+}
+
+func (s *filterTreeStack) peek() *FilterTree {
+	x.Assertf(!s.empty(), "Trying to peek empty stack")
+	return s.a[len(s.a)-1]
+}
+
+func evalStack(opStack, valueStack *filterTreeStack) {
+	topOp := opStack.pop()
+	topVal1 := valueStack.pop()
+	topVal2 := valueStack.pop()
+	topOp.Child = []*FilterTree{topVal2, topVal1}
+	valueStack.push(topOp)
 }
 
 // parseFilter parses the filter directive to produce a QueryFilter / parse tree.
-func parseFilter(l *lex.Lexer) (*QueryFilter, error) {
-	qf := &QueryFilter{}
+func parseFilter(l *lex.Lexer) (*FilterTree, error) {
 	item := <-l.Items
-
 	if item.Typ != itemLeftRound {
 		return nil, x.Errorf("Expected ( after filter directive")
 	}
 
-	// filterDepth is number of ( - number of ).
-	// It's initially 1 because we read a ( above.
-	filterDepth := 1
+	opStack := new(filterTreeStack)
+	opStack.push(&FilterTree{Op: itemLeftRound}) // Push ( onto operator stack.
+	valueStack := new(filterTreeStack)
 
-	// Use a stack to build the parse tree. Currently, we support only &&, ||. Note
-	// that && takes precedence over ||.
+	precedence := map[lex.ItemType]int{
+		itemFilterAnd: 2,
+		itemFilterOr:  1,
+	}
+
 	for item = range l.Items {
-		x.Printf("%v\n", item)
-		if item.Typ == itemLeftRound {
-			filterDepth++
-		} else if item.Typ == itemRightRound {
-			filterDepth--
-			if filterDepth == 0 {
-				return qf, nil
-			} else if filterDepth < 0 {
-				return nil, x.Errorf("Too many )")
+		x.Printf("Token [%v]\n", item)
+		if item.Typ == itemFilterFunc { // Value.
+			leaf := &FilterTree{FuncName: item.Val}
+			itemInFunc := <-l.Items
+			if itemInFunc.Typ != itemLeftRound {
+				return nil, x.Errorf("Expected ( after func name [%s]", leaf.FuncName)
 			}
+			var terminated bool
+			for itemInFunc = range l.Items {
+				if itemInFunc.Typ == itemRightRound {
+					terminated = true
+					break
+				} else if itemInFunc.Typ != itemFilterFuncArg {
+					return nil, x.Errorf("Expected arg after func [%s], but got item %v",
+						leaf.FuncName, itemInFunc)
+				}
+				leaf.FuncArgs = append(leaf.FuncArgs, itemInFunc.Val)
+			}
+			if !terminated {
+				return nil, x.Errorf("Expected ) to terminate func definition")
+			}
+			valueStack.push(leaf)
+
+		} else if item.Typ == itemLeftRound { // Just push to op stack.
+			opStack.push(&FilterTree{Op: itemLeftRound})
+
+		} else if item.Typ == itemRightRound { // Pop op stack until we see a (.
+			for !opStack.empty() {
+				topOp := opStack.peek()
+				if topOp.Op == itemLeftRound {
+					break
+				}
+				evalStack(opStack, valueStack)
+			}
+			opStack.pop() // Pop away the (.
+			if opStack.empty() {
+				// The parentheses are balanced out. Let's break.
+				break
+			}
+
+		} else if opPred := precedence[item.Typ]; opPred > 0 { // Op.
+			// Evaluate the stack until we see an operator with strictly lower pred.
+			for !opStack.empty() {
+				topOp := opStack.peek()
+				if precedence[topOp.Op] < opPred {
+					break
+				}
+				evalStack(opStack, valueStack)
+			}
+			opStack.push(&FilterTree{Op: item.Typ}) // Push current operator.
 		}
 	}
-	return nil, x.Errorf("Expected ) to end filter directive")
+
+	// For filters, we start with ( and end with ). We expect to break out of loop
+	// when the parentheses balance off, and at that point, opStack should be empty.
+	// For other applications, typically we do another loop after all items are
+	// consumed that goes like: "while opStack is nonempty, evalStack."
+	x.Assertf(opStack.empty(), "Op stack should be empty when we exit")
+
+	if valueStack.empty() {
+		// This happens when we have @filter(). We can either return an error or
+		// ignore. Currently, let's just ignore.
+		return nil, nil
+	}
+
+	if valueStack.size() != 1 {
+		return nil, x.Errorf("Expected one item in value stack, but got %d",
+			valueStack.size())
+	}
+	return valueStack.pop(), nil
 }
 
 // getRoot gets the root graph query object after parsing the args.
@@ -689,9 +830,11 @@ func godeep(l *lex.Lexer, gq *GraphQuery) error {
 		} else if item.Typ == itemDirectiveName {
 			switch item.Val {
 			case "@filter":
-				if _, err := parseFilter(l); err != nil {
+				filter, err := parseFilter(l)
+				if err != nil {
 					return err
 				}
+				curp.Filter = filter
 
 			default:
 				return x.Errorf("Unknown directive [%s]", item.Val)

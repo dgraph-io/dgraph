@@ -827,3 +827,67 @@ func TestParseVariablesError7(t *testing.T) {
 		t.Error("Expected type for variable $d")
 	}
 }
+
+func TestParseFilter_simplest(t *testing.T) {
+	query := `
+	query {
+		me(_uid_:0x0a) {
+			friends @filter() {
+				name @filter(namefilter())
+			}
+			gender @filter(eq()),age @filter(neq())
+			hometown
+		}
+	}
+`
+
+	gq, _, err := Parse(query)
+	if err != nil {
+		t.Error(err)
+	}
+	if gq == nil {
+		t.Error("subgraph is nil")
+		return
+	}
+	if len(gq.Children) != 4 {
+		t.Errorf("Expected 4 children. Got: %v", len(gq.Children))
+		return
+	}
+	if err := checkAttr(gq.Children[0], "friends"); err != nil {
+		t.Error(err)
+	}
+	if err := checkAttr(gq.Children[1], "gender"); err != nil {
+		t.Error(err)
+	}
+	if err := checkAttr(gq.Children[2], "age"); err != nil {
+		t.Error(err)
+	}
+	if err := checkAttr(gq.Children[3], "hometown"); err != nil {
+		t.Error(err)
+	}
+	child := gq.Children[0]
+	if len(child.Children) != 1 {
+		t.Errorf("Expected 1 child of friends. Got: %v", len(child.Children))
+	}
+	if err := checkAttr(child.Children[0], "name"); err != nil {
+		t.Error(err)
+	}
+
+	//	fmt.Printf("~~~~~ [%s]\n", gq.Children[0].Filter)
+
+	//	if gq.Children[0].Filter != nil {
+	//		t.Error("friends should have no filter")
+	//		return
+	//	}
+
+	//	if gq.Children[0].Children[0].Filter == nil {
+	//		t.Error("friends should have no filter")
+	//		return
+	//	}
+
+	//	if gq.Children[1].Filter != nil {
+	//		t.Error("friends should have no filter")
+	//		return
+	//	}
+
+}

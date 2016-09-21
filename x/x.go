@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"log"
 	"net/http"
 	"time"
 
@@ -134,8 +133,3 @@ func Trace(ctx context.Context, format string, args ...interface{}) {
 	}
 	tr.LazyPrintf(format, args...)
 }
-
-// Printf does a log.Printf. We often do printf for debugging but has to keep
-// adding import "fmt" or "log" and removing them after we are done.
-// Let's include "x" in all packages and have access to log.Printf all the time.
-func Printf(format string, args ...interface{}) { log.Printf(format, args...) }

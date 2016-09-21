@@ -21,7 +21,6 @@ import (
 	"bytes"
 
 	"github.com/dgraph-io/dgraph/lex"
-	"github.com/dgraph-io/dgraph/x"
 )
 
 const (
@@ -67,10 +66,6 @@ const (
 	itemFilterFunc                              // Function inside a filter.
 	itemFilterFuncArg                           // Function args inside a filter.
 )
-
-func init() {
-	x.Printf("~~~~%d\n", itemFilterFunc)
-}
 
 // lexText lexes the input string and calls other lex functions.
 func lexText(l *lex.Lexer) lex.StateFn {
@@ -158,18 +153,14 @@ func lexFilterFuncInside(l *lex.Lexer) lex.StateFn {
 	l.AcceptRun(isSpace)
 	l.Ignore() // Any spaces encountered.
 
-	r := l.Next()
-	if r != leftRound {
-		return l.Errorf("Expected ( after filter func")
-	}
-	l.Ignore()
-
 	for {
 		r := l.Next()
 		if isSpace(r) || r == ',' {
 			l.Ignore()
+		} else if r == leftRound {
+			l.Emit(itemLeftRound)
 		} else if r == rightRound {
-			l.Ignore()
+			l.Emit(itemRightRound)
 			return lexFilterInside
 		} else if isEndLiteral(r) {
 			l.Ignore()
@@ -213,7 +204,6 @@ func lexFilterInside(l *lex.Lexer) lex.StateFn {
 			l.FilterDepth--
 			l.Emit(itemRightRound)
 			if l.FilterDepth == 0 {
-				x.Printf("~~~hahaha\n")
 				return lexInside // Filter directive is done.
 			}
 		case r == lex.EOF:
