@@ -50,6 +50,7 @@ var (
 	gentleMergeChan chan struct{}
 )
 
+// dirtyMapOp is a bulk operation on dirtyMap.
 type dirtyMapOp int
 
 const (
@@ -133,10 +134,8 @@ func mergeAndUpdateKeys(keys []uint64) {
 		if !ok || l == nil {
 			continue
 		}
-		// Not calling processOne, because we don't want to
-		// remove the postings list from the map, to avoid
-		// a race condition, where another caller re-creates the
-		// posting list before a merge happens.
+		// Not removing the postings list from the map, to avoid a race condition,
+		// where another caller re-creates the posting list before a merge happens.
 		mergeAndUpdate(l, ctr)
 	}
 	ctr.log()
