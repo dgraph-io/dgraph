@@ -179,9 +179,9 @@ type BoolType bool
 func (v BoolType) MarshalBinary() ([]byte, error) {
 	var bs [1]byte
 	if v {
-		bs[0] = 0
-	} else {
 		bs[0] = 1
+	} else {
+		bs[0] = 0
 	}
 	return bs[:], nil
 }
