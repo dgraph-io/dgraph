@@ -1075,7 +1075,6 @@ func TestParseFilter_unbalancedbrac(t *testing.T) {
 		}
 	}
 `
-
 	_, _, err := Parse(query)
 	if err == nil {
 		t.Error("Expected error")
@@ -1094,7 +1093,6 @@ func TestParseFilter_unknowndirective(t *testing.T) {
 		}
 	}
 `
-
 	_, _, err := Parse(query)
 	if err == nil {
 		t.Error("Expected error")
