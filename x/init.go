@@ -70,7 +70,8 @@ To say hi to the community       , visit https://dgraph.slack.com.
 
 // Printf does a log.Printf. We often do printf for debugging but has to keep
 // adding import "fmt" or "log" and removing them after we are done.
-// Let's include "x" in all packages and have access to log.Printf all the time.
+// Let's add Printf to "x" and include "x" almost everywhere. Caution: Do remember
+// to call x.Init. For tests, you need a TestMain that calls x.Init.
 func Printf(format string, args ...interface{}) {
 	Assert(logger != nil)
 	// Call depth is one higher than default.
