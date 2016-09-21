@@ -18,6 +18,7 @@ package gql
 
 import (
 	"encoding"
+	"encoding/json"
 	"fmt"
 )
 
@@ -42,6 +43,7 @@ type TypeValue interface {
 	encoding.BinaryUnmarshaler
 	encoding.TextMarshaler
 	encoding.TextUnmarshaler
+	json.Marshaler
 }
 
 type TypeValueFunc func() TypeValue

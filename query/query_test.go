@@ -609,24 +609,50 @@ func TestPostTraverse(t *testing.T) {
 
 		actorMap := m["actor"].(map[string]interface{})
 
-		if _, success := actorMap["name"].(string); !success {
+		if _, success := actorMap["name"].(*gql.StringType); !success {
 			t.Errorf("Expected type coercion to string for: %v\n", actorMap["name"])
 		}
 		// Note: although, int and int32 have same size, they are treated as different types in go
 		// GraphQL spec mentions integer type to be int32
-		if _, success := actorMap["age"].(int32); !success {
+		if _, success := actorMap["age"].(*gql.Int32Type); !success {
 			t.Errorf("Expected type coercion to int32 for: %v\n", actorMap["age"])
 		}
-		if _, success := actorMap["sword_present"].(bool); !success {
+		if _, success := actorMap["sword_present"].(*gql.BoolType); !success {
 			t.Errorf("Expected type coercion to bool for: %v\n", actorMap["sword_present"])
 		}
-		if _, success := actorMap["survival_rate"].(float64); !success {
+		if _, success := actorMap["survival_rate"].(*gql.FloatType); !success {
 			t.Errorf("Expected type coercion to float64 for: %v\n", actorMap["survival_rate"])
 		}
 		friendMap := actorMap["friend"].([]interface{})
 		friend := friendMap[0].(map[string]interface{})
-		if _, success := friend["name"].(string); !success {
+		if _, success := friend["name"].(*gql.StringType); !success {
 			t.Errorf("Expected type coercion to string for: %v\n", friend["name"])
+		}
+
+		// Test that the types marshal to json correctly
+		js, err := json.Marshal(val)
+		if err != nil {
+			t.Errorf("Error marshaling json: %v\n", err)
+		}
+		var mp map[string]interface{}
+		err = json.Unmarshal(js, &mp)
+		if err != nil {
+			t.Error(err)
+		}
+
+		actorMap = mp["actor"].(map[string]interface{})
+		if _, success := actorMap["name"].(string); !success {
+			t.Errorf("Expected json type string for: %v\n", actorMap["name"])
+		}
+		// json parses ints as floats
+		if _, success := actorMap["age"].(float64); !success {
+			t.Errorf("Expected json type int for: %v\n", actorMap["age"])
+		}
+		if _, success := actorMap["sword_present"].(bool); !success {
+			t.Errorf("Expected json type bool for: %v\n", actorMap["sword_present"])
+		}
+		if _, success := actorMap["survival_rate"].(float64); !success {
+			t.Errorf("Expected json type float64 for: %v\n", actorMap["survival_rate"])
 		}
 	}
 }

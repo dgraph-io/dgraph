@@ -18,6 +18,7 @@ package gql
 
 import (
 	"encoding/binary"
+	"encoding/json"
 	"math"
 	"strconv"
 
@@ -70,21 +71,25 @@ var (
 
 type Int32Type int32
 
-func (v *Int32Type) MarshalBinary() ([]byte, error) {
+func (v Int32Type) MarshalBinary() ([]byte, error) {
 	var bs [4]byte
-	binary.LittleEndian.PutUint32(bs[:], uint32(*v))
+	binary.LittleEndian.PutUint32(bs[:], uint32(v))
 	return bs[:], nil
+}
+
+func (v Int32Type) MarshalText() ([]byte, error) {
+	s := strconv.FormatInt(int64(v), 10)
+	return []byte(s), nil
+}
+
+func (v Int32Type) MarshalJSON() ([]byte, error) {
+	return json.Marshal(int32(v))
 }
 
 func (v *Int32Type) UnmarshalBinary(data []byte) error {
 	val := binary.LittleEndian.Uint32(data)
 	*v = Int32Type(val)
 	return nil
-}
-
-func (v *Int32Type) MarshalText() ([]byte, error) {
-	s := strconv.FormatInt(int64(*v), 10)
-	return []byte(s), nil
 }
 
 func (v *Int32Type) UnmarshalText(text []byte) error {
@@ -103,11 +108,20 @@ func newInt32Val() TypeValue {
 
 type FloatType float64
 
-func (v *FloatType) MarshalBinary() ([]byte, error) {
+func (v FloatType) MarshalBinary() ([]byte, error) {
 	var bs [8]byte
-	u := math.Float64bits(float64(*v))
+	u := math.Float64bits(float64(v))
 	binary.LittleEndian.PutUint64(bs[:], u)
 	return bs[:], nil
+}
+
+func (v FloatType) MarshalText() ([]byte, error) {
+	s := strconv.FormatFloat(float64(v), 'E', -1, 64)
+	return []byte(s), nil
+}
+
+func (v FloatType) MarshalJSON() ([]byte, error) {
+	return json.Marshal(float64(v))
 }
 
 func (v *FloatType) UnmarshalBinary(data []byte) error {
@@ -115,11 +129,6 @@ func (v *FloatType) UnmarshalBinary(data []byte) error {
 	val := math.Float64frombits(u)
 	*v = FloatType(val)
 	return nil
-}
-
-func (v *FloatType) MarshalText() ([]byte, error) {
-	s := strconv.FormatFloat(float64(*v), 'E', -1, 64)
-	return []byte(s), nil
 }
 
 func (v *FloatType) UnmarshalText(text []byte) error {
@@ -138,18 +147,22 @@ func newFloatVal() TypeValue {
 
 type StringType string
 
-func (v *StringType) MarshalBinary() ([]byte, error) {
-	return []byte(*v), nil
+func (v StringType) MarshalBinary() ([]byte, error) {
+	return []byte(v), nil
+}
+
+func (v StringType) MarshalText() ([]byte, error) {
+	return v.MarshalBinary()
+}
+
+func (v StringType) MarshalJSON() ([]byte, error) {
+	return json.Marshal(string(v))
 }
 
 func (v *StringType) UnmarshalBinary(data []byte) error {
 	s := string(data)
 	*v = StringType(s)
 	return nil
-}
-
-func (v *StringType) MarshalText() ([]byte, error) {
-	return v.MarshalBinary()
 }
 
 func (v *StringType) UnmarshalText(text []byte) error {
@@ -163,14 +176,23 @@ func newStringVal() TypeValue {
 
 type BoolType bool
 
-func (v *BoolType) MarshalBinary() ([]byte, error) {
+func (v BoolType) MarshalBinary() ([]byte, error) {
 	var bs [1]byte
-	if *v {
+	if v {
 		bs[0] = 0
 	} else {
 		bs[0] = 1
 	}
 	return bs[:], nil
+}
+
+func (v BoolType) MarshalText() ([]byte, error) {
+	s := strconv.FormatBool(bool(v))
+	return []byte(s), nil
+}
+
+func (v BoolType) MarshalJSON() ([]byte, error) {
+	return json.Marshal(bool(v))
 }
 
 func (v *BoolType) UnmarshalBinary(data []byte) error {
@@ -182,11 +204,6 @@ func (v *BoolType) UnmarshalBinary(data []byte) error {
 		return x.Errorf("Invalid value for bool %v", data[0])
 	}
 	return nil
-}
-
-func (v *BoolType) MarshalText() ([]byte, error) {
-	s := strconv.FormatBool(bool(*v))
-	return []byte(s), nil
 }
 
 func (v *BoolType) UnmarshalText(text []byte) error {
