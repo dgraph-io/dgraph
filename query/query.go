@@ -411,7 +411,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 				uid := ul.Uids(i)
 				uc := nodePool.Get().(*graph.Node)
 				uc.Attribute = pc.Attr
-				if sg.GetUid || sg.isDebug {
+				if sg.Params.GetUid || sg.Params.isDebug {
 					uc.Uid = uid
 				}
 				if rerr := pc.preTraverse(uid, uc); rerr != nil {
@@ -470,7 +470,7 @@ func (sg *SubGraph) ToProtocolBuffer(l *Latency) (*graph.Node, error) {
 
 	var ul task.UidList
 	r.Uidmatrix(&ul, 0)
-	if sg.GetUid || sg.isDebug {
+	if sg.Params.GetUid || sg.Params.isDebug {
 		n.Uid = ul.Uids(0)
 	}
 
