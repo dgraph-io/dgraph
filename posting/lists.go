@@ -53,7 +53,7 @@ var (
 type dirtyMapOp int
 
 const (
-	dirtyMapOpReset       = 0
+	dirtyMapOpReset       = iota
 	dirtyMapOpGentleMerge = iota
 )
 
