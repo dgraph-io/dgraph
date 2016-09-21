@@ -11,6 +11,8 @@
 ```
 # from the root of the repo, move into the git folder.
 $ cd .git
+# delete the hooks folder which is already there.
+$ rm -rf hooks
 # create symlink between directories
 $ ln -s ../contrib/hooks hooks
 ```
