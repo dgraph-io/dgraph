@@ -578,6 +578,7 @@ func (t *FilterTree) String() string {
 	return buf.String()
 }
 
+// stringHelper does simple DFS to convert FilterTree to string.
 func (t *FilterTree) stringHelper(buf *bytes.Buffer) {
 	if t == nil {
 		return
@@ -612,10 +613,10 @@ func (t *FilterTree) stringHelper(buf *bytes.Buffer) {
 		err = x.Errorf("Unknown operator")
 	}
 	x.Check(err)
-	_, err = buf.WriteRune(' ')
-	x.Check(err)
 
 	for _, c := range t.Child {
+		_, err = buf.WriteRune(' ')
+		x.Check(err)
 		c.stringHelper(buf)
 	}
 	_, err = buf.WriteRune(')')
@@ -665,7 +666,6 @@ func parseFilter(l *lex.Lexer) (*FilterTree, error) {
 	}
 
 	for item = range l.Items {
-		x.Printf("Token [%v]\n", item)
 		if item.Typ == itemFilterFunc { // Value.
 			leaf := &FilterTree{FuncName: item.Val}
 			itemInFunc := <-l.Items
