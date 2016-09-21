@@ -150,8 +150,7 @@ func (s *state) readLines(r io.Reader) {
 		log.Fatalf("%+v", err)
 	}
 
-	// If we haven't yet finished reading the file
-	// read the rest of the rows.
+	// If we haven't yet finished reading the file read the rest of the rows.
 	for {
 		err = readLine(bufReader, &strBuf)
 		if err != nil {
