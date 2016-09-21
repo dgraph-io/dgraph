@@ -321,44 +321,8 @@ func MergeLists(numRoutines int) {
 	go c.periodicLog()
 	defer c.ticker.Stop()
 
-	// Read n items each time by iterating over list map.
-	//	n := int(0.07 * float64(lhmap.Size()))
-	//	if n < 1000 {
-	//		n = 1000
-	//	}
-
-	// Main idea: While iterating, we do not call processOne at all. The reason is
-	// that when iterating, we lock big parts of the map, and we want to do it as
-	// fast as possible, and without distraction from processOne which is also
-	// trying to lock parts of the map. On one machine, the loading times goes from
-	// 8 mins to <5 mins. We have also tried pushing to keysChan while consuming it
-	// with processOne calls.  That seems to increase running time back to 7 mins.
-
-	//	keysChan := make(chan uint64, n) // Allocate channel only once.
-	//	defer close(keysChan)
-	//	for lhmap.Size() > 0 {
-	//		lhmap.streamUntilCap(keysChan) // Don't close keysChan yet. We can reuse it.
-
-	//		var wg sync.WaitGroup
-	//		for i := 0; i < numRoutines; i++ {
-	//			wg.Add(1)
-	//			go func() {
-	//				defer wg.Done()
-	//				// Note: we don't do a range loop here because it will block when channel
-	//				// becomes empty. Instead, we exit the goroutine once channel is empty.
-	//				for {
-	//					select {
-	//					case k := <-keysChan:
-	//						processOne(k, c)
-	//					default:
-	//						return
-	//					}
-	//				}
-	//			}()
-	//		}
-	//		wg.Wait()
-	//	}
-
+	// We iterate over lhmap, deleting keys and pushing values (List) into this
+	// channel. Then goroutines right below will commit these lists to data store.
 	workChan := make(chan *List, 10000)
 
 	var wg sync.WaitGroup
@@ -374,12 +338,11 @@ func MergeLists(numRoutines int) {
 	}
 
 	lhmap.EachWithDelete(func(k uint64, v *List) {
-		if v == nil {
+		if v == nil { // To be safe. Check might be unnecessary.
 			return
 		}
 		workChan <- v
 	})
 	close(workChan)
-
 	wg.Wait()
 }
