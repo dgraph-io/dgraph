@@ -30,6 +30,7 @@ import (
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/query/graph"
+	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
@@ -112,7 +113,7 @@ func (l *Latency) ToMap() map[string]string {
 }
 
 type params struct {
-	AttrType gql.Type
+	AttrType schema.Type
 	Alias    string
 	Count    int
 	Offset   int
@@ -283,7 +284,7 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 				return result, fmt.Errorf("Unknown Scalar:%v. Leaf predicate:'%v' must be"+
 					" one of the scalar types defined in the schema.", sg.Params.AttrType, sg.Attr)
 			}
-			stype := sg.Params.AttrType.(gql.Scalar)
+			stype := sg.Params.AttrType.(schema.Scalar)
 			lval, err := stype.ParseType(val)
 			if err != nil {
 				return result, err
@@ -434,7 +435,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 					return fmt.Errorf("Unknown Scalar:%v. Leaf predicate:'%v' must be"+
 						" one of the scalar types defined in the schema.", pc.Params.AttrType, pc.Attr)
 				}
-				stype := pc.Params.AttrType.(gql.Scalar)
+				stype := pc.Params.AttrType.(schema.Scalar)
 				if _, err := stype.ParseType(v); err != nil {
 					return err
 				}
@@ -487,7 +488,30 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 	// children. But, in this case, we don't want to muck with the current
 	// node, because of the way we're dealing with the root node.
 	// So, we work on the children, and then recurse for grand children.
+
+	scalarMap := make(map[string]bool)
+	if schema.TypeOf(sg.Attr) != nil {
+		// Add scalar fields in the level to children
+		list := schema.ScalarList(sg.Attr)
+		for _, it := range list {
+			args := params{
+				AttrType: it.Typ,
+				isDebug:  sg.Params.isDebug,
+			}
+			dst := &SubGraph{
+				Attr:   it.Field,
+				Params: args,
+			}
+			sg.Children = append(sg.Children, dst)
+			scalarMap[it.Field] = true
+		}
+
+	}
+
 	for _, gchild := range gq.Children {
+		if scalarMap[gchild.Attr] {
+			continue
+		}
 		if gchild.Attr == "_count_" {
 			if len(gq.Children) > 1 {
 				return errors.New("Cannot have other attributes with count")
@@ -503,7 +527,7 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 		}
 
 		args := params{
-			AttrType: gql.SchemaType(gchild.Attr),
+			AttrType: schema.TypeOf(gchild.Attr),
 			Alias:    gchild.Alias,
 			isDebug:  sg.Params.isDebug,
 		}
@@ -601,7 +625,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	b.Finish(rend)
 
 	args := params{
-		AttrType: gql.SchemaType(gq.Attr),
+		AttrType: schema.TypeOf(gq.Attr),
 		IsRoot:   true,
 		isDebug:  gq.Attr == "debug",
 	}

@@ -2,7 +2,6 @@ package schema
 
 import (
 	"bufio"
-	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -10,13 +9,8 @@ import (
 )
 
 var (
-	schemaFile = flag.String("schema", "", "Path to schema file")
-	store      map[string]Object
+	store map[string]Object
 )
-
-type Object struct {
-	fields map[string]string //field to type relationship
-}
 
 func Parse(schema string) error {
 	store = make(map[string]Object)
@@ -46,13 +40,16 @@ func Parse(schema string) error {
 			}
 		} else {
 			temp := strings.Split(cur, ":")
+			if len(temp) < 2 {
+				return fmt.Errorf("Invalid declaration")
+			}
 			name := strings.Trim(temp[0], " \t")
 			typ := strings.Trim(temp[1], " \t")
 			newObj.fields[name] = typ
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		return fmt.Errorf("Error reading schema file:", err)
+		return fmt.Errorf("Error reading schema file: %v", err)
 	}
 	fmt.Println(store)
 	return nil

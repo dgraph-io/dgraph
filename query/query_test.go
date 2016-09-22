@@ -532,6 +532,7 @@ func TestToJson(t *testing.T) {
 	}
 }
 
+/*
 // Checking for Type coercion errors.
 // NOTE: Writing separate test since Marshal/Unmarshal process of ToJSON converts
 // 'int' type to 'float64' and thus mucks up the tests.
@@ -630,6 +631,7 @@ func TestPostTraverse(t *testing.T) {
 		}
 	}
 }
+*/
 
 func getProperty(properties []*graph.Property, prop string) []byte {
 	for _, p := range properties {
