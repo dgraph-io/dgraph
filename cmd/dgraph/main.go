@@ -281,7 +281,7 @@ func validateTypes(nquads []rdf.NQuad) error {
 		if t := gql.SchemaType(nquad.Predicate); t != nil && t.IsScalar() {
 			// Currently, only scalar types are present
 			stype := t.(gql.Scalar)
-			if _, err := stype.ParseType(nquad.ObjectValue); err != nil {
+			if _, err := stype.Unmarshaler.UnmarshalText(nquad.ObjectValue); err != nil {
 				return err
 			}
 		}
