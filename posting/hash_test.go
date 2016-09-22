@@ -16,7 +16,10 @@
 
 package posting
 
-import "testing"
+import (
+	"sync"
+	"testing"
+)
 
 func TestHashBasic(t *testing.T) {
 	a := newShardedListMap(32)
@@ -70,14 +73,20 @@ func TestHashConcurrent(t *testing.T) {
 		lists = append(lists, new(List))
 	}
 
+	var wg sync.WaitGroup
 	for i := 0; i < 1000; i++ {
+		wg.Add(1)
 		go func(i int) {
+			defer wg.Done()
 			a.PutIfMissing(uint64(i), lists[i])
 		}(i)
 	}
+	wg.Wait()
 
 	for i := 0; i < 1000; i++ {
+		wg.Add(1)
 		go func(i int) {
+			defer wg.Done()
 			l, _ := a.Get(uint64(i))
 			if l != lists[i] {
 				t.Errorf("Expected lists[%d] but got something else", i)
@@ -85,4 +94,5 @@ func TestHashConcurrent(t *testing.T) {
 			}
 		}(i)
 	}
+	wg.Wait()
 }
