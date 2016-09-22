@@ -127,7 +127,7 @@ func TestParseBool(t *testing.T) {
 }
 
 func TestTime(t *testing.T) {
-	v := time.Now()
+	v := time.Date(2009, time.November, 10, 23, 0, 0, 0, time.UTC)
 	testBinary(v, dateTimeType.Unmarshaler, t)
 	testText(v, dateTimeType.Unmarshaler, t)
 }
