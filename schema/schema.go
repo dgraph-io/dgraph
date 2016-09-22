@@ -21,25 +21,41 @@ type scalar struct {
 	Typ   Type
 }
 
+func init() {
+	store = make(map[string]Type)
+}
+
 func ScalarList(obj string) []scalar {
 	var res []scalar
-	objStore := store[obj].(Object)
-	for k, v := range objStore.fields {
-		if t, ok := IsScalar(v); ok {
+	objStore, ok := store[obj].(Object)
+	if !ok {
+		return res
+	}
+	for k, v := range objStore.Fields {
+		if t, ok := GetScalar(v); ok {
 			res = append(res, scalar{Field: k, Typ: t})
 		}
 	}
 	return res
 }
 
-func TypeOf(field string) Type {
-	if obj, ok := store[field]; ok {
-		return obj.Type()
+func TypeOf(Pred string) Type {
+	if obj, ok := store[Pred]; ok {
+		return obj
 	}
 	return nil
 }
 
-func IsScalar(typ string) (Type, bool) {
+func FieldType(obj string, field string) string {
+	if res, ok := store[obj]; ok {
+		if t, ok := res.(Object).Fields[field]; ok {
+			return t
+		}
+	}
+	return ""
+}
+
+func GetScalar(typ string) (Type, bool) {
 	var res Type
 	switch typ {
 	case "int":

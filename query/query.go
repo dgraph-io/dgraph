@@ -287,7 +287,7 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 			stype := sg.Params.AttrType.(schema.Scalar)
 			lval, err := stype.ParseType(val)
 			if err != nil {
-				return result, err
+				return result, fmt.Errorf("Unable to coerce %v to %v: %v", val, sg.Attr, err)
 			}
 			if sg.Params.Alias != "" {
 				m[sg.Params.Alias] = lval
@@ -490,9 +490,10 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 	// So, we work on the children, and then recurse for grand children.
 
 	scalarMap := make(map[string]bool)
-	if schema.TypeOf(sg.Attr) != nil {
+	// Add scalar chilsdren nodes based on schema
+	if obj, ok := sg.Params.AttrType.(schema.Object); ok {
 		// Add scalar fields in the level to children
-		list := schema.ScalarList(sg.Attr)
+		list := schema.ScalarList(obj.Name)
 		for _, it := range list {
 			args := params{
 				AttrType: it.Typ,
@@ -526,8 +527,12 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 			sg.Params.GetUid = true
 		}
 
+		var attrType schema.Type
+		if objType, ok := sg.Params.AttrType.(schema.Object); ok {
+			attrType = schema.TypeOf(schema.FieldType(objType.Name, gchild.Attr))
+		}
 		args := params{
-			AttrType: schema.TypeOf(gchild.Attr),
+			AttrType: attrType,
 			Alias:    gchild.Alias,
 			isDebug:  sg.Params.isDebug,
 		}

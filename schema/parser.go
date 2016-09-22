@@ -13,8 +13,6 @@ var (
 )
 
 func Parse(schema string) error {
-	store = make(map[string]Type)
-
 	file, err := os.Open(schema)
 	if err != nil {
 		log.Fatal(err)
@@ -40,7 +38,7 @@ func Parse(schema string) error {
 			curObj = strings.Trim(cur[5:], " {")
 			newObj = Object{
 				Name:   curObj,
-				fields: make(map[string]string),
+				Fields: make(map[string]string),
 			}
 		} else if len(cur) > 5 && cur[:6] == "scalar" {
 			curIt := strings.Split(cur, " ")
@@ -51,7 +49,7 @@ func Parse(schema string) error {
 				temp := strings.Split(strings.Trim(cur[7:], " \t"), ":")
 				name := strings.Trim(temp[0], " \t")
 				typ := strings.Trim(temp[1], " \t")
-				t, ok := IsScalar(typ)
+				t, ok := GetScalar(typ)
 				if !ok {
 					return fmt.Errorf("Invalid scalar type")
 				}
@@ -67,9 +65,9 @@ func Parse(schema string) error {
 			typ := strings.Trim(temp[1], " \t")
 
 			if curObj != "" {
-				newObj.fields[name] = typ
+				newObj.Fields[name] = typ
 			} else if isScalarBlock {
-				t, ok := IsScalar(typ)
+				t, ok := GetScalar(typ)
 				if !ok {
 					return fmt.Errorf("Invalid scalar type")
 				}

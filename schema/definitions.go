@@ -35,7 +35,7 @@ type Scalar struct {
 
 type Object struct {
 	Name   string
-	fields map[string]string //field to type relationship
+	Fields map[string]string //field to type relationship
 }
 
 // ParseTypeFunc is a function that parses and does coercion for Scalar types.
@@ -47,12 +47,12 @@ func (s Scalar) String() string {
 }
 
 func (s Scalar) Type() Type {
-	typ, _ := IsScalar(s.Name)
+	typ, _ := GetScalar(s.Name)
 	return typ
 }
 
 func (o Object) Type() Type {
-	return objectType
+	return o
 }
 
 func (s Scalar) IsScalar() bool {
