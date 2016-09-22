@@ -118,6 +118,9 @@ func (v Int32Type) MarshalJSON() ([]byte, error) {
 type int32Unmarshaler struct{}
 
 func (v int32Unmarshaler) UnmarshalBinary(data []byte) (TypeValue, error) {
+	if len(data) < 4 {
+		return nil, x.Errorf("Invalid data for int32 %v", data)
+	}
 	val := binary.LittleEndian.Uint32(data)
 	return Int32Type(val), nil
 }
@@ -157,6 +160,9 @@ func (v FloatType) MarshalJSON() ([]byte, error) {
 type floatUnmarshaler struct{}
 
 func (v floatUnmarshaler) UnmarshalBinary(data []byte) (TypeValue, error) {
+	if len(data) < 8 {
+		return nil, x.Errorf("Invalid data for float %v", data)
+	}
 	u := binary.LittleEndian.Uint64(data)
 	val := math.Float64frombits(u)
 	return FloatType(val), nil

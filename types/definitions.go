@@ -34,20 +34,18 @@ type Scalar struct {
 	Name        string // name of scalar type
 	Description string // short description
 	// to unmarshal the binary/text representation of the type.
-	Unmarshaler TypeValueUnmarshaler
+	Unmarshaler Unmarshaler
 }
 
-// TypeValue is the interface that all scalar type values need to able
-// implement.
+// TypeValue is the interface that all scalar type values need to implement.
 type TypeValue interface {
 	encoding.TextMarshaler
 	encoding.BinaryMarshaler
 	json.Marshaler
 }
 
-// TypeValueUnmarshaler type is for unmarshaling a TypeValue from
-// binary/text format.
-type TypeValueUnmarshaler interface {
+// TypeValueUnmarshaler type is for unmarshaling a TypeValue from binary/text format.
+type Unmarshaler interface {
 	// UnmarshalBinary unmarshals the data from a binary format.
 	UnmarshalBinary(data []byte) (TypeValue, error)
 	// UnmarshalText unmarshals the data from a text format.

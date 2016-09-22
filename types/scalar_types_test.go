@@ -21,7 +21,7 @@ import (
 	"time"
 )
 
-func testBinary(val TypeValue, un TypeValueUnmarshaler, t *testing.T) {
+func testBinary(val TypeValue, un Unmarshaler, t *testing.T) {
 	bytes, err := val.MarshalBinary()
 	if err != nil {
 		t.Error(err)
@@ -35,7 +35,7 @@ func testBinary(val TypeValue, un TypeValueUnmarshaler, t *testing.T) {
 	}
 }
 
-func testText(val TypeValue, un TypeValueUnmarshaler, t *testing.T) {
+func testText(val TypeValue, un Unmarshaler, t *testing.T) {
 	bytes, err := val.MarshalText()
 	if err != nil {
 		t.Error(err)
@@ -70,6 +70,11 @@ func TestParseInt(t *testing.T) {
 			t.Errorf("Error parsing %s: %v", v, err)
 		}
 	}
+
+	data := []byte{0, 3, 1}
+	if _, err := intType.Unmarshaler.UnmarshalBinary(data); err == nil {
+		t.Errorf("Expected error parsing %v", data)
+	}
 }
 
 func TestFloat(t *testing.T) {
@@ -93,6 +98,11 @@ func TestParseFloat(t *testing.T) {
 			t.Errorf("Error parsing %s: %v", v, err)
 		}
 	}
+	data := []byte{0, 3, 1, 5, 1}
+	if _, err := floatType.Unmarshaler.UnmarshalBinary(data); err == nil {
+		t.Errorf("Expected error parsing %v", data)
+	}
+
 }
 
 func TestString(t *testing.T) {
