@@ -157,10 +157,10 @@ func processDirtyChan() {
 				case gentleMergeChan <- struct{}{}:
 					n := int(float64(len(dirtyMap)) * *gentleMergeFrac)
 					if cap(keysBuffer) < n {
-						// Resize keysBuffer to max(2*current cap, n).
-						newCap := n
-						if cap(keysBuffer) > newCap {
-							newCap = cap(keysBuffer)
+						// Resize keysBuffer to newCap := max(2*current cap, n).
+						newCap := 2 * cap(keysBuffer)
+						if newCap < n {
+							newCap = n
 						}
 						keysBuffer = make([]uint64, 0, newCap)
 					}
@@ -306,20 +306,16 @@ func GetOrCreate(key []byte, pstore *store.Store) (rlist *List, decr func()) {
 
 	l := getNew() // This retrieves a new *List and increments its ref count.
 	lp = lhmap.PutIfMissing(fp, l)
-	// Actually we could do lp.incr here, and remove the two incr calls below, but
-	// this might be harder to read.
+	// We are always going to return lp to caller, whether it is l or not. So, let's
+	// increment its reference counter.
+	lp.incr()
 
 	if lp == l {
-		l.incr() // Increment reference counter for the caller.
 		l.init(key, pstore)
-		return l, l.decr
+	} else {
+		// Undo the increment in getNew() call above.
+		l.decr()
 	}
-	// If we're unable to insert this, decrement the reference count. This would
-	// undo the increment in the getNew() call, and allow this list to be reused.
-	l.decr()
-
-	// Here, lp is different from l. Increment lp's counter before returning it.
-	lp.incr()
 	return lp, lp.decr
 }
 
@@ -366,7 +362,6 @@ func MergeLists(numRoutines int) {
 		if l == nil { // To be safe. Check might be unnecessary.
 			return
 		}
-		l.decr() // List is now deleted from lhmap. Decrement reference counter.
 		workChan <- l
 	})
 	close(workChan)
