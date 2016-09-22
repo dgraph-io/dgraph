@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package gql
+package types
 
 import (
 	"encoding/binary"
@@ -77,6 +77,22 @@ var (
 		Unmarshaler: timeUnmarsh,
 	}
 )
+
+// stores a mapping between a string name of a type
+var typeMap map[string]Type = map[string]Type{
+	"int":      intType,
+	"float":    floatType,
+	"string":   stringType,
+	"bool":     booleanType,
+	"id":       idType,
+	"datetime": dateTimeType,
+}
+
+// TypeForName returns the type corresponding to the given name.
+// If name is not recognized, it returns nil.
+func TypeForName(name string) Type {
+	return typeMap[name]
+}
 
 // Int32Type is the scalar type for int32
 type Int32Type int32

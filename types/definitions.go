@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package gql
+package types
 
 import (
 	"encoding"

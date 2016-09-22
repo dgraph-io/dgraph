@@ -19,6 +19,8 @@ package gql
 import (
 	"os"
 	"testing"
+
+	"github.com/dgraph-io/dgraph/types"
 )
 
 func createSchemaFile() (*os.File, error) {
@@ -67,11 +69,11 @@ func TestSchemaType(t *testing.T) {
 		t.Error(err)
 	}
 	typ := SchemaType("name")
-	if _, ok := typ.(Scalar); !ok {
+	if _, ok := typ.(types.Scalar); !ok {
 		t.Error("Type assertion failed for predicate:name")
 	}
 	typ = SchemaType("age")
-	if _, ok := typ.(Scalar); !ok {
+	if _, ok := typ.(types.Scalar); !ok {
 		t.Error("Type assertion failed for predicate:age")
 	}
 }
