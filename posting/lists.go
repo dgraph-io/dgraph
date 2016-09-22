@@ -353,8 +353,8 @@ func MergeLists(numRoutines int) {
 			defer wg.Done()
 			for l := range workChan {
 				l.SetForDeletion() // No more AddMutation.
-				l.decr()
 				mergeAndUpdate(l, c)
+				l.decr()
 			}
 		}()
 	}
