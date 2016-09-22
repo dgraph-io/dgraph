@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
-	"math/rand"
 	"os"
 	"os/exec"
 	"runtime"
@@ -34,31 +33,30 @@ import (
 	"time"
 
 	"github.com/dgryski/go-farm"
-	"github.com/zond/gotomic"
 
 	"github.com/dgraph-io/dgraph/store"
-	"github.com/dgraph-io/dgraph/x"
 )
 
-var maxmemory = flag.Int("stw_ram_mb", 4096,
-	"If RAM usage exceeds this, we stop the world, and flush our buffers.")
+var (
+	maxmemory = flag.Int("stw_ram_mb", 4096,
+		"If RAM usage exceeds this, we stop the world, and flush our buffers.")
 
-type mergeRoutines struct {
-	sync.RWMutex
-	count int
-}
+	gentleMergeFrac = flag.Float64("gentlemerge", 0.10, "Fraction of dirty posting lists to merge every few seconds.")
+	lhmapNumShards  = flag.Int("lhmap", 32, "Number of shards for lhmap.")
 
-func (mr *mergeRoutines) Count() int {
-	mr.RLock()
-	defer mr.RUnlock()
-	return mr.count
-}
+	dirtyMap        map[uint64]struct{} // Made global for log().
+	dirtyChan       chan uint64         // Puts to dirtyMap has to go through here.
+	dirtyMapOpChan  chan dirtyMapOp     // Ops on dirtyMap except puts go in here.
+	gentleMergeChan chan struct{}
+)
 
-func (mr *mergeRoutines) Add(delta int) {
-	mr.Lock()
-	mr.count += delta
-	mr.Unlock()
-}
+// dirtyMapOp is a bulk operation on dirtyMap.
+type dirtyMapOp int
+
+const (
+	dirtyMapOpReset       = iota
+	dirtyMapOpGentleMerge = iota
+)
 
 type counters struct {
 	ticker  *time.Ticker
@@ -92,7 +90,7 @@ func (c *counters) log() {
 	log.Printf("List merge counters. added: %d merged: %d clean: %d"+
 		" pending: %d mapsize: %d dirtysize: %d\n",
 		added, merged, atomic.LoadUint64(&c.clean),
-		pending, lhmap.Size(), dirtymap.Size())
+		pending, lhmap.Size(), len(dirtyMap))
 }
 
 func newCounters() *counters {
@@ -110,7 +108,7 @@ func aggressivelyEvict() {
 	megs := getMemUsage()
 	log.Printf("Memory usage over threshold. STW. Allocated MB: %v\n", megs)
 
-	log.Println("Calling merge on all lists.")
+	log.Println("Aggressive evict, committing to RocksDB")
 	MergeLists(100 * runtime.GOMAXPROCS(-1))
 
 	log.Println("Trying to free OS memory")
@@ -122,53 +120,69 @@ func aggressivelyEvict() {
 	log.Printf("Memory usage after calling GC. Allocated MB: %v", megs)
 }
 
-func gentlyMerge(mr *mergeRoutines) {
-	defer mr.Add(-1)
+// mergeAndUpdateKeys calls mergeAndUpdate for each key in array "keys".
+func mergeAndUpdateKeys(keys []uint64) {
+	defer func() { <-gentleMergeChan }()
+	if len(keys) == 0 {
+		return
+	}
 	ctr := newCounters()
 	defer ctr.ticker.Stop()
 
-	// Pick 7% of the dirty map or 400 keys, whichever is higher.
-	pick := int(float64(dirtymap.Size()) * 0.07)
-	if pick < 400 {
-		pick = 400
-	}
-	// We should start picking up elements from a randomly selected index,
-	// otherwise, the same keys would keep on getting merged, while the
-	// rest would never get a chance.
-	var start int
-	n := dirtymap.Size() - pick
-	if n > 0 {
-		start = rand.Intn(n)
-	}
-
-	idx := 0
-	count := 0
-	dirtymap.Each(func(k gotomic.Hashable, v gotomic.Thing) bool {
-		if idx < start {
-			idx++
-			return false
+	for _, key := range keys {
+		l, ok := lhmap.Get(key)
+		if !ok || l == nil {
+			continue
 		}
-
-		dirtymap.Delete(k)
-
-		ret, ok := lhmap.Get(k)
-		if !ok || ret == nil {
-			return false
-		}
-		// Not calling processOne, because we don't want to
-		// remove the postings list from the map, to avoid
-		// a race condition, where another caller re-creates the
-		// posting list before a merge happens.
-		l := ret.(*List)
-		if l == nil {
-			return false
-		}
+		// Not removing the postings list from the map, to avoid a race condition,
+		// where another caller re-creates the posting list before a merge happens.
 		mergeAndUpdate(l, ctr)
-		count++
-		return count >= pick
-	})
-
+	}
 	ctr.log()
+}
+
+// processDirtyChan passes contents from dirty channel into dirty map.
+// All write operations to dirtyMap should be contained in this function.
+func processDirtyChan() {
+	keysBuffer := make([]uint64, 0, 10000)
+	for {
+		select {
+		case key := <-dirtyChan:
+			dirtyMap[key] = struct{}{}
+
+		case op := <-dirtyMapOpChan:
+			switch op {
+			case dirtyMapOpGentleMerge:
+				select {
+				case gentleMergeChan <- struct{}{}:
+					n := int(float64(len(dirtyMap)) * *gentleMergeFrac)
+					if cap(keysBuffer) < n {
+						// Resize keysBuffer to newCap := max(2*current cap, n).
+						newCap := 2 * cap(keysBuffer)
+						if newCap < n {
+							newCap = n
+						}
+						keysBuffer = make([]uint64, 0, newCap)
+					}
+					for key := range dirtyMap {
+						delete(dirtyMap, key)
+						keysBuffer = append(keysBuffer, key)
+						if len(keysBuffer) > n {
+							break
+						}
+					}
+					go mergeAndUpdateKeys(keysBuffer)
+				default:
+					log.Println("Skipping gentle merge")
+				}
+
+			case dirtyMapOpReset:
+				for k := range dirtyMap {
+					delete(dirtyMap, k)
+				}
+			}
+		}
+	}
 }
 
 // getMemUsage returns the amount of memory used by the process in MB
@@ -227,51 +241,49 @@ func getMemUsage() int {
 	return rss * os.Getpagesize() / (1 << 20)
 }
 
-// checkMeomeryUsage monitors the memory usage by the running process and
+// checkMemoryUsage monitors the memory usage by the running process and
 // calls aggressively evict if the threshold is reached.
 func checkMemoryUsage() {
-	var mr mergeRoutines
 	for _ = range time.Tick(5 * time.Second) {
 		totMemory := getMemUsage()
 		if totMemory > *maxmemory {
+			// Although gentle merges cannot start after aggressive evict, some of them
+			// might still be running and try to lock lhmap.
 			aggressivelyEvict()
 		} else {
-			// If merging is slow, we don't want to end up having too many goroutines
-			// merging the dirty list. This should keep them in check.
-			// With a value of 18 and duration of 5 seconds, some goroutines are
-			// taking over 1.5 mins to finish.
-			if mr.Count() > 18 {
-				log.Println("Skipping gentle merging.")
-				continue
-			}
-			mr.Add(1)
-			// gentlyMerge can take a while to finish. So, run it in a goroutine.
-			go gentlyMerge(&mr)
+			// Gentle merge should not happen during an aggressive evict.
+			// This push into dirtyMapOpChan might be blocked by another gentle merge
+			// (just the copying into keysBuffers but not the actual RocksDB work) or a
+			// reset of dirtymap.
+			dirtyMapOpChan <- dirtyMapOpGentleMerge
 		}
 	}
 }
 
 var (
 	stopTheWorld sync.RWMutex
-	lhmap        *gotomic.Hash
-	dirtymap     *gotomic.Hash
+	lhmap        *listMap
 )
 
 // Init initializes the posting lists package, the in memory and dirty list hash.
 func Init() {
-	lhmap = gotomic.NewHash()
-	dirtymap = gotomic.NewHash()
+	lhmap = newShardedListMap(*lhmapNumShards)
+	dirtyChan = make(chan uint64, 10000)
+	dirtyMap = make(map[uint64]struct{}, 1000)
+	dirtyMapOpChan = make(chan dirtyMapOp, 1)
+	// Capacity is max number of gentle merges that can happen in parallel.
+	gentleMergeChan = make(chan struct{}, 18)
 	go checkMemoryUsage()
+	go processDirtyChan()
 }
 
-func getFromMap(gotomicKey gotomic.IntKey) *List {
-	lp, _ := lhmap.Get(gotomicKey)
+func getFromMap(key uint64) *List {
+	lp, _ := lhmap.Get(key)
 	if lp == nil {
 		return nil
 	}
-	result := lp.(*List)
-	result.incr()
-	return result
+	lp.incr()
+	return lp
 }
 
 // GetOrCreate stores the List corresponding to key, if it's not there already.
@@ -282,30 +294,29 @@ func getFromMap(gotomicKey gotomic.IntKey) *List {
 // ... // Use plist
 func GetOrCreate(key []byte, pstore *store.Store) (rlist *List, decr func()) {
 	fp := farm.Fingerprint64(key)
-	gotomicKey := gotomic.IntKey(fp)
 
 	stopTheWorld.RLock()
 	defer stopTheWorld.RUnlock()
-	if lp := getFromMap(gotomicKey); lp != nil {
+
+	lp, _ := lhmap.Get(fp)
+	if lp != nil {
+		lp.incr()
 		return lp, lp.decr
 	}
 
-	{
-		l := getNew() // This retrieves a new *List and increments its ref count.
-		if inserted := lhmap.PutIfMissing(gotomicKey, l); inserted {
-			l.incr() // Increment reference counter for the caller.
-			l.init(key, pstore)
-			return l, l.decr
-		}
-		// If we're unable to insert this, decrement the reference count.
-		// This would undo the increment in the newList() call, and allow this list to be reused.
+	l := getNew() // This retrieves a new *List and increments its ref count.
+	lp = lhmap.PutIfMissing(fp, l)
+	// We are always going to return lp to caller, whether it is l or not. So, let's
+	// increment its reference counter.
+	lp.incr()
+
+	if lp == l {
+		l.init(key, pstore)
+	} else {
+		// Undo the increment in getNew() call above.
 		l.decr()
 	}
-	if lp := getFromMap(gotomicKey); lp != nil {
-		return lp, lp.decr
-	}
-	x.Assertf(false, "Key should be present.")
-	return nil, nil
+	return lp, lp.decr
 }
 
 func mergeAndUpdate(l *List, c *counters) {
@@ -321,54 +332,41 @@ func mergeAndUpdate(l *List, c *counters) {
 	}
 }
 
-func processOne(k gotomic.Hashable, c *counters) {
-	ret, _ := lhmap.Delete(k)
-	if ret == nil {
-		return
-	}
-	l := ret.(*List)
-
-	if l == nil {
-		return
-	}
-	defer l.decr()
-	l.SetForDeletion() // No more AddMutation.
-	mergeAndUpdate(l, c)
-}
-
-// For on-demand merging of all lists.
-func process(ch chan gotomic.Hashable, c *counters, wg *sync.WaitGroup) {
-	// No need to go through dirtymap, because we're going through
-	// everything right now anyways.
-	for k := range ch {
-		processOne(k, c)
-	}
-	wg.Done()
-}
-
-func queueAll(ch chan gotomic.Hashable, c *counters) {
-	lhmap.Each(func(k gotomic.Hashable, v gotomic.Thing) bool {
-		ch <- k
-		atomic.AddUint64(&c.added, 1)
-		return false // If this returns true, Each would break.
-	})
-	close(ch)
-}
-
 func MergeLists(numRoutines int) {
 	// We're merging all the lists, so just create a new dirtymap.
-	dirtymap = gotomic.NewHash()
-	ch := make(chan gotomic.Hashable, 10000)
+	// This push into dirtyMapOpChan can be blocked by a gentle merge as the channel
+	// has very low capacity.
+	dirtyMapOpChan <- dirtyMapOpReset
+
 	c := newCounters()
 	go c.periodicLog()
 	defer c.ticker.Stop()
-	go queueAll(ch, c)
 
-	wg := new(sync.WaitGroup)
+	// We iterate over lhmap, deleting keys and pushing values (List) into this
+	// channel. Then goroutines right below will commit these lists to data store.
+	workChan := make(chan *List, 10000)
+
+	var wg sync.WaitGroup
 	for i := 0; i < numRoutines; i++ {
 		wg.Add(1)
-		go process(ch, c, wg)
+		go func() {
+			defer wg.Done()
+			for l := range workChan {
+				l.SetForDeletion() // No more AddMutation.
+				mergeAndUpdate(l, c)
+				l.decr()
+			}
+		}()
 	}
+
+	lhmap.EachWithDelete(func(k uint64, l *List) {
+		if l == nil { // To be safe. Check might be unnecessary.
+			return
+		}
+		// We lose one reference for deletion from lhmap. But we gain one reference
+		// for pushing into workChan. So no decr or incr here.
+		workChan <- l
+	})
+	close(workChan)
 	wg.Wait()
-	c.ticker.Stop()
 }

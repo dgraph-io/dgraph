@@ -155,7 +155,8 @@ func (w *grpcWorker) Mutate(ctx context.Context, query *Payload) (*Payload, erro
 
 // ServeTask is used to respond to a query.
 func (w *grpcWorker) ServeTask(ctx context.Context, query *Payload) (*Payload, error) {
-	q := x.NewTaskQuery(query.Data)
+	q := new(task.Query)
+	x.ParseTaskQuery(q, query.Data)
 	attr := string(q.Attr())
 	x.Trace(ctx, "Attribute: %v NumUids: %v InstanceIdx: %v ServeTask",
 		attr, q.UidsLength(), ws.instanceIdx)

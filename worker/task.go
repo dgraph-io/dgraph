@@ -36,7 +36,8 @@ const (
 // the instance which stores posting list corresponding to the predicate in the
 // query.
 func ProcessTaskOverNetwork(ctx context.Context, qu []byte) (result []byte, rerr error) {
-	q := x.NewTaskQuery(qu)
+	q := new(task.Query)
+	x.ParseTaskQuery(q, qu)
 
 	attr := string(q.Attr())
 	idx := farm.Fingerprint64([]byte(attr)) % ws.numInstances
@@ -81,7 +82,8 @@ func ProcessTaskOverNetwork(ctx context.Context, qu []byte) (result []byte, rerr
 
 // processTask processes the query, accumulates and returns the result.
 func processTask(query []byte) ([]byte, error) {
-	q := x.NewTaskQuery(query)
+	q := new(task.Query)
+	x.ParseTaskQuery(q, query)
 
 	attr := string(q.Attr())
 	store := ws.dataStore

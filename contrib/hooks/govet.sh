@@ -27,6 +27,7 @@ errors=
 
 # Run on one file at a time because a single invocation of "go tool vet"
 # with multiple files requires the files to all be in one package.
+echo -e "\033[32m Running go vet on staged files. Any errors won't allow you to commit.\033[0m"
 for gofile in $gofiles
 do
 	if ! go tool vet $vetflags $gofile 2>&1; then

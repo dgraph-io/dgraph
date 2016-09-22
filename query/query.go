@@ -176,8 +176,11 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 	}
 
 	// Now read the query and results at current node.
-	q := x.NewTaskQuery(sg.Query)
-	r := x.NewTaskResult(sg.Result)
+	q := new(task.Query)
+	x.ParseTaskQuery(q, sg.Query)
+
+	r := new(task.Result)
+	x.ParseTaskResult(r, sg.Result)
 
 	if q.UidsLength() != r.UidmatrixLength() {
 		log.Fatalf("Result uidmatrixlength: %v. Query uidslength: %v",
@@ -380,9 +383,11 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 
 	// We go through all predicate children of the subgraph.
 	for _, pc := range sg.Children {
-		r := x.NewTaskResult(pc.Result)
-		q := x.NewTaskQuery(pc.Query)
+		r := new(task.Result)
+		x.ParseTaskResult(r, pc.Result)
 
+		q := new(task.Query)
+		x.ParseTaskQuery(q, pc.Query)
 		idx := indexOf(uid, q)
 
 		if idx == -1 {
@@ -467,7 +472,8 @@ func (sg *SubGraph) ToProtocolBuffer(l *Latency) (*graph.Node, error) {
 		return n, nil
 	}
 
-	r := x.NewTaskResult(sg.Result)
+	r := new(task.Result)
+	x.ParseTaskResult(r, sg.Result)
 
 	var ul task.UidList
 	r.Uidmatrix(&ul, 0)
@@ -665,7 +671,8 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, rch chan error) {
 		}
 	}
 
-	r := x.NewTaskResult(sg.Result)
+	r := new(task.Result)
+	x.ParseTaskResult(r, sg.Result)
 	if r.ValuesLength() > 0 {
 		var v task.Value
 		if r.Values(&v, 0) {
