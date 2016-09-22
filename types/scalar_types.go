@@ -79,7 +79,7 @@ var (
 )
 
 // stores a mapping between a string name of a type
-var typeMap map[string]Type = map[string]Type{
+var typeMap = map[string]Type{
 	"int":      intType,
 	"float":    floatType,
 	"string":   stringType,
