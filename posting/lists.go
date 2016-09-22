@@ -363,6 +363,8 @@ func MergeLists(numRoutines int) {
 		if l == nil { // To be safe. Check might be unnecessary.
 			return
 		}
+		// We lose one reference for deletion from lhmap. But we gain one reference
+		// for pushing into workChan. So no decr or incr here.
 		workChan <- l
 	})
 	close(workChan)
