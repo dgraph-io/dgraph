@@ -144,6 +144,7 @@ func mergeAndUpdateKeys(keys []uint64) {
 // processDirtyChan passes contents from dirty channel into dirty map.
 // All write operations to dirtyMap should be contained in this function.
 func processDirtyChan() {
+	keysBuffer := make([]uint64, 0, 10000)
 	for {
 		select {
 		case key := <-dirtyChan:
@@ -155,7 +156,14 @@ func processDirtyChan() {
 				select {
 				case gentleMergeChan <- struct{}{}:
 					n := int(float64(len(dirtyMap)) * *gentleMergeFrac)
-					keysBuffer := make([]uint64, 0, n)
+					if cap(keysBuffer) < n {
+						// Resize keysBuffer to max(2*current cap, n).
+						newCap := n
+						if cap(keysBuffer) > newCap {
+							newCap = cap(keysBuffer)
+						}
+						keysBuffer = make([]uint64, 0, newCap)
+					}
 					for key := range dirtyMap {
 						delete(dirtyMap, key)
 						keysBuffer = append(keysBuffer, key)
@@ -244,6 +252,9 @@ func checkMemoryUsage() {
 			aggressivelyEvict()
 		} else {
 			// Gentle merge should not happen during an aggressive evict.
+			// This push into dirtyMapOpChan might be blocked by another gentle merge
+			// (just the copying into keysBuffers but not the actual RocksDB work) or a
+			// reset of dirtymap.
 			dirtyMapOpChan <- dirtyMapOpGentleMerge
 		}
 	}
@@ -303,6 +314,8 @@ func mergeAndUpdate(l *List, c *counters) {
 // MergeLists commit all posting lists in lhmap to RocksDB.
 func MergeLists(numRoutines int) {
 	// We're merging all the lists, so just create a new dirtymap.
+	// This push into dirtyMapOpChan can be blocked by a gentle merge as the channel
+	// has very low capacity.
 	dirtyMapOpChan <- dirtyMapOpReset
 
 	c := newCounters()
