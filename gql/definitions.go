@@ -45,6 +45,7 @@ type TypeValue interface {
 	json.Marshaler
 }
 
+// Unmarshaler for unmarshaling a TypeValue from binary/text format.
 type TypeValueUnmarshaler interface {
 	UnmarshalBinary(data []byte) (TypeValue, error)
 	UnmarshalText(data []byte) (TypeValue, error)
