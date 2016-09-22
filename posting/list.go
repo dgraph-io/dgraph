@@ -31,7 +31,6 @@ import (
 
 	"github.com/dgryski/go-farm"
 	"github.com/google/flatbuffers/go"
-	"github.com/zond/gotomic"
 
 	"github.com/dgraph-io/dgraph/posting/types"
 	"github.com/dgraph-io/dgraph/store"
@@ -58,7 +57,7 @@ type MutationLink struct {
 type List struct {
 	sync.RWMutex
 	key         []byte
-	ghash       gotomic.Hashable
+	ghash       uint64
 	hash        uint32
 	pbuffer     unsafe.Pointer
 	pstore      *store.Store // postinglist store
@@ -241,7 +240,7 @@ func (l *List) init(key []byte, pstore *store.Store) {
 	l.pstore = pstore
 
 	l.hash = farm.Fingerprint32(key)
-	l.ghash = gotomic.IntKey(farm.Fingerprint64(key))
+	l.ghash = farm.Fingerprint64(key)
 	l.mlayer = make(map[int]types.Posting)
 }
 
@@ -648,8 +647,8 @@ func (l *List) AddMutation(ctx context.Context, t x.DirectedEdge, op byte) (bool
 	hasMutated := l.mergeMutation(mpost)
 	if len(l.mindex)+len(l.mlayer) > 0 {
 		atomic.StoreInt64(&l.dirtyTs, time.Now().UnixNano())
-		if dirtymap != nil {
-			dirtymap.Put(l.ghash, true)
+		if dirtyChan != nil {
+			dirtyChan <- l.ghash
 		}
 	}
 	x.Trace(ctx, "Mutation done")
