@@ -9,11 +9,11 @@ import (
 )
 
 var (
-	store map[string]Object
+	store map[string]Type
 )
 
 func Parse(schema string) error {
-	store = make(map[string]Object)
+	store = make(map[string]Type)
 
 	file, err := os.Open(schema)
 	if err != nil {
@@ -23,21 +23,41 @@ func Parse(schema string) error {
 
 	var cur, curObj string
 	var newObj Object
+	var isScalarBlock bool
 	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
+	for i := 0; scanner.Scan(); i++ {
 		cur = strings.Trim(scanner.Text(), " \t\n")
-
 		if cur == "" || cur[0] == '#' {
 			continue
 		}
 
 		if cur[0] == '}' {
 			store[curObj] = newObj
-		} else if cur[:4] == "type" {
+			curObj = ""
+		} else if cur[0] == ')' {
+			isScalarBlock = false
+		} else if len(cur) > 3 && cur[:4] == "type" {
 			curObj = strings.Trim(cur[5:], " {")
 			newObj = Object{
+				Name:   curObj,
 				fields: make(map[string]string),
 			}
+		} else if len(cur) > 5 && cur[:6] == "scalar" {
+			curIt := strings.Split(cur, " ")
+			if len(curIt) > 1 && curIt[1] == "(" {
+				isScalarBlock = true
+				continue
+			} else {
+				temp := strings.Split(strings.Trim(cur[7:], " \t"), ":")
+				name := strings.Trim(temp[0], " \t")
+				typ := strings.Trim(temp[1], " \t")
+				t, ok := IsScalar(typ)
+				if !ok {
+					return fmt.Errorf("Invalid scalar type")
+				}
+				store[name] = t
+			}
+
 		} else {
 			temp := strings.Split(cur, ":")
 			if len(temp) < 2 {
@@ -45,7 +65,18 @@ func Parse(schema string) error {
 			}
 			name := strings.Trim(temp[0], " \t")
 			typ := strings.Trim(temp[1], " \t")
-			newObj.fields[name] = typ
+
+			if curObj != "" {
+				newObj.fields[name] = typ
+			} else if isScalarBlock {
+				t, ok := IsScalar(typ)
+				if !ok {
+					return fmt.Errorf("Invalid scalar type")
+				}
+				store[name] = t
+			} else {
+				return fmt.Errorf("Invaild schema: Line %v", i)
+			}
 		}
 	}
 	if err := scanner.Err(); err != nil {

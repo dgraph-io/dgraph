@@ -34,6 +34,7 @@ type Scalar struct {
 }
 
 type Object struct {
+	Name   string
 	fields map[string]string //field to type relationship
 }
 

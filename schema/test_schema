@@ -1,15 +1,24 @@
+scalar age : int
+
+scalar (
+ name: string
+  address:string
+    budget :int
+)
+
+
 type   Person {
 name: string
 age: int
 address: string
-friends: [Person]
+friends: Person
 }
 
 type Actor{
 name  : string
  age : int
   address :  string 
-films: [Film] 
+films: Film 
 }
 
 type Film {

@@ -23,7 +23,8 @@ type scalar struct {
 
 func ScalarList(obj string) []scalar {
 	var res []scalar
-	for k, v := range store[obj].fields {
+	objStore := store[obj].(Object)
+	for k, v := range objStore.fields {
 		if t, ok := IsScalar(v); ok {
 			res = append(res, scalar{Field: k, Typ: t})
 		}
