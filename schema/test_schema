@@ -1,0 +1,18 @@
+type   Person {
+name: string
+age: int
+address: string
+friends: [Person]
+}
+
+type Actor{
+name  : string
+ age : int
+  address :  string 
+films: [Film] 
+}
+
+type Film {
+name: string
+budget: int
+}
