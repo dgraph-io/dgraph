@@ -18,6 +18,7 @@ errors=
 # Run on one file at a time because a single invocation of golint
 # with multiple files requires the files to all be in one package.
 gofiles_with_warnings=()
+echo -e "\033[32m Running golint on staged files. You can either acknowledge the warnings or step through them.\033[0m"
 for gofile in $gofiles
 do
 	errcount=$(golint $gofile | wc -l)
