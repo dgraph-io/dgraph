@@ -22,7 +22,7 @@ import (
 	"io/ioutil"
 )
 
-// Schema stores the types for all predicates in the system.
+// schema stores the types for all predicates in the system.
 var schema = make(map[string]Type)
 
 // LoadSchema loads the schema and checks for errors.

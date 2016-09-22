@@ -49,7 +49,7 @@ func Checkf(err error, format string, args ...interface{}) {
 	}
 }
 
-// Assert logs fatal if b is false.
+// Assert asserts that b is true. Otherwise, it would log fatal.
 func Assert(b bool) {
 	if !b {
 		log.Fatalf("%+v", Errorf("Assert failed"))

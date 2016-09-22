@@ -277,25 +277,50 @@ func Init() {
 	go processDirtyChan()
 }
 
-// GetOrCreate stores the List corresponding to key(if its not there already)
-// to lhmap and returns it.
-func GetOrCreate(key []byte, pstore *store.Store) *List {
+func getFromMap(key uint64) *List {
+	lp, _ := lhmap.Get(key)
+	if lp == nil {
+		return nil
+	}
+	lp.incr()
+	return lp
+}
+
+// GetOrCreate stores the List corresponding to key, if it's not there already.
+// to lhmap and returns it. It also returns a reference decrement function to be called by caller.
+//
+// plist, decr := GetOrCreate(key, store)
+// defer decr()
+// ... // Use plist
+func GetOrCreate(key []byte, pstore *store.Store) (rlist *List, decr func()) {
 	fp := farm.Fingerprint64(key)
 
 	stopTheWorld.RLock()
 	defer stopTheWorld.RUnlock()
+
 	lp, _ := lhmap.Get(fp)
 	if lp != nil {
-		return lp
+		lp.incr()
+		return lp, lp.decr
 	}
 
-	l := NewList()
+	l := getNew() // This retrieves a new *List and increments its ref count.
 	lp = lhmap.PutIfMissing(fp, l)
+	// Actually we could do lp.incr here, and remove the two incr calls below, but
+	// this might be harder to read.
+
 	if lp == l {
+		l.incr() // Increment reference counter for the caller.
 		l.init(key, pstore)
-		return l
+		return l, l.decr
 	}
-	return lp
+	// If we're unable to insert this, decrement the reference count. This would
+	// undo the increment in the getNew() call, and allow this list to be reused.
+	l.decr()
+
+	// Here, lp is different from l. Increment lp's counter before returning it.
+	lp.incr()
+	return lp, lp.decr
 }
 
 func mergeAndUpdate(l *List, c *counters) {
@@ -311,7 +336,6 @@ func mergeAndUpdate(l *List, c *counters) {
 	}
 }
 
-// MergeLists commit all posting lists in lhmap to RocksDB.
 func MergeLists(numRoutines int) {
 	// We're merging all the lists, so just create a new dirtymap.
 	// This push into dirtyMapOpChan can be blocked by a gentle merge as the channel
@@ -338,11 +362,12 @@ func MergeLists(numRoutines int) {
 		}()
 	}
 
-	lhmap.EachWithDelete(func(k uint64, v *List) {
-		if v == nil { // To be safe. Check might be unnecessary.
+	lhmap.EachWithDelete(func(k uint64, l *List) {
+		if l == nil { // To be safe. Check might be unnecessary.
 			return
 		}
-		workChan <- v
+		l.decr() // List is now deleted from lhmap. Decrement reference counter.
+		workChan <- l
 	})
 	close(workChan)
 	wg.Wait()
