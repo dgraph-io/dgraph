@@ -78,23 +78,23 @@ var (
 	}
 )
 
-// Scalar type for int32
+// Int32Type is the scalar type for int32
 type Int32Type int32
 
-// Marshal to binary
+// MarshalBinary marshals to binary
 func (v Int32Type) MarshalBinary() ([]byte, error) {
 	var bs [4]byte
 	binary.LittleEndian.PutUint32(bs[:], uint32(v))
 	return bs[:], nil
 }
 
-// Marshal to text
+// MarshalText marshals to text
 func (v Int32Type) MarshalText() ([]byte, error) {
 	s := strconv.FormatInt(int64(v), 10)
 	return []byte(s), nil
 }
 
-// Marshal to json
+// MarshalJSON marshals to json
 func (v Int32Type) MarshalJSON() ([]byte, error) {
 	return json.Marshal(int32(v))
 }
@@ -116,10 +116,10 @@ func (v int32Unmarshaler) UnmarshalText(text []byte) (TypeValue, error) {
 
 var int32Unmarsh int32Unmarshaler
 
-// Scalar type for float64
+// FloatType is the scalar type for float64
 type FloatType float64
 
-// Marshal to binary
+// MarshalBinary marshals to binary
 func (v FloatType) MarshalBinary() ([]byte, error) {
 	var bs [8]byte
 	u := math.Float64bits(float64(v))
@@ -127,13 +127,13 @@ func (v FloatType) MarshalBinary() ([]byte, error) {
 	return bs[:], nil
 }
 
-// Marshal to text
+// MarshalText marshals to text
 func (v FloatType) MarshalText() ([]byte, error) {
 	s := strconv.FormatFloat(float64(v), 'E', -1, 64)
 	return []byte(s), nil
 }
 
-// Marshal to json
+// MarshalJSON marshals to json
 func (v FloatType) MarshalJSON() ([]byte, error) {
 	return json.Marshal(float64(v))
 }
@@ -156,20 +156,20 @@ func (v floatUnmarshaler) UnmarshalText(text []byte) (TypeValue, error) {
 
 var floatUnmarsh floatUnmarshaler
 
-// Scalar type for string
+// StringType is the scalar type for string
 type StringType string
 
-// Marshal to binary
+// MarshalBinary marshals to binary
 func (v StringType) MarshalBinary() ([]byte, error) {
 	return []byte(v), nil
 }
 
-// Marshal to text
+// MarshalText marshals to text
 func (v StringType) MarshalText() ([]byte, error) {
 	return v.MarshalBinary()
 }
 
-// Marshal to json
+// MarshalJSON marshals to json
 func (v StringType) MarshalJSON() ([]byte, error) {
 	return json.Marshal(string(v))
 }
@@ -186,10 +186,10 @@ func (v stringUnmarshaler) UnmarshalText(text []byte) (TypeValue, error) {
 
 var stringUnmarsh stringUnmarshaler
 
-// Scalar type for bool
+// BoolType is the scalar type for bool
 type BoolType bool
 
-// Marshal to binary
+// MarshalBinary marshals to binary
 func (v BoolType) MarshalBinary() ([]byte, error) {
 	var bs [1]byte
 	if v {
@@ -200,13 +200,13 @@ func (v BoolType) MarshalBinary() ([]byte, error) {
 	return bs[:], nil
 }
 
-// Marshal to text
+// MarshalText marshals to text
 func (v BoolType) MarshalText() ([]byte, error) {
 	s := strconv.FormatBool(bool(v))
 	return []byte(s), nil
 }
 
-// Marshal to json
+// MarshalJSON marshals to json
 func (v BoolType) MarshalJSON() ([]byte, error) {
 	return json.Marshal(bool(v))
 }

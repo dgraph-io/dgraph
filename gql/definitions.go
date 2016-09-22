@@ -37,7 +37,7 @@ type Scalar struct {
 	Unmarshaler TypeValueUnmarshaler
 }
 
-// This is the interface that all scalar type values need to able
+// TypeValue is the interface that all scalar type values need to able
 // implement.
 type TypeValue interface {
 	encoding.TextMarshaler
@@ -45,9 +45,12 @@ type TypeValue interface {
 	json.Marshaler
 }
 
-// Unmarshaler for unmarshaling a TypeValue from binary/text format.
+// TypeValueUnmarshaler type is for unmarshaling a TypeValue from
+// binary/text format.
 type TypeValueUnmarshaler interface {
+	// UnmarshalBinary unmarshals the data from a binary format.
 	UnmarshalBinary(data []byte) (TypeValue, error)
+	// UnmarshalText unmarshals the data from a text format.
 	UnmarshalText(data []byte) (TypeValue, error)
 }
 
