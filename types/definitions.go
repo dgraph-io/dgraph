@@ -27,12 +27,16 @@ type Type interface {
 	IsScalar() bool
 }
 
+// TypeId is the id used to identify a type.
+type TypeId byte
+
 // Scalar type defines concrete structure for scalar types to use.
 // Almost all scalar types can also act as input types.
 // Scalars (along with Enums) form leaf nodes of request or input values to arguements.
 type Scalar struct {
 	Name        string // name of scalar type
 	Description string // short description
+	id          TypeId // The storage identifier for this type
 	// to unmarshal the binary/text representation of the type.
 	Unmarshaler Unmarshaler
 }
@@ -55,6 +59,11 @@ type Unmarshaler interface {
 // String function to implement string interface
 func (s Scalar) String() string {
 	return fmt.Sprint(s.Name)
+}
+
+// Id function returns the storage identifier of this type
+func (s Scalar) Id() TypeId {
+	return s.id
 }
 
 // IsScalar function to assert scalar type

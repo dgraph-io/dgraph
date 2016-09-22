@@ -26,11 +26,24 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
+// Note: These ids are stored in the posting lists to indicate the type
+// of the data. The order *cannot* be changed without breaking existing
+// data. When adding a new type *always* add to the end of this list.
+// Never delete anything from this list even if it becomes unused.
+const (
+	stringId TypeId = iota
+	int32Id
+	floatId
+	boolId
+	dateTimeId
+)
+
 // added suffix 'type' to names to distinguish from Go types 'int' and 'string'
 var (
 	// Int scalar type.
 	intType = Scalar{
 		Name: "Int",
+		id:   int32Id,
 		Description: "The 'Int' scalar type represents non-fractional signed whole" +
 			" numeric values. Int can represent values between -(2^31)" +
 			" and 2^31 - 1.",
@@ -39,6 +52,7 @@ var (
 	// Float scalar type.
 	floatType = Scalar{
 		Name: "Float",
+		id:   floatId,
 		Description: "The 'Float' scalar type represents signed double-precision" +
 			" fractional values	as specified by [IEEE 754]" +
 			" (http://en.wikipedia.org/wiki/IEEE_floating_point).",
@@ -47,6 +61,7 @@ var (
 	// String scalar type.
 	stringType = Scalar{
 		Name: "String",
+		id:   stringId,
 		Description: "The 'String' scalar type represents textual data, represented" +
 			" as UTF-8 character sequences. The String type is most often" +
 			" used by GraphQL to represent free-form human-readable text.",
@@ -55,12 +70,14 @@ var (
 	// Boolean scalar type.
 	booleanType = Scalar{
 		Name:        "Boolean",
+		id:          boolId,
 		Description: "The 'Boolean' scalar type represents 'true' or 'false'.",
 		Unmarshaler: boolUnmarsh,
 	}
 	// ID scalar type.
 	idType = Scalar{
 		Name: "ID",
+		id:   stringId,
 		Description: "The 'ID' scalar type represents a unique identifier, often" +
 			" used to refetch an object or as key for a cache. The ID type" +
 			" appears in a JSON response as a String; however, it is not" +
@@ -72,6 +89,7 @@ var (
 	// DateTime scalar type.
 	dateTimeType = Scalar{
 		Name: "DateTime",
+		id:   dateTimeId,
 		Description: "The 'DateTime' scalar type an instant in time with nanosecond" +
 			" precision. Each DateTime is associated with a timezone.",
 		Unmarshaler: timeUnmarsh,
