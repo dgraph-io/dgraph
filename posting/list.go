@@ -123,6 +123,9 @@ func samePosting(a *types.Posting, b *types.Posting) bool {
 	if !bytes.Equal(a.ValueBytes(), b.ValueBytes()) {
 		return false
 	}
+	if a.ValType() != b.ValType() {
+		return false
+	}
 	if !bytes.Equal(a.Source(), b.Source()) {
 		return false
 	}
@@ -159,6 +162,9 @@ func newPosting(t x.DirectedEdge, op byte) []byte {
 	types.PostingAddSource(b, so)
 	types.PostingAddTs(b, t.Timestamp.UnixNano())
 	types.PostingAddOp(b, op)
+	if t.ValueType != 0 {
+		types.PostingAddValType(b, t.ValueType)
+	}
 	vend := types.PostingEnd(b)
 	b.Finish(vend)
 
@@ -185,6 +191,9 @@ func addEdgeToPosting(b *flatbuffers.Builder,
 	types.PostingAddSource(b, so)
 	types.PostingAddTs(b, t.Timestamp.UnixNano())
 	types.PostingAddOp(b, op)
+	if t.ValueType != 0 {
+		types.PostingAddValType(b, t.ValueType)
+	}
 	return types.PostingEnd(b)
 }
 
@@ -203,6 +212,9 @@ func addPosting(b *flatbuffers.Builder, p types.Posting) flatbuffers.UOffsetT {
 	types.PostingAddSource(b, so)
 	types.PostingAddTs(b, p.Ts())
 	types.PostingAddOp(b, p.Op())
+	if p.ValType() != 0 {
+		types.PostingAddValType(b, p.ValType())
+	}
 	return types.PostingEnd(b)
 }
 
@@ -761,21 +773,21 @@ func (l *List) Uids(opt ListOptions) []uint64 {
 	return result
 }
 
-func (l *List) Value() (result []byte, rerr error) {
+func (l *List) Value() (result []byte, rtype byte, rerr error) {
 	l.wg.Wait()
 	l.RLock()
 	defer l.RUnlock()
 
 	if l.length() == 0 {
-		return result, fmt.Errorf("No value found")
+		return result, rtype, fmt.Errorf("No value found")
 	}
 
 	var p types.Posting
 	if ok := l.get(&p, l.length()-1); !ok {
-		return result, fmt.Errorf("Unable to get last posting")
+		return result, rtype, fmt.Errorf("Unable to get last posting")
 	}
 	if p.Uid() != math.MaxUint64 {
-		return result, fmt.Errorf("No value found")
+		return result, rtype, fmt.Errorf("No value found")
 	}
-	return p.ValueBytes(), nil
+	return p.ValueBytes(), p.ValType(), nil
 }
