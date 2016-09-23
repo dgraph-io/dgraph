@@ -227,19 +227,25 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 		if ok := r.Uidmatrix(&ul, i); !ok {
 			return result, fmt.Errorf("While parsing UidList")
 		}
-		l := make([]interface{}, ul.UidsLength())
+		l := make([]interface{}, 0, ul.UidsLength())
 		for j := 0; j < ul.UidsLength(); j++ {
 			uid := ul.Uids(j)
 			m := make(map[string]interface{})
 			if sg.Params.GetUid || sg.Params.isDebug {
 				m["_uid_"] = fmt.Sprintf("%#x", uid)
+			} else {
+				// If uid is not requested and the Cresult is empty dont include in result
+				if _, present := cResult[uid]; !present {
+					continue
+				}
 			}
 			if ival, present := cResult[uid]; !present {
-				l[j] = m
+				l = append(l, m)
 			} else {
-				l[j] = mergeInterfaces(m, ival)
+				l = append(l, mergeInterfaces(m, ival))
 			}
 		}
+
 		if len(l) == 1 {
 			m := make(map[string]interface{})
 			if sg.Params.Alias != "" {
@@ -264,10 +270,16 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 			return result, fmt.Errorf("While parsing value")
 		}
 		val := tv.ValBytes()
+
+		m := make(map[string]interface{})
 		if bytes.Equal(val, nil) {
 			// We do this, because we typically do set values, even though
 			// they might be nil. This is to ensure that the index of the query uids
 			// and the index of the results can remain in sync.
+			if sg.Params.AttrType != nil && sg.Params.AttrType.IsScalar() {
+				m["INVALID"] = true
+				result[q.Uids(i)] = m
+			}
 			continue
 		}
 
@@ -276,7 +288,6 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 				" Previous value detected. A uid -> list of uids / value. Not both",
 				pval, q.Uids(i), val)
 		}
-		m := make(map[string]interface{})
 		if sg.Params.GetUid || sg.Params.isDebug {
 			m["_uid_"] = fmt.Sprintf("%#x", q.Uids(i))
 		}
@@ -519,7 +530,6 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 			sg.Children = append(sg.Children, dst)
 			scalarMap[it.Field] = true
 		}
-
 	}
 
 	for _, gchild := range gq.Children {
@@ -736,35 +746,6 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, rch chan error) {
 		rch <- nil
 		return
 	}
-	/*
-		// Let's execute it in a tree fashion. Each SubGraph would break off
-		// as many goroutines as it's children; which would then recursively
-		// do the same thing.
-		// Buffered channel to ensure no-blockage.
-		childchan := make(chan error, len(sg.Children))
-		for i := 0; i < len(sg.Children); i++ {
-			child := sg.Children[i]
-			child.Query = createTaskQuery(child, sorted)
-			go ProcessGraph(ctx, child, childchan)
-		}
-
-		// Now get all the results back.
-		for i := 0; i < len(sg.Children); i++ {
-			select {
-			case err = <-childchan:
-				x.Trace(ctx, "Reply from child. Index: %v Attr: %v", i, sg.Children[i].Attr)
-				if err != nil {
-					x.Trace(ctx, "Error while processing child task: %v", err)
-					rch <- err
-					return
-				}
-			case <-ctx.Done():
-				x.Trace(ctx, "Context done before full execution: %v", ctx.Err())
-				rch <- ctx.Err()
-				return
-			}
-		}
-	*/
 
 	var processed, leftToProcess []*SubGraph
 	// First iterate over the value nodes and check for validity.
@@ -820,10 +801,10 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, rch chan error) {
 			}
 
 			// type assertion for scalar type values
-			if !sg.Params.AttrType.IsScalar() {
+			if !node.Params.AttrType.IsScalar() {
 				log.Fatal("This shouldnt happen")
 			}
-			stype := sg.Params.AttrType.(schema.Scalar)
+			stype := node.Params.AttrType.(schema.Scalar)
 			_, err := stype.ParseType(val)
 			if err != nil {
 				invalidUids[sorted[i]] = true
