@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net"
 	"strconv"
 	"strings"
 	"sync"
@@ -16,16 +17,22 @@ import (
 )
 
 type node struct {
-	cfg   *raft.Config
-	data  map[string]string
-	done  <-chan struct{}
-	id    uint64
-	raft  raft.Node
-	store *raft.MemoryStorage
-	peers map[uint64]*Pool
+	cfg       *raft.Config
+	data      map[string]string
+	done      <-chan struct{}
+	id        uint64
+	raft      raft.Node
+	store     *raft.MemoryStorage
+	peers     map[uint64]*Pool
+	localAddr string
 }
 
-func (n *node) connect(pid uint64, addr string) {
+// TODO: Make this thread safe.
+func (n *node) Connect(pid uint64, addr string) {
+	if _, has := n.peers[pid]; has {
+		return
+	}
+
 	fmt.Printf("connect addr: %v\n", addr)
 	pool := NewPool(addr, 5)
 	query := new(Payload)
@@ -43,6 +50,7 @@ func (n *node) connect(pid uint64, addr string) {
 	}
 	_ = pool.Put(conn)
 	n.peers[pid] = pool
+	fmt.Printf("CONNECTED TO %d %v\n", pid, addr)
 }
 
 func (n *node) send(m raftpb.Message) {
@@ -54,6 +62,7 @@ func (n *node) send(m raftpb.Message) {
 	x.Check(err)
 
 	c := NewWorkerClient(conn)
+	m.Context = []byte(n.localAddr)
 
 	data, err := m.Marshal()
 	x.Checkf(err, "Unable to marshal: %+v", m)
@@ -156,8 +165,9 @@ func (n *node) Step(ctx context.Context, msg raftpb.Message) error {
 	return n.raft.Step(ctx, msg)
 }
 
-func newNode(id uint64, pn string) *node {
+func newNode(id uint64, my, pn string) *node {
 	fmt.Printf("NEW NODE ID: %v\n", id)
+	fmt.Println("local address", net.Addr(nil))
 
 	store := raft.NewMemoryStorage()
 	n := &node{
@@ -171,8 +181,9 @@ func newNode(id uint64, pn string) *node {
 			MaxSizePerMsg:   4096,
 			MaxInflightMsgs: 256,
 		},
-		data:  make(map[string]string),
-		peers: make(map[uint64]*Pool),
+		data:      make(map[string]string),
+		peers:     make(map[uint64]*Pool),
+		localAddr: my,
 	}
 
 	var raftPeers []raft.Peer
@@ -185,7 +196,7 @@ func newNode(id uint64, pn string) *node {
 			x.Checkf(err, "Invalid peer id: %v", kv[0])
 			raftPeers = append(raftPeers, raft.Peer{ID: pid})
 
-			n.connect(pid, kv[1])
+			n.Connect(pid, kv[1])
 		}
 	}
 	fmt.Printf("raftpeers: %+v\n", raftPeers)
@@ -197,9 +208,9 @@ func newNode(id uint64, pn string) *node {
 var thisNode *node
 var once sync.Once
 
-func InitNode(id uint64, pn string) {
+func InitNode(id uint64, my, pn string) {
 	once.Do(func() {
-		thisNode = newNode(id, pn)
+		thisNode = newNode(id, my, pn)
 	})
 }
 

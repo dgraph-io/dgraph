@@ -593,7 +593,8 @@ func main() {
 		uid.Init(uidStore)
 	}
 
-	worker.InitNode(uint64(rand.Uint32()), *peers)
+	my := "localhost" + *workerPort
+	worker.InitNode(uint64(rand.Uint32()), my, *peers)
 	node := worker.GetNode()
 	go node.Run()
 	go node.Campaign(context.TODO())

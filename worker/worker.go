@@ -29,7 +29,6 @@ import (
 	"github.com/google/flatbuffers/go"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/peer"
 
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/task"
@@ -178,9 +177,6 @@ func (w *grpcWorker) ServeTask(ctx context.Context, query *Payload) (*Payload, e
 }
 
 func (w *grpcWorker) RaftMessage(ctx context.Context, query *Payload) (*Payload, error) {
-	p, ok := peer.FromContext(ctx)
-	fmt.Printf("PEER for RAFTMESSAGE: %v %v\n", p.Addr.String(), ok)
-
 	reply := &Payload{}
 	reply.Data = []byte("ok")
 	msg := raftpb.Message{}
@@ -188,7 +184,9 @@ func (w *grpcWorker) RaftMessage(ctx context.Context, query *Payload) (*Payload,
 		return reply, err
 	}
 	fmt.Printf("Received RAFT Message: %+v\n", msg)
+	GetNode().Connect(msg.From, string(msg.Context))
 	GetNode().Step(ctx, msg)
+
 	return reply, nil
 }
 
