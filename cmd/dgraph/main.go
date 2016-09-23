@@ -37,6 +37,7 @@ import (
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc"
 
+	"github.com/dgraph-io/dgraph/draft"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/query"
@@ -557,6 +558,7 @@ func setupServer() {
 }
 
 func main() {
+	rand.Seed(time.Now().UnixNano())
 	x.Init()
 	checkFlagsAndInitDirs()
 
@@ -565,6 +567,9 @@ func main() {
 	defer ps.Close()
 
 	posting.InitIndex(ps)
+
+	node := draft.GetNode(uint64(rand.Uint32()))
+	go node.Run()
 
 	addrs := strings.Split(*workers, ",")
 	lenAddr := uint64(len(addrs))
