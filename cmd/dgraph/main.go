@@ -59,6 +59,7 @@ var (
 		"Number of cores to be used by the process")
 	instanceIdx = flag.Uint64("idx", 0,
 		"serves only entities whose Fingerprint % numInstance == instanceIdx.")
+	peers   = flag.String("peers", "", "List of peers in this format: ID1:URL1,ID2:URL2,...")
 	workers = flag.String("workers", "",
 		"Comma separated list of IP addresses of workers")
 	workerPort = flag.String("workerport", ":12345",
@@ -568,8 +569,9 @@ func main() {
 
 	posting.InitIndex(ps)
 
-	node := draft.GetNode(uint64(rand.Uint32()))
+	node := draft.GetNode(uint64(rand.Uint32()), *peers)
 	go node.Run()
+	go node.Campaign(context.TODO())
 
 	addrs := strings.Split(*workers, ",")
 	lenAddr := uint64(len(addrs))
