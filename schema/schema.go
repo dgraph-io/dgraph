@@ -39,8 +39,8 @@ func ScalarList(obj string) []scalar {
 	return res
 }
 
-func TypeOf(Pred string) Type {
-	if obj, ok := store[Pred]; ok {
+func TypeOf(pred string) Type {
+	if obj, ok := store[pred]; ok {
 		return obj
 	}
 	return nil
