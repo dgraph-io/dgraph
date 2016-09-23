@@ -22,7 +22,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-func (to Scalar) ConvertFrom(value TypeValue) (TypeValue, error) {
+func (to Scalar) Convert(value TypeValue) (TypeValue, error) {
 	if to.Id() == stringId {
 		// If we are converting to a string, simply use
 		// MarshalText
@@ -41,7 +41,7 @@ func (to Scalar) ConvertFrom(value TypeValue) (TypeValue, error) {
 		// the unmarshaller
 		return u.UnmarshalText([]byte(v))
 	case Int32Type:
-		if c, ok := u.(intUnmarshaler); !ok {
+		if c, ok := u.(int32Unmarshaler); !ok {
 			return nil, cantConvert(to, v)
 		} else {
 			return c.fromInt(int32(v))
@@ -77,7 +77,7 @@ func cantConvert(to Scalar, val TypeValue) error {
 	return x.Errorf("Cannot convert %v to type %s", val, to.Name)
 }
 
-type intUnmarshaler interface {
+type int32Unmarshaler interface {
 	fromInt(value int32) (TypeValue, error)
 }
 

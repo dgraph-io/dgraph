@@ -292,3 +292,70 @@ func (u unmarshalTime) UnmarshalText(text []byte) (TypeValue, error) {
 }
 
 var uTime unmarshalTime
+
+func (u unmarshalInt32) fromFloat(f float64) (TypeValue, error) {
+	if f > math.MaxInt32 || f < math.MinInt32 || math.IsNaN(f) {
+		return nil, x.Errorf("Float out of int32 range")
+	}
+	return Int32Type(f), nil
+}
+
+func (u unmarshalInt32) fromBool(b bool) (TypeValue, error) {
+	if b {
+		return Int32Type(1), nil
+	} else {
+		return Int32Type(0), nil
+	}
+}
+
+func (u unmarshalInt32) fromTime(t time.Time) (TypeValue, error) {
+	// Represent the unix timestamp as a 32bit int.
+	secs := t.Unix()
+	if secs > math.MaxInt32 || secs < math.MinInt32 {
+		return nil, x.Errorf("Time out of int32 range")
+	}
+	return Int32Type(secs), nil
+}
+
+func (u unmarshalFloat) fromInt(i int32) (TypeValue, error) {
+	return FloatType(i), nil
+}
+
+func (u unmarshalFloat) fromBool(b bool) (TypeValue, error) {
+	if b {
+		return FloatType(1), nil
+	} else {
+		return FloatType(0), nil
+	}
+}
+
+const (
+	nanoSecondsInSec = 1000000000
+)
+
+func (u unmarshalFloat) fromTime(t time.Time) (TypeValue, error) {
+	// Represent the unix timestamp as a float (with fractional seconds)
+	secs := float64(t.Unix())
+	nano := float64(t.Nanosecond())
+	val := secs + nano/nanoSecondsInSec
+	return FloatType(val), nil
+}
+
+func (u unmarshalBool) fromInt(i int32) (TypeValue, error) {
+	return BoolType(i != 0), nil
+}
+
+func (u unmarshalBool) fromFloat(f float64) (TypeValue, error) {
+	return BoolType(f != 0), nil
+}
+
+func (u unmarshalTime) fromInt(i int32) (TypeValue, error) {
+	return time.Unix(int64(i), 0).UTC(), nil
+}
+
+func (u unmarshalTime) fromFloat(f float64) (TypeValue, error) {
+	secs := int64(f)
+	fracSecs := f - float64(secs)
+	nsecs := int64(fracSecs * nanoSecondsInSec)
+	return time.Unix(secs, nsecs).UTC(), nil
+}
