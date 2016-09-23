@@ -14,14 +14,21 @@
  * limitations under the License.
  */
 
-package gql
+package types
 
-import "fmt"
+import (
+	"encoding"
+	"encoding/json"
+	"fmt"
+)
 
 // Type interface is the wrapper interface for all types
 type Type interface {
 	IsScalar() bool
 }
+
+// TypeId is the id used to identify a type.
+type TypeId byte
 
 // Scalar type defines concrete structure for scalar types to use.
 // Almost all scalar types can also act as input types.
@@ -29,15 +36,34 @@ type Type interface {
 type Scalar struct {
 	Name        string // name of scalar type
 	Description string // short description
-	ParseType   ParseTypeFunc
+	id          TypeId // The storage identifier for this type
+	// to unmarshal the binary/text representation of the type.
+	Unmarshaler Unmarshaler
 }
 
-// ParseTypeFunc is a function that parses and does coercion for Scalar types.
-type ParseTypeFunc func(input []byte) (interface{}, error)
+// TypeValue is the interface that all scalar type values need to implement.
+type TypeValue interface {
+	encoding.TextMarshaler
+	encoding.BinaryMarshaler
+	json.Marshaler
+}
+
+// Unmarshaler type is for unmarshaling a TypeValue from binary/text format.
+type Unmarshaler interface {
+	// UnmarshalBinary unmarshals the data from a binary format.
+	UnmarshalBinary(data []byte) (TypeValue, error)
+	// UnmarshalText unmarshals the data from a text format.
+	UnmarshalText(data []byte) (TypeValue, error)
+}
 
 // String function to implement string interface
 func (s Scalar) String() string {
 	return fmt.Sprint(s.Name)
+}
+
+// Id function returns the storage identifier of this type
+func (s Scalar) Id() TypeId {
+	return s.id
 }
 
 // IsScalar function to assert scalar type

@@ -31,6 +31,7 @@ import (
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/query/graph"
 	"github.com/dgraph-io/dgraph/task"
+	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/google/flatbuffers/go"
@@ -112,7 +113,7 @@ func (l *Latency) ToMap() map[string]string {
 }
 
 type params struct {
-	AttrType gql.Type
+	AttrType types.Type
 	Alias    string
 	Count    int
 	Offset   int
@@ -286,8 +287,8 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 				return result, fmt.Errorf("Unknown Scalar:%v. Leaf predicate:'%v' must be"+
 					" one of the scalar types defined in the schema.", sg.Params.AttrType, sg.Attr)
 			}
-			stype := sg.Params.AttrType.(gql.Scalar)
-			lval, err := stype.ParseType(val)
+			stype := sg.Params.AttrType.(types.Scalar)
+			lval, err := stype.Unmarshaler.UnmarshalText(val)
 			if err != nil {
 				return result, err
 			}
@@ -439,8 +440,8 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 					return fmt.Errorf("Unknown Scalar:%v. Leaf predicate:'%v' must be"+
 						" one of the scalar types defined in the schema.", pc.Params.AttrType, pc.Attr)
 				}
-				stype := pc.Params.AttrType.(gql.Scalar)
-				if _, err := stype.ParseType(v); err != nil {
+				stype := pc.Params.AttrType.(types.Scalar)
+				if _, err := stype.Unmarshaler.UnmarshalText(v); err != nil {
 					return err
 				}
 			}

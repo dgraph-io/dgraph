@@ -43,6 +43,7 @@ import (
 	"github.com/dgraph-io/dgraph/query/graph"
 	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/store"
+	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/uid"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
@@ -280,8 +281,8 @@ func validateTypes(nquads []rdf.NQuad) error {
 	for _, nquad := range nquads {
 		if t := gql.SchemaType(nquad.Predicate); t != nil && t.IsScalar() {
 			// Currently, only scalar types are present
-			stype := t.(gql.Scalar)
-			if _, err := stype.ParseType(nquad.ObjectValue); err != nil {
+			stype := t.(types.Scalar)
+			if _, err := stype.Unmarshaler.UnmarshalText(nquad.ObjectValue); err != nil {
 				return err
 			}
 		}
