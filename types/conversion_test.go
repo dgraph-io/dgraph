@@ -32,7 +32,7 @@ func TestConvertInt32ToBool(t *testing.T) {
 		{0, false},
 	}
 	for _, tc := range data {
-		if out, err := booleanType.Convert(tc.in); err != nil {
+		if out, err := Boolean.Convert(tc.in); err != nil {
 			t.Errorf("Unexpected error converting int to bool: %v", err)
 		} else if out.(BoolType) != tc.out {
 			t.Errorf("Converting int to bool: Expected %v, got %v", tc.out, out)
@@ -54,7 +54,7 @@ func TestConvertFloatToBool(t *testing.T) {
 		{FloatType(math.Inf(-1)), true},
 	}
 	for _, tc := range data {
-		if out, err := booleanType.Convert(tc.in); err != nil {
+		if out, err := Boolean.Convert(tc.in); err != nil {
 			t.Errorf("Unexpected error converting float to bool: %v", err)
 		} else if out.(BoolType) != tc.out {
 			t.Errorf("Converting float to bool: Expected %v, got %v", tc.out, out)
@@ -77,7 +77,7 @@ func TestConvertStringToBool(t *testing.T) {
 		{"False", false},
 	}
 	for _, tc := range data {
-		if out, err := booleanType.Convert(tc.in); err != nil {
+		if out, err := Boolean.Convert(tc.in); err != nil {
 			t.Errorf("Unexpected error converting string to bool: %v", err)
 		} else if out.(BoolType) != tc.out {
 			t.Errorf("Converting string to bool: Expected %v, got %v", tc.out, out)
@@ -92,7 +92,7 @@ func TestConvertStringToBool(t *testing.T) {
 	}
 
 	for _, tc := range errData {
-		if out, err := booleanType.Convert(tc); err == nil {
+		if out, err := Boolean.Convert(tc); err == nil {
 			t.Errorf("Expected error converting string %s to bool %v", tc, out)
 		}
 	}
@@ -100,7 +100,7 @@ func TestConvertStringToBool(t *testing.T) {
 
 func TestConvertDateTimeToBool(t *testing.T) {
 	tm := time.Now()
-	if _, err := booleanType.Convert(tm); err == nil {
+	if _, err := Boolean.Convert(tm); err == nil {
 		t.Errorf("Expected error converting time to bool")
 	}
 }
@@ -114,7 +114,7 @@ func TestConvertBoolToInt32(t *testing.T) {
 		{false, 0},
 	}
 	for _, tc := range data {
-		if out, err := intType.Convert(tc.in); err != nil {
+		if out, err := Int32.Convert(tc.in); err != nil {
 			t.Errorf("Unexpected error converting bool to int: %v", err)
 		} else if out.(Int32Type) != tc.out {
 			t.Errorf("Converting bool to in: Expected %v, got %v", tc.out, out)
@@ -133,7 +133,7 @@ func TestConvertFloatToInt32(t *testing.T) {
 		{-0.0, 0},
 	}
 	for _, tc := range data {
-		if out, err := intType.Convert(tc.in); err != nil {
+		if out, err := Int32.Convert(tc.in); err != nil {
 			t.Errorf("Unexpected error converting float to int: %v", err)
 		} else if out.(Int32Type) != tc.out {
 			t.Errorf("Converting float to int: Expected %v, got %v", tc.out, out)
@@ -147,7 +147,7 @@ func TestConvertFloatToInt32(t *testing.T) {
 		-522638295213.3243,
 	}
 	for _, tc := range errData {
-		if out, err := intType.Convert(FloatType(tc)); err == nil {
+		if out, err := Int32.Convert(FloatType(tc)); err == nil {
 			t.Errorf("Expected error converting float %f to int %v", tc, out)
 		}
 	}
@@ -164,7 +164,7 @@ func TestConvertStringToInt32(t *testing.T) {
 		{"0", 0},
 	}
 	for _, tc := range data {
-		if out, err := intType.Convert(tc.in); err != nil {
+		if out, err := Int32.Convert(tc.in); err != nil {
 			t.Errorf("Unexpected error converting string to int: %v", err)
 		} else if out.(Int32Type) != tc.out {
 			t.Errorf("Converting string to int: Expected %v, got %v", tc.out, out)
@@ -180,7 +180,7 @@ func TestConvertStringToInt32(t *testing.T) {
 	}
 
 	for _, tc := range errData {
-		if out, err := intType.Convert(tc); err == nil {
+		if out, err := Int32.Convert(tc); err == nil {
 			t.Errorf("Expected error converting string %s to int %v", tc, out)
 		}
 	}
@@ -195,7 +195,7 @@ func TestConvertDateTimeToInt32(t *testing.T) {
 		{time.Date(1969, time.November, 10, 23, 0, 0, 0, time.UTC), -4410000},
 	}
 	for _, tc := range data {
-		if out, err := intType.Convert(tc.in); err != nil {
+		if out, err := Int32.Convert(tc.in); err != nil {
 			t.Errorf("Unexpected error converting time to int: %v", err)
 		} else if out.(Int32Type) != tc.out {
 			t.Errorf("Converting time to int: Expected %v, got %v", tc.out, out)
@@ -208,7 +208,7 @@ func TestConvertDateTimeToInt32(t *testing.T) {
 	}
 
 	for _, tc := range errData {
-		if out, err := intType.Convert(tc); err == nil {
+		if out, err := Int32.Convert(tc); err == nil {
 			t.Errorf("Expected error converting time %s to int %v", tc, out)
 		}
 	}
@@ -223,7 +223,7 @@ func TestConvertBoolToFloat(t *testing.T) {
 		{false, 0.0},
 	}
 	for _, tc := range data {
-		if out, err := floatType.Convert(tc.in); err != nil {
+		if out, err := Float.Convert(tc.in); err != nil {
 			t.Errorf("Unexpected error converting bool to float: %v", err)
 		} else if out.(FloatType) != tc.out {
 			t.Errorf("Converting bool to float: Expected %v, got %v", tc.out, out)
@@ -241,7 +241,7 @@ func TestConvertInt32ToFloat(t *testing.T) {
 		{0, 0.0},
 	}
 	for _, tc := range data {
-		if out, err := floatType.Convert(tc.in); err != nil {
+		if out, err := Float.Convert(tc.in); err != nil {
 			t.Errorf("Unexpected error converting int to float: %v", err)
 		} else if out.(FloatType) != tc.out {
 			t.Errorf("Converting int to float: Expected %v, got %v", tc.out, out)
@@ -262,7 +262,7 @@ func TestConvertStringToFloat(t *testing.T) {
 		{"1e-2", 0.01},
 	}
 	for _, tc := range data {
-		if out, err := floatType.Convert(tc.in); err != nil {
+		if out, err := Float.Convert(tc.in); err != nil {
 			t.Errorf("Unexpected error converting string to float: %v", err)
 		} else if out.(FloatType) != tc.out {
 			t.Errorf("Converting string to float: Expected %v, got %v", tc.out, out)
@@ -277,7 +277,7 @@ func TestConvertStringToFloat(t *testing.T) {
 	}
 
 	for _, tc := range errData {
-		if out, err := floatType.Convert(tc); err == nil {
+		if out, err := Float.Convert(tc); err == nil {
 			t.Errorf("Expected error converting string %s to float %v", tc, out)
 		}
 	}
@@ -296,7 +296,7 @@ func TestConvertDateTimeToFloat(t *testing.T) {
 		{time.Date(1901, time.November, 10, 23, 0, 0, 0, time.UTC), -2150326800},
 	}
 	for _, tc := range data {
-		if out, err := floatType.Convert(tc.in); err != nil {
+		if out, err := Float.Convert(tc.in); err != nil {
 			t.Errorf("Unexpected error converting time to int: %v", err)
 		} else if out.(FloatType) != tc.out {
 			t.Errorf("Converting time to int: Expected %v, got %v", tc.out, out)
@@ -306,7 +306,7 @@ func TestConvertDateTimeToFloat(t *testing.T) {
 
 func TestConvertBoolToTime(t *testing.T) {
 	b := BoolType(false)
-	if _, err := dateTimeType.Convert(b); err == nil {
+	if _, err := DateTime.Convert(b); err == nil {
 		t.Errorf("Expected error converting bool to time")
 	}
 }
@@ -321,7 +321,7 @@ func TestConvertInt32ToTime(t *testing.T) {
 		{0, time.Date(1970, time.January, 1, 0, 0, 0, 0, time.UTC)},
 	}
 	for _, tc := range data {
-		if out, err := dateTimeType.Convert(tc.in); err != nil {
+		if out, err := DateTime.Convert(tc.in); err != nil {
 			t.Errorf("Unexpected error converting time to int: %v", err)
 		} else if out != tc.out {
 			t.Errorf("Converting time to int: Expected %v, got %v", tc.out, out)
@@ -344,7 +344,7 @@ func TestConvertFloatToTime(t *testing.T) {
 		{-4409999.999, time.Date(1969, time.November, 10, 23, 0, 0, 1000001, time.UTC)},
 	}
 	for _, tc := range data {
-		if out, err := dateTimeType.Convert(tc.in); err != nil {
+		if out, err := DateTime.Convert(tc.in); err != nil {
 			t.Errorf("Unexpected error converting float to int: %v", err)
 		} else if out != tc.out {
 			t.Errorf("Converting float to int: Expected %v, got %v", tc.out, out)
@@ -363,7 +363,7 @@ func TestConvertToString(t *testing.T) {
 		{BoolType(true), "true"},
 	}
 	for _, tc := range data {
-		if out, err := stringType.Convert(tc.in); err != nil {
+		if out, err := String.Convert(tc.in); err != nil {
 			t.Errorf("Unexpected error converting to string: %v", err)
 		} else if out != tc.out {
 			t.Errorf("Converting to string: Expected %v, got %v", tc.out, out)

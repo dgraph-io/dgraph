@@ -38,10 +38,9 @@ const (
 	dateTimeId
 )
 
-// added suffix 'type' to names to distinguish from Go types 'int' and 'string'
 var (
 	// Int scalar type.
-	intType = Scalar{
+	Int32 = Scalar{
 		Name: "int",
 		id:   int32Id,
 		Description: "The 'Int' scalar type represents non-fractional signed whole" +
@@ -50,7 +49,7 @@ var (
 		Unmarshaler: uInt32,
 	}
 	// Float scalar type.
-	floatType = Scalar{
+	Float = Scalar{
 		Name: "float",
 		id:   floatId,
 		Description: "The 'Float' scalar type represents signed double-precision" +
@@ -59,7 +58,7 @@ var (
 		Unmarshaler: uFloat,
 	}
 	// String scalar type.
-	stringType = Scalar{
+	String = Scalar{
 		Name: "string",
 		id:   stringId,
 		Description: "The 'String' scalar type represents textual data, represented" +
@@ -68,14 +67,14 @@ var (
 		Unmarshaler: uString,
 	}
 	// Boolean scalar type.
-	booleanType = Scalar{
+	Boolean = Scalar{
 		Name:        "bool",
 		id:          boolId,
 		Description: "The 'Boolean' scalar type represents 'true' or 'false'.",
 		Unmarshaler: uBool,
 	}
 	// ID scalar type.
-	idType = Scalar{
+	ID = Scalar{
 		Name: "id",
 		id:   stringId,
 		Description: "The 'ID' scalar type represents a unique identifier, often" +
@@ -87,7 +86,7 @@ var (
 		Unmarshaler: uString,
 	}
 	// DateTime scalar type.
-	dateTimeType = Scalar{
+	DateTime = Scalar{
 		Name: "datetime",
 		id:   dateTimeId,
 		Description: "The 'DateTime' scalar type an instant in time with nanosecond" +
@@ -98,12 +97,12 @@ var (
 
 // stores a mapping between a string name of a type
 var typeMap = map[string]Type{
-	intType.Name:      intType,
-	floatType.Name:    floatType,
-	stringType.Name:   stringType,
-	booleanType.Name:  booleanType,
-	idType.Name:       idType,
-	dateTimeType.Name: dateTimeType,
+	Int32.Name:    Int32,
+	Float.Name:    Float,
+	String.Name:   String,
+	Boolean.Name:  Boolean,
+	ID.Name:       ID,
+	DateTime.Name: DateTime,
 }
 
 // TypeForName returns the type corresponding to the given name.
