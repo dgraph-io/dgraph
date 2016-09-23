@@ -1,4 +1,4 @@
-package draft
+package worker
 
 import (
 	"bytes"
@@ -22,13 +22,44 @@ type node struct {
 	id    uint64
 	raft  raft.Node
 	store *raft.MemoryStorage
-	peers map[uint64]string
+	peers map[uint64]*Pool
 }
 
-func (n *node) send(msgs []raftpb.Message) {
-	fmt.Printf("SENDING %d MESSAGES\n", len(msgs))
-	// TODO: Implement this.
-	return
+func (n *node) connect(pid uint64, addr string) {
+	fmt.Printf("connect addr: %v\n", addr)
+	pool := NewPool(addr, 5)
+	query := new(Payload)
+	query.Data = []byte("hello")
+
+	conn, err := pool.Get()
+	if err != nil {
+		log.Fatalf("Unable to connect: %v", err)
+	}
+
+	c := NewWorkerClient(conn)
+	_, err = c.Hello(context.Background(), query)
+	if err != nil {
+		log.Fatalf("Unable to connect: %v", err)
+	}
+	_ = pool.Put(conn)
+	n.peers[pid] = pool
+}
+
+func (n *node) send(m raftpb.Message) {
+	fmt.Printf("Sending message: %+v\n", m)
+	pool, has := n.peers[m.To]
+	x.Assertf(has, "Don't have address for peer: %d", m.To)
+
+	conn, err := pool.Get()
+	x.Check(err)
+
+	c := NewWorkerClient(conn)
+
+	data, err := m.Marshal()
+	x.Checkf(err, "Unable to marshal: %+v", m)
+	p := &Payload{Data: data}
+	_, err = c.RaftMessage(context.TODO(), p)
+	log.Printf("Error: %+v", err)
 }
 
 func (n *node) process(e raftpb.Entry) error {
@@ -95,7 +126,9 @@ func (n *node) Run() {
 
 		case rd := <-n.raft.Ready():
 			n.saveToStorage(rd.Snapshot, rd.HardState, rd.Entries)
-			n.send(rd.Messages)
+			for _, msg := range rd.Messages {
+				go n.send(msg)
+			}
 			if !raft.IsEmptySnap(rd.Snapshot) {
 				fmt.Printf("Got snapshot: %q\n", rd.Snapshot.Data)
 			}
@@ -119,22 +152,12 @@ func (n *node) Campaign(ctx context.Context) {
 	}
 }
 
+func (n *node) Step(ctx context.Context, msg raftpb.Message) error {
+	return n.raft.Step(ctx, msg)
+}
+
 func newNode(id uint64, pn string) *node {
 	fmt.Printf("NEW NODE ID: %v\n", id)
-	peers := make(map[uint64]string)
-	var raftPeers []raft.Peer
-	raftPeers = append(raftPeers, raft.Peer{ID: id})
-	if len(pn) > 0 {
-		for _, p := range strings.Split(pn, ",") {
-			kv := strings.SplitN(p, ":", 2)
-			x.Assertf(len(kv) == 2, "Invalid peer format: %v", p)
-			pid, err := strconv.ParseUint(kv[0], 10, 64)
-			x.Checkf(err, "Invalid peer id: %v", kv[0])
-			peers[pid] = kv[1]
-			raftPeers = append(raftPeers, raft.Peer{ID: pid})
-		}
-	}
-	fmt.Printf("raftpeers: %+v\n", raftPeers)
 
 	store := raft.NewMemoryStorage()
 	n := &node{
@@ -149,8 +172,24 @@ func newNode(id uint64, pn string) *node {
 			MaxInflightMsgs: 256,
 		},
 		data:  make(map[string]string),
-		peers: peers,
+		peers: make(map[uint64]*Pool),
 	}
+
+	var raftPeers []raft.Peer
+	raftPeers = append(raftPeers, raft.Peer{ID: id})
+	if len(pn) > 0 {
+		for _, p := range strings.Split(pn, ",") {
+			kv := strings.SplitN(p, ":", 2)
+			x.Assertf(len(kv) == 2, "Invalid peer format: %v", p)
+			pid, err := strconv.ParseUint(kv[0], 10, 64)
+			x.Checkf(err, "Invalid peer id: %v", kv[0])
+			raftPeers = append(raftPeers, raft.Peer{ID: pid})
+
+			n.connect(pid, kv[1])
+		}
+	}
+	fmt.Printf("raftpeers: %+v\n", raftPeers)
+
 	n.raft = raft.StartNode(n.cfg, raftPeers)
 	return n
 }
@@ -158,9 +197,12 @@ func newNode(id uint64, pn string) *node {
 var thisNode *node
 var once sync.Once
 
-func GetNode(id uint64, pn string) *node {
+func InitNode(id uint64, pn string) {
 	once.Do(func() {
 		thisNode = newNode(id, pn)
 	})
+}
+
+func GetNode() *node {
 	return thisNode
 }

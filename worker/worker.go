@@ -19,14 +19,17 @@
 package worker
 
 import (
+	"fmt"
 	"log"
 	"net"
 	"sync"
 
+	"github.com/coreos/etcd/raft/raftpb"
 	"github.com/dgryski/go-farm"
 	"github.com/google/flatbuffers/go"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/peer"
 
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/task"
@@ -172,6 +175,21 @@ func (w *grpcWorker) ServeTask(ctx context.Context, query *Payload) (*Payload, e
 		log.Fatalf("attr: %v instanceIdx: %v Request sent to wrong server.", attr, ws.instanceIdx)
 	}
 	return reply, rerr
+}
+
+func (w *grpcWorker) RaftMessage(ctx context.Context, query *Payload) (*Payload, error) {
+	p, ok := peer.FromContext(ctx)
+	fmt.Printf("PEER for RAFTMESSAGE: %v %v\n", p.Addr.String(), ok)
+
+	reply := &Payload{}
+	reply.Data = []byte("ok")
+	msg := raftpb.Message{}
+	if err := msg.Unmarshal(query.Data); err != nil {
+		return reply, err
+	}
+	fmt.Printf("Received RAFT Message: %+v\n", msg)
+	GetNode().Step(ctx, msg)
+	return reply, nil
 }
 
 // PredicateData can be used to return data corresponding to a predicate over

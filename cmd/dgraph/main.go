@@ -37,7 +37,6 @@ import (
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc"
 
-	"github.com/dgraph-io/dgraph/draft"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/query"
@@ -569,10 +568,6 @@ func main() {
 
 	posting.InitIndex(ps)
 
-	node := draft.GetNode(uint64(rand.Uint32()), *peers)
-	go node.Run()
-	go node.Campaign(context.TODO())
-
 	addrs := strings.Split(*workers, ",")
 	lenAddr := uint64(len(addrs))
 	if lenAddr == 0 {
@@ -597,6 +592,11 @@ func main() {
 		worker.SetWorkerState(ws)
 		uid.Init(uidStore)
 	}
+
+	worker.InitNode(uint64(rand.Uint32()), *peers)
+	node := worker.GetNode()
+	go node.Run()
+	go node.Campaign(context.TODO())
 
 	if len(*schemaFile) > 0 {
 		err = gql.LoadSchema(*schemaFile)
