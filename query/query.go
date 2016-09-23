@@ -160,6 +160,7 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 	// Get results from all children first.
 	cResult := make(map[uint64]interface{})
 
+	ignoreUids := make(map[uint64]bool)
 	for _, child := range sg.Children {
 		m, err := postTraverse(child)
 		if err != nil {
@@ -167,6 +168,14 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 		}
 		// Merge results from all children, one by one.
 		for k, v := range m {
+			if _, ok := v.(map[string]interface{})["INVALID"]; ok {
+				ignoreUids[k] = true
+				delete(cResult, k)
+			}
+			if ignoreUids[k] {
+				continue
+			}
+
 			if val, present := cResult[k]; !present {
 				cResult[k] = v
 			} else {
@@ -287,7 +296,11 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 			stype := sg.Params.AttrType.(schema.Scalar)
 			lval, err := stype.ParseType(val)
 			if err != nil {
-				return result, fmt.Errorf("Unable to coerce %v to %v: %v", val, sg.Attr, err)
+				// Mark node as invalid and ignore in results.
+				m["INVALID"] = true
+				result[q.Uids(i)] = m
+				continue
+				//return result, fmt.Errorf("Unable to coerce %v to %v: %v", val, sg.Attr, err)
 			}
 			if sg.Params.Alias != "" {
 				m[sg.Params.Alias] = lval
@@ -723,16 +736,49 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, rch chan error) {
 		rch <- nil
 		return
 	}
+	/*
+		// Let's execute it in a tree fashion. Each SubGraph would break off
+		// as many goroutines as it's children; which would then recursively
+		// do the same thing.
+		// Buffered channel to ensure no-blockage.
+		childchan := make(chan error, len(sg.Children))
+		for i := 0; i < len(sg.Children); i++ {
+			child := sg.Children[i]
+			child.Query = createTaskQuery(child, sorted)
+			go ProcessGraph(ctx, child, childchan)
+		}
 
-	// Let's execute it in a tree fashion. Each SubGraph would break off
-	// as many goroutines as it's children; which would then recursively
-	// do the same thing.
-	// Buffered channel to ensure no-blockage.
+		// Now get all the results back.
+		for i := 0; i < len(sg.Children); i++ {
+			select {
+			case err = <-childchan:
+				x.Trace(ctx, "Reply from child. Index: %v Attr: %v", i, sg.Children[i].Attr)
+				if err != nil {
+					x.Trace(ctx, "Error while processing child task: %v", err)
+					rch <- err
+					return
+				}
+			case <-ctx.Done():
+				x.Trace(ctx, "Context done before full execution: %v", ctx.Err())
+				rch <- ctx.Err()
+				return
+			}
+		}
+	*/
+
+	var processed, leftToProcess []*SubGraph
+	// First iterate over the value nodes and check for validity.
 	childchan := make(chan error, len(sg.Children))
 	for i := 0; i < len(sg.Children); i++ {
 		child := sg.Children[i]
-		child.Query = createTaskQuery(child, sorted)
-		go ProcessGraph(ctx, child, childchan)
+		if child.Params.AttrType == nil || child.Params.AttrType.IsScalar() {
+			processed = append(processed, child)
+			child.Query = createTaskQuery(child, sorted)
+			go ProcessGraph(ctx, child, childchan)
+		} else {
+			leftToProcess = append(leftToProcess, child)
+			childchan <- nil
+		}
 	}
 
 	// Now get all the results back.
@@ -751,5 +797,71 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, rch chan error) {
 			return
 		}
 	}
+
+	invalidUids := make(map[uint64]bool)
+	// Check the results of the child and eliminate uids without all results.
+	for _, node := range processed {
+		if node.Params.AttrType == nil {
+			continue
+		}
+		var tv task.Value
+		rNode := x.NewTaskResult(node.Result)
+		for i := 0; i < rNode.ValuesLength(); i++ {
+			if ok := rNode.Values(&tv, i); !ok {
+				invalidUids[sorted[i]] = true
+			}
+			val := tv.ValBytes()
+			if bytes.Equal(val, nil) {
+				// We do this, because we typically do set values, even though
+				// they might be nil. This is to ensure that the index of the query uids
+				// and the index of the results can remain in sync.
+				invalidUids[sorted[i]] = true
+				continue
+			}
+
+			// type assertion for scalar type values
+			if !sg.Params.AttrType.IsScalar() {
+				log.Fatal("This shouldnt happen")
+			}
+			stype := sg.Params.AttrType.(schema.Scalar)
+			_, err := stype.ParseType(val)
+			if err != nil {
+				invalidUids[sorted[i]] = true
+			}
+		}
+	}
+
+	sortedNew := make([]uint64, 0, len(sorted))
+	for _, v := range sorted {
+		if invalidUids[v] {
+			continue
+		}
+		sortedNew = append(sortedNew, v)
+	}
+
+	// Now go to next level only with valid uids.
+	childchan = make(chan error, len(leftToProcess))
+	for _, child := range leftToProcess {
+		child.Query = createTaskQuery(child, sortedNew)
+		go ProcessGraph(ctx, child, childchan)
+	}
+
+	// Now get all the results back.
+	for i := 0; i < len(leftToProcess); i++ {
+		select {
+		case err = <-childchan:
+			x.Trace(ctx, "Reply from child. Index: %v Attr: %v", i, sg.Children[i].Attr)
+			if err != nil {
+				x.Trace(ctx, "Error while processing child task: %v", err)
+				rch <- err
+				return
+			}
+		case <-ctx.Done():
+			x.Trace(ctx, "Context done before full execution: %v", ctx.Err())
+			rch <- ctx.Err()
+			return
+		}
+	}
+
 	rch <- nil
 }
