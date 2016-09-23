@@ -20,6 +20,7 @@ addons:
     - libsnappy-dev
     - zlib1g-dev
     - jq
+    - graphviz
 env:
 - CC=clang-3.8 CXX=clang++-3.8
 cache:
