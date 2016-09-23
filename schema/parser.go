@@ -80,6 +80,18 @@ func Parse(schema string) error {
 	if err := scanner.Err(); err != nil {
 		return fmt.Errorf("Error reading schema file: %v", err)
 	}
+
+	for _, v := range store {
+		if obj, ok := v.(Object); ok {
+			for p, q := range obj.Fields {
+				typ := TypeOf(q)
+				if typ != nil && !typ.IsScalar() {
+					store[p] = typ
+				}
+			}
+		}
+	}
+
 	fmt.Println(store)
 	return nil
 }

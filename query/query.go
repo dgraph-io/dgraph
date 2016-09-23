@@ -166,11 +166,23 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 		if err != nil {
 			return result, err
 		}
+
+		var condFlag bool
+		if obj, ok := schema.TypeOf(sg.Attr).(schema.Object); ok {
+			if _, ok := obj.Fields[child.Attr]; ok {
+				condFlag = true
+			}
+		}
+
 		// Merge results from all children, one by one.
 		for k, v := range m {
 			if _, ok := v.(map[string]interface{})["INVALID"]; ok {
-				ignoreUids[k] = true
-				delete(cResult, k)
+				if condFlag {
+					ignoreUids[k] = true
+					delete(cResult, k)
+				} else {
+					continue
+				}
 			}
 			if ignoreUids[k] {
 				continue
@@ -227,22 +239,17 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 		if ok := r.Uidmatrix(&ul, i); !ok {
 			return result, fmt.Errorf("While parsing UidList")
 		}
-		l := make([]interface{}, 0, ul.UidsLength())
+		l := make([]interface{}, ul.UidsLength())
 		for j := 0; j < ul.UidsLength(); j++ {
 			uid := ul.Uids(j)
 			m := make(map[string]interface{})
 			if sg.Params.GetUid || sg.Params.isDebug {
 				m["_uid_"] = fmt.Sprintf("%#x", uid)
-			} else {
-				// If uid is not requested and the Cresult is empty dont include in result
-				if _, present := cResult[uid]; !present {
-					continue
-				}
 			}
 			if ival, present := cResult[uid]; !present {
-				l = append(l, m)
+				l[j] = m
 			} else {
-				l = append(l, mergeInterfaces(m, ival))
+				l[j] = mergeInterfaces(m, ival)
 			}
 		}
 

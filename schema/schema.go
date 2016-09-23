@@ -43,6 +43,9 @@ func TypeOf(pred string) Type {
 	if obj, ok := store[pred]; ok {
 		return obj
 	}
+	if typ, ok := GetScalar(pred); ok {
+		return typ
+	}
 	return nil
 }
 
