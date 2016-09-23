@@ -42,7 +42,7 @@ const (
 var (
 	// Int scalar type.
 	intType = Scalar{
-		Name: "Int",
+		Name: "int",
 		id:   int32Id,
 		Description: "The 'Int' scalar type represents non-fractional signed whole" +
 			" numeric values. Int can represent values between -(2^31)" +
@@ -51,7 +51,7 @@ var (
 	}
 	// Float scalar type.
 	floatType = Scalar{
-		Name: "Float",
+		Name: "float",
 		id:   floatId,
 		Description: "The 'Float' scalar type represents signed double-precision" +
 			" fractional values	as specified by [IEEE 754]" +
@@ -60,7 +60,7 @@ var (
 	}
 	// String scalar type.
 	stringType = Scalar{
-		Name: "String",
+		Name: "string",
 		id:   stringId,
 		Description: "The 'String' scalar type represents textual data, represented" +
 			" as UTF-8 character sequences. The String type is most often" +
@@ -69,14 +69,14 @@ var (
 	}
 	// Boolean scalar type.
 	booleanType = Scalar{
-		Name:        "Boolean",
+		Name:        "bool",
 		id:          boolId,
 		Description: "The 'Boolean' scalar type represents 'true' or 'false'.",
 		Unmarshaler: uBool,
 	}
 	// ID scalar type.
 	idType = Scalar{
-		Name: "ID",
+		Name: "id",
 		id:   stringId,
 		Description: "The 'ID' scalar type represents a unique identifier, often" +
 			" used to refetch an object or as key for a cache. The ID type" +
@@ -88,7 +88,7 @@ var (
 	}
 	// DateTime scalar type.
 	dateTimeType = Scalar{
-		Name: "DateTime",
+		Name: "datetime",
 		id:   dateTimeId,
 		Description: "The 'DateTime' scalar type an instant in time with nanosecond" +
 			" precision. Each DateTime is associated with a timezone.",
@@ -98,12 +98,12 @@ var (
 
 // stores a mapping between a string name of a type
 var typeMap = map[string]Type{
-	"int":      intType,
-	"float":    floatType,
-	"string":   stringType,
-	"bool":     booleanType,
-	"id":       idType,
-	"datetime": dateTimeType,
+	intType.Name:      intType,
+	floatType.Name:    floatType,
+	stringType.Name:   stringType,
+	booleanType.Name:  booleanType,
+	idType.Name:       idType,
+	dateTimeType.Name: dateTimeType,
 }
 
 // TypeForName returns the type corresponding to the given name.
