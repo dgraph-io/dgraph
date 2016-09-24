@@ -58,7 +58,8 @@ var (
 		"Number of cores to be used by the process")
 	instanceIdx = flag.Uint64("idx", 0,
 		"serves only entities whose Fingerprint % numInstance == instanceIdx.")
-	peers   = flag.String("peers", "", "List of peers in this format: ID1:URL1,ID2:URL2,...")
+	cluster = flag.String("cluster", "", "List of peers in this format: ID1:URL1,ID2:URL2,...")
+	peer    = flag.String("peer", "", "Address of any peer.")
 	workers = flag.String("workers", "",
 		"Comma separated list of IP addresses of workers")
 	workerPort = flag.String("workerport", ":12345",
@@ -594,10 +595,14 @@ func main() {
 	}
 
 	my := "localhost" + *workerPort
-	worker.InitNode(uint64(rand.Uint32()), my, *peers)
-	node := worker.GetNode()
-	go node.Run()
-	go node.Campaign(context.TODO())
+	worker.InitNode(uint64(*instanceIdx), my)
+	worker.GetNode().StartNode(*cluster)
+	if len(*peer) > 0 {
+		go worker.GetNode().JoinCluster(*peer)
+	}
+
+	// node := worker.GetNode()
+	// go node.Campaign(context.TODO())
 
 	if len(*schemaFile) > 0 {
 		err = gql.LoadSchema(*schemaFile)

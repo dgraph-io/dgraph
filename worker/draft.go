@@ -51,6 +51,16 @@ func (n *node) Connect(pid uint64, addr string) {
 	_ = pool.Put(conn)
 	n.peers[pid] = pool
 	fmt.Printf("CONNECTED TO %d %v\n", pid, addr)
+	return
+}
+
+func (n *node) AddToCluster(pid uint64) {
+	n.raft.ProposeConfChange(context.TODO(), raftpb.ConfChange{
+		ID:      pid,
+		Type:    raftpb.ConfChangeAddNode,
+		NodeID:  pid,
+		Context: []byte(strconv.FormatUint(pid, 10) + ":" + n.peers[pid].Addr),
+	})
 }
 
 func (n *node) send(m raftpb.Message) {
@@ -82,6 +92,12 @@ func (n *node) process(e raftpb.Entry) error {
 		fmt.Printf("Configuration change\n")
 		var cc raftpb.ConfChange
 		cc.Unmarshal(e.Data)
+
+		if len(cc.Context) > 0 {
+			pid, paddr := parsePeer(string(cc.Context))
+			n.Connect(pid, paddr)
+		}
+
 		n.raft.ApplyConfChange(cc)
 		return nil
 	}
@@ -136,10 +152,11 @@ func (n *node) Run() {
 		case rd := <-n.raft.Ready():
 			n.saveToStorage(rd.Snapshot, rd.HardState, rd.Entries)
 			for _, msg := range rd.Messages {
-				go n.send(msg)
+				n.send(msg)
 			}
 			if !raft.IsEmptySnap(rd.Snapshot) {
 				fmt.Printf("Got snapshot: %q\n", rd.Snapshot.Data)
+				// applyToStateMachine
 			}
 			for _, entry := range rd.CommittedEntries {
 				x.Check(n.process(entry))
@@ -153,7 +170,6 @@ func (n *node) Run() {
 }
 
 func (n *node) Campaign(ctx context.Context) {
-	return
 	time.Sleep(3 * time.Second)
 	if len(n.peers) > 0 {
 		fmt.Printf("CAMPAIGN\n")
@@ -165,7 +181,33 @@ func (n *node) Step(ctx context.Context, msg raftpb.Message) error {
 	return n.raft.Step(ctx, msg)
 }
 
-func newNode(id uint64, my, pn string) *node {
+func parsePeer(peer string) (uint64, string) {
+	kv := strings.SplitN(peer, ":", 2)
+	x.Assertf(len(kv) == 2, "Invalid peer format: %v", peer)
+	pid, err := strconv.ParseUint(kv[0], 10, 64)
+	x.Checkf(err, "Invalid peer id: %v", kv[0])
+	return pid, kv[1]
+}
+
+func (n *node) JoinCluster(any string) {
+	// Tell one of the peers to join.
+
+	pid, paddr := parsePeer(any)
+	n.Connect(pid, paddr)
+
+	fmt.Printf("TELLING PEER TO ADD ME: %v\n", any)
+	pool := n.peers[pid]
+	query := &Payload{}
+	query.Data = []byte(strconv.FormatUint(n.id, 10) + ":" + n.localAddr)
+	conn, err := pool.Get()
+	x.Check(err)
+	c := NewWorkerClient(conn)
+	_, err = c.JoinCluster(context.Background(), query)
+	x.Checkf(err, "Error while joining cluster")
+	fmt.Printf("Done with JoinCluster call\n")
+}
+
+func newNode(id uint64, my string) *node {
 	fmt.Printf("NEW NODE ID: %v\n", id)
 	fmt.Println("local address", net.Addr(nil))
 
@@ -185,32 +227,35 @@ func newNode(id uint64, my, pn string) *node {
 		peers:     make(map[uint64]*Pool),
 		localAddr: my,
 	}
+	return n
+}
 
+func (n *node) StartNode(cluster string) {
 	var raftPeers []raft.Peer
-	raftPeers = append(raftPeers, raft.Peer{ID: id})
-	if len(pn) > 0 {
-		for _, p := range strings.Split(pn, ",") {
-			kv := strings.SplitN(p, ":", 2)
-			x.Assertf(len(kv) == 2, "Invalid peer format: %v", p)
-			pid, err := strconv.ParseUint(kv[0], 10, 64)
-			x.Checkf(err, "Invalid peer id: %v", kv[0])
-			raftPeers = append(raftPeers, raft.Peer{ID: pid})
+	if len(cluster) > 0 {
+		raftPeers = append(raftPeers, raft.Peer{ID: n.id})
 
-			n.Connect(pid, kv[1])
+		for _, p := range strings.Split(cluster, ",") {
+			pid, paddr := parsePeer(p)
+			raftPeers = append(raftPeers, raft.Peer{ID: pid})
+			n.Connect(pid, paddr)
 		}
 	}
-	fmt.Printf("raftpeers: %+v\n", raftPeers)
 
 	n.raft = raft.StartNode(n.cfg, raftPeers)
-	return n
+	go n.Run()
+
+	if len(cluster) == 0 {
+		go n.Campaign(context.Background())
+	}
 }
 
 var thisNode *node
 var once sync.Once
 
-func InitNode(id uint64, my, pn string) {
+func InitNode(id uint64, my string) {
 	once.Do(func() {
-		thisNode = newNode(id, my, pn)
+		thisNode = newNode(id, my)
 	})
 }
 

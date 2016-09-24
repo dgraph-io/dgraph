@@ -7,11 +7,13 @@ message Payload {
 }
 
 service Worker {
-	rpc Hello (Payload) returns (Payload) {}
-	rpc GetOrAssign (Payload) returns (Payload) {}
-	rpc Mutate (Payload) returns (Payload) {}
-	rpc ServeTask (Payload) returns (Payload) {}
+	rpc Hello (Payload)         returns (Payload) {}
+	rpc GetOrAssign (Payload)   returns (Payload) {}
+	rpc Mutate (Payload)        returns (Payload) {}
+	rpc ServeTask (Payload)     returns (Payload) {}
 	rpc PredicateData (Payload) returns (stream Payload) {}
+
 	rpc RaftMessage (Payload) returns (Payload) {}
+	rpc JoinCluster (Payload) returns (Payload) {}
 }
 

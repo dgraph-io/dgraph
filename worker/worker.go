@@ -22,6 +22,8 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/coreos/etcd/raft/raftpb"
@@ -187,6 +189,28 @@ func (w *grpcWorker) RaftMessage(ctx context.Context, query *Payload) (*Payload,
 	GetNode().Connect(msg.From, string(msg.Context))
 	GetNode().Step(ctx, msg)
 
+	return reply, nil
+}
+
+func (w *grpcWorker) JoinCluster(ctx context.Context, query *Payload) (*Payload, error) {
+	reply := &Payload{}
+	reply.Data = []byte("ok")
+	if len(query.Data) == 0 {
+		return reply, x.Errorf("JoinCluster: No data provided")
+	}
+	kv := strings.SplitN(string(query.Data), ":", 2)
+	if len(kv) != 2 {
+		return reply, x.Errorf("Invalid data: %v", string(query.Data))
+	}
+
+	pid, err := strconv.ParseUint(kv[0], 10, 64)
+	if err != nil {
+		return reply, x.Wrap(err)
+	}
+
+	GetNode().Connect(pid, kv[1])
+	GetNode().AddToCluster(pid)
+	fmt.Printf("JOINCLUSTER recieved. Modified conf: %v", string(query.Data))
 	return reply, nil
 }
 
