@@ -96,7 +96,7 @@ var (
 )
 
 // stores a mapping between a string name of a type
-var typeMap = map[string]Type{
+var typeNameMap = map[string]Type{
 	Int32.Name:    Int32,
 	Float.Name:    Float,
 	String.Name:   String,
@@ -105,10 +105,26 @@ var typeMap = map[string]Type{
 	DateTime.Name: DateTime,
 }
 
+// stores a mapping between the typeId to a type
+var typeIdMap = map[TypeId]Type{
+	Int32.Id():    Int32,
+	Float.Id():    Float,
+	String.Id():   String,
+	Boolean.Id():  Boolean,
+	ID.Id():       ID,
+	DateTime.Id(): DateTime,
+}
+
 // TypeForName returns the type corresponding to the given name.
 // If name is not recognized, it returns nil.
 func TypeForName(name string) Type {
-	return typeMap[name]
+	return typeNameMap[name]
+}
+
+// TypeForId returns the type corresponding to the given TypeId.
+// If id is not recognized, it returns nil.
+func TypeForId(id TypeId) Type {
+	return typeIdMap[id]
 }
 
 // Int32Type is the scalar type for int32
