@@ -281,9 +281,19 @@ func validateTypes(nquads []rdf.NQuad) error {
 	for _, nquad := range nquads {
 		if t := gql.SchemaType(nquad.Predicate); t != nil && t.IsScalar() {
 			// Currently, only scalar types are present
-			stype := t.(types.Scalar)
-			if _, err := stype.Unmarshaler.UnmarshalText(nquad.ObjectValue); err != nil {
-				return err
+			schemaType := t.(types.Scalar)
+			storageType := types.TypeForId(types.TypeId(nquad.ObjectType))
+			if storageType == nil {
+				log.Fatalf("Parsing created invalid type %v", nquad.ObjectType)
+			}
+			if storageType != schemaType {
+				v, err := storageType.(types.Scalar).Unmarshaler.UnmarshalBinary(nquad.ObjectValue)
+				if err != nil {
+					return err
+				}
+				if _, err := schemaType.Convert(v); err != nil {
+					return err
+				}
 			}
 		}
 	}
