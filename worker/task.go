@@ -40,7 +40,7 @@ func ProcessTaskOverNetwork(ctx context.Context, qu []byte) (result []byte, rerr
 	x.ParseTaskQuery(q, qu)
 
 	attr := string(q.Attr())
-	idx := farm.Fingerprint64([]byte(attr)) % ws.numInstances
+	idx := farm.Fingerprint64([]byte(attr)) % ws.numGroups
 
 	// Posting list with xid -> uid and uid -> xid mapping is stored on instance 0.
 	if attr == _xid_ || attr == _uid_ {
@@ -48,8 +48,8 @@ func ProcessTaskOverNetwork(ctx context.Context, qu []byte) (result []byte, rerr
 	}
 	runHere := (ws.groupId == idx)
 
-	x.Trace(ctx, "runHere: %v attr: %v groupId: %v numInstances: %v",
-		runHere, attr, ws.groupId, ws.numInstances)
+	x.Trace(ctx, "runHere: %v attr: %v groupId: %v numGroups: %v",
+		runHere, attr, ws.groupId, ws.numGroups)
 
 	if runHere {
 		// No need for a network call, as this should be run from within

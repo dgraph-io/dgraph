@@ -71,7 +71,8 @@ var (
 	cpuprofile  = flag.String("cpu", "", "write cpu profile to file")
 	memprofile  = flag.String("mem", "", "write memory profile to file")
 	closeCh     = make(chan struct{})
-	groupId     = 0 // ALL
+
+	groupId uint64 = 0 // ALL
 )
 
 type mutationResult struct {
@@ -579,8 +580,8 @@ func main() {
 
 	posting.Init()
 	var ws *worker.State
-	if groupId != 0 {
-		ws = worker.NewState(ps, nil, *instanceIdx, lenAddr)
+	if groupId != 0 { // HACK: This will currently not run.
+		ws = worker.NewState(ps, nil, groupId, 1) // TODO: Set number of grous here.
 		worker.SetWorkerState(ws)
 		uid.Init(nil)
 
@@ -591,7 +592,7 @@ func main() {
 		}
 		defer uidStore.Close()
 		// Only server instance 0 will have uidStore
-		ws = worker.NewState(ps, uidStore, *instanceIdx, lenAddr)
+		ws = worker.NewState(ps, uidStore, groupId, 1) // TODO: Set number of groups here.
 		worker.SetWorkerState(ws)
 		uid.Init(uidStore)
 	}

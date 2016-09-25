@@ -112,7 +112,7 @@ func GetOrAssignUidsOverNetwork(ctx context.Context, xidToUid map[string]uint64)
 	// If instance number 0 called this and then it already has posting list for
 	// xid <-> uid conversion, hence call getOrAssignUids locally else call
 	// GetOrAssign using worker client.
-	// if ws.instanceIdx == 0 {
+	// if ws.groupId == 0 {
 	// HACK HACK HACK
 	if true {
 		reply.Data, rerr = getOrAssignUids(ctx, xidList)

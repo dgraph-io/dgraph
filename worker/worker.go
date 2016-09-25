@@ -39,11 +39,10 @@ import (
 
 // State stores the worker state.
 type State struct {
-	dataStore    *store.Store
-	uidStore     *store.Store
-	instanceIdx  uint64
-	numInstances uint64
-	groupId      uint64
+	dataStore *store.Store
+	uidStore  *store.Store
+	groupId   uint64
+	numGroups uint64
 	// pools stores the pool for all the instances which is then used to send queries
 	// and mutations to the appropriate instance.
 	pools      []*Pool
@@ -60,13 +59,12 @@ func SetWorkerState(s *State) {
 }
 
 // NewState initializes the state on an instance with data,uid store and other meta.
-func NewState(ps, uStore *store.Store, idx, numInst uint64) *State {
+func NewState(ps, uStore *store.Store, gid, numGroups uint64) *State {
 	return &State{
-		dataStore:    ps,
-		uidStore:     uStore,
-		instanceIdx:  idx,
-		numInstances: numInst,
-		groupId:      0, // HACK HACK HACK
+		dataStore: ps,
+		uidStore:  uStore,
+		numGroups: numGroups,
+		groupId:   gid,
 	}
 }
 
@@ -131,8 +129,8 @@ func (w *grpcWorker) GetOrAssign(ctx context.Context, query *Payload) (*Payload,
 	xids := new(task.XidList)
 	xids.Init(query.Data, uo)
 
-	if ws.instanceIdx != 0 {
-		log.Fatalf("instanceIdx: %v. GetOrAssign. We shouldn't be getting this req", ws.instanceIdx)
+	if ws.groupId != 0 {
+		log.Fatalf("groupId: %v. GetOrAssign. We shouldn't be getting this req", ws.groupId)
 	}
 
 	reply := new(Payload)
@@ -164,18 +162,17 @@ func (w *grpcWorker) ServeTask(ctx context.Context, query *Payload) (*Payload, e
 	q := new(task.Query)
 	x.ParseTaskQuery(q, query.Data)
 	attr := string(q.Attr())
-	x.Trace(ctx, "Attribute: %v NumUids: %v InstanceIdx: %v ServeTask",
-		attr, q.UidsLength(), ws.instanceIdx)
+	x.Trace(ctx, "Attribute: %v NumUids: %v groupId: %v ServeTask", attr, q.UidsLength(), ws.groupId)
 
 	reply := new(Payload)
 	var rerr error
 	// Request for xid <-> uid conversion should be handled by instance 0 and all
 	// other requests should be handled according to modulo sharding of the predicate.
-	chosenInstance := farm.Fingerprint64([]byte(attr)) % ws.numInstances
-	if (ws.instanceIdx == 0 && attr == _xid_) || chosenInstance == ws.instanceIdx {
+	chosenInstance := farm.Fingerprint64([]byte(attr)) % ws.numGroups
+	if (ws.groupId == 0 && attr == _xid_) || chosenInstance == ws.groupId {
 		reply.Data, rerr = processTask(query.Data)
 	} else {
-		log.Fatalf("attr: %v instanceIdx: %v Request sent to wrong server.", attr, ws.instanceIdx)
+		log.Fatalf("attr: %v groupId: %v Request sent to wrong server.", attr, ws.groupId)
 	}
 	return reply, rerr
 }
