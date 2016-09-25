@@ -29,6 +29,9 @@ type node struct {
 
 // TODO: Make this thread safe.
 func (n *node) Connect(pid uint64, addr string) {
+	if pid == n.id {
+		return
+	}
 	if _, has := n.peers[pid]; has {
 		return
 	}
@@ -64,6 +67,8 @@ func (n *node) AddToCluster(pid uint64) {
 }
 
 func (n *node) send(m raftpb.Message) {
+	x.Assertf(n.id != m.To, "Seding message to itself")
+
 	pool, has := n.peers[m.To]
 	x.Assertf(has, "Don't have address for peer: %d", m.To)
 
