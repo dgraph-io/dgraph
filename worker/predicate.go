@@ -19,6 +19,7 @@ package worker
 import (
 	"context"
 	"io"
+	"strconv"
 
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/x"
@@ -66,20 +67,18 @@ func (s *State) writeBatch(ctx context.Context, kv chan *task.KV, che chan error
 
 // PopulateShard gets data for predicate pred from server with id serverId and
 // writes it to RocksDB.
-func (s *State) PopulateShard(ctx context.Context, pred string,
-	serverId int) error {
+func (s *State) PopulateShard(ctx context.Context, pool *Pool, group uint64) error {
 	var err error
 
-	pool := s.GetPool(serverId)
 	query := new(Payload)
-	query.Data = []byte(pred)
+	query.Data = []byte(strconv.FormatUint(group, 10))
 	if err != nil {
 		return err
 	}
 
 	conn, err := pool.Get()
 	if err != nil {
-		return err
+		return x.Wrap(err)
 	}
 	defer pool.Put(conn)
 	c := NewWorkerClient(conn)
@@ -88,7 +87,7 @@ func (s *State) PopulateShard(ctx context.Context, pred string,
 	if err != nil {
 		return err
 	}
-	x.Trace(ctx, "Streaming data for pred: %v from server with id: %v", pred, serverId)
+	x.Trace(ctx, "Streaming data for group: %v", group)
 
 	kvs := make(chan *task.KV, 1000)
 	che := make(chan error)
@@ -111,12 +110,11 @@ func (s *State) PopulateShard(ctx context.Context, pred string,
 		// We check for errors, if there are no errors we send value to channel.
 		select {
 		case <-ctx.Done():
-			x.Trace(ctx, "Context timed out while streaming pred: %v from instance: %v",
-				pred, serverId)
+			x.Trace(ctx, "Context timed out while streaming group: %v", group)
 			close(kvs)
 			return ctx.Err()
 		case err := <-che:
-			x.Trace(ctx, "Error while doing a batch write for pred: %v", pred)
+			x.Trace(ctx, "Error while doing a batch write for group: %v", group)
 			close(kvs)
 			return err
 		case kvs <- kv:
@@ -125,9 +123,9 @@ func (s *State) PopulateShard(ctx context.Context, pred string,
 	close(kvs)
 
 	if err := <-che; err != nil {
-		x.Trace(ctx, "Error while doing a batch write for pred: %v", pred)
+		x.Trace(ctx, "Error while doing a batch write for group: %v", group)
 		return err
 	}
-	x.Trace(ctx, "Streaming complete for pred: %v from server with id: %v", pred, serverId)
+	x.Trace(ctx, "Streaming complete for group: %v", group)
 	return nil
 }

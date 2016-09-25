@@ -64,7 +64,6 @@ func (n *node) AddToCluster(pid uint64) {
 }
 
 func (n *node) send(m raftpb.Message) {
-	fmt.Printf("Sending message: %+v\n", m)
 	pool, has := n.peers[m.To]
 	x.Assertf(has, "Don't have address for peer: %d", m.To)
 
@@ -78,7 +77,6 @@ func (n *node) send(m raftpb.Message) {
 	x.Checkf(err, "Unable to marshal: %+v", m)
 	p := &Payload{Data: data}
 	_, err = c.RaftMessage(context.TODO(), p)
-	log.Printf("Error: %+v", err)
 }
 
 func (n *node) process(e raftpb.Entry) error {
@@ -125,7 +123,7 @@ func (n *node) saveToStorage(s raftpb.Snapshot, h raftpb.HardState,
 		if err != nil {
 			log.Fatalf("While retrieving term: %v\n", err)
 		}
-		fmt.Printf("%d node Term for le: %v is %v\n", n.id, le, te)
+		fmt.Printf("[Node: %d] Term: %v for le: %v\n", n.id, te, le)
 		if s.Metadata.Index <= le {
 			fmt.Printf("%d node ignoring snapshot. Last index: %v\n", n.id, le)
 			return
@@ -142,6 +140,18 @@ func (n *node) saveToStorage(s raftpb.Snapshot, h raftpb.HardState,
 	n.store.Append(es)
 }
 
+func (n *node) processSnapshot(s raftpb.Snapshot) {
+	lead := n.raft.Status().Lead
+	if lead == 0 {
+		fmt.Printf("Don't know who the leader is")
+		return
+	}
+	pool := n.peers[lead]
+	fmt.Printf("Getting snapshot from leader: %v", lead)
+	x.Checkf(ws.PopulateShard(context.TODO(), pool, 0), "processSnapshot")
+	fmt.Printf("DONE with snapshot ============================")
+}
+
 func (n *node) Run() {
 	fmt.Println("Run")
 	for {
@@ -156,7 +166,7 @@ func (n *node) Run() {
 			}
 			if !raft.IsEmptySnap(rd.Snapshot) {
 				fmt.Printf("Got snapshot: %q\n", rd.Snapshot.Data)
-				// applyToStateMachine
+				n.processSnapshot(rd.Snapshot)
 			}
 			for _, entry := range rd.CommittedEntries {
 				x.Check(n.process(entry))
@@ -178,6 +188,32 @@ func (n *node) Campaign(ctx context.Context) {
 
 func (n *node) Step(ctx context.Context, msg raftpb.Message) error {
 	return n.raft.Step(ctx, msg)
+}
+
+func (n *node) SnapshotPeriodically() {
+	for t := range time.Tick(10 * time.Second) {
+		fmt.Printf("Snapshot Periodically: %v", t)
+
+		le, err := n.store.LastIndex()
+		x.Checkf(err, "Unable to retrieve last index")
+
+		existing, err := n.store.Snapshot()
+		x.Checkf(err, "Unable to get existing snapshot")
+
+		si := existing.Metadata.Index
+		fmt.Printf("le, si: %v %v\n", le, si)
+		if le <= si {
+			fmt.Printf("le, si: %v %v. No snapshot\n", le, si)
+			continue
+		}
+
+		msg := fmt.Sprintf("Snapshot from %v", strconv.FormatUint(n.id, 10))
+		_, err = n.store.CreateSnapshot(le, nil, []byte(msg))
+		x.Checkf(err, "While creating snapshot")
+
+		x.Checkf(n.store.Compact(le), "While compacting snapshot")
+		fmt.Println("Snapshot DONE =================")
+	}
 }
 
 func parsePeer(peer string) (uint64, string) {

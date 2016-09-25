@@ -46,10 +46,10 @@ func ProcessTaskOverNetwork(ctx context.Context, qu []byte) (result []byte, rerr
 	if attr == _xid_ || attr == _uid_ {
 		idx = 0
 	}
-	runHere := (ws.instanceIdx == idx)
+	runHere := (ws.groupId == idx)
 
-	x.Trace(ctx, "runHere: %v attr: %v instanceIdx: %v numInstances: %v",
-		runHere, attr, ws.instanceIdx, ws.numInstances)
+	x.Trace(ctx, "runHere: %v attr: %v groupId: %v numInstances: %v",
+		runHere, attr, ws.groupId, ws.numInstances)
 
 	if runHere {
 		// No need for a network call, as this should be run from within

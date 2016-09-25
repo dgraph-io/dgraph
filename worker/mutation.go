@@ -63,7 +63,7 @@ func (m *Mutations) Decode(data []byte) error {
 func runMutations(ctx context.Context, edges []x.DirectedEdge, op byte, left *Mutations) error {
 	for _, edge := range edges {
 		if farm.Fingerprint64(
-			[]byte(edge.Attribute))%ws.numInstances != ws.instanceIdx {
+			[]byte(edge.Attribute))%ws.numInstances != ws.groupId {
 			return fmt.Errorf("Predicate fingerprint doesn't match this instance")
 		}
 
@@ -102,7 +102,9 @@ func runMutate(ctx context.Context, idx int, m *Mutations,
 	left := new(Mutations)
 	var err error
 	// We run them locally if idx == instanceIdx
-	if idx == int(ws.instanceIdx) {
+	// HACK HACK HACK
+	// if idx == int(ws.instanceIdx) {
+	if true {
 		if err = mutate(ctx, m, left); err != nil {
 			che <- err
 			return

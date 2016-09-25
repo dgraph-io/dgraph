@@ -43,6 +43,7 @@ type State struct {
 	uidStore     *store.Store
 	instanceIdx  uint64
 	numInstances uint64
+	groupId      uint64
 	// pools stores the pool for all the instances which is then used to send queries
 	// and mutations to the appropriate instance.
 	pools      []*Pool
@@ -65,6 +66,7 @@ func NewState(ps, uStore *store.Store, idx, numInst uint64) *State {
 		uidStore:     uStore,
 		instanceIdx:  idx,
 		numInstances: numInst,
+		groupId:      0, // HACK HACK HACK
 	}
 }
 
@@ -185,7 +187,6 @@ func (w *grpcWorker) RaftMessage(ctx context.Context, query *Payload) (*Payload,
 	if err := msg.Unmarshal(query.Data); err != nil {
 		return reply, err
 	}
-	fmt.Printf("Received RAFT Message: %+v\n", msg)
 	GetNode().Connect(msg.From, string(msg.Context))
 	GetNode().Step(ctx, msg)
 
@@ -217,16 +218,19 @@ func (w *grpcWorker) JoinCluster(ctx context.Context, query *Payload) (*Payload,
 // PredicateData can be used to return data corresponding to a predicate over
 // a stream.
 func (w *grpcWorker) PredicateData(query *Payload, stream Worker_PredicateDataServer) error {
-	qp := query.Data
-	prefix := append(qp, '|')
+	sgid := string(query.Data)
+	_, err := strconv.ParseUint(string(query.Data), 10, 64)
+	x.Checkf(err, "Unable to parse group id: %v", sgid)
+
 	// TODO(pawan) - Shift to CheckPoints once we figure out how to add them to the
 	// RocksDB library we are using.
 	// http://rocksdb.org/blog/2609/use-checkpoints-for-efficient-snapshots/
 	it := ws.dataStore.NewIterator()
 	defer it.Close()
 
-	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+	for it.SeekToFirst(); it.Valid(); it.Next() {
 		k, v := it.Key(), it.Value()
+		// TODO: Check that key is part of the specified group id.
 
 		b := flatbuffers.NewBuilder(0)
 		bko := b.CreateByteVector(k.Data())

@@ -71,6 +71,7 @@ var (
 	cpuprofile  = flag.String("cpu", "", "write cpu profile to file")
 	memprofile  = flag.String("mem", "", "write memory profile to file")
 	closeCh     = make(chan struct{})
+	groupId     = 0 // ALL
 )
 
 type mutationResult struct {
@@ -578,11 +579,12 @@ func main() {
 
 	posting.Init()
 	var ws *worker.State
-	if *instanceIdx != 0 {
+	if groupId != 0 {
 		ws = worker.NewState(ps, nil, *instanceIdx, lenAddr)
 		worker.SetWorkerState(ws)
 		uid.Init(nil)
-	} else {
+
+	} else { // handles group 0.
 		uidStore, err := store.NewStore(*uidDir)
 		if err != nil {
 			log.Fatalf("error initializing uid store: %s", err)
@@ -600,6 +602,7 @@ func main() {
 	if len(*peer) > 0 {
 		go worker.GetNode().JoinCluster(*peer)
 	}
+	go worker.GetNode().SnapshotPeriodically()
 
 	// node := worker.GetNode()
 	// go node.Campaign(context.TODO())
