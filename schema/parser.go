@@ -35,6 +35,9 @@ func Parse(schema string) error {
 		} else if cur[0] == ')' {
 			isScalarBlock = false
 		} else if len(cur) > 3 && cur[:4] == "type" {
+			if isScalarBlock {
+				return fmt.Errorf("line %v: Cannot have type inside scalar block", i)
+			}
 			curObj = strings.Trim(cur[5:], " {")
 			newObj = Object{
 				Name:   curObj,
