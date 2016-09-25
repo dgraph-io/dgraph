@@ -170,7 +170,6 @@ func (n *node) Run() {
 }
 
 func (n *node) Campaign(ctx context.Context) {
-	time.Sleep(3 * time.Second)
 	if len(n.peers) > 0 {
 		fmt.Printf("CAMPAIGN\n")
 		x.Check(n.raft.Campaign(ctx))
@@ -202,9 +201,13 @@ func (n *node) JoinCluster(any string) {
 	conn, err := pool.Get()
 	x.Check(err)
 	c := NewWorkerClient(conn)
+	fmt.Println("Calling JoinCluster")
 	_, err = c.JoinCluster(context.Background(), query)
 	x.Checkf(err, "Error while joining cluster")
 	fmt.Printf("Done with JoinCluster call\n")
+
+	// No need to campaign.
+	// go n.Campaign(context.Background())
 }
 
 func newNode(id uint64, my string) *node {
@@ -244,10 +247,6 @@ func (n *node) StartNode(cluster string) {
 
 	n.raft = raft.StartNode(n.cfg, raftPeers)
 	go n.Run()
-
-	if len(cluster) == 0 {
-		go n.Campaign(context.Background())
-	}
 }
 
 var thisNode *node
