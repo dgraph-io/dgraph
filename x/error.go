@@ -29,8 +29,10 @@ package x
 // (3) You want to generate a new error with stack trace info. Use x.Errorf.
 
 import (
+	"context"
 	"fmt"
 	"log"
+	"strings"
 
 	"github.com/pkg/errors"
 )
@@ -85,4 +87,13 @@ func Errorf(format string, args ...interface{}) error {
 		return fmt.Errorf(format, args...)
 	}
 	return errors.Errorf(format, args...)
+}
+
+// TraceError is like Trace but it logs just an error, which may have stacktrace.
+func TraceError(ctx context.Context, err error) {
+	s := fmt.Sprintf("%+v\n", err)
+	tok := strings.Split(s, "\t")
+	for _, t := range tok {
+		fmt.Printf("[%s]\n", t)
+	}
 }
