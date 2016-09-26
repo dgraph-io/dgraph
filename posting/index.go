@@ -121,15 +121,15 @@ func processIndexTerm(ctx context.Context, attr string, uid uint64, term []byte,
 	if del {
 		_, err := plist.AddMutation(ctx, edge, Del)
 		if err != nil {
-			x.Trace(ctx, "Error deleting %s for attr %s entity %d: %v",
-				string(term), edge.Attribute, edge.Entity, err)
+			x.TraceError(ctx, x.Wrapf(err, "Error deleting %s for attr %s entity %d: %v",
+				string(term), edge.Attribute, edge.Entity))
 		}
 		indexLog.Printf("DEL [%s] [%d] OldTerm [%s]", edge.Attribute, edge.Entity, string(term))
 	} else {
 		_, err := plist.AddMutation(ctx, edge, Set)
 		if err != nil {
-			x.Trace(ctx, "Error adding %s for attr %s entity %d: %v",
-				string(term), edge.Attribute, edge.Entity, err)
+			x.TraceError(ctx, x.Wrapf(err, "Error adding %s for attr %s entity %d: %v",
+				string(term), edge.Attribute, edge.Entity))
 		}
 		indexLog.Printf("SET [%s] [%d] NewTerm [%s]", edge.Attribute, edge.Entity, string(term))
 	}
