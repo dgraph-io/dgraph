@@ -8,11 +8,7 @@ import (
 	"strings"
 )
 
-var (
-	store map[string]Type
-)
-
-func Parse(schema string) error {
+func Parse1(schema string) error {
 	file, err := os.Open(schema)
 	if err != nil {
 		log.Fatal(err)

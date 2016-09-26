@@ -21,6 +21,8 @@ type scalar struct {
 	Typ   Type
 }
 
+var store map[string]Type
+
 func init() {
 	store = make(map[string]Type)
 }
