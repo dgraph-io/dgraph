@@ -110,8 +110,7 @@ func writeLineRef(buf *bytes.Buffer, s string) {
 func shortenedErrorString(err error) string {
 	buf := bytes.NewBuffer(make([]byte, 0, 40))
 
-	// Here is a sample input.
-
+	// Here is a sample input:
 	//	 some error
 	//	 github.com/dgraph-io/dgraph/x.Errorf
 	//		/home/jchiu/go/src/github.com/dgraph-io/dgraph/x/error.go:89
@@ -124,7 +123,7 @@ func shortenedErrorString(err error) string {
 	//	 runtime.goexit
 	//		/usr/lib/go-1.7/src/runtime/asm_amd64.s:2086
 
-	// Here is a sample output.
+	// Here is a sample output:
 	// some error; x.Errorf (x/error.go:90) main.f (x/tmp/main.go:10) main.main (x/tmp/main.go:15) runtime.main (proc.go:183) runtime.goexit (asm_amd64.s:2086)
 
 	// First, split into lines.
@@ -135,6 +134,7 @@ func shortenedErrorString(err error) string {
 	// reference. The initial value is true.
 	lineRef := true
 
+	// Second, process each line, depending on whether it is a line ref or not.
 	for _, line := range lines {
 		if strings.HasPrefix(line, "\t") {
 			// This is a line reference. We want to shorten the filename and put it
