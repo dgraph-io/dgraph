@@ -50,10 +50,10 @@ type TypeValue interface {
 
 // Unmarshaler type is for unmarshaling a TypeValue from binary/text format.
 type Unmarshaler interface {
-	// UnmarshalBinary unmarshals the data from a binary format.
-	UnmarshalBinary(data []byte) (TypeValue, error)
-	// UnmarshalText unmarshals the data from a text format.
-	UnmarshalText(data []byte) (TypeValue, error)
+	// FromBinary unmarshals the data from a binary format.
+	FromBinary(data []byte) (TypeValue, error)
+	// FromText unmarshals the data from a text format.
+	FromText(data []byte) (TypeValue, error)
 }
 
 // String function to implement string interface
