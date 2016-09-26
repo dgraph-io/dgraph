@@ -26,7 +26,6 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-<<<<<<< HEAD
 // Note: These ids are stored in the posting lists to indicate the type
 // of the data. The order *cannot* be changed without breaking existing
 // data. When adding a new type *always* add to the end of this list.
@@ -39,17 +38,12 @@ const (
 	dateTimeId
 )
 
-=======
->>>>>>> upstream
 // added suffix 'type' to names to distinguish from Go types 'int' and 'string'
 var (
 	// Int scalar type.
 	intType = Scalar{
 		Name: "int",
-<<<<<<< HEAD
 		id:   int32Id,
-=======
->>>>>>> upstream
 		Description: "The 'Int' scalar type represents non-fractional signed whole" +
 			" numeric values. Int can represent values between -(2^31)" +
 			" and 2^31 - 1.",
@@ -58,10 +52,7 @@ var (
 	// Float scalar type.
 	floatType = Scalar{
 		Name: "float",
-<<<<<<< HEAD
 		id:   floatId,
-=======
->>>>>>> upstream
 		Description: "The 'Float' scalar type represents signed double-precision" +
 			" fractional values	as specified by [IEEE 754]" +
 			" (http://en.wikipedia.org/wiki/IEEE_floating_point).",
@@ -70,10 +61,7 @@ var (
 	// String scalar type.
 	stringType = Scalar{
 		Name: "string",
-<<<<<<< HEAD
 		id:   stringId,
-=======
->>>>>>> upstream
 		Description: "The 'String' scalar type represents textual data, represented" +
 			" as UTF-8 character sequences. The String type is most often" +
 			" used by GraphQL to represent free-form human-readable text.",
@@ -82,20 +70,14 @@ var (
 	// Boolean scalar type.
 	booleanType = Scalar{
 		Name:        "bool",
-<<<<<<< HEAD
 		id:          boolId,
-=======
->>>>>>> upstream
 		Description: "The 'Boolean' scalar type represents 'true' or 'false'.",
 		Unmarshaler: uBool,
 	}
 	// ID scalar type.
 	idType = Scalar{
 		Name: "id",
-<<<<<<< HEAD
 		id:   stringId,
-=======
->>>>>>> upstream
 		Description: "The 'ID' scalar type represents a unique identifier, often" +
 			" used to refetch an object or as key for a cache. The ID type" +
 			" appears in a JSON response as a String; however, it is not" +
@@ -106,12 +88,8 @@ var (
 	}
 	// DateTime scalar type.
 	dateTimeType = Scalar{
-<<<<<<< HEAD
 		Name: "datetime",
 		id:   dateTimeId,
-=======
-		Name: "DateTime",
->>>>>>> upstream
 		Description: "The 'DateTime' scalar type an instant in time with nanosecond" +
 			" precision. Each DateTime is associated with a timezone.",
 		Unmarshaler: uTime,
