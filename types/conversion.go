@@ -23,7 +23,7 @@ import (
 )
 
 func (to Scalar) Convert(value TypeValue) (TypeValue, error) {
-	if to.Id() == stringId {
+	if to.ID() == stringID {
 		// If we are converting to a string, simply use
 		// MarshalText
 		if r, err := value.MarshalText(); err != nil {
