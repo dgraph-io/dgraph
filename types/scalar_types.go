@@ -117,7 +117,7 @@ func (v Int32Type) MarshalJSON() ([]byte, error) {
 
 type unmarshalInt32 struct{}
 
-func (v unmarshalInt32) UnmarshalBinary(data []byte) (TypeValue, error) {
+func (v unmarshalInt32) FromBinary(data []byte) (TypeValue, error) {
 	if len(data) < 4 {
 		return nil, x.Errorf("Invalid data for int32 %v", data)
 	}
@@ -125,7 +125,7 @@ func (v unmarshalInt32) UnmarshalBinary(data []byte) (TypeValue, error) {
 	return Int32Type(val), nil
 }
 
-func (v unmarshalInt32) UnmarshalText(text []byte) (TypeValue, error) {
+func (v unmarshalInt32) FromText(text []byte) (TypeValue, error) {
 	val, err := strconv.ParseInt(string(text), 10, 32)
 	if err != nil {
 		return nil, err
@@ -159,7 +159,7 @@ func (v FloatType) MarshalJSON() ([]byte, error) {
 
 type unmarshalFloat struct{}
 
-func (v unmarshalFloat) UnmarshalBinary(data []byte) (TypeValue, error) {
+func (v unmarshalFloat) FromBinary(data []byte) (TypeValue, error) {
 	if len(data) < 8 {
 		return nil, x.Errorf("Invalid data for float %v", data)
 	}
@@ -168,7 +168,7 @@ func (v unmarshalFloat) UnmarshalBinary(data []byte) (TypeValue, error) {
 	return FloatType(val), nil
 }
 
-func (v unmarshalFloat) UnmarshalText(text []byte) (TypeValue, error) {
+func (v unmarshalFloat) FromText(text []byte) (TypeValue, error) {
 	val, err := strconv.ParseFloat(string(text), 64)
 	if err != nil {
 		return nil, err
@@ -198,12 +198,12 @@ func (v StringType) MarshalJSON() ([]byte, error) {
 
 type unmarshalString struct{}
 
-func (v unmarshalString) UnmarshalBinary(data []byte) (TypeValue, error) {
+func (v unmarshalString) FromBinary(data []byte) (TypeValue, error) {
 	return StringType(data), nil
 }
 
-func (v unmarshalString) UnmarshalText(text []byte) (TypeValue, error) {
-	return v.UnmarshalBinary(text)
+func (v unmarshalString) FromText(text []byte) (TypeValue, error) {
+	return v.FromBinary(text)
 }
 
 var uString unmarshalString
@@ -235,7 +235,7 @@ func (v BoolType) MarshalJSON() ([]byte, error) {
 
 type unmarshalBool struct{}
 
-func (v unmarshalBool) UnmarshalBinary(data []byte) (TypeValue, error) {
+func (v unmarshalBool) FromBinary(data []byte) (TypeValue, error) {
 	if data[0] == 0 {
 		return BoolType(false), nil
 	} else if data[0] == 1 {
@@ -245,7 +245,7 @@ func (v unmarshalBool) UnmarshalBinary(data []byte) (TypeValue, error) {
 	}
 }
 
-func (v unmarshalBool) UnmarshalText(text []byte) (TypeValue, error) {
+func (v unmarshalBool) FromText(text []byte) (TypeValue, error) {
 	val, err := strconv.ParseBool(string(text))
 	if err != nil {
 		return nil, err
@@ -257,7 +257,7 @@ var uBool unmarshalBool
 
 type unmarshalTime struct{}
 
-func (u unmarshalTime) UnmarshalBinary(data []byte) (TypeValue, error) {
+func (u unmarshalTime) FromBinary(data []byte) (TypeValue, error) {
 	var v time.Time
 	if err := v.UnmarshalBinary(data); err != nil {
 		return nil, err
@@ -265,7 +265,7 @@ func (u unmarshalTime) UnmarshalBinary(data []byte) (TypeValue, error) {
 	return v, nil
 }
 
-func (u unmarshalTime) UnmarshalText(text []byte) (TypeValue, error) {
+func (u unmarshalTime) FromText(text []byte) (TypeValue, error) {
 	var v time.Time
 	if err := v.UnmarshalText(text); err != nil {
 		return nil, err
