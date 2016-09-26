@@ -526,7 +526,7 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 			dst.Params.Offset = int(offset)
 		}
 		if v, ok := gchild.Args["after"]; ok {
-			after, err := strconv.ParseInt(v, 0, 32)
+			after, err := strconv.ParseInt(v, 0, 64)
 			if err != nil {
 				return err
 			}

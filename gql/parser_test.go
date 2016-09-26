@@ -29,6 +29,15 @@ func checkAttr(g *GraphQuery, attr string) error {
 	return nil
 }
 
+func checkFilter(filter *FilterTree, expected string) error {
+	s := filter.debugString()
+	if s != expected {
+		return fmt.Errorf("Expected filter %s but got %s", expected,
+			filter.debugString())
+	}
+	return nil
+}
+
 func TestParse(t *testing.T) {
 	query := `
 	query {
@@ -826,4 +835,269 @@ func TestParseVariablesError7(t *testing.T) {
 	if err == nil {
 		t.Error("Expected type for variable $d")
 	}
+}
+
+func TestParseFilter_simplest(t *testing.T) {
+	query := `
+	query {
+		me(_uid_:0x0a) {
+			friends @filter() {
+				name @filter(namefilter())
+			}
+			gender @filter(eq()),age @filter(neq("a", "b"))
+			hometown
+		}
+	}
+`
+
+	gq, _, err := Parse(query)
+	if err != nil {
+		t.Error(err)
+	}
+	if gq == nil {
+		t.Error("subgraph is nil")
+		return
+	}
+	if len(gq.Children) != 4 {
+		t.Errorf("Expected 4 children. Got: %v", len(gq.Children))
+		return
+	}
+	if err := checkAttr(gq.Children[0], "friends"); err != nil {
+		t.Error(err)
+	}
+	if err := checkAttr(gq.Children[1], "gender"); err != nil {
+		t.Error(err)
+	}
+	if err := checkAttr(gq.Children[2], "age"); err != nil {
+		t.Error(err)
+	}
+	if err := checkAttr(gq.Children[3], "hometown"); err != nil {
+		t.Error(err)
+	}
+	child := gq.Children[0]
+	if len(child.Children) != 1 {
+		t.Errorf("Expected 1 child of friends. Got: %v", len(child.Children))
+	}
+	if err := checkAttr(child.Children[0], "name"); err != nil {
+		t.Error(err)
+	}
+
+	if gq.Children[0].Filter != nil {
+		t.Error("friends should have no filter")
+		return
+	}
+
+	// We may want to consider using a test library such as stretchr/testify, soon.
+	if err := checkFilter(gq.Children[1].Filter, "(eq)"); err != nil {
+		t.Error(err)
+		return
+	}
+
+	if err := checkFilter(gq.Children[2].Filter, `(neq "a" "b")`); err != nil {
+		t.Error(err)
+		return
+	}
+
+	if err := checkFilter(gq.Children[0].Children[0].Filter, "(namefilter)"); err != nil {
+		t.Error(err)
+		return
+	}
+}
+
+// Test operator precedence. && should be evaluated before ||.
+func TestParseFilter_op(t *testing.T) {
+	query := `
+	query {
+		me(_uid_:0x0a) {
+			friends @filter(a() || b() 
+			&& c()) {
+				name
+			}
+			gender,age
+			hometown
+		}
+	}
+`
+
+	gq, _, err := Parse(query)
+	if err != nil {
+		t.Error(err)
+	}
+	if gq == nil {
+		t.Error("subgraph is nil")
+		return
+	}
+	if len(gq.Children) != 4 {
+		t.Errorf("Expected 4 children. Got: %v", len(gq.Children))
+		return
+	}
+	if err := checkAttr(gq.Children[0], "friends"); err != nil {
+		t.Error(err)
+	}
+	if err := checkAttr(gq.Children[1], "gender"); err != nil {
+		t.Error(err)
+	}
+	if err := checkAttr(gq.Children[2], "age"); err != nil {
+		t.Error(err)
+	}
+	if err := checkAttr(gq.Children[3], "hometown"); err != nil {
+		t.Error(err)
+	}
+	child := gq.Children[0]
+	if len(child.Children) != 1 {
+		t.Errorf("Expected 1 child of friends. Got: %v", len(child.Children))
+	}
+	if err := checkAttr(child.Children[0], "name"); err != nil {
+		t.Error(err)
+	}
+
+	if err := checkFilter(gq.Children[0].Filter, "(OR (a) (AND (b) (c)))"); err != nil {
+		t.Error(err)
+		return
+	}
+}
+
+// Test operator precedence. Let brackets make || evaluates before &&.
+func TestParseFilter_op2(t *testing.T) {
+	query := `
+	query {
+		me(_uid_:0x0a) {
+			friends @filter((a() || b())
+			 && c()) {
+				name
+			}
+			gender,age
+			hometown
+		}
+	}
+`
+
+	gq, _, err := Parse(query)
+	if err != nil {
+		t.Error(err)
+	}
+	if gq == nil {
+		t.Error("subgraph is nil")
+		return
+	}
+	if len(gq.Children) != 4 {
+		t.Errorf("Expected 4 children. Got: %v", len(gq.Children))
+		return
+	}
+	if err := checkAttr(gq.Children[0], "friends"); err != nil {
+		t.Error(err)
+	}
+	if err := checkAttr(gq.Children[1], "gender"); err != nil {
+		t.Error(err)
+	}
+	if err := checkAttr(gq.Children[2], "age"); err != nil {
+		t.Error(err)
+	}
+	if err := checkAttr(gq.Children[3], "hometown"); err != nil {
+		t.Error(err)
+	}
+	child := gq.Children[0]
+	if len(child.Children) != 1 {
+		t.Errorf("Expected 1 child of friends. Got: %v", len(child.Children))
+	}
+	if err := checkAttr(child.Children[0], "name"); err != nil {
+		t.Error(err)
+	}
+
+	if err := checkFilter(gq.Children[0].Filter, "(AND (OR (a) (b)) (c))"); err != nil {
+		t.Error(err)
+		return
+	}
+}
+
+// Test operator precedence. More elaborate brackets.
+func TestParseFilter_brac(t *testing.T) {
+	query := `
+	query {
+		me(_uid_:0x0a) {
+			friends @filter(  a("hello") || b("world", "is") && (c() || (d("haha") || e())) && f()){
+				name
+			}
+			gender,age
+			hometown
+		}
+	}
+`
+
+	gq, _, err := Parse(query)
+	if err != nil {
+		t.Error(err)
+	}
+	if gq == nil {
+		t.Error("subgraph is nil")
+		return
+	}
+	if len(gq.Children) != 4 {
+		t.Errorf("Expected 4 children. Got: %v", len(gq.Children))
+		return
+	}
+	if err := checkAttr(gq.Children[0], "friends"); err != nil {
+		t.Error(err)
+	}
+	if err := checkAttr(gq.Children[1], "gender"); err != nil {
+		t.Error(err)
+	}
+	if err := checkAttr(gq.Children[2], "age"); err != nil {
+		t.Error(err)
+	}
+	if err := checkAttr(gq.Children[3], "hometown"); err != nil {
+		t.Error(err)
+	}
+	child := gq.Children[0]
+	if len(child.Children) != 1 {
+		t.Errorf("Expected 1 child of friends. Got: %v", len(child.Children))
+	}
+	if err := checkAttr(child.Children[0], "name"); err != nil {
+		t.Error(err)
+	}
+
+	err = checkFilter(gq.Children[0].Filter,
+		`(OR (a "hello") (AND (AND (b "world" "is") (OR (c) (OR (d "haha") (e)))) (f)))`)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+}
+
+// Test if unbalanced brac will lead to errors.
+func TestParseFilter_unbalancedbrac(t *testing.T) {
+	query := `
+	query {
+		me(_uid_:0x0a) {
+			friends @filter(  ()
+				name
+			}
+			gender,age
+			hometown
+		}
+	}
+`
+	_, _, err := Parse(query)
+	if err == nil {
+		t.Error("Expected error")
+	}
+}
+
+func TestParseFilter_unknowndirective(t *testing.T) {
+	query := `
+	query {
+		me(_uid_:0x0a) {
+			friends @filtererr
+				name
+			}
+			gender,age
+			hometown
+		}
+	}
+`
+	_, _, err := Parse(query)
+	if err == nil {
+		t.Error("Expected error")
+	}
+
 }
