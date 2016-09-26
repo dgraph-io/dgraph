@@ -38,6 +38,7 @@ const (
 	dateTimeID
 )
 
+// added suffix 'type' to names to distinguish from Go types 'int' and 'string'
 var (
 	// Int32Type scalar.
 	Int32Type = Scalar{
