@@ -119,10 +119,10 @@ func samePosting(a *types.Posting, b *types.Posting) bool {
 	if a.ValueLength() != b.ValueLength() {
 		return false
 	}
-	if !bytes.Equal(a.ValueBytes(), b.ValueBytes()) {
+	if a.ValType() != b.ValType() {
 		return false
 	}
-	if a.ValType() != b.ValType() {
+	if !bytes.Equal(a.ValueBytes(), b.ValueBytes()) {
 		return false
 	}
 	if !bytes.Equal(a.Source(), b.Source()) {
