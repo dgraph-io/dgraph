@@ -580,8 +580,8 @@ func parseArguments(l *lex.Lexer) (result []pair, rerr error) {
 	return result, nil
 }
 
-// String converts FilterTree to a string. Good for testing, debugging.
-func (t *FilterTree) String() string {
+// debugString converts FilterTree to a string. Good for testing, debugging.
+func (t *FilterTree) debugString() string {
 	buf := bytes.NewBuffer(make([]byte, 0, 20))
 	t.stringHelper(buf)
 	return buf.String()
@@ -589,15 +589,14 @@ func (t *FilterTree) String() string {
 
 // stringHelper does simple DFS to convert FilterTree to string.
 func (t *FilterTree) stringHelper(buf *bytes.Buffer) {
-	if t == nil {
-		return
-	}
+	x.Assert(t != nil)
 	if len(t.FuncName) > 0 {
 		// Leaf node.
 		_, err := buf.WriteRune('(')
 		x.Check(err)
 		_, err = buf.WriteString(t.FuncName)
 		x.Check(err)
+
 		for _, arg := range t.FuncArgs {
 			_, err = buf.WriteString(" \"")
 			x.Check(err)

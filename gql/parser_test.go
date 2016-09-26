@@ -30,9 +30,10 @@ func checkAttr(g *GraphQuery, attr string) error {
 }
 
 func checkFilter(filter *FilterTree, expected string) error {
-	s := filter.String()
+	s := filter.debugString()
 	if s != expected {
-		return fmt.Errorf("Expected filter %s but got %s", expected, filter)
+		return fmt.Errorf("Expected filter %s but got %s", expected,
+			filter.debugString())
 	}
 	return nil
 }
@@ -1014,7 +1015,7 @@ func TestParseFilter_brac(t *testing.T) {
 	query := `
 	query {
 		me(_uid_:0x0a) {
-			friends @filter(  a() || b() && (c() || (d() || e())) && f()){
+			friends @filter(  a("hello") || b("world", "is") && (c() || (d("haha") || e())) && f()){
 				name
 			}
 			gender,age
@@ -1055,8 +1056,9 @@ func TestParseFilter_brac(t *testing.T) {
 		t.Error(err)
 	}
 
-	if err := checkFilter(gq.Children[0].Filter,
-		"(OR (a) (AND (AND (b) (OR (c) (OR (d) (e)))) (f)))"); err != nil {
+	err = checkFilter(gq.Children[0].Filter,
+		`(OR (a "hello") (AND (AND (b "world" "is") (OR (c) (OR (d "haha") (e)))) (f)))`)
+	if err != nil {
 		t.Error(err)
 		return
 	}

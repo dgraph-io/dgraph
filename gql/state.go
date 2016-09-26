@@ -199,7 +199,7 @@ func lexFilterInside(l *lex.Lexer) lex.StateFn {
 			l.FilterDepth++
 		case r == rightRound:
 			if l.FilterDepth == 0 {
-				return l.Errorf("Unexpected )")
+				return l.Errorf("Unexpected right round bracket")
 			}
 			l.FilterDepth--
 			l.Emit(itemRightRound)
@@ -240,6 +240,8 @@ func lexDirective(l *lex.Lexer) lex.StateFn {
 	}
 
 	l.Backup()
+	// This gives our buffer an initial capacity. Its length is zero though. The
+	// buffer can grow beyond this initial capacity.
 	buf := bytes.NewBuffer(make([]byte, 0, 15))
 	for {
 		// The caller already checked isNameBegin, and absorbed one rune.
