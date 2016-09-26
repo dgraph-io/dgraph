@@ -14,9 +14,13 @@
  * limitations under the License.
  */
 
-package gql
+package types
 
-import "fmt"
+import (
+	"encoding"
+	"encoding/json"
+	"fmt"
+)
 
 // Type interface is the wrapper interface for all types
 type Type interface {
@@ -29,11 +33,24 @@ type Type interface {
 type Scalar struct {
 	Name        string // name of scalar type
 	Description string // short description
-	ParseType   ParseTypeFunc
+	// to unmarshal the binary/text representation of the type.
+	Unmarshaler Unmarshaler
 }
 
-// ParseTypeFunc is a function that parses and does coercion for Scalar types.
-type ParseTypeFunc func(input []byte) (interface{}, error)
+// TypeValue is the interface that all scalar type values need to implement.
+type TypeValue interface {
+	encoding.TextMarshaler
+	encoding.BinaryMarshaler
+	json.Marshaler
+}
+
+// Unmarshaler type is for unmarshaling a TypeValue from binary/text format.
+type Unmarshaler interface {
+	// FromBinary unmarshals the data from a binary format.
+	FromBinary(data []byte) (TypeValue, error)
+	// FromText unmarshals the data from a text format.
+	FromText(data []byte) (TypeValue, error)
+}
 
 // String function to implement string interface
 func (s Scalar) String() string {
