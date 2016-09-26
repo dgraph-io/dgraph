@@ -39,7 +39,7 @@ func (to Scalar) Convert(value TypeValue) (TypeValue, error) {
 	case StringType:
 		// If the value is a string, then we can always Unmarshal it using
 		// the unmarshaller
-		return u.UnmarshalText([]byte(v))
+		return u.FromText([]byte(v))
 	case Int32Type:
 		if c, ok := u.(int32Unmarshaler); !ok {
 			return nil, cantConvert(to, v)
