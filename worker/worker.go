@@ -222,10 +222,6 @@ func (w *grpcWorker) PredicateData(query *Payload, stream Worker_PredicateDataSe
 	group.Init(query.Data, 0)
 	_ = group.Groupid()
 
-	sgid := string(query.Data)
-	_, err := strconv.ParseUint(string(query.Data), 10, 64)
-	x.Checkf(err, "Unable to parse group id: %v", sgid)
-
 	// TODO(pawan) - Shift to CheckPoints once we figure out how to add them to the
 	// RocksDB library we are using.
 	// http://rocksdb.org/blog/2609/use-checkpoints-for-efficient-snapshots/
@@ -247,14 +243,10 @@ func (w *grpcWorker) PredicateData(query *Payload, stream Worker_PredicateDataSe
 			// Found a match.
 			var t task.KT
 			x.Assertf(group.Keys(&t, i), "Unable to parse task.KT")
-			if bytes.Equal(k.Data(), t.KeyBytes()) {
-				if pl.CommitTs() == t.Ts() {
-					// No need to send this.
-					// TODO: Currently commit timestamp is arbitrarily set. We should switch to
-					// something which can remain consistent.
-					// Potentially a version number or something.
-					continue
-				}
+
+			if bytes.Equal(k.Data(), t.KeyBytes()) && bytes.Equal(pl.Checksum(), t.ChecksumBytes()) {
+				// No need to send this.
+				continue
 			}
 		}
 

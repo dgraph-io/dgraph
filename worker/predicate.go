@@ -79,9 +79,11 @@ func generateGroup(group uint64) ([]byte, error) {
 		pl := types.GetRootAsPostingList(v.Data(), 0)
 
 		ko := b.CreateByteVector(k.Data())
+		co := b.CreateByteVector(pl.Checksum())
+
 		task.KTStart(b)
 		task.KTAddKey(b, ko)
-		task.KTAddTs(b, pl.CommitTs())
+		task.KTAddChecksum(b, co)
 		uo := task.KTEnd(b)
 
 		uoffsets = append(uoffsets, uo)
