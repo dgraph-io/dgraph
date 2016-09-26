@@ -537,6 +537,7 @@ func TestToJson(t *testing.T) {
 	}
 }
 
+/*
 // Checking for Type coercion errors.
 // NOTE: Writing separate test since Marshal/Unmarshal process of ToJSON converts
 // 'int' type to 'float64' and thus mucks up the tests.
@@ -635,6 +636,7 @@ func TestPostTraverse(t *testing.T) {
 		}
 	}
 }
+*/
 
 func getProperty(properties []*graph.Property, prop string) []byte {
 	for _, p := range properties {
@@ -646,6 +648,105 @@ func getProperty(properties []*graph.Property, prop string) []byte {
 }
 
 func TestToPB(t *testing.T) {
+	dir, _ := populateGraph(t)
+	defer os.RemoveAll(dir)
+
+	query := `
+		{
+			debug(_uid_:0x1) {
+				_xid_
+				name
+				gender
+				status
+				friend {
+					name
+				}
+				friend {
+				}
+			}
+		}
+  `
+
+	gq, _, err := gql.Parse(query)
+	if err != nil {
+		t.Error(err)
+	}
+	ctx := context.Background()
+	sg, err := ToSubGraph(ctx, gq)
+	if err != nil {
+		t.Error(err)
+	}
+
+	ch := make(chan error)
+	go ProcessGraph(ctx, sg, ch)
+	err = <-ch
+	if err != nil {
+		t.Error(err)
+	}
+
+	var l Latency
+	gr, err := sg.ToProtocolBuffer(&l)
+	if err != nil {
+		t.Error(err)
+	}
+
+	if gr.Attribute != "debug" {
+		t.Errorf("Expected attribute me, Got: %v", gr.Attribute)
+	}
+	if gr.Uid != 1 {
+		t.Errorf("Expected uid 1, Got: %v", gr.Uid)
+	}
+	if gr.Xid != "mich" {
+		t.Errorf("Expected xid mich, Got: %v", gr.Xid)
+	}
+	if len(gr.Properties) != 3 {
+		t.Errorf("Expected values map to contain 3 properties, Got: %v",
+			len(gr.Properties))
+	}
+	if string(getProperty(gr.Properties, "name")) != "Michonne" {
+		t.Errorf("Expected property name to have value Michonne, Got: %v",
+			string(getProperty(gr.Properties, "name")))
+	}
+	if len(gr.Children) != 10 {
+		t.Errorf("Expected 10 children, Got: %v", len(gr.Children))
+	}
+
+	child := gr.Children[0]
+	if child.Uid != 23 {
+		t.Errorf("Expected uid 23, Got: %v", gr.Uid)
+	}
+	if child.Attribute != "friend" {
+		t.Errorf("Expected attribute friend, Got: %v", child.Attribute)
+	}
+	if len(child.Properties) != 1 {
+		t.Errorf("Expected values map to contain 1 property, Got: %v",
+			len(child.Properties))
+	}
+	if string(getProperty(child.Properties, "name")) != "Rick Grimes" {
+		t.Errorf("Expected property name to have value Rick Grimes, Got: %v",
+			string(getProperty(child.Properties, "name")))
+	}
+	if len(child.Children) != 0 {
+		t.Errorf("Expected 0 children, Got: %v", len(child.Children))
+	}
+
+	child = gr.Children[5]
+	if child.Uid != 23 {
+		t.Errorf("Expected uid 23, Got: %v", gr.Uid)
+	}
+	if child.Attribute != "friend" {
+		t.Errorf("Expected attribute friend, Got: %v", child.Attribute)
+	}
+	if len(child.Properties) != 0 {
+		t.Errorf("Expected values map to contain 0 properties, Got: %v",
+			len(child.Properties))
+	}
+	if len(child.Children) != 0 {
+		t.Errorf("Expected 0 children, Got: %v", len(child.Children))
+	}
+}
+
+func TestSchema(t *testing.T) {
 	dir, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
 

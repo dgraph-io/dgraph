@@ -14,12 +14,13 @@
  * limitations under the License.
  */
 
-package gql
+package schema
 
 import "fmt"
 
 // Type interface is the wrapper interface for all types
 type Type interface {
+	Type() Type
 	IsScalar() bool
 }
 
@@ -32,6 +33,11 @@ type Scalar struct {
 	ParseType   ParseTypeFunc
 }
 
+type Object struct {
+	Name   string
+	Fields map[string]string //field to type relationship
+}
+
 // ParseTypeFunc is a function that parses and does coercion for Scalar types.
 type ParseTypeFunc func(input []byte) (interface{}, error)
 
@@ -40,7 +46,19 @@ func (s Scalar) String() string {
 	return fmt.Sprint(s.Name)
 }
 
-// IsScalar function to assert scalar type
+func (s Scalar) Type() Type {
+	typ, _ := getScalar(s.Name)
+	return typ
+}
+
+func (o Object) Type() Type {
+	return o
+}
+
 func (s Scalar) IsScalar() bool {
 	return true
+}
+
+func (o Object) IsScalar() bool {
+	return false
 }

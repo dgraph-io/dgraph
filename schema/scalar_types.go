@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package gql
+package schema
 
 import "strconv"
 
@@ -22,7 +22,7 @@ import "strconv"
 var (
 	// Int scalar type.
 	intType = Scalar{
-		Name: "Int",
+		Name: "int",
 		Description: "The 'Int' scalar type represents non-fractional signed whole" +
 			" numeric values. Int can represent values between -(2^31)" +
 			" and 2^31 - 1.",
@@ -30,7 +30,7 @@ var (
 	}
 	// Float scalar type.
 	floatType = Scalar{
-		Name: "Float",
+		Name: "float",
 		Description: "The 'Float' scalar type represents signed double-precision" +
 			" fractional values	as specified by [IEEE 754]" +
 			" (http://en.wikipedia.org/wiki/IEEE_floating_point).",
@@ -38,7 +38,7 @@ var (
 	}
 	// String scalar type.
 	stringType = Scalar{
-		Name: "String",
+		Name: "string",
 		Description: "The 'String' scalar type represents textual data, represented" +
 			" as UTF-8 character sequences. The String type is most often" +
 			" used by GraphQL to represent free-form human-readable text.",
@@ -46,13 +46,13 @@ var (
 	}
 	// Boolean scalar type.
 	booleanType = Scalar{
-		Name:        "Boolean",
+		Name:        "bool",
 		Description: "The 'Boolean' scalar type represents 'true' or 'false'.",
 		ParseType:   coerceBool,
 	}
 	// ID scalar type.
 	idType = Scalar{
-		Name: "ID",
+		Name: "id",
 		Description: "The 'ID' scalar type represents a unique identifier, often" +
 			" used to refetch an object or as key for a cache. The ID type" +
 			" appears in a JSON response as a String; however, it is not" +

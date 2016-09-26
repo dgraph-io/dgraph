@@ -1,0 +1,27 @@
+scalar age : int
+
+scalar (
+ name: string
+  address:string
+    budget :int
+)
+
+
+type   Person {
+name: string
+age: int
+address: string
+friend: Person
+}
+
+type Actor{
+name  : string
+ age : int
+  address :  string 
+films: Film 
+}
+
+type Film {
+name: string
+budget: int
+}
