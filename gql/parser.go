@@ -17,13 +17,13 @@
 package gql
 
 import (
+	"bytes"
 	"encoding/json"
-	"errors"
-	"fmt"
 	"strconv"
 	"strings"
 
 	"github.com/dgraph-io/dgraph/lex"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 // GraphQuery stores the parsed Query in a tree format. This gets converted to
@@ -35,6 +35,7 @@ type GraphQuery struct {
 	Alias    string
 	Args     map[string]string
 	Children []*GraphQuery
+	Filter   *FilterTree
 
 	// Internal fields below.
 	// If gq.fragment is nonempty, then it is a fragment reference / spread.
@@ -72,6 +73,23 @@ type varInfo struct {
 // varMap is a map with key as variable name.
 type varMap map[string]varInfo
 
+var filterOpPrecedence map[lex.ItemType]int
+
+// FilterTree is the result of parsing the filter directive.
+type FilterTree struct {
+	FuncName string   // For leaf nodes only.
+	FuncArgs []string // For leaf nodes only.
+	Op       lex.ItemType
+	Child    []*FilterTree
+}
+
+func init() {
+	filterOpPrecedence = map[lex.ItemType]int{
+		itemFilterAnd: 2,
+		itemFilterOr:  1,
+	}
+}
+
 // run is used to run the lexer until we encounter nil state.
 func run(l *lex.Lexer) {
 	for state := lexText; state != nil; {
@@ -90,7 +108,7 @@ func (fn *fragmentNode) expand(fmap fragmentMap) error {
 		return nil
 	}
 	if fn.Entered {
-		return fmt.Errorf("Cycle detected: %s", fn.Name)
+		return x.Errorf("Cycle detected: %s", fn.Name)
 	}
 	fn.Entered = true
 	if err := fn.Gq.expandFragments(fmap); err != nil {
@@ -110,7 +128,7 @@ func (gq *GraphQuery) expandFragments(fmap fragmentMap) error {
 			fname := child.fragment // Name of fragment being referenced.
 			fchild := fmap[fname]
 			if fchild == nil {
-				return fmt.Errorf("Missing fragment: %s", fname)
+				return x.Errorf("Missing fragment: %s", fname)
 			}
 			if err := fchild.expand(fmap); err != nil {
 				return err
@@ -189,13 +207,13 @@ func checkValidity(vm varMap) error {
 		typ := v.Type
 
 		if len(typ) == 0 {
-			return fmt.Errorf("Type of variable %v not specified", k)
+			return x.Errorf("Type of variable %v not specified", k)
 		}
 
 		// Ensure value is not nil if the variable is required.
 		if typ[len(typ)-1] == '!' {
 			if v.Value == "" {
-				return fmt.Errorf("Variable %v should be initialised", k)
+				return x.Errorf("Variable %v should be initialised", k)
 			}
 			typ = typ[:len(typ)-1]
 		}
@@ -206,24 +224,24 @@ func checkValidity(vm varMap) error {
 			case "int":
 				{
 					if _, err := strconv.ParseInt(v.Value, 0, 64); err != nil {
-						return fmt.Errorf("Expected an int but got %v", v.Value)
+						return x.Wrapf(err, "Expected an int but got %v", v.Value)
 					}
 				}
 			case "float":
 				{
 					if _, err := strconv.ParseFloat(v.Value, 64); err != nil {
-						return fmt.Errorf("Expected a float but got %v", v.Value)
+						return x.Wrapf(err, "Expected a float but got %v", v.Value)
 					}
 				}
 			case "bool":
 				{
 					if _, err := strconv.ParseBool(v.Value); err != nil {
-						return fmt.Errorf("Expected a bool but got %v", v.Value)
+						return x.Wrapf(err, "Expected a bool but got %v", v.Value)
 					}
 				}
 			case "string": // Value is a valid string. No checks required.
 			default:
-				return fmt.Errorf("Type %v not supported", typ)
+				return x.Errorf("Type %v not supported", typ)
 			}
 		}
 	}
@@ -237,7 +255,7 @@ func substituteVariables(gq *GraphQuery, vmap varMap) error {
 		if v[0] == '$' {
 			va, ok := vmap[v]
 			if !ok {
-				return fmt.Errorf("Variable not defined %v", v)
+				return x.Errorf("Variable not defined %v", v)
 			}
 			gq.Args[k] = va.Value
 		}
@@ -273,7 +291,7 @@ func Parse(input string) (gq *GraphQuery, mu *Mutation, rerr error) {
 		case itemOpType:
 			if item.Val == "mutation" {
 				if mu != nil {
-					return nil, nil, errors.New("Only one mutation block allowed.")
+					return nil, nil, x.Errorf("Only one mutation block allowed.")
 				}
 				if mu, rerr = getMutation(l); rerr != nil {
 					return nil, nil, rerr
@@ -325,13 +343,13 @@ L2:
 			v := strings.TrimSpace(item.Val)
 			if len(v) > 0 {
 				if name != "" {
-					return nil, fmt.Errorf("Multiple word query name not allowed.")
+					return nil, x.Errorf("Multiple word query name not allowed.")
 				}
 				name = item.Val
 			}
 		case itemLeftRound:
 			if name == "" {
-				return nil, fmt.Errorf("Variables can be defined only in named queries.")
+				return nil, x.Errorf("Variables can be defined only in named queries.")
 			}
 
 			if rerr = parseVariables(l, vmap); rerr != nil {
@@ -367,7 +385,7 @@ func getQuery(l *lex.Lexer) (gq *GraphQuery, rerr error) {
 			return nil, rerr
 		}
 	} else {
-		return nil, fmt.Errorf("Malformed Query. Missing {")
+		return nil, x.Errorf("Malformed Query. Missing {")
 	}
 
 	return gq, nil
@@ -388,12 +406,11 @@ func getFragment(l *lex.Lexer) (*fragmentNode, error) {
 		} else if item.Typ == itemLeftCurl {
 			break
 		} else {
-			return nil, fmt.Errorf("Unexpected item in fragment: %v %v",
-				item.Typ, item.Val)
+			return nil, x.Errorf("Unexpected item in fragment: %v %v", item.Typ, item.Val)
 		}
 	}
 	if name == "" {
-		return nil, errors.New("Empty fragment name")
+		return nil, x.Errorf("Empty fragment name")
 	}
 
 	gq := &GraphQuery{
@@ -411,7 +428,8 @@ func getFragment(l *lex.Lexer) (*fragmentNode, error) {
 
 // getMutation function parses and stores the set and delete
 // operation in Mutation.
-func getMutation(l *lex.Lexer) (mu *Mutation, rerr error) {
+func getMutation(l *lex.Lexer) (*Mutation, error) {
+	var mu *Mutation
 	for item := range l.Items {
 		if item.Typ == itemText {
 			continue
@@ -428,13 +446,13 @@ func getMutation(l *lex.Lexer) (mu *Mutation, rerr error) {
 			}
 		}
 	}
-	return nil, errors.New("Invalid mutation.")
+	return nil, x.Errorf("Invalid mutation.")
 }
 
 // parseMutationOp parses and stores set or delete operation string in Mutation.
 func parseMutationOp(l *lex.Lexer, op string, mu *Mutation) error {
 	if mu == nil {
-		return errors.New("Mutation is nil.")
+		return x.Errorf("Mutation is nil.")
 	}
 
 	parse := false
@@ -444,27 +462,27 @@ func parseMutationOp(l *lex.Lexer, op string, mu *Mutation) error {
 		}
 		if item.Typ == itemLeftCurl {
 			if parse {
-				return errors.New("Too many left curls in set mutation.")
+				return x.Errorf("Too many left curls in set mutation.")
 			}
 			parse = true
 		}
 		if item.Typ == itemMutationContent {
 			if !parse {
-				return errors.New("Mutation syntax invalid.")
+				return x.Errorf("Mutation syntax invalid.")
 			}
 			if op == "set" {
 				mu.Set = item.Val
 			} else if op == "delete" {
 				mu.Del = item.Val
 			} else {
-				return errors.New("Invalid mutation operation.")
+				return x.Errorf("Invalid mutation operation.")
 			}
 		}
 		if item.Typ == itemRightCurl {
 			return nil
 		}
 	}
-	return errors.New("Invalid mutation formatting.")
+	return x.Errorf("Invalid mutation formatting.")
 }
 
 func parseVariables(l *lex.Lexer, vmap varMap) error {
@@ -477,19 +495,19 @@ func parseVariables(l *lex.Lexer, vmap varMap) error {
 		} else if item.Typ == itemRightRound {
 			break
 		} else {
-			return fmt.Errorf("Expecting a variable name. Got: %v", item)
+			return x.Errorf("Expecting a variable name. Got: %v", item)
 		}
 
 		// Get variable type.
 		item = <-l.Items
 		if item.Typ != itemVarType {
-			return fmt.Errorf("Expecting a variable type. Got: %v", item)
+			return x.Errorf("Expecting a variable type. Got: %v", item)
 		}
 
 		// Ensure that the type is not nil.
 		varType := item.Val
 		if varType == "" {
-			return fmt.Errorf("Type of a variable can't be empty")
+			return x.Errorf("Type of a variable can't be empty")
 		}
 
 		// Insert the variable into the map. The variable might already be defiend
@@ -510,7 +528,7 @@ func parseVariables(l *lex.Lexer, vmap varMap) error {
 		if item.Typ == itemEqual {
 			it := <-l.Items
 			if it.Typ != itemVarDefault {
-				return fmt.Errorf("Expecting default value of a variable. Got: %v", item)
+				return x.Errorf("Expecting default value of a variable. Got: %v", item)
 			}
 
 			// If value is empty replace, otherwise ignore the default value
@@ -547,19 +565,180 @@ func parseArguments(l *lex.Lexer) (result []pair, rerr error) {
 			break
 
 		} else {
-			return result, fmt.Errorf("Expecting argument name. Got: %v", item)
+			return result, x.Errorf("Expecting argument name. Got: %v", item)
 		}
 
 		// Get value.
 		item = <-l.Items
 		if item.Typ != itemArgVal {
-			return result, fmt.Errorf("Expecting argument value. Got: %v", item)
+			return result, x.Errorf("Expecting argument value. Got: %v", item)
 		}
 
 		p.Val = item.Val
 		result = append(result, p)
 	}
 	return result, nil
+}
+
+// debugString converts FilterTree to a string. Good for testing, debugging.
+func (t *FilterTree) debugString() string {
+	buf := bytes.NewBuffer(make([]byte, 0, 20))
+	t.stringHelper(buf)
+	return buf.String()
+}
+
+// stringHelper does simple DFS to convert FilterTree to string.
+func (t *FilterTree) stringHelper(buf *bytes.Buffer) {
+	x.Assert(t != nil)
+	if len(t.FuncName) > 0 {
+		// Leaf node.
+		_, err := buf.WriteRune('(')
+		x.Check(err)
+		_, err = buf.WriteString(t.FuncName)
+		x.Check(err)
+
+		for _, arg := range t.FuncArgs {
+			_, err = buf.WriteString(" \"")
+			x.Check(err)
+			_, err = buf.WriteString(arg)
+			x.Check(err)
+			_, err := buf.WriteRune('"')
+			x.Check(err)
+		}
+		_, err = buf.WriteRune(')')
+		x.Check(err)
+		return
+	}
+	// Non-leaf node.
+	_, err := buf.WriteRune('(')
+	x.Check(err)
+	switch t.Op {
+	case itemFilterAnd:
+		_, err = buf.WriteString("AND")
+	case itemFilterOr:
+		_, err = buf.WriteString("OR")
+	default:
+		err = x.Errorf("Unknown operator")
+	}
+	x.Check(err)
+
+	for _, c := range t.Child {
+		_, err = buf.WriteRune(' ')
+		x.Check(err)
+		c.stringHelper(buf)
+	}
+	_, err = buf.WriteRune(')')
+	x.Check(err)
+}
+
+type filterTreeStack struct{ a []*FilterTree }
+
+func (s *filterTreeStack) empty() bool        { return len(s.a) == 0 }
+func (s *filterTreeStack) size() int          { return len(s.a) }
+func (s *filterTreeStack) push(t *FilterTree) { s.a = append(s.a, t) }
+
+func (s *filterTreeStack) pop() *FilterTree {
+	x.Assertf(!s.empty(), "Trying to pop empty stack")
+	last := s.a[len(s.a)-1]
+	s.a = s.a[:len(s.a)-1]
+	return last
+}
+
+func (s *filterTreeStack) peek() *FilterTree {
+	x.Assertf(!s.empty(), "Trying to peek empty stack")
+	return s.a[len(s.a)-1]
+}
+
+func evalStack(opStack, valueStack *filterTreeStack) {
+	topOp := opStack.pop()
+	topVal1 := valueStack.pop()
+	topVal2 := valueStack.pop()
+	topOp.Child = []*FilterTree{topVal2, topVal1}
+	valueStack.push(topOp)
+}
+
+// parseFilter parses the filter directive to produce a QueryFilter / parse tree.
+func parseFilter(l *lex.Lexer) (*FilterTree, error) {
+	item := <-l.Items
+	if item.Typ != itemLeftRound {
+		return nil, x.Errorf("Expected ( after filter directive")
+	}
+
+	opStack := new(filterTreeStack)
+	opStack.push(&FilterTree{Op: itemLeftRound}) // Push ( onto operator stack.
+	valueStack := new(filterTreeStack)
+
+	for item = range l.Items {
+		if item.Typ == itemFilterFunc { // Value.
+			leaf := &FilterTree{FuncName: item.Val}
+			itemInFunc := <-l.Items
+			if itemInFunc.Typ != itemLeftRound {
+				return nil, x.Errorf("Expected ( after func name [%s]", leaf.FuncName)
+			}
+			var terminated bool
+			for itemInFunc = range l.Items {
+				if itemInFunc.Typ == itemRightRound {
+					terminated = true
+					break
+				} else if itemInFunc.Typ != itemFilterFuncArg {
+					return nil, x.Errorf("Expected arg after func [%s], but got item %v",
+						leaf.FuncName, itemInFunc)
+				}
+				leaf.FuncArgs = append(leaf.FuncArgs, itemInFunc.Val)
+			}
+			if !terminated {
+				return nil, x.Errorf("Expected ) to terminate func definition")
+			}
+			valueStack.push(leaf)
+
+		} else if item.Typ == itemLeftRound { // Just push to op stack.
+			opStack.push(&FilterTree{Op: itemLeftRound})
+
+		} else if item.Typ == itemRightRound { // Pop op stack until we see a (.
+			for !opStack.empty() {
+				topOp := opStack.peek()
+				if topOp.Op == itemLeftRound {
+					break
+				}
+				evalStack(opStack, valueStack)
+			}
+			opStack.pop() // Pop away the (.
+			if opStack.empty() {
+				// The parentheses are balanced out. Let's break.
+				break
+			}
+
+		} else if opPred := filterOpPrecedence[item.Typ]; opPred > 0 { // Op.
+			// Evaluate the stack until we see an operator with strictly lower pred.
+			for !opStack.empty() {
+				topOp := opStack.peek()
+				if filterOpPrecedence[topOp.Op] < opPred {
+					break
+				}
+				evalStack(opStack, valueStack)
+			}
+			opStack.push(&FilterTree{Op: item.Typ}) // Push current operator.
+		}
+	}
+
+	// For filters, we start with ( and end with ). We expect to break out of loop
+	// when the parentheses balance off, and at that point, opStack should be empty.
+	// For other applications, typically after all items are
+	// consumed, we will run a loop like "while opStack is nonempty, evalStack".
+	// This is not needed here.
+	x.Assertf(opStack.empty(), "Op stack should be empty when we exit")
+
+	if valueStack.empty() {
+		// This happens when we have @filter(). We can either return an error or
+		// ignore. Currently, let's just ignore and pretend there is no filter.
+		return nil, nil
+	}
+
+	if valueStack.size() != 1 {
+		return nil, x.Errorf("Expected one item in value stack, but got %d",
+			valueStack.size())
+	}
+	return valueStack.pop(), nil
 }
 
 // getRoot gets the root graph query object after parsing the args.
@@ -569,13 +748,13 @@ func getRoot(l *lex.Lexer) (gq *GraphQuery, rerr error) {
 	}
 	item := <-l.Items
 	if item.Typ != itemName {
-		return nil, fmt.Errorf("Expected some name. Got: %v", item)
+		return nil, x.Errorf("Expected some name. Got: %v", item)
 	}
 
 	gq.Attr = item.Val
 	item = <-l.Items
 	if item.Typ != itemLeftRound {
-		return nil, fmt.Errorf("Expected variable start. Got: %v", item)
+		return nil, x.Errorf("Expected variable start. Got: %v", item)
 	}
 
 	args, err := parseArguments(l)
@@ -591,7 +770,7 @@ func getRoot(l *lex.Lexer) (gq *GraphQuery, rerr error) {
 		} else if p.Key == "_xid_" {
 			gq.XID = p.Val
 		} else {
-			return nil, fmt.Errorf("Expecting _uid_ or _xid_. Got: %+v", p)
+			return nil, x.Errorf("Expecting _uid_ or _xid_. Got: %+v", p)
 		}
 	}
 
@@ -603,7 +782,7 @@ func godeep(l *lex.Lexer, gq *GraphQuery) error {
 	curp := gq // Used to track current node, for nesting.
 	for item := range l.Items {
 		if item.Typ == lex.ItemError {
-			return errors.New(item.Val)
+			return x.Errorf(item.Val)
 		}
 
 		if item.Typ == lex.ItemEOF {
@@ -617,7 +796,7 @@ func godeep(l *lex.Lexer, gq *GraphQuery) error {
 		if item.Typ == itemFragmentSpread {
 			// item.Val is expected to start with "..." and to have len >3.
 			if len(item.Val) <= 3 {
-				return fmt.Errorf("Fragment name invalid: %s", item.Val)
+				return x.Errorf("Fragment name invalid: %s", item.Val)
 			}
 
 			gq.Children = append(gq.Children, &GraphQuery{fragment: item.Val[3:]})
@@ -647,10 +826,22 @@ func godeep(l *lex.Lexer, gq *GraphQuery) error {
 			// Stores args in GraphQuery, will be used later while retrieving results.
 			for _, p := range args {
 				if p.Val == "" {
-					return fmt.Errorf("Got empty argument")
+					return x.Errorf("Got empty argument")
 				}
 
 				curp.Args[p.Key] = p.Val
+			}
+		} else if item.Typ == itemDirectiveName {
+			switch item.Val {
+			case "@filter":
+				filter, err := parseFilter(l)
+				if err != nil {
+					return err
+				}
+				curp.Filter = filter
+
+			default:
+				return x.Errorf("Unknown directive [%s]", item.Val)
 			}
 		}
 	}
