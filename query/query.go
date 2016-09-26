@@ -160,6 +160,8 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 	// Get results from all children first.
 	cResult := make(map[uint64]interface{})
 
+	// ignoreUids would contain those UIDs whose scalar childlren dont obey the
+	// types specified in the schema.
 	ignoreUids := make(map[uint64]bool)
 	for _, child := range sg.Children {
 		m, err := postTraverse(child)
@@ -529,7 +531,7 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 	// node, because of the way we're dealing with the root node.
 	// So, we work on the children, and then recurse for grand children.
 
-	scalars := make([]string, 0)
+	var scalars []string
 	// Add scalar chilsdren nodes based on schema
 	if obj, ok := sg.Params.AttrType.(schema.Object); ok {
 		// Add scalar fields in the level to children
@@ -808,6 +810,7 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, rch chan error) {
 		}
 		var tv task.Value
 		rNode := x.NewTaskResult(node.Result)
+		// rNode ValuesLength() is equal to len(sorted).
 		for i := 0; i < rNode.ValuesLength(); i++ {
 			uid := sorted[i]
 			if ok := rNode.Values(&tv, i); !ok {
