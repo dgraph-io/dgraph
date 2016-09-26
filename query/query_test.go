@@ -67,7 +67,9 @@ func checkSingleValue(t *testing.T, child *SubGraph,
 	if child.Attr != attr || len(child.Result) == 0 {
 		t.Error("Expected attr name with some.Result")
 	}
-	r := x.NewTaskResult(child.Result)
+	r := new(task.Result)
+	x.ParseTaskResult(r, child.Result)
+
 	if r.ValuesLength() != 1 {
 		t.Errorf("Expected value length 1. Got: %v", r.ValuesLength())
 	}
@@ -109,7 +111,8 @@ func TestNewGraph(t *testing.T) {
 
 	worker.SetWorkerState(worker.NewState(ps, nil, 0, 1))
 
-	r := x.NewTaskResult(sg.Result)
+	r := new(task.Result)
+	x.ParseTaskResult(r, sg.Result)
 	if r.UidmatrixLength() != 1 {
 		t.Errorf("Expected length 1. Got: %v", r.UidmatrixLength())
 	}
@@ -442,7 +445,9 @@ func TestProcessGraph(t *testing.T) {
 		t.Errorf("Expected some.Result.")
 		return
 	}
-	r := x.NewTaskResult(child.Result)
+
+	r := new(task.Result)
+	x.ParseTaskResult(r, child.Result)
 
 	if r.UidmatrixLength() != 1 {
 		t.Errorf("Expected 1 matrix. Got: %v", r.UidmatrixLength())
