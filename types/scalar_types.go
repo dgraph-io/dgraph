@@ -36,6 +36,7 @@ const (
 	floatID
 	boolID
 	dateTimeID
+	dateID
 )
 
 var (
