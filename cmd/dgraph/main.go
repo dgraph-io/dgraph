@@ -282,7 +282,7 @@ func validateTypes(nquads []rdf.NQuad) error {
 		if t := gql.SchemaType(nquad.Predicate); t != nil && t.IsScalar() {
 			// Currently, only scalar types are present
 			schemaType := t.(types.Scalar)
-			storageType := types.TypeForId(types.TypeId(nquad.ObjectType))
+			storageType := types.TypeForID(types.TypeID(nquad.ObjectType))
 			if storageType == nil {
 				log.Fatalf("Parsing created invalid type %v", nquad.ObjectType)
 			}

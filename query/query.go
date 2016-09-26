@@ -317,7 +317,7 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 func getValue(tv task.Value) (types.TypeValue, types.Type, error) {
 	vType := tv.ValType()
 	valBytes := tv.ValBytes()
-	stype := types.TypeForId(types.TypeId(vType))
+	stype := types.TypeForID(types.TypeID(vType))
 	if stype == nil {
 		return nil, nil, x.Errorf("Invalid type: %v", vType)
 	}

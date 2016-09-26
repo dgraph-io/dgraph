@@ -39,7 +39,7 @@ const (
 )
 
 var (
-	// Int scalar type.
+	// Int32 scalar type.
 	Int32 = Scalar{
 		Name: "int",
 		id:   int32ID,
@@ -105,14 +105,14 @@ var typeNameMap = map[string]Type{
 	DateTime.Name: DateTime,
 }
 
-// stores a mapping between the typeId to a type
-var typeIdMap = map[TypeId]Type{
-	Int32.Id():    Int32,
-	Float.Id():    Float,
-	String.Id():   String,
-	Boolean.Id():  Boolean,
-	ID.Id():       ID,
-	DateTime.Id(): DateTime,
+// stores a mapping between the typeID to a type
+var typeIDMap = map[TypeID]Type{
+	Int32.ID():    Int32,
+	Float.ID():    Float,
+	String.ID():   String,
+	Boolean.ID():  Boolean,
+	ID.ID():       ID,
+	DateTime.ID(): DateTime,
 }
 
 // TypeForName returns the type corresponding to the given name.
@@ -121,10 +121,10 @@ func TypeForName(name string) Type {
 	return typeNameMap[name]
 }
 
-// TypeForId returns the type corresponding to the given TypeId.
+// TypeForID returns the type corresponding to the given TypeID.
 // If id is not recognized, it returns nil.
-func TypeForId(id TypeId) Type {
-	return typeIdMap[id]
+func TypeForID(id TypeID) Type {
+	return typeIDMap[id]
 }
 
 // Int32Type is the scalar type for int32
