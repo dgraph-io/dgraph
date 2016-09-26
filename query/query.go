@@ -176,7 +176,7 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 
 		// Merge results from all children, one by one.
 		for k, v := range m {
-			if _, ok := v.(map[string]interface{})["INVALID"]; ok {
+			if _, ok := v.(map[string]interface{})["_inv_"]; ok {
 				if condFlag {
 					ignoreUids[k] = true
 					delete(cResult, k)
@@ -284,7 +284,7 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 			// they might be nil. This is to ensure that the index of the query uids
 			// and the index of the results can remain in sync.
 			if sg.Params.AttrType != nil && sg.Params.AttrType.IsScalar() {
-				m["INVALID"] = true
+				m["_inv_"] = true
 				result[q.Uids(i)] = m
 			}
 			continue
@@ -315,7 +315,7 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 			lval, err := stype.ParseType(val)
 			if err != nil {
 				// Mark node as invalid and ignore in results.
-				m["INVALID"] = true
+				m["_inv_"] = true
 				result[q.Uids(i)] = m
 				continue
 				//return result, fmt.Errorf("Unable to coerce %v to %v: %v", val, sg.Attr, err)
@@ -514,13 +514,22 @@ func (sg *SubGraph) ToProtocolBuffer(l *Latency) (*graph.Node, error) {
 	return n, nil
 }
 
+func isPresent(list []string, str string) bool {
+	for _, v := range list {
+		if v == str {
+			return true
+		}
+	}
+	return false
+}
+
 func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 	// Typically you act on the current node, and leave recursion to deal with
 	// children. But, in this case, we don't want to muck with the current
 	// node, because of the way we're dealing with the root node.
 	// So, we work on the children, and then recurse for grand children.
 
-	scalarMap := make(map[string]bool)
+	scalars := make([]string, 0)
 	// Add scalar chilsdren nodes based on schema
 	if obj, ok := sg.Params.AttrType.(schema.Object); ok {
 		// Add scalar fields in the level to children
@@ -535,12 +544,12 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 				Params: args,
 			}
 			sg.Children = append(sg.Children, dst)
-			scalarMap[it.Field] = true
+			scalars = append(scalars, it.Field)
 		}
 	}
 
 	for _, gchild := range gq.Children {
-		if scalarMap[gchild.Attr] {
+		if isPresent(scalars, gchild.Attr) {
 			continue
 		}
 		if gchild.Attr == "_count_" {
@@ -786,6 +795,11 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, rch chan error) {
 		}
 	}
 
+	if len(leftToProcess) == 0 {
+		rch <- nil
+		return
+	}
+
 	invalidUids := make(map[uint64]bool)
 	// Check the results of the child and eliminate uids without all results.
 	for _, node := range processed {
@@ -795,15 +809,16 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, rch chan error) {
 		var tv task.Value
 		rNode := x.NewTaskResult(node.Result)
 		for i := 0; i < rNode.ValuesLength(); i++ {
+			uid := sorted[i]
 			if ok := rNode.Values(&tv, i); !ok {
-				invalidUids[sorted[i]] = true
+				invalidUids[uid] = true
 			}
 			val := tv.ValBytes()
 			if bytes.Equal(val, nil) {
 				// We do this, because we typically do set values, even though
 				// they might be nil. This is to ensure that the index of the query uids
 				// and the index of the results can remain in sync.
-				invalidUids[sorted[i]] = true
+				invalidUids[uid] = true
 				continue
 			}
 
@@ -814,23 +829,25 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, rch chan error) {
 			stype := node.Params.AttrType.(schema.Scalar)
 			_, err := stype.ParseType(val)
 			if err != nil {
-				invalidUids[sorted[i]] = true
+				invalidUids[uid] = true
 			}
 		}
 	}
 
-	sortedNew := make([]uint64, 0, len(sorted))
-	for _, v := range sorted {
-		if invalidUids[v] {
+	j := 0
+	for i := 0; i < len(sorted); i++ {
+		if invalidUids[sorted[i]] {
 			continue
 		}
-		sortedNew = append(sortedNew, v)
+		sorted[j] = sorted[i]
+		j++
 	}
+	sorted = sorted[:j]
 
 	// Now go to next level only with valid uids.
 	childchan = make(chan error, len(leftToProcess))
 	for _, child := range leftToProcess {
-		child.Query = createTaskQuery(child, sortedNew)
+		child.Query = createTaskQuery(child, sorted)
 		go ProcessGraph(ctx, child, childchan)
 	}
 

@@ -32,7 +32,7 @@ func ScalarList(obj string) []scalar {
 		return res
 	}
 	for k, v := range objStore.Fields {
-		if t, ok := GetScalar(v); ok {
+		if t, ok := getScalar(v); ok {
 			res = append(res, scalar{Field: k, Typ: t})
 		}
 	}
@@ -43,7 +43,7 @@ func TypeOf(pred string) Type {
 	if obj, ok := store[pred]; ok {
 		return obj
 	}
-	if typ, ok := GetScalar(pred); ok {
+	if typ, ok := getScalar(pred); ok {
 		return typ
 	}
 	return nil
@@ -58,7 +58,7 @@ func FieldType(obj string, field string) string {
 	return ""
 }
 
-func GetScalar(typ string) (Type, bool) {
+func getScalar(typ string) (Type, bool) {
 	var res Type
 	switch typ {
 	case "int":

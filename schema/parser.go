@@ -52,7 +52,7 @@ func Parse(schema string) error {
 				temp := strings.Split(strings.Trim(cur[7:], " \t"), ":")
 				name := strings.Trim(temp[0], " \t")
 				typ := strings.Trim(temp[1], " \t")
-				t, ok := GetScalar(typ)
+				t, ok := getScalar(typ)
 				if !ok {
 					return fmt.Errorf("Invalid scalar type")
 				}
@@ -70,7 +70,7 @@ func Parse(schema string) error {
 			if curObj != "" {
 				newObj.Fields[name] = typ
 			} else if isScalarBlock {
-				t, ok := GetScalar(typ)
+				t, ok := getScalar(typ)
 				if !ok {
 					return fmt.Errorf("Invalid scalar type")
 				}

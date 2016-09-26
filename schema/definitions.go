@@ -47,7 +47,7 @@ func (s Scalar) String() string {
 }
 
 func (s Scalar) Type() Type {
-	typ, _ := GetScalar(s.Name)
+	typ, _ := getScalar(s.Name)
 	return typ
 }
 
