@@ -324,7 +324,7 @@ func getValue(tv task.Value) (types.TypeValue, types.Type, error) {
 	if !stype.IsScalar() {
 		return nil, nil, x.Errorf("Unknown scalar type :%v", vType)
 	}
-	val, err := stype.(types.Scalar).Unmarshaler.UnmarshalBinary(valBytes)
+	val, err := stype.(types.Scalar).Unmarshaler.FromBinary(valBytes)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -564,7 +564,7 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 			dst.Params.Offset = int(offset)
 		}
 		if v, ok := gchild.Args["after"]; ok {
-			after, err := strconv.ParseInt(v, 0, 32)
+			after, err := strconv.ParseInt(v, 0, 64)
 			if err != nil {
 				return err
 			}

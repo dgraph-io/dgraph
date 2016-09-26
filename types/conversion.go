@@ -22,15 +22,16 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
+// Convert converts the value to given scalar type.
 func (to Scalar) Convert(value TypeValue) (TypeValue, error) {
-	if to.Id() == stringId {
+	if to.ID() == stringID {
 		// If we are converting to a string, simply use
 		// MarshalText
-		if r, err := value.MarshalText(); err != nil {
+		r, err := value.MarshalText()
+		if err != nil {
 			return nil, err
-		} else {
-			return StringType(r), nil
 		}
+		return StringType(r), nil
 	}
 
 	u := to.Unmarshaler
@@ -39,34 +40,34 @@ func (to Scalar) Convert(value TypeValue) (TypeValue, error) {
 	case StringType:
 		// If the value is a string, then we can always Unmarshal it using
 		// the unmarshaller
-		return u.UnmarshalText([]byte(v))
+		return u.FromText([]byte(v))
 	case Int32Type:
-		if c, ok := u.(int32Unmarshaler); !ok {
+		c, ok := u.(int32Unmarshaler)
+		if !ok {
 			return nil, cantConvert(to, v)
-		} else {
-			return c.fromInt(int32(v))
 		}
+		return c.fromInt(int32(v))
 
 	case FloatType:
-		if c, ok := u.(floatUnmarshaler); !ok {
+		c, ok := u.(floatUnmarshaler)
+		if !ok {
 			return nil, cantConvert(to, v)
-		} else {
-			return c.fromFloat(float64(v))
 		}
+		return c.fromFloat(float64(v))
 
 	case BoolType:
-		if c, ok := u.(boolUnmarshaler); !ok {
+		c, ok := u.(boolUnmarshaler)
+		if !ok {
 			return nil, cantConvert(to, v)
-		} else {
-			return c.fromBool(bool(v))
 		}
+		return c.fromBool(bool(v))
 
 	case time.Time:
-		if c, ok := u.(timeUnmarshaler); !ok {
+		c, ok := u.(timeUnmarshaler)
+		if !ok {
 			return nil, cantConvert(to, v)
-		} else {
-			return c.fromTime(v)
 		}
+		return c.fromTime(v)
 
 	default:
 		return nil, cantConvert(to, v)

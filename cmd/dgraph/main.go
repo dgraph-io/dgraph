@@ -287,7 +287,7 @@ func validateTypes(nquads []rdf.NQuad) error {
 				log.Fatalf("Parsing created invalid type %v", nquad.ObjectType)
 			}
 			if storageType != schemaType {
-				v, err := storageType.(types.Scalar).Unmarshaler.UnmarshalBinary(nquad.ObjectValue)
+				v, err := storageType.(types.Scalar).Unmarshaler.FromBinary(nquad.ObjectValue)
 				if err != nil {
 					return err
 				}

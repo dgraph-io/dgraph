@@ -27,8 +27,8 @@ type Type interface {
 	IsScalar() bool
 }
 
-// TypeId is the id used to identify a type.
-type TypeId byte
+// TypeID is the id used to identify a type.
+type TypeID byte
 
 // Scalar type defines concrete structure for scalar types to use.
 // Almost all scalar types can also act as input types.
@@ -36,7 +36,7 @@ type TypeId byte
 type Scalar struct {
 	Name        string // name of scalar type
 	Description string // short description
-	id          TypeId // The storage identifier for this type
+	id          TypeID // The storage identifier for this type
 	// to unmarshal the binary/text representation of the type.
 	Unmarshaler Unmarshaler
 }
@@ -50,10 +50,10 @@ type TypeValue interface {
 
 // Unmarshaler type is for unmarshaling a TypeValue from binary/text format.
 type Unmarshaler interface {
-	// UnmarshalBinary unmarshals the data from a binary format.
-	UnmarshalBinary(data []byte) (TypeValue, error)
-	// UnmarshalText unmarshals the data from a text format.
-	UnmarshalText(data []byte) (TypeValue, error)
+	// FromBinary unmarshals the data from a binary format.
+	FromBinary(data []byte) (TypeValue, error)
+	// FromText unmarshals the data from a text format.
+	FromText(data []byte) (TypeValue, error)
 }
 
 // String function to implement string interface
@@ -61,8 +61,8 @@ func (s Scalar) String() string {
 	return fmt.Sprint(s.Name)
 }
 
-// Id function returns the storage identifier of this type
-func (s Scalar) Id() TypeId {
+// ID function returns the storage identifier of this type
+func (s Scalar) ID() TypeID {
 	return s.id
 }
 
