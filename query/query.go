@@ -802,37 +802,40 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, rch chan error) {
 		return
 	}
 
+	sgObj, ok := schema.TypeOf(sg.Attr).(schema.Object)
 	invalidUids := make(map[uint64]bool)
 	// Check the results of the child and eliminate uids without all results.
-	for _, node := range processed {
-		if node.Params.AttrType == nil {
-			continue
-		}
-		var tv task.Value
-		rNode := x.NewTaskResult(node.Result)
-		// rNode ValuesLength() is equal to len(sorted).
-		for i := 0; i < rNode.ValuesLength(); i++ {
-			uid := sorted[i]
-			if ok := rNode.Values(&tv, i); !ok {
-				invalidUids[uid] = true
-			}
-			val := tv.ValBytes()
-			if bytes.Equal(val, nil) {
-				// We do this, because we typically do set values, even though
-				// they might be nil. This is to ensure that the index of the query uids
-				// and the index of the results can remain in sync.
-				invalidUids[uid] = true
+	if ok {
+		for _, node := range processed {
+			if _, present := sgObj.Fields[node.Attr]; !present {
 				continue
 			}
+			var tv task.Value
+			rNode := x.NewTaskResult(node.Result)
+			// rNode ValuesLength() is equal to len(sorted).
+			for i := 0; i < rNode.ValuesLength(); i++ {
+				uid := sorted[i]
+				if ok := rNode.Values(&tv, i); !ok {
+					invalidUids[uid] = true
+				}
+				val := tv.ValBytes()
+				if bytes.Equal(val, nil) {
+					// We do this, because we typically do set values, even though
+					// they might be nil. This is to ensure that the index of the query uids
+					// and the index of the results can remain in sync.
+					invalidUids[uid] = true
+					continue
+				}
 
-			// type assertion for scalar type values
-			if !node.Params.AttrType.IsScalar() {
-				log.Fatal("This shouldnt happen")
-			}
-			stype := node.Params.AttrType.(schema.Scalar)
-			_, err := stype.ParseType(val)
-			if err != nil {
-				invalidUids[uid] = true
+				// type assertion for scalar type values
+				if !node.Params.AttrType.IsScalar() {
+					log.Fatal("This shouldnt happen")
+				}
+				stype := node.Params.AttrType.(schema.Scalar)
+				_, err := stype.ParseType(val)
+				if err != nil {
+					invalidUids[uid] = true
+				}
 			}
 		}
 	}
