@@ -225,16 +225,16 @@ func isNewline(r rune) bool {
 }
 
 var typeMap = map[string]types.Scalar{
-	"xs:string":   types.String,
-	"xs:dateTime": types.DateTime,
-	"xs:int":      types.Int32,
-	"xs:boolean":  types.Boolean,
-	"xs:double":   types.Float,
-	"xs:float":    types.Float,
-	"http://www.w3.org/2001/XMLSchema#string":   types.String,
-	"http://www.w3.org/2001/XMLSchema#dateTime": types.DateTime,
-	"http://www.w3.org/2001/XMLSchema#int":      types.Int32,
-	"http://www.w3.org/2001/XMLSchema#boolean":  types.Boolean,
-	"http://www.w3.org/2001/XMLSchema#double":   types.Float,
-	"http://www.w3.org/2001/XMLSchema#float":    types.Float,
+	"xs:string":   types.StringType,
+	"xs:dateTime": types.DateTimeType,
+	"xs:int":      types.Int32Type,
+	"xs:boolean":  types.BooleanType,
+	"xs:double":   types.FloatType,
+	"xs:float":    types.FloatType,
+	"http://www.w3.org/2001/XMLSchema#string":   types.StringType,
+	"http://www.w3.org/2001/XMLSchema#dateTime": types.DateTimeType,
+	"http://www.w3.org/2001/XMLSchema#int":      types.Int32Type,
+	"http://www.w3.org/2001/XMLSchema#boolean":  types.BooleanType,
+	"http://www.w3.org/2001/XMLSchema#double":   types.FloatType,
+	"http://www.w3.org/2001/XMLSchema#float":    types.FloatType,
 }
