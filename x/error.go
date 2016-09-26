@@ -29,6 +29,7 @@ package x
 // (3) You want to generate a new error with stack trace info. Use x.Errorf.
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"log"
@@ -89,11 +90,80 @@ func Errorf(format string, args ...interface{}) error {
 	return errors.Errorf(format, args...)
 }
 
+const (
+	dgraphPrefix  = "github.com/dgraph-io/dgraph/"
+	runtimePrefix = "src/runtime/"
+	testingPrefix = "src/testing/"
+)
+
+func writeLineRef(buf *bytes.Buffer, s string) {
+	for _, p := range []string{dgraphPrefix, runtimePrefix, testingPrefix} {
+		idx := strings.Index(s, p)
+		if idx >= 0 {
+			buf.WriteString(s[idx+len(p):])
+			return
+		}
+	}
+	buf.WriteString(strings.TrimSpace(s))
+}
+
+func shortenedErrorString(err error) string {
+	buf := bytes.NewBuffer(make([]byte, 0, 40))
+
+	// Here is a sample input.
+
+	//	 some error
+	//	 github.com/dgraph-io/dgraph/x.Errorf
+	//		/home/jchiu/go/src/github.com/dgraph-io/dgraph/x/error.go:89
+	//	 main.f
+	//		/home/jchiu/go/src/github.com/dgraph-io/dgraph/x/tmp/main.go:10
+	//	 main.main
+	//		/home/jchiu/go/src/github.com/dgraph-io/dgraph/x/tmp/main.go:15
+	//	 runtime.main
+	//		/usr/lib/go-1.7/src/runtime/proc.go:183
+	//	 runtime.goexit
+	//		/usr/lib/go-1.7/src/runtime/asm_amd64.s:2086
+
+	// Here is a sample output.
+	// some error; x.Errorf (x/error.go:90) main.f (x/tmp/main.go:10) main.main (x/tmp/main.go:15) runtime.main (proc.go:183) runtime.goexit (asm_amd64.s:2086)
+
+	// First, split into lines.
+	lines := strings.Split(fmt.Sprintf("%+v\n", err), "\n")
+
+	// The tab prefix tells us whether this line is a line reference.
+	// We have two states. If lineRef is true, the last line we have seen is a line
+	// reference. The initial value is true.
+	lineRef := true
+
+	for _, line := range lines {
+		if strings.HasPrefix(line, "\t") {
+			// This is a line reference. We want to shorten the filename and put it
+			// inside parentheses.
+			buf.WriteString(" (")
+			writeLineRef(buf, line)
+			buf.WriteString(") ")
+			lineRef = true
+		} else {
+			// This line is not a line reference.
+			if !lineRef {
+				// If the previous line is not a line reference either, we want to
+				// separate them by semicolons.
+				buf.WriteString("; ")
+			}
+			// Even though it is not a line reference, it might still contain "dgraph".
+			// Let's trim that away if possible.
+			buf.WriteString(strings.Replace(line, dgraphPrefix, "", -1))
+			lineRef = false
+		}
+	}
+	return buf.String()
+}
+
 // TraceError is like Trace but it logs just an error, which may have stacktrace.
 func TraceError(ctx context.Context, err error) {
-	s := fmt.Sprintf("%+v\n", err)
-	tok := strings.Split(s, "\t")
-	for _, t := range tok {
-		fmt.Printf("[%s]\n", t)
+	if !*debugMode {
+		Trace(ctx, fmt.Sprintf("%+v\n", err))
+		return
 	}
+	Trace(ctx, shortenedErrorString(err))
 }
