@@ -19,9 +19,11 @@
 package worker
 
 import (
+	"bytes"
 	"fmt"
 	"log"
 	"net"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -32,6 +34,7 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
+	"github.com/dgraph-io/dgraph/posting/types"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/x"
@@ -215,6 +218,10 @@ func (w *grpcWorker) JoinCluster(ctx context.Context, query *Payload) (*Payload,
 // PredicateData can be used to return data corresponding to a predicate over
 // a stream.
 func (w *grpcWorker) PredicateData(query *Payload, stream Worker_PredicateDataServer) error {
+	var group task.Group
+	group.Init(query.Data, 0)
+	_ = group.Groupid()
+
 	sgid := string(query.Data)
 	_, err := strconv.ParseUint(string(query.Data), 10, 64)
 	x.Checkf(err, "Unable to parse group id: %v", sgid)
@@ -227,7 +234,29 @@ func (w *grpcWorker) PredicateData(query *Payload, stream Worker_PredicateDataSe
 
 	for it.SeekToFirst(); it.Valid(); it.Next() {
 		k, v := it.Key(), it.Value()
+		pl := types.GetRootAsPostingList(v.Data(), 0)
+
 		// TODO: Check that key is part of the specified group id.
+		i := sort.Search(group.KeysLength(), func(i int) bool {
+			var t task.KT
+			x.Assertf(group.Keys(&t, i), "Unable to parse task.KT")
+			return bytes.Compare(k.Data(), t.KeyBytes()) <= 0
+		})
+
+		if i < group.KeysLength() {
+			// Found a match.
+			var t task.KT
+			x.Assertf(group.Keys(&t, i), "Unable to parse task.KT")
+			if bytes.Equal(k.Data(), t.KeyBytes()) {
+				if pl.CommitTs() == t.Ts() {
+					// No need to send this.
+					// TODO: Currently commit timestamp is arbitrarily set. We should switch to
+					// something which can remain consistent.
+					// Potentially a version number or something.
+					continue
+				}
+			}
+		}
 
 		b := flatbuffers.NewBuilder(0)
 		bko := b.CreateByteVector(k.Data())
