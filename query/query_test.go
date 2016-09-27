@@ -583,6 +583,96 @@ func TestToJSONFilter(t *testing.T) {
 	}
 }
 
+func TestToJSONFilterOr(t *testing.T) {
+	dir, _ := populateGraph(t)
+	defer os.RemoveAll(dir)
+	query := `
+		{
+			me(_uid_:0x01) {
+				name
+				gender
+				status
+				friend @filter(eq("name", "Andrea") || eq("name", "Glenn Rhee")) {
+					name
+				}
+			}
+		}
+	`
+
+	gq, _, err := gql.Parse(query)
+	if err != nil {
+		t.Error(err)
+	}
+	ctx := context.Background()
+	sg, err := ToSubGraph(ctx, gq)
+	if err != nil {
+		t.Error(err)
+	}
+
+	ch := make(chan error)
+	go ProcessGraph(ctx, sg, ch)
+	err = <-ch
+	if err != nil {
+		t.Error(err)
+	}
+
+	var l Latency
+	js, err := sg.ToJSON(&l)
+	if err != nil {
+		t.Error(err)
+	}
+
+	s := string(js)
+	if s != `{"me":{"friend":[{"name":"Glenn Rhee"},{"name":"Andrea"}],"gender":"female","name":"Michonne","status":"alive"}}` {
+		t.Errorf("Wrong output: %s", s)
+	}
+}
+
+func TestToJSONFilterAnd(t *testing.T) {
+	dir, _ := populateGraph(t)
+	defer os.RemoveAll(dir)
+	query := `
+		{
+			me(_uid_:0x01) {
+				name
+				gender
+				status
+				friend @filter(eq("name", "Andrea") && eq("name", "Glenn Rhee")) {
+					name
+				}
+			}
+		}
+	`
+
+	gq, _, err := gql.Parse(query)
+	if err != nil {
+		t.Error(err)
+	}
+	ctx := context.Background()
+	sg, err := ToSubGraph(ctx, gq)
+	if err != nil {
+		t.Error(err)
+	}
+
+	ch := make(chan error)
+	go ProcessGraph(ctx, sg, ch)
+	err = <-ch
+	if err != nil {
+		t.Error(err)
+	}
+
+	var l Latency
+	js, err := sg.ToJSON(&l)
+	if err != nil {
+		t.Error(err)
+	}
+
+	s := string(js)
+	if s != `{"me":{"gender":"female","name":"Michonne","status":"alive"}}` {
+		t.Errorf("Wrong output: %s", s)
+	}
+}
+
 // Checking for Type coercion errors.
 // NOTE: Writing separate test since Marshal/Unmarshal process of ToJSON converts
 // 'int' type to 'float64' and thus mucks up the tests.
@@ -880,6 +970,152 @@ children: <
     prop: "name"
     val: "Andrea"
   >
+>
+`
+	pbText := proto.MarshalTextString(pb)
+	if pbText != expectedPb {
+		t.Errorf("Output wrong: %v", pbText)
+		return
+	}
+}
+
+func TestToPBFilterOr(t *testing.T) {
+	dir, _ := populateGraph(t)
+	defer os.RemoveAll(dir)
+
+	// Alright. Now we have everything set up. Let's create the query.
+	query := `
+		{
+			me(_uid_:0x01) {
+				name
+				gender
+				status
+				friend @filter(eq("name", "Andrea") || eq("name", "Glenn Rhee")) {
+					name
+				}
+			}
+		}
+	`
+
+	gq, _, err := gql.Parse(query)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	ctx := context.Background()
+	sg, err := ToSubGraph(ctx, gq)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	ch := make(chan error)
+	go ProcessGraph(ctx, sg, ch)
+	err = <-ch
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	var l Latency
+	pb, err := sg.ToProtocolBuffer(&l)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	expectedPb := `attribute: "me"
+properties: <
+  prop: "name"
+  val: "Michonne"
+>
+properties: <
+  prop: "gender"
+  val: "female"
+>
+properties: <
+  prop: "status"
+  val: "alive"
+>
+children: <
+  attribute: "friend"
+  properties: <
+    prop: "name"
+    val: "Glenn Rhee"
+  >
+>
+children: <
+  attribute: "friend"
+  properties: <
+    prop: "name"
+    val: "Andrea"
+  >
+>
+`
+	pbText := proto.MarshalTextString(pb)
+	if pbText != expectedPb {
+		t.Errorf("Output wrong: %v", pbText)
+		return
+	}
+}
+
+func TestToPBFilterAnd(t *testing.T) {
+	dir, _ := populateGraph(t)
+	defer os.RemoveAll(dir)
+
+	// Alright. Now we have everything set up. Let's create the query.
+	query := `
+		{
+			me(_uid_:0x01) {
+				name
+				gender
+				status
+				friend @filter(eq("name", "Andrea") && eq("name", "Glenn Rhee")) {
+					name
+				}
+			}
+		}
+	`
+
+	gq, _, err := gql.Parse(query)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	ctx := context.Background()
+	sg, err := ToSubGraph(ctx, gq)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	ch := make(chan error)
+	go ProcessGraph(ctx, sg, ch)
+	err = <-ch
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	var l Latency
+	pb, err := sg.ToProtocolBuffer(&l)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	expectedPb := `attribute: "me"
+properties: <
+  prop: "name"
+  val: "Michonne"
+>
+properties: <
+  prop: "gender"
+  val: "female"
+>
+properties: <
+  prop: "status"
+  val: "alive"
 >
 `
 	pbText := proto.MarshalTextString(pb)

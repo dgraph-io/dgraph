@@ -53,6 +53,24 @@ func (ul UIDLists) Get(i int) Uint64List { return ul[i] }
 // Size returns number of lists.
 func (ul UIDLists) Size() int { return len(ul) }
 
+// plainUintLists is the simplest possible Uint64Lists.
+type PlainUintLists []PlainUintList
+
+// Size returns number of lists.
+func (s PlainUintLists) Size() int { return len(s) }
+
+// Get returns the i-th list.
+func (s PlainUintLists) Get(i int) Uint64List { return s[i] }
+
+// plainUintList is the simplest possible Uint64List.
+type PlainUintList []uint64
+
+// Size returns size of list.
+func (s PlainUintList) Size() int { return len(s) }
+
+// Get returns i-th element of list.
+func (s PlainUintList) Get(i int) uint64 { return (s)[i] }
+
 // MergeSorted merges sorted uint64 lists. Only unique numbers are returned.
 // In the future, we might have another interface for the output.
 func MergeSorted(lists Uint64Lists) []uint64 {

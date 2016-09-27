@@ -856,12 +856,40 @@ func applyFilterHelper(ctx context.Context, sorted []uint64,
 		return out, nil
 	}
 
-	switch filter.Op {
-	case gql.ItemFilterAnd:
-		return nil, nil
-	case gql.ItemFilterOr:
-		return nil, nil
+	//func applyFilterHelper(ctx context.Context, sorted []uint64,
+	//	filter *gql.FilterTree, predMap map[string]*SubGraph) ([]uint64, error) {
+
+	type resultPair struct {
+		uid []uint64
+		err error
+	}
+	resultChan := make(chan resultPair)
+
+	// For now, we only handle AND and OR.
+	if filter.Op != gql.ItemFilterAnd && filter.Op != gql.ItemFilterOr {
+		return sorted, x.Errorf("Unknown operator %v", filter.Op)
 	}
 
-	return nil, nil
+	// Get UIDs for child filters.
+	for _, c := range filter.Child {
+		go func(c *gql.FilterTree) {
+			r, err := applyFilterHelper(ctx, sorted, c, predMap)
+			resultChan <- resultPair{r, err}
+		}(c)
+	}
+	uidList := make(algo.PlainUintLists, 0, len(filter.Child))
+	for i := 0; i < len(filter.Child); i++ {
+		r := <-resultChan
+		if r.err != nil {
+			return sorted, r.err
+		}
+		uidList = append(uidList, r.uid)
+	}
+
+	// Either merge or intersect the UID lists.
+	if filter.Op == gql.ItemFilterOr {
+		return algo.MergeSorted(uidList), nil
+	}
+	x.Assert(filter.Op == gql.ItemFilterAnd)
+	return algo.IntersectSorted(uidList), nil
 }
