@@ -580,7 +580,7 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 		} else {
 			// Child is explicitly specified as some type.
 			if objType := schema.TypeOf(gchild.Attr); objType != nil {
-				if gchild.Attr == objType.(schema.Object).Name {
+				if o, ok := objType.(schema.Object); ok && o.Name == gchild.Attr {
 					attrType = objType
 				}
 			}
