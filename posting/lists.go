@@ -189,7 +189,7 @@ func periodicMerging() {
 				// no mutations are being added. So, we won't block our keysBuffer channel.
 				aggressivelyEvict()
 			} else {
-				gentleMerge(dirtyMap)
+				//gentleMerge(dirtyMap)
 			}
 		}
 	}
