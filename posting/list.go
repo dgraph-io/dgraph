@@ -119,6 +119,9 @@ func samePosting(a *types.Posting, b *types.Posting) bool {
 	if a.ValueLength() != b.ValueLength() {
 		return false
 	}
+	if a.ValType() != b.ValType() {
+		return false
+	}
 	if !bytes.Equal(a.ValueBytes(), b.ValueBytes()) {
 		return false
 	}
@@ -158,6 +161,9 @@ func newPosting(t x.DirectedEdge, op byte) []byte {
 	types.PostingAddSource(b, so)
 	types.PostingAddTs(b, t.Timestamp.UnixNano())
 	types.PostingAddOp(b, op)
+	if t.ValueType != 0 {
+		types.PostingAddValType(b, t.ValueType)
+	}
 	vend := types.PostingEnd(b)
 	b.Finish(vend)
 
@@ -184,6 +190,9 @@ func addEdgeToPosting(b *flatbuffers.Builder,
 	types.PostingAddSource(b, so)
 	types.PostingAddTs(b, t.Timestamp.UnixNano())
 	types.PostingAddOp(b, op)
+	if t.ValueType != 0 {
+		types.PostingAddValType(b, t.ValueType)
+	}
 	return types.PostingEnd(b)
 }
 
@@ -202,6 +211,9 @@ func addPosting(b *flatbuffers.Builder, p types.Posting) flatbuffers.UOffsetT {
 	types.PostingAddSource(b, so)
 	types.PostingAddTs(b, p.Ts())
 	types.PostingAddOp(b, p.Op())
+	if p.ValType() != 0 {
+		types.PostingAddValType(b, p.ValType())
+	}
 	return types.PostingEnd(b)
 }
 
@@ -649,7 +661,9 @@ func (l *List) AddMutation(ctx context.Context, t x.DirectedEdge, op byte) (bool
 	if len(l.mindex)+len(l.mlayer) > 0 {
 		atomic.StoreInt64(&l.dirtyTs, time.Now().UnixNano())
 		if dirtyChan != nil {
+			//			fmt.Printf("~~~Waiting to push %d\n", l.ghash)
 			dirtyChan <- l.ghash
+			//			fmt.Printf("~~~Done push %d\n", l.ghash)
 		}
 	}
 	x.Trace(ctx, "Mutation done")
@@ -657,17 +671,22 @@ func (l *List) AddMutation(ctx context.Context, t x.DirectedEdge, op byte) (bool
 }
 
 func (l *List) MergeIfDirty(ctx context.Context) (merged bool, err error) {
+	//	id := rand.Int()
+	//	fmt.Printf("~~~~MergeIfDirty %d\n", id)
 	if atomic.LoadInt64(&l.dirtyTs) == 0 {
 		x.Trace(ctx, "Not committing")
 		return false, nil
 	}
 	x.Trace(ctx, "Committing")
+	//	defer fmt.Printf("~~~~MergeIfDirty 2: %d\n", id)
 	return l.merge()
 }
 
 func (l *List) merge() (merged bool, rerr error) {
 	l.wg.Wait()
+	//	fmt.Printf("~~~~merge acquiring lock %d\n", l.ghash)
 	l.Lock()
+	//	fmt.Printf("~~~~merge got lock %d\n", l.ghash)
 	defer l.Unlock()
 
 	if len(l.mindex)+len(l.mlayer) == 0 {
@@ -761,21 +780,21 @@ func (l *List) Uids(opt ListOptions) []uint64 {
 	return result
 }
 
-func (l *List) Value() (result []byte, rerr error) {
+func (l *List) Value() (result []byte, rtype byte, rerr error) {
 	l.wg.Wait()
 	l.RLock()
 	defer l.RUnlock()
 
 	if l.length() == 0 {
-		return result, fmt.Errorf("No value found")
+		return result, rtype, fmt.Errorf("No value found")
 	}
 
 	var p types.Posting
 	if ok := l.get(&p, l.length()-1); !ok {
-		return result, fmt.Errorf("Unable to get last posting")
+		return result, rtype, fmt.Errorf("Unable to get last posting")
 	}
 	if p.Uid() != math.MaxUint64 {
-		return result, fmt.Errorf("No value found")
+		return result, rtype, fmt.Errorf("No value found")
 	}
-	return p.ValueBytes(), nil
+	return p.ValueBytes(), p.ValType(), nil
 }

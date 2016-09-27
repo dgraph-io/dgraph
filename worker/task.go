@@ -121,13 +121,15 @@ func processTask(query []byte) ([]byte, error) {
 		var valoffset flatbuffers.UOffsetT
 		// If a posting list contains a value, we store that or else we store a nil
 		// byte so that processing is consistent later.
-		if val, err := pl.Value(); err != nil {
+		val, t, err := pl.Value()
+		if err != nil {
 			valoffset = b.CreateByteVector(x.Nilbyte)
 		} else {
 			valoffset = b.CreateByteVector(val)
 		}
 		task.ValueStart(b)
 		task.ValueAddVal(b, valoffset)
+		task.ValueAddValType(b, t)
 		voffsets[i] = task.ValueEnd(b)
 
 		if q.GetCount() == 1 {

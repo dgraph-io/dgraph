@@ -35,6 +35,7 @@ type NQuad struct {
 	Predicate   string
 	ObjectId    string
 	ObjectValue []byte
+	ObjectType  byte
 	Label       string
 }
 
@@ -67,6 +68,7 @@ func (nq NQuad) ToEdge() (result x.DirectedEdge, rerr error) {
 		result.ValueId = oid
 	} else {
 		result.Value = nq.ObjectValue
+		result.ValueType = nq.ObjectType
 	}
 	result.Attribute = nq.Predicate
 	result.Source = nq.Label
@@ -97,6 +99,7 @@ func (nq NQuad) ToEdgeUsing(
 
 	if len(nq.ObjectId) == 0 {
 		result.Value = nq.ObjectValue
+		result.ValueType = nq.ObjectType
 	} else {
 		uid, err = toUid(nq.ObjectId, xidToUID)
 		if err != nil {
@@ -189,6 +192,8 @@ func Parse(line string) (rnq NQuad, rerr error) {
 	}
 	if len(oval) > 0 {
 		rnq.ObjectValue = []byte(oval)
+		// TODO: It's always zero until we parse the types.
+		rnq.ObjectType = 0
 	}
 	if len(rnq.Subject) == 0 || len(rnq.Predicate) == 0 {
 		return rnq, fmt.Errorf("Empty required fields in NQuad. Input: [%s]", line)
