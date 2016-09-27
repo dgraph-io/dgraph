@@ -151,8 +151,9 @@ func gentleMerge(dirtyMap map[uint64]struct{}) {
 	}
 }
 
-// processDirtyChan passes contents from dirty channel into dirty map.
-// All write operations to dirtyMap should be contained in this function.
+// periodicMerging periodically merges the dirty posting lists. It also checks our memory
+// usage. If it exceeds a certain threshold, it would stop the world, and aggressively
+// merge and evict all posting lists from memory.
 func periodicMerging() {
 	ticker := time.NewTicker(5 * time.Second)
 	dirtyMap := make(map[uint64]struct{}, 1000)
