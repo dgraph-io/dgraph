@@ -71,7 +71,7 @@ func ProcessTaskOverNetwork(ctx context.Context, qu []byte) (result []byte, rerr
 	c := NewWorkerClient(conn)
 	reply, err := c.ServeTask(context.Background(), query)
 	if err != nil {
-		x.Trace(ctx, "Error while calling Worker.ServeTask: %v", err)
+		x.TraceError(ctx, x.Wrapf(err, "Error while calling Worker.ServeTask"))
 		return []byte(""), err
 	}
 

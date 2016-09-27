@@ -81,7 +81,7 @@ func getOrAssignUids(ctx context.Context,
 	wg.Wait()
 	close(che)
 	for err := range che {
-		x.Trace(ctx, "Error while getOrAssignUids: %v", err)
+		x.TraceError(ctx, x.Wrapf(err, "Error while getOrAssignUids"))
 		return uidList, err
 	}
 
@@ -125,14 +125,14 @@ func GetOrAssignUidsOverNetwork(ctx context.Context, xidToUid map[string]uint64)
 		pool := ws.GetPool(0)
 		conn, err := pool.Get()
 		if err != nil {
-			x.Trace(ctx, "Error while retrieving connection: %v", err)
+			x.TraceError(ctx, x.Wrapf(err, "Error while retrieving connection"))
 			return err
 		}
 		c := NewWorkerClient(conn)
 
 		reply, rerr = c.GetOrAssign(context.Background(), query)
 		if rerr != nil {
-			x.Trace(ctx, "Error while getting uids: %v", rerr)
+			x.TraceError(ctx, x.Wrapf(rerr, "Error while getting uids"))
 			return rerr
 		}
 	}

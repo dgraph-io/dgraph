@@ -31,6 +31,7 @@ import (
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/query/graph"
 	"github.com/dgraph-io/dgraph/task"
+	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/google/flatbuffers/go"
@@ -112,7 +113,7 @@ func (l *Latency) ToMap() map[string]string {
 }
 
 type params struct {
-	AttrType gql.Type
+	AttrType types.Type
 	Alias    string
 	Count    int
 	Offset   int
@@ -286,8 +287,8 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 				return result, fmt.Errorf("Unknown Scalar:%v. Leaf predicate:'%v' must be"+
 					" one of the scalar types defined in the schema.", sg.Params.AttrType, sg.Attr)
 			}
-			stype := sg.Params.AttrType.(gql.Scalar)
-			lval, err := stype.ParseType(val)
+			stype := sg.Params.AttrType.(types.Scalar)
+			lval, err := stype.Unmarshaler.FromText(val)
 			if err != nil {
 				return result, err
 			}
@@ -439,8 +440,8 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 					return fmt.Errorf("Unknown Scalar:%v. Leaf predicate:'%v' must be"+
 						" one of the scalar types defined in the schema.", pc.Params.AttrType, pc.Attr)
 				}
-				stype := pc.Params.AttrType.(gql.Scalar)
-				if _, err := stype.ParseType(v); err != nil {
+				stype := pc.Params.AttrType.(types.Scalar)
+				if _, err := stype.Unmarshaler.FromText(v); err != nil {
 					return err
 				}
 			}
@@ -525,7 +526,7 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 			dst.Params.Offset = int(offset)
 		}
 		if v, ok := gchild.Args["after"]; ok {
-			after, err := strconv.ParseInt(v, 0, 32)
+			after, err := strconv.ParseInt(v, 0, 64)
 			if err != nil {
 				return err
 			}
@@ -565,7 +566,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		xidToUid := make(map[string]uint64)
 		xidToUid[exid] = 0
 		if err := worker.GetOrAssignUidsOverNetwork(ctx, xidToUid); err != nil {
-			x.Trace(ctx, "Error while getting uids over network: %v", err)
+			x.TraceError(ctx, x.Wrapf(err, "Error while getting uids over network"))
 			return nil, err
 		}
 
@@ -574,8 +575,8 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	}
 
 	if euid == 0 {
-		err := fmt.Errorf("Query internal id is zero")
-		x.Trace(ctx, "Invalid query: %v", err)
+		err := x.Errorf("Invalid query, query internal id is zero")
+		x.TraceError(ctx, err)
 		return nil, err
 	}
 
@@ -664,7 +665,7 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, rch chan error) {
 	if len(sg.Query) > 0 && !sg.Params.IsRoot {
 		sg.Result, err = worker.ProcessTaskOverNetwork(ctx, sg.Query)
 		if err != nil {
-			x.Trace(ctx, "Error while processing task: %v", err)
+			x.TraceError(ctx, x.Wrapf(err, "Error while processing task"))
 			rch <- err
 			return
 		}
@@ -687,7 +688,7 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, rch chan error) {
 
 	sorted, err := sortedUniqueUids(r)
 	if err != nil {
-		x.Trace(ctx, "Error while processing task: %v", err)
+		x.TraceError(ctx, x.Wrapf(err, "Error while processing task"))
 		rch <- err
 		return
 	}
@@ -716,12 +717,12 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, rch chan error) {
 		case err = <-childchan:
 			x.Trace(ctx, "Reply from child. Index: %v Attr: %v", i, sg.Children[i].Attr)
 			if err != nil {
-				x.Trace(ctx, "Error while processing child task: %v", err)
+				x.TraceError(ctx, x.Wrapf(err, "Error while processing child task"))
 				rch <- err
 				return
 			}
 		case <-ctx.Done():
-			x.Trace(ctx, "Context done before full execution: %v", ctx.Err())
+			x.TraceError(ctx, x.Wrapf(ctx.Err(), "Context done before full execution"))
 			rch <- ctx.Err()
 			return
 		}

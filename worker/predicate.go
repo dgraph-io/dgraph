@@ -118,7 +118,7 @@ func (s *State) PopulateShard(ctx context.Context, pool *Pool, group uint64) err
 
 	conn, err := pool.Get()
 	if err != nil {
-		return x.Wrap(err)
+		return err
 	}
 	defer pool.Put(conn)
 	c := NewWorkerClient(conn)
@@ -150,20 +150,22 @@ func (s *State) PopulateShard(ctx context.Context, pool *Pool, group uint64) err
 		// We check for errors, if there are no errors we send value to channel.
 		select {
 		case <-ctx.Done():
-			x.Trace(ctx, "Context timed out while streaming group: %v", group)
+			x.TraceError(ctx, x.Errorf("Context timed out while streaming group: %v", group))
 			close(kvs)
 			return ctx.Err()
+
 		case err := <-che:
-			x.Trace(ctx, "Error while doing a batch write for group: %v", group)
+			x.TraceError(ctx, x.Errorf("Error while doing a batch write for group: %v", group))
 			close(kvs)
 			return err
+
 		case kvs <- kv:
 		}
 	}
 	close(kvs)
 
 	if err := <-che; err != nil {
-		x.Trace(ctx, "Error while doing a batch write for group: %v", group)
+		x.TraceError(ctx, x.Errorf("Error while doing a batch write for group: %v", group))
 		return err
 	}
 	x.Trace(ctx, "Streaming complete for group: %v", group)

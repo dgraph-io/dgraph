@@ -20,10 +20,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+
+	"github.com/dgraph-io/dgraph/types"
 )
 
 // schema stores the types for all predicates in the system.
-var schema = make(map[string]Type)
+var schema = make(map[string]types.Type)
 
 // LoadSchema loads the schema and checks for errors.
 func LoadSchema(fileName string) error {
@@ -37,25 +39,16 @@ func LoadSchema(fileName string) error {
 	}
 	// go over schema file values and assign appropriate types from type system
 	for k, v := range s {
-		switch v {
-		case "int":
-			schema[k] = intType
-		case "float":
-			schema[k] = floatType
-		case "string":
-			schema[k] = stringType
-		case "bool":
-			schema[k] = booleanType
-		case "id":
-			schema[k] = idType
-		default:
+		t := types.TypeForName(v)
+		if t == nil {
 			return fmt.Errorf("Unknown type:%v in input schema file for predicate:%v", v, k)
 		}
+		schema[k] = t
 	}
 	return nil
 }
 
 // SchemaType fetches types for a predicate from schema map
-func SchemaType(p string) Type {
+func SchemaType(p string) types.Type {
 	return schema[p]
 }

@@ -44,18 +44,8 @@ var (
 	gentleMergeFrac = flag.Float64("gentlemerge", 0.10, "Fraction of dirty posting lists to merge every few seconds.")
 	lhmapNumShards  = flag.Int("lhmap", 32, "Number of shards for lhmap.")
 
-	dirtyMap        map[uint64]struct{} // Made global for log().
-	dirtyChan       chan uint64         // Puts to dirtyMap has to go through here.
-	dirtyMapOpChan  chan dirtyMapOp     // Ops on dirtyMap except puts go in here.
-	gentleMergeChan chan struct{}
-)
-
-// dirtyMapOp is a bulk operation on dirtyMap.
-type dirtyMapOp int
-
-const (
-	dirtyMapOpReset       = iota
-	dirtyMapOpGentleMerge = iota
+	dirtyChan       chan uint64   // All dirty posting list keys are pushed here.
+	gentleMergeChan chan struct{} // Used to avoid running too many gentle merges at the same time.
 )
 
 type counters struct {
@@ -88,9 +78,9 @@ func (c *counters) log() {
 	}
 
 	log.Printf("List merge counters. added: %d merged: %d clean: %d"+
-		" pending: %d mapsize: %d dirtysize: %d\n",
+		" pending: %d mapsize: %d\n",
 		added, merged, atomic.LoadUint64(&c.clean),
-		pending, lhmap.Size(), len(dirtyMap))
+		pending, lhmap.Size())
 }
 
 func newCounters() *counters {
@@ -141,45 +131,58 @@ func mergeAndUpdateKeys(keys []uint64) {
 	ctr.log()
 }
 
-// processDirtyChan passes contents from dirty channel into dirty map.
-// All write operations to dirtyMap should be contained in this function.
-func processDirtyChan() {
-	keysBuffer := make([]uint64, 0, 10000)
+func gentleMerge(dirtyMap map[uint64]struct{}) {
+	select {
+	case gentleMergeChan <- struct{}{}:
+		n := int(float64(len(dirtyMap)) * *gentleMergeFrac)
+		if n < 300 {
+			// Have a min value of n, so we can merge small number of dirty PLs fast.
+			n = len(dirtyMap)
+		}
+		keysBuffer := make([]uint64, 0, n)
+
+		for key := range dirtyMap {
+			delete(dirtyMap, key)
+			keysBuffer = append(keysBuffer, key)
+			if len(keysBuffer) >= n {
+				// We don't want to process the entire dirtyMap in one go.
+				break
+			}
+		}
+		go mergeAndUpdateKeys(keysBuffer)
+	default:
+		log.Println("Skipping gentle merge")
+	}
+}
+
+// periodicMerging periodically merges the dirty posting lists. It also checks our memory
+// usage. If it exceeds a certain threshold, it would stop the world, and aggressively
+// merge and evict all posting lists from memory.
+func periodicMerging() {
+	ticker := time.NewTicker(5 * time.Second)
+	dirtyMap := make(map[uint64]struct{}, 1000)
+	dsize := 0
 	for {
 		select {
 		case key := <-dirtyChan:
 			dirtyMap[key] = struct{}{}
 
-		case op := <-dirtyMapOpChan:
-			switch op {
-			case dirtyMapOpGentleMerge:
-				select {
-				case gentleMergeChan <- struct{}{}:
-					n := int(float64(len(dirtyMap)) * *gentleMergeFrac)
-					if cap(keysBuffer) < n {
-						// Resize keysBuffer to newCap := max(2*current cap, n).
-						newCap := 2 * cap(keysBuffer)
-						if newCap < n {
-							newCap = n
-						}
-						keysBuffer = make([]uint64, 0, newCap)
-					}
-					for key := range dirtyMap {
-						delete(dirtyMap, key)
-						keysBuffer = append(keysBuffer, key)
-						if len(keysBuffer) > n {
-							break
-						}
-					}
-					go mergeAndUpdateKeys(keysBuffer)
-				default:
-					log.Println("Skipping gentle merge")
-				}
+		case <-ticker.C:
+			if len(dirtyMap) != dsize {
+				dsize = len(dirtyMap)
+				log.Printf("Dirty map size: %d\n", dsize)
+			}
 
-			case dirtyMapOpReset:
+			totMemory := getMemUsage()
+			if totMemory > *maxmemory {
+				// It's okay to run a blocking aggressive merge here, because during aggressive merge,
+				// no mutations are being added. So, we won't block our keysBuffer channel.
+				aggressivelyEvict()
 				for k := range dirtyMap {
 					delete(dirtyMap, k)
 				}
+			} else {
+				gentleMerge(dirtyMap)
 			}
 		}
 	}
@@ -241,25 +244,6 @@ func getMemUsage() int {
 	return rss * os.Getpagesize() / (1 << 20)
 }
 
-// checkMemoryUsage monitors the memory usage by the running process and
-// calls aggressively evict if the threshold is reached.
-func checkMemoryUsage() {
-	for _ = range time.Tick(5 * time.Second) {
-		totMemory := getMemUsage()
-		if totMemory > *maxmemory {
-			// Although gentle merges cannot start after aggressive evict, some of them
-			// might still be running and try to lock lhmap.
-			aggressivelyEvict()
-		} else {
-			// Gentle merge should not happen during an aggressive evict.
-			// This push into dirtyMapOpChan might be blocked by another gentle merge
-			// (just the copying into keysBuffers but not the actual RocksDB work) or a
-			// reset of dirtymap.
-			dirtyMapOpChan <- dirtyMapOpGentleMerge
-		}
-	}
-}
-
 var (
 	stopTheWorld sync.RWMutex
 	lhmap        *listMap
@@ -268,12 +252,9 @@ var (
 // Init initializes the posting lists package, the in memory and dirty list hash.
 func Init() {
 	dirtyChan = make(chan uint64, 10000)
-	dirtyMap = make(map[uint64]struct{}, 1000)
-	dirtyMapOpChan = make(chan dirtyMapOp, 1)
 	// Capacity is max number of gentle merges that can happen in parallel.
 	gentleMergeChan = make(chan struct{}, 18)
-	go checkMemoryUsage()
-	go processDirtyChan()
+	go periodicMerging()
 }
 
 func init() {
@@ -338,11 +319,6 @@ func mergeAndUpdate(l *List, c *counters) {
 }
 
 func MergeLists(numRoutines int) {
-	// We're merging all the lists, so just create a new dirtymap.
-	// This push into dirtyMapOpChan can be blocked by a gentle merge as the channel
-	// has very low capacity.
-	dirtyMapOpChan <- dirtyMapOpReset
-
 	c := newCounters()
 	go c.periodicLog()
 	defer c.ticker.Stop()
