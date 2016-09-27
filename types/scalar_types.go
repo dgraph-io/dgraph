@@ -302,7 +302,10 @@ func (u unmarshalTime) FromBinary(data []byte) (TypeValue, error) {
 func (u unmarshalTime) FromText(text []byte) (TypeValue, error) {
 	var v time.Time
 	if err := v.UnmarshalText(text); err != nil {
-		return nil, err
+		// Try parsing without timezone since that is a valid format
+		if v, err = time.Parse("2006-01-02T15:04:05", string(text)); err != nil {
+			return nil, err
+		}
 	}
 	return v, nil
 }
