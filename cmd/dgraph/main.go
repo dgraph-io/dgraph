@@ -121,7 +121,7 @@ func convertToNQuad(ctx context.Context, mutation string) ([]rdf.NQuad, error) {
 		}
 		nq, err := rdf.Parse(ln)
 		if err != nil {
-			x.Trace(ctx, "Error while parsing RDF: %v", err)
+			x.TraceError(ctx, x.Wrapf(err, "Error while parsing RDF"))
 			return nquads, err
 		}
 		nquads = append(nquads, nq)
@@ -147,7 +147,7 @@ func convertToEdges(ctx context.Context, nquads []rdf.NQuad) (mutationResult, er
 	}
 	if len(xidToUid) > 0 {
 		if err := worker.GetOrAssignUidsOverNetwork(ctx, xidToUid); err != nil {
-			x.Trace(ctx, "Error while GetOrAssignUidsOverNetwork: %v", err)
+			x.TraceError(ctx, x.Wrapf(err, "Error while GetOrAssignUidsOverNetwork"))
 			return mr, err
 		}
 	}
@@ -156,7 +156,7 @@ func convertToEdges(ctx context.Context, nquads []rdf.NQuad) (mutationResult, er
 		// Get edges from nquad using xidToUid.
 		edge, err := nq.ToEdgeUsing(xidToUid)
 		if err != nil {
-			x.Trace(ctx, "Error while converting to edge: %v %v", nq, err)
+			x.TraceError(ctx, x.Wrapf(err, "Error while converting to edge: %v", nq))
 			return mr, err
 		}
 		edges = append(edges, edge)
@@ -178,18 +178,18 @@ func convertToEdges(ctx context.Context, nquads []rdf.NQuad) (mutationResult, er
 func applyMutations(ctx context.Context, m worker.Mutations) error {
 	left, err := worker.MutateOverNetwork(ctx, m)
 	if err != nil {
-		x.Trace(ctx, "Error while MutateOverNetwork: %v", err)
+		x.TraceError(ctx, x.Wrapf(err, "Error while MutateOverNetwork"))
 		return err
 	}
 	if len(left.Set) > 0 || len(left.Del) > 0 {
-		x.Trace(ctx, "%d edges couldn't be applied", len(left.Del)+len(left.Set))
+		x.TraceError(ctx, x.Errorf("%d edges couldn't be applied", len(left.Del)+len(left.Set)))
 		for _, e := range left.Set {
-			x.Trace(ctx, "Unable to apply set mutation for edge: %v", e)
+			x.TraceError(ctx, x.Errorf("Unable to apply set mutation for edge: %v", e))
 		}
 		for _, e := range left.Del {
-			x.Trace(ctx, "Unable to apply delete mutation for edge: %v", e)
+			x.TraceError(ctx, x.Errorf("Unable to apply delete mutation for edge: %v", e))
 		}
-		return fmt.Errorf("Unapplied mutations")
+		return x.Errorf("Unapplied mutations")
 	}
 	return nil
 }
@@ -314,7 +314,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 	q, err := ioutil.ReadAll(r.Body)
 	if err != nil || len(q) == 0 {
-		x.Trace(ctx, "Error while reading query: %v", err)
+		x.TraceError(ctx, x.Wrapf(err, "Error while reading query"))
 		x.SetStatus(w, x.ErrorInvalidRequest, "Invalid request encountered.")
 		return
 	}
@@ -328,7 +328,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	x.Trace(ctx, "Query received: %v", string(q))
 	gq, mu, err := gql.Parse(string(q))
 	if err != nil {
-		x.Trace(ctx, "Error while parsing query: %v", err)
+		x.TraceError(ctx, x.Wrapf(err, "Error while parsing query"))
 		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
 		return
 	}
@@ -337,7 +337,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	// If we have mutations, run them first.
 	if mu != nil && (len(mu.Set) > 0 || len(mu.Del) > 0) {
 		if allocIds, err = mutationHandler(ctx, mu); err != nil {
-			x.Trace(ctx, "Error while handling mutations: %v", err)
+			x.TraceError(ctx, x.Wrapf(err, "Error while handling mutations"))
 			x.SetStatus(w, x.Error, err.Error())
 			return
 		}
@@ -359,7 +359,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 
 	sg, err := query.ToSubGraph(ctx, gq)
 	if err != nil {
-		x.Trace(ctx, "Error while conversion o internal format: %v", err)
+		x.TraceError(ctx, x.Wrapf(err, "Error while conversion o internal format"))
 		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
 		return
 	}
@@ -370,7 +370,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	go query.ProcessGraph(ctx, sg, rch)
 	err = <-rch
 	if err != nil {
-		x.Trace(ctx, "Error while executing query: %v", err)
+		x.TraceError(ctx, x.Wrapf(err, "Error while executing query"))
 		x.SetStatus(w, x.Error, err.Error())
 		return
 	}
@@ -378,7 +378,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	x.Trace(ctx, "Graph processed")
 	js, err := sg.ToJSON(&l)
 	if err != nil {
-		x.Trace(ctx, "Error while converting to Json: %v", err)
+		x.TraceError(ctx, x.Wrapf(err, "Error while converting to Json"))
 		x.SetStatus(w, x.Error, err.Error())
 		return
 	}
@@ -406,7 +406,7 @@ func (s *grpcServer) Query(ctx context.Context,
 
 	resp := new(graph.Response)
 	if len(req.Query) == 0 && req.Mutation == nil {
-		x.Trace(ctx, "Empty query and mutation.")
+		x.TraceError(ctx, x.Errorf("Empty query and mutation."))
 		return resp, fmt.Errorf("Empty query and mutation.")
 	}
 
@@ -420,7 +420,7 @@ func (s *grpcServer) Query(ctx context.Context,
 	x.Trace(ctx, "Query received: %v", req.Query)
 	gq, mu, err := gql.Parse(req.Query)
 	if err != nil {
-		x.Trace(ctx, "Error while parsing query: %v", err)
+		x.TraceError(ctx, x.Wrapf(err, "Error while parsing query"))
 		return resp, err
 	}
 
@@ -428,7 +428,7 @@ func (s *grpcServer) Query(ctx context.Context,
 	// same as the http client.
 	if mu != nil && (len(mu.Set) > 0 || len(mu.Del) > 0) {
 		if allocIds, err = mutationHandler(ctx, mu); err != nil {
-			x.Trace(ctx, "Error while handling mutations: %v", err)
+			x.TraceError(ctx, x.Wrapf(err, "Error while handling mutations"))
 			return resp, err
 		}
 	}
@@ -437,7 +437,7 @@ func (s *grpcServer) Query(ctx context.Context,
 	// them here.
 	if req.Mutation != nil && (len(req.Mutation.Set) > 0 || len(req.Mutation.Del) > 0) {
 		if allocIds, err = runMutations(ctx, req.Mutation); err != nil {
-			x.Trace(ctx, "Error while handling mutations: %v", err)
+			x.TraceError(ctx, x.Wrapf(err, "Error while handling mutations"))
 			return resp, err
 		}
 	}
@@ -449,7 +449,7 @@ func (s *grpcServer) Query(ctx context.Context,
 
 	sg, err := query.ToSubGraph(ctx, gq)
 	if err != nil {
-		x.Trace(ctx, "Error while conversion to internal format: %v", err)
+		x.TraceError(ctx, x.Wrapf(err, "Error while conversion to internal format"))
 		return resp, err
 	}
 	l.Parsing = time.Since(l.Start)
@@ -459,7 +459,7 @@ func (s *grpcServer) Query(ctx context.Context,
 	go query.ProcessGraph(ctx, sg, rch)
 	err = <-rch
 	if err != nil {
-		x.Trace(ctx, "Error while executing query: %v", err)
+		x.TraceError(ctx, x.Wrapf(err, "Error while executing query"))
 		return resp, err
 	}
 	l.Processing = time.Since(l.Start) - l.Parsing
@@ -467,7 +467,7 @@ func (s *grpcServer) Query(ctx context.Context,
 
 	node, err := sg.ToProtocolBuffer(&l)
 	if err != nil {
-		x.Trace(ctx, "Error while converting to ProtocolBuffer: %v", err)
+		x.TraceError(ctx, x.Wrapf(err, "Error while converting to ProtocolBuffer"))
 		return resp, err
 	}
 	resp.N = node

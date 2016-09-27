@@ -188,7 +188,7 @@ func MutateOverNetwork(ctx context.Context, m Mutations) (left Mutations, rerr e
 		select {
 		case err := <-errors:
 			if err != nil {
-				x.Trace(ctx, "Error while running all mutations: %v", err)
+				x.TraceError(ctx, x.Wrapf(err, "Error while running all mutations"))
 				return left, err
 			}
 		case <-ctx.Done():
