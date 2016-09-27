@@ -205,7 +205,7 @@ func Parse(line string) (rnq NQuad, rerr error) {
 	}
 	if len(oval) > 0 {
 		rnq.ObjectValue = []byte(oval)
-		// TODO: It's always zero until we parse the types.
+		// If no type is specified, we default to string.
 		rnq.ObjectType = 0
 	}
 	if len(rnq.Subject) == 0 || len(rnq.Predicate) == 0 {
