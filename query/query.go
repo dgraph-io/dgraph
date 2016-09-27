@@ -814,9 +814,10 @@ func (sg *SubGraph) applyFilter(ctx context.Context) error {
 
 	newSorted, err := applyFilterHelper(ctx, sg.sorted, sg.Filter, predMap)
 	if err != nil {
-		sg.sorted = newSorted
+		return err
 	}
-	return err
+	sg.sorted = newSorted
+	return nil
 }
 
 func applyFilterHelper(ctx context.Context, sorted []uint64,
