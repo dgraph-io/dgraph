@@ -76,17 +76,17 @@ func processScalarBlock(l *lex.Lexer) error {
 					return fmt.Errorf("Missing collon")
 				}
 
-				if next := <-l.Items; next.Typ != itemScalarType {
+				next := <-l.Items
+				if next.Typ != itemScalarType {
 					return fmt.Errorf("Missing Type")
-				} else {
-					typ = next.Val
 				}
+				typ = next.Val
 
-				if t, ok := getScalar(typ); ok {
-					store[name] = t
-				} else {
+				t, ok := getScalar(typ)
+				if !ok {
 					return fmt.Errorf("Invalid type")
 				}
+				store[name] = t
 			}
 		}
 	}
@@ -106,15 +106,16 @@ func processScalar(l *lex.Lexer) error {
 				var name, typ string
 				name = item.Val
 
-				if next := <-l.Items; next.Typ != itemCollon {
+				next := <-l.Items
+				if next.Typ != itemCollon {
 					return fmt.Errorf("Missing collon")
 				}
 
-				if next := <-l.Items; next.Typ != itemScalarType {
+				next = <-l.Items
+				if next.Typ != itemScalarType {
 					return fmt.Errorf("Missing Type")
-				} else {
-					typ = next.Val
 				}
+				typ = next.Val
 
 				if t, ok := getScalar(typ); ok {
 					store[name] = t
@@ -130,18 +131,19 @@ func processScalar(l *lex.Lexer) error {
 
 func processObject(l *lex.Lexer) error {
 	var objName string
-	if next := <-l.Items; next.Typ != itemObject {
+	next := <-l.Items
+	if next.Typ != itemObject {
 		return fmt.Errorf("Missing object name")
-	} else {
-		objName = next.Val
 	}
+	objName = next.Val
 
 	obj := Object{
 		Name:   objName,
 		Fields: make(map[string]string),
 	}
 
-	if next := <-l.Items; next.Typ != itemLeftCurl {
+	next = <-l.Items
+	if next.Typ != itemLeftCurl {
 		return fmt.Errorf("Missing left curly brace")
 	}
 
@@ -155,15 +157,16 @@ L:
 				var name, typ string
 				name = item.Val
 
-				if next := <-l.Items; next.Typ != itemCollon {
+				next := <-l.Items
+				if next.Typ != itemCollon {
 					return fmt.Errorf("Missing collon")
 				}
 
-				if next := <-l.Items; next.Typ != itemObjectType {
+				next = <-l.Items
+				if next.Typ != itemObjectType {
 					return fmt.Errorf("Missing Type")
-				} else {
-					typ = next.Val
 				}
+				typ = next.Val
 				if t, ok := getScalar(typ); ok {
 					if t1, ok := store[name]; ok {
 						if t1.(Scalar).Name != t.(Scalar).Name {

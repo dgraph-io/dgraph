@@ -16,7 +16,7 @@
 
 package schema
 
-type scalar struct {
+type Item struct {
 	Field string
 	Typ   Type
 }
@@ -28,15 +28,15 @@ func init() {
 }
 
 // ScalarList returns the list of scalars in the geiven object.
-func ScalarList(obj string) []scalar {
-	var res []scalar
+func ScalarList(obj string) []Item {
+	var res []Item
 	objStore, ok := store[obj].(Object)
 	if !ok {
 		return res
 	}
 	for k, v := range objStore.Fields {
 		if t, ok := getScalar(v); ok {
-			res = append(res, scalar{Field: k, Typ: t})
+			res = append(res, Item{Field: k, Typ: t})
 		}
 	}
 	return res

@@ -46,12 +46,12 @@ func (s Scalar) String() string {
 	return fmt.Sprint(s.Name)
 }
 
-// Iscalar returns true if the object is of scalar type.
+// IsScalar returns true if the object is of scalar type.
 func (s Scalar) IsScalar() bool {
 	return true
 }
 
-// Iscalar returns true if the object is of scalar type.
+// IsScalar returns true if the object is of scalar type.
 func (o Object) IsScalar() bool {
 	return false
 }
