@@ -59,6 +59,7 @@ type DirectedEdge struct {
 	Entity    uint64 // Subject or source node / UID.
 	Attribute string // Attribute or predicate. Labels the edge.
 	Value     []byte // Edge points to a value.
+	ValueType byte   // The type of the value
 	ValueId   uint64 // Object or destination node / UID.
 	Source    string
 	Timestamp time.Time
