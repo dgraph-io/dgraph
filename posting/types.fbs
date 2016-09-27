@@ -10,6 +10,7 @@ table Posting {
 
 table PostingList {
 	commitTs:long;
+	checksum:string;
 	postings:[Posting];
 }
 

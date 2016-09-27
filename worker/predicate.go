@@ -20,6 +20,7 @@ import (
 	"context"
 	"io"
 
+	"github.com/dgraph-io/dgraph/posting/types"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/x"
 	flatbuffers "github.com/google/flatbuffers/go"
@@ -64,18 +65,56 @@ func (s *State) writeBatch(ctx context.Context, kv chan *task.KV, che chan error
 	che <- nil
 }
 
+func (s *State) generateGroup(group uint64) ([]byte, error) {
+	it := s.dataStore.NewIterator()
+	defer it.Close()
+
+	b := flatbuffers.NewBuilder(0)
+	uoffsets := make([]flatbuffers.UOffsetT, 0, 100)
+
+	for it.SeekToFirst(); it.Valid(); it.Next() {
+		// TODO: Check if this key belongs to the group.
+
+		k, v := it.Key(), it.Value()
+		pl := types.GetRootAsPostingList(v.Data(), 0)
+
+		ko := b.CreateByteVector(k.Data())
+		co := b.CreateByteVector(pl.Checksum())
+
+		task.KTStart(b)
+		task.KTAddKey(b, ko)
+		task.KTAddChecksum(b, co)
+		uo := task.KTEnd(b)
+
+		uoffsets = append(uoffsets, uo)
+	}
+	if err := it.Err(); err != nil {
+		return []byte{}, nil
+	}
+
+	task.GroupStartKeysVector(b, len(uoffsets))
+	for i := len(uoffsets) - 1; i >= 0; i-- {
+		b.PrependUOffsetT(uoffsets[i])
+	}
+	keysOffset := b.EndVector(len(uoffsets))
+
+	task.GroupStart(b)
+	task.GroupAddGroupid(b, group)
+	task.GroupAddKeys(b, keysOffset)
+	rend := task.GroupEnd(b)
+	b.Finish(rend)
+	return b.Bytes[b.Head():], nil
+}
+
 // PopulateShard gets data for predicate pred from server with id serverId and
 // writes it to RocksDB.
-func (s *State) PopulateShard(ctx context.Context, pred string,
-	serverId int) error {
-	var err error
-
-	pool := s.GetPool(serverId)
+func (s *State) PopulateShard(ctx context.Context, pool *Pool, group uint64) error {
 	query := new(Payload)
-	query.Data = []byte(pred)
+	data, err := s.generateGroup(group)
 	if err != nil {
-		return err
+		return x.Wrapf(err, "While generating keys group")
 	}
+	query.Data = data
 
 	conn, err := pool.Get()
 	if err != nil {
@@ -88,7 +127,7 @@ func (s *State) PopulateShard(ctx context.Context, pred string,
 	if err != nil {
 		return err
 	}
-	x.Trace(ctx, "Streaming data for pred: %v from server with id: %v", pred, serverId)
+	x.Trace(ctx, "Streaming data for group: %v", group)
 
 	kvs := make(chan *task.KV, 1000)
 	che := make(chan error)
@@ -111,23 +150,24 @@ func (s *State) PopulateShard(ctx context.Context, pred string,
 		// We check for errors, if there are no errors we send value to channel.
 		select {
 		case <-ctx.Done():
-			x.TraceError(ctx, x.Errorf("Context timed out while streaming pred: %v from instance: %v",
-				pred, serverId))
+			x.TraceError(ctx, x.Errorf("Context timed out while streaming group: %v", group))
 			close(kvs)
 			return ctx.Err()
+
 		case err := <-che:
-			x.TraceError(ctx, x.Errorf("Error while doing a batch write for pred: %v", pred))
+			x.TraceError(ctx, x.Errorf("Error while doing a batch write for group: %v", group))
 			close(kvs)
 			return err
+
 		case kvs <- kv:
 		}
 	}
 	close(kvs)
 
 	if err := <-che; err != nil {
-		x.TraceError(ctx, x.Errorf("Error while doing a batch write for pred: %v", pred))
+		x.TraceError(ctx, x.Errorf("Error while doing a batch write for group: %v", group))
 		return err
 	}
-	x.Trace(ctx, "Streaming complete for pred: %v from server with id: %v", pred, serverId)
+	x.Trace(ctx, "Streaming complete for group: %v", group)
 	return nil
 }

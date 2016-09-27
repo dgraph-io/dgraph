@@ -29,6 +29,16 @@ table Result {
 }
 
 table KV {
-	key: [ubyte];
-	val: [ubyte];
+	key:[ubyte];
+	val:[ubyte];
+}
+
+table KT {
+	key:[ubyte];
+	checksum:[ubyte];
+}
+
+table Group {
+	groupid:ulong;
+	keys:[KT];
 }

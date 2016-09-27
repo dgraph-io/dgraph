@@ -59,6 +59,8 @@ var (
 		"Number of cores to be used by the process")
 	instanceIdx = flag.Uint64("idx", 0,
 		"serves only entities whose Fingerprint % numInstance == instanceIdx.")
+	cluster = flag.String("cluster", "", "List of peers in this format: ID1:URL1,ID2:URL2,...")
+	peer    = flag.String("peer", "", "Address of any peer.")
 	workers = flag.String("workers", "",
 		"Comma separated list of IP addresses of workers")
 	workerPort = flag.String("workerport", ":12345",
@@ -70,6 +72,8 @@ var (
 	cpuprofile  = flag.String("cpu", "", "write cpu profile to file")
 	memprofile  = flag.String("mem", "", "write memory profile to file")
 	closeCh     = make(chan struct{})
+
+	groupId uint64 = 0 // ALL
 )
 
 type mutationResult struct {
@@ -558,6 +562,7 @@ func setupServer() {
 }
 
 func main() {
+	rand.Seed(time.Now().UnixNano())
 	x.Init()
 	checkFlagsAndInitDirs()
 
@@ -576,21 +581,33 @@ func main() {
 
 	posting.Init()
 	var ws *worker.State
-	if *instanceIdx != 0 {
-		ws = worker.NewState(ps, nil, *instanceIdx, lenAddr)
+	if groupId != 0 { // HACK: This will currently not run.
+		ws = worker.NewState(ps, nil, groupId, 1) // TODO: Set number of grous here.
 		worker.SetWorkerState(ws)
 		uid.Init(nil)
-	} else {
+
+	} else { // handles group 0.
 		uidStore, err := store.NewStore(*uidDir)
 		if err != nil {
 			log.Fatalf("error initializing uid store: %s", err)
 		}
 		defer uidStore.Close()
 		// Only server instance 0 will have uidStore
-		ws = worker.NewState(ps, uidStore, *instanceIdx, lenAddr)
+		ws = worker.NewState(ps, uidStore, groupId, 1) // TODO: Set number of groups here.
 		worker.SetWorkerState(ws)
 		uid.Init(uidStore)
 	}
+
+	my := "localhost" + *workerPort
+	worker.InitNode(uint64(*instanceIdx), my)
+	worker.GetNode().StartNode(*cluster)
+	if len(*peer) > 0 {
+		go worker.GetNode().JoinCluster(*peer)
+	}
+	go worker.GetNode().SnapshotPeriodically()
+
+	// node := worker.GetNode()
+	// go node.Campaign(context.TODO())
 
 	if len(*schemaFile) > 0 {
 		err = gql.LoadSchema(*schemaFile)
