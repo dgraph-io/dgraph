@@ -136,6 +136,16 @@ func TestParseBool(t *testing.T) {
 	}
 }
 
+func TestParseTime(t *testing.T) {
+	array := []string{"2014-10-28T04:00:10", "2002-05-30T09:30:10Z",
+		"2002-05-30T09:30:10.5", "2002-05-30T09:30:10-06:00"}
+	for _, v := range array {
+		if _, err := DateTimeType.Unmarshaler.FromText([]byte(v)); err != nil {
+			t.Errorf("Error parsing %s: %v", v, err)
+		}
+	}
+}
+
 func TestTime(t *testing.T) {
 	v := time.Date(2009, time.November, 10, 23, 0, 0, 0, time.UTC)
 	testBinary(v, DateTimeType.Unmarshaler, t)
