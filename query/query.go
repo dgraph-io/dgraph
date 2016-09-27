@@ -136,7 +136,16 @@ type SubGraph struct {
 	Query  []byte // Contains list of source UIDs.
 	Result []byte // Contains UID matrix or list of values for child attributes.
 
-	sorted []uint64 // List of source UIDs, after applying filters.
+	// sorted is a list of destination UIDs, after applying filters.
+	// Recall that UID matrix has the following structure. Each sub-vector is a list
+	// of destination UIDs for a fixed source UID.
+	// Before filtering, sorted is the union of all these sub-vectors, i.e., the
+	// list of unique destination UIDs.
+	// After filtering, sorted can be much smaller.
+	// Caution: Each of "children" is given the filtered sg.sorted. However, the UID
+	// matrix for this node does not take into account the filtering. Hence, during
+	// postTraverse or preTraverse, we need to intersect with sg.sorted.
+	sorted []uint64
 }
 
 func mergeInterfaces(i1 interface{}, i2 interface{}) interface{} {
@@ -226,8 +235,19 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 		}
 		//l := make([]interface{}, ul.UidsLength())
 		l := make([]interface{}, 0, ul.UidsLength())
+
+		// We want to intersect ul.Uids with this list. Since both are sorted, this
+		// intersection is very cheap. We just need to maintain the variable sortedIdx
+		// which indexes into sg.sorted (the sorted UID list).
+		var sortedIdx int
 		for j := 0; j < ul.UidsLength(); j++ {
 			uid := ul.Uids(j)
+			for ; sortedIdx < len(sg.sorted) && sg.sorted[sortedIdx] < uid; sortedIdx++ {
+			}
+			if sortedIdx >= len(sg.sorted) || sg.sorted[sortedIdx] > uid {
+				continue
+			}
+
 			m := make(map[string]interface{})
 			if sg.Params.GetUid || sg.Params.isDebug {
 				m["_uid_"] = fmt.Sprintf("%#x", uid)
