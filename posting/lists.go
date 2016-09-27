@@ -267,7 +267,6 @@ var (
 
 // Init initializes the posting lists package, the in memory and dirty list hash.
 func Init() {
-	lhmap = newShardedListMap(*lhmapNumShards)
 	dirtyChan = make(chan uint64, 10000)
 	dirtyMap = make(map[uint64]struct{}, 1000)
 	dirtyMapOpChan = make(chan dirtyMapOp, 1)
@@ -275,6 +274,12 @@ func Init() {
 	gentleMergeChan = make(chan struct{}, 18)
 	go checkMemoryUsage()
 	go processDirtyChan()
+}
+
+func init() {
+	// Move this to package default init. So, we can use this package without
+	// initializing periodic merging.
+	lhmap = newShardedListMap(*lhmapNumShards)
 }
 
 func getFromMap(key uint64) *List {

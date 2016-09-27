@@ -21,10 +21,13 @@ import (
 	"io/ioutil"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/store"
+	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/x"
+	flatbuffers "github.com/google/flatbuffers/go"
 )
 
 func checkShard(ps *store.Store) (int, []byte) {
@@ -126,12 +129,48 @@ func TestGenerateGroup(t *testing.T) {
 	// instance.
 	for i := 0; i < 100; i++ {
 		k := fmt.Sprintf("%03d", i)
+		t.Logf("key: %v", k)
 		list, _ := posting.GetOrCreate([]byte(k), ps)
 
-		var de x.DirectedEdge
-		list.AddMutation(context.TODO(), de, posting.SET)
-		if _, err := list.MergeIfDirty(context.TODO()); err != nil {
-			t.Errorf("While merging: %v", err)
+		de := x.DirectedEdge{
+			ValueId:   2,
+			Source:    "test",
+			Timestamp: time.Now(),
 		}
+		list.AddMutation(context.TODO(), de, posting.Set)
+		if merged, err := list.MergeIfDirty(context.TODO()); err != nil {
+			t.Errorf("While merging: %v", err)
+		} else if !merged {
+			t.Errorf("No merge happened")
+		}
+	}
+
+	ws := NewState(ps, nil, 0, 1)
+	data, err := ws.generateGroup(0)
+	if err != nil {
+		t.Error(err)
+	}
+	t.Logf("Size of data: %v", len(data))
+
+	var g task.Group
+	uo := flatbuffers.GetUOffsetT(data)
+	t.Logf("Found offset: %v", uo)
+	g.Init(data, uo)
+
+	if g.KeysLength() != 100 {
+		t.Errorf("There should be 100 keys. Found: %v", g.KeysLength())
+		t.Fail()
+	}
+	for i := 0; i < 100; i++ {
+		var k task.KT
+		if ok := g.Keys(&k, i); !ok {
+			t.Errorf("Unable to parse key at index: %v", i)
+		}
+		expected := fmt.Sprintf("%03d", i)
+		found := string(k.KeyBytes())
+		if expected != found {
+			t.Errorf("Key expected:[%q], found:[%q]", expected, found)
+		}
+		t.Logf("Checksum: %q", k.ChecksumBytes())
 	}
 }

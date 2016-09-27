@@ -65,8 +65,8 @@ func (s *State) writeBatch(ctx context.Context, kv chan *task.KV, che chan error
 	che <- nil
 }
 
-func generateGroup(group uint64) ([]byte, error) {
-	it := ws.dataStore.NewIterator()
+func (s *State) generateGroup(group uint64) ([]byte, error) {
+	it := s.dataStore.NewIterator()
 	defer it.Close()
 
 	b := flatbuffers.NewBuilder(0)
@@ -110,7 +110,7 @@ func generateGroup(group uint64) ([]byte, error) {
 // writes it to RocksDB.
 func (s *State) PopulateShard(ctx context.Context, pool *Pool, group uint64) error {
 	query := new(Payload)
-	data, err := generateGroup(group)
+	data, err := s.generateGroup(group)
 	if err != nil {
 		return x.Wrapf(err, "While generating keys group")
 	}
