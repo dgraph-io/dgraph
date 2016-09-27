@@ -227,13 +227,14 @@ func isNewline(r rune) bool {
 }
 
 var typeMap = map[string]types.Scalar{
-	"xs:string":   types.StringType,
-	"xs:dateTime": types.DateTimeType,
-	"xs:date":     types.DateType,
-	"xs:int":      types.Int32Type,
-	"xs:boolean":  types.BooleanType,
-	"xs:double":   types.FloatType,
-	"xs:float":    types.FloatType,
+	"xs:string":                                 types.StringType,
+	"xs:dateTime":                               types.DateTimeType,
+	"xs:date":                                   types.DateType,
+	"xs:int":                                    types.Int32Type,
+	"xs:boolean":                                types.BooleanType,
+	"xs:double":                                 types.FloatType,
+	"xs:float":                                  types.FloatType,
+	"geo:geojson":                               types.GeoType,
 	"http://www.w3.org/2001/XMLSchema#string":   types.StringType,
 	"http://www.w3.org/2001/XMLSchema#dateTime": types.DateTimeType,
 	"http://www.w3.org/2001/XMLSchema#date":     types.DateType,
