@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
-	"math/rand"
 	"os"
 	"os/exec"
 	"runtime"
@@ -96,7 +95,6 @@ func aggressivelyEvict() {
 	log.Printf("Memory usage over threshold. STW. Allocated MB: %v\n", megs)
 
 	log.Println("Aggressive evict, committing to RocksDB")
-	time.Sleep(5 * time.Second)
 	MergeLists(100 * runtime.GOMAXPROCS(-1))
 
 	log.Println("Trying to free OS memory")
@@ -132,8 +130,6 @@ func mergeAndUpdateKeys(keys []uint64) {
 func gentleMerge(dirtyMap map[uint64]struct{}) {
 	select {
 	case gentleMergeChan <- struct{}{}:
-		id := rand.Int()
-		fmt.Printf("Start gentle merge %d\n", id)
 		n := int(float64(len(dirtyMap)) * *gentleMergeFrac)
 		if n < 300 {
 			// Have a min value of n, so we can merge small number of dirty PLs fast.
@@ -149,7 +145,6 @@ func gentleMerge(dirtyMap map[uint64]struct{}) {
 				break
 			}
 		}
-		fmt.Printf("Leaving gentle merge %d\n", id)
 		go mergeAndUpdateKeys(keysBuffer)
 	default:
 		log.Println("Skipping gentle merge")
