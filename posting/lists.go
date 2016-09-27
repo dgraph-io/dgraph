@@ -100,6 +100,7 @@ func aggressivelyEvict() {
 	log.Printf("Memory usage over threshold. STW. Allocated MB: %v\n", megs)
 
 	log.Println("Aggressive evict, committing to RocksDB")
+	time.Sleep(5 * time.Second)
 	MergeLists(100 * runtime.GOMAXPROCS(-1))
 
 	log.Println("Trying to free OS memory")
