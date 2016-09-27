@@ -235,8 +235,13 @@ func (n *node) JoinCluster(any string) {
 	pid, paddr := parsePeer(any)
 	n.Connect(pid, paddr)
 
-	fmt.Printf("TELLING PEER TO ADD ME: %v\n", any)
+	// TODO: Make this thread safe.
 	pool := n.peers[pid]
+	// TODO: Ask for the leader, before running PopulateShard.
+	// Bring the instance up to speed first.
+	x.Checkf(ws.PopulateShard(context.TODO(), pool, 0), "Error while populating shard")
+
+	fmt.Printf("TELLING PEER TO ADD ME: %v\n", any)
 	query := &Payload{}
 	query.Data = []byte(strconv.FormatUint(n.id, 10) + ":" + n.localAddr)
 	conn, err := pool.Get()

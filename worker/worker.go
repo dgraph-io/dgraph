@@ -219,7 +219,8 @@ func (w *grpcWorker) JoinCluster(ctx context.Context, query *Payload) (*Payload,
 // a stream.
 func (w *grpcWorker) PredicateData(query *Payload, stream Worker_PredicateDataServer) error {
 	var group task.Group
-	group.Init(query.Data, 0)
+	uo := flatbuffers.GetUOffsetT(query.Data)
+	group.Init(query.Data, uo)
 	_ = group.Groupid()
 
 	// TODO(pawan) - Shift to CheckPoints once we figure out how to add them to the
