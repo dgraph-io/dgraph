@@ -135,6 +135,8 @@ type SubGraph struct {
 
 	Query  []byte // Contains list of source UIDs.
 	Result []byte // Contains UID matrix or list of values for child attributes.
+
+	sorted []uint64 // List of source UIDs, after applying filters.
 }
 
 func mergeInterfaces(i1 interface{}, i2 interface{}) interface{} {
@@ -222,7 +224,8 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 		if ok := r.Uidmatrix(&ul, i); !ok {
 			return result, fmt.Errorf("While parsing UidList")
 		}
-		l := make([]interface{}, ul.UidsLength())
+		//l := make([]interface{}, ul.UidsLength())
+		l := make([]interface{}, 0, ul.UidsLength())
 		for j := 0; j < ul.UidsLength(); j++ {
 			uid := ul.Uids(j)
 			m := make(map[string]interface{})
@@ -230,9 +233,11 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 				m["_uid_"] = fmt.Sprintf("%#x", uid)
 			}
 			if ival, present := cResult[uid]; !present {
-				l[j] = m
+				//l[j] = m
+				l = append(l, m)
 			} else {
-				l[j] = mergeInterfaces(m, ival)
+				//l[j] = mergeInterfaces(m, ival)
+				l = append(l, mergeInterfaces(m, ival))
 			}
 		}
 		if len(l) == 1 {
@@ -689,14 +694,14 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, rch chan error) {
 		return
 	}
 
-	sorted, err := sortedUniqueUids(r)
+	sg.sorted, err = sortedUniqueUids(r)
 	if err != nil {
 		x.TraceError(ctx, x.Wrapf(err, "Error while processing task"))
 		rch <- err
 		return
 	}
 
-	if len(sorted) == 0 {
+	if len(sg.sorted) == 0 {
 		// Looks like we're done here.
 		x.Trace(ctx, "Zero uids. Num attr children: %v", len(sg.Children))
 		rch <- nil
@@ -704,7 +709,7 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, rch chan error) {
 	}
 
 	// Apply filters if any.
-	if sorted, err = sg.applyFilter(ctx, sorted); err != nil {
+	if err = sg.applyFilter(ctx); err != nil {
 		rch <- err
 		return
 	}
@@ -716,7 +721,7 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, rch chan error) {
 	childchan := make(chan error, len(sg.Children))
 	for i := 0; i < len(sg.Children); i++ {
 		child := sg.Children[i]
-		child.Query = createTaskQuery(child, sorted)
+		child.Query = createTaskQuery(child, sg.sorted)
 		go ProcessGraph(ctx, child, childchan)
 	}
 
@@ -756,10 +761,10 @@ func predsFromFilter(filter *gql.FilterTree, out map[string]*SubGraph) {
 	}
 }
 
-// applyFilters filters "sorted" given sg's filters.
-func (sg *SubGraph) applyFilter(ctx context.Context, sorted []uint64) ([]uint64, error) {
+// applyFilters applies filters to sg.sorted.
+func (sg *SubGraph) applyFilter(ctx context.Context) error {
 	if sg.Filter == nil { // No filter.
-		return sorted, nil
+		return nil
 	}
 	predMap := make(map[string]*SubGraph)
 	predsFromFilter(sg.Filter, predMap)
@@ -767,7 +772,7 @@ func (sg *SubGraph) applyFilter(ctx context.Context, sorted []uint64) ([]uint64,
 	// Get values for all predicates referenced in filter.
 	childchan := make(chan error)
 	for _, child := range predMap {
-		child.Query = createTaskQuery(child, sorted)
+		child.Query = createTaskQuery(child, sg.sorted)
 		go ProcessGraph(ctx, child, childchan)
 	}
 
@@ -778,41 +783,60 @@ func (sg *SubGraph) applyFilter(ctx context.Context, sorted []uint64) ([]uint64,
 			if err != nil {
 				x.TraceError(ctx, x.Wrapf(err,
 					"Error while processing child task for filter"))
-				return sorted, nil
+				return err
 			}
 		case <-ctx.Done():
 			x.TraceError(ctx, x.Wrapf(ctx.Err(),
 				"Context done before full execution in filter"))
-			return sorted, ctx.Err()
+			return ctx.Err()
 		}
 	}
 
-	//return applyFilterHelper(ctx, sorted, sg.Filter)
-	return nil, nil
+	newSorted, err := applyFilterHelper(ctx, sg.sorted, sg.Filter, predMap)
+	if err != nil {
+		sg.sorted = newSorted
+	}
+	return err
 }
 
-//func applyFilterHelper(ctx context.Context, sorted []uint64, filter *gql.FilterTree) ([]uint64, error) {
-//	// Handle leaf nodes first.
-//	if len(filter.FuncName) > 0 {
-//		x.Assertf(filter.FuncName == "eq", "Only exact match is supported now")
-//		x.Assertf(len(filter.FuncArgs) == 2,
-//			"Expect exactly two arguments: pred and predValue")
+func applyFilterHelper(ctx context.Context, sorted []uint64,
+	filter *gql.FilterTree, predMap map[string]*SubGraph) ([]uint64, error) {
+	out := make([]uint64, 0, 10) // out is our final output usually.
 
-//		child := &SubGraph{
-//			Attr: filter.FuncArgs[0],
-//		}
-//		child.Query = createTaskQuery(child, sorted)
-//		ProcessGraph(ctx, chil)
+	if len(filter.FuncName) > 0 {
+		// Handle leaf nodes first.
+		x.Assertf(filter.FuncName == "eq", "Only exact match is supported now")
+		x.Assertf(len(filter.FuncArgs) == 2,
+			"Expect exactly two arguments: pred and predValue")
 
-//		return nil, nil
-//	}
+		pred := filter.FuncArgs[0]
+		sg := predMap[pred]
+		x.Assert(sg != nil)
 
-//	switch filter.Op {
-//	case gql.ItemFilterAnd:
-//		return nil, nil
-//	case gql.ItemFilterOr:
-//		return nil, nil
-//	}
+		r := new(task.Result)
+		x.ParseTaskResult(r, sg.Result)
 
-//	return nil, nil
-//}
+		x.Assertf(r.ValuesLength() == len(sorted),
+			"Wrong number of results: %d vs %d", r.ValuesLength(), len(sorted))
+		var tv task.Value
+		for i := 0; i < r.ValuesLength(); i++ {
+			if ok := r.Values(&tv, i); !ok {
+				return sorted, x.Errorf("While parsing value")
+			}
+			val := tv.ValBytes()
+			if val != nil && string(val) == filter.FuncArgs[1] {
+				out = append(out, sorted[i])
+			}
+		}
+		return out, nil
+	}
+
+	switch filter.Op {
+	case gql.ItemFilterAnd:
+		return nil, nil
+	case gql.ItemFilterOr:
+		return nil, nil
+	}
+
+	return nil, nil
+}
