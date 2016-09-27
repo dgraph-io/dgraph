@@ -1,5 +1,5 @@
 /*
- * Copyright 2016 DGraph Labs, Inc.
+ * Copyright 2016 Dgraph Labs, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,6 +41,7 @@ func (to Scalar) Convert(value TypeValue) (TypeValue, error) {
 		// If the value is a string, then we can always Unmarshal it using
 		// the unmarshaller
 		return u.FromText([]byte(v))
+
 	case Int32:
 		c, ok := u.(int32Unmarshaler)
 		if !ok {
