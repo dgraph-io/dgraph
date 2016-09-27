@@ -171,8 +171,7 @@ func periodicMerging() {
 
 			totMemory := getMemUsage()
 			if totMemory > *maxmemory {
-				// It's okay to run a blocking aggressive merge here, because during aggressive merge,
-				// no mutations are being added. So, we won't block our keysBuffer channel.
+				// Acquire lock, so no new posting lists are given out.
 				stopTheWorld.Lock()
 
 			DIRTYLOOP:
