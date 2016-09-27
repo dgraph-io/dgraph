@@ -135,12 +135,16 @@ func gentleMerge(dirtyMap map[uint64]struct{}) {
 	select {
 	case gentleMergeChan <- struct{}{}:
 		n := int(float64(len(dirtyMap)) * *gentleMergeFrac)
+		if n < 300 {
+			// Have a min value of n, so we can merge small number of dirty PLs fast.
+			n = len(dirtyMap)
+		}
 		keysBuffer := make([]uint64, 0, n)
 
 		for key := range dirtyMap {
 			delete(dirtyMap, key)
 			keysBuffer = append(keysBuffer, key)
-			if len(keysBuffer) == n {
+			if len(keysBuffer) >= n {
 				// We don't want to process the entire dirtyMap in one go.
 				break
 			}
