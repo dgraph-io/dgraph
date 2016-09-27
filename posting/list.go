@@ -627,7 +627,7 @@ func (l *List) SetForDeletion() {
 func (l *List) AddMutation(ctx context.Context, t x.DirectedEdge, op byte) (bool, error) {
 	l.wg.Wait()
 	if atomic.LoadInt32(&l.deleteMe) == 1 {
-		x.Trace(ctx, "DELETEME set to true. Temporary error.")
+		x.TraceError(ctx, x.Errorf("DELETEME set to true. Temporary error."))
 		return false, E_TMP_ERROR
 	}
 
@@ -637,8 +637,9 @@ func (l *List) AddMutation(ctx context.Context, t x.DirectedEdge, op byte) (bool
 		t.ValueId = math.MaxUint64
 	}
 	if t.ValueId == 0 {
-		x.Trace(ctx, "ValueId cannot be zero")
-		return false, fmt.Errorf("ValueId cannot be zero.")
+		err := x.Errorf("ValueId cannot be zero")
+		x.TraceError(ctx, err)
+		return false, err
 	}
 	mbuf := newPosting(t, op)
 
