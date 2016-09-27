@@ -111,12 +111,12 @@ func (s *State) PopulateShard(ctx context.Context, pred string,
 		// We check for errors, if there are no errors we send value to channel.
 		select {
 		case <-ctx.Done():
-			x.Trace(ctx, "Context timed out while streaming pred: %v from instance: %v",
-				pred, serverId)
+			x.TraceError(ctx, x.Errorf("Context timed out while streaming pred: %v from instance: %v",
+				pred, serverId))
 			close(kvs)
 			return ctx.Err()
 		case err := <-che:
-			x.Trace(ctx, "Error while doing a batch write for pred: %v", pred)
+			x.TraceError(ctx, x.Errorf("Error while doing a batch write for pred: %v", pred))
 			close(kvs)
 			return err
 		case kvs <- kv:
@@ -125,7 +125,7 @@ func (s *State) PopulateShard(ctx context.Context, pred string,
 	close(kvs)
 
 	if err := <-che; err != nil {
-		x.Trace(ctx, "Error while doing a batch write for pred: %v", pred)
+		x.TraceError(ctx, x.Errorf("Error while doing a batch write for pred: %v", pred))
 		return err
 	}
 	x.Trace(ctx, "Streaming complete for pred: %v from server with id: %v", pred, serverId)

@@ -566,7 +566,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		xidToUid := make(map[string]uint64)
 		xidToUid[exid] = 0
 		if err := worker.GetOrAssignUidsOverNetwork(ctx, xidToUid); err != nil {
-			x.Trace(ctx, "Error while getting uids over network: %v", err)
+			x.TraceError(ctx, x.Wrapf(err, "Error while getting uids over network"))
 			return nil, err
 		}
 
@@ -575,8 +575,8 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	}
 
 	if euid == 0 {
-		err := fmt.Errorf("Query internal id is zero")
-		x.Trace(ctx, "Invalid query: %v", err)
+		err := x.Errorf("Invalid query, query internal id is zero")
+		x.TraceError(ctx, err)
 		return nil, err
 	}
 
@@ -665,7 +665,7 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, rch chan error) {
 	if len(sg.Query) > 0 && !sg.Params.IsRoot {
 		sg.Result, err = worker.ProcessTaskOverNetwork(ctx, sg.Query)
 		if err != nil {
-			x.Trace(ctx, "Error while processing task: %v", err)
+			x.TraceError(ctx, x.Wrapf(err, "Error while processing task"))
 			rch <- err
 			return
 		}
@@ -688,7 +688,7 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, rch chan error) {
 
 	sorted, err := sortedUniqueUids(r)
 	if err != nil {
-		x.Trace(ctx, "Error while processing task: %v", err)
+		x.TraceError(ctx, x.Wrapf(err, "Error while processing task"))
 		rch <- err
 		return
 	}
@@ -717,12 +717,12 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, rch chan error) {
 		case err = <-childchan:
 			x.Trace(ctx, "Reply from child. Index: %v Attr: %v", i, sg.Children[i].Attr)
 			if err != nil {
-				x.Trace(ctx, "Error while processing child task: %v", err)
+				x.TraceError(ctx, x.Wrapf(err, "Error while processing child task"))
 				rch <- err
 				return
 			}
 		case <-ctx.Done():
-			x.Trace(ctx, "Context done before full execution: %v", ctx.Err())
+			x.TraceError(ctx, x.Wrapf(ctx.Err(), "Context done before full execution"))
 			rch <- ctx.Err()
 			return
 		}
