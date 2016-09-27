@@ -95,6 +95,14 @@ var (
 			" precision. Each DateTime is associated with a timezone.",
 		Unmarshaler: uTime,
 	}
+	// DateType scalar.
+	DateType = Scalar{
+		Name: "date",
+		id:   dateID,
+		Description: "The 'Date' scalar type represents a date (year, month, day)." +
+			" A date is not associated with a timezone.",
+		Unmarshaler: uDate,
+	}
 )
 
 // stores a mapping between a string name of a type
@@ -105,6 +113,7 @@ var typeNameMap = map[string]Type{
 	BooleanType.Name:  BooleanType,
 	IDType.Name:       IDType,
 	DateTimeType.Name: DateTimeType,
+	DateType.Name:     DateType,
 }
 
 // stores a mapping between the typeID to a type
@@ -115,6 +124,7 @@ var typeIDMap = map[TypeID]Type{
 	BooleanType.ID():  BooleanType,
 	IDType.ID():       IDType,
 	DateTimeType.ID(): DateTimeType,
+	DateType.ID():     DateType,
 }
 
 // TypeForName returns the type corresponding to the given name.
