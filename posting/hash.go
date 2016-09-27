@@ -1,8 +1,6 @@
 package posting
 
-import (
-	"sync"
-)
+import "sync"
 
 type listMapShard struct {
 	sync.RWMutex
