@@ -24,8 +24,6 @@ import (
 	"log"
 	"net"
 	"sort"
-	"strconv"
-	"strings"
 	"sync"
 
 	"github.com/coreos/etcd/raft/raftpb"
@@ -46,6 +44,8 @@ type State struct {
 	uidStore  *store.Store
 	groupId   uint64
 	numGroups uint64
+
+	// TODO: Remove this code once RAFT groups are in place.
 	// pools stores the pool for all the instances which is then used to send queries
 	// and mutations to the appropriate instance.
 	pools      []*Pool
@@ -171,6 +171,8 @@ func (w *grpcWorker) ServeTask(ctx context.Context, query *Payload) (*Payload, e
 	var rerr error
 	// Request for xid <-> uid conversion should be handled by instance 0 and all
 	// other requests should be handled according to modulo sharding of the predicate.
+
+	// TODO: This should be done based on group rules, and not a modulo of num groups.
 	chosenInstance := farm.Fingerprint64([]byte(attr)) % ws.numGroups
 	if (ws.groupId == 0 && attr == _xid_) || chosenInstance == ws.groupId {
 		reply.Data, rerr = processTask(query.Data)
@@ -199,17 +201,9 @@ func (w *grpcWorker) JoinCluster(ctx context.Context, query *Payload) (*Payload,
 	if len(query.Data) == 0 {
 		return reply, x.Errorf("JoinCluster: No data provided")
 	}
-	kv := strings.SplitN(string(query.Data), ":", 2)
-	if len(kv) != 2 {
-		return reply, x.Errorf("Invalid data: %v", string(query.Data))
-	}
+	pid, addr := parsePeer(string(query.Data))
 
-	pid, err := strconv.ParseUint(kv[0], 10, 64)
-	if err != nil {
-		return reply, x.Wrap(err)
-	}
-
-	GetNode().Connect(pid, kv[1])
+	GetNode().Connect(pid, addr)
 	GetNode().AddToCluster(pid)
 	fmt.Printf("JOINCLUSTER recieved. Modified conf: %v", string(query.Data))
 	return reply, nil
@@ -218,7 +212,7 @@ func (w *grpcWorker) JoinCluster(ctx context.Context, query *Payload) (*Payload,
 // PredicateData can be used to return data corresponding to a predicate over
 // a stream.
 func (w *grpcWorker) PredicateData(query *Payload, stream Worker_PredicateDataServer) error {
-	var group task.Group
+	var group task.GroupKeys
 	uo := flatbuffers.GetUOffsetT(query.Data)
 	group.Init(query.Data, uo)
 	_ = group.Groupid()
@@ -235,15 +229,15 @@ func (w *grpcWorker) PredicateData(query *Payload, stream Worker_PredicateDataSe
 
 		// TODO: Check that key is part of the specified group id.
 		i := sort.Search(group.KeysLength(), func(i int) bool {
-			var t task.KT
-			x.Assertf(group.Keys(&t, i), "Unable to parse task.KT")
+			var t task.KC
+			x.Assertf(group.Keys(&t, i), "Unable to parse task.KC")
 			return bytes.Compare(k.Data(), t.KeyBytes()) <= 0
 		})
 
 		if i < group.KeysLength() {
 			// Found a match.
-			var t task.KT
-			x.Assertf(group.Keys(&t, i), "Unable to parse task.KT")
+			var t task.KC
+			x.Assertf(group.Keys(&t, i), "Unable to parse task.KC")
 
 			if bytes.Equal(k.Data(), t.KeyBytes()) && bytes.Equal(pl.Checksum(), t.ChecksumBytes()) {
 				// No need to send this.
@@ -275,7 +269,7 @@ func (w *grpcWorker) PredicateData(query *Payload, stream Worker_PredicateDataSe
 
 // runServer initializes a tcp server on port which listens to requests from
 // other workers for internal communication.
-func runServer(port string) {
+func RunServer(port string) {
 	ln, err := net.Listen("tcp", port)
 	if err != nil {
 		log.Fatalf("While running server: %v", err)
@@ -286,40 +280,6 @@ func runServer(port string) {
 	s := grpc.NewServer(grpc.CustomCodec(&PayloadCodec{}))
 	RegisterWorkerServer(s, &grpcWorker{})
 	s.Serve(ln)
-}
-
-// Connect establishes a connection with other workers and sends the Hello rpc
-// call to them.
-func (s *State) Connect(workerList []string, workerPort string) {
-	go runServer(workerPort)
-
-	for _, addr := range workerList {
-		if len(addr) == 0 {
-			continue
-		}
-
-		pool := NewPool(addr, 5)
-		query := new(Payload)
-		query.Data = []byte("hello")
-
-		conn, err := pool.Get()
-		if err != nil {
-			log.Fatalf("Unable to connect: %v", err)
-		}
-
-		c := NewWorkerClient(conn)
-		_, err = c.Hello(context.Background(), query)
-		if err != nil {
-			log.Fatalf("Unable to connect: %v", err)
-		}
-		_ = pool.Put(conn)
-
-		s.poolsMutex.Lock()
-		s.pools = append(s.pools, pool)
-		s.poolsMutex.Unlock()
-	}
-
-	log.Print("Server started. Clients connected.")
 }
 
 // GetPool returns pool for given index.

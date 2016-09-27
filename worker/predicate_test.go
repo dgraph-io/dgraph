@@ -162,7 +162,7 @@ func TestGenerateGroup(t *testing.T) {
 		t.Fail()
 	}
 	for i := 0; i < 100; i++ {
-		var k task.KT
+		var k task.KC
 		if ok := g.Keys(&k, i); !ok {
 			t.Errorf("Unable to parse key at index: %v", i)
 		}

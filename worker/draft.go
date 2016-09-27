@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"net"
 	"strconv"
 	"strings"
 	"sync"
@@ -226,6 +225,7 @@ func parsePeer(peer string) (uint64, string) {
 	x.Assertf(len(kv) == 2, "Invalid peer format: %v", peer)
 	pid, err := strconv.ParseUint(kv[0], 10, 64)
 	x.Checkf(err, "Invalid peer id: %v", kv[0])
+	// TODO: Validate the url kv[1]
 	return pid, kv[1]
 }
 
@@ -258,14 +258,13 @@ func (n *node) JoinCluster(any string) {
 
 func newNode(id uint64, my string) *node {
 	fmt.Printf("NEW NODE ID: %v\n", id)
-	fmt.Println("local address", net.Addr(nil))
 
 	store := raft.NewMemoryStorage()
 	n := &node{
 		id:    id,
 		store: store,
 		cfg: &raft.Config{
-			ID:              uint64(id),
+			ID:              id,
 			ElectionTick:    3,
 			HeartbeatTick:   1,
 			Storage:         store,
@@ -280,18 +279,16 @@ func newNode(id uint64, my string) *node {
 }
 
 func (n *node) StartNode(cluster string) {
-	var raftPeers []raft.Peer
+	var peers []raft.Peer
 	if len(cluster) > 0 {
-		raftPeers = append(raftPeers, raft.Peer{ID: n.id})
-
 		for _, p := range strings.Split(cluster, ",") {
 			pid, paddr := parsePeer(p)
-			raftPeers = append(raftPeers, raft.Peer{ID: pid})
+			peers = append(peers, raft.Peer{ID: pid})
 			n.Connect(pid, paddr)
 		}
 	}
 
-	n.raft = raft.StartNode(n.cfg, raftPeers)
+	n.raft = raft.StartNode(n.cfg, peers)
 	go n.Run()
 }
 

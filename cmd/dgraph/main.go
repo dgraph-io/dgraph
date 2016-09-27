@@ -57,12 +57,9 @@ var (
 	port        = flag.Int("port", 8080, "Port to run server on.")
 	numcpu      = flag.Int("cores", runtime.NumCPU(),
 		"Number of cores to be used by the process")
-	instanceIdx = flag.Uint64("idx", 0,
-		"serves only entities whose Fingerprint % numInstance == instanceIdx.")
-	cluster = flag.String("cluster", "", "List of peers in this format: ID1:URL1,ID2:URL2,...")
-	peer    = flag.String("peer", "", "Address of any peer.")
-	workers = flag.String("workers", "",
-		"Comma separated list of IP addresses of workers")
+	raftId     = flag.Uint64("idx", 0, "RAFT ID that this server will use to join RAFT groups.")
+	cluster    = flag.String("cluster", "", "List of peers in this format: ID1:URL1,ID2:URL2,...")
+	peer       = flag.String("peer", "", "Address of any peer.")
 	workerPort = flag.String("workerport", ":12345",
 		"Port used by worker for internal communication.")
 	nomutations = flag.Bool("nomutations", false, "Don't allow mutations on this server.")
@@ -527,6 +524,8 @@ func serveHTTP(l net.Listener) {
 }
 
 func setupServer() {
+	go worker.RunServer(*workerPort) // For internal communication.
+
 	l, err := net.Listen("tcp", fmt.Sprintf(":%d", *port))
 	if err != nil {
 		log.Fatal(err)
@@ -571,18 +570,11 @@ func main() {
 	defer ps.Close()
 
 	posting.InitIndex(ps)
-
-	addrs := strings.Split(*workers, ",")
-	lenAddr := uint64(len(addrs))
-	if lenAddr == 0 {
-		// If no worker is specified, then we're it.
-		lenAddr = 1
-	}
-
 	posting.Init()
+
 	var ws *worker.State
 	if groupId != 0 { // HACK: This will currently not run.
-		ws = worker.NewState(ps, nil, groupId, 1) // TODO: Set number of grous here.
+		ws = worker.NewState(ps, nil, groupId, 1) // TODO: Set number of groups here.
 		worker.SetWorkerState(ws)
 		uid.Init(nil)
 
@@ -599,7 +591,7 @@ func main() {
 	}
 
 	my := "localhost" + *workerPort
-	worker.InitNode(uint64(*instanceIdx), my)
+	worker.InitNode(*raftId, my)
 	worker.GetNode().StartNode(*cluster)
 	if len(*peer) > 0 {
 		go worker.GetNode().JoinCluster(*peer)
@@ -615,9 +607,6 @@ func main() {
 			log.Fatalf("Error while loading schema:%v", err)
 		}
 	}
-	// Initiate internal worker communication.
-	ws.Connect(addrs, *workerPort)
-
 	// Setup external communication.
 	setupServer()
 }

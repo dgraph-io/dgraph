@@ -33,12 +33,12 @@ table KV {
 	val:[ubyte];
 }
 
-table KT {
+table KC {
 	key:[ubyte];
 	checksum:[ubyte];
 }
 
-table Group {
+table GroupKeys {
 	groupid:ulong;
-	keys:[KT];
+	keys:[KC];
 }

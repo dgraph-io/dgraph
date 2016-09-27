@@ -81,10 +81,10 @@ func (s *State) generateGroup(group uint64) ([]byte, error) {
 		ko := b.CreateByteVector(k.Data())
 		co := b.CreateByteVector(pl.Checksum())
 
-		task.KTStart(b)
-		task.KTAddKey(b, ko)
-		task.KTAddChecksum(b, co)
-		uo := task.KTEnd(b)
+		task.KCStart(b)
+		task.KCAddKey(b, ko)
+		task.KCAddChecksum(b, co)
+		uo := task.KCEnd(b)
 
 		uoffsets = append(uoffsets, uo)
 	}
@@ -92,16 +92,16 @@ func (s *State) generateGroup(group uint64) ([]byte, error) {
 		return []byte{}, nil
 	}
 
-	task.GroupStartKeysVector(b, len(uoffsets))
+	task.GroupKeysStartKeysVector(b, len(uoffsets))
 	for i := len(uoffsets) - 1; i >= 0; i-- {
 		b.PrependUOffsetT(uoffsets[i])
 	}
 	keysOffset := b.EndVector(len(uoffsets))
 
-	task.GroupStart(b)
-	task.GroupAddGroupid(b, group)
-	task.GroupAddKeys(b, keysOffset)
-	rend := task.GroupEnd(b)
+	task.GroupKeysStart(b)
+	task.GroupKeysAddGroupid(b, group)
+	task.GroupKeysAddKeys(b, keysOffset)
+	rend := task.GroupKeysEnd(b)
 	b.Finish(rend)
 	return b.Bytes[b.Head():], nil
 }
