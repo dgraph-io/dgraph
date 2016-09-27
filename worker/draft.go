@@ -15,6 +15,23 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
+type peerPool struct {
+	sync.RWMutex
+	peers map[uint64]*Pool
+}
+
+func (p *peerPool) Get(id uint64) *Pool {
+	p.RLock()
+	defer p.RUnlock()
+	return p.peers[id]
+}
+
+func (p *peerPool) Set(id uint64, pool *Pool) {
+	p.Lock()
+	defer p.Unlock()
+	p.peers[id] = pool
+}
+
 type node struct {
 	cfg       *raft.Config
 	data      map[string]string
@@ -22,16 +39,15 @@ type node struct {
 	id        uint64
 	raft      raft.Node
 	store     *raft.MemoryStorage
-	peers     map[uint64]*Pool
+	peers     peerPool
 	localAddr string
 }
 
-// TODO: Make this thread safe.
 func (n *node) Connect(pid uint64, addr string) {
 	if pid == n.id {
 		return
 	}
-	if _, has := n.peers[pid]; has {
+	if pool := n.peers.Get(pid); pool != nil {
 		return
 	}
 
@@ -50,26 +66,30 @@ func (n *node) Connect(pid uint64, addr string) {
 	if err != nil {
 		log.Fatalf("Unable to connect: %v", err)
 	}
-	_ = pool.Put(conn)
-	n.peers[pid] = pool
+	x.Check(pool.Put(conn))
+
+	n.peers.Set(pid, pool)
 	fmt.Printf("CONNECTED TO %d %v\n", pid, addr)
 	return
 }
 
 func (n *node) AddToCluster(pid uint64) {
+	pool := n.peers.Get(pid)
+	x.Assertf(pool != nil, "Unable to find conn pool for peer: %d", pid)
+
 	n.raft.ProposeConfChange(context.TODO(), raftpb.ConfChange{
 		ID:      pid,
 		Type:    raftpb.ConfChangeAddNode,
 		NodeID:  pid,
-		Context: []byte(strconv.FormatUint(pid, 10) + ":" + n.peers[pid].Addr),
+		Context: []byte(strconv.FormatUint(pid, 10) + ":" + pool.Addr),
 	})
 }
 
 func (n *node) send(m raftpb.Message) {
 	x.Assertf(n.id != m.To, "Seding message to itself")
 
-	pool, has := n.peers[m.To]
-	x.Assertf(has, "Don't have address for peer: %d", m.To)
+	pool := n.peers.Get(m.To)
+	x.Assertf(pool != nil, "Don't have address for peer: %d", m.To)
 
 	conn, err := pool.Get()
 	x.Check(err)
@@ -150,7 +170,8 @@ func (n *node) processSnapshot(s raftpb.Snapshot) {
 		fmt.Printf("Don't know who the leader is")
 		return
 	}
-	pool := n.peers[lead]
+	pool := n.peers.Get(lead)
+	x.Assertf(pool != nil, "Leader: %d pool should not be nil", lead)
 	fmt.Printf("Getting snapshot from leader: %v", lead)
 	x.Checkf(ws.PopulateShard(context.TODO(), pool, 0), "processSnapshot")
 	fmt.Printf("DONE with snapshot ============================")
@@ -183,19 +204,12 @@ func (n *node) Run() {
 	}
 }
 
-func (n *node) Campaign(ctx context.Context) {
-	if len(n.peers) > 0 {
-		fmt.Printf("CAMPAIGN\n")
-		x.Check(n.raft.Campaign(ctx))
-	}
-}
-
 func (n *node) Step(ctx context.Context, msg raftpb.Message) error {
 	return n.raft.Step(ctx, msg)
 }
 
 func (n *node) SnapshotPeriodically() {
-	for t := range time.Tick(10 * time.Second) {
+	for t := range time.Tick(time.Minute) {
 		fmt.Printf("Snapshot Periodically: %v", t)
 
 		le, err := n.store.LastIndex()
@@ -231,12 +245,12 @@ func parsePeer(peer string) (uint64, string) {
 
 func (n *node) JoinCluster(any string) {
 	// Tell one of the peers to join.
-
 	pid, paddr := parsePeer(any)
 	n.Connect(pid, paddr)
 
-	// TODO: Make this thread safe.
-	pool := n.peers[pid]
+	pool := n.peers.Get(pid)
+	x.Assertf(pool != nil, "Unable to find pool for peer: %d", pid)
+
 	// TODO: Ask for the leader, before running PopulateShard.
 	// Bring the instance up to speed first.
 	x.Checkf(ws.PopulateShard(context.TODO(), pool, 0), "Error while populating shard")
@@ -259,6 +273,10 @@ func (n *node) JoinCluster(any string) {
 func newNode(id uint64, my string) *node {
 	fmt.Printf("NEW NODE ID: %v\n", id)
 
+	peers := peerPool{
+		peers: make(map[uint64]*Pool),
+	}
+
 	store := raft.NewMemoryStorage()
 	n := &node{
 		id:    id,
@@ -272,7 +290,7 @@ func newNode(id uint64, my string) *node {
 			MaxInflightMsgs: 256,
 		},
 		data:      make(map[string]string),
-		peers:     make(map[uint64]*Pool),
+		peers:     peers,
 		localAddr: my,
 	}
 	return n
