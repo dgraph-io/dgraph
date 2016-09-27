@@ -66,6 +66,9 @@ func Parse(schema string) error {
 
 			if curObj != "" {
 				newObj.Fields[name] = typ
+				if t, ok := getScalar(typ); ok {
+					store[name] = t
+				}
 			} else if isScalarBlock {
 				t, ok := getScalar(typ)
 				if !ok {

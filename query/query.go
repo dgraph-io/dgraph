@@ -573,7 +573,7 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 
 		// Determine the type of current node.
 		var attrType schema.Type
-		if attrType = schema.TypeOf(sg.Attr); attrType == nil {
+		if sg.Params.AttrType != nil {
 			if objType, ok := sg.Params.AttrType.(schema.Object); ok {
 				attrType = schema.TypeOf(objType.Fields[gchild.Attr])
 			}
