@@ -9,7 +9,7 @@ import (
 )
 
 // Parse parses the given schema file and generates the schema store.
-func Parse(schema string) error {
+func Parse1(schema string) error {
 	file, err := os.Open(schema)
 	if err != nil {
 		log.Fatal(err)

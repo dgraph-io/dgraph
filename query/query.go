@@ -535,7 +535,7 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 	// So, we work on the children, and then recurse for grand children.
 
 	var scalars []string
-	// Add scalar chilsdren nodes based on schema
+	// Add scalar children nodes based on schema
 	if obj, ok := sg.Params.AttrType.(schema.Object); ok {
 		// Add scalar fields in the level to children
 		list := schema.ScalarList(obj.Name)
@@ -576,6 +576,13 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 		if sg.Params.AttrType != nil {
 			if objType, ok := sg.Params.AttrType.(schema.Object); ok {
 				attrType = schema.TypeOf(objType.Fields[gchild.Attr])
+			}
+		} else {
+			// Child is explicitly specified as some type.
+			if objType := schema.TypeOf(gchild.Attr); objType != nil {
+				if gchild.Attr == objType.(schema.Object).Name {
+					attrType = objType
+				}
 			}
 		}
 		args := params{

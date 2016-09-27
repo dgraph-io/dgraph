@@ -1,11 +1,11 @@
-scalar age:int
+ scalar age:int
 
 scalar (
   name: string
   address: string
   )
 
-type   Person {
+type  Person {
 name: string
 age: int
 address: string
@@ -14,6 +14,7 @@ friend: Person
 
 type Actor{
 name  : string
+NumFollower: int
  age : int
   address :  string 
 films: Film 
