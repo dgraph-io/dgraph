@@ -37,6 +37,7 @@ const (
 	boolID
 	dateTimeID
 	dateID
+	geoID
 )
 
 // added suffix 'type' to names to distinguish from Go types 'int' and 'string'
@@ -102,6 +103,14 @@ var (
 		Description: "The 'Date' scalar type represents a date (year, month, day)." +
 			" A date is not associated with a timezone.",
 		Unmarshaler: uDate,
+	}
+	// GeoDataType scalar.
+	GeoType = Scalar{
+		Name: "geo",
+		id:   geoID,
+		Description: "The 'Geo' scalar represents geographic spatial data. This data" +
+			" stored in the WKB format.",
+		Unmarshaler: uGeo,
 	}
 )
 

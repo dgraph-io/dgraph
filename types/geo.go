@@ -14,12 +14,10 @@
  * limitations under the License.
  */
 
-package geo
+package types
 
 import (
 	"encoding/binary"
-
-	"github.com/dgraph-io/dgraph/types"
 
 	"github.com/twpayne/go-geom"
 	"github.com/twpayne/go-geom/encoding/geojson"
@@ -50,7 +48,7 @@ func (v Geo) MarshalJSON() ([]byte, error) {
 
 type unmarshalGeo struct{}
 
-func (u unmarshalGeo) FromBinary(data []byte) (types.TypeValue, error) {
+func (u unmarshalGeo) FromBinary(data []byte) (TypeValue, error) {
 	v, err := wkb.Unmarshal(data)
 	if err != nil {
 		return nil, err
@@ -61,7 +59,7 @@ func (u unmarshalGeo) FromBinary(data []byte) (types.TypeValue, error) {
 }
 
 // Parses geojson text.
-func (u unmarshalGeo) FromText(text []byte) (types.TypeValue, error) {
+func (u unmarshalGeo) FromText(text []byte) (TypeValue, error) {
 	var g geom.T
 	if err := geojson.Unmarshal(text, &g); err != nil {
 		return nil, err
