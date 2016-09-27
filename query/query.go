@@ -253,10 +253,8 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 				m["_uid_"] = fmt.Sprintf("%#x", uid)
 			}
 			if ival, present := cResult[uid]; !present {
-				//l[j] = m
 				l = append(l, m)
 			} else {
-				//l[j] = mergeInterfaces(m, ival)
 				l = append(l, mergeInterfaces(m, ival))
 			}
 		}
@@ -439,8 +437,14 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 		} else if ul.UidsLength() > 0 {
 			// We create as many predicate entity children as the length of uids for
 			// this predicate.
+			var sortedIdx int // Index into pc.sorted.
 			for i := 0; i < ul.UidsLength(); i++ {
 				uid := ul.Uids(i)
+				for ; sortedIdx < len(pc.sorted) && pc.sorted[sortedIdx] < uid; sortedIdx++ {
+				}
+				if sortedIdx >= len(pc.sorted) || pc.sorted[sortedIdx] > uid {
+					continue
+				}
 				uc := nodePool.Get().(*graph.Node)
 				uc.Attribute = pc.Attr
 				if sg.Params.GetUid || sg.Params.isDebug {
@@ -454,7 +458,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 			}
 		} else {
 			if ok := r.Values(&tv, idx); !ok {
-				return fmt.Errorf("While parsing value")
+				return x.Errorf("While parsing value")
 			}
 
 			v := tv.ValBytes()

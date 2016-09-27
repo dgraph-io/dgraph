@@ -816,6 +816,79 @@ func TestToPB(t *testing.T) {
 	}
 }
 
+func TestToPBFilter(t *testing.T) {
+	dir, _ := populateGraph(t)
+	defer os.RemoveAll(dir)
+
+	// Alright. Now we have everything set up. Let's create the query.
+	query := `
+		{
+			me(_uid_:0x01) {
+				name
+				gender
+				status
+				friend @filter(eq("name", "Andrea")) {
+					name
+				}
+			}
+		}
+	`
+
+	gq, _, err := gql.Parse(query)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	ctx := context.Background()
+	sg, err := ToSubGraph(ctx, gq)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	ch := make(chan error)
+	go ProcessGraph(ctx, sg, ch)
+	err = <-ch
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	var l Latency
+	pb, err := sg.ToProtocolBuffer(&l)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	expectedPb := `attribute: "me"
+properties: <
+  prop: "name"
+  val: "Michonne"
+>
+properties: <
+  prop: "gender"
+  val: "female"
+>
+properties: <
+  prop: "status"
+  val: "alive"
+>
+children: <
+  attribute: "friend"
+  properties: <
+    prop: "name"
+    val: "Andrea"
+  >
+>
+`
+	pbText := proto.MarshalTextString(pb)
+	if pbText != expectedPb {
+		t.Errorf("Output wrong: %v", pbText)
+		return
+	}
+}
+
 func benchmarkToJson(file string, b *testing.B) {
 	b.ReportAllocs()
 	var sg SubGraph
