@@ -776,11 +776,13 @@ func (sg *SubGraph) applyFilter(ctx context.Context, sorted []uint64) ([]uint64,
 		case err := <-childchan:
 			x.Trace(ctx, "Reply from child for filter.")
 			if err != nil {
-				x.Trace(ctx, "Error while processing child task for filter: %v", err)
+				x.TraceError(ctx, x.Wrapf(err,
+					"Error while processing child task for filter"))
 				return sorted, nil
 			}
 		case <-ctx.Done():
-			x.Trace(ctx, "Context done before full execution: %v", ctx.Err())
+			x.TraceError(ctx, x.Wrapf(ctx.Err(),
+				"Context done before full execution in filter"))
 			return sorted, ctx.Err()
 		}
 	}
