@@ -270,6 +270,7 @@ func (l *List) getPostingList() *types.PostingList {
 }
 
 // Caller must hold at least a read lock.
+// TODO: Consider using the new sort.Search function.
 func (l *List) lePostingIndex(maxUid uint64) (int, uint64) {
 	posting := l.getPostingList()
 	left, right := 0, posting.PostingsLength()-1
@@ -301,6 +302,7 @@ func (l *List) lePostingIndex(maxUid uint64) (int, uint64) {
 	return sofar, p.Uid()
 }
 
+// TODO: Consider using the new sort.Search function.
 func (l *List) leMutationIndex(maxUid uint64) (int, uint64) {
 	left, right := 0, len(l.mindex)-1
 	sofar := -1

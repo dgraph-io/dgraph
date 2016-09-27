@@ -97,8 +97,7 @@ func mutate(ctx context.Context, m *Mutations, left *Mutations) error {
 }
 
 // runMutate is used to run the mutations on an instance.
-func runMutate(ctx context.Context, idx int, m *Mutations,
-	replies chan *Payload, che chan error) {
+func runMutate(ctx context.Context, idx int, m *Mutations, replies chan *Payload, che chan error) {
 	left := new(Mutations)
 	var err error
 	// We run them locally if idx == groupId
