@@ -20,11 +20,11 @@ func Parse(file string) (rerr error) {
 	if err != nil {
 		return fmt.Errorf("Error reading file: %v", err)
 	}
-	str := string(b)
+	s := string(b)
 
 	l := &lex.Lexer{}
 
-	l.Init(str)
+	l.Init(s)
 	go run(l)
 
 	for item := range l.Items {
@@ -44,7 +44,7 @@ func Parse(file string) (rerr error) {
 		}
 	}
 
-	for _, v := range store {
+	for _, v := range str {
 		if obj, ok := v.(Object); ok {
 			for p, q := range obj.Fields {
 				typ := TypeOf(q)
@@ -52,13 +52,13 @@ func Parse(file string) (rerr error) {
 					return fmt.Errorf("Type not defined %v", q)
 				}
 				if typ != nil && !typ.IsScalar() {
-					store[p] = typ
+					str[p] = typ
 				}
 			}
 		}
 	}
 
-	fmt.Println(store)
+	fmt.Println(str)
 	return nil
 }
 
@@ -86,7 +86,7 @@ func processScalarBlock(l *lex.Lexer) error {
 				if !ok {
 					return fmt.Errorf("Invalid type")
 				}
-				store[name] = t
+				str[name] = t
 			}
 		}
 	}
@@ -118,7 +118,7 @@ func processScalar(l *lex.Lexer) error {
 				typ = next.Val
 
 				if t, ok := getScalar(typ); ok {
-					store[name] = t
+					str[name] = t
 				} else {
 					return fmt.Errorf("Invalid type")
 				}
@@ -168,18 +168,18 @@ L:
 				}
 				typ = next.Val
 				if t, ok := getScalar(typ); ok {
-					if t1, ok := store[name]; ok {
+					if t1, ok := str[name]; ok {
 						if t1.(Scalar).Name != t.(Scalar).Name {
 							return fmt.Errorf("Same field cant have multiple types")
 						}
 					} else {
-						store[name] = t
+						str[name] = t
 					}
 				}
 				obj.Fields[name] = typ
 			}
 		}
 	}
-	store[objName] = obj
+	str[objName] = obj
 	return nil
 }

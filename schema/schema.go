@@ -21,20 +21,20 @@ type Item struct {
 	Typ   Type
 }
 
-var store map[string]Type
+var str map[string]Type
 
 func init() {
-	store = make(map[string]Type)
+	str = make(map[string]Type)
 }
 
 // ScalarList returns the list of scalars in the geiven object.
 func ScalarList(obj string) []Item {
 	var res []Item
-	objStore, ok := store[obj].(Object)
+	objstr, ok := str[obj].(Object)
 	if !ok {
 		return res
 	}
-	for k, v := range objStore.Fields {
+	for k, v := range objstr.Fields {
 		if t, ok := getScalar(v); ok {
 			res = append(res, Item{Field: k, Typ: t})
 		}
@@ -44,7 +44,7 @@ func ScalarList(obj string) []Item {
 
 // TypeOf returns the type of given field.
 func TypeOf(pred string) Type {
-	if obj, ok := store[pred]; ok {
+	if obj, ok := str[pred]; ok {
 		return obj
 	}
 	if typ, ok := getScalar(pred); ok {

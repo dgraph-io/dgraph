@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/gob"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"strings"
@@ -32,6 +33,7 @@ import (
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/query/graph"
+	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/worker"
@@ -175,6 +177,12 @@ func populateGraph(t *testing.T) (string, *store.Store) {
 	edge.Value = []byte("female")
 	addEdge(t, edge, getOrCreate(posting.Key(1, "gender"), ps))
 
+	edge.Value = []byte("15")
+	addEdge(t, edge, getOrCreate(posting.Key(1, "age"), ps))
+
+	edge.Value = []byte("31, 32 street, Jupiter")
+	addEdge(t, edge, getOrCreate(posting.Key(1, "address"), ps))
+
 	edge.Value = []byte("alive")
 	addEdge(t, edge, getOrCreate(posting.Key(1, "status"), ps))
 
@@ -190,6 +198,12 @@ func populateGraph(t *testing.T) (string, *store.Store) {
 	// Now let's add a name for each of the friends, except 101.
 	edge.Value = []byte("Rick Grimes")
 	addEdge(t, edge, getOrCreate(posting.Key(23, "name"), ps))
+
+	edge.Value = []byte("15")
+	addEdge(t, edge, getOrCreate(posting.Key(23, "age"), ps))
+
+	edge.Value = []byte("21, mark street, Mars")
+	addEdge(t, edge, getOrCreate(posting.Key(23, "address"), ps))
 
 	edge.Value = []byte("Glenn Rhee")
 	addEdge(t, edge, getOrCreate(posting.Key(24, "name"), ps))
@@ -235,6 +249,50 @@ func processToJson(t *testing.T, query string) map[string]interface{} {
 		t.Error(err)
 	}
 	return mp
+}
+
+func TestSchema1(t *testing.T) {
+	err := schema.Parse("test_schema")
+
+	if err != nil {
+		t.Error(err)
+	}
+
+	dir, _ := populateGraph(t)
+	defer os.RemoveAll(dir)
+
+	// Alright. Now we have everything set up. Let's create the query.
+	query := `
+		{
+			person(_uid_:0x01) {
+				friend
+			}
+		}
+	`
+	mp := processToJson(t, query)
+	fmt.Println(mp)
+	resp := mp["person"]
+	name := resp.(map[string]interface{})["name"].(string)
+	if name != "Michonne" {
+		t.Errorf("Expected name Michonne. Got %s", name)
+	}
+	friends := resp.(map[string]interface{})["friend"].([]interface{})
+	co := 0
+	res := 0
+	for _, it := range friends {
+		if len(it.(map[string]interface{})) == 0 {
+			co++
+		} else {
+			res = len(it.(map[string]interface{}))
+		}
+	}
+	if co != 4 {
+		t.Error("Invalid result")
+	}
+	if res != 3 {
+		t.Error("Invalid result")
+	}
+
 }
 
 func TestGetUid(t *testing.T) {
