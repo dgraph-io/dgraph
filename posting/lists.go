@@ -141,24 +141,15 @@ func mergeAndUpdateKeys(keys []uint64) {
 	ctr.log()
 }
 
-func gentleMerge(keysBuffer []uint64) {
+func gentleMerge() {
 	select {
 	case gentleMergeChan <- struct{}{}:
 		n := int(float64(len(dirtyMap)) * *gentleMergeFrac)
-		if cap(keysBuffer) < n {
-			// Resize keysBuffer to newCap := max(2*current cap, n).
-			newCap := 2 * cap(keysBuffer)
-			if newCap < n {
-				newCap = n
-			}
-			keysBuffer = make([]uint64, 0, newCap)
-		}
+		keysBuffer := make([]uint64, 0, n)
+
 		for key := range dirtyMap {
 			delete(dirtyMap, key)
 			keysBuffer = append(keysBuffer, key)
-			if len(keysBuffer) > n {
-				break
-			}
 		}
 		go mergeAndUpdateKeys(keysBuffer)
 	default:
@@ -170,7 +161,6 @@ func gentleMerge(keysBuffer []uint64) {
 // All write operations to dirtyMap should be contained in this function.
 func periodicMerging() {
 	ticker := time.NewTicker(5 * time.Second)
-	keysBuffer := make([]uint64, 0, 10000)
 	for {
 		select {
 		case key := <-dirtyChan:
@@ -186,7 +176,7 @@ func periodicMerging() {
 					delete(dirtyMap, k)
 				}
 			} else {
-				gentleMerge(keysBuffer)
+				gentleMerge()
 			}
 		}
 	}
