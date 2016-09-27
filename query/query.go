@@ -169,6 +169,9 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 			return result, err
 		}
 
+		// condFlag is used to ensure that the child is a required part of the
+		// current node according to schema. Only then should we check for its
+		// validity.
 		var condFlag bool
 		if obj, ok := schema.TypeOf(sg.Attr).(schema.Object); ok {
 			if _, ok := obj.Fields[child.Attr]; ok {
@@ -572,7 +575,7 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 		var attrType schema.Type
 		if attrType = schema.TypeOf(sg.Attr); attrType == nil {
 			if objType, ok := sg.Params.AttrType.(schema.Object); ok {
-				attrType = schema.TypeOf(schema.FieldType(objType.Name, gchild.Attr))
+				attrType = schema.TypeOf(objType.Fields[gchild.Attr])
 			}
 		}
 		args := params{
@@ -797,6 +800,7 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, rch chan error) {
 		}
 	}
 
+	// If all the child nodes are processed, return.
 	if len(leftToProcess) == 0 {
 		rch <- nil
 		return
@@ -840,6 +844,7 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, rch chan error) {
 		}
 	}
 
+	// Filter out the invalid UIDs.
 	j := 0
 	for i := 0; i < len(sorted); i++ {
 		if invalidUids[sorted[i]] {
@@ -850,14 +855,14 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, rch chan error) {
 	}
 	sorted = sorted[:j]
 
-	// Now go to next level only with valid uids.
+	// Now process next level with valid UIDs.
 	childchan = make(chan error, len(leftToProcess))
 	for _, child := range leftToProcess {
 		child.Query = createTaskQuery(child, sorted)
 		go ProcessGraph(ctx, child, childchan)
 	}
 
-	// Now get all the results back.
+	// Now get the results back.
 	for i := 0; i < len(leftToProcess); i++ {
 		select {
 		case err = <-childchan:

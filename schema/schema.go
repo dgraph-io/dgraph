@@ -27,6 +27,7 @@ func init() {
 	store = make(map[string]Type)
 }
 
+// ScalarList returns the list of scalars in the geiven object.
 func ScalarList(obj string) []scalar {
 	var res []scalar
 	objStore, ok := store[obj].(Object)
@@ -41,6 +42,7 @@ func ScalarList(obj string) []scalar {
 	return res
 }
 
+// TypeOf returns the type of given field.
 func TypeOf(pred string) Type {
 	if obj, ok := store[pred]; ok {
 		return obj
@@ -49,15 +51,6 @@ func TypeOf(pred string) Type {
 		return typ
 	}
 	return nil
-}
-
-func FieldType(obj string, field string) string {
-	if res, ok := store[obj]; ok {
-		if t, ok := res.(Object).Fields[field]; ok {
-			return t
-		}
-	}
-	return ""
 }
 
 func getScalar(typ string) (Type, bool) {

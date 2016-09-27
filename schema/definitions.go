@@ -20,7 +20,6 @@ import "fmt"
 
 // Type interface is the wrapper interface for all types
 type Type interface {
-	Type() Type
 	IsScalar() bool
 }
 
@@ -33,6 +32,7 @@ type Scalar struct {
 	ParseType   ParseTypeFunc
 }
 
+// Object represents all object types in the schema definition.
 type Object struct {
 	Name   string
 	Fields map[string]string //field to type relationship
@@ -46,19 +46,12 @@ func (s Scalar) String() string {
 	return fmt.Sprint(s.Name)
 }
 
-func (s Scalar) Type() Type {
-	typ, _ := getScalar(s.Name)
-	return typ
-}
-
-func (o Object) Type() Type {
-	return o
-}
-
+// Iscalar returns true if the object is of scalar type.
 func (s Scalar) IsScalar() bool {
 	return true
 }
 
+// Iscalar returns true if the object is of scalar type.
 func (o Object) IsScalar() bool {
 	return false
 }
