@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"math/rand"
 	"os"
 	"os/exec"
 	"runtime"
@@ -134,10 +135,12 @@ func mergeAndUpdateKeys(keys []uint64) {
 func gentleMerge(dirtyMap map[uint64]struct{}) {
 	select {
 	case gentleMergeChan <- struct{}{}:
+		id := rand.Int()
+		fmt.Printf("Start gentle merge %d\n", id)
 		n := int(float64(len(dirtyMap)) * *gentleMergeFrac)
 		if n < 300 {
 			// Have a min value of n, so we can merge small number of dirty PLs fast.
-			n = len(dirtyMap)
+			n = 300
 		}
 		keysBuffer := make([]uint64, 0, n)
 
@@ -149,6 +152,7 @@ func gentleMerge(dirtyMap map[uint64]struct{}) {
 				break
 			}
 		}
+		fmt.Printf("Leaving gentle merge %d\n", id)
 		go mergeAndUpdateKeys(keysBuffer)
 	default:
 		log.Println("Skipping gentle merge")
@@ -175,12 +179,15 @@ func periodicMerging() {
 
 			totMemory := getMemUsage()
 			if totMemory > *maxmemory {
-				// It's okay to run a blocking aggressive merge here, because during aggressive merge,
-				// no mutations are being added. So, we won't block our keysBuffer channel.
-				aggressivelyEvict()
+				fmt.Printf("~~~~Deleting dirtymap\n")
 				for k := range dirtyMap {
 					delete(dirtyMap, k)
 				}
+				fmt.Printf("~~~~Done deleting dirtymap\n")
+
+				// It's okay to run a blocking aggressive merge here, because during aggressive merge,
+				// no mutations are being added. So, we won't block our keysBuffer channel.
+				aggressivelyEvict()
 			} else {
 				gentleMerge(dirtyMap)
 			}
@@ -323,6 +330,7 @@ func MergeLists(numRoutines int) {
 	workChan := make(chan *List, 10000)
 
 	var wg sync.WaitGroup
+	fmt.Printf("~~~~~~MergeLists 1\n")
 	for i := 0; i < numRoutines; i++ {
 		wg.Add(1)
 		go func() {
@@ -334,6 +342,7 @@ func MergeLists(numRoutines int) {
 			}
 		}()
 	}
+	fmt.Printf("~~~~~~MergeLists 2\n")
 
 	lhmap.EachWithDelete(func(k uint64, l *List) {
 		if l == nil { // To be safe. Check might be unnecessary.
@@ -343,6 +352,8 @@ func MergeLists(numRoutines int) {
 		// for pushing into workChan. So no decr or incr here.
 		workChan <- l
 	})
+	fmt.Printf("~~~~~~MergeLists 3\n")
 	close(workChan)
+	fmt.Printf("~~~~~~MergeLists 4\n")
 	wg.Wait()
 }
