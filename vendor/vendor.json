@@ -77,6 +77,24 @@
 			"revisionTime": "2016-09-05T20:05:55Z"
 		},
 		{
+			"checksumSHA1": "nPzv1N4lRBr2UAvJure4uLjlYf8=",
+			"path": "github.com/twpayne/go-geom",
+			"revision": "bc4a3b038d13a183df22fd5f0316957a8c0dfd17",
+			"revisionTime": "2016-09-20T10:00:50Z"
+		},
+		{
+			"checksumSHA1": "7nqAxLYlyEi9e5DUsc+WNo++6PY=",
+			"path": "github.com/twpayne/go-geom/encoding/geojson",
+			"revision": "bc4a3b038d13a183df22fd5f0316957a8c0dfd17",
+			"revisionTime": "2016-09-20T10:00:50Z"
+		},
+		{
+			"checksumSHA1": "vSHXkm1nl0Y+xP0E420yRQDCnCA=",
+			"path": "github.com/twpayne/go-geom/encoding/wkb",
+			"revision": "bc4a3b038d13a183df22fd5f0316957a8c0dfd17",
+			"revisionTime": "2016-09-20T10:00:50Z"
+		},
+		{
 			"checksumSHA1": "7LaLud3qlAQZ+xftxLTbYg3cGpo=",
 			"path": "github.com/willf/bitset",
 			"revision": "28a4168144bb8ac95454e1f51c84da1933681ad4",
