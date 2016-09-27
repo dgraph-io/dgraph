@@ -177,8 +177,9 @@ func TestProcessTask(t *testing.T) {
 	}
 }
 
-// Check index. Similar to TestProcessTaskIndexMLayer but we call MergeLists
-// in between the test.
+// Index-related test. Similar to TestProcessTaskIndex but we call MergeLists only
+// at the end. In other words, everything is happening only in mutation layers,
+// and not committed to RocksDB until near the end.
 func TestProcessTaskIndexMLayer(t *testing.T) {
 	posting.ReadIndexConfigs([]byte(`{"config": [{"attribute": "friend"}]}`))
 
@@ -332,8 +333,8 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 	}
 }
 
-// Check index. All operations happen in mutation layers for this test. We call
-// MergeLists only at the very end of the test.
+// Index-related test. Similar to TestProcessTaskIndeMLayer except we call
+// MergeLists in between a lot of updates.
 func TestProcessTaskIndex(t *testing.T) {
 	posting.ReadIndexConfigs([]byte(`{"config": [{"attribute": "friend"}]}`))
 
