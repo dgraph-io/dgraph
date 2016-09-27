@@ -331,7 +331,7 @@ func MergeLists(numRoutines int) {
 	workChan := make(chan *List, 10000)
 
 	var wg sync.WaitGroup
-	fmt.Printf("~~~~~~MergeLists 1\n")
+	//	fmt.Printf("~~~~~~MergeLists 1\n")
 	for i := 0; i < numRoutines; i++ {
 		wg.Add(1)
 		go func() {
@@ -343,7 +343,7 @@ func MergeLists(numRoutines int) {
 			}
 		}()
 	}
-	fmt.Printf("~~~~~~MergeLists 2\n")
+	//	fmt.Printf("~~~~~~MergeLists 2\n")
 
 	lhmap.EachWithDelete(func(k uint64, l *List) {
 		if l == nil { // To be safe. Check might be unnecessary.
