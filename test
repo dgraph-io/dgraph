@@ -2,14 +2,22 @@
 
 function run {
   go test $@ |\
-		GREP_COLORS='mt=00;32' egrep --line-buffered --color=always '^ok\ .*|' |\
-		GREP_COLORS='mt=01;32' egrep --line-buffered --color=always '^\?\ .*|' |\
-		GREP_COLORS='mt=00;31' egrep --line-buffered --color=always '.*FAIL.*|'
+		GREP_COLORS='mt=00;32' egrep --line-buffered --color=always '^ok\ .*|$' |\
+		GREP_COLORS='mt=01;32' egrep --line-buffered --color=always '^\?\ .*|$' |\
+		GREP_COLORS='mt=00;31' egrep --line-buffered --color=always '.*FAIL.*|$'
 }
 
+# For piped commands return non-zero status if any command
+# in the pipe returns a non-zero status
+set -o pipefail
 echo
 echo "Running tests. Ignoring vendor folder."
 run "$(go list ./... | grep -v vendor | grep -v cmd)"
+
+# Exit if the previous command failed.
+if [ $? != 0 ]; then
+    exit $?
+fi
 
 echo
 echo "Running tests in cmd directory."
