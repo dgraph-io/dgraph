@@ -661,9 +661,7 @@ func (l *List) AddMutation(ctx context.Context, t x.DirectedEdge, op byte) (bool
 	if len(l.mindex)+len(l.mlayer) > 0 {
 		atomic.StoreInt64(&l.dirtyTs, time.Now().UnixNano())
 		if dirtyChan != nil {
-			//			fmt.Printf("~~~Waiting to push %d\n", l.ghash)
 			dirtyChan <- l.ghash
-			//			fmt.Printf("~~~Done push %d\n", l.ghash)
 		}
 	}
 	x.Trace(ctx, "Mutation done")
@@ -671,22 +669,17 @@ func (l *List) AddMutation(ctx context.Context, t x.DirectedEdge, op byte) (bool
 }
 
 func (l *List) MergeIfDirty(ctx context.Context) (merged bool, err error) {
-	//	id := rand.Int()
-	//	fmt.Printf("~~~~MergeIfDirty %d\n", id)
 	if atomic.LoadInt64(&l.dirtyTs) == 0 {
 		x.Trace(ctx, "Not committing")
 		return false, nil
 	}
 	x.Trace(ctx, "Committing")
-	//	defer fmt.Printf("~~~~MergeIfDirty 2: %d\n", id)
 	return l.merge()
 }
 
 func (l *List) merge() (merged bool, rerr error) {
 	l.wg.Wait()
-	//	fmt.Printf("~~~~merge acquiring lock %d\n", l.ghash)
 	l.Lock()
-	//	fmt.Printf("~~~~merge got lock %d\n", l.ghash)
 	defer l.Unlock()
 
 	if len(l.mindex)+len(l.mlayer) == 0 {

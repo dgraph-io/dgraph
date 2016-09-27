@@ -79,9 +79,7 @@ func (c *counters) log() {
 	}
 
 	log.Printf("List merge counters. added: %d merged: %d clean: %d"+
-		" pending: %d mapsize: %d\n",
-		added, merged, atomic.LoadUint64(&c.clean),
-		pending, lhmap.Size())
+		" pending: %d\n", added, merged, atomic.LoadUint64(&c.clean), pending)
 }
 
 func newCounters() *counters {
@@ -93,8 +91,6 @@ func newCounters() *counters {
 func aggressivelyEvict() {
 	// Okay, we exceed the max memory threshold.
 	// Stop the world, and deal with this first.
-	stopTheWorld.Lock()
-	defer stopTheWorld.Unlock()
 
 	megs := getMemUsage()
 	log.Printf("Memory usage over threshold. STW. Allocated MB: %v\n", megs)
@@ -109,7 +105,7 @@ func aggressivelyEvict() {
 	debug.FreeOSMemory()
 
 	megs = getMemUsage()
-	log.Printf("Memory usage after calling GC. Allocated MB: %v", megs)
+	log.Printf("EVICT DONE! Memory usage after calling GC. Allocated MB: %v", megs)
 }
 
 // mergeAndUpdateKeys calls mergeAndUpdate for each key in array "keys".
@@ -180,17 +176,28 @@ func periodicMerging() {
 
 			totMemory := getMemUsage()
 			if totMemory > *maxmemory {
-				fmt.Printf("~~~~Deleting dirtymap\n")
+				// Acquire lock, so no new posting lists are given out.
+				stopTheWorld.Lock()
+
+			DIRTYLOOP:
+				// Flush out the dirtyChan after acquiring lock. This allow posting lists which
+				// are currently being processed to not get stuck on dirtyChan, which won't be
+				// processed until aggressive evict finishes.
+				for {
+					select {
+					case <-dirtyChan:
+						// pass
+					default:
+						break DIRTYLOOP
+					}
+				}
+				aggressivelyEvict()
 				for k := range dirtyMap {
 					delete(dirtyMap, k)
 				}
-				fmt.Printf("~~~~Done deleting dirtymap\n")
-
-				// It's okay to run a blocking aggressive merge here, because during aggressive merge,
-				// no mutations are being added. So, we won't block our keysBuffer channel.
-				aggressivelyEvict()
+				stopTheWorld.Unlock()
 			} else {
-				//gentleMerge(dirtyMap)
+				gentleMerge(dirtyMap)
 			}
 		}
 	}
@@ -331,7 +338,6 @@ func MergeLists(numRoutines int) {
 	workChan := make(chan *List, 10000)
 
 	var wg sync.WaitGroup
-	//	fmt.Printf("~~~~~~MergeLists 1\n")
 	for i := 0; i < numRoutines; i++ {
 		wg.Add(1)
 		go func() {
@@ -343,7 +349,6 @@ func MergeLists(numRoutines int) {
 			}
 		}()
 	}
-	//	fmt.Printf("~~~~~~MergeLists 2\n")
 
 	lhmap.EachWithDelete(func(k uint64, l *List) {
 		if l == nil { // To be safe. Check might be unnecessary.
@@ -353,8 +358,6 @@ func MergeLists(numRoutines int) {
 		// for pushing into workChan. So no decr or incr here.
 		workChan <- l
 	})
-	fmt.Printf("~~~~~~MergeLists 3\n")
 	close(workChan)
-	fmt.Printf("~~~~~~MergeLists 4\n")
 	wg.Wait()
 }
