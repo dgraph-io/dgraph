@@ -233,7 +233,6 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 		if ok := r.Uidmatrix(&ul, i); !ok {
 			return result, fmt.Errorf("While parsing UidList")
 		}
-		//l := make([]interface{}, ul.UidsLength())
 		l := make([]interface{}, 0, ul.UidsLength())
 
 		// We want to intersect ul.Uids with this list. Since both are sorted, this
@@ -824,6 +823,9 @@ func (sg *SubGraph) applyFilter(ctx context.Context) error {
 	return nil
 }
 
+// applyFilterHelper traverses filter tree and produce a filtered list of UIDs.
+// Input "sorted" is the very original list of destination UIDs of a SubGraph.
+// Input "predMap" contains all the SubGraph objects which has all the results.
 func applyFilterHelper(ctx context.Context, sorted []uint64,
 	filter *gql.FilterTree, predMap map[string]*SubGraph) ([]uint64, error) {
 	out := make([]uint64, 0, 10) // out is our final output usually.
@@ -840,7 +842,6 @@ func applyFilterHelper(ctx context.Context, sorted []uint64,
 
 		r := new(task.Result)
 		x.ParseTaskResult(r, sg.Result)
-
 		x.Assertf(r.ValuesLength() == len(sorted),
 			"Wrong number of results: %d vs %d", r.ValuesLength(), len(sorted))
 		var tv task.Value
@@ -856,21 +857,17 @@ func applyFilterHelper(ctx context.Context, sorted []uint64,
 		return out, nil
 	}
 
-	//func applyFilterHelper(ctx context.Context, sorted []uint64,
-	//	filter *gql.FilterTree, predMap map[string]*SubGraph) ([]uint64, error) {
-
-	type resultPair struct {
-		uid []uint64
-		err error
-	}
-	resultChan := make(chan resultPair)
-
 	// For now, we only handle AND and OR.
 	if filter.Op != gql.ItemFilterAnd && filter.Op != gql.ItemFilterOr {
 		return sorted, x.Errorf("Unknown operator %v", filter.Op)
 	}
 
 	// Get UIDs for child filters.
+	type resultPair struct {
+		uid []uint64
+		err error
+	}
+	resultChan := make(chan resultPair)
 	for _, c := range filter.Child {
 		go func(c *gql.FilterTree) {
 			r, err := applyFilterHelper(ctx, sorted, c, predMap)
@@ -878,6 +875,7 @@ func applyFilterHelper(ctx context.Context, sorted []uint64,
 		}(c)
 	}
 	uidList := make(algo.PlainUintLists, 0, len(filter.Child))
+	// Collect the results from above goroutines.
 	for i := 0; i < len(filter.Child); i++ {
 		r := <-resultChan
 		if r.err != nil {
