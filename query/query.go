@@ -131,6 +131,7 @@ type SubGraph struct {
 	Attr     string
 	Children []*SubGraph
 	Params   params
+	Filter   *gql.FilterTree
 
 	Query  []byte // Contains list of source UIDs.
 	Result []byte // Contains UID matrix or list of values for child attributes.
@@ -517,6 +518,7 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 		dst := &SubGraph{
 			Attr:   gchild.Attr,
 			Params: args,
+			Filter: gchild.Filter,
 		}
 		if v, ok := gchild.Args["offset"]; ok {
 			offset, err := strconv.ParseInt(v, 0, 32)
@@ -616,6 +618,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		Attr:   gq.Attr,
 		Result: b.Bytes[b.Head():],
 		Params: args,
+		Filter: gq.Filter,
 	}
 	// Also add query for consistency and to allow for ToJSON() later.
 	sg.Query = createTaskQuery(sg, []uint64{euid})
@@ -700,6 +703,12 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, rch chan error) {
 		return
 	}
 
+	// Apply filters if any.
+	if sorted, err = sg.applyFilter(ctx, sorted); err != nil {
+		rch <- err
+		return
+	}
+
 	// Let's execute it in a tree fashion. Each SubGraph would break off
 	// as many goroutines as it's children; which would then recursively
 	// do the same thing.
@@ -729,3 +738,79 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, rch chan error) {
 	}
 	rch <- nil
 }
+
+// predsFromFilter returns unique predicates for a FilterTree.
+func predsFromFilter(filter *gql.FilterTree, out map[string]*SubGraph) {
+	if len(filter.FuncName) > 0 {
+		x.Assertf(len(filter.FuncArgs) >= 1,
+			"Expected >=1 args, got %d", len(filter.FuncArgs))
+		// Assume first argument is the predicate.
+		_, found := out[filter.FuncArgs[0]]
+		if !found {
+			out[filter.FuncArgs[0]] = &SubGraph{Attr: filter.FuncArgs[0]}
+		}
+		return
+	}
+	for _, c := range filter.Child {
+		predsFromFilter(c, out)
+	}
+}
+
+// applyFilters filters "sorted" given sg's filters.
+func (sg *SubGraph) applyFilter(ctx context.Context, sorted []uint64) ([]uint64, error) {
+	if sg.Filter == nil { // No filter.
+		return sorted, nil
+	}
+	predMap := make(map[string]*SubGraph)
+	predsFromFilter(sg.Filter, predMap)
+
+	// Get values for all predicates referenced in filter.
+	childchan := make(chan error)
+	for _, child := range predMap {
+		child.Query = createTaskQuery(child, sorted)
+		go ProcessGraph(ctx, child, childchan)
+	}
+
+	for i := 0; i < len(predMap); i++ {
+		select {
+		case err := <-childchan:
+			x.Trace(ctx, "Reply from child for filter.")
+			if err != nil {
+				x.Trace(ctx, "Error while processing child task for filter: %v", err)
+				return sorted, nil
+			}
+		case <-ctx.Done():
+			x.Trace(ctx, "Context done before full execution: %v", ctx.Err())
+			return sorted, ctx.Err()
+		}
+	}
+
+	//return applyFilterHelper(ctx, sorted, sg.Filter)
+	return nil, nil
+}
+
+//func applyFilterHelper(ctx context.Context, sorted []uint64, filter *gql.FilterTree) ([]uint64, error) {
+//	// Handle leaf nodes first.
+//	if len(filter.FuncName) > 0 {
+//		x.Assertf(filter.FuncName == "eq", "Only exact match is supported now")
+//		x.Assertf(len(filter.FuncArgs) == 2,
+//			"Expect exactly two arguments: pred and predValue")
+
+//		child := &SubGraph{
+//			Attr: filter.FuncArgs[0],
+//		}
+//		child.Query = createTaskQuery(child, sorted)
+//		ProcessGraph(ctx, chil)
+
+//		return nil, nil
+//	}
+
+//	switch filter.Op {
+//	case gql.ItemFilterAnd:
+//		return nil, nil
+//	case gql.ItemFilterOr:
+//		return nil, nil
+//	}
+
+//	return nil, nil
+//}

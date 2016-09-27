@@ -85,8 +85,8 @@ type FilterTree struct {
 
 func init() {
 	filterOpPrecedence = map[lex.ItemType]int{
-		itemFilterAnd: 2,
-		itemFilterOr:  1,
+		ItemFilterAnd: 2,
+		ItemFilterOr:  1,
 	}
 }
 
@@ -613,9 +613,9 @@ func (t *FilterTree) stringHelper(buf *bytes.Buffer) {
 	_, err := buf.WriteRune('(')
 	x.Check(err)
 	switch t.Op {
-	case itemFilterAnd:
+	case ItemFilterAnd:
 		_, err = buf.WriteString("AND")
-	case itemFilterOr:
+	case ItemFilterOr:
 		_, err = buf.WriteString("OR")
 	default:
 		err = x.Errorf("Unknown operator")

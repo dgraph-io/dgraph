@@ -61,8 +61,8 @@ const (
 	itemVarDefault                              // default value of a variable
 	itemAlias                                   // Alias for a field
 	itemDirectiveName                           // Name starting with @
-	itemFilterAnd                               // And inside a filter.
-	itemFilterOr                                // Or inside a filter.
+	ItemFilterAnd                               // And inside a filter.
+	ItemFilterOr                                // Or inside a filter.
 	itemFilterFunc                              // Function inside a filter.
 	itemFilterFuncArg                           // Function args inside a filter.
 )
@@ -215,14 +215,14 @@ func lexFilterInside(l *lex.Lexer) lex.StateFn {
 		case r == '&':
 			r2 := l.Next()
 			if r2 == '&' {
-				l.Emit(itemFilterAnd)
+				l.Emit(ItemFilterAnd)
 				return lexFilterInside
 			}
 			return l.Errorf("Expected & but got %v", r2)
 		case r == '|':
 			r2 := l.Next()
 			if r2 == '|' {
-				l.Emit(itemFilterOr)
+				l.Emit(ItemFilterOr)
 				return lexFilterInside
 			}
 			return l.Errorf("Expected | but got %v", r2)
