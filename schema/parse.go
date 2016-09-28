@@ -42,6 +42,8 @@ func Parse(file string) (rerr error) {
 					return rerr
 				}
 			}
+		case lex.ItemError:
+			return fmt.Errorf(item.Val)
 		}
 	}
 
@@ -59,7 +61,6 @@ func Parse(file string) (rerr error) {
 		}
 	}
 
-	fmt.Println(str)
 	return nil
 }
 
@@ -89,6 +90,8 @@ func processScalarBlock(l *lex.Lexer) error {
 				}
 				str[name] = t
 			}
+		case lex.ItemError:
+			return fmt.Errorf(item.Val)
 		}
 	}
 
@@ -125,6 +128,8 @@ func processScalar(l *lex.Lexer) error {
 				}
 				return nil
 			}
+		case lex.ItemError:
+			return fmt.Errorf(item.Val)
 		}
 	}
 	return nil
@@ -179,6 +184,8 @@ L:
 				}
 				obj.Fields[name] = typ
 			}
+		case lex.ItemError:
+			return fmt.Errorf(item.Val)
 		}
 	}
 	str[objName] = obj

@@ -16,11 +16,7 @@
 
 package schema
 
-import (
-	"log"
-
-	"github.com/dgraph-io/dgraph/lex"
-)
+import "github.com/dgraph-io/dgraph/lex"
 
 const (
 	leftCurl   = '{'
@@ -60,6 +56,8 @@ Loop:
 			return lexStart
 		case isSpace(r) || isEndOfLine(r):
 			l.Ignore()
+		default:
+			return l.Errorf("Invalid schema. Unexpected %s", l.Input[l.Start:l.Pos])
 		}
 	}
 	if l.Pos > l.Start {
@@ -85,7 +83,7 @@ func lexStart(l *lex.Lexer) lex.StateFn {
 			l.Emit(itemType)
 			return lexObject
 		} else {
-			log.Fatal("Invalid schema")
+			return l.Errorf("Invalid schema")
 		}
 	}
 
@@ -103,6 +101,8 @@ func lexScalar(l *lex.Lexer) lex.StateFn {
 			return lexScalarBlock
 		case isSpace(r) || isEndOfLine(r):
 			l.Ignore()
+		default:
+			return l.Errorf("Invalid schema. Unexpected %s", l.Input[l.Start:l.Pos])
 		}
 	}
 }
@@ -118,6 +118,8 @@ func lexScalarBlock(l *lex.Lexer) lex.StateFn {
 			return lexScalarPair1
 		case isSpace(r) || isEndOfLine(r):
 			l.Ignore()
+		default:
+			return l.Errorf("Invalid schema. Unexpected %s", l.Input[l.Start:l.Pos])
 		}
 	}
 }
@@ -142,6 +144,8 @@ func lexObject(l *lex.Lexer) lex.StateFn {
 				}
 				return lexObjectBlock
 			}
+		default:
+			return l.Errorf("Invalid schema. Unexpected %s", l.Input[l.Start:l.Pos])
 		}
 	}
 }
@@ -158,6 +162,8 @@ func lexObjectBlock(l *lex.Lexer) lex.StateFn {
 			return lexText
 		case isNameBegin(r):
 			return lexObjectPair
+		default:
+			return l.Errorf("Invalid schema. Unexpected %s", l.Input[l.Start:l.Pos])
 		}
 	}
 }
@@ -185,6 +191,8 @@ L:
 		case isNameBegin(r):
 			l.Backup()
 			break L
+		default:
+			return l.Errorf("Invalid schema. Unexpected %s", l.Input[l.Start:l.Pos])
 		}
 	}
 
@@ -224,6 +232,8 @@ L:
 		case isNameBegin(r):
 			l.Backup()
 			break L
+		default:
+			return l.Errorf("Invalid schema. Unexpected %s", l.Input[l.Start:l.Pos])
 		}
 	}
 
@@ -263,6 +273,8 @@ L:
 		case isNameBegin(r):
 			l.Backup()
 			break L
+		default:
+			return l.Errorf("Invalid schema. Unexpected %s", l.Input[l.Start:l.Pos])
 		}
 	}
 
