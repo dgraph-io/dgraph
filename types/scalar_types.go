@@ -114,7 +114,7 @@ var (
 			" A date is not associated with a timezone.",
 		Unmarshaler: uDate,
 	}
-	// GeoDataType scalar.
+	// GeoType scalar.
 	GeoType = Scalar{
 		Name: "geo",
 		id:   geoID,
@@ -133,6 +133,7 @@ var typeNameMap = map[string]Type{
 	IDType.Name:       IDType,
 	DateTimeType.Name: DateTimeType,
 	DateType.Name:     DateType,
+	GeoType.Name:      GeoType,
 }
 
 // stores a mapping between the typeID to a type
@@ -145,6 +146,7 @@ var typeIDMap = map[TypeID]Type{
 	DateTimeType.ID():  DateTimeType,
 	ByteArrayType.ID(): ByteArrayType,
 	DateType.ID():      DateType,
+	GeoType.ID():       GeoType,
 }
 
 // TypeForName returns the type corresponding to the given name.
