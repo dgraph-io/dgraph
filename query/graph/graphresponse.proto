@@ -12,8 +12,20 @@ message NQuad {
     string sub = 1;
     string pred = 2;
     string objId = 3;
-    bytes objVal = 4;
+    bytes objVal = 4;  // Deprecated use value instead
     string label = 5;
+    Value value = 6;
+}
+
+message Value {
+    oneof val {
+        bytes bytes_val = 1;
+        int32 int_val = 2;
+        bool bool_val = 3;
+        string str_val = 4;
+        double double_val = 5;
+        bytes geo_val = 6;  // Geo data in WKB format
+    }
 }
 
 message Mutation {
@@ -34,7 +46,8 @@ message Latency {
 
 message Property {
     string prop = 1;
-    bytes val = 2;
+    bytes val = 2;  // deprecated use Value instead
+    Value value = 3;
 }
 
 message Node {

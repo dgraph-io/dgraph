@@ -10,6 +10,7 @@
 
 	It has these top-level messages:
 		NQuad
+		Value
 		Mutation
 		Request
 		Latency
@@ -47,12 +48,244 @@ type NQuad struct {
 	ObjId  string `protobuf:"bytes,3,opt,name=objId,proto3" json:"objId,omitempty"`
 	ObjVal []byte `protobuf:"bytes,4,opt,name=objVal,proto3" json:"objVal,omitempty"`
 	Label  string `protobuf:"bytes,5,opt,name=label,proto3" json:"label,omitempty"`
+	Value  *Value `protobuf:"bytes,6,opt,name=value" json:"value,omitempty"`
 }
 
 func (m *NQuad) Reset()                    { *m = NQuad{} }
 func (m *NQuad) String() string            { return proto.CompactTextString(m) }
 func (*NQuad) ProtoMessage()               {}
 func (*NQuad) Descriptor() ([]byte, []int) { return fileDescriptorGraphresponse, []int{0} }
+
+func (m *NQuad) GetValue() *Value {
+	if m != nil {
+		return m.Value
+	}
+	return nil
+}
+
+type Value struct {
+	// Types that are valid to be assigned to Val:
+	//	*Value_BytesVal
+	//	*Value_IntVal
+	//	*Value_BoolVal
+	//	*Value_StrVal
+	//	*Value_DoubleVal
+	//	*Value_GeoVal
+	Val isValue_Val `protobuf_oneof:"val"`
+}
+
+func (m *Value) Reset()                    { *m = Value{} }
+func (m *Value) String() string            { return proto.CompactTextString(m) }
+func (*Value) ProtoMessage()               {}
+func (*Value) Descriptor() ([]byte, []int) { return fileDescriptorGraphresponse, []int{1} }
+
+type isValue_Val interface {
+	isValue_Val()
+	MarshalTo([]byte) (int, error)
+	Size() int
+}
+
+type Value_BytesVal struct {
+	BytesVal []byte `protobuf:"bytes,1,opt,name=bytes_val,json=bytesVal,proto3,oneof"`
+}
+type Value_IntVal struct {
+	IntVal int32 `protobuf:"varint,2,opt,name=int_val,json=intVal,proto3,oneof"`
+}
+type Value_BoolVal struct {
+	BoolVal bool `protobuf:"varint,3,opt,name=bool_val,json=boolVal,proto3,oneof"`
+}
+type Value_StrVal struct {
+	StrVal string `protobuf:"bytes,4,opt,name=str_val,json=strVal,proto3,oneof"`
+}
+type Value_DoubleVal struct {
+	DoubleVal float64 `protobuf:"fixed64,5,opt,name=double_val,json=doubleVal,proto3,oneof"`
+}
+type Value_GeoVal struct {
+	GeoVal []byte `protobuf:"bytes,6,opt,name=geo_val,json=geoVal,proto3,oneof"`
+}
+
+func (*Value_BytesVal) isValue_Val()  {}
+func (*Value_IntVal) isValue_Val()    {}
+func (*Value_BoolVal) isValue_Val()   {}
+func (*Value_StrVal) isValue_Val()    {}
+func (*Value_DoubleVal) isValue_Val() {}
+func (*Value_GeoVal) isValue_Val()    {}
+
+func (m *Value) GetVal() isValue_Val {
+	if m != nil {
+		return m.Val
+	}
+	return nil
+}
+
+func (m *Value) GetBytesVal() []byte {
+	if x, ok := m.GetVal().(*Value_BytesVal); ok {
+		return x.BytesVal
+	}
+	return nil
+}
+
+func (m *Value) GetIntVal() int32 {
+	if x, ok := m.GetVal().(*Value_IntVal); ok {
+		return x.IntVal
+	}
+	return 0
+}
+
+func (m *Value) GetBoolVal() bool {
+	if x, ok := m.GetVal().(*Value_BoolVal); ok {
+		return x.BoolVal
+	}
+	return false
+}
+
+func (m *Value) GetStrVal() string {
+	if x, ok := m.GetVal().(*Value_StrVal); ok {
+		return x.StrVal
+	}
+	return ""
+}
+
+func (m *Value) GetDoubleVal() float64 {
+	if x, ok := m.GetVal().(*Value_DoubleVal); ok {
+		return x.DoubleVal
+	}
+	return 0
+}
+
+func (m *Value) GetGeoVal() []byte {
+	if x, ok := m.GetVal().(*Value_GeoVal); ok {
+		return x.GeoVal
+	}
+	return nil
+}
+
+// XXX_OneofFuncs is for the internal use of the proto package.
+func (*Value) XXX_OneofFuncs() (func(msg proto.Message, b *proto.Buffer) error, func(msg proto.Message, tag, wire int, b *proto.Buffer) (bool, error), func(msg proto.Message) (n int), []interface{}) {
+	return _Value_OneofMarshaler, _Value_OneofUnmarshaler, _Value_OneofSizer, []interface{}{
+		(*Value_BytesVal)(nil),
+		(*Value_IntVal)(nil),
+		(*Value_BoolVal)(nil),
+		(*Value_StrVal)(nil),
+		(*Value_DoubleVal)(nil),
+		(*Value_GeoVal)(nil),
+	}
+}
+
+func _Value_OneofMarshaler(msg proto.Message, b *proto.Buffer) error {
+	m := msg.(*Value)
+	// val
+	switch x := m.Val.(type) {
+	case *Value_BytesVal:
+		_ = b.EncodeVarint(1<<3 | proto.WireBytes)
+		_ = b.EncodeRawBytes(x.BytesVal)
+	case *Value_IntVal:
+		_ = b.EncodeVarint(2<<3 | proto.WireVarint)
+		_ = b.EncodeVarint(uint64(x.IntVal))
+	case *Value_BoolVal:
+		t := uint64(0)
+		if x.BoolVal {
+			t = 1
+		}
+		_ = b.EncodeVarint(3<<3 | proto.WireVarint)
+		_ = b.EncodeVarint(t)
+	case *Value_StrVal:
+		_ = b.EncodeVarint(4<<3 | proto.WireBytes)
+		_ = b.EncodeStringBytes(x.StrVal)
+	case *Value_DoubleVal:
+		_ = b.EncodeVarint(5<<3 | proto.WireFixed64)
+		_ = b.EncodeFixed64(math.Float64bits(x.DoubleVal))
+	case *Value_GeoVal:
+		_ = b.EncodeVarint(6<<3 | proto.WireBytes)
+		_ = b.EncodeRawBytes(x.GeoVal)
+	case nil:
+	default:
+		return fmt.Errorf("Value.Val has unexpected type %T", x)
+	}
+	return nil
+}
+
+func _Value_OneofUnmarshaler(msg proto.Message, tag, wire int, b *proto.Buffer) (bool, error) {
+	m := msg.(*Value)
+	switch tag {
+	case 1: // val.bytes_val
+		if wire != proto.WireBytes {
+			return true, proto.ErrInternalBadWireType
+		}
+		x, err := b.DecodeRawBytes(true)
+		m.Val = &Value_BytesVal{x}
+		return true, err
+	case 2: // val.int_val
+		if wire != proto.WireVarint {
+			return true, proto.ErrInternalBadWireType
+		}
+		x, err := b.DecodeVarint()
+		m.Val = &Value_IntVal{int32(x)}
+		return true, err
+	case 3: // val.bool_val
+		if wire != proto.WireVarint {
+			return true, proto.ErrInternalBadWireType
+		}
+		x, err := b.DecodeVarint()
+		m.Val = &Value_BoolVal{x != 0}
+		return true, err
+	case 4: // val.str_val
+		if wire != proto.WireBytes {
+			return true, proto.ErrInternalBadWireType
+		}
+		x, err := b.DecodeStringBytes()
+		m.Val = &Value_StrVal{x}
+		return true, err
+	case 5: // val.double_val
+		if wire != proto.WireFixed64 {
+			return true, proto.ErrInternalBadWireType
+		}
+		x, err := b.DecodeFixed64()
+		m.Val = &Value_DoubleVal{math.Float64frombits(x)}
+		return true, err
+	case 6: // val.geo_val
+		if wire != proto.WireBytes {
+			return true, proto.ErrInternalBadWireType
+		}
+		x, err := b.DecodeRawBytes(true)
+		m.Val = &Value_GeoVal{x}
+		return true, err
+	default:
+		return false, nil
+	}
+}
+
+func _Value_OneofSizer(msg proto.Message) (n int) {
+	m := msg.(*Value)
+	// val
+	switch x := m.Val.(type) {
+	case *Value_BytesVal:
+		n += proto.SizeVarint(1<<3 | proto.WireBytes)
+		n += proto.SizeVarint(uint64(len(x.BytesVal)))
+		n += len(x.BytesVal)
+	case *Value_IntVal:
+		n += proto.SizeVarint(2<<3 | proto.WireVarint)
+		n += proto.SizeVarint(uint64(x.IntVal))
+	case *Value_BoolVal:
+		n += proto.SizeVarint(3<<3 | proto.WireVarint)
+		n += 1
+	case *Value_StrVal:
+		n += proto.SizeVarint(4<<3 | proto.WireBytes)
+		n += proto.SizeVarint(uint64(len(x.StrVal)))
+		n += len(x.StrVal)
+	case *Value_DoubleVal:
+		n += proto.SizeVarint(5<<3 | proto.WireFixed64)
+		n += 8
+	case *Value_GeoVal:
+		n += proto.SizeVarint(6<<3 | proto.WireBytes)
+		n += proto.SizeVarint(uint64(len(x.GeoVal)))
+		n += len(x.GeoVal)
+	case nil:
+	default:
+		panic(fmt.Sprintf("proto: unexpected type %T in oneof", x))
+	}
+	return n
+}
 
 type Mutation struct {
 	Set []*NQuad `protobuf:"bytes,1,rep,name=set" json:"set,omitempty"`
@@ -62,7 +295,7 @@ type Mutation struct {
 func (m *Mutation) Reset()                    { *m = Mutation{} }
 func (m *Mutation) String() string            { return proto.CompactTextString(m) }
 func (*Mutation) ProtoMessage()               {}
-func (*Mutation) Descriptor() ([]byte, []int) { return fileDescriptorGraphresponse, []int{1} }
+func (*Mutation) Descriptor() ([]byte, []int) { return fileDescriptorGraphresponse, []int{2} }
 
 func (m *Mutation) GetSet() []*NQuad {
 	if m != nil {
@@ -86,7 +319,7 @@ type Request struct {
 func (m *Request) Reset()                    { *m = Request{} }
 func (m *Request) String() string            { return proto.CompactTextString(m) }
 func (*Request) ProtoMessage()               {}
-func (*Request) Descriptor() ([]byte, []int) { return fileDescriptorGraphresponse, []int{2} }
+func (*Request) Descriptor() ([]byte, []int) { return fileDescriptorGraphresponse, []int{3} }
 
 func (m *Request) GetMutation() *Mutation {
 	if m != nil {
@@ -104,17 +337,25 @@ type Latency struct {
 func (m *Latency) Reset()                    { *m = Latency{} }
 func (m *Latency) String() string            { return proto.CompactTextString(m) }
 func (*Latency) ProtoMessage()               {}
-func (*Latency) Descriptor() ([]byte, []int) { return fileDescriptorGraphresponse, []int{3} }
+func (*Latency) Descriptor() ([]byte, []int) { return fileDescriptorGraphresponse, []int{4} }
 
 type Property struct {
-	Prop string `protobuf:"bytes,1,opt,name=prop,proto3" json:"prop,omitempty"`
-	Val  []byte `protobuf:"bytes,2,opt,name=val,proto3" json:"val,omitempty"`
+	Prop  string `protobuf:"bytes,1,opt,name=prop,proto3" json:"prop,omitempty"`
+	Val   []byte `protobuf:"bytes,2,opt,name=val,proto3" json:"val,omitempty"`
+	Value *Value `protobuf:"bytes,3,opt,name=value" json:"value,omitempty"`
 }
 
 func (m *Property) Reset()                    { *m = Property{} }
 func (m *Property) String() string            { return proto.CompactTextString(m) }
 func (*Property) ProtoMessage()               {}
-func (*Property) Descriptor() ([]byte, []int) { return fileDescriptorGraphresponse, []int{4} }
+func (*Property) Descriptor() ([]byte, []int) { return fileDescriptorGraphresponse, []int{5} }
+
+func (m *Property) GetValue() *Value {
+	if m != nil {
+		return m.Value
+	}
+	return nil
+}
 
 type Node struct {
 	Uid        uint64      `protobuf:"varint,1,opt,name=uid,proto3" json:"uid,omitempty"`
@@ -127,7 +368,7 @@ type Node struct {
 func (m *Node) Reset()                    { *m = Node{} }
 func (m *Node) String() string            { return proto.CompactTextString(m) }
 func (*Node) ProtoMessage()               {}
-func (*Node) Descriptor() ([]byte, []int) { return fileDescriptorGraphresponse, []int{5} }
+func (*Node) Descriptor() ([]byte, []int) { return fileDescriptorGraphresponse, []int{6} }
 
 func (m *Node) GetProperties() []*Property {
 	if m != nil {
@@ -146,13 +387,13 @@ func (m *Node) GetChildren() []*Node {
 type Response struct {
 	N            *Node             `protobuf:"bytes,1,opt,name=n" json:"n,omitempty"`
 	L            *Latency          `protobuf:"bytes,2,opt,name=l" json:"l,omitempty"`
-	AssignedUids map[string]uint64 `protobuf:"bytes,3,rep,name=AssignedUids,json=assignedUids" json:"AssignedUids,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"varint,2,opt,name=value,proto3"`
+	AssignedUids map[string]uint64 `protobuf:"bytes,3,rep,name=AssignedUids" json:"AssignedUids,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"varint,2,opt,name=value,proto3"`
 }
 
 func (m *Response) Reset()                    { *m = Response{} }
 func (m *Response) String() string            { return proto.CompactTextString(m) }
 func (*Response) ProtoMessage()               {}
-func (*Response) Descriptor() ([]byte, []int) { return fileDescriptorGraphresponse, []int{6} }
+func (*Response) Descriptor() ([]byte, []int) { return fileDescriptorGraphresponse, []int{7} }
 
 func (m *Response) GetN() *Node {
 	if m != nil {
@@ -177,6 +418,7 @@ func (m *Response) GetAssignedUids() map[string]uint64 {
 
 func init() {
 	proto.RegisterType((*NQuad)(nil), "graph.NQuad")
+	proto.RegisterType((*Value)(nil), "graph.Value")
 	proto.RegisterType((*Mutation)(nil), "graph.Mutation")
 	proto.RegisterType((*Request)(nil), "graph.Request")
 	proto.RegisterType((*Latency)(nil), "graph.Latency")
@@ -302,9 +544,98 @@ func (m *NQuad) MarshalTo(data []byte) (int, error) {
 		i = encodeVarintGraphresponse(data, i, uint64(len(m.Label)))
 		i += copy(data[i:], m.Label)
 	}
+	if m.Value != nil {
+		data[i] = 0x32
+		i++
+		i = encodeVarintGraphresponse(data, i, uint64(m.Value.Size()))
+		n1, err := m.Value.MarshalTo(data[i:])
+		if err != nil {
+			return 0, err
+		}
+		i += n1
+	}
 	return i, nil
 }
 
+func (m *Value) Marshal() (data []byte, err error) {
+	size := m.Size()
+	data = make([]byte, size)
+	n, err := m.MarshalTo(data)
+	if err != nil {
+		return nil, err
+	}
+	return data[:n], nil
+}
+
+func (m *Value) MarshalTo(data []byte) (int, error) {
+	var i int
+	_ = i
+	var l int
+	_ = l
+	if m.Val != nil {
+		nn2, err := m.Val.MarshalTo(data[i:])
+		if err != nil {
+			return 0, err
+		}
+		i += nn2
+	}
+	return i, nil
+}
+
+func (m *Value_BytesVal) MarshalTo(data []byte) (int, error) {
+	i := 0
+	if m.BytesVal != nil {
+		data[i] = 0xa
+		i++
+		i = encodeVarintGraphresponse(data, i, uint64(len(m.BytesVal)))
+		i += copy(data[i:], m.BytesVal)
+	}
+	return i, nil
+}
+func (m *Value_IntVal) MarshalTo(data []byte) (int, error) {
+	i := 0
+	data[i] = 0x10
+	i++
+	i = encodeVarintGraphresponse(data, i, uint64(m.IntVal))
+	return i, nil
+}
+func (m *Value_BoolVal) MarshalTo(data []byte) (int, error) {
+	i := 0
+	data[i] = 0x18
+	i++
+	if m.BoolVal {
+		data[i] = 1
+	} else {
+		data[i] = 0
+	}
+	i++
+	return i, nil
+}
+func (m *Value_StrVal) MarshalTo(data []byte) (int, error) {
+	i := 0
+	data[i] = 0x22
+	i++
+	i = encodeVarintGraphresponse(data, i, uint64(len(m.StrVal)))
+	i += copy(data[i:], m.StrVal)
+	return i, nil
+}
+func (m *Value_DoubleVal) MarshalTo(data []byte) (int, error) {
+	i := 0
+	data[i] = 0x29
+	i++
+	i = encodeFixed64Graphresponse(data, i, uint64(math.Float64bits(float64(m.DoubleVal))))
+	return i, nil
+}
+func (m *Value_GeoVal) MarshalTo(data []byte) (int, error) {
+	i := 0
+	if m.GeoVal != nil {
+		data[i] = 0x32
+		i++
+		i = encodeVarintGraphresponse(data, i, uint64(len(m.GeoVal)))
+		i += copy(data[i:], m.GeoVal)
+	}
+	return i, nil
+}
 func (m *Mutation) Marshal() (data []byte, err error) {
 	size := m.Size()
 	data = make([]byte, size)
@@ -372,11 +703,11 @@ func (m *Request) MarshalTo(data []byte) (int, error) {
 		data[i] = 0x12
 		i++
 		i = encodeVarintGraphresponse(data, i, uint64(m.Mutation.Size()))
-		n1, err := m.Mutation.MarshalTo(data[i:])
+		n3, err := m.Mutation.MarshalTo(data[i:])
 		if err != nil {
 			return 0, err
 		}
-		i += n1
+		i += n3
 	}
 	return i, nil
 }
@@ -443,6 +774,16 @@ func (m *Property) MarshalTo(data []byte) (int, error) {
 		i++
 		i = encodeVarintGraphresponse(data, i, uint64(len(m.Val)))
 		i += copy(data[i:], m.Val)
+	}
+	if m.Value != nil {
+		data[i] = 0x1a
+		i++
+		i = encodeVarintGraphresponse(data, i, uint64(m.Value.Size()))
+		n4, err := m.Value.MarshalTo(data[i:])
+		if err != nil {
+			return 0, err
+		}
+		i += n4
 	}
 	return i, nil
 }
@@ -525,21 +866,21 @@ func (m *Response) MarshalTo(data []byte) (int, error) {
 		data[i] = 0xa
 		i++
 		i = encodeVarintGraphresponse(data, i, uint64(m.N.Size()))
-		n2, err := m.N.MarshalTo(data[i:])
+		n5, err := m.N.MarshalTo(data[i:])
 		if err != nil {
 			return 0, err
 		}
-		i += n2
+		i += n5
 	}
 	if m.L != nil {
 		data[i] = 0x12
 		i++
 		i = encodeVarintGraphresponse(data, i, uint64(m.L.Size()))
-		n3, err := m.L.MarshalTo(data[i:])
+		n6, err := m.L.MarshalTo(data[i:])
 		if err != nil {
 			return 0, err
 		}
-		i += n3
+		i += n6
 	}
 	if len(m.AssignedUids) > 0 {
 		for k, _ := range m.AssignedUids {
@@ -610,9 +951,65 @@ func (m *NQuad) Size() (n int) {
 	if l > 0 {
 		n += 1 + l + sovGraphresponse(uint64(l))
 	}
+	if m.Value != nil {
+		l = m.Value.Size()
+		n += 1 + l + sovGraphresponse(uint64(l))
+	}
 	return n
 }
 
+func (m *Value) Size() (n int) {
+	var l int
+	_ = l
+	if m.Val != nil {
+		n += m.Val.Size()
+	}
+	return n
+}
+
+func (m *Value_BytesVal) Size() (n int) {
+	var l int
+	_ = l
+	if m.BytesVal != nil {
+		l = len(m.BytesVal)
+		n += 1 + l + sovGraphresponse(uint64(l))
+	}
+	return n
+}
+func (m *Value_IntVal) Size() (n int) {
+	var l int
+	_ = l
+	n += 1 + sovGraphresponse(uint64(m.IntVal))
+	return n
+}
+func (m *Value_BoolVal) Size() (n int) {
+	var l int
+	_ = l
+	n += 2
+	return n
+}
+func (m *Value_StrVal) Size() (n int) {
+	var l int
+	_ = l
+	l = len(m.StrVal)
+	n += 1 + l + sovGraphresponse(uint64(l))
+	return n
+}
+func (m *Value_DoubleVal) Size() (n int) {
+	var l int
+	_ = l
+	n += 9
+	return n
+}
+func (m *Value_GeoVal) Size() (n int) {
+	var l int
+	_ = l
+	if m.GeoVal != nil {
+		l = len(m.GeoVal)
+		n += 1 + l + sovGraphresponse(uint64(l))
+	}
+	return n
+}
 func (m *Mutation) Size() (n int) {
 	var l int
 	_ = l
@@ -672,6 +1069,10 @@ func (m *Property) Size() (n int) {
 	}
 	l = len(m.Val)
 	if l > 0 {
+		n += 1 + l + sovGraphresponse(uint64(l))
+	}
+	if m.Value != nil {
+		l = m.Value.Size()
 		n += 1 + l + sovGraphresponse(uint64(l))
 	}
 	return n
@@ -916,6 +1317,237 @@ func (m *NQuad) Unmarshal(data []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			m.Label = string(data[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 6:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Value", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowGraphresponse
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				msglen |= (int(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthGraphresponse
+			}
+			postIndex := iNdEx + msglen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.Value == nil {
+				m.Value = &Value{}
+			}
+			if err := m.Value.Unmarshal(data[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipGraphresponse(data[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthGraphresponse
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *Value) Unmarshal(data []byte) error {
+	l := len(data)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowGraphresponse
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := data[iNdEx]
+			iNdEx++
+			wire |= (uint64(b) & 0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: Value: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: Value: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field BytesVal", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowGraphresponse
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				byteLen |= (int(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthGraphresponse
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			v := make([]byte, postIndex-iNdEx)
+			copy(v, data[iNdEx:postIndex])
+			m.Val = &Value_BytesVal{v}
+			iNdEx = postIndex
+		case 2:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field IntVal", wireType)
+			}
+			var v int32
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowGraphresponse
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				v |= (int32(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.Val = &Value_IntVal{v}
+		case 3:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field BoolVal", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowGraphresponse
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				v |= (int(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			b := bool(v != 0)
+			m.Val = &Value_BoolVal{b}
+		case 4:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field StrVal", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowGraphresponse
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				stringLen |= (uint64(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthGraphresponse
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Val = &Value_StrVal{string(data[iNdEx:postIndex])}
+			iNdEx = postIndex
+		case 5:
+			if wireType != 1 {
+				return fmt.Errorf("proto: wrong wireType = %d for field DoubleVal", wireType)
+			}
+			var v uint64
+			if (iNdEx + 8) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += 8
+			v = uint64(data[iNdEx-8])
+			v |= uint64(data[iNdEx-7]) << 8
+			v |= uint64(data[iNdEx-6]) << 16
+			v |= uint64(data[iNdEx-5]) << 24
+			v |= uint64(data[iNdEx-4]) << 32
+			v |= uint64(data[iNdEx-3]) << 40
+			v |= uint64(data[iNdEx-2]) << 48
+			v |= uint64(data[iNdEx-1]) << 56
+			m.Val = &Value_DoubleVal{float64(math.Float64frombits(v))}
+		case 6:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field GeoVal", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowGraphresponse
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				byteLen |= (int(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthGraphresponse
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			v := make([]byte, postIndex-iNdEx)
+			copy(v, data[iNdEx:postIndex])
+			m.Val = &Value_GeoVal{v}
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
@@ -1386,6 +2018,39 @@ func (m *Property) Unmarshal(data []byte) error {
 			m.Val = append(m.Val[:0], data[iNdEx:postIndex]...)
 			if m.Val == nil {
 				m.Val = []byte{}
+			}
+			iNdEx = postIndex
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Value", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowGraphresponse
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				msglen |= (int(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthGraphresponse
+			}
+			postIndex := iNdEx + msglen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.Value == nil {
+				m.Value = &Value{}
+			}
+			if err := m.Value.Unmarshal(data[iNdEx:postIndex]); err != nil {
+				return err
 			}
 			iNdEx = postIndex
 		default:
@@ -1928,37 +2593,45 @@ var (
 func init() { proto.RegisterFile("graphresponse.proto", fileDescriptorGraphresponse) }
 
 var fileDescriptorGraphresponse = []byte{
-	// 507 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0x6c, 0x53, 0xc1, 0x6e, 0xd3, 0x40,
-	0x10, 0xed, 0x26, 0x76, 0x92, 0x4e, 0xa2, 0xb4, 0x2c, 0x08, 0x2d, 0x55, 0x65, 0x05, 0x5f, 0x88,
-	0x40, 0x0a, 0x28, 0x70, 0x40, 0x5c, 0x10, 0x88, 0x1e, 0x40, 0xa5, 0xa2, 0x8b, 0xe0, 0xbe, 0xce,
-	0xae, 0x52, 0x17, 0xe3, 0x75, 0x76, 0xd7, 0x15, 0xf9, 0x13, 0xce, 0x7c, 0x0d, 0x12, 0x17, 0x3e,
-	0x01, 0x85, 0x1f, 0x41, 0x3b, 0x5e, 0x87, 0xa8, 0x70, 0x9b, 0x79, 0xef, 0x69, 0xe6, 0xed, 0xf3,
-	0x18, 0x6e, 0x2e, 0x8d, 0xa8, 0x2e, 0x8c, 0xb2, 0x95, 0x2e, 0xad, 0x9a, 0x55, 0x46, 0x3b, 0x4d,
-	0x63, 0x04, 0xd3, 0x15, 0xc4, 0x67, 0xe7, 0xb5, 0x90, 0xf4, 0x10, 0xba, 0xb6, 0xce, 0x18, 0x99,
-	0x90, 0xe9, 0x3e, 0xf7, 0x25, 0xa5, 0x10, 0x55, 0x46, 0x49, 0xd6, 0x41, 0x08, 0x6b, 0x7a, 0x0b,
-	0x62, 0x9d, 0x5d, 0xbe, 0x96, 0xac, 0x8b, 0x60, 0xd3, 0xd0, 0xdb, 0xd0, 0xd3, 0xd9, 0xe5, 0x47,
-	0x51, 0xb0, 0x68, 0x42, 0xa6, 0x23, 0x1e, 0x3a, 0xaf, 0x2e, 0x44, 0xa6, 0x0a, 0x16, 0x37, 0x6a,
-	0x6c, 0xd2, 0x37, 0x30, 0x78, 0x5b, 0x3b, 0xe1, 0x72, 0x5d, 0xd2, 0x04, 0xba, 0x56, 0x39, 0x46,
-	0x26, 0xdd, 0xe9, 0x70, 0x3e, 0x9a, 0xa1, 0xa7, 0x19, 0x1a, 0xe2, 0x9e, 0xf0, 0xbc, 0x54, 0x05,
-	0xeb, 0xfc, 0x8f, 0x97, 0xaa, 0x48, 0x4f, 0xa1, 0xcf, 0xd5, 0xaa, 0x56, 0xd6, 0xf9, 0x65, 0xab,
-	0x5a, 0x99, 0x75, 0x78, 0x42, 0xd3, 0xd0, 0x07, 0x30, 0xf8, 0x1c, 0x96, 0xe1, 0x43, 0x86, 0xf3,
-	0x83, 0x30, 0xa5, 0xf5, 0xc0, 0xb7, 0x82, 0xf4, 0x3d, 0xf4, 0x4f, 0x85, 0x53, 0xe5, 0x62, 0x4d,
-	0x19, 0xf4, 0x2b, 0x61, 0x6c, 0x5e, 0x2e, 0xc3, 0xbc, 0xb6, 0xa5, 0x09, 0x40, 0x65, 0xf4, 0x42,
-	0x59, 0x24, 0x9b, 0x70, 0x76, 0x10, 0x3a, 0x86, 0x4e, 0x95, 0x85, 0x7c, 0x3a, 0x55, 0x96, 0x3e,
-	0x82, 0xc1, 0x3b, 0xa3, 0x2b, 0x65, 0xdc, 0xba, 0x89, 0x54, 0x57, 0x61, 0x24, 0xd6, 0x3e, 0xf8,
-	0x2b, 0x51, 0xe0, 0xa0, 0x11, 0xf7, 0x65, 0xfa, 0x8d, 0x40, 0x74, 0xa6, 0xa5, 0xf2, 0x54, 0x9d,
-	0x4b, 0x54, 0x47, 0xdc, 0x97, 0x1e, 0xf9, 0x92, 0xb7, 0x9f, 0xc4, 0x97, 0xf4, 0x18, 0xf6, 0x85,
-	0x73, 0x26, 0xcf, 0x6a, 0xa7, 0xc2, 0xd6, 0xbf, 0x00, 0x7d, 0x88, 0x66, 0xfd, 0xf2, 0x5c, 0x59,
-	0x16, 0x61, 0x8c, 0x6d, 0x00, 0xad, 0x2b, 0xbe, 0x23, 0xa1, 0xf7, 0x60, 0xb0, 0xb8, 0xc8, 0x0b,
-	0x69, 0x54, 0xc9, 0x62, 0x94, 0x0f, 0xdb, 0xd4, 0xb5, 0x54, 0x7c, 0x4b, 0xa6, 0x3f, 0x08, 0x0c,
-	0x78, 0x38, 0x29, 0x7a, 0x07, 0x48, 0x89, 0x36, 0xaf, 0xc9, 0x49, 0x49, 0x8f, 0x81, 0x14, 0x21,
-	0xf9, 0x71, 0xa0, 0x42, 0xc6, 0x9c, 0x14, 0xf4, 0x04, 0x46, 0x2f, 0xac, 0xcd, 0x97, 0xa5, 0x92,
-	0x1f, 0x72, 0x69, 0x59, 0x17, 0x57, 0xde, 0x0d, 0xc2, 0x76, 0xfe, 0x6c, 0x57, 0x73, 0x52, 0x3a,
-	0xb3, 0xe6, 0x23, 0xb1, 0x03, 0x1d, 0x3d, 0x87, 0x1b, 0xff, 0x48, 0x7c, 0x56, 0x9f, 0x54, 0x7b,
-	0x0e, 0xbe, 0xf4, 0x27, 0x72, 0x25, 0x8a, 0x5a, 0xa1, 0x9f, 0x88, 0x37, 0xcd, 0xb3, 0xce, 0x53,
-	0x32, 0x7f, 0x02, 0xbd, 0x57, 0xb8, 0x93, 0xde, 0x87, 0xf8, 0x1c, 0x2f, 0x67, 0xbc, 0x35, 0x81,
-	0xf7, 0x75, 0x74, 0x70, 0xcd, 0x54, 0xba, 0xf7, 0xf2, 0xf0, 0xfb, 0x26, 0x21, 0x3f, 0x37, 0x09,
-	0xf9, 0xb5, 0x49, 0xc8, 0xd7, 0xdf, 0xc9, 0x5e, 0xd6, 0xc3, 0x9f, 0xeb, 0xf1, 0x9f, 0x00, 0x00,
-	0x00, 0xff, 0xff, 0x3b, 0x5e, 0x7b, 0x91, 0x73, 0x03, 0x00, 0x00,
+	// 632 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0x74, 0x54, 0xc1, 0x6e, 0xd3, 0x40,
+	0x10, 0xcd, 0xc6, 0xb1, 0xe3, 0x4c, 0xa3, 0xb6, 0x2c, 0x08, 0xb9, 0xa5, 0x84, 0xe0, 0x0b, 0x15,
+	0x48, 0x41, 0x2a, 0x1c, 0x10, 0x17, 0x44, 0x45, 0xa5, 0x80, 0x4a, 0x45, 0x17, 0xe8, 0x15, 0xd9,
+	0xf5, 0x2a, 0x75, 0x31, 0x5e, 0x77, 0x77, 0x5d, 0x91, 0x0f, 0x41, 0xe2, 0xcc, 0x77, 0xf0, 0x01,
+	0x48, 0x5c, 0xf8, 0x04, 0x54, 0x7e, 0x04, 0xcd, 0x78, 0xdd, 0x86, 0x02, 0xb7, 0x99, 0xf7, 0x66,
+	0x66, 0x9f, 0x67, 0x5e, 0x02, 0x57, 0x67, 0x3a, 0xa9, 0x8e, 0xb4, 0x34, 0x95, 0x2a, 0x8d, 0x9c,
+	0x54, 0x5a, 0x59, 0xc5, 0x7d, 0x02, 0xe3, 0x4f, 0x0c, 0xfc, 0xbd, 0xfd, 0x3a, 0xc9, 0xf8, 0x2a,
+	0x78, 0xa6, 0x4e, 0x23, 0x36, 0x66, 0x9b, 0x03, 0x81, 0x21, 0xe7, 0xd0, 0xab, 0xb4, 0xcc, 0xa2,
+	0x2e, 0x41, 0x14, 0xf3, 0x6b, 0xe0, 0xab, 0xf4, 0xf8, 0x79, 0x16, 0x79, 0x04, 0x36, 0x09, 0xbf,
+	0x0e, 0x81, 0x4a, 0x8f, 0x0f, 0x92, 0x22, 0xea, 0x8d, 0xd9, 0xe6, 0x50, 0xb8, 0x0c, 0xab, 0x8b,
+	0x24, 0x95, 0x45, 0xe4, 0x37, 0xd5, 0x94, 0xf0, 0x18, 0xfc, 0xd3, 0xa4, 0xa8, 0x65, 0x14, 0x8c,
+	0xd9, 0xe6, 0xd2, 0xd6, 0x70, 0x42, 0x52, 0x26, 0x07, 0x88, 0x89, 0x86, 0x8a, 0xbf, 0x32, 0xf0,
+	0x09, 0xe0, 0x37, 0x61, 0x90, 0xce, 0xad, 0x34, 0xef, 0x4e, 0x93, 0x82, 0xd4, 0x0d, 0xa7, 0x1d,
+	0x11, 0x12, 0x84, 0x4f, 0xac, 0x41, 0x3f, 0x2f, 0x2d, 0x91, 0xa8, 0xd3, 0x9f, 0x76, 0x44, 0x90,
+	0x97, 0x16, 0xa9, 0x1b, 0x10, 0xa6, 0x4a, 0x15, 0xc4, 0xa1, 0xdc, 0x70, 0xda, 0x11, 0x7d, 0x44,
+	0x5c, 0x9f, 0xb1, 0x9a, 0x38, 0xd4, 0x3c, 0xc0, 0x3e, 0x63, 0x35, 0x52, 0xb7, 0x00, 0x32, 0x55,
+	0xa7, 0x85, 0x24, 0x16, 0xa5, 0xb3, 0x69, 0x47, 0x0c, 0x1a, 0xcc, 0xf5, 0xce, 0xa4, 0x22, 0x36,
+	0x70, 0x82, 0x82, 0x99, 0x54, 0x07, 0x49, 0xb1, 0xed, 0x83, 0x77, 0x9a, 0x14, 0xf1, 0x0b, 0x08,
+	0x5f, 0xd6, 0x36, 0xb1, 0xb9, 0x2a, 0xf9, 0x08, 0x3c, 0x23, 0x6d, 0xc4, 0xc6, 0xde, 0xc2, 0xc7,
+	0xd2, 0xce, 0x05, 0x12, 0xc8, 0x67, 0x12, 0xd5, 0xff, 0x83, 0xcf, 0x64, 0x11, 0xef, 0x42, 0x5f,
+	0xc8, 0x93, 0x5a, 0x1a, 0x8b, 0xfb, 0x3c, 0xa9, 0xa5, 0x9e, 0xbb, 0x2b, 0x35, 0x09, 0xbf, 0x07,
+	0xe1, 0x07, 0xf7, 0x18, 0xed, 0x60, 0x69, 0x6b, 0xc5, 0x4d, 0x69, 0x35, 0x88, 0xf3, 0x82, 0xf8,
+	0x35, 0xf4, 0x77, 0x13, 0x2b, 0xcb, 0xc3, 0x39, 0x8f, 0xa0, 0x5f, 0x25, 0xda, 0xe4, 0xe5, 0xcc,
+	0xcd, 0x6b, 0x53, 0x3e, 0x02, 0xa8, 0xb4, 0x3a, 0x94, 0x86, 0xc8, 0xe6, 0xfe, 0x0b, 0x08, 0x5f,
+	0x86, 0x6e, 0x95, 0x3a, 0x0b, 0x74, 0xab, 0x34, 0x7e, 0x03, 0xe1, 0x2b, 0xad, 0x2a, 0xa9, 0xed,
+	0xbc, 0x71, 0x8d, 0xaa, 0xdc, 0x48, 0x8a, 0xd1, 0x5b, 0xed, 0x81, 0x86, 0x02, 0xc3, 0x0b, 0x0f,
+	0x78, 0xff, 0xf7, 0xc0, 0x17, 0x06, 0xbd, 0x3d, 0x95, 0x49, 0x6c, 0xaf, 0xf3, 0x8c, 0x26, 0xf6,
+	0x04, 0x86, 0x88, 0x7c, 0xcc, 0x5b, 0x67, 0x62, 0xc8, 0x37, 0x60, 0x90, 0x58, 0xab, 0xf3, 0xb4,
+	0xb6, 0xd2, 0x29, 0xbb, 0x00, 0xf8, 0x7d, 0xfa, 0x20, 0x14, 0x98, 0x4b, 0x13, 0xf5, 0x68, 0xd5,
+	0xed, 0x92, 0x5a, 0xe5, 0x62, 0xa1, 0x84, 0xdf, 0x81, 0xf0, 0xf0, 0x28, 0x2f, 0x32, 0x2d, 0xcb,
+	0xc8, 0xa7, 0xf2, 0xa5, 0xf6, 0x32, 0x2a, 0x93, 0xe2, 0x9c, 0x8c, 0xbf, 0x33, 0x08, 0x85, 0xfb,
+	0x69, 0xf1, 0x35, 0x60, 0x25, 0xc9, 0xbc, 0x54, 0xce, 0x4a, 0xbe, 0x01, 0xac, 0x70, 0xd7, 0x59,
+	0x76, 0x94, 0xbb, 0x83, 0x60, 0x05, 0xdf, 0x81, 0xe1, 0x53, 0x63, 0xf2, 0x59, 0x29, 0xb3, 0xb7,
+	0x79, 0x66, 0x22, 0x8f, 0x9e, 0xbc, 0xed, 0x0a, 0xdb, 0xf9, 0x93, 0xc5, 0x9a, 0x9d, 0xd2, 0xea,
+	0xb9, 0xf8, 0xa3, 0x6d, 0xfd, 0x09, 0x5c, 0xf9, 0xab, 0x04, 0x77, 0xf5, 0x5e, 0xb6, 0x96, 0xc1,
+	0x10, 0x6d, 0xd4, 0x2c, 0xbf, 0x4b, 0x1b, 0x6d, 0x92, 0xc7, 0xdd, 0x47, 0x6c, 0xeb, 0x21, 0x04,
+	0xcf, 0xe8, 0x4d, 0x7e, 0x17, 0xfc, 0x7d, 0x72, 0xd7, 0xf2, 0xb9, 0x08, 0xf2, 0xe0, 0xfa, 0xca,
+	0x25, 0x51, 0x71, 0x67, 0x7b, 0xf5, 0xdb, 0xd9, 0x88, 0xfd, 0x38, 0x1b, 0xb1, 0x9f, 0x67, 0x23,
+	0xf6, 0xf9, 0xd7, 0xa8, 0x93, 0x06, 0xf4, 0x27, 0xf3, 0xe0, 0x77, 0x00, 0x00, 0x00, 0xff, 0xff,
+	0x12, 0xbd, 0xa2, 0xa3, 0x7b, 0x04, 0x00, 0x00,
 }
