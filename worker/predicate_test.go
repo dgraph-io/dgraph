@@ -19,9 +19,13 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
+	"log"
+	"net"
 	"os"
 	"testing"
 	"time"
+
+	"google.golang.org/grpc"
 
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/posting/types"
@@ -62,6 +66,25 @@ func writePLs(t *testing.T, count int, vid uint64, ps *store.Store) {
 	}
 }
 
+// We define this function so that we have access to the server which we can
+// close at the end of the test.
+func newServer(port string) (*grpc.Server, net.Listener, error) {
+	ln, err := net.Listen("tcp", port)
+	if err != nil {
+		log.Fatalf("While running server: %v", err)
+		return nil, nil, err
+	}
+	log.Printf("Worker listening at address: %v", ln.Addr())
+
+	s := grpc.NewServer(grpc.CustomCodec(&PayloadCodec{}))
+	return s, ln, nil
+}
+
+func serve(s *grpc.Server, ln net.Listener) {
+	RegisterWorkerServer(s, &grpcWorker{})
+	s.Serve(ln)
+}
+
 func initNode(id uint64, my string) {
 	thisNode = newNode(id, my)
 }
@@ -84,7 +107,13 @@ func TestPopulateShard(t *testing.T) {
 	writePLs(t, 100, 2, ps)
 	w := NewState(ps, nil, 0, 1)
 	SetWorkerState(w)
-	go RunServer(":12345")
+
+	s, ln, err := newServer(":12345")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Stop()
+	go serve(s, ln)
 
 	dir1, err := ioutil.TempDir("", "store1")
 	if err != nil {
@@ -99,7 +128,14 @@ func TestPopulateShard(t *testing.T) {
 	defer ps1.Close()
 
 	w1 := NewState(ps1, nil, 1, 2)
-	go RunServer(":12346")
+
+	s1, ln1, err := newServer(":12346")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s1.Stop()
+	go serve(s1, ln1)
+
 	SetWorkerState(w)
 	pool := NewPool("localhost:12345", 5)
 	_, err = w1.PopulateShard(context.Background(), pool, 0)
@@ -144,14 +180,72 @@ func TestPopulateShard(t *testing.T) {
 }
 
 func TestJoinCluster(t *testing.T) {
-	// initNode(1, "localhost:12345")
-	// n1 := GetNode()
-	// n1.StartNode("1:localhost:12345")
+	var err error
+	dir, err := ioutil.TempDir("", "store0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
 
-	// initNode(2, "localhost:12346")
-	// n2 := GetNode()
-	// n2.StartNode("")
-	// thisNode = n1
+	ps, err := store.NewStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ps.Close()
+	posting.Init()
+
+	writePLs(t, 100, 2, ps)
+	w := NewState(ps, nil, 0, 1)
+	SetWorkerState(w)
+
+	s, ln, err := newServer(":12345")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Stop()
+	go serve(s, ln)
+
+	initNode(1, "localhost:12345")
+	n1 := GetNode()
+	n1.StartNode("1:localhost:12345")
+
+	dir1, err := ioutil.TempDir("", "store1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir1)
+
+	ps1, err := store.NewStore(dir1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ps1.Close()
+
+	w1 := NewState(ps1, nil, 1, 2)
+
+	s1, ln1, err := newServer(":12346")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s1.Stop()
+	go serve(s1, ln1)
+
+	// This state would be used by PredicateData
+	SetWorkerState(w)
+	initNode(2, "localhost:12346")
+	n2 := GetNode()
+	n2.StartNode("")
+	thisNode = n1
+	n2.JoinCluster("1:localhost:12345", w1)
+
+	// Getting count on number of keys written to posting list store on instance 1.
+	count, k := checkShard(ps1)
+	if count != 100 {
+		t.Fatalf("Expected %d key value pairs. Got : %d", 100, count)
+	}
+	if string(k) != "099" {
+		t.Fatalf("Expected key to be: %v. Got %v", "099", string(k))
+	}
 }
 
 func TestGenerateGroup(t *testing.T) {

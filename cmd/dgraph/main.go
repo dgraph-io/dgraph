@@ -594,7 +594,7 @@ func main() {
 	worker.InitNode(*raftId, my)
 	worker.GetNode().StartNode(*cluster)
 	if len(*peer) > 0 {
-		go worker.GetNode().JoinCluster(*peer)
+		go worker.GetNode().JoinCluster(*peer, ws)
 	}
 	go worker.GetNode().SnapshotPeriodically()
 

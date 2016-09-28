@@ -230,7 +230,7 @@ func parsePeer(peer string) (uint64, string) {
 	return pid, kv[1]
 }
 
-func (n *node) JoinCluster(any string) {
+func (n *node) JoinCluster(any string, s *State) {
 	// Tell one of the peers to join.
 
 	pid, paddr := parsePeer(any)
@@ -240,7 +240,7 @@ func (n *node) JoinCluster(any string) {
 	pool := n.peers[pid]
 	// TODO: Ask for the leader, before running PopulateShard.
 	// Bring the instance up to speed first.
-	_, err := ws.PopulateShard(context.TODO(), pool, 0)
+	_, err := s.PopulateShard(context.TODO(), pool, 0)
 	x.Checkf(err, "Error while populating shard")
 
 	fmt.Printf("TELLING PEER TO ADD ME: %v\n", any)
