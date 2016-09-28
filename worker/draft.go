@@ -152,7 +152,8 @@ func (n *node) processSnapshot(s raftpb.Snapshot) {
 	}
 	pool := n.peers[lead]
 	fmt.Printf("Getting snapshot from leader: %v", lead)
-	x.Checkf(ws.PopulateShard(context.TODO(), pool, 0), "processSnapshot")
+	_, err := ws.PopulateShard(context.TODO(), pool, 0)
+	x.Checkf(err, "processSnapshot")
 	fmt.Printf("DONE with snapshot ============================")
 }
 
@@ -239,7 +240,8 @@ func (n *node) JoinCluster(any string) {
 	pool := n.peers[pid]
 	// TODO: Ask for the leader, before running PopulateShard.
 	// Bring the instance up to speed first.
-	x.Checkf(ws.PopulateShard(context.TODO(), pool, 0), "Error while populating shard")
+	_, err := ws.PopulateShard(context.TODO(), pool, 0)
+	x.Checkf(err, "Error while populating shard")
 
 	fmt.Printf("TELLING PEER TO ADD ME: %v\n", any)
 	query := &Payload{}
