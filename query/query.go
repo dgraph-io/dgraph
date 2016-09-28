@@ -32,6 +32,7 @@ import (
 	"github.com/dgraph-io/dgraph/query/graph"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/task"
+	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/google/flatbuffers/go"
@@ -113,7 +114,7 @@ func (l *Latency) ToMap() map[string]string {
 }
 
 type params struct {
-	AttrType schema.Type
+	AttrType types.Type
 	Alias    string
 	Count    int
 	Offset   int
@@ -173,7 +174,7 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 		// current node according to schema. Only then should we check for its
 		// validity.
 		var condFlag bool
-		if obj, ok := schema.TypeOf(sg.Attr).(schema.Object); ok {
+		if obj, ok := schema.TypeOf(sg.Attr).(types.Object); ok {
 			if _, ok := obj.Fields[child.Attr]; ok {
 				condFlag = true
 			}
@@ -316,7 +317,7 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 				return result, fmt.Errorf("Unknown Scalar:%v. Leaf predicate:'%v' must be"+
 					" one of the scalar types defined in the schema.", sg.Params.AttrType, sg.Attr)
 			}
-			stype := sg.Params.AttrType.(schema.Scalar)
+			stype := sg.Params.AttrType.(types.Scalar)
 			lval, err := stype.ParseType(val)
 			if err != nil {
 				// Mark node as invalid and ignore in results.
@@ -471,7 +472,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 					return fmt.Errorf("Unknown Scalar:%v. Leaf predicate:'%v' must be"+
 						" one of the scalar types defined in the schema.", pc.Params.AttrType, pc.Attr)
 				}
-				stype := pc.Params.AttrType.(schema.Scalar)
+				stype := pc.Params.AttrType.(types.Scalar)
 				if _, err := stype.ParseType(v); err != nil {
 					return err
 				}
@@ -536,7 +537,7 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 
 	var scalars []string
 	// Add scalar children nodes based on schema
-	if obj, ok := sg.Params.AttrType.(schema.Object); ok {
+	if obj, ok := sg.Params.AttrType.(types.Object); ok {
 		// Add scalar fields in the level to children
 		list := schema.ScalarList(obj.Name)
 		for _, it := range list {
@@ -572,15 +573,15 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 		}
 
 		// Determine the type of current node.
-		var attrType schema.Type
+		var attrType types.Type
 		if sg.Params.AttrType != nil {
-			if objType, ok := sg.Params.AttrType.(schema.Object); ok {
+			if objType, ok := sg.Params.AttrType.(types.Object); ok {
 				attrType = schema.TypeOf(objType.Fields[gchild.Attr])
 			}
 		} else {
 			// Child is explicitly specified as some type.
 			if objType := schema.TypeOf(gchild.Attr); objType != nil {
-				if o, ok := objType.(schema.Object); ok && o.Name == gchild.Attr {
+				if o, ok := objType.(types.Object); ok && o.Name == gchild.Attr {
 					attrType = objType
 				}
 			}
@@ -813,7 +814,7 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, rch chan error) {
 		return
 	}
 
-	sgObj, ok := schema.TypeOf(sg.Attr).(schema.Object)
+	sgObj, ok := schema.TypeOf(sg.Attr).(types.Object)
 	invalidUids := make(map[uint64]bool)
 	// Check the results of the child and eliminate uids without all results.
 	if ok {
@@ -842,7 +843,7 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, rch chan error) {
 				if !node.Params.AttrType.IsScalar() {
 					log.Fatal("This shouldnt happen")
 				}
-				stype := node.Params.AttrType.(schema.Scalar)
+				stype := node.Params.AttrType.(types.Scalar)
 				_, err := stype.ParseType(val)
 				if err != nil {
 					invalidUids[uid] = true

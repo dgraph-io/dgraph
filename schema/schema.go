@@ -16,22 +16,24 @@
 
 package schema
 
+import "github.com/dgraph-io/dgraph/types"
+
 // Item contains the name of the field and its type
 type Item struct {
 	Field string
-	Typ   Type
+	Typ   types.Type
 }
 
-var str map[string]Type
+var str map[string]types.Type
 
 func init() {
-	str = make(map[string]Type)
+	str = make(map[string]types.Type)
 }
 
 // ScalarList returns the list of scalars in the geiven object.
 func ScalarList(obj string) []Item {
 	var res []Item
-	objstr, ok := str[obj].(Object)
+	objstr, ok := str[obj].(types.Object)
 	if !ok {
 		return res
 	}
@@ -44,7 +46,7 @@ func ScalarList(obj string) []Item {
 }
 
 // TypeOf returns the type of given field.
-func TypeOf(pred string) Type {
+func TypeOf(pred string) types.Type {
 	if obj, ok := str[pred]; ok {
 		return obj
 	}
@@ -54,19 +56,19 @@ func TypeOf(pred string) Type {
 	return nil
 }
 
-func getScalar(typ string) (Type, bool) {
-	var res Type
+func getScalar(typ string) (types.Type, bool) {
+	var res types.Type
 	switch typ {
 	case "int":
-		res = intType
+		res = types.IntType
 	case "float":
-		res = floatType
+		res = types.FloatType
 	case "string":
-		res = stringType
+		res = types.StringType
 	case "bool":
-		res = booleanType
+		res = types.BooleanType
 	case "id":
-		res = idType
+		res = types.IdType
 	default:
 		res = nil
 	}

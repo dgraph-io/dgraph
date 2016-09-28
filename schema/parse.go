@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 
 	"github.com/dgraph-io/dgraph/lex"
+	"github.com/dgraph-io/dgraph/types"
 )
 
 func run(l *lex.Lexer) {
@@ -45,7 +46,7 @@ func Parse(file string) (rerr error) {
 	}
 
 	for _, v := range str {
-		if obj, ok := v.(Object); ok {
+		if obj, ok := v.(types.Object); ok {
 			for p, q := range obj.Fields {
 				typ := TypeOf(q)
 				if typ == nil {
@@ -137,7 +138,7 @@ func processObject(l *lex.Lexer) error {
 	}
 	objName = next.Val
 
-	obj := Object{
+	obj := types.Object{
 		Name:   objName,
 		Fields: make(map[string]string),
 	}
@@ -169,7 +170,7 @@ L:
 				typ = next.Val
 				if t, ok := getScalar(typ); ok {
 					if t1, ok := str[name]; ok {
-						if t1.(Scalar).Name != t.(Scalar).Name {
+						if t1.(types.Scalar).Name != t.(types.Scalar).Name {
 							return fmt.Errorf("Same field cant have multiple types")
 						}
 					} else {

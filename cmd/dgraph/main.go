@@ -44,6 +44,7 @@ import (
 	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/store"
+	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/uid"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
@@ -282,7 +283,7 @@ func validateTypes(nquads []rdf.NQuad) error {
 		//TODO(Ashwin): Ensure global types so that muations can be type checked
 		if t := schema.TypeOf(nquad.Predicate); t != nil && t.IsScalar() {
 			// Currently, only scalar types are present
-			stype := t.(schema.Scalar)
+			stype := t.(types.Scalar)
 			if _, err := stype.ParseType(nquad.ObjectValue); err != nil {
 				return err
 			}

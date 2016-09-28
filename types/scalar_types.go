@@ -14,14 +14,14 @@
  * limitations under the License.
  */
 
-package schema
+package types
 
 import "strconv"
 
 // added suffix 'type' to names to distinguish from Go types 'int' and 'string'
 var (
 	// Int scalar type.
-	intType = Scalar{
+	IntType = Scalar{
 		Name: "int",
 		Description: "The 'Int' scalar type represents non-fractional signed whole" +
 			" numeric values. Int can represent values between -(2^31)" +
@@ -29,7 +29,7 @@ var (
 		ParseType: coerceInt,
 	}
 	// Float scalar type.
-	floatType = Scalar{
+	FloatType = Scalar{
 		Name: "float",
 		Description: "The 'Float' scalar type represents signed double-precision" +
 			" fractional values	as specified by [IEEE 754]" +
@@ -37,7 +37,7 @@ var (
 		ParseType: coerceFloat,
 	}
 	// String scalar type.
-	stringType = Scalar{
+	StringType = Scalar{
 		Name: "string",
 		Description: "The 'String' scalar type represents textual data, represented" +
 			" as UTF-8 character sequences. The String type is most often" +
@@ -45,13 +45,13 @@ var (
 		ParseType: coerceString,
 	}
 	// Boolean scalar type.
-	booleanType = Scalar{
+	BooleanType = Scalar{
 		Name:        "bool",
 		Description: "The 'Boolean' scalar type represents 'true' or 'false'.",
 		ParseType:   coerceBool,
 	}
 	// ID scalar type.
-	idType = Scalar{
+	IdType = Scalar{
 		Name: "id",
 		Description: "The 'ID' scalar type represents a unique identifier, often" +
 			" used to refetch an object or as key for a cache. The ID type" +

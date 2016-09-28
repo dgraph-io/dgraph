@@ -1,4 +1,4 @@
-package schema
+package types
 
 var (
 	objectType = Object{}
