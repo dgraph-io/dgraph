@@ -31,11 +31,12 @@ import (
 // data. When adding a new type *always* add to the end of this list.
 // Never delete anything from this list even if it becomes unused.
 const (
-	stringID TypeID = iota
+	bytesID TypeID = iota
 	int32ID
 	floatID
 	boolID
 	dateTimeID
+	stringID
 )
 
 // added suffix 'type' to names to distinguish from Go types 'int' and 'string'
@@ -44,6 +45,7 @@ var (
 	Int32Type = Scalar{
 		Name: "int",
 		id:   int32ID,
+		// TODO: Why do we have this description field? If not needed, remove.
 		Description: "The 'Int' scalar type represents non-fractional signed whole" +
 			" numeric values. Int can represent values between -(2^31)" +
 			" and 2^31 - 1.",
@@ -65,6 +67,14 @@ var (
 		Description: "The 'String' scalar type represents textual data, represented" +
 			" as UTF-8 character sequences. The String type is most often" +
 			" used by GraphQL to represent free-form human-readable text.",
+		Unmarshaler: uString,
+	}
+	// ByteArrayType scalar.
+	ByteArrayType = Scalar{
+		Name: "bytes",
+		id:   bytesID,
+		Description: "The 'ByteArray' scalar type represents any untyped byte stream." +
+			" This is default storage mechanism if a type is not specified.",
 		Unmarshaler: uString,
 	}
 	// BooleanType scalar.
@@ -108,12 +118,13 @@ var typeNameMap = map[string]Type{
 
 // stores a mapping between the typeID to a type
 var typeIDMap = map[TypeID]Type{
-	Int32Type.ID():    Int32Type,
-	FloatType.ID():    FloatType,
-	StringType.ID():   StringType,
-	BooleanType.ID():  BooleanType,
-	IDType.ID():       IDType,
-	DateTimeType.ID(): DateTimeType,
+	Int32Type.ID():     Int32Type,
+	FloatType.ID():     FloatType,
+	StringType.ID():    StringType,
+	BooleanType.ID():   BooleanType,
+	IDType.ID():        IDType,
+	DateTimeType.ID():  DateTimeType,
+	ByteArrayType.ID(): ByteArrayType,
 }
 
 // TypeForName returns the type corresponding to the given name.
