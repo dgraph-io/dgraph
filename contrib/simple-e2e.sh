@@ -82,22 +82,22 @@ check_val() {
         fi
 }
 
-authname=$(echo $resp | jq '.me.author.name')
+authname=$(echo $resp | jq '.me[0].author[0].name')
 check_val '"Lewis Carroll"' "$authname";
 
-born=$(echo $resp | jq '.me.author.born')
+born=$(echo $resp | jq '.me[0].author[0].born')
 check_val \"1832\" $born;
 
-died=$(echo $resp | jq '.me.author.died')
+died=$(echo $resp | jq '.me[0].author[0].died')
 check_val \"1898\" $died;
 
-charname=$(echo $resp | jq '.me.character.name')
+charname=$(echo $resp | jq '.me[0].character[0].name')
 check_val \"Alice\" $charname;
 
-name=$(echo $resp | jq '.me.name')
+name=$(echo $resp | jq '.me[0].name')
 check_val '"Alice in Wonderland"' "$name";
 
-written=$(echo $resp | jq --raw-output '.me | . ["written-in"]')
+written=$(echo $resp | jq --raw-output '.me[0] | . ["written-in"]')
 check_val "1865" $written;
 
 GREEN='\033[0;32m'
