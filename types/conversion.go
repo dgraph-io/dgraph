@@ -24,9 +24,8 @@ import (
 
 // Convert converts the value to given scalar type.
 func (to Scalar) Convert(value TypeValue) (TypeValue, error) {
-	if to.ID() == stringID {
-		// If we are converting to a string, simply use
-		// MarshalText
+	if to.ID() == stringID || to.ID() == bytesID {
+		// If we are converting to a string or bytes, simply use MarshalText
 		r, err := value.MarshalText()
 		if err != nil {
 			return nil, err
@@ -37,9 +36,13 @@ func (to Scalar) Convert(value TypeValue) (TypeValue, error) {
 	u := to.Unmarshaler
 	// Otherwise we check if the conversion is defined.
 	switch v := value.(type) {
+	case Bytes:
+		// Bytes convert the same way as strings, as bytes denote an untyped value which is almost
+		// always a string.
+		return u.FromText([]byte(v))
+
 	case String:
-		// If the value is a string, then we can always Unmarshal it using
-		// the unmarshaller
+		// If the value is a string, then we can always Unmarshal it using the unmarshaller
 		return u.FromText([]byte(v))
 
 	case Int32:
