@@ -1,7 +1,6 @@
 package worker
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"log"
@@ -33,6 +32,7 @@ func (p *peerPool) Set(id uint64, pool *Pool) {
 }
 
 type node struct {
+	ctx       context.Context
 	cfg       *raft.Config
 	data      map[string]string
 	done      <-chan struct{}
@@ -125,11 +125,17 @@ func (n *node) process(e raftpb.Entry) error {
 	}
 
 	if e.Type == raftpb.EntryNormal {
-		parts := bytes.SplitN(e.Data, []byte(":"), 2)
-		k := string(parts[0])
-		v := string(parts[1])
-		n.data[k] = v
-		fmt.Printf(" Key: %v Val: %v\n", k, v)
+		// TODO: We're assuming that these are mutations. They could be something else.
+		m := new(Mutations)
+		// Ensure that this can be decoded.
+		if err := m.Decode(e.Data); err != nil {
+			x.TraceError(n.ctx, err)
+			return err
+		}
+		if err := mutate(n.ctx, m); err != nil {
+			x.TraceError(n.ctx, err)
+			return err
+		}
 	}
 
 	return nil
@@ -279,6 +285,7 @@ func newNode(id uint64, my string) *node {
 
 	store := raft.NewMemoryStorage()
 	n := &node{
+		ctx:   context.TODO(),
 		id:    id,
 		store: store,
 		cfg: &raft.Config{

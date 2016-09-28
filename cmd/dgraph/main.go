@@ -177,20 +177,10 @@ func convertToEdges(ctx context.Context, nquads []rdf.NQuad) (mutationResult, er
 }
 
 func applyMutations(ctx context.Context, m worker.Mutations) error {
-	left, err := worker.MutateOverNetwork(ctx, m)
+	err := worker.MutateOverNetwork(ctx, m)
 	if err != nil {
 		x.TraceError(ctx, x.Wrapf(err, "Error while MutateOverNetwork"))
 		return err
-	}
-	if len(left.Set) > 0 || len(left.Del) > 0 {
-		x.TraceError(ctx, x.Errorf("%d edges couldn't be applied", len(left.Del)+len(left.Set)))
-		for _, e := range left.Set {
-			x.TraceError(ctx, x.Errorf("Unable to apply set mutation for edge: %v", e))
-		}
-		for _, e := range left.Del {
-			x.TraceError(ctx, x.Errorf("Unable to apply delete mutation for edge: %v", e))
-		}
-		return x.Errorf("Unapplied mutations")
 	}
 	return nil
 }
