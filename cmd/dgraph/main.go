@@ -57,10 +57,9 @@ var (
 	port        = flag.Int("port", 8080, "Port to run server on.")
 	numcpu      = flag.Int("cores", runtime.NumCPU(),
 		"Number of cores to be used by the process")
-	instanceIdx = flag.Uint64("idx", 0,
-		"serves only entities whose Fingerprint % numInstance == instanceIdx.")
-	workers = flag.String("workers", "",
-		"Comma separated list of IP addresses of workers")
+	raftId     = flag.Uint64("idx", 0, "RAFT ID that this server will use to join RAFT groups.")
+	cluster    = flag.String("cluster", "", "List of peers in this format: ID1:URL1,ID2:URL2,...")
+	peer       = flag.String("peer", "", "Address of any peer.")
 	workerPort = flag.String("workerport", ":12345",
 		"Port used by worker for internal communication.")
 	nomutations = flag.Bool("nomutations", false, "Don't allow mutations on this server.")
@@ -70,6 +69,8 @@ var (
 	cpuprofile  = flag.String("cpu", "", "write cpu profile to file")
 	memprofile  = flag.String("mem", "", "write memory profile to file")
 	closeCh     = make(chan struct{})
+
+	groupId uint64 = 0 // ALL
 )
 
 type mutationResult struct {
@@ -523,6 +524,8 @@ func serveHTTP(l net.Listener) {
 }
 
 func setupServer() {
+	go worker.RunServer(*workerPort) // For internal communication.
+
 	l, err := net.Listen("tcp", fmt.Sprintf(":%d", *port))
 	if err != nil {
 		log.Fatal(err)
@@ -558,6 +561,7 @@ func setupServer() {
 }
 
 func main() {
+	rand.Seed(time.Now().UnixNano())
 	x.Init()
 	checkFlagsAndInitDirs()
 
@@ -566,31 +570,36 @@ func main() {
 	defer ps.Close()
 
 	posting.InitIndex(ps)
-
-	addrs := strings.Split(*workers, ",")
-	lenAddr := uint64(len(addrs))
-	if lenAddr == 0 {
-		// If no worker is specified, then we're it.
-		lenAddr = 1
-	}
-
 	posting.Init()
+
 	var ws *worker.State
-	if *instanceIdx != 0 {
-		ws = worker.NewState(ps, nil, *instanceIdx, lenAddr)
+	if groupId != 0 { // HACK: This will currently not run.
+		ws = worker.NewState(ps, nil, groupId, 1) // TODO: Set number of groups here.
 		worker.SetWorkerState(ws)
 		uid.Init(nil)
-	} else {
+
+	} else { // handles group 0.
 		uidStore, err := store.NewStore(*uidDir)
 		if err != nil {
 			log.Fatalf("error initializing uid store: %s", err)
 		}
 		defer uidStore.Close()
 		// Only server instance 0 will have uidStore
-		ws = worker.NewState(ps, uidStore, *instanceIdx, lenAddr)
+		ws = worker.NewState(ps, uidStore, groupId, 1) // TODO: Set number of groups here.
 		worker.SetWorkerState(ws)
 		uid.Init(uidStore)
 	}
+
+	my := "localhost" + *workerPort
+	worker.InitNode(*raftId, my)
+	worker.GetNode().StartNode(*cluster)
+	if len(*peer) > 0 {
+		go worker.GetNode().JoinCluster(*peer)
+	}
+	go worker.GetNode().SnapshotPeriodically()
+
+	// node := worker.GetNode()
+	// go node.Campaign(context.TODO())
 
 	if len(*schemaFile) > 0 {
 		err = gql.LoadSchema(*schemaFile)
@@ -598,9 +607,6 @@ func main() {
 			log.Fatalf("Error while loading schema:%v", err)
 		}
 	}
-	// Initiate internal worker communication.
-	ws.Connect(addrs, *workerPort)
-
 	// Setup external communication.
 	setupServer()
 }
