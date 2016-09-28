@@ -16,6 +16,7 @@
 
 package schema
 
+// Item contains the name of the field and its type
 type Item struct {
 	Field string
 	Typ   Type

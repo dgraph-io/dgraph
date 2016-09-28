@@ -292,7 +292,6 @@ func TestSchema1(t *testing.T) {
 	if res != 3 {
 		t.Error("Invalid result")
 	}
-
 }
 
 func TestGetUid(t *testing.T) {
