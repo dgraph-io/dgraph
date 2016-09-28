@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"math/rand"
 	"strconv"
 	"strings"
 	"sync"
@@ -31,16 +32,44 @@ func (p *peerPool) Set(id uint64, pool *Pool) {
 	p.peers[id] = pool
 }
 
+type proposals struct {
+	sync.RWMutex
+	ids map[uint64]chan error
+}
+
+func (p *proposals) Store(pid uint64, ch chan error) {
+	p.Lock()
+	defer p.Unlock()
+	_, has := p.proposals[pid]
+	x.Assertf(!has, "Same proposal is being stored again.")
+	p.proposals[pid] = ch
+}
+
+func (p *proposals) Done(pid uint64, err error) {
+	var ch chan error
+	p.Lock()
+	ch, has := p.proposals[pid]
+	if has {
+		delete(p.proposals, pid)
+	}
+	p.Unlock()
+	if !has {
+		return
+	}
+	ch <- err
+}
+
 type node struct {
-	ctx       context.Context
 	cfg       *raft.Config
+	ctx       context.Context
 	data      map[string]string
 	done      <-chan struct{}
 	id        uint64
+	localAddr string
+	peers     peerPool
+	props     proposals
 	raft      raft.Node
 	store     *raft.MemoryStorage
-	peers     peerPool
-	localAddr string
 }
 
 func (n *node) Connect(pid uint64, addr string) {
@@ -83,6 +112,20 @@ func (n *node) AddToCluster(pid uint64) {
 		NodeID:  pid,
 		Context: []byte(strconv.FormatUint(pid, 10) + ":" + pool.Addr),
 	})
+}
+
+func (n *node) ProposeAndWait(ctx context.Context, data []byte) error {
+	header := make([]byte, 8)
+	proposalId := rand.Int63()
+	// data must store
+	che := make(chan error, 1)
+	ctxi := context.WithValue(ctx, "chan", che)
+	err := n.raft.Propose(ctxi, data)
+	if err != nil {
+		return x.Wrapf(err, "While proposing")
+	}
+	err = <-che
+	return err
 }
 
 func (n *node) send(m raftpb.Message) {
@@ -282,6 +325,9 @@ func newNode(id uint64, my string) *node {
 	peers := peerPool{
 		peers: make(map[uint64]*Pool),
 	}
+	props := proposals{
+		ids: make(map[uint64]chan error),
+	}
 
 	store := raft.NewMemoryStorage()
 	n := &node{
@@ -298,6 +344,7 @@ func newNode(id uint64, my string) *node {
 		},
 		data:      make(map[string]string),
 		peers:     peers,
+		props:     props,
 		localAddr: my,
 	}
 	return n
