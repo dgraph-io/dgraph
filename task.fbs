@@ -12,6 +12,7 @@ table Query {
 
 table Value {
 	val:[ubyte];
+	valType:ubyte;
 }
 
 table XidList {

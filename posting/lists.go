@@ -78,9 +78,7 @@ func (c *counters) log() {
 	}
 
 	log.Printf("List merge counters. added: %d merged: %d clean: %d"+
-		" pending: %d mapsize: %d\n",
-		added, merged, atomic.LoadUint64(&c.clean),
-		pending, lhmap.Size())
+		" pending: %d\n", added, merged, atomic.LoadUint64(&c.clean), pending)
 }
 
 func newCounters() *counters {
@@ -92,8 +90,6 @@ func newCounters() *counters {
 func aggressivelyEvict() {
 	// Okay, we exceed the max memory threshold.
 	// Stop the world, and deal with this first.
-	stopTheWorld.Lock()
-	defer stopTheWorld.Unlock()
 
 	megs := getMemUsage()
 	log.Printf("Memory usage over threshold. STW. Allocated MB: %v\n", megs)
@@ -107,7 +103,7 @@ func aggressivelyEvict() {
 	debug.FreeOSMemory()
 
 	megs = getMemUsage()
-	log.Printf("Memory usage after calling GC. Allocated MB: %v", megs)
+	log.Printf("EVICT DONE! Memory usage after calling GC. Allocated MB: %v", megs)
 }
 
 // mergeAndUpdateKeys calls mergeAndUpdate for each key in array "keys".
@@ -175,12 +171,26 @@ func periodicMerging() {
 
 			totMemory := getMemUsage()
 			if totMemory > *maxmemory {
-				// It's okay to run a blocking aggressive merge here, because during aggressive merge,
-				// no mutations are being added. So, we won't block our keysBuffer channel.
+				// Acquire lock, so no new posting lists are given out.
+				stopTheWorld.Lock()
+
+			DIRTYLOOP:
+				// Flush out the dirtyChan after acquiring lock. This allow posting lists which
+				// are currently being processed to not get stuck on dirtyChan, which won't be
+				// processed until aggressive evict finishes.
+				for {
+					select {
+					case <-dirtyChan:
+						// pass
+					default:
+						break DIRTYLOOP
+					}
+				}
 				aggressivelyEvict()
 				for k := range dirtyMap {
 					delete(dirtyMap, k)
 				}
+				stopTheWorld.Unlock()
 			} else {
 				gentleMerge(dirtyMap)
 			}

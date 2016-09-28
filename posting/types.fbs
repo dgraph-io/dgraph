@@ -6,6 +6,7 @@ table Posting {
 	source:string;
 	ts:long;
 	op:ubyte;
+	valType:ubyte;  // The data type of the value
 }
 
 table PostingList {

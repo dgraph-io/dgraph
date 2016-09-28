@@ -39,8 +39,17 @@ func (rcv *Value) ValBytes() []byte {
 	return nil
 }
 
-func ValueStart(builder *flatbuffers.Builder) { builder.StartObject(1) }
+func (rcv *Value) ValType() byte {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
+	if o != 0 {
+		return rcv._tab.GetByte(o + rcv._tab.Pos)
+	}
+	return 0
+}
+
+func ValueStart(builder *flatbuffers.Builder) { builder.StartObject(2) }
 func ValueAddVal(builder *flatbuffers.Builder, val flatbuffers.UOffsetT) { builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(val), 0) }
 func ValueStartValVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT { return builder.StartVector(1, numElems, 1)
 }
+func ValueAddValType(builder *flatbuffers.Builder, valType byte) { builder.PrependByteSlot(1, valType, 0) }
 func ValueEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT { return builder.EndObject() }
