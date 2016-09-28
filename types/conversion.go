@@ -31,31 +31,32 @@ func (to Scalar) Convert(value TypeValue) (TypeValue, error) {
 		if err != nil {
 			return nil, err
 		}
-		return StringType(r), nil
+		return String(r), nil
 	}
 
 	u := to.Unmarshaler
 	// Otherwise we check if the conversion is defined.
 	switch v := value.(type) {
-	case StringType:
+	case String:
 		// If the value is a string, then we can always Unmarshal it using
 		// the unmarshaller
 		return u.FromText([]byte(v))
-	case Int32Type:
+
+	case Int32:
 		c, ok := u.(int32Unmarshaler)
 		if !ok {
 			return nil, cantConvert(to, v)
 		}
 		return c.fromInt(int32(v))
 
-	case FloatType:
+	case Float:
 		c, ok := u.(floatUnmarshaler)
 		if !ok {
 			return nil, cantConvert(to, v)
 		}
 		return c.fromFloat(float64(v))
 
-	case BoolType:
+	case Bool:
 		c, ok := u.(boolUnmarshaler)
 		if !ok {
 			return nil, cantConvert(to, v)

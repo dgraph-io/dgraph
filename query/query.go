@@ -249,12 +249,16 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 		if ok := r.Values(&tv, i); !ok {
 			return result, fmt.Errorf("While parsing value")
 		}
-		val := tv.ValBytes()
-		if bytes.Equal(val, nil) {
+		valBytes := tv.ValBytes()
+		if bytes.Equal(valBytes, nil) {
 			// We do this, because we typically do set values, even though
 			// they might be nil. This is to ensure that the index of the query uids
 			// and the index of the results can remain in sync.
 			continue
+		}
+		val, storageType, err := getValue(tv)
+		if err != nil {
+			return result, err
 		}
 
 		if pval, present := result[q.Uids(i)]; present {
@@ -267,11 +271,11 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 			m["_uid_"] = fmt.Sprintf("%#x", q.Uids(i))
 		}
 		if sg.Params.AttrType == nil {
-			// No type defined for attr in type system/schema, hence return string value
+			// No type defined for attr in type system/schema, hence return the original value
 			if sg.Params.Alias != "" {
-				m[sg.Params.Alias] = string(val)
+				m[sg.Params.Alias] = val
 			} else {
-				m[sg.Attr] = string(val)
+				m[sg.Attr] = val
 			}
 		} else {
 			// type assertion for scalar type values
@@ -279,10 +283,16 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 				return result, fmt.Errorf("Unknown Scalar:%v. Leaf predicate:'%v' must be"+
 					" one of the scalar types defined in the schema.", sg.Params.AttrType, sg.Attr)
 			}
-			stype := sg.Params.AttrType.(types.Scalar)
-			lval, err := stype.Unmarshaler.FromText(val)
-			if err != nil {
-				return result, err
+			schemaType := sg.Params.AttrType.(types.Scalar)
+			lval := val
+			if schemaType != storageType {
+				// The schema and storage types do not match, so we do a type conversion.
+				var err error
+				lval, err = schemaType.Convert(val)
+				if err != nil {
+					// We ignore schema conversion errors and not include the values in the result
+					continue
+				}
 			}
 			if sg.Params.Alias != "" {
 				m[sg.Params.Alias] = lval
@@ -293,6 +303,24 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 		result[q.Uids(i)] = m
 	}
 	return result, nil
+}
+
+// gets the value from the task.
+func getValue(tv task.Value) (types.TypeValue, types.Type, error) {
+	vType := tv.ValType()
+	valBytes := tv.ValBytes()
+	stype := types.TypeForID(types.TypeID(vType))
+	if stype == nil {
+		return nil, nil, x.Errorf("Invalid type: %v", vType)
+	}
+	if !stype.IsScalar() {
+		return nil, nil, x.Errorf("Unknown scalar type :%v", vType)
+	}
+	val, err := stype.(types.Scalar).Unmarshaler.FromBinary(valBytes)
+	if err != nil {
+		return nil, nil, err
+	}
+	return val, stype, nil
 }
 
 // ToJSON converts the internal subgraph object to JSON format which is then sent
@@ -423,7 +451,10 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 				return fmt.Errorf("While parsing value")
 			}
 
-			v := tv.ValBytes()
+			v, storageType, err := getValue(tv)
+			if err != nil {
+				return err
+			}
 
 			//do type checking on response values
 			if pc.Params.AttrType != nil {
@@ -432,19 +463,31 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 					return fmt.Errorf("Unknown Scalar:%v. Leaf predicate:'%v' must be"+
 						" one of the scalar types defined in the schema.", pc.Params.AttrType, pc.Attr)
 				}
-				stype := pc.Params.AttrType.(types.Scalar)
-				if _, err := stype.Unmarshaler.FromText(v); err != nil {
-					return err
+				schemaType := pc.Params.AttrType.(types.Scalar)
+				if schemaType != storageType {
+					if _, err := schemaType.Convert(v); err != nil {
+						// skip values that don't convert.
+						continue
+					}
 				}
 			}
 
 			if pc.Attr == "_xid_" {
-				dst.Xid = string(v)
+				txt, err := v.MarshalText()
+				if err != nil {
+					return err
+				}
+				dst.Xid = string(txt)
 				// We don't want to add _uid_ to properties map.
 			} else if pc.Attr == "_uid_" {
 				continue
 			} else {
-				p := &graph.Property{Prop: pc.Attr, Val: v}
+				val, err := v.MarshalBinary()
+				if err != nil {
+					return err
+				}
+				// TODO: Figure out how the client parses this value
+				p := &graph.Property{Prop: pc.Attr, Val: val}
 				properties = append(properties, p)
 			}
 		}

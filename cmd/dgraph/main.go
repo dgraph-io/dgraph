@@ -282,9 +282,31 @@ func validateTypes(nquads []rdf.NQuad) error {
 	for _, nquad := range nquads {
 		if t := gql.SchemaType(nquad.Predicate); t != nil && t.IsScalar() {
 			// Currently, only scalar types are present
-			stype := t.(types.Scalar)
-			if _, err := stype.Unmarshaler.FromText(nquad.ObjectValue); err != nil {
-				return err
+			schemaType := t.(types.Scalar)
+			storageType := types.TypeForID(types.TypeID(nquad.ObjectType))
+			if storageType == nil {
+				log.Fatalf("Parsing created invalid type %v", nquad.ObjectType)
+			}
+			if storageType == types.ByteArrayType {
+				// Storage type was unspecified in the RDF, so we convert the data to the schema
+				// type.
+				v, err := schemaType.Unmarshaler.FromText(nquad.ObjectValue)
+				if err != nil {
+					return err
+				}
+				nquad.ObjectValue, err = v.MarshalBinary()
+				if err != nil {
+					return err
+				}
+				nquad.ObjectType = byte(schemaType.ID())
+			} else if storageType != schemaType {
+				v, err := storageType.(types.Scalar).Unmarshaler.FromBinary(nquad.ObjectValue)
+				if err != nil {
+					return err
+				}
+				if _, err := schemaType.Convert(v); err != nil {
+					return err
+				}
 			}
 		}
 	}

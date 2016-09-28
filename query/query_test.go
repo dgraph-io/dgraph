@@ -617,23 +617,23 @@ func TestPostTraverse(t *testing.T) {
 
 		actorMap := m["actor"].([]interface{})[0].(map[string]interface{})
 
-		if _, success := actorMap["name"].(types.StringType); !success {
+		if _, success := actorMap["name"].(types.String); !success {
 			t.Errorf("Expected type coercion to string for: %v\n", actorMap["name"])
 		}
 		// Note: although, int and int32 have same size, they are treated as different types in go
 		// GraphQL spec mentions integer type to be int32
-		if _, success := actorMap["age"].(types.Int32Type); !success {
+		if _, success := actorMap["age"].(types.Int32); !success {
 			t.Errorf("Expected type coercion to int32 for: %v\n", actorMap["age"])
 		}
-		if _, success := actorMap["sword_present"].(types.BoolType); !success {
+		if _, success := actorMap["sword_present"].(types.Bool); !success {
 			t.Errorf("Expected type coercion to bool for: %v\n", actorMap["sword_present"])
 		}
-		if _, success := actorMap["survival_rate"].(types.FloatType); !success {
+		if _, success := actorMap["survival_rate"].(types.Float); !success {
 			t.Errorf("Expected type coercion to float64 for: %v\n", actorMap["survival_rate"])
 		}
 		friendMap := actorMap["friend"].([]interface{})
 		friend := friendMap[0].(map[string]interface{})
-		if _, success := friend["name"].(types.StringType); !success {
+		if _, success := friend["name"].(types.String); !success {
 			t.Errorf("Expected type coercion to string for: %v\n", friend["name"])
 		}
 
