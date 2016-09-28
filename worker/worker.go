@@ -19,15 +19,20 @@
 package worker
 
 import (
+	"bytes"
+	"fmt"
 	"log"
 	"net"
+	"sort"
 	"sync"
 
+	"github.com/coreos/etcd/raft/raftpb"
 	"github.com/dgryski/go-farm"
 	"github.com/google/flatbuffers/go"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
+	"github.com/dgraph-io/dgraph/posting/types"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/x"
@@ -35,10 +40,12 @@ import (
 
 // State stores the worker state.
 type State struct {
-	dataStore    *store.Store
-	uidStore     *store.Store
-	instanceIdx  uint64
-	numInstances uint64
+	dataStore *store.Store
+	uidStore  *store.Store
+	groupId   uint64
+	numGroups uint64
+
+	// TODO: Remove this code once RAFT groups are in place.
 	// pools stores the pool for all the instances which is then used to send queries
 	// and mutations to the appropriate instance.
 	pools      []*Pool
@@ -55,12 +62,12 @@ func SetWorkerState(s *State) {
 }
 
 // NewState initializes the state on an instance with data,uid store and other meta.
-func NewState(ps, uStore *store.Store, idx, numInst uint64) *State {
+func NewState(ps, uStore *store.Store, gid, numGroups uint64) *State {
 	return &State{
-		dataStore:    ps,
-		uidStore:     uStore,
-		instanceIdx:  idx,
-		numInstances: numInst,
+		dataStore: ps,
+		uidStore:  uStore,
+		numGroups: numGroups,
+		groupId:   gid,
 	}
 }
 
@@ -125,8 +132,8 @@ func (w *grpcWorker) GetOrAssign(ctx context.Context, query *Payload) (*Payload,
 	xids := new(task.XidList)
 	xids.Init(query.Data, uo)
 
-	if ws.instanceIdx != 0 {
-		log.Fatalf("instanceIdx: %v. GetOrAssign. We shouldn't be getting this req", ws.instanceIdx)
+	if ws.groupId != 0 {
+		log.Fatalf("groupId: %v. GetOrAssign. We shouldn't be getting this req", ws.groupId)
 	}
 
 	reply := new(Payload)
@@ -158,35 +165,85 @@ func (w *grpcWorker) ServeTask(ctx context.Context, query *Payload) (*Payload, e
 	q := new(task.Query)
 	x.ParseTaskQuery(q, query.Data)
 	attr := string(q.Attr())
-	x.Trace(ctx, "Attribute: %v NumUids: %v InstanceIdx: %v ServeTask",
-		attr, q.UidsLength(), ws.instanceIdx)
+	x.Trace(ctx, "Attribute: %v NumUids: %v groupId: %v ServeTask", attr, q.UidsLength(), ws.groupId)
 
 	reply := new(Payload)
 	var rerr error
 	// Request for xid <-> uid conversion should be handled by instance 0 and all
 	// other requests should be handled according to modulo sharding of the predicate.
-	chosenInstance := farm.Fingerprint64([]byte(attr)) % ws.numInstances
-	if (ws.instanceIdx == 0 && attr == _xid_) || chosenInstance == ws.instanceIdx {
+
+	// TODO: This should be done based on group rules, and not a modulo of num groups.
+	chosenInstance := farm.Fingerprint64([]byte(attr)) % ws.numGroups
+	if (ws.groupId == 0 && attr == _xid_) || chosenInstance == ws.groupId {
 		reply.Data, rerr = processTask(query.Data)
 	} else {
-		log.Fatalf("attr: %v instanceIdx: %v Request sent to wrong server.", attr, ws.instanceIdx)
+		log.Fatalf("attr: %v groupId: %v Request sent to wrong server.", attr, ws.groupId)
 	}
 	return reply, rerr
+}
+
+func (w *grpcWorker) RaftMessage(ctx context.Context, query *Payload) (*Payload, error) {
+	reply := &Payload{}
+	reply.Data = []byte("ok")
+	msg := raftpb.Message{}
+	if err := msg.Unmarshal(query.Data); err != nil {
+		return reply, err
+	}
+	GetNode().Connect(msg.From, string(msg.Context))
+	GetNode().Step(ctx, msg)
+
+	return reply, nil
+}
+
+func (w *grpcWorker) JoinCluster(ctx context.Context, query *Payload) (*Payload, error) {
+	reply := &Payload{}
+	reply.Data = []byte("ok")
+	if len(query.Data) == 0 {
+		return reply, x.Errorf("JoinCluster: No data provided")
+	}
+	pid, addr := parsePeer(string(query.Data))
+
+	GetNode().Connect(pid, addr)
+	GetNode().AddToCluster(pid)
+	fmt.Printf("JOINCLUSTER recieved. Modified conf: %v", string(query.Data))
+	return reply, nil
 }
 
 // PredicateData can be used to return data corresponding to a predicate over
 // a stream.
 func (w *grpcWorker) PredicateData(query *Payload, stream Worker_PredicateDataServer) error {
-	qp := query.Data
-	prefix := append(qp, '|')
+	var group task.GroupKeys
+	uo := flatbuffers.GetUOffsetT(query.Data)
+	group.Init(query.Data, uo)
+	_ = group.Groupid()
+
 	// TODO(pawan) - Shift to CheckPoints once we figure out how to add them to the
 	// RocksDB library we are using.
 	// http://rocksdb.org/blog/2609/use-checkpoints-for-efficient-snapshots/
 	it := ws.dataStore.NewIterator()
 	defer it.Close()
 
-	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+	for it.SeekToFirst(); it.Valid(); it.Next() {
 		k, v := it.Key(), it.Value()
+		pl := types.GetRootAsPostingList(v.Data(), 0)
+
+		// TODO: Check that key is part of the specified group id.
+		i := sort.Search(group.KeysLength(), func(i int) bool {
+			var t task.KC
+			x.Assertf(group.Keys(&t, i), "Unable to parse task.KC")
+			return bytes.Compare(k.Data(), t.KeyBytes()) <= 0
+		})
+
+		if i < group.KeysLength() {
+			// Found a match.
+			var t task.KC
+			x.Assertf(group.Keys(&t, i), "Unable to parse task.KC")
+
+			if bytes.Equal(k.Data(), t.KeyBytes()) && bytes.Equal(pl.Checksum(), t.ChecksumBytes()) {
+				// No need to send this.
+				continue
+			}
+		}
 
 		b := flatbuffers.NewBuilder(0)
 		bko := b.CreateByteVector(k.Data())
@@ -212,7 +269,7 @@ func (w *grpcWorker) PredicateData(query *Payload, stream Worker_PredicateDataSe
 
 // runServer initializes a tcp server on port which listens to requests from
 // other workers for internal communication.
-func runServer(port string) {
+func RunServer(port string) {
 	ln, err := net.Listen("tcp", port)
 	if err != nil {
 		log.Fatalf("While running server: %v", err)
@@ -223,40 +280,6 @@ func runServer(port string) {
 	s := grpc.NewServer(grpc.CustomCodec(&PayloadCodec{}))
 	RegisterWorkerServer(s, &grpcWorker{})
 	s.Serve(ln)
-}
-
-// Connect establishes a connection with other workers and sends the Hello rpc
-// call to them.
-func (s *State) Connect(workerList []string, workerPort string) {
-	go runServer(workerPort)
-
-	for _, addr := range workerList {
-		if len(addr) == 0 {
-			continue
-		}
-
-		pool := NewPool(addr, 5)
-		query := new(Payload)
-		query.Data = []byte("hello")
-
-		conn, err := pool.Get()
-		if err != nil {
-			log.Fatalf("Unable to connect: %v", err)
-		}
-
-		c := NewWorkerClient(conn)
-		_, err = c.Hello(context.Background(), query)
-		if err != nil {
-			log.Fatalf("Unable to connect: %v", err)
-		}
-		_ = pool.Put(conn)
-
-		s.poolsMutex.Lock()
-		s.pools = append(s.pools, pool)
-		s.poolsMutex.Unlock()
-	}
-
-	log.Print("Server started. Clients connected.")
 }
 
 // GetPool returns pool for given index.

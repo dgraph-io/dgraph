@@ -234,15 +234,7 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 				l[j] = mergeInterfaces(m, ival)
 			}
 		}
-		if len(l) == 1 {
-			m := make(map[string]interface{})
-			if sg.Params.Alias != "" {
-				m[sg.Params.Alias] = l[0]
-			} else {
-				m[sg.Attr] = l[0]
-			}
-			result[q.Uids(i)] = m
-		} else if len(l) > 1 {
+		if len(l) > 0 {
 			m := make(map[string]interface{})
 			if sg.Params.Alias != "" {
 				m[sg.Params.Alias] = l
