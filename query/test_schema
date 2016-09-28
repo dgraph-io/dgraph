@@ -1,0 +1,16 @@
+ scalar age:int
+
+scalar (
+  name: string
+  address: string
+  alive: bool
+  survival_rate: float
+)
+
+type  person {
+name: string
+age: int
+address: string
+friend: person
+}
+

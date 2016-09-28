@@ -30,6 +30,7 @@ import (
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/query/graph"
+	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/worker"
@@ -160,13 +161,39 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 	// Get results from all children first.
 	cResult := make(map[uint64]interface{})
 
+	// ignoreUids would contain those UIDs whose scalar childlren dont obey the
+	// types specified in the schema.
+	ignoreUids := make(map[uint64]bool)
 	for _, child := range sg.Children {
 		m, err := postTraverse(child)
 		if err != nil {
 			return result, err
 		}
+
+		// condFlag is used to ensure that the child is a required part of the
+		// current node according to schema. Only then should we check for its
+		// validity.
+		var condFlag bool
+		if obj, ok := schema.TypeOf(sg.Attr).(types.Object); ok {
+			if _, ok := obj.Fields[child.Attr]; ok {
+				condFlag = true
+			}
+		}
+
 		// Merge results from all children, one by one.
 		for k, v := range m {
+			if _, ok := v.(map[string]interface{})["_inv_"]; ok {
+				if condFlag {
+					ignoreUids[k] = true
+					delete(cResult, k)
+				} else {
+					continue
+				}
+			}
+			if ignoreUids[k] {
+				continue
+			}
+
 			if val, present := cResult[k]; !present {
 				cResult[k] = v
 			} else {
@@ -250,10 +277,16 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 			return result, fmt.Errorf("While parsing value")
 		}
 		valBytes := tv.ValBytes()
+		m := make(map[string]interface{})
 		if bytes.Equal(valBytes, nil) {
+
 			// We do this, because we typically do set values, even though
 			// they might be nil. This is to ensure that the index of the query uids
 			// and the index of the results can remain in sync.
+			if sg.Params.AttrType != nil && sg.Params.AttrType.IsScalar() {
+				m["_inv_"] = true
+				result[q.Uids(i)] = m
+			}
 			continue
 		}
 		val, storageType, err := getValue(tv)
@@ -266,7 +299,6 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 				" Previous value detected. A uid -> list of uids / value. Not both",
 				pval, q.Uids(i), val)
 		}
-		m := make(map[string]interface{})
 		if sg.Params.GetUid || sg.Params.isDebug {
 			m["_uid_"] = fmt.Sprintf("%#x", q.Uids(i))
 		}
@@ -291,6 +323,8 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 				lval, err = schemaType.Convert(val)
 				if err != nil {
 					// We ignore schema conversion errors and not include the values in the result
+					m["_inv_"] = true
+					result[q.Uids(i)] = m
 					continue
 				}
 			}
@@ -524,12 +558,44 @@ func (sg *SubGraph) ToProtocolBuffer(l *Latency) (*graph.Node, error) {
 	return n, nil
 }
 
+func isPresent(list []string, str string) bool {
+	for _, v := range list {
+		if v == str {
+			return true
+		}
+	}
+	return false
+}
+
 func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 	// Typically you act on the current node, and leave recursion to deal with
 	// children. But, in this case, we don't want to muck with the current
 	// node, because of the way we're dealing with the root node.
 	// So, we work on the children, and then recurse for grand children.
+
+	var scalars []string
+	// Add scalar children nodes based on schema
+	if obj, ok := sg.Params.AttrType.(types.Object); ok {
+		// Add scalar fields in the level to children
+		list := schema.ScalarList(obj.Name)
+		for _, it := range list {
+			args := params{
+				AttrType: it.Typ,
+				isDebug:  sg.Params.isDebug,
+			}
+			dst := &SubGraph{
+				Attr:   it.Field,
+				Params: args,
+			}
+			sg.Children = append(sg.Children, dst)
+			scalars = append(scalars, it.Field)
+		}
+	}
+
 	for _, gchild := range gq.Children {
+		if isPresent(scalars, gchild.Attr) {
+			continue
+		}
 		if gchild.Attr == "_count_" {
 			if len(gq.Children) > 1 {
 				return errors.New("Cannot have other attributes with count")
@@ -544,8 +610,22 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 			sg.Params.GetUid = true
 		}
 
+		// Determine the type of current node.
+		var attrType types.Type
+		if sg.Params.AttrType != nil {
+			if objType, ok := sg.Params.AttrType.(types.Object); ok {
+				attrType = schema.TypeOf(objType.Fields[gchild.Attr])
+			}
+		} else {
+			// Child is explicitly specified as some type.
+			if objType := schema.TypeOf(gchild.Attr); objType != nil {
+				if o, ok := objType.(types.Object); ok && o.Name == gchild.Attr {
+					attrType = objType
+				}
+			}
+		}
 		args := params{
-			AttrType: gql.SchemaType(gchild.Attr),
+			AttrType: attrType,
 			Alias:    gchild.Alias,
 			isDebug:  sg.Params.isDebug,
 		}
@@ -643,7 +723,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	b.Finish(rend)
 
 	args := params{
-		AttrType: gql.SchemaType(gq.Attr),
+		AttrType: schema.TypeOf(gq.Attr),
 		IsRoot:   true,
 		isDebug:  gq.Attr == "debug",
 	}
@@ -735,15 +815,19 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, rch chan error) {
 		return
 	}
 
-	// Let's execute it in a tree fashion. Each SubGraph would break off
-	// as many goroutines as it's children; which would then recursively
-	// do the same thing.
-	// Buffered channel to ensure no-blockage.
+	var processed, leftToProcess []*SubGraph
+	// First iterate over the value nodes and check for validity.
 	childchan := make(chan error, len(sg.Children))
 	for i := 0; i < len(sg.Children); i++ {
 		child := sg.Children[i]
-		child.Query = createTaskQuery(child, sorted)
-		go ProcessGraph(ctx, child, childchan)
+		if child.Params.AttrType == nil || child.Params.AttrType.IsScalar() {
+			processed = append(processed, child)
+			child.Query = createTaskQuery(child, sorted)
+			go ProcessGraph(ctx, child, childchan)
+		} else {
+			leftToProcess = append(leftToProcess, child)
+			childchan <- nil
+		}
 	}
 
 	// Now get all the results back.
@@ -762,5 +846,86 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, rch chan error) {
 			return
 		}
 	}
+
+	// If all the child nodes are processed, return.
+	if len(leftToProcess) == 0 {
+		rch <- nil
+		return
+	}
+
+	sgObj, ok := schema.TypeOf(sg.Attr).(types.Object)
+	invalidUids := make(map[uint64]bool)
+	// Check the results of the child and eliminate uids without all results.
+	if ok {
+		for _, node := range processed {
+			if _, present := sgObj.Fields[node.Attr]; !present {
+				continue
+			}
+			var tv task.Value
+			rNode := new(task.Result)
+			x.ParseTaskResult(rNode, node.Result)
+			// rNode ValuesLength() is equal to len(sorted).
+			for i := 0; i < rNode.ValuesLength(); i++ {
+				uid := sorted[i]
+				if ok := rNode.Values(&tv, i); !ok {
+					invalidUids[uid] = true
+				}
+				val := tv.ValBytes()
+				if bytes.Equal(val, nil) {
+					// We do this, because we typically do set values, even though
+					// they might be nil. This is to ensure that the index of the query uids
+					// and the index of the results can remain in sync.
+					invalidUids[uid] = true
+					continue
+				}
+
+				// type assertion for scalar type values
+				if !node.Params.AttrType.IsScalar() {
+					log.Fatal("This shouldnt happen")
+				}
+				stype := node.Params.AttrType.(types.Scalar)
+				_, err := stype.Unmarshaler.FromText(val)
+				if err != nil {
+					invalidUids[uid] = true
+				}
+			}
+		}
+	}
+
+	// Filter out the invalid UIDs.
+	j := 0
+	for i := 0; i < len(sorted); i++ {
+		if invalidUids[sorted[i]] {
+			continue
+		}
+		sorted[j] = sorted[i]
+		j++
+	}
+	sorted = sorted[:j]
+
+	// Now process next level with valid UIDs.
+	childchan = make(chan error, len(leftToProcess))
+	for _, child := range leftToProcess {
+		child.Query = createTaskQuery(child, sorted)
+		go ProcessGraph(ctx, child, childchan)
+	}
+
+	// Now get the results back.
+	for i := 0; i < len(leftToProcess); i++ {
+		select {
+		case err = <-childchan:
+			x.Trace(ctx, "Reply from child. Index: %v Attr: %v", i, sg.Children[i].Attr)
+			if err != nil {
+				x.Trace(ctx, "Error while processing child task: %v", err)
+				rch <- err
+				return
+			}
+		case <-ctx.Done():
+			x.Trace(ctx, "Context done before full execution: %v", ctx.Err())
+			rch <- ctx.Err()
+			return
+		}
+	}
+
 	rch <- nil
 }

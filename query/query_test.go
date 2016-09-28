@@ -33,9 +33,9 @@ import (
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/query/graph"
+	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/task"
-	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -67,7 +67,7 @@ func checkName(t *testing.T, r *task.Result, idx int, expected string) {
 func checkSingleValue(t *testing.T, child *SubGraph,
 	attr string, value string) {
 	if child.Attr != attr || len(child.Result) == 0 {
-		t.Error("Expected attr name with some.Result")
+		t.Error("Expected attr name with some result", attr)
 	}
 	r := new(task.Result)
 	x.ParseTaskResult(r, child.Result)
@@ -180,13 +180,19 @@ func populateGraph(t *testing.T) (string, *store.Store) {
 	edge.Value = []byte("female")
 	addEdge(t, edge, getOrCreate(posting.Key(1, "gender"), ps))
 
-	edge.Value = []byte("alive")
-	addEdge(t, edge, getOrCreate(posting.Key(1, "status"), ps))
+	edge.Value = []byte("15")
+	addEdge(t, edge, getOrCreate(posting.Key(1, "age"), ps))
+
+	edge.Value = []byte("31, 32 street, Jupiter")
+	addEdge(t, edge, getOrCreate(posting.Key(1, "address"), ps))
+
+	edge.Value = []byte("yes")
+	addEdge(t, edge, getOrCreate(posting.Key(1, "alive"), ps))
 
 	edge.Value = []byte("38")
 	addEdge(t, edge, getOrCreate(posting.Key(1, "age"), ps))
 
-	edge.Value = []byte("98.99")
+	edge.Value = []byte("98.99%")
 	addEdge(t, edge, getOrCreate(posting.Key(1, "survival_rate"), ps))
 
 	edge.Value = []byte("true")
@@ -195,6 +201,12 @@ func populateGraph(t *testing.T) (string, *store.Store) {
 	// Now let's add a name for each of the friends, except 101.
 	edge.Value = []byte("Rick Grimes")
 	addEdge(t, edge, getOrCreate(posting.Key(23, "name"), ps))
+
+	edge.Value = []byte("15")
+	addEdge(t, edge, getOrCreate(posting.Key(23, "age"), ps))
+
+	edge.Value = []byte("21, mark street, Mars")
+	addEdge(t, edge, getOrCreate(posting.Key(23, "address"), ps))
 
 	edge.Value = []byte("Glenn Rhee")
 	addEdge(t, edge, getOrCreate(posting.Key(24, "name"), ps))
@@ -242,6 +254,59 @@ func processToJson(t *testing.T, query string) map[string]interface{} {
 	return mp
 }
 
+func TestSchema1(t *testing.T) {
+	err := schema.Parse("test_schema")
+
+	if err != nil {
+		t.Error(err)
+	}
+
+	dir, _ := populateGraph(t)
+	defer os.RemoveAll(dir)
+
+	// Alright. Now we have everything set up. Let's create the query.
+	query := `
+		{
+			person(_uid_:0x01) {
+				alive
+				survival_rate
+				friend
+			}
+		}
+	`
+	mp := processToJson(t, query)
+	fmt.Println(mp)
+	resp := mp["person"]
+	name := resp.([]interface{})[0].(map[string]interface{})["name"].(string)
+	if name != "Michonne" {
+		t.Errorf("Expected name Michonne. Got %s", name)
+	}
+	if _, ok := resp.([]interface{})[0].(map[string]interface{})["alive"]; !ok {
+		t.Error("Expected alive as its not part of person")
+	}
+
+	if _, ok := resp.([]interface{})[0].(map[string]interface{})["survival_rate"]; !ok {
+		t.Error("Expected survival rate as its not part of person")
+	}
+
+	friends := resp.([]interface{})[0].(map[string]interface{})["friend"].([]interface{})
+	co := 0
+	res := 0
+	for _, it := range friends {
+		if len(it.(map[string]interface{})) == 0 {
+			co++
+		} else {
+			res = len(it.(map[string]interface{}))
+		}
+	}
+	if co != 4 {
+		t.Error("Invalid result")
+	}
+	if res != 3 {
+		t.Error("Invalid result")
+	}
+}
+
 func TestGetUid(t *testing.T) {
 	dir, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
@@ -253,7 +318,7 @@ func TestGetUid(t *testing.T) {
 				name
 				_uid_
 				gender
-				status
+				alive
 				friend {
 					_count_
 				}
@@ -279,7 +344,7 @@ func TestDebug1(t *testing.T) {
 			debug(_uid_:0x01) {
 				name
 				gender
-				status
+				alive
 				friend {
 					_count_
 				}
@@ -304,7 +369,7 @@ func TestDebug2(t *testing.T) {
 			me(_uid_:0x01) {
 				name
 				gender
-				status
+				alive
 				friend {
 					_count_
 				}
@@ -331,7 +396,7 @@ func TestCount(t *testing.T) {
 			me(_uid_:0x01) {
 				name
 				gender
-				status
+				alive
 				friend {
 					_count_
 				}
@@ -360,7 +425,7 @@ func TestCountError1(t *testing.T) {
 				}
 				name
 				gender
-				status
+				alive
 			}
 		}
 	`
@@ -388,7 +453,7 @@ func TestCountError2(t *testing.T) {
 				}
 				name
 				gender
-				status
+				alive
 			}
 		}
 	`
@@ -416,7 +481,7 @@ func TestProcessGraph(t *testing.T) {
 				}
 				name
 				gender
-				status
+				alive	
 			}
 		}
 	`
@@ -491,7 +556,7 @@ func TestProcessGraph(t *testing.T) {
 
 	checkSingleValue(t, sg.Children[1], "name", "Michonne")
 	checkSingleValue(t, sg.Children[2], "gender", "female")
-	checkSingleValue(t, sg.Children[3], "status", "alive")
+	checkSingleValue(t, sg.Children[3], "alive", "yes")
 }
 
 func TestToJson(t *testing.T) {
@@ -504,7 +569,7 @@ func TestToJson(t *testing.T) {
 			me(_uid_:0x01) {
 				name
 				gender
-				status
+			  alive	
 				friend {
 					name
 				}
@@ -540,6 +605,7 @@ func TestToJson(t *testing.T) {
 	}
 }
 
+/*
 // Checking for Type coercion errors.
 // NOTE: Writing separate test since Marshal/Unmarshal process of ToJSON converts
 // 'int' type to 'float64' and thus mucks up the tests.
@@ -664,6 +730,7 @@ func TestPostTraverse(t *testing.T) {
 		}
 	}
 }
+*/
 
 func getProperty(properties []*graph.Property, prop string) []byte {
 	for _, p := range properties {
@@ -684,7 +751,106 @@ func TestToPB(t *testing.T) {
 				_xid_
 				name
 				gender
-				status
+				alive
+				friend {
+					name
+				}
+				friend {
+				}
+			}
+		}
+  `
+
+	gq, _, err := gql.Parse(query)
+	if err != nil {
+		t.Error(err)
+	}
+	ctx := context.Background()
+	sg, err := ToSubGraph(ctx, gq)
+	if err != nil {
+		t.Error(err)
+	}
+
+	ch := make(chan error)
+	go ProcessGraph(ctx, sg, ch)
+	err = <-ch
+	if err != nil {
+		t.Error(err)
+	}
+
+	var l Latency
+	gr, err := sg.ToProtocolBuffer(&l)
+	if err != nil {
+		t.Error(err)
+	}
+
+	if gr.Attribute != "debug" {
+		t.Errorf("Expected attribute me, Got: %v", gr.Attribute)
+	}
+	if gr.Uid != 1 {
+		t.Errorf("Expected uid 1, Got: %v", gr.Uid)
+	}
+	if gr.Xid != "mich" {
+		t.Errorf("Expected xid mich, Got: %v", gr.Xid)
+	}
+	if len(gr.Properties) != 3 {
+		t.Errorf("Expected values map to contain 3 properties, Got: %v",
+			len(gr.Properties))
+	}
+	if string(getProperty(gr.Properties, "name")) != "Michonne" {
+		t.Errorf("Expected property name to have value Michonne, Got: %v",
+			string(getProperty(gr.Properties, "name")))
+	}
+	if len(gr.Children) != 10 {
+		t.Errorf("Expected 10 children, Got: %v", len(gr.Children))
+	}
+
+	child := gr.Children[0]
+	if child.Uid != 23 {
+		t.Errorf("Expected uid 23, Got: %v", gr.Uid)
+	}
+	if child.Attribute != "friend" {
+		t.Errorf("Expected attribute friend, Got: %v", child.Attribute)
+	}
+	if len(child.Properties) != 1 {
+		t.Errorf("Expected values map to contain 1 property, Got: %v",
+			len(child.Properties))
+	}
+	if string(getProperty(child.Properties, "name")) != "Rick Grimes" {
+		t.Errorf("Expected property name to have value Rick Grimes, Got: %v",
+			string(getProperty(child.Properties, "name")))
+	}
+	if len(child.Children) != 0 {
+		t.Errorf("Expected 0 children, Got: %v", len(child.Children))
+	}
+
+	child = gr.Children[5]
+	if child.Uid != 23 {
+		t.Errorf("Expected uid 23, Got: %v", gr.Uid)
+	}
+	if child.Attribute != "friend" {
+		t.Errorf("Expected attribute friend, Got: %v", child.Attribute)
+	}
+	if len(child.Properties) != 0 {
+		t.Errorf("Expected values map to contain 0 properties, Got: %v",
+			len(child.Properties))
+	}
+	if len(child.Children) != 0 {
+		t.Errorf("Expected 0 children, Got: %v", len(child.Children))
+	}
+}
+
+func TestSchema(t *testing.T) {
+	dir, _ := populateGraph(t)
+	defer os.RemoveAll(dir)
+
+	query := `
+		{
+			debug(_uid_:0x1) {
+				_xid_
+				name
+				gender
+				alive
 				friend {
 					name
 				}

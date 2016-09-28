@@ -42,6 +42,7 @@ import (
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/query/graph"
 	"github.com/dgraph-io/dgraph/rdf"
+	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/uid"
@@ -65,9 +66,9 @@ var (
 	nomutations = flag.Bool("nomutations", false, "Don't allow mutations on this server.")
 	shutdown    = flag.Bool("shutdown", false, "Allow client to send shutdown signal.")
 	tracing     = flag.Float64("trace", 0.5, "The ratio of queries to trace.")
-	schemaFile  = flag.String("schema", "", "Path to the file that specifies schema in json format")
 	cpuprofile  = flag.String("cpu", "", "write cpu profile to file")
 	memprofile  = flag.String("mem", "", "write memory profile to file")
+	schemaFile  = flag.String("schema", "", "Path to schema file")
 	closeCh     = make(chan struct{})
 
 	groupId uint64 = 0 // ALL
@@ -280,7 +281,8 @@ func mutationHandler(ctx context.Context, mu *gql.Mutation) (map[string]uint64, 
 // input value is of the correct type
 func validateTypes(nquads []rdf.NQuad) error {
 	for _, nquad := range nquads {
-		if t := gql.SchemaType(nquad.Predicate); t != nil && t.IsScalar() {
+		//TODO(Ashwin): Ensure global types so that muations can be type checked
+		if t := schema.TypeOf(nquad.Predicate); t != nil && t.IsScalar() {
 			// Currently, only scalar types are present
 			schemaType := t.(types.Scalar)
 			storageType := types.TypeForID(types.TypeID(nquad.ObjectType))
@@ -624,7 +626,7 @@ func main() {
 	// go node.Campaign(context.TODO())
 
 	if len(*schemaFile) > 0 {
-		err = gql.LoadSchema(*schemaFile)
+		err = schema.Parse(*schemaFile)
 		if err != nil {
 			log.Fatalf("Error while loading schema:%v", err)
 		}
