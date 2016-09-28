@@ -79,6 +79,7 @@ func TestPopulateShard(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer ps.Close()
+	posting.Init()
 
 	writePLs(t, 100, 2, ps)
 	w := NewState(ps, nil, 0, 1)
@@ -165,6 +166,7 @@ func TestGenerateGroup(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer ps.Close()
+	posting.Init()
 
 	writePLs(t, 100, 2, ps)
 	ws := NewState(ps, nil, 0, 1)
