@@ -435,6 +435,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 	var properties []*graph.Property
 	var children []*graph.Node
 
+	invalidUids := make(map[uint64]bool)
 	// We go through all predicate children of the subgraph.
 	for _, pc := range sg.Children {
 		r := new(task.Result)
@@ -475,16 +476,23 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 					uc.Uid = uid
 				}
 				if rerr := pc.preTraverse(uid, uc); rerr != nil {
-					log.Printf("Error while traversal: %v", rerr)
-					return rerr
+					if rerr.Error() == "_INV_" {
+						invalidUids[uid] = true
+					} else {
+						log.Printf("Error while traversal: %v", rerr)
+						return rerr
+					}
 				}
-				children = append(children, uc)
+				if !invalidUids[uid] {
+					children = append(children, uc)
+				}
 			}
 		} else {
 			if ok := r.Values(&tv, idx); !ok {
 				return fmt.Errorf("While parsing value")
 			}
 
+			valBytes := tv.ValBytes()
 			v, storageType, err := getValue(tv)
 			if err != nil {
 				return err
@@ -499,9 +507,9 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 				}
 				schemaType := pc.Params.AttrType.(types.Scalar)
 				if schemaType != storageType {
-					if _, err := schemaType.Convert(v); err != nil {
+					if _, err := schemaType.Convert(v); err != nil || bytes.Equal(valBytes, nil) {
 						// skip values that don't convert.
-						continue
+						return fmt.Errorf("_INV_")
 					}
 				}
 			}
@@ -870,23 +878,25 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, rch chan error) {
 				if ok := rNode.Values(&tv, i); !ok {
 					invalidUids[uid] = true
 				}
-				val := tv.ValBytes()
-				if bytes.Equal(val, nil) {
-					// We do this, because we typically do set values, even though
-					// they might be nil. This is to ensure that the index of the query uids
-					// and the index of the results can remain in sync.
+
+				valBytes := tv.ValBytes()
+				v, storageType, err := getValue(tv)
+				if err != nil || bytes.Equal(valBytes, nil) {
+					// The value is not as requested in schema.
 					invalidUids[uid] = true
 					continue
 				}
 
 				// type assertion for scalar type values
 				if !node.Params.AttrType.IsScalar() {
-					log.Fatal("This shouldnt happen")
+					rch <- fmt.Errorf("Fatal mistakes in type.")
 				}
-				stype := node.Params.AttrType.(types.Scalar)
-				_, err := stype.Unmarshaler.FromText(val)
-				if err != nil {
-					invalidUids[uid] = true
+
+				schemaType := node.Params.AttrType.(types.Scalar)
+				if schemaType != storageType {
+					if _, err = schemaType.Convert(v); err != nil {
+						invalidUids[uid] = true
+					}
 				}
 			}
 		}
