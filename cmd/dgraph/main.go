@@ -286,7 +286,19 @@ func validateTypes(nquads []rdf.NQuad) error {
 			if storageType == nil {
 				log.Fatalf("Parsing created invalid type %v", nquad.ObjectType)
 			}
-			if storageType != schemaType {
+			if storageType == types.ByteArrayType {
+				// Storage type was unspecified in the RDF, so we convert the data to the schema
+				// type.
+				v, err := schemaType.Unmarshaler.FromText(nquad.ObjectValue)
+				if err != nil {
+					return err
+				}
+				nquad.ObjectValue, err = v.MarshalBinary()
+				if err != nil {
+					return err
+				}
+				nquad.ObjectType = byte(schemaType.ID())
+			} else if storageType != schemaType {
 				v, err := storageType.(types.Scalar).Unmarshaler.FromBinary(nquad.ObjectValue)
 				if err != nil {
 					return err

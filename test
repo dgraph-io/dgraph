@@ -13,10 +13,9 @@ set -o pipefail
 echo
 echo "Running tests. Ignoring vendor folder."
 run "$(go list ./... | grep -v vendor | grep -v cmd)"
-
 # Exit if the previous command failed.
 if [ $? != 0 ]; then
-    exit $?
+    exit 1
 fi
 
 echo
