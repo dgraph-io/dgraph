@@ -67,7 +67,7 @@ func checkName(t *testing.T, r *task.Result, idx int, expected string) {
 func checkSingleValue(t *testing.T, child *SubGraph,
 	attr string, value string) {
 	if child.Attr != attr || len(child.Result) == 0 {
-		t.Error("Expected attr name with some.Result")
+		t.Error("Expected attr name with some result", attr)
 	}
 	r := x.NewTaskResult(child.Result)
 	if r.ValuesLength() != 1 {
@@ -183,13 +183,13 @@ func populateGraph(t *testing.T) (string, *store.Store) {
 	edge.Value = []byte("31, 32 street, Jupiter")
 	addEdge(t, edge, getOrCreate(posting.Key(1, "address"), ps))
 
-	edge.Value = []byte("alive")
-	addEdge(t, edge, getOrCreate(posting.Key(1, "status"), ps))
+	edge.Value = []byte("yes")
+	addEdge(t, edge, getOrCreate(posting.Key(1, "alive"), ps))
 
 	edge.Value = []byte("38")
 	addEdge(t, edge, getOrCreate(posting.Key(1, "age"), ps))
 
-	edge.Value = []byte("98.99")
+	edge.Value = []byte("98.99%")
 	addEdge(t, edge, getOrCreate(posting.Key(1, "survival_rate"), ps))
 
 	edge.Value = []byte("true")
@@ -265,6 +265,8 @@ func TestSchema1(t *testing.T) {
 	query := `
 		{
 			person(_uid_:0x01) {
+				alive
+				survival_rate
 				friend
 			}
 		}
@@ -276,6 +278,14 @@ func TestSchema1(t *testing.T) {
 	if name != "Michonne" {
 		t.Errorf("Expected name Michonne. Got %s", name)
 	}
+	if _, ok := resp.(map[string]interface{})["alive"]; !ok {
+		t.Error("Expected alive as its not part of person")
+	}
+
+	if _, ok := resp.(map[string]interface{})["survival_rate"]; !ok {
+		t.Error("Expected survival rate as its not part of person")
+	}
+
 	friends := resp.(map[string]interface{})["friend"].([]interface{})
 	co := 0
 	res := 0
@@ -305,7 +315,7 @@ func TestGetUid(t *testing.T) {
 				name
 				_uid_
 				gender
-				status
+				alive
 				friend {
 					_count_
 				}
@@ -330,7 +340,7 @@ func TestDebug1(t *testing.T) {
 			debug(_uid_:0x01) {
 				name
 				gender
-				status
+				alive
 				friend {
 					_count_
 				}
@@ -355,7 +365,7 @@ func TestDebug2(t *testing.T) {
 			me(_uid_:0x01) {
 				name
 				gender
-				status
+				alive
 				friend {
 					_count_
 				}
@@ -382,7 +392,7 @@ func TestCount(t *testing.T) {
 			me(_uid_:0x01) {
 				name
 				gender
-				status
+				alive
 				friend {
 					_count_
 				}
@@ -411,7 +421,7 @@ func TestCountError1(t *testing.T) {
 				}
 				name
 				gender
-				status
+				alive
 			}
 		}
 	`
@@ -439,7 +449,7 @@ func TestCountError2(t *testing.T) {
 				}
 				name
 				gender
-				status
+				alive
 			}
 		}
 	`
@@ -467,7 +477,7 @@ func TestProcessGraph(t *testing.T) {
 				}
 				name
 				gender
-				status
+				alive	
 			}
 		}
 	`
@@ -540,7 +550,7 @@ func TestProcessGraph(t *testing.T) {
 
 	checkSingleValue(t, sg.Children[1], "name", "Michonne")
 	checkSingleValue(t, sg.Children[2], "gender", "female")
-	checkSingleValue(t, sg.Children[3], "status", "alive")
+	checkSingleValue(t, sg.Children[3], "alive", "yes")
 }
 
 func TestToJson(t *testing.T) {
@@ -553,7 +563,7 @@ func TestToJson(t *testing.T) {
 			me(_uid_:0x01) {
 				name
 				gender
-				status
+			  alive	
 				friend {
 					name
 				}
@@ -709,7 +719,7 @@ func TestToPB(t *testing.T) {
 				_xid_
 				name
 				gender
-				status
+				alive
 				friend {
 					name
 				}
@@ -808,7 +818,7 @@ func TestSchema(t *testing.T) {
 				_xid_
 				name
 				gender
-				status
+				alive
 				friend {
 					name
 				}

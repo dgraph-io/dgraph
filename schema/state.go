@@ -311,7 +311,7 @@ func isNameSuffix(r rune) bool {
 	if r >= '0' && r <= '9' {
 		return true
 	}
-	if r == '.' || r == '-' { // Use by freebase.
+	if r == '_' || r == '.' || r == '-' { // Use by freebase.
 		return true
 	}
 	return false
