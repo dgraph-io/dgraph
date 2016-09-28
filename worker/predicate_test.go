@@ -152,7 +152,7 @@ func TestGenerateGroup(t *testing.T) {
 	}
 	t.Logf("Size of data: %v", len(data))
 
-	var g task.Group
+	var g task.GroupKeys
 	uo := flatbuffers.GetUOffsetT(data)
 	t.Logf("Found offset: %v", uo)
 	g.Init(data, uo)
