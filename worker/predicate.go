@@ -108,24 +108,24 @@ func (s *State) generateGroup(group uint64) ([]byte, error) {
 
 // PopulateShard gets data for predicate pred from server with id serverId and
 // writes it to RocksDB.
-func (s *State) PopulateShard(ctx context.Context, pool *Pool, group uint64) error {
+func (s *State) PopulateShard(ctx context.Context, pool *Pool, group uint64) (int, error) {
 	query := new(Payload)
 	data, err := s.generateGroup(group)
 	if err != nil {
-		return x.Wrapf(err, "While generating keys group")
+		return 0, x.Wrapf(err, "While generating keys group")
 	}
 	query.Data = data
 
 	conn, err := pool.Get()
 	if err != nil {
-		return err
+		return 0, err
 	}
 	defer pool.Put(conn)
 	c := NewWorkerClient(conn)
 
 	stream, err := c.PredicateData(context.Background(), query)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	x.Trace(ctx, "Streaming data for group: %v", group)
 
@@ -133,6 +133,8 @@ func (s *State) PopulateShard(ctx context.Context, pool *Pool, group uint64) err
 	che := make(chan error)
 	go s.writeBatch(ctx, kvs, che)
 
+	// We can use count to check the number of posting lists returned in tests.
+	count := 0
 	for {
 		payload, err := stream.Recv()
 		if err == io.EOF {
@@ -140,9 +142,9 @@ func (s *State) PopulateShard(ctx context.Context, pool *Pool, group uint64) err
 		}
 		if err != nil {
 			close(kvs)
-			return err
+			return count, err
 		}
-
+		count++
 		uo := flatbuffers.GetUOffsetT(payload.Data)
 		kv := new(task.KV)
 		kv.Init(payload.Data, uo)
@@ -152,12 +154,12 @@ func (s *State) PopulateShard(ctx context.Context, pool *Pool, group uint64) err
 		case <-ctx.Done():
 			x.TraceError(ctx, x.Errorf("Context timed out while streaming group: %v", group))
 			close(kvs)
-			return ctx.Err()
+			return count, ctx.Err()
 
 		case err := <-che:
 			x.TraceError(ctx, x.Errorf("Error while doing a batch write for group: %v", group))
 			close(kvs)
-			return err
+			return count, err
 
 		case kvs <- kv:
 		}
@@ -166,8 +168,8 @@ func (s *State) PopulateShard(ctx context.Context, pool *Pool, group uint64) err
 
 	if err := <-che; err != nil {
 		x.TraceError(ctx, x.Errorf("Error while doing a batch write for group: %v", group))
-		return err
+		return count, err
 	}
 	x.Trace(ctx, "Streaming complete for group: %v", group)
-	return nil
+	return count, nil
 }
