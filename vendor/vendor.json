@@ -41,6 +41,18 @@
 			"tree": true
 		},
 		{
+			"checksumSHA1": "jw+XDfPJgogfSPCsuebqFZj/GJc=",
+			"path": "github.com/coreos/etcd/raft",
+			"revision": "1ebeef5cbfe69c0dab2bc701ee5307eed7a7d8d2",
+			"revisionTime": "2016-09-05T06:26:19Z"
+		},
+		{
+			"checksumSHA1": "7iseLdwhxsT7LD5n3g01bfpTd/0=",
+			"path": "github.com/coreos/etcd/raft/raftpb",
+			"revision": "1ebeef5cbfe69c0dab2bc701ee5307eed7a7d8d2",
+			"revisionTime": "2016-09-05T06:26:19Z"
+		},
+		{
 			"checksumSHA1": "a29TtOU87eZA0S6wL+rAkpqUEzc=",
 			"path": "github.com/dgryski/go-farm",
 			"revision": "d1e51a4af19092715f4ce7d8257fe5bc8f8be727",

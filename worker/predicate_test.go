@@ -20,11 +20,19 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"net"
 	"os"
 	"testing"
 	"time"
 
+	"google.golang.org/grpc"
+
+	"github.com/dgraph-io/dgraph/posting"
+	"github.com/dgraph-io/dgraph/posting/types"
 	"github.com/dgraph-io/dgraph/store"
+	"github.com/dgraph-io/dgraph/task"
+	"github.com/dgraph-io/dgraph/x"
+	flatbuffers "github.com/google/flatbuffers/go"
 )
 
 func checkShard(ps *store.Store) (int, []byte) {
@@ -32,19 +40,57 @@ func checkShard(ps *store.Store) (int, []byte) {
 	defer it.Close()
 
 	count := 0
-	var val []byte
-	prefix := []byte("test")
-	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+	for it.SeekToFirst(); it.Valid(); it.Next() {
 		count++
-		val = it.Value().Data()
 	}
-	return count, val
+	return count, it.Key().Data()
+}
+
+func writePLs(t *testing.T, count int, vid uint64, ps *store.Store) {
+	for i := 0; i < count; i++ {
+		k := fmt.Sprintf("%03d", i)
+		t.Logf("key: %v", k)
+		list, _ := posting.GetOrCreate([]byte(k), ps)
+
+		de := x.DirectedEdge{
+			ValueId:   vid,
+			Source:    "test",
+			Timestamp: time.Now(),
+		}
+		list.AddMutation(context.TODO(), de, posting.Set)
+		if merged, err := list.MergeIfDirty(context.TODO()); err != nil {
+			t.Errorf("While merging: %v", err)
+		} else if !merged {
+			t.Errorf("No merge happened")
+		}
+	}
+}
+
+// We define this function so that we have access to the server which we can
+// close at the end of the test.
+func newServer(port string) (*grpc.Server, net.Listener, error) {
+	ln, err := net.Listen("tcp", port)
+	if err != nil {
+		log.Fatalf("While running server: %v", err)
+		return nil, nil, err
+	}
+	log.Printf("Worker listening at address: %v", ln.Addr())
+
+	s := grpc.NewServer(grpc.CustomCodec(&PayloadCodec{}))
+	return s, ln, nil
+}
+
+func serve(s *grpc.Server, ln net.Listener) {
+	RegisterWorkerServer(s, &grpcWorker{})
+	s.Serve(ln)
+}
+
+func initNode(id uint64, my string) {
+	thisNode = newNode(id, my)
 }
 
 func TestPopulateShard(t *testing.T) {
 	var err error
-	addrs := []string{":12345", ":12346"}
-
 	dir, err := ioutil.TempDir("", "store0")
 	if err != nil {
 		t.Fatal(err)
@@ -56,21 +102,18 @@ func TestPopulateShard(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer ps.Close()
+	posting.Init()
 
-	// Batch writing dummy key value pairs which will be transferred to other
-	// instance.
-	wb := ps.NewWriteBatch()
-	for i := 0; i < 100; i++ {
-		wb.Put([]byte(fmt.Sprintf("test|%d", i)), []byte("test"))
-
-	}
-	if err := ps.WriteBatch(wb); err != nil {
-		log.Fatal(err)
-	}
-
-	w := NewState(ps, nil, 0, 2)
+	writePLs(t, 100, 2, ps)
+	w := NewState(ps, nil, 0, 1)
 	SetWorkerState(w)
-	go w.Connect(addrs, ":12345")
+
+	s, ln, err := newServer(":12345")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Stop()
+	go serve(s, ln)
 
 	dir1, err := ioutil.TempDir("", "store1")
 	if err != nil {
@@ -85,24 +128,167 @@ func TestPopulateShard(t *testing.T) {
 	defer ps1.Close()
 
 	w1 := NewState(ps1, nil, 1, 2)
-	SetWorkerState(w1)
-	go w1.Connect(addrs, ":12346")
 
-	// Wait for workers to be initialized and connected.
-	time.Sleep(5 * time.Second)
+	s1, ln1, err := newServer(":12346")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s1.Stop()
+	go serve(s1, ln1)
 
-	// Since PredicateData reads from the global variable wo, we change it to w.
 	SetWorkerState(w)
-	if err := w1.PopulateShard(context.Background(), "test", 0); err != nil {
+	pool := NewPool("localhost:12345", 5)
+	_, err = w1.PopulateShard(context.Background(), pool, 0)
+	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Getting count on number of keys written to posting list store on instance 1.
-	count, val := checkShard(ps1)
+	count, k := checkShard(ps1)
 	if count != 100 {
 		t.Fatalf("Expected %d key value pairs. Got : %d", 100, count)
 	}
-	if string(val) != "test" {
-		t.Fatalf("Expected last value %s. Got : %s", "test", string(val))
+	if string(k) != "099" {
+		t.Fatalf("Expected key to be: %v. Got %v", "099", string(k))
+	}
+
+	l, _ := posting.GetOrCreate(k, ps)
+	if l.Length() != 1 {
+		t.Error("Unable to find added elements in posting list")
+	}
+	var p types.Posting
+	if ok := l.Get(&p, 0); !ok {
+		t.Error("Unable to retrieve posting at 1st iter")
+		t.Fail()
+	}
+	if p.Uid() != 2 {
+		t.Errorf("Expected 2. Got: %v", p.Uid())
+	}
+	if string(p.Source()) != "test" {
+		t.Errorf("Expected testing. Got: %v", string(p.Source()))
+	}
+
+	// We modify the ValueId in 50 PLs. So now PopulateShard should only return these after checking the Checksum.
+	writePLs(t, 50, 5, ps)
+	count, err = w1.PopulateShard(context.Background(), pool, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count != 50 {
+		t.Errorf("Expected PopulateShard to return %v k-v pairs. Got: %v", 50, count)
+	}
+}
+
+func TestJoinCluster(t *testing.T) {
+	var err error
+	dir, err := ioutil.TempDir("", "store0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+
+	ps, err := store.NewStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ps.Close()
+	posting.Init()
+
+	writePLs(t, 100, 2, ps)
+	w := NewState(ps, nil, 0, 1)
+	SetWorkerState(w)
+
+	s, ln, err := newServer(":12345")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Stop()
+	go serve(s, ln)
+
+	initNode(1, "localhost:12345")
+	n1 := GetNode()
+	n1.StartNode("1:localhost:12345")
+
+	dir1, err := ioutil.TempDir("", "store1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir1)
+
+	ps1, err := store.NewStore(dir1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ps1.Close()
+
+	w1 := NewState(ps1, nil, 1, 2)
+
+	s1, ln1, err := newServer(":12346")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s1.Stop()
+	go serve(s1, ln1)
+
+	// This state would be used by PredicateData
+	SetWorkerState(w)
+	initNode(2, "localhost:12346")
+	n2 := GetNode()
+	n2.StartNode("")
+	thisNode = n1
+	n2.JoinCluster("1:localhost:12345", w1)
+
+	// Getting count on number of keys written to posting list store on instance 1.
+	count, k := checkShard(ps1)
+	if count != 100 {
+		t.Fatalf("Expected %d key value pairs. Got : %d", 100, count)
+	}
+	if string(k) != "099" {
+		t.Fatalf("Expected key to be: %v. Got %v", "099", string(k))
+	}
+}
+
+func TestGenerateGroup(t *testing.T) {
+	dir, err := ioutil.TempDir("", "store3")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+
+	ps, err := store.NewStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ps.Close()
+	posting.Init()
+
+	writePLs(t, 100, 2, ps)
+	ws := NewState(ps, nil, 0, 1)
+	data, err := ws.generateGroup(0)
+	if err != nil {
+		t.Error(err)
+	}
+	t.Logf("Size of data: %v", len(data))
+
+	var g task.GroupKeys
+	uo := flatbuffers.GetUOffsetT(data)
+	t.Logf("Found offset: %v", uo)
+	g.Init(data, uo)
+
+	if g.KeysLength() != 100 {
+		t.Errorf("There should be 100 keys. Found: %v", g.KeysLength())
+		t.Fail()
+	}
+	for i := 0; i < 100; i++ {
+		var k task.KC
+		if ok := g.Keys(&k, i); !ok {
+			t.Errorf("Unable to parse key at index: %v", i)
+		}
+		expected := fmt.Sprintf("%03d", i)
+		found := string(k.KeyBytes())
+		if expected != found {
+			t.Errorf("Key expected:[%q], found:[%q]", expected, found)
+		}
+		t.Logf("Checksum: %q", k.ChecksumBytes())
 	}
 }

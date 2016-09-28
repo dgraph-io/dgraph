@@ -234,15 +234,7 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 				l[j] = mergeInterfaces(m, ival)
 			}
 		}
-		if len(l) == 1 {
-			m := make(map[string]interface{})
-			if sg.Params.Alias != "" {
-				m[sg.Params.Alias] = l[0]
-			} else {
-				m[sg.Attr] = l[0]
-			}
-			result[q.Uids(i)] = m
-		} else if len(l) > 1 {
+		if len(l) > 0 {
 			m := make(map[string]interface{})
 			if sg.Params.Alias != "" {
 				m[sg.Params.Alias] = l
@@ -480,17 +472,22 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 				}
 			}
 
-			txt, err := v.MarshalText()
 			if pc.Attr == "_xid_" {
+				txt, err := v.MarshalText()
+				if err != nil {
+					return err
+				}
 				dst.Xid = string(txt)
 				// We don't want to add _uid_ to properties map.
 			} else if pc.Attr == "_uid_" {
 				continue
 			} else {
+				val, err := v.MarshalBinary()
 				if err != nil {
 					return err
 				}
-				p := &graph.Property{Prop: pc.Attr, Val: txt}
+				// TODO: Figure out how the client parses this value
+				p := &graph.Property{Prop: pc.Attr, Val: val}
 				properties = append(properties, p)
 			}
 		}

@@ -128,6 +128,11 @@ func UidlistOffset(b *flatbuffers.Builder,
 var Nilbyte []byte
 
 func Trace(ctx context.Context, format string, args ...interface{}) {
+	if *debugMode {
+		fmt.Printf(format, args...)
+		return
+	}
+
 	tr, ok := trace.FromContext(ctx)
 	if !ok {
 		return

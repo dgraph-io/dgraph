@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/gob"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"strings"
@@ -260,8 +261,9 @@ func TestGetUid(t *testing.T) {
 		}
 	`
 	mp := processToJson(t, query)
+	fmt.Println(mp)
 	resp := mp["me"]
-	uid := resp.(map[string]interface{})["_uid_"].(string)
+	uid := resp.([]interface{})[0].(map[string]interface{})["_uid_"].(string)
 	if uid != "0x1" {
 		t.Errorf("Expected uid 0x01. Got %s", uid)
 	}
@@ -287,7 +289,7 @@ func TestDebug1(t *testing.T) {
 
 	mp := processToJson(t, query)
 	resp := mp["debug"]
-	uid := resp.(map[string]interface{})["_uid_"].(string)
+	uid := resp.([]interface{})[0].(map[string]interface{})["_uid_"].(string)
 	if uid != "0x1" {
 		t.Errorf("Expected uid 0x1. Got %s", uid)
 	}
@@ -312,7 +314,7 @@ func TestDebug2(t *testing.T) {
 
 	mp := processToJson(t, query)
 	resp := mp["me"]
-	uid, ok := resp.(map[string]interface{})["_uid_"].(string)
+	uid, ok := resp.([]interface{})[0].(map[string]interface{})["_uid_"].(string)
 	if ok {
 		t.Errorf("No uid expected but got one %s", uid)
 	}
@@ -339,7 +341,7 @@ func TestCount(t *testing.T) {
 
 	mp := processToJson(t, query)
 	resp := mp["me"]
-	friend := resp.(map[string]interface{})["friend"]
+	friend := resp.([]interface{})[0].(map[string]interface{})["friend"]
 	count := int(friend.(map[string]interface{})["_count_"].(float64))
 	if count != 5 {
 		t.Errorf("Expected count 1. Got %d", count)
@@ -613,7 +615,7 @@ func TestPostTraverse(t *testing.T) {
 			m = make(map[string]interface{})
 		}
 
-		actorMap := m["actor"].(map[string]interface{})
+		actorMap := m["actor"].([]interface{})[0].(map[string]interface{})
 
 		if _, success := actorMap["name"].(types.String); !success {
 			t.Errorf("Expected type coercion to string for: %v\n", actorMap["name"])
@@ -646,7 +648,7 @@ func TestPostTraverse(t *testing.T) {
 			t.Error(err)
 		}
 
-		actorMap = mp["actor"].(map[string]interface{})
+		actorMap = mp["actor"].([]interface{})[0].(map[string]interface{})
 		if _, success := actorMap["name"].(string); !success {
 			t.Errorf("Expected json type string for: %v\n", actorMap["name"])
 		}

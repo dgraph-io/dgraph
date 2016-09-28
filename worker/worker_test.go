@@ -25,7 +25,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/dgraph/commit"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/task"
@@ -196,10 +195,6 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 		return
 	}
 	defer ps.Close()
-
-	clog := commit.NewLogger(dir, "mutations", 50<<20)
-	clog.Init()
-	defer clog.Close()
 
 	posting.Init()
 	SetWorkerState(NewState(ps, nil, 0, 1))
