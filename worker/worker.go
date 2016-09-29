@@ -66,10 +66,9 @@ func NewState(ps, uStore *store.Store, idx, numInst uint64) *State {
 
 // NewQuery creates a Query flatbuffer table, serializes and returns it.
 func NewQuery(attr string, uids []uint64, terms []string) []byte {
-	b := flatbuffers.NewBuilder(0)
-
 	x.Assert(uids == nil || terms == nil)
 
+	b := flatbuffers.NewBuilder(0)
 	var vend flatbuffers.UOffsetT
 	if uids != nil {
 		task.QueryStartUidsVector(b, len(uids))
@@ -80,8 +79,7 @@ func NewQuery(attr string, uids []uint64, terms []string) []byte {
 	} else {
 		offsets := make([]flatbuffers.UOffsetT, 0, len(terms))
 		for _, term := range terms {
-			uo := b.CreateString(term)
-			offsets = append(offsets, uo)
+			offsets = append(offsets, b.CreateString(term))
 		}
 		task.QueryStartTermsVector(b, len(terms))
 		for i := len(terms) - 1; i >= 0; i-- {

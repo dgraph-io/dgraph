@@ -649,24 +649,42 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		Filter: gq.Filter,
 	}
 	// Also add query for consistency and to allow for ToJSON() later.
-	sg.Query = createTaskQuery(sg, []uint64{euid})
+	sg.Query = createTaskQuery(sg, []uint64{euid}, nil)
 	return sg, nil
 }
 
 // createTaskQuery generates the query buffer.
-func createTaskQuery(sg *SubGraph, sorted []uint64) []byte {
+func createTaskQuery(sg *SubGraph, uids []uint64, terms []string) []byte {
+	x.Assert(uids == nil || terms == nil)
+
 	b := flatbuffers.NewBuilder(0)
-	ao := b.CreateString(sg.Attr)
-
-	task.QueryStartUidsVector(b, len(sorted))
-	for i := len(sorted) - 1; i >= 0; i-- {
-		b.PrependUint64(sorted[i])
+	var vend flatbuffers.UOffsetT
+	if uids != nil {
+		task.QueryStartUidsVector(b, len(uids))
+		for i := len(uids) - 1; i >= 0; i-- {
+			b.PrependUint64(uids[i])
+		}
+		vend = b.EndVector(len(uids))
+	} else {
+		offsets := make([]flatbuffers.UOffsetT, 0, len(terms))
+		for _, term := range terms {
+			offsets = append(offsets, b.CreateString(term))
+		}
+		task.QueryStartTermsVector(b, len(terms))
+		for i := len(terms) - 1; i >= 0; i-- {
+			b.PrependUOffsetT(offsets[i])
+		}
+		vend = b.EndVector(len(terms))
 	}
-	vend := b.EndVector(len(sorted))
 
+	ao := b.CreateString(sg.Attr)
 	task.QueryStart(b)
 	task.QueryAddAttr(b, ao)
-	task.QueryAddUids(b, vend)
+	if uids != nil {
+		task.QueryAddUids(b, vend)
+	} else {
+		task.QueryAddTerms(b, vend)
+	}
 	task.QueryAddCount(b, int32(sg.Params.Count))
 	task.QueryAddOffset(b, int32(sg.Params.Offset))
 	task.QueryAddAfterUid(b, sg.Params.AfterUid)
@@ -744,7 +762,7 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, rch chan error) {
 	childchan := make(chan error, len(sg.Children))
 	for i := 0; i < len(sg.Children); i++ {
 		child := sg.Children[i]
-		child.Query = createTaskQuery(child, sg.sorted)
+		child.Query = createTaskQuery(child, sg.sorted, nil)
 		go ProcessGraph(ctx, child, childchan)
 	}
 
@@ -767,55 +785,12 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, rch chan error) {
 	rch <- nil
 }
 
-// predsFromFilter returns unique predicates for a FilterTree.
-func predsFromFilter(filter *gql.FilterTree, out map[string]*SubGraph) {
-	if len(filter.FuncName) > 0 {
-		x.Assertf(len(filter.FuncArgs) >= 1,
-			"Expected >=1 args, got %d", len(filter.FuncArgs))
-		// Assume first argument is the predicate.
-		_, found := out[filter.FuncArgs[0]]
-		if !found {
-			out[filter.FuncArgs[0]] = &SubGraph{Attr: filter.FuncArgs[0]}
-		}
-		return
-	}
-	for _, c := range filter.Child {
-		predsFromFilter(c, out)
-	}
-}
-
-// applyFilters applies filters to sg.sorted.
+// applyFilter applies filters to sg.sorted.
 func (sg *SubGraph) applyFilter(ctx context.Context) error {
 	if sg.Filter == nil { // No filter.
 		return nil
 	}
-	predMap := make(map[string]*SubGraph)
-	predsFromFilter(sg.Filter, predMap)
-
-	// Get values for all predicates referenced in filter.
-	childchan := make(chan error)
-	for _, child := range predMap {
-		child.Query = createTaskQuery(child, sg.sorted)
-		go ProcessGraph(ctx, child, childchan)
-	}
-
-	for i := 0; i < len(predMap); i++ {
-		select {
-		case err := <-childchan:
-			x.Trace(ctx, "Reply from child for filter.")
-			if err != nil {
-				x.TraceError(ctx, x.Wrapf(err,
-					"Error while processing child task for filter"))
-				return err
-			}
-		case <-ctx.Done():
-			x.TraceError(ctx, x.Wrapf(ctx.Err(),
-				"Context done before full execution in filter"))
-			return ctx.Err()
-		}
-	}
-
-	newSorted, err := applyFilterHelper(ctx, sg.sorted, sg.Filter, predMap)
+	newSorted, err := filterHelper(ctx, sg.sorted, sg.Filter)
 	if err != nil {
 		return err
 	}
@@ -823,38 +798,34 @@ func (sg *SubGraph) applyFilter(ctx context.Context) error {
 	return nil
 }
 
-// applyFilterHelper traverses filter tree and produce a filtered list of UIDs.
+// filterHelper traverses filter tree and produce a filtered list of UIDs.
 // Input "sorted" is the very original list of destination UIDs of a SubGraph.
-// Input "predMap" contains all the SubGraph objects which has all the results.
-func applyFilterHelper(ctx context.Context, sorted []uint64,
-	filter *gql.FilterTree, predMap map[string]*SubGraph) ([]uint64, error) {
-	out := make([]uint64, 0, 10) // out is our final output usually.
-
-	if len(filter.FuncName) > 0 {
-		// Handle leaf nodes first.
+func filterHelper(ctx context.Context, sorted []uint64, filter *gql.FilterTree) ([]uint64, error) {
+	if len(filter.FuncName) > 0 { // Leaf node.
 		x.Assertf(filter.FuncName == "eq", "Only exact match is supported now")
 		x.Assertf(len(filter.FuncArgs) == 2,
 			"Expect exactly two arguments: pred and predValue")
 
-		pred := filter.FuncArgs[0]
-		sg := predMap[pred]
-		x.Assert(sg != nil)
+		attr := filter.FuncArgs[0]
+		sg := &SubGraph{Attr: attr}
+		sg.Query = createTaskQuery(sg, nil, []string{filter.FuncArgs[1]})
+		sgChan := make(chan error)
+		go ProcessGraph(ctx, sg, sgChan)
+		err := <-sgChan
+		if err != nil {
+			return nil, err
+		}
 
 		r := new(task.Result)
 		x.ParseTaskResult(r, sg.Result)
-		x.Assertf(r.ValuesLength() == len(sorted),
-			"Wrong number of results: %d vs %d", r.ValuesLength(), len(sorted))
-		var tv task.Value
-		for i := 0; i < r.ValuesLength(); i++ {
-			if ok := r.Values(&tv, i); !ok {
-				return sorted, x.Errorf("While parsing value")
-			}
-			val := tv.ValBytes()
-			if val != nil && string(val) == filter.FuncArgs[1] {
-				out = append(out, sorted[i])
-			}
+		x.Assert(r.UidmatrixLength() == 1)
+		ul := new(algo.UIDList)
+		if ok := r.Uidmatrix(&ul.UidList, 0); !ok {
+			return nil, x.Errorf("Error parsing UID matrix in filterHelper")
 		}
-		return out, nil
+		// Create a GenericLists. Note there is no copying here.
+		lists := algo.GenericLists{[]algo.Uint64List{algo.PlainUintList(sorted), ul}}
+		return algo.IntersectSorted(lists), nil
 	}
 
 	// For now, we only handle AND and OR.
@@ -870,7 +841,7 @@ func applyFilterHelper(ctx context.Context, sorted []uint64,
 	resultChan := make(chan resultPair)
 	for _, c := range filter.Child {
 		go func(c *gql.FilterTree) {
-			r, err := applyFilterHelper(ctx, sorted, c, predMap)
+			r, err := filterHelper(ctx, sorted, c)
 			resultChan <- resultPair{r, err}
 		}(c)
 	}

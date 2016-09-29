@@ -17,9 +17,12 @@
 package algo
 
 import (
+	"bytes"
 	"container/heap"
+	"strconv"
 
 	"github.com/dgraph-io/dgraph/task"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 // Uint64Lists is a list of Uint64List. We need this because []X is not equal to
@@ -44,6 +47,22 @@ func (ul *UIDList) Get(i int) uint64 { return ul.Uids(i) }
 // Size returns size of UID list.
 func (ul *UIDList) Size() int { return ul.UidsLength() }
 
+func (ul *UIDList) String() string {
+	buf := bytes.NewBuffer(make([]byte, 0, 20))
+	_, err := buf.WriteRune('[')
+	x.Check(err)
+	n := ul.Size()
+	for i := 0; i < n; i++ {
+		_, err = buf.WriteString(strconv.FormatUint(ul.Get(i), 10))
+		x.Check(err)
+		if i < n-1 {
+			_, err = buf.WriteRune(' ')
+			x.Check(err)
+		}
+	}
+	return buf.String()
+}
+
 // UIDLists is a list of UIDList.
 type UIDLists []*UIDList
 
@@ -53,7 +72,7 @@ func (ul UIDLists) Get(i int) Uint64List { return ul[i] }
 // Size returns number of lists.
 func (ul UIDLists) Size() int { return len(ul) }
 
-// plainUintLists is the simplest possible Uint64Lists.
+// PlainUintLists is the simplest possible Uint64Lists.
 type PlainUintLists []PlainUintList
 
 // Size returns number of lists.
@@ -62,7 +81,7 @@ func (s PlainUintLists) Size() int { return len(s) }
 // Get returns the i-th list.
 func (s PlainUintLists) Get(i int) Uint64List { return s[i] }
 
-// plainUintList is the simplest possible Uint64List.
+// PlainUintList is the simplest possible Uint64List.
 type PlainUintList []uint64
 
 // Size returns size of list.
@@ -70,6 +89,17 @@ func (s PlainUintList) Size() int { return len(s) }
 
 // Get returns i-th element of list.
 func (s PlainUintList) Get(i int) uint64 { return (s)[i] }
+
+// GenericLists is a list of any Uint64List.
+type GenericLists struct {
+	Data []Uint64List
+}
+
+// Size returns size of list.
+func (s GenericLists) Size() int { return len(s.Data) }
+
+// Get returns i-th element of list.
+func (s GenericLists) Get(i int) Uint64List { return s.Data[i] }
 
 // MergeSorted merges sorted uint64 lists. Only unique numbers are returned.
 // In the future, we might have another interface for the output.
@@ -130,9 +160,10 @@ func IntersectSorted(lists Uint64Lists) []uint64 {
 	//     If y > x, we want to skip x. Break out of loop for B.
 	//   If we reach here, append our output by x.
 	// We also remove all duplicates.
-	var minLen, minLenIndex int
+	var minLenIndex int
+	minLen := lists.Get(0).Size()
 	// minLen array is lists[minLenIndex].
-	for i := 0; i < n; i++ {
+	for i := 1; i < n; i++ {
 		l := lists.Get(i)
 		if l.Size() < minLen {
 			minLen = l.Size()
@@ -162,7 +193,7 @@ func IntersectSorted(lists Uint64Lists) []uint64 {
 			for ; k < l.Size() && l.Get(k) < val; k++ {
 			}
 			idx[j] = k
-			if l.Get(k) > val {
+			if k >= l.Size() || l.Get(k) > val {
 				skip = true
 				break
 			}

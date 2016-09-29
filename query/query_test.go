@@ -47,7 +47,7 @@ func setErr(err *error, nerr error) {
 }
 
 func addEdge(t *testing.T, edge x.DirectedEdge, l *posting.List) {
-	if _, err := l.AddMutation(context.Background(), edge, posting.Set); err != nil {
+	if err := l.AddMutationWithIndex(context.Background(), edge, posting.Set); err != nil {
 		t.Error(err)
 	}
 }
@@ -150,6 +150,8 @@ func populateGraph(t *testing.T) (string, *store.Store) {
 
 	worker.SetWorkerState(worker.NewState(ps, nil, 0, 1))
 	posting.Init()
+	posting.ReadIndexConfigs([]byte(`{"config": [{"attribute": "name"}]}`))
+	posting.InitIndex(ps)
 
 	// So, user we're interested in has uid: 1.
 	// She has 5 friends: 23, 24, 25, 31, and 101
@@ -157,56 +159,81 @@ func populateGraph(t *testing.T) (string, *store.Store) {
 		ValueId:   23,
 		Source:    "testing",
 		Timestamp: time.Now(),
+		Attribute: "friend",
 	}
 	addEdge(t, edge, getOrCreate(posting.Key(1, "friend"), ps))
 
 	edge.ValueId = 24
+	edge.Entity = 1
 	addEdge(t, edge, getOrCreate(posting.Key(1, "friend"), ps))
 
 	edge.ValueId = 25
+	edge.Entity = 1
 	addEdge(t, edge, getOrCreate(posting.Key(1, "friend"), ps))
 
 	edge.ValueId = 31
+	edge.Entity = 1
 	addEdge(t, edge, getOrCreate(posting.Key(1, "friend"), ps))
 
 	edge.ValueId = 101
+	edge.Entity = 1
 	addEdge(t, edge, getOrCreate(posting.Key(1, "friend"), ps))
 
 	// Now let's add a few properties for the main user.
 	edge.Value = []byte("Michonne")
+	edge.Attribute = "name"
+	edge.Entity = 1
 	addEdge(t, edge, getOrCreate(posting.Key(1, "name"), ps))
 
 	edge.Value = []byte("female")
+	edge.Attribute = "gender"
+	edge.Entity = 1
 	addEdge(t, edge, getOrCreate(posting.Key(1, "gender"), ps))
 
 	edge.Value = []byte("alive")
+	edge.Attribute = "status"
+	edge.Entity = 1
 	addEdge(t, edge, getOrCreate(posting.Key(1, "status"), ps))
 
 	edge.Value = []byte("38")
+	edge.Attribute = "age"
+	edge.Entity = 1
 	addEdge(t, edge, getOrCreate(posting.Key(1, "age"), ps))
 
 	edge.Value = []byte("98.99")
+	edge.Attribute = "survival_rate"
+	edge.Entity = 1
 	addEdge(t, edge, getOrCreate(posting.Key(1, "survival_rate"), ps))
 
 	edge.Value = []byte("true")
+	edge.Attribute = "sword_present"
+	edge.Entity = 1
 	addEdge(t, edge, getOrCreate(posting.Key(1, "sword_present"), ps))
 
 	// Now let's add a name for each of the friends, except 101.
 	edge.Value = []byte("Rick Grimes")
+	edge.Attribute = "name"
+	edge.Entity = 23
 	addEdge(t, edge, getOrCreate(posting.Key(23, "name"), ps))
 
 	edge.Value = []byte("Glenn Rhee")
+	edge.Entity = 24
 	addEdge(t, edge, getOrCreate(posting.Key(24, "name"), ps))
 
 	edge.Value = []byte("Daryl Dixon")
+	edge.Entity = 25
 	addEdge(t, edge, getOrCreate(posting.Key(25, "name"), ps))
 
 	edge.Value = []byte("Andrea")
+	edge.Entity = 31
 	addEdge(t, edge, getOrCreate(posting.Key(31, "name"), ps))
 
 	edge.Value = []byte("mich")
+	edge.Attribute = "_xid_"
+	edge.Entity = 1
 	addEdge(t, edge, getOrCreate(posting.Key(1, "_xid_"), ps))
 
+	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
 	return dir, ps
 }
 
