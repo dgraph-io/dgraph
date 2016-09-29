@@ -386,6 +386,43 @@ func (sg *SubGraph) ToJSON(l *Latency) ([]byte, error) {
 	return nil, fmt.Errorf("Runtime should never reach here.")
 }
 
+func (sg *SubGraph) ToJSON2(l *Latency) ([]byte, error) {
+	pb, err := sg.ToProtocolBuffer(l)
+	if err != nil {
+		return []byte{}, err
+	}
+	res := pbToJson([]*graph.Node{pb})
+	return json.Marshal(res)
+}
+
+// This method converts the response from ToProtocolBuffer to an intermediate
+// data structure that can be marshalled to JSON.
+func pbToJson(gr []*graph.Node) map[string][]interface{} {
+	result := make(map[string][]interface{})
+	var cResult map[string]interface{}
+
+	// We do this for every graph.Node in the slice.
+	for _, cgr := range gr {
+		cResult = make(map[string]interface{})
+		for _, p := range cgr.Properties {
+			cResult[p.Prop] = string(p.Val)
+		}
+		// Returning uid as hex value.
+		if cgr.Uid != 0 {
+			cResult["_uid_"] = fmt.Sprintf("%#x", cgr.Uid)
+		}
+		if cgr.Xid != "" {
+			cResult["_xid_"] = cgr.Xid
+		}
+		res := pbToJson(cgr.Children)
+		for k, v := range res {
+			cResult[k] = v
+		}
+		result[cgr.Attribute] = append(result[cgr.Attribute], cResult)
+	}
+	return result
+}
+
 // This function performs a binary search on the uids slice and returns the
 // index at which it finds the uid, else returns -1
 func indexOf(uid uint64, q *task.Query) int {
@@ -490,7 +527,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 				return err
 			}
 
-			//do type checking on response values
+			// do type checking on response values
 			if pc.Params.AttrType != nil {
 				// type assertion for scalar type values
 				if !pc.Params.AttrType.IsScalar() {
@@ -549,7 +586,6 @@ func (sg *SubGraph) ToProtocolBuffer(l *Latency) (*graph.Node, error) {
 	if sg.Params.GetUid || sg.Params.isDebug {
 		n.Uid = ul.Uids(0)
 	}
-
 	if rerr := sg.preTraverse(ul.Uids(0), n); rerr != nil {
 		return n, rerr
 	}
