@@ -531,10 +531,8 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 }
 
 func createProperty(prop string, v types.TypeValue) *graph.Property {
-	// We still populate val for backward compatibility
-	val, _ := v.MarshalBinary()
 	pval := toProtoValue(v)
-	return &graph.Property{Prop: prop, Val: val, Value: pval}
+	return &graph.Property{Prop: prop, Value: pval}
 }
 
 // ToProtocolBuffer method transforms the predicate based subgraph to an
