@@ -360,30 +360,58 @@ func getValue(tv task.Value) (types.TypeValue, types.Type, error) {
 // ToJSON converts the internal subgraph object to JSON format which is then sent
 // to the HTTP client.
 func (sg *SubGraph) ToJSON(l *Latency) ([]byte, error) {
-	r, err := postTraverse(sg)
+	// 	r, err := postTraverse(sg)
+	// 	if err != nil {
+	// 		return nil, err
+	// 	}
+	// 	l.Json = time.Since(l.Start) - l.Parsing - l.Processing
+	// 	if len(r) != 1 {
+	// 		log.Fatal("We don't currently support more than 1 uid at root.")
+	// 	}
+	//
+	// 	// r is a map, and we don't know it's key. So iterate over it, even though it only has 1 result.
+	// 	for _, ival := range r {
+	// 		var m map[string]interface{}
+	// 		if ival != nil {
+	// 			m = ival.(map[string]interface{})
+	// 		} else {
+	// 			m = make(map[string]interface{})
+	// 		}
+	// 		if sg.Params.isDebug {
+	// 			m["server_latency"] = l.ToMap()
+	// 		}
+	// 		return json.Marshal(m)
+	// 	}
+	// 	log.Fatal("Runtime should never reach here.")
+	// 	return nil, fmt.Errorf("Runtime should never reach here.")
+	pb, err := sg.ToProtocolBuffer(l)
+	fmt.Println(pb)
 	if err != nil {
-		return nil, err
+		return []byte{}, err
 	}
-	l.Json = time.Since(l.Start) - l.Parsing - l.Processing
-	if len(r) != 1 {
-		log.Fatal("We don't currently support more than 1 uid at root.")
-	}
+	res := pbToJson([]*graph.Node{pb})
+	return json.Marshal(res)
+}
 
-	// r is a map, and we don't know it's key. So iterate over it, even though it only has 1 result.
-	for _, ival := range r {
-		var m map[string]interface{}
-		if ival != nil {
-			m = ival.(map[string]interface{})
-		} else {
-			m = make(map[string]interface{})
+// This method converts the response from ToProtocolBuffer to an intermediate
+// data structure that can be marshalled to JSON.
+func pbToJson(gr []*graph.Node) map[string][]interface{} {
+	result := make(map[string][]interface{})
+	cResult := make(map[string]interface{})
+
+	// We do this for every graph.Node in the slice.
+	for _, cgr := range gr {
+		cResult = make(map[string]interface{})
+		for _, p := range cgr.Properties {
+			cResult[p.Prop] = string(p.Val)
 		}
-		if sg.Params.isDebug {
-			m["server_latency"] = l.ToMap()
+		res := pbToJson(cgr.Children)
+		for k, v := range res {
+			cResult[k] = v
 		}
-		return json.Marshal(m)
+		result[cgr.Attribute] = append(result[cgr.Attribute], cResult)
 	}
-	log.Fatal("Runtime should never reach here.")
-	return nil, fmt.Errorf("Runtime should never reach here.")
+	return result
 }
 
 // This function performs a binary search on the uids slice and returns the
@@ -490,7 +518,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 				return err
 			}
 
-			//do type checking on response values
+			// do type checking on response values
 			if pc.Params.AttrType != nil {
 				// type assertion for scalar type values
 				if !pc.Params.AttrType.IsScalar() {
