@@ -241,7 +241,7 @@ func processToJson(t *testing.T, query string) map[string]interface{} {
 	}
 
 	var l Latency
-	js, err := sg.ToJSON(&l)
+	js, err := sg.ToJSON2(&l)
 	if err != nil {
 		t.Error(err)
 	}
@@ -979,6 +979,38 @@ func BenchmarkToJSON_100_Actor(b *testing.B)     { benchmarkToJson("benchmark/ac
 func BenchmarkToJSON_100_Director(b *testing.B)  { benchmarkToJson("benchmark/directors100.bin", b) }
 func BenchmarkToJSON_1000_Actor(b *testing.B)    { benchmarkToJson("benchmark/actors1000.bin", b) }
 func BenchmarkToJSON_1000_Director(b *testing.B) { benchmarkToJson("benchmark/directors1000.bin", b) }
+
+func benchmarkToJson2(file string, b *testing.B) {
+	b.ReportAllocs()
+	var sg SubGraph
+	var l Latency
+
+	f, err := ioutil.ReadFile(file)
+	if err != nil {
+		b.Error(err)
+	}
+
+	buf := bytes.NewBuffer(f)
+	dec := gob.NewDecoder(buf)
+	err = dec.Decode(&sg)
+	if err != nil {
+		b.Error(err)
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if _, err := sg.ToJSON2(&l); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkToJSON2_10_Actor(b *testing.B)      { benchmarkToJson2("benchmark/actors10.bin", b) }
+func BenchmarkToJSON2_10_Director(b *testing.B)   { benchmarkToJson2("benchmark/directors10.bin", b) }
+func BenchmarkToJSON2_100_Actor(b *testing.B)     { benchmarkToJson2("benchmark/actors100.bin", b) }
+func BenchmarkToJSON2_100_Director(b *testing.B)  { benchmarkToJson2("benchmark/directors100.bin", b) }
+func BenchmarkToJSON2_1000_Actor(b *testing.B)    { benchmarkToJson2("benchmark/actors1000.bin", b) }
+func BenchmarkToJSON2_1000_Director(b *testing.B) { benchmarkToJson2("benchmark/directors1000.bin", b) }
 
 func benchmarkToPB(file string, b *testing.B) {
 	b.ReportAllocs()

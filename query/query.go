@@ -360,30 +360,33 @@ func getValue(tv task.Value) (types.TypeValue, types.Type, error) {
 // ToJSON converts the internal subgraph object to JSON format which is then sent
 // to the HTTP client.
 func (sg *SubGraph) ToJSON(l *Latency) ([]byte, error) {
-	// 	r, err := postTraverse(sg)
-	// 	if err != nil {
-	// 		return nil, err
-	// 	}
-	// 	l.Json = time.Since(l.Start) - l.Parsing - l.Processing
-	// 	if len(r) != 1 {
-	// 		log.Fatal("We don't currently support more than 1 uid at root.")
-	// 	}
-	//
-	// 	// r is a map, and we don't know it's key. So iterate over it, even though it only has 1 result.
-	// 	for _, ival := range r {
-	// 		var m map[string]interface{}
-	// 		if ival != nil {
-	// 			m = ival.(map[string]interface{})
-	// 		} else {
-	// 			m = make(map[string]interface{})
-	// 		}
-	// 		if sg.Params.isDebug {
-	// 			m["server_latency"] = l.ToMap()
-	// 		}
-	// 		return json.Marshal(m)
-	// 	}
-	// 	log.Fatal("Runtime should never reach here.")
-	// 	return nil, fmt.Errorf("Runtime should never reach here.")
+	r, err := postTraverse(sg)
+	if err != nil {
+		return nil, err
+	}
+	l.Json = time.Since(l.Start) - l.Parsing - l.Processing
+	if len(r) != 1 {
+		log.Fatal("We don't currently support more than 1 uid at root.")
+	}
+
+	// r is a map, and we don't know it's key. So iterate over it, even though it only has 1 result.
+	for _, ival := range r {
+		var m map[string]interface{}
+		if ival != nil {
+			m = ival.(map[string]interface{})
+		} else {
+			m = make(map[string]interface{})
+		}
+		if sg.Params.isDebug {
+			m["server_latency"] = l.ToMap()
+		}
+		return json.Marshal(m)
+	}
+	log.Fatal("Runtime should never reach here.")
+	return nil, fmt.Errorf("Runtime should never reach here.")
+}
+
+func (sg *SubGraph) ToJSON2(l *Latency) ([]byte, error) {
 	pb, err := sg.ToProtocolBuffer(l)
 	if err != nil {
 		return []byte{}, err
@@ -396,7 +399,7 @@ func (sg *SubGraph) ToJSON(l *Latency) ([]byte, error) {
 // data structure that can be marshalled to JSON.
 func pbToJson(gr []*graph.Node) map[string][]interface{} {
 	result := make(map[string][]interface{})
-	cResult := make(map[string]interface{})
+	var cResult map[string]interface{}
 
 	// We do this for every graph.Node in the slice.
 	for _, cgr := range gr {
