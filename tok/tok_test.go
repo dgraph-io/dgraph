@@ -11,8 +11,8 @@ func TestBasic(t *testing.T) {
 	}{
 		{"hello world", []string{"hello", "world"}},
 		{"  HE,LLO,  \n  world  ", []string{"he", "llo", "world"}},
-		{"在新加坡鞭刑是處置犯人  的方法之一!", []string{"在", "新加坡", "鞭刑", "是",
-			"處置", "犯人", "的", "方法", "之一"}},
+		{"在新加坡鞭刑是處置犯人  的方法之一!",
+			[]string{"在", "新加坡", "鞭刑", "是", "處置", "犯人", "的", "方法", "之一"}},
 		{"cafés   cool", []string{"cafes", "cool"}},
 		{"nörmalization", []string{"normalization"}},
 		{" 住宅地域における本機の使用は有害な電波妨害を引き起こすことがあり、その場合ユーザーは自己負担で電波妨害の問題を解決しなければなりません。",
