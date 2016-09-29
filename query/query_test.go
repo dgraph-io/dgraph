@@ -305,6 +305,18 @@ func TestSchema1(t *testing.T) {
 	if res != 3 {
 		t.Error("Invalid result")
 	}
+
+	actorMap := mp["person"].([]interface{})[0].(map[string]interface{})
+	if _, success := actorMap["name"].(string); !success {
+		t.Errorf("Expected json type string for: %v\n", actorMap["name"])
+	}
+	// json parses ints as floats
+	if _, success := actorMap["age"].(float64); !success {
+		t.Errorf("Expected json type int for: %v\n", actorMap["age"])
+	}
+	if _, success := actorMap["survival_rate"].(float64); success {
+		t.Errorf("Survival rate not part of person, so it doesnt have to be coerced: %v\n", actorMap["survival_rate"])
+	}
 }
 
 func TestGetUid(t *testing.T) {
@@ -604,133 +616,6 @@ func TestToJson(t *testing.T) {
 		t.Errorf("Unable to find Michonne in this result: %v", s)
 	}
 }
-
-/*
-// Checking for Type coercion errors.
-// NOTE: Writing separate test since Marshal/Unmarshal process of ToJSON converts
-// 'int' type to 'float64' and thus mucks up the tests.
-func TestPostTraverse(t *testing.T) {
-	dir, _ := populateGraph(t)
-	defer os.RemoveAll(dir)
-
-	file, err := os.Create("test_schema.json")
-	if err != nil {
-		t.Error(err)
-	}
-	s := `
-		{
-			"name": "string",
-			"age": "int",
-			"survival_rate": "float",
-			"sword_present": "bool"
-		}
-	`
-	file.WriteString(s)
-
-	defer file.Close()
-	defer os.Remove(file.Name())
-
-	// load schema from json file
-	err = gql.LoadSchema(file.Name())
-	if err != nil {
-		t.Error(err)
-	}
-
-	query := `
-		{
-			actor(_uid_:0x01) {
-				name
-				age
-				sword_present
-				survival_rate
-				friend {
-					name
-				}
-			}
-		}
-	`
-
-	gq, _, err := gql.Parse(query)
-	if err != nil {
-		t.Error(err)
-	}
-	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, gq)
-	if err != nil {
-		t.Error(err)
-	}
-
-	ch := make(chan error)
-	go ProcessGraph(ctx, sg, ch)
-	err = <-ch
-	if err != nil {
-		t.Error(err)
-	}
-
-	r, err := postTraverse(sg)
-	if err != nil {
-		t.Error(err)
-	}
-
-	// iterating over the map (as in ToJSON) to get the required values
-	for _, val := range r {
-		var m map[string]interface{}
-		if val != nil {
-			m = val.(map[string]interface{})
-		} else {
-			m = make(map[string]interface{})
-		}
-
-		actorMap := m["actor"].([]interface{})[0].(map[string]interface{})
-
-		if _, success := actorMap["name"].(types.String); !success {
-			t.Errorf("Expected type coercion to string for: %v\n", actorMap["name"])
-		}
-		// Note: although, int and int32 have same size, they are treated as different types in go
-		// GraphQL spec mentions integer type to be int32
-		if _, success := actorMap["age"].(types.Int32); !success {
-			t.Errorf("Expected type coercion to int32 for: %v\n", actorMap["age"])
-		}
-		if _, success := actorMap["sword_present"].(types.Bool); !success {
-			t.Errorf("Expected type coercion to bool for: %v\n", actorMap["sword_present"])
-		}
-		if _, success := actorMap["survival_rate"].(types.Float); !success {
-			t.Errorf("Expected type coercion to float64 for: %v\n", actorMap["survival_rate"])
-		}
-		friendMap := actorMap["friend"].([]interface{})
-		friend := friendMap[0].(map[string]interface{})
-		if _, success := friend["name"].(types.String); !success {
-			t.Errorf("Expected type coercion to string for: %v\n", friend["name"])
-		}
-
-		// Test that the types marshal to json correctly
-		js, err := json.Marshal(val)
-		if err != nil {
-			t.Errorf("Error marshaling json: %v\n", err)
-		}
-		var mp map[string]interface{}
-		err = json.Unmarshal(js, &mp)
-		if err != nil {
-			t.Error(err)
-		}
-
-		actorMap = mp["actor"].([]interface{})[0].(map[string]interface{})
-		if _, success := actorMap["name"].(string); !success {
-			t.Errorf("Expected json type string for: %v\n", actorMap["name"])
-		}
-		// json parses ints as floats
-		if _, success := actorMap["age"].(float64); !success {
-			t.Errorf("Expected json type int for: %v\n", actorMap["age"])
-		}
-		if _, success := actorMap["sword_present"].(bool); !success {
-			t.Errorf("Expected json type bool for: %v\n", actorMap["sword_present"])
-		}
-		if _, success := actorMap["survival_rate"].(float64); !success {
-			t.Errorf("Expected json type float64 for: %v\n", actorMap["survival_rate"])
-		}
-	}
-}
-*/
 
 func getProperty(properties []*graph.Property, prop string) []byte {
 	for _, p := range properties {
