@@ -14,7 +14,17 @@
  * limitations under the License.
  */
 
-// Package icu is a wrapper around ICU boundary iterating functions.
+// Package tok is a wrapper around ICU boundary iterating functions.
 package tok
 
 import "C"
+
+// Note that currently, in a lot of files, we have the line "+build tok" to
+// enable the file only when we see the build tag "tok". The reason is that we
+// are not asking the user to install ICU yet, until we try harder to embed it.
+// To run the build, do "go build -tags tok ." or to run the test in this folder,
+// to "go test -v -tags tok ."
+//
+// After we sort out the above, we will in a separate PR, use this package in
+// index.go, as well as add a new filter function to use this index. We are still
+// waiting for the filter logic in query package to be checked in.

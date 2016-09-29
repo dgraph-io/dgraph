@@ -18,9 +18,7 @@
 
 package tok
 
-import (
-	"testing"
-)
+import "testing"
 
 func TestTokenizeBasic(t *testing.T) {
 	testData := []struct {
