@@ -200,15 +200,48 @@ func mutationToNQuad(nq []*graph.NQuad) []rdf.NQuad {
 	resp := make([]rdf.NQuad, 0, len(nq))
 
 	for _, n := range nq {
-		resp = append(resp, rdf.NQuad{
-			Subject:     n.Sub,
-			Predicate:   n.Pred,
-			ObjectId:    n.ObjId,
-			ObjectValue: n.ObjVal,
-			Label:       n.Label,
-		})
+		nq := rdf.NQuad{
+			Subject:   n.Sub,
+			Predicate: n.Pred,
+			ObjectId:  n.ObjId,
+			Label:     n.Label,
+		}
+		v, t := typeValueFromNQuad(n)
+		if v != nil {
+			nq.ObjectValue, _ = v.MarshalBinary()
+			nq.ObjectType = byte(t.ID())
+		}
+		resp = append(resp, nq)
 	}
 	return resp
+}
+
+func typeValueFromNQuad(nq *graph.NQuad) (types.TypeValue, types.Scalar) {
+	if nq.Value == nil || nq.Value.Val == nil {
+		// If the field is not set, we check the deprecated field in the proto.
+		if nq.ObjVal != nil {
+			return types.Bytes(nq.ObjVal), types.ByteArrayType
+		}
+		return nil, types.ByteArrayType
+	}
+	switch v := nq.Value.Val.(type) {
+	case *graph.Value_BytesVal:
+		return types.Bytes(v.BytesVal), types.ByteArrayType
+	case *graph.Value_IntVal:
+		return types.Int32(v.IntVal), types.Int32Type
+	case *graph.Value_StrVal:
+		return types.String(v.StrVal), types.StringType
+	case *graph.Value_BoolVal:
+		return types.Bool(v.BoolVal), types.BooleanType
+	case *graph.Value_DoubleVal:
+		return types.Float(v.DoubleVal), types.FloatType
+	case nil:
+		log.Fatalf("Val being nil is already handled")
+		return nil, types.ByteArrayType
+	default:
+		// Unknown type
+		return nil, types.ByteArrayType
+	}
 }
 
 func convertAndApply(ctx context.Context, set []rdf.NQuad, del []rdf.NQuad) (map[string]uint64, error) {
