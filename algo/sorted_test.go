@@ -37,6 +37,16 @@ func arrayCompare(a []uint64, b []uint64) error {
 	return nil
 }
 
+func TestMergeSorted0(t *testing.T) {
+	input := PlainUintLists{
+		PlainUintList{55},
+	}
+	expected := []uint64{55}
+	if err := arrayCompare(MergeSorted(input), expected); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestMergeSorted1(t *testing.T) {
 	input := PlainUintLists{
 		PlainUintList{1, 3, 6, 8, 10},

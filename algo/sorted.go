@@ -47,6 +47,7 @@ func (ul *UIDList) Get(i int) uint64 { return ul.Uids(i) }
 // Size returns size of UID list.
 func (ul *UIDList) Size() int { return ul.UidsLength() }
 
+// String returns the UIDList as a string. Good for printing the list.
 func (ul *UIDList) String() string {
 	buf := bytes.NewBuffer(make([]byte, 0, 20))
 	_, err := buf.WriteRune('[')
