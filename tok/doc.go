@@ -16,3 +16,5 @@
 
 // Package icu is a wrapper around ICU boundary iterating functions.
 package tok
+
+import "C"

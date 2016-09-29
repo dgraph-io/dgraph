@@ -1,7 +1,7 @@
-// +build !embed
+// +build tok
 
 package tok
 
-// #cgo CFLAGS: -I/usr/local/include -DU_DISABLE_RENAMING=1
+// #cgo CFLAGS: -I/usr/local/include -DENABLE_ICU
 // #cgo LDFLAGS: -L/usr/local/lib -licuuc
 import "C"
