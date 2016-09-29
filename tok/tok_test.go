@@ -22,7 +22,7 @@ import (
 	"testing"
 )
 
-func TestBasic(t *testing.T) {
+func TestTokenizeBasic(t *testing.T) {
 	testData := []struct {
 		in       string
 		expected []string

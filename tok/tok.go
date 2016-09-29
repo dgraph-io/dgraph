@@ -35,9 +35,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-var (
-	transformer transform.Transformer
-)
+var transformer transform.Transformer
 
 // Tokenizer wraps the Tokenizer object in icuc.c.
 type Tokenizer struct {
