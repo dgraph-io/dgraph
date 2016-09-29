@@ -404,6 +404,13 @@ func pbToJson(gr []*graph.Node) map[string][]interface{} {
 		for _, p := range cgr.Properties {
 			cResult[p.Prop] = string(p.Val)
 		}
+		// Returning uid as hex value.
+		if cgr.Uid != 0 {
+			cResult["_uid_"] = fmt.Sprintf("%#x", cgr.Uid)
+		}
+		if cgr.Xid != "" {
+			cResult["_xid_"] = cgr.Xid
+		}
 		res := pbToJson(cgr.Children)
 		for k, v := range res {
 			cResult[k] = v
@@ -576,7 +583,6 @@ func (sg *SubGraph) ToProtocolBuffer(l *Latency) (*graph.Node, error) {
 	if sg.Params.GetUid || sg.Params.isDebug {
 		n.Uid = ul.Uids(0)
 	}
-
 	if rerr := sg.preTraverse(ul.Uids(0), n); rerr != nil {
 		return n, rerr
 	}

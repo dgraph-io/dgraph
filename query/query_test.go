@@ -21,7 +21,6 @@ import (
 	"context"
 	"encoding/gob"
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"os"
 	"strings"
@@ -276,7 +275,6 @@ func TestSchema1(t *testing.T) {
 		}
 	`
 	mp := processToJson(t, query)
-	fmt.Println(mp)
 	resp := mp["person"]
 	name := resp.([]interface{})[0].(map[string]interface{})["name"].(string)
 	if name != "Michonne" {
@@ -309,7 +307,6 @@ func TestSchema1(t *testing.T) {
 }
 
 func TestGetUid(t *testing.T) {
-	t.SkipNow()
 	dir, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
 
@@ -336,7 +333,6 @@ func TestGetUid(t *testing.T) {
 }
 
 func TestDebug1(t *testing.T) {
-	t.SkipNow()
 	dir, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
 
@@ -389,7 +385,6 @@ func TestDebug2(t *testing.T) {
 }
 
 func TestCount(t *testing.T) {
-	t.SkipNow()
 	dir, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
 
@@ -410,9 +405,9 @@ func TestCount(t *testing.T) {
 	mp := processToJson(t, query)
 	resp := mp["me"]
 	friend := resp.([]interface{})[0].(map[string]interface{})["friend"]
-	count := int(friend.(map[string]interface{})["_count_"].(float64))
-	if count != 5 {
-		t.Errorf("Expected count 1. Got %d", count)
+	count := friend.([]interface{})[0].(map[string]interface{})["_count_"].(string)
+	if count != "5" {
+		t.Errorf("Expected count 5. Got %d", count)
 	}
 }
 
@@ -484,7 +479,7 @@ func TestProcessGraph(t *testing.T) {
 				}
 				name
 				gender
-				alive	
+				alive
 			}
 		}
 	`
@@ -570,10 +565,13 @@ func TestToJson(t *testing.T) {
 	query := `
 		{
 			me(_uid_:0x01) {
+				_xid_
+				_uid_
 				name
 				gender
 			  alive
 				friend {
+					_uid_
 					name
 				}
 			}
@@ -605,6 +603,14 @@ func TestToJson(t *testing.T) {
 	s := string(js)
 	if !strings.Contains(s, "Michonne") {
 		t.Errorf("Unable to find Michonne in this result: %v", s)
+	}
+	// Check for xid in result.
+	if !strings.Contains(s, "mich") {
+		t.Errorf("Unable to find mich in this result: %v", s)
+	}
+	// Check for an uid.
+	if !strings.Contains(s, "0x19") {
+		t.Errorf("Unable to find uid 0x19 in this result: %v", s)
 	}
 }
 
