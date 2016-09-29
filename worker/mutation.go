@@ -103,7 +103,7 @@ func proposeMutation(ctx context.Context, idx int, m *Mutations, che chan error)
 	// HACK HACK HACK
 	// if idx == int(ws.groupId) {
 	if true {
-		che <- GetNode().ProposeAndWait(ctx, data)
+		che <- GetNode().ProposeAndWait(ctx, mutationMsg, data)
 		// che <- GetNode().raft.Propose(ctx, data)
 		return
 	}

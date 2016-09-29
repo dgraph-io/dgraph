@@ -1,7 +1,9 @@
 package worker
 
 import (
+	"bytes"
 	"context"
+	"encoding/binary"
 	"fmt"
 	"log"
 	"math/rand"
@@ -13,6 +15,11 @@ import (
 	"github.com/coreos/etcd/raft"
 	"github.com/coreos/etcd/raft/raftpb"
 	"github.com/dgraph-io/dgraph/x"
+)
+
+const (
+	mutationMsg = 1
+	assignMsg   = 2
 )
 
 type peerPool struct {
@@ -34,23 +41,23 @@ func (p *peerPool) Set(id uint64, pool *Pool) {
 
 type proposals struct {
 	sync.RWMutex
-	ids map[uint64]chan error
+	ids map[int64]chan error
 }
 
-func (p *proposals) Store(pid uint64, ch chan error) {
+func (p *proposals) Store(pid int64, ch chan error) {
 	p.Lock()
 	defer p.Unlock()
-	_, has := p.proposals[pid]
+	_, has := p.ids[pid]
 	x.Assertf(!has, "Same proposal is being stored again.")
-	p.proposals[pid] = ch
+	p.ids[pid] = ch
 }
 
-func (p *proposals) Done(pid uint64, err error) {
+func (p *proposals) Done(pid int64, err error) {
 	var ch chan error
 	p.Lock()
-	ch, has := p.proposals[pid]
+	ch, has := p.ids[pid]
 	if has {
-		delete(p.proposals, pid)
+		delete(p.ids, pid)
 	}
 	p.Unlock()
 	if !has {
@@ -114,18 +121,55 @@ func (n *node) AddToCluster(pid uint64) {
 	})
 }
 
-func (n *node) ProposeAndWait(ctx context.Context, data []byte) error {
-	header := make([]byte, 8)
-	proposalId := rand.Int63()
-	// data must store
+type header struct {
+	proposalId int64
+	msgId      uint32
+}
+
+func (h *header) Encode() []byte {
+	buf := new(bytes.Buffer)
+	x.Check(binary.Write(buf, binary.LittleEndian, h.proposalId))
+	x.Check(binary.Write(buf, binary.LittleEndian, h.msgId))
+
+	result := buf.Bytes()
+	x.Assertf(len(result) == 12, "Expected length of encoded header: 12. Got: %v", len(result))
+	return result
+}
+
+func (h *header) Decode(in []byte) {
+	buf := bytes.NewBuffer(in)
+	x.Check(binary.Read(buf, binary.LittleEndian, &h.proposalId))
+	x.Check(binary.Read(buf, binary.LittleEndian, &h.msgId))
+}
+
+func (n *node) ProposeAndWait(ctx context.Context, msg uint32, data []byte) error {
+	var h header
+	h.proposalId = rand.Int63()
+	h.msgId = msg
+	hdata := h.Encode()
+
+	proposalData := make([]byte, len(data)+len(hdata))
+	x.Assert(copy(proposalData, hdata) == len(hdata))
+	x.Assert(copy(proposalData[len(hdata):], data) == len(data))
+
 	che := make(chan error, 1)
-	ctxi := context.WithValue(ctx, "chan", che)
-	err := n.raft.Propose(ctxi, data)
+	n.props.Store(h.proposalId, che)
+
+	err := n.raft.Propose(ctx, proposalData)
 	if err != nil {
 		return x.Wrapf(err, "While proposing")
 	}
-	err = <-che
-	return err
+
+	// Wait for the proposal to be committed.
+	x.Trace(ctx, "Waiting for the proposal to be applied.")
+	select {
+	case err = <-che:
+		x.TraceError(ctx, err)
+		fmt.Printf("DEBUG. Proposeandwait replied with: %v", err)
+		return err
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 func (n *node) send(m raftpb.Message) {
@@ -147,8 +191,6 @@ func (n *node) send(m raftpb.Message) {
 }
 
 func (n *node) process(e raftpb.Entry) error {
-	// TODO: Implement this.
-	fmt.Printf("process: %+v\n", e)
 	if e.Data == nil {
 		return nil
 	}
@@ -168,17 +210,23 @@ func (n *node) process(e raftpb.Entry) error {
 	}
 
 	if e.Type == raftpb.EntryNormal {
-		// TODO: We're assuming that these are mutations. They could be something else.
+		var h header
+		h.Decode(e.Data[0:12])
+		x.Assertf(h.msgId == 1, "We only handle mutations for now.")
+
 		m := new(Mutations)
 		// Ensure that this can be decoded.
-		if err := m.Decode(e.Data); err != nil {
+		if err := m.Decode(e.Data[12:]); err != nil {
 			x.TraceError(n.ctx, err)
+			n.props.Done(h.proposalId, err)
 			return err
 		}
 		if err := mutate(n.ctx, m); err != nil {
 			x.TraceError(n.ctx, err)
+			n.props.Done(h.proposalId, err)
 			return err
 		}
+		n.props.Done(h.proposalId, nil)
 	}
 
 	return nil
@@ -326,7 +374,7 @@ func newNode(id uint64, my string) *node {
 		peers: make(map[uint64]*Pool),
 	}
 	props := proposals{
-		ids: make(map[uint64]chan error),
+		ids: make(map[int64]chan error),
 	}
 
 	store := raft.NewMemoryStorage()

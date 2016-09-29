@@ -113,6 +113,7 @@ func convertToNQuad(ctx context.Context, mutation string) ([]rdf.NQuad, error) {
 	var nquads []rdf.NQuad
 	r := strings.NewReader(mutation)
 	scanner := bufio.NewScanner(r)
+	x.Trace(ctx, "Converting to NQuad")
 
 	// Scanning the mutation string, one line at a time.
 	for scanner.Scan() {
