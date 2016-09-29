@@ -385,7 +385,6 @@ func (sg *SubGraph) ToJSON(l *Latency) ([]byte, error) {
 	// 	log.Fatal("Runtime should never reach here.")
 	// 	return nil, fmt.Errorf("Runtime should never reach here.")
 	pb, err := sg.ToProtocolBuffer(l)
-	fmt.Println(pb)
 	if err != nil {
 		return []byte{}, err
 	}
