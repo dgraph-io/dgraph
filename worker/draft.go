@@ -126,13 +126,18 @@ type header struct {
 	msgId      uint32
 }
 
+func (h *header) Length() int {
+	return 12
+}
+
 func (h *header) Encode() []byte {
 	buf := new(bytes.Buffer)
 	x.Check(binary.Write(buf, binary.LittleEndian, h.proposalId))
 	x.Check(binary.Write(buf, binary.LittleEndian, h.msgId))
 
 	result := buf.Bytes()
-	x.Assertf(len(result) == 12, "Expected length of encoded header: 12. Got: %v", len(result))
+	x.Assertf(len(result) == h.Length(),
+		"Expected length of encoded header: %v. Got: %v", h.Length(), len(result))
 	return result
 }
 
@@ -211,12 +216,12 @@ func (n *node) process(e raftpb.Entry) error {
 
 	if e.Type == raftpb.EntryNormal {
 		var h header
-		h.Decode(e.Data[0:12])
+		h.Decode(e.Data[0:h.Length()])
 		x.Assertf(h.msgId == 1, "We only handle mutations for now.")
 
 		m := new(Mutations)
 		// Ensure that this can be decoded.
-		if err := m.Decode(e.Data[12:]); err != nil {
+		if err := m.Decode(e.Data[h.Length():]); err != nil {
 			x.TraceError(n.ctx, err)
 			n.props.Done(h.proposalId, err)
 			return err
