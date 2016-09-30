@@ -42,6 +42,7 @@ import (
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/query/graph"
 	"github.com/dgraph-io/dgraph/rdf"
+	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/uid"
@@ -65,9 +66,9 @@ var (
 	nomutations = flag.Bool("nomutations", false, "Don't allow mutations on this server.")
 	shutdown    = flag.Bool("shutdown", false, "Allow client to send shutdown signal.")
 	tracing     = flag.Float64("trace", 0.5, "The ratio of queries to trace.")
-	schemaFile  = flag.String("schema", "", "Path to the file that specifies schema in json format")
 	cpuprofile  = flag.String("cpu", "", "write cpu profile to file")
 	memprofile  = flag.String("mem", "", "write memory profile to file")
+	schemaFile  = flag.String("schema", "", "Path to schema file")
 	closeCh     = make(chan struct{})
 
 	groupId uint64 = 0 // ALL
@@ -199,15 +200,44 @@ func mutationToNQuad(nq []*graph.NQuad) []rdf.NQuad {
 	resp := make([]rdf.NQuad, 0, len(nq))
 
 	for _, n := range nq {
-		resp = append(resp, rdf.NQuad{
-			Subject:     n.Sub,
-			Predicate:   n.Pred,
-			ObjectId:    n.ObjId,
-			ObjectValue: n.ObjVal,
-			Label:       n.Label,
-		})
+		nq := rdf.NQuad{
+			Subject:   n.Sub,
+			Predicate: n.Pred,
+			ObjectId:  n.ObjId,
+			Label:     n.Label,
+		}
+		v, t := typeValueFromNQuad(n)
+		if v != nil {
+			nq.ObjectValue, _ = v.MarshalBinary()
+			nq.ObjectType = byte(t.ID())
+		}
+		resp = append(resp, nq)
 	}
 	return resp
+}
+
+func typeValueFromNQuad(nq *graph.NQuad) (types.TypeValue, types.Scalar) {
+	if nq.Value == nil || nq.Value.Val == nil {
+		return nil, types.ByteArrayType
+	}
+	switch v := nq.Value.Val.(type) {
+	case *graph.Value_BytesVal:
+		return types.Bytes(v.BytesVal), types.ByteArrayType
+	case *graph.Value_IntVal:
+		return types.Int32(v.IntVal), types.Int32Type
+	case *graph.Value_StrVal:
+		return types.String(v.StrVal), types.StringType
+	case *graph.Value_BoolVal:
+		return types.Bool(v.BoolVal), types.BooleanType
+	case *graph.Value_DoubleVal:
+		return types.Float(v.DoubleVal), types.FloatType
+	case nil:
+		log.Fatalf("Val being nil is already handled")
+		return nil, types.ByteArrayType
+	default:
+		// Unknown type
+		return nil, types.ByteArrayType
+	}
 }
 
 func convertAndApply(ctx context.Context, set []rdf.NQuad, del []rdf.NQuad) (map[string]uint64, error) {
@@ -280,7 +310,8 @@ func mutationHandler(ctx context.Context, mu *gql.Mutation) (map[string]uint64, 
 // input value is of the correct type
 func validateTypes(nquads []rdf.NQuad) error {
 	for _, nquad := range nquads {
-		if t := gql.SchemaType(nquad.Predicate); t != nil && t.IsScalar() {
+		//TODO(Ashwin): Ensure global types so that muations can be type checked
+		if t := schema.TypeOf(nquad.Predicate); t != nil && t.IsScalar() {
 			// Currently, only scalar types are present
 			schemaType := t.(types.Scalar)
 			storageType := types.TypeForID(types.TypeID(nquad.ObjectType))
@@ -624,7 +655,7 @@ func main() {
 	// go node.Campaign(context.TODO())
 
 	if len(*schemaFile) > 0 {
-		err = gql.LoadSchema(*schemaFile)
+		err = schema.Parse(*schemaFile)
 		if err != nil {
 			log.Fatalf("Error while loading schema:%v", err)
 		}
