@@ -24,8 +24,6 @@
 #include <unicode/ustring.h>
 #include <unicode/ubrk.h>
 
-
-
 typedef struct Tokenizer Tokenizer;
 
 Tokenizer* NewTokenizer(const char* input, int len, UErrorCode* err);
