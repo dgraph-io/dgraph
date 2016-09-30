@@ -218,10 +218,6 @@ func mutationToNQuad(nq []*graph.NQuad) []rdf.NQuad {
 
 func typeValueFromNQuad(nq *graph.NQuad) (types.TypeValue, types.Scalar) {
 	if nq.Value == nil || nq.Value.Val == nil {
-		// If the field is not set, we check the deprecated field in the proto.
-		if nq.ObjVal != nil {
-			return types.Bytes(nq.ObjVal), types.ByteArrayType
-		}
 		return nil, types.ByteArrayType
 	}
 	switch v := nq.Value.Val.(type) {

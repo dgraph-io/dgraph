@@ -456,8 +456,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 		}
 
 		if r.CountLength() > 0 {
-			count := strconv.Itoa(int(r.Count(idx)))
-			p := &graph.Property{Prop: "_count_", Val: []byte(count)}
+			p := createProperty("_count_", types.Int32(r.Count(idx)))
 			uc := &graph.Node{
 				Attribute:  pc.Attr,
 				Properties: []*graph.Property{p},
