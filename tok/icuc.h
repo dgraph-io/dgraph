@@ -26,7 +26,8 @@
 
 typedef struct Tokenizer Tokenizer;
 
-Tokenizer* NewTokenizer(const char* input, int len, UErrorCode* err);
+Tokenizer* NewTokenizer(const char* input, int len, int max_token_size,
+  UErrorCode* err);
 
 void DestroyTokenizer(Tokenizer* tokenizer);
 

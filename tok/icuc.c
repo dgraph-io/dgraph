@@ -18,23 +18,23 @@
 
 #include "icuc.h"
 
-#define kMaxTokenSize 100
-
 struct Tokenizer {
 	UChar* buf;  // Our input string converted to UChar array. We own this array.
 	UBreakIterator* iter;
 	int len;  // Number of UChar's.
 	int end;  // Index into buf. It tells us where the last token ends.
-	char token[kMaxTokenSize];  // For storing results of TokenizerNext.
+	char* token;  // For storing results of TokenizerNext.
+	int max_token_size;
 };
 
 // NewTokenizer creates new Tokenizer object given some input string.
 // CAUTION: input string should be null-terminated.
-// convert the input to an array of UChar where each UChar takes 2 bytes.
-Tokenizer* NewTokenizer(const char* input, int len, UErrorCode* err) {
+Tokenizer* NewTokenizer(const char* input, int len, int max_token_size, UErrorCode* err) {
 	Tokenizer* tokenizer = (Tokenizer*)malloc(sizeof(Tokenizer));
-	tokenizer->buf = (UChar*)malloc(sizeof(UChar) * (len + 5));
+	tokenizer->buf = (UChar*)malloc(sizeof(UChar) * (len + 1));
+	tokenizer->token = (char*)malloc(sizeof(char) * (max_token_size + 1));
 	tokenizer->token[0] = 0;
+	tokenizer->max_token_size = max_token_size;
 	
 	// Convert char array to UChar array.
 	u_uastrcpy(tokenizer->buf, input);
@@ -43,7 +43,7 @@ Tokenizer* NewTokenizer(const char* input, int len, UErrorCode* err) {
 	// determine the number of runes at the outset.
 	tokenizer->len = u_strlen(tokenizer->buf);
 	
-	// Prepares our iterator object.
+	// Prepares our iterator object. Leave the locale undefined.
 	tokenizer->iter = ubrk_open(UBRK_WORD, "", tokenizer->buf, len, err);
 	tokenizer->end = ubrk_first(tokenizer->iter);
 	return tokenizer;
@@ -52,6 +52,7 @@ Tokenizer* NewTokenizer(const char* input, int len, UErrorCode* err) {
 // DestroyTokenizer frees Tokenizer object.
 void DestroyTokenizer(Tokenizer* tokenizer) {
 	ubrk_close(tokenizer->iter);
+	free(tokenizer->token);
 	free(tokenizer->buf);
 	free(tokenizer);
 }
@@ -72,8 +73,10 @@ int TokenizerNext(Tokenizer* tokenizer) {
 	tokenizer->buf[end] = 0;
 	
 	// Want to copy tokenizer->end to new_end.
-	u_austrncpy(tokenizer->token, tokenizer->buf + start, kMaxTokenSize - 1);
-	tokenizer->token[kMaxTokenSize - 1] = 0;  // Just in case we hit token's limit.
+	u_austrncpy(tokenizer->token, tokenizer->buf + start,
+	  tokenizer->max_token_size);
+  // In case we hit token's limit, null terminate it.
+	tokenizer->token[tokenizer->max_token_size] = 0;
 	
 	tokenizer->buf[end] = backup;
 	// The strlen here seems expensive, but there seems to be no good alternative.

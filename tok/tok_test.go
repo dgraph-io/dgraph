@@ -18,7 +18,10 @@
 
 package tok
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestTokenizeBasic(t *testing.T) {
 	testData := []struct {
@@ -36,6 +39,9 @@ func TestTokenizeBasic(t *testing.T) {
 				"電波", "妨害", "を", "引き起こす", "こと", "か", "あり", "その", "場合", "ユー",
 				"サー", "は", "自己", "負担", "て", "電波", "妨害", "の", "問題", "を", "解決",
 				"しな", "け", "れ", "は", "なり", "ま", "せん"}},
+		// Exceed the max token width and test that we did not exceed.
+		{strings.Repeat("a", (1+maxTokenSize)*5),
+			[]string{strings.Repeat("a", maxTokenSize)}},
 	}
 
 	for _, d := range testData {

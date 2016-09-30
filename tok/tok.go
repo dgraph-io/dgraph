@@ -36,6 +36,8 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
+const maxTokenSize = 100
+
 var transformer transform.Transformer
 
 // Tokenizer wraps the Tokenizer object in icuc.c.
@@ -76,7 +78,7 @@ func NewTokenizer(s []byte) (*Tokenizer, error) {
 	sNorm = append(sNorm, 0) // Null-terminate this for ICU's C functions.
 
 	var err C.UErrorCode
-	c := C.NewTokenizer(byteToChar(sNorm), C.int(len(s)), &err)
+	c := C.NewTokenizer(byteToChar(sNorm), C.int(len(s)), maxTokenSize, &err)
 	if int(err) > 0 {
 		return nil, x.Errorf("ICU new tokenizer error %d", int(err))
 	}
