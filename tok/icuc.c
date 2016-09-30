@@ -76,11 +76,13 @@ int TokenizerNext(Tokenizer* tokenizer) {
 	tokenizer->token[kMaxTokenSize - 1] = 0;  // Just in case we hit token's limit.
 	
 	tokenizer->buf[end] = backup;
-	// The strlen here seems expensive, but I prefer working with []byte in Go and
-	// for that, we need the length and it is better to do it in C than in Go.
-	// u_austrncpy does not seem to return any length information.
-	// An alternative is to use the C++ API but the C++ code looks more convoluted
-	// and might make the job for embedding more tricky.
+	// The strlen here seems expensive, but there seems to be no good alternative.
+	// 1) If you return a C string and convert to Go string, you do a copy which is
+	//    more expensive than a strlen scan.
+	// 2) If you convert to []byte without copy, you will need the length here.
+	// 3) It is unfortunate that u_austrncpy does not return num bytes written.
+	// 4) Alternatively, use C++ API. However, the C++ code looks more convoluted
+	//    and might make the job for embedding more tricky.
 	return strlen(tokenizer->token);
 }
 
