@@ -141,10 +141,10 @@ func convertToEdges(ctx context.Context, nquads []rdf.NQuad) (mutationResult, er
 	// which has the xid <-> uid mapping to get uids.
 	xidToUid := make(map[string]uint64)
 	for _, nq := range nquads {
-		if !strings.HasPrefix(nq.Subject, "_uid_:") {
+		if strings.HasPrefix(nq.Subject, "_new_:") {
 			xidToUid[nq.Subject] = 0
 		}
-		if len(nq.ObjectId) > 0 && !strings.HasPrefix(nq.ObjectId, "_uid_:") {
+		if len(nq.ObjectId) > 0 && strings.HasPrefix(nq.ObjectId, "_new_:") {
 			xidToUid[nq.ObjectId] = 0
 		}
 	}

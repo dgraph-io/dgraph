@@ -74,8 +74,9 @@ type node struct {
 	localAddr string
 	peers     peerPool
 	props     proposals
-	raft      raft.Node
-	store     *raft.MemoryStorage
+	// TODO: Check if raft.Node is threadsafe.
+	raft  raft.Node
+	store *raft.MemoryStorage
 }
 
 func (n *node) Connect(pid uint64, addr string) {
@@ -411,6 +412,10 @@ func (n *node) StartNode(cluster string) {
 
 	n.raft = raft.StartNode(n.cfg, peers)
 	go n.Run()
+}
+
+func (n *node) AmLeader() bool {
+	return n.raft.Status().Lead == n.raft.Status().ID
 }
 
 var thisNode *node
