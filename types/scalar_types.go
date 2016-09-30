@@ -75,7 +75,7 @@ var (
 		id:   bytesID,
 		Description: "The 'ByteArray' scalar type represents any untyped byte stream." +
 			" This is default storage mechanism if a type is not specified.",
-		Unmarshaler: uString,
+		Unmarshaler: uBytes,
 	}
 	// BooleanType scalar.
 	BooleanType = Scalar{
@@ -252,6 +252,37 @@ func (v unmarshalString) FromText(text []byte) (TypeValue, error) {
 }
 
 var uString unmarshalString
+
+// Bytes is the scalar type for []byte
+type Bytes []byte
+
+// MarshalBinary marshals to binary
+func (v Bytes) MarshalBinary() ([]byte, error) {
+	return []byte(v), nil
+}
+
+// MarshalText marshals to text
+func (v Bytes) MarshalText() ([]byte, error) {
+	return v.MarshalBinary()
+}
+
+// MarshalJSON marshals to json
+func (v Bytes) MarshalJSON() ([]byte, error) {
+	// TODO: should we encode this somehow if they are are not printable characters.
+	return json.Marshal(string(v))
+}
+
+type unmarshalBytes struct{}
+
+func (v unmarshalBytes) FromBinary(data []byte) (TypeValue, error) {
+	return Bytes(data), nil
+}
+
+func (v unmarshalBytes) FromText(text []byte) (TypeValue, error) {
+	return v.FromBinary(text)
+}
+
+var uBytes unmarshalBytes
 
 // Bool is the scalar type for bool
 type Bool bool

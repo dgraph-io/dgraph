@@ -456,8 +456,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 		}
 
 		if r.CountLength() > 0 {
-			count := strconv.Itoa(int(r.Count(idx)))
-			p := &graph.Property{Prop: "_count_", Val: []byte(count)}
+			p := createProperty("_count_", types.Int32(r.Count(idx)))
 			uc := &graph.Node{
 				Attribute:  pc.Attr,
 				Properties: []*graph.Property{p},
@@ -490,22 +489,6 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 				return err
 			}
 
-			//do type checking on response values
-			if pc.Params.AttrType != nil {
-				// type assertion for scalar type values
-				if !pc.Params.AttrType.IsScalar() {
-					return fmt.Errorf("Unknown Scalar:%v. Leaf predicate:'%v' must be"+
-						" one of the scalar types defined in the schema.", pc.Params.AttrType, pc.Attr)
-				}
-				schemaType := pc.Params.AttrType.(types.Scalar)
-				if schemaType != storageType {
-					if _, err := schemaType.Convert(v); err != nil {
-						// skip values that don't convert.
-						continue
-					}
-				}
-			}
-
 			if pc.Attr == "_xid_" {
 				txt, err := v.MarshalText()
 				if err != nil {
@@ -515,13 +498,28 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 				// We don't want to add _uid_ to properties map.
 			} else if pc.Attr == "_uid_" {
 				continue
-			} else {
-				val, err := v.MarshalBinary()
-				if err != nil {
-					return err
+			} else if pc.Params.AttrType != nil {
+				//do type checking on response values
+				// type assertion for scalar type values
+				if !pc.Params.AttrType.IsScalar() {
+					return fmt.Errorf("Unknown Scalar:%v. Leaf predicate:'%v' must be"+
+						" one of the scalar types defined in the schema.", pc.Params.AttrType, pc.Attr)
 				}
-				// TODO: Figure out how the client parses this value
-				p := &graph.Property{Prop: pc.Attr, Val: val}
+				schemaType := pc.Params.AttrType.(types.Scalar)
+				sv := v
+				if schemaType != storageType {
+					// schema types don't match so we convert
+					var err error
+					sv, err = schemaType.Convert(v)
+					if err != nil {
+						// skip values that don't convert.
+						continue
+					}
+				}
+				p := createProperty(pc.Attr, sv)
+				properties = append(properties, p)
+			} else {
+				p := createProperty(pc.Attr, v)
 				properties = append(properties, p)
 			}
 		}
@@ -529,6 +527,11 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 
 	dst.Properties, dst.Children = properties, children
 	return nil
+}
+
+func createProperty(prop string, v types.TypeValue) *graph.Property {
+	pval := toProtoValue(v)
+	return &graph.Property{Prop: prop, Value: pval}
 }
 
 // ToProtocolBuffer method transforms the predicate based subgraph to an

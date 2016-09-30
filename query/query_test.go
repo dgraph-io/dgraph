@@ -21,7 +21,6 @@ import (
 	"context"
 	"encoding/gob"
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"os"
 	"strings"
@@ -36,6 +35,7 @@ import (
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/task"
+	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -180,14 +180,18 @@ func populateGraph(t *testing.T) (string, *store.Store) {
 	edge.Value = []byte("female")
 	addEdge(t, edge, getOrCreate(posting.Key(1, "gender"), ps))
 
-	edge.Value = []byte("15")
+	edge.Value, _ = types.Int32(15).MarshalBinary()
+	edge.ValueType = byte(types.Int32Type.ID())
 	addEdge(t, edge, getOrCreate(posting.Key(1, "age"), ps))
+	edge.ValueType = 0
 
 	edge.Value = []byte("31, 32 street, Jupiter")
 	addEdge(t, edge, getOrCreate(posting.Key(1, "address"), ps))
 
-	edge.Value = []byte("yes")
+	edge.Value, _ = types.Bool(true).MarshalBinary()
+	edge.ValueType = byte(types.BooleanType.ID())
 	addEdge(t, edge, getOrCreate(posting.Key(1, "alive"), ps))
+	edge.ValueType = 0
 
 	edge.Value = []byte("38")
 	addEdge(t, edge, getOrCreate(posting.Key(1, "age"), ps))
@@ -200,7 +204,9 @@ func populateGraph(t *testing.T) (string, *store.Store) {
 
 	// Now let's add a name for each of the friends, except 101.
 	edge.Value = []byte("Rick Grimes")
+	edge.ValueType = byte(types.StringType.ID())
 	addEdge(t, edge, getOrCreate(posting.Key(23, "name"), ps))
+	edge.ValueType = 0
 
 	edge.Value = []byte("15")
 	addEdge(t, edge, getOrCreate(posting.Key(23, "age"), ps))
@@ -275,14 +281,17 @@ func TestSchema1(t *testing.T) {
 		}
 	`
 	mp := processToJson(t, query)
-	fmt.Println(mp)
 	resp := mp["person"]
 	name := resp.([]interface{})[0].(map[string]interface{})["name"].(string)
 	if name != "Michonne" {
 		t.Errorf("Expected name Michonne. Got %s", name)
 	}
-	if _, ok := resp.([]interface{})[0].(map[string]interface{})["alive"]; !ok {
-		t.Error("Expected alive as its not part of person")
+	if alive, ok := resp.([]interface{})[0].(map[string]interface{})["alive"]; !ok || !alive.(bool) {
+		t.Errorf("Expected alive true. Got %v ", alive)
+	}
+
+	if age, ok := resp.([]interface{})[0].(map[string]interface{})["age"]; !ok || (age.(float64) != 38) {
+		t.Errorf("Expected age 38. Got %v", age)
 	}
 
 	if _, ok := resp.([]interface{})[0].(map[string]interface{})["survival_rate"]; !ok {
@@ -326,7 +335,6 @@ func TestGetUid(t *testing.T) {
 		}
 	`
 	mp := processToJson(t, query)
-	fmt.Println(mp)
 	resp := mp["me"]
 	uid := resp.([]interface{})[0].(map[string]interface{})["_uid_"].(string)
 	if uid != "0x1" {
@@ -556,7 +564,6 @@ func TestProcessGraph(t *testing.T) {
 
 	checkSingleValue(t, sg.Children[1], "name", "Michonne")
 	checkSingleValue(t, sg.Children[2], "gender", "female")
-	checkSingleValue(t, sg.Children[3], "alive", "yes")
 }
 
 func TestToJson(t *testing.T) {
@@ -732,10 +739,10 @@ func TestPostTraverse(t *testing.T) {
 }
 */
 
-func getProperty(properties []*graph.Property, prop string) []byte {
+func getProperty(properties []*graph.Property, prop string) *graph.Value {
 	for _, p := range properties {
 		if p.Prop == prop {
-			return p.Val
+			return p.Value
 		}
 	}
 	return nil
@@ -797,10 +804,15 @@ func TestToPB(t *testing.T) {
 		t.Errorf("Expected values map to contain 3 properties, Got: %v",
 			len(gr.Properties))
 	}
-	if string(getProperty(gr.Properties, "name")) != "Michonne" {
+	if string(getProperty(gr.Properties, "name").GetBytesVal()) != "Michonne" {
 		t.Errorf("Expected property name to have value Michonne, Got: %v",
-			string(getProperty(gr.Properties, "name")))
+			getProperty(gr.Properties, "name").GetBytesVal())
 	}
+	if getProperty(gr.Properties, "alive").GetBoolVal() != true {
+		t.Errorf("Expected property age to have value true, Got: %v",
+			getProperty(gr.Properties, "alive").GetBoolVal())
+	}
+
 	if len(gr.Children) != 10 {
 		t.Errorf("Expected 10 children, Got: %v", len(gr.Children))
 	}
@@ -816,9 +828,9 @@ func TestToPB(t *testing.T) {
 		t.Errorf("Expected values map to contain 1 property, Got: %v",
 			len(child.Properties))
 	}
-	if string(getProperty(child.Properties, "name")) != "Rick Grimes" {
+	if getProperty(child.Properties, "name").GetStrVal() != "Rick Grimes" {
 		t.Errorf("Expected property name to have value Rick Grimes, Got: %v",
-			string(getProperty(child.Properties, "name")))
+			getProperty(child.Properties, "name").GetStrVal())
 	}
 	if len(child.Children) != 0 {
 		t.Errorf("Expected 0 children, Got: %v", len(child.Children))
@@ -896,9 +908,9 @@ func TestSchema(t *testing.T) {
 		t.Errorf("Expected values map to contain 3 properties, Got: %v",
 			len(gr.Properties))
 	}
-	if string(getProperty(gr.Properties, "name")) != "Michonne" {
+	if string(getProperty(gr.Properties, "name").GetBytesVal()) != "Michonne" {
 		t.Errorf("Expected property name to have value Michonne, Got: %v",
-			string(getProperty(gr.Properties, "name")))
+			getProperty(gr.Properties, "name").GetBytesVal())
 	}
 	if len(gr.Children) != 10 {
 		t.Errorf("Expected 10 children, Got: %v", len(gr.Children))
@@ -915,9 +927,9 @@ func TestSchema(t *testing.T) {
 		t.Errorf("Expected values map to contain 1 property, Got: %v",
 			len(child.Properties))
 	}
-	if string(getProperty(child.Properties, "name")) != "Rick Grimes" {
+	if getProperty(child.Properties, "name").GetStrVal() != "Rick Grimes" {
 		t.Errorf("Expected property name to have value Rick Grimes, Got: %v",
-			string(getProperty(child.Properties, "name")))
+			getProperty(child.Properties, "name").GetStrVal())
 	}
 	if len(child.Children) != 0 {
 		t.Errorf("Expected 0 children, Got: %v", len(child.Children))
