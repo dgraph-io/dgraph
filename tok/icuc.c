@@ -79,7 +79,7 @@ int TokenizerNext(Tokenizer* tokenizer) {
 	// The strlen here seems expensive, but there seems to be no good alternative.
 	// 1) If you return a C string and convert to Go string, you do a copy which is
 	//    more expensive than a strlen scan.
-	// 2) If you convert to []byte without copy, you will need the length here.
+	// 2) If you convert to []byte without copy, you will need the length.
 	// 3) It is unfortunate that u_austrncpy does not return num bytes written.
 	// 4) Alternatively, use C++ API. However, the C++ code looks more convoluted
 	//    and might make the job for embedding more tricky.
