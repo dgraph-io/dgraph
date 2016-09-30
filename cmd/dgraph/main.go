@@ -388,6 +388,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var allocIds map[string]uint64
+	var allocIdsStr map[string]string
 	// If we have mutations, run them first.
 	if mu != nil && (len(mu.Set) > 0 || len(mu.Del) > 0) {
 		if allocIds, err = mutationHandler(ctx, mu); err != nil {
@@ -395,13 +396,18 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 			x.SetStatus(w, x.Error, err.Error())
 			return
 		}
+		// convert the new UIDs to hex string.
+		allocIdsStr = make(map[string]string)
+		for k, v := range allocIds {
+			allocIdsStr[k] = fmt.Sprintf("%#x", v)
+		}
 	}
 
 	if gq == nil || (gq.UID == 0 && len(gq.XID) == 0) {
 		mp := map[string]interface{}{
 			"code":    x.ErrorOk,
 			"message": "Done",
-			"uids":    allocIds,
+			"uids":    allocIdsStr,
 		}
 		if js, err := json.Marshal(mp); err == nil {
 			w.Write(js)
