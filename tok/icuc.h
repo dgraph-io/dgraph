@@ -32,8 +32,8 @@ Tokenizer* NewTokenizer(const char* input, int len, UErrorCode* err);
 
 void DestroyTokenizer(Tokenizer* tokenizer);
 
-char* TokenizerNext(Tokenizer* tokenizer);
+int TokenizerNext(Tokenizer* tokenizer);
 
-int TokenizerDone(Tokenizer* tokenizer);
+char* TokenizerToken(Tokenizer* tokenizer);
 
 #endif

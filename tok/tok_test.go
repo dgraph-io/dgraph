@@ -48,11 +48,11 @@ func TestTokenizeBasic(t *testing.T) {
 			}
 			var tokens []string
 			for {
-				sPtr := tokenizer.Next()
-				if sPtr == nil {
+				s := tokenizer.Next()
+				if s == nil {
 					break
 				}
-				tokens = append(tokens, *sPtr)
+				tokens = append(tokens, string(s))
 			}
 
 			if len(tokens) != len(expected) {

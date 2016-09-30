@@ -25,10 +25,11 @@ import "C"
 
 import (
 	"bytes"
-	"strings"
+	"reflect"
 	"unicode"
 	"unsafe"
 
+	// We rely on these almost standard Go libraries to do unicode normalization.
 	"golang.org/x/text/transform"
 	"golang.org/x/text/unicode/norm"
 
@@ -40,6 +41,10 @@ var transformer transform.Transformer
 // Tokenizer wraps the Tokenizer object in icuc.c.
 type Tokenizer struct {
 	c *C.Tokenizer
+
+	// We do not own this. It belongs to C.Tokenizer. But we like to cache it to
+	// avoid extra cgo calls.
+	token *C.char
 }
 
 func init() {
@@ -62,6 +67,7 @@ func normalize(in []byte) ([]byte, error) {
 	return out, err
 }
 
+// NewTokenizer creates a new Tokenizer object from a given input string of bytes.
 func NewTokenizer(s []byte) (*Tokenizer, error) {
 	sNorm, terr := normalize(s)
 	if terr != nil {
@@ -74,28 +80,27 @@ func NewTokenizer(s []byte) (*Tokenizer, error) {
 	if int(err) > 0 {
 		return nil, x.Errorf("ICU new tokenizer error %d", int(err))
 	}
-	return &Tokenizer{c}, nil
+	return &Tokenizer{c, C.TokenizerToken(c)}, nil
 }
 
+// Destroy destroys the tokenizer object.
 func (t *Tokenizer) Destroy() {
 	C.DestroyTokenizer(t.c)
 }
 
-func (t *Tokenizer) Next() *string {
+// Next returns the next
+func (t *Tokenizer) Next() []byte {
 	for {
-		result := C.TokenizerNext(t.c) // C string.
-		if result == nil {             // We are out of tokens.
-			return nil
+		n := int(C.TokenizerNext(t.c))
+		if n < 0 {
+			break
 		}
-		s := strings.TrimSpace(C.GoString(result))
+		s := bytes.TrimSpace(charToByte(t.token, n))
 		if len(s) > 0 {
-			return &s
+			return s
 		}
 	}
-}
-
-func (t *Tokenizer) Done() bool {
-	return C.TokenizerDone(t.c) != 0
+	return nil
 }
 
 // byteToChar returns *C.char from byte slice.
@@ -105,4 +110,12 @@ func byteToChar(b []byte) *C.char {
 		c = (*C.char)(unsafe.Pointer(&b[0]))
 	}
 	return c
+}
+
+// charToByte converts a *C.char to a byte slice.
+func charToByte(data *C.char, l int) []byte {
+	var value []byte
+	sH := (*reflect.SliceHeader)(unsafe.Pointer(&value))
+	sH.Cap, sH.Len, sH.Data = l, l, uintptr(unsafe.Pointer(data))
+	return value
 }

@@ -18,7 +18,7 @@
 
 #include "icuc.h"
 
-#define kMaxTokenSize 1000
+#define kMaxTokenSize 100
 
 struct Tokenizer {
 	UChar* buf;  // Our input string converted to UChar array. We own this array.
@@ -34,6 +34,7 @@ struct Tokenizer {
 Tokenizer* NewTokenizer(const char* input, int len, UErrorCode* err) {
 	Tokenizer* tokenizer = (Tokenizer*)malloc(sizeof(Tokenizer));
 	tokenizer->buf = (UChar*)malloc(sizeof(UChar) * (len + 5));
+	tokenizer->token[0] = 0;
 	
 	// Convert char array to UChar array.
 	u_uastrcpy(tokenizer->buf, input);
@@ -56,11 +57,12 @@ void DestroyTokenizer(Tokenizer* tokenizer) {
 }
 
 // TokenizerNext copies the next token into tokenizer->token and returns
-// tokenizer->token. However, if we run out of tokens, we return a nullptr.
-char* TokenizerNext(Tokenizer* tokenizer) {
+// number of chars written. However, if we run out of tokens, we return -1.
+int TokenizerNext(Tokenizer* tokenizer) {
 	const int start = tokenizer->end;
 	if (start >= tokenizer->len) {
-		return 0;
+		tokenizer->token[0] = 0;
+		return -1;
 	}
 	const int end = ubrk_next(tokenizer->iter);
   tokenizer->end = end;
@@ -74,12 +76,17 @@ char* TokenizerNext(Tokenizer* tokenizer) {
 	tokenizer->token[kMaxTokenSize - 1] = 0;  // Just in case we hit token's limit.
 	
 	tokenizer->buf[end] = backup;
-	return tokenizer->token;
+	// The strlen here seems expensive, but I prefer working with []byte in Go and
+	// for that, we need the length and it is better to do it in C than in Go.
+	// u_austrncpy does not seem to return any length information.
+	// An alternative is to use the C++ API but the C++ code looks more convoluted
+	// and might make the job for embedding more tricky.
+	return strlen(tokenizer->token);
 }
 
-// TokenizerDone returns whether the tokenizer is out of tokens.
-int TokenizerDone(Tokenizer* tokenizer) {
-	return tokenizer->end == UBRK_DONE;
+// TokenizerToken returns the last token written.
+char* TokenizerToken(Tokenizer* tokenizer) {
+	return tokenizer->token;
 }
 
 #endif
