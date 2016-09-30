@@ -684,7 +684,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	// and populate the children for attributes.
 	if len(exid) > 0 {
 		x.Assertf(!strings.HasPrefix(exid, "_new_:"), "Query shouldn't contain _new_")
-		euid = farm.Fingerprint64(exid)
+		euid = farm.Fingerprint64([]byte(exid))
 		x.Trace(ctx, "Xid: %v Uid: %v", exid, euid)
 	}
 

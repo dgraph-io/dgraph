@@ -26,7 +26,6 @@ import (
 
 	"github.com/dgraph-io/dgraph/lex"
 	"github.com/dgraph-io/dgraph/types"
-	"github.com/dgraph-io/dgraph/uid"
 	"github.com/dgraph-io/dgraph/x"
 	farm "github.com/dgryski/go-farm"
 )
@@ -49,7 +48,7 @@ func getUid(xid string) (uint64, error) {
 		return strconv.ParseUint(xid[6:], 0, 64)
 	}
 	// Get uid from posting list in UidStore.
-	return uid.Get(xid)
+	return farm.Fingerprint64([]byte(xid)), nil
 }
 
 // ToEdge is useful when you want to find the UID corresponding to XID for
@@ -82,13 +81,10 @@ func toUid(xid string, newToUid map[string]uint64) (uid uint64, rerr error) {
 	if id, present := newToUid[xid]; present {
 		return id, nil
 	}
-	if strings.HasPrefix(xid, "_xid_:") {
-		return farm.Fingerprint64([]byte(xid[6:])), nil
-	}
 	if strings.HasPrefix(xid, "_uid_:") {
 		return strconv.ParseUint(xid[6:], 0, 64)
 	}
-	return 0, fmt.Errorf("Unable to assign or find uid for: %v", xid)
+	return farm.Fingerprint64([]byte(xid)), nil
 }
 
 // ToEdgeUsing determines the UIDs for the provided XIDs and populates the
