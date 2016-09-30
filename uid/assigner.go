@@ -109,8 +109,7 @@ func allocateUniqueUid(instanceIdx uint64, numInstances uint64) uint64 {
 	return 0
 }
 
-// GetOrAssign returns a unique integer (uid) for a given xid if
-// it already exists or assigns a new uid and returns it.
+// AssignNew assigns N unique uids.
 func AssignNew(N int, instanceIdx uint64, numInstances uint64) x.Mutations {
 	var m x.Mutations
 	for i := 0; i < N; i++ {

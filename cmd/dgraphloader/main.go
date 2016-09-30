@@ -46,7 +46,6 @@ var (
 	numInstances = flag.Uint64("num", 1,
 		"Total number of instances among which uid assigning is shared")
 	postingDir = flag.String("p", "", "Directory to store posting lists")
-	uidDir     = flag.String("u", "", "Directory to read UID posting lists")
 	cpuprofile = flag.String("cpu", "", "write cpu profile to file")
 	memprofile = flag.String("mem", "", "write memory profile to file")
 	numcpu     = flag.Int("cores", runtime.NumCPU(),
@@ -96,15 +95,9 @@ func main() {
 	defer dataStore.Close()
 	posting.InitIndex(dataStore)
 
-	uidStore, err := store.NewReadOnlyStore(*uidDir)
-	if err != nil {
-		glog.Fatalf("Fail to initialize uidStore: %v", err)
-	}
-	defer uidStore.Close()
-
 	posting.Init()
-	uid.Init(uidStore)
-	loader.Init(uidStore, dataStore)
+	uid.Init(dataStore)
+	loader.Init(dataStore)
 
 	files := strings.Split(*rdfGzips, ",")
 	for _, path := range files {

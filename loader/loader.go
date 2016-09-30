@@ -25,7 +25,6 @@ import (
 	"log"
 	"math/rand"
 	"runtime"
-	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -37,12 +36,11 @@ import (
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/store"
-	"github.com/dgraph-io/dgraph/uid"
 	"github.com/dgraph-io/dgraph/x"
 )
 
 var glog = x.Log("loader")
-var uidStore, dataStore *store.Store
+var dataStore *store.Store
 
 var maxRoutines = flag.Int("maxroutines", 3000,
 	"Maximum number of goroutines to execute concurrently")
@@ -64,8 +62,7 @@ type state struct {
 	err          error
 }
 
-func Init(uidstore, datastore *store.Store) {
-	uidStore = uidstore
+func Init(datastore *store.Store) {
 	dataStore = datastore
 }
 
@@ -239,67 +236,6 @@ func (s *state) handleNQuads(wg *sync.WaitGroup) {
 	}
 }
 
-// assignUid assigns a unique integer for a given xid string.
-func (s *state) assignUid(xid string) error {
-	if strings.HasPrefix(xid, "_uid_:") {
-		_, err := strconv.ParseUint(xid[6:], 0, 64)
-		return err
-	}
-
-	_, err := uid.GetOrAssign(xid, s.instanceIdx, s.numInstances)
-	for err != nil {
-		// Just put in a retry loop to tackle temporary errors.
-		if err == posting.E_TMP_ERROR {
-			time.Sleep(time.Microsecond)
-			glog.WithError(err).WithField("xid", xid).
-				Debug("Temporary error")
-		} else {
-			glog.WithError(err).WithField("xid", xid).
-				Error("While getting UID")
-			return err
-		}
-		_, err = uid.GetOrAssign(xid, s.instanceIdx, s.numInstances)
-	}
-	return nil
-}
-
-// assignUidsOnly assigns uid to those entities that satisfy the
-// modulo rule.
-func (s *state) assignUidsOnly(wg *sync.WaitGroup) {
-	defer wg.Done()
-
-	for nq := range s.cnq {
-		if s.Error() != nil {
-			return
-		}
-		ignored := true
-		if farm.Fingerprint64([]byte(nq.Subject))%s.numInstances == s.instanceIdx {
-			if err := s.assignUid(nq.Subject); err != nil {
-				s.SetError(err)
-				glog.WithError(err).Error("While assigning Uid to subject.")
-				return
-			}
-			ignored = false
-		}
-
-		if len(nq.ObjectId) > 0 &&
-			farm.Fingerprint64([]byte(nq.ObjectId))%s.numInstances == s.instanceIdx {
-			if err := s.assignUid(nq.ObjectId); err != nil {
-				s.SetError(err)
-				glog.WithError(err).Error("While assigning Uid to object.")
-				return
-			}
-			ignored = false
-		}
-
-		if ignored {
-			atomic.AddUint64(&s.ctr.ignored, 1)
-		} else {
-			atomic.AddUint64(&s.ctr.processed, 1)
-		}
-	}
-}
-
 // LoadEdges is called with the reader object of a file whose
 // contents are to be converted to posting lists.
 func LoadEdges(reader io.Reader, instanceIdx uint64,
@@ -329,49 +265,6 @@ func LoadEdges(reader io.Reader, instanceIdx uint64,
 	wg.Add(nrt)
 	for i := 0; i < nrt; i++ {
 		go s.handleNQuads(&wg) // NQuads --> Posting list [slow].
-	}
-
-	// Block until all parseStream goroutines are finished.
-	pwg.Wait()
-	close(s.cnq)
-	// Okay, we've stopped input to cnq, and closed it.
-	// Now wait for handleNQuads to finish.
-	wg.Wait()
-
-	ticker.Stop()
-	return atomic.LoadUint64(&s.ctr.processed), s.Error()
-}
-
-// AssignUids would pick up all the external ids in RDFs read,
-// and assign unique integer ids for them. This function would
-// not load the edges, only assign UIDs.
-func AssignUids(reader io.Reader, instanceIdx uint64,
-	numInstances uint64) (uint64, error) {
-
-	s := new(state)
-	s.ctr = new(counters)
-	ticker := time.NewTicker(time.Second)
-	go s.printCounters(ticker)
-
-	// Producer: Start buffering input to channel.
-	s.instanceIdx = instanceIdx
-	s.numInstances = numInstances
-	s.input = make(chan string, 10000)
-	go s.readLines(reader)
-
-	s.cnq = make(chan rdf.NQuad, 10000)
-	numr := runtime.GOMAXPROCS(-1)
-	var pwg sync.WaitGroup
-	pwg.Add(numr)
-	for i := 0; i < numr; i++ {
-		go s.parseStream(&pwg) // Input --> NQuads
-	}
-
-	wg := new(sync.WaitGroup)
-	nrt := *maxRoutines
-	for i := 0; i < nrt; i++ {
-		wg.Add(1)
-		go s.assignUidsOnly(wg)
 	}
 
 	// Block until all parseStream goroutines are finished.

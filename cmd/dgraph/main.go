@@ -53,7 +53,6 @@ import (
 
 var (
 	postingDir  = flag.String("p", "p", "Directory to store posting lists")
-	uidDir      = flag.String("u", "u", "XID UID posting lists directory")
 	mutationDir = flag.String("m", "m", "Directory to store mutations")
 	port        = flag.Int("port", 8080, "Port to run server on.")
 	numcpu      = flag.Int("cores", runtime.NumCPU(),
@@ -553,10 +552,6 @@ func checkFlagsAndInitDirs() {
 	if err != nil {
 		log.Fatalf("Error while creating the filepath for mutations: %v", err)
 	}
-	err = os.MkdirAll(*uidDir, 0700)
-	if err != nil {
-		log.Fatalf("Error while creating the filepath for uids: %v", err)
-	}
 }
 
 func serveGRPC(l net.Listener) {
@@ -624,20 +619,15 @@ func main() {
 
 	var ws *worker.State
 	if groupId != 0 { // HACK: This will currently not run.
-		ws = worker.NewState(ps, nil, groupId, 1) // TODO: Set number of groups here.
+		ws = worker.NewState(ps, groupId, 1) // TODO: Set number of groups here.
 		worker.SetWorkerState(ws)
 		uid.Init(nil)
 
 	} else { // handles group 0.
-		uidStore, err := store.NewStore(*uidDir)
-		if err != nil {
-			log.Fatalf("error initializing uid store: %s", err)
-		}
-		defer uidStore.Close()
 		// Only server instance 0 will have uidStore
-		ws = worker.NewState(ps, uidStore, groupId, 1) // TODO: Set number of groups here.
+		ws = worker.NewState(ps, groupId, 1) // TODO: Set number of groups here.
 		worker.SetWorkerState(ws)
-		uid.Init(uidStore)
+		uid.Init(ps)
 	}
 
 	my := "localhost" + *workerPort
