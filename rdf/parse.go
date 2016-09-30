@@ -25,6 +25,7 @@ import (
 	"unicode"
 
 	"github.com/dgraph-io/dgraph/lex"
+	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/uid"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -164,7 +165,6 @@ func Parse(line string) (rnq NQuad, rerr error) {
 			rnq.Predicate += "." + item.Val
 
 		case itemObjectType:
-			// TODO: Strictly parse common types like integers, floats etc.
 			if len(oval) == 0 {
 				log.Fatalf(
 					"itemObject should be emitted before itemObjectType. Input: [%s]",
@@ -174,7 +174,20 @@ func Parse(line string) (rnq NQuad, rerr error) {
 			if strings.Trim(val, " ") == "*" {
 				return rnq, fmt.Errorf("itemObject can't be *")
 			}
-			oval += "@@" + val
+			if t, ok := typeMap[val]; ok {
+				p, err := t.Unmarshaler.FromText([]byte(oval))
+				if err != nil {
+					return rnq, err
+				}
+				rnq.ObjectValue, err = p.MarshalBinary()
+				if err != nil {
+					return rnq, err
+				}
+				rnq.ObjectType = byte(t.ID())
+				oval = ""
+			} else {
+				oval += "@@" + val
+			}
 
 		case lex.ItemError:
 			return rnq, fmt.Errorf(item.Val)
@@ -192,7 +205,7 @@ func Parse(line string) (rnq NQuad, rerr error) {
 	}
 	if len(oval) > 0 {
 		rnq.ObjectValue = []byte(oval)
-		// TODO: It's always zero until we parse the types.
+		// If no type is specified, we default to string.
 		rnq.ObjectType = 0
 	}
 	if len(rnq.Subject) == 0 || len(rnq.Predicate) == 0 {
@@ -211,4 +224,22 @@ func Parse(line string) (rnq NQuad, rerr error) {
 
 func isNewline(r rune) bool {
 	return r == '\n' || r == '\r'
+}
+
+var typeMap = map[string]types.Scalar{
+	"xs:string":                                 types.StringType,
+	"xs:dateTime":                               types.DateTimeType,
+	"xs:date":                                   types.DateType,
+	"xs:int":                                    types.Int32Type,
+	"xs:boolean":                                types.BooleanType,
+	"xs:double":                                 types.FloatType,
+	"xs:float":                                  types.FloatType,
+	"geo:geojson":                               types.GeoType,
+	"http://www.w3.org/2001/XMLSchema#string":   types.StringType,
+	"http://www.w3.org/2001/XMLSchema#dateTime": types.DateTimeType,
+	"http://www.w3.org/2001/XMLSchema#date":     types.DateType,
+	"http://www.w3.org/2001/XMLSchema#int":      types.Int32Type,
+	"http://www.w3.org/2001/XMLSchema#boolean":  types.BooleanType,
+	"http://www.w3.org/2001/XMLSchema#double":   types.FloatType,
+	"http://www.w3.org/2001/XMLSchema#float":    types.FloatType,
 }

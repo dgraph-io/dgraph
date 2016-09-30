@@ -270,7 +270,8 @@ func (n *node) processSnapshot(s raftpb.Snapshot) {
 	pool := n.peers.Get(lead)
 	x.Assertf(pool != nil, "Leader: %d pool should not be nil", lead)
 	fmt.Printf("Getting snapshot from leader: %v", lead)
-	x.Checkf(ws.PopulateShard(context.TODO(), pool, 0), "processSnapshot")
+	_, err := ws.PopulateShard(context.TODO(), pool, 0)
+	x.Checkf(err, "processSnapshot")
 	fmt.Printf("DONE with snapshot ============================")
 }
 
@@ -340,7 +341,7 @@ func parsePeer(peer string) (uint64, string) {
 	return pid, kv[1]
 }
 
-func (n *node) JoinCluster(any string) {
+func (n *node) JoinCluster(any string, s *State) {
 	// Tell one of the peers to join.
 	pid, paddr := parsePeer(any)
 	n.Connect(pid, paddr)
@@ -350,7 +351,8 @@ func (n *node) JoinCluster(any string) {
 
 	// TODO: Ask for the leader, before running PopulateShard.
 	// Bring the instance up to speed first.
-	x.Checkf(ws.PopulateShard(context.TODO(), pool, 0), "Error while populating shard")
+	_, err := s.PopulateShard(context.TODO(), pool, 0)
+	x.Checkf(err, "Error while populating shard")
 
 	fmt.Printf("TELLING PEER TO ADD ME: %v\n", any)
 	query := &Payload{}

@@ -50,87 +50,97 @@ func testText(val TypeValue, un Unmarshaler, t *testing.T) {
 }
 
 func TestInt32(t *testing.T) {
-	array := []int32{1532, -122911, 0}
+	array := []Int32{1532, -122911, 0}
 	for _, v := range array {
-		testBinary(Int32Type(v), intType.Unmarshaler, t)
-		testText(Int32Type(v), intType.Unmarshaler, t)
+		testBinary(v, Int32Type.Unmarshaler, t)
+		testText(v, Int32Type.Unmarshaler, t)
 	}
 }
 
 func TestParseInt(t *testing.T) {
 	array := []string{"abc", "5a", "2.5"}
 	for _, v := range array {
-		if _, err := intType.Unmarshaler.FromText([]byte(v)); err == nil {
+		if _, err := Int32Type.Unmarshaler.FromText([]byte(v)); err == nil {
 			t.Errorf("Expected error parsing %s", v)
 		}
 	}
 	array = []string{"52", "0", "-7"}
 	for _, v := range array {
-		if _, err := intType.Unmarshaler.FromText([]byte(v)); err != nil {
+		if _, err := Int32Type.Unmarshaler.FromText([]byte(v)); err != nil {
 			t.Errorf("Error parsing %s: %v", v, err)
 		}
 	}
 
 	data := []byte{0, 3, 1}
-	if _, err := intType.Unmarshaler.FromBinary(data); err == nil {
+	if _, err := Int32Type.Unmarshaler.FromBinary(data); err == nil {
 		t.Errorf("Expected error parsing %v", data)
 	}
 }
 
 func TestFloat(t *testing.T) {
-	array := []float64{15.32, -12.2911, 42, 0.0}
+	array := []Float{15.32, -12.2911, 42, 0.0}
 	for _, v := range array {
-		testBinary(FloatType(v), floatType.Unmarshaler, t)
-		testText(FloatType(v), floatType.Unmarshaler, t)
+		testBinary(v, FloatType.Unmarshaler, t)
+		testText(v, FloatType.Unmarshaler, t)
 	}
 }
 
 func TestParseFloat(t *testing.T) {
 	array := []string{"abc", "5a", "2.5a"}
 	for _, v := range array {
-		if _, err := floatType.Unmarshaler.FromText([]byte(v)); err == nil {
+		if _, err := FloatType.Unmarshaler.FromText([]byte(v)); err == nil {
 			t.Errorf("Expected error parsing %s", v)
 		}
 	}
 	array = []string{"52", "0", "-7", "-2.5", "1e4"}
 	for _, v := range array {
-		if _, err := floatType.Unmarshaler.FromText([]byte(v)); err != nil {
+		if _, err := FloatType.Unmarshaler.FromText([]byte(v)); err != nil {
 			t.Errorf("Error parsing %s: %v", v, err)
 		}
 	}
 	data := []byte{0, 3, 1, 5, 1}
-	if _, err := floatType.Unmarshaler.FromBinary(data); err == nil {
+	if _, err := FloatType.Unmarshaler.FromBinary(data); err == nil {
 		t.Errorf("Expected error parsing %v", data)
 	}
 
 }
 
 func TestString(t *testing.T) {
-	array := []string{"abc", ""}
+	array := []String{"abc", ""}
 	for _, v := range array {
-		testBinary(StringType(v), stringType.Unmarshaler, t)
-		testText(StringType(v), stringType.Unmarshaler, t)
+		testBinary(v, StringType.Unmarshaler, t)
+		testText(v, StringType.Unmarshaler, t)
 	}
 }
 
 func TestBool(t *testing.T) {
-	array := []bool{true, false}
+	array := []Bool{true, false}
 	for _, v := range array {
-		testBinary(BoolType(v), booleanType.Unmarshaler, t)
-		testText(BoolType(v), booleanType.Unmarshaler, t)
+		testBinary(v, BooleanType.Unmarshaler, t)
+		testText(v, BooleanType.Unmarshaler, t)
 	}
 }
 
 func TestParseBool(t *testing.T) {
 	array := []string{"abc", "5", ""}
 	for _, v := range array {
-		if _, err := booleanType.Unmarshaler.FromText([]byte(v)); err == nil {
+		if _, err := BooleanType.Unmarshaler.FromText([]byte(v)); err == nil {
 			t.Errorf("Expected error parsing %s", v)
 		}
 	}
 	array = []string{"true", "F", "0", "False"}
 	for _, v := range array {
-		if _, err := booleanType.Unmarshaler.FromText([]byte(v)); err != nil {
+		if _, err := BooleanType.Unmarshaler.FromText([]byte(v)); err != nil {
+			t.Errorf("Error parsing %s: %v", v, err)
+		}
+	}
+}
+
+func TestParseTime(t *testing.T) {
+	array := []string{"2014-10-28T04:00:10", "2002-05-30T09:30:10Z",
+		"2002-05-30T09:30:10.5", "2002-05-30T09:30:10-06:00"}
+	for _, v := range array {
+		if _, err := DateTimeType.Unmarshaler.FromText([]byte(v)); err != nil {
 			t.Errorf("Error parsing %s: %v", v, err)
 		}
 	}
@@ -138,6 +148,6 @@ func TestParseBool(t *testing.T) {
 
 func TestTime(t *testing.T) {
 	v := time.Date(2009, time.November, 10, 23, 0, 0, 0, time.UTC)
-	testBinary(v, dateTimeType.Unmarshaler, t)
-	testText(v, dateTimeType.Unmarshaler, t)
+	testBinary(v, DateTimeType.Unmarshaler, t)
+	testText(v, DateTimeType.Unmarshaler, t)
 }

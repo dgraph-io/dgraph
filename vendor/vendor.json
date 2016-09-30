@@ -41,6 +41,18 @@
 			"tree": true
 		},
 		{
+			"checksumSHA1": "jw+XDfPJgogfSPCsuebqFZj/GJc=",
+			"path": "github.com/coreos/etcd/raft",
+			"revision": "1ebeef5cbfe69c0dab2bc701ee5307eed7a7d8d2",
+			"revisionTime": "2016-09-05T06:26:19Z"
+		},
+		{
+			"checksumSHA1": "7iseLdwhxsT7LD5n3g01bfpTd/0=",
+			"path": "github.com/coreos/etcd/raft/raftpb",
+			"revision": "1ebeef5cbfe69c0dab2bc701ee5307eed7a7d8d2",
+			"revisionTime": "2016-09-05T06:26:19Z"
+		},
+		{
 			"checksumSHA1": "a29TtOU87eZA0S6wL+rAkpqUEzc=",
 			"path": "github.com/dgryski/go-farm",
 			"revision": "d1e51a4af19092715f4ce7d8257fe5bc8f8be727",
@@ -75,6 +87,30 @@
 			"path": "github.com/soheilhy/cmux",
 			"revision": "13f520d62c8e9514090ab9f170fa5df915f2d1bf",
 			"revisionTime": "2016-09-05T20:05:55Z"
+		},
+		{
+			"checksumSHA1": "nPzv1N4lRBr2UAvJure4uLjlYf8=",
+			"path": "github.com/twpayne/go-geom",
+			"revision": "bc4a3b038d13a183df22fd5f0316957a8c0dfd17",
+			"revisionTime": "2016-09-20T10:00:50Z"
+		},
+		{
+			"checksumSHA1": "7nqAxLYlyEi9e5DUsc+WNo++6PY=",
+			"path": "github.com/twpayne/go-geom/encoding/geojson",
+			"revision": "bc4a3b038d13a183df22fd5f0316957a8c0dfd17",
+			"revisionTime": "2016-09-20T10:00:50Z"
+		},
+		{
+			"checksumSHA1": "vSHXkm1nl0Y+xP0E420yRQDCnCA=",
+			"path": "github.com/twpayne/go-geom/encoding/wkb",
+			"revision": "bc4a3b038d13a183df22fd5f0316957a8c0dfd17",
+			"revisionTime": "2016-09-20T10:00:50Z"
+		},
+		{
+			"checksumSHA1": "KDedv+IgB08fN9r3oSsHJ5/1Xyc=",
+			"path": "github.com/twpayne/go-geom/encoding/wkbcommon",
+			"revision": "bc4a3b038d13a183df22fd5f0316957a8c0dfd17",
+			"revisionTime": "2016-09-20T10:00:50Z"
 		},
 		{
 			"checksumSHA1": "7LaLud3qlAQZ+xftxLTbYg3cGpo=",
