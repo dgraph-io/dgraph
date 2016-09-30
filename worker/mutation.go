@@ -17,8 +17,6 @@
 package worker
 
 import (
-	"bytes"
-	"encoding/gob"
 	"fmt"
 	"log"
 
@@ -30,33 +28,10 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-// Mutations stores the directed edges for both the set and delete operations.
-type Mutations struct {
-	Set []x.DirectedEdge
-	Del []x.DirectedEdge
-}
-
 const (
 	set = "set"
 	del = "delete"
 )
-
-// Encode gob encodes the mutation which is then sent over to the instance which
-// is supposed to run it.
-func (m *Mutations) Encode() (data []byte, rerr error) {
-	var b bytes.Buffer
-	enc := gob.NewEncoder(&b)
-	rerr = enc.Encode(*m)
-	return b.Bytes(), rerr
-}
-
-// Decode decodes the mutation from a byte slice after receiving the byte slice over
-// the network.
-func (m *Mutations) Decode(data []byte) error {
-	r := bytes.NewReader(data)
-	dec := gob.NewDecoder(r)
-	return dec.Decode(m)
-}
 
 // runMutations goes through all the edges and applies them. It returns the
 // mutations which were not applied in left.
@@ -80,7 +55,7 @@ func runMutations(ctx context.Context, edges []x.DirectedEdge, op byte) error {
 }
 
 // mutate runs the set and delete mutations.
-func mutate(ctx context.Context, m *Mutations) error {
+func mutate(ctx context.Context, m *x.Mutations) error {
 	// Running the set instructions first.
 	if err := runMutations(ctx, m.Set, posting.Set); err != nil {
 		return err
@@ -92,7 +67,7 @@ func mutate(ctx context.Context, m *Mutations) error {
 }
 
 // runMutate is used to run the mutations on an instance.
-func proposeMutation(ctx context.Context, idx int, m *Mutations, che chan error) {
+func proposeMutation(ctx context.Context, idx int, m *x.Mutations, che chan error) {
 	data, err := m.Encode()
 	if err != nil {
 		che <- err
@@ -127,13 +102,13 @@ func proposeMutation(ctx context.Context, idx int, m *Mutations, che chan error)
 
 // addToMutationArray adds the edges to the appropriate index in the mutationArray,
 // taking into account the op(operation) and the attribute.
-func addToMutationArray(mutationArray []*Mutations, edges []x.DirectedEdge, op string) {
+func addToMutationArray(mutationArray []*x.Mutations, edges []x.DirectedEdge, op string) {
 	for _, edge := range edges {
 		// TODO: Determine the right group using rules, instead of modulos.
 		idx := farm.Fingerprint64([]byte(edge.Attribute)) % ws.numGroups
 		mu := mutationArray[idx]
 		if mu == nil {
-			mu = new(Mutations)
+			mu = new(x.Mutations)
 			mutationArray[idx] = mu
 		}
 
@@ -147,8 +122,8 @@ func addToMutationArray(mutationArray []*Mutations, edges []x.DirectedEdge, op s
 
 // MutateOverNetwork checks which instance should be running the mutations
 // according to fingerprint of the predicate and sends it to that instance.
-func MutateOverNetwork(ctx context.Context, m Mutations) (rerr error) {
-	mutationArray := make([]*Mutations, ws.numGroups)
+func MutateOverNetwork(ctx context.Context, m x.Mutations) (rerr error) {
+	mutationArray := make([]*x.Mutations, ws.numGroups)
 
 	addToMutationArray(mutationArray, m.Set, set)
 	addToMutationArray(mutationArray, m.Del, del)

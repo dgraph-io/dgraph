@@ -144,7 +144,7 @@ func (w *grpcWorker) GetOrAssign(ctx context.Context, query *Payload) (*Payload,
 
 // Mutate is used to apply mutations over the network on other instances.
 func (w *grpcWorker) Mutate(ctx context.Context, query *Payload) (*Payload, error) {
-	m := new(Mutations)
+	m := new(x.Mutations)
 	// Ensure that this can be decoded. This is an optional step.
 	if err := m.Decode(query.Data); err != nil {
 		return nil, x.Wrapf(err, "While decoding mutation.")

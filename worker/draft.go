@@ -18,8 +18,8 @@ import (
 )
 
 const (
-	mutationMsg = 1
-	assignMsg   = 2
+	mutationMsg     = 1
+	directedEdgeMsg = 2
 )
 
 type peerPool struct {
@@ -219,7 +219,7 @@ func (n *node) process(e raftpb.Entry) error {
 		h.Decode(e.Data[0:h.Length()])
 		x.Assertf(h.msgId == 1, "We only handle mutations for now.")
 
-		m := new(Mutations)
+		m := new(x.Mutations)
 		// Ensure that this can be decoded.
 		if err := m.Decode(e.Data[h.Length():]); err != nil {
 			x.TraceError(n.ctx, err)

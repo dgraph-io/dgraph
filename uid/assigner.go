@@ -116,6 +116,7 @@ func Init(ps *store.Store) {
 // until the obtained integer is unique.
 func allocateUniqueUid(xid string, instanceIdx uint64,
 	numInstances uint64) (uid uint64, rerr error) {
+
 	mod := math.MaxUint64 / numInstances
 	minIdx := instanceIdx * mod
 
@@ -154,12 +155,16 @@ func allocateUniqueUid(xid string, instanceIdx uint64,
 			continue
 		}
 
+		// TODO: This needs to be proposed.
 		// Uid hasn't been assigned yet.
 		t := x.DirectedEdge{
+			Entity:    uid,
+			Attribute: "_xid_",
 			Value:     []byte(val), // not txid
 			Source:    "_assigner_",
 			Timestamp: time.Now(),
 		}
+
 		_, rerr = pl.AddMutation(context.Background(), t, posting.Set)
 		return uid, rerr
 	}
