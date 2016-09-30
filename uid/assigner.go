@@ -244,14 +244,11 @@ func GetOrAssign(xid string, instanceIdx uint64,
 
 	if pl.Length() > 1 {
 		log.Fatalf("We shouldn't have more than 1 uid for xid: %v\n", xid)
-	} else {
-		// We found one posting.
-		var p types.Posting
-		if ok := pl.Get(&p, 0); !ok {
-			return 0, errors.New("While retrieving entry from posting list")
-		}
-		return p.Uid(), nil
 	}
-	return 0, errors.New("Some unhandled route lead me here." +
-		" Wake the stupid developer up.")
+	// We found one posting.
+	var p types.Posting
+	if ok := pl.Get(&p, 0); !ok {
+		return 0, errors.New("While retrieving entry from posting list")
+	}
+	return p.Uid(), nil
 }

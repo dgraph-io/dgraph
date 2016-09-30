@@ -1,10 +1,11 @@
 package worker
 
 import (
-	"bytes"
 	"context"
+	"encoding/binary"
 	"fmt"
 	"log"
+	"math/rand"
 	"strconv"
 	"strings"
 	"sync"
@@ -15,23 +16,73 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
+const (
+	mutationMsg = 1
+	assignMsg   = 2
+)
+
+type peerPool struct {
+	sync.RWMutex
+	peers map[uint64]*Pool
+}
+
+func (p *peerPool) Get(id uint64) *Pool {
+	p.RLock()
+	defer p.RUnlock()
+	return p.peers[id]
+}
+
+func (p *peerPool) Set(id uint64, pool *Pool) {
+	p.Lock()
+	defer p.Unlock()
+	p.peers[id] = pool
+}
+
+type proposals struct {
+	sync.RWMutex
+	ids map[uint32]chan error
+}
+
+func (p *proposals) Store(pid uint32, ch chan error) {
+	p.Lock()
+	defer p.Unlock()
+	_, has := p.ids[pid]
+	x.Assertf(!has, "Same proposal is being stored again.")
+	p.ids[pid] = ch
+}
+
+func (p *proposals) Done(pid uint32, err error) {
+	var ch chan error
+	p.Lock()
+	ch, has := p.ids[pid]
+	if has {
+		delete(p.ids, pid)
+	}
+	p.Unlock()
+	if !has {
+		return
+	}
+	ch <- err
+}
+
 type node struct {
 	cfg       *raft.Config
+	ctx       context.Context
 	data      map[string]string
 	done      <-chan struct{}
 	id        uint64
+	localAddr string
+	peers     peerPool
+	props     proposals
 	raft      raft.Node
 	store     *raft.MemoryStorage
-	peers     map[uint64]*Pool
-	localAddr string
 }
 
-// TODO: Make this thread safe.
 func (n *node) Connect(pid uint64, addr string) {
 	if pid == n.id {
 		return
 	}
-	if _, has := n.peers[pid]; has {
+	if pool := n.peers.Get(pid); pool != nil {
 		return
 	}
 
@@ -50,26 +101,81 @@ func (n *node) Connect(pid uint64, addr string) {
 	if err != nil {
 		log.Fatalf("Unable to connect: %v", err)
 	}
-	_ = pool.Put(conn)
-	n.peers[pid] = pool
+	x.Check(pool.Put(conn))
+
+	n.peers.Set(pid, pool)
 	fmt.Printf("CONNECTED TO %d %v\n", pid, addr)
 	return
 }
 
 func (n *node) AddToCluster(pid uint64) {
+	pool := n.peers.Get(pid)
+	x.Assertf(pool != nil, "Unable to find conn pool for peer: %d", pid)
+
 	n.raft.ProposeConfChange(context.TODO(), raftpb.ConfChange{
 		ID:      pid,
 		Type:    raftpb.ConfChangeAddNode,
 		NodeID:  pid,
-		Context: []byte(strconv.FormatUint(pid, 10) + ":" + n.peers[pid].Addr),
+		Context: []byte(strconv.FormatUint(pid, 10) + ":" + pool.Addr),
 	})
+}
+
+type header struct {
+	proposalId uint32
+	msgId      uint16
+}
+
+func (h *header) Length() int {
+	return 6 // 4 bytes for proposalId, 2 bytes for msgId.
+}
+
+func (h *header) Encode() []byte {
+	result := make([]byte, h.Length())
+	binary.LittleEndian.PutUint32(result[0:4], h.proposalId)
+	binary.LittleEndian.PutUint16(result[4:6], h.msgId)
+	return result
+}
+
+func (h *header) Decode(in []byte) {
+	h.proposalId = binary.LittleEndian.Uint32(in[0:4])
+	h.msgId = binary.LittleEndian.Uint16(in[4:6])
+}
+
+func (n *node) ProposeAndWait(ctx context.Context, msg uint16, data []byte) error {
+	var h header
+	h.proposalId = rand.Uint32()
+	h.msgId = msg
+	hdata := h.Encode()
+
+	proposalData := make([]byte, len(data)+len(hdata))
+	x.Assert(copy(proposalData, hdata) == len(hdata))
+	x.Assert(copy(proposalData[len(hdata):], data) == len(data))
+
+	che := make(chan error, 1)
+	n.props.Store(h.proposalId, che)
+
+	err := n.raft.Propose(ctx, proposalData)
+	if err != nil {
+		return x.Wrapf(err, "While proposing")
+	}
+
+	// Wait for the proposal to be committed.
+	x.Trace(ctx, "Waiting for the proposal to be applied.")
+	select {
+	case err = <-che:
+		x.TraceError(ctx, err)
+		fmt.Printf("DEBUG. Proposeandwait replied with: %v", err)
+		return err
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 func (n *node) send(m raftpb.Message) {
 	x.Assertf(n.id != m.To, "Seding message to itself")
 
-	pool, has := n.peers[m.To]
-	x.Assertf(has, "Don't have address for peer: %d", m.To)
+	pool := n.peers.Get(m.To)
+	x.Assertf(pool != nil, "Don't have address for peer: %d", m.To)
 
 	conn, err := pool.Get()
 	x.Check(err)
@@ -84,8 +190,6 @@ func (n *node) send(m raftpb.Message) {
 }
 
 func (n *node) process(e raftpb.Entry) error {
-	// TODO: Implement this.
-	fmt.Printf("process: %+v\n", e)
 	if e.Data == nil {
 		return nil
 	}
@@ -105,11 +209,23 @@ func (n *node) process(e raftpb.Entry) error {
 	}
 
 	if e.Type == raftpb.EntryNormal {
-		parts := bytes.SplitN(e.Data, []byte(":"), 2)
-		k := string(parts[0])
-		v := string(parts[1])
-		n.data[k] = v
-		fmt.Printf(" Key: %v Val: %v\n", k, v)
+		var h header
+		h.Decode(e.Data[0:h.Length()])
+		x.Assertf(h.msgId == 1, "We only handle mutations for now.")
+
+		m := new(Mutations)
+		// Ensure that this can be decoded.
+		if err := m.Decode(e.Data[h.Length():]); err != nil {
+			x.TraceError(n.ctx, err)
+			n.props.Done(h.proposalId, err)
+			return err
+		}
+		if err := mutate(n.ctx, m); err != nil {
+			x.TraceError(n.ctx, err)
+			n.props.Done(h.proposalId, err)
+			return err
+		}
+		n.props.Done(h.proposalId, nil)
 	}
 
 	return nil
@@ -150,7 +266,8 @@ func (n *node) processSnapshot(s raftpb.Snapshot) {
 		fmt.Printf("Don't know who the leader is")
 		return
 	}
-	pool := n.peers[lead]
+	pool := n.peers.Get(lead)
+	x.Assertf(pool != nil, "Leader: %d pool should not be nil", lead)
 	fmt.Printf("Getting snapshot from leader: %v", lead)
 	_, err := ws.PopulateShard(context.TODO(), pool, 0)
 	x.Checkf(err, "processSnapshot")
@@ -184,19 +301,12 @@ func (n *node) Run() {
 	}
 }
 
-func (n *node) Campaign(ctx context.Context) {
-	if len(n.peers) > 0 {
-		fmt.Printf("CAMPAIGN\n")
-		x.Check(n.raft.Campaign(ctx))
-	}
-}
-
 func (n *node) Step(ctx context.Context, msg raftpb.Message) error {
 	return n.raft.Step(ctx, msg)
 }
 
 func (n *node) SnapshotPeriodically() {
-	for t := range time.Tick(10 * time.Second) {
+	for t := range time.Tick(time.Minute) {
 		fmt.Printf("Snapshot Periodically: %v", t)
 
 		le, err := n.store.LastIndex()
@@ -232,12 +342,12 @@ func parsePeer(peer string) (uint64, string) {
 
 func (n *node) JoinCluster(any string, s *State) {
 	// Tell one of the peers to join.
-
 	pid, paddr := parsePeer(any)
 	n.Connect(pid, paddr)
 
-	// TODO: Make this thread safe.
-	pool := n.peers[pid]
+	pool := n.peers.Get(pid)
+	x.Assertf(pool != nil, "Unable to find pool for peer: %d", pid)
+
 	// TODO: Ask for the leader, before running PopulateShard.
 	// Bring the instance up to speed first.
 	_, err := s.PopulateShard(context.TODO(), pool, 0)
@@ -261,8 +371,16 @@ func (n *node) JoinCluster(any string, s *State) {
 func newNode(id uint64, my string) *node {
 	fmt.Printf("NEW NODE ID: %v\n", id)
 
+	peers := peerPool{
+		peers: make(map[uint64]*Pool),
+	}
+	props := proposals{
+		ids: make(map[uint32]chan error),
+	}
+
 	store := raft.NewMemoryStorage()
 	n := &node{
+		ctx:   context.TODO(),
 		id:    id,
 		store: store,
 		cfg: &raft.Config{
@@ -274,7 +392,8 @@ func newNode(id uint64, my string) *node {
 			MaxInflightMsgs: 256,
 		},
 		data:      make(map[string]string),
-		peers:     make(map[uint64]*Pool),
+		peers:     peers,
+		props:     props,
 		localAddr: my,
 	}
 	return n

@@ -145,19 +145,16 @@ func (w *grpcWorker) GetOrAssign(ctx context.Context, query *Payload) (*Payload,
 // Mutate is used to apply mutations over the network on other instances.
 func (w *grpcWorker) Mutate(ctx context.Context, query *Payload) (*Payload, error) {
 	m := new(Mutations)
+	// Ensure that this can be decoded. This is an optional step.
 	if err := m.Decode(query.Data); err != nil {
+		return nil, x.Wrapf(err, "While decoding mutation.")
+	}
+	// Propose to the cluster.
+	// TODO: Figure out the right group to propose this to.
+	if err := GetNode().raft.Propose(ctx, query.Data); err != nil {
 		return nil, err
 	}
-
-	left := new(Mutations)
-	if err := mutate(ctx, m, left); err != nil {
-		return nil, err
-	}
-
-	reply := new(Payload)
-	var rerr error
-	reply.Data, rerr = left.Encode()
-	return reply, rerr
+	return &Payload{}, nil
 }
 
 // ServeTask is used to respond to a query.
