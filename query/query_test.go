@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/gob"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"strings"
@@ -335,6 +336,7 @@ func TestGetUid(t *testing.T) {
 		}
 	`
 	mp := processToJson(t, query)
+	fmt.Println(mp)
 	resp := mp["me"]
 	uid := resp.([]interface{})[0].(map[string]interface{})["_uid_"].(string)
 	if uid != "0x1" {
