@@ -73,6 +73,13 @@ func (to Scalar) Convert(value TypeValue) (TypeValue, error) {
 		}
 		return c.fromTime(v)
 
+	case Date:
+		c, ok := u.(dateUnmarshaler)
+		if !ok {
+			return nil, cantConvert(to, v)
+		}
+		return c.fromDate(v)
+
 	default:
 		return nil, cantConvert(to, v)
 	}
@@ -96,4 +103,8 @@ type boolUnmarshaler interface {
 
 type timeUnmarshaler interface {
 	fromTime(value time.Time) (TypeValue, error)
+}
+
+type dateUnmarshaler interface {
+	fromDate(value Date) (TypeValue, error)
 }

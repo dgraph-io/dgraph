@@ -188,6 +188,10 @@ var testNQuads = []struct {
 		hasErr: true,
 	},
 	{
+		input:  `_:alice <age> "thirteen"^^<xs:int> .`,
+		hasErr: true,
+	},
+	{
 		input:  `<alice> <knows> * .`,
 		hasErr: true,
 	},

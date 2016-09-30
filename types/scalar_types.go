@@ -37,6 +37,8 @@ const (
 	boolID
 	dateTimeID
 	stringID
+	dateID
+	geoID
 )
 
 // added suffix 'type' to names to distinguish from Go types 'int' and 'string'
@@ -104,6 +106,22 @@ var (
 			" precision. Each DateTime is associated with a timezone.",
 		Unmarshaler: uTime,
 	}
+	// DateType scalar.
+	DateType = Scalar{
+		Name: "date",
+		id:   dateID,
+		Description: "The 'Date' scalar type represents a date (year, month, day)." +
+			" A date is not associated with a timezone.",
+		Unmarshaler: uDate,
+	}
+	// GeoType scalar.
+	GeoType = Scalar{
+		Name: "geo",
+		id:   geoID,
+		Description: "The 'Geo' scalar represents geographic spatial data. This data" +
+			" stored in the WKB format.",
+		Unmarshaler: uGeo,
+	}
 )
 
 // stores a mapping between a string name of a type
@@ -114,6 +132,8 @@ var typeNameMap = map[string]Type{
 	BooleanType.Name:  BooleanType,
 	IDType.Name:       IDType,
 	DateTimeType.Name: DateTimeType,
+	DateType.Name:     DateType,
+	GeoType.Name:      GeoType,
 }
 
 // stores a mapping between the typeID to a type
@@ -125,6 +145,8 @@ var typeIDMap = map[TypeID]Type{
 	IDType.ID():        IDType,
 	DateTimeType.ID():  DateTimeType,
 	ByteArrayType.ID(): ByteArrayType,
+	DateType.ID():      DateType,
+	GeoType.ID():       GeoType,
 }
 
 // TypeForName returns the type corresponding to the given name.
