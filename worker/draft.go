@@ -1,7 +1,6 @@
 package worker
 
 import (
-	"bytes"
 	"context"
 	"encoding/binary"
 	"fmt"
@@ -41,10 +40,10 @@ func (p *peerPool) Set(id uint64, pool *Pool) {
 
 type proposals struct {
 	sync.RWMutex
-	ids map[int64]chan error
+	ids map[uint32]chan error
 }
 
-func (p *proposals) Store(pid int64, ch chan error) {
+func (p *proposals) Store(pid uint32, ch chan error) {
 	p.Lock()
 	defer p.Unlock()
 	_, has := p.ids[pid]
@@ -52,7 +51,7 @@ func (p *proposals) Store(pid int64, ch chan error) {
 	p.ids[pid] = ch
 }
 
-func (p *proposals) Done(pid int64, err error) {
+func (p *proposals) Done(pid uint32, err error) {
 	var ch chan error
 	p.Lock()
 	ch, has := p.ids[pid]
@@ -122,34 +121,29 @@ func (n *node) AddToCluster(pid uint64) {
 }
 
 type header struct {
-	proposalId int64
-	msgId      uint32
+	proposalId uint32
+	msgId      uint16
 }
 
 func (h *header) Length() int {
-	return 12
+	return 6 // 4 bytes for proposalId, 2 bytes for msgId.
 }
 
 func (h *header) Encode() []byte {
-	buf := new(bytes.Buffer)
-	x.Check(binary.Write(buf, binary.LittleEndian, h.proposalId))
-	x.Check(binary.Write(buf, binary.LittleEndian, h.msgId))
-
-	result := buf.Bytes()
-	x.Assertf(len(result) == h.Length(),
-		"Expected length of encoded header: %v. Got: %v", h.Length(), len(result))
+	result := make([]byte, h.Length())
+	binary.LittleEndian.PutUint32(result[0:4], h.proposalId)
+	binary.LittleEndian.PutUint16(result[4:6], h.msgId)
 	return result
 }
 
 func (h *header) Decode(in []byte) {
-	buf := bytes.NewBuffer(in)
-	x.Check(binary.Read(buf, binary.LittleEndian, &h.proposalId))
-	x.Check(binary.Read(buf, binary.LittleEndian, &h.msgId))
+	h.proposalId = binary.LittleEndian.Uint32(in[0:4])
+	h.msgId = binary.LittleEndian.Uint16(in[4:6])
 }
 
-func (n *node) ProposeAndWait(ctx context.Context, msg uint32, data []byte) error {
+func (n *node) ProposeAndWait(ctx context.Context, msg uint16, data []byte) error {
 	var h header
-	h.proposalId = rand.Int63()
+	h.proposalId = rand.Uint32()
 	h.msgId = msg
 	hdata := h.Encode()
 
@@ -381,7 +375,7 @@ func newNode(id uint64, my string) *node {
 		peers: make(map[uint64]*Pool),
 	}
 	props := proposals{
-		ids: make(map[int64]chan error),
+		ids: make(map[uint32]chan error),
 	}
 
 	store := raft.NewMemoryStorage()

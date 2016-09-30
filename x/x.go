@@ -154,7 +154,7 @@ var Nilbyte []byte
 
 func Trace(ctx context.Context, format string, args ...interface{}) {
 	if *debugMode {
-		fmt.Printf(format, args...)
+		fmt.Printf(format+"\n", args...)
 		return
 	}
 

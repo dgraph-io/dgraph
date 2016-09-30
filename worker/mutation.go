@@ -83,6 +83,7 @@ func proposeMutation(ctx context.Context, idx int, m *x.Mutations, che chan erro
 		return
 	}
 
+	// TODO: Move this to the appropriate place. Propose mutation should only deal with RAFT.
 	// Get a connection from the pool and run mutations over the network.
 	pool := ws.GetPool(idx)
 	query := new(Payload)
@@ -120,7 +121,7 @@ func addToMutationArray(mutationArray []*x.Mutations, edges []x.DirectedEdge, op
 	}
 }
 
-// MutateOverNetwork checks which instance should be running the mutations
+// MutateOverNetwork checks which group should be running the mutations
 // according to fingerprint of the predicate and sends it to that instance.
 func MutateOverNetwork(ctx context.Context, m x.Mutations) (rerr error) {
 	mutationArray := make([]*x.Mutations, ws.numGroups)
