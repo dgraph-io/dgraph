@@ -12,9 +12,8 @@ message NQuad {
     string sub = 1;
     string pred = 2;
     string objId = 3;
-    bytes objVal = 4;  // Deprecated use value instead
+    Value value = 4;
     string label = 5;
-    Value value = 6;
 }
 
 message Value {
@@ -46,8 +45,7 @@ message Latency {
 
 message Property {
     string prop = 1;
-    bytes val = 2;  // deprecated use Value instead
-    Value value = 3;
+    Value value = 2;
 }
 
 message Node {
