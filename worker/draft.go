@@ -68,15 +68,13 @@ func (p *proposals) Done(pid uint32, err error) {
 type node struct {
 	cfg       *raft.Config
 	ctx       context.Context
-	data      map[string]string
 	done      <-chan struct{}
 	id        uint64
 	localAddr string
 	peers     peerPool
 	props     proposals
-	// TODO: Check if raft.Node is threadsafe.
-	raft  raft.Node
-	store *raft.MemoryStorage
+	raft      raft.Node
+	store     *raft.MemoryStorage
 }
 
 func (n *node) Connect(pid uint64, addr string) {
@@ -392,7 +390,6 @@ func newNode(id uint64, my string) *node {
 			MaxSizePerMsg:   4096,
 			MaxInflightMsgs: 256,
 		},
-		data:      make(map[string]string),
 		peers:     peers,
 		props:     props,
 		localAddr: my,
