@@ -196,7 +196,7 @@ func applyMutations(ctx context.Context, m worker.Mutations) error {
 	return nil
 }
 
-func mutationToNQuad(nq []*graph.NQuad) []rdf.NQuad {
+func mutationToNQuad(nq []*graph.NQuad) ([]rdf.NQuad, error) {
 	resp := make([]rdf.NQuad, 0, len(nq))
 
 	for _, n := range nq {
@@ -206,37 +206,47 @@ func mutationToNQuad(nq []*graph.NQuad) []rdf.NQuad {
 			ObjectId:  n.ObjId,
 			Label:     n.Label,
 		}
-		v, t := typeValueFromNQuad(n)
+		v, t, err := typeValueFromNQuad(n)
+		if err != nil {
+			return resp, err
+		}
 		if v != nil {
 			nq.ObjectValue, _ = v.MarshalBinary()
 			nq.ObjectType = byte(t.ID())
 		}
 		resp = append(resp, nq)
 	}
-	return resp
+	return resp, nil
 }
 
-func typeValueFromNQuad(nq *graph.NQuad) (types.TypeValue, types.Scalar) {
+func typeValueFromNQuad(nq *graph.NQuad) (types.TypeValue, types.Scalar, error) {
 	if nq.Value == nil || nq.Value.Val == nil {
-		return nil, types.ByteArrayType
+		return nil, types.ByteArrayType, nil
 	}
 	switch v := nq.Value.Val.(type) {
 	case *graph.Value_BytesVal:
-		return types.Bytes(v.BytesVal), types.ByteArrayType
+		return types.Bytes(v.BytesVal), types.ByteArrayType, nil
 	case *graph.Value_IntVal:
-		return types.Int32(v.IntVal), types.Int32Type
+		return types.Int32(v.IntVal), types.Int32Type, nil
 	case *graph.Value_StrVal:
-		return types.String(v.StrVal), types.StringType
+		return types.String(v.StrVal), types.StringType, nil
 	case *graph.Value_BoolVal:
-		return types.Bool(v.BoolVal), types.BooleanType
+		return types.Bool(v.BoolVal), types.BooleanType, nil
 	case *graph.Value_DoubleVal:
-		return types.Float(v.DoubleVal), types.FloatType
+		return types.Float(v.DoubleVal), types.FloatType, nil
+	case *graph.Value_GeoVal:
+		geom, err := types.GeoType.Unmarshaler.FromBinary(v.GeoVal)
+		if err != nil {
+			return nil, types.ByteArrayType, err
+		}
+		return geom, types.GeoType, nil
+
 	case nil:
 		log.Fatalf("Val being nil is already handled")
-		return nil, types.ByteArrayType
+		return nil, types.ByteArrayType, nil
 	default:
 		// Unknown type
-		return nil, types.ByteArrayType
+		return nil, types.ByteArrayType, x.Errorf("Unknown value type %T", v)
 	}
 }
 
@@ -271,8 +281,14 @@ func runMutations(ctx context.Context, mu *graph.Mutation) (map[string]uint64, e
 	var allocIds map[string]uint64
 	var err error
 
-	set := mutationToNQuad(mu.Set)
-	del := mutationToNQuad(mu.Del)
+	set, err := mutationToNQuad(mu.Set)
+	if err != nil {
+		return nil, err
+	}
+	del, err := mutationToNQuad(mu.Del)
+	if err != nil {
+		return nil, err
+	}
 	if allocIds, err = convertAndApply(ctx, set, del); err != nil {
 		return nil, err
 	}

@@ -41,6 +41,10 @@ func toProtoValue(v types.TypeValue) *graph.Value {
 	case types.Bool:
 		return &graph.Value{&graph.Value_BoolVal{bool(val)}}
 
+	case types.Geo:
+		var b, _ = val.MarshalBinary()
+		return &graph.Value{&graph.Value_GeoVal{b}}
+
 	default:
 		// A type that isn't supported in the proto
 		return nil
