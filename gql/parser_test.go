@@ -696,8 +696,8 @@ func TestParseVariables2(t *testing.T) {
 
 func TestParseVariables3(t *testing.T) {
 	query := `{
-		"query": "query testQuery($a: int , $b: int! = 3){root(_uid_: 0x0a) {name(first: $b){english}}}", 
-		"variables": {"$a": "5" } 
+		"query": "query testQuery($a: int , $b: int! ){root(_uid_: 0x0a) {name(first: $b){english}}}", 
+		"variables": {"$a": "5", "$b": "3"} 
 	}`
 	_, _, err := Parse(query)
 	if err != nil {
@@ -707,7 +707,7 @@ func TestParseVariables3(t *testing.T) {
 
 func TestParseVariablesStringfiedJSON(t *testing.T) {
 	query := `{
-		"query": "query testQuery($a: int , $b: int! = 3){root(_uid_: 0x0a) {name(first: $b){english}}}", 
+		"query": "query testQuery($a: int! , $b: int){root(_uid_: 0x0a) {name(first: $b){english}}}", 
 		"variables": "{\"$a\": \"5\" }" 
 	}`
 	_, _, err := Parse(query)
@@ -834,6 +834,17 @@ func TestParseVariablesError7(t *testing.T) {
 	_, _, err := Parse(query)
 	if err == nil {
 		t.Error("Expected type for variable $d")
+	}
+}
+
+func TestParseVariablesiError8(t *testing.T) {
+	query := `{
+		"query": "query testQuery($a: int = 3  , $b: int! =  4 ,  $c : int = 3){root(_uid_: 0x0a) {name(first: $b, after: $a, offset: $c){english}}}", 
+		"variables": {"$b": "5" } 
+	}`
+	_, _, err := Parse(query)
+	if err == nil {
+		t.Error("Vaiabes type ending with ! cant have default value")
 	}
 }
 
