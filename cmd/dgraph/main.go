@@ -615,7 +615,6 @@ func main() {
 		uid.Init(nil)
 
 	} else { // handles group 0.
-		// Only server instance 0 will have uidStore
 		ws = worker.NewState(ps, groupId, 1) // TODO: Set number of groups here.
 		worker.SetWorkerState(ws)
 		uid.Init(ps)
