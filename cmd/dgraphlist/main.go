@@ -11,15 +11,13 @@ import (
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/posting/types"
 	"github.com/dgraph-io/dgraph/rdb"
-	"github.com/dgraph-io/dgraph/uid"
 	"github.com/dgraph-io/dgraph/x"
 )
 
 var glog = x.Log("dlist")
 
-var dir = flag.String("dir", "", "Directory containing ")
-var xid = flag.String("xid", "", "Get posting list for xid")
-var suid = flag.String("uid", "", "Get posting list for uid")
+var dir = flag.String("dir", "", "Directory containing posting lists")
+var uid = flag.String("uid", "", "Get posting list for uid")
 var attr = flag.String("attr", "", "Get posting list for attribute")
 var count = flag.Bool("count", false, "Only output number of results."+
 	" Useful for range scanning with attribute.")
@@ -71,8 +69,8 @@ func main() {
 	defer db.Close()
 
 	var key []byte
-	if len(*suid) > 0 && len(*attr) > 0 {
-		u, rerr := strconv.ParseUint(*suid, 0, 64)
+	if len(*uid) > 0 && len(*attr) > 0 {
+		u, rerr := strconv.ParseUint(*uid, 0, 64)
 		if rerr != nil {
 			glog.WithError(rerr).Fatal("While parsing uid")
 		}
@@ -82,15 +80,12 @@ func main() {
 		scanOverAttr(db)
 		return
 
-	} else if len(*suid) > 0 {
-		u, rerr := strconv.ParseUint(*suid, 0, 64)
+	} else if len(*uid) > 0 {
+		u, rerr := strconv.ParseUint(*uid, 0, 64)
 		if rerr != nil {
 			glog.WithError(rerr).Fatal("While parsing uid")
 		}
 		key = posting.Key(u, "_xid_")
-
-	} else if len(*xid) > 0 {
-		key = uid.StringKey(*xid)
 
 	} else {
 		glog.Fatal("Invalid request.")
