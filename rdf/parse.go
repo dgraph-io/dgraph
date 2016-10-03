@@ -47,7 +47,6 @@ func getUid(xid string) (uint64, error) {
 	if strings.HasPrefix(xid, "_uid_:") {
 		return strconv.ParseUint(xid[6:], 0, 64)
 	}
-	// Get uid from posting list in UidStore.
 	return farm.Fingerprint64([]byte(xid)), nil
 }
 

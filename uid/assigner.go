@@ -38,6 +38,9 @@ type lockManager struct {
 	uids map[uint64]time.Time
 }
 
+// isNew checks that the passed uid is the first time lockManager has seen it.
+// This avoids collisions where a uid which is proposed but still not pushed to a posting list,
+// gets assigned to another entity.
 func (lm *lockManager) isNew(uid uint64) bool {
 	lm.Lock()
 	defer lm.Unlock()

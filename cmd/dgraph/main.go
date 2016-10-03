@@ -134,29 +134,26 @@ func convertToNQuad(ctx context.Context, mutation string) ([]rdf.NQuad, error) {
 func convertToEdges(ctx context.Context, nquads []rdf.NQuad) (mutationResult, error) {
 	var edges []x.DirectedEdge
 	var mr mutationResult
-	allocatedIds := make(map[string]uint64)
 
-	// xidToUid is used to store ids which are not uids. It is sent to the instance
-	// which has the xid <-> uid mapping to get uids.
-	xidToUid := make(map[string]uint64)
+	newUids := make(map[string]uint64)
 	for _, nq := range nquads {
 		if strings.HasPrefix(nq.Subject, "_new_:") {
-			xidToUid[nq.Subject] = 0
+			newUids[nq.Subject] = 0
 		}
 		if len(nq.ObjectId) > 0 && strings.HasPrefix(nq.ObjectId, "_new_:") {
-			xidToUid[nq.ObjectId] = 0
+			newUids[nq.ObjectId] = 0
 		}
 	}
-	if len(xidToUid) > 0 {
-		if err := worker.GetOrAssignUidsOverNetwork(ctx, xidToUid); err != nil {
+	if len(newUids) > 0 {
+		if err := worker.GetOrAssignUidsOverNetwork(ctx, newUids); err != nil {
 			x.TraceError(ctx, x.Wrapf(err, "Error while GetOrAssignUidsOverNetwork"))
 			return mr, err
 		}
 	}
 
 	for _, nq := range nquads {
-		// Get edges from nquad using xidToUid.
-		edge, err := nq.ToEdgeUsing(xidToUid)
+		// Get edges from nquad using newUids.
+		edge, err := nq.ToEdgeUsing(newUids)
 		if err != nil {
 			x.TraceError(ctx, x.Wrapf(err, "Error while converting to edge: %v", nq))
 			return mr, err
@@ -164,15 +161,9 @@ func convertToEdges(ctx context.Context, nquads []rdf.NQuad) (mutationResult, er
 		edges = append(edges, edge)
 	}
 
-	for k, v := range xidToUid {
-		if strings.HasPrefix(k, "_new_:") {
-			allocatedIds[k[6:]] = v
-		}
-	}
-
 	mr = mutationResult{
 		edges:   edges,
-		newUids: allocatedIds,
+		newUids: newUids,
 	}
 	return mr, nil
 }
