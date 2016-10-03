@@ -843,8 +843,8 @@ func TestParseVariablesiError8(t *testing.T) {
 		"variables": {"$b": "5" } 
 	}`
 	_, _, err := Parse(query)
-	if err == nil {
-		t.Error("Vaiabes type ending with ! cant have default value")
+	if err.Error() != "Type ending with ! can't have default value: Got: int!" {
+		t.Error("Variables type ending with ! cant have default value")
 	}
 }
 
