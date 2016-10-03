@@ -20,7 +20,7 @@ export LD_LIBRARY_PATH="${ROCKSDBDIR}:${LD_LIBRARY_PATH}"
 pushd cmd/dgraph &> /dev/null
 go build .
 # Start dgraph in the background.
-./dgraph --m ~/dgraph/m --p ~/dgraph/p --u ~/dgraph/u --mem dmem-"$TRAVIS_COMMIT".prof --cpu dcpu-"$TRAVIS_COMMIT".prof --shutdown true &
+./dgraph --m ~/dgraph/m --p ~/dgraph/p --mem dmem-"$TRAVIS_COMMIT".prof --cpu dcpu-"$TRAVIS_COMMIT".prof --shutdown true &
 
 pushd $BUILD/benchmarks/throughputtest &> /dev/null
 go build . && ./throughputtest --numsec 30 --ip "http://127.0.0.1:8080/query"  --numuser 1000
