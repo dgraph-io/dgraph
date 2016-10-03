@@ -20,7 +20,6 @@ package worker
 
 import (
 	"bytes"
-	"fmt"
 	"log"
 	"net"
 	"sort"
@@ -149,7 +148,8 @@ func (w *grpcWorker) Mutate(ctx context.Context, query *Payload) (*Payload, erro
 	}
 	// Propose to the cluster.
 	// TODO: Figure out the right group to propose this to.
-	if err := GetNode().raft.Propose(ctx, query.Data); err != nil {
+	node := Node(m.GroupId)
+	if err := node.raft.Propose(ctx, query.Data); err != nil {
 		return nil, err
 	}
 	return &Payload{}, nil
@@ -184,8 +184,11 @@ func (w *grpcWorker) RaftMessage(ctx context.Context, query *Payload) (*Payload,
 	if err := msg.Unmarshal(query.Data); err != nil {
 		return reply, err
 	}
-	GetNode().Connect(msg.From, string(msg.Context))
-	GetNode().Step(ctx, msg)
+
+	rc := task.GetRootAsRaftContext(msg.Context, 0)
+	node := Node(rc.Group())
+	node.Connect(msg.From, string(rc.Addr()))
+	node.Step(ctx, msg)
 
 	return reply, nil
 }
@@ -196,11 +199,10 @@ func (w *grpcWorker) JoinCluster(ctx context.Context, query *Payload) (*Payload,
 	if len(query.Data) == 0 {
 		return reply, x.Errorf("JoinCluster: No data provided")
 	}
-	pid, addr := parsePeer(string(query.Data))
-
-	GetNode().Connect(pid, addr)
-	GetNode().AddToCluster(pid)
-	fmt.Printf("JOINCLUSTER recieved. Modified conf: %v", string(query.Data))
+	rc := task.GetRootAsRaftContext(query.Data, 0)
+	node := Node(rc.Group())
+	node.Connect(rc.Id(), string(rc.Addr()))
+	node.AddToCluster(rc.Id())
 	return reply, nil
 }
 

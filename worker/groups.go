@@ -21,13 +21,13 @@ func Node(groupId uint32) *node {
 	return n
 }
 
-func StoreNode(groupId uint32, newn *node) *node {
+func InitNode(groupId uint32, nodeId uint64, publicAddr string) *node {
 	gr.Lock()
 	defer gr.Unlock()
-	if n, has := gr.Map[groupId]; has {
-		newn.Stop() // Stop the provided node.
-		return n
+	node := newNode(groupId, nodeId, publicAddr)
+	if _, has := gr.Map[groupId]; has {
+		x.Assertf(false, "Didn't expect a node in RAFT group mapping: %v", groupId)
 	}
-	gr.Map[groupId] = newn
-	return newn
+	gr.Map[groupId] = node
+	return node
 }

@@ -44,3 +44,9 @@ table GroupKeys {
 	groupid:ulong;
 	keys:[KC];
 }
+
+table RaftContext {
+  id:ulong;
+	group:uint;
+	addr:string;
+}

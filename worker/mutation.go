@@ -67,7 +67,7 @@ func mutate(ctx context.Context, m *x.Mutations) error {
 }
 
 // runMutate is used to run the mutations on an instance.
-func proposeMutation(ctx context.Context, idx int, m *x.Mutations, che chan error) {
+func proposeMutation(ctx context.Context, groupId uint32, m *x.Mutations, che chan error) {
 	data, err := m.Encode()
 	if err != nil {
 		che <- err
@@ -78,27 +78,30 @@ func proposeMutation(ctx context.Context, idx int, m *x.Mutations, che chan erro
 	// HACK HACK HACK
 	// if idx == int(ws.groupId) {
 	if true {
-		che <- GetNode().ProposeAndWait(ctx, mutationMsg, data)
+		node := Node(groupId)
+		che <- node.ProposeAndWait(ctx, mutationMsg, data)
 		// che <- GetNode().raft.Propose(ctx, data)
 		return
 	}
 
 	// TODO: Move this to the appropriate place. Propose mutation should only deal with RAFT.
 	// Get a connection from the pool and run mutations over the network.
-	pool := ws.GetPool(idx)
-	query := new(Payload)
-	query.Data = data
+	/*
+		pool := ws.GetPool(idx)
+		query := new(Payload)
+		query.Data = data
 
-	conn, err := pool.Get()
-	if err != nil {
+		conn, err := pool.Get()
+		if err != nil {
+			che <- err
+			return
+		}
+		defer pool.Put(conn)
+		c := NewWorkerClient(conn)
+
+		_, err = c.Mutate(ctx, query)
 		che <- err
-		return
-	}
-	defer pool.Put(conn)
-	c := NewWorkerClient(conn)
-
-	_, err = c.Mutate(ctx, query)
-	che <- err
+	*/
 }
 
 // addToMutationArray adds the edges to the appropriate index in the mutationArray,
@@ -110,6 +113,7 @@ func addToMutationArray(mutationArray []*x.Mutations, edges []x.DirectedEdge, op
 		mu := mutationArray[idx]
 		if mu == nil {
 			mu = new(x.Mutations)
+			mu.GroupId = uint32(idx)
 			mutationArray[idx] = mu
 		}
 
@@ -136,7 +140,7 @@ func MutateOverNetwork(ctx context.Context, m x.Mutations) (rerr error) {
 			continue
 		}
 		count++
-		go proposeMutation(ctx, idx, mu, errors)
+		go proposeMutation(ctx, uint32(idx), mu, errors)
 	}
 
 	// Wait for all the goroutines to reply back.

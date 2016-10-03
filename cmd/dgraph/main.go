@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"math"
 	"math/rand"
 	"net"
 	"net/http"
@@ -628,14 +629,14 @@ func main() {
 	}
 
 	my := "localhost" + *workerPort
-	worker.InitNode(*raftId, my)
-	worker.GetNode().StartNode(*cluster)
-	if len(*peer) > 0 {
-		go worker.GetNode().JoinCluster(*peer, ws)
-	}
+	// First initiate the commmon group across the entire cluster. This group
+	// stores information about which server serves which groups.
+	node := worker.InitNode(math.MaxUint32, *raftId, my)
+	node.StartNode(*cluster)
 
-	// node := worker.GetNode()
-	// go node.Campaign(context.TODO())
+	if len(*peer) > 0 {
+		node.JoinCluster(*peer, ws)
+	}
 
 	if len(*schemaFile) > 0 {
 		err = schema.Parse(*schemaFile)

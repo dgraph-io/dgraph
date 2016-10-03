@@ -13,7 +13,9 @@ import (
 
 	"github.com/coreos/etcd/raft"
 	"github.com/coreos/etcd/raft/raftpb"
+	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/x"
+	flatbuffers "github.com/google/flatbuffers/go"
 )
 
 const (
@@ -65,15 +67,15 @@ func (p *proposals) Done(pid uint32, err error) {
 }
 
 type node struct {
-	cfg       *raft.Config
-	ctx       context.Context
-	done      chan struct{}
-	id        uint64
-	localAddr string
-	peers     peerPool
-	props     proposals
-	raft      raft.Node
-	store     *raft.MemoryStorage
+	cfg         *raft.Config
+	ctx         context.Context
+	done        chan struct{}
+	id          uint64
+	peers       peerPool
+	props       proposals
+	raft        raft.Node
+	store       *raft.MemoryStorage
+	raftContext []byte
 }
 
 func (n *node) Connect(pid uint64, addr string) {
@@ -110,11 +112,12 @@ func (n *node) AddToCluster(pid uint64) {
 	pool := n.peers.Get(pid)
 	x.Assertf(pool != nil, "Unable to find conn pool for peer: %d", pid)
 
+	rc := task.GetRootAsRaftContext(n.raftContext, 0)
 	n.raft.ProposeConfChange(context.TODO(), raftpb.ConfChange{
 		ID:      pid,
 		Type:    raftpb.ConfChangeAddNode,
 		NodeID:  pid,
-		Context: []byte(strconv.FormatUint(pid, 10) + ":" + pool.Addr),
+		Context: createRaftContext(pid, rc.Group(), pool.Addr),
 	})
 }
 
@@ -179,8 +182,7 @@ func (n *node) send(m raftpb.Message) {
 	x.Check(err)
 
 	c := NewWorkerClient(conn)
-	m.Context = []byte(n.localAddr)
-
+	m.Context = n.raftContext
 	data, err := m.Marshal()
 	x.Checkf(err, "Unable to marshal: %+v", m)
 	p := &Payload{Data: data}
@@ -365,7 +367,7 @@ func (n *node) JoinCluster(any string, s *State) {
 
 	fmt.Printf("TELLING PEER TO ADD ME: %v\n", any)
 	query := &Payload{}
-	query.Data = []byte(strconv.FormatUint(n.id, 10) + ":" + n.localAddr)
+	query.Data = n.raftContext
 	conn, err := pool.Get()
 	x.Check(err)
 	c := NewWorkerClient(conn)
@@ -375,7 +377,21 @@ func (n *node) JoinCluster(any string, s *State) {
 	fmt.Printf("Done with JoinCluster call\n")
 }
 
-func newNode(id uint64, my string) *node {
+func createRaftContext(id uint64, gid uint32, addr string) []byte {
+	// Create a flatbuffer for storing group id and local address.
+	// This needs to send along with every raft message.
+	b := flatbuffers.NewBuilder(0)
+	so := b.CreateString(addr)
+	task.RaftContextStart(b)
+	task.RaftContextAddId(b, id)
+	task.RaftContextAddGroup(b, gid)
+	task.RaftContextAddAddr(b, so)
+	uo := task.RaftContextEnd(b)
+	b.Finish(uo)
+	return b.Bytes[b.Head():]
+}
+
+func newNode(gid uint32, id uint64, myAddr string) *node {
 	fmt.Printf("NEW NODE ID: %v\n", id)
 
 	peers := peerPool{
@@ -399,9 +415,9 @@ func newNode(id uint64, my string) *node {
 			MaxSizePerMsg:   4096,
 			MaxInflightMsgs: 256,
 		},
-		peers:     peers,
-		props:     props,
-		localAddr: my,
+		peers:       peers,
+		props:       props,
+		raftContext: createRaftContext(id, gid, myAddr),
 	}
 	return n
 }
@@ -426,14 +442,3 @@ func (n *node) AmLeader() bool {
 }
 
 var thisNode *node
-var once sync.Once
-
-func InitNode(id uint64, my string) {
-	once.Do(func() {
-		thisNode = newNode(id, my)
-	})
-}
-
-func GetNode() *node {
-	return thisNode
-}
