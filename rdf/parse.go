@@ -26,8 +26,8 @@ import (
 
 	"github.com/dgraph-io/dgraph/lex"
 	"github.com/dgraph-io/dgraph/types"
-	"github.com/dgraph-io/dgraph/uid"
 	"github.com/dgraph-io/dgraph/x"
+	farm "github.com/dgryski/go-farm"
 )
 
 // NQuad is the data structure used for storing rdf N-Quads.
@@ -47,8 +47,7 @@ func getUid(xid string) (uint64, error) {
 	if strings.HasPrefix(xid, "_uid_:") {
 		return strconv.ParseUint(xid[6:], 0, 64)
 	}
-	// Get uid from posting list in UidStore.
-	return uid.Get(xid)
+	return farm.Fingerprint64([]byte(xid)), nil
 }
 
 // ToEdge is useful when you want to find the UID corresponding to XID for
@@ -77,22 +76,21 @@ func (nq NQuad) ToEdge() (result x.DirectedEdge, rerr error) {
 	return result, nil
 }
 
-func toUid(xid string, xidToUID map[string]uint64) (uid uint64, rerr error) {
-	if id, present := xidToUID[xid]; present {
+func toUid(xid string, newToUid map[string]uint64) (uid uint64, rerr error) {
+	if id, present := newToUid[xid]; present {
 		return id, nil
 	}
-
-	if !strings.HasPrefix(xid, "_uid_:") {
-		return 0, fmt.Errorf("Unable to assign or find uid for: %v", xid)
+	if strings.HasPrefix(xid, "_uid_:") {
+		return strconv.ParseUint(xid[6:], 0, 64)
 	}
-	return strconv.ParseUint(xid[6:], 0, 64)
+	return farm.Fingerprint64([]byte(xid)), nil
 }
 
 // ToEdgeUsing determines the UIDs for the provided XIDs and populates the
 // xidToUid map.
 func (nq NQuad) ToEdgeUsing(
-	xidToUID map[string]uint64) (result x.DirectedEdge, rerr error) {
-	uid, err := toUid(nq.Subject, xidToUID)
+	newToUid map[string]uint64) (result x.DirectedEdge, rerr error) {
+	uid, err := toUid(nq.Subject, newToUid)
 	if err != nil {
 		return result, err
 	}
@@ -102,7 +100,7 @@ func (nq NQuad) ToEdgeUsing(
 		result.Value = nq.ObjectValue
 		result.ValueType = nq.ObjectType
 	} else {
-		uid, err = toUid(nq.ObjectId, xidToUID)
+		uid, err = toUid(nq.ObjectId, newToUid)
 		if err != nil {
 			return result, err
 		}

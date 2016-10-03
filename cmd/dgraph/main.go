@@ -53,7 +53,6 @@ import (
 
 var (
 	postingDir  = flag.String("p", "p", "Directory to store posting lists")
-	uidDir      = flag.String("u", "u", "XID UID posting lists directory")
 	mutationDir = flag.String("m", "m", "Directory to store mutations")
 	port        = flag.Int("port", 8080, "Port to run server on.")
 	numcpu      = flag.Int("cores", runtime.NumCPU(),
@@ -135,29 +134,26 @@ func convertToNQuad(ctx context.Context, mutation string) ([]rdf.NQuad, error) {
 func convertToEdges(ctx context.Context, nquads []rdf.NQuad) (mutationResult, error) {
 	var edges []x.DirectedEdge
 	var mr mutationResult
-	allocatedIds := make(map[string]uint64)
 
-	// xidToUid is used to store ids which are not uids. It is sent to the instance
-	// which has the xid <-> uid mapping to get uids.
-	xidToUid := make(map[string]uint64)
+	newUids := make(map[string]uint64)
 	for _, nq := range nquads {
-		if !strings.HasPrefix(nq.Subject, "_uid_:") {
-			xidToUid[nq.Subject] = 0
+		if strings.HasPrefix(nq.Subject, "_new_:") {
+			newUids[nq.Subject] = 0
 		}
-		if len(nq.ObjectId) > 0 && !strings.HasPrefix(nq.ObjectId, "_uid_:") {
-			xidToUid[nq.ObjectId] = 0
+		if len(nq.ObjectId) > 0 && strings.HasPrefix(nq.ObjectId, "_new_:") {
+			newUids[nq.ObjectId] = 0
 		}
 	}
-	if len(xidToUid) > 0 {
-		if err := worker.GetOrAssignUidsOverNetwork(ctx, xidToUid); err != nil {
+	if len(newUids) > 0 {
+		if err := worker.GetOrAssignUidsOverNetwork(ctx, newUids); err != nil {
 			x.TraceError(ctx, x.Wrapf(err, "Error while GetOrAssignUidsOverNetwork"))
 			return mr, err
 		}
 	}
 
 	for _, nq := range nquads {
-		// Get edges from nquad using xidToUid.
-		edge, err := nq.ToEdgeUsing(xidToUid)
+		// Get edges from nquad using newUids.
+		edge, err := nq.ToEdgeUsing(newUids)
 		if err != nil {
 			x.TraceError(ctx, x.Wrapf(err, "Error while converting to edge: %v", nq))
 			return mr, err
@@ -165,20 +161,21 @@ func convertToEdges(ctx context.Context, nquads []rdf.NQuad) (mutationResult, er
 		edges = append(edges, edge)
 	}
 
-	for k, v := range xidToUid {
-		if strings.HasPrefix(k, "_new_:") {
-			allocatedIds[k[6:]] = v
-		}
+	resultUids := make(map[string]uint64)
+	// Strip out _new_: prefix from the keys.
+	for k, v := range newUids {
+		x.Assertf(strings.HasPrefix(k, "_new_:"), "Expected prefix _new_: in key: %v", k)
+		resultUids[k[6:]] = v
 	}
 
 	mr = mutationResult{
 		edges:   edges,
-		newUids: allocatedIds,
+		newUids: resultUids,
 	}
 	return mr, nil
 }
 
-func applyMutations(ctx context.Context, m worker.Mutations) error {
+func applyMutations(ctx context.Context, m x.Mutations) error {
 	err := worker.MutateOverNetwork(ctx, m)
 	if err != nil {
 		x.TraceError(ctx, x.Wrapf(err, "Error while MutateOverNetwork"))
@@ -233,7 +230,7 @@ func typeValueFromNQuad(nq *graph.NQuad) (types.TypeValue, types.Scalar) {
 
 func convertAndApply(ctx context.Context, set []rdf.NQuad, del []rdf.NQuad) (map[string]uint64, error) {
 	var allocIds map[string]uint64
-	var m worker.Mutations
+	var m x.Mutations
 	var err error
 	var mr mutationResult
 
@@ -553,10 +550,6 @@ func checkFlagsAndInitDirs() {
 	if err != nil {
 		log.Fatalf("Error while creating the filepath for mutations: %v", err)
 	}
-	err = os.MkdirAll(*uidDir, 0700)
-	if err != nil {
-		log.Fatalf("Error while creating the filepath for uids: %v", err)
-	}
 }
 
 func serveGRPC(l net.Listener) {
@@ -624,20 +617,14 @@ func main() {
 
 	var ws *worker.State
 	if groupId != 0 { // HACK: This will currently not run.
-		ws = worker.NewState(ps, nil, groupId, 1) // TODO: Set number of groups here.
+		ws = worker.NewState(ps, groupId, 1) // TODO: Set number of groups here.
 		worker.SetWorkerState(ws)
 		uid.Init(nil)
 
 	} else { // handles group 0.
-		uidStore, err := store.NewStore(*uidDir)
-		if err != nil {
-			log.Fatalf("error initializing uid store: %s", err)
-		}
-		defer uidStore.Close()
-		// Only server instance 0 will have uidStore
-		ws = worker.NewState(ps, uidStore, groupId, 1) // TODO: Set number of groups here.
+		ws = worker.NewState(ps, groupId, 1) // TODO: Set number of groups here.
 		worker.SetWorkerState(ws)
-		uid.Init(uidStore)
+		uid.Init(ps)
 	}
 
 	my := "localhost" + *workerPort

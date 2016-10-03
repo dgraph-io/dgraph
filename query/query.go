@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"log"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -35,6 +36,7 @@ import (
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
+	farm "github.com/dgryski/go-farm"
 	"github.com/google/flatbuffers/go"
 )
 
@@ -689,14 +691,8 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	// This would set the Result field in SubGraph,
 	// and populate the children for attributes.
 	if len(exid) > 0 {
-		xidToUid := make(map[string]uint64)
-		xidToUid[exid] = 0
-		if err := worker.GetOrAssignUidsOverNetwork(ctx, xidToUid); err != nil {
-			x.TraceError(ctx, x.Wrapf(err, "Error while getting uids over network"))
-			return nil, err
-		}
-
-		euid = xidToUid[exid]
+		x.Assertf(!strings.HasPrefix(exid, "_new_:"), "Query shouldn't contain _new_")
+		euid = farm.Fingerprint64([]byte(exid))
 		x.Trace(ctx, "Xid: %v Uid: %v", exid, euid)
 	}
 

@@ -41,7 +41,6 @@ import (
 // State stores the worker state.
 type State struct {
 	dataStore *store.Store
-	uidStore  *store.Store
 	groupId   uint64
 	numGroups uint64
 
@@ -62,10 +61,9 @@ func SetWorkerState(s *State) {
 }
 
 // NewState initializes the state on an instance with data,uid store and other meta.
-func NewState(ps, uStore *store.Store, gid, numGroups uint64) *State {
+func NewState(ps *store.Store, gid, numGroups uint64) *State {
 	return &State{
 		dataStore: ps,
-		uidStore:  uStore,
 		numGroups: numGroups,
 		groupId:   gid,
 	}
@@ -144,7 +142,7 @@ func (w *grpcWorker) GetOrAssign(ctx context.Context, query *Payload) (*Payload,
 
 // Mutate is used to apply mutations over the network on other instances.
 func (w *grpcWorker) Mutate(ctx context.Context, query *Payload) (*Payload, error) {
-	m := new(Mutations)
+	m := new(x.Mutations)
 	// Ensure that this can be decoded. This is an optional step.
 	if err := m.Decode(query.Data); err != nil {
 		return nil, x.Wrapf(err, "While decoding mutation.")

@@ -87,10 +87,6 @@ func processTask(query []byte) ([]byte, error) {
 
 	attr := string(q.Attr())
 	store := ws.dataStore
-	if attr == _xid_ {
-		store = ws.uidStore
-	}
-
 	x.Assertf(q.UidsLength() == 0 || q.TermsLength() == 0,
 		"At least one of Uids and Term should be empty: %d vs %d", q.UidsLength(), q.TermsLength())
 

@@ -17,8 +17,8 @@ import (
 )
 
 const (
-	mutationMsg = 1
-	assignMsg   = 2
+	mutationMsg     = 1
+	directedEdgeMsg = 2
 )
 
 type peerPool struct {
@@ -68,7 +68,6 @@ func (p *proposals) Done(pid uint32, err error) {
 type node struct {
 	cfg       *raft.Config
 	ctx       context.Context
-	data      map[string]string
 	done      <-chan struct{}
 	id        uint64
 	localAddr string
@@ -213,7 +212,7 @@ func (n *node) process(e raftpb.Entry) error {
 		h.Decode(e.Data[0:h.Length()])
 		x.Assertf(h.msgId == 1, "We only handle mutations for now.")
 
-		m := new(Mutations)
+		m := new(x.Mutations)
 		// Ensure that this can be decoded.
 		if err := m.Decode(e.Data[h.Length():]); err != nil {
 			x.TraceError(n.ctx, err)
@@ -391,7 +390,6 @@ func newNode(id uint64, my string) *node {
 			MaxSizePerMsg:   4096,
 			MaxInflightMsgs: 256,
 		},
-		data:      make(map[string]string),
 		peers:     peers,
 		props:     props,
 		localAddr: my,
@@ -411,6 +409,10 @@ func (n *node) StartNode(cluster string) {
 
 	n.raft = raft.StartNode(n.cfg, peers)
 	go n.Run()
+}
+
+func (n *node) AmLeader() bool {
+	return n.raft.Status().Lead == n.raft.Status().ID
 }
 
 var thisNode *node

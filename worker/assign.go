@@ -20,7 +20,7 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"sync"
+	"strings"
 
 	"github.com/google/flatbuffers/go"
 
@@ -54,41 +54,35 @@ func createXidListBuffer(xids map[string]uint64) []byte {
 // xids in the xidList.
 func getOrAssignUids(ctx context.Context,
 	xidList *task.XidList) (uidList []byte, rerr error) {
+	// This function is triggered by an RPC call. We ensure that only leader can assign new UIDs,
+	// so we can tackle any collisions that might happen with the lockmanager.
+	// In essence, we just want one server to be handing out new uids.
+	if !GetNode().AmLeader() {
+		return uidList, x.Errorf("Assigning UIDs is only allowed on leader.")
+	}
 
 	if xidList.XidsLength() == 0 {
 		return uidList, fmt.Errorf("Empty xid list")
 	}
 
-	wg := new(sync.WaitGroup)
-	uids := make([]uint64, xidList.XidsLength())
-	che := make(chan error, xidList.XidsLength())
+	// Just verify that we're only asking for _new_ ids.
 	for i := 0; i < xidList.XidsLength(); i++ {
-		wg.Add(1)
 		xid := string(xidList.Xids(i))
-
-		// Start a goroutine to get uid for a xid.
-		go func(idx int) {
-			defer wg.Done()
-			u, err := uid.GetOrAssign(xid, 0, 1)
-			if err != nil {
-				che <- err
-				return
-			}
-			uids[idx] = u
-		}(i)
+		x.Assertf(strings.HasPrefix(xid, "_new_:"), "UIDs over network can only be assigned for _new_")
 	}
-	// We want for goroutines to finish and then we create the uidlist vector.
-	wg.Wait()
-	close(che)
-	for err := range che {
-		x.TraceError(ctx, x.Wrapf(err, "Error while getOrAssignUids"))
+
+	mutations := uid.AssignNew(xidList.XidsLength(), 0, 1)
+	data, err := mutations.Encode()
+	x.Checkf(err, "While encoding mutation: %v", mutations)
+	if err := GetNode().ProposeAndWait(ctx, mutationMsg, data); err != nil {
 		return uidList, err
 	}
+	// Mutations successfully applied.
 
 	b := flatbuffers.NewBuilder(0)
 	task.UidListStartUidsVector(b, xidList.XidsLength())
-	for i := len(uids) - 1; i >= 0; i-- {
-		b.PrependUint64(uids[i])
+	for i := 0; i < xidList.XidsLength(); i++ {
+		b.PrependUint64(mutations.Set[i].Entity)
 	}
 	ve := b.EndVector(xidList.XidsLength())
 
@@ -100,10 +94,10 @@ func getOrAssignUids(ctx context.Context,
 }
 
 // GetOrAssignUidsOverNetwork gets or assigns uids corresponding to xids and
-// writes them to the xidToUid map.
-func GetOrAssignUidsOverNetwork(ctx context.Context, xidToUid map[string]uint64) (rerr error) {
+// writes them to the newUids map.
+func GetOrAssignUidsOverNetwork(ctx context.Context, newUids map[string]uint64) (rerr error) {
 	query := new(Payload)
-	query.Data = createXidListBuffer(xidToUid)
+	query.Data = createXidListBuffer(newUids)
 	uo := flatbuffers.GetUOffsetT(query.Data)
 	xidList := new(task.XidList)
 	xidList.Init(query.Data, uo)
@@ -148,7 +142,7 @@ func GetOrAssignUidsOverNetwork(ctx context.Context, xidToUid map[string]uint64)
 		xid := string(xidList.Xids(i))
 		uid := uidList.Uids(i)
 		// Writing uids to the map.
-		xidToUid[xid] = uid
+		newUids[xid] = uid
 	}
 	return nil
 }
