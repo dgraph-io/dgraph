@@ -629,13 +629,22 @@ func main() {
 	}
 
 	my := "localhost" + *workerPort
+
+	// TODO: Clean up the RAFT group creation code.
+
 	// First initiate the commmon group across the entire cluster. This group
 	// stores information about which server serves which groups.
 	node := worker.InitNode(math.MaxUint32, *raftId, my)
 	node.StartNode(*cluster)
-
 	if len(*peer) > 0 {
-		node.JoinCluster(*peer, ws)
+		go node.JoinCluster(*peer, ws)
+	}
+
+	// Also create node for group zero, which would handle UID assignment.
+	node = worker.InitNode(0, *raftId, my)
+	node.StartNode(*cluster)
+	if len(*peer) > 0 {
+		go node.JoinCluster(*peer, ws)
 	}
 
 	if len(*schemaFile) > 0 {

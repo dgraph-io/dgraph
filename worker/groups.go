@@ -24,6 +24,10 @@ func Node(groupId uint32) *node {
 func InitNode(groupId uint32, nodeId uint64, publicAddr string) *node {
 	gr.Lock()
 	defer gr.Unlock()
+	if gr.Map == nil {
+		gr.Map = make(map[uint32]*node)
+	}
+
 	node := newNode(groupId, nodeId, publicAddr)
 	if _, has := gr.Map[groupId]; has {
 		x.Assertf(false, "Didn't expect a node in RAFT group mapping: %v", groupId)

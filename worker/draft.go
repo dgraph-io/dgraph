@@ -200,8 +200,8 @@ func (n *node) process(e raftpb.Entry) error {
 		cc.Unmarshal(e.Data)
 
 		if len(cc.Context) > 0 {
-			pid, paddr := parsePeer(string(cc.Context))
-			n.Connect(pid, paddr)
+			rc := task.GetRootAsRaftContext(cc.Context, 0)
+			n.Connect(rc.Id(), string(rc.Addr()))
 		}
 
 		n.raft.ApplyConfChange(cc)
