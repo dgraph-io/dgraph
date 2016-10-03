@@ -191,8 +191,6 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 	q := new(task.Query)
 	x.ParseTaskQuery(q, sg.Query)
 
-	//	r := new(task.Result)
-	//	x.ParseTaskResult(r, sg.Result)
 	r := sg.Result
 	x.Assertf(q.UidsLength() == r.Size(),
 		"Result uidmatrixlength: %v. Query uidslength: %v", q.UidsLength(), r.Size())
@@ -705,17 +703,14 @@ func createTaskQuery(sg *SubGraph, uids []uint64, terms []string, intersect []ui
 // from different instances.
 func ProcessGraph(ctx context.Context, sg *SubGraph, rch chan error) {
 	var err error
-	var resultBuf []byte
 	if len(sg.Query) > 0 && !sg.Params.IsRoot {
-		resultBuf, err = worker.ProcessTaskOverNetwork(ctx, sg.Query)
+		resultBuf, err := worker.ProcessTaskOverNetwork(ctx, sg.Query)
 		if err != nil {
 			x.TraceError(ctx, x.Wrapf(err, "Error while processing task"))
 			rch <- err
 			return
 		}
-	}
 
-	if resultBuf != nil {
 		r := new(task.Result)
 		x.ParseTaskResult(r, resultBuf)
 
