@@ -27,6 +27,7 @@ fi
 if [ ! -f "benchmarks/data/rdf-films.gz" ]; then
     git clone https://github.com/dgraph-io/benchmarks.git
 fi
+benchmark=$(pwd)/benchmarks/data
 popd &> /dev/null
 
 # build flags needed for rocksdb
