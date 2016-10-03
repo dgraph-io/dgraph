@@ -212,6 +212,7 @@ func (n *node) processMembership(e raftpb.Entry, h header) error {
 	mm := task.GetRootAsMembership(e.Data[h.Length():], 0)
 	fmt.Printf("group: %v Addr: %q leader: %v dead: %v\n",
 		mm.Group(), mm.Addr(), mm.Leader(), mm.Amdead())
+	UpdateServer(mm)
 	return nil
 }
 
@@ -322,9 +323,7 @@ func (n *node) Run() {
 }
 
 func (n *node) Stop() {
-	// Two goroutines are depending on this.
-	n.done <- struct{}{}
-	n.done <- struct{}{}
+	close(n.done)
 }
 
 func (n *node) Step(ctx context.Context, msg raftpb.Message) error {
@@ -424,7 +423,6 @@ func newNode(gid uint32, id uint64, myAddr string) *node {
 	store := raft.NewMemoryStorage()
 	n := &node{
 		ctx:   context.TODO(),
-		done:  make(chan struct{}, 3),
 		id:    id,
 		store: store,
 		cfg: &raft.Config{
@@ -455,8 +453,49 @@ func (n *node) StartNode(cluster string) {
 	n.raft = raft.StartNode(n.cfg, peers)
 	go n.Run()
 	go n.snapshotPeriodically()
+	go n.Inform()
+}
+
+func (n *node) doInform(rc *task.RaftContext) {
+	s, found := Server(rc.Id(), rc.Group())
+	if found && s.Addr == string(rc.Addr()) && s.Leader == n.AmLeader() {
+		return
+	}
+
+	var l byte
+	if n.AmLeader() {
+		l = byte(1)
+	}
+
+	b := flatbuffers.NewBuilder(0)
+	so := b.CreateString(string(rc.Addr()))
+	task.MembershipStart(b)
+	task.MembershipAddId(b, rc.Id())
+	task.MembershipAddGroup(b, rc.Group())
+	task.MembershipAddAddr(b, so)
+	task.MembershipAddLeader(b, l)
+	uo := task.MembershipEnd(b)
+	b.Finish(uo)
+	data := b.Bytes[b.Head():]
+
+	common := Node(math.MaxUint32)
+	x.Checkf(common.ProposeAndWait(context.TODO(), membershipMsg, data),
+		"Expected acceptance.")
+}
+
+func (n *node) Inform() {
 	rc := task.GetRootAsRaftContext(n.raftContext, 0)
-	go Inform(rc.Group())
+	if rc.Group() == math.MaxUint32 {
+		return
+	}
+	n.doInform(rc)
+
+	select {
+	case <-time.Tick(time.Minute):
+		n.doInform(rc)
+	case <-n.done:
+		return
+	}
 }
 
 func (n *node) AmLeader() bool {

@@ -52,6 +52,7 @@ table RaftContext {
 }
 
 table Membership {
+	id:ulong;
 	group:uint;
 	addr:string;
 	leader:bool;
