@@ -13,7 +13,20 @@ ROCKSDBDIR=$BUILD/rocksdb-4.9
 set -e
 
 pushd $BUILD &> /dev/null
-benchmark=$(pwd)/benchmarks/data
+
+gitlfsfile="git-lfs-1.3.1"
+if [ ! -d $gitlfsfile ]; then
+  # Get git-lfs and benchmark data.
+  wget https://github.com/github/git-lfs/releases/download/v1.3.1/git-lfs-linux-amd64-1.3.1.tar.gz
+  tar -xzf git-lfs-linux-amd64-1.3.1.tar.gz
+  pushd git-lfs-1.3.1 &> /dev/null
+  sudo /bin/bash ./install.sh
+  popd &> /dev/null
+fi
+
+if [ ! -f "benchmarks/data/rdf-films.gz" ]; then
+    git clone https://github.com/dgraph-io/benchmarks.git
+fi
 popd &> /dev/null
 
 # build flags needed for rocksdb
