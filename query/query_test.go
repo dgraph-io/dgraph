@@ -259,7 +259,7 @@ func processToJson(t *testing.T, query string) map[string]interface{} {
 	}
 
 	ch := make(chan error)
-	go ProcessGraph(ctx, sg, ch)
+	go ProcessGraph(ctx, sg, nil, ch)
 	err = <-ch
 	if err != nil {
 		t.Error(err)
@@ -346,7 +346,7 @@ func TestSchema1(t *testing.T) {
 	}
 }
 
-func TestGetUid(t *testing.T) {
+func TestGetUID(t *testing.T) {
 	dir, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
 
@@ -533,7 +533,7 @@ func TestProcessGraph(t *testing.T) {
 	}
 
 	ch := make(chan error)
-	go ProcessGraph(ctx, sg, ch)
+	go ProcessGraph(ctx, sg, nil, ch)
 	err = <-ch
 	if err != nil {
 		t.Error(err)
@@ -619,7 +619,7 @@ func TestToJSON(t *testing.T) {
 	}
 
 	ch := make(chan error)
-	go ProcessGraph(ctx, sg, ch)
+	go ProcessGraph(ctx, sg, nil, ch)
 	err = <-ch
 	if err != nil {
 		t.Error(err)
@@ -662,7 +662,7 @@ func TestToJSONFilter(t *testing.T) {
 	}
 
 	ch := make(chan error)
-	go ProcessGraph(ctx, sg, ch)
+	go ProcessGraph(ctx, sg, nil, ch)
 	err = <-ch
 	if err != nil {
 		t.Error(err)
@@ -706,7 +706,7 @@ func TestToJSONFilterUID(t *testing.T) {
 	}
 
 	ch := make(chan error)
-	go ProcessGraph(ctx, sg, ch)
+	go ProcessGraph(ctx, sg, nil, ch)
 	err = <-ch
 	if err != nil {
 		t.Error(err)
@@ -750,7 +750,7 @@ func TestToJSONFilterOr(t *testing.T) {
 	}
 
 	ch := make(chan error)
-	go ProcessGraph(ctx, sg, ch)
+	go ProcessGraph(ctx, sg, nil, ch)
 	err = <-ch
 	if err != nil {
 		t.Error(err)
@@ -794,7 +794,7 @@ func TestToJSONFilterAnd(t *testing.T) {
 	}
 
 	ch := make(chan error)
-	go ProcessGraph(ctx, sg, ch)
+	go ProcessGraph(ctx, sg, nil, ch)
 	err = <-ch
 	if err != nil {
 		t.Error(err)
@@ -852,7 +852,7 @@ func TestToPB(t *testing.T) {
 	}
 
 	ch := make(chan error)
-	go ProcessGraph(ctx, sg, ch)
+	go ProcessGraph(ctx, sg, nil, ch)
 	err = <-ch
 	if err != nil {
 		t.Error(err)
@@ -956,7 +956,7 @@ func TestSchema(t *testing.T) {
 	}
 
 	ch := make(chan error)
-	go ProcessGraph(ctx, sg, ch)
+	go ProcessGraph(ctx, sg, nil, ch)
 	err = <-ch
 	if err != nil {
 		t.Error(err)
@@ -1054,7 +1054,7 @@ func TestToPBFilter(t *testing.T) {
 	}
 
 	ch := make(chan error)
-	go ProcessGraph(ctx, sg, ch)
+	go ProcessGraph(ctx, sg, nil, ch)
 	err = <-ch
 	if err != nil {
 		t.Error(err)
@@ -1128,7 +1128,7 @@ func TestToPBFilterOr(t *testing.T) {
 	}
 
 	ch := make(chan error)
-	go ProcessGraph(ctx, sg, ch)
+	go ProcessGraph(ctx, sg, nil, ch)
 	err = <-ch
 	if err != nil {
 		t.Error(err)
@@ -1211,7 +1211,7 @@ func TestToPBFilterAnd(t *testing.T) {
 	}
 
 	ch := make(chan error)
-	go ProcessGraph(ctx, sg, ch)
+	go ProcessGraph(ctx, sg, nil, ch)
 	err = <-ch
 	if err != nil {
 		t.Error(err)
