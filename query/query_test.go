@@ -111,7 +111,7 @@ func TestNewGraph(t *testing.T) {
 		t.Error(err)
 	}
 
-	worker.SetWorkerState(worker.NewState(ps, nil, 0, 1))
+	worker.SetWorkerState(worker.NewState(ps, 0, 1))
 
 	r := new(task.Result)
 	x.ParseTaskResult(r, sg.Result)
@@ -149,7 +149,7 @@ func populateGraph(t *testing.T) (string, *store.Store) {
 		return "", nil
 	}
 
-	worker.SetWorkerState(worker.NewState(ps, nil, 0, 1))
+	worker.SetWorkerState(worker.NewState(ps, 0, 1))
 	posting.Init()
 
 	// So, user we're interested in has uid: 1.

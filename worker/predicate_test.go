@@ -105,7 +105,7 @@ func TestPopulateShard(t *testing.T) {
 	posting.Init()
 
 	writePLs(t, 100, 2, ps)
-	w := NewState(ps, nil, 0, 1)
+	w := NewState(ps, 0, 1)
 	SetWorkerState(w)
 
 	s, ln, err := newServer(":12345")
@@ -127,7 +127,7 @@ func TestPopulateShard(t *testing.T) {
 	}
 	defer ps1.Close()
 
-	w1 := NewState(ps1, nil, 1, 2)
+	w1 := NewState(ps1, 1, 2)
 
 	s1, ln1, err := newServer(":12346")
 	if err != nil {
@@ -195,7 +195,7 @@ func TestJoinCluster(t *testing.T) {
 	posting.Init()
 
 	writePLs(t, 100, 2, ps)
-	w := NewState(ps, nil, 0, 1)
+	w := NewState(ps, 0, 1)
 	SetWorkerState(w)
 
 	s, ln, err := newServer(":12345")
@@ -221,7 +221,7 @@ func TestJoinCluster(t *testing.T) {
 	}
 	defer ps1.Close()
 
-	w1 := NewState(ps1, nil, 1, 2)
+	w1 := NewState(ps1, 1, 2)
 
 	s1, ln1, err := newServer(":12346")
 	if err != nil {
@@ -263,7 +263,7 @@ func TestGenerateGroup(t *testing.T) {
 	posting.Init()
 
 	writePLs(t, 100, 2, ps)
-	ws := NewState(ps, nil, 0, 1)
+	ws := NewState(ps, 0, 1)
 	data, err := ws.generateGroup(0)
 	if err != nil {
 		t.Error(err)

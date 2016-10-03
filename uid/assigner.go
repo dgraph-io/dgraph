@@ -128,3 +128,7 @@ func AssignNew(N int, instanceIdx uint64, numInstances uint64) x.Mutations {
 	}
 	return m
 }
+
+func StringKey(xid string) []byte {
+	return []byte("_uid_|" + xid)
+}

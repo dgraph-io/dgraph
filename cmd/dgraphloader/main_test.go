@@ -20,20 +20,12 @@ import (
 func TestQuery(t *testing.T) {
 	logrus.SetLevel(logrus.DebugLevel)
 	dir, err := ioutil.TempDir("", "storetest_")
-	dir1, err1 := ioutil.TempDir("", "storetest1_")
-	if err != nil || err1 != nil {
+	if err != nil {
 		t.Fail()
 	}
 	defer os.RemoveAll(dir)
-	defer os.RemoveAll(dir1)
 
 	ps, err := store.NewStore(dir)
-	if err != nil {
-		t.Error(err)
-		t.Fail()
-	}
-
-	ps1, err := store.NewStore(dir1)
 	if err != nil {
 		t.Error(err)
 		t.Fail()
@@ -42,22 +34,10 @@ func TestQuery(t *testing.T) {
 	posting.Init()
 
 	uid.Init(ps)
-	loader.Init(ps, ps1)
-	posting.InitIndex(ps1)
+	loader.Init(ps)
+	posting.InitIndex(ps)
 
 	var count uint64
-	{
-		f, err := os.Open("test_input")
-		if err != nil {
-			t.Error(err)
-			t.Fail()
-		}
-		r := bufio.NewReader(f)
-		count, err = loader.AssignUids(r, 0, 1) // Assign uids for everything.
-		t.Logf("count: %v", count)
-		f.Close()
-		posting.MergeLists(100)
-	}
 	{
 		f, err := os.Open("test_input")
 		if err != nil {

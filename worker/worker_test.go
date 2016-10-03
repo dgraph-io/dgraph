@@ -121,7 +121,7 @@ func TestProcessTask(t *testing.T) {
 	}
 	defer ps.Close()
 
-	SetWorkerState(NewState(ps, nil, 0, 1))
+	SetWorkerState(NewState(ps, 0, 1))
 
 	posting.Init()
 	posting.InitIndex(ps)
@@ -197,7 +197,7 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 	defer ps.Close()
 
 	posting.Init()
-	SetWorkerState(NewState(ps, nil, 0, 1))
+	SetWorkerState(NewState(ps, 0, 1))
 
 	posting.InitIndex(ps)
 
@@ -349,7 +349,7 @@ func TestProcessTaskIndex(t *testing.T) {
 	posting.InitIndex(ps)
 
 	posting.Init()
-	SetWorkerState(NewState(ps, nil, 0, 1))
+	SetWorkerState(NewState(ps, 0, 1))
 
 	populateGraph(t, ps)
 	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
