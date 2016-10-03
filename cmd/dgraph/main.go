@@ -145,7 +145,7 @@ func convertToEdges(ctx context.Context, nquads []rdf.NQuad) (mutationResult, er
 		}
 	}
 	if len(newUids) > 0 {
-		if err := worker.GetOrAssignUidsOverNetwork(ctx, newUids); err != nil {
+		if err := worker.AssignUidsOverNetwork(ctx, newUids); err != nil {
 			x.TraceError(ctx, x.Wrapf(err, "Error while GetOrAssignUidsOverNetwork"))
 			return mr, err
 		}
