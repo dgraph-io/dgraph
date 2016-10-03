@@ -85,11 +85,7 @@ func AssignUidsOverNetwork(ctx context.Context, newUids map[string]uint64) (rerr
 	num.Init(query.Data, uo)
 
 	reply := new(Payload)
-	// If instance number 0 called this and then it already has posting list for
-	// xid <-> uid conversion, hence call getOrAssignUids locally else call
-	// GetOrAssign using worker client.
-	// if ws.groupId == 0 {
-	// HACK HACK HACK
+	// TODO: Send this over the network, depending upon which server should be handling this.
 	if true {
 		reply.Data, rerr = assignUids(ctx, num)
 		if rerr != nil {
