@@ -300,6 +300,8 @@ func (n *node) Run() {
 }
 
 func (n *node) Stop() {
+	// Two goroutines are depending on this.
+	n.done <- struct{}{}
 	n.done <- struct{}{}
 }
 
@@ -307,29 +309,35 @@ func (n *node) Step(ctx context.Context, msg raftpb.Message) error {
 	return n.raft.Step(ctx, msg)
 }
 
-func (n *node) SnapshotPeriodically() {
-	for t := range time.Tick(time.Minute) {
-		fmt.Printf("Snapshot Periodically: %v", t)
+func (n *node) snapshotPeriodically() {
+	for {
+		select {
+		case t := <-time.Tick(time.Minute):
+			fmt.Printf("Snapshot Periodically: %v", t)
 
-		le, err := n.store.LastIndex()
-		x.Checkf(err, "Unable to retrieve last index")
+			le, err := n.store.LastIndex()
+			x.Checkf(err, "Unable to retrieve last index")
 
-		existing, err := n.store.Snapshot()
-		x.Checkf(err, "Unable to get existing snapshot")
+			existing, err := n.store.Snapshot()
+			x.Checkf(err, "Unable to get existing snapshot")
 
-		si := existing.Metadata.Index
-		fmt.Printf("le, si: %v %v\n", le, si)
-		if le <= si {
-			fmt.Printf("le, si: %v %v. No snapshot\n", le, si)
-			continue
+			si := existing.Metadata.Index
+			fmt.Printf("le, si: %v %v\n", le, si)
+			if le <= si {
+				fmt.Printf("le, si: %v %v. No snapshot\n", le, si)
+				continue
+			}
+
+			msg := fmt.Sprintf("Snapshot from %v", strconv.FormatUint(n.id, 10))
+			_, err = n.store.CreateSnapshot(le, nil, []byte(msg))
+			x.Checkf(err, "While creating snapshot")
+
+			x.Checkf(n.store.Compact(le), "While compacting snapshot")
+			fmt.Println("Snapshot DONE =================")
+
+		case <-n.done:
+			return
 		}
-
-		msg := fmt.Sprintf("Snapshot from %v", strconv.FormatUint(n.id, 10))
-		_, err = n.store.CreateSnapshot(le, nil, []byte(msg))
-		x.Checkf(err, "While creating snapshot")
-
-		x.Checkf(n.store.Compact(le), "While compacting snapshot")
-		fmt.Println("Snapshot DONE =================")
 	}
 }
 
@@ -380,7 +388,7 @@ func newNode(id uint64, my string) *node {
 	store := raft.NewMemoryStorage()
 	n := &node{
 		ctx:   context.TODO(),
-		done:  make(chan struct{}),
+		done:  make(chan struct{}, 3),
 		id:    id,
 		store: store,
 		cfg: &raft.Config{
@@ -410,6 +418,7 @@ func (n *node) StartNode(cluster string) {
 
 	n.raft = raft.StartNode(n.cfg, peers)
 	go n.Run()
+	go n.snapshotPeriodically()
 }
 
 func (n *node) AmLeader() bool {

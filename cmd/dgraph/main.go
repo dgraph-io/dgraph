@@ -633,7 +633,6 @@ func main() {
 	if len(*peer) > 0 {
 		go worker.GetNode().JoinCluster(*peer, ws)
 	}
-	go worker.GetNode().SnapshotPeriodically()
 
 	// node := worker.GetNode()
 	// go node.Campaign(context.TODO())
