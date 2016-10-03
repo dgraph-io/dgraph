@@ -281,14 +281,9 @@ func runMutations(ctx context.Context, mu *graph.Mutation) (map[string]uint64, e
 	var allocIds map[string]uint64
 	var err error
 
-	set, err := mutationToNQuad(mu.Set)
-	if err != nil {
-		return nil, err
-	}
-	del, err := mutationToNQuad(mu.Del)
-	if err != nil {
-		return nil, err
-	}
+	set, _ := mutationToNQuad(mu.Set)
+	del, _ := mutationToNQuad(mu.Del)
+
 	if allocIds, err = convertAndApply(ctx, set, del); err != nil {
 		return nil, err
 	}
