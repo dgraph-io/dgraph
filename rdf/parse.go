@@ -25,8 +25,9 @@ import (
 	"unicode"
 
 	"github.com/dgraph-io/dgraph/lex"
-	"github.com/dgraph-io/dgraph/uid"
+	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
+	farm "github.com/dgryski/go-farm"
 )
 
 // NQuad is the data structure used for storing rdf N-Quads.
@@ -46,8 +47,7 @@ func getUid(xid string) (uint64, error) {
 	if strings.HasPrefix(xid, "_uid_:") {
 		return strconv.ParseUint(xid[6:], 0, 64)
 	}
-	// Get uid from posting list in UidStore.
-	return uid.Get(xid)
+	return farm.Fingerprint64([]byte(xid)), nil
 }
 
 // ToEdge is useful when you want to find the UID corresponding to XID for
@@ -76,22 +76,21 @@ func (nq NQuad) ToEdge() (result x.DirectedEdge, rerr error) {
 	return result, nil
 }
 
-func toUid(xid string, xidToUID map[string]uint64) (uid uint64, rerr error) {
-	if id, present := xidToUID[xid]; present {
+func toUid(xid string, newToUid map[string]uint64) (uid uint64, rerr error) {
+	if id, present := newToUid[xid]; present {
 		return id, nil
 	}
-
-	if !strings.HasPrefix(xid, "_uid_:") {
-		return 0, fmt.Errorf("Unable to assign or find uid for: %v", xid)
+	if strings.HasPrefix(xid, "_uid_:") {
+		return strconv.ParseUint(xid[6:], 0, 64)
 	}
-	return strconv.ParseUint(xid[6:], 0, 64)
+	return farm.Fingerprint64([]byte(xid)), nil
 }
 
 // ToEdgeUsing determines the UIDs for the provided XIDs and populates the
 // xidToUid map.
 func (nq NQuad) ToEdgeUsing(
-	xidToUID map[string]uint64) (result x.DirectedEdge, rerr error) {
-	uid, err := toUid(nq.Subject, xidToUID)
+	newToUid map[string]uint64) (result x.DirectedEdge, rerr error) {
+	uid, err := toUid(nq.Subject, newToUid)
 	if err != nil {
 		return result, err
 	}
@@ -101,7 +100,7 @@ func (nq NQuad) ToEdgeUsing(
 		result.Value = nq.ObjectValue
 		result.ValueType = nq.ObjectType
 	} else {
-		uid, err = toUid(nq.ObjectId, xidToUID)
+		uid, err = toUid(nq.ObjectId, newToUid)
 		if err != nil {
 			return result, err
 		}
@@ -164,7 +163,6 @@ func Parse(line string) (rnq NQuad, rerr error) {
 			rnq.Predicate += "." + item.Val
 
 		case itemObjectType:
-			// TODO: Strictly parse common types like integers, floats etc.
 			if len(oval) == 0 {
 				log.Fatalf(
 					"itemObject should be emitted before itemObjectType. Input: [%s]",
@@ -174,7 +172,20 @@ func Parse(line string) (rnq NQuad, rerr error) {
 			if strings.Trim(val, " ") == "*" {
 				return rnq, fmt.Errorf("itemObject can't be *")
 			}
-			oval += "@@" + val
+			if t, ok := typeMap[val]; ok {
+				p, err := t.Unmarshaler.FromText([]byte(oval))
+				if err != nil {
+					return rnq, err
+				}
+				rnq.ObjectValue, err = p.MarshalBinary()
+				if err != nil {
+					return rnq, err
+				}
+				rnq.ObjectType = byte(t.ID())
+				oval = ""
+			} else {
+				oval += "@@" + val
+			}
 
 		case lex.ItemError:
 			return rnq, fmt.Errorf(item.Val)
@@ -192,7 +203,7 @@ func Parse(line string) (rnq NQuad, rerr error) {
 	}
 	if len(oval) > 0 {
 		rnq.ObjectValue = []byte(oval)
-		// TODO: It's always zero until we parse the types.
+		// If no type is specified, we default to string.
 		rnq.ObjectType = 0
 	}
 	if len(rnq.Subject) == 0 || len(rnq.Predicate) == 0 {
@@ -211,4 +222,22 @@ func Parse(line string) (rnq NQuad, rerr error) {
 
 func isNewline(r rune) bool {
 	return r == '\n' || r == '\r'
+}
+
+var typeMap = map[string]types.Scalar{
+	"xs:string":                                 types.StringType,
+	"xs:dateTime":                               types.DateTimeType,
+	"xs:date":                                   types.DateType,
+	"xs:int":                                    types.Int32Type,
+	"xs:boolean":                                types.BooleanType,
+	"xs:double":                                 types.FloatType,
+	"xs:float":                                  types.FloatType,
+	"geo:geojson":                               types.GeoType,
+	"http://www.w3.org/2001/XMLSchema#string":   types.StringType,
+	"http://www.w3.org/2001/XMLSchema#dateTime": types.DateTimeType,
+	"http://www.w3.org/2001/XMLSchema#date":     types.DateType,
+	"http://www.w3.org/2001/XMLSchema#int":      types.Int32Type,
+	"http://www.w3.org/2001/XMLSchema#boolean":  types.BooleanType,
+	"http://www.w3.org/2001/XMLSchema#double":   types.FloatType,
+	"http://www.w3.org/2001/XMLSchema#float":    types.FloatType,
 }

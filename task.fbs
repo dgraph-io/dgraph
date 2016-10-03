@@ -21,8 +21,9 @@ table Value {
 	valType:ubyte;
 }
 
-table XidList {
-	xids:[string];
+table Num {
+	group:uint;
+	val:int;
 }
 
 table UidList {
@@ -44,6 +45,16 @@ table ValueList {
 }
 
 table KV {
-	key: [ubyte];
-	val: [ubyte];
+	key:[ubyte];
+	val:[ubyte];
+}
+
+table KC {
+	key:[ubyte];
+	checksum:[ubyte];
+}
+
+table GroupKeys {
+	groupid:ulong;
+	keys:[KC];
 }

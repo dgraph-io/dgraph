@@ -17,96 +17,66 @@
 package uid
 
 import (
-	"context"
-	"errors"
-	"fmt"
 	"log"
 	"math"
 	"math/rand"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/dgryski/go-farm"
 
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/posting/types"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/x"
 )
 
 var lmgr *lockManager
 var uidStore *store.Store
-var eidPool = sync.Pool{
-	New: func() interface{} {
-		return new(entry)
-	},
-}
-
-type entry struct {
-	sync.Mutex
-	ts time.Time
-}
-
-func (e *entry) isOld() bool {
-	e.Lock()
-	defer e.Unlock()
-	return time.Now().Sub(e.ts) > time.Minute
-}
 
 type lockManager struct {
 	sync.RWMutex
-	locks map[string]*entry
+	uids map[uint64]time.Time
 }
 
-func (lm *lockManager) newOrExisting(xid string) *entry {
-	lm.RLock()
-	if e, ok := lm.locks[xid]; ok {
-		lm.RUnlock()
-		return e
-	}
-	lm.RUnlock()
-
+// isNew checks that the passed uid is the first time lockManager has seen it.
+// This avoids collisions where a uid which is proposed but still not pushed to a posting list,
+// gets assigned to another entity.
+func (lm *lockManager) isNew(uid uint64) bool {
 	lm.Lock()
 	defer lm.Unlock()
-	if e, ok := lm.locks[xid]; ok {
-		return e
+	if _, has := lm.uids[uid]; has {
+		return false
 	}
-	e := eidPool.Get().(*entry)
-	e.ts = time.Now()
-	lm.locks[xid] = e
-	return e
+	lm.uids[uid] = time.Now()
+	return true
 }
 
 func (lm *lockManager) clean() {
 	ticker := time.NewTicker(time.Minute)
 	for _ = range ticker.C {
-		count := 0
+		now := time.Now()
 		lm.Lock()
-		for xid, e := range lm.locks {
-			if e.isOld() {
-				count += 1
-				delete(lm.locks, xid)
-				eidPool.Put(e)
+		for uid, ts := range lm.uids {
+			// A minute is enough to avoid the race condition issue for
+			// proposing the same UID for a different entity.
+			if now.Sub(ts) > time.Minute {
+				delete(lm.uids, uid)
 			}
 		}
 		lm.Unlock()
-		// A minute is enough to avoid the race condition issue for
-		// uid allocation to an xid.
 	}
 }
 
 // package level init
 func init() {
 	rand.Seed(time.Now().UnixNano())
-	lmgr = new(lockManager)
-	lmgr.locks = make(map[string]*entry)
-	// TODO(manishrjain): This map should be cleaned up.
-	// go lmgr.clean()
 }
 
 func Init(ps *store.Store) {
 	uidStore = ps
+	lmgr = new(lockManager)
+	lmgr.uids = make(map[uint64]time.Time)
+	go lmgr.clean()
 }
 
 // allocateUniqueUid returns an integer in range:
@@ -114,144 +84,47 @@ func Init(ps *store.Store) {
 // which hasn't already been allocated to other xids. It does this by
 // taking the fingerprint of the xid appended with zero or more spaces
 // until the obtained integer is unique.
-func allocateUniqueUid(xid string, instanceIdx uint64,
-	numInstances uint64) (uid uint64, rerr error) {
+func allocateUniqueUid(instanceIdx uint64, numInstances uint64) uint64 {
 	mod := math.MaxUint64 / numInstances
 	minIdx := instanceIdx * mod
 
-	txid := []byte(xid)
-	val := xid
-	if strings.HasPrefix(xid, "_new_:") {
-		if _, err := rand.Read(txid); err != nil {
-			return 0, err
-		}
-		val = "_new_"
-	}
+	buf := make([]byte, 128)
+	for {
+		_, err := rand.Read(buf)
+		x.Checkf(err, "rand.Read shouldn't throw an error")
 
-	suffix := make([]byte, 1)
-	for i := 0; ; i++ {
-		if i > 0 {
-			_, err := rand.Read(suffix)
-			x.Check(err)
-			txid = append(txid, suffix[0])
-		}
-
-		uid1 := farm.Fingerprint64(txid) // Generate from hash.
-		uid = (uid1 % mod) + minIdx
-		if uid == math.MaxUint64 {
+		uidb := farm.Fingerprint64(buf) // Generate from hash.
+		uid := (uidb % mod) + minIdx
+		if uid == math.MaxUint64 || !lmgr.isNew(uid) {
 			continue
 		}
 
 		// Check if this uid has already been allocated.
-		key := posting.Key(uid, "_xid_") // uid -> "_xid_" -> xid
+		key := posting.Key(uid, "_uid_")
 		pl, decr := posting.GetOrCreate(key, uidStore)
 		defer decr()
 
-		if pl.Length() > 0 {
-			// Something already present here.
-			var p types.Posting
-			pl.Get(&p, 0)
-			continue
+		if pl.Length() == 0 {
+			return uid
 		}
+	}
+	log.Fatalf("This shouldn't be reached.")
+	return 0
+}
 
-		// Uid hasn't been assigned yet.
+// AssignNew assigns N unique uids.
+func AssignNew(N int, instanceIdx uint64, numInstances uint64) x.Mutations {
+	var m x.Mutations
+	for i := 0; i < N; i++ {
+		uid := allocateUniqueUid(instanceIdx, numInstances)
 		t := x.DirectedEdge{
-			Value:     []byte(val), // not txid
+			Entity:    uid,
+			Attribute: "_uid_",
+			Value:     []byte("_taken_"), // not txid
 			Source:    "_assigner_",
 			Timestamp: time.Now(),
 		}
-		_, rerr = pl.AddMutation(context.Background(), t, posting.Set)
-		return uid, rerr
+		m.Set = append(m.Set, t)
 	}
-}
-
-// assignNew assigns a uid to a given xid and writes it to the
-// posting list.
-func assignNew(pl *posting.List, xid string, instanceIdx uint64,
-	numInstances uint64) (uint64, error) {
-
-	entry := lmgr.newOrExisting(xid)
-	entry.Lock()
-	entry.ts = time.Now()
-	defer entry.Unlock()
-
-	if pl.Length() > 1 {
-		log.Fatalf("We shouldn't have more than 1 uid for xid: %v\n", xid)
-
-	} else if pl.Length() > 0 {
-		var p types.Posting
-		if ok := pl.Get(&p, 0); !ok {
-			return 0, errors.New("While retrieving entry from posting list.")
-		}
-		return p.Uid(), nil
-	}
-
-	// No current id exists. Create one.
-	uid, err := allocateUniqueUid(xid, instanceIdx, numInstances)
-	if err != nil {
-		return 0, err
-	}
-
-	t := x.DirectedEdge{
-		ValueId:   uid,
-		Source:    "_assigner_",
-		Timestamp: time.Now(),
-	}
-	_, rerr := pl.AddMutation(context.Background(), t, posting.Set)
-	return uid, rerr
-}
-
-func StringKey(xid string) []byte {
-	return []byte("_uid_|" + xid)
-}
-
-// Get returns the uid of the corresponding xid.
-func Get(xid string) (uid uint64, rerr error) {
-	key := StringKey(xid)
-	pl, decr := posting.GetOrCreate(key, uidStore)
-	defer decr()
-
-	if pl.Length() == 0 {
-		return 0, fmt.Errorf("xid: %v doesn't have any uid assigned.", xid)
-	}
-	if pl.Length() > 1 {
-		log.Fatalf("We shouldn't have more than 1 uid for xid: %v\n", xid)
-	}
-	var p types.Posting
-	if ok := pl.Get(&p, 0); !ok {
-		return 0, fmt.Errorf("While retrieving entry from posting list")
-	}
-	return p.Uid(), nil
-}
-
-// GetOrAssign returns a unique integer (uid) for a given xid if
-// it already exists or assigns a new uid and returns it.
-func GetOrAssign(xid string, instanceIdx uint64,
-	numInstances uint64) (uid uint64, rerr error) {
-
-	// Prefix _new_ requires us to create a new uid(entity).
-	if strings.HasPrefix(xid, "_new_:") {
-		return allocateUniqueUid(xid, instanceIdx, numInstances)
-	}
-
-	key := StringKey(xid)
-	pl, decr := posting.GetOrCreate(key, uidStore)
-	defer decr()
-
-	if pl.Length() == 0 {
-		return assignNew(pl, xid, instanceIdx, numInstances)
-	}
-
-	if pl.Length() > 1 {
-		log.Fatalf("We shouldn't have more than 1 uid for xid: %v\n", xid)
-	} else {
-		// We found one posting.
-		var p types.Posting
-		if ok := pl.Get(&p, 0); !ok {
-			return 0, errors.New("While retrieving entry from posting list")
-		}
-		return p.Uid(), nil
-	}
-	return 0, errors.New("Some unhandled route lead me here." +
-		" Wake the stupid developer up.")
+	return m
 }

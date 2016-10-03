@@ -17,8 +17,6 @@
 package worker
 
 import (
-	"bytes"
-	"encoding/gob"
 	"fmt"
 	"log"
 
@@ -30,40 +28,17 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-// Mutations stores the directed edges for both the set and delete operations.
-type Mutations struct {
-	Set []x.DirectedEdge
-	Del []x.DirectedEdge
-}
-
 const (
 	set = "set"
 	del = "delete"
 )
 
-// Encode gob encodes the mutation which is then sent over to the instance which
-// is supposed to run it.
-func (m *Mutations) Encode() (data []byte, rerr error) {
-	var b bytes.Buffer
-	enc := gob.NewEncoder(&b)
-	rerr = enc.Encode(*m)
-	return b.Bytes(), rerr
-}
-
-// Decode decodes the mutation from a byte slice after receiving the byte slice over
-// the network.
-func (m *Mutations) Decode(data []byte) error {
-	r := bytes.NewReader(data)
-	dec := gob.NewDecoder(r)
-	return dec.Decode(m)
-}
-
 // runMutations goes through all the edges and applies them. It returns the
 // mutations which were not applied in left.
-func runMutations(ctx context.Context, edges []x.DirectedEdge, op byte, left *Mutations) error {
+func runMutations(ctx context.Context, edges []x.DirectedEdge, op byte) error {
 	for _, edge := range edges {
 		if farm.Fingerprint64(
-			[]byte(edge.Attribute))%ws.numInstances != ws.instanceIdx {
+			[]byte(edge.Attribute))%ws.numGroups != ws.groupId {
 			return fmt.Errorf("Predicate fingerprint doesn't match this instance")
 		}
 
@@ -72,60 +47,47 @@ func runMutations(ctx context.Context, edges []x.DirectedEdge, op byte, left *Mu
 		defer decr()
 
 		if err := plist.AddMutationWithIndex(ctx, edge, op); err != nil {
-			if op == posting.Set {
-				left.Set = append(left.Set, edge)
-			} else if op == posting.Del {
-				left.Del = append(left.Del, edge)
-			}
 			log.Printf("Error while adding mutation: %v %v", edge, err)
-			continue
+			return err // abort applying the rest of them.
 		}
 	}
 	return nil
 }
 
 // mutate runs the set and delete mutations.
-func mutate(ctx context.Context, m *Mutations, left *Mutations) error {
+func mutate(ctx context.Context, m *x.Mutations) error {
 	// Running the set instructions first.
-	if err := runMutations(ctx, m.Set, posting.Set, left); err != nil {
+	if err := runMutations(ctx, m.Set, posting.Set); err != nil {
 		return err
 	}
-	if err := runMutations(ctx, m.Del, posting.Del, left); err != nil {
+	if err := runMutations(ctx, m.Del, posting.Del); err != nil {
 		return err
 	}
 	return nil
 }
 
 // runMutate is used to run the mutations on an instance.
-func runMutate(ctx context.Context, idx int, m *Mutations,
-	replies chan *Payload, che chan error) {
-	left := new(Mutations)
-	var err error
-	// We run them locally if idx == instanceIdx
-	if idx == int(ws.instanceIdx) {
-		if err = mutate(ctx, m, left); err != nil {
-			che <- err
-			return
-		}
-		reply := new(Payload)
-		// Encoding and sending back the mutations which were not applied.
-		if reply.Data, err = left.Encode(); err != nil {
-			che <- err
-			return
-		}
-		replies <- reply
-		che <- nil
-		return
-	}
-
-	// Get a connection from the pool and run mutations over the network.
-	pool := ws.GetPool(idx)
-	query := new(Payload)
-	query.Data, err = m.Encode()
+func proposeMutation(ctx context.Context, idx int, m *x.Mutations, che chan error) {
+	data, err := m.Encode()
 	if err != nil {
 		che <- err
 		return
 	}
+
+	// We run them locally if idx == groupId
+	// HACK HACK HACK
+	// if idx == int(ws.groupId) {
+	if true {
+		che <- GetNode().ProposeAndWait(ctx, mutationMsg, data)
+		// che <- GetNode().raft.Propose(ctx, data)
+		return
+	}
+
+	// TODO: Move this to the appropriate place. Propose mutation should only deal with RAFT.
+	// Get a connection from the pool and run mutations over the network.
+	pool := ws.GetPool(idx)
+	query := new(Payload)
+	query.Data = data
 
 	conn, err := pool.Get()
 	if err != nil {
@@ -135,23 +97,19 @@ func runMutate(ctx context.Context, idx int, m *Mutations,
 	defer pool.Put(conn)
 	c := NewWorkerClient(conn)
 
-	reply, err := c.Mutate(ctx, query)
-	if err != nil {
-		che <- err
-		return
-	}
-	replies <- reply
-	che <- nil
+	_, err = c.Mutate(ctx, query)
+	che <- err
 }
 
 // addToMutationArray adds the edges to the appropriate index in the mutationArray,
 // taking into account the op(operation) and the attribute.
-func addToMutationArray(mutationArray []*Mutations, edges []x.DirectedEdge, op string) {
+func addToMutationArray(mutationArray []*x.Mutations, edges []x.DirectedEdge, op string) {
 	for _, edge := range edges {
-		idx := farm.Fingerprint64([]byte(edge.Attribute)) % ws.numInstances
+		// TODO: Determine the right group using rules, instead of modulos.
+		idx := farm.Fingerprint64([]byte(edge.Attribute)) % ws.numGroups
 		mu := mutationArray[idx]
 		if mu == nil {
-			mu = new(Mutations)
+			mu = new(x.Mutations)
 			mutationArray[idx] = mu
 		}
 
@@ -163,23 +121,22 @@ func addToMutationArray(mutationArray []*Mutations, edges []x.DirectedEdge, op s
 	}
 }
 
-// MutateOverNetwork checks which instance should be running the mutations
+// MutateOverNetwork checks which group should be running the mutations
 // according to fingerprint of the predicate and sends it to that instance.
-func MutateOverNetwork(ctx context.Context, m Mutations) (left Mutations, rerr error) {
-	mutationArray := make([]*Mutations, ws.numInstances)
+func MutateOverNetwork(ctx context.Context, m x.Mutations) (rerr error) {
+	mutationArray := make([]*x.Mutations, ws.numGroups)
 
 	addToMutationArray(mutationArray, m.Set, set)
 	addToMutationArray(mutationArray, m.Del, del)
 
-	replies := make(chan *Payload, ws.numInstances)
-	errors := make(chan error, ws.numInstances)
+	errors := make(chan error, ws.numGroups)
 	count := 0
 	for idx, mu := range mutationArray {
 		if mu == nil || (len(mu.Set) == 0 && len(mu.Del) == 0) {
 			continue
 		}
 		count++
-		go runMutate(ctx, idx, mu, replies, errors)
+		go proposeMutation(ctx, idx, mu, errors)
 	}
 
 	// Wait for all the goroutines to reply back.
@@ -189,23 +146,13 @@ func MutateOverNetwork(ctx context.Context, m Mutations) (left Mutations, rerr e
 		case err := <-errors:
 			if err != nil {
 				x.TraceError(ctx, x.Wrapf(err, "Error while running all mutations"))
-				return left, err
+				return err
 			}
 		case <-ctx.Done():
-			return left, ctx.Err()
+			return ctx.Err()
 		}
 	}
-	close(replies)
 	close(errors)
 
-	// Any mutations which weren't applied are added to left which is returned.
-	for reply := range replies {
-		l := new(Mutations)
-		if err := l.Decode(reply.Data); err != nil {
-			return left, err
-		}
-		left.Set = append(left.Set, l.Set...)
-		left.Del = append(left.Del, l.Del...)
-	}
-	return left, nil
+	return nil
 }

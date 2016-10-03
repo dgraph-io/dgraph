@@ -42,6 +42,7 @@ import (
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/query/graph"
 	"github.com/dgraph-io/dgraph/rdf"
+	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/uid"
@@ -52,24 +53,24 @@ import (
 
 var (
 	postingDir  = flag.String("p", "p", "Directory to store posting lists")
-	uidDir      = flag.String("u", "u", "XID UID posting lists directory")
 	mutationDir = flag.String("m", "m", "Directory to store mutations")
 	port        = flag.Int("port", 8080, "Port to run server on.")
 	numcpu      = flag.Int("cores", runtime.NumCPU(),
 		"Number of cores to be used by the process")
-	instanceIdx = flag.Uint64("idx", 0,
-		"serves only entities whose Fingerprint % numInstance == instanceIdx.")
-	workers = flag.String("workers", "",
-		"Comma separated list of IP addresses of workers")
+	raftId     = flag.Uint64("idx", 1, "RAFT ID that this server will use to join RAFT groups.")
+	cluster    = flag.String("cluster", "", "List of peers in this format: ID1:URL1,ID2:URL2,...")
+	peer       = flag.String("peer", "", "Address of any peer.")
 	workerPort = flag.String("workerport", ":12345",
 		"Port used by worker for internal communication.")
 	nomutations = flag.Bool("nomutations", false, "Don't allow mutations on this server.")
 	shutdown    = flag.Bool("shutdown", false, "Allow client to send shutdown signal.")
 	tracing     = flag.Float64("trace", 0.5, "The ratio of queries to trace.")
-	schemaFile  = flag.String("schema", "", "Path to the file that specifies schema in json format")
 	cpuprofile  = flag.String("cpu", "", "write cpu profile to file")
 	memprofile  = flag.String("mem", "", "write memory profile to file")
+	schemaFile  = flag.String("schema", "", "Path to schema file")
 	closeCh     = make(chan struct{})
+
+	groupId uint64 = 0 // ALL
 )
 
 type mutationResult struct {
@@ -112,6 +113,7 @@ func convertToNQuad(ctx context.Context, mutation string) ([]rdf.NQuad, error) {
 	var nquads []rdf.NQuad
 	r := strings.NewReader(mutation)
 	scanner := bufio.NewScanner(r)
+	x.Trace(ctx, "Converting to NQuad")
 
 	// Scanning the mutation string, one line at a time.
 	for scanner.Scan() {
@@ -132,29 +134,26 @@ func convertToNQuad(ctx context.Context, mutation string) ([]rdf.NQuad, error) {
 func convertToEdges(ctx context.Context, nquads []rdf.NQuad) (mutationResult, error) {
 	var edges []x.DirectedEdge
 	var mr mutationResult
-	allocatedIds := make(map[string]uint64)
 
-	// xidToUid is used to store ids which are not uids. It is sent to the instance
-	// which has the xid <-> uid mapping to get uids.
-	xidToUid := make(map[string]uint64)
+	newUids := make(map[string]uint64)
 	for _, nq := range nquads {
-		if !strings.HasPrefix(nq.Subject, "_uid_:") {
-			xidToUid[nq.Subject] = 0
+		if strings.HasPrefix(nq.Subject, "_new_:") {
+			newUids[nq.Subject] = 0
 		}
-		if len(nq.ObjectId) > 0 && !strings.HasPrefix(nq.ObjectId, "_uid_:") {
-			xidToUid[nq.ObjectId] = 0
+		if len(nq.ObjectId) > 0 && strings.HasPrefix(nq.ObjectId, "_new_:") {
+			newUids[nq.ObjectId] = 0
 		}
 	}
-	if len(xidToUid) > 0 {
-		if err := worker.GetOrAssignUidsOverNetwork(ctx, xidToUid); err != nil {
+	if len(newUids) > 0 {
+		if err := worker.AssignUidsOverNetwork(ctx, newUids); err != nil {
 			x.TraceError(ctx, x.Wrapf(err, "Error while GetOrAssignUidsOverNetwork"))
 			return mr, err
 		}
 	}
 
 	for _, nq := range nquads {
-		// Get edges from nquad using xidToUid.
-		edge, err := nq.ToEdgeUsing(xidToUid)
+		// Get edges from nquad using newUids.
+		edge, err := nq.ToEdgeUsing(newUids)
 		if err != nil {
 			x.TraceError(ctx, x.Wrapf(err, "Error while converting to edge: %v", nq))
 			return mr, err
@@ -162,34 +161,25 @@ func convertToEdges(ctx context.Context, nquads []rdf.NQuad) (mutationResult, er
 		edges = append(edges, edge)
 	}
 
-	for k, v := range xidToUid {
-		if strings.HasPrefix(k, "_new_:") {
-			allocatedIds[k[6:]] = v
-		}
+	resultUids := make(map[string]uint64)
+	// Strip out _new_: prefix from the keys.
+	for k, v := range newUids {
+		x.Assertf(strings.HasPrefix(k, "_new_:"), "Expected prefix _new_: in key: %v", k)
+		resultUids[k[6:]] = v
 	}
 
 	mr = mutationResult{
 		edges:   edges,
-		newUids: allocatedIds,
+		newUids: resultUids,
 	}
 	return mr, nil
 }
 
-func applyMutations(ctx context.Context, m worker.Mutations) error {
-	left, err := worker.MutateOverNetwork(ctx, m)
+func applyMutations(ctx context.Context, m x.Mutations) error {
+	err := worker.MutateOverNetwork(ctx, m)
 	if err != nil {
 		x.TraceError(ctx, x.Wrapf(err, "Error while MutateOverNetwork"))
 		return err
-	}
-	if len(left.Set) > 0 || len(left.Del) > 0 {
-		x.TraceError(ctx, x.Errorf("%d edges couldn't be applied", len(left.Del)+len(left.Set)))
-		for _, e := range left.Set {
-			x.TraceError(ctx, x.Errorf("Unable to apply set mutation for edge: %v", e))
-		}
-		for _, e := range left.Del {
-			x.TraceError(ctx, x.Errorf("Unable to apply delete mutation for edge: %v", e))
-		}
-		return x.Errorf("Unapplied mutations")
 	}
 	return nil
 }
@@ -198,20 +188,49 @@ func mutationToNQuad(nq []*graph.NQuad) []rdf.NQuad {
 	resp := make([]rdf.NQuad, 0, len(nq))
 
 	for _, n := range nq {
-		resp = append(resp, rdf.NQuad{
-			Subject:     n.Sub,
-			Predicate:   n.Pred,
-			ObjectId:    n.ObjId,
-			ObjectValue: n.ObjVal,
-			Label:       n.Label,
-		})
+		nq := rdf.NQuad{
+			Subject:   n.Sub,
+			Predicate: n.Pred,
+			ObjectId:  n.ObjId,
+			Label:     n.Label,
+		}
+		v, t := typeValueFromNQuad(n)
+		if v != nil {
+			nq.ObjectValue, _ = v.MarshalBinary()
+			nq.ObjectType = byte(t.ID())
+		}
+		resp = append(resp, nq)
 	}
 	return resp
 }
 
+func typeValueFromNQuad(nq *graph.NQuad) (types.TypeValue, types.Scalar) {
+	if nq.Value == nil || nq.Value.Val == nil {
+		return nil, types.ByteArrayType
+	}
+	switch v := nq.Value.Val.(type) {
+	case *graph.Value_BytesVal:
+		return types.Bytes(v.BytesVal), types.ByteArrayType
+	case *graph.Value_IntVal:
+		return types.Int32(v.IntVal), types.Int32Type
+	case *graph.Value_StrVal:
+		return types.String(v.StrVal), types.StringType
+	case *graph.Value_BoolVal:
+		return types.Bool(v.BoolVal), types.BooleanType
+	case *graph.Value_DoubleVal:
+		return types.Float(v.DoubleVal), types.FloatType
+	case nil:
+		log.Fatalf("Val being nil is already handled")
+		return nil, types.ByteArrayType
+	default:
+		// Unknown type
+		return nil, types.ByteArrayType
+	}
+}
+
 func convertAndApply(ctx context.Context, set []rdf.NQuad, del []rdf.NQuad) (map[string]uint64, error) {
 	var allocIds map[string]uint64
-	var m worker.Mutations
+	var m x.Mutations
 	var err error
 	var mr mutationResult
 
@@ -279,11 +298,34 @@ func mutationHandler(ctx context.Context, mu *gql.Mutation) (map[string]uint64, 
 // input value is of the correct type
 func validateTypes(nquads []rdf.NQuad) error {
 	for _, nquad := range nquads {
-		if t := gql.SchemaType(nquad.Predicate); t != nil && t.IsScalar() {
+		//TODO(Ashwin): Ensure global types so that muations can be type checked
+		if t := schema.TypeOf(nquad.Predicate); t != nil && t.IsScalar() {
 			// Currently, only scalar types are present
-			stype := t.(types.Scalar)
-			if _, err := stype.Unmarshaler.FromText(nquad.ObjectValue); err != nil {
-				return err
+			schemaType := t.(types.Scalar)
+			storageType, ok := types.TypeForID(types.TypeID(nquad.ObjectType))
+			if !ok {
+				log.Fatalf("Parsing created invalid type %v", nquad.ObjectType)
+			}
+			if storageType == types.ByteArrayType {
+				// Storage type was unspecified in the RDF, so we convert the data to the schema
+				// type.
+				v, err := schemaType.Unmarshaler.FromText(nquad.ObjectValue)
+				if err != nil {
+					return err
+				}
+				nquad.ObjectValue, err = v.MarshalBinary()
+				if err != nil {
+					return err
+				}
+				nquad.ObjectType = byte(schemaType.ID())
+			} else if storageType != schemaType {
+				v, err := storageType.(types.Scalar).Unmarshaler.FromBinary(nquad.ObjectValue)
+				if err != nil {
+					return err
+				}
+				if _, err := schemaType.Convert(v); err != nil {
+					return err
+				}
 			}
 		}
 	}
@@ -334,6 +376,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var allocIds map[string]uint64
+	var allocIdsStr map[string]string
 	// If we have mutations, run them first.
 	if mu != nil && (len(mu.Set) > 0 || len(mu.Del) > 0) {
 		if allocIds, err = mutationHandler(ctx, mu); err != nil {
@@ -341,13 +384,18 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 			x.SetStatus(w, x.Error, err.Error())
 			return
 		}
+		// convert the new UIDs to hex string.
+		allocIdsStr = make(map[string]string)
+		for k, v := range allocIds {
+			allocIdsStr[k] = fmt.Sprintf("%#x", v)
+		}
 	}
 
 	if gq == nil || (gq.UID == 0 && len(gq.XID) == 0) {
 		mp := map[string]interface{}{
 			"code":    x.ErrorOk,
 			"message": "Done",
-			"uids":    allocIds,
+			"uids":    allocIdsStr,
 		}
 		if js, err := json.Marshal(mp); err == nil {
 			w.Write(js)
@@ -502,10 +550,6 @@ func checkFlagsAndInitDirs() {
 	if err != nil {
 		log.Fatalf("Error while creating the filepath for mutations: %v", err)
 	}
-	err = os.MkdirAll(*uidDir, 0700)
-	if err != nil {
-		log.Fatalf("Error while creating the filepath for uids: %v", err)
-	}
 }
 
 func serveGRPC(l net.Listener) {
@@ -523,6 +567,8 @@ func serveHTTP(l net.Listener) {
 }
 
 func setupServer() {
+	go worker.RunServer(*workerPort) // For internal communication.
+
 	l, err := net.Listen("tcp", fmt.Sprintf(":%d", *port))
 	if err != nil {
 		log.Fatal(err)
@@ -558,6 +604,7 @@ func setupServer() {
 }
 
 func main() {
+	rand.Seed(time.Now().UnixNano())
 	x.Init()
 	checkFlagsAndInitDirs()
 
@@ -566,41 +613,37 @@ func main() {
 	defer ps.Close()
 
 	posting.InitIndex(ps)
-
-	addrs := strings.Split(*workers, ",")
-	lenAddr := uint64(len(addrs))
-	if lenAddr == 0 {
-		// If no worker is specified, then we're it.
-		lenAddr = 1
-	}
-
 	posting.Init()
+
 	var ws *worker.State
-	if *instanceIdx != 0 {
-		ws = worker.NewState(ps, nil, *instanceIdx, lenAddr)
+	if groupId != 0 { // HACK: This will currently not run.
+		ws = worker.NewState(ps, groupId, 1) // TODO: Set number of groups here.
 		worker.SetWorkerState(ws)
 		uid.Init(nil)
-	} else {
-		uidStore, err := store.NewStore(*uidDir)
-		if err != nil {
-			log.Fatalf("error initializing uid store: %s", err)
-		}
-		defer uidStore.Close()
-		// Only server instance 0 will have uidStore
-		ws = worker.NewState(ps, uidStore, *instanceIdx, lenAddr)
+
+	} else { // handles group 0.
+		ws = worker.NewState(ps, groupId, 1) // TODO: Set number of groups here.
 		worker.SetWorkerState(ws)
-		uid.Init(uidStore)
+		uid.Init(ps)
 	}
 
+	my := "localhost" + *workerPort
+	worker.InitNode(*raftId, my)
+	worker.GetNode().StartNode(*cluster)
+	if len(*peer) > 0 {
+		go worker.GetNode().JoinCluster(*peer, ws)
+	}
+	go worker.GetNode().SnapshotPeriodically()
+
+	// node := worker.GetNode()
+	// go node.Campaign(context.TODO())
+
 	if len(*schemaFile) > 0 {
-		err = gql.LoadSchema(*schemaFile)
+		err = schema.Parse(*schemaFile)
 		if err != nil {
 			log.Fatalf("Error while loading schema:%v", err)
 		}
 	}
-	// Initiate internal worker communication.
-	ws.Connect(addrs, *workerPort)
-
 	// Setup external communication.
 	setupServer()
 }

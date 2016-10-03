@@ -19,6 +19,7 @@ package posting
 import (
 	"bytes"
 	"context"
+	"crypto/md5"
 	"encoding/binary"
 	"fmt"
 	"log"
@@ -270,6 +271,7 @@ func (l *List) getPostingList() *types.PostingList {
 	if buf == nil || len(buf.d) == 0 {
 		nbuf := new(buffer)
 		var err error
+		x.Assert(l.pstore != nil)
 		if nbuf.d, err = l.pstore.Get(l.key); err != nil || nbuf.d == nil {
 			// Error. Just set to empty.
 			nbuf.d = make([]byte, len(empty))
@@ -285,6 +287,7 @@ func (l *List) getPostingList() *types.PostingList {
 }
 
 // Caller must hold at least a read lock.
+// TODO: Consider using the new sort.Search function.
 func (l *List) lePostingIndex(maxUid uint64) (int, uint64) {
 	posting := l.getPostingList()
 	left, right := 0, posting.PostingsLength()-1
@@ -316,6 +319,7 @@ func (l *List) lePostingIndex(maxUid uint64) (int, uint64) {
 	return sofar, p.Uid()
 }
 
+// TODO: Consider using the new sort.Search function.
 func (l *List) leMutationIndex(maxUid uint64) (int, uint64) {
 	left, right := 0, len(l.mindex)-1
 	sofar := -1
@@ -696,10 +700,22 @@ func (l *List) merge() (merged bool, rerr error) {
 	sz := l.length()
 	b := flatbuffers.NewBuilder(0)
 	offsets := make([]flatbuffers.UOffsetT, sz)
+
+	ubuf := make([]byte, 16)
+	h := md5.New()
 	for i := 0; i < sz; i++ {
 		if ok := l.get(&p, i); !ok {
 			log.Fatalf("Idx: %d. Unable to parse posting.", i)
 		}
+
+		// Add individual posting to hash.
+		n := binary.PutVarint(ubuf, int64(i))
+		h.Write(ubuf[0:n])
+		n = binary.PutUvarint(ubuf, p.Uid())
+		h.Write(ubuf[0:n])
+		h.Write(p.ValueBytes())
+		h.Write(p.Source())
+
 		offsets[i] = addPosting(b, p)
 	}
 	types.PostingListStartPostingsVector(b, sz)
@@ -708,7 +724,9 @@ func (l *List) merge() (merged bool, rerr error) {
 	}
 	vend := b.EndVector(sz)
 
+	co := b.CreateString(fmt.Sprintf("%x", h.Sum(nil)))
 	types.PostingListStart(b)
+	types.PostingListAddChecksum(b, co)
 	types.PostingListAddPostings(b, vend)
 	end := types.PostingListEnd(b)
 	b.Finish(end)

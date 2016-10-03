@@ -161,6 +161,9 @@ func shortenedErrorString(err error) string {
 
 // TraceError is like Trace but it logs just an error, which may have stacktrace.
 func TraceError(ctx context.Context, err error) {
+	if err == nil {
+		return
+	}
 	if !*debugMode {
 		Trace(ctx, err.Error())
 		return

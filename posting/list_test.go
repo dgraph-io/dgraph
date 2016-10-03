@@ -644,6 +644,136 @@ func TestAddMutation_mrjn1(t *testing.T) {
 	}
 }
 
+func TestAddMutation_checksum(t *testing.T) {
+	var c1, c2, c3 string
+
+	dir, err := ioutil.TempDir("", "storetest_")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer os.RemoveAll(dir)
+
+	ps, err := store.NewStore(dir)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	{
+		ol := getNew()
+		key := Key(10, "value")
+		ol.init(key, ps)
+		ctx := context.Background()
+
+		edge := x.DirectedEdge{
+			ValueId:   1,
+			Source:    "jchiu",
+			Timestamp: time.Now(),
+		}
+		if _, err := ol.AddMutation(ctx, edge, Set); err != nil {
+			t.Error(err)
+		}
+		edge = x.DirectedEdge{
+			ValueId:   3,
+			Source:    "jchiu",
+			Timestamp: time.Now(),
+		}
+		if _, err := ol.AddMutation(ctx, edge, Set); err != nil {
+			t.Error(err)
+		}
+		if merged, err := ol.MergeIfDirty(ctx); err != nil {
+			t.Error(err)
+		} else if !merged {
+			t.Error(x.Errorf("Unable to merge posting list."))
+		}
+		pl := ol.getPostingList()
+		c1 = string(pl.Checksum())
+	}
+
+	{
+		ol := getNew()
+		key := Key(10, "value2")
+		ol.init(key, ps)
+		ctx := context.Background()
+
+		// Add in reverse.
+		edge := x.DirectedEdge{
+			ValueId:   3,
+			Source:    "jchiu",
+			Timestamp: time.Now(),
+		}
+		if _, err := ol.AddMutation(ctx, edge, Set); err != nil {
+			t.Error(err)
+		}
+		edge = x.DirectedEdge{
+			ValueId:   1,
+			Source:    "jchiu",
+			Timestamp: time.Now(),
+		}
+		if _, err := ol.AddMutation(ctx, edge, Set); err != nil {
+			t.Error(err)
+		}
+
+		if merged, err := ol.MergeIfDirty(ctx); err != nil {
+			t.Error(err)
+		} else if !merged {
+			t.Error(x.Errorf("Unable to merge posting list."))
+		}
+		pl := ol.getPostingList()
+		c2 = string(pl.Checksum())
+	}
+
+	if c1 != c2 {
+		t.Errorf("Checksums should match: %v %v", c1, c2)
+	}
+
+	{
+		ol := getNew()
+		key := Key(10, "value3")
+		ol.init(key, ps)
+		ctx := context.Background()
+
+		// Add in reverse.
+		edge := x.DirectedEdge{
+			ValueId:   3,
+			Source:    "jchiu",
+			Timestamp: time.Now(),
+		}
+		if _, err := ol.AddMutation(ctx, edge, Set); err != nil {
+			t.Error(err)
+		}
+		edge = x.DirectedEdge{
+			ValueId:   1,
+			Source:    "jchiu",
+			Timestamp: time.Now(),
+		}
+		if _, err := ol.AddMutation(ctx, edge, Set); err != nil {
+			t.Error(err)
+		}
+		edge = x.DirectedEdge{
+			ValueId:   4,
+			Source:    "jchiu",
+			Timestamp: time.Now(),
+		}
+		if _, err := ol.AddMutation(ctx, edge, Set); err != nil {
+			t.Error(err)
+		}
+
+		if merged, err := ol.MergeIfDirty(ctx); err != nil {
+			t.Error(err)
+		} else if !merged {
+			t.Error(x.Errorf("Unable to merge posting list."))
+		}
+		pl := ol.getPostingList()
+		c3 = string(pl.Checksum())
+	}
+
+	if c3 == c1 {
+		t.Errorf("Checksum should be different: %v %v", c1, c3)
+	}
+}
+
 func benchmarkAddMutations(n int, b *testing.B) {
 	// logrus.SetLevel(logrus.DebugLevel)
 	l := getNew()

@@ -41,6 +41,12 @@ type Scalar struct {
 	Unmarshaler Unmarshaler
 }
 
+// Object represents all object types in the schema definition.
+type Object struct {
+	Name   string
+	Fields map[string]string //field to type relationship
+}
+
 // TypeValue is the interface that all scalar type values need to implement.
 type TypeValue interface {
 	encoding.TextMarshaler
@@ -66,7 +72,12 @@ func (s Scalar) ID() TypeID {
 	return s.id
 }
 
-// IsScalar function to assert scalar type
+// IsScalar returns true if the object is of scalar type.
 func (s Scalar) IsScalar() bool {
 	return true
+}
+
+// IsScalar returns true if the object is of scalar type.
+func (o Object) IsScalar() bool {
+	return false
 }

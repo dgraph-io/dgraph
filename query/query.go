@@ -24,16 +24,19 @@ import (
 	"fmt"
 	"log"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/query/graph"
+	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
+	farm "github.com/dgryski/go-farm"
 	"github.com/google/flatbuffers/go"
 )
 
@@ -172,13 +175,39 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 	// Get results from all children first.
 	cResult := make(map[uint64]interface{})
 
+	// ignoreUids would contain those UIDs whose scalar childlren dont obey the
+	// types specified in the schema.
+	ignoreUids := make(map[uint64]bool)
 	for _, child := range sg.Children {
 		m, err := postTraverse(child)
 		if err != nil {
 			return result, err
 		}
+
+		// condFlag is used to ensure that the child is a required part of the
+		// current node according to schema. Only then should we check for its
+		// validity.
+		var condFlag bool
+		if obj, ok := schema.TypeOf(sg.Attr).(types.Object); ok {
+			if _, ok := obj.Fields[child.Attr]; ok {
+				condFlag = true
+			}
+		}
+
 		// Merge results from all children, one by one.
 		for k, v := range m {
+			if _, ok := v.(map[string]interface{})["_inv_"]; ok {
+				if condFlag {
+					ignoreUids[k] = true
+					delete(cResult, k)
+				} else {
+					continue
+				}
+			}
+			if ignoreUids[k] {
+				continue
+			}
+
 			if val, present := cResult[k]; !present {
 				cResult[k] = v
 			} else {
@@ -251,15 +280,7 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 				l = append(l, mergeInterfaces(m, ival))
 			}
 		}
-		if len(l) == 1 {
-			m := make(map[string]interface{})
-			if sg.Params.Alias != "" {
-				m[sg.Params.Alias] = l[0]
-			} else {
-				m[sg.Attr] = l[0]
-			}
-			result[q.Uids(i)] = m
-		} else if len(l) > 1 {
+		if len(l) > 0 {
 			m := make(map[string]interface{})
 			if sg.Params.Alias != "" {
 				m[sg.Params.Alias] = l
@@ -276,12 +297,22 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 		if ok := values.Values(&tv, i); !ok {
 			return result, fmt.Errorf("While parsing value")
 		}
-		val := tv.ValBytes()
-		if bytes.Equal(val, nil) {
+		valBytes := tv.ValBytes()
+		m := make(map[string]interface{})
+		if bytes.Equal(valBytes, nil) {
+
 			// We do this, because we typically do set values, even though
 			// they might be nil. This is to ensure that the index of the query uids
 			// and the index of the results can remain in sync.
+			if sg.Params.AttrType != nil && sg.Params.AttrType.IsScalar() {
+				m["_inv_"] = true
+				result[q.Uids(i)] = m
+			}
 			continue
+		}
+		val, storageType, err := getValue(tv)
+		if err != nil {
+			return result, err
 		}
 
 		if pval, present := result[q.Uids(i)]; present {
@@ -289,16 +320,15 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 				" Previous value detected. A uid -> list of uids / value. Not both",
 				pval, q.Uids(i), val)
 		}
-		m := make(map[string]interface{})
 		if sg.Params.GetUid || sg.Params.isDebug {
 			m["_uid_"] = fmt.Sprintf("%#x", q.Uids(i))
 		}
 		if sg.Params.AttrType == nil {
-			// No type defined for attr in type system/schema, hence return string value
+			// No type defined for attr in type system/schema, hence return the original value
 			if sg.Params.Alias != "" {
-				m[sg.Params.Alias] = string(val)
+				m[sg.Params.Alias] = val
 			} else {
-				m[sg.Attr] = string(val)
+				m[sg.Attr] = val
 			}
 		} else {
 			// type assertion for scalar type values
@@ -306,10 +336,18 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 				return result, fmt.Errorf("Unknown Scalar:%v. Leaf predicate:'%v' must be"+
 					" one of the scalar types defined in the schema.", sg.Params.AttrType, sg.Attr)
 			}
-			stype := sg.Params.AttrType.(types.Scalar)
-			lval, err := stype.Unmarshaler.FromText(val)
-			if err != nil {
-				return result, err
+			schemaType := sg.Params.AttrType.(types.Scalar)
+			lval := val
+			if schemaType != storageType {
+				// The schema and storage types do not match, so we do a type conversion.
+				var err error
+				lval, err = schemaType.Convert(val)
+				if err != nil {
+					// We ignore schema conversion errors and not include the values in the result
+					m["_inv_"] = true
+					result[q.Uids(i)] = m
+					continue
+				}
 			}
 			if sg.Params.Alias != "" {
 				m[sg.Params.Alias] = lval
@@ -320,6 +358,24 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 		result[q.Uids(i)] = m
 	}
 	return result, nil
+}
+
+// gets the value from the task.
+func getValue(tv task.Value) (types.TypeValue, types.Type, error) {
+	vType := tv.ValType()
+	valBytes := tv.ValBytes()
+	stype, _ := types.TypeForID(types.TypeID(vType))
+	if stype == nil {
+		return nil, nil, x.Errorf("Invalid type: %v", vType)
+	}
+	if !stype.IsScalar() {
+		return nil, nil, x.Errorf("Unknown scalar type :%v", vType)
+	}
+	val, err := stype.(types.Scalar).Unmarshaler.FromBinary(valBytes)
+	if err != nil {
+		return nil, nil, err
+	}
+	return val, stype, nil
 }
 
 // ToJSON converts the internal subgraph object to JSON format which is then sent
@@ -400,6 +456,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 	var properties []*graph.Property
 	var children []*graph.Node
 
+	invalidUids := make(map[uint64]bool)
 	// We go through all predicate children of the subgraph.
 	for _, pc := range sg.Children {
 		r := pc.Result
@@ -417,8 +474,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 		var tv task.Value
 
 		if sg.Count != nil && sg.Count.CountLength() > 0 {
-			count := strconv.Itoa(int(sg.Count.Count(idx)))
-			p := &graph.Property{Prop: "_count_", Val: []byte(count)}
+			p := createProperty("_count_", types.Int32(sg.Count.Count(idx)))
 			uc := &graph.Node{
 				Attribute:  pc.Attr,
 				Properties: []*graph.Property{p},
@@ -442,37 +498,59 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 					uc.Uid = uid
 				}
 				if rerr := pc.preTraverse(uid, uc); rerr != nil {
-					log.Printf("Error while traversal: %v", rerr)
-					return rerr
+					if rerr.Error() == "_INV_" {
+						invalidUids[uid] = true
+					} else {
+						log.Printf("Error while traversal: %v", rerr)
+						return rerr
+					}
 				}
-				children = append(children, uc)
+				if !invalidUids[uid] {
+					children = append(children, uc)
+				}
 			}
 		} else {
 			if ok := pc.Values.Values(&tv, idx); !ok {
 				return x.Errorf("While parsing value")
 			}
-			v := tv.ValBytes()
 
-			//do type checking on response values
-			if pc.Params.AttrType != nil {
+			valBytes := tv.ValBytes()
+			v, storageType, err := getValue(tv)
+			if err != nil {
+				return err
+			}
+
+			if pc.Attr == "_xid_" {
+				txt, err := v.MarshalText()
+				if err != nil {
+					return err
+				}
+				dst.Xid = string(txt)
+				// We don't want to add _uid_ to properties map.
+			} else if pc.Attr == "_uid_" {
+				continue
+			} else if pc.Params.AttrType != nil {
+				//do type checking on response values
 				// type assertion for scalar type values
 				if !pc.Params.AttrType.IsScalar() {
 					return fmt.Errorf("Unknown Scalar:%v. Leaf predicate:'%v' must be"+
 						" one of the scalar types defined in the schema.", pc.Params.AttrType, pc.Attr)
 				}
-				stype := pc.Params.AttrType.(types.Scalar)
-				if _, err := stype.Unmarshaler.FromText(v); err != nil {
-					return err
+				schemaType := pc.Params.AttrType.(types.Scalar)
+				sv := v
+				if schemaType != storageType {
+					// schema types don't match so we convert
+					var err error
+					sv, err = schemaType.Convert(v)
+					if bytes.Equal(valBytes, nil) || err != nil {
+						// skip values that don't convert.
+						return fmt.Errorf("_INV_")
+					}
 				}
-			}
-
-			if pc.Attr == "_xid_" {
-				dst.Xid = string(v)
-				// We don't want to add _uid_ to properties map.
-			} else if pc.Attr == "_uid_" {
-				continue
+				p := createProperty(pc.Attr, sv)
+				properties = append(properties, p)
 			} else {
-				p := &graph.Property{Prop: pc.Attr, Val: v}
+				p := createProperty(pc.Attr, v)
 				properties = append(properties, p)
 			}
 		}
@@ -480,6 +558,11 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 
 	dst.Properties, dst.Children = properties, children
 	return nil
+}
+
+func createProperty(prop string, v types.TypeValue) *graph.Property {
+	pval := toProtoValue(v)
+	return &graph.Property{Prop: prop, Value: pval}
 }
 
 // ToProtocolBuffer method transforms the predicate based subgraph to an
@@ -506,12 +589,44 @@ func (sg *SubGraph) ToProtocolBuffer(l *Latency) (*graph.Node, error) {
 	return n, nil
 }
 
+func isPresent(list []string, str string) bool {
+	for _, v := range list {
+		if v == str {
+			return true
+		}
+	}
+	return false
+}
+
 func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 	// Typically you act on the current node, and leave recursion to deal with
 	// children. But, in this case, we don't want to muck with the current
 	// node, because of the way we're dealing with the root node.
 	// So, we work on the children, and then recurse for grand children.
+
+	var scalars []string
+	// Add scalar children nodes based on schema
+	if obj, ok := sg.Params.AttrType.(types.Object); ok {
+		// Add scalar fields in the level to children
+		list := schema.ScalarList(obj.Name)
+		for _, it := range list {
+			args := params{
+				AttrType: it.Typ,
+				isDebug:  sg.Params.isDebug,
+			}
+			dst := &SubGraph{
+				Attr:   it.Field,
+				Params: args,
+			}
+			sg.Children = append(sg.Children, dst)
+			scalars = append(scalars, it.Field)
+		}
+	}
+
 	for _, gchild := range gq.Children {
+		if isPresent(scalars, gchild.Attr) {
+			continue
+		}
 		if gchild.Attr == "_count_" {
 			if len(gq.Children) > 1 {
 				return errors.New("Cannot have other attributes with count")
@@ -526,8 +641,22 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 			sg.Params.GetUid = true
 		}
 
+		// Determine the type of current node.
+		var attrType types.Type
+		if sg.Params.AttrType != nil {
+			if objType, ok := sg.Params.AttrType.(types.Object); ok {
+				attrType = schema.TypeOf(objType.Fields[gchild.Attr])
+			}
+		} else {
+			// Child is explicitly specified as some type.
+			if objType := schema.TypeOf(gchild.Attr); objType != nil {
+				if o, ok := objType.(types.Object); ok && o.Name == gchild.Attr {
+					attrType = objType
+				}
+			}
+		}
 		args := params{
-			AttrType: gql.SchemaType(gchild.Attr),
+			AttrType: attrType,
 			Alias:    gchild.Alias,
 			isDebug:  sg.Params.isDebug,
 		}
@@ -581,14 +710,8 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	// This would set the Result field in SubGraph,
 	// and populate the children for attributes.
 	if len(exid) > 0 {
-		xidToUid := make(map[string]uint64)
-		xidToUid[exid] = 0
-		if err := worker.GetOrAssignUidsOverNetwork(ctx, xidToUid); err != nil {
-			x.TraceError(ctx, x.Wrapf(err, "Error while getting uids over network"))
-			return nil, err
-		}
-
-		euid = xidToUid[exid]
+		x.Assertf(!strings.HasPrefix(exid, "_new_:"), "Query shouldn't contain _new_")
+		euid = farm.Fingerprint64([]byte(exid))
 		x.Trace(ctx, "Xid: %v Uid: %v", exid, euid)
 	}
 
@@ -600,7 +723,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 
 	// sg is to be returned.
 	args := params{
-		AttrType: gql.SchemaType(gq.Attr),
+		AttrType: schema.TypeOf(gq.Attr),
 		IsRoot:   true,
 		isDebug:  gq.Attr == "debug",
 	}
@@ -777,15 +900,19 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, rch chan error) {
 		return
 	}
 
-	// Let's execute it in a tree fashion. Each SubGraph would break off
-	// as many goroutines as it's children; which would then recursively
-	// do the same thing.
-	// Buffered channel to ensure no-blockage.
+	var processed, leftToProcess []*SubGraph
+	// First iterate over the value nodes and check for validity.
 	childchan := make(chan error, len(sg.Children))
 	for i := 0; i < len(sg.Children); i++ {
 		child := sg.Children[i]
-		child.Query = createTaskQuery(child, sg.sorted, nil, nil)
-		go ProcessGraph(ctx, child, childchan)
+		if child.Params.AttrType == nil || child.Params.AttrType.IsScalar() {
+			processed = append(processed, child)
+			child.Query = createTaskQuery(child, sg.sorted, nil, nil)
+			go ProcessGraph(ctx, child, childchan)
+		} else {
+			leftToProcess = append(leftToProcess, child)
+			childchan <- nil
+		}
 	}
 
 	// Now get all the results back.
@@ -804,6 +931,89 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, rch chan error) {
 			return
 		}
 	}
+
+	// If all the child nodes are processed, return.
+	if len(leftToProcess) == 0 {
+		rch <- nil
+		return
+	}
+
+	sgObj, ok := schema.TypeOf(sg.Attr).(types.Object)
+	invalidUids := make(map[uint64]bool)
+	// Check the results of the child and eliminate uids without all results.
+	if ok {
+		for _, node := range processed {
+			if _, present := sgObj.Fields[node.Attr]; !present {
+				continue
+			}
+			var tv task.Value
+			//rNode := new(task.Result)
+			//x.ParseTaskResult(rNode, node.Result)
+			// rNode ValuesLength() is equal to len(sorted).
+			for i := 0; i < node.Values.ValuesLength(); i++ {
+				uid := sg.sorted[i]
+				if ok := node.Values.Values(&tv, i); !ok {
+					invalidUids[uid] = true
+				}
+
+				valBytes := tv.ValBytes()
+				v, storageType, err := getValue(tv)
+				if err != nil || bytes.Equal(valBytes, nil) {
+					// The value is not as requested in schema.
+					invalidUids[uid] = true
+					continue
+				}
+
+				// type assertion for scalar type values
+				if !node.Params.AttrType.IsScalar() {
+					rch <- fmt.Errorf("Fatal mistakes in type.")
+				}
+
+				schemaType := node.Params.AttrType.(types.Scalar)
+				if schemaType != storageType {
+					if _, err = schemaType.Convert(v); err != nil {
+						invalidUids[uid] = true
+					}
+				}
+			}
+		}
+	}
+
+	// Filter out the invalid UIDs.
+	j := 0
+	for i := 0; i < len(sg.sorted); i++ {
+		if invalidUids[sg.sorted[i]] {
+			continue
+		}
+		sg.sorted[j] = sg.sorted[i]
+		j++
+	}
+	sg.sorted = sg.sorted[:j]
+
+	// Now process next level with valid UIDs.
+	childchan = make(chan error, len(leftToProcess))
+	for _, child := range leftToProcess {
+		child.Query = createTaskQuery(child, sg.sorted, nil, nil)
+		go ProcessGraph(ctx, child, childchan)
+	}
+
+	// Now get the results back.
+	for i := 0; i < len(leftToProcess); i++ {
+		select {
+		case err = <-childchan:
+			x.Trace(ctx, "Reply from child. Index: %v Attr: %v", i, sg.Children[i].Attr)
+			if err != nil {
+				x.Trace(ctx, "Error while processing child task: %v", err)
+				rch <- err
+				return
+			}
+		case <-ctx.Done():
+			x.Trace(ctx, "Context done before full execution: %v", ctx.Err())
+			rch <- ctx.Err()
+			return
+		}
+	}
+
 	rch <- nil
 }
 

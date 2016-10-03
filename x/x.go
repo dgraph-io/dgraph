@@ -17,7 +17,9 @@
 package x
 
 import (
+	"bytes"
 	"context"
+	"encoding/gob"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -60,6 +62,29 @@ type DirectedEdge struct {
 	ValueId   uint64 // Object or destination node / UID.
 	Source    string
 	Timestamp time.Time
+}
+
+// Mutations stores the directed edges for both the set and delete operations.
+type Mutations struct {
+	Set []DirectedEdge
+	Del []DirectedEdge
+}
+
+// Encode gob encodes the mutation which is then sent over to the instance which
+// is supposed to run it.
+func (m *Mutations) Encode() (data []byte, rerr error) {
+	var b bytes.Buffer
+	enc := gob.NewEncoder(&b)
+	rerr = enc.Encode(*m)
+	return b.Bytes(), rerr
+}
+
+// Decode decodes the mutation from a byte slice after receiving the byte slice over
+// the network.
+func (m *Mutations) Decode(data []byte) error {
+	r := bytes.NewReader(data)
+	dec := gob.NewDecoder(r)
+	return dec.Decode(m)
 }
 
 func SetError(prev *error, n error) {
@@ -112,6 +137,11 @@ func ParseRequest(w http.ResponseWriter, r *http.Request, data interface{}) bool
 var Nilbyte []byte
 
 func Trace(ctx context.Context, format string, args ...interface{}) {
+	if *debugMode {
+		fmt.Printf(format+"\n", args...)
+		return
+	}
+
 	tr, ok := trace.FromContext(ctx)
 	if !ok {
 		return

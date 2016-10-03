@@ -24,38 +24,42 @@ import (
 
 // Convert converts the value to given scalar type.
 func (to Scalar) Convert(value TypeValue) (TypeValue, error) {
-	if to.ID() == stringID {
-		// If we are converting to a string, simply use
-		// MarshalText
+	if to.ID() == stringID || to.ID() == bytesID {
+		// If we are converting to a string or bytes, simply use MarshalText
 		r, err := value.MarshalText()
 		if err != nil {
 			return nil, err
 		}
-		return StringType(r), nil
+		return String(r), nil
 	}
 
 	u := to.Unmarshaler
 	// Otherwise we check if the conversion is defined.
 	switch v := value.(type) {
-	case StringType:
-		// If the value is a string, then we can always Unmarshal it using
-		// the unmarshaller
+	case Bytes:
+		// Bytes convert the same way as strings, as bytes denote an untyped value which is almost
+		// always a string.
 		return u.FromText([]byte(v))
-	case Int32Type:
+
+	case String:
+		// If the value is a string, then we can always Unmarshal it using the unmarshaller
+		return u.FromText([]byte(v))
+
+	case Int32:
 		c, ok := u.(int32Unmarshaler)
 		if !ok {
 			return nil, cantConvert(to, v)
 		}
 		return c.fromInt(int32(v))
 
-	case FloatType:
+	case Float:
 		c, ok := u.(floatUnmarshaler)
 		if !ok {
 			return nil, cantConvert(to, v)
 		}
 		return c.fromFloat(float64(v))
 
-	case BoolType:
+	case Bool:
 		c, ok := u.(boolUnmarshaler)
 		if !ok {
 			return nil, cantConvert(to, v)
@@ -68,6 +72,13 @@ func (to Scalar) Convert(value TypeValue) (TypeValue, error) {
 			return nil, cantConvert(to, v)
 		}
 		return c.fromTime(v)
+
+	case Date:
+		c, ok := u.(dateUnmarshaler)
+		if !ok {
+			return nil, cantConvert(to, v)
+		}
+		return c.fromDate(v)
 
 	default:
 		return nil, cantConvert(to, v)
@@ -92,4 +103,8 @@ type boolUnmarshaler interface {
 
 type timeUnmarshaler interface {
 	fromTime(value time.Time) (TypeValue, error)
+}
+
+type dateUnmarshaler interface {
+	fromDate(value Date) (TypeValue, error)
 }
