@@ -38,9 +38,9 @@ func TestAddToMutationArray(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	SetWorkerState(NewState(ps, nil, 0, 1))
+	SetWorkerState(NewState(ps, 0, 1))
 
-	mutationsArray := make([]*Mutations, 1)
+	mutationsArray := make([]*x.Mutations, 1)
 	edges := []x.DirectedEdge{}
 
 	edges = append(edges, x.DirectedEdge{
