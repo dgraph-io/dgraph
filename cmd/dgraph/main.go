@@ -161,9 +161,16 @@ func convertToEdges(ctx context.Context, nquads []rdf.NQuad) (mutationResult, er
 		edges = append(edges, edge)
 	}
 
+	resultUids := make(map[string]uint64)
+	// Strip out _new_: prefix from the keys.
+	for k, v := range newUids {
+		x.Assertf(strings.HasPrefix(k, "_new_:"), "Expected prefix _new_: in key: %v", k)
+		resultUids[k[6:]] = v
+	}
+
 	mr = mutationResult{
 		edges:   edges,
-		newUids: newUids,
+		newUids: resultUids,
 	}
 	return mr, nil
 }
