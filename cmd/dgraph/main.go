@@ -415,7 +415,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	x.Trace(ctx, "Query parsed")
 
 	rch := make(chan error)
-	go query.ProcessGraph(ctx, sg, rch)
+	go query.ProcessGraph(ctx, sg, nil, rch)
 	err = <-rch
 	if err != nil {
 		x.TraceError(ctx, x.Wrapf(err, "Error while executing query"))
@@ -504,7 +504,7 @@ func (s *grpcServer) Query(ctx context.Context,
 	x.Trace(ctx, "Query parsed")
 
 	rch := make(chan error)
-	go query.ProcessGraph(ctx, sg, rch)
+	go query.ProcessGraph(ctx, sg, nil, rch)
 	err = <-rch
 	if err != nil {
 		x.TraceError(ctx, x.Wrapf(err, "Error while executing query"))

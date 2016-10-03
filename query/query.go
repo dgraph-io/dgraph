@@ -820,7 +820,8 @@ func createTaskQuery(sg *SubGraph, uids []uint64, terms []string, intersect []ui
 // from different instances. Note: taskQuery is nil for root node.
 func ProcessGraph(ctx context.Context, sg *SubGraph, taskQuery []byte, rch chan error) {
 	var err error
-	if len(sg.sourceUIDs) > 0 && taskQuery != nil {
+	if taskQuery != nil {
+		log.Printf("~~~~ProcessGraph issuing task query [%s]", sg.Attr)
 		resultBuf, err := worker.ProcessTaskOverNetwork(ctx, taskQuery)
 		if err != nil {
 			x.TraceError(ctx, x.Wrapf(err, "Error while processing task"))
@@ -859,7 +860,7 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, taskQuery []byte, rch chan 
 	}
 
 	sg.destUIDs = algo.MergeSorted(sg.Result)
-	log.Printf("~~~[%s] %v", sg.Attr, sg.destUIDs)
+	log.Printf("~~~destUIDs [%s] %v", sg.Attr, sg.destUIDs)
 	if sg.Values.ValuesLength() > 0 {
 		log.Printf("~~~values [%s] len=%d", sg.Attr, sg.Values.ValuesLength())
 		for i := 0; i < sg.Values.ValuesLength(); i++ {

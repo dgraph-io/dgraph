@@ -150,7 +150,7 @@ func TestQuery(t *testing.T) {
 	}
 
 	ch := make(chan error)
-	go query.ProcessGraph(ctx, g, ch)
+	go query.ProcessGraph(ctx, g, nil, ch)
 	if err := <-ch; err != nil {
 		t.Error(err)
 		return
@@ -279,7 +279,7 @@ func BenchmarkQuery(b *testing.B) {
 		}
 
 		ch := make(chan error)
-		go query.ProcessGraph(ctx, g, ch)
+		go query.ProcessGraph(ctx, g, nil, ch)
 		if err := <-ch; err != nil {
 			b.Error(err)
 			return
