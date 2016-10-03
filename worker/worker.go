@@ -125,18 +125,18 @@ func (w *grpcWorker) Hello(ctx context.Context, in *Payload) (*Payload, error) {
 }
 
 // GetOrAssign is used to get uids for a set of xids by communicating with other workers.
-func (w *grpcWorker) GetOrAssign(ctx context.Context, query *Payload) (*Payload, error) {
+func (w *grpcWorker) AssignUids(ctx context.Context, query *Payload) (*Payload, error) {
 	uo := flatbuffers.GetUOffsetT(query.Data)
-	xids := new(task.XidList)
-	xids.Init(query.Data, uo)
+	num := new(task.Num)
+	num.Init(query.Data, uo)
 
-	if ws.groupId != 0 {
+	if num.Group() != 0 {
 		log.Fatalf("groupId: %v. GetOrAssign. We shouldn't be getting this req", ws.groupId)
 	}
 
 	reply := new(Payload)
 	var rerr error
-	reply.Data, rerr = getOrAssignUids(ctx, xids)
+	reply.Data, rerr = assignUids(ctx, num)
 	return reply, rerr
 }
 

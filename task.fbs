@@ -15,8 +15,9 @@ table Value {
 	valType:ubyte;
 }
 
-table XidList {
-	xids:[string];
+table Num {
+	group:uint;
+	val:int;
 }
 
 table UidList {

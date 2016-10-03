@@ -17,8 +17,7 @@ import (
 )
 
 const (
-	mutationMsg     = 1
-	directedEdgeMsg = 2
+	mutationMsg = 1
 )
 
 type peerPool struct {
@@ -68,7 +67,7 @@ func (p *proposals) Done(pid uint32, err error) {
 type node struct {
 	cfg       *raft.Config
 	ctx       context.Context
-	done      <-chan struct{}
+	done      chan struct{}
 	id        uint64
 	localAddr string
 	peers     peerPool
@@ -300,6 +299,10 @@ func (n *node) Run() {
 	}
 }
 
+func (n *node) Stop() {
+	n.done <- struct{}{}
+}
+
 func (n *node) Step(ctx context.Context, msg raftpb.Message) error {
 	return n.raft.Step(ctx, msg)
 }
@@ -362,9 +365,6 @@ func (n *node) JoinCluster(any string, s *State) {
 	_, err = c.JoinCluster(context.Background(), query)
 	x.Checkf(err, "Error while joining cluster")
 	fmt.Printf("Done with JoinCluster call\n")
-
-	// No need to campaign.
-	// go n.Campaign(context.Background())
 }
 
 func newNode(id uint64, my string) *node {
@@ -380,6 +380,7 @@ func newNode(id uint64, my string) *node {
 	store := raft.NewMemoryStorage()
 	n := &node{
 		ctx:   context.TODO(),
+		done:  make(chan struct{}),
 		id:    id,
 		store: store,
 		cfg: &raft.Config{
