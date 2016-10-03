@@ -50,3 +50,10 @@ table RaftContext {
 	group:uint;
 	addr:string;
 }
+
+table Membership {
+	group:uint;
+	addr:string;
+	leader:bool;
+	amdead:bool;
+}

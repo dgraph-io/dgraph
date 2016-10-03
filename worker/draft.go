@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"log"
+	"math"
 	"math/rand"
 	"strconv"
 	"strings"
@@ -19,7 +20,8 @@ import (
 )
 
 const (
-	mutationMsg = 1
+	mutationMsg   = 1
+	membershipMsg = 2
 )
 
 type peerPool struct {
@@ -189,10 +191,35 @@ func (n *node) send(m raftpb.Message) {
 	_, err = c.RaftMessage(context.TODO(), p)
 }
 
+func (n *node) processMutation(e raftpb.Entry, h header) error {
+	m := new(x.Mutations)
+	// Ensure that this can be decoded.
+	if err := m.Decode(e.Data[h.Length():]); err != nil {
+		x.TraceError(n.ctx, err)
+		return err
+	}
+	if err := mutate(n.ctx, m); err != nil {
+		x.TraceError(n.ctx, err)
+		return err
+	}
+	return nil
+}
+
+func (n *node) processMembership(e raftpb.Entry, h header) error {
+	rc := task.GetRootAsRaftContext(n.raftContext, 0)
+	x.Assert(rc.Group() == math.MaxUint32)
+
+	mm := task.GetRootAsMembership(e.Data[h.Length():], 0)
+	fmt.Printf("group: %v Addr: %q leader: %v dead: %v\n",
+		mm.Group(), mm.Addr(), mm.Leader(), mm.Amdead())
+	return nil
+}
+
 func (n *node) process(e raftpb.Entry) error {
 	if e.Data == nil {
 		return nil
 	}
+	fmt.Printf("Entry type to process: %v\n", e.Type.String())
 
 	if e.Type == raftpb.EntryConfChange {
 		fmt.Printf("Configuration change\n")
@@ -211,21 +238,14 @@ func (n *node) process(e raftpb.Entry) error {
 	if e.Type == raftpb.EntryNormal {
 		var h header
 		h.Decode(e.Data[0:h.Length()])
-		x.Assertf(h.msgId == 1, "We only handle mutations for now.")
 
-		m := new(x.Mutations)
-		// Ensure that this can be decoded.
-		if err := m.Decode(e.Data[h.Length():]); err != nil {
-			x.TraceError(n.ctx, err)
-			n.props.Done(h.proposalId, err)
-			return err
+		var err error
+		if h.msgId == mutationMsg {
+			err = n.processMutation(e, h)
+		} else if h.msgId == membershipMsg {
+			err = n.processMembership(e, h)
 		}
-		if err := mutate(n.ctx, m); err != nil {
-			x.TraceError(n.ctx, err)
-			n.props.Done(h.proposalId, err)
-			return err
-		}
-		n.props.Done(h.proposalId, nil)
+		n.props.Done(h.proposalId, err)
 	}
 
 	return nil
@@ -435,6 +455,8 @@ func (n *node) StartNode(cluster string) {
 	n.raft = raft.StartNode(n.cfg, peers)
 	go n.Run()
 	go n.snapshotPeriodically()
+	rc := task.GetRootAsRaftContext(n.raftContext, 0)
+	go Inform(rc.Group())
 }
 
 func (n *node) AmLeader() bool {
