@@ -22,6 +22,7 @@ import (
 	"github.com/dgryski/go-farm"
 	"github.com/google/flatbuffers/go"
 
+	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/x"
@@ -143,6 +144,12 @@ func processTask(query []byte) ([]byte, error) {
 				Count:    int(q.Count()),
 				AfterUid: uint64(q.AfterUid()),
 			}
+
+			intersect := new(algo.UIDList)
+			if q.Intersect(&intersect.UidList) != nil {
+				opts.Intersect = intersect
+			}
+
 			ulist := pl.Uids(opts)
 			uoffsets[i] = x.UidlistOffset(b, ulist)
 		}

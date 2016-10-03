@@ -137,14 +137,10 @@ type SubGraph struct {
 	Result []byte // Contains UID matrix or list of values for child attributes.
 
 	// sorted is a list of destination UIDs, after applying filters.
-	// Recall that UID matrix has the following structure. Each sub-vector is a list
-	// of destination UIDs for a fixed source UID.
-	// Before filtering, sorted is the union of all these sub-vectors, i.e., the
-	// list of unique destination UIDs.
-	// After filtering, sorted can be much smaller.
-	// Caution: Each of "children" is given the filtered sg.sorted. However, the UID
-	// matrix for this node does not take into account the filtering. Hence, during
-	// postTraverse or preTraverse, we need to intersect with sg.sorted.
+	// One may ask: Doesn't children nodes contain sg.sorted? There is one
+	// exception. Imagine a node with no children but we ask for its children's
+	// UIDs. The node has a filter. In this case, it has no children to store the
+	// filtered UIDs.
 	sorted []uint64
 }
 
@@ -649,12 +645,12 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		Filter: gq.Filter,
 	}
 	// Also add query for consistency and to allow for ToJSON() later.
-	sg.Query = createTaskQuery(sg, []uint64{euid}, nil)
+	sg.Query = createTaskQuery(sg, []uint64{euid}, nil, nil)
 	return sg, nil
 }
 
 // createTaskQuery generates the query buffer.
-func createTaskQuery(sg *SubGraph, uids []uint64, terms []string) []byte {
+func createTaskQuery(sg *SubGraph, uids []uint64, terms []string, intersect []uint64) []byte {
 	x.Assert(uids == nil || terms == nil)
 
 	b := flatbuffers.NewBuilder(0)
@@ -677,6 +673,13 @@ func createTaskQuery(sg *SubGraph, uids []uint64, terms []string) []byte {
 		vend = b.EndVector(len(terms))
 	}
 
+	var intersectOffset flatbuffers.UOffsetT
+	if intersect != nil {
+		x.Assert(uids == nil)
+		x.Assert(len(terms) > 0)
+		intersectOffset = x.UidlistOffset(b, intersect)
+	}
+
 	ao := b.CreateString(sg.Attr)
 	task.QueryStart(b)
 	task.QueryAddAttr(b, ao)
@@ -685,14 +688,16 @@ func createTaskQuery(sg *SubGraph, uids []uint64, terms []string) []byte {
 	} else {
 		task.QueryAddTerms(b, vend)
 	}
+	if intersect != nil {
+		task.QueryAddIntersect(b, intersectOffset)
+	}
 	task.QueryAddCount(b, int32(sg.Params.Count))
 	task.QueryAddOffset(b, int32(sg.Params.Offset))
 	task.QueryAddAfterUid(b, sg.Params.AfterUid)
 	task.QueryAddGetCount(b, sg.Params.GetCount)
 
-	qend := task.QueryEnd(b)
-	b.Finish(qend)
-	return b.Bytes[b.Head():]
+	b.Finish(task.QueryEnd(b))
+	return b.FinishedBytes()
 }
 
 func sortedUniqueUids(r *task.Result) ([]uint64, error) {
@@ -755,6 +760,12 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, rch chan error) {
 		return
 	}
 
+	// Apply offset and count (for pagination).
+	if err = sg.applyWindow(ctx); err != nil {
+		rch <- err
+		return
+	}
+
 	// Let's execute it in a tree fashion. Each SubGraph would break off
 	// as many goroutines as it's children; which would then recursively
 	// do the same thing.
@@ -762,7 +773,7 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, rch chan error) {
 	childchan := make(chan error, len(sg.Children))
 	for i := 0; i < len(sg.Children); i++ {
 		child := sg.Children[i]
-		child.Query = createTaskQuery(child, sg.sorted, nil)
+		child.Query = createTaskQuery(child, sg.sorted, nil, nil)
 		go ProcessGraph(ctx, child, childchan)
 	}
 
@@ -790,7 +801,7 @@ func (sg *SubGraph) applyFilter(ctx context.Context) error {
 	if sg.Filter == nil { // No filter.
 		return nil
 	}
-	newSorted, err := filterHelper(ctx, sg.sorted, sg.Filter)
+	newSorted, err := runFilter(ctx, sg.sorted, sg.Filter)
 	if err != nil {
 		return err
 	}
@@ -798,9 +809,9 @@ func (sg *SubGraph) applyFilter(ctx context.Context) error {
 	return nil
 }
 
-// filterHelper traverses filter tree and produce a filtered list of UIDs.
+// runFilter traverses filter tree and produce a filtered list of UIDs.
 // Input "sorted" is the very original list of destination UIDs of a SubGraph.
-func filterHelper(ctx context.Context, sorted []uint64, filter *gql.FilterTree) ([]uint64, error) {
+func runFilter(ctx context.Context, sorted []uint64, filter *gql.FilterTree) ([]uint64, error) {
 	if len(filter.FuncName) > 0 { // Leaf node.
 		x.Assertf(filter.FuncName == "eq", "Only exact match is supported now")
 		x.Assertf(len(filter.FuncArgs) == 2,
@@ -808,8 +819,8 @@ func filterHelper(ctx context.Context, sorted []uint64, filter *gql.FilterTree) 
 
 		attr := filter.FuncArgs[0]
 		sg := &SubGraph{Attr: attr}
-		sg.Query = createTaskQuery(sg, nil, []string{filter.FuncArgs[1]})
-		sgChan := make(chan error)
+		sg.Query = createTaskQuery(sg, nil, []string{filter.FuncArgs[1]}, sorted)
+		sgChan := make(chan error, 1)
 		go ProcessGraph(ctx, sg, sgChan)
 		err := <-sgChan
 		if err != nil {
@@ -819,17 +830,19 @@ func filterHelper(ctx context.Context, sorted []uint64, filter *gql.FilterTree) 
 		r := new(task.Result)
 		x.ParseTaskResult(r, sg.Result)
 		x.Assert(r.UidmatrixLength() == 1)
-		ul := new(algo.UIDList)
+		var ul algo.UIDList
 		if ok := r.Uidmatrix(&ul.UidList, 0); !ok {
 			return nil, x.Errorf("Error parsing UID matrix in filterHelper")
 		}
-		// Create a GenericLists. Note there is no copying here.
-		lists := algo.GenericLists{[]algo.Uint64List{algo.PlainUintList(sorted), ul}}
-		return algo.IntersectSorted(lists), nil
+		result := make([]uint64, ul.Size())
+		for i := 0; i < ul.Size(); i++ {
+			result[i] = ul.Get(i)
+		}
+		return result, nil
 	}
 
 	// For now, we only handle AND and OR.
-	if filter.Op != gql.ItemFilterAnd && filter.Op != gql.ItemFilterOr {
+	if filter.Op != gql.FilterOpAnd && filter.Op != gql.FilterOpOr {
 		return sorted, x.Errorf("Unknown operator %v", filter.Op)
 	}
 
@@ -841,7 +854,7 @@ func filterHelper(ctx context.Context, sorted []uint64, filter *gql.FilterTree) 
 	resultChan := make(chan resultPair)
 	for _, c := range filter.Child {
 		go func(c *gql.FilterTree) {
-			r, err := filterHelper(ctx, sorted, c)
+			r, err := runFilter(ctx, sorted, c)
 			resultChan <- resultPair{r, err}
 		}(c)
 	}
@@ -856,9 +869,58 @@ func filterHelper(ctx context.Context, sorted []uint64, filter *gql.FilterTree) 
 	}
 
 	// Either merge or intersect the UID lists.
-	if filter.Op == gql.ItemFilterOr {
+	if filter.Op == gql.FilterOpOr {
 		return algo.MergeSorted(uidList), nil
 	}
-	x.Assert(filter.Op == gql.ItemFilterAnd)
+	x.Assert(filter.Op == gql.FilterOpAnd)
 	return algo.IntersectSorted(uidList), nil
+}
+
+// window returns start and end indices given windowing params.
+func window(p *params, l *task.UidList) (int, int) {
+	if p.Count == 0 && p.Offset == 0 { // No windowing.
+		return 0, l.UidsLength()
+	}
+	if p.Count < 0 {
+		// Items from the back of the array, like Python arrays.
+		return l.UidsLength() - p.Count, l.UidsLength()
+	}
+	start := p.Offset
+	if start < 0 {
+		start = 0
+	}
+	if p.Count == 0 {
+		return start, l.UidsLength()
+	}
+	end := start + p.Count
+	if end > l.UidsLength() {
+		end = l.UidsLength()
+	}
+	return start, end
+}
+
+// applyWindow applies windowing to sg.sorted.
+func (sg *SubGraph) applyWindow(ctx context.Context) error {
+	params := sg.Params
+	if params.Count == 0 && params.Offset == 0 { // No windowing.
+		return nil
+	}
+	// For each row in UID matrix, we want to apply windowing. After that, we need
+	// to rebuild sg.sorted.
+	var result task.Result
+	x.ParseTaskResult(&result, sg.Result)
+
+	// We do not modify sg.Result. In postTraverse and preTraverse, we will take
+	// into count windowing params.
+	n := result.UidmatrixLength()
+	var results algo.GenericLists
+	results.Data = make([]algo.Uint64List, n)
+	for i := 0; i < n; i++ {
+		l := new(algo.UIDList)
+		x.Assert(result.Uidmatrix(&l.UidList, i))
+		start, end := window(&sg.Params, &l.UidList)
+		results.Data[i] = algo.NewUint64ListSlice(l, start, end)
+	}
+	sg.sorted = algo.MergeSorted(results)
+	return nil
 }

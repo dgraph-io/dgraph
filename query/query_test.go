@@ -610,6 +610,51 @@ func TestToJSONFilter(t *testing.T) {
 	}
 }
 
+func TestToJSONFilterUID(t *testing.T) {
+	dir, _ := populateGraph(t)
+	defer os.RemoveAll(dir)
+	query := `
+		{
+			me(_uid_:0x01) {
+				name
+				gender
+				status
+				friend @filter(eq("name", "Andrea")) {
+					_uid_
+				}
+			}
+		}
+	`
+
+	gq, _, err := gql.Parse(query)
+	if err != nil {
+		t.Error(err)
+	}
+	ctx := context.Background()
+	sg, err := ToSubGraph(ctx, gq)
+	if err != nil {
+		t.Error(err)
+	}
+
+	ch := make(chan error)
+	go ProcessGraph(ctx, sg, ch)
+	err = <-ch
+	if err != nil {
+		t.Error(err)
+	}
+
+	var l Latency
+	js, err := sg.ToJSON(&l)
+	if err != nil {
+		t.Error(err)
+	}
+
+	s := string(js)
+	if s != `{"me":{"friend":{"_uid_":"0x1f"},"gender":"female","name":"Michonne","status":"alive"}}` {
+		t.Errorf("Wrong output: %s", s)
+	}
+}
+
 func TestToJSONFilterOr(t *testing.T) {
 	dir, _ := populateGraph(t)
 	defer os.RemoveAll(dir)

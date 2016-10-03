@@ -47,8 +47,8 @@ func (ul *UIDList) Get(i int) uint64 { return ul.Uids(i) }
 // Size returns size of UID list.
 func (ul *UIDList) Size() int { return ul.UidsLength() }
 
-// String returns the UIDList as a string. Good for printing the list.
-func (ul *UIDList) String() string {
+// DebugString returns the UIDList as a string. Good for printing the list.
+func (ul *UIDList) DebugString() string {
 	buf := bytes.NewBuffer(make([]byte, 0, 20))
 	_, err := buf.WriteRune('[')
 	x.Check(err)
@@ -72,6 +72,32 @@ func (ul UIDLists) Get(i int) Uint64List { return ul[i] }
 
 // Size returns number of lists.
 func (ul UIDLists) Size() int { return len(ul) }
+
+// Uint64ListSlice is a slice of some Uint64List.
+type Uint64ListSlice struct {
+	data       Uint64List // Uint64List is an interface, assumed to be small.
+	start, end int
+}
+
+// NewUint64ListSlice returns a new NewUint64ListSlice. It performs some checks.
+func NewUint64ListSlice(data Uint64List, start, end int) Uint64ListSlice {
+	x.Assertf(start <= end, "Invalid slice %d %d", start, end)
+	x.Assertf(start >= 0 && start < data.Size(),
+		"Out of bounds %d %d %d", start, end, data.Size())
+	x.Assertf(end >= 0 && end < data.Size(),
+		"Out of bounds %d %d %d", start, end, data.Size())
+	return Uint64ListSlice{data, start, end}
+}
+
+// Get returns i-th element.
+func (ul Uint64ListSlice) Get(i int) uint64 {
+	return ul.data.Get(i + ul.start)
+}
+
+// Size returns size of UID list.
+func (ul Uint64ListSlice) Size() int {
+	return ul.end - ul.start
+}
 
 // PlainUintLists is the simplest possible Uint64Lists.
 type PlainUintLists []PlainUintList
@@ -148,6 +174,8 @@ func MergeSorted(lists Uint64Lists) []uint64 {
 }
 
 // IntersectSorted returns intersection of uint64 lists.
+// TODO(jchiu): If one list is a lot smaller than the others, it might be much
+// faster to do binary search in the other lists.
 func IntersectSorted(lists Uint64Lists) []uint64 {
 	n := lists.Size()
 	if n == 0 {

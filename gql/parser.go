@@ -73,20 +73,29 @@ type varInfo struct {
 // varMap is a map with key as variable name.
 type varMap map[string]varInfo
 
-var filterOpPrecedence map[lex.ItemType]int
+var filterOpPrecedence map[FilterOp]int
 
 // FilterTree is the result of parsing the filter directive.
 type FilterTree struct {
 	FuncName string   // For leaf nodes only.
 	FuncArgs []string // For leaf nodes only.
-	Op       lex.ItemType
+	Op       FilterOp
 	Child    []*FilterTree
 }
 
+// Filter operators: And, Or, and some internal ones.
+type FilterOp int
+
+const (
+	FilterOpAnd       = iota
+	FilterOpOr        = iota
+	filterOpLeftRound = iota // Internal use only.
+)
+
 func init() {
-	filterOpPrecedence = map[lex.ItemType]int{
-		ItemFilterAnd: 2,
-		ItemFilterOr:  1,
+	filterOpPrecedence = map[FilterOp]int{
+		FilterOpAnd: 2,
+		FilterOpOr:  1,
 	}
 }
 
@@ -613,9 +622,9 @@ func (t *FilterTree) stringHelper(buf *bytes.Buffer) {
 	_, err := buf.WriteRune('(')
 	x.Check(err)
 	switch t.Op {
-	case ItemFilterAnd:
+	case FilterOpAnd:
 		_, err = buf.WriteString("AND")
-	case ItemFilterOr:
+	case FilterOpOr:
 		_, err = buf.WriteString("OR")
 	default:
 		err = x.Errorf("Unknown operator")
@@ -665,7 +674,7 @@ func parseFilter(l *lex.Lexer) (*FilterTree, error) {
 	}
 
 	opStack := new(filterTreeStack)
-	opStack.push(&FilterTree{Op: itemLeftRound}) // Push ( onto operator stack.
+	opStack.push(&FilterTree{Op: filterOpLeftRound}) // Push ( onto operator stack.
 	valueStack := new(filterTreeStack)
 
 	for item = range l.Items {
@@ -692,12 +701,12 @@ func parseFilter(l *lex.Lexer) (*FilterTree, error) {
 			valueStack.push(leaf)
 
 		} else if item.Typ == itemLeftRound { // Just push to op stack.
-			opStack.push(&FilterTree{Op: itemLeftRound})
+			opStack.push(&FilterTree{Op: filterOpLeftRound})
 
 		} else if item.Typ == itemRightRound { // Pop op stack until we see a (.
 			for !opStack.empty() {
 				topOp := opStack.peek()
-				if topOp.Op == itemLeftRound {
+				if topOp.Op == filterOpLeftRound {
 					break
 				}
 				evalStack(opStack, valueStack)
@@ -708,7 +717,13 @@ func parseFilter(l *lex.Lexer) (*FilterTree, error) {
 				break
 			}
 
-		} else if opPred := filterOpPrecedence[item.Typ]; opPred > 0 { // Op.
+		} else if item.Typ == itemFilterAnd || item.Typ == itemFilterOr {
+			var op FilterOp = FilterOpAnd
+			if item.Typ == itemFilterOr {
+				op = FilterOpOr
+			}
+			opPred := filterOpPrecedence[op]
+			x.Assertf(opPred > 0, "Expected opPred > 0: %d", opPred)
 			// Evaluate the stack until we see an operator with strictly lower pred.
 			for !opStack.empty() {
 				topOp := opStack.peek()
@@ -717,7 +732,7 @@ func parseFilter(l *lex.Lexer) (*FilterTree, error) {
 				}
 				evalStack(opStack, valueStack)
 			}
-			opStack.push(&FilterTree{Op: item.Typ}) // Push current operator.
+			opStack.push(&FilterTree{Op: op}) // Push current operator.
 		}
 	}
 

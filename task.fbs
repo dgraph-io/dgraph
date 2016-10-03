@@ -2,12 +2,18 @@ namespace task;
 
 table Query {
 	attr:string;
-	uids:[ulong];
 	count:int;
 	offset:int;
 	afterUid:ulong;
 	getCount:ushort;
+	
+	// Exactly one of uids and terms is populated.
+	uids:[ulong];
 	terms:[string];
+	
+	// Intersect results with this UID list. If uids is populated, then this is
+	// an "intersection query". If terms is populated, this is a "filter query".
+	intersect:UidList;
 }
 
 table Value {
