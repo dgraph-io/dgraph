@@ -140,7 +140,7 @@ type SubGraph struct {
 
 	Counts *task.CountList
 	Values task.ValueList
-	Result algo.UIDLists
+	Result algo.GenericLists
 
 	// sourceUIDs is a list of unique source UIDs. They are always copies of
 	// destUIDs of parent nodes.
@@ -739,7 +739,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		buf := b.FinishedBytes()
 		ul := new(algo.UIDList)
 		x.ParseUidList(&ul.UidList, buf)
-		sg.Result = algo.UIDLists{ul}
+		sg.Result = algo.GenericLists{[]algo.Uint64List{ul}}
 	}
 
 	{
@@ -833,11 +833,11 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, taskQuery []byte, rch chan 
 		x.ParseTaskResult(r, resultBuf)
 
 		// Extract UIDLists from task.Result.
-		sg.Result = make([]*algo.UIDList, r.UidmatrixLength())
+		sg.Result.Data = make([]algo.Uint64List, r.UidmatrixLength())
 		for i := 0; i < r.UidmatrixLength(); i++ {
 			ul := new(algo.UIDList)
 			x.Assert(r.Uidmatrix(&ul.UidList, i))
-			sg.Result[i] = ul
+			sg.Result.Data[i] = ul
 		}
 
 		// Extract values from task.Result.
@@ -860,7 +860,7 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, taskQuery []byte, rch chan 
 	}
 
 	sg.destUIDs = algo.MergeSorted(sg.Result)
-	log.Printf("~~~destUIDs [%s] %v", sg.Attr, sg.destUIDs)
+	/*log.Printf("~~~destUIDs [%s] %v", sg.Attr, sg.destUIDs)
 	if sg.Values.ValuesLength() > 0 {
 		log.Printf("~~~values [%s] len=%d", sg.Attr, sg.Values.ValuesLength())
 		for i := 0; i < sg.Values.ValuesLength(); i++ {
@@ -869,7 +869,7 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, taskQuery []byte, rch chan 
 				log.Printf("~~~value [%s][%d] = %s", sg.Attr, i, string(tv.ValBytes()))
 			}
 		}
-	}
+	}*/
 	if err != nil {
 		x.TraceError(ctx, x.Wrapf(err, "Error while processing task"))
 		rch <- err
@@ -897,24 +897,24 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, taskQuery []byte, rch chan 
 
 	var processed, leftToProcess []*SubGraph
 	// First iterate over the value nodes and check for validity.
-	childchan := make(chan error, len(sg.Children))
+	childChan := make(chan error, len(sg.Children))
 	for i := 0; i < len(sg.Children); i++ {
 		child := sg.Children[i]
 		child.sourceUIDs = sg.destUIDs // Make the connection.
 		if child.Params.AttrType == nil || child.Params.AttrType.IsScalar() {
 			processed = append(processed, child)
 			taskQuery := createTaskQuery(child, sg.destUIDs, nil, nil)
-			go ProcessGraph(ctx, child, taskQuery, childchan)
+			go ProcessGraph(ctx, child, taskQuery, childChan)
 		} else {
 			leftToProcess = append(leftToProcess, child)
-			childchan <- nil
+			childChan <- nil
 		}
 	}
 
 	// Now get all the results back.
 	for i := 0; i < len(sg.Children); i++ {
 		select {
-		case err = <-childchan:
+		case err = <-childChan:
 			x.Trace(ctx, "Reply from child. Index: %v Attr: %v", i, sg.Children[i].Attr)
 			if err != nil {
 				x.TraceError(ctx, x.Wrapf(err, "Error while processing child task"))
@@ -984,16 +984,16 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, taskQuery []byte, rch chan 
 	sg.destUIDs = sg.destUIDs[:j]
 
 	// Now process next level with valid UIDs.
-	childchan = make(chan error, len(leftToProcess))
+	childChan = make(chan error, len(leftToProcess))
 	for _, child := range leftToProcess {
 		taskQuery := createTaskQuery(child, sg.destUIDs, nil, nil)
-		go ProcessGraph(ctx, child, taskQuery, childchan)
+		go ProcessGraph(ctx, child, taskQuery, childChan)
 	}
 
 	// Now get the results back.
 	for i := 0; i < len(leftToProcess); i++ {
 		select {
-		case err = <-childchan:
+		case err = <-childChan:
 			x.Trace(ctx, "Reply from child. Index: %v Attr: %v", i, sg.Children[i].Attr)
 			if err != nil {
 				x.Trace(ctx, "Error while processing child task: %v", err)
@@ -1085,38 +1085,51 @@ func runFilter(ctx context.Context, destUIDs []uint64, filter *gql.FilterTree) (
 	return algo.IntersectSorted(uidList), nil
 }
 
-// window returns start and end indices given windowing params.
-func window(p *params, l *task.UidList) (int, int) {
+// pageRange returns start and end indices given pagination params. Note that n
+// is the size of the input list.
+func pageRange(p *params, n int) (int, int) {
 	if p.Count == 0 && p.Offset == 0 { // No windowing.
-		return 0, l.UidsLength()
+		return 0, n
 	}
 	if p.Count < 0 {
 		// Items from the back of the array, like Python arrays.
-		return l.UidsLength() - p.Count, l.UidsLength()
+		return n - p.Count, n
 	}
 	start := p.Offset
 	if start < 0 {
 		start = 0
 	}
-	if p.Count == 0 {
-		return start, l.UidsLength()
+	if p.Count == 0 { // No count specified. Just take the offset parameter.
+		return start, n
 	}
 	end := start + p.Count
-	if end > l.UidsLength() {
-		end = l.UidsLength()
+	if end > n {
+		end = n
 	}
 	return start, end
 }
 
 // applyWindow applies windowing to sg.sorted.
 func (sg *SubGraph) applyPagination(ctx context.Context) error {
+	params := sg.Params
+	if params.Count == 0 && params.Offset == 0 { // No pagination.
+		return nil
+	}
+
+	x.Assert(len(sg.sourceUIDs) == sg.Result.Size())
+	for i := 0; i < len(sg.sourceUIDs); i++ {
+		l := algo.IntersectSorted(algo.GenericLists{
+			[]algo.Uint64List{sg.Result.Get(i), algo.PlainUintList(sg.destUIDs)}})
+		start, end := pageRange(&sg.Params, len(l))
+		l = l[start:end]
+		sg.Result.Data[i] = algo.PlainUintList(l)
+	}
+
+	// Re-merge the UID matrix.
+	sg.destUIDs = algo.MergeSorted(sg.Result)
 	return nil
-	//	params := sg.Params
-	//	if params.Count == 0 && params.Offset == 0 { // No windowing.
-	//		return nil
-	//	}
-	//	// For each row in UID matrix, we want to apply windowing. After that, we need
-	//	// to rebuild sg.sorted.
+	//	// For each row in UID matrix, we want to apply pagination or windowing. After
+	// that, we need to rebuild sg.sorted.
 	//	var result task.Result
 	//	x.ParseTaskResult(&result, sg.Result)
 

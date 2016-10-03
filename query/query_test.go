@@ -65,7 +65,7 @@ func checkName(t *testing.T, sg *SubGraph, idx int, expected string) {
 }
 
 func checkSingleValue(t *testing.T, child *SubGraph, attr string, value string) {
-	if child.Attr != attr || len(child.Result) == 0 {
+	if child.Attr != attr || child.Result.Size() == 0 {
 		t.Error("Expected attr name with some result", attr)
 	}
 
@@ -546,7 +546,7 @@ func TestProcessGraph(t *testing.T) {
 	if child.Attr != "friend" {
 		t.Errorf("Expected attr friend. Got: %v", child.Attr)
 	}
-	if len(child.Result) == 0 {
+	if child.Result.Size() == 0 {
 		t.Errorf("Expected some.Result.")
 		return
 	}
