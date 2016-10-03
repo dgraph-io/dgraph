@@ -2,9 +2,7 @@ package main
 
 import (
 	"bufio"
-	"flag"
 	"io/ioutil"
-	"math/rand"
 	"os"
 	"testing"
 
@@ -20,20 +18,12 @@ import (
 func TestQuery(t *testing.T) {
 	logrus.SetLevel(logrus.DebugLevel)
 	dir, err := ioutil.TempDir("", "storetest_")
-	dir1, err1 := ioutil.TempDir("", "storetest1_")
-	if err != nil || err1 != nil {
+	if err != nil {
 		t.Fail()
 	}
 	defer os.RemoveAll(dir)
-	defer os.RemoveAll(dir1)
 
 	ps, err := store.NewStore(dir)
-	if err != nil {
-		t.Error(err)
-		t.Fail()
-	}
-
-	ps1, err := store.NewStore(dir1)
 	if err != nil {
 		t.Error(err)
 		t.Fail()
@@ -42,22 +32,10 @@ func TestQuery(t *testing.T) {
 	posting.Init()
 
 	uid.Init(ps)
-	loader.Init(ps, ps1)
-	posting.InitIndex(ps1)
+	loader.Init(ps)
+	posting.InitIndex(ps)
 
 	var count uint64
-	{
-		f, err := os.Open("test_input")
-		if err != nil {
-			t.Error(err)
-			t.Fail()
-		}
-		r := bufio.NewReader(f)
-		count, err = loader.AssignUids(r, 0, 1) // Assign uids for everything.
-		t.Logf("count: %v", count)
-		f.Close()
-		posting.MergeLists(100)
-	}
 	{
 		f, err := os.Open("test_input")
 		if err != nil {
@@ -99,78 +77,4 @@ func TestQuery(t *testing.T) {
 	if count != 4 {
 		t.Error("loader assignment not as expected")
 	}
-}
-
-var uiddir = flag.String("uid", "", "UID directory")
-var rdffile = flag.String("rdf", "", "RDF file")
-
-func BenchmarkLoadRW(b *testing.B) {
-	flag.Parse()
-	logrus.SetLevel(logrus.ErrorLevel)
-	var nameL []string
-
-	uidStore, err := store.NewStore(*uiddir)
-	if err != nil {
-		b.Errorf("Error creating uidStore: %v", err)
-		return
-	}
-	defer uidStore.Close()
-
-	posting.Init()
-	uid.Init(uidStore)
-
-	f, err := os.Open("nameslist")
-	if err != nil {
-		b.Error("Error opening file")
-	}
-	defer f.Close()
-	scanner := bufio.NewScanner(f)
-	for scanner.Scan() {
-		nameL = append(nameL, scanner.Text())
-	}
-
-	lenL := len(nameL)
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		it := nameL[rand.Intn(lenL)]
-		uidStore.Get(uid.StringKey(it))
-	}
-	b.StopTimer()
-}
-
-func BenchmarkLoadReadOnly(b *testing.B) {
-	flag.Parse()
-	logrus.SetLevel(logrus.ErrorLevel)
-	var nameL []string
-
-	uidStore, err := store.NewReadOnlyStore(*uiddir)
-	if err != nil {
-		b.Errorf("Error creating uidStore: %v", err)
-		return
-	}
-	defer uidStore.Close()
-
-	posting.Init()
-	uid.Init(uidStore)
-
-	f, err := os.Open("nameslist")
-	if err != nil {
-		b.Error("Error opening file")
-	}
-	defer f.Close()
-	scanner := bufio.NewScanner(f)
-
-	for scanner.Scan() {
-		nameL = append(nameL, scanner.Text())
-	}
-
-	lenL := len(nameL)
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		it := nameL[rand.Intn(lenL)]
-		uidStore.Get(uid.StringKey(it))
-	}
-	b.StopTimer()
 }

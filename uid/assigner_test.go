@@ -18,13 +18,8 @@ package uid
 
 import (
 	"errors"
-	"io/ioutil"
 	"log"
 	"math"
-	"os"
-	"testing"
-
-	"github.com/Sirupsen/logrus"
 
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/posting/types"
@@ -59,70 +54,4 @@ func externalId(uid uint64) (xid string, rerr error) {
 		log.Fatalf("Value uid must be MaxUint64. Uid: %v", p.Uid())
 	}
 	return string(p.ValueBytes()), rerr
-}
-
-func TestGetOrAssign(t *testing.T) {
-	logrus.SetLevel(logrus.DebugLevel)
-
-	dir, err := ioutil.TempDir("", "storetest_")
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	defer os.RemoveAll(dir)
-	ps, err := store.NewStore(dir)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-
-	posting.Init()
-	Init(ps)
-
-	var u1, u2 uint64
-	{
-		uid, err := GetOrAssign("externalid0", 0, 1)
-		if err != nil {
-			t.Error(err)
-		}
-		t.Logf("Found uid: [%x]", uid)
-		u1 = uid
-	}
-
-	{
-		uid, err := GetOrAssign("externalid1", 0, 1)
-		if err != nil {
-			t.Error(err)
-		}
-		t.Logf("Found uid: [%x]", uid)
-		u2 = uid
-	}
-
-	if u1 == u2 {
-		t.Error("Uid1 and Uid2 shouldn't be the same")
-	}
-	// return
-
-	{
-		uid, err := GetOrAssign("externalid0", 0, 1)
-		if err != nil {
-			t.Error(err)
-		}
-		t.Logf("Found uid: [%x]", uid)
-		if u1 != uid {
-			t.Error("Uid should be the same.")
-		}
-	}
-	// return
-
-	{
-		xid, err := externalId(u1)
-		if err != nil {
-			t.Error(err)
-		}
-		if xid != "externalid0" {
-			t.Errorf("Expected externalid0. Found: [%q]", xid)
-		}
-	}
-	return
 }
