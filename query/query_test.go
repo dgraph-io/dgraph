@@ -52,9 +52,9 @@ func addEdge(t *testing.T, edge x.DirectedEdge, l *posting.List) {
 	}
 }
 
-func checkName(t *testing.T, r *task.Result, idx int, expected string) {
+func checkName(t *testing.T, sg *SubGraph, idx int, expected string) {
 	var tv task.Value
-	if ok := r.Values(&tv, idx); !ok {
+	if ok := sg.Values.Values(&tv, idx); !ok {
 		t.Error("Unable to retrieve value")
 	}
 	name := tv.ValBytes()
@@ -63,29 +63,22 @@ func checkName(t *testing.T, r *task.Result, idx int, expected string) {
 	}
 }
 
-func checkSingleValue(t *testing.T, child *SubGraph,
-	attr string, value string) {
+func checkSingleValue(t *testing.T, child *SubGraph, attr string, value string) {
 	if child.Attr != attr || len(child.Result) == 0 {
 		t.Error("Expected attr name with some.Result")
 	}
-	r := new(task.Result)
-	x.ParseTaskResult(r, child.Result)
 
-	if r.ValuesLength() != 1 {
-		t.Errorf("Expected value length 1. Got: %v", r.ValuesLength())
+	if child.Values.ValuesLength() != 1 {
+		t.Errorf("Expected value length 1. Got: %v", child.Values.ValuesLength())
 	}
-	if r.UidmatrixLength() != 1 {
-		t.Errorf("Expected uidmatrix length 1. Got: %v", r.UidmatrixLength())
-	}
-	var ul task.UidList
-	if ok := r.Uidmatrix(&ul, 0); !ok {
-		t.Errorf("While parsing uidlist")
+	if child.Result.Size() != 1 {
+		t.Errorf("Expected uidmatrix length 1. Got: %v", child.Result.Size())
 	}
 
-	if ul.UidsLength() != 0 {
-		t.Errorf("Expected uids length 0. Got: %v", ul.UidsLength())
+	if child.Result.Get(0).Size() != 0 {
+		t.Errorf("Expected uids length 0. Got: %v", child.Result.Get(0).Size())
 	}
-	checkName(t, r, 0, value)
+	checkName(t, child, 0, value)
 }
 
 func TestNewGraph(t *testing.T) {
@@ -112,20 +105,14 @@ func TestNewGraph(t *testing.T) {
 
 	worker.SetWorkerState(worker.NewState(ps, nil, 0, 1))
 
-	r := new(task.Result)
-	x.ParseTaskResult(r, sg.Result)
-	if r.UidmatrixLength() != 1 {
-		t.Errorf("Expected length 1. Got: %v", r.UidmatrixLength())
+	if sg.Result.Size() != 1 {
+		t.Errorf("Expected length 1. Got: %v", sg.Result.Size())
 	}
-	var ul task.UidList
-	if ok := r.Uidmatrix(&ul, 0); !ok {
-		t.Errorf("Unable to parse uidlist at index 0")
+	if sg.Result.Get(0).Size() != 1 {
+		t.Errorf("Expected length 1. Got: %v", sg.Result.Get(0).Size())
 	}
-	if ul.UidsLength() != 1 {
-		t.Errorf("Expected length 1. Got: %v", ul.UidsLength())
-	}
-	if ul.Uids(0) != 101 {
-		t.Errorf("Expected uid: %v. Got: %v", 101, ul.Uids(0))
+	if sg.Result.Get(0).Get(0) != 101 {
+		t.Errorf("Expected uid: %v. Got: %v", 101, sg.Result.Get(0).Get(0))
 	}
 }
 
@@ -474,39 +461,34 @@ func TestProcessGraph(t *testing.T) {
 		return
 	}
 
-	r := new(task.Result)
-	x.ParseTaskResult(r, child.Result)
-
-	if r.UidmatrixLength() != 1 {
-		t.Errorf("Expected 1 matrix. Got: %v", r.UidmatrixLength())
-	}
-	var ul task.UidList
-	if ok := r.Uidmatrix(&ul, 0); !ok {
-		t.Errorf("While parsing uidlist")
+	if sg.Result.Size() != 1 {
+		t.Errorf("Expected 1 matrix. Got: %v", sg.Result.Size())
 	}
 
-	if ul.UidsLength() != 5 {
-		t.Errorf("Expected 5 friends. Got: %v", ul.UidsLength())
+	ul := child.Result.Get(0)
+	if ul.Size() != 5 {
+		t.Errorf("Expected 5 friends. Got: %v", ul.Size())
 	}
-	if ul.Uids(0) != 23 || ul.Uids(1) != 24 || ul.Uids(2) != 25 ||
-		ul.Uids(3) != 31 || ul.Uids(4) != 101 {
+	if ul.Get(0) != 23 || ul.Get(1) != 24 || ul.Get(2) != 25 ||
+		ul.Get(3) != 31 || ul.Get(4) != 101 {
 		t.Errorf("Friend ids don't match")
 	}
 	if len(child.Children) != 1 || child.Children[0].Attr != "name" {
 		t.Errorf("Expected attr name")
 	}
 	child = child.Children[0]
-	x.ParseTaskResult(r, child.Result)
-	if r.ValuesLength() != 5 {
+
+	values := child.Values
+	if values.ValuesLength() != 5 {
 		t.Errorf("Expected 5 names of 5 friends")
 	}
-	checkName(t, r, 0, "Rick Grimes")
-	checkName(t, r, 1, "Glenn Rhee")
-	checkName(t, r, 2, "Daryl Dixon")
-	checkName(t, r, 3, "Andrea")
+	checkName(t, child, 0, "Rick Grimes")
+	checkName(t, child, 1, "Glenn Rhee")
+	checkName(t, child, 2, "Daryl Dixon")
+	checkName(t, child, 3, "Andrea")
 	{
 		var tv task.Value
-		if ok := r.Values(&tv, 4); !ok {
+		if ok := values.Values(&tv, 4); !ok {
 			t.Error("Unable to retrieve value")
 		}
 		if !bytes.Equal(tv.ValBytes(), []byte{}) {

@@ -150,26 +150,31 @@ func TestProcessTask(t *testing.T) {
 		t.Error(err)
 	}
 
-	if r.ValuesLength() != 3 {
-		t.Errorf("Expected 3. Got values length: %v", r.ValuesLength())
+	var valuesList task.ValueList
+	if r.Values(&valuesList) == nil {
+		t.Errorf("Error loading ValueList")
+		return
+	}
+	if valuesList.ValuesLength() != 3 {
+		t.Errorf("Expected 3. Got values length: %v", valuesList.ValuesLength())
 		return
 	}
 	var tval task.Value
-	if ok := r.Values(&tval, 0); !ok {
+	if ok := valuesList.Values(&tval, 0); !ok {
 		t.Errorf("Unable to retrieve value")
 	}
 	if string(tval.ValBytes()) != "photon" {
 		t.Errorf("Expected photon. Got: %q", string(tval.ValBytes()))
 	}
 
-	if ok := r.Values(&tval, 1); !ok {
+	if ok := valuesList.Values(&tval, 1); !ok {
 		t.Errorf("Unable to retrieve value")
 	}
 	if !bytes.Equal(tval.ValBytes(), []byte{}) {
 		t.Errorf("Invalid value")
 	}
 
-	if ok := r.Values(&tval, 2); !ok {
+	if ok := valuesList.Values(&tval, 2); !ok {
 		t.Errorf("Unable to retrieve value")
 	}
 	if string(tval.ValBytes()) != "photon" {

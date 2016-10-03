@@ -18,6 +18,7 @@ package worker
 
 import (
 	"context"
+	"log"
 
 	"github.com/dgryski/go-farm"
 	"github.com/google/flatbuffers/go"
@@ -37,6 +38,7 @@ const (
 // the instance which stores posting list corresponding to the predicate in the
 // query.
 func ProcessTaskOverNetwork(ctx context.Context, qu []byte) (result []byte, rerr error) {
+	log.Printf("~~ProcessTaskOverNetwork")
 	q := new(task.Query)
 	x.ParseTaskQuery(q, qu)
 
@@ -155,29 +157,47 @@ func processTask(query []byte) ([]byte, error) {
 		}
 	}
 
-	task.ResultStartValuesVector(b, len(voffsets))
+	// Create a ValueList's vector of Values.
+	task.ValueListStartValuesVector(b, len(voffsets))
 	for i := len(voffsets) - 1; i >= 0; i-- {
 		b.PrependUOffsetT(voffsets[i])
 	}
-	valuesVent := b.EndVector(len(voffsets))
+	valuesVecOffset := b.EndVector(len(voffsets))
 
+	// Create a ValueList.
+	task.ValueListStart(b)
+	task.ValueListAddValues(b, valuesVecOffset)
+	valuesVent := task.ValueListEnd(b)
+
+	// Prepare UID matrix.
 	task.ResultStartUidmatrixVector(b, len(uoffsets))
 	for i := len(uoffsets) - 1; i >= 0; i-- {
 		b.PrependUOffsetT(uoffsets[i])
 	}
 	matrixVent := b.EndVector(len(uoffsets))
 
-	task.ResultStartCountVector(b, len(counts))
+	// Create a CountList's vector of ulong.
+	task.CountListStartCountVector(b, len(counts))
 	for i := len(counts) - 1; i >= 0; i-- {
 		b.PrependUint64(counts[i])
 	}
-	countsVent := b.EndVector(len(counts))
+	countVecOffset := b.EndVector(len(counts))
+
+	// Create a CountList.
+	task.CountListStart(b)
+	task.CountListAddCount(b, countVecOffset)
+	countsVent := task.CountListEnd(b)
 
 	task.ResultStart(b)
 	task.ResultAddValues(b, valuesVent)
 	task.ResultAddUidmatrix(b, matrixVent)
 	task.ResultAddCount(b, countsVent)
-	rend := task.ResultEnd(b)
-	b.Finish(rend)
-	return b.Bytes[b.Head():], nil
+	b.Finish(task.ResultEnd(b))
+	buf := b.FinishedBytes()
+
+	var ttt task.Result
+	x.ParseTaskResult(&ttt, buf)
+
+	return buf, nil
+	//return b.FinishedBytes(), nil
 }

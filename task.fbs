@@ -29,10 +29,18 @@ table UidList {
 	uids:[ulong];
 }
 
+table CountList {
+	count:[ulong];
+}
+
 table Result {
 	uidmatrix:[UidList];
+	values:ValueList;
+	count:CountList;
+}
+
+table ValueList {
 	values:[Value];
-	count:[ulong];
 }
 
 table KV {

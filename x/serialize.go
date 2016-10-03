@@ -23,6 +23,16 @@ import (
 	"github.com/dgraph-io/dgraph/task"
 )
 
+// ParseValueList parses bytes into task.ValueList.
+func ParseValueList(q *task.ValueList, b []byte) {
+	q.Init(b, flatbuffers.GetUOffsetT(b))
+}
+
+// ParseUidList parses bytes into task.UidList.
+func ParseUidList(q *task.UidList, b []byte) {
+	q.Init(b, flatbuffers.GetUOffsetT(b))
+}
+
 // ParseTaskQuery parses bytes into task.Query. This is very fast.
 func ParseTaskQuery(q *task.Query, b []byte) {
 	q.Init(b, flatbuffers.GetUOffsetT(b))
@@ -36,4 +46,16 @@ func ParseTaskResult(r *task.Result, b []byte) {
 // ParsePosting parses bytes into types.Posting. This is very fast.
 func ParsePosting(p *types.Posting, b []byte) {
 	p.Init(b, flatbuffers.GetUOffsetT(b))
+}
+
+// UidlistOffset adds a UidList to buffer and returns the offset.
+func UidlistOffset(b *flatbuffers.Builder, sorted []uint64) flatbuffers.UOffsetT {
+	task.UidListStartUidsVector(b, len(sorted))
+	for i := len(sorted) - 1; i >= 0; i-- {
+		b.PrependUint64(sorted[i])
+	}
+	ulist := b.EndVector(len(sorted))
+	task.UidListStart(b)
+	task.UidListAddUids(b, ulist)
+	return task.UidListEnd(b)
 }
