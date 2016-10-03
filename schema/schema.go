@@ -57,25 +57,5 @@ func TypeOf(pred string) types.Type {
 }
 
 func getScalar(typ string) (types.Type, bool) {
-	var res types.Type
-	switch typ {
-	case "int":
-		res = types.Int32Type
-	case "float":
-		res = types.FloatType
-	case "string":
-		res = types.StringType
-	case "bool":
-		res = types.BooleanType
-	case "id":
-		res = types.IDType
-	default:
-		res = nil
-	}
-
-	if res != nil {
-		return res, true
-	}
-
-	return res, false
+	return types.TypeForName(typ)
 }
