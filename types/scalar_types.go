@@ -151,14 +151,16 @@ var typeIDMap = map[TypeID]Type{
 
 // TypeForName returns the type corresponding to the given name.
 // If name is not recognized, it returns nil.
-func TypeForName(name string) Type {
-	return typeNameMap[name]
+func TypeForName(name string) (Type, bool) {
+	t, ok := typeNameMap[name]
+	return t, ok
 }
 
 // TypeForID returns the type corresponding to the given TypeID.
 // If id is not recognized, it returns nil.
-func TypeForID(id TypeID) Type {
-	return typeIDMap[id]
+func TypeForID(id TypeID) (Type, bool) {
+	t, ok := typeIDMap[id]
+	return t, ok
 }
 
 // Int32 is the scalar type for int32
