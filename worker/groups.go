@@ -3,6 +3,7 @@ package worker
 import (
 	"fmt"
 	"math"
+	"math/rand"
 	"sync"
 
 	"github.com/dgraph-io/dgraph/task"
@@ -36,13 +37,6 @@ func init() {
 func groups() *groupi {
 	return gr
 }
-
-/*
-func pools() *pooli {
-	return nil
-}
-var pl Pools
-*/
 
 func StartRaftNodes(raftId uint64, my, cluster, peer string) {
 	node := groups().InitNode(math.MaxUint32, raftId, my)
@@ -155,13 +149,20 @@ func (g *groupi) UpdateServer(mm *task.Membership) {
 	fmt.Printf("Group: %v. List: %+v\n", mm.Group(), all.list)
 }
 
-/*
-func LeaderPool(groupId uint32) *Pool {
-	pool := pl.get(addr)
-	if pool != nil {
-		return pool
-	}
-	pl.connect(addr)
-	return pl.get(addr)
+func (g *groupi) AnyServer(group uint32) string {
+	g.RLock()
+	defer g.RUnlock()
+	all := g.all[group]
+	x.Assert(all != nil)
+	sz := len(all.list)
+	idx := rand.Intn(sz)
+	return all.list[idx].Addr
 }
-*/
+
+func (g *groupi) Leader(group uint32) string {
+	g.RLock()
+	defer g.RUnlock()
+	all := g.all[group]
+	x.Assert(all != nil)
+	return all.list[0].Addr
+}
