@@ -232,7 +232,6 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 	//
 
 	if sg.Counts != nil && sg.Counts.CountLength() > 0 {
-		log.Printf("~~~~postTraverse: [%s] len=%d", sg.Attr, sg.Counts.CountLength())
 		for i := 0; i < sg.Counts.CountLength(); i++ {
 			co := sg.Counts.Count(i)
 			m := make(map[string]interface{})
@@ -717,8 +716,6 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		srcUIDs: []uint64{euid},
 	}
 
-	log.Printf("~~~~populating [%s]", sg.Attr)
-
 	{
 		// Encode uid into result flatbuffer.
 		b := flatbuffers.NewBuilder(0)
@@ -746,8 +743,6 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		b.Finish(task.ValueListEnd(b))
 		buf := b.FinishedBytes()
 		x.ParseValueList(&sg.Values, buf)
-
-		log.Printf("~~~~~~~[%s] %d", sg.Attr, sg.Values.ValuesLength())
 	}
 	return sg, nil
 }
@@ -808,7 +803,6 @@ func createTaskQuery(sg *SubGraph, uids []uint64, terms []string, intersect []ui
 func ProcessGraph(ctx context.Context, sg *SubGraph, taskQuery []byte, rch chan error) {
 	var err error
 	if taskQuery != nil {
-		log.Printf("~~~~ProcessGraph issuing task query [%s]", sg.Attr)
 		resultBuf, err := worker.ProcessTaskOverNetwork(ctx, taskQuery)
 		if err != nil {
 			x.TraceError(ctx, x.Wrapf(err, "Error while processing task"))
@@ -847,16 +841,6 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, taskQuery []byte, rch chan 
 	}
 
 	sg.destUIDs = algo.MergeSorted(sg.Result)
-	/*log.Printf("~~~destUIDs [%s] %v", sg.Attr, sg.destUIDs)
-	if sg.Values.ValuesLength() > 0 {
-		log.Printf("~~~values [%s] len=%d", sg.Attr, sg.Values.ValuesLength())
-		for i := 0; i < sg.Values.ValuesLength(); i++ {
-			var tv task.Value
-			if sg.Values.Values(&tv, i) {
-				log.Printf("~~~value [%s][%d] = %s", sg.Attr, i, string(tv.ValBytes()))
-			}
-		}
-	}*/
 	if err != nil {
 		x.TraceError(ctx, x.Wrapf(err, "Error while processing task"))
 		rch <- err
@@ -877,9 +861,6 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, taskQuery []byte, rch chan 
 	}
 
 	// Apply offset and count (for pagination).
-	if sg.Attr == "friend" {
-		log.Printf("~~~ params %v %v", sg.Params.Offset, sg.Params.Count)
-	}
 	if err = sg.applyPagination(ctx); err != nil {
 		rch <- err
 		return
@@ -1105,8 +1086,6 @@ func (sg *SubGraph) applyPagination(ctx context.Context) error {
 	if params.Count == 0 && params.Offset == 0 { // No pagination.
 		return nil
 	}
-
-	log.Printf("~~~### pagination [%s]", sg.Attr)
 	x.Assert(len(sg.srcUIDs) == sg.Result.Size())
 	for i := 0; i < len(sg.srcUIDs); i++ {
 		l := algo.IntersectSorted(algo.GenericLists{
@@ -1115,26 +1094,7 @@ func (sg *SubGraph) applyPagination(ctx context.Context) error {
 		l = l[start:end]
 		sg.Result.Data[i] = algo.PlainUintList(l)
 	}
-
 	// Re-merge the UID matrix.
 	sg.destUIDs = algo.MergeSorted(sg.Result)
 	return nil
-	//	// For each row in UID matrix, we want to apply pagination or windowing. After
-	// that, we need to rebuild sg.sorted.
-	//	var result task.Result
-	//	x.ParseTaskResult(&result, sg.Result)
-
-	//	// We do not modify sg.Result. In postTraverse and preTraverse, we will take
-	//	// into count windowing params.
-	//	n := result.UidmatrixLength()
-	//	var results algo.GenericLists
-	//	results.Data = make([]algo.Uint64List, n)
-	//	for i := 0; i < n; i++ {
-	//		l := new(algo.UIDList)
-	//		x.Assert(result.Uidmatrix(&l.UidList, i))
-	//		start, end := window(&sg.Params, &l.UidList)
-	//		results.Data[i] = algo.NewUint64ListSlice(l, start, end)
-	//	}
-	//	sg.sorted = algo.MergeSorted(results)
-	//	return nil
 }
