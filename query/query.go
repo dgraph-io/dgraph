@@ -247,19 +247,8 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 
 	for i, ul := range r {
 		l := make([]interface{}, 0, ul.Size())
-
-		// We want to intersect ul.Uids with sg.destUIDs. Both are sorted.
-		// We need to maintain an index into sg.destUIDs, to do the intersection.
-		var destIdx int
-		destSize := sg.destUIDs.Size()
 		for j := 0; j < ul.Size(); j++ {
 			uid := ul.Get(j)
-			for ; destIdx < destSize && sg.destUIDs.Get(destIdx) < uid; destIdx++ {
-			}
-			if destIdx >= destSize || sg.destUIDs.Get(destIdx) > uid {
-				continue
-			}
-
 			m := make(map[string]interface{})
 			if sg.Params.GetUid || sg.Params.isDebug {
 				m["_uid_"] = fmt.Sprintf("%#x", uid)
@@ -440,8 +429,6 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 		}
 
 		ul := pc.Result[idx]
-		var tv task.Value
-
 		if sg.Counts != nil && sg.Counts.CountLength() > 0 {
 			p := createProperty("_count_", types.Int32(sg.Counts.Count(idx)))
 			uc := &graph.Node{
@@ -450,18 +437,11 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 			}
 			children = append(children, uc)
 
-		} else if ul.Size() > 0 {
+		} else if ul.Size() > 0 || len(pc.Children) > 0 {
 			// We create as many predicate entity children as the length of uids for
 			// this predicate.
-			var destIdx int // Index into pc.destUIDs.
-			destSize := pc.destUIDs.Size()
 			for i := 0; i < ul.Size(); i++ {
 				uid := ul.Get(i)
-				for ; destIdx < destSize && pc.destUIDs.Get(destIdx) < uid; destIdx++ {
-				}
-				if destIdx >= destSize || pc.destUIDs.Get(destIdx) > uid {
-					continue
-				}
 				uc := nodePool.Get().(*graph.Node)
 				uc.Attribute = pc.Attr
 				if sg.Params.GetUid || sg.Params.isDebug {
@@ -480,6 +460,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 				}
 			}
 		} else {
+			var tv task.Value
 			if ok := pc.Values.Values(&tv, idx); !ok {
 				return x.Errorf("While parsing value")
 			}
@@ -977,6 +958,10 @@ func (sg *SubGraph) applyFilter(ctx context.Context) error {
 		return err
 	}
 	sg.destUIDs = newSorted
+	// For each posting list, intersect with sg.destUIDs.
+	for _, l := range sg.Result {
+		l.Intersect(sg.destUIDs)
+	}
 	return nil
 }
 

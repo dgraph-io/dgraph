@@ -72,8 +72,23 @@ func (u *UIDList) ApplyFilterFn(f func(uid uint64) bool) {
 
 // Slice selects a slice of the data.
 func (u *UIDList) Slice(start, end int) {
-	u.convertToUints()
-	u.uints = u.uints[start:end]
+	if u.uints != nil {
+		u.uints = u.uints[start:end]
+		return
+	}
+	if u.list == nil {
+		return
+	}
+	// This is a task list. Let's copy what we want and convert to a []uint64.
+	x.Assert(start >= 0)
+	x.Assert(end <= u.Size())
+	x.Assert(start <= end)
+	output := make([]uint64, 0, end-start)
+	for i := start; i < end; i++ {
+		output = append(output, u.list.Uids(i))
+	}
+	u.uints = output
+	u.list = nil
 }
 
 // Intersect intersects with another list and updates this list.
