@@ -83,12 +83,17 @@ type FilterTree struct {
 	Child    []*FilterTree
 }
 
-// Filter operators: And, Or, and some internal ones.
+// FilterOp are filter operators: AND, OR, and some internal ones.
 type FilterOp int
 
 const (
-	FilterOpAnd       = iota
-	FilterOpOr        = iota
+	// FilterOpAnd is AND operator applied to filter conditions.
+	FilterOpAnd = iota
+
+	// FilterOpOr is OR operator applied to filter conditions.
+	FilterOpOr = iota
+
+	// filterOpLeftRound represents a left bracket and is internal.
 	filterOpLeftRound = iota // Internal use only.
 )
 
