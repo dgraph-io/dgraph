@@ -204,6 +204,9 @@ L:
 			return fmt.Errorf(item.Val)
 		}
 	}
+	if len(obj.Fields) == 0 {
+		return fmt.Errorf("Object type %v with no fields", objName)
+	}
 	str[objName] = obj
 	return nil
 }
