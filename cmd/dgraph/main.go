@@ -625,6 +625,7 @@ func main() {
 
 	posting.InitIndex(ps)
 	posting.Init()
+	worker.ParseGroupConfig("group.conf")
 
 	var ws *worker.State
 	if groupId != 0 { // HACK: This will currently not run.
