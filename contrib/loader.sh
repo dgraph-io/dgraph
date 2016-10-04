@@ -13,6 +13,20 @@ ROCKSDBDIR=$BUILD/rocksdb-4.9
 set -e
 
 pushd $BUILD &> /dev/null
+
+gitlfsfile="git-lfs-1.3.1"
+if [ ! -d $gitlfsfile ]; then
+  # Get git-lfs and benchmark data.
+  wget https://github.com/github/git-lfs/releases/download/v1.3.1/git-lfs-linux-amd64-1.3.1.tar.gz
+  tar -xzf git-lfs-linux-amd64-1.3.1.tar.gz
+  pushd git-lfs-1.3.1 &> /dev/null
+  sudo /bin/bash ./install.sh
+  popd &> /dev/null
+fi
+
+if [ ! -f "benchmarks/data/rdf-films.gz" ]; then
+    git clone https://github.com/dgraph-io/benchmarks.git
+fi
 benchmark=$(pwd)/benchmarks/data
 popd &> /dev/null
 
@@ -23,5 +37,5 @@ export LD_LIBRARY_PATH="${ROCKSDBDIR}:${LD_LIBRARY_PATH}"
 
 pushd cmd/dgraphloader &> /dev/null
 go build .
-./dgraphloader --num 1 --idx 0 --rdfgzips $benchmark/actor-director.gz --u ~/dgraph/u --p ~/dgraph/p --stw_ram_mb 3000 --cores 1
+./dgraphloader --num 1 --idx 0 --rdfgzips $benchmark/rdf-films.gz,$benchmark/names.gz --p ~/dgraph/p --stw_ram_mb 3000
 popd &> /dev/null

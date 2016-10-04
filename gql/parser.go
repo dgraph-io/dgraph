@@ -531,6 +531,10 @@ func parseVariables(l *lex.Lexer, vmap varMap) error {
 				return x.Errorf("Expecting default value of a variable. Got: %v", item)
 			}
 
+			if varType[len(varType)-1] == '!' {
+				return x.Errorf("Type ending with ! can't have default value: Got: %v", varType)
+			}
+
 			// If value is empty replace, otherwise ignore the default value
 			// as the intialised value will override the default value.
 			if vmap[varName].Value == "" {

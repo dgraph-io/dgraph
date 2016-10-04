@@ -21,6 +21,7 @@ import (
 	"io/ioutil"
 	"os"
 	"testing"
+	"time"
 
 	"context"
 
@@ -64,23 +65,11 @@ func prepare() (dir1, dir2 string, ps *store.Store, rerr error) {
 	}
 
 	posting.Init()
-	worker.SetWorkerState(worker.NewState(ps, nil, 0, 1))
+	worker.SetWorkerState(worker.NewState(ps, 0, 1))
 	uid.Init(ps)
-	loader.Init(ps, ps)
+	loader.Init(ps)
 	posting.InitIndex(ps)
 
-	{
-		// Assign Uids first.
-		f, err := os.Open("testdata.nq")
-		if err != nil {
-			return dir1, dir2, nil, err
-		}
-		_, err = loader.AssignUids(f, 0, 1)
-		f.Close()
-		if err != nil {
-			return dir1, dir2, nil, err
-		}
-	}
 	{
 		// Then load data.
 		f, err := os.Open("testdata.nq")
@@ -187,6 +176,13 @@ var qm = `
 `
 
 func TestAssignUid(t *testing.T) {
+	worker.InitNode(1, "localhost:4567")
+	n := worker.GetNode()
+	n.StartNode("1:localhost:4567")
+	// Waiting for it to become leader, because uids can only be assigned on the leader.
+	for !n.AmLeader() {
+		time.Sleep(1 * time.Second)
+	}
 	dir1, dir2, _, err := prepare()
 	if err != nil {
 		t.Error(err)
@@ -209,6 +205,12 @@ func TestAssignUid(t *testing.T) {
 
 	if len(allocIds) != 2 {
 		t.Errorf("Expected two UIDs to be allocated")
+	}
+	if _, ok := allocIds["x"]; !ok {
+		t.Error("Expected map to contain value for x")
+	}
+	if _, ok := allocIds["y"]; !ok {
+		t.Error("Expected map to contain value for y")
 	}
 }
 
