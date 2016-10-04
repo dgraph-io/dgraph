@@ -106,8 +106,8 @@ func getNew() *List {
 // UIDs, for each posting list. It should be internal to this package.
 type ListOptions struct {
 	// To get 40th to 50th results, use offset=40, count/first=10.
-	Offset    int           // Skip this many results.
-	Count     int           // Max num UIDs returned; "first" argument in GraphQL.
+	//	Offset    int           // Skip this many results.
+	//	Count     int           // Max num UIDs returned; "first" argument in GraphQL.
 	AfterUid  uint64        // Any UID returned must be after this value.
 	Intersect *algo.UIDList // Intersect results with this list of UIDs.
 }
@@ -759,55 +759,38 @@ func (l *List) Uids(opt ListOptions) []uint64 {
 	l.RLock()
 	defer l.RUnlock()
 
-	// TODO: Allow offset, count. Disable later. This is to allow tests to pass all
-	// the time, so that we know everything is working.
-
-	x.Assertf(opt.Offset >= 0, "Unexpected offset %d", opt.Offset)
-
 	var p types.Posting
+	var offset int
 	if opt.AfterUid > 0 {
 		// sort.Search returns the index of the first element > AfterUid.
 		// AfterUid overrides the offset parameter.
-		opt.Offset = sort.Search(l.length(), func(i int) bool {
+		offset = sort.Search(l.length(), func(i int) bool {
 			l.get(&p, i)
 			return p.Uid() > opt.AfterUid
 		})
 	}
-	if opt.Count < 0 {
-		// Negative count (or "first" in GraphQL) means we want to take this many
-		// items from the back of the array.
-		opt.Count = -opt.Count
-		opt.Offset = l.length() - opt.Count // Negative count overrides offset.
-	}
-	if opt.Offset < 0 {
-		opt.Offset = 0
+
+	count := l.length()
+	if opt.Intersect != nil && opt.Intersect.Size() < count {
+		count = opt.Intersect.Size()
 	}
 
-	if opt.Count == 0 || opt.Count > l.length()-opt.Offset {
-		opt.Count = l.length() - opt.Offset
-	}
-	if opt.Count < 0 {
-		opt.Count = 0
-	}
-
-	result := make([]uint64, opt.Count)
-	result = result[:0]
-
-	var intersectIdx int
-	for i := opt.Offset; i < opt.Count+opt.Offset && i < l.length(); i++ {
+	result := make([]uint64, 0, count)
+	var intersectIdx int // Indexes into opt.Intersect if it exists.
+	for i := offset; i < l.length(); i++ {
 		if ok := l.get(&p, i); !ok || p.Uid() == math.MaxUint64 {
 			break
 		}
 		// Try to intersect.
-		pUID := p.Uid()
+		uid := p.Uid()
 		if opt.Intersect != nil {
-			for ; intersectIdx < opt.Intersect.Size() && opt.Intersect.Get(intersectIdx) < pUID; intersectIdx++ {
+			for ; intersectIdx < opt.Intersect.Size() && opt.Intersect.Get(intersectIdx) < uid; intersectIdx++ {
 			}
-			if intersectIdx >= opt.Intersect.Size() || opt.Intersect.Get(intersectIdx) > pUID {
+			if intersectIdx >= opt.Intersect.Size() || opt.Intersect.Get(intersectIdx) > uid {
 				continue
 			}
 		}
-		result = append(result, pUID)
+		result = append(result, uid)
 	}
 	return result
 }

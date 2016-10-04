@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -135,22 +136,15 @@ type SubGraph struct {
 	Params   params
 	Filter   *gql.FilterTree
 
-	//Query []byte // Contains list of source UIDs.
-	//Result []byte // Contains UID matrix or list of values for child attributes.
-
 	Counts *task.CountList
 	Values task.ValueList
 	Result algo.GenericLists
 
-	// sourceUIDs is a list of unique source UIDs. They are always copies of
-	// destUIDs of parent nodes.
-	sourceUIDs []uint64
+	// srcUIDs is a list of unique source UIDs. They are always copies of destUIDs
+	// of parent nodes in GraphQL structure.
+	srcUIDs []uint64
 
-	// destUIDs is a list of destination UIDs, after applying filters.
-	// One may ask: Doesn't children nodes contain sg.sorted? There is one
-	// exception. Imagine a node with no children but we ask for its children's
-	// UIDs. The node has a filter. In this case, it has no children to store the
-	// filtered UIDs.
+	// destUIDs is a list of destination UIDs, after applying filters, pagination.
 	destUIDs []uint64
 }
 
@@ -171,7 +165,7 @@ func mergeInterfaces(i1 interface{}, i2 interface{}) interface{} {
 
 // postTraverse traverses the subgraph recursively and returns final result for the query.
 func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
-	if len(sg.sourceUIDs) == 0 {
+	if len(sg.srcUIDs) == 0 {
 		return nil, nil
 	}
 	result := make(map[uint64]interface{})
@@ -220,10 +214,10 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 	}
 
 	r := sg.Result
-	x.Assertf(len(sg.sourceUIDs) == r.Size(),
-		"Result uidmatrixlength: %v. Query uidslength: %v", len(sg.sourceUIDs), r.Size())
-	x.Assertf(len(sg.sourceUIDs) == sg.Values.ValuesLength(),
-		"Result valuelength: %v. Query uidslength: %v", len(sg.sourceUIDs), sg.Values.ValuesLength())
+	x.Assertf(len(sg.srcUIDs) == r.Size(),
+		"Result uidmatrixlength: %v. Query uidslength: %v", len(sg.srcUIDs), r.Size())
+	x.Assertf(len(sg.srcUIDs) == sg.Values.ValuesLength(),
+		"Result valuelength: %v. Query uidslength: %v", len(sg.srcUIDs), sg.Values.ValuesLength())
 
 	// Generate a matrix of maps
 	// Row -> .....
@@ -249,7 +243,7 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 			} else {
 				mp[sg.Attr] = m
 			}
-			result[sg.sourceUIDs[i]] = mp
+			result[sg.srcUIDs[i]] = mp
 		}
 	}
 
@@ -286,7 +280,7 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 			} else {
 				m[sg.Attr] = l
 			}
-			result[sg.sourceUIDs[i]] = m
+			result[sg.srcUIDs[i]] = m
 		}
 	}
 
@@ -294,7 +288,7 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 	var tv task.Value
 	for i := 0; i < values.ValuesLength(); i++ {
 		if ok := values.Values(&tv, i); !ok {
-			return result, fmt.Errorf("While parsing value")
+			return result, x.Errorf("While parsing value")
 		}
 		valBytes := tv.ValBytes()
 		m := make(map[string]interface{})
@@ -305,7 +299,7 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 			// and the index of the results can remain in sync.
 			if sg.Params.AttrType != nil && sg.Params.AttrType.IsScalar() {
 				m["_inv_"] = true
-				result[sg.sourceUIDs[i]] = m
+				result[sg.srcUIDs[i]] = m
 			}
 			continue
 		}
@@ -314,13 +308,13 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 			return result, err
 		}
 
-		if pval, present := result[sg.sourceUIDs[i]]; present {
+		if pval, present := result[sg.srcUIDs[i]]; present {
 			log.Fatalf("prev: %v _uid_: %v new: %v"+
 				" Previous value detected. A uid -> list of uids / value. Not both",
-				pval, sg.sourceUIDs[i], val)
+				pval, sg.srcUIDs[i], val)
 		}
 		if sg.Params.GetUid || sg.Params.isDebug {
-			m["_uid_"] = fmt.Sprintf("%#x", sg.sourceUIDs[i])
+			m["_uid_"] = fmt.Sprintf("%#x", sg.srcUIDs[i])
 		}
 		if sg.Params.AttrType == nil {
 			// No type defined for attr in type system/schema, hence return the original value
@@ -332,7 +326,7 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 		} else {
 			// type assertion for scalar type values
 			if !sg.Params.AttrType.IsScalar() {
-				return result, fmt.Errorf("Unknown Scalar:%v. Leaf predicate:'%v' must be"+
+				return result, x.Errorf("Unknown Scalar:%v. Leaf predicate:'%v' must be"+
 					" one of the scalar types defined in the schema.", sg.Params.AttrType, sg.Attr)
 			}
 			schemaType := sg.Params.AttrType.(types.Scalar)
@@ -344,7 +338,7 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 				if err != nil {
 					// We ignore schema conversion errors and not include the values in the result
 					m["_inv_"] = true
-					result[sg.sourceUIDs[i]] = m
+					result[sg.srcUIDs[i]] = m
 					continue
 				}
 			}
@@ -354,7 +348,7 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 				m[sg.Attr] = lval
 			}
 		}
-		result[sg.sourceUIDs[i]] = m
+		result[sg.srcUIDs[i]] = m
 	}
 	return result, nil
 }
@@ -403,22 +397,15 @@ func (sg *SubGraph) ToJSON(l *Latency) ([]byte, error) {
 		return json.Marshal(m)
 	}
 	log.Fatal("Runtime should never reach here.")
-	return nil, fmt.Errorf("Runtime should never reach here.")
+	return nil, x.Errorf("Runtime should never reach here.")
 }
 
 // This function performs a binary search on the uids slice and returns the
 // index at which it finds the uid, else returns -1
 func indexOf(uid uint64, q []uint64) int {
-	low, mid, high := 0, 0, len(q)-1
-	for low <= high {
-		mid = (low + high) / 2
-		if q[mid] == uid {
-			return mid
-		} else if q[mid] > uid {
-			high = mid - 1
-		} else {
-			low = mid + 1
-		}
+	i := sort.Search(len(q), func(i int) bool { return q[i] >= uid })
+	if i < len(q) && q[i] == uid {
+		return i
 	}
 	return -1
 }
@@ -459,11 +446,11 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 	// We go through all predicate children of the subgraph.
 	for _, pc := range sg.Children {
 		r := pc.Result
-		idx := indexOf(uid, pc.sourceUIDs)
+		idx := indexOf(uid, pc.srcUIDs)
 
 		if idx == -1 {
 			log.Fatal("Attribute with uid not found in child Query uids.")
-			return fmt.Errorf("Attribute with uid not found")
+			return x.Errorf("Attribute with uid not found")
 		}
 
 		ul := r.Get(idx)
@@ -529,7 +516,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 				//do type checking on response values
 				// type assertion for scalar type values
 				if !pc.Params.AttrType.IsScalar() {
-					return fmt.Errorf("Unknown Scalar:%v. Leaf predicate:'%v' must be"+
+					return x.Errorf("Unknown Scalar:%v. Leaf predicate:'%v' must be"+
 						" one of the scalar types defined in the schema.", pc.Params.AttrType, pc.Attr)
 				}
 				schemaType := pc.Params.AttrType.(types.Scalar)
@@ -540,7 +527,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 					sv, err = schemaType.Convert(v)
 					if bytes.Equal(valBytes, nil) || err != nil {
 						// skip values that don't convert.
-						return fmt.Errorf("_INV_")
+						return x.Errorf("_INV_")
 					}
 				}
 				p := createProperty(pc.Attr, sv)
@@ -567,7 +554,7 @@ func (sg *SubGraph) ToProtocolBuffer(l *Latency) (*graph.Node, error) {
 	n := &graph.Node{
 		Attribute: sg.Attr,
 	}
-	if sg.sourceUIDs == nil {
+	if sg.srcUIDs == nil {
 		return n, nil
 	}
 
@@ -724,10 +711,10 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		isDebug:  gq.Attr == "debug",
 	}
 	sg := &SubGraph{
-		Attr:       gq.Attr,
-		Params:     args,
-		Filter:     gq.Filter,
-		sourceUIDs: []uint64{euid},
+		Attr:    gq.Attr,
+		Params:  args,
+		Filter:  gq.Filter,
+		srcUIDs: []uint64{euid},
 	}
 
 	log.Printf("~~~~populating [%s]", sg.Attr)
@@ -890,6 +877,9 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, taskQuery []byte, rch chan 
 	}
 
 	// Apply offset and count (for pagination).
+	if sg.Attr == "friend" {
+		log.Printf("~~~ params %v %v", sg.Params.Offset, sg.Params.Count)
+	}
 	if err = sg.applyPagination(ctx); err != nil {
 		rch <- err
 		return
@@ -900,7 +890,7 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, taskQuery []byte, rch chan 
 	childChan := make(chan error, len(sg.Children))
 	for i := 0; i < len(sg.Children); i++ {
 		child := sg.Children[i]
-		child.sourceUIDs = sg.destUIDs // Make the connection.
+		child.srcUIDs = sg.destUIDs // Make the connection.
 		if child.Params.AttrType == nil || child.Params.AttrType.IsScalar() {
 			processed = append(processed, child)
 			taskQuery := createTaskQuery(child, sg.destUIDs, nil, nil)
@@ -959,7 +949,7 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, taskQuery []byte, rch chan 
 
 				// type assertion for scalar type values
 				if !node.Params.AttrType.IsScalar() {
-					rch <- fmt.Errorf("Fatal mistakes in type.")
+					rch <- x.Errorf("Fatal mistakes in type.")
 				}
 
 				schemaType := node.Params.AttrType.(types.Scalar)
@@ -1088,12 +1078,12 @@ func runFilter(ctx context.Context, destUIDs []uint64, filter *gql.FilterTree) (
 // pageRange returns start and end indices given pagination params. Note that n
 // is the size of the input list.
 func pageRange(p *params, n int) (int, int) {
-	if p.Count == 0 && p.Offset == 0 { // No windowing.
+	if p.Count == 0 && p.Offset == 0 {
 		return 0, n
 	}
 	if p.Count < 0 {
 		// Items from the back of the array, like Python arrays.
-		return n - p.Count, n
+		return n + p.Count, n
 	}
 	start := p.Offset
 	if start < 0 {
@@ -1116,8 +1106,9 @@ func (sg *SubGraph) applyPagination(ctx context.Context) error {
 		return nil
 	}
 
-	x.Assert(len(sg.sourceUIDs) == sg.Result.Size())
-	for i := 0; i < len(sg.sourceUIDs); i++ {
+	log.Printf("~~~### pagination [%s]", sg.Attr)
+	x.Assert(len(sg.srcUIDs) == sg.Result.Size())
+	for i := 0; i < len(sg.srcUIDs); i++ {
 		l := algo.IntersectSorted(algo.GenericLists{
 			[]algo.Uint64List{sg.Result.Get(i), algo.PlainUintList(sg.destUIDs)}})
 		start, end := pageRange(&sg.Params, len(l))

@@ -18,7 +18,6 @@ package worker
 
 import (
 	"context"
-	"log"
 
 	"github.com/dgryski/go-farm"
 	"github.com/google/flatbuffers/go"
@@ -38,7 +37,6 @@ const (
 // the instance which stores posting list corresponding to the predicate in the
 // query.
 func ProcessTaskOverNetwork(ctx context.Context, qu []byte) (result []byte, rerr error) {
-	log.Printf("~~ProcessTaskOverNetwork")
 	q := new(task.Query)
 	x.ParseTaskQuery(q, qu)
 
@@ -138,11 +136,12 @@ func processTask(query []byte) ([]byte, error) {
 			uoffsets[i] = x.UidlistOffset(b, []uint64{})
 		} else {
 			opts := posting.ListOptions{
-				Offset:   int(q.Offset()),
-				Count:    int(q.Count()),
+				//				Offset:   int(q.Offset()),
+				//				Count:    int(q.Count()),
 				AfterUid: uint64(q.AfterUid()),
 			}
 
+			// Get taskQuery.Intersect field.
 			intersect := new(algo.UIDList)
 			if q.Intersect(&intersect.UidList) != nil {
 				opts.Intersect = intersect
@@ -189,11 +188,5 @@ func processTask(query []byte) ([]byte, error) {
 	task.ResultAddUidmatrix(b, matrixVent)
 	task.ResultAddCount(b, countsVent)
 	b.Finish(task.ResultEnd(b))
-	buf := b.FinishedBytes()
-
-	var ttt task.Result
-	x.ParseTaskResult(&ttt, buf)
-
-	return buf, nil
-	//return b.FinishedBytes(), nil
+	return b.FinishedBytes(), nil
 }
