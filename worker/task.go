@@ -140,9 +140,10 @@ func processTask(query []byte) ([]byte, error) {
 			}
 
 			// Get taskQuery.Intersect field.
-			intersect := new(algo.UIDList)
-			if q.Intersect(&intersect.UidList) != nil {
-				opts.Intersect = intersect
+			taskList := new(task.UidList)
+			if q.Intersect(taskList) != nil {
+				opts.Intersect = new(algo.UIDList)
+				opts.Intersect.FromTask(taskList)
 			}
 
 			ulist := pl.Uids(opts)

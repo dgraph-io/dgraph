@@ -65,19 +65,19 @@ func checkName(t *testing.T, sg *SubGraph, idx int, expected string) {
 }
 
 func checkSingleValue(t *testing.T, child *SubGraph, attr string, value string) {
-	if child.Attr != attr || child.Result.Size() == 0 {
+	if child.Attr != attr || len(child.Result) == 0 {
 		t.Error("Expected attr name with some result", attr)
 	}
 
 	if child.Values.ValuesLength() != 1 {
 		t.Errorf("Expected value length 1. Got: %v", child.Values.ValuesLength())
 	}
-	if child.Result.Size() != 1 {
-		t.Errorf("Expected uidmatrix length 1. Got: %v", child.Result.Size())
+	if len(child.Result) != 1 {
+		t.Errorf("Expected uidmatrix length 1. Got: %v", len(child.Result))
 	}
 
-	if child.Result.Get(0).Size() != 0 {
-		t.Errorf("Expected uids length 0. Got: %v", child.Result.Get(0).Size())
+	if child.Result[0].Size() != 0 {
+		t.Errorf("Expected uids length 0. Got: %v", child.Result[0].Size())
 	}
 	checkName(t, child, 0, value)
 }
@@ -106,14 +106,14 @@ func TestNewGraph(t *testing.T) {
 
 	worker.SetWorkerState(worker.NewState(ps, 0, 1))
 
-	if sg.Result.Size() != 1 {
-		t.Errorf("Expected length 1. Got: %v", sg.Result.Size())
+	if len(sg.Result) != 1 {
+		t.Errorf("Expected length 1. Got: %v", len(sg.Result))
 	}
-	if sg.Result.Get(0).Size() != 1 {
-		t.Errorf("Expected length 1. Got: %v", sg.Result.Get(0).Size())
+	if sg.Result[0].Size() != 1 {
+		t.Errorf("Expected length 1. Got: %v", sg.Result[0].Size())
 	}
-	if sg.Result.Get(0).Get(0) != 101 {
-		t.Errorf("Expected uid: %v. Got: %v", 101, sg.Result.Get(0).Get(0))
+	if sg.Result[0].Get(0) != 101 {
+		t.Errorf("Expected uid: %v. Got: %v", 101, sg.Result[0].Get(0))
 	}
 }
 
@@ -546,16 +546,16 @@ func TestProcessGraph(t *testing.T) {
 	if child.Attr != "friend" {
 		t.Errorf("Expected attr friend. Got: %v", child.Attr)
 	}
-	if child.Result.Size() == 0 {
+	if len(child.Result) == 0 {
 		t.Errorf("Expected some.Result.")
 		return
 	}
 
-	if sg.Result.Size() != 1 {
-		t.Errorf("Expected 1 matrix. Got: %v", sg.Result.Size())
+	if len(sg.Result) != 1 {
+		t.Errorf("Expected 1 matrix. Got: %v", len(sg.Result))
 	}
 
-	ul := child.Result.Get(0)
+	ul := child.Result[0]
 	if ul.Size() != 5 {
 		t.Errorf("Expected 5 friends. Got: %v", ul.Size())
 	}

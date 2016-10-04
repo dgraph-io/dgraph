@@ -23,7 +23,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -138,14 +137,14 @@ type SubGraph struct {
 
 	Counts *task.CountList
 	Values task.ValueList
-	Result algo.GenericLists
+	Result []*algo.UIDList
 
 	// srcUIDs is a list of unique source UIDs. They are always copies of destUIDs
 	// of parent nodes in GraphQL structure.
-	srcUIDs []uint64
+	srcUIDs *algo.UIDList
 
 	// destUIDs is a list of destination UIDs, after applying filters, pagination.
-	destUIDs []uint64
+	destUIDs *algo.UIDList
 }
 
 func mergeInterfaces(i1 interface{}, i2 interface{}) interface{} {
@@ -165,7 +164,7 @@ func mergeInterfaces(i1 interface{}, i2 interface{}) interface{} {
 
 // postTraverse traverses the subgraph recursively and returns final result for the query.
 func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
-	if len(sg.srcUIDs) == 0 {
+	if sg.srcUIDs.Size() == 0 {
 		return nil, nil
 	}
 	result := make(map[uint64]interface{})
@@ -214,10 +213,10 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 	}
 
 	r := sg.Result
-	x.Assertf(len(sg.srcUIDs) == r.Size(),
-		"Result uidmatrixlength: %v. Query uidslength: %v", len(sg.srcUIDs), r.Size())
-	x.Assertf(len(sg.srcUIDs) == sg.Values.ValuesLength(),
-		"Result valuelength: %v. Query uidslength: %v", len(sg.srcUIDs), sg.Values.ValuesLength())
+	x.Assertf(sg.srcUIDs.Size() == len(r),
+		"Result uidmatrixlength: %v. Query uidslength: %v", sg.srcUIDs.Size(), len(r))
+	x.Assertf(sg.srcUIDs.Size() == sg.Values.ValuesLength(),
+		"Result valuelength: %v. Query uidslength: %v", sg.srcUIDs.Size(), sg.Values.ValuesLength())
 
 	// Generate a matrix of maps
 	// Row -> .....
@@ -242,22 +241,22 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 			} else {
 				mp[sg.Attr] = m
 			}
-			result[sg.srcUIDs[i]] = mp
+			result[sg.srcUIDs.Get(i)] = mp
 		}
 	}
 
-	for i := 0; i < r.Size(); i++ {
-		ul := r.Get(i)
+	for i, ul := range r {
 		l := make([]interface{}, 0, ul.Size())
 
 		// We want to intersect ul.Uids with sg.destUIDs. Both are sorted.
 		// We need to maintain an index into sg.destUIDs, to do the intersection.
 		var destIdx int
+		destSize := sg.destUIDs.Size()
 		for j := 0; j < ul.Size(); j++ {
 			uid := ul.Get(j)
-			for ; destIdx < len(sg.destUIDs) && sg.destUIDs[destIdx] < uid; destIdx++ {
+			for ; destIdx < destSize && sg.destUIDs.Get(destIdx) < uid; destIdx++ {
 			}
-			if destIdx >= len(sg.destUIDs) || sg.destUIDs[destIdx] > uid {
+			if destIdx >= destSize || sg.destUIDs.Get(destIdx) > uid {
 				continue
 			}
 
@@ -278,7 +277,7 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 			} else {
 				m[sg.Attr] = l
 			}
-			result[sg.srcUIDs[i]] = m
+			result[sg.srcUIDs.Get(i)] = m
 		}
 	}
 
@@ -297,7 +296,7 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 			// and the index of the results can remain in sync.
 			if sg.Params.AttrType != nil && sg.Params.AttrType.IsScalar() {
 				m["_inv_"] = true
-				result[sg.srcUIDs[i]] = m
+				result[sg.srcUIDs.Get(i)] = m
 			}
 			continue
 		}
@@ -306,13 +305,13 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 			return result, err
 		}
 
-		if pval, present := result[sg.srcUIDs[i]]; present {
+		if pval, present := result[sg.srcUIDs.Get(i)]; present {
 			log.Fatalf("prev: %v _uid_: %v new: %v"+
 				" Previous value detected. A uid -> list of uids / value. Not both",
-				pval, sg.srcUIDs[i], val)
+				pval, sg.srcUIDs.Get(i), val)
 		}
 		if sg.Params.GetUid || sg.Params.isDebug {
-			m["_uid_"] = fmt.Sprintf("%#x", sg.srcUIDs[i])
+			m["_uid_"] = fmt.Sprintf("%#x", sg.srcUIDs.Get(i))
 		}
 		if sg.Params.AttrType == nil {
 			// No type defined for attr in type system/schema, hence return the original value
@@ -336,7 +335,7 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 				if err != nil {
 					// We ignore schema conversion errors and not include the values in the result
 					m["_inv_"] = true
-					result[sg.srcUIDs[i]] = m
+					result[sg.srcUIDs.Get(i)] = m
 					continue
 				}
 			}
@@ -346,7 +345,7 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 				m[sg.Attr] = lval
 			}
 		}
-		result[sg.srcUIDs[i]] = m
+		result[sg.srcUIDs.Get(i)] = m
 	}
 	return result, nil
 }
@@ -398,16 +397,6 @@ func (sg *SubGraph) ToJSON(l *Latency) ([]byte, error) {
 	return nil, x.Errorf("Runtime should never reach here.")
 }
 
-// This function performs a binary search on the uids slice and returns the
-// index at which it finds the uid, else returns -1
-func indexOf(uid uint64, q []uint64) int {
-	i := sort.Search(len(q), func(i int) bool { return q[i] >= uid })
-	if i < len(q) && q[i] == uid {
-		return i
-	}
-	return -1
-}
-
 var nodePool = sync.Pool{
 	New: func() interface{} {
 		return &graph.Node{}
@@ -443,15 +432,14 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 	invalidUids := make(map[uint64]bool)
 	// We go through all predicate children of the subgraph.
 	for _, pc := range sg.Children {
-		r := pc.Result
-		idx := indexOf(uid, pc.srcUIDs)
+		idx := pc.srcUIDs.IndexOf(uid)
 
 		if idx == -1 {
 			log.Fatal("Attribute with uid not found in child Query uids.")
 			return x.Errorf("Attribute with uid not found")
 		}
 
-		ul := r.Get(idx)
+		ul := pc.Result[idx]
 		var tv task.Value
 
 		if sg.Counts != nil && sg.Counts.CountLength() > 0 {
@@ -466,11 +454,12 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 			// We create as many predicate entity children as the length of uids for
 			// this predicate.
 			var destIdx int // Index into pc.destUIDs.
+			destSize := pc.destUIDs.Size()
 			for i := 0; i < ul.Size(); i++ {
 				uid := ul.Get(i)
-				for ; destIdx < len(pc.destUIDs) && pc.destUIDs[destIdx] < uid; destIdx++ {
+				for ; destIdx < destSize && pc.destUIDs.Get(destIdx) < uid; destIdx++ {
 				}
-				if destIdx >= len(pc.destUIDs) || pc.destUIDs[destIdx] > uid {
+				if destIdx >= destSize || pc.destUIDs.Get(destIdx) > uid {
 					continue
 				}
 				uc := nodePool.Get().(*graph.Node)
@@ -556,8 +545,8 @@ func (sg *SubGraph) ToProtocolBuffer(l *Latency) (*graph.Node, error) {
 		return n, nil
 	}
 
-	x.Assert(sg.Result.Size() == 1)
-	ul := sg.Result.Get(0)
+	x.Assert(len(sg.Result) == 1)
+	ul := sg.Result[0]
 	if sg.Params.GetUid || sg.Params.isDebug {
 		n.Uid = ul.Get(0)
 	}
@@ -712,7 +701,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		Attr:    gq.Attr,
 		Params:  args,
 		Filter:  gq.Filter,
-		srcUIDs: []uint64{euid},
+		srcUIDs: algo.NewUIDList([]uint64{euid}),
 	}
 
 	{
@@ -720,9 +709,11 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		b := flatbuffers.NewBuilder(0)
 		b.Finish(x.UidlistOffset(b, []uint64{euid}))
 		buf := b.FinishedBytes()
+		tl := new(task.UidList)
+		x.ParseUidList(tl, buf)
 		ul := new(algo.UIDList)
-		x.ParseUidList(&ul.UidList, buf)
-		sg.Result = algo.GenericLists{[]algo.Uint64List{ul}}
+		ul.FromTask(tl)
+		sg.Result = []*algo.UIDList{ul}
 	}
 
 	{
@@ -747,17 +738,17 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 }
 
 // createTaskQuery generates the query buffer.
-func createTaskQuery(sg *SubGraph, uids []uint64, terms []string, intersect []uint64) []byte {
+func createTaskQuery(sg *SubGraph, uids *algo.UIDList, terms []string, intersect *algo.UIDList) []byte {
 	x.Assert(uids == nil || terms == nil)
 
 	b := flatbuffers.NewBuilder(0)
 	var vend flatbuffers.UOffsetT
 	if uids != nil {
-		task.QueryStartUidsVector(b, len(uids))
-		for i := len(uids) - 1; i >= 0; i-- {
-			b.PrependUint64(uids[i])
+		task.QueryStartUidsVector(b, uids.Size())
+		for i := uids.Size() - 1; i >= 0; i-- {
+			b.PrependUint64(uids.Get(i))
 		}
-		vend = b.EndVector(len(uids))
+		vend = b.EndVector(uids.Size())
 	} else {
 		offsets := make([]flatbuffers.UOffsetT, 0, len(terms))
 		for _, term := range terms {
@@ -774,7 +765,7 @@ func createTaskQuery(sg *SubGraph, uids []uint64, terms []string, intersect []ui
 	if intersect != nil {
 		x.Assert(uids == nil)
 		x.Assert(len(terms) > 0)
-		intersectOffset = x.UidlistOffset(b, intersect)
+		intersectOffset = intersect.UidlistOffset(b)
 	}
 
 	ao := b.CreateString(sg.Attr)
@@ -813,11 +804,13 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, taskQuery []byte, rch chan 
 		x.ParseTaskResult(r, resultBuf)
 
 		// Extract UIDLists from task.Result.
-		sg.Result.Data = make([]algo.Uint64List, r.UidmatrixLength())
+		sg.Result = make([]*algo.UIDList, r.UidmatrixLength())
 		for i := 0; i < r.UidmatrixLength(); i++ {
+			tl := new(task.UidList)
+			x.Assert(r.Uidmatrix(tl, i))
 			ul := new(algo.UIDList)
-			x.Assert(r.Uidmatrix(&ul.UidList, i))
-			sg.Result.Data[i] = ul
+			ul.FromTask(tl)
+			sg.Result[i] = ul
 		}
 
 		// Extract values from task.Result.
@@ -839,14 +832,14 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, taskQuery []byte, rch chan 
 		return
 	}
 
-	sg.destUIDs = algo.MergeSorted(sg.Result)
+	sg.destUIDs = algo.MergeLists(sg.Result)
 	if err != nil {
 		x.TraceError(ctx, x.Wrapf(err, "Error while processing task"))
 		rch <- err
 		return
 	}
 
-	if len(sg.destUIDs) == 0 {
+	if sg.destUIDs.Size() == 0 {
 		// Looks like we're done here.
 		x.Trace(ctx, "Zero uids. Num attr children: %v", len(sg.Children))
 		rch <- nil
@@ -914,7 +907,7 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, taskQuery []byte, rch chan 
 			}
 			var tv task.Value
 			for i := 0; i < node.Values.ValuesLength(); i++ {
-				uid := sg.destUIDs[i]
+				uid := sg.destUIDs.Get(i)
 				if ok := node.Values.Values(&tv, i); !ok {
 					invalidUids[uid] = true
 				}
@@ -943,15 +936,9 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, taskQuery []byte, rch chan 
 	}
 
 	// Filter out the invalid UIDs.
-	j := 0
-	for i := 0; i < len(sg.destUIDs); i++ {
-		if invalidUids[sg.destUIDs[i]] {
-			continue
-		}
-		sg.destUIDs[j] = sg.destUIDs[i]
-		j++
-	}
-	sg.destUIDs = sg.destUIDs[:j]
+	sg.destUIDs.ApplyFilterFn(func(uid uint64) bool {
+		return !invalidUids[uid]
+	})
 
 	// Now process next level with valid UIDs.
 	childChan = make(chan error, len(leftToProcess))
@@ -994,8 +981,8 @@ func (sg *SubGraph) applyFilter(ctx context.Context) error {
 }
 
 // runFilter traverses filter tree and produce a filtered list of UIDs.
-// Input "sorted" is the very original list of destination UIDs of a SubGraph.
-func runFilter(ctx context.Context, destUIDs []uint64, filter *gql.FilterTree) ([]uint64, error) {
+// Input "destUIDs" is the very original list of destination UIDs of a SubGraph.
+func runFilter(ctx context.Context, destUIDs *algo.UIDList, filter *gql.FilterTree) (*algo.UIDList, error) {
 	if len(filter.FuncName) > 0 { // Leaf node.
 		x.Assertf(filter.FuncName == "eq", "Only exact match is supported now")
 		x.Assertf(len(filter.FuncArgs) == 2,
@@ -1011,13 +998,8 @@ func runFilter(ctx context.Context, destUIDs []uint64, filter *gql.FilterTree) (
 			return nil, err
 		}
 
-		x.Assert(sg.Result.Size() == 1)
-		ul := sg.Result.Get(0)
-		result := make([]uint64, ul.Size())
-		for i := 0; i < ul.Size(); i++ {
-			result[i] = ul.Get(i)
-		}
-		return result, nil
+		x.Assert(len(sg.Result) == 1)
+		return sg.Result[0], nil
 	}
 
 	// For now, we only handle AND and OR.
@@ -1027,7 +1009,7 @@ func runFilter(ctx context.Context, destUIDs []uint64, filter *gql.FilterTree) (
 
 	// Get UIDs for child filters.
 	type resultPair struct {
-		uid []uint64
+		uid *algo.UIDList
 		err error
 	}
 	resultChan := make(chan resultPair)
@@ -1037,22 +1019,22 @@ func runFilter(ctx context.Context, destUIDs []uint64, filter *gql.FilterTree) (
 			resultChan <- resultPair{r, err}
 		}(c)
 	}
-	uidList := make(algo.PlainUintLists, 0, len(filter.Child))
+	lists := make([]*algo.UIDList, 0, len(filter.Child))
 	// Collect the results from above goroutines.
 	for i := 0; i < len(filter.Child); i++ {
 		r := <-resultChan
 		if r.err != nil {
 			return destUIDs, r.err
 		}
-		uidList = append(uidList, r.uid)
+		lists = append(lists, r.uid)
 	}
 
 	// Either merge or intersect the UID lists.
 	if filter.Op == gql.FilterOpOr {
-		return algo.MergeSorted(uidList), nil
+		return algo.MergeLists(lists), nil
 	}
 	x.Assert(filter.Op == gql.FilterOpAnd)
-	return algo.IntersectSorted(uidList), nil
+	return algo.IntersectLists(lists), nil
 }
 
 // pageRange returns start and end indices given pagination params. Note that n
@@ -1085,15 +1067,13 @@ func (sg *SubGraph) applyPagination(ctx context.Context) error {
 	if params.Count == 0 && params.Offset == 0 { // No pagination.
 		return nil
 	}
-	x.Assert(len(sg.srcUIDs) == sg.Result.Size())
-	for i := 0; i < len(sg.srcUIDs); i++ {
-		l := algo.IntersectSorted(algo.GenericLists{
-			[]algo.Uint64List{sg.Result.Get(i), algo.PlainUintList(sg.destUIDs)}})
-		start, end := pageRange(&sg.Params, len(l))
-		l = l[start:end]
-		sg.Result.Data[i] = algo.PlainUintList(l)
+	x.Assert(sg.srcUIDs.Size() == len(sg.Result))
+	for _, l := range sg.Result {
+		l.Intersect(sg.destUIDs)
+		start, end := pageRange(&sg.Params, l.Size())
+		l.Slice(start, end)
 	}
 	// Re-merge the UID matrix.
-	sg.destUIDs = algo.MergeSorted(sg.Result)
+	sg.destUIDs = algo.MergeLists(sg.Result)
 	return nil
 }
