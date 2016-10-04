@@ -68,8 +68,9 @@ var (
 	cpuprofile  = flag.String("cpu", "", "write cpu profile to file")
 	memprofile  = flag.String("mem", "", "write memory profile to file")
 	schemaFile  = flag.String("schema", "", "Path to schema file")
-	rdbStatsSec = flag.Int("rdbstatssec", 5*60, "Print out RocksDB stats every this many seconds. If <=0, we don't print anyting.")
-	closeCh     = make(chan struct{})
+	rdbStats    = flag.Duration("rdbstats", 5*time.Minute, "Print out RocksDB stats every this many seconds. If <=0, we don't print anyting.")
+
+	closeCh = make(chan struct{})
 
 	groupId uint64 = 0 // ALL
 )
@@ -616,12 +617,9 @@ func setupServer() {
 }
 
 func printStats(ps *store.Store) {
-	if *rdbStatsSec <= 0 {
-		return
-	}
 	go func() {
 		for {
-			time.Sleep(time.Duration(*rdbStatsSec) * time.Second)
+			time.Sleep(*rdbStats)
 			fmt.Println(ps.GetStats())
 		}
 	}()
