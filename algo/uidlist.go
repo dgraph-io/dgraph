@@ -48,6 +48,9 @@ func (u *UIDList) Get(i int) uint64 {
 
 // Size returns size of UIDList.
 func (u *UIDList) Size() int {
+	if u == nil {
+		return 0
+	}
 	if u.list != nil {
 		return u.list.UidsLength()
 	}
