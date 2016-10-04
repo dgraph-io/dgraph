@@ -113,38 +113,6 @@ func (w *grpcWorker) Hello(ctx context.Context, in *Payload) (*Payload, error) {
 	return out, nil
 }
 
-// GetOrAssign is used to get uids for a set of xids by communicating with other workers.
-func (w *grpcWorker) AssignUids(ctx context.Context, query *Payload) (*Payload, error) {
-	uo := flatbuffers.GetUOffsetT(query.Data)
-	num := new(task.Num)
-	num.Init(query.Data, uo)
-
-	if !groups().ServesGroup(num.Group()) {
-		log.Fatalf("groupId: %v. GetOrAssign. We shouldn't be getting this req", num.Group())
-	}
-
-	reply := new(Payload)
-	var rerr error
-	reply.Data, rerr = assignUids(ctx, num)
-	return reply, rerr
-}
-
-// Mutate is used to apply mutations over the network on other instances.
-func (w *grpcWorker) Mutate(ctx context.Context, query *Payload) (*Payload, error) {
-	m := new(x.Mutations)
-	// Ensure that this can be decoded. This is an optional step.
-	if err := m.Decode(query.Data); err != nil {
-		return nil, x.Wrapf(err, "While decoding mutation.")
-	}
-	// Propose to the cluster.
-	// TODO: Figure out the right group to propose this to.
-	node := groups().Node(m.GroupId)
-	if err := node.raft.Propose(ctx, query.Data); err != nil {
-		return nil, err
-	}
-	return &Payload{}, nil
-}
-
 func (w *grpcWorker) RaftMessage(ctx context.Context, query *Payload) (*Payload, error) {
 	reply := &Payload{}
 	reply.Data = []byte("ok")

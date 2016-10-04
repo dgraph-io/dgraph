@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"log"
 
-	"context"
+	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/x"
@@ -64,41 +64,34 @@ func mutate(ctx context.Context, m *x.Mutations) error {
 }
 
 // runMutate is used to run the mutations on an instance.
-func proposeMutation(ctx context.Context, groupId uint32, m *x.Mutations, che chan error) {
+func proposeOrSend(ctx context.Context, gid uint32, m *x.Mutations, che chan error) {
 	data, err := m.Encode()
 	if err != nil {
 		che <- err
 		return
 	}
 
-	// We run them locally if idx == groupId
-	// HACK HACK HACK
-	// if idx == int(ws.groupId) {
-	if true {
-		node := groups().Node(groupId)
+	if groups().ServesGroup(gid) {
+		node := groups().Node(gid)
 		che <- node.ProposeAndWait(ctx, mutationMsg, data)
-		// che <- GetNode().raft.Propose(ctx, data)
 		return
 	}
 
-	// TODO: Move this to the appropriate place. Propose mutation should only deal with RAFT.
-	// Get a connection from the pool and run mutations over the network.
-	/*
-		pool := ws.GetPool(idx)
-		query := new(Payload)
-		query.Data = data
-
-		conn, err := pool.Get()
-		if err != nil {
-			che <- err
-			return
-		}
-		defer pool.Put(conn)
-		c := NewWorkerClient(conn)
-
-		_, err = c.Mutate(ctx, query)
+	addr := groups().Leader(gid)
+	pl := pools().get(addr)
+	conn, err := pl.Get()
+	if err != nil {
+		x.TraceError(ctx, err)
 		che <- err
-	*/
+		return
+	}
+	defer pl.Put(conn)
+	query := new(Payload)
+	query.Data = data
+
+	c := NewWorkerClient(conn)
+	_, err = c.Mutate(ctx, query)
+	che <- err
 }
 
 // addToMutationArray adds the edges to the appropriate index in the mutationArray,
@@ -133,7 +126,7 @@ func MutateOverNetwork(ctx context.Context, m x.Mutations) (rerr error) {
 
 	errors := make(chan error, len(mutationMap))
 	for gid, mu := range mutationMap {
-		go proposeMutation(ctx, gid, mu, errors)
+		proposeOrSend(ctx, gid, mu, errors)
 	}
 
 	// Wait for all the goroutines to reply back.
@@ -152,4 +145,15 @@ func MutateOverNetwork(ctx context.Context, m x.Mutations) (rerr error) {
 	close(errors)
 
 	return nil
+}
+
+// Mutate is used to apply mutations over the network on other instances.
+func (w *grpcWorker) Mutate(ctx context.Context, query *Payload) (*Payload, error) {
+	m := new(x.Mutations)
+	// Ensure that this can be decoded. This is an optional step.
+	if err := m.Decode(query.Data); err != nil {
+		return nil, x.Wrapf(err, "While decoding mutation.")
+	}
+	node := groups().Node(m.GroupId)
+	return &Payload{}, node.ProposeAndWait(ctx, mutationMsg, query.Data)
 }

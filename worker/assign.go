@@ -17,11 +17,11 @@
 package worker
 
 import (
-	"context"
 	"fmt"
 	"log"
 
 	"github.com/google/flatbuffers/go"
+	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/uid"
@@ -128,4 +128,20 @@ func AssignUidsOverNetwork(ctx context.Context, newUids map[string]uint64) (rerr
 		i++
 	}
 	return nil
+}
+
+// GetOrAssign is used to get uids for a set of xids by communicating with other workers.
+func (w *grpcWorker) AssignUids(ctx context.Context, query *Payload) (*Payload, error) {
+	uo := flatbuffers.GetUOffsetT(query.Data)
+	num := new(task.Num)
+	num.Init(query.Data, uo)
+
+	if !groups().ServesGroup(num.Group()) {
+		log.Fatalf("groupId: %v. GetOrAssign. We shouldn't be getting this req", num.Group())
+	}
+
+	reply := new(Payload)
+	var rerr error
+	reply.Data, rerr = assignUids(ctx, num)
+	return reply, rerr
 }
