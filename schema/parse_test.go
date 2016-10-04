@@ -50,7 +50,14 @@ func TestSchema3_Error(t *testing.T) {
 
 func TestSchema4_Error(t *testing.T) {
 	err := Parse("testfiles/test_schema4")
-	if err.Error() == "Object type Actor with no fields" {
-		t.Error("Expected error")
+	if err.Error() != "Object type Person with no fields" {
+		t.Error(err)
+	}
+}
+
+func TestSchema5_Error(t *testing.T) {
+	err := Parse("testfiles/test_schema5")
+	if err.Error() != "Repeated field name in object Person" {
+		t.Error(err)
 	}
 }

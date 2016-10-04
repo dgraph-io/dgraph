@@ -198,6 +198,9 @@ L:
 						str[name] = t
 					}
 				}
+				if _, ok := obj.Fields[name]; ok {
+					return fmt.Errorf("Repeated field %v in object %v", name, objName)
+				}
 				obj.Fields[name] = typ
 			}
 		case lex.ItemError:
