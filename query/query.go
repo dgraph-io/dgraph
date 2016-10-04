@@ -250,15 +250,14 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 		ul := r.Get(i)
 		l := make([]interface{}, 0, ul.Size())
 
-		// We want to intersect ul.Uids with this list. Since both are sorted, this
-		// intersection is very cheap. We just need to maintain the variable sortedIdx
-		// which indexes into sg.sorted (the sorted UID list).
-		var sortedIdx int
+		// We want to intersect ul.Uids with sg.destUIDs. Both are sorted.
+		// We need to maintain an index into sg.destUIDs, to do the intersection.
+		var destIdx int
 		for j := 0; j < ul.Size(); j++ {
 			uid := ul.Get(j)
-			for ; sortedIdx < len(sg.destUIDs) && sg.destUIDs[sortedIdx] < uid; sortedIdx++ {
+			for ; destIdx < len(sg.destUIDs) && sg.destUIDs[destIdx] < uid; destIdx++ {
 			}
-			if sortedIdx >= len(sg.destUIDs) || sg.destUIDs[sortedIdx] > uid {
+			if destIdx >= len(sg.destUIDs) || sg.destUIDs[destIdx] > uid {
 				continue
 			}
 
@@ -466,12 +465,12 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 		} else if ul.Size() > 0 {
 			// We create as many predicate entity children as the length of uids for
 			// this predicate.
-			var sortedIdx int // Index into pc.sorted.
+			var destIdx int // Index into pc.destUIDs.
 			for i := 0; i < ul.Size(); i++ {
 				uid := ul.Get(i)
-				for ; sortedIdx < len(pc.destUIDs) && pc.destUIDs[sortedIdx] < uid; sortedIdx++ {
+				for ; destIdx < len(pc.destUIDs) && pc.destUIDs[destIdx] < uid; destIdx++ {
 				}
-				if sortedIdx >= len(pc.destUIDs) || pc.destUIDs[sortedIdx] > uid {
+				if destIdx >= len(pc.destUIDs) || pc.destUIDs[destIdx] > uid {
 					continue
 				}
 				uc := nodePool.Get().(*graph.Node)
