@@ -2,6 +2,7 @@ package worker
 
 import (
 	"log"
+	"sync"
 
 	"google.golang.org/grpc"
 )
@@ -39,6 +40,37 @@ func (cb *PayloadCodec) String() string {
 type Pool struct {
 	conns chan *grpc.ClientConn
 	Addr  string
+}
+
+type Pools struct {
+	sync.RWMutex
+	all map[string]*Pool
+}
+
+func (p *Pools) get(addr string) *Pool {
+	p.RLock()
+	defer p.RUnlock()
+	pool, _ := p.all[addr]
+	return pool
+}
+
+func (p *Pools) connect(addr string) {
+	p.RLock()
+	_, has := p.all[addr]
+	p.RUnlock()
+	if has {
+		return
+	}
+
+	pool := NewPool(addr, 5)
+
+	p.Lock()
+	defer p.Unlock()
+	_, has = p.all[addr]
+	if has {
+		return
+	}
+	p.all[addr] = pool
 }
 
 // NewPool initializes an instance of Pool which is used to connect with other

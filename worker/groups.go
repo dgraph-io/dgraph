@@ -2,6 +2,7 @@ package worker
 
 import (
 	"fmt"
+	"math"
 	"sync"
 
 	"github.com/dgraph-io/dgraph/task"
@@ -18,44 +19,83 @@ type servers struct {
 	list []server
 }
 
-type groups struct {
+type groupi struct {
 	sync.RWMutex
-	Local map[uint32]*node
-	All   map[uint32]*servers
+	local map[uint32]*node
+	all   map[uint32]*servers
+	num   uint32
 }
 
-var gr groups
+var gr *groupi
 
-func Node(groupId uint32) *node {
-	gr.RLock()
-	defer gr.RUnlock()
-	n, has := gr.Local[groupId]
+// package level init.
+func init() {
+	gr = new(groupi)
+}
+
+func groups() *groupi {
+	return gr
+}
+
+/*
+func pools() *pooli {
+	return nil
+}
+var pl Pools
+*/
+
+func StartRaftNodes(raftId uint64, my, cluster, peer string) {
+	node := groups().InitNode(math.MaxUint32, raftId, my)
+	node.StartNode(cluster)
+	if len(peer) > 0 {
+		go node.JoinCluster(peer, ws)
+	}
+
+	// Also create node for group zero, which would handle UID assignment.
+	node = groups().InitNode(0, raftId, my)
+	node.StartNode(cluster)
+	if len(peer) > 0 {
+		go node.JoinCluster(peer, ws)
+	}
+}
+
+func (g *groupi) Node(groupId uint32) *node {
+	g.RLock()
+	defer g.RUnlock()
+	n, has := g.local[groupId]
 	x.Assertf(has, "Node should be present for group: %v", groupId)
 	return n
 }
 
-func InitNode(groupId uint32, nodeId uint64, publicAddr string) *node {
-	gr.Lock()
-	defer gr.Unlock()
-	if gr.Local == nil {
-		gr.Local = make(map[uint32]*node)
+func (g *groupi) ServesGroup(groupId uint32) bool {
+	g.RLock()
+	defer g.RUnlock()
+	_, has := g.local[groupId]
+	return has
+}
+
+func (g *groupi) InitNode(groupId uint32, nodeId uint64, publicAddr string) *node {
+	g.Lock()
+	defer g.Unlock()
+	if g.local == nil {
+		g.local = make(map[uint32]*node)
 	}
 
 	node := newNode(groupId, nodeId, publicAddr)
-	if _, has := gr.Local[groupId]; has {
+	if _, has := g.local[groupId]; has {
 		x.Assertf(false, "Didn't expect a node in RAFT group mapping: %v", groupId)
 	}
-	gr.Local[groupId] = node
+	g.local[groupId] = node
 	return node
 }
 
-func Server(id uint64, groupId uint32) (rs server, found bool) {
-	gr.RLock()
-	defer gr.RUnlock()
-	if gr.All == nil {
+func (g *groupi) Server(id uint64, groupId uint32) (rs server, found bool) {
+	g.RLock()
+	defer g.RUnlock()
+	if g.all == nil {
 		return server{}, false
 	}
-	all := gr.All[groupId]
+	all := g.all[groupId]
 	if all == nil {
 		return server{}, false
 	}
@@ -67,23 +107,23 @@ func Server(id uint64, groupId uint32) (rs server, found bool) {
 	return server{}, false
 }
 
-func UpdateServer(mm *task.Membership) {
+func (g *groupi) UpdateServer(mm *task.Membership) {
 	update := server{
 		Id:     mm.Id(),
 		Addr:   string(mm.Addr()),
 		Leader: mm.Leader() == byte(1),
 	}
-	gr.Lock()
-	defer gr.Unlock()
+	g.Lock()
+	defer g.Unlock()
 
-	if gr.All == nil {
-		gr.All = make(map[uint32]*servers)
+	if g.all == nil {
+		g.all = make(map[uint32]*servers)
 	}
 
-	all := gr.All[mm.Group()]
+	all := g.all[mm.Group()]
 	if all == nil {
 		all = new(servers)
-		gr.All[mm.Group()] = all
+		g.all[mm.Group()] = all
 	}
 
 	for {
@@ -114,3 +154,14 @@ func UpdateServer(mm *task.Membership) {
 	}
 	fmt.Printf("Group: %v. List: %+v\n", mm.Group(), all.list)
 }
+
+/*
+func LeaderPool(groupId uint32) *Pool {
+	pool := pl.get(addr)
+	if pool != nil {
+		return pool
+	}
+	pl.connect(addr)
+	return pl.get(addr)
+}
+*/

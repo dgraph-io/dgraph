@@ -22,8 +22,6 @@ import (
 
 	"context"
 
-	"github.com/dgryski/go-farm"
-
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -37,8 +35,7 @@ const (
 // mutations which were not applied in left.
 func runMutations(ctx context.Context, edges []x.DirectedEdge, op byte) error {
 	for _, edge := range edges {
-		if farm.Fingerprint64(
-			[]byte(edge.Attribute))%ws.numGroups != ws.groupId {
+		if !groups().ServesGroup(BelongsTo(edge.Attribute)) {
 			return fmt.Errorf("Predicate fingerprint doesn't match this instance")
 		}
 
@@ -78,7 +75,7 @@ func proposeMutation(ctx context.Context, groupId uint32, m *x.Mutations, che ch
 	// HACK HACK HACK
 	// if idx == int(ws.groupId) {
 	if true {
-		node := Node(groupId)
+		node := groups().Node(groupId)
 		che <- node.ProposeAndWait(ctx, mutationMsg, data)
 		// che <- GetNode().raft.Propose(ctx, data)
 		return
@@ -106,15 +103,15 @@ func proposeMutation(ctx context.Context, groupId uint32, m *x.Mutations, che ch
 
 // addToMutationArray adds the edges to the appropriate index in the mutationArray,
 // taking into account the op(operation) and the attribute.
-func addToMutationArray(mutationArray []*x.Mutations, edges []x.DirectedEdge, op string) {
+func addToMutationMap(mutationMap map[uint32]*x.Mutations, edges []x.DirectedEdge, op string) {
 	for _, edge := range edges {
 		// TODO: Determine the right group using rules, instead of modulos.
-		idx := farm.Fingerprint64([]byte(edge.Attribute)) % ws.numGroups
-		mu := mutationArray[idx]
+		gid := BelongsTo(edge.Attribute)
+		mu := mutationMap[gid]
 		if mu == nil {
 			mu = new(x.Mutations)
-			mu.GroupId = uint32(idx)
-			mutationArray[idx] = mu
+			mu.GroupId = gid
+			mutationMap[gid] = mu
 		}
 
 		if op == set {
@@ -128,24 +125,20 @@ func addToMutationArray(mutationArray []*x.Mutations, edges []x.DirectedEdge, op
 // MutateOverNetwork checks which group should be running the mutations
 // according to fingerprint of the predicate and sends it to that instance.
 func MutateOverNetwork(ctx context.Context, m x.Mutations) (rerr error) {
-	mutationArray := make([]*x.Mutations, ws.numGroups)
+	// mutationArray := make([]*x.Mutations, ws.numGroups)
+	mutationMap := make(map[uint32]*x.Mutations)
 
-	addToMutationArray(mutationArray, m.Set, set)
-	addToMutationArray(mutationArray, m.Del, del)
+	addToMutationMap(mutationMap, m.Set, set)
+	addToMutationMap(mutationMap, m.Del, del)
 
-	errors := make(chan error, ws.numGroups)
-	count := 0
-	for idx, mu := range mutationArray {
-		if mu == nil || (len(mu.Set) == 0 && len(mu.Del) == 0) {
-			continue
-		}
-		count++
-		go proposeMutation(ctx, uint32(idx), mu, errors)
+	errors := make(chan error, len(mutationMap))
+	for gid, mu := range mutationMap {
+		go proposeMutation(ctx, gid, mu, errors)
 	}
 
 	// Wait for all the goroutines to reply back.
 	// We return if an error was returned or the parent called ctx.Done()
-	for i := 0; i < count; i++ {
+	for i := 0; i < len(mutationMap); i++ {
 		select {
 		case err := <-errors:
 			if err != nil {

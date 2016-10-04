@@ -212,7 +212,7 @@ func (n *node) processMembership(e raftpb.Entry, h header) error {
 	mm := task.GetRootAsMembership(e.Data[h.Length():], 0)
 	fmt.Printf("group: %v Addr: %q leader: %v dead: %v\n",
 		mm.Group(), mm.Addr(), mm.Leader(), mm.Amdead())
-	UpdateServer(mm)
+	groups().UpdateServer(mm)
 	return nil
 }
 
@@ -457,7 +457,7 @@ func (n *node) StartNode(cluster string) {
 }
 
 func (n *node) doInform(rc *task.RaftContext) {
-	s, found := Server(rc.Id(), rc.Group())
+	s, found := groups().Server(rc.Id(), rc.Group())
 	if found && s.Addr == string(rc.Addr()) && s.Leader == n.AmLeader() {
 		return
 	}
@@ -478,7 +478,7 @@ func (n *node) doInform(rc *task.RaftContext) {
 	b.Finish(uo)
 	data := b.Bytes[b.Head():]
 
-	common := Node(math.MaxUint32)
+	common := groups().Node(math.MaxUint32)
 	x.Checkf(common.ProposeAndWait(context.TODO(), membershipMsg, data),
 		"Expected acceptance.")
 }

@@ -43,7 +43,7 @@ func assignUids(ctx context.Context, num *task.Num) (uidList []byte, rerr error)
 	// This function is triggered by an RPC call. We ensure that only leader can assign new UIDs,
 	// so we can tackle any collisions that might happen with the lockmanager.
 	// In essence, we just want one server to be handing out new uids.
-	node := Node(num.Group())
+	node := groups().Node(num.Group())
 	if !node.AmLeader() {
 		return uidList, x.Errorf("Assigning UIDs is only allowed on leader.")
 	}

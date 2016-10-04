@@ -23,6 +23,7 @@ import (
 	"github.com/dgraph-io/dgraph/posting/types"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/x"
+	farm "github.com/dgryski/go-farm"
 	flatbuffers "github.com/google/flatbuffers/go"
 )
 
@@ -172,4 +173,8 @@ func (s *State) PopulateShard(ctx context.Context, pool *Pool, group uint64) (in
 	}
 	x.Trace(ctx, "Streaming complete for group: %v", group)
 	return count, nil
+}
+
+func BelongsTo(pred string) uint32 {
+	return uint32(farm.Fingerprint64([]byte(pred)) % 100)
 }

@@ -17,10 +17,10 @@
 package worker
 
 import (
-	"context"
+	"log"
 
-	"github.com/dgryski/go-farm"
 	"github.com/google/flatbuffers/go"
+	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/task"
@@ -40,16 +40,10 @@ func ProcessTaskOverNetwork(ctx context.Context, qu []byte) (result []byte, rerr
 	x.ParseTaskQuery(q, qu)
 
 	attr := string(q.Attr())
-	idx := farm.Fingerprint64([]byte(attr)) % ws.numGroups
+	gid := BelongsTo(attr)
+	runHere := groups().ServesGroup(gid)
 
-	// Posting list with xid -> uid and uid -> xid mapping is stored on instance 0.
-	if attr == _xid_ || attr == _uid_ {
-		idx = 0
-	}
-	runHere := (ws.groupId == idx)
-
-	x.Trace(ctx, "runHere: %v attr: %v groupId: %v numGroups: %v",
-		runHere, attr, ws.groupId, ws.numGroups)
+	x.Trace(ctx, "runHere: %v attr: %v groupId: %v", runHere, attr, gid)
 
 	if runHere {
 		// No need for a network call, as this should be run from within
@@ -58,26 +52,30 @@ func ProcessTaskOverNetwork(ctx context.Context, qu []byte) (result []byte, rerr
 	}
 
 	// Using a worker client for the instance idx, we get the result of the query.
-	pool := ws.GetPool(int(idx))
-	addr := pool.Addr
-	query := new(Payload)
-	query.Data = qu
+	// TODO: Make this work again.
+	return
+	/*
+		pool := ws.GetPool(int(idx))
+		addr := pool.Addr
+		query := new(Payload)
+		query.Data = qu
 
-	conn, err := pool.Get()
-	if err != nil {
-		return []byte(""), err
-	}
-	defer pool.Put(conn)
-	c := NewWorkerClient(conn)
-	reply, err := c.ServeTask(context.Background(), query)
-	if err != nil {
-		x.TraceError(ctx, x.Wrapf(err, "Error while calling Worker.ServeTask"))
-		return []byte(""), err
-	}
+		conn, err := pool.Get()
+		if err != nil {
+			return []byte(""), err
+		}
+		defer pool.Put(conn)
+		c := NewWorkerClient(conn)
+		reply, err := c.ServeTask(context.Background(), query)
+		if err != nil {
+			x.TraceError(ctx, x.Wrapf(err, "Error while calling Worker.ServeTask"))
+			return []byte(""), err
+		}
 
-	x.Trace(ctx, "Reply from server. length: %v Addr: %v Attr: %v",
-		len(reply.Data), addr, attr)
-	return reply.Data, nil
+		x.Trace(ctx, "Reply from server. length: %v Addr: %v Attr: %v",
+			len(reply.Data), addr, attr)
+		return reply.Data, nil
+	*/
 }
 
 // processTask processes the query, accumulates and returns the result.
@@ -169,4 +167,25 @@ func processTask(query []byte) ([]byte, error) {
 	rend := task.ResultEnd(b)
 	b.Finish(rend)
 	return b.Bytes[b.Head():], nil
+}
+
+// ServeTask is used to respond to a query.
+func (w *grpcWorker) ServeTask(ctx context.Context, query *Payload) (*Payload, error) {
+	q := new(task.Query)
+	x.ParseTaskQuery(q, query.Data)
+	gid := BelongsTo(string(q.Attr()))
+	x.Trace(ctx, "Attribute: %q NumUids: %v groupId: %v ServeTask", q.Attr(), q.UidsLength(), gid)
+
+	reply := new(Payload)
+	var rerr error
+	// Request for xid <-> uid conversion should be handled by instance 0 and all
+	// other requests should be handled according to modulo sharding of the predicate.
+
+	// TODO: This should be done based on group rules, and not a modulo of num groups.
+	if groups().ServesGroup(gid) {
+		reply.Data, rerr = processTask(query.Data)
+	} else {
+		log.Fatalf("attr: %q groupId: %v Request sent to wrong server.", q.Attr(), gid)
+	}
+	return reply, rerr
 }

@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
-	"math"
 	"math/rand"
 	"net"
 	"net/http"
@@ -627,17 +626,8 @@ func main() {
 	posting.InitIndex(ps)
 	posting.Init()
 
-	var ws *worker.State
-	if groupId != 0 { // HACK: This will currently not run.
-		ws = worker.NewState(ps, groupId, 1) // TODO: Set number of groups here.
-		worker.SetWorkerState(ws)
-		uid.Init(nil)
-
-	} else { // handles group 0.
-		ws = worker.NewState(ps, groupId, 1) // TODO: Set number of groups here.
-		worker.SetWorkerState(ws)
-		uid.Init(ps)
-	}
+	worker.SetState(ps)
+	uid.Init(ps)
 
 	my := "localhost" + *workerPort
 
@@ -645,18 +635,7 @@ func main() {
 
 	// First initiate the commmon group across the entire cluster. This group
 	// stores information about which server serves which groups.
-	node := worker.InitNode(math.MaxUint32, *raftId, my)
-	node.StartNode(*cluster)
-	if len(*peer) > 0 {
-		go node.JoinCluster(*peer, ws)
-	}
-
-	// Also create node for group zero, which would handle UID assignment.
-	node = worker.InitNode(0, *raftId, my)
-	node.StartNode(*cluster)
-	if len(*peer) > 0 {
-		go node.JoinCluster(*peer, ws)
-	}
+	go worker.StartRaftNodes(*raftId, my, *cluster, *peer)
 
 	if len(*schemaFile) > 0 {
 		err = schema.Parse(*schemaFile)
