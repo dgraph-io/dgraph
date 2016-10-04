@@ -155,3 +155,6 @@ func (db *DB) GetProperty(propName string) string {
 	defer C.free(unsafe.Pointer(cValue))
 	return C.GoString(cValue)
 }
+
+// GetStats returns stats of our data store.
+func (db *DB) GetStats() string { return db.GetProperty("rocksdb.stats") }
