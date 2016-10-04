@@ -3,7 +3,6 @@ package worker
 import (
 	"bufio"
 	"fmt"
-	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -26,7 +25,7 @@ type config struct {
 
 var groupConfig config
 
-func parsePredicates(groupId uint32, p string) {
+func parsePredicates(groupId uint32, p string) error {
 	preds := strings.Split(p, ",")
 	x.Assertf(len(preds) > 0, "Length of predicates in config should be > 0")
 
@@ -43,20 +42,20 @@ func parsePredicates(groupId uint32, p string) {
 		}
 		groupConfig.pred = append(groupConfig.pred, meta)
 	}
+	return nil
 }
 
-func parseDefaultConfig(l string) uint64 {
+func parseDefaultConfig(l string) (uint64, error) {
 	// If we have already seen a default config line, and n has a value then we
 	// log.Fatal.
 	if groupConfig.n != 0 {
-		x.Check(fmt.Errorf("Default config can only be defined once: %v", l))
+		return 0, fmt.Errorf("Default config can only be defined once: %v", l)
 	}
 	l = strings.TrimSpace(l)
 	conf := strings.Split(l, " ")
 	// + in (fp % n + k) is optional.
-	fmt.Println(len(conf))
 	if !(len(conf) == 5 || len(conf) == 3) || conf[0] != "fp" || conf[1] != "%" {
-		x.Check(fmt.Errorf("Default config format should be like: %v", "default: fp % n + k"))
+		return 0, fmt.Errorf("Default config format should be like: %v", "default: fp % n + k")
 	}
 
 	var err error
@@ -66,10 +65,10 @@ func parseDefaultConfig(l string) uint64 {
 		groupConfig.k, err = strconv.ParseUint(conf[4], 10, 64)
 		x.Check(err)
 	}
-	return groupConfig.k
+	return groupConfig.k, nil
 }
 
-func parseConfig(f *os.File) {
+func parseConfig(f *os.File) error {
 	scanner := bufio.NewScanner(f)
 	// To keep track of last groupId seen across lines. If we the groups ids are
 	// not sequential, we log.Fatal.
@@ -86,39 +85,55 @@ func parseConfig(f *os.File) {
 		}
 		c := strings.Split(l, ":")
 		if len(c) < 2 {
-			x.Check(fmt.Errorf("Incorrect format for config line: %v", l))
+			return fmt.Errorf("Incorrect format for config line: %v", l)
 		}
 		if c[0] == "default" {
 			seenDefault = true
-			k := parseDefaultConfig(c[1])
+			k, err := parseDefaultConfig(c[1])
+			if err != nil {
+				return err
+			}
 			if k == 0 {
 				continue
 			}
-			x.Assertf(k <= currGroupId, "k in (fp mod N + k) should be <= the last groupno %v.",
-				currGroupId)
+			if k > currGroupId {
+				return fmt.Errorf("k in (fp mod N + k) should be <= the last groupno %v.",
+					currGroupId)
+			}
 		} else {
 			// There shouldn't be a line after the default config line.
 			if seenDefault {
-				log.Fatalf("Default config should be specified as the last line. Found %v",
+				return fmt.Errorf("Default config should be specified as the last line. Found %v",
 					l)
 			}
 			groupId, err := strconv.ParseUint(c[0], 10, 64)
 			x.Check(err)
-			x.Assertf(currGroupId == groupId,
-				"Group ids should be sequential and should start from 0: %v", groupId)
+			if currGroupId != groupId {
+				return fmt.Errorf("Group ids should be sequential and should start from 0. "+
+					"Found %v, should have been %v", groupId, currGroupId)
+			}
 			currGroupId++
-			parsePredicates(uint32(groupId), c[1])
+			err = parsePredicates(uint32(groupId), c[1])
+			if err != nil {
+				return err
+			}
 		}
 	}
 	x.Check(scanner.Err())
+	return nil
 }
 
 // ParseGroupConfig parses the config file and stores the predicate <-> group map.
-func ParseGroupConfig(file string) {
+func ParseGroupConfig(file string) error {
 	cf, err := os.Open(file)
 	x.Check(err)
-	parseConfig(cf)
-	x.Assertf(groupConfig.n > 0, "Cant take modulo 0.")
+	if err = parseConfig(cf); err != nil {
+		return err
+	}
+	if groupConfig.n == 0 {
+		return fmt.Errorf("Cant take modulo 0.")
+	}
+	return nil
 }
 
 func fpGroup(pred string) uint32 {
