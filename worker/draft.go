@@ -26,19 +26,19 @@ const (
 
 type peerPool struct {
 	sync.RWMutex
-	peers map[uint64]*Pool
+	peers map[uint64]string
 }
 
-func (p *peerPool) Get(id uint64) *Pool {
+func (p *peerPool) Get(id uint64) string {
 	p.RLock()
 	defer p.RUnlock()
 	return p.peers[id]
 }
 
-func (p *peerPool) Set(id uint64, pool *Pool) {
+func (p *peerPool) Set(id uint64, addr string) {
 	p.Lock()
 	defer p.Unlock()
-	p.peers[id] = pool
+	p.peers[id] = addr
 }
 
 type proposals struct {
@@ -84,42 +84,23 @@ func (n *node) Connect(pid uint64, addr string) {
 	if pid == n.id {
 		return
 	}
-	if pool := n.peers.Get(pid); pool != nil {
+	if paddr := n.peers.Get(pid); paddr == addr {
 		return
 	}
-
-	fmt.Printf("connect addr: %v\n", addr)
-	pool := NewPool(addr, 5)
-	query := new(Payload)
-	query.Data = []byte("hello")
-
-	conn, err := pool.Get()
-	if err != nil {
-		log.Fatalf("Unable to connect: %v", err)
-	}
-
-	c := NewWorkerClient(conn)
-	_, err = c.Hello(context.Background(), query)
-	if err != nil {
-		log.Fatalf("Unable to connect: %v", err)
-	}
-	x.Check(pool.Put(conn))
-
-	n.peers.Set(pid, pool)
-	fmt.Printf("CONNECTED TO %d %v\n", pid, addr)
-	return
+	pools().connect(addr)
+	n.peers.Set(pid, addr)
 }
 
 func (n *node) AddToCluster(pid uint64) {
-	pool := n.peers.Get(pid)
-	x.Assertf(pool != nil, "Unable to find conn pool for peer: %d", pid)
+	addr := n.peers.Get(pid)
+	x.Assertf(len(addr) > 0, "Unable to find conn pool for peer: %d", pid)
 
 	rc := task.GetRootAsRaftContext(n.raftContext, 0)
 	n.raft.ProposeConfChange(context.TODO(), raftpb.ConfChange{
 		ID:      pid,
 		Type:    raftpb.ConfChangeAddNode,
 		NodeID:  pid,
-		Context: createRaftContext(pid, rc.Group(), pool.Addr),
+		Context: createRaftContext(pid, rc.Group(), addr),
 	})
 }
 
@@ -177,11 +158,13 @@ func (n *node) ProposeAndWait(ctx context.Context, msg uint16, data []byte) erro
 func (n *node) send(m raftpb.Message) {
 	x.Assertf(n.id != m.To, "Seding message to itself")
 
-	pool := n.peers.Get(m.To)
-	x.Assertf(pool != nil, "Don't have address for peer: %d", m.To)
+	addr := n.peers.Get(m.To)
+	x.Assertf(len(addr) > 0, "Don't have address for peer: %d", m.To)
 
+	pool := pools().get(addr)
 	conn, err := pool.Get()
 	x.Check(err)
+	defer pool.Put(conn)
 
 	c := NewWorkerClient(conn)
 	m.Context = n.raftContext
@@ -287,12 +270,15 @@ func (n *node) processSnapshot(s raftpb.Snapshot) {
 		fmt.Printf("Don't know who the leader is")
 		return
 	}
-	pool := n.peers.Get(lead)
+	addr := n.peers.Get(lead)
+	x.Assertf(addr != "", "Should have the leader address: %v", lead)
+	pool := pools().get(addr)
 	x.Assertf(pool != nil, "Leader: %d pool should not be nil", lead)
+
 	fmt.Printf("Getting snapshot from leader: %v", lead)
 	_, err := ws.PopulateShard(context.TODO(), pool, 0)
 	x.Checkf(err, "processSnapshot")
-	fmt.Printf("DONE with snapshot ============================")
+	fmt.Printf("DONE with snapshot")
 }
 
 func (n *node) Run() {
@@ -376,8 +362,9 @@ func (n *node) JoinCluster(any string, s *State) {
 	pid, paddr := parsePeer(any)
 	n.Connect(pid, paddr)
 
-	pool := n.peers.Get(pid)
-	x.Assertf(pool != nil, "Unable to find pool for peer: %d", pid)
+	addr := n.peers.Get(pid)
+	pool := pools().get(addr)
+	x.Assertf(pool != nil, "Unable to find addr for peer: %d", pid)
 
 	// TODO: Ask for the leader, before running PopulateShard.
 	// Bring the instance up to speed first.
@@ -414,7 +401,7 @@ func newNode(gid uint32, id uint64, myAddr string) *node {
 	fmt.Printf("NEW NODE ID: %v\n", id)
 
 	peers := peerPool{
-		peers: make(map[uint64]*Pool),
+		peers: make(map[uint64]string),
 	}
 	props := proposals{
 		ids: make(map[uint32]chan error),

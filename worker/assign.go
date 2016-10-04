@@ -86,6 +86,8 @@ func AssignUidsOverNetwork(ctx context.Context, newUids map[string]uint64) (rerr
 	num.Init(query.Data, uo)
 
 	reply := new(Payload)
+
+	_ = BelongsTo("_uid_")
 	// TODO: Send this over the network, depending upon which server should be handling this.
 	if true {
 		reply.Data, rerr = assignUids(ctx, num)
@@ -95,12 +97,13 @@ func AssignUidsOverNetwork(ctx context.Context, newUids map[string]uint64) (rerr
 
 	} else {
 		// Get pool for worker on instance 0.
-		pool := ws.GetPool(0)
-		conn, err := pool.Get()
+		var p pool
+		conn, err := p.Get()
 		if err != nil {
 			x.TraceError(ctx, x.Wrapf(err, "Error while retrieving connection"))
 			return err
 		}
+		defer p.Put(conn)
 		c := NewWorkerClient(conn)
 
 		reply, rerr = c.AssignUids(context.Background(), query)

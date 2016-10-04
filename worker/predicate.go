@@ -109,7 +109,7 @@ func (s *State) generateGroup(group uint64) ([]byte, error) {
 
 // PopulateShard gets data for predicate pred from server with id serverId and
 // writes it to RocksDB.
-func (s *State) PopulateShard(ctx context.Context, pool *Pool, group uint64) (int, error) {
+func (s *State) PopulateShard(ctx context.Context, pl *pool, group uint64) (int, error) {
 	query := new(Payload)
 	data, err := s.generateGroup(group)
 	if err != nil {
@@ -117,11 +117,11 @@ func (s *State) PopulateShard(ctx context.Context, pool *Pool, group uint64) (in
 	}
 	query.Data = data
 
-	conn, err := pool.Get()
+	conn, err := pl.Get()
 	if err != nil {
 		return 0, err
 	}
-	defer pool.Put(conn)
+	defer pl.Put(conn)
 	c := NewWorkerClient(conn)
 
 	stream, err := c.PredicateData(context.Background(), query)

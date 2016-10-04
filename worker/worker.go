@@ -43,7 +43,7 @@ type State struct {
 	// TODO: Remove this code once RAFT groups are in place.
 	// pools stores the pool for all the instances which is then used to send queries
 	// and mutations to the appropriate instance.
-	pools      []*Pool
+	pools      []*pool
 	poolsMutex sync.RWMutex
 }
 
@@ -245,11 +245,4 @@ func RunServer(port string) {
 	s := grpc.NewServer(grpc.CustomCodec(&PayloadCodec{}))
 	RegisterWorkerServer(s, &grpcWorker{})
 	s.Serve(ln)
-}
-
-// GetPool returns pool for given index.
-func (s *State) GetPool(k int) *Pool {
-	s.poolsMutex.RLock()
-	defer s.poolsMutex.RUnlock()
-	return s.pools[k]
 }
