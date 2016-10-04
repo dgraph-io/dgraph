@@ -87,25 +87,25 @@ func AssignUidsOverNetwork(ctx context.Context, newUids map[string]uint64) (rerr
 
 	reply := new(Payload)
 
-	_ = BelongsTo("_uid_")
+	gid := BelongsTo("_uid_")
 	// TODO: Send this over the network, depending upon which server should be handling this.
-	if true {
+	if groups().ServesGroup(gid) {
 		reply.Data, rerr = assignUids(ctx, num)
 		if rerr != nil {
 			return rerr
 		}
 
 	} else {
-		// Get pool for worker on instance 0.
-		var p pool
+		addr := groups().Leader(gid)
+		p := pools().get(addr)
 		conn, err := p.Get()
 		if err != nil {
 			x.TraceError(ctx, x.Wrapf(err, "Error while retrieving connection"))
 			return err
 		}
 		defer p.Put(conn)
-		c := NewWorkerClient(conn)
 
+		c := NewWorkerClient(conn)
 		reply, rerr = c.AssignUids(context.Background(), query)
 		if rerr != nil {
 			x.TraceError(ctx, x.Wrapf(rerr, "Error while getting uids"))
