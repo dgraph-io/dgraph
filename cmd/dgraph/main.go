@@ -68,6 +68,7 @@ var (
 	cpuprofile  = flag.String("cpu", "", "write cpu profile to file")
 	memprofile  = flag.String("mem", "", "write memory profile to file")
 	schemaFile  = flag.String("schema", "", "Path to schema file")
+	rdbStatsSec = flag.Int("rdbstatssec", 5*60, "Print out RocksDB stats every this many seconds. If <=0, we don't print anyting.")
 	closeCh     = make(chan struct{})
 
 	groupId uint64 = 0 // ALL
@@ -614,6 +615,18 @@ func setupServer() {
 	}
 }
 
+func printStats(ps *store.Store) {
+	if *rdbStatsSec <= 0 {
+		return
+	}
+	go func() {
+		for {
+			time.Sleep(time.Duration(*rdbStatsSec) * time.Second)
+			fmt.Println(ps.GetStats())
+		}
+	}()
+}
+
 func main() {
 	rand.Seed(time.Now().UnixNano())
 	x.Init()
@@ -625,6 +638,7 @@ func main() {
 
 	posting.InitIndex(ps)
 	posting.Init()
+	printStats(ps)
 
 	var ws *worker.State
 	if groupId != 0 { // HACK: This will currently not run.
