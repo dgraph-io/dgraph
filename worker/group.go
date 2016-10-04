@@ -52,6 +52,7 @@ func parsePredicates() {
 	}
 }
 
+// ParseGroupConfig parses the config file and stores the predicate <-> group map.
 func ParseGroupConfig(file string) {
 	cf, err := os.Open(file)
 	x.Check(err)
