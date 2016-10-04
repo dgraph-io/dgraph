@@ -105,10 +105,7 @@ func getNew() *List {
 // ListOptions is used in List.Uids (in posting) to customize our output list of
 // UIDs, for each posting list. It should be internal to this package.
 type ListOptions struct {
-	// To get 40th to 50th results, use offset=40, count/first=10.
-	//	Offset    int           // Skip this many results.
-	//	Count     int           // Max num UIDs returned; "first" argument in GraphQL.
-	AfterUid  uint64        // Any UID returned must be after this value.
+	AfterUID  uint64        // Any UID returned must be after this value.
 	Intersect *algo.UIDList // Intersect results with this list of UIDs.
 }
 
@@ -761,12 +758,12 @@ func (l *List) Uids(opt ListOptions) []uint64 {
 
 	var p types.Posting
 	var offset int
-	if opt.AfterUid > 0 {
+	if opt.AfterUID > 0 {
 		// sort.Search returns the index of the first element > AfterUid.
 		// AfterUid overrides the offset parameter.
 		offset = sort.Search(l.length(), func(i int) bool {
 			l.get(&p, i)
-			return p.Uid() > opt.AfterUid
+			return p.Uid() > opt.AfterUID
 		})
 	}
 

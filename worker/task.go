@@ -136,9 +136,7 @@ func processTask(query []byte) ([]byte, error) {
 			uoffsets[i] = x.UidlistOffset(b, []uint64{})
 		} else {
 			opts := posting.ListOptions{
-				//				Offset:   int(q.Offset()),
-				//				Count:    int(q.Count()),
-				AfterUid: uint64(q.AfterUid()),
+				AfterUID: uint64(q.AfterUid()),
 			}
 
 			// Get taskQuery.Intersect field.
