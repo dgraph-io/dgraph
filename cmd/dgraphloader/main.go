@@ -135,4 +135,5 @@ func main() {
 		pprof.WriteHeapProfile(f)
 		f.Close()
 	}
+	glog.Println(dataStore.GetStats())
 }

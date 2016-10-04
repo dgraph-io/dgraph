@@ -140,3 +140,6 @@ func (s *Store) NewSnapshot() *rdb.Snapshot { return s.db.NewSnapshot() }
 
 // SetSnapshot updates default read options to use the given snapshot.
 func (s *Store) SetSnapshot(snapshot *rdb.Snapshot) { s.ropt.SetSnapshot(snapshot) }
+
+// GetStats returns stats of our data store.
+func (s *Store) GetStats() string { return s.db.GetStats() }
