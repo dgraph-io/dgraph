@@ -42,9 +42,16 @@ type indexConfigs struct {
 }
 
 type indexConfig struct {
-	Attr string `json:"attribute"`
-	// TODO(jchiu): Add other tokenizer here in future.
+	Attr   string `json:"attribute"`
+	KeyGen string `json:"keygen"`
 }
+
+type keyGenerator interface {
+	// IndexKeys returns the index keys to be used to index the given attribute.
+	IndexKeys(attr string, data []byte) ([]string, error)
+}
+
+type exactMatchKeyGen struct{}
 
 var (
 	indexLog        trace.EventLog
@@ -52,7 +59,8 @@ var (
 	indexCfgs       indexConfigs
 	indexConfigFile = flag.String("indexconfig", "",
 		"File containing index config. If empty, we assume no index.")
-	indexedAttr = make(map[string]bool)
+	indexedAttr = make(map[string]keyGenerator)
+	exactMatch  exactMatchKeyGen
 )
 
 func init() {
@@ -73,7 +81,13 @@ func init() {
 func ReadIndexConfigs(f []byte) {
 	x.Check(json.Unmarshal(f, &indexCfgs))
 	for _, c := range indexCfgs.Cfg {
-		indexedAttr[c.Attr] = true
+		switch c.KeyGen {
+		case "":
+			indexedAttr[c.Attr] = exactMatch
+		default:
+			indexLog.Printf("Unknown key generator %s for attribute %s", c.KeyGen, c.Attr)
+			indexedAttr[c.Attr] = exactMatch
+		}
 	}
 	if len(indexedAttr) == 0 {
 		indexLog.Printf("No indexed attributes!")
@@ -92,6 +106,10 @@ func InitIndex(ds *store.Store) {
 	indexStore = ds
 }
 
+func (e exactMatchKeyGen) IndexKeys(attr string, data []byte) ([]string, error) {
+	return []string{string(IndexKey(attr, data))}, nil
+}
+
 // IndexKey creates a key for indexing the term for given attribute.
 func IndexKey(attr string, term []byte) []byte {
 	buf := bytes.NewBuffer(make([]byte, 0, len(attr)+len(term)+2))
@@ -107,31 +125,37 @@ func IndexKey(attr string, term []byte) []byte {
 }
 
 // processIndexTerm adds mutation(s) for a single term, to maintain index.
-func processIndexTerm(ctx context.Context, attr string, uid uint64, term []byte, del bool) {
-	edge := x.DirectedEdge{
-		Timestamp: time.Now(),
-		ValueId:   uid,
-		Attribute: attr,
+func processIndexTerm(ctx context.Context, keygen keyGenerator, attr string, uid uint64, term []byte, del bool) {
+	keys, err := keygen.IndexKeys(attr, term)
+	if err != nil {
+		// This data is not indexable
+		return
 	}
-	key := IndexKey(edge.Attribute, term)
-	plist, decr := GetOrCreate(key, indexStore)
-	defer decr()
-	x.Assertf(plist != nil, "plist is nil [%s] %d %s", key, edge.ValueId, edge.Attribute)
+	for _, key := range keys {
+		edge := x.DirectedEdge{
+			Timestamp: time.Now(),
+			ValueId:   uid,
+			Attribute: attr,
+		}
+		plist, decr := GetOrCreate([]byte(key), indexStore)
+		defer decr()
+		x.Assertf(plist != nil, "plist is nil [%s] %d %s", key, edge.ValueId, edge.Attribute)
 
-	if del {
-		_, err := plist.AddMutation(ctx, edge, Del)
-		if err != nil {
-			x.TraceError(ctx, x.Wrapf(err, "Error deleting %s for attr %s entity %d: %v",
-				string(term), edge.Attribute, edge.Entity))
+		if del {
+			_, err := plist.AddMutation(ctx, edge, Del)
+			if err != nil {
+				x.TraceError(ctx, x.Wrapf(err, "Error deleting %s for attr %s entity %d: %v",
+					string(term), edge.Attribute, edge.Entity))
+			}
+			indexLog.Printf("DEL [%s] [%d] OldTerm [%s]", edge.Attribute, edge.Entity, string(term))
+		} else {
+			_, err := plist.AddMutation(ctx, edge, Set)
+			if err != nil {
+				x.TraceError(ctx, x.Wrapf(err, "Error adding %s for attr %s entity %d: %v",
+					string(term), edge.Attribute, edge.Entity))
+			}
+			indexLog.Printf("SET [%s] [%d] NewTerm [%s]", edge.Attribute, edge.Entity, string(term))
 		}
-		indexLog.Printf("DEL [%s] [%d] OldTerm [%s]", edge.Attribute, edge.Entity, string(term))
-	} else {
-		_, err := plist.AddMutation(ctx, edge, Set)
-		if err != nil {
-			x.TraceError(ctx, x.Wrapf(err, "Error adding %s for attr %s entity %d: %v",
-				string(term), edge.Attribute, edge.Entity))
-		}
-		indexLog.Printf("SET [%s] [%d] NewTerm [%s]", edge.Attribute, edge.Entity, string(term))
 	}
 }
 
@@ -142,7 +166,8 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t x.DirectedEdge, op by
 
 	var lastPost types.Posting
 	var hasLastPost bool
-	doUpdateIndex := indexStore != nil && (t.Value != nil) && indexedAttr[t.Attribute]
+	keygen, needsIndex := indexedAttr[t.Attribute]
+	doUpdateIndex := indexStore != nil && (t.Value != nil) && needsIndex
 	if doUpdateIndex {
 		// Check last posting for original value BEFORE any mutation actually happens.
 		if l.Length() >= 1 {
@@ -158,10 +183,10 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t x.DirectedEdge, op by
 		return nil
 	}
 	if hasLastPost && lastPost.ValueBytes() != nil {
-		processIndexTerm(ctx, t.Attribute, t.Entity, lastPost.ValueBytes(), true)
+		processIndexTerm(ctx, keygen, t.Attribute, t.Entity, lastPost.ValueBytes(), true)
 	}
 	if op == Set {
-		processIndexTerm(ctx, t.Attribute, t.Entity, t.Value, false)
+		processIndexTerm(ctx, keygen, t.Attribute, t.Entity, t.Value, false)
 	}
 	return nil
 }
