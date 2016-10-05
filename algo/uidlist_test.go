@@ -231,3 +231,16 @@ func TestUIDListIntersect5(t *testing.T) {
 	u.Intersect(&v)
 	listEqual(&u, NewUIDList([]uint64{3}), t)
 }
+
+func TestApplyFilterUint(t *testing.T) {
+	var u UIDList
+	u.FromUints([]uint64{1, 2, 3, 4, 5})
+	u.ApplyFilter(func(a uint64) bool { return (a % 2) == 1 })
+	listEqual(&u, NewUIDList([]uint64{1, 3, 5}), t)
+}
+
+func TestApplyFilterList(t *testing.T) {
+	u := newListFromTask([]uint64{1, 2, 3, 4, 5})
+	u.ApplyFilter(func(a uint64) bool { return (a % 2) == 1 })
+	listEqual(u, NewUIDList([]uint64{1, 3, 5}), t)
+}

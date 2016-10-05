@@ -917,7 +917,7 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, taskQuery []byte, rch chan 
 	}
 
 	// Filter out the invalid UIDs.
-	sg.destUIDs.ApplyFilterFn(func(uid uint64) bool {
+	sg.destUIDs.ApplyFilter(func(uid uint64) bool {
 		return !invalidUids[uid]
 	})
 

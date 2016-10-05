@@ -91,10 +91,10 @@ const (
 	FilterOpAnd = iota
 
 	// FilterOpOr is OR operator applied to filter conditions.
-	FilterOpOr = iota
+	FilterOpOr
 
 	// filterOpLeftRound represents a left bracket and is internal.
-	filterOpLeftRound = iota // Internal use only.
+	filterOpLeftRound // Internal use only.
 )
 
 func init() {

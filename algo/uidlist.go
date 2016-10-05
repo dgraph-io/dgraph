@@ -58,16 +58,24 @@ func (u *UIDList) Size() int {
 }
 
 // Reslice selects a slice of the data.
-func (u *UIDList) ApplyFilterFn(f func(uid uint64) bool) {
-	u.convertToUints()
-	var idx int
-	for _, uid := range u.uints {
+func (u *UIDList) ApplyFilter(f func(uid uint64) bool) {
+	var out []uint64
+	if u.uints != nil {
+		out = u.uints[:0]
+	} else {
+		out = make([]uint64, 0, 30)
+	}
+
+	n := u.Size()
+	for i := 0; i < n; i++ {
+		uid := u.Get(i)
 		if f(uid) {
-			u.uints[idx] = uid
-			idx++
+			out = append(out, uid)
 		}
 	}
-	u.uints = u.uints[:idx]
+
+	u.uints = out
+	u.list = nil
 }
 
 // Slice selects a slice of the data.
@@ -92,40 +100,43 @@ func (u *UIDList) Slice(start, end int) {
 }
 
 // Intersect intersects with another list and updates this list.
-// TODO(jchiu): Consider binary search if n>>m or n<<m.
 func (u *UIDList) Intersect(v *UIDList) {
-	u.convertToUints()
+	var out []uint64
+
+	if u.uints != nil {
+		out = u.uints[:0]
+	} else {
+		n := u.Size()
+		if v.Size() < n {
+			n = v.Size()
+		}
+		out = make([]uint64, 0, n)
+	}
 
 	n := u.Size()
 	m := v.Size()
-	var uIdx, vIdx int
+	var k int
 	for i := 0; i < n; i++ {
-		val := u.Get(i)
-		for ; vIdx < m && v.Get(vIdx) < val; vIdx++ {
+		uid := u.Get(i)
+		for ; k < m && v.Get(k) < uid; k++ {
 		}
-		if vIdx < m && v.Get(vIdx) == val {
-			u.uints[uIdx] = val
-			uIdx++
+		if k < m && v.Get(k) == uid {
+			out = append(out, uid)
 		}
 	}
-	u.uints = u.uints[:uIdx]
+	u.uints = out
+	u.list = nil
 }
 
-// convertToUints converts internal representation to uints which is easier to
-// work with than flatbuffers.
-func (u *UIDList) convertToUints() {
-	if u.uints == nil {
-		x.Assert(u.list != nil)
-		n := u.Size()
-		u.uints = make([]uint64, n)
-		for i := 0; i < n; i++ {
-			u.uints[i] = u.list.Uids(i)
-		}
-		u.list = nil
-	}
-}
-
-// IntersectLists intersect a list of UIDLists.
+// IntersectLists intersect a list of UIDLists. An alternative is to do
+// pairwise intersections n-1 times where n=number of lists. This is less
+// efficient:
+// Let p be length of shortest list. Let q be average length of lists. So
+// nq = total number of elements.
+// There are many possible cases. Consider the case where the shortest list
+// is the answer (or close to the answer). The following method requires nq
+// reads (each element is read only once) whereas pairwise intersections can
+// require np + nq - p reads, which can be up to ~twice as many.
 func IntersectLists(lists []*UIDList) *UIDList {
 	if len(lists) == 0 {
 		output := new(UIDList)
@@ -137,9 +148,8 @@ func IntersectLists(lists []*UIDList) *UIDList {
 	// For each x in A,
 	//   For each other list B,
 	//     Keep popping elements until we get a y >= x.
-	//     If y > x, we want to skip x. Break out of loop for B.
-	//   If we reach here, append our output by x.
-	// We also remove all duplicates.
+	//     If y > x, mark x as "skipped". Break out of loop.
+	//   If x is not marked as "skipped", append x to result.
 	var minLenIdx int
 	minLen := lists[0].Size()
 	for i := 1; i < len(lists); i++ { // Start from 1.
@@ -169,12 +179,12 @@ func IntersectLists(lists []*UIDList) *UIDList {
 				continue
 			}
 			l := lists[j]
-			k := idx[j]
-			n := l.Size()
-			for ; k < n && l.Get(k) < val; k++ {
+			lidx := idx[j]
+			lsz := l.Size()
+			for ; lidx < lsz && l.Get(lidx) < val; lidx++ {
 			}
-			idx[j] = k
-			if k >= n || l.Get(k) > val {
+			idx[j] = lidx
+			if lidx >= lsz || l.Get(lidx) > val {
 				skip = true
 				break
 			}
@@ -247,7 +257,7 @@ func (u *UIDList) IndexOf(uid uint64) int {
 }
 
 // UidlistOffset adds a UidList to buffer and returns the offset.
-func (u *UIDList) UidlistOffset(b *flatbuffers.Builder) flatbuffers.UOffsetT {
+func (u *UIDList) AddTo(b *flatbuffers.Builder) flatbuffers.UOffsetT {
 	n := u.Size()
 	task.UidListStartUidsVector(b, n)
 	for i := n - 1; i >= 0; i-- {
