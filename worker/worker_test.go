@@ -29,6 +29,7 @@ import (
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/x"
+	flatbuffers "github.com/google/flatbuffers/go"
 )
 
 func addEdge(t *testing.T, edge x.DirectedEdge, l *posting.List) {
@@ -127,7 +128,7 @@ func TestProcessTask(t *testing.T) {
 	posting.InitIndex(ps)
 	populateGraph(t, ps)
 
-	query := NewQuery("friend", []uint64{10, 11, 12}, nil)
+	query := newQuery("friend", []uint64{10, 11, 12}, nil)
 	result, err := processTask(query)
 	if err != nil {
 		t.Error(err)
@@ -176,6 +177,45 @@ func TestProcessTask(t *testing.T) {
 	}
 }
 
+// newQuery creates a Query flatbuffer table, serializes and returns it.
+func newQuery(attr string, uids []uint64, terms []string) []byte {
+	b := flatbuffers.NewBuilder(0)
+
+	x.Assert(uids == nil || terms == nil)
+
+	var vend flatbuffers.UOffsetT
+	if uids != nil {
+		task.QueryStartUidsVector(b, len(uids))
+		for i := len(uids) - 1; i >= 0; i-- {
+			b.PrependUint64(uids[i])
+		}
+		vend = b.EndVector(len(uids))
+	} else {
+		offsets := make([]flatbuffers.UOffsetT, 0, len(terms))
+		for _, term := range terms {
+			uo := b.CreateString(term)
+			offsets = append(offsets, uo)
+		}
+		task.QueryStartTermsVector(b, len(terms))
+		for i := len(terms) - 1; i >= 0; i-- {
+			b.PrependUOffsetT(offsets[i])
+		}
+		vend = b.EndVector(len(terms))
+	}
+
+	ao := b.CreateString(attr)
+	task.QueryStart(b)
+	task.QueryAddAttr(b, ao)
+	if uids != nil {
+		task.QueryAddUids(b, vend)
+	} else {
+		task.QueryAddTerms(b, vend)
+	}
+	qend := task.QueryEnd(b)
+	b.Finish(qend)
+	return b.Bytes[b.Head():]
+}
+
 // Index-related test. Similar to TestProcessTaskIndex but we call MergeLists only
 // at the end. In other words, everything is happening only in mutation layers,
 // and not committed to RocksDB until near the end.
@@ -204,7 +244,7 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 	populateGraph(t, ps)
 	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
 
-	query := NewQuery("friend", nil, []string{"hey", "photon"})
+	query := newQuery("friend", nil, []string{"hey", "photon"})
 	result, err := processTask(query)
 	if err != nil {
 		t.Error(err)
@@ -237,7 +277,7 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
 
 	// Issue a similar query.
-	query = NewQuery("friend", nil, []string{"hey", "photon", "notphoton", "notphoton_extra"})
+	query = newQuery("friend", nil, []string{"hey", "photon", "notphoton", "notphoton_extra"})
 	result, err = processTask(query)
 	if err != nil {
 		t.Error(err)
@@ -282,7 +322,7 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
 
 	// Issue a similar query.
-	query = NewQuery("friend", nil, []string{"photon", "notphoton", "ignored"})
+	query = newQuery("friend", nil, []string{"photon", "notphoton", "ignored"})
 	result, err = processTask(query)
 	if err != nil {
 		t.Error(err)
@@ -307,7 +347,7 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 	posting.MergeLists(10)
 	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
 
-	query = NewQuery("friend", nil, []string{"photon", "notphoton", "ignored"})
+	query = newQuery("friend", nil, []string{"photon", "notphoton", "ignored"})
 	result, err = processTask(query)
 	if err != nil {
 		t.Error(err)
@@ -354,7 +394,7 @@ func TestProcessTaskIndex(t *testing.T) {
 	populateGraph(t, ps)
 	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
 
-	query := NewQuery("friend", nil, []string{"hey", "photon"})
+	query := newQuery("friend", nil, []string{"hey", "photon"})
 	result, err := processTask(query)
 	if err != nil {
 		t.Error(err)
@@ -390,7 +430,7 @@ func TestProcessTaskIndex(t *testing.T) {
 	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
 
 	// Issue a similar query.
-	query = NewQuery("friend", nil, []string{"hey", "photon", "notphoton", "notphoton_extra"})
+	query = newQuery("friend", nil, []string{"hey", "photon", "notphoton", "notphoton_extra"})
 	result, err = processTask(query)
 	if err != nil {
 		t.Error(err)
@@ -438,7 +478,7 @@ func TestProcessTaskIndex(t *testing.T) {
 	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
 
 	// Issue a similar query.
-	query = NewQuery("friend", nil, []string{"photon", "notphoton", "ignored"})
+	query = newQuery("friend", nil, []string{"photon", "notphoton", "ignored"})
 	result, err = processTask(query)
 	if err != nil {
 		t.Error(err)

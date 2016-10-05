@@ -1,7 +1,6 @@
 package worker
 
 import (
-	"context"
 	"encoding/binary"
 	"fmt"
 	"log"
@@ -14,9 +13,11 @@ import (
 
 	"github.com/coreos/etcd/raft"
 	"github.com/coreos/etcd/raft/raftpb"
+	flatbuffers "github.com/google/flatbuffers/go"
+	"golang.org/x/net/context"
+
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/x"
-	flatbuffers "github.com/google/flatbuffers/go"
 )
 
 const (
@@ -489,4 +490,32 @@ func (n *node) AmLeader() bool {
 	return n.raft.Status().Lead == n.raft.Status().ID
 }
 
-var thisNode *node
+func (w *grpcWorker) RaftMessage(ctx context.Context, query *Payload) (*Payload, error) {
+	reply := &Payload{}
+	reply.Data = []byte("ok")
+	msg := raftpb.Message{}
+	if err := msg.Unmarshal(query.Data); err != nil {
+		return reply, err
+	}
+
+	rc := task.GetRootAsRaftContext(msg.Context, 0)
+	node := groups().Node(rc.Group())
+	node.Connect(msg.From, string(rc.Addr()))
+	node.Step(ctx, msg)
+
+	return reply, nil
+}
+
+func (w *grpcWorker) JoinCluster(ctx context.Context, query *Payload) (*Payload, error) {
+	reply := &Payload{}
+	reply.Data = []byte("ok")
+	if len(query.Data) == 0 {
+		return reply, x.Errorf("JoinCluster: No data provided")
+	}
+
+	rc := task.GetRootAsRaftContext(query.Data, 0)
+	node := groups().Node(rc.Group())
+	node.Connect(rc.Id(), string(rc.Addr()))
+	node.AddToCluster(rc.Id())
+	return reply, nil
+}
