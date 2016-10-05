@@ -7,9 +7,8 @@ import (
 	"strings"
 )
 
-const dgraphServer = "http://localhost:8080/query"
-
 func decodeResponse(q string) string {
+	dgraphServer := "http://localhost:8080/query"
 	client := new(http.Client)
 	req, err := http.NewRequest("POST", dgraphServer, strings.NewReader(q))
 	resp, err := client.Do(req)
