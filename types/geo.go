@@ -26,18 +26,18 @@ import (
 
 // Geo represents geo-spatial data.
 type Geo struct {
-	geo geom.T
+	geom.T
 }
 
 // MarshalBinary marshals to binary
 func (v Geo) MarshalBinary() ([]byte, error) {
-	return wkb.Marshal(v.geo, binary.LittleEndian)
+	return wkb.Marshal(v.T, binary.LittleEndian)
 }
 
 // MarshalText marshals to text
 func (v Geo) MarshalText() ([]byte, error) {
 	// The text format is geojson
-	return geojson.Marshal(v.geo)
+	return geojson.Marshal(v.T)
 }
 
 // MarshalJSON marshals to json
@@ -53,9 +53,7 @@ func (u unmarshalGeo) FromBinary(data []byte) (TypeValue, error) {
 	if err != nil {
 		return nil, err
 	}
-	var g Geo
-	g.geo = v
-	return g, nil
+	return Geo{v}, nil
 }
 
 // Parses geojson text.
@@ -64,9 +62,7 @@ func (u unmarshalGeo) FromText(text []byte) (TypeValue, error) {
 	if err := geojson.Unmarshal(text, &g); err != nil {
 		return nil, err
 	}
-	var geo Geo
-	geo.geo = g
-	return geo, nil
+	return Geo{g}, nil
 }
 
 var uGeo unmarshalGeo
