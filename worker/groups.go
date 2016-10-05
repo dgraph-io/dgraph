@@ -22,9 +22,11 @@ type servers struct {
 
 type groupi struct {
 	sync.RWMutex
+	// local stores the groupId to node map for this server.
 	local map[uint32]*node
-	all   map[uint32]*servers
-	num   uint32
+	// all stores the groupId to servers map for the entire cluster.
+	all map[uint32]*servers
+	num uint32
 }
 
 var gr *groupi
@@ -89,11 +91,11 @@ func (g *groupi) Server(id uint64, groupId uint32) (rs server, found bool) {
 	if g.all == nil {
 		return server{}, false
 	}
-	all := g.all[groupId]
-	if all == nil {
+	sl := g.all[groupId]
+	if sl == nil {
 		return server{}, false
 	}
-	for _, s := range all.list {
+	for _, s := range sl.list {
 		if s.Id == id {
 			return s, true
 		}
@@ -114,20 +116,20 @@ func (g *groupi) UpdateServer(mm *task.Membership) {
 		g.all = make(map[uint32]*servers)
 	}
 
-	all := g.all[mm.Group()]
-	if all == nil {
-		all = new(servers)
-		g.all[mm.Group()] = all
+	sl := g.all[mm.Group()]
+	if sl == nil {
+		sl = new(servers)
+		g.all[mm.Group()] = sl
 	}
 
 	for {
 		// Remove all instances of the provided node. There should only be one.
 		found := false
-		for i, s := range all.list {
+		for i, s := range sl.list {
 			if s.Id == update.Id {
 				found = true
-				all.list[i] = all.list[len(all.list)-1]
-				all.list = all.list[:len(all.list)-1]
+				sl.list[i] = sl.list[len(sl.list)-1]
+				sl.list = sl.list[:len(sl.list)-1]
 			}
 		}
 		if !found {
@@ -136,17 +138,17 @@ func (g *groupi) UpdateServer(mm *task.Membership) {
 	}
 
 	// Append update to the list. If it's a leader, move it to index zero.
-	all.list = append(all.list, update)
-	last := len(all.list) - 1
+	sl.list = append(sl.list, update)
+	last := len(sl.list) - 1
 	if update.Leader {
-		all.list[0], all.list[last] = all.list[last], all.list[0]
+		sl.list[0], sl.list[last] = sl.list[last], sl.list[0]
 	}
 
 	// Update all servers upwards of index zero as followers.
-	for i := 1; i < len(all.list); i++ {
-		all.list[i].Leader = false
+	for i := 1; i < len(sl.list); i++ {
+		sl.list[i].Leader = false
 	}
-	fmt.Printf("Group: %v. List: %+v\n", mm.Group(), all.list)
+	fmt.Printf("Group: %v. List: %+v\n", mm.Group(), sl.list)
 }
 
 func (g *groupi) AnyServer(group uint32) string {
