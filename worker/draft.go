@@ -491,31 +491,42 @@ func (n *node) AmLeader() bool {
 }
 
 func (w *grpcWorker) RaftMessage(ctx context.Context, query *Payload) (*Payload, error) {
-	reply := &Payload{}
-	reply.Data = []byte("ok")
+	if ctx.Err() != nil {
+		return &Payload{}, ctx.Err()
+	}
+
 	msg := raftpb.Message{}
 	if err := msg.Unmarshal(query.Data); err != nil {
-		return reply, err
+		return &Payload{}, err
 	}
 
 	rc := task.GetRootAsRaftContext(msg.Context, 0)
 	node := groups().Node(rc.Group())
 	node.Connect(msg.From, string(rc.Addr()))
-	node.Step(ctx, msg)
 
-	return reply, nil
+	c := make(chan error, 1)
+	go func() { c <- node.Step(ctx, msg) }()
+
+	select {
+	case <-ctx.Done():
+		return &Payload{}, ctx.Err()
+	case err := <-c:
+		return &Payload{}, err
+	}
 }
 
 func (w *grpcWorker) JoinCluster(ctx context.Context, query *Payload) (*Payload, error) {
-	reply := &Payload{}
-	reply.Data = []byte("ok")
+	if ctx.Err() != nil {
+		return &Payload{}, ctx.Err()
+	}
+
 	if len(query.Data) == 0 {
-		return reply, x.Errorf("JoinCluster: No data provided")
+		return &Payload{}, x.Errorf("JoinCluster: No data provided")
 	}
 
 	rc := task.GetRootAsRaftContext(query.Data, 0)
 	node := groups().Node(rc.Group())
 	node.Connect(rc.Id(), string(rc.Addr()))
 	node.AddToCluster(rc.Id())
-	return reply, nil
+	return &Payload{}, nil
 }

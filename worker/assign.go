@@ -132,6 +132,10 @@ func AssignUidsOverNetwork(ctx context.Context, newUids map[string]uint64) (rerr
 
 // GetOrAssign is used to get uids for a set of xids by communicating with other workers.
 func (w *grpcWorker) AssignUids(ctx context.Context, query *Payload) (*Payload, error) {
+	if ctx.Err() != nil {
+		return &Payload{}, ctx.Err()
+	}
+
 	uo := flatbuffers.GetUOffsetT(query.Data)
 	num := new(task.Num)
 	num.Init(query.Data, uo)
@@ -141,7 +145,17 @@ func (w *grpcWorker) AssignUids(ctx context.Context, query *Payload) (*Payload, 
 	}
 
 	reply := new(Payload)
-	var rerr error
-	reply.Data, rerr = assignUids(ctx, num)
-	return reply, rerr
+	c := make(chan error, 1)
+	go func() {
+		var err error
+		reply.Data, err = assignUids(ctx, num)
+		c <- err
+	}()
+
+	select {
+	case <-ctx.Done():
+		return reply, ctx.Err()
+	case err := <-c:
+		return reply, err
+	}
 }
