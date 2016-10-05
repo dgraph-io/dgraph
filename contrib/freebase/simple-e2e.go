@@ -1,26 +1,11 @@
-package main
+package testing
 
 import (
-	"io/ioutil"
 	"log"
-	"net/http"
-	"strings"
+	"testing"
 )
 
-const dgraphServer = "http://localhost:8080/query"
-
-func decodeResponse(q string) string {
-	client := new(http.Client)
-	req, err := http.NewRequest("POST", dgraphServer, strings.NewReader(q))
-	resp, err := client.Do(req)
-	b, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		log.Fatal(err)
-	}
-	return string(b)
-}
-
-func main() {
+func TestSimple(t *testing.T) {
 	// Run mutation.
 	m := `mutation {
         set {

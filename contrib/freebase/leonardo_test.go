@@ -1,10 +1,11 @@
-package main
+package testing
 
 import (
 	"io/ioutil"
 	"log"
 	"net/http"
 	"strings"
+	"testing"
 )
 
 func decodeResponse(q string) string {
@@ -19,7 +20,7 @@ func decodeResponse(q string) string {
 	return string(b)
 }
 
-func main() {
+func TestLeonardo(t *testing.T) {
 	q := `
     {
       me(_xid_: m.0dvmd) {
