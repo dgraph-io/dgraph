@@ -69,9 +69,8 @@ var (
 	memprofile  = flag.String("mem", "", "write memory profile to file")
 	schemaFile  = flag.String("schema", "", "Path to schema file")
 	rdbStats    = flag.Duration("rdbstats", 5*time.Minute, "Print out RocksDB stats every this many seconds. If <=0, we don't print anyting.")
-	groupConf   = flag.String("conf", "groups.conf",
-		"Path to config file with group <-> predicate mapping.")
-	closeCh = make(chan struct{})
+	groupConf   = flag.String("conf", "", "Path to config file with group <-> predicate mapping.")
+	closeCh     = make(chan struct{})
 
 	groupId uint64 = 0 // ALL
 )
