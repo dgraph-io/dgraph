@@ -62,6 +62,9 @@ func parseDefaultConfig(l string) (uint64, error) {
 	groupConfig.n, err = strconv.ParseUint(conf[2], 10, 64)
 	x.Check(err)
 	if len(conf) == 5 {
+		if conf[3] != "+" {
+			return 0, fmt.Errorf("Default config format should be like: %v", "default: fp % n + k")
+		}
 		groupConfig.k, err = strconv.ParseUint(conf[4], 10, 64)
 		x.Check(err)
 	}
