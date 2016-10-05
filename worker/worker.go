@@ -57,14 +57,7 @@ type grpcWorker struct{}
 // Hello rpc call is used to check connection with other workers after worker
 // tcp server for this instance starts.
 func (w *grpcWorker) Hello(ctx context.Context, in *Payload) (*Payload, error) {
-	out := new(Payload)
-	if string(in.Data) == "hello" {
-		out.Data = []byte("Oh hello there!")
-	} else {
-		out.Data = []byte("Hey stranger!")
-	}
-
-	return out, nil
+	return &Payload{Data: []byte("world")}, nil
 }
 
 // runServer initializes a tcp server on port which listens to requests from

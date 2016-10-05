@@ -17,8 +17,6 @@
 package worker
 
 import (
-	"log"
-
 	"github.com/google/flatbuffers/go"
 	"golang.org/x/net/context"
 
@@ -34,10 +32,9 @@ func ProcessTaskOverNetwork(ctx context.Context, qu []byte) (result []byte, rerr
 	q := task.GetRootAsQuery(qu, 0)
 	attr := string(q.Attr())
 	gid := BelongsTo(attr)
-	runHere := groups().ServesGroup(gid)
-	x.Trace(ctx, "runHere: %v attr: %v groupId: %v", runHere, attr, gid)
+	x.Trace(ctx, "attr: %v groupId: %v", attr, gid)
 
-	if runHere {
+	if groups().ServesGroup(gid) {
 		// No need for a network call, as this should be run from within this instance.
 		return processTask(qu)
 	}
@@ -168,9 +165,8 @@ func (w *grpcWorker) ServeTask(ctx context.Context, query *Payload) (*Payload, e
 	x.Trace(ctx, "Attribute: %q NumUids: %v groupId: %v ServeTask", q.Attr(), q.UidsLength(), gid)
 
 	reply := new(Payload)
-	if !groups().ServesGroup(gid) {
-		log.Fatalf("attr: %q groupId: %v Request sent to wrong server.", q.Attr(), gid)
-	}
+	x.Assertf(groups().ServesGroup(gid),
+		"attr: %q groupId: %v Request sent to wrong server.", q.Attr(), gid)
 
 	c := make(chan error, 1)
 	go func() {

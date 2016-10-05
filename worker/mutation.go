@@ -98,7 +98,6 @@ func proposeOrSend(ctx context.Context, gid uint32, m *x.Mutations, che chan err
 // taking into account the op(operation) and the attribute.
 func addToMutationMap(mutationMap map[uint32]*x.Mutations, edges []x.DirectedEdge, op string) {
 	for _, edge := range edges {
-		// TODO: Determine the right group using rules, instead of modulos.
 		gid := BelongsTo(edge.Attribute)
 		mu := mutationMap[gid]
 		if mu == nil {
@@ -118,7 +117,6 @@ func addToMutationMap(mutationMap map[uint32]*x.Mutations, edges []x.DirectedEdg
 // MutateOverNetwork checks which group should be running the mutations
 // according to fingerprint of the predicate and sends it to that instance.
 func MutateOverNetwork(ctx context.Context, m x.Mutations) (rerr error) {
-	// mutationArray := make([]*x.Mutations, ws.numGroups)
 	mutationMap := make(map[uint32]*x.Mutations)
 
 	addToMutationMap(mutationMap, m.Set, set)
