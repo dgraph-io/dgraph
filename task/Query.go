@@ -112,7 +112,7 @@ func (rcv *Query) TermsLength() int {
 	return 0
 }
 
-func (rcv *Query) Intersect(obj *UidList) *UidList {
+func (rcv *Query) ToIntersect(obj *UidList) *UidList {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(18))
 	if o != 0 {
 		x := rcv._tab.Indirect(o + rcv._tab.Pos)
@@ -155,8 +155,8 @@ func QueryAddTerms(builder *flatbuffers.Builder, terms flatbuffers.UOffsetT) {
 func QueryStartTermsVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
 	return builder.StartVector(4, numElems, 4)
 }
-func QueryAddIntersect(builder *flatbuffers.Builder, intersect flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(7, flatbuffers.UOffsetT(intersect), 0)
+func QueryAddToIntersect(builder *flatbuffers.Builder, toIntersect flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(7, flatbuffers.UOffsetT(toIntersect), 0)
 }
 func QueryEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()

@@ -52,28 +52,28 @@ func checkUids(t *testing.T, l *List, uids ...uint64) error {
 		// Tests for "after"
 		opts := ListOptions{10, nil}
 		ruids := l.Uids(opts)
-		if len(ruids) != 2 {
-			return fmt.Errorf("Expected result of length: 2. Got: %v", len(ruids))
+		if ruids.Size() != 2 {
+			return fmt.Errorf("Expected result of length: 2. Got: %v", ruids.Size())
 		}
-		for i := 0; i < len(ruids); i++ {
-			if ruids[i] != uids[1+i] {
-				return fmt.Errorf("Uids expected: %v. Got: %v", uids[1+i], ruids[i])
+		for i := 0; i < ruids.Size(); i++ {
+			if ruids.Get(i) != uids[1+i] {
+				return fmt.Errorf("Uids expected: %v. Got: %v", uids[1+i], ruids.Get(i))
 			}
 		}
 
 		opts = ListOptions{80, nil}
 		ruids = l.Uids(opts)
-		if len(ruids) != 1 {
-			return fmt.Errorf("Expected result of length: 1. Got: %v", len(ruids))
+		if ruids.Size() != 1 {
+			return fmt.Errorf("Expected result of length: 1. Got: %v", ruids.Size())
 		}
-		if ruids[0] != 81 {
-			return fmt.Errorf("Uids expected: %v. Got: %v", uids[2], ruids[0])
+		if ruids.Get(0) != 81 {
+			return fmt.Errorf("Uids expected: %v. Got: %v", uids[2], ruids.Get(0))
 		}
 
 		opts = ListOptions{82, nil}
 		ruids = l.Uids(opts)
-		if len(ruids) != 0 {
-			return fmt.Errorf("Expected result of length: 0. Got: %v", len(ruids))
+		if ruids.Size() != 0 {
+			return fmt.Errorf("Expected result of length: 0. Got: %v", ruids.Size())
 		}
 	}
 	return nil

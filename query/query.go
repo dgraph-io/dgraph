@@ -136,7 +136,7 @@ type SubGraph struct {
 	Filter   *gql.FilterTree
 
 	Counts *task.CountList
-	Values task.ValueList
+	Values *task.ValueList
 	Result []*algo.UIDList
 
 	// srcUIDs is a list of unique source UIDs. They are always copies of destUIDs
@@ -688,10 +688,9 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	{
 		// Encode uid into result flatbuffer.
 		b := flatbuffers.NewBuilder(0)
-		b.Finish(x.UidlistOffset(b, []uint64{euid}))
+		b.Finish(algo.NewUIDList([]uint64{euid}).AddTo(b))
 		buf := b.FinishedBytes()
-		tl := new(task.UidList)
-		x.ParseUidList(tl, buf)
+		tl := task.GetRootAsUidList(buf, 0)
 		ul := new(algo.UIDList)
 		ul.FromTask(tl)
 		sg.Result = []*algo.UIDList{ul}
@@ -713,7 +712,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		task.ValueListAddValues(b, voffset)
 		b.Finish(task.ValueListEnd(b))
 		buf := b.FinishedBytes()
-		x.ParseValueList(&sg.Values, buf)
+		sg.Values = task.GetRootAsValueList(buf, 0)
 	}
 	return sg, nil
 }
@@ -746,7 +745,7 @@ func createTaskQuery(sg *SubGraph, uids *algo.UIDList, terms []string, intersect
 	if intersect != nil {
 		x.Assert(uids == nil)
 		x.Assert(len(terms) > 0)
-		intersectOffset = intersect.UidlistOffset(b)
+		intersectOffset = intersect.AddTo(b)
 	}
 
 	ao := b.CreateString(sg.Attr)
@@ -758,7 +757,7 @@ func createTaskQuery(sg *SubGraph, uids *algo.UIDList, terms []string, intersect
 		task.QueryAddTerms(b, vend)
 	}
 	if intersect != nil {
-		task.QueryAddIntersect(b, intersectOffset)
+		task.QueryAddToIntersect(b, intersectOffset)
 	}
 	task.QueryAddCount(b, int32(sg.Params.Count))
 	task.QueryAddOffset(b, int32(sg.Params.Offset))
@@ -781,8 +780,7 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, taskQuery []byte, rch chan 
 			return
 		}
 
-		r := new(task.Result)
-		x.ParseTaskResult(r, resultBuf)
+		r := task.GetRootAsResult(resultBuf, 0)
 
 		// Extract UIDLists from task.Result.
 		sg.Result = make([]*algo.UIDList, r.UidmatrixLength())
@@ -795,7 +793,7 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, taskQuery []byte, rch chan 
 		}
 
 		// Extract values from task.Result.
-		x.Assert(r.Values(&sg.Values) != nil)
+		sg.Values = r.Values(nil)
 		if sg.Values.ValuesLength() > 0 {
 			var v task.Value
 			if sg.Values.Values(&v, 0) {
@@ -967,7 +965,8 @@ func (sg *SubGraph) applyFilter(ctx context.Context) error {
 
 // runFilter traverses filter tree and produce a filtered list of UIDs.
 // Input "destUIDs" is the very original list of destination UIDs of a SubGraph.
-func runFilter(ctx context.Context, destUIDs *algo.UIDList, filter *gql.FilterTree) (*algo.UIDList, error) {
+func runFilter(ctx context.Context, destUIDs *algo.UIDList,
+	filter *gql.FilterTree) (*algo.UIDList, error) {
 	if len(filter.FuncName) > 0 { // Leaf node.
 		x.Assertf(filter.FuncName == "eq", "Only exact match is supported now")
 		x.Assertf(len(filter.FuncArgs) == 2,
@@ -988,7 +987,7 @@ func runFilter(ctx context.Context, destUIDs *algo.UIDList, filter *gql.FilterTr
 	}
 
 	// For now, we only handle AND and OR.
-	if filter.Op != gql.FilterOpAnd && filter.Op != gql.FilterOpOr {
+	if filter.Op != "&" && filter.Op != "|" {
 		return destUIDs, x.Errorf("Unknown operator %v", filter.Op)
 	}
 
@@ -1015,10 +1014,10 @@ func runFilter(ctx context.Context, destUIDs *algo.UIDList, filter *gql.FilterTr
 	}
 
 	// Either merge or intersect the UID lists.
-	if filter.Op == gql.FilterOpOr {
+	if filter.Op == "|" {
 		return algo.MergeLists(lists), nil
 	}
-	x.Assert(filter.Op == gql.FilterOpAnd)
+	x.Assert(filter.Op == "&")
 	return algo.IntersectLists(lists), nil
 }
 
@@ -1029,8 +1028,8 @@ func pageRange(p *params, n int) (int, int) {
 		return 0, n
 	}
 	if p.Count < 0 {
-		// Items from the back of the array, like Python arrays.
-		return n + p.Count, n
+		// Items from the back of the array, like Python arrays. Do a postive mod n.
+		return (((n + p.Count) % n) + n) % n, n
 	}
 	start := p.Offset
 	if start < 0 {

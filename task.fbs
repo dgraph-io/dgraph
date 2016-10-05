@@ -13,7 +13,7 @@ table Query {
 	
 	// Intersect results with this UID list. If uids is populated, then this is
 	// an "intersection query". If terms is populated, this is a "filter query".
-	intersect:UidList;
+	toIntersect:UidList;
 }
 
 table Value {
@@ -31,7 +31,7 @@ table UidList {
 }
 
 table CountList {
-	count:[ulong];
+	count:[uint];
 }
 
 table Result {

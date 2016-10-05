@@ -751,7 +751,7 @@ func (l *List) LastCompactionTs() time.Time {
 
 // Uids returns the UIDs given some query params.
 // We have to apply the filtering before applying (offset, count).
-func (l *List) Uids(opt ListOptions) []uint64 {
+func (l *List) Uids(opt ListOptions) *algo.UIDList {
 	l.wg.Wait()
 	l.RLock()
 	defer l.RUnlock()
@@ -789,7 +789,7 @@ func (l *List) Uids(opt ListOptions) []uint64 {
 		}
 		result = append(result, uid)
 	}
-	return result
+	return algo.NewUIDList(result)
 }
 
 func (l *List) Value() (result []byte, rtype byte, rerr error) {

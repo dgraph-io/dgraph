@@ -37,8 +37,7 @@ const (
 // the instance which stores posting list corresponding to the predicate in the
 // query.
 func ProcessTaskOverNetwork(ctx context.Context, qu []byte) (result []byte, rerr error) {
-	q := new(task.Query)
-	x.ParseTaskQuery(q, qu)
+	q := task.GetRootAsQuery(qu, 0)
 
 	attr := string(q.Attr())
 	idx := farm.Fingerprint64([]byte(attr)) % ws.numGroups
@@ -83,8 +82,7 @@ func ProcessTaskOverNetwork(ctx context.Context, qu []byte) (result []byte, rerr
 
 // processTask processes the query, accumulates and returns the result.
 func processTask(query []byte) ([]byte, error) {
-	q := new(task.Query)
-	x.ParseTaskQuery(q, query)
+	q := task.GetRootAsQuery(query, 0)
 
 	attr := string(q.Attr())
 	store := ws.dataStore
@@ -133,7 +131,7 @@ func processTask(query []byte) ([]byte, error) {
 			count := uint64(pl.Length())
 			counts = append(counts, count)
 			// Add an empty UID list to make later processing consistent
-			uoffsets[i] = x.UidlistOffset(b, []uint64{})
+			uoffsets[i] = algo.NewUIDList([]uint64{}).AddTo(b)
 		} else {
 			opts := posting.ListOptions{
 				AfterUID: uint64(q.AfterUid()),
@@ -141,13 +139,13 @@ func processTask(query []byte) ([]byte, error) {
 
 			// Get taskQuery.Intersect field.
 			taskList := new(task.UidList)
-			if q.Intersect(taskList) != nil {
+			if q.ToIntersect(taskList) != nil {
 				opts.Intersect = new(algo.UIDList)
 				opts.Intersect.FromTask(taskList)
 			}
 
 			ulist := pl.Uids(opts)
-			uoffsets[i] = x.UidlistOffset(b, ulist)
+			uoffsets[i] = ulist.AddTo(b)
 		}
 	}
 

@@ -26,15 +26,13 @@ func NewUIDList(data []uint64) *UIDList {
 
 // FromUints initialize UIDList from []uint64.
 func (u *UIDList) FromUints(data []uint64) {
-	x.Assert(u.uints == nil)
-	x.Assert(u.list == nil)
+	x.Assert(u != nil && u.uints == nil && u.list == nil)
 	u.uints = data
 }
 
 // FromUints initialize UIDList from task.UidList.
 func (u *UIDList) FromTask(data *task.UidList) {
-	x.Assert(u.uints == nil)
-	x.Assert(u.list == nil)
+	x.Assert(u != nil && u.uints == nil && u.list == nil)
 	u.list = data
 }
 
@@ -48,9 +46,7 @@ func (u *UIDList) Get(i int) uint64 {
 
 // Size returns size of UIDList.
 func (u *UIDList) Size() int {
-	if u == nil {
-		return 0
-	}
+	x.Assert(u != nil)
 	if u.list != nil {
 		return u.list.UidsLength()
 	}
@@ -59,13 +55,13 @@ func (u *UIDList) Size() int {
 
 // Reslice selects a slice of the data.
 func (u *UIDList) ApplyFilter(f func(uid uint64) bool) {
+	x.Assert(u != nil && (u.uints != nil || u.list != nil))
 	var out []uint64
 	if u.uints != nil {
 		out = u.uints[:0]
 	} else {
 		out = make([]uint64, 0, 30)
 	}
-
 	n := u.Size()
 	for i := 0; i < n; i++ {
 		uid := u.Get(i)
@@ -73,18 +69,15 @@ func (u *UIDList) ApplyFilter(f func(uid uint64) bool) {
 			out = append(out, uid)
 		}
 	}
-
 	u.uints = out
 	u.list = nil
 }
 
 // Slice selects a slice of the data.
 func (u *UIDList) Slice(start, end int) {
+	x.Assert(u != nil && (u.uints != nil || u.list != nil))
 	if u.uints != nil {
 		u.uints = u.uints[start:end]
-		return
-	}
-	if u.list == nil {
 		return
 	}
 	// This is a task list. Let's copy what we want and convert to a []uint64.
@@ -101,8 +94,8 @@ func (u *UIDList) Slice(start, end int) {
 
 // Intersect intersects with another list and updates this list.
 func (u *UIDList) Intersect(v *UIDList) {
+	x.Assert(u != nil && (u.uints != nil || u.list != nil))
 	var out []uint64
-
 	if u.uints != nil {
 		out = u.uints[:0]
 	} else {
@@ -139,9 +132,7 @@ func (u *UIDList) Intersect(v *UIDList) {
 // require np + nq - p reads, which can be up to ~twice as many.
 func IntersectLists(lists []*UIDList) *UIDList {
 	if len(lists) == 0 {
-		output := new(UIDList)
-		output.FromUints([]uint64{})
-		return output
+		return NewUIDList([]uint64{})
 	}
 
 	// Scan through the smallest list. Denote as A.
@@ -203,9 +194,7 @@ func IntersectLists(lists []*UIDList) *UIDList {
 // MergeLists merges sorted uint64 lists. Only unique numbers are returned.
 func MergeLists(lists []*UIDList) *UIDList {
 	if len(lists) == 0 {
-		output := new(UIDList)
-		output.FromUints([]uint64{})
-		return output
+		return NewUIDList([]uint64{})
 	}
 
 	h := &uint64Heap{}
@@ -249,6 +238,7 @@ func MergeLists(lists []*UIDList) *UIDList {
 // IndexOf performs a binary search on the uids slice and returns the index at
 // which it finds the uid, else returns -1
 func (u *UIDList) IndexOf(uid uint64) int {
+	x.Assert(u != nil && (u.uints != nil || u.list != nil))
 	i := sort.Search(u.Size(), func(i int) bool { return u.Get(i) >= uid })
 	if i < u.Size() && u.Get(i) == uid {
 		return i
@@ -258,6 +248,7 @@ func (u *UIDList) IndexOf(uid uint64) int {
 
 // UidlistOffset adds a UidList to buffer and returns the offset.
 func (u *UIDList) AddTo(b *flatbuffers.Builder) flatbuffers.UOffsetT {
+	x.Assert(u != nil && (u.uints != nil || u.list != nil))
 	n := u.Size()
 	task.UidListStartUidsVector(b, n)
 	for i := n - 1; i >= 0; i-- {

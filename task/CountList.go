@@ -22,11 +22,11 @@ func (rcv *CountList) Init(buf []byte, i flatbuffers.UOffsetT) {
 	rcv._tab.Pos = i
 }
 
-func (rcv *CountList) Count(j int) uint64 {
+func (rcv *CountList) Count(j int) uint32 {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
 	if o != 0 {
 		a := rcv._tab.Vector(o)
-		return rcv._tab.GetUint64(a + flatbuffers.UOffsetT(j*8))
+		return rcv._tab.GetUint32(a + flatbuffers.UOffsetT(j*4))
 	}
 	return 0
 }
@@ -46,7 +46,7 @@ func CountListAddCount(builder *flatbuffers.Builder, count flatbuffers.UOffsetT)
 	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(count), 0)
 }
 func CountListStartCountVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
-	return builder.StartVector(8, numElems, 8)
+	return builder.StartVector(4, numElems, 4)
 }
 func CountListEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()

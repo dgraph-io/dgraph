@@ -22,7 +22,6 @@ import (
 	"github.com/google/flatbuffers/go"
 
 	"github.com/dgraph-io/dgraph/task"
-	"github.com/dgraph-io/dgraph/x"
 )
 
 func listEqual(u, v *UIDList, t *testing.T) {
@@ -50,8 +49,7 @@ func newListFromTask(a []uint64) *UIDList {
 	b.Finish(task.UidListEnd(b))
 	data := b.FinishedBytes()
 
-	ulist := new(task.UidList)
-	x.ParseUidList(ulist, data)
+	ulist := task.GetRootAsUidList(data, 0)
 	out := new(UIDList)
 	out.FromTask(ulist)
 	return out
