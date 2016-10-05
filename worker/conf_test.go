@@ -3,7 +3,17 @@ package worker
 import "testing"
 
 func TestGroups(t *testing.T) {
-	err := ParseGroupConfig("group_tests/defaultmissing.conf")
+	err := ParseGroupConfig("group_tests/filemissing.conf")
+	if err != nil {
+		t.Errorf("Expected nil error. Got: %v", err)
+	}
+	gid := BelongsTo("type.object.name.en")
+	if gid != 0 {
+		t.Errorf("Expected groupId to be: %v. Got: %v", 0, gid)
+	}
+
+	groupConfig = config{}
+	err = ParseGroupConfig("group_tests/defaultmissing.conf")
 	if err.Error() != "Cant take modulo 0." {
 		t.Error("Error doesn't match expected value")
 	}
@@ -53,15 +63,15 @@ func TestGroups(t *testing.T) {
 	if err = ParseGroupConfig("group_tests/rightsequence.conf"); err != nil {
 		t.Errorf("Expected nil error. Got: %v", err)
 	}
-	gid := group("type.object.name.en")
+	gid = BelongsTo("type.object.name.en")
 	if gid != 1 {
 		t.Errorf("Expected groupId to be: %v. Got: %v", 1, gid)
 	}
-	gid = group("type.object.name.fr")
+	gid = BelongsTo("type.object.name.fr")
 	if gid != 2 {
 		t.Errorf("Expected groupId to be: %v. Got: %v", 2, gid)
 	}
-	gid = group("film.actor.film")
+	gid = BelongsTo("film.actor.film")
 	if gid != 11 {
 		t.Errorf("Expected groupId to be: %v. Got: %v", 11, gid)
 	}

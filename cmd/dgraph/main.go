@@ -68,7 +68,7 @@ var (
 	cpuprofile  = flag.String("cpu", "", "write cpu profile to file")
 	memprofile  = flag.String("mem", "", "write memory profile to file")
 	schemaFile  = flag.String("schema", "", "Path to schema file")
-	groupConf   = flag.String("groups", "groups.conf",
+	groupConf   = flag.String("conf", "groups.conf",
 		"Path to config file with group <-> predicate mapping.")
 	closeCh = make(chan struct{})
 
@@ -616,9 +616,7 @@ func main() {
 
 	posting.InitIndex(ps)
 	posting.Init()
-	if len(*groupConf) > 0 {
-		x.Check(worker.ParseGroupConfig(*groupConf))
-	}
+	x.Check(worker.ParseGroupConfig(*groupConf))
 
 	var ws *worker.State
 	if groupId != 0 { // HACK: This will currently not run.

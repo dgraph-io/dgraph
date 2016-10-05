@@ -72,7 +72,7 @@ func parseConfig(f *os.File) error {
 	scanner := bufio.NewScanner(f)
 	// To keep track of last groupId seen across lines. If we the groups ids are
 	// not sequential, we log.Fatal.
-	var currGroupId uint64
+	var curGroupId uint64
 	// If after seeing line with default config, we see other lines, we log.Fatal.
 	// Default config should be specified as the last line, so that we can check
 	// accurately that k in (fp % N + k) generates consecutive groups.
@@ -96,9 +96,9 @@ func parseConfig(f *os.File) error {
 			if k == 0 {
 				continue
 			}
-			if k > currGroupId {
+			if k > curGroupId {
 				return fmt.Errorf("k in (fp mod N + k) should be <= the last groupno %v.",
-					currGroupId)
+					curGroupId)
 			}
 		} else {
 			// There shouldn't be a line after the default config line.
@@ -108,11 +108,11 @@ func parseConfig(f *os.File) error {
 			}
 			groupId, err := strconv.ParseUint(c[0], 10, 64)
 			x.Check(err)
-			if currGroupId != groupId {
+			if curGroupId != groupId {
 				return fmt.Errorf("Group ids should be sequential and should start from 0. "+
-					"Found %v, should have been %v", groupId, currGroupId)
+					"Found %v, should have been %v", groupId, curGroupId)
 			}
-			currGroupId++
+			curGroupId++
 			err = parsePredicates(uint32(groupId), c[1])
 			if err != nil {
 				return err
@@ -126,6 +126,10 @@ func parseConfig(f *os.File) error {
 // ParseGroupConfig parses the config file and stores the predicate <-> group map.
 func ParseGroupConfig(file string) error {
 	cf, err := os.Open(file)
+	if os.IsNotExist(err) {
+		groupConfig.n = 1
+		return nil
+	}
 	x.Check(err)
 	if err = parseConfig(cf); err != nil {
 		return err
@@ -140,7 +144,7 @@ func fpGroup(pred string) uint32 {
 	return farm.Fingerprint32([]byte(pred))%uint32(groupConfig.n) + uint32(groupConfig.k)
 }
 
-func group(pred string) uint32 {
+func BelongsTo(pred string) uint32 {
 	for _, meta := range groupConfig.pred {
 		if meta.exactMatch && meta.val == pred {
 			return meta.gid
