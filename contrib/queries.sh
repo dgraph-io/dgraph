@@ -22,6 +22,8 @@ go build .
 # Start dgraph in the background.
 ./dgraph --m ~/dgraph/m --p ~/dgraph/p --cluster "1:localhost:4567" --mem dmem-"$TRAVIS_COMMIT".prof --cpu dcpu-"$TRAVIS_COMMIT".prof --shutdown true &
 
+go test -v ./contrib/freebase
+
 pushd $BUILD/benchmarks/throughputtest &> /dev/null
 go build . && ./throughputtest --numsec 30 --ip "http://127.0.0.1:8080/query"  --numuser 1000
 # shutdown Dgraph server.
