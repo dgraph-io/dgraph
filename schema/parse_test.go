@@ -18,32 +18,62 @@ package schema
 
 import (
 	"testing"
+
+	"github.com/dgraph-io/dgraph/types"
 )
 
 func TestSchema(t *testing.T) {
-	err := Parse("test_schema")
+	str = make(map[string]types.Type)
+	err := Parse("testfiles/test_schema")
 	if err != nil {
 		t.Error(err)
 	}
 }
 
 func TestSchema1_Error(t *testing.T) {
-	err := Parse("test_schema1")
+	str = make(map[string]types.Type)
+	err := Parse("testfiles/test_schema1")
 	if err == nil {
 		t.Error("Expected error")
 	}
 }
 
 func TestSchema2_Error(t *testing.T) {
-	err := Parse("test_schema2")
+	str = make(map[string]types.Type)
+	err := Parse("testfiles/test_schema2")
 	if err == nil {
 		t.Error("Expected error")
 	}
 }
 
 func TestSchema3_Error(t *testing.T) {
-	err := Parse("test_schema3")
+	str = make(map[string]types.Type)
+	err := Parse("testfiles/test_schema3")
 	if err == nil {
 		t.Error("Expected error")
+	}
+}
+
+func TestSchema4_Error(t *testing.T) {
+	str = make(map[string]types.Type)
+	err := Parse("testfiles/test_schema4")
+	if err.Error() != "Object type Person with no fields" {
+		t.Error(err)
+	}
+}
+
+func TestSchema5_Error(t *testing.T) {
+	str = make(map[string]types.Type)
+	err := Parse("testfiles/test_schema5")
+	if err.Error() != "Repeated field name in object Person" {
+		t.Error(err)
+	}
+}
+
+func TestSchema6_Error(t *testing.T) {
+	str = make(map[string]types.Type)
+	err := Parse("testfiles/test_schema6")
+	if err.Error() != "Type not defined Film" {
+		t.Error(err)
 	}
 }

@@ -1,0 +1,11 @@
+scalar (
+  name: string
+  address: string
+  )
+
+type  Person {
+name: string
+address: string
+friend: Person
+films: Film
+}
