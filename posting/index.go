@@ -26,6 +26,7 @@ import (
 
 	"golang.org/x/net/trace"
 
+	"github.com/dgraph-io/dgraph/geo"
 	"github.com/dgraph-io/dgraph/posting/types"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/x"
@@ -61,6 +62,7 @@ var (
 		"File containing index config. If empty, we assume no index.")
 	indexedAttr = make(map[string]keyGenerator)
 	exactMatch  exactMatchKeyGen
+	geoKeyGen   geo.KeyGenerator
 )
 
 func init() {
@@ -84,6 +86,8 @@ func ReadIndexConfigs(f []byte) {
 		switch c.KeyGen {
 		case "":
 			indexedAttr[c.Attr] = exactMatch
+		case "geo":
+			indexedAttr[c.Attr] = geoKeyGen
 		default:
 			indexLog.Printf("Unknown key generator %s for attribute %s", c.KeyGen, c.Attr)
 			indexedAttr[c.Attr] = exactMatch
