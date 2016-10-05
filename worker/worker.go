@@ -20,14 +20,12 @@ package worker
 
 import (
 	"bytes"
-	"fmt"
 	"log"
 	"net"
 	"sort"
 	"sync"
 
 	"github.com/coreos/etcd/raft/raftpb"
-	"github.com/dgryski/go-farm"
 	"github.com/google/flatbuffers/go"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
@@ -41,32 +39,23 @@ import (
 // State stores the worker state.
 type State struct {
 	dataStore *store.Store
-	groupId   uint64
-	numGroups uint64
 
 	// TODO: Remove this code once RAFT groups are in place.
 	// pools stores the pool for all the instances which is then used to send queries
 	// and mutations to the appropriate instance.
-	pools      []*Pool
+	pools      []*pool
 	poolsMutex sync.RWMutex
 }
 
 // Stores the worker state.
 var ws *State
 
-// SetWorkerState sets the global worker state to the given state.
-func SetWorkerState(s *State) {
-	x.Assert(s != nil)
-	ws = s
-}
-
 // NewState initializes the state on an instance with data,uid store and other meta.
-func NewState(ps *store.Store, gid, numGroups uint64) *State {
-	return &State{
+func SetState(ps *store.Store) *State {
+	ws = &State{
 		dataStore: ps,
-		numGroups: numGroups,
-		groupId:   gid,
 	}
+	return ws
 }
 
 // NewQuery creates a Query flatbuffer table, serializes and returns it.
@@ -124,59 +113,6 @@ func (w *grpcWorker) Hello(ctx context.Context, in *Payload) (*Payload, error) {
 	return out, nil
 }
 
-// GetOrAssign is used to get uids for a set of xids by communicating with other workers.
-func (w *grpcWorker) AssignUids(ctx context.Context, query *Payload) (*Payload, error) {
-	uo := flatbuffers.GetUOffsetT(query.Data)
-	num := new(task.Num)
-	num.Init(query.Data, uo)
-
-	if num.Group() != 0 {
-		log.Fatalf("groupId: %v. GetOrAssign. We shouldn't be getting this req", ws.groupId)
-	}
-
-	reply := new(Payload)
-	var rerr error
-	reply.Data, rerr = assignUids(ctx, num)
-	return reply, rerr
-}
-
-// Mutate is used to apply mutations over the network on other instances.
-func (w *grpcWorker) Mutate(ctx context.Context, query *Payload) (*Payload, error) {
-	m := new(x.Mutations)
-	// Ensure that this can be decoded. This is an optional step.
-	if err := m.Decode(query.Data); err != nil {
-		return nil, x.Wrapf(err, "While decoding mutation.")
-	}
-	// Propose to the cluster.
-	// TODO: Figure out the right group to propose this to.
-	if err := GetNode().raft.Propose(ctx, query.Data); err != nil {
-		return nil, err
-	}
-	return &Payload{}, nil
-}
-
-// ServeTask is used to respond to a query.
-func (w *grpcWorker) ServeTask(ctx context.Context, query *Payload) (*Payload, error) {
-	q := new(task.Query)
-	x.ParseTaskQuery(q, query.Data)
-	attr := string(q.Attr())
-	x.Trace(ctx, "Attribute: %v NumUids: %v groupId: %v ServeTask", attr, q.UidsLength(), ws.groupId)
-
-	reply := new(Payload)
-	var rerr error
-	// Request for xid <-> uid conversion should be handled by instance 0 and all
-	// other requests should be handled according to modulo sharding of the predicate.
-
-	// TODO: This should be done based on group rules, and not a modulo of num groups.
-	chosenInstance := farm.Fingerprint64([]byte(attr)) % ws.numGroups
-	if (ws.groupId == 0 && attr == _xid_) || chosenInstance == ws.groupId {
-		reply.Data, rerr = processTask(query.Data)
-	} else {
-		log.Fatalf("attr: %v groupId: %v Request sent to wrong server.", attr, ws.groupId)
-	}
-	return reply, rerr
-}
-
 func (w *grpcWorker) RaftMessage(ctx context.Context, query *Payload) (*Payload, error) {
 	reply := &Payload{}
 	reply.Data = []byte("ok")
@@ -184,8 +120,11 @@ func (w *grpcWorker) RaftMessage(ctx context.Context, query *Payload) (*Payload,
 	if err := msg.Unmarshal(query.Data); err != nil {
 		return reply, err
 	}
-	GetNode().Connect(msg.From, string(msg.Context))
-	GetNode().Step(ctx, msg)
+
+	rc := task.GetRootAsRaftContext(msg.Context, 0)
+	node := groups().Node(rc.Group())
+	node.Connect(msg.From, string(rc.Addr()))
+	node.Step(ctx, msg)
 
 	return reply, nil
 }
@@ -196,11 +135,10 @@ func (w *grpcWorker) JoinCluster(ctx context.Context, query *Payload) (*Payload,
 	if len(query.Data) == 0 {
 		return reply, x.Errorf("JoinCluster: No data provided")
 	}
-	pid, addr := parsePeer(string(query.Data))
-
-	GetNode().Connect(pid, addr)
-	GetNode().AddToCluster(pid)
-	fmt.Printf("JOINCLUSTER recieved. Modified conf: %v", string(query.Data))
+	rc := task.GetRootAsRaftContext(query.Data, 0)
+	node := groups().Node(rc.Group())
+	node.Connect(rc.Id(), string(rc.Addr()))
+	node.AddToCluster(rc.Id())
 	return reply, nil
 }
 
@@ -275,11 +213,4 @@ func RunServer(port string) {
 	s := grpc.NewServer(grpc.CustomCodec(&PayloadCodec{}))
 	RegisterWorkerServer(s, &grpcWorker{})
 	s.Serve(ln)
-}
-
-// GetPool returns pool for given index.
-func (s *State) GetPool(k int) *Pool {
-	s.poolsMutex.RLock()
-	defer s.poolsMutex.RUnlock()
-	return s.pools[k]
 }

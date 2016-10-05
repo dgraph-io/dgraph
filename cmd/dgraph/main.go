@@ -640,28 +640,16 @@ func main() {
 	printStats(ps)
 	x.Check(worker.ParseGroupConfig(*groupConf))
 
-	var ws *worker.State
-	if groupId != 0 { // HACK: This will currently not run.
-		ws = worker.NewState(ps, groupId, 1) // TODO: Set number of groups here.
-		worker.SetWorkerState(ws)
-		uid.Init(nil)
-
-	} else { // handles group 0.
-		ws = worker.NewState(ps, groupId, 1) // TODO: Set number of groups here.
-		worker.SetWorkerState(ws)
-		uid.Init(ps)
-	}
+	worker.SetState(ps)
+	uid.Init(ps)
 
 	my := "localhost" + *workerPort
-	worker.InitNode(*raftId, my)
-	worker.GetNode().StartNode(*cluster)
-	if len(*peer) > 0 {
-		go worker.GetNode().JoinCluster(*peer, ws)
-	}
-	go worker.GetNode().SnapshotPeriodically()
 
-	// node := worker.GetNode()
-	// go node.Campaign(context.TODO())
+	// TODO: Clean up the RAFT group creation code.
+
+	// First initiate the commmon group across the entire cluster. This group
+	// stores information about which server serves which groups.
+	go worker.StartRaftNodes(*raftId, my, *cluster, *peer)
 
 	if len(*schemaFile) > 0 {
 		err = schema.Parse(*schemaFile)

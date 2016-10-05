@@ -69,8 +69,9 @@ type DirectedEdge struct {
 
 // Mutations stores the directed edges for both the set and delete operations.
 type Mutations struct {
-	Set []DirectedEdge
-	Del []DirectedEdge
+	GroupId uint32
+	Set     []DirectedEdge
+	Del     []DirectedEdge
 }
 
 // Encode gob encodes the mutation which is then sent over to the instance which

@@ -17,11 +17,11 @@
 package worker
 
 import (
-	"context"
 	"fmt"
 	"log"
 
 	"github.com/google/flatbuffers/go"
+	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/uid"
@@ -43,7 +43,8 @@ func assignUids(ctx context.Context, num *task.Num) (uidList []byte, rerr error)
 	// This function is triggered by an RPC call. We ensure that only leader can assign new UIDs,
 	// so we can tackle any collisions that might happen with the lockmanager.
 	// In essence, we just want one server to be handing out new uids.
-	if !GetNode().AmLeader() {
+	node := groups().Node(num.Group())
+	if !node.AmLeader() {
 		return uidList, x.Errorf("Assigning UIDs is only allowed on leader.")
 	}
 
@@ -55,7 +56,7 @@ func assignUids(ctx context.Context, num *task.Num) (uidList []byte, rerr error)
 	mutations := uid.AssignNew(val, 0, 1)
 	data, err := mutations.Encode()
 	x.Checkf(err, "While encoding mutation: %v", mutations)
-	if err := GetNode().ProposeAndWait(ctx, mutationMsg, data); err != nil {
+	if err := node.ProposeAndWait(ctx, mutationMsg, data); err != nil {
 		return uidList, err
 	}
 	// Mutations successfully applied.
@@ -85,23 +86,26 @@ func AssignUidsOverNetwork(ctx context.Context, newUids map[string]uint64) (rerr
 	num.Init(query.Data, uo)
 
 	reply := new(Payload)
+
+	gid := BelongsTo("_uid_")
 	// TODO: Send this over the network, depending upon which server should be handling this.
-	if true {
+	if groups().ServesGroup(gid) {
 		reply.Data, rerr = assignUids(ctx, num)
 		if rerr != nil {
 			return rerr
 		}
 
 	} else {
-		// Get pool for worker on instance 0.
-		pool := ws.GetPool(0)
-		conn, err := pool.Get()
+		addr := groups().Leader(gid)
+		p := pools().get(addr)
+		conn, err := p.Get()
 		if err != nil {
 			x.TraceError(ctx, x.Wrapf(err, "Error while retrieving connection"))
 			return err
 		}
-		c := NewWorkerClient(conn)
+		defer p.Put(conn)
 
+		c := NewWorkerClient(conn)
 		reply, rerr = c.AssignUids(context.Background(), query)
 		if rerr != nil {
 			x.TraceError(ctx, x.Wrapf(rerr, "Error while getting uids"))
@@ -124,4 +128,20 @@ func AssignUidsOverNetwork(ctx context.Context, newUids map[string]uint64) (rerr
 		i++
 	}
 	return nil
+}
+
+// GetOrAssign is used to get uids for a set of xids by communicating with other workers.
+func (w *grpcWorker) AssignUids(ctx context.Context, query *Payload) (*Payload, error) {
+	uo := flatbuffers.GetUOffsetT(query.Data)
+	num := new(task.Num)
+	num.Init(query.Data, uo)
+
+	if !groups().ServesGroup(num.Group()) {
+		log.Fatalf("groupId: %v. GetOrAssign. We shouldn't be getting this req", num.Group())
+	}
+
+	reply := new(Payload)
+	var rerr error
+	reply.Data, rerr = assignUids(ctx, num)
+	return reply, rerr
 }
