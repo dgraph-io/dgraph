@@ -28,7 +28,7 @@ pushd $SRC &> /dev/null
 
 # create coverage output
 echo 'mode: atomic' > $OUT
-for PKG in $(go list ./...|grep -v '/vendor/'); do
+for PKG in $(go list ./...|grep -v '/vendor/' | grep -v '/contrib/'); do
   echo "TESTING: $PKG"
   go test -v -covermode=atomic -coverprofile=$TMP $PKG
   tail -n +2 $TMP >> $OUT
