@@ -3,7 +3,7 @@
 set -e
 
 # Simple end to end test run for all commits.
-go run ./contrib/freebase/simple_test.go
+go test -v ./contrib/freebase/simple_test.go
 
 # We run the assigner and the loader only when a commit is made on master/release
 # branches.
