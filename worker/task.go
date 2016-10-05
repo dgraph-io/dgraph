@@ -27,10 +27,6 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-const (
-	_uid_ = "_uid_"
-)
-
 // ProcessTaskOverNetwork is used to process the query and get the result from
 // the instance which stores posting list corresponding to the predicate in the
 // query.
@@ -46,7 +42,7 @@ func ProcessTaskOverNetwork(ctx context.Context, qu []byte) (result []byte, rerr
 		return processTask(qu)
 	}
 
-	// This needs to be send over the network.
+	// Send this over the network.
 	// TODO: Send the request to multiple servers as described in Jeff Dean's talk.
 	addr := groups().AnyServer(gid)
 	pl := pools().get(addr)
