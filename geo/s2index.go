@@ -91,7 +91,7 @@ const (
 	// MaxCellLevel is the largest cell leve (smallest cell size) used by indexing
 	MaxCellLevel = 16 // Approx 120m x 180m
 	// MaxCells is the maximum number of cells to use when indexing regions.
-	MaxCells = 20
+	MaxCells = 18
 )
 
 func pointFromCoord(r geom.Coord) s2.Point {
