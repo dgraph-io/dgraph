@@ -107,6 +107,12 @@
 			"revisionTime": "2016-09-25T22:06:09Z"
 		},
 		{
+			"checksumSHA1": "omdvCNu8sJIc9FbOfObC484M7Dg=",
+			"path": "github.com/stretchr/testify/require",
+			"revision": "976c720a22c8eb4eb6a0b4348ad85ad12491a506",
+			"revisionTime": "2016-09-25T22:06:09Z"
+		},
+		{
 			"checksumSHA1": "nPzv1N4lRBr2UAvJure4uLjlYf8=",
 			"path": "github.com/twpayne/go-geom",
 			"revision": "bc4a3b038d13a183df22fd5f0316957a8c0dfd17",
