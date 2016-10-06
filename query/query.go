@@ -164,6 +164,7 @@ func mergeInterfaces(i1 interface{}, i2 interface{}) interface{} {
 
 // postTraverse traverses the subgraph recursively and returns final result for the query.
 func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
+	// No need to check for nil as Size() will return 0 in that case.
 	if sg.srcUIDs.Size() == 0 {
 		return nil, nil
 	}
@@ -819,7 +820,7 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, taskQuery []byte, rch chan 
 	}
 
 	if sg.destUIDs.Size() == 0 {
-		// Looks like we're done here.
+		// Looks like we're done here. Be careful with nil srcUIDs!
 		x.Trace(ctx, "Zero uids. Num attr children: %v", len(sg.Children))
 		rch <- nil
 		return
