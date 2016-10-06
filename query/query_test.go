@@ -40,6 +40,11 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
+func init() {
+	worker.ParseGroupConfig("")
+	worker.StartRaftNodes(1, "localhost:12345", "1:localhost:12345", "")
+}
+
 func setErr(err *error, nerr error) {
 	if err != nil {
 		return
@@ -104,7 +109,7 @@ func TestNewGraph(t *testing.T) {
 		t.Error(err)
 	}
 
-	worker.SetWorkerState(worker.NewState(ps, 0, 1))
+	worker.SetState(ps)
 
 	if len(sg.Result) != 1 {
 		t.Errorf("Expected length 1. Got: %v", len(sg.Result))
@@ -136,7 +141,7 @@ func populateGraph(t *testing.T) (string, *store.Store) {
 		return "", nil
 	}
 
-	worker.SetWorkerState(worker.NewState(ps, 0, 1))
+	worker.SetState(ps)
 	posting.Init()
 	posting.ReadIndexConfigs([]byte(`{"config": [{"attribute": "name"}]}`))
 	posting.InitIndex(ps)
