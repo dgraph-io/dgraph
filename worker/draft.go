@@ -92,12 +92,12 @@ func (n *node) Connect(pid uint64, addr string) {
 	n.peers.Set(pid, addr)
 }
 
-func (n *node) AddToCluster(pid uint64) {
+func (n *node) AddToCluster(pid uint64) error {
 	addr := n.peers.Get(pid)
 	x.Assertf(len(addr) > 0, "Unable to find conn pool for peer: %d", pid)
 
 	rc := task.GetRootAsRaftContext(n.raftContext, 0)
-	n.raft.ProposeConfChange(context.TODO(), raftpb.ConfChange{
+	return n.raft.ProposeConfChange(context.TODO(), raftpb.ConfChange{
 		ID:      pid,
 		Type:    raftpb.ConfChangeAddNode,
 		NodeID:  pid,
@@ -527,6 +527,14 @@ func (w *grpcWorker) JoinCluster(ctx context.Context, query *Payload) (*Payload,
 	rc := task.GetRootAsRaftContext(query.Data, 0)
 	node := groups().Node(rc.Group())
 	node.Connect(rc.Id(), string(rc.Addr()))
-	node.AddToCluster(rc.Id())
-	return &Payload{}, nil
+
+	c := make(chan error, 1)
+	go func() { c <- node.AddToCluster(rc.Id()) }()
+
+	select {
+	case <-ctx.Done():
+		return &Payload{}, ctx.Err()
+	case err := <-c:
+		return &Payload{}, err
+	}
 }

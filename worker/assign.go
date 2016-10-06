@@ -75,8 +75,7 @@ func assignUids(ctx context.Context, num *task.Num) (uidList []byte, rerr error)
 	return b.Bytes[b.Head():], nil
 }
 
-// GetOrAssignUidsOverNetwork gets or assigns uids corresponding to xids and
-// writes them to the newUids map.
+// AssignUidsOverNetwork assigns new uids and writes them to the newUids map.
 func AssignUidsOverNetwork(ctx context.Context, newUids map[string]uint64) (rerr error) {
 	query := new(Payload)
 	gid := BelongsTo("_uid_")
@@ -121,7 +120,8 @@ func AssignUidsOverNetwork(ctx context.Context, newUids map[string]uint64) (rerr
 	return nil
 }
 
-// GetOrAssign is used to get uids for a set of xids by communicating with other workers.
+// AssignUids is used to assign new uids by communicating with the leader of the RAFT group
+// responsible for handing out uids.
 func (w *grpcWorker) AssignUids(ctx context.Context, query *Payload) (*Payload, error) {
 	if ctx.Err() != nil {
 		return &Payload{}, ctx.Err()
