@@ -29,12 +29,13 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/posting/types"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/x"
 )
 
-func getUIDs(t *testing.T, l *List) []uint64 {
+func listToArray(t *testing.T, l *List) []uint64 {
 	n := l.Length()
 	out := make([]uint64, 0, n)
 	for i := 0; i < n; i++ {
@@ -45,24 +46,26 @@ func getUIDs(t *testing.T, l *List) []uint64 {
 	return out
 }
 
+func ulToArray(l *algo.UIDList) []uint64 {
+	n := l.Size()
+	out := make([]uint64, 0, n)
+	for i := 0; i < n; i++ {
+		out = append(out, l.Get(i))
+	}
+	return out
+}
+
 func checkUids(t *testing.T, l *List, uids []uint64) {
-	require.Equal(t, getUIDs(t, l), uids)
+	require.Equal(t, listToArray(t, l), uids)
 	if len(uids) >= 3 {
-		opts := ListOptions{1, 2, 0}
-		ruids := l.Uids(opts)
-		require.Equal(t, ruids, uids[1:])
+		opts := ListOptions{10, nil} // Tests for "after"
+		require.Equal(t, ulToArray(l.Uids(opts)), uids[1:])
 
-		opts = ListOptions{1, -2, 0} // offset should be ignored.
-		require.Equal(t, l.Uids(opts), uids[len(uids)-2:])
+		opts = ListOptions{80, nil}
+		require.Equal(t, ulToArray(l.Uids(opts)), []uint64{81})
 
-		opts = ListOptions{0, 2, 10} // Tests for "after"
-		require.Equal(t, l.Uids(opts), uids[1:])
-
-		opts = ListOptions{0, 2, 80}
-		require.Equal(t, l.Uids(opts), []uint64{81})
-
-		opts = ListOptions{0, 2, 82}
-		require.Empty(t, l.Uids(opts))
+		opts = ListOptions{82, nil}
+		require.Empty(t, ulToArray(l.Uids(opts)))
 	}
 }
 
@@ -90,7 +93,7 @@ func TestAddMutation(t *testing.T) {
 	}
 	addMutation(t, l, edge, Set)
 
-	require.Equal(t, getUIDs(t, l), []uint64{9})
+	require.Equal(t, listToArray(t, l), []uint64{9})
 
 	var p types.Posting
 	require.True(t, l.Get(&p, 0))
@@ -99,12 +102,12 @@ func TestAddMutation(t *testing.T) {
 	// Add another edge now.
 	edge.ValueId = 81
 	addMutation(t, l, edge, Set)
-	require.Equal(t, getUIDs(t, l), []uint64{9, 81})
+	require.Equal(t, listToArray(t, l), []uint64{9, 81})
 
 	// Add another edge, in between the two above.
 	edge.ValueId = 49
 	addMutation(t, l, edge, Set)
-	require.Equal(t, getUIDs(t, l), []uint64{9, 49, 81})
+	require.Equal(t, listToArray(t, l), []uint64{9, 49, 81})
 
 	checkUids(t, l, []uint64{9, 49, 81})
 

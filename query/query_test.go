@@ -48,14 +48,14 @@ func setErr(err *error, nerr error) {
 }
 
 func addEdge(t *testing.T, edge x.DirectedEdge, l *posting.List) {
-	if _, err := l.AddMutation(context.Background(), edge, posting.Set); err != nil {
+	if err := l.AddMutationWithIndex(context.Background(), edge, posting.Set); err != nil {
 		t.Error(err)
 	}
 }
 
-func checkName(t *testing.T, r *task.Result, idx int, expected string) {
+func checkName(t *testing.T, sg *SubGraph, idx int, expected string) {
 	var tv task.Value
-	if ok := r.Values(&tv, idx); !ok {
+	if ok := sg.Values.Values(&tv, idx); !ok {
 		t.Error("Unable to retrieve value")
 	}
 	name := tv.ValBytes()
@@ -64,29 +64,22 @@ func checkName(t *testing.T, r *task.Result, idx int, expected string) {
 	}
 }
 
-func checkSingleValue(t *testing.T, child *SubGraph,
-	attr string, value string) {
+func checkSingleValue(t *testing.T, child *SubGraph, attr string, value string) {
 	if child.Attr != attr || len(child.Result) == 0 {
 		t.Error("Expected attr name with some result", attr)
 	}
-	r := new(task.Result)
-	x.ParseTaskResult(r, child.Result)
 
-	if r.ValuesLength() != 1 {
-		t.Errorf("Expected value length 1. Got: %v", r.ValuesLength())
+	if child.Values.ValuesLength() != 1 {
+		t.Errorf("Expected value length 1. Got: %v", child.Values.ValuesLength())
 	}
-	if r.UidmatrixLength() != 1 {
-		t.Errorf("Expected uidmatrix length 1. Got: %v", r.UidmatrixLength())
-	}
-	var ul task.UidList
-	if ok := r.Uidmatrix(&ul, 0); !ok {
-		t.Errorf("While parsing uidlist")
+	if len(child.Result) != 1 {
+		t.Errorf("Expected uidmatrix length 1. Got: %v", len(child.Result))
 	}
 
-	if ul.UidsLength() != 0 {
-		t.Errorf("Expected uids length 0. Got: %v", ul.UidsLength())
+	if child.Result[0].Size() != 0 {
+		t.Errorf("Expected uids length 0. Got: %v", child.Result[0].Size())
 	}
-	checkName(t, r, 0, value)
+	checkName(t, child, 0, value)
 }
 
 func TestNewGraph(t *testing.T) {
@@ -113,20 +106,14 @@ func TestNewGraph(t *testing.T) {
 
 	worker.SetWorkerState(worker.NewState(ps, 0, 1))
 
-	r := new(task.Result)
-	x.ParseTaskResult(r, sg.Result)
-	if r.UidmatrixLength() != 1 {
-		t.Errorf("Expected length 1. Got: %v", r.UidmatrixLength())
+	if len(sg.Result) != 1 {
+		t.Errorf("Expected length 1. Got: %v", len(sg.Result))
 	}
-	var ul task.UidList
-	if ok := r.Uidmatrix(&ul, 0); !ok {
-		t.Errorf("Unable to parse uidlist at index 0")
+	if sg.Result[0].Size() != 1 {
+		t.Errorf("Expected length 1. Got: %v", sg.Result[0].Size())
 	}
-	if ul.UidsLength() != 1 {
-		t.Errorf("Expected length 1. Got: %v", ul.UidsLength())
-	}
-	if ul.Uids(0) != 101 {
-		t.Errorf("Expected uid: %v. Got: %v", 101, ul.Uids(0))
+	if sg.Result[0].Get(0) != 101 {
+		t.Errorf("Expected uid: %v. Got: %v", 101, sg.Result[0].Get(0))
 	}
 }
 
@@ -151,6 +138,8 @@ func populateGraph(t *testing.T) (string, *store.Store) {
 
 	worker.SetWorkerState(worker.NewState(ps, 0, 1))
 	posting.Init()
+	posting.ReadIndexConfigs([]byte(`{"config": [{"attribute": "name"}]}`))
+	posting.InitIndex(ps)
 
 	// So, user we're interested in has uid: 1.
 	// She has 5 friends: 23, 24, 25, 31, and 101
@@ -158,52 +147,75 @@ func populateGraph(t *testing.T) (string, *store.Store) {
 		ValueId:   23,
 		Source:    "testing",
 		Timestamp: time.Now(),
+		Attribute: "friend",
 	}
 	addEdge(t, edge, getOrCreate(posting.Key(1, "friend"), ps))
 
 	edge.ValueId = 24
+	edge.Entity = 1
 	addEdge(t, edge, getOrCreate(posting.Key(1, "friend"), ps))
 
 	edge.ValueId = 25
+	edge.Entity = 1
 	addEdge(t, edge, getOrCreate(posting.Key(1, "friend"), ps))
 
 	edge.ValueId = 31
+	edge.Entity = 1
 	addEdge(t, edge, getOrCreate(posting.Key(1, "friend"), ps))
 
 	edge.ValueId = 101
+	edge.Entity = 1
 	addEdge(t, edge, getOrCreate(posting.Key(1, "friend"), ps))
 
 	// Now let's add a few properties for the main user.
 	edge.Value = []byte("Michonne")
+	edge.Attribute = "name"
+	edge.Entity = 1
 	addEdge(t, edge, getOrCreate(posting.Key(1, "name"), ps))
 
 	edge.Value = []byte("female")
+	edge.Attribute = "gender"
+	edge.Entity = 1
 	addEdge(t, edge, getOrCreate(posting.Key(1, "gender"), ps))
 
 	edge.Value, _ = types.Int32(15).MarshalBinary()
 	edge.ValueType = byte(types.Int32Type.ID())
+	edge.Attribute = "age"
+	edge.Entity = 1
 	addEdge(t, edge, getOrCreate(posting.Key(1, "age"), ps))
 	edge.ValueType = 0
 
 	edge.Value = []byte("31, 32 street, Jupiter")
+	edge.Attribute = "address"
+	edge.Entity = 1
 	addEdge(t, edge, getOrCreate(posting.Key(1, "address"), ps))
 
 	edge.Value, _ = types.Bool(true).MarshalBinary()
+	edge.Attribute = "alive"
 	edge.ValueType = byte(types.BooleanType.ID())
+	edge.Entity = 1
 	addEdge(t, edge, getOrCreate(posting.Key(1, "alive"), ps))
 	edge.ValueType = 0
 
 	edge.Value = []byte("38")
+	edge.Attribute = "age"
+	edge.Entity = 1
 	addEdge(t, edge, getOrCreate(posting.Key(1, "age"), ps))
 
 	edge.Value = []byte("98.99%")
+	edge.Attribute = "survival_rate"
+	edge.Entity = 1
 	addEdge(t, edge, getOrCreate(posting.Key(1, "survival_rate"), ps))
 
 	edge.Value = []byte("true")
+	edge.Attribute = "sword_present"
+	edge.Entity = 1
 	addEdge(t, edge, getOrCreate(posting.Key(1, "sword_present"), ps))
 
 	// Now let's add a name for each of the friends, except 101.
 	edge.Value = []byte("Rick Grimes")
+	edge.Attribute = "name"
+	edge.Entity = 23
 	edge.ValueType = byte(types.StringType.ID())
 	addEdge(t, edge, getOrCreate(posting.Key(23, "name"), ps))
 	edge.ValueType = 0
@@ -215,17 +227,23 @@ func populateGraph(t *testing.T) (string, *store.Store) {
 	addEdge(t, edge, getOrCreate(posting.Key(23, "address"), ps))
 
 	edge.Value = []byte("Glenn Rhee")
+	edge.Entity = 24
 	addEdge(t, edge, getOrCreate(posting.Key(24, "name"), ps))
 
 	edge.Value = []byte("Daryl Dixon")
+	edge.Entity = 25
 	addEdge(t, edge, getOrCreate(posting.Key(25, "name"), ps))
 
 	edge.Value = []byte("Andrea")
+	edge.Entity = 31
 	addEdge(t, edge, getOrCreate(posting.Key(31, "name"), ps))
 
 	edge.Value = []byte("mich")
+	edge.Attribute = "_xid_"
+	edge.Entity = 1
 	addEdge(t, edge, getOrCreate(posting.Key(1, "_xid_"), ps))
 
+	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
 	return dir, ps
 }
 
@@ -241,7 +259,7 @@ func processToJson(t *testing.T, query string) map[string]interface{} {
 	}
 
 	ch := make(chan error)
-	go ProcessGraph(ctx, sg, ch)
+	go ProcessGraph(ctx, sg, nil, ch)
 	err = <-ch
 	if err != nil {
 		t.Error(err)
@@ -328,7 +346,7 @@ func TestSchema1(t *testing.T) {
 	}
 }
 
-func TestGetUid(t *testing.T) {
+func TestGetUID(t *testing.T) {
 	dir, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
 
@@ -461,7 +479,6 @@ func TestCountError1(t *testing.T) {
 }
 
 func TestCountError2(t *testing.T) {
-
 	// Alright. Now we have everything set up. Let's create the query.
 	query := `
 		{
@@ -516,7 +533,7 @@ func TestProcessGraph(t *testing.T) {
 	}
 
 	ch := make(chan error)
-	go ProcessGraph(ctx, sg, ch)
+	go ProcessGraph(ctx, sg, nil, ch)
 	err = <-ch
 	if err != nil {
 		t.Error(err)
@@ -534,39 +551,34 @@ func TestProcessGraph(t *testing.T) {
 		return
 	}
 
-	r := new(task.Result)
-	x.ParseTaskResult(r, child.Result)
-
-	if r.UidmatrixLength() != 1 {
-		t.Errorf("Expected 1 matrix. Got: %v", r.UidmatrixLength())
-	}
-	var ul task.UidList
-	if ok := r.Uidmatrix(&ul, 0); !ok {
-		t.Errorf("While parsing uidlist")
+	if len(sg.Result) != 1 {
+		t.Errorf("Expected 1 matrix. Got: %v", len(sg.Result))
 	}
 
-	if ul.UidsLength() != 5 {
-		t.Errorf("Expected 5 friends. Got: %v", ul.UidsLength())
+	ul := child.Result[0]
+	if ul.Size() != 5 {
+		t.Errorf("Expected 5 friends. Got: %v", ul.Size())
 	}
-	if ul.Uids(0) != 23 || ul.Uids(1) != 24 || ul.Uids(2) != 25 ||
-		ul.Uids(3) != 31 || ul.Uids(4) != 101 {
+	if ul.Get(0) != 23 || ul.Get(1) != 24 || ul.Get(2) != 25 ||
+		ul.Get(3) != 31 || ul.Get(4) != 101 {
 		t.Errorf("Friend ids don't match")
 	}
 	if len(child.Children) != 1 || child.Children[0].Attr != "name" {
 		t.Errorf("Expected attr name")
 	}
 	child = child.Children[0]
-	x.ParseTaskResult(r, child.Result)
-	if r.ValuesLength() != 5 {
+
+	values := child.Values
+	if values.ValuesLength() != 5 {
 		t.Errorf("Expected 5 names of 5 friends")
 	}
-	checkName(t, r, 0, "Rick Grimes")
-	checkName(t, r, 1, "Glenn Rhee")
-	checkName(t, r, 2, "Daryl Dixon")
-	checkName(t, r, 3, "Andrea")
+	checkName(t, child, 0, "Rick Grimes")
+	checkName(t, child, 1, "Glenn Rhee")
+	checkName(t, child, 2, "Daryl Dixon")
+	checkName(t, child, 3, "Andrea")
 	{
 		var tv task.Value
-		if ok := r.Values(&tv, 4); !ok {
+		if ok := values.Values(&tv, 4); !ok {
 			t.Error("Unable to retrieve value")
 		}
 		if !bytes.Equal(tv.ValBytes(), []byte{}) {
@@ -578,7 +590,7 @@ func TestProcessGraph(t *testing.T) {
 	checkSingleValue(t, sg.Children[2], "gender", "female")
 }
 
-func TestToJson(t *testing.T) {
+func TestToJSON(t *testing.T) {
 	dir, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
 
@@ -607,7 +619,7 @@ func TestToJson(t *testing.T) {
 	}
 
 	ch := make(chan error)
-	go ProcessGraph(ctx, sg, ch)
+	go ProcessGraph(ctx, sg, nil, ch)
 	err = <-ch
 	if err != nil {
 		t.Error(err)
@@ -621,6 +633,405 @@ func TestToJson(t *testing.T) {
 	s := string(js)
 	if !strings.Contains(s, "Michonne") {
 		t.Errorf("Unable to find Michonne in this result: %v", s)
+	}
+}
+
+func TestToJSONFilter(t *testing.T) {
+	dir, _ := populateGraph(t)
+	defer os.RemoveAll(dir)
+	query := `
+		{
+			me(_uid_:0x01) {
+				name
+				gender
+				friend @filter(eq("name", "Andrea")) {
+					name
+				}
+			}
+		}
+	`
+
+	gq, _, err := gql.Parse(query)
+	if err != nil {
+		t.Error(err)
+	}
+	ctx := context.Background()
+	sg, err := ToSubGraph(ctx, gq)
+	if err != nil {
+		t.Error(err)
+	}
+
+	ch := make(chan error)
+	go ProcessGraph(ctx, sg, nil, ch)
+	err = <-ch
+	if err != nil {
+		t.Error(err)
+	}
+
+	var l Latency
+	js, err := sg.ToJSON(&l)
+	if err != nil {
+		t.Error(err)
+	}
+
+	s := string(js)
+	if s != `{"me":[{"friend":[{"name":"Andrea"}],"gender":"female","name":"Michonne"}]}` {
+		t.Errorf("Wrong output: %s", s)
+	}
+}
+
+func TestToJSONFilterUID(t *testing.T) {
+	dir, _ := populateGraph(t)
+	defer os.RemoveAll(dir)
+	query := `
+		{
+			me(_uid_:0x01) {
+				name
+				gender
+				friend @filter(eq("name", "Andrea")) {
+					_uid_
+				}
+			}
+		}
+	`
+
+	gq, _, err := gql.Parse(query)
+	if err != nil {
+		t.Error(err)
+	}
+	ctx := context.Background()
+	sg, err := ToSubGraph(ctx, gq)
+	if err != nil {
+		t.Error(err)
+	}
+
+	ch := make(chan error)
+	go ProcessGraph(ctx, sg, nil, ch)
+	err = <-ch
+	if err != nil {
+		t.Error(err)
+	}
+
+	var l Latency
+	js, err := sg.ToJSON(&l)
+	if err != nil {
+		t.Error(err)
+	}
+
+	s := string(js)
+	if s != `{"me":[{"friend":[{"_uid_":"0x1f"}],"gender":"female","name":"Michonne"}]}` {
+		t.Errorf("Wrong output: %s", s)
+	}
+}
+
+func TestToJSONFilterOr(t *testing.T) {
+	dir, _ := populateGraph(t)
+	defer os.RemoveAll(dir)
+	query := `
+		{
+			me(_uid_:0x01) {
+				name
+				gender
+				friend @filter(eq("name", "Andrea") || eq("name", "Glenn Rhee")) {
+					name
+				}
+			}
+		}
+	`
+
+	gq, _, err := gql.Parse(query)
+	if err != nil {
+		t.Error(err)
+	}
+	ctx := context.Background()
+	sg, err := ToSubGraph(ctx, gq)
+	if err != nil {
+		t.Error(err)
+	}
+
+	ch := make(chan error)
+	go ProcessGraph(ctx, sg, nil, ch)
+	err = <-ch
+	if err != nil {
+		t.Error(err)
+	}
+
+	var l Latency
+	js, err := sg.ToJSON(&l)
+	if err != nil {
+		t.Error(err)
+	}
+
+	s := string(js)
+	if s != `{"me":[{"friend":[{"name":"Glenn Rhee"},{"name":"Andrea"}],"gender":"female","name":"Michonne"}]}` {
+		t.Errorf("Wrong output: %s", s)
+	}
+}
+
+func TestToJSONFilterOrFirst(t *testing.T) {
+	dir, _ := populateGraph(t)
+	defer os.RemoveAll(dir)
+	query := `
+		{
+			me(_uid_:0x01) {
+				name
+				gender
+				friend(first:2) @filter(eq("name", "Andrea") || eq("name", "Glenn Rhee") || eq("name", "Daryl Dixon")) {
+					name
+				}
+			}
+		}
+	`
+
+	gq, _, err := gql.Parse(query)
+	if err != nil {
+		t.Error(err)
+	}
+	ctx := context.Background()
+	sg, err := ToSubGraph(ctx, gq)
+	if err != nil {
+		t.Error(err)
+	}
+
+	ch := make(chan error)
+	go ProcessGraph(ctx, sg, nil, ch)
+	err = <-ch
+	if err != nil {
+		t.Error(err)
+	}
+
+	var l Latency
+	js, err := sg.ToJSON(&l)
+	if err != nil {
+		t.Error(err)
+	}
+
+	s := string(js)
+	if s != `{"me":[{"friend":[{"name":"Glenn Rhee"},{"name":"Daryl Dixon"}],"gender":"female","name":"Michonne"}]}` {
+		t.Errorf("Wrong output: %s", s)
+	}
+}
+
+func TestToJSONFilterOrOffset(t *testing.T) {
+	dir, _ := populateGraph(t)
+	defer os.RemoveAll(dir)
+	query := `
+		{
+			me(_uid_:0x01) {
+				name
+				gender
+				friend(offset:1) @filter(eq("name", "Andrea") || eq("name", "Glenn Rhee") || eq("name", "Daryl Dixon")) {
+					name
+				}
+			}
+		}
+	`
+
+	gq, _, err := gql.Parse(query)
+	if err != nil {
+		t.Error(err)
+	}
+	ctx := context.Background()
+	sg, err := ToSubGraph(ctx, gq)
+	if err != nil {
+		t.Error(err)
+	}
+
+	ch := make(chan error)
+	go ProcessGraph(ctx, sg, nil, ch)
+	err = <-ch
+	if err != nil {
+		t.Error(err)
+	}
+
+	var l Latency
+	js, err := sg.ToJSON(&l)
+	if err != nil {
+		t.Error(err)
+	}
+
+	s := string(js)
+	if s != `{"me":[{"friend":[{"name":"Daryl Dixon"},{"name":"Andrea"}],"gender":"female","name":"Michonne"}]}` {
+		t.Errorf("Wrong output: %s", s)
+	}
+}
+
+// No filter. Just to test first and offset.
+func TestToJSONFirstOffset(t *testing.T) {
+	dir, _ := populateGraph(t)
+	defer os.RemoveAll(dir)
+	query := `
+		{
+			me(_uid_:0x01) {
+				name
+				gender
+				friend(offset:1, first:1) {
+					name
+				}
+			}
+		}
+	`
+
+	gq, _, err := gql.Parse(query)
+	if err != nil {
+		t.Error(err)
+	}
+	ctx := context.Background()
+	sg, err := ToSubGraph(ctx, gq)
+	if err != nil {
+		t.Error(err)
+	}
+
+	ch := make(chan error)
+	go ProcessGraph(ctx, sg, nil, ch)
+	err = <-ch
+	if err != nil {
+		t.Error(err)
+	}
+
+	var l Latency
+	js, err := sg.ToJSON(&l)
+	if err != nil {
+		t.Error(err)
+	}
+
+	s := string(js)
+	if s != `{"me":[{"friend":[{"name":"Glenn Rhee"}],"gender":"female","name":"Michonne"}]}` {
+		t.Errorf("Wrong output: %s", s)
+	}
+}
+
+func TestToJSONFilterOrFirstOffset(t *testing.T) {
+	dir, _ := populateGraph(t)
+	defer os.RemoveAll(dir)
+	query := `
+		{
+			me(_uid_:0x01) {
+				name
+				gender
+				friend(offset:1, first:1) @filter(eq("name", "Andrea") || eq("name", "Glenn Rhee") || eq("name", "Daryl Dixon")) {
+					name
+				}
+			}
+		}
+	`
+
+	gq, _, err := gql.Parse(query)
+	if err != nil {
+		t.Error(err)
+	}
+	ctx := context.Background()
+	sg, err := ToSubGraph(ctx, gq)
+	if err != nil {
+		t.Error(err)
+	}
+
+	ch := make(chan error)
+	go ProcessGraph(ctx, sg, nil, ch)
+	err = <-ch
+	if err != nil {
+		t.Error(err)
+	}
+
+	var l Latency
+	js, err := sg.ToJSON(&l)
+	if err != nil {
+		t.Error(err)
+	}
+
+	s := string(js)
+	if s != `{"me":[{"friend":[{"name":"Daryl Dixon"}],"gender":"female","name":"Michonne"}]}` {
+		t.Errorf("Wrong output: %s", s)
+	}
+}
+
+func TestToJSONFilterOrFirstNegative(t *testing.T) {
+	dir, _ := populateGraph(t)
+	defer os.RemoveAll(dir)
+	// When negative first/count is specified, we ignore offset and returns the last
+	// few number of items.
+	query := `
+		{
+			me(_uid_:0x01) {
+				name
+				gender
+				friend(first:-1, offset:0) @filter(eq("name", "Andrea") || eq("name", "Glenn Rhee") || eq("name", "Daryl Dixon")) {
+					name
+				}
+			}
+		}
+	`
+
+	gq, _, err := gql.Parse(query)
+	if err != nil {
+		t.Error(err)
+	}
+	ctx := context.Background()
+	sg, err := ToSubGraph(ctx, gq)
+	if err != nil {
+		t.Error(err)
+	}
+
+	ch := make(chan error)
+	go ProcessGraph(ctx, sg, nil, ch)
+	err = <-ch
+	if err != nil {
+		t.Error(err)
+	}
+
+	var l Latency
+	js, err := sg.ToJSON(&l)
+	if err != nil {
+		t.Error(err)
+	}
+
+	s := string(js)
+	if s != `{"me":[{"friend":[{"name":"Andrea"}],"gender":"female","name":"Michonne"}]}` {
+		t.Errorf("Wrong output: %s", s)
+	}
+}
+
+func TestToJSONFilterAnd(t *testing.T) {
+	dir, _ := populateGraph(t)
+	defer os.RemoveAll(dir)
+	query := `
+		{
+			me(_uid_:0x01) {
+				name
+				gender
+				friend @filter(eq("name", "Andrea") && eq("name", "Glenn Rhee")) {
+					name
+				}
+			}
+		}
+	`
+
+	gq, _, err := gql.Parse(query)
+	if err != nil {
+		t.Error(err)
+	}
+	ctx := context.Background()
+	sg, err := ToSubGraph(ctx, gq)
+	if err != nil {
+		t.Error(err)
+	}
+
+	ch := make(chan error)
+	go ProcessGraph(ctx, sg, nil, ch)
+	err = <-ch
+	if err != nil {
+		t.Error(err)
+	}
+
+	var l Latency
+	js, err := sg.ToJSON(&l)
+	if err != nil {
+		t.Error(err)
+	}
+
+	s := string(js)
+	if s != `{"me":[{"gender":"female","name":"Michonne"}]}` {
+		t.Errorf("Wrong output: %s", s)
 	}
 }
 
@@ -664,7 +1075,7 @@ func TestToPB(t *testing.T) {
 	}
 
 	ch := make(chan error)
-	go ProcessGraph(ctx, sg, ch)
+	go ProcessGraph(ctx, sg, nil, ch)
 	err = <-ch
 	if err != nil {
 		t.Error(err)
@@ -768,7 +1179,7 @@ func TestSchema(t *testing.T) {
 	}
 
 	ch := make(chan error)
-	go ProcessGraph(ctx, sg, ch)
+	go ProcessGraph(ctx, sg, nil, ch)
 	err = <-ch
 	if err != nil {
 		t.Error(err)
@@ -833,6 +1244,228 @@ func TestSchema(t *testing.T) {
 	}
 	if len(child.Children) != 0 {
 		t.Errorf("Expected 0 children, Got: %v", len(child.Children))
+	}
+}
+
+func TestToPBFilter(t *testing.T) {
+	dir, _ := populateGraph(t)
+	defer os.RemoveAll(dir)
+
+	// Alright. Now we have everything set up. Let's create the query.
+	query := `
+		{
+			me(_uid_:0x01) {
+				name
+				gender
+				friend @filter(eq("name", "Andrea")) {
+					name
+				}
+			}
+		}
+	`
+
+	gq, _, err := gql.Parse(query)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	ctx := context.Background()
+	sg, err := ToSubGraph(ctx, gq)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	ch := make(chan error)
+	go ProcessGraph(ctx, sg, nil, ch)
+	err = <-ch
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	var l Latency
+	pb, err := sg.ToProtocolBuffer(&l)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	expectedPb := `attribute: "me"
+properties: <
+  prop: "name"
+  value: <
+    bytes_val: "Michonne"
+  >
+>
+properties: <
+  prop: "gender"
+  value: <
+    bytes_val: "female"
+  >
+>
+children: <
+  attribute: "friend"
+  properties: <
+    prop: "name"
+    value: <
+      bytes_val: "Andrea"
+    >
+  >
+>
+`
+	pbText := proto.MarshalTextString(pb)
+	if pbText != expectedPb {
+		t.Errorf("Output wrong: %v", pbText)
+		return
+	}
+}
+
+func TestToPBFilterOr(t *testing.T) {
+	dir, _ := populateGraph(t)
+	defer os.RemoveAll(dir)
+
+	// Alright. Now we have everything set up. Let's create the query.
+	query := `
+		{
+			me(_uid_:0x01) {
+				name
+				gender
+				friend @filter(eq("name", "Andrea") || eq("name", "Glenn Rhee")) {
+					name
+				}
+			}
+		}
+	`
+
+	gq, _, err := gql.Parse(query)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	ctx := context.Background()
+	sg, err := ToSubGraph(ctx, gq)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	ch := make(chan error)
+	go ProcessGraph(ctx, sg, nil, ch)
+	err = <-ch
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	var l Latency
+	pb, err := sg.ToProtocolBuffer(&l)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	expectedPb := `attribute: "me"
+properties: <
+  prop: "name"
+  value: <
+    bytes_val: "Michonne"
+  >
+>
+properties: <
+  prop: "gender"
+  value: <
+    bytes_val: "female"
+  >
+>
+children: <
+  attribute: "friend"
+  properties: <
+    prop: "name"
+    value: <
+      bytes_val: "Glenn Rhee"
+    >
+  >
+>
+children: <
+  attribute: "friend"
+  properties: <
+    prop: "name"
+    value: <
+      bytes_val: "Andrea"
+    >
+  >
+>
+`
+	pbText := proto.MarshalTextString(pb)
+	if pbText != expectedPb {
+		t.Errorf("Output wrong: %v", pbText)
+		return
+	}
+}
+
+func TestToPBFilterAnd(t *testing.T) {
+	dir, _ := populateGraph(t)
+	defer os.RemoveAll(dir)
+
+	// Alright. Now we have everything set up. Let's create the query.
+	query := `
+		{
+			me(_uid_:0x01) {
+				name
+				gender
+				friend @filter(eq("name", "Andrea") && eq("name", "Glenn Rhee")) {
+					name
+				}
+			}
+		}
+	`
+
+	gq, _, err := gql.Parse(query)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	ctx := context.Background()
+	sg, err := ToSubGraph(ctx, gq)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	ch := make(chan error)
+	go ProcessGraph(ctx, sg, nil, ch)
+	err = <-ch
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	var l Latency
+	pb, err := sg.ToProtocolBuffer(&l)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	expectedPb := `attribute: "me"
+properties: <
+  prop: "name"
+  value: <
+    bytes_val: "Michonne"
+  >
+>
+properties: <
+  prop: "gender"
+  value: <
+    bytes_val: "female"
+  >
+>
+`
+	pbText := proto.MarshalTextString(pb)
+	if pbText != expectedPb {
+		t.Errorf("Output wrong: %v", pbText)
+		return
 	}
 }
 

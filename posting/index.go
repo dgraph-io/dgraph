@@ -108,10 +108,12 @@ func IndexKey(attr string, term []byte) []byte {
 
 // processIndexTerm adds mutation(s) for a single term, to maintain index.
 func processIndexTerm(ctx context.Context, attr string, uid uint64, term []byte, del bool) {
+	x.Assert(uid != 0)
 	edge := x.DirectedEdge{
 		Timestamp: time.Now(),
 		ValueId:   uid,
 		Attribute: attr,
+		Source:    "idx",
 	}
 	key := IndexKey(edge.Attribute, term)
 	plist, decr := GetOrCreate(key, indexStore)

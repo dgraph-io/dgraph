@@ -134,8 +134,7 @@ func TestProcessTask(t *testing.T) {
 		t.Error(err)
 	}
 
-	r := new(task.Result)
-	x.ParseTaskResult(r, result)
+	r := task.GetRootAsResult(result, 0)
 	if r.UidmatrixLength() != 3 {
 		t.Errorf("Expected 3. Got uidmatrix length: %v", r.UidmatrixLength())
 		return
@@ -150,26 +149,31 @@ func TestProcessTask(t *testing.T) {
 		t.Error(err)
 	}
 
-	if r.ValuesLength() != 3 {
-		t.Errorf("Expected 3. Got values length: %v", r.ValuesLength())
+	var valuesList task.ValueList
+	if r.Values(&valuesList) == nil {
+		t.Errorf("Error loading ValueList")
+		return
+	}
+	if valuesList.ValuesLength() != 3 {
+		t.Errorf("Expected 3. Got values length: %v", valuesList.ValuesLength())
 		return
 	}
 	var tval task.Value
-	if ok := r.Values(&tval, 0); !ok {
+	if ok := valuesList.Values(&tval, 0); !ok {
 		t.Errorf("Unable to retrieve value")
 	}
 	if string(tval.ValBytes()) != "photon" {
 		t.Errorf("Expected photon. Got: %q", string(tval.ValBytes()))
 	}
 
-	if ok := r.Values(&tval, 1); !ok {
+	if ok := valuesList.Values(&tval, 1); !ok {
 		t.Errorf("Unable to retrieve value")
 	}
 	if !bytes.Equal(tval.ValBytes(), []byte{}) {
 		t.Errorf("Invalid value")
 	}
 
-	if ok := r.Values(&tval, 2); !ok {
+	if ok := valuesList.Values(&tval, 2); !ok {
 		t.Errorf("Unable to retrieve value")
 	}
 	if string(tval.ValBytes()) != "photon" {
@@ -250,8 +254,7 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 		t.Error(err)
 	}
 
-	r := new(task.Result)
-	x.ParseTaskResult(r, result)
+	r := task.GetRootAsResult(result, 0)
 	if r.UidmatrixLength() != 2 {
 		t.Errorf("Expected 2. Got uidmatrix length: %v", r.UidmatrixLength())
 	}
@@ -283,8 +286,7 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 		t.Error(err)
 	}
 
-	r = new(task.Result)
-	x.ParseTaskResult(r, result)
+	r = task.GetRootAsResult(result, 0)
 	if r.UidmatrixLength() != 4 {
 		t.Errorf("Expected 4. Got uidmatrix length: %v", r.UidmatrixLength())
 	}
@@ -328,8 +330,7 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 		t.Error(err)
 	}
 
-	r = new(task.Result)
-	x.ParseTaskResult(r, result)
+	r = task.GetRootAsResult(result, 0)
 	if r.UidmatrixLength() != 3 {
 		t.Errorf("Expected 3. Got uidmatrix length: %v", r.UidmatrixLength())
 	}
@@ -352,8 +353,7 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	r = new(task.Result)
-	x.ParseTaskResult(r, result)
+	r = task.GetRootAsResult(result, 0)
 	if r.UidmatrixLength() != 3 {
 		t.Errorf("Expected 3. Got uidmatrix length: %v", r.UidmatrixLength())
 	}
@@ -400,8 +400,7 @@ func TestProcessTaskIndex(t *testing.T) {
 		t.Error(err)
 	}
 
-	r := new(task.Result)
-	x.ParseTaskResult(r, result)
+	r := task.GetRootAsResult(result, 0)
 	if r.UidmatrixLength() != 2 {
 		t.Errorf("Expected 2. Got uidmatrix length: %v", r.UidmatrixLength())
 	}
@@ -436,8 +435,7 @@ func TestProcessTaskIndex(t *testing.T) {
 		t.Error(err)
 	}
 
-	r = new(task.Result)
-	x.ParseTaskResult(r, result)
+	r = task.GetRootAsResult(result, 0)
 	if r.UidmatrixLength() != 4 {
 		t.Errorf("Expected 4. Got uidmatrix length: %v", r.UidmatrixLength())
 	}
@@ -484,8 +482,7 @@ func TestProcessTaskIndex(t *testing.T) {
 		t.Error(err)
 	}
 
-	r = new(task.Result)
-	x.ParseTaskResult(r, result)
+	r = task.GetRootAsResult(result, 0)
 	if r.UidmatrixLength() != 3 {
 		t.Errorf("Expected 3. Got uidmatrix length: %v", r.UidmatrixLength())
 	}

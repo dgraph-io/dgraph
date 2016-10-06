@@ -20,6 +20,7 @@ import (
 	"github.com/google/flatbuffers/go"
 	"golang.org/x/net/context"
 
+	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/x"
@@ -65,8 +66,7 @@ func ProcessTaskOverNetwork(ctx context.Context, qu []byte) (result []byte, rerr
 
 // processTask processes the query, accumulates and returns the result.
 func processTask(query []byte) ([]byte, error) {
-	q := new(task.Query)
-	x.ParseTaskQuery(q, query)
+	q := task.GetRootAsQuery(query, 0)
 
 	attr := string(q.Attr())
 	store := ws.dataStore
@@ -115,43 +115,61 @@ func processTask(query []byte) ([]byte, error) {
 			count := uint64(pl.Length())
 			counts = append(counts, count)
 			// Add an empty UID list to make later processing consistent
-			uoffsets[i] = x.UidlistOffset(b, []uint64{})
+			uoffsets[i] = algo.NewUIDList([]uint64{}).AddTo(b)
 		} else {
 			opts := posting.ListOptions{
-				Offset:   int(q.Offset()),
-				Count:    int(q.Count()),
-				AfterUid: uint64(q.AfterUid()),
+				AfterUID: uint64(q.AfterUid()),
 			}
+
+			// Get taskQuery.Intersect field.
+			taskList := new(task.UidList)
+			if q.ToIntersect(taskList) != nil {
+				opts.Intersect = new(algo.UIDList)
+				opts.Intersect.FromTask(taskList)
+			}
+
 			ulist := pl.Uids(opts)
-			uoffsets[i] = x.UidlistOffset(b, ulist)
+			uoffsets[i] = ulist.AddTo(b)
 		}
 	}
 
-	task.ResultStartValuesVector(b, len(voffsets))
+	// Create a ValueList's vector of Values.
+	task.ValueListStartValuesVector(b, len(voffsets))
 	for i := len(voffsets) - 1; i >= 0; i-- {
 		b.PrependUOffsetT(voffsets[i])
 	}
-	valuesVent := b.EndVector(len(voffsets))
+	valuesVecOffset := b.EndVector(len(voffsets))
 
+	// Create a ValueList.
+	task.ValueListStart(b)
+	task.ValueListAddValues(b, valuesVecOffset)
+	valuesVent := task.ValueListEnd(b)
+
+	// Prepare UID matrix.
 	task.ResultStartUidmatrixVector(b, len(uoffsets))
 	for i := len(uoffsets) - 1; i >= 0; i-- {
 		b.PrependUOffsetT(uoffsets[i])
 	}
 	matrixVent := b.EndVector(len(uoffsets))
 
-	task.ResultStartCountVector(b, len(counts))
+	// Create a CountList's vector of ulong.
+	task.CountListStartCountVector(b, len(counts))
 	for i := len(counts) - 1; i >= 0; i-- {
 		b.PrependUint64(counts[i])
 	}
-	countsVent := b.EndVector(len(counts))
+	countVecOffset := b.EndVector(len(counts))
+
+	// Create a CountList.
+	task.CountListStart(b)
+	task.CountListAddCount(b, countVecOffset)
+	countsVent := task.CountListEnd(b)
 
 	task.ResultStart(b)
 	task.ResultAddValues(b, valuesVent)
 	task.ResultAddUidmatrix(b, matrixVent)
 	task.ResultAddCount(b, countsVent)
-	rend := task.ResultEnd(b)
-	b.Finish(rend)
-	return b.Bytes[b.Head():], nil
+	b.Finish(task.ResultEnd(b))
+	return b.FinishedBytes(), nil
 }
 
 // ServeTask is used to respond to a query.

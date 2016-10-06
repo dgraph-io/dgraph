@@ -28,9 +28,6 @@ func (rcv *Result) Uidmatrix(obj *UidList, j int) bool {
 		x := rcv._tab.Vector(o)
 		x += flatbuffers.UOffsetT(j) * 4
 		x = rcv._tab.Indirect(x)
-		if obj == nil {
-			obj = new(UidList)
-		}
 		obj.Init(rcv._tab.Bytes, x)
 		return true
 	}
@@ -45,44 +42,30 @@ func (rcv *Result) UidmatrixLength() int {
 	return 0
 }
 
-func (rcv *Result) Values(obj *Value, j int) bool {
+func (rcv *Result) Values(obj *ValueList) *ValueList {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
 	if o != 0 {
-		x := rcv._tab.Vector(o)
-		x += flatbuffers.UOffsetT(j) * 4
-		x = rcv._tab.Indirect(x)
+		x := rcv._tab.Indirect(o + rcv._tab.Pos)
 		if obj == nil {
-			obj = new(Value)
+			obj = new(ValueList)
 		}
 		obj.Init(rcv._tab.Bytes, x)
-		return true
+		return obj
 	}
-	return false
+	return nil
 }
 
-func (rcv *Result) ValuesLength() int {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
-	if o != 0 {
-		return rcv._tab.VectorLen(o)
-	}
-	return 0
-}
-
-func (rcv *Result) Count(j int) uint64 {
+func (rcv *Result) Count(obj *CountList) *CountList {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
 	if o != 0 {
-		a := rcv._tab.Vector(o)
-		return rcv._tab.GetUint64(a + flatbuffers.UOffsetT(j*8))
+		x := rcv._tab.Indirect(o + rcv._tab.Pos)
+		if obj == nil {
+			obj = new(CountList)
+		}
+		obj.Init(rcv._tab.Bytes, x)
+		return obj
 	}
-	return 0
-}
-
-func (rcv *Result) CountLength() int {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
-	if o != 0 {
-		return rcv._tab.VectorLen(o)
-	}
-	return 0
+	return nil
 }
 
 func ResultStart(builder *flatbuffers.Builder) {
@@ -97,14 +80,8 @@ func ResultStartUidmatrixVector(builder *flatbuffers.Builder, numElems int) flat
 func ResultAddValues(builder *flatbuffers.Builder, values flatbuffers.UOffsetT) {
 	builder.PrependUOffsetTSlot(1, flatbuffers.UOffsetT(values), 0)
 }
-func ResultStartValuesVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
-	return builder.StartVector(4, numElems, 4)
-}
 func ResultAddCount(builder *flatbuffers.Builder, count flatbuffers.UOffsetT) {
 	builder.PrependUOffsetTSlot(2, flatbuffers.UOffsetT(count), 0)
-}
-func ResultStartCountVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
-	return builder.StartVector(8, numElems, 8)
 }
 func ResultEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
