@@ -39,10 +39,10 @@ func createQuery(group uint32, N int) []byte {
 }
 
 // assignUids returns a byte slice containing uids.
+// This function is triggered by an RPC call. We ensure that only leader can assign new UIDs,
+// so we can tackle any collisions that might happen with the lockmanager.
+// In essence, we just want one server to be handing out new uids.
 func assignUids(ctx context.Context, num *task.Num) (uidList []byte, rerr error) {
-	// This function is triggered by an RPC call. We ensure that only leader can assign new UIDs,
-	// so we can tackle any collisions that might happen with the lockmanager.
-	// In essence, we just want one server to be handing out new uids.
 	node := groups().Node(num.Group())
 	if !node.AmLeader() {
 		return uidList, x.Errorf("Assigning UIDs is only allowed on leader.")
@@ -75,20 +75,14 @@ func assignUids(ctx context.Context, num *task.Num) (uidList []byte, rerr error)
 	return b.Bytes[b.Head():], nil
 }
 
-// GetOrAssignUidsOverNetwork gets or assigns uids corresponding to xids and
-// writes them to the newUids map.
+// AssignUidsOverNetwork assigns new uids and writes them to the newUids map.
 func AssignUidsOverNetwork(ctx context.Context, newUids map[string]uint64) (rerr error) {
 	query := new(Payload)
-	query.Data = createQuery(0, len(newUids)) // TODO: Fill in the right group.
-
-	uo := flatbuffers.GetUOffsetT(query.Data)
-	num := new(task.Num)
-	num.Init(query.Data, uo)
-
-	reply := new(Payload)
-
 	gid := BelongsTo("_uid_")
-	// TODO: Send this over the network, depending upon which server should be handling this.
+	query.Data = createQuery(gid, len(newUids))
+
+	num := task.GetRootAsNum(query.Data, 0)
+	reply := new(Payload)
 	if groups().ServesGroup(gid) {
 		reply.Data, rerr = assignUids(ctx, num)
 		if rerr != nil {
@@ -106,42 +100,50 @@ func AssignUidsOverNetwork(ctx context.Context, newUids map[string]uint64) (rerr
 		defer p.Put(conn)
 
 		c := NewWorkerClient(conn)
-		reply, rerr = c.AssignUids(context.Background(), query)
+		reply, rerr = c.AssignUids(ctx, query)
 		if rerr != nil {
 			x.TraceError(ctx, x.Wrapf(rerr, "Error while getting uids"))
 			return rerr
 		}
 	}
 
-	uidList := new(task.UidList)
-	uo = flatbuffers.GetUOffsetT(reply.Data)
-	uidList.Init(reply.Data, uo)
-
-	if uidList.UidsLength() != int(num.Val()) {
-		log.Fatalf("Requested: %d != Retrieved Uids: %d", num.Val(), uidList.UidsLength())
-	}
+	ul := task.GetRootAsUidList(reply.Data, 0)
+	x.Assertf(ul.UidsLength() == int(num.Val()),
+		"Requested: %d != Retrieved Uids: %d", num.Val(), ul.UidsLength())
 
 	i := 0
 	for k := range newUids {
-		uid := uidList.Uids(i)
+		uid := ul.Uids(i)
 		newUids[k] = uid // Write uids to map.
 		i++
 	}
 	return nil
 }
 
-// GetOrAssign is used to get uids for a set of xids by communicating with other workers.
+// AssignUids is used to assign new uids by communicating with the leader of the RAFT group
+// responsible for handing out uids.
 func (w *grpcWorker) AssignUids(ctx context.Context, query *Payload) (*Payload, error) {
-	uo := flatbuffers.GetUOffsetT(query.Data)
-	num := new(task.Num)
-	num.Init(query.Data, uo)
+	if ctx.Err() != nil {
+		return &Payload{}, ctx.Err()
+	}
 
+	num := task.GetRootAsNum(query.Data, 0)
 	if !groups().ServesGroup(num.Group()) {
 		log.Fatalf("groupId: %v. GetOrAssign. We shouldn't be getting this req", num.Group())
 	}
 
 	reply := new(Payload)
-	var rerr error
-	reply.Data, rerr = assignUids(ctx, num)
-	return reply, rerr
+	c := make(chan error, 1)
+	go func() {
+		var err error
+		reply.Data, err = assignUids(ctx, num)
+		c <- err
+	}()
+
+	select {
+	case <-ctx.Done():
+		return reply, ctx.Err()
+	case err := <-c:
+		return reply, err
+	}
 }

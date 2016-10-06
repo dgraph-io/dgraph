@@ -35,7 +35,6 @@ var gr *groupi
 func init() {
 	gr = new(groupi)
 }
-
 func groups() *groupi {
 	return gr
 }

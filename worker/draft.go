@@ -1,7 +1,6 @@
 package worker
 
 import (
-	"context"
 	"encoding/binary"
 	"fmt"
 	"log"
@@ -14,9 +13,11 @@ import (
 
 	"github.com/coreos/etcd/raft"
 	"github.com/coreos/etcd/raft/raftpb"
+	flatbuffers "github.com/google/flatbuffers/go"
+	"golang.org/x/net/context"
+
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/x"
-	flatbuffers "github.com/google/flatbuffers/go"
 )
 
 const (
@@ -91,12 +92,12 @@ func (n *node) Connect(pid uint64, addr string) {
 	n.peers.Set(pid, addr)
 }
 
-func (n *node) AddToCluster(pid uint64) {
+func (n *node) AddToCluster(pid uint64) error {
 	addr := n.peers.Get(pid)
 	x.Assertf(len(addr) > 0, "Unable to find conn pool for peer: %d", pid)
 
 	rc := task.GetRootAsRaftContext(n.raftContext, 0)
-	n.raft.ProposeConfChange(context.TODO(), raftpb.ConfChange{
+	return n.raft.ProposeConfChange(context.TODO(), raftpb.ConfChange{
 		ID:      pid,
 		Type:    raftpb.ConfChangeAddNode,
 		NodeID:  pid,
@@ -489,4 +490,51 @@ func (n *node) AmLeader() bool {
 	return n.raft.Status().Lead == n.raft.Status().ID
 }
 
-var thisNode *node
+func (w *grpcWorker) RaftMessage(ctx context.Context, query *Payload) (*Payload, error) {
+	if ctx.Err() != nil {
+		return &Payload{}, ctx.Err()
+	}
+
+	msg := raftpb.Message{}
+	if err := msg.Unmarshal(query.Data); err != nil {
+		return &Payload{}, err
+	}
+
+	rc := task.GetRootAsRaftContext(msg.Context, 0)
+	node := groups().Node(rc.Group())
+	node.Connect(msg.From, string(rc.Addr()))
+
+	c := make(chan error, 1)
+	go func() { c <- node.Step(ctx, msg) }()
+
+	select {
+	case <-ctx.Done():
+		return &Payload{}, ctx.Err()
+	case err := <-c:
+		return &Payload{}, err
+	}
+}
+
+func (w *grpcWorker) JoinCluster(ctx context.Context, query *Payload) (*Payload, error) {
+	if ctx.Err() != nil {
+		return &Payload{}, ctx.Err()
+	}
+
+	if len(query.Data) == 0 {
+		return &Payload{}, x.Errorf("JoinCluster: No data provided")
+	}
+
+	rc := task.GetRootAsRaftContext(query.Data, 0)
+	node := groups().Node(rc.Group())
+	node.Connect(rc.Id(), string(rc.Addr()))
+
+	c := make(chan error, 1)
+	go func() { c <- node.AddToCluster(rc.Id()) }()
+
+	select {
+	case <-ctx.Done():
+		return &Payload{}, ctx.Err()
+	case err := <-c:
+		return &Payload{}, err
+	}
+}
