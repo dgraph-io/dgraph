@@ -77,3 +77,33 @@ func TestSchema6_Error(t *testing.T) {
 		t.Error(err)
 	}
 }
+
+// Correct specification of indexing
+func TestSchemaIndex(t *testing.T) {
+	str = make(map[string]types.Type)
+	indexedFields = make(map[string]bool)
+	err := Parse("testfiles/test_schema_index1")
+	if err != nil {
+		t.Error(err)
+	}
+}
+
+// Indexing can't be specified inside object types.
+func TestSchemaIndex_Error1(t *testing.T) {
+	str = make(map[string]types.Type)
+	indexedFields = make(map[string]bool)
+	err := Parse("testfiles/test_schema_index2")
+	if err == nil {
+		t.Error("Expected error")
+	}
+}
+
+// Object types cant be indexed.
+func TestSchemaIndex_Error2(t *testing.T) {
+	str = make(map[string]types.Type)
+	indexedFields = make(map[string]bool)
+	err := Parse("testfiles/test_schema_index3")
+	if err == nil {
+		t.Error("Expected error")
+	}
+}

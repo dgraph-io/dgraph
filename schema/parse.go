@@ -105,6 +105,17 @@ func processScalarBlock(l *lex.Lexer) error {
 					return fmt.Errorf("Invalid type")
 				}
 				str[name] = t
+
+				// Check for index.
+				next = <-l.Items
+				if next.Typ == itemAt {
+					index := <-l.Items
+					if index.Typ == itemIndex {
+						indexedFields[name] = true
+					} else {
+						return fmt.Errorf("Invalid index specification")
+					}
+				}
 			}
 		case lex.ItemError:
 			return fmt.Errorf(item.Val)
@@ -141,6 +152,17 @@ func processScalar(l *lex.Lexer) error {
 					str[name] = t
 				} else {
 					return fmt.Errorf("Invalid type")
+				}
+
+				// Check for index.
+				next = <-l.Items
+				if next.Typ == itemAt {
+					index := <-l.Items
+					if index.Typ == itemIndex {
+						indexedFields[name] = true
+					} else {
+						return fmt.Errorf("Invalid index specification")
+					}
 				}
 				return nil
 			}

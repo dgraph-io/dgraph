@@ -25,9 +25,16 @@ type Item struct {
 }
 
 var str map[string]types.Type
+var indexedFields map[string]bool
 
 func init() {
 	str = make(map[string]types.Type)
+	indexedFields = make(map[string]bool)
+}
+
+// IsIndexed returns if a given predicated is indexed or not.
+func IsIndexed(str string) bool {
+	return indexedFields[str]
 }
 
 // ScalarList returns the list of scalars in the geiven object.
