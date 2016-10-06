@@ -326,8 +326,8 @@ func TestLex(t *testing.T) {
 			assert.Error(t, err, "Expected error for input: %q. Output: %+v",
 				test.input, rnq)
 		} else {
-			assert.NoError(t, err, "Error while parsing")
-			assert.Equal(t, rnq, test.nq)
+			assert.NoError(t, err, "Got error for input: %q", test.input)
+			assert.Equal(t, rnq, test.nq, "Mismatch for input: %q", test.input)
 		}
 	}
 }

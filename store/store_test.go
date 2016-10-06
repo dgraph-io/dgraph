@@ -126,7 +126,6 @@ func benchmarkGet(valSize int, b *testing.B) {
 	path, err := ioutil.TempDir("", "storetest_")
 	if err != nil {
 		b.Error(err)
-		b.Fail()
 		return
 	}
 	defer os.RemoveAll(path)
@@ -134,7 +133,6 @@ func benchmarkGet(valSize int, b *testing.B) {
 	s, err := NewStore(path)
 	if err != nil {
 		b.Error(err)
-		b.Fail()
 		return
 	}
 	buf := make([]byte, valSize)
@@ -175,7 +173,6 @@ func benchmarkSet(valSize int, b *testing.B) {
 	path, err := ioutil.TempDir("", "storetest_")
 	if err != nil {
 		b.Error(err)
-		b.Fail()
 		return
 	}
 	defer os.RemoveAll(path)
@@ -183,7 +180,6 @@ func benchmarkSet(valSize int, b *testing.B) {
 	s, err := NewStore(path)
 	if err != nil {
 		b.Error(err)
-		b.Fail()
 		return
 	}
 	buf := make([]byte, valSize)
