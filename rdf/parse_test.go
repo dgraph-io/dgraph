@@ -17,14 +17,15 @@
 package rdf
 
 import (
-	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 var testNQuads = []struct {
-	input  string
-	nq     NQuad
-	hasErr bool
+	input       string
+	nq          NQuad
+	expectedErr bool
 }{
 	{
 		input: `<some_subject_id> <predicate> <object_id> .`,
@@ -136,92 +137,92 @@ var testNQuads = []struct {
 		},
 	},
 	{
-		input:  "_:alice .",
-		hasErr: true,
+		input:       "_:alice .",
+		expectedErr: true,
 	},
 	{
-		input:  "_:alice knows .",
-		hasErr: true,
+		input:       "_:alice knows .",
+		expectedErr: true,
 	},
 	{
-		input:  "<alice> <knows> .",
-		hasErr: true,
+		input:       "<alice> <knows> .",
+		expectedErr: true,
 	},
 	{
-		input:  "_uid_: 0x01 <knows> <something> .",
-		hasErr: true,
+		input:       "_uid_: 0x01 <knows> <something> .",
+		expectedErr: true,
 	},
 	{
-		input:  "<alice> <knows> _uid_: 0x01 .",
-		hasErr: true,
+		input:       "<alice> <knows> _uid_: 0x01 .",
+		expectedErr: true,
 	},
 	{
-		input:  `_:alice "knows" stuff .`,
-		hasErr: true,
+		input:       `_:alice "knows" stuff .`,
+		expectedErr: true,
 	},
 	{
-		input:  "_:alice <knows> stuff .",
-		hasErr: true,
+		input:       "_:alice <knows> stuff .",
+		expectedErr: true,
 	},
 	{
-		input:  "_:alice <knows> <stuff>",
-		hasErr: true,
+		input:       "_:alice <knows> <stuff>",
+		expectedErr: true,
 	},
 	{
-		input:  `"_:alice" <knows> <stuff> .`,
-		hasErr: true,
+		input:       `"_:alice" <knows> <stuff> .`,
+		expectedErr: true,
 	},
 	{
-		input:  `_:alice <knows> "stuff .`,
-		hasErr: true,
+		input:       `_:alice <knows> "stuff .`,
+		expectedErr: true,
 	},
 	{
-		input:  `_:alice <knows> "stuff"@-en .`,
-		hasErr: true,
+		input:       `_:alice <knows> "stuff"@-en .`,
+		expectedErr: true,
 	},
 	{
-		input:  `_:alice <knows> "stuff"^<string> .`,
-		hasErr: true,
+		input:       `_:alice <knows> "stuff"^<string> .`,
+		expectedErr: true,
 	},
 	{
-		input:  `_:alice <knows> "stuff"^^xs:string .`,
-		hasErr: true,
+		input:       `_:alice <knows> "stuff"^^xs:string .`,
+		expectedErr: true,
 	},
 	{
-		input:  `_:alice <age> "thirteen"^^<xs:int> .`,
-		hasErr: true,
+		input:       `_:alice <age> "thirteen"^^<xs:int> .`,
+		expectedErr: true,
 	},
 	{
-		input:  `<alice> <knows> * .`,
-		hasErr: true,
+		input:       `<alice> <knows> * .`,
+		expectedErr: true,
 	},
 	{
-		input:  `<alice> <knows> <*> .`,
-		hasErr: true,
+		input:       `<alice> <knows> <*> .`,
+		expectedErr: true,
 	},
 	{
-		input:  `<*> <knows> "stuff" .`,
-		hasErr: true,
+		input:       `<*> <knows> "stuff" .`,
+		expectedErr: true,
 	},
 	{
-		input:  `<alice> <*> "stuff" .`,
-		hasErr: true,
+		input:       `<alice> <*> "stuff" .`,
+		expectedErr: true,
 	},
 	{
-		input:  `<alice> < * > "stuff" .`,
-		hasErr: true,
+		input:       `<alice> < * > "stuff" .`,
+		expectedErr: true,
 	},
 	{
-		input:  `<alice> <* *> "stuff" .`,
-		hasErr: true,
+		input:       `<alice> <* *> "stuff" .`,
+		expectedErr: true,
 	},
 	{
-		input:  `<alice> <*> "stuff" .`,
-		hasErr: true,
+		input:       `<alice> <*> "stuff" .`,
+		expectedErr: true,
 	},
 	{
-		input:  `_:alice <knows> "stuff"^^< * > .`,
-		hasErr: true,
+		input:       `_:alice <knows> "stuff"^^< * > .`,
+		expectedErr: true,
 	},
 	{
 		input: `_:alice <knows> "stuff"^^<xs:string> .`,
@@ -232,7 +233,7 @@ var testNQuads = []struct {
 			ObjectValue: []byte("stuff"),
 			ObjectType:  5,
 		},
-		hasErr: false,
+		expectedErr: false,
 	},
 	{
 		input: `<alice> <knows> "*" .`,
@@ -242,7 +243,7 @@ var testNQuads = []struct {
 			ObjectId:    "",
 			ObjectValue: []byte("*"),
 		},
-		hasErr: false,
+		expectedErr: false,
 	},
 	{
 		input: `_:alice <knows> "stuff"^^<xs:string> <label> .`,
@@ -254,7 +255,7 @@ var testNQuads = []struct {
 			Label:       "label",
 			ObjectType:  5,
 		},
-		hasErr: false,
+		expectedErr: false,
 	},
 	{
 		input: `_:alice <knows> "stuff"^^<xs:string> _:label .`,
@@ -266,7 +267,7 @@ var testNQuads = []struct {
 			Label:       "_:label",
 			ObjectType:  5,
 		},
-		hasErr: false,
+		expectedErr: false,
 	},
 	{
 		input: `_:alice <knows> "stuff"^^<xs:string> _:label . # comment`,
@@ -278,27 +279,27 @@ var testNQuads = []struct {
 			Label:       "_:label",
 			ObjectType:  5,
 		},
-		hasErr: false,
+		expectedErr: false,
 	},
 	{
-		input:  `_:alice <knows> "stuff"^^<xs:string> "label" .`,
-		hasErr: true,
+		input:       `_:alice <knows> "stuff"^^<xs:string> "label" .`,
+		expectedErr: true,
 	},
 	{
-		input:  `_:alice <knows> "stuff"^^<xs:string> _uid_:0x01 .`,
-		hasErr: true,
+		input:       `_:alice <knows> "stuff"^^<xs:string> _uid_:0x01 .`,
+		expectedErr: true,
 	},
 	{
-		input:  `_:alice <knows> "stuff"^^<xs:string> <quad> <pentagon> .`,
-		hasErr: true,
+		input:       `_:alice <knows> "stuff"^^<xs:string> <quad> <pentagon> .`,
+		expectedErr: true,
 	},
 	{
-		input:  `_:alice <knows> "stuff"^^<xs:string> quad .`,
-		hasErr: true,
+		input:       `_:alice <knows> "stuff"^^<xs:string> quad .`,
+		expectedErr: true,
 	},
 	{
-		input:  `_:alice <knows> "stuff"^^<xs:string> <*> .`,
-		hasErr: true,
+		input:       `_:alice <knows> "stuff"^^<xs:string> <*> .`,
+		expectedErr: true,
 	},
 	{
 		input: `_:alice <knows> <bob> . <bob>`, // ignores the <bob> after dot.
@@ -321,19 +322,12 @@ var testNQuads = []struct {
 func TestLex(t *testing.T) {
 	for _, test := range testNQuads {
 		rnq, err := Parse(test.input)
-		if test.hasErr {
-			if err == nil {
-				t.Errorf("Expected error for input: %q. Output: %+v", test.input, rnq)
-			}
-			continue
+		if test.expectedErr {
+			assert.Error(t, err, "Expected error for input: %q. Output: %+v",
+				test.input, rnq)
 		} else {
-			if err != nil {
-				t.Errorf("Unexpected error: %v", err)
-			}
-		}
-
-		if !reflect.DeepEqual(rnq, test.nq) {
-			t.Errorf("Expected %v. Got: %v", test.nq, rnq)
+			assert.NoError(t, err, "Error while parsing")
+			assert.Equal(t, rnq, test.nq)
 		}
 	}
 }

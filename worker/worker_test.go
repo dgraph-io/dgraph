@@ -25,6 +25,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/task"
@@ -32,15 +34,13 @@ import (
 )
 
 func addEdge(t *testing.T, edge x.DirectedEdge, l *posting.List) {
-	if err := l.AddMutationWithIndex(context.Background(), edge, posting.Set); err != nil {
-		t.Error(err)
-	}
+	require.NoError(t,
+		l.AddMutationWithIndex(context.Background(), edge, posting.Set))
 }
 
 func delEdge(t *testing.T, edge x.DirectedEdge, l *posting.List) {
-	if err := l.AddMutationWithIndex(context.Background(), edge, posting.Del); err != nil {
-		t.Error(err)
-	}
+	require.NoError(t,
+		l.AddMutationWithIndex(context.Background(), edge, posting.Del))
 }
 
 func check(r *task.Result, idx int, expected []uint64) error {
