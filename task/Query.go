@@ -78,38 +78,25 @@ func (rcv *Query) MutateGetCount(n uint16) bool {
 	return rcv._tab.MutateUint16Slot(12, n)
 }
 
-func (rcv *Query) Uids(j int) uint64 {
+func (rcv *Query) FilterType() byte {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(14))
 	if o != 0 {
-		a := rcv._tab.Vector(o)
-		return rcv._tab.GetUint64(a + flatbuffers.UOffsetT(j*8))
+		return rcv._tab.GetByte(o + rcv._tab.Pos)
 	}
 	return 0
 }
 
-func (rcv *Query) UidsLength() int {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(14))
-	if o != 0 {
-		return rcv._tab.VectorLen(o)
-	}
-	return 0
+func (rcv *Query) MutateFilterType(n byte) bool {
+	return rcv._tab.MutateByteSlot(14, n)
 }
 
-func (rcv *Query) Terms(j int) []byte {
+func (rcv *Query) Filter(obj *flatbuffers.Table) bool {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(16))
 	if o != 0 {
-		a := rcv._tab.Vector(o)
-		return rcv._tab.ByteVector(a + flatbuffers.UOffsetT(j*4))
+		rcv._tab.Union(obj, o)
+		return true
 	}
-	return nil
-}
-
-func (rcv *Query) TermsLength() int {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(16))
-	if o != 0 {
-		return rcv._tab.VectorLen(o)
-	}
-	return 0
+	return false
 }
 
 func (rcv *Query) ToIntersect(obj *UidList) *UidList {
@@ -143,17 +130,11 @@ func QueryAddAfterUid(builder *flatbuffers.Builder, afterUid uint64) {
 func QueryAddGetCount(builder *flatbuffers.Builder, getCount uint16) {
 	builder.PrependUint16Slot(4, getCount, 0)
 }
-func QueryAddUids(builder *flatbuffers.Builder, uids flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(5, flatbuffers.UOffsetT(uids), 0)
+func QueryAddFilterType(builder *flatbuffers.Builder, filterType byte) {
+	builder.PrependByteSlot(5, filterType, 0)
 }
-func QueryStartUidsVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
-	return builder.StartVector(8, numElems, 8)
-}
-func QueryAddTerms(builder *flatbuffers.Builder, terms flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(6, flatbuffers.UOffsetT(terms), 0)
-}
-func QueryStartTermsVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
-	return builder.StartVector(4, numElems, 4)
+func QueryAddFilter(builder *flatbuffers.Builder, filter flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(6, flatbuffers.UOffsetT(filter), 0)
 }
 func QueryAddToIntersect(builder *flatbuffers.Builder, toIntersect flatbuffers.UOffsetT) {
 	builder.PrependUOffsetTSlot(7, flatbuffers.UOffsetT(toIntersect), 0)

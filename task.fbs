@@ -1,5 +1,10 @@
 namespace task;
 
+// UidList returns the subjects matching the uid list
+// TermsList returns values which match the terms
+// GeoFilter returns values which match the geo query
+union QueryFilter { UidList, TermList, GeoFilter }
+
 table Query {
 	attr:string;
 	count:int;
@@ -7,13 +12,27 @@ table Query {
 	afterUid:ulong;
 	getCount:ushort;
 	
-	// Exactly one of uids and terms is populated.
-	uids:[ulong];
-	terms:[string];
+    // Different ways in which you can filter the uids
+    filter:QueryFilter;
 	
 	// Intersect results with this UID list. If uids is populated, then this is
 	// an "intersection query". If terms is populated, this is a "filter query".
 	toIntersect:UidList;
+}
+
+table TermList {
+    terms:[string];
+}
+
+enum GeoQuery : byte { Within, Contains, Intersects, Near }
+
+table GeoFilter {
+    // The type of query that is being run
+    query:GeoQuery;
+    // Geo data in WKB format that is the parameter to the query.
+    data:[ubyte];
+    // Optional, used for Near queries.
+    maxDistance:uint;
 }
 
 table Value {
