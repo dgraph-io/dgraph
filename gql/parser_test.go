@@ -17,7 +17,6 @@
 package gql
 
 import (
-	"fmt"
 	"strings"
 	"testing"
 
@@ -30,15 +29,6 @@ func childAttrs(g *GraphQuery) []string {
 		out = append(out, g.Children[i].Attr)
 	}
 	return out
-}
-
-func checkFilter(filter *FilterTree, expected string) error {
-	s := filter.debugString()
-	if s != expected {
-		return fmt.Errorf("Expected filter %s but got %s", expected,
-			filter.debugString())
-	}
-	return nil
 }
 
 func TestParse(t *testing.T) {
@@ -297,13 +287,6 @@ func TestParseMutationAndQuery(t *testing.T) {
 	require.NotNil(t, gq)
 	require.Equal(t, gq.XID, "tomhanks")
 	require.Equal(t, childAttrs(gq), []string{"name", "hometown"})
-}
-
-func checkAttr(g *GraphQuery, attr string) error {
-	if g.Attr != attr {
-		return fmt.Errorf("Expected attr: %v. Got: %v", attr, g.Attr)
-	}
-	return nil
 }
 
 func TestParseFragmentNoNesting(t *testing.T) {

@@ -34,19 +34,6 @@ func toArray(u *UIDList) []uint64 {
 	return out
 }
 
-func listEqual(u, v *UIDList, t *testing.T) {
-	if u.Size() != v.Size() {
-		t.Errorf("Size mismatch %d vs %d", u.Size(), v.Size())
-		t.Fatal()
-	}
-	for i := 0; i < u.Size(); i++ {
-		if u.Get(i) != v.Get(i) {
-			t.Errorf("Element mismatch at index %d: %d vs %d", i, u.Get(i), v.Get(i))
-			t.Fatal()
-		}
-	}
-}
-
 func newListFromTask(a []uint64) *UIDList {
 	b := flatbuffers.NewBuilder(0)
 	task.UidListStartUidsVector(b, len(a))
@@ -136,8 +123,7 @@ func TestMergeSorted7(t *testing.T) {
 
 func TestMergeSorted8(t *testing.T) {
 	input := []*UIDList{}
-	expected := NewUIDList([]uint64{})
-	listEqual(MergeLists(input), expected, t)
+	require.Empty(t, toArray(MergeLists(input)))
 }
 
 func TestMergeSorted9(t *testing.T) {
@@ -160,8 +146,7 @@ func TestIntersectSorted1(t *testing.T) {
 		newListFromTask([]uint64{1, 2, 3}),
 		NewUIDList([]uint64{2, 3, 4, 5}),
 	}
-	expected := NewUIDList([]uint64{2, 3})
-	listEqual(IntersectLists(input), expected, t)
+	require.Equal(t, toArray(IntersectLists(input)), []uint64{2, 3})
 }
 
 func TestIntersectSorted2(t *testing.T) {
