@@ -22,6 +22,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/posting"
+	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -89,7 +90,7 @@ func processTask(query []byte) ([]byte, error) {
 	for i := 0; i < n; i++ {
 		var key []byte
 		if useTerm {
-			key = posting.IndexKey(attr, q.Terms(i))
+			key = schema.IndexKey(attr, q.Terms(i))
 		} else {
 			key = posting.Key(q.Uids(i), attr)
 		}
