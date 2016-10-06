@@ -19,13 +19,16 @@ package posting
 import (
 	"bytes"
 	"context"
+	"strconv"
 	"time"
 
 	"golang.org/x/net/trace"
 
-	"github.com/dgraph-io/dgraph/posting/types"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/store"
+
+	ptypes "github.com/dgraph-io/dgraph/posting/types"
+	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -66,6 +69,29 @@ func IndexKey(attr string, term []byte) []byte {
 	return buf.Bytes()
 }
 
+func indexKeys(attr string, data []byte) ([]string, error) {
+	t := schema.TypeOf(attr)
+	switch t {
+	case types.DateType:
+		return dateIndexYear(attr, data)
+	default:
+		return exactMatchIndexKeys(attr, data), nil
+	}
+
+}
+
+func exactMatchIndexKeys(attr string, data []byte) []string {
+	return []string{string(IndexKey(attr, data))}
+}
+
+func dateIndexYear(attr string, data []byte) ([]string, error) {
+	var t time.Time
+	t.UnmarshalBinary(data)
+	year := t.Year()
+	bs := []byte(strconv.Itoa(year))
+	return []string{string(IndexKey(attr, bs))}, nil
+}
+
 // processIndexTerm adds mutation(s) for a single term, to maintain index.
 func processIndexTerm(ctx context.Context, attr string, uid uint64, term []byte, del bool) {
 	x.Assert(uid != 0)
@@ -75,25 +101,30 @@ func processIndexTerm(ctx context.Context, attr string, uid uint64, term []byte,
 		Attribute: attr,
 		Source:    "idx",
 	}
-	key := IndexKey(edge.Attribute, term)
-	plist, decr := GetOrCreate(key, indexStore)
-	defer decr()
-	x.Assertf(plist != nil, "plist is nil [%s] %d %s", key, edge.ValueId, edge.Attribute)
 
-	if del {
-		_, err := plist.AddMutation(ctx, edge, Del)
-		if err != nil {
-			x.TraceError(ctx, x.Wrapf(err, "Error deleting %s for attr %s entity %d: %v",
-				string(term), edge.Attribute, edge.Entity))
+	// Get the tokens from tokenizer and apply indexing on all terms.
+	keys, err := indexKeys(attr, term)
+	x.Assert(err == nil)
+	for _, key := range keys {
+		plist, decr := GetOrCreate([]byte(key), indexStore)
+		defer decr()
+		x.Assertf(plist != nil, "plist is nil [%s] %d %s", key, edge.ValueId, edge.Attribute)
+
+		if del {
+			_, err := plist.AddMutation(ctx, edge, Del)
+			if err != nil {
+				x.TraceError(ctx, x.Wrapf(err, "Error deleting %s for attr %s entity %d: %v",
+					string(term), edge.Attribute, edge.Entity))
+			}
+			indexLog.Printf("DEL [%s] [%d] OldTerm [%s]", edge.Attribute, edge.Entity, string(term))
+		} else {
+			_, err := plist.AddMutation(ctx, edge, Set)
+			if err != nil {
+				x.TraceError(ctx, x.Wrapf(err, "Error adding %s for attr %s entity %d: %v",
+					string(term), edge.Attribute, edge.Entity))
+			}
+			indexLog.Printf("SET [%s] [%d] NewTerm [%s]", edge.Attribute, edge.Entity, string(term))
 		}
-		indexLog.Printf("DEL [%s] [%d] OldTerm [%s]", edge.Attribute, edge.Entity, string(term))
-	} else {
-		_, err := plist.AddMutation(ctx, edge, Set)
-		if err != nil {
-			x.TraceError(ctx, x.Wrapf(err, "Error adding %s for attr %s entity %d: %v",
-				string(term), edge.Attribute, edge.Entity))
-		}
-		indexLog.Printf("SET [%s] [%d] NewTerm [%s]", edge.Attribute, edge.Entity, string(term))
 	}
 }
 
@@ -102,7 +133,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t x.DirectedEdge, op by
 	x.Assertf(len(t.Attribute) > 0 && t.Attribute[0] != indexRune,
 		"[%s] [%d] [%s] %d %d\n", t.Attribute, t.Entity, string(t.Value), t.ValueId, op)
 
-	var lastPost types.Posting
+	var lastPost ptypes.Posting
 	var hasLastPost bool
 	doUpdateIndex := indexStore != nil && (t.Value != nil) && schema.IsIndexed(t.Attribute)
 	if doUpdateIndex {
