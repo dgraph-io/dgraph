@@ -53,6 +53,12 @@
 			"revisionTime": "2016-09-05T06:26:19Z"
 		},
 		{
+			"checksumSHA1": "Lf3uUXTkKK5DJ37BxQvxO1Fq+K8=",
+			"path": "github.com/davecgh/go-spew/spew",
+			"revision": "6d212800a42e8ab5c146b8ace3490ee17e5225f9",
+			"revisionTime": "2016-09-07T16:21:46Z"
+		},
+		{
 			"checksumSHA1": "a29TtOU87eZA0S6wL+rAkpqUEzc=",
 			"path": "github.com/dgryski/go-farm",
 			"revision": "d1e51a4af19092715f4ce7d8257fe5bc8f8be727",
@@ -83,10 +89,22 @@
 			"revisionTime": "2016-08-22T09:00:10Z"
 		},
 		{
+			"checksumSHA1": "LuFv4/jlrmFNnDb/5SCSEPAM9vU=",
+			"path": "github.com/pmezard/go-difflib/difflib",
+			"revision": "792786c7400a136282c1664665ae0a8db921c6c2",
+			"revisionTime": "2016-01-10T10:55:54Z"
+		},
+		{
 			"checksumSHA1": "W2kMUxTFJybcc8NKlqEAM4jY7Mw=",
 			"path": "github.com/soheilhy/cmux",
 			"revision": "13f520d62c8e9514090ab9f170fa5df915f2d1bf",
 			"revisionTime": "2016-09-05T20:05:55Z"
+		},
+		{
+			"checksumSHA1": "Q2V7Zs3diLmLfmfbiuLpSxETSuY=",
+			"path": "github.com/stretchr/testify/assert",
+			"revision": "976c720a22c8eb4eb6a0b4348ad85ad12491a506",
+			"revisionTime": "2016-09-25T22:06:09Z"
 		},
 		{
 			"checksumSHA1": "nPzv1N4lRBr2UAvJure4uLjlYf8=",

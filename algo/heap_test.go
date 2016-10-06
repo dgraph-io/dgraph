@@ -19,6 +19,8 @@ package algo
 import (
 	"container/heap"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestPush(t *testing.T) {
@@ -32,40 +34,27 @@ func TestPush(t *testing.T) {
 	e.val = 4
 	heap.Push(h, e)
 
-	if h.Len() != 3 {
-		t.Errorf("Expected len 3. Found: %v", h.Len())
-	}
-	if (*h)[0].val != 3 {
-		t.Errorf("Expected min 3. Found: %+v", (*h)[0])
-	}
+	require.Equal(t, h.Len(), 3)
+	require.EqualValues(t, (*h)[0].val, 3)
+
 	e.val = 10
 	(*h)[0] = e
 	heap.Fix(h, 0)
-	if (*h)[0].val != 4 {
-		t.Errorf("Expected min 4. Found: %+v", (*h)[0])
-	}
+	require.EqualValues(t, (*h)[0].val, 4)
+
 	e.val = 11
 	(*h)[0] = e
 	heap.Fix(h, 0)
-	if (*h)[0].val != 5 {
-		t.Errorf("Expected min 5. Found: %+v", (*h)[0])
-	}
+	require.EqualValues(t, (*h)[0].val, 5)
 
 	e = heap.Pop(h).(elem)
-	if e.val != 5 {
-		t.Errorf("Expected min 5. Found %+v", e)
-	}
+	require.EqualValues(t, e.val, 5)
 
 	e = heap.Pop(h).(elem)
-	if e.val != 10 {
-		t.Errorf("Expected min 10. Found: %+v", e)
-	}
-	e = heap.Pop(h).(elem)
-	if e.val != 11 {
-		t.Errorf("Expected min 11. Found: %+v", e)
-	}
+	require.EqualValues(t, e.val, 10)
 
-	if h.Len() != 0 {
-		t.Errorf("Expected len 0. Found: %v, values: %+v", h.Len(), h)
-	}
+	e = heap.Pop(h).(elem)
+	require.EqualValues(t, e.val, 11)
+
+	require.Equal(t, h.Len(), 0)
 }
