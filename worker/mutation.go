@@ -98,7 +98,6 @@ func proposeOrSend(ctx context.Context, gid uint32, m *x.Mutations, che chan err
 // taking into account the op(operation) and the attribute.
 func addToMutationMap(mutationMap map[uint32]*x.Mutations, edges []x.DirectedEdge, op string) {
 	for _, edge := range edges {
-		// TODO: Determine the right group using rules, instead of modulos.
 		gid := BelongsTo(edge.Attribute)
 		mu := mutationMap[gid]
 		if mu == nil {
@@ -118,7 +117,6 @@ func addToMutationMap(mutationMap map[uint32]*x.Mutations, edges []x.DirectedEdg
 // MutateOverNetwork checks which group should be running the mutations
 // according to fingerprint of the predicate and sends it to that instance.
 func MutateOverNetwork(ctx context.Context, m x.Mutations) (rerr error) {
-	// mutationArray := make([]*x.Mutations, ws.numGroups)
 	mutationMap := make(map[uint32]*x.Mutations)
 
 	addToMutationMap(mutationMap, m.Set, set)
@@ -149,11 +147,24 @@ func MutateOverNetwork(ctx context.Context, m x.Mutations) (rerr error) {
 
 // Mutate is used to apply mutations over the network on other instances.
 func (w *grpcWorker) Mutate(ctx context.Context, query *Payload) (*Payload, error) {
+	if ctx.Err() != nil {
+		return &Payload{}, ctx.Err()
+	}
+
 	m := new(x.Mutations)
 	// Ensure that this can be decoded. This is an optional step.
 	if err := m.Decode(query.Data); err != nil {
 		return nil, x.Wrapf(err, "While decoding mutation.")
 	}
+
+	c := make(chan error, 1)
 	node := groups().Node(m.GroupId)
-	return &Payload{}, node.ProposeAndWait(ctx, mutationMsg, query.Data)
+	go func() { c <- node.ProposeAndWait(ctx, mutationMsg, query.Data) }()
+
+	select {
+	case <-ctx.Done():
+		return &Payload{}, ctx.Err()
+	case err := <-c:
+		return &Payload{}, err
+	}
 }
