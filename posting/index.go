@@ -35,8 +35,6 @@ const (
 	indexRune = ':'
 )
 
-// TODO(jchiu): Add other tokenizer here in future.
-
 var (
 	indexLog   trace.EventLog
 	indexStore *store.Store

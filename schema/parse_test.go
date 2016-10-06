@@ -20,38 +20,27 @@ import (
 	"testing"
 
 	"github.com/dgraph-io/dgraph/types"
+	"github.com/stretchr/testify/require"
 )
 
 func TestSchema(t *testing.T) {
 	str = make(map[string]types.Type)
-	err := Parse("testfiles/test_schema")
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, Parse("testfiles/test_schema"))
 }
 
 func TestSchema1_Error(t *testing.T) {
 	str = make(map[string]types.Type)
-	err := Parse("testfiles/test_schema1")
-	if err == nil {
-		t.Error("Expected error")
-	}
+	require.Error(t, Parse("testfiles/test_schema1"))
 }
 
 func TestSchema2_Error(t *testing.T) {
 	str = make(map[string]types.Type)
-	err := Parse("testfiles/test_schema2")
-	if err == nil {
-		t.Error("Expected error")
-	}
+	require.Error(t, Parse("testfiles/test_schema2"))
 }
 
 func TestSchema3_Error(t *testing.T) {
 	str = make(map[string]types.Type)
-	err := Parse("testfiles/test_schema3")
-	if err == nil {
-		t.Error("Expected error")
-	}
+	require.Error(t, Parse("testfiles/test_schema3"))
 }
 
 func TestSchema4_Error(t *testing.T) {
@@ -81,29 +70,19 @@ func TestSchema6_Error(t *testing.T) {
 // Correct specification of indexing
 func TestSchemaIndex(t *testing.T) {
 	str = make(map[string]types.Type)
-	indexedFields = make(map[string]bool)
-	err := Parse("testfiles/test_schema_index1")
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, Parse("testfiles/test_schema_index1"))
 }
 
 // Indexing can't be specified inside object types.
 func TestSchemaIndex_Error1(t *testing.T) {
 	str = make(map[string]types.Type)
 	indexedFields = make(map[string]bool)
-	err := Parse("testfiles/test_schema_index2")
-	if err == nil {
-		t.Error("Expected error")
-	}
+	require.Error(t, Parse("testfiles/test_schema_index2"))
 }
 
 // Object types cant be indexed.
 func TestSchemaIndex_Error2(t *testing.T) {
 	str = make(map[string]types.Type)
 	indexedFields = make(map[string]bool)
-	err := Parse("testfiles/test_schema_index3")
-	if err == nil {
-		t.Error("Expected error")
-	}
+	require.Error(t, Parse("testfiles/test_schema_index3"))
 }

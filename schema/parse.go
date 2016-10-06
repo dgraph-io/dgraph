@@ -17,11 +17,11 @@
 package schema
 
 import (
-	"fmt"
 	"io/ioutil"
 
 	"github.com/dgraph-io/dgraph/lex"
 	"github.com/dgraph-io/dgraph/types"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 func run(l *lex.Lexer) {
@@ -31,16 +31,20 @@ func run(l *lex.Lexer) {
 	close(l.Items) // No more tokens.
 }
 
-// Parse parses the schema file
+// Parse parses the schema file.
 func Parse(file string) (rerr error) {
 	b, err := ioutil.ReadFile(file)
 	if err != nil {
-		return fmt.Errorf("Error reading file: %v", err)
+		return x.Errorf("Error reading file: %v", err)
 	}
-	s := string(b)
+	return ParseBytes(b)
+}
+
+// Parses the byte array which holds the schema.
+func ParseBytes(schema []byte) (rerr error) {
+	s := string(schema)
 
 	l := &lex.Lexer{}
-
 	l.Init(s)
 	go run(l)
 
@@ -59,7 +63,7 @@ func Parse(file string) (rerr error) {
 				}
 			}
 		case lex.ItemError:
-			return fmt.Errorf(item.Val)
+			return x.Errorf(item.Val)
 		}
 	}
 
@@ -68,7 +72,7 @@ func Parse(file string) (rerr error) {
 			for p, q := range obj.Fields {
 				typ := TypeOf(q)
 				if typ == nil {
-					return fmt.Errorf("Type not defined %v", q)
+					return x.Errorf("Type not defined %v", q)
 				}
 				if typ != nil && !typ.IsScalar() {
 					str[p] = typ
@@ -91,18 +95,18 @@ func processScalarBlock(l *lex.Lexer) error {
 				name = item.Val
 
 				if next := <-l.Items; next.Typ != itemCollon {
-					return fmt.Errorf("Missing collon")
+					return x.Errorf("Missing collon")
 				}
 
 				next := <-l.Items
 				if next.Typ != itemScalarType {
-					return fmt.Errorf("Missing Type")
+					return x.Errorf("Missing Type")
 				}
 				typ = next.Val
 
 				t, ok := getScalar(typ)
 				if !ok {
-					return fmt.Errorf("Invalid type")
+					return x.Errorf("Invalid type")
 				}
 				str[name] = t
 
@@ -113,12 +117,12 @@ func processScalarBlock(l *lex.Lexer) error {
 					if index.Typ == itemIndex {
 						indexedFields[name] = true
 					} else {
-						return fmt.Errorf("Invalid index specification")
+						return x.Errorf("Invalid index specification")
 					}
 				}
 			}
 		case lex.ItemError:
-			return fmt.Errorf(item.Val)
+			return x.Errorf(item.Val)
 		}
 	}
 
@@ -139,19 +143,19 @@ func processScalar(l *lex.Lexer) error {
 
 				next := <-l.Items
 				if next.Typ != itemCollon {
-					return fmt.Errorf("Missing collon")
+					return x.Errorf("Missing collon")
 				}
 
 				next = <-l.Items
 				if next.Typ != itemScalarType {
-					return fmt.Errorf("Missing Type")
+					return x.Errorf("Missing Type")
 				}
 				typ = next.Val
 
 				if t, ok := getScalar(typ); ok {
 					str[name] = t
 				} else {
-					return fmt.Errorf("Invalid type")
+					return x.Errorf("Invalid type")
 				}
 
 				// Check for index.
@@ -161,13 +165,13 @@ func processScalar(l *lex.Lexer) error {
 					if index.Typ == itemIndex {
 						indexedFields[name] = true
 					} else {
-						return fmt.Errorf("Invalid index specification")
+						return x.Errorf("Invalid index specification")
 					}
 				}
 				return nil
 			}
 		case lex.ItemError:
-			return fmt.Errorf(item.Val)
+			return x.Errorf(item.Val)
 		}
 	}
 	return nil
@@ -177,7 +181,7 @@ func processObject(l *lex.Lexer) error {
 	var objName string
 	next := <-l.Items
 	if next.Typ != itemObject {
-		return fmt.Errorf("Missing object name")
+		return x.Errorf("Missing object name")
 	}
 	objName = next.Val
 
@@ -188,7 +192,7 @@ func processObject(l *lex.Lexer) error {
 
 	next = <-l.Items
 	if next.Typ != itemLeftCurl {
-		return fmt.Errorf("Missing left curly brace")
+		return x.Errorf("Missing left curly brace")
 	}
 
 L:
@@ -203,34 +207,34 @@ L:
 
 				next := <-l.Items
 				if next.Typ != itemCollon {
-					return fmt.Errorf("Missing collon")
+					return x.Errorf("Missing collon")
 				}
 
 				next = <-l.Items
 				if next.Typ != itemObjectType {
-					return fmt.Errorf("Missing Type")
+					return x.Errorf("Missing Type")
 				}
 				typ = next.Val
 				if t, ok := getScalar(typ); ok {
 					if t1, ok := str[name]; ok {
 						if t1.(types.Scalar).Name != t.(types.Scalar).Name {
-							return fmt.Errorf("Same field cant have multiple types")
+							return x.Errorf("Same field cant have multiple types")
 						}
 					} else {
 						str[name] = t
 					}
 				}
 				if _, ok := obj.Fields[name]; ok {
-					return fmt.Errorf("Repeated field %v in object %v", name, objName)
+					return x.Errorf("Repeated field %v in object %v", name, objName)
 				}
 				obj.Fields[name] = typ
 			}
 		case lex.ItemError:
-			return fmt.Errorf(item.Val)
+			return x.Errorf(item.Val)
 		}
 	}
 	if len(obj.Fields) == 0 {
-		return fmt.Errorf("Object type %v with no fields", objName)
+		return x.Errorf("Object type %v with no fields", objName)
 	}
 	str[objName] = obj
 	return nil

@@ -24,8 +24,12 @@ type Item struct {
 	Typ   types.Type
 }
 
-var str map[string]types.Type
-var indexedFields map[string]bool
+var (
+	// Map containing predicate to type information.
+	str map[string]types.Type
+	// Map containing fields that are indexed.
+	indexedFields map[string]bool
+)
 
 func init() {
 	str = make(map[string]types.Type)
