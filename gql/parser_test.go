@@ -24,9 +24,9 @@ import (
 )
 
 func childAttrs(g *GraphQuery) []string {
-	out := make([]string, 0, len(g.Children))
-	for i := 0; i < len(g.Children); i++ {
-		out = append(out, g.Children[i].Attr)
+	var out []string
+	for _, c := range g.Children {
+		out = append(out, c.Attr)
 	}
 	return out
 }
