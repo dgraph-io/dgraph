@@ -20,13 +20,16 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
-func checkAttr(g *GraphQuery, attr string) error {
-	if g.Attr != attr {
-		return fmt.Errorf("Expected attr: %v. Got: %v", attr, g.Attr)
+func childAttrs(g *GraphQuery) []string {
+	out := make([]string, 0, len(g.Children))
+	for i := 0; i < len(g.Children); i++ {
+		out = append(out, g.Children[i].Attr)
 	}
-	return nil
+	return out
 }
 
 func checkFilter(filter *FilterTree, expected string) error {
@@ -51,36 +54,10 @@ func TestParse(t *testing.T) {
 	}
 `
 	gq, _, err := Parse(query)
-	if err != nil {
-		t.Error(err)
-	}
-	if gq == nil {
-		t.Error("subgraph is nil")
-		return
-	}
-	if len(gq.Children) != 4 {
-		t.Errorf("Expected 4 children. Got: %v", len(gq.Children))
-		return
-	}
-	if err := checkAttr(gq.Children[0], "friends"); err != nil {
-		t.Error(err)
-	}
-	if err := checkAttr(gq.Children[1], "gender"); err != nil {
-		t.Error(err)
-	}
-	if err := checkAttr(gq.Children[2], "age"); err != nil {
-		t.Error(err)
-	}
-	if err := checkAttr(gq.Children[3], "hometown"); err != nil {
-		t.Error(err)
-	}
-	child := gq.Children[0]
-	if len(child.Children) != 1 {
-		t.Errorf("Expected 1 child of friends. Got: %v", len(child.Children))
-	}
-	if err := checkAttr(child.Children[0], "name"); err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
+	require.NotNil(t, gq)
+	require.Equal(t, childAttrs(gq), []string{"friends", "gender", "age", "hometown"})
+	require.Equal(t, childAttrs(gq.Children[0]), []string{"name"})
 }
 
 func TestParseXid(t *testing.T) {
@@ -93,20 +70,9 @@ func TestParseXid(t *testing.T) {
 		}
 	}`
 	gq, _, err := Parse(query)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	if gq == nil {
-		t.Error("subgraph is nil")
-		return
-	}
-	if len(gq.Children) != 1 {
-		t.Errorf("Expected 1 children. Got: %v", len(gq.Children))
-	}
-	if err := checkAttr(gq.Children[0], "type.object.name"); err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
+	require.NotNil(t, gq)
+	require.Equal(t, childAttrs(gq), []string{"type.object.name"})
 }
 
 func TestParseFirst(t *testing.T) {
@@ -119,26 +85,10 @@ func TestParseFirst(t *testing.T) {
 		}
 	}`
 	gq, _, err := Parse(query)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	if gq == nil {
-		t.Error("subgraph is nil")
-		return
-	}
-	if len(gq.Children) != 2 {
-		t.Errorf("Expected 2 children. Got: %v", len(gq.Children))
-	}
-	if err := checkAttr(gq.Children[0], "type.object.name"); err != nil {
-		t.Error(err)
-	}
-	if err := checkAttr(gq.Children[1], "friends"); err != nil {
-		t.Error(err)
-	}
-	if gq.Children[1].Args["first"] != "10" {
-		t.Errorf("Expected count 10. Got: %v", gq.Children[1].Args["first"])
-	}
+	require.NoError(t, err)
+	require.NotNil(t, gq)
+	require.Equal(t, childAttrs(gq), []string{"type.object.name", "friends"})
+	require.Equal(t, gq.Children[1].Args["first"], "10")
 }
 
 func TestParseFirst_error(t *testing.T) {
@@ -150,12 +100,8 @@ func TestParseFirst_error(t *testing.T) {
 			}
 		}
 	}`
-	var err error
-	_, _, err = Parse(query)
-	t.Log(err)
-	if err == nil {
-		t.Error("Expected error")
-	}
+	_, _, err := Parse(query)
+	require.Error(t, err)
 }
 
 func TestParseAfter(t *testing.T) {
@@ -168,29 +114,11 @@ func TestParseAfter(t *testing.T) {
 		}
 	}`
 	gq, _, err := Parse(query)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	if gq == nil {
-		t.Error("subgraph is nil")
-		return
-	}
-	if len(gq.Children) != 2 {
-		t.Errorf("Expected 2 children. Got: %v", len(gq.Children))
-	}
-	if err := checkAttr(gq.Children[0], "type.object.name"); err != nil {
-		t.Error(err)
-	}
-	if err := checkAttr(gq.Children[1], "friends"); err != nil {
-		t.Error(err)
-	}
-	if gq.Children[1].Args["first"] != "10" {
-		t.Errorf("Expected count 10. Got: %v", gq.Children[1].Args["first"])
-	}
-	if gq.Children[1].Args["after"] != "3" {
-		t.Errorf("Expected after to be 3. Got: %v", gq.Children[1].Args["after"])
-	}
+	require.NoError(t, err)
+	require.NotNil(t, gq)
+	require.Equal(t, childAttrs(gq), []string{"type.object.name", "friends"})
+	require.Equal(t, gq.Children[1].Args["first"], "10")
+	require.Equal(t, gq.Children[1].Args["after"], "3")
 }
 
 func TestParseOffset(t *testing.T) {
@@ -203,29 +131,11 @@ func TestParseOffset(t *testing.T) {
 		}
 	}`
 	gq, _, err := Parse(query)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	if gq == nil {
-		t.Error("subgraph is nil")
-		return
-	}
-	if len(gq.Children) != 2 {
-		t.Errorf("Expected 2 children. Got: %v", len(gq.Children))
-	}
-	if err := checkAttr(gq.Children[0], "type.object.name"); err != nil {
-		t.Error(err)
-	}
-	if err := checkAttr(gq.Children[1], "friends"); err != nil {
-		t.Error(err)
-	}
-	if gq.Children[1].Args["first"] != "10" {
-		t.Errorf("Expected count 10. Got: %v", gq.Children[1].Args["First"])
-	}
-	if gq.Children[1].Args["offset"] != "3" {
-		t.Errorf("Expected Offset 3. Got: %v", gq.Children[1].Args["offset"])
-	}
+	require.NoError(t, err)
+	require.NotNil(t, gq)
+	require.Equal(t, childAttrs(gq), []string{"type.object.name", "friends"})
+	require.Equal(t, gq.Children[1].Args["first"], "10")
+	require.Equal(t, gq.Children[1].Args["offset"], "3")
 }
 
 func TestParseOffset_error(t *testing.T) {
@@ -238,10 +148,7 @@ func TestParseOffset_error(t *testing.T) {
 		}
 	}`
 	_, _, err := Parse(query)
-	if err == nil {
-		t.Error("Expected error on negative offset")
-		return
-	}
+	require.Error(t, err)
 }
 
 func TestParse_error2(t *testing.T) {
@@ -252,12 +159,8 @@ func TestParse_error2(t *testing.T) {
 			}
 		}
 	`
-	var err error
-	_, _, err = Parse(query)
-	t.Log(err)
-	if err == nil {
-		t.Error("Expected error")
-	}
+	_, _, err := Parse(query)
+	require.Error(t, err)
 }
 
 func TestParse_pass1(t *testing.T) {
@@ -271,22 +174,10 @@ func TestParse_pass1(t *testing.T) {
 		}
 	`
 	gq, _, err := Parse(query)
-	if err != nil {
-		t.Error(err)
-	}
-	if len(gq.Children) != 2 {
-		t.Errorf("Expected 2. Got: %v", len(gq.Children))
-	}
-	if err := checkAttr(gq.Children[0], "name"); err != nil {
-		t.Error(err)
-	}
-	if err := checkAttr(gq.Children[1], "friends"); err != nil {
-		t.Error(err)
-	}
-	f := gq.Children[1]
-	if len(f.Children) != 0 {
-		t.Errorf("Expected 0. Got: %v", len(gq.Children))
-	}
+	require.NoError(t, err)
+	require.NotNil(t, gq)
+	require.Equal(t, childAttrs(gq), []string{"name", "friends"})
+	require.Empty(t, childAttrs(gq.Children[1]))
 }
 
 func TestParse_alias(t *testing.T) {
@@ -301,26 +192,11 @@ func TestParse_alias(t *testing.T) {
 		}
 	`
 	gq, _, err := Parse(query)
-	if err != nil {
-		t.Error(err)
-	}
-	if len(gq.Children) != 2 {
-		t.Errorf("Expected 2. Got: %v", len(gq.Children))
-	}
-	if err := checkAttr(gq.Children[0], "name"); err != nil {
-		t.Error(err)
-	}
-	if err := checkAttr(gq.Children[1], "friends"); err != nil {
-		t.Error(err)
-	}
-	if gq.Children[1].Alias != "bestFriend" {
-		t.Error("Alias incorrect")
-	}
-
-	f := gq.Children[1]
-	if len(f.Children) != 1 {
-		t.Errorf("Expected 1. Got: %v", len(gq.Children))
-	}
+	require.NoError(t, err)
+	require.NotNil(t, gq)
+	require.Equal(t, childAttrs(gq), []string{"name", "friends"})
+	require.Equal(t, gq.Children[1].Alias, "bestFriend")
+	require.Equal(t, childAttrs(gq.Children[1]), []string{"name"})
 }
 
 func TestParse_block(t *testing.T) {
@@ -332,15 +208,9 @@ func TestParse_block(t *testing.T) {
 		}
 	`
 	gq, _, err := Parse(query)
-	if err != nil {
-		t.Error(err)
-	}
-	if len(gq.Children) != 1 {
-		t.Errorf("Expected 1. Got: %v", len(gq.Children))
-	}
-	if err := checkAttr(gq.Children[0], "type.object.name.es-419"); err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
+	require.NotNil(t, gq)
+	require.Equal(t, childAttrs(gq), []string{"type.object.name.es-419"})
 }
 
 func TestParseMutation(t *testing.T) {
@@ -356,19 +226,10 @@ func TestParseMutation(t *testing.T) {
 		}
 	`
 	_, mu, err := Parse(query)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	if strings.Index(mu.Set, "<name> <is> <something> .") == -1 {
-		t.Error("Unable to find mutation content.")
-	}
-	if strings.Index(mu.Set, "<hometown> <is> <san francisco> .") == -1 {
-		t.Error("Unable to find mutation content.")
-	}
-	if strings.Index(mu.Del, "<name> <is> <something-else> .") == -1 {
-		t.Error("Unable to find mutation content.")
-	}
+	require.NoError(t, err)
+	require.NotEqual(t, strings.Index(mu.Set, "<name> <is> <something> ."), -1)
+	require.NotEqual(t, strings.Index(mu.Set, "<hometown> <is> <san francisco> ."), -1)
+	require.NotEqual(t, strings.Index(mu.Del, "<name> <is> <something-else> ."), -1)
 }
 
 func TestParseMutation_error(t *testing.T) {
@@ -383,11 +244,7 @@ func TestParseMutation_error(t *testing.T) {
 		}
 	`
 	_, _, err := Parse(query)
-	if err == nil {
-		t.Error(err)
-		return
-	}
-	t.Log(err)
+	require.Error(t, err)
 }
 
 func TestParseMutation_error2(t *testing.T) {
@@ -409,11 +266,7 @@ func TestParseMutation_error2(t *testing.T) {
 
 	`
 	_, _, err := Parse(query)
-	if err == nil {
-		t.Error(err)
-		return
-	}
-	t.Log(err)
+	require.Error(t, err)
 }
 
 func TestParseMutationAndQuery(t *testing.T) {
@@ -435,43 +288,22 @@ func TestParseMutationAndQuery(t *testing.T) {
 		}
 	`
 	gq, mu, err := Parse(query)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
+	require.NotNil(t, mu)
+	require.NotEqual(t, strings.Index(mu.Set, "<name> <is> <something> ."), -1)
+	require.NotEqual(t, strings.Index(mu.Set, "<hometown> <is> <san francisco> ."), -1)
+	require.NotEqual(t, strings.Index(mu.Del, "<name> <is> <something-else> ."), -1)
 
-	if mu == nil {
-		t.Error("mutation is nil")
-		return
-	}
-	if strings.Index(mu.Set, "<name> <is> <something> .") == -1 {
-		t.Error("Unable to find mutation content.")
-	}
-	if strings.Index(mu.Set, "<hometown> <is> <san francisco> .") == -1 {
-		t.Error("Unable to find mutation content.")
-	}
-	if strings.Index(mu.Del, "<name> <is> <something-else> .") == -1 {
-		t.Error("Unable to find mutation content.")
-	}
+	require.NotNil(t, gq)
+	require.Equal(t, gq.XID, "tomhanks")
+	require.Equal(t, childAttrs(gq), []string{"name", "hometown"})
+}
 
-	if gq == nil {
-		t.Error("subgraph is nil")
-		return
+func checkAttr(g *GraphQuery, attr string) error {
+	if g.Attr != attr {
+		return fmt.Errorf("Expected attr: %v. Got: %v", attr, g.Attr)
 	}
-	if gq.XID != "tomhanks" {
-		t.Errorf("Expected: tomhanks. Got: %v", gq.XID)
-		return
-	}
-	if len(gq.Children) != 2 {
-		t.Errorf("Expected 2 children. Got: %v", len(gq.Children))
-		return
-	}
-	if err := checkAttr(gq.Children[0], "name"); err != nil {
-		t.Error(err)
-	}
-	if err := checkAttr(gq.Children[1], "hometown"); err != nil {
-		t.Error(err)
-	}
+	return nil
 }
 
 func TestParseFragmentNoNesting(t *testing.T) {
@@ -505,26 +337,9 @@ func TestParseFragmentNoNesting(t *testing.T) {
 	}
 `
 	gq, _, err := Parse(query)
-	if err != nil {
-		t.Error(err)
-	}
-	if gq == nil {
-		t.Error("subgraph is nil")
-		return
-	}
-	if len(gq.Children) != 6 {
-		t.Errorf("Expected 6 children. Got: %v", len(gq.Children))
-		return
-	}
-
-	// Notice that the order is preserved.
-	expectedFields := []string{"name", "id", "friends", "name", "hobbies", "id"}
-	for i, v := range expectedFields {
-		if err := checkAttr(gq.Children[i], v); err != nil {
-			t.Error(err)
-			return
-		}
-	}
+	require.NoError(t, err)
+	require.NotNil(t, gq)
+	require.Equal(t, childAttrs(gq), []string{"name", "id", "friends", "name", "hobbies", "id"})
 }
 
 func TestParseFragmentNest1(t *testing.T) {
@@ -548,26 +363,9 @@ func TestParseFragmentNest1(t *testing.T) {
 	}
 `
 	gq, _, err := Parse(query)
-	if err != nil {
-		t.Error(err)
-	}
-	if gq == nil {
-		t.Error("subgraph is nil")
-		return
-	}
-	if len(gq.Children) != 3 {
-		t.Errorf("Expected 3 children. Got: %v", len(gq.Children))
-		return
-	}
-
-	// Notice that the order is preserved.
-	expectedFields := []string{"id", "hobbies", "friends"}
-	for i, v := range expectedFields {
-		if err := checkAttr(gq.Children[i], v); err != nil {
-			t.Error(err)
-			return
-		}
-	}
+	require.NoError(t, err)
+	require.NotNil(t, gq)
+	require.Equal(t, childAttrs(gq), []string{"id", "hobbies", "friends"})
 }
 
 func TestParseFragmentNest2(t *testing.T) {
@@ -588,31 +386,10 @@ func TestParseFragmentNest2(t *testing.T) {
 	}
 `
 	gq, _, err := Parse(query)
-	if err != nil {
-		t.Error(err)
-	}
-	if gq == nil {
-		t.Error("subgraph is nil")
-		return
-	}
-	if len(gq.Children) != 1 {
-		t.Errorf("Expected 1 child. Got: %v", len(gq.Children))
-		return
-	}
-
-	gq = gq.Children[0]
-	if len(gq.Children) != 2 {
-		t.Errorf("Expected 2 child. Got: %v", len(gq.Children))
-		return
-	}
-
-	expectedFields := []string{"name", "nickname"}
-	for i, v := range expectedFields {
-		if err := checkAttr(gq.Children[i], v); err != nil {
-			t.Error(err)
-			return
-		}
-	}
+	require.NoError(t, err)
+	require.NotNil(t, gq)
+	require.Equal(t, childAttrs(gq), []string{"friends"})
+	require.Equal(t, childAttrs(gq.Children[0]), []string{"name", "nickname"})
 }
 
 func TestParseFragmentCycle(t *testing.T) {
@@ -635,9 +412,7 @@ func TestParseFragmentCycle(t *testing.T) {
 	}
 `
 	_, _, err := Parse(query)
-	if err == nil {
-		t.Error("Expected error with cycle")
-	}
+	require.Error(t, err, "Expected error with cycle")
 }
 
 func TestParseFragmentMissing(t *testing.T) {
@@ -656,9 +431,7 @@ func TestParseFragmentMissing(t *testing.T) {
 	}
 `
 	_, _, err := Parse(query)
-	if err == nil {
-		t.Error("Expected error with missing fragment")
-	}
+	require.Error(t, err, "Expected error with missing fragment")
 }
 
 func TestParseVariables(t *testing.T) {
@@ -667,9 +440,7 @@ func TestParseVariables(t *testing.T) {
 		"variables": {"$a": "6", "$b": "5" } 
 	}`
 	_, _, err := Parse(query)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 }
 
 func TestParseVariables1(t *testing.T) {
@@ -678,9 +449,7 @@ func TestParseVariables1(t *testing.T) {
 		"variables": {"$b": "5" } 
 	}`
 	_, _, err := Parse(query)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 }
 
 func TestParseVariables2(t *testing.T) {
@@ -689,9 +458,7 @@ func TestParseVariables2(t *testing.T) {
 		"variables": {"$b": "false", "$a": "3.33" } 
 	}`
 	_, _, err := Parse(query)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 }
 
 func TestParseVariables3(t *testing.T) {
@@ -700,9 +467,7 @@ func TestParseVariables3(t *testing.T) {
 		"variables": {"$a": "5", "$b": "3"} 
 	}`
 	_, _, err := Parse(query)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 }
 
 func TestParseVariablesStringfiedJSON(t *testing.T) {
@@ -711,9 +476,7 @@ func TestParseVariablesStringfiedJSON(t *testing.T) {
 		"variables": "{\"$a\": \"5\" }" 
 	}`
 	_, _, err := Parse(query)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 }
 
 func TestParseVariablesDefault1(t *testing.T) {
@@ -722,9 +485,7 @@ func TestParseVariablesDefault1(t *testing.T) {
 		"variables": {"$b": "5" } 
 	}`
 	_, _, err := Parse(query)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 }
 func TestParseVariablesFragments(t *testing.T) {
 	query := `{
@@ -732,23 +493,12 @@ func TestParseVariablesFragments(t *testing.T) {
 	"variables": {"$a": "5"}
 }`
 	gq, _, err := Parse(query)
-	if err != nil {
-		t.Error(err)
-	}
-	if gq == nil {
-		t.Error("subgraph is nil")
-		return
-	}
-	if len(gq.Children) != 2 {
-		t.Errorf("Expected 2 children. Got: %v", len(gq.Children))
-		return
-	}
-
-	// Notice that the order is preserved.
-
-	if gq.Children[0].Args["first"] != "5" {
-		t.Error("Expected first to be 5. Got %v", gq.Children[2].Args["first"])
-	}
+	require.NoError(t, err)
+	require.NotNil(t, gq)
+	require.Equal(t, childAttrs(gq), []string{"id", "friends"})
+	require.Empty(t, childAttrs(gq.Children[0]))
+	require.Equal(t, childAttrs(gq.Children[1]), []string{"name"})
+	require.Equal(t, gq.Children[0].Args["first"], "5")
 }
 
 func TestParseVariablesError1(t *testing.T) {
@@ -760,9 +510,7 @@ func TestParseVariablesError1(t *testing.T) {
 		}
 	`
 	_, _, err := Parse(query)
-	if err == nil {
-		t.Error("Expected error")
-	}
+	require.Error(t, err)
 }
 
 func TestParseVariablesError2(t *testing.T) {
@@ -773,9 +521,7 @@ func TestParseVariablesError2(t *testing.T) {
 		"variables": {"$a": "6", "$b": "5" } 
 	}`
 	_, _, err := Parse(query)
-	if err == nil {
-		t.Error("Expected value for variable $c")
-	}
+	require.Error(t, err, "Expected value for variable $c")
 }
 
 func TestParseVariablesError3(t *testing.T) {
@@ -786,9 +532,7 @@ func TestParseVariablesError3(t *testing.T) {
 		"variables": {"$a": "6", "$b": "5" } 
 	}`
 	_, _, err := Parse(query)
-	if err == nil {
-		t.Error("Expected type for variable $b")
-	}
+	require.Error(t, err, "Expected type for variable $b")
 }
 
 func TestParseVariablesError4(t *testing.T) {
@@ -797,9 +541,7 @@ func TestParseVariablesError4(t *testing.T) {
 		"variables": {"$a": "5" } 
 	}`
 	_, _, err := Parse(query)
-	if err == nil {
-		t.Error("Expected type error")
-	}
+	require.Error(t, err, "Expected type error")
 }
 
 func TestParseVariablesError5(t *testing.T) {
@@ -808,9 +550,7 @@ func TestParseVariablesError5(t *testing.T) {
 		"variables": {"$a": "6", "$b": "5" } 
 	}`
 	_, _, err := Parse(query)
-	if err == nil {
-		t.Error("Expected error: Query with variables should be named")
-	}
+	require.Error(t, err, "Expected error: Query with variables should be named")
 }
 
 func TestParseVariablesError6(t *testing.T) {
@@ -819,9 +559,7 @@ func TestParseVariablesError6(t *testing.T) {
 		"variables": {"$a": "6", "$b": "5" } 
 	}`
 	_, _, err := Parse(query)
-	if err == nil {
-		t.Error("Expected error: Type random not supported")
-	}
+	require.Error(t, err, "Expected error: Type random not supported")
 }
 
 func TestParseVariablesError7(t *testing.T) {
@@ -832,9 +570,7 @@ func TestParseVariablesError7(t *testing.T) {
 		"variables": {"$a": "6", "$b": "5", "$d": "abc" } 
 	}`
 	_, _, err := Parse(query)
-	if err == nil {
-		t.Error("Expected type for variable $d")
-	}
+	require.Error(t, err, "Expected type for variable $d")
 }
 
 func TestParseVariablesiError8(t *testing.T) {
@@ -843,9 +579,7 @@ func TestParseVariablesiError8(t *testing.T) {
 		"variables": {"$b": "5" } 
 	}`
 	_, _, err := Parse(query)
-	if err.Error() != "Type ending with ! can't have default value: Got: int!" {
-		t.Error("Variables type ending with ! cant have default value")
-	}
+	require.Error(t, err, "Variables type ending with ! cant have default value")
 }
 
 func TestParseFilter_simplest(t *testing.T) {
@@ -860,59 +594,15 @@ func TestParseFilter_simplest(t *testing.T) {
 		}
 	}
 `
-
 	gq, _, err := Parse(query)
-	if err != nil {
-		t.Error(err)
-	}
-	if gq == nil {
-		t.Error("subgraph is nil")
-		return
-	}
-	if len(gq.Children) != 4 {
-		t.Errorf("Expected 4 children. Got: %v", len(gq.Children))
-		return
-	}
-	if err := checkAttr(gq.Children[0], "friends"); err != nil {
-		t.Error(err)
-	}
-	if err := checkAttr(gq.Children[1], "gender"); err != nil {
-		t.Error(err)
-	}
-	if err := checkAttr(gq.Children[2], "age"); err != nil {
-		t.Error(err)
-	}
-	if err := checkAttr(gq.Children[3], "hometown"); err != nil {
-		t.Error(err)
-	}
-	child := gq.Children[0]
-	if len(child.Children) != 1 {
-		t.Errorf("Expected 1 child of friends. Got: %v", len(child.Children))
-	}
-	if err := checkAttr(child.Children[0], "name"); err != nil {
-		t.Error(err)
-	}
-
-	if gq.Children[0].Filter != nil {
-		t.Error("friends should have no filter")
-		return
-	}
-
-	// We may want to consider using a test library such as stretchr/testify, soon.
-	if err := checkFilter(gq.Children[1].Filter, "(eq)"); err != nil {
-		t.Error(err)
-		return
-	}
-
-	if err := checkFilter(gq.Children[2].Filter, `(neq "a" "b")`); err != nil {
-		t.Error(err)
-		return
-	}
-
-	if err := checkFilter(gq.Children[0].Children[0].Filter, "(namefilter)"); err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
+	require.NotNil(t, gq)
+	require.Equal(t, childAttrs(gq), []string{"friends", "gender", "age", "hometown"})
+	require.Equal(t, childAttrs(gq.Children[0]), []string{"name"})
+	require.Nil(t, gq.Children[0].Filter)
+	require.Equal(t, gq.Children[1].Filter.debugString(), `(eq)`)
+	require.Equal(t, gq.Children[2].Filter.debugString(), `(neq "a" "b")`)
+	require.Equal(t, gq.Children[0].Children[0].Filter.debugString(), "(namefilter)")
 }
 
 // Test operator precedence. && should be evaluated before ||.
@@ -929,43 +619,12 @@ func TestParseFilter_op(t *testing.T) {
 		}
 	}
 `
-
 	gq, _, err := Parse(query)
-	if err != nil {
-		t.Error(err)
-	}
-	if gq == nil {
-		t.Error("subgraph is nil")
-		return
-	}
-	if len(gq.Children) != 4 {
-		t.Errorf("Expected 4 children. Got: %v", len(gq.Children))
-		return
-	}
-	if err := checkAttr(gq.Children[0], "friends"); err != nil {
-		t.Error(err)
-	}
-	if err := checkAttr(gq.Children[1], "gender"); err != nil {
-		t.Error(err)
-	}
-	if err := checkAttr(gq.Children[2], "age"); err != nil {
-		t.Error(err)
-	}
-	if err := checkAttr(gq.Children[3], "hometown"); err != nil {
-		t.Error(err)
-	}
-	child := gq.Children[0]
-	if len(child.Children) != 1 {
-		t.Errorf("Expected 1 child of friends. Got: %v", len(child.Children))
-	}
-	if err := checkAttr(child.Children[0], "name"); err != nil {
-		t.Error(err)
-	}
-
-	if err := checkFilter(gq.Children[0].Filter, "(OR (a) (AND (b) (c)))"); err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
+	require.NotNil(t, gq)
+	require.Equal(t, childAttrs(gq), []string{"friends", "gender", "age", "hometown"})
+	require.Equal(t, childAttrs(gq.Children[0]), []string{"name"})
+	require.Equal(t, gq.Children[0].Filter.debugString(), `(OR (a) (AND (b) (c)))`)
 }
 
 // Test operator precedence. Let brackets make || evaluates before &&.
@@ -982,43 +641,12 @@ func TestParseFilter_op2(t *testing.T) {
 		}
 	}
 `
-
 	gq, _, err := Parse(query)
-	if err != nil {
-		t.Error(err)
-	}
-	if gq == nil {
-		t.Error("subgraph is nil")
-		return
-	}
-	if len(gq.Children) != 4 {
-		t.Errorf("Expected 4 children. Got: %v", len(gq.Children))
-		return
-	}
-	if err := checkAttr(gq.Children[0], "friends"); err != nil {
-		t.Error(err)
-	}
-	if err := checkAttr(gq.Children[1], "gender"); err != nil {
-		t.Error(err)
-	}
-	if err := checkAttr(gq.Children[2], "age"); err != nil {
-		t.Error(err)
-	}
-	if err := checkAttr(gq.Children[3], "hometown"); err != nil {
-		t.Error(err)
-	}
-	child := gq.Children[0]
-	if len(child.Children) != 1 {
-		t.Errorf("Expected 1 child of friends. Got: %v", len(child.Children))
-	}
-	if err := checkAttr(child.Children[0], "name"); err != nil {
-		t.Error(err)
-	}
-
-	if err := checkFilter(gq.Children[0].Filter, "(AND (OR (a) (b)) (c))"); err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
+	require.NotNil(t, gq)
+	require.Equal(t, childAttrs(gq), []string{"friends", "gender", "age", "hometown"})
+	require.Equal(t, childAttrs(gq.Children[0]), []string{"name"})
+	require.Equal(t, gq.Children[0].Filter.debugString(), `(AND (OR (a) (b)) (c))`)
 }
 
 // Test operator precedence. More elaborate brackets.
@@ -1034,45 +662,13 @@ func TestParseFilter_brac(t *testing.T) {
 		}
 	}
 `
-
 	gq, _, err := Parse(query)
-	if err != nil {
-		t.Error(err)
-	}
-	if gq == nil {
-		t.Error("subgraph is nil")
-		return
-	}
-	if len(gq.Children) != 4 {
-		t.Errorf("Expected 4 children. Got: %v", len(gq.Children))
-		return
-	}
-	if err := checkAttr(gq.Children[0], "friends"); err != nil {
-		t.Error(err)
-	}
-	if err := checkAttr(gq.Children[1], "gender"); err != nil {
-		t.Error(err)
-	}
-	if err := checkAttr(gq.Children[2], "age"); err != nil {
-		t.Error(err)
-	}
-	if err := checkAttr(gq.Children[3], "hometown"); err != nil {
-		t.Error(err)
-	}
-	child := gq.Children[0]
-	if len(child.Children) != 1 {
-		t.Errorf("Expected 1 child of friends. Got: %v", len(child.Children))
-	}
-	if err := checkAttr(child.Children[0], "name"); err != nil {
-		t.Error(err)
-	}
-
-	err = checkFilter(gq.Children[0].Filter,
+	require.NoError(t, err)
+	require.NotNil(t, gq)
+	require.Equal(t, childAttrs(gq), []string{"friends", "gender", "age", "hometown"})
+	require.Equal(t, childAttrs(gq.Children[0]), []string{"name"})
+	require.Equal(t, gq.Children[0].Filter.debugString(),
 		`(OR (a "hello") (AND (AND (b "world" "is") (OR (c) (OR (d "haha") (e)))) (f)))`)
-	if err != nil {
-		t.Error(err)
-		return
-	}
 }
 
 // Test if unbalanced brac will lead to errors.
@@ -1089,9 +685,7 @@ func TestParseFilter_unbalancedbrac(t *testing.T) {
 	}
 `
 	_, _, err := Parse(query)
-	if err == nil {
-		t.Error("Expected error")
-	}
+	require.Error(t, err)
 }
 
 func TestParseFilter_unknowndirective(t *testing.T) {
@@ -1107,8 +701,5 @@ func TestParseFilter_unknowndirective(t *testing.T) {
 	}
 `
 	_, _, err := Parse(query)
-	if err == nil {
-		t.Error("Expected error")
-	}
-
+	require.Error(t, err)
 }
