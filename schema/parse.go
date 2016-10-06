@@ -40,7 +40,7 @@ func Parse(file string) (rerr error) {
 	return ParseBytes(b)
 }
 
-// Parses the byte array which holds the schema.
+// ParseBytes parses the byte array which holds the schema.
 func ParseBytes(schema []byte) (rerr error) {
 	s := string(schema)
 
