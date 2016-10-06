@@ -165,12 +165,11 @@ func TestAddMutation_Value(t *testing.T) {
 		Source:    "new-testing",
 		Timestamp: time.Now(),
 	}
-	ctx := context.Background()
 	addMutation(t, ol, edge, Set)
 	checkValue(t, ol, "oh hey there")
 
 	// Run the same check after committing.
-	_, err = ol.MergeIfDirty(ctx)
+	_, err = ol.MergeIfDirty(context.Background())
 	require.NoError(t, err)
 	checkValue(t, ol, "oh hey there")
 
@@ -276,18 +275,11 @@ func TestAddMutation_jchiu3(t *testing.T) {
 	ol := getNew()
 	key := Key(10, "value")
 	dir, err := ioutil.TempDir("", "storetest_")
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 
 	ps, err := store.NewStore(dir)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-
+	require.NoError(t, err)
 	ol.init(key, ps)
 
 	// Set value to cars and merge to RocksDB.
@@ -451,7 +443,6 @@ func TestAddMutation_checksum(t *testing.T) {
 		ol := getNew()
 		key := Key(10, "value2")
 		ol.init(key, ps)
-		ctx := context.Background()
 
 		// Add in reverse.
 		edge := x.DirectedEdge{
@@ -459,18 +450,16 @@ func TestAddMutation_checksum(t *testing.T) {
 			Source:    "jchiu",
 			Timestamp: time.Now(),
 		}
-		_, err := ol.AddMutation(ctx, edge, Set)
-		require.NoError(t, err)
+		addMutation(t, ol, edge, Set)
 
 		edge = x.DirectedEdge{
 			ValueId:   1,
 			Source:    "jchiu",
 			Timestamp: time.Now(),
 		}
-		_, err = ol.AddMutation(ctx, edge, Set)
-		require.NoError(t, err)
+		addMutation(t, ol, edge, Set)
 
-		merged, err := ol.MergeIfDirty(ctx)
+		merged, err := ol.MergeIfDirty(context.Background())
 		require.NoError(t, err)
 		require.True(t, merged)
 
@@ -483,7 +472,6 @@ func TestAddMutation_checksum(t *testing.T) {
 		ol := getNew()
 		key := Key(10, "value3")
 		ol.init(key, ps)
-		ctx := context.Background()
 
 		// Add in reverse.
 		edge := x.DirectedEdge{
@@ -491,27 +479,23 @@ func TestAddMutation_checksum(t *testing.T) {
 			Source:    "jchiu",
 			Timestamp: time.Now(),
 		}
-		_, err := ol.AddMutation(ctx, edge, Set)
-		require.NoError(t, err)
+		addMutation(t, ol, edge, Set)
 
 		edge = x.DirectedEdge{
 			ValueId:   1,
 			Source:    "jchiu",
 			Timestamp: time.Now(),
 		}
-
-		_, err = ol.AddMutation(ctx, edge, Set)
-		require.NoError(t, err)
+		addMutation(t, ol, edge, Set)
 
 		edge = x.DirectedEdge{
 			ValueId:   4,
 			Source:    "jchiu",
 			Timestamp: time.Now(),
 		}
-		_, err = ol.AddMutation(ctx, edge, Set)
-		require.NoError(t, err)
+		addMutation(t, ol, edge, Set)
 
-		merged, err := ol.MergeIfDirty(ctx)
+		merged, err := ol.MergeIfDirty(context.Background())
 		require.NoError(t, err)
 		require.True(t, merged)
 
