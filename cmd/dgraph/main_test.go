@@ -48,6 +48,13 @@ var q0 = `
 	}
 `
 
+func init() {
+	worker.ParseGroupConfig("")
+	worker.StartRaftNodes(1, "localhost:12345", "1:localhost:12345", "")
+	// Wait for the node to become leader for group 0.
+	time.Sleep(5 * time.Second)
+}
+
 func prepare() (dir1, dir2 string, ps *store.Store, rerr error) {
 	var err error
 	dir1, err = ioutil.TempDir("", "storetest_")
@@ -65,7 +72,7 @@ func prepare() (dir1, dir2 string, ps *store.Store, rerr error) {
 	}
 
 	posting.Init()
-	worker.SetWorkerState(worker.NewState(ps, 0, 1))
+	worker.SetState(ps)
 	uid.Init(ps)
 	loader.Init(ps)
 	posting.InitIndex(ps)
@@ -176,13 +183,6 @@ var qm = `
 `
 
 func TestAssignUid(t *testing.T) {
-	worker.InitNode(1, "localhost:4567")
-	n := worker.GetNode()
-	n.StartNode("1:localhost:4567")
-	// Waiting for it to become leader, because uids can only be assigned on the leader.
-	for !n.AmLeader() {
-		time.Sleep(1 * time.Second)
-	}
 	dir1, dir2, _, err := prepare()
 	if err != nil {
 		t.Error(err)

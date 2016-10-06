@@ -40,6 +40,11 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
+func init() {
+	worker.ParseGroupConfig("")
+	worker.StartRaftNodes(1, "localhost:12345", "1:localhost:12345", "")
+}
+
 func setErr(err *error, nerr error) {
 	if err != nil {
 		return
@@ -111,7 +116,7 @@ func TestNewGraph(t *testing.T) {
 		t.Error(err)
 	}
 
-	worker.SetWorkerState(worker.NewState(ps, 0, 1))
+	worker.SetState(ps)
 
 	r := new(task.Result)
 	x.ParseTaskResult(r, sg.Result)
@@ -149,7 +154,7 @@ func populateGraph(t *testing.T) (string, *store.Store) {
 		return "", nil
 	}
 
-	worker.SetWorkerState(worker.NewState(ps, 0, 1))
+	worker.SetState(ps)
 	posting.Init()
 
 	// So, user we're interested in has uid: 1.
