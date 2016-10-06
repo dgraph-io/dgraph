@@ -722,23 +722,32 @@ func createTaskQuery(sg *SubGraph, uids *algo.UIDList, terms []string, intersect
 	x.Assert(uids == nil || terms == nil)
 
 	b := flatbuffers.NewBuilder(0)
-	var vend flatbuffers.UOffsetT
+	var fend flatbuffers.UOffsetT
+	var ftype byte
 	if uids != nil {
-		task.QueryStartUidsVector(b, uids.Size())
+		task.UidListStartUidsVector(b, uids.Size())
 		for i := uids.Size() - 1; i >= 0; i-- {
 			b.PrependUint64(uids.Get(i))
 		}
-		vend = b.EndVector(uids.Size())
+		vend := b.EndVector(uids.Size())
+		task.UidListStart(b)
+		task.UidListAddUids(b, vend)
+		fend = task.UidListEnd(b)
+		ftype = task.QueryFilterUidList
 	} else {
 		offsets := make([]flatbuffers.UOffsetT, 0, len(terms))
 		for _, term := range terms {
 			offsets = append(offsets, b.CreateString(term))
 		}
-		task.QueryStartTermsVector(b, len(terms))
+		task.TermListStartTermsVector(b, len(terms))
 		for i := len(terms) - 1; i >= 0; i-- {
 			b.PrependUOffsetT(offsets[i])
 		}
-		vend = b.EndVector(len(terms))
+		vend := b.EndVector(len(terms))
+		task.TermListStart(b)
+		task.TermListAddTerms(b, vend)
+		fend = task.TermListEnd(b)
+		ftype = task.QueryFilterTermList
 	}
 
 	var intersectOffset flatbuffers.UOffsetT
@@ -751,11 +760,8 @@ func createTaskQuery(sg *SubGraph, uids *algo.UIDList, terms []string, intersect
 	ao := b.CreateString(sg.Attr)
 	task.QueryStart(b)
 	task.QueryAddAttr(b, ao)
-	if uids != nil {
-		task.QueryAddUids(b, vend)
-	} else {
-		task.QueryAddTerms(b, vend)
-	}
+	task.QueryAddFilterType(b, ftype)
+	task.QueryAddFilter(b, fend)
 	if intersect != nil {
 		task.QueryAddToIntersect(b, intersectOffset)
 	}

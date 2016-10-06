@@ -71,15 +71,26 @@ func processTask(query []byte) ([]byte, error) {
 
 	attr := string(q.Attr())
 	store := ws.dataStore
-	x.Assertf(q.UidsLength() == 0 || q.TermsLength() == 0,
-		"At least one of Uids and Term should be empty: %d vs %d", q.UidsLength(), q.TermsLength())
+	var uids *task.UidList
+	var terms *task.TermList
+	useTerm := false
+	unionTable := new(flatbuffers.Table)
+	if q.Filter(unionTable) {
+		if q.FilterType() == task.QueryFilterUidList {
+			uids = new(task.UidList)
+			uids.Init(unionTable.Bytes, unionTable.Pos)
+		} else if q.FilterType() == task.QueryFilterTermList {
+			terms = new(task.TermList)
+			terms.Init(unionTable.Bytes, unionTable.Pos)
+			useTerm = true
+		}
+	}
 
-	useTerm := q.TermsLength() > 0
 	var n int
 	if useTerm {
-		n = q.TermsLength()
+		n = terms.TermsLength()
 	} else {
-		n = q.UidsLength()
+		n = uids.UidsLength()
 	}
 
 	b := flatbuffers.NewBuilder(0)
@@ -90,9 +101,9 @@ func processTask(query []byte) ([]byte, error) {
 	for i := 0; i < n; i++ {
 		var key []byte
 		if useTerm {
-			key = schema.IndexKey(attr, q.Terms(i))
+			key = schema.IndexKey(attr, terms.Terms(i))
 		} else {
-			key = posting.Key(q.Uids(i), attr)
+			key = posting.Key(uids.Uids(i), attr)
 		}
 		// Get or create the posting list for an entity, attribute combination.
 		pl, decr := posting.GetOrCreate(key, store)
@@ -181,7 +192,7 @@ func (w *grpcWorker) ServeTask(ctx context.Context, query *Payload) (*Payload, e
 
 	q := task.GetRootAsQuery(query.Data, 0)
 	gid := BelongsTo(string(q.Attr()))
-	x.Trace(ctx, "Attribute: %q NumUids: %v groupId: %v ServeTask", q.Attr(), q.UidsLength(), gid)
+	x.Trace(ctx, "Attribute: %q groupId: %v ServeTask", q.Attr(), gid)
 
 	reply := new(Payload)
 	x.Assertf(groups().ServesGroup(gid),

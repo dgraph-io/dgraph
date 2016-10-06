@@ -188,34 +188,40 @@ func newQuery(attr string, uids []uint64, terms []string) []byte {
 
 	x.Assert(uids == nil || terms == nil)
 
-	var vend flatbuffers.UOffsetT
+	var fend flatbuffers.UOffsetT
+	var ftype byte
 	if uids != nil {
-		task.QueryStartUidsVector(b, len(uids))
+		task.UidListStartUidsVector(b, len(uids))
 		for i := len(uids) - 1; i >= 0; i-- {
 			b.PrependUint64(uids[i])
 		}
-		vend = b.EndVector(len(uids))
+		vend := b.EndVector(len(uids))
+		task.UidListStart(b)
+		task.UidListAddUids(b, vend)
+		fend = task.UidListEnd(b)
+		ftype = task.QueryFilterUidList
 	} else {
 		offsets := make([]flatbuffers.UOffsetT, 0, len(terms))
 		for _, term := range terms {
 			uo := b.CreateString(term)
 			offsets = append(offsets, uo)
 		}
-		task.QueryStartTermsVector(b, len(terms))
+		task.TermListStartTermsVector(b, len(terms))
 		for i := len(terms) - 1; i >= 0; i-- {
 			b.PrependUOffsetT(offsets[i])
 		}
-		vend = b.EndVector(len(terms))
+		vend := b.EndVector(len(terms))
+		task.TermListStart(b)
+		task.TermListAddTerms(b, vend)
+		fend = task.TermListEnd(b)
+		ftype = task.QueryFilterTermList
 	}
 
 	ao := b.CreateString(attr)
 	task.QueryStart(b)
 	task.QueryAddAttr(b, ao)
-	if uids != nil {
-		task.QueryAddUids(b, vend)
-	} else {
-		task.QueryAddTerms(b, vend)
-	}
+	task.QueryAddFilterType(b, ftype)
+	task.QueryAddFilter(b, fend)
 	qend := task.QueryEnd(b)
 	b.Finish(qend)
 	return b.Bytes[b.Head():]
