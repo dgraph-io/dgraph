@@ -19,14 +19,12 @@ package posting
 import (
 	"bytes"
 	"context"
-	"encoding/json"
-	"flag"
-	"io/ioutil"
 	"time"
 
 	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/dgraph/posting/types"
+	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -37,51 +35,13 @@ const (
 	indexRune = ':'
 )
 
-type indexConfigs struct {
-	Cfg []*indexConfig `json:"config"`
-}
-
-type indexConfig struct {
-	Attr string `json:"attribute"`
-	// TODO(jchiu): Add other tokenizer here in future.
-}
-
 var (
-	indexLog        trace.EventLog
-	indexStore      *store.Store
-	indexCfgs       indexConfigs
-	indexConfigFile = flag.String("indexconfig", "",
-		"File containing index config. If empty, we assume no index.")
-	indexedAttr = make(map[string]bool)
+	indexLog   trace.EventLog
+	indexStore *store.Store
 )
 
 func init() {
 	indexLog = trace.NewEventLog("index", "Logger")
-	x.AddInit(func() {
-		if indexConfigFile == nil || len(*indexConfigFile) == 0 {
-			indexLog.Printf("No valid config file: %v", *indexConfigFile)
-			return
-		}
-		f, err := ioutil.ReadFile(*indexConfigFile)
-		x.Check(err)
-		indexLog.Printf("Reading index configs from [%s]", *indexConfigFile)
-		ReadIndexConfigs(f)
-	})
-}
-
-// ReadIndexConfigs parses configs from given byte array.
-func ReadIndexConfigs(f []byte) {
-	x.Check(json.Unmarshal(f, &indexCfgs))
-	for _, c := range indexCfgs.Cfg {
-		indexedAttr[c.Attr] = true
-	}
-	if len(indexedAttr) == 0 {
-		indexLog.Printf("No indexed attributes!")
-	} else {
-		for k := range indexedAttr {
-			indexLog.Printf("Indexed attribute [%s]", k)
-		}
-	}
 }
 
 // InitIndex initializes the index with the given data store.
@@ -144,7 +104,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t x.DirectedEdge, op by
 
 	var lastPost types.Posting
 	var hasLastPost bool
-	doUpdateIndex := indexStore != nil && (t.Value != nil) && indexedAttr[t.Attribute]
+	doUpdateIndex := indexStore != nil && (t.Value != nil) && schema.IsIndexed(t.Attribute)
 	if doUpdateIndex {
 		// Check last posting for original value BEFORE any mutation actually happens.
 		if l.Length() >= 1 {

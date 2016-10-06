@@ -28,6 +28,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgraph/posting"
+	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/x"
@@ -106,7 +107,7 @@ func populateGraph(t *testing.T, ps *store.Store) {
 }
 
 func TestProcessTask(t *testing.T) {
-	posting.ReadIndexConfigs([]byte(`{"config": [{"attribute": "friend"}]}`))
+	schema.ParseBytes([]byte(`scalar friend:string @index`))
 
 	dir, err := ioutil.TempDir("", "storetest_")
 	if err != nil {
@@ -224,7 +225,7 @@ func newQuery(attr string, uids []uint64, terms []string) []byte {
 // at the end. In other words, everything is happening only in mutation layers,
 // and not committed to RocksDB until near the end.
 func TestProcessTaskIndexMLayer(t *testing.T) {
-	posting.ReadIndexConfigs([]byte(`{"config": [{"attribute": "friend"}]}`))
+	schema.ParseBytes([]byte(`scalar friend:string @index`))
 
 	dir, err := ioutil.TempDir("", "storetest_")
 	if err != nil {
@@ -371,7 +372,7 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 // Index-related test. Similar to TestProcessTaskIndeMLayer except we call
 // MergeLists in between a lot of updates.
 func TestProcessTaskIndex(t *testing.T) {
-	posting.ReadIndexConfigs([]byte(`{"config": [{"attribute": "friend"}]}`))
+	schema.ParseBytes([]byte(`scalar friend:string @index`))
 
 	dir, err := ioutil.TempDir("", "storetest_")
 	if err != nil {

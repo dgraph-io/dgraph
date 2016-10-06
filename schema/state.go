@@ -42,6 +42,9 @@ const (
 	itemObjectName
 	itemObjectType
 	itemCollon
+	itemAt
+	itemIndex
+	itemDummy // Used if index specification is missing
 )
 
 // lexText lexes the input string and calls other lex functions.
@@ -206,6 +209,41 @@ L:
 		break
 	}
 
+	// Check for the mention of @index.
+	var isIndexed bool
+L1:
+	for {
+		switch r := l.Next(); {
+		case isSpace(r):
+			l.Ignore()
+		case isEndOfLine(r):
+			break L1
+		case r == '@':
+			l.Emit(itemAt)
+			isIndexed = true
+			for {
+				r := l.Next()
+				if isNameSuffix(r) {
+					continue // absorb
+				}
+				l.Backup()
+				// l.Pos would be index of the end of operation type + 1.
+				word := l.Input[l.Start:l.Pos]
+				if word == "index" {
+					l.Emit(itemIndex)
+					break L1
+				} else {
+					return l.Errorf("Invalid mention of index")
+				}
+			}
+			break L1
+		default:
+			return l.Errorf("Invalid schema. Unexpected %s", l.Input[l.Start:l.Pos])
+		}
+	}
+	if !isIndexed {
+		l.Emit(itemDummy)
+	}
 	return lexText
 }
 
@@ -247,8 +285,42 @@ L:
 		break
 	}
 
+	// Check for the mention of @index.
+	var isIndexed bool
+L1:
+	for {
+		switch r := l.Next(); {
+		case isSpace(r):
+			l.Ignore()
+		case isEndOfLine(r):
+			break L1
+		case r == '@':
+			l.Emit(itemAt)
+			isIndexed = true
+			for {
+				r := l.Next()
+				if isNameSuffix(r) {
+					continue // absorb
+				}
+				l.Backup()
+				// l.Pos would be index of the end of operation type + 1.
+				word := l.Input[l.Start:l.Pos]
+				if word == "index" {
+					l.Emit(itemIndex)
+					break L1
+				} else {
+					return l.Errorf("Invalid mention of index")
+				}
+			}
+			break L1
+		default:
+			return l.Errorf("Invalid schema. Unexpected %s", l.Input[l.Start:l.Pos])
+		}
+	}
+	if !isIndexed {
+		l.Emit(itemDummy)
+	}
 	return lexScalarBlock
-
 }
 
 func lexObjectPair(l *lex.Lexer) lex.StateFn {

@@ -24,10 +24,21 @@ type Item struct {
 	Typ   types.Type
 }
 
-var str map[string]types.Type
+var (
+	// Map containing predicate to type information.
+	str map[string]types.Type
+	// Map containing fields that are indexed.
+	indexedFields map[string]bool
+)
 
 func init() {
 	str = make(map[string]types.Type)
+	indexedFields = make(map[string]bool)
+}
+
+// IsIndexed returns if a given predicated is indexed or not.
+func IsIndexed(str string) bool {
+	return indexedFields[str]
 }
 
 // ScalarList returns the list of scalars in the geiven object.

@@ -143,7 +143,7 @@ func populateGraph(t *testing.T) (string, *store.Store) {
 
 	worker.SetState(ps)
 	posting.Init()
-	posting.ReadIndexConfigs([]byte(`{"config": [{"attribute": "name"}]}`))
+	schema.ParseBytes([]byte(`scalar name:string @index`))
 	posting.InitIndex(ps)
 
 	// So, user we're interested in has uid: 1.
