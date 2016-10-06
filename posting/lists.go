@@ -133,7 +133,7 @@ func gentleMerge(dirtyMap map[uint64]struct{}) {
 		n := int(float64(len(dirtyMap)) * *gentleMergeFrac)
 		if n < 300 {
 			// Have a min value of n, so we can merge small number of dirty PLs fast.
-			n = len(dirtyMap)
+			n = 300
 		}
 		keysBuffer := make([]uint64, 0, n)
 

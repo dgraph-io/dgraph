@@ -68,6 +68,8 @@ var (
 	cpuprofile  = flag.String("cpu", "", "write cpu profile to file")
 	memprofile  = flag.String("mem", "", "write memory profile to file")
 	schemaFile  = flag.String("schema", "", "Path to schema file")
+	rdbStats    = flag.Duration("rdbstats", 5*time.Minute, "Print out RocksDB stats every this many seconds. If <=0, we don't print anyting.")
+	groupConf   = flag.String("conf", "", "Path to config file with group <-> predicate mapping.")
 	closeCh     = make(chan struct{})
 
 	groupId uint64 = 0 // ALL
@@ -426,7 +428,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	x.Trace(ctx, "Query parsed")
 
 	rch := make(chan error)
-	go query.ProcessGraph(ctx, sg, rch)
+	go query.ProcessGraph(ctx, sg, nil, rch)
 	err = <-rch
 	if err != nil {
 		x.TraceError(ctx, x.Wrapf(err, "Error while executing query"))
@@ -515,7 +517,7 @@ func (s *grpcServer) Query(ctx context.Context,
 	x.Trace(ctx, "Query parsed")
 
 	rch := make(chan error)
-	go query.ProcessGraph(ctx, sg, rch)
+	go query.ProcessGraph(ctx, sg, nil, rch)
 	err = <-rch
 	if err != nil {
 		x.TraceError(ctx, x.Wrapf(err, "Error while executing query"))
@@ -614,6 +616,15 @@ func setupServer() {
 	}
 }
 
+func printStats(ps *store.Store) {
+	go func() {
+		for {
+			time.Sleep(*rdbStats)
+			fmt.Println(ps.GetStats())
+		}
+	}()
+}
+
 func main() {
 	rand.Seed(time.Now().UnixNano())
 	x.Init()
@@ -625,29 +636,19 @@ func main() {
 
 	posting.InitIndex(ps)
 	posting.Init()
+	printStats(ps)
+	x.Check(worker.ParseGroupConfig(*groupConf))
 
-	var ws *worker.State
-	if groupId != 0 { // HACK: This will currently not run.
-		ws = worker.NewState(ps, groupId, 1) // TODO: Set number of groups here.
-		worker.SetWorkerState(ws)
-		uid.Init(nil)
-
-	} else { // handles group 0.
-		ws = worker.NewState(ps, groupId, 1) // TODO: Set number of groups here.
-		worker.SetWorkerState(ws)
-		uid.Init(ps)
-	}
+	worker.SetState(ps)
+	uid.Init(ps)
 
 	my := "localhost" + *workerPort
-	worker.InitNode(*raftId, my)
-	worker.GetNode().StartNode(*cluster)
-	if len(*peer) > 0 {
-		go worker.GetNode().JoinCluster(*peer, ws)
-	}
-	go worker.GetNode().SnapshotPeriodically()
 
-	// node := worker.GetNode()
-	// go node.Campaign(context.TODO())
+	// TODO: Clean up the RAFT group creation code.
+
+	// First initiate the commmon group across the entire cluster. This group
+	// stores information about which server serves which groups.
+	go worker.StartRaftNodes(*raftId, my, *cluster, *peer)
 
 	if len(*schemaFile) > 0 {
 		err = schema.Parse(*schemaFile)

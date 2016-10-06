@@ -50,7 +50,8 @@ var (
 	memprofile = flag.String("mem", "", "write memory profile to file")
 	numcpu     = flag.Int("cores", runtime.NumCPU(),
 		"Number of cores to be used by the process")
-	prof = flag.String("profile", "", "Address at which profile is displayed")
+	prof     = flag.String("profile", "", "Address at which profile is displayed")
+	rdbStats = flag.Bool("rdbstats", false, "Print out RocksDB stats at the end?")
 )
 
 func main() {
@@ -134,5 +135,8 @@ func main() {
 		}
 		pprof.WriteHeapProfile(f)
 		f.Close()
+	}
+	if *rdbStats {
+		glog.Println(dataStore.GetStats())
 	}
 }

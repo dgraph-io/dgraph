@@ -33,6 +33,7 @@ import (
 	"github.com/dgryski/go-farm"
 	"github.com/google/flatbuffers/go"
 
+	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/posting/types"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/x"
@@ -101,10 +102,11 @@ func getNew() *List {
 	return l
 }
 
+// ListOptions is used in List.Uids (in posting) to customize our output list of
+// UIDs, for each posting list. It should be internal to this package.
 type ListOptions struct {
-	Offset   int
-	Count    int
-	AfterUid uint64
+	AfterUID  uint64        // Any UID returned must be after this value.
+	Intersect *algo.UIDList // Intersect results with this list of UIDs.
 }
 
 type ByUid []*types.Posting
@@ -747,48 +749,47 @@ func (l *List) LastCompactionTs() time.Time {
 	return l.lastCompact
 }
 
-func (l *List) Uids(opt ListOptions) []uint64 {
+// Uids returns the UIDs given some query params.
+// We have to apply the filtering before applying (offset, count).
+func (l *List) Uids(opt ListOptions) *algo.UIDList {
 	l.wg.Wait()
 	l.RLock()
 	defer l.RUnlock()
 
-	if opt.Offset < 0 {
-		log.Fatalf("Unexpected offset: %v", opt.Offset)
-		return make([]uint64, 0)
-	}
-
 	var p types.Posting
-	if opt.AfterUid > 0 {
+	var offset int
+	if opt.AfterUID > 0 {
 		// sort.Search returns the index of the first element > AfterUid.
-		opt.Offset = sort.Search(l.length(), func(i int) bool {
+		// AfterUid overrides the offset parameter.
+		offset = sort.Search(l.length(), func(i int) bool {
 			l.get(&p, i)
-			return p.Uid() > opt.AfterUid
+			return p.Uid() > opt.AfterUID
 		})
 	}
-	if opt.Count < 0 {
-		opt.Count = 0 - opt.Count
-		opt.Offset = l.length() - opt.Count
-	}
-	if opt.Offset < 0 {
-		opt.Offset = 0
+
+	count := l.length()
+	if opt.Intersect != nil && opt.Intersect.Size() < count {
+		count = opt.Intersect.Size()
 	}
 
-	if opt.Count == 0 || opt.Count > l.length()-opt.Offset {
-		opt.Count = l.length() - opt.Offset
-	}
-	if opt.Count < 0 {
-		opt.Count = 0
-	}
-
-	result := make([]uint64, opt.Count)
-	result = result[:0]
-	for i := opt.Offset; i < opt.Count+opt.Offset && i < l.length(); i++ {
+	result := make([]uint64, 0, count)
+	var intersectIdx int // Indexes into opt.Intersect if it exists.
+	for i := offset; i < l.length(); i++ {
 		if ok := l.get(&p, i); !ok || p.Uid() == math.MaxUint64 {
 			break
 		}
-		result = append(result, p.Uid())
+		// Try to intersect.
+		uid := p.Uid()
+		if opt.Intersect != nil {
+			for ; intersectIdx < opt.Intersect.Size() && opt.Intersect.Get(intersectIdx) < uid; intersectIdx++ {
+			}
+			if intersectIdx >= opt.Intersect.Size() || opt.Intersect.Get(intersectIdx) > uid {
+				continue
+			}
+		}
+		result = append(result, uid)
 	}
-	return result
+	return algo.NewUIDList(result)
 }
 
 func (l *List) Value() (result []byte, rtype byte, rerr error) {

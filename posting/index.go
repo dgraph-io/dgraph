@@ -19,15 +19,13 @@ package posting
 import (
 	"bytes"
 	"context"
-	"encoding/json"
-	"flag"
-	"io/ioutil"
 	"time"
 
 	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/dgraph/geo"
 	"github.com/dgraph-io/dgraph/posting/types"
+	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -38,6 +36,7 @@ const (
 	indexRune = ':'
 )
 
+<<<<<<< HEAD
 type indexConfigs struct {
 	Cfg []*indexConfig `json:"config"`
 }
@@ -63,10 +62,16 @@ var (
 	indexedAttr = make(map[string]keyGenerator)
 	exactMatch  exactMatchKeyGen
 	geoKeyGen   geo.KeyGenerator
+=======
+var (
+	indexLog   trace.EventLog
+	indexStore *store.Store
+>>>>>>> upstream
 )
 
 func init() {
 	indexLog = trace.NewEventLog("index", "Logger")
+<<<<<<< HEAD
 	x.AddInit(func() {
 		if indexConfigFile == nil || len(*indexConfigFile) == 0 {
 			indexLog.Printf("No valid config file: %v", *indexConfigFile)
@@ -100,6 +105,8 @@ func ReadIndexConfigs(f []byte) {
 			indexLog.Printf("Indexed attribute [%s]", k)
 		}
 	}
+=======
+>>>>>>> upstream
 }
 
 // InitIndex initializes the index with the given data store.
@@ -129,11 +136,21 @@ func IndexKey(attr string, term []byte) []byte {
 }
 
 // processIndexTerm adds mutation(s) for a single term, to maintain index.
+<<<<<<< HEAD
 func processIndexTerm(ctx context.Context, keygen keyGenerator, attr string, uid uint64, term []byte, del bool) {
 	keys, err := keygen.IndexKeys(attr, term)
 	if err != nil {
 		// This data is not indexable
 		return
+=======
+func processIndexTerm(ctx context.Context, attr string, uid uint64, term []byte, del bool) {
+	x.Assert(uid != 0)
+	edge := x.DirectedEdge{
+		Timestamp: time.Now(),
+		ValueId:   uid,
+		Attribute: attr,
+		Source:    "idx",
+>>>>>>> upstream
 	}
 	for _, key := range keys {
 		edge := x.DirectedEdge{
@@ -170,8 +187,12 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t x.DirectedEdge, op by
 
 	var lastPost types.Posting
 	var hasLastPost bool
+<<<<<<< HEAD
 	keygen, needsIndex := indexedAttr[t.Attribute]
 	doUpdateIndex := indexStore != nil && (t.Value != nil) && needsIndex
+=======
+	doUpdateIndex := indexStore != nil && (t.Value != nil) && schema.IsIndexed(t.Attribute)
+>>>>>>> upstream
 	if doUpdateIndex {
 		// Check last posting for original value BEFORE any mutation actually happens.
 		if l.Length() >= 1 {

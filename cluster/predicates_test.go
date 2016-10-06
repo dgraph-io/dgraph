@@ -25,39 +25,25 @@ import (
 	"testing"
 
 	"github.com/Sirupsen/logrus"
+	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/store"
 )
 
 func TestgetPredicate(t *testing.T) {
-	attr := "friends"
-	var uid uint64 = 12345
-
-	buf := bytes.NewBufferString(attr)
-	if err := binary.Write(buf, binary.LittleEndian, uid); err != nil {
-		t.Fatalf("Error while creating key with attr: %v uid: %v\n", attr, uid)
-	}
-
-	str := getPredicate(buf.Bytes())
-	if str != "friends" {
-		t.Error("Wrong predicate obtained")
-	}
+	buf := bytes.NewBufferString("friends")
+	require.NoError(t, binary.Write(buf, binary.LittleEndian, 12345))
+	require.EqualValues(t, getPredicate(buf.Bytes()), "friends")
 }
 
 func TestGetPredicateList(t *testing.T) {
 	logrus.SetLevel(logrus.DebugLevel)
 	dir1, err := ioutil.TempDir("", "dir_")
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
 	defer os.RemoveAll(dir1)
 	ps1, err := store.NewStore(dir1)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
 	defer ps1.Close()
 
 	k1 := posting.Key(1000, "friend")
@@ -70,10 +56,5 @@ func TestGetPredicateList(t *testing.T) {
 	ps1.SetOne(k3, []byte("ram"))
 	ps1.SetOne(k4, []byte("ash"))
 	ps1.SetOne(k5, []byte("mallory"))
-
-	list := GetPredicateList(ps1)
-
-	if len(list) != 2 {
-		t.Errorf("Predicate List incorrect %v", len(list))
-	}
+	require.Equal(t, GetPredicateList(ps1), []string{"follow", "friend"})
 }

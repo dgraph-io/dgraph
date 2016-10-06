@@ -27,10 +27,7 @@ import (
 	"time"
 
 	"github.com/Sirupsen/logrus"
-	"github.com/google/flatbuffers/go"
 	"golang.org/x/net/trace"
-
-	"github.com/dgraph-io/dgraph/task"
 )
 
 // Error constants representing different types of errors.
@@ -69,8 +66,9 @@ type DirectedEdge struct {
 
 // Mutations stores the directed edges for both the set and delete operations.
 type Mutations struct {
-	Set []DirectedEdge
-	Del []DirectedEdge
+	GroupId uint32
+	Set     []DirectedEdge
+	Del     []DirectedEdge
 }
 
 // Encode gob encodes the mutation which is then sent over to the instance which
@@ -135,19 +133,6 @@ func ParseRequest(w http.ResponseWriter, r *http.Request, data interface{}) bool
 		return false
 	}
 	return true
-}
-
-func UidlistOffset(b *flatbuffers.Builder,
-	sorted []uint64) flatbuffers.UOffsetT {
-
-	task.UidListStartUidsVector(b, len(sorted))
-	for i := len(sorted) - 1; i >= 0; i-- {
-		b.PrependUint64(sorted[i])
-	}
-	ulist := b.EndVector(len(sorted))
-	task.UidListStart(b)
-	task.UidListAddUids(b, ulist)
-	return task.UidListEnd(b)
 }
 
 var Nilbyte []byte

@@ -20,9 +20,7 @@ import (
 	"fmt"
 	"log"
 
-	"context"
-
-	"github.com/dgryski/go-farm"
+	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/x"
@@ -37,8 +35,7 @@ const (
 // mutations which were not applied in left.
 func runMutations(ctx context.Context, edges []x.DirectedEdge, op byte) error {
 	for _, edge := range edges {
-		if farm.Fingerprint64(
-			[]byte(edge.Attribute))%ws.numGroups != ws.groupId {
+		if !groups().ServesGroup(BelongsTo(edge.Attribute)) {
 			return fmt.Errorf("Predicate fingerprint doesn't match this instance")
 		}
 
@@ -67,50 +64,46 @@ func mutate(ctx context.Context, m *x.Mutations) error {
 }
 
 // runMutate is used to run the mutations on an instance.
-func proposeMutation(ctx context.Context, idx int, m *x.Mutations, che chan error) {
+func proposeOrSend(ctx context.Context, gid uint32, m *x.Mutations, che chan error) {
 	data, err := m.Encode()
 	if err != nil {
 		che <- err
 		return
 	}
 
-	// We run them locally if idx == groupId
-	// HACK HACK HACK
-	// if idx == int(ws.groupId) {
-	if true {
-		che <- GetNode().ProposeAndWait(ctx, mutationMsg, data)
-		// che <- GetNode().raft.Propose(ctx, data)
+	if groups().ServesGroup(gid) {
+		node := groups().Node(gid)
+		che <- node.ProposeAndWait(ctx, mutationMsg, data)
 		return
 	}
 
-	// TODO: Move this to the appropriate place. Propose mutation should only deal with RAFT.
-	// Get a connection from the pool and run mutations over the network.
-	pool := ws.GetPool(idx)
-	query := new(Payload)
-	query.Data = data
-
-	conn, err := pool.Get()
+	addr := groups().Leader(gid)
+	pl := pools().get(addr)
+	conn, err := pl.Get()
 	if err != nil {
+		x.TraceError(ctx, err)
 		che <- err
 		return
 	}
-	defer pool.Put(conn)
-	c := NewWorkerClient(conn)
+	defer pl.Put(conn)
+	query := new(Payload)
+	query.Data = data
 
+	c := NewWorkerClient(conn)
 	_, err = c.Mutate(ctx, query)
 	che <- err
 }
 
 // addToMutationArray adds the edges to the appropriate index in the mutationArray,
 // taking into account the op(operation) and the attribute.
-func addToMutationArray(mutationArray []*x.Mutations, edges []x.DirectedEdge, op string) {
+func addToMutationMap(mutationMap map[uint32]*x.Mutations, edges []x.DirectedEdge, op string) {
 	for _, edge := range edges {
-		// TODO: Determine the right group using rules, instead of modulos.
-		idx := farm.Fingerprint64([]byte(edge.Attribute)) % ws.numGroups
-		mu := mutationArray[idx]
+		gid := BelongsTo(edge.Attribute)
+		mu := mutationMap[gid]
 		if mu == nil {
 			mu = new(x.Mutations)
-			mutationArray[idx] = mu
+			mu.GroupId = gid
+			mutationMap[gid] = mu
 		}
 
 		if op == set {
@@ -124,24 +117,19 @@ func addToMutationArray(mutationArray []*x.Mutations, edges []x.DirectedEdge, op
 // MutateOverNetwork checks which group should be running the mutations
 // according to fingerprint of the predicate and sends it to that instance.
 func MutateOverNetwork(ctx context.Context, m x.Mutations) (rerr error) {
-	mutationArray := make([]*x.Mutations, ws.numGroups)
+	mutationMap := make(map[uint32]*x.Mutations)
 
-	addToMutationArray(mutationArray, m.Set, set)
-	addToMutationArray(mutationArray, m.Del, del)
+	addToMutationMap(mutationMap, m.Set, set)
+	addToMutationMap(mutationMap, m.Del, del)
 
-	errors := make(chan error, ws.numGroups)
-	count := 0
-	for idx, mu := range mutationArray {
-		if mu == nil || (len(mu.Set) == 0 && len(mu.Del) == 0) {
-			continue
-		}
-		count++
-		go proposeMutation(ctx, idx, mu, errors)
+	errors := make(chan error, len(mutationMap))
+	for gid, mu := range mutationMap {
+		proposeOrSend(ctx, gid, mu, errors)
 	}
 
 	// Wait for all the goroutines to reply back.
 	// We return if an error was returned or the parent called ctx.Done()
-	for i := 0; i < count; i++ {
+	for i := 0; i < len(mutationMap); i++ {
 		select {
 		case err := <-errors:
 			if err != nil {
@@ -155,4 +143,28 @@ func MutateOverNetwork(ctx context.Context, m x.Mutations) (rerr error) {
 	close(errors)
 
 	return nil
+}
+
+// Mutate is used to apply mutations over the network on other instances.
+func (w *grpcWorker) Mutate(ctx context.Context, query *Payload) (*Payload, error) {
+	if ctx.Err() != nil {
+		return &Payload{}, ctx.Err()
+	}
+
+	m := new(x.Mutations)
+	// Ensure that this can be decoded. This is an optional step.
+	if err := m.Decode(query.Data); err != nil {
+		return nil, x.Wrapf(err, "While decoding mutation.")
+	}
+
+	c := make(chan error, 1)
+	node := groups().Node(m.GroupId)
+	go func() { c <- node.ProposeAndWait(ctx, mutationMsg, query.Data) }()
+
+	select {
+	case <-ctx.Done():
+		return &Payload{}, ctx.Err()
+	case err := <-c:
+		return &Payload{}, err
+	}
 }

@@ -2,12 +2,18 @@ namespace task;
 
 table Query {
 	attr:string;
-	uids:[ulong];
 	count:int;
 	offset:int;
 	afterUid:ulong;
 	getCount:ushort;
+	
+	// Exactly one of uids and terms is populated.
+	uids:[ulong];
 	terms:[string];
+	
+	// Intersect results with this UID list. If uids is populated, then this is
+	// an "intersection query". If terms is populated, this is a "filter query".
+	toIntersect:UidList;
 }
 
 table Value {
@@ -24,10 +30,18 @@ table UidList {
 	uids:[ulong];
 }
 
+table CountList {
+	count:[uint];
+}
+
 table Result {
 	uidmatrix:[UidList];
+	values:ValueList;
+	count:CountList;
+}
+
+table ValueList {
 	values:[Value];
-	count:[ulong];
 }
 
 table KV {
@@ -43,4 +57,18 @@ table KC {
 table GroupKeys {
 	groupid:ulong;
 	keys:[KC];
+}
+
+table RaftContext {
+	id:ulong;
+	group:uint;
+	addr:string;
+}
+
+table Membership {
+	id:ulong;
+	group:uint;
+	addr:string;
+	leader:bool;
+	amdead:bool;
 }

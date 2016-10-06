@@ -18,32 +18,71 @@ package schema
 
 import (
 	"testing"
+
+	"github.com/dgraph-io/dgraph/types"
+	"github.com/stretchr/testify/require"
 )
 
 func TestSchema(t *testing.T) {
-	err := Parse("test_schema")
-	if err != nil {
+	str = make(map[string]types.Type)
+	require.NoError(t, Parse("testfiles/test_schema"))
+}
+
+func TestSchema1_Error(t *testing.T) {
+	str = make(map[string]types.Type)
+	require.Error(t, Parse("testfiles/test_schema1"))
+}
+
+func TestSchema2_Error(t *testing.T) {
+	str = make(map[string]types.Type)
+	require.Error(t, Parse("testfiles/test_schema2"))
+}
+
+func TestSchema3_Error(t *testing.T) {
+	str = make(map[string]types.Type)
+	require.Error(t, Parse("testfiles/test_schema3"))
+}
+
+func TestSchema4_Error(t *testing.T) {
+	str = make(map[string]types.Type)
+	err := Parse("testfiles/test_schema4")
+	if err.Error() != "Object type Person with no fields" {
 		t.Error(err)
 	}
 }
 
-func TestSchema1_Error(t *testing.T) {
-	err := Parse("test_schema1")
-	if err == nil {
-		t.Error("Expected error")
+func TestSchema5_Error(t *testing.T) {
+	str = make(map[string]types.Type)
+	err := Parse("testfiles/test_schema5")
+	if err.Error() != "Repeated field name in object Person" {
+		t.Error(err)
 	}
 }
 
-func TestSchema2_Error(t *testing.T) {
-	err := Parse("test_schema2")
-	if err == nil {
-		t.Error("Expected error")
+func TestSchema6_Error(t *testing.T) {
+	str = make(map[string]types.Type)
+	err := Parse("testfiles/test_schema6")
+	if err.Error() != "Type not defined Film" {
+		t.Error(err)
 	}
 }
 
-func TestSchema3_Error(t *testing.T) {
-	err := Parse("test_schema3")
-	if err == nil {
-		t.Error("Expected error")
-	}
+// Correct specification of indexing
+func TestSchemaIndex(t *testing.T) {
+	str = make(map[string]types.Type)
+	require.NoError(t, Parse("testfiles/test_schema_index1"))
+}
+
+// Indexing can't be specified inside object types.
+func TestSchemaIndex_Error1(t *testing.T) {
+	str = make(map[string]types.Type)
+	indexedFields = make(map[string]bool)
+	require.Error(t, Parse("testfiles/test_schema_index2"))
+}
+
+// Object types cant be indexed.
+func TestSchemaIndex_Error2(t *testing.T) {
+	str = make(map[string]types.Type)
+	indexedFields = make(map[string]bool)
+	require.Error(t, Parse("testfiles/test_schema_index3"))
 }

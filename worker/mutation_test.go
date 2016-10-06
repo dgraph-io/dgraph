@@ -27,6 +27,8 @@ import (
 )
 
 func TestAddToMutationArray(t *testing.T) {
+	groupConfig = config{}
+	ParseGroupConfig("")
 	dir, err := ioutil.TempDir("", "storetest_")
 	if err != nil {
 		t.Error(err)
@@ -38,9 +40,9 @@ func TestAddToMutationArray(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	SetWorkerState(NewState(ps, 0, 1))
+	SetState(ps)
 
-	mutationsArray := make([]*x.Mutations, 1)
+	mutationsMap := make(map[uint32]*x.Mutations)
 	edges := []x.DirectedEdge{}
 
 	edges = append(edges, x.DirectedEdge{
@@ -49,14 +51,14 @@ func TestAddToMutationArray(t *testing.T) {
 		Timestamp: time.Now(),
 	})
 
-	addToMutationArray(mutationsArray, edges, set)
-	mu := mutationsArray[0]
+	addToMutationMap(mutationsMap, edges, set)
+	mu := mutationsMap[0]
 	if mu == nil || mu.Set == nil {
 		t.Errorf("Expected mu.Set to not be nil")
 	}
 
-	addToMutationArray(mutationsArray, edges, del)
-	mu = mutationsArray[0]
+	addToMutationMap(mutationsMap, edges, del)
+	mu = mutationsMap[0]
 	if mu == nil || mu.Del == nil {
 		t.Errorf("Expected mu.Del to not be nil")
 	}
