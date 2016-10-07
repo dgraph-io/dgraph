@@ -79,9 +79,9 @@ func indexKeys(attr string, data []byte) ([]string, error) {
 	default:
 		return exactMatchIndexKeys(attr, data), nil
 	}
-
 }
 
+// processIndexTerm adds mutation(s) for a single term, to maintain index.
 func processIndexTerm(ctx context.Context, attr string, uid uint64, term []byte, del bool) {
 	x.Assert(uid != 0)
 	keys, err := indexKeys(attr, term)
