@@ -72,7 +72,7 @@ func indexCells(g types.Geo) (s2.CellUnion, error) {
 	case *geom.Point:
 		return indexCellsForPoint(v, MinCellLevel, MaxCellLevel), nil
 	case *geom.Polygon:
-		l, err := loopFromPolygon(v)
+		l, err := LoopFromPolygon(v)
 		if err != nil {
 			return nil, err
 		}
@@ -98,8 +98,14 @@ func pointFromCoord(r geom.Coord) s2.Point {
 	return s2.PointFromLatLng(ll)
 }
 
-// We use loops instead of s2.Polygon as the s2.Polygon implemention is incomplete.
-func loopFromPolygon(p *geom.Polygon) (*s2.Loop, error) {
+// PointFromPoint converts a geom.Point to a s2.Point
+func PointFromPoint(p *geom.Point) s2.Point {
+	return pointFromCoord(p.Coords())
+}
+
+// LoopFromPolygon converts a geom.Polygon to a s2.Loop. We use loops instead of s2.Polygon as the
+// s2.Polygon implemention is incomplete.
+func LoopFromPolygon(p *geom.Polygon) (*s2.Loop, error) {
 	// go implementation of s2 does not support more than one loop (and will panic if the size of
 	// the loops array > 1). So we will skip the holes in the polygon and just use the outer loop.
 	r := p.LinearRing(0)

@@ -21,7 +21,6 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/dgraph/algo"
-	"github.com/dgraph-io/dgraph/geo"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/x"
@@ -129,7 +128,7 @@ func processTask(query []byte) ([]byte, error) {
 		case task.QueryFilterGeoFilter:
 			filter := new(task.GeoFilter)
 			filter.Init(unionTable.Bytes, unionTable.Pos)
-			k, err := geo.NewQueryKeys(filter)
+			k, err := newQueryKeys(filter)
 			if err != nil {
 				return nil, err
 			}
