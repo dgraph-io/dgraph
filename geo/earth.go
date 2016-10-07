@@ -35,6 +35,11 @@ func EarthDistance(angle s1.Angle) Length {
 	return Length(angle.Radians() * EarthRadiusMeters)
 }
 
+// EarthAngle converts a to distance on earth in meters to an angle
+func EarthAngle(dist float64) s1.Angle {
+	return s1.Angle(dist / EarthRadiusMeters)
+}
+
 // Area denotes an area on Earth
 type Area float64
 

@@ -34,6 +34,7 @@ type QueryKeys struct {
 	keys  []string  // The index keys
 	pt    *s2.Point // If not nil, the input data was a point
 	loop  *s2.Loop  // If not nil, the input data was a polygon
+	cap   *s2.Cap   // If not nil, the cap to be used for a near query
 	query int8      // The geo query being performed.
 }
 
@@ -52,7 +53,7 @@ func (q QueryKeys) PostFilter(attr string) func(u uint64) bool {
 	switch q.query {
 	case task.GeoQueryWithin:
 		return func(u uint64) bool {
-			return isWithin(attr, u, q.pt, q.loop)
+			return isWithin(attr, u, q.pt, q.loop, nil)
 		}
 	case task.GeoQueryContains:
 		return func(u uint64) bool {
@@ -65,7 +66,7 @@ func (q QueryKeys) PostFilter(attr string) func(u uint64) bool {
 	case task.GeoQueryNear:
 		// for a point to be near it should be within the loop defined by distance from the origin
 		return func(u uint64) bool {
-			return isWithin(attr, u, nil, q.loop)
+			return isWithin(attr, u, nil, nil, q.cap)
 		}
 	}
 	return nil
@@ -73,8 +74,6 @@ func (q QueryKeys) PostFilter(attr string) func(u uint64) bool {
 
 // newQueryKeys creates a QueryKeys object for the given filter.
 func newQueryKeys(f *task.GeoFilter) (*QueryKeys, error) {
-	// TODO: Support near queries
-
 	// Try to parse the data as geo type.
 	v, err := types.GeoType.Unmarshaler.FromBinary(f.DataBytes())
 	if err != nil {
@@ -93,9 +92,15 @@ func newQueryKeys(f *task.GeoFilter) (*QueryKeys, error) {
 	switch v := g.T.(type) {
 	case *geom.Point:
 		p := geo.PointFromPoint(v)
+		if f.Query() == task.GeoQueryNear {
+			return nearQueryKeys(p, f.MaxDistance())
+		}
 		return &QueryKeys{keys: keys, pt: &p, query: f.Query()}, nil
 
 	case *geom.Polygon:
+		if f.Query() == task.GeoQueryNear {
+			return nil, x.Errorf("Cannot use a polygon in a near query")
+		}
 		l, err := geo.LoopFromPolygon(v)
 		if err != nil {
 			return nil, err
@@ -106,9 +111,20 @@ func newQueryKeys(f *task.GeoFilter) (*QueryKeys, error) {
 	}
 }
 
+// nearQueryKeys creates a QueryKeys object for a near query.
+func nearQueryKeys(pt s2.Point, d uint32) (*QueryKeys, error) {
+	if d <= 0 {
+		return nil, x.Errorf("Invalid max distance specified for a near query")
+	}
+	a := geo.EarthAngle(float64(d))
+	c := s2.CapFromCenterAngle(pt, a)
+	keys := geo.IndexKeysForCap(c)
+	return &QueryKeys{keys: keys, cap: &c, query: task.GeoQueryNear}, nil
+}
+
 // returns true if the geometry represented by uid/attr is within the given loop or point
-func isWithin(attr string, uid uint64, pt *s2.Point, loop *s2.Loop) bool {
-	x.Assertf(pt != nil || loop != nil, "At least a point or loop should be defined.")
+func isWithin(attr string, uid uint64, pt *s2.Point, loop *s2.Loop, cap *s2.Cap) bool {
+	x.Assertf(pt != nil || loop != nil || cap != nil, "At least a point, loop or cap should be defined.")
 	if pt != nil {
 		// Nothing is inside a point.
 		return false
@@ -125,7 +141,10 @@ func isWithin(attr string, uid uint64, pt *s2.Point, loop *s2.Loop) bool {
 	}
 
 	s2pt := geo.PointFromPoint(gpt)
-	return loop.ContainsPoint(s2pt)
+	if loop != nil {
+		return loop.ContainsPoint(s2pt)
+	}
+	return cap.ContainsPoint(s2pt)
 }
 
 // returns true if the geometry represented by uid/attr contains the given loop or point

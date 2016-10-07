@@ -48,11 +48,27 @@ func IndexKeysFromGeo(g types.Geo) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
+	return indexKeysFromCellUnion(cu), nil
+}
+
+// IndexKeysForCap returns the keys to be used in a geospatial index for a Cap.
+func IndexKeysForCap(c s2.Cap) []string {
+	rc := &s2.RegionCoverer{
+		MinLevel: MinCellLevel,
+		MaxLevel: MaxCellLevel,
+		LevelMod: 0,
+		MaxCells: MaxCells,
+	}
+	cu := rc.Covering(c)
+	return indexKeysFromCellUnion(cu)
+}
+
+func indexKeysFromCellUnion(cu s2.CellUnion) []string {
 	keys := make([]string, len(cu))
 	for i, c := range cu {
 		keys[i] = indexKeyFromCellID(c)
 	}
-	return keys, nil
+	return keys
 }
 
 const indexPrefix = ":_loc_|"
