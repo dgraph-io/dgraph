@@ -184,7 +184,7 @@ func populateGraph(t *testing.T) (string, *store.Store) {
 	addEdge(t, edge, getOrCreate(posting.Key(1, "gender"), ps))
 
 	edge.Value, _ = types.Int32(15).MarshalBinary()
-	edge.ValueType = byte(types.Int32Type.ID())
+	edge.ValueType = byte(types.Int32ID)
 	edge.Attribute = "age"
 	edge.Entity = 1
 	addEdge(t, edge, getOrCreate(posting.Key(1, "age"), ps))
