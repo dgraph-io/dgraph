@@ -42,10 +42,8 @@ func (q QueryKeys) PostFilter(attr string) func(u uint64) bool {
 
 // NewQueryKeys creates a QueryKeys object for the given filter.
 func NewQueryKeys(f *task.GeoFilter) (*QueryKeys, error) {
-	var kg KeyGenerator
 	// TODO: Support near queries
-	// attr not used by IndexKeys, so we use just an empty string
-	keys, err := kg.IndexKeys("", f.DataBytes())
+	keys, err := IndexKeys(f.DataBytes())
 	if err != nil {
 		return nil, err
 	}
