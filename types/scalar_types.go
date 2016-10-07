@@ -113,7 +113,7 @@ var typeNameMap = map[string]Type{
 }
 
 // stores a mapping between the typeID to a type
-var typeIDMap = map[TypeID]Type{
+var typeIDMap = map[TypeID]Scalar{
 	Int32Type.ID():     Int32Type,
 	FloatType.ID():     FloatType,
 	StringType.ID():    StringType,
@@ -161,7 +161,7 @@ func (v Int32) MarshalJSON() ([]byte, error) {
 }
 
 // Type returns the type of this value
-func (v Int32) Type() Type {
+func (v Int32) Type() Scalar {
 	return typeIDMap[int32ID]
 }
 
@@ -208,7 +208,7 @@ func (v Float) MarshalJSON() ([]byte, error) {
 }
 
 // Type returns the type of this value
-func (v Float) Type() Type {
+func (v Float) Type() Scalar {
 	return typeIDMap[floatID]
 }
 
@@ -252,7 +252,7 @@ func (v String) MarshalJSON() ([]byte, error) {
 }
 
 // Type returns the type of this value
-func (v String) Type() Type {
+func (v String) Type() Scalar {
 	return typeIDMap[stringID]
 }
 
@@ -288,7 +288,7 @@ func (v Bytes) MarshalJSON() ([]byte, error) {
 }
 
 // Type returns the type of this value
-func (v Bytes) Type() Type {
+func (v Bytes) Type() Scalar {
 	return typeIDMap[bytesID]
 }
 
@@ -330,7 +330,7 @@ func (v Bool) MarshalJSON() ([]byte, error) {
 }
 
 // Type returns the type of this value
-func (v Bool) Type() Type {
+func (v Bool) Type() Scalar {
 	return typeIDMap[boolID]
 }
 
@@ -362,7 +362,7 @@ type Time struct {
 }
 
 // Type returns the type of this value
-func (v Time) Type() Type {
+func (v Time) Type() Scalar {
 	return typeIDMap[dateTimeID]
 }
 

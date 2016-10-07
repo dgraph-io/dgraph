@@ -196,47 +196,47 @@ func mutationToNQuad(nq []*graph.NQuad) ([]rdf.NQuad, error) {
 			ObjectId:  n.ObjId,
 			Label:     n.Label,
 		}
-		v, id, err := typeValueFromNQuad(n)
+		v, err := typeValueFromNQuad(n)
 		if err != nil {
 			return resp, err
 		}
 		if v != nil {
 			nq.ObjectValue, _ = v.MarshalBinary()
-			nq.ObjectType = byte(id)
+			nq.ObjectType = byte(v.Type().ID())
 		}
 		resp = append(resp, nq)
 	}
 	return resp, nil
 }
 
-func typeValueFromNQuad(nq *graph.NQuad) (types.Value, types.TypeID, error) {
+func typeValueFromNQuad(nq *graph.NQuad) (types.Value, error) {
 	if nq.Value == nil || nq.Value.Val == nil {
-		return nil, 0, nil
+		return nil, nil
 	}
 	switch v := nq.Value.Val.(type) {
 	case *graph.Value_BytesVal:
-		return types.Bytes(v.BytesVal), types.ByteArrayType.ID(), nil
+		return types.Bytes(v.BytesVal), nil
 	case *graph.Value_IntVal:
-		return types.Int32(v.IntVal), types.Int32Type.ID(), nil
+		return types.Int32(v.IntVal), nil
 	case *graph.Value_StrVal:
-		return types.String(v.StrVal), types.StringType.ID(), nil
+		return types.String(v.StrVal), nil
 	case *graph.Value_BoolVal:
-		return types.Bool(v.BoolVal), types.BooleanType.ID(), nil
+		return types.Bool(v.BoolVal), nil
 	case *graph.Value_DoubleVal:
-		return types.Float(v.DoubleVal), types.FloatType.ID(), nil
+		return types.Float(v.DoubleVal), nil
 	case *graph.Value_GeoVal:
 		geom, err := types.GeoType.Unmarshaler.FromBinary(v.GeoVal)
 		if err != nil {
-			return nil, 0, err
+			return nil, err
 		}
-		return geom, types.GeoType.ID(), nil
+		return geom, nil
 
 	case nil:
 		log.Fatalf("Val being nil is already handled")
-		return nil, 0, nil
+		return nil, nil
 	default:
 		// Unknown type
-		return nil, 0, x.Errorf("Unknown value type %T", v)
+		return nil, x.Errorf("Unknown value type %T", v)
 	}
 }
 

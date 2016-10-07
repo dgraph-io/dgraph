@@ -52,7 +52,7 @@ type Value interface {
 	encoding.BinaryMarshaler
 	json.Marshaler
 	// Type returns the type of this value
-	Type() Type
+	Type() Scalar
 }
 
 // Unmarshaler type is for unmarshaling a Value from binary/text format.
