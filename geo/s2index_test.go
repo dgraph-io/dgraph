@@ -126,8 +126,7 @@ func TestKeyGeneratorPoint(t *testing.T) {
 		t.Error(err)
 	}
 
-	var k KeyGenerator
-	keys, err := k.IndexKeys("location", data)
+	keys, err := IndexKeys(data)
 	if err != nil {
 		t.Error(err)
 	}
@@ -151,8 +150,7 @@ func TestKeyGeneratorPolygon(t *testing.T) {
 		t.Error(err)
 	}
 
-	var k KeyGenerator
-	keys, err := k.IndexKeys("boundary", data)
+	keys, err := IndexKeys(data)
 	if err != nil {
 		t.Error(err)
 	}
@@ -251,8 +249,7 @@ func BenchmarkKeyGeneratorPoint(b *testing.B) {
 	}
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		var k KeyGenerator
-		k.IndexKeys("location", data)
+		IndexKeys(data)
 	}
 }
 
@@ -268,8 +265,7 @@ func BenchmarkKeyGeneratorPolygon(b *testing.B) {
 
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		var k KeyGenerator
-		k.IndexKeys("boundary", data)
+		IndexKeys(data)
 	}
 }
 

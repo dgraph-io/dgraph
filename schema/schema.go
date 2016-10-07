@@ -41,21 +41,6 @@ func IsIndexed(str string) bool {
 	return indexedFields[str]
 }
 
-// GetKeygen returns the IndexKeyGenerator associated with this attribute.
-func GetKeygen(attr string) IndexKeyGenerator {
-	t, ok := str[attr]
-	if !ok {
-		return nil
-	}
-
-	switch t {
-	case types.GeoType:
-		return geoKeyGen
-	default:
-		return exactMatch
-	}
-}
-
 // ScalarList returns the list of scalars in the geiven object.
 func ScalarList(obj string) []Item {
 	var res []Item
