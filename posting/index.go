@@ -17,15 +17,23 @@
 package posting
 
 import (
+	"bytes"
 	"context"
 	"time"
 
 	"golang.org/x/net/trace"
 
+	"github.com/dgraph-io/dgraph/geo"
 	"github.com/dgraph-io/dgraph/posting/types"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/store"
+	stype "github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
+)
+
+const (
+	// Posting list keys are prefixed with this rune if it is a mutation meant for the index.
+	indexRune = ':'
 )
 
 var (
@@ -45,9 +53,38 @@ func InitIndex(ds *store.Store) {
 	indexStore = ds
 }
 
-func processIndexTerm(ctx context.Context, keygen schema.IndexKeyGenerator, attr string, uid uint64, term []byte, del bool) {
+// IndexKey creates a key for indexing the term for given attribute.
+func IndexKey(attr string, term []byte) []byte {
+	buf := bytes.NewBuffer(make([]byte, 0, len(attr)+len(term)+2))
+	_, err := buf.WriteRune(indexRune)
+	x.Check(err)
+	_, err = buf.WriteString(attr)
+	x.Check(err)
+	_, err = buf.WriteRune('|')
+	x.Check(err)
+	_, err = buf.Write(term)
+	x.Check(err)
+	return buf.Bytes()
+}
+
+func exactMatchIndexKeys(attr string, data []byte) []string {
+	return []string{string(IndexKey(attr, data))}
+}
+
+func indexKeys(attr string, data []byte) ([]string, error) {
+	t := schema.TypeOf(attr)
+	switch t {
+	case stype.GeoType:
+		return geo.IndexKeys(data)
+	default:
+		return exactMatchIndexKeys(attr, data), nil
+	}
+}
+
+// processIndexTerm adds mutation(s) for a single term, to maintain index.
+func processIndexTerm(ctx context.Context, attr string, uid uint64, term []byte, del bool) {
 	x.Assert(uid != 0)
-	keys, err := keygen.IndexKeys(attr, term)
+	keys, err := indexKeys(attr, term)
 	if err != nil {
 		// This data is not indexable
 		return
@@ -83,7 +120,7 @@ func processIndexTerm(ctx context.Context, keygen schema.IndexKeyGenerator, attr
 
 // AddMutationWithIndex is AddMutation with support for indexing.
 func (l *List) AddMutationWithIndex(ctx context.Context, t x.DirectedEdge, op byte) error {
-	x.Assertf(len(t.Attribute) > 0 && t.Attribute[0] != schema.IndexRune,
+	x.Assertf(len(t.Attribute) > 0 && t.Attribute[0] != indexRune,
 		"[%s] [%d] [%s] %d %d\n", t.Attribute, t.Entity, string(t.Value), t.ValueId, op)
 
 	var lastPost types.Posting
@@ -103,12 +140,11 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t x.DirectedEdge, op by
 	if !hasMutated || !doUpdateIndex {
 		return nil
 	}
-	keygen := schema.GetKeygen(t.Attribute)
 	if hasLastPost && lastPost.ValueBytes() != nil {
-		processIndexTerm(ctx, keygen, t.Attribute, t.Entity, lastPost.ValueBytes(), true)
+		processIndexTerm(ctx, t.Attribute, t.Entity, lastPost.ValueBytes(), true)
 	}
 	if op == Set {
-		processIndexTerm(ctx, keygen, t.Attribute, t.Entity, t.Value, false)
+		processIndexTerm(ctx, t.Attribute, t.Entity, t.Value, false)
 	}
 	return nil
 }

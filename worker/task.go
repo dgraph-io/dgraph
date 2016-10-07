@@ -23,7 +23,6 @@ import (
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/geo"
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -85,7 +84,7 @@ func (t termKeyList) Length() int {
 }
 
 func (t termKeyList) Key(i int, attr string) []byte {
-	return schema.IndexKey(attr, t.Terms(i))
+	return posting.IndexKey(attr, t.Terms(i))
 }
 
 func (t termKeyList) PostFilter(attr string) func(u uint64) bool {
