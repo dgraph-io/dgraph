@@ -144,6 +144,12 @@ func processTask(query []byte) ([]byte, error) {
 			uoffsets[i] = ulist.AddTo(b)
 		}
 	}
+	rv := createResult(b, uoffsets, voffsets, counts)
+	return rv, nil
+}
+
+func createResult(b *flatbuffers.Builder, uoffsets, voffsets []flatbuffers.UOffsetT,
+	counts []uint64) []byte {
 
 	// Create a ValueList's vector of Values.
 	task.ValueListStartValuesVector(b, len(voffsets))
@@ -181,7 +187,7 @@ func processTask(query []byte) ([]byte, error) {
 	task.ResultAddUidmatrix(b, matrixVent)
 	task.ResultAddCount(b, countsVent)
 	b.Finish(task.ResultEnd(b))
-	return b.FinishedBytes(), nil
+	return b.FinishedBytes()
 }
 
 // ServeTask is used to respond to a query.
