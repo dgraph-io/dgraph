@@ -48,7 +48,7 @@ func (v Geo) MarshalJSON() ([]byte, error) {
 
 // Type returns the type of this value
 func (v Geo) Type() Scalar {
-	return typeIDMap[GeoID]
+	return geoType
 }
 
 type unmarshalGeo struct{}
