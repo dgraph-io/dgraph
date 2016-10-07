@@ -148,6 +148,6 @@ func TestParseTime(t *testing.T) {
 
 func TestTime(t *testing.T) {
 	v := time.Date(2009, time.November, 10, 23, 0, 0, 0, time.UTC)
-	testBinary(v, DateTimeType.Unmarshaler, t)
-	testText(v, DateTimeType.Unmarshaler, t)
+	testBinary(Time{v}, DateTimeType.Unmarshaler, t)
+	testText(Time{v}, DateTimeType.Unmarshaler, t)
 }

@@ -60,6 +60,11 @@ func (v Date) MarshalJSON() ([]byte, error) {
 	return json.Marshal(str)
 }
 
+// Type returns the type of this value
+func (v Date) Type() Type {
+	return typeIDMap[dateID]
+}
+
 type unmarshalDate struct{}
 
 func (u unmarshalDate) FromBinary(data []byte) (Value, error) {
@@ -86,8 +91,8 @@ func (u unmarshalDate) fromFloat(f float64) (Value, error) {
 	if err != nil {
 		return nil, err
 	}
-	tm := v.(time.Time)
-	return u.fromTime(tm)
+	tm := v.(Time)
+	return u.fromTime(tm.Time)
 }
 
 func (u unmarshalDate) fromTime(t time.Time) (Value, error) {
@@ -100,12 +105,12 @@ func (u unmarshalDate) fromInt(i int32) (Value, error) {
 	if err != nil {
 		return nil, err
 	}
-	tm := v.(time.Time)
-	return u.fromTime(tm)
+	tm := v.(Time)
+	return u.fromTime(tm.Time)
 }
 
 func (u unmarshalTime) fromDate(v Date) (Value, error) {
-	return v.time, nil
+	return Time{v.time}, nil
 }
 
 func (u unmarshalFloat) fromDate(v Date) (Value, error) {

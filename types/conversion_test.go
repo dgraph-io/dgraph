@@ -99,7 +99,7 @@ func TestConvertStringToBool(t *testing.T) {
 }
 
 func TestConvertDateTimeToBool(t *testing.T) {
-	tm := time.Now()
+	tm := Time{time.Now()}
 	if _, err := BooleanType.Convert(tm); err == nil {
 		t.Errorf("Expected error converting time to bool")
 	}
@@ -195,7 +195,7 @@ func TestConvertDateTimeToInt32(t *testing.T) {
 		{time.Date(1969, time.November, 10, 23, 0, 0, 0, time.UTC), -4410000},
 	}
 	for _, tc := range data {
-		if out, err := Int32Type.Convert(tc.in); err != nil {
+		if out, err := Int32Type.Convert(Time{tc.in}); err != nil {
 			t.Errorf("Unexpected error converting time to int: %v", err)
 		} else if out != tc.out {
 			t.Errorf("Converting time to int: Expected %v, got %v", tc.out, out)
@@ -208,7 +208,7 @@ func TestConvertDateTimeToInt32(t *testing.T) {
 	}
 
 	for _, tc := range errData {
-		if out, err := Int32Type.Convert(tc); err == nil {
+		if out, err := Int32Type.Convert(Time{tc}); err == nil {
 			t.Errorf("Expected error converting time %s to int %v", tc, out)
 		}
 	}
@@ -296,7 +296,7 @@ func TestConvertDateTimeToFloat(t *testing.T) {
 		{time.Date(1901, time.November, 10, 23, 0, 0, 0, time.UTC), -2150326800},
 	}
 	for _, tc := range data {
-		if out, err := FloatType.Convert(tc.in); err != nil {
+		if out, err := FloatType.Convert(Time{tc.in}); err != nil {
 			t.Errorf("Unexpected error converting time to int: %v", err)
 		} else if out != tc.out {
 			t.Errorf("Converting time to int: Expected %v, got %v", tc.out, out)
@@ -321,9 +321,10 @@ func TestConvertInt32ToTime(t *testing.T) {
 		{0, time.Date(1970, time.January, 1, 0, 0, 0, 0, time.UTC)},
 	}
 	for _, tc := range data {
+		tout := Time{tc.out}
 		if out, err := DateTimeType.Convert(tc.in); err != nil {
 			t.Errorf("Unexpected error converting time to int: %v", err)
-		} else if out != tc.out {
+		} else if out != tout {
 			t.Errorf("Converting time to int: Expected %v, got %v", tc.out, out)
 		}
 	}
@@ -344,9 +345,10 @@ func TestConvertFloatToTime(t *testing.T) {
 		{-4409999.999, time.Date(1969, time.November, 10, 23, 0, 0, 1000001, time.UTC)},
 	}
 	for _, tc := range data {
+		tout := Time{tc.out}
 		if out, err := DateTimeType.Convert(tc.in); err != nil {
 			t.Errorf("Unexpected error converting float to int: %v", err)
-		} else if out != tc.out {
+		} else if out != tout {
 			t.Errorf("Converting float to int: Expected %v, got %v", tc.out, out)
 		}
 	}
@@ -357,7 +359,7 @@ func TestConvertToString(t *testing.T) {
 		in  Value
 		out String
 	}{
-		{time.Date(2006, time.January, 2, 15, 4, 5, 0, time.UTC), "2006-01-02T15:04:05Z"},
+		{Time{time.Date(2006, time.January, 2, 15, 4, 5, 0, time.UTC)}, "2006-01-02T15:04:05Z"},
 		{Float(13816.251), "1.3816251E+04"},
 		{Int32(-1221), "-1221"},
 		{Bool(true), "true"},

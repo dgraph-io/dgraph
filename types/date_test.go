@@ -91,9 +91,10 @@ func TestConvertDateToTime(t *testing.T) {
 			time.Date(1901, time.November, 10, 0, 0, 0, 0, time.UTC)},
 	}
 	for _, tc := range data {
+		tout := Time{tc.out}
 		if out, err := DateTimeType.Convert(tc.in); err != nil {
 			t.Errorf("Unexpected error converting date to time: %v", err)
-		} else if out.(time.Time) != tc.out {
+		} else if out.(Time) != tout {
 			t.Errorf("Converting date to time: Expected %v, got %v", tc.out, out)
 		}
 	}
@@ -159,7 +160,7 @@ func TestConvertDateTimeToDate(t *testing.T) {
 			createDate(1969, time.November, 10)},
 	}
 	for _, tc := range data {
-		if out, err := DateType.Convert(tc.in); err != nil {
+		if out, err := DateType.Convert(Time{tc.in}); err != nil {
 			t.Errorf("Unexpected error converting time to date: %v", err)
 		} else if out != tc.out {
 			t.Errorf("Converting time to date: Expected %v, got %v", tc.out, out)

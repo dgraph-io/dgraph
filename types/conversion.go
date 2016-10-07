@@ -66,12 +66,12 @@ func (to Scalar) Convert(value Value) (Value, error) {
 		}
 		return c.fromBool(bool(v))
 
-	case time.Time:
+	case Time:
 		c, ok := u.(timeUnmarshaler)
 		if !ok {
 			return nil, cantConvert(to, v)
 		}
-		return c.fromTime(v)
+		return c.fromTime(v.Time)
 
 	case Date:
 		c, ok := u.(dateUnmarshaler)

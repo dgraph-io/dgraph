@@ -46,6 +46,11 @@ func (v Geo) MarshalJSON() ([]byte, error) {
 	return v.MarshalText()
 }
 
+// Type returns the type of this value
+func (v Geo) Type() Type {
+	return typeIDMap[geoID]
+}
+
 type unmarshalGeo struct{}
 
 func (u unmarshalGeo) FromBinary(data []byte) (Value, error) {
