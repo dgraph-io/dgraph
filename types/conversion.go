@@ -23,7 +23,7 @@ import (
 )
 
 // Convert converts the value to given scalar type.
-func (to Scalar) Convert(value TypeValue) (TypeValue, error) {
+func (to Scalar) Convert(value Value) (Value, error) {
 	if to.ID() == stringID || to.ID() == bytesID {
 		// If we are converting to a string or bytes, simply use MarshalText
 		r, err := value.MarshalText()
@@ -85,26 +85,26 @@ func (to Scalar) Convert(value TypeValue) (TypeValue, error) {
 	}
 }
 
-func cantConvert(to Scalar, val TypeValue) error {
+func cantConvert(to Scalar, val Value) error {
 	return x.Errorf("Cannot convert %v to type %s", val, to.Name)
 }
 
 type int32Unmarshaler interface {
-	fromInt(value int32) (TypeValue, error)
+	fromInt(value int32) (Value, error)
 }
 
 type floatUnmarshaler interface {
-	fromFloat(value float64) (TypeValue, error)
+	fromFloat(value float64) (Value, error)
 }
 
 type boolUnmarshaler interface {
-	fromBool(value bool) (TypeValue, error)
+	fromBool(value bool) (Value, error)
 }
 
 type timeUnmarshaler interface {
-	fromTime(value time.Time) (TypeValue, error)
+	fromTime(value time.Time) (Value, error)
 }
 
 type dateUnmarshaler interface {
-	fromDate(value Date) (TypeValue, error)
+	fromDate(value Date) (Value, error)
 }

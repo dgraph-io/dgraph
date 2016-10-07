@@ -21,7 +21,7 @@ import (
 	"time"
 )
 
-func testBinary(val TypeValue, un Unmarshaler, t *testing.T) {
+func testBinary(val Value, un Unmarshaler, t *testing.T) {
 	bytes, err := val.MarshalBinary()
 	if err != nil {
 		t.Error(err)
@@ -35,7 +35,7 @@ func testBinary(val TypeValue, un Unmarshaler, t *testing.T) {
 	}
 }
 
-func testText(val TypeValue, un Unmarshaler, t *testing.T) {
+func testText(val Value, un Unmarshaler, t *testing.T) {
 	bytes, err := val.MarshalText()
 	if err != nil {
 		t.Error(err)

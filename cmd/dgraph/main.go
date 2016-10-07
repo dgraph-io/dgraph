@@ -209,7 +209,7 @@ func mutationToNQuad(nq []*graph.NQuad) ([]rdf.NQuad, error) {
 	return resp, nil
 }
 
-func typeValueFromNQuad(nq *graph.NQuad) (types.TypeValue, types.TypeID, error) {
+func typeValueFromNQuad(nq *graph.NQuad) (types.Value, types.TypeID, error) {
 	if nq.Value == nil || nq.Value.Val == nil {
 		return nil, 0, nil
 	}

@@ -354,7 +354,7 @@ func TestConvertFloatToTime(t *testing.T) {
 
 func TestConvertToString(t *testing.T) {
 	data := []struct {
-		in  TypeValue
+		in  Value
 		out String
 	}{
 		{time.Date(2006, time.January, 2, 15, 4, 5, 0, time.UTC), "2006-01-02T15:04:05Z"},

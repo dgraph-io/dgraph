@@ -126,14 +126,15 @@ var (
 
 // stores a mapping between a string name of a type
 var typeNameMap = map[string]Type{
-	Int32Type.Name:    Int32Type,
-	FloatType.Name:    FloatType,
-	StringType.Name:   StringType,
-	BooleanType.Name:  BooleanType,
-	IDType.Name:       IDType,
-	DateTimeType.Name: DateTimeType,
-	DateType.Name:     DateType,
-	GeoType.Name:      GeoType,
+	"int":      Int32Type,
+	"float":    FloatType,
+	"string":   StringType,
+	"bool":     BooleanType,
+	"id":       IDType,
+	"datetime": DateTimeType,
+	"date":     DateType,
+	"geo":      GeoType,
+	"bytes":    ByteArrayType,
 }
 
 // stores a mapping between the typeID to a type
@@ -186,7 +187,7 @@ func (v Int32) MarshalJSON() ([]byte, error) {
 
 type unmarshalInt32 struct{}
 
-func (u unmarshalInt32) FromBinary(data []byte) (TypeValue, error) {
+func (u unmarshalInt32) FromBinary(data []byte) (Value, error) {
 	if len(data) < 4 {
 		return nil, x.Errorf("Invalid data for int32 %v", data)
 	}
@@ -194,7 +195,7 @@ func (u unmarshalInt32) FromBinary(data []byte) (TypeValue, error) {
 	return Int32(val), nil
 }
 
-func (u unmarshalInt32) FromText(text []byte) (TypeValue, error) {
+func (u unmarshalInt32) FromText(text []byte) (Value, error) {
 	val, err := strconv.ParseInt(string(text), 10, 32)
 	if err != nil {
 		return nil, err
@@ -228,7 +229,7 @@ func (v Float) MarshalJSON() ([]byte, error) {
 
 type unmarshalFloat struct{}
 
-func (u unmarshalFloat) FromBinary(data []byte) (TypeValue, error) {
+func (u unmarshalFloat) FromBinary(data []byte) (Value, error) {
 	if len(data) < 8 {
 		return nil, x.Errorf("Invalid data for float %v", data)
 	}
@@ -237,7 +238,7 @@ func (u unmarshalFloat) FromBinary(data []byte) (TypeValue, error) {
 	return Float(val), nil
 }
 
-func (u unmarshalFloat) FromText(text []byte) (TypeValue, error) {
+func (u unmarshalFloat) FromText(text []byte) (Value, error) {
 	val, err := strconv.ParseFloat(string(text), 64)
 	if err != nil {
 		return nil, err
@@ -267,11 +268,11 @@ func (v String) MarshalJSON() ([]byte, error) {
 
 type unmarshalString struct{}
 
-func (v unmarshalString) FromBinary(data []byte) (TypeValue, error) {
+func (v unmarshalString) FromBinary(data []byte) (Value, error) {
 	return String(data), nil
 }
 
-func (v unmarshalString) FromText(text []byte) (TypeValue, error) {
+func (v unmarshalString) FromText(text []byte) (Value, error) {
 	return v.FromBinary(text)
 }
 
@@ -298,11 +299,11 @@ func (v Bytes) MarshalJSON() ([]byte, error) {
 
 type unmarshalBytes struct{}
 
-func (v unmarshalBytes) FromBinary(data []byte) (TypeValue, error) {
+func (v unmarshalBytes) FromBinary(data []byte) (Value, error) {
 	return Bytes(data), nil
 }
 
-func (v unmarshalBytes) FromText(text []byte) (TypeValue, error) {
+func (v unmarshalBytes) FromText(text []byte) (Value, error) {
 	return v.FromBinary(text)
 }
 
@@ -335,7 +336,7 @@ func (v Bool) MarshalJSON() ([]byte, error) {
 
 type unmarshalBool struct{}
 
-func (u unmarshalBool) FromBinary(data []byte) (TypeValue, error) {
+func (u unmarshalBool) FromBinary(data []byte) (Value, error) {
 	if data[0] == 0 {
 		return Bool(false), nil
 	} else if data[0] == 1 {
@@ -345,7 +346,7 @@ func (u unmarshalBool) FromBinary(data []byte) (TypeValue, error) {
 	}
 }
 
-func (u unmarshalBool) FromText(text []byte) (TypeValue, error) {
+func (u unmarshalBool) FromText(text []byte) (Value, error) {
 	val, err := strconv.ParseBool(string(text))
 	if err != nil {
 		return nil, err
@@ -357,7 +358,7 @@ var uBool unmarshalBool
 
 type unmarshalTime struct{}
 
-func (u unmarshalTime) FromBinary(data []byte) (TypeValue, error) {
+func (u unmarshalTime) FromBinary(data []byte) (Value, error) {
 	var v time.Time
 	if err := v.UnmarshalBinary(data); err != nil {
 		return nil, err
@@ -365,7 +366,7 @@ func (u unmarshalTime) FromBinary(data []byte) (TypeValue, error) {
 	return v, nil
 }
 
-func (u unmarshalTime) FromText(text []byte) (TypeValue, error) {
+func (u unmarshalTime) FromText(text []byte) (Value, error) {
 	var v time.Time
 	if err := v.UnmarshalText(text); err != nil {
 		// Try parsing without timezone since that is a valid format
@@ -378,21 +379,21 @@ func (u unmarshalTime) FromText(text []byte) (TypeValue, error) {
 
 var uTime unmarshalTime
 
-func (u unmarshalInt32) fromFloat(f float64) (TypeValue, error) {
+func (u unmarshalInt32) fromFloat(f float64) (Value, error) {
 	if f > math.MaxInt32 || f < math.MinInt32 || math.IsNaN(f) {
 		return nil, x.Errorf("Float out of int32 range")
 	}
 	return Int32(f), nil
 }
 
-func (u unmarshalInt32) fromBool(b bool) (TypeValue, error) {
+func (u unmarshalInt32) fromBool(b bool) (Value, error) {
 	if b {
 		return Int32(1), nil
 	}
 	return Int32(0), nil
 }
 
-func (u unmarshalInt32) fromTime(t time.Time) (TypeValue, error) {
+func (u unmarshalInt32) fromTime(t time.Time) (Value, error) {
 	// Represent the unix timestamp as a 32bit int.
 	secs := t.Unix()
 	if secs > math.MaxInt32 || secs < math.MinInt32 {
@@ -401,11 +402,11 @@ func (u unmarshalInt32) fromTime(t time.Time) (TypeValue, error) {
 	return Int32(secs), nil
 }
 
-func (u unmarshalFloat) fromInt(i int32) (TypeValue, error) {
+func (u unmarshalFloat) fromInt(i int32) (Value, error) {
 	return Float(i), nil
 }
 
-func (u unmarshalFloat) fromBool(b bool) (TypeValue, error) {
+func (u unmarshalFloat) fromBool(b bool) (Value, error) {
 	if b {
 		return Float(1), nil
 	}
@@ -416,7 +417,7 @@ const (
 	nanoSecondsInSec = 1000000000
 )
 
-func (u unmarshalFloat) fromTime(t time.Time) (TypeValue, error) {
+func (u unmarshalFloat) fromTime(t time.Time) (Value, error) {
 	// Represent the unix timestamp as a float (with fractional seconds)
 	secs := float64(t.Unix())
 	nano := float64(t.Nanosecond())
@@ -424,19 +425,19 @@ func (u unmarshalFloat) fromTime(t time.Time) (TypeValue, error) {
 	return Float(val), nil
 }
 
-func (u unmarshalBool) fromInt(i int32) (TypeValue, error) {
+func (u unmarshalBool) fromInt(i int32) (Value, error) {
 	return Bool(i != 0), nil
 }
 
-func (u unmarshalBool) fromFloat(f float64) (TypeValue, error) {
+func (u unmarshalBool) fromFloat(f float64) (Value, error) {
 	return Bool(f != 0), nil
 }
 
-func (u unmarshalTime) fromInt(i int32) (TypeValue, error) {
+func (u unmarshalTime) fromInt(i int32) (Value, error) {
 	return time.Unix(int64(i), 0).UTC(), nil
 }
 
-func (u unmarshalTime) fromFloat(f float64) (TypeValue, error) {
+func (u unmarshalTime) fromFloat(f float64) (Value, error) {
 	secs := int64(f)
 	fracSecs := f - float64(secs)
 	nsecs := int64(fracSecs * nanoSecondsInSec)

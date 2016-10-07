@@ -48,7 +48,7 @@ func (v Geo) MarshalJSON() ([]byte, error) {
 
 type unmarshalGeo struct{}
 
-func (u unmarshalGeo) FromBinary(data []byte) (TypeValue, error) {
+func (u unmarshalGeo) FromBinary(data []byte) (Value, error) {
 	v, err := wkb.Unmarshal(data)
 	if err != nil {
 		return nil, err
@@ -59,7 +59,7 @@ func (u unmarshalGeo) FromBinary(data []byte) (TypeValue, error) {
 }
 
 // Parses geojson text.
-func (u unmarshalGeo) FromText(text []byte) (TypeValue, error) {
+func (u unmarshalGeo) FromText(text []byte) (Value, error) {
 	var g geom.T
 	if err := geojson.Unmarshal(text, &g); err != nil {
 		return nil, err

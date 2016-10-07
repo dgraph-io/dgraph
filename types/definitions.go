@@ -47,19 +47,19 @@ type Object struct {
 	Fields map[string]string //field to type relationship
 }
 
-// TypeValue is the interface that all scalar type values need to implement.
-type TypeValue interface {
+// Value is the interface that all scalar values need to implement.
+type Value interface {
 	encoding.TextMarshaler
 	encoding.BinaryMarshaler
 	json.Marshaler
 }
 
-// Unmarshaler type is for unmarshaling a TypeValue from binary/text format.
+// Unmarshaler type is for unmarshaling a Value from binary/text format.
 type Unmarshaler interface {
 	// FromBinary unmarshals the data from a binary format.
-	FromBinary(data []byte) (TypeValue, error)
+	FromBinary(data []byte) (Value, error)
 	// FromText unmarshals the data from a text format.
-	FromText(data []byte) (TypeValue, error)
+	FromText(data []byte) (Value, error)
 }
 
 // String function to implement string interface

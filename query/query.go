@@ -341,7 +341,7 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 }
 
 // gets the value from the task.
-func getValue(tv task.Value) (types.TypeValue, types.Type, error) {
+func getValue(tv task.Value) (types.Value, types.Type, error) {
 	vType := tv.ValType()
 	valBytes := tv.ValBytes()
 	stype, _ := types.TypeForID(types.TypeID(vType))
@@ -512,7 +512,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 	return nil
 }
 
-func createProperty(prop string, v types.TypeValue) *graph.Property {
+func createProperty(prop string, v types.Value) *graph.Property {
 	pval := toProtoValue(v)
 	return &graph.Property{Prop: prop, Value: pval}
 }

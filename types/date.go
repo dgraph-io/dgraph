@@ -62,7 +62,7 @@ func (v Date) MarshalJSON() ([]byte, error) {
 
 type unmarshalDate struct{}
 
-func (u unmarshalDate) FromBinary(data []byte) (TypeValue, error) {
+func (u unmarshalDate) FromBinary(data []byte) (Value, error) {
 	if len(data) < 8 {
 		return nil, x.Errorf("Invalid data for date %v", data)
 	}
@@ -71,7 +71,7 @@ func (u unmarshalDate) FromBinary(data []byte) (TypeValue, error) {
 	return u.fromTime(tm)
 }
 
-func (u unmarshalDate) FromText(text []byte) (TypeValue, error) {
+func (u unmarshalDate) FromText(text []byte) (Value, error) {
 	val, err := time.Parse(dateFormat, string(text))
 	if err != nil {
 		return nil, err
@@ -81,7 +81,7 @@ func (u unmarshalDate) FromText(text []byte) (TypeValue, error) {
 
 var uDate unmarshalDate
 
-func (u unmarshalDate) fromFloat(f float64) (TypeValue, error) {
+func (u unmarshalDate) fromFloat(f float64) (Value, error) {
 	v, err := uTime.fromFloat(f)
 	if err != nil {
 		return nil, err
@@ -90,12 +90,12 @@ func (u unmarshalDate) fromFloat(f float64) (TypeValue, error) {
 	return u.fromTime(tm)
 }
 
-func (u unmarshalDate) fromTime(t time.Time) (TypeValue, error) {
+func (u unmarshalDate) fromTime(t time.Time) (Value, error) {
 	// truncate the time to just a date.
 	return createDate(t.Date()), nil
 }
 
-func (u unmarshalDate) fromInt(i int32) (TypeValue, error) {
+func (u unmarshalDate) fromInt(i int32) (Value, error) {
 	v, err := uTime.fromInt(i)
 	if err != nil {
 		return nil, err
@@ -104,14 +104,14 @@ func (u unmarshalDate) fromInt(i int32) (TypeValue, error) {
 	return u.fromTime(tm)
 }
 
-func (u unmarshalTime) fromDate(v Date) (TypeValue, error) {
+func (u unmarshalTime) fromDate(v Date) (Value, error) {
 	return v.time, nil
 }
 
-func (u unmarshalFloat) fromDate(v Date) (TypeValue, error) {
+func (u unmarshalFloat) fromDate(v Date) (Value, error) {
 	return u.fromTime(v.time)
 }
 
-func (u unmarshalInt32) fromDate(v Date) (TypeValue, error) {
+func (u unmarshalInt32) fromDate(v Date) (Value, error) {
 	return u.fromTime(v.time)
 }
