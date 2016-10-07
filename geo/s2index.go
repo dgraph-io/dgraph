@@ -174,66 +174,6 @@ func indexCellsForPoint(p *geom.Point, minLevel, maxLevel int) s2.CellUnion {
 	return cells
 }
 
-// Make s2.Loop implement s2.Region
-type loopRegion struct {
-	*s2.Loop
-}
-
-func (l loopRegion) ContainsCell(c s2.Cell) bool {
-	// Quick check if the cell is in the bounding box
-	if !l.RectBound().ContainsCell(c) {
-		return false
-	}
-
-	// Quick check to see if the first vertex is in the loop.
-	if !l.ContainsPoint(c.Vertex(0)) {
-		return false
-	}
-
-	// At this stage one vertex is in the loop, now we check that the edges of the cell do not cross
-	// the loop.
-	return !l.edgesCross(c)
-}
-
-// returns true if the edges of the cell cross the edges of the loop
-func (l loopRegion) edgesCross(c s2.Cell) bool {
-	for i := 0; i < 4; i++ {
-		crosser := s2.NewChainEdgeCrosser(c.Vertex(i), c.Vertex((i+1)%4), l.Vertex(0))
-		for i := 1; i <= l.NumEdges(); i++ { // add vertex 0 twice as it is a closed loop
-			if crosser.EdgeOrVertexChainCrossing(l.Vertex(i)) {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-func (l loopRegion) IntersectsCell(c s2.Cell) bool {
-	// Quick check if the cell intersects the bounding box
-	if !l.RectBound().IntersectsCell(c) {
-		return false
-	}
-
-	// Quick check to see if the first vertex is in the loop.
-	if l.ContainsPoint(c.Vertex(0)) {
-		return true
-	}
-
-	// At this stage the one vertex is outside the loop. We check if any of the edges of the cell
-	// cross the loop.
-	if l.edgesCross(c) {
-		return true
-	}
-
-	// At this stage we know that there is one point of the cell outside the loop and the boundaries
-	// do not interesect. The only way for the cell to intersect with the loop is if it contains the
-	// the loop. We test this by checking if an arbitrary vertex of the loop is inside the cell.
-	if c.RectBound().Contains(l.RectBound()) {
-		return c.ContainsPoint(l.Vertex(0))
-	}
-	return false
-}
-
 func coverLoop(l *s2.Loop, minLevel int, maxLevel int, maxCells int) s2.CellUnion {
 	rc := &s2.RegionCoverer{
 		MinLevel: minLevel,

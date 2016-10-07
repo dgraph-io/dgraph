@@ -156,11 +156,34 @@ func contains(attr string, uid uint64, pt *s2.Point, loop *s2.Loop) bool {
 // returns true if the geometry represented by uid/attr intersects the given loop or point
 func intersects(attr string, uid uint64, pt *s2.Point, loop *s2.Loop) bool {
 	x.Assertf(pt != nil || loop != nil, "At least a point or loop should be defined.")
-	_, err := parseValue(attr, uid)
+	g, err := parseValue(attr, uid)
 	if err != nil {
 		return false
 	}
-	return true
+	switch v := g.T.(type) {
+	case *geom.Point:
+		p := geo.PointFromPoint(v)
+		if pt != nil {
+			// Points only intersect if they are the same. (We allow for small rounding errors)
+			return pt.ApproxEqual(p)
+		}
+		// else loop is not nil
+		return loop.ContainsPoint(p)
+
+	case *geom.Polygon:
+		l, err := geo.LoopFromPolygon(v)
+		if err != nil {
+			return false
+		}
+		if pt != nil {
+			return loop.ContainsPoint(*pt)
+		}
+		// else loop is not nil
+		return geo.Intersects(l, loop)
+	default:
+		// A type that we don't know how to handle.
+		return false
+	}
 }
 
 func parseValue(attr string, uid uint64) (types.Geo, error) {
