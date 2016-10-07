@@ -21,6 +21,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/dgraph/algo"
+	"github.com/dgraph-io/dgraph/geo"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/task"
@@ -70,6 +71,8 @@ type keyList interface {
 	Length() int
 	// fetch the i'th key in the list
 	Key(i int, attr string) []byte
+	// A filter to be applied to the uid list
+	PostFilter(attr string) func(u uint64) bool
 }
 
 // wrap the TermList to implement the keyList interface
@@ -85,6 +88,10 @@ func (t termKeyList) Key(i int, attr string) []byte {
 	return schema.IndexKey(attr, t.Terms(i))
 }
 
+func (t termKeyList) PostFilter(attr string) func(u uint64) bool {
+	return nil
+}
+
 // Wrap the UidsList to implement the keyList interface
 type uidKeyList struct {
 	*task.UidList
@@ -96,6 +103,10 @@ func (t uidKeyList) Length() int {
 
 func (t uidKeyList) Key(i int, attr string) []byte {
 	return posting.Key(t.Uids(i), attr)
+}
+
+func (t uidKeyList) PostFilter(attr string) func(u uint64) bool {
+	return nil
 }
 
 // processTask processes the query, accumulates and returns the result.
@@ -115,6 +126,15 @@ func processTask(query []byte) ([]byte, error) {
 			terms := new(task.TermList)
 			terms.Init(unionTable.Bytes, unionTable.Pos)
 			return readPostingList(q, termKeyList{terms}), nil
+
+		case task.QueryFilterGeoFilter:
+			filter := new(task.GeoFilter)
+			filter.Init(unionTable.Bytes, unionTable.Pos)
+			k, err := geo.NewQueryKeys(filter)
+			if err != nil {
+				return nil, err
+			}
+			return readPostingList(q, k), nil
 
 		default:
 			return nil, x.Errorf("Unknown filter type %v", q.FilterType())
@@ -171,11 +191,14 @@ func readPostingList(q *task.Query, keys keyList) []byte {
 			}
 
 			ulist := pl.Uids(opts)
+			pf := keys.PostFilter(attr)
+			if pf != nil {
+				ulist.ApplyFilter(pf)
+			}
 			uoffsets[i] = ulist.AddTo(b)
 		}
 	}
-	rv := createResult(b, uoffsets, voffsets, counts)
-	return rv
+	return createResult(b, uoffsets, voffsets, counts)
 }
 
 func createResult(b *flatbuffers.Builder, uoffsets, voffsets []flatbuffers.UOffsetT,
