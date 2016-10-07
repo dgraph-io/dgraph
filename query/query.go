@@ -290,7 +290,7 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 			}
 			continue
 		}
-		val, storageType, err := getValue(tv)
+		val, err := getValue(tv)
 		if err != nil {
 			return result, err
 		}
@@ -318,7 +318,7 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 			}
 			schemaType := sg.Params.AttrType.(types.Scalar)
 			lval := val
-			if schemaType != storageType {
+			if schemaType != val.Type() {
 				// The schema and storage types do not match, so we do a type conversion.
 				var err error
 				lval, err = schemaType.Convert(val)
@@ -341,21 +341,18 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 }
 
 // gets the value from the task.
-func getValue(tv task.Value) (types.Value, types.Type, error) {
+func getValue(tv task.Value) (types.Value, error) {
 	vType := tv.ValType()
 	valBytes := tv.ValBytes()
-	stype, _ := types.TypeForID(types.TypeID(vType))
-	if stype == nil {
-		return nil, nil, x.Errorf("Invalid type: %v", vType)
+	u := types.TypeID(vType).Unmarshaler()
+	if u == nil {
+		return nil, x.Errorf("Invalid type: %v", vType)
 	}
-	if !stype.IsScalar() {
-		return nil, nil, x.Errorf("Unknown scalar type :%v", vType)
-	}
-	val, err := stype.(types.Scalar).Unmarshaler.FromBinary(valBytes)
+	val, err := u.FromBinary(valBytes)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	return val, stype, nil
+	return val, nil
 }
 
 // ToJSON converts the internal subgraph object to JSON format which is then sent
@@ -467,7 +464,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 			}
 
 			valBytes := tv.ValBytes()
-			v, storageType, err := getValue(tv)
+			v, err := getValue(tv)
 			if err != nil {
 				return err
 			}
@@ -490,7 +487,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 				}
 				schemaType := pc.Params.AttrType.(types.Scalar)
 				sv := v
-				if schemaType != storageType {
+				if schemaType != v.Type() {
 					// schema types don't match so we convert
 					var err error
 					sv, err = schemaType.Convert(v)
@@ -893,7 +890,7 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, taskQuery []byte, rch chan 
 				}
 
 				valBytes := tv.ValBytes()
-				v, storageType, err := getValue(tv)
+				v, err := getValue(tv)
 				if err != nil || bytes.Equal(valBytes, nil) {
 					// The value is not as requested in schema.
 					invalidUids[uid] = true
@@ -906,7 +903,7 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, taskQuery []byte, rch chan 
 				}
 
 				schemaType := node.Params.AttrType.(types.Scalar)
-				if schemaType != storageType {
+				if schemaType != v.Type() {
 					if _, err = schemaType.Convert(v); err != nil {
 						invalidUids[uid] = true
 					}

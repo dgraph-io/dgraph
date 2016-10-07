@@ -62,7 +62,7 @@ func (v Date) MarshalJSON() ([]byte, error) {
 
 // Type returns the type of this value
 func (v Date) Type() Scalar {
-	return typeIDMap[dateID]
+	return typeIDMap[DateID]
 }
 
 type unmarshalDate struct{}

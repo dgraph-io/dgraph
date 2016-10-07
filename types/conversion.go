@@ -24,7 +24,7 @@ import (
 
 // Convert converts the value to given scalar type.
 func (to Scalar) Convert(value Value) (Value, error) {
-	if to.ID() == stringID || to.ID() == bytesID {
+	if to.ID() == StringID || to.ID() == BytesID {
 		// If we are converting to a string or bytes, simply use MarshalText
 		r, err := value.MarshalText()
 		if err != nil {
@@ -33,7 +33,7 @@ func (to Scalar) Convert(value Value) (Value, error) {
 		return String(r), nil
 	}
 
-	u := to.Unmarshaler
+	u := to.ID().Unmarshaler()
 	// Otherwise we check if the conversion is defined.
 	switch v := value.(type) {
 	case Bytes:

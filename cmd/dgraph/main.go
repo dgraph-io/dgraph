@@ -225,7 +225,7 @@ func typeValueFromNQuad(nq *graph.NQuad) (types.Value, error) {
 	case *graph.Value_DoubleVal:
 		return types.Float(v.DoubleVal), nil
 	case *graph.Value_GeoVal:
-		geom, err := types.GeoType.Unmarshaler.FromBinary(v.GeoVal)
+		geom, err := types.GeoID.Unmarshaler().FromBinary(v.GeoVal)
 		if err != nil {
 			return nil, err
 		}
@@ -315,14 +315,11 @@ func validateTypes(nquads []rdf.NQuad) error {
 		if t := schema.TypeOf(nquad.Predicate); t != nil && t.IsScalar() {
 			// Currently, only scalar types are present
 			schemaType := t.(types.Scalar)
-			storageType, ok := types.TypeForID(types.TypeID(nquad.ObjectType))
-			if !ok {
-				log.Fatalf("Parsing created invalid type %v", nquad.ObjectType)
-			}
-			if storageType == types.ByteArrayType {
+			typeID := types.TypeID(nquad.ObjectType)
+			if typeID == types.BytesID {
 				// Storage type was unspecified in the RDF, so we convert the data to the schema
 				// type.
-				v, err := schemaType.Unmarshaler.FromText(nquad.ObjectValue)
+				v, err := schemaType.ID().Unmarshaler().FromText(nquad.ObjectValue)
 				if err != nil {
 					return err
 				}
@@ -331,8 +328,8 @@ func validateTypes(nquads []rdf.NQuad) error {
 					return err
 				}
 				nquad.ObjectType = byte(schemaType.ID())
-			} else if storageType != schemaType {
-				v, err := storageType.(types.Scalar).Unmarshaler.FromBinary(nquad.ObjectValue)
+			} else if typeID != schemaType.ID() {
+				v, err := typeID.Unmarshaler().FromBinary(nquad.ObjectValue)
 				if err != nil {
 					return err
 				}

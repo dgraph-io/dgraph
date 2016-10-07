@@ -173,7 +173,7 @@ func Parse(line string) (rnq NQuad, rerr error) {
 				return rnq, fmt.Errorf("itemObject can't be *")
 			}
 			if t, ok := typeMap[val]; ok {
-				p, err := t.Unmarshaler.FromText([]byte(oval))
+				p, err := t.Unmarshaler().FromText([]byte(oval))
 				if err != nil {
 					return rnq, err
 				}
@@ -181,7 +181,7 @@ func Parse(line string) (rnq NQuad, rerr error) {
 				if err != nil {
 					return rnq, err
 				}
-				rnq.ObjectType = byte(t.ID())
+				rnq.ObjectType = byte(t)
 				oval = ""
 			} else {
 				oval += "@@" + val
@@ -224,20 +224,20 @@ func isNewline(r rune) bool {
 	return r == '\n' || r == '\r'
 }
 
-var typeMap = map[string]types.Scalar{
-	"xs:string":                                 types.StringType,
-	"xs:dateTime":                               types.DateTimeType,
-	"xs:date":                                   types.DateType,
-	"xs:int":                                    types.Int32Type,
-	"xs:boolean":                                types.BooleanType,
-	"xs:double":                                 types.FloatType,
-	"xs:float":                                  types.FloatType,
-	"geo:geojson":                               types.GeoType,
-	"http://www.w3.org/2001/XMLSchema#string":   types.StringType,
-	"http://www.w3.org/2001/XMLSchema#dateTime": types.DateTimeType,
-	"http://www.w3.org/2001/XMLSchema#date":     types.DateType,
-	"http://www.w3.org/2001/XMLSchema#int":      types.Int32Type,
-	"http://www.w3.org/2001/XMLSchema#boolean":  types.BooleanType,
-	"http://www.w3.org/2001/XMLSchema#double":   types.FloatType,
-	"http://www.w3.org/2001/XMLSchema#float":    types.FloatType,
+var typeMap = map[string]types.TypeID{
+	"xs:string":                                 types.StringID,
+	"xs:dateTime":                               types.DateTimeID,
+	"xs:date":                                   types.DateID,
+	"xs:int":                                    types.Int32ID,
+	"xs:boolean":                                types.BoolID,
+	"xs:double":                                 types.FloatID,
+	"xs:float":                                  types.FloatID,
+	"geo:geojson":                               types.GeoID,
+	"http://www.w3.org/2001/XMLSchema#string":   types.StringID,
+	"http://www.w3.org/2001/XMLSchema#dateTime": types.DateTimeID,
+	"http://www.w3.org/2001/XMLSchema#date":     types.DateID,
+	"http://www.w3.org/2001/XMLSchema#int":      types.Int32ID,
+	"http://www.w3.org/2001/XMLSchema#boolean":  types.BoolID,
+	"http://www.w3.org/2001/XMLSchema#double":   types.FloatID,
+	"http://www.w3.org/2001/XMLSchema#float":    types.FloatID,
 }

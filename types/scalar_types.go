@@ -31,71 +31,62 @@ import (
 // data. When adding a new type *always* add to the end of this list.
 // Never delete anything from this list even if it becomes unused.
 const (
-	bytesID    TypeID = 0
-	int32ID           = 1
-	floatID           = 2
-	boolID            = 3
-	dateTimeID        = 4
-	stringID          = 5
-	dateID            = 6
-	geoID             = 7
+	BytesID    TypeID = 0
+	Int32ID    TypeID = 1
+	FloatID    TypeID = 2
+	BoolID     TypeID = 3
+	DateTimeID TypeID = 4
+	StringID   TypeID = 5
+	DateID     TypeID = 6
+	GeoID      TypeID = 7
 )
 
 // added suffix 'type' to names to distinguish from Go types 'int' and 'string'
 var (
 	// Int32Type scalar.
 	Int32Type = Scalar{
-		Name:        "int",
-		id:          int32ID,
-		Unmarshaler: uInt32,
+		Name: "int",
+		id:   Int32ID,
 	}
 	// FloatType scalar.
 	FloatType = Scalar{
-		Name:        "float",
-		id:          floatID,
-		Unmarshaler: uFloat,
+		Name: "float",
+		id:   FloatID,
 	}
 	// StringType scalar.
 	StringType = Scalar{
-		Name:        "string",
-		id:          stringID,
-		Unmarshaler: uString,
+		Name: "string",
+		id:   StringID,
 	}
 	// ByteArrayType scalar.
 	ByteArrayType = Scalar{
-		Name:        "bytes",
-		id:          bytesID,
-		Unmarshaler: uBytes,
+		Name: "bytes",
+		id:   BytesID,
 	}
 	// BooleanType scalar.
 	BooleanType = Scalar{
-		Name:        "bool",
-		id:          boolID,
-		Unmarshaler: uBool,
+		Name: "bool",
+		id:   BoolID,
 	}
 	// IDType scalar.
 	IDType = Scalar{
-		Name:        "id",
-		id:          stringID,
-		Unmarshaler: uString,
+		Name: "id",
+		id:   StringID,
 	}
 	// DateTimeType scalar.
 	DateTimeType = Scalar{
-		Name:        "datetime",
-		id:          dateTimeID,
-		Unmarshaler: uTime,
+		Name: "datetime",
+		id:   DateTimeID,
 	}
 	// DateType scalar.
 	DateType = Scalar{
-		Name:        "date",
-		id:          dateID,
-		Unmarshaler: uDate,
+		Name: "date",
+		id:   DateID,
 	}
 	// GeoType scalar.
 	GeoType = Scalar{
-		Name:        "geo",
-		id:          geoID,
-		Unmarshaler: uGeo,
+		Name: "geo",
+		id:   GeoID,
 	}
 )
 
@@ -123,6 +114,17 @@ var typeIDMap = map[TypeID]Scalar{
 	ByteArrayType.ID(): ByteArrayType,
 	DateType.ID():      DateType,
 	GeoType.ID():       GeoType,
+}
+
+var typeIDUnmarshalerMap = map[TypeID]Unmarshaler{
+	Int32ID:    uInt32,
+	FloatID:    uFloat,
+	StringID:   uString,
+	BoolID:     uBool,
+	DateTimeID: uTime,
+	BytesID:    uBytes,
+	DateID:     uDate,
+	GeoID:      uGeo,
 }
 
 // TypeForName returns the type corresponding to the given name.
@@ -162,7 +164,7 @@ func (v Int32) MarshalJSON() ([]byte, error) {
 
 // Type returns the type of this value
 func (v Int32) Type() Scalar {
-	return typeIDMap[int32ID]
+	return typeIDMap[Int32ID]
 }
 
 type unmarshalInt32 struct{}
@@ -209,7 +211,7 @@ func (v Float) MarshalJSON() ([]byte, error) {
 
 // Type returns the type of this value
 func (v Float) Type() Scalar {
-	return typeIDMap[floatID]
+	return typeIDMap[FloatID]
 }
 
 type unmarshalFloat struct{}
@@ -253,7 +255,7 @@ func (v String) MarshalJSON() ([]byte, error) {
 
 // Type returns the type of this value
 func (v String) Type() Scalar {
-	return typeIDMap[stringID]
+	return typeIDMap[StringID]
 }
 
 type unmarshalString struct{}
@@ -289,7 +291,7 @@ func (v Bytes) MarshalJSON() ([]byte, error) {
 
 // Type returns the type of this value
 func (v Bytes) Type() Scalar {
-	return typeIDMap[bytesID]
+	return typeIDMap[BytesID]
 }
 
 type unmarshalBytes struct{}
@@ -331,7 +333,7 @@ func (v Bool) MarshalJSON() ([]byte, error) {
 
 // Type returns the type of this value
 func (v Bool) Type() Scalar {
-	return typeIDMap[boolID]
+	return typeIDMap[BoolID]
 }
 
 type unmarshalBool struct{}
@@ -363,7 +365,7 @@ type Time struct {
 
 // Type returns the type of this value
 func (v Time) Type() Scalar {
-	return typeIDMap[dateTimeID]
+	return typeIDMap[DateTimeID]
 }
 
 type unmarshalTime struct{}
