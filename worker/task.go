@@ -65,33 +65,68 @@ func ProcessTaskOverNetwork(ctx context.Context, qu []byte) (result []byte, rerr
 	return reply.Data, nil
 }
 
+type keyList interface {
+	// Length of the list
+	Length() int
+	// fetch the i'th key in the list
+	Key(i int, attr string) []byte
+}
+
+// wrap the TermList to implement the keyList interface
+type termKeyList struct {
+	*task.TermList
+}
+
+func (t termKeyList) Length() int {
+	return t.TermsLength()
+}
+
+func (t termKeyList) Key(i int, attr string) []byte {
+	return schema.IndexKey(attr, t.Terms(i))
+}
+
+// Wrap the UidsList to implement the keyList interface
+type uidKeyList struct {
+	*task.UidList
+}
+
+func (t uidKeyList) Length() int {
+	return t.UidsLength()
+}
+
+func (t uidKeyList) Key(i int, attr string) []byte {
+	return posting.Key(t.Uids(i), attr)
+}
+
 // processTask processes the query, accumulates and returns the result.
 func processTask(query []byte) ([]byte, error) {
 	q := task.GetRootAsQuery(query, 0)
 
-	attr := string(q.Attr())
-	store := ws.dataStore
-	var uids *task.UidList
-	var terms *task.TermList
-	useTerm := false
 	unionTable := new(flatbuffers.Table)
 	if q.Filter(unionTable) {
-		if q.FilterType() == task.QueryFilterUidList {
-			uids = new(task.UidList)
+		switch q.FilterType() {
+
+		case task.QueryFilterUidList:
+			uids := new(task.UidList)
 			uids.Init(unionTable.Bytes, unionTable.Pos)
-		} else if q.FilterType() == task.QueryFilterTermList {
-			terms = new(task.TermList)
+			return readPostingList(q, uidKeyList{uids}), nil
+
+		case task.QueryFilterTermList:
+			terms := new(task.TermList)
 			terms.Init(unionTable.Bytes, unionTable.Pos)
-			useTerm = true
+			return readPostingList(q, termKeyList{terms}), nil
+
+		default:
+			return nil, x.Errorf("Unknown filter type %v", q.FilterType())
 		}
 	}
+	return nil, x.Errorf("No filter in query")
+}
 
-	var n int
-	if useTerm {
-		n = terms.TermsLength()
-	} else {
-		n = uids.UidsLength()
-	}
+func readPostingList(q *task.Query, keys keyList) []byte {
+	store := ws.dataStore
+	attr := string(q.Attr())
+	n := keys.Length()
 
 	b := flatbuffers.NewBuilder(0)
 	voffsets := make([]flatbuffers.UOffsetT, n)
@@ -99,12 +134,7 @@ func processTask(query []byte) ([]byte, error) {
 	var counts []uint64
 
 	for i := 0; i < n; i++ {
-		var key []byte
-		if useTerm {
-			key = schema.IndexKey(attr, terms.Terms(i))
-		} else {
-			key = posting.Key(uids.Uids(i), attr)
-		}
+		key := keys.Key(i, attr)
 		// Get or create the posting list for an entity, attribute combination.
 		pl, decr := posting.GetOrCreate(key, store)
 		defer decr()
@@ -145,7 +175,7 @@ func processTask(query []byte) ([]byte, error) {
 		}
 	}
 	rv := createResult(b, uoffsets, voffsets, counts)
-	return rv, nil
+	return rv
 }
 
 func createResult(b *flatbuffers.Builder, uoffsets, voffsets []flatbuffers.UOffsetT,
