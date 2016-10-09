@@ -56,14 +56,6 @@ type Value interface {
 	fmt.Stringer
 }
 
-// Unmarshaler type is for unmarshaling a Value from binary/text format.
-type Unmarshaler interface {
-	// FromBinary unmarshals the data from a binary format.
-	FromBinary(data []byte) (Value, error)
-	// FromText unmarshals the data from a text format.
-	FromText(data []byte) (Value, error)
-}
-
 // String function to implement string interface
 func (s Scalar) String() string {
 	return fmt.Sprint(s.Name)
