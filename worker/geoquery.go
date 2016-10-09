@@ -209,8 +209,8 @@ func parseValue(attr string, uid uint64) (types.Geo, error) {
 	store := ws.dataStore
 	key := posting.Key(uid, attr)
 	pl, decr := posting.GetOrCreate(key, store)
-	val, _, err := pl.Value()
 	defer decr()
+	val, _, err := pl.Value()
 	if err != nil {
 		return types.Geo{nil}, err
 	}
