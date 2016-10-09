@@ -173,7 +173,8 @@ func Parse(line string) (rnq NQuad, rerr error) {
 				return rnq, fmt.Errorf("itemObject can't be *")
 			}
 			if t, ok := typeMap[val]; ok {
-				p, err := t.Unmarshaler().FromText([]byte(oval))
+				p := types.ValueForType(t)
+				err := p.UnmarshalText([]byte(oval))
 				if err != nil {
 					return rnq, err
 				}

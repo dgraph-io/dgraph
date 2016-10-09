@@ -215,21 +215,27 @@ func typeValueFromNQuad(nq *graph.NQuad) (types.Value, error) {
 	}
 	switch v := nq.Value.Val.(type) {
 	case *graph.Value_BytesVal:
-		return types.Bytes(v.BytesVal), nil
+		b := types.Bytes(v.BytesVal)
+		return &b, nil
 	case *graph.Value_IntVal:
-		return types.Int32(v.IntVal), nil
+		i := types.Int32(v.IntVal)
+		return &i, nil
 	case *graph.Value_StrVal:
-		return types.String(v.StrVal), nil
+		s := types.String(v.StrVal)
+		return &s, nil
 	case *graph.Value_BoolVal:
-		return types.Bool(v.BoolVal), nil
+		b := types.Bool(v.BoolVal)
+		return &b, nil
 	case *graph.Value_DoubleVal:
-		return types.Float(v.DoubleVal), nil
+		f := types.Float(v.DoubleVal)
+		return &f, nil
 	case *graph.Value_GeoVal:
-		geom, err := types.GeoID.Unmarshaler().FromBinary(v.GeoVal)
+		var geom types.Geo
+		err := geom.UnmarshalBinary(v.GeoVal)
 		if err != nil {
 			return nil, err
 		}
-		return geom, nil
+		return &geom, nil
 
 	case nil:
 		log.Fatalf("Val being nil is already handled")
@@ -319,7 +325,8 @@ func validateTypes(nquads []rdf.NQuad) error {
 			if typeID == types.BytesID {
 				// Storage type was unspecified in the RDF, so we convert the data to the schema
 				// type.
-				v, err := schemaType.ID().Unmarshaler().FromText(nquad.ObjectValue)
+				v := types.ValueForType(schemaType.ID())
+				err := v.UnmarshalText(nquad.ObjectValue)
 				if err != nil {
 					return err
 				}
@@ -329,7 +336,8 @@ func validateTypes(nquads []rdf.NQuad) error {
 				}
 				nquad.ObjectType = byte(schemaType.ID())
 			} else if typeID != schemaType.ID() {
-				v, err := typeID.Unmarshaler().FromBinary(nquad.ObjectValue)
+				v := types.ValueForType(schemaType.ID())
+				err := v.UnmarshalBinary(nquad.ObjectValue)
 				if err != nil {
 					return err
 				}

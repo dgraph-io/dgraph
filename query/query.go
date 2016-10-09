@@ -344,11 +344,11 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 func getValue(tv task.Value) (types.Value, error) {
 	vType := tv.ValType()
 	valBytes := tv.ValBytes()
-	u := types.TypeID(vType).Unmarshaler()
-	if u == nil {
+	val := types.ValueForType(types.TypeID(vType))
+	if val == nil {
 		return nil, x.Errorf("Invalid type: %v", vType)
 	}
-	val, err := u.FromBinary(valBytes)
+	err := val.UnmarshalBinary(valBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -428,7 +428,8 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 
 		ul := pc.Result[idx]
 		if sg.Counts != nil && sg.Counts.CountLength() > 0 {
-			p := createProperty("_count_", types.Int32(sg.Counts.Count(idx)))
+			c := types.Int32(sg.Counts.Count(idx))
+			p := createProperty("_count_", &c)
 			uc := &graph.Node{
 				Attribute:  pc.Attr,
 				Properties: []*graph.Property{p},

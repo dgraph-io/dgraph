@@ -26,22 +26,22 @@ import (
 
 func toProtoValue(v types.Value) *graph.Value {
 	switch val := v.(type) {
-	case types.Bytes:
-		return &graph.Value{&graph.Value_BytesVal{val}}
+	case *types.Bytes:
+		return &graph.Value{&graph.Value_BytesVal{*val}}
 
-	case types.String:
-		return &graph.Value{&graph.Value_StrVal{string(val)}}
+	case *types.String:
+		return &graph.Value{&graph.Value_StrVal{string(*val)}}
 
-	case types.Int32:
-		return &graph.Value{&graph.Value_IntVal{int32(val)}}
+	case *types.Int32:
+		return &graph.Value{&graph.Value_IntVal{int32(*val)}}
 
-	case types.Float:
-		return &graph.Value{&graph.Value_DoubleVal{float64(val)}}
+	case *types.Float:
+		return &graph.Value{&graph.Value_DoubleVal{float64(*val)}}
 
-	case types.Bool:
-		return &graph.Value{&graph.Value_BoolVal{bool(val)}}
+	case *types.Bool:
+		return &graph.Value{&graph.Value_BoolVal{bool(*val)}}
 
-	case types.Geo:
+	case *types.Geo:
 		var b, _ = val.MarshalBinary()
 		return &graph.Value{&graph.Value_GeoVal{b}}
 
