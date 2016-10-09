@@ -51,27 +51,26 @@ func (v Geo) Type() Scalar {
 	return geoType
 }
 
-type unmarshalGeo struct{}
-
-func (u unmarshalGeo) FromBinary(data []byte) (Value, error) {
-	v, err := wkb.Unmarshal(data)
+// UnmarshalBinary unmarshals the data from WKB
+func (v *Geo) UnmarshalBinary(data []byte) error {
+	w, err := wkb.Unmarshal(data)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	var g Geo
-	g.geo = v
-	return g, nil
+	v.geo = w
+	return nil
 }
 
-// Parses geojson text.
-func (u unmarshalGeo) FromText(text []byte) (Value, error) {
+// UnmarshalText parses the data from a Geojson
+func (v *Geo) UnmarshalText(text []byte) error {
 	var g geom.T
 	if err := geojson.Unmarshal(text, &g); err != nil {
-		return nil, err
+		return err
 	}
-	var geo Geo
-	geo.geo = g
-	return geo, nil
+	v.geo = g
+	return nil
 }
 
-var uGeo unmarshalGeo
+func (v Geo) String() string {
+	return "<geodata>"
+}

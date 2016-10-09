@@ -30,11 +30,6 @@ type Type interface {
 // TypeID is the id used to identify a type.
 type TypeID byte
 
-// Unmarshaler returns the unmarshaler associated with the TypeID
-func (t TypeID) Unmarshaler() Unmarshaler {
-	return typeIDUnmarshalerMap[t]
-}
-
 // Scalar type defines concrete structure for scalar types to use.
 // Almost all scalar types can also act as input types.
 // Scalars (along with Enums) form leaf nodes of request or input values to arguements.
@@ -52,10 +47,13 @@ type Object struct {
 // Value is the interface that all scalar values need to implement.
 type Value interface {
 	encoding.TextMarshaler
+	encoding.TextUnmarshaler
 	encoding.BinaryMarshaler
+	encoding.BinaryUnmarshaler
 	json.Marshaler
 	// Type returns the type of this value
 	Type() Scalar
+	fmt.Stringer
 }
 
 // Unmarshaler type is for unmarshaling a Value from binary/text format.

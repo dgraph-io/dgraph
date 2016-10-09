@@ -19,6 +19,7 @@ package types
 import (
 	"encoding/binary"
 	"encoding/json"
+	"fmt"
 	"math"
 	"strconv"
 	"time"
@@ -94,22 +95,51 @@ var typeNameMap = map[string]Type{
 	byteArrayType.Name: byteArrayType,
 }
 
-var typeIDUnmarshalerMap = map[TypeID]Unmarshaler{
-	Int32ID:    uInt32,
-	FloatID:    uFloat,
-	StringID:   uString,
-	BoolID:     uBool,
-	DateTimeID: uTime,
-	BytesID:    uBytes,
-	DateID:     uDate,
-	GeoID:      uGeo,
-}
-
 // TypeForName returns the type corresponding to the given name.
 // If name is not recognized, it returns nil.
 func TypeForName(name string) (Type, bool) {
 	t, ok := typeNameMap[name]
 	return t, ok
+}
+
+// ValueForType returns the zero value for a type id
+func ValueForType(id TypeID) Value {
+	switch id {
+	case BytesID:
+		var b Bytes
+		return &b
+
+	case Int32ID:
+		var i Int32
+		return &i
+
+	case FloatID:
+		var f Float
+		return &f
+
+	case BoolID:
+		var b Bool
+		return &b
+
+	case DateTimeID:
+		var t Time
+		return &t
+
+	case StringID:
+		var s String
+		return &s
+
+	case DateID:
+		var d Date
+		return &d
+
+	case GeoID:
+		var g Geo
+		return &g
+
+	default:
+		return nil
+	}
 }
 
 // Int32 is the scalar type for int32
@@ -138,25 +168,28 @@ func (v Int32) Type() Scalar {
 	return int32Type
 }
 
-type unmarshalInt32 struct{}
-
-func (u unmarshalInt32) FromBinary(data []byte) (Value, error) {
-	if len(data) < 4 {
-		return nil, x.Errorf("Invalid data for int32 %v", data)
-	}
-	val := binary.LittleEndian.Uint32(data)
-	return Int32(val), nil
+func (v Int32) String() string {
+	return fmt.Sprintf("%v", int32(v))
 }
 
-func (u unmarshalInt32) FromText(text []byte) (Value, error) {
+// UnmarshalBinary unmarshals the data from a binary format.
+func (v *Int32) UnmarshalBinary(data []byte) error {
+	if len(data) < 4 {
+		return x.Errorf("Invalid data for int32 %v", data)
+	}
+	*v = Int32(binary.LittleEndian.Uint32(data))
+	return nil
+}
+
+// UnmarshalText unmarshals the data from a text format.
+func (v *Int32) UnmarshalText(text []byte) error {
 	val, err := strconv.ParseInt(string(text), 10, 32)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	return Int32(val), nil
+	*v = Int32(val)
+	return nil
 }
-
-var uInt32 unmarshalInt32
 
 // Float is the scalar type for float64
 type Float float64
@@ -185,26 +218,30 @@ func (v Float) Type() Scalar {
 	return floatType
 }
 
-type unmarshalFloat struct{}
-
-func (u unmarshalFloat) FromBinary(data []byte) (Value, error) {
+// UnmarshalBinary unmarshals the data from a binary format.
+func (v *Float) UnmarshalBinary(data []byte) error {
 	if len(data) < 8 {
-		return nil, x.Errorf("Invalid data for float %v", data)
+		return x.Errorf("Invalid data for float %v", data)
 	}
-	v := binary.LittleEndian.Uint64(data)
-	val := math.Float64frombits(v)
-	return Float(val), nil
+	i := binary.LittleEndian.Uint64(data)
+	val := math.Float64frombits(i)
+	*v = Float(val)
+	return nil
 }
 
-func (u unmarshalFloat) FromText(text []byte) (Value, error) {
+// UnmarshalText unmarshals the data from a text format.
+func (v *Float) UnmarshalText(text []byte) error {
 	val, err := strconv.ParseFloat(string(text), 64)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	return Float(val), nil
+	*v = Float(val)
+	return nil
 }
 
-var uFloat unmarshalFloat
+func (v Float) String() string {
+	return fmt.Sprintf("%v", float64(v))
+}
 
 // String is the scalar type for string
 type String string
@@ -229,17 +266,20 @@ func (v String) Type() Scalar {
 	return stringType
 }
 
-type unmarshalString struct{}
-
-func (v unmarshalString) FromBinary(data []byte) (Value, error) {
-	return String(data), nil
+// UnmarshalBinary unmarshals the data from a binary format.
+func (v *String) UnmarshalBinary(data []byte) error {
+	*v = String(data)
+	return nil
 }
 
-func (v unmarshalString) FromText(text []byte) (Value, error) {
-	return v.FromBinary(text)
+// UnmarshalText unmarshals the data from a text format.
+func (v *String) UnmarshalText(text []byte) error {
+	return v.UnmarshalBinary(text)
 }
 
-var uString unmarshalString
+func (v String) String() string {
+	return string(v)
+}
 
 // Bytes is the scalar type for []byte
 type Bytes []byte
@@ -265,17 +305,20 @@ func (v Bytes) Type() Scalar {
 	return byteArrayType
 }
 
-type unmarshalBytes struct{}
-
-func (v unmarshalBytes) FromBinary(data []byte) (Value, error) {
-	return Bytes(data), nil
+// UnmarshalBinary unmarshals the data from a binary format.
+func (v *Bytes) UnmarshalBinary(data []byte) error {
+	*v = Bytes(data)
+	return nil
 }
 
-func (v unmarshalBytes) FromText(text []byte) (Value, error) {
-	return v.FromBinary(text)
+// UnmarshalText unmarshals the data from a text format.
+func (v *Bytes) UnmarshalText(text []byte) error {
+	return v.UnmarshalBinary(text)
 }
 
-var uBytes unmarshalBytes
+func (v Bytes) String() string {
+	return string(v)
+}
 
 // Bool is the scalar type for bool
 type Bool bool
@@ -307,27 +350,32 @@ func (v Bool) Type() Scalar {
 	return booleanType
 }
 
-type unmarshalBool struct{}
-
-func (u unmarshalBool) FromBinary(data []byte) (Value, error) {
+// UnmarshalBinary unmarshals the data from a binary format.
+func (v *Bool) UnmarshalBinary(data []byte) error {
 	if data[0] == 0 {
-		return Bool(false), nil
+		*v = Bool(false)
+		return nil
 	} else if data[0] == 1 {
-		return Bool(true), nil
+		*v = Bool(true)
+		return nil
 	} else {
-		return nil, x.Errorf("Invalid value for bool %v", data[0])
+		return x.Errorf("Invalid value for bool %v", data[0])
 	}
 }
 
-func (u unmarshalBool) FromText(text []byte) (Value, error) {
+// UnmarshalText unmarshals the data from a text format.
+func (v *Bool) UnmarshalText(text []byte) error {
 	val, err := strconv.ParseBool(string(text))
 	if err != nil {
-		return nil, err
+		return err
 	}
-	return Bool(val), nil
+	*v = Bool(val)
+	return nil
 }
 
-var uBool unmarshalBool
+func (v Bool) String() string {
+	return fmt.Sprintf("%v", bool(v))
+}
 
 // Time wraps time.Time to add the Value interface
 type Time struct {
@@ -339,92 +387,92 @@ func (v Time) Type() Scalar {
 	return dateTimeType
 }
 
-type unmarshalTime struct{}
-
-func (u unmarshalTime) FromBinary(data []byte) (Value, error) {
-	var v time.Time
-	if err := v.UnmarshalBinary(data); err != nil {
-		return nil, err
-	}
-	return Time{v}, nil
-}
-
-func (u unmarshalTime) FromText(text []byte) (Value, error) {
-	var v time.Time
-	if err := v.UnmarshalText(text); err != nil {
+// UnmarshalText unmarshals the data from a text format.
+func (v *Time) UnmarshalText(text []byte) error {
+	var t time.Time
+	if err := t.UnmarshalText(text); err != nil {
 		// Try parsing without timezone since that is a valid format
-		if v, err = time.Parse("2006-01-02T15:04:05", string(text)); err != nil {
-			return nil, err
+		if t, err = time.Parse("2006-01-02T15:04:05", string(text)); err != nil {
+			return err
 		}
 	}
-	return Time{v}, nil
+	v.Time = t
+	return nil
 }
 
-var uTime unmarshalTime
-
-func (u unmarshalInt32) fromFloat(f float64) (Value, error) {
+func (v *Int32) fromFloat(f float64) error {
 	if f > math.MaxInt32 || f < math.MinInt32 || math.IsNaN(f) {
-		return nil, x.Errorf("Float out of int32 range")
+		return x.Errorf("Float out of int32 range")
 	}
-	return Int32(f), nil
+	*v = Int32(f)
+	return nil
 }
 
-func (u unmarshalInt32) fromBool(b bool) (Value, error) {
+func (v *Int32) fromBool(b bool) error {
 	if b {
-		return Int32(1), nil
+		*v = 1
+	} else {
+		*v = 0
 	}
-	return Int32(0), nil
+	return nil
 }
 
-func (u unmarshalInt32) fromTime(t time.Time) (Value, error) {
+func (v *Int32) fromTime(t time.Time) error {
 	// Represent the unix timestamp as a 32bit int.
 	secs := t.Unix()
 	if secs > math.MaxInt32 || secs < math.MinInt32 {
-		return nil, x.Errorf("Time out of int32 range")
+		return x.Errorf("Time out of int32 range")
 	}
-	return Int32(secs), nil
+	*v = Int32(secs)
+	return nil
 }
 
-func (u unmarshalFloat) fromInt(i int32) (Value, error) {
-	return Float(i), nil
+func (v *Float) fromInt(i int32) error {
+	*v = Float(i)
+	return nil
 }
 
-func (u unmarshalFloat) fromBool(b bool) (Value, error) {
+func (v *Float) fromBool(b bool) error {
 	if b {
-		return Float(1), nil
+		*v = 1
+	} else {
+		*v = 0
 	}
-	return Float(0), nil
+	return nil
 }
 
 const (
 	nanoSecondsInSec = 1000000000
 )
 
-func (u unmarshalFloat) fromTime(t time.Time) (Value, error) {
+func (v *Float) fromTime(t time.Time) error {
 	// Represent the unix timestamp as a float (with fractional seconds)
 	secs := float64(t.Unix())
 	nano := float64(t.Nanosecond())
 	val := secs + nano/nanoSecondsInSec
-	return Float(val), nil
+	*v = Float(val)
+	return nil
 }
 
-func (u unmarshalBool) fromInt(i int32) (Value, error) {
-	return Bool(i != 0), nil
+func (v *Bool) fromInt(i int32) error {
+	*v = i != 0
+	return nil
 }
 
-func (u unmarshalBool) fromFloat(f float64) (Value, error) {
-	return Bool(f != 0), nil
+func (v *Bool) fromFloat(f float64) error {
+	*v = f != 0
+	return nil
 }
 
-func (u unmarshalTime) fromInt(i int32) (Value, error) {
-	t := time.Unix(int64(i), 0).UTC()
-	return Time{t}, nil
+func (v *Time) fromInt(i int32) error {
+	v.Time = time.Unix(int64(i), 0).UTC()
+	return nil
 }
 
-func (u unmarshalTime) fromFloat(f float64) (Value, error) {
+func (v *Time) fromFloat(f float64) error {
 	secs := int64(f)
 	fracSecs := f - float64(secs)
 	nsecs := int64(fracSecs * nanoSecondsInSec)
-	t := time.Unix(secs, nsecs).UTC()
-	return Time{t}, nil
+	v.Time = time.Unix(secs, nsecs).UTC()
+	return nil
 }

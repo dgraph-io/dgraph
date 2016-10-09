@@ -65,58 +65,63 @@ func (v Date) Type() Scalar {
 	return dateType
 }
 
-type unmarshalDate struct{}
+func (v Date) String() string {
+	str, _ := v.MarshalText()
+	return string(str)
+}
 
-func (u unmarshalDate) FromBinary(data []byte) (Value, error) {
+// UnmarshalBinary unmarshals the data from a binary format.
+func (v *Date) UnmarshalBinary(data []byte) error {
 	if len(data) < 8 {
-		return nil, x.Errorf("Invalid data for date %v", data)
+		return x.Errorf("Invalid data for date %v", data)
 	}
 	val := binary.LittleEndian.Uint64(data)
 	tm := time.Unix(int64(val), 0)
-	return u.fromTime(tm)
+	return v.fromTime(tm)
 }
 
-func (u unmarshalDate) FromText(text []byte) (Value, error) {
+// UnmarshalText unmarshals the data from a text format.
+func (v *Date) UnmarshalText(text []byte) error {
 	val, err := time.Parse(dateFormat, string(text))
 	if err != nil {
-		return nil, err
+		return err
 	}
-	return u.fromTime(val)
+	return v.fromTime(val)
 }
 
-var uDate unmarshalDate
-
-func (u unmarshalDate) fromFloat(f float64) (Value, error) {
-	v, err := uTime.fromFloat(f)
+func (v *Date) fromFloat(f float64) error {
+	var t Time
+	err := t.fromFloat(f)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	tm := v.(Time)
-	return u.fromTime(tm.Time)
+	return v.fromTime(t.Time)
 }
 
-func (u unmarshalDate) fromTime(t time.Time) (Value, error) {
+func (v *Date) fromTime(t time.Time) error {
 	// truncate the time to just a date.
-	return createDate(t.Date()), nil
+	*v = createDate(t.Date())
+	return nil
 }
 
-func (u unmarshalDate) fromInt(i int32) (Value, error) {
-	v, err := uTime.fromInt(i)
+func (v *Date) fromInt(i int32) error {
+	var t Time
+	err := t.fromInt(i)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	tm := v.(Time)
-	return u.fromTime(tm.Time)
+	return v.fromTime(t.Time)
 }
 
-func (u unmarshalTime) fromDate(v Date) (Value, error) {
-	return Time{v.time}, nil
+func (v *Time) fromDate(d Date) error {
+	v.Time = d.time
+	return nil
 }
 
-func (u unmarshalFloat) fromDate(v Date) (Value, error) {
-	return u.fromTime(v.time)
+func (v *Float) fromDate(d Date) error {
+	return v.fromTime(d.time)
 }
 
-func (u unmarshalInt32) fromDate(v Date) (Value, error) {
-	return u.fromTime(v.time)
+func (v *Int32) fromDate(d Date) error {
+	return v.fromTime(d.time)
 }
