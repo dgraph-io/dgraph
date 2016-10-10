@@ -16,7 +16,7 @@ import (
 	"time"
 	"unsafe"
 
-	_ "github.com/dgraph-io/dgraph/tok/icu/icuembed"
+	_ "github.com/dgraph-io/dgraph/tok/icu/icuembed" // Force ICU to be linked in.
 	"github.com/dgraph-io/dgraph/x"
 )
 
