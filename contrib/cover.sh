@@ -16,10 +16,11 @@ fi
 rm -f $OUT
 
 ROCKSDBDIR=$BUILD/rocksdb-4.9
+ICUDIR=$BUILD/icu/build
 
 # build flags needed for rocksdb
-export CGO_CPPFLAGS="-I${ROCKSDBDIR}/include"
-export CGO_LDFLAGS="-L${ROCKSDBDIR}"
+export CGO_CPPFLAGS="-I${ROCKSDBDIR}/include -I${ICUDIR}/include"
+export CGO_LDFLAGS="-L${ROCKSDBDIR} -L${ICUDIR}/lib"
 export LD_LIBRARY_PATH="${ROCKSDBDIR}:${LD_LIBRARY_PATH}"
 
 set -e
