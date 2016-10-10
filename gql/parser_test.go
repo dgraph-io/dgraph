@@ -50,6 +50,21 @@ func TestParse(t *testing.T) {
 	require.Equal(t, childAttrs(gq.Children[0]), []string{"name"})
 }
 
+func TestParseiError(t *testing.T) {
+	query := `
+		me(_uid_:0x0a) {
+			friends {
+				name
+			}
+			gender,age
+			hometown
+		}
+	}
+`
+	_, _, err := Parse(query)
+	require.Error(t, err)
+}
+
 func TestParseXid(t *testing.T) {
 	// logrus.SetLevel(logrus.DebugLevel)
 	// TODO: Why does the query not have _xid_ attribute?
