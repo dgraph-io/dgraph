@@ -50,7 +50,7 @@ func TestParse(t *testing.T) {
 	require.Equal(t, childAttrs(gq.Children[0]), []string{"name"})
 }
 
-func TestParseiError(t *testing.T) {
+func TestParseError(t *testing.T) {
 	query := `
 		me(_uid_:0x0a) {
 			friends {
