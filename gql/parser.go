@@ -286,6 +286,8 @@ func Parse(input string) (gq *GraphQuery, mu *Mutation, rerr error) {
 	fmap := make(fragmentMap)
 	for item := range l.Items {
 		switch item.Typ {
+		case lex.ItemError:
+			return nil, nil, x.Errorf(item.Val)
 		case itemText:
 			continue
 
@@ -340,6 +342,8 @@ func getVariablesAndQuery(l *lex.Lexer, vmap varMap) (gq *GraphQuery,
 L2:
 	for item := range l.Items {
 		switch item.Typ {
+		case lex.ItemError:
+			return nil, x.Errorf(item.Val)
 		case itemText:
 			v := strings.TrimSpace(item.Val)
 			if len(v) > 0 {
