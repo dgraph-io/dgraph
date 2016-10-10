@@ -36,73 +36,7 @@ do
         sleep 1
 done
 
-# Run the query.
-curl http://localhost:8080/query -XPOST -d $'mutation {
-        set {
-            <alice-in-wonderland> <type> <novel> .
-            <alice-in-wonderland> <character> <alice> .
-            <alice-in-wonderland> <author> <lewis-carrol> .
-            <alice-in-wonderland> <written-in> "1865" .
-            <alice-in-wonderland> <name> "Alice in Wonderland" .
-            <alice-in-wonderland> <sequel> <looking-glass> .
-            <alice> <name> "Alice" .
-            <alice> <name> "Алисия"@ru .
-            <alice> <name> "Adélaïde"@fr .
-            <lewis-carrol> <name> "Lewis Carroll" .
-            <lewis-carrol> <born> "1832" .
-            <lewis-carrol> <died> "1898" .
-        }
-}'
-
-resp=$(curl http://localhost:8080/query -XPOST -d '
-{
-	me(_xid_: alice-in-wonderland) {
-		type
-		written-in
-		name
-		character {
-                        name
-			name.fr
-			name.ru
-		}
-		author {
-                        name
-                        born
-                        died
-		}
-	}
-}')
-
-check_val() {
-        expected="$1"
-        actual="$2"
-        if [ "$expected" != "$actual" ];then
-                echo -e "Expected value: $expected. Got: $actual"
-                exit 1
-        fi
-}
-
-authname=$(echo $resp | jq '.me[0].author[0].name')
-check_val '"Lewis Carroll"' "$authname";
-
-born=$(echo $resp | jq '.me[0].author[0].born')
-check_val \"1832\" $born;
-
-died=$(echo $resp | jq '.me[0].author[0].died')
-check_val \"1898\" $died;
-
-charname=$(echo $resp | jq '.me[0].character[0].name')
-check_val \"Alice\" $charname;
-
-name=$(echo $resp | jq '.me[0].name')
-check_val '"Alice in Wonderland"' "$name";
-
-written=$(echo $resp | jq --raw-output '.me[0] | . ["written-in"]')
-check_val "1865" $written;
-
-GREEN='\033[0;32m'
-NC='\033[0m'
-printf "${GREEN}Query results matched expected values${NC}\n"
+go test -v ../../contrib/freebase/simple_test.go
 
 killall dgraph
 popd &> /dev/null

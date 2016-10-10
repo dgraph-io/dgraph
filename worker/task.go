@@ -17,59 +17,43 @@
 package worker
 
 import (
-	"context"
-
-	"github.com/dgryski/go-farm"
 	"github.com/google/flatbuffers/go"
+	"golang.org/x/net/context"
 
+	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/x"
-)
-
-const (
-	_xid_ = "_xid_"
-	_uid_ = "_uid_"
 )
 
 // ProcessTaskOverNetwork is used to process the query and get the result from
 // the instance which stores posting list corresponding to the predicate in the
 // query.
 func ProcessTaskOverNetwork(ctx context.Context, qu []byte) (result []byte, rerr error) {
-	q := new(task.Query)
-	x.ParseTaskQuery(q, qu)
-
+	q := task.GetRootAsQuery(qu, 0)
 	attr := string(q.Attr())
-	idx := farm.Fingerprint64([]byte(attr)) % ws.numGroups
+	gid := BelongsTo(attr)
+	x.Trace(ctx, "attr: %v groupId: %v", attr, gid)
 
-	// Posting list with xid -> uid and uid -> xid mapping is stored on instance 0.
-	if attr == _xid_ || attr == _uid_ {
-		idx = 0
-	}
-	runHere := (ws.groupId == idx)
-
-	x.Trace(ctx, "runHere: %v attr: %v groupId: %v numGroups: %v",
-		runHere, attr, ws.groupId, ws.numGroups)
-
-	if runHere {
-		// No need for a network call, as this should be run from within
-		// this instance.
+	if groups().ServesGroup(gid) {
+		// No need for a network call, as this should be run from within this instance.
 		return processTask(qu)
 	}
 
-	// Using a worker client for the instance idx, we get the result of the query.
-	pool := ws.GetPool(int(idx))
-	addr := pool.Addr
-	query := new(Payload)
-	query.Data = qu
+	// Send this over the network.
+	// TODO: Send the request to multiple servers as described in Jeff Dean's talk.
+	addr := groups().AnyServer(gid)
+	pl := pools().get(addr)
 
-	conn, err := pool.Get()
+	conn, err := pl.Get()
 	if err != nil {
-		return []byte(""), err
+		return result, x.Wrapf(err, "ProcessTaskOverNetwork: while retrieving connection.")
 	}
-	defer pool.Put(conn)
+	defer pl.Put(conn)
+	x.Trace(ctx, "Sending request to %v", addr)
+
 	c := NewWorkerClient(conn)
-	reply, err := c.ServeTask(context.Background(), query)
+	reply, err := c.ServeTask(ctx, &Payload{Data: qu})
 	if err != nil {
 		x.TraceError(ctx, x.Wrapf(err, "Error while calling Worker.ServeTask"))
 		return []byte(""), err
@@ -82,8 +66,7 @@ func ProcessTaskOverNetwork(ctx context.Context, qu []byte) (result []byte, rerr
 
 // processTask processes the query, accumulates and returns the result.
 func processTask(query []byte) ([]byte, error) {
-	q := new(task.Query)
-	x.ParseTaskQuery(q, query)
+	q := task.GetRootAsQuery(query, 0)
 
 	attr := string(q.Attr())
 	store := ws.dataStore
@@ -132,41 +115,88 @@ func processTask(query []byte) ([]byte, error) {
 			count := uint64(pl.Length())
 			counts = append(counts, count)
 			// Add an empty UID list to make later processing consistent
-			uoffsets[i] = x.UidlistOffset(b, []uint64{})
+			uoffsets[i] = algo.NewUIDList([]uint64{}).AddTo(b)
 		} else {
 			opts := posting.ListOptions{
-				Offset:   int(q.Offset()),
-				Count:    int(q.Count()),
-				AfterUid: uint64(q.AfterUid()),
+				AfterUID: uint64(q.AfterUid()),
 			}
+
+			// Get taskQuery.Intersect field.
+			taskList := new(task.UidList)
+			if q.ToIntersect(taskList) != nil {
+				opts.Intersect = new(algo.UIDList)
+				opts.Intersect.FromTask(taskList)
+			}
+
 			ulist := pl.Uids(opts)
-			uoffsets[i] = x.UidlistOffset(b, ulist)
+			uoffsets[i] = ulist.AddTo(b)
 		}
 	}
 
-	task.ResultStartValuesVector(b, len(voffsets))
+	// Create a ValueList's vector of Values.
+	task.ValueListStartValuesVector(b, len(voffsets))
 	for i := len(voffsets) - 1; i >= 0; i-- {
 		b.PrependUOffsetT(voffsets[i])
 	}
-	valuesVent := b.EndVector(len(voffsets))
+	valuesVecOffset := b.EndVector(len(voffsets))
 
+	// Create a ValueList.
+	task.ValueListStart(b)
+	task.ValueListAddValues(b, valuesVecOffset)
+	valuesVent := task.ValueListEnd(b)
+
+	// Prepare UID matrix.
 	task.ResultStartUidmatrixVector(b, len(uoffsets))
 	for i := len(uoffsets) - 1; i >= 0; i-- {
 		b.PrependUOffsetT(uoffsets[i])
 	}
 	matrixVent := b.EndVector(len(uoffsets))
 
-	task.ResultStartCountVector(b, len(counts))
+	// Create a CountList's vector of ulong.
+	task.CountListStartCountVector(b, len(counts))
 	for i := len(counts) - 1; i >= 0; i-- {
 		b.PrependUint64(counts[i])
 	}
-	countsVent := b.EndVector(len(counts))
+	countVecOffset := b.EndVector(len(counts))
+
+	// Create a CountList.
+	task.CountListStart(b)
+	task.CountListAddCount(b, countVecOffset)
+	countsVent := task.CountListEnd(b)
 
 	task.ResultStart(b)
 	task.ResultAddValues(b, valuesVent)
 	task.ResultAddUidmatrix(b, matrixVent)
 	task.ResultAddCount(b, countsVent)
-	rend := task.ResultEnd(b)
-	b.Finish(rend)
-	return b.Bytes[b.Head():], nil
+	b.Finish(task.ResultEnd(b))
+	return b.FinishedBytes(), nil
+}
+
+// ServeTask is used to respond to a query.
+func (w *grpcWorker) ServeTask(ctx context.Context, query *Payload) (*Payload, error) {
+	if ctx.Err() != nil {
+		return &Payload{}, ctx.Err()
+	}
+
+	q := task.GetRootAsQuery(query.Data, 0)
+	gid := BelongsTo(string(q.Attr()))
+	x.Trace(ctx, "Attribute: %q NumUids: %v groupId: %v ServeTask", q.Attr(), q.UidsLength(), gid)
+
+	reply := new(Payload)
+	x.Assertf(groups().ServesGroup(gid),
+		"attr: %q groupId: %v Request sent to wrong server.", q.Attr(), gid)
+
+	c := make(chan error, 1)
+	go func() {
+		var err error
+		reply.Data, err = processTask(query.Data)
+		c <- err
+	}()
+
+	select {
+	case <-ctx.Done():
+		return reply, ctx.Err()
+	case err := <-c:
+		return reply, err
+	}
 }

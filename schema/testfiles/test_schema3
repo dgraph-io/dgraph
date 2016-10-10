@@ -1,0 +1,20 @@
+type  Person {
+name: string
+age: int
+address: string
+scalar test: int
+friend: Person
+}
+
+type Actor{
+name  : string
+NumFollower: int
+ age : int
+  address :  string 
+films: Film 
+}
+
+type Film {
+name: string
+budget: int
+}

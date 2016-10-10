@@ -1,6 +1,0 @@
- scalar age:int
-
-scalar (
-  name: string
-  address: string
-}

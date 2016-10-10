@@ -19,50 +19,30 @@ package posting
 import (
 	"sync"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestHashBasic(t *testing.T) {
 	a := newShardedListMap(32)
-	if a.Size() != 0 {
-		t.Error("Expected empty a")
-		return
-	}
+	require.Equal(t, a.Size(), 0)
 
 	l1 := new(List)
-	l := a.PutIfMissing(123, l1)
-	if l != l1 {
-		t.Error("Put failed")
-		return
-	}
+	require.Equal(t, a.PutIfMissing(123, l1), l1)
 
 	l2 := new(List)
-	l = a.PutIfMissing(123, l2)
-	if l != l1 {
-		t.Error("Expected PutIfMissing to be noop and return l1")
-		return
-	}
+	require.Equal(t, a.PutIfMissing(123, l2), l1)
 
 	l, found := a.Get(123)
-	if !found || l != l1 {
-		t.Error("Missing or wrong valid for key 123")
-		return
-	}
+	require.True(t, found)
+	require.Equal(t, l, l1)
 
 	a.EachWithDelete(func(k uint64, l *List) {
-		if k != 123 {
-			t.Errorf("Expected to delete key 123 but got d", k)
-			t.Fail()
-		}
-		if l != l1 {
-			t.Error("Expected to delete value l1 but got something else")
-			t.Fail()
-		}
+		require.EqualValues(t, k, 123)
+		require.Equal(t, l, l1)
 	})
 
-	if a.Size() != 0 {
-		t.Error("Expected empty a after EachWithDelete call")
-		return
-	}
+	require.Equal(t, a.Size(), 0)
 }
 
 // Good for testing for race conditions.
@@ -88,10 +68,7 @@ func TestHashConcurrent(t *testing.T) {
 		go func(i int) {
 			defer wg.Done()
 			l, _ := a.Get(uint64(i))
-			if l != lists[i] {
-				t.Errorf("Expected lists[%d] but got something else", i)
-				t.Fail()
-			}
+			require.Equal(t, l, lists[i])
 		}(i)
 	}
 	wg.Wait()
