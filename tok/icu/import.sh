@@ -16,12 +16,16 @@ fi
 
 # Add: Get data from our github page.
 
-rm -Rf $TARGET/common
 rm -Rf $TARGET/icuembed
+mkdir -p $TARGET/icuembed
 
-cp -Rf icu/source/common $TARGET
-cp -f icu/source/stubdata/stubdata.c $TARGET/common
-mv $TARGET/common $TARGET/icuembed
+cp -f icu/source/common/*.cpp $TARGET/icuembed
+cp -f icu/source/common/*.c $TARGET/icuembed
+cp -f icu/source/common/*.h $TARGET/icuembed
+cp -Rf icu/source/common/unicode $TARGET/icuembed
+
+#cp -Rf icu/source/common $TARGET
+cp -f icu/source/stubdata/stubdata.c $TARGET/icuembed
 
 cp -f $DIR/$DATA $TARGET
 
