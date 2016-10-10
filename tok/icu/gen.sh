@@ -23,8 +23,10 @@ cp -Rf icu/source/common $TARGET
 cp -f icu/source/stubdata/stubdata.c $TARGET/common
 mv $TARGET/common $TARGET/icuembed
 
-cp $DIR/$DATA $TARGET
+cp -f $DIR/$DATA $TARGET
 
-# Add in some Go files.
+# Add in some Go file(s).
 cd $TARGET
 cp -f icuembed.go.tmpl icuembed/icuembed.go
+
+echo -e "Please run dgraph with the flag:\n-icu $TARGET/$DATA"

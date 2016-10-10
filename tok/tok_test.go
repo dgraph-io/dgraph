@@ -17,8 +17,11 @@
 package tok
 
 import (
+	"os"
 	"strings"
 	"testing"
+
+	"github.com/dgraph-io/dgraph/x"
 )
 
 func TestTokenizeBasic(t *testing.T) {
@@ -71,4 +74,9 @@ func TestTokenizeBasic(t *testing.T) {
 			}
 		}(d.in, d.expected)
 	}
+}
+
+func TestMain(m *testing.M) {
+	x.Init()
+	os.Exit(m.Run())
 }
