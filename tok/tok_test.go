@@ -1,5 +1,3 @@
-// +build tok
-
 /*
  * Copyright 2016 Dgraph Labs, Inc.
  *

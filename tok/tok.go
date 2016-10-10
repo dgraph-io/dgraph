@@ -1,5 +1,3 @@
-// +build tok
-
 /*
  * Copyright 2016 Dgraph Labs, Inc.
  *
@@ -81,6 +79,9 @@ func NewTokenizer(s []byte) (*Tokenizer, error) {
 	c := C.NewTokenizer(byteToChar(sNorm), C.int(len(s)), maxTokenSize, &err)
 	if int(err) > 0 {
 		return nil, x.Errorf("ICU new tokenizer error %d", int(err))
+	}
+	if c == nil {
+		return nil, x.Errorf("NewTokenizer returns nil")
 	}
 	return &Tokenizer{c, C.TokenizerToken(c)}, nil
 }
