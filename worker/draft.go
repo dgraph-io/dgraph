@@ -16,6 +16,7 @@ import (
 	flatbuffers "github.com/google/flatbuffers/go"
 	"golang.org/x/net/context"
 
+	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -74,11 +75,13 @@ type node struct {
 	ctx         context.Context
 	done        chan struct{}
 	id          uint64
+	gid         uint32
 	peers       peerPool
 	props       proposals
 	raft        raft.Node
 	store       *raft.MemoryStorage
 	raftContext []byte
+	wal         *raftwal.Wal
 }
 
 func (n *node) Connect(pid uint64, addr string) {
@@ -358,7 +361,7 @@ func parsePeer(peer string) (uint64, string) {
 	return pid, kv[1]
 }
 
-func (n *node) JoinCluster(any string, s *State) {
+func (n *node) joinPeers(any string, s *State) {
 	// Tell one of the peers to join.
 	pid, paddr := parsePeer(any)
 	n.Connect(pid, paddr)
@@ -412,6 +415,7 @@ func newNode(gid uint32, id uint64, myAddr string) *node {
 	n := &node{
 		ctx:   context.TODO(),
 		id:    id,
+		gid:   gid,
 		store: store,
 		cfg: &raft.Config{
 			ID:              id,
@@ -428,20 +432,74 @@ func newNode(gid uint32, id uint64, myAddr string) *node {
 	return n
 }
 
-func (n *node) StartNode(cluster string) {
-	var peers []raft.Peer
-	if len(cluster) > 0 {
-		for _, p := range strings.Split(cluster, ",") {
-			pid, paddr := parsePeer(p)
-			peers = append(peers, raft.Peer{ID: pid})
-			n.Connect(pid, paddr)
+func (n *node) initFromWal(wal *raftwal.Wal) (restart bool, rerr error) {
+	n.wal = wal
+
+	var sp raftpb.Snapshot
+	sp, rerr = wal.Snapshot(n.gid)
+	if rerr != nil {
+		return
+	}
+	if !raft.IsEmptySnap(sp) {
+		restart = true
+		if rerr = n.store.ApplySnapshot(sp); rerr != nil {
+			return
 		}
 	}
+
+	var hd raftpb.HardState
+	hd, rerr = wal.HardState(n.gid)
+	if rerr != nil {
+		return
+	}
+	if !raft.IsEmptyHardState(hd) {
+		restart = true
+		if rerr = n.store.SetHardState(hd); rerr != nil {
+			return
+		}
+	}
+
+	var term, idx uint64
+	if !raft.IsEmptySnap(sp) {
+		term = sp.Metadata.Term
+		idx = sp.Metadata.Index
+	}
+
+	var es []raftpb.Entry
+	es, rerr = wal.Entries(n.gid, term, idx)
+	if rerr != nil {
+		return
+	}
+	if len(es) > 0 {
+		restart = true
+	}
+	rerr = n.store.Append(es)
+	return
+}
+
+func (n *node) InitAndStartNode(wal *raftwal.Wal, peer string, ch chan error) {
+	restart, err := n.initFromWal(wal)
+	if err != nil {
+		ch <- err
+		return
+	}
+
+	if restart {
+		n.raft = raft.RestartNode(n.cfg)
+		ch <- nil
+		return
+	}
+
+	peers := []raft.Peer{{ID: n.id}}
 
 	n.raft = raft.StartNode(n.cfg, peers)
 	go n.Run()
 	go n.snapshotPeriodically()
 	go n.Inform()
+	if len(peer) > 0 {
+		go n.joinPeers(peer, ws)
+	}
+	ch <- nil
 }
 
 func (n *node) doInform(rc *task.RaftContext) {

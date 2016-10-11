@@ -41,6 +41,7 @@ import (
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/query/graph"
+	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/store"
@@ -636,6 +637,7 @@ func main() {
 	wals, err := store.NewSyncStore(*walDir)
 	x.Checkf(err, "Error initializing wal store")
 	defer wals.Close()
+	wal := raftwal.Init(wals)
 
 	posting.InitIndex(ps)
 	posting.Init()
@@ -651,7 +653,7 @@ func main() {
 
 	// First initiate the commmon group across the entire cluster. This group
 	// stores information about which server serves which groups.
-	go worker.StartRaftNodes(*raftId, my, *cluster, *peer)
+	go worker.StartRaftNodes(wal, *raftId, my, *peer)
 
 	if len(*schemaFile) > 0 {
 		err = schema.Parse(*schemaFile)
