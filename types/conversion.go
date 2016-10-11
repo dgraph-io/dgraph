@@ -23,88 +23,104 @@ import (
 )
 
 // Convert converts the value to given scalar type.
-func (to Scalar) Convert(value TypeValue) (TypeValue, error) {
-	if to.ID() == stringID || to.ID() == bytesID {
+func (to Scalar) Convert(value Value) (Value, error) {
+	if to.ID() == StringID || to.ID() == BytesID {
 		// If we are converting to a string or bytes, simply use MarshalText
 		r, err := value.MarshalText()
 		if err != nil {
 			return nil, err
 		}
-		return String(r), nil
+		v := String(r)
+		return &v, nil
 	}
 
-	u := to.Unmarshaler
+	u := ValueForType(to.ID())
 	// Otherwise we check if the conversion is defined.
 	switch v := value.(type) {
-	case Bytes:
+	case *Bytes:
 		// Bytes convert the same way as strings, as bytes denote an untyped value which is almost
 		// always a string.
-		return u.FromText([]byte(v))
+		if err := u.UnmarshalText([]byte(*v)); err != nil {
+			return nil, err
+		}
 
-	case String:
+	case *String:
 		// If the value is a string, then we can always Unmarshal it using the unmarshaller
-		return u.FromText([]byte(v))
+		if err := u.UnmarshalText([]byte(*v)); err != nil {
+			return nil, err
+		}
 
-	case Int32:
+	case *Int32:
 		c, ok := u.(int32Unmarshaler)
 		if !ok {
 			return nil, cantConvert(to, v)
 		}
-		return c.fromInt(int32(v))
+		if err := c.fromInt(int32(*v)); err != nil {
+			return nil, err
+		}
 
-	case Float:
+	case *Float:
 		c, ok := u.(floatUnmarshaler)
 		if !ok {
 			return nil, cantConvert(to, v)
 		}
-		return c.fromFloat(float64(v))
+		if err := c.fromFloat(float64(*v)); err != nil {
+			return nil, err
+		}
 
-	case Bool:
+	case *Bool:
 		c, ok := u.(boolUnmarshaler)
 		if !ok {
 			return nil, cantConvert(to, v)
 		}
-		return c.fromBool(bool(v))
+		if err := c.fromBool(bool(*v)); err != nil {
+			return nil, err
+		}
 
-	case time.Time:
+	case *Time:
 		c, ok := u.(timeUnmarshaler)
 		if !ok {
 			return nil, cantConvert(to, v)
 		}
-		return c.fromTime(v)
+		if err := c.fromTime(v.Time); err != nil {
+			return nil, err
+		}
 
-	case Date:
+	case *Date:
 		c, ok := u.(dateUnmarshaler)
 		if !ok {
 			return nil, cantConvert(to, v)
 		}
-		return c.fromDate(v)
+		if err := c.fromDate(*v); err != nil {
+			return nil, err
+		}
 
 	default:
 		return nil, cantConvert(to, v)
 	}
+	return u, nil
 }
 
-func cantConvert(to Scalar, val TypeValue) error {
+func cantConvert(to Scalar, val Value) error {
 	return x.Errorf("Cannot convert %v to type %s", val, to.Name)
 }
 
 type int32Unmarshaler interface {
-	fromInt(value int32) (TypeValue, error)
+	fromInt(value int32) error
 }
 
 type floatUnmarshaler interface {
-	fromFloat(value float64) (TypeValue, error)
+	fromFloat(value float64) error
 }
 
 type boolUnmarshaler interface {
-	fromBool(value bool) (TypeValue, error)
+	fromBool(value bool) error
 }
 
 type timeUnmarshaler interface {
-	fromTime(value time.Time) (TypeValue, error)
+	fromTime(value time.Time) error
 }
 
 type dateUnmarshaler interface {
-	fromDate(value Date) (TypeValue, error)
+	fromDate(value Date) error
 }
