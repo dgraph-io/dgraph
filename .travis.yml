@@ -29,6 +29,7 @@ cache:
   - "$HOME/build"
 install:
 - bash contrib/build-rocksdb.sh $HOME/build
+- bash contrib/build-icu.sh $HOME/build
 before_script:
 - go get github.com/mattn/goveralls
 script:

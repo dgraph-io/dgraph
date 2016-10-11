@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#ifdef ENABLE_ICU
-
 #include <stdint.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -34,5 +32,3 @@ void DestroyTokenizer(Tokenizer* tokenizer);
 int TokenizerNext(Tokenizer* tokenizer);
 
 char* TokenizerToken(Tokenizer* tokenizer);
-
-#endif

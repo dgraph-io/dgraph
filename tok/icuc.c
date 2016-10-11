@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#ifdef ENABLE_ICU
-
 #include "icuc.h"
 
 struct Tokenizer {
@@ -45,6 +43,10 @@ Tokenizer* NewTokenizer(const char* input, int len, int max_token_size, UErrorCo
 	
 	// Prepares our iterator object. Leave the locale undefined.
 	tokenizer->iter = ubrk_open(UBRK_WORD, "", tokenizer->buf, len, err);
+	if (U_FAILURE(*err)) {
+		return 0;
+	}
+	
 	tokenizer->end = ubrk_first(tokenizer->iter);
 	return tokenizer;
 }
@@ -93,5 +95,3 @@ int TokenizerNext(Tokenizer* tokenizer) {
 char* TokenizerToken(Tokenizer* tokenizer) {
 	return tokenizer->token;
 }
-
-#endif

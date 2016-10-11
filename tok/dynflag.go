@@ -1,7 +1,9 @@
-// +build tok
+// +build !embed
 
 package tok
 
-// #cgo CFLAGS: -I/usr/local/include -DENABLE_ICU
-// #cgo LDFLAGS: -L/usr/local/lib -licuuc
+// We assume ICU4C is installed to /usr/local/include and /usr/local/lib.
+
+// #cgo CPPFLAGS: -DU_DISABLE_RENAMING=1
+// #cgo LDFLAGS: -licuuc -licudata
 import "C"

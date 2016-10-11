@@ -1,5 +1,3 @@
-// +build tok
-
 /*
  * Copyright 2016 Dgraph Labs, Inc.
  *
@@ -18,9 +16,18 @@
 
 package tok
 
+/*
+For testing embedded version, try:
+wget https://github.com/dgraph-io/goicu/raw/master/icudt57l.dat -P /tmp
+go test -icu /tmp/icudt57l.dat -tags embed
+*/
+
 import (
+	"os"
 	"strings"
 	"testing"
+
+	"github.com/dgraph-io/dgraph/x"
 )
 
 func TestTokenizeBasic(t *testing.T) {
@@ -73,4 +80,9 @@ func TestTokenizeBasic(t *testing.T) {
 			}
 		}(d.in, d.expected)
 	}
+}
+
+func TestMain(m *testing.M) {
+	x.Init()
+	os.Exit(m.Run())
 }
