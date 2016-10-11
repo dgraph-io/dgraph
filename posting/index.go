@@ -101,7 +101,7 @@ func processIndexTerm(ctx context.Context, attr string, uid uint64, term []byte,
 	}
 
 	for _, key := range keys {
-		plist, decr := GetOrCreate([]byte(key), indexStore)
+		plist, decr := GetOrCreate(key, indexStore)
 		defer decr()
 		x.Assertf(plist != nil, "plist is nil [%s] %d %s", key, edge.ValueId, edge.Attribute)
 
