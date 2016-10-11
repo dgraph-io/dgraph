@@ -405,6 +405,10 @@ func lexOperationType(l *lex.Lexer) lex.StateFn {
 		} else if word == "query" {
 			l.Emit(itemOpType)
 			l.Mode = queryMode
+		} else {
+			if l.Mode == 0 {
+				l.Errorf("Invalid operation type")
+			}
 		}
 		break
 	}
