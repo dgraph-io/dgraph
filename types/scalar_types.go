@@ -19,6 +19,7 @@ package types
 import (
 	"encoding/binary"
 	"encoding/json"
+	"fmt"
 	"math"
 	"strconv"
 	"time"
@@ -31,122 +32,67 @@ import (
 // data. When adding a new type *always* add to the end of this list.
 // Never delete anything from this list even if it becomes unused.
 const (
-	bytesID TypeID = iota
-	int32ID
-	floatID
-	boolID
-	dateTimeID
-	stringID
-	dateID
-	geoID
+	BytesID    TypeID = 0
+	Int32ID    TypeID = 1
+	FloatID    TypeID = 2
+	BoolID     TypeID = 3
+	DateTimeID TypeID = 4
+	StringID   TypeID = 5
+	DateID     TypeID = 6
+	GeoID      TypeID = 7
 )
 
 // added suffix 'type' to names to distinguish from Go types 'int' and 'string'
 var (
-	// Int32Type scalar.
-	Int32Type = Scalar{
+	int32Type = Scalar{
 		Name: "int",
-		id:   int32ID,
-		// TODO: Why do we have this description field? If not needed, remove.
-		Description: "The 'Int' scalar type represents non-fractional signed whole" +
-			" numeric values. Int can represent values between -(2^31)" +
-			" and 2^31 - 1.",
-		Unmarshaler: uInt32,
+		id:   Int32ID,
 	}
-	// FloatType scalar.
-	FloatType = Scalar{
+	floatType = Scalar{
 		Name: "float",
-		id:   floatID,
-		Description: "The 'Float' scalar type represents signed double-precision" +
-			" fractional values	as specified by [IEEE 754]" +
-			" (http://en.wikipedia.org/wiki/IEEE_floating_point).",
-		Unmarshaler: uFloat,
+		id:   FloatID,
 	}
-	// StringType scalar.
-	StringType = Scalar{
+	stringType = Scalar{
 		Name: "string",
-		id:   stringID,
-		Description: "The 'String' scalar type represents textual data, represented" +
-			" as UTF-8 character sequences. The String type is most often" +
-			" used by GraphQL to represent free-form human-readable text.",
-		Unmarshaler: uString,
+		id:   StringID,
 	}
-	// ByteArrayType scalar.
-	ByteArrayType = Scalar{
+	byteArrayType = Scalar{
 		Name: "bytes",
-		id:   bytesID,
-		Description: "The 'ByteArray' scalar type represents any untyped byte stream." +
-			" This is default storage mechanism if a type is not specified.",
-		Unmarshaler: uBytes,
+		id:   BytesID,
 	}
-	// BooleanType scalar.
-	BooleanType = Scalar{
-		Name:        "bool",
-		id:          boolID,
-		Description: "The 'Boolean' scalar type represents 'true' or 'false'.",
-		Unmarshaler: uBool,
+	booleanType = Scalar{
+		Name: "bool",
+		id:   BoolID,
 	}
-	// IDType scalar.
-	IDType = Scalar{
+	idType = Scalar{
 		Name: "id",
-		id:   stringID,
-		Description: "The 'ID' scalar type represents a unique identifier, often" +
-			" used to refetch an object or as key for a cache. The ID type" +
-			" appears in a JSON response as a String; however, it is not" +
-			" intended to be human-readable. When expected as an input" +
-			" type, any string (such as '4') or integer (such as '4')" +
-			" input value will be accepted as an ID.",
-		Unmarshaler: uString,
+		id:   StringID,
 	}
-	// DateTimeType scalar.
-	DateTimeType = Scalar{
+	dateTimeType = Scalar{
 		Name: "datetime",
-		id:   dateTimeID,
-		Description: "The 'DateTime' scalar type an instant in time with nanosecond" +
-			" precision. Each DateTime is associated with a timezone.",
-		Unmarshaler: uTime,
+		id:   DateTimeID,
 	}
-	// DateType scalar.
-	DateType = Scalar{
+	dateType = Scalar{
 		Name: "date",
-		id:   dateID,
-		Description: "The 'Date' scalar type represents a date (year, month, day)." +
-			" A date is not associated with a timezone.",
-		Unmarshaler: uDate,
+		id:   DateID,
 	}
-	// GeoType scalar.
-	GeoType = Scalar{
+	geoType = Scalar{
 		Name: "geo",
-		id:   geoID,
-		Description: "The 'Geo' scalar represents geographic spatial data. This data" +
-			" stored in the WKB format.",
-		Unmarshaler: uGeo,
+		id:   GeoID,
 	}
 )
 
 // stores a mapping between a string name of a type
 var typeNameMap = map[string]Type{
-	Int32Type.Name:    Int32Type,
-	FloatType.Name:    FloatType,
-	StringType.Name:   StringType,
-	BooleanType.Name:  BooleanType,
-	IDType.Name:       IDType,
-	DateTimeType.Name: DateTimeType,
-	DateType.Name:     DateType,
-	GeoType.Name:      GeoType,
-}
-
-// stores a mapping between the typeID to a type
-var typeIDMap = map[TypeID]Type{
-	Int32Type.ID():     Int32Type,
-	FloatType.ID():     FloatType,
-	StringType.ID():    StringType,
-	BooleanType.ID():   BooleanType,
-	IDType.ID():        IDType,
-	DateTimeType.ID():  DateTimeType,
-	ByteArrayType.ID(): ByteArrayType,
-	DateType.ID():      DateType,
-	GeoType.ID():       GeoType,
+	int32Type.Name:     int32Type,
+	floatType.Name:     floatType,
+	stringType.Name:    stringType,
+	booleanType.Name:   booleanType,
+	idType.Name:        idType,
+	dateTimeType.Name:  dateTimeType,
+	dateType.Name:      dateType,
+	geoType.Name:       geoType,
+	byteArrayType.Name: byteArrayType,
 }
 
 // TypeForName returns the type corresponding to the given name.
@@ -156,11 +102,44 @@ func TypeForName(name string) (Type, bool) {
 	return t, ok
 }
 
-// TypeForID returns the type corresponding to the given TypeID.
-// If id is not recognized, it returns nil.
-func TypeForID(id TypeID) (Type, bool) {
-	t, ok := typeIDMap[id]
-	return t, ok
+// ValueForType returns the zero value for a type id
+func ValueForType(id TypeID) Value {
+	switch id {
+	case BytesID:
+		var b Bytes
+		return &b
+
+	case Int32ID:
+		var i Int32
+		return &i
+
+	case FloatID:
+		var f Float
+		return &f
+
+	case BoolID:
+		var b Bool
+		return &b
+
+	case DateTimeID:
+		var t Time
+		return &t
+
+	case StringID:
+		var s String
+		return &s
+
+	case DateID:
+		var d Date
+		return &d
+
+	case GeoID:
+		var g Geo
+		return &g
+
+	default:
+		return nil
+	}
 }
 
 // Int32 is the scalar type for int32
@@ -184,25 +163,33 @@ func (v Int32) MarshalJSON() ([]byte, error) {
 	return json.Marshal(int32(v))
 }
 
-type unmarshalInt32 struct{}
-
-func (u unmarshalInt32) FromBinary(data []byte) (TypeValue, error) {
-	if len(data) < 4 {
-		return nil, x.Errorf("Invalid data for int32 %v", data)
-	}
-	val := binary.LittleEndian.Uint32(data)
-	return Int32(val), nil
+// Type returns the type of this value
+func (v Int32) Type() Scalar {
+	return int32Type
 }
 
-func (u unmarshalInt32) FromText(text []byte) (TypeValue, error) {
+func (v Int32) String() string {
+	return fmt.Sprintf("%v", int32(v))
+}
+
+// UnmarshalBinary unmarshals the data from a binary format.
+func (v *Int32) UnmarshalBinary(data []byte) error {
+	if len(data) < 4 {
+		return x.Errorf("Invalid data for int32 %v", data)
+	}
+	*v = Int32(binary.LittleEndian.Uint32(data))
+	return nil
+}
+
+// UnmarshalText unmarshals the data from a text format.
+func (v *Int32) UnmarshalText(text []byte) error {
 	val, err := strconv.ParseInt(string(text), 10, 32)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	return Int32(val), nil
+	*v = Int32(val)
+	return nil
 }
-
-var uInt32 unmarshalInt32
 
 // Float is the scalar type for float64
 type Float float64
@@ -226,26 +213,35 @@ func (v Float) MarshalJSON() ([]byte, error) {
 	return json.Marshal(float64(v))
 }
 
-type unmarshalFloat struct{}
-
-func (u unmarshalFloat) FromBinary(data []byte) (TypeValue, error) {
-	if len(data) < 8 {
-		return nil, x.Errorf("Invalid data for float %v", data)
-	}
-	v := binary.LittleEndian.Uint64(data)
-	val := math.Float64frombits(v)
-	return Float(val), nil
+// Type returns the type of this value
+func (v Float) Type() Scalar {
+	return floatType
 }
 
-func (u unmarshalFloat) FromText(text []byte) (TypeValue, error) {
+// UnmarshalBinary unmarshals the data from a binary format.
+func (v *Float) UnmarshalBinary(data []byte) error {
+	if len(data) < 8 {
+		return x.Errorf("Invalid data for float %v", data)
+	}
+	i := binary.LittleEndian.Uint64(data)
+	val := math.Float64frombits(i)
+	*v = Float(val)
+	return nil
+}
+
+// UnmarshalText unmarshals the data from a text format.
+func (v *Float) UnmarshalText(text []byte) error {
 	val, err := strconv.ParseFloat(string(text), 64)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	return Float(val), nil
+	*v = Float(val)
+	return nil
 }
 
-var uFloat unmarshalFloat
+func (v Float) String() string {
+	return fmt.Sprintf("%v", float64(v))
+}
 
 // String is the scalar type for string
 type String string
@@ -265,17 +261,25 @@ func (v String) MarshalJSON() ([]byte, error) {
 	return json.Marshal(string(v))
 }
 
-type unmarshalString struct{}
-
-func (v unmarshalString) FromBinary(data []byte) (TypeValue, error) {
-	return String(data), nil
+// Type returns the type of this value
+func (v String) Type() Scalar {
+	return stringType
 }
 
-func (v unmarshalString) FromText(text []byte) (TypeValue, error) {
-	return v.FromBinary(text)
+// UnmarshalBinary unmarshals the data from a binary format.
+func (v *String) UnmarshalBinary(data []byte) error {
+	*v = String(data)
+	return nil
 }
 
-var uString unmarshalString
+// UnmarshalText unmarshals the data from a text format.
+func (v *String) UnmarshalText(text []byte) error {
+	return v.UnmarshalBinary(text)
+}
+
+func (v String) String() string {
+	return string(v)
+}
 
 // Bytes is the scalar type for []byte
 type Bytes []byte
@@ -296,17 +300,25 @@ func (v Bytes) MarshalJSON() ([]byte, error) {
 	return json.Marshal(string(v))
 }
 
-type unmarshalBytes struct{}
-
-func (v unmarshalBytes) FromBinary(data []byte) (TypeValue, error) {
-	return Bytes(data), nil
+// Type returns the type of this value
+func (v Bytes) Type() Scalar {
+	return byteArrayType
 }
 
-func (v unmarshalBytes) FromText(text []byte) (TypeValue, error) {
-	return v.FromBinary(text)
+// UnmarshalBinary unmarshals the data from a binary format.
+func (v *Bytes) UnmarshalBinary(data []byte) error {
+	*v = Bytes(data)
+	return nil
 }
 
-var uBytes unmarshalBytes
+// UnmarshalText unmarshals the data from a text format.
+func (v *Bytes) UnmarshalText(text []byte) error {
+	return v.UnmarshalBinary(text)
+}
+
+func (v Bytes) String() string {
+	return string(v)
+}
 
 // Bool is the scalar type for bool
 type Bool bool
@@ -333,112 +345,134 @@ func (v Bool) MarshalJSON() ([]byte, error) {
 	return json.Marshal(bool(v))
 }
 
-type unmarshalBool struct{}
+// Type returns the type of this value
+func (v Bool) Type() Scalar {
+	return booleanType
+}
 
-func (u unmarshalBool) FromBinary(data []byte) (TypeValue, error) {
+// UnmarshalBinary unmarshals the data from a binary format.
+func (v *Bool) UnmarshalBinary(data []byte) error {
 	if data[0] == 0 {
-		return Bool(false), nil
+		*v = Bool(false)
+		return nil
 	} else if data[0] == 1 {
-		return Bool(true), nil
+		*v = Bool(true)
+		return nil
 	} else {
-		return nil, x.Errorf("Invalid value for bool %v", data[0])
+		return x.Errorf("Invalid value for bool %v", data[0])
 	}
 }
 
-func (u unmarshalBool) FromText(text []byte) (TypeValue, error) {
+// UnmarshalText unmarshals the data from a text format.
+func (v *Bool) UnmarshalText(text []byte) error {
 	val, err := strconv.ParseBool(string(text))
 	if err != nil {
-		return nil, err
+		return err
 	}
-	return Bool(val), nil
+	*v = Bool(val)
+	return nil
 }
 
-var uBool unmarshalBool
-
-type unmarshalTime struct{}
-
-func (u unmarshalTime) FromBinary(data []byte) (TypeValue, error) {
-	var v time.Time
-	if err := v.UnmarshalBinary(data); err != nil {
-		return nil, err
-	}
-	return v, nil
+func (v Bool) String() string {
+	return fmt.Sprintf("%v", bool(v))
 }
 
-func (u unmarshalTime) FromText(text []byte) (TypeValue, error) {
-	var v time.Time
-	if err := v.UnmarshalText(text); err != nil {
+// Time wraps time.Time to add the Value interface
+type Time struct {
+	time.Time
+}
+
+// Type returns the type of this value
+func (v Time) Type() Scalar {
+	return dateTimeType
+}
+
+// UnmarshalText unmarshals the data from a text format.
+func (v *Time) UnmarshalText(text []byte) error {
+	var t time.Time
+	if err := t.UnmarshalText(text); err != nil {
 		// Try parsing without timezone since that is a valid format
-		if v, err = time.Parse("2006-01-02T15:04:05", string(text)); err != nil {
-			return nil, err
+		if t, err = time.Parse("2006-01-02T15:04:05", string(text)); err != nil {
+			return err
 		}
 	}
-	return v, nil
+	v.Time = t
+	return nil
 }
 
-var uTime unmarshalTime
-
-func (u unmarshalInt32) fromFloat(f float64) (TypeValue, error) {
+func (v *Int32) fromFloat(f float64) error {
 	if f > math.MaxInt32 || f < math.MinInt32 || math.IsNaN(f) {
-		return nil, x.Errorf("Float out of int32 range")
+		return x.Errorf("Float out of int32 range")
 	}
-	return Int32(f), nil
+	*v = Int32(f)
+	return nil
 }
 
-func (u unmarshalInt32) fromBool(b bool) (TypeValue, error) {
+func (v *Int32) fromBool(b bool) error {
 	if b {
-		return Int32(1), nil
+		*v = 1
+	} else {
+		*v = 0
 	}
-	return Int32(0), nil
+	return nil
 }
 
-func (u unmarshalInt32) fromTime(t time.Time) (TypeValue, error) {
+func (v *Int32) fromTime(t time.Time) error {
 	// Represent the unix timestamp as a 32bit int.
 	secs := t.Unix()
 	if secs > math.MaxInt32 || secs < math.MinInt32 {
-		return nil, x.Errorf("Time out of int32 range")
+		return x.Errorf("Time out of int32 range")
 	}
-	return Int32(secs), nil
+	*v = Int32(secs)
+	return nil
 }
 
-func (u unmarshalFloat) fromInt(i int32) (TypeValue, error) {
-	return Float(i), nil
+func (v *Float) fromInt(i int32) error {
+	*v = Float(i)
+	return nil
 }
 
-func (u unmarshalFloat) fromBool(b bool) (TypeValue, error) {
+func (v *Float) fromBool(b bool) error {
 	if b {
-		return Float(1), nil
+		*v = 1
+	} else {
+		*v = 0
 	}
-	return Float(0), nil
+	return nil
 }
 
 const (
 	nanoSecondsInSec = 1000000000
 )
 
-func (u unmarshalFloat) fromTime(t time.Time) (TypeValue, error) {
+func (v *Float) fromTime(t time.Time) error {
 	// Represent the unix timestamp as a float (with fractional seconds)
 	secs := float64(t.Unix())
 	nano := float64(t.Nanosecond())
 	val := secs + nano/nanoSecondsInSec
-	return Float(val), nil
+	*v = Float(val)
+	return nil
 }
 
-func (u unmarshalBool) fromInt(i int32) (TypeValue, error) {
-	return Bool(i != 0), nil
+func (v *Bool) fromInt(i int32) error {
+	*v = i != 0
+	return nil
 }
 
-func (u unmarshalBool) fromFloat(f float64) (TypeValue, error) {
-	return Bool(f != 0), nil
+func (v *Bool) fromFloat(f float64) error {
+	*v = f != 0
+	return nil
 }
 
-func (u unmarshalTime) fromInt(i int32) (TypeValue, error) {
-	return time.Unix(int64(i), 0).UTC(), nil
+func (v *Time) fromInt(i int32) error {
+	v.Time = time.Unix(int64(i), 0).UTC()
+	return nil
 }
 
-func (u unmarshalTime) fromFloat(f float64) (TypeValue, error) {
+func (v *Time) fromFloat(f float64) error {
 	secs := int64(f)
 	fracSecs := f - float64(secs)
 	nsecs := int64(fracSecs * nanoSecondsInSec)
-	return time.Unix(secs, nsecs).UTC(), nil
+	v.Time = time.Unix(secs, nsecs).UTC()
+	return nil
 }

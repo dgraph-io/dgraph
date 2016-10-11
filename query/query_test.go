@@ -184,7 +184,7 @@ func populateGraph(t *testing.T) (string, *store.Store) {
 	addEdge(t, edge, getOrCreate(posting.Key(1, "gender"), ps))
 
 	edge.Value, _ = types.Int32(15).MarshalBinary()
-	edge.ValueType = byte(types.Int32Type.ID())
+	edge.ValueType = byte(types.Int32ID)
 	edge.Attribute = "age"
 	edge.Entity = 1
 	addEdge(t, edge, getOrCreate(posting.Key(1, "age"), ps))
@@ -197,7 +197,7 @@ func populateGraph(t *testing.T) (string, *store.Store) {
 
 	edge.Value, _ = types.Bool(true).MarshalBinary()
 	edge.Attribute = "alive"
-	edge.ValueType = byte(types.BooleanType.ID())
+	edge.ValueType = byte(types.BoolID)
 	edge.Entity = 1
 	addEdge(t, edge, getOrCreate(posting.Key(1, "alive"), ps))
 	edge.ValueType = 0
@@ -221,7 +221,7 @@ func populateGraph(t *testing.T) (string, *store.Store) {
 	edge.Value = []byte("Rick Grimes")
 	edge.Attribute = "name"
 	edge.Entity = 23
-	edge.ValueType = byte(types.StringType.ID())
+	edge.ValueType = byte(types.StringID)
 	addEdge(t, edge, getOrCreate(posting.Key(23, "name"), ps))
 	edge.ValueType = 0
 
