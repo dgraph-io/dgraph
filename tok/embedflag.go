@@ -2,9 +2,10 @@
 
 package tok
 
-//  /home/jchiu/go/src/github.com/dgraph-io/dgraph/vendor/github.com/dgraph-io/goicu/icuembed
+// govendor get  github.com/dgraph-io/goicu/icuembed
+// govendor get  github.com/dgraph-io/goicu/icuembed/unicode
 
-// #cgo CPPFLAGS: -I/home/jchiu/go/src/github.com/dgraph-io/dgraph/vendor/github.com/dgraph-io/goicu/icuembed -DU_DISABLE_RENAMING=1
+// #cgo CPPFLAGS: -I../vendor/github.com/dgraph-io/goicu/icuembed -DU_DISABLE_RENAMING=1
 // #cgo darwin LDFLAGS: -Wl,-undefined -Wl,dynamic_lookup
 // #cgo !darwin LDFLAGS: -Wl,-unresolved-symbols=ignore-all -lrt
 import "C"

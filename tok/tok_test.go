@@ -16,6 +16,12 @@
 
 package tok
 
+/*
+For testing embedded version, try:
+wget https://github.com/dgraph-io/goicu/raw/master/icudt57l.dat -P /tmp
+go test -icu /tmp/icudt57l.dat -tags embed
+*/
+
 import (
 	"os"
 	"strings"
