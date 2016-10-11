@@ -59,7 +59,6 @@ var (
 	numcpu     = flag.Int("cores", runtime.NumCPU(),
 		"Number of cores to be used by the process")
 	raftId     = flag.Uint64("idx", 1, "RAFT ID that this server will use to join RAFT groups.")
-	cluster    = flag.String("cluster", "", "List of peers in this format: ID1:URL1,ID2:URL2,...")
 	peer       = flag.String("peer", "", "Address of any peer.")
 	workerPort = flag.String("workerport", ":12345",
 		"Port used by worker for internal communication.")

@@ -2,6 +2,7 @@ package raftwal
 
 import (
 	"encoding/binary"
+	"fmt"
 
 	"github.com/coreos/etcd/raft"
 	"github.com/coreos/etcd/raft/raftpb"
@@ -49,6 +50,7 @@ func (w *Wal) Store(gid uint32, s raftpb.Snapshot, h raftpb.HardState, es []raft
 		if err != nil {
 			return x.Wrapf(err, "wal.Store: While marshal snapshot")
 		}
+		fmt.Printf("w.Store snapshot: %+v\n", s)
 		b.Put(snapshotKey(gid), data)
 	}
 
@@ -57,6 +59,7 @@ func (w *Wal) Store(gid uint32, s raftpb.Snapshot, h raftpb.HardState, es []raft
 		if err != nil {
 			return x.Wrapf(err, "wal.Store: While marshal hardstate")
 		}
+		fmt.Printf("w.Store hardstate: %+v\n", h)
 		b.Put(hardStateKey(gid), data)
 	}
 
@@ -67,20 +70,30 @@ func (w *Wal) Store(gid uint32, s raftpb.Snapshot, h raftpb.HardState, es []raft
 		if err != nil {
 			return x.Wrapf(err, "wal.Store: While marshal entry")
 		}
-		b.Put(entryKey(gid, e.Term, e.Index), data)
+		k := entryKey(gid, e.Term, e.Index)
+		fmt.Printf("w.Store [%d, %d] key: %x\n", t, i, k)
+		b.Put(k, data)
 	}
 
-	// Delete all keys above this index.
-	start := entryKey(gid, t, i+1)
-	itr := w.wals.NewIterator()
-	prefix := make([]byte, 4)
-	binary.BigEndian.PutUint32(prefix, gid)
+	if t > 0 || i > 0 {
+		// Delete all keys above this index.
+		start := entryKey(gid, t, i+1)
+		fmt.Printf("Deleting keys after [%d, %d]\n", t, i+1)
+		itr := w.wals.NewIterator()
+		prefix := make([]byte, 4)
+		binary.BigEndian.PutUint32(prefix, gid)
 
-	for itr.Seek(start); itr.ValidForPrefix(prefix); itr.Next() {
-		b.Delete(itr.Key().Data())
+		for itr.Seek(start); itr.ValidForPrefix(prefix); itr.Next() {
+			fmt.Printf("w.Store Delete key: %x\n", itr.Key().Data())
+			b.Delete(itr.Key().Data())
+		}
+	}
+	if b.Count() > 0 {
+		fmt.Printf("wal.Store: Batch has %d writes\n", b.Count())
 	}
 
-	return x.Wrapf(w.wals.WriteBatch(b), "wal.Store: While WriteBatch")
+	err := w.wals.WriteBatch(b)
+	return x.Wrapf(err, "wal.Store: While WriteBatch")
 }
 
 func (w *Wal) Snapshot(gid uint32) (snap raftpb.Snapshot, rerr error) {
@@ -107,7 +120,12 @@ func (w *Wal) Entries(gid uint32, fromTerm, fromIndex uint64) (es []raftpb.Entry
 	prefix := make([]byte, 4)
 	binary.BigEndian.PutUint32(prefix, gid)
 
+	for itr.SeekToFirst(); itr.Valid(); itr.Next() {
+		fmt.Printf("Key: %x\n", itr.Key().Data())
+	}
+
 	for itr.Seek(start); itr.ValidForPrefix(prefix); itr.Next() {
+		fmt.Printf("Entries Key: %v\n", itr.Key().Data())
 		data := itr.Value().Data()
 		var e raftpb.Entry
 		if err := e.Unmarshal(data); err != nil {

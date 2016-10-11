@@ -293,6 +293,7 @@ func (n *node) Run() {
 			n.raft.Tick()
 
 		case rd := <-n.raft.Ready():
+			x.Check(n.wal.Store(n.gid, rd.Snapshot, rd.HardState, rd.Entries))
 			n.saveToStorage(rd.Snapshot, rd.HardState, rd.Entries)
 			for _, msg := range rd.Messages {
 				n.send(msg)
@@ -441,6 +442,7 @@ func (n *node) initFromWal(wal *raftwal.Wal) (restart bool, rerr error) {
 		return
 	}
 	if !raft.IsEmptySnap(sp) {
+		fmt.Printf("Found Snapshot: %+v\n", sp)
 		restart = true
 		if rerr = n.store.ApplySnapshot(sp); rerr != nil {
 			return
@@ -453,6 +455,7 @@ func (n *node) initFromWal(wal *raftwal.Wal) (restart bool, rerr error) {
 		return
 	}
 	if !raft.IsEmptyHardState(hd) {
+		fmt.Printf("Found hardstate: %+v\n", sp)
 		restart = true
 		if rerr = n.store.SetHardState(hd); rerr != nil {
 			return
@@ -470,6 +473,7 @@ func (n *node) initFromWal(wal *raftwal.Wal) (restart bool, rerr error) {
 	if rerr != nil {
 		return
 	}
+	fmt.Printf("Found %d entries\n", len(es))
 	if len(es) > 0 {
 		restart = true
 	}
@@ -477,29 +481,22 @@ func (n *node) initFromWal(wal *raftwal.Wal) (restart bool, rerr error) {
 	return
 }
 
-func (n *node) InitAndStartNode(wal *raftwal.Wal, peer string, ch chan error) {
+func (n *node) InitAndStartNode(wal *raftwal.Wal, peer string) {
 	restart, err := n.initFromWal(wal)
-	if err != nil {
-		ch <- err
-		return
-	}
+	x.Check(err)
 
 	if restart {
 		n.raft = raft.RestartNode(n.cfg)
-		ch <- nil
-		return
+	} else {
+		peers := []raft.Peer{{ID: n.id}}
+		n.raft = raft.StartNode(n.cfg, peers)
+		if len(peer) > 0 {
+			n.joinPeers(peer, ws)
+		}
 	}
-
-	peers := []raft.Peer{{ID: n.id}}
-
-	n.raft = raft.StartNode(n.cfg, peers)
 	go n.Run()
 	go n.snapshotPeriodically()
 	go n.Inform()
-	if len(peer) > 0 {
-		go n.joinPeers(peer, ws)
-	}
-	ch <- nil
 }
 
 func (n *node) doInform(rc *task.RaftContext) {
@@ -525,6 +522,9 @@ func (n *node) doInform(rc *task.RaftContext) {
 	data := b.Bytes[b.Head():]
 
 	common := groups().Node(math.MaxUint32)
+	if common == nil {
+		return
+	}
 	x.Checkf(common.ProposeAndWait(context.TODO(), membershipMsg, data),
 		"Expected acceptance.")
 }
@@ -534,10 +534,9 @@ func (n *node) Inform() {
 	if rc.Group() == math.MaxUint32 {
 		return
 	}
-	n.doInform(rc)
 
 	select {
-	case <-time.Tick(time.Minute):
+	case <-time.Tick(30 * time.Second):
 		n.doInform(rc)
 	case <-n.done:
 		return
