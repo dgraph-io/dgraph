@@ -52,10 +52,10 @@ import (
 )
 
 var (
-	postingDir  = flag.String("p", "p", "Directory to store posting lists")
-	mutationDir = flag.String("m", "m", "Directory to store mutations")
-	port        = flag.Int("port", 8080, "Port to run server on.")
-	numcpu      = flag.Int("cores", runtime.NumCPU(),
+	postingDir = flag.String("p", "p", "Directory to store posting lists.")
+	walDir     = flag.String("w", "w", "Directory to store raft write-ahead logs.")
+	port       = flag.Int("port", 8080, "Port to run server on.")
+	numcpu     = flag.Int("cores", runtime.NumCPU(),
 		"Number of cores to be used by the process")
 	raftId     = flag.Uint64("idx", 1, "RAFT ID that this server will use to join RAFT groups.")
 	cluster    = flag.String("cluster", "", "List of peers in this format: ID1:URL1,ID2:URL2,...")
@@ -68,11 +68,10 @@ var (
 	cpuprofile  = flag.String("cpu", "", "write cpu profile to file")
 	memprofile  = flag.String("mem", "", "write memory profile to file")
 	schemaFile  = flag.String("schema", "", "Path to schema file")
-	rdbStats    = flag.Duration("rdbstats", 5*time.Minute, "Print out RocksDB stats every this many seconds. If <=0, we don't print anyting.")
-	groupConf   = flag.String("conf", "", "Path to config file with group <-> predicate mapping.")
-	closeCh     = make(chan struct{})
-
-	groupId uint64 = 0 // ALL
+	rdbStats    = flag.Duration("rdbstats", 5*time.Minute,
+		"Print out RocksDB stats every this many seconds. If <=0, we don't print anyting.")
+	groupConf = flag.String("conf", "", "Path to config file with group <-> predicate mapping.")
+	closeCh   = make(chan struct{})
 )
 
 type mutationResult struct {
@@ -559,9 +558,9 @@ func checkFlagsAndInitDirs() {
 	if err != nil {
 		log.Fatalf("Error while creating the filepath for postings: %v", err)
 	}
-	err = os.MkdirAll(*mutationDir, 0700)
+	err = os.MkdirAll(*walDir, 0700)
 	if err != nil {
-		log.Fatalf("Error while creating the filepath for mutations: %v", err)
+		log.Fatalf("Error while creating the filepath for wal: %v", err)
 	}
 }
 
@@ -633,6 +632,10 @@ func main() {
 	ps, err := store.NewStore(*postingDir)
 	x.Checkf(err, "Error initializing postings store")
 	defer ps.Close()
+
+	wals, err := store.NewSyncStore(*walDir)
+	x.Checkf(err, "Error initializing wal store")
+	defer wals.Close()
 
 	posting.InitIndex(ps)
 	posting.Init()
