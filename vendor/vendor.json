@@ -59,6 +59,12 @@
 			"revisionTime": "2016-09-07T16:21:46Z"
 		},
 		{
+			"checksumSHA1": "8lF1z9oU8BKc3ZroQ4B6Qau3Qwk=",
+			"path": "github.com/dgraph-io/goicu/icuembed",
+			"revision": "4b676c39f8c530fc98da1ddcaae9360c7c1acf51",
+			"revisionTime": "2016-10-11T01:46:28Z"
+		},
+		{
 			"checksumSHA1": "a29TtOU87eZA0S6wL+rAkpqUEzc=",
 			"path": "github.com/dgryski/go-farm",
 			"revision": "d1e51a4af19092715f4ce7d8257fe5bc8f8be727",
