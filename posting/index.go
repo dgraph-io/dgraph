@@ -26,13 +26,16 @@ import (
 	"github.com/dgraph-io/dgraph/posting/types"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/store"
+	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/x"
 )
 
 const (
 	// Posting list keys are prefixed with this rune if it is a mutation meant for
-	// the index.
-	indexRune = ':'
+	// the index. For now, we only index strings and we can have either exact or
+	// partial matches. We use a different prefix for exact and partial matches.
+	indexRune  = ':'
+	indexRune2 = '$'
 )
 
 var (
@@ -53,9 +56,9 @@ func InitIndex(ds *store.Store) {
 }
 
 // IndexKey creates a key for indexing the term for given attribute.
-func IndexKey(attr string, term []byte) []byte {
+func IndexKey(attr string, term []byte, r rune) []byte {
 	buf := bytes.NewBuffer(make([]byte, 0, len(attr)+len(term)+2))
-	_, err := buf.WriteRune(indexRune)
+	_, err := buf.WriteRune(r)
 	x.Check(err)
 	_, err = buf.WriteString(attr)
 	x.Check(err)
@@ -67,7 +70,8 @@ func IndexKey(attr string, term []byte) []byte {
 }
 
 // processIndexTerm adds mutation(s) for a single term, to maintain index.
-func processIndexTerm(ctx context.Context, attr string, uid uint64, term []byte, del bool) {
+func processIndexTerm(ctx context.Context, attr string, uid uint64, term []byte,
+	r rune, del bool) {
 	x.Assert(uid != 0)
 	edge := x.DirectedEdge{
 		Timestamp: time.Now(),
@@ -75,7 +79,7 @@ func processIndexTerm(ctx context.Context, attr string, uid uint64, term []byte,
 		Attribute: attr,
 		Source:    "idx",
 	}
-	key := IndexKey(edge.Attribute, term)
+	key := IndexKey(edge.Attribute, term, r)
 	plist, decr := GetOrCreate(key, indexStore)
 	defer decr()
 	x.Assertf(plist != nil, "plist is nil [%s] %d %s", key, edge.ValueId, edge.Attribute)
@@ -99,12 +103,15 @@ func processIndexTerm(ctx context.Context, attr string, uid uint64, term []byte,
 
 // AddMutationWithIndex is AddMutation with support for indexing.
 func (l *List) AddMutationWithIndex(ctx context.Context, t x.DirectedEdge, op byte) error {
-	x.Assertf(len(t.Attribute) > 0 && t.Attribute[0] != indexRune,
-		"[%s] [%d] [%s] %d %d\n", t.Attribute, t.Entity, string(t.Value), t.ValueId, op)
+	x.Assertf(len(t.Attribute) > 0 && t.Attribute[0] != indexRune &&
+		t.Attribute[0] != indexRune2,
+		"[%s] [%d] [%s] %d %d\n", t.Attribute, t.Entity, string(t.Value), t.ValueId,
+		op)
 
 	var lastPost types.Posting
 	var hasLastPost bool
-	doUpdateIndex := indexStore != nil && (t.Value != nil) && schema.IsIndexed(t.Attribute)
+	doUpdateIndex := indexStore != nil && (t.Value != nil) &&
+		schema.IsIndexed(t.Attribute)
 	if doUpdateIndex {
 		// Check last posting for original value BEFORE any mutation actually happens.
 		if l.Length() >= 1 {
@@ -119,11 +126,41 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t x.DirectedEdge, op by
 	if !hasMutated || !doUpdateIndex {
 		return nil
 	}
+
+	// Exact matches.
 	if hasLastPost && lastPost.ValueBytes() != nil {
-		processIndexTerm(ctx, t.Attribute, t.Entity, lastPost.ValueBytes(), true)
+		processIndexTerm(ctx, t.Attribute, t.Entity, lastPost.ValueBytes(), indexRune, true)
 	}
 	if op == Set {
-		processIndexTerm(ctx, t.Attribute, t.Entity, t.Value, false)
+		processIndexTerm(ctx, t.Attribute, t.Entity, t.Value, indexRune, false)
+	}
+
+	// Partial matches.
+	if hasLastPost && lastPost.ValueBytes() != nil {
+		tokenizer, err := tok.NewTokenizer(lastPost.ValueBytes())
+		if err != nil {
+			return err
+		}
+		for {
+			s := tokenizer.Next()
+			if s == nil {
+				break
+			}
+			processIndexTerm(ctx, t.Attribute, t.Entity, s, indexRune2, true)
+		}
+	}
+	if op == Set {
+		tokenizer, err := tok.NewTokenizer(t.Value)
+		if err != nil {
+			return err
+		}
+		for {
+			s := tokenizer.Next()
+			if s == nil {
+				break
+			}
+			processIndexTerm(ctx, t.Attribute, t.Entity, s, indexRune2, false)
+		}
 	}
 	return nil
 }
