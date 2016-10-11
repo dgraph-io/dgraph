@@ -71,7 +71,7 @@ func exactMatchIndexKeys(attr string, data []byte) []string {
 	return []string{string(IndexKey(attr, data))}
 }
 
-func indexKeys(attr string, data []byte) ([]string, error) {
+func tokenizedIndexKeys(attr string, data []byte) ([]string, error) {
 	t := schema.TypeOf(attr)
 	if !t.IsScalar() {
 		return nil, x.Errorf("Cannot index attribute %s of type object.", attr)
@@ -88,18 +88,19 @@ func indexKeys(attr string, data []byte) ([]string, error) {
 // processIndexTerm adds mutation(s) for a single term, to maintain index.
 func processIndexTerm(ctx context.Context, attr string, uid uint64, term []byte, del bool) {
 	x.Assert(uid != 0)
-	keys, err := indexKeys(attr, term)
+	keys, err := tokenizedIndexKeys(attr, term)
 	if err != nil {
 		// This data is not indexable
 		return
 	}
+	edge := x.DirectedEdge{
+		Timestamp: time.Now(),
+		ValueId:   uid,
+		Attribute: attr,
+		Source:    "idx",
+	}
+
 	for _, key := range keys {
-		edge := x.DirectedEdge{
-			Timestamp: time.Now(),
-			ValueId:   uid,
-			Attribute: attr,
-			Source:    "idx",
-		}
 		plist, decr := GetOrCreate([]byte(key), indexStore)
 		defer decr()
 		x.Assertf(plist != nil, "plist is nil [%s] %d %s", key, edge.ValueId, edge.Attribute)
