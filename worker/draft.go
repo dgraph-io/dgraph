@@ -159,7 +159,7 @@ func (n *node) ProposeAndWait(ctx context.Context, msg uint16, data []byte) erro
 	}
 }
 
-func (n *node) send(m raftpb.Message) {
+func (n *node) send(ctx context.Context, m raftpb.Message, ch chan error) {
 	x.Assertf(n.id != m.To, "Seding message to itself")
 
 	addr := n.peers.Get(m.To)
@@ -175,7 +175,8 @@ func (n *node) send(m raftpb.Message) {
 	data, err := m.Marshal()
 	x.Checkf(err, "Unable to marshal: %+v", m)
 	p := &Payload{Data: data}
-	_, err = c.RaftMessage(context.TODO(), p)
+	_, err = c.RaftMessage(ctx, p)
+	ch <- err
 }
 
 func (n *node) processMutation(e raftpb.Entry, h header) error {
@@ -295,9 +296,12 @@ func (n *node) Run() {
 		case rd := <-n.raft.Ready():
 			x.Check(n.wal.Store(n.gid, rd.Snapshot, rd.HardState, rd.Entries))
 			n.saveToStorage(rd.Snapshot, rd.HardState, rd.Entries)
+			che := make(chan error, len(rd.Messages))
+			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 			for _, msg := range rd.Messages {
-				n.send(msg)
+				go n.send(ctx, msg, che)
 			}
+
 			if !raft.IsEmptySnap(rd.Snapshot) {
 				fmt.Printf("Got snapshot: %q\n", rd.Snapshot.Data)
 				n.processSnapshot(rd.Snapshot)
@@ -305,7 +309,19 @@ func (n *node) Run() {
 			for _, entry := range rd.CommittedEntries {
 				x.Check(n.process(entry))
 			}
+
 			n.raft.Advance()
+			// Block to ensure all messages have been sent.
+			for i := 0; i < len(rd.Messages); i++ {
+				select {
+				case err := <-che:
+					fmt.Printf("Error while sending messages: %v", err)
+				case <-ctx.Done():
+					fmt.Printf("Context timeout: %v", ctx.Err())
+					break
+				}
+			}
+			cancel()
 
 		case <-n.done:
 			return
@@ -420,7 +436,7 @@ func newNode(gid uint32, id uint64, myAddr string) *node {
 		store: store,
 		cfg: &raft.Config{
 			ID:              id,
-			ElectionTick:    3,
+			ElectionTick:    10,
 			HeartbeatTick:   1,
 			Storage:         store,
 			MaxSizePerMsg:   4096,
