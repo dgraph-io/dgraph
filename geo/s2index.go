@@ -30,13 +30,9 @@ import (
 // IndexKeys creates the keys to use in the index for the given data assuming that it is geo data.
 func IndexKeys(data []byte) ([]string, error) {
 	// Try to parse the data as geo type.
-	v, err := types.GeoType.Unmarshaler.FromBinary(data)
-	if err != nil {
+	var g types.Geo
+	if err := g.UnmarshalBinary(data); err != nil {
 		return nil, err
-	}
-	g, ok := v.(types.Geo)
-	if !ok {
-		log.Fatalf("Unexpected type from the unmarshaler.")
 	}
 	return IndexKeysFromGeo(g)
 }

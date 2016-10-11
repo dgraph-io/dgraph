@@ -73,8 +73,12 @@ func exactMatchIndexKeys(attr string, data []byte) []string {
 
 func indexKeys(attr string, data []byte) ([]string, error) {
 	t := schema.TypeOf(attr)
-	switch t {
-	case stype.GeoType:
+	if !t.IsScalar() {
+		return nil, x.Errorf("Cannot index attribute %s of type object.", attr)
+	}
+	s := t.(stype.Scalar)
+	switch s.ID() {
+	case stype.GeoID:
 		return geo.IndexKeys(data)
 	default:
 		return exactMatchIndexKeys(attr, data), nil
