@@ -134,7 +134,7 @@ func TestKeyGeneratorPoint(t *testing.T) {
 		t.Errorf("Expected 12 keys. Got %d instead.", len(keys))
 	}
 	for _, key := range keys {
-		if !strings.HasPrefix(key, ":_loc_|") {
+		if !strings.HasPrefix(string(key), ":_loc_|") {
 			t.Errorf("Expected prefix ':_loc_|' for key %s", key)
 		}
 	}
@@ -158,7 +158,7 @@ func TestKeyGeneratorPolygon(t *testing.T) {
 		t.Errorf("Expected 18 keys. Got %d instead.", len(keys))
 	}
 	for _, key := range keys {
-		if !strings.HasPrefix(key, ":_loc_|") {
+		if !strings.HasPrefix(string(key), ":_loc_|") {
 			t.Errorf("Expected prefix ':_loc_|' for key %s", key)
 		}
 	}

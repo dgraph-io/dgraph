@@ -28,7 +28,7 @@ import (
 )
 
 // IndexKeys creates the keys to use in the index for the given data assuming that it is geo data.
-func IndexKeys(data []byte) ([]string, error) {
+func IndexKeys(data []byte) ([][]byte, error) {
 	// Try to parse the data as geo type.
 	var g types.Geo
 	if err := g.UnmarshalBinary(data); err != nil {
@@ -39,12 +39,12 @@ func IndexKeys(data []byte) ([]string, error) {
 
 // IndexKeysFromGeo returns the keys to be used in a geospatial index for the given geometry. If the
 // geometry is not supported it returns an error.
-func IndexKeysFromGeo(g types.Geo) ([]string, error) {
+func IndexKeysFromGeo(g types.Geo) ([][]byte, error) {
 	cu, err := indexCells(g)
 	if err != nil {
 		return nil, err
 	}
-	keys := make([]string, len(cu))
+	keys := make([][]byte, len(cu))
 	for i, c := range cu {
 		keys[i] = indexKeyFromCellID(c)
 	}
@@ -53,11 +53,11 @@ func IndexKeysFromGeo(g types.Geo) ([]string, error) {
 
 const indexPrefix = ":_loc_|"
 
-func indexKeyFromCellID(c s2.CellID) string {
+func indexKeyFromCellID(c s2.CellID) []byte {
 	var buf bytes.Buffer
 	buf.WriteString(indexPrefix)
 	buf.WriteString(c.ToToken())
-	return buf.String()
+	return buf.Bytes()
 }
 
 func indexCells(g types.Geo) (s2.CellUnion, error) {

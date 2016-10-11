@@ -67,11 +67,11 @@ func IndexKey(attr string, term []byte) []byte {
 	return buf.Bytes()
 }
 
-func exactMatchIndexKeys(attr string, data []byte) []string {
-	return []string{string(IndexKey(attr, data))}
+func exactMatchIndexKeys(attr string, data []byte) [][]byte {
+	return [][]byte{IndexKey(attr, data)}
 }
 
-func tokenizedIndexKeys(attr string, data []byte) ([]string, error) {
+func tokenizedIndexKeys(attr string, data []byte) ([][]byte, error) {
 	t := schema.TypeOf(attr)
 	if !t.IsScalar() {
 		return nil, x.Errorf("Cannot index attribute %s of type object.", attr)
