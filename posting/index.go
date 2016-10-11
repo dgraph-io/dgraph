@@ -19,6 +19,7 @@ package posting
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"strconv"
 	"time"
 
@@ -26,16 +27,17 @@ import (
 
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/store"
+	"github.com/dgraph-io/dgraph/types"
 
 	ptypes "github.com/dgraph-io/dgraph/posting/types"
-	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
 
 const (
 	// Posting list keys are prefixed with this rune if it is a mutation meant for
 	// the index.
-	indexRune = ':'
+	indexRune  = ':'
+	dateFormat = "2006-01-02"
 )
 
 var (
@@ -71,25 +73,45 @@ func IndexKey(attr string, term []byte) []byte {
 
 func indexKeys(attr string, data []byte) ([]string, error) {
 	t := schema.TypeOf(attr)
+	fmt.Println("Indexing:", attr, t, data)
 	switch t {
+	case types.DateTimeType:
+		return dateIndexYear(attr, data)
 	case types.DateType:
 		return dateIndexYear(attr, data)
+	case types.Int32Type:
+		return intIndex(attr, data)
+	case types.FloatType:
+		return floatIndex(attr, data)
 	default:
 		return exactMatchIndexKeys(attr, data), nil
 	}
-
 }
 
 func exactMatchIndexKeys(attr string, data []byte) []string {
 	return []string{string(IndexKey(attr, data))}
 }
 
+func intIndex(attr string, data []byte) ([]string, error) {
+	fmt.Println(attr, data, "^^^^^^^")
+	fmt.Println(strconv.Atoi(string(data)))
+
+	return []string{string(IndexKey(attr, data))}, nil
+}
+
+func floatIndex(attr string, data []byte) ([]string, error) {
+	fmt.Println(attr, data, "^^^^^^^")
+
+	f, _ := strconv.ParseFloat(string(data), 64)
+	in := int(f)
+	return []string{string(IndexKey(attr, []byte(strconv.Itoa(in))))}, nil
+}
+
 func dateIndexYear(attr string, data []byte) ([]string, error) {
-	var t time.Time
-	t.UnmarshalBinary(data)
-	year := t.Year()
-	bs := []byte(strconv.Itoa(year))
-	return []string{string(IndexKey(attr, bs))}, nil
+	fmt.Println(attr, string(data), "^^^^^^^")
+	t, _ := time.Parse(dateFormat, string(data))
+	fmt.Println(t.Year())
+	return []string{string(IndexKey(attr, []byte(strconv.Itoa(t.Year()))))}, nil
 }
 
 // processIndexTerm adds mutation(s) for a single term, to maintain index.
