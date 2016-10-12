@@ -578,7 +578,7 @@ func serveHTTP(l net.Listener) {
 	}
 }
 
-func setupServer() {
+func setupServer(che chan error) {
 	go worker.RunServer(*workerPort) // For internal communication.
 
 	l, err := net.Listen("tcp", fmt.Sprintf(":%d", *port))
@@ -609,10 +609,7 @@ func setupServer() {
 	log.Println("Server listening on port", *port)
 
 	// Start cmux serving.
-	if err := tcpm.Serve(); !strings.Contains(err.Error(),
-		"use of closed network connection") {
-		log.Fatal(err)
-	}
+	che <- tcpm.Serve()
 }
 
 func printStats(ps *store.Store) {
@@ -636,7 +633,7 @@ func main() {
 	wals, err := store.NewSyncStore(*walDir)
 	x.Checkf(err, "Error initializing wal store")
 	defer wals.Close()
-	wal := raftwal.Init(wals)
+	wal := raftwal.Init(wals, *raftId)
 
 	posting.InitIndex(ps)
 	posting.Init()
@@ -646,14 +643,6 @@ func main() {
 	worker.SetState(ps)
 	uid.Init(ps)
 
-	my := "localhost" + *workerPort
-
-	// TODO: Clean up the RAFT group creation code.
-
-	// First initiate the commmon group across the entire cluster. This group
-	// stores information about which server serves which groups.
-	go worker.StartRaftNodes(wal, *raftId, my, *peer)
-
 	if len(*schemaFile) > 0 {
 		err = schema.Parse(*schemaFile)
 		if err != nil {
@@ -661,5 +650,17 @@ func main() {
 		}
 	}
 	// Setup external communication.
-	setupServer()
+	che := make(chan error, 1)
+	go setupServer(che)
+
+	// TODO: Clean up the RAFT group creation code.
+	// Initiate the commmon group across the entire cluster. This group
+	// stores information about which server serves which groups.
+	my := "localhost" + *workerPort
+	go worker.StartRaftNodes(wal, *raftId, my, *peer)
+
+	if err := <-che; !strings.Contains(err.Error(),
+		"use of closed network connection") {
+		log.Fatal(err)
+	}
 }

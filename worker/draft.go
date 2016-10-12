@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"log"
@@ -70,6 +71,11 @@ func (p *proposals) Done(pid uint32, err error) {
 	ch <- err
 }
 
+type sendmsg struct {
+	to   uint64
+	data []byte
+}
+
 type node struct {
 	cfg         *raft.Config
 	ctx         context.Context
@@ -82,6 +88,7 @@ type node struct {
 	store       *raft.MemoryStorage
 	raftContext []byte
 	wal         *raftwal.Wal
+	messages    chan sendmsg
 }
 
 func (n *node) Connect(pid uint64, addr string) {
@@ -159,24 +166,63 @@ func (n *node) ProposeAndWait(ctx context.Context, msg uint16, data []byte) erro
 	}
 }
 
-func (n *node) send(ctx context.Context, m raftpb.Message, ch chan error) {
+func (n *node) send(m raftpb.Message) {
 	x.Assertf(n.id != m.To, "Seding message to itself")
+	data, err := m.Marshal()
+	x.Check(err)
+	n.messages <- sendmsg{to: m.To, data: data}
+}
 
-	addr := n.peers.Get(m.To)
-	x.Assertf(len(addr) > 0, "Don't have address for peer: %d", m.To)
+func (n *node) doSendMessage(to uint64, data []byte) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
 
+	addr := n.peers.Get(to)
+	x.Assertf(len(addr) > 0, "Don't have address for peer: %d", to)
 	pool := pools().get(addr)
 	conn, err := pool.Get()
 	x.Check(err)
 	defer pool.Put(conn)
 
 	c := NewWorkerClient(conn)
-	m.Context = n.raftContext
-	data, err := m.Marshal()
-	x.Checkf(err, "Unable to marshal: %+v", m)
 	p := &Payload{Data: data}
-	_, err = c.RaftMessage(ctx, p)
-	ch <- err
+
+	ch := make(chan error, 1)
+	go func() {
+		_, err = c.RaftMessage(ctx, p)
+		ch <- err
+	}()
+
+	select {
+	case <-ctx.Done():
+		return
+	case <-ch:
+		return
+	}
+}
+
+func (n *node) batchAndSendMessages() {
+	batches := make(map[uint64]*bytes.Buffer)
+	for {
+		select {
+		case sm := <-n.messages:
+			if _, ok := batches[sm.to]; !ok {
+				batches[sm.to] = new(bytes.Buffer)
+			}
+			buf := batches[sm.to]
+			binary.Write(buf, binary.LittleEndian, uint32(len(sm.data)))
+			buf.Write(sm.data)
+
+		case <-time.Tick(10 * time.Millisecond):
+			for to, buf := range batches {
+				if buf.Len() == 0 {
+					continue
+				}
+				go n.doSendMessage(to, buf.Bytes())
+				buf.Reset()
+			}
+		}
+	}
 }
 
 func (n *node) processMutation(e raftpb.Entry, h header) error {
@@ -208,10 +254,9 @@ func (n *node) process(e raftpb.Entry) error {
 	if e.Data == nil {
 		return nil
 	}
-	fmt.Printf("Entry type to process: %v\n", e.Type.String())
+	fmt.Printf("Entry type to process: %+v\n", e)
 
 	if e.Type == raftpb.EntryConfChange {
-		fmt.Printf("Configuration change\n")
 		var cc raftpb.ConfChange
 		cc.Unmarshal(e.Data)
 
@@ -287,23 +332,24 @@ func (n *node) processSnapshot(s raftpb.Snapshot) {
 }
 
 func (n *node) Run() {
-	fmt.Println("Run")
 	for {
 		select {
-		case <-time.Tick(time.Second):
+		case t := <-time.Tick(time.Second):
+			fmt.Printf("[%v]              TICK %v\n", n.gid, t)
 			n.raft.Tick()
 
 		case rd := <-n.raft.Ready():
+			fmt.Printf("[%v]              READY START\n", n.gid)
 			x.Check(n.wal.Store(n.gid, rd.Snapshot, rd.HardState, rd.Entries))
 			n.saveToStorage(rd.Snapshot, rd.HardState, rd.Entries)
-			che := make(chan error, len(rd.Messages))
-			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 			for _, msg := range rd.Messages {
-				go n.send(ctx, msg, che)
+				// TODO: Do some optimizations here to drop messages.
+				msg.Context = n.raftContext
+				n.send(msg)
 			}
 
 			if !raft.IsEmptySnap(rd.Snapshot) {
-				fmt.Printf("Got snapshot: %q\n", rd.Snapshot.Data)
+				fmt.Printf("               Got snapshot: %q\n", rd.Snapshot.Data)
 				n.processSnapshot(rd.Snapshot)
 			}
 			for _, entry := range rd.CommittedEntries {
@@ -311,17 +357,7 @@ func (n *node) Run() {
 			}
 
 			n.raft.Advance()
-			// Block to ensure all messages have been sent.
-			for i := 0; i < len(rd.Messages); i++ {
-				select {
-				case err := <-che:
-					fmt.Printf("Error while sending messages: %v", err)
-				case <-ctx.Done():
-					fmt.Printf("Context timeout: %v", ctx.Err())
-					break
-				}
-			}
-			cancel()
+			fmt.Printf("[%v]              READY DONE\n", n.gid)
 
 		case <-n.done:
 			return
@@ -340,7 +376,7 @@ func (n *node) Step(ctx context.Context, msg raftpb.Message) error {
 func (n *node) snapshotPeriodically() {
 	for {
 		select {
-		case t := <-time.Tick(time.Minute):
+		case t := <-time.Tick(10 * time.Minute):
 			fmt.Printf("Snapshot Periodically: %v", t)
 
 			le, err := n.store.LastIndex()
@@ -419,7 +455,7 @@ func createRaftContext(id uint64, gid uint32, addr string) []byte {
 }
 
 func newNode(gid uint32, id uint64, myAddr string) *node {
-	fmt.Printf("NEW NODE ID: %v\n", id)
+	fmt.Printf("NEW NODE GID, ID: [%v, %v]\n", gid, id)
 
 	peers := peerPool{
 		peers: make(map[uint64]string),
@@ -445,6 +481,7 @@ func newNode(gid uint32, id uint64, myAddr string) *node {
 		peers:       peers,
 		props:       props,
 		raftContext: createRaftContext(id, gid, myAddr),
+		messages:    make(chan sendmsg, 1000),
 	}
 	return n
 }
@@ -502,7 +539,9 @@ func (n *node) InitAndStartNode(wal *raftwal.Wal, peer string) {
 	x.Check(err)
 
 	if restart {
+		fmt.Printf("RESTARTING\n")
 		n.raft = raft.RestartNode(n.cfg)
+
 	} else {
 		peers := []raft.Peer{{ID: n.id}}
 		n.raft = raft.StartNode(n.cfg, peers)
@@ -513,6 +552,7 @@ func (n *node) InitAndStartNode(wal *raftwal.Wal, peer string) {
 	go n.Run()
 	go n.snapshotPeriodically()
 	go n.Inform()
+	go n.batchAndSendMessages()
 }
 
 func (n *node) doInform(rc *task.RaftContext) {
@@ -563,16 +603,7 @@ func (n *node) AmLeader() bool {
 	return n.raft.Status().Lead == n.raft.Status().ID
 }
 
-func (w *grpcWorker) RaftMessage(ctx context.Context, query *Payload) (*Payload, error) {
-	if ctx.Err() != nil {
-		return &Payload{}, ctx.Err()
-	}
-
-	msg := raftpb.Message{}
-	if err := msg.Unmarshal(query.Data); err != nil {
-		return &Payload{}, err
-	}
-
+func (w *grpcWorker) applyMessage(ctx context.Context, msg raftpb.Message) error {
 	rc := task.GetRootAsRaftContext(msg.Context, 0)
 	node := groups().Node(rc.Group())
 	node.Connect(msg.From, string(rc.Addr()))
@@ -582,10 +613,34 @@ func (w *grpcWorker) RaftMessage(ctx context.Context, query *Payload) (*Payload,
 
 	select {
 	case <-ctx.Done():
-		return &Payload{}, ctx.Err()
+		return ctx.Err()
 	case err := <-c:
-		return &Payload{}, err
+		return err
 	}
+}
+
+func (w *grpcWorker) RaftMessage(ctx context.Context, query *Payload) (*Payload, error) {
+	if ctx.Err() != nil {
+		return &Payload{}, ctx.Err()
+	}
+
+	count := 0
+	for idx := 0; idx < len(query.Data); {
+		len := int(binary.LittleEndian.Uint32(query.Data[idx : idx+4]))
+		idx += 4
+		msg := raftpb.Message{}
+		if err := msg.Unmarshal(query.Data[idx : idx+len]); err != nil {
+			x.Check(err)
+		}
+		fmt.Printf("Got message: %+v\n", msg)
+		if err := w.applyMessage(ctx, msg); err != nil {
+			return &Payload{}, err
+		}
+		idx += len
+		count++
+	}
+	fmt.Printf("Got %d messages\n", count)
+	return &Payload{}, nil
 }
 
 func (w *grpcWorker) JoinCluster(ctx context.Context, query *Payload) (*Payload, error) {
