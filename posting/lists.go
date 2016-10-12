@@ -35,7 +35,6 @@ import (
 	"github.com/dgryski/go-farm"
 
 	"github.com/dgraph-io/dgraph/store"
-	"github.com/dgraph-io/dgraph/x"
 )
 
 var (
@@ -285,7 +284,6 @@ func getFromMap(key uint64) *List {
 // defer decr()
 // ... // Use plist
 func GetOrCreate(key []byte, pstore *store.Store) (rlist *List, decr func()) {
-	x.Printf("~~GetOrCreate: Key=[%s]\n", string(key))
 	fp := farm.Fingerprint64(key)
 
 	stopTheWorld.RLock()

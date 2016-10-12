@@ -984,20 +984,13 @@ func runFilter(ctx context.Context, destUIDs *algo.UIDList,
 		defer tokenizer.Destroy()
 		x.Assert(tokenizer != nil)
 		tokens := tokenizer.StringTokens()
-		if len(tokens) == 0 {
-			x.Printf("~~~~~~~NO TOKENS: [%s]\n", filter.FuncArgs)
-		}
 		taskQuery := createTaskQuery(sg, nil, tokens, destUIDs)
-		x.Printf("~~~~~Query: %d %v", len(tokens), tokens)
 		go ProcessGraph(ctx, sg, taskQuery, sgChan)
 		err = <-sgChan
 		if err != nil {
 			return nil, err
 		}
 		x.Assert(len(sg.Result) == len(tokens))
-		for i, l := range sg.Result {
-			x.Printf("~~%d: {%s}\n", i, l.DebugString())
-		}
 		return algo.MergeLists(sg.Result), nil
 	}
 
