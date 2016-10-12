@@ -65,9 +65,9 @@ func tokenizedIndexKeys(attr string, p stype.Value) ([][]byte, error) {
 	case stype.FloatID:
 		return stype.FloatIndex(attr, data)
 	case stype.DateID:
-		return stype.DateIndex1(attr, data)
+		return stype.DateIndex(attr, data)
 	case stype.DateTimeID:
-		return stype.DateIndex2(attr, data)
+		return stype.TimeIndex(attr, data)
 	case stype.BoolID:
 	default:
 		return stype.ExactMatchIndexKeys(attr, data), nil

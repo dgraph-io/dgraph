@@ -41,7 +41,7 @@ func IntIndex(attr string, data []byte) ([][]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	err = binary.Write(buf, binary.LittleEndian, t)
+	err = binary.Write(buf, binary.BigEndian, t)
 	if err != nil {
 		return nil, err
 	}
@@ -55,33 +55,33 @@ func FloatIndex(attr string, data []byte) ([][]byte, error) {
 	}
 	in := int(f)
 	buf := new(bytes.Buffer)
-	err = binary.Write(buf, binary.LittleEndian, in)
+	err = binary.Write(buf, binary.BigEndian, in)
 	if err != nil {
 		return nil, err
 	}
 	return [][]byte{IndexKey(attr, buf.Bytes())}, nil
 }
 
-func DateIndex1(attr string, data []byte) ([][]byte, error) {
+func DateIndex(attr string, data []byte) ([][]byte, error) {
 	t, err := time.Parse(dateFormat1, string(data))
 	if err != nil {
 		return nil, err
 	}
 	buf := new(bytes.Buffer)
-	err = binary.Write(buf, binary.LittleEndian, t.Year())
+	err = binary.Write(buf, binary.BigEndian, t.Year())
 	if err != nil {
 		return nil, err
 	}
 	return [][]byte{IndexKey(attr, buf.Bytes())}, nil
 }
 
-func DateIndex2(attr string, data []byte) ([][]byte, error) {
+func TimeIndex(attr string, data []byte) ([][]byte, error) {
 	t, err := time.Parse(dateFormat2, string(data))
 	if err != nil {
 		return nil, err
 	}
 	buf := new(bytes.Buffer)
-	err = binary.Write(buf, binary.LittleEndian, t.Year())
+	err = binary.Write(buf, binary.BigEndian, t.Year())
 	if err != nil {
 		return nil, err
 	}
