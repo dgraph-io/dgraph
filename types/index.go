@@ -2,6 +2,7 @@ package types
 
 import (
 	"bytes"
+	"encoding/binary"
 	"strconv"
 	"time"
 
@@ -35,21 +36,54 @@ func ExactMatchIndexKeys(attr string, data []byte) [][]byte {
 }
 
 func IntIndex(attr string, data []byte) ([][]byte, error) {
-	return [][]byte{IndexKey(attr, data)}, nil
+	buf := new(bytes.Buffer)
+	t, err := strconv.ParseInt(string(data), 0, 32)
+	if err != nil {
+		return nil, err
+	}
+	err = binary.Write(buf, binary.LittleEndian, t)
+	if err != nil {
+		return nil, err
+	}
+	return [][]byte{IndexKey(attr, buf.Bytes())}, nil
 }
 
 func FloatIndex(attr string, data []byte) ([][]byte, error) {
-	f, _ := strconv.ParseFloat(string(data), 64)
+	f, err := strconv.ParseFloat(string(data), 64)
+	if err != nil {
+		return nil, err
+	}
 	in := int(f)
-	return [][]byte{IndexKey(attr, []byte(strconv.Itoa(in)))}, nil
+	buf := new(bytes.Buffer)
+	err = binary.Write(buf, binary.LittleEndian, in)
+	if err != nil {
+		return nil, err
+	}
+	return [][]byte{IndexKey(attr, buf.Bytes())}, nil
 }
 
 func DateIndex1(attr string, data []byte) ([][]byte, error) {
-	t, _ := time.Parse(dateFormat1, string(data))
-	return [][]byte{IndexKey(attr, []byte(strconv.Itoa(t.Year())))}, nil
+	t, err := time.Parse(dateFormat1, string(data))
+	if err != nil {
+		return nil, err
+	}
+	buf := new(bytes.Buffer)
+	err = binary.Write(buf, binary.LittleEndian, t.Year())
+	if err != nil {
+		return nil, err
+	}
+	return [][]byte{IndexKey(attr, buf.Bytes())}, nil
 }
 
 func DateIndex2(attr string, data []byte) ([][]byte, error) {
-	t, _ := time.Parse(dateFormat2, string(data))
-	return [][]byte{IndexKey(attr, []byte(strconv.Itoa(t.Year())))}, nil
+	t, err := time.Parse(dateFormat2, string(data))
+	if err != nil {
+		return nil, err
+	}
+	buf := new(bytes.Buffer)
+	err = binary.Write(buf, binary.LittleEndian, t.Year())
+	if err != nil {
+		return nil, err
+	}
+	return [][]byte{IndexKey(attr, buf.Bytes())}, nil
 }
