@@ -164,6 +164,7 @@ func mergeInterfaces(i1 interface{}, i2 interface{}) interface{} {
 
 // postTraverse traverses the subgraph recursively and returns final result for the query.
 func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
+	// No need to check for nil as Size() will return 0 in that case.
 	if sg.srcUIDs.Size() == 0 {
 		return nil, nil
 	}
@@ -289,7 +290,7 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 			}
 			continue
 		}
-		val, storageType, err := getValue(tv)
+		val, err := getValue(tv)
 		if err != nil {
 			return result, err
 		}
@@ -317,7 +318,7 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 			}
 			schemaType := sg.Params.AttrType.(types.Scalar)
 			lval := val
-			if schemaType != storageType {
+			if schemaType != val.Type() {
 				// The schema and storage types do not match, so we do a type conversion.
 				var err error
 				lval, err = schemaType.Convert(val)
@@ -340,21 +341,18 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 }
 
 // gets the value from the task.
-func getValue(tv task.Value) (types.TypeValue, types.Type, error) {
+func getValue(tv task.Value) (types.Value, error) {
 	vType := tv.ValType()
 	valBytes := tv.ValBytes()
-	stype, _ := types.TypeForID(types.TypeID(vType))
-	if stype == nil {
-		return nil, nil, x.Errorf("Invalid type: %v", vType)
+	val := types.ValueForType(types.TypeID(vType))
+	if val == nil {
+		return nil, x.Errorf("Invalid type: %v", vType)
 	}
-	if !stype.IsScalar() {
-		return nil, nil, x.Errorf("Unknown scalar type :%v", vType)
-	}
-	val, err := stype.(types.Scalar).Unmarshaler.FromBinary(valBytes)
+	err := val.UnmarshalBinary(valBytes)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	return val, stype, nil
+	return val, nil
 }
 
 // ToJSON converts the internal subgraph object to JSON format which is then sent
@@ -430,7 +428,8 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 
 		ul := pc.Result[idx]
 		if sg.Counts != nil && sg.Counts.CountLength() > 0 {
-			p := createProperty("_count_", types.Int32(sg.Counts.Count(idx)))
+			c := types.Int32(sg.Counts.Count(idx))
+			p := createProperty("_count_", &c)
 			uc := &graph.Node{
 				Attribute:  pc.Attr,
 				Properties: []*graph.Property{p},
@@ -466,7 +465,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 			}
 
 			valBytes := tv.ValBytes()
-			v, storageType, err := getValue(tv)
+			v, err := getValue(tv)
 			if err != nil {
 				return err
 			}
@@ -489,7 +488,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 				}
 				schemaType := pc.Params.AttrType.(types.Scalar)
 				sv := v
-				if schemaType != storageType {
+				if schemaType != v.Type() {
 					// schema types don't match so we convert
 					var err error
 					sv, err = schemaType.Convert(v)
@@ -511,7 +510,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 	return nil
 }
 
-func createProperty(prop string, v types.TypeValue) *graph.Property {
+func createProperty(prop string, v types.Value) *graph.Property {
 	pval := toProtoValue(v)
 	return &graph.Property{Prop: prop, Value: pval}
 }
@@ -624,7 +623,7 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 			dst.Params.Offset = int(offset)
 		}
 		if v, ok := gchild.Args["after"]; ok {
-			after, err := strconv.ParseInt(v, 0, 64)
+			after, err := strconv.ParseUint(v, 0, 64)
 			if err != nil {
 				return err
 			}
@@ -819,7 +818,7 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, taskQuery []byte, rch chan 
 	}
 
 	if sg.destUIDs.Size() == 0 {
-		// Looks like we're done here.
+		// Looks like we're done here. Be careful with nil srcUIDs!
 		x.Trace(ctx, "Zero uids. Num attr children: %v", len(sg.Children))
 		rch <- nil
 		return
@@ -892,7 +891,7 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, taskQuery []byte, rch chan 
 				}
 
 				valBytes := tv.ValBytes()
-				v, storageType, err := getValue(tv)
+				v, err := getValue(tv)
 				if err != nil || bytes.Equal(valBytes, nil) {
 					// The value is not as requested in schema.
 					invalidUids[uid] = true
@@ -905,7 +904,7 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, taskQuery []byte, rch chan 
 				}
 
 				schemaType := node.Params.AttrType.(types.Scalar)
-				if schemaType != storageType {
+				if schemaType != v.Type() {
 					if _, err = schemaType.Convert(v); err != nil {
 						invalidUids[uid] = true
 					}

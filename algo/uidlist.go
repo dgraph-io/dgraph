@@ -46,7 +46,12 @@ func (u *UIDList) Get(i int) uint64 {
 
 // Size returns size of UIDList.
 func (u *UIDList) Size() int {
-	x.Assert(u != nil)
+	if u == nil {
+		// In a subgraph node, in processGraph, sometimes we might fan out to zero
+		// nodes, i.e., sg.destUIDs is empty. In this case, child subgraph might not
+		// have its srcUIDs initialized.
+		return 0
+	}
 	if u.list != nil {
 		return u.list.UidsLength()
 	}

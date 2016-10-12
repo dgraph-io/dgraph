@@ -19,6 +19,8 @@ package gql
 import (
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/dgraph-io/dgraph/lex"
 )
 
@@ -38,9 +40,7 @@ func TestNewLexer(t *testing.T) {
 	l.Init(input)
 	go run(l)
 	for item := range l.Items {
-		if item.Typ == lex.ItemError {
-			t.Error(item.String())
-		}
+		require.NotEqual(t, item.Typ, lex.ItemError)
 		t.Log(item.String())
 	}
 }
@@ -66,9 +66,7 @@ func TestNewLexerMutation(t *testing.T) {
 	l.Init(input)
 	go run(l)
 	for item := range l.Items {
-		if item.Typ == lex.ItemError {
-			t.Error(item.String())
-		}
+		require.NotEqual(t, item.Typ, lex.ItemError)
 		t.Log(item.String())
 	}
 }
@@ -89,9 +87,7 @@ func TestAbruptMutation(t *testing.T) {
 		t.Log(item.String())
 		typ = item.Typ
 	}
-	if typ != lex.ItemError {
-		t.Error("This should fail.")
-	}
+	require.Equal(t, typ, lex.ItemError)
 }
 
 func TestVariables1(t *testing.T) {
@@ -105,9 +101,7 @@ func TestVariables1(t *testing.T) {
 	l.Init(input)
 	go run(l)
 	for item := range l.Items {
-		if item.Typ == lex.ItemError {
-			t.Error(item.String())
-		}
+		require.NotEqual(t, item.Typ, lex.ItemError)
 		t.Log(item.String(), item.Typ)
 	}
 }
@@ -123,9 +117,7 @@ func TestVariables2(t *testing.T) {
 	l.Init(input)
 	go run(l)
 	for item := range l.Items {
-		if item.Typ == lex.ItemError {
-			t.Error(item.String())
-		}
+		require.NotEqual(t, item.Typ, lex.ItemError)
 		t.Log(item.String(), item.Typ)
 	}
 }
@@ -141,9 +133,7 @@ func TestVariablesDefault(t *testing.T) {
 	l.Init(input)
 	go run(l)
 	for item := range l.Items {
-		if item.Typ == lex.ItemError {
-			t.Error(item.String())
-		}
+		require.NotEqual(t, item.Typ, lex.ItemError)
 		t.Log(item.String(), item.Typ)
 	}
 }
@@ -163,7 +153,5 @@ func TestVariablesError(t *testing.T) {
 		t.Log(item.String())
 		typ = item.Typ
 	}
-	if typ != lex.ItemError {
-		t.Error("This should fail.")
-	}
+	require.Equal(t, typ, lex.ItemError)
 }

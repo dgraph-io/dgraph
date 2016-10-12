@@ -27,7 +27,8 @@ func TestParse(t *testing.T) {
 		`{"type":"MultiLineString","coordinates":[[[1,2,3],[4,5,6],[7,8,9],[1,2,3]]]}`,
 	}
 	for _, v := range array {
-		if g, err := GeoType.Unmarshaler.FromText([]byte(v)); err != nil {
+		var g Geo
+		if err := g.UnmarshalText([]byte(v)); err != nil {
 			t.Errorf("Error parsing %s: %v", v, err)
 		} else {
 			// Marshal it back to text
@@ -41,7 +42,8 @@ func TestParse(t *testing.T) {
 				t.Errorf("Error marshaling to WKB: %v", err)
 			}
 
-			if bg, err := GeoType.Unmarshaler.FromBinary(wkb); err != nil {
+			var bg Geo
+			if err := bg.UnmarshalBinary(wkb); err != nil {
 				t.Errorf("Error unmarshaling WKB: %v", err)
 			} else if !reflect.DeepEqual(g, bg) {
 				t.Errorf("Expected %#v, got %#v", g, bg)
@@ -58,7 +60,8 @@ func TestParseGeoJsonErrors(t *testing.T) {
 		`thisisntjson`,
 	}
 	for _, v := range array {
-		if _, err := GeoType.Unmarshaler.FromText([]byte(v)); err == nil {
+		var g Geo
+		if err := g.UnmarshalText([]byte(v)); err == nil {
 			t.Errorf("Expected error parsing %s: %v", v, err)
 		}
 	}
