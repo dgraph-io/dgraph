@@ -2,7 +2,6 @@ package types
 
 import (
 	"bytes"
-	"fmt"
 	"strconv"
 	"time"
 
@@ -31,50 +30,26 @@ func IndexKey(attr string, term []byte) []byte {
 	return buf.Bytes()
 }
 
-func IntIndex(attr string, data []byte) ([][]byte, error) {
-	fmt.Println(data)
-	var t Int32
-	// Ensure it actually is an int.
-	if err := t.UnmarshalBinary(data); err != nil {
-		return nil, err
-	}
+func ExactMatchIndexKeys(attr string, data []byte) [][]byte {
+	return [][]byte{IndexKey(attr, data)}
+}
 
+func IntIndex(attr string, data []byte) ([][]byte, error) {
 	return [][]byte{IndexKey(attr, data)}, nil
 }
 
 func FloatIndex(attr string, data []byte) ([][]byte, error) {
-	var t Float
-
-	fmt.Println("********", data)
-	if err := t.UnmarshalBinary(data); err != nil {
-		fmt.Println(err)
-		return nil, err
-	}
-
-	fmt.Println("********")
-	in := int(t)
-	fmt.Println(in)
+	f, _ := strconv.ParseFloat(string(data), 64)
+	in := int(f)
 	return [][]byte{IndexKey(attr, []byte(strconv.Itoa(in)))}, nil
 }
 
 func DateIndex1(attr string, data []byte) ([][]byte, error) {
-	var t Date
-	if err := t.UnmarshalBinary(data); err != nil {
-		return nil, err
-	}
-
-	tt, _ := time.Parse(dateFormat1, string(data))
-	fmt.Println(tt.Year())
-	return [][]byte{IndexKey(attr, []byte(strconv.Itoa(tt.Year())))}, nil
+	t, _ := time.Parse(dateFormat1, string(data))
+	return [][]byte{IndexKey(attr, []byte(strconv.Itoa(t.Year())))}, nil
 }
 
 func DateIndex2(attr string, data []byte) ([][]byte, error) {
-	var t Time
-	if err := t.UnmarshalBinary(data); err != nil {
-		return nil, err
-	}
-
-	tt, _ := time.Parse(dateFormat2, string(data))
-	fmt.Println(t.Year())
-	return [][]byte{IndexKey(attr, []byte(strconv.Itoa(tt.Year())))}, nil
+	t, _ := time.Parse(dateFormat2, string(data))
+	return [][]byte{IndexKey(attr, []byte(strconv.Itoa(t.Year())))}, nil
 }

@@ -17,7 +17,6 @@
 package posting
 
 import (
-	"bytes"
 	"context"
 	"time"
 
@@ -29,14 +28,6 @@ import (
 	"github.com/dgraph-io/dgraph/store"
 	stype "github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
-)
-
-const (
-	// Posting list keys are prefixed with this rune if it is a mutation meant for
-	// the index.
-	indexRune   = ':'
-	dateFormat1 = "2006-01-02"
-	dateFormat2 = "2006-01-02T15:04:05"
 )
 
 var (
@@ -56,28 +47,14 @@ func InitIndex(ds *store.Store) {
 	indexStore = ds
 }
 
-// IndexKey creates a key for indexing the term for given attribute.
-func IndexKey(attr string, term []byte) []byte {
-	buf := bytes.NewBuffer(make([]byte, 0, len(attr)+len(term)+2))
-	_, err := buf.WriteRune(indexRune)
-	x.Check(err)
-	_, err = buf.WriteString(attr)
-	x.Check(err)
-	_, err = buf.WriteRune('|')
-	x.Check(err)
-	_, err = buf.Write(term)
-	x.Check(err)
-	return buf.Bytes()
-}
-
-func exactMatchIndexKeys(attr string, data []byte) [][]byte {
-	return [][]byte{IndexKey(attr, data)}
-}
-
-func tokenizedIndexKeys(attr string, data []byte) ([][]byte, error) {
+func tokenizedIndexKeys(attr string, p stype.Value) ([][]byte, error) {
 	t := schema.TypeOf(attr)
 	if !t.IsScalar() {
 		return nil, x.Errorf("Cannot index attribute %s of type object.", attr)
+	}
+	data, err := p.MarshalText()
+	if err != nil {
+		return nil, err
 	}
 	s := t.(stype.Scalar)
 	switch s.ID() {
@@ -91,16 +68,17 @@ func tokenizedIndexKeys(attr string, data []byte) ([][]byte, error) {
 		return stype.DateIndex1(attr, data)
 	case stype.DateTimeID:
 		return stype.DateIndex2(attr, data)
+	case stype.BoolID:
 	default:
-		return exactMatchIndexKeys(attr, data), nil
+		return stype.ExactMatchIndexKeys(attr, data), nil
 	}
 	return nil, nil
 }
 
-// tokenizeAndIndexTerm adds mutation(s) for a single term, to maintain index.
-func tokenizeAndIndexTerm(ctx context.Context, attr string, uid uint64, term []byte, del bool) {
+// processIndexTerm adds mutation(s) for a single term, to maintain index.
+func processIndexTerm(ctx context.Context, attr string, uid uint64, p stype.Value, del bool) {
 	x.Assert(uid != 0)
-	keys, err := tokenizedIndexKeys(attr, term)
+	keys, err := tokenizedIndexKeys(attr, p)
 	if err != nil {
 		// This data is not indexable
 		return
@@ -137,7 +115,7 @@ func tokenizeAndIndexTerm(ctx context.Context, attr string, uid uint64, term []b
 
 // AddMutationWithIndex is AddMutation with support for indexing.
 func (l *List) AddMutationWithIndex(ctx context.Context, t x.DirectedEdge, op byte) error {
-	x.Assertf(len(t.Attribute) > 0 && t.Attribute[0] != indexRune,
+	x.Assertf(len(t.Attribute) > 0 && t.Attribute[0] != ':',
 		"[%s] [%d] [%s] %d %d\n", t.Attribute, t.Entity, string(t.Value), t.ValueId, op)
 
 	var lastPost types.Posting
@@ -162,10 +140,22 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t x.DirectedEdge, op by
 
 	// Exact matches.
 	if hasLastPost && lastPost.ValueBytes() != nil {
-		tokenizeAndIndexTerm(ctx, t.Attribute, t.Entity, lastPost.ValueBytes(), true)
+		delTerm := lastPost.ValueBytes()
+		delType := lastPost.ValType()
+		p := stype.ValueForType(stype.TypeID(delType))
+		err = p.UnmarshalBinary(delTerm)
+		if err != nil {
+			return err
+		}
+		processIndexTerm(ctx, t.Attribute, t.Entity, p, true)
 	}
 	if op == Set {
-		tokenizeAndIndexTerm(ctx, t.Attribute, t.Entity, t.Value, false)
+		p := stype.ValueForType(stype.TypeID(t.ValueType))
+		err := p.UnmarshalBinary(t.Value)
+		if err != nil {
+			return err
+		}
+		processIndexTerm(ctx, t.Attribute, t.Entity, p, false)
 	}
 	return nil
 }
