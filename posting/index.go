@@ -36,8 +36,9 @@ import (
 const (
 	// Posting list keys are prefixed with this rune if it is a mutation meant for
 	// the index.
-	indexRune  = ':'
-	dateFormat = "2006-01-02"
+	indexRune   = ':'
+	dateFormat1 = "2006-01-02"
+	dateFormat2 = "2006-01-02T15:04:05"
 )
 
 var (
@@ -84,31 +85,49 @@ func tokenizedIndexKeys(attr string, data []byte) ([][]byte, error) {
 	switch s.ID() {
 	case stype.GeoID:
 		return geo.IndexKeys(data)
+	case stype.Int32ID:
+		return intIndex(attr, data)
+	case stype.FloatID:
+		return floatIndex(attr, data)
+	case stype.DateID:
+		return dateIndex1(attr, data)
+	case stype.DateTimeID:
+		return dateIndex2(attr, data)
+	case stype.BoolID:
 	default:
 		return exactMatchIndexKeys(attr, data), nil
 	}
+	return nil, nil
 }
 
-func intIndex(attr string, data []byte) ([]string, error) {
+func intIndex(attr string, data []byte) ([][]byte, error) {
 	fmt.Println(attr, data, "^^^^^^^")
 	fmt.Println(strconv.Atoi(string(data)))
 
-	return []string{string(IndexKey(attr, data))}, nil
+	return [][]byte{IndexKey(attr, data)}, nil
 }
 
-func floatIndex(attr string, data []byte) ([]string, error) {
+func floatIndex(attr string, data []byte) ([][]byte, error) {
 	fmt.Println(attr, data, "^^^^^^^")
 
 	f, _ := strconv.ParseFloat(string(data), 64)
 	in := int(f)
-	return []string{string(IndexKey(attr, []byte(strconv.Itoa(in))))}, nil
+	fmt.Println(in)
+	return [][]byte{IndexKey(attr, []byte(strconv.Itoa(in)))}, nil
 }
 
-func dateIndexYear(attr string, data []byte) ([]string, error) {
+func dateIndex1(attr string, data []byte) ([][]byte, error) {
 	fmt.Println(attr, string(data), "^^^^^^^")
-	t, _ := time.Parse(dateFormat, string(data))
+	t, _ := time.Parse(dateFormat1, string(data))
 	fmt.Println(t.Year())
-	return []string{string(IndexKey(attr, []byte(strconv.Itoa(t.Year()))))}, nil
+	return [][]byte{IndexKey(attr, []byte(strconv.Itoa(t.Year())))}, nil
+}
+
+func dateIndex2(attr string, data []byte) ([][]byte, error) {
+	fmt.Println(attr, string(data), "^^^^^^^")
+	t, _ := time.Parse(dateFormat2, string(data))
+	fmt.Println(t.Year())
+	return [][]byte{IndexKey(attr, []byte(strconv.Itoa(t.Year())))}, nil
 }
 
 // processIndexTerm adds mutation(s) for a single term, to maintain index.
