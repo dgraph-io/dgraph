@@ -19,8 +19,6 @@ package posting
 import (
 	"bytes"
 	"context"
-	"fmt"
-	"strconv"
 	"time"
 
 	"golang.org/x/net/trace"
@@ -86,46 +84,21 @@ func tokenizedIndexKeys(attr string, data []byte) ([][]byte, error) {
 	case stype.GeoID:
 		return geo.IndexKeys(data)
 	case stype.Int32ID:
-		return intIndex(attr, data)
+		return stype.IntIndex(attr, data)
 	case stype.FloatID:
-		return floatIndex(attr, data)
+		return stype.FloatIndex(attr, data)
 	case stype.DateID:
-		return dateIndex1(attr, data)
+		return stype.DateIndex1(attr, data)
 	case stype.DateTimeID:
-		return dateIndex2(attr, data)
-	case stype.BoolID:
+		return stype.DateIndex2(attr, data)
 	default:
 		return exactMatchIndexKeys(attr, data), nil
 	}
 	return nil, nil
 }
 
-func intIndex(attr string, data []byte) ([][]byte, error) {
-	fmt.Println(strconv.Atoi(string(data)))
-	return [][]byte{IndexKey(attr, data)}, nil
-}
-
-func floatIndex(attr string, data []byte) ([][]byte, error) {
-	f, _ := strconv.ParseFloat(string(data), 64)
-	in := int(f)
-	fmt.Println(in)
-	return [][]byte{IndexKey(attr, []byte(strconv.Itoa(in)))}, nil
-}
-
-func dateIndex1(attr string, data []byte) ([][]byte, error) {
-	t, _ := time.Parse(dateFormat1, string(data))
-	fmt.Println(t.Year())
-	return [][]byte{IndexKey(attr, []byte(strconv.Itoa(t.Year())))}, nil
-}
-
-func dateIndex2(attr string, data []byte) ([][]byte, error) {
-	t, _ := time.Parse(dateFormat2, string(data))
-	fmt.Println(t.Year())
-	return [][]byte{IndexKey(attr, []byte(strconv.Itoa(t.Year())))}, nil
-}
-
-// processIndexTerm adds mutation(s) for a single term, to maintain index.
-func processIndexTerm(ctx context.Context, attr string, uid uint64, term []byte, del bool) {
+// tokenizeAndIndexTerm adds mutation(s) for a single term, to maintain index.
+func tokenizeAndIndexTerm(ctx context.Context, attr string, uid uint64, term []byte, del bool) {
 	x.Assert(uid != 0)
 	keys, err := tokenizedIndexKeys(attr, term)
 	if err != nil {
@@ -169,21 +142,6 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t x.DirectedEdge, op by
 
 	var lastPost types.Posting
 	var hasLastPost bool
-	var indexTerm []byte
-
-	if t.ValueType != 0 {
-		p := stype.ValueForType(stype.TypeID(t.ValueType))
-		err := p.UnmarshalBinary(t.Value)
-		if err != nil {
-			return err
-		}
-		indexTerm, err = p.MarshalText()
-		if err != nil {
-			return err
-		}
-	} else {
-		indexTerm = t.Value
-	}
 
 	doUpdateIndex := indexStore != nil && (t.Value != nil) &&
 		schema.IsIndexed(t.Attribute)
@@ -204,24 +162,10 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t x.DirectedEdge, op by
 
 	// Exact matches.
 	if hasLastPost && lastPost.ValueBytes() != nil {
-		delTerm := lastPost.ValueBytes()
-		delType := lastPost.ValType()
-		if delType != 0 {
-			p := stype.ValueForType(stype.TypeID(delType))
-			err = p.UnmarshalBinary(delTerm)
-			if err != nil {
-				return err
-			}
-			delTerm, err = p.MarshalText()
-			if err != nil {
-				return err
-			}
-
-		}
-		processIndexTerm(ctx, t.Attribute, t.Entity, delTerm, true)
+		tokenizeAndIndexTerm(ctx, t.Attribute, t.Entity, lastPost.ValueBytes(), true)
 	}
 	if op == Set {
-		processIndexTerm(ctx, t.Attribute, t.Entity, indexTerm, false)
+		tokenizeAndIndexTerm(ctx, t.Attribute, t.Entity, t.Value, false)
 	}
 	return nil
 }
