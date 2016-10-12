@@ -31,10 +31,12 @@ func IndexKey(attr string, term []byte) []byte {
 	return buf.Bytes()
 }
 
+// ExactMatchIndexKeys indexes string type.
 func ExactMatchIndexKeys(attr string, data []byte) [][]byte {
 	return [][]byte{IndexKey(attr, data)}
 }
 
+// IntIndex indexs int type.
 func IntIndex(attr string, data []byte) ([][]byte, error) {
 	buf := new(bytes.Buffer)
 	t, err := strconv.ParseInt(string(data), 0, 32)
@@ -48,6 +50,7 @@ func IntIndex(attr string, data []byte) ([][]byte, error) {
 	return [][]byte{IndexKey(attr, buf.Bytes())}, nil
 }
 
+// FloatIndex indexs float type.
 func FloatIndex(attr string, data []byte) ([][]byte, error) {
 	f, err := strconv.ParseFloat(string(data), 64)
 	if err != nil {
@@ -62,6 +65,7 @@ func FloatIndex(attr string, data []byte) ([][]byte, error) {
 	return [][]byte{IndexKey(attr, buf.Bytes())}, nil
 }
 
+// DateIndex indexs date type.
 func DateIndex(attr string, data []byte) ([][]byte, error) {
 	t, err := time.Parse(dateFormat1, string(data))
 	if err != nil {
@@ -75,6 +79,7 @@ func DateIndex(attr string, data []byte) ([][]byte, error) {
 	return [][]byte{IndexKey(attr, buf.Bytes())}, nil
 }
 
+// TimeIndex indexs time type.
 func TimeIndex(attr string, data []byte) ([][]byte, error) {
 	t, err := time.Parse(dateFormat2, string(data))
 	if err != nil {
