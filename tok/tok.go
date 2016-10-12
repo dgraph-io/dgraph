@@ -61,7 +61,7 @@ func normalize(in []byte) ([]byte, error) {
 		}
 		return unicode.ToLower(r) // Convert to lower case.
 	}, out)
-	return []byte(out), err
+	return out, err
 }
 
 // NewTokenizer creates a new Tokenizer object from a given input string of bytes.
