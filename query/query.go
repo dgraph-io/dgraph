@@ -33,6 +33,7 @@ import (
 	"github.com/dgraph-io/dgraph/query/graph"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/task"
+	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
@@ -974,15 +975,30 @@ func runFilter(ctx context.Context, destUIDs *algo.UIDList,
 		attr := filter.FuncArgs[0]
 		sg := &SubGraph{Attr: attr}
 		sgChan := make(chan error, 1)
-		taskQuery := createTaskQuery(sg, nil, []string{filter.FuncArgs[1]}, destUIDs)
+
+		// Tokenize FuncArgs[1].
+		tokenizer, err := tok.NewTokenizer([]byte(filter.FuncArgs[1]))
+		if err != nil {
+			return nil, x.Errorf("Could not create tokenizer: %v", filter.FuncArgs[1])
+		}
+		defer tokenizer.Destroy()
+		x.Assert(tokenizer != nil)
+		tokens := tokenizer.StringTokens()
+		if len(tokens) == 0 {
+			x.Printf("~~~~~~~NO TOKENS: [%s]\n", filter.FuncArgs)
+		}
+		taskQuery := createTaskQuery(sg, nil, tokens, destUIDs)
+		x.Printf("~~~~~Query: %d %v", len(tokens), tokens)
 		go ProcessGraph(ctx, sg, taskQuery, sgChan)
-		err := <-sgChan
+		err = <-sgChan
 		if err != nil {
 			return nil, err
 		}
-
-		x.Assert(len(sg.Result) == 1)
-		return sg.Result[0], nil
+		x.Assert(len(sg.Result) == len(tokens))
+		for i, l := range sg.Result {
+			x.Printf("~~%d: {%s}\n", i, l.DebugString())
+		}
+		return algo.MergeLists(sg.Result), nil
 	}
 
 	// For now, we only handle AND and OR.

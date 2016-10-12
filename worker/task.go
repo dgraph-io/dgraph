@@ -89,7 +89,7 @@ func processTask(query []byte) ([]byte, error) {
 	for i := 0; i < n; i++ {
 		var key []byte
 		if useTerm {
-			key = posting.IndexKey(attr, q.Terms(i))
+			key = posting.DefaultIndexKey(attr, q.Terms(i))
 		} else {
 			key = posting.Key(q.Uids(i), attr)
 		}

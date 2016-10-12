@@ -27,6 +27,7 @@ import (
 	"github.com/dgraph-io/dgraph/posting/types"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/store"
+	"github.com/dgraph-io/dgraph/tok"
 	stype "github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -53,8 +54,8 @@ func InitIndex(ds *store.Store) {
 	indexStore = ds
 }
 
-// IndexKey creates a key for indexing the term for given attribute.
-func IndexKey(attr string, term []byte) []byte {
+// DefaultIndexKey creates a key for indexing the term for given attribute.
+func DefaultIndexKey(attr string, term []byte) []byte {
 	buf := bytes.NewBuffer(make([]byte, 0, len(attr)+len(term)+2))
 	_, err := buf.WriteRune(indexRune)
 	x.Check(err)
@@ -67,8 +68,22 @@ func IndexKey(attr string, term []byte) []byte {
 	return buf.Bytes()
 }
 
-func exactMatchIndexKeys(attr string, data []byte) [][]byte {
-	return [][]byte{IndexKey(attr, data)}
+func defaultIndexKeys(attr string, data []byte) [][]byte {
+	tokenizer, err := tok.NewTokenizer(data)
+	if err != nil {
+		return nil
+	}
+	defer tokenizer.Destroy()
+
+	tokens := make([][]byte, 0, 5)
+	for {
+		s := tokenizer.Next()
+		if s == nil {
+			break
+		}
+		tokens = append(tokens, DefaultIndexKey(attr, s))
+	}
+	return tokens
 }
 
 func tokenizedIndexKeys(attr string, data []byte) ([][]byte, error) {
@@ -81,7 +96,7 @@ func tokenizedIndexKeys(attr string, data []byte) ([][]byte, error) {
 	case stype.GeoID:
 		return geo.IndexKeys(data)
 	default:
-		return exactMatchIndexKeys(attr, data), nil
+		return defaultIndexKeys(attr, data), nil
 	}
 }
 
