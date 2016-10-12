@@ -101,15 +101,11 @@ func tokenizedIndexKeys(attr string, data []byte) ([][]byte, error) {
 }
 
 func intIndex(attr string, data []byte) ([][]byte, error) {
-	fmt.Println(attr, data, "^^^^^^^")
 	fmt.Println(strconv.Atoi(string(data)))
-
 	return [][]byte{IndexKey(attr, data)}, nil
 }
 
 func floatIndex(attr string, data []byte) ([][]byte, error) {
-	fmt.Println(attr, data, "^^^^^^^")
-
 	f, _ := strconv.ParseFloat(string(data), 64)
 	in := int(f)
 	fmt.Println(in)
@@ -117,14 +113,12 @@ func floatIndex(attr string, data []byte) ([][]byte, error) {
 }
 
 func dateIndex1(attr string, data []byte) ([][]byte, error) {
-	fmt.Println(attr, string(data), "^^^^^^^")
 	t, _ := time.Parse(dateFormat1, string(data))
 	fmt.Println(t.Year())
 	return [][]byte{IndexKey(attr, []byte(strconv.Itoa(t.Year())))}, nil
 }
 
 func dateIndex2(attr string, data []byte) ([][]byte, error) {
-	fmt.Println(attr, string(data), "^^^^^^^")
 	t, _ := time.Parse(dateFormat2, string(data))
 	fmt.Println(t.Year())
 	return [][]byte{IndexKey(attr, []byte(strconv.Itoa(t.Year())))}, nil
@@ -175,6 +169,22 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t x.DirectedEdge, op by
 
 	var lastPost types.Posting
 	var hasLastPost bool
+	var indexTerm []byte
+
+	if t.ValueType != 0 {
+		p := stype.ValueForType(stype.TypeID(t.ValueType))
+		err := p.UnmarshalBinary(t.Value)
+		if err != nil {
+			return err
+		}
+		indexTerm, err = p.MarshalText()
+		if err != nil {
+			return err
+		}
+	} else {
+		indexTerm = t.Value
+	}
+
 	doUpdateIndex := indexStore != nil && (t.Value != nil) &&
 		schema.IsIndexed(t.Attribute)
 	if doUpdateIndex {
@@ -194,10 +204,24 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t x.DirectedEdge, op by
 
 	// Exact matches.
 	if hasLastPost && lastPost.ValueBytes() != nil {
-		processIndexTerm(ctx, t.Attribute, t.Entity, lastPost.ValueBytes(), true)
+		delTerm := lastPost.ValueBytes()
+		delType := lastPost.ValType()
+		if delType != 0 {
+			p := stype.ValueForType(stype.TypeID(delType))
+			err = p.UnmarshalBinary(delTerm)
+			if err != nil {
+				return err
+			}
+			delTerm, err = p.MarshalText()
+			if err != nil {
+				return err
+			}
+
+		}
+		processIndexTerm(ctx, t.Attribute, t.Entity, delTerm, true)
 	}
 	if op == Set {
-		processIndexTerm(ctx, t.Attribute, t.Entity, t.Value, false)
+		processIndexTerm(ctx, t.Attribute, t.Entity, indexTerm, false)
 	}
 	return nil
 }
