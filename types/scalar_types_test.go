@@ -19,60 +19,55 @@ package types
 import (
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
-func testBinary(val TypeValue, un Unmarshaler, t *testing.T) {
+func testBinary(val Value, t *testing.T) {
 	bytes, err := val.MarshalBinary()
-	if err != nil {
-		t.Error(err)
-	}
-	val2, err := un.FromBinary(bytes)
-	if err != nil {
-		t.Error(err)
-	}
-	if val != val2 {
-		t.Errorf("Expected marshal/unmarshal binary to parse to the same value: %v == %v", val2, val)
-	}
+	require.NoError(t, err)
+	val2 := ValueForType(val.Type().ID())
+	err = val2.UnmarshalBinary(bytes)
+	require.NoError(t, err)
+	require.Equal(t, val, val2,
+		"Expected marshal/unmarshal binary to parse to the same value: %v == %v", val2, val)
 }
 
-func testText(val TypeValue, un Unmarshaler, t *testing.T) {
+func testText(val Value, t *testing.T) {
 	bytes, err := val.MarshalText()
-	if err != nil {
-		t.Error(err)
-	}
-	val2, err := un.FromText(bytes)
-	if err != nil {
-		t.Error(err)
-	}
-	if val != val2 {
-		t.Errorf("Expected marshal/unmarshal text to parse to the same value: %v == %v", val2, val)
-	}
+	require.NoError(t, err)
+	val2 := ValueForType(val.Type().ID())
+	err = val2.UnmarshalText(bytes)
+	require.NoError(t, err)
+	require.Equal(t, val, val2,
+		"Expected marshal/unmarshal text to parse to the same value: %v == %v", val2, val)
 }
 
 func TestInt32(t *testing.T) {
 	array := []Int32{1532, -122911, 0}
 	for _, v := range array {
-		testBinary(v, Int32Type.Unmarshaler, t)
-		testText(v, Int32Type.Unmarshaler, t)
+		testBinary(&v, t)
+		testText(&v, t)
 	}
 }
 
 func TestParseInt(t *testing.T) {
 	array := []string{"abc", "5a", "2.5"}
+	var i Int32
 	for _, v := range array {
-		if _, err := Int32Type.Unmarshaler.FromText([]byte(v)); err == nil {
+		if err := i.UnmarshalText([]byte(v)); err == nil {
 			t.Errorf("Expected error parsing %s", v)
 		}
 	}
 	array = []string{"52", "0", "-7"}
 	for _, v := range array {
-		if _, err := Int32Type.Unmarshaler.FromText([]byte(v)); err != nil {
+		if err := i.UnmarshalText([]byte(v)); err != nil {
 			t.Errorf("Error parsing %s: %v", v, err)
 		}
 	}
 
 	data := []byte{0, 3, 1}
-	if _, err := Int32Type.Unmarshaler.FromBinary(data); err == nil {
+	if err := i.UnmarshalBinary(data); err == nil {
 		t.Errorf("Expected error parsing %v", data)
 	}
 }
@@ -80,26 +75,27 @@ func TestParseInt(t *testing.T) {
 func TestFloat(t *testing.T) {
 	array := []Float{15.32, -12.2911, 42, 0.0}
 	for _, v := range array {
-		testBinary(v, FloatType.Unmarshaler, t)
-		testText(v, FloatType.Unmarshaler, t)
+		testBinary(&v, t)
+		testText(&v, t)
 	}
 }
 
 func TestParseFloat(t *testing.T) {
 	array := []string{"abc", "5a", "2.5a"}
+	var f Float
 	for _, v := range array {
-		if _, err := FloatType.Unmarshaler.FromText([]byte(v)); err == nil {
+		if err := f.UnmarshalText([]byte(v)); err == nil {
 			t.Errorf("Expected error parsing %s", v)
 		}
 	}
 	array = []string{"52", "0", "-7", "-2.5", "1e4"}
 	for _, v := range array {
-		if _, err := FloatType.Unmarshaler.FromText([]byte(v)); err != nil {
+		if err := f.UnmarshalText([]byte(v)); err != nil {
 			t.Errorf("Error parsing %s: %v", v, err)
 		}
 	}
 	data := []byte{0, 3, 1, 5, 1}
-	if _, err := FloatType.Unmarshaler.FromBinary(data); err == nil {
+	if err := f.UnmarshalBinary(data); err == nil {
 		t.Errorf("Expected error parsing %v", data)
 	}
 
@@ -108,29 +104,30 @@ func TestParseFloat(t *testing.T) {
 func TestString(t *testing.T) {
 	array := []String{"abc", ""}
 	for _, v := range array {
-		testBinary(v, StringType.Unmarshaler, t)
-		testText(v, StringType.Unmarshaler, t)
+		testBinary(&v, t)
+		testText(&v, t)
 	}
 }
 
 func TestBool(t *testing.T) {
 	array := []Bool{true, false}
 	for _, v := range array {
-		testBinary(v, BooleanType.Unmarshaler, t)
-		testText(v, BooleanType.Unmarshaler, t)
+		testBinary(&v, t)
+		testText(&v, t)
 	}
 }
 
 func TestParseBool(t *testing.T) {
 	array := []string{"abc", "5", ""}
+	var b Bool
 	for _, v := range array {
-		if _, err := BooleanType.Unmarshaler.FromText([]byte(v)); err == nil {
+		if err := b.UnmarshalText([]byte(v)); err == nil {
 			t.Errorf("Expected error parsing %s", v)
 		}
 	}
 	array = []string{"true", "F", "0", "False"}
 	for _, v := range array {
-		if _, err := BooleanType.Unmarshaler.FromText([]byte(v)); err != nil {
+		if err := b.UnmarshalText([]byte(v)); err != nil {
 			t.Errorf("Error parsing %s: %v", v, err)
 		}
 	}
@@ -139,8 +136,9 @@ func TestParseBool(t *testing.T) {
 func TestParseTime(t *testing.T) {
 	array := []string{"2014-10-28T04:00:10", "2002-05-30T09:30:10Z",
 		"2002-05-30T09:30:10.5", "2002-05-30T09:30:10-06:00"}
+	var tm Time
 	for _, v := range array {
-		if _, err := DateTimeType.Unmarshaler.FromText([]byte(v)); err != nil {
+		if err := tm.UnmarshalText([]byte(v)); err != nil {
 			t.Errorf("Error parsing %s: %v", v, err)
 		}
 	}
@@ -148,6 +146,6 @@ func TestParseTime(t *testing.T) {
 
 func TestTime(t *testing.T) {
 	v := time.Date(2009, time.November, 10, 23, 0, 0, 0, time.UTC)
-	testBinary(v, DateTimeType.Unmarshaler, t)
-	testText(v, DateTimeType.Unmarshaler, t)
+	testBinary(&Time{v}, t)
+	testText(&Time{v}, t)
 }

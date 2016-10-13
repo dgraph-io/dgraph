@@ -215,6 +215,18 @@
 			"revisionTime": "2016-05-15T03:16:23Z"
 		},
 		{
+			"checksumSHA1": "TZDHZj3zWDc5LKqpoLamOKt6Nmo=",
+			"path": "golang.org/x/text/transform",
+			"revision": "d69c40b4be55797923cec7457fac7a244d91a9b6",
+			"revisionTime": "2016-08-15T22:39:46Z"
+		},
+		{
+			"checksumSHA1": "pDDMc5yLVQ2xeR9CajcgIJODPcw=",
+			"path": "golang.org/x/text/unicode/norm",
+			"revision": "d69c40b4be55797923cec7457fac7a244d91a9b6",
+			"revisionTime": "2016-08-15T22:39:46Z"
+		},
+		{
 			"checksumSHA1": "BUjt26m9GKSiGLzF+R6sMyHAv/k=",
 			"path": "google.golang.org/grpc",
 			"revision": "0eb7c5dcd059d77bde1eb5bc7d953940170d0d18",

@@ -12,8 +12,11 @@ table Query {
 	afterUid:ulong;
 	getCount:ushort;
 	
-    // Different ways in which you can filter the uids
-    filter:QueryFilter;
+        // Different ways in which you can filter the uids
+        filter:QueryFilter;
+	// Exactly one of uids and terms is populated.
+	uids:[ulong];
+	tokens:[string];
 	
 	// Intersect results with this UID list. If uids is populated, then this is
 	// an "intersection query". If terms is populated, this is a "filter query".

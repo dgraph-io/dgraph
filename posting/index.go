@@ -17,7 +17,6 @@
 package posting
 
 import (
-	"bytes"
 	"context"
 	"time"
 
@@ -29,11 +28,6 @@ import (
 	"github.com/dgraph-io/dgraph/store"
 	stype "github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
-)
-
-const (
-	// Posting list keys are prefixed with this rune if it is a mutation meant for the index.
-	indexRune = ':'
 )
 
 var (
@@ -53,18 +47,32 @@ func InitIndex(ds *store.Store) {
 	indexStore = ds
 }
 
-// IndexKey creates a key for indexing the term for given attribute.
-func IndexKey(attr string, term []byte) []byte {
-	buf := bytes.NewBuffer(make([]byte, 0, len(attr)+len(term)+2))
-	_, err := buf.WriteRune(indexRune)
-	x.Check(err)
-	_, err = buf.WriteString(attr)
-	x.Check(err)
-	_, err = buf.WriteRune('|')
-	x.Check(err)
-	_, err = buf.Write(term)
-	x.Check(err)
-	return buf.Bytes()
+func tokenizedIndexKeys(attr string, p stype.Value) ([][]byte, error) {
+	t := schema.TypeOf(attr)
+	if !t.IsScalar() {
+		return nil, x.Errorf("Cannot index attribute %s of type object.", attr)
+	}
+	data, err := p.MarshalText()
+	if err != nil {
+		return nil, err
+	}
+	s := t.(stype.Scalar)
+	switch s.ID() {
+	case stype.GeoID:
+		return geo.IndexKeys(data)
+	case stype.Int32ID:
+		return stype.IntIndex(attr, data)
+	case stype.FloatID:
+		return stype.FloatIndex(attr, data)
+	case stype.DateID:
+		return stype.DateIndex(attr, data)
+	case stype.DateTimeID:
+		return stype.TimeIndex(attr, data)
+	case stype.BoolID:
+	default:
+		return stype.DefaultIndexKeys(attr, data), nil
+	}
+	return nil, nil
 }
 
 func exactMatchIndexKeys(attr string, data []byte) []string {
@@ -82,21 +90,22 @@ func indexKeys(attr string, data []byte) ([]string, error) {
 }
 
 // processIndexTerm adds mutation(s) for a single term, to maintain index.
-func processIndexTerm(ctx context.Context, attr string, uid uint64, term []byte, del bool) {
+func processIndexTerm(ctx context.Context, attr string, uid uint64, p stype.Value, del bool) {
 	x.Assert(uid != 0)
-	keys, err := indexKeys(attr, term)
+	keys, err := tokenizedIndexKeys(attr, p)
 	if err != nil {
 		// This data is not indexable
 		return
 	}
+	edge := x.DirectedEdge{
+		Timestamp: time.Now(),
+		ValueId:   uid,
+		Attribute: attr,
+		Source:    "idx",
+	}
+
 	for _, key := range keys {
-		edge := x.DirectedEdge{
-			Timestamp: time.Now(),
-			ValueId:   uid,
-			Attribute: attr,
-			Source:    "idx",
-		}
-		plist, decr := GetOrCreate([]byte(key), indexStore)
+		plist, decr := GetOrCreate(key, indexStore)
 		defer decr()
 		x.Assertf(plist != nil, "plist is nil [%s] %d %s", key, edge.ValueId, edge.Attribute)
 
@@ -120,12 +129,14 @@ func processIndexTerm(ctx context.Context, attr string, uid uint64, term []byte,
 
 // AddMutationWithIndex is AddMutation with support for indexing.
 func (l *List) AddMutationWithIndex(ctx context.Context, t x.DirectedEdge, op byte) error {
-	x.Assertf(len(t.Attribute) > 0 && t.Attribute[0] != indexRune,
+	x.Assertf(len(t.Attribute) > 0 && t.Attribute[0] != ':',
 		"[%s] [%d] [%s] %d %d\n", t.Attribute, t.Entity, string(t.Value), t.ValueId, op)
 
 	var lastPost types.Posting
 	var hasLastPost bool
-	doUpdateIndex := indexStore != nil && (t.Value != nil) && schema.IsIndexed(t.Attribute)
+
+	doUpdateIndex := indexStore != nil && (t.Value != nil) &&
+		schema.IsIndexed(t.Attribute)
 	if doUpdateIndex {
 		// Check last posting for original value BEFORE any mutation actually happens.
 		if l.Length() >= 1 {
@@ -140,11 +151,25 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t x.DirectedEdge, op by
 	if !hasMutated || !doUpdateIndex {
 		return nil
 	}
+
+	// Exact matches.
 	if hasLastPost && lastPost.ValueBytes() != nil {
-		processIndexTerm(ctx, t.Attribute, t.Entity, lastPost.ValueBytes(), true)
+		delTerm := lastPost.ValueBytes()
+		delType := lastPost.ValType()
+		p := stype.ValueForType(stype.TypeID(delType))
+		err = p.UnmarshalBinary(delTerm)
+		if err != nil {
+			return err
+		}
+		processIndexTerm(ctx, t.Attribute, t.Entity, p, true)
 	}
 	if op == Set {
-		processIndexTerm(ctx, t.Attribute, t.Entity, t.Value, false)
+		p := stype.ValueForType(stype.TypeID(t.ValueType))
+		err := p.UnmarshalBinary(t.Value)
+		if err != nil {
+			return err
+		}
+		processIndexTerm(ctx, t.Attribute, t.Entity, p, false)
 	}
 	return nil
 }

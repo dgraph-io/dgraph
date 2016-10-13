@@ -23,6 +23,7 @@ import (
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/task"
+	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -152,7 +153,12 @@ func readPostingList(q *task.Query, keys keyList) []byte {
 	var counts []uint64
 
 	for i := 0; i < n; i++ {
-		key := keys.Key(i, attr)
+		var key []byte
+		if useTerm {
+			key = types.IndexKey(attr, q.Tokens(i))
+		} else {
+			key = posting.Key(q.Uids(i), attr)
+		}
 		// Get or create the posting list for an entity, attribute combination.
 		pl, decr := posting.GetOrCreate(key, store)
 		defer decr()

@@ -34,11 +34,8 @@ type TypeID byte
 // Almost all scalar types can also act as input types.
 // Scalars (along with Enums) form leaf nodes of request or input values to arguements.
 type Scalar struct {
-	Name        string // name of scalar type
-	Description string // short description
-	id          TypeID // The storage identifier for this type
-	// to unmarshal the binary/text representation of the type.
-	Unmarshaler Unmarshaler
+	Name string // name of scalar type
+	id   TypeID // The storage identifier for this type
 }
 
 // Object represents all object types in the schema definition.
@@ -47,19 +44,16 @@ type Object struct {
 	Fields map[string]string //field to type relationship
 }
 
-// TypeValue is the interface that all scalar type values need to implement.
-type TypeValue interface {
+// Value is the interface that all scalar values need to implement.
+type Value interface {
 	encoding.TextMarshaler
+	encoding.TextUnmarshaler
 	encoding.BinaryMarshaler
+	encoding.BinaryUnmarshaler
 	json.Marshaler
-}
-
-// Unmarshaler type is for unmarshaling a TypeValue from binary/text format.
-type Unmarshaler interface {
-	// FromBinary unmarshals the data from a binary format.
-	FromBinary(data []byte) (TypeValue, error)
-	// FromText unmarshals the data from a text format.
-	FromText(data []byte) (TypeValue, error)
+	// Type returns the type of this value
+	Type() Scalar
+	fmt.Stringer
 }
 
 // String function to implement string interface

@@ -183,10 +183,10 @@ func TestProcessTask(t *testing.T) {
 }
 
 // newQuery creates a Query flatbuffer table, serializes and returns it.
-func newQuery(attr string, uids []uint64, terms []string) []byte {
+func newQuery(attr string, uids []uint64, tokens []string) []byte {
 	b := flatbuffers.NewBuilder(0)
 
-	x.Assert(uids == nil || terms == nil)
+	x.Assert(uids == nil || tokens == nil)
 
 	var fend flatbuffers.UOffsetT
 	var ftype byte
@@ -201,27 +201,26 @@ func newQuery(attr string, uids []uint64, terms []string) []byte {
 		fend = task.UidListEnd(b)
 		ftype = task.QueryFilterUidList
 	} else {
-		offsets := make([]flatbuffers.UOffsetT, 0, len(terms))
-		for _, term := range terms {
+		offsets := make([]flatbuffers.UOffsetT, 0, len(tokens))
+		for _, term := range tokens {
 			uo := b.CreateString(term)
 			offsets = append(offsets, uo)
 		}
-		task.TermListStartTermsVector(b, len(terms))
-		for i := len(terms) - 1; i >= 0; i-- {
+		task.QueryStartTokensVector(b, len(tokens))
+		for i := len(tokens) - 1; i >= 0; i-- {
 			b.PrependUOffsetT(offsets[i])
 		}
-		vend := b.EndVector(len(terms))
-		task.TermListStart(b)
-		task.TermListAddTerms(b, vend)
-		fend = task.TermListEnd(b)
-		ftype = task.QueryFilterTermList
+		vend = b.EndVector(len(tokens))
 	}
 
 	ao := b.CreateString(attr)
 	task.QueryStart(b)
 	task.QueryAddAttr(b, ao)
-	task.QueryAddFilterType(b, ftype)
-	task.QueryAddFilter(b, fend)
+	if uids != nil {
+		task.QueryAddUids(b, vend)
+	} else {
+		task.QueryAddTokens(b, vend)
+	}
 	qend := task.QueryEnd(b)
 	b.Finish(qend)
 	return b.Bytes[b.Head():]
@@ -502,4 +501,9 @@ func TestProcessTaskIndex(t *testing.T) {
 	if err := check(r, 2, []uint64{12}); err != nil {
 		t.Error(err)
 	}
+}
+
+func TestMain(m *testing.M) {
+	x.Init()
+	os.Exit(m.Run())
 }

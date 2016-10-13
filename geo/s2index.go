@@ -28,22 +28,18 @@ import (
 )
 
 // IndexKeys creates the keys to use in the index for the given data assuming that it is geo data.
-func IndexKeys(data []byte) ([]string, error) {
+func IndexKeys(data []byte) ([][]byte, error) {
 	// Try to parse the data as geo type.
-	v, err := types.GeoType.Unmarshaler.FromBinary(data)
-	if err != nil {
+	var g types.Geo
+	if err := g.UnmarshalBinary(data); err != nil {
 		return nil, err
-	}
-	g, ok := v.(types.Geo)
-	if !ok {
-		log.Fatalf("Unexpected type from the unmarshaler.")
 	}
 	return IndexKeysFromGeo(g)
 }
 
 // IndexKeysFromGeo returns the keys to be used in a geospatial index for the given geometry. If the
 // geometry is not supported it returns an error.
-func IndexKeysFromGeo(g types.Geo) ([]string, error) {
+func IndexKeysFromGeo(g types.Geo) ([][]byte, error) {
 	cu, err := indexCells(g)
 	if err != nil {
 		return nil, err
@@ -64,20 +60,20 @@ func IndexKeysForCap(c s2.Cap) []string {
 }
 
 func indexKeysFromCellUnion(cu s2.CellUnion) []string {
-	keys := make([]string, len(cu))
+	keys := make([][]byte, len(cu))
 	for i, c := range cu {
 		keys[i] = indexKeyFromCellID(c)
 	}
-	return keys
+	return keys, nil
 }
 
 const indexPrefix = ":_loc_|"
 
-func indexKeyFromCellID(c s2.CellID) string {
+func indexKeyFromCellID(c s2.CellID) []byte {
 	var buf bytes.Buffer
 	buf.WriteString(indexPrefix)
 	buf.WriteString(c.ToToken())
-	return buf.String()
+	return buf.Bytes()
 }
 
 func indexCells(g types.Geo) (s2.CellUnion, error) {

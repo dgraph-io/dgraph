@@ -43,11 +43,12 @@ func EarthAngle(dist float64) s1.Angle {
 // Area denotes an area on Earth
 type Area float64
 
-// EarthArea converts an area on the unit square to an area on earth in sq. meters.
+// EarthArea converts an area on the unit sphere to an area on earth in sq. meters.
 func EarthArea(a float64) Area {
 	return Area(a * EarthRadiusMeters * EarthRadiusMeters)
 }
 
+// String converts the length to human readable units
 func (l Length) String() string {
 	if l > 1000 {
 		return fmt.Sprintf("%.3f km", l/1000)
@@ -61,6 +62,7 @@ func (l Length) String() string {
 const km2 = 1000 * 1000
 const cm2 = 100 * 100
 
+// String converts the area to human readable units
 func (a Area) String() string {
 	if a > km2 {
 		return fmt.Sprintf("%.3f km^2", a/km2)
