@@ -188,18 +188,13 @@ func newQuery(attr string, uids []uint64, tokens []string) []byte {
 
 	x.Assert(uids == nil || tokens == nil)
 
-	var fend flatbuffers.UOffsetT
-	var ftype byte
+	var vend flatbuffers.UOffsetT
 	if uids != nil {
-		task.UidListStartUidsVector(b, len(uids))
+		task.QueryStartUidsVector(b, len(uids))
 		for i := len(uids) - 1; i >= 0; i-- {
 			b.PrependUint64(uids[i])
 		}
-		vend := b.EndVector(len(uids))
-		task.UidListStart(b)
-		task.UidListAddUids(b, vend)
-		fend = task.UidListEnd(b)
-		ftype = task.QueryFilterUidList
+		vend = b.EndVector(len(uids))
 	} else {
 		offsets := make([]flatbuffers.UOffsetT, 0, len(tokens))
 		for _, term := range tokens {

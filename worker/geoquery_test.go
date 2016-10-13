@@ -60,16 +60,16 @@ func createTestData(t *testing.T, ps *store.Store) {
 	edge := x.DirectedEdge{
 		Timestamp: time.Now(),
 		Attribute: "location",
-		ValueType: byte(types.GeoType.ID()),
+		ValueType: byte(types.GeoID),
 	}
-	u := types.GeoType.Unmarshaler
+	var g types.Geo
 
-	g, err := u.FromText([]byte(""))
+	err := g.UnmarshalText([]byte(""))
 	require.NoError(t, err)
 
 	edge.Entity = 10
 	edge.Value, err = g.MarshalBinary()
 	require.NoError(t, err)
 
-	addEdge(t, edge, ps)
+	addEdgeTo(t, edge, ps)
 }

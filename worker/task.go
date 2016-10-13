@@ -65,87 +65,22 @@ func ProcessTaskOverNetwork(ctx context.Context, qu []byte) (result []byte, rerr
 	return reply.Data, nil
 }
 
-type keyList interface {
-	// Length of the list
-	Length() int
-	// fetch the i'th key in the list
-	Key(i int, attr string) []byte
-	// A filter to be applied to the uid list
-	PostFilter(attr string) func(u uint64) bool
-}
-
-// wrap the TermList to implement the keyList interface
-type termKeyList struct {
-	*task.TermList
-}
-
-func (t termKeyList) Length() int {
-	return t.TermsLength()
-}
-
-func (t termKeyList) Key(i int, attr string) []byte {
-	return posting.IndexKey(attr, t.Terms(i))
-}
-
-func (t termKeyList) PostFilter(attr string) func(u uint64) bool {
-	return nil
-}
-
-// Wrap the UidsList to implement the keyList interface
-type uidKeyList struct {
-	*task.UidList
-}
-
-func (t uidKeyList) Length() int {
-	return t.UidsLength()
-}
-
-func (t uidKeyList) Key(i int, attr string) []byte {
-	return posting.Key(t.Uids(i), attr)
-}
-
-func (t uidKeyList) PostFilter(attr string) func(u uint64) bool {
-	return nil
-}
-
 // processTask processes the query, accumulates and returns the result.
 func processTask(query []byte) ([]byte, error) {
 	q := task.GetRootAsQuery(query, 0)
 
-	unionTable := new(flatbuffers.Table)
-	if q.Filter(unionTable) {
-		switch q.FilterType() {
-
-		case task.QueryFilterUidList:
-			uids := new(task.UidList)
-			uids.Init(unionTable.Bytes, unionTable.Pos)
-			return readPostingList(q, uidKeyList{uids}), nil
-
-		case task.QueryFilterTermList:
-			terms := new(task.TermList)
-			terms.Init(unionTable.Bytes, unionTable.Pos)
-			return readPostingList(q, termKeyList{terms}), nil
-
-		case task.QueryFilterGeoFilter:
-			filter := new(task.GeoFilter)
-			filter.Init(unionTable.Bytes, unionTable.Pos)
-			k, err := newQueryKeys(filter)
-			if err != nil {
-				return nil, err
-			}
-			return readPostingList(q, k), nil
-
-		default:
-			return nil, x.Errorf("Unknown filter type %v", q.FilterType())
-		}
-	}
-	return nil, x.Errorf("No filter in query")
-}
-
-func readPostingList(q *task.Query, keys keyList) []byte {
-	store := ws.dataStore
 	attr := string(q.Attr())
-	n := keys.Length()
+	store := ws.dataStore
+	x.Assertf(q.UidsLength() == 0 || q.TokensLength() == 0,
+		"At least one of Uids and Term should be empty: %d vs %d", q.UidsLength(), q.TokensLength())
+
+	useTerm := q.TokensLength() > 0
+	var n int
+	if useTerm {
+		n = q.TokensLength()
+	} else {
+		n = q.UidsLength()
+	}
 
 	b := flatbuffers.NewBuilder(0)
 	voffsets := make([]flatbuffers.UOffsetT, n)
@@ -195,18 +130,9 @@ func readPostingList(q *task.Query, keys keyList) []byte {
 			}
 
 			ulist := pl.Uids(opts)
-			pf := keys.PostFilter(attr)
-			if pf != nil {
-				ulist.ApplyFilter(pf)
-			}
 			uoffsets[i] = ulist.AddTo(b)
 		}
 	}
-	return createResult(b, uoffsets, voffsets, counts)
-}
-
-func createResult(b *flatbuffers.Builder, uoffsets, voffsets []flatbuffers.UOffsetT,
-	counts []uint64) []byte {
 
 	// Create a ValueList's vector of Values.
 	task.ValueListStartValuesVector(b, len(voffsets))
@@ -244,7 +170,7 @@ func createResult(b *flatbuffers.Builder, uoffsets, voffsets []flatbuffers.UOffs
 	task.ResultAddUidmatrix(b, matrixVent)
 	task.ResultAddCount(b, countsVent)
 	b.Finish(task.ResultEnd(b))
-	return b.FinishedBytes()
+	return b.FinishedBytes(), nil
 }
 
 // ServeTask is used to respond to a query.
@@ -255,7 +181,7 @@ func (w *grpcWorker) ServeTask(ctx context.Context, query *Payload) (*Payload, e
 
 	q := task.GetRootAsQuery(query.Data, 0)
 	gid := BelongsTo(string(q.Attr()))
-	x.Trace(ctx, "Attribute: %q groupId: %v ServeTask", q.Attr(), gid)
+	x.Trace(ctx, "Attribute: %q NumUids: %v groupId: %v ServeTask", q.Attr(), q.UidsLength(), gid)
 
 	reply := new(Payload)
 	x.Assertf(groups().ServesGroup(gid),

@@ -17,25 +17,29 @@
 package worker
 
 import (
-	"log"
-
 	"github.com/golang/geo/s2"
 	"github.com/twpayne/go-geom"
 
 	"github.com/dgraph-io/dgraph/geo"
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
 
+const (
+	GeoQueryWithin byte = iota
+	GeoQueryContains
+	GeoQueryIntersects
+	GeoQueryNear
+)
+
 // QueryKeys represents the list of keys to be used when querying
 type QueryKeys struct {
-	keys  []string  // The index keys
+	keys  [][]byte  // The index keys
 	pt    *s2.Point // If not nil, the input data was a point
 	loop  *s2.Loop  // If not nil, the input data was a polygon
 	cap   *s2.Cap   // If not nil, the cap to be used for a near query
-	query int8      // The geo query being performed.
+	query byte      // The geo query being performed.
 }
 
 // Length is the number of keys in the list
@@ -51,19 +55,19 @@ func (q QueryKeys) Key(i int, attr string) []byte {
 // PostFilter returns a function to filter the uids after reading them from the index.
 func (q QueryKeys) PostFilter(attr string) func(u uint64) bool {
 	switch q.query {
-	case task.GeoQueryWithin:
+	case GeoQueryWithin:
 		return func(u uint64) bool {
 			return isWithin(attr, u, q.pt, q.loop, nil)
 		}
-	case task.GeoQueryContains:
+	case GeoQueryContains:
 		return func(u uint64) bool {
 			return contains(attr, u, q.pt, q.loop)
 		}
-	case task.GeoQueryIntersects:
+	case GeoQueryIntersects:
 		return func(u uint64) bool {
 			return intersects(attr, u, q.pt, q.loop)
 		}
-	case task.GeoQueryNear:
+	case GeoQueryNear:
 		// for a point to be near it should be within the loop defined by distance from the origin
 		return func(u uint64) bool {
 			return isWithin(attr, u, nil, nil, q.cap)
@@ -73,15 +77,12 @@ func (q QueryKeys) PostFilter(attr string) func(u uint64) bool {
 }
 
 // newQueryKeys creates a QueryKeys object for the given filter.
-func newQueryKeys(f *task.GeoFilter) (*QueryKeys, error) {
+func newQueryKeys(query byte, data []byte, dist uint32) (*QueryKeys, error) {
 	// Try to parse the data as geo type.
-	v, err := types.GeoType.Unmarshaler.FromBinary(f.DataBytes())
+	var g types.Geo
+	err := g.UnmarshalBinary(data)
 	if err != nil {
 		return nil, err
-	}
-	g, ok := v.(types.Geo)
-	if !ok {
-		log.Fatalf("Unexpected type from the unmarshaler.")
 	}
 
 	keys, err := geo.IndexKeysFromGeo(g)
@@ -92,20 +93,20 @@ func newQueryKeys(f *task.GeoFilter) (*QueryKeys, error) {
 	switch v := g.T.(type) {
 	case *geom.Point:
 		p := geo.PointFromPoint(v)
-		if f.Query() == task.GeoQueryNear {
-			return nearQueryKeys(p, f.MaxDistance())
+		if query == GeoQueryNear {
+			return nearQueryKeys(p, dist)
 		}
-		return &QueryKeys{keys: keys, pt: &p, query: f.Query()}, nil
+		return &QueryKeys{keys: keys, pt: &p, query: query}, nil
 
 	case *geom.Polygon:
-		if f.Query() == task.GeoQueryNear {
+		if query == GeoQueryNear {
 			return nil, x.Errorf("Cannot use a polygon in a near query")
 		}
 		l, err := geo.LoopFromPolygon(v)
 		if err != nil {
 			return nil, err
 		}
-		return &QueryKeys{keys: keys, loop: l, query: f.Query()}, nil
+		return &QueryKeys{keys: keys, loop: l, query: query}, nil
 	default:
 		return nil, x.Errorf("Cannot query using a geometry of type %T", v)
 	}
@@ -119,7 +120,7 @@ func nearQueryKeys(pt s2.Point, d uint32) (*QueryKeys, error) {
 	a := geo.EarthAngle(float64(d))
 	c := s2.CapFromCenterAngle(pt, a)
 	keys := geo.IndexKeysForCap(c)
-	return &QueryKeys{keys: keys, cap: &c, query: task.GeoQueryNear}, nil
+	return &QueryKeys{keys: keys, cap: &c, query: GeoQueryNear}, nil
 }
 
 // returns true if the geometry represented by uid/attr is within the given loop or point
@@ -214,9 +215,10 @@ func parseValue(attr string, uid uint64) (types.Geo, error) {
 	if err != nil {
 		return types.Geo{nil}, err
 	}
-	g, err := types.GeoType.Unmarshaler.FromBinary(val)
+	var g types.Geo
+	err = g.UnmarshalBinary(val)
 	if err != nil {
 		return types.Geo{nil}, err
 	}
-	return g.(types.Geo), nil
+	return g, nil
 }

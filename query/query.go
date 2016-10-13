@@ -723,18 +723,13 @@ func createTaskQuery(sg *SubGraph, uids *algo.UIDList, tokens []string,
 	x.Assert(uids == nil || tokens == nil)
 
 	b := flatbuffers.NewBuilder(0)
-	var fend flatbuffers.UOffsetT
-	var ftype byte
+	var vend flatbuffers.UOffsetT
 	if uids != nil {
-		task.UidListStartUidsVector(b, uids.Size())
+		task.QueryStartUidsVector(b, uids.Size())
 		for i := uids.Size() - 1; i >= 0; i-- {
 			b.PrependUint64(uids.Get(i))
 		}
-		vend := b.EndVector(uids.Size())
-		task.UidListStart(b)
-		task.UidListAddUids(b, vend)
-		fend = task.UidListEnd(b)
-		ftype = task.QueryFilterUidList
+		vend = b.EndVector(uids.Size())
 	} else {
 		offsets := make([]flatbuffers.UOffsetT, 0, len(tokens))
 		for _, term := range tokens {
