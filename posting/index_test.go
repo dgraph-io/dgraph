@@ -31,22 +31,22 @@ func TestIndexingFloat(t *testing.T) {
 
 func TestIndexingDate(t *testing.T) {
 	var v types.Date
-	v.Time = time.Date(10, 0, 0, 0, 0, 0, 0, time.UTC)
+	v.Time = time.Date(10, 1, 1, 1, 1, 1, 1, time.UTC)
 
 	schema.ParseBytes([]byte("scalar age:date @index"))
 	a, err := tokenizedIndexKeys("age", types.Value(&v))
 	require.NoError(t, err)
-	require.Equal(t, []byte{0x3a, 0x61, 0x67, 0x65, 0x7c, 0x0, 0x0, 0x0, 0x9}, a[0])
+	require.Equal(t, []byte{0x3a, 0x61, 0x67, 0x65, 0x7c, 0x0, 0x0, 0x0, 0xa}, a[0])
 }
 
 func TestIndexingTime(t *testing.T) {
 	var v types.Time
-	v.Time = time.Date(10, 0, 0, 0, 0, 0, 0, time.UTC)
+	v.Time = time.Date(10, 1, 1, 1, 1, 1, 1, time.UTC)
 
 	schema.ParseBytes([]byte("scalar age:datetime @index"))
 	a, err := tokenizedIndexKeys("age", types.Value(&v))
 	require.NoError(t, err)
-	require.Equal(t, []byte{0x3a, 0x61, 0x67, 0x65, 0x7c, 0x0, 0x0, 0x0, 0x9}, a[0])
+	require.Equal(t, []byte{0x3a, 0x61, 0x67, 0x65, 0x7c, 0x0, 0x0, 0x0, 0xa}, a[0])
 }
 
 func TestIndexing(t *testing.T) {
