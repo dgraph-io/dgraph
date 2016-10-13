@@ -183,10 +183,10 @@ func TestProcessTask(t *testing.T) {
 }
 
 // newQuery creates a Query flatbuffer table, serializes and returns it.
-func newQuery(attr string, uids []uint64, terms []string) []byte {
+func newQuery(attr string, uids []uint64, tokens []string) []byte {
 	b := flatbuffers.NewBuilder(0)
 
-	x.Assert(uids == nil || terms == nil)
+	x.Assert(uids == nil || tokens == nil)
 
 	var vend flatbuffers.UOffsetT
 	if uids != nil {
@@ -196,16 +196,16 @@ func newQuery(attr string, uids []uint64, terms []string) []byte {
 		}
 		vend = b.EndVector(len(uids))
 	} else {
-		offsets := make([]flatbuffers.UOffsetT, 0, len(terms))
-		for _, term := range terms {
+		offsets := make([]flatbuffers.UOffsetT, 0, len(tokens))
+		for _, term := range tokens {
 			uo := b.CreateString(term)
 			offsets = append(offsets, uo)
 		}
-		task.QueryStartTermsVector(b, len(terms))
-		for i := len(terms) - 1; i >= 0; i-- {
+		task.QueryStartTokensVector(b, len(tokens))
+		for i := len(tokens) - 1; i >= 0; i-- {
 			b.PrependUOffsetT(offsets[i])
 		}
-		vend = b.EndVector(len(terms))
+		vend = b.EndVector(len(tokens))
 	}
 
 	ao := b.CreateString(attr)
@@ -214,7 +214,7 @@ func newQuery(attr string, uids []uint64, terms []string) []byte {
 	if uids != nil {
 		task.QueryAddUids(b, vend)
 	} else {
-		task.QueryAddTerms(b, vend)
+		task.QueryAddTokens(b, vend)
 	}
 	qend := task.QueryEnd(b)
 	b.Finish(qend)

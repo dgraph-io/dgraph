@@ -95,7 +95,7 @@ func (rcv *Query) UidsLength() int {
 	return 0
 }
 
-func (rcv *Query) Terms(j int) []byte {
+func (rcv *Query) Tokens(j int) []byte {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(16))
 	if o != 0 {
 		a := rcv._tab.Vector(o)
@@ -104,7 +104,7 @@ func (rcv *Query) Terms(j int) []byte {
 	return nil
 }
 
-func (rcv *Query) TermsLength() int {
+func (rcv *Query) TokensLength() int {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(16))
 	if o != 0 {
 		return rcv._tab.VectorLen(o)
@@ -149,10 +149,10 @@ func QueryAddUids(builder *flatbuffers.Builder, uids flatbuffers.UOffsetT) {
 func QueryStartUidsVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
 	return builder.StartVector(8, numElems, 8)
 }
-func QueryAddTerms(builder *flatbuffers.Builder, terms flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(6, flatbuffers.UOffsetT(terms), 0)
+func QueryAddTokens(builder *flatbuffers.Builder, tokens flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(6, flatbuffers.UOffsetT(tokens), 0)
 }
-func QueryStartTermsVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
+func QueryStartTokensVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
 	return builder.StartVector(4, numElems, 4)
 }
 func QueryAddToIntersect(builder *flatbuffers.Builder, toIntersect flatbuffers.UOffsetT) {
