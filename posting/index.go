@@ -75,20 +75,6 @@ func tokenizedIndexKeys(attr string, p stype.Value) ([][]byte, error) {
 	return nil, nil
 }
 
-func exactMatchIndexKeys(attr string, data []byte) []string {
-	return []string{string(IndexKey(attr, data))}
-}
-
-func indexKeys(attr string, data []byte) ([]string, error) {
-	t := schema.TypeOf(attr)
-	switch t {
-	case stype.GeoType:
-		return geo.IndexKeys(data)
-	default:
-		return exactMatchIndexKeys(attr, data), nil
-	}
-}
-
 // processIndexTerm adds mutation(s) for a single term, to maintain index.
 func processIndexTerm(ctx context.Context, attr string, uid uint64, p stype.Value, del bool) {
 	x.Assert(uid != 0)
