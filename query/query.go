@@ -986,10 +986,15 @@ func runFilter(ctx context.Context, destUIDs *algo.UIDList,
 		tokens := tokenizer.StringTokens()
 		taskQuery := createTaskQuery(sg, nil, tokens, destUIDs)
 		go ProcessGraph(ctx, sg, taskQuery, sgChan)
-		err = <-sgChan
-		if err != nil {
-			return nil, err
+		select {
+		case <-ctx.Done():
+			return nil, x.Wrap(ctx.Err())
+		case err = <-sgChan:
+			if err != nil {
+				return nil, err
+			}
 		}
+
 		x.Assert(len(sg.Result) == len(tokens))
 		return algo.MergeLists(sg.Result), nil
 	}
