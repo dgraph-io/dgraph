@@ -3,8 +3,6 @@ package types
 import (
 	"bytes"
 	"encoding/binary"
-	"strconv"
-	"time"
 
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/x"
@@ -33,7 +31,8 @@ func IndexKey(attr string, term []byte) []byte {
 }
 
 // DefaultIndexKeys tokenizes data as a string and return keys for indexing.
-func DefaultIndexKeys(attr string, data []byte) [][]byte {
+func DefaultIndexKeys(attr string, val *String) [][]byte {
+	data := []byte((*val).String())
 	tokenizer, err := tok.NewTokenizer(data)
 	if err != nil {
 		return nil
@@ -57,13 +56,9 @@ func ExactMatchIndexKeys(attr string, data []byte) [][]byte {
 }
 
 // IntIndex indexs int type.
-func IntIndex(attr string, data []byte) ([][]byte, error) {
+func IntIndex(attr string, val *Int32) ([][]byte, error) {
 	buf := new(bytes.Buffer)
-	t, err := strconv.ParseInt(string(data), 0, 32)
-	if err != nil {
-		return nil, err
-	}
-	err = binary.Write(buf, binary.BigEndian, t)
+	err := binary.Write(buf, binary.BigEndian, int32(*val))
 	if err != nil {
 		return nil, err
 	}
@@ -71,14 +66,10 @@ func IntIndex(attr string, data []byte) ([][]byte, error) {
 }
 
 // FloatIndex indexs float type.
-func FloatIndex(attr string, data []byte) ([][]byte, error) {
-	f, err := strconv.ParseFloat(string(data), 64)
-	if err != nil {
-		return nil, err
-	}
-	in := int(f)
+func FloatIndex(attr string, val *Float) ([][]byte, error) {
+	in := int(*val)
 	buf := new(bytes.Buffer)
-	err = binary.Write(buf, binary.BigEndian, in)
+	err := binary.Write(buf, binary.BigEndian, in)
 	if err != nil {
 		return nil, err
 	}
@@ -86,13 +77,9 @@ func FloatIndex(attr string, data []byte) ([][]byte, error) {
 }
 
 // DateIndex indexs date type.
-func DateIndex(attr string, data []byte) ([][]byte, error) {
-	t, err := time.Parse(dateFormat1, string(data))
-	if err != nil {
-		return nil, err
-	}
+func DateIndex(attr string, val *Date) ([][]byte, error) {
 	buf := new(bytes.Buffer)
-	err = binary.Write(buf, binary.BigEndian, t.Year())
+	err := binary.Write(buf, binary.BigEndian, (*val).Time.Year())
 	if err != nil {
 		return nil, err
 	}
@@ -100,13 +87,9 @@ func DateIndex(attr string, data []byte) ([][]byte, error) {
 }
 
 // TimeIndex indexs time type.
-func TimeIndex(attr string, data []byte) ([][]byte, error) {
-	t, err := time.Parse(dateFormat2, string(data))
-	if err != nil {
-		return nil, err
-	}
+func TimeIndex(attr string, val *Time) ([][]byte, error) {
 	buf := new(bytes.Buffer)
-	err = binary.Write(buf, binary.BigEndian, t.Year())
+	err := binary.Write(buf, binary.BigEndian, (*val).Time.Year())
 	if err != nil {
 		return nil, err
 	}

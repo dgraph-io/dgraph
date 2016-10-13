@@ -28,13 +28,9 @@ import (
 )
 
 // IndexKeys creates the keys to use in the index for the given data assuming that it is geo data.
-func IndexKeys(data []byte) ([][]byte, error) {
+func IndexKeys(val *types.Geo) ([][]byte, error) {
 	// Try to parse the data as geo type.
-	var g types.Geo
-	if err := g.UnmarshalBinary(data); err != nil {
-		return nil, err
-	}
-	return IndexKeysFromGeo(g)
+	return IndexKeysFromGeo(*val)
 }
 
 // IndexKeysFromGeo returns the keys to be used in a geospatial index for the given geometry. If the
