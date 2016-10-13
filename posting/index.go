@@ -70,7 +70,7 @@ func tokenizedIndexKeys(attr string, p stype.Value) ([][]byte, error) {
 		return stype.TimeIndex(attr, data)
 	case stype.BoolID:
 	default:
-		return stype.ExactMatchIndexKeys(attr, data), nil
+		return stype.DefaultIndexKeys(attr, data), nil
 	}
 	return nil, nil
 }

@@ -737,7 +737,7 @@ func TestToJSONFilterOr(t *testing.T) {
 			me(_uid_:0x01) {
 				name
 				gender
-				friend @filter(eq("name", "Andrea") || eq("name", "Glenn Rhee")) {
+				friend @filter(eq("name", "Andrea") || eq("name", "Rhee")) {
 					name
 				}
 			}
@@ -781,7 +781,7 @@ func TestToJSONFilterOrFirst(t *testing.T) {
 			me(_uid_:0x01) {
 				name
 				gender
-				friend(first:2) @filter(eq("name", "Andrea") || eq("name", "Glenn Rhee") || eq("name", "Daryl Dixon")) {
+				friend(first:2) @filter(eq("name", "Andrea") || eq("name", "Glenn Rhee") || eq("name", "Daryl")) {
 					name
 				}
 			}
@@ -1646,4 +1646,9 @@ func BenchmarkToPBUnmarshal_1000_Actor(b *testing.B) {
 }
 func BenchmarkToPBUnmarshal_1000_Director(b *testing.B) {
 	benchmarkToPBUnmarshal("benchmark/directors1000.bin", b)
+}
+
+func TestMain(m *testing.M) {
+	x.Init()
+	os.Exit(m.Run())
 }

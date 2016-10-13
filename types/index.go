@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -29,6 +30,25 @@ func IndexKey(attr string, term []byte) []byte {
 	_, err = buf.Write(term)
 	x.Check(err)
 	return buf.Bytes()
+}
+
+// DefaultIndexKeys tokenizes data as a string and return keys for indexing.
+func DefaultIndexKeys(attr string, data []byte) [][]byte {
+	tokenizer, err := tok.NewTokenizer(data)
+	if err != nil {
+		return nil
+	}
+	defer tokenizer.Destroy()
+
+	tokens := make([][]byte, 0, 5)
+	for {
+		s := tokenizer.Next()
+		if s == nil {
+			break
+		}
+		tokens = append(tokens, IndexKey(attr, s))
+	}
+	return tokens
 }
 
 // ExactMatchIndexKeys indexes string type.

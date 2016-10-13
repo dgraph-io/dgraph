@@ -47,16 +47,13 @@ type Tokenizer struct {
 	token *C.char
 }
 
-func init() {
-	// Prepare the unicode normalizer.
+// normalize does unicode normalization.
+func normalize(in []byte) ([]byte, error) {
+	// We need a new transformer for each input as it cannot be reused.
 	filter := func(r rune) bool {
 		return unicode.Is(unicode.Mn, r) // Mn: nonspacing marks (to be removed)
 	}
-	transformer = transform.Chain(norm.NFD, transform.RemoveFunc(filter), norm.NFC)
-}
-
-// normalize does unicode normalization.
-func normalize(in []byte) ([]byte, error) {
+	transformer := transform.Chain(norm.NFD, transform.RemoveFunc(filter), norm.NFC)
 	out, _, err := transform.Bytes(transformer, in)
 	out = bytes.Map(func(r rune) rune {
 		if unicode.IsPunct(r) { // Replace punctuations with spaces.
@@ -69,6 +66,7 @@ func normalize(in []byte) ([]byte, error) {
 
 // NewTokenizer creates a new Tokenizer object from a given input string of bytes.
 func NewTokenizer(s []byte) (*Tokenizer, error) {
+	x.Assert(s != nil)
 	sNorm, terr := normalize(s)
 	if terr != nil {
 		return nil, terr
@@ -91,7 +89,7 @@ func (t *Tokenizer) Destroy() {
 	C.DestroyTokenizer(t.c)
 }
 
-// Next returns the next
+// Next returns the next token. It will allocate memory for the token.
 func (t *Tokenizer) Next() []byte {
 	for {
 		n := int(C.TokenizerNext(t.c))
@@ -104,6 +102,19 @@ func (t *Tokenizer) Next() []byte {
 		}
 	}
 	return nil
+}
+
+// StringTokens returns all tokens as strings. If we fail, we return nil.
+func (t *Tokenizer) StringTokens() []string {
+	var tokens []string
+	for {
+		s := t.Next()
+		if s == nil {
+			break
+		}
+		tokens = append(tokens, string(s))
+	}
+	return tokens
 }
 
 // byteToChar returns *C.char from byte slice.

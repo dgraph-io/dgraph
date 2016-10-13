@@ -497,3 +497,8 @@ func TestProcessTaskIndex(t *testing.T) {
 		t.Error(err)
 	}
 }
+
+func TestMain(m *testing.M) {
+	x.Init()
+	os.Exit(m.Run())
+}
