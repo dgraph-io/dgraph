@@ -17,7 +17,6 @@
 package geo
 
 import (
-	"bytes"
 	"log"
 
 	"github.com/golang/geo/s2"
@@ -48,7 +47,7 @@ func IndexKeysFromGeo(g types.Geo) ([][]byte, error) {
 }
 
 // IndexKeysForCap returns the keys to be used in a geospatial index for a Cap.
-func IndexKeysForCap(c s2.Cap) []string {
+func IndexKeysForCap(c s2.Cap) [][]byte {
 	rc := &s2.RegionCoverer{
 		MinLevel: MinCellLevel,
 		MaxLevel: MaxCellLevel,
@@ -59,22 +58,15 @@ func IndexKeysForCap(c s2.Cap) []string {
 	return indexKeysFromCellUnion(cu)
 }
 
-func indexKeysFromCellUnion(cu s2.CellUnion) []string {
+func indexKeysFromCellUnion(cu s2.CellUnion) [][]byte {
 	keys := make([][]byte, len(cu))
 	for i, c := range cu {
-		keys[i] = indexKeyFromCellID(c)
+		keys[i] = types.IndexKey(indexAttr, []byte(c.ToToken()))
 	}
-	return keys, nil
+	return keys
 }
 
-const indexPrefix = ":_loc_|"
-
-func indexKeyFromCellID(c s2.CellID) []byte {
-	var buf bytes.Buffer
-	buf.WriteString(indexPrefix)
-	buf.WriteString(c.ToToken())
-	return buf.Bytes()
-}
+const indexAttr = "_loc_"
 
 func indexCells(g types.Geo) (s2.CellUnion, error) {
 	if g.Stride() != 2 {

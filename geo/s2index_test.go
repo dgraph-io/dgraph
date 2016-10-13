@@ -170,7 +170,7 @@ func testCover(file string, max int) {
 	if err != nil {
 		return
 	}
-	l, _ := loopFromPolygon(p)
+	l, _ := LoopFromPolygon(p)
 	cu := coverLoop(l, MinCellLevel, MaxCellLevel, max)
 	printCells(cu)
 	printCoverAccuracy(l, cu)
@@ -274,7 +274,7 @@ func benchCover(b *testing.B, file string, max int) {
 	if err != nil {
 		b.Error(err)
 	}
-	l, _ := loopFromPolygon(p)
+	l, _ := LoopFromPolygon(p)
 	var cu s2.CellUnion
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
@@ -290,6 +290,6 @@ func benchToLoop(b *testing.B, file string) {
 	}
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		_, _ = loopFromPolygon(p)
+		_, _ = LoopFromPolygon(p)
 	}
 }
