@@ -67,7 +67,7 @@ func IntIndex(attr string, val *Int32) ([][]byte, error) {
 
 // FloatIndex indexs float type.
 func FloatIndex(attr string, val *Float) ([][]byte, error) {
-	in := int(*val)
+	in := int32(*val)
 	buf := new(bytes.Buffer)
 	err := binary.Write(buf, binary.BigEndian, in)
 	if err != nil {
@@ -79,7 +79,7 @@ func FloatIndex(attr string, val *Float) ([][]byte, error) {
 // DateIndex indexs time type.
 func DateIndex(attr string, val *Date) ([][]byte, error) {
 	buf := new(bytes.Buffer)
-	err := binary.Write(buf, binary.BigEndian, (*val).Time.Year())
+	err := binary.Write(buf, binary.BigEndian, int32((*val).Time.Year()))
 	if err != nil {
 		return nil, err
 	}
@@ -89,7 +89,7 @@ func DateIndex(attr string, val *Date) ([][]byte, error) {
 // TimeIndex indexs time type.
 func TimeIndex(attr string, val *Time) ([][]byte, error) {
 	buf := new(bytes.Buffer)
-	err := binary.Write(buf, binary.BigEndian, (*val).Time.Year())
+	err := binary.Write(buf, binary.BigEndian, int32((*val).Time.Year()))
 	if err != nil {
 		return nil, err
 	}
