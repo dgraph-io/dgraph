@@ -27,7 +27,7 @@ import (
 // Date represents a date (YYYY-MM-DD). There is no timezone information
 // attached.
 type Date struct {
-	Time time.Time
+	time.Time
 }
 
 func createDate(y int, m time.Month, d int) Date {

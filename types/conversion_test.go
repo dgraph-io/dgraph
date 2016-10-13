@@ -22,6 +22,60 @@ import (
 	"time"
 )
 
+func TestSameConversionString(t *testing.T) {
+	data := []struct {
+		in  String
+		out String
+	}{
+		{"a", "a"},
+		{"", ""},
+		{"abc", "abc"},
+	}
+	for _, tc := range data {
+		if out, err := stringType.Convert(&tc.in); err != nil {
+			t.Errorf("Unexpected error converting int to bool: %v", err)
+		} else if *(out.(*String)) != tc.out {
+			t.Errorf("Converting string to string: Expected %v, got %v", tc.out, out)
+		}
+	}
+}
+
+func TestSameConversionFloat(t *testing.T) {
+	data := []struct {
+		in  Float
+		out Float
+	}{
+		{3.4434, 3.4434},
+		{-3, -3},
+		{0.5e2, 0.5e2},
+	}
+	for _, tc := range data {
+		if out, err := floatType.Convert(&tc.in); err != nil {
+			t.Errorf("Unexpected error converting int to bool: %v", err)
+		} else if *(out.(*Float)) != tc.out {
+			t.Errorf("Converting float to float: Expected %v, got %v", tc.out, out)
+		}
+	}
+}
+
+func TestSameConversionInt(t *testing.T) {
+	data := []struct {
+		in  Int32
+		out Int32
+	}{
+		{3, 3},
+		{-3, -3},
+		{0, 0},
+	}
+	for _, tc := range data {
+		if out, err := int32Type.Convert(&tc.in); err != nil {
+			t.Errorf("Unexpected error converting int to bool: %v", err)
+		} else if *(out.(*Int32)) != tc.out {
+			t.Errorf("Converting int to int: Expected %v, got %v", tc.out, out)
+		}
+	}
+}
+
 func TestConvertInt32ToBool(t *testing.T) {
 	data := []struct {
 		in  Int32

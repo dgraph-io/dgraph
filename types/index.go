@@ -76,7 +76,7 @@ func FloatIndex(attr string, val *Float) ([][]byte, error) {
 	return [][]byte{IndexKey(attr, buf.Bytes())}, nil
 }
 
-// DateIndex indexs date type.
+// DateIndex indexs time type.
 func DateIndex(attr string, val *Date) ([][]byte, error) {
 	buf := new(bytes.Buffer)
 	err := binary.Write(buf, binary.BigEndian, (*val).Time.Year())
