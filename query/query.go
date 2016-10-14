@@ -318,17 +318,13 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 					" one of the scalar types defined in the schema.", sg.Params.AttrType, sg.Attr)
 			}
 			schemaType := sg.Params.AttrType.(types.Scalar)
-			lval := val
-			if schemaType != val.Type() {
-				// The schema and storage types do not match, so we do a type conversion.
-				var err error
-				lval, err = schemaType.Convert(val)
-				if err != nil {
-					// We ignore schema conversion errors and not include the values in the result
-					m["_inv_"] = true
-					result[sg.srcUIDs.Get(i)] = m
-					continue
-				}
+			// Convert to schema type.
+			lval, err := schemaType.Convert(val)
+			if err != nil {
+				// We ignore schema conversion errors and not include the values in the result
+				m["_inv_"] = true
+				result[sg.srcUIDs.Get(i)] = m
+				continue
 			}
 			if sg.Params.Alias != "" {
 				m[sg.Params.Alias] = lval
@@ -488,15 +484,11 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 						" one of the scalar types defined in the schema.", pc.Params.AttrType, pc.Attr)
 				}
 				schemaType := pc.Params.AttrType.(types.Scalar)
-				sv := v
-				if schemaType != v.Type() {
-					// schema types don't match so we convert
-					var err error
-					sv, err = schemaType.Convert(v)
-					if bytes.Equal(valBytes, nil) || err != nil {
-						// skip values that don't convert.
-						return x.Errorf("_INV_")
-					}
+				// Convert to schema type.
+				sv, err := schemaType.Convert(v)
+				if bytes.Equal(valBytes, nil) || err != nil {
+					// skip values that don't convert.
+					return x.Errorf("_INV_")
 				}
 				p := createProperty(pc.Attr, sv)
 				properties = append(properties, p)
@@ -900,16 +892,15 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, taskQuery []byte, rch chan 
 					continue
 				}
 
-				// type assertion for scalar type values
+				// type assertion for scalar type values.
 				if !node.Params.AttrType.IsScalar() {
 					rch <- x.Errorf("Fatal mistakes in type.")
 				}
 
+				// Check if compatible with schema type.
 				schemaType := node.Params.AttrType.(types.Scalar)
-				if schemaType != v.Type() {
-					if _, err = schemaType.Convert(v); err != nil {
-						invalidUids[uid] = true
-					}
+				if _, err = schemaType.Convert(v); err != nil {
+					invalidUids[uid] = true
 				}
 			}
 		}

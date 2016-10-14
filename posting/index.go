@@ -48,29 +48,28 @@ func InitIndex(ds *store.Store) {
 }
 
 func tokenizedIndexKeys(attr string, p stype.Value) ([][]byte, error) {
-	t := schema.TypeOf(attr)
-	if !t.IsScalar() {
+	schemaType := schema.TypeOf(attr)
+	if !schemaType.IsScalar() {
 		return nil, x.Errorf("Cannot index attribute %s of type object.", attr)
 	}
-	data, err := p.MarshalText()
+	s := schemaType.(stype.Scalar)
+	schemaVal, err := s.Convert(p)
 	if err != nil {
 		return nil, err
 	}
-	s := t.(stype.Scalar)
-	switch s.ID() {
-	case stype.GeoID:
-		return geo.IndexKeys(data)
-	case stype.Int32ID:
-		return stype.IntIndex(attr, data)
-	case stype.FloatID:
-		return stype.FloatIndex(attr, data)
-	case stype.DateID:
-		return stype.DateIndex(attr, data)
-	case stype.DateTimeID:
-		return stype.TimeIndex(attr, data)
-	case stype.BoolID:
-	default:
-		return stype.DefaultIndexKeys(attr, data), nil
+	switch v := schemaVal.(type) {
+	case *stype.Geo:
+		return geo.IndexKeys(v)
+	case *stype.Int32:
+		return stype.IntIndex(attr, v)
+	case *stype.Float:
+		return stype.FloatIndex(attr, v)
+	case *stype.Date:
+		return stype.DateIndex(attr, v)
+	case *stype.Time:
+		return stype.TimeIndex(attr, v)
+	case *stype.String:
+		return stype.DefaultIndexKeys(attr, v), nil
 	}
 	return nil, nil
 }

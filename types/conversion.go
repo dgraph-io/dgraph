@@ -24,6 +24,10 @@ import (
 
 // Convert converts the value to given scalar type.
 func (to Scalar) Convert(value Value) (Value, error) {
+	if to.ID() == value.Type().ID() {
+		return value, nil
+	}
+
 	if to.ID() == StringID || to.ID() == BytesID {
 		// If we are converting to a string or bytes, simply use MarshalText
 		r, err := value.MarshalText()
