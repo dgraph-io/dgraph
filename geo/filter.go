@@ -70,8 +70,8 @@ func QueryTokens(f *Filter) ([][]byte, *QueryData, error) {
 		return ToTokens(cu), &QueryData{pt: &p, qtype: f.Type}, nil
 
 	case *geom.Polygon:
-		if f.Type == QueryTypeNear {
-			return nil, nil, x.Errorf("Cannot use a polygon in a near query")
+		if f.Type == QueryTypeNear || f.Type == QueryTypeContains {
+			return nil, nil, x.Errorf("Cannot use a polygon in a near or contains query")
 		}
 		l, err := loopFromPolygon(v)
 		if err != nil {
@@ -115,11 +115,6 @@ func (q QueryData) MatchesFilter(g types.Geo) bool {
 // returns true if the geometry represented by g is within the given loop or cap
 func (q QueryData) isWithin(g types.Geo) bool {
 	x.Assertf(q.pt != nil || q.loop != nil || q.cap != nil, "At least a point, loop or cap should be defined.")
-	if q.pt != nil {
-		// Nothing is inside a point.
-		return false
-	}
-
 	gpt, ok := g.T.(*geom.Point)
 	if !ok {
 		// We will only consider points for within queries.
@@ -127,6 +122,10 @@ func (q QueryData) isWithin(g types.Geo) bool {
 	}
 
 	s2pt := pointFromPoint(gpt)
+	if q.pt != nil {
+		return q.pt.ApproxEqual(s2pt)
+	}
+
 	if q.loop != nil {
 		return q.loop.ContainsPoint(s2pt)
 	}
@@ -173,7 +172,7 @@ func (q QueryData) intersects(g types.Geo) bool {
 			return false
 		}
 		if q.pt != nil {
-			return q.loop.ContainsPoint(*q.pt)
+			return l.ContainsPoint(*q.pt)
 		}
 		// else loop is not nil
 		return Intersects(l, q.loop)
