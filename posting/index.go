@@ -57,19 +57,19 @@ func tokenizedIndexKeys(attr string, p stype.Value) ([][]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	switch s.ID() {
-	case stype.GeoID:
-		return geo.IndexKeys(schemaVal.(*stype.Geo))
-	case stype.Int32ID:
-		return stype.IntIndex(attr, schemaVal.(*stype.Int32))
-	case stype.FloatID:
-		return stype.FloatIndex(attr, schemaVal.(*stype.Float))
-	case stype.DateID:
-		return stype.DateIndex(attr, schemaVal.(*stype.Date))
-	case stype.DateTimeID:
-		return stype.TimeIndex(attr, schemaVal.(*stype.Time))
-	case stype.StringID:
-		return stype.DefaultIndexKeys(attr, schemaVal.(*stype.String)), nil
+	switch v := schemaVal.(type) {
+	case *stype.Geo:
+		return geo.IndexKeys(v)
+	case *stype.Int32:
+		return stype.IntIndex(attr, v)
+	case *stype.Float:
+		return stype.FloatIndex(attr, v)
+	case *stype.Date:
+		return stype.DateIndex(attr, v)
+	case *stype.Time:
+		return stype.TimeIndex(attr, v)
+	case *stype.String:
+		return stype.DefaultIndexKeys(attr, v), nil
 	}
 	return nil, nil
 }
