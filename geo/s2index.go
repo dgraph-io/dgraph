@@ -43,30 +43,25 @@ func IndexKeysFromGeo(g types.Geo) ([][]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return indexKeysFromCellUnion(cu), nil
+	keys := make([][]byte, len(cu))
+	for i, c := range cu {
+		keys[i] = types.IndexKey(IndexAttr, []byte(c.ToToken()))
+	}
+	return keys, nil
 }
 
 // IndexKeysForCap returns the keys to be used in a geospatial index for a Cap.
-func IndexKeysForCap(c s2.Cap) [][]byte {
+func indexCellsForCap(c s2.Cap) s2.CellUnion {
 	rc := &s2.RegionCoverer{
 		MinLevel: MinCellLevel,
 		MaxLevel: MaxCellLevel,
 		LevelMod: 0,
 		MaxCells: MaxCells,
 	}
-	cu := rc.Covering(c)
-	return indexKeysFromCellUnion(cu)
+	return rc.Covering(c)
 }
 
-func indexKeysFromCellUnion(cu s2.CellUnion) [][]byte {
-	keys := make([][]byte, len(cu))
-	for i, c := range cu {
-		keys[i] = types.IndexKey(indexAttr, []byte(c.ToToken()))
-	}
-	return keys
-}
-
-const indexAttr = "_loc_"
+const IndexAttr = "_loc_"
 
 func indexCells(g types.Geo) (s2.CellUnion, error) {
 	if g.Stride() != 2 {
@@ -76,7 +71,7 @@ func indexCells(g types.Geo) (s2.CellUnion, error) {
 	case *geom.Point:
 		return indexCellsForPoint(v, MinCellLevel, MaxCellLevel), nil
 	case *geom.Polygon:
-		l, err := LoopFromPolygon(v)
+		l, err := loopFromPolygon(v)
 		if err != nil {
 			return nil, err
 		}
@@ -103,13 +98,13 @@ func pointFromCoord(r geom.Coord) s2.Point {
 }
 
 // PointFromPoint converts a geom.Point to a s2.Point
-func PointFromPoint(p *geom.Point) s2.Point {
+func pointFromPoint(p *geom.Point) s2.Point {
 	return pointFromCoord(p.Coords())
 }
 
-// LoopFromPolygon converts a geom.Polygon to a s2.Loop. We use loops instead of s2.Polygon as the
+// loopFromPolygon converts a geom.Polygon to a s2.Loop. We use loops instead of s2.Polygon as the
 // s2.Polygon implemention is incomplete.
-func LoopFromPolygon(p *geom.Polygon) (*s2.Loop, error) {
+func loopFromPolygon(p *geom.Polygon) (*s2.Loop, error) {
 	// go implementation of s2 does not support more than one loop (and will panic if the size of
 	// the loops array > 1). So we will skip the holes in the polygon and just use the outer loop.
 	r := p.LinearRing(0)

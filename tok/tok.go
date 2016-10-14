@@ -104,15 +104,15 @@ func (t *Tokenizer) Next() []byte {
 	return nil
 }
 
-// StringTokens returns all tokens as strings. If we fail, we return nil.
-func (t *Tokenizer) StringTokens() []string {
-	var tokens []string
+// Tokens returns all tokens. If we fail, we return nil.
+func (t *Tokenizer) Tokens() [][]byte {
+	var tokens [][]byte
 	for {
 		s := t.Next()
 		if s == nil {
 			break
 		}
-		tokens = append(tokens, string(s))
+		tokens = append(tokens, s)
 	}
 	return tokens
 }

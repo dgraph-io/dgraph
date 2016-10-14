@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgraph/algo"
+	"github.com/dgraph-io/dgraph/geo"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/query/graph"
 	"github.com/dgraph-io/dgraph/schema"
@@ -131,10 +132,11 @@ type params struct {
 // query and the response. Once generated, this can then be encoded to other
 // client convenient formats, like GraphQL / JSON.
 type SubGraph struct {
-	Attr     string
-	Children []*SubGraph
-	Params   params
-	Filter   *gql.FilterTree
+	Attr      string
+	Children  []*SubGraph
+	Params    params
+	Filter    *gql.FilterTree
+	GeoFilter *geo.Filter
 
 	Counts *task.CountList
 	Values *task.ValueList
@@ -718,7 +720,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 }
 
 // createTaskQuery generates the query buffer.
-func createTaskQuery(sg *SubGraph, uids *algo.UIDList, tokens []string,
+func createTaskQuery(sg *SubGraph, uids *algo.UIDList, tokens [][]byte,
 	intersect *algo.UIDList) []byte {
 	x.Assert(uids == nil || tokens == nil)
 
@@ -733,7 +735,7 @@ func createTaskQuery(sg *SubGraph, uids *algo.UIDList, tokens []string,
 	} else {
 		offsets := make([]flatbuffers.UOffsetT, 0, len(tokens))
 		for _, term := range tokens {
-			offsets = append(offsets, b.CreateString(term))
+			offsets = append(offsets, b.CreateByteVector(term))
 		}
 		task.QueryStartTokensVector(b, len(tokens))
 		for i := len(tokens) - 1; i >= 0; i-- {
@@ -984,7 +986,7 @@ func runFilter(ctx context.Context, destUIDs *algo.UIDList,
 		}
 		defer tokenizer.Destroy()
 		x.Assert(tokenizer != nil)
-		tokens := tokenizer.StringTokens()
+		tokens := tokenizer.Tokens()
 		taskQuery := createTaskQuery(sg, nil, tokens, destUIDs)
 		go ProcessGraph(ctx, sg, taskQuery, sgChan)
 		select {
