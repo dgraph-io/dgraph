@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package worker
+package query
 
 import (
 	"io/ioutil"
@@ -27,6 +27,7 @@ import (
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/types"
+	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -45,7 +46,7 @@ func createTestStore(t *testing.T) *store.Store {
 	}
 	defer ps.Close()
 
-	SetState(ps)
+	worker.SetState(ps)
 
 	posting.Init()
 	posting.InitIndex(ps)

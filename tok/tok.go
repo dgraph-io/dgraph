@@ -112,7 +112,10 @@ func (t *Tokenizer) Tokens() [][]byte {
 		if s == nil {
 			break
 		}
-		tokens = append(tokens, s)
+		// make a copy of the token as the underlying byte array gets overwritten
+		scopy := make([]byte, len(s))
+		copy(scopy, s)
+		tokens = append(tokens, scopy)
 	}
 	return tokens
 }
