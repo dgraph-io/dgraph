@@ -126,7 +126,10 @@ func TestKeyGeneratorPoint(t *testing.T) {
 		t.Error(err)
 	}
 
-	keys, err := IndexKeys(data)
+	var g types.Geo
+	g.UnmarshalBinary(data)
+
+	keys, err := IndexKeys(&g)
 	if err != nil {
 		t.Error(err)
 	}
@@ -150,7 +153,9 @@ func TestKeyGeneratorPolygon(t *testing.T) {
 		t.Error(err)
 	}
 
-	keys, err := IndexKeys(data)
+	var g types.Geo
+	g.UnmarshalBinary(data)
+	keys, err := IndexKeys(&g)
 	if err != nil {
 		t.Error(err)
 	}
@@ -247,9 +252,11 @@ func BenchmarkKeyGeneratorPoint(b *testing.B) {
 	if err != nil {
 		b.Error(err)
 	}
+	var g types.Geo
+	g.UnmarshalBinary(data)
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		IndexKeys(data)
+		IndexKeys(&g)
 	}
 }
 
@@ -262,10 +269,11 @@ func BenchmarkKeyGeneratorPolygon(b *testing.B) {
 	if err != nil {
 		b.Error(err)
 	}
-
+	var g types.Geo
+	g.UnmarshalBinary(data)
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		IndexKeys(data)
+		IndexKeys(&g)
 	}
 }
 
