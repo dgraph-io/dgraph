@@ -270,7 +270,14 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 			} else {
 				m[sg.Attr] = l
 			}
-			result[sg.srcUIDs.Get(i)] = m
+			if sg.GeoFilter != nil {
+				x.Assertf(len(l) == 1, "There should be exactly 1 uid at the top level.")
+				// remove the top level attr from the result, that is only used
+				// for filtering the results.
+				result[sg.srcUIDs.Get(i)] = l[0]
+			} else {
+				result[sg.srcUIDs.Get(i)] = m
+			}
 		}
 	}
 
@@ -362,10 +369,8 @@ func (sg *SubGraph) ToJSON(l *Latency) ([]byte, error) {
 		return nil, err
 	}
 	l.Json = time.Since(l.Start) - l.Parsing - l.Processing
-	if len(r) != 1 {
-		log.Fatal("We don't currently support more than 1 uid at root.")
-	}
 
+	var a []map[string]interface{}
 	// r is a map, and we don't know it's key. So iterate over it, even though it only has 1 result.
 	for _, ival := range r {
 		var m map[string]interface{}
@@ -377,10 +382,13 @@ func (sg *SubGraph) ToJSON(l *Latency) ([]byte, error) {
 		if sg.Params.isDebug {
 			m["server_latency"] = l.ToMap()
 		}
-		return json.Marshal(m)
+		if len(r) == 1 {
+			return json.Marshal(m)
+		} else {
+			a = append(a, m)
+		}
 	}
-	log.Fatal("Runtime should never reach here.")
-	return nil, x.Errorf("Runtime should never reach here.")
+	return json.Marshal(a)
 }
 
 var nodePool = sync.Pool{
@@ -692,23 +700,32 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 
 	{
 		// Also need to add nil value to keep this consistent.
-		b := flatbuffers.NewBuilder(0)
+		sg.Values = createNilValuesList(1)
+	}
+	return sg, nil
+}
+
+func createNilValuesList(count int) *task.ValueList {
+	b := flatbuffers.NewBuilder(0)
+	offsets := make([]flatbuffers.UOffsetT, count)
+	for i := 0; i < count; i++ {
 		bvo := b.CreateByteVector(x.Nilbyte)
 		task.ValueStart(b)
 		task.ValueAddVal(b, bvo)
-		voffset := task.ValueEnd(b)
-
-		task.ValueListStartValuesVector(b, 1)
-		b.PrependUOffsetT(voffset)
-		voffset = b.EndVector(1)
-
-		task.ValueListStart(b)
-		task.ValueListAddValues(b, voffset)
-		b.Finish(task.ValueListEnd(b))
-		buf := b.FinishedBytes()
-		sg.Values = task.GetRootAsValueList(buf, 0)
+		offsets[i] = task.ValueEnd(b)
 	}
-	return sg, nil
+
+	task.ValueListStartValuesVector(b, count)
+	for i := 0; i < count; i++ {
+		b.PrependUOffsetT(offsets[i])
+	}
+	voffset := b.EndVector(count)
+
+	task.ValueListStart(b)
+	task.ValueListAddValues(b, voffset)
+	b.Finish(task.ValueListEnd(b))
+	buf := b.FinishedBytes()
+	return task.GetRootAsValueList(buf, 0)
 }
 
 // createTaskQuery generates the query buffer.
@@ -803,6 +820,11 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, taskQuery []byte, rch chan 
 	if sg.Params.GetCount == 1 {
 		x.Trace(ctx, "Zero uids. Only count requested")
 		rch <- nil
+		return
+	}
+
+	if err = sg.applyGeoQuery(ctx); err != nil {
+		rch <- err
 		return
 	}
 

@@ -50,7 +50,15 @@ func (sg *SubGraph) applyGeoQuery(ctx context.Context) error {
 	}
 
 	// Filter the values
-	sg.destUIDs = filterUIDs(uids, values, data)
+	sg.srcUIDs = filterUIDs(uids, values, data)
+	// Keep result and values consistent with srcUIDs
+
+	for i := 0; i < sg.srcUIDs.Size(); i++ {
+		uid := sg.srcUIDs.Get(i)
+		ulist := algo.NewUIDList([]uint64{uid})
+		sg.Result = append(sg.Result, ulist)
+	}
+	sg.Values = createNilValuesList(sg.srcUIDs.Size())
 	return nil
 }
 
