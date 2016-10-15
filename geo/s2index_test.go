@@ -134,7 +134,8 @@ func TestKeyGeneratorPoint(t *testing.T) {
 	}
 
 	var g types.Geo
-	g.UnmarshalBinary(data)
+	err = g.UnmarshalBinary(data)
+	require.NoError(t, err)
 
 	keys, err := IndexKeys(&g)
 	if err != nil {
@@ -159,7 +160,9 @@ func TestKeyGeneratorPolygon(t *testing.T) {
 	}
 
 	var g types.Geo
-	g.UnmarshalBinary(data)
+	err = g.UnmarshalBinary(data)
+	require.NoError(t, err)
+
 	keys, err := IndexKeys(&g)
 	if err != nil {
 		t.Error(err)

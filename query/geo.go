@@ -105,7 +105,7 @@ func fetchValues(ctx context.Context, attr string, uids *algo.UIDList) (*task.Va
 
 func filterUIDs(uids *algo.UIDList, values *task.ValueList, q *geo.QueryData) *algo.UIDList {
 	x.Assert(values.ValuesLength() == uids.Size())
-	rv := make([]uint64, 0)
+	var rv []uint64
 	for i := 0; i < values.ValuesLength(); i++ {
 		var tv task.Value
 		if ok := values.Values(&tv, i); !ok {

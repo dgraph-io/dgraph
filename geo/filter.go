@@ -24,22 +24,28 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
+// QueryType indicates the type of geo query.
 type QueryType byte
 
 const (
+	// QueryTypeWithin finds all points that are within the given geometry
 	QueryTypeWithin QueryType = iota
+	// QueryTypeContains finds all polygons that contain the given point
 	QueryTypeContains
+	// QueryTypeIntersects finds all objects that intersect the given geometry
 	QueryTypeIntersects
+	// QueryTypeNear finds all points that are within the given distance from the given point.
 	QueryTypeNear
 )
 
+// Filter describes the geo query.
 type Filter struct {
-	Type        QueryType
-	Data        []byte
-	MaxDistance float64
+	Type        QueryType // The type of the query
+	Data        []byte    // The geometry in binary form which is the parameter for the query
+	MaxDistance float64   // MaxDistance for near queries
 }
 
-// QueryKeys represents the list of keys to be used when querying
+// QueryData is internal data used by the geo query filter to additionally filter the geometries.
 type QueryData struct {
 	pt    *s2.Point // If not nil, the input data was a point
 	loop  *s2.Loop  // If not nil, the input data was a polygon

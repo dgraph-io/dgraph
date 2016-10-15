@@ -61,6 +61,7 @@ func indexCellsForCap(c s2.Cap) s2.CellUnion {
 }
 
 const (
+	// IndexAttr is the predicate used by geo indexes.
 	IndexAttr    = "_loc_"
 	parentPrefix = "p/"
 	coverPrefix  = "c/"
@@ -194,7 +195,7 @@ func getParentCells(cu s2.CellUnion, minLevel int) s2.CellUnion {
 	// convert the parents map to an array
 	cells := make([]s2.CellID, len(parents))
 	i := 0
-	for k, _ := range parents {
+	for k := range parents {
 		cells[i] = k
 		i++
 	}

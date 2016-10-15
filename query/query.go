@@ -384,9 +384,8 @@ func (sg *SubGraph) ToJSON(l *Latency) ([]byte, error) {
 		}
 		if len(r) == 1 {
 			return json.Marshal(m)
-		} else {
-			a = append(a, m)
 		}
+		a = append(a, m)
 	}
 	return json.Marshal(a)
 }
