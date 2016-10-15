@@ -22,14 +22,6 @@ import (
 
 // Added functionality missing in s2
 
-func ToTokens(cu s2.CellUnion) [][]byte {
-	toks := make([][]byte, len(cu))
-	for i, c := range cu {
-		toks[i] = []byte(c.ToToken())
-	}
-	return toks
-}
-
 // Make s2.Loop implement s2.Region
 type loopRegion struct {
 	*s2.Loop

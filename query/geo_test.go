@@ -18,6 +18,7 @@ package query
 
 import (
 	"context"
+	"encoding/json"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -105,7 +106,7 @@ func createTestData(t *testing.T, ps *store.Store) {
 	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
 }
 
-func runQuery(t *testing.T, sg *SubGraph) string {
+func runQuery(t *testing.T, sg *SubGraph) interface{} {
 	ctx := context.Background()
 	ch := make(chan error)
 	go ProcessGraph(ctx, sg, nil, ch)
@@ -115,7 +116,11 @@ func runQuery(t *testing.T, sg *SubGraph) string {
 	var l Latency
 	js, err := sg.ToJSON(&l)
 	require.NoError(t, err)
-	return string(js)
+
+	var v interface{}
+	err = json.Unmarshal(js, &v)
+	require.NoError(t, err)
+	return v
 }
 
 func TestWithinPoint(t *testing.T) {
@@ -136,8 +141,9 @@ func TestWithinPoint(t *testing.T) {
 		Children:  []*SubGraph{&SubGraph{Attr: "name"}},
 	}
 
-	js := runQuery(t, sg)
-	require.Equal(t, js, `{"name":"Googleplex"}`)
+	mp := runQuery(t, sg)
+	expected := map[string]interface{}{"name": "Googleplex"}
+	require.Equal(t, expected, mp)
 }
 
 func TestWithinPolygon(t *testing.T) {
@@ -160,9 +166,10 @@ func TestWithinPolygon(t *testing.T) {
 		Children:  []*SubGraph{&SubGraph{Attr: "name"}},
 	}
 
-	js := runQuery(t, sg)
-	require.Equal(t, js,
-		`[{"name":"Googleplex"},{"name":"Shoreline Amphitheater"}]`)
+	mp := runQuery(t, sg)
+	expected := []interface{}{map[string]interface{}{"name": "Googleplex"},
+		map[string]interface{}{"name": "Shoreline Amphitheater"}}
+	EqualArrays(t, expected, mp)
 }
 
 func TestContainsPoint(t *testing.T) {
@@ -183,9 +190,10 @@ func TestContainsPoint(t *testing.T) {
 		Children:  []*SubGraph{&SubGraph{Attr: "name"}},
 	}
 
-	js := runQuery(t, sg)
-	require.Equal(t, js,
-		`[{"name":"SF Bay area"},{"name":"Mountain View"}]`)
+	mp := runQuery(t, sg)
+	expected := []interface{}{map[string]interface{}{"name": "SF Bay area"},
+		map[string]interface{}{"name": "Mountain View"}}
+	EqualArrays(t, expected, mp)
 }
 
 func TestNearPoint(t *testing.T) {
@@ -206,7 +214,45 @@ func TestNearPoint(t *testing.T) {
 		Children:  []*SubGraph{&SubGraph{Attr: "name"}},
 	}
 
-	js := runQuery(t, sg)
-	require.Equal(t, js,
-		`[{"name":"Googleplex"},{"name":"Shoreline Amphitheater"}]`)
+	mp := runQuery(t, sg)
+	expected := []interface{}{map[string]interface{}{"name": "Googleplex"},
+		map[string]interface{}{"name": "Shoreline Amphitheater"}}
+	EqualArrays(t, expected, mp)
+}
+
+func TestIntersectsPolygon(t *testing.T) {
+	dir, ps := createTestStore(t)
+	defer os.RemoveAll(dir)
+	defer ps.Close()
+
+	createTestData(t, ps)
+
+	p := geom.NewPolygon(geom.XY).MustSetCoords([][]geom.Coord{
+		{{-122.06, 37.37}, {-122.1, 37.36}, {-122.12, 37.4}, {-122.11, 37.43}, {-122.04, 37.43}, {-122.06, 37.37}},
+	})
+	g := types.Geo{p}
+	data, err := g.MarshalBinary()
+	require.NoError(t, err)
+
+	sg := &SubGraph{
+		Attr:      "geometry",
+		GeoFilter: &geo.Filter{Data: data, Type: geo.QueryTypeIntersects},
+		Children:  []*SubGraph{&SubGraph{Attr: "name"}},
+	}
+
+	mp := runQuery(t, sg)
+	expected := []interface{}{map[string]interface{}{"name": "Googleplex"},
+		map[string]interface{}{"name": "Shoreline Amphitheater"},
+		map[string]interface{}{"name": "SF Bay area"},
+		map[string]interface{}{"name": "Mountain View"}}
+	EqualArrays(t, expected, mp)
+}
+
+// Tests whether 2 array have the same contents
+func EqualArrays(t *testing.T, a1 []interface{}, a2 interface{}) {
+	// Test that the lengths are the same and every element in a1 is in a2
+	require.Len(t, a2, len(a1))
+	for _, v := range a1 {
+		require.Contains(t, a2, v)
+	}
 }

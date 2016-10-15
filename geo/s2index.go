@@ -17,6 +17,7 @@
 package geo
 
 import (
+	"bytes"
 	"log"
 
 	"github.com/golang/geo/s2"
@@ -29,13 +30,21 @@ import (
 // IndexKeys returns the keys to be used in a geospatial index for the given geometry. If the
 // geometry is not supported it returns an error.
 func IndexKeys(g *types.Geo) ([][]byte, error) {
-	cu, err := indexCells(*g)
+	parents, cover, err := indexCells(*g)
 	if err != nil {
 		return nil, err
 	}
-	keys := make([][]byte, len(cu))
-	for i, c := range cu {
-		keys[i] = types.IndexKey(IndexAttr, []byte(c.ToToken()))
+	keys := make([][]byte, len(parents)+len(cover))
+	// We index parents and cover using different prefix, that makes it more performant at query
+	// time to only look up parents/cover depending on what kind of query it is.
+	ptoks := toTokens(parents, parentPrefix)
+	ctoks := toTokens(cover, coverPrefix)
+	for i, v := range ptoks {
+		keys[i] = types.IndexKey(IndexAttr, v)
+	}
+	l := len(ptoks)
+	for i, v := range ctoks {
+		keys[i+l] = types.IndexKey(IndexAttr, v)
 	}
 	return keys, nil
 }
@@ -51,23 +60,35 @@ func indexCellsForCap(c s2.Cap) s2.CellUnion {
 	return rc.Covering(c)
 }
 
-const IndexAttr = "_loc_"
+const (
+	IndexAttr    = "_loc_"
+	parentPrefix = "p/"
+	coverPrefix  = "c/"
+)
 
-func indexCells(g types.Geo) (s2.CellUnion, error) {
+// IndexCells returns two cellunions. The first is a list of parents, which are all the cells upto
+// the min level that contain this geometry. The second is the cover, which are the smallest
+// possible cells required to cover the region. This makes it easier at query time to query only the
+// parents or only the cover or both depending on whether it is a within, contains or intersects
+// query.
+func indexCells(g types.Geo) (parents s2.CellUnion, cover s2.CellUnion, err error) {
 	if g.Stride() != 2 {
-		return nil, x.Errorf("Covering only available for 2D co-ordinates.")
+		return nil, nil, x.Errorf("Covering only available for 2D co-ordinates.")
 	}
 	switch v := g.T.(type) {
 	case *geom.Point:
-		return indexCellsForPoint(v, MinCellLevel, MaxCellLevel), nil
+		p, c := indexCellsForPoint(v, MinCellLevel, MaxCellLevel)
+		return p, c, nil
 	case *geom.Polygon:
 		l, err := loopFromPolygon(v)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-		return coverLoop(l, MinCellLevel, MaxCellLevel, MaxCells), nil
+		cover := coverLoop(l, MinCellLevel, MaxCellLevel, MaxCells)
+		parents := getParentCells(cover, MinCellLevel)
+		return parents, cover, nil
 	default:
-		return nil, x.Errorf("Cannot index geometry of type %T", v)
+		return nil, nil, x.Errorf("Cannot index geometry of type %T", v)
 	}
 }
 
@@ -150,7 +171,7 @@ func loopFromRing(r *geom.LinearRing, reverse bool) *s2.Loop {
 }
 
 // create cells for point from the minLevel to maxLevel both inclusive.
-func indexCellsForPoint(p *geom.Point, minLevel, maxLevel int) s2.CellUnion {
+func indexCellsForPoint(p *geom.Point, minLevel, maxLevel int) (s2.CellUnion, s2.CellUnion) {
 	if maxLevel < minLevel {
 		log.Fatalf("Maxlevel should be greater than minLevel")
 	}
@@ -159,6 +180,23 @@ func indexCellsForPoint(p *geom.Point, minLevel, maxLevel int) s2.CellUnion {
 	cells := make([]s2.CellID, maxLevel-minLevel+1)
 	for l := minLevel; l <= maxLevel; l++ {
 		cells[l-minLevel] = c.Parent(l)
+	}
+	return cells, []s2.CellID{c.Parent(maxLevel)}
+}
+
+func getParentCells(cu s2.CellUnion, minLevel int) s2.CellUnion {
+	parents := make(map[s2.CellID]bool)
+	for _, c := range cu {
+		for l := c.Level(); l >= minLevel; l-- {
+			parents[c.Parent(l)] = true
+		}
+	}
+	// convert the parents map to an array
+	cells := make([]s2.CellID, len(parents))
+	i := 0
+	for k, _ := range parents {
+		cells[i] = k
+		i++
 	}
 	return cells
 }
@@ -171,4 +209,17 @@ func coverLoop(l *s2.Loop, minLevel int, maxLevel int, maxCells int) s2.CellUnio
 		MaxCells: maxCells,
 	}
 	return rc.Covering(loopRegion{l})
+}
+
+func toTokens(cu s2.CellUnion, prefix string) [][]byte {
+	toks := make([][]byte, len(cu))
+	for i, c := range cu {
+		var buf bytes.Buffer
+		_, err := buf.WriteString(prefix)
+		x.Check(err)
+		_, err = buf.WriteString(c.ToToken())
+		x.Check(err)
+		toks[i] = buf.Bytes()
+	}
+	return toks
 }

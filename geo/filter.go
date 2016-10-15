@@ -55,31 +55,63 @@ func QueryTokens(f *Filter) ([][]byte, *QueryData, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-
-	cu, err := indexCells(g)
-	if err != nil {
-		return nil, nil, err
-	}
+	var l *s2.Loop
+	var pt *s2.Point
 
 	switch v := g.T.(type) {
 	case *geom.Point:
 		p := pointFromPoint(v)
-		if f.Type == QueryTypeNear {
-			return nearQueryKeys(p, f.MaxDistance)
-		}
-		return ToTokens(cu), &QueryData{pt: &p, qtype: f.Type}, nil
+		pt = &p
 
 	case *geom.Polygon:
-		if f.Type == QueryTypeNear || f.Type == QueryTypeContains {
-			return nil, nil, x.Errorf("Cannot use a polygon in a near or contains query")
-		}
-		l, err := loopFromPolygon(v)
+		l, err = loopFromPolygon(v)
 		if err != nil {
 			return nil, nil, err
 		}
-		return ToTokens(cu), &QueryData{loop: l, qtype: f.Type}, nil
+
 	default:
 		return nil, nil, x.Errorf("Cannot query using a geometry of type %T", v)
+	}
+
+	x.Assertf(l != nil || pt != nil, "We should have a point or a loop.")
+
+	parents, cover, err := indexCells(g)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	switch f.Type {
+	case QueryTypeWithin:
+		// For a within query we only need to look at the objects whose parents match our cover.
+		// So we take our cover and prefix with the parentPrefix to look in the index.
+		keys := toTokens(cover, parentPrefix)
+		return keys, &QueryData{pt: pt, loop: l, qtype: f.Type}, nil
+
+	case QueryTypeContains:
+		if l != nil {
+			return nil, nil, x.Errorf("Cannot use a polygon in a contains query")
+		}
+		// For a contains query, we only need to look at the objects whose cover matches our
+		// parents. So we take our parents and prefix with the coverPrefix to look in the index.
+		return toTokens(parents, coverPrefix), &QueryData{pt: pt, qtype: f.Type}, nil
+
+	case QueryTypeNear:
+		if l != nil {
+			return nil, nil, x.Errorf("Cannot use a polygon in a near query")
+		}
+		return nearQueryKeys(*pt, f.MaxDistance)
+
+	case QueryTypeIntersects:
+		// An intersects query is essentially the union of contains and within. So we look at all
+		// the objects whose parents match our cover as well as all the objects whose cover matches
+		// our parents.
+		keys1 := toTokens(cover, parentPrefix)
+		keys2 := toTokens(parents, coverPrefix)
+		keys := append(keys1, keys2...)
+		return keys, &QueryData{pt: pt, loop: l, qtype: f.Type}, nil
+
+	default:
+		return nil, nil, x.Errorf("Unknown query type")
 	}
 }
 
@@ -91,7 +123,9 @@ func nearQueryKeys(pt s2.Point, d float64) ([][]byte, *QueryData, error) {
 	a := EarthAngle(d)
 	c := s2.CapFromCenterAngle(pt, a)
 	cu := indexCellsForCap(c)
-	return ToTokens(cu), &QueryData{cap: &c, qtype: QueryTypeNear}, nil
+	// A near query is similar to within, where we are looking for points within the cap. So we need
+	// all objects whose parents match the cover of the cap.
+	return toTokens(cu, parentPrefix), &QueryData{cap: &c, qtype: QueryTypeNear}, nil
 }
 
 // MatchesFilter applies the query filter to a geo value
