@@ -4,14 +4,14 @@
 #   docker build -t dgraph/release .
 #   docker run -it dgraph/release bash
 
-# You might see warnings such as the following, but dgraph will run fine.
-# Your stdout won't be flooded with these warnings.
-#   dgraph: /usr/lib/libstdc++.so.6: no version information available (required by dgraph)
-
 # We need libc (not the lightweight version). Otherwise, dgraph cannot run.
 FROM frolvlad/alpine-glibc
 
-RUN apk add --no-cache bash wget curl g++
+# We need libstdc++ as the embedded binaries are dynamically linked with libstdc++.
+# You might see warnings such as the following, but dgraph will run fine.
+# Your stdout won't be flooded with these warnings.
+#   dgraph: /usr/lib/libstdc++.so.6: no version information available (required by dgraph)
+RUN apk add --no-cache bash wget curl libstdc++
 
 # Get embedded binaries from Dgraph.
 RUN curl https://get.dgraph.io | bash
