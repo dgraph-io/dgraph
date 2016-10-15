@@ -40,7 +40,11 @@ func TestQueryTokensPolygon(t *testing.T) {
 		toks, qd, err := QueryTokens(f)
 		require.NoError(t, err)
 
-		require.Equal(t, len(toks), 18, "Expected 18 keys")
+		if qt == QueryTypeWithin {
+			require.Len(t, toks, 18)
+		} else {
+			require.Len(t, toks, 65)
+		}
 		require.NotNil(t, qd)
 		require.Equal(t, qd.qtype, f.Type)
 		require.NotNil(t, qd.loop)
@@ -75,7 +79,13 @@ func TestQueryTokensPoint(t *testing.T) {
 		toks, qd, err := QueryTokens(f)
 		require.NoError(t, err)
 
-		require.Equal(t, len(toks), MaxCellLevel-MinCellLevel+1)
+		if qt == QueryTypeWithin {
+			require.Len(t, toks, 1)
+		} else if qt == QueryTypeContains {
+			require.Len(t, toks, MaxCellLevel-MinCellLevel+1)
+		} else {
+			require.Len(t, toks, MaxCellLevel-MinCellLevel+2)
+		}
 		require.NotNil(t, qd)
 		require.Equal(t, qd.qtype, f.Type)
 		require.Nil(t, qd.loop)
