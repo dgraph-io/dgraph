@@ -6,6 +6,7 @@
 
 # We need libc (not the lightweight version). Otherwise, dgraph cannot run.
 FROM frolvlad/alpine-glibc
+MAINTAINER Dgraph Labs <contact@dgraph.io>
 
 # We need libstdc++ as the embedded binaries are dynamically linked with libstdc++.
 # You might see warnings such as the following, but dgraph will run fine.
@@ -20,7 +21,7 @@ RUN curl https://get.dgraph.io | bash
 # to host machine for persistence.
 RUN mkdir /dgraph && mkdir /data
 
-# Some sample sequence of commands:
+# Sequence of commands to bulkload some sample data:
 #   cd /data
 #   wget https://github.com/dgraph-io/benchmarks/raw/master/data/rdf-films.gz
 #   wget https://github.com/dgraph-io/benchmarks/raw/master/data/names.gz
