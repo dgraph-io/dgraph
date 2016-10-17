@@ -550,10 +550,12 @@ func (n *node) InitAndStartNode(wal *raftwal.Wal, peer string) {
 		n.raft = raft.RestartNode(n.cfg)
 
 	} else {
-		peers := []raft.Peer{{ID: n.id}}
-		n.raft = raft.StartNode(n.cfg, peers)
 		if len(peer) > 0 {
+			n.raft = raft.StartNode(n.cfg, nil)
 			n.joinPeers(peer, ws)
+		} else {
+			peers := []raft.Peer{{ID: n.id}}
+			n.raft = raft.StartNode(n.cfg, peers)
 		}
 	}
 	go n.Run()
