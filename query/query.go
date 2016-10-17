@@ -304,14 +304,17 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 		if sg.Params.GetUid || sg.Params.isDebug {
 			m["_uid_"] = fmt.Sprintf("%#x", sg.srcUIDs.Get(i))
 		}
-		if sg.Params.AttrType == nil {
+
+		globalType := schema.TypeOf(sg.Attr)
+
+		if globalType == nil {
 			// No type defined for attr in type system/schema, hence return the original value
 			if sg.Params.Alias != "" {
 				m[sg.Params.Alias] = val
 			} else {
 				m[sg.Attr] = val
 			}
-		} else {
+		} else if sg.Params.AttrType != nil {
 			// type assertion for scalar type values
 			if !sg.Params.AttrType.IsScalar() {
 				return result, x.Errorf("Unknown Scalar:%v. Leaf predicate:'%v' must be"+
@@ -324,6 +327,24 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 				// We ignore schema conversion errors and not include the values in the result
 				m["_inv_"] = true
 				result[sg.srcUIDs.Get(i)] = m
+				continue
+			}
+			if sg.Params.Alias != "" {
+				m[sg.Params.Alias] = lval
+			} else {
+				m[sg.Attr] = lval
+			}
+		} else if globalType != nil {
+			// type assertion for optional scalars which aren't part of objects.
+			if !globalType.IsScalar() {
+				return result, x.Errorf("Unknown Scalar:%v. Leaf predicate:'%v' must be"+
+					" one of the scalar types defined in the schema.", sg.Params.AttrType, sg.Attr)
+			}
+			gt := globalType.(types.Scalar)
+			// Convert to schema type.
+			lval, err := gt.Convert(val)
+			if err != nil {
+				// We ignore schema conversion errors and not include the values in the result
 				continue
 			}
 			if sg.Params.Alias != "" {
@@ -432,7 +453,6 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 				Properties: []*graph.Property{p},
 			}
 			children = append(children, uc)
-
 		} else if ul.Size() > 0 || len(pc.Children) > 0 {
 			// We create as many predicate entity children as the length of uids for
 			// this predicate.
@@ -493,8 +513,27 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 				p := createProperty(pc.Attr, sv)
 				properties = append(properties, p)
 			} else {
-				p := createProperty(pc.Attr, v)
-				properties = append(properties, p)
+				// Try to coerce types if this is an optional scalar outside an object
+				// definition.
+				globalType := schema.TypeOf(pc.Attr)
+				if globalType != nil && !globalType.IsScalar() {
+					return x.Errorf("Leaf predicate:'%v' must be a scalar.", pc.Attr)
+				}
+
+				if globalType == nil {
+					p := createProperty(pc.Attr, v)
+					properties = append(properties, p)
+				} else {
+					gt := globalType.(types.Scalar)
+					// Convert to schema type.
+					sv, err := gt.Convert(v)
+					if bytes.Equal(valBytes, nil) || err != nil {
+						// skip values that don't convert.
+						continue
+					}
+					p := createProperty(pc.Attr, sv)
+					properties = append(properties, p)
+				}
 			}
 		}
 	}
