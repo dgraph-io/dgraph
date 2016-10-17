@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/gob"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"strings"
@@ -207,7 +208,7 @@ func populateGraph(t *testing.T) (string, *store.Store) {
 	edge.Entity = 1
 	addEdge(t, edge, getOrCreate(posting.Key(1, "age"), ps))
 
-	edge.Value = []byte("98.99%")
+	edge.Value = []byte("98.99")
 	edge.Attribute = "survival_rate"
 	edge.Entity = 1
 	addEdge(t, edge, getOrCreate(posting.Key(1, "survival_rate"), ps))
@@ -281,74 +282,6 @@ func processToJson(t *testing.T, query string) map[string]interface{} {
 		t.Error(err)
 	}
 	return mp
-}
-
-func TestSchema1(t *testing.T) {
-	err := schema.Parse("test_schema")
-
-	if err != nil {
-		t.Error(err)
-	}
-
-	dir, _ := populateGraph(t)
-	defer os.RemoveAll(dir)
-
-	// Alright. Now we have everything set up. Let's create the query.
-	query := `
-		{
-			person(_uid_:0x01) {
-				alive
-				survival_rate
-				friend
-			}
-		}
-	`
-	mp := processToJson(t, query)
-	resp := mp["person"]
-	name := resp.([]interface{})[0].(map[string]interface{})["name"].(string)
-	if name != "Michonne" {
-		t.Errorf("Expected name Michonne. Got %s", name)
-	}
-	if alive, ok := resp.([]interface{})[0].(map[string]interface{})["alive"]; !ok || !alive.(bool) {
-		t.Errorf("Expected alive true. Got %v ", alive)
-	}
-
-	if age, ok := resp.([]interface{})[0].(map[string]interface{})["age"]; !ok || (age.(float64) != 38) {
-		t.Errorf("Expected age 38. Got %v", age)
-	}
-
-	if _, ok := resp.([]interface{})[0].(map[string]interface{})["survival_rate"]; !ok {
-		t.Error("Expected survival rate as its not part of person")
-	}
-
-	friends := resp.([]interface{})[0].(map[string]interface{})["friend"].([]interface{})
-	co := 0
-	res := 0
-	for _, it := range friends {
-		if len(it.(map[string]interface{})) == 0 {
-			co++
-		} else {
-			res = len(it.(map[string]interface{}))
-		}
-	}
-	if co != 4 {
-		t.Error("Invalid result")
-	}
-	if res != 3 {
-		t.Error("Invalid result")
-	}
-
-	actorMap := mp["person"].([]interface{})[0].(map[string]interface{})
-	if _, success := actorMap["name"].(string); !success {
-		t.Errorf("Expected json type string for: %v\n", actorMap["name"])
-	}
-	// json parses ints as floats
-	if _, success := actorMap["age"].(float64); !success {
-		t.Errorf("Expected json type int for: %v\n", actorMap["age"])
-	}
-	if _, success := actorMap["survival_rate"].(float64); success {
-		t.Errorf("Survival rate not part of person, so it doesnt have to be coerced: %v\n", actorMap["survival_rate"])
-	}
 }
 
 func TestGetUID(t *testing.T) {
@@ -1092,6 +1025,7 @@ func TestToPB(t *testing.T) {
 		t.Error(err)
 	}
 
+	fmt.Println(gr)
 	if gr.Attribute != "debug" {
 		t.Errorf("Expected attribute me, Got: %v", gr.Attribute)
 	}
@@ -1105,7 +1039,7 @@ func TestToPB(t *testing.T) {
 		t.Errorf("Expected values map to contain 3 properties, Got: %v",
 			len(gr.Properties))
 	}
-	if string(getProperty(gr.Properties, "name").GetBytesVal()) != "Michonne" {
+	if getProperty(gr.Properties, "name").GetStrVal() != "Michonne" {
 		t.Errorf("Expected property name to have value Michonne, Got: %v",
 			getProperty(gr.Properties, "name").GetBytesVal())
 	}
@@ -1209,7 +1143,7 @@ func TestSchema(t *testing.T) {
 		t.Errorf("Expected values map to contain 3 properties, Got: %v",
 			len(gr.Properties))
 	}
-	if string(getProperty(gr.Properties, "name").GetBytesVal()) != "Michonne" {
+	if getProperty(gr.Properties, "name").GetStrVal() != "Michonne" {
 		t.Errorf("Expected property name to have value Michonne, Got: %v",
 			getProperty(gr.Properties, "name").GetBytesVal())
 	}
@@ -1300,7 +1234,7 @@ func TestToPBFilter(t *testing.T) {
 properties: <
   prop: "name"
   value: <
-    bytes_val: "Michonne"
+    str_val: "Michonne"
   >
 >
 properties: <
@@ -1314,7 +1248,7 @@ children: <
   properties: <
     prop: "name"
     value: <
-      bytes_val: "Andrea"
+      str_val: "Andrea"
     >
   >
 >
@@ -1374,7 +1308,7 @@ func TestToPBFilterOr(t *testing.T) {
 properties: <
   prop: "name"
   value: <
-    bytes_val: "Michonne"
+    str_val: "Michonne"
   >
 >
 properties: <
@@ -1388,7 +1322,7 @@ children: <
   properties: <
     prop: "name"
     value: <
-      bytes_val: "Glenn Rhee"
+      str_val: "Glenn Rhee"
     >
   >
 >
@@ -1397,7 +1331,7 @@ children: <
   properties: <
     prop: "name"
     value: <
-      bytes_val: "Andrea"
+      str_val: "Andrea"
     >
   >
 >
@@ -1457,7 +1391,7 @@ func TestToPBFilterAnd(t *testing.T) {
 properties: <
   prop: "name"
   value: <
-    bytes_val: "Michonne"
+    str_val: "Michonne"
   >
 >
 properties: <
@@ -1467,6 +1401,7 @@ properties: <
   >
 >
 `
+
 	pbText := proto.MarshalTextString(pb)
 	if pbText != expectedPb {
 		t.Errorf("Output wrong: %v", pbText)
@@ -1651,4 +1586,72 @@ func BenchmarkToPBUnmarshal_1000_Director(b *testing.B) {
 func TestMain(m *testing.M) {
 	x.Init()
 	os.Exit(m.Run())
+}
+
+func TestSchema1(t *testing.T) {
+	err := schema.Parse("test_schema")
+
+	if err != nil {
+		t.Error(err)
+	}
+
+	dir, _ := populateGraph(t)
+	defer os.RemoveAll(dir)
+
+	// Alright. Now we have everything set up. Let's create the query.
+	query := `
+		{
+			person(_uid_:0x01) {
+				alive
+				survival_rate
+				friend
+			}
+		}
+	`
+	mp := processToJson(t, query)
+	resp := mp["person"]
+	name := resp.([]interface{})[0].(map[string]interface{})["name"].(string)
+	if name != "Michonne" {
+		t.Errorf("Expected name Michonne. Got %s", name)
+	}
+	if alive, ok := resp.([]interface{})[0].(map[string]interface{})["alive"]; !ok || !alive.(bool) {
+		t.Errorf("Expected alive true. Got %v ", alive)
+	}
+
+	if age, ok := resp.([]interface{})[0].(map[string]interface{})["age"]; !ok || (age.(float64) != 38) {
+		t.Errorf("Expected age 38. Got %v", age)
+	}
+
+	if _, ok := resp.([]interface{})[0].(map[string]interface{})["survival_rate"]; !ok {
+		t.Error("Expected survival rate as its not part of person")
+	}
+
+	friends := resp.([]interface{})[0].(map[string]interface{})["friend"].([]interface{})
+	co := 0
+	res := 0
+	for _, it := range friends {
+		if len(it.(map[string]interface{})) == 0 {
+			co++
+		} else {
+			res = len(it.(map[string]interface{}))
+		}
+	}
+	if co != 4 {
+		t.Error("Invalid result")
+	}
+	if res != 3 {
+		t.Error("Invalid result")
+	}
+
+	actorMap := mp["person"].([]interface{})[0].(map[string]interface{})
+	if _, success := actorMap["name"].(string); !success {
+		t.Errorf("Expected json type string for: %v\n", actorMap["name"])
+	}
+	// json parses ints as floats
+	if _, success := actorMap["age"].(float64); !success {
+		t.Errorf("Expected json type int for: %v\n", actorMap["age"])
+	}
+	if _, success := actorMap["survival_rate"].(float64); !success {
+		t.Errorf("Survival rate has to be coereced as its mentioned in schema.")
+	}
 }

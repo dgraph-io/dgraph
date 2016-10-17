@@ -516,14 +516,14 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 				// Try to coerce types if this is an optional scalar outside an object
 				// definition.
 				globalType := schema.TypeOf(pc.Attr)
-				if globalType != nil && !globalType.IsScalar() {
-					return x.Errorf("Leaf predicate:'%v' must be a scalar.", pc.Attr)
-				}
 
 				if globalType == nil {
 					p := createProperty(pc.Attr, v)
 					properties = append(properties, p)
 				} else {
+					if !globalType.IsScalar() {
+						return x.Errorf("Leaf predicate:'%v' must be a scalar.", pc.Attr)
+					}
 					gt := globalType.(types.Scalar)
 					// Convert to schema type.
 					sv, err := gt.Convert(v)
