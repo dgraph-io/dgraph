@@ -170,7 +170,13 @@ func (n *node) send(m raftpb.Message) {
 	x.Assertf(n.id != m.To, "Seding message to itself")
 	data, err := m.Marshal()
 	x.Check(err)
-	n.messages <- sendmsg{to: m.To, data: data}
+	fmt.Printf("\t\tSENDING: %v %v-->%v\n", m.Type, m.From, m.To)
+	select {
+	case n.messages <- sendmsg{to: m.To, data: data}:
+		// pass
+	default:
+		log.Fatalf("Unable to push messages to channel in send")
+	}
 }
 
 func (n *node) doSendMessage(to uint64, data []byte) {
@@ -335,11 +341,12 @@ func (n *node) Run() {
 	for {
 		select {
 		case t := <-time.Tick(time.Second):
-			fmt.Printf("[%v]              TICK %v\n", n.gid, t)
+			// fmt.Printf("[%v]              TICK %v\n", n.gid, t)
+			_ = t
 			n.raft.Tick()
 
 		case rd := <-n.raft.Ready():
-			fmt.Printf("[%v]              READY START\n", n.gid)
+			// fmt.Printf("[%v]              READY START\n", n.gid)
 			x.Check(n.wal.Store(n.gid, rd.Snapshot, rd.HardState, rd.Entries))
 			n.saveToStorage(rd.Snapshot, rd.HardState, rd.Entries)
 			for _, msg := range rd.Messages {
@@ -357,7 +364,7 @@ func (n *node) Run() {
 			}
 
 			n.raft.Advance()
-			fmt.Printf("[%v]              READY DONE\n", n.gid)
+			// fmt.Printf("[%v]              READY DONE\n", n.gid)
 
 		case <-n.done:
 			return
@@ -632,14 +639,14 @@ func (w *grpcWorker) RaftMessage(ctx context.Context, query *Payload) (*Payload,
 		if err := msg.Unmarshal(query.Data[idx : idx+len]); err != nil {
 			x.Check(err)
 		}
-		fmt.Printf("Got message: %+v\n", msg)
+		fmt.Printf("RECEIVED: %v %v-->%v\n", msg.Type, msg.From, msg.To)
 		if err := w.applyMessage(ctx, msg); err != nil {
 			return &Payload{}, err
 		}
 		idx += len
 		count++
 	}
-	fmt.Printf("Got %d messages\n", count)
+	// fmt.Printf("Got %d messages\n", count)
 	return &Payload{}, nil
 }
 
