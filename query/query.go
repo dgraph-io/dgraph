@@ -776,14 +776,7 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, taskQuery []byte, rch chan 
 		r := task.GetRootAsResult(resultBuf, 0)
 
 		// Extract UIDLists from task.Result.
-		sg.Result = make([]*algo.UIDList, r.UidmatrixLength())
-		for i := 0; i < r.UidmatrixLength(); i++ {
-			tl := new(task.UidList)
-			x.Assert(r.Uidmatrix(tl, i))
-			ul := new(algo.UIDList)
-			ul.FromTask(tl)
-			sg.Result[i] = ul
-		}
+		sg.Result = algo.FromTaskResult(r)
 
 		// Extract values from task.Result.
 		sg.Values = r.Values(nil)
