@@ -30,4 +30,4 @@ RUN mkdir /dgraph && mkdir /data
 #   time dgraphloader   -rdfgzips /data/rdf-films.gz -instanceIdx 0 -numInstances 1 -uids u -postings p
 
 EXPOSE 8080
-ENTRYPOINT ["dgraph"]
+CMD ["dgraph"]
