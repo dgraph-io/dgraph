@@ -304,34 +304,46 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 		if sg.Params.GetUid || sg.Params.isDebug {
 			m["_uid_"] = fmt.Sprintf("%#x", sg.srcUIDs.Get(i))
 		}
-		if sg.Params.AttrType == nil {
-			// No type defined for attr in type system/schema, hence return the original value
-			if sg.Params.Alias != "" {
-				m[sg.Params.Alias] = val
-			} else {
-				m[sg.Attr] = val
-			}
-		} else {
+
+		globalType := schema.TypeOf(sg.Attr)
+		schemaType := sg.Params.AttrType
+		lval := val
+
+		if schemaType != nil {
 			// type assertion for scalar type values
-			if !sg.Params.AttrType.IsScalar() {
+			if !schemaType.IsScalar() {
 				return result, x.Errorf("Unknown Scalar:%v. Leaf predicate:'%v' must be"+
 					" one of the scalar types defined in the schema.", sg.Params.AttrType, sg.Attr)
 			}
-			schemaType := sg.Params.AttrType.(types.Scalar)
 			// Convert to schema type.
-			lval, err := schemaType.Convert(val)
+			st := schemaType.(types.Scalar)
+			lval, err = st.Convert(val)
 			if err != nil {
 				// We ignore schema conversion errors and not include the values in the result
 				m["_inv_"] = true
 				result[sg.srcUIDs.Get(i)] = m
 				continue
 			}
-			if sg.Params.Alias != "" {
-				m[sg.Params.Alias] = lval
-			} else {
-				m[sg.Attr] = lval
+		} else if globalType != nil {
+			// type assertion for optional scalars which aren't part of objects.
+			if !globalType.IsScalar() {
+				return result, x.Errorf("Unknown Scalar:%v. Leaf predicate:'%v' must be"+
+					" one of the scalar types defined in the schema.", sg.Params.AttrType, sg.Attr)
+			}
+			gt := globalType.(types.Scalar)
+			lval, err = gt.Convert(val)
+			if err != nil {
+				// We ignore schema conversion errors and not include the values in the result
+				continue
 			}
 		}
+
+		if sg.Params.Alias != "" {
+			m[sg.Params.Alias] = lval
+		} else {
+			m[sg.Attr] = lval
+		}
+
 		result[sg.srcUIDs.Get(i)] = m
 	}
 	return result, nil
@@ -432,7 +444,6 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 				Properties: []*graph.Property{p},
 			}
 			children = append(children, uc)
-
 		} else if ul.Size() > 0 || len(pc.Children) > 0 {
 			// We create as many predicate entity children as the length of uids for
 			// this predicate.
@@ -476,24 +487,38 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 				// We don't want to add _uid_ to properties map.
 			} else if pc.Attr == "_uid_" {
 				continue
-			} else if pc.Params.AttrType != nil {
-				//do type checking on response values
-				// type assertion for scalar type values
-				if !pc.Params.AttrType.IsScalar() {
-					return x.Errorf("Unknown Scalar:%v. Leaf predicate:'%v' must be"+
-						" one of the scalar types defined in the schema.", pc.Params.AttrType, pc.Attr)
-				}
-				schemaType := pc.Params.AttrType.(types.Scalar)
-				// Convert to schema type.
-				sv, err := schemaType.Convert(v)
-				if bytes.Equal(valBytes, nil) || err != nil {
-					// skip values that don't convert.
-					return x.Errorf("_INV_")
+			} else {
+				globalType := schema.TypeOf(pc.Attr)
+				schemaType := pc.Params.AttrType
+				sv := v
+
+				if schemaType != nil {
+					//do type checking on response values
+					if !schemaType.IsScalar() {
+						return x.Errorf("Unknown Scalar:%v. Leaf predicate:'%v' must be"+
+							" one of the scalar types defined in the schema.", pc.Params.AttrType, pc.Attr)
+					}
+					st := schemaType.(types.Scalar)
+					// Convert to schema type.
+					sv, err = st.Convert(v)
+					if bytes.Equal(valBytes, nil) || err != nil {
+						// skip values that don't convert.
+						return x.Errorf("_INV_")
+					}
+				} else if globalType != nil {
+					// Try to coerce types if this is an optional scalar outside an object
+					// definition.
+					if !globalType.IsScalar() {
+						return x.Errorf("Leaf predicate:'%v' must be a scalar.", pc.Attr)
+					}
+					gt := globalType.(types.Scalar)
+					// Convert to schema type.
+					sv, err = gt.Convert(v)
+					if bytes.Equal(valBytes, nil) || err != nil {
+						continue
+					}
 				}
 				p := createProperty(pc.Attr, sv)
-				properties = append(properties, p)
-			} else {
-				p := createProperty(pc.Attr, v)
 				properties = append(properties, p)
 			}
 		}
