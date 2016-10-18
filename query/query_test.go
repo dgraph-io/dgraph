@@ -563,7 +563,7 @@ func TestToJSONFilterAllOf(t *testing.T) {
 	js, err := sg.ToJSON(&l)
 	require.NoError(t, err)
 	require.EqualValues(t,
-		`{"me":["gender":"female","name":"Michonne"}]}`,
+		`{"me":[{"gender":"female","name":"Michonne"}]}`,
 		string(js))
 }
 
