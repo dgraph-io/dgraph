@@ -3,3 +3,8 @@ scalar (
   age: int @index
   health: float @index
 )
+
+type person {
+  name: string
+  age: int 
+} 
