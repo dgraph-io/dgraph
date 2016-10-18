@@ -960,7 +960,10 @@ func (sg *SubGraph) applyFilter(ctx context.Context) error {
 func runFilter(ctx context.Context, destUIDs *algo.UIDList,
 	filter *gql.FilterTree) (*algo.UIDList, error) {
 	if len(filter.FuncName) > 0 { // Leaf node.
-		x.Assertf(filter.FuncName == "eq", "Only exact match is supported now")
+		filter.FuncName = strings.ToLower(filter.FuncName) // Not sure if needed.
+		isAnyOf := filter.FuncName == "anyof"
+		isAllOf := filter.FuncName == "allof"
+		x.Assertf(isAnyOf || isAllOf, "FuncName invalid: %s", filter.FuncName)
 		x.Assertf(len(filter.FuncArgs) == 2,
 			"Expect exactly two arguments: pred and predValue")
 
@@ -988,7 +991,10 @@ func runFilter(ctx context.Context, destUIDs *algo.UIDList,
 		}
 
 		x.Assert(len(sg.Result) == len(tokens))
-		return algo.MergeLists(sg.Result), nil
+		if isAnyOf {
+			return algo.MergeLists(sg.Result), nil
+		}
+		return algo.IntersectLists(sg.Result), nil
 	}
 
 	// For now, we only handle AND and OR.
