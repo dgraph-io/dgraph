@@ -38,6 +38,19 @@ func (u *UIDList) FromTask(data *task.UidList) {
 	u.list = data
 }
 
+// ParseTaskResult parses task.Result and extracts a []*UIDList.
+func FromTaskResult(r *task.Result) []*UIDList {
+	out := make([]*UIDList, r.UidmatrixLength())
+	for i := 0; i < r.UidmatrixLength(); i++ {
+		tl := new(task.UidList)
+		x.Assert(r.Uidmatrix(tl, i))
+		ul := new(UIDList)
+		ul.FromTask(tl)
+		out[i] = ul
+	}
+	return out
+}
+
 // Get returns the i-th element of UIDList.
 func (u *UIDList) Get(i int) uint64 {
 	if u.list != nil {
