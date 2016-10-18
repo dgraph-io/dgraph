@@ -38,6 +38,19 @@ func (u *UIDList) FromTask(data *task.UidList) {
 	u.list = data
 }
 
+// FromTaskResult parses task.Result and extracts a []*UIDList.
+func FromTaskResult(r *task.Result) []*UIDList {
+	out := make([]*UIDList, r.UidmatrixLength())
+	for i := 0; i < r.UidmatrixLength(); i++ {
+		tl := new(task.UidList)
+		x.Assert(r.Uidmatrix(tl, i))
+		ul := new(UIDList)
+		ul.FromTask(tl)
+		out[i] = ul
+	}
+	return out
+}
+
 // Get returns the i-th element of UIDList.
 func (u *UIDList) Get(i int) uint64 {
 	if u.list != nil {
@@ -276,4 +289,22 @@ func (u *UIDList) DebugString() string {
 		b.WriteString("] ")
 	}
 	return b.String()
+}
+
+// ToUintsForTest converts to uints for testing purpose only.
+func (u *UIDList) ToUintsForTest() []uint64 {
+	out := make([]uint64, 0, u.Size())
+	for i := 0; i < u.Size(); i++ {
+		out = append(out, u.Get(i))
+	}
+	return out
+}
+
+// ToUintsListForTest converts to list of uints for testing purpose only.
+func ToUintsListForTest(ul []*UIDList) [][]uint64 {
+	out := make([][]uint64, 0, len(ul))
+	for _, u := range ul {
+		out = append(out, u.ToUintsForTest())
+	}
+	return out
 }
