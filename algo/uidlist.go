@@ -1,8 +1,10 @@
 package algo
 
 import (
+	"bytes"
 	"container/heap"
 	"sort"
+	"strconv"
 
 	"github.com/google/flatbuffers/go"
 
@@ -263,4 +265,15 @@ func (u *UIDList) AddTo(b *flatbuffers.Builder) flatbuffers.UOffsetT {
 	task.UidListStart(b)
 	task.UidListAddUids(b, ulist)
 	return task.UidListEnd(b)
+}
+
+// DebugString returns a debug string for UIDList.
+func (u *UIDList) DebugString() string {
+	var b bytes.Buffer
+	for i := 0; i < u.Size(); i++ {
+		b.WriteRune('[')
+		b.WriteString(strconv.FormatUint(u.Get(i), 10))
+		b.WriteString("] ")
+	}
+	return b.String()
 }

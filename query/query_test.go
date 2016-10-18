@@ -184,7 +184,7 @@ func populateGraph(t *testing.T) (string, *store.Store) {
 	addEdge(t, edge, getOrCreate(posting.Key(1, "gender"), ps))
 
 	edge.Value, _ = types.Int32(15).MarshalBinary()
-	edge.ValueType = byte(types.Int32Type.ID())
+	edge.ValueType = byte(types.Int32ID)
 	edge.Attribute = "age"
 	edge.Entity = 1
 	addEdge(t, edge, getOrCreate(posting.Key(1, "age"), ps))
@@ -197,7 +197,7 @@ func populateGraph(t *testing.T) (string, *store.Store) {
 
 	edge.Value, _ = types.Bool(true).MarshalBinary()
 	edge.Attribute = "alive"
-	edge.ValueType = byte(types.BooleanType.ID())
+	edge.ValueType = byte(types.BoolID)
 	edge.Entity = 1
 	addEdge(t, edge, getOrCreate(posting.Key(1, "alive"), ps))
 	edge.ValueType = 0
@@ -221,7 +221,7 @@ func populateGraph(t *testing.T) (string, *store.Store) {
 	edge.Value = []byte("Rick Grimes")
 	edge.Attribute = "name"
 	edge.Entity = 23
-	edge.ValueType = byte(types.StringType.ID())
+	edge.ValueType = byte(types.StringID)
 	addEdge(t, edge, getOrCreate(posting.Key(23, "name"), ps))
 	edge.ValueType = 0
 
@@ -737,7 +737,7 @@ func TestToJSONFilterOr(t *testing.T) {
 			me(_uid_:0x01) {
 				name
 				gender
-				friend @filter(eq("name", "Andrea") || eq("name", "Glenn Rhee")) {
+				friend @filter(eq("name", "Andrea") || eq("name", "Rhee")) {
 					name
 				}
 			}
@@ -781,7 +781,7 @@ func TestToJSONFilterOrFirst(t *testing.T) {
 			me(_uid_:0x01) {
 				name
 				gender
-				friend(first:2) @filter(eq("name", "Andrea") || eq("name", "Glenn Rhee") || eq("name", "Daryl Dixon")) {
+				friend(first:2) @filter(eq("name", "Andrea") || eq("name", "Glenn Rhee") || eq("name", "Daryl")) {
 					name
 				}
 			}
@@ -1646,4 +1646,9 @@ func BenchmarkToPBUnmarshal_1000_Actor(b *testing.B) {
 }
 func BenchmarkToPBUnmarshal_1000_Director(b *testing.B) {
 	benchmarkToPBUnmarshal("benchmark/directors1000.bin", b)
+}
+
+func TestMain(m *testing.M) {
+	x.Init()
+	os.Exit(m.Run())
 }

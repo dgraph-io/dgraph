@@ -1,0 +1,5 @@
+scalar (
+  date:date @index
+  age: int @index
+  health: float @index
+)

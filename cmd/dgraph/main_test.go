@@ -17,13 +17,14 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"testing"
 	"time"
 
-	"context"
+	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/loader"
@@ -98,76 +99,39 @@ func closeAll(dir1, dir2 string) {
 	os.RemoveAll(dir1)
 }
 
+func childAttrs(sg *query.SubGraph) []string {
+	var out []string
+	for _, c := range sg.Children {
+		out = append(out, c.Attr)
+	}
+	return out
+}
+
 func TestQuery(t *testing.T) {
 	dir1, dir2, _, err := prepare()
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
 	defer closeAll(dir1, dir2)
 
 	// Parse GQL into internal query representation.
 	gq, _, err := gql.Parse(q0)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
+
 	ctx := context.Background()
 	g, err := query.ToSubGraph(ctx, gq)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
 
 	// Test internal query representation.
-	if len(g.Children) != 3 {
-		t.Errorf("Expected 3 children. Got: %v", len(g.Children))
-	}
-
-	{
-		child := g.Children[0]
-		if child.Attr != "follows" {
-			t.Errorf("Expected follows. Got: %q", child.Attr)
-		}
-		if len(child.Children) != 2 {
-			t.Errorf("Expected 2 child. Got: %v", len(child.Children))
-		}
-		gc := child.Children[0]
-		if gc.Attr != "_xid_" {
-			t.Errorf("Expected _xid_. Got: %q", gc.Attr)
-		}
-		gc = child.Children[1]
-		if gc.Attr != "status" {
-			t.Errorf("Expected status. Got: %q", gc.Attr)
-		}
-	}
-
-	{
-		child := g.Children[1]
-		if child.Attr != "_xid_" {
-			t.Errorf("Expected _xid_. Got: %q", child.Attr)
-		}
-	}
-
-	{
-		child := g.Children[2]
-		if child.Attr != "status" {
-			t.Errorf("Expected status. Got: %q", child.Attr)
-		}
-	}
+	require.EqualValues(t, childAttrs(g), []string{"follows", "_xid_", "status"})
+	require.EqualValues(t, childAttrs(g.Children[0]), []string{"_xid_", "status"})
 
 	ch := make(chan error)
 	go query.ProcessGraph(ctx, g, nil, ch)
-	if err := <-ch; err != nil {
-		t.Error(err)
-		return
-	}
+	err = <-ch
+	require.NoError(t, err)
+
 	var l query.Latency
 	js, err := g.ToJSON(&l)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
 	fmt.Println(string(js))
 }
 
@@ -184,53 +148,34 @@ var qm = `
 
 func TestAssignUid(t *testing.T) {
 	dir1, dir2, _, err := prepare()
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
 	defer closeAll(dir1, dir2)
 
 	// Parse GQL into internal query representation.
 	_, mu, err := gql.Parse(qm)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
+
 	ctx := context.Background()
 	allocIds, err := mutationHandler(ctx, mu)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
 
-	if len(allocIds) != 2 {
-		t.Errorf("Expected two UIDs to be allocated")
-	}
-	if _, ok := allocIds["x"]; !ok {
-		t.Error("Expected map to contain value for x")
-	}
-	if _, ok := allocIds["y"]; !ok {
-		t.Error("Expected map to contain value for y")
-	}
+	require.EqualValues(t, len(allocIds), 2, "Expected two UIDs to be allocated")
+	_, ok := allocIds["x"]
+	require.True(t, ok)
+	_, ok = allocIds["y"]
+	require.True(t, ok)
 }
 
 func TestConvertToEdges(t *testing.T) {
 	q1 := `_uid_:0x01 <type> _uid_:0x02 .
 	       _uid_:0x01 <character> _uid_:0x03 .`
-
-	var edges []x.DirectedEdge
-	var err error
 	nquads, err := convertToNQuad(context.Background(), q1)
-	if err != nil {
-		t.Errorf("Expected err to be nil. Got: %v", err)
-	}
+	require.NoError(t, err)
+
 	mr, err := convertToEdges(context.Background(), nquads)
-	if err != nil {
-		t.Errorf("Expected err to be nil. Got: %v", err)
-	}
-	if len(mr.edges) != 2 {
-		t.Errorf("Expected len of edges to be: %v. Got: %v", 2, len(edges))
-	}
+	require.NoError(t, err)
+
+	require.EqualValues(t, len(mr.edges), 2)
 }
 
 var q1 = `
@@ -291,4 +236,9 @@ func BenchmarkQuery(b *testing.B) {
 			return
 		}
 	}
+}
+
+func TestMain(m *testing.M) {
+	x.Init()
+	os.Exit(m.Run())
 }
