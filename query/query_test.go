@@ -497,7 +497,7 @@ func TestToJSON(t *testing.T) {
 	require.Contains(t, string(js), "Michonne")
 }
 
-func TestToJSONFilterAnyOf(t *testing.T) {
+func TestToJSONFilter(t *testing.T) {
 	dir, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
 	query := `
@@ -563,7 +563,7 @@ func TestToJSONFilterAllOf(t *testing.T) {
 	js, err := sg.ToJSON(&l)
 	require.NoError(t, err)
 	require.EqualValues(t,
-		`{"me":[{"gender":"female","name":"Michonne"}]}`,
+		`{"me":["gender":"female","name":"Michonne"}]}`,
 		string(js))
 }
 
@@ -609,7 +609,7 @@ func TestToJSONFilterOr(t *testing.T) {
 			me(_uid_:0x01) {
 				name
 				gender
-				friend @filter(anyof("name", "Andrea") || anyof("name", "Rhee")) {
+				friend @filter(anyof("name", "Andrea") || anyof("name", "Andrea Rhee")) {
 					name
 				}
 			}
@@ -643,7 +643,7 @@ func TestToJSONFilterOrFirst(t *testing.T) {
 			me(_uid_:0x01) {
 				name
 				gender
-				friend(first:2) @filter(anyof("name", "Andrea") || anyof("name", "Glenn Rhee") || anyof("name", "Daryl")) {
+				friend(first:2) @filter(anyof("name", "Andrea") || anyof("name", "Glenn SomethingElse") || anyof("name", "Daryl")) {
 					name
 				}
 			}
@@ -746,7 +746,7 @@ func TestToJSONFilterOrFirstOffset(t *testing.T) {
 			me(_uid_:0x01) {
 				name
 				gender
-				friend(offset:1, first:1) @filter(anyof("name", "Andrea") || anyof("name", "Glenn Rhee") || anyof("name", "Daryl Dixon")) {
+				friend(offset:1, first:1) @filter(anyof("name", "Andrea") || anyof("name", "SomethingElse Rhee") || anyof("name", "Daryl Dixon")) {
 					name
 				}
 			}
@@ -816,7 +816,7 @@ func TestToJSONFilterAnd(t *testing.T) {
 			me(_uid_:0x01) {
 				name
 				gender
-				friend @filter(anyof("name", "Andrea") && anyof("name", "Glenn Rhee")) {
+				friend @filter(anyof("name", "Andrea") && anyof("name", "SomethingElse Rhee")) {
 					name
 				}
 			}
@@ -1042,7 +1042,7 @@ func TestToPBFilterOr(t *testing.T) {
 			me(_uid_:0x01) {
 				name
 				gender
-				friend @filter(anyof("name", "Andrea") || anyof("name", "Glenn SomethingElse")) {
+				friend @filter(anyof("name", "Andrea") || anyof("name", "Glenn Rhee")) {
 					name
 				}
 			}
@@ -1110,7 +1110,7 @@ func TestToPBFilterAnd(t *testing.T) {
 			me(_uid_:0x01) {
 				name
 				gender
-				friend @filter(anyof("name", "Andrea") && anyof("name", "Glenn SomethingElse")) {
+				friend @filter(anyof("name", "Andrea") && anyof("name", "Glenn Rhee")) {
 					name
 				}
 			}
@@ -1149,6 +1149,86 @@ properties: <
 `
 	require.EqualValues(t, proto.MarshalTextString(pb), expectedPb)
 }
+
+//func TestProcessGraphOrdered(t *testing.T) {
+//	dir, _ := populateGraph(t)
+//	defer os.RemoveAll(dir)
+
+//	// Alright. Now we have everything set up. Let's create the query.
+//	query := `
+//		{
+//			me(_uid_: 0x01) {
+//				friend(orderBy: dob) {
+//					name
+//				}
+//				name
+//				gender
+//				alive
+//			}
+//		}
+//	`
+//	gq, _, err := gql.Parse(query)
+//	require.NoError(t, err)
+
+//	ctx := context.Background()
+//	sg, err := ToSubGraph(ctx, gq)
+//	require.NoError(t, err)
+
+//	ch := make(chan error)
+//	go ProcessGraph(ctx, sg, nil, ch)
+//	err = <-ch
+//	require.NoError(t, err)
+
+//	if len(sg.Children) != 4 {
+//		t.Errorf("Expected len 4. Got: %v", len(sg.Children))
+//	}
+//	child := sg.Children[0]
+//	if child.Attr != "friend" {
+//		t.Errorf("Expected attr friend. Got: %v", child.Attr)
+//	}
+//	if len(child.Result) == 0 {
+//		t.Errorf("Expected some.Result.")
+//		return
+//	}
+
+//	if len(sg.Result) != 1 {
+//		t.Errorf("Expected 1 matrix. Got: %v", len(sg.Result))
+//	}
+
+//	ul := child.Result[0]
+//	if ul.Size() != 5 {
+//		t.Errorf("Expected 5 friends. Got: %v", ul.Size())
+//	}
+//	if ul.Get(0) != 23 || ul.Get(1) != 24 || ul.Get(2) != 25 ||
+//		ul.Get(3) != 31 || ul.Get(4) != 101 {
+//		t.Errorf("Friend ids don't match")
+//	}
+//	if len(child.Children) != 1 || child.Children[0].Attr != "name" {
+//		t.Errorf("Expected attr name")
+//	}
+//	child = child.Children[0]
+
+//	values := child.Values
+//	if values.ValuesLength() != 5 {
+//		t.Errorf("Expected 5 names of 5 friends")
+//	}
+//	checkName(t, child, 0, "Rick Grimes")
+//	checkName(t, child, 1, "Glenn Rhee")
+//	checkName(t, child, 2, "Daryl Dixon")
+//	checkName(t, child, 3, "Andrea")
+//	{
+//		var tv task.Value
+//		if ok := values.Values(&tv, 4); !ok {
+//			t.Error("Unable to retrieve value")
+//		}
+//		if !bytes.Equal(tv.ValBytes(), []byte{}) {
+//			t.Error("Expected a null byte slice")
+//		}
+//	}
+
+//	checkSingleValue(t, sg.Children[1], "name", "Michonne")
+//	checkSingleValue(t, sg.Children[2], "gender", "female")
+//}
 
 func benchmarkToJson(file string, b *testing.B) {
 	b.ReportAllocs()
