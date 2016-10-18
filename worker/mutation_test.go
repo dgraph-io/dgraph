@@ -22,6 +22,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -30,16 +32,11 @@ func TestAddToMutationArray(t *testing.T) {
 	groupConfig = config{}
 	ParseGroupConfig("")
 	dir, err := ioutil.TempDir("", "storetest_")
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
 	defer os.RemoveAll(dir)
+
 	ps, err := store.NewStore(dir)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
 	SetState(ps)
 
 	mutationsMap := make(map[uint32]*x.Mutations)
@@ -53,13 +50,12 @@ func TestAddToMutationArray(t *testing.T) {
 
 	addToMutationMap(mutationsMap, edges, set)
 	mu := mutationsMap[0]
-	if mu == nil || mu.Set == nil {
-		t.Errorf("Expected mu.Set to not be nil")
-	}
+	require.NotNil(t, mu)
+	require.NotNil(t, mu.Set)
 
 	addToMutationMap(mutationsMap, edges, del)
 	mu = mutationsMap[0]
-	if mu == nil || mu.Del == nil {
-		t.Errorf("Expected mu.Del to not be nil")
-	}
+	require.NotNil(t, mu)
+	require.NotNil(t, mu.Del)
+
 }
