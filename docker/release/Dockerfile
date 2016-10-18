@@ -1,8 +1,8 @@
 # Dockerfile for Dgraph
 
 # For your convenience:
-#   docker build -t dgraph/release .
-#   docker run -it dgraph/release bash
+#   docker build -t dgraph/dgraph .
+#   docker run -it dgraph/dgraph bash
 
 # We need libc (not the lightweight version). Otherwise, dgraph cannot run.
 FROM frolvlad/alpine-glibc
