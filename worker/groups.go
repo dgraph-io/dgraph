@@ -49,11 +49,6 @@ func StartRaftNodes(wal *raftwal.Wal, raftId uint64, my, peer string) {
 	// Also create node for group zero, which would handle UID assignment.
 	node = groups().newNode(0, raftId, my)
 	go node.InitAndStartNode(wal, peer)
-
-	//for i := 0; i < 2; i++ {
-	//err := <-ch
-	//x.Check(err)
-	//}
 }
 
 func (g *groupi) Node(groupId uint32) *node {

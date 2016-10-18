@@ -159,7 +159,6 @@ func (n *node) ProposeAndWait(ctx context.Context, msg uint16, data []byte) erro
 	select {
 	case err = <-che:
 		x.TraceError(ctx, err)
-		fmt.Printf("DEBUG. Proposeandwait replied with: %v", err)
 		return err
 	case <-ctx.Done():
 		return ctx.Err()
@@ -294,18 +293,11 @@ func (n *node) process(e raftpb.Entry) error {
 func (n *node) saveToStorage(s raftpb.Snapshot, h raftpb.HardState,
 	es []raftpb.Entry) {
 	if !raft.IsEmptySnap(s) {
-		fmt.Printf("saveToStorage snapshot: %v\n", s.String())
 		le, err := n.store.LastIndex()
 		if err != nil {
 			log.Fatalf("While retrieving last index: %v\n", err)
 		}
-		te, err := n.store.Term(le)
-		if err != nil {
-			log.Fatalf("While retrieving term: %v\n", err)
-		}
-		fmt.Printf("[Node: %d] Term: %v for le: %v\n", n.id, te, le)
 		if s.Metadata.Index <= le {
-			fmt.Printf("%d node ignoring snapshot. Last index: %v\n", n.id, le)
 			return
 		}
 
@@ -323,7 +315,6 @@ func (n *node) saveToStorage(s raftpb.Snapshot, h raftpb.HardState,
 func (n *node) processSnapshot(s raftpb.Snapshot) {
 	lead := n.raft.Status().Lead
 	if lead == 0 {
-		fmt.Printf("Don't know who the leader is")
 		return
 	}
 	addr := n.peers.Get(lead)
@@ -331,22 +322,18 @@ func (n *node) processSnapshot(s raftpb.Snapshot) {
 	pool := pools().get(addr)
 	x.Assertf(pool != nil, "Leader: %d pool should not be nil", lead)
 
-	fmt.Printf("Getting snapshot from leader: %v", lead)
 	_, err := ws.PopulateShard(context.TODO(), pool, 0)
 	x.Checkf(err, "processSnapshot")
-	fmt.Printf("DONE with snapshot")
 }
 
 func (n *node) Run() {
 	for {
 		select {
 		case t := <-time.Tick(time.Second):
-			// fmt.Printf("[%v]              TICK %v\n", n.gid, t)
 			_ = t
 			n.raft.Tick()
 
 		case rd := <-n.raft.Ready():
-			// fmt.Printf("[%v]              READY START\n", n.gid)
 			x.Check(n.wal.Store(n.gid, rd.Snapshot, rd.HardState, rd.Entries))
 			n.saveToStorage(rd.Snapshot, rd.HardState, rd.Entries)
 			for _, msg := range rd.Messages {
@@ -356,7 +343,6 @@ func (n *node) Run() {
 			}
 
 			if !raft.IsEmptySnap(rd.Snapshot) {
-				fmt.Printf("               Got snapshot: %q\n", rd.Snapshot.Data)
 				n.processSnapshot(rd.Snapshot)
 			}
 			for _, entry := range rd.CommittedEntries {
@@ -364,7 +350,6 @@ func (n *node) Run() {
 			}
 
 			n.raft.Advance()
-			// fmt.Printf("[%v]              READY DONE\n", n.gid)
 
 		case <-n.done:
 			return
@@ -383,9 +368,7 @@ func (n *node) Step(ctx context.Context, msg raftpb.Message) error {
 func (n *node) snapshotPeriodically() {
 	for {
 		select {
-		case t := <-time.Tick(10 * time.Minute):
-			fmt.Printf("Snapshot Periodically: %v", t)
-
+		case <-time.Tick(10 * time.Minute):
 			le, err := n.store.LastIndex()
 			x.Checkf(err, "Unable to retrieve last index")
 
@@ -393,18 +376,14 @@ func (n *node) snapshotPeriodically() {
 			x.Checkf(err, "Unable to get existing snapshot")
 
 			si := existing.Metadata.Index
-			fmt.Printf("le, si: %v %v\n", le, si)
 			if le <= si {
-				fmt.Printf("le, si: %v %v. No snapshot\n", le, si)
 				continue
 			}
 
 			msg := fmt.Sprintf("Snapshot from %v", strconv.FormatUint(n.id, 10))
 			_, err = n.store.CreateSnapshot(le, nil, []byte(msg))
 			x.Checkf(err, "While creating snapshot")
-
 			x.Checkf(n.store.Compact(le), "While compacting snapshot")
-			fmt.Println("Snapshot DONE =================")
 
 		case <-n.done:
 			return
