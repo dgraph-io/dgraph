@@ -2,6 +2,10 @@
 
 # For your convenience:
 #   docker build -t dgraph/dgraph .
+#
+# To run dgraph:
+#   docker run -it dgraph/dgraph
+# To go into bash:
 #   docker run -it dgraph/dgraph bash
 
 # We need libc (not the lightweight version). Otherwise, dgraph cannot run.
