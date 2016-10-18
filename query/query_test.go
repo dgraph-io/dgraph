@@ -147,7 +147,6 @@ func populateGraph(t *testing.T) (string, *store.Store) {
 	posting.Init()
 	schema.ParseBytes([]byte(schemaStr))
 	posting.InitIndex(ps)
-	worker.InitIndex()
 
 	// So, user we're interested in has uid: 1.
 	// She has 5 friends: 23, 24, 25, 31, and 101
@@ -498,7 +497,7 @@ func TestToJSON(t *testing.T) {
 	require.Contains(t, string(js), "Michonne")
 }
 
-func TestToJSONFilter(t *testing.T) {
+func TestToJSONFilterAnyOf(t *testing.T) {
 	dir, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
 	query := `
@@ -506,7 +505,7 @@ func TestToJSONFilter(t *testing.T) {
 			me(_uid_:0x01) {
 				name
 				gender
-				friend @filter(eq("name", "Andrea")) {
+				friend @filter(anyof("name", "Andrea SomethingElse")) {
 					name
 				}
 			}
@@ -533,6 +532,41 @@ func TestToJSONFilter(t *testing.T) {
 		string(js))
 }
 
+func TestToJSONFilterAllOf(t *testing.T) {
+	dir, _ := populateGraph(t)
+	defer os.RemoveAll(dir)
+	query := `
+		{
+			me(_uid_:0x01) {
+				name
+				gender
+				friend @filter(allof("name", "Andrea SomethingElse")) {
+					name
+				}
+			}
+		}
+	`
+
+	gq, _, err := gql.Parse(query)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	sg, err := ToSubGraph(ctx, gq)
+	require.NoError(t, err)
+
+	ch := make(chan error)
+	go ProcessGraph(ctx, sg, nil, ch)
+	err = <-ch
+	require.NoError(t, err)
+
+	var l Latency
+	js, err := sg.ToJSON(&l)
+	require.NoError(t, err)
+	require.EqualValues(t,
+		`{"me":[{"gender":"female","name":"Michonne"}]}`,
+		string(js))
+}
+
 func TestToJSONFilterUID(t *testing.T) {
 	dir, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
@@ -541,7 +575,7 @@ func TestToJSONFilterUID(t *testing.T) {
 			me(_uid_:0x01) {
 				name
 				gender
-				friend @filter(eq("name", "Andrea")) {
+				friend @filter(anyof("name", "Andrea")) {
 					_uid_
 				}
 			}
@@ -575,7 +609,7 @@ func TestToJSONFilterOr(t *testing.T) {
 			me(_uid_:0x01) {
 				name
 				gender
-				friend @filter(eq("name", "Andrea") || anyof("name", "Rhee")) {
+				friend @filter(anyof("name", "Andrea") || anyof("name", "Rhee")) {
 					name
 				}
 			}
@@ -609,7 +643,7 @@ func TestToJSONFilterOrFirst(t *testing.T) {
 			me(_uid_:0x01) {
 				name
 				gender
-				friend(first:2) @filter(eq("name", "Andrea") || eq("name", "Glenn Rhee") || eq("name", "Daryl")) {
+				friend(first:2) @filter(anyof("name", "Andrea") || anyof("name", "Glenn Rhee") || anyof("name", "Daryl")) {
 					name
 				}
 			}
@@ -643,7 +677,7 @@ func TestToJSONFilterOrOffset(t *testing.T) {
 			me(_uid_:0x01) {
 				name
 				gender
-				friend(offset:1) @filter(eq("name", "Andrea") || eq("name", "Glenn Rhee") || eq("name", "Daryl Dixon")) {
+				friend(offset:1) @filter(anyof("name", "Andrea") || anyof("name", "Glenn Rhee") || anyof("name", "Daryl Dixon")) {
 					name
 				}
 			}
@@ -712,7 +746,7 @@ func TestToJSONFilterOrFirstOffset(t *testing.T) {
 			me(_uid_:0x01) {
 				name
 				gender
-				friend(offset:1, first:1) @filter(eq("name", "Andrea") || eq("name", "Glenn Rhee") || eq("name", "Daryl Dixon")) {
+				friend(offset:1, first:1) @filter(anyof("name", "Andrea") || anyof("name", "Glenn Rhee") || anyof("name", "Daryl Dixon")) {
 					name
 				}
 			}
@@ -748,7 +782,7 @@ func TestToJSONFilterOrFirstNegative(t *testing.T) {
 			me(_uid_:0x01) {
 				name
 				gender
-				friend(first:-1, offset:0) @filter(eq("name", "Andrea") || eq("name", "Glenn Rhee") || eq("name", "Daryl Dixon")) {
+				friend(first:-1, offset:0) @filter(anyof("name", "Andrea") || anyof("name", "Glenn Rhee") || anyof("name", "Daryl Dixon")) {
 					name
 				}
 			}
@@ -782,7 +816,7 @@ func TestToJSONFilterAnd(t *testing.T) {
 			me(_uid_:0x01) {
 				name
 				gender
-				friend @filter(eq("name", "Andrea") && eq("name", "Glenn Rhee")) {
+				friend @filter(anyof("name", "Andrea") && anyof("name", "Glenn Rhee")) {
 					name
 				}
 			}
@@ -949,7 +983,7 @@ func TestToPBFilter(t *testing.T) {
 			me(_uid_:0x01) {
 				name
 				gender
-				friend @filter(eq("name", "Andrea")) {
+				friend @filter(anyof("name", "Andrea")) {
 					name
 				}
 			}
@@ -1008,7 +1042,7 @@ func TestToPBFilterOr(t *testing.T) {
 			me(_uid_:0x01) {
 				name
 				gender
-				friend @filter(eq("name", "Andrea") || eq("name", "Glenn Rhee")) {
+				friend @filter(anyof("name", "Andrea") || anyof("name", "Glenn SomethingElse")) {
 					name
 				}
 			}
@@ -1076,7 +1110,7 @@ func TestToPBFilterAnd(t *testing.T) {
 			me(_uid_:0x01) {
 				name
 				gender
-				friend @filter(eq("name", "Andrea") && eq("name", "Glenn Rhee")) {
+				friend @filter(anyof("name", "Andrea") && anyof("name", "Glenn SomethingElse")) {
 					name
 				}
 			}

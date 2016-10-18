@@ -277,3 +277,21 @@ func (u *UIDList) DebugString() string {
 	}
 	return b.String()
 }
+
+// ToUintsForTest converts to uints for testing purpose only.
+func (u *UIDList) ToUintsForTest() []uint64 {
+	out := make([]uint64, 0, u.Size())
+	for i := 0; i < u.Size(); i++ {
+		out = append(out, u.Get(i))
+	}
+	return out
+}
+
+// ToUintsListForTest converts to list of uints for testing purpose only.
+func ToUintsListForTest(ul []*UIDList) [][]uint64 {
+	out := make([][]uint64, 0, len(ul))
+	for _, u := range ul {
+		out = append(out, u.ToUintsForTest())
+	}
+	return out
+}
