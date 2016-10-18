@@ -1,8 +1,12 @@
 # Dockerfile for Dgraph
 
 # For your convenience:
-#   docker build -t dgraph/release .
-#   docker run -it dgraph/release bash
+#   docker build -t dgraph/dgraph .
+#
+# To run dgraph:
+#   docker run -it dgraph/dgraph
+# To go into bash:
+#   docker run -it dgraph/dgraph bash
 
 # We need libc (not the lightweight version). Otherwise, dgraph cannot run.
 FROM frolvlad/alpine-glibc
@@ -30,4 +34,4 @@ RUN mkdir /dgraph && mkdir /data
 #   time dgraphloader   -rdfgzips /data/rdf-films.gz -instanceIdx 0 -numInstances 1 -uids u -postings p
 
 EXPOSE 8080
-ENTRYPOINT ["dgraph"]
+CMD ["dgraph"]

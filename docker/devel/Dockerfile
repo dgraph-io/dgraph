@@ -33,8 +33,6 @@ RUN cd /installs/icu/source && \
 	make && \
 	make install
 
-ENV CGO_CPPFLAGS "-I$/usr/local/include"
-ENV CGO_LDFLAGS "-L/usr/local/lib"
 ENV LD_LIBRARY_PATH "/usr/local/lib"
 
 # Install Dgraph and update dependencies to right versions.
