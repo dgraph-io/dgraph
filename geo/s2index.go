@@ -30,41 +30,66 @@ import (
 // IndexKeys returns the keys to be used in a geospatial index for the given geometry. If the
 // geometry is not supported it returns an error.
 func IndexKeys(g *types.Geo) ([][]byte, error) {
-	cu, err := indexCells(*g)
+	parents, cover, err := indexCells(*g)
 	if err != nil {
 		return nil, err
 	}
-	keys := make([][]byte, len(cu))
-	for i, c := range cu {
-		keys[i] = indexKeyFromCellID(c)
+	keys := make([][]byte, len(parents)+len(cover))
+	// We index parents and cover using different prefix, that makes it more performant at query
+	// time to only look up parents/cover depending on what kind of query it is.
+	ptoks := toTokens(parents, parentPrefix)
+	ctoks := toTokens(cover, coverPrefix)
+	for i, v := range ptoks {
+		keys[i] = types.IndexKey(IndexAttr, v)
+	}
+	l := len(ptoks)
+	for i, v := range ctoks {
+		keys[i+l] = types.IndexKey(IndexAttr, v)
 	}
 	return keys, nil
 }
 
-const indexPrefix = ":_loc_|"
-
-func indexKeyFromCellID(c s2.CellID) []byte {
-	var buf bytes.Buffer
-	buf.WriteString(indexPrefix)
-	buf.WriteString(c.ToToken())
-	return buf.Bytes()
+// IndexKeysForCap returns the keys to be used in a geospatial index for a Cap.
+func indexCellsForCap(c s2.Cap) s2.CellUnion {
+	rc := &s2.RegionCoverer{
+		MinLevel: MinCellLevel,
+		MaxLevel: MaxCellLevel,
+		LevelMod: 0,
+		MaxCells: MaxCells,
+	}
+	return rc.Covering(c)
 }
 
-func indexCells(g types.Geo) (s2.CellUnion, error) {
+const (
+	// IndexAttr is the predicate used by geo indexes.
+	IndexAttr    = "_loc_"
+	parentPrefix = "p/"
+	coverPrefix  = "c/"
+)
+
+// IndexCells returns two cellunions. The first is a list of parents, which are all the cells upto
+// the min level that contain this geometry. The second is the cover, which are the smallest
+// possible cells required to cover the region. This makes it easier at query time to query only the
+// parents or only the cover or both depending on whether it is a within, contains or intersects
+// query.
+func indexCells(g types.Geo) (parents s2.CellUnion, cover s2.CellUnion, err error) {
 	if g.Stride() != 2 {
-		return nil, x.Errorf("Covering only available for 2D co-ordinates.")
+		return nil, nil, x.Errorf("Covering only available for 2D co-ordinates.")
 	}
 	switch v := g.T.(type) {
 	case *geom.Point:
-		return indexCellsForPoint(v, MinCellLevel, MaxCellLevel), nil
+		p, c := indexCellsForPoint(v, MinCellLevel, MaxCellLevel)
+		return p, c, nil
 	case *geom.Polygon:
 		l, err := loopFromPolygon(v)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-		return coverLoop(l, MinCellLevel, MaxCellLevel, MaxCells), nil
+		cover := coverLoop(l, MinCellLevel, MaxCellLevel, MaxCells)
+		parents := getParentCells(cover, MinCellLevel)
+		return parents, cover, nil
 	default:
-		return nil, x.Errorf("Cannot index geometry of type %T", v)
+		return nil, nil, x.Errorf("Cannot index geometry of type %T", v)
 	}
 }
 
@@ -84,7 +109,13 @@ func pointFromCoord(r geom.Coord) s2.Point {
 	return s2.PointFromLatLng(ll)
 }
 
-// We use loops instead of s2.Polygon as the s2.Polygon implemention is incomplete.
+// PointFromPoint converts a geom.Point to a s2.Point
+func pointFromPoint(p *geom.Point) s2.Point {
+	return pointFromCoord(p.Coords())
+}
+
+// loopFromPolygon converts a geom.Polygon to a s2.Loop. We use loops instead of s2.Polygon as the
+// s2.Polygon implemention is incomplete.
 func loopFromPolygon(p *geom.Polygon) (*s2.Loop, error) {
 	// go implementation of s2 does not support more than one loop (and will panic if the size of
 	// the loops array > 1). So we will skip the holes in the polygon and just use the outer loop.
@@ -141,7 +172,7 @@ func loopFromRing(r *geom.LinearRing, reverse bool) *s2.Loop {
 }
 
 // create cells for point from the minLevel to maxLevel both inclusive.
-func indexCellsForPoint(p *geom.Point, minLevel, maxLevel int) s2.CellUnion {
+func indexCellsForPoint(p *geom.Point, minLevel, maxLevel int) (s2.CellUnion, s2.CellUnion) {
 	if maxLevel < minLevel {
 		log.Fatalf("Maxlevel should be greater than minLevel")
 	}
@@ -151,67 +182,24 @@ func indexCellsForPoint(p *geom.Point, minLevel, maxLevel int) s2.CellUnion {
 	for l := minLevel; l <= maxLevel; l++ {
 		cells[l-minLevel] = c.Parent(l)
 	}
-	return cells
+	return cells, []s2.CellID{c.Parent(maxLevel)}
 }
 
-// Make s2.Loop implement s2.Region
-type loopRegion struct {
-	*s2.Loop
-}
-
-func (l loopRegion) ContainsCell(c s2.Cell) bool {
-	// Quick check if the cell is in the bounding box
-	if !l.RectBound().ContainsCell(c) {
-		return false
-	}
-
-	// Quick check to see if the first vertex is in the loop.
-	if !l.ContainsPoint(c.Vertex(0)) {
-		return false
-	}
-
-	// At this stage one vertex is in the loop, now we check that the edges of the cell do not cross
-	// the loop.
-	return !l.edgesCross(c)
-}
-
-// returns true if the edges of the cell cross the edges of the loop
-func (l loopRegion) edgesCross(c s2.Cell) bool {
-	for i := 0; i < 4; i++ {
-		crosser := s2.NewChainEdgeCrosser(c.Vertex(i), c.Vertex((i+1)%4), l.Vertex(0))
-		for i := 1; i <= l.NumEdges(); i++ { // add vertex 0 twice as it is a closed loop
-			if crosser.EdgeOrVertexChainCrossing(l.Vertex(i)) {
-				return true
-			}
+func getParentCells(cu s2.CellUnion, minLevel int) s2.CellUnion {
+	parents := make(map[s2.CellID]bool)
+	for _, c := range cu {
+		for l := c.Level(); l >= minLevel; l-- {
+			parents[c.Parent(l)] = true
 		}
 	}
-	return false
-}
-
-func (l loopRegion) IntersectsCell(c s2.Cell) bool {
-	// Quick check if the cell intersects the bounding box
-	if !l.RectBound().IntersectsCell(c) {
-		return false
+	// convert the parents map to an array
+	cells := make([]s2.CellID, len(parents))
+	i := 0
+	for k := range parents {
+		cells[i] = k
+		i++
 	}
-
-	// Quick check to see if the first vertex is in the loop.
-	if l.ContainsPoint(c.Vertex(0)) {
-		return true
-	}
-
-	// At this stage the one vertex is outside the loop. We check if any of the edges of the cell
-	// cross the loop.
-	if l.edgesCross(c) {
-		return true
-	}
-
-	// At this stage we know that there is one point of the cell outside the loop and the boundaries
-	// do not interesect. The only way for the cell to intersect with the loop is if it contains the
-	// the loop. We test this by checking if an arbitrary vertex of the loop is inside the cell.
-	if c.RectBound().Contains(l.RectBound()) {
-		return c.ContainsPoint(l.Vertex(0))
-	}
-	return false
+	return cells
 }
 
 func coverLoop(l *s2.Loop, minLevel int, maxLevel int, maxCells int) s2.CellUnion {
@@ -222,4 +210,17 @@ func coverLoop(l *s2.Loop, minLevel int, maxLevel int, maxCells int) s2.CellUnio
 		MaxCells: maxCells,
 	}
 	return rc.Covering(loopRegion{l})
+}
+
+func toTokens(cu s2.CellUnion, prefix string) [][]byte {
+	toks := make([][]byte, len(cu))
+	for i, c := range cu {
+		var buf bytes.Buffer
+		_, err := buf.WriteString(prefix)
+		x.Check(err)
+		_, err = buf.WriteString(c.ToToken())
+		x.Check(err)
+		toks[i] = buf.Bytes()
+	}
+	return toks
 }

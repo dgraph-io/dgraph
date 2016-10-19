@@ -26,6 +26,7 @@ import (
 	"testing"
 
 	"github.com/golang/geo/s2"
+	"github.com/stretchr/testify/require"
 	"github.com/twpayne/go-geom"
 	"github.com/twpayne/go-geom/encoding/geojson"
 	"github.com/twpayne/go-geom/encoding/wkb"
@@ -57,21 +58,19 @@ func loadPolygon(name string) (*geom.Polygon, error) {
 
 func TestIndexCellsPoint(t *testing.T) {
 	p := geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{-122.082506, 37.4249518})
-	cu, err := indexCells(types.Geo{p})
+	parents, cover, err := indexCells(types.Geo{p})
 	if err != nil {
 		t.Error(err)
 	}
-	if len(cu) != (MaxCellLevel - MinCellLevel + 1) {
-		t.Errorf("Expected 12 cells. Got %d instead.", len(cu))
-	}
-	c := cu[0]
+	require.Len(t, parents, MaxCellLevel-MinCellLevel+1)
+	c := parents[0]
 	if c.Level() != MinCellLevel {
 		t.Errorf("Expected cell level %d. Got %d instead.", MinCellLevel, c.Level())
 	}
 	if c.ToToken() != "808c" {
 		t.Errorf("Unexpected cell token %s.", c.ToToken())
 	}
-	c = cu[len(cu)-1]
+	c = parents[len(parents)-1]
 	if c.Level() != MaxCellLevel {
 		t.Errorf("Expected cell level %d. Got %d instead.", MaxCellLevel, c.Level())
 	}
@@ -79,13 +78,19 @@ func TestIndexCellsPoint(t *testing.T) {
 		t.Errorf("Unexpected cell token %s.", c.ToToken())
 	}
 	// check that all cell levels are different
-	pc := cu[0]
-	for _, c := range cu[1:] {
+	pc := parents[0]
+	for _, c := range parents[1:] {
 		if c.Level() <= pc.Level() {
 			t.Errorf("Expected cell to have level greater than %d. Got %d", pc.Level(), c.Level())
 		}
 		pc = c
 	}
+
+	// Check that cover only has one item
+	require.Len(t, cover, 1)
+	c = cover[0]
+	require.Equal(t, c.Level(), MaxCellLevel)
+	require.Equal(t, c.ToToken(), "808fb9f81")
 }
 
 func printCells(cu s2.CellUnion) {
@@ -105,18 +110,20 @@ func TestIndexCellsPolygon(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	cu, err := indexCells(types.Geo{p})
+	parents, cover, err := indexCells(types.Geo{p})
 	if err != nil {
 		t.Error(err)
 	}
-	if len(cu) > MaxCells {
-		t.Errorf("Expected less than %d cells. Got %d instead.", MaxCells, len(cu))
+	if len(cover) > MaxCells {
+		t.Errorf("Expected less than %d cells. Got %d instead.", MaxCells, len(cover))
 	}
-	for _, c := range cu {
+	for _, c := range cover {
 		if c.Level() > MaxCellLevel || c.Level() < MinCellLevel {
 			t.Errorf("Invalid cell level %d.", c.Level())
 		}
+		require.Contains(t, parents, c)
 	}
+	require.True(t, len(parents) > len(cover))
 }
 
 func TestKeyGeneratorPoint(t *testing.T) {
@@ -127,15 +134,14 @@ func TestKeyGeneratorPoint(t *testing.T) {
 	}
 
 	var g types.Geo
-	g.UnmarshalBinary(data)
+	err = g.UnmarshalBinary(data)
+	require.NoError(t, err)
 
 	keys, err := IndexKeys(&g)
 	if err != nil {
 		t.Error(err)
 	}
-	if len(keys) != (MaxCellLevel - MinCellLevel + 1) {
-		t.Errorf("Expected 12 keys. Got %d instead.", len(keys))
-	}
+	require.Len(t, keys, MaxCellLevel-MinCellLevel+1+1) // +1 for the cover
 	for _, key := range keys {
 		if !strings.HasPrefix(string(key), ":_loc_|") {
 			t.Errorf("Expected prefix ':_loc_|' for key %s", key)
@@ -154,14 +160,14 @@ func TestKeyGeneratorPolygon(t *testing.T) {
 	}
 
 	var g types.Geo
-	g.UnmarshalBinary(data)
+	err = g.UnmarshalBinary(data)
+	require.NoError(t, err)
+
 	keys, err := IndexKeys(&g)
 	if err != nil {
 		t.Error(err)
 	}
-	if len(keys) != 18 {
-		t.Errorf("Expected 18 keys. Got %d instead.", len(keys))
-	}
+	require.Len(t, keys, 65)
 	for _, key := range keys {
 		if !strings.HasPrefix(string(key), ":_loc_|") {
 			t.Errorf("Expected prefix ':_loc_|' for key %s", key)
