@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"log"
@@ -16,6 +17,7 @@ import (
 	flatbuffers "github.com/google/flatbuffers/go"
 	"golang.org/x/net/context"
 
+	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -69,16 +71,24 @@ func (p *proposals) Done(pid uint32, err error) {
 	ch <- err
 }
 
+type sendmsg struct {
+	to   uint64
+	data []byte
+}
+
 type node struct {
 	cfg         *raft.Config
 	ctx         context.Context
 	done        chan struct{}
 	id          uint64
+	gid         uint32
 	peers       peerPool
 	props       proposals
 	raft        raft.Node
 	store       *raft.MemoryStorage
 	raftContext []byte
+	wal         *raftwal.Wal
+	messages    chan sendmsg
 }
 
 func (n *node) Connect(pid uint64, addr string) {
@@ -149,7 +159,6 @@ func (n *node) ProposeAndWait(ctx context.Context, msg uint16, data []byte) erro
 	select {
 	case err = <-che:
 		x.TraceError(ctx, err)
-		fmt.Printf("DEBUG. Proposeandwait replied with: %v", err)
 		return err
 	case <-ctx.Done():
 		return ctx.Err()
@@ -158,21 +167,69 @@ func (n *node) ProposeAndWait(ctx context.Context, msg uint16, data []byte) erro
 
 func (n *node) send(m raftpb.Message) {
 	x.Assertf(n.id != m.To, "Seding message to itself")
+	data, err := m.Marshal()
+	x.Check(err)
+	fmt.Printf("\t\tSENDING: %v %v-->%v\n", m.Type, m.From, m.To)
+	select {
+	case n.messages <- sendmsg{to: m.To, data: data}:
+		// pass
+	default:
+		log.Fatalf("Unable to push messages to channel in send")
+	}
+}
 
-	addr := n.peers.Get(m.To)
-	x.Assertf(len(addr) > 0, "Don't have address for peer: %d", m.To)
+func (n *node) doSendMessage(to uint64, data []byte) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
 
+	addr := n.peers.Get(to)
+	x.Assertf(len(addr) > 0, "Don't have address for peer: %d", to)
 	pool := pools().get(addr)
 	conn, err := pool.Get()
 	x.Check(err)
 	defer pool.Put(conn)
 
 	c := NewWorkerClient(conn)
-	m.Context = n.raftContext
-	data, err := m.Marshal()
-	x.Checkf(err, "Unable to marshal: %+v", m)
 	p := &Payload{Data: data}
-	_, err = c.RaftMessage(context.TODO(), p)
+
+	ch := make(chan error, 1)
+	go func() {
+		_, err = c.RaftMessage(ctx, p)
+		ch <- err
+	}()
+
+	select {
+	case <-ctx.Done():
+		return
+	case <-ch:
+		// We don't need to do anything if we receive any error while sending message.
+		// RAFT would automatically retry.
+		return
+	}
+}
+
+func (n *node) batchAndSendMessages() {
+	batches := make(map[uint64]*bytes.Buffer)
+	for {
+		select {
+		case sm := <-n.messages:
+			if _, ok := batches[sm.to]; !ok {
+				batches[sm.to] = new(bytes.Buffer)
+			}
+			buf := batches[sm.to]
+			binary.Write(buf, binary.LittleEndian, uint32(len(sm.data)))
+			buf.Write(sm.data)
+
+		case <-time.Tick(10 * time.Millisecond):
+			for to, buf := range batches {
+				if buf.Len() == 0 {
+					continue
+				}
+				go n.doSendMessage(to, buf.Bytes())
+				buf.Reset()
+			}
+		}
+	}
 }
 
 func (n *node) processMutation(e raftpb.Entry, h header) error {
@@ -204,10 +261,9 @@ func (n *node) process(e raftpb.Entry) error {
 	if e.Data == nil {
 		return nil
 	}
-	fmt.Printf("Entry type to process: %v\n", e.Type.String())
+	fmt.Printf("Entry type to process: %+v\n", e)
 
 	if e.Type == raftpb.EntryConfChange {
-		fmt.Printf("Configuration change\n")
 		var cc raftpb.ConfChange
 		cc.Unmarshal(e.Data)
 
@@ -239,18 +295,11 @@ func (n *node) process(e raftpb.Entry) error {
 func (n *node) saveToStorage(s raftpb.Snapshot, h raftpb.HardState,
 	es []raftpb.Entry) {
 	if !raft.IsEmptySnap(s) {
-		fmt.Printf("saveToStorage snapshot: %v\n", s.String())
 		le, err := n.store.LastIndex()
 		if err != nil {
 			log.Fatalf("While retrieving last index: %v\n", err)
 		}
-		te, err := n.store.Term(le)
-		if err != nil {
-			log.Fatalf("While retrieving term: %v\n", err)
-		}
-		fmt.Printf("[Node: %d] Term: %v for le: %v\n", n.id, te, le)
 		if s.Metadata.Index <= le {
-			fmt.Printf("%d node ignoring snapshot. Last index: %v\n", n.id, le)
 			return
 		}
 
@@ -268,7 +317,6 @@ func (n *node) saveToStorage(s raftpb.Snapshot, h raftpb.HardState,
 func (n *node) processSnapshot(s raftpb.Snapshot) {
 	lead := n.raft.Status().Lead
 	if lead == 0 {
-		fmt.Printf("Don't know who the leader is")
 		return
 	}
 	addr := n.peers.Get(lead)
@@ -276,31 +324,32 @@ func (n *node) processSnapshot(s raftpb.Snapshot) {
 	pool := pools().get(addr)
 	x.Assertf(pool != nil, "Leader: %d pool should not be nil", lead)
 
-	fmt.Printf("Getting snapshot from leader: %v", lead)
 	_, err := ws.PopulateShard(context.TODO(), pool, 0)
 	x.Checkf(err, "processSnapshot")
-	fmt.Printf("DONE with snapshot")
 }
 
 func (n *node) Run() {
-	fmt.Println("Run")
 	for {
 		select {
 		case <-time.Tick(time.Second):
 			n.raft.Tick()
 
 		case rd := <-n.raft.Ready():
+			x.Check(n.wal.Store(n.gid, rd.Snapshot, rd.HardState, rd.Entries))
 			n.saveToStorage(rd.Snapshot, rd.HardState, rd.Entries)
 			for _, msg := range rd.Messages {
+				// TODO: Do some optimizations here to drop messages.
+				msg.Context = n.raftContext
 				n.send(msg)
 			}
+
 			if !raft.IsEmptySnap(rd.Snapshot) {
-				fmt.Printf("Got snapshot: %q\n", rd.Snapshot.Data)
 				n.processSnapshot(rd.Snapshot)
 			}
 			for _, entry := range rd.CommittedEntries {
 				x.Check(n.process(entry))
 			}
+
 			n.raft.Advance()
 
 		case <-n.done:
@@ -320,9 +369,7 @@ func (n *node) Step(ctx context.Context, msg raftpb.Message) error {
 func (n *node) snapshotPeriodically() {
 	for {
 		select {
-		case t := <-time.Tick(time.Minute):
-			fmt.Printf("Snapshot Periodically: %v", t)
-
+		case <-time.Tick(10 * time.Minute):
 			le, err := n.store.LastIndex()
 			x.Checkf(err, "Unable to retrieve last index")
 
@@ -330,18 +377,14 @@ func (n *node) snapshotPeriodically() {
 			x.Checkf(err, "Unable to get existing snapshot")
 
 			si := existing.Metadata.Index
-			fmt.Printf("le, si: %v %v\n", le, si)
 			if le <= si {
-				fmt.Printf("le, si: %v %v. No snapshot\n", le, si)
 				continue
 			}
 
 			msg := fmt.Sprintf("Snapshot from %v", strconv.FormatUint(n.id, 10))
 			_, err = n.store.CreateSnapshot(le, nil, []byte(msg))
 			x.Checkf(err, "While creating snapshot")
-
 			x.Checkf(n.store.Compact(le), "While compacting snapshot")
-			fmt.Println("Snapshot DONE =================")
 
 		case <-n.done:
 			return
@@ -358,7 +401,7 @@ func parsePeer(peer string) (uint64, string) {
 	return pid, kv[1]
 }
 
-func (n *node) JoinCluster(any string, s *State) {
+func (n *node) joinPeers(any string, s *State) {
 	// Tell one of the peers to join.
 	pid, paddr := parsePeer(any)
 	n.Connect(pid, paddr)
@@ -399,7 +442,7 @@ func createRaftContext(id uint64, gid uint32, addr string) []byte {
 }
 
 func newNode(gid uint32, id uint64, myAddr string) *node {
-	fmt.Printf("NEW NODE ID: %v\n", id)
+	fmt.Printf("NEW NODE GID, ID: [%v, %v]\n", gid, id)
 
 	peers := peerPool{
 		peers: make(map[uint64]string),
@@ -412,10 +455,11 @@ func newNode(gid uint32, id uint64, myAddr string) *node {
 	n := &node{
 		ctx:   context.TODO(),
 		id:    id,
+		gid:   gid,
 		store: store,
 		cfg: &raft.Config{
 			ID:              id,
-			ElectionTick:    3,
+			ElectionTick:    10,
 			HeartbeatTick:   1,
 			Storage:         store,
 			MaxSizePerMsg:   4096,
@@ -424,24 +468,77 @@ func newNode(gid uint32, id uint64, myAddr string) *node {
 		peers:       peers,
 		props:       props,
 		raftContext: createRaftContext(id, gid, myAddr),
+		messages:    make(chan sendmsg, 1000),
 	}
 	return n
 }
 
-func (n *node) StartNode(cluster string) {
-	var peers []raft.Peer
-	if len(cluster) > 0 {
-		for _, p := range strings.Split(cluster, ",") {
-			pid, paddr := parsePeer(p)
-			peers = append(peers, raft.Peer{ID: pid})
-			n.Connect(pid, paddr)
+func (n *node) initFromWal(wal *raftwal.Wal) (restart bool, rerr error) {
+	n.wal = wal
+
+	var sp raftpb.Snapshot
+	sp, rerr = wal.Snapshot(n.gid)
+	if rerr != nil {
+		return
+	}
+	var term, idx uint64
+	if !raft.IsEmptySnap(sp) {
+		fmt.Printf("Found Snapshot: %+v\n", sp)
+		restart = true
+		if rerr = n.store.ApplySnapshot(sp); rerr != nil {
+			return
+		}
+		term = sp.Metadata.Term
+		idx = sp.Metadata.Index
+	}
+
+	var hd raftpb.HardState
+	hd, rerr = wal.HardState(n.gid)
+	if rerr != nil {
+		return
+	}
+	if !raft.IsEmptyHardState(hd) {
+		fmt.Printf("Found hardstate: %+v\n", sp)
+		restart = true
+		if rerr = n.store.SetHardState(hd); rerr != nil {
+			return
 		}
 	}
 
-	n.raft = raft.StartNode(n.cfg, peers)
+	var es []raftpb.Entry
+	es, rerr = wal.Entries(n.gid, term, idx)
+	if rerr != nil {
+		return
+	}
+	fmt.Printf("Found %d entries\n", len(es))
+	if len(es) > 0 {
+		restart = true
+	}
+	rerr = n.store.Append(es)
+	return
+}
+
+func (n *node) InitAndStartNode(wal *raftwal.Wal, peer string) {
+	restart, err := n.initFromWal(wal)
+	x.Check(err)
+
+	if restart {
+		fmt.Printf("RESTARTING\n")
+		n.raft = raft.RestartNode(n.cfg)
+
+	} else {
+		if len(peer) > 0 {
+			n.raft = raft.StartNode(n.cfg, nil)
+			n.joinPeers(peer, ws)
+		} else {
+			peers := []raft.Peer{{ID: n.id}}
+			n.raft = raft.StartNode(n.cfg, peers)
+		}
+	}
 	go n.Run()
 	go n.snapshotPeriodically()
 	go n.Inform()
+	go n.batchAndSendMessages()
 }
 
 func (n *node) doInform(rc *task.RaftContext) {
@@ -467,6 +564,9 @@ func (n *node) doInform(rc *task.RaftContext) {
 	data := b.Bytes[b.Head():]
 
 	common := groups().Node(math.MaxUint32)
+	if common == nil {
+		return
+	}
 	x.Checkf(common.ProposeAndWait(context.TODO(), membershipMsg, data),
 		"Expected acceptance.")
 }
@@ -476,10 +576,9 @@ func (n *node) Inform() {
 	if rc.Group() == math.MaxUint32 {
 		return
 	}
-	n.doInform(rc)
 
 	select {
-	case <-time.Tick(time.Minute):
+	case <-time.Tick(30 * time.Second):
 		n.doInform(rc)
 	case <-n.done:
 		return
@@ -490,16 +589,7 @@ func (n *node) AmLeader() bool {
 	return n.raft.Status().Lead == n.raft.Status().ID
 }
 
-func (w *grpcWorker) RaftMessage(ctx context.Context, query *Payload) (*Payload, error) {
-	if ctx.Err() != nil {
-		return &Payload{}, ctx.Err()
-	}
-
-	msg := raftpb.Message{}
-	if err := msg.Unmarshal(query.Data); err != nil {
-		return &Payload{}, err
-	}
-
+func (w *grpcWorker) applyMessage(ctx context.Context, msg raftpb.Message) error {
 	rc := task.GetRootAsRaftContext(msg.Context, 0)
 	node := groups().Node(rc.Group())
 	node.Connect(msg.From, string(rc.Addr()))
@@ -509,10 +599,32 @@ func (w *grpcWorker) RaftMessage(ctx context.Context, query *Payload) (*Payload,
 
 	select {
 	case <-ctx.Done():
-		return &Payload{}, ctx.Err()
+		return ctx.Err()
 	case err := <-c:
-		return &Payload{}, err
+		return err
 	}
+}
+
+func (w *grpcWorker) RaftMessage(ctx context.Context, query *Payload) (*Payload, error) {
+	if ctx.Err() != nil {
+		return &Payload{}, ctx.Err()
+	}
+
+	for idx := 0; idx < len(query.Data); {
+		len := int(binary.LittleEndian.Uint32(query.Data[idx : idx+4]))
+		idx += 4
+		msg := raftpb.Message{}
+		if err := msg.Unmarshal(query.Data[idx : idx+len]); err != nil {
+			x.Check(err)
+		}
+		fmt.Printf("RECEIVED: %v %v-->%v\n", msg.Type, msg.From, msg.To)
+		if err := w.applyMessage(ctx, msg); err != nil {
+			return &Payload{}, err
+		}
+		idx += len
+	}
+	// fmt.Printf("Got %d messages\n", count)
+	return &Payload{}, nil
 }
 
 func (w *grpcWorker) JoinCluster(ctx context.Context, query *Payload) (*Payload, error) {

@@ -41,6 +41,7 @@ import (
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/query/graph"
+	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/store"
@@ -52,13 +53,12 @@ import (
 )
 
 var (
-	postingDir  = flag.String("p", "p", "Directory to store posting lists")
-	mutationDir = flag.String("m", "m", "Directory to store mutations")
-	port        = flag.Int("port", 8080, "Port to run server on.")
-	numcpu      = flag.Int("cores", runtime.NumCPU(),
+	postingDir = flag.String("p", "p", "Directory to store posting lists.")
+	walDir     = flag.String("w", "w", "Directory to store raft write-ahead logs.")
+	port       = flag.Int("port", 8080, "Port to run server on.")
+	numcpu     = flag.Int("cores", runtime.NumCPU(),
 		"Number of cores to be used by the process")
 	raftId     = flag.Uint64("idx", 1, "RAFT ID that this server will use to join RAFT groups.")
-	cluster    = flag.String("cluster", "", "List of peers in this format: ID1:URL1,ID2:URL2,...")
 	peer       = flag.String("peer", "", "Address of any peer.")
 	workerPort = flag.String("workerport", ":12345",
 		"Port used by worker for internal communication.")
@@ -68,11 +68,10 @@ var (
 	cpuprofile  = flag.String("cpu", "", "write cpu profile to file")
 	memprofile  = flag.String("mem", "", "write memory profile to file")
 	schemaFile  = flag.String("schema", "", "Path to schema file")
-	rdbStats    = flag.Duration("rdbstats", 5*time.Minute, "Print out RocksDB stats every this many seconds. If <=0, we don't print anyting.")
-	groupConf   = flag.String("conf", "", "Path to config file with group <-> predicate mapping.")
-	closeCh     = make(chan struct{})
-
-	groupId uint64 = 0 // ALL
+	rdbStats    = flag.Duration("rdbstats", 5*time.Minute,
+		"Print out RocksDB stats every this many seconds. If <=0, we don't print anyting.")
+	groupConf = flag.String("conf", "", "Path to config file with group <-> predicate mapping.")
+	closeCh   = make(chan struct{})
 )
 
 type mutationResult struct {
@@ -564,9 +563,9 @@ func checkFlagsAndInitDirs() {
 	if err != nil {
 		log.Fatalf("Error while creating the filepath for postings: %v", err)
 	}
-	err = os.MkdirAll(*mutationDir, 0700)
+	err = os.MkdirAll(*walDir, 0700)
 	if err != nil {
-		log.Fatalf("Error while creating the filepath for mutations: %v", err)
+		log.Fatalf("Error while creating the filepath for wal: %v", err)
 	}
 }
 
@@ -584,7 +583,7 @@ func serveHTTP(l net.Listener) {
 	}
 }
 
-func setupServer() {
+func setupServer(che chan error) {
 	go worker.RunServer(*workerPort) // For internal communication.
 
 	l, err := net.Listen("tcp", fmt.Sprintf(":%d", *port))
@@ -615,10 +614,7 @@ func setupServer() {
 	log.Println("Server listening on port", *port)
 
 	// Start cmux serving.
-	if err := tcpm.Serve(); !strings.Contains(err.Error(),
-		"use of closed network connection") {
-		log.Fatal(err)
-	}
+	che <- tcpm.Serve()
 }
 
 func printStats(ps *store.Store) {
@@ -639,6 +635,11 @@ func main() {
 	x.Checkf(err, "Error initializing postings store")
 	defer ps.Close()
 
+	wals, err := store.NewSyncStore(*walDir)
+	x.Checkf(err, "Error initializing wal store")
+	defer wals.Close()
+	wal := raftwal.Init(wals, *raftId)
+
 	posting.InitIndex(ps)
 	posting.Init()
 	printStats(ps)
@@ -647,14 +648,6 @@ func main() {
 	worker.SetState(ps)
 	uid.Init(ps)
 
-	my := "localhost" + *workerPort
-
-	// TODO: Clean up the RAFT group creation code.
-
-	// First initiate the commmon group across the entire cluster. This group
-	// stores information about which server serves which groups.
-	go worker.StartRaftNodes(*raftId, my, *cluster, *peer)
-
 	if len(*schemaFile) > 0 {
 		err = schema.Parse(*schemaFile)
 		if err != nil {
@@ -662,5 +655,17 @@ func main() {
 		}
 	}
 	// Setup external communication.
-	setupServer()
+	che := make(chan error, 1)
+	go setupServer(che)
+
+	// TODO: Clean up the RAFT group creation code.
+	// Initiate the commmon group across the entire cluster. This group
+	// stores information about which server serves which groups.
+	my := "localhost" + *workerPort
+	go worker.StartRaftNodes(wal, *raftId, my, *peer)
+
+	if err := <-che; !strings.Contains(err.Error(),
+		"use of closed network connection") {
+		log.Fatal(err)
+	}
 }
