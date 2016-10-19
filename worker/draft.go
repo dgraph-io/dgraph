@@ -202,6 +202,8 @@ func (n *node) doSendMessage(to uint64, data []byte) {
 	case <-ctx.Done():
 		return
 	case <-ch:
+		// We don't need to do anything if we receive any error while sending message.
+		// RAFT would automatically retry.
 		return
 	}
 }
@@ -329,8 +331,7 @@ func (n *node) processSnapshot(s raftpb.Snapshot) {
 func (n *node) Run() {
 	for {
 		select {
-		case t := <-time.Tick(time.Second):
-			_ = t
+		case <-time.Tick(time.Second):
 			n.raft.Tick()
 
 		case rd := <-n.raft.Ready():
@@ -480,12 +481,15 @@ func (n *node) initFromWal(wal *raftwal.Wal) (restart bool, rerr error) {
 	if rerr != nil {
 		return
 	}
+	var term, idx uint64
 	if !raft.IsEmptySnap(sp) {
 		fmt.Printf("Found Snapshot: %+v\n", sp)
 		restart = true
 		if rerr = n.store.ApplySnapshot(sp); rerr != nil {
 			return
 		}
+		term = sp.Metadata.Term
+		idx = sp.Metadata.Index
 	}
 
 	var hd raftpb.HardState
@@ -499,12 +503,6 @@ func (n *node) initFromWal(wal *raftwal.Wal) (restart bool, rerr error) {
 		if rerr = n.store.SetHardState(hd); rerr != nil {
 			return
 		}
-	}
-
-	var term, idx uint64
-	if !raft.IsEmptySnap(sp) {
-		term = sp.Metadata.Term
-		idx = sp.Metadata.Index
 	}
 
 	var es []raftpb.Entry
@@ -612,7 +610,6 @@ func (w *grpcWorker) RaftMessage(ctx context.Context, query *Payload) (*Payload,
 		return &Payload{}, ctx.Err()
 	}
 
-	count := 0
 	for idx := 0; idx < len(query.Data); {
 		len := int(binary.LittleEndian.Uint32(query.Data[idx : idx+4]))
 		idx += 4
@@ -625,7 +622,6 @@ func (w *grpcWorker) RaftMessage(ctx context.Context, query *Payload) (*Payload,
 			return &Payload{}, err
 		}
 		idx += len
-		count++
 	}
 	// fmt.Printf("Got %d messages\n", count)
 	return &Payload{}, nil

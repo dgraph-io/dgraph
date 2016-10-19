@@ -82,6 +82,8 @@ func (w *Wal) Store(gid uint32, s raftpb.Snapshot, h raftpb.HardState, es []raft
 		b.Put(k, data)
 	}
 
+	// If we get no entries, then the default value of t and i would be zero. That would
+	// end up deleting all the previous valid raft entry logs. This check avoids that.
 	if t > 0 || i > 0 {
 		// Delete all keys above this index.
 		start := w.entryKey(gid, t, i+1)

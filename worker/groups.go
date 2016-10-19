@@ -41,8 +41,6 @@ func groups() *groupi {
 }
 
 func StartRaftNodes(wal *raftwal.Wal, raftId uint64, my, peer string) {
-	// ch := make(chan error, 2)
-
 	node := groups().newNode(math.MaxUint32, raftId, my)
 	go node.InitAndStartNode(wal, peer)
 
