@@ -134,7 +134,7 @@ func samePosting(a *types.Posting, b *types.Posting) bool {
 	return true
 }
 
-// Key = attribute|uid
+// Key = attribute|uid (might want to deprecate this in favor of KeyFromEdge)
 func Key(uid uint64, attr string) []byte {
 	buf := bytes.NewBufferString(attr)
 	if _, err := buf.WriteRune('|'); err != nil {
@@ -144,6 +144,13 @@ func Key(uid uint64, attr string) []byte {
 		log.Fatalf("Error while creating key with attr: %v uid: %v\n", attr, uid)
 	}
 	return buf.Bytes()
+}
+
+func KeyFromEdge(e *x.DirectedEdge) []byte {
+	if len(e.Key) > 0 {
+		return e.Key
+	}
+	return Key(e.Entity, e.Attribute)
 }
 
 func newPosting(t x.DirectedEdge, op byte) []byte {

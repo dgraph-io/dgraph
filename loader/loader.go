@@ -226,7 +226,7 @@ func (s *state) handleNQuads(wg *sync.WaitGroup) {
 			edge, err = nq.ToEdge()
 		}
 
-		key := posting.Key(edge.Entity, edge.Attribute)
+		key := posting.KeyFromEdge(&edge)
 
 		plist, decr := posting.GetOrCreate(key, dataStore)
 		plist.AddMutationWithIndex(ctx, edge, posting.Set)

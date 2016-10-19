@@ -116,6 +116,7 @@ func initTest(t *testing.T) (string, *store.Store) {
 	SetState(ps)
 
 	posting.InitIndex(ps)
+	InitIndex()
 
 	populateGraph(t, ps)
 	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.

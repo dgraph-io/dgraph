@@ -60,6 +60,7 @@ type DirectedEdge struct {
 	Value     []byte // Edge points to a value.
 	ValueType byte   // The type of the value
 	ValueId   uint64 // Object or destination node / UID.
+	Key       []byte //If nonempty, overrides the usual Attribute|Entity key.
 	Source    string
 	Timestamp time.Time
 }

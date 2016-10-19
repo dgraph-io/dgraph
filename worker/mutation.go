@@ -39,7 +39,7 @@ func runMutations(ctx context.Context, edges []x.DirectedEdge, op byte) error {
 			return fmt.Errorf("Predicate fingerprint doesn't match this instance")
 		}
 
-		key := posting.Key(edge.Entity, edge.Attribute)
+		key := posting.KeyFromEdge(&edge)
 		plist, decr := posting.GetOrCreate(key, ws.dataStore)
 		defer decr()
 

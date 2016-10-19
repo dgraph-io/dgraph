@@ -74,9 +74,9 @@ func processTask(query []byte) ([]byte, error) {
 	x.Assertf(q.UidsLength() == 0 || q.TokensLength() == 0,
 		"At least one of Uids and Term should be empty: %d vs %d", q.UidsLength(), q.TokensLength())
 
-	useTerm := q.TokensLength() > 0
+	useToken := q.TokensLength() > 0
 	var n int
-	if useTerm {
+	if useToken {
 		n = q.TokensLength()
 	} else {
 		n = q.UidsLength()
@@ -89,7 +89,7 @@ func processTask(query []byte) ([]byte, error) {
 
 	for i := 0; i < n; i++ {
 		var key []byte
-		if useTerm {
+		if useToken {
 			key = types.IndexKey(attr, q.Tokens(i))
 		} else {
 			key = posting.Key(q.Uids(i), attr)
