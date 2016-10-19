@@ -34,7 +34,7 @@ fi
 # configure, build
 if [ ! -e icu/build/lib/libicuuc.so ]; then
   cd icu/source
-	./configure --prefix=$BUILD/icu/build --disable-renaming
+	./configure --prefix=$BUILD/icu/build
   make
   make install
 fi

@@ -60,10 +60,16 @@ func NewStore(filepath string) (*Store, error) {
 	s.setOpts()
 	var err error
 	s.db, err = rdb.OpenDb(s.opt, filepath)
-	if err != nil {
-		return nil, x.Wrap(err)
-	}
-	return s, nil
+	return s, x.Wrap(err)
+}
+
+func NewSyncStore(filepath string) (*Store, error) {
+	s := &Store{}
+	s.setOpts()
+	s.wopt.SetSync(true) // Do synchronous writes.
+	var err error
+	s.db, err = rdb.OpenDb(s.opt, filepath)
+	return s, x.Wrap(err)
 }
 
 // NewReadOnlyStore constructs a readonly Store object at filepath, given options.
@@ -72,10 +78,7 @@ func NewReadOnlyStore(filepath string) (*Store, error) {
 	s.setOpts()
 	var err error
 	s.db, err = rdb.OpenDbForReadOnly(s.opt, filepath, false)
-	if err != nil {
-		return nil, x.Wrap(err)
-	}
-	return s, nil
+	return s, x.Wrap(err)
 }
 
 // Get returns the value given a key for RocksDB.
