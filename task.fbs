@@ -72,3 +72,8 @@ table Membership {
 	leader:bool;
 	amdead:bool;
 }
+
+table Sort {
+	attr:string;
+	uids:[UidList];
+}

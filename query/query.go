@@ -124,6 +124,7 @@ type params struct {
 	AfterUid uint64
 	GetCount uint16
 	GetUid   bool
+	Order    string
 	isDebug  bool
 }
 
@@ -654,6 +655,9 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 			}
 			dst.Params.Count = int(first)
 		}
+		if v, ok := gchild.Args["order"]; ok {
+			dst.Params.Order = v
+		}
 		sg.Children = append(sg.Children, dst)
 		err := treeCopy(ctx, gchild, dst)
 		if err != nil {
@@ -838,6 +842,12 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, taskQuery []byte, rch chan 
 
 	// Apply filters if any.
 	if err = sg.applyFilter(ctx); err != nil {
+		rch <- err
+		return
+	}
+
+	// Apply ordering if any.
+	if err = sg.applyOrder(ctx); err != nil {
 		rch <- err
 		return
 	}
@@ -1074,7 +1084,7 @@ func pageRange(p *params, n int) (int, int) {
 	return start, end
 }
 
-// applyWindow applies windowing to sg.sorted.
+// applyPagination applies windowing / pagination to UID matrix.
 func (sg *SubGraph) applyPagination(ctx context.Context) error {
 	params := sg.Params
 	if params.Count == 0 && params.Offset == 0 { // No pagination.
@@ -1088,5 +1098,34 @@ func (sg *SubGraph) applyPagination(ctx context.Context) error {
 	}
 	// Re-merge the UID matrix.
 	sg.destUIDs = algo.MergeLists(sg.Result)
+	return nil
+}
+
+func (sg *SubGraph) applyOrder(ctx context.Context) error {
+	if len(sg.Params.Order) == 0 {
+		return nil
+	}
+	x.Printf("~~~~~OrderBy=%s sg.Attr=%s", sg.Params.Order, sg.Attr)
+
+	b := flatbuffers.NewBuilder(0)
+	ao := b.CreateString(string(sg.Params.Order))
+
+	// Add UID matrix.
+	uidOffsets := make([]flatbuffers.UOffsetT, 0, len(sg.Result))
+	for _, ul := range sg.Result {
+		uidOffsets = append(uidOffsets, ul.AddTo(b))
+	}
+
+	task.SortStartUidsVector(b, len(uidOffsets))
+	for i := len(uidOffsets) - 1; i >= 0; i-- {
+		b.PrependUOffsetT(uidOffsets[i])
+	}
+	uend := b.EndVector(len(uidOffsets))
+
+	task.SortStart(b)
+	task.SortAddAttr(b, ao)
+	task.SortAddUids(b, uend)
+	b.Finish(task.SortEnd(b))
+	worker.SortOverNetwork(ctx, b.FinishedBytes())
 	return nil
 }

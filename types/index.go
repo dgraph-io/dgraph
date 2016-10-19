@@ -25,8 +25,10 @@ func IndexKey(attr string, term []byte) []byte {
 	x.Check(err)
 	_, err = buf.WriteRune('|')
 	x.Check(err)
-	_, err = buf.Write(term)
-	x.Check(err)
+	if term != nil {
+		_, err = buf.Write(term)
+		x.Check(err)
+	}
 	return buf.Bytes()
 }
 

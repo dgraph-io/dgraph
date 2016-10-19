@@ -181,11 +181,16 @@ func populateGraph(t *testing.T) (string, *store.Store) {
 	addEdgeToValue(t, ps, "name", 25, "Daryl Dixon")
 	addEdgeToValue(t, ps, "name", 31, "Andrea")
 
+	addEdgeToValue(t, ps, "dob", 23, "1910-01-02")
+	addEdgeToValue(t, ps, "dob", 24, "1909-01-05")
+	addEdgeToValue(t, ps, "dob", 25, "1906-01-10")
+	addEdgeToValue(t, ps, "dob", 31, "1902-01-15")
+
 	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
 	return dir, ps
 }
 
-func processToJson(t *testing.T, query string) map[string]interface{} {
+func processToJSON(t *testing.T, query string) map[string]interface{} {
 	gq, _, err := gql.Parse(query)
 	require.NoError(t, err)
 
@@ -225,7 +230,7 @@ func TestGetUID(t *testing.T) {
 			}
 		}
 	`
-	mp := processToJson(t, query)
+	mp := processToJSON(t, query)
 	resp := mp["me"]
 	uid := resp.([]interface{})[0].(map[string]interface{})["_uid_"].(string)
 	require.EqualValues(t, "0x1", uid)
@@ -249,7 +254,7 @@ func TestDebug1(t *testing.T) {
 		}
 	`
 
-	mp := processToJson(t, query)
+	mp := processToJSON(t, query)
 	resp := mp["debug"]
 	uid := resp.([]interface{})[0].(map[string]interface{})["_uid_"].(string)
 	require.EqualValues(t, "0x1", uid)
@@ -272,7 +277,7 @@ func TestDebug2(t *testing.T) {
 		}
 	`
 
-	mp := processToJson(t, query)
+	mp := processToJSON(t, query)
 	resp := mp["me"]
 	uid, ok := resp.([]interface{})[0].(map[string]interface{})["_uid_"].(string)
 	require.False(t, ok, "No uid expected but got one %s", uid)
@@ -296,7 +301,7 @@ func TestCount(t *testing.T) {
 		}
 	`
 
-	mp := processToJson(t, query)
+	mp := processToJSON(t, query)
 	resp := mp["me"]
 	friend := resp.([]interface{})[0].(map[string]interface{})["friend"]
 	count := int(friend.(map[string]interface{})["_count_"].(float64))
@@ -830,26 +835,26 @@ func TestToPB(t *testing.T) {
 	require.EqualValues(t, "debug", gr.Attribute)
 	require.EqualValues(t, 1, gr.Uid)
 	require.EqualValues(t, "mich", gr.Xid)
-	require.EqualValues(t, 3, len(gr.Properties))
+	require.Len(t, gr.Properties, 3)
 
 	require.EqualValues(t, "Michonne",
 		getProperty(gr.Properties, "name").GetStrVal())
-	require.EqualValues(t, 10, len(gr.Children))
+	require.Len(t, gr.Children, 10)
 
 	child := gr.Children[0]
 	require.EqualValues(t, 23, child.Uid)
 	require.EqualValues(t, "friend", child.Attribute)
 
-	require.EqualValues(t, 1, len(child.Properties))
+	require.Len(t, child.Properties, 1)
 	require.EqualValues(t, "Rick Grimes",
 		getProperty(child.Properties, "name").GetStrVal())
-	require.EqualValues(t, 0, len(child.Children))
+	require.Empty(t, child.Children)
 
 	child = gr.Children[5]
 	require.EqualValues(t, 23, child.Uid)
 	require.EqualValues(t, "friend", child.Attribute)
-	require.EqualValues(t, 0, len(child.Properties))
-	require.EqualValues(t, 0, len(child.Children))
+	require.Empty(t, child.Properties)
+	require.Empty(t, child.Children)
 }
 
 func TestSchema(t *testing.T) {
@@ -891,11 +896,11 @@ func TestSchema(t *testing.T) {
 	require.EqualValues(t, "debug", gr.Attribute)
 	require.EqualValues(t, 1, gr.Uid)
 	require.EqualValues(t, "mich", gr.Xid)
-	require.EqualValues(t, 3, len(gr.Properties))
+	require.Len(t, gr.Properties, 3)
 
 	require.EqualValues(t, "Michonne",
 		getProperty(gr.Properties, "name").GetStrVal())
-	require.EqualValues(t, 10, len(gr.Children))
+	require.Len(t, gr.Children, 10)
 
 	child := gr.Children[0]
 	require.EqualValues(t, 23, child.Uid)
@@ -904,13 +909,13 @@ func TestSchema(t *testing.T) {
 	require.EqualValues(t, 1, len(child.Properties))
 	require.EqualValues(t, "Rick Grimes",
 		getProperty(child.Properties, "name").GetStrVal())
-	require.EqualValues(t, 0, len(child.Children))
+	require.Empty(t, child.Children)
 
 	child = gr.Children[5]
 	require.EqualValues(t, 23, child.Uid)
 	require.EqualValues(t, "friend", child.Attribute)
-	require.EqualValues(t, 0, len(child.Properties))
-	require.EqualValues(t, 0, len(child.Children))
+	require.Empty(t, child.Properties)
+	require.Empty(t, child.Children)
 }
 
 func TestToPBFilter(t *testing.T) {
@@ -1090,85 +1095,40 @@ properties: <
 	require.EqualValues(t, proto.MarshalTextString(pb), expectedPb)
 }
 
-//func TestProcessGraphOrdered(t *testing.T) {
-//	dir, _ := populateGraph(t)
-//	defer os.RemoveAll(dir)
+func TestToJSONOrder(t *testing.T) {
+	dir, _ := populateGraph(t)
+	defer os.RemoveAll(dir)
+	query := `
+		{
+			me(_uid_:0x01) {
+				name
+				gender
+				friend(order: dob) {
+					name
+				}
+			}
+		}
+	`
 
-//	// Alright. Now we have everything set up. Let's create the query.
-//	query := `
-//		{
-//			me(_uid_: 0x01) {
-//				friend(orderBy: dob) {
-//					name
-//				}
-//				name
-//				gender
-//				alive
-//			}
-//		}
-//	`
-//	gq, _, err := gql.Parse(query)
-//	require.NoError(t, err)
+	gq, _, err := gql.Parse(query)
+	require.NoError(t, err)
 
-//	ctx := context.Background()
-//	sg, err := ToSubGraph(ctx, gq)
-//	require.NoError(t, err)
+	ctx := context.Background()
+	sg, err := ToSubGraph(ctx, gq)
+	require.NoError(t, err)
 
-//	ch := make(chan error)
-//	go ProcessGraph(ctx, sg, nil, ch)
-//	err = <-ch
-//	require.NoError(t, err)
+	ch := make(chan error)
+	go ProcessGraph(ctx, sg, nil, ch)
+	err = <-ch
+	require.NoError(t, err)
 
-//	if len(sg.Children) != 4 {
-//		t.Errorf("Expected len 4. Got: %v", len(sg.Children))
-//	}
-//	child := sg.Children[0]
-//	if child.Attr != "friend" {
-//		t.Errorf("Expected attr friend. Got: %v", child.Attr)
-//	}
-//	if len(child.Result) == 0 {
-//		t.Errorf("Expected some.Result.")
-//		return
-//	}
-
-//	if len(sg.Result) != 1 {
-//		t.Errorf("Expected 1 matrix. Got: %v", len(sg.Result))
-//	}
-
-//	ul := child.Result[0]
-//	if ul.Size() != 5 {
-//		t.Errorf("Expected 5 friends. Got: %v", ul.Size())
-//	}
-//	if ul.Get(0) != 23 || ul.Get(1) != 24 || ul.Get(2) != 25 ||
-//		ul.Get(3) != 31 || ul.Get(4) != 101 {
-//		t.Errorf("Friend ids don't match")
-//	}
-//	if len(child.Children) != 1 || child.Children[0].Attr != "name" {
-//		t.Errorf("Expected attr name")
-//	}
-//	child = child.Children[0]
-
-//	values := child.Values
-//	if values.ValuesLength() != 5 {
-//		t.Errorf("Expected 5 names of 5 friends")
-//	}
-//	checkName(t, child, 0, "Rick Grimes")
-//	checkName(t, child, 1, "Glenn Rhee")
-//	checkName(t, child, 2, "Daryl Dixon")
-//	checkName(t, child, 3, "Andrea")
-//	{
-//		var tv task.Value
-//		if ok := values.Values(&tv, 4); !ok {
-//			t.Error("Unable to retrieve value")
-//		}
-//		if !bytes.Equal(tv.ValBytes(), []byte{}) {
-//			t.Error("Expected a null byte slice")
-//		}
-//	}
-
-//	checkSingleValue(t, sg.Children[1], "name", "Michonne")
-//	checkSingleValue(t, sg.Children[2], "gender", "female")
-//}
+	//	var l Latency
+	//	js, err := sg.ToJSON(&l)
+	//	require.NoError(t, err)
+	//	require.EqualValues(t,
+	//		`{"me":[{"friend":[{"name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
+	//		string(js))
+}
 
 func benchmarkToJson(file string, b *testing.B) {
 	b.ReportAllocs()
@@ -1365,7 +1325,7 @@ func TestSchema1(t *testing.T) {
 			}
 		}
 	`
-	mp := processToJson(t, query)
+	mp := processToJSON(t, query)
 	resp := mp["person"]
 	name := resp.([]interface{})[0].(map[string]interface{})["name"].(string)
 	require.EqualValues(t, "Michonne", name)
