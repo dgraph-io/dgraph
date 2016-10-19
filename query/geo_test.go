@@ -33,7 +33,6 @@ import (
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/worker"
-	"github.com/dgraph-io/dgraph/x"
 )
 
 func createTestStore(t *testing.T) (string, *store.Store) {
@@ -57,27 +56,12 @@ func createTestStore(t *testing.T) (string, *store.Store) {
 	return dir, ps
 }
 
-func addEdgeToStore(t *testing.T, edge x.DirectedEdge, ps *store.Store) {
-	addEdge(t, edge, getOrCreate(posting.Key(edge.Entity, edge.Attribute), ps))
-}
-
 func addGeoData(t *testing.T, ps *store.Store, uid uint64, p geom.T, name string) {
-	edge := x.DirectedEdge{
-		Timestamp: time.Now(),
-		Attribute: "geometry",
-		ValueType: byte(types.GeoID),
-		Entity:    uid,
-	}
 	g := types.Geo{p}
-	var err error
-	edge.Value, err = g.MarshalBinary()
+	value, err := g.MarshalBinary()
 	require.NoError(t, err)
-	addEdgeToStore(t, edge, ps)
-
-	edge.Value = []byte(name)
-	edge.ValueType = byte(types.StringID)
-	edge.Attribute = "name"
-	addEdgeToStore(t, edge, ps)
+	addEdgeToTypedValue(t, ps, "geometry", uid, types.GeoID, value)
+	addEdgeToTypedValue(t, ps, "name", uid, types.StringID, []byte(name))
 }
 
 func createTestData(t *testing.T, ps *store.Store) {
