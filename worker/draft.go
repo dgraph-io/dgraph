@@ -183,7 +183,9 @@ func (n *node) doSendMessage(to uint64, data []byte) {
 	defer cancel()
 
 	addr := n.peers.Get(to)
-	x.Assertf(len(addr) > 0, "Don't have address for peer: %d", to)
+	if len(addr) == 0 {
+		return
+	}
 	pool := pools().get(addr)
 	conn, err := pool.Get()
 	x.Check(err)
@@ -528,8 +530,8 @@ func (n *node) InitAndStartNode(wal *raftwal.Wal, peer string) {
 
 	} else {
 		if len(peer) > 0 {
-			n.raft = raft.StartNode(n.cfg, nil)
 			n.joinPeers(peer, ws)
+			n.raft = raft.StartNode(n.cfg, nil)
 		} else {
 			peers := []raft.Peer{{ID: n.id}}
 			n.raft = raft.StartNode(n.cfg, peers)
