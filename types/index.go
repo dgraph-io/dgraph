@@ -32,6 +32,13 @@ func IndexKey(attr string, term []byte) []byte {
 	return buf.Bytes()
 }
 
+// TokenFromKey returns token for a given key in data store.
+func TokenFromKey(key []byte) []byte {
+	i := bytes.IndexRune(key, ':')
+	x.Assert(i >= 0)
+	return key[i+1:]
+}
+
 // DefaultIndexKeys tokenizes data as a string and return keys for indexing.
 func DefaultIndexKeys(attr string, val *String) [][]byte {
 	data := []byte((*val).String())

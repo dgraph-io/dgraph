@@ -41,7 +41,7 @@ func IsIndexed(str string) bool {
 	return indexedFields[str]
 }
 
-// ScalarList returns the list of scalars in the geiven object.
+// ScalarList returns the list of scalars in the given object.
 func ScalarList(obj string) []Item {
 	var res []Item
 	objstr, ok := str[obj].(types.Object)
@@ -54,6 +54,15 @@ func ScalarList(obj string) []Item {
 		}
 	}
 	return res
+}
+
+// IndexedFields returns a list of indexed fields.
+func IndexedFields() []string {
+	out := make([]string, 0, len(indexedFields))
+	for k := range indexedFields {
+		out = append(out, k)
+	}
+	return out
 }
 
 // TypeOf returns the type of given field.
