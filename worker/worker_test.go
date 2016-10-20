@@ -143,6 +143,9 @@ func TestProcessTask(t *testing.T) {
 			[]uint64{23},
 			[]uint64{23, 25, 26, 31},
 		}, algo.ToUintsListForTest(algo.FromTaskResult(r)))
+
+	// Test index's keys.
+	require.EqualValues(t, []string{"photon"}, index.KeysForTest("friend"))
 }
 
 // newQuery creates a Query flatbuffer table, serializes and returns it.
@@ -217,7 +220,8 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
 
 	// Issue a similar query.
-	query = newQuery("friend", nil, []string{"hey", "photon", "notphoton", "notphoton_extra"})
+	query = newQuery("friend", nil,
+		[]string{"hey", "photon", "notphoton", "notphoton_extra"})
 	result, err = processTask(query)
 	require.NoError(t, err)
 
@@ -275,6 +279,10 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 		[]uint64{},
 		[]uint64{12},
 	}, algo.ToUintsListForTest(algo.FromTaskResult(r)))
+
+	// Test index's keys.
+	require.EqualValues(t, []string{"extra", "ignored", "notphoton", "photon"},
+		index.KeysForTest("friend"))
 }
 
 // Index-related test. Similar to TestProcessTaskIndeMLayer except we call
@@ -312,7 +320,8 @@ func TestProcessTaskIndex(t *testing.T) {
 	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
 
 	// Issue a similar query.
-	query = newQuery("friend", nil, []string{"hey", "photon", "notphoton", "notphoton_extra"})
+	query = newQuery("friend", nil,
+		[]string{"hey", "photon", "notphoton", "notphoton_extra"})
 	result, err = processTask(query)
 	require.NoError(t, err)
 
@@ -358,6 +367,10 @@ func TestProcessTaskIndex(t *testing.T) {
 		[]uint64{},
 		[]uint64{12},
 	}, algo.ToUintsListForTest(algo.FromTaskResult(r)))
+
+	// Test index's keys.
+	require.EqualValues(t, []string{"extra", "ignored", "notphoton", "photon"},
+		index.KeysForTest("friend"))
 }
 
 func TestMain(m *testing.M) {

@@ -57,7 +57,7 @@ func InitIndex(dataStore *store.Store) {
 		}(attr)
 	}
 
-	keysTables := make(map[string]*KeysTable)
+	keysTables = make(map[string]*KeysTable)
 	for i := 0; i < len(indexedFields); i++ {
 		r := <-results
 		keysTables[r.attr] = r.table
@@ -122,4 +122,12 @@ func (t *KeysTable) Size() int {
 	t.RLock()
 	defer t.RUnlock()
 	return len(t.key)
+}
+
+// KeysForTest returns keys for a table. This is just for testing / debugging.
+func KeysForTest(attr string) []string {
+	kt := GetKeysTable(attr)
+	kt.RLock()
+	defer kt.RUnlock()
+	return kt.key
 }

@@ -120,12 +120,12 @@ func spawnIndexMutations(ctx context.Context, attr string, uid uint64, p stype.V
 			index.MutateChan <- x.Mutations{
 				Del: []x.DirectedEdge{edge},
 			}
-			indexLog.Printf("processIndexTerm DEL [%s] [%d] OldTerm [%s]", edge.Attribute, edge.Entity, string(edge.IndexToken))
+			indexLog.Printf("processIndexTerm DEL [%s] [%d] OldTerm [%s]", edge.Attribute, edge.Entity, edge.IndexToken)
 		} else {
 			index.MutateChan <- x.Mutations{
 				Set: []x.DirectedEdge{edge},
 			}
-			indexLog.Printf("processIndexTerm SET [%s] [%d] NewTerm [%s]", edge.Attribute, edge.Entity, string(edge.IndexToken))
+			indexLog.Printf("processIndexTerm SET [%s] [%d] NewTerm [%s]", edge.Attribute, edge.Entity, edge.IndexToken)
 		}
 	}
 }
@@ -142,8 +142,14 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t x.DirectedEdge, op by
 	var lastPost types.Posting
 	var hasLastPost bool
 
-	doUpdateIndex := indexStore != nil && (t.Value != nil) &&
-		(len(t.IndexToken) == 0) && schema.IsIndexed(t.Attribute)
+	isIndexedAttr := schema.IsIndexed(t.Attribute)
+	if len(t.IndexToken) > 0 && op == Set {
+		x.Assertf(isIndexedAttr, "Attribute should be indexed: %s", t.Attribute)
+		index.GetKeysTable(t.Attribute).Add(t.IndexToken)
+	}
+
+	doUpdateIndex := indexStore != nil && (t.Value != nil) && isIndexedAttr &&
+		(len(t.IndexToken) == 0)
 	if doUpdateIndex {
 		// Check last posting for original value BEFORE any mutation actually happens.
 		if l.Length() >= 1 {

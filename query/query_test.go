@@ -149,6 +149,7 @@ func populateGraph(t *testing.T) (string, *store.Store) {
 	schema.ParseBytes([]byte(schemaStr))
 	posting.InitIndex(ps)
 	worker.InitIndex()
+	index.InitIndex(ps)
 
 	// So, user we're interested in has uid: 1.
 	// She has 5 friends: 23, 24, 25, 31, and 101
