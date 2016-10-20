@@ -145,6 +145,8 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t x.DirectedEdge, op by
 	var hasLastPost bool
 
 	isIndexedAttr := schema.IsIndexed(t.Attribute)
+
+	// Update list of tokens / buckets.
 	if len(t.IndexToken) > 0 && op == Set {
 		x.Assertf(isIndexedAttr, "Attribute should be indexed: %s", t.Attribute)
 		index.GetTokensTable(t.Attribute).Add(t.IndexToken)

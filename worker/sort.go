@@ -7,6 +7,7 @@ import (
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/index"
 	"github.com/dgraph-io/dgraph/posting"
+	//	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
@@ -83,159 +84,206 @@ func processSort(qu []byte) ([]byte, error) {
 	if s.Coarse() == 0 {
 		return doFineSort(s)
 	}
-	return doCoarseSort(s)
+	return newCoarseSorter(s).run()
 }
 
-func doFineSort(s *task.Sort) ([]byte, error) {
-	return []byte{}, nil
+type coarseSorter struct {
+	s       *task.Sort
+	attr    string
+	offset  int
+	count   int
+	state   []byte
+	offsets []int
+	counts  []int
+	out     [][]uint64
 }
 
-func doCoarseSort(s *task.Sort) ([]byte, error) {
+func newCoarseSorter(s *task.Sort) *coarseSorter {
 	x.Assert(s != nil)
-	attr := string(s.Attr())
+	x.Assertf(s.Count() >= 0,
+		"We do not yet support negative count with sorting: %s %d",
+		s.Attr(), s.Count())
 
-	m := s.UidmatrixLength()
-
-	// Iterate over buckets, get posting lists, intersect and dump to "out".
-	// It is hard to write directly to a flatbuffer output because you have to
-	// output one UID list at a time, whereas we process bucket by bucket.
-	kt := index.GetTokensTable(attr)
-	out := make([][]uint64, m) // Store the intermediate results.
-	for i := 0; i < m; i++ {
-		out[i] = make([]uint64, 0, 10)
+	n := s.UidmatrixLength()
+	cs := &coarseSorter{
+		s:       s,
+		attr:    string(s.Attr()),
+		offset:  int(s.Offset()),
+		count:   int(s.Count()),
+		state:   make([]byte, n),
+		offsets: make([]int, n),
+		out:     make([][]uint64, n), // Intermediate results.
 	}
 
-	offset := int(s.Offset())
-	count := int(s.Count())
-	x.Assertf(count >= 0,
-		"We do not yet support negative count with sorting: %d", count)
-
-	// Example: Fix one UID list. Intersect with 4 buckets. Say the size of
-	// intersections of each bucket is: 30 40 50 30.
-	// Say offset is 45. In this case, you can only discard the first bucket.
-	// You have to keep everything from the second bucket as the ordering within
-	// a bucket is undefined. After dropping the first bucket, the "offset"
-	// should be modifed to 15.
-
-	// State 0: Waiting to hit first bucket that we want to include.
-	// State 1: Waiting to hit last bucket that we want to include.
-	// State 2: Done with this UID list.
-	state := make([]byte, m)
-
-	// offsets[i] is the offset for i-th UID list. As we intersect with buckets,
-	// we decrement offsets[i] until we go into state 1.
-	offsets := make([]int, m)
-	for i := 0; i < m; i++ {
-		offsets[i] = offset
+	for i := 0; i < n; i++ {
+		cs.offsets[i] = cs.offset
 	}
 
-	// counts[i] is the number of elements that are now covered. While in
-	// state 1, we keep decrementing counts[i] by size of intersection. We go
-	// into state 2 when counts[i] <= 0.
-	// If count == 0, we ignore counts and enter 2 only after intersecting with
-	// all buckets.
-	var counts []int
-	if count > 0 {
-		counts = make([]int, m)
-		for i := 0; i < m; i++ {
-			counts[i] = count
+	if cs.count > 0 {
+		cs.counts = make([]int, n)
+		for i := 0; i < n; i++ {
+			cs.counts[i] = cs.count
 		}
 	}
 
-	var done bool
-	for token := kt.GetFirst(); !done && len(token) > 0; token = kt.GetNext(token) {
-		if len(token) == 0 {
+	for i := 0; i < n; i++ {
+		cs.out[i] = make([]uint64, 0, 10)
+	}
+	return cs
+}
+
+// Example: Fix one UID list. Intersect with 4 buckets. Say the size of
+// intersections of each bucket is: 30 40 50 30.
+// Say offset is 45. In this case, you can only discard the first bucket.
+// You have to keep everything from the second bucket as the ordering within
+// a bucket is undefined. After dropping the first bucket, the "offset"
+// should be modifed to 15.
+
+// runHelper looks up UIDs for one token / bucket and intersect with each
+// UID list in the UID matrix. Returns true if all UID lists are done.
+func (cs *coarseSorter) runHelper(key []byte) bool {
+	pl, decr := posting.GetOrCreate(key, ws.dataStore)
+	defer decr()
+
+	// If some UID list is not done, "done" will be set to false.
+	done := true
+	for i := 0; i < cs.s.UidmatrixLength(); i++ { // Iterate over UID lists.
+		var ul task.UidList
+		var l algo.UIDList
+		x.Assert(cs.s.Uidmatrix(&ul, i))
+		l.FromTask(&ul)
+		listOpt := posting.ListOptions{Intersect: &l}
+		// Intersect index with i-th input UID list.
+		result := pl.Uids(listOpt)
+		n := result.Size()
+
+		if cs.state[i] == 2 {
+			// This UID list is done. No need to process.
+			continue
+		}
+		// By default, we want to output this bucket's intersesction.
+		wantBucket := true
+		if cs.state[i] == 0 {
+			if cs.offsets[i] >= n {
+				// We do not need this bucket. Let's not output it.
+				cs.offsets[i] -= n
+				wantBucket = false
+			} else {
+				// This is the first bucket we need. Enter new state. Update count.
+				x.Printf("~~~## i=%d n=%d offsets[i]=%d", i, n, cs.offsets[i])
+				cs.state[i] = 1
+				if cs.count > 0 {
+					// Say intersection is 100 elements. Offset is 3. So, we're
+					// keeping 97 elements from this bucket. Decrement count by 97.
+					cs.counts[i] -= (n - cs.offsets[i])
+					if cs.counts[i] <= 0 {
+						cs.state[i] = 2 // We are done with this UID list.
+					}
+				}
+			}
+		} else if cs.state[i] == 1 {
+			if cs.count > 0 {
+				cs.counts[i] -= n
+				if cs.counts[i] <= 0 {
+					cs.state[i] = 2 // We are done with this UID list.
+				}
+			}
+		}
+
+		if wantBucket {
+			for j := 0; j < result.Size(); j++ {
+				cs.out[i] = append(cs.out[i], result.Get(j))
+			}
+		}
+
+		if cs.state[i] != 2 {
+			// There is a UID list that is not done. So we need to continue
+			// iterating over buckets.
+			done = false
+		}
+	}
+	return done
+}
+
+func (cs *coarseSorter) run() ([]byte, error) {
+	kt := index.GetTokensTable(cs.attr)
+	for token := kt.GetFirst(); len(token) > 0; token = kt.GetNext(token) {
+		if cs.runHelper(types.IndexKey(cs.attr, token)) {
 			break
 		}
-		key := types.IndexKey(attr, token)
-		pl, decr := posting.GetOrCreate(key, ws.dataStore)
-		x.Assertf(pl != nil, "%s %s", attr, token)
-
-		// If some UID list is not done, "done" will be set to false.
-		done = true
-		for i := 0; i < m; i++ { // Iterate over UID lists.
-			var ul task.UidList
-			var l algo.UIDList
-			x.Assert(s.Uidmatrix(&ul, i))
-			l.FromTask(&ul)
-			listOpt := posting.ListOptions{Intersect: &l}
-			// Intersect index with i-th input UID list.
-			result := pl.Uids(listOpt)
-			n := result.Size()
-			x.Printf("~~~Intersect token=[%s] i=%d sizeOfResult=%d", token, i, n)
-
-			wantBucket := state[i] < 2
-			if state[i] == 0 {
-				if offsets[i] >= n {
-					// We do not need this bucket. Let's drop it.
-					offsets[i] -= n
-					wantBucket = false
-				} else {
-					// This is the first bucket we need. Enter new state. Update count.
-					x.Printf("~~~## i=%d n=%d offsets[i]=%d", i, n, offsets[i])
-					state[i] = 1
-					if count > 0 {
-						// Say intersection is 100 elements. Offset is 3. So, we're
-						// keeping 97 elements from this bucket. Decrement count by 97.
-						counts[i] -= (n - offsets[i])
-						if counts[i] <= 0 {
-							state[i] = 2
-						}
-					}
-				}
-			} else if state[i] == 1 {
-				if count > 0 {
-					counts[i] -= n
-					if counts[i] <= 0 {
-						state[i] = 2
-					}
-				}
-			}
-
-			if wantBucket {
-				for j := 0; j < result.Size(); j++ {
-					out[i] = append(out[i], result.Get(j))
-				}
-			}
-
-			x.Printf("~~~EndOfIter: token=[%s] state[%d]=%d", token, i, state[i])
-			if state[i] != 2 {
-				// There is a UID list that is not done. So we need to continue
-				// iterating over buckets.
-				done = false
-			}
-		}
-		decr() // Done with this posting list.
 	}
 
-	x.Printf("~~~~sort out:%v", out)
+	x.Printf("~~~~sort out:%v", cs.out)
 
 	// Convert out to flatbuffers output.
 	b := flatbuffers.NewBuilder(0)
 
 	// Add UID matrix.
-	uidOffsets := make([]flatbuffers.UOffsetT, 0, m)
-	for _, ul := range out {
+	n := cs.s.UidmatrixLength()
+	uidOffsets := make([]flatbuffers.UOffsetT, 0, n)
+	for _, ul := range cs.out {
 		var l algo.UIDList
 		l.FromUints(ul)
 		uidOffsets = append(uidOffsets, l.AddTo(b))
 	}
 
-	task.SortResultStartUidmatrixVector(b, m)
-	for i := m - 1; i >= 0; i-- {
+	task.SortResultStartUidmatrixVector(b, n)
+	for i := n - 1; i >= 0; i-- {
 		b.PrependUOffsetT(uidOffsets[i])
 	}
-	uend := b.EndVector(m)
+	uend := b.EndVector(n)
 
-	task.SortResultStartOffsetVector(b, m)
-	for i := m - 1; i >= 0; i-- {
-		b.PrependInt32(int32(offsets[i]))
+	task.SortResultStartOffsetVector(b, n)
+	for i := n - 1; i >= 0; i-- {
+		b.PrependInt32(int32(cs.offsets[i]))
 	}
-	offsetOffset := b.EndVector(m)
+	offsetOffset := b.EndVector(n)
 
 	task.SortResultStart(b)
 	task.SortResultAddUidmatrix(b, uend)
 	task.SortResultAddOffset(b, offsetOffset)
 	b.Finish(task.SortResultEnd(b))
 	return b.FinishedBytes(), nil
+}
+
+func doFineSort(s *task.Sort) ([]byte, error) {
+	x.Assertf(s.UidmatrixLength() == 1,
+		"Expected only one list to be sorted for now: %d", s.UidmatrixLength())
+
+	var ul task.UidList
+	x.Assert(s.Uidmatrix(&ul, 0))
+	attr := string(s.Attr())
+	//	typ := schema.TypeOf(attr)
+
+	for i := 0; i < ul.UidsLength(); i++ {
+		uid := ul.Uids(i)
+		fetchValue(uid, attr)
+	}
+
+	return []byte{}, nil
+}
+
+func fetchValue(uid uint64, attr string) (types.Value, error) {
+	//	pl, decr := posting.GetOrCreate(posting.Key(uid, attr), ws.dataStore)
+	//	defer decr()
+
+	//	valBytes, vType, err := pl.Value()
+	//	if err != nil {
+	//		return nil, err
+	//	}
+
+	return nil, nil
+
+	//	vType := tv.ValType()
+	//	valBytes := tv.ValBytes()
+	//	val := types.ValueForType(types.TypeID(vType))
+	//	if val == nil {
+	//		return nil, x.Errorf("Invalid type: %v", vType)
+	//	}
+	//	err := val.UnmarshalBinary(valBytes)
+	//	if err != nil {
+	//		return nil, err
+	//	}
+	//	return val, nil
+
 }

@@ -350,7 +350,7 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 	return result, nil
 }
 
-// gets the value from the task.
+// getValue gets the value from the task.
 func getValue(tv task.Value) (types.Value, error) {
 	vType := tv.ValType()
 	valBytes := tv.ValBytes()
@@ -862,7 +862,7 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, taskQuery []byte, rch chan 
 		// 2) In possibly another worker: Get the exact values and apply sort.
 		// The second step is necessary because within each bucket, the results
 		// might not be sorted.
-		if err = sg.applyOrderByIndex(ctx); err != nil {
+		if err = sg.applyOrder(ctx); err != nil {
 			rch <- err
 			return
 		}
@@ -1111,9 +1111,8 @@ func (sg *SubGraph) applyPagination(ctx context.Context) error {
 	return nil
 }
 
-// applyOrderByIndex orders and trims UID matrix using index. The results are
-// rough: within each bucket, the results might not be in the correct order.
-func (sg *SubGraph) applyOrderByIndex(ctx context.Context) error {
+// applyOrder orders results by a given attribute.
+func (sg *SubGraph) applyOrder(ctx context.Context) error {
 	if len(sg.Params.Order) == 0 {
 		return nil
 	}
