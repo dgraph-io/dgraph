@@ -25,6 +25,7 @@ import (
 	"log"
 	"math"
 	"sort"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -136,14 +137,29 @@ func samePosting(a *types.Posting, b *types.Posting) bool {
 
 // Key = attribute|uid
 func Key(uid uint64, attr string) []byte {
-	buf := bytes.NewBufferString(attr)
-	if _, err := buf.WriteRune('|'); err != nil {
-		log.Fatalf("Error while writing |")
+	buf := make([]byte, len(attr)+9)
+	for i, ch := range attr {
+		buf[i] = byte(ch)
 	}
-	if err := binary.Write(buf, binary.LittleEndian, uid); err != nil {
-		log.Fatalf("Error while creating key with attr: %v uid: %v\n", attr, uid)
+	buf[len(attr)] = '|'
+	binary.BigEndian.PutUint64(buf[len(attr)+1:], uid)
+	return buf
+}
+
+func debugKey(key []byte) string {
+	var b bytes.Buffer
+	var rest []byte
+	for i, ch := range key {
+		if ch == '|' {
+			b.WriteByte(':')
+			rest = key[i+1:]
+			break
+		}
+		b.WriteByte(ch)
 	}
-	return buf.Bytes()
+	uid := binary.BigEndian.Uint64(rest)
+	b.WriteString(strconv.FormatUint(uid, 16))
+	return b.String()
 }
 
 func newPosting(t x.DirectedEdge, op byte) []byte {
@@ -701,9 +717,7 @@ func (l *List) merge() (merged bool, rerr error) {
 	ubuf := make([]byte, 16)
 	h := md5.New()
 	for i := 0; i < sz; i++ {
-		if ok := l.get(&p, i); !ok {
-			log.Fatalf("Idx: %d. Unable to parse posting.", i)
-		}
+		x.Assertf(l.get(&p, i), "Unable to parse posting idx: %v for key: %s", i, debugKey(l.key))
 
 		// Add individual posting to hash.
 		n := binary.PutVarint(ubuf, int64(i))
