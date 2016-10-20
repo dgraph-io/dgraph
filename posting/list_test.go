@@ -18,11 +18,13 @@ package posting
 
 import (
 	"context"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"math"
 	"math/rand"
 	"os"
+	"sort"
 	"strconv"
 	"testing"
 	"time"
@@ -72,6 +74,23 @@ func checkUids(t *testing.T, l *List, uids []uint64) {
 func addMutation(t *testing.T, l *List, edge x.DirectedEdge, op byte) {
 	_, err := l.AddMutation(context.Background(), edge, op)
 	require.NoError(t, err)
+}
+
+func TestKey(t *testing.T) {
+	var i uint64
+	keys := make([]string, 0, 1024)
+	for i = 1024; i >= 1; i-- {
+		key := Key(i, "testing.key")
+		keys = append(keys, string(key))
+		require.Equal(t, fmt.Sprintf("testing.key:%x", i), debugKey(key))
+	}
+	// Test that sorting is as expected.
+	sort.Strings(keys)
+	require.True(t, sort.StringsAreSorted(keys))
+	for i, key := range keys {
+		exp := Key(uint64(i+1), "testing.key")
+		require.Equal(t, key, string(exp))
+	}
 }
 
 func TestAddMutation(t *testing.T) {
