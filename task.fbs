@@ -77,13 +77,14 @@ table Sort {
 	attr:string;
 	uidmatrix:[UidList];
 	
-	// If true, we intersect with index buckets. Otherwise, we fetch actual values and sort.
-	index:bool;
-	
 	count:int;
 	offset:int;
+	
+	coarse:bool;
 }
 
 table SortResult {
+	// Offsets can get updated as we discard some bucket intersections at the front.
+	offset:[int];
 	uidmatrix:[UidList];
 }

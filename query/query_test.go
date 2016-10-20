@@ -183,10 +183,10 @@ func populateGraph(t *testing.T) (string, *store.Store) {
 	addEdgeToValue(t, ps, "name", 25, "Daryl Dixon")
 	addEdgeToValue(t, ps, "name", 31, "Andrea")
 
-	addEdgeToValue(t, ps, "dob", 23, "1910-01-02")
+	addEdgeToValue(t, ps, "dob", 23, "1910-05-02")
 	addEdgeToValue(t, ps, "dob", 24, "1909-01-05")
-	addEdgeToValue(t, ps, "dob", 25, "1906-01-10")
-	addEdgeToValue(t, ps, "dob", 31, "1902-01-15")
+	addEdgeToValue(t, ps, "dob", 25, "1909-05-10")
+	addEdgeToValue(t, ps, "dob", 31, "1901-01-15")
 
 	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
 	return dir, ps
@@ -1098,42 +1098,42 @@ properties: <
 }
 
 // Test sorting without committing to RocksDB.
-func TestToJSONOrderMLayer(t *testing.T) {
-	dir, ps := populateGraph(t)
-	defer os.RemoveAll(dir)
-	defer ps.Close()
+//func TestToJSONOrderMLayer(t *testing.T) {
+//	dir, ps := populateGraph(t)
+//	defer os.RemoveAll(dir)
+//	defer ps.Close()
 
-	query := `
-		{
-			me(_uid_:0x01) {
-				name
-				gender
-				friend(order: dob) {
-					name
-				}
-			}
-		}
-	`
+//	query := `
+//		{
+//			me(_uid_:0x01) {
+//				name
+//				gender
+//				friend(order: dob, offset: 2) {
+//					name
+//				}
+//			}
+//		}
+//	`
 
-	gq, _, err := gql.Parse(query)
-	require.NoError(t, err)
+//	gq, _, err := gql.Parse(query)
+//	require.NoError(t, err)
 
-	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, gq)
-	require.NoError(t, err)
+//	ctx := context.Background()
+//	sg, err := ToSubGraph(ctx, gq)
+//	require.NoError(t, err)
 
-	ch := make(chan error)
-	go ProcessGraph(ctx, sg, nil, ch)
-	err = <-ch
-	require.NoError(t, err)
+//	ch := make(chan error)
+//	go ProcessGraph(ctx, sg, nil, ch)
+//	err = <-ch
+//	require.NoError(t, err)
 
-	//	var l Latency
-	//	js, err := sg.ToJSON(&l)
-	//	require.NoError(t, err)
-	//	require.EqualValues(t,
-	//		`{"me":[{"friend":[{"name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
-	//		string(js))
-}
+//	//	var l Latency
+//	//	js, err := sg.ToJSON(&l)
+//	//	require.NoError(t, err)
+//	//	require.EqualValues(t,
+//	//		`{"me":[{"friend":[{"name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
+//	//		string(js))
+//}
 
 func benchmarkToJson(file string, b *testing.B) {
 	b.ReportAllocs()

@@ -1150,15 +1150,7 @@ func (sg *SubGraph) applyOrderByIndex(ctx context.Context) error {
 	// Copy result into our UID matrix.
 	result := task.GetRootAsSortResult(resultData, 0)
 	x.Assert(result.UidmatrixLength() == len(sg.Result))
-	out := make([]*algo.UIDList, len(sg.Result))
-	for i := 0; i < len(sg.Result); i++ {
-		l := new(algo.UIDList)
-		ul := new(task.UidList)
-		x.Assert(result.Uidmatrix(ul, i))
-		l.FromTask(ul)
-		out[i] = l
-	}
-	sg.Result = out
+	sg.Result = algo.FromSortResult(result)
 
 	// Update sg.destUID. We need to send it out to be sorted. Note we still
 	// want sg.destUID to be sorted by UID, not some attribute. To obtain
@@ -1166,5 +1158,25 @@ func (sg *SubGraph) applyOrderByIndex(ctx context.Context) error {
 	// For each element in UID matrix, we do a binary search in the current
 	// destUID and mark it. Then we scan over this bool array and rebuild
 	// destUIDs.
+	included := make([]bool, sg.destUIDs.Size())
+	for _, ul := range sg.Result {
+		for i := 0; i < ul.Size(); i++ {
+			uid := ul.Get(i)
+			idx := sg.destUIDs.IndexOf(uid) // Binary search.
+			if idx >= 0 {
+				included[idx] = true
+			}
+		}
+	}
+	newDest := make([]uint64, 0, len(included))
+	for i := 0; i < len(included); i++ {
+		if included[i] {
+			newDest = append(newDest, sg.destUIDs.Get(i))
+		}
+	}
+	sg.destUIDs = new(algo.UIDList)
+	sg.destUIDs.FromUints(newDest)
+	x.Printf("~~~~~orderByIndex: destUIDs: %v", sg.destUIDs.DebugString())
+
 	return nil
 }

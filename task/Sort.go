@@ -74,8 +74,20 @@ func (rcv *Sort) MutateOffset(n int32) bool {
 	return rcv._tab.MutateInt32Slot(10, n)
 }
 
+func (rcv *Sort) Coarse() byte {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(12))
+	if o != 0 {
+		return rcv._tab.GetByte(o + rcv._tab.Pos)
+	}
+	return 0
+}
+
+func (rcv *Sort) MutateCoarse(n byte) bool {
+	return rcv._tab.MutateByteSlot(12, n)
+}
+
 func SortStart(builder *flatbuffers.Builder) {
-	builder.StartObject(4)
+	builder.StartObject(5)
 }
 func SortAddAttr(builder *flatbuffers.Builder, attr flatbuffers.UOffsetT) {
 	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(attr), 0)
@@ -91,6 +103,9 @@ func SortAddCount(builder *flatbuffers.Builder, count int32) {
 }
 func SortAddOffset(builder *flatbuffers.Builder, offset int32) {
 	builder.PrependInt32Slot(3, offset, 0)
+}
+func SortAddCoarse(builder *flatbuffers.Builder, coarse byte) {
+	builder.PrependByteSlot(4, coarse, 0)
 }
 func SortEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
