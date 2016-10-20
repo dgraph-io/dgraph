@@ -131,3 +131,25 @@ func KeysForTest(attr string) []string {
 	defer kt.RUnlock()
 	return kt.key
 }
+
+// GetNextKey returns the next key after given key. It also returns the index
+// of the key.
+func (t *KeysTable) GetNext(key string) (int, string) {
+	t.RLock()
+	defer t.RUnlock()
+	i := sort.Search(len(t.key),
+		func(i int) bool {
+			return t.key[i] > key
+		})
+	if i < len(t.key) {
+		return i, t.key[i]
+	}
+	return i, ""
+}
+
+func (t *KeysTable) GetFirst() string {
+	t.RLock()
+	defer t.RUnlock()
+	x.Assert(len(t.key) > 0)
+	return t.key[0]
+}
