@@ -527,6 +527,55 @@ func TestAddMutation_checksum(t *testing.T) {
 	require.NotEqual(t, c3, c1)
 }
 
+func TestAddMutation_gru(t *testing.T) {
+	ol := getNew()
+	key := Key(0x01, "question.tag")
+	dir, err := ioutil.TempDir("", "storetest_")
+	require.NoError(t, err)
+	defer os.RemoveAll(dir)
+
+	ps, err := store.NewStore(dir)
+	require.NoError(t, err)
+	ol.init(key, ps)
+
+	{
+		// Set two tag ids and merge.
+		edge := x.DirectedEdge{
+			ValueId:   0x2b693088816b04b7,
+			Source:    "gru",
+			Timestamp: time.Now(),
+		}
+		addMutation(t, ol, edge, Set)
+		edge = x.DirectedEdge{
+			ValueId:   0x29bf442b48a772e0,
+			Source:    "gru",
+			Timestamp: time.Now(),
+		}
+		addMutation(t, ol, edge, Set)
+		merged, err := ol.MergeIfDirty(context.Background())
+		require.NoError(t, err)
+		require.True(t, merged)
+	}
+
+	{
+		edge := x.DirectedEdge{
+			ValueId:   0x38dec821d2ac3a79,
+			Source:    "gru",
+			Timestamp: time.Now(),
+		}
+		addMutation(t, ol, edge, Set)
+		edge = x.DirectedEdge{
+			ValueId:   0x2b693088816b04b7,
+			Source:    "gru",
+			Timestamp: time.Now(),
+		}
+		addMutation(t, ol, edge, Del)
+		merged, err := ol.MergeIfDirty(context.Background())
+		require.NoError(t, err)
+		require.True(t, merged)
+	}
+}
+
 func benchmarkAddMutations(n int, b *testing.B) {
 	// logrus.SetLevel(logrus.DebugLevel)
 	l := getNew()

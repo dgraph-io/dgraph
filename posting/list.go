@@ -615,10 +615,14 @@ func (l *List) get(p *types.Posting, i int) bool {
 		*p = val
 		return true
 	}
-	// Hit the main posting list.
+
 	if newidx >= plist.PostingsLength() {
-		return false
+		// Index could move past the posting list, yet unable to find an mindex element, because
+		// they get moved one right for good reasons, using mindexInsertAt.
+		// So, we just need to try recursively.
+		return l.get(p, newidx)
 	}
+	// Hit the main posting list.
 	return plist.Postings(p, newidx)
 }
 
