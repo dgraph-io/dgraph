@@ -75,8 +75,8 @@ func tokenizedIndexKeys(attr string, p stype.Value) ([][]byte, error) {
 	return nil, nil
 }
 
-// processIndexTerm adds mutation(s) for a single term, to maintain index.
-func processIndexTerm(ctx context.Context, attr string, uid uint64, p stype.Value, del bool) {
+// addIndexMutations adds mutations for a single term, to maintain index.
+func addIndexMutations(ctx context.Context, attr string, uid uint64, p stype.Value, del bool) {
 	x.Assert(uid != 0)
 	keys, err := tokenizedIndexKeys(attr, p)
 	if err != nil {
@@ -127,15 +127,28 @@ func processIndexTerm(ctx context.Context, attr string, uid uint64, p stype.Valu
 	}
 }
 
-// AddMutationWithIndex is AddMutation with support for indexing.
+// AddMutationWithIndex is AddMutation with support for indexing. Note that
+// index-related mutations also come through here.
 func (l *List) AddMutationWithIndex(ctx context.Context, t x.DirectedEdge, op byte) error {
-	x.Assertf(len(t.Attribute) > 0 && t.Attribute[0] != ':',
-		"[%s] [%d] [%s] %d %d\n", t.Attribute, t.Entity, string(t.Value), t.ValueId, op)
+	x.Assertf(len(t.Attribute) > 0, "Empty attribute")
+	isIndexKey := stype.IsIndexKeyStr(t.Attribute)
+	x.Assertf(!isIndexKey,
+		"Index mutations have edge.Key populated; edge.Attribute must not begin with indexRune")
+
+	isIndexedAttr := schema.IsIndexed(t.Attribute)
+	if isIndexKey && op == Set {
+		x.Assertf(isIndexedAttr,
+			"Index mutations observed for unindexed attribute: %s", t.Attribute)
+		// This is an index mutation. We shall update our in-memory list of keys.
+		// Currently we only care about SET and not DEL.
+		kt := index.GetKeysTable(t.Attribute)
+		kt.Add(t.IndexValue)
+	}
 
 	var lastPost types.Posting
 	var hasLastPost bool
 
-	doUpdateIndex := indexStore != nil && (t.Value != nil) &&
+	doUpdateIndex := !isIndexKey && indexStore != nil && (t.Value != nil) &&
 		schema.IsIndexed(t.Attribute)
 	if doUpdateIndex {
 		// Check last posting for original value BEFORE any mutation actually happens.
@@ -152,7 +165,6 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t x.DirectedEdge, op by
 		return nil
 	}
 
-	// Exact matches.
 	if hasLastPost && lastPost.ValueBytes() != nil {
 		delTerm := lastPost.ValueBytes()
 		delType := lastPost.ValType()
@@ -161,7 +173,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t x.DirectedEdge, op by
 		if err != nil {
 			return err
 		}
-		processIndexTerm(ctx, t.Attribute, t.Entity, p, true)
+		addIndexMutations(ctx, t.Attribute, t.Entity, p, true)
 	}
 	if op == Set {
 		p := stype.ValueForType(stype.TypeID(t.ValueType))
@@ -169,7 +181,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t x.DirectedEdge, op by
 		if err != nil {
 			return err
 		}
-		processIndexTerm(ctx, t.Attribute, t.Entity, p, false)
+		addIndexMutations(ctx, t.Attribute, t.Entity, p, false)
 	}
 	return nil
 }

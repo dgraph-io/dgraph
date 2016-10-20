@@ -31,6 +31,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/index"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/query/graph"
 	"github.com/dgraph-io/dgraph/schema"
@@ -1096,8 +1097,14 @@ properties: <
 }
 
 func TestToJSONOrder(t *testing.T) {
-	dir, _ := populateGraph(t)
+	dir, ps := populateGraph(t)
 	defer os.RemoveAll(dir)
+	defer ps.Close()
+
+	posting.MergeLists(10)
+	time.Sleep(time.Second)
+	index.InitIndex(ps)
+
 	query := `
 		{
 			me(_uid_:0x01) {

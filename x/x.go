@@ -55,14 +55,14 @@ type Status struct {
 }
 
 type DirectedEdge struct {
-	Entity    uint64 // Subject or source node / UID.
-	Attribute string // Attribute or predicate. Labels the edge.
-	Value     []byte // Edge points to a value.
-	ValueType byte   // The type of the value
-	ValueId   uint64 // Object or destination node / UID.
-	Key       []byte //If nonempty, overrides the usual Attribute|Entity key.
-	Source    string
-	Timestamp time.Time
+	Entity     uint64 // Subject or source node / UID.
+	Attribute  string // Attribute or predicate. Labels the edge.
+	Value      []byte // Edge points to a value.
+	ValueType  byte   // The type of the value
+	ValueId    uint64 // Object or destination node / UID.
+	IndexValue []byte // For index mutations. It's the value being indexed.
+	Source     string
+	Timestamp  time.Time
 }
 
 // Mutations stores the directed edges for both the set and delete operations.

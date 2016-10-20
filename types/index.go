@@ -3,6 +3,7 @@ package types
 import (
 	"bytes"
 	"encoding/binary"
+	"strings"
 
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/x"
@@ -15,6 +16,30 @@ const (
 	dateFormat1 = "2006-01-02"
 	dateFormat2 = "2006-01-02T15:04:05"
 )
+
+// IsIndexKey returns whether key is generated from IndexKey, i.e., starts
+// with indexRune.
+func IsIndexKey(key []byte) bool {
+	if len(key) == 0 {
+		return false
+	}
+	buf := bytes.NewBuffer(key) // Cheap operation.
+	r, _, err := buf.ReadRune()
+	x.Printf("~~~~%v %v", r, err)
+	return err == nil && r == indexRune
+}
+
+// IsIndexKeyStr returns whether key is generated from IndexKey, i.e., starts
+// with indexRune.
+func IsIndexKeyStr(key string) bool {
+	if len(key) == 0 {
+		return false
+	}
+	buf := strings.NewReader(key) // Cheap operation.
+	r, _, err := buf.ReadRune()
+	x.Printf("~~~~%v %v", r, err)
+	return err == nil && r == indexRune
+}
 
 // IndexKey creates a key for indexing the term for given attribute.
 func IndexKey(attr string, term []byte) []byte {
@@ -57,11 +82,6 @@ func DefaultIndexKeys(attr string, val *String) [][]byte {
 		tokens = append(tokens, IndexKey(attr, s))
 	}
 	return tokens
-}
-
-// ExactMatchIndexKeys indexes string type.
-func ExactMatchIndexKeys(attr string, data []byte) [][]byte {
-	return [][]byte{IndexKey(attr, data)}
 }
 
 // IntIndex indexs int type.
