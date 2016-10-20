@@ -75,5 +75,11 @@ table Membership {
 
 table Sort {
 	attr:string;
-	uids:[UidList];
+	uidmatrix:[UidList];
+	count:int;
+	offset:int;
+}
+
+table SortResult {
+	uidmatrix:[UidList];
 }

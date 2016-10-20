@@ -1,11 +1,11 @@
 package worker
 
 import (
-	"time"
-
+	"github.com/google/flatbuffers/go"
 	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/dgraph/algo"
+	"github.com/dgraph-io/dgraph/index"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/types"
@@ -48,37 +48,6 @@ func SortOverNetwork(ctx context.Context, qu []byte) (result []byte, rerr error)
 	return reply.Data, nil
 }
 
-func processSort(qu []byte) ([]byte, error) {
-	s := task.GetRootAsSort(qu, 0)
-	x.Assert(s != nil)
-	attr := string(s.Attr())
-
-	// Iterate over buckets.
-	prefix := types.IndexKey(attr, "") // Do it the simple way first.
-
-	posting.MergeLists(10)
-	time.Sleep(time.Second)
-	x.Printf("~~~~~ReceiveSort: attr=%s #uids=%d prefix=%s", attr, s.UidsLength(), prefix)
-	//	for iter.Seek(prefix); iter.Valid(); iter.Next() {
-	//		x.Printf("~~~~HIT prefix=%s", prefix)
-	//	}
-
-	iter := ws.dataStore.NewIterator()
-	defer iter.Close()
-
-	for iter.Seek(prefix); iter.ValidForPrefix(prefix); iter.Next() {
-		x.Printf("~~~Key=%s", string(iter.Key().Data()))
-	}
-
-	var ul task.UidList
-	x.Assert(s.Uids(&ul, 0))
-	var l algo.UIDList
-	l.FromTask(&ul)
-	x.Printf("~~~~~ReceiveSortData: %s", l.DebugString())
-
-	return nil, nil
-}
-
 // Sort is used to sort given UID matrix.
 func (w *grpcWorker) Sort(ctx context.Context, query *Payload) (*Payload, error) {
 	if ctx.Err() != nil {
@@ -106,4 +75,73 @@ func (w *grpcWorker) Sort(ctx context.Context, query *Payload) (*Payload, error)
 	case err := <-c:
 		return reply, err
 	}
+}
+
+func processSort(qu []byte) ([]byte, error) {
+	s := task.GetRootAsSort(qu, 0)
+	x.Assert(s != nil)
+	attr := string(s.Attr())
+
+	m := s.UidmatrixLength()
+
+	// Iterate over buckets, get posting lists, intersect and dump to "out".
+	// It is hard to write directly to a flatbuffer output because you have to
+	// output one UID list at a time, whereas we process bucket by bucket.
+	kt := index.GetTokensTable(attr)
+	out := make([][]uint64, m) // Store the intermediate results.
+	for i := 0; i < m; i++ {
+		out[i] = make([]uint64, 0, 10)
+	}
+
+	for token := kt.GetFirst(); len(token) > 0; token = kt.GetNext(token) {
+		if len(token) == 0 {
+			break
+		}
+		key := types.IndexKey(attr, token)
+		pl, decr := posting.GetOrCreate(key, ws.dataStore)
+		x.Assertf(pl != nil, "%s %s", attr, token)
+
+		// Iterate over UID lists.
+		for i := 0; i < m; i++ {
+			var ul task.UidList
+			var l algo.UIDList
+			x.Assert(s.Uidmatrix(&ul, i))
+			l.FromTask(&ul)
+			listOpt := posting.ListOptions{
+				Intersect: &l,
+			}
+			// Intersect index with i-th input UID list.
+			result := pl.Uids(listOpt)
+			x.Printf("~~~Intersect token=[%s] i=%d sizeOfResult=%d", token, i, result.Size())
+			// Append result.
+			for j := 0; j < result.Size(); j++ {
+				out[i] = append(out[i], result.Get(j))
+			}
+		}
+		decr() // Done with this posting list.
+	}
+
+	x.Printf("~~~~sort out:%v", out)
+
+	// Convert out to flatbuffers output.
+	b := flatbuffers.NewBuilder(0)
+
+	// Add UID matrix.
+	uidOffsets := make([]flatbuffers.UOffsetT, 0, m)
+	for _, ul := range out {
+		var l algo.UIDList
+		l.FromUints(ul)
+		uidOffsets = append(uidOffsets, l.AddTo(b))
+	}
+
+	task.SortResultStartUidmatrixVector(b, m)
+	for i := m - 1; i >= 0; i-- {
+		b.PrependUOffsetT(uidOffsets[i])
+	}
+	uend := b.EndVector(m)
+
+	task.SortResultStart(b)
+	task.SortResultAddUidmatrix(b, uend)
+	b.Finish(task.SortResultEnd(b))
+	return b.FinishedBytes(), nil
 }

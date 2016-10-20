@@ -30,7 +30,7 @@ func (rcv *Sort) Attr() []byte {
 	return nil
 }
 
-func (rcv *Sort) Uids(obj *UidList, j int) bool {
+func (rcv *Sort) Uidmatrix(obj *UidList, j int) bool {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
 	if o != 0 {
 		x := rcv._tab.Vector(o)
@@ -42,7 +42,7 @@ func (rcv *Sort) Uids(obj *UidList, j int) bool {
 	return false
 }
 
-func (rcv *Sort) UidsLength() int {
+func (rcv *Sort) UidmatrixLength() int {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
 	if o != 0 {
 		return rcv._tab.VectorLen(o)
@@ -50,17 +50,47 @@ func (rcv *Sort) UidsLength() int {
 	return 0
 }
 
+func (rcv *Sort) Count() int32 {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
+	if o != 0 {
+		return rcv._tab.GetInt32(o + rcv._tab.Pos)
+	}
+	return 0
+}
+
+func (rcv *Sort) MutateCount(n int32) bool {
+	return rcv._tab.MutateInt32Slot(8, n)
+}
+
+func (rcv *Sort) Offset() int32 {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
+	if o != 0 {
+		return rcv._tab.GetInt32(o + rcv._tab.Pos)
+	}
+	return 0
+}
+
+func (rcv *Sort) MutateOffset(n int32) bool {
+	return rcv._tab.MutateInt32Slot(10, n)
+}
+
 func SortStart(builder *flatbuffers.Builder) {
-	builder.StartObject(2)
+	builder.StartObject(4)
 }
 func SortAddAttr(builder *flatbuffers.Builder, attr flatbuffers.UOffsetT) {
 	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(attr), 0)
 }
-func SortAddUids(builder *flatbuffers.Builder, uids flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(1, flatbuffers.UOffsetT(uids), 0)
+func SortAddUidmatrix(builder *flatbuffers.Builder, uidmatrix flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(1, flatbuffers.UOffsetT(uidmatrix), 0)
 }
-func SortStartUidsVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
+func SortStartUidmatrixVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
 	return builder.StartVector(4, numElems, 4)
+}
+func SortAddCount(builder *flatbuffers.Builder, count int32) {
+	builder.PrependInt32Slot(2, count, 0)
+}
+func SortAddOffset(builder *flatbuffers.Builder, offset int32) {
+	builder.PrependInt32Slot(3, offset, 0)
 }
 func SortEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()

@@ -6,8 +6,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestKeysTableBasic(t *testing.T) {
-	keys := NewKeysTable()
+func TestTokensTableBasic(t *testing.T) {
+	keys := NewTokensTable()
 	require.EqualValues(t, 0, keys.Size())
 
 	// Query empty table.
@@ -48,23 +48,9 @@ func TestKeysTableBasic(t *testing.T) {
 	require.EqualValues(t, "aaa", keys.GetFirst())
 
 	// Test GetNext.
-	idx, nextKey := keys.GetNext("")
-	require.EqualValues(t, 0, idx)
-	require.EqualValues(t, "aaa", nextKey)
-
-	idx, nextKey = keys.GetNext("aaa")
-	require.EqualValues(t, 1, idx)
-	require.EqualValues(t, "world", nextKey)
-
-	idx, nextKey = keys.GetNext("aab")
-	require.EqualValues(t, 1, idx)
-	require.EqualValues(t, "world", nextKey)
-
-	idx, nextKey = keys.GetNext("world")
-	require.EqualValues(t, 2, idx)
-	require.EqualValues(t, "zzz", nextKey)
-
-	idx, nextKey = keys.GetNext("zzz")
-	require.EqualValues(t, 3, idx)
-	require.EqualValues(t, "", nextKey)
+	require.EqualValues(t, "aaa", keys.GetNext(""))
+	require.EqualValues(t, "world", keys.GetNext("aaa"))
+	require.EqualValues(t, "world", keys.GetNext("aab"))
+	require.EqualValues(t, "zzz", keys.GetNext("world"))
+	require.EqualValues(t, "", keys.GetNext("zzz"))
 }

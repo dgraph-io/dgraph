@@ -1097,14 +1097,11 @@ properties: <
 	require.EqualValues(t, proto.MarshalTextString(pb), expectedPb)
 }
 
-func TestToJSONOrder(t *testing.T) {
+// Test sorting without committing to RocksDB.
+func TestToJSONOrderMLayer(t *testing.T) {
 	dir, ps := populateGraph(t)
 	defer os.RemoveAll(dir)
 	defer ps.Close()
-
-	posting.MergeLists(10)
-	time.Sleep(time.Second)
-	index.InitIndex(ps)
 
 	query := `
 		{

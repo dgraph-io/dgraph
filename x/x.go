@@ -150,3 +150,26 @@ func Trace(ctx context.Context, format string, args ...interface{}) {
 	}
 	tr.LazyPrintf(format, args...)
 }
+
+// PageRange returns range for a list of n elements given pagination params.
+func PageRange(offset int, count int, n int) (int, int) {
+	if count == 0 && offset == 0 {
+		return 0, n
+	}
+	if count < 0 {
+		// Items from the back of the array, like Python arrays. Do a postive mod n.
+		return (((n + count) % n) + n) % n, n
+	}
+	start := offset
+	if start < 0 {
+		start = 0
+	}
+	if count == 0 { // No count specified. Just take the offset parameter.
+		return start, n
+	}
+	end := start + count
+	if end > n {
+		end = n
+	}
+	return start, end
+}

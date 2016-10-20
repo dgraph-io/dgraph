@@ -44,6 +44,7 @@ func IndexKeys(g *types.Geo) ([]string, error) {
 const indexPrefix = ":_loc_|"
 
 func indexKeyFromCellID(c s2.CellID) string {
+	// TODO: Should return just c.ToToken and treat indexPrefix as a predicate.
 	var buf bytes.Buffer
 	buf.WriteString(indexPrefix)
 	buf.WriteString(c.ToToken())

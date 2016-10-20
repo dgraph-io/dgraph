@@ -17,11 +17,11 @@ const (
 )
 
 var (
-	MutateChan chan x.Mutations
-	keysTables map[string]*KeysTable
+	MutateChan   chan x.Mutations
+	TokensTables map[string]*TokensTable
 )
 
-type KeysTable struct {
+type TokensTable struct {
 	sync.RWMutex
 	key []string
 }
@@ -36,13 +36,13 @@ func InitIndex(dataStore *store.Store) {
 	x.Printf("~~~~~~~~index.InitIndex: %d", len(indexedFields))
 	type resultStruct struct {
 		attr  string
-		table *KeysTable
+		table *TokensTable
 	}
 	results := make(chan resultStruct, len(indexedFields))
 
 	for _, attr := range indexedFields {
 		go func(attr string) {
-			table := NewKeysTable()
+			table := NewTokensTable()
 			prefix := types.IndexKey(attr, "")
 			x.Printf("~~~~index.InitIndex: seeking to prefix=[%s]", prefix)
 
@@ -57,29 +57,29 @@ func InitIndex(dataStore *store.Store) {
 		}(attr)
 	}
 
-	keysTables = make(map[string]*KeysTable)
+	TokensTables = make(map[string]*TokensTable)
 	for i := 0; i < len(indexedFields); i++ {
 		r := <-results
-		keysTables[r.attr] = r.table
+		TokensTables[r.attr] = r.table
 	}
 }
 
-// GetKeysTable returns KeysTable for an indexed attribute.
-func GetKeysTable(attr string) *KeysTable {
-	x.Assertf(keysTables != nil,
-		"keysTable uninitialized. You need to call InitIndex.")
-	return keysTables[attr]
+// GetTokensTable returns TokensTable for an indexed attribute.
+func GetTokensTable(attr string) *TokensTable {
+	x.Assertf(TokensTables != nil,
+		"TokensTable uninitialized. You need to call InitIndex.")
+	return TokensTables[attr]
 }
 
-// NewKeysTable returns a new keysTable.
-func NewKeysTable() *KeysTable {
-	return &KeysTable{
+// NewTokensTable returns a new TokensTable.
+func NewTokensTable() *TokensTable {
+	return &TokensTable{
 		key: make([]string, 0, 50),
 	}
 }
 
 // Get returns position of element. If not found, it returns -1.
-func (t *KeysTable) Get(s string) int {
+func (t *TokensTable) Get(s string) int {
 	t.RLock()
 	defer t.RUnlock()
 	i := sort.SearchStrings(t.key, s)
@@ -90,12 +90,12 @@ func (t *KeysTable) Get(s string) int {
 }
 
 // Add increments counter for a given key. If it doesn't exist, we create a
-// new entry in keysTable. We don't support delete yet. We are using a very
+// new entry in TokensTable. We don't support delete yet. We are using a very
 // simple implementation. In the future, as balanced trees / skip lists
 // implementations become standardized for Go, we may consider using them.
 // We also didn't support Delete operations yet. For that, we need to store
 // the counts for each key.
-func (t *KeysTable) Add(s string) {
+func (t *TokensTable) Add(s string) {
 	t.Lock()
 	defer t.Unlock()
 	i := sort.SearchStrings(t.key, s)
@@ -111,14 +111,14 @@ func (t *KeysTable) Add(s string) {
 
 // append appends a key to the table. It assumes that this key is the largest
 // and that order is preserved.
-func (t *KeysTable) append(s string) {
+func (t *TokensTable) append(s string) {
 	t.Lock()
 	defer t.Unlock()
 	t.key = append(t.key, s)
 }
 
-// Size returns size of keysTable.
-func (t *KeysTable) Size() int {
+// Size returns size of TokensTable.
+func (t *TokensTable) Size() int {
 	t.RLock()
 	defer t.RUnlock()
 	return len(t.key)
@@ -126,15 +126,15 @@ func (t *KeysTable) Size() int {
 
 // KeysForTest returns keys for a table. This is just for testing / debugging.
 func KeysForTest(attr string) []string {
-	kt := GetKeysTable(attr)
+	kt := GetTokensTable(attr)
 	kt.RLock()
 	defer kt.RUnlock()
 	return kt.key
 }
 
-// GetNextKey returns the next key after given key. It also returns the index
-// of the key.
-func (t *KeysTable) GetNext(key string) (int, string) {
+// GetNextKey returns the next key after given key. If we reach the end, we
+// return an empty string.
+func (t *TokensTable) GetNext(key string) string {
 	t.RLock()
 	defer t.RUnlock()
 	i := sort.Search(len(t.key),
@@ -142,12 +142,14 @@ func (t *KeysTable) GetNext(key string) (int, string) {
 			return t.key[i] > key
 		})
 	if i < len(t.key) {
-		return i, t.key[i]
+		return t.key[i]
 	}
-	return i, ""
+	return ""
 }
 
-func (t *KeysTable) GetFirst() string {
+// GetFirst returns the first key in our list of keys. You could also call
+// GetNext("") but that is less efficient.
+func (t *TokensTable) GetFirst() string {
 	t.RLock()
 	defer t.RUnlock()
 	x.Assert(len(t.key) > 0)

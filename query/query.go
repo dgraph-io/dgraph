@@ -846,16 +846,26 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, taskQuery []byte, rch chan 
 		return
 	}
 
-	// Apply ordering if any.
-	if err = sg.applyOrder(ctx); err != nil {
-		rch <- err
-		return
-	}
+	// At this point, destUIDs and UID matrix are all sorted by UID.
 
-	// Apply offset and count (for pagination).
-	if err = sg.applyPagination(ctx); err != nil {
-		rch <- err
-		return
+	if len(sg.Params.Order) == 0 {
+		// There is no ordering. Easy case. Just apply pagination and return.
+		if err = sg.applyPagination(ctx); err != nil {
+			rch <- err
+			return
+		}
+	} else {
+		// There is ordering here. We do this in two steps as the index might not
+		// be in the same worker as the predicate data.
+		// 1) In one worker: Iterate over index. Intersect with each UID list in
+		//    UID matrix. Apply pagination to each UID list to trim results.
+		// 2) In possibly another worker: Get the exact values and apply sort.
+		// The second step is necessary because within each bucket, the results
+		// might not be sorted.
+		if err = sg.applyOrderByIndex(ctx); err != nil {
+			rch <- err
+			return
+		}
 	}
 
 	var processed, leftToProcess []*SubGraph
@@ -1093,7 +1103,7 @@ func (sg *SubGraph) applyPagination(ctx context.Context) error {
 	x.Assert(sg.srcUIDs.Size() == len(sg.Result))
 	for _, l := range sg.Result {
 		l.Intersect(sg.destUIDs)
-		start, end := pageRange(&sg.Params, l.Size())
+		start, end := x.PageRange(sg.Params.Offset, sg.Params.Count, l.Size())
 		l.Slice(start, end)
 	}
 	// Re-merge the UID matrix.
@@ -1101,7 +1111,9 @@ func (sg *SubGraph) applyPagination(ctx context.Context) error {
 	return nil
 }
 
-func (sg *SubGraph) applyOrder(ctx context.Context) error {
+// applyOrderByIndex orders and trims UID matrix using index. The results are
+// rough: within each bucket, the results might not be in the correct order.
+func (sg *SubGraph) applyOrderByIndex(ctx context.Context) error {
 	if len(sg.Params.Order) == 0 {
 		return nil
 	}
@@ -1116,7 +1128,7 @@ func (sg *SubGraph) applyOrder(ctx context.Context) error {
 		uidOffsets = append(uidOffsets, ul.AddTo(b))
 	}
 
-	task.SortStartUidsVector(b, len(uidOffsets))
+	task.SortStartUidmatrixVector(b, len(uidOffsets))
 	for i := len(uidOffsets) - 1; i >= 0; i-- {
 		b.PrependUOffsetT(uidOffsets[i])
 	}
@@ -1124,8 +1136,28 @@ func (sg *SubGraph) applyOrder(ctx context.Context) error {
 
 	task.SortStart(b)
 	task.SortAddAttr(b, ao)
-	task.SortAddUids(b, uend)
+	task.SortAddUidmatrix(b, uend)
+
+	task.SortAddOffset(b, int32(sg.Params.Offset))
+	task.SortAddCount(b, int32(sg.Params.Count))
+
 	b.Finish(task.SortEnd(b))
-	worker.SortOverNetwork(ctx, b.FinishedBytes())
+	resultData, err := worker.SortOverNetwork(ctx, b.FinishedBytes())
+	if err != nil {
+		return err
+	}
+
+	// Copy result into our UID matrix.
+	result := task.GetRootAsSortResult(resultData, 0)
+	x.Assert(result.UidmatrixLength() == len(sg.Result))
+	out := make([]*algo.UIDList, len(sg.Result))
+	for i := 0; i < len(sg.Result); i++ {
+		l := new(algo.UIDList)
+		ul := new(task.UidList)
+		x.Assert(result.Uidmatrix(ul, i))
+		l.FromTask(ul)
+		out[i] = l
+	}
+	sg.Result = out
 	return nil
 }
