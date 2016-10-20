@@ -137,11 +137,8 @@ func TestProcessTask(t *testing.T) {
 
 	r := task.GetRootAsResult(result, 0)
 	require.EqualValues(t,
-		[][]uint64{
-			[]uint64{23, 31},
-			[]uint64{23},
-			[]uint64{23, 25, 26, 31},
-		}, algo.ToUintsListForTest(algo.FromTaskResult(r)))
+		[][]uint64{{23, 31}, {23}, {23, 25, 26, 31}},
+		algo.ToUintsListForTest(algo.FromTaskResult(r)))
 }
 
 // newQuery creates a Query flatbuffer table, serializes and returns it.
@@ -196,10 +193,8 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 	require.NoError(t, err)
 
 	r := task.GetRootAsResult(result, 0)
-	require.EqualValues(t, [][]uint64{
-		[]uint64{},
-		[]uint64{10, 12},
-	}, algo.ToUintsListForTest(algo.FromTaskResult(r)))
+	require.EqualValues(t, [][]uint64{{}, {10, 12}},
+		algo.ToUintsListForTest(algo.FromTaskResult(r)))
 
 	// Now try changing 12's friend value from "photon" to "notphoton_extra" to
 	// "notphoton".
@@ -221,12 +216,8 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 	require.NoError(t, err)
 
 	r = task.GetRootAsResult(result, 0)
-	require.EqualValues(t, [][]uint64{
-		[]uint64{},
-		[]uint64{10},
-		[]uint64{12},
-		[]uint64{},
-	}, algo.ToUintsListForTest(algo.FromTaskResult(r)))
+	require.EqualValues(t, [][]uint64{{}, {10}, {12}, {}},
+		algo.ToUintsListForTest(algo.FromTaskResult(r)))
 
 	// Try deleting.
 	edge = x.DirectedEdge{
@@ -254,11 +245,8 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 	require.NoError(t, err)
 
 	r = task.GetRootAsResult(result, 0)
-	require.EqualValues(t, [][]uint64{
-		[]uint64{},
-		[]uint64{},
-		[]uint64{12},
-	}, algo.ToUintsListForTest(algo.FromTaskResult(r)))
+	require.EqualValues(t, [][]uint64{{}, {}, {12}},
+		algo.ToUintsListForTest(algo.FromTaskResult(r)))
 
 	// Final touch: Merge everything to RocksDB.
 	posting.MergeLists(10)
@@ -269,11 +257,8 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 	require.NoError(t, err)
 
 	r = task.GetRootAsResult(result, 0)
-	require.EqualValues(t, [][]uint64{
-		[]uint64{},
-		[]uint64{},
-		[]uint64{12},
-	}, algo.ToUintsListForTest(algo.FromTaskResult(r)))
+	require.EqualValues(t, [][]uint64{{}, {}, {12}},
+		algo.ToUintsListForTest(algo.FromTaskResult(r)))
 
 	require.EqualValues(t,
 		[]string{"extra", "ignored", "notphoton", "photon"},
@@ -292,10 +277,8 @@ func TestProcessTaskIndex(t *testing.T) {
 	require.NoError(t, err)
 
 	r := task.GetRootAsResult(result, 0)
-	require.EqualValues(t, [][]uint64{
-		[]uint64{},
-		[]uint64{10, 12},
-	}, algo.ToUintsListForTest(algo.FromTaskResult(r)))
+	require.EqualValues(t, [][]uint64{{}, {10, 12}},
+		algo.ToUintsListForTest(algo.FromTaskResult(r)))
 
 	posting.MergeLists(10)
 	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
@@ -320,12 +303,8 @@ func TestProcessTaskIndex(t *testing.T) {
 	require.NoError(t, err)
 
 	r = task.GetRootAsResult(result, 0)
-	require.EqualValues(t, [][]uint64{
-		[]uint64{},
-		[]uint64{10},
-		[]uint64{12},
-		[]uint64{},
-	}, algo.ToUintsListForTest(algo.FromTaskResult(r)))
+	require.EqualValues(t, [][]uint64{{}, {10}, {12}, {}},
+		algo.ToUintsListForTest(algo.FromTaskResult(r)))
 
 	posting.MergeLists(10)
 	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
@@ -356,11 +335,8 @@ func TestProcessTaskIndex(t *testing.T) {
 	require.NoError(t, err)
 
 	r = task.GetRootAsResult(result, 0)
-	require.EqualValues(t, [][]uint64{
-		[]uint64{},
-		[]uint64{},
-		[]uint64{12},
-	}, algo.ToUintsListForTest(algo.FromTaskResult(r)))
+	require.EqualValues(t, [][]uint64{{}, {}, {12}},
+		algo.ToUintsListForTest(algo.FromTaskResult(r)))
 
 	require.EqualValues(t,
 		[]string{"extra", "ignored", "notphoton", "photon"},
@@ -375,15 +351,15 @@ func populateGraphForSort(t *testing.T, ps *store.Store) {
 	}
 
 	dobs := []string{
-		"1980-05-05", // 10
+		"1980-05-05", // 10 (1980)
 		"1980-04-05", // 11
-		"1979-05-05", // 12
+		"1979-05-05", // 12 (1979)
 		"1979-02-05", // 13
 		"1979-03-05", // 14
-		"1965-05-05", // 15
+		"1965-05-05", // 15 (1965)
 		"1965-04-05", // 16
 		"1965-03-05", // 17
-		"1970-05-05", // 18
+		"1970-05-05", // 18 (1970)
 		"1970-04-05", // 19
 		"1970-01-05", // 20
 		"1970-02-05", // 21
@@ -398,7 +374,7 @@ func populateGraphForSort(t *testing.T, ps *store.Store) {
 }
 
 // newSort creates a task.Sort table.
-func newSort(uids [][]uint64, offset, count int) []byte {
+func newSort(uids [][]uint64, offset, count int, coarse bool) []byte {
 	x.Assert(uids != nil)
 
 	b := flatbuffers.NewBuilder(0)
@@ -423,33 +399,159 @@ func newSort(uids [][]uint64, offset, count int) []byte {
 	task.SortAddUidmatrix(b, uend)
 	task.SortAddOffset(b, int32(offset))
 	task.SortAddCount(b, int32(count))
+	var coarseByte byte
+	if coarse {
+		coarseByte = 1
+	}
+	task.SortAddCoarse(b, coarseByte)
 	b.Finish(task.SortEnd(b))
 	return b.FinishedBytes()
 }
 
-func TestProcessSort(t *testing.T) {
+func TestProcessCoarseSort(t *testing.T) {
 	dir, ps := initTest(t, `scalar dob:date @index`)
 	defer os.RemoveAll(dir)
 	defer ps.Close()
 	populateGraphForSort(t, ps)
 	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
 
-	//	sort := newSort([][]uint64{
-	//		{10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21},
-	//		{10, 11, 12, 13, 14},
-	//		{16, 17, 18, 19, 20, 21},
-	//	}, 0, 0)
-	//	result, err := processSort(sort)
-	//	require.NoError(t, err)
+	sort := newSort([][]uint64{
+		{10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21},
+		{10, 11, 12, 13, 14, 21},
+		{16, 17, 18, 19, 20, 21},
+	}, 0, 0, true)
+	result, err := processSort(sort)
+	require.NoError(t, err)
 
-	//	r := task.GetRootAsSortResult(result, 0)
-	//	require.NotNil(t, r)
+	r := task.GetRootAsSortResult(result, 0)
+	require.NotNil(t, r)
+	require.EqualValues(t, [][]uint64{
+		{15, 16, 17, 18, 19, 20, 21, 12, 13, 14, 10, 11},
+		{21, 12, 13, 14, 10, 11},
+		{16, 17, 18, 19, 20, 21}},
+		algo.ToUintsListForTest(algo.FromSortResult(r)))
+}
 
-	//	r := task.GetRootAsSortResult(result, 0)
-	//	require.EqualValues(t, [][]uint64{
-	//		[]uint64{},
-	//		[]uint64{10, 12},
-	//	}, algo.ToUintsListForTest(algo.FromSortResult(r)))
+func TestProcessCoarseSortOffset(t *testing.T) {
+	dir, ps := initTest(t, `scalar dob:date @index`)
+	defer os.RemoveAll(dir)
+	defer ps.Close()
+	populateGraphForSort(t, ps)
+	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
+
+	input := [][]uint64{
+		{10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21},
+		{10, 11, 12, 13, 14, 21},
+		{16, 17, 18, 19, 20, 21}}
+
+	// Offset 1.
+	sort := newSort(input, 1, 0, true)
+	result, err := processSort(sort)
+	require.NoError(t, err)
+	r := task.GetRootAsSortResult(result, 0)
+	require.EqualValues(t, [][]uint64{
+		{15, 16, 17, 18, 19, 20, 21, 12, 13, 14, 10, 11},
+		{12, 13, 14, 10, 11},
+		{16, 17, 18, 19, 20, 21}},
+		algo.ToUintsListForTest(algo.FromSortResult(r)))
+
+	// Offset 2.
+	sort = newSort(input, 2, 0, true)
+	result, err = processSort(sort)
+	require.NoError(t, err)
+	r = task.GetRootAsSortResult(result, 0)
+	require.EqualValues(t, [][]uint64{
+		{15, 16, 17, 18, 19, 20, 21, 12, 13, 14, 10, 11},
+		{12, 13, 14, 10, 11},
+		{18, 19, 20, 21}},
+		algo.ToUintsListForTest(algo.FromSortResult(r)))
+
+	// Offset 5.
+	sort = newSort(input, 5, 0, true)
+	result, err = processSort(sort)
+	require.NoError(t, err)
+	r = task.GetRootAsSortResult(result, 0)
+	require.EqualValues(t, [][]uint64{
+		{18, 19, 20, 21, 12, 13, 14, 10, 11},
+		{10, 11},
+		{18, 19, 20, 21}},
+		algo.ToUintsListForTest(algo.FromSortResult(r)))
+
+	// Offset 6.
+	sort = newSort(input, 6, 0, true)
+	result, err = processSort(sort)
+	require.NoError(t, err)
+	r = task.GetRootAsSortResult(result, 0)
+	require.EqualValues(t, [][]uint64{
+		{18, 19, 20, 21, 12, 13, 14, 10, 11},
+		{},
+		{}},
+		algo.ToUintsListForTest(algo.FromSortResult(r)))
+}
+
+func TestProcessCoarseSortCount(t *testing.T) {
+	dir, ps := initTest(t, `scalar dob:date @index`)
+	defer os.RemoveAll(dir)
+	defer ps.Close()
+	populateGraphForSort(t, ps)
+	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
+
+	input := [][]uint64{
+		{10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21},
+		{10, 11, 12, 13, 14, 21},
+		{16, 17, 18, 19, 20, 21}}
+
+	// Count 1.
+	sort := newSort(input, 0, 1, true)
+	result, err := processSort(sort)
+	require.NoError(t, err)
+
+	r := task.GetRootAsSortResult(result, 0)
+	require.NotNil(t, r)
+	require.EqualValues(t, [][]uint64{
+		{15, 16, 17},
+		{21},
+		{16, 17}},
+		algo.ToUintsListForTest(algo.FromSortResult(r)))
+
+	// Count 2.
+	sort = newSort(input, 0, 2, true)
+	result, err = processSort(sort)
+	require.NoError(t, err)
+
+	r = task.GetRootAsSortResult(result, 0)
+	require.NotNil(t, r)
+	require.EqualValues(t, [][]uint64{
+		{15, 16, 17},
+		{21, 12, 13, 14},
+		{16, 17}},
+		algo.ToUintsListForTest(algo.FromSortResult(r)))
+
+	// Count 5.
+	sort = newSort(input, 0, 5, true)
+	result, err = processSort(sort)
+	require.NoError(t, err)
+
+	r = task.GetRootAsSortResult(result, 0)
+	require.NotNil(t, r)
+	require.EqualValues(t, [][]uint64{
+		{15, 16, 17, 18, 19, 20, 21},
+		{21, 12, 13, 14, 10, 11},
+		{16, 17, 18, 19, 20, 21}},
+		algo.ToUintsListForTest(algo.FromSortResult(r)))
+
+	// Count 6.
+	sort = newSort(input, 0, 6, true)
+	result, err = processSort(sort)
+	require.NoError(t, err)
+
+	r = task.GetRootAsSortResult(result, 0)
+	require.NotNil(t, r)
+	require.EqualValues(t, [][]uint64{
+		{15, 16, 17, 18, 19, 20, 21},
+		{21, 12, 13, 14, 10, 11},
+		{16, 17, 18, 19, 20, 21}},
+		algo.ToUintsListForTest(algo.FromSortResult(r)))
 }
 
 func TestMain(m *testing.M) {

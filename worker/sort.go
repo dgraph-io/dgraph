@@ -164,7 +164,7 @@ func doCoarseSort(s *task.Sort) ([]byte, error) {
 			n := result.Size()
 			x.Printf("~~~Intersect token=[%s] i=%d sizeOfResult=%d", token, i, n)
 
-			wantBucket := true
+			wantBucket := state[i] < 2
 			if state[i] == 0 {
 				if offsets[i] >= n {
 					// We do not need this bucket. Let's drop it.
@@ -172,6 +172,7 @@ func doCoarseSort(s *task.Sort) ([]byte, error) {
 					wantBucket = false
 				} else {
 					// This is the first bucket we need. Enter new state. Update count.
+					x.Printf("~~~## i=%d n=%d offsets[i]=%d", i, n, offsets[i])
 					state[i] = 1
 					if count > 0 {
 						// Say intersection is 100 elements. Offset is 3. So, we're
@@ -197,6 +198,7 @@ func doCoarseSort(s *task.Sort) ([]byte, error) {
 				}
 			}
 
+			x.Printf("~~~EndOfIter: token=[%s] state[%d]=%d", token, i, state[i])
 			if state[i] != 2 {
 				// There is a UID list that is not done. So we need to continue
 				// iterating over buckets.
