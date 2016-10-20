@@ -61,7 +61,7 @@ func (s Scalar) String() string {
 	return fmt.Sprint(s.Name)
 }
 
-// ID function returns the storage identifier of this type
+// ID function returns the storage identifier of this type.
 func (s Scalar) ID() TypeID {
 	return s.id
 }

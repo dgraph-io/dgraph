@@ -17,6 +17,8 @@
 package types
 
 import (
+	"bytes"
+	"sort"
 	"time"
 
 	"github.com/dgraph-io/dgraph/x"
@@ -103,6 +105,65 @@ func (to Scalar) Convert(value Value) (Value, error) {
 		return nil, cantConvert(to, v)
 	}
 	return u, nil
+}
+
+type AsDate []Value
+
+func (s AsDate) Len() int      { return len(s) }
+func (s AsDate) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
+func (s AsDate) Less(i, j int) bool {
+	return s[i].(*Date).Time.Before(s[j].(*Date).Time)
+}
+
+type AsDateTime []Value
+
+func (s AsDateTime) Len() int      { return len(s) }
+func (s AsDateTime) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
+func (s AsDateTime) Less(i, j int) bool {
+	return s[i].(*Time).Time.Before(s[j].(*Time).Time)
+}
+
+type AsInt32 []Value
+
+func (s AsInt32) Len() int      { return len(s) }
+func (s AsInt32) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
+func (s AsInt32) Less(i, j int) bool {
+	return *(s[i].(*Int32)) < *(s[j].(*Int32))
+}
+
+type AsString []Value
+
+func (s AsString) Len() int      { return len(s) }
+func (s AsString) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
+func (s AsString) Less(i, j int) bool {
+	return *(s[i].(*String)) < *(s[j].(*String))
+}
+
+type AsBytes []Value
+
+func (s AsBytes) Len() int      { return len(s) }
+func (s AsBytes) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
+func (s AsBytes) Less(i, j int) bool {
+	return bytes.Compare(*(s[i].(*Bytes)), *(s[j].(*Bytes))) < 0
+}
+
+// Sort sorts the given array in-place.
+func (s Scalar) Sort(a []Value) error {
+	switch s.ID() {
+	case DateID:
+		sort.Sort(AsDate(a))
+	case DateTimeID:
+		sort.Sort(AsDateTime(a))
+	case Int32ID:
+		sort.Sort(AsInt32(a))
+	case StringID:
+		sort.Sort(AsString(a))
+	case BytesID:
+		sort.Sort(AsBytes(a))
+	default:
+		return x.Errorf("Type does not support sorting: %s", s)
+	}
+	return nil
 }
 
 func cantConvert(to Scalar, val Value) error {

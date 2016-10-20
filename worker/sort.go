@@ -7,7 +7,7 @@ import (
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/index"
 	"github.com/dgraph-io/dgraph/posting"
-	//	"github.com/dgraph-io/dgraph/schema"
+	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
@@ -253,37 +253,48 @@ func doFineSort(s *task.Sort) ([]byte, error) {
 	var ul task.UidList
 	x.Assert(s.Uidmatrix(&ul, 0))
 	attr := string(s.Attr())
-	//	typ := schema.TypeOf(attr)
+	sType := schema.TypeOf(attr)
+	if !sType.IsScalar() {
+		return nil, x.Errorf("Cannot sort attribute %s of type object.", attr)
+	}
+	scalar := sType.(types.Scalar)
 
+	values := make([]types.Value, ul.UidsLength())
 	for i := 0; i < ul.UidsLength(); i++ {
 		uid := ul.Uids(i)
-		fetchValue(uid, attr)
+		val, err := fetchValue(uid, attr, scalar)
+		if err != nil {
+			return []byte{}, err
+		}
+		x.Printf("~~~~%s %s", val.String(), val.Type())
+		values[i] = val
 	}
 
+	scalar.Sort(values)
+	x.Printf("~~~sorted! %v", values)
 	return []byte{}, nil
 }
 
-func fetchValue(uid uint64, attr string) (types.Value, error) {
-	//	pl, decr := posting.GetOrCreate(posting.Key(uid, attr), ws.dataStore)
-	//	defer decr()
+func fetchValue(uid uint64, attr string, scalar types.Scalar) (types.Value, error) {
+	pl, decr := posting.GetOrCreate(posting.Key(uid, attr), ws.dataStore)
+	defer decr()
 
-	//	valBytes, vType, err := pl.Value()
-	//	if err != nil {
-	//		return nil, err
-	//	}
+	valBytes, vType, err := pl.Value()
+	if err != nil {
+		return nil, err
+	}
+	val := types.ValueForType(types.TypeID(vType))
+	if val == nil {
+		return nil, x.Errorf("Invalid type: %v", vType)
+	}
+	err = val.UnmarshalBinary(valBytes)
+	if err != nil {
+		return nil, err
+	}
 
-	return nil, nil
-
-	//	vType := tv.ValType()
-	//	valBytes := tv.ValBytes()
-	//	val := types.ValueForType(types.TypeID(vType))
-	//	if val == nil {
-	//		return nil, x.Errorf("Invalid type: %v", vType)
-	//	}
-	//	err := val.UnmarshalBinary(valBytes)
-	//	if err != nil {
-	//		return nil, err
-	//	}
-	//	return val, nil
-
+	schemaVal, err := scalar.Convert(val)
+	if err != nil {
+		return nil, err
+	}
+	return schemaVal, nil
 }

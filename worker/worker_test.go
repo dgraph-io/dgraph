@@ -655,6 +655,28 @@ func TestProcessCoarseSortOffsetCount(t *testing.T) {
 		algo.ToUintsListForTest(algo.FromSortResult(r)))
 }
 
+func TestProcessFineSort(t *testing.T) {
+	dir, ps := initTest(t, `scalar dob:date @index`)
+	defer os.RemoveAll(dir)
+	defer ps.Close()
+	populateGraphForSort(t, ps)
+	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
+
+	sort := newSort([][]uint64{
+		{10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21}}, 0, 0, false)
+	result, err := processSort(sort)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	//	r := task.GetRootAsSortResult(result, 0)
+	//	require.NotNil(t, r)
+	//	require.EqualValues(t, [][]uint64{
+	//		{15, 16, 17, 18, 19, 20, 21, 12, 13, 14, 10, 11},
+	//		{21, 12, 13, 14, 10, 11},
+	//		{16, 17, 18, 19, 20, 21}},
+	//		algo.ToUintsListForTest(algo.FromSortResult(r)))
+}
+
 func TestMain(m *testing.M) {
 	x.Init()
 	os.Exit(m.Run())
