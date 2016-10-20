@@ -1159,5 +1159,12 @@ func (sg *SubGraph) applyOrderByIndex(ctx context.Context) error {
 		out[i] = l
 	}
 	sg.Result = out
+
+	// Update sg.destUID. We need to send it out to be sorted. Note we still
+	// want sg.destUID to be sorted by UID, not some attribute. To obtain
+	// sg.destUID, we iterate over the UID matrix (which is not sorted by UID).
+	// For each element in UID matrix, we do a binary search in the current
+	// destUID and mark it. Then we scan over this bool array and rebuild
+	// destUIDs.
 	return nil
 }

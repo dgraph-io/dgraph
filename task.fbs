@@ -76,6 +76,10 @@ table Membership {
 table Sort {
 	attr:string;
 	uidmatrix:[UidList];
+	
+	// If true, we intersect with index buckets. Otherwise, we fetch actual values and sort.
+	index:bool;
+	
 	count:int;
 	offset:int;
 }
