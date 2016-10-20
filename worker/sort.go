@@ -105,7 +105,8 @@ type coarseSorter struct {
 func newCoarseSorter(attr string, s *task.CoarseSort) *coarseSorter {
 	x.Assert(s != nil)
 	x.Assertf(s.Count() >= 0,
-		"We do not yet support negative count with sorting: %s %d",
+		("We do not yet support negative count with sorting: %s %d. " +
+			"Try flipping order and return first few elements instead."),
 		attr, s.Count())
 
 	n := s.UidmatrixLength()
@@ -247,6 +248,11 @@ func (cs *coarseSorter) run() ([]byte, error) {
 	return b.FinishedBytes(), nil
 }
 
+// doFineSort sorts the UIDs by their values. The attribute has to be
+// specified in the schema with a type that makes sense. We do not return the
+// values as they may be long strings. We just return the ordering of the
+// UIDs. For example, if the input is 100, 150, 200, 250, and after sorting by
+// some attribute, it is 150, 250, 200, 100. Then we will return 1, 3, 2, 0.
 func doFineSort(attr string, s *task.FineSort) ([]byte, error) {
 	ul := s.Uid(nil)
 	x.Assert(ul != nil)
@@ -264,7 +270,6 @@ func doFineSort(attr string, s *task.FineSort) ([]byte, error) {
 		if err != nil {
 			return []byte{}, err
 		}
-		x.Printf("~~~~%s %s", val.String(), val.Type())
 		values[i] = val
 	}
 
@@ -272,8 +277,6 @@ func doFineSort(attr string, s *task.FineSort) ([]byte, error) {
 	if err != nil {
 		return []byte{}, err
 	}
-	x.Printf("~~~sorted! %v", values)
-	x.Printf("~~~sorted! %v", idx)
 
 	// Serialize idx.
 	b := flatbuffers.NewBuilder(0)
