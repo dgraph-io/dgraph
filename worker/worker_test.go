@@ -373,8 +373,8 @@ func populateGraphForSort(t *testing.T, ps *store.Store) {
 	}
 }
 
-// newSort creates a task.Sort table.
-func newSort(uids [][]uint64, offset, count int, coarse bool) []byte {
+// newCoarseSort creates a task.Sort for course sorting.
+func newCoarseSort(uids [][]uint64, offset, count int) []byte {
 	x.Assert(uids != nil)
 
 	b := flatbuffers.NewBuilder(0)
@@ -388,22 +388,22 @@ func newSort(uids [][]uint64, offset, count int, coarse bool) []byte {
 		uidOffsets = append(uidOffsets, l.AddTo(b))
 	}
 
-	task.SortStartUidmatrixVector(b, len(uidOffsets))
+	task.CoarseSortStartUidmatrixVector(b, len(uidOffsets))
 	for i := len(uidOffsets) - 1; i >= 0; i-- {
 		b.PrependUOffsetT(uidOffsets[i])
 	}
 	uend := b.EndVector(len(uidOffsets))
 
+	task.CoarseSortStart(b)
+	task.CoarseSortAddUidmatrix(b, uend)
+	task.CoarseSortAddOffset(b, int32(offset))
+	task.CoarseSortAddCount(b, int32(count))
+	csEnd := task.CoarseSortEnd(b)
+
 	task.SortStart(b)
 	task.SortAddAttr(b, ao)
-	task.SortAddUidmatrix(b, uend)
-	task.SortAddOffset(b, int32(offset))
-	task.SortAddCount(b, int32(count))
-	var coarseByte byte
-	if coarse {
-		coarseByte = 1
-	}
-	task.SortAddCoarse(b, coarseByte)
+	task.SortAddCoarseSort(b, csEnd)
+	task.SortAddCoarse(b, byte(1))
 	b.Finish(task.SortEnd(b))
 	return b.FinishedBytes()
 }
@@ -415,11 +415,11 @@ func TestProcessCoarseSort(t *testing.T) {
 	populateGraphForSort(t, ps)
 	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
 
-	sort := newSort([][]uint64{
+	sort := newCoarseSort([][]uint64{
 		{10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21},
 		{10, 11, 12, 13, 14, 21},
 		{16, 17, 18, 19, 20, 21},
-	}, 0, 0, true)
+	}, 0, 0)
 	result, err := processSort(sort)
 	require.NoError(t, err)
 
@@ -445,7 +445,7 @@ func TestProcessCoarseSortOffset(t *testing.T) {
 		{16, 17, 18, 19, 20, 21}}
 
 	// Offset 1.
-	sort := newSort(input, 1, 0, true)
+	sort := newCoarseSort(input, 1, 0)
 	result, err := processSort(sort)
 	require.NoError(t, err)
 	r := task.GetRootAsSortResult(result, 0)
@@ -456,7 +456,7 @@ func TestProcessCoarseSortOffset(t *testing.T) {
 		algo.ToUintsListForTest(algo.FromSortResult(r)))
 
 	// Offset 2.
-	sort = newSort(input, 2, 0, true)
+	sort = newCoarseSort(input, 2, 0)
 	result, err = processSort(sort)
 	require.NoError(t, err)
 	r = task.GetRootAsSortResult(result, 0)
@@ -467,7 +467,7 @@ func TestProcessCoarseSortOffset(t *testing.T) {
 		algo.ToUintsListForTest(algo.FromSortResult(r)))
 
 	// Offset 5.
-	sort = newSort(input, 5, 0, true)
+	sort = newCoarseSort(input, 5, 0)
 	result, err = processSort(sort)
 	require.NoError(t, err)
 	r = task.GetRootAsSortResult(result, 0)
@@ -478,7 +478,7 @@ func TestProcessCoarseSortOffset(t *testing.T) {
 		algo.ToUintsListForTest(algo.FromSortResult(r)))
 
 	// Offset 6.
-	sort = newSort(input, 6, 0, true)
+	sort = newCoarseSort(input, 6, 0)
 	result, err = processSort(sort)
 	require.NoError(t, err)
 	r = task.GetRootAsSortResult(result, 0)
@@ -502,7 +502,7 @@ func TestProcessCoarseSortCount(t *testing.T) {
 		{16, 17, 18, 19, 20, 21}}
 
 	// Count 1.
-	sort := newSort(input, 0, 1, true)
+	sort := newCoarseSort(input, 0, 1)
 	result, err := processSort(sort)
 	require.NoError(t, err)
 
@@ -515,7 +515,7 @@ func TestProcessCoarseSortCount(t *testing.T) {
 		algo.ToUintsListForTest(algo.FromSortResult(r)))
 
 	// Count 2.
-	sort = newSort(input, 0, 2, true)
+	sort = newCoarseSort(input, 0, 2)
 	result, err = processSort(sort)
 	require.NoError(t, err)
 
@@ -528,7 +528,7 @@ func TestProcessCoarseSortCount(t *testing.T) {
 		algo.ToUintsListForTest(algo.FromSortResult(r)))
 
 	// Count 5.
-	sort = newSort(input, 0, 5, true)
+	sort = newCoarseSort(input, 0, 5)
 	result, err = processSort(sort)
 	require.NoError(t, err)
 
@@ -541,7 +541,7 @@ func TestProcessCoarseSortCount(t *testing.T) {
 		algo.ToUintsListForTest(algo.FromSortResult(r)))
 
 	// Count 6.
-	sort = newSort(input, 0, 6, true)
+	sort = newCoarseSort(input, 0, 6)
 	result, err = processSort(sort)
 	require.NoError(t, err)
 
@@ -567,7 +567,7 @@ func TestProcessCoarseSortOffsetCount(t *testing.T) {
 		{16, 17, 18, 19, 20, 21}}
 
 	// Offset 1. Count 1.
-	sort := newSort(input, 1, 1, true)
+	sort := newCoarseSort(input, 1, 1)
 	result, err := processSort(sort)
 	require.NoError(t, err)
 	r := task.GetRootAsSortResult(result, 0)
@@ -578,7 +578,7 @@ func TestProcessCoarseSortOffsetCount(t *testing.T) {
 		algo.ToUintsListForTest(algo.FromSortResult(r)))
 
 	// Offset 1. Count 2.
-	sort = newSort(input, 1, 2, true)
+	sort = newCoarseSort(input, 1, 2)
 	result, err = processSort(sort)
 	require.NoError(t, err)
 	r = task.GetRootAsSortResult(result, 0)
@@ -589,7 +589,7 @@ func TestProcessCoarseSortOffsetCount(t *testing.T) {
 		algo.ToUintsListForTest(algo.FromSortResult(r)))
 
 	// Offset 1. Count 3.
-	sort = newSort(input, 1, 3, true)
+	sort = newCoarseSort(input, 1, 3)
 	result, err = processSort(sort)
 	require.NoError(t, err)
 	r = task.GetRootAsSortResult(result, 0)
@@ -600,7 +600,7 @@ func TestProcessCoarseSortOffsetCount(t *testing.T) {
 		algo.ToUintsListForTest(algo.FromSortResult(r)))
 
 	// Offset 1. Count 1000.
-	sort = newSort(input, 1, 1000, true)
+	sort = newCoarseSort(input, 1, 1000)
 	result, err = processSort(sort)
 	require.NoError(t, err)
 	r = task.GetRootAsSortResult(result, 0)
@@ -611,7 +611,7 @@ func TestProcessCoarseSortOffsetCount(t *testing.T) {
 		algo.ToUintsListForTest(algo.FromSortResult(r)))
 
 	// Offset 5. Count 1.
-	sort = newSort(input, 5, 1, true)
+	sort = newCoarseSort(input, 5, 1)
 	result, err = processSort(sort)
 	require.NoError(t, err)
 	r = task.GetRootAsSortResult(result, 0)
@@ -622,7 +622,7 @@ func TestProcessCoarseSortOffsetCount(t *testing.T) {
 		algo.ToUintsListForTest(algo.FromSortResult(r)))
 
 	// Offset 5. Count 2.
-	sort = newSort(input, 5, 2, true)
+	sort = newCoarseSort(input, 5, 2)
 	result, err = processSort(sort)
 	require.NoError(t, err)
 	r = task.GetRootAsSortResult(result, 0)
@@ -633,7 +633,7 @@ func TestProcessCoarseSortOffsetCount(t *testing.T) {
 		algo.ToUintsListForTest(algo.FromSortResult(r)))
 
 	// Offset 5. Count 3.
-	sort = newSort(input, 5, 3, true)
+	sort = newCoarseSort(input, 5, 3)
 	result, err = processSort(sort)
 	require.NoError(t, err)
 	r = task.GetRootAsSortResult(result, 0)
@@ -644,7 +644,7 @@ func TestProcessCoarseSortOffsetCount(t *testing.T) {
 		algo.ToUintsListForTest(algo.FromSortResult(r)))
 
 	// Offset 100. Count 100.
-	sort = newSort(input, 100, 100, true)
+	sort = newCoarseSort(input, 100, 100)
 	result, err = processSort(sort)
 	require.NoError(t, err)
 	r = task.GetRootAsSortResult(result, 0)
@@ -655,6 +655,28 @@ func TestProcessCoarseSortOffsetCount(t *testing.T) {
 		algo.ToUintsListForTest(algo.FromSortResult(r)))
 }
 
+func newFineSort(uids []uint64) []byte {
+	x.Assert(uids != nil)
+
+	b := flatbuffers.NewBuilder(0)
+	ao := b.CreateString("dob") // Only consider sort by dob for tests.
+
+	var l algo.UIDList
+	l.FromUints(uids)
+	uo := l.AddTo(b)
+
+	task.FineSortStart(b)
+	task.FineSortAddUid(b, uo)
+	fsEnd := task.FineSortEnd(b)
+
+	task.SortStart(b)
+	task.SortAddAttr(b, ao)
+	task.SortAddFineSort(b, fsEnd)
+	task.SortAddCoarse(b, byte(0))
+	b.Finish(task.SortEnd(b))
+	return b.FinishedBytes()
+}
+
 func TestProcessFineSort(t *testing.T) {
 	dir, ps := initTest(t, `scalar dob:date @index`)
 	defer os.RemoveAll(dir)
@@ -662,19 +684,19 @@ func TestProcessFineSort(t *testing.T) {
 	populateGraphForSort(t, ps)
 	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
 
-	sort := newSort([][]uint64{
-		{10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21}}, 0, 0, false)
+	sort := newFineSort([]uint64{
+		10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21})
 	result, err := processSort(sort)
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
-	//	r := task.GetRootAsSortResult(result, 0)
-	//	require.NotNil(t, r)
-	//	require.EqualValues(t, [][]uint64{
-	//		{15, 16, 17, 18, 19, 20, 21, 12, 13, 14, 10, 11},
-	//		{21, 12, 13, 14, 10, 11},
-	//		{16, 17, 18, 19, 20, 21}},
-	//		algo.ToUintsListForTest(algo.FromSortResult(r)))
+	r := task.GetRootAsSortResult(result, 0)
+	idx := make([]uint32, r.IdxLength())
+	for i := 0; i < r.IdxLength(); i++ {
+		idx[i] = r.Idx(i)
+	}
+	require.EqualValues(t,
+		[]uint32{7, 6, 5, 10, 11, 9, 8, 3, 4, 2, 1, 0}, idx)
 }
 
 func TestMain(m *testing.M) {

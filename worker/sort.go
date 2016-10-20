@@ -82,13 +82,17 @@ func (w *grpcWorker) Sort(ctx context.Context, query *Payload) (*Payload, error)
 func processSort(qu []byte) ([]byte, error) {
 	s := task.GetRootAsSort(qu, 0)
 	if s.Coarse() == 0 {
-		return doFineSort(s)
+		fs := s.FineSort(nil)
+		x.Assert(fs != nil)
+		return doFineSort(string(s.Attr()), fs)
 	}
-	return newCoarseSorter(s).run()
+	cs := s.CoarseSort(nil)
+	x.Assert(cs != nil)
+	return newCoarseSorter(string(s.Attr()), cs).run()
 }
 
 type coarseSorter struct {
-	s       *task.Sort
+	s       *task.CoarseSort
 	attr    string
 	offset  int
 	count   int
@@ -98,16 +102,16 @@ type coarseSorter struct {
 	out     [][]uint64
 }
 
-func newCoarseSorter(s *task.Sort) *coarseSorter {
+func newCoarseSorter(attr string, s *task.CoarseSort) *coarseSorter {
 	x.Assert(s != nil)
 	x.Assertf(s.Count() >= 0,
 		"We do not yet support negative count with sorting: %s %d",
-		s.Attr(), s.Count())
+		attr, s.Count())
 
 	n := s.UidmatrixLength()
 	cs := &coarseSorter{
 		s:       s,
-		attr:    string(s.Attr()),
+		attr:    attr,
 		offset:  int(s.Offset()),
 		count:   int(s.Count()),
 		state:   make([]byte, n),
@@ -161,7 +165,7 @@ func (cs *coarseSorter) runHelper(key []byte) bool {
 			// This UID list is done. No need to process.
 			continue
 		}
-		// By default, we want to output this bucket's intersesction.
+		// By default, we want to output this bucket's intersection.
 		wantBucket := true
 		if cs.state[i] == 0 {
 			if cs.offsets[i] >= n {
@@ -170,7 +174,6 @@ func (cs *coarseSorter) runHelper(key []byte) bool {
 				wantBucket = false
 			} else {
 				// This is the first bucket we need. Enter new state. Update count.
-				x.Printf("~~~## i=%d n=%d offsets[i]=%d", i, n, cs.offsets[i])
 				cs.state[i] = 1
 				if cs.count > 0 {
 					// Say intersection is 100 elements. Offset is 3. So, we're
@@ -213,8 +216,6 @@ func (cs *coarseSorter) run() ([]byte, error) {
 		}
 	}
 
-	x.Printf("~~~~sort out:%v", cs.out)
-
 	// Convert out to flatbuffers output.
 	b := flatbuffers.NewBuilder(0)
 
@@ -246,13 +247,10 @@ func (cs *coarseSorter) run() ([]byte, error) {
 	return b.FinishedBytes(), nil
 }
 
-func doFineSort(s *task.Sort) ([]byte, error) {
-	x.Assertf(s.UidmatrixLength() == 1,
-		"Expected only one list to be sorted for now: %d", s.UidmatrixLength())
+func doFineSort(attr string, s *task.FineSort) ([]byte, error) {
+	ul := s.Uid(nil)
+	x.Assert(ul != nil)
 
-	var ul task.UidList
-	x.Assert(s.Uidmatrix(&ul, 0))
-	attr := string(s.Attr())
 	sType := schema.TypeOf(attr)
 	if !sType.IsScalar() {
 		return nil, x.Errorf("Cannot sort attribute %s of type object.", attr)
@@ -270,9 +268,24 @@ func doFineSort(s *task.Sort) ([]byte, error) {
 		values[i] = val
 	}
 
-	scalar.Sort(values)
+	idx, err := scalar.Sort(values)
+	if err != nil {
+		return []byte{}, err
+	}
 	x.Printf("~~~sorted! %v", values)
-	return []byte{}, nil
+	x.Printf("~~~sorted! %v", idx)
+
+	// Serialize idx.
+	b := flatbuffers.NewBuilder(0)
+	task.SortResultStartIdxVector(b, len(idx))
+	for i := len(idx) - 1; i >= 0; i-- {
+		b.PrependUint32(idx[i])
+	}
+	idxEnd := b.EndVector(len(idx))
+	task.SortResultStart(b)
+	task.SortResultAddIdx(b, idxEnd)
+	b.Finish(task.SortResultEnd(b))
+	return b.FinishedBytes(), nil
 }
 
 func fetchValue(uid uint64, attr string, scalar types.Scalar) (types.Value, error) {

@@ -59,8 +59,25 @@ func (rcv *SortResult) UidmatrixLength() int {
 	return 0
 }
 
+func (rcv *SortResult) Idx(j int) uint32 {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
+	if o != 0 {
+		a := rcv._tab.Vector(o)
+		return rcv._tab.GetUint32(a + flatbuffers.UOffsetT(j*4))
+	}
+	return 0
+}
+
+func (rcv *SortResult) IdxLength() int {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
+	if o != 0 {
+		return rcv._tab.VectorLen(o)
+	}
+	return 0
+}
+
 func SortResultStart(builder *flatbuffers.Builder) {
-	builder.StartObject(2)
+	builder.StartObject(3)
 }
 func SortResultAddOffset(builder *flatbuffers.Builder, offset flatbuffers.UOffsetT) {
 	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(offset), 0)
@@ -72,6 +89,12 @@ func SortResultAddUidmatrix(builder *flatbuffers.Builder, uidmatrix flatbuffers.
 	builder.PrependUOffsetTSlot(1, flatbuffers.UOffsetT(uidmatrix), 0)
 }
 func SortResultStartUidmatrixVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
+	return builder.StartVector(4, numElems, 4)
+}
+func SortResultAddIdx(builder *flatbuffers.Builder, idx flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(2, flatbuffers.UOffsetT(idx), 0)
+}
+func SortResultStartIdxVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
 	return builder.StartVector(4, numElems, 4)
 }
 func SortResultEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {

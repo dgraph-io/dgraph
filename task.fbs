@@ -73,18 +73,29 @@ table Membership {
 	amdead:bool;
 }
 
-table Sort {
-	attr:string;
+table CoarseSort {
 	uidmatrix:[UidList];
-	
 	count:int;
 	offset:int;
-	
+}
+
+table FineSort {	
+	uid:UidList;
+}
+
+table Sort {
 	coarse:bool;
+	attr:string;	
+	coarseSort:CoarseSort;
+	fineSort:FineSort;
 }
 
 table SortResult {
+	// For coarse sort.
 	// Offsets can get updated as we discard some bucket intersections at the front.
 	offset:[int];
 	uidmatrix:[UidList];
+	
+	// For fine sort. We return the results of an argsort.
+	idx:[uint];
 }

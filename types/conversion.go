@@ -107,12 +107,50 @@ func (to Scalar) Convert(value Value) (Value, error) {
 	return u, nil
 }
 
-type AsDate []Value
+func cantConvert(to Scalar, val Value) error {
+	return x.Errorf("Cannot convert %v to type %s", val, to.Name)
+}
 
-func (s AsDate) Len() int      { return len(s) }
-func (s AsDate) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
-func (s AsDate) Less(i, j int) bool {
-	return s[i].(*Date).Time.Before(s[j].(*Date).Time)
+type int32Unmarshaler interface {
+	fromInt(value int32) error
+}
+
+type floatUnmarshaler interface {
+	fromFloat(value float64) error
+}
+
+type boolUnmarshaler interface {
+	fromBool(value bool) error
+}
+
+type timeUnmarshaler interface {
+	fromTime(value time.Time) error
+}
+
+type dateUnmarshaler interface {
+	fromDate(value Date) error
+}
+
+func intRange(n int) []uint32 {
+	out := make([]uint32, n)
+	for i := 0; i < n; i++ {
+		out[i] = uint32(i)
+	}
+	return out
+}
+
+type dateSorter struct {
+	values []Value
+	idx    []uint32
+}
+
+func (s *dateSorter) Len() int { return len(s.values) }
+func (s *dateSorter) Swap(i, j int) {
+	s.values[i], s.values[j] = s.values[j], s.values[i]
+	s.idx[i], s.idx[j] = s.idx[j], s.idx[i]
+}
+func (s *dateSorter) Less(i, j int) bool {
+	return s.values[i].(*Date).Time.Before(s.values[j].(*Date).Time)
 }
 
 type AsDateTime []Value
@@ -148,44 +186,22 @@ func (s AsBytes) Less(i, j int) bool {
 }
 
 // Sort sorts the given array in-place.
-func (s Scalar) Sort(a []Value) error {
+func (s Scalar) Sort(v []Value) ([]uint32, error) {
 	switch s.ID() {
 	case DateID:
-		sort.Sort(AsDate(a))
-	case DateTimeID:
-		sort.Sort(AsDateTime(a))
-	case Int32ID:
-		sort.Sort(AsInt32(a))
-	case StringID:
-		sort.Sort(AsString(a))
-	case BytesID:
-		sort.Sort(AsBytes(a))
+		sorter := &dateSorter{v, intRange(len(v))}
+		sort.Sort(sorter)
+		return sorter.idx, nil
+		//	case DateTimeID:
+		//		sort.Sort(AsDateTime(a))
+		//	case Int32ID:
+		//		sort.Sort(AsInt32(a))
+		//	case StringID:
+		//		sort.Sort(AsString(a))
+		//	case BytesID:
+		//		sort.Sort(AsBytes(a))
 	default:
-		return x.Errorf("Type does not support sorting: %s", s)
+		return nil, x.Errorf("Type does not support sorting: %s", s)
 	}
-	return nil
-}
-
-func cantConvert(to Scalar, val Value) error {
-	return x.Errorf("Cannot convert %v to type %s", val, to.Name)
-}
-
-type int32Unmarshaler interface {
-	fromInt(value int32) error
-}
-
-type floatUnmarshaler interface {
-	fromFloat(value float64) error
-}
-
-type boolUnmarshaler interface {
-	fromBool(value bool) error
-}
-
-type timeUnmarshaler interface {
-	fromTime(value time.Time) error
-}
-
-type dateUnmarshaler interface {
-	fromDate(value Date) error
+	return nil, x.Errorf("Should not reach here")
 }

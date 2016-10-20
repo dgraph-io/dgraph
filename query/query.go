@@ -1127,19 +1127,22 @@ func (sg *SubGraph) applyOrder(ctx context.Context) error {
 		uidOffsets = append(uidOffsets, ul.AddTo(b))
 	}
 
-	task.SortStartUidmatrixVector(b, len(uidOffsets))
+	task.CoarseSortStartUidmatrixVector(b, len(uidOffsets))
 	for i := len(uidOffsets) - 1; i >= 0; i-- {
 		b.PrependUOffsetT(uidOffsets[i])
 	}
-	uend := b.EndVector(len(uidOffsets))
+	uEnd := b.EndVector(len(uidOffsets))
+
+	task.CoarseSortStart(b)
+	task.CoarseSortAddUidmatrix(b, uEnd)
+	task.CoarseSortAddOffset(b, int32(sg.Params.Offset))
+	task.CoarseSortAddCount(b, int32(sg.Params.Count))
+	csEnd := task.CoarseSortEnd(b)
 
 	task.SortStart(b)
 	task.SortAddAttr(b, ao)
-	task.SortAddUidmatrix(b, uend)
-
-	task.SortAddOffset(b, int32(sg.Params.Offset))
-	task.SortAddCount(b, int32(sg.Params.Count))
-
+	task.SortAddCoarseSort(b, csEnd)
+	task.SortAddCoarse(b, byte(1)) // Specify that this is a coarse sort.
 	b.Finish(task.SortEnd(b))
 	resultData, err := worker.SortOverNetwork(ctx, b.FinishedBytes())
 	if err != nil {

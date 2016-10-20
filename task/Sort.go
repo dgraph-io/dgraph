@@ -22,60 +22,8 @@ func (rcv *Sort) Init(buf []byte, i flatbuffers.UOffsetT) {
 	rcv._tab.Pos = i
 }
 
-func (rcv *Sort) Attr() []byte {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
-	if o != 0 {
-		return rcv._tab.ByteVector(o + rcv._tab.Pos)
-	}
-	return nil
-}
-
-func (rcv *Sort) Uidmatrix(obj *UidList, j int) bool {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
-	if o != 0 {
-		x := rcv._tab.Vector(o)
-		x += flatbuffers.UOffsetT(j) * 4
-		x = rcv._tab.Indirect(x)
-		obj.Init(rcv._tab.Bytes, x)
-		return true
-	}
-	return false
-}
-
-func (rcv *Sort) UidmatrixLength() int {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
-	if o != 0 {
-		return rcv._tab.VectorLen(o)
-	}
-	return 0
-}
-
-func (rcv *Sort) Count() int32 {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
-	if o != 0 {
-		return rcv._tab.GetInt32(o + rcv._tab.Pos)
-	}
-	return 0
-}
-
-func (rcv *Sort) MutateCount(n int32) bool {
-	return rcv._tab.MutateInt32Slot(8, n)
-}
-
-func (rcv *Sort) Offset() int32 {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
-	if o != 0 {
-		return rcv._tab.GetInt32(o + rcv._tab.Pos)
-	}
-	return 0
-}
-
-func (rcv *Sort) MutateOffset(n int32) bool {
-	return rcv._tab.MutateInt32Slot(10, n)
-}
-
 func (rcv *Sort) Coarse() byte {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(12))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
 	if o != 0 {
 		return rcv._tab.GetByte(o + rcv._tab.Pos)
 	}
@@ -83,29 +31,57 @@ func (rcv *Sort) Coarse() byte {
 }
 
 func (rcv *Sort) MutateCoarse(n byte) bool {
-	return rcv._tab.MutateByteSlot(12, n)
+	return rcv._tab.MutateByteSlot(4, n)
+}
+
+func (rcv *Sort) Attr() []byte {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
+	if o != 0 {
+		return rcv._tab.ByteVector(o + rcv._tab.Pos)
+	}
+	return nil
+}
+
+func (rcv *Sort) CoarseSort(obj *CoarseSort) *CoarseSort {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
+	if o != 0 {
+		x := rcv._tab.Indirect(o + rcv._tab.Pos)
+		if obj == nil {
+			obj = new(CoarseSort)
+		}
+		obj.Init(rcv._tab.Bytes, x)
+		return obj
+	}
+	return nil
+}
+
+func (rcv *Sort) FineSort(obj *FineSort) *FineSort {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
+	if o != 0 {
+		x := rcv._tab.Indirect(o + rcv._tab.Pos)
+		if obj == nil {
+			obj = new(FineSort)
+		}
+		obj.Init(rcv._tab.Bytes, x)
+		return obj
+	}
+	return nil
 }
 
 func SortStart(builder *flatbuffers.Builder) {
-	builder.StartObject(5)
-}
-func SortAddAttr(builder *flatbuffers.Builder, attr flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(attr), 0)
-}
-func SortAddUidmatrix(builder *flatbuffers.Builder, uidmatrix flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(1, flatbuffers.UOffsetT(uidmatrix), 0)
-}
-func SortStartUidmatrixVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
-	return builder.StartVector(4, numElems, 4)
-}
-func SortAddCount(builder *flatbuffers.Builder, count int32) {
-	builder.PrependInt32Slot(2, count, 0)
-}
-func SortAddOffset(builder *flatbuffers.Builder, offset int32) {
-	builder.PrependInt32Slot(3, offset, 0)
+	builder.StartObject(4)
 }
 func SortAddCoarse(builder *flatbuffers.Builder, coarse byte) {
-	builder.PrependByteSlot(4, coarse, 0)
+	builder.PrependByteSlot(0, coarse, 0)
+}
+func SortAddAttr(builder *flatbuffers.Builder, attr flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(1, flatbuffers.UOffsetT(attr), 0)
+}
+func SortAddCoarseSort(builder *flatbuffers.Builder, coarseSort flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(2, flatbuffers.UOffsetT(coarseSort), 0)
+}
+func SortAddFineSort(builder *flatbuffers.Builder, fineSort flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(3, flatbuffers.UOffsetT(fineSort), 0)
 }
 func SortEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
