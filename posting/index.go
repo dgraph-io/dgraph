@@ -48,7 +48,8 @@ func InitIndex(ds *store.Store) {
 	indexStore = ds
 }
 
-func tokenizedIndexKeys(attr string, p stype.Value) ([][]byte, error) {
+// indexTokens return tokens, without the predicate prefix and index rune.
+func indexTokens(attr string, p stype.Value) ([]string, error) {
 	schemaType := schema.TypeOf(attr)
 	if !schemaType.IsScalar() {
 		return nil, x.Errorf("Cannot index attribute %s of type object.", attr)
@@ -59,7 +60,7 @@ func tokenizedIndexKeys(attr string, p stype.Value) ([][]byte, error) {
 		return nil, err
 	}
 	switch v := schemaVal.(type) {
-	case *stype.Geo:
+	case *stype.Geo: // Not supported now.
 		return geo.IndexKeys(v)
 	case *stype.Int32:
 		return stype.IntIndex(attr, v)
@@ -75,10 +76,11 @@ func tokenizedIndexKeys(attr string, p stype.Value) ([][]byte, error) {
 	return nil, nil
 }
 
-// addIndexMutations adds mutations for a single term, to maintain index.
-func addIndexMutations(ctx context.Context, attr string, uid uint64, p stype.Value, del bool) {
+// spawnIndexMutations adds mutations for a single term, to maintain index.
+func spawnIndexMutations(ctx context.Context, attr string, uid uint64, p stype.Value, del bool) {
 	x.Assert(uid != 0)
-	keys, err := tokenizedIndexKeys(attr, p)
+	tokens, err := indexTokens(attr, p)
+	x.Printf("~~~~~~~processIndexTerm numTokens=%d", len(tokens))
 	if err != nil {
 		// This data is not indexable
 		return
@@ -90,66 +92,58 @@ func addIndexMutations(ctx context.Context, attr string, uid uint64, p stype.Val
 		Source:    "idx",
 	}
 
-	//	for _, key := range keys {
-	//		plist, decr := GetOrCreate(key, indexStore)
-	//		defer decr()
-	//		x.Assertf(plist != nil, "plist is nil [%s] %d %s", key, edge.ValueId, edge.Attribute)
+	for _, token := range tokens {
+		x.Printf("~~~~~~~processIndexTerm attr=%s token=[%s] length=%d", attr, string(token), len(token))
+		edge.IndexToken = token
 
-	//		if del {
-	//			_, err := plist.AddMutation(ctx, edge, Del)
-	//			if err != nil {
-	//				x.TraceError(ctx, x.Wrapf(err, "Error deleting %s for attr %s entity %d: %v",
-	//					string(key), edge.Attribute, edge.Entity))
-	//			}
-	//			indexLog.Printf("DEL [%s] [%d] OldTerm [%s]", edge.Attribute, edge.Entity, string(key))
-	//		} else {
-	//			_, err := plist.AddMutation(ctx, edge, Set)
-	//			if err != nil {
-	//				x.TraceError(ctx, x.Wrapf(err, "Error adding %s for attr %s entity %d: %v",
-	//					string(key), edge.Attribute, edge.Entity))
-	//			}
-	//			indexLog.Printf("SET [%s] [%d] NewTerm [%s]", edge.Attribute, edge.Entity, string(key))
-	//		}
-	//	}
-	for _, key := range keys {
-		edge.Key = key
+		//		key := KeyFromEdge(&edge)
+		//		plist, decr := GetOrCreate(key, indexStore)
+		//		defer decr()
+		//		x.Assertf(plist != nil, "plist is nil [%s] %d %s", key, edge.ValueId, edge.Attribute)
+
+		//		if del {
+		//			_, err := plist.AddMutation(ctx, edge, Del)
+		//			if err != nil {
+		//				x.TraceError(ctx, x.Wrapf(err, "Error deleting %s for attr %s entity %d: %v",
+		//					string(key), edge.Attribute, edge.Entity))
+		//			}
+		//			indexLog.Printf("DEL [%s] [%d] OldTerm [%s]", edge.Attribute, edge.Entity, string(key))
+		//		} else {
+		//			_, err := plist.AddMutation(ctx, edge, Set)
+		//			if err != nil {
+		//				x.TraceError(ctx, x.Wrapf(err, "Error adding %s for attr %s entity %d: %v",
+		//					string(key), edge.Attribute, edge.Entity))
+		//			}
+		//			indexLog.Printf("SET [%s] [%d] NewTerm [%s]", edge.Attribute, edge.Entity, string(key))
+		//		}
 		if del {
 			index.MutateChan <- x.Mutations{
 				Del: []x.DirectedEdge{edge},
 			}
-			indexLog.Printf("DEL [%s] [%d] OldTerm [%s]", edge.Attribute, edge.Entity, string(key))
+			indexLog.Printf("processIndexTerm DEL [%s] [%d] OldTerm [%s]", edge.Attribute, edge.Entity, string(edge.IndexToken))
 		} else {
 			index.MutateChan <- x.Mutations{
 				Set: []x.DirectedEdge{edge},
 			}
-			indexLog.Printf("SET [%s] [%d] NewTerm [%s]", edge.Attribute, edge.Entity, string(key))
+			indexLog.Printf("processIndexTerm SET [%s] [%d] NewTerm [%s]", edge.Attribute, edge.Entity, string(edge.IndexToken))
 		}
 	}
 }
 
 // AddMutationWithIndex is AddMutation with support for indexing. Note that
-// index-related mutations also come through here.
+// index mutations will also come through here.
 func (l *List) AddMutationWithIndex(ctx context.Context, t x.DirectedEdge, op byte) error {
-	x.Assertf(len(t.Attribute) > 0, "Empty attribute")
-	isIndexKey := stype.IsIndexKeyStr(t.Attribute)
-	x.Assertf(!isIndexKey,
-		"Index mutations have edge.Key populated; edge.Attribute must not begin with indexRune")
+	x.Assertf(len(t.Attribute) > 0, "Attribute should always be nonempty")
 
-	isIndexedAttr := schema.IsIndexed(t.Attribute)
-	if isIndexKey && op == Set {
-		x.Assertf(isIndexedAttr,
-			"Index mutations observed for unindexed attribute: %s", t.Attribute)
-		// This is an index mutation. We shall update our in-memory list of keys.
-		// Currently we only care about SET and not DEL.
-		kt := index.GetKeysTable(t.Attribute)
-		kt.Add(t.IndexValue)
-	}
+	// Temporary check. Remove later on.
+	x.Assertf(!stype.IsIndexKey(t.Attribute),
+		"Attribute should never begin with indexRune: %s", t.Attribute)
 
 	var lastPost types.Posting
 	var hasLastPost bool
 
-	doUpdateIndex := !isIndexKey && indexStore != nil && (t.Value != nil) &&
-		schema.IsIndexed(t.Attribute)
+	doUpdateIndex := indexStore != nil && (t.Value != nil) &&
+		(len(t.IndexToken) == 0) && schema.IsIndexed(t.Attribute)
 	if doUpdateIndex {
 		// Check last posting for original value BEFORE any mutation actually happens.
 		if l.Length() >= 1 {
@@ -165,6 +159,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t x.DirectedEdge, op by
 		return nil
 	}
 
+	// Exact matches.
 	if hasLastPost && lastPost.ValueBytes() != nil {
 		delTerm := lastPost.ValueBytes()
 		delType := lastPost.ValType()
@@ -173,7 +168,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t x.DirectedEdge, op by
 		if err != nil {
 			return err
 		}
-		addIndexMutations(ctx, t.Attribute, t.Entity, p, true)
+		spawnIndexMutations(ctx, t.Attribute, t.Entity, p, true)
 	}
 	if op == Set {
 		p := stype.ValueForType(stype.TypeID(t.ValueType))
@@ -181,7 +176,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t x.DirectedEdge, op by
 		if err != nil {
 			return err
 		}
-		addIndexMutations(ctx, t.Attribute, t.Entity, p, false)
+		spawnIndexMutations(ctx, t.Attribute, t.Entity, p, false)
 	}
 	return nil
 }

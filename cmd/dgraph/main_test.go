@@ -51,7 +51,13 @@ var q0 = `
 
 func init() {
 	worker.ParseGroupConfig("")
-	worker.StartRaftNodes(1, "localhost:12345", "1:localhost:12345", "")
+
+	wals, err := store.NewSyncStore(*walDir)
+	x.Checkf(err, "Error initializing wal store")
+	defer wals.Close()
+	wal := raftwal.Init(wals, *raftId)
+
+	worker.StartRaftNodes(1, 1, "localhost:12345", "1:localhost:12345")
 	// Wait for the node to become leader for group 0.
 	time.Sleep(5 * time.Second)
 }

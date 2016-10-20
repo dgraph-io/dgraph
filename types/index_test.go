@@ -21,8 +21,7 @@ func TestIndexKey(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		require.EqualValues(t, tt.out, IsIndexKey([]byte(tt.in)), "%v %v", tt.in, tt.out)
-		require.EqualValues(t, tt.out, IsIndexKeyStr(tt.in), "%v %v", tt.in, tt.out)
+		require.EqualValues(t, tt.out, IsIndexKey(tt.in), "%v %v", tt.in, tt.out)
 	}
 }
 

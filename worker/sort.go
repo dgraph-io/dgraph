@@ -54,7 +54,7 @@ func processSort(qu []byte) ([]byte, error) {
 	attr := string(s.Attr())
 
 	// Iterate over buckets.
-	prefix := types.IndexKey(attr, nil) // Do it the simple way first.
+	prefix := types.IndexKey(attr, "") // Do it the simple way first.
 
 	posting.MergeLists(10)
 	time.Sleep(time.Second)

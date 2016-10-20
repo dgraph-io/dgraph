@@ -43,7 +43,7 @@ func InitIndex(dataStore *store.Store) {
 	for _, attr := range indexedFields {
 		go func(attr string) {
 			table := NewKeysTable()
-			prefix := types.IndexKey(attr, nil)
+			prefix := types.IndexKey(attr, "")
 			x.Printf("~~~~index.InitIndex: seeking to prefix=[%s]", prefix)
 
 			it := dataStore.NewIterator()

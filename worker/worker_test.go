@@ -26,6 +26,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgraph/algo"
+	"github.com/dgraph-io/dgraph/index"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/store"
@@ -90,6 +91,7 @@ func populateGraph(t *testing.T, ps *store.Store) {
 	addEdge(t, edge, getOrCreate(posting.Key(12, "friend"), ps))
 
 	edge.Entity = 10
+	edge.Value = []byte("photon")
 	addEdge(t, edge, getOrCreate(posting.Key(10, "friend"), ps))
 }
 
@@ -117,6 +119,7 @@ func initTest(t *testing.T) (string, *store.Store) {
 
 	posting.InitIndex(ps)
 	InitIndex()
+	index.InitIndex(ps)
 
 	populateGraph(t, ps)
 	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.

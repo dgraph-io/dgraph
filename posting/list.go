@@ -36,6 +36,7 @@ import (
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/posting/types"
 	"github.com/dgraph-io/dgraph/store"
+	stype "github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -147,10 +148,11 @@ func Key(uid uint64, attr string) []byte {
 }
 
 func KeyFromEdge(e *x.DirectedEdge) []byte {
-	if len(e.Key) > 0 {
-		return e.Key
+	if len(e.IndexToken) == 0 {
+		// Usual case.
+		Key(e.Entity, e.Attribute)
 	}
-	return Key(e.Entity, e.Attribute)
+	return stype.IndexKey(e.Attribute, e.IndexToken)
 }
 
 func newPosting(t x.DirectedEdge, op byte) []byte {

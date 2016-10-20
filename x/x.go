@@ -60,8 +60,8 @@ type DirectedEdge struct {
 	Value      []byte // Edge points to a value.
 	ValueType  byte   // The type of the value
 	ValueId    uint64 // Object or destination node / UID.
-	IndexValue []byte // For index mutations. It's the value being indexed.
 	Source     string
+	IndexToken string // If nonempty, this is an index mutation. Key is Attr and IndexToken.
 	Timestamp  time.Time
 }
 
