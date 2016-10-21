@@ -40,7 +40,7 @@ func runMutations(ctx context.Context, edges []x.DirectedEdge, op byte) error {
 		}
 
 		key := posting.Key(edge.Entity, edge.Attribute)
-		plist, decr := posting.GetOrCreate(key, ws.dataStore)
+		plist, decr := posting.GetOrCreate(key)
 		defer decr()
 
 		if err := plist.AddMutationWithIndex(ctx, edge, op); err != nil {
@@ -157,6 +157,9 @@ func (w *grpcWorker) Mutate(ctx context.Context, query *Payload) (*Payload, erro
 		return nil, x.Wrapf(err, "While decoding mutation.")
 	}
 
+	if !groups().ServesGroup(m.GroupId) {
+		return &Payload{}, x.Errorf("This server doesn't serve group id: %v", m.GroupId)
+	}
 	c := make(chan error, 1)
 	node := groups().Node(m.GroupId)
 	go func() { c <- node.ProposeAndWait(ctx, mutationMsg, query.Data) }()

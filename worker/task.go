@@ -70,7 +70,6 @@ func processTask(query []byte) ([]byte, error) {
 	q := task.GetRootAsQuery(query, 0)
 
 	attr := string(q.Attr())
-	store := ws.dataStore
 	x.Assertf(q.UidsLength() == 0 || q.TokensLength() == 0,
 		"At least one of Uids and Term should be empty: %d vs %d", q.UidsLength(), q.TokensLength())
 
@@ -95,7 +94,7 @@ func processTask(query []byte) ([]byte, error) {
 			key = posting.Key(q.Uids(i), attr)
 		}
 		// Get or create the posting list for an entity, attribute combination.
-		pl, decr := posting.GetOrCreate(key, store)
+		pl, decr := posting.GetOrCreate(key)
 		defer decr()
 
 		var valoffset flatbuffers.UOffsetT

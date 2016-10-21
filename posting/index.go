@@ -25,26 +25,16 @@ import (
 	"github.com/dgraph-io/dgraph/geo"
 	"github.com/dgraph-io/dgraph/posting/types"
 	"github.com/dgraph-io/dgraph/schema"
-	"github.com/dgraph-io/dgraph/store"
 	stype "github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
 
 var (
-	indexLog   trace.EventLog
-	indexStore *store.Store
+	indexLog trace.EventLog
 )
 
 func init() {
 	indexLog = trace.NewEventLog("index", "Logger")
-}
-
-// InitIndex initializes the index with the given data store.
-func InitIndex(ds *store.Store) {
-	if ds == nil {
-		return
-	}
-	indexStore = ds
 }
 
 func tokenizedIndexKeys(attr string, p stype.Value) ([][]byte, error) {
@@ -90,7 +80,7 @@ func processIndexTerm(ctx context.Context, attr string, uid uint64, p stype.Valu
 	}
 
 	for _, key := range keys {
-		plist, decr := GetOrCreate(key, indexStore)
+		plist, decr := GetOrCreate(key)
 		defer decr()
 		x.Assertf(plist != nil, "plist is nil [%s] %d %s", key, edge.ValueId, edge.Attribute)
 
@@ -120,7 +110,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t x.DirectedEdge, op by
 	var lastPost types.Posting
 	var hasLastPost bool
 
-	doUpdateIndex := indexStore != nil && (t.Value != nil) &&
+	doUpdateIndex := pstore != nil && (t.Value != nil) &&
 		schema.IsIndexed(t.Attribute)
 	if doUpdateIndex {
 		// Check last posting for original value BEFORE any mutation actually happens.

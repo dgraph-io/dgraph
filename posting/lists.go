@@ -257,10 +257,12 @@ func getMemUsage() int {
 var (
 	stopTheWorld sync.RWMutex
 	lhmap        *listMap
+	pstore       *store.Store
 )
 
 // Init initializes the posting lists package, the in memory and dirty list hash.
-func Init() {
+func Init(ps *store.Store) {
+	pstore = ps
 	lhmap = newShardedListMap(*lhmapNumShards)
 	dirtyChan = make(chan uint64, 10000)
 	// Capacity is max number of gentle merges that can happen in parallel.
@@ -283,7 +285,7 @@ func getFromMap(key uint64) *List {
 // plist, decr := GetOrCreate(key, store)
 // defer decr()
 // ... // Use plist
-func GetOrCreate(key []byte, pstore *store.Store) (rlist *List, decr func()) {
+func GetOrCreate(key []byte) (rlist *List, decr func()) {
 	fp := farm.Fingerprint64(key)
 
 	stopTheWorld.RLock()
