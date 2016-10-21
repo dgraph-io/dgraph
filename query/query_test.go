@@ -1231,6 +1231,269 @@ func TestToJSONOrderOffset(t *testing.T) {
 		string(js))
 }
 
+// Test sorting / ordering by dob.
+func TestToJSONOrderOffsetCount(t *testing.T) {
+	dir, ps := populateGraph(t)
+	defer os.RemoveAll(dir)
+	defer ps.Close()
+
+	query := `
+		{
+			me(_uid_:0x01) {
+				name
+				gender
+				friend(order: dob, offset: 2, first: 1) {
+					name
+				}
+			}
+		}
+	`
+
+	gq, _, err := gql.Parse(query)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	sg, err := ToSubGraph(ctx, gq)
+	require.NoError(t, err)
+
+	ch := make(chan error)
+	go ProcessGraph(ctx, sg, nil, ch)
+	err = <-ch
+	require.NoError(t, err)
+
+	var l Latency
+	js, err := sg.ToJSON(&l)
+	require.NoError(t, err)
+	require.EqualValues(t,
+		`{"me":[{"friend":[{"name":"Glenn Rhee"}],"gender":"female","name":"Michonne"}]}`,
+		string(js))
+}
+
+// Test sorting / ordering by dob.
+func TestToPBOrder(t *testing.T) {
+	dir, ps := populateGraph(t)
+	defer os.RemoveAll(dir)
+	defer ps.Close()
+
+	query := `
+		{
+			me(_uid_:0x01) {
+				name
+				gender
+				friend(order: dob) {
+					name
+				}
+			}
+		}
+	`
+
+	gq, _, err := gql.Parse(query)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	sg, err := ToSubGraph(ctx, gq)
+	require.NoError(t, err)
+
+	ch := make(chan error)
+	go ProcessGraph(ctx, sg, nil, ch)
+	err = <-ch
+	require.NoError(t, err)
+
+	var l Latency
+	pb, err := sg.ToProtocolBuffer(&l)
+	require.NoError(t, err)
+
+	expectedPb := `attribute: "me"
+properties: <
+  prop: "name"
+  value: <
+    str_val: "Michonne"
+  >
+>
+properties: <
+  prop: "gender"
+  value: <
+    bytes_val: "female"
+  >
+>
+children: <
+  attribute: "friend"
+  properties: <
+    prop: "name"
+    value: <
+      str_val: "Andrea"
+    >
+  >
+>
+children: <
+  attribute: "friend"
+  properties: <
+    prop: "name"
+    value: <
+      str_val: "Daryl Dixon"
+    >
+  >
+>
+children: <
+  attribute: "friend"
+  properties: <
+    prop: "name"
+    value: <
+      str_val: "Glenn Rhee"
+    >
+  >
+>
+children: <
+  attribute: "friend"
+  properties: <
+    prop: "name"
+    value: <
+      str_val: "Rick Grimes"
+    >
+  >
+>
+`
+	require.EqualValues(t, proto.MarshalTextString(pb), expectedPb)
+}
+
+// Test sorting / ordering by dob.
+func TestToPBOrderCount(t *testing.T) {
+	dir, ps := populateGraph(t)
+	defer os.RemoveAll(dir)
+	defer ps.Close()
+
+	query := `
+		{
+			me(_uid_:0x01) {
+				name
+				gender
+				friend(order: dob, first: 2) {
+					name
+				}
+			}
+		}
+	`
+
+	gq, _, err := gql.Parse(query)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	sg, err := ToSubGraph(ctx, gq)
+	require.NoError(t, err)
+
+	ch := make(chan error)
+	go ProcessGraph(ctx, sg, nil, ch)
+	err = <-ch
+	require.NoError(t, err)
+
+	var l Latency
+	pb, err := sg.ToProtocolBuffer(&l)
+	require.NoError(t, err)
+
+	expectedPb := `attribute: "me"
+properties: <
+  prop: "name"
+  value: <
+    str_val: "Michonne"
+  >
+>
+properties: <
+  prop: "gender"
+  value: <
+    bytes_val: "female"
+  >
+>
+children: <
+  attribute: "friend"
+  properties: <
+    prop: "name"
+    value: <
+      str_val: "Andrea"
+    >
+  >
+>
+children: <
+  attribute: "friend"
+  properties: <
+    prop: "name"
+    value: <
+      str_val: "Daryl Dixon"
+    >
+  >
+>
+`
+	require.EqualValues(t, proto.MarshalTextString(pb), expectedPb)
+}
+
+// Test sorting / ordering by dob.
+func TestToPBOrderOffsetCount(t *testing.T) {
+	dir, ps := populateGraph(t)
+	defer os.RemoveAll(dir)
+	defer ps.Close()
+
+	query := `
+		{
+			me(_uid_:0x01) {
+				name
+				gender
+				friend(order: dob, first: 2, offset: 1) {
+					name
+				}
+			}
+		}
+	`
+
+	gq, _, err := gql.Parse(query)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	sg, err := ToSubGraph(ctx, gq)
+	require.NoError(t, err)
+
+	ch := make(chan error)
+	go ProcessGraph(ctx, sg, nil, ch)
+	err = <-ch
+	require.NoError(t, err)
+
+	var l Latency
+	pb, err := sg.ToProtocolBuffer(&l)
+	require.NoError(t, err)
+
+	expectedPb := `attribute: "me"
+properties: <
+  prop: "name"
+  value: <
+    str_val: "Michonne"
+  >
+>
+properties: <
+  prop: "gender"
+  value: <
+    bytes_val: "female"
+  >
+>
+children: <
+  attribute: "friend"
+  properties: <
+    prop: "name"
+    value: <
+      str_val: "Daryl Dixon"
+    >
+  >
+>
+children: <
+  attribute: "friend"
+  properties: <
+    prop: "name"
+    value: <
+      str_val: "Glenn Rhee"
+    >
+  >
+>
+`
+	require.EqualValues(t, proto.MarshalTextString(pb), expectedPb)
+}
+
 func TestMain(m *testing.M) {
 	x.Init()
 	os.Exit(m.Run())
