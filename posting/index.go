@@ -80,7 +80,6 @@ func indexTokens(attr string, p stype.Value) ([]string, error) {
 func spawnIndexMutations(ctx context.Context, attr string, uid uint64, p stype.Value, del bool) {
 	x.Assert(uid != 0)
 	tokens, err := indexTokens(attr, p)
-	//	x.Printf("~~~~~~~processIndexTerm numTokens=%d", len(tokens))
 	if err != nil {
 		// This data is not indexable
 		return
@@ -93,41 +92,17 @@ func spawnIndexMutations(ctx context.Context, attr string, uid uint64, p stype.V
 	}
 
 	for _, token := range tokens {
-		//		x.Printf("~~~~~~~processIndexTerm attr=%s token=[%s] length=%d %d", attr, string(token), len(token), uid)
 		edge.IndexToken = token
-
-		//		key := KeyFromEdge(&edge)
-		//		plist, decr := GetOrCreate(key, indexStore)
-		//		defer decr()
-		//		x.Assertf(plist != nil, "plist is nil [%s] %d %s", key, edge.ValueId, edge.Attribute)
-
-		//		if del {
-		//			_, err := plist.AddMutation(ctx, edge, Del)
-		//			if err != nil {
-		//				x.TraceError(ctx, x.Wrapf(err, "Error deleting %s for attr %s entity %d: %v",
-		//					string(key), edge.Attribute, edge.Entity))
-		//			}
-		//			indexLog.Printf("DEL [%s] [%d] OldTerm [%s]", edge.Attribute, edge.Entity, string(key))
-		//		} else {
-		//			_, err := plist.AddMutation(ctx, edge, Set)
-		//			if err != nil {
-		//				x.TraceError(ctx, x.Wrapf(err, "Error adding %s for attr %s entity %d: %v",
-		//					string(key), edge.Attribute, edge.Entity))
-		//			}
-		//			indexLog.Printf("SET [%s] [%d] NewTerm [%s]", edge.Attribute, edge.Entity, string(key))
-		//		}
 		if del {
 			index.MutateChan <- x.Mutations{
 				Del: []x.DirectedEdge{edge},
 			}
 			indexLog.Printf("processIndexTerm DEL [%s] [%d] OldTerm [%s]", edge.Attribute, edge.Entity, edge.IndexToken)
-			x.Printf("~~~processIndexTerm DEL [%s] [%d] OldTerm [%s]", edge.Attribute, edge.ValueId, edge.IndexToken)
 		} else {
 			index.MutateChan <- x.Mutations{
 				Set: []x.DirectedEdge{edge},
 			}
 			indexLog.Printf("processIndexTerm SET [%s] [%d] NewTerm [%s]", edge.Attribute, edge.Entity, edge.IndexToken)
-			x.Printf("~~~processIndexTerm SET [%s] [%d] NewTerm [%s]", edge.Attribute, edge.ValueId, edge.IndexToken)
 		}
 	}
 }

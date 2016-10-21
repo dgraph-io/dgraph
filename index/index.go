@@ -33,7 +33,6 @@ func init() {
 // InitIndex iterates through store to get the keys into memory.
 func InitIndex(dataStore *store.Store) {
 	indexedFields := schema.IndexedFields()
-	x.Printf("~~~~~~~~index.InitIndex: %d", len(indexedFields))
 	type resultStruct struct {
 		attr  string
 		table *TokensTable
@@ -44,14 +43,12 @@ func InitIndex(dataStore *store.Store) {
 		go func(attr string) {
 			table := NewTokensTable()
 			prefix := types.IndexKey(attr, "")
-			x.Printf("~~~~index.InitIndex: seeking to prefix=[%s]", prefix)
 
 			it := dataStore.NewIterator()
 			defer it.Close()
 			for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
 				token := types.TokenFromKey(it.Key().Data())
 				table.append(string(token))
-				x.Printf("~~~index.InitIndex: attr=%s token=%s or %v", attr, token, []byte(token))
 			}
 			results <- resultStruct{attr, table}
 		}(attr)

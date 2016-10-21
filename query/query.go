@@ -1093,7 +1093,6 @@ func (sg *SubGraph) applyOrder(ctx context.Context) error {
 	if len(sg.Params.Order) == 0 {
 		return nil
 	}
-	x.Printf("~~~~~OrderBy=%s sg.Attr=%s", sg.Params.Order, sg.Attr)
 
 	b := flatbuffers.NewBuilder(0)
 	ao := b.CreateString(string(sg.Params.Order))
@@ -1131,8 +1130,6 @@ func (sg *SubGraph) applyOrder(ctx context.Context) error {
 	x.Assert(csResult.UidmatrixLength() == len(sg.Result))
 	sg.Result = algo.FromSortResult(csResult)
 
-	x.Printf("~~~%v", algo.ToUintsListForTest(sg.Result))
-
 	// Update sg.destUID. We need to send it out to be sorted. Note we still
 	// want sg.destUID to be sorted by UID, not some attribute as this property
 	// is assumed by subgraph's children.
@@ -1167,7 +1164,6 @@ func (sg *SubGraph) applyOrder(ctx context.Context) error {
 		sg.destUIDs = new(algo.UIDList)
 		sg.destUIDs.FromUints(newDest)
 	}
-	x.Printf("~~~~~orderByIndex: destUIDs: %v", sg.destUIDs.DebugString())
 
 	// Do a fine sort now.
 	b = flatbuffers.NewBuilder(0)
@@ -1198,8 +1194,6 @@ func (sg *SubGraph) applyOrder(ctx context.Context) error {
 		idxToRank[fsResult.Idx(i)] = uint32(i)
 	}
 
-	x.Printf("~~~idxToRank: %v", idxToRank)
-
 	// For each posting list, sort using idxInv. For each element, we will need
 	// to do binary search to identify its location in sg.destUIDs.
 	// Flatbuffers are not mutable and not nice for sorting. Hence, we need to
@@ -1221,9 +1215,7 @@ func (sg *SubGraph) applyOrder(ctx context.Context) error {
 			ranks = append(ranks, idxToRank[p])
 			idx = append(idx, uint32(p))
 		}
-
-		sort.Sort(&ByRank{idx, ranks})
-		x.Printf("~~~ranks %d %v %v", i, ranks, idx)
+		sort.Sort(&byRank{idx, ranks})
 
 		// Apply pagination.
 		start, end := x.PageRange(int(csResult.Offset(i)), sg.Params.Count, ul.Size())
@@ -1236,7 +1228,6 @@ func (sg *SubGraph) applyOrder(ctx context.Context) error {
 		}
 		sg.Result[i] = new(algo.UIDList)
 		sg.Result[i].FromUints(uids)
-		x.Printf("~~~~%v", sg.Result[i].DebugString())
 	}
 
 	// Rebuild destUIDs. Fine sorting can trim additional entries.
@@ -1248,21 +1239,20 @@ func (sg *SubGraph) applyOrder(ctx context.Context) error {
 	}
 	sg.destUIDs = new(algo.UIDList)
 	sg.destUIDs.FromUints(newDest)
-	x.Printf("~~~ destUIDs: %v", sg.destUIDs)
 
 	return nil
 }
 
-type ByRank struct {
+type byRank struct {
 	idx   []uint32 // Index into sg.destUIDs.
 	ranks []uint32 // Rank in sorted sg.destUIDs. Sorting is by some attribute.
 }
 
-func (s *ByRank) Len() int { return len(s.ranks) }
-func (s *ByRank) Swap(i, j int) {
+func (s *byRank) Len() int { return len(s.ranks) }
+func (s *byRank) Swap(i, j int) {
 	s.idx[i], s.idx[j] = s.idx[j], s.idx[i]
 	s.ranks[i], s.ranks[j] = s.ranks[j], s.ranks[i]
 }
-func (s *ByRank) Less(i, j int) bool {
+func (s *byRank) Less(i, j int) bool {
 	return s.ranks[i] < s.ranks[j]
 }

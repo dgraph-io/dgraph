@@ -17,8 +17,6 @@
 package types
 
 import (
-	"bytes"
-	"sort"
 	"time"
 
 	"github.com/dgraph-io/dgraph/x"
@@ -129,79 +127,4 @@ type timeUnmarshaler interface {
 
 type dateUnmarshaler interface {
 	fromDate(value Date) error
-}
-
-func intRange(n int) []uint32 {
-	out := make([]uint32, n)
-	for i := 0; i < n; i++ {
-		out[i] = uint32(i)
-	}
-	return out
-}
-
-type dateSorter struct {
-	values []Value
-	idx    []uint32
-}
-
-func (s *dateSorter) Len() int { return len(s.values) }
-func (s *dateSorter) Swap(i, j int) {
-	s.values[i], s.values[j] = s.values[j], s.values[i]
-	s.idx[i], s.idx[j] = s.idx[j], s.idx[i]
-}
-func (s *dateSorter) Less(i, j int) bool {
-	return s.values[i].(*Date).Time.Before(s.values[j].(*Date).Time)
-}
-
-type AsDateTime []Value
-
-func (s AsDateTime) Len() int      { return len(s) }
-func (s AsDateTime) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
-func (s AsDateTime) Less(i, j int) bool {
-	return s[i].(*Time).Time.Before(s[j].(*Time).Time)
-}
-
-type AsInt32 []Value
-
-func (s AsInt32) Len() int      { return len(s) }
-func (s AsInt32) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
-func (s AsInt32) Less(i, j int) bool {
-	return *(s[i].(*Int32)) < *(s[j].(*Int32))
-}
-
-type AsString []Value
-
-func (s AsString) Len() int      { return len(s) }
-func (s AsString) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
-func (s AsString) Less(i, j int) bool {
-	return *(s[i].(*String)) < *(s[j].(*String))
-}
-
-type AsBytes []Value
-
-func (s AsBytes) Len() int      { return len(s) }
-func (s AsBytes) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
-func (s AsBytes) Less(i, j int) bool {
-	return bytes.Compare(*(s[i].(*Bytes)), *(s[j].(*Bytes))) < 0
-}
-
-// Sort sorts the given array in-place.
-func (s Scalar) Sort(v []Value) ([]uint32, error) {
-	switch s.ID() {
-	case DateID:
-		sorter := &dateSorter{v, intRange(len(v))}
-		sort.Sort(sorter)
-		return sorter.idx, nil
-		//	case DateTimeID:
-		//		sort.Sort(AsDateTime(a))
-		//	case Int32ID:
-		//		sort.Sort(AsInt32(a))
-		//	case StringID:
-		//		sort.Sort(AsString(a))
-		//	case BytesID:
-		//		sort.Sort(AsBytes(a))
-	default:
-		return nil, x.Errorf("Type does not support sorting: %s", s)
-	}
-	return nil, x.Errorf("Should not reach here")
 }
