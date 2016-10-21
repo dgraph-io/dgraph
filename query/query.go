@@ -946,7 +946,7 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, taskQuery []byte, rch chan 
 	}
 
 	// Filter out the invalid UIDs.
-	sg.destUIDs.ApplyFilter(func(uid uint64) bool {
+	sg.destUIDs.ApplyFilter(func(uid uint64, idx int) bool {
 		return !invalidUids[uid]
 	})
 
@@ -1153,16 +1153,9 @@ func (sg *SubGraph) applyOrder(ctx context.Context) error {
 				}
 			}
 		}
-		newDest := make([]uint64, 0, len(included))
-		for i := 0; i < len(included); i++ {
-			if included[i] {
-				newDest = append(newDest, sg.destUIDs.Get(i))
-			}
-		}
-		// sg.destUIDs might be much smaller than before due to trimming in
-		// the coarse sorting.
-		sg.destUIDs = new(algo.UIDList)
-		sg.destUIDs.FromUints(newDest)
+
+		sg.destUIDs.ApplyFilter(
+			func(uid uint64, idx int) bool { return included[idx] })
 	}
 
 	// Do a fine sort now.
@@ -1230,15 +1223,8 @@ func (sg *SubGraph) applyOrder(ctx context.Context) error {
 		sg.Result[i].FromUints(uids)
 	}
 
-	// Rebuild destUIDs. Fine sorting can trim additional entries.
-	newDest := make([]uint64, 0, len(included))
-	for i := 0; i < len(included); i++ {
-		if included[i] {
-			newDest = append(newDest, sg.destUIDs.Get(i))
-		}
-	}
-	sg.destUIDs = new(algo.UIDList)
-	sg.destUIDs.FromUints(newDest)
+	sg.destUIDs.ApplyFilter(
+		func(uid uint64, idx int) bool { return included[idx] })
 	return nil
 }
 

@@ -214,12 +214,18 @@ func TestUIDListIntersect5(t *testing.T) {
 
 func TestApplyFilterUint(t *testing.T) {
 	u := NewUIDList([]uint64{1, 2, 3, 4, 5})
-	u.ApplyFilter(func(a uint64) bool { return (a % 2) == 1 })
+	u.ApplyFilter(func(a uint64, idx int) bool { return (a % 2) == 1 })
 	require.Equal(t, toArray(u), []uint64{1, 3, 5})
 }
 
 func TestApplyFilterList(t *testing.T) {
 	u := newListFromTask([]uint64{1, 2, 3, 4, 5})
-	u.ApplyFilter(func(a uint64) bool { return (a % 2) == 1 })
+	u.ApplyFilter(func(a uint64, idx int) bool { return (a % 2) == 1 })
 	require.Equal(t, toArray(u), []uint64{1, 3, 5})
+}
+
+func TestApplyFilterByIdx(t *testing.T) {
+	u := newListFromTask([]uint64{1, 2, 3, 4, 5})
+	u.ApplyFilter(func(a uint64, idx int) bool { return (idx % 2) == 1 })
+	require.Equal(t, toArray(u), []uint64{2, 4})
 }
