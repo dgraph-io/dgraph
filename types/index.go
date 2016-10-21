@@ -41,7 +41,7 @@ func IndexKey(attr string, term string) []byte {
 	return buf.Bytes()
 }
 
-// Returns token from an index key.
+// TokenFromKey returns token from an index key.
 func TokenFromKey(key []byte) []byte {
 	i := bytes.IndexRune(key, indexRune)
 	x.Assert(i >= 0)

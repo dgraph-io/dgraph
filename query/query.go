@@ -1239,7 +1239,6 @@ func (sg *SubGraph) applyOrder(ctx context.Context) error {
 	}
 	sg.destUIDs = new(algo.UIDList)
 	sg.destUIDs.FromUints(newDest)
-
 	return nil
 }
 
