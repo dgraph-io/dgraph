@@ -17,9 +17,7 @@
 package query
 
 import (
-	"bytes"
 	"context"
-	"encoding/gob"
 	"encoding/json"
 	"io/ioutil"
 	"os"
@@ -183,9 +181,9 @@ func populateGraph(t *testing.T) (string, *store.Store) {
 	addEdgeToValue(t, ps, "name", 25, "Daryl Dixon")
 	addEdgeToValue(t, ps, "name", 31, "Andrea")
 
-	addEdgeToValue(t, ps, "dob", 23, "1910-05-02")
-	addEdgeToValue(t, ps, "dob", 24, "1909-01-05")
-	addEdgeToValue(t, ps, "dob", 25, "1909-05-10")
+	addEdgeToValue(t, ps, "dob", 23, "1910-01-02")
+	addEdgeToValue(t, ps, "dob", 24, "1909-05-05")
+	addEdgeToValue(t, ps, "dob", 25, "1909-01-10")
 	addEdgeToValue(t, ps, "dob", 31, "1901-01-15")
 
 	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
@@ -1097,223 +1095,6 @@ properties: <
 	require.EqualValues(t, proto.MarshalTextString(pb), expectedPb)
 }
 
-// Test sorting without committing to RocksDB.
-//func TestToJSONOrderMLayer(t *testing.T) {
-//	dir, ps := populateGraph(t)
-//	defer os.RemoveAll(dir)
-//	defer ps.Close()
-
-//	query := `
-//		{
-//			me(_uid_:0x01) {
-//				name
-//				gender
-//				friend(order: dob, offset: 2) {
-//					name
-//				}
-//			}
-//		}
-//	`
-
-//	gq, _, err := gql.Parse(query)
-//	require.NoError(t, err)
-
-//	ctx := context.Background()
-//	sg, err := ToSubGraph(ctx, gq)
-//	require.NoError(t, err)
-
-//	ch := make(chan error)
-//	go ProcessGraph(ctx, sg, nil, ch)
-//	err = <-ch
-//	require.NoError(t, err)
-
-//	//	var l Latency
-//	//	js, err := sg.ToJSON(&l)
-//	//	require.NoError(t, err)
-//	//	require.EqualValues(t,
-//	//		`{"me":[{"friend":[{"name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
-//	//		string(js))
-//}
-
-func benchmarkToJson(file string, b *testing.B) {
-	b.ReportAllocs()
-	var sg SubGraph
-	var l Latency
-
-	f, err := ioutil.ReadFile(file)
-	if err != nil {
-		b.Error(err)
-	}
-
-	buf := bytes.NewBuffer(f)
-	dec := gob.NewDecoder(buf)
-	err = dec.Decode(&sg)
-	if err != nil {
-		b.Error(err)
-	}
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		if _, err := sg.ToJSON(&l); err != nil {
-			b.Fatal(err)
-		}
-	}
-}
-
-func BenchmarkToJSON_10_Actor(b *testing.B)      { benchmarkToJson("benchmark/actors10.bin", b) }
-func BenchmarkToJSON_10_Director(b *testing.B)   { benchmarkToJson("benchmark/directors10.bin", b) }
-func BenchmarkToJSON_100_Actor(b *testing.B)     { benchmarkToJson("benchmark/actors100.bin", b) }
-func BenchmarkToJSON_100_Director(b *testing.B)  { benchmarkToJson("benchmark/directors100.bin", b) }
-func BenchmarkToJSON_1000_Actor(b *testing.B)    { benchmarkToJson("benchmark/actors1000.bin", b) }
-func BenchmarkToJSON_1000_Director(b *testing.B) { benchmarkToJson("benchmark/directors1000.bin", b) }
-
-func benchmarkToPB(file string, b *testing.B) {
-	b.ReportAllocs()
-	var sg SubGraph
-	var l Latency
-
-	f, err := ioutil.ReadFile(file)
-	if err != nil {
-		b.Error(err)
-	}
-
-	buf := bytes.NewBuffer(f)
-	dec := gob.NewDecoder(buf)
-	err = dec.Decode(&sg)
-	if err != nil {
-		b.Error(err)
-	}
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		pb, err := sg.ToProtocolBuffer(&l)
-		if err != nil {
-			b.Fatal(err)
-		}
-		r := new(graph.Response)
-		r.N = pb
-		var c Codec
-		if _, err = c.Marshal(r); err != nil {
-			b.Fatal(err)
-		}
-	}
-}
-
-func BenchmarkToPB_10_Actor(b *testing.B)      { benchmarkToPB("benchmark/actors10.bin", b) }
-func BenchmarkToPB_10_Director(b *testing.B)   { benchmarkToPB("benchmark/directors10.bin", b) }
-func BenchmarkToPB_100_Actor(b *testing.B)     { benchmarkToPB("benchmark/actors100.bin", b) }
-func BenchmarkToPB_100_Director(b *testing.B)  { benchmarkToPB("benchmark/directors100.bin", b) }
-func BenchmarkToPB_1000_Actor(b *testing.B)    { benchmarkToPB("benchmark/actors1000.bin", b) }
-func BenchmarkToPB_1000_Director(b *testing.B) { benchmarkToPB("benchmark/directors1000.bin", b) }
-
-func benchmarkToPBMarshal(file string, b *testing.B) {
-	b.ReportAllocs()
-	var sg SubGraph
-	var l Latency
-
-	f, err := ioutil.ReadFile(file)
-	if err != nil {
-		b.Error(err)
-	}
-
-	buf := bytes.NewBuffer(f)
-	dec := gob.NewDecoder(buf)
-	err = dec.Decode(&sg)
-	if err != nil {
-		b.Error(err)
-	}
-	p, err := sg.ToProtocolBuffer(&l)
-	if err != nil {
-		b.Fatal(err)
-	}
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		if _, err = proto.Marshal(p); err != nil {
-			b.Fatal(err)
-		}
-	}
-}
-
-func BenchmarkToPBMarshal_10_Actor(b *testing.B) {
-	benchmarkToPBMarshal("benchmark/actors10.bin", b)
-}
-func BenchmarkToPBMarshal_10_Director(b *testing.B) {
-	benchmarkToPBMarshal("benchmark/directors10.bin", b)
-}
-func BenchmarkToPBMarshal_100_Actor(b *testing.B) {
-	benchmarkToPBMarshal("benchmark/actors100.bin", b)
-}
-func BenchmarkToPBMarshal_100_Director(b *testing.B) {
-	benchmarkToPBMarshal("benchmark/directors100.bin", b)
-}
-func BenchmarkToPBMarshal_1000_Actor(b *testing.B) {
-	benchmarkToPBMarshal("benchmark/actors1000.bin", b)
-}
-func BenchmarkToPBMarshal_1000_Director(b *testing.B) {
-	benchmarkToPBMarshal("benchmark/directors1000.bin", b)
-}
-
-func benchmarkToPBUnmarshal(file string, b *testing.B) {
-	b.ReportAllocs()
-	var sg SubGraph
-	var l Latency
-
-	f, err := ioutil.ReadFile(file)
-	if err != nil {
-		b.Error(err)
-	}
-
-	buf := bytes.NewBuffer(f)
-	dec := gob.NewDecoder(buf)
-	err = dec.Decode(&sg)
-	if err != nil {
-		b.Error(err)
-	}
-	p, err := sg.ToProtocolBuffer(&l)
-	if err != nil {
-		b.Fatal(err)
-	}
-
-	pbb, err := proto.Marshal(p)
-	if err != nil {
-		b.Fatal(err)
-	}
-
-	pdu := &graph.Node{}
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		err = proto.Unmarshal(pbb, pdu)
-		if err != nil {
-			b.Fatal(err)
-		}
-
-	}
-}
-
-func BenchmarkToPBUnmarshal_10_Actor(b *testing.B) {
-	benchmarkToPBUnmarshal("benchmark/actors10.bin", b)
-}
-func BenchmarkToPBUnmarshal_10_Director(b *testing.B) {
-	benchmarkToPBUnmarshal("benchmark/directors10.bin", b)
-}
-func BenchmarkToPBUnmarshal_100_Actor(b *testing.B) {
-	benchmarkToPBUnmarshal("benchmark/actors100.bin", b)
-}
-func BenchmarkToPBUnmarshal_100_Director(b *testing.B) {
-	benchmarkToPBUnmarshal("benchmark/directors100.bin", b)
-}
-func BenchmarkToPBUnmarshal_1000_Actor(b *testing.B) {
-	benchmarkToPBUnmarshal("benchmark/actors1000.bin", b)
-}
-func BenchmarkToPBUnmarshal_1000_Director(b *testing.B) {
-	benchmarkToPBUnmarshal("benchmark/directors1000.bin", b)
-}
-
-func TestMain(m *testing.M) {
-	x.Init()
-	os.Exit(m.Run())
-}
-
 func TestSchema1(t *testing.T) {
 	require.NoError(t, schema.Parse("test_schema"))
 
@@ -1372,4 +1153,85 @@ func TestSchema1(t *testing.T) {
 	_, success = actorMap["survival_rate"].(float64)
 	require.True(t, success,
 		"Survival rate has to be coerced")
+}
+
+// Test sorting / ordering by dob.
+func TestToJSONOrder(t *testing.T) {
+	dir, ps := populateGraph(t)
+	defer os.RemoveAll(dir)
+	defer ps.Close()
+
+	query := `
+		{
+			me(_uid_:0x01) {
+				name
+				gender
+				friend(order: dob) {
+					name
+				}
+			}
+		}
+	`
+
+	gq, _, err := gql.Parse(query)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	sg, err := ToSubGraph(ctx, gq)
+	require.NoError(t, err)
+
+	ch := make(chan error)
+	go ProcessGraph(ctx, sg, nil, ch)
+	err = <-ch
+	require.NoError(t, err)
+
+	var l Latency
+	js, err := sg.ToJSON(&l)
+	require.NoError(t, err)
+	require.EqualValues(t,
+		`{"me":[{"friend":[{"name":"Andrea"},{"name":"Daryl Dixon"},{"name":"Glenn Rhee"},{"name":"Rick Grimes"}],"gender":"female","name":"Michonne"}]}`,
+		string(js))
+}
+
+// Test sorting / ordering by dob.
+func TestToJSONOrderOffset(t *testing.T) {
+	dir, ps := populateGraph(t)
+	defer os.RemoveAll(dir)
+	defer ps.Close()
+
+	query := `
+		{
+			me(_uid_:0x01) {
+				name
+				gender
+				friend(order: dob, offset: 2) {
+					name
+				}
+			}
+		}
+	`
+
+	gq, _, err := gql.Parse(query)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	sg, err := ToSubGraph(ctx, gq)
+	require.NoError(t, err)
+
+	ch := make(chan error)
+	go ProcessGraph(ctx, sg, nil, ch)
+	err = <-ch
+	require.NoError(t, err)
+
+	var l Latency
+	js, err := sg.ToJSON(&l)
+	require.NoError(t, err)
+	require.EqualValues(t,
+		`{"me":[{"friend":[{"name":"Glenn Rhee"},{"name":"Rick Grimes"}],"gender":"female","name":"Michonne"}]}`,
+		string(js))
+}
+
+func TestMain(m *testing.M) {
+	x.Init()
+	os.Exit(m.Run())
 }

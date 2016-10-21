@@ -97,5 +97,7 @@ table SortResult {
 	uidmatrix:[UidList];
 	
 	// For fine sort. We return the results of an argsort.
+	// If idx[3] = 5, then the 3rd element in the sorted list is 5th element
+	// of our input.
 	idx:[uint];
 }

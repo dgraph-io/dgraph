@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -1070,30 +1071,6 @@ func runFilter(ctx context.Context, destUIDs *algo.UIDList,
 	return algo.IntersectLists(lists), nil
 }
 
-// pageRange returns start and end indices given pagination params. Note that n
-// is the size of the input list.
-func pageRange(p *params, n int) (int, int) {
-	if p.Count == 0 && p.Offset == 0 {
-		return 0, n
-	}
-	if p.Count < 0 {
-		// Items from the back of the array, like Python arrays. Do a postive mod n.
-		return (((n + p.Count) % n) + n) % n, n
-	}
-	start := p.Offset
-	if start < 0 {
-		start = 0
-	}
-	if p.Count == 0 { // No count specified. Just take the offset parameter.
-		return start, n
-	}
-	end := start + p.Count
-	if end > n {
-		end = n
-	}
-	return start, end
-}
-
 // applyPagination applies windowing / pagination to UID matrix.
 func (sg *SubGraph) applyPagination(ctx context.Context) error {
 	params := sg.Params
@@ -1150,26 +1127,119 @@ func (sg *SubGraph) applyOrder(ctx context.Context) error {
 	}
 
 	// Copy result into our UID matrix.
-	result := task.GetRootAsSortResult(resultData, 0)
-	x.Assert(result.UidmatrixLength() == len(sg.Result))
-	sg.Result = algo.FromSortResult(result)
+	csResult := task.GetRootAsSortResult(resultData, 0)
+	x.Assert(csResult.UidmatrixLength() == len(sg.Result))
+	sg.Result = algo.FromSortResult(csResult)
+
+	x.Printf("~~~%v", algo.ToUintsListForTest(sg.Result))
 
 	// Update sg.destUID. We need to send it out to be sorted. Note we still
-	// want sg.destUID to be sorted by UID, not some attribute. To obtain
-	// sg.destUID, we iterate over the UID matrix (which is not sorted by UID).
-	// For each element in UID matrix, we do a binary search in the current
-	// destUID and mark it. Then we scan over this bool array and rebuild
-	// destUIDs.
+	// want sg.destUID to be sorted by UID, not some attribute as this property
+	// is assumed by subgraph's children.
+
+	// To obtain sg.destUID, we iterate over the UID matrix (which is not sorted
+	// by UID). For each element in UID matrix, we do a binary search in the
+	// current destUID and mark it. Then we scan over this bool array and
+	// rebuild destUIDs.
+	var maxLen int
 	included := make([]bool, sg.destUIDs.Size())
-	for _, ul := range sg.Result {
-		for i := 0; i < ul.Size(); i++ {
-			uid := ul.Get(i)
-			idx := sg.destUIDs.IndexOf(uid) // Binary search.
-			if idx >= 0 {
-				included[idx] = true
+	{
+		for _, ul := range sg.Result {
+			if ul.Size() > maxLen {
+				maxLen = ul.Size() // Used later.
+			}
+			for i := 0; i < ul.Size(); i++ {
+				uid := ul.Get(i)
+				idx := sg.destUIDs.IndexOf(uid) // Binary search.
+				if idx >= 0 {
+					included[idx] = true
+				}
 			}
 		}
+		newDest := make([]uint64, 0, len(included))
+		for i := 0; i < len(included); i++ {
+			if included[i] {
+				newDest = append(newDest, sg.destUIDs.Get(i))
+			}
+		}
+		// sg.destUIDs might be much smaller than before due to trimming in
+		// the coarse sorting.
+		sg.destUIDs = new(algo.UIDList)
+		sg.destUIDs.FromUints(newDest)
 	}
+	x.Printf("~~~~~orderByIndex: destUIDs: %v", sg.destUIDs.DebugString())
+
+	// Do a fine sort now.
+	b = flatbuffers.NewBuilder(0)
+	ao = b.CreateString(sg.Params.Order)
+	uo := sg.destUIDs.AddTo(b)
+
+	task.FineSortStart(b)
+	task.FineSortAddUid(b, uo)
+	fsEnd := task.FineSortEnd(b)
+
+	task.SortStart(b)
+	task.SortAddAttr(b, ao)
+	task.SortAddFineSort(b, fsEnd)
+	task.SortAddCoarse(b, byte(0))
+	b.Finish(task.SortEnd(b))
+	resultData, err = worker.SortOverNetwork(ctx, b.FinishedBytes())
+	if err != nil {
+		return err
+	}
+
+	fsResult := task.GetRootAsSortResult(resultData, 0)
+	x.Assert(fsResult.IdxLength() == sg.destUIDs.Size())
+
+	idxToRank := make([]uint32, fsResult.IdxLength())
+	for i := 0; i < fsResult.IdxLength(); i++ {
+		// destUIDs[result.Idx(i)] is the i-th element in list sorted by attribute.
+		// idxToRank[i] is the rank of destUIDs[i] in list sorted by attribute.
+		idxToRank[fsResult.Idx(i)] = uint32(i)
+	}
+
+	x.Printf("~~~idxToRank: %v", idxToRank)
+
+	// For each posting list, sort using idxInv. For each element, we will need
+	// to do binary search to identify its location in sg.destUIDs.
+	// Flatbuffers are not mutable and not nice for sorting. Hence, we need to
+	// do some copying of UIDs.
+	ranksBuffer := make([]uint32, 0, maxLen)
+	idxBuffer := make([]uint32, 0, maxLen)
+	// Reset part of included.
+	included = included[:sg.destUIDs.Size()]
+	for i := 0; i < len(included); i++ {
+		included[i] = false
+	}
+	for i, ul := range sg.Result {
+		ranks := ranksBuffer[:0]
+		idx := idxBuffer[:0]
+		for j := 0; j < ul.Size(); j++ {
+			uid := ul.Get(j)
+			p := sg.destUIDs.IndexOf(uid) // Binary search.
+			x.Assert(p >= 0 && p < ul.Size())
+			ranks = append(ranks, idxToRank[p])
+			idx = append(idx, uint32(p))
+		}
+
+		sort.Sort(&ByRank{idx, ranks})
+		x.Printf("~~~ranks %d %v %v", i, ranks, idx)
+
+		// Apply pagination.
+		start, end := x.PageRange(int(csResult.Offset(i)), sg.Params.Count, ul.Size())
+		uids := make([]uint64, end-start)
+
+		for k := start; k < end; k++ {
+			p := idx[k]
+			included[p] = true // Mark sg.destUIDs so that we can trim it later.
+			uids[k-start] = sg.destUIDs.Get(int(p))
+		}
+		sg.Result[i] = new(algo.UIDList)
+		sg.Result[i].FromUints(uids)
+		x.Printf("~~~~%v", sg.Result[i].DebugString())
+	}
+
+	// Rebuild destUIDs. Fine sorting can trim additional entries.
 	newDest := make([]uint64, 0, len(included))
 	for i := 0; i < len(included); i++ {
 		if included[i] {
@@ -1178,7 +1248,21 @@ func (sg *SubGraph) applyOrder(ctx context.Context) error {
 	}
 	sg.destUIDs = new(algo.UIDList)
 	sg.destUIDs.FromUints(newDest)
-	x.Printf("~~~~~orderByIndex: destUIDs: %v", sg.destUIDs.DebugString())
+	x.Printf("~~~ destUIDs: %v", sg.destUIDs)
 
 	return nil
+}
+
+type ByRank struct {
+	idx   []uint32 // Index into sg.destUIDs.
+	ranks []uint32 // Rank in sorted sg.destUIDs. Sorting is by some attribute.
+}
+
+func (s *ByRank) Len() int { return len(s.ranks) }
+func (s *ByRank) Swap(i, j int) {
+	s.idx[i], s.idx[j] = s.idx[j], s.idx[i]
+	s.ranks[i], s.ranks[j] = s.ranks[j], s.ranks[i]
+}
+func (s *ByRank) Less(i, j int) bool {
+	return s.ranks[i] < s.ranks[j]
 }
