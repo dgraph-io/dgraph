@@ -326,7 +326,7 @@ func (n *node) processSnapshot(s raftpb.Snapshot) {
 	pool := pools().get(addr)
 	x.Assertf(pool != nil, "Leader: %d pool should not be nil", lead)
 
-	_, err := ws.PopulateShard(context.TODO(), pool, 0)
+	_, err := populateShard(context.TODO(), pool, 0)
 	x.Checkf(err, "processSnapshot")
 }
 
@@ -403,7 +403,7 @@ func parsePeer(peer string) (uint64, string) {
 	return pid, kv[1]
 }
 
-func (n *node) joinPeers(any string, s *State) {
+func (n *node) joinPeers(any string) {
 	// Tell one of the peers to join.
 	pid, paddr := parsePeer(any)
 	n.Connect(pid, paddr)
@@ -412,9 +412,9 @@ func (n *node) joinPeers(any string, s *State) {
 	pool := pools().get(addr)
 	x.Assertf(pool != nil, "Unable to find addr for peer: %d", pid)
 
-	// TODO: Ask for the leader, before running PopulateShard.
+	// TODO: Ask for the leader, before running populateShard.
 	// Bring the instance up to speed first.
-	_, err := s.PopulateShard(context.TODO(), pool, 0)
+	_, err := populateShard(context.TODO(), pool, 0)
 	x.Checkf(err, "Error while populating shard")
 
 	fmt.Printf("TELLING PEER TO ADD ME: %v\n", any)
@@ -530,7 +530,7 @@ func (n *node) InitAndStartNode(wal *raftwal.Wal, peer string) {
 
 	} else {
 		if len(peer) > 0 {
-			n.joinPeers(peer, ws)
+			n.joinPeers(peer)
 			n.raft = raft.StartNode(n.cfg, nil)
 		} else {
 			peers := []raft.Peer{{ID: n.id}}

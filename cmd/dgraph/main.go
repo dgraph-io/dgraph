@@ -41,12 +41,10 @@ import (
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/query/graph"
-	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/types"
-	"github.com/dgraph-io/dgraph/uid"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/soheilhy/cmux"
@@ -54,24 +52,18 @@ import (
 
 var (
 	postingDir = flag.String("p", "p", "Directory to store posting lists.")
-	walDir     = flag.String("w", "w", "Directory to store raft write-ahead logs.")
 	port       = flag.Int("port", 8080, "Port to run server on.")
 	numcpu     = flag.Int("cores", runtime.NumCPU(),
 		"Number of cores to be used by the process")
-	raftId     = flag.Uint64("idx", 1, "RAFT ID that this server will use to join RAFT groups.")
-	peer       = flag.String("peer", "", "Address of any peer.")
-	workerPort = flag.String("workerport", ":12345",
-		"Port used by worker for internal communication.")
 	nomutations = flag.Bool("nomutations", false, "Don't allow mutations on this server.")
 	shutdown    = flag.Bool("shutdown", false, "Allow client to send shutdown signal.")
 	tracing     = flag.Float64("trace", 0.5, "The ratio of queries to trace.")
-	cpuprofile  = flag.String("cpu", "", "write cpu profile to file")
-	memprofile  = flag.String("mem", "", "write memory profile to file")
 	schemaFile  = flag.String("schema", "", "Path to schema file")
 	rdbStats    = flag.Duration("rdbstats", 5*time.Minute,
 		"Print out RocksDB stats every this many seconds. If <=0, we don't print anyting.")
-	groupConf = flag.String("conf", "", "Path to config file with group <-> predicate mapping.")
-	closeCh   = make(chan struct{})
+	cpuprofile = flag.String("cpu", "", "write cpu profile to file")
+	memprofile = flag.String("mem", "", "write memory profile to file")
+	closeCh    = make(chan struct{})
 )
 
 type mutationResult struct {
@@ -563,10 +555,6 @@ func checkFlagsAndInitDirs() {
 	if err != nil {
 		log.Fatalf("Error while creating the filepath for postings: %v", err)
 	}
-	err = os.MkdirAll(*walDir, 0700)
-	if err != nil {
-		log.Fatalf("Error while creating the filepath for wal: %v", err)
-	}
 }
 
 func serveGRPC(l net.Listener) {
@@ -584,7 +572,7 @@ func serveHTTP(l net.Listener) {
 }
 
 func setupServer(che chan error) {
-	go worker.RunServer(*workerPort) // For internal communication.
+	go worker.RunServer() // For internal communication.
 
 	l, err := net.Listen("tcp", fmt.Sprintf(":%d", *port))
 	if err != nil {
@@ -618,12 +606,10 @@ func setupServer(che chan error) {
 }
 
 func printStats(ps *store.Store) {
-	go func() {
-		for {
-			time.Sleep(*rdbStats)
-			fmt.Println(ps.GetStats())
-		}
-	}()
+	for {
+		time.Sleep(*rdbStats)
+		fmt.Println(ps.GetStats())
+	}
 }
 
 func main() {
@@ -635,18 +621,9 @@ func main() {
 	x.Checkf(err, "Error initializing postings store")
 	defer ps.Close()
 
-	wals, err := store.NewSyncStore(*walDir)
-	x.Checkf(err, "Error initializing wal store")
-	defer wals.Close()
-	wal := raftwal.Init(wals, *raftId)
-
-	posting.InitIndex(ps)
-	posting.Init()
-	printStats(ps)
-	x.Check(worker.ParseGroupConfig(*groupConf))
-
-	worker.SetState(ps)
-	uid.Init(ps)
+	posting.Init(ps)
+	worker.Init(ps)
+	go printStats(ps)
 
 	if len(*schemaFile) > 0 {
 		err = schema.Parse(*schemaFile)
@@ -657,12 +634,7 @@ func main() {
 	// Setup external communication.
 	che := make(chan error, 1)
 	go setupServer(che)
-
-	// TODO: Clean up the RAFT group creation code.
-	// Initiate the commmon group across the entire cluster. This group
-	// stores information about which server serves which groups.
-	my := "localhost" + *workerPort
-	go worker.StartRaftNodes(wal, *raftId, my, *peer)
+	go worker.StartRaftNodes()
 
 	if err := <-che; !strings.Contains(err.Error(),
 		"use of closed network connection") {
