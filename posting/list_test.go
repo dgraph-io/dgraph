@@ -31,41 +31,26 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/posting/types"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/x"
 )
 
-func listToArray(t *testing.T, l *List) []uint64 {
+func listToArray(t *testing.T, afterUid uint64, l *List) []uint64 {
 	out := make([]uint64, 0, 10)
-	l.Iterate(0, func(p *types.Posting) bool {
+	l.Iterate(afterUid, func(p types.Posting) bool {
 		out = append(out, p.Uid())
 		return true
 	})
 	return out
 }
 
-func ulToArray(l *algo.UIDList) []uint64 {
-	n := l.Size()
-	out := make([]uint64, 0, n)
-	for i := 0; i < n; i++ {
-		out = append(out, l.Get(i))
-	}
-	return out
-}
-
 func checkUids(t *testing.T, l *List, uids []uint64) {
-	require.Equal(t, listToArray(t, l), uids)
+	require.Equal(t, uids, listToArray(t, 0, l))
 	if len(uids) >= 3 {
-		opts := ListOptions{10, nil} // Tests for "after"
-		require.Equal(t, ulToArray(l.Uids(opts)), uids[1:])
-
-		opts = ListOptions{80, nil}
-		require.Equal(t, ulToArray(l.Uids(opts)), []uint64{81})
-
-		opts = ListOptions{82, nil}
-		require.Empty(t, ulToArray(l.Uids(opts)))
+		require.Equal(t, uids[1:], listToArray(t, 10, l), uids[1:])
+		require.Equal(t, []uint64{81}, listToArray(t, 80, l))
+		require.Empty(t, listToArray(t, 82, l))
 	}
 }
 
@@ -91,17 +76,9 @@ func TestKey(t *testing.T) {
 	}
 }
 
-func getFirst(l *List) (res *types.Posting) {
-	l.Iterate(0, func(p *types.Posting) bool {
-		res = p
-		return false
-	})
-	return res
-}
-
 func getLength(l *List) int {
 	count := 0
-	l.Iterate(0, func(p *types.Posting) bool {
+	l.Iterate(0, func(p types.Posting) bool {
 		count++
 		return true
 	})
@@ -127,7 +104,7 @@ func TestAddMutation(t *testing.T) {
 	}
 	addMutation(t, l, edge, Set)
 
-	require.Equal(t, listToArray(t, l), []uint64{9})
+	require.Equal(t, listToArray(t, 0, l), []uint64{9})
 
 	p := getFirst(l)
 	require.NotNil(t, p, "Unable to retrieve posting")
@@ -136,12 +113,12 @@ func TestAddMutation(t *testing.T) {
 	// Add another edge now.
 	edge.ValueId = 81
 	addMutation(t, l, edge, Set)
-	require.Equal(t, listToArray(t, l), []uint64{9, 81})
+	require.Equal(t, listToArray(t, 0, l), []uint64{9, 81})
 
 	// Add another edge, in between the two above.
 	edge.ValueId = 49
 	addMutation(t, l, edge, Set)
-	require.Equal(t, listToArray(t, l), []uint64{9, 49, 81})
+	require.Equal(t, listToArray(t, 0, l), []uint64{9, 49, 81})
 
 	checkUids(t, l, []uint64{9, 49, 81})
 
@@ -174,11 +151,19 @@ func TestAddMutation(t *testing.T) {
 	checkUids(t, dl, uids)
 }
 
+func getFirst(l *List) (res types.Posting) {
+	res = *types.GetRootAsPosting(emptyPosting, 0)
+	l.Iterate(0, func(p types.Posting) bool {
+		res = p
+		return false
+	})
+	return res
+}
+
 func checkValue(t *testing.T, ol *List, val string) {
 	p := getFirst(ol)
-	require.NotNil(t, p, "Unable to retrieve posting")
-	require.Equal(t, p.Uid(), uint64(math.MaxUint64)) // Cast to prevent overflow.
-	require.EqualValues(t, p.ValueBytes(), val)
+	require.Equal(t, uint64(math.MaxUint64), p.Uid()) // Cast to prevent overflow.
+	require.EqualValues(t, val, p.ValueBytes())
 }
 
 func TestAddMutation_Value(t *testing.T) {

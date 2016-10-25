@@ -120,6 +120,7 @@ func samePosting(a *types.Posting, b *types.Posting) bool {
 	if !bytes.Equal(a.ValueBytes(), b.ValueBytes()) {
 		return false
 	}
+	// Checking source might not be necessary.
 	if !bytes.Equal(a.Source(), b.Source()) {
 		return false
 	}
@@ -299,45 +300,65 @@ func (l *List) SetForDeletion() {
 }
 
 func (l *List) updateMutationLayer(mpost *types.Posting) bool {
-	pl := l.getPostingList()
 	findUid := mpost.Uid()
+
+	// First check the mutable layer.
+	midx := sort.Search(len(l.mlayer), func(idx int) bool {
+		mp := l.mlayer[idx]
+		return findUid <= mp.Uid()
+	})
+	if midx < len(l.mlayer) {
+		// Found this in mlayer.
+		mp := l.mlayer[midx]
+		if samePosting(mp, mpost) && mp.Op() == mpost.Op() {
+			// Everything is the same. No change.
+			return false
+		}
+		if mp.Uid() == mpost.Uid() {
+			if !samePosting(mp, mpost) && mpost.Op() == Del {
+				return false
+			}
+			// Same UID. So, set the new version.
+			l.mlayer[midx] = mpost
+			return true
+		}
+	}
+
+	// Didn't find it in mutable layer. Now check the immutable layer.
+	pl := l.getPostingList()
 	pidx := sort.Search(pl.PostingsLength(), func(idx int) bool {
 		p := new(types.Posting)
 		x.Assert(pl.Postings(p, idx))
 		return findUid <= p.Uid()
 	})
-
 	if pidx < pl.PostingsLength() {
 		p := new(types.Posting)
 		x.Assertf(pl.Postings(p, pidx), "Unable to parse Posting at index: %v", pidx)
+
 		if samePosting(p, mpost) && mpost.Op() == Set {
+			// Found exact same posting in immutable layer. So, no need to Set.
 			return false
 		}
 		if p.Uid() != mpost.Uid() && mpost.Op() == Del {
+			// Couldn't find the posting in immutable layer. So, no need to Del.
 			return false
 		}
-	} else if mpost.Op() == Del {
-		return false
+		if p.Uid() == mpost.Uid() && mpost.Op() == Del {
+			// Found the index in the immutable layer, but
+			if !samePosting(p, mpost) {
+				return false
+			}
+		}
 	}
+	// Doesn't match what we already have in immutable layer. So, add to mutable layer.
 
-	midx := sort.Search(len(l.mlayer), func(idx int) bool {
-		mp := l.mlayer[idx]
-		return findUid <= mp.Uid()
-	})
 	if midx >= len(l.mlayer) {
+		// Add it at the end.
 		l.mlayer = append(l.mlayer, mpost)
 		return true
 	}
 
-	mp := l.mlayer[midx]
-	if samePosting(mp, mpost) && mp.Op() == mpost.Op() {
-		return false
-	}
-	if mp.Uid() == mpost.Uid() {
-		l.mlayer[midx] = mpost
-		return true
-	}
-	// The case where midx points to the first element in mlayer which is greater than mpost.Uid.
+	// Otherwise, add it where midx is pointing to.
 	l.mlayer = append(l.mlayer, nil)
 	copy(l.mlayer[midx+1:], l.mlayer[midx:])
 	l.mlayer[midx] = mpost
@@ -414,14 +435,14 @@ func (l *List) AddMutation(ctx context.Context, t x.DirectedEdge, op byte) (bool
 //    return true  // to continue iteration.
 //    return false // to break iteration.
 //  })
-func (l *List) Iterate(afterUid uint64, f func(obj *types.Posting) bool) {
+func (l *List) Iterate(afterUid uint64, f func(obj types.Posting) bool) {
 	l.wg.Wait()
 	l.RLock()
 	defer l.RUnlock()
 	l.iterate(afterUid, f)
 }
 
-func (l *List) iterate(afterUid uint64, f func(obj *types.Posting) bool) {
+func (l *List) iterate(afterUid uint64, f func(obj types.Posting) bool) {
 	pidx, midx := 0, 0
 	pl := l.getPostingList()
 
@@ -437,35 +458,36 @@ func (l *List) iterate(afterUid uint64, f func(obj *types.Posting) bool) {
 		})
 	}
 
-	var pp, mp *types.Posting
-	var cont bool
+	mp := new(types.Posting)
+	pp := new(types.Posting)
+	cont := true
 ITERATE:
 	for cont {
 		if pidx < pl.PostingsLength() {
 			x.Assert(pl.Postings(pp, pidx))
 		} else {
-			pp = nil
+			pp = types.GetRootAsPosting(emptyPosting, 0)
 		}
 		if midx < len(l.mlayer) {
 			mp = l.mlayer[midx]
 		} else {
-			mp = nil
+			mp = types.GetRootAsPosting(emptyPosting, 0)
 		}
 
 		switch {
-		case pp == nil && mp == nil:
+		case pp.Uid() == 0 && mp.Uid() == 0:
 			break ITERATE
-		case mp == nil || (pp != nil && pp.Uid() < mp.Uid()):
-			cont = f(pp)
+		case mp.Uid() == 0 || (pp.Uid() > 0 && pp.Uid() < mp.Uid()):
+			cont = f(*pp)
 			pidx++
-		case pp == nil || (mp != nil && mp.Uid() < pp.Uid()):
+		case pp.Uid() == 0 || (mp.Uid() > 0 && mp.Uid() < pp.Uid()):
 			if mp.Op() == Set {
-				cont = f(mp)
+				cont = f(*mp)
 			}
 			midx++
 		case pp.Uid() == mp.Uid():
 			if mp.Op() == Set {
-				cont = f(mp)
+				cont = f(*mp)
 			}
 			pidx++
 			midx++
@@ -500,7 +522,7 @@ func (l *List) commit() (committed bool, rerr error) {
 	ubuf := make([]byte, 16)
 	h := md5.New()
 	count := 0
-	l.iterate(0, func(p *types.Posting) bool {
+	l.iterate(0, func(p types.Posting) bool {
 		n := binary.PutVarint(ubuf, int64(count))
 		h.Write(ubuf[0:n])
 		n = binary.PutUvarint(ubuf, p.Uid())
@@ -509,7 +531,7 @@ func (l *List) commit() (committed bool, rerr error) {
 		h.Write(p.Source())
 		count++
 
-		offsets = append(offsets, addPosting(b, *p))
+		offsets = append(offsets, addPosting(b, p))
 		return true
 	})
 
@@ -534,6 +556,7 @@ func (l *List) commit() (committed bool, rerr error) {
 	// Now reset the mutation variables.
 	atomic.StorePointer(&l.pbuffer, nil) // Make prev buffer eligible for GC.
 	atomic.StoreInt64(&l.dirtyTs, 0)     // Set as clean.
+	l.mlayer = l.mlayer[:0]
 	l.lastCompact = time.Now()
 	return true, nil
 }
@@ -553,7 +576,7 @@ func (l *List) Uids(opt ListOptions) *algo.UIDList {
 
 	result := make([]uint64, 0, 10)
 	var intersectIdx int // Indexes into opt.Intersect if it exists.
-	l.iterate(opt.AfterUID, func(p *types.Posting) bool {
+	l.iterate(opt.AfterUID, func(p types.Posting) bool {
 		if p.Uid() == math.MaxUint64 {
 			return false
 		}
@@ -571,20 +594,22 @@ func (l *List) Uids(opt ListOptions) *algo.UIDList {
 	return algo.NewUIDList(result)
 }
 
-func (l *List) Value() (res *types.Posting, rerr error) {
+func (l *List) Value() (res types.Posting, rerr error) {
 	l.wg.Wait()
 	l.RLock()
 	defer l.RUnlock()
 
-	l.iterate(math.MaxUint64-1, func(p *types.Posting) bool {
+	var found bool
+	l.iterate(math.MaxUint64-1, func(p types.Posting) bool {
 		if p.Uid() == math.MaxUint64 {
 			res = p
+			found = true
 		}
 		return false
 	})
 
-	if res == nil {
-		return nil, ErrNoValue
+	if !found {
+		return res, ErrNoValue
 	}
 	return res, nil
 }

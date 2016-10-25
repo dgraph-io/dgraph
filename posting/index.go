@@ -107,7 +107,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t x.DirectedEdge, op by
 	x.Assertf(len(t.Attribute) > 0 && t.Attribute[0] != ':',
 		"[%s] [%d] [%s] %d %d\n", t.Attribute, t.Entity, string(t.Value), t.ValueId, op)
 
-	var lastPost *types.Posting
+	var lastPost types.Posting
 	var verr error
 
 	doUpdateIndex := pstore != nil && (t.Value != nil) &&
