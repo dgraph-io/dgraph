@@ -178,11 +178,7 @@ func newPosting(t x.DirectedEdge, op byte) *types.Posting {
 	vend := types.PostingEnd(b)
 	b.Finish(vend)
 
-	mpost := new(types.Posting)
-	buf := b.Bytes[b.Head():]
-	uo := flatbuffers.GetUOffsetT(buf)
-	mpost.Init(buf, uo)
-	return mpost
+	return types.GetRootAsPosting(b.Bytes[b.Head():], 0)
 }
 
 func addEdgeToPosting(b *flatbuffers.Builder,
@@ -294,6 +290,7 @@ func (l *List) getPostingList() *types.PostingList {
 	return types.GetRootAsPostingList(buf.d, 0)
 }
 
+// SetForDeletion will mark this List to be deleted, so no more mutations can be applied to this.
 func (l *List) SetForDeletion() {
 	l.wg.Wait()
 	atomic.StoreInt32(&l.deleteMe, 1)
@@ -310,12 +307,13 @@ func (l *List) updateMutationLayer(mpost *types.Posting) bool {
 	if midx < len(l.mlayer) {
 		// Found this in mlayer.
 		mp := l.mlayer[midx]
-		if samePosting(mp, mpost) && mp.Op() == mpost.Op() {
+		msame := samePosting(mp, mpost)
+		if msame && mp.Op() == mpost.Op() {
 			// Everything is the same. No change.
 			return false
 		}
 		if mp.Uid() == mpost.Uid() {
-			if !samePosting(mp, mpost) && mpost.Op() == Del {
+			if !msame && mpost.Op() == Del {
 				return false
 			}
 			// Same UID. So, set the new version.
@@ -335,7 +333,8 @@ func (l *List) updateMutationLayer(mpost *types.Posting) bool {
 		p := new(types.Posting)
 		x.Assertf(pl.Postings(p, pidx), "Unable to parse Posting at index: %v", pidx)
 
-		if samePosting(p, mpost) && mpost.Op() == Set {
+		psame := samePosting(p, mpost)
+		if psame && mpost.Op() == Set {
 			// Found exact same posting in immutable layer. So, no need to Set.
 			return false
 		}
@@ -345,7 +344,7 @@ func (l *List) updateMutationLayer(mpost *types.Posting) bool {
 		}
 		if p.Uid() == mpost.Uid() && mpost.Op() == Del {
 			// Found the index in the immutable layer, but
-			if !samePosting(p, mpost) {
+			if !psame {
 				return false
 			}
 		}
@@ -380,6 +379,13 @@ func (l *List) updateMutationLayer(mpost *types.Posting) bool {
 // BenchmarkAddMutations_SyncEvery100LogEntry-6 	   10000	    298352 ns/op
 // BenchmarkAddMutations_SyncEvery1000LogEntry-6	   30000	     63544 ns/op
 // ok  	github.com/dgraph-io/dgraph/posting	10.291s
+//
+// Update: With the latest changes, we no longer use commit.Log, in fact, the
+// commit package is not present anymore. With RAFT, everything goes into WAL
+// before being applied to PL. So, AddMutation now is solely a memory based operation.
+// This is the result with the latest changes, running on my i5 laptop.
+//
+// BenchmarkAddMutations-4    	  300000	     26737 ns/op
 
 // AddMutation adds mutation to mutation layers. Note that it does not write
 // anything to disk. Some other background routine will be responsible for merging
@@ -430,19 +436,20 @@ func (l *List) AddMutation(ctx context.Context, t x.DirectedEdge, op byte) (bool
 // The iteration will start after the provided UID. The results would not include this UID.
 // The function will loop until either the Posting List is fully iterated, or you return a false
 // in the provided function, which will indicate to the function to break out of the iteration.
+//
 // 	pl.Iterate(func(p *types.Posting) bool {
 //    // Use posting p
 //    return true  // to continue iteration.
 //    return false // to break iteration.
 //  })
-func (l *List) Iterate(afterUid uint64, f func(obj types.Posting) bool) {
+func (l *List) Iterate(afterUid uint64, f func(obj *types.Posting) bool) {
 	l.wg.Wait()
 	l.RLock()
 	defer l.RUnlock()
 	l.iterate(afterUid, f)
 }
 
-func (l *List) iterate(afterUid uint64, f func(obj types.Posting) bool) {
+func (l *List) iterate(afterUid uint64, f func(obj *types.Posting) bool) {
 	pidx, midx := 0, 0
 	pl := l.getPostingList()
 
@@ -458,36 +465,35 @@ func (l *List) iterate(afterUid uint64, f func(obj types.Posting) bool) {
 		})
 	}
 
-	mp := new(types.Posting)
-	pp := new(types.Posting)
+	empty := types.GetRootAsPosting(emptyPosting, 0)
+	mp, pp := new(types.Posting), new(types.Posting)
 	cont := true
-ITERATE:
 	for cont {
 		if pidx < pl.PostingsLength() {
 			x.Assert(pl.Postings(pp, pidx))
 		} else {
-			pp = types.GetRootAsPosting(emptyPosting, 0)
+			pp = empty
 		}
 		if midx < len(l.mlayer) {
 			mp = l.mlayer[midx]
 		} else {
-			mp = types.GetRootAsPosting(emptyPosting, 0)
+			mp = empty
 		}
 
 		switch {
 		case pp.Uid() == 0 && mp.Uid() == 0:
-			break ITERATE
+			cont = false
 		case mp.Uid() == 0 || (pp.Uid() > 0 && pp.Uid() < mp.Uid()):
-			cont = f(*pp)
+			cont = f(pp)
 			pidx++
 		case pp.Uid() == 0 || (mp.Uid() > 0 && mp.Uid() < pp.Uid()):
 			if mp.Op() == Set {
-				cont = f(*mp)
+				cont = f(mp)
 			}
 			midx++
 		case pp.Uid() == mp.Uid():
 			if mp.Op() == Set {
-				cont = f(*mp)
+				cont = f(mp)
 			}
 			pidx++
 			midx++
@@ -500,7 +506,7 @@ ITERATE:
 // Length iterates over the posting list and counts the number of elements. This is NOT CHEAP. So, use it sparingly.
 func (l *List) Length(afterUid uint64) int {
 	count := 0
-	l.Iterate(afterUid, func(types.Posting) bool {
+	l.Iterate(afterUid, func(*types.Posting) bool {
 		count++
 		return true
 	})
@@ -532,7 +538,7 @@ func (l *List) commit() (committed bool, rerr error) {
 	ubuf := make([]byte, 16)
 	h := md5.New()
 	count := 0
-	l.iterate(0, func(p types.Posting) bool {
+	l.iterate(0, func(p *types.Posting) bool {
 		n := binary.PutVarint(ubuf, int64(count))
 		h.Write(ubuf[0:n])
 		n = binary.PutUvarint(ubuf, p.Uid())
@@ -541,7 +547,7 @@ func (l *List) commit() (committed bool, rerr error) {
 		h.Write(p.Source())
 		count++
 
-		offsets = append(offsets, addPosting(b, p))
+		offsets = append(offsets, addPosting(b, *p))
 		return true
 	})
 
@@ -586,7 +592,7 @@ func (l *List) Uids(opt ListOptions) *algo.UIDList {
 
 	result := make([]uint64, 0, 10)
 	var intersectIdx int // Indexes into opt.Intersect if it exists.
-	l.iterate(opt.AfterUID, func(p types.Posting) bool {
+	l.iterate(opt.AfterUID, func(p *types.Posting) bool {
 		if p.Uid() == math.MaxUint64 {
 			return false
 		}
@@ -610,9 +616,9 @@ func (l *List) Value() (res types.Posting, rerr error) {
 	defer l.RUnlock()
 
 	var found bool
-	l.iterate(math.MaxUint64-1, func(p types.Posting) bool {
+	l.iterate(math.MaxUint64-1, func(p *types.Posting) bool {
 		if p.Uid() == math.MaxUint64 {
-			res = p
+			res = *p
 			found = true
 		}
 		return false
