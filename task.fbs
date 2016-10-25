@@ -72,3 +72,13 @@ table Membership {
 	leader:bool;
 	amdead:bool;
 }
+
+table Sort {
+	uidmatrix:[UidList];
+	count:int;
+	offset:int;
+}
+
+table SortResult {
+	uidmatrix:[UidList];
+}
