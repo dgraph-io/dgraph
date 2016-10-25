@@ -77,12 +77,7 @@ func TestKey(t *testing.T) {
 }
 
 func getLength(l *List) int {
-	count := 0
-	l.Iterate(0, func(p types.Posting) bool {
-		count++
-		return true
-	})
-	return count
+	return l.Length(0)
 }
 
 func TestAddMutation(t *testing.T) {
