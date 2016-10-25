@@ -100,19 +100,19 @@ func processTask(query []byte) ([]byte, error) {
 		var valoffset flatbuffers.UOffsetT
 		// If a posting list contains a value, we store that or else we store a nil
 		// byte so that processing is consistent later.
-		val, t, err := pl.Value()
+		val, err := pl.Value()
 		if err != nil {
 			valoffset = b.CreateByteVector(x.Nilbyte)
 		} else {
-			valoffset = b.CreateByteVector(val)
+			valoffset = b.CreateByteVector(val.ValueBytes())
 		}
 		task.ValueStart(b)
 		task.ValueAddVal(b, valoffset)
-		task.ValueAddValType(b, t)
+		task.ValueAddValType(b, val.ValType())
 		voffsets[i] = task.ValueEnd(b)
 
 		if q.GetCount() == 1 {
-			count := uint64(pl.Length())
+			count := uint64(pl.Length(0))
 			counts = append(counts, count)
 			// Add an empty UID list to make later processing consistent
 			uoffsets[i] = algo.NewUIDList([]uint64{}).AddTo(b)

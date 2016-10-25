@@ -497,6 +497,16 @@ ITERATE:
 	}
 }
 
+// Length iterates over the posting list and counts the number of elements. This is NOT CHEAP. So, use it sparingly.
+func (l *List) Length(afterUid uint64) int {
+	count := 0
+	l.Iterate(afterUid, func(types.Posting) bool {
+		count++
+		return true
+	})
+	return count
+}
+
 func (l *List) CommitIfDirty(ctx context.Context) (committed bool, err error) {
 	if atomic.LoadInt64(&l.dirtyTs) == 0 {
 		x.Trace(ctx, "Not committing")
