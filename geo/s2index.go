@@ -17,7 +17,6 @@
 package geo
 
 import (
-	"bytes"
 	"log"
 
 	"github.com/golang/geo/s2"
@@ -27,27 +26,18 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-// IndexKeys returns the keys to be used in a geospatial index for the given geometry. If the
-// geometry is not supported it returns an error.
-func IndexKeys(g *types.Geo) ([][]byte, error) {
+// IndexTokens returns the keys to be used in a geospatial index for the given
+// geometry. If the geometry is not supported it returns an error.
+func IndexTokens(g *types.Geo) ([]string, error) {
 	cu, err := indexCells(*g)
 	if err != nil {
 		return nil, err
 	}
-	keys := make([][]byte, len(cu))
+	keys := make([]string, len(cu))
 	for i, c := range cu {
-		keys[i] = indexKeyFromCellID(c)
+		keys[i] = c.ToToken()
 	}
 	return keys, nil
-}
-
-const indexPrefix = ":_loc_|"
-
-func indexKeyFromCellID(c s2.CellID) []byte {
-	var buf bytes.Buffer
-	buf.WriteString(indexPrefix)
-	buf.WriteString(c.ToToken())
-	return buf.Bytes()
 }
 
 func indexCells(g types.Geo) (s2.CellUnion, error) {
