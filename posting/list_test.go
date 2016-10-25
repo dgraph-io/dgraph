@@ -571,6 +571,68 @@ func TestAddMutation_gru(t *testing.T) {
 	}
 }
 
+func TestAddMutation_gru2(t *testing.T) {
+	ol := getNew()
+	key := Key(0x01, "question.tag")
+	dir, err := ioutil.TempDir("", "storetest_")
+	require.NoError(t, err)
+	defer os.RemoveAll(dir)
+
+	ps, err := store.NewStore(dir)
+	require.NoError(t, err)
+	ol.init(key, ps)
+
+	{
+		// Set two tag ids and merge.
+		edge := x.DirectedEdge{
+			ValueId:   0x02,
+			Source:    "gru",
+			Timestamp: time.Now(),
+		}
+		addMutation(t, ol, edge, Set)
+		edge = x.DirectedEdge{
+			ValueId:   0x03,
+			Source:    "gru",
+			Timestamp: time.Now(),
+		}
+		addMutation(t, ol, edge, Set)
+		merged, err := ol.CommitIfDirty(context.Background())
+		require.NoError(t, err)
+		require.True(t, merged)
+	}
+
+	{
+		// Lets set a new tag and delete the two older ones.
+		edge := x.DirectedEdge{
+			ValueId:   0x02,
+			Source:    "gru",
+			Timestamp: time.Now(),
+		}
+		addMutation(t, ol, edge, Del)
+		edge = x.DirectedEdge{
+			ValueId:   0x03,
+			Source:    "gru",
+			Timestamp: time.Now(),
+		}
+		addMutation(t, ol, edge, Del)
+
+		edge = x.DirectedEdge{
+			ValueId:   0x04,
+			Source:    "gru",
+			Timestamp: time.Now(),
+		}
+		addMutation(t, ol, edge, Set)
+
+		merged, err := ol.CommitIfDirty(context.Background())
+		require.NoError(t, err)
+		require.True(t, merged)
+	}
+
+	// Posting list should just have the new tag.
+	uids := []uint64{0x04}
+	require.Equal(t, uids, listToArray(t, 0, ol))
+}
+
 func benchmarkAddMutations(n int, b *testing.B) {
 	// logrus.SetLevel(logrus.DebugLevel)
 	l := getNew()
