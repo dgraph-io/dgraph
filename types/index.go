@@ -30,6 +30,14 @@ func IndexKey(attr string, term string) []byte {
 	return buf.Bytes()
 }
 
+// TokenFromKey returns token from an index key. This is used to build
+// TokensTable by iterating over keys in RocksDB.
+func TokenFromKey(key []byte) string {
+	i := bytes.IndexRune(key, indexRune)
+	x.Assert(i >= 0)
+	return string(key[i+1:])
+}
+
 // DefaultIndexKeys tokenizes data as a string and return keys for indexing.
 func DefaultIndexKeys(attr string, val *String) []string {
 	data := []byte((*val).String())

@@ -16,7 +16,7 @@ func TestIndexingInt(t *testing.T) {
 	schema.ParseBytes([]byte("scalar age:int @index"))
 	a, err := indexTokens("age", types.Value(&v))
 	require.NoError(t, err)
-	require.Equal(t, []byte{0x3a, 0x61, 0x67, 0x65, 0x7c, 0x0, 0x0, 0x0, 0xa}, a[0])
+	require.EqualValues(t, []byte{0x0, 0x0, 0x0, 0xa}, a[0])
 }
 
 func TestIndexingFloat(t *testing.T) {
@@ -26,7 +26,7 @@ func TestIndexingFloat(t *testing.T) {
 	schema.ParseBytes([]byte("scalar age:float @index"))
 	a, err := indexTokens("age", types.Value(&v))
 	require.NoError(t, err)
-	require.Equal(t, []byte{0x3a, 0x61, 0x67, 0x65, 0x7c, 0x0, 0x0, 0x0, 0xa}, a[0])
+	require.EqualValues(t, []byte{0x0, 0x0, 0x0, 0xa}, a[0])
 }
 
 func TestIndexingDate(t *testing.T) {
@@ -36,7 +36,7 @@ func TestIndexingDate(t *testing.T) {
 	schema.ParseBytes([]byte("scalar age:date @index"))
 	a, err := indexTokens("age", types.Value(&v))
 	require.NoError(t, err)
-	require.Equal(t, []byte{0x3a, 0x61, 0x67, 0x65, 0x7c, 0x0, 0x0, 0x0, 0xa}, a[0])
+	require.EqualValues(t, []byte{0x0, 0x0, 0x0, 0xa}, a[0])
 }
 
 func TestIndexingTime(t *testing.T) {
@@ -46,7 +46,7 @@ func TestIndexingTime(t *testing.T) {
 	schema.ParseBytes([]byte("scalar age:datetime @index"))
 	a, err := indexTokens("age", types.Value(&v))
 	require.NoError(t, err)
-	require.Equal(t, []byte{0x3a, 0x61, 0x67, 0x65, 0x7c, 0x0, 0x0, 0x0, 0xa}, a[0])
+	require.EqualValues(t, []byte{0x0, 0x0, 0x0, 0xa}, a[0])
 }
 
 func TestIndexing(t *testing.T) {
@@ -56,5 +56,5 @@ func TestIndexing(t *testing.T) {
 	schema.ParseBytes([]byte("scalar name:string @index"))
 	a, err := indexTokens("name", types.Value(&v))
 	require.NoError(t, err)
-	require.Equal(t, ":name|abc", string(a[0]))
+	require.EqualValues(t, "abc", string(a[0]))
 }

@@ -22,10 +22,10 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strings"
 	"testing"
 
 	"github.com/golang/geo/s2"
+	"github.com/stretchr/testify/require"
 	"github.com/twpayne/go-geom"
 	"github.com/twpayne/go-geom/encoding/geojson"
 	"github.com/twpayne/go-geom/encoding/wkb"
@@ -58,9 +58,8 @@ func loadPolygon(name string) (*geom.Polygon, error) {
 func TestIndexCellsPoint(t *testing.T) {
 	p := geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{-122.082506, 37.4249518})
 	cu, err := indexCells(types.Geo{p})
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
+
 	if len(cu) != (MaxCellLevel - MinCellLevel + 1) {
 		t.Errorf("Expected 12 cells. Got %d instead.", len(cu))
 	}
@@ -102,13 +101,11 @@ func printCells(cu s2.CellUnion) {
 
 func TestIndexCellsPolygon(t *testing.T) {
 	p, err := loadPolygon("zip.json")
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
+
 	cu, err := indexCells(types.Geo{p})
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
+
 	if len(cu) > MaxCells {
 		t.Errorf("Expected less than %d cells. Got %d instead.", MaxCells, len(cu))
 	}
@@ -122,51 +119,27 @@ func TestIndexCellsPolygon(t *testing.T) {
 func TestKeyGeneratorPoint(t *testing.T) {
 	p := geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{-122.082506, 37.4249518})
 	data, err := wkb.Marshal(p, binary.LittleEndian)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 
 	var g types.Geo
 	g.UnmarshalBinary(data)
 
-	keys, err := IndexTokens(&g)
-	if err != nil {
-		t.Error(err)
-	}
-	if len(keys) != (MaxCellLevel - MinCellLevel + 1) {
-		t.Errorf("Expected 12 keys. Got %d instead.", len(keys))
-	}
-	for _, key := range keys {
-		if !strings.HasPrefix(string(key), ":_loc_|") {
-			t.Errorf("Expected prefix ':_loc_|' for key %s", key)
-		}
-	}
+	tokens, err := IndexTokens(&g)
+	require.NoError(t, err)
+	require.Len(t, tokens, MaxCellLevel-MinCellLevel+1)
 }
 
 func TestKeyGeneratorPolygon(t *testing.T) {
 	p, err := loadPolygon("zip.json")
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	data, err := wkb.Marshal(p, binary.LittleEndian)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 
 	var g types.Geo
 	g.UnmarshalBinary(data)
 	keys, err := IndexTokens(&g)
-	if err != nil {
-		t.Error(err)
-	}
-	if len(keys) != 18 {
-		t.Errorf("Expected 18 keys. Got %d instead.", len(keys))
-	}
-	for _, key := range keys {
-		if !strings.HasPrefix(string(key), ":_loc_|") {
-			t.Errorf("Expected prefix ':_loc_|' for key %s", key)
-		}
-	}
+	require.NoError(t, err)
+	require.Len(t, keys, 18)
 }
 
 func testCover(file string, max int) {
