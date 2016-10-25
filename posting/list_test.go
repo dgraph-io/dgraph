@@ -38,13 +38,11 @@ import (
 )
 
 func listToArray(t *testing.T, l *List) []uint64 {
-	n := l.Length()
-	out := make([]uint64, 0, n)
-	for i := 0; i < n; i++ {
-		var p types.Posting
-		require.True(t, l.Get(&p, i))
+	out := make([]uint64, 0, 10)
+	l.Iterate(0, func(p *types.Posting) bool {
 		out = append(out, p.Uid())
-	}
+		return true
+	})
 	return out
 }
 
@@ -93,6 +91,23 @@ func TestKey(t *testing.T) {
 	}
 }
 
+func getFirst(l *List) (res *types.Posting) {
+	l.Iterate(0, func(p *types.Posting) bool {
+		res = p
+		return false
+	})
+	return res
+}
+
+func getLength(l *List) int {
+	count := 0
+	l.Iterate(0, func(p *types.Posting) bool {
+		count++
+		return true
+	})
+	return count
+}
+
 func TestAddMutation(t *testing.T) {
 	l := getNew()
 	key := Key(1, "name")
@@ -114,8 +129,8 @@ func TestAddMutation(t *testing.T) {
 
 	require.Equal(t, listToArray(t, l), []uint64{9})
 
-	var p types.Posting
-	require.True(t, l.Get(&p, 0))
+	p := getFirst(l)
+	require.NotNil(t, p, "Unable to retrieve posting")
 	require.EqualValues(t, p.Source(), "testing")
 
 	// Add another edge now.
@@ -144,24 +159,24 @@ func TestAddMutation(t *testing.T) {
 	uids := []uint64{9, 69, 81}
 	checkUids(t, l, uids)
 
-	require.True(t, l.Get(&p, 0))
+	p = getFirst(l)
+	require.NotNil(t, p, "Unable to retrieve posting")
 	require.EqualValues(t, p.Source(), "anti-testing")
-	l.MergeIfDirty(context.Background())
+	l.CommitIfDirty(context.Background())
 
 	// Try reading the same data in another PostingList.
 	dl := getNew()
 	dl.init(key, ps)
 	checkUids(t, dl, uids)
 
-	_, err = dl.MergeIfDirty(context.Background())
+	_, err = dl.CommitIfDirty(context.Background())
 	require.NoError(t, err)
 	checkUids(t, dl, uids)
 }
 
 func checkValue(t *testing.T, ol *List, val string) {
-	require.NotEqual(t, ol.Length(), 0)
-	var p types.Posting
-	require.True(t, ol.Get(&p, 0))
+	p := getFirst(ol)
+	require.NotNil(t, p, "Unable to retrieve posting")
 	require.Equal(t, p.Uid(), uint64(math.MaxUint64)) // Cast to prevent overflow.
 	require.EqualValues(t, p.ValueBytes(), val)
 }
@@ -191,7 +206,7 @@ func TestAddMutation_Value(t *testing.T) {
 	checkValue(t, ol, "oh hey there")
 
 	// Run the same check after committing.
-	_, err = ol.MergeIfDirty(context.Background())
+	_, err = ol.CommitIfDirty(context.Background())
 	require.NoError(t, err)
 	checkValue(t, ol, "oh hey there")
 
@@ -220,7 +235,7 @@ func TestAddMutation_jchiu1(t *testing.T) {
 	}
 	ctx := context.Background()
 	addMutation(t, ol, edge, Set)
-	merged, err := ol.MergeIfDirty(ctx)
+	merged, err := ol.CommitIfDirty(ctx)
 	require.NoError(t, err)
 	require.True(t, merged)
 
@@ -311,7 +326,7 @@ func TestAddMutation_jchiu3(t *testing.T) {
 		Timestamp: time.Now(),
 	}
 	addMutation(t, ol, edge, Set)
-	merged, err := ol.MergeIfDirty(context.Background())
+	merged, err := ol.CommitIfDirty(context.Background())
 	require.NoError(t, err)
 	require.True(t, merged)
 	checkValue(t, ol, "cars")
@@ -323,7 +338,7 @@ func TestAddMutation_jchiu3(t *testing.T) {
 		Timestamp: time.Now(),
 	}
 	addMutation(t, ol, edge, Del)
-	require.Equal(t, ol.Length(), 0)
+	require.Equal(t, getLength(ol), 0)
 
 	// Set value to newcars, but don't merge yet.
 	edge = x.DirectedEdge{
@@ -341,7 +356,7 @@ func TestAddMutation_jchiu3(t *testing.T) {
 		Timestamp: time.Now(),
 	}
 	addMutation(t, ol, edge, Del)
-	require.NotEqual(t, ol.Length(), 0)
+	require.NotEqual(t, getLength(ol), 0)
 	checkValue(t, ol, "newcars")
 
 	// Del a value newcars and but don't merge.
@@ -351,7 +366,7 @@ func TestAddMutation_jchiu3(t *testing.T) {
 		Timestamp: time.Now(),
 	}
 	addMutation(t, ol, edge, Del)
-	require.Equal(t, ol.Length(), 0)
+	require.Equal(t, getLength(ol), 0)
 }
 
 func TestAddMutation_mrjn1(t *testing.T) {
@@ -372,7 +387,7 @@ func TestAddMutation_mrjn1(t *testing.T) {
 		Timestamp: time.Now(),
 	}
 	addMutation(t, ol, edge, Set)
-	merged, err := ol.MergeIfDirty(context.Background())
+	merged, err := ol.CommitIfDirty(context.Background())
 	require.NoError(t, err)
 	require.True(t, merged)
 
@@ -392,7 +407,7 @@ func TestAddMutation_mrjn1(t *testing.T) {
 		Timestamp: time.Now(),
 	}
 	addMutation(t, ol, edge, Del)
-	require.Equal(t, ol.Length(), 0)
+	require.Equal(t, getLength(ol), 0)
 
 	// Do this again to cover Del, muid == curUid, inPlist test case.
 	// Delete the previously committed value cars. But don't merge.
@@ -402,7 +417,7 @@ func TestAddMutation_mrjn1(t *testing.T) {
 		Timestamp: time.Now(),
 	}
 	addMutation(t, ol, edge, Del)
-	require.Equal(t, ol.Length(), 0)
+	require.Equal(t, getLength(ol), 0)
 
 	// Set the value again to cover Set, muid == curUid, inPlist test case.
 	// Set the previously committed value cars. But don't merge.
@@ -421,7 +436,7 @@ func TestAddMutation_mrjn1(t *testing.T) {
 		Timestamp: time.Now(),
 	}
 	addMutation(t, ol, edge, Del)
-	require.Equal(t, ol.Length(), 0)
+	require.Equal(t, getLength(ol), 0)
 }
 
 func TestAddMutation_checksum(t *testing.T) {
@@ -453,7 +468,7 @@ func TestAddMutation_checksum(t *testing.T) {
 		}
 		addMutation(t, ol, edge, Set)
 
-		merged, err := ol.MergeIfDirty(context.Background())
+		merged, err := ol.CommitIfDirty(context.Background())
 		require.NoError(t, err)
 		require.True(t, merged)
 
@@ -481,7 +496,7 @@ func TestAddMutation_checksum(t *testing.T) {
 		}
 		addMutation(t, ol, edge, Set)
 
-		merged, err := ol.MergeIfDirty(context.Background())
+		merged, err := ol.CommitIfDirty(context.Background())
 		require.NoError(t, err)
 		require.True(t, merged)
 
@@ -517,7 +532,7 @@ func TestAddMutation_checksum(t *testing.T) {
 		}
 		addMutation(t, ol, edge, Set)
 
-		merged, err := ol.MergeIfDirty(context.Background())
+		merged, err := ol.CommitIfDirty(context.Background())
 		require.NoError(t, err)
 		require.True(t, merged)
 
@@ -552,7 +567,7 @@ func TestAddMutation_gru(t *testing.T) {
 			Timestamp: time.Now(),
 		}
 		addMutation(t, ol, edge, Set)
-		merged, err := ol.MergeIfDirty(context.Background())
+		merged, err := ol.CommitIfDirty(context.Background())
 		require.NoError(t, err)
 		require.True(t, merged)
 	}
@@ -570,7 +585,7 @@ func TestAddMutation_gru(t *testing.T) {
 			Timestamp: time.Now(),
 		}
 		addMutation(t, ol, edge, Del)
-		merged, err := ol.MergeIfDirty(context.Background())
+		merged, err := ol.CommitIfDirty(context.Background())
 		require.NoError(t, err)
 		require.True(t, merged)
 	}

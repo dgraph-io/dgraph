@@ -107,17 +107,14 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t x.DirectedEdge, op by
 	x.Assertf(len(t.Attribute) > 0 && t.Attribute[0] != ':',
 		"[%s] [%d] [%s] %d %d\n", t.Attribute, t.Entity, string(t.Value), t.ValueId, op)
 
-	var lastPost types.Posting
-	var hasLastPost bool
+	var lastPost *types.Posting
+	var verr error
 
 	doUpdateIndex := pstore != nil && (t.Value != nil) &&
 		schema.IsIndexed(t.Attribute)
 	if doUpdateIndex {
 		// Check last posting for original value BEFORE any mutation actually happens.
-		if l.Length() >= 1 {
-			x.Assert(l.Get(&lastPost, l.Length()-1))
-			hasLastPost = true
-		}
+		lastPost, verr = l.Value()
 	}
 	hasMutated, err := l.AddMutation(ctx, t, op)
 	if err != nil {
@@ -128,7 +125,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t x.DirectedEdge, op by
 	}
 
 	// Exact matches.
-	if hasLastPost && lastPost.ValueBytes() != nil {
+	if verr == nil && lastPost.ValueBytes() != nil {
 		delTerm := lastPost.ValueBytes()
 		delType := lastPost.ValType()
 		p := stype.ValueForType(stype.TypeID(delType))
