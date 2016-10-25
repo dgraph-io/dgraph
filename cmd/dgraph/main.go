@@ -316,9 +316,7 @@ func mutationHandler(ctx context.Context, mu *gql.Mutation) (map[string]uint64, 
 // input value is of the correct type
 func validateTypes(nquads []rdf.NQuad) error {
 	for _, nquad := range nquads {
-		//TODO(Ashwin): Ensure global types so that muations can be type checked
 		if t := schema.TypeOf(nquad.Predicate); t != nil && t.IsScalar() {
-			// Currently, only scalar types are present
 			schemaType := t.(types.Scalar)
 			typeID := types.TypeID(nquad.ObjectType)
 			if typeID == types.BytesID {
@@ -335,7 +333,7 @@ func validateTypes(nquads []rdf.NQuad) error {
 				}
 				nquad.ObjectType = byte(schemaType.ID())
 			} else if typeID != schemaType.ID() {
-				v := types.ValueForType(schemaType.ID())
+				v := types.ValueForType(typeID)
 				err := v.UnmarshalBinary(nquad.ObjectValue)
 				if err != nil {
 					return err
