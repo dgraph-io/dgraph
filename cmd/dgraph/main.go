@@ -57,6 +57,7 @@ var (
 		"Number of cores to be used by the process")
 	nomutations = flag.Bool("nomutations", false, "Don't allow mutations on this server.")
 	shutdown    = flag.Bool("shutdown", false, "Allow client to send shutdown signal.")
+	backup      = flag.Bool("backup", false, "Allow client to request a backup.")
 	tracing     = flag.Float64("trace", 0.5, "The ratio of queries to trace.")
 	schemaFile  = flag.String("schema", "", "Path to schema file")
 	rdbStats    = flag.Duration("rdbstats", 5*time.Minute,
@@ -369,8 +370,15 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if *shutdown && string(q) == "SHUTDOWN" {
+		posting.Backup()
 		exitWithProfiles()
 		x.SetStatus(w, x.ErrorOk, "Server has been shutdown")
+		return
+	}
+
+	if *backup && string(q) == "BACKUP" {
+		posting.Backup()
+		x.SetStatus(w, x.ErrorOk, "Backup process has been initiated.")
 		return
 	}
 

@@ -3,13 +3,12 @@ package posting
 import (
 	"bufio"
 	"bytes"
-	"compress/gzip"
 	"encoding/binary"
 	"fmt"
 	"math"
 	"os"
 	"strconv"
-	"time"
+	"strings"
 
 	"github.com/dgraph-io/dgraph/posting/types"
 	stype "github.com/dgraph-io/dgraph/types"
@@ -30,7 +29,7 @@ func Backup() error {
 	it.SeekToFirst()
 
 	go writeToFile(ch)
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 33; i++ {
 		go convertToRdf(chkv, ch)
 	}
 
@@ -43,9 +42,13 @@ func Backup() error {
 	return nil
 }
 
-func splitKey(key []byte) (string, string) {
+func splitKey(key []byte) (string, string, bool) {
 	var b bytes.Buffer
 	var rest []byte
+	if strings.HasPrefix(string(key), ":") || strings.HasPrefix(string(key), "_uid_") {
+		return "", "", false
+	}
+	fmt.Printf("---%s\n", key)
 	for i, ch := range key {
 		if ch == '|' {
 			rest = key[i+1:]
@@ -54,13 +57,16 @@ func splitKey(key []byte) (string, string) {
 		b.WriteByte(ch)
 	}
 	uid := binary.BigEndian.Uint64(rest)
-	return b.String(), strconv.FormatUint(uid, 16)
+	return b.String(), strconv.FormatUint(uid, 10), true
 }
 
 func toRdf(item kv, ch chan []byte) {
 	var buf bytes.Buffer
 	p := new(types.Posting)
-	pred, srcUid := splitKey(item.key)
+	pred, srcUid, b := splitKey(item.key)
+	if !b {
+		return
+	}
 	buf.WriteString("<_uid_:")
 	buf.WriteString(srcUid)
 	buf.WriteString("> <")
@@ -70,7 +76,7 @@ func toRdf(item kv, ch chan []byte) {
 	pl := types.GetRootAsPostingList(item.value, 0)
 	for pidx := 0; pidx < pl.PostingsLength(); pidx++ {
 		x.Assertf(pl.Postings(p, pidx), "Unable to parse Posting at index: %v", pidx)
-		if p.Uid() == math.MaxUint64 {
+		if p.Uid() == math.MaxUint64 && !bytes.Equal(p.ValueBytes(), nil) {
 			// Value posting
 			buf2 := buf
 			buf2.WriteRune('"')
@@ -96,28 +102,30 @@ func toRdf(item kv, ch chan []byte) {
 		buf2.WriteString(str)
 		buf2.WriteString("> .\n")
 		ch <- buf2.Bytes()
-
 	}
 	return
 }
 
 func convertToRdf(chkv chan kv, ch chan []byte) {
 	for it := range chkv {
-		go toRdf(it, ch)
+		toRdf(it, ch)
 	}
 }
 
 func writeToFile(ch chan []byte) error {
-	f, err := os.Create(fmt.Sprintf("/backup/%s.gz", time.Now().String()))
+	file := fmt.Sprintf("backup/%s", "abc") //time.Now().String())
+	err := os.MkdirAll("backup", 0700)
+	f, err := os.Create(file)
 	x.Check(err)
 	w := bufio.NewWriter(f)
-	gw := gzip.NewWriter(w)
+	//	gw := gzip.NewWriter(w)
 
 	for item := range ch {
-		gw.Write(item)
+		fmt.Println("$$$$", item)
+		w.Write(item)
+		w.Flush()
 	}
 
-	gw.Flush()
-	gw.Close()
+	w.Flush()
 	return nil
 }
