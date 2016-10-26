@@ -422,7 +422,6 @@ func TestProcessSort(t *testing.T) {
 	defer os.RemoveAll(dir)
 	defer ps.Close()
 	populateGraphForSort(t, ps)
-	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
 
 	sort := newSort([][]uint64{
 		{10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21},
@@ -438,6 +437,226 @@ func TestProcessSort(t *testing.T) {
 		{15, 16, 17, 18, 19, 20, 21, 12, 13, 14, 10, 11},
 		{21, 12, 13, 14, 10, 11},
 		{16, 17, 18, 19, 20, 21}},
+		algo.ToUintsListForTest(algo.FromSortResult(r)))
+}
+
+func TestProcessSortOffset(t *testing.T) {
+	dir, ps := initTest(t, `scalar dob:date @index`)
+	defer os.RemoveAll(dir)
+	defer ps.Close()
+	populateGraphForSort(t, ps)
+
+	input := [][]uint64{
+		{10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21},
+		{10, 11, 12, 13, 14, 21},
+		{16, 17, 18, 19, 20, 21}}
+
+	// Offset 1.
+	sort := newSort(input, 1, 0)
+	result, err := processSort(sort)
+	require.NoError(t, err)
+	r := task.GetRootAsSortResult(result, 0)
+	require.EqualValues(t, [][]uint64{
+		{15, 16, 17, 18, 19, 20, 21, 12, 13, 14, 10, 11},
+		{12, 13, 14, 10, 11},
+		{16, 17, 18, 19, 20, 21}},
+		algo.ToUintsListForTest(algo.FromSortResult(r)))
+
+	// Offset 2.
+	sort = newSort(input, 2, 0)
+	result, err = processSort(sort)
+	require.NoError(t, err)
+	r = task.GetRootAsSortResult(result, 0)
+	require.EqualValues(t, [][]uint64{
+		{15, 16, 17, 18, 19, 20, 21, 12, 13, 14, 10, 11},
+		{12, 13, 14, 10, 11},
+		{18, 19, 20, 21}},
+		algo.ToUintsListForTest(algo.FromSortResult(r)))
+
+	// Offset 5.
+	sort = newSort(input, 5, 0)
+	result, err = processSort(sort)
+	require.NoError(t, err)
+	r = task.GetRootAsSortResult(result, 0)
+	require.EqualValues(t, [][]uint64{
+		{18, 19, 20, 21, 12, 13, 14, 10, 11},
+		{10, 11},
+		{18, 19, 20, 21}},
+		algo.ToUintsListForTest(algo.FromSortResult(r)))
+
+	// Offset 6.
+	sort = newSort(input, 6, 0)
+	result, err = processSort(sort)
+	require.NoError(t, err)
+	r = task.GetRootAsSortResult(result, 0)
+	require.EqualValues(t, [][]uint64{
+		{18, 19, 20, 21, 12, 13, 14, 10, 11},
+		{},
+		{}},
+		algo.ToUintsListForTest(algo.FromSortResult(r)))
+}
+
+func TestProcessSortCount(t *testing.T) {
+	dir, ps := initTest(t, `scalar dob:date @index`)
+	defer os.RemoveAll(dir)
+	defer ps.Close()
+	populateGraphForSort(t, ps)
+
+	input := [][]uint64{
+		{10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21},
+		{10, 11, 12, 13, 14, 21},
+		{16, 17, 18, 19, 20, 21}}
+
+	// Count 1.
+	sort := newSort(input, 0, 1)
+	result, err := processSort(sort)
+	require.NoError(t, err)
+
+	r := task.GetRootAsSortResult(result, 0)
+	require.NotNil(t, r)
+	require.EqualValues(t, [][]uint64{
+		{15, 16, 17},
+		{21},
+		{16, 17}},
+		algo.ToUintsListForTest(algo.FromSortResult(r)))
+
+	// Count 2.
+	sort = newSort(input, 0, 2)
+	result, err = processSort(sort)
+	require.NoError(t, err)
+
+	r = task.GetRootAsSortResult(result, 0)
+	require.NotNil(t, r)
+	require.EqualValues(t, [][]uint64{
+		{15, 16, 17},
+		{21, 12, 13, 14},
+		{16, 17}},
+		algo.ToUintsListForTest(algo.FromSortResult(r)))
+
+	// Count 5.
+	sort = newSort(input, 0, 5)
+	result, err = processSort(sort)
+	require.NoError(t, err)
+
+	r = task.GetRootAsSortResult(result, 0)
+	require.NotNil(t, r)
+	require.EqualValues(t, [][]uint64{
+		{15, 16, 17, 18, 19, 20, 21},
+		{21, 12, 13, 14, 10, 11},
+		{16, 17, 18, 19, 20, 21}},
+		algo.ToUintsListForTest(algo.FromSortResult(r)))
+
+	// Count 6.
+	sort = newSort(input, 0, 6)
+	result, err = processSort(sort)
+	require.NoError(t, err)
+
+	r = task.GetRootAsSortResult(result, 0)
+	require.NotNil(t, r)
+	require.EqualValues(t, [][]uint64{
+		{15, 16, 17, 18, 19, 20, 21},
+		{21, 12, 13, 14, 10, 11},
+		{16, 17, 18, 19, 20, 21}},
+		algo.ToUintsListForTest(algo.FromSortResult(r)))
+}
+
+func TestProcessSortOffsetCount(t *testing.T) {
+	dir, ps := initTest(t, `scalar dob:date @index`)
+	defer os.RemoveAll(dir)
+	defer ps.Close()
+	populateGraphForSort(t, ps)
+
+	input := [][]uint64{
+		{10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21},
+		{10, 11, 12, 13, 14, 21},
+		{16, 17, 18, 19, 20, 21}}
+
+	// Offset 1. Count 1.
+	sort := newSort(input, 1, 1)
+	result, err := processSort(sort)
+	require.NoError(t, err)
+	r := task.GetRootAsSortResult(result, 0)
+	require.EqualValues(t, [][]uint64{
+		{15, 16, 17},
+		{12, 13, 14},
+		{16, 17}},
+		algo.ToUintsListForTest(algo.FromSortResult(r)))
+
+	// Offset 1. Count 2.
+	sort = newSort(input, 1, 2)
+	result, err = processSort(sort)
+	require.NoError(t, err)
+	r = task.GetRootAsSortResult(result, 0)
+	require.EqualValues(t, [][]uint64{
+		{15, 16, 17},
+		{12, 13, 14},
+		{16, 17, 18, 19, 20, 21}},
+		algo.ToUintsListForTest(algo.FromSortResult(r)))
+
+	// Offset 1. Count 3.
+	sort = newSort(input, 1, 3)
+	result, err = processSort(sort)
+	require.NoError(t, err)
+	r = task.GetRootAsSortResult(result, 0)
+	require.EqualValues(t, [][]uint64{
+		{15, 16, 17, 18, 19, 20, 21},
+		{12, 13, 14},
+		{16, 17, 18, 19, 20, 21}},
+		algo.ToUintsListForTest(algo.FromSortResult(r)))
+
+	// Offset 1. Count 1000.
+	sort = newSort(input, 1, 1000)
+	result, err = processSort(sort)
+	require.NoError(t, err)
+	r = task.GetRootAsSortResult(result, 0)
+	require.EqualValues(t, [][]uint64{
+		{15, 16, 17, 18, 19, 20, 21, 12, 13, 14, 10, 11},
+		{12, 13, 14, 10, 11},
+		{16, 17, 18, 19, 20, 21}},
+		algo.ToUintsListForTest(algo.FromSortResult(r)))
+
+	// Offset 5. Count 1.
+	sort = newSort(input, 5, 1)
+	result, err = processSort(sort)
+	require.NoError(t, err)
+	r = task.GetRootAsSortResult(result, 0)
+	require.EqualValues(t, [][]uint64{
+		{18, 19, 20, 21},
+		{10, 11},
+		{18, 19, 20, 21}},
+		algo.ToUintsListForTest(algo.FromSortResult(r)))
+
+	// Offset 5. Count 2.
+	sort = newSort(input, 5, 2)
+	result, err = processSort(sort)
+	require.NoError(t, err)
+	r = task.GetRootAsSortResult(result, 0)
+	require.EqualValues(t, [][]uint64{
+		{18, 19, 20, 21},
+		{10, 11},
+		{18, 19, 20, 21}},
+		algo.ToUintsListForTest(algo.FromSortResult(r)))
+
+	// Offset 5. Count 3.
+	sort = newSort(input, 5, 3)
+	result, err = processSort(sort)
+	require.NoError(t, err)
+	r = task.GetRootAsSortResult(result, 0)
+	require.EqualValues(t, [][]uint64{
+		{18, 19, 20, 21, 12, 13, 14},
+		{10, 11},
+		{18, 19, 20, 21}},
+		algo.ToUintsListForTest(algo.FromSortResult(r)))
+
+	// Offset 100. Count 100.
+	sort = newSort(input, 100, 100)
+	result, err = processSort(sort)
+	require.NoError(t, err)
+	r = task.GetRootAsSortResult(result, 0)
+	require.EqualValues(t, [][]uint64{
+		{},
+		{},
+		{}},
 		algo.ToUintsListForTest(algo.FromSortResult(r)))
 }
 

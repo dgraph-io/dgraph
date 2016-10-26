@@ -164,6 +164,7 @@ func intersectBucket(ts *task.Sort, key []byte, offsets []int, count int,
 		////// SORT result before applying offset.
 		if offsets[i] > 0 {
 			result.Slice(offsets[i], n)
+			offsets[i] = 0
 			n = result.Size()
 		}
 

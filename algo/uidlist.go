@@ -321,3 +321,9 @@ func ToUintsListForTest(ul []*UIDList) [][]uint64 {
 	}
 	return out
 }
+
+// Swap swaps two elements. Logs fatal if UIDList is not stored as []uint64.
+func (u *UIDList) Swap(i, j int) {
+	x.Assert(u.uints != nil)
+	u.uints[i], u.uints[j] = u.uints[j], u.uints[i]
+}
