@@ -23,7 +23,6 @@ import (
 	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/dgraph/geo"
-	"github.com/dgraph-io/dgraph/posting/types"
 	"github.com/dgraph-io/dgraph/schema"
 	stype "github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
@@ -107,14 +106,15 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t x.DirectedEdge, op by
 	x.Assertf(len(t.Attribute) > 0 && t.Attribute[0] != ':',
 		"[%s] [%d] [%s] %d %d\n", t.Attribute, t.Entity, string(t.Value), t.ValueId, op)
 
-	var lastPost types.Posting
+	var vbytes []byte
+	var vtype byte
 	var verr error
 
 	doUpdateIndex := pstore != nil && (t.Value != nil) &&
 		schema.IsIndexed(t.Attribute)
 	if doUpdateIndex {
 		// Check last posting for original value BEFORE any mutation actually happens.
-		lastPost, verr = l.Value()
+		vbytes, vtype, verr = l.Value()
 	}
 	hasMutated, err := l.AddMutation(ctx, t, op)
 	if err != nil {
@@ -125,9 +125,9 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t x.DirectedEdge, op by
 	}
 
 	// Exact matches.
-	if verr == nil && lastPost.ValueBytes() != nil {
-		delTerm := lastPost.ValueBytes()
-		delType := lastPost.ValType()
+	if verr == nil && len(vbytes) > 0 {
+		delTerm := vbytes
+		delType := vtype
 		p := stype.ValueForType(stype.TypeID(delType))
 		err = p.UnmarshalBinary(delTerm)
 		if err != nil {
