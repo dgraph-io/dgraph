@@ -141,8 +141,6 @@ func intersectBucket(ts *task.Sort, attr string, token string,
 	pl, decr := posting.GetOrCreate(key, ws.dataStore)
 	defer decr()
 
-	x.Printf("~~~~pl key=[%s] len=%d", string(key), pl.Length())
-
 	for i := 0; i < ts.UidmatrixLength(); i++ { // Iterate over UID lists.
 		if count > 0 && len(out[i]) >= count {
 			continue

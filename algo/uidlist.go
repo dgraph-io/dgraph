@@ -87,7 +87,7 @@ func (u *UIDList) Size() int {
 }
 
 // Reslice selects a slice of the data.
-func (u *UIDList) ApplyFilter(f func(uid uint64) bool) {
+func (u *UIDList) ApplyFilter(f func(uid uint64, idx int) bool) {
 	x.Assert(u != nil && (u.uints != nil || u.list != nil))
 	var out []uint64
 	if u.uints != nil {
@@ -98,7 +98,7 @@ func (u *UIDList) ApplyFilter(f func(uid uint64) bool) {
 	n := u.Size()
 	for i := 0; i < n; i++ {
 		uid := u.Get(i)
-		if f(uid) {
+		if f(uid, i) {
 			out = append(out, uid)
 		}
 	}
