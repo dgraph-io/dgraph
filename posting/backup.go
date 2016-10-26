@@ -9,6 +9,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/dgraph-io/dgraph/posting/types"
 	stype "github.com/dgraph-io/dgraph/types"
@@ -27,11 +28,13 @@ func Backup() error {
 	it := pstore.NewIterator()
 	defer it.Close()
 	it.SeekToFirst()
+	var wg sync.WaitGroup
 
-	go writeToFile(ch)
+	wg.Add(33)
 	for i := 0; i < 33; i++ {
-		go convertToRdf(chkv, ch)
+		go convertToRdf(&wg, chkv, ch)
 	}
+	go writeToFile(ch)
 
 	for it = it; it.Valid(); it.Next() {
 		chkv <- kv{
@@ -39,6 +42,10 @@ func Backup() error {
 			value: it.Value().Data(),
 		}
 	}
+
+	close(chkv)
+	wg.Wait()
+	close(ch)
 	return nil
 }
 
@@ -106,26 +113,26 @@ func toRdf(item kv, ch chan []byte) {
 	return
 }
 
-func convertToRdf(chkv chan kv, ch chan []byte) {
+func convertToRdf(wg *sync.WaitGroup, chkv chan kv, ch chan []byte) {
 	for it := range chkv {
 		toRdf(it, ch)
 	}
+	wg.Done()
 }
 
 func writeToFile(ch chan []byte) error {
-	file := fmt.Sprintf("backup/%s", "abc") //time.Now().String())
+	file := fmt.Sprintf("backup/data") //, time.Now().String())
 	err := os.MkdirAll("backup", 0700)
 	f, err := os.Create(file)
 	x.Check(err)
+	//gw := gzip.NewWriter(f)
 	w := bufio.NewWriter(f)
-	//	gw := gzip.NewWriter(w)
 
 	for item := range ch {
-		fmt.Println("$$$$", item)
 		w.Write(item)
-		w.Flush()
 	}
-
 	w.Flush()
+	//gw.Close()
+	f.Close()
 	return nil
 }
