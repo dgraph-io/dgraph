@@ -115,8 +115,8 @@ func indexTokens(attr string, p stype.Value) ([]string, error) {
 	return nil, nil
 }
 
-// createIndexMutations adds mutation(s) for a single term, to maintain index.
-func createIndexMutations(ctx context.Context, attr string, uid uint64,
+// addIndexMutations adds mutation(s) for a single term, to maintain index.
+func addIndexMutations(ctx context.Context, attr string, uid uint64,
 	p stype.Value, del bool) {
 	x.Assert(uid != 0)
 	tokens, err := indexTokens(attr, p)
@@ -130,6 +130,9 @@ func createIndexMutations(ctx context.Context, attr string, uid uint64,
 		Attribute: attr,
 		Source:    "idx",
 	}
+
+	tokensTable := GetTokensTable(attr)
+	x.Assertf(tokensTable != nil, "TokensTable missing for attr %s", attr)
 
 	for _, token := range tokens {
 		plist, decr := GetOrCreate(stype.IndexKey(attr, token), indexStore)
@@ -155,6 +158,8 @@ func createIndexMutations(ctx context.Context, attr string, uid uint64,
 			}
 			indexLog.Printf("SET [%s] [%d] NewTerm [%s]",
 				edge.Attribute, edge.Entity, token)
+
+			tokensTable.Add(token)
 		}
 	}
 }
@@ -193,7 +198,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t x.DirectedEdge, op by
 		if err != nil {
 			return err
 		}
-		createIndexMutations(ctx, t.Attribute, t.Entity, p, true)
+		addIndexMutations(ctx, t.Attribute, t.Entity, p, true)
 	}
 	if op == Set {
 		p := stype.ValueForType(stype.TypeID(t.ValueType))
@@ -201,7 +206,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t x.DirectedEdge, op by
 		if err != nil {
 			return err
 		}
-		createIndexMutations(ctx, t.Attribute, t.Entity, p, false)
+		addIndexMutations(ctx, t.Attribute, t.Entity, p, false)
 	}
 	return nil
 }
@@ -268,10 +273,10 @@ func (t *TokensTable) Size() int {
 
 // KeysForTest returns keys for a table. This is just for testing / debugging.
 func KeysForTest(attr string) []string {
-	kt := GetTokensTable(attr)
-	kt.RLock()
-	defer kt.RUnlock()
-	return kt.key
+	t := GetTokensTable(attr)
+	t.RLock()
+	defer t.RUnlock()
+	return t.key
 }
 
 // GetNextKey returns the next key after given key. If we reach the end, we
@@ -294,6 +299,9 @@ func (t *TokensTable) GetNext(key string) string {
 func (t *TokensTable) GetFirst() string {
 	t.RLock()
 	defer t.RUnlock()
-	x.Assert(len(t.key) > 0)
+	if len(t.key) == 0 {
+		// Assume all keys are nonempty. Returning empty string means there's no keys.
+		return ""
+	}
 	return t.key[0]
 }
