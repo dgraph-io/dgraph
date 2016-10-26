@@ -370,7 +370,6 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if *shutdown && string(q) == "SHUTDOWN" {
-		posting.Backup()
 		exitWithProfiles()
 		x.SetStatus(w, x.ErrorOk, "Server has been shutdown")
 		return
