@@ -17,7 +17,7 @@ func SortOverNetwork(ctx context.Context, qu []byte) (result []byte, rerr error)
 	q := task.GetRootAsSort(qu, 0)
 	attr := string(q.Attr())
 	gid := BelongsTo(attr)
-	x.Trace(ctx, "attr: %v groupId: %v", attr, gid)
+	x.Trace(ctx, "worker.Sort attr: %v groupId: %v", attr, gid)
 
 	if groups().ServesGroup(gid) {
 		// No need for a network call, as this should be run from within this instance.
@@ -37,15 +37,27 @@ func SortOverNetwork(ctx context.Context, qu []byte) (result []byte, rerr error)
 	x.Trace(ctx, "Sending request to %v", addr)
 
 	c := NewWorkerClient(conn)
-	reply, err := c.Sort(ctx, &Payload{Data: qu})
-	if err != nil {
-		x.TraceError(ctx, x.Wrapf(err, "Error while calling Worker.Sort"))
-		return []byte(""), err
+	type rpcReply struct {
+		reply *Payload
+		err   error
 	}
-
-	x.Trace(ctx, "Reply from server. length: %v Addr: %v Attr: %v",
-		len(reply.Data), addr, attr)
-	return reply.Data, nil
+	replyChan := make(chan rpcReply, 1)
+	go func() {
+		reply, err := c.Sort(ctx, &Payload{Data: qu})
+		replyChan <- rpcReply{reply, err}
+	}()
+	select {
+	case r := <-replyChan:
+		if r.err != nil {
+			x.TraceError(ctx, x.Wrapf(r.err, "Error while calling Worker.Sort"))
+			return []byte{}, err
+		}
+		x.Trace(ctx, "Reply from server. length: %v Addr: %v Attr: %v",
+			len(r.reply.Data), addr, attr)
+		return r.reply.Data, nil
+	case <-ctx.Done():
+		return []byte{}, ctx.Err()
+	}
 }
 
 // Sort is used to sort given UID matrix.
