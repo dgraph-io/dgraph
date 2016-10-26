@@ -377,6 +377,7 @@ func populateGraphForSort(t *testing.T, ps *store.Store) {
 		"1970-01-05", // 20
 		"1970-02-05", // 21
 	}
+	// The sorted UIDs are: (17 16 15) (20 21 19 18) (13 14 12) (11 10)
 
 	for i, dob := range dobs {
 		edge.Entity = uint64(i + 10)
@@ -430,13 +431,13 @@ func TestProcessSort(t *testing.T) {
 	}, 0, 0)
 	result, err := processSort(sort)
 	require.NoError(t, err)
-
 	r := task.GetRootAsSortResult(result, 0)
 	require.NotNil(t, r)
+	// The sorted UIDs are: (17 16 15) (20 21 19 18) (13 14 12) (11 10)
 	require.EqualValues(t, [][]uint64{
-		{15, 16, 17, 18, 19, 20, 21, 12, 13, 14, 10, 11},
-		{21, 12, 13, 14, 10, 11},
-		{16, 17, 18, 19, 20, 21}},
+		{17, 16, 15, 20, 21, 19, 18, 13, 14, 12, 11, 10},
+		{21, 13, 14, 12, 11, 10},
+		{17, 16, 20, 21, 19, 18}},
 		algo.ToUintsListForTest(algo.FromSortResult(r)))
 }
 
@@ -457,9 +458,9 @@ func TestProcessSortOffset(t *testing.T) {
 	require.NoError(t, err)
 	r := task.GetRootAsSortResult(result, 0)
 	require.EqualValues(t, [][]uint64{
-		{15, 16, 17, 18, 19, 20, 21, 12, 13, 14, 10, 11},
-		{12, 13, 14, 10, 11},
-		{16, 17, 18, 19, 20, 21}},
+		{16, 15, 20, 21, 19, 18, 13, 14, 12, 11, 10},
+		{13, 14, 12, 11, 10},
+		{16, 20, 21, 19, 18}},
 		algo.ToUintsListForTest(algo.FromSortResult(r)))
 
 	// Offset 2.
@@ -468,9 +469,9 @@ func TestProcessSortOffset(t *testing.T) {
 	require.NoError(t, err)
 	r = task.GetRootAsSortResult(result, 0)
 	require.EqualValues(t, [][]uint64{
-		{15, 16, 17, 18, 19, 20, 21, 12, 13, 14, 10, 11},
-		{12, 13, 14, 10, 11},
-		{18, 19, 20, 21}},
+		{15, 20, 21, 19, 18, 13, 14, 12, 11, 10},
+		{14, 12, 11, 10},
+		{20, 21, 19, 18}},
 		algo.ToUintsListForTest(algo.FromSortResult(r)))
 
 	// Offset 5.
@@ -479,9 +480,9 @@ func TestProcessSortOffset(t *testing.T) {
 	require.NoError(t, err)
 	r = task.GetRootAsSortResult(result, 0)
 	require.EqualValues(t, [][]uint64{
-		{18, 19, 20, 21, 12, 13, 14, 10, 11},
-		{10, 11},
-		{18, 19, 20, 21}},
+		{19, 18, 13, 14, 12, 11, 10},
+		{10},
+		{18}},
 		algo.ToUintsListForTest(algo.FromSortResult(r)))
 
 	// Offset 6.
@@ -490,7 +491,18 @@ func TestProcessSortOffset(t *testing.T) {
 	require.NoError(t, err)
 	r = task.GetRootAsSortResult(result, 0)
 	require.EqualValues(t, [][]uint64{
-		{18, 19, 20, 21, 12, 13, 14, 10, 11},
+		{18, 13, 14, 12, 11, 10},
+		{},
+		{}},
+		algo.ToUintsListForTest(algo.FromSortResult(r)))
+
+	// Offset 7.
+	sort = newSort(input, 7, 0)
+	result, err = processSort(sort)
+	require.NoError(t, err)
+	r = task.GetRootAsSortResult(result, 0)
+	require.EqualValues(t, [][]uint64{
+		{13, 14, 12, 11, 10},
 		{},
 		{}},
 		algo.ToUintsListForTest(algo.FromSortResult(r)))
@@ -511,52 +523,60 @@ func TestProcessSortCount(t *testing.T) {
 	sort := newSort(input, 0, 1)
 	result, err := processSort(sort)
 	require.NoError(t, err)
-
 	r := task.GetRootAsSortResult(result, 0)
 	require.NotNil(t, r)
 	require.EqualValues(t, [][]uint64{
-		{15, 16, 17},
+		{17},
 		{21},
-		{16, 17}},
+		{17}},
 		algo.ToUintsListForTest(algo.FromSortResult(r)))
 
 	// Count 2.
 	sort = newSort(input, 0, 2)
 	result, err = processSort(sort)
 	require.NoError(t, err)
-
 	r = task.GetRootAsSortResult(result, 0)
 	require.NotNil(t, r)
 	require.EqualValues(t, [][]uint64{
-		{15, 16, 17},
-		{21, 12, 13, 14},
-		{16, 17}},
+		{17, 16},
+		{21, 13},
+		{17, 16}},
 		algo.ToUintsListForTest(algo.FromSortResult(r)))
 
 	// Count 5.
 	sort = newSort(input, 0, 5)
 	result, err = processSort(sort)
 	require.NoError(t, err)
-
 	r = task.GetRootAsSortResult(result, 0)
 	require.NotNil(t, r)
 	require.EqualValues(t, [][]uint64{
-		{15, 16, 17, 18, 19, 20, 21},
-		{21, 12, 13, 14, 10, 11},
-		{16, 17, 18, 19, 20, 21}},
+		{17, 16, 15, 20, 21},
+		{21, 13, 14, 12, 11},
+		{17, 16, 20, 21, 19}},
 		algo.ToUintsListForTest(algo.FromSortResult(r)))
 
 	// Count 6.
 	sort = newSort(input, 0, 6)
 	result, err = processSort(sort)
 	require.NoError(t, err)
-
 	r = task.GetRootAsSortResult(result, 0)
 	require.NotNil(t, r)
 	require.EqualValues(t, [][]uint64{
-		{15, 16, 17, 18, 19, 20, 21},
-		{21, 12, 13, 14, 10, 11},
-		{16, 17, 18, 19, 20, 21}},
+		{17, 16, 15, 20, 21, 19},
+		{21, 13, 14, 12, 11, 10},
+		{17, 16, 20, 21, 19, 18}},
+		algo.ToUintsListForTest(algo.FromSortResult(r)))
+
+	// Count 7.
+	sort = newSort(input, 0, 7)
+	result, err = processSort(sort)
+	require.NoError(t, err)
+	r = task.GetRootAsSortResult(result, 0)
+	require.NotNil(t, r)
+	require.EqualValues(t, [][]uint64{
+		{17, 16, 15, 20, 21, 19, 18},
+		{21, 13, 14, 12, 11, 10},
+		{17, 16, 20, 21, 19, 18}},
 		algo.ToUintsListForTest(algo.FromSortResult(r)))
 }
 
@@ -577,9 +597,9 @@ func TestProcessSortOffsetCount(t *testing.T) {
 	require.NoError(t, err)
 	r := task.GetRootAsSortResult(result, 0)
 	require.EqualValues(t, [][]uint64{
-		{15, 16, 17},
-		{12, 13, 14},
-		{16, 17}},
+		{16},
+		{13},
+		{16}},
 		algo.ToUintsListForTest(algo.FromSortResult(r)))
 
 	// Offset 1. Count 2.
@@ -588,9 +608,9 @@ func TestProcessSortOffsetCount(t *testing.T) {
 	require.NoError(t, err)
 	r = task.GetRootAsSortResult(result, 0)
 	require.EqualValues(t, [][]uint64{
-		{15, 16, 17},
-		{12, 13, 14},
-		{16, 17, 18, 19, 20, 21}},
+		{16, 15},
+		{13, 14},
+		{16, 20}},
 		algo.ToUintsListForTest(algo.FromSortResult(r)))
 
 	// Offset 1. Count 3.
@@ -599,9 +619,9 @@ func TestProcessSortOffsetCount(t *testing.T) {
 	require.NoError(t, err)
 	r = task.GetRootAsSortResult(result, 0)
 	require.EqualValues(t, [][]uint64{
-		{15, 16, 17, 18, 19, 20, 21},
-		{12, 13, 14},
-		{16, 17, 18, 19, 20, 21}},
+		{16, 15, 20},
+		{13, 14, 12},
+		{16, 20, 21}},
 		algo.ToUintsListForTest(algo.FromSortResult(r)))
 
 	// Offset 1. Count 1000.
@@ -610,9 +630,9 @@ func TestProcessSortOffsetCount(t *testing.T) {
 	require.NoError(t, err)
 	r = task.GetRootAsSortResult(result, 0)
 	require.EqualValues(t, [][]uint64{
-		{15, 16, 17, 18, 19, 20, 21, 12, 13, 14, 10, 11},
-		{12, 13, 14, 10, 11},
-		{16, 17, 18, 19, 20, 21}},
+		{16, 15, 20, 21, 19, 18, 13, 14, 12, 11, 10},
+		{13, 14, 12, 11, 10},
+		{16, 20, 21, 19, 18}},
 		algo.ToUintsListForTest(algo.FromSortResult(r)))
 
 	// Offset 5. Count 1.
@@ -621,9 +641,9 @@ func TestProcessSortOffsetCount(t *testing.T) {
 	require.NoError(t, err)
 	r = task.GetRootAsSortResult(result, 0)
 	require.EqualValues(t, [][]uint64{
-		{18, 19, 20, 21},
-		{10, 11},
-		{18, 19, 20, 21}},
+		{19},
+		{10},
+		{18}},
 		algo.ToUintsListForTest(algo.FromSortResult(r)))
 
 	// Offset 5. Count 2.
@@ -632,9 +652,9 @@ func TestProcessSortOffsetCount(t *testing.T) {
 	require.NoError(t, err)
 	r = task.GetRootAsSortResult(result, 0)
 	require.EqualValues(t, [][]uint64{
-		{18, 19, 20, 21},
-		{10, 11},
-		{18, 19, 20, 21}},
+		{19, 18},
+		{10},
+		{18}},
 		algo.ToUintsListForTest(algo.FromSortResult(r)))
 
 	// Offset 5. Count 3.
@@ -643,9 +663,9 @@ func TestProcessSortOffsetCount(t *testing.T) {
 	require.NoError(t, err)
 	r = task.GetRootAsSortResult(result, 0)
 	require.EqualValues(t, [][]uint64{
-		{18, 19, 20, 21, 12, 13, 14},
-		{10, 11},
-		{18, 19, 20, 21}},
+		{19, 18, 13},
+		{10},
+		{18}},
 		algo.ToUintsListForTest(algo.FromSortResult(r)))
 
 	// Offset 100. Count 100.

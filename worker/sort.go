@@ -6,7 +6,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/posting"
-	//	"github.com/dgraph-io/dgraph/schema"
+	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
@@ -88,6 +88,13 @@ func processSort(qu []byte) ([]byte, error) {
 			"Try flipping order and return first few elements instead."),
 		attr, ts.Count())
 
+	sType := schema.TypeOf(attr)
+	if !sType.IsScalar() {
+		return []byte{},
+			x.Errorf("Cannot sort attribute %s of type object.", attr)
+	}
+	scalar := sType.(types.Scalar)
+
 	n := ts.UidmatrixLength()
 	out := make([][]uint64, n)
 	for i := 0; i < n; i++ {
@@ -104,8 +111,7 @@ func processSort(qu []byte) ([]byte, error) {
 	// Iterate over every bucket in TokensTable.
 	t := posting.GetTokensTable(attr)
 	for token := t.GetFirst(); len(token) > 0; token = t.GetNext(token) {
-		key := types.IndexKey(attr, token)
-		if intersectBucket(ts, key, offsets, int(ts.Count()), out) {
+		if intersectBucket(ts, attr, token, scalar, offsets, int(ts.Count()), out) {
 			break
 		}
 	}
@@ -129,8 +135,9 @@ func processSort(qu []byte) ([]byte, error) {
 	return b.FinishedBytes(), nil
 }
 
-func intersectBucket(ts *task.Sort, key []byte, offsets []int, count int,
-	out [][]uint64) bool {
+func intersectBucket(ts *task.Sort, attr string, token string,
+	scalar types.Scalar, offsets []int, count int, out [][]uint64) bool {
+	key := types.IndexKey(attr, token)
 	pl, decr := posting.GetOrCreate(key, ws.dataStore)
 	defer decr()
 
@@ -160,8 +167,9 @@ func intersectBucket(ts *task.Sort, key []byte, offsets []int, count int,
 			continue
 		}
 
-		// We need to do the sort. Let's do that later.
-		////// SORT result before applying offset.
+		// Sort result *before* applying offset.
+		sortByValue(attr, result, scalar)
+
 		if offsets[i] > 0 {
 			result.Slice(offsets[i], n)
 			offsets[i] = 0
@@ -197,69 +205,41 @@ func intersectBucket(ts *task.Sort, key []byte, offsets []int, count int,
 	return true
 }
 
-// doFineSort sorts the UIDs by their values. The attribute has to be
-// specified in the schema with a type that makes sense. We do not return the
-// values as they may be long strings. We just return the ordering of the
-// UIDs. For example, if the input is 100, 150, 200, 250, and after sorting by
-// some attribute, it is 150, 250, 200, 100. Then we will return 1, 3, 2, 0.
-//func doFineSort(attr string, s *task.FineSort) ([]byte, error) {
-//	ul := s.Uid(nil)
-//	x.Assert(ul != nil)
+// sortByValue fetches values and sort UIDList.
+func sortByValue(attr string, ul *algo.UIDList, scalar types.Scalar) error {
+	values := make([]types.Value, ul.Size())
+	for i := 0; i < ul.Size(); i++ {
+		uid := ul.Get(i)
+		val, err := fetchValue(uid, attr, scalar)
+		if err != nil {
+			return err
+		}
+		values[i] = val
+	}
+	return scalar.Sort(values, ul)
+}
 
-//	sType := schema.TypeOf(attr)
-//	if !sType.IsScalar() {
-//		return nil, x.Errorf("Cannot sort attribute %s of type object.", attr)
-//	}
-//	scalar := sType.(types.Scalar)
+// fetchValue gets the value for a given UID.
+func fetchValue(uid uint64, attr string, scalar types.Scalar) (types.Value, error) {
+	pl, decr := posting.GetOrCreate(posting.Key(uid, attr), ws.dataStore)
+	defer decr()
 
-//	values := make([]types.Value, ul.UidsLength())
-//	for i := 0; i < ul.UidsLength(); i++ {
-//		uid := ul.Uids(i)
-//		val, err := fetchValue(uid, attr, scalar)
-//		if err != nil {
-//			return []byte{}, err
-//		}
-//		values[i] = val
-//	}
+	valBytes, vType, err := pl.Value()
+	if err != nil {
+		return nil, err
+	}
+	val := types.ValueForType(types.TypeID(vType))
+	if val == nil {
+		return nil, x.Errorf("Invalid type: %v", vType)
+	}
+	err = val.UnmarshalBinary(valBytes)
+	if err != nil {
+		return nil, err
+	}
 
-//	idx, err := scalar.Sort(values)
-//	if err != nil {
-//		return []byte{}, err
-//	}
-
-//	// Serialize idx.
-//	b := flatbuffers.NewBuilder(0)
-//	task.SortResultStartIdxVector(b, len(idx))
-//	for i := len(idx) - 1; i >= 0; i-- {
-//		b.PrependUint32(idx[i])
-//	}
-//	idxEnd := b.EndVector(len(idx))
-//	task.SortResultStart(b)
-//	task.SortResultAddIdx(b, idxEnd)
-//	b.Finish(task.SortResultEnd(b))
-//	return b.FinishedBytes(), nil
-//}
-
-//func fetchValue(uid uint64, attr string, scalar types.Scalar) (types.Value, error) {
-//	pl, decr := posting.GetOrCreate(posting.Key(uid, attr), ws.dataStore)
-//	defer decr()
-
-//	valBytes, vType, err := pl.Value()
-//	if err != nil {
-//		return nil, err
-//	}
-//	val := types.ValueForType(types.TypeID(vType))
-//	if val == nil {
-//		return nil, x.Errorf("Invalid type: %v", vType)
-//	}
-//	err = val.UnmarshalBinary(valBytes)
-//	if err != nil {
-//		return nil, err
-//	}
-
-//	schemaVal, err := scalar.Convert(val)
-//	if err != nil {
-//		return nil, err
-//	}
-//	return schemaVal, nil
-//}
+	schemaVal, err := scalar.Convert(val)
+	if err != nil {
+		return nil, err
+	}
+	return schemaVal, nil
+}

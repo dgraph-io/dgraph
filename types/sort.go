@@ -21,6 +21,7 @@ import (
 	"sort"
 
 	"github.com/dgraph-io/dgraph/algo"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 type sortBase struct {
@@ -74,20 +75,27 @@ func (s byByteArray) Less(i, j int) bool {
 }
 
 // Sort sorts the given array in-place.
-func (s Scalar) Sort(v []Value, ul *algo.UIDList) {
+func (s Scalar) Sort(v []Value, ul *algo.UIDList) error {
 	b := sortBase{v, ul}
 	switch s.ID() {
 	case DateID:
 		sort.Sort(byDate{b})
+		return nil
 	case DateTimeID:
 		sort.Sort(byDateTime{b})
+		return nil
 	case Int32ID:
 		sort.Sort(byInt32{b})
+		return nil
 	case FloatID:
 		sort.Sort(byFloat{b})
+		return nil
 	case StringID:
 		sort.Sort(byString{b})
+		return nil
 	case BytesID:
 		sort.Sort(byByteArray{b})
+		return nil
 	}
+	return x.Errorf("Scalar doesn't support sorting %s", s)
 }
