@@ -316,7 +316,7 @@ func mergeAndUpdate(l *List, c *counters) {
 	if l == nil {
 		return
 	}
-	if merged, err := l.MergeIfDirty(context.Background()); err != nil {
+	if merged, err := l.CommitIfDirty(context.Background()); err != nil {
 		log.Printf("Error while commiting dirty list: %v\n", err)
 	} else if merged {
 		atomic.AddUint64(&c.merged, 1)

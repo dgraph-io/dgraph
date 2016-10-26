@@ -98,7 +98,7 @@ func allocateUniqueUid(instanceIdx uint64, numInstances uint64) uint64 {
 		pl, decr := posting.GetOrCreate(key)
 		defer decr()
 
-		if pl.Length() == 0 {
+		if pl.Length(0) == 0 {
 			return uid
 		}
 	}
