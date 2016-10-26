@@ -610,7 +610,7 @@ func (l *List) Uids(opt ListOptions) *algo.UIDList {
 	return algo.NewUIDList(result)
 }
 
-func (l *List) Value() (res types.Posting, rerr error) {
+func (l *List) Value() (val []byte, vtype byte, rerr error) {
 	l.wg.Wait()
 	l.RLock()
 	defer l.RUnlock()
@@ -618,14 +618,16 @@ func (l *List) Value() (res types.Posting, rerr error) {
 	var found bool
 	l.iterate(math.MaxUint64-1, func(p *types.Posting) bool {
 		if p.Uid() == math.MaxUint64 {
-			res = *p
+			val = make([]byte, len(p.ValueBytes()))
+			copy(val, p.ValueBytes())
+			vtype = p.ValType()
 			found = true
 		}
 		return false
 	})
 
 	if !found {
-		return res, ErrNoValue
+		return val, vtype, ErrNoValue
 	}
-	return res, nil
+	return val, vtype, nil
 }

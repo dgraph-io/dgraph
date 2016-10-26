@@ -89,6 +89,7 @@ type node struct {
 	raftContext []byte
 	wal         *raftwal.Wal
 	messages    chan sendmsg
+	canCampaign bool
 }
 
 func (n *node) Connect(pid uint64, addr string) {
@@ -331,6 +332,7 @@ func (n *node) processSnapshot(s raftpb.Snapshot) {
 }
 
 func (n *node) Run() {
+	fr := true
 	for {
 		select {
 		case <-time.Tick(time.Second):
@@ -353,6 +355,10 @@ func (n *node) Run() {
 			}
 
 			n.raft.Advance()
+			if fr && n.canCampaign {
+				go n.raft.Campaign(context.TODO())
+				fr = false
+			}
 
 		case <-n.done:
 			return
@@ -535,6 +541,8 @@ func (n *node) InitAndStartNode(wal *raftwal.Wal, peer string) {
 		} else {
 			peers := []raft.Peer{{ID: n.id}}
 			n.raft = raft.StartNode(n.cfg, peers)
+			// Trigger election, so this node can become the leader of this single-node cluster.
+			n.canCampaign = true
 		}
 	}
 	go n.Run()
