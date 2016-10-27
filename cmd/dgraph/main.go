@@ -59,11 +59,9 @@ var (
 	shutdown    = flag.Bool("shutdown", false, "Allow client to send shutdown signal.")
 	tracing     = flag.Float64("trace", 0.5, "The ratio of queries to trace.")
 	schemaFile  = flag.String("schema", "", "Path to schema file")
-	rdbStats    = flag.Duration("rdbstats", 5*time.Minute,
-		"Print out RocksDB stats every this many seconds. If <=0, we don't print anyting.")
-	cpuprofile = flag.String("cpu", "", "write cpu profile to file")
-	memprofile = flag.String("mem", "", "write memory profile to file")
-	closeCh    = make(chan struct{})
+	cpuprofile  = flag.String("cpu", "", "write cpu profile to file")
+	memprofile  = flag.String("mem", "", "write memory profile to file")
+	closeCh     = make(chan struct{})
 )
 
 type mutationResult struct {
@@ -444,6 +442,15 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write(js)
 }
 
+// debugHandler outputs some basic stats, e.g., RocksDB stats.
+func debugHandler(w http.ResponseWriter, r *http.Request) {
+	addCorsHeaders(w)
+	w.Header().Set("Content-Type", "text/html")
+	w.Write([]byte("<pre>"))
+	w.Write([]byte(worker.Stats())) // This should be quite fast.
+	w.Write([]byte("</pre>"))
+}
+
 // server is used to implement graph.DgraphServer
 type grpcServer struct{}
 
@@ -584,6 +591,7 @@ func setupServer(che chan error) {
 	http2 := tcpm.Match(cmux.HTTP2())
 
 	http.HandleFunc("/query", queryHandler)
+	http.HandleFunc("/debug", debugHandler)
 	// Initilize the servers.
 	go serveGRPC(grpcl)
 	go serveHTTP(httpl)
@@ -603,13 +611,6 @@ func setupServer(che chan error) {
 	che <- tcpm.Serve()
 }
 
-func printStats(ps *store.Store) {
-	for {
-		time.Sleep(*rdbStats)
-		fmt.Println(ps.GetStats())
-	}
-}
-
 func main() {
 	rand.Seed(time.Now().UnixNano())
 	x.Init()
@@ -621,7 +622,6 @@ func main() {
 
 	posting.Init(ps)
 	worker.Init(ps)
-	go printStats(ps)
 
 	if len(*schemaFile) > 0 {
 		err = schema.Parse(*schemaFile)
