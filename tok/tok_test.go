@@ -57,10 +57,9 @@ func TestTokenizeBasic(t *testing.T) {
 		func(in string, expected []string) {
 			tokenizer, err := NewTokenizer([]byte(d.in))
 			defer tokenizer.Destroy()
-			if err != nil {
-				t.Error(err)
-				return
-			}
+			require.NotNil(t, tokenizer)
+			require.NoError(t, err)
+
 			var tokens []string
 			for {
 				s := tokenizer.Next()
@@ -70,16 +69,7 @@ func TestTokenizeBasic(t *testing.T) {
 				tokens = append(tokens, string(s))
 			}
 
-			if len(tokens) != len(expected) {
-				t.Errorf("Wrong number of tokens: %d vs %d", len(tokens), len(expected))
-				return
-			}
-			for i := 0; i < len(tokens); i++ {
-				if tokens[i] != expected[i] {
-					t.Errorf("Expected token [%s] but got [%s]", expected[i], tokens[i])
-					return
-				}
-			}
+			require.EqualValues(t, tokens, expected)
 		}(d.in, d.expected)
 	}
 }
