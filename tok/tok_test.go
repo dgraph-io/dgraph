@@ -59,17 +59,12 @@ func TestTokenizeBasic(t *testing.T) {
 			defer tokenizer.Destroy()
 			require.NotNil(t, tokenizer)
 			require.NoError(t, err)
-
+			tokensBytes := tokenizer.Tokens()
 			var tokens []string
-			for {
-				s := tokenizer.Next()
-				if s == nil {
-					break
-				}
-				tokens = append(tokens, string(s))
+			for _, token := range tokensBytes {
+				tokens = append(tokens, string(token))
 			}
-
-			require.EqualValues(t, tokens, expected)
+			require.EqualValues(t, expected, tokens)
 		}(d.in, d.expected)
 	}
 }
