@@ -442,12 +442,12 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write(js)
 }
 
-// debugHandler outputs some basic stats, e.g., RocksDB stats.
-func debugHandler(w http.ResponseWriter, r *http.Request) {
+// storeStatsHandler outputs some basic stats for data store.
+func storeStatsHandler(w http.ResponseWriter, r *http.Request) {
 	addCorsHeaders(w)
 	w.Header().Set("Content-Type", "text/html")
 	w.Write([]byte("<pre>"))
-	w.Write([]byte(worker.Stats())) // This should be quite fast.
+	w.Write([]byte(worker.StoreStats()))
 	w.Write([]byte("</pre>"))
 }
 
@@ -591,7 +591,7 @@ func setupServer(che chan error) {
 	http2 := tcpm.Match(cmux.HTTP2())
 
 	http.HandleFunc("/query", queryHandler)
-	http.HandleFunc("/debug", debugHandler)
+	http.HandleFunc("/debug/store", storeStatsHandler)
 	// Initilize the servers.
 	go serveGRPC(grpcl)
 	go serveHTTP(httpl)

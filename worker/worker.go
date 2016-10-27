@@ -64,7 +64,7 @@ func RunServer() {
 	s.Serve(ln)
 }
 
-// Stats returns some basic stats for worker, e.g., RocksDB stats.
-func Stats() string {
+// StoreStats returns stats for data store.
+func StoreStats() string {
 	return pstore.GetStats()
 }
