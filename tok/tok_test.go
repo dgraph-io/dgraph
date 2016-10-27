@@ -27,6 +27,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -80,6 +82,16 @@ func TestTokenizeBasic(t *testing.T) {
 			}
 		}(d.in, d.expected)
 	}
+}
+
+func TestNoICU(t *testing.T) {
+	disableICU = true
+	tokenizer, err := NewTokenizer([]byte("hello world"))
+	defer tokenizer.Destroy()
+	require.NotNil(t, tokenizer)
+	require.NoError(t, err)
+	tokens := tokenizer.Tokens()
+	require.Empty(t, tokens)
 }
 
 func TestMain(m *testing.M) {

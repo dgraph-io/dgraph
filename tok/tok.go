@@ -36,7 +36,10 @@ import (
 
 const maxTokenSize = 100
 
-var transformer transform.Transformer
+var (
+	transformer transform.Transformer
+	disableICU  bool
+)
 
 // Tokenizer wraps the Tokenizer object in icuc.c.
 type Tokenizer struct {
@@ -67,6 +70,12 @@ func normalize(in []byte) ([]byte, error) {
 // NewTokenizer creates a new Tokenizer object from a given input string of bytes.
 func NewTokenizer(s []byte) (*Tokenizer, error) {
 	x.Assert(s != nil)
+
+	if disableICU {
+		// ICU is disabled. Return a dummy tokenizer.
+		return &Tokenizer{}, nil
+	}
+
 	sNorm, terr := normalize(s)
 	if terr != nil {
 		return nil, terr
@@ -86,11 +95,16 @@ func NewTokenizer(s []byte) (*Tokenizer, error) {
 
 // Destroy destroys the tokenizer object.
 func (t *Tokenizer) Destroy() {
-	C.DestroyTokenizer(t.c)
+	if !disableICU {
+		C.DestroyTokenizer(t.c)
+	}
 }
 
 // Next returns the next token. It will allocate memory for the token.
 func (t *Tokenizer) Next() []byte {
+	if disableICU {
+		return nil
+	}
 	for {
 		n := int(C.TokenizerNext(t.c))
 		if n < 0 {
