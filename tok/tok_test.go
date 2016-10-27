@@ -27,6 +27,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -55,31 +57,26 @@ func TestTokenizeBasic(t *testing.T) {
 		func(in string, expected []string) {
 			tokenizer, err := NewTokenizer([]byte(d.in))
 			defer tokenizer.Destroy()
-			if err != nil {
-				t.Error(err)
-				return
-			}
+			require.NotNil(t, tokenizer)
+			require.NoError(t, err)
+			tokensBytes := tokenizer.Tokens()
 			var tokens []string
-			for {
-				s := tokenizer.Next()
-				if s == nil {
-					break
-				}
-				tokens = append(tokens, string(s))
+			for _, token := range tokensBytes {
+				tokens = append(tokens, string(token))
 			}
-
-			if len(tokens) != len(expected) {
-				t.Errorf("Wrong number of tokens: %d vs %d", len(tokens), len(expected))
-				return
-			}
-			for i := 0; i < len(tokens); i++ {
-				if tokens[i] != expected[i] {
-					t.Errorf("Expected token [%s] but got [%s]", expected[i], tokens[i])
-					return
-				}
-			}
+			require.EqualValues(t, expected, tokens)
 		}(d.in, d.expected)
 	}
+}
+
+func TestNoICU(t *testing.T) {
+	disableICU = true
+	tokenizer, err := NewTokenizer([]byte("hello world"))
+	defer tokenizer.Destroy()
+	require.NotNil(t, tokenizer)
+	require.NoError(t, err)
+	tokens := tokenizer.Tokens()
+	require.Empty(t, tokens)
 }
 
 func TestMain(m *testing.M) {
