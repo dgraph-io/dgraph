@@ -63,3 +63,8 @@ func RunServer() {
 	RegisterWorkerServer(s, &grpcWorker{})
 	s.Serve(ln)
 }
+
+// StoreStats returns stats for data store.
+func StoreStats() string {
+	return pstore.GetStats()
+}
