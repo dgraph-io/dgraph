@@ -11,7 +11,7 @@ import (
 const (
 	// Posting list keys are prefixed with this rune if it is a mutation meant for
 	// the index.
-	indexRune   = ':'
+	IndexRune   = ':'
 	dateFormat1 = "2006-01-02"
 	dateFormat2 = "2006-01-02T15:04:05"
 )
@@ -19,7 +19,7 @@ const (
 // IndexKey creates a key for indexing the term for given attribute.
 func IndexKey(attr string, term []byte) []byte {
 	buf := bytes.NewBuffer(make([]byte, 0, len(attr)+len(term)+2))
-	_, err := buf.WriteRune(indexRune)
+	_, err := buf.WriteRune(IndexRune)
 	x.Check(err)
 	_, err = buf.WriteString(attr)
 	x.Check(err)
