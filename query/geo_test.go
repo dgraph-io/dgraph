@@ -32,7 +32,6 @@ import (
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/types"
-	"github.com/dgraph-io/dgraph/worker"
 )
 
 func createTestStore(t *testing.T) (string, *store.Store) {
@@ -48,11 +47,10 @@ func createTestStore(t *testing.T) (string, *store.Store) {
 		return "", nil
 	}
 
-	worker.SetState(ps)
+	//	worker.SetState(ps)
 
-	posting.Init()
 	schema.ParseBytes([]byte(`scalar geometry:geo @index`))
-	posting.InitIndex(ps)
+	posting.Init(ps)
 	return dir, ps
 }
 

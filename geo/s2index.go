@@ -40,11 +40,11 @@ func IndexKeys(g *types.Geo) ([][]byte, error) {
 	ptoks := toTokens(parents, parentPrefix)
 	ctoks := toTokens(cover, coverPrefix)
 	for i, v := range ptoks {
-		keys[i] = types.IndexKey(IndexAttr, v)
+		keys[i] = types.IndexKey(IndexAttr, string(v))
 	}
 	l := len(ptoks)
 	for i, v := range ctoks {
-		keys[i+l] = types.IndexKey(IndexAttr, v)
+		keys[i+l] = types.IndexKey(IndexAttr, string(v))
 	}
 	return keys, nil
 }

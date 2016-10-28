@@ -37,7 +37,6 @@ func TestAddToMutationArray(t *testing.T) {
 
 	ps, err := store.NewStore(dir)
 	require.NoError(t, err)
-	SetState(ps)
 
 	mutationsMap := make(map[uint32]*x.Mutations)
 	edges := []x.DirectedEdge{}

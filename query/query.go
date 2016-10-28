@@ -125,6 +125,7 @@ type params struct {
 	AfterUid uint64
 	GetCount uint16
 	GetUid   bool
+	Order    string
 	isDebug  bool
 }
 
@@ -663,6 +664,9 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 			}
 			dst.Params.Count = int(first)
 		}
+		if v, ok := gchild.Args["order"]; ok {
+			dst.Params.Order = v
+		}
 		sg.Children = append(sg.Children, dst)
 		err := treeCopy(ctx, gchild, dst)
 		if err != nil {
@@ -865,10 +869,18 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, taskQuery []byte, rch chan 
 		return
 	}
 
-	// Apply offset and count (for pagination).
-	if err = sg.applyPagination(ctx); err != nil {
-		rch <- err
-		return
+	if len(sg.Params.Order) == 0 {
+		// There is no ordering. Just apply pagination and return.
+		if err = sg.applyPagination(ctx); err != nil {
+			rch <- err
+			return
+		}
+	} else {
+		// We need to sort first before pagination.
+		if err = sg.applyOrderAndPagination(ctx); err != nil {
+			rch <- err
+			return
+		}
 	}
 
 	var processed, leftToProcess []*SubGraph
@@ -948,7 +960,7 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, taskQuery []byte, rch chan 
 	}
 
 	// Filter out the invalid UIDs.
-	sg.destUIDs.ApplyFilter(func(uid uint64) bool {
+	sg.destUIDs.ApplyFilter(func(uid uint64, idx int) bool {
 		return !invalidUids[uid]
 	})
 
@@ -1111,5 +1123,63 @@ func (sg *SubGraph) applyPagination(ctx context.Context) error {
 	}
 	// Re-merge the UID matrix.
 	sg.destUIDs = algo.MergeLists(sg.Result)
+	return nil
+}
+
+// applyOrderAndPagination orders each posting list by a given attribute
+// before applying pagination.
+func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
+	if len(sg.Params.Order) == 0 {
+		return nil
+	}
+
+	b := flatbuffers.NewBuilder(0)
+	ao := b.CreateString(string(sg.Params.Order))
+
+	// Add UID matrix.
+	uidOffsets := make([]flatbuffers.UOffsetT, 0, len(sg.Result))
+	for _, ul := range sg.Result {
+		uidOffsets = append(uidOffsets, ul.AddTo(b))
+	}
+
+	task.SortStartUidmatrixVector(b, len(uidOffsets))
+	for i := len(uidOffsets) - 1; i >= 0; i-- {
+		b.PrependUOffsetT(uidOffsets[i])
+	}
+	uEnd := b.EndVector(len(uidOffsets))
+
+	task.SortStart(b)
+	task.SortAddAttr(b, ao)
+	task.SortAddUidmatrix(b, uEnd)
+	task.SortAddOffset(b, int32(sg.Params.Offset))
+	task.SortAddCount(b, int32(sg.Params.Count))
+	b.Finish(task.SortEnd(b))
+
+	resultData, err := worker.SortOverNetwork(ctx, b.FinishedBytes())
+	if err != nil {
+		return err
+	}
+
+	// Copy result into our UID matrix.
+	result := task.GetRootAsSortResult(resultData, 0)
+	x.Assert(result.UidmatrixLength() == len(sg.Result))
+	sg.Result = algo.FromSortResult(result)
+
+	// Update sg.destUID. Iterate over the UID matrix (which is not sorted by
+	// UID). For each element in UID matrix, we do a binary search in the
+	// current destUID and mark it. Then we scan over this bool array and
+	// rebuild destUIDs.
+	included := make([]bool, sg.destUIDs.Size())
+	for _, ul := range sg.Result {
+		for i := 0; i < ul.Size(); i++ {
+			uid := ul.Get(i)
+			idx := sg.destUIDs.IndexOf(uid) // Binary search.
+			if idx >= 0 {
+				included[idx] = true
+			}
+		}
+	}
+	sg.destUIDs.ApplyFilter(
+		func(uid uint64, idx int) bool { return included[idx] })
 	return nil
 }

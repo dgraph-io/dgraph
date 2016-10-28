@@ -51,6 +51,19 @@ func FromTaskResult(r *task.Result) []*UIDList {
 	return out
 }
 
+// FromSortResult parses task.Result and extracts a []*UIDList.
+func FromSortResult(r *task.SortResult) []*UIDList {
+	out := make([]*UIDList, r.UidmatrixLength())
+	for i := 0; i < r.UidmatrixLength(); i++ {
+		tl := new(task.UidList)
+		x.Assert(r.Uidmatrix(tl, i))
+		ul := new(UIDList)
+		ul.FromTask(tl)
+		out[i] = ul
+	}
+	return out
+}
+
 // Get returns the i-th element of UIDList.
 func (u *UIDList) Get(i int) uint64 {
 	if u.list != nil {
@@ -74,7 +87,7 @@ func (u *UIDList) Size() int {
 }
 
 // Reslice selects a slice of the data.
-func (u *UIDList) ApplyFilter(f func(uid uint64) bool) {
+func (u *UIDList) ApplyFilter(f func(uid uint64, idx int) bool) {
 	x.Assert(u != nil && (u.uints != nil || u.list != nil))
 	var out []uint64
 	if u.uints != nil {
@@ -85,7 +98,7 @@ func (u *UIDList) ApplyFilter(f func(uid uint64) bool) {
 	n := u.Size()
 	for i := 0; i < n; i++ {
 		uid := u.Get(i)
-		if f(uid) {
+		if f(uid, i) {
 			out = append(out, uid)
 		}
 	}
@@ -307,4 +320,10 @@ func ToUintsListForTest(ul []*UIDList) [][]uint64 {
 		out = append(out, u.ToUintsForTest())
 	}
 	return out
+}
+
+// Swap swaps two elements. Logs fatal if UIDList is not stored as []uint64.
+func (u *UIDList) Swap(i, j int) {
+	x.Assert(u.uints != nil)
+	u.uints[i], u.uints[j] = u.uints[j], u.uints[i]
 }

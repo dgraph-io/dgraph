@@ -70,3 +70,12 @@ func TypeOf(pred string) types.Type {
 func getScalar(typ string) (types.Type, bool) {
 	return types.TypeForName(typ)
 }
+
+// IndexedFields returns a list of indexed fields.
+func IndexedFields() []string {
+	out := make([]string, 0, len(indexedFields))
+	for k := range indexedFields {
+		out = append(out, k)
+	}
+	return out
+}

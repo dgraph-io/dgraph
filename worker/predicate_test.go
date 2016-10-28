@@ -50,7 +50,7 @@ func writePLs(t *testing.T, count int, vid uint64, ps *store.Store) {
 	for i := 0; i < count; i++ {
 		k := fmt.Sprintf("%03d", i)
 		t.Logf("key: %v", k)
-		list, _ := posting.GetOrCreate([]byte(k), ps)
+		list, _ := posting.GetOrCreate([]byte(k))
 
 		de := x.DirectedEdge{
 			ValueId:   vid,
@@ -147,8 +147,8 @@ func TestPopulateShard(t *testing.T) {
 		t.Fatalf("Expected key to be: %v. Got %v", "099", string(k))
 	}
 
-	l, _ := posting.GetOrCreate(k, ps)
-	if l.Length() != 1 {
+	l, _ := posting.GetOrCreate(k)
+	if l.Length(0) != 1 {
 		t.Error("Unable to find added elements in posting list")
 	}
 	var p types.Posting

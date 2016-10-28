@@ -13,7 +13,6 @@ import (
 	"github.com/dgraph-io/dgraph/loader"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/store"
-	"github.com/dgraph-io/dgraph/uid"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -26,10 +25,8 @@ func TestQuery(t *testing.T) {
 	ps, err := store.NewStore(dir)
 	require.NoError(t, err)
 
-	posting.Init()
-	uid.Init(ps)
+	posting.Init(ps)
 	loader.Init(ps)
-	posting.InitIndex(ps)
 
 	var count uint64
 	{

@@ -27,7 +27,7 @@ import (
 )
 
 func getOrCreate(key []byte, ps *store.Store) *posting.List {
-	l, _ := posting.GetOrCreate(key, ps)
+	l, _ := posting.GetOrCreate(key)
 	return l
 }
 
@@ -36,11 +36,11 @@ func getOrCreate(key []byte, ps *store.Store) *posting.List {
 func externalId(uid uint64) (xid string, rerr error) {
 	key := posting.Key(uid, "_xid_") // uid -> "_xid_" -> xid
 	pl := getOrCreate(key, uidStore)
-	if pl.Length() == 0 {
+	if pl.Length(0) == 0 {
 		return "", errors.New("NO external id")
 	}
 
-	if pl.Length() > 1 {
+	if pl.Length(0) > 1 {
 		log.Fatalf("This shouldn't be happening. Uid: %v", uid)
 		return "", errors.New("Multiple external ids for this uid.")
 	}
