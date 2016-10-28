@@ -37,26 +37,22 @@ func SortOverNetwork(ctx context.Context, qu []byte) (result []byte, rerr error)
 	x.Trace(ctx, "Sending request to %v", addr)
 
 	c := NewWorkerClient(conn)
-	type rpcReply struct {
-		reply *Payload
-		err   error
-	}
-	replyChan := make(chan rpcReply, 1)
+	reply := new(Payload)
+	cerr := make(chan error, 1)
 	go func() {
-		reply, err := c.Sort(ctx, &Payload{Data: qu})
-		replyChan <- rpcReply{reply, err}
+		var err error
+		result, err = c.Sort(ctx, &Payload{Data: qu})
+		cerr <- err
 	}()
+
 	select {
-	case r := <-replyChan:
-		if r.err != nil {
-			x.TraceError(ctx, x.Wrapf(r.err, "Error while calling Worker.Sort"))
-			return []byte{}, err
-		}
-		x.Trace(ctx, "Reply from server. length: %v Addr: %v Attr: %v",
-			len(r.reply.Data), addr, attr)
-		return r.reply.Data, nil
 	case <-ctx.Done():
 		return []byte{}, ctx.Err()
+	case err := <-cerr:
+		if err != nil {
+			x.TraceError(ctx, x.Wrapf(r.err, "Error while calling Worker.Sort"))
+		}
+		return reply.Data, err
 	}
 }
 
@@ -123,6 +119,7 @@ func processSort(qu []byte) ([]byte, error) {
 	// Iterate over every bucket in TokensTable.
 	t := posting.GetTokensTable(attr)
 	for token := t.GetFirst(); len(token) > 0; token = t.GetNext(token) {
+		// TODO(manish): Decrease the number of arguments being passed like this.
 		if intersectBucket(ts, attr, token, scalar, offsets, int(ts.Count()), out) {
 			break
 		}

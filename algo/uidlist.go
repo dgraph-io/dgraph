@@ -3,6 +3,7 @@ package algo
 import (
 	"bytes"
 	"container/heap"
+	"log"
 	"sort"
 	"strconv"
 
@@ -87,7 +88,7 @@ func (u *UIDList) Size() int {
 }
 
 // Reslice selects a slice of the data.
-func (u *UIDList) ApplyFilter(f func(uid uint64, idx int) bool) {
+func (u *UIDList) ApplyFilter(f func(uint64, int) bool) {
 	x.Assert(u != nil && (u.uints != nil || u.list != nil))
 	var out []uint64
 	if u.uints != nil {
@@ -187,13 +188,13 @@ func IntersectLists(lists []*UIDList) *UIDList {
 
 	// Our final output. Give it some capacity.
 	output := make([]uint64, 0, minLen)
-	// idx[i] is the element we are looking at for lists[i].
-	idx := make([]int, len(lists))
+	// lptrs[j] is the element we are looking at for lists[j].
+	lptrs := make([]int, len(lists))
 	shortList := lists[minLenIdx]
 	for i := 0; i < shortList.Size(); i++ {
 		val := shortList.Get(i)
 		if i > 0 && val == shortList.Get(i-1) {
-			continue // Avoid duplicates.
+			log.Fatal("We shouldn't have duplicates in UIDLists")
 		}
 
 		var skip bool                     // Should we skip val in output?
@@ -202,17 +203,19 @@ func IntersectLists(lists []*UIDList) *UIDList {
 				// No point checking yourself.
 				continue
 			}
-			l := lists[j]
-			lidx := idx[j]
-			lsz := l.Size()
-			for ; lidx < lsz && l.Get(lidx) < val; lidx++ {
+
+			lj := lists[j]
+			ljp := lptrs[j]
+			lsz := lj.Size()
+			for ; ljp < lsz && lj.Get(ljp) < val; ljp++ {
 			}
-			idx[j] = lidx
-			if lidx >= lsz || l.Get(lidx) > val {
+
+			lptrs[j] = ljp
+			if ljp >= lsz || lj.Get(ljp) > val {
 				skip = true
 				break
 			}
-			// Otherwise, l[k] = val and we continue checking other lists.
+			// Otherwise, lj.Get(ljp) = val and we continue checking other lists.
 		}
 		if !skip {
 			output = append(output, val)

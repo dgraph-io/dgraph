@@ -137,7 +137,7 @@ type SubGraph struct {
 	Children  []*SubGraph
 	Params    params
 	Filter    *gql.FilterTree
-	GeoFilter *geo.Filter
+	GeoFilter *geo.Filter // TODO: We shouldn't have a special case for this.
 
 	Counts *task.CountList
 	Values *task.ValueList
