@@ -25,7 +25,17 @@ var (
 
 func init() {
 	x.AddInit(func() {
-		x.Assertf(len(*icuDataFile) > 0, "ICU data file empty")
-		x.Check(icuembed.Load(*icuDataFile))
+		disableICU = true
+		if len(*icuDataFile) == 0 {
+			x.Printf("WARNING: ICU data file empty")
+			return
+		}
+		if err := icuembed.Load(*icuDataFile); err != nil {
+			x.Printf("WARNING: Error loading ICU datafile: %s %v",
+				*icuDataFile, err)
+			return
+		}
+		// Everything well. Re-enable ICU.
+		disableICU = false
 	})
 }

@@ -24,10 +24,7 @@ import (
 
 	"golang.org/x/net/trace"
 
-	"github.com/dgraph-io/dgraph/geo"
-	"github.com/dgraph-io/dgraph/posting/types"
 	"github.com/dgraph-io/dgraph/schema"
-	"github.com/dgraph-io/dgraph/store"
 	stype "github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -40,7 +37,6 @@ type TokensTable struct {
 
 var (
 	indexLog     trace.EventLog
-	indexStore   *store.Store
 	TokensTables map[string]*TokensTable
 )
 
@@ -48,12 +44,9 @@ func init() {
 	indexLog = trace.NewEventLog("index", "Logger")
 }
 
-// InitIndex initializes the index with the given data store.
-func InitIndex(ds *store.Store) {
-	if ds == nil {
-		return
-	}
-	indexStore = ds
+// initIndex initializes the index with the given data store.
+func initIndex() {
+	x.Assert(pstore != nil)
 
 	// Initialize TokensTables.
 	indexedFields := schema.IndexedFields()
@@ -70,7 +63,7 @@ func InitIndex(ds *store.Store) {
 			}
 			prefix := stype.IndexKey(attr, "")
 
-			it := indexStore.NewIterator()
+			it := pstore.NewIterator()
 			defer it.Close()
 			for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
 				table.push(stype.TokenFromKey(it.Key().Data()))
@@ -99,8 +92,10 @@ func indexTokens(attr string, p stype.Value) ([]string, error) {
 		return nil, err
 	}
 	switch v := schemaVal.(type) {
-	case *stype.Geo:
-		return geo.IndexTokens(v)
+	// TODO: Geo is currently disabled. We like tokenizers to not mess with
+	// keys. However, Geo seems to require that.
+	//	case *stype.Geo:
+	//		return geo.IndexTokens(v)
 	case *stype.Int32:
 		return stype.IntIndex(attr, v)
 	case *stype.Float:
@@ -135,32 +130,37 @@ func addIndexMutations(ctx context.Context, attr string, uid uint64,
 	x.Assertf(tokensTable != nil, "TokensTable missing for attr %s", attr)
 
 	for _, token := range tokens {
-		plist, decr := GetOrCreate(stype.IndexKey(attr, token), indexStore)
-		defer decr()
-		x.Assertf(plist != nil, "plist is nil [%s] %d %s",
-			token, edge.ValueId, edge.Attribute)
+		addIndexMutation(ctx, attr, token, tokensTable, &edge, del)
+	}
+}
 
-		if del {
-			_, err := plist.AddMutation(ctx, edge, Del)
-			if err != nil {
-				x.TraceError(ctx, x.Wrapf(err,
-					"Error deleting %s for attr %s entity %d: %v",
-					token, edge.Attribute, edge.Entity))
-			}
-			indexLog.Printf("DEL [%s] [%d] OldTerm [%s]",
-				edge.Attribute, edge.Entity, token)
-		} else {
-			_, err := plist.AddMutation(ctx, edge, Set)
-			if err != nil {
-				x.TraceError(ctx, x.Wrapf(err,
-					"Error adding %s for attr %s entity %d: %v",
-					token, edge.Attribute, edge.Entity))
-			}
-			indexLog.Printf("SET [%s] [%d] NewTerm [%s]",
-				edge.Attribute, edge.Entity, token)
+func addIndexMutation(ctx context.Context, attr, token string,
+	tokensTable *TokensTable, edge *x.DirectedEdge, del bool) {
+	plist, decr := GetOrCreate(stype.IndexKey(attr, token))
+	defer decr()
 
-			tokensTable.Add(token)
+	x.Assertf(plist != nil, "plist is nil [%s] %d %s",
+		token, edge.ValueId, edge.Attribute)
+	if del {
+		_, err := plist.AddMutation(ctx, *edge, Del)
+		if err != nil {
+			x.TraceError(ctx, x.Wrapf(err,
+				"Error deleting %s for attr %s entity %d: %v",
+				token, edge.Attribute, edge.Entity))
 		}
+		indexLog.Printf("DEL [%s] [%d] OldTerm [%s]",
+			edge.Attribute, edge.Entity, token)
+	} else {
+		_, err := plist.AddMutation(ctx, *edge, Set)
+		if err != nil {
+			x.TraceError(ctx, x.Wrapf(err,
+				"Error adding %s for attr %s entity %d: %v",
+				token, edge.Attribute, edge.Entity))
+		}
+		indexLog.Printf("SET [%s] [%d] NewTerm [%s]",
+			edge.Attribute, edge.Entity, token)
+
+		tokensTable.Add(token)
 	}
 }
 
@@ -169,17 +169,15 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t x.DirectedEdge, op by
 	x.Assertf(len(t.Attribute) > 0 && t.Attribute[0] != ':',
 		"[%s] [%d] [%s] %d %d\n", t.Attribute, t.Entity, string(t.Value), t.ValueId, op)
 
-	var lastPost types.Posting
-	var hasLastPost bool
+	var vbytes []byte
+	var vtype byte
+	var verr error
 
-	doUpdateIndex := indexStore != nil && (t.Value != nil) &&
+	doUpdateIndex := pstore != nil && (t.Value != nil) &&
 		schema.IsIndexed(t.Attribute)
 	if doUpdateIndex {
 		// Check last posting for original value BEFORE any mutation actually happens.
-		if l.Length() >= 1 {
-			x.Assert(l.Get(&lastPost, l.Length()-1))
-			hasLastPost = true
-		}
+		vbytes, vtype, verr = l.Value()
 	}
 	hasMutated, err := l.AddMutation(ctx, t, op)
 	if err != nil {
@@ -190,9 +188,9 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t x.DirectedEdge, op by
 	}
 
 	// Exact matches.
-	if hasLastPost && lastPost.ValueBytes() != nil {
-		delTerm := lastPost.ValueBytes()
-		delType := lastPost.ValType()
+	if verr == nil && len(vbytes) > 0 {
+		delTerm := vbytes
+		delType := vtype
 		p := stype.ValueForType(stype.TypeID(delType))
 		err = p.UnmarshalBinary(delTerm)
 		if err != nil {

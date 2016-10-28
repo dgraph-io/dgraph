@@ -26,12 +26,10 @@ import (
 	"github.com/dgryski/go-farm"
 
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/x"
 )
 
 var lmgr *lockManager
-var uidStore *store.Store
 
 type lockManager struct {
 	sync.RWMutex
@@ -70,10 +68,6 @@ func (lm *lockManager) clean() {
 // package level init
 func init() {
 	rand.Seed(time.Now().UnixNano())
-}
-
-func Init(ps *store.Store) {
-	uidStore = ps
 	lmgr = new(lockManager)
 	lmgr.uids = make(map[uint64]time.Time)
 	go lmgr.clean()
@@ -101,10 +95,10 @@ func allocateUniqueUid(instanceIdx uint64, numInstances uint64) uint64 {
 
 		// Check if this uid has already been allocated.
 		key := posting.Key(uid, "_uid_")
-		pl, decr := posting.GetOrCreate(key, uidStore)
+		pl, decr := posting.GetOrCreate(key)
 		defer decr()
 
-		if pl.Length() == 0 {
+		if pl.Length(0) == 0 {
 			return uid
 		}
 	}

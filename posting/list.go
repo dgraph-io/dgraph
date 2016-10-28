@@ -25,6 +25,7 @@ import (
 	"log"
 	"math"
 	"sort"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -40,20 +41,15 @@ import (
 )
 
 var E_TMP_ERROR = fmt.Errorf("Temporary Error. Please retry.")
+var ErrNoValue = fmt.Errorf("No value found")
 
 const (
-	Set = 0x01
-	Del = 0x02
+	Set byte = 0x01
+	Del byte = 0x02
 )
 
 type buffer struct {
 	d []byte
-}
-
-type MutationLink struct {
-	idx     int
-	moveidx int
-	posting *types.Posting
 }
 
 type List struct {
@@ -62,16 +58,13 @@ type List struct {
 	ghash       uint64
 	hash        uint32
 	pbuffer     unsafe.Pointer
-	pstore      *store.Store // postinglist store
+	mlayer      []*types.Posting // mutations
+	pstore      *store.Store     // postinglist store
 	lastCompact time.Time
 	wg          sync.WaitGroup
 	deleteMe    int32
 	refcount    int32
 
-	// Mutations
-	mlayer  map[int]types.Posting // Stores only replace instructions.
-	mdelta  int                   // len(plist) + mdelta = final length.
-	mindex  []*MutationLink
 	dirtyTs int64 // Use atomics for this.
 }
 
@@ -96,7 +89,6 @@ func getNew() *List {
 	l := listPool.Get().(*List)
 	*l = List{}
 	l.wg.Add(1)
-	l.mlayer = make(map[int]types.Posting)
 	x.Assert(len(l.key) == 0)
 	l.refcount = 1
 	return l
@@ -128,6 +120,7 @@ func samePosting(a *types.Posting, b *types.Posting) bool {
 	if !bytes.Equal(a.ValueBytes(), b.ValueBytes()) {
 		return false
 	}
+	// Checking source might not be necessary.
 	if !bytes.Equal(a.Source(), b.Source()) {
 		return false
 	}
@@ -136,17 +129,32 @@ func samePosting(a *types.Posting, b *types.Posting) bool {
 
 // Key = attribute|uid
 func Key(uid uint64, attr string) []byte {
-	buf := bytes.NewBufferString(attr)
-	if _, err := buf.WriteRune('|'); err != nil {
-		log.Fatalf("Error while writing |")
+	buf := make([]byte, len(attr)+9)
+	for i, ch := range attr {
+		buf[i] = byte(ch)
 	}
-	if err := binary.Write(buf, binary.LittleEndian, uid); err != nil {
-		log.Fatalf("Error while creating key with attr: %v uid: %v\n", attr, uid)
-	}
-	return buf.Bytes()
+	buf[len(attr)] = '|'
+	binary.BigEndian.PutUint64(buf[len(attr)+1:], uid)
+	return buf
 }
 
-func newPosting(t x.DirectedEdge, op byte) []byte {
+func debugKey(key []byte) string {
+	var b bytes.Buffer
+	var rest []byte
+	for i, ch := range key {
+		if ch == '|' {
+			b.WriteByte(':')
+			rest = key[i+1:]
+			break
+		}
+		b.WriteByte(ch)
+	}
+	uid := binary.BigEndian.Uint64(rest)
+	b.WriteString(strconv.FormatUint(uid, 16))
+	return b.String()
+}
+
+func newPosting(t x.DirectedEdge, op byte) *types.Posting {
 	b := flatbuffers.NewBuilder(0)
 	var bo flatbuffers.UOffsetT
 	if !bytes.Equal(t.Value, nil) {
@@ -170,7 +178,7 @@ func newPosting(t x.DirectedEdge, op byte) []byte {
 	vend := types.PostingEnd(b)
 	b.Finish(vend)
 
-	return b.Bytes[b.Head():]
+	return types.GetRootAsPosting(b.Bytes[b.Head():], 0)
 }
 
 func addEdgeToPosting(b *flatbuffers.Builder,
@@ -256,7 +264,6 @@ func (l *List) init(key []byte, pstore *store.Store) {
 
 	l.hash = farm.Fingerprint32(key)
 	l.ghash = farm.Fingerprint64(key)
-	l.mlayer = make(map[int]types.Posting)
 }
 
 // getPostingList tries to get posting list from l.pbuffer. If it is nil, then
@@ -283,332 +290,78 @@ func (l *List) getPostingList() *types.PostingList {
 	return types.GetRootAsPostingList(buf.d, 0)
 }
 
-// Caller must hold at least a read lock.
-// TODO: Consider using the new sort.Search function.
-func (l *List) lePostingIndex(maxUid uint64) (int, uint64) {
-	posting := l.getPostingList()
-	left, right := 0, posting.PostingsLength()-1
-	sofar := -1
-	p := new(types.Posting)
-
-	for left <= right {
-		pos := (left + right) / 2
-		if ok := posting.Postings(p, pos); !ok {
-			log.Fatalf("Unable to parse posting from list idx: %v", pos)
-		}
-		val := p.Uid()
-		if val > maxUid {
-			right = pos - 1
-			continue
-		}
-		if val == maxUid {
-			return pos, val
-		}
-		sofar = pos
-		left = pos + 1
-	}
-	if sofar == -1 {
-		return -1, 0
-	}
-	if ok := posting.Postings(p, sofar); !ok {
-		log.Fatalf("Unable to parse posting from list idx: %v", sofar)
-	}
-	return sofar, p.Uid()
-}
-
-// TODO: Consider using the new sort.Search function.
-func (l *List) leMutationIndex(maxUid uint64) (int, uint64) {
-	left, right := 0, len(l.mindex)-1
-	sofar := -1
-	for left <= right {
-		pos := (left + right) / 2
-		m := l.mindex[pos]
-		val := m.posting.Uid()
-		if val > maxUid {
-			right = pos - 1
-			continue
-		}
-		if val == maxUid {
-			return pos, val
-		}
-		sofar = pos
-		left = pos + 1
-	}
-	if sofar == -1 {
-		return -1, 0
-	}
-	return sofar, l.mindex[sofar].posting.Uid()
-}
-
-func (l *List) mindexInsertAt(mlink *MutationLink, mi int) {
-	l.mindex = append(l.mindex, nil)
-	copy(l.mindex[mi+1:], l.mindex[mi:])
-	l.mindex[mi] = mlink
-	for i := mi + 1; i < len(l.mindex); i++ {
-		l.mindex[i].idx++
-	}
-}
-
-func (l *List) mindexDeleteAt(mi int) {
-	l.mindex = append(l.mindex[:mi], l.mindex[mi+1:]...)
-	for i := mi; i < len(l.mindex); i++ {
-		l.mindex[i].idx--
-	}
-}
-
-// mutationIndex (mindex) is useful to avoid having to parse the entire
-// postinglist upto idx, for every Get(*types.Posting, idx), which has a
-// complexity of O(idx). Iteration over N size posting list would this push
-// us into O(N^2) territory, without this technique.
-//
-// Using this technique,
-// we can overlay mutation layers over immutable posting list, to allow for
-// O(m) lookups, where m = size of mutation list. Obviously, the size of
-// mutation list should be much smaller than the size of posting list, except
-// in tiny posting lists, where performance wouldn't be such a concern anyways.
-//
-// Say we have this data:
-// Posting List (plist, immutable):
-// idx:   0  1  2  3  4  5
-// value: 2  5  9 10 13 15
-//
-// Mutation List (mlist):
-// idx:          0   1   2
-// value:        7  10  13' // posting uid is 13 but other values vary.
-// Op:         SET DEL SET
-// Effective:  ADD DEL REP  (REP = replace)
-//
-// ----------------------------------------------------------------------------
-// regenerateIndex would generate these:
-// mlayer (layer just above posting list contains only replace instructions)
-// idx:          4
-// value:       13'
-// Op:       	 SET
-// Effective:  REP  (REP = replace)
-//
-// mindex:
-// idx:          2   4
-// value:        7  10
-// moveidx:     -1  +1
-// Effective:  ADD DEL
-//
-// Now, let's see how the access would work:
-// idx: get --> calculation [idx, served from, value]
-// idx: 0 --> 0   [0, plist, 2]
-// idx: 1 --> 1   [1, plist, 5]
-// idx: 2 --> ADD from mindex
-//        -->     [2, mindex, 7] // also has moveidx = -1
-// idx: 3 --> 3 + moveidx=-1 = 2 [2, plist, 9]
-// idx: 4 --> DEL from mindex
-//        --> 4 + moveidx=-1 + moveidx=+1 = 4 [4, mlayer, 13']
-// idx: 5 --> 5 + moveidx=-1 + moveidx=+1 = 5 [5, plist, 15]
-//
-// Thus we can provide mutation layers over immutable posting list, while
-// still ensuring fast lookup access.
-//
-// NOTE: mergeMutation expects the caller to hold a RW Lock.
-// Update: With mergeMutation function, we're adding mutations with a cost
-// of O(log M + log N), where M = number of previous mutations, and N =
-// number of postings in the immutable posting list.
-//
-// NOTE: Strictly speaking, mergeMutation is not O(log M + log N). Any calls to
-// mindexInsertAt or mindexDeleteAt is O(M) time. However in practice, M is small.
-//
-// mergeMutation is the function that merges a mutation into mutation layers. It
-// does not write anything to RocksDB. Returns whether a mutation did happen.
-func (l *List) mergeMutation(mp *types.Posting) bool {
-	curUid := mp.Uid()
-	pi, puid := l.lePostingIndex(curUid)  // O(log N)
-	mi, muid := l.leMutationIndex(curUid) // O(log M)
-	inPlist := puid == curUid
-
-	// O(1) follows, but any additions or deletions from mindex would
-	// be O(M) due to element shifting. In terms of benchmarks, this performs
-	// a LOT better than when I was running O(N + M), re-generating mutation
-	// flatbuffers, linked lists etc.
-	mlink := new(MutationLink)
-	mlink.posting = mp
-
-	if mp.Op() == Del {
-		if muid == curUid { // curUid found in mindex.
-			ml := l.mindex[mi]
-			if !samePosting(ml.posting, mp) {
-				// Not the same posting, so we should ignore this.
-				return false
-			}
-
-			if inPlist { // In plist, so replace previous instruction in mindex.
-				if _, inMlayer := l.mlayer[pi]; inMlayer {
-					x.Assertf(false, "Shouldn't be present in both mindex and mlayer. curUid = %v", curUid)
-				}
-
-				mlink.moveidx = 1
-				mlink.idx = pi + mi
-				l.mindex[mi] = mlink
-
-			} else { // Not in plist, so delete previous instruction in mindex.
-				l.mdelta--
-				l.mindexDeleteAt(mi)
-			}
-
-		} else { // curUid not found in mindex.
-
-			// If present in mlayer, and matches with what we have, remove from it.
-			if tp, ok := l.mlayer[pi]; ok {
-				if !samePosting(&tp, mp) {
-					return false
-				}
-				delete(l.mlayer, pi)
-
-				mlink.moveidx = 1
-				l.mdelta--
-				mlink.idx = pi + mi + 1
-				l.mindexInsertAt(mlink, mi+1)
-
-			} else if inPlist { // In plist, so insert in mindex.
-				plist := l.getPostingList()
-				var tp types.Posting
-				if ok := plist.Postings(&tp, pi); ok {
-					if !samePosting(&tp, mp) {
-						// Not the same posting as in plist. Ignore.
-						return false
-					}
-				}
-
-				mlink.moveidx = 1
-				l.mdelta--
-				mlink.idx = pi + mi + 1
-				l.mindexInsertAt(mlink, mi+1)
-
-			} else {
-				// Not found in plist, and not found in mindex. So, ignore.
-			}
-		}
-
-	} else if mp.Op() == Set {
-		if muid == curUid { // curUid found in mindex.
-			if inPlist { // In plist, so delete previous instruction, set in mlayer.
-				l.mindexDeleteAt(mi)
-				l.mlayer[pi] = *mp
-				l.mdelta++
-
-			} else { // Not in plist, so replace previous set instruction in mindex.
-				// NOTE: This prev instruction couldn't have been a Del instruction.
-				mlink.idx = pi + 1 + mi
-				mlink.moveidx = -1
-				l.mindex[mi] = mlink
-			}
-
-		} else { // curUid not found in mindex.
-			if inPlist { // In plist, so just set it in mlayer.
-
-				// If this posting matches what we already have in posting list,
-				// we don't need to `dirty` this by adding to mlayer.
-				// Note that this means that the timestamp of the posting would
-				// remain unchanged.
-				plist := l.getPostingList()
-				var tp types.Posting
-				if ok := plist.Postings(&tp, pi); ok {
-					if samePosting(&tp, mp) {
-						delete(l.mlayer, pi) // if exists.
-						return false         // do nothing.
-					}
-				}
-				// Not found in plist. Set in mlayer.
-				l.mlayer[pi] = *mp
-
-			} else { // not in plist, not in mindex, so insert in mindex.
-				mlink.moveidx = -1
-				l.mdelta++
-				mlink.idx = pi + 1 + mi + 1 // right of pi, and right of mi.
-				l.mindexInsertAt(mlink, mi+1)
-			}
-		}
-
-	} else {
-		log.Fatalf("Invalid operation: %v", mp.Op())
-	}
-	return true
-}
-
-// Caller must hold at least a read lock.
-func (l *List) length() int {
-	plist := l.getPostingList()
-	return plist.PostingsLength() + l.mdelta
-}
-
-func (l *List) Length() int {
-	l.wg.Wait()
-
-	l.RLock()
-	defer l.RUnlock()
-	return l.length()
-}
-
-func (l *List) Get(p *types.Posting, i int) bool {
-	l.wg.Wait()
-
-	l.RLock()
-	defer l.RUnlock()
-	return l.get(p, i)
-}
-
-// Caller must hold at least a read lock.
-func (l *List) get(p *types.Posting, i int) bool {
-	plist := l.getPostingList()
-	if len(l.mindex) == 0 {
-		if val, ok := l.mlayer[i]; ok {
-			*p = val
-			return true
-		}
-		return plist.Postings(p, i)
-	}
-
-	// Iterate over mindex, and see if we have instructions
-	// for the given index. Otherwise, sum up the move indexes
-	// uptil the given index, so we know where to look in
-	// mlayer and/or the main posting list.
-	move := 0
-	for _, mlink := range l.mindex {
-		if mlink.idx > i {
-			break
-
-		} else if mlink.idx == i {
-			// Found an instruction. Check what is says.
-			if mlink.posting.Op() == Set {
-				// ADD
-				*p = *mlink.posting
-				return true
-
-			} else if mlink.posting.Op() == Del {
-				// DELETE
-				// The loop will break in the next iteration, after updating the move
-				// variable.
-
-			} else {
-				log.Fatal("Someone, I mean you, forgot to tackle" +
-					" this operation. Stop drinking.")
-			}
-		}
-		move += mlink.moveidx
-	}
-	newidx := i + move
-
-	// Check if we have any replace instruction in mlayer.
-	if val, ok := l.mlayer[newidx]; ok {
-		*p = val
-		return true
-	}
-	// Hit the main posting list.
-	if newidx >= plist.PostingsLength() {
-		return false
-	}
-	return plist.Postings(p, newidx)
-}
-
+// SetForDeletion will mark this List to be deleted, so no more mutations can be applied to this.
 func (l *List) SetForDeletion() {
 	l.wg.Wait()
 	atomic.StoreInt32(&l.deleteMe, 1)
+}
+
+func (l *List) updateMutationLayer(mpost *types.Posting) bool {
+	findUid := mpost.Uid()
+
+	// First check the mutable layer.
+	midx := sort.Search(len(l.mlayer), func(idx int) bool {
+		mp := l.mlayer[idx]
+		return findUid <= mp.Uid()
+	})
+	if midx < len(l.mlayer) {
+		// Found this in mlayer.
+		mp := l.mlayer[midx]
+		msame := samePosting(mp, mpost)
+		if msame && mp.Op() == mpost.Op() {
+			// Everything is the same. No change.
+			return false
+		}
+		if mp.Uid() == mpost.Uid() {
+			if !msame && mpost.Op() == Del {
+				return false
+			}
+			// Same UID. So, set the new version.
+			l.mlayer[midx] = mpost
+			return true
+		}
+	}
+
+	// Didn't find it in mutable layer. Now check the immutable layer.
+	pl := l.getPostingList()
+	pidx := sort.Search(pl.PostingsLength(), func(idx int) bool {
+		p := new(types.Posting)
+		x.Assert(pl.Postings(p, idx))
+		return findUid <= p.Uid()
+	})
+	if pidx < pl.PostingsLength() {
+		p := new(types.Posting)
+		x.Assertf(pl.Postings(p, pidx), "Unable to parse Posting at index: %v", pidx)
+
+		psame := samePosting(p, mpost)
+		if psame && mpost.Op() == Set {
+			// Found exact same posting in immutable layer. So, no need to Set.
+			return false
+		}
+		if p.Uid() != mpost.Uid() && mpost.Op() == Del {
+			// Couldn't find the posting in immutable layer. So, no need to Del.
+			return false
+		}
+		if p.Uid() == mpost.Uid() && mpost.Op() == Del {
+			// Found the index in the immutable layer, but
+			if !psame {
+				return false
+			}
+		}
+	}
+	// Doesn't match what we already have in immutable layer. So, add to mutable layer.
+
+	if midx >= len(l.mlayer) {
+		// Add it at the end.
+		l.mlayer = append(l.mlayer, mpost)
+		return true
+	}
+
+	// Otherwise, add it where midx is pointing to.
+	l.mlayer = append(l.mlayer, nil)
+	copy(l.mlayer[midx+1:], l.mlayer[midx:])
+	l.mlayer[midx] = mpost
+	return true
 }
 
 // In benchmarks, the time taken per AddMutation before was
@@ -626,6 +379,13 @@ func (l *List) SetForDeletion() {
 // BenchmarkAddMutations_SyncEvery100LogEntry-6 	   10000	    298352 ns/op
 // BenchmarkAddMutations_SyncEvery1000LogEntry-6	   30000	     63544 ns/op
 // ok  	github.com/dgraph-io/dgraph/posting	10.291s
+//
+// Update: With the latest changes, we no longer use commit.Log, in fact, the
+// commit package is not present anymore. With RAFT, everything goes into WAL
+// before being applied to PL. So, AddMutation now is solely a memory based operation.
+// This is the result with the latest changes, running on my i5 laptop.
+//
+// BenchmarkAddMutations-4    	  300000	     26737 ns/op
 
 // AddMutation adds mutation to mutation layers. Note that it does not write
 // anything to disk. Some other background routine will be responsible for merging
@@ -647,7 +407,7 @@ func (l *List) AddMutation(ctx context.Context, t x.DirectedEdge, op byte) (bool
 		x.TraceError(ctx, err)
 		return false, err
 	}
-	mbuf := newPosting(t, op)
+	mpost := newPosting(t, op)
 
 	// Mutation arrives:
 	// - Check if we had any(SET/DEL) before this, stored in the mutation list.
@@ -660,11 +420,8 @@ func (l *List) AddMutation(ctx context.Context, t x.DirectedEdge, op byte) (bool
 	defer l.Unlock()
 	x.Trace(ctx, "Lock acquired")
 
-	uo := flatbuffers.GetUOffsetT(mbuf)
-	mpost := new(types.Posting)
-	mpost.Init(mbuf, uo)
-	hasMutated := l.mergeMutation(mpost)
-	if len(l.mindex)+len(l.mlayer) > 0 {
+	hasMutated := l.updateMutationLayer(mpost)
+	if len(l.mlayer) > 0 {
 		atomic.StoreInt64(&l.dirtyTs, time.Now().UnixNano())
 		if dirtyChan != nil {
 			dirtyChan <- l.ghash
@@ -674,52 +431,131 @@ func (l *List) AddMutation(ctx context.Context, t x.DirectedEdge, op byte) (bool
 	return hasMutated, nil
 }
 
-func (l *List) MergeIfDirty(ctx context.Context) (merged bool, err error) {
+// Iterate will allow you to iterate over this Posting List, while having acquired a read lock.
+// So, please keep this iteration cheap, otherwise mutations would get stuck.
+// The iteration will start after the provided UID. The results would not include this UID.
+// The function will loop until either the Posting List is fully iterated, or you return a false
+// in the provided function, which will indicate to the function to break out of the iteration.
+//
+// 	pl.Iterate(func(p *types.Posting) bool {
+//    // Use posting p
+//    return true  // to continue iteration.
+//    return false // to break iteration.
+//  })
+func (l *List) Iterate(afterUid uint64, f func(obj *types.Posting) bool) {
+	l.wg.Wait()
+	l.RLock()
+	defer l.RUnlock()
+	l.iterate(afterUid, f)
+}
+
+func (l *List) iterate(afterUid uint64, f func(obj *types.Posting) bool) {
+	pidx, midx := 0, 0
+	pl := l.getPostingList()
+
+	if afterUid > 0 {
+		pidx = sort.Search(pl.PostingsLength(), func(idx int) bool {
+			p := new(types.Posting)
+			x.Assert(pl.Postings(p, idx))
+			return afterUid < p.Uid()
+		})
+		midx = sort.Search(len(l.mlayer), func(idx int) bool {
+			mp := l.mlayer[idx]
+			return afterUid < mp.Uid()
+		})
+	}
+
+	empty := types.GetRootAsPosting(emptyPosting, 0)
+	mp, pp := new(types.Posting), new(types.Posting)
+	cont := true
+	for cont {
+		if pidx < pl.PostingsLength() {
+			x.Assert(pl.Postings(pp, pidx))
+		} else {
+			pp = empty
+		}
+		if midx < len(l.mlayer) {
+			mp = l.mlayer[midx]
+		} else {
+			mp = empty
+		}
+
+		switch {
+		case pp.Uid() == 0 && mp.Uid() == 0:
+			cont = false
+		case mp.Uid() == 0 || (pp.Uid() > 0 && pp.Uid() < mp.Uid()):
+			cont = f(pp)
+			pidx++
+		case pp.Uid() == 0 || (mp.Uid() > 0 && mp.Uid() < pp.Uid()):
+			if mp.Op() == Set {
+				cont = f(mp)
+			}
+			midx++
+		case pp.Uid() == mp.Uid():
+			if mp.Op() == Set {
+				cont = f(mp)
+			}
+			pidx++
+			midx++
+		default:
+			log.Fatalf("Unhandled case during iteration of posting list.")
+		}
+	}
+}
+
+// Length iterates over the posting list and counts the number of elements. This is NOT CHEAP. So, use it sparingly.
+func (l *List) Length(afterUid uint64) int {
+	count := 0
+	l.Iterate(afterUid, func(*types.Posting) bool {
+		count++
+		return true
+	})
+	return count
+}
+
+func (l *List) CommitIfDirty(ctx context.Context) (committed bool, err error) {
 	if atomic.LoadInt64(&l.dirtyTs) == 0 {
 		x.Trace(ctx, "Not committing")
 		return false, nil
 	}
 	x.Trace(ctx, "Committing")
-	return l.merge()
+	return l.commit()
 }
 
-func (l *List) merge() (merged bool, rerr error) {
+func (l *List) commit() (committed bool, rerr error) {
 	l.wg.Wait()
 	l.Lock()
 	defer l.Unlock()
 
-	if len(l.mindex)+len(l.mlayer) == 0 {
+	if len(l.mlayer) == 0 {
 		atomic.StoreInt64(&l.dirtyTs, 0)
 		return false, nil
 	}
 
-	var p types.Posting
-	sz := l.length()
 	b := flatbuffers.NewBuilder(0)
-	offsets := make([]flatbuffers.UOffsetT, sz)
+	offsets := make([]flatbuffers.UOffsetT, 0, 10)
 
 	ubuf := make([]byte, 16)
 	h := md5.New()
-	for i := 0; i < sz; i++ {
-		if ok := l.get(&p, i); !ok {
-			log.Fatalf("Idx: %d. Unable to parse posting.", i)
-		}
-
-		// Add individual posting to hash.
-		n := binary.PutVarint(ubuf, int64(i))
+	count := 0
+	l.iterate(0, func(p *types.Posting) bool {
+		n := binary.PutVarint(ubuf, int64(count))
 		h.Write(ubuf[0:n])
 		n = binary.PutUvarint(ubuf, p.Uid())
 		h.Write(ubuf[0:n])
 		h.Write(p.ValueBytes())
 		h.Write(p.Source())
+		count++
 
-		offsets[i] = addPosting(b, p)
-	}
-	types.PostingListStartPostingsVector(b, sz)
+		offsets = append(offsets, addPosting(b, *p))
+		return true
+	})
+
+	types.PostingListStartPostingsVector(b, count)
 	for i := len(offsets) - 1; i >= 0; i-- {
 		b.PrependUOffsetT(offsets[i])
 	}
-	vend := b.EndVector(sz)
+	vend := b.EndVector(count)
 
 	co := b.CreateString(fmt.Sprintf("%x", h.Sum(nil)))
 	types.PostingListStart(b)
@@ -736,10 +572,8 @@ func (l *List) merge() (merged bool, rerr error) {
 	// Now reset the mutation variables.
 	atomic.StorePointer(&l.pbuffer, nil) // Make prev buffer eligible for GC.
 	atomic.StoreInt64(&l.dirtyTs, 0)     // Set as clean.
+	l.mlayer = l.mlayer[:0]
 	l.lastCompact = time.Now()
-	l.mlayer = make(map[int]types.Posting)
-	l.mdelta = 0
-	l.mindex = nil
 	return true, nil
 }
 
@@ -756,57 +590,44 @@ func (l *List) Uids(opt ListOptions) *algo.UIDList {
 	l.RLock()
 	defer l.RUnlock()
 
-	var p types.Posting
-	var offset int
-	if opt.AfterUID > 0 {
-		// sort.Search returns the index of the first element > AfterUid.
-		// AfterUid overrides the offset parameter.
-		offset = sort.Search(l.length(), func(i int) bool {
-			l.get(&p, i)
-			return p.Uid() > opt.AfterUID
-		})
-	}
-
-	count := l.length()
-	if opt.Intersect != nil && opt.Intersect.Size() < count {
-		count = opt.Intersect.Size()
-	}
-
-	result := make([]uint64, 0, count)
+	result := make([]uint64, 0, 10)
 	var intersectIdx int // Indexes into opt.Intersect if it exists.
-	for i := offset; i < l.length(); i++ {
-		if ok := l.get(&p, i); !ok || p.Uid() == math.MaxUint64 {
-			break
+	l.iterate(opt.AfterUID, func(p *types.Posting) bool {
+		if p.Uid() == math.MaxUint64 {
+			return false
 		}
-		// Try to intersect.
 		uid := p.Uid()
 		if opt.Intersect != nil {
 			for ; intersectIdx < opt.Intersect.Size() && opt.Intersect.Get(intersectIdx) < uid; intersectIdx++ {
 			}
 			if intersectIdx >= opt.Intersect.Size() || opt.Intersect.Get(intersectIdx) > uid {
-				continue
+				return true
 			}
 		}
 		result = append(result, uid)
-	}
+		return true
+	})
 	return algo.NewUIDList(result)
 }
 
-func (l *List) Value() (result []byte, rtype byte, rerr error) {
+func (l *List) Value() (val []byte, vtype byte, rerr error) {
 	l.wg.Wait()
 	l.RLock()
 	defer l.RUnlock()
 
-	if l.length() == 0 {
-		return result, rtype, fmt.Errorf("No value found")
-	}
+	var found bool
+	l.iterate(math.MaxUint64-1, func(p *types.Posting) bool {
+		if p.Uid() == math.MaxUint64 {
+			val = make([]byte, len(p.ValueBytes()))
+			copy(val, p.ValueBytes())
+			vtype = p.ValType()
+			found = true
+		}
+		return false
+	})
 
-	var p types.Posting
-	if ok := l.get(&p, l.length()-1); !ok {
-		return result, rtype, fmt.Errorf("Unable to get last posting")
+	if !found {
+		return val, vtype, ErrNoValue
 	}
-	if p.Uid() != math.MaxUint64 {
-		return result, rtype, fmt.Errorf("No value found")
-	}
-	return p.ValueBytes(), p.ValType(), nil
+	return val, vtype, nil
 }

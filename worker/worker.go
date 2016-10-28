@@ -19,36 +19,25 @@
 package worker
 
 import (
+	"flag"
+	"fmt"
 	"log"
 	"net"
-	"sync"
+
+	"github.com/dgraph-io/dgraph/store"
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
-
-	"github.com/dgraph-io/dgraph/store"
 )
 
-// State stores the worker state.
-type State struct {
-	dataStore *store.Store
+var (
+	workerPort = flag.Int("workerport", 12345,
+		"Port used by worker for internal communication.")
+	pstore *store.Store
+)
 
-	// TODO: Remove this code once RAFT groups are in place.
-	// pools stores the pool for all the instances which is then used to send queries
-	// and mutations to the appropriate instance.
-	pools      []*pool
-	poolsMutex sync.RWMutex
-}
-
-// Stores the worker state.
-var ws *State
-
-// NewState initializes the state on an instance with data,uid store and other meta.
-func SetState(ps *store.Store) *State {
-	ws = &State{
-		dataStore: ps,
-	}
-	return ws
+func Init(ps *store.Store) {
+	pstore = ps
 }
 
 // grpcWorker struct implements the gRPC server interface.
@@ -62,8 +51,8 @@ func (w *grpcWorker) Hello(ctx context.Context, in *Payload) (*Payload, error) {
 
 // runServer initializes a tcp server on port which listens to requests from
 // other workers for internal communication.
-func RunServer(port string) {
-	ln, err := net.Listen("tcp", port)
+func RunServer() {
+	ln, err := net.Listen("tcp", fmt.Sprintf(":%d", *workerPort))
 	if err != nil {
 		log.Fatalf("While running server: %v", err)
 		return
@@ -73,4 +62,9 @@ func RunServer(port string) {
 	s := grpc.NewServer(grpc.CustomCodec(&PayloadCodec{}))
 	RegisterWorkerServer(s, &grpcWorker{})
 	s.Serve(ln)
+}
+
+// StoreStats returns stats for data store.
+func StoreStats() string {
+	return pstore.GetStats()
 }

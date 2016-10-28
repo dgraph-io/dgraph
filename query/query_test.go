@@ -43,7 +43,7 @@ import (
 
 func init() {
 	worker.ParseGroupConfig("")
-	worker.StartRaftNodes(1, "localhost:12345", "1:localhost:12345", "")
+	worker.StartRaftNodes()
 	// Wait for the node to become leader for group 0.
 	time.Sleep(5 * time.Second)
 }
@@ -77,11 +77,11 @@ func TestNewGraph(t *testing.T) {
 	ps, err := store.NewStore(dir)
 	require.NoError(t, err)
 
+	posting.Init(ps)
+
 	ctx := context.Background()
 	sg, err := newGraph(ctx, gq)
 	require.NoError(t, err)
-
-	worker.SetState(ps)
 
 	require.EqualValues(t,
 		[][]uint64{
@@ -102,7 +102,7 @@ func addEdgeToValue(t *testing.T, ps *store.Store, attr string, src uint64,
 		Attribute: attr,
 		Entity:    src,
 	}
-	l, _ := posting.GetOrCreate(posting.Key(src, attr), ps)
+	l, _ := posting.GetOrCreate(posting.Key(src, attr))
 	require.NoError(t,
 		l.AddMutationWithIndex(context.Background(), edge, posting.Set))
 }
@@ -117,7 +117,7 @@ func addEdgeToTypedValue(t *testing.T, ps *store.Store, attr string, src uint64,
 		Attribute: attr,
 		Entity:    src,
 	}
-	l, _ := posting.GetOrCreate(posting.Key(src, attr), ps)
+	l, _ := posting.GetOrCreate(posting.Key(src, attr))
 	require.NoError(t,
 		l.AddMutationWithIndex(context.Background(), edge, posting.Set))
 }
@@ -130,7 +130,7 @@ func addEdgeToUID(t *testing.T, ps *store.Store, attr string, src uint64, dst ui
 		Attribute: attr,
 		Entity:    src,
 	}
-	l, _ := posting.GetOrCreate(posting.Key(src, attr), ps)
+	l, _ := posting.GetOrCreate(posting.Key(src, attr))
 	require.NoError(t,
 		l.AddMutationWithIndex(context.Background(), edge, posting.Set))
 }
@@ -143,10 +143,8 @@ func populateGraph(t *testing.T) (string, *store.Store) {
 	ps, err := store.NewStore(dir)
 	require.NoError(t, err)
 
-	worker.SetState(ps)
-	posting.Init()
 	schema.ParseBytes([]byte(schemaStr))
-	posting.InitIndex(ps)
+	posting.Init(ps)
 
 	// So, user we're interested in has uid: 1.
 	// She has 5 friends: 23, 24, 25, 31, and 101
@@ -211,6 +209,7 @@ func processToJSON(t *testing.T, query string) map[string]interface{} {
 
 	return mp
 }
+
 func TestGetUID(t *testing.T) {
 	dir, _ := populateGraph(t)
 	defer os.RemoveAll(dir)

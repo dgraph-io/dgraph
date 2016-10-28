@@ -150,7 +150,7 @@ func processSort(qu []byte) ([]byte, error) {
 func intersectBucket(ts *task.Sort, attr string, token string,
 	scalar types.Scalar, offsets []int, count int, out [][]uint64) bool {
 	key := types.IndexKey(attr, token)
-	pl, decr := posting.GetOrCreate(key, ws.dataStore)
+	pl, decr := posting.GetOrCreate(key)
 	defer decr()
 
 	for i := 0; i < ts.UidmatrixLength(); i++ { // Iterate over UID lists.
@@ -231,7 +231,7 @@ func sortByValue(attr string, ul *algo.UIDList, scalar types.Scalar) error {
 
 // fetchValue gets the value for a given UID.
 func fetchValue(uid uint64, attr string, scalar types.Scalar) (types.Value, error) {
-	pl, decr := posting.GetOrCreate(posting.Key(uid, attr), ws.dataStore)
+	pl, decr := posting.GetOrCreate(posting.Key(uid, attr))
 	defer decr()
 
 	valBytes, vType, err := pl.Value()

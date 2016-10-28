@@ -1,13 +1,29 @@
 package worker
 
 import (
+	"flag"
 	"fmt"
 	"math"
 	"math/rand"
+	"os"
+	"strconv"
+	"strings"
 	"sync"
 
+	"github.com/dgraph-io/dgraph/raftwal"
+	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/x"
+)
+
+var (
+	groupConf = flag.String("conf", "", "Path to config file with group <-> predicate mapping.")
+	groupIds  = flag.String("groups", "0", "RAFT groups handled by this server.")
+	myAddr    = flag.String("my", "",
+		"addr:port of this server, so other Dgraph servers can talk to this.")
+	peer   = flag.String("peer", "", "Address of any peer.")
+	raftId = flag.Uint64("idx", 1, "RAFT ID that this server will use to join RAFT groups.")
+	walDir = flag.String("w", "w", "Directory to store raft write-ahead logs.")
 )
 
 type server struct {
@@ -22,6 +38,7 @@ type servers struct {
 
 type groupi struct {
 	sync.RWMutex
+	wal *raftwal.Wal
 	// local stores the groupId to node map for this server.
 	local map[uint32]*node
 	// all stores the groupId to servers map for the entire cluster.
@@ -39,19 +56,29 @@ func groups() *groupi {
 	return gr
 }
 
-func StartRaftNodes(raftId uint64, my, cluster, peer string) {
-	node := groups().InitNode(math.MaxUint32, raftId, my)
-	node.StartNode(cluster)
-	if len(peer) > 0 {
-		go node.JoinCluster(peer, ws)
+func StartRaftNodes() {
+	x.Check(ParseGroupConfig(*groupConf))
+	x.Checkf(os.MkdirAll(*walDir, 0700), "Error while creating WAL dir.")
+	wals, err := store.NewSyncStore(*walDir)
+	x.Checkf(err, "Error initializing wal store")
+	gr.wal = raftwal.Init(wals, *raftId)
+
+	my := *myAddr
+	if len(my) == 0 {
+		my = fmt.Sprintf("localhost:%d", *workerPort)
 	}
 
-	// Also create node for group zero, which would handle UID assignment.
-	node = groups().InitNode(0, raftId, my)
-	node.StartNode(cluster)
-	if len(peer) > 0 {
-		go node.JoinCluster(peer, ws)
+	for _, id := range strings.Split(*groupIds, ",") {
+		gid, err := strconv.ParseUint(id, 0, 32)
+		x.Checkf(err, "Unable to parse group id: %v", id)
+		node := groups().newNode(uint32(gid), *raftId, my)
+		go node.InitAndStartNode(gr.wal, *peer)
 	}
+	// TODO: Remove this group that every server is currently part of.
+	// Instead, only some servers should contain information about everyone,
+	// and everyone should ping those servers for updates.
+	node := groups().newNode(math.MaxUint32, *raftId, my)
+	go node.InitAndStartNode(gr.wal, *peer)
 }
 
 func (g *groupi) Node(groupId uint32) *node {
@@ -69,7 +96,7 @@ func (g *groupi) ServesGroup(groupId uint32) bool {
 	return has
 }
 
-func (g *groupi) InitNode(groupId uint32, nodeId uint64, publicAddr string) *node {
+func (g *groupi) newNode(groupId uint32, nodeId uint64, publicAddr string) *node {
 	g.Lock()
 	defer g.Unlock()
 	if g.local == nil {

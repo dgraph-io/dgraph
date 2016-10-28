@@ -45,34 +45,23 @@ import (
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/types"
-	"github.com/dgraph-io/dgraph/uid"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/soheilhy/cmux"
 )
 
 var (
-	postingDir  = flag.String("p", "p", "Directory to store posting lists")
-	mutationDir = flag.String("m", "m", "Directory to store mutations")
-	port        = flag.Int("port", 8080, "Port to run server on.")
-	numcpu      = flag.Int("cores", runtime.NumCPU(),
+	postingDir = flag.String("p", "p", "Directory to store posting lists.")
+	port       = flag.Int("port", 8080, "Port to run server on.")
+	numcpu     = flag.Int("cores", runtime.NumCPU(),
 		"Number of cores to be used by the process")
-	raftId     = flag.Uint64("idx", 1, "RAFT ID that this server will use to join RAFT groups.")
-	cluster    = flag.String("cluster", "", "List of peers in this format: ID1:URL1,ID2:URL2,...")
-	peer       = flag.String("peer", "", "Address of any peer.")
-	workerPort = flag.String("workerport", ":12345",
-		"Port used by worker for internal communication.")
 	nomutations = flag.Bool("nomutations", false, "Don't allow mutations on this server.")
 	shutdown    = flag.Bool("shutdown", false, "Allow client to send shutdown signal.")
 	tracing     = flag.Float64("trace", 0.5, "The ratio of queries to trace.")
+	schemaFile  = flag.String("schema", "", "Path to schema file")
 	cpuprofile  = flag.String("cpu", "", "write cpu profile to file")
 	memprofile  = flag.String("mem", "", "write memory profile to file")
-	schemaFile  = flag.String("schema", "", "Path to schema file")
-	rdbStats    = flag.Duration("rdbstats", 5*time.Minute, "Print out RocksDB stats every this many seconds. If <=0, we don't print anyting.")
-	groupConf   = flag.String("conf", "", "Path to config file with group <-> predicate mapping.")
 	closeCh     = make(chan struct{})
-
-	groupId uint64 = 0 // ALL
 )
 
 type mutationResult struct {
@@ -317,9 +306,7 @@ func mutationHandler(ctx context.Context, mu *gql.Mutation) (map[string]uint64, 
 // input value is of the correct type
 func validateTypes(nquads []rdf.NQuad) error {
 	for _, nquad := range nquads {
-		//TODO(Ashwin): Ensure global types so that muations can be type checked
 		if t := schema.TypeOf(nquad.Predicate); t != nil && t.IsScalar() {
-			// Currently, only scalar types are present
 			schemaType := t.(types.Scalar)
 			typeID := types.TypeID(nquad.ObjectType)
 			if typeID == types.BytesID {
@@ -336,7 +323,7 @@ func validateTypes(nquads []rdf.NQuad) error {
 				}
 				nquad.ObjectType = byte(schemaType.ID())
 			} else if typeID != schemaType.ID() {
-				v := types.ValueForType(schemaType.ID())
+				v := types.ValueForType(typeID)
 				err := v.UnmarshalBinary(nquad.ObjectValue)
 				if err != nil {
 					return err
@@ -455,6 +442,15 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write(js)
 }
 
+// storeStatsHandler outputs some basic stats for data store.
+func storeStatsHandler(w http.ResponseWriter, r *http.Request) {
+	addCorsHeaders(w)
+	w.Header().Set("Content-Type", "text/html")
+	w.Write([]byte("<pre>"))
+	w.Write([]byte(worker.StoreStats()))
+	w.Write([]byte("</pre>"))
+}
+
 // server is used to implement graph.DgraphServer
 type grpcServer struct{}
 
@@ -564,10 +560,6 @@ func checkFlagsAndInitDirs() {
 	if err != nil {
 		log.Fatalf("Error while creating the filepath for postings: %v", err)
 	}
-	err = os.MkdirAll(*mutationDir, 0700)
-	if err != nil {
-		log.Fatalf("Error while creating the filepath for mutations: %v", err)
-	}
 }
 
 func serveGRPC(l net.Listener) {
@@ -584,8 +576,8 @@ func serveHTTP(l net.Listener) {
 	}
 }
 
-func setupServer() {
-	go worker.RunServer(*workerPort) // For internal communication.
+func setupServer(che chan error) {
+	go worker.RunServer() // For internal communication.
 
 	l, err := net.Listen("tcp", fmt.Sprintf(":%d", *port))
 	if err != nil {
@@ -599,6 +591,7 @@ func setupServer() {
 	http2 := tcpm.Match(cmux.HTTP2())
 
 	http.HandleFunc("/query", queryHandler)
+	http.HandleFunc("/debug/store", storeStatsHandler)
 	// Initilize the servers.
 	go serveGRPC(grpcl)
 	go serveHTTP(httpl)
@@ -615,19 +608,7 @@ func setupServer() {
 	log.Println("Server listening on port", *port)
 
 	// Start cmux serving.
-	if err := tcpm.Serve(); !strings.Contains(err.Error(),
-		"use of closed network connection") {
-		log.Fatal(err)
-	}
-}
-
-func printStats(ps *store.Store) {
-	go func() {
-		for {
-			time.Sleep(*rdbStats)
-			fmt.Println(ps.GetStats())
-		}
-	}()
+	che <- tcpm.Serve()
 }
 
 func main() {
@@ -639,21 +620,8 @@ func main() {
 	x.Checkf(err, "Error initializing postings store")
 	defer ps.Close()
 
-	posting.InitIndex(ps)
-	posting.Init()
-	printStats(ps)
-	x.Check(worker.ParseGroupConfig(*groupConf))
-
-	worker.SetState(ps)
-	uid.Init(ps)
-
-	my := "localhost" + *workerPort
-
-	// TODO: Clean up the RAFT group creation code.
-
-	// First initiate the commmon group across the entire cluster. This group
-	// stores information about which server serves which groups.
-	go worker.StartRaftNodes(*raftId, my, *cluster, *peer)
+	posting.Init(ps)
+	worker.Init(ps)
 
 	if len(*schemaFile) > 0 {
 		err = schema.Parse(*schemaFile)
@@ -662,5 +630,12 @@ func main() {
 		}
 	}
 	// Setup external communication.
-	setupServer()
+	che := make(chan error, 1)
+	go setupServer(che)
+	go worker.StartRaftNodes()
+
+	if err := <-che; !strings.Contains(err.Error(),
+		"use of closed network connection") {
+		log.Fatal(err)
+	}
 }

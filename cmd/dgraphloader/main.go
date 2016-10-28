@@ -32,7 +32,6 @@ import (
 	"github.com/dgraph-io/dgraph/loader"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/store"
-	"github.com/dgraph-io/dgraph/uid"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -94,10 +93,7 @@ func main() {
 		glog.Fatalf("Fail to initialize dataStore: %v", err)
 	}
 	defer dataStore.Close()
-	posting.InitIndex(dataStore)
-
-	posting.Init()
-	uid.Init(dataStore)
+	posting.Init(dataStore)
 	loader.Init(dataStore)
 
 	files := strings.Split(*rdfGzips, ",")

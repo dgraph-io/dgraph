@@ -17,7 +17,7 @@ const (
 )
 
 // IndexKey creates a key for indexing the term for given attribute.
-func IndexKey(attr string, term string) []byte {
+func IndexKey(attr, term string) []byte {
 	buf := bytes.NewBuffer(make([]byte, 0, len(attr)+len(term)+2))
 	_, err := buf.WriteRune(indexRune)
 	x.Check(err)

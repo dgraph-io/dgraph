@@ -31,7 +31,6 @@ import (
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/store"
-	"github.com/dgraph-io/dgraph/uid"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -51,7 +50,7 @@ var q0 = `
 
 func init() {
 	worker.ParseGroupConfig("")
-	worker.StartRaftNodes(1, "localhost:12345", "1:localhost:12345", "")
+	worker.StartRaftNodes()
 	// Wait for the node to become leader for group 0.
 	time.Sleep(5 * time.Second)
 }
@@ -72,11 +71,8 @@ func prepare() (dir1, dir2 string, ps *store.Store, rerr error) {
 		return dir1, "", nil, err
 	}
 
-	posting.Init()
-	worker.SetState(ps)
-	uid.Init(ps)
+	posting.Init(ps)
 	loader.Init(ps)
-	posting.InitIndex(ps)
 
 	{
 		// Then load data.

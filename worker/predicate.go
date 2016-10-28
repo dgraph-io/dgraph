@@ -34,8 +34,8 @@ const (
 )
 
 // writeBatch performs a batch write of key value pairs to RocksDB.
-func (s *State) writeBatch(ctx context.Context, kv chan *task.KV, che chan error) {
-	wb := s.dataStore.NewWriteBatch()
+func writeBatch(ctx context.Context, kv chan *task.KV, che chan error) {
+	wb := pstore.NewWriteBatch()
 	batchSize := 0
 	batchWriteNum := 1
 	for i := range kv {
@@ -44,7 +44,7 @@ func (s *State) writeBatch(ctx context.Context, kv chan *task.KV, che chan error
 		// We write in batches of size 32MB.
 		if batchSize >= 32*MB {
 			x.Trace(ctx, "Doing batch write %d.", batchWriteNum)
-			if err := s.dataStore.WriteBatch(wb); err != nil {
+			if err := pstore.WriteBatch(wb); err != nil {
 				che <- err
 				return
 			}
@@ -61,14 +61,14 @@ func (s *State) writeBatch(ctx context.Context, kv chan *task.KV, che chan error
 	// write batch here.
 	if batchSize > 0 {
 		x.Trace(ctx, "Doing batch write %d.", batchWriteNum)
-		che <- s.dataStore.WriteBatch(wb)
+		che <- pstore.WriteBatch(wb)
 		return
 	}
 	che <- nil
 }
 
-func (s *State) generateGroup(group uint64) ([]byte, error) {
-	it := s.dataStore.NewIterator()
+func generateGroup(group uint64) ([]byte, error) {
+	it := pstore.NewIterator()
 	defer it.Close()
 
 	b := flatbuffers.NewBuilder(0)
@@ -110,9 +110,9 @@ func (s *State) generateGroup(group uint64) ([]byte, error) {
 
 // PopulateShard gets data for predicate pred from server with id serverId and
 // writes it to RocksDB.
-func (s *State) PopulateShard(ctx context.Context, pl *pool, group uint64) (int, error) {
+func populateShard(ctx context.Context, pl *pool, group uint64) (int, error) {
 	query := new(Payload)
-	data, err := s.generateGroup(group)
+	data, err := generateGroup(group)
 	if err != nil {
 		return 0, x.Wrapf(err, "While generating keys group")
 	}
@@ -133,7 +133,7 @@ func (s *State) PopulateShard(ctx context.Context, pl *pool, group uint64) (int,
 
 	kvs := make(chan *task.KV, 1000)
 	che := make(chan error)
-	go s.writeBatch(ctx, kvs, che)
+	go writeBatch(ctx, kvs, che)
 
 	// We can use count to check the number of posting lists returned in tests.
 	count := 0
@@ -187,7 +187,7 @@ func (w *grpcWorker) PredicateData(query *Payload, stream Worker_PredicateDataSe
 	// TODO(pawan) - Shift to CheckPoints once we figure out how to add them to the
 	// RocksDB library we are using.
 	// http://rocksdb.org/blog/2609/use-checkpoints-for-efficient-snapshots/
-	it := ws.dataStore.NewIterator()
+	it := pstore.NewIterator()
 	defer it.Close()
 
 	for it.SeekToFirst(); it.Valid(); it.Next() {
