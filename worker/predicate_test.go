@@ -58,7 +58,7 @@ func writePLs(t *testing.T, count int, vid uint64, ps *store.Store) {
 			Timestamp: time.Now(),
 		}
 		list.AddMutation(context.TODO(), de, posting.Set)
-		if merged, err := list.MergeIfDirty(context.TODO()); err != nil {
+		if merged, err := list.CommitIfDirty(context.TODO()); err != nil {
 			t.Errorf("While merging: %v", err)
 		} else if !merged {
 			t.Errorf("No merge happened")
@@ -98,10 +98,9 @@ func TestPopulateShard(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer ps.Close()
-	posting.Init()
+	posting.Init(ps)
 
 	writePLs(t, 100, 2, ps)
-	SetState(ps)
 
 	s, ln, err := newServer(":12345")
 	if err != nil {
@@ -122,8 +121,6 @@ func TestPopulateShard(t *testing.T) {
 	}
 	defer ps1.Close()
 
-	w1 := SetState(ps1)
-
 	s1, ln1, err := newServer(":12346")
 	if err != nil {
 		t.Fatal(err)
@@ -131,9 +128,8 @@ func TestPopulateShard(t *testing.T) {
 	defer s1.Stop()
 	go serve(s1, ln1)
 
-	SetState(ps)
 	pool := newPool("localhost:12345", 5)
-	_, err = w1.PopulateShard(context.Background(), pool, 0)
+	_, err = populateShard(context.Background(), pool, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -151,21 +147,27 @@ func TestPopulateShard(t *testing.T) {
 	if l.Length(0) != 1 {
 		t.Error("Unable to find added elements in posting list")
 	}
-	var p types.Posting
-	if ok := l.Get(&p, 0); !ok {
+	var found bool
+	l.Iterate(0, func(p *types.Posting) bool {
+		if p.Uid() != 2 {
+			t.Errorf("Expected 2. Got: %v", p.Uid())
+		}
+		if string(p.Source()) != "test" {
+			t.Errorf("Expected testing. Got: %v", string(p.Source()))
+		}
+		found = true
+		return false
+	})
+
+	if !found {
 		t.Error("Unable to retrieve posting at 1st iter")
 		t.Fail()
 	}
-	if p.Uid() != 2 {
-		t.Errorf("Expected 2. Got: %v", p.Uid())
-	}
-	if string(p.Source()) != "test" {
-		t.Errorf("Expected testing. Got: %v", string(p.Source()))
-	}
 
-	// We modify the ValueId in 50 PLs. So now PopulateShard should only return these after checking the Checksum.
+	// We modify the ValueId in 50 PLs. So now PopulateShard should only return
+	// these after checking the Checksum.
 	writePLs(t, 50, 5, ps)
-	count, err = w1.PopulateShard(context.Background(), pool, 0)
+	count, err = populateShard(context.Background(), pool, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -189,10 +191,9 @@ func TestJoinCluster(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer ps.Close()
-	posting.Init()
+	posting.Init(ps)
 
 	writePLs(t, 100, 2, ps)
-	SetState(ps)
 
 	s, ln, err := newServer(":12345")
 	if err != nil {
@@ -213,18 +214,12 @@ func TestJoinCluster(t *testing.T) {
 	}
 	defer ps1.Close()
 
-	SetState(ps1)
-
 	s1, ln1, err := newServer(":12346")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer s1.Stop()
 	go serve(s1, ln1)
-
-	// This state would be used by PredicateData
-	SetState(ps)
-	// n2.JoinCluster("1:localhost:12345", w1)
 
 	// Getting count on number of keys written to posting list store on instance 1.
 	count, k := checkShard(ps1)
@@ -248,11 +243,10 @@ func TestGenerateGroup(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer ps.Close()
-	posting.Init()
+	posting.Init(ps)
 
 	writePLs(t, 100, 2, ps)
-	SetState(ps)
-	data, err := ws.generateGroup(0)
+	data, err := generateGroup(0)
 	if err != nil {
 		t.Error(err)
 	}

@@ -24,7 +24,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -34,9 +33,6 @@ func TestAddToMutationArray(t *testing.T) {
 	dir, err := ioutil.TempDir("", "storetest_")
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
-
-	ps, err := store.NewStore(dir)
-	require.NoError(t, err)
 
 	mutationsMap := make(map[uint32]*x.Mutations)
 	edges := []x.DirectedEdge{}

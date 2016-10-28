@@ -36,8 +36,8 @@ type TokensTable struct {
 }
 
 var (
-	indexLog     trace.EventLog
-	TokensTables map[string]*TokensTable
+	indexLog trace.EventLog
+	tables   map[string]*TokensTable
 )
 
 func init() {
@@ -72,10 +72,10 @@ func initIndex() {
 		}(attr)
 	}
 
-	TokensTables = make(map[string]*TokensTable)
+	tables = make(map[string]*TokensTable)
 	for i := 0; i < len(indexedFields); i++ {
 		r := <-results
-		TokensTables[r.attr] = r.table
+		tables[r.attr] = r.table
 	}
 
 }
@@ -150,6 +150,7 @@ func addIndexMutation(ctx context.Context, attr, token string,
 		}
 		indexLog.Printf("DEL [%s] [%d] OldTerm [%s]",
 			edge.Attribute, edge.Entity, token)
+
 	} else {
 		_, err := plist.AddMutation(ctx, *edge, Set)
 		if err != nil {
@@ -211,9 +212,9 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t x.DirectedEdge, op by
 
 // GetTokensTable returns TokensTable for an indexed attribute.
 func GetTokensTable(attr string) *TokensTable {
-	x.Assertf(TokensTables != nil,
+	x.Assertf(tables != nil,
 		"TokensTable uninitialized. You need to call InitIndex.")
-	return TokensTables[attr]
+	return tables[attr]
 }
 
 // NewTokensTable returns a new TokensTable.
