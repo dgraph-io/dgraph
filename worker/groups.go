@@ -51,6 +51,8 @@ func groups() *groupi {
 	return gr
 }
 
+// StartRaftNodes will read the WAL dir, create the RAFT groups,
+// and either start or restart RAFT nodes.
 func StartRaftNodes(walDir string) {
 	gr = new(groupi)
 

@@ -3,7 +3,6 @@ package algo
 import (
 	"bytes"
 	"container/heap"
-	"log"
 	"sort"
 	"strconv"
 
@@ -206,7 +205,7 @@ func IntersectLists(lists []*UIDList) *UIDList {
 	for i := 0; i < shortList.Size(); i++ {
 		val := shortList.Get(i)
 		if i > 0 && val == shortList.Get(i-1) {
-			log.Fatal("We shouldn't have duplicates in UIDLists")
+			x.Assertf(false, "We shouldn't have duplicates in UIDLists")
 		}
 
 		var skip bool                     // Should we skip val in output?
