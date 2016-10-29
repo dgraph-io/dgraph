@@ -24,7 +24,9 @@ import (
 	"log"
 	"net"
 
+	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/store"
+	"github.com/dgraph-io/dgraph/x"
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
@@ -47,6 +49,37 @@ type grpcWorker struct{}
 // tcp server for this instance starts.
 func (w *grpcWorker) Hello(ctx context.Context, in *Payload) (*Payload, error) {
 	return &Payload{Data: []byte("world")}, nil
+}
+
+// InitiateBackup inititates the backup at the machine.
+func (w *grpcWorker) InitiateBackup(ctx context.Context, in *Payload) (*Payload, error) {
+	posting.Backup()
+	return &Payload{Data: []byte("Backup Initiated")}, nil
+}
+
+func BackupAll() {
+	allServers := groups().all
+	for _, v := range allServers {
+		for _, ser := range v.list {
+			if ser.Leader {
+				if ser.Addr == groups().Leader(groups().num) {
+					continue
+				}
+				addr := ser.Addr
+				pl := pools().get(addr)
+				conn, err := pl.Get()
+				x.Check(err)
+				defer pl.Put(conn)
+
+				ctx := context.Background()
+				query := &Payload{}
+				c := NewWorkerClient(conn)
+				_, err = c.InitiateBackup(ctx, query)
+				x.Check(err)
+			}
+		}
+	}
+	posting.Backup()
 }
 
 // runServer initializes a tcp server on port which listens to requests from
