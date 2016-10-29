@@ -16,16 +16,8 @@
 
 package geo
 
-import (
-	"encoding/binary"
-	"testing"
-
-	"github.com/stretchr/testify/require"
-	"github.com/twpayne/go-geom"
-	"github.com/twpayne/go-geom/encoding/wkb"
-
-	"github.com/dgraph-io/dgraph/types"
-)
+/*
+TODO: Enable these
 
 func TestQueryTokensPolygon(t *testing.T) {
 	p, err := loadPolygon("zip.json")
@@ -293,3 +285,4 @@ func TestMatchesFilterNearPoint(t *testing.T) {
 	})
 	require.False(t, qd.MatchesFilter(types.Geo{poly}))
 }
+*/

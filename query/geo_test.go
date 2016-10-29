@@ -20,14 +20,12 @@ import (
 	"context"
 	"encoding/json"
 	"io/ioutil"
-	"os"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 	"github.com/twpayne/go-geom"
 
-	"github.com/dgraph-io/dgraph/geo"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/store"
@@ -104,6 +102,9 @@ func runQuery(t *testing.T, sg *SubGraph) interface{} {
 	require.NoError(t, err)
 	return v
 }
+
+/*
+TODO: Re-enable these.
 
 func TestWithinPoint(t *testing.T) {
 	dir, ps := createTestStore(t)
@@ -268,3 +269,4 @@ func EqualArrays(t *testing.T, a1 []interface{}, a2 interface{}) {
 		require.Contains(t, a2, v)
 	}
 }
+*/

@@ -1132,6 +1132,10 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 	if len(sg.Params.Order) == 0 {
 		return nil
 	}
+	if sg.Params.Count == 0 {
+		// Only retrieve up to 1000 results by default.
+		sg.Params.Count = 1000
+	}
 
 	b := flatbuffers.NewBuilder(0)
 	ao := b.CreateString(string(sg.Params.Order))

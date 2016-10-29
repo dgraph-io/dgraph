@@ -107,7 +107,7 @@ func processSort(qu []byte) ([]byte, error) {
 		// offsets[i] is the offset for i-th posting list. It gets decremented as we
 		// iterate over buckets.
 		out[i].offset = int(ts.Offset())
-		out[i].ulist = new(algo.UIDList)
+		out[i].ulist = algo.NewUIDList([]uint64{})
 	}
 
 	// Iterate over every bucket in TokensTable.
