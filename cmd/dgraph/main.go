@@ -620,15 +620,17 @@ func main() {
 	x.Checkf(err, "Error initializing postings store")
 	defer ps.Close()
 
-	posting.Init(ps)
-	worker.Init(ps)
-
 	if len(*schemaFile) > 0 {
 		err = schema.Parse(*schemaFile)
 		if err != nil {
 			log.Fatalf("Error while loading schema:%v", err)
 		}
 	}
+	// Posting will initialize index which requires schema. Hence, initialize
+	// schema before calling posting.Init().
+	posting.Init(ps)
+	worker.Init(ps)
+
 	// Setup external communication.
 	che := make(chan error, 1)
 	go setupServer(che)

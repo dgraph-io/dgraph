@@ -129,7 +129,7 @@ func nearQueryKeys(pt s2.Point, d float64) ([]string, *QueryData, error) {
 	cu := indexCellsForCap(c)
 	// A near query is similar to within, where we are looking for points within the cap. So we need
 	// all objects whose parents match the cover of the cap.
-	return appendTokens(nil, cu, parentPrefix), &QueryData{cap: &c, qtype: QueryTypeNear}, nil
+	return toTokens(cu, parentPrefix), &QueryData{cap: &c, qtype: QueryTypeNear}, nil
 }
 
 // MatchesFilter applies the query filter to a geo value
