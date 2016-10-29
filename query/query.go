@@ -757,7 +757,7 @@ func createNilValuesList(count int) *task.ValueList {
 }
 
 // createTaskQuery generates the query buffer.
-func createTaskQuery(sg *SubGraph, uids *algo.UIDList, tokens [][]byte,
+func createTaskQuery(sg *SubGraph, uids *algo.UIDList, tokens []string,
 	intersect *algo.UIDList) []byte {
 	x.Assert(uids == nil || tokens == nil)
 
@@ -771,8 +771,8 @@ func createTaskQuery(sg *SubGraph, uids *algo.UIDList, tokens [][]byte,
 		vend = b.EndVector(uids.Size())
 	} else {
 		offsets := make([]flatbuffers.UOffsetT, 0, len(tokens))
-		for _, term := range tokens {
-			offsets = append(offsets, b.CreateByteVector(term))
+		for _, token := range tokens {
+			offsets = append(offsets, b.CreateString(token))
 		}
 		task.QueryStartTokensVector(b, len(tokens))
 		for i := len(tokens) - 1; i >= 0; i-- {
@@ -1134,7 +1134,7 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 	}
 
 	b := flatbuffers.NewBuilder(0)
-	ao := b.CreateString(string(sg.Params.Order))
+	ao := b.CreateString(sg.Params.Order)
 
 	// Add UID matrix.
 	uidOffsets := make([]flatbuffers.UOffsetT, 0, len(sg.Result))

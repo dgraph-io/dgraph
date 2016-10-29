@@ -36,18 +36,9 @@ import (
 
 func createTestStore(t *testing.T) (string, *store.Store) {
 	dir, err := ioutil.TempDir("", "storetest_")
-	if err != nil {
-		t.Error(err)
-		return "", nil
-	}
-
+	require.NoError(t, err)
 	ps, err := store.NewStore(dir)
-	if err != nil {
-		t.Error(err)
-		return "", nil
-	}
-
-	//	worker.SetState(ps)
+	require.NoError(t, err)
 
 	schema.ParseBytes([]byte(`scalar geometry:geo @index`))
 	posting.Init(ps)

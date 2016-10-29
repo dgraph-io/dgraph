@@ -54,7 +54,7 @@ type QueryData struct {
 }
 
 // QueryTokens returns the tokens to be used to look up the geo index for a given filter.
-func QueryTokens(f *Filter) ([][]byte, *QueryData, error) {
+func QueryTokens(f *Filter) ([]string, *QueryData, error) {
 	// Try to parse the data as geo type.
 	var g types.Geo
 	err := g.UnmarshalBinary(f.Data)
@@ -90,8 +90,8 @@ func QueryTokens(f *Filter) ([][]byte, *QueryData, error) {
 	case QueryTypeWithin:
 		// For a within query we only need to look at the objects whose parents match our cover.
 		// So we take our cover and prefix with the parentPrefix to look in the index.
-		keys := toTokens(cover, parentPrefix)
-		return keys, &QueryData{pt: pt, loop: l, qtype: f.Type}, nil
+		toks := toTokens(cover, parentPrefix)
+		return toks, &QueryData{pt: pt, loop: l, qtype: f.Type}, nil
 
 	case QueryTypeContains:
 		if l != nil {
@@ -111,10 +111,8 @@ func QueryTokens(f *Filter) ([][]byte, *QueryData, error) {
 		// An intersects query is essentially the union of contains and within. So we look at all
 		// the objects whose parents match our cover as well as all the objects whose cover matches
 		// our parents.
-		keys1 := toTokens(cover, parentPrefix)
-		keys2 := toTokens(parents, coverPrefix)
-		keys := append(keys1, keys2...)
-		return keys, &QueryData{pt: pt, loop: l, qtype: f.Type}, nil
+		toks := parentCoverTokens(parents, cover)
+		return toks, &QueryData{pt: pt, loop: l, qtype: f.Type}, nil
 
 	default:
 		return nil, nil, x.Errorf("Unknown query type")
@@ -122,7 +120,7 @@ func QueryTokens(f *Filter) ([][]byte, *QueryData, error) {
 }
 
 // nearQueryKeys creates a QueryKeys object for a near query.
-func nearQueryKeys(pt s2.Point, d float64) ([][]byte, *QueryData, error) {
+func nearQueryKeys(pt s2.Point, d float64) ([]string, *QueryData, error) {
 	if d <= 0 {
 		return nil, nil, x.Errorf("Invalid max distance specified for a near query")
 	}
@@ -131,7 +129,7 @@ func nearQueryKeys(pt s2.Point, d float64) ([][]byte, *QueryData, error) {
 	cu := indexCellsForCap(c)
 	// A near query is similar to within, where we are looking for points within the cap. So we need
 	// all objects whose parents match the cover of the cap.
-	return toTokens(cu, parentPrefix), &QueryData{cap: &c, qtype: QueryTypeNear}, nil
+	return appendTokens(nil, cu, parentPrefix), &QueryData{cap: &c, qtype: QueryTypeNear}, nil
 }
 
 // MatchesFilter applies the query filter to a geo value
