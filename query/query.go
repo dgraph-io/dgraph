@@ -137,7 +137,7 @@ type SubGraph struct {
 	Children  []*SubGraph
 	Params    params
 	Filter    *gql.FilterTree
-	GeoFilter *geo.Filter
+	GeoFilter *geo.Filter // TODO: We shouldn't have a special case for this.
 
 	Counts *task.CountList
 	Values *task.ValueList
@@ -1131,6 +1131,10 @@ func (sg *SubGraph) applyPagination(ctx context.Context) error {
 func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 	if len(sg.Params.Order) == 0 {
 		return nil
+	}
+	if sg.Params.Count == 0 {
+		// Only retrieve up to 1000 results by default.
+		sg.Params.Count = 1000
 	}
 
 	b := flatbuffers.NewBuilder(0)

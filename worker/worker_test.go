@@ -417,7 +417,7 @@ func TestProcessSort(t *testing.T) {
 		{10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21},
 		{10, 11, 12, 13, 14, 21},
 		{16, 17, 18, 19, 20, 21},
-	}, 0, 0)
+	}, 0, 1000)
 	result, err := processSort(sort)
 	require.NoError(t, err)
 	r := task.GetRootAsSortResult(result, 0)
@@ -442,7 +442,7 @@ func TestProcessSortOffset(t *testing.T) {
 		{16, 17, 18, 19, 20, 21}}
 
 	// Offset 1.
-	sort := newSort(input, 1, 0)
+	sort := newSort(input, 1, 1000)
 	result, err := processSort(sort)
 	require.NoError(t, err)
 	r := task.GetRootAsSortResult(result, 0)
@@ -453,7 +453,7 @@ func TestProcessSortOffset(t *testing.T) {
 		algo.ToUintsListForTest(algo.FromSortResult(r)))
 
 	// Offset 2.
-	sort = newSort(input, 2, 0)
+	sort = newSort(input, 2, 1000)
 	result, err = processSort(sort)
 	require.NoError(t, err)
 	r = task.GetRootAsSortResult(result, 0)
@@ -464,7 +464,7 @@ func TestProcessSortOffset(t *testing.T) {
 		algo.ToUintsListForTest(algo.FromSortResult(r)))
 
 	// Offset 5.
-	sort = newSort(input, 5, 0)
+	sort = newSort(input, 5, 1000)
 	result, err = processSort(sort)
 	require.NoError(t, err)
 	r = task.GetRootAsSortResult(result, 0)
@@ -475,7 +475,7 @@ func TestProcessSortOffset(t *testing.T) {
 		algo.ToUintsListForTest(algo.FromSortResult(r)))
 
 	// Offset 6.
-	sort = newSort(input, 6, 0)
+	sort = newSort(input, 6, 1000)
 	result, err = processSort(sort)
 	require.NoError(t, err)
 	r = task.GetRootAsSortResult(result, 0)
@@ -486,7 +486,7 @@ func TestProcessSortOffset(t *testing.T) {
 		algo.ToUintsListForTest(algo.FromSortResult(r)))
 
 	// Offset 7.
-	sort = newSort(input, 7, 0)
+	sort = newSort(input, 7, 1000)
 	result, err = processSort(sort)
 	require.NoError(t, err)
 	r = task.GetRootAsSortResult(result, 0)

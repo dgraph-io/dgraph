@@ -151,7 +151,7 @@ func TestIntersectSorted1(t *testing.T) {
 
 func TestIntersectSorted2(t *testing.T) {
 	input := []*UIDList{
-		newListFromTask([]uint64{1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3}),
+		newListFromTask([]uint64{1, 2, 3}),
 	}
 	require.Equal(t, toArray(IntersectLists(input)), []uint64{1, 2, 3})
 }

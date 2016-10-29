@@ -32,6 +32,7 @@ import (
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/types"
+	"github.com/dgraph-io/dgraph/worker"
 )
 
 func createTestStore(t *testing.T) (string, *store.Store) {
@@ -54,6 +55,11 @@ func addGeoData(t *testing.T, ps *store.Store, uid uint64, p geom.T, name string
 }
 
 func createTestData(t *testing.T, ps *store.Store) {
+	dir, err := ioutil.TempDir("", "wal")
+	require.NoError(t, err)
+	worker.ParseGroupConfig("")
+	worker.StartRaftNodes(dir)
+
 	p := geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{-122.082506, 37.4249518})
 	addGeoData(t, ps, 1, p, "Googleplex")
 

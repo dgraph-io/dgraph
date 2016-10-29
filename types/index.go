@@ -18,16 +18,11 @@ const (
 
 // IndexKey creates a key for indexing the term for given attribute.
 func IndexKey(attr, term string) []byte {
-	buf := bytes.NewBuffer(make([]byte, 0, len(attr)+len(term)+2))
-	_, err := buf.WriteRune(indexRune)
-	x.Check(err)
-	_, err = buf.WriteString(attr)
-	x.Check(err)
-	_, err = buf.WriteRune('|')
-	x.Check(err)
-	_, err = buf.WriteString(term)
-	x.Check(err)
-	return buf.Bytes()
+	buf := make([]byte, len(attr)+len(term)+1)
+	copy(buf[0:len(attr)], attr[:])
+	buf[len(attr)] = indexRune
+	copy(buf[len(attr)+1:], term[:])
+	return buf
 }
 
 // TokenFromKey returns token from an index key. This is used to build

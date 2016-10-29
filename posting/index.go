@@ -26,7 +26,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/geo"
 	"github.com/dgraph-io/dgraph/schema"
-	stype "github.com/dgraph-io/dgraph/types"
+	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -37,8 +37,8 @@ type TokensTable struct {
 }
 
 var (
-	indexLog     trace.EventLog
-	TokensTables map[string]*TokensTable
+	indexLog trace.EventLog
+	tables   map[string]*TokensTable
 )
 
 func init() {
@@ -62,56 +62,56 @@ func initIndex() {
 			table := &TokensTable{
 				key: make([]string, 0, 50),
 			}
-			prefix := stype.IndexKey(attr, "")
+			prefix := types.IndexKey(attr, "")
 
 			it := pstore.NewIterator()
 			defer it.Close()
 			for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
-				table.push(stype.TokenFromKey(it.Key().Data()))
+				table.push(types.TokenFromKey(it.Key().Data()))
 			}
 			results <- resultStruct{attr, table}
 		}(attr)
 	}
 
-	TokensTables = make(map[string]*TokensTable)
+	tables = make(map[string]*TokensTable)
 	for i := 0; i < len(indexedFields); i++ {
 		r := <-results
-		TokensTables[r.attr] = r.table
+		tables[r.attr] = r.table
 	}
 
 }
 
 // indexTokens return tokens, without the predicate prefix and index rune.
-func indexTokens(attr string, p stype.Value) ([]string, error) {
+func indexTokens(attr string, p types.Value) ([]string, error) {
 	schemaType := schema.TypeOf(attr)
 	if !schemaType.IsScalar() {
 		return nil, x.Errorf("Cannot index attribute %s of type object.", attr)
 	}
-	s := schemaType.(stype.Scalar)
+	s := schemaType.(types.Scalar)
 	schemaVal, err := s.Convert(p)
 	if err != nil {
 		return nil, err
 	}
 	switch v := schemaVal.(type) {
-	case *stype.Geo:
+	case *types.Geo:
 		return geo.IndexTokens(v)
-	case *stype.Int32:
-		return stype.IntIndex(attr, v)
-	case *stype.Float:
-		return stype.FloatIndex(attr, v)
-	case *stype.Date:
-		return stype.DateIndex(attr, v)
-	case *stype.Time:
-		return stype.TimeIndex(attr, v)
-	case *stype.String:
-		return stype.DefaultIndexKeys(attr, v), nil
+	case *types.Int32:
+		return types.IntIndex(attr, v)
+	case *types.Float:
+		return types.FloatIndex(attr, v)
+	case *types.Date:
+		return types.DateIndex(attr, v)
+	case *types.Time:
+		return types.TimeIndex(attr, v)
+	case *types.String:
+		return types.DefaultIndexKeys(attr, v), nil
 	}
 	return nil, nil
 }
 
 // addIndexMutations adds mutation(s) for a single term, to maintain index.
 func addIndexMutations(ctx context.Context, attr string, uid uint64,
-	p stype.Value, del bool) {
+	p types.Value, del bool) {
 	x.Assert(uid != 0)
 	tokens, err := indexTokens(attr, p)
 	if err != nil {
@@ -135,7 +135,7 @@ func addIndexMutations(ctx context.Context, attr string, uid uint64,
 
 func addIndexMutation(ctx context.Context, attr, token string,
 	tokensTable *TokensTable, edge *x.DirectedEdge, del bool) {
-	plist, decr := GetOrCreate(stype.IndexKey(attr, token))
+	plist, decr := GetOrCreate(types.IndexKey(attr, token))
 	defer decr()
 
 	x.Assertf(plist != nil, "plist is nil [%s] %d %s",
@@ -149,6 +149,7 @@ func addIndexMutation(ctx context.Context, attr, token string,
 		}
 		indexLog.Printf("DEL [%s] [%d] OldTerm [%s]",
 			edge.Attribute, edge.Entity, token)
+
 	} else {
 		_, err := plist.AddMutation(ctx, *edge, Set)
 		if err != nil {
@@ -190,14 +191,14 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t x.DirectedEdge, op by
 	if verr == nil && len(vbytes) > 0 {
 		delTerm := vbytes
 		delType := vtype
-		p := stype.ValueForType(stype.TypeID(delType))
+		p := types.ValueForType(types.TypeID(delType))
 		if err := p.UnmarshalBinary(delTerm); err != nil {
 			return err
 		}
 		addIndexMutations(ctx, t.Attribute, t.Entity, p, true)
 	}
 	if op == Set {
-		p := stype.ValueForType(stype.TypeID(t.ValueType))
+		p := types.ValueForType(types.TypeID(t.ValueType))
 		if err := p.UnmarshalBinary(t.Value); err != nil {
 			return err
 		}
@@ -208,9 +209,9 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t x.DirectedEdge, op by
 
 // GetTokensTable returns TokensTable for an indexed attribute.
 func GetTokensTable(attr string) *TokensTable {
-	x.Assertf(TokensTables != nil,
+	x.Assertf(tables != nil,
 		"TokensTable uninitialized. You need to call InitIndex.")
-	return TokensTables[attr]
+	return tables[attr]
 }
 
 // NewTokensTable returns a new TokensTable.

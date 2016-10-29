@@ -23,7 +23,6 @@ var (
 		"addr:port of this server, so other Dgraph servers can talk to this.")
 	peer   = flag.String("peer", "", "Address of any peer.")
 	raftId = flag.Uint64("idx", 1, "RAFT ID that this server will use to join RAFT groups.")
-	walDir = flag.String("w", "w", "Directory to store raft write-ahead logs.")
 )
 
 type server struct {
@@ -48,18 +47,18 @@ type groupi struct {
 
 var gr *groupi
 
-// package level init.
-func init() {
-	gr = new(groupi)
-}
 func groups() *groupi {
 	return gr
 }
 
-func StartRaftNodes() {
+// StartRaftNodes will read the WAL dir, create the RAFT groups,
+// and either start or restart RAFT nodes.
+func StartRaftNodes(walDir string) {
+	gr = new(groupi)
+
 	x.Check(ParseGroupConfig(*groupConf))
-	x.Checkf(os.MkdirAll(*walDir, 0700), "Error while creating WAL dir.")
-	wals, err := store.NewSyncStore(*walDir)
+	x.Checkf(os.MkdirAll(walDir, 0700), "Error while creating WAL dir.")
+	wals, err := store.NewSyncStore(walDir)
 	x.Checkf(err, "Error initializing wal store")
 	gr.wal = raftwal.Init(wals, *raftId)
 
