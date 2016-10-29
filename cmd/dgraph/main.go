@@ -52,6 +52,7 @@ import (
 
 var (
 	postingDir = flag.String("p", "p", "Directory to store posting lists.")
+	walDir     = flag.String("w", "w", "Directory to store raft write-ahead logs.")
 	port       = flag.Int("port", 8080, "Port to run server on.")
 	numcpu     = flag.Int("cores", runtime.NumCPU(),
 		"Number of cores to be used by the process")
@@ -634,7 +635,7 @@ func main() {
 	// Setup external communication.
 	che := make(chan error, 1)
 	go setupServer(che)
-	go worker.StartRaftNodes()
+	go worker.StartRaftNodes(*walDir)
 
 	if err := <-che; !strings.Contains(err.Error(),
 		"use of closed network connection") {

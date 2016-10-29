@@ -22,7 +22,6 @@ import (
 	"io/ioutil"
 	"os"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -48,13 +47,6 @@ var q0 = `
 	}
 `
 
-func init() {
-	worker.ParseGroupConfig("")
-	worker.StartRaftNodes()
-	// Wait for the node to become leader for group 0.
-	time.Sleep(5 * time.Second)
-}
-
 func prepare() (dir1, dir2 string, ps *store.Store, rerr error) {
 	var err error
 	dir1, err = ioutil.TempDir("", "storetest_")
@@ -66,13 +58,15 @@ func prepare() (dir1, dir2 string, ps *store.Store, rerr error) {
 		return "", "", nil, err
 	}
 
-	dir2, err = ioutil.TempDir("", "storemuts_")
+	dir2, err = ioutil.TempDir("", "wal_")
 	if err != nil {
 		return dir1, "", nil, err
 	}
 
 	posting.Init(ps)
 	loader.Init(ps)
+	worker.ParseGroupConfig("")
+	worker.StartRaftNodes(dir2)
 
 	{
 		// Then load data.

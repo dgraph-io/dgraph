@@ -41,13 +41,6 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-func init() {
-	worker.ParseGroupConfig("")
-	worker.StartRaftNodes()
-	// Wait for the node to become leader for group 0.
-	time.Sleep(5 * time.Second)
-}
-
 func childAttrs(sg *SubGraph) []string {
 	var out []string
 	for _, c := range sg.Children {
@@ -146,6 +139,11 @@ func populateGraph(t *testing.T) (string, *store.Store) {
 	schema.ParseBytes([]byte(schemaStr))
 	posting.Init(ps)
 	worker.Init(ps)
+
+	worker.ParseGroupConfig("")
+	dir2, err := ioutil.TempDir("", "wal_")
+	require.NoError(t, err)
+	worker.StartRaftNodes(dir2)
 
 	// So, user we're interested in has uid: 1.
 	// She has 5 friends: 23, 24, 25, 31, and 101
