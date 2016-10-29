@@ -92,6 +92,10 @@ func toRdf(item kv, ch chan []byte) {
 			x.Check(err)
 			_, err = buf2.WriteRune('"')
 			x.Check(err)
+			if p.ValType() != 0 {
+				_, err = buf2.WriteString(fmt.Sprintf("^^<xs:%s> ", typ.Type().Name))
+				x.Check(err)
+			}
 			_, err = buf2.WriteString(" .\n")
 			x.Check(err)
 			ch <- buf2.Bytes()
