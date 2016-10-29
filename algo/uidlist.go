@@ -65,6 +65,16 @@ func FromSortResult(r *task.SortResult) []*UIDList {
 	return out
 }
 
+func (u *UIDList) AddSlice(e []uint64) {
+	x.Assert(u.uints != nil)
+	u.uints = append(u.uints, e...)
+}
+
+func (u *UIDList) Add(e uint64) {
+	x.Assert(u.uints != nil)
+	u.uints = append(u.uints, e)
+}
+
 // Get returns the i-th element of UIDList.
 func (u *UIDList) Get(i int) uint64 {
 	if u.list != nil {

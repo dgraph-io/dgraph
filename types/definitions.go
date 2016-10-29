@@ -58,7 +58,7 @@ type Value interface {
 
 // String function to implement string interface
 func (s Scalar) String() string {
-	return fmt.Sprint(s.Name)
+	return s.Name
 }
 
 // ID function returns the storage identifier of this type
