@@ -18,12 +18,19 @@ package geo
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"os"
+	"testing"
 
+	"github.com/golang/geo/s2"
+	"github.com/stretchr/testify/require"
 	"github.com/twpayne/go-geom"
 	"github.com/twpayne/go-geom/encoding/geojson"
+	"github.com/twpayne/go-geom/encoding/wkb"
+
+	"github.com/dgraph-io/dgraph/types"
 )
 
 func loadPolygon(name string) (*geom.Polygon, error) {
@@ -47,9 +54,6 @@ func loadPolygon(name string) (*geom.Polygon, error) {
 	}
 	return nil, fmt.Errorf("Did not load a polygon from the json.")
 }
-
-/*
-TODO: Fix these
 
 func TestIndexCellsPoint(t *testing.T) {
 	p := geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{-122.082506, 37.4249518})
@@ -124,14 +128,9 @@ func TestKeyGeneratorPoint(t *testing.T) {
 	err = g.UnmarshalBinary(data)
 	require.NoError(t, err)
 
-	keys, err := IndexKeys(&g)
+	keys, err := IndexTokens(&g)
 	require.NoError(t, err)
 	require.Len(t, keys, MaxCellLevel-MinCellLevel+1+1) // +1 for the cover
-	for _, key := range keys {
-		if !strings.HasPrefix(string(key), ":_loc_|") {
-			t.Errorf("Expected prefix ':_loc_|' for key %s", key)
-		}
-	}
 }
 
 func TestKeyGeneratorPolygon(t *testing.T) {
@@ -143,14 +142,9 @@ func TestKeyGeneratorPolygon(t *testing.T) {
 	var g types.Geo
 	err = g.UnmarshalBinary(data)
 	require.NoError(t, err)
-	keys, err := IndexKeys(&g)
+	keys, err := IndexTokens(&g)
 	require.NoError(t, err)
 	require.Len(t, keys, 65)
-	for _, key := range keys {
-		if !strings.HasPrefix(string(key), ":_loc_|") {
-			t.Errorf("Expected prefix ':_loc_|' for key %s", key)
-		}
-	}
 }
 
 func testCover(file string, max int) {
@@ -240,7 +234,7 @@ func BenchmarkKeyGeneratorPoint(b *testing.B) {
 	g.UnmarshalBinary(data)
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		IndexKeys(&g)
+		IndexTokens(&g)
 	}
 }
 
@@ -257,7 +251,7 @@ func BenchmarkKeyGeneratorPolygon(b *testing.B) {
 	g.UnmarshalBinary(data)
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		IndexKeys(&g)
+		IndexTokens(&g)
 	}
 }
 
@@ -285,4 +279,3 @@ func benchToLoop(b *testing.B, file string) {
 		_, _ = loopFromPolygon(p)
 	}
 }
-*/

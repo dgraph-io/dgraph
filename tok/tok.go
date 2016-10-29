@@ -119,19 +119,16 @@ func (t *Tokenizer) Next() []byte {
 }
 
 // Tokens returns all tokens. If we fail, we return nil.
-func (t *Tokenizer) Tokens() [][]byte {
-	var tokens [][]byte
+func (t *Tokenizer) Tokens() []string {
+	out := make([]string, 0, 10)
 	for {
 		s := t.Next()
 		if s == nil {
 			break
 		}
-		// make a copy of the token as the underlying byte array gets overwritten
-		scopy := make([]byte, len(s))
-		copy(scopy, s)
-		tokens = append(tokens, scopy)
+		out = append(out, string(s))
 	}
-	return tokens
+	return out
 }
 
 // byteToChar returns *C.char from byte slice.
