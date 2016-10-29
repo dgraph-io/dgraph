@@ -38,7 +38,7 @@ func (sg *SubGraph) applyGeoQuery(ctx context.Context) error {
 	}
 
 	// Lookup the geo index first
-	uids, err := fetchIndexEntries(ctx, tokens)
+	uids, err := fetchIndexEntries(ctx, sg.Attr, tokens)
 	if err != nil {
 		return err
 	}
@@ -62,8 +62,8 @@ func (sg *SubGraph) applyGeoQuery(ctx context.Context) error {
 	return nil
 }
 
-func fetchIndexEntries(ctx context.Context, tokens [][]byte) (*algo.UIDList, error) {
-	sg := &SubGraph{Attr: geo.IndexAttr}
+func fetchIndexEntries(ctx context.Context, attr string, tokens []string) (*algo.UIDList, error) {
+	sg := &SubGraph{Attr: attr}
 	sgChan := make(chan error, 1)
 
 	// Query the index for the uids

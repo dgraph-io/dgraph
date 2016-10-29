@@ -17,7 +17,6 @@
 package geo
 
 import (
-	"bytes"
 	"log"
 
 	"github.com/golang/geo/s2"
@@ -27,26 +26,26 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-// IndexKeys returns the keys to be used in a geospatial index for the given geometry. If the
+func parentCoverTokens(parents s2.CellUnion, cover s2.CellUnion) []string {
+	// We index parents and cover using different prefix, that makes it more
+	// performant at query time to only look up parents/cover depending on what
+	// kind of query it is.
+	tokens := make([]string, 0, len(parents)+len(cover))
+	tokens = appendTokens(tokens, parents, parentPrefix)
+	tokens = appendTokens(tokens, cover, coverPrefix)
+	x.Assertf(len(tokens) == len(parents)+len(cover), "%d %d %d",
+		len(tokens), len(parents), len(cover))
+	return tokens
+}
+
+// IndexTokens returns the tokens to be used in a geospatial index for the given geometry. If the
 // geometry is not supported it returns an error.
-func IndexKeys(g *types.Geo) ([][]byte, error) {
+func IndexTokens(g *types.Geo) ([]string, error) {
 	parents, cover, err := indexCells(*g)
 	if err != nil {
 		return nil, err
 	}
-	keys := make([][]byte, len(parents)+len(cover))
-	// We index parents and cover using different prefix, that makes it more performant at query
-	// time to only look up parents/cover depending on what kind of query it is.
-	ptoks := toTokens(parents, parentPrefix)
-	ctoks := toTokens(cover, coverPrefix)
-	for i, v := range ptoks {
-		keys[i] = types.IndexKey(IndexAttr, string(v))
-	}
-	l := len(ptoks)
-	for i, v := range ctoks {
-		keys[i+l] = types.IndexKey(IndexAttr, string(v))
-	}
-	return keys, nil
+	return parentCoverTokens(parents, cover), nil
 }
 
 // IndexKeysForCap returns the keys to be used in a geospatial index for a Cap.
@@ -61,8 +60,6 @@ func indexCellsForCap(c s2.Cap) s2.CellUnion {
 }
 
 const (
-	// IndexAttr is the predicate used by geo indexes.
-	IndexAttr    = "_loc_"
 	parentPrefix = "p/"
 	coverPrefix  = "c/"
 )
@@ -72,7 +69,7 @@ const (
 // possible cells required to cover the region. This makes it easier at query time to query only the
 // parents or only the cover or both depending on whether it is a within, contains or intersects
 // query.
-func indexCells(g types.Geo) (parents s2.CellUnion, cover s2.CellUnion, err error) {
+func indexCells(g types.Geo) (parents, cover s2.CellUnion, err error) {
 	if g.Stride() != 2 {
 		return nil, nil, x.Errorf("Covering only available for 2D co-ordinates.")
 	}
@@ -212,15 +209,15 @@ func coverLoop(l *s2.Loop, minLevel int, maxLevel int, maxCells int) s2.CellUnio
 	return rc.Covering(loopRegion{l})
 }
 
-func toTokens(cu s2.CellUnion, prefix string) [][]byte {
-	toks := make([][]byte, len(cu))
-	for i, c := range cu {
-		var buf bytes.Buffer
-		_, err := buf.WriteString(prefix)
-		x.Check(err)
-		_, err = buf.WriteString(c.ToToken())
-		x.Check(err)
-		toks[i] = buf.Bytes()
+// appendTokens creates tokens with a certain prefix and append.
+func appendTokens(toks []string, cu s2.CellUnion, prefix string) []string {
+	for _, c := range cu {
+		toks = append(toks, prefix+c.ToToken())
 	}
 	return toks
+}
+
+// toTokens creates tokens with a certain prefix.
+func toTokens(cu s2.CellUnion, prefix string) []string {
+	return appendTokens(nil, cu, prefix)
 }

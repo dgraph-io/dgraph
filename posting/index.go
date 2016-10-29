@@ -24,6 +24,7 @@ import (
 
 	"golang.org/x/net/trace"
 
+	"github.com/dgraph-io/dgraph/geo"
 	"github.com/dgraph-io/dgraph/schema"
 	stype "github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
@@ -92,10 +93,8 @@ func indexTokens(attr string, p stype.Value) ([]string, error) {
 		return nil, err
 	}
 	switch v := schemaVal.(type) {
-	// TODO: Geo is currently disabled. We like tokenizers to not mess with
-	// keys. However, Geo seems to require that.
-	//	case *stype.Geo:
-	//		return geo.IndexTokens(v)
+	case *stype.Geo:
+		return geo.IndexTokens(v)
 	case *stype.Int32:
 		return stype.IntIndex(attr, v)
 	case *stype.Float:
@@ -167,7 +166,7 @@ func addIndexMutation(ctx context.Context, attr, token string,
 // AddMutationWithIndex is AddMutation with support for indexing.
 func (l *List) AddMutationWithIndex(ctx context.Context, t x.DirectedEdge, op byte) error {
 	x.Assertf(len(t.Attribute) > 0 && t.Attribute[0] != ':',
-		"[%s] [%d] [%s] %d %d\n", t.Attribute, t.Entity, string(t.Value), t.ValueId, op)
+		"[%s] [%d] [%v] %d %d\n", t.Attribute, t.Entity, t.Value, t.ValueId, op)
 
 	var vbytes []byte
 	var vtype byte
@@ -192,16 +191,14 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t x.DirectedEdge, op by
 		delTerm := vbytes
 		delType := vtype
 		p := stype.ValueForType(stype.TypeID(delType))
-		err = p.UnmarshalBinary(delTerm)
-		if err != nil {
+		if err := p.UnmarshalBinary(delTerm); err != nil {
 			return err
 		}
 		addIndexMutations(ctx, t.Attribute, t.Entity, p, true)
 	}
 	if op == Set {
 		p := stype.ValueForType(stype.TypeID(t.ValueType))
-		err := p.UnmarshalBinary(t.Value)
-		if err != nil {
+		if err := p.UnmarshalBinary(t.Value); err != nil {
 			return err
 		}
 		addIndexMutations(ctx, t.Attribute, t.Entity, p, false)
