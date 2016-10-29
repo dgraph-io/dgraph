@@ -22,6 +22,7 @@ import (
 	"io/ioutil"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -140,6 +141,7 @@ func TestAssignUid(t *testing.T) {
 	dir1, dir2, _, err := prepare()
 	require.NoError(t, err)
 	defer closeAll(dir1, dir2)
+	time.Sleep(5 * time.Second) // Wait for ME to become leader.
 
 	// Parse GQL into internal query representation.
 	_, mu, err := gql.Parse(qm)
