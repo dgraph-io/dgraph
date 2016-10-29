@@ -20,16 +20,19 @@ import (
 	"context"
 	"encoding/json"
 	"io/ioutil"
+	"os"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 	"github.com/twpayne/go-geom"
 
+	"github.com/dgraph-io/dgraph/geo"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/types"
+	"github.com/dgraph-io/dgraph/worker"
 )
 
 func createTestStore(t *testing.T) (string, *store.Store) {
@@ -52,6 +55,11 @@ func addGeoData(t *testing.T, ps *store.Store, uid uint64, p geom.T, name string
 }
 
 func createTestData(t *testing.T, ps *store.Store) {
+	dir, err := ioutil.TempDir("", "wal")
+	require.NoError(t, err)
+	worker.ParseGroupConfig("")
+	worker.StartRaftNodes(dir)
+
 	p := geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{-122.082506, 37.4249518})
 	addGeoData(t, ps, 1, p, "Googleplex")
 
@@ -93,9 +101,6 @@ func runQuery(t *testing.T, sg *SubGraph) interface{} {
 	require.NoError(t, err)
 	return v
 }
-
-/*
-TODO: Re-enable these.
 
 func TestWithinPoint(t *testing.T) {
 	dir, ps := createTestStore(t)
@@ -260,4 +265,3 @@ func EqualArrays(t *testing.T, a1 []interface{}, a2 interface{}) {
 		require.Contains(t, a2, v)
 	}
 }
-*/

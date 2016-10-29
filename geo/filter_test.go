@@ -20,10 +20,11 @@ import (
 	"encoding/binary"
 	"testing"
 
-	"github.com/dgraph-io/dgraph/types"
 	"github.com/stretchr/testify/require"
-	geom "github.com/twpayne/go-geom"
+	"github.com/twpayne/go-geom"
 	"github.com/twpayne/go-geom/encoding/wkb"
+
+	"github.com/dgraph-io/dgraph/types"
 )
 
 func TestQueryTokensPolygon(t *testing.T) {

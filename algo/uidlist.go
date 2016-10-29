@@ -65,11 +65,13 @@ func FromSortResult(r *task.SortResult) []*UIDList {
 	return out
 }
 
+// AddSlice adds a list of uint64s to UIDList.
 func (u *UIDList) AddSlice(e []uint64) {
 	x.Assert(u.uints != nil)
 	u.uints = append(u.uints, e...)
 }
 
+// Add adds a single uint64 to UIDList.
 func (u *UIDList) Add(e uint64) {
 	x.Assert(u.uints != nil)
 	u.uints = append(u.uints, e)
