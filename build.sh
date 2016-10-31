@@ -25,31 +25,30 @@ build_flags='-tags=embed -v'
 echo -e "\033[1;33mBuilding binaries\033[0m"
 echo "dgraph"
 cd $dgraph_cmd/dgraph && go build $build_flags .;
-echo "dgraphassigner"
-cd $dgraph_cmd/dgraphassigner && go build $build_flags .;
 echo "dgraphloader"
 cd $dgraph_cmd/dgraphloader && go build $build_flags .;
 echo "dgraphlist"
 cd $dgraph_cmd/dgraphlist && go build $build_flags .;
-echo "dgraphmerge"
-cd $dgraph_cmd/dgraphmerge && go build $build_flags .;
 
 echo -e "\n\033[1;33mCopying binaries to tmp folder\033[0m"
 cd $tmp_dir;
-cp $dgraph_cmd/dgraph/dgraph $dgraph_cmd/dgraphassigner/dgraphassigner $dgraph_cmd/dgraphlist/dgraphlist $dgraph_cmd/dgraphmerge/dgraphmerge $dgraph_cmd/dgraphloader/dgraphloader .;
+mkdir dgraph && pushd &> /dev/null dgraph;
+cp $dgraph_cmd/dgraph/dgraph $dgraph_cmd/dgraphlist/dgraphlist $dgraph_cmd/dgraphloader/dgraphloader .;
 
 platform="$(uname | tr '[:upper:]' '[:lower:]')"
 # Stripping the binaries.
 # Stripping binaries on Mac doesn't lead to much reduction in size and
 # instead gives an error.
 if [ "$platform" = "linux" ]; then
-  strip dgraph dgraphassigner dgraphloader dgraphmerge dgraphlist
+  strip dgraph dgraphloader dgraphlist
   echo -e "\n\033[1;34mSize of files after strip: $(du -sh)\033[0m"
 fi
 
 echo -e "\n\033[1;33mCreating tar file\033[0m"
 tar_file=dgraph-"$platform"-amd64-v$release_version
-tar -zcf $tar_file.tar.gz dgraph dgraphassigner dgraphlist dgraphmerge dgraphloader;
+popd &> /dev/null
+# Create a tar file with the contents of the dgraph folder (i.e the binaries)
+tar -zcf $tar_file.tar.gz dgraph;
 echo -e "\n\033[1;34mSize of tar file: $(du -sh $tar_file.tar.gz)\033[0m"
 
 echo -e "\n\033[1;33mMoving tarfile to original directory\033[0m"
