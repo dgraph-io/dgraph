@@ -752,6 +752,7 @@ func TestAfterUIDCountWithCommit(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, merged)
 
+	// Mutation layer starts afresh from here.
 	// Delete half of the edges.
 	for i := 100; i < 300; i += 2 {
 		edge.ValueId = uint64(i)

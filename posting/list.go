@@ -365,28 +365,32 @@ func (l *List) updateMutationLayer(mpost *types.Posting) bool {
 		x.Assert(pl.Postings(p, idx))
 		return findUid <= p.Uid()
 	})
+
+	var uidFound, psame bool
 	if pidx < pl.PostingsLength() {
 		p := new(types.Posting)
 		x.Assertf(pl.Postings(p, pidx), "Unable to parse Posting at index: %v", pidx)
+		uidFound = mpost.Uid() == p.Uid()
+		if uidFound {
+			psame = samePosting(p, mpost)
+		}
+	}
 
-		psame := samePosting(p, mpost)
-		if mpost.Op() == Set {
-			if psame {
-				return false
-			}
-			if mpost.Uid() != p.Uid() {
-				// Posting not found in PL. This is considered an Add operation.
-				mpost.MutateOp(Add)
-			}
-		} else {
-			if p.Uid() != mpost.Uid() {
-				// Couldn't find the posting in immutable layer. So, no need to Del.
-				return false
-			}
-			if !psame {
-				// Found the index in the immutable layer, but contents don't match.
-				return false
-			}
+	if mpost.Op() == Set {
+		if psame {
+			return false
+		}
+		if !uidFound {
+			// Posting not found in PL. This is considered an Add operation.
+			mpost.MutateOp(Add)
+		}
+	} else {
+		if !uidFound || !psame {
+			// uidFound=false: Couldn't find the posting in immutable layer. So,
+			// no need to Del.
+			// psam=false: Found the index in the immutable layer, but contents
+			// don't match. Do not Del.
+			return false
 		}
 	}
 
@@ -527,12 +531,12 @@ func (l *List) iterate(afterUid uint64, f func(obj *types.Posting) bool) {
 			cont = f(pp)
 			pidx++
 		case pp.Uid() == 0 || (mp.Uid() > 0 && mp.Uid() < pp.Uid()):
-			if mp.Op() == Set {
+			if mp.Op() == Set || mp.Op() == Add {
 				cont = f(mp)
 			}
 			midx++
 		case pp.Uid() == mp.Uid():
-			if mp.Op() == Set {
+			if mp.Op() == Set || mp.Op() == Add {
 				cont = f(mp)
 			}
 			pidx++
@@ -545,40 +549,31 @@ func (l *List) iterate(afterUid uint64, f func(obj *types.Posting) bool) {
 
 // Length iterates over the mutation layer and counts number of elements.
 func (l *List) Length(afterUid uint64) int {
-	count := 0
-	l.Iterate(afterUid, func(*types.Posting) bool {
-		count++
-		return true
-	})
+	pidx, midx := 0, 0
+	pl := l.getPostingList()
+
+	if afterUid > 0 {
+		pidx = sort.Search(pl.PostingsLength(), func(idx int) bool {
+			p := new(types.Posting)
+			x.Assert(pl.Postings(p, idx))
+			return afterUid < p.Uid()
+		})
+		midx = sort.Search(len(l.mlayer), func(idx int) bool {
+			mp := l.mlayer[idx]
+			return afterUid < mp.Uid()
+		})
+	}
+
+	count := pl.PostingsLength() - pidx
+	for _, p := range l.mlayer[midx:] {
+		if p.Op() == Add {
+			count++
+		} else if p.Op() == Del {
+			count--
+		}
+	}
 	return count
 }
-
-//func (l *List) Length(afterUid uint64) int {
-//	pidx, midx := 0, 0
-//	pl := l.getPostingList()
-
-//	if afterUid > 0 {
-//		pidx = sort.Search(pl.PostingsLength(), func(idx int) bool {
-//			p := new(types.Posting)
-//			x.Assert(pl.Postings(p, idx))
-//			return afterUid < p.Uid()
-//		})
-//		midx = sort.Search(len(l.mlayer), func(idx int) bool {
-//			mp := l.mlayer[idx]
-//			return afterUid < mp.Uid()
-//		})
-//	}
-
-//	count := pl.PostingsLength() - pidx
-//	for _, p := range l.mlayer[midx:] {
-//		if p.Op() == Add {
-//			count++
-//		} else if p.Op() == Del {
-//			count--
-//		}
-//	}
-//	return count
-//}
 
 func (l *List) CommitIfDirty(ctx context.Context) (committed bool, err error) {
 	if atomic.LoadInt64(&l.dirtyTs) == 0 {
