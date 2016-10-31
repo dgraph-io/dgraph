@@ -76,10 +76,6 @@ func TestKey(t *testing.T) {
 	}
 }
 
-func getLength(l *List) int {
-	return l.Length(0)
-}
-
 func TestAddMutation(t *testing.T) {
 	l := getNew()
 	key := Key(1, "name")
@@ -220,6 +216,7 @@ func TestAddMutation_jchiu1(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, merged)
 
+	require.EqualValues(t, 1, ol.Length(0))
 	checkValue(t, ol, "cars")
 
 	// Set value to newcars, but don't merge yet.
@@ -229,6 +226,7 @@ func TestAddMutation_jchiu1(t *testing.T) {
 		Timestamp: time.Now(),
 	}
 	addMutation(t, ol, edge, Set)
+	require.EqualValues(t, 1, ol.Length(0))
 	checkValue(t, ol, "newcars")
 
 	// Set value to someothercars, but don't merge yet.
@@ -238,6 +236,7 @@ func TestAddMutation_jchiu1(t *testing.T) {
 		Timestamp: time.Now(),
 	}
 	addMutation(t, ol, edge, Set)
+	require.EqualValues(t, 1, ol.Length(0))
 	checkValue(t, ol, "someothercars")
 
 	// Set value back to the committed value cars, but don't merge yet.
@@ -247,6 +246,7 @@ func TestAddMutation_jchiu1(t *testing.T) {
 		Timestamp: time.Now(),
 	}
 	addMutation(t, ol, edge, Set)
+	require.EqualValues(t, 1, ol.Length(0))
 	checkValue(t, ol, "cars")
 }
 
@@ -268,6 +268,7 @@ func TestAddMutation_jchiu2(t *testing.T) {
 		Timestamp: time.Now(),
 	}
 	addMutation(t, ol, edge, Del)
+	require.EqualValues(t, 0, ol.Length(0))
 
 	// Set value to newcars, but don't merge yet.
 	edge = x.DirectedEdge{
@@ -277,15 +278,17 @@ func TestAddMutation_jchiu2(t *testing.T) {
 	}
 	addMutation(t, ol, edge, Set)
 	require.NoError(t, err)
+	require.EqualValues(t, 1, ol.Length(0))
 	checkValue(t, ol, "newcars")
 
-	// Set value back to cars, but don't merge yet.
+	// Del a value cars. This operation should be ignored.
 	edge = x.DirectedEdge{
 		Value:     []byte("cars"),
 		Source:    "jchiu",
 		Timestamp: time.Now(),
 	}
 	addMutation(t, ol, edge, Del)
+	require.EqualValues(t, 1, ol.Length(0))
 	checkValue(t, ol, "newcars")
 }
 
@@ -307,10 +310,11 @@ func TestAddMutation_jchiu3(t *testing.T) {
 		Timestamp: time.Now(),
 	}
 	addMutation(t, ol, edge, Set)
-	require.Equal(t, 1, getLength(ol))
+	require.Equal(t, 1, ol.Length(0))
 	merged, err := ol.CommitIfDirty(context.Background())
 	require.NoError(t, err)
 	require.True(t, merged)
+	require.EqualValues(t, 1, ol.Length(0))
 	checkValue(t, ol, "cars")
 
 	// Del a value cars and but don't merge.
@@ -320,7 +324,7 @@ func TestAddMutation_jchiu3(t *testing.T) {
 		Timestamp: time.Now(),
 	}
 	addMutation(t, ol, edge, Del)
-	require.Equal(t, 0, getLength(ol))
+	require.Equal(t, 0, ol.Length(0))
 
 	// Set value to newcars, but don't merge yet.
 	edge = x.DirectedEdge{
@@ -329,6 +333,7 @@ func TestAddMutation_jchiu3(t *testing.T) {
 		Timestamp: time.Now(),
 	}
 	addMutation(t, ol, edge, Set)
+	require.EqualValues(t, 1, ol.Length(0))
 	checkValue(t, ol, "newcars")
 
 	// Del a value othercars and but don't merge.
@@ -338,7 +343,7 @@ func TestAddMutation_jchiu3(t *testing.T) {
 		Timestamp: time.Now(),
 	}
 	addMutation(t, ol, edge, Del)
-	require.NotEqual(t, 0, getLength(ol))
+	require.NotEqual(t, 0, ol.Length(0))
 	checkValue(t, ol, "newcars")
 
 	// Del a value newcars and but don't merge.
@@ -348,7 +353,7 @@ func TestAddMutation_jchiu3(t *testing.T) {
 		Timestamp: time.Now(),
 	}
 	addMutation(t, ol, edge, Del)
-	require.Equal(t, 0, getLength(ol))
+	require.Equal(t, 0, ol.Length(0))
 }
 
 func TestAddMutation_mrjn1(t *testing.T) {
@@ -389,7 +394,7 @@ func TestAddMutation_mrjn1(t *testing.T) {
 		Timestamp: time.Now(),
 	}
 	addMutation(t, ol, edge, Del)
-	require.Equal(t, 0, getLength(ol))
+	require.Equal(t, 0, ol.Length(0))
 
 	// Do this again to cover Del, muid == curUid, inPlist test case.
 	// Delete the previously committed value cars. But don't merge.
@@ -399,7 +404,7 @@ func TestAddMutation_mrjn1(t *testing.T) {
 		Timestamp: time.Now(),
 	}
 	addMutation(t, ol, edge, Del)
-	require.Equal(t, 0, getLength(ol))
+	require.Equal(t, 0, ol.Length(0))
 
 	// Set the value again to cover Set, muid == curUid, inPlist test case.
 	// Set the previously committed value cars. But don't merge.
@@ -418,7 +423,7 @@ func TestAddMutation_mrjn1(t *testing.T) {
 		Timestamp: time.Now(),
 	}
 	addMutation(t, ol, edge, Del)
-	require.Equal(t, 0, getLength(ol))
+	require.Equal(t, 0, ol.Length(0))
 }
 
 func TestAddMutation_checksum(t *testing.T) {
