@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting/types"
 	stype "github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
@@ -41,8 +42,12 @@ func Backup(gid uint32) error {
 		if bytes.HasPrefix(it.Key().Data(), []byte(":")) || bytes.HasPrefix(it.Key().Data(), []byte("_uid_")) {
 			continue
 		}
-		k := make([]byte, len(it.Key().Data()))
-		copy(k, it.Key().Data())
+		pred, uid := splitKey(it.Key().Data())
+		if group.BelongsTo(pred) != gid {
+			continue
+		}
+
+		k := []byte(fmt.Sprintf("<_uid_:%x> <%s> ", uid, pred))
 		v := make([]byte, len(it.Value().Data()))
 		copy(v, it.Value().Data())
 		chkv <- kv{
@@ -62,8 +67,7 @@ func Backup(gid uint32) error {
 
 func toRDF(item kv, ch chan []byte) {
 	p := new(types.Posting)
-	pred, srcUID := splitKey(item.key)
-	pre := []byte(fmt.Sprintf("<_uid_:%x> <%s> ", srcUID, pred))
+	pre := item.key
 	buf := bytes.NewBuffer(make([]byte, 0, 100))
 
 	pl := types.GetRootAsPostingList(item.value, 0)

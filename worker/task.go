@@ -21,6 +21,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/dgraph/algo"
+	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/types"
@@ -33,7 +34,7 @@ import (
 func ProcessTaskOverNetwork(ctx context.Context, qu []byte) (result []byte, rerr error) {
 	q := task.GetRootAsQuery(qu, 0)
 	attr := string(q.Attr())
-	gid := BelongsTo(attr)
+	gid := group.BelongsTo(attr)
 	x.Trace(ctx, "attr: %v groupId: %v", attr, gid)
 
 	if groups().ServesGroup(gid) {
@@ -179,7 +180,7 @@ func (w *grpcWorker) ServeTask(ctx context.Context, query *Payload) (*Payload, e
 	}
 
 	q := task.GetRootAsQuery(query.Data, 0)
-	gid := BelongsTo(string(q.Attr()))
+	gid := group.BelongsTo(string(q.Attr()))
 	x.Trace(ctx, "Attribute: %q NumUids: %v groupId: %v ServeTask", q.Attr(), q.UidsLength(), gid)
 
 	reply := new(Payload)

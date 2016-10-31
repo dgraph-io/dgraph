@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/task"
@@ -57,7 +58,7 @@ func groups() *groupi {
 }
 
 func StartRaftNodes() {
-	x.Check(ParseGroupConfig(*groupConf))
+	x.Check(group.ParseGroupConfig(*groupConf))
 	x.Checkf(os.MkdirAll(*walDir, 0700), "Error while creating WAL dir.")
 	wals, err := store.NewSyncStore(*walDir)
 	x.Checkf(err, "Error initializing wal store")
