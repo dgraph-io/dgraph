@@ -717,6 +717,93 @@ func TestAfterUIDCount(t *testing.T) {
 	require.EqualValues(t, 0, ol.Length(300))
 }
 
+func TestAfterUIDCountWithCommit(t *testing.T) {
+	ol := getNew()
+	key := Key(10, "value")
+	dir, err := ioutil.TempDir("", "storetest_")
+	require.NoError(t, err)
+	defer os.RemoveAll(dir)
+
+	ps, err := store.NewStore(dir)
+	require.NoError(t, err)
+	ol.init(key, ps)
+
+	// Set value to cars and merge to RocksDB.
+	edge := x.DirectedEdge{
+		Source:    "jchiu",
+		Timestamp: time.Now(),
+	}
+
+	for i := 100; i < 300; i++ {
+		edge.ValueId = uint64(i)
+		addMutation(t, ol, edge, Set)
+	}
+	require.EqualValues(t, 200, ol.Length(0))
+	require.EqualValues(t, 100, ol.Length(199))
+	require.EqualValues(t, 0, ol.Length(300))
+
+	// Commit to database.
+	merged, err := ol.CommitIfDirty(context.Background())
+	require.NoError(t, err)
+	require.True(t, merged)
+
+	// Delete half of the edges.
+	for i := 100; i < 300; i += 2 {
+		edge.ValueId = uint64(i)
+		addMutation(t, ol, edge, Del)
+	}
+	require.EqualValues(t, 100, ol.Length(0))
+	require.EqualValues(t, 50, ol.Length(199))
+	require.EqualValues(t, 0, ol.Length(300))
+
+	// Try to delete half of the edges. Redundant deletes.
+	for i := 100; i < 300; i += 2 {
+		edge.ValueId = uint64(i)
+		addMutation(t, ol, edge, Del)
+	}
+	require.EqualValues(t, 100, ol.Length(0))
+	require.EqualValues(t, 50, ol.Length(199))
+	require.EqualValues(t, 0, ol.Length(300))
+
+	// Delete everything.
+	for i := 100; i < 300; i++ {
+		edge.ValueId = uint64(i)
+		addMutation(t, ol, edge, Del)
+	}
+	require.EqualValues(t, 0, ol.Length(0))
+	require.EqualValues(t, 0, ol.Length(199))
+	require.EqualValues(t, 0, ol.Length(300))
+
+	// Insert 1/4 of the edges.
+	for i := 100; i < 300; i += 4 {
+		edge.ValueId = uint64(i)
+		addMutation(t, ol, edge, Set)
+	}
+	require.EqualValues(t, 50, ol.Length(0))
+	require.EqualValues(t, 25, ol.Length(199))
+	require.EqualValues(t, 0, ol.Length(300))
+
+	// Insert 1/4 of the edges.
+	edge.Timestamp = time.Now() // Force an update of the edge.
+	edge.Source = "somethingelse"
+	for i := 100; i < 300; i += 4 {
+		edge.ValueId = uint64(i)
+		addMutation(t, ol, edge, Set)
+	}
+	require.EqualValues(t, 50, ol.Length(0)) // Expect no change.
+	require.EqualValues(t, 25, ol.Length(199))
+	require.EqualValues(t, 0, ol.Length(300))
+
+	// Insert 1/4 of the edges.
+	for i := 103; i < 300; i += 4 {
+		edge.ValueId = uint64(i)
+		addMutation(t, ol, edge, Set)
+	}
+	require.EqualValues(t, 100, ol.Length(0))
+	require.EqualValues(t, 50, ol.Length(199))
+	require.EqualValues(t, 0, ol.Length(300))
+}
+
 func TestMain(m *testing.M) {
 	x.Init()
 	os.Exit(m.Run())
