@@ -44,9 +44,9 @@ var E_TMP_ERROR = fmt.Errorf("Temporary Error. Please retry.")
 var ErrNoValue = fmt.Errorf("No value found")
 
 const (
-	Set byte = 0x01 // Contributes 0 to count.
-	Del byte = 0x02 // Contributes -1 to count.
-	Add byte = 0x03 // Contributes 1 to count.
+	Set byte = 0x01 // Contributes 0 in Length().
+	Del byte = 0x02 // Contributes -1 in Length().
+	Add byte = 0x03 // Contributes 1 in Length().
 )
 
 type buffer struct {
