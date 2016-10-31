@@ -9,7 +9,6 @@ import (
 	"os"
 	"strconv"
 	"sync"
-	"time"
 
 	"github.com/dgraph-io/dgraph/posting/types"
 	stype "github.com/dgraph-io/dgraph/types"
@@ -23,7 +22,7 @@ type kv struct {
 }
 
 // Backup creates a backup of data by exporting it as an RDF gzip.
-func Backup() error {
+func Backup(gNum uint32) error {
 	ch := make(chan []byte, 10000)
 	chkv := make(chan kv, 1000)
 	// Remove.
@@ -36,7 +35,7 @@ func Backup() error {
 	for i := 0; i < numRoutines; i++ {
 		go convertToRdf(&wg, chkv, ch)
 	}
-	go writeToFile(ch)
+	go writeToFile(strconv.Itoa(int(gNum)), ch)
 
 	for it.SeekToFirst(); it.Valid(); it.Next() {
 		k := make([]byte, len(it.Key().Data()))
@@ -126,8 +125,8 @@ func convertToRdf(wg *sync.WaitGroup, chkv chan kv, ch chan []byte) {
 	wg.Done()
 }
 
-func writeToFile(ch chan []byte) {
-	file := fmt.Sprintf("backup/ddata-%s.gz", time.Now().String())
+func writeToFile(str string, ch chan []byte) {
+	file := fmt.Sprintf("backup/ddata-%s.gz", str)
 	err := os.MkdirAll("backup", 0700)
 	f, err := os.Create(file)
 	defer f.Close()

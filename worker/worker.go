@@ -53,7 +53,7 @@ func (w *grpcWorker) Hello(ctx context.Context, in *Payload) (*Payload, error) {
 
 // InitiateBackup inititates the backup at the machine.
 func (w *grpcWorker) InitiateBackup(ctx context.Context, in *Payload) (*Payload, error) {
-	posting.Backup()
+	posting.Backup(groups().num)
 	return &Payload{Data: []byte("Backup Initiated")}, nil
 }
 
@@ -79,7 +79,7 @@ func BackupAll() {
 			}
 		}
 	}
-	posting.Backup()
+	posting.Backup(groups().num)
 }
 
 // runServer initializes a tcp server on port which listens to requests from
