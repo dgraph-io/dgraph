@@ -44,9 +44,12 @@ var E_TMP_ERROR = fmt.Errorf("Temporary Error. Please retry.")
 var ErrNoValue = fmt.Errorf("No value found")
 
 const (
-	Set byte = 0x01 // Contributes 0 in Length().
-	Del byte = 0x02 // Contributes -1 in Length().
-	Add byte = 0x03 // Contributes 1 in Length().
+	// Set means overwrite in mutation layer. It contributes 0 in Length.
+	Set byte = 0x01
+	// Del means delete in mutation layer. It contributes -1 in Length.
+	Del byte = 0x02
+	// Add means add new element in mutation layer. It contributes 1 in Length.
+	Add byte = 0x03
 )
 
 type buffer struct {
@@ -307,6 +310,7 @@ func (l *List) updateMutationLayer(mpost *types.Posting) bool {
 		return findUid <= mp.Uid()
 	})
 
+	// This block handles the case where mpost.UID is found in mutation layer.
 	if midx < len(l.mlayer) && l.mlayer[midx].Uid() == mpost.Uid() {
 		// mp is the posting found in mlayer.
 		oldPost := l.mlayer[midx]
@@ -316,7 +320,9 @@ func (l *List) updateMutationLayer(mpost *types.Posting) bool {
 		msame := samePosting(oldPost, mpost)
 		if msame && ((mpost.Op() == Del) == (oldPost.Op() == Del)) {
 			// This posting has similar content as what is found in mlayer. If the
-			// ops are similar, then we do nothing.
+			// ops are similar, then we do nothing. Note that Add and Set are
+			// considered similar, and the second clause is true also when
+			// mpost.Op==Add and oldPost.Op==Set.
 			return false
 		}
 
@@ -350,8 +356,8 @@ func (l *List) updateMutationLayer(mpost *types.Posting) bool {
 	// Didn't find it in mutable layer. Now check the immutable layer.
 	pl := l.getPostingList()
 	pidx := sort.Search(pl.PostingsLength(), func(idx int) bool {
-		p := new(types.Posting)
-		x.Assert(pl.Postings(p, idx))
+		var p types.Posting
+		x.Assert(pl.Postings(&p, idx))
 		return findUid <= p.Uid()
 	})
 
