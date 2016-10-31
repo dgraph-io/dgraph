@@ -53,33 +53,57 @@ func (w *grpcWorker) Hello(ctx context.Context, in *Payload) (*Payload, error) {
 
 // InitiateBackup inititates the backup at the machine.
 func (w *grpcWorker) InitiateBackup(ctx context.Context, in *Payload) (*Payload, error) {
-	posting.Backup(groups().num)
+	err := posting.Backup(groups().num)
+	if err != nil {
+		return &Payload{Data: []byte("Backup Failed")}, err
+	}
 	return &Payload{Data: []byte("Backup Initiated")}, nil
 }
 
-func BackupAll() {
+// Creates backup of all nodes in cluster by initiaing backups in all the master
+// nodes.
+func BackupAll() error {
 	allServers := groups().all
+	errChan := make(chan error, 1000)
+	count := 0
 	for _, v := range allServers {
 		for _, ser := range v.list {
-			if ser.Leader {
-				if ser.Addr == groups().Leader(groups().num) {
-					continue
-				}
-				addr := ser.Addr
-				pl := pools().get(addr)
-				conn, err := pl.Get()
-				x.Check(err)
-				defer pl.Put(conn)
+			// Only send backup request to master nodes.
+			if !ser.Leader || ser.Addr == groups().Leader(groups().num) {
+				continue
+			}
+			count++
+			addr := ser.Addr
+			pl := pools().get(addr)
+			conn, err := pl.Get()
+			x.Check(err)
 
+			go func() {
 				ctx := context.Background()
 				query := &Payload{}
 				c := NewWorkerClient(conn)
 				_, err = c.InitiateBackup(ctx, query)
-				x.Check(err)
+				errChan <- err
+				pl.Put(conn)
+			}()
+		}
+	}
+
+	go func() {
+		err := posting.Backup(groups().num)
+		errChan <- err
+	}()
+	count++
+
+	for i := 0; i < count; i++ {
+		select {
+		case err := <-errChan:
+			if err != nil {
+				return err
 			}
 		}
 	}
-	posting.Backup(groups().num)
+	return nil
 }
 
 // runServer initializes a tcp server on port which listens to requests from

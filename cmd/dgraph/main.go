@@ -377,7 +377,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 
 	if *backup && string(q) == "BACKUP" {
 		worker.BackupAll()
-		x.SetStatus(w, x.ErrorOk, "Backup process has been initiated.")
+		x.SetStatus(w, x.ErrorOk, "Backup completed.")
 		return
 	}
 
