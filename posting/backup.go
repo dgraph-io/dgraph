@@ -3,11 +3,13 @@ package posting
 import (
 	"bufio"
 	"bytes"
+	"compress/gzip"
 	"fmt"
 	"math"
 	"os"
 	"strconv"
 	"sync"
+	"time"
 
 	"github.com/dgraph-io/dgraph/posting/types"
 	stype "github.com/dgraph-io/dgraph/types"
@@ -125,17 +127,18 @@ func convertToRdf(wg *sync.WaitGroup, chkv chan kv, ch chan []byte) {
 }
 
 func writeToFile(ch chan []byte) {
-	file := fmt.Sprintf("backup/data") //, time.Now().String())
+	file := fmt.Sprintf("backup/ddata-%s.gz", time.Now().String())
 	err := os.MkdirAll("backup", 0700)
 	f, err := os.Create(file)
 	defer f.Close()
 	x.Check(err)
-	//gw := gzip.NewWriter(f)
 	w := bufio.NewWriter(f)
+	gw := gzip.NewWriter(w)
 
 	for item := range ch {
-		w.Write(item)
+		gw.Write(item)
 	}
+	gw.Flush()
+	gw.Close()
 	w.Flush()
-	//gw.Close()
 }
