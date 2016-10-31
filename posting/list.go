@@ -531,7 +531,7 @@ func (l *List) iterate(afterUid uint64, f func(obj *types.Posting) bool) {
 	}
 }
 
-// Length iterates over the posting list and counts the number of elements. This is NOT CHEAP. So, use it sparingly.
+// Length iterates over the mutation layer and counts number of elements.
 func (l *List) Length(afterUid uint64) int {
 	pidx, midx := 0, 0
 	pl := l.getPostingList()
