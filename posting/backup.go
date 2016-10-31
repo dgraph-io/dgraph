@@ -41,7 +41,8 @@ func Backup(gid uint32) error {
 	go writeToFile(strconv.Itoa(int(gid)), ch, errChan)
 
 	for it.SeekToFirst(); it.Valid(); it.Next() {
-		if bytes.HasPrefix(it.Key().Data(), []byte(":")) || bytes.HasPrefix(it.Key().Data(), []byte("_uid_")) {
+		if bytes.HasPrefix(it.Key().Data(), []byte(":")) ||
+			bytes.HasPrefix(it.Key().Data(), []byte("_uid_")) {
 			continue
 		}
 		pred, uid := splitKey(it.Key().Data())
@@ -127,7 +128,8 @@ func convertToRdf(wg *sync.WaitGroup, chkv chan kv, ch chan []byte) {
 }
 
 func writeToFile(str string, ch chan []byte, errChan chan error) {
-	file := fmt.Sprintf("backup/ddata-%s_%s.gz", str, time.Now().Format("2006-01-02-15-04"))
+	file := fmt.Sprintf("backup/ddata-%s_%s.gz", str,
+		time.Now().Format("2006-01-02-15-04"))
 	err := os.MkdirAll("backup", 0700)
 	if err != nil {
 		errChan <- err
