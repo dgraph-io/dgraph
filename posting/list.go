@@ -515,12 +515,12 @@ func (l *List) iterate(afterUid uint64, f func(obj *types.Posting) bool) {
 			cont = f(pp)
 			pidx++
 		case pp.Uid() == 0 || (mp.Uid() > 0 && mp.Uid() < pp.Uid()):
-			if mp.Op() == Set || mp.Op() == Add {
+			if mp.Op() != Del {
 				cont = f(mp)
 			}
 			midx++
 		case pp.Uid() == mp.Uid():
-			if mp.Op() == Set || mp.Op() == Add {
+			if mp.Op() != Del {
 				cont = f(mp)
 			}
 			pidx++
