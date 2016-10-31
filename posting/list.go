@@ -138,13 +138,13 @@ func Key(uid uint64, attr string) []byte {
 	return buf
 }
 
-func splitKey(key []byte) (string, string) {
+func splitKey(key []byte) (string, uint64) {
 	sKeys := bytes.Split(key, []byte("|"))
 	x.Assert(len(sKeys) == 2)
 	b := sKeys[0]
 	rest := sKeys[1]
 	uid := binary.BigEndian.Uint64(rest)
-	return string(b), strconv.FormatUint(uid, 16)
+	return string(b), uid
 }
 
 func debugKey(key []byte) string {
