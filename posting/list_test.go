@@ -722,6 +722,43 @@ func TestAfterUIDCount(t *testing.T) {
 	require.EqualValues(t, 0, ol.Length(300))
 }
 
+func TestAfterUIDCount2(t *testing.T) {
+	ol := getNew()
+	key := Key(10, "value")
+	dir, err := ioutil.TempDir("", "storetest_")
+	require.NoError(t, err)
+	defer os.RemoveAll(dir)
+
+	ps, err := store.NewStore(dir)
+	require.NoError(t, err)
+	ol.init(key, ps)
+
+	// Set value to cars and merge to RocksDB.
+	edge := x.DirectedEdge{
+		Source:    "jchiu",
+		Timestamp: time.Now(),
+	}
+
+	for i := 100; i < 300; i++ {
+		edge.ValueId = uint64(i)
+		addMutation(t, ol, edge, Set)
+	}
+	require.EqualValues(t, 200, ol.Length(0))
+	require.EqualValues(t, 100, ol.Length(199))
+	require.EqualValues(t, 0, ol.Length(300))
+
+	// Re-insert 1/4 of the edges. Counts should not change.
+	edge.Timestamp = time.Now() // Force an update of the edge.
+	edge.Source = "somethingelse"
+	for i := 100; i < 300; i += 4 {
+		edge.ValueId = uint64(i)
+		addMutation(t, ol, edge, Set)
+	}
+	require.EqualValues(t, 200, ol.Length(0))
+	require.EqualValues(t, 100, ol.Length(199))
+	require.EqualValues(t, 0, ol.Length(300))
+}
+
 func TestAfterUIDCountWithCommit(t *testing.T) {
 	ol := getNew()
 	key := Key(10, "value")

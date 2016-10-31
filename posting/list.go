@@ -297,17 +297,6 @@ func (l *List) SetForDeletion() {
 	atomic.StoreInt32(&l.deleteMe, 1)
 }
 
-// similarOp treats Add and Set as the same operator, and compare with Del.
-func similarOp(op1, op2 byte) bool {
-	if op1 == Add {
-		op1 = Set
-	}
-	if op2 == Add {
-		op2 = Set
-	}
-	return op1 == op2
-}
-
 func (l *List) updateMutationLayer(mpost *types.Posting) bool {
 	x.Assert(mpost.Op() == Set || mpost.Op() == Del)
 	findUid := mpost.Uid()
@@ -325,7 +314,7 @@ func (l *List) updateMutationLayer(mpost *types.Posting) bool {
 		// Note that mpost.Op is either Set or Del, whereas oldPost.Op can be
 		// either Set or Del or Add.
 		msame := samePosting(oldPost, mpost)
-		if msame && similarOp(mpost.Op(), oldPost.Op()) {
+		if msame && ((mpost.Op() == Del) == (oldPost.Op() == Del)) {
 			// This posting has similar content as what is found in mlayer. If the
 			// ops are similar, then we do nothing.
 			return false
@@ -337,12 +326,12 @@ func (l *List) updateMutationLayer(mpost *types.Posting) bool {
 		}
 
 		// Here are the remaining cases.
-		// Del, Set: Replace with new post. Treat as an overwrite.
+		// Del, Set: Replace with new post.
 		// Del, Del: Replace with new post.
-		// Add, Del: Undo by removing oldPost.
-		// Add, Set: Replace with new post. Need to set mpost.Op to Add.
 		// Set, Del: Replace with new post.
 		// Set, Set: Replace with new post.
+		// Add, Del: Undo by removing oldPost.
+		// Add, Set: Replace with new post. Need to set mpost.Op to Add.
 		if oldPost.Op() == Add {
 			if mpost.Op() == Del {
 				// Undo old post.
