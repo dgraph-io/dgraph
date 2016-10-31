@@ -307,6 +307,7 @@ func TestAddMutation_jchiu3(t *testing.T) {
 		Timestamp: time.Now(),
 	}
 	addMutation(t, ol, edge, Set)
+	require.Equal(t, 1, getLength(ol))
 	merged, err := ol.CommitIfDirty(context.Background())
 	require.NoError(t, err)
 	require.True(t, merged)
@@ -319,7 +320,7 @@ func TestAddMutation_jchiu3(t *testing.T) {
 		Timestamp: time.Now(),
 	}
 	addMutation(t, ol, edge, Del)
-	require.Equal(t, getLength(ol), 0)
+	require.Equal(t, 0, getLength(ol))
 
 	// Set value to newcars, but don't merge yet.
 	edge = x.DirectedEdge{
@@ -337,7 +338,7 @@ func TestAddMutation_jchiu3(t *testing.T) {
 		Timestamp: time.Now(),
 	}
 	addMutation(t, ol, edge, Del)
-	require.NotEqual(t, getLength(ol), 0)
+	require.NotEqual(t, 0, getLength(ol))
 	checkValue(t, ol, "newcars")
 
 	// Del a value newcars and but don't merge.
@@ -347,7 +348,7 @@ func TestAddMutation_jchiu3(t *testing.T) {
 		Timestamp: time.Now(),
 	}
 	addMutation(t, ol, edge, Del)
-	require.Equal(t, getLength(ol), 0)
+	require.Equal(t, 0, getLength(ol))
 }
 
 func TestAddMutation_mrjn1(t *testing.T) {
@@ -388,7 +389,7 @@ func TestAddMutation_mrjn1(t *testing.T) {
 		Timestamp: time.Now(),
 	}
 	addMutation(t, ol, edge, Del)
-	require.Equal(t, getLength(ol), 0)
+	require.Equal(t, 0, getLength(ol))
 
 	// Do this again to cover Del, muid == curUid, inPlist test case.
 	// Delete the previously committed value cars. But don't merge.
@@ -398,7 +399,7 @@ func TestAddMutation_mrjn1(t *testing.T) {
 		Timestamp: time.Now(),
 	}
 	addMutation(t, ol, edge, Del)
-	require.Equal(t, getLength(ol), 0)
+	require.Equal(t, 0, getLength(ol))
 
 	// Set the value again to cover Set, muid == curUid, inPlist test case.
 	// Set the previously committed value cars. But don't merge.
@@ -417,7 +418,7 @@ func TestAddMutation_mrjn1(t *testing.T) {
 		Timestamp: time.Now(),
 	}
 	addMutation(t, ol, edge, Del)
-	require.Equal(t, getLength(ol), 0)
+	require.Equal(t, 0, getLength(ol))
 }
 
 func TestAddMutation_checksum(t *testing.T) {
@@ -666,4 +667,9 @@ func BenchmarkAddMutations(b *testing.B) {
 			b.Error(err)
 		}
 	}
+}
+
+func TestMain(m *testing.M) {
+	x.Init()
+	os.Exit(m.Run())
 }

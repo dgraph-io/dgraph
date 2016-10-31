@@ -59,6 +59,7 @@ type List struct {
 	hash        uint32
 	pbuffer     unsafe.Pointer
 	mlayer      []*types.Posting // mutations
+	count       []int8           // How does posting contribute to overall count.
 	pstore      *store.Store     // postinglist store
 	lastCompact time.Time
 	wg          sync.WaitGroup
@@ -317,6 +318,18 @@ func (l *List) updateMutationLayer(mpost *types.Posting) bool {
 				return false
 			}
 			// Same UID. So, set the new version.
+			if mp.Op() != mpost.Op() {
+				// Only update counts when the ops are different.
+				if mpost.Op() == Set {
+					// Increment instead of setting to 1 because the final value can be
+					// 0 or 1.
+					l.count[midx]++
+				} else if mpost.Op() == Del {
+					// Increment instead of setting to 1 because the final value can be
+					// 0 or -1.
+					l.count[midx]--
+				}
+			}
 			l.mlayer[midx] = mpost
 			return true
 		}
@@ -350,10 +363,19 @@ func (l *List) updateMutationLayer(mpost *types.Posting) bool {
 		}
 	}
 	// Doesn't match what we already have in immutable layer. So, add to mutable layer.
+	var postCount int8
+	if mpost.Op() == Set {
+		postCount = 1
+	} else if mpost.Op() == Del {
+		postCount = -1
+	} else {
+		x.Fatalf("Invalid posting op: %v", mpost.Op())
+	}
 
 	if midx >= len(l.mlayer) {
 		// Add it at the end.
 		l.mlayer = append(l.mlayer, mpost)
+		l.count = append(l.count, postCount)
 		return true
 	}
 
@@ -361,6 +383,12 @@ func (l *List) updateMutationLayer(mpost *types.Posting) bool {
 	l.mlayer = append(l.mlayer, nil)
 	copy(l.mlayer[midx+1:], l.mlayer[midx:])
 	l.mlayer[midx] = mpost
+
+	// Update counts.
+	l.count = append(l.count, 0)
+	copy(l.count[midx+1:], l.count[midx:])
+	l.count[midx] = postCount
+
 	return true
 }
 
@@ -505,11 +533,25 @@ func (l *List) iterate(afterUid uint64, f func(obj *types.Posting) bool) {
 
 // Length iterates over the posting list and counts the number of elements. This is NOT CHEAP. So, use it sparingly.
 func (l *List) Length(afterUid uint64) int {
-	count := 0
-	l.Iterate(afterUid, func(*types.Posting) bool {
-		count++
-		return true
-	})
+	pidx, midx := 0, 0
+	pl := l.getPostingList()
+
+	if afterUid > 0 {
+		pidx = sort.Search(pl.PostingsLength(), func(idx int) bool {
+			p := new(types.Posting)
+			x.Assert(pl.Postings(p, idx))
+			return afterUid < p.Uid()
+		})
+		midx = sort.Search(len(l.mlayer), func(idx int) bool {
+			mp := l.mlayer[idx]
+			return afterUid < mp.Uid()
+		})
+	}
+
+	count := pl.PostingsLength() - pidx
+	for _, c := range l.count[midx:] {
+		count += int(c)
+	}
 	return count
 }
 
@@ -573,6 +615,7 @@ func (l *List) commit() (committed bool, rerr error) {
 	atomic.StorePointer(&l.pbuffer, nil) // Make prev buffer eligible for GC.
 	atomic.StoreInt64(&l.dirtyTs, 0)     // Set as clean.
 	l.mlayer = l.mlayer[:0]
+	l.count = l.count[:0]
 	l.lastCompact = time.Now()
 	return true, nil
 }
