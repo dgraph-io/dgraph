@@ -31,6 +31,8 @@ func Backup(gid uint32) error {
 	it := pstore.NewIterator()
 	defer it.Close()
 	var wg sync.WaitGroup
+	var lastPred string
+	var belongs bool
 
 	wg.Add(numBackupRoutines)
 	for i := 0; i < numBackupRoutines; i++ {
@@ -43,8 +45,15 @@ func Backup(gid uint32) error {
 			continue
 		}
 		pred, uid := splitKey(it.Key().Data())
-		if group.BelongsTo(pred) != gid {
+		if pred == lastPred && !belongs {
 			continue
+		} else if pred != lastPred {
+			if group.BelongsTo(pred) != gid {
+				lastPred = pred
+				belongs = false
+				continue
+			}
+			belongs = true
 		}
 
 		k := []byte(fmt.Sprintf("<_uid_:%x> <%s> ", uid, pred))
@@ -54,6 +63,7 @@ func Backup(gid uint32) error {
 			key:   k,
 			value: v,
 		}
+		lastPred = pred
 	}
 
 	close(chkv)
