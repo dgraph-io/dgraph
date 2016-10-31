@@ -60,7 +60,7 @@ func (w *grpcWorker) InitiateBackup(ctx context.Context, in *Payload) (*Payload,
 	return &Payload{Data: []byte("Backup Initiated")}, nil
 }
 
-// Creates backup of all nodes in cluster by initiaing backups in all the master
+// BackupAll Creates backup of all nodes in cluster by initiaing backups in all the master
 // nodes.
 func BackupAll() error {
 	allServers := groups().all
