@@ -373,14 +373,9 @@ func (l *List) updateMutationLayer(mpost *types.Posting) bool {
 			// Posting not found in PL. This is considered an Add operation.
 			mpost.MutateOp(Add)
 		}
-	} else {
-		if !uidFound || !psame {
-			// uidFound=false: Couldn't find the posting in immutable layer. So,
-			// no need to Del.
-			// psam=false: Found the index in the immutable layer, but contents
-			// don't match. Do not Del.
-			return false
-		}
+	} else if !psame { // mpost.Op==Del
+		// Either we fail to find UID in immutable PL or contents don't match.
+		return false
 	}
 
 	// Doesn't match what we already have in immutable layer. So, add to mutable layer.
