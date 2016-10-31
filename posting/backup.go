@@ -38,13 +38,13 @@ func Backup(gNum uint32) error {
 	go writeToFile(strconv.Itoa(int(gNum)), ch, errChan)
 
 	for it.SeekToFirst(); it.Valid(); it.Next() {
+		if bytes.HasPrefix(it.Key().Data(), []byte(":")) || bytes.HasPrefix(it.Key().Data(), []byte("_uid_")) {
+			continue
+		}
 		k := make([]byte, len(it.Key().Data()))
 		copy(k, it.Key().Data())
 		v := make([]byte, len(it.Value().Data()))
 		copy(v, it.Value().Data())
-		if bytes.HasPrefix(k, []byte(":")) || bytes.HasPrefix(k, []byte("_uid_")) {
-			continue
-		}
 		chkv <- kv{
 			key:   k,
 			value: v,
