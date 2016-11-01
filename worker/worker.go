@@ -24,7 +24,6 @@ import (
 	"log"
 	"net"
 
-	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/x"
 
@@ -61,7 +60,7 @@ func (w *grpcWorker) InitiateBackup(ctx context.Context, in *Payload) (*Payload,
 func initiateBackup() error {
 	for gid, node := range groups().local {
 		if node.AmLeader() {
-			err := posting.Backup(gid)
+			err := Backup(gid)
 			if err != nil {
 				return err
 			}

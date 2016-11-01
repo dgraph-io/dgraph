@@ -1,4 +1,4 @@
-package posting
+package worker
 
 import (
 	"bufio"
@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dgraph-io/dgraph/group"
+	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/posting/types"
 	stype "github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
@@ -32,7 +32,6 @@ func Backup(gid uint32) error {
 	defer it.Close()
 	var wg sync.WaitGroup
 	var lastPred string
-	var belongs bool
 
 	wg.Add(numBackupRoutines)
 	for i := 0; i < numBackupRoutines; i++ {
@@ -40,21 +39,21 @@ func Backup(gid uint32) error {
 	}
 	go writeToFile(strconv.Itoa(int(gid)), ch, errChan)
 
-	for it.SeekToFirst(); it.Valid(); it.Next() {
-		if bytes.HasPrefix(it.Key().Data(), []byte(":")) ||
-			bytes.HasPrefix(it.Key().Data(), []byte("_uid_")) {
+	it.SeekToFirst()
+	for it.Valid() {
+		if bytes.HasPrefix(it.Key().Data(), []byte(":")) {
+			// Seek to the end of index keys.
+			it.Seek([]byte(":~"))
+		}
+		if bytes.HasPrefix(it.Key().Data(), []byte("_uid_")) {
+			// Skip the UID mappings.
+			it.Seek([]byte("_uid_~"))
 			continue
 		}
-		pred, uid := splitKey(it.Key().Data())
-		if pred == lastPred && !belongs {
+		pred, uid := posting.SplitKey(it.Key().Data())
+		if pred != lastPred && BelongsTo(pred) != gid {
+			it.Seek([]byte(fmt.Sprintf("%s~", pred)))
 			continue
-		} else if pred != lastPred {
-			if group.BelongsTo(pred) != gid {
-				lastPred = pred
-				belongs = false
-				continue
-			}
-			belongs = true
 		}
 
 		k := []byte(fmt.Sprintf("<_uid_:%x> <%s> ", uid, pred))
@@ -65,6 +64,7 @@ func Backup(gid uint32) error {
 			value: v,
 		}
 		lastPred = pred
+		it.Next()
 	}
 
 	close(chkv)
@@ -102,9 +102,7 @@ func toRDF(item kv, ch chan []byte) {
 			}
 			_, err = buf.WriteString(" .\n")
 			x.Check(err)
-			ch <- buf.Bytes()
-			buf.Reset()
-			return
+			break
 		}
 		// Uid list
 		destUID := p.Uid()

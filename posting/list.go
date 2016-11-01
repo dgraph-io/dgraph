@@ -138,7 +138,9 @@ func Key(uid uint64, attr string) []byte {
 	return buf
 }
 
-func splitKey(key []byte) (string, uint64) {
+// SplitKey returns the predicate and the uid.
+// (Note that it is not applicable to index keys)
+func SplitKey(key []byte) (string, uint64) {
 	sKeys := bytes.Split(key, []byte("|"))
 	x.Assert(len(sKeys) == 2)
 	b := sKeys[0]
