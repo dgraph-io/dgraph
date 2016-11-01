@@ -180,7 +180,7 @@ func (g *groupi) AnyServer(group uint32) string {
 	g.RLock()
 	defer g.RUnlock()
 	all := g.all[group]
-	x.Assert(all != nil)
+	x.AssertTrue(all != nil)
 	sz := len(all.list)
 	idx := rand.Intn(sz)
 	return all.list[idx].Addr
@@ -190,6 +190,6 @@ func (g *groupi) Leader(group uint32) string {
 	g.RLock()
 	defer g.RUnlock()
 	all := g.all[group]
-	x.Assert(all != nil)
+	x.AssertTrue(all != nil)
 	return all.list[0].Addr
 }

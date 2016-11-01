@@ -47,7 +47,7 @@ func init() {
 
 // initIndex initializes the index with the given data store.
 func initIndex() {
-	x.Assert(pstore != nil)
+	x.AssertTrue(pstore != nil)
 
 	// Initialize TokensTables.
 	indexedFields := schema.IndexedFields()
@@ -112,7 +112,7 @@ func indexTokens(attr string, p types.Value) ([]string, error) {
 // addIndexMutations adds mutation(s) for a single term, to maintain index.
 func addIndexMutations(ctx context.Context, attr string, uid uint64,
 	p types.Value, del bool) {
-	x.Assert(uid != 0)
+	x.AssertTrue(uid != 0)
 	tokens, err := indexTokens(attr, p)
 	if err != nil {
 		// This data is not indexable

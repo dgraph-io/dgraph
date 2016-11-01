@@ -1,7 +1,9 @@
 package worker
 
 import (
+	"bytes"
 	"context"
+	"crypto/rand"
 	"log"
 	"sync"
 
@@ -78,7 +80,8 @@ func (p *poolsi) connect(addr string) {
 
 	pool := newPool(addr, 5)
 	query := new(Payload)
-	query.Data = []byte("hello")
+	query.Data = make([]byte, 10)
+	x.Check2(rand.Read(query.Data))
 
 	conn, err := pool.Get()
 	if err != nil {
@@ -86,10 +89,11 @@ func (p *poolsi) connect(addr string) {
 	}
 
 	c := NewWorkerClient(conn)
-	_, err = c.Hello(context.Background(), query)
+	resp, err := c.Echo(context.Background(), query)
 	if err != nil {
 		log.Fatalf("Unable to connect: %v", err)
 	}
+	x.AssertTrue(bytes.Equal(resp.Data, query.Data))
 	x.Check(pool.Put(conn))
 
 	p.Lock()

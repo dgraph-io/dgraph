@@ -93,7 +93,7 @@ func getNew() *List {
 	l := listPool.Get().(*List)
 	*l = List{}
 	l.wg.Add(1)
-	x.Assert(len(l.key) == 0)
+	x.AssertTrue(len(l.key) == 0)
 	l.refcount = 1
 	return l
 }
@@ -279,7 +279,7 @@ func (l *List) getPostingList() *types.PostingList {
 	if buf == nil || len(buf.d) == 0 {
 		nbuf := new(buffer)
 		var err error
-		x.Assert(l.pstore != nil)
+		x.AssertTrue(l.pstore != nil)
 		if nbuf.d, err = l.pstore.Get(l.key); err != nil || nbuf.d == nil {
 			// Error. Just set to empty.
 			nbuf.d = make([]byte, len(empty))
@@ -301,7 +301,7 @@ func (l *List) SetForDeletion() {
 }
 
 func (l *List) updateMutationLayer(mpost *types.Posting) bool {
-	x.Assert(mpost.Op() == Set || mpost.Op() == Del)
+	x.AssertTrue(mpost.Op() == Set || mpost.Op() == Del)
 	findUid := mpost.Uid()
 
 	// First check the mutable layer.
@@ -347,7 +347,7 @@ func (l *List) updateMutationLayer(mpost *types.Posting) bool {
 				return true
 			}
 			// Add followed by Set is considered an Add. Hence, mutate mpost.Op.
-			x.Assert(mpost.MutateOp(Add))
+			x.AssertTrue(mpost.MutateOp(Add))
 		}
 		l.mlayer[midx] = mpost
 		return true
@@ -357,7 +357,7 @@ func (l *List) updateMutationLayer(mpost *types.Posting) bool {
 	pl := l.getPostingList()
 	pidx := sort.Search(pl.PostingsLength(), func(idx int) bool {
 		var p types.Posting
-		x.Assert(pl.Postings(&p, idx))
+		x.AssertTrue(pl.Postings(&p, idx))
 		return findUid <= p.Uid()
 	})
 
@@ -490,7 +490,7 @@ func (l *List) iterate(afterUid uint64, f func(obj *types.Posting) bool) {
 	if afterUid > 0 {
 		pidx = sort.Search(pl.PostingsLength(), func(idx int) bool {
 			p := new(types.Posting)
-			x.Assert(pl.Postings(p, idx))
+			x.AssertTrue(pl.Postings(p, idx))
 			return afterUid < p.Uid()
 		})
 		midx = sort.Search(len(l.mlayer), func(idx int) bool {
@@ -504,7 +504,7 @@ func (l *List) iterate(afterUid uint64, f func(obj *types.Posting) bool) {
 	cont := true
 	for cont {
 		if pidx < pl.PostingsLength() {
-			x.Assert(pl.Postings(pp, pidx))
+			x.AssertTrue(pl.Postings(pp, pidx))
 		} else {
 			pp = empty
 		}
@@ -545,7 +545,7 @@ func (l *List) Length(afterUid uint64) int {
 	if afterUid > 0 {
 		pidx = sort.Search(pl.PostingsLength(), func(idx int) bool {
 			p := new(types.Posting)
-			x.Assert(pl.Postings(p, idx))
+			x.AssertTrue(pl.Postings(p, idx))
 			return afterUid < p.Uid()
 		})
 		midx = sort.Search(len(l.mlayer), func(idx int) bool {

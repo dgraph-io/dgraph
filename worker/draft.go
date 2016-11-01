@@ -144,8 +144,8 @@ func (n *node) ProposeAndWait(ctx context.Context, msg uint16, data []byte) erro
 	hdata := h.Encode()
 
 	proposalData := make([]byte, len(data)+len(hdata))
-	x.Assert(copy(proposalData, hdata) == len(hdata))
-	x.Assert(copy(proposalData[len(hdata):], data) == len(data))
+	x.AssertTrue(copy(proposalData, hdata) == len(hdata))
+	x.AssertTrue(copy(proposalData[len(hdata):], data) == len(data))
 
 	che := make(chan error, 1)
 	n.props.Store(h.proposalId, che)
@@ -251,7 +251,7 @@ func (n *node) processMutation(e raftpb.Entry, h header) error {
 
 func (n *node) processMembership(e raftpb.Entry, h header) error {
 	rc := task.GetRootAsRaftContext(n.raftContext, 0)
-	x.Assert(rc.Group() == math.MaxUint32)
+	x.AssertTrue(rc.Group() == math.MaxUint32)
 
 	mm := task.GetRootAsMembership(e.Data[h.Length():], 0)
 	fmt.Printf("group: %v Addr: %q leader: %v dead: %v\n",

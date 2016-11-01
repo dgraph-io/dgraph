@@ -598,7 +598,7 @@ func (t *FilterTree) debugString() string {
 
 // stringHelper does simple DFS to convert FilterTree to string.
 func (t *FilterTree) stringHelper(buf *bytes.Buffer) {
-	x.Assert(t != nil)
+	x.AssertTrue(t != nil)
 	if len(t.FuncName) > 0 {
 		// Leaf node.
 		_, err := buf.WriteRune('(')

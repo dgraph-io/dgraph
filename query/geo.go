@@ -78,7 +78,7 @@ func fetchIndexEntries(ctx context.Context, attr string, tokens []string) (*algo
 		}
 	}
 
-	x.Assert(len(sg.Result) == len(tokens))
+	x.AssertTrue(len(sg.Result) == len(tokens))
 	return algo.MergeLists(sg.Result), nil
 }
 
@@ -99,12 +99,12 @@ func fetchValues(ctx context.Context, attr string, uids *algo.UIDList) (*task.Va
 	}
 
 	values := sg.Values
-	x.Assert(values.ValuesLength() == uids.Size())
+	x.AssertTrue(values.ValuesLength() == uids.Size())
 	return values, nil
 }
 
 func filterUIDs(uids *algo.UIDList, values *task.ValueList, q *geo.QueryData) *algo.UIDList {
-	x.Assert(values.ValuesLength() == uids.Size())
+	x.AssertTrue(values.ValuesLength() == uids.Size())
 	var rv []uint64
 	for i := 0; i < values.ValuesLength(); i++ {
 		var tv task.Value

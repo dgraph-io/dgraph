@@ -45,7 +45,7 @@ func Init() {
 		log.Fatal("Unable to parse flags")
 	}
 	logger = log.New(os.Stderr, "", log.Lshortfile|log.Flags())
-	Assert(logger != nil)
+	AssertTrue(logger != nil)
 	printVersionOnly()
 	// Next, run all the init functions that have been added.
 	for _, f := range initFunc {

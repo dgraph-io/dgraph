@@ -93,7 +93,7 @@ var (
 // processSort does either a coarse or a fine sort.
 func processSort(qu []byte) ([]byte, error) {
 	ts := task.GetRootAsSort(qu, 0)
-	x.Assert(ts != nil)
+	x.AssertTrue(ts != nil)
 
 	attr := string(ts.Attr())
 	x.Assertf(ts.Count() > 0,
@@ -169,7 +169,7 @@ func intersectBucket(ts *task.Sort, attr string, token string, out []intersected
 		{
 			var l algo.UIDList
 			var ul task.UidList
-			x.Assert(ts.Uidmatrix(&ul, i))
+			x.AssertTrue(ts.Uidmatrix(&ul, i))
 			l.FromTask(&ul)
 			listOpt := posting.ListOptions{Intersect: &l}
 			// Intersect index with i-th input UID list.
@@ -213,7 +213,7 @@ func intersectBucket(ts *task.Sort, attr string, token string, out []intersected
 		if out[i].ulist.Size() < count {
 			return errContinue
 		}
-		x.Assert(out[i].ulist.Size() == count)
+		x.AssertTrue(out[i].ulist.Size() == count)
 	}
 	return errDone
 }
