@@ -109,7 +109,6 @@ func markUids(ctx context.Context, mlist *task.MarkList) (rerr error) {
 			Source:    "_XIDorUSER_",
 			Timestamp: time.Now(),
 		}
-		fmt.Println(mut)
 		mutations.Set = append(mutations.Set, mut)
 	}
 	data, err := mutations.Encode()
