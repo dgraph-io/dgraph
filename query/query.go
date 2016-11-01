@@ -432,7 +432,7 @@ func init() {
 }
 
 // This method gets the values and children for a subgraph.
-func (sg *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
+func (sg *SubGraph) preTraverse(uid uint64, dst subgraphOutput) error {
 	var properties []*graph.Property
 	var children []*graph.Node
 
@@ -460,10 +460,12 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 			// this predicate.
 			for i := 0; i < ul.Size(); i++ {
 				uid := ul.Get(i)
-				uc := nodePool.Get().(*graph.Node)
-				uc.Attribute = pc.Attr
+				//uc := nodePool.Get().(*graph.Node)
+				//uc.Attribute = pc.Attr
+				uc := dst.New(pc.Attr)
 				if sg.Params.GetUID || sg.Params.isDebug {
-					uc.Uid = uid
+					//uc.Uid = uid
+					uc.SetUID(uid)
 				}
 				if rerr := pc.preTraverse(uid, uc); rerr != nil {
 					if rerr.Error() == "_INV_" {
@@ -474,7 +476,8 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 					}
 				}
 				if !invalidUids[uid] {
-					children = append(children, uc)
+					//children = append(children, uc)
+					dst.AddChild(pc.Attr, uc)
 				}
 			}
 		} else {
@@ -494,7 +497,8 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 				if err != nil {
 					return err
 				}
-				dst.Xid = string(txt)
+				//dst.Xid = string(txt)
+				dst.SetXID(string(txt))
 				// We don't want to add _uid_ to properties map.
 			} else if pc.Attr == "_uid_" {
 				continue
@@ -529,13 +533,14 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 						continue
 					}
 				}
-				p := createProperty(pc.Attr, sv)
-				properties = append(properties, p)
+				dst.AddValue(pc.Attr, sv)
+				//				p := createProperty(pc.Attr, sv)
+				//				properties = append(properties, p)
 			}
 		}
 	}
 
-	dst.Properties, dst.Children = properties, children
+	//dst.Properties, dst.Children = properties, children
 	return nil
 }
 
@@ -1192,4 +1197,92 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 	sg.DestUIDs.ApplyFilter(
 		func(uid uint64, idx int) bool { return included[idx] })
 	return nil
+}
+
+type subgraphOutput interface {
+	AddValue(attr string, v types.Value)
+	AddChild(attr string, child subgraphOutput)
+	New(attr string) subgraphOutput
+	SetUID(uid uint64)
+	SetXID(xid string)
+}
+
+type protoOutput struct{ *graph.Node }
+
+func toProtoHelper(p subgraphOutput) *graph.Node {
+	return p.(*protoOutput).Node
+}
+
+func (p *protoOutput) AddValue(attr string, v types.Value) {
+	p.Node.Properties = append(p.Node.Properties, createProperty(attr, v))
+}
+
+func (p *protoOutput) AddChild(attr string, child subgraphOutput) {
+	p.Node.Children = append(p.Node.Children, toProtoHelper(child))
+}
+
+func (p *protoOutput) New(attr string) subgraphOutput {
+	uc := nodePool.Get().(*graph.Node)
+	uc.Attribute = attr
+	return &protoOutput{uc}
+}
+
+func (p *protoOutput) SetUID(uid uint64) {
+	p.Node.Uid = uid
+}
+
+func (p *protoOutput) SetXID(xid string) {
+	p.Node.Xid = xid
+}
+
+type jsonOutput struct {
+	data map[string]interface{}
+}
+
+func (p *jsonOutput) AddValue(attr string, v types.Value) {
+	b, err := v.MarshalText()
+	x.Check(err)
+	p.data[attr] = string(b)
+}
+
+func (p *jsonOutput) AddChild(attr string, child subgraphOutput) {
+	a := p.data[attr]
+	if a == nil {
+		// Need to do this because we cannot cast nil interface to
+		// []map[string]interface{}.
+		a = make([]map[string]interface{}, 0)
+	}
+	p.data[attr] = append(a.([]map[string]interface{}),
+		child.(*jsonOutput).data)
+}
+
+func (p *jsonOutput) New(attr string) subgraphOutput {
+	out := &jsonOutput{make(map[string]interface{})}
+	return out
+}
+
+func (p *jsonOutput) SetUID(uid uint64) {
+	p.data["_uid_"] = fmt.Sprintf("%#x", uid)
+}
+
+func (p *jsonOutput) SetXID(xid string) {
+	p.data["_xid_"] = xid
+}
+
+// ToJSONAlternate converts the internal subgraph object to JSON format which is then sent
+// to the HTTP client.
+func (sg *SubGraph) ToJSONAlternate(l *Latency) ([]byte, error) {
+	x.Assert(len(sg.Result) == 1)
+
+	var dummy *jsonOutput
+	n := dummy.New(sg.Attr)
+	ul := sg.Result[0]
+	if sg.Params.GetUID || sg.Params.isDebug {
+		n.SetUID(ul.Get(0))
+	}
+
+	if err := sg.preTraverse(ul.Get(0), n); err != nil {
+		return nil, err
+	}
+	return json.Marshal(n.(*jsonOutput).data)
 }
