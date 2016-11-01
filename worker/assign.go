@@ -19,6 +19,7 @@ package worker
 import (
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/google/flatbuffers/go"
 	"golang.org/x/net/context"
@@ -58,6 +59,43 @@ func assignUids(ctx context.Context, num *task.Num) (uidList []byte, rerr error)
 	x.Checkf(err, "While encoding mutation: %v", mutations)
 	if err := node.ProposeAndWait(ctx, mutationMsg, data); err != nil {
 		return uidList, err
+	}
+	// Mutations successfully applied.
+
+	b := flatbuffers.NewBuilder(0)
+	task.UidListStartUidsVector(b, val)
+	for i := 0; i < val; i++ {
+		b.PrependUint64(mutations.Set[i].Entity)
+	}
+	ve := b.EndVector(val)
+
+	task.UidListStart(b)
+	task.UidListAddUids(b, ve)
+	uend := task.UidListEnd(b)
+	b.Finish(uend)
+	return b.Bytes[b.Head():], nil
+}
+
+func MarkUids(ctx context.Context, ulist []uint64) (rerr error) {
+	node := groups().Node(num.Group())
+	if !node.AmLeader() {
+		return uidList, x.Errorf("Marking UIDs is only allowed on leader.")
+	}
+
+	for _, uid := range ulist {
+		mut := x.DirectedEdge{
+			Entity:    uid,
+			Attribute: "_uid_",
+			Value:     []byte("_taken_"), // not txid
+			Source:    "_XIDorUSER_",
+			Timestamp: time.Now(),
+		}
+	}
+	mutations := uid.AssignNew(val, 0, 1)
+	data, err := mutations.Encode()
+	x.Checkf(err, "While encoding mutation: %v", mutations)
+	if err := node.ProposeAndWait(ctx, mutationMsg, data); err != nil {
+		return err
 	}
 	// Mutations successfully applied.
 
