@@ -152,10 +152,10 @@ func processTask(query []byte) ([]byte, error) {
 	}
 	matrixVent := b.EndVector(len(uoffsets))
 
-	// Create a CountList's vector of ulong.
+	// Create a CountList's vector of counts.
 	task.CountListStartCountVector(b, len(counts))
 	for i := len(counts) - 1; i >= 0; i-- {
-		b.PrependUint64(counts[i])
+		b.PrependUint32(uint32(counts[i]))
 	}
 	countVecOffset := b.EndVector(len(counts))
 

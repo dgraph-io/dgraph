@@ -49,7 +49,7 @@ func childAttrs(sg *SubGraph) []string {
 	return out
 }
 
-func taskValues(t *testing.T, v *task.ValueList) []string {
+func taskValues(t *testing.T, v x.ValueList) []string {
 	out := make([]string, v.ValuesLength())
 	for i := 0; i < v.ValuesLength(); i++ {
 		var tv task.Value
@@ -1431,7 +1431,7 @@ children: <
 	require.EqualValues(t, proto.MarshalTextString(pb), expectedPb)
 }
 
-func benchmarkToJson(file string, b *testing.B) {
+func benchmarkToJSON(file string, b *testing.B) {
 	b.ReportAllocs()
 	var sg SubGraph
 	var l Latency
@@ -1456,12 +1456,14 @@ func benchmarkToJson(file string, b *testing.B) {
 	}
 }
 
-func BenchmarkToJSON_10_Actor(b *testing.B)      { benchmarkToJson("benchmark/actors10.bin", b) }
-func BenchmarkToJSON_10_Director(b *testing.B)   { benchmarkToJson("benchmark/directors10.bin", b) }
-func BenchmarkToJSON_100_Actor(b *testing.B)     { benchmarkToJson("benchmark/actors100.bin", b) }
-func BenchmarkToJSON_100_Director(b *testing.B)  { benchmarkToJson("benchmark/directors100.bin", b) }
-func BenchmarkToJSON_1000_Actor(b *testing.B)    { benchmarkToJson("benchmark/actors1000.bin", b) }
-func BenchmarkToJSON_1000_Director(b *testing.B) { benchmarkToJson("benchmark/directors1000.bin", b) }
+func BenchmarkToJSON_10_ActorAlt(b *testing.B) { benchmarkToJSON("benchmark/actor.0.gob", b) }
+
+func BenchmarkToJSON_10_Actor(b *testing.B)      { benchmarkToJSON("benchmark/actors10.bin", b) }
+func BenchmarkToJSON_10_Director(b *testing.B)   { benchmarkToJSON("benchmark/directors10.bin", b) }
+func BenchmarkToJSON_100_Actor(b *testing.B)     { benchmarkToJSON("benchmark/actors100.bin", b) }
+func BenchmarkToJSON_100_Director(b *testing.B)  { benchmarkToJSON("benchmark/directors100.bin", b) }
+func BenchmarkToJSON_1000_Actor(b *testing.B)    { benchmarkToJSON("benchmark/actors1000.bin", b) }
+func BenchmarkToJSON_1000_Director(b *testing.B) { benchmarkToJSON("benchmark/directors1000.bin", b) }
 
 func benchmarkToPB(file string, b *testing.B) {
 	b.ReportAllocs()

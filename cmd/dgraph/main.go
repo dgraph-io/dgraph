@@ -437,12 +437,12 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 
 	if len(*dumpSubgraph) > 0 {
 		x.Checkf(os.MkdirAll(*dumpSubgraph, 0700), *dumpSubgraph)
-		s := time.Now().Format("20060102_150405.gob")
+		s := time.Now().Format("20060102.150405.000000.gob")
 		filename := path.Join(*dumpSubgraph, s)
 		f, err := os.Create(filename)
 		x.Checkf(err, filename)
 		enc := gob.NewEncoder(f)
-		enc.Encode(sg)
+		x.Check(enc.Encode(sg))
 		x.Checkf(f.Close(), filename)
 	}
 
