@@ -26,6 +26,11 @@ table Num {
 	val:int;
 }
 
+table MarkList {
+	group:uint;
+	uids:[ulong];
+}
+
 table UidList {
 	uids:[ulong];
 }

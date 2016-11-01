@@ -127,15 +127,35 @@ func convertToEdges(ctx context.Context, nquads []rdf.NQuad) (mutationResult, er
 	var edges []x.DirectedEdge
 	var mr mutationResult
 
+	markUids := make(map[uint64]bool)
 	newUids := make(map[string]uint64)
 	for _, nq := range nquads {
 		if strings.HasPrefix(nq.Subject, "_new_:") {
 			newUids[nq.Subject] = 0
+		} else {
+			uid, err := rdf.GetUid(nq.Subject)
+			x.Check(err)
+			markUids[uid] = true
 		}
-		if len(nq.ObjectId) > 0 && strings.HasPrefix(nq.ObjectId, "_new_:") {
-			newUids[nq.ObjectId] = 0
+
+		if len(nq.ObjectId) > 0 {
+			if strings.HasPrefix(nq.ObjectId, "_new_:") {
+				newUids[nq.ObjectId] = 0
+			} else {
+				uid, err := rdf.GetUid(nq.ObjectId)
+				x.Check(err)
+				markUids[uid] = true
+			}
 		}
 	}
+
+	if len(markUids) > 0 {
+		if err := worker.MarkUidsOverNetwork(ctx, markUids); err != nil {
+			x.TraceError(ctx, x.Wrapf(err, "Error while MarkUidsOverNetwork"))
+			return mr, err
+		}
+	}
+
 	if len(newUids) > 0 {
 		if err := worker.AssignUidsOverNetwork(ctx, newUids); err != nil {
 			x.TraceError(ctx, x.Wrapf(err, "Error while GetOrAssignUidsOverNetwork"))

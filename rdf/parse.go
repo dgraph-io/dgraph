@@ -42,7 +42,7 @@ type NQuad struct {
 
 // Gets the uid corresponding to an xid from the posting list which stores the
 // mapping.
-func getUid(xid string) (uint64, error) {
+func GetUid(xid string) (uint64, error) {
 	// If string represents a UID, convert to uint64 and return.
 	if strings.HasPrefix(xid, "_uid_:") {
 		return strconv.ParseUint(xid[6:], 0, 64)
@@ -50,10 +50,9 @@ func getUid(xid string) (uint64, error) {
 	return farm.Fingerprint64([]byte(xid)), nil
 }
 
-// ToEdge is useful when you want to find the UID corresponding to XID for
 // just one edge. The method doesn't automatically generate a UID for an XID.
 func (nq NQuad) ToEdge() (result x.DirectedEdge, rerr error) {
-	sid, err := getUid(nq.Subject)
+	sid, err := GetUid(nq.Subject)
 	if err != nil {
 		return result, err
 	}
@@ -61,7 +60,7 @@ func (nq NQuad) ToEdge() (result x.DirectedEdge, rerr error) {
 	result.Entity = sid
 	// An edge can have an id or a value.
 	if len(nq.ObjectId) > 0 {
-		oid, err := getUid(nq.ObjectId)
+		oid, err := GetUid(nq.ObjectId)
 		if err != nil {
 			return result, err
 		}
@@ -80,10 +79,7 @@ func toUid(xid string, newToUid map[string]uint64) (uid uint64, rerr error) {
 	if id, present := newToUid[xid]; present {
 		return id, nil
 	}
-	if strings.HasPrefix(xid, "_uid_:") {
-		return strconv.ParseUint(xid[6:], 0, 64)
-	}
-	return farm.Fingerprint64([]byte(xid)), nil
+	return GetUid(xid)
 }
 
 // ToEdgeUsing determines the UIDs for the provided XIDs and populates the

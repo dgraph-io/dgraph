@@ -29,12 +29,29 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-func createQuery(group uint32, N int) []byte {
+func createNumQuery(group uint32, N int) []byte {
 	b := flatbuffers.NewBuilder(0)
 	task.NumStart(b)
 	task.NumAddGroup(b, group)
 	task.NumAddVal(b, int32(N))
 	uo := task.NumEnd(b)
+	b.Finish(uo)
+	return b.Bytes[b.Head():]
+}
+
+func createMarkListQuery(group uint32, umap map[uint64]bool) []byte {
+	b := flatbuffers.NewBuilder(0)
+
+	task.MarkListStartUidsVector(b, len(umap))
+	for k := range umap {
+		b.PrependUint64(k)
+	}
+	mlist := b.EndVector(len(umap))
+
+	task.MarkListStart(b)
+	task.MarkListAddGroup(b, group)
+	task.MarkListAddUids(b, mlist)
+	uo := task.MarkListEnd(b)
 	b.Finish(uo)
 	return b.Bytes[b.Head():]
 }
@@ -76,13 +93,15 @@ func assignUids(ctx context.Context, num *task.Num) (uidList []byte, rerr error)
 	return b.Bytes[b.Head():], nil
 }
 
-func MarkUids(ctx context.Context, ulist []uint64) (rerr error) {
-	node := groups().Node(num.Group())
+func markUids(ctx context.Context, mlist *task.MarkList) (rerr error) {
+	node := groups().Node(mlist.Group())
 	if !node.AmLeader() {
-		return uidList, x.Errorf("Marking UIDs is only allowed on leader.")
+		return x.Errorf("Marking UIDs is only allowed on leader. %d", mlist.Group())
 	}
 
-	for _, uid := range ulist {
+	var mutations x.Mutations
+	for i := 0; i < mlist.UidsLength(); i++ {
+		uid := mlist.Uids(i)
 		mut := x.DirectedEdge{
 			Entity:    uid,
 			Attribute: "_uid_",
@@ -90,34 +109,55 @@ func MarkUids(ctx context.Context, ulist []uint64) (rerr error) {
 			Source:    "_XIDorUSER_",
 			Timestamp: time.Now(),
 		}
+		fmt.Println(mut)
+		mutations.Set = append(mutations.Set, mut)
 	}
-	mutations := uid.AssignNew(val, 0, 1)
 	data, err := mutations.Encode()
 	x.Checkf(err, "While encoding mutation: %v", mutations)
 	if err := node.ProposeAndWait(ctx, mutationMsg, data); err != nil {
 		return err
 	}
 	// Mutations successfully applied.
+	return nil
+}
 
-	b := flatbuffers.NewBuilder(0)
-	task.UidListStartUidsVector(b, val)
-	for i := 0; i < val; i++ {
-		b.PrependUint64(mutations.Set[i].Entity)
+func MarkUidsOverNetwork(ctx context.Context, umap map[uint64]bool) (rerr error) {
+	query := new(Payload)
+	gid := BelongsTo("_uid_")
+	query.Data = createMarkListQuery(gid, umap)
+
+	mlist := task.GetRootAsMarkList(query.Data, 0)
+	if groups().ServesGroup(gid) {
+		rerr = markUids(ctx, mlist)
+		if rerr != nil {
+			return rerr
+		}
+
+	} else {
+		addr := groups().Leader(gid)
+		p := pools().get(addr)
+		conn, err := p.Get()
+		if err != nil {
+			x.TraceError(ctx, x.Wrapf(err, "Error while retrieving connection"))
+			return err
+		}
+		defer p.Put(conn)
+
+		c := NewWorkerClient(conn)
+		_, rerr = c.MarkUids(ctx, query)
+		if rerr != nil {
+			x.TraceError(ctx, x.Wrapf(rerr, "Error while getting uids"))
+			return rerr
+		}
 	}
-	ve := b.EndVector(val)
-
-	task.UidListStart(b)
-	task.UidListAddUids(b, ve)
-	uend := task.UidListEnd(b)
-	b.Finish(uend)
-	return b.Bytes[b.Head():], nil
+	return nil
 }
 
 // AssignUidsOverNetwork assigns new uids and writes them to the newUids map.
 func AssignUidsOverNetwork(ctx context.Context, newUids map[string]uint64) (rerr error) {
 	query := new(Payload)
 	gid := BelongsTo("_uid_")
-	query.Data = createQuery(gid, len(newUids))
+	query.Data = createNumQuery(gid, len(newUids))
 
 	num := task.GetRootAsNum(query.Data, 0)
 	reply := new(Payload)
@@ -156,6 +196,32 @@ func AssignUidsOverNetwork(ctx context.Context, newUids map[string]uint64) (rerr
 		i++
 	}
 	return nil
+}
+
+func (w *grpcWorker) MarkUids(ctx context.Context, query *Payload) (*Payload, error) {
+	if ctx.Err() != nil {
+		return &Payload{}, ctx.Err()
+	}
+
+	mlist := task.GetRootAsMarkList(query.Data, 0)
+	if !groups().ServesGroup(mlist.Group()) {
+		log.Fatalf("groupId: %v. GetOrAssign. We shouldn't be getting this req", mlist.Group())
+	}
+
+	reply := new(Payload)
+	c := make(chan error, 1)
+	go func() {
+		var err error
+		err = markUids(ctx, mlist)
+		c <- err
+	}()
+
+	select {
+	case <-ctx.Done():
+		return reply, ctx.Err()
+	case err := <-c:
+		return reply, err
+	}
 }
 
 // AssignUids is used to assign new uids by communicating with the leader of the RAFT group
