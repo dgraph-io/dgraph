@@ -76,7 +76,7 @@ func (l *List) refCount() int32 { return atomic.LoadInt32(&l.refcount) }
 func (l *List) incr() int32     { return atomic.AddInt32(&l.refcount, 1) }
 func (l *List) decr() {
 	val := atomic.AddInt32(&l.refcount, -1)
-	x.Assertf(val >= 0, "List reference should never be less than zero: %v", val)
+	x.AssertTruef(val >= 0, "List reference should never be less than zero: %v", val)
 	if val > 0 {
 		return
 	}
@@ -364,7 +364,7 @@ func (l *List) updateMutationLayer(mpost *types.Posting) bool {
 	var uidFound, psame bool
 	if pidx < pl.PostingsLength() {
 		p := new(types.Posting)
-		x.Assertf(pl.Postings(p, pidx), "Unable to parse Posting at index: %v", pidx)
+		x.AssertTruef(pl.Postings(p, pidx), "Unable to parse Posting at index: %v", pidx)
 		uidFound = mpost.Uid() == p.Uid()
 		if uidFound {
 			psame = samePosting(p, mpost)

@@ -17,5 +17,6 @@ service Worker {
 
 	rpc RaftMessage (Payload) returns (Payload) {}
 	rpc JoinCluster (Payload) returns (Payload) {}
+	rpc UpdateMembership (Payload) returns (Payload) {}
 }
 

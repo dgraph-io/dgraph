@@ -108,7 +108,7 @@ func AssignUidsOverNetwork(ctx context.Context, newUids map[string]uint64) (rerr
 	}
 
 	ul := task.GetRootAsUidList(reply.Data, 0)
-	x.Assertf(ul.UidsLength() == int(num.Val()),
+	x.AssertTruef(ul.UidsLength() == int(num.Val()),
 		"Requested: %d != Retrieved Uids: %d", num.Val(), ul.UidsLength())
 
 	i := 0

@@ -67,7 +67,7 @@ func (w *grpcWorker) Sort(ctx context.Context, query *Payload) (*Payload, error)
 	//x.Trace(ctx, "Attribute: %q NumUids: %v groupId: %v Sort", q.Attr(), q.UidsLength(), gid)
 
 	reply := new(Payload)
-	x.Assertf(groups().ServesGroup(gid),
+	x.AssertTruef(groups().ServesGroup(gid),
 		"attr: %q groupId: %v Request sent to wrong server.", s.Attr(), gid)
 
 	c := make(chan error, 1)
@@ -96,7 +96,7 @@ func processSort(qu []byte) ([]byte, error) {
 	x.AssertTrue(ts != nil)
 
 	attr := string(ts.Attr())
-	x.Assertf(ts.Count() > 0,
+	x.AssertTruef(ts.Count() > 0,
 		("We do not yet support negative or infinite count with sorting: %s %d. " +
 			"Try flipping order and return first few elements instead."),
 		attr, ts.Count())

@@ -70,7 +70,7 @@ func processTask(query []byte) ([]byte, error) {
 	q := task.GetRootAsQuery(query, 0)
 
 	attr := string(q.Attr())
-	x.Assertf(q.UidsLength() == 0 || q.TokensLength() == 0,
+	x.AssertTruef(q.UidsLength() == 0 || q.TokensLength() == 0,
 		"At least one of Uids and Term should be empty: %d vs %d", q.UidsLength(), q.TokensLength())
 
 	useTerm := q.TokensLength() > 0
@@ -183,7 +183,7 @@ func (w *grpcWorker) ServeTask(ctx context.Context, query *Payload) (*Payload, e
 	x.Trace(ctx, "Attribute: %q NumUids: %v groupId: %v ServeTask", q.Attr(), q.UidsLength(), gid)
 
 	reply := new(Payload)
-	x.Assertf(groups().ServesGroup(gid),
+	x.AssertTruef(groups().ServesGroup(gid),
 		"attr: %q groupId: %v Request sent to wrong server.", q.Attr(), gid)
 
 	c := make(chan error, 1)

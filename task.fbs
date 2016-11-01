@@ -71,6 +71,12 @@ table Membership {
 	addr:string;
 	leader:bool;
 	amdead:bool;
+	lastUpdate:ulong;
+}
+
+table MembershipUpdate {
+	members:[Membership];
+	lastUpdate:ulong;
 }
 
 table Sort {

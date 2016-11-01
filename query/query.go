@@ -218,9 +218,9 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 	}
 
 	r := sg.Result
-	x.Assertf(sg.srcUIDs.Size() == len(r),
+	x.AssertTruef(sg.srcUIDs.Size() == len(r),
 		"Result uidmatrixlength: %v. Query uidslength: %v", sg.srcUIDs.Size(), len(r))
-	x.Assertf(sg.srcUIDs.Size() == sg.Values.ValuesLength(),
+	x.AssertTruef(sg.srcUIDs.Size() == sg.Values.ValuesLength(),
 		"Result valuelength: %v. Query uidslength: %v", sg.srcUIDs.Size(), sg.Values.ValuesLength())
 
 	// Generate a matrix of maps
@@ -272,7 +272,7 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 				m[sg.Attr] = l
 			}
 			if sg.GeoFilter != nil {
-				x.Assertf(len(l) == 1, "There should be exactly 1 uid at the top level.")
+				x.AssertTruef(len(l) == 1, "There should be exactly 1 uid at the top level.")
 				// remove the top level attr from the result, that is only used
 				// for filtering the results.
 				result[sg.srcUIDs.Get(i)] = l[0]
@@ -692,7 +692,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	// This would set the Result field in SubGraph,
 	// and populate the children for attributes.
 	if len(exid) > 0 {
-		x.Assertf(!strings.HasPrefix(exid, "_new_:"), "Query shouldn't contain _new_")
+		x.AssertTruef(!strings.HasPrefix(exid, "_new_:"), "Query shouldn't contain _new_")
 		euid = farm.Fingerprint64([]byte(exid))
 		x.Trace(ctx, "Xid: %v Uid: %v", exid, euid)
 	}
@@ -1016,8 +1016,8 @@ func runFilter(ctx context.Context, destUIDs *algo.UIDList,
 		filter.FuncName = strings.ToLower(filter.FuncName) // Not sure if needed.
 		isAnyOf := filter.FuncName == "anyof"
 		isAllOf := filter.FuncName == "allof"
-		x.Assertf(isAnyOf || isAllOf, "FuncName invalid: %s", filter.FuncName)
-		x.Assertf(len(filter.FuncArgs) == 2,
+		x.AssertTruef(isAnyOf || isAllOf, "FuncName invalid: %s", filter.FuncName)
+		x.AssertTruef(len(filter.FuncArgs) == 2,
 			"Expect exactly two arguments: pred and predValue")
 
 		attr := filter.FuncArgs[0]

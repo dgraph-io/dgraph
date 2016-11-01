@@ -197,14 +197,14 @@ func (w *grpcWorker) PredicateData(query *Payload, stream Worker_PredicateDataSe
 		// TODO: Check that key is part of the specified group id.
 		i := sort.Search(group.KeysLength(), func(i int) bool {
 			var t task.KC
-			x.Assertf(group.Keys(&t, i), "Unable to parse task.KC")
+			x.AssertTruef(group.Keys(&t, i), "Unable to parse task.KC")
 			return bytes.Compare(k.Data(), t.KeyBytes()) <= 0
 		})
 
 		if i < group.KeysLength() {
 			// Found a match.
 			var t task.KC
-			x.Assertf(group.Keys(&t, i), "Unable to parse task.KC")
+			x.AssertTruef(group.Keys(&t, i), "Unable to parse task.KC")
 
 			if bytes.Equal(k.Data(), t.KeyBytes()) && bytes.Equal(pl.Checksum(), t.ChecksumBytes()) {
 				// No need to send this.

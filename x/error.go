@@ -60,15 +60,15 @@ func Check2f(ignore interface{}, err error, format string, args ...interface{}) 
 	Checkf(err, format, args)
 }
 
-// Assert asserts that b is true. Otherwise, it would log fatal.
+// AssertTrue asserts that b is true. Otherwise, it would log fatal.
 func AssertTrue(b bool) {
 	if !b {
 		log.Fatalf("%+v", Errorf("Assert failed"))
 	}
 }
 
-// Assertf is Assert with extra info.
-func Assertf(b bool, format string, args ...interface{}) {
+// AssertTruef is AssertTrue with extra info.
+func AssertTruef(b bool, format string, args ...interface{}) {
 	if !b {
 		log.Fatalf("%+v", Errorf(format, args...))
 	}

@@ -22,6 +22,10 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
+var (
+	errRedirect = fmt.Errorf("Redirect to server serving the right raft group")
+)
+
 const (
 	mutationMsg   = 1
 	membershipMsg = 2
@@ -53,7 +57,7 @@ func (p *proposals) Store(pid uint32, ch chan error) {
 	p.Lock()
 	defer p.Unlock()
 	_, has := p.ids[pid]
-	x.Assertf(!has, "Same proposal is being stored again.")
+	x.AssertTruef(!has, "Same proposal is being stored again.")
 	p.ids[pid] = ch
 }
 
@@ -105,7 +109,7 @@ func (n *node) Connect(pid uint64, addr string) {
 
 func (n *node) AddToCluster(pid uint64) error {
 	addr := n.peers.Get(pid)
-	x.Assertf(len(addr) > 0, "Unable to find conn pool for peer: %d", pid)
+	x.AssertTruef(len(addr) > 0, "Unable to find conn pool for peer: %d", pid)
 
 	rc := task.GetRootAsRaftContext(n.raftContext, 0)
 	return n.raft.ProposeConfChange(context.TODO(), raftpb.ConfChange{
@@ -167,7 +171,7 @@ func (n *node) ProposeAndWait(ctx context.Context, msg uint16, data []byte) erro
 }
 
 func (n *node) send(m raftpb.Message) {
-	x.Assertf(n.id != m.To, "Seding message to itself")
+	x.AssertTruef(n.id != m.To, "Seding message to itself")
 	data, err := m.Marshal()
 	x.Check(err)
 	fmt.Printf("\t\tSENDING: %v %v-->%v\n", m.Type, m.From, m.To)
@@ -256,7 +260,7 @@ func (n *node) processMembership(e raftpb.Entry, h header) error {
 	mm := task.GetRootAsMembership(e.Data[h.Length():], 0)
 	fmt.Printf("group: %v Addr: %q leader: %v dead: %v\n",
 		mm.Group(), mm.Addr(), mm.Leader(), mm.Amdead())
-	groups().UpdateServer(mm)
+	groups().applyMembershipUpdate(e.Index, mm)
 	return nil
 }
 
@@ -323,9 +327,9 @@ func (n *node) processSnapshot(s raftpb.Snapshot) {
 		return
 	}
 	addr := n.peers.Get(lead)
-	x.Assertf(addr != "", "Should have the leader address: %v", lead)
+	x.AssertTruef(addr != "", "Should have the leader address: %v", lead)
 	pool := pools().get(addr)
-	x.Assertf(pool != nil, "Leader: %d pool should not be nil", lead)
+	x.AssertTruef(pool != nil, "Leader: %d pool should not be nil", lead)
 
 	_, err := populateShard(context.TODO(), pool, 0)
 	x.Checkf(err, "processSnapshot")
@@ -402,7 +406,7 @@ func (n *node) snapshotPeriodically() {
 
 func parsePeer(peer string) (uint64, string) {
 	kv := strings.SplitN(peer, ":", 2)
-	x.Assertf(len(kv) == 2, "Invalid peer format: %v", peer)
+	x.AssertTruef(len(kv) == 2, "Invalid peer format: %v", peer)
 	pid, err := strconv.ParseUint(kv[0], 10, 64)
 	x.Checkf(err, "Invalid peer id: %v", kv[0])
 	// TODO: Validate the url kv[1]
@@ -416,7 +420,7 @@ func (n *node) joinPeers(any string) {
 
 	addr := n.peers.Get(pid)
 	pool := pools().get(addr)
-	x.Assertf(pool != nil, "Unable to find addr for peer: %d", pid)
+	x.AssertTruef(pool != nil, "Unable to find addr for peer: %d", pid)
 
 	// TODO: Ask for the leader, before running populateShard.
 	// Bring the instance up to speed first.
@@ -547,52 +551,8 @@ func (n *node) InitAndStartNode(wal *raftwal.Wal, peer string) {
 	}
 	go n.Run()
 	go n.snapshotPeriodically()
-	go n.Inform()
+	// go n.Inform()
 	go n.batchAndSendMessages()
-}
-
-func (n *node) doInform(rc *task.RaftContext) {
-	s, found := groups().Server(rc.Id(), rc.Group())
-	if found && s.Addr == string(rc.Addr()) && s.Leader == n.AmLeader() {
-		return
-	}
-
-	var l byte
-	if n.AmLeader() {
-		l = byte(1)
-	}
-
-	b := flatbuffers.NewBuilder(0)
-	so := b.CreateString(string(rc.Addr()))
-	task.MembershipStart(b)
-	task.MembershipAddId(b, rc.Id())
-	task.MembershipAddGroup(b, rc.Group())
-	task.MembershipAddAddr(b, so)
-	task.MembershipAddLeader(b, l)
-	uo := task.MembershipEnd(b)
-	b.Finish(uo)
-	data := b.Bytes[b.Head():]
-
-	common := groups().Node(math.MaxUint32)
-	if common == nil {
-		return
-	}
-	x.Checkf(common.ProposeAndWait(context.TODO(), membershipMsg, data),
-		"Expected acceptance.")
-}
-
-func (n *node) Inform() {
-	rc := task.GetRootAsRaftContext(n.raftContext, 0)
-	if rc.Group() == math.MaxUint32 {
-		return
-	}
-
-	select {
-	case <-time.Tick(30 * time.Second):
-		n.doInform(rc)
-	case <-n.done:
-		return
-	}
 }
 
 func (n *node) AmLeader() bool {

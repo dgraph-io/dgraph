@@ -63,6 +63,15 @@ func pools() *poolsi {
 	return pi
 }
 
+func (p *poolsi) any() *pool {
+	p.RLock()
+	defer p.RUnlock()
+	for _, pool := range p.all {
+		return pool
+	}
+	return nil
+}
+
 func (p *poolsi) get(addr string) *pool {
 	p.RLock()
 	defer p.RUnlock()
