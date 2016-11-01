@@ -31,7 +31,6 @@ import (
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/store"
-	"github.com/dgraph-io/dgraph/uid"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -49,13 +48,6 @@ var q0 = `
 	}
 `
 
-func init() {
-	worker.ParseGroupConfig("")
-	worker.StartRaftNodes(1, "localhost:12345", "1:localhost:12345", "")
-	// Wait for the node to become leader for group 0.
-	time.Sleep(5 * time.Second)
-}
-
 func prepare() (dir1, dir2 string, ps *store.Store, rerr error) {
 	var err error
 	dir1, err = ioutil.TempDir("", "storetest_")
@@ -67,16 +59,15 @@ func prepare() (dir1, dir2 string, ps *store.Store, rerr error) {
 		return "", "", nil, err
 	}
 
-	dir2, err = ioutil.TempDir("", "storemuts_")
+	dir2, err = ioutil.TempDir("", "wal_")
 	if err != nil {
 		return dir1, "", nil, err
 	}
 
-	posting.Init()
-	worker.SetState(ps)
-	uid.Init(ps)
+	posting.Init(ps)
 	loader.Init(ps)
-	posting.InitIndex(ps)
+	worker.ParseGroupConfig("")
+	worker.StartRaftNodes(dir2)
 
 	{
 		// Then load data.
@@ -150,6 +141,7 @@ func TestAssignUid(t *testing.T) {
 	dir1, dir2, _, err := prepare()
 	require.NoError(t, err)
 	defer closeAll(dir1, dir2)
+	time.Sleep(5 * time.Second) // Wait for ME to become leader.
 
 	// Parse GQL into internal query representation.
 	_, mu, err := gql.Parse(qm)

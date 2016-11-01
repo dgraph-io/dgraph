@@ -52,6 +52,7 @@ import (
 
 var (
 	postingDir = flag.String("p", "p", "Directory to store posting lists.")
+	walDir     = flag.String("w", "w", "Directory to store raft write-ahead logs.")
 	port       = flag.Int("port", 8080, "Port to run server on.")
 	numcpu     = flag.Int("cores", runtime.NumCPU(),
 		"Number of cores to be used by the process")
@@ -60,11 +61,9 @@ var (
 	backup      = flag.Bool("backup", false, "Allow client to request a backup.")
 	tracing     = flag.Float64("trace", 0.5, "The ratio of queries to trace.")
 	schemaFile  = flag.String("schema", "", "Path to schema file")
-	rdbStats    = flag.Duration("rdbstats", 5*time.Minute,
-		"Print out RocksDB stats every this many seconds. If <=0, we don't print anyting.")
-	cpuprofile = flag.String("cpu", "", "write cpu profile to file")
-	memprofile = flag.String("mem", "", "write memory profile to file")
-	closeCh    = make(chan struct{})
+	cpuprofile  = flag.String("cpu", "", "write cpu profile to file")
+	memprofile  = flag.String("mem", "", "write memory profile to file")
+	closeCh     = make(chan struct{})
 )
 
 type mutationResult struct {
@@ -451,6 +450,15 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write(js)
 }
 
+// storeStatsHandler outputs some basic stats for data store.
+func storeStatsHandler(w http.ResponseWriter, r *http.Request) {
+	addCorsHeaders(w)
+	w.Header().Set("Content-Type", "text/html")
+	w.Write([]byte("<pre>"))
+	w.Write([]byte(worker.StoreStats()))
+	w.Write([]byte("</pre>"))
+}
+
 // server is used to implement graph.DgraphServer
 type grpcServer struct{}
 
@@ -591,6 +599,7 @@ func setupServer(che chan error) {
 	http2 := tcpm.Match(cmux.HTTP2())
 
 	http.HandleFunc("/query", queryHandler)
+	http.HandleFunc("/debug/store", storeStatsHandler)
 	// Initilize the servers.
 	go serveGRPC(grpcl)
 	go serveHTTP(httpl)
@@ -610,13 +619,6 @@ func setupServer(che chan error) {
 	che <- tcpm.Serve()
 }
 
-func printStats(ps *store.Store) {
-	for {
-		time.Sleep(*rdbStats)
-		fmt.Println(ps.GetStats())
-	}
-}
-
 func main() {
 	rand.Seed(time.Now().UnixNano())
 	x.Init()
@@ -626,20 +628,21 @@ func main() {
 	x.Checkf(err, "Error initializing postings store")
 	defer ps.Close()
 
-	posting.Init(ps)
-	worker.Init(ps)
-	go printStats(ps)
-
 	if len(*schemaFile) > 0 {
 		err = schema.Parse(*schemaFile)
 		if err != nil {
 			log.Fatalf("Error while loading schema:%v", err)
 		}
 	}
+	// Posting will initialize index which requires schema. Hence, initialize
+	// schema before calling posting.Init().
+	posting.Init(ps)
+	worker.Init(ps)
+
 	// Setup external communication.
 	che := make(chan error, 1)
 	go setupServer(che)
-	go worker.StartRaftNodes()
+	go worker.StartRaftNodes(*walDir)
 
 	if err := <-che; !strings.Contains(err.Error(),
 		"use of closed network connection") {

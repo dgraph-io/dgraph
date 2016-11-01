@@ -263,6 +263,7 @@ var (
 // Init initializes the posting lists package, the in memory and dirty list hash.
 func Init(ps *store.Store) {
 	pstore = ps
+	initIndex()
 	lhmap = newShardedListMap(*lhmapNumShards)
 	dirtyChan = make(chan uint64, 10000)
 	// Capacity is max number of gentle merges that can happen in parallel.

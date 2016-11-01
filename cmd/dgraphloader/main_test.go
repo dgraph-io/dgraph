@@ -13,7 +13,6 @@ import (
 	"github.com/dgraph-io/dgraph/loader"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/store"
-	"github.com/dgraph-io/dgraph/uid"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -25,11 +24,10 @@ func TestQuery(t *testing.T) {
 
 	ps, err := store.NewStore(dir)
 	require.NoError(t, err)
+	defer ps.Close()
 
-	posting.Init()
-	uid.Init(ps)
+	posting.Init(ps)
 	loader.Init(ps)
-	posting.InitIndex(ps)
 
 	var count uint64
 	{
@@ -48,12 +46,10 @@ func TestQuery(t *testing.T) {
 
 	{
 		f, err := os.Open("test_input")
-		if err != nil {
-			t.Error(err)
-			t.Fail()
-		}
+		require.NoError(t, err)
 		r := bufio.NewReader(f)
 		count, err = loader.LoadEdges(r, 0, 2)
+		require.NoError(t, err)
 		t.Logf("count: %v", count)
 		f.Close()
 		posting.MergeLists(100)

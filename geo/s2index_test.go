@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strings"
 	"testing"
 
 	"github.com/golang/geo/s2"
@@ -59,9 +58,7 @@ func loadPolygon(name string) (*geom.Polygon, error) {
 func TestIndexCellsPoint(t *testing.T) {
 	p := geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{-122.082506, 37.4249518})
 	parents, cover, err := indexCells(types.Geo{p})
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	require.Len(t, parents, MaxCellLevel-MinCellLevel+1)
 	c := parents[0]
 	if c.Level() != MinCellLevel {
@@ -107,13 +104,9 @@ func printCells(cu s2.CellUnion) {
 
 func TestIndexCellsPolygon(t *testing.T) {
 	p, err := loadPolygon("zip.json")
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	parents, cover, err := indexCells(types.Geo{p})
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	if len(cover) > MaxCells {
 		t.Errorf("Expected less than %d cells. Got %d instead.", MaxCells, len(cover))
 	}
@@ -129,50 +122,29 @@ func TestIndexCellsPolygon(t *testing.T) {
 func TestKeyGeneratorPoint(t *testing.T) {
 	p := geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{-122.082506, 37.4249518})
 	data, err := wkb.Marshal(p, binary.LittleEndian)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 
 	var g types.Geo
 	err = g.UnmarshalBinary(data)
 	require.NoError(t, err)
 
-	keys, err := IndexKeys(&g)
-	if err != nil {
-		t.Error(err)
-	}
+	keys, err := IndexTokens(&g)
+	require.NoError(t, err)
 	require.Len(t, keys, MaxCellLevel-MinCellLevel+1+1) // +1 for the cover
-	for _, key := range keys {
-		if !strings.HasPrefix(string(key), ":_loc_|") {
-			t.Errorf("Expected prefix ':_loc_|' for key %s", key)
-		}
-	}
 }
 
 func TestKeyGeneratorPolygon(t *testing.T) {
 	p, err := loadPolygon("zip.json")
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	data, err := wkb.Marshal(p, binary.LittleEndian)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 
 	var g types.Geo
 	err = g.UnmarshalBinary(data)
 	require.NoError(t, err)
-
-	keys, err := IndexKeys(&g)
-	if err != nil {
-		t.Error(err)
-	}
+	keys, err := IndexTokens(&g)
+	require.NoError(t, err)
 	require.Len(t, keys, 65)
-	for _, key := range keys {
-		if !strings.HasPrefix(string(key), ":_loc_|") {
-			t.Errorf("Expected prefix ':_loc_|' for key %s", key)
-		}
-	}
 }
 
 func testCover(file string, max int) {
@@ -262,7 +234,7 @@ func BenchmarkKeyGeneratorPoint(b *testing.B) {
 	g.UnmarshalBinary(data)
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		IndexKeys(&g)
+		IndexTokens(&g)
 	}
 }
 
@@ -279,7 +251,7 @@ func BenchmarkKeyGeneratorPolygon(b *testing.B) {
 	g.UnmarshalBinary(data)
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		IndexKeys(&g)
+		IndexTokens(&g)
 	}
 }
 

@@ -76,10 +76,6 @@ func TestKey(t *testing.T) {
 	}
 }
 
-func getLength(l *List) int {
-	return l.Length(0)
-}
-
 func TestAddMutation(t *testing.T) {
 	l := getNew()
 	key := Key(1, "name")
@@ -220,6 +216,7 @@ func TestAddMutation_jchiu1(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, merged)
 
+	require.EqualValues(t, 1, ol.Length(0))
 	checkValue(t, ol, "cars")
 
 	// Set value to newcars, but don't merge yet.
@@ -229,6 +226,7 @@ func TestAddMutation_jchiu1(t *testing.T) {
 		Timestamp: time.Now(),
 	}
 	addMutation(t, ol, edge, Set)
+	require.EqualValues(t, 1, ol.Length(0))
 	checkValue(t, ol, "newcars")
 
 	// Set value to someothercars, but don't merge yet.
@@ -238,6 +236,7 @@ func TestAddMutation_jchiu1(t *testing.T) {
 		Timestamp: time.Now(),
 	}
 	addMutation(t, ol, edge, Set)
+	require.EqualValues(t, 1, ol.Length(0))
 	checkValue(t, ol, "someothercars")
 
 	// Set value back to the committed value cars, but don't merge yet.
@@ -247,6 +246,7 @@ func TestAddMutation_jchiu1(t *testing.T) {
 		Timestamp: time.Now(),
 	}
 	addMutation(t, ol, edge, Set)
+	require.EqualValues(t, 1, ol.Length(0))
 	checkValue(t, ol, "cars")
 }
 
@@ -268,6 +268,7 @@ func TestAddMutation_jchiu2(t *testing.T) {
 		Timestamp: time.Now(),
 	}
 	addMutation(t, ol, edge, Del)
+	require.EqualValues(t, 0, ol.Length(0))
 
 	// Set value to newcars, but don't merge yet.
 	edge = x.DirectedEdge{
@@ -277,15 +278,17 @@ func TestAddMutation_jchiu2(t *testing.T) {
 	}
 	addMutation(t, ol, edge, Set)
 	require.NoError(t, err)
+	require.EqualValues(t, 1, ol.Length(0))
 	checkValue(t, ol, "newcars")
 
-	// Set value back to cars, but don't merge yet.
+	// Del a value cars. This operation should be ignored.
 	edge = x.DirectedEdge{
 		Value:     []byte("cars"),
 		Source:    "jchiu",
 		Timestamp: time.Now(),
 	}
 	addMutation(t, ol, edge, Del)
+	require.EqualValues(t, 1, ol.Length(0))
 	checkValue(t, ol, "newcars")
 }
 
@@ -307,9 +310,11 @@ func TestAddMutation_jchiu3(t *testing.T) {
 		Timestamp: time.Now(),
 	}
 	addMutation(t, ol, edge, Set)
+	require.Equal(t, 1, ol.Length(0))
 	merged, err := ol.CommitIfDirty(context.Background())
 	require.NoError(t, err)
 	require.True(t, merged)
+	require.EqualValues(t, 1, ol.Length(0))
 	checkValue(t, ol, "cars")
 
 	// Del a value cars and but don't merge.
@@ -319,7 +324,7 @@ func TestAddMutation_jchiu3(t *testing.T) {
 		Timestamp: time.Now(),
 	}
 	addMutation(t, ol, edge, Del)
-	require.Equal(t, getLength(ol), 0)
+	require.Equal(t, 0, ol.Length(0))
 
 	// Set value to newcars, but don't merge yet.
 	edge = x.DirectedEdge{
@@ -328,6 +333,7 @@ func TestAddMutation_jchiu3(t *testing.T) {
 		Timestamp: time.Now(),
 	}
 	addMutation(t, ol, edge, Set)
+	require.EqualValues(t, 1, ol.Length(0))
 	checkValue(t, ol, "newcars")
 
 	// Del a value othercars and but don't merge.
@@ -337,7 +343,7 @@ func TestAddMutation_jchiu3(t *testing.T) {
 		Timestamp: time.Now(),
 	}
 	addMutation(t, ol, edge, Del)
-	require.NotEqual(t, getLength(ol), 0)
+	require.NotEqual(t, 0, ol.Length(0))
 	checkValue(t, ol, "newcars")
 
 	// Del a value newcars and but don't merge.
@@ -347,7 +353,7 @@ func TestAddMutation_jchiu3(t *testing.T) {
 		Timestamp: time.Now(),
 	}
 	addMutation(t, ol, edge, Del)
-	require.Equal(t, getLength(ol), 0)
+	require.Equal(t, 0, ol.Length(0))
 }
 
 func TestAddMutation_mrjn1(t *testing.T) {
@@ -388,7 +394,7 @@ func TestAddMutation_mrjn1(t *testing.T) {
 		Timestamp: time.Now(),
 	}
 	addMutation(t, ol, edge, Del)
-	require.Equal(t, getLength(ol), 0)
+	require.Equal(t, 0, ol.Length(0))
 
 	// Do this again to cover Del, muid == curUid, inPlist test case.
 	// Delete the previously committed value cars. But don't merge.
@@ -398,7 +404,7 @@ func TestAddMutation_mrjn1(t *testing.T) {
 		Timestamp: time.Now(),
 	}
 	addMutation(t, ol, edge, Del)
-	require.Equal(t, getLength(ol), 0)
+	require.Equal(t, 0, ol.Length(0))
 
 	// Set the value again to cover Set, muid == curUid, inPlist test case.
 	// Set the previously committed value cars. But don't merge.
@@ -417,7 +423,7 @@ func TestAddMutation_mrjn1(t *testing.T) {
 		Timestamp: time.Now(),
 	}
 	addMutation(t, ol, edge, Del)
-	require.Equal(t, getLength(ol), 0)
+	require.Equal(t, 0, ol.Length(0))
 }
 
 func TestAddMutation_checksum(t *testing.T) {
@@ -632,6 +638,218 @@ func TestAddMutation_gru2(t *testing.T) {
 	// Posting list should just have the new tag.
 	uids := []uint64{0x04}
 	require.Equal(t, uids, listToArray(t, 0, ol))
+}
+
+func TestAfterUIDCount(t *testing.T) {
+	ol := getNew()
+	key := Key(10, "value")
+	dir, err := ioutil.TempDir("", "storetest_")
+	require.NoError(t, err)
+	defer os.RemoveAll(dir)
+
+	ps, err := store.NewStore(dir)
+	require.NoError(t, err)
+	ol.init(key, ps)
+
+	// Set value to cars and merge to RocksDB.
+	edge := x.DirectedEdge{
+		Source:    "jchiu",
+		Timestamp: time.Now(),
+	}
+
+	for i := 100; i < 300; i++ {
+		edge.ValueId = uint64(i)
+		addMutation(t, ol, edge, Set)
+	}
+	require.EqualValues(t, 200, ol.Length(0))
+	require.EqualValues(t, 100, ol.Length(199))
+	require.EqualValues(t, 0, ol.Length(300))
+
+	// Delete half of the edges.
+	for i := 100; i < 300; i += 2 {
+		edge.ValueId = uint64(i)
+		addMutation(t, ol, edge, Del)
+	}
+	require.EqualValues(t, 100, ol.Length(0))
+	require.EqualValues(t, 50, ol.Length(199))
+	require.EqualValues(t, 0, ol.Length(300))
+
+	// Try to delete half of the edges. Redundant deletes.
+	for i := 100; i < 300; i += 2 {
+		edge.ValueId = uint64(i)
+		addMutation(t, ol, edge, Del)
+	}
+	require.EqualValues(t, 100, ol.Length(0))
+	require.EqualValues(t, 50, ol.Length(199))
+	require.EqualValues(t, 0, ol.Length(300))
+
+	// Delete everything.
+	for i := 100; i < 300; i++ {
+		edge.ValueId = uint64(i)
+		addMutation(t, ol, edge, Del)
+	}
+	require.EqualValues(t, 0, ol.Length(0))
+	require.EqualValues(t, 0, ol.Length(199))
+	require.EqualValues(t, 0, ol.Length(300))
+
+	// Insert 1/4 of the edges.
+	for i := 100; i < 300; i += 4 {
+		edge.ValueId = uint64(i)
+		addMutation(t, ol, edge, Set)
+	}
+	require.EqualValues(t, 50, ol.Length(0))
+	require.EqualValues(t, 25, ol.Length(199))
+	require.EqualValues(t, 0, ol.Length(300))
+
+	// Insert 1/4 of the edges.
+	edge.Timestamp = time.Now() // Force an update of the edge.
+	edge.Source = "somethingelse"
+	for i := 100; i < 300; i += 4 {
+		edge.ValueId = uint64(i)
+		addMutation(t, ol, edge, Set)
+	}
+	require.EqualValues(t, 50, ol.Length(0)) // Expect no change.
+	require.EqualValues(t, 25, ol.Length(199))
+	require.EqualValues(t, 0, ol.Length(300))
+
+	// Insert 1/4 of the edges.
+	for i := 103; i < 300; i += 4 {
+		edge.ValueId = uint64(i)
+		addMutation(t, ol, edge, Set)
+	}
+	require.EqualValues(t, 100, ol.Length(0))
+	require.EqualValues(t, 50, ol.Length(199))
+	require.EqualValues(t, 0, ol.Length(300))
+}
+
+func TestAfterUIDCount2(t *testing.T) {
+	ol := getNew()
+	key := Key(10, "value")
+	dir, err := ioutil.TempDir("", "storetest_")
+	require.NoError(t, err)
+	defer os.RemoveAll(dir)
+
+	ps, err := store.NewStore(dir)
+	require.NoError(t, err)
+	ol.init(key, ps)
+
+	// Set value to cars and merge to RocksDB.
+	edge := x.DirectedEdge{
+		Source:    "jchiu",
+		Timestamp: time.Now(),
+	}
+
+	for i := 100; i < 300; i++ {
+		edge.ValueId = uint64(i)
+		addMutation(t, ol, edge, Set)
+	}
+	require.EqualValues(t, 200, ol.Length(0))
+	require.EqualValues(t, 100, ol.Length(199))
+	require.EqualValues(t, 0, ol.Length(300))
+
+	// Re-insert 1/4 of the edges. Counts should not change.
+	edge.Timestamp = time.Now() // Force an update of the edge.
+	edge.Source = "somethingelse"
+	for i := 100; i < 300; i += 4 {
+		edge.ValueId = uint64(i)
+		addMutation(t, ol, edge, Set)
+	}
+	require.EqualValues(t, 200, ol.Length(0))
+	require.EqualValues(t, 100, ol.Length(199))
+	require.EqualValues(t, 0, ol.Length(300))
+}
+
+func TestAfterUIDCountWithCommit(t *testing.T) {
+	ol := getNew()
+	key := Key(10, "value")
+	dir, err := ioutil.TempDir("", "storetest_")
+	require.NoError(t, err)
+	defer os.RemoveAll(dir)
+
+	ps, err := store.NewStore(dir)
+	require.NoError(t, err)
+	ol.init(key, ps)
+
+	// Set value to cars and merge to RocksDB.
+	edge := x.DirectedEdge{
+		Source:    "jchiu",
+		Timestamp: time.Now(),
+	}
+
+	for i := 100; i < 300; i++ {
+		edge.ValueId = uint64(i)
+		addMutation(t, ol, edge, Set)
+	}
+	require.EqualValues(t, 200, ol.Length(0))
+	require.EqualValues(t, 100, ol.Length(199))
+	require.EqualValues(t, 0, ol.Length(300))
+
+	// Commit to database.
+	merged, err := ol.CommitIfDirty(context.Background())
+	require.NoError(t, err)
+	require.True(t, merged)
+
+	// Mutation layer starts afresh from here.
+	// Delete half of the edges.
+	for i := 100; i < 300; i += 2 {
+		edge.ValueId = uint64(i)
+		addMutation(t, ol, edge, Del)
+	}
+	require.EqualValues(t, 100, ol.Length(0))
+	require.EqualValues(t, 50, ol.Length(199))
+	require.EqualValues(t, 0, ol.Length(300))
+
+	// Try to delete half of the edges. Redundant deletes.
+	for i := 100; i < 300; i += 2 {
+		edge.ValueId = uint64(i)
+		addMutation(t, ol, edge, Del)
+	}
+	require.EqualValues(t, 100, ol.Length(0))
+	require.EqualValues(t, 50, ol.Length(199))
+	require.EqualValues(t, 0, ol.Length(300))
+
+	// Delete everything.
+	for i := 100; i < 300; i++ {
+		edge.ValueId = uint64(i)
+		addMutation(t, ol, edge, Del)
+	}
+	require.EqualValues(t, 0, ol.Length(0))
+	require.EqualValues(t, 0, ol.Length(199))
+	require.EqualValues(t, 0, ol.Length(300))
+
+	// Insert 1/4 of the edges.
+	for i := 100; i < 300; i += 4 {
+		edge.ValueId = uint64(i)
+		addMutation(t, ol, edge, Set)
+	}
+	require.EqualValues(t, 50, ol.Length(0))
+	require.EqualValues(t, 25, ol.Length(199))
+	require.EqualValues(t, 0, ol.Length(300))
+
+	// Insert 1/4 of the edges.
+	edge.Timestamp = time.Now() // Force an update of the edge.
+	edge.Source = "somethingelse"
+	for i := 100; i < 300; i += 4 {
+		edge.ValueId = uint64(i)
+		addMutation(t, ol, edge, Set)
+	}
+	require.EqualValues(t, 50, ol.Length(0)) // Expect no change.
+	require.EqualValues(t, 25, ol.Length(199))
+	require.EqualValues(t, 0, ol.Length(300))
+
+	// Insert 1/4 of the edges.
+	for i := 103; i < 300; i += 4 {
+		edge.ValueId = uint64(i)
+		addMutation(t, ol, edge, Set)
+	}
+	require.EqualValues(t, 100, ol.Length(0))
+	require.EqualValues(t, 50, ol.Length(199))
+	require.EqualValues(t, 0, ol.Length(300))
+}
+
+func TestMain(m *testing.M) {
+	x.Init()
+	os.Exit(m.Run())
 }
 
 func BenchmarkAddMutations(b *testing.B) {

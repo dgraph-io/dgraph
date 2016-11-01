@@ -37,22 +37,12 @@ import (
 
 func createTestStore(t *testing.T) (string, *store.Store) {
 	dir, err := ioutil.TempDir("", "storetest_")
-	if err != nil {
-		t.Error(err)
-		return "", nil
-	}
-
+	require.NoError(t, err)
 	ps, err := store.NewStore(dir)
-	if err != nil {
-		t.Error(err)
-		return "", nil
-	}
+	require.NoError(t, err)
 
-	worker.SetState(ps)
-
-	posting.Init()
 	schema.ParseBytes([]byte(`scalar geometry:geo @index`))
-	posting.InitIndex(ps)
+	posting.Init(ps)
 	return dir, ps
 }
 
@@ -65,6 +55,11 @@ func addGeoData(t *testing.T, ps *store.Store, uid uint64, p geom.T, name string
 }
 
 func createTestData(t *testing.T, ps *store.Store) {
+	dir, err := ioutil.TempDir("", "wal")
+	require.NoError(t, err)
+	worker.ParseGroupConfig("")
+	worker.StartRaftNodes(dir)
+
 	p := geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{-122.082506, 37.4249518})
 	addGeoData(t, ps, 1, p, "Googleplex")
 

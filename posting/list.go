@@ -44,8 +44,12 @@ var E_TMP_ERROR = fmt.Errorf("Temporary Error. Please retry.")
 var ErrNoValue = fmt.Errorf("No value found")
 
 const (
+	// Set means overwrite in mutation layer. It contributes 0 in Length.
 	Set byte = 0x01
+	// Del means delete in mutation layer. It contributes -1 in Length.
 	Del byte = 0x02
+	// Add means add new element in mutation layer. It contributes 1 in Length.
+	Add byte = 0x03
 )
 
 type buffer struct {
@@ -308,6 +312,7 @@ func (l *List) SetForDeletion() {
 }
 
 func (l *List) updateMutationLayer(mpost *types.Posting) bool {
+	x.Assert(mpost.Op() == Set || mpost.Op() == Del)
 	findUid := mpost.Uid()
 
 	// First check the mutable layer.
@@ -315,53 +320,82 @@ func (l *List) updateMutationLayer(mpost *types.Posting) bool {
 		mp := l.mlayer[idx]
 		return findUid <= mp.Uid()
 	})
-	if midx < len(l.mlayer) {
-		// Found this in mlayer.
-		mp := l.mlayer[midx]
-		msame := samePosting(mp, mpost)
-		if msame && mp.Op() == mpost.Op() {
-			// Everything is the same. No change.
+
+	// This block handles the case where mpost.UID is found in mutation layer.
+	if midx < len(l.mlayer) && l.mlayer[midx].Uid() == mpost.Uid() {
+		// mp is the posting found in mlayer.
+		oldPost := l.mlayer[midx]
+
+		// Note that mpost.Op is either Set or Del, whereas oldPost.Op can be
+		// either Set or Del or Add.
+		msame := samePosting(oldPost, mpost)
+		if msame && ((mpost.Op() == Del) == (oldPost.Op() == Del)) {
+			// This posting has similar content as what is found in mlayer. If the
+			// ops are similar, then we do nothing. Note that Add and Set are
+			// considered similar, and the second clause is true also when
+			// mpost.Op==Add and oldPost.Op==Set.
 			return false
 		}
-		if mp.Uid() == mpost.Uid() {
-			if !msame && mpost.Op() == Del {
-				return false
-			}
-			// Same UID. So, set the new version.
-			l.mlayer[midx] = mpost
-			return true
+
+		if !msame && mpost.Op() == Del {
+			// Invalid Del as contents do not match.
+			return false
 		}
+
+		// Here are the remaining cases.
+		// Del, Set: Replace with new post.
+		// Del, Del: Replace with new post.
+		// Set, Del: Replace with new post.
+		// Set, Set: Replace with new post.
+		// Add, Del: Undo by removing oldPost.
+		// Add, Set: Replace with new post. Need to set mpost.Op to Add.
+		if oldPost.Op() == Add {
+			if mpost.Op() == Del {
+				// Undo old post.
+				copy(l.mlayer[midx:], l.mlayer[midx+1:])
+				l.mlayer[len(l.mlayer)-1] = nil
+				l.mlayer = l.mlayer[:len(l.mlayer)-1]
+				return true
+			}
+			// Add followed by Set is considered an Add. Hence, mutate mpost.Op.
+			x.Assert(mpost.MutateOp(Add))
+		}
+		l.mlayer[midx] = mpost
+		return true
 	}
 
 	// Didn't find it in mutable layer. Now check the immutable layer.
 	pl := l.getPostingList()
 	pidx := sort.Search(pl.PostingsLength(), func(idx int) bool {
-		p := new(types.Posting)
-		x.Assert(pl.Postings(p, idx))
+		var p types.Posting
+		x.Assert(pl.Postings(&p, idx))
 		return findUid <= p.Uid()
 	})
+
+	var uidFound, psame bool
 	if pidx < pl.PostingsLength() {
 		p := new(types.Posting)
 		x.Assertf(pl.Postings(p, pidx), "Unable to parse Posting at index: %v", pidx)
-
-		psame := samePosting(p, mpost)
-		if psame && mpost.Op() == Set {
-			// Found exact same posting in immutable layer. So, no need to Set.
-			return false
-		}
-		if p.Uid() != mpost.Uid() && mpost.Op() == Del {
-			// Couldn't find the posting in immutable layer. So, no need to Del.
-			return false
-		}
-		if p.Uid() == mpost.Uid() && mpost.Op() == Del {
-			// Found the index in the immutable layer, but
-			if !psame {
-				return false
-			}
+		uidFound = mpost.Uid() == p.Uid()
+		if uidFound {
+			psame = samePosting(p, mpost)
 		}
 	}
-	// Doesn't match what we already have in immutable layer. So, add to mutable layer.
 
+	if mpost.Op() == Set {
+		if psame {
+			return false
+		}
+		if !uidFound {
+			// Posting not found in PL. This is considered an Add operation.
+			mpost.MutateOp(Add)
+		}
+	} else if !psame { // mpost.Op==Del
+		// Either we fail to find UID in immutable PL or contents don't match.
+		return false
+	}
+
+	// Doesn't match what we already have in immutable layer. So, add to mutable layer.
 	if midx >= len(l.mlayer) {
 		// Add it at the end.
 		l.mlayer = append(l.mlayer, mpost)
@@ -498,12 +532,12 @@ func (l *List) iterate(afterUid uint64, f func(obj *types.Posting) bool) {
 			cont = f(pp)
 			pidx++
 		case pp.Uid() == 0 || (mp.Uid() > 0 && mp.Uid() < pp.Uid()):
-			if mp.Op() == Set {
+			if mp.Op() != Del {
 				cont = f(mp)
 			}
 			midx++
 		case pp.Uid() == mp.Uid():
-			if mp.Op() == Set {
+			if mp.Op() != Del {
 				cont = f(mp)
 			}
 			pidx++
@@ -514,13 +548,31 @@ func (l *List) iterate(afterUid uint64, f func(obj *types.Posting) bool) {
 	}
 }
 
-// Length iterates over the posting list and counts the number of elements. This is NOT CHEAP. So, use it sparingly.
+// Length iterates over the mutation layer and counts number of elements.
 func (l *List) Length(afterUid uint64) int {
-	count := 0
-	l.Iterate(afterUid, func(*types.Posting) bool {
-		count++
-		return true
-	})
+	pidx, midx := 0, 0
+	pl := l.getPostingList()
+
+	if afterUid > 0 {
+		pidx = sort.Search(pl.PostingsLength(), func(idx int) bool {
+			p := new(types.Posting)
+			x.Assert(pl.Postings(p, idx))
+			return afterUid < p.Uid()
+		})
+		midx = sort.Search(len(l.mlayer), func(idx int) bool {
+			mp := l.mlayer[idx]
+			return afterUid < mp.Uid()
+		})
+	}
+
+	count := pl.PostingsLength() - pidx
+	for _, p := range l.mlayer[midx:] {
+		if p.Op() == Add {
+			count++
+		} else if p.Op() == Del {
+			count--
+		}
+	}
 	return count
 }
 

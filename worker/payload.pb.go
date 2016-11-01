@@ -64,6 +64,7 @@ type WorkerClient interface {
 	Mutate(ctx context.Context, in *Payload, opts ...grpc.CallOption) (*Payload, error)
 	ServeTask(ctx context.Context, in *Payload, opts ...grpc.CallOption) (*Payload, error)
 	PredicateData(ctx context.Context, in *Payload, opts ...grpc.CallOption) (Worker_PredicateDataClient, error)
+	Sort(ctx context.Context, in *Payload, opts ...grpc.CallOption) (*Payload, error)
 	RaftMessage(ctx context.Context, in *Payload, opts ...grpc.CallOption) (*Payload, error)
 	JoinCluster(ctx context.Context, in *Payload, opts ...grpc.CallOption) (*Payload, error)
 	InitiateBackup(ctx context.Context, in *Payload, opts ...grpc.CallOption) (*Payload, error)
@@ -145,6 +146,15 @@ func (x *workerPredicateDataClient) Recv() (*Payload, error) {
 	return m, nil
 }
 
+func (c *workerClient) Sort(ctx context.Context, in *Payload, opts ...grpc.CallOption) (*Payload, error) {
+	out := new(Payload)
+	err := grpc.Invoke(ctx, "/worker.Worker/Sort", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *workerClient) RaftMessage(ctx context.Context, in *Payload, opts ...grpc.CallOption) (*Payload, error) {
 	out := new(Payload)
 	err := grpc.Invoke(ctx, "/worker.Worker/RaftMessage", in, out, c.cc, opts...)
@@ -180,6 +190,7 @@ type WorkerServer interface {
 	Mutate(context.Context, *Payload) (*Payload, error)
 	ServeTask(context.Context, *Payload) (*Payload, error)
 	PredicateData(*Payload, Worker_PredicateDataServer) error
+	Sort(context.Context, *Payload) (*Payload, error)
 	RaftMessage(context.Context, *Payload) (*Payload, error)
 	JoinCluster(context.Context, *Payload) (*Payload, error)
 	InitiateBackup(context.Context, *Payload) (*Payload, error)
@@ -282,6 +293,24 @@ func (x *workerPredicateDataServer) Send(m *Payload) error {
 	return x.ServerStream.SendMsg(m)
 }
 
+func _Worker_Sort_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Payload)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WorkerServer).Sort(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/worker.Worker/Sort",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WorkerServer).Sort(ctx, req.(*Payload))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Worker_RaftMessage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(Payload)
 	if err := dec(in); err != nil {
@@ -355,6 +384,10 @@ var _Worker_serviceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ServeTask",
 			Handler:    _Worker_ServeTask_Handler,
+		},
+		{
+			MethodName: "Sort",
+			Handler:    _Worker_Sort_Handler,
 		},
 		{
 			MethodName: "RaftMessage",

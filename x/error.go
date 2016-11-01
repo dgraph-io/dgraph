@@ -93,6 +93,11 @@ func Errorf(format string, args ...interface{}) error {
 	return errors.Errorf(format, args...)
 }
 
+// Fatalf logs fatal.
+func Fatalf(format string, args ...interface{}) {
+	log.Fatalf("%+v", Errorf(format, args...))
+}
+
 const (
 	dgraphPrefix  = "github.com/dgraph-io/dgraph/"
 	runtimePrefix = "src/runtime/"

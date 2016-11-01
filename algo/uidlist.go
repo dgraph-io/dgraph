@@ -51,6 +51,31 @@ func FromTaskResult(r *task.Result) []*UIDList {
 	return out
 }
 
+// FromSortResult parses task.Result and extracts a []*UIDList.
+func FromSortResult(r *task.SortResult) []*UIDList {
+	out := make([]*UIDList, r.UidmatrixLength())
+	for i := 0; i < r.UidmatrixLength(); i++ {
+		tl := new(task.UidList)
+		x.Assert(r.Uidmatrix(tl, i))
+		ul := new(UIDList)
+		ul.FromTask(tl)
+		out[i] = ul
+	}
+	return out
+}
+
+// AddSlice adds a list of uint64s to UIDList.
+func (u *UIDList) AddSlice(e []uint64) {
+	x.Assert(u.uints != nil)
+	u.uints = append(u.uints, e...)
+}
+
+// Add adds a single uint64 to UIDList.
+func (u *UIDList) Add(e uint64) {
+	x.Assert(u.uints != nil)
+	u.uints = append(u.uints, e)
+}
+
 // Get returns the i-th element of UIDList.
 func (u *UIDList) Get(i int) uint64 {
 	if u.list != nil {
@@ -74,7 +99,7 @@ func (u *UIDList) Size() int {
 }
 
 // Reslice selects a slice of the data.
-func (u *UIDList) ApplyFilter(f func(uid uint64) bool) {
+func (u *UIDList) ApplyFilter(f func(uint64, int) bool) {
 	x.Assert(u != nil && (u.uints != nil || u.list != nil))
 	var out []uint64
 	if u.uints != nil {
@@ -85,7 +110,7 @@ func (u *UIDList) ApplyFilter(f func(uid uint64) bool) {
 	n := u.Size()
 	for i := 0; i < n; i++ {
 		uid := u.Get(i)
-		if f(uid) {
+		if f(uid, i) {
 			out = append(out, uid)
 		}
 	}
@@ -174,13 +199,13 @@ func IntersectLists(lists []*UIDList) *UIDList {
 
 	// Our final output. Give it some capacity.
 	output := make([]uint64, 0, minLen)
-	// idx[i] is the element we are looking at for lists[i].
-	idx := make([]int, len(lists))
+	// lptrs[j] is the element we are looking at for lists[j].
+	lptrs := make([]int, len(lists))
 	shortList := lists[minLenIdx]
 	for i := 0; i < shortList.Size(); i++ {
 		val := shortList.Get(i)
 		if i > 0 && val == shortList.Get(i-1) {
-			continue // Avoid duplicates.
+			x.Assertf(false, "We shouldn't have duplicates in UIDLists")
 		}
 
 		var skip bool                     // Should we skip val in output?
@@ -189,17 +214,19 @@ func IntersectLists(lists []*UIDList) *UIDList {
 				// No point checking yourself.
 				continue
 			}
-			l := lists[j]
-			lidx := idx[j]
-			lsz := l.Size()
-			for ; lidx < lsz && l.Get(lidx) < val; lidx++ {
+
+			lj := lists[j]
+			ljp := lptrs[j]
+			lsz := lj.Size()
+			for ; ljp < lsz && lj.Get(ljp) < val; ljp++ {
 			}
-			idx[j] = lidx
-			if lidx >= lsz || l.Get(lidx) > val {
+
+			lptrs[j] = ljp
+			if ljp >= lsz || lj.Get(ljp) > val {
 				skip = true
 				break
 			}
-			// Otherwise, l[k] = val and we continue checking other lists.
+			// Otherwise, lj.Get(ljp) = val and we continue checking other lists.
 		}
 		if !skip {
 			output = append(output, val)
@@ -307,4 +334,10 @@ func ToUintsListForTest(ul []*UIDList) [][]uint64 {
 		out = append(out, u.ToUintsForTest())
 	}
 	return out
+}
+
+// Swap swaps two elements. Logs fatal if UIDList is not stored as []uint64.
+func (u *UIDList) Swap(i, j int) {
+	x.Assert(u.uints != nil)
+	u.uints[i], u.uints[j] = u.uints[j], u.uints[i]
 }
