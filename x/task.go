@@ -22,14 +22,13 @@ import (
 	"github.com/dgraph-io/dgraph/task"
 )
 
-type CountList struct {
-	task.CountList
-}
+// CountList wraps task.CountList and provides serialization.
+type CountList struct{ task.CountList }
 
-type ValueList struct {
-	task.ValueList
-}
+// ValueList wraps task.ValueList and provides serialization.
+type ValueList struct{ task.ValueList }
 
+// MarshalBinary serializes CountList.
 func (l *CountList) MarshalBinary() ([]byte, error) {
 	b := flatbuffers.NewBuilder(0)
 	n := l.CountLength()
@@ -44,11 +43,13 @@ func (l *CountList) MarshalBinary() ([]byte, error) {
 	return b.FinishedBytes(), nil
 }
 
+// MarshalBinary deserializes CountList.
 func (l *CountList) UnmarshalBinary(buf []byte) error {
 	l.Init(buf, flatbuffers.GetUOffsetT(buf))
 	return nil
 }
 
+// MarshalBinary serializes ValueList.
 func (l *ValueList) MarshalBinary() ([]byte, error) {
 	b := flatbuffers.NewBuilder(0)
 	n := l.ValuesLength()
@@ -76,6 +77,7 @@ func (l *ValueList) MarshalBinary() ([]byte, error) {
 	return b.FinishedBytes(), nil
 }
 
+// MarshalBinary deserializes ValueList.
 func (l *ValueList) UnmarshalBinary(buf []byte) error {
 	l.Init(buf, flatbuffers.GetUOffsetT(buf))
 	return nil

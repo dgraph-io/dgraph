@@ -62,6 +62,8 @@ for S in dumpsg/*.gob; do
 done
 ```
 
-```
+# Copy to benchmarks directory
+
+```shell
 cp -vf /tmp/*.gob ./
 ```

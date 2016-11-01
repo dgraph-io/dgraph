@@ -1438,24 +1438,14 @@ func benchmarkToJSON(file string, b *testing.B) {
 
 	f, err := ioutil.ReadFile(file)
 	if err != nil {
-		b.Fatal(err)
+		b.Error(err)
 	}
 
 	buf := bytes.NewBuffer(f)
 	dec := gob.NewDecoder(buf)
 	err = dec.Decode(&sg)
 	if err != nil {
-		b.Fatal(err)
-	}
-
-	x.Printf("~~~~~%v", sg.SrcUIDs.DebugString())
-	x.Printf("~~~~~%v", sg.DestUIDs.DebugString())
-	x.Printf("~~~~~%v", len(sg.Result))
-	if sg.Values != nil {
-		x.Printf("~~~~~%v", sg.Values.ValuesLength())
-	}
-	if sg.Counts != nil {
-		x.Printf("~~~~~%v", sg.Counts.CountLength())
+		b.Error(err)
 	}
 
 	b.ResetTimer()
