@@ -13,6 +13,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
+// UIDList is a list of UIDs that can be stored in different forms.
 type UIDList struct {
 	uints []uint64
 	list  *task.UidList
@@ -33,7 +34,7 @@ func (u *UIDList) FromUints(data []uint64) {
 	u.uints = data
 }
 
-// FromUints initialize UIDList from task.UidList.
+// FromTask initialize UIDList from task.UidList.
 func (u *UIDList) FromTask(data *task.UidList) {
 	x.Assert(u != nil && u.uints == nil && u.list == nil)
 	u.list = data
@@ -99,7 +100,7 @@ func (u *UIDList) Size() int {
 	return len(u.uints)
 }
 
-// Reslice selects a slice of the data.
+// ApplyFilter applies a filter to our data.
 func (u *UIDList) ApplyFilter(f func(uint64, int) bool) {
 	x.Assert(u != nil && (u.uints != nil || u.list != nil))
 	var out []uint64
@@ -294,7 +295,7 @@ func (u *UIDList) IndexOf(uid uint64) int {
 	return -1
 }
 
-// UidlistOffset adds a UidList to buffer and returns the offset.
+// AddTo adds a UidList to buffer and returns the offset.
 func (u *UIDList) AddTo(b *flatbuffers.Builder) flatbuffers.UOffsetT {
 	x.Assert(u != nil && (u.uints != nil || u.list != nil))
 	n := u.Size()
