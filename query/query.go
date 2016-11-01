@@ -140,8 +140,8 @@ type SubGraph struct {
 	Filter    *gql.FilterTree
 	GeoFilter *geo.Filter // TODO: We shouldn't have a special case for this.
 
-	Counts x.CountList
-	Values x.ValueList
+	Counts *x.CountList
+	Values *x.ValueList
 	Result []*algo.UIDList
 
 	// srcUIDs is a list of unique source UIDs. They are always copies of destUIDs
@@ -221,6 +221,7 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 	r := sg.Result
 	x.Assertf(sg.SrcUIDs.Size() == len(r),
 		"Result uidmatrixlength: %v. Query uidslength: %v", sg.SrcUIDs.Size(), len(r))
+	x.Assertf(sg.Values != nil, "%s %d", sg.Attr, sg.SrcUIDs.Size())
 	x.Assertf(sg.SrcUIDs.Size() == sg.Values.ValuesLength(),
 		"Result valuelength: %v. Query uidslength: %v", sg.SrcUIDs.Size(), sg.Values.ValuesLength())
 
@@ -236,7 +237,7 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 	//                          list of maps of {uid, uid + children result}]
 	//
 
-	if sg.Counts.CountList != nil && sg.Counts.CountLength() > 0 {
+	if sg.Counts != nil && sg.Counts.CountLength() > 0 {
 		for i := 0; i < sg.Counts.CountLength(); i++ {
 			co := sg.Counts.Count(i)
 			m := make(map[string]interface{})
@@ -447,7 +448,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 		}
 
 		ul := pc.Result[idx]
-		if sg.Counts.CountList != nil && sg.Counts.CountLength() > 0 {
+		if sg.Counts != nil && sg.Counts.CountLength() > 0 {
 			c := types.Int32(sg.Counts.Count(idx))
 			p := createProperty("_count_", &c)
 			uc := &graph.Node{
@@ -734,7 +735,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	return sg, nil
 }
 
-func createNilValuesList(count int) x.ValueList {
+func createNilValuesList(count int) *x.ValueList {
 	b := flatbuffers.NewBuilder(0)
 	offsets := make([]flatbuffers.UOffsetT, count)
 	for i := 0; i < count; i++ {
@@ -754,7 +755,9 @@ func createNilValuesList(count int) x.ValueList {
 	task.ValueListAddValues(b, voffset)
 	b.Finish(task.ValueListEnd(b))
 	buf := b.FinishedBytes()
-	return x.ValueList{task.GetRootAsValueList(buf, 0)}
+	out := new(x.ValueList)
+	out.Init(buf, 0)
+	return out
 }
 
 // createTaskQuery generates the query buffer.
@@ -827,7 +830,8 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, taskQuery []byte, rch chan 
 		sg.Result = algo.FromTaskResult(r)
 
 		// Extract values from task.Result.
-		sg.Values = x.ValueList{r.Values(nil)}
+		sg.Values = new(x.ValueList)
+		x.Assert(r.Values(&sg.Values.ValueList) != nil)
 		if sg.Values.ValuesLength() > 0 {
 			var v task.Value
 			if sg.Values.Values(&v, 0) {
@@ -836,7 +840,8 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, taskQuery []byte, rch chan 
 		}
 
 		// Extract counts from task.Result.
-		sg.Counts = x.CountList{r.Count(nil)}
+		sg.Counts = new(x.CountList)
+		x.Assert(r.Count(&sg.Counts.CountList) != nil)
 	}
 
 	if sg.Params.GetCount == 1 {

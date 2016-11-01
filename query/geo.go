@@ -82,7 +82,7 @@ func fetchIndexEntries(ctx context.Context, attr string, tokens []string) (*algo
 	return algo.MergeLists(sg.Result), nil
 }
 
-func fetchValues(ctx context.Context, attr string, uids *algo.UIDList) (x.ValueList, error) {
+func fetchValues(ctx context.Context, attr string, uids *algo.UIDList) (*x.ValueList, error) {
 	sg := &SubGraph{Attr: attr}
 	sgChan := make(chan error, 1)
 
@@ -91,10 +91,10 @@ func fetchValues(ctx context.Context, attr string, uids *algo.UIDList) (x.ValueL
 	go ProcessGraph(ctx, sg, taskQuery, sgChan)
 	select {
 	case <-ctx.Done():
-		return x.ValueList{}, x.Wrap(ctx.Err())
+		return nil, x.Wrap(ctx.Err())
 	case err := <-sgChan:
 		if err != nil {
-			return x.ValueList{}, err
+			return nil, err
 		}
 	}
 
@@ -103,7 +103,7 @@ func fetchValues(ctx context.Context, attr string, uids *algo.UIDList) (x.ValueL
 	return values, nil
 }
 
-func filterUIDs(uids *algo.UIDList, values x.ValueList, q *geo.QueryData) *algo.UIDList {
+func filterUIDs(uids *algo.UIDList, values *x.ValueList, q *geo.QueryData) *algo.UIDList {
 	x.Assert(values.ValuesLength() == uids.Size())
 	var rv []uint64
 	for i := 0; i < values.ValuesLength(); i++ {

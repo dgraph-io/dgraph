@@ -23,17 +23,14 @@ import (
 )
 
 type CountList struct {
-	*task.CountList
+	task.CountList
 }
 
 type ValueList struct {
-	*task.ValueList
+	task.ValueList
 }
 
-func (l CountList) MarshalBinary() ([]byte, error) {
-	if l.CountList == nil {
-		return []byte{}, nil
-	}
+func (l *CountList) MarshalBinary() ([]byte, error) {
 	b := flatbuffers.NewBuilder(0)
 	n := l.CountLength()
 	task.CountListStartCountVector(b, n)
@@ -47,18 +44,12 @@ func (l CountList) MarshalBinary() ([]byte, error) {
 	return b.FinishedBytes(), nil
 }
 
-func (l CountList) UnmarshalBinary(data []byte) error {
-	if len(data) == 0 {
-		return nil
-	}
-	l.CountList = task.GetRootAsCountList(data, 0)
+func (l *CountList) UnmarshalBinary(data []byte) error {
+	l.Init(data, 0)
 	return nil
 }
 
-func (l ValueList) MarshalBinary() ([]byte, error) {
-	if l.ValueList == nil {
-		return []byte{}, nil
-	}
+func (l *ValueList) MarshalBinary() ([]byte, error) {
 	b := flatbuffers.NewBuilder(0)
 	n := l.ValuesLength()
 
@@ -85,10 +76,7 @@ func (l ValueList) MarshalBinary() ([]byte, error) {
 	return b.FinishedBytes(), nil
 }
 
-func (l ValueList) UnmarshalBinary(data []byte) error {
-	if len(data) == 0 {
-		return nil
-	}
-	l.ValueList = task.GetRootAsValueList(data, 0)
+func (l *ValueList) UnmarshalBinary(data []byte) error {
+	l.Init(data, 0)
 	return nil
 }

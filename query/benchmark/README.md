@@ -61,3 +61,7 @@ for S in dumpsg/*.gob; do
 	n=$(($n+1))
 done
 ```
+
+```
+cp -vf /tmp/*.gob ./
+```
