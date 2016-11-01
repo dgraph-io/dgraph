@@ -43,10 +43,10 @@ func Backup(gid uint32) error {
 	for it.Valid() {
 		if bytes.ContainsRune(it.Key().Data(), ':') {
 			// Seek to the end of index keys.
-			//pre := bytes.Split(it.Key().Data(), []byte("|"))[0]
-			//pre = append(pre, '~')
-			//it.Seek(pre)
-			it.Next()
+			pre := bytes.Split(it.Key().Data(), []byte("|"))[0]
+			pre = append(pre, '~')
+			it.Seek(pre)
+			continue
 		}
 		if bytes.HasPrefix(it.Key().Data(), []byte("_uid_")) {
 			// Skip the UID mappings.
