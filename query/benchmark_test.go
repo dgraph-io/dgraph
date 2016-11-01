@@ -48,14 +48,14 @@ func BenchmarkToJSON(b *testing.B) {
 
 		f, err := ioutil.ReadFile(file)
 		if err != nil {
-			b.Error(err)
+			b.Fatal(err)
 		}
 
 		buf := bytes.NewBuffer(f)
 		dec := gob.NewDecoder(buf)
 		err = dec.Decode(&sg)
 		if err != nil {
-			b.Error(err)
+			b.Fatal(err)
 		}
 
 		b.ResetTimer()
@@ -75,14 +75,14 @@ func BenchmarkToPB(b *testing.B) {
 
 		f, err := ioutil.ReadFile(file)
 		if err != nil {
-			b.Error(err)
+			b.Fatal(err)
 		}
 
 		buf := bytes.NewBuffer(f)
 		dec := gob.NewDecoder(buf)
 		err = dec.Decode(&sg)
 		if err != nil {
-			b.Error(err)
+			b.Fatal(err)
 		}
 
 		b.ResetTimer()
@@ -109,14 +109,14 @@ func BenchmarkToPBMarshal(b *testing.B) {
 
 		f, err := ioutil.ReadFile(file)
 		if err != nil {
-			b.Error(err)
+			b.Fatal(err)
 		}
 
 		buf := bytes.NewBuffer(f)
 		dec := gob.NewDecoder(buf)
 		err = dec.Decode(&sg)
 		if err != nil {
-			b.Error(err)
+			b.Fatal(err)
 		}
 		p, err := sg.ToProtocolBuffer(&l)
 		if err != nil {
@@ -139,14 +139,14 @@ func BenchmarkToPBUnmarshal(b *testing.B) {
 
 		f, err := ioutil.ReadFile(file)
 		if err != nil {
-			b.Error(err)
+			b.Fatal(err)
 		}
 
 		buf := bytes.NewBuffer(f)
 		dec := gob.NewDecoder(buf)
 		err = dec.Decode(&sg)
 		if err != nil {
-			b.Error(err)
+			b.Fatal(err)
 		}
 		p, err := sg.ToProtocolBuffer(&l)
 		if err != nil {
