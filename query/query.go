@@ -221,7 +221,6 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 	r := sg.Result
 	x.Assertf(sg.SrcUIDs.Size() == len(r),
 		"Result uidmatrixlength: %v. Query uidslength: %v", sg.SrcUIDs.Size(), len(r))
-	x.Assertf(sg.Values != nil, "%s %d", sg.Attr, sg.SrcUIDs.Size())
 	x.Assertf(sg.SrcUIDs.Size() == sg.Values.ValuesLength(),
 		"Result valuelength: %v. Query uidslength: %v", sg.SrcUIDs.Size(), sg.Values.ValuesLength())
 
@@ -755,9 +754,9 @@ func createNilValuesList(count int) *x.ValueList {
 	task.ValueListAddValues(b, voffset)
 	b.Finish(task.ValueListEnd(b))
 	buf := b.FinishedBytes()
+
 	out := new(x.ValueList)
-	out.Init(buf, 0)
-	x.Assert(out.ValuesLength() == count)
+	x.Check(out.UnmarshalBinary(buf))
 	return out
 }
 

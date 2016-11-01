@@ -44,8 +44,8 @@ func (l *CountList) MarshalBinary() ([]byte, error) {
 	return b.FinishedBytes(), nil
 }
 
-func (l *CountList) UnmarshalBinary(data []byte) error {
-	l.Init(data, 0)
+func (l *CountList) UnmarshalBinary(buf []byte) error {
+	l.Init(buf, flatbuffers.GetUOffsetT(buf))
 	return nil
 }
 
@@ -76,7 +76,7 @@ func (l *ValueList) MarshalBinary() ([]byte, error) {
 	return b.FinishedBytes(), nil
 }
 
-func (l *ValueList) UnmarshalBinary(data []byte) error {
-	l.Init(data, 0)
+func (l *ValueList) UnmarshalBinary(buf []byte) error {
+	l.Init(buf, flatbuffers.GetUOffsetT(buf))
 	return nil
 }
