@@ -123,9 +123,9 @@ type params struct {
 	Alias    string
 	Count    int
 	Offset   int
-	AfterUid uint64
+	AfterUID uint64
 	GetCount uint16
-	GetUid   bool
+	GetUID   bool
 	Order    string
 	isDebug  bool
 }
@@ -256,7 +256,7 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 		for j := 0; j < ul.Size(); j++ {
 			uid := ul.Get(j)
 			m := make(map[string]interface{})
-			if sg.Params.GetUid || sg.Params.isDebug {
+			if sg.Params.GetUID || sg.Params.isDebug {
 				m["_uid_"] = fmt.Sprintf("%#x", uid)
 			}
 			if ival, present := cResult[uid]; !present {
@@ -312,7 +312,7 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 				" Previous value detected. A uid -> list of uids / value. Not both",
 				pval, sg.SrcUIDs.Get(i), val)
 		}
-		if sg.Params.GetUid || sg.Params.isDebug {
+		if sg.Params.GetUID || sg.Params.isDebug {
 			m["_uid_"] = fmt.Sprintf("%#x", sg.SrcUIDs.Get(i))
 		}
 
@@ -462,7 +462,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 				uid := ul.Get(i)
 				uc := nodePool.Get().(*graph.Node)
 				uc.Attribute = pc.Attr
-				if sg.Params.GetUid || sg.Params.isDebug {
+				if sg.Params.GetUID || sg.Params.isDebug {
 					uc.Uid = uid
 				}
 				if rerr := pc.preTraverse(uid, uc); rerr != nil {
@@ -556,7 +556,7 @@ func (sg *SubGraph) ToProtocolBuffer(l *Latency) (*graph.Node, error) {
 
 	x.Assert(len(sg.Result) == 1)
 	ul := sg.Result[0]
-	if sg.Params.GetUid || sg.Params.isDebug {
+	if sg.Params.GetUID || sg.Params.isDebug {
 		n.Uid = ul.Get(0)
 	}
 
@@ -617,7 +617,7 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 			break
 		}
 		if gchild.Attr == "_uid_" {
-			sg.Params.GetUid = true
+			sg.Params.GetUID = true
 		}
 
 		// Determine the type of current node.
@@ -656,7 +656,7 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 			if err != nil {
 				return err
 			}
-			dst.Params.AfterUid = uint64(after)
+			dst.Params.AfterUID = uint64(after)
 		}
 		if v, ok := gchild.Args["first"]; ok {
 			first, err := strconv.ParseInt(v, 0, 32)
@@ -805,7 +805,7 @@ func createTaskQuery(sg *SubGraph, uids *algo.UIDList, tokens []string,
 	}
 	task.QueryAddCount(b, int32(sg.Params.Count))
 	task.QueryAddOffset(b, int32(sg.Params.Offset))
-	task.QueryAddAfterUid(b, sg.Params.AfterUid)
+	task.QueryAddAfterUid(b, sg.Params.AfterUID)
 	task.QueryAddGetCount(b, sg.Params.GetCount)
 
 	b.Finish(task.QueryEnd(b))
