@@ -757,6 +757,7 @@ func createNilValuesList(count int) *x.ValueList {
 	buf := b.FinishedBytes()
 	out := new(x.ValueList)
 	out.Init(buf, 0)
+	x.Assert(out.ValuesLength() == count)
 	return out
 }
 
