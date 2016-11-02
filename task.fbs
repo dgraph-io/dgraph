@@ -24,10 +24,6 @@ table Value {
 table Num {
 	group:uint;
 	val:int;
-}
-
-table MarkList {
-	group:uint;
 	uids:[ulong];
 }
 
