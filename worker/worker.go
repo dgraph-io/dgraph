@@ -34,6 +34,8 @@ import (
 var (
 	workerPort = flag.Int("workerport", 12345,
 		"Port used by worker for internal communication.")
+	backupPath = flag.String("backuppath", "backup",
+		"Folder in which to store backups.")
 	pstore *store.Store
 )
 
@@ -62,7 +64,7 @@ func initiateBackup() error {
 	defer groups().RUnlock()
 	for gid, node := range groups().local {
 		if node.AmLeader() {
-			err := Backup(gid)
+			err := Backup(gid, *backupPath)
 			if err != nil {
 				return err
 			}

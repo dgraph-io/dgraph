@@ -24,7 +24,7 @@ type kv struct {
 }
 
 // Backup creates a backup of data by exporting it as an RDF gzip.
-func Backup(gid uint32) error {
+func Backup(gid uint32, bpath string) error {
 	ch := make(chan []byte, 10000)
 	chkv := make(chan kv, 1000)
 	errChan := make(chan error, 1)
@@ -37,7 +37,7 @@ func Backup(gid uint32) error {
 	for i := 0; i < numBackupRoutines; i++ {
 		go convertToRdf(&wg, chkv, ch)
 	}
-	go writeToFile(strconv.Itoa(int(gid)), ch, errChan)
+	go writeToFile(strconv.Itoa(int(gid)), bpath, ch, errChan)
 
 	it.SeekToFirst()
 	for it.Valid() {
@@ -128,10 +128,10 @@ func convertToRdf(wg *sync.WaitGroup, chkv chan kv, ch chan []byte) {
 	wg.Done()
 }
 
-func writeToFile(str string, ch chan []byte, errChan chan error) {
-	file := fmt.Sprintf("backup/dgraph-%s-%s.gz", str,
+func writeToFile(str, bpath string, ch chan []byte, errChan chan error) {
+	file := fmt.Sprintf("%s/dgraph-%s-%s.gz", bpath, str,
 		time.Now().Format("2006-01-02-15-04"))
-	err := os.MkdirAll("backup", 0700)
+	err := os.MkdirAll(bpath, 0700)
 	if err != nil {
 		errChan <- err
 	}

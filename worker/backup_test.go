@@ -78,23 +78,24 @@ func TestBackup(t *testing.T) {
 	defer os.RemoveAll(dir)
 	defer ps.Close()
 	// Remove already existing backup folders is any.
-	os.RemoveAll("backup/")
-	defer os.RemoveAll("backup/")
+	bdir := "backup_test"
+	os.RemoveAll(bdir)
+	defer os.RemoveAll(bdir)
 
 	posting.MergeLists(10)
 
 	// We have 7 friend type edges.
-	err := Backup(BelongsTo("friend"))
+	err := Backup(BelongsTo("friend"), bdir)
 	require.NoError(t, err)
 
 	// We have 2 name type edges(with index).
-	err = Backup(BelongsTo("name"))
+	err = Backup(BelongsTo("name"), bdir)
 	require.NoError(t, err)
 
-	searchDir := "backup/"
+	searchDir := bdir
 	fileList := []string{}
 	err = filepath.Walk(searchDir, func(path string, f os.FileInfo, err error) error {
-		if path != "backup/" {
+		if path != bdir {
 			fileList = append(fileList, path)
 		}
 		return nil
