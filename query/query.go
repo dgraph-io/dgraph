@@ -419,6 +419,10 @@ func postTraverseAlt(sg *SubGraph, newPostOut func() postOutput) (map[uint64]pos
 			if val, present := cResult[k]; !present {
 				// First time we see this UID.
 				cResult[k] = v
+
+				if sg.Params.GetUID || sg.Params.isDebug {
+					v.SetUID(k)
+				}
 			} else {
 				// UID already exists. We just need to merge stuff from v into
 				// existing result which is cResult[k] or val.
@@ -455,9 +459,6 @@ func postTraverseAlt(sg *SubGraph, newPostOut func() postOutput) (map[uint64]pos
 			x.Printf("~~~hey mergingChild srcUID=%d ulSize=%d", srcUID, ul.Size())
 		}
 		m := newPostOut()
-		if sg.Params.GetUID || sg.Params.isDebug {
-			m.SetUID(srcUID)
-		}
 		result[srcUID] = m
 
 		for j := 0; j < ul.Size(); j++ {
@@ -479,9 +480,6 @@ func postTraverseAlt(sg *SubGraph, newPostOut func() postOutput) (map[uint64]pos
 		m, present := result[srcUID]
 		if !present {
 			m = newPostOut()
-			if sg.Params.GetUID || sg.Params.isDebug {
-				m.SetUID(srcUID)
-			}
 			result[srcUID] = m
 		}
 
@@ -1462,7 +1460,6 @@ type postOutput interface {
 	AddValue(attr string, v types.Value)
 	AddChild(attr string, child postOutput)
 	SetUID(uid uint64)
-	SetXID(xid string)
 }
 
 type jsonPostOutput struct {
@@ -1471,9 +1468,10 @@ type jsonPostOutput struct {
 }
 
 func newJSONPostOutput() postOutput {
-	return &jsonPostOutput{
+	out := &jsonPostOutput{
 		data: make(map[string]interface{}),
 	}
+	return out
 }
 
 func (p *jsonPostOutput) Invalidate() { p.invalid = true }
@@ -1507,10 +1505,6 @@ func (p *jsonPostOutput) AddChild(attr string, child postOutput) {
 
 func (p *jsonPostOutput) SetUID(uid uint64) {
 	p.data["_uid_"] = fmt.Sprintf("%#x", uid)
-}
-
-func (p *jsonPostOutput) SetXID(xid string) {
-	p.data["_xid_"] = xid
 }
 
 // ToJSONWithPost converts the internal subgraph object to JSON format which is then sent

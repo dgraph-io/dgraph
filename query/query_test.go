@@ -223,6 +223,32 @@ func TestGetUID(t *testing.T) {
 				gender
 				alive
 				friend {
+					_uid_
+					name
+				}
+			}
+		}
+	`
+	mp := processToJSON(t, query)
+
+	resp := mp["me"]
+	uid := resp.([]interface{})[0].(map[string]interface{})["_uid_"].(string)
+	require.EqualValues(t, "0x1", uid)
+}
+
+func TestGetUIDCount(t *testing.T) {
+	dir, _ := populateGraph(t)
+	defer os.RemoveAll(dir)
+
+	// Alright. Now we have everything set up. Let's create the query.
+	query := `
+		{
+			me(_uid_:0x01) {
+				name
+				_uid_
+				gender
+				alive
+				friend {
 					_count_
 				}
 			}
