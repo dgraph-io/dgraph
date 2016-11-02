@@ -334,9 +334,10 @@ func (n *node) processSnapshot(s raftpb.Snapshot) {
 
 func (n *node) Run() {
 	fr := true
+	ticker := time.NewTicker(time.Second)
 	for {
 		select {
-		case <-time.Tick(time.Second):
+		case <-ticker.C:
 			n.raft.Tick()
 
 		case rd := <-n.raft.Ready():
@@ -376,9 +377,10 @@ func (n *node) Step(ctx context.Context, msg raftpb.Message) error {
 }
 
 func (n *node) snapshotPeriodically() {
+	ticker := time.NewTicker(10 * time.Minute)
 	for {
 		select {
-		case <-time.Tick(10 * time.Minute):
+		case <-ticker.C:
 			le, err := n.store.LastIndex()
 			x.Checkf(err, "Unable to retrieve last index")
 
