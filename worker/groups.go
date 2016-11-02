@@ -194,6 +194,17 @@ func buildTaskMembership(b *flatbuffers.Builder, gid uint32,
 	return task.MembershipEnd(b)
 }
 
+// How inform works:
+// - Each server iterates over all the nodes it's serving, present in local.
+// - If serving group zero, propose membership status updates directly via RAFT.
+// - Otherwise, generates a membership update, which includes status of all serving nodes.
+// - Check if it has address of a server from group zero. If so, use that.
+// - Otherwise, use the peer information passed down via flags.
+// - Send update via UpdateMembership call to the peer.
+// - If the peer doesn't serve group zero, it would return back a redirect with the right address.
+// - Otherwise, it would iterate over the memberships, check for duplicates, and apply updates.
+// - Once iteration is over without errors, it would return back all new updates.
+// - These updates are then applied to groups().all state via applyMembershipUpdate.
 func (g *groupi) inform() {
 	if g.ServesGroup(0) {
 		// This server serves group zero.
@@ -220,6 +231,7 @@ func (g *groupi) inform() {
 		return
 	}
 
+	// Generate membership update of all local nodes.
 	var data []byte
 	{
 		g.RLock()
@@ -244,6 +256,7 @@ func (g *groupi) inform() {
 		data = b.FinishedBytes()
 		g.RUnlock()
 	}
+	x.AssertTrue(len(data) > 0)
 
 	// This server isn't serving group zero. Send an update to peer.
 	var pl *pool
@@ -376,32 +389,38 @@ func (w *grpcWorker) UpdateMembership(ctx context.Context, query *Payload) (*Pay
 	}
 
 	update := task.GetRootAsMembershipUpdate(query.Data, 0)
-	zero := groups().Node(0)
-	_ = zero
-	che := make(chan error, 1)
-	_ = che
-	// TODO: Work on this.
+	che := make(chan error, update.MembersLength())
+
 	for i := 0; i < update.MembersLength(); i++ {
 		mm := new(task.Membership)
 		x.AssertTrue(update.Members(mm, i))
 		if groups().isDuplicate(mm.Group(), mm.Id(), string(mm.Addr()), mm.Leader() == 1) {
+			che <- nil
 			continue
 		}
-	}
-	//if groups().isDuplicate(mm) {
-	//che <- nil
-	//} else {
-	//che <- n.ProposeAndWait(ctx, membershipMsg, query.Data)
-	//}
 
-	select {
-	case <-ctx.Done():
-		return &Payload{}, ctx.Err()
-	case err := <-che:
-		if err != nil {
-			return &Payload{}, err
-		}
-		//res := &Payload{Data: groups().MembershipUpdateAfter(mm.LastUpdate())}
-		return &Payload{}, nil
+		b := flatbuffers.NewBuilder(0)
+		uo := buildTaskMembership(b, mm.Group(), mm.Id(), mm.Addr(), mm.Leader() == 1)
+		b.Finish(uo)
+		data := b.FinishedBytes()
+
+		go func(data []byte) {
+			zero := groups().Node(0)
+			che <- zero.ProposeAndWait(zero.ctx, membershipMsg, data)
+		}(data)
 	}
+
+	for i := 0; i < update.MembersLength(); i++ {
+		select {
+		case <-ctx.Done():
+			return &Payload{}, ctx.Err()
+		case err := <-che:
+			if err != nil {
+				return &Payload{}, err
+			}
+		}
+	}
+
+	reply := groups().MembershipUpdateAfter(update.LastUpdate())
+	return &Payload{Data: reply}, nil
 }
