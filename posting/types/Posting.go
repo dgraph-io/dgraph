@@ -17,10 +17,6 @@ func GetRootAsPosting(buf []byte, offset flatbuffers.UOffsetT) *Posting {
 	return x
 }
 
-func (rcv *Posting) Array() []byte {
-	return rcv._tab.Bytes
-}
-
 func (rcv *Posting) Init(buf []byte, i flatbuffers.UOffsetT) {
 	rcv._tab.Bytes = buf
 	rcv._tab.Pos = i
