@@ -25,7 +25,6 @@ import (
 	"net"
 
 	"github.com/dgraph-io/dgraph/store"
-	"github.com/dgraph-io/dgraph/x"
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
@@ -34,7 +33,7 @@ import (
 var (
 	workerPort = flag.Int("workerport", 12345,
 		"Port used by worker for internal communication.")
-	backupPath = flag.String("backuppath", "backup",
+	backupPath = flag.String("backup", "backup",
 		"Folder in which to store backups.")
 	pstore *store.Store
 )
@@ -60,14 +59,20 @@ func (w *grpcWorker) InitiateBackup(ctx context.Context, in *Payload) (*Payload,
 }
 
 func initiateBackup() error {
+	var grpList []uint32
+
 	groups().RLock()
-	defer groups().RUnlock()
 	for gid, node := range groups().local {
 		if node.AmLeader() {
-			err := Backup(gid, *backupPath)
-			if err != nil {
-				return err
-			}
+			grpList = append(grpList, gid)
+		}
+	}
+	groups().RUnlock()
+
+	for _, gid := range grpList {
+		err := Backup(gid, *backupPath)
+		if err != nil {
+			return err
 		}
 	}
 	return nil
@@ -79,11 +84,25 @@ func BackupAll() error {
 	errChan := make(chan error, 1000)
 	count := 0
 	// Send backup calls to other workers.
-	for _, pl := range pools().all {
-		count++
-		conn, err := pl.Get()
-		x.Check(err)
+	addrMap := make(map[string]bool)
+	groups().RLock()
+	for _, servers := range groups().all {
+		for _, it := range servers.list {
+			// Don't add the current nodes address in this.
+			if it.Leader {
+				addrMap[it.Addr] = true
+			}
+		}
+	}
+	groups().RUnlock()
 
+	for addr := range addrMap {
+		count++
+		pl := pools().get(addr)
+		conn, err := pl.Get()
+		if err != nil {
+			return err
+		}
 		go func() {
 			ctx := context.Background()
 			query := &Payload{}
@@ -92,8 +111,8 @@ func BackupAll() error {
 			errChan <- err
 			pl.Put(conn)
 		}()
-
 	}
+
 	// Backup this worker.
 	count++
 	go func() {
