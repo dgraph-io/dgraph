@@ -198,8 +198,11 @@ func processToJSON(t *testing.T, query string) map[string]interface{} {
 	require.NoError(t, err)
 
 	var l Latency
-	js, err := sg.ToJSON(&l)
+	js, err := sg.ToJSONWithPost(&l)
+	//js, err := sg.ToJSON(&l)
 	require.NoError(t, err)
+
+	x.Printf("~~~~~%s", string(js))
 
 	var mp map[string]interface{}
 	require.NoError(t, json.Unmarshal(js, &mp))
@@ -226,6 +229,7 @@ func TestGetUID(t *testing.T) {
 		}
 	`
 	mp := processToJSON(t, query)
+
 	resp := mp["me"]
 	uid := resp.([]interface{})[0].(map[string]interface{})["_uid_"].(string)
 	require.EqualValues(t, "0x1", uid)
@@ -432,9 +436,11 @@ func TestToJSON(t *testing.T) {
 	require.NoError(t, err)
 
 	var l Latency
-	js, err := sg.ToJSON(&l)
+	js, err := sg.ToJSONWithPost(&l)
 	require.NoError(t, err)
-	require.Contains(t, string(js), "Michonne")
+	require.EqualValues(t,
+		`{"me":[{"alive":true,"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"},{}],"gender":"female","name":"Michonne"}]}`,
+		string(js))
 }
 
 func TestToJSONFilter(t *testing.T) {
@@ -465,7 +471,7 @@ func TestToJSONFilter(t *testing.T) {
 	require.NoError(t, err)
 
 	var l Latency
-	js, err := sg.ToJSON(&l)
+	js, err := sg.ToJSONWithPost(&l)
 	require.NoError(t, err)
 	require.EqualValues(t,
 		`{"me":[{"friend":[{"name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
@@ -500,7 +506,7 @@ func TestToJSONFilterAllOf(t *testing.T) {
 	require.NoError(t, err)
 
 	var l Latency
-	js, err := sg.ToJSON(&l)
+	js, err := sg.ToJSONWithPost(&l)
 	require.NoError(t, err)
 	require.EqualValues(t,
 		`{"me":[{"gender":"female","name":"Michonne"}]}`,
@@ -535,10 +541,11 @@ func TestToJSONFilterUID(t *testing.T) {
 	require.NoError(t, err)
 
 	var l Latency
-	js, err := sg.ToJSON(&l)
+	js, err := sg.ToJSONWithPost(&l)
 	require.NoError(t, err)
-	require.EqualValues(t, js,
-		`{"me":[{"friend":[{"_uid_":"0x1f"}],"gender":"female","name":"Michonne"}]}`)
+	require.EqualValues(t,
+		`{"me":[{"friend":[{"_uid_":"0x1f"}],"gender":"female","name":"Michonne"}]}`,
+		string(js))
 }
 
 func TestToJSONFilterOr(t *testing.T) {
@@ -569,10 +576,11 @@ func TestToJSONFilterOr(t *testing.T) {
 	require.NoError(t, err)
 
 	var l Latency
-	js, err := sg.ToJSON(&l)
+	js, err := sg.ToJSONWithPost(&l)
 	require.NoError(t, err)
-	require.EqualValues(t, js,
-		`{"me":[{"friend":[{"name":"Glenn Rhee"},{"name":"Andrea"}],"gender":"female","name":"Michonne"}]}`)
+	require.EqualValues(t,
+		`{"me":[{"friend":[{"name":"Glenn Rhee"},{"name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
+		string(js))
 }
 
 func TestToJSONFilterOrFirst(t *testing.T) {
@@ -603,10 +611,11 @@ func TestToJSONFilterOrFirst(t *testing.T) {
 	require.NoError(t, err)
 
 	var l Latency
-	js, err := sg.ToJSON(&l)
+	js, err := sg.ToJSONWithPost(&l)
 	require.NoError(t, err)
-	require.EqualValues(t, js,
-		`{"me":[{"friend":[{"name":"Glenn Rhee"},{"name":"Daryl Dixon"}],"gender":"female","name":"Michonne"}]}`)
+	require.EqualValues(t,
+		`{"me":[{"friend":[{"name":"Glenn Rhee"},{"name":"Daryl Dixon"}],"gender":"female","name":"Michonne"}]}`,
+		string(js))
 }
 
 func TestToJSONFilterOrOffset(t *testing.T) {
@@ -637,10 +646,11 @@ func TestToJSONFilterOrOffset(t *testing.T) {
 	require.NoError(t, err)
 
 	var l Latency
-	js, err := sg.ToJSON(&l)
+	js, err := sg.ToJSONWithPost(&l)
 	require.NoError(t, err)
-	require.EqualValues(t, js,
-		`{"me":[{"friend":[{"name":"Daryl Dixon"},{"name":"Andrea"}],"gender":"female","name":"Michonne"}]}`)
+	require.EqualValues(t,
+		`{"me":[{"friend":[{"name":"Daryl Dixon"},{"name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
+		string(js))
 }
 
 // No filter. Just to test first and offset.
@@ -672,10 +682,11 @@ func TestToJSONFirstOffset(t *testing.T) {
 	require.NoError(t, err)
 
 	var l Latency
-	js, err := sg.ToJSON(&l)
+	js, err := sg.ToJSONWithPost(&l)
 	require.NoError(t, err)
-	require.EqualValues(t, js,
-		`{"me":[{"friend":[{"name":"Glenn Rhee"}],"gender":"female","name":"Michonne"}]}`)
+	require.EqualValues(t,
+		`{"me":[{"friend":[{"name":"Glenn Rhee"}],"gender":"female","name":"Michonne"}]}`,
+		string(js))
 }
 
 func TestToJSONFilterOrFirstOffset(t *testing.T) {
@@ -706,10 +717,11 @@ func TestToJSONFilterOrFirstOffset(t *testing.T) {
 	require.NoError(t, err)
 
 	var l Latency
-	js, err := sg.ToJSON(&l)
+	js, err := sg.ToJSONWithPost(&l)
 	require.NoError(t, err)
-	require.EqualValues(t, js,
-		`{"me":[{"friend":[{"name":"Daryl Dixon"}],"gender":"female","name":"Michonne"}]}`)
+	require.EqualValues(t,
+		`{"me":[{"friend":[{"name":"Daryl Dixon"}],"gender":"female","name":"Michonne"}]}`,
+		string(js))
 }
 
 func TestToJSONFilterOrFirstNegative(t *testing.T) {
@@ -742,10 +754,11 @@ func TestToJSONFilterOrFirstNegative(t *testing.T) {
 	require.NoError(t, err)
 
 	var l Latency
-	js, err := sg.ToJSON(&l)
+	js, err := sg.ToJSONWithPost(&l)
 	require.NoError(t, err)
-	require.EqualValues(t, js,
-		`{"me":[{"friend":[{"name":"Andrea"}],"gender":"female","name":"Michonne"}]}`)
+	require.EqualValues(t,
+		`{"me":[{"friend":[{"name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
+		string(js))
 }
 
 func TestToJSONFilterAnd(t *testing.T) {
@@ -776,10 +789,11 @@ func TestToJSONFilterAnd(t *testing.T) {
 	require.NoError(t, err)
 
 	var l Latency
-	js, err := sg.ToJSON(&l)
+	js, err := sg.ToJSONWithPost(&l)
 	require.NoError(t, err)
-	require.EqualValues(t, js,
-		`{"me":[{"gender":"female","name":"Michonne"}]}`)
+	require.EqualValues(t,
+		`{"me":[{"gender":"female","name":"Michonne"}]}`,
+		string(js))
 }
 
 func getProperty(properties []*graph.Property, prop string) *graph.Value {
