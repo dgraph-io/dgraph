@@ -5,7 +5,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"log"
-	"math"
 	"math/rand"
 	"strconv"
 	"strings"
@@ -20,10 +19,6 @@ import (
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/x"
-)
-
-var (
-	errRedirect = fmt.Errorf("Redirect to server serving the right raft group")
 )
 
 const (
@@ -217,6 +212,7 @@ func (n *node) doSendMessage(to uint64, data []byte) {
 
 func (n *node) batchAndSendMessages() {
 	batches := make(map[uint64]*bytes.Buffer)
+	ticker := time.NewTicker(10 * time.Millisecond)
 	for {
 		select {
 		case sm := <-n.messages:
@@ -227,7 +223,7 @@ func (n *node) batchAndSendMessages() {
 			binary.Write(buf, binary.LittleEndian, uint32(len(sm.data)))
 			buf.Write(sm.data)
 
-		case <-time.Tick(10 * time.Millisecond):
+		case <-ticker.C:
 			for to, buf := range batches {
 				if buf.Len() == 0 {
 					continue
@@ -254,8 +250,7 @@ func (n *node) processMutation(e raftpb.Entry, h header) error {
 }
 
 func (n *node) processMembership(e raftpb.Entry, h header) error {
-	rc := task.GetRootAsRaftContext(n.raftContext, 0)
-	x.AssertTrue(rc.Group() == math.MaxUint32)
+	x.AssertTrue(n.gid == 0)
 
 	mm := task.GetRootAsMembership(e.Data[h.Length():], 0)
 	fmt.Printf("group: %v Addr: %q leader: %v dead: %v\n",
@@ -337,9 +332,10 @@ func (n *node) processSnapshot(s raftpb.Snapshot) {
 
 func (n *node) Run() {
 	fr := true
+	ticker := time.NewTicker(time.Second)
 	for {
 		select {
-		case <-time.Tick(time.Second):
+		case <-ticker.C:
 			n.raft.Tick()
 
 		case rd := <-n.raft.Ready():
@@ -379,9 +375,10 @@ func (n *node) Step(ctx context.Context, msg raftpb.Message) error {
 }
 
 func (n *node) snapshotPeriodically() {
+	ticker := time.NewTicker(10 * time.Minute)
 	for {
 		select {
-		case <-time.Tick(10 * time.Minute):
+		case <-ticker.C:
 			le, err := n.store.LastIndex()
 			x.Checkf(err, "Unable to retrieve last index")
 
@@ -551,7 +548,6 @@ func (n *node) InitAndStartNode(wal *raftwal.Wal, peer string) {
 	}
 	go n.Run()
 	go n.snapshotPeriodically()
-	// go n.Inform()
 	go n.batchAndSendMessages()
 }
 

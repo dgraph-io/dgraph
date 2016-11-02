@@ -24,8 +24,9 @@ var (
 	groupIds  = flag.String("groups", "0", "RAFT groups handled by this server.")
 	myAddr    = flag.String("my", "",
 		"addr:port of this server, so other Dgraph servers can talk to this.")
-	peer   = flag.String("peer", "", "Address of any peer.")
-	raftId = flag.Uint64("idx", 1, "RAFT ID that this server will use to join RAFT groups.")
+	peer        = flag.String("peer", "", "Address of any peer.")
+	raftId      = flag.Uint64("idx", 1, "RAFT ID that this server will use to join RAFT groups.")
+	errRedirect = fmt.Errorf("Redirect to server serving the right raft group")
 )
 
 type server struct {
@@ -159,6 +160,7 @@ func (g *groupi) isDuplicate(gid uint32, nid uint64, addr string, leader bool) b
 	return g.duplicate(gid, nid, addr, leader)
 }
 
+// duplicate requires at least a read mutex lock to be held by the caller.
 func (g *groupi) duplicate(gid uint32, nid uint64, addr string, leader bool) bool {
 	sl := g.all[gid]
 	if sl == nil {
@@ -194,7 +196,8 @@ func buildTaskMembership(b *flatbuffers.Builder, gid uint32,
 	return task.MembershipEnd(b)
 }
 
-// How inform works:
+// syncMemberships needs to be called in an periodic loop.
+// How syncMemberships works:
 // - Each server iterates over all the nodes it's serving, present in local.
 // - If serving group zero, propose membership status updates directly via RAFT.
 // - Otherwise, generates a membership update, which includes status of all serving nodes.
@@ -205,7 +208,7 @@ func buildTaskMembership(b *flatbuffers.Builder, gid uint32,
 // - Otherwise, it would iterate over the memberships, check for duplicates, and apply updates.
 // - Once iteration is over without errors, it would return back all new updates.
 // - These updates are then applied to groups().all state via applyMembershipUpdate.
-func (g *groupi) inform() {
+func (g *groupi) syncMemberships() {
 	if g.ServesGroup(0) {
 		// This server serves group zero.
 		g.RLock()
@@ -231,6 +234,7 @@ func (g *groupi) inform() {
 		return
 	}
 
+	// This server doesn't serve group zero.
 	// Generate membership update of all local nodes.
 	var data []byte
 	{
@@ -258,7 +262,7 @@ func (g *groupi) inform() {
 	}
 	x.AssertTrue(len(data) > 0)
 
-	// This server isn't serving group zero. Send an update to peer.
+	// Send an update to peer.
 	var pl *pool
 	addr := g.AnyServer(0)
 
@@ -285,6 +289,7 @@ UPDATEMEMBERSHIP:
 		x.TraceError(g.ctx, err)
 		return
 	}
+
 	update := task.GetRootAsMembershipUpdate(out.Data, 0)
 	for i := 0; i < update.MembersLength(); i++ {
 		mm := new(task.Membership)
