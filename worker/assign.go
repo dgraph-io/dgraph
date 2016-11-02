@@ -32,26 +32,26 @@ import (
 func createNumQuery(group uint32, umap map[string]uint64) []byte {
 	b := flatbuffers.NewBuilder(0)
 
-	count1, count2 := 0, 0
+	newids, xids := 0, 0
 	for _, v := range umap {
 		if v == 0 {
-			count1++
+			newids++
 		} else {
-			count2++
+			xids++
 		}
 	}
 
-	task.NumStartUidsVector(b, count2)
+	task.NumStartUidsVector(b, xids)
 	for _, v := range umap {
 		if v != 0 {
 			b.PrependUint64(v)
 		}
 	}
-	mlist := b.EndVector(count2)
+	mlist := b.EndVector(xids)
 
 	task.NumStart(b)
 	task.NumAddGroup(b, group)
-	task.NumAddVal(b, int32(count1))
+	task.NumAddVal(b, int32(newids))
 	task.NumAddUids(b, mlist)
 	uo := task.NumEnd(b)
 	b.Finish(uo)
@@ -78,14 +78,14 @@ func assignUids(ctx context.Context, num *task.Num) (uidList []byte, rerr error)
 
 	for i := 0; i < markNum; i++ {
 		uid := num.Uids(i)
-		mut := x.DirectedEdge{
+		mu := x.DirectedEdge{
 			Entity:    uid,
 			Attribute: "_uid_",
 			Value:     []byte("_taken_"), // not txid
 			Source:    "_XIDorUSER_",
 			Timestamp: time.Now(),
 		}
-		mutations.Set = append(mutations.Set, mut)
+		mutations.Set = append(mutations.Set, mu)
 	}
 
 	data, err := mutations.Encode()

@@ -122,7 +122,3 @@ func AssignNew(N int, instanceIdx uint64, numInstances uint64) x.Mutations {
 	}
 	return m
 }
-
-func MarkUsed(uid uint64) {
-
-}
