@@ -213,6 +213,7 @@ func (n *node) doSendMessage(to uint64, data []byte) {
 
 func (n *node) batchAndSendMessages() {
 	batches := make(map[uint64]*bytes.Buffer)
+	ticker := time.NewTicker(10 * time.Millisecond)
 	for {
 		select {
 		case sm := <-n.messages:
@@ -223,7 +224,7 @@ func (n *node) batchAndSendMessages() {
 			binary.Write(buf, binary.LittleEndian, uint32(len(sm.data)))
 			buf.Write(sm.data)
 
-		case <-time.Tick(10 * time.Millisecond):
+		case <-ticker.C:
 			for to, buf := range batches {
 				if buf.Len() == 0 {
 					continue
