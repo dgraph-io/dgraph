@@ -3,7 +3,6 @@ package worker
 import (
 	"bufio"
 	"compress/gzip"
-	"context"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -13,26 +12,11 @@ import (
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/store"
-	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
 )
 
-func addEdge(t *testing.T, edge x.DirectedEdge, l *posting.List) {
-	require.NoError(t,
-		l.AddMutationWithIndex(context.Background(), edge, posting.Set))
-}
-
-func delEdge(t *testing.T, edge x.DirectedEdge, l *posting.List) {
-	require.NoError(t,
-		l.AddMutationWithIndex(context.Background(), edge, posting.Del))
-}
-
-func getOrCreate(key []byte) *posting.List {
-	l, _ := posting.GetOrCreate(key)
-	return l
-}
-func populateGraph(t *testing.T) {
+func populateGraphBackup(t *testing.T) {
 	edge := x.DirectedEdge{
 		ValueId:   23,
 		Source:    "author0",
@@ -69,9 +53,10 @@ func populateGraph(t *testing.T) {
 	edge.Entity = 10
 	addEdge(t, edge, getOrCreate(posting.Key(10, "name")))
 }
-func initTest(t *testing.T, schemaStr string) (string, *store.Store) {
+
+func initTestBackup(t *testing.T, schemaStr string) (string, *store.Store) {
 	schema.ParseBytes([]byte(schemaStr))
-	worker.ParseGroupConfig("groups.conf")
+	ParseGroupConfig("groups.conf")
 
 	dir, err := ioutil.TempDir("", "storetest_")
 	require.NoError(t, err)
@@ -80,8 +65,8 @@ func initTest(t *testing.T, schemaStr string) (string, *store.Store) {
 	require.NoError(t, err)
 
 	posting.Init(ps)
-	worker.Init(ps)
-	populateGraph(t)
+	Init(ps)
+	populateGraphBackup(t)
 	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
 
 	return dir, ps
@@ -89,7 +74,7 @@ func initTest(t *testing.T, schemaStr string) (string, *store.Store) {
 
 func TestBackup(t *testing.T) {
 	// Index the name predicate. We ensure it doesn't show up on backup.
-	dir, ps := initTest(t, "scalar name:string @index")
+	dir, ps := initTestBackup(t, "scalar name:string @index")
 	defer os.RemoveAll(dir)
 	defer ps.Close()
 	// Remove already existing backup folders is any.
@@ -99,11 +84,11 @@ func TestBackup(t *testing.T) {
 	posting.MergeLists(10)
 
 	// We have 7 friend type edges.
-	err := worker.Backup(worker.BelongsTo("friend"))
+	err := Backup(BelongsTo("friend"))
 	require.NoError(t, err)
 
 	// We have 2 name type edges(with index).
-	err = worker.Backup(worker.BelongsTo("name"))
+	err = Backup(BelongsTo("name"))
 	require.NoError(t, err)
 
 	searchDir := "backup/"
