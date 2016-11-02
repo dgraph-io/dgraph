@@ -132,7 +132,7 @@ func convertToEdges(ctx context.Context, nquads []rdf.NQuad) (mutationResult, er
 	for _, nq := range nquads {
 		if strings.HasPrefix(nq.Subject, "_new_:") {
 			newUids[nq.Subject] = 0
-		} else {
+		} else if !strings.HasPrefix(nq.Subject, "_uid_:") {
 			uid, err := rdf.GetUid(nq.Subject)
 			x.Check(err)
 			markUids[uid] = true
@@ -141,7 +141,7 @@ func convertToEdges(ctx context.Context, nquads []rdf.NQuad) (mutationResult, er
 		if len(nq.ObjectId) > 0 {
 			if strings.HasPrefix(nq.ObjectId, "_new_:") {
 				newUids[nq.ObjectId] = 0
-			} else {
+			} else if !strings.HasPrefix(nq.ObjectId, "_uid_:") {
 				uid, err := rdf.GetUid(nq.ObjectId)
 				x.Check(err)
 				markUids[uid] = true

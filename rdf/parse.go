@@ -50,6 +50,7 @@ func GetUid(xid string) (uint64, error) {
 	return farm.Fingerprint64([]byte(xid)), nil
 }
 
+// ToEdge is useful when you want to find the UID corresponding to XID for
 // just one edge. The method doesn't automatically generate a UID for an XID.
 func (nq NQuad) ToEdge() (result x.DirectedEdge, rerr error) {
 	sid, err := GetUid(nq.Subject)
