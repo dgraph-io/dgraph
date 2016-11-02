@@ -77,7 +77,7 @@ func TestBackup(t *testing.T) {
 
 	posting.MergeLists(10)
 
-	// We have 7 friend type edges. FP("friends")%10 = 2.
+	// We have 4 friend type edges. FP("friends")%10 = 2.
 	err := Backup(BelongsTo("friend"), bdir)
 	require.NoError(t, err)
 
