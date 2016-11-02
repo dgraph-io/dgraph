@@ -127,7 +127,6 @@ func convertToEdges(ctx context.Context, nquads []rdf.NQuad) (mutationResult, er
 	var edges []x.DirectedEdge
 	var mr mutationResult
 
-	markUids := make(map[uint64]bool)
 	newUids := make(map[string]uint64)
 	for _, nq := range nquads {
 		if strings.HasPrefix(nq.Subject, "_new_:") {
@@ -135,7 +134,7 @@ func convertToEdges(ctx context.Context, nquads []rdf.NQuad) (mutationResult, er
 		} else if !strings.HasPrefix(nq.Subject, "_uid_:") {
 			uid, err := rdf.GetUid(nq.Subject)
 			x.Check(err)
-			markUids[uid] = true
+			newUids[nq.Subject] = uid
 		}
 
 		if len(nq.ObjectId) > 0 {
@@ -144,13 +143,13 @@ func convertToEdges(ctx context.Context, nquads []rdf.NQuad) (mutationResult, er
 			} else if !strings.HasPrefix(nq.ObjectId, "_uid_:") {
 				uid, err := rdf.GetUid(nq.ObjectId)
 				x.Check(err)
-				markUids[uid] = true
+				newUids[nq.ObjectId] = uid
 			}
 		}
 	}
 
-	if len(newUids) > 0 || len(markUids) > 0 {
-		if err := worker.AssignUidsOverNetwork(ctx, newUids, markUids); err != nil {
+	if len(newUids) > 0 {
+		if err := worker.AssignUidsOverNetwork(ctx, newUids); err != nil {
 			x.TraceError(ctx, x.Wrapf(err, "Error while GetOrAssignUidsOverNetwork"))
 			return mr, err
 		}
@@ -169,8 +168,9 @@ func convertToEdges(ctx context.Context, nquads []rdf.NQuad) (mutationResult, er
 	resultUids := make(map[string]uint64)
 	// Strip out _new_: prefix from the keys.
 	for k, v := range newUids {
-		x.Assertf(strings.HasPrefix(k, "_new_:"), "Expected prefix _new_: in key: %v", k)
-		resultUids[k[6:]] = v
+		if strings.HasPrefix(k, "_new_:") {
+			resultUids[k[6:]] = v
+		}
 	}
 
 	mr = mutationResult{

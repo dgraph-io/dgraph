@@ -29,18 +29,29 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-func createNumQuery(group uint32, N int, umap map[uint64]bool) []byte {
+func createNumQuery(group uint32, umap map[string]uint64) []byte {
 	b := flatbuffers.NewBuilder(0)
 
-	task.NumStartUidsVector(b, len(umap))
-	for k := range umap {
-		b.PrependUint64(k)
+	count1, count2 := 0, 0
+	for _, v := range umap {
+		if v == 0 {
+			count1++
+		} else {
+			count2++
+		}
 	}
-	mlist := b.EndVector(len(umap))
+
+	task.NumStartUidsVector(b, count2)
+	for _, v := range umap {
+		if v != 0 {
+			b.PrependUint64(v)
+		}
+	}
+	mlist := b.EndVector(count2)
 
 	task.NumStart(b)
 	task.NumAddGroup(b, group)
-	task.NumAddVal(b, int32(N))
+	task.NumAddVal(b, int32(count1))
 	task.NumAddUids(b, mlist)
 	uo := task.NumEnd(b)
 	b.Finish(uo)
@@ -99,11 +110,11 @@ func assignUids(ctx context.Context, num *task.Num) (uidList []byte, rerr error)
 	return b.Bytes[b.Head():], nil
 }
 
-// AssignUidsOverNetwork assigns new uids and writes them to the newUids map.
-func AssignUidsOverNetwork(ctx context.Context, newUids map[string]uint64, umap map[uint64]bool) (rerr error) {
+// AssignUidsOverNetwork assigns new uids and writes them to the umap.
+func AssignUidsOverNetwork(ctx context.Context, umap map[string]uint64) (rerr error) {
 	query := new(Payload)
 	gid := BelongsTo("_uid_")
-	query.Data = createNumQuery(gid, len(newUids), umap)
+	query.Data = createNumQuery(gid, umap)
 
 	num := task.GetRootAsNum(query.Data, 0)
 	reply := new(Payload)
@@ -136,10 +147,12 @@ func AssignUidsOverNetwork(ctx context.Context, newUids map[string]uint64, umap 
 		"Requested: %d != Retrieved Uids: %d", num.Val(), ul.UidsLength())
 
 	i := 0
-	for k := range newUids {
-		uid := ul.Uids(i)
-		newUids[k] = uid // Write uids to map.
-		i++
+	for k, v := range umap {
+		if v == 0 {
+			uid := ul.Uids(i)
+			umap[k] = uid // Write uids to map.
+			i++
+		}
 	}
 	return nil
 }
