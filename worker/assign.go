@@ -19,6 +19,7 @@ package worker
 import (
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/google/flatbuffers/go"
 	"golang.org/x/net/context"
@@ -28,11 +29,30 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-func createQuery(group uint32, N int) []byte {
+func createNumQuery(group uint32, umap map[string]uint64) []byte {
 	b := flatbuffers.NewBuilder(0)
+
+	newids, xids := 0, 0
+	for _, v := range umap {
+		if v == 0 {
+			newids++
+		} else {
+			xids++
+		}
+	}
+
+	task.NumStartUidsVector(b, xids)
+	for _, v := range umap {
+		if v != 0 {
+			b.PrependUint64(v)
+		}
+	}
+	mlist := b.EndVector(xids)
+
 	task.NumStart(b)
 	task.NumAddGroup(b, group)
-	task.NumAddVal(b, int32(N))
+	task.NumAddVal(b, int32(newids))
+	task.NumAddUids(b, mlist)
 	uo := task.NumEnd(b)
 	b.Finish(uo)
 	return b.Bytes[b.Head():]
@@ -49,11 +69,25 @@ func assignUids(ctx context.Context, num *task.Num) (uidList []byte, rerr error)
 	}
 
 	val := int(num.Val())
-	if val == 0 {
-		return uidList, fmt.Errorf("Empty xid list")
+	markNum := num.UidsLength()
+	if val == 0 && markNum == 0 {
+		return uidList, fmt.Errorf("Nothing to be marked or assigned")
 	}
 
 	mutations := uid.AssignNew(val, 0, 1)
+
+	for i := 0; i < markNum; i++ {
+		uid := num.Uids(i)
+		mu := x.DirectedEdge{
+			Entity:    uid,
+			Attribute: "_uid_",
+			Value:     []byte("_taken_"), // not txid
+			Source:    "_XIDorUSER_",
+			Timestamp: time.Now(),
+		}
+		mutations.Set = append(mutations.Set, mu)
+	}
+
 	data, err := mutations.Encode()
 	x.Checkf(err, "While encoding mutation: %v", mutations)
 	if err := node.ProposeAndWait(ctx, mutationMsg, data); err != nil {
@@ -61,6 +95,7 @@ func assignUids(ctx context.Context, num *task.Num) (uidList []byte, rerr error)
 	}
 	// Mutations successfully applied.
 
+	// First N entities are newly assigned UIDs.
 	b := flatbuffers.NewBuilder(0)
 	task.UidListStartUidsVector(b, val)
 	for i := 0; i < val; i++ {
@@ -75,11 +110,11 @@ func assignUids(ctx context.Context, num *task.Num) (uidList []byte, rerr error)
 	return b.Bytes[b.Head():], nil
 }
 
-// AssignUidsOverNetwork assigns new uids and writes them to the newUids map.
-func AssignUidsOverNetwork(ctx context.Context, newUids map[string]uint64) (rerr error) {
+// AssignUidsOverNetwork assigns new uids and writes them to the umap.
+func AssignUidsOverNetwork(ctx context.Context, umap map[string]uint64) (rerr error) {
 	query := new(Payload)
 	gid := BelongsTo("_uid_")
-	query.Data = createQuery(gid, len(newUids))
+	query.Data = createNumQuery(gid, umap)
 
 	num := task.GetRootAsNum(query.Data, 0)
 	reply := new(Payload)
@@ -112,10 +147,12 @@ func AssignUidsOverNetwork(ctx context.Context, newUids map[string]uint64) (rerr
 		"Requested: %d != Retrieved Uids: %d", num.Val(), ul.UidsLength())
 
 	i := 0
-	for k := range newUids {
-		uid := ul.Uids(i)
-		newUids[k] = uid // Write uids to map.
-		i++
+	for k, v := range umap {
+		if v == 0 {
+			uid := ul.Uids(i)
+			umap[k] = uid // Write uids to map.
+			i++
+		}
 	}
 	return nil
 }

@@ -24,6 +24,7 @@ table Value {
 table Num {
 	group:uint;
 	val:int;
+	uids:[ulong];
 }
 
 table UidList {
