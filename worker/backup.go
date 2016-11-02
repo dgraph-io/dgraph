@@ -129,7 +129,7 @@ func convertToRdf(wg *sync.WaitGroup, chkv chan kv, ch chan []byte) {
 }
 
 func writeToFile(str string, ch chan []byte, errChan chan error) {
-	file := fmt.Sprintf("backup/ddata-%s_%s.gz", str,
+	file := fmt.Sprintf("backup/dgraph-%s-%s.gz", str,
 		time.Now().Format("2006-01-02-15-04"))
 	err := os.MkdirAll("backup", 0700)
 	if err != nil {
@@ -141,7 +141,7 @@ func writeToFile(str string, ch chan []byte, errChan chan error) {
 	}
 	defer f.Close()
 	x.Check(err)
-	w := bufio.NewWriterSize(f, 1024)
+	w := bufio.NewWriterSize(f, 1000000)
 	gw, err := gzip.NewWriterLevel(w, gzip.BestCompression)
 	if err != nil {
 		errChan <- err

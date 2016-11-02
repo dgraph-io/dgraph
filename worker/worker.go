@@ -58,6 +58,8 @@ func (w *grpcWorker) InitiateBackup(ctx context.Context, in *Payload) (*Payload,
 }
 
 func initiateBackup() error {
+	groups().RLock()
+	defer groups().RUnlock()
 	for gid, node := range groups().local {
 		if node.AmLeader() {
 			err := Backup(gid)
