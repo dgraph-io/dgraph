@@ -438,8 +438,8 @@ func postTraverseAlt(sg *SubGraph, newPostOut func() postOutput) (map[uint64]pos
 		"Result valuelength: %v. Query uidslength: %v",
 		sg.SrcUIDs.Size(), sg.Values.ValuesLength())
 
-	if sg.Attr == "name" {
-		x.Printf("~~~~hey cresultSize=%d resultSize=%d hasCount=%v", len(cResult), len(result), sg.Counts != nil && sg.Counts.CountLength() > 0)
+	if sg.Attr == "friend" {
+		x.Printf("~~~~hey attr=%s cresultSize=%d resultSize=%d hasCount=%v", outputAttr, len(cResult), len(result), sg.Counts != nil && sg.Counts.CountLength() > 0)
 	}
 	if sg.Counts != nil && sg.Counts.CountLength() > 0 {
 		for i := 0; i < sg.Counts.CountLength(); i++ {
@@ -449,17 +449,26 @@ func postTraverseAlt(sg *SubGraph, newPostOut func() postOutput) (map[uint64]pos
 			mp := newPostOut()
 			mp.AddChild(outputAttr, m)
 			result[sg.SrcUIDs.Get(i)] = mp
+
+			if sg.Attr == "friend" {
+				js, err := json.MarshalIndent(mp.(*jsonPostOutput).data, "", "  ")
+				x.Check(err)
+				x.Printf("~~~~~" + string(js))
+			}
 		}
 	}
 
 	// Visit each posting list in sg.Result and merge in child results.
 	for i, ul := range sg.Result {
 		srcUID := sg.SrcUIDs.Get(i)
+		m, present := result[srcUID]
+		if !present {
+			m = newPostOut()
+			result[srcUID] = m
+		}
 		if sg.Attr == "name" {
 			x.Printf("~~~hey mergingChild srcUID=%d ulSize=%d", srcUID, ul.Size())
 		}
-		m := newPostOut()
-		result[srcUID] = m
 
 		for j := 0; j < ul.Size(); j++ {
 			uid := ul.Get(j)
