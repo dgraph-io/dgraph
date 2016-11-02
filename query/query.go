@@ -144,7 +144,7 @@ type SubGraph struct {
 	Values *x.ValueList
 	Result []*algo.UIDList
 
-	// srcUIDs is a list of unique source UIDs. They are always copies of destUIDs
+	// SrcUIDs is a list of unique source UIDs. They are always copies of destUIDs
 	// of parent nodes in GraphQL structure.
 	SrcUIDs *algo.UIDList
 
@@ -360,7 +360,7 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 	return result, nil
 }
 
-// gets the value from the task.
+// getValue gets the value from the task.
 func getValue(tv task.Value) (types.Value, error) {
 	vType := tv.ValType()
 	valBytes := tv.ValBytes()
@@ -368,8 +368,7 @@ func getValue(tv task.Value) (types.Value, error) {
 	if val == nil {
 		return nil, x.Errorf("Invalid type: %v", vType)
 	}
-	err := val.UnmarshalBinary(valBytes)
-	if err != nil {
+	if err := val.UnmarshalBinary(valBytes); err != nil {
 		return nil, err
 	}
 	return val, nil
@@ -433,33 +432,30 @@ func init() {
 
 // This method gets the values and children for a subgraph.
 func (sg *SubGraph) preTraverse(uid uint64, dst subgraphOutput) error {
-	var properties []*graph.Property
-	var children []*graph.Node
-
 	invalidUids := make(map[uint64]bool)
 	// We go through all predicate children of the subgraph.
 	for _, pc := range sg.Children {
 		idx := pc.SrcUIDs.IndexOf(uid)
-
-		if idx == -1 {
-			log.Fatal("Attribute with uid not found in child Query uids.")
-			return x.Errorf("Attribute with uid not found")
-		}
-
+		x.Assertf(idx >= 0, "Attribute with uid not found in child Query uids")
 		ul := pc.Result[idx]
 		if sg.Counts != nil && sg.Counts.CountLength() > 0 {
 			c := types.Int32(sg.Counts.Count(idx))
-			p := createProperty("_count_", &c)
+			/*p := createProperty("_count_", &c)
 			uc := &graph.Node{
 				Attribute:  pc.Attr,
 				Properties: []*graph.Property{p},
 			}
-			children = append(children, uc)
+			children = append(children, uc)*/
+			uc := dst.New(pc.Attr)
+			uc.AddValue("_count_", &c)
 		} else if ul.Size() > 0 || len(pc.Children) > 0 {
 			// We create as many predicate entity children as the length of uids for
 			// this predicate.
 			for i := 0; i < ul.Size(); i++ {
 				uid := ul.Get(i)
+				if invalidUids[uid] {
+					continue
+				}
 				//uc := nodePool.Get().(*graph.Node)
 				//uc.Attribute = pc.Attr
 				uc := dst.New(pc.Attr)
@@ -470,15 +466,14 @@ func (sg *SubGraph) preTraverse(uid uint64, dst subgraphOutput) error {
 				if rerr := pc.preTraverse(uid, uc); rerr != nil {
 					if rerr.Error() == "_INV_" {
 						invalidUids[uid] = true
-					} else {
-						log.Printf("Error while traversal: %v", rerr)
-						return rerr
+						continue // next UID.
 					}
+					// Some other error.
+					log.Printf("Error while traversal: %v", rerr)
+					return rerr
 				}
-				if !invalidUids[uid] {
-					//children = append(children, uc)
-					dst.AddChild(pc.Attr, uc)
-				}
+				//children = append(children, uc)
+				dst.AddChild(pc.Attr, uc)
 			}
 		} else {
 			var tv task.Value
@@ -486,7 +481,6 @@ func (sg *SubGraph) preTraverse(uid uint64, dst subgraphOutput) error {
 				return x.Errorf("While parsing value")
 			}
 
-			valBytes := tv.ValBytes()
 			v, err := getValue(tv)
 			if err != nil {
 				return err
@@ -516,7 +510,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst subgraphOutput) error {
 					st := schemaType.(types.Scalar)
 					// Convert to schema type.
 					sv, err = st.Convert(v)
-					if bytes.Equal(valBytes, nil) || err != nil {
+					if bytes.Equal(tv.ValBytes(), nil) || err != nil {
 						// skip values that don't convert.
 						return x.Errorf("_INV_")
 					}
@@ -529,7 +523,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst subgraphOutput) error {
 					gt := globalType.(types.Scalar)
 					// Convert to schema type.
 					sv, err = gt.Convert(v)
-					if bytes.Equal(valBytes, nil) || err != nil {
+					if bytes.Equal(tv.ValBytes(), nil) || err != nil {
 						continue
 					}
 				}
@@ -552,25 +546,24 @@ func createProperty(prop string, v types.Value) *graph.Property {
 // ToProtocolBuffer method transforms the predicate based subgraph to an
 // predicate-entity based protocol buffer subgraph.
 func (sg *SubGraph) ToProtocolBuffer(l *Latency) (*graph.Node, error) {
-	n := &graph.Node{
-		Attribute: sg.Attr,
-	}
+	var dummy *protoOutput
 	if sg.SrcUIDs == nil {
-		return n, nil
+		return toProtoHelper(dummy.New(sg.Attr)), nil
 	}
 
 	x.Assert(len(sg.Result) == 1)
+	n := dummy.New(sg.Attr)
 	ul := sg.Result[0]
 	if sg.Params.GetUID || sg.Params.isDebug {
-		n.Uid = ul.Get(0)
+		n.SetUID(ul.Get(0))
 	}
 
 	if rerr := sg.preTraverse(ul.Get(0), n); rerr != nil {
-		return n, rerr
+		return toProtoHelper(n), rerr
 	}
 
 	l.ProtocolBuffer = time.Since(l.Start) - l.Parsing - l.Processing
-	return n, nil
+	return toProtoHelper(n), nil
 }
 
 func isPresent(list []string, str string) bool {
@@ -868,7 +861,7 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, taskQuery []byte, rch chan 
 	}
 
 	if sg.DestUIDs.Size() == 0 {
-		// Looks like we're done here. Be careful with nil srcUIDs!
+		// Looks like we're done here. Be careful with nil SrcUIDs!
 		x.Trace(ctx, "Zero uids. Num attr children: %v", len(sg.Children))
 		rch <- nil
 		return
@@ -1207,7 +1200,9 @@ type subgraphOutput interface {
 	SetXID(xid string)
 }
 
-type protoOutput struct{ *graph.Node }
+type protoOutput struct {
+	*graph.Node
+}
 
 func toProtoHelper(p subgraphOutput) *graph.Node {
 	return p.(*protoOutput).Node
@@ -1227,13 +1222,8 @@ func (p *protoOutput) New(attr string) subgraphOutput {
 	return &protoOutput{uc}
 }
 
-func (p *protoOutput) SetUID(uid uint64) {
-	p.Node.Uid = uid
-}
-
-func (p *protoOutput) SetXID(xid string) {
-	p.Node.Xid = xid
-}
+func (p *protoOutput) SetUID(uid uint64) { p.Node.Uid = uid }
+func (p *protoOutput) SetXID(xid string) { p.Node.Xid = xid }
 
 type jsonOutput struct {
 	data map[string]interface{}
@@ -1250,15 +1240,14 @@ func (p *jsonOutput) AddChild(attr string, child subgraphOutput) {
 	if a == nil {
 		// Need to do this because we cannot cast nil interface to
 		// []map[string]interface{}.
-		a = make([]map[string]interface{}, 0)
+		a = make([]map[string]interface{}, 0, 5)
 	}
 	p.data[attr] = append(a.([]map[string]interface{}),
 		child.(*jsonOutput).data)
 }
 
 func (p *jsonOutput) New(attr string) subgraphOutput {
-	out := &jsonOutput{make(map[string]interface{})}
-	return out
+	return &jsonOutput{make(map[string]interface{})}
 }
 
 func (p *jsonOutput) SetUID(uid uint64) {

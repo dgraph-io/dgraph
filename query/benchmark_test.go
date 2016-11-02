@@ -67,6 +67,33 @@ func BenchmarkToJSON(b *testing.B) {
 	})
 }
 
+func BenchmarkToJSONAlt(b *testing.B) {
+	benchmarkHelper(b, func(b *testing.B, file string) {
+		b.ReportAllocs()
+		var sg SubGraph
+		var l Latency
+
+		f, err := ioutil.ReadFile(file)
+		if err != nil {
+			b.Fatal(err)
+		}
+
+		buf := bytes.NewBuffer(f)
+		dec := gob.NewDecoder(buf)
+		err = dec.Decode(&sg)
+		if err != nil {
+			b.Fatal(err)
+		}
+
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			if _, err := sg.ToJSONAlternate(&l); err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
+}
+
 func BenchmarkToPB(b *testing.B) {
 	benchmarkHelper(b, func(b *testing.B, file string) {
 		b.ReportAllocs()

@@ -446,7 +446,8 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		x.Checkf(f.Close(), filename)
 	}
 
-	js, err := sg.ToJSON(&l)
+	//js, err := sg.ToJSON(&l)
+	js, err := sg.ToJSONAlternate(&l)
 	if err != nil {
 		x.TraceError(ctx, x.Wrapf(err, "Error while converting to Json"))
 		x.SetStatus(w, x.Error, err.Error())
