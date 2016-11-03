@@ -380,12 +380,6 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if *shutdown && string(q) == "SHUTDOWN" {
-		exitWithProfiles()
-		x.SetStatus(w, x.ErrorOk, "Server has been shutdown")
-		return
-	}
-
 	x.Trace(ctx, "Query received: %v", string(q))
 	gq, mu, err := gql.Parse(string(q))
 	if err != nil {
@@ -465,6 +459,13 @@ func storeStatsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("</pre>"))
 }
 
+func shutDownHandler(w http.ResponseWriter, r *http.Request) {
+	if *shutdown {
+		exitWithProfiles()
+		x.SetStatus(w, x.ErrorOk, "Server has been shutdown")
+	}
+}
+
 // server is used to implement graph.DgraphServer
 type grpcServer struct{}
 
@@ -484,11 +485,6 @@ func (s *grpcServer) Query(ctx context.Context,
 	if len(req.Query) == 0 && req.Mutation == nil {
 		x.TraceError(ctx, x.Errorf("Empty query and mutation."))
 		return resp, fmt.Errorf("Empty query and mutation.")
-	}
-
-	if *shutdown && req.Query == "SHUTDOWN" {
-		exitWithProfiles()
-		return nil, nil
 	}
 
 	var l query.Latency
@@ -606,6 +602,7 @@ func setupServer(che chan error) {
 
 	http.HandleFunc("/query", queryHandler)
 	http.HandleFunc("/debug/store", storeStatsHandler)
+	http.HandleFunc("/admin/shutdown", shutDownHandler)
 	// Initilize the servers.
 	go serveGRPC(grpcl)
 	go serveHTTP(httpl)
