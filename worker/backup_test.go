@@ -112,11 +112,11 @@ func TestBackup(t *testing.T) {
 			require.Contains(t, []string{"_uid_:1", "_uid_:2", "_uid_:3", "_uid_:4"}, nq.Subject)
 			// The only value we set was "photon".
 			if !bytes.Equal(nq.ObjectValue, nil) {
-				require.Equal(t, nq.ObjectValue, []byte("photon"))
+				require.Equal(t, []byte("photon"), nq.ObjectValue)
 			}
 			// The only objectId we set was uid 5.
 			if nq.ObjectId != "" {
-				require.Equal(t, nq.ObjectId, "_uid_:5")
+				require.Equal(t, "_uid_:5", nq.ObjectId)
 			}
 			count++
 		}
@@ -124,5 +124,5 @@ func TestBackup(t *testing.T) {
 		require.NoError(t, scanner.Err())
 	}
 	// This order will bw presereved due to file naming.
-	require.Equal(t, counts, []int{4, 2})
+	require.Equal(t, []int{4, 2}, counts)
 }

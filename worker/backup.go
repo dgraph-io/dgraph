@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"path"
 	"strconv"
 	"sync"
 	"time"
@@ -35,7 +36,12 @@ func Backup(gid uint32, bpath string) error {
 
 	wg.Add(numBackupRoutines)
 	for i := 0; i < numBackupRoutines; i++ {
-		go convertToRdf(&wg, chkv, ch)
+		go func() {
+			for it := range chkv {
+				toRDF(it, ch)
+			}
+			wg.Done()
+		}()
 	}
 	go writeToFile(strconv.Itoa(int(gid)), bpath, ch, errChan)
 
@@ -71,7 +77,7 @@ func Backup(gid uint32, bpath string) error {
 	}
 
 	close(chkv)
-	// Wait for convertToRdf to finish.
+	// Wait for numBackupRoutines to finish.
 	wg.Wait()
 	close(ch)
 
@@ -121,16 +127,9 @@ func toRDF(item kv, ch chan []byte) {
 	ch <- buf.Bytes()
 }
 
-func convertToRdf(wg *sync.WaitGroup, chkv chan kv, ch chan []byte) {
-	for it := range chkv {
-		toRDF(it, ch)
-	}
-	wg.Done()
-}
-
 func writeToFile(str, bpath string, ch chan []byte, errChan chan error) {
-	file := fmt.Sprintf("%s/dgraph-%s-%s.gz", bpath, str,
-		time.Now().Format("2006-01-02-15-04"))
+	file := path.Join(bpath, fmt.Sprintf("dgraph-%s-%s.gz", str,
+		time.Now().Format("2006-01-02-15-04")))
 	err := os.MkdirAll(bpath, 0700)
 	if err != nil {
 		errChan <- err

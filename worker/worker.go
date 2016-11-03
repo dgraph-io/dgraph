@@ -78,7 +78,7 @@ func initiateBackup() error {
 	return nil
 }
 
-// BackupAll Creates backup of all nodes in cluster by initiaing backups in all the master
+// BackupAll Creates backup of all nodes in cluster by initiating backups in all the master
 // nodes.
 func BackupAll() error {
 	errChan := make(chan error, 1000)

@@ -361,28 +361,29 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	var l query.Latency
 	l.Start = time.Now()
 	defer r.Body.Close()
-	q, err := ioutil.ReadAll(r.Body)
+	req, err := ioutil.ReadAll(r.Body)
+	q := string(req)
 	if err != nil || len(q) == 0 {
 		x.TraceError(ctx, x.Wrapf(err, "Error while reading query"))
 		x.SetStatus(w, x.ErrorInvalidRequest, "Invalid request encountered.")
 		return
 	}
 
-	if *shutdown && string(q) == "SHUTDOWN" {
+	if *shutdown && q == "SHUTDOWN" {
 		exitWithProfiles()
 		x.SetStatus(w, x.ErrorOk, "Server has been shutdown")
 		return
 	}
 
 	// TODO(Ashwin): Move to /admin endpoint.
-	if *backup && string(q) == "BACKUP" {
+	if *backup && q == "BACKUP" {
 		worker.BackupAll()
 		x.SetStatus(w, x.ErrorOk, "Backup completed.")
 		return
 	}
 
-	x.Trace(ctx, "Query received: %v", string(q))
-	gq, mu, err := gql.Parse(string(q))
+	x.Trace(ctx, "Query received: %v", q)
+	gq, mu, err := gql.Parse(q)
 	if err != nil {
 		x.TraceError(ctx, x.Wrapf(err, "Error while parsing query"))
 		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
