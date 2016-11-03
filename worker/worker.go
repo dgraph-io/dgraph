@@ -23,8 +23,10 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"strconv"
 
 	"github.com/dgraph-io/dgraph/store"
+	"github.com/dgraph-io/dgraph/x"
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
@@ -55,27 +57,20 @@ func (w *grpcWorker) Hello(ctx context.Context, in *Payload) (*Payload, error) {
 func (w *grpcWorker) InitiateBackup(ctx context.Context, in *Payload) (*Payload, error) {
 	// Iterate through the groups serverd by this server and backup groups
 	// for which it is the leader.
-	return &Payload{}, initiateBackup()
+	gid, err := strconv.Atoi(string(in.Data))
+	x.Check(err)
+	return &Payload{}, initiateBackup(uint32(gid))
 }
 
-func initiateBackup() error {
-	var grpList []uint32
-
+func initiateBackup(gid uint32) error {
 	groups().RLock()
-	for gid, node := range groups().local {
-		if node.AmLeader() {
-			grpList = append(grpList, gid)
-		}
+	if !groups().Node(gid).AmLeader() {
+
+		return fmt.Errorf("Node not leader of group %d", gid)
 	}
 	groups().RUnlock()
-
-	for _, gid := range grpList {
-		err := Backup(gid, *backupPath)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
+	err := Backup(gid, *backupPath)
+	return err
 }
 
 // BackupAll Creates backup of all nodes in cluster by initiating backups in all the master
@@ -84,19 +79,20 @@ func BackupAll() error {
 	errChan := make(chan error, 1000)
 	count := 0
 	// Send backup calls to other workers.
-	addrMap := make(map[string]bool)
+	addrMap := make(map[uint32]string)
 	groups().RLock()
-	for _, servers := range groups().all {
+	for gid, servers := range groups().all {
 		for _, it := range servers.list {
-			// Don't add the current nodes address in this.
+			// TODO: Don't add the current nodes address in this.
 			if it.Leader {
-				addrMap[it.Addr] = true
+				addrMap[gid] = it.Addr
+				break
 			}
 		}
 	}
 	groups().RUnlock()
 
-	for addr := range addrMap {
+	for gid, addr := range addrMap {
 		count++
 		pl := pools().get(addr)
 		conn, err := pl.Get()
@@ -105,7 +101,7 @@ func BackupAll() error {
 		}
 		go func() {
 			ctx := context.Background()
-			query := &Payload{}
+			query := &Payload{[]byte(strconv.Itoa(int(gid)))}
 			c := NewWorkerClient(conn)
 			_, err = c.InitiateBackup(ctx, query)
 			errChan <- err
@@ -114,11 +110,15 @@ func BackupAll() error {
 	}
 
 	// Backup this worker.
-	count++
-	go func() {
-		err := initiateBackup()
-		errChan <- err
-	}()
+	for gid, it := range groups().local {
+		if it.AmLeader() {
+			count++
+			go func() {
+				err := initiateBackup(gid)
+				errChan <- err
+			}()
+		}
+	}
 
 	for i := 0; i < count; i++ {
 		select {
