@@ -125,7 +125,7 @@ func AssignUidsOverNetwork(ctx context.Context, umap map[string]uint64) (rerr er
 		}
 
 	} else {
-		addr := groups().Leader(gid)
+		_, addr := groups().Leader(gid)
 		p := pools().get(addr)
 		conn, err := p.Get()
 		if err != nil {
@@ -143,7 +143,7 @@ func AssignUidsOverNetwork(ctx context.Context, umap map[string]uint64) (rerr er
 	}
 
 	ul := task.GetRootAsUidList(reply.Data, 0)
-	x.Assertf(ul.UidsLength() == int(num.Val()),
+	x.AssertTruef(ul.UidsLength() == int(num.Val()),
 		"Requested: %d != Retrieved Uids: %d", num.Val(), ul.UidsLength())
 
 	i := 0

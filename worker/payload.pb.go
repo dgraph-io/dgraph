@@ -36,7 +36,7 @@ var _ = math.Inf
 const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
 
 type Payload struct {
-	Data []byte `protobuf:"bytes,1,opt,name=Data,proto3" json:"Data,omitempty"`
+	Data []byte `protobuf:"bytes,1,opt,name=Data,json=data,proto3" json:"Data,omitempty"`
 }
 
 func (m *Payload) Reset()                    { *m = Payload{} }
@@ -59,14 +59,18 @@ const _ = grpc.SupportPackageIsVersion3
 // Client API for Worker service
 
 type WorkerClient interface {
-	Hello(ctx context.Context, in *Payload, opts ...grpc.CallOption) (*Payload, error)
+	// Connection testing RPC.
+	Echo(ctx context.Context, in *Payload, opts ...grpc.CallOption) (*Payload, error)
+	// Data serving RPCs.
 	AssignUids(ctx context.Context, in *Payload, opts ...grpc.CallOption) (*Payload, error)
 	Mutate(ctx context.Context, in *Payload, opts ...grpc.CallOption) (*Payload, error)
 	ServeTask(ctx context.Context, in *Payload, opts ...grpc.CallOption) (*Payload, error)
 	PredicateData(ctx context.Context, in *Payload, opts ...grpc.CallOption) (Worker_PredicateDataClient, error)
 	Sort(ctx context.Context, in *Payload, opts ...grpc.CallOption) (*Payload, error)
+	// RAFT serving RPCs.
 	RaftMessage(ctx context.Context, in *Payload, opts ...grpc.CallOption) (*Payload, error)
 	JoinCluster(ctx context.Context, in *Payload, opts ...grpc.CallOption) (*Payload, error)
+	UpdateMembership(ctx context.Context, in *Payload, opts ...grpc.CallOption) (*Payload, error)
 }
 
 type workerClient struct {
@@ -77,9 +81,9 @@ func NewWorkerClient(cc *grpc.ClientConn) WorkerClient {
 	return &workerClient{cc}
 }
 
-func (c *workerClient) Hello(ctx context.Context, in *Payload, opts ...grpc.CallOption) (*Payload, error) {
+func (c *workerClient) Echo(ctx context.Context, in *Payload, opts ...grpc.CallOption) (*Payload, error) {
 	out := new(Payload)
-	err := grpc.Invoke(ctx, "/worker.Worker/Hello", in, out, c.cc, opts...)
+	err := grpc.Invoke(ctx, "/worker.Worker/Echo", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -172,37 +176,50 @@ func (c *workerClient) JoinCluster(ctx context.Context, in *Payload, opts ...grp
 	return out, nil
 }
 
+func (c *workerClient) UpdateMembership(ctx context.Context, in *Payload, opts ...grpc.CallOption) (*Payload, error) {
+	out := new(Payload)
+	err := grpc.Invoke(ctx, "/worker.Worker/UpdateMembership", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // Server API for Worker service
 
 type WorkerServer interface {
-	Hello(context.Context, *Payload) (*Payload, error)
+	// Connection testing RPC.
+	Echo(context.Context, *Payload) (*Payload, error)
+	// Data serving RPCs.
 	AssignUids(context.Context, *Payload) (*Payload, error)
 	Mutate(context.Context, *Payload) (*Payload, error)
 	ServeTask(context.Context, *Payload) (*Payload, error)
 	PredicateData(*Payload, Worker_PredicateDataServer) error
 	Sort(context.Context, *Payload) (*Payload, error)
+	// RAFT serving RPCs.
 	RaftMessage(context.Context, *Payload) (*Payload, error)
 	JoinCluster(context.Context, *Payload) (*Payload, error)
+	UpdateMembership(context.Context, *Payload) (*Payload, error)
 }
 
 func RegisterWorkerServer(s *grpc.Server, srv WorkerServer) {
 	s.RegisterService(&_Worker_serviceDesc, srv)
 }
 
-func _Worker_Hello_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Worker_Echo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(Payload)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(WorkerServer).Hello(ctx, in)
+		return srv.(WorkerServer).Echo(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/worker.Worker/Hello",
+		FullMethod: "/worker.Worker/Echo",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(WorkerServer).Hello(ctx, req.(*Payload))
+		return srv.(WorkerServer).Echo(ctx, req.(*Payload))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -336,13 +353,31 @@ func _Worker_JoinCluster_Handler(srv interface{}, ctx context.Context, dec func(
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Worker_UpdateMembership_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Payload)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WorkerServer).UpdateMembership(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/worker.Worker/UpdateMembership",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WorkerServer).UpdateMembership(ctx, req.(*Payload))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 var _Worker_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "worker.Worker",
 	HandlerType: (*WorkerServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "Hello",
-			Handler:    _Worker_Hello_Handler,
+			MethodName: "Echo",
+			Handler:    _Worker_Echo_Handler,
 		},
 		{
 			MethodName: "AssignUids",
@@ -368,6 +403,10 @@ var _Worker_serviceDesc = grpc.ServiceDesc{
 			MethodName: "JoinCluster",
 			Handler:    _Worker_JoinCluster_Handler,
 		},
+		{
+			MethodName: "UpdateMembership",
+			Handler:    _Worker_UpdateMembership_Handler,
+		},
 	},
 	Streams: []grpc.StreamDesc{
 		{
@@ -379,55 +418,55 @@ var _Worker_serviceDesc = grpc.ServiceDesc{
 	Metadata: fileDescriptorPayload,
 }
 
-func (m *Payload) Marshal() (dAtA []byte, err error) {
+func (m *Payload) Marshal() (data []byte, err error) {
 	size := m.Size()
-	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	data = make([]byte, size)
+	n, err := m.MarshalTo(data)
 	if err != nil {
 		return nil, err
 	}
-	return dAtA[:n], nil
+	return data[:n], nil
 }
 
-func (m *Payload) MarshalTo(dAtA []byte) (int, error) {
+func (m *Payload) MarshalTo(data []byte) (int, error) {
 	var i int
 	_ = i
 	var l int
 	_ = l
 	if len(m.Data) > 0 {
-		dAtA[i] = 0xa
+		data[i] = 0xa
 		i++
-		i = encodeVarintPayload(dAtA, i, uint64(len(m.Data)))
-		i += copy(dAtA[i:], m.Data)
+		i = encodeVarintPayload(data, i, uint64(len(m.Data)))
+		i += copy(data[i:], m.Data)
 	}
 	return i, nil
 }
 
-func encodeFixed64Payload(dAtA []byte, offset int, v uint64) int {
-	dAtA[offset] = uint8(v)
-	dAtA[offset+1] = uint8(v >> 8)
-	dAtA[offset+2] = uint8(v >> 16)
-	dAtA[offset+3] = uint8(v >> 24)
-	dAtA[offset+4] = uint8(v >> 32)
-	dAtA[offset+5] = uint8(v >> 40)
-	dAtA[offset+6] = uint8(v >> 48)
-	dAtA[offset+7] = uint8(v >> 56)
+func encodeFixed64Payload(data []byte, offset int, v uint64) int {
+	data[offset] = uint8(v)
+	data[offset+1] = uint8(v >> 8)
+	data[offset+2] = uint8(v >> 16)
+	data[offset+3] = uint8(v >> 24)
+	data[offset+4] = uint8(v >> 32)
+	data[offset+5] = uint8(v >> 40)
+	data[offset+6] = uint8(v >> 48)
+	data[offset+7] = uint8(v >> 56)
 	return offset + 8
 }
-func encodeFixed32Payload(dAtA []byte, offset int, v uint32) int {
-	dAtA[offset] = uint8(v)
-	dAtA[offset+1] = uint8(v >> 8)
-	dAtA[offset+2] = uint8(v >> 16)
-	dAtA[offset+3] = uint8(v >> 24)
+func encodeFixed32Payload(data []byte, offset int, v uint32) int {
+	data[offset] = uint8(v)
+	data[offset+1] = uint8(v >> 8)
+	data[offset+2] = uint8(v >> 16)
+	data[offset+3] = uint8(v >> 24)
 	return offset + 4
 }
-func encodeVarintPayload(dAtA []byte, offset int, v uint64) int {
+func encodeVarintPayload(data []byte, offset int, v uint64) int {
 	for v >= 1<<7 {
-		dAtA[offset] = uint8(v&0x7f | 0x80)
+		data[offset] = uint8(v&0x7f | 0x80)
 		v >>= 7
 		offset++
 	}
-	dAtA[offset] = uint8(v)
+	data[offset] = uint8(v)
 	return offset + 1
 }
 func (m *Payload) Size() (n int) {
@@ -453,8 +492,8 @@ func sovPayload(x uint64) (n int) {
 func sozPayload(x uint64) (n int) {
 	return sovPayload(uint64((x << 1) ^ uint64((int64(x) >> 63))))
 }
-func (m *Payload) Unmarshal(dAtA []byte) error {
-	l := len(dAtA)
+func (m *Payload) Unmarshal(data []byte) error {
+	l := len(data)
 	iNdEx := 0
 	for iNdEx < l {
 		preIndex := iNdEx
@@ -466,7 +505,7 @@ func (m *Payload) Unmarshal(dAtA []byte) error {
 			if iNdEx >= l {
 				return io.ErrUnexpectedEOF
 			}
-			b := dAtA[iNdEx]
+			b := data[iNdEx]
 			iNdEx++
 			wire |= (uint64(b) & 0x7F) << shift
 			if b < 0x80 {
@@ -494,7 +533,7 @@ func (m *Payload) Unmarshal(dAtA []byte) error {
 				if iNdEx >= l {
 					return io.ErrUnexpectedEOF
 				}
-				b := dAtA[iNdEx]
+				b := data[iNdEx]
 				iNdEx++
 				byteLen |= (int(b) & 0x7F) << shift
 				if b < 0x80 {
@@ -508,14 +547,14 @@ func (m *Payload) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Data = append(m.Data[:0], dAtA[iNdEx:postIndex]...)
+			m.Data = append(m.Data[:0], data[iNdEx:postIndex]...)
 			if m.Data == nil {
 				m.Data = []byte{}
 			}
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
-			skippy, err := skipPayload(dAtA[iNdEx:])
+			skippy, err := skipPayload(data[iNdEx:])
 			if err != nil {
 				return err
 			}
@@ -534,8 +573,8 @@ func (m *Payload) Unmarshal(dAtA []byte) error {
 	}
 	return nil
 }
-func skipPayload(dAtA []byte) (n int, err error) {
-	l := len(dAtA)
+func skipPayload(data []byte) (n int, err error) {
+	l := len(data)
 	iNdEx := 0
 	for iNdEx < l {
 		var wire uint64
@@ -546,7 +585,7 @@ func skipPayload(dAtA []byte) (n int, err error) {
 			if iNdEx >= l {
 				return 0, io.ErrUnexpectedEOF
 			}
-			b := dAtA[iNdEx]
+			b := data[iNdEx]
 			iNdEx++
 			wire |= (uint64(b) & 0x7F) << shift
 			if b < 0x80 {
@@ -564,7 +603,7 @@ func skipPayload(dAtA []byte) (n int, err error) {
 					return 0, io.ErrUnexpectedEOF
 				}
 				iNdEx++
-				if dAtA[iNdEx-1] < 0x80 {
+				if data[iNdEx-1] < 0x80 {
 					break
 				}
 			}
@@ -581,7 +620,7 @@ func skipPayload(dAtA []byte) (n int, err error) {
 				if iNdEx >= l {
 					return 0, io.ErrUnexpectedEOF
 				}
-				b := dAtA[iNdEx]
+				b := data[iNdEx]
 				iNdEx++
 				length |= (int(b) & 0x7F) << shift
 				if b < 0x80 {
@@ -604,7 +643,7 @@ func skipPayload(dAtA []byte) (n int, err error) {
 					if iNdEx >= l {
 						return 0, io.ErrUnexpectedEOF
 					}
-					b := dAtA[iNdEx]
+					b := data[iNdEx]
 					iNdEx++
 					innerWire |= (uint64(b) & 0x7F) << shift
 					if b < 0x80 {
@@ -615,7 +654,7 @@ func skipPayload(dAtA []byte) (n int, err error) {
 				if innerWireType == 4 {
 					break
 				}
-				next, err := skipPayload(dAtA[start:])
+				next, err := skipPayload(data[start:])
 				if err != nil {
 					return 0, err
 				}
@@ -642,20 +681,21 @@ var (
 func init() { proto.RegisterFile("payload.proto", fileDescriptorPayload) }
 
 var fileDescriptorPayload = []byte{
-	// 226 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0xe2, 0xe2, 0x2d, 0x48, 0xac, 0xcc,
-	0xc9, 0x4f, 0x4c, 0xd1, 0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x17, 0x62, 0x2b, 0xcf, 0x2f, 0xca, 0x4e,
-	0x2d, 0x52, 0x92, 0xe5, 0x62, 0x0f, 0x80, 0x48, 0x08, 0x09, 0x71, 0xb1, 0xb8, 0x24, 0x96, 0x24,
-	0x4a, 0x30, 0x2a, 0x30, 0x6a, 0xf0, 0x04, 0x81, 0xd9, 0x46, 0xfd, 0xcc, 0x5c, 0x6c, 0xe1, 0x60,
-	0x95, 0x42, 0xda, 0x5c, 0xac, 0x1e, 0xa9, 0x39, 0x39, 0xf9, 0x42, 0xfc, 0x7a, 0x10, 0xbd, 0x7a,
-	0x50, 0x8d, 0x52, 0xe8, 0x02, 0x4a, 0x0c, 0x42, 0x06, 0x5c, 0x5c, 0x8e, 0xc5, 0xc5, 0x99, 0xe9,
-	0x79, 0xa1, 0x99, 0x29, 0xc5, 0x44, 0xe9, 0xd0, 0xe1, 0x62, 0xf3, 0x2d, 0x2d, 0x49, 0x2c, 0x49,
-	0x25, 0x4a, 0xb5, 0x3e, 0x17, 0x67, 0x70, 0x6a, 0x51, 0x59, 0x6a, 0x48, 0x62, 0x71, 0x36, 0x51,
-	0x1a, 0x4c, 0xb9, 0x78, 0x03, 0x8a, 0x52, 0x53, 0x32, 0x93, 0x13, 0x4b, 0x52, 0x41, 0x3e, 0x23,
-	0x46, 0x93, 0x01, 0xa3, 0x90, 0x16, 0x17, 0x4b, 0x70, 0x7e, 0x51, 0x09, 0x51, 0x56, 0x18, 0x72,
-	0x71, 0x07, 0x25, 0xa6, 0x95, 0xf8, 0xa6, 0x16, 0x17, 0x27, 0xa6, 0xa7, 0x12, 0xab, 0xc5, 0x2b,
-	0x3f, 0x33, 0xcf, 0x39, 0xa7, 0xb4, 0xb8, 0x24, 0xb5, 0x88, 0x18, 0x2d, 0x4e, 0x02, 0x27, 0x1e,
-	0xc9, 0x31, 0x5e, 0x78, 0x24, 0xc7, 0xf8, 0xe0, 0x91, 0x1c, 0xe3, 0x8c, 0xc7, 0x72, 0x0c, 0x49,
-	0x6c, 0xe0, 0x18, 0x35, 0x06, 0x04, 0x00, 0x00, 0xff, 0xff, 0xbc, 0x7a, 0xad, 0xf0, 0xe2, 0x01,
-	0x00, 0x00,
+	// 248 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0x8c, 0xd2, 0xcf, 0x4a, 0x03, 0x41,
+	0x0c, 0x06, 0xf0, 0x0e, 0x2e, 0x2b, 0x46, 0x8b, 0x65, 0x4e, 0x22, 0xb8, 0x48, 0x4f, 0x22, 0xb2,
+	0x56, 0x45, 0xef, 0xfe, 0xbb, 0x08, 0x0b, 0xa5, 0xb5, 0x78, 0x4e, 0x3b, 0xb1, 0x1d, 0x5a, 0x3b,
+	0xcb, 0x24, 0x55, 0x7c, 0x13, 0x9f, 0x48, 0x3c, 0xfa, 0x08, 0xb2, 0xbe, 0x88, 0xb4, 0xeb, 0xa9,
+	0xa7, 0x5c, 0x93, 0xef, 0x47, 0xf8, 0x20, 0xd0, 0x2c, 0xf1, 0x7d, 0x16, 0xd0, 0xe5, 0x65, 0x0c,
+	0x12, 0x6c, 0xfa, 0x16, 0xe2, 0x94, 0x62, 0xfb, 0x00, 0x36, 0xbb, 0xf5, 0xc2, 0x5a, 0x48, 0xee,
+	0x50, 0x70, 0xcf, 0x1c, 0x9a, 0xa3, 0x9d, 0x5e, 0xe2, 0x50, 0xf0, 0xfc, 0x73, 0x03, 0xd2, 0xa7,
+	0x55, 0xd2, 0x1e, 0x43, 0x72, 0x3f, 0x9a, 0x04, 0xbb, 0x9b, 0xd7, 0x34, 0xff, 0x77, 0xfb, 0xeb,
+	0x83, 0x76, 0xc3, 0x76, 0x00, 0xae, 0x99, 0xfd, 0x78, 0x3e, 0xf0, 0x8e, 0x55, 0xe2, 0x04, 0xd2,
+	0x62, 0x21, 0x28, 0xa4, 0x4a, 0x9f, 0xc2, 0x56, 0x9f, 0xe2, 0x2b, 0x3d, 0x22, 0x4f, 0x55, 0xe0,
+	0x12, 0x9a, 0xdd, 0x48, 0xce, 0x8f, 0x50, 0x68, 0x59, 0x52, 0x83, 0x3a, 0x66, 0xd9, 0xb9, 0x1f,
+	0xa2, 0xa8, 0x4e, 0x9c, 0xc1, 0x76, 0x0f, 0x9f, 0xa5, 0x20, 0x66, 0x1c, 0x93, 0x96, 0x3c, 0x04,
+	0x3f, 0xbf, 0x9d, 0x2d, 0x58, 0x28, 0xaa, 0xc8, 0x15, 0xb4, 0x06, 0xa5, 0x43, 0xa1, 0x82, 0x5e,
+	0x86, 0x14, 0x79, 0xe2, 0x4b, 0x8d, 0xbb, 0x69, 0x7d, 0x55, 0x99, 0xf9, 0xae, 0x32, 0xf3, 0x53,
+	0x65, 0xe6, 0xe3, 0x37, 0x6b, 0x0c, 0xd3, 0xd5, 0x23, 0x5c, 0xfc, 0x05, 0x00, 0x00, 0xff, 0xff,
+	0xe9, 0x9c, 0xfd, 0x1b, 0x19, 0x02, 0x00, 0x00,
 }

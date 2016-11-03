@@ -47,7 +47,7 @@ func init() {
 
 // initIndex initializes the index with the given data store.
 func initIndex() {
-	x.Assert(pstore != nil)
+	x.AssertTrue(pstore != nil)
 
 	// Initialize TokensTables.
 	indexedFields := schema.IndexedFields()
@@ -112,7 +112,7 @@ func indexTokens(attr string, p types.Value) ([]string, error) {
 // addIndexMutations adds mutation(s) for a single term, to maintain index.
 func addIndexMutations(ctx context.Context, attr string, uid uint64,
 	p types.Value, del bool) {
-	x.Assert(uid != 0)
+	x.AssertTrue(uid != 0)
 	tokens, err := indexTokens(attr, p)
 	if err != nil {
 		// This data is not indexable
@@ -126,7 +126,7 @@ func addIndexMutations(ctx context.Context, attr string, uid uint64,
 	}
 
 	tokensTable := GetTokensTable(attr)
-	x.Assertf(tokensTable != nil, "TokensTable missing for attr %s", attr)
+	x.AssertTruef(tokensTable != nil, "TokensTable missing for attr %s", attr)
 
 	for _, token := range tokens {
 		addIndexMutation(ctx, attr, token, tokensTable, &edge, del)
@@ -138,7 +138,7 @@ func addIndexMutation(ctx context.Context, attr, token string,
 	plist, decr := GetOrCreate(types.IndexKey(attr, token))
 	defer decr()
 
-	x.Assertf(plist != nil, "plist is nil [%s] %d %s",
+	x.AssertTruef(plist != nil, "plist is nil [%s] %d %s",
 		token, edge.ValueId, edge.Attribute)
 	if del {
 		_, err := plist.AddMutation(ctx, *edge, Del)
@@ -166,7 +166,7 @@ func addIndexMutation(ctx context.Context, attr, token string,
 
 // AddMutationWithIndex is AddMutation with support for indexing.
 func (l *List) AddMutationWithIndex(ctx context.Context, t x.DirectedEdge, op byte) error {
-	x.Assertf(len(t.Attribute) > 0 && t.Attribute[0] != ':',
+	x.AssertTruef(len(t.Attribute) > 0 && t.Attribute[0] != ':',
 		"[%s] [%d] [%v] %d %d\n", t.Attribute, t.Entity, t.Value, t.ValueId, op)
 
 	var vbytes []byte
@@ -209,7 +209,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t x.DirectedEdge, op by
 
 // GetTokensTable returns TokensTable for an indexed attribute.
 func GetTokensTable(attr string) *TokensTable {
-	x.Assertf(tables != nil,
+	x.AssertTruef(tables != nil,
 		"TokensTable uninitialized. You need to call InitIndex.")
 	return tables[attr]
 }

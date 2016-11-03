@@ -134,7 +134,7 @@ func TestProcessTask(t *testing.T) {
 func newQuery(attr string, uids []uint64, tokens []string) []byte {
 	b := flatbuffers.NewBuilder(0)
 
-	x.Assert(uids == nil || tokens == nil)
+	x.AssertTrue(uids == nil || tokens == nil)
 
 	var vend flatbuffers.UOffsetT
 	if uids != nil {
@@ -379,7 +379,7 @@ func populateGraphForSort(t *testing.T, ps *store.Store) {
 
 // newSort creates a task.Sort for sorting.
 func newSort(uids [][]uint64, offset, count int) []byte {
-	x.Assert(uids != nil)
+	x.AssertTrue(uids != nil)
 
 	b := flatbuffers.NewBuilder(0)
 	ao := b.CreateString("dob") // Only consider sort by dob for tests.

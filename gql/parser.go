@@ -598,7 +598,7 @@ func (t *FilterTree) debugString() string {
 
 // stringHelper does simple DFS to convert FilterTree to string.
 func (t *FilterTree) stringHelper(buf *bytes.Buffer) {
-	x.Assert(t != nil)
+	x.AssertTrue(t != nil)
 	if len(t.FuncName) > 0 {
 		// Leaf node.
 		_, err := buf.WriteRune('(')
@@ -647,14 +647,14 @@ func (s *filterTreeStack) size() int          { return len(s.a) }
 func (s *filterTreeStack) push(t *FilterTree) { s.a = append(s.a, t) }
 
 func (s *filterTreeStack) pop() *FilterTree {
-	x.Assertf(!s.empty(), "Trying to pop empty stack")
+	x.AssertTruef(!s.empty(), "Trying to pop empty stack")
 	last := s.a[len(s.a)-1]
 	s.a = s.a[:len(s.a)-1]
 	return last
 }
 
 func (s *filterTreeStack) peek() *FilterTree {
-	x.Assertf(!s.empty(), "Trying to peek empty stack")
+	x.AssertTruef(!s.empty(), "Trying to peek empty stack")
 	return s.a[len(s.a)-1]
 }
 
@@ -723,7 +723,7 @@ func parseFilter(l *lex.Lexer) (*FilterTree, error) {
 				op = "|"
 			}
 			opPred := filterOpPrecedence[op]
-			x.Assertf(opPred > 0, "Expected opPred > 0: %d", opPred)
+			x.AssertTruef(opPred > 0, "Expected opPred > 0: %d", opPred)
 			// Evaluate the stack until we see an operator with strictly lower pred.
 			for !opStack.empty() {
 				topOp := opStack.peek()
@@ -741,7 +741,7 @@ func parseFilter(l *lex.Lexer) (*FilterTree, error) {
 	// For other applications, typically after all items are
 	// consumed, we will run a loop like "while opStack is nonempty, evalStack".
 	// This is not needed here.
-	x.Assertf(opStack.empty(), "Op stack should be empty when we exit")
+	x.AssertTruef(opStack.empty(), "Op stack should be empty when we exit")
 
 	if valueStack.empty() {
 		// This happens when we have @filter(). We can either return an error or
