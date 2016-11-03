@@ -184,13 +184,6 @@ func populateGraph(t *testing.T) (string, *store.Store) {
 	return dir, ps
 }
 
-func processToJSON(t *testing.T, query string) map[string]interface{} {
-	js := processToJSONAlt(t, query)
-	var mp map[string]interface{}
-	require.NoError(t, json.Unmarshal([]byte(js), &mp))
-	return mp
-}
-
 func processToJSONAlt(t *testing.T, query string) string {
 	gq, _, err := gql.Parse(query)
 	require.NoError(t, err)
@@ -281,7 +274,10 @@ func TestDebug1(t *testing.T) {
 		}
 	`
 
-	mp := processToJSON(t, query)
+	js := processToJSONAlt(t, query)
+	var mp map[string]interface{}
+	require.NoError(t, json.Unmarshal([]byte(js), &mp))
+
 	resp := mp["debug"]
 	uid := resp.([]interface{})[0].(map[string]interface{})["_uid_"].(string)
 	require.EqualValues(t, "0x1", uid)
@@ -304,7 +300,10 @@ func TestDebug2(t *testing.T) {
 		}
 	`
 
-	mp := processToJSON(t, query)
+	js := processToJSONAlt(t, query)
+	var mp map[string]interface{}
+	require.NoError(t, json.Unmarshal([]byte(js), &mp))
+
 	resp := mp["me"]
 	uid, ok := resp.([]interface{})[0].(map[string]interface{})["_uid_"].(string)
 	require.False(t, ok, "No uid expected but got one %s", uid)
