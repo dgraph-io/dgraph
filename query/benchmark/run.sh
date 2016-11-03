@@ -4,7 +4,10 @@ set -e
 DATADIR=$HOME/dgraph
 THISDIR=`pwd`
 
+# These actors have 10, 1000, 1007 results respectively.
 ACTORS="m.03c7p9t m.0148x0 m.08624h"
+
+# These directors have 10, 100, 992 results respectively.
 DIRECTORS="m.0bysn41 m.03k5gd m.05dxl_"
 
 pushd $DATADIR &> /dev/null
