@@ -33,9 +33,11 @@ func benchmarkHelper(b *testing.B, f func(*testing.B, string)) {
 		for i := 0; i < 3; i++ {
 			label := fmt.Sprintf("%s_%d", s, i)
 			filename := fmt.Sprintf("benchmark/%s.%d.gob", s, i)
-			b.Run(label, func(b *testing.B) {
+			if !b.Run(label, func(b *testing.B) {
 				f(b, filename)
-			})
+			}) {
+				b.FailNow()
+			}
 		}
 	}
 }
