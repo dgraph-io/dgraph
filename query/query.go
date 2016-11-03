@@ -37,7 +37,6 @@ import (
 	"github.com/dgraph-io/dgraph/query/graph"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/task"
-	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
@@ -1017,43 +1016,18 @@ func (sg *SubGraph) applyFilter(ctx context.Context) error {
 // runFilter traverses filter tree and produce a filtered list of UIDs.
 // Input "destUIDs" is the very original list of destination UIDs of a SubGraph.
 func runFilter(ctx context.Context, destUIDs *algo.UIDList,
-	filter *gql.FilterTree) (*algo.UIDList, error) {
+	filter *gql.FilterTree) (l *algo.UIDList, rerr error) {
 	if len(filter.FuncName) > 0 { // Leaf node.
 		filter.FuncName = strings.ToLower(filter.FuncName) // Not sure if needed.
-		isAnyOf := filter.FuncName == "anyof"
-		isAllOf := filter.FuncName == "allof"
-		x.AssertTruef(isAnyOf || isAllOf, "FuncName invalid: %s", filter.FuncName)
 		x.AssertTruef(len(filter.FuncArgs) == 2,
 			"Expect exactly two arguments: pred and predValue")
 
-		attr := filter.FuncArgs[0]
-		sg := &SubGraph{Attr: attr}
-		sgChan := make(chan error, 1)
-
-		// Tokenize FuncArgs[1].
-		tokenizer, err := tok.NewTokenizer([]byte(filter.FuncArgs[1]))
-		if err != nil {
-			return nil, x.Errorf("Could not create tokenizer: %v", filter.FuncArgs[1])
+		switch filter.FuncName {
+		case "anyof":
+			return anyof(ctx, destUIDs, filter.FuncArgs[0], filter.FuncArgs[1])
+		case "allof":
+			return allof(ctx, destUIDs, filter.FuncArgs[0], filter.FuncArgs[1])
 		}
-		defer tokenizer.Destroy()
-		x.AssertTrue(tokenizer != nil)
-		tokens := tokenizer.Tokens()
-		taskQuery := createTaskQuery(sg, nil, tokens, destUIDs)
-		go ProcessGraph(ctx, sg, taskQuery, sgChan)
-		select {
-		case <-ctx.Done():
-			return nil, x.Wrap(ctx.Err())
-		case err = <-sgChan:
-			if err != nil {
-				return nil, err
-			}
-		}
-
-		x.AssertTrue(len(sg.Result) == len(tokens))
-		if isAnyOf {
-			return algo.MergeLists(sg.Result), nil
-		}
-		return algo.IntersectLists(sg.Result), nil
 	}
 
 	// For now, we only handle AND and OR.
