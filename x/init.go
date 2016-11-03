@@ -73,7 +73,7 @@ To say hi to the community       , visit https://dgraph.slack.com.
 // Let's add Printf to "x" and include "x" almost everywhere. Caution: Do remember
 // to call x.Init. For tests, you need a TestMain that calls x.Init.
 func Printf(format string, args ...interface{}) {
-	Assert(logger != nil)
+	Assertf(logger != nil, "Logger is not defined. Have you called x.Init?")
 	// Call depth is one higher than default.
-	logger.Output(3, fmt.Sprintf(format, args...))
+	logger.Output(2, fmt.Sprintf(format, args...))
 }
