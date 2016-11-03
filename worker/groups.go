@@ -31,10 +31,10 @@ var (
 )
 
 type server struct {
-	Id      uint64
-	Addr    string
-	Leader  bool
-	RaftIdx uint64
+	NodeId  uint64 // Raft Id associated with the raft node.
+	Addr    string // The public address of the server serving this node.
+	Leader  bool   // Set to true if the node is a leader of the group.
+	RaftIdx uint64 // The raft index which applied this membership update in group zero.
 }
 
 type servers struct {
@@ -141,7 +141,7 @@ func (g *groupi) Server(id uint64, groupId uint32) (rs server, found bool) {
 		return server{}, false
 	}
 	for _, s := range sl.list {
-		if s.Id == id {
+		if s.NodeId == id {
 			return s, true
 		}
 	}
@@ -179,7 +179,7 @@ func (g *groupi) Leader(group uint32) (uint64, string) {
 	if all == nil {
 		return 0, ""
 	}
-	return all.list[0].Id, all.list[0].Addr
+	return all.list[0].NodeId, all.list[0].Addr
 }
 
 func (g *groupi) isDuplicate(gid uint32, nid uint64, addr string, leader bool) bool {
@@ -189,13 +189,15 @@ func (g *groupi) isDuplicate(gid uint32, nid uint64, addr string, leader bool) b
 }
 
 // duplicate requires at least a read mutex lock to be held by the caller.
+// duplicate will return true if we already have a server which matches the arguments
+// provided to the function exactly. This is used to avoid re-applying the same update.
 func (g *groupi) duplicate(gid uint32, nid uint64, addr string, leader bool) bool {
 	sl := g.all[gid]
 	if sl == nil {
 		return false
 	}
 	for _, s := range sl.list {
-		if s.Id == nid && s.Addr == addr && s.Leader == leader {
+		if s.NodeId == nid && s.Addr == addr && s.Leader == leader {
 			return true
 		}
 	}
@@ -252,7 +254,7 @@ func (g *groupi) syncMemberships() {
 				b := flatbuffers.NewBuilder(0)
 				uo := buildTaskMembership(b, rc.Group(), rc.Id(), rc.Addr(), amleader)
 				b.Finish(uo)
-				data := b.Bytes[b.Head():]
+				data := b.FinishedBytes()
 
 				zero := groups().Node(0)
 				zero.ProposeAndWait(zero.ctx, membershipMsg, data)
@@ -355,7 +357,7 @@ func (g *groupi) periodicSyncMemberships() {
 // membership update in group zero.
 func (g *groupi) applyMembershipUpdate(raftIdx uint64, mm *task.Membership) {
 	update := server{
-		Id:      mm.Id(),
+		NodeId:  mm.Id(),
 		Addr:    string(mm.Addr()),
 		Leader:  mm.Leader() == byte(1),
 		RaftIdx: raftIdx,
@@ -386,7 +388,7 @@ func (g *groupi) applyMembershipUpdate(raftIdx uint64, mm *task.Membership) {
 		// Remove all instances of the provided node. There should only be one.
 		found := false
 		for i, s := range sl.list {
-			if s.Id == update.Id {
+			if s.NodeId == update.NodeId {
 				found = true
 				sl.list[i] = sl.list[len(sl.list)-1]
 				sl.list = sl.list[:len(sl.list)-1]
@@ -415,11 +417,13 @@ func (g *groupi) applyMembershipUpdate(raftIdx uint64, mm *task.Membership) {
 	}
 }
 
+// MembershipUpdateAfter generates the Flatbuffer response containing all the
+// membership updates after the provided raft index.
 func (g *groupi) MembershipUpdateAfter(ridx uint64) []byte {
 	g.RLock()
 	defer g.RUnlock()
 
-	var maxIdx uint64
+	maxIdx := ridx
 	b := flatbuffers.NewBuilder(0)
 	uoffsets := make([]flatbuffers.UOffsetT, 0, 10)
 	for gid, peers := range g.all {
@@ -430,7 +434,7 @@ func (g *groupi) MembershipUpdateAfter(ridx uint64) []byte {
 			if s.RaftIdx > maxIdx {
 				maxIdx = s.RaftIdx
 			}
-			uo := buildTaskMembership(b, gid, s.Id, []byte(s.Addr), s.Leader)
+			uo := buildTaskMembership(b, gid, s.NodeId, []byte(s.Addr), s.Leader)
 			uoffsets = append(uoffsets, uo)
 		}
 	}
@@ -497,6 +501,8 @@ func (w *grpcWorker) UpdateMembership(ctx context.Context, query *Payload) (*Pay
 		}
 	}
 
+	// Find all membership updates since the provided lastUpdate. LastUpdate is
+	// the last raft index that the caller has recorded an update for.
 	reply := groups().MembershipUpdateAfter(update.LastUpdate())
 	return &Payload{Data: reply}, nil
 }

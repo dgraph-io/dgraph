@@ -101,15 +101,11 @@ func (p *poolsi) connect(addr string) {
 	x.Check2(rand.Read(query.Data))
 
 	conn, err := pool.Get()
-	if err != nil {
-		log.Fatalf("Unable to connect: %v", err)
-	}
+	x.Checkf(err, "Unable to connect")
 
 	c := NewWorkerClient(conn)
 	resp, err := c.Echo(context.Background(), query)
-	if err != nil {
-		log.Fatalf("Unable to connect: %v", err)
-	}
+	x.Checkf(err, "Unable to Echo")
 	x.AssertTrue(bytes.Equal(resp.Data, query.Data))
 	x.Check(pool.Put(conn))
 	fmt.Printf("Connection with %q successful.\n", addr)

@@ -52,11 +52,13 @@ func Checkf(err error, format string, args ...interface{}) {
 	}
 }
 
-func Check2(ignore interface{}, err error) {
+// Check2 acts as convenience wrapper around Check, using the 2nd argument as error.
+func Check2(_ interface{}, err error) {
 	Check(err)
 }
 
-func Check2f(ignore interface{}, err error, format string, args ...interface{}) {
+// Check2 acts as convenience wrapper around Checkf, using the 2nd argument as error.
+func Check2f(_ interface{}, err error, format string, args ...interface{}) {
 	Checkf(err, format, args)
 }
 

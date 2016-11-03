@@ -6,11 +6,11 @@ table Query {
 	offset:int;
 	afterUid:ulong;
 	getCount:ushort;
-	
+
 	// Exactly one of uids and terms is populated.
 	uids:[ulong];
 	tokens:[string];
-	
+
 	// Intersect results with this UID list. If uids is populated, then this is
 	// an "intersection query". If terms is populated, this is a "filter query".
 	toIntersect:UidList;
@@ -65,20 +65,6 @@ table RaftContext {
 	addr:string;
 }
 
-table Membership {
-	id:ulong;
-	group:uint;
-	addr:string;
-	leader:bool;
-	amdead:bool;
-	lastUpdate:ulong;
-}
-
-table MembershipUpdate {
-	members:[Membership];
-	lastUpdate:ulong;
-}
-
 table Sort {
 	attr:string;
 	uidmatrix:[UidList];
@@ -88,4 +74,24 @@ table Sort {
 
 table SortResult {
 	uidmatrix:[UidList];
+}
+
+// Membership stores information about RAFT group membership for a single RAFT node.
+// Note that each server can be serving multiple RAFT groups. Each group would have
+// one RAFT node per server serving that group.
+table Membership {
+	id:ulong;
+	group:uint;
+	addr:string;
+	leader:bool;
+	amdead:bool;
+	lastUpdate:ulong;
+}
+
+// MembershipUpdate is used to pack together the current membership state of all the nodes
+// in the caller server; and the membership updates recorded by the callee server since
+// the provided lastUpdate.
+table MembershipUpdate {
+	members:[Membership];
+	lastUpdate:ulong;
 }
