@@ -185,6 +185,13 @@ func populateGraph(t *testing.T) (string, *store.Store) {
 }
 
 func processToJSON(t *testing.T, query string) map[string]interface{} {
+	js := processToJSONAlt(t, query)
+	var mp map[string]interface{}
+	require.NoError(t, json.Unmarshal([]byte(js), &mp))
+	return mp
+}
+
+func processToJSONAlt(t *testing.T, query string) string {
 	gq, _, err := gql.Parse(query)
 	require.NoError(t, err)
 
@@ -204,10 +211,7 @@ func processToJSON(t *testing.T, query string) map[string]interface{} {
 
 	x.Printf("~~~~~%s", string(js))
 
-	var mp map[string]interface{}
-	require.NoError(t, json.Unmarshal(js, &mp))
-
-	return mp
+	return string(js)
 }
 
 func TestGetUID(t *testing.T) {
@@ -229,11 +233,10 @@ func TestGetUID(t *testing.T) {
 			}
 		}
 	`
-	mp := processToJSON(t, query)
-
-	resp := mp["me"]
-	uid := resp.([]interface{})[0].(map[string]interface{})["_uid_"].(string)
-	require.EqualValues(t, "0x1", uid)
+	js := processToJSONAlt(t, query)
+	require.JSONEq(t,
+		`{"me":[{"_uid_":"0x1","alive":true,"friend":[{"_uid_":"0x17","name":"Rick Grimes"},{"_uid_":"0x18","name":"Glenn Rhee"},{"_uid_":"0x19","name":"Daryl Dixon"},{"_uid_":"0x1f","name":"Andrea"},{"_uid_":"0x65"}],"gender":"female","name":"Michonne"}]}`,
+		js)
 }
 
 func TestGetUIDCount(t *testing.T) {
@@ -254,11 +257,10 @@ func TestGetUIDCount(t *testing.T) {
 			}
 		}
 	`
-	mp := processToJSON(t, query)
-
-	resp := mp["me"]
-	uid := resp.([]interface{})[0].(map[string]interface{})["_uid_"].(string)
-	require.EqualValues(t, "0x1", uid)
+	js := processToJSONAlt(t, query)
+	require.JSONEq(t,
+		`{"me":[{"_uid_":"0x1","alive":true,"friend":[{"_count_":5}],"gender":"female","name":"Michonne"}]}`,
+		js)
 }
 
 func TestDebug1(t *testing.T) {
@@ -326,11 +328,10 @@ func TestCount(t *testing.T) {
 		}
 	`
 
-	mp := processToJSON(t, query)
-	resp := mp["me"]
-	friend := resp.([]interface{})[0].(map[string]interface{})["friend"]
-	count := int(friend.(map[string]interface{})["_count_"].(float64))
-	require.EqualValues(t, count, 5)
+	js := processToJSONAlt(t, query)
+	require.EqualValues(t,
+		`{"me":[{"alive":true,"friend":[{"_count_":5}],"gender":"female","name":"Michonne"}]}`,
+		js)
 }
 
 func TestCountError1(t *testing.T) {
@@ -1485,48 +1486,52 @@ func TestSchema1(t *testing.T) {
 			}
 		}
 	`
-	mp := processToJSON(t, query)
-	resp := mp["person"]
-	name := resp.([]interface{})[0].(map[string]interface{})["name"].(string)
-	require.EqualValues(t, "Michonne", name)
+	js := processToJSONAlt(t, query)
+	require.JSONEq(t,
+		`{"person":[{"address":"31, 32 street, Jupiter","age":38,"alive":true,"friend":[{"address":"21, mark street, Mars","age":15,"name":"Rick Grimes"}],"name":"Michonne","survival_rate":98.99}]}`,
+		js)
 
-	alive, ok := resp.([]interface{})[0].(map[string]interface{})["alive"]
-	require.True(t, ok)
-	require.EqualValues(t, true, alive)
+	//	resp := mp["person"]
+	//	name := resp.([]interface{})[0].(map[string]interface{})["name"].(string)
+	//	require.EqualValues(t, "Michonne", name)
 
-	age, ok := resp.([]interface{})[0].(map[string]interface{})["age"]
-	require.True(t, ok)
-	require.EqualValues(t, 38, age.(float64))
+	//	alive, ok := resp.([]interface{})[0].(map[string]interface{})["alive"]
+	//	require.True(t, ok)
+	//	require.EqualValues(t, true, alive)
 
-	_, ok = resp.([]interface{})[0].(map[string]interface{})["survival_rate"]
-	require.True(t, ok)
+	//	age, ok := resp.([]interface{})[0].(map[string]interface{})["age"]
+	//	require.True(t, ok)
+	//	require.EqualValues(t, 38, age.(float64))
 
-	friends := resp.([]interface{})[0].(map[string]interface{})["friend"].([]interface{})
-	co := 0
-	res := 0
-	for _, it := range friends {
-		if len(it.(map[string]interface{})) == 0 {
-			co++
-		} else {
-			res = len(it.(map[string]interface{}))
-		}
-	}
-	require.EqualValues(t, 4, co)
-	require.EqualValues(t, 3, res)
+	//	_, ok = resp.([]interface{})[0].(map[string]interface{})["survival_rate"]
+	//	require.True(t, ok)
 
-	actorMap := mp["person"].([]interface{})[0].(map[string]interface{})
-	_, success := actorMap["name"].(string)
-	require.True(t, success,
-		"Expected json type string for: %v", actorMap["name"])
+	//	friends := resp.([]interface{})[0].(map[string]interface{})["friend"].([]interface{})
+	//	co := 0
+	//	res := 0
+	//	for _, it := range friends {
+	//		if len(it.(map[string]interface{})) == 0 {
+	//			co++
+	//		} else {
+	//			res = len(it.(map[string]interface{}))
+	//		}
+	//	}
+	//	require.EqualValues(t, 4, co)
+	//	require.EqualValues(t, 3, res)
 
-	// json parses ints as floats
-	_, success = actorMap["age"].(float64)
-	require.True(t, success,
-		"Expected json type int for: %v", actorMap["age"])
+	//	actorMap := mp["person"].([]interface{})[0].(map[string]interface{})
+	//	_, success := actorMap["name"].(string)
+	//	require.True(t, success,
+	//		"Expected json type string for: %v", actorMap["name"])
 
-	_, success = actorMap["survival_rate"].(float64)
-	require.True(t, success,
-		"Survival rate has to be coerced")
+	//	// json parses ints as floats
+	//	_, success = actorMap["age"].(float64)
+	//	require.True(t, success,
+	//		"Expected json type int for: %v", actorMap["age"])
+
+	//	_, success = actorMap["survival_rate"].(float64)
+	//	require.True(t, success,
+	//		"Survival rate has to be coerced")
 }
 
 func TestMain(m *testing.M) {
