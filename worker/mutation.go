@@ -77,7 +77,7 @@ func proposeOrSend(ctx context.Context, gid uint32, m *x.Mutations, che chan err
 		return
 	}
 
-	addr := groups().Leader(gid)
+	_, addr := groups().Leader(gid)
 	pl := pools().get(addr)
 	conn, err := pl.Get()
 	if err != nil {

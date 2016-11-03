@@ -70,7 +70,7 @@ func processTask(query []byte) ([]byte, error) {
 	q := task.GetRootAsQuery(query, 0)
 
 	attr := string(q.Attr())
-	x.Assertf(q.UidsLength() == 0 || q.TokensLength() == 0,
+	x.AssertTruef(q.UidsLength() == 0 || q.TokensLength() == 0,
 		"At least one of Uids and Term should be empty: %d vs %d", q.UidsLength(), q.TokensLength())
 
 	useTerm := q.TokensLength() > 0
@@ -152,10 +152,10 @@ func processTask(query []byte) ([]byte, error) {
 	}
 	matrixVent := b.EndVector(len(uoffsets))
 
-	// Create a CountList's vector of ulong.
+	// Create a CountList's vector of counts.
 	task.CountListStartCountVector(b, len(counts))
 	for i := len(counts) - 1; i >= 0; i-- {
-		b.PrependUint64(counts[i])
+		b.PrependUint32(uint32(counts[i]))
 	}
 	countVecOffset := b.EndVector(len(counts))
 
@@ -183,7 +183,7 @@ func (w *grpcWorker) ServeTask(ctx context.Context, query *Payload) (*Payload, e
 	x.Trace(ctx, "Attribute: %q NumUids: %v groupId: %v ServeTask", q.Attr(), q.UidsLength(), gid)
 
 	reply := new(Payload)
-	x.Assertf(groups().ServesGroup(gid),
+	x.AssertTruef(groups().ServesGroup(gid),
 		"attr: %q groupId: %v Request sent to wrong server.", q.Attr(), gid)
 
 	c := make(chan error, 1)

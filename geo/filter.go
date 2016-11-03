@@ -79,7 +79,7 @@ func QueryTokens(f *Filter) ([]string, *QueryData, error) {
 		return nil, nil, x.Errorf("Cannot query using a geometry of type %T", v)
 	}
 
-	x.Assertf(l != nil || pt != nil, "We should have a point or a loop.")
+	x.AssertTruef(l != nil || pt != nil, "We should have a point or a loop.")
 
 	parents, cover, err := indexCells(g)
 	if err != nil {
@@ -152,7 +152,7 @@ func (q QueryData) MatchesFilter(g types.Geo) bool {
 
 // returns true if the geometry represented by g is within the given loop or cap
 func (q QueryData) isWithin(g types.Geo) bool {
-	x.Assertf(q.pt != nil || q.loop != nil || q.cap != nil, "At least a point, loop or cap should be defined.")
+	x.AssertTruef(q.pt != nil || q.loop != nil || q.cap != nil, "At least a point, loop or cap should be defined.")
 	gpt, ok := g.T.(*geom.Point)
 	if !ok {
 		// We will only consider points for within queries.
@@ -172,7 +172,7 @@ func (q QueryData) isWithin(g types.Geo) bool {
 
 // returns true if the geometry represented by uid/attr contains the given point
 func (q QueryData) contains(g types.Geo) bool {
-	x.Assertf(q.pt != nil || q.loop != nil, "At least a point or loop should be defined.")
+	x.AssertTruef(q.pt != nil || q.loop != nil, "At least a point or loop should be defined.")
 	if q.loop != nil {
 		// We don't support polygons containing polygons yet.
 		return false
@@ -193,7 +193,7 @@ func (q QueryData) contains(g types.Geo) bool {
 
 // returns true if the geometry represented by uid/attr intersects the given loop or point
 func (q QueryData) intersects(g types.Geo) bool {
-	x.Assertf(q.pt != nil || q.loop != nil, "At least a point or loop should be defined.")
+	x.AssertTruef(q.pt != nil || q.loop != nil, "At least a point or loop should be defined.")
 	switch v := g.T.(type) {
 	case *geom.Point:
 		p := pointFromPoint(v)

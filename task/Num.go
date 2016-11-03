@@ -46,14 +46,37 @@ func (rcv *Num) MutateVal(n int32) bool {
 	return rcv._tab.MutateInt32Slot(6, n)
 }
 
+func (rcv *Num) Uids(j int) uint64 {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
+	if o != 0 {
+		a := rcv._tab.Vector(o)
+		return rcv._tab.GetUint64(a + flatbuffers.UOffsetT(j*8))
+	}
+	return 0
+}
+
+func (rcv *Num) UidsLength() int {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
+	if o != 0 {
+		return rcv._tab.VectorLen(o)
+	}
+	return 0
+}
+
 func NumStart(builder *flatbuffers.Builder) {
-	builder.StartObject(2)
+	builder.StartObject(3)
 }
 func NumAddGroup(builder *flatbuffers.Builder, group uint32) {
 	builder.PrependUint32Slot(0, group, 0)
 }
 func NumAddVal(builder *flatbuffers.Builder, val int32) {
 	builder.PrependInt32Slot(1, val, 0)
+}
+func NumAddUids(builder *flatbuffers.Builder, uids flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(2, flatbuffers.UOffsetT(uids), 0)
+}
+func NumStartUidsVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
+	return builder.StartVector(8, numElems, 8)
 }
 func NumEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()

@@ -49,8 +49,8 @@ type grpcWorker struct{}
 
 // Hello rpc call is used to check connection with other workers after worker
 // tcp server for this instance starts.
-func (w *grpcWorker) Hello(ctx context.Context, in *Payload) (*Payload, error) {
-	return &Payload{Data: []byte("world")}, nil
+func (w *grpcWorker) Echo(ctx context.Context, in *Payload) (*Payload, error) {
+	return &Payload{Data: in.Data}, nil
 }
 
 // InitiateBackup inititates the backup at the machine.

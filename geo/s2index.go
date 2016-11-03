@@ -33,7 +33,7 @@ func parentCoverTokens(parents s2.CellUnion, cover s2.CellUnion) []string {
 	tokens := make([]string, 0, len(parents)+len(cover))
 	tokens = appendTokens(tokens, parents, parentPrefix)
 	tokens = appendTokens(tokens, cover, coverPrefix)
-	x.Assertf(len(tokens) == len(parents)+len(cover), "%d %d %d",
+	x.AssertTruef(len(tokens) == len(parents)+len(cover), "%d %d %d",
 		len(tokens), len(parents), len(cover))
 	return tokens
 }

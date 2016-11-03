@@ -27,7 +27,7 @@ var groupConfig config
 
 func parsePredicates(groupId uint32, p string) error {
 	preds := strings.Split(p, ",")
-	x.Assertf(len(preds) > 0, "Length of predicates in config should be > 0")
+	x.AssertTruef(len(preds) > 0, "Length of predicates in config should be > 0")
 
 	for _, pred := range preds {
 		pred = strings.TrimSpace(pred)

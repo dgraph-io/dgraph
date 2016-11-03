@@ -8,15 +8,20 @@ message Payload {
 }
 
 service Worker {
-	rpc Hello (Payload)         returns (Payload) {}
-	rpc AssignUids (Payload)    returns (Payload) {}
-	rpc Mutate (Payload)        returns (Payload) {}
-	rpc ServeTask (Payload)     returns (Payload) {}
-	rpc PredicateData (Payload) returns (stream Payload) {}
-	rpc Sort (Payload)          returns (Payload) {}
+	// Connection testing RPC.
+	rpc Echo (Payload)             returns (Payload) {}
 
-	rpc RaftMessage (Payload) returns (Payload) {}
-	rpc JoinCluster (Payload) returns (Payload) {}
-	rpc InitiateBackup (Payload) returns (Payload) {}
+	// Data serving RPCs.
+	rpc AssignUids (Payload)       returns (Payload) {}
+	rpc Mutate (Payload)           returns (Payload) {}
+	rpc ServeTask (Payload)        returns (Payload) {}
+	rpc PredicateData (Payload)    returns (stream Payload) {}
+	rpc Sort (Payload)             returns (Payload) {}
+
+	// RAFT serving RPCs.
+	rpc RaftMessage (Payload)      returns (Payload) {}
+	rpc JoinCluster (Payload)      returns (Payload) {}
+	rpc InitiateBackup (Payload)   returns (Payload) {}
+	rpc UpdateMembership (Payload) returns (Payload) {}
 }
 

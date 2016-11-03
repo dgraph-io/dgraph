@@ -18,6 +18,7 @@ package main
 
 import (
 	"bufio"
+	"encoding/gob"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -28,6 +29,7 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"os"
+	"path"
 	"runtime"
 	"runtime/pprof"
 	"strings"
@@ -56,14 +58,16 @@ var (
 	port       = flag.Int("port", 8080, "Port to run server on.")
 	numcpu     = flag.Int("cores", runtime.NumCPU(),
 		"Number of cores to be used by the process")
-	nomutations = flag.Bool("nomutations", false, "Don't allow mutations on this server.")
-	shutdown    = flag.Bool("shutdown", false, "Allow client to send shutdown signal.")
-	backup      = flag.Bool("bkp", false, "Allow client to request a backup.")
-	tracing     = flag.Float64("trace", 0.5, "The ratio of queries to trace.")
-	schemaFile  = flag.String("schema", "", "Path to schema file")
-	cpuprofile  = flag.String("cpu", "", "write cpu profile to file")
-	memprofile  = flag.String("mem", "", "write memory profile to file")
-	closeCh     = make(chan struct{})
+	nomutations  = flag.Bool("nomutations", false, "Don't allow mutations on this server.")
+	shutdown     = flag.Bool("shutdown", false, "Allow client to send shutdown signal.")
+	backup       = flag.Bool("bkp", false, "Allow client to request a backup.")
+	tracing      = flag.Float64("trace", 0.5, "The ratio of queries to trace.")
+	schemaFile   = flag.String("schema", "", "Path to schema file")
+	cpuprofile   = flag.String("cpu", "", "write cpu profile to file")
+	memprofile   = flag.String("mem", "", "write memory profile to file")
+	dumpSubgraph = flag.String("dumpsg", "", "Directory to save subgraph for testing, debugging")
+
+	closeCh = make(chan struct{})
 )
 
 type mutationResult struct {
@@ -132,11 +136,23 @@ func convertToEdges(ctx context.Context, nquads []rdf.NQuad) (mutationResult, er
 	for _, nq := range nquads {
 		if strings.HasPrefix(nq.Subject, "_new_:") {
 			newUids[nq.Subject] = 0
+		} else if !strings.HasPrefix(nq.Subject, "_uid_:") {
+			uid, err := rdf.GetUid(nq.Subject)
+			x.Check(err)
+			newUids[nq.Subject] = uid
 		}
-		if len(nq.ObjectId) > 0 && strings.HasPrefix(nq.ObjectId, "_new_:") {
-			newUids[nq.ObjectId] = 0
+
+		if len(nq.ObjectId) > 0 {
+			if strings.HasPrefix(nq.ObjectId, "_new_:") {
+				newUids[nq.ObjectId] = 0
+			} else if !strings.HasPrefix(nq.ObjectId, "_uid_:") {
+				uid, err := rdf.GetUid(nq.ObjectId)
+				x.Check(err)
+				newUids[nq.ObjectId] = uid
+			}
 		}
 	}
+
 	if len(newUids) > 0 {
 		if err := worker.AssignUidsOverNetwork(ctx, newUids); err != nil {
 			x.TraceError(ctx, x.Wrapf(err, "Error while GetOrAssignUidsOverNetwork"))
@@ -157,8 +173,9 @@ func convertToEdges(ctx context.Context, nquads []rdf.NQuad) (mutationResult, er
 	resultUids := make(map[string]uint64)
 	// Strip out _new_: prefix from the keys.
 	for k, v := range newUids {
-		x.Assertf(strings.HasPrefix(k, "_new_:"), "Expected prefix _new_: in key: %v", k)
-		resultUids[k[6:]] = v
+		if strings.HasPrefix(k, "_new_:") {
+			resultUids[k[6:]] = v
+		}
 	}
 
 	mr = mutationResult{
@@ -439,6 +456,18 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	l.Processing = time.Since(l.Start) - l.Parsing
 	x.Trace(ctx, "Graph processed")
+
+	if len(*dumpSubgraph) > 0 {
+		x.Checkf(os.MkdirAll(*dumpSubgraph, 0700), *dumpSubgraph)
+		s := time.Now().Format("20060102.150405.000000.gob")
+		filename := path.Join(*dumpSubgraph, s)
+		f, err := os.Create(filename)
+		x.Checkf(err, filename)
+		enc := gob.NewEncoder(f)
+		x.Check(enc.Encode(sg))
+		x.Checkf(f.Close(), filename)
+	}
+
 	js, err := sg.ToJSON(&l)
 	if err != nil {
 		x.TraceError(ctx, x.Wrapf(err, "Error while converting to Json"))
@@ -555,9 +584,7 @@ func checkFlagsAndInitDirs() {
 	numCpus := *numcpu
 	if len(*cpuprofile) > 0 {
 		f, err := os.Create(*cpuprofile)
-		if err != nil {
-			log.Fatal(err)
-		}
+		x.Check(err)
 		pprof.StartCPUProfile(f)
 	}
 
@@ -565,11 +592,7 @@ func checkFlagsAndInitDirs() {
 	log.Printf("num_cpu: %v. prev_maxprocs: %v. Set max procs to num cpus",
 		numCpus, prev)
 	// Create parent directories for postings, uids and mutations
-	var err error
-	err = os.MkdirAll(*postingDir, 0700)
-	if err != nil {
-		log.Fatalf("Error while creating the filepath for postings: %v", err)
-	}
+	x.Check(os.MkdirAll(*postingDir, 0700))
 }
 
 func serveGRPC(l net.Listener) {
