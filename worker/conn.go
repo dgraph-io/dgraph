@@ -85,6 +85,9 @@ func (p *poolsi) get(addr string) *pool {
 }
 
 func (p *poolsi) connect(addr string) {
+	if addr == *myAddr {
+		return
+	}
 	p.RLock()
 	_, has := p.all[addr]
 	p.RUnlock()

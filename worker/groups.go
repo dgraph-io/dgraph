@@ -62,16 +62,23 @@ func groups() *groupi {
 
 // StartRaftNodes will read the WAL dir, create the RAFT groups,
 // and either start or restart RAFT nodes.
+// This function triggers RAFT nodes to be created.
 func StartRaftNodes(walDir string) {
 	gr = new(groupi)
 	gr.ctx, gr.cancel = context.WithCancel(context.Background())
-	go gr.periodicSyncMemberships()
 
 	// Successfully connect with the peer, before doing anything else.
 	if len(*peer) > 0 {
 		_, paddr := parsePeer(*peer)
 		pools().connect(paddr)
+
+		// Force run syncMemberships with this peer, so our nodes know if they have other
+		// servers who are serving the same groups. That way, they can talk to them
+		// and try to join their clusters. Otherwise, they'll start off as a single-node
+		// cluster.
+		gr.syncMemberships()
 	}
+	go gr.periodicSyncMemberships() // Now set it to be run periodically.
 
 	x.Check(ParseGroupConfig(*groupConf))
 	x.Checkf(os.MkdirAll(walDir, 0700), "Error while creating WAL dir.")
@@ -88,7 +95,7 @@ func StartRaftNodes(walDir string) {
 		gid, err := strconv.ParseUint(id, 0, 32)
 		x.Checkf(err, "Unable to parse group id: %v", id)
 		node := groups().newNode(uint32(gid), *raftId, my)
-		go node.InitAndStartNode(gr.wal, *peer)
+		go node.InitAndStartNode(gr.wal)
 	}
 }
 
@@ -153,12 +160,26 @@ func (g *groupi) AnyServer(group uint32) string {
 	return all.list[idx].Addr
 }
 
-func (g *groupi) Leader(group uint32) string {
+func (g *groupi) HasPeer(group uint32) bool {
+	g.RLock()
+	g.RUnlock()
+	all := g.all[group]
+	if all == nil {
+		return false
+	}
+	return len(all.list) > 0
+}
+
+// Leader will try to retrun the leader of a given group, based on membership information.
+// There is currently no guarantee that the returned server is the leader of the group.
+func (g *groupi) Leader(group uint32) (uint64, string) {
 	g.RLock()
 	defer g.RUnlock()
 	all := g.all[group]
-	x.AssertTrue(all != nil)
-	return all.list[0].Addr
+	if all == nil {
+		return 0, ""
+	}
+	return all.list[0].Id, all.list[0].Addr
 }
 
 func (g *groupi) isDuplicate(gid uint32, nid uint64, addr string, leader bool) bool {

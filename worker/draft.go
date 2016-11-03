@@ -414,9 +414,8 @@ func parsePeer(peer string) (uint64, string) {
 	return pid, kv[1]
 }
 
-func (n *node) joinPeers(any string) {
-	// Tell one of the peers to join.
-	pid, paddr := parsePeer(any)
+func (n *node) joinPeers() {
+	pid, paddr := groups().Leader(n.gid)
 	n.Connect(pid, paddr)
 	fmt.Printf("Connected with: %v\n", paddr)
 
@@ -429,7 +428,6 @@ func (n *node) joinPeers(any string) {
 	_, err := populateShard(context.TODO(), pool, 0)
 	x.Checkf(err, "Error while populating shard")
 
-	fmt.Printf("TELLING PEER TO ADD ME: %v\n", any)
 	query := &Payload{}
 	query.Data = n.raftContext
 	conn, err := pool.Get()
@@ -532,7 +530,7 @@ func (n *node) initFromWal(wal *raftwal.Wal) (restart bool, rerr error) {
 	return
 }
 
-func (n *node) InitAndStartNode(wal *raftwal.Wal, peer string) {
+func (n *node) InitAndStartNode(wal *raftwal.Wal) {
 	restart, err := n.initFromWal(wal)
 	x.Check(err)
 
@@ -541,9 +539,10 @@ func (n *node) InitAndStartNode(wal *raftwal.Wal, peer string) {
 		n.raft = raft.RestartNode(n.cfg)
 
 	} else {
-		if len(peer) > 0 {
-			n.joinPeers(peer)
+		if groups().HasPeer(n.gid) {
+			n.joinPeers()
 			n.raft = raft.StartNode(n.cfg, nil)
+
 		} else {
 			peers := []raft.Peer{{ID: n.id}}
 			n.raft = raft.StartNode(n.cfg, peers)

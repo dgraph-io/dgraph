@@ -90,7 +90,7 @@ func AssignUidsOverNetwork(ctx context.Context, newUids map[string]uint64) (rerr
 		}
 
 	} else {
-		addr := groups().Leader(gid)
+		_, addr := groups().Leader(gid)
 		p := pools().get(addr)
 		conn, err := p.Get()
 		if err != nil {
