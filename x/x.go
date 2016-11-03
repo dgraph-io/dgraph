@@ -54,6 +54,7 @@ type Status struct {
 	Message string `json:"message"`
 }
 
+// DirectedEdge is passed to AddMutation to add edges to our graph DB.
 type DirectedEdge struct {
 	Entity    uint64 // Subject or source node / UID.
 	Attribute string // Attribute or predicate. Labels the edge.
@@ -88,6 +89,7 @@ func (m *Mutations) Decode(data []byte) error {
 	return dec.Decode(m)
 }
 
+// SetError sets the error logged in this package.
 func SetError(prev *error, n error) {
 	if prev == nil {
 		prev = &n

@@ -377,7 +377,7 @@ func (l *List) updateMutationLayer(mpost *types.Posting) bool {
 		}
 		if !uidFound {
 			// Posting not found in PL. This is considered an Add operation.
-			mpost.MutateOp(Add)
+			x.AssertTrue(mpost.MutateOp(Add))
 		}
 	} else if !psame { // mpost.Op==Del
 		// Either we fail to find UID in immutable PL or contents don't match.

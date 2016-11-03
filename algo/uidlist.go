@@ -3,6 +3,7 @@ package algo
 import (
 	"bytes"
 	"container/heap"
+	"encoding/binary"
 	"sort"
 	"strconv"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
+// UIDList is a list of UIDs that can be stored in different forms.
 type UIDList struct {
 	uints []uint64
 	list  *task.UidList
@@ -32,7 +34,7 @@ func (u *UIDList) FromUints(data []uint64) {
 	u.uints = data
 }
 
-// FromUints initialize UIDList from task.UidList.
+// FromTask initialize UIDList from task.UidList.
 func (u *UIDList) FromTask(data *task.UidList) {
 	x.AssertTrue(u != nil && u.uints == nil && u.list == nil)
 	u.list = data
@@ -98,7 +100,7 @@ func (u *UIDList) Size() int {
 	return len(u.uints)
 }
 
-// Reslice selects a slice of the data.
+// ApplyFilter applies a filter to our data.
 func (u *UIDList) ApplyFilter(f func(uint64, int) bool) {
 	x.AssertTrue(u != nil && (u.uints != nil || u.list != nil))
 	var out []uint64
@@ -293,7 +295,7 @@ func (u *UIDList) IndexOf(uid uint64) int {
 	return -1
 }
 
-// UidlistOffset adds a UidList to buffer and returns the offset.
+// AddTo adds a UidList to buffer and returns the offset.
 func (u *UIDList) AddTo(b *flatbuffers.Builder) flatbuffers.UOffsetT {
 	x.AssertTrue(u != nil && (u.uints != nil || u.list != nil))
 	n := u.Size()
@@ -340,4 +342,35 @@ func ToUintsListForTest(ul []*UIDList) [][]uint64 {
 func (u *UIDList) Swap(i, j int) {
 	x.AssertTrue(u.uints != nil)
 	u.uints[i], u.uints[j] = u.uints[j], u.uints[i]
+}
+
+// MarshalBinary encodes our UID list.
+func (u *UIDList) MarshalBinary() ([]byte, error) {
+	var b bytes.Buffer
+	n := u.Size()
+	if err := binary.Write(&b, binary.LittleEndian, uint64(n)); err != nil {
+		return nil, err
+	}
+	for i := 0; i < n; i++ {
+		if err := binary.Write(&b, binary.LittleEndian, u.Get(i)); err != nil {
+			return nil, err
+		}
+	}
+	return b.Bytes(), nil
+}
+
+// UnmarshalBinary decodes our UID list.
+func (u *UIDList) UnmarshalBinary(data []byte) error {
+	b := bytes.NewBuffer(data)
+	var n uint64
+	if err := binary.Read(b, binary.LittleEndian, &n); err != nil {
+		return err
+	}
+	u.uints = make([]uint64, n)
+	for i := 0; i < int(n); i++ {
+		if err := binary.Read(b, binary.LittleEndian, &u.uints[i]); err != nil {
+			return err
+		}
+	}
+	return nil
 }
