@@ -4,12 +4,17 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"fmt"
 	"log"
 	"sync"
 
 	"github.com/dgraph-io/dgraph/x"
 
 	"google.golang.org/grpc"
+)
+
+var (
+	errNoConnection = fmt.Errorf("No connection exists")
 )
 
 // PayloadCodec is a custom codec that is that is used for internal worker
@@ -104,6 +109,7 @@ func (p *poolsi) connect(addr string) {
 	}
 	x.AssertTrue(bytes.Equal(resp.Data, query.Data))
 	x.Check(pool.Put(conn))
+	fmt.Printf("Connection with %q successful.\n", addr)
 
 	p.Lock()
 	defer p.Unlock()
@@ -137,6 +143,10 @@ func (p *pool) dialNew() (*grpc.ClientConn, error) {
 // Get returns a connection from the pool of connections or a new connection if
 // the pool is empty.
 func (p *pool) Get() (*grpc.ClientConn, error) {
+	if p == nil {
+		return nil, errNoConnection
+	}
+
 	select {
 	case conn := <-p.conns:
 		return conn, nil

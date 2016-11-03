@@ -169,7 +169,9 @@ func (n *node) send(m raftpb.Message) {
 	x.AssertTruef(n.id != m.To, "Seding message to itself")
 	data, err := m.Marshal()
 	x.Check(err)
-	fmt.Printf("\t\tSENDING: %v %v-->%v\n", m.Type, m.From, m.To)
+	if m.Type != raftpb.MsgHeartbeat && m.Type != raftpb.MsgHeartbeatResp {
+		fmt.Printf("\t\tSENDING: %v %v-->%v\n", m.Type, m.From, m.To)
+	}
 	select {
 	case n.messages <- sendmsg{to: m.To, data: data}:
 		// pass
@@ -263,7 +265,7 @@ func (n *node) process(e raftpb.Entry) error {
 	if e.Data == nil {
 		return nil
 	}
-	fmt.Printf("Entry type to process: %+v\n", e)
+	fmt.Printf("Entry type to process: [%d, %d] Type: %v\n", e.Term, e.Index, e.Type)
 
 	if e.Type == raftpb.EntryConfChange {
 		var cc raftpb.ConfChange
@@ -402,6 +404,8 @@ func (n *node) snapshotPeriodically() {
 }
 
 func parsePeer(peer string) (uint64, string) {
+	x.AssertTrue(len(peer) > 0)
+
 	kv := strings.SplitN(peer, ":", 2)
 	x.AssertTruef(len(kv) == 2, "Invalid peer format: %v", peer)
 	pid, err := strconv.ParseUint(kv[0], 10, 64)
@@ -414,6 +418,7 @@ func (n *node) joinPeers(any string) {
 	// Tell one of the peers to join.
 	pid, paddr := parsePeer(any)
 	n.Connect(pid, paddr)
+	fmt.Printf("Connected with: %v\n", paddr)
 
 	addr := n.peers.Get(pid)
 	pool := pools().get(addr)
@@ -577,17 +582,23 @@ func (w *grpcWorker) RaftMessage(ctx context.Context, query *Payload) (*Payload,
 	}
 
 	for idx := 0; idx < len(query.Data); {
-		len := int(binary.LittleEndian.Uint32(query.Data[idx : idx+4]))
+		sz := int(binary.LittleEndian.Uint32(query.Data[idx : idx+4]))
 		idx += 4
 		msg := raftpb.Message{}
-		if err := msg.Unmarshal(query.Data[idx : idx+len]); err != nil {
+		if idx+sz-1 > len(query.Data) {
+			return &Payload{}, x.Errorf(
+				"Invalid query. Size specified: %v. Size of array: %v\n", sz, len(query.Data))
+		}
+		if err := msg.Unmarshal(query.Data[idx : idx+sz]); err != nil {
 			x.Check(err)
 		}
-		fmt.Printf("RECEIVED: %v %v-->%v\n", msg.Type, msg.From, msg.To)
+		if msg.Type != raftpb.MsgHeartbeat && msg.Type != raftpb.MsgHeartbeatResp {
+			fmt.Printf("RECEIVED: %v %v-->%v\n", msg.Type, msg.From, msg.To)
+		}
 		if err := w.applyMessage(ctx, msg); err != nil {
 			return &Payload{}, err
 		}
-		idx += len
+		idx += sz
 	}
 	// fmt.Printf("Got %d messages\n", count)
 	return &Payload{}, nil
@@ -604,6 +615,9 @@ func (w *grpcWorker) JoinCluster(ctx context.Context, query *Payload) (*Payload,
 
 	rc := task.GetRootAsRaftContext(query.Data, 0)
 	node := groups().Node(rc.Group())
+	if node == nil {
+		return &Payload{}, nil
+	}
 	node.Connect(rc.Id(), string(rc.Addr()))
 
 	c := make(chan error, 1)

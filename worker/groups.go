@@ -1,14 +1,15 @@
 package worker
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
-	"math"
 	"math/rand"
 	"os"
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/store"
@@ -24,9 +25,9 @@ var (
 	groupIds  = flag.String("groups", "0", "RAFT groups handled by this server.")
 	myAddr    = flag.String("my", "",
 		"addr:port of this server, so other Dgraph servers can talk to this.")
-	peer        = flag.String("peer", "", "Address of any peer.")
-	raftId      = flag.Uint64("idx", 1, "RAFT ID that this server will use to join RAFT groups.")
-	errRedirect = fmt.Errorf("Redirect to server serving the right raft group")
+	peer           = flag.String("peer", "", "Address of any peer.")
+	raftId         = flag.Uint64("idx", 1, "RAFT ID that this server will use to join RAFT groups.")
+	redirectPrefix = []byte("REDIRECT:")
 )
 
 type server struct {
@@ -42,8 +43,9 @@ type servers struct {
 
 type groupi struct {
 	sync.RWMutex
-	ctx context.Context
-	wal *raftwal.Wal
+	ctx    context.Context
+	cancel context.CancelFunc
+	wal    *raftwal.Wal
 	// local stores the groupId to node map for this server.
 	local map[uint32]*node
 	// all stores the groupId to servers map for the entire cluster.
@@ -62,7 +64,14 @@ func groups() *groupi {
 // and either start or restart RAFT nodes.
 func StartRaftNodes(walDir string) {
 	gr = new(groupi)
-	gr.ctx = context.Background()
+	gr.ctx, gr.cancel = context.WithCancel(context.Background())
+	go gr.periodicSyncMemberships()
+
+	// Successfully connect with the peer, before doing anything else.
+	if len(*peer) > 0 {
+		_, paddr := parsePeer(*peer)
+		pools().connect(paddr)
+	}
 
 	x.Check(ParseGroupConfig(*groupConf))
 	x.Checkf(os.MkdirAll(walDir, 0700), "Error while creating WAL dir.")
@@ -81,19 +90,15 @@ func StartRaftNodes(walDir string) {
 		node := groups().newNode(uint32(gid), *raftId, my)
 		go node.InitAndStartNode(gr.wal, *peer)
 	}
-	// TODO: Remove this group that every server is currently part of.
-	// Instead, only some servers should contain information about everyone,
-	// and everyone should ping those servers for updates.
-	node := groups().newNode(math.MaxUint32, *raftId, my)
-	go node.InitAndStartNode(gr.wal, *peer)
 }
 
 func (g *groupi) Node(groupId uint32) *node {
 	g.RLock()
 	defer g.RUnlock()
-	n, has := g.local[groupId]
-	x.AssertTruef(has, "Node should be present for group: %v", groupId)
-	return n
+	if n, has := g.local[groupId]; has {
+		return n
+	}
+	return nil
 }
 
 func (g *groupi) ServesGroup(groupId uint32) bool {
@@ -140,7 +145,9 @@ func (g *groupi) AnyServer(group uint32) string {
 	g.RLock()
 	defer g.RUnlock()
 	all := g.all[group]
-	x.AssertTrue(all != nil)
+	if all == nil {
+		return ""
+	}
 	sz := len(all.list)
 	idx := rand.Intn(sz)
 	return all.list[idx].Addr
@@ -267,37 +274,64 @@ func (g *groupi) syncMemberships() {
 	addr := g.AnyServer(0)
 
 UPDATEMEMBERSHIP:
+	fmt.Printf("Address is: %v\n", addr)
 	if len(addr) > 0 {
 		pl = pools().get(addr)
 	} else {
 		pl = pools().any()
 	}
 	conn, err := pl.Get()
+	if err == errNoConnection {
+		fmt.Println("Unable to sync memberships. No valid connection")
+		return
+	}
 	x.Check(err)
 	defer pl.Put(conn)
 
 	c := NewWorkerClient(conn)
 	p := &Payload{Data: data}
 	out, err := c.UpdateMembership(g.ctx, p)
-	if err == errRedirect {
-		x.TraceError(g.ctx, err)
-		addr = string(out.Data)
-		pools().connect(addr)
-		goto UPDATEMEMBERSHIP
-
-	} else if err != nil {
+	if err != nil {
 		x.TraceError(g.ctx, err)
 		return
+	}
+
+	// Check if we got a redirect.
+	if len(out.Data) >= len(redirectPrefix) &&
+		bytes.Equal(out.Data[0:len(redirectPrefix)], redirectPrefix) {
+
+		addr = string(out.Data[len(redirectPrefix):])
+		if len(addr) == 0 {
+			return
+		}
+		fmt.Printf("Got redirect for: %q\n", addr)
+		pools().connect(addr)
+		goto UPDATEMEMBERSHIP
 	}
 
 	update := task.GetRootAsMembershipUpdate(out.Data, 0)
 	for i := 0; i < update.MembersLength(); i++ {
 		mm := new(task.Membership)
 		x.AssertTrue(update.Members(mm, i))
-		g.applyMembershipUpdate(0, mm)
+		g.applyMembershipUpdate(update.LastUpdate(), mm)
 	}
 }
 
+func (g *groupi) periodicSyncMemberships() {
+	t := time.NewTicker(10 * time.Second)
+	for {
+		select {
+		case tm := <-t.C:
+			fmt.Printf("%v: Syncing memberships\n", tm)
+			g.syncMemberships()
+		case <-g.ctx.Done():
+			return
+		}
+	}
+}
+
+// raftIdx is the RAFT index corresponding to the application of this
+// membership update in group zero.
 func (g *groupi) applyMembershipUpdate(raftIdx uint64, mm *task.Membership) {
 	update := server{
 		Id:      mm.Id(),
@@ -305,6 +339,11 @@ func (g *groupi) applyMembershipUpdate(raftIdx uint64, mm *task.Membership) {
 		Leader:  mm.Leader() == byte(1),
 		RaftIdx: raftIdx,
 	}
+	go pools().connect(update.Addr)
+
+	fmt.Println("----------------------------")
+	fmt.Printf("====== APPLYING MEMBERSHIP UPDATE: %+v\n", update)
+	fmt.Println("----------------------------")
 	g.Lock()
 	defer g.Unlock()
 
@@ -348,7 +387,11 @@ func (g *groupi) applyMembershipUpdate(raftIdx uint64, mm *task.Membership) {
 	for i := 1; i < len(sl.list); i++ {
 		sl.list[i].Leader = false
 	}
-	fmt.Printf("Group: %v. List: %+v\n", mm.Group(), sl.list)
+
+	// Print out the entire list.
+	for gid, sl := range g.all {
+		fmt.Printf("Group: %v. List: %+v\n", gid, sl.list)
+	}
 }
 
 func (g *groupi) MembershipUpdateAfter(ridx uint64) []byte {
@@ -385,12 +428,19 @@ func (g *groupi) MembershipUpdateAfter(ridx uint64) []byte {
 	return b.FinishedBytes()
 }
 
+// UpdateMembership is the RPC call for updating membership for servers
+// which don't serve group zero.
 func (w *grpcWorker) UpdateMembership(ctx context.Context, query *Payload) (*Payload, error) {
 	if ctx.Err() != nil {
 		return &Payload{}, ctx.Err()
 	}
 	if !groups().ServesGroup(0) {
-		return &Payload{Data: []byte(groups().AnyServer(0))}, errRedirect
+		addr := groups().AnyServer(0)
+		// fmt.Printf("I don't serve group zero. But, here's who does: %v\n", addr)
+		p := new(Payload)
+		p.Data = append(p.Data, redirectPrefix...)
+		p.Data = append(p.Data, []byte(addr)...)
+		return p, nil
 	}
 
 	update := task.GetRootAsMembershipUpdate(query.Data, 0)
