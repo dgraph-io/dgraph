@@ -394,7 +394,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 
 	// TODO(Ashwin): Move to /admin endpoint.
 	if *backup && q == "BACKUP" {
-		worker.StartBackupProcess()
+		worker.StartBackup()
 		x.SetStatus(w, x.ErrorOk, "Backup completed.")
 		return
 	}

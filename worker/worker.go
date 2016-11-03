@@ -62,6 +62,7 @@ func (w *grpcWorker) InitiateBackup(ctx context.Context, in *Payload) (*Payload,
 	return &Payload{}, initiateBackup(uint32(gid))
 }
 
+// StartBackupProcess starts the backup process if it is master of group 0.
 func (w *grpcWorker) StartBackupProcess(ctx context.Context, in *Payload) (*Payload, error) {
 	cur, ok := groups().local[0]
 	if ok && cur.AmLeader() {
@@ -80,7 +81,9 @@ func initiateBackup(gid uint32) error {
 	return err
 }
 
-func StartBackupProcess() error {
+// StartBackup starts the backup process if it is master of group 0
+// else calls the master of group 0.
+func StartBackup() error {
 	cur, ok := groups().local[0]
 	if ok && cur.AmLeader() {
 		return BackupAll()
