@@ -30,13 +30,13 @@ func NewUIDList(data []uint64) *UIDList {
 
 // FromUints initialize UIDList from []uint64.
 func (u *UIDList) FromUints(data []uint64) {
-	x.Assert(u != nil && u.uints == nil && u.list == nil)
+	x.AssertTrue(u != nil && u.uints == nil && u.list == nil)
 	u.uints = data
 }
 
 // FromTask initialize UIDList from task.UidList.
 func (u *UIDList) FromTask(data *task.UidList) {
-	x.Assert(u != nil && u.uints == nil && u.list == nil)
+	x.AssertTrue(u != nil && u.uints == nil && u.list == nil)
 	u.list = data
 }
 
@@ -45,7 +45,7 @@ func FromTaskResult(r *task.Result) []*UIDList {
 	out := make([]*UIDList, r.UidmatrixLength())
 	for i := 0; i < r.UidmatrixLength(); i++ {
 		tl := new(task.UidList)
-		x.Assert(r.Uidmatrix(tl, i))
+		x.AssertTrue(r.Uidmatrix(tl, i))
 		ul := new(UIDList)
 		ul.FromTask(tl)
 		out[i] = ul
@@ -58,7 +58,7 @@ func FromSortResult(r *task.SortResult) []*UIDList {
 	out := make([]*UIDList, r.UidmatrixLength())
 	for i := 0; i < r.UidmatrixLength(); i++ {
 		tl := new(task.UidList)
-		x.Assert(r.Uidmatrix(tl, i))
+		x.AssertTrue(r.Uidmatrix(tl, i))
 		ul := new(UIDList)
 		ul.FromTask(tl)
 		out[i] = ul
@@ -68,13 +68,13 @@ func FromSortResult(r *task.SortResult) []*UIDList {
 
 // AddSlice adds a list of uint64s to UIDList.
 func (u *UIDList) AddSlice(e []uint64) {
-	x.Assert(u.uints != nil)
+	x.AssertTrue(u.uints != nil)
 	u.uints = append(u.uints, e...)
 }
 
 // Add adds a single uint64 to UIDList.
 func (u *UIDList) Add(e uint64) {
-	x.Assert(u.uints != nil)
+	x.AssertTrue(u.uints != nil)
 	u.uints = append(u.uints, e)
 }
 
@@ -102,7 +102,7 @@ func (u *UIDList) Size() int {
 
 // ApplyFilter applies a filter to our data.
 func (u *UIDList) ApplyFilter(f func(uint64, int) bool) {
-	x.Assert(u != nil && (u.uints != nil || u.list != nil))
+	x.AssertTrue(u != nil && (u.uints != nil || u.list != nil))
 	var out []uint64
 	if u.uints != nil {
 		out = u.uints[:0]
@@ -122,15 +122,15 @@ func (u *UIDList) ApplyFilter(f func(uint64, int) bool) {
 
 // Slice selects a slice of the data.
 func (u *UIDList) Slice(start, end int) {
-	x.Assert(u != nil && (u.uints != nil || u.list != nil))
+	x.AssertTrue(u != nil && (u.uints != nil || u.list != nil))
 	if u.uints != nil {
 		u.uints = u.uints[start:end]
 		return
 	}
 	// This is a task list. Let's copy what we want and convert to a []uint64.
-	x.Assert(start >= 0)
-	x.Assert(end <= u.Size())
-	x.Assert(start <= end)
+	x.AssertTrue(start >= 0)
+	x.AssertTrue(end <= u.Size())
+	x.AssertTrue(start <= end)
 	output := make([]uint64, 0, end-start)
 	for i := start; i < end; i++ {
 		output = append(output, u.list.Uids(i))
@@ -141,7 +141,7 @@ func (u *UIDList) Slice(start, end int) {
 
 // Intersect intersects with another list and updates this list.
 func (u *UIDList) Intersect(v *UIDList) {
-	x.Assert(u != nil && (u.uints != nil || u.list != nil))
+	x.AssertTrue(u != nil && (u.uints != nil || u.list != nil))
 	var out []uint64
 	if u.uints != nil {
 		out = u.uints[:0]
@@ -207,7 +207,7 @@ func IntersectLists(lists []*UIDList) *UIDList {
 	for i := 0; i < shortList.Size(); i++ {
 		val := shortList.Get(i)
 		if i > 0 && val == shortList.Get(i-1) {
-			x.Assertf(false, "We shouldn't have duplicates in UIDLists")
+			x.AssertTruef(false, "We shouldn't have duplicates in UIDLists")
 		}
 
 		var skip bool                     // Should we skip val in output?
@@ -287,7 +287,7 @@ func MergeLists(lists []*UIDList) *UIDList {
 // IndexOf performs a binary search on the uids slice and returns the index at
 // which it finds the uid, else returns -1
 func (u *UIDList) IndexOf(uid uint64) int {
-	x.Assert(u != nil && (u.uints != nil || u.list != nil))
+	x.AssertTrue(u != nil && (u.uints != nil || u.list != nil))
 	i := sort.Search(u.Size(), func(i int) bool { return u.Get(i) >= uid })
 	if i < u.Size() && u.Get(i) == uid {
 		return i
@@ -297,7 +297,7 @@ func (u *UIDList) IndexOf(uid uint64) int {
 
 // AddTo adds a UidList to buffer and returns the offset.
 func (u *UIDList) AddTo(b *flatbuffers.Builder) flatbuffers.UOffsetT {
-	x.Assert(u != nil && (u.uints != nil || u.list != nil))
+	x.AssertTrue(u != nil && (u.uints != nil || u.list != nil))
 	n := u.Size()
 	task.UidListStartUidsVector(b, n)
 	for i := n - 1; i >= 0; i-- {
@@ -340,7 +340,7 @@ func ToUintsListForTest(ul []*UIDList) [][]uint64 {
 
 // Swap swaps two elements. Logs fatal if UIDList is not stored as []uint64.
 func (u *UIDList) Swap(i, j int) {
-	x.Assert(u.uints != nil)
+	x.AssertTrue(u.uints != nil)
 	u.uints[i], u.uints[j] = u.uints[j], u.uints[i]
 }
 

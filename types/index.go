@@ -29,7 +29,7 @@ func IndexKey(attr, term string) []byte {
 // TokensTable by iterating over keys in RocksDB.
 func TokenFromKey(key []byte) string {
 	i := bytes.IndexRune(key, indexRune)
-	x.Assert(i >= 0)
+	x.AssertTrue(i >= 0)
 	return string(key[i+1:])
 }
 

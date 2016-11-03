@@ -69,7 +69,7 @@ func normalize(in []byte) ([]byte, error) {
 
 // NewTokenizer creates a new Tokenizer object from a given input string of bytes.
 func NewTokenizer(s []byte) (*Tokenizer, error) {
-	x.Assert(s != nil)
+	x.AssertTrue(s != nil)
 
 	if disableICU {
 		// ICU is disabled. Return a dummy tokenizer.

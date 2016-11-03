@@ -67,7 +67,7 @@ func (w *grpcWorker) Sort(ctx context.Context, query *Payload) (*Payload, error)
 	//x.Trace(ctx, "Attribute: %q NumUids: %v groupId: %v Sort", q.Attr(), q.UidsLength(), gid)
 
 	reply := new(Payload)
-	x.Assertf(groups().ServesGroup(gid),
+	x.AssertTruef(groups().ServesGroup(gid),
 		"attr: %q groupId: %v Request sent to wrong server.", s.Attr(), gid)
 
 	c := make(chan error, 1)
@@ -93,10 +93,10 @@ var (
 // processSort does either a coarse or a fine sort.
 func processSort(qu []byte) ([]byte, error) {
 	ts := task.GetRootAsSort(qu, 0)
-	x.Assert(ts != nil)
+	x.AssertTrue(ts != nil)
 
 	attr := string(ts.Attr())
-	x.Assertf(ts.Count() > 0,
+	x.AssertTruef(ts.Count() > 0,
 		("We do not yet support negative or infinite count with sorting: %s %d. " +
 			"Try flipping order and return first few elements instead."),
 		attr, ts.Count())
@@ -169,7 +169,7 @@ func intersectBucket(ts *task.Sort, attr string, token string, out []intersected
 		{
 			var l algo.UIDList
 			var ul task.UidList
-			x.Assert(ts.Uidmatrix(&ul, i))
+			x.AssertTrue(ts.Uidmatrix(&ul, i))
 			l.FromTask(&ul)
 			listOpt := posting.ListOptions{Intersect: &l}
 			// Intersect index with i-th input UID list.
@@ -213,7 +213,7 @@ func intersectBucket(ts *task.Sort, attr string, token string, out []intersected
 		if out[i].ulist.Size() < count {
 			return errContinue
 		}
-		x.Assert(out[i].ulist.Size() == count)
+		x.AssertTrue(out[i].ulist.Size() == count)
 	}
 	return errDone
 }
