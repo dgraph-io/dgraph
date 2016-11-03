@@ -62,15 +62,46 @@ func (w *grpcWorker) InitiateBackup(ctx context.Context, in *Payload) (*Payload,
 	return &Payload{}, initiateBackup(uint32(gid))
 }
 
+func (w *grpcWorker) StartBackupProcess(ctx context.Context, in *Payload) (*Payload, error) {
+	cur, ok := groups().local[0]
+	if ok && cur.AmLeader() {
+		return &Payload{}, BackupAll()
+	}
+	return &Payload{}, fmt.Errorf("Backup request sent to wrong server")
+}
+
 func initiateBackup(gid uint32) error {
 	groups().RLock()
 	if !groups().Node(gid).AmLeader() {
-
 		return fmt.Errorf("Node not leader of group %d", gid)
 	}
 	groups().RUnlock()
 	err := Backup(gid, *backupPath)
 	return err
+}
+
+func StartBackupProcess() error {
+	cur, ok := groups().local[0]
+	if ok && cur.AmLeader() {
+		return BackupAll()
+	}
+
+	for _, node := range groups().all[0].list {
+		if node.Leader {
+			addr := node.Addr
+			pl := pools().get(addr)
+			conn, err := pl.Get()
+			if err != nil {
+				return err
+			}
+			ctx := context.Background()
+			query := &Payload{}
+			c := NewWorkerClient(conn)
+			_, err = c.StartBackupProcess(ctx, query)
+			return err
+		}
+	}
+	return nil
 }
 
 // BackupAll Creates backup of all nodes in cluster by initiating backups in all the master
@@ -79,46 +110,45 @@ func BackupAll() error {
 	errChan := make(chan error, 1000)
 	count := 0
 	// Send backup calls to other workers.
-	addrMap := make(map[uint32]string)
+	doneMap := make(map[uint32]bool)
+
 	groups().RLock()
-	for gid, servers := range groups().all {
-		for _, it := range servers.list {
-			// TODO: Don't add the current nodes address in this.
-			if it.Leader {
-				addrMap[gid] = it.Addr
-				break
-			}
-		}
-	}
-	groups().RUnlock()
-
-	for gid, addr := range addrMap {
-		count++
-		pl := pools().get(addr)
-		conn, err := pl.Get()
-		if err != nil {
-			return err
-		}
-		go func() {
-			ctx := context.Background()
-			query := &Payload{[]byte(strconv.Itoa(int(gid)))}
-			c := NewWorkerClient(conn)
-			_, err = c.InitiateBackup(ctx, query)
-			errChan <- err
-			pl.Put(conn)
-		}()
-	}
-
-	// Backup this worker.
 	for gid, it := range groups().local {
 		if it.AmLeader() {
 			count++
+			doneMap[gid] = true
 			go func() {
 				err := initiateBackup(gid)
 				errChan <- err
 			}()
 		}
 	}
+
+	for gid, servers := range groups().all {
+		if _, ok := doneMap[gid]; ok {
+			continue
+		}
+		for _, it := range servers.list {
+			if it.Leader {
+				count++
+				pl := pools().get(it.Addr)
+				conn, err := pl.Get()
+				if err != nil {
+					return err
+				}
+				go func() {
+					ctx := context.Background()
+					query := &Payload{[]byte(strconv.Itoa(int(gid)))}
+					c := NewWorkerClient(conn)
+					_, err = c.InitiateBackup(ctx, query)
+					errChan <- err
+					pl.Put(conn)
+				}()
+				break
+			}
+		}
+	}
+	groups().RUnlock()
 
 	for i := 0; i < count; i++ {
 		select {

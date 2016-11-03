@@ -19,9 +19,10 @@ service Worker {
 	rpc Sort (Payload)             returns (Payload) {}
 
 	// RAFT serving RPCs.
-	rpc RaftMessage (Payload)      returns (Payload) {}
-	rpc JoinCluster (Payload)      returns (Payload) {}
-	rpc InitiateBackup (Payload)   returns (Payload) {}
-	rpc UpdateMembership (Payload) returns (Payload) {}
+	rpc RaftMessage (Payload)       returns (Payload) {}
+	rpc JoinCluster (Payload)       returns (Payload) {}
+	rpc InitiateBackup (Payload)    returns (Payload) {}
+	rpc StartBackupProcess(Payload) returns (Payload) {}
+	rpc UpdateMembership (Payload)  returns (Payload) {}
 }
 

@@ -92,7 +92,7 @@ func toRDF(item kv, ch chan []byte) {
 
 	pl := types.GetRootAsPostingList(item.value, 0)
 	for pidx := 0; pidx < pl.PostingsLength(); pidx++ {
-		x.Assertf(pl.Postings(p, pidx), "Unable to parse Posting at index: %v", pidx)
+		x.AssertTruef(pl.Postings(p, pidx), "Unable to parse Posting at index: %v", pidx)
 		buf.Write(pre)
 		if p.Uid() == math.MaxUint64 && !bytes.Equal(p.ValueBytes(), nil) {
 			// Value posting

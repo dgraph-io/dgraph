@@ -146,7 +146,7 @@ func Key(uid uint64, attr string) []byte {
 // (Note that it is not applicable to index keys)
 func SplitKey(key []byte) (string, uint64) {
 	sKeys := bytes.Split(key, []byte("|"))
-	x.Assert(len(sKeys) == 2)
+	x.AssertTrue(len(sKeys) == 2)
 	b := sKeys[0]
 	rest := sKeys[1]
 	uid := binary.BigEndian.Uint64(rest)
