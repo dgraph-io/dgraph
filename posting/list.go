@@ -142,6 +142,17 @@ func Key(uid uint64, attr string) []byte {
 	return buf
 }
 
+// SplitKey returns the predicate and the uid.
+// (Note that it is not applicable to index keys)
+func SplitKey(key []byte) (string, uint64) {
+	sKeys := bytes.Split(key, []byte("|"))
+	x.AssertTrue(len(sKeys) == 2)
+	b := sKeys[0]
+	rest := sKeys[1]
+	uid := binary.BigEndian.Uint64(rest)
+	return string(b), uid
+}
+
 func debugKey(key []byte) string {
 	var b bytes.Buffer
 	var rest []byte
