@@ -59,8 +59,6 @@ var (
 	numcpu     = flag.Int("cores", runtime.NumCPU(),
 		"Number of cores to be used by the process")
 	nomutations  = flag.Bool("nomutations", false, "Don't allow mutations on this server.")
-	shutdown     = flag.Bool("shutdown", false, "Allow client to send shutdown signal.")
-	backup       = flag.Bool("bkp", false, "Allow client to request a backup.")
 	tracing      = flag.Float64("trace", 0.5, "The ratio of queries to trace.")
 	schemaFile   = flag.String("schema", "", "Path to schema file")
 	cpuprofile   = flag.String("cpu", "", "write cpu profile to file")
@@ -479,20 +477,24 @@ func storeStatsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func shutDownHandler(w http.ResponseWriter, r *http.Request) {
-	if *shutdown {
-		exitWithProfiles()
-		x.SetStatus(w, x.ErrorOk, "Server has been shutdown")
+	ip, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil || ip != "127.0.0.1" {
+		x.SetStatus(w, x.ErrorUnauthorized, "")
 	}
+	exitWithProfiles()
+	x.SetStatus(w, x.ErrorOk, "Server has been shutdown")
 }
 
 func backupHandler(w http.ResponseWriter, r *http.Request) {
-	if *backup {
-		err := worker.StartBackup()
-		if err != nil {
-			x.SetStatus(w, x.Error, "Backup Failed.")
-		}
-		x.SetStatus(w, x.ErrorOk, "Backup completed.")
+	ip, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil || ip != "127.0.0.1" {
+		x.SetStatus(w, x.ErrorUnauthorized, "")
 	}
+	err = worker.StartBackup()
+	if err != nil {
+		x.SetStatus(w, x.Error, "Backup Failed.")
+	}
+	x.SetStatus(w, x.ErrorOk, "Backup completed.")
 }
 
 // server is used to implement graph.DgraphServer
