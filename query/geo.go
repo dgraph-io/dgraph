@@ -50,15 +50,15 @@ func (sg *SubGraph) applyGeoQuery(ctx context.Context) error {
 	}
 
 	// Filter the values
-	sg.srcUIDs = filterUIDs(uids, values, data)
+	sg.SrcUIDs = filterUIDs(uids, values, data)
 	// Keep result and values consistent with srcUIDs
 
-	for i := 0; i < sg.srcUIDs.Size(); i++ {
-		uid := sg.srcUIDs.Get(i)
+	for i := 0; i < sg.SrcUIDs.Size(); i++ {
+		uid := sg.SrcUIDs.Get(i)
 		ulist := algo.NewUIDList([]uint64{uid})
 		sg.Result = append(sg.Result, ulist)
 	}
-	sg.Values = createNilValuesList(sg.srcUIDs.Size())
+	sg.Values = createNilValuesList(sg.SrcUIDs.Size())
 	return nil
 }
 
@@ -78,11 +78,11 @@ func fetchIndexEntries(ctx context.Context, attr string, tokens []string) (*algo
 		}
 	}
 
-	x.Assert(len(sg.Result) == len(tokens))
+	x.AssertTrue(len(sg.Result) == len(tokens))
 	return algo.MergeLists(sg.Result), nil
 }
 
-func fetchValues(ctx context.Context, attr string, uids *algo.UIDList) (*task.ValueList, error) {
+func fetchValues(ctx context.Context, attr string, uids *algo.UIDList) (*x.ValueList, error) {
 	sg := &SubGraph{Attr: attr}
 	sgChan := make(chan error, 1)
 
@@ -99,12 +99,12 @@ func fetchValues(ctx context.Context, attr string, uids *algo.UIDList) (*task.Va
 	}
 
 	values := sg.Values
-	x.Assert(values.ValuesLength() == uids.Size())
+	x.AssertTrue(values.ValuesLength() == uids.Size())
 	return values, nil
 }
 
-func filterUIDs(uids *algo.UIDList, values *task.ValueList, q *geo.QueryData) *algo.UIDList {
-	x.Assert(values.ValuesLength() == uids.Size())
+func filterUIDs(uids *algo.UIDList, values *x.ValueList, q *geo.QueryData) *algo.UIDList {
+	x.AssertTrue(values.ValuesLength() == uids.Size())
 	var rv []uint64
 	for i := 0; i < values.ValuesLength(); i++ {
 		var tv task.Value

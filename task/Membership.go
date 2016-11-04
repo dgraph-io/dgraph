@@ -78,8 +78,20 @@ func (rcv *Membership) MutateAmdead(n byte) bool {
 	return rcv._tab.MutateByteSlot(12, n)
 }
 
+func (rcv *Membership) LastUpdate() uint64 {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(14))
+	if o != 0 {
+		return rcv._tab.GetUint64(o + rcv._tab.Pos)
+	}
+	return 0
+}
+
+func (rcv *Membership) MutateLastUpdate(n uint64) bool {
+	return rcv._tab.MutateUint64Slot(14, n)
+}
+
 func MembershipStart(builder *flatbuffers.Builder) {
-	builder.StartObject(5)
+	builder.StartObject(6)
 }
 func MembershipAddId(builder *flatbuffers.Builder, id uint64) {
 	builder.PrependUint64Slot(0, id, 0)
@@ -95,6 +107,9 @@ func MembershipAddLeader(builder *flatbuffers.Builder, leader byte) {
 }
 func MembershipAddAmdead(builder *flatbuffers.Builder, amdead byte) {
 	builder.PrependByteSlot(4, amdead, 0)
+}
+func MembershipAddLastUpdate(builder *flatbuffers.Builder, lastUpdate uint64) {
+	builder.PrependUint64Slot(5, lastUpdate, 0)
 }
 func MembershipEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()

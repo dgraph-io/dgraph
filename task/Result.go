@@ -28,6 +28,9 @@ func (rcv *Result) Uidmatrix(obj *UidList, j int) bool {
 		x := rcv._tab.Vector(o)
 		x += flatbuffers.UOffsetT(j) * 4
 		x = rcv._tab.Indirect(x)
+		if obj == nil {
+			obj = new(UidList)
+		}
 		obj.Init(rcv._tab.Bytes, x)
 		return true
 	}

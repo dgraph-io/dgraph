@@ -5,7 +5,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"log"
-	"math"
 	"math/rand"
 	"strconv"
 	"strings"
@@ -53,7 +52,7 @@ func (p *proposals) Store(pid uint32, ch chan error) {
 	p.Lock()
 	defer p.Unlock()
 	_, has := p.ids[pid]
-	x.Assertf(!has, "Same proposal is being stored again.")
+	x.AssertTruef(!has, "Same proposal is being stored again.")
 	p.ids[pid] = ch
 }
 
@@ -105,7 +104,7 @@ func (n *node) Connect(pid uint64, addr string) {
 
 func (n *node) AddToCluster(pid uint64) error {
 	addr := n.peers.Get(pid)
-	x.Assertf(len(addr) > 0, "Unable to find conn pool for peer: %d", pid)
+	x.AssertTruef(len(addr) > 0, "Unable to find conn pool for peer: %d", pid)
 
 	rc := task.GetRootAsRaftContext(n.raftContext, 0)
 	return n.raft.ProposeConfChange(context.TODO(), raftpb.ConfChange{
@@ -144,8 +143,8 @@ func (n *node) ProposeAndWait(ctx context.Context, msg uint16, data []byte) erro
 	hdata := h.Encode()
 
 	proposalData := make([]byte, len(data)+len(hdata))
-	x.Assert(copy(proposalData, hdata) == len(hdata))
-	x.Assert(copy(proposalData[len(hdata):], data) == len(data))
+	x.AssertTrue(copy(proposalData, hdata) == len(hdata))
+	x.AssertTrue(copy(proposalData[len(hdata):], data) == len(data))
 
 	che := make(chan error, 1)
 	n.props.Store(h.proposalId, che)
@@ -167,10 +166,12 @@ func (n *node) ProposeAndWait(ctx context.Context, msg uint16, data []byte) erro
 }
 
 func (n *node) send(m raftpb.Message) {
-	x.Assertf(n.id != m.To, "Seding message to itself")
+	x.AssertTruef(n.id != m.To, "Seding message to itself")
 	data, err := m.Marshal()
 	x.Check(err)
-	fmt.Printf("\t\tSENDING: %v %v-->%v\n", m.Type, m.From, m.To)
+	if m.Type != raftpb.MsgHeartbeat && m.Type != raftpb.MsgHeartbeatResp {
+		fmt.Printf("\t\tSENDING: %v %v-->%v\n", m.Type, m.From, m.To)
+	}
 	select {
 	case n.messages <- sendmsg{to: m.To, data: data}:
 		// pass
@@ -251,13 +252,12 @@ func (n *node) processMutation(e raftpb.Entry, h header) error {
 }
 
 func (n *node) processMembership(e raftpb.Entry, h header) error {
-	rc := task.GetRootAsRaftContext(n.raftContext, 0)
-	x.Assert(rc.Group() == math.MaxUint32)
+	x.AssertTrue(n.gid == 0)
 
 	mm := task.GetRootAsMembership(e.Data[h.Length():], 0)
 	fmt.Printf("group: %v Addr: %q leader: %v dead: %v\n",
 		mm.Group(), mm.Addr(), mm.Leader(), mm.Amdead())
-	groups().UpdateServer(mm)
+	groups().applyMembershipUpdate(e.Index, mm)
 	return nil
 }
 
@@ -265,7 +265,7 @@ func (n *node) process(e raftpb.Entry) error {
 	if e.Data == nil {
 		return nil
 	}
-	fmt.Printf("Entry type to process: %+v\n", e)
+	fmt.Printf("Entry type to process: [%d, %d] Type: %v\n", e.Term, e.Index, e.Type)
 
 	if e.Type == raftpb.EntryConfChange {
 		var cc raftpb.ConfChange
@@ -324,9 +324,9 @@ func (n *node) processSnapshot(s raftpb.Snapshot) {
 		return
 	}
 	addr := n.peers.Get(lead)
-	x.Assertf(addr != "", "Should have the leader address: %v", lead)
+	x.AssertTruef(addr != "", "Should have the leader address: %v", lead)
 	pool := pools().get(addr)
-	x.Assertf(pool != nil, "Leader: %d pool should not be nil", lead)
+	x.AssertTruef(pool != nil, "Leader: %d pool should not be nil", lead)
 
 	_, err := populateShard(context.TODO(), pool, 0)
 	x.Checkf(err, "processSnapshot")
@@ -404,29 +404,30 @@ func (n *node) snapshotPeriodically() {
 }
 
 func parsePeer(peer string) (uint64, string) {
+	x.AssertTrue(len(peer) > 0)
+
 	kv := strings.SplitN(peer, ":", 2)
-	x.Assertf(len(kv) == 2, "Invalid peer format: %v", peer)
+	x.AssertTruef(len(kv) == 2, "Invalid peer format: %v", peer)
 	pid, err := strconv.ParseUint(kv[0], 10, 64)
 	x.Checkf(err, "Invalid peer id: %v", kv[0])
 	// TODO: Validate the url kv[1]
 	return pid, kv[1]
 }
 
-func (n *node) joinPeers(any string) {
-	// Tell one of the peers to join.
-	pid, paddr := parsePeer(any)
+func (n *node) joinPeers() {
+	pid, paddr := groups().Leader(n.gid)
 	n.Connect(pid, paddr)
+	fmt.Printf("Connected with: %v\n", paddr)
 
 	addr := n.peers.Get(pid)
 	pool := pools().get(addr)
-	x.Assertf(pool != nil, "Unable to find addr for peer: %d", pid)
+	x.AssertTruef(pool != nil, "Unable to find addr for peer: %d", pid)
 
 	// TODO: Ask for the leader, before running populateShard.
 	// Bring the instance up to speed first.
 	_, err := populateShard(context.TODO(), pool, 0)
 	x.Checkf(err, "Error while populating shard")
 
-	fmt.Printf("TELLING PEER TO ADD ME: %v\n", any)
 	query := &Payload{}
 	query.Data = n.raftContext
 	conn, err := pool.Get()
@@ -529,7 +530,7 @@ func (n *node) initFromWal(wal *raftwal.Wal) (restart bool, rerr error) {
 	return
 }
 
-func (n *node) InitAndStartNode(wal *raftwal.Wal, peer string) {
+func (n *node) InitAndStartNode(wal *raftwal.Wal) {
 	restart, err := n.initFromWal(wal)
 	x.Check(err)
 
@@ -538,9 +539,10 @@ func (n *node) InitAndStartNode(wal *raftwal.Wal, peer string) {
 		n.raft = raft.RestartNode(n.cfg)
 
 	} else {
-		if len(peer) > 0 {
-			n.joinPeers(peer)
+		if groups().HasPeer(n.gid) {
+			n.joinPeers()
 			n.raft = raft.StartNode(n.cfg, nil)
+
 		} else {
 			peers := []raft.Peer{{ID: n.id}}
 			n.raft = raft.StartNode(n.cfg, peers)
@@ -550,52 +552,7 @@ func (n *node) InitAndStartNode(wal *raftwal.Wal, peer string) {
 	}
 	go n.Run()
 	go n.snapshotPeriodically()
-	go n.Inform()
 	go n.batchAndSendMessages()
-}
-
-func (n *node) doInform(rc *task.RaftContext) {
-	s, found := groups().Server(rc.Id(), rc.Group())
-	if found && s.Addr == string(rc.Addr()) && s.Leader == n.AmLeader() {
-		return
-	}
-
-	var l byte
-	if n.AmLeader() {
-		l = byte(1)
-	}
-
-	b := flatbuffers.NewBuilder(0)
-	so := b.CreateString(string(rc.Addr()))
-	task.MembershipStart(b)
-	task.MembershipAddId(b, rc.Id())
-	task.MembershipAddGroup(b, rc.Group())
-	task.MembershipAddAddr(b, so)
-	task.MembershipAddLeader(b, l)
-	uo := task.MembershipEnd(b)
-	b.Finish(uo)
-	data := b.Bytes[b.Head():]
-
-	common := groups().Node(math.MaxUint32)
-	if common == nil {
-		return
-	}
-	x.Checkf(common.ProposeAndWait(context.TODO(), membershipMsg, data),
-		"Expected acceptance.")
-}
-
-func (n *node) Inform() {
-	rc := task.GetRootAsRaftContext(n.raftContext, 0)
-	if rc.Group() == math.MaxUint32 {
-		return
-	}
-
-	select {
-	case <-time.Tick(30 * time.Second):
-		n.doInform(rc)
-	case <-n.done:
-		return
-	}
 }
 
 func (n *node) AmLeader() bool {
@@ -624,17 +581,23 @@ func (w *grpcWorker) RaftMessage(ctx context.Context, query *Payload) (*Payload,
 	}
 
 	for idx := 0; idx < len(query.Data); {
-		len := int(binary.LittleEndian.Uint32(query.Data[idx : idx+4]))
+		sz := int(binary.LittleEndian.Uint32(query.Data[idx : idx+4]))
 		idx += 4
 		msg := raftpb.Message{}
-		if err := msg.Unmarshal(query.Data[idx : idx+len]); err != nil {
+		if idx+sz-1 > len(query.Data) {
+			return &Payload{}, x.Errorf(
+				"Invalid query. Size specified: %v. Size of array: %v\n", sz, len(query.Data))
+		}
+		if err := msg.Unmarshal(query.Data[idx : idx+sz]); err != nil {
 			x.Check(err)
 		}
-		fmt.Printf("RECEIVED: %v %v-->%v\n", msg.Type, msg.From, msg.To)
+		if msg.Type != raftpb.MsgHeartbeat && msg.Type != raftpb.MsgHeartbeatResp {
+			fmt.Printf("RECEIVED: %v %v-->%v\n", msg.Type, msg.From, msg.To)
+		}
 		if err := w.applyMessage(ctx, msg); err != nil {
 			return &Payload{}, err
 		}
-		idx += len
+		idx += sz
 	}
 	// fmt.Printf("Got %d messages\n", count)
 	return &Payload{}, nil
@@ -651,6 +614,9 @@ func (w *grpcWorker) JoinCluster(ctx context.Context, query *Payload) (*Payload,
 
 	rc := task.GetRootAsRaftContext(query.Data, 0)
 	node := groups().Node(rc.Group())
+	if node == nil {
+		return &Payload{}, nil
+	}
 	node.Connect(rc.Id(), string(rc.Addr()))
 
 	c := make(chan error, 1)

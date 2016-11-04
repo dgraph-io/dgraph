@@ -76,7 +76,7 @@ func (l *List) refCount() int32 { return atomic.LoadInt32(&l.refcount) }
 func (l *List) incr() int32     { return atomic.AddInt32(&l.refcount, 1) }
 func (l *List) decr() {
 	val := atomic.AddInt32(&l.refcount, -1)
-	x.Assertf(val >= 0, "List reference should never be less than zero: %v", val)
+	x.AssertTruef(val >= 0, "List reference should never be less than zero: %v", val)
 	if val > 0 {
 		return
 	}
@@ -93,7 +93,7 @@ func getNew() *List {
 	l := listPool.Get().(*List)
 	*l = List{}
 	l.wg.Add(1)
-	x.Assert(len(l.key) == 0)
+	x.AssertTrue(len(l.key) == 0)
 	l.refcount = 1
 	return l
 }
@@ -140,6 +140,17 @@ func Key(uid uint64, attr string) []byte {
 	buf[len(attr)] = '|'
 	binary.BigEndian.PutUint64(buf[len(attr)+1:], uid)
 	return buf
+}
+
+// SplitKey returns the predicate and the uid.
+// (Note that it is not applicable to index keys)
+func SplitKey(key []byte) (string, uint64) {
+	sKeys := bytes.Split(key, []byte("|"))
+	x.AssertTrue(len(sKeys) == 2)
+	b := sKeys[0]
+	rest := sKeys[1]
+	uid := binary.BigEndian.Uint64(rest)
+	return string(b), uid
 }
 
 func debugKey(key []byte) string {
@@ -279,7 +290,7 @@ func (l *List) getPostingList() *types.PostingList {
 	if buf == nil || len(buf.d) == 0 {
 		nbuf := new(buffer)
 		var err error
-		x.Assert(l.pstore != nil)
+		x.AssertTrue(l.pstore != nil)
 		if nbuf.d, err = l.pstore.Get(l.key); err != nil || nbuf.d == nil {
 			// Error. Just set to empty.
 			nbuf.d = make([]byte, len(empty))
@@ -301,7 +312,7 @@ func (l *List) SetForDeletion() {
 }
 
 func (l *List) updateMutationLayer(mpost *types.Posting) bool {
-	x.Assert(mpost.Op() == Set || mpost.Op() == Del)
+	x.AssertTrue(mpost.Op() == Set || mpost.Op() == Del)
 	findUid := mpost.Uid()
 
 	// First check the mutable layer.
@@ -347,7 +358,7 @@ func (l *List) updateMutationLayer(mpost *types.Posting) bool {
 				return true
 			}
 			// Add followed by Set is considered an Add. Hence, mutate mpost.Op.
-			x.Assert(mpost.MutateOp(Add))
+			x.AssertTrue(mpost.MutateOp(Add))
 		}
 		l.mlayer[midx] = mpost
 		return true
@@ -357,14 +368,14 @@ func (l *List) updateMutationLayer(mpost *types.Posting) bool {
 	pl := l.getPostingList()
 	pidx := sort.Search(pl.PostingsLength(), func(idx int) bool {
 		var p types.Posting
-		x.Assert(pl.Postings(&p, idx))
+		x.AssertTrue(pl.Postings(&p, idx))
 		return findUid <= p.Uid()
 	})
 
 	var uidFound, psame bool
 	if pidx < pl.PostingsLength() {
 		p := new(types.Posting)
-		x.Assertf(pl.Postings(p, pidx), "Unable to parse Posting at index: %v", pidx)
+		x.AssertTruef(pl.Postings(p, pidx), "Unable to parse Posting at index: %v", pidx)
 		uidFound = mpost.Uid() == p.Uid()
 		if uidFound {
 			psame = samePosting(p, mpost)
@@ -377,7 +388,7 @@ func (l *List) updateMutationLayer(mpost *types.Posting) bool {
 		}
 		if !uidFound {
 			// Posting not found in PL. This is considered an Add operation.
-			mpost.MutateOp(Add)
+			x.AssertTrue(mpost.MutateOp(Add))
 		}
 	} else if !psame { // mpost.Op==Del
 		// Either we fail to find UID in immutable PL or contents don't match.
@@ -490,7 +501,7 @@ func (l *List) iterate(afterUid uint64, f func(obj *types.Posting) bool) {
 	if afterUid > 0 {
 		pidx = sort.Search(pl.PostingsLength(), func(idx int) bool {
 			p := new(types.Posting)
-			x.Assert(pl.Postings(p, idx))
+			x.AssertTrue(pl.Postings(p, idx))
 			return afterUid < p.Uid()
 		})
 		midx = sort.Search(len(l.mlayer), func(idx int) bool {
@@ -504,7 +515,7 @@ func (l *List) iterate(afterUid uint64, f func(obj *types.Posting) bool) {
 	cont := true
 	for cont {
 		if pidx < pl.PostingsLength() {
-			x.Assert(pl.Postings(pp, pidx))
+			x.AssertTrue(pl.Postings(pp, pidx))
 		} else {
 			pp = empty
 		}
@@ -545,7 +556,7 @@ func (l *List) Length(afterUid uint64) int {
 	if afterUid > 0 {
 		pidx = sort.Search(pl.PostingsLength(), func(idx int) bool {
 			p := new(types.Posting)
-			x.Assert(pl.Postings(p, idx))
+			x.AssertTrue(pl.Postings(p, idx))
 			return afterUid < p.Uid()
 		})
 		midx = sort.Search(len(l.mlayer), func(idx int) bool {
