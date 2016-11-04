@@ -72,13 +72,10 @@ func (w *grpcWorker) StartBackupProcess(ctx context.Context, in *Payload) (*Payl
 }
 
 func initiateBackup(gid uint32) error {
-	groups().RLock()
 	if !groups().Node(gid).AmLeader() {
 		return fmt.Errorf("Node not leader of group %d", gid)
 	}
-	groups().RUnlock()
-	err := Backup(gid, *backupPath)
-	return err
+	return backup(gid, *backupPath)
 }
 
 // StartBackup starts the backup process if it is master of group 0

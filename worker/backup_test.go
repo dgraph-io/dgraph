@@ -78,11 +78,11 @@ func TestBackup(t *testing.T) {
 	posting.MergeLists(10)
 
 	// We have 4 friend type edges. FP("friends")%10 = 2.
-	err := Backup(BelongsTo("friend"), bdir)
+	err := backup(BelongsTo("friend"), bdir)
 	require.NoError(t, err)
 
 	// We have 2 name type edges(with index). FP("name")%10 =7.
-	err = Backup(BelongsTo("name"), bdir)
+	err = backup(BelongsTo("name"), bdir)
 	require.NoError(t, err)
 
 	searchDir := bdir

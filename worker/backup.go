@@ -25,7 +25,7 @@ type kv struct {
 }
 
 // Backup creates a backup of data by exporting it as an RDF gzip.
-func Backup(gid uint32, bpath string) error {
+func backup(gid uint32, bpath string) error {
 	ch := make(chan []byte, 10000)
 	chkv := make(chan kv, 1000)
 	errChan := make(chan error, 1)
@@ -37,8 +37,8 @@ func Backup(gid uint32, bpath string) error {
 	wg.Add(numBackupRoutines)
 	for i := 0; i < numBackupRoutines; i++ {
 		go func() {
-			for it := range chkv {
-				toRDF(it, ch)
+			for item := range chkv {
+				toRDF(item, ch)
 			}
 			wg.Done()
 		}()
