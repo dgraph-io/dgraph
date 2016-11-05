@@ -29,7 +29,6 @@ import (
 	"time"
 
 	farm "github.com/dgryski/go-farm"
-	"github.com/gogo/protobuf/proto"
 	"github.com/google/flatbuffers/go"
 
 	"github.com/dgraph-io/dgraph/algo"
@@ -400,8 +399,6 @@ func postTraverseAlt(sg *SubGraph, newPostOut func() postOutput) (map[uint64]pos
 			}
 		}
 
-		isXID := child.Attr == "_xid_"
-
 		// Merge results from all children, one by one.
 		for k, v := range m {
 			if !v.Valid() {
@@ -416,9 +413,6 @@ func postTraverseAlt(sg *SubGraph, newPostOut func() postOutput) (map[uint64]pos
 				continue
 			}
 
-			if k == 1 {
-				x.Printf("~~~merging v=%s", proto.MarshalTextString(v.(*protoPostOutput).Node))
-			}
 			if val, present := cResult[k]; !present {
 				// First time we see this UID.
 				cResult[k] = v
@@ -429,20 +423,9 @@ func postTraverseAlt(sg *SubGraph, newPostOut func() postOutput) (map[uint64]pos
 			} else {
 				// UID already exists. We just need to merge stuff from v into
 				// existing result which is cResult[k] or val.
-				if isXID {
-					// Special merging for _xid_.
-					//val.SetXID(v)
-					val.Merge(v)
-				} else {
-					val.Merge(v)
-				}
+				val.Merge(v)
 			}
 		}
-	}
-
-	x.Printf("~~~attr=%s len(cResult)=%d", sg.Attr, len(cResult))
-	for k, v := range cResult {
-		x.Printf("~~~~cResult attr=%s uid=%d postOutput=%s", sg.Attr, k, proto.MarshalTextString(v.(*protoPostOutput).Node))
 	}
 
 	x.AssertTruef(sg.SrcUIDs.Size() == len(sg.Result),
@@ -475,7 +458,6 @@ func postTraverseAlt(sg *SubGraph, newPostOut func() postOutput) (map[uint64]pos
 		for j := 0; j < ul.Size(); j++ {
 			uid := ul.Get(j)
 			if ival, present := cResult[uid]; present {
-				x.Printf("~~~~~add child attr=%s uid=%d ival=%s", sg.Attr, uid, proto.MarshalTextString(ival.(*protoPostOutput).Node))
 				m.AddChild(outputAttr, ival)
 			}
 		}
@@ -542,11 +524,6 @@ func postTraverseAlt(sg *SubGraph, newPostOut func() postOutput) (map[uint64]pos
 			}
 		}
 		m.AddValue(outputAttr, lval)
-	}
-
-	x.Printf("~~~~~result")
-	for k, v := range result {
-		x.Printf("~~~~ending attr=%s uid=%d result=%s", sg.Attr, k, proto.MarshalTextString(v.(*protoPostOutput).Node))
 	}
 	return result, nil
 }
@@ -1695,6 +1672,10 @@ func (p *protoPostOutput) Invalidate() { p.invalid = true }
 func (p *protoPostOutput) Valid() bool { return !p.invalid }
 
 func (p *protoPostOutput) AddValue(attr string, v types.Value) {
+	if attr == "_xid_" {
+		p.Node.Xid = v.String()
+		return
+	}
 	p.Node.Properties = append(p.Node.Properties, createProperty(attr, v))
 }
 
