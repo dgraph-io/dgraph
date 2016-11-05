@@ -25,14 +25,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gogo/protobuf/proto"
-
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/query/graph"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/worker"
-	"github.com/dgraph-io/dgraph/x"
 )
 
 func prepareTest(b *testing.B) (*store.Store, string, string) {
@@ -97,18 +94,16 @@ func BenchmarkToJSON(b *testing.B) {
 			b.Fatal(err)
 		}
 
-		x.Printf("~~~~~~~Start [%s] %d", file, b.N)
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			if _, err := sg.ToJSON(&l); err != nil {
 				b.Fatal(err)
 			}
 		}
-		x.Printf("~~~~~~~End [%s] %d", file, b.N)
 	})
 }
 
-func BenchmarkToJSONAlt(b *testing.B) {
+func BenchmarkToJSONWithPre(b *testing.B) {
 	benchmarkHelper(b, func(b *testing.B, file string) {
 		b.ReportAllocs()
 		var sg SubGraph
@@ -129,6 +124,33 @@ func BenchmarkToJSONAlt(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			if _, err := sg.ToJSONWithPre(&l); err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
+}
+
+func BenchmarkToJSONWithPost(b *testing.B) {
+	benchmarkHelper(b, func(b *testing.B, file string) {
+		b.ReportAllocs()
+		var sg SubGraph
+		var l Latency
+
+		f, err := ioutil.ReadFile(file)
+		if err != nil {
+			b.Fatal(err)
+		}
+
+		buf := bytes.NewBuffer(f)
+		dec := gob.NewDecoder(buf)
+		err = dec.Decode(&sg)
+		if err != nil {
+			b.Fatal(err)
+		}
+
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			if _, err := sg.ToJSONWithPost(&l); err != nil {
 				b.Fatal(err)
 			}
 		}
@@ -169,7 +191,7 @@ func BenchmarkToPB(b *testing.B) {
 	})
 }
 
-func BenchmarkToPBMarshal(b *testing.B) {
+func BenchmarkToPBWithPre(b *testing.B) {
 	benchmarkHelper(b, func(b *testing.B, file string) {
 		b.ReportAllocs()
 		var sg SubGraph
@@ -186,51 +208,17 @@ func BenchmarkToPBMarshal(b *testing.B) {
 		if err != nil {
 			b.Fatal(err)
 		}
-		p, err := sg.ToProtocolBuffer(&l)
-		if err != nil {
-			b.Fatal(err)
-		}
+
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			if _, err = proto.Marshal(p); err != nil {
+			pb, err := sg.ToProtocolBufferWithPre(&l)
+			if err != nil {
 				b.Fatal(err)
 			}
-		}
-	})
-}
-
-func BenchmarkToPBUnmarshal(b *testing.B) {
-	benchmarkHelper(b, func(b *testing.B, file string) {
-		b.ReportAllocs()
-		var sg SubGraph
-		var l Latency
-
-		f, err := ioutil.ReadFile(file)
-		if err != nil {
-			b.Fatal(err)
-		}
-
-		buf := bytes.NewBuffer(f)
-		dec := gob.NewDecoder(buf)
-		err = dec.Decode(&sg)
-		if err != nil {
-			b.Fatal(err)
-		}
-		p, err := sg.ToProtocolBuffer(&l)
-		if err != nil {
-			b.Fatal(err)
-		}
-
-		pbb, err := proto.Marshal(p)
-		if err != nil {
-			b.Fatal(err)
-		}
-
-		pdu := &graph.Node{}
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			err = proto.Unmarshal(pbb, pdu)
-			if err != nil {
+			r := new(graph.Response)
+			r.N = pb
+			var c Codec
+			if _, err = c.Marshal(r); err != nil {
 				b.Fatal(err)
 			}
 		}

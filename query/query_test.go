@@ -184,7 +184,7 @@ func populateGraph(t *testing.T) (string, string, *store.Store) {
 	return dir, dir2, ps
 }
 
-func processToJSONAlt(t *testing.T, query string) string {
+func processToJSON(t *testing.T, query string) string {
 	gq, _, err := gql.Parse(query)
 	require.NoError(t, err)
 
@@ -225,7 +225,7 @@ func TestGetUID(t *testing.T) {
 			}
 		}
 	`
-	js := processToJSONAlt(t, query)
+	js := processToJSON(t, query)
 	require.JSONEq(t,
 		`{"me":[{"_uid_":"0x1","alive":true,"friend":[{"_uid_":"0x17","name":"Rick Grimes"},{"_uid_":"0x18","name":"Glenn Rhee"},{"_uid_":"0x19","name":"Daryl Dixon"},{"_uid_":"0x1f","name":"Andrea"},{"_uid_":"0x65"}],"gender":"female","name":"Michonne"}]}`,
 		js)
@@ -250,7 +250,7 @@ func TestGetUIDCount(t *testing.T) {
 			}
 		}
 	`
-	js := processToJSONAlt(t, query)
+	js := processToJSON(t, query)
 	require.JSONEq(t,
 		`{"me":[{"_uid_":"0x1","alive":true,"friend":[{"_count_":5}],"gender":"female","name":"Michonne"}]}`,
 		js)
@@ -275,7 +275,7 @@ func TestDebug1(t *testing.T) {
 		}
 	`
 
-	js := processToJSONAlt(t, query)
+	js := processToJSON(t, query)
 	var mp map[string]interface{}
 	require.NoError(t, json.Unmarshal([]byte(js), &mp))
 
@@ -302,7 +302,7 @@ func TestDebug2(t *testing.T) {
 		}
 	`
 
-	js := processToJSONAlt(t, query)
+	js := processToJSON(t, query)
 	var mp map[string]interface{}
 	require.NoError(t, json.Unmarshal([]byte(js), &mp))
 
@@ -330,7 +330,7 @@ func TestCount(t *testing.T) {
 		}
 	`
 
-	js := processToJSONAlt(t, query)
+	js := processToJSON(t, query)
 	require.EqualValues(t,
 		`{"me":[{"alive":true,"friend":[{"_count_":5}],"gender":"female","name":"Michonne"}]}`,
 		js)
@@ -880,8 +880,11 @@ func TestToPB(t *testing.T) {
 	require.NoError(t, err)
 
 	var l Latency
-	gr, err := sg.ToProtocolBuffer(&l)
+	gr, err := sg.ToProtocolBufferWithPost(&l)
+	//gr, err := sg.ToProtocolBuffer(&l)
 	require.NoError(t, err)
+
+	x.Printf("~~~~~%s", proto.MarshalTextString(gr))
 
 	require.EqualValues(t, "debug", gr.Attribute)
 	require.EqualValues(t, 1, gr.Uid)
@@ -1512,7 +1515,7 @@ func TestSchema1(t *testing.T) {
 			}
 		}
 	`
-	js := processToJSONAlt(t, query)
+	js := processToJSON(t, query)
 	require.JSONEq(t,
 		`{"person":[{"address":"31, 32 street, Jupiter","age":38,"alive":true,"friend":[{"address":"21, mark street, Mars","age":15,"name":"Rick Grimes"}],"name":"Michonne","survival_rate":98.99}]}`,
 		js)

@@ -29,6 +29,7 @@ import (
 	"time"
 
 	farm "github.com/dgryski/go-farm"
+	"github.com/gogo/protobuf/proto"
 	"github.com/google/flatbuffers/go"
 
 	"github.com/dgraph-io/dgraph/algo"
@@ -399,6 +400,8 @@ func postTraverseAlt(sg *SubGraph, newPostOut func() postOutput) (map[uint64]pos
 			}
 		}
 
+		isXID := child.Attr == "_xid_"
+
 		// Merge results from all children, one by one.
 		for k, v := range m {
 			if !v.Valid() {
@@ -413,6 +416,9 @@ func postTraverseAlt(sg *SubGraph, newPostOut func() postOutput) (map[uint64]pos
 				continue
 			}
 
+			if k == 1 {
+				x.Printf("~~~merging v=%s", proto.MarshalTextString(v.(*protoPostOutput).Node))
+			}
 			if val, present := cResult[k]; !present {
 				// First time we see this UID.
 				cResult[k] = v
@@ -423,9 +429,20 @@ func postTraverseAlt(sg *SubGraph, newPostOut func() postOutput) (map[uint64]pos
 			} else {
 				// UID already exists. We just need to merge stuff from v into
 				// existing result which is cResult[k] or val.
-				val.Merge(v)
+				if isXID {
+					// Special merging for _xid_.
+					//val.SetXID(v)
+					val.Merge(v)
+				} else {
+					val.Merge(v)
+				}
 			}
 		}
+	}
+
+	x.Printf("~~~attr=%s len(cResult)=%d", sg.Attr, len(cResult))
+	for k, v := range cResult {
+		x.Printf("~~~~cResult attr=%s uid=%d postOutput=%s", sg.Attr, k, proto.MarshalTextString(v.(*protoPostOutput).Node))
 	}
 
 	x.AssertTruef(sg.SrcUIDs.Size() == len(sg.Result),
@@ -458,6 +475,7 @@ func postTraverseAlt(sg *SubGraph, newPostOut func() postOutput) (map[uint64]pos
 		for j := 0; j < ul.Size(); j++ {
 			uid := ul.Get(j)
 			if ival, present := cResult[uid]; present {
+				x.Printf("~~~~~add child attr=%s uid=%d ival=%s", sg.Attr, uid, proto.MarshalTextString(ival.(*protoPostOutput).Node))
 				m.AddChild(outputAttr, ival)
 			}
 		}
@@ -524,6 +542,11 @@ func postTraverseAlt(sg *SubGraph, newPostOut func() postOutput) (map[uint64]pos
 			}
 		}
 		m.AddValue(outputAttr, lval)
+	}
+
+	x.Printf("~~~~~result")
+	for k, v := range result {
+		x.Printf("~~~~ending attr=%s uid=%d result=%s", sg.Attr, k, proto.MarshalTextString(v.(*protoPostOutput).Node))
 	}
 	return result, nil
 }
@@ -599,7 +622,115 @@ func init() {
 }
 
 // This method gets the values and children for a subgraph.
-func (sg *SubGraph) preTraverse(uid uint64, dst preOutput) error {
+func (sg *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
+	var properties []*graph.Property
+	var children []*graph.Node
+
+	invalidUids := make(map[uint64]bool)
+	// We go through all predicate children of the subgraph.
+	for _, pc := range sg.Children {
+		idx := pc.SrcUIDs.IndexOf(uid)
+
+		if idx == -1 {
+			log.Fatal("Attribute with uid not found in child Query uids.")
+			return x.Errorf("Attribute with uid not found")
+		}
+
+		ul := pc.Result[idx]
+		if sg.Counts != nil && sg.Counts.CountLength() > 0 {
+			c := types.Int32(sg.Counts.Count(idx))
+			p := createProperty("_count_", &c)
+			uc := &graph.Node{
+				Attribute:  pc.Attr,
+				Properties: []*graph.Property{p},
+			}
+			children = append(children, uc)
+		} else if ul.Size() > 0 || len(pc.Children) > 0 {
+			// We create as many predicate entity children as the length of uids for
+			// this predicate.
+			for i := 0; i < ul.Size(); i++ {
+				uid := ul.Get(i)
+				uc := nodePool.Get().(*graph.Node)
+				uc.Attribute = pc.Attr
+				if sg.Params.GetUID || sg.Params.isDebug {
+					uc.Uid = uid
+				}
+				if rerr := pc.preTraverse(uid, uc); rerr != nil {
+					if rerr.Error() == "_INV_" {
+						invalidUids[uid] = true
+					} else {
+						log.Printf("Error while traversal: %v", rerr)
+						return rerr
+					}
+				}
+				if !invalidUids[uid] {
+					children = append(children, uc)
+				}
+			}
+		} else {
+			var tv task.Value
+			if ok := pc.Values.Values(&tv, idx); !ok {
+				return x.Errorf("While parsing value")
+			}
+
+			valBytes := tv.ValBytes()
+			v, err := getValue(tv)
+			if err != nil {
+				return err
+			}
+
+			if pc.Attr == "_xid_" {
+				txt, err := v.MarshalText()
+				if err != nil {
+					return err
+				}
+				dst.Xid = string(txt)
+				// We don't want to add _uid_ to properties map.
+			} else if pc.Attr == "_uid_" {
+				continue
+			} else {
+				globalType := schema.TypeOf(pc.Attr)
+				schemaType := pc.Params.AttrType
+				sv := v
+
+				if schemaType != nil {
+					//do type checking on response values
+					if !schemaType.IsScalar() {
+						return x.Errorf("Unknown Scalar:%v. Leaf predicate:'%v' must be"+
+							" one of the scalar types defined in the schema.", pc.Params.AttrType, pc.Attr)
+					}
+					st := schemaType.(types.Scalar)
+					// Convert to schema type.
+					sv, err = st.Convert(v)
+					if bytes.Equal(valBytes, nil) || err != nil {
+						// skip values that don't convert.
+						return x.Errorf("_INV_")
+					}
+				} else if globalType != nil {
+					// Try to coerce types if this is an optional scalar outside an object
+					// definition.
+					if !globalType.IsScalar() {
+						return x.Errorf("Leaf predicate:'%v' must be a scalar.", pc.Attr)
+					}
+					gt := globalType.(types.Scalar)
+					// Convert to schema type.
+					sv, err = gt.Convert(v)
+					if bytes.Equal(valBytes, nil) || err != nil {
+						continue
+					}
+				}
+				p := createProperty(pc.Attr, sv)
+				properties = append(properties, p)
+			}
+		}
+	}
+
+	dst.Properties, dst.Children = properties, children
+	return nil
+}
+
+// This method gets the values and children for a subgraph.
+func (sg *SubGraph) preTraverseAlt(uid uint64, dst preOutput) error {
 	invalidUids := make(map[uint64]bool)
 	// We go through all predicate children of the subgraph.
 	for _, pc := range sg.Children {
@@ -631,7 +762,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst preOutput) error {
 					//uc.Uid = uid
 					uc.SetUID(uid)
 				}
-				if rerr := pc.preTraverse(uid, uc); rerr != nil {
+				if rerr := pc.preTraverseAlt(uid, uc); rerr != nil {
 					if rerr.Error() == "_INV_" {
 						invalidUids[uid] = true
 						continue // next UID.
@@ -714,24 +845,25 @@ func createProperty(prop string, v types.Value) *graph.Property {
 // ToProtocolBuffer method transforms the predicate based subgraph to an
 // predicate-entity based protocol buffer subgraph.
 func (sg *SubGraph) ToProtocolBuffer(l *Latency) (*graph.Node, error) {
-	var dummy *protoPreOutput
+	n := &graph.Node{
+		Attribute: sg.Attr,
+	}
 	if sg.SrcUIDs == nil {
-		return toProtoHelper(dummy.New(sg.Attr)), nil
+		return n, nil
 	}
 
 	x.AssertTrue(len(sg.Result) == 1)
-	n := dummy.New(sg.Attr)
 	ul := sg.Result[0]
 	if sg.Params.GetUID || sg.Params.isDebug {
-		n.SetUID(ul.Get(0))
+		n.Uid = ul.Get(0)
 	}
 
 	if rerr := sg.preTraverse(ul.Get(0), n); rerr != nil {
-		return toProtoHelper(n), rerr
+		return n, rerr
 	}
 
 	l.ProtocolBuffer = time.Since(l.Start) - l.Parsing - l.Processing
-	return toProtoHelper(n), nil
+	return n, nil
 }
 
 func isPresent(list []string, str string) bool {
@@ -1372,16 +1504,12 @@ type protoPreOutput struct {
 	*graph.Node
 }
 
-func toProtoHelper(p preOutput) *graph.Node {
-	return p.(*protoPreOutput).Node
-}
-
 func (p *protoPreOutput) AddValue(attr string, v types.Value) {
 	p.Node.Properties = append(p.Node.Properties, createProperty(attr, v))
 }
 
 func (p *protoPreOutput) AddChild(attr string, child preOutput) {
-	p.Node.Children = append(p.Node.Children, toProtoHelper(child))
+	p.Node.Children = append(p.Node.Children, child.(*protoPreOutput).Node)
 }
 
 func (p *protoPreOutput) New(attr string) preOutput {
@@ -1392,6 +1520,28 @@ func (p *protoPreOutput) New(attr string) preOutput {
 
 func (p *protoPreOutput) SetUID(uid uint64) { p.Node.Uid = uid }
 func (p *protoPreOutput) SetXID(xid string) { p.Node.Xid = xid }
+
+// ToProtocolBufferWithPre is ToProtocolBuffer that uses preTraverseAlt.
+func (sg *SubGraph) ToProtocolBufferWithPre(l *Latency) (*graph.Node, error) {
+	var dummy *protoPreOutput
+	if sg.SrcUIDs == nil {
+		return dummy.New(sg.Attr).(*protoPreOutput).Node, nil
+	}
+
+	x.AssertTrue(len(sg.Result) == 1)
+	n := dummy.New(sg.Attr)
+	ul := sg.Result[0]
+	if sg.Params.GetUID || sg.Params.isDebug {
+		n.SetUID(ul.Get(0))
+	}
+
+	if rerr := sg.preTraverseAlt(ul.Get(0), n); rerr != nil {
+		return n.(*protoPreOutput).Node, rerr
+	}
+
+	l.ProtocolBuffer = time.Since(l.Start) - l.Parsing - l.Processing
+	return n.(*protoPreOutput).Node, nil
+}
 
 type jsonPreOutput struct {
 	data map[string]interface{}
@@ -1438,7 +1588,7 @@ func (sg *SubGraph) ToJSONWithPre(l *Latency) ([]byte, error) {
 		n.SetUID(ul.Get(0))
 	}
 
-	if err := sg.preTraverse(ul.Get(0), n); err != nil {
+	if err := sg.preTraverseAlt(ul.Get(0), n); err != nil {
 		return nil, err
 	}
 	return json.Marshal(n.(*jsonPreOutput).data)
@@ -1451,6 +1601,7 @@ type postOutput interface {
 	AddValue(attr string, v types.Value)
 	AddChild(attr string, child postOutput)
 	SetUID(uid uint64)
+	SetXID(child postOutput)
 }
 
 type jsonPostOutput struct {
@@ -1470,9 +1621,6 @@ func (p *jsonPostOutput) Invalidate() { p.invalid = true }
 func (p *jsonPostOutput) Valid() bool { return !p.invalid }
 
 func (p *jsonPostOutput) AddValue(attr string, v types.Value) {
-	//	b, err := v.MarshalText()
-	//	x.Check(err)
-	//	p.data[attr] = string(b)
 	p.data[attr] = v
 }
 
@@ -1496,6 +1644,10 @@ func (p *jsonPostOutput) AddChild(attr string, child postOutput) {
 
 func (p *jsonPostOutput) SetUID(uid uint64) {
 	p.data["_uid_"] = fmt.Sprintf("%#x", uid)
+}
+
+func (p *jsonPostOutput) SetXID(child postOutput) {
+	p.data["_xid_"] = child.(*jsonPostOutput).data["_xid_"]
 }
 
 // ToJSONWithPost converts the internal subgraph object to JSON format which is then sent
@@ -1525,4 +1677,61 @@ func (sg *SubGraph) ToJSONWithPost(l *Latency) ([]byte, error) {
 		a = append(a, m)
 	}
 	return json.Marshal(a)
+}
+
+type protoPostOutput struct {
+	*graph.Node
+	invalid bool
+}
+
+func newProtoPostOutput() postOutput {
+	return &protoPostOutput{
+		Node: new(graph.Node),
+	}
+}
+
+func (p *protoPostOutput) Invalidate() { p.invalid = true }
+
+func (p *protoPostOutput) Valid() bool { return !p.invalid }
+
+func (p *protoPostOutput) AddValue(attr string, v types.Value) {
+	p.Node.Properties = append(p.Node.Properties, createProperty(attr, v))
+}
+
+func (p *protoPostOutput) AddChild(attr string, child postOutput) {
+	n := child.(*protoPostOutput).Node
+	n.Attribute = attr
+	p.Node.Children = append(p.Node.Children, n)
+}
+
+func (p *protoPostOutput) Merge(q postOutput) {
+	m := q.(*protoPostOutput).Node
+	p.Properties = append(p.Properties, m.Properties...)
+	p.Children = append(p.Children, m.Children...)
+}
+
+func (p *protoPostOutput) SetUID(uid uint64) { p.Node.Uid = uid }
+
+func (p *protoPostOutput) SetXID(child postOutput) {
+	childProp := child.(*protoPostOutput).Properties
+	x.AssertTrue(len(childProp) == 1)
+	x.AssertTrue(childProp[0].Prop == "_xid_")
+	p.Xid = child.(*protoPostOutput).Properties[0].String()
+}
+
+// ToProtocolBufferWithPost is ToProtocolBuffer that uses postTraverseAlt.
+func (sg *SubGraph) ToProtocolBufferWithPost(l *Latency) (*graph.Node, error) {
+	r, err := postTraverseAlt(sg, newProtoPostOutput)
+	if err != nil {
+		return nil, err
+	}
+	x.AssertTrue(len(r) == 1)
+	var r1 postOutput
+	for _, v := range r {
+		r1 = v
+	}
+
+	n := r1.(*protoPostOutput).Node
+	x.AssertTrue(len(n.Children) == 1)
+	return n.Children[0], nil
 }
