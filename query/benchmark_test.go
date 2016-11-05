@@ -21,26 +21,65 @@ import (
 	"encoding/gob"
 	"fmt"
 	"io/ioutil"
+	"os"
 	"testing"
+	"time"
 
 	"github.com/gogo/protobuf/proto"
 
+	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/query/graph"
+	"github.com/dgraph-io/dgraph/schema"
+	"github.com/dgraph-io/dgraph/store"
+	"github.com/dgraph-io/dgraph/worker"
+	"github.com/dgraph-io/dgraph/x"
 )
+
+func prepareTest(b *testing.B) (*store.Store, string, string) {
+	dir, err := ioutil.TempDir("", "storetest_")
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	ps, err := store.NewStore(dir)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	schema.ParseBytes([]byte(""))
+	posting.Init(ps)
+	worker.Init(ps)
+
+	worker.ParseGroupConfig("")
+	dir2, err := ioutil.TempDir("", "wal_")
+	if err != nil {
+		b.Fatal(err)
+	}
+	worker.StartRaftNodes(dir2)
+	time.Sleep(3 * time.Second)
+	return ps, dir, dir2
+}
 
 func benchmarkHelper(b *testing.B, f func(*testing.B, string)) {
 	for _, s := range []string{"actor", "director"} {
 		for i := 0; i < 3; i++ {
 			label := fmt.Sprintf("%s_%d", s, i)
 			filename := fmt.Sprintf("benchmark/%s.%d.gob", s, i)
-			b.Run(label, func(b *testing.B) {
+			if !b.Run(label, func(b *testing.B) {
 				f(b, filename)
-			})
+			}) {
+				b.FailNow()
+			}
 		}
 	}
 }
 
 func BenchmarkToJSON(b *testing.B) {
+	ps, dir, dir2 := prepareTest(b)
+	defer ps.Close()
+	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
+
 	benchmarkHelper(b, func(b *testing.B, file string) {
 		b.ReportAllocs()
 		var sg SubGraph
@@ -58,12 +97,14 @@ func BenchmarkToJSON(b *testing.B) {
 			b.Fatal(err)
 		}
 
+		x.Printf("~~~~~~~Start [%s] %d", file, b.N)
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			if _, err := sg.ToJSON(&l); err != nil {
 				b.Fatal(err)
 			}
 		}
+		x.Printf("~~~~~~~End [%s] %d", file, b.N)
 	})
 }
 

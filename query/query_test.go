@@ -126,7 +126,7 @@ func addEdgeToUID(t *testing.T, ps *store.Store, attr string, src uint64, dst ui
 		l.AddMutationWithIndex(context.Background(), edge, posting.Set))
 }
 
-func populateGraph(t *testing.T) (string, *store.Store) {
+func populateGraph(t *testing.T) (string, string, *store.Store) {
 	// logrus.SetLevel(logrus.DebugLevel)
 	dir, err := ioutil.TempDir("", "storetest_")
 	require.NoError(t, err)
@@ -181,7 +181,7 @@ func populateGraph(t *testing.T) (string, *store.Store) {
 	addEdgeToValue(t, ps, "dob", 31, "1901-01-15")
 
 	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
-	return dir, ps
+	return dir, dir2, ps
 }
 
 func processToJSONAlt(t *testing.T, query string) string {
@@ -202,14 +202,13 @@ func processToJSONAlt(t *testing.T, query string) string {
 	//js, err := sg.ToJSON(&l)
 	require.NoError(t, err)
 
-	x.Printf("~~~~~%s", string(js))
-
 	return string(js)
 }
 
 func TestGetUID(t *testing.T) {
-	dir, _ := populateGraph(t)
+	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
 
 	// Alright. Now we have everything set up. Let's create the query.
 	query := `
@@ -233,8 +232,9 @@ func TestGetUID(t *testing.T) {
 }
 
 func TestGetUIDCount(t *testing.T) {
-	dir, _ := populateGraph(t)
+	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
 
 	// Alright. Now we have everything set up. Let's create the query.
 	query := `
@@ -257,8 +257,9 @@ func TestGetUIDCount(t *testing.T) {
 }
 
 func TestDebug1(t *testing.T) {
-	dir, _ := populateGraph(t)
+	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
 
 	// Alright. Now we have everything set up. Let's create the query.
 	query := `
@@ -284,8 +285,9 @@ func TestDebug1(t *testing.T) {
 }
 
 func TestDebug2(t *testing.T) {
-	dir, _ := populateGraph(t)
+	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
 
 	query := `
 		{
@@ -310,8 +312,9 @@ func TestDebug2(t *testing.T) {
 }
 
 func TestCount(t *testing.T) {
-	dir, _ := populateGraph(t)
+	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
 
 	// Alright. Now we have everything set up. Let's create the query.
 	query := `
@@ -381,8 +384,9 @@ func TestCountError2(t *testing.T) {
 }
 
 func TestProcessGraph(t *testing.T) {
-	dir, _ := populateGraph(t)
+	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
 
 	// Alright. Now we have everything set up. Let's create the query.
 	query := `
@@ -432,8 +436,9 @@ func TestProcessGraph(t *testing.T) {
 }
 
 func TestToJSON(t *testing.T) {
-	dir, _ := populateGraph(t)
+	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
 
 	// Alright. Now we have everything set up. Let's create the query.
 	query := `
@@ -470,8 +475,9 @@ func TestToJSON(t *testing.T) {
 }
 
 func TestToJSONFilter(t *testing.T) {
-	dir, _ := populateGraph(t)
+	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
 	query := `
 		{
 			me(_uid_:0x01) {
@@ -505,8 +511,9 @@ func TestToJSONFilter(t *testing.T) {
 }
 
 func TestToJSONFilterAllOf(t *testing.T) {
-	dir, _ := populateGraph(t)
+	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
 	query := `
 		{
 			me(_uid_:0x01) {
@@ -540,8 +547,9 @@ func TestToJSONFilterAllOf(t *testing.T) {
 }
 
 func TestToJSONFilterUID(t *testing.T) {
-	dir, _ := populateGraph(t)
+	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
 	query := `
 		{
 			me(_uid_:0x01) {
@@ -575,8 +583,9 @@ func TestToJSONFilterUID(t *testing.T) {
 }
 
 func TestToJSONFilterOr(t *testing.T) {
-	dir, _ := populateGraph(t)
+	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
 	query := `
 		{
 			me(_uid_:0x01) {
@@ -610,8 +619,9 @@ func TestToJSONFilterOr(t *testing.T) {
 }
 
 func TestToJSONFilterOrFirst(t *testing.T) {
-	dir, _ := populateGraph(t)
+	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
 	query := `
 		{
 			me(_uid_:0x01) {
@@ -645,8 +655,9 @@ func TestToJSONFilterOrFirst(t *testing.T) {
 }
 
 func TestToJSONFilterOrOffset(t *testing.T) {
-	dir, _ := populateGraph(t)
+	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
 	query := `
 		{
 			me(_uid_:0x01) {
@@ -681,8 +692,9 @@ func TestToJSONFilterOrOffset(t *testing.T) {
 
 // No filter. Just to test first and offset.
 func TestToJSONFirstOffset(t *testing.T) {
-	dir, _ := populateGraph(t)
+	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
 	query := `
 		{
 			me(_uid_:0x01) {
@@ -716,8 +728,9 @@ func TestToJSONFirstOffset(t *testing.T) {
 }
 
 func TestToJSONFilterOrFirstOffset(t *testing.T) {
-	dir, _ := populateGraph(t)
+	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
 	query := `
 		{
 			me(_uid_:0x01) {
@@ -751,8 +764,9 @@ func TestToJSONFilterOrFirstOffset(t *testing.T) {
 }
 
 func TestToJSONFilterOrFirstNegative(t *testing.T) {
-	dir, _ := populateGraph(t)
+	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
 	// When negative first/count is specified, we ignore offset and returns the last
 	// few number of items.
 	query := `
@@ -788,8 +802,9 @@ func TestToJSONFilterOrFirstNegative(t *testing.T) {
 }
 
 func TestToJSONFilterAnd(t *testing.T) {
-	dir, _ := populateGraph(t)
+	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
 	query := `
 		{
 			me(_uid_:0x01) {
@@ -832,8 +847,9 @@ func getProperty(properties []*graph.Property, prop string) *graph.Value {
 }
 
 func TestToPB(t *testing.T) {
-	dir, _ := populateGraph(t)
+	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
 
 	query := `
 		{
@@ -893,8 +909,9 @@ func TestToPB(t *testing.T) {
 }
 
 func TestSchema(t *testing.T) {
-	dir, _ := populateGraph(t)
+	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
 
 	query := `
 		{
@@ -954,8 +971,9 @@ func TestSchema(t *testing.T) {
 }
 
 func TestToPBFilter(t *testing.T) {
-	dir, _ := populateGraph(t)
+	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
 
 	// Alright. Now we have everything set up. Let's create the query.
 	query := `
@@ -1013,8 +1031,9 @@ children: <
 }
 
 func TestToPBFilterOr(t *testing.T) {
-	dir, _ := populateGraph(t)
+	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
 
 	// Alright. Now we have everything set up. Let's create the query.
 	query := `
@@ -1081,8 +1100,9 @@ children: <
 }
 
 func TestToPBFilterAnd(t *testing.T) {
-	dir, _ := populateGraph(t)
+	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
 
 	// Alright. Now we have everything set up. Let's create the query.
 	query := `
@@ -1132,8 +1152,9 @@ properties: <
 
 // Test sorting / ordering by dob.
 func TestToJSONOrder(t *testing.T) {
-	dir, ps := populateGraph(t)
+	dir, dir2, ps := populateGraph(t)
 	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
 	defer ps.Close()
 
 	query := `
@@ -1170,8 +1191,9 @@ func TestToJSONOrder(t *testing.T) {
 
 // Test sorting / ordering by dob.
 func TestToJSONOrderOffset(t *testing.T) {
-	dir, ps := populateGraph(t)
+	dir, dir2, ps := populateGraph(t)
 	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
 	defer ps.Close()
 
 	query := `
@@ -1208,8 +1230,9 @@ func TestToJSONOrderOffset(t *testing.T) {
 
 // Test sorting / ordering by dob.
 func TestToJSONOrderOffsetCount(t *testing.T) {
-	dir, ps := populateGraph(t)
+	dir, dir2, ps := populateGraph(t)
 	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
 	defer ps.Close()
 
 	query := `
@@ -1246,8 +1269,9 @@ func TestToJSONOrderOffsetCount(t *testing.T) {
 
 // Test sorting / ordering by dob.
 func TestToPBOrder(t *testing.T) {
-	dir, ps := populateGraph(t)
+	dir, dir2, ps := populateGraph(t)
 	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
 	defer ps.Close()
 
 	query := `
@@ -1333,8 +1357,9 @@ children: <
 
 // Test sorting / ordering by dob.
 func TestToPBOrderCount(t *testing.T) {
-	dir, ps := populateGraph(t)
+	dir, dir2, ps := populateGraph(t)
 	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
 	defer ps.Close()
 
 	query := `
@@ -1402,8 +1427,9 @@ children: <
 
 // Test sorting / ordering by dob.
 func TestToPBOrderOffsetCount(t *testing.T) {
-	dir, ps := populateGraph(t)
+	dir, dir2, ps := populateGraph(t)
 	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
 	defer ps.Close()
 
 	query := `
@@ -1472,8 +1498,9 @@ children: <
 func TestSchema1(t *testing.T) {
 	require.NoError(t, schema.Parse("test_schema"))
 
-	dir, _ := populateGraph(t)
+	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
 
 	// Alright. Now we have everything set up. Let's create the query.
 	query := `

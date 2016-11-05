@@ -45,7 +45,7 @@ func Init() {
 		log.Fatal("Unable to parse flags")
 	}
 	logger = log.New(os.Stderr, "", log.Lshortfile|log.Flags())
-	Assert(logger != nil)
+	AssertTrue(logger != nil)
 	printVersionOnly()
 	// Next, run all the init functions that have been added.
 	for _, f := range initFunc {
@@ -73,7 +73,7 @@ To say hi to the community       , visit https://dgraph.slack.com.
 // Let's add Printf to "x" and include "x" almost everywhere. Caution: Do remember
 // to call x.Init. For tests, you need a TestMain that calls x.Init.
 func Printf(format string, args ...interface{}) {
-	Assertf(logger != nil, "Logger is not defined. Have you called x.Init?")
+	AssertTruef(logger != nil, "Logger is not defined. Have you called x.Init?")
 	// Call depth is one higher than default.
 	logger.Output(2, fmt.Sprintf(format, args...))
 }

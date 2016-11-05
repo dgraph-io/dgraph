@@ -1,13 +1,20 @@
 package worker
 
 import (
+	"bytes"
 	"context"
+	"crypto/rand"
+	"fmt"
 	"log"
 	"sync"
 
 	"github.com/dgraph-io/dgraph/x"
 
 	"google.golang.org/grpc"
+)
+
+var (
+	errNoConnection = fmt.Errorf("No connection exists")
 )
 
 // PayloadCodec is a custom codec that is that is used for internal worker
@@ -61,6 +68,15 @@ func pools() *poolsi {
 	return pi
 }
 
+func (p *poolsi) any() *pool {
+	p.RLock()
+	defer p.RUnlock()
+	for _, pool := range p.all {
+		return pool
+	}
+	return nil
+}
+
 func (p *poolsi) get(addr string) *pool {
 	p.RLock()
 	defer p.RUnlock()
@@ -69,6 +85,9 @@ func (p *poolsi) get(addr string) *pool {
 }
 
 func (p *poolsi) connect(addr string) {
+	if addr == *myAddr {
+		return
+	}
 	p.RLock()
 	_, has := p.all[addr]
 	p.RUnlock()
@@ -78,19 +97,18 @@ func (p *poolsi) connect(addr string) {
 
 	pool := newPool(addr, 5)
 	query := new(Payload)
-	query.Data = []byte("hello")
+	query.Data = make([]byte, 10)
+	x.Check2(rand.Read(query.Data))
 
 	conn, err := pool.Get()
-	if err != nil {
-		log.Fatalf("Unable to connect: %v", err)
-	}
+	x.Checkf(err, "Unable to connect")
 
 	c := NewWorkerClient(conn)
-	_, err = c.Hello(context.Background(), query)
-	if err != nil {
-		log.Fatalf("Unable to connect: %v", err)
-	}
+	resp, err := c.Echo(context.Background(), query)
+	x.Checkf(err, "Unable to Echo")
+	x.AssertTrue(bytes.Equal(resp.Data, query.Data))
 	x.Check(pool.Put(conn))
+	fmt.Printf("Connection with %q successful.\n", addr)
 
 	p.Lock()
 	defer p.Unlock()
@@ -124,6 +142,10 @@ func (p *pool) dialNew() (*grpc.ClientConn, error) {
 // Get returns a connection from the pool of connections or a new connection if
 // the pool is empty.
 func (p *pool) Get() (*grpc.ClientConn, error) {
+	if p == nil {
+		return nil, errNoConnection
+	}
+
 	select {
 	case conn := <-p.conns:
 		return conn, nil

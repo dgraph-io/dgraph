@@ -18,6 +18,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/gob"
 	"encoding/json"
 	"flag"
@@ -135,11 +136,23 @@ func convertToEdges(ctx context.Context, nquads []rdf.NQuad) (mutationResult, er
 	for _, nq := range nquads {
 		if strings.HasPrefix(nq.Subject, "_new_:") {
 			newUids[nq.Subject] = 0
+		} else if !strings.HasPrefix(nq.Subject, "_uid_:") {
+			uid, err := rdf.GetUid(nq.Subject)
+			x.Check(err)
+			newUids[nq.Subject] = uid
 		}
-		if len(nq.ObjectId) > 0 && strings.HasPrefix(nq.ObjectId, "_new_:") {
-			newUids[nq.ObjectId] = 0
+
+		if len(nq.ObjectId) > 0 {
+			if strings.HasPrefix(nq.ObjectId, "_new_:") {
+				newUids[nq.ObjectId] = 0
+			} else if !strings.HasPrefix(nq.ObjectId, "_uid_:") {
+				uid, err := rdf.GetUid(nq.ObjectId)
+				x.Check(err)
+				newUids[nq.ObjectId] = uid
+			}
 		}
 	}
+
 	if len(newUids) > 0 {
 		if err := worker.AssignUidsOverNetwork(ctx, newUids); err != nil {
 			x.TraceError(ctx, x.Wrapf(err, "Error while GetOrAssignUidsOverNetwork"))
@@ -160,8 +173,9 @@ func convertToEdges(ctx context.Context, nquads []rdf.NQuad) (mutationResult, er
 	resultUids := make(map[string]uint64)
 	// Strip out _new_: prefix from the keys.
 	for k, v := range newUids {
-		x.Assertf(strings.HasPrefix(k, "_new_:"), "Expected prefix _new_: in key: %v", k)
-		resultUids[k[6:]] = v
+		if strings.HasPrefix(k, "_new_:") {
+			resultUids[k[6:]] = v
+		}
 	}
 
 	mr = mutationResult{
@@ -446,8 +460,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		x.Checkf(f.Close(), filename)
 	}
 
-	//js, err := sg.ToJSON(&l)
-	js, err := sg.ToJSONAlternate(&l)
+	js, err := sg.ToJSON(&l)
 	if err != nil {
 		x.TraceError(ctx, x.Wrapf(err, "Error while converting to Json"))
 		x.SetStatus(w, x.Error, err.Error())

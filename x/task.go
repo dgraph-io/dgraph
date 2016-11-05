@@ -57,7 +57,7 @@ func (l *ValueList) MarshalBinary() ([]byte, error) {
 	voffsets := make([]flatbuffers.UOffsetT, n)
 	var v task.Value
 	for i := 0; i < n; i++ {
-		Assert(l.Values(&v, i))
+		AssertTrue(l.Values(&v, i))
 		valoffset := b.CreateByteVector(v.ValBytes())
 		task.ValueStart(b)
 		task.ValueAddVal(b, valoffset)
