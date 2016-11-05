@@ -6,6 +6,7 @@ import (
 	"compress/gzip"
 	"fmt"
 	"math"
+	"math/rand"
 	"os"
 	"path"
 	"strconv"
@@ -173,25 +174,22 @@ func backup(gid uint32, bdir string) error {
 	return <-errChan
 }
 
-func handleRPCForGroup(ctx context.Context, reqId uint64, gid uint32) *BackupPayload {
-	nid := reqId & uint64(0xffffffff00000000)
-	nid += uint64(gid)
-
+func handleBackupForGroup(ctx context.Context, reqId uint64, gid uint32) *BackupPayload {
 	n := groups().Node(gid)
 	if n.AmLeader() {
 		x.Trace(ctx, "Leader of group: %d. Running backup.", gid)
 		if err := backup(gid, *backupPath); err != nil {
 			x.TraceError(ctx, err)
 			return &BackupPayload{
-				ReqId:  nid,
+				ReqId:  reqId,
 				Status: BackupPayload_FAILED,
 			}
 		}
 		x.Trace(ctx, "Backup done for group: %d.", gid)
 		return &BackupPayload{
-			ReqId:  nid,
-			Status: BackupPayload_SUCCESS,
-			Groups: []uint32{gid},
+			ReqId:   reqId,
+			Status:  BackupPayload_SUCCESS,
+			GroupId: gid,
 		}
 	}
 
@@ -213,22 +211,24 @@ func handleRPCForGroup(ctx context.Context, reqId uint64, gid uint32) *BackupPay
 	if conn == nil {
 		x.Trace(ctx, fmt.Sprintf("Unable to find a server to backup group: %d", gid))
 		return &BackupPayload{
-			ReqId:  nid,
-			Status: BackupPayload_FAILED,
+			ReqId:   reqId,
+			Status:  BackupPayload_FAILED,
+			GroupId: gid,
 		}
 	}
 
 	c := NewWorkerClient(conn)
 	nr := &BackupPayload{
-		ReqId:  nid,
-		Groups: []uint32{gid},
+		ReqId:   reqId,
+		GroupId: gid,
 	}
 	nrep, err := c.Backup(ctx, nr)
 	if err != nil {
 		x.TraceError(ctx, err)
 		return &BackupPayload{
-			ReqId:  nid,
-			Status: BackupPayload_FAILED,
+			ReqId:   reqId,
+			Status:  BackupPayload_FAILED,
+			GroupId: gid,
 		}
 	}
 	return nrep
@@ -250,25 +250,68 @@ func (w *grpcWorker) Backup(ctx context.Context, req *BackupPayload) (*BackupPay
 		return reply, nil
 	}
 
-	chb := make(chan *BackupPayload, len(req.Groups))
-	for _, gid := range req.Groups {
+	chb := make(chan *BackupPayload, 1)
+	go func() {
+		chb <- handleBackupForGroup(ctx, req.ReqId, req.GroupId)
+	}()
+
+	select {
+	case rep := <-chb:
+		return rep, nil
+	case <-ctx.Done():
+		return reply, ctx.Err()
+	}
+}
+
+func BackupOverNetwork(ctx context.Context) {
+	// Let's first collect all groups.
+	todo := make(map[uint32]bool)
+	groups().RLock()
+	for gid := range groups().all {
+		todo[gid] = true
+	}
+	groups().RUnlock()
+
+	ch := make(*BackupPayload, len(todo))
+	reqId := uint64(rand.Int63())
+	for _, gid := range todo {
 		go func() {
-			chb <- handleRPCForGroup(ctx, req.ReqId, gid)
+			ch <- handleBackupForGroup(ctx, reqId, gid)
 		}()
 	}
-	for i := 0; i < len(req.Groups); i++ {
-		select {
-		case rep := <-chb:
-			if rep.Status == BackupPayload_SUCCESS {
-				reply.Groups = append(reply.Groups, rep.Groups...)
-			}
-		case <-ctx.Done():
-			return reply, ctx.Err()
+
+	// Now retry the failed ones.
+	var failed []uint32
+	for i := 0; i < len(gids); i++ {
+		bp := <-ch
+		if bp.Status != BackupPayload_SUCCESS {
+			x.Trace(ctx, "Backup status: %v for group id: %d", gid, bp.Status)
+			failed = append(failed, gid)
+		} else {
+			x.Trace(ctx, "Backup successful for groups: %v", bp.Groups)
 		}
 	}
 
-	if len(reply.Groups) > 0 {
-		reply.Status = BackupPayload_SUCCESS
+	// Send failed to group zero.
+	if len(failed) > 0 {
+		zreq := &BackupPayload{
+			ReqId:  reqId,
+			Groups: failed,
+		}
+		_, addr := groups().Leader(0)
+		pl := pools().get(addr)
+		conn, err := pl.Get()
+		if err != nil {
+			x.TraceError(ctx, err)
+			return
+		}
+		c := NewWorkerClient(conn)
+		resp, err := c.Backup(ctx, zreq)
+		if err != nil {
+			x.TraceError(ctx, err)
+			return
+		}
+		if resp.Status != BackupPayload_SUCCESS {
+		}
 	}
-	return reply, nil
 }

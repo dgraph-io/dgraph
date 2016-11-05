@@ -12,7 +12,7 @@ message Payload {
 // When used in response, groups represent the list of groups that were backed up.
 message BackupPayload {
 	uint64 req_id = 1;  // Use req_id to avoid handle duplicate requests.
-	repeated uint32 groups = 2;  // List of groups.
+	uint32 group_id = 2;  // Group id to back up.
 	enum Status {
 		NONE      = 0;
 		SUCCESS   = 1;
