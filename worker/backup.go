@@ -12,6 +12,10 @@ import (
 	"sync"
 	"time"
 
+	"google.golang.org/grpc"
+
+	"golang.org/x/net/context"
+
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/posting/types"
 	stype "github.com/dgraph-io/dgraph/types"
@@ -45,8 +49,7 @@ func backup(gid uint32, bpath string) error {
 	}
 	go writeToFile(strconv.Itoa(int(gid)), bpath, ch, errChan)
 
-	it.SeekToFirst()
-	for it.Valid() {
+	for it.SeekToFirst(); it.Valid(); {
 		if bytes.ContainsRune(it.Key().Data(), ':') {
 			// Seek to the end of index keys.
 			pre := bytes.Split(it.Key().Data(), []byte("|"))[0]
@@ -154,4 +157,88 @@ func writeToFile(str, bpath string, ch chan []byte, errChan chan error) {
 	gw.Close()
 	w.Flush()
 	errChan <- nil
+}
+
+func handleRPCForGroup(ctx context.Context, reqId uint64, gid uint32) *BackupPayload {
+	nid := reqId & uint64(0xffffffff00000000)
+	nid += uint64(gid)
+	reply := &BackupPayload{ReqId: nid}
+
+	n := groups().Node(gid)
+	if n.AmLeader() {
+		x.Trace(ctx, "Leader of group: %d. Running backup.", gid)
+		// TODO: Do this.
+		// che <- backup(gid)
+		x.Trace(ctx, "Backup done for group: %d.", gid)
+		return reply
+	}
+
+	// I'm not the leader. Relay to someone who I think is.
+	_, addr := groups().Leader(gid)
+	var conn *grpc.ClientConn
+	for i := 0; i < 3; i++ {
+		pl := pools().get(addr)
+		var err error
+		conn, err = pl.Get()
+		if err == nil {
+			defer pl.Put(conn)
+			break
+		}
+		x.TraceError(ctx, err)
+		addr = groups().AnyServer(gid)
+	}
+	if conn == nil {
+		x.Trace(ctx, fmt.Sprintf("Unable to find a server to backup group: %d", gid))
+		reply.Status = BackupPayload_FAILED
+		return reply
+	}
+
+	c := NewWorkerClient(conn)
+	nr.Groups = append(nr.Groups, gid)
+	nrep, err := c.Backup(ctx, nr)
+	if err != nil {
+		x.TraceError(ctx, err)
+		reply.Status = BackupPayload_FAILED
+		return reply
+	}
+	return nrep
+}
+
+// Backup request is used to trigger backups for the request list of groups.
+// If a server receives request to backup a group that it doesn't handle, it would
+// automatically relay that request to the server that it thinks should handle the request.
+// The response would contain the list of groups that were backed up.
+func (w *grpcWorker) Backup(ctx context.Context, req *BackupPayload) (*BackupPayload, error) {
+	reply := &BackupPayload{ReqId: req.ReqId}
+	reply.Status = BackupPayload_FAILED // Set by default.
+
+	if ctx.Err() != nil {
+		return reply, ctx.Err()
+	}
+	if !w.addIfNotPresent(req.ReqId) {
+		reply.Status = BackupPayload_DUPLICATE
+		return reply, nil
+	}
+
+	chb := make(chan *BackupPayload, len(req.Groups))
+	for _, gid := range req.Groups {
+		go func() {
+			chb <- backupGroup(gid)
+		}()
+	}
+	for i := 0; i < len(req.Groups); i++ {
+		select {
+		case rep := <-chb:
+			if rep.Status == BackupPayload_SUCCESS {
+				reply.Groups = append(reply.Groups, rep.Groups...)
+			}
+		case ctx.Done():
+			return reply, ctx.Err()
+		}
+	}
+
+	if len(reply.Groups) > 0 {
+		reply.Status = BackupPayload_SUCCESS
+	}
+	return reply, nil
 }
