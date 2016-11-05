@@ -28,70 +28,10 @@ type kv struct {
 	key, value []byte
 }
 
-// Backup creates a backup of data by exporting it as an RDF gzip.
-func backup(gid uint32, bpath string) error {
-	ch := make(chan []byte, 10000)
-	chkv := make(chan kv, 1000)
-	errChan := make(chan error, 1)
-	it := pstore.NewIterator()
-	defer it.Close()
-	var wg sync.WaitGroup
-	var lastPred string
-
-	wg.Add(numBackupRoutines)
-	for i := 0; i < numBackupRoutines; i++ {
-		go func() {
-			for item := range chkv {
-				toRDF(item, ch)
-			}
-			wg.Done()
-		}()
-	}
-	go writeToFile(strconv.Itoa(int(gid)), bpath, ch, errChan)
-
-	for it.SeekToFirst(); it.Valid(); {
-		if bytes.ContainsRune(it.Key().Data(), ':') {
-			// Seek to the end of index keys.
-			pre := bytes.Split(it.Key().Data(), []byte("|"))[0]
-			pre = append(pre, '~')
-			it.Seek(pre)
-			continue
-		}
-		if bytes.HasPrefix(it.Key().Data(), []byte("_uid_")) {
-			// Skip the UID mappings.
-			it.Seek([]byte("_uid_~"))
-			continue
-		}
-		pred, uid := posting.SplitKey(it.Key().Data())
-		if pred != lastPred && BelongsTo(pred) != gid {
-			it.Seek([]byte(fmt.Sprintf("%s~", pred)))
-			continue
-		}
-
-		k := []byte(fmt.Sprintf("<_uid_:%x> <%s> ", uid, pred))
-		v := make([]byte, len(it.Value().Data()))
-		copy(v, it.Value().Data())
-		chkv <- kv{
-			key:   k,
-			value: v,
-		}
-		lastPred = pred
-		it.Next()
-	}
-
-	close(chkv)
-	// Wait for numBackupRoutines to finish.
-	wg.Wait()
-	close(ch)
-
-	err := <-errChan
-	return err
-}
-
-func toRDF(item kv, ch chan []byte) {
+func toRDF(buf *bytes.Buffer, item kv, ch chan []byte) {
+	buf.Reset()
 	p := new(types.Posting)
 	pre := item.key
-	buf := bytes.NewBuffer(make([]byte, 0, 100))
 
 	pl := types.GetRootAsPostingList(item.value, 0)
 	for pidx := 0; pidx < pl.PostingsLength(); pidx++ {
@@ -130,10 +70,8 @@ func toRDF(item kv, ch chan []byte) {
 	ch <- buf.Bytes()
 }
 
-func writeToFile(str, bpath string, ch chan []byte, errChan chan error) {
-	file := path.Join(bpath, fmt.Sprintf("dgraph-%s-%s.gz", str,
-		time.Now().Format("2006-01-02-15-04")))
-	err := os.MkdirAll(bpath, 0700)
+func writeToFile(fpath string, ch chan []byte, errChan chan error) {
+	err := os.MkdirAll(fpath, 0700)
 	if err != nil {
 		errChan <- err
 	}
@@ -157,6 +95,75 @@ func writeToFile(str, bpath string, ch chan []byte, errChan chan error) {
 	gw.Close()
 	w.Flush()
 	errChan <- nil
+}
+
+// Backup creates a backup of data by exporting it as an RDF gzip.
+func backup(gid uint32, bdir string) error {
+	// Use a goroutine to write to file.
+	fpath := path.Join(bdir, fmt.Sprintf("dgraph-%d-%s.gz", gid,
+		time.Now().Format("2006-01-02-15-04")))
+	chb := make(chan []byte, 1000)
+	errChan := make(chan error, 1)
+	go writeToFile(fpath, chb, errChan)
+
+	// Use a bunch of goroutines to convert to RDF format.
+	chkv := make(chan kv, 1000)
+	var wg sync.WaitGroup
+	wg.Add(numBackupRoutines)
+	for i := 0; i < numBackupRoutines; i++ {
+		go func() {
+			buf := new(bytes.Buffer)
+			for item := range chkv {
+				toRDF(buf, item, chb)
+			}
+			wg.Done()
+		}()
+	}
+
+	uidPrefix = []byte("_uid_")
+	// Iterate over rocksdb.
+	it := pstore.NewIterator()
+	defer it.Close()
+	var lastPred string
+	for it.SeekToFirst(); it.Valid(); {
+		key := it.Key().Data()
+		cidx := bytes.IndexRune(key, ':')
+		if cidx > -1 {
+			// Seek to the end of index keys.
+			pre := key[:cidx]
+			pre = append(pre, '~')
+			it.Seek(pre)
+			continue
+		}
+		if bytes.HasPrefix(key, uidPrefix) {
+			// Skip the UID mappings.
+			it.Seek([]byte("_uid_~"))
+			continue
+		}
+		pred, uid := posting.SplitKey(key)
+		if pred != lastPred && BelongsTo(pred) != gid {
+			it.Seek([]byte(fmt.Sprintf("%s~", pred)))
+			continue
+		}
+
+		k := []byte(fmt.Sprintf("<_uid_:%x> <%s> ", uid, pred))
+		v := make([]byte, len(it.Value().Data()))
+		copy(v, it.Value().Data())
+		chkv <- kv{
+			key:   k,
+			value: v,
+		}
+		lastPred = pred
+		it.Next()
+	}
+
+	close(chkv)
+	// Wait for numBackupRoutines to finish.
+	wg.Wait()
+	close(ch)
+
+	err := <-errChan
+	return err
 }
 
 func handleRPCForGroup(ctx context.Context, reqId uint64, gid uint32) *BackupPayload {
