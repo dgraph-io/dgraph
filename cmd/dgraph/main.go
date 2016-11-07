@@ -392,9 +392,9 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO(Ashwin): Move to /admin endpoint.
+	// TODO(Ashwin): Move to /admin endpoint, and don't have a deadline for ctx.
 	if *backup && q == "BACKUP" {
-		worker.StartBackup()
+		worker.BackupOverNetwork(ctx)
 		x.SetStatus(w, x.ErrorOk, "Backup completed.")
 		return
 	}

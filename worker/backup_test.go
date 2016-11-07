@@ -71,14 +71,14 @@ func TestBackup(t *testing.T) {
 	defer os.RemoveAll(dir)
 	defer ps.Close()
 	// Remove already existing backup folders is any.
-	bdir := "backup_test"
-	os.RemoveAll(bdir)
+	bdir, err := ioutil.TempDir("", "backup")
+	require.NoError(t, err)
 	defer os.RemoveAll(bdir)
 
 	posting.MergeLists(10)
 
 	// We have 4 friend type edges. FP("friends")%10 = 2.
-	err := backup(BelongsTo("friend"), bdir)
+	err = backup(BelongsTo("friend"), bdir)
 	require.NoError(t, err)
 
 	// We have 2 name type edges(with index). FP("name")%10 =7.

@@ -23,10 +23,9 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"strconv"
+	"sync"
 
 	"github.com/dgraph-io/dgraph/store"
-	"github.com/dgraph-io/dgraph/x"
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
@@ -45,120 +44,29 @@ func Init(ps *store.Store) {
 }
 
 // grpcWorker struct implements the gRPC server interface.
-type grpcWorker struct{}
+type grpcWorker struct {
+	sync.Mutex
+	reqids map[uint64]bool
+}
+
+// addIfNotPresent returns false if it finds the reqid already present.
+// Otherwise, adds the reqid in the list, and returns true.
+func (w *grpcWorker) addIfNotPresent(reqid uint64) bool {
+	w.Lock()
+	defer w.Unlock()
+	if w.reqids == nil {
+		w.reqids = make(map[uint64]bool)
+	} else if _, has := w.reqids[reqid]; has {
+		return false
+	}
+	w.reqids[reqid] = true
+	return true
+}
 
 // Hello rpc call is used to check connection with other workers after worker
 // tcp server for this instance starts.
 func (w *grpcWorker) Echo(ctx context.Context, in *Payload) (*Payload, error) {
 	return &Payload{Data: in.Data}, nil
-}
-
-// InitiateBackup inititates the backup at the machine.
-func (w *grpcWorker) InitiateBackup(ctx context.Context, in *Payload) (*Payload, error) {
-	// Iterate through the groups serverd by this server and backup groups
-	// for which it is the leader.
-	gid, err := strconv.Atoi(string(in.Data))
-	x.Check(err)
-	return &Payload{}, initiateBackup(uint32(gid))
-}
-
-// StartBackupProcess starts the backup process if it is master of group 0.
-func (w *grpcWorker) StartBackupProcess(ctx context.Context, in *Payload) (*Payload, error) {
-	cur, ok := groups().local[0]
-	if ok && cur.AmLeader() {
-		return &Payload{}, BackupAll()
-	}
-	return &Payload{}, fmt.Errorf("Backup request sent to wrong server")
-}
-
-func initiateBackup(gid uint32) error {
-	if !groups().Node(gid).AmLeader() {
-		return fmt.Errorf("Node not leader of group %d", gid)
-	}
-	return backup(gid, *backupPath)
-}
-
-// StartBackup starts the backup process if it is master of group 0
-// else calls the master of group 0.
-func StartBackup() error {
-	cur, ok := groups().local[0]
-	if ok && cur.AmLeader() {
-		return BackupAll()
-	}
-
-	for _, node := range groups().all[0].list {
-		if node.Leader {
-			addr := node.Addr
-			pl := pools().get(addr)
-			conn, err := pl.Get()
-			if err != nil {
-				return err
-			}
-			ctx := context.Background()
-			query := &Payload{}
-			c := NewWorkerClient(conn)
-			_, err = c.StartBackupProcess(ctx, query)
-			return err
-		}
-	}
-	return nil
-}
-
-// BackupAll Creates backup of all nodes in cluster by initiating backups in all the master
-// nodes.
-func BackupAll() error {
-	errChan := make(chan error, 1000)
-	count := 0
-	// Send backup calls to other workers.
-	doneMap := make(map[uint32]bool)
-
-	groups().RLock()
-	for gid, it := range groups().local {
-		if it.AmLeader() {
-			count++
-			doneMap[gid] = true
-			go func() {
-				err := initiateBackup(gid)
-				errChan <- err
-			}()
-		}
-	}
-
-	for gid, servers := range groups().all {
-		if _, ok := doneMap[gid]; ok {
-			continue
-		}
-		for _, it := range servers.list {
-			if it.Leader {
-				count++
-				pl := pools().get(it.Addr)
-				conn, err := pl.Get()
-				if err != nil {
-					return err
-				}
-				go func() {
-					ctx := context.Background()
-					query := &Payload{[]byte(strconv.Itoa(int(gid)))}
-					c := NewWorkerClient(conn)
-					_, err = c.InitiateBackup(ctx, query)
-					errChan <- err
-					pl.Put(conn)
-				}()
-				break
-			}
-		}
-	}
-	groups().RUnlock()
-
-	for i := 0; i < count; i++ {
-		select {
-		case err := <-errChan:
-			if err != nil {
-				return err
-			}
-		}
-	}
-	return nil
 }
 
 // runServer initializes a tcp server on port which listens to requests from

@@ -155,7 +155,7 @@ func (n *node) ProposeAndWait(ctx context.Context, msg uint16, data []byte) erro
 	}
 
 	// Wait for the proposal to be committed.
-	x.Trace(ctx, "Waiting for the proposal to be applied.")
+	x.Trace(ctx, "Waiting for the proposal: %d to be applied.", msg)
 	select {
 	case err = <-che:
 		x.TraceError(ctx, err)
@@ -551,11 +551,16 @@ func (n *node) InitAndStartNode(wal *raftwal.Wal) {
 		}
 	}
 	go n.Run()
-	go n.snapshotPeriodically()
+	// TODO: Find a better way to snapshot, so we don't lose the membership
+	// state information, which isn't persisted.
+	// go n.snapshotPeriodically()
 	go n.batchAndSendMessages()
 }
 
 func (n *node) AmLeader() bool {
+	if n == nil {
+		return false
+	}
 	return n.raft.Status().Lead == n.raft.Status().ID
 }
 
