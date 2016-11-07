@@ -198,7 +198,7 @@ func markTaken(ctx context.Context, uid uint64) {
 	mu := x.DirectedEdge{
 		Entity:    uid,
 		Attribute: "_uid_",
-		Value:     []byte("_taken_"), // not txid
+		Value:     []byte("_"), // not txid
 		Source:    "_loader_",
 		Timestamp: time.Now(),
 	}
@@ -220,7 +220,7 @@ func (s *state) handleNQuads(wg *sync.WaitGroup) {
 			return
 		}
 		// Only handle this edge if the attribute satisfies the modulo rule
-		if !s.groupsMap[group.BelongsTo(nq.Predicate)] { // farm.Fingerprint64([]byte(nq.Predicate))%s.numInstances != s.instanceIdx {
+		if !s.groupsMap[group.BelongsTo(nq.Predicate)] {
 			atomic.AddUint64(&s.ctr.ignored, 1)
 			continue
 		}

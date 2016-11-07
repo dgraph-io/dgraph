@@ -82,7 +82,7 @@ func assignUids(ctx context.Context, num *task.Num) (uidList []byte, rerr error)
 		mu := x.DirectedEdge{
 			Entity:    uid,
 			Attribute: "_uid_",
-			Value:     []byte("_taken_"), // not txid
+			Value:     []byte("_"), // not txid
 			Source:    "_XIDorUSER_",
 			Timestamp: time.Now(),
 		}
