@@ -13,9 +13,8 @@ import (
 	"sync"
 	"time"
 
-	"google.golang.org/grpc"
-
 	"golang.org/x/net/context"
+	"google.golang.org/grpc"
 
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/posting/types"
@@ -138,7 +137,6 @@ func backup(gid uint32, bdir string) error {
 	var lastPred string
 	for it.SeekToFirst(); it.Valid(); {
 		key := it.Key().Data()
-		fmt.Printf("[g:%d] key=[%q]\n", gid, key)
 		cidx := bytes.IndexRune(key, ':')
 		if cidx > -1 {
 			// Seek to the end of index keys.
@@ -160,7 +158,6 @@ func backup(gid uint32, bdir string) error {
 
 		k := []byte(fmt.Sprintf("<_uid_:%x> <%s> ", uid, pred))
 		v := make([]byte, len(it.Value().Data()))
-		fmt.Printf("[%d] key=[%q]\n", gid, k)
 		copy(v, it.Value().Data())
 		chkv <- kv{
 			key:   k,
@@ -198,9 +195,18 @@ func handleBackupForGroup(ctx context.Context, reqId uint64, gid uint32) *Backup
 	}
 
 	// I'm not the leader. Relay to someone who I think is.
-	_, addr := groups().Leader(gid)
+	var addrs []string
+	{
+		// Try in order: leader of given group, any server from given group, leader of group zero.
+		_, addr := groups().Leader(gid)
+		addrs = append(addrs, addr)
+		addrs = append(addrs, groups().AnyServer(gid))
+		_, addr = groups().Leader(0)
+		addrs = append(addrs, addr)
+	}
+
 	var conn *grpc.ClientConn
-	for i := 0; i < 3; i++ {
+	for _, addr := range addrs {
 		pl := pools().get(addr)
 		var err error
 		conn, err = pl.Get()
@@ -210,12 +216,10 @@ func handleBackupForGroup(ctx context.Context, reqId uint64, gid uint32) *Backup
 			break
 		}
 		x.TraceError(ctx, err)
-		if i == 1 {
-			_, addr = groups().Leader(0)
-		} else { // triggered on i = 0
-			addr = groups().AnyServer(gid)
-		}
 	}
+
+	// Unable to find any connection to any of these servers. This should be exceedingly rare.
+	// But probably not worthy of crashing the server. We can just skip the backup.
 	if conn == nil {
 		x.Trace(ctx, fmt.Sprintf("Unable to find a server to backup group: %d", gid))
 		return &BackupPayload{
@@ -245,7 +249,6 @@ func handleBackupForGroup(ctx context.Context, reqId uint64, gid uint32) *Backup
 // Backup request is used to trigger backups for the request list of groups.
 // If a server receives request to backup a group that it doesn't handle, it would
 // automatically relay that request to the server that it thinks should handle the request.
-// The response would contain the list of groups that were backed up.
 func (w *grpcWorker) Backup(ctx context.Context, req *BackupPayload) (*BackupPayload, error) {
 	reply := &BackupPayload{ReqId: req.ReqId}
 	reply.Status = BackupPayload_FAILED // Set by default.
@@ -278,7 +281,6 @@ func BackupOverNetwork(ctx context.Context) {
 	ch := make(chan *BackupPayload, len(gids))
 	for _, gid := range gids {
 		go func(group uint32) {
-			fmt.Printf("handleBackupForGroup. Gid: %v\n", group)
 			reqId := uint64(rand.Int63())
 			ch <- handleBackupForGroup(ctx, reqId, group)
 		}(gid)

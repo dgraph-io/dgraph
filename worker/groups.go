@@ -77,9 +77,9 @@ func StartRaftNodes(walDir string) {
 		// and try to join their clusters. Otherwise, they'll start off as a single-node
 		// cluster.
 		// IMPORTANT: Don't run any nodes until we have done at least one full sync for membership
-		// information with the cluster. If you start this node with peer too quickly, just
-		// after starting the leader of group zero, that node might not have updated
-		// itself in the memberships; and hence this node would think that noone is handling
+		// information with the cluster. If you start this node too quickly, just
+		// after starting the leader of group zero, that leader might not have updated
+		// itself in the memberships; and hence this node would think that no one is handling
 		// group zero. Therefore, we MUST wait to get pass a last update raft index of zero.
 		for gr.LastUpdate() == 0 {
 			fmt.Println("Last update raft index for membership information is zero. Syncing...")
@@ -268,6 +268,7 @@ func (g *groupi) syncMemberships() {
 	if g.ServesGroup(0) {
 		// This server serves group zero.
 		g.RLock()
+		defer g.RUnlock()
 		for _, n := range g.local {
 			rc := task.GetRootAsRaftContext(n.raftContext, 0)
 			if g.duplicate(rc.Group(), rc.Id(), string(rc.Addr()), n.AmLeader()) {
@@ -285,7 +286,6 @@ func (g *groupi) syncMemberships() {
 
 			}(rc, n.AmLeader())
 		}
-		g.RUnlock()
 		return
 	}
 
