@@ -13,13 +13,13 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/net/context"
-	"google.golang.org/grpc"
-
+	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/posting/types"
 	stype "github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
+	"golang.org/x/net/context"
+	"google.golang.org/grpc"
 )
 
 const numBackupRoutines = 10
@@ -151,7 +151,7 @@ func backup(gid uint32, bdir string) error {
 			continue
 		}
 		pred, uid := posting.SplitKey(key)
-		if pred != lastPred && BelongsTo(pred) != gid {
+		if pred != lastPred && group.BelongsTo(pred) != gid {
 			it.Seek([]byte(fmt.Sprintf("%s~", pred)))
 			continue
 		}

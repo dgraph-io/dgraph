@@ -25,10 +25,12 @@ import (
 	"os"
 	"runtime"
 	"runtime/pprof"
+	"strconv"
 	"strings"
 
 	"github.com/Sirupsen/logrus"
 
+	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/loader"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/store"
@@ -38,12 +40,11 @@ import (
 var (
 	glog = x.Log("loader_main")
 
+	conf     = flag.String("conf", "", "group configuration file")
 	rdfGzips = flag.String("rdfgzips", "",
 		"Comma separated gzip files containing RDF data")
-	instanceIdx = flag.Uint64("idx", 0,
-		"Only pick entities, where Fingerprint % numInstance == instanceIdx.")
-	numInstances = flag.Uint64("num", 1,
-		"Total number of instances among which uid assigning is shared")
+	groups = flag.String("groups", "0",
+		"Only pick entities, where groupID matches the specified ones.")
 	postingDir = flag.String("p", "", "Directory to store posting lists")
 	cpuprofile = flag.String("cpu", "", "write cpu profile to file")
 	memprofile = flag.String("mem", "", "write memory profile to file")
@@ -95,6 +96,16 @@ func main() {
 	defer dataStore.Close()
 	posting.Init(dataStore)
 	loader.Init(dataStore)
+	x.Check(group.ParseGroupConfig(*conf))
+
+	log.Println("Loading data for groups", *groups)
+	groupsMap := make(map[uint32]bool)
+	for _, it := range strings.Split(*groups, ",") {
+		gid, err := strconv.Atoi(it)
+		x.Check(err)
+		x.AssertTrue(gid >= 0)
+		groupsMap[uint32(gid)] = true
+	}
 
 	files := strings.Split(*rdfGzips, ",")
 	for _, path := range files {
@@ -113,7 +124,7 @@ func main() {
 		}
 
 		// Load NQuads and write them to internal storage.
-		count, err := loader.LoadEdges(r, *instanceIdx, *numInstances)
+		count, err := loader.LoadEdges(r, groupsMap)
 		if err != nil {
 			glog.WithError(err).Fatal("While handling rdf reader.")
 		}

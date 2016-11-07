@@ -114,7 +114,7 @@ func AssignNew(N int, instanceIdx uint64, numInstances uint64) x.Mutations {
 		t := x.DirectedEdge{
 			Entity:    uid,
 			Attribute: "_uid_",
-			Value:     []byte("_taken_"), // not txid
+			Value:     []byte("_"), // not txid
 			Source:    "_assigner_",
 			Timestamp: time.Now(),
 		}

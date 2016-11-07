@@ -28,6 +28,7 @@ import (
 	"github.com/twpayne/go-geom"
 
 	"github.com/dgraph-io/dgraph/geo"
+	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/store"
@@ -57,7 +58,7 @@ func addGeoData(t *testing.T, ps *store.Store, uid uint64, p geom.T, name string
 func createTestData(t *testing.T, ps *store.Store) {
 	dir, err := ioutil.TempDir("", "wal")
 	require.NoError(t, err)
-	worker.ParseGroupConfig("")
+	group.ParseGroupConfig("")
 	worker.StartRaftNodes(dir)
 
 	p := geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{-122.082506, 37.4249518})
