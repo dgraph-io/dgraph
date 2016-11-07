@@ -275,6 +275,11 @@ func (w *grpcWorker) Backup(ctx context.Context, req *BackupPayload) (*BackupPay
 }
 
 func BackupOverNetwork(ctx context.Context) {
+	// If we haven't even had a single membership update, don't run backup.
+	if groups().LastUpdate() == 0 {
+		x.Trace(ctx, "This server hasn't yet been fully initiated. Please retry later.")
+		return
+	}
 	// Let's first collect all groups.
 	gids := groups().KnownGroups()
 
