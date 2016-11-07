@@ -71,9 +71,6 @@ func main() {
 			log.Println(http.ListenAndServe(*prof, nil))
 		}()
 	}
-	if len(*groups) == 0 {
-		log.Fatalf("Groups list cannot be empty")
-	}
 	logrus.SetLevel(logrus.InfoLevel)
 	numCpus := *numcpu
 	prevProcs := runtime.GOMAXPROCS(numCpus)
@@ -101,9 +98,9 @@ func main() {
 	loader.Init(dataStore)
 	x.Check(group.ParseGroupConfig(*conf))
 
+	log.Println("Loading data for groups", *groups)
 	groupsMap := make(map[uint32]bool)
-	groupList := strings.Split(*groups, ",")
-	for _, it := range groupList {
+	for _, it := range strings.Split(*groups, ",") {
 		gid, err := strconv.Atoi(it)
 		x.Check(err)
 		x.AssertTrue(gid >= 0)
