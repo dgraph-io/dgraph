@@ -66,10 +66,6 @@ func toRDF(buf *bytes.Buffer, item kv) {
 }
 
 func writeToFile(fpath string, ch chan []byte) error {
-	err := os.MkdirAll(fpath, 0700)
-	if err != nil {
-		return err
-	}
 	f, err := os.Create(fpath)
 	if err != nil {
 		return err
@@ -100,7 +96,11 @@ func writeToFile(fpath string, ch chan []byte) error {
 // Backup creates a backup of data by exporting it as an RDF gzip.
 func backup(gid uint32, bdir string) error {
 	// Use a goroutine to write to file.
-	fpath := path.Join(bdir, fmt.Sprintf("dgraph-%d-%s.gz", gid,
+	err := os.MkdirAll(bdir, 0700)
+	if err != nil {
+		return err
+	}
+	fpath := path.Join(bdir, fmt.Sprintf("dgraph-%d-%s.rdf.gz", gid,
 		time.Now().Format("2006-01-02-15-04")))
 	chb := make(chan []byte, 1000)
 	errChan := make(chan error, 1)
@@ -206,7 +206,11 @@ func handleBackupForGroup(ctx context.Context, reqId uint64, gid uint32) *Backup
 			break
 		}
 		x.TraceError(ctx, err)
-		addr = groups().AnyServer(gid)
+		if i == 1 {
+			_, addr = groups().Leader(0)
+		} else { // triggered on i = 0
+			addr = groups().AnyServer(gid)
+		}
 	}
 	if conn == nil {
 		x.Trace(ctx, fmt.Sprintf("Unable to find a server to backup group: %d", gid))
@@ -265,21 +269,15 @@ func (w *grpcWorker) Backup(ctx context.Context, req *BackupPayload) (*BackupPay
 
 func BackupOverNetwork(ctx context.Context) {
 	// Let's first collect all groups.
-	var gids []uint32
-	{
-		groups().RLock()
-		for gid := range groups().all {
-			gids = append(gids, gid)
-		}
-		groups().RUnlock()
-	}
+	gids := groups().KnownGroups()
 
 	ch := make(chan *BackupPayload, len(gids))
 	for _, gid := range gids {
-		go func() {
+		go func(group uint32) {
+			fmt.Printf("handleBackupForGroup. Gid: %v\n", group)
 			reqId := uint64(rand.Int63())
-			ch <- handleBackupForGroup(ctx, reqId, gid)
-		}()
+			ch <- handleBackupForGroup(ctx, reqId, group)
+		}(gid)
 	}
 
 	for i := 0; i < len(gids); i++ {
