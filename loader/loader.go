@@ -40,12 +40,10 @@ import (
 )
 
 var (
-	glog      = x.Log("loader")
-	dataStore *store.Store
-
+	glog        = x.Log("loader")
+	dataStore   *store.Store
 	maxRoutines = flag.Int("maxroutines", 3000,
 		"Maximum number of goroutines to execute concurrently")
-	conf = flag.String("conf", "", "group configuration file")
 )
 
 type counters struct {
@@ -66,7 +64,6 @@ type state struct {
 
 func Init(datastore *store.Store) {
 	dataStore = datastore
-	group.ParseGroupConfig(*conf)
 }
 
 func (s *state) Error() error {

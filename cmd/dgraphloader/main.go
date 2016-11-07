@@ -30,6 +30,7 @@ import (
 
 	"github.com/Sirupsen/logrus"
 
+	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/loader"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/store"
@@ -39,6 +40,7 @@ import (
 var (
 	glog = x.Log("loader_main")
 
+	conf     = flag.String("gconf", "", "group configuration file")
 	rdfGzips = flag.String("rdfgzips", "",
 		"Comma separated gzip files containing RDF data")
 	groupsList = flag.String("group", "",
@@ -97,6 +99,7 @@ func main() {
 	defer dataStore.Close()
 	posting.Init(dataStore)
 	loader.Init(dataStore)
+	group.ParseGroupConfig(*conf)
 
 	groupsMap := make(map[uint32]bool)
 	groups := strings.Split(*groupsList, ",")
