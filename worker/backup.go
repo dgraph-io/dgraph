@@ -102,6 +102,7 @@ func backup(gid uint32, bdir string) error {
 	}
 	fpath := path.Join(bdir, fmt.Sprintf("dgraph-%d-%s.rdf.gz", gid,
 		time.Now().Format("2006-01-02-15-04")))
+	fmt.Printf("Backing up at: %v\n", fpath)
 	chb := make(chan []byte, 1000)
 	errChan := make(chan error, 1)
 	go func() {
@@ -137,10 +138,11 @@ func backup(gid uint32, bdir string) error {
 	var lastPred string
 	for it.SeekToFirst(); it.Valid(); {
 		key := it.Key().Data()
+		fmt.Printf("[g:%d] key=[%q]\n", gid, key)
 		cidx := bytes.IndexRune(key, ':')
 		if cidx > -1 {
 			// Seek to the end of index keys.
-			pre := key[:cidx]
+			pre := key[:cidx+1]
 			pre = append(pre, '~')
 			it.Seek(pre)
 			continue
@@ -158,6 +160,7 @@ func backup(gid uint32, bdir string) error {
 
 		k := []byte(fmt.Sprintf("<_uid_:%x> <%s> ", uid, pred))
 		v := make([]byte, len(it.Value().Data()))
+		fmt.Printf("[%d] key=[%q]\n", gid, k)
 		copy(v, it.Value().Data())
 		chkv <- kv{
 			key:   k,
@@ -171,7 +174,8 @@ func backup(gid uint32, bdir string) error {
 	wg.Wait()   // Wait for numBackupRoutines to finish.
 	close(chb)  // We have stopped output to chb.
 
-	return <-errChan
+	err = <-errChan
+	return err
 }
 
 func handleBackupForGroup(ctx context.Context, reqId uint64, gid uint32) *BackupPayload {
