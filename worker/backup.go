@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/posting/types"
 	stype "github.com/dgraph-io/dgraph/types"
@@ -60,7 +61,7 @@ func backup(gid uint32, bpath string) error {
 			continue
 		}
 		pred, uid := posting.SplitKey(it.Key().Data())
-		if pred != lastPred && BelongsTo(pred) != gid {
+		if pred != lastPred && group.BelongsTo(pred) != gid {
 			it.Seek([]byte(fmt.Sprintf("%s~", pred)))
 			continue
 		}

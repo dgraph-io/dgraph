@@ -25,6 +25,7 @@ import (
 	"os"
 	"runtime"
 	"runtime/pprof"
+	"strconv"
 	"strings"
 
 	"github.com/Sirupsen/logrus"
@@ -40,10 +41,8 @@ var (
 
 	rdfGzips = flag.String("rdfgzips", "",
 		"Comma separated gzip files containing RDF data")
-	instanceIdx = flag.Uint64("idx", 0,
-		"Only pick entities, where Fingerprint % numInstance == instanceIdx.")
-	numInstances = flag.Uint64("num", 1,
-		"Total number of instances among which uid assigning is shared")
+	groupsList = flag.String("group", "",
+		"Only pick entities, where groupID matches the specified ones.")
 	postingDir = flag.String("p", "", "Directory to store posting lists")
 	cpuprofile = flag.String("cpu", "", "write cpu profile to file")
 	memprofile = flag.String("mem", "", "write memory profile to file")
@@ -69,6 +68,9 @@ func main() {
 		go func() {
 			log.Println(http.ListenAndServe(*prof, nil))
 		}()
+	}
+	if len(*groupsList) == 0 {
+		log.Fatalf("Groups list cannot be empty")
 	}
 	logrus.SetLevel(logrus.InfoLevel)
 	numCpus := *numcpu
@@ -96,6 +98,15 @@ func main() {
 	posting.Init(dataStore)
 	loader.Init(dataStore)
 
+	groupsMap := make(map[uint32]bool)
+	groups := strings.Split(*groupsList, ",")
+	for _, it := range groups {
+		gid, err := strconv.Atoi(it)
+		x.Check(err)
+		x.AssertTrue(gid >= 0)
+		groupsMap[uint32(gid)] = true
+	}
+
 	files := strings.Split(*rdfGzips, ",")
 	for _, path := range files {
 		if len(path) == 0 {
@@ -113,7 +124,7 @@ func main() {
 		}
 
 		// Load NQuads and write them to internal storage.
-		count, err := loader.LoadEdges(r, *instanceIdx, *numInstances)
+		count, err := loader.LoadEdges(r, groupsMap)
 		if err != nil {
 			glog.WithError(err).Fatal("While handling rdf reader.")
 		}

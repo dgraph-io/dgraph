@@ -24,6 +24,7 @@ import (
 	"github.com/google/flatbuffers/go"
 	"golang.org/x/net/context"
 
+	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/uid"
 	"github.com/dgraph-io/dgraph/x"
@@ -113,7 +114,7 @@ func assignUids(ctx context.Context, num *task.Num) (uidList []byte, rerr error)
 // AssignUidsOverNetwork assigns new uids and writes them to the umap.
 func AssignUidsOverNetwork(ctx context.Context, umap map[string]uint64) (rerr error) {
 	query := new(Payload)
-	gid := BelongsTo("_uid_")
+	gid := group.BelongsTo("_uid_")
 	query.Data = createNumQuery(gid, umap)
 
 	num := task.GetRootAsNum(query.Data, 0)

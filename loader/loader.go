@@ -31,19 +31,22 @@ import (
 	"time"
 
 	"github.com/Sirupsen/logrus"
-	"github.com/dgryski/go-farm"
 
+	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/x"
 )
 
-var glog = x.Log("loader")
-var dataStore *store.Store
+var (
+	glog      = x.Log("loader")
+	dataStore *store.Store
 
-var maxRoutines = flag.Int("maxroutines", 3000,
-	"Maximum number of goroutines to execute concurrently")
+	maxRoutines = flag.Int("maxroutines", 3000,
+		"Maximum number of goroutines to execute concurrently")
+	conf = flag.String("conf", "", "group configuration file")
+)
 
 type counters struct {
 	read      uint64
@@ -54,16 +57,16 @@ type counters struct {
 
 type state struct {
 	sync.RWMutex
-	input        chan string
-	cnq          chan rdf.NQuad
-	ctr          *counters
-	instanceIdx  uint64
-	numInstances uint64
-	err          error
+	input     chan string
+	cnq       chan rdf.NQuad
+	ctr       *counters
+	groupsMap map[uint32]bool
+	err       error
 }
 
 func Init(datastore *store.Store) {
 	dataStore = datastore
+	group.ParseGroupConfig(*conf)
 }
 
 func (s *state) Error() error {
@@ -206,7 +209,7 @@ func (s *state) handleNQuads(wg *sync.WaitGroup) {
 			return
 		}
 		// Only handle this edge if the attribute satisfies the modulo rule
-		if farm.Fingerprint64([]byte(nq.Predicate))%s.numInstances != s.instanceIdx {
+		if !s.groupsMap[group.BelongsTo(nq.Predicate)] { // farm.Fingerprint64([]byte(nq.Predicate))%s.numInstances != s.instanceIdx {
 			atomic.AddUint64(&s.ctr.ignored, 1)
 			continue
 		}
@@ -232,14 +235,42 @@ func (s *state) handleNQuads(wg *sync.WaitGroup) {
 		plist.AddMutationWithIndex(ctx, edge, posting.Set)
 		decr() // Don't defer, just call because we're in a channel loop.
 
+		// Mark UIDs and XIDs as taken
+		if s.groupsMap[group.BelongsTo("_uid_")] {
+			// Mark entity UID.
+			mu := x.DirectedEdge{
+				Entity:    edge.Entity,
+				Attribute: "_uid_",
+				Value:     []byte("_taken_"), // not txid
+				Source:    "_loader_",
+				Timestamp: time.Now(),
+			}
+			key := posting.Key(edge.Entity, "_uid_")
+			plist, decr := posting.GetOrCreate(key)
+			plist.AddMutationWithIndex(ctx, mu, posting.Set)
+			decr()
+			// Mark the Value UID.
+			if edge.ValueId != 0 {
+				mu = x.DirectedEdge{
+					Entity:    edge.ValueId,
+					Attribute: "_uid_",
+					Value:     []byte("_taken_"), // not txid
+					Source:    "_loader_",
+					Timestamp: time.Now(),
+				}
+				key := posting.Key(edge.ValueId, "_uid_")
+				plist, decr := posting.GetOrCreate(key)
+				plist.AddMutationWithIndex(ctx, mu, posting.Set)
+				decr()
+			}
+		}
 		atomic.AddUint64(&s.ctr.processed, 1)
 	}
 }
 
 // LoadEdges is called with the reader object of a file whose
 // contents are to be converted to posting lists.
-func LoadEdges(reader io.Reader, instanceIdx uint64,
-	numInstances uint64) (uint64, error) {
+func LoadEdges(reader io.Reader, groupsMap map[uint32]bool) (uint64, error) {
 
 	s := new(state)
 	s.ctr = new(counters)
@@ -247,8 +278,7 @@ func LoadEdges(reader io.Reader, instanceIdx uint64,
 	go s.printCounters(ticker)
 
 	// Producer: Start buffering input to channel.
-	s.instanceIdx = instanceIdx
-	s.numInstances = numInstances
+	s.groupsMap = groupsMap
 	s.input = make(chan string, 10000)
 	go s.readLines(reader)
 
