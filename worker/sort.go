@@ -5,6 +5,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/dgraph/algo"
+	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/task"
@@ -16,7 +17,7 @@ import (
 func SortOverNetwork(ctx context.Context, qu []byte) ([]byte, error) {
 	q := task.GetRootAsSort(qu, 0)
 	attr := string(q.Attr())
-	gid := BelongsTo(attr)
+	gid := group.BelongsTo(attr)
 	x.Trace(ctx, "worker.Sort attr: %v groupId: %v", attr, gid)
 
 	if groups().ServesGroup(gid) {
@@ -63,7 +64,7 @@ func (w *grpcWorker) Sort(ctx context.Context, query *Payload) (*Payload, error)
 	}
 
 	s := task.GetRootAsSort(query.Data, 0)
-	gid := BelongsTo(string(s.Attr()))
+	gid := group.BelongsTo(string(s.Attr()))
 	//x.Trace(ctx, "Attribute: %q NumUids: %v groupId: %v Sort", q.Attr(), q.UidsLength(), gid)
 
 	reply := new(Payload)

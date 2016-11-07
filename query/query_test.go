@@ -29,6 +29,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/query/graph"
 	"github.com/dgraph-io/dgraph/schema"
@@ -138,7 +139,7 @@ func populateGraph(t *testing.T) (string, *store.Store) {
 	posting.Init(ps)
 	worker.Init(ps)
 
-	worker.ParseGroupConfig("")
+	group.ParseGroupConfig("")
 	dir2, err := ioutil.TempDir("", "wal_")
 	require.NoError(t, err)
 	worker.StartRaftNodes(dir2)

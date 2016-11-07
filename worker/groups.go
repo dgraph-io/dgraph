@@ -21,9 +21,8 @@ import (
 )
 
 var (
-	groupConf = flag.String("conf", "", "Path to config file with group <-> predicate mapping.")
-	groupIds  = flag.String("groups", "0", "RAFT groups handled by this server.")
-	myAddr    = flag.String("my", "",
+	groupIds = flag.String("groups", "0", "RAFT groups handled by this server.")
+	myAddr   = flag.String("my", "",
 		"addr:port of this server, so other Dgraph servers can talk to this.")
 	peer           = flag.String("peer", "", "Address of any peer.")
 	raftId         = flag.Uint64("idx", 1, "RAFT ID that this server will use to join RAFT groups.")
@@ -80,7 +79,6 @@ func StartRaftNodes(walDir string) {
 	}
 	go gr.periodicSyncMemberships() // Now set it to be run periodically.
 
-	x.Check(ParseGroupConfig(*groupConf))
 	x.Checkf(os.MkdirAll(walDir, 0700), "Error while creating WAL dir.")
 	wals, err := store.NewSyncStore(walDir)
 	x.Checkf(err, "Error initializing wal store")
