@@ -194,12 +194,26 @@ func (s *state) parseStream(wg *sync.WaitGroup) {
 		atomic.AddUint64(&s.ctr.parsed, 1)
 	}
 }
+func markTaken(ctx context.Context, uid uint64) {
+	mu := x.DirectedEdge{
+		Entity:    uid,
+		Attribute: "_uid_",
+		Value:     []byte("_taken_"), // not txid
+		Source:    "_loader_",
+		Timestamp: time.Now(),
+	}
+	key := posting.Key(uid, "_uid_")
+	plist, decr := posting.GetOrCreate(key)
+	plist.AddMutation(ctx, mu, posting.Set)
+	decr()
+}
 
 // handleNQuads converts the nQuads that satisfy the modulo
 // rule into posting lists.
 func (s *state) handleNQuads(wg *sync.WaitGroup) {
 	defer wg.Done()
-
+	// Check if we need to mark used UIDs.
+	markUids := s.groupsMap[group.BelongsTo("_uid_")]
 	ctx := context.Background()
 	for nq := range s.cnq {
 		if s.Error() != nil {
@@ -233,32 +247,12 @@ func (s *state) handleNQuads(wg *sync.WaitGroup) {
 		decr() // Don't defer, just call because we're in a channel loop.
 
 		// Mark UIDs and XIDs as taken
-		if s.groupsMap[group.BelongsTo("_uid_")] {
+		if markUids {
 			// Mark entity UID.
-			mu := x.DirectedEdge{
-				Entity:    edge.Entity,
-				Attribute: "_uid_",
-				Value:     []byte("_taken_"), // not txid
-				Source:    "_loader_",
-				Timestamp: time.Now(),
-			}
-			key := posting.Key(edge.Entity, "_uid_")
-			plist, decr := posting.GetOrCreate(key)
-			plist.AddMutationWithIndex(ctx, mu, posting.Set)
-			decr()
+			markTaken(ctx, edge.Entity)
 			// Mark the Value UID.
 			if edge.ValueId != 0 {
-				mu = x.DirectedEdge{
-					Entity:    edge.ValueId,
-					Attribute: "_uid_",
-					Value:     []byte("_taken_"), // not txid
-					Source:    "_loader_",
-					Timestamp: time.Now(),
-				}
-				key := posting.Key(edge.ValueId, "_uid_")
-				plist, decr := posting.GetOrCreate(key)
-				plist.AddMutationWithIndex(ctx, mu, posting.Set)
-				decr()
+				markTaken(ctx, edge.ValueId)
 			}
 		}
 		atomic.AddUint64(&s.ctr.processed, 1)

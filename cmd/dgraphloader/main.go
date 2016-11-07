@@ -40,10 +40,10 @@ import (
 var (
 	glog = x.Log("loader_main")
 
-	conf     = flag.String("gconf", "", "group configuration file")
+	conf     = flag.String("conf", "", "group configuration file")
 	rdfGzips = flag.String("rdfgzips", "",
 		"Comma separated gzip files containing RDF data")
-	groupsList = flag.String("group", "",
+	groups = flag.String("groups", "0",
 		"Only pick entities, where groupID matches the specified ones.")
 	postingDir = flag.String("p", "", "Directory to store posting lists")
 	cpuprofile = flag.String("cpu", "", "write cpu profile to file")
@@ -71,7 +71,7 @@ func main() {
 			log.Println(http.ListenAndServe(*prof, nil))
 		}()
 	}
-	if len(*groupsList) == 0 {
+	if len(*groups) == 0 {
 		log.Fatalf("Groups list cannot be empty")
 	}
 	logrus.SetLevel(logrus.InfoLevel)
@@ -99,11 +99,11 @@ func main() {
 	defer dataStore.Close()
 	posting.Init(dataStore)
 	loader.Init(dataStore)
-	group.ParseGroupConfig(*conf)
+	x.Check(group.ParseGroupConfig(*conf))
 
 	groupsMap := make(map[uint32]bool)
-	groups := strings.Split(*groupsList, ",")
-	for _, it := range groups {
+	groupList := strings.Split(*groups, ",")
+	for _, it := range groupList {
 		gid, err := strconv.Atoi(it)
 		x.Check(err)
 		x.AssertTrue(gid >= 0)
