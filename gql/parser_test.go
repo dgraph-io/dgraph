@@ -701,3 +701,19 @@ func TestParseFilter_unknowndirective(t *testing.T) {
 	_, _, err := Parse(query)
 	require.Error(t, err)
 }
+
+func TestParseGenerator(t *testing.T) {
+	query := `
+	query {
+		me(allof("name", "barack")) {
+			friends {
+				name
+			}
+			gender,age
+			hometown
+		}
+	}
+`
+	_, _, err := Parse(query)
+	require.Error(t, err)
+}

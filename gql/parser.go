@@ -19,6 +19,7 @@ package gql
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -36,6 +37,7 @@ type GraphQuery struct {
 	Args     map[string]string
 	Children []*GraphQuery
 	Filter   *FilterTree
+	Gen      *Generator
 
 	// Internal fields below.
 	// If gq.fragment is nonempty, then it is a fragment reference / spread.
@@ -79,6 +81,11 @@ type FilterTree struct {
 	FuncArgs []string // For leaf nodes only.
 	Op       string
 	Child    []*FilterTree
+}
+
+type Generator struct {
+	FuncName string
+	FuncArgs []string
 }
 
 // filterOpPrecedence is a map from filterOp (a string) to its precedence.
@@ -666,6 +673,39 @@ func evalStack(opStack, valueStack *filterTreeStack) {
 	valueStack.push(topOp)
 }
 
+func parseGenerator(l *lex.Lexer) (*Generator, error) {
+
+	var g *Generator
+	for item := range l.Items {
+		if item.Typ == itemFilterFunc { // Value.
+			g = &Generator{FuncName: item.Val}
+			itemInFunc := <-l.Items
+			if itemInFunc.Typ != itemLeftRound {
+				return nil, x.Errorf("Expected ( after func name [%s]", g.FuncName)
+			}
+			var terminated bool
+			for itemInFunc = range l.Items {
+				if itemInFunc.Typ == itemRightRound {
+					terminated = true
+					break
+				} else if itemInFunc.Typ != itemFilterFuncArg {
+					return nil, x.Errorf("Expected arg after func [%s], but got item %v",
+						g.FuncName, itemInFunc)
+				}
+				g.FuncArgs = append(g.FuncArgs, itemInFunc.Val)
+			}
+			if !terminated {
+				return nil, x.Errorf("Expected ) to terminate func definition")
+			}
+		} else if item.Typ == itemRightRound {
+			break
+		} else {
+			return nil, x.Errorf("Expected a generator function but got %v", item.Val)
+		}
+	}
+	return g, nil
+}
+
 // parseFilter parses the filter directive to produce a QueryFilter / parse tree.
 func parseFilter(l *lex.Lexer) (*FilterTree, error) {
 	item := <-l.Items
@@ -772,21 +812,37 @@ func getRoot(l *lex.Lexer) (gq *GraphQuery, rerr error) {
 		return nil, x.Errorf("Expected variable start. Got: %v", item)
 	}
 
-	args, err := parseArguments(l)
-	if err != nil {
-		return nil, err
-	}
-	for _, p := range args {
-		if p.Key == "_uid_" {
-			gq.UID, rerr = strconv.ParseUint(p.Val, 0, 64)
-			if rerr != nil {
-				return nil, rerr
-			}
-		} else if p.Key == "_xid_" {
-			gq.XID = p.Val
-		} else {
-			return nil, x.Errorf("Expecting _uid_ or _xid_. Got: %+v", p)
+	fmt.Println("Right")
+	item = <-l.Items
+	if item.Typ == itemGenerator {
+		// Store the generator function.
+		gen, err := parseGenerator(l)
+		fmt.Println("^^^^", gen, err)
+		if err != nil {
+			return nil, err
 		}
+		gq.Gen = gen
+		fmt.Println("^^^^", gen)
+	} else if item.Typ == itemArgument {
+		fmt.Println("Right")
+		args, err := parseArguments(l)
+		if err != nil {
+			return nil, err
+		}
+		for _, p := range args {
+			if p.Key == "_uid_" {
+				gq.UID, rerr = strconv.ParseUint(p.Val, 0, 64)
+				if rerr != nil {
+					return nil, rerr
+				}
+			} else if p.Key == "_xid_" {
+				gq.XID = p.Val
+			} else {
+				return nil, x.Errorf("Expecting _uid_ or _xid_. Got: %+v", p)
+			}
+		}
+	} else {
+		fmt.Println("Unhandled")
 	}
 
 	return gq, nil
@@ -834,17 +890,20 @@ func godeep(l *lex.Lexer, gq *GraphQuery) error {
 			}
 
 		} else if item.Typ == itemLeftRound {
-			args, err := parseArguments(l)
-			if err != nil {
-				return err
-			}
-			// Stores args in GraphQuery, will be used later while retrieving results.
-			for _, p := range args {
-				if p.Val == "" {
-					return x.Errorf("Got empty argument")
+			item = <-l.Items
+			if item.Typ == itemArgument {
+				args, err := parseArguments(l)
+				if err != nil {
+					return err
 				}
+				// Stores args in GraphQuery, will be used later while retrieving results.
+				for _, p := range args {
+					if p.Val == "" {
+						return x.Errorf("Got empty argument")
+					}
 
-				curp.Args[p.Key] = p.Val
+					curp.Args[p.Key] = p.Val
+				}
 			}
 		} else if item.Typ == itemDirectiveName {
 			switch item.Val {

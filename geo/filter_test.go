@@ -36,8 +36,8 @@ func TestQueryTokensPolygon(t *testing.T) {
 
 	qtypes := []QueryType{QueryTypeWithin, QueryTypeIntersects}
 	for _, qt := range qtypes {
-		f := &Filter{Data: data, Type: qt}
-		toks, qd, err := QueryTokens(f)
+		//		f := &Filter{Data: data, Type: qt}
+		toks, qd, err := QueryTokens(data, qt, 0)
 		require.NoError(t, err)
 
 		if qt == QueryTypeWithin {
@@ -46,7 +46,7 @@ func TestQueryTokensPolygon(t *testing.T) {
 			require.Len(t, toks, 65)
 		}
 		require.NotNil(t, qd)
-		require.Equal(t, qd.qtype, f.Type)
+		require.Equal(t, qd.qtype, qt)
 		require.NotNil(t, qd.loop)
 		require.Nil(t, qd.pt)
 		require.Nil(t, qd.cap)
@@ -62,8 +62,8 @@ func TestQueryTokensPolygonError(t *testing.T) {
 
 	qtypes := []QueryType{QueryTypeNear, QueryTypeContains}
 	for _, qt := range qtypes {
-		f := &Filter{Data: data, Type: qt}
-		_, _, err := QueryTokens(f)
+		//f := &Filter{Data: data, Type: qt}
+		_, _, err := QueryTokens(data, qt, 0)
 		require.Error(t, err)
 	}
 }
@@ -75,8 +75,8 @@ func TestQueryTokensPoint(t *testing.T) {
 
 	qtypes := []QueryType{QueryTypeWithin, QueryTypeIntersects, QueryTypeContains}
 	for _, qt := range qtypes {
-		f := &Filter{Data: data, Type: qt}
-		toks, qd, err := QueryTokens(f)
+		//	f := &Filter{Data: data, Type: qt}
+		toks, qd, err := QueryTokens(data, qt, 0)
 		require.NoError(t, err)
 
 		if qt == QueryTypeWithin {
@@ -87,7 +87,7 @@ func TestQueryTokensPoint(t *testing.T) {
 			require.Len(t, toks, MaxCellLevel-MinCellLevel+2)
 		}
 		require.NotNil(t, qd)
-		require.Equal(t, qd.qtype, f.Type)
+		require.Equal(t, qd.qtype, qt)
 		require.Nil(t, qd.loop)
 		require.NotNil(t, qd.pt)
 		require.Nil(t, qd.cap)
@@ -99,13 +99,13 @@ func TestQueryTokensNear(t *testing.T) {
 	data, err := wkb.Marshal(p, binary.LittleEndian)
 	require.NoError(t, err)
 
-	f := &Filter{Data: data, Type: QueryTypeNear, MaxDistance: 1000}
-	toks, qd, err := QueryTokens(f)
+	//f := &Filter{Data: data, Type: QueryTypeNear, MaxDistance: 1000}
+	toks, qd, err := QueryTokens(data, QueryTypeNear, 1000)
 	require.NoError(t, err)
 
 	require.Equal(t, len(toks), 15)
 	require.NotNil(t, qd)
-	require.Equal(t, qd.qtype, f.Type)
+	require.Equal(t, qd.qtype, QueryTypeNear)
 	require.Nil(t, qd.loop)
 	require.Nil(t, qd.pt)
 	require.NotNil(t, qd.cap)
@@ -116,8 +116,8 @@ func TestQueryTokensNearError(t *testing.T) {
 	data, err := wkb.Marshal(p, binary.LittleEndian)
 	require.NoError(t, err)
 
-	f := &Filter{Data: data, Type: QueryTypeNear}
-	_, _, err = QueryTokens(f)
+	//f := &Filter{Data: data, Type: QueryTypeNear}
+	_, _, err = QueryTokens(data, QueryTypeNear, 0)
 	require.Error(t, err) // no max distance
 }
 
@@ -125,8 +125,8 @@ func TestMatchesFilterWithinPoint(t *testing.T) {
 	p := geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{-122.082506, 37.4249518})
 	data, err := wkb.Marshal(p, binary.LittleEndian)
 	require.NoError(t, err)
-	f := &Filter{Data: data, Type: QueryTypeWithin}
-	_, qd, err := QueryTokens(f)
+	//f := &Filter{Data: data, Type: QueryTypeWithin}
+	_, qd, err := QueryTokens(data, QueryTypeWithin, 0)
 	require.NoError(t, err)
 
 	p2 := geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{-122.082506, 37.4249518})
@@ -150,8 +150,8 @@ func TestMatchesFilterWithinPolygon(t *testing.T) {
 	})
 	data, err := wkb.Marshal(p, binary.LittleEndian)
 	require.NoError(t, err)
-	f := &Filter{Data: data, Type: QueryTypeWithin}
-	_, qd, err := QueryTokens(f)
+	//f := &Filter{Data: data, Type: QueryTypeWithin}
+	_, qd, err := QueryTokens(data, QueryTypeWithin, 0)
 	require.NoError(t, err)
 
 	// Poly contains point
@@ -174,8 +174,8 @@ func TestMatchesFilterContainsPoint(t *testing.T) {
 	p := geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{-122.082506, 37.4249518})
 	data, err := wkb.Marshal(p, binary.LittleEndian)
 	require.NoError(t, err)
-	f := &Filter{Data: data, Type: QueryTypeContains}
-	_, qd, err := QueryTokens(f)
+	//f := &Filter{Data: data, Type: QueryTypeContains}
+	_, qd, err := QueryTokens(data, QueryTypeContains, 0)
 	require.NoError(t, err)
 
 	// Points aren't returned for contains queries
@@ -199,8 +199,8 @@ func TestMatchesFilterIntersectsPoint(t *testing.T) {
 	p := geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{-122.082506, 37.4249518})
 	data, err := wkb.Marshal(p, binary.LittleEndian)
 	require.NoError(t, err)
-	f := &Filter{Data: data, Type: QueryTypeIntersects}
-	_, qd, err := QueryTokens(f)
+	//f := &Filter{Data: data, Type: QueryTypeIntersects}
+	_, qd, err := QueryTokens(data, QueryTypeIntersects, 0)
 	require.NoError(t, err)
 
 	// Same point
@@ -230,8 +230,8 @@ func TestMatchesFilterIntersectsPolygon(t *testing.T) {
 	})
 	data, err := wkb.Marshal(p, binary.LittleEndian)
 	require.NoError(t, err)
-	f := &Filter{Data: data, Type: QueryTypeIntersects}
-	_, qd, err := QueryTokens(f)
+	//f := &Filter{Data: data, Type: QueryTypeIntersects}
+	_, qd, err := QueryTokens(data, QueryTypeIntersects, 0)
 	require.NoError(t, err)
 
 	// Poly contains point
@@ -271,8 +271,8 @@ func TestMatchesFilterNearPoint(t *testing.T) {
 	p := geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{-122.082506, 37.4249518})
 	data, err := wkb.Marshal(p, binary.LittleEndian)
 	require.NoError(t, err)
-	f := &Filter{Data: data, Type: QueryTypeNear, MaxDistance: 1000}
-	_, qd, err := QueryTokens(f)
+	//f := &Filter{Data: data, Type: QueryTypeNear, MaxDistance: 1000}
+	_, qd, err := QueryTokens(data, QueryTypeNear, 1000)
 	require.NoError(t, err)
 
 	// Same point

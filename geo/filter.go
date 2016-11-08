@@ -38,12 +38,14 @@ const (
 	QueryTypeNear
 )
 
+/*
 // Filter describes the geo query.
 type Filter struct {
 	Type        QueryType // The type of the query
 	Data        []byte    // The geometry in binary form which is the parameter for the query
 	MaxDistance float64   // MaxDistance for near queries
 }
+*/
 
 // QueryData is internal data used by the geo query filter to additionally filter the geometries.
 type QueryData struct {
@@ -54,10 +56,10 @@ type QueryData struct {
 }
 
 // QueryTokens returns the tokens to be used to look up the geo index for a given filter.
-func QueryTokens(f *Filter) ([]string, *QueryData, error) {
+func QueryTokens(data []byte, qt QueryType, maxDistance float64) ([]string, *QueryData, error) {
 	// Try to parse the data as geo type.
 	var g types.Geo
-	err := g.UnmarshalBinary(f.Data)
+	err := g.UnmarshalBinary(data)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -86,12 +88,12 @@ func QueryTokens(f *Filter) ([]string, *QueryData, error) {
 		return nil, nil, err
 	}
 
-	switch f.Type {
+	switch qt {
 	case QueryTypeWithin:
 		// For a within query we only need to look at the objects whose parents match our cover.
 		// So we take our cover and prefix with the parentPrefix to look in the index.
 		toks := toTokens(cover, parentPrefix)
-		return toks, &QueryData{pt: pt, loop: l, qtype: f.Type}, nil
+		return toks, &QueryData{pt: pt, loop: l, qtype: qt}, nil
 
 	case QueryTypeContains:
 		if l != nil {
@@ -99,20 +101,20 @@ func QueryTokens(f *Filter) ([]string, *QueryData, error) {
 		}
 		// For a contains query, we only need to look at the objects whose cover matches our
 		// parents. So we take our parents and prefix with the coverPrefix to look in the index.
-		return toTokens(parents, coverPrefix), &QueryData{pt: pt, qtype: f.Type}, nil
+		return toTokens(parents, coverPrefix), &QueryData{pt: pt, qtype: qt}, nil
 
 	case QueryTypeNear:
 		if l != nil {
 			return nil, nil, x.Errorf("Cannot use a polygon in a near query")
 		}
-		return nearQueryKeys(*pt, f.MaxDistance)
+		return nearQueryKeys(*pt, maxDistance)
 
 	case QueryTypeIntersects:
 		// An intersects query is essentially the union of contains and within. So we look at all
 		// the objects whose parents match our cover as well as all the objects whose cover matches
 		// our parents.
 		toks := parentCoverTokens(parents, cover)
-		return toks, &QueryData{pt: pt, loop: l, qtype: f.Type}, nil
+		return toks, &QueryData{pt: pt, loop: l, qtype: qt}, nil
 
 	default:
 		return nil, nil, x.Errorf("Unknown query type")

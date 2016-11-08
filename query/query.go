@@ -32,7 +32,6 @@ import (
 	"github.com/google/flatbuffers/go"
 
 	"github.com/dgraph-io/dgraph/algo"
-	"github.com/dgraph-io/dgraph/geo"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/query/graph"
 	"github.com/dgraph-io/dgraph/schema"
@@ -133,11 +132,11 @@ type params struct {
 // query and the response. Once generated, this can then be encoded to other
 // client convenient formats, like GraphQL / JSON.
 type SubGraph struct {
-	Attr      string
-	Children  []*SubGraph
-	Params    params
-	Filter    *gql.FilterTree
-	GeoFilter *geo.Filter // TODO: We shouldn't have a special case for this.
+	Attr     string
+	Children []*SubGraph
+	Params   params
+	Filter   *gql.FilterTree
+	// GeoFilter *geo.Filter // TODO: We shouldn't have a special case for this.
 
 	Counts *x.CountList
 	Values *x.ValueList
@@ -271,14 +270,16 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 			} else {
 				m[sg.Attr] = l
 			}
-			if sg.GeoFilter != nil {
-				x.AssertTruef(len(l) == 1, "There should be exactly 1 uid at the top level.")
-				// remove the top level attr from the result, that is only used
-				// for filtering the results.
-				result[sg.SrcUIDs.Get(i)] = l[0]
-			} else {
-				result[sg.SrcUIDs.Get(i)] = m
-			}
+			/*
+				if sg.GeoFilter != nil {
+					x.AssertTruef(len(l) == 1, "There should be exactly 1 uid at the top level.")
+					// remove the top level attr from the result, that is only used
+					// for filtering the results.
+					result[sg.SrcUIDs.Get(i)] = l[0]
+				} else {
+			*/
+			result[sg.SrcUIDs.Get(i)] = m
+			// }
 		}
 	}
 

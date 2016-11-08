@@ -19,6 +19,7 @@ package gql
 
 import (
 	"bytes"
+	"fmt"
 
 	"github.com/dgraph-io/dgraph/lex"
 )
@@ -65,6 +66,8 @@ const (
 	itemFilterOr                                // Or inside a filter.
 	itemFilterFunc                              // Function inside a filter.
 	itemFilterFuncArg                           // Function args inside a filter.
+	itemGenerator                               // To specify its a generator.
+	itemArgument                                // To specify its a argument list.
 )
 
 // lexText lexes the input string and calls other lex functions.
@@ -137,7 +140,17 @@ func lexInside(l *lex.Lexer) lex.StateFn {
 			return lexComment
 		case r == leftRound:
 			l.Emit(itemLeftRound)
-			return lexArgInside
+			k := l.Next()
+			fmt.Println(l.Input[l.Start:l.Pos])
+			if k == '_' || l.Depth != 1 || l.Mode != queryMode {
+				l.Backup()
+				l.Emit(itemArgument)
+				return lexArgInside
+			} else {
+				l.Backup()
+				l.Emit(itemGenerator)
+				return lexFilterFuncName
+			}
 		case r == ':':
 			return lexAlias
 		case r == '@':
@@ -169,6 +182,7 @@ func lexFilterFuncInside(l *lex.Lexer) lex.StateFn {
 			l.Next() // Consume " and ignore it.
 			l.Ignore()
 		} else {
+			fmt.Println(l.Input[l.Start:l.Pos])
 			return l.Errorf("Expected quotation mark in lexFilterFuncArgs")
 		}
 	}
