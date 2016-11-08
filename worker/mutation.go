@@ -22,6 +22,7 @@ import (
 
 	"golang.org/x/net/context"
 
+	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -35,7 +36,7 @@ const (
 // mutations which were not applied in left.
 func runMutations(ctx context.Context, edges []x.DirectedEdge, op byte) error {
 	for _, edge := range edges {
-		if !groups().ServesGroup(BelongsTo(edge.Attribute)) {
+		if !groups().ServesGroup(group.BelongsTo(edge.Attribute)) {
 			return fmt.Errorf("Predicate fingerprint doesn't match this instance")
 		}
 
@@ -98,7 +99,7 @@ func proposeOrSend(ctx context.Context, gid uint32, m *x.Mutations, che chan err
 // taking into account the op(operation) and the attribute.
 func addToMutationMap(mutationMap map[uint32]*x.Mutations, edges []x.DirectedEdge, op string) {
 	for _, edge := range edges {
-		gid := BelongsTo(edge.Attribute)
+		gid := group.BelongsTo(edge.Attribute)
 		mu := mutationMap[gid]
 		if mu == nil {
 			mu = new(x.Mutations)

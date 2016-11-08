@@ -24,12 +24,12 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/x"
 )
 
 func TestAddToMutationArray(t *testing.T) {
-	groupConfig = config{}
-	ParseGroupConfig("")
+	group.ParseGroupConfig("")
 	dir, err := ioutil.TempDir("", "storetest_")
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)

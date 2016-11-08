@@ -21,9 +21,8 @@ import (
 )
 
 var (
-	groupConf = flag.String("conf", "", "Path to config file with group <-> predicate mapping.")
-	groupIds  = flag.String("groups", "0", "RAFT groups handled by this server.")
-	myAddr    = flag.String("my", "",
+	groupIds = flag.String("groups", "0", "RAFT groups handled by this server.")
+	myAddr   = flag.String("my", "",
 		"addr:port of this server, so other Dgraph servers can talk to this.")
 	peer           = flag.String("peer", "", "Address of any peer.")
 	raftId         = flag.Uint64("idx", 1, "RAFT ID that this server will use to join RAFT groups.")
@@ -76,25 +75,33 @@ func StartRaftNodes(walDir string) {
 		// servers who are serving the same groups. That way, they can talk to them
 		// and try to join their clusters. Otherwise, they'll start off as a single-node
 		// cluster.
-		gr.syncMemberships()
+		// IMPORTANT: Don't run any nodes until we have done at least one full sync for membership
+		// information with the cluster. If you start this node too quickly, just
+		// after starting the leader of group zero, that leader might not have updated
+		// itself in the memberships; and hence this node would think that no one is handling
+		// group zero. Therefore, we MUST wait to get pass a last update raft index of zero.
+		for gr.LastUpdate() == 0 {
+			fmt.Println("Last update raft index for membership information is zero. Syncing...")
+			gr.syncMemberships()
+			time.Sleep(time.Second)
+		}
+		fmt.Printf("Last update is now: %d\n", gr.LastUpdate())
 	}
 	go gr.periodicSyncMemberships() // Now set it to be run periodically.
 
-	x.Check(ParseGroupConfig(*groupConf))
 	x.Checkf(os.MkdirAll(walDir, 0700), "Error while creating WAL dir.")
 	wals, err := store.NewSyncStore(walDir)
 	x.Checkf(err, "Error initializing wal store")
 	gr.wal = raftwal.Init(wals, *raftId)
 
-	my := *myAddr
-	if len(my) == 0 {
-		my = fmt.Sprintf("localhost:%d", *workerPort)
+	if len(*myAddr) == 0 {
+		*myAddr = fmt.Sprintf("localhost:%d", *workerPort)
 	}
 
 	for _, id := range strings.Split(*groupIds, ",") {
 		gid, err := strconv.ParseUint(id, 0, 32)
 		x.Checkf(err, "Unable to parse group id: %v", id)
-		node := groups().newNode(uint32(gid), *raftId, my)
+		node := groups().newNode(uint32(gid), *raftId, *myAddr)
 		go node.InitAndStartNode(gr.wal)
 	}
 }
@@ -162,7 +169,7 @@ func (g *groupi) AnyServer(group uint32) string {
 
 func (g *groupi) HasPeer(group uint32) bool {
 	g.RLock()
-	g.RUnlock()
+	defer g.RUnlock()
 	all := g.all[group]
 	if all == nil {
 		return false
@@ -180,6 +187,15 @@ func (g *groupi) Leader(group uint32) (uint64, string) {
 		return 0, ""
 	}
 	return all.list[0].NodeId, all.list[0].Addr
+}
+
+func (g *groupi) KnownGroups() (gids []uint32) {
+	g.RLock()
+	defer g.RUnlock()
+	for gid := range g.all {
+		gids = append(gids, gid)
+	}
+	return
 }
 
 func (g *groupi) isDuplicate(gid uint32, nid uint64, addr string, leader bool) bool {
@@ -208,6 +224,14 @@ func (g *groupi) LastUpdate() uint64 {
 	g.RLock()
 	defer g.RUnlock()
 	return g.lastUpdate
+}
+
+func (g *groupi) TouchLastUpdate(u uint64) {
+	g.Lock()
+	defer g.Unlock()
+	if g.lastUpdate < u {
+		g.lastUpdate = u
+	}
 }
 
 func buildTaskMembership(b *flatbuffers.Builder, gid uint32,
@@ -243,7 +267,6 @@ func (g *groupi) syncMemberships() {
 		// This server serves group zero.
 		g.RLock()
 		defer g.RUnlock()
-
 		for _, n := range g.local {
 			rc := task.GetRootAsRaftContext(n.raftContext, 0)
 			if g.duplicate(rc.Group(), rc.Id(), string(rc.Addr()), n.AmLeader()) {
@@ -257,7 +280,7 @@ func (g *groupi) syncMemberships() {
 				data := b.FinishedBytes()
 
 				zero := groups().Node(0)
-				zero.ProposeAndWait(zero.ctx, membershipMsg, data)
+				x.Check(zero.ProposeAndWait(zero.ctx, membershipMsg, data))
 
 			}(rc, n.AmLeader())
 		}
@@ -297,7 +320,6 @@ func (g *groupi) syncMemberships() {
 	addr := g.AnyServer(0)
 
 UPDATEMEMBERSHIP:
-	fmt.Printf("Address is: %v\n", addr)
 	if len(addr) > 0 {
 		pl = pools().get(addr)
 	} else {
@@ -332,12 +354,17 @@ UPDATEMEMBERSHIP:
 		goto UPDATEMEMBERSHIP
 	}
 
+	var lu uint64
 	update := task.GetRootAsMembershipUpdate(out.Data, 0)
 	for i := 0; i < update.MembersLength(); i++ {
 		mm := new(task.Membership)
 		x.AssertTrue(update.Members(mm, i))
 		g.applyMembershipUpdate(update.LastUpdate(), mm)
+		if lu < update.LastUpdate() {
+			lu = update.LastUpdate()
+		}
 	}
+	g.TouchLastUpdate(lu)
 }
 
 func (g *groupi) periodicSyncMemberships() {
@@ -362,17 +389,15 @@ func (g *groupi) applyMembershipUpdate(raftIdx uint64, mm *task.Membership) {
 		Leader:  mm.Leader() == byte(1),
 		RaftIdx: raftIdx,
 	}
-	go pools().connect(update.Addr)
+	if update.Addr != *myAddr {
+		go pools().connect(update.Addr)
+	}
 
 	fmt.Println("----------------------------")
 	fmt.Printf("====== APPLYING MEMBERSHIP UPDATE: %+v\n", update)
 	fmt.Println("----------------------------")
 	g.Lock()
 	defer g.Unlock()
-
-	if g.lastUpdate < raftIdx {
-		g.lastUpdate = raftIdx
-	}
 
 	if g.all == nil {
 		g.all = make(map[uint32]*servers)

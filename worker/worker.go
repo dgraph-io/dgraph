@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"sync"
 
 	"github.com/dgraph-io/dgraph/store"
 
@@ -33,6 +34,8 @@ import (
 var (
 	workerPort = flag.Int("workerport", 12345,
 		"Port used by worker for internal communication.")
+	backupPath = flag.String("backup", "backup",
+		"Folder in which to store backups.")
 	pstore *store.Store
 )
 
@@ -41,7 +44,24 @@ func Init(ps *store.Store) {
 }
 
 // grpcWorker struct implements the gRPC server interface.
-type grpcWorker struct{}
+type grpcWorker struct {
+	sync.Mutex
+	reqids map[uint64]bool
+}
+
+// addIfNotPresent returns false if it finds the reqid already present.
+// Otherwise, adds the reqid in the list, and returns true.
+func (w *grpcWorker) addIfNotPresent(reqid uint64) bool {
+	w.Lock()
+	defer w.Unlock()
+	if w.reqids == nil {
+		w.reqids = make(map[uint64]bool)
+	} else if _, has := w.reqids[reqid]; has {
+		return false
+	}
+	w.reqids[reqid] = true
+	return true
+}
 
 // Hello rpc call is used to check connection with other workers after worker
 // tcp server for this instance starts.

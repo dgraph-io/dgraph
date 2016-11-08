@@ -24,21 +24,33 @@ type PayloadCodec struct{}
 // Marshal marshals v into a Payload instance. v contains serialised data
 // for a flatbuffer Query object.
 func (cb *PayloadCodec) Marshal(v interface{}) ([]byte, error) {
-	p, ok := v.(*Payload)
-	if !ok {
-		log.Fatalf("Invalid type of struct: %+v", v)
+	switch t := v.(type) {
+	case *Payload:
+		p := v.(*Payload)
+		return p.Data, nil
+	case *BackupPayload:
+		p := v.(*BackupPayload)
+		return p.Marshal()
+	default:
+		x.Fatalf("Invalid type of struct: %T\n", t)
+		return []byte{}, nil
 	}
-	return p.Data, nil
 }
 
 // Unmarshal unmarshals byte slice data into v.
 func (cb *PayloadCodec) Unmarshal(data []byte, v interface{}) error {
-	p, ok := v.(*Payload)
-	if !ok {
-		log.Fatalf("Invalid type of struct: %+v", v)
+	switch t := v.(type) {
+	case *Payload:
+		p := v.(*Payload)
+		p.Data = data
+		return nil
+	case *BackupPayload:
+		p := v.(*BackupPayload)
+		return p.Unmarshal(data)
+	default:
+		x.Fatalf("Invalid type of struct: %T\n", t)
+		return nil
 	}
-	p.Data = data
-	return nil
 }
 
 func (cb *PayloadCodec) String() string {
