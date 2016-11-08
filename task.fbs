@@ -21,6 +21,10 @@ table Value {
 	valType:ubyte;
 }
 
+table ValueList {
+	values:[Value];
+}
+
 table Num {
 	group:uint;
 	val:int;
@@ -39,10 +43,6 @@ table Result {
 	uidmatrix:[UidList];
 	values:ValueList;
 	count:CountList;
-}
-
-table ValueList {
-	values:[Value];
 }
 
 table KV {

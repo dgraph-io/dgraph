@@ -140,9 +140,10 @@ type SubGraph struct {
 	Filter    *gql.FilterTree
 	GeoFilter *geo.Filter // TODO: We shouldn't have a special case for this.
 
-	Counts *x.CountList
-	Values *x.ValueList
-	Result []*algo.UIDList
+	resultBuf []byte
+	counts    *task.CountList
+	values    *task.ValueList
+	result    []*algo.UIDList
 
 	// srcUIDs is a list of unique source UIDs. They are always copies of destUIDs
 	// of parent nodes in GraphQL structure.
@@ -150,6 +151,34 @@ type SubGraph struct {
 
 	// destUIDs is a list of destination UIDs, after applying filters, pagination.
 	DestUIDs *algo.UIDList
+}
+
+// Result extracts UIDLists from task.Result.
+func (sg *SubGraph) Result() []*algo.UIDList {
+	if len(sg.result) == 0 {
+		r := task.GetRootAsResult(sg.resultBuf, 0)
+		sg.result = algo.FromTaskResult(r)
+	}
+	return sg.result
+}
+
+func (sg *SubGraph) Counts() *task.CountList {
+	if sg.counts == nil {
+		sg.counts = new(task.CountList)
+		r := task.GetRootAsResult(sg.resultBuf, 0)
+		x.AssertTrue(r.Count(sg.counts) != nil)
+	}
+	return sg.counts
+}
+
+// Values extracts values from task.Result.
+func (sg *SubGraph) Values() *task.ValueList {
+	if sg.values == nil {
+		sg.values = new(task.ValueList)
+		r := task.GetRootAsResult(sg.resultBuf, 0)
+		x.AssertTrue(r.Values(sg.values) != nil)
+	}
+	return sg.values
 }
 
 func mergeInterfaces(i1 interface{}, i2 interface{}) interface{} {
@@ -218,11 +247,11 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 		}
 	}
 
-	r := sg.Result
+	r := sg.Result()
 	x.AssertTruef(sg.SrcUIDs.Size() == len(r),
 		"Result uidmatrixlength: %v. Query uidslength: %v", sg.SrcUIDs.Size(), len(r))
-	x.AssertTruef(sg.SrcUIDs.Size() == sg.Values.ValuesLength(),
-		"Result valuelength: %v. Query uidslength: %v", sg.SrcUIDs.Size(), sg.Values.ValuesLength())
+	x.AssertTruef(sg.SrcUIDs.Size() == sg.Values().ValuesLength(),
+		"Result valuelength: %v. Query uidslength: %v", sg.SrcUIDs.Size(), sg.Values().ValuesLength())
 
 	// Generate a matrix of maps
 	// Row -> .....
@@ -236,9 +265,9 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 	//                          list of maps of {uid, uid + children result}]
 	//
 
-	if sg.Counts != nil && sg.Counts.CountLength() > 0 {
-		for i := 0; i < sg.Counts.CountLength(); i++ {
-			co := sg.Counts.Count(i)
+	if sg.Counts().CountLength() > 0 {
+		for i := 0; i < sg.Counts().CountLength(); i++ {
+			co := sg.Counts().Count(i)
 			m := make(map[string]interface{})
 			m["_count_"] = co
 			mp := make(map[string]interface{})
@@ -283,7 +312,7 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 		}
 	}
 
-	values := sg.Values
+	values := sg.Values()
 	var tv task.Value
 	for i := 0; i < values.ValuesLength(); i++ {
 		if ok := values.Values(&tv, i); !ok {
@@ -446,9 +475,9 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 			return x.Errorf("Attribute with uid not found")
 		}
 
-		ul := pc.Result[idx]
-		if sg.Counts != nil && sg.Counts.CountLength() > 0 {
-			c := types.Int32(sg.Counts.Count(idx))
+		ul := pc.Result()[idx]
+		if sg.Counts().CountLength() > 0 {
+			c := types.Int32(sg.Counts().Count(idx))
 			p := createProperty("_count_", &c)
 			uc := &graph.Node{
 				Attribute:  pc.Attr,
@@ -479,7 +508,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
 			}
 		} else {
 			var tv task.Value
-			if ok := pc.Values.Values(&tv, idx); !ok {
+			if ok := pc.Values().Values(&tv, idx); !ok {
 				return x.Errorf("While parsing value")
 			}
 
@@ -554,8 +583,8 @@ func (sg *SubGraph) ToProtocolBuffer(l *Latency) (*graph.Node, error) {
 		return n, nil
 	}
 
-	x.AssertTrue(len(sg.Result) == 1)
-	ul := sg.Result[0]
+	x.AssertTrue(len(sg.Result()) == 1)
+	ul := sg.Result()[0]
 	if sg.Params.GetUID || sg.Params.isDebug {
 		n.Uid = ul.Get(0)
 	}
@@ -817,31 +846,19 @@ func createTaskQuery(sg *SubGraph, uids *algo.UIDList, tokens []string,
 func ProcessGraph(ctx context.Context, sg *SubGraph, taskQuery []byte, rch chan error) {
 	var err error
 	if taskQuery != nil {
-		resultBuf, err := worker.ProcessTaskOverNetwork(ctx, taskQuery)
+		sg.resultBuf, err = worker.ProcessTaskOverNetwork(ctx, taskQuery)
 		if err != nil {
 			x.TraceError(ctx, x.Wrapf(err, "Error while processing task"))
 			rch <- err
 			return
 		}
 
-		r := task.GetRootAsResult(resultBuf, 0)
-
-		// Extract UIDLists from task.Result.
-		sg.Result = algo.FromTaskResult(r)
-
-		// Extract values from task.Result.
-		sg.Values = new(x.ValueList)
-		x.AssertTrue(r.Values(&sg.Values.ValueList) != nil)
-		if sg.Values.ValuesLength() > 0 {
+		if sg.Values().ValuesLength() > 0 {
 			var v task.Value
 			if sg.Values.Values(&v, 0) {
 				x.Trace(ctx, "Sample value for attr: %v Val: %v", sg.Attr, string(v.ValBytes()))
 			}
 		}
-
-		// Extract counts from task.Result.
-		sg.Counts = new(x.CountList)
-		x.AssertTrue(r.Count(&sg.Counts.CountList) != nil)
 	}
 
 	if sg.Params.GetCount == 1 {

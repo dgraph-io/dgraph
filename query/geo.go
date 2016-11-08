@@ -16,17 +16,7 @@
 
 package query
 
-import (
-	"bytes"
-	"context"
-
-	"github.com/dgraph-io/dgraph/algo"
-	"github.com/dgraph-io/dgraph/geo"
-	"github.com/dgraph-io/dgraph/task"
-	"github.com/dgraph-io/dgraph/types"
-	"github.com/dgraph-io/dgraph/x"
-)
-
+/*
 func (sg *SubGraph) applyGeoQuery(ctx context.Context) error {
 	if sg.GeoFilter == nil { // no geo filter
 		return nil
@@ -133,3 +123,4 @@ func filterUIDs(uids *algo.UIDList, values *x.ValueList, q *geo.QueryData) *algo
 	}
 	return algo.NewUIDList(rv)
 }
+*/
