@@ -2,6 +2,7 @@ scalar (
   date:date @index
   age: int @index
   health: float @index
+	name: string @index
 )
 
 type person {

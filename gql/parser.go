@@ -812,17 +812,15 @@ func getRoot(l *lex.Lexer) (gq *GraphQuery, rerr error) {
 		return nil, x.Errorf("Expected variable start. Got: %v", item)
 	}
 
-	fmt.Println("Right")
 	item = <-l.Items
 	if item.Typ == itemGenerator {
 		// Store the generator function.
 		gen, err := parseGenerator(l)
-		fmt.Println("^^^^", gen, err)
 		if err != nil {
 			return nil, err
 		}
 		gq.Gen = gen
-		fmt.Println("^^^^", gen)
+		fmt.Println("%%%%%%%", gen)
 	} else if item.Typ == itemArgument {
 		fmt.Println("Right")
 		args, err := parseArguments(l)
@@ -842,7 +840,7 @@ func getRoot(l *lex.Lexer) (gq *GraphQuery, rerr error) {
 			}
 		}
 	} else {
-		fmt.Println("Unhandled")
+		return nil, x.Errorf("Unexpected root argument.")
 	}
 
 	return gq, nil

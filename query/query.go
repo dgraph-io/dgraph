@@ -136,7 +136,7 @@ type SubGraph struct {
 	Children []*SubGraph
 	Params   params
 	Filter   *gql.FilterTree
-	// GeoFilter *geo.Filter // TODO: We shouldn't have a special case for this.
+	Gen      *gql.Generator
 
 	Counts *x.CountList
 	Values *x.ValueList
@@ -219,8 +219,8 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 	r := sg.Result
 	x.AssertTruef(sg.SrcUIDs.Size() == len(r),
 		"Result uidmatrixlength: %v. Query uidslength: %v", sg.SrcUIDs.Size(), len(r))
-	x.AssertTruef(sg.SrcUIDs.Size() == sg.Values.ValuesLength(),
-		"Result valuelength: %v. Query uidslength: %v", sg.SrcUIDs.Size(), sg.Values.ValuesLength())
+	//x.AssertTruef(sg.SrcUIDs.Size() == sg.Values.ValuesLength(),
+	//		"Result valuelength: %v. Query uidslength: %v", sg.SrcUIDs.Size(), sg.Values.ValuesLength())
 
 	// Generate a matrix of maps
 	// Row -> .....
@@ -357,6 +357,7 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 
 		result[sg.SrcUIDs.Get(i)] = m
 	}
+	fmt.Println(sg.Attr, result)
 	return result, nil
 }
 
@@ -643,6 +644,7 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 			Attr:   gchild.Attr,
 			Params: args,
 			Filter: gchild.Filter,
+			Gen:    gchild.Gen,
 		}
 		if v, ok := gchild.Args["offset"]; ok {
 			offset, err := strconv.ParseInt(v, 0, 32)
@@ -698,8 +700,8 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		x.Trace(ctx, "Xid: %v Uid: %v", exid, euid)
 	}
 
-	if euid == 0 {
-		err := x.Errorf("Invalid query, query internal id is zero")
+	if euid == 0 && gq.Gen == nil {
+		err := x.Errorf("Invalid query, query internal id is zero and generator is nil")
 		x.TraceError(ctx, err)
 		return nil, err
 	}
@@ -709,22 +711,31 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		AttrType: schema.TypeOf(gq.Attr),
 		isDebug:  gq.Attr == "debug",
 	}
+
+	var src []uint64
+	if euid != 0 {
+		src = append(src, euid)
+	}
+
 	sg := &SubGraph{
 		Attr:    gq.Attr,
 		Params:  args,
 		Filter:  gq.Filter,
-		SrcUIDs: algo.NewUIDList([]uint64{euid}),
+		Gen:     gq.Gen,
+		SrcUIDs: algo.NewUIDList(src),
 	}
 
 	{
 		// Encode uid into result flatbuffer.
 		b := flatbuffers.NewBuilder(0)
-		b.Finish(algo.NewUIDList([]uint64{euid}).AddTo(b))
+		b.Finish(algo.NewUIDList(src).AddTo(b))
 		buf := b.FinishedBytes()
 		tl := task.GetRootAsUidList(buf, 0)
 		ul := new(algo.UIDList)
 		ul.FromTask(tl)
-		sg.Result = []*algo.UIDList{ul}
+		if euid != 0 {
+			sg.Result = []*algo.UIDList{ul}
+		}
 	}
 
 	{
@@ -850,10 +861,12 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, taskQuery []byte, rch chan 
 		return
 	}
 
-	if err = sg.applyGeoQuery(ctx); err != nil {
-		rch <- err
-		return
-	}
+	/*
+		if err = sg.applyGeoQuery(ctx); err != nil {
+			rch <- err
+			return
+		}
+	*/
 
 	sg.DestUIDs = algo.MergeLists(sg.Result)
 	if err != nil {
@@ -861,6 +874,8 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, taskQuery []byte, rch chan 
 		rch <- err
 		return
 	}
+
+	sg.applyGenerator(ctx)
 
 	if sg.DestUIDs.Size() == 0 {
 		// Looks like we're done here. Be careful with nil srcUIDs!
@@ -995,6 +1010,41 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, taskQuery []byte, rch chan 
 	}
 
 	rch <- nil
+}
+
+func (sg *SubGraph) applyGenerator(ctx context.Context) error {
+	if sg.Gen == nil { // No Generator.
+		return nil
+	}
+	newSorted, err := runGenerator(ctx, sg.Gen)
+	fmt.Println(newSorted.Size(), newSorted, "_____________________________")
+	if err != nil {
+		return err
+	}
+	sg.DestUIDs = algo.MergeLists([]*algo.UIDList{sg.DestUIDs, newSorted})
+	sg.SrcUIDs = sg.DestUIDs
+	//.FromUints(sg.DestUIDs.ToUintsForTest())
+	fmt.Println(sg.SrcUIDs.Size(), sg.SrcUIDs, "_____________________________")
+	for i := 0; i < newSorted.Size(); i++ {
+		sg.Result = append(sg.Result, algo.NewUIDList([]uint64{newSorted.Get(i)}))
+	}
+	return nil
+}
+
+func runGenerator(ctx context.Context,
+	gen *gql.Generator) (l *algo.UIDList, rerr error) {
+	if len(gen.FuncName) > 0 { // Leaf node.
+		gen.FuncName = strings.ToLower(gen.FuncName) // Not sure if needed.
+		x.AssertTruef(len(gen.FuncArgs) == 2,
+			"Expect exactly two arguments: pred and predValue") // Temporary.
+		switch gen.FuncName {
+		case "anyof":
+			return anyof(ctx, nil, gen.FuncArgs[0], gen.FuncArgs[1])
+		case "allof":
+			return allof(ctx, nil, gen.FuncArgs[0], gen.FuncArgs[1])
+		}
+	}
+	return nil, nil
 }
 
 // applyFilter applies filters to sg.sorted.

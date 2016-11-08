@@ -425,7 +425,8 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if gq == nil || (gq.UID == 0 && len(gq.XID) == 0) {
+	fmt.Println(gq, "//////////")
+	if gq == nil || (gq.UID == 0 && gq.Gen == nil && len(gq.XID) == 0) {
 		mp := map[string]interface{}{
 			"code":    x.ErrorOk,
 			"message": "Done",
@@ -439,7 +440,9 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	fmt.Println(gq, "//////////")
 	sg, err := query.ToSubGraph(ctx, gq)
+	fmt.Println(sg, err, "//////////")
 	if err != nil {
 		x.TraceError(ctx, x.Wrapf(err, "Error while conversion o internal format"))
 		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
@@ -470,6 +473,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		x.Checkf(f.Close(), filename)
 	}
 
+	fmt.Println("---", sg, "--------------")
 	js, err := sg.ToJSON(&l)
 	if err != nil {
 		x.TraceError(ctx, x.Wrapf(err, "Error while converting to Json"))

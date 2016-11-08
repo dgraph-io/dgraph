@@ -704,7 +704,7 @@ func TestParseFilter_unknowndirective(t *testing.T) {
 
 func TestParseGenerator(t *testing.T) {
 	query := `
-	query {
+	{
 		me(allof("name", "barack")) {
 			friends {
 				name
@@ -715,5 +715,5 @@ func TestParseGenerator(t *testing.T) {
 	}
 `
 	_, _, err := Parse(query)
-	require.Error(t, err)
+	require.NoError(t, err)
 }

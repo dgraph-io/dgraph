@@ -19,7 +19,6 @@ package gql
 
 import (
 	"bytes"
-	"fmt"
 
 	"github.com/dgraph-io/dgraph/lex"
 )
@@ -141,15 +140,15 @@ func lexInside(l *lex.Lexer) lex.StateFn {
 		case r == leftRound:
 			l.Emit(itemLeftRound)
 			k := l.Next()
-			fmt.Println(l.Input[l.Start:l.Pos])
-			if k == '_' || l.Depth != 1 || l.Mode != queryMode {
+			if k == '_' || l.Depth != 1 || l.Mode == fragmentMode {
 				l.Backup()
 				l.Emit(itemArgument)
 				return lexArgInside
 			} else {
 				l.Backup()
 				l.Emit(itemGenerator)
-				return lexFilterFuncName
+				l.FilterDepth++
+				return lexFilterInside
 			}
 		case r == ':':
 			return lexAlias
@@ -182,7 +181,6 @@ func lexFilterFuncInside(l *lex.Lexer) lex.StateFn {
 			l.Next() // Consume " and ignore it.
 			l.Ignore()
 		} else {
-			fmt.Println(l.Input[l.Start:l.Pos])
 			return l.Errorf("Expected quotation mark in lexFilterFuncArgs")
 		}
 	}
