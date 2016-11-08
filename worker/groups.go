@@ -162,7 +162,7 @@ func (g *groupi) AnyServer(group uint32) string {
 
 func (g *groupi) HasPeer(group uint32) bool {
 	g.RLock()
-	g.RUnlock()
+	defer g.RUnlock()
 	all := g.all[group]
 	if all == nil {
 		return false

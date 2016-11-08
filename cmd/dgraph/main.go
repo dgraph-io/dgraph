@@ -61,6 +61,7 @@ var (
 		"Number of cores to be used by the process")
 	nomutations  = flag.Bool("nomutations", false, "Don't allow mutations on this server.")
 	shutdown     = flag.Bool("shutdown", false, "Allow client to send shutdown signal.")
+	backup       = flag.Bool("bkp", false, "Allow client to request a backup.")
 	tracing      = flag.Float64("trace", 0.5, "The ratio of queries to trace.")
 	schemaFile   = flag.String("schema", "", "Path to schema file")
 	cpuprofile   = flag.String("cpu", "", "write cpu profile to file")
@@ -378,21 +379,29 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	var l query.Latency
 	l.Start = time.Now()
 	defer r.Body.Close()
-	q, err := ioutil.ReadAll(r.Body)
+	req, err := ioutil.ReadAll(r.Body)
+	q := string(req)
 	if err != nil || len(q) == 0 {
 		x.TraceError(ctx, x.Wrapf(err, "Error while reading query"))
 		x.SetStatus(w, x.ErrorInvalidRequest, "Invalid request encountered.")
 		return
 	}
 
-	if *shutdown && string(q) == "SHUTDOWN" {
+	if *shutdown && q == "SHUTDOWN" {
 		exitWithProfiles()
 		x.SetStatus(w, x.ErrorOk, "Server has been shutdown")
 		return
 	}
 
-	x.Trace(ctx, "Query received: %v", string(q))
-	gq, mu, err := gql.Parse(string(q))
+	// TODO(Ashwin): Move to /admin endpoint.
+	if *backup && q == "BACKUP" {
+		worker.StartBackup()
+		x.SetStatus(w, x.ErrorOk, "Backup completed.")
+		return
+	}
+
+	x.Trace(ctx, "Query received: %v", q)
+	gq, mu, err := gql.Parse(q)
 	if err != nil {
 		x.TraceError(ctx, x.Wrapf(err, "Error while parsing query"))
 		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
