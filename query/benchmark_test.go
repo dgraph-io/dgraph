@@ -21,15 +21,19 @@ import (
 	"encoding/gob"
 	"fmt"
 	"io/ioutil"
-	"os"
 	"testing"
 	"time"
 
+	"github.com/google/flatbuffers/go"
+
+	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/query/graph"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/store"
+	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/worker"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 func prepareTest(b *testing.B) (*store.Store, string, string) {
@@ -57,13 +61,52 @@ func prepareTest(b *testing.B) (*store.Store, string, string) {
 	return ps, dir, dir2
 }
 
-func benchmarkHelper(b *testing.B, f func(*testing.B, string)) {
+func buildValueList(data []string) *x.ValueList {
+	b := flatbuffers.NewBuilder(0)
+	offsets := make([]flatbuffers.UOffsetT, 0, len(data))
+	for _, s := range data {
+		bvo := b.CreateString(s)
+		task.ValueStart(b)
+		task.ValueAddVal(b, bvo)
+		offsets = append(offsets, task.ValueEnd(b))
+	}
+
+	task.ValueListStartValuesVector(b, len(data))
+	for i := 0; i < len(data); i++ {
+		b.PrependUOffsetT(offsets[i])
+	}
+	voffset := b.EndVector(len(data))
+
+	task.ValueListStart(b)
+	task.ValueListAddValues(b, voffset)
+	b.Finish(task.ValueListEnd(b))
+	buf := b.FinishedBytes()
+
+	out := new(x.ValueList)
+	x.Check(out.UnmarshalBinary(buf))
+	return out
+}
+
+// benchmarkHelper runs against some data from benchmark folder.
+func benchmarkHelper(b *testing.B, f func(*testing.B, *SubGraph)) {
 	for _, s := range []string{"actor", "director"} {
 		for i := 0; i < 3; i++ {
 			label := fmt.Sprintf("%s_%d", s, i)
 			filename := fmt.Sprintf("benchmark/%s.%d.gob", s, i)
 			if !b.Run(label, func(b *testing.B) {
-				f(b, filename)
+				b.ReportAllocs()
+				sg := new(SubGraph)
+				data, err := ioutil.ReadFile(filename)
+				if err != nil {
+					b.Fatal(err)
+				}
+				buf := bytes.NewBuffer(data)
+				dec := gob.NewDecoder(buf)
+				err = dec.Decode(sg)
+				if err != nil {
+					b.Fatal(err)
+				}
+				f(b, sg)
 			}) {
 				b.FailNow()
 			}
@@ -71,56 +114,9 @@ func benchmarkHelper(b *testing.B, f func(*testing.B, string)) {
 	}
 }
 
-func BenchmarkToJSON(b *testing.B) {
-	ps, dir, dir2 := prepareTest(b)
-	defer ps.Close()
-	defer os.RemoveAll(dir)
-	defer os.RemoveAll(dir2)
-
-	benchmarkHelper(b, func(b *testing.B, file string) {
-		b.ReportAllocs()
-		var sg SubGraph
-		var l Latency
-
-		f, err := ioutil.ReadFile(file)
-		if err != nil {
-			b.Fatal(err)
-		}
-
-		buf := bytes.NewBuffer(f)
-		dec := gob.NewDecoder(buf)
-		err = dec.Decode(&sg)
-		if err != nil {
-			b.Fatal(err)
-		}
-
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			if _, err := sg.ToJSON(&l); err != nil {
-				b.Fatal(err)
-			}
-		}
-	})
-}
-
 func BenchmarkToJSONWithPre(b *testing.B) {
-	benchmarkHelper(b, func(b *testing.B, file string) {
-		b.ReportAllocs()
-		var sg SubGraph
+	benchmarkHelper(b, func(b *testing.B, sg *SubGraph) {
 		var l Latency
-
-		f, err := ioutil.ReadFile(file)
-		if err != nil {
-			b.Fatal(err)
-		}
-
-		buf := bytes.NewBuffer(f)
-		dec := gob.NewDecoder(buf)
-		err = dec.Decode(&sg)
-		if err != nil {
-			b.Fatal(err)
-		}
-
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			if _, err := sg.ToJSONWithPre(&l); err != nil {
@@ -131,23 +127,8 @@ func BenchmarkToJSONWithPre(b *testing.B) {
 }
 
 func BenchmarkToJSONWithPost(b *testing.B) {
-	benchmarkHelper(b, func(b *testing.B, file string) {
-		b.ReportAllocs()
-		var sg SubGraph
+	benchmarkHelper(b, func(b *testing.B, sg *SubGraph) {
 		var l Latency
-
-		f, err := ioutil.ReadFile(file)
-		if err != nil {
-			b.Fatal(err)
-		}
-
-		buf := bytes.NewBuffer(f)
-		dec := gob.NewDecoder(buf)
-		err = dec.Decode(&sg)
-		if err != nil {
-			b.Fatal(err)
-		}
-
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			if _, err := sg.ToJSONWithPost(&l); err != nil {
@@ -157,58 +138,9 @@ func BenchmarkToJSONWithPost(b *testing.B) {
 	})
 }
 
-func BenchmarkToPB(b *testing.B) {
-	benchmarkHelper(b, func(b *testing.B, file string) {
-		b.ReportAllocs()
-		var sg SubGraph
-		var l Latency
-
-		f, err := ioutil.ReadFile(file)
-		if err != nil {
-			b.Fatal(err)
-		}
-
-		buf := bytes.NewBuffer(f)
-		dec := gob.NewDecoder(buf)
-		err = dec.Decode(&sg)
-		if err != nil {
-			b.Fatal(err)
-		}
-
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			pb, err := sg.ToProtocolBuffer(&l)
-			if err != nil {
-				b.Fatal(err)
-			}
-			r := new(graph.Response)
-			r.N = pb
-			var c Codec
-			if _, err = c.Marshal(r); err != nil {
-				b.Fatal(err)
-			}
-		}
-	})
-}
-
 func BenchmarkToPBWithPre(b *testing.B) {
-	benchmarkHelper(b, func(b *testing.B, file string) {
-		b.ReportAllocs()
-		var sg SubGraph
+	benchmarkHelper(b, func(b *testing.B, sg *SubGraph) {
 		var l Latency
-
-		f, err := ioutil.ReadFile(file)
-		if err != nil {
-			b.Fatal(err)
-		}
-
-		buf := bytes.NewBuffer(f)
-		dec := gob.NewDecoder(buf)
-		err = dec.Decode(&sg)
-		if err != nil {
-			b.Fatal(err)
-		}
-
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			pb, err := sg.ToProtocolBufferWithPre(&l)
@@ -223,4 +155,131 @@ func BenchmarkToPBWithPre(b *testing.B) {
 			}
 		}
 	})
+}
+
+func BenchmarkToPBWithPost(b *testing.B) {
+	benchmarkHelper(b, func(b *testing.B, sg *SubGraph) {
+		var l Latency
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			pb, err := sg.ToProtocolBufferWithPost(&l)
+			if err != nil {
+				b.Fatal(err)
+			}
+			r := new(graph.Response)
+			r.N = pb
+			var c Codec
+			if _, err = c.Marshal(r); err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
+}
+
+func valueSubGraph(attr string, uid []uint64, data []string) *SubGraph {
+	x.AssertTrue(len(uid) == len(data))
+	r := make([]*algo.UIDList, 0)
+	for i := 0; i < len(uid); i++ {
+		r = append(r, algo.NewUIDList([]uint64{}))
+	}
+	return &SubGraph{
+		Attr:    attr,
+		SrcUIDs: algo.NewUIDList(uid),
+		Values:  buildValueList(data),
+		Result:  r,
+	}
+}
+
+func uint64Range(a, b int) *algo.UIDList {
+	out := make([]uint64, 0)
+	for i := a; i < b; i++ {
+		out = append(out, uint64(i))
+	}
+	return algo.NewUIDList(out)
+}
+
+func sampleChildren(srcUID []uint64) []*SubGraph {
+	children := make([]*SubGraph, 0)
+	data := make([]string, 0, len(srcUID))
+	for i := 0; i < len(srcUID); i++ {
+		data = append(data, "somedata")
+	}
+	for i := 0; i < 50; i++ {
+		children = append(children, valueSubGraph(
+			fmt.Sprintf("attr%d", i), srcUID, data))
+	}
+	return children
+}
+
+const uidStart = 10000
+const uidEnd = 15000
+
+// sampleSubGraph1 creates a subgraph with given number of unique descendents.
+func sampleSubGraph(numUnique int) *SubGraph {
+	r := make([]*algo.UIDList, 0)
+	for i := uidStart; i < uidEnd; i++ {
+		r = append(r, algo.NewUIDList([]uint64{uint64(100000000 + (i % numUnique))}))
+	}
+
+	var destUID []uint64
+	for i := 0; i < numUnique; i++ {
+		destUID = append(destUID, uint64(100000000+i))
+	}
+
+	c := &SubGraph{
+		Attr:     "aaa",
+		SrcUIDs:  uint64Range(uidStart, uidEnd),
+		DestUIDs: algo.NewUIDList(destUID),
+		Values:   createNilValuesList(len(r)),
+		Result:   r,
+		Children: sampleChildren(destUID),
+	}
+
+	d := &SubGraph{
+		Attr:     "bbb",
+		SrcUIDs:  algo.NewUIDList([]uint64{1}),
+		DestUIDs: uint64Range(uidStart, uidEnd),
+		Result:   []*algo.UIDList{uint64Range(uidStart, uidEnd)},
+		Values:   createNilValuesList(1),
+		Children: []*SubGraph{c},
+	}
+
+	return &SubGraph{
+		Attr:     "ignore",
+		SrcUIDs:  algo.NewUIDList([]uint64{1}),
+		DestUIDs: algo.NewUIDList([]uint64{1}),
+		Values:   createNilValuesList(1),
+		Result:   []*algo.UIDList{algo.NewUIDList([]uint64{1})},
+		Children: []*SubGraph{d},
+	}
+}
+
+func BenchmarkToPBSynthetic(b *testing.B) {
+	for _, label := range []string{"pre", "post"} {
+		for _, numUnique := range []int{1, 1000, 2000, 3000, 4000, 5000} {
+			b.Run(fmt.Sprintf("%s_%d", label, numUnique), func(b *testing.B) {
+				b.ReportAllocs()
+				sg := sampleSubGraph(numUnique)
+				toPBFunc := sg.ToProtocolBufferWithPre
+				if label == "post" {
+					toPBFunc = sg.ToProtocolBufferWithPost
+				}
+
+				b.ResetTimer()
+				var l Latency
+				for i := 0; i < b.N; i++ {
+					pb, err := toPBFunc(&l)
+					if err != nil {
+						b.Fatal(err)
+					}
+					r := new(graph.Response)
+					r.N = pb
+					var c Codec
+					if _, err = c.Marshal(r); err != nil {
+						b.Fatal(err)
+					}
+				}
+			})
+		}
+	}
 }

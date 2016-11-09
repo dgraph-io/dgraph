@@ -429,11 +429,11 @@ func postTraverseAlt(sg *SubGraph, newPostOut func() postOutput) (map[uint64]pos
 	}
 
 	x.AssertTruef(sg.SrcUIDs.Size() == len(sg.Result),
-		"Result uidmatrixlength: %v. Query uidslength: %v",
-		sg.SrcUIDs.Size(), len(sg.Result))
+		"Attr: %v. SrcUID size: %v. Result size: %v",
+		sg.Attr, sg.SrcUIDs.Size(), len(sg.Result))
 	x.AssertTruef(sg.SrcUIDs.Size() == sg.Values.ValuesLength(),
-		"Result valuelength: %v. Query uidslength: %v",
-		sg.SrcUIDs.Size(), sg.Values.ValuesLength())
+		"Attr: %v. SrcUID size: %v. Values size: %v",
+		sg.Attr, sg.SrcUIDs.Size(), sg.Values.ValuesLength())
 
 	if sg.Counts != nil && sg.Counts.CountLength() > 0 {
 		for i := 0; i < sg.Counts.CountLength(); i++ {
