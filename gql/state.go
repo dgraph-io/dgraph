@@ -139,6 +139,8 @@ func lexInside(l *lex.Lexer) lex.StateFn {
 			return lexComment
 		case r == leftRound:
 			l.Emit(itemLeftRound)
+			l.AcceptRun(isSpace)
+			l.Ignore()
 			k := l.Next()
 			if k == '_' || l.Depth != 1 || l.Mode == fragmentMode {
 				l.Backup()
