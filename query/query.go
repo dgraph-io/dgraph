@@ -136,7 +136,6 @@ type SubGraph struct {
 	Children []*SubGraph
 	Params   params
 	Filter   *gql.FilterTree
-	Gen      *gql.Generator
 
 	Counts *x.CountList
 	Values *x.ValueList
@@ -644,7 +643,6 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 			Attr:   gchild.Attr,
 			Params: args,
 			Filter: gchild.Filter,
-			Gen:    gchild.Gen,
 		}
 		if v, ok := gchild.Args["offset"]; ok {
 			offset, err := strconv.ParseInt(v, 0, 32)
@@ -712,32 +710,28 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		isDebug:  gq.Attr == "debug",
 	}
 
-	var src []uint64
-	if euid != 0 {
-		src = append(src, euid)
-	}
-
 	sg := &SubGraph{
-		Attr:    gq.Attr,
-		Params:  args,
-		Filter:  gq.Filter,
-		Gen:     gq.Gen,
-		SrcUIDs: algo.NewUIDList(src),
+		Attr:   gq.Attr,
+		Params: args,
+		Filter: gq.Filter,
 	}
-
-	{
-		// Encode uid into result flatbuffer.
-		b := flatbuffers.NewBuilder(0)
-		b.Finish(algo.NewUIDList(src).AddTo(b))
-		buf := b.FinishedBytes()
-		tl := task.GetRootAsUidList(buf, 0)
-		ul := new(algo.UIDList)
-		ul.FromTask(tl)
-		if euid != 0 {
-			sg.Result = []*algo.UIDList{ul}
+	if gq.Gen != nil {
+		sg.applyGenerator(ctx, gq.Gen)
+	} else {
+		sg.SrcUIDs = algo.NewUIDList([]uint64{euid})
+		{
+			// Encode uid into result flatbuffer.
+			b := flatbuffers.NewBuilder(0)
+			b.Finish(algo.NewUIDList([]uint64{euid}).AddTo(b))
+			buf := b.FinishedBytes()
+			tl := task.GetRootAsUidList(buf, 0)
+			ul := new(algo.UIDList)
+			ul.FromTask(tl)
+			if euid != 0 {
+				sg.Result = []*algo.UIDList{ul}
+			}
 		}
 	}
-
 	{
 		// Also need to add nil value to keep this consistent.
 		sg.Values = createNilValuesList(1)
@@ -875,8 +869,6 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, taskQuery []byte, rch chan 
 		return
 	}
 
-	sg.applyGenerator(ctx)
-
 	if sg.DestUIDs.Size() == 0 {
 		// Looks like we're done here. Be careful with nil srcUIDs!
 		x.Trace(ctx, "Zero uids. Num attr children: %v", len(sg.Children))
@@ -1012,19 +1004,15 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, taskQuery []byte, rch chan 
 	rch <- nil
 }
 
-func (sg *SubGraph) applyGenerator(ctx context.Context) error {
-	if sg.Gen == nil { // No Generator.
+func (sg *SubGraph) applyGenerator(ctx context.Context, gen *gql.Generator) error {
+	if gen == nil { // No Generator.
 		return nil
 	}
-	newSorted, err := runGenerator(ctx, sg.Gen)
-	fmt.Println(newSorted.Size(), newSorted, "_____________________________")
+	newSorted, err := runGenerator(ctx, gen)
 	if err != nil {
 		return err
 	}
-	sg.DestUIDs = algo.MergeLists([]*algo.UIDList{sg.DestUIDs, newSorted})
-	sg.SrcUIDs = sg.DestUIDs
-	//.FromUints(sg.DestUIDs.ToUintsForTest())
-	fmt.Println(sg.SrcUIDs.Size(), sg.SrcUIDs, "_____________________________")
+	sg.SrcUIDs = newSorted
 	for i := 0; i < newSorted.Size(); i++ {
 		sg.Result = append(sg.Result, algo.NewUIDList([]uint64{newSorted.Get(i)}))
 	}
@@ -1042,6 +1030,8 @@ func runGenerator(ctx context.Context,
 			return anyof(ctx, nil, gen.FuncArgs[0], gen.FuncArgs[1])
 		case "allof":
 			return allof(ctx, nil, gen.FuncArgs[0], gen.FuncArgs[1])
+			//case "near":
+			//	return generateGeo(ctx, gen.FuncArgs[0], geo.QueryTypeNear, gen.FuncArgs[1], gen.FuncArgs[2])
 		}
 	}
 	return nil, nil
