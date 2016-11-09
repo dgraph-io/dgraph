@@ -56,6 +56,10 @@ type groupi struct {
 var gr *groupi
 
 func groups() *groupi {
+	if gr == nil {
+		gr = new(groupi)
+		gr.ctx, gr.cancel = context.WithCancel(context.Background())
+	}
 	return gr
 }
 
@@ -63,9 +67,6 @@ func groups() *groupi {
 // and either start or restart RAFT nodes.
 // This function triggers RAFT nodes to be created.
 func StartRaftNodes(walDir string) {
-	gr = new(groupi)
-	gr.ctx, gr.cancel = context.WithCancel(context.Background())
-
 	// Successfully connect with the peer, before doing anything else.
 	if len(*peer) > 0 {
 		_, paddr := parsePeer(*peer)

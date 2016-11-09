@@ -48,7 +48,7 @@ func childAttrs(sg *SubGraph) []string {
 	return out
 }
 
-func taskValues(t *testing.T, v *x.ValueList) []string {
+func taskValues(t *testing.T, v *task.ValueList) []string {
 	out := make([]string, v.ValuesLength())
 	for i := 0; i < v.ValuesLength(); i++ {
 		var tv task.Value
@@ -78,7 +78,7 @@ func TestNewGraph(t *testing.T) {
 	require.EqualValues(t,
 		[][]uint64{
 			[]uint64{101},
-		}, algo.ToUintsListForTest(sg.Result))
+		}, algo.ToUintsListForTest(sg.UIDMatrix()))
 }
 
 const schemaStr = `
@@ -140,9 +140,9 @@ func populateGraph(t *testing.T) (string, *store.Store) {
 	worker.Init(ps)
 
 	group.ParseGroupConfig("")
-	dir2, err := ioutil.TempDir("", "wal_")
-	require.NoError(t, err)
-	worker.StartRaftNodes(dir2)
+	//dir2, err := ioutil.TempDir("", "wal_")
+	//require.NoError(t, err)
+	// worker.StartRaftNodes(dir2)
 
 	// So, user we're interested in has uid: 1.
 	// She has 5 friends: 23, 24, 25, 31, and 101
@@ -387,19 +387,19 @@ func TestProcessGraph(t *testing.T) {
 	require.EqualValues(t,
 		[][]uint64{
 			[]uint64{23, 24, 25, 31, 101},
-		}, algo.ToUintsListForTest(child.Result))
+		}, algo.ToUintsListForTest(child.UIDMatrix()))
 
 	require.EqualValues(t, []string{"name"}, childAttrs(child))
 
 	child = child.Children[0]
 	require.EqualValues(t,
 		[]string{"Rick Grimes", "Glenn Rhee", "Daryl Dixon", "Andrea", ""},
-		taskValues(t, child.Values))
+		taskValues(t, child.Values()))
 
 	require.EqualValues(t, []string{"Michonne"},
-		taskValues(t, sg.Children[1].Values))
+		taskValues(t, sg.Children[1].Values()))
 	require.EqualValues(t, []string{"female"},
-		taskValues(t, sg.Children[2].Values))
+		taskValues(t, sg.Children[2].Values()))
 }
 
 func TestToJSON(t *testing.T) {

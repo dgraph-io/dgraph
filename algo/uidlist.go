@@ -3,7 +3,6 @@ package algo
 import (
 	"bytes"
 	"container/heap"
-	"encoding/binary"
 	"sort"
 	"strconv"
 
@@ -342,35 +341,4 @@ func ToUintsListForTest(ul []*UIDList) [][]uint64 {
 func (u *UIDList) Swap(i, j int) {
 	x.AssertTrue(u.uints != nil)
 	u.uints[i], u.uints[j] = u.uints[j], u.uints[i]
-}
-
-// MarshalBinary encodes our UID list.
-func (u *UIDList) MarshalBinary() ([]byte, error) {
-	var b bytes.Buffer
-	n := u.Size()
-	if err := binary.Write(&b, binary.LittleEndian, uint64(n)); err != nil {
-		return nil, err
-	}
-	for i := 0; i < n; i++ {
-		if err := binary.Write(&b, binary.LittleEndian, u.Get(i)); err != nil {
-			return nil, err
-		}
-	}
-	return b.Bytes(), nil
-}
-
-// UnmarshalBinary decodes our UID list.
-func (u *UIDList) UnmarshalBinary(data []byte) error {
-	b := bytes.NewBuffer(data)
-	var n uint64
-	if err := binary.Read(b, binary.LittleEndian, &n); err != nil {
-		return err
-	}
-	u.uints = make([]uint64, n)
-	for i := 0; i < int(n); i++ {
-		if err := binary.Read(b, binary.LittleEndian, &u.uints[i]); err != nil {
-			return err
-		}
-	}
-	return nil
 }
