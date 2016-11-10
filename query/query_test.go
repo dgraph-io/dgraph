@@ -199,7 +199,7 @@ func processToJSON(t *testing.T, query string) string {
 	require.NoError(t, err)
 
 	var l Latency
-	js, err := sg.ToJSONWithPost(&l)
+	js, err := sg.ToJSON(&l)
 	//js, err := sg.ToJSON(&l)
 	require.NoError(t, err)
 
@@ -468,7 +468,7 @@ func TestToJSON(t *testing.T) {
 	require.NoError(t, err)
 
 	var l Latency
-	js, err := sg.ToJSONWithPost(&l)
+	js, err := sg.ToJSON(&l)
 	require.NoError(t, err)
 	require.EqualValues(t,
 		`{"me":[{"alive":true,"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"},{}],"gender":"female","name":"Michonne"}]}`,
@@ -504,7 +504,7 @@ func TestToJSONFilter(t *testing.T) {
 	require.NoError(t, err)
 
 	var l Latency
-	js, err := sg.ToJSONWithPost(&l)
+	js, err := sg.ToJSON(&l)
 	require.NoError(t, err)
 	require.EqualValues(t,
 		`{"me":[{"friend":[{"name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
@@ -540,7 +540,7 @@ func TestToJSONFilterAllOf(t *testing.T) {
 	require.NoError(t, err)
 
 	var l Latency
-	js, err := sg.ToJSONWithPost(&l)
+	js, err := sg.ToJSON(&l)
 	require.NoError(t, err)
 	require.EqualValues(t,
 		`{"me":[{"gender":"female","name":"Michonne"}]}`,
@@ -576,7 +576,7 @@ func TestToJSONFilterUID(t *testing.T) {
 	require.NoError(t, err)
 
 	var l Latency
-	js, err := sg.ToJSONWithPost(&l)
+	js, err := sg.ToJSON(&l)
 	require.NoError(t, err)
 	require.EqualValues(t,
 		`{"me":[{"friend":[{"_uid_":"0x1f"}],"gender":"female","name":"Michonne"}]}`,
@@ -612,7 +612,7 @@ func TestToJSONFilterOr(t *testing.T) {
 	require.NoError(t, err)
 
 	var l Latency
-	js, err := sg.ToJSONWithPost(&l)
+	js, err := sg.ToJSON(&l)
 	require.NoError(t, err)
 	require.EqualValues(t,
 		`{"me":[{"friend":[{"name":"Glenn Rhee"},{"name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
@@ -648,7 +648,7 @@ func TestToJSONFilterOrFirst(t *testing.T) {
 	require.NoError(t, err)
 
 	var l Latency
-	js, err := sg.ToJSONWithPost(&l)
+	js, err := sg.ToJSON(&l)
 	require.NoError(t, err)
 	require.EqualValues(t,
 		`{"me":[{"friend":[{"name":"Glenn Rhee"},{"name":"Daryl Dixon"}],"gender":"female","name":"Michonne"}]}`,
@@ -684,7 +684,7 @@ func TestToJSONFilterOrOffset(t *testing.T) {
 	require.NoError(t, err)
 
 	var l Latency
-	js, err := sg.ToJSONWithPost(&l)
+	js, err := sg.ToJSON(&l)
 	require.NoError(t, err)
 	require.EqualValues(t,
 		`{"me":[{"friend":[{"name":"Daryl Dixon"},{"name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
@@ -721,7 +721,7 @@ func TestToJSONFirstOffset(t *testing.T) {
 	require.NoError(t, err)
 
 	var l Latency
-	js, err := sg.ToJSONWithPost(&l)
+	js, err := sg.ToJSON(&l)
 	require.NoError(t, err)
 	require.EqualValues(t,
 		`{"me":[{"friend":[{"name":"Glenn Rhee"}],"gender":"female","name":"Michonne"}]}`,
@@ -757,7 +757,7 @@ func TestToJSONFilterOrFirstOffset(t *testing.T) {
 	require.NoError(t, err)
 
 	var l Latency
-	js, err := sg.ToJSONWithPost(&l)
+	js, err := sg.ToJSON(&l)
 	require.NoError(t, err)
 	require.EqualValues(t,
 		`{"me":[{"friend":[{"name":"Daryl Dixon"}],"gender":"female","name":"Michonne"}]}`,
@@ -795,7 +795,7 @@ func TestToJSONFilterOrFirstNegative(t *testing.T) {
 	require.NoError(t, err)
 
 	var l Latency
-	js, err := sg.ToJSONWithPost(&l)
+	js, err := sg.ToJSON(&l)
 	require.NoError(t, err)
 	require.EqualValues(t,
 		`{"me":[{"friend":[{"name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
@@ -831,7 +831,7 @@ func TestToJSONFilterAnd(t *testing.T) {
 	require.NoError(t, err)
 
 	var l Latency
-	js, err := sg.ToJSONWithPost(&l)
+	js, err := sg.ToJSON(&l)
 	require.NoError(t, err)
 	require.EqualValues(t,
 		`{"me":[{"gender":"female","name":"Michonne"}]}`,
@@ -881,7 +881,7 @@ func TestToPB(t *testing.T) {
 	require.NoError(t, err)
 
 	var l Latency
-	gr, err := sg.ToProtocolBufferWithPost(&l)
+	gr, err := sg.ToProtocolBuffer(&l)
 	require.NoError(t, err)
 
 	require.EqualValues(t,
@@ -1046,7 +1046,7 @@ func TestToPBFilter(t *testing.T) {
 	require.NoError(t, err)
 
 	var l Latency
-	pb, err := sg.ToProtocolBufferWithPost(&l)
+	pb, err := sg.ToProtocolBuffer(&l)
 	require.NoError(t, err)
 
 	expectedPb := `attribute: "me"

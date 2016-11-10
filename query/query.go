@@ -167,367 +167,6 @@ func mergeInterfaces(i1 interface{}, i2 interface{}) interface{} {
 	return []interface{}{i1, i2}
 }
 
-// postTraverse traverses the subgraph recursively and returns final result for the query.
-func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
-	// No need to check for nil as Size() will return 0 in that case.
-	if sg.SrcUIDs.Size() == 0 {
-		return nil, nil
-	}
-	result := make(map[uint64]interface{})
-	// Get results from all children first.
-	cResult := make(map[uint64]interface{})
-
-	// ignoreUids would contain those UIDs whose scalar childlren dont obey the
-	// types specified in the schema.
-	ignoreUids := make(map[uint64]bool)
-	for _, child := range sg.Children {
-		m, err := postTraverse(child)
-		if err != nil {
-			return result, err
-		}
-
-		// condFlag is used to ensure that the child is a required part of the
-		// current node according to schema. Only then should we check for its
-		// validity.
-		var condFlag bool
-		if obj, ok := schema.TypeOf(sg.Attr).(types.Object); ok {
-			if _, ok := obj.Fields[child.Attr]; ok {
-				condFlag = true
-			}
-		}
-
-		// Merge results from all children, one by one.
-		for k, v := range m {
-			if _, ok := v.(map[string]interface{})["_inv_"]; ok {
-				if condFlag {
-					ignoreUids[k] = true
-					delete(cResult, k)
-				} else {
-					continue
-				}
-			}
-			if ignoreUids[k] {
-				continue
-			}
-
-			if val, present := cResult[k]; !present {
-				cResult[k] = v
-			} else {
-				cResult[k] = mergeInterfaces(val, v)
-			}
-		}
-	}
-
-	r := sg.Result
-	x.AssertTruef(sg.SrcUIDs.Size() == len(r),
-		"Result uidmatrixlength: %v. Query uidslength: %v", sg.SrcUIDs.Size(), len(r))
-	x.AssertTruef(sg.SrcUIDs.Size() == sg.Values.ValuesLength(),
-		"Result valuelength: %v. Query uidslength: %v", sg.SrcUIDs.Size(), sg.Values.ValuesLength())
-
-	// Generate a matrix of maps
-	// Row -> .....
-	// Col
-	//  |
-	//  v
-	//  map{_uid_ = uid}
-	// If some result is present from children results, then merge.
-	// Otherwise, this would only contain the _uid_ property.
-	// result[uid in row] = map[cur attribute ->
-	//                          list of maps of {uid, uid + children result}]
-	//
-
-	if sg.Counts != nil && sg.Counts.CountLength() > 0 {
-		for i := 0; i < sg.Counts.CountLength(); i++ {
-			co := sg.Counts.Count(i)
-			m := make(map[string]interface{})
-			m["_count_"] = co
-			mp := make(map[string]interface{})
-			if sg.Params.Alias != "" {
-				mp[sg.Params.Alias] = m
-			} else {
-				mp[sg.Attr] = m
-			}
-			result[sg.SrcUIDs.Get(i)] = mp
-		}
-	}
-
-	for i, ul := range r {
-		l := make([]interface{}, 0, ul.Size())
-		for j := 0; j < ul.Size(); j++ {
-			uid := ul.Get(j)
-			m := make(map[string]interface{})
-			if sg.Params.GetUID || sg.Params.isDebug {
-				m["_uid_"] = fmt.Sprintf("%#x", uid)
-			}
-			if ival, present := cResult[uid]; !present {
-				l = append(l, m)
-			} else {
-				l = append(l, mergeInterfaces(m, ival))
-			}
-		}
-		if len(l) > 0 {
-			m := make(map[string]interface{})
-			if sg.Params.Alias != "" {
-				m[sg.Params.Alias] = l
-			} else {
-				m[sg.Attr] = l
-			}
-			if sg.GeoFilter != nil {
-				x.AssertTruef(len(l) == 1, "There should be exactly 1 uid at the top level.")
-				// remove the top level attr from the result, that is only used
-				// for filtering the results.
-				result[sg.SrcUIDs.Get(i)] = l[0]
-			} else {
-				result[sg.SrcUIDs.Get(i)] = m
-			}
-		}
-	}
-
-	values := sg.Values
-	var tv task.Value
-	for i := 0; i < values.ValuesLength(); i++ {
-		if ok := values.Values(&tv, i); !ok {
-			return result, x.Errorf("While parsing value")
-		}
-		valBytes := tv.ValBytes()
-		m := make(map[string]interface{})
-		if bytes.Equal(valBytes, nil) {
-
-			// We do this, because we typically do set values, even though
-			// they might be nil. This is to ensure that the index of the query uids
-			// and the index of the results can remain in sync.
-			if sg.Params.AttrType != nil && sg.Params.AttrType.IsScalar() {
-				m["_inv_"] = true
-				result[sg.SrcUIDs.Get(i)] = m
-			}
-			continue
-		}
-		val, err := getValue(tv)
-		if err != nil {
-			return result, err
-		}
-
-		if pval, present := result[sg.SrcUIDs.Get(i)]; present {
-			log.Fatalf("prev: %v _uid_: %v new: %v"+
-				" Previous value detected. A uid -> list of uids / value. Not both",
-				pval, sg.SrcUIDs.Get(i), val)
-		}
-		if sg.Params.GetUID || sg.Params.isDebug {
-			m["_uid_"] = fmt.Sprintf("%#x", sg.SrcUIDs.Get(i))
-		}
-
-		globalType := schema.TypeOf(sg.Attr)
-		schemaType := sg.Params.AttrType
-		lval := val
-
-		if schemaType != nil {
-			// type assertion for scalar type values
-			if !schemaType.IsScalar() {
-				return result, x.Errorf("Unknown Scalar:%v. Leaf predicate:'%v' must be"+
-					" one of the scalar types defined in the schema.", sg.Params.AttrType, sg.Attr)
-			}
-			// Convert to schema type.
-			st := schemaType.(types.Scalar)
-			lval, err = st.Convert(val)
-			if err != nil {
-				// We ignore schema conversion errors and not include the values in the result
-				m["_inv_"] = true
-				result[sg.SrcUIDs.Get(i)] = m
-				continue
-			}
-		} else if globalType != nil {
-			// type assertion for optional scalars which aren't part of objects.
-			if !globalType.IsScalar() {
-				return result, x.Errorf("Unknown Scalar:%v. Leaf predicate:'%v' must be"+
-					" one of the scalar types defined in the schema.", sg.Params.AttrType, sg.Attr)
-			}
-			gt := globalType.(types.Scalar)
-			lval, err = gt.Convert(val)
-			if err != nil {
-				// We ignore schema conversion errors and not include the values in the result
-				continue
-			}
-		}
-
-		if sg.Params.Alias != "" {
-			m[sg.Params.Alias] = lval
-		} else {
-			m[sg.Attr] = lval
-		}
-
-		result[sg.SrcUIDs.Get(i)] = m
-	}
-	return result, nil
-}
-
-// postTraverseAlt traverses the subgraph recursively and returns final result for the query.
-func postTraverseAlt(sg *SubGraph, newPostOut func() postOutput) (map[uint64]postOutput, error) {
-	// No need to check for nil as Size() will return 0 in that case.
-	if sg.SrcUIDs.Size() == 0 {
-		return nil, nil
-	}
-
-	// This will be returned later.
-	result := make(map[uint64]postOutput)
-
-	// Data from child attributes. Key is sg.destUIDs.
-	cResult := make(map[uint64]postOutput)
-
-	outputAttr := sg.Attr
-	if sg.Params.Alias != "" {
-		outputAttr = sg.Params.Alias
-	}
-
-	// ignoreUids would contain those UIDs whose scalar childlren don't obey the
-	// types specified in the schema.
-	ignoreUids := make(map[uint64]bool)
-
-	// Merge data from children attributes and rekey by UIDs in sg.destUIDs.
-	for _, child := range sg.Children {
-		m, err := postTraverseAlt(child, newPostOut)
-		if err != nil {
-			return result, err
-		}
-
-		// condFlag is used to ensure that the child is a required part of the
-		// current node according to schema. Only then should we check for its
-		// validity.
-		var condFlag bool
-		if obj, ok := schema.TypeOf(sg.Attr).(types.Object); ok {
-			if _, ok := obj.Fields[child.Attr]; ok {
-				condFlag = true
-			}
-		}
-
-		// Merge results from all children, one by one.
-		for k, v := range m {
-			if !v.Valid() {
-				if condFlag {
-					ignoreUids[k] = true
-					delete(cResult, k)
-				}
-				continue
-			}
-			if ignoreUids[k] {
-				// Invalidated by some other attribute.
-				continue
-			}
-
-			if val, present := cResult[k]; !present {
-				// First time we see this UID.
-				cResult[k] = v
-
-				if sg.Params.GetUID || sg.Params.isDebug {
-					v.SetUID(k)
-				}
-			} else {
-				// UID already exists. We just need to merge stuff from v into
-				// existing result which is cResult[k] or val.
-				val.Merge(v)
-			}
-		}
-	}
-
-	x.AssertTruef(sg.SrcUIDs.Size() == len(sg.Result),
-		"Attr: %v. SrcUID size: %v. Result size: %v",
-		sg.Attr, sg.SrcUIDs.Size(), len(sg.Result))
-	x.AssertTruef(sg.SrcUIDs.Size() == sg.Values.ValuesLength(),
-		"Attr: %v. SrcUID size: %v. Values size: %v",
-		sg.Attr, sg.SrcUIDs.Size(), sg.Values.ValuesLength())
-
-	if sg.Counts != nil && sg.Counts.CountLength() > 0 {
-		for i := 0; i < sg.Counts.CountLength(); i++ {
-			c := types.Int32(sg.Counts.Count(i))
-			m := newPostOut()
-			m.AddValue("_count_", &c)
-			mp := newPostOut()
-			mp.AddChild(outputAttr, m)
-			result[sg.SrcUIDs.Get(i)] = mp
-		}
-	}
-
-	// Visit each posting list in sg.Result and merge in child results.
-	for i, ul := range sg.Result {
-		srcUID := sg.SrcUIDs.Get(i)
-		m, present := result[srcUID]
-		if !present {
-			m = newPostOut()
-			result[srcUID] = m
-		}
-
-		for j := 0; j < ul.Size(); j++ {
-			uid := ul.Get(j)
-			if ival, present := cResult[uid]; present {
-				m.AddChild(outputAttr, ival)
-			}
-		}
-	}
-
-	values := sg.Values
-	var tv task.Value
-	for i := 0; i < values.ValuesLength(); i++ {
-		if ok := values.Values(&tv, i); !ok {
-			return result, x.Errorf("While parsing value")
-		}
-
-		srcUID := sg.SrcUIDs.Get(i)
-		m, present := result[srcUID]
-		if !present {
-			m = newPostOut()
-			result[srcUID] = m
-		}
-
-		if bytes.Equal(tv.ValBytes(), nil) {
-			// We do this, because we typically do set values, even though
-			// they might be nil. This is to ensure that the index of the query uids
-			// and the index of the results can remain in sync.
-			if sg.Params.AttrType != nil && sg.Params.AttrType.IsScalar() {
-				m.Invalidate()
-			}
-			continue
-		}
-		val, err := getValue(tv)
-		if err != nil {
-			return result, err
-		}
-
-		globalType := schema.TypeOf(sg.Attr)
-		schemaType := sg.Params.AttrType
-		lval := val
-
-		if schemaType != nil {
-			// type assertion for scalar type values
-			if !schemaType.IsScalar() {
-				return result, x.Errorf("Unknown Scalar:%v. Leaf predicate:'%v' must be"+
-					" one of the scalar types defined in the schema.", sg.Params.AttrType, sg.Attr)
-			}
-			// Convert to schema type.
-			st := schemaType.(types.Scalar)
-			lval, err = st.Convert(val)
-			if err != nil {
-				// We ignore schema conversion errors and not include the values in the result
-				m.Invalidate()
-				result[sg.SrcUIDs.Get(i)] = m
-				continue
-			}
-		} else if globalType != nil {
-			// type assertion for optional scalars which aren't part of objects.
-			if !globalType.IsScalar() {
-				return result, x.Errorf("Unknown Scalar:%v. Leaf predicate:'%v' must be"+
-					" one of the scalar types defined in the schema.", sg.Params.AttrType, sg.Attr)
-			}
-			gt := globalType.(types.Scalar)
-			lval, err = gt.Convert(val)
-			if err != nil {
-				// We ignore schema conversion errors and not include the values in the result
-				continue
-			}
-		}
-		m.AddValue(outputAttr, lval)
-	}
-	return result, nil
-}
-
 // getValue gets the value from the task.
 func getValue(tv task.Value) (types.Value, error) {
 	vType := tv.ValType()
@@ -540,35 +179,6 @@ func getValue(tv task.Value) (types.Value, error) {
 		return nil, err
 	}
 	return val, nil
-}
-
-// ToJSON converts the internal subgraph object to JSON format which is then sent
-// to the HTTP client.
-func (sg *SubGraph) ToJSON(l *Latency) ([]byte, error) {
-	r, err := postTraverse(sg)
-	if err != nil {
-		return nil, err
-	}
-	l.Json = time.Since(l.Start) - l.Parsing - l.Processing
-
-	var a []map[string]interface{}
-	// r is a map, and we don't know it's key. So iterate over it, even though it only has 1 result.
-	for _, ival := range r {
-		var m map[string]interface{}
-		if ival != nil {
-			m = ival.(map[string]interface{})
-		} else {
-			m = make(map[string]interface{})
-		}
-		if sg.Params.isDebug {
-			m["server_latency"] = l.ToMap()
-		}
-		if len(r) == 1 {
-			return json.Marshal(m)
-		}
-		a = append(a, m)
-	}
-	return json.Marshal(a)
 }
 
 var nodePool = sync.Pool{
@@ -599,115 +209,7 @@ func init() {
 }
 
 // This method gets the values and children for a subgraph.
-func (sg *SubGraph) preTraverse(uid uint64, dst *graph.Node) error {
-	var properties []*graph.Property
-	var children []*graph.Node
-
-	invalidUids := make(map[uint64]bool)
-	// We go through all predicate children of the subgraph.
-	for _, pc := range sg.Children {
-		idx := pc.SrcUIDs.IndexOf(uid)
-
-		if idx == -1 {
-			log.Fatal("Attribute with uid not found in child Query uids.")
-			return x.Errorf("Attribute with uid not found")
-		}
-
-		ul := pc.Result[idx]
-		if sg.Counts != nil && sg.Counts.CountLength() > 0 {
-			c := types.Int32(sg.Counts.Count(idx))
-			p := createProperty("_count_", &c)
-			uc := &graph.Node{
-				Attribute:  pc.Attr,
-				Properties: []*graph.Property{p},
-			}
-			children = append(children, uc)
-		} else if ul.Size() > 0 || len(pc.Children) > 0 {
-			// We create as many predicate entity children as the length of uids for
-			// this predicate.
-			for i := 0; i < ul.Size(); i++ {
-				uid := ul.Get(i)
-				uc := nodePool.Get().(*graph.Node)
-				uc.Attribute = pc.Attr
-				if sg.Params.GetUID || sg.Params.isDebug {
-					uc.Uid = uid
-				}
-				if rerr := pc.preTraverse(uid, uc); rerr != nil {
-					if rerr.Error() == "_INV_" {
-						invalidUids[uid] = true
-					} else {
-						log.Printf("Error while traversal: %v", rerr)
-						return rerr
-					}
-				}
-				if !invalidUids[uid] {
-					children = append(children, uc)
-				}
-			}
-		} else {
-			var tv task.Value
-			if ok := pc.Values.Values(&tv, idx); !ok {
-				return x.Errorf("While parsing value")
-			}
-
-			valBytes := tv.ValBytes()
-			v, err := getValue(tv)
-			if err != nil {
-				return err
-			}
-
-			if pc.Attr == "_xid_" {
-				txt, err := v.MarshalText()
-				if err != nil {
-					return err
-				}
-				dst.Xid = string(txt)
-				// We don't want to add _uid_ to properties map.
-			} else if pc.Attr == "_uid_" {
-				continue
-			} else {
-				globalType := schema.TypeOf(pc.Attr)
-				schemaType := pc.Params.AttrType
-				sv := v
-
-				if schemaType != nil {
-					//do type checking on response values
-					if !schemaType.IsScalar() {
-						return x.Errorf("Unknown Scalar:%v. Leaf predicate:'%v' must be"+
-							" one of the scalar types defined in the schema.", pc.Params.AttrType, pc.Attr)
-					}
-					st := schemaType.(types.Scalar)
-					// Convert to schema type.
-					sv, err = st.Convert(v)
-					if bytes.Equal(valBytes, nil) || err != nil {
-						// skip values that don't convert.
-						return x.Errorf("_INV_")
-					}
-				} else if globalType != nil {
-					// Try to coerce types if this is an optional scalar outside an object
-					// definition.
-					if !globalType.IsScalar() {
-						return x.Errorf("Leaf predicate:'%v' must be a scalar.", pc.Attr)
-					}
-					gt := globalType.(types.Scalar)
-					// Convert to schema type.
-					sv, err = gt.Convert(v)
-					if bytes.Equal(valBytes, nil) || err != nil {
-						continue
-					}
-				}
-				p := createProperty(pc.Attr, sv)
-				properties = append(properties, p)
-			}
-		}
-	}
-
-	dst.Properties, dst.Children = properties, children
-	return nil
-}
-
-// This method gets the values and children for a subgraph.
-func (sg *SubGraph) preTraverseAlt(uid uint64, dst preOutput) error {
+func (sg *SubGraph) preTraverse(uid uint64, dst preOutput) error {
 	invalidUids := make(map[uint64]bool)
 	// We go through all predicate children of the subgraph.
 	for _, pc := range sg.Children {
@@ -716,12 +218,6 @@ func (sg *SubGraph) preTraverseAlt(uid uint64, dst preOutput) error {
 		ul := pc.Result[idx]
 		if sg.Counts != nil && sg.Counts.CountLength() > 0 {
 			c := types.Int32(sg.Counts.Count(idx))
-			/*p := createProperty("_count_", &c)
-			uc := &graph.Node{
-				Attribute:  pc.Attr,
-				Properties: []*graph.Property{p},
-			}
-			children = append(children, uc)*/
 			uc := dst.New(pc.Attr)
 			uc.AddValue("_count_", &c)
 		} else if ul.Size() > 0 || len(pc.Children) > 0 {
@@ -732,14 +228,11 @@ func (sg *SubGraph) preTraverseAlt(uid uint64, dst preOutput) error {
 				if invalidUids[uid] {
 					continue
 				}
-				//uc := nodePool.Get().(*graph.Node)
-				//uc.Attribute = pc.Attr
 				uc := dst.New(pc.Attr)
 				if sg.Params.GetUID || sg.Params.isDebug {
-					//uc.Uid = uid
 					uc.SetUID(uid)
 				}
-				if rerr := pc.preTraverseAlt(uid, uc); rerr != nil {
+				if rerr := pc.preTraverse(uid, uc); rerr != nil {
 					if rerr.Error() == "_INV_" {
 						invalidUids[uid] = true
 						continue // next UID.
@@ -748,7 +241,6 @@ func (sg *SubGraph) preTraverseAlt(uid uint64, dst preOutput) error {
 					log.Printf("Error while traversal: %v", rerr)
 					return rerr
 				}
-				//children = append(children, uc)
 				dst.AddChild(pc.Attr, uc)
 			}
 		} else {
@@ -767,7 +259,6 @@ func (sg *SubGraph) preTraverseAlt(uid uint64, dst preOutput) error {
 				if err != nil {
 					return err
 				}
-				//dst.Xid = string(txt)
 				dst.SetXID(string(txt))
 				// We don't want to add _uid_ to properties map.
 			} else if pc.Attr == "_uid_" {
@@ -776,9 +267,8 @@ func (sg *SubGraph) preTraverseAlt(uid uint64, dst preOutput) error {
 				globalType := schema.TypeOf(pc.Attr)
 				schemaType := pc.Params.AttrType
 				sv := v
-
 				if schemaType != nil {
-					//do type checking on response values
+					// Do type checking on response values
 					if !schemaType.IsScalar() {
 						return x.Errorf("Unknown Scalar:%v. Leaf predicate:'%v' must be"+
 							" one of the scalar types defined in the schema.", pc.Params.AttrType, pc.Attr)
@@ -791,8 +281,8 @@ func (sg *SubGraph) preTraverseAlt(uid uint64, dst preOutput) error {
 						return x.Errorf("_INV_")
 					}
 				} else if globalType != nil {
-					// Try to coerce types if this is an optional scalar outside an object
-					// definition.
+					// Try to coerce types if this is an optional scalar outside an
+					// object definition.
 					if !globalType.IsScalar() {
 						return x.Errorf("Leaf predicate:'%v' must be a scalar.", pc.Attr)
 					}
@@ -804,8 +294,6 @@ func (sg *SubGraph) preTraverseAlt(uid uint64, dst preOutput) error {
 					}
 				}
 				dst.AddValue(pc.Attr, sv)
-				//				p := createProperty(pc.Attr, sv)
-				//				properties = append(properties, p)
 			}
 		}
 	}
@@ -817,30 +305,6 @@ func (sg *SubGraph) preTraverseAlt(uid uint64, dst preOutput) error {
 func createProperty(prop string, v types.Value) *graph.Property {
 	pval := toProtoValue(v)
 	return &graph.Property{Prop: prop, Value: pval}
-}
-
-// ToProtocolBuffer method transforms the predicate based subgraph to an
-// predicate-entity based protocol buffer subgraph.
-func (sg *SubGraph) ToProtocolBuffer(l *Latency) (*graph.Node, error) {
-	n := &graph.Node{
-		Attribute: sg.Attr,
-	}
-	if sg.SrcUIDs == nil {
-		return n, nil
-	}
-
-	x.AssertTrue(len(sg.Result) == 1)
-	ul := sg.Result[0]
-	if sg.Params.GetUID || sg.Params.isDebug {
-		n.Uid = ul.Get(0)
-	}
-
-	if rerr := sg.preTraverse(ul.Get(0), n); rerr != nil {
-		return n, rerr
-	}
-
-	l.ProtocolBuffer = time.Since(l.Start) - l.Parsing - l.Processing
-	return n, nil
 }
 
 func isPresent(list []string, str string) bool {
@@ -1469,6 +933,7 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 	return nil
 }
 
+// preOutput is the generic output / writer for preTraverse.
 type preOutput interface {
 	AddValue(attr string, v types.Value)
 	AddChild(attr string, child preOutput)
@@ -1477,29 +942,38 @@ type preOutput interface {
 	SetXID(xid string)
 }
 
+// protoPreOutput is the proto output for preTraverse.
 type protoPreOutput struct {
 	*graph.Node
 }
 
+// AddValue adds an attribute value for protoPreOutput.
 func (p *protoPreOutput) AddValue(attr string, v types.Value) {
 	p.Node.Properties = append(p.Node.Properties, createProperty(attr, v))
 }
 
+// AddChild adds a child for protoPreOutput.
 func (p *protoPreOutput) AddChild(attr string, child preOutput) {
 	p.Node.Children = append(p.Node.Children, child.(*protoPreOutput).Node)
 }
 
+// New creates a new node for protoPreOutput.
 func (p *protoPreOutput) New(attr string) preOutput {
 	uc := nodePool.Get().(*graph.Node)
 	uc.Attribute = attr
 	return &protoPreOutput{uc}
 }
 
+// SetUID sets UID of a protoPreOutput.
 func (p *protoPreOutput) SetUID(uid uint64) { p.Node.Uid = uid }
+
+// SetXID sets XID of a protoPreOutput.
 func (p *protoPreOutput) SetXID(xid string) { p.Node.Xid = xid }
 
-// ToProtocolBufferWithPre is ToProtocolBuffer that uses preTraverseAlt.
-func (sg *SubGraph) ToProtocolBufferWithPre(l *Latency) (*graph.Node, error) {
+// ToProtocolBuffer does preorder traversal to build a proto buffer. We have
+// used postorder traversal before, but preorder seems simpler and faster for
+// most cases.
+func (sg *SubGraph) ToProtocolBuffer(l *Latency) (*graph.Node, error) {
 	var dummy *protoPreOutput
 	if sg.SrcUIDs == nil {
 		return dummy.New(sg.Attr).(*protoPreOutput).Node, nil
@@ -1512,7 +986,7 @@ func (sg *SubGraph) ToProtocolBufferWithPre(l *Latency) (*graph.Node, error) {
 		n.SetUID(ul.Get(0))
 	}
 
-	if rerr := sg.preTraverseAlt(ul.Get(0), n); rerr != nil {
+	if rerr := sg.preTraverse(ul.Get(0), n); rerr != nil {
 		return n.(*protoPreOutput).Node, rerr
 	}
 
@@ -1520,16 +994,19 @@ func (sg *SubGraph) ToProtocolBufferWithPre(l *Latency) (*graph.Node, error) {
 	return n.(*protoPreOutput).Node, nil
 }
 
+// jsonPreOutput is the JSON output for preTraverse.
 type jsonPreOutput struct {
 	data map[string]interface{}
 }
 
+// AddValue adds an attribute value for jsonPreOutput.
 func (p *jsonPreOutput) AddValue(attr string, v types.Value) {
 	b, err := v.MarshalText()
 	x.Check(err)
 	p.data[attr] = string(b)
 }
 
+// AddChild adds a child for jsonPreOutput.
 func (p *jsonPreOutput) AddChild(attr string, child preOutput) {
 	a := p.data[attr]
 	if a == nil {
@@ -1541,21 +1018,24 @@ func (p *jsonPreOutput) AddChild(attr string, child preOutput) {
 		child.(*jsonPreOutput).data)
 }
 
+// New creates a new node for jsonPreOutput.
 func (p *jsonPreOutput) New(attr string) preOutput {
 	return &jsonPreOutput{make(map[string]interface{})}
 }
 
+// SetUID sets UID of a jsonPreOutput.
 func (p *jsonPreOutput) SetUID(uid uint64) {
 	p.data["_uid_"] = fmt.Sprintf("%#x", uid)
 }
 
+// SetXID sets XID of a jsonPreOutput.
 func (p *jsonPreOutput) SetXID(xid string) {
 	p.data["_xid_"] = xid
 }
 
-// ToJSONWithPre converts the internal subgraph object to JSON format which
-// is then sent to the HTTP client.
-func (sg *SubGraph) ToJSONWithPre(l *Latency) ([]byte, error) {
+// ToJSON converts the internal subgraph object to JSON format which is then\
+// sent to the HTTP client.
+func (sg *SubGraph) ToJSON(l *Latency) ([]byte, error) {
 	x.AssertTrue(len(sg.Result) == 1)
 
 	var dummy *jsonPreOutput
@@ -1565,154 +1045,8 @@ func (sg *SubGraph) ToJSONWithPre(l *Latency) ([]byte, error) {
 		n.SetUID(ul.Get(0))
 	}
 
-	if err := sg.preTraverseAlt(ul.Get(0), n); err != nil {
+	if err := sg.preTraverse(ul.Get(0), n); err != nil {
 		return nil, err
 	}
 	return json.Marshal(n.(*jsonPreOutput).data)
-}
-
-type postOutput interface {
-	Invalidate()
-	Valid() bool
-	Merge(postOutput)
-	AddValue(attr string, v types.Value)
-	AddChild(attr string, child postOutput)
-	SetUID(uid uint64)
-	SetXID(child postOutput)
-}
-
-type jsonPostOutput struct {
-	data    map[string]interface{}
-	invalid bool
-}
-
-func newJSONPostOutput() postOutput {
-	out := &jsonPostOutput{
-		data: make(map[string]interface{}),
-	}
-	return out
-}
-
-func (p *jsonPostOutput) Invalidate() { p.invalid = true }
-
-func (p *jsonPostOutput) Valid() bool { return !p.invalid }
-
-func (p *jsonPostOutput) AddValue(attr string, v types.Value) {
-	p.data[attr] = v
-}
-
-func (p *jsonPostOutput) Merge(q postOutput) {
-	m := q.(*jsonPostOutput).data
-	for k, v := range m {
-		p.data[k] = v
-	}
-}
-
-func (p *jsonPostOutput) AddChild(attr string, child postOutput) {
-	a := p.data[attr]
-	if a == nil {
-		// Need to do this because we cannot cast nil interface to
-		// []map[string]interface{}.
-		a = make([]map[string]interface{}, 0, 5)
-	}
-	p.data[attr] = append(a.([]map[string]interface{}),
-		child.(*jsonPostOutput).data)
-}
-
-func (p *jsonPostOutput) SetUID(uid uint64) {
-	p.data["_uid_"] = fmt.Sprintf("%#x", uid)
-}
-
-func (p *jsonPostOutput) SetXID(child postOutput) {
-	p.data["_xid_"] = child.(*jsonPostOutput).data["_xid_"]
-}
-
-// ToJSONWithPost converts the internal subgraph object to JSON format which is then sent
-// to the HTTP client.
-func (sg *SubGraph) ToJSONWithPost(l *Latency) ([]byte, error) {
-	r, err := postTraverseAlt(sg, newJSONPostOutput)
-	if err != nil {
-		return nil, err
-	}
-	l.Json = time.Since(l.Start) - l.Parsing - l.Processing
-
-	var a []map[string]interface{}
-	// r is a map, and we don't know it's key. So iterate over it, even though it only has 1 result.
-	for _, ival := range r {
-		var m map[string]interface{}
-		if ival != nil {
-			m = ival.(*jsonPostOutput).data
-		} else {
-			m = make(map[string]interface{})
-		}
-		if sg.Params.isDebug {
-			m["server_latency"] = l.ToMap()
-		}
-		if len(r) == 1 {
-			return json.Marshal(m)
-		}
-		a = append(a, m)
-	}
-	return json.Marshal(a)
-}
-
-type protoPostOutput struct {
-	*graph.Node
-	invalid bool
-}
-
-func newProtoPostOutput() postOutput {
-	return &protoPostOutput{
-		Node: new(graph.Node),
-	}
-}
-
-func (p *protoPostOutput) Invalidate() { p.invalid = true }
-
-func (p *protoPostOutput) Valid() bool { return !p.invalid }
-
-func (p *protoPostOutput) AddValue(attr string, v types.Value) {
-	if attr == "_xid_" {
-		p.Node.Xid = v.String()
-		return
-	}
-	p.Node.Properties = append(p.Node.Properties, createProperty(attr, v))
-}
-
-func (p *protoPostOutput) AddChild(attr string, child postOutput) {
-	n := child.(*protoPostOutput).Node
-	n.Attribute = attr
-	p.Node.Children = append(p.Node.Children, n)
-}
-
-func (p *protoPostOutput) Merge(q postOutput) {
-	m := q.(*protoPostOutput).Node
-	p.Properties = append(p.Properties, m.Properties...)
-	p.Children = append(p.Children, m.Children...)
-}
-
-func (p *protoPostOutput) SetUID(uid uint64) { p.Node.Uid = uid }
-
-func (p *protoPostOutput) SetXID(child postOutput) {
-	childProp := child.(*protoPostOutput).Properties
-	x.AssertTrue(len(childProp) == 1)
-	x.AssertTrue(childProp[0].Prop == "_xid_")
-	p.Xid = child.(*protoPostOutput).Properties[0].String()
-}
-
-// ToProtocolBufferWithPost is ToProtocolBuffer that uses postTraverseAlt.
-func (sg *SubGraph) ToProtocolBufferWithPost(l *Latency) (*graph.Node, error) {
-	r, err := postTraverseAlt(sg, newProtoPostOutput)
-	if err != nil {
-		return nil, err
-	}
-	x.AssertTrue(len(r) == 1)
-	var r1 postOutput
-	for _, v := range r {
-		r1 = v
-	}
-
-	n := r1.(*protoPostOutput).Node
-	x.AssertTrue(len(n.Children) == 1)
-	return n.Children[0], nil
 }

@@ -115,55 +115,24 @@ func benchmarkHelper(b *testing.B, f func(*testing.B, *SubGraph)) {
 	}
 }
 
-func BenchmarkToJSONWithPre(b *testing.B) {
+func BenchmarkToJSON(b *testing.B) {
 	benchmarkHelper(b, func(b *testing.B, sg *SubGraph) {
 		var l Latency
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			if _, err := sg.ToJSONWithPre(&l); err != nil {
+			if _, err := sg.ToJSON(&l); err != nil {
 				b.Fatal(err)
 			}
 		}
 	})
 }
 
-func BenchmarkToJSONWithPost(b *testing.B) {
+func BenchmarkToProto(b *testing.B) {
 	benchmarkHelper(b, func(b *testing.B, sg *SubGraph) {
 		var l Latency
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			if _, err := sg.ToJSONWithPost(&l); err != nil {
-				b.Fatal(err)
-			}
-		}
-	})
-}
-
-func BenchmarkToPBWithPre(b *testing.B) {
-	benchmarkHelper(b, func(b *testing.B, sg *SubGraph) {
-		var l Latency
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			pb, err := sg.ToProtocolBufferWithPre(&l)
-			if err != nil {
-				b.Fatal(err)
-			}
-			r := new(graph.Response)
-			r.N = pb
-			var c Codec
-			if _, err = c.Marshal(r); err != nil {
-				b.Fatal(err)
-			}
-		}
-	})
-}
-
-func BenchmarkToPBWithPost(b *testing.B) {
-	benchmarkHelper(b, func(b *testing.B, sg *SubGraph) {
-		var l Latency
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			pb, err := sg.ToProtocolBufferWithPost(&l)
+			pb, err := sg.ToProtocolBuffer(&l)
 			if err != nil {
 				b.Fatal(err)
 			}
@@ -255,32 +224,41 @@ func sampleSubGraph(numUnique int) *SubGraph {
 	}
 }
 
-func BenchmarkToPBSynthetic(b *testing.B) {
-	for _, label := range []string{"pre", "post"} {
-		for _, numUnique := range []int{1, 1000, 2000, 3000, 4000, 5000} {
-			b.Run(fmt.Sprintf("%s_%d", label, numUnique), func(b *testing.B) {
-				b.ReportAllocs()
-				sg := sampleSubGraph(numUnique)
-				toPBFunc := sg.ToProtocolBufferWithPre
-				if label == "post" {
-					toPBFunc = sg.ToProtocolBufferWithPost
+func BenchmarkToProtoSynthetic(b *testing.B) {
+	for _, numUnique := range []int{1, 1000, 2000, 3000, 4000, 5000} {
+		b.Run(fmt.Sprintf("unique%d", numUnique), func(b *testing.B) {
+			b.ReportAllocs()
+			sg := sampleSubGraph(numUnique)
+			var l Latency
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				pb, err := sg.ToProtocolBuffer(&l)
+				if err != nil {
+					b.Fatal(err)
 				}
+				r := new(graph.Response)
+				r.N = pb
+				var c Codec
+				if _, err = c.Marshal(r); err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+	}
+}
 
-				b.ResetTimer()
-				var l Latency
-				for i := 0; i < b.N; i++ {
-					pb, err := toPBFunc(&l)
-					if err != nil {
-						b.Fatal(err)
-					}
-					r := new(graph.Response)
-					r.N = pb
-					var c Codec
-					if _, err = c.Marshal(r); err != nil {
-						b.Fatal(err)
-					}
+func BenchmarkToJSONSynthetic(b *testing.B) {
+	for _, numUnique := range []int{1, 1000, 2000, 3000, 4000, 5000} {
+		b.Run(fmt.Sprintf("%unique%d", numUnique), func(b *testing.B) {
+			b.ReportAllocs()
+			sg := sampleSubGraph(numUnique)
+			var l Latency
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				if _, err := sg.ToJSON(&l); err != nil {
+					b.Fatal(err)
 				}
-			})
-		}
+			}
+		})
 	}
 }

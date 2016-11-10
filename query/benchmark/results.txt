@@ -1,0 +1,56 @@
+Machine: Jay's 64G desktop
+
+ToProto:
+
+WithPre:
+      20	  95618541 ns/op	39861295 B/op	 1060078 allocs/op
+      10	 123337381 ns/op	39863207 B/op	 1060098 allocs/op
+      10	 123074097 ns/op	39860972 B/op	 1060079 allocs/op
+      10	 124367722 ns/op	39861371 B/op	 1060075 allocs/op
+      10	 123757496 ns/op	39861220 B/op	 1060065 allocs/op
+      10	 122457428 ns/op	39860052 B/op	 1060058 allocs/op
+
+WithPost:
+      50	  26482329 ns/op	 7302381 B/op	   16378 allocs/op
+      20	  76642407 ns/op	26233380 B/op	  375368 allocs/op
+      10	 115666361 ns/op	44890162 B/op	  734396 allocs/op
+      10	 145024249 ns/op	58154125 B/op	 1093554 allocs/op
+      10	 182033826 ns/op	82205568 B/op	 1452403 allocs/op
+       5	 211619219 ns/op	95290499 B/op	 1810701 allocs/op
+
+ToJSON:
+
+WithPre:
+      10	 198720552 ns/op	88146644 B/op	 1631744 allocs/op
+       5	 225869540 ns/op	88155619 B/op	 1631784 allocs/op
+       5	 219219566 ns/op	88145428 B/op	 1631723 allocs/op
+       5	 220872334 ns/op	88136057 B/op	 1631697 allocs/op
+       5	 221127249 ns/op	88145416 B/op	 1631713 allocs/op
+       5	 217261252 ns/op	88139046 B/op	 1631682 allocs/op
+	
+WithPost:
+       5	 235309354 ns/op	127446713 B/op	 2091298 allocs/op
+       5	 280120027 ns/op	157664113 B/op	 2299809 allocs/op
+       5	 323651674 ns/op	187598216 B/op	 2508103 allocs/op
+       3	 365435908 ns/op	212152914 B/op	 2716581 allocs/op
+       3	 428802503 ns/op	247529517 B/op	 2924863 allocs/op
+       3	 461889070 ns/op	271865712 B/op	 3132284 allocs/op
+
+Down the rows, we vary the number of unique descendents from:
+1, 1000, 2000, 3000, 4000, 5000
+
+At 5000, there is no unique descendent. For PreTraverse, we expect the running
+time to be constant. For PostTraverse, we expect to become faster when there
+is more overlap, i.e., fewer unique descendents.
+
+For ToProto, we see that WithPost might have a chance of beating WithPre when
+there is a lot of overlap. However, when there is little overlap, WithPost
+can be almost twice as slow and takes twice as much memory.
+
+For ToJSON, the case seems more clear. Even when there is a lot of overlap,
+WithPost is doing worse than WithPre.
+
+In theory, WithPost avoids a lot of work when there is a lot of overlap. But
+actually, when we marshal the proto or JSON, we need to traverse every node.
+Hence, the actual gain is not much. Considering this, we shall go for
+PreTraverse which is simpler and faster most of the time than PostTraverse.
