@@ -356,7 +356,6 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 
 		result[sg.SrcUIDs.Get(i)] = m
 	}
-	fmt.Println(sg.Attr, result)
 	return result, nil
 }
 
