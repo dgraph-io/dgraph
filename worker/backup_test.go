@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/schema"
@@ -49,7 +50,7 @@ func populateGraphBackup(t *testing.T) {
 
 func initTestBackup(t *testing.T, schemaStr string) (string, *store.Store) {
 	schema.ParseBytes([]byte(schemaStr))
-	ParseGroupConfig("groups.conf")
+	group.ParseGroupConfig("groups.conf")
 
 	dir, err := ioutil.TempDir("", "storetest_")
 	require.NoError(t, err)
@@ -71,18 +72,18 @@ func TestBackup(t *testing.T) {
 	defer os.RemoveAll(dir)
 	defer ps.Close()
 	// Remove already existing backup folders is any.
-	bdir := "backup_test"
-	os.RemoveAll(bdir)
+	bdir, err := ioutil.TempDir("", "backup")
+	require.NoError(t, err)
 	defer os.RemoveAll(bdir)
 
 	posting.MergeLists(10)
 
 	// We have 4 friend type edges. FP("friends")%10 = 2.
-	err := backup(BelongsTo("friend"), bdir)
+	err = backup(group.BelongsTo("friend"), bdir)
 	require.NoError(t, err)
 
 	// We have 2 name type edges(with index). FP("name")%10 =7.
-	err = backup(BelongsTo("name"), bdir)
+	err = backup(group.BelongsTo("name"), bdir)
 	require.NoError(t, err)
 
 	searchDir := bdir

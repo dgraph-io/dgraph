@@ -41,6 +41,7 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/query/graph"
@@ -54,6 +55,7 @@ import (
 )
 
 var (
+	conf       = flag.String("conf", "", "group configuration file")
 	postingDir = flag.String("p", "p", "Directory to store posting lists.")
 	walDir     = flag.String("w", "w", "Directory to store raft write-ahead logs.")
 	port       = flag.Int("port", 8080, "Port to run server on.")
@@ -393,9 +395,9 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO(Ashwin): Move to /admin endpoint.
+	// TODO(Ashwin): Move to /admin endpoint, and don't have a deadline for ctx.
 	if *backup && q == "BACKUP" {
-		worker.StartBackup()
+		worker.BackupOverNetwork(ctx)
 		x.SetStatus(w, x.ErrorOk, "Backup completed.")
 		return
 	}
@@ -664,6 +666,7 @@ func main() {
 	// schema before calling posting.Init().
 	posting.Init(ps)
 	worker.Init(ps)
+	x.Check(group.ParseGroupConfig(*conf))
 
 	// Setup external communication.
 	che := make(chan error, 1)
