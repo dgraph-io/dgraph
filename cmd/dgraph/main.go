@@ -18,7 +18,6 @@ package main
 
 import (
 	"bufio"
-	"bytes"
 	"encoding/gob"
 	"encoding/json"
 	"flag"

@@ -27,6 +27,7 @@ import (
 	"github.com/google/flatbuffers/go"
 
 	"github.com/dgraph-io/dgraph/algo"
+	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/query/graph"
 	"github.com/dgraph-io/dgraph/schema"
@@ -51,7 +52,7 @@ func prepareTest(b *testing.B) (*store.Store, string, string) {
 	posting.Init(ps)
 	worker.Init(ps)
 
-	worker.ParseGroupConfig("")
+	group.ParseGroupConfig("")
 	dir2, err := ioutil.TempDir("", "wal_")
 	if err != nil {
 		b.Fatal(err)
