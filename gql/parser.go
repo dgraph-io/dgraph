@@ -674,7 +674,6 @@ func evalStack(opStack, valueStack *filterTreeStack) {
 }
 
 func parseGenerator(l *lex.Lexer) (*Generator, error) {
-
 	var g *Generator
 	for item := range l.Items {
 		if item.Typ == itemFilterFunc { // Value.
@@ -700,6 +699,7 @@ func parseGenerator(l *lex.Lexer) (*Generator, error) {
 		} else if item.Typ == itemRightRound {
 			break
 		} else {
+			fmt.Println("%%%%%%%%%%%  ", item.Val)
 			return nil, x.Errorf("Expected a generator function but got %v", item.Val)
 		}
 	}

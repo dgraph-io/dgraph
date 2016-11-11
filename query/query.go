@@ -32,6 +32,7 @@ import (
 	"github.com/google/flatbuffers/go"
 
 	"github.com/dgraph-io/dgraph/algo"
+	"github.com/dgraph-io/dgraph/geo"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/query/graph"
 	"github.com/dgraph-io/dgraph/schema"
@@ -1022,15 +1023,28 @@ func runGenerator(ctx context.Context,
 	gen *gql.Generator) (l *algo.UIDList, rerr error) {
 	if len(gen.FuncName) > 0 { // Leaf node.
 		gen.FuncName = strings.ToLower(gen.FuncName) // Not sure if needed.
-		x.AssertTruef(len(gen.FuncArgs) == 2,
-			"Expect exactly two arguments: pred and predValue") // Temporary.
+
 		switch gen.FuncName {
 		case "anyof":
 			return anyof(ctx, nil, gen.FuncArgs[0], gen.FuncArgs[1])
 		case "allof":
 			return allof(ctx, nil, gen.FuncArgs[0], gen.FuncArgs[1])
-			//case "near":
-			//	return generateGeo(ctx, gen.FuncArgs[0], geo.QueryTypeNear, gen.FuncArgs[1], gen.FuncArgs[2])
+		case "near":
+			maxD, err := strconv.ParseFloat(gen.FuncArgs[2], 64)
+			if err != nil {
+				return nil, err
+			}
+			var g types.Geo
+			geoD := strings.Replace(gen.FuncArgs[1], "'", "\"", -1)
+			err = g.UnmarshalText([]byte(geoD))
+			if err != nil {
+				return nil, err
+			}
+			gb, err := g.MarshalBinary()
+			if err != nil {
+				return nil, err
+			}
+			return generateGeo(ctx, gen.FuncArgs[0], geo.QueryTypeNear, gb, maxD)
 		}
 	}
 	return nil, nil
