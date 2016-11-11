@@ -200,9 +200,7 @@ func processToJSON(t *testing.T, query string) string {
 
 	var l Latency
 	js, err := sg.ToJSON(&l)
-	//js, err := sg.ToJSON(&l)
 	require.NoError(t, err)
-
 	return string(js)
 }
 

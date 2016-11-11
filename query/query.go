@@ -283,8 +283,6 @@ func (sg *SubGraph) preTraverse(uid uint64, dst preOutput) error {
 			}
 		}
 	}
-
-	//dst.Properties, dst.Children = properties, children
 	return nil
 }
 
