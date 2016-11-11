@@ -717,3 +717,18 @@ func TestParseGenerator(t *testing.T) {
 	_, _, err := Parse(query)
 	require.NoError(t, err)
 }
+
+func TestParseGeoJson(t *testing.T) {
+	query := `
+	mutation {
+		set {
+			<_uid_:1> <loc> "{
+				\'Type\':\'Point\' , 
+				\'Coordinates\':[1.1,2.0]
+			}"^^<geo:geojson> . 
+		}
+	}
+	`
+	_, _, err := Parse(query)
+	require.NoError(t, err)
+}

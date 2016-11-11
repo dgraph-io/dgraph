@@ -389,6 +389,15 @@ func lexTextMutation(l *lex.Lexer) lex.StateFn {
 		if r == lex.EOF {
 			return l.Errorf("Unclosed mutation text")
 		}
+		if r == leftCurl {
+			l.Depth++
+		}
+		if r == rightCurl {
+			if l.Depth > 2 {
+				l.Depth--
+				continue
+			}
+		}
 		if r != rightCurl {
 			// Absorb everything until we find '}'.
 			continue
