@@ -950,6 +950,26 @@ children: <
   uid: 101
   attribute: "friend"
 >
+children: <
+  uid: 23
+  attribute: "friend"
+>
+children: <
+  uid: 24
+  attribute: "friend"
+>
+children: <
+  uid: 25
+  attribute: "friend"
+>
+children: <
+  uid: 31
+  attribute: "friend"
+>
+children: <
+  uid: 101
+  attribute: "friend"
+>
 `, proto.MarshalTextString(gr))
 }
 

@@ -249,7 +249,7 @@ func BenchmarkToProtoSynthetic(b *testing.B) {
 
 func BenchmarkToJSONSynthetic(b *testing.B) {
 	for _, numUnique := range []int{1, 1000, 2000, 3000, 4000, 5000} {
-		b.Run(fmt.Sprintf("%unique%d", numUnique), func(b *testing.B) {
+		b.Run(fmt.Sprintf("unique%d", numUnique), func(b *testing.B) {
 			b.ReportAllocs()
 			sg := sampleSubGraph(numUnique)
 			var l Latency

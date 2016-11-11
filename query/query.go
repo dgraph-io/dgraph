@@ -152,21 +152,6 @@ type SubGraph struct {
 	DestUIDs *algo.UIDList
 }
 
-func mergeInterfaces(i1 interface{}, i2 interface{}) interface{} {
-	switch i1.(type) {
-	case map[string]interface{}:
-		m1 := i1.(map[string]interface{})
-		if m2, ok := i2.(map[string]interface{}); ok {
-			for k1, v1 := range m1 {
-				m2[k1] = v1
-			}
-			return m2
-		}
-		break
-	}
-	return []interface{}{i1, i2}
-}
-
 // getValue gets the value from the task.
 func getValue(tv task.Value) (types.Value, error) {
 	vType := tv.ValType()
@@ -216,10 +201,12 @@ func (sg *SubGraph) preTraverse(uid uint64, dst preOutput) error {
 		idx := pc.SrcUIDs.IndexOf(uid)
 		x.AssertTruef(idx >= 0, "Attribute with uid not found in child Query uids")
 		ul := pc.Result[idx]
-		if sg.Counts != nil && sg.Counts.CountLength() > 0 {
-			c := types.Int32(sg.Counts.Count(idx))
+
+		if pc.Counts != nil && pc.Counts.CountLength() > 0 {
+			c := types.Int32(pc.Counts.Count(idx))
 			uc := dst.New(pc.Attr)
 			uc.AddValue("_count_", &c)
+			dst.AddChild(pc.Attr, uc)
 		} else if ul.Size() > 0 || len(pc.Children) > 0 {
 			// We create as many predicate entity children as the length of uids for
 			// this predicate.
@@ -260,9 +247,8 @@ func (sg *SubGraph) preTraverse(uid uint64, dst preOutput) error {
 					return err
 				}
 				dst.SetXID(string(txt))
-				// We don't want to add _uid_ to properties map.
 			} else if pc.Attr == "_uid_" {
-				continue
+				dst.SetUID(uid)
 			} else {
 				globalType := schema.TypeOf(pc.Attr)
 				schemaType := pc.Params.AttrType
@@ -1001,9 +987,7 @@ type jsonPreOutput struct {
 
 // AddValue adds an attribute value for jsonPreOutput.
 func (p *jsonPreOutput) AddValue(attr string, v types.Value) {
-	b, err := v.MarshalText()
-	x.Check(err)
-	p.data[attr] = string(b)
+	p.data[attr] = v
 }
 
 // AddChild adds a child for jsonPreOutput.
@@ -1048,5 +1032,8 @@ func (sg *SubGraph) ToJSON(l *Latency) ([]byte, error) {
 	if err := sg.preTraverse(ul.Get(0), n); err != nil {
 		return nil, err
 	}
-	return json.Marshal(n.(*jsonPreOutput).data)
+	root := map[string]interface{}{
+		sg.Attr: []map[string]interface{}{n.(*jsonPreOutput).data},
+	}
+	return json.Marshal(root)
 }
