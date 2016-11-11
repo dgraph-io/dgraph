@@ -126,137 +126,137 @@ func TestWithinPoint(t *testing.T) {
 	require.Equal(t, expected, mp)
 }
 
-func TestWithinPolygon(t *testing.T) {
-	dir, ps := createTestStore(t)
-	defer os.RemoveAll(dir)
-	defer ps.Close()
+//func TestWithinPolygon(t *testing.T) {
+//	dir, ps := createTestStore(t)
+//	defer os.RemoveAll(dir)
+//	defer ps.Close()
 
-	createTestData(t, ps)
+//	createTestData(t, ps)
 
-	p := geom.NewPolygon(geom.XY).MustSetCoords([][]geom.Coord{
-		{{-122.06, 37.37}, {-122.1, 37.36}, {-122.12, 37.4}, {-122.11, 37.43}, {-122.04, 37.43}, {-122.06, 37.37}},
-	})
-	g := types.Geo{p}
-	data, err := g.MarshalBinary()
-	require.NoError(t, err)
+//	p := geom.NewPolygon(geom.XY).MustSetCoords([][]geom.Coord{
+//		{{-122.06, 37.37}, {-122.1, 37.36}, {-122.12, 37.4}, {-122.11, 37.43}, {-122.04, 37.43}, {-122.06, 37.37}},
+//	})
+//	g := types.Geo{p}
+//	data, err := g.MarshalBinary()
+//	require.NoError(t, err)
 
-	sg := &SubGraph{
-		Attr:      "geometry",
-		GeoFilter: &geo.Filter{Data: data, Type: geo.QueryTypeWithin},
-		Children:  []*SubGraph{&SubGraph{Attr: "name"}},
-	}
+//	sg := &SubGraph{
+//		Attr:      "geometry",
+//		GeoFilter: &geo.Filter{Data: data, Type: geo.QueryTypeWithin},
+//		Children:  []*SubGraph{&SubGraph{Attr: "name"}},
+//	}
 
-	mp := runQuery(t, sg)
-	expected := []interface{}{map[string]interface{}{"name": "Googleplex"},
-		map[string]interface{}{"name": "Shoreline Amphitheater"}}
-	EqualArrays(t, expected, mp)
-}
+//	mp := runQuery(t, sg)
+//	expected := []interface{}{map[string]interface{}{"name": "Googleplex"},
+//		map[string]interface{}{"name": "Shoreline Amphitheater"}}
+//	EqualArrays(t, expected, mp)
+//}
 
-func TestContainsPoint(t *testing.T) {
-	dir, ps := createTestStore(t)
-	defer os.RemoveAll(dir)
-	defer ps.Close()
+//func TestContainsPoint(t *testing.T) {
+//	dir, ps := createTestStore(t)
+//	defer os.RemoveAll(dir)
+//	defer ps.Close()
 
-	createTestData(t, ps)
+//	createTestData(t, ps)
 
-	p := geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{-122.082506, 37.4249518})
-	g := types.Geo{p}
-	data, err := g.MarshalBinary()
-	require.NoError(t, err)
+//	p := geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{-122.082506, 37.4249518})
+//	g := types.Geo{p}
+//	data, err := g.MarshalBinary()
+//	require.NoError(t, err)
 
-	sg := &SubGraph{
-		Attr:      "geometry",
-		GeoFilter: &geo.Filter{Data: data, Type: geo.QueryTypeContains},
-		Children:  []*SubGraph{&SubGraph{Attr: "name"}},
-	}
+//	sg := &SubGraph{
+//		Attr:      "geometry",
+//		GeoFilter: &geo.Filter{Data: data, Type: geo.QueryTypeContains},
+//		Children:  []*SubGraph{&SubGraph{Attr: "name"}},
+//	}
 
-	mp := runQuery(t, sg)
-	expected := []interface{}{map[string]interface{}{"name": "SF Bay area"},
-		map[string]interface{}{"name": "Mountain View"}}
-	EqualArrays(t, expected, mp)
-}
+//	mp := runQuery(t, sg)
+//	expected := []interface{}{map[string]interface{}{"name": "SF Bay area"},
+//		map[string]interface{}{"name": "Mountain View"}}
+//	EqualArrays(t, expected, mp)
+//}
 
-func TestNearPoint(t *testing.T) {
-	dir, ps := createTestStore(t)
-	defer os.RemoveAll(dir)
-	defer ps.Close()
+//func TestNearPoint(t *testing.T) {
+//	dir, ps := createTestStore(t)
+//	defer os.RemoveAll(dir)
+//	defer ps.Close()
 
-	createTestData(t, ps)
+//	createTestData(t, ps)
 
-	p := geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{-122.082506, 37.4249518})
-	g := types.Geo{p}
-	data, err := g.MarshalBinary()
-	require.NoError(t, err)
+//	p := geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{-122.082506, 37.4249518})
+//	g := types.Geo{p}
+//	data, err := g.MarshalBinary()
+//	require.NoError(t, err)
 
-	sg := &SubGraph{
-		Attr:      "geometry",
-		GeoFilter: &geo.Filter{Data: data, Type: geo.QueryTypeNear, MaxDistance: 1000},
-		Children:  []*SubGraph{&SubGraph{Attr: "name"}},
-	}
+//	sg := &SubGraph{
+//		Attr:      "geometry",
+//		GeoFilter: &geo.Filter{Data: data, Type: geo.QueryTypeNear, MaxDistance: 1000},
+//		Children:  []*SubGraph{&SubGraph{Attr: "name"}},
+//	}
 
-	mp := runQuery(t, sg)
-	expected := []interface{}{map[string]interface{}{"name": "Googleplex"},
-		map[string]interface{}{"name": "Shoreline Amphitheater"}}
-	EqualArrays(t, expected, mp)
-}
+//	mp := runQuery(t, sg)
+//	expected := []interface{}{map[string]interface{}{"name": "Googleplex"},
+//		map[string]interface{}{"name": "Shoreline Amphitheater"}}
+//	EqualArrays(t, expected, mp)
+//}
 
-func TestIntersectsPolygon1(t *testing.T) {
-	dir, ps := createTestStore(t)
-	defer os.RemoveAll(dir)
-	defer ps.Close()
+//func TestIntersectsPolygon1(t *testing.T) {
+//	dir, ps := createTestStore(t)
+//	defer os.RemoveAll(dir)
+//	defer ps.Close()
 
-	createTestData(t, ps)
+//	createTestData(t, ps)
 
-	p := geom.NewPolygon(geom.XY).MustSetCoords([][]geom.Coord{
-		{{-122.06, 37.37}, {-122.1, 37.36}, {-122.12, 37.4}, {-122.11, 37.43}, {-122.04, 37.43}, {-122.06, 37.37}},
-	})
-	g := types.Geo{p}
-	data, err := g.MarshalBinary()
-	require.NoError(t, err)
+//	p := geom.NewPolygon(geom.XY).MustSetCoords([][]geom.Coord{
+//		{{-122.06, 37.37}, {-122.1, 37.36}, {-122.12, 37.4}, {-122.11, 37.43}, {-122.04, 37.43}, {-122.06, 37.37}},
+//	})
+//	g := types.Geo{p}
+//	data, err := g.MarshalBinary()
+//	require.NoError(t, err)
 
-	sg := &SubGraph{
-		Attr:      "geometry",
-		GeoFilter: &geo.Filter{Data: data, Type: geo.QueryTypeIntersects},
-		Children:  []*SubGraph{&SubGraph{Attr: "name"}},
-	}
+//	sg := &SubGraph{
+//		Attr:      "geometry",
+//		GeoFilter: &geo.Filter{Data: data, Type: geo.QueryTypeIntersects},
+//		Children:  []*SubGraph{&SubGraph{Attr: "name"}},
+//	}
 
-	mp := runQuery(t, sg)
-	expected := []interface{}{map[string]interface{}{"name": "Googleplex"},
-		map[string]interface{}{"name": "Shoreline Amphitheater"},
-		map[string]interface{}{"name": "SF Bay area"},
-		map[string]interface{}{"name": "Mountain View"}}
-	EqualArrays(t, expected, mp)
-}
+//	mp := runQuery(t, sg)
+//	expected := []interface{}{map[string]interface{}{"name": "Googleplex"},
+//		map[string]interface{}{"name": "Shoreline Amphitheater"},
+//		map[string]interface{}{"name": "SF Bay area"},
+//		map[string]interface{}{"name": "Mountain View"}}
+//	EqualArrays(t, expected, mp)
+//}
 
-func TestIntersectsPolygon2(t *testing.T) {
-	dir, ps := createTestStore(t)
-	defer os.RemoveAll(dir)
-	defer ps.Close()
+//func TestIntersectsPolygon2(t *testing.T) {
+//	dir, ps := createTestStore(t)
+//	defer os.RemoveAll(dir)
+//	defer ps.Close()
 
-	createTestData(t, ps)
+//	createTestData(t, ps)
 
-	p := geom.NewPolygon(geom.XY).MustSetCoords([][]geom.Coord{
-		{{-121.6, 37.1}, {-122.4, 37.3}, {-122.6, 37.8}, {-122.5, 38.3}, {-121.9, 38}, {-121.6, 37.1}},
-	})
-	g := types.Geo{p}
-	data, err := g.MarshalBinary()
-	require.NoError(t, err)
+//	p := geom.NewPolygon(geom.XY).MustSetCoords([][]geom.Coord{
+//		{{-121.6, 37.1}, {-122.4, 37.3}, {-122.6, 37.8}, {-122.5, 38.3}, {-121.9, 38}, {-121.6, 37.1}},
+//	})
+//	g := types.Geo{p}
+//	data, err := g.MarshalBinary()
+//	require.NoError(t, err)
 
-	sg := &SubGraph{
-		Attr:      "geometry",
-		GeoFilter: &geo.Filter{Data: data, Type: geo.QueryTypeIntersects},
-		Children:  []*SubGraph{&SubGraph{Attr: "name"}},
-	}
+//	sg := &SubGraph{
+//		Attr:      "geometry",
+//		GeoFilter: &geo.Filter{Data: data, Type: geo.QueryTypeIntersects},
+//		Children:  []*SubGraph{&SubGraph{Attr: "name"}},
+//	}
 
-	mp := runQuery(t, sg)
-	expected := []interface{}{map[string]interface{}{"name": "Googleplex"},
-		map[string]interface{}{"name": "Shoreline Amphitheater"},
-		map[string]interface{}{"name": "SF Bay area"},
-		map[string]interface{}{"name": "San Carlos"},
-		map[string]interface{}{"name": "San Carlos Airport"},
-		map[string]interface{}{"name": "Mountain View"}}
-	EqualArrays(t, expected, mp)
-}
+//	mp := runQuery(t, sg)
+//	expected := []interface{}{map[string]interface{}{"name": "Googleplex"},
+//		map[string]interface{}{"name": "Shoreline Amphitheater"},
+//		map[string]interface{}{"name": "SF Bay area"},
+//		map[string]interface{}{"name": "San Carlos"},
+//		map[string]interface{}{"name": "San Carlos Airport"},
+//		map[string]interface{}{"name": "Mountain View"}}
+//	EqualArrays(t, expected, mp)
+//}
 
 // Tests whether 2 array have the same contents
 func EqualArrays(t *testing.T, a1 []interface{}, a2 interface{}) {
