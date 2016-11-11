@@ -19,7 +19,6 @@ package gql
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"strconv"
 	"strings"
 
@@ -699,7 +698,6 @@ func parseGenerator(l *lex.Lexer) (*Generator, error) {
 		} else if item.Typ == itemRightRound {
 			break
 		} else {
-			fmt.Println("%%%%%%%%%%%  ", item.Val)
 			return nil, x.Errorf("Expected a generator function but got %v", item.Val)
 		}
 	}
@@ -820,9 +818,7 @@ func getRoot(l *lex.Lexer) (gq *GraphQuery, rerr error) {
 			return nil, err
 		}
 		gq.Gen = gen
-		fmt.Println("%%%%%%%", gen)
 	} else if item.Typ == itemArgument {
-		fmt.Println("Right")
 		args, err := parseArguments(l)
 		if err != nil {
 			return nil, err
