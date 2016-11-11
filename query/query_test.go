@@ -847,7 +847,7 @@ func getProperty(properties []*graph.Property, prop string) *graph.Value {
 	return nil
 }
 
-func TestToPB(t *testing.T) {
+func TestToProto(t *testing.T) {
 	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
 	defer os.RemoveAll(dir2)
@@ -1035,7 +1035,7 @@ func TestSchema(t *testing.T) {
 	require.Empty(t, child.Children)
 }
 
-func TestToPBFilter(t *testing.T) {
+func TestToProtoFilter(t *testing.T) {
 	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
 	defer os.RemoveAll(dir2)
@@ -1095,7 +1095,7 @@ children: <
 	require.EqualValues(t, proto.MarshalTextString(pb), expectedPb)
 }
 
-func TestToPBFilterOr(t *testing.T) {
+func TestToProtoFilterOr(t *testing.T) {
 	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
 	defer os.RemoveAll(dir2)
@@ -1164,7 +1164,7 @@ children: <
 	require.EqualValues(t, proto.MarshalTextString(pb), expectedPb)
 }
 
-func TestToPBFilterAnd(t *testing.T) {
+func TestToProtoFilterAnd(t *testing.T) {
 	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
 	defer os.RemoveAll(dir2)
@@ -1333,7 +1333,7 @@ func TestToJSONOrderOffsetCount(t *testing.T) {
 }
 
 // Test sorting / ordering by dob.
-func TestToPBOrder(t *testing.T) {
+func TestToProtoOrder(t *testing.T) {
 	dir, dir2, ps := populateGraph(t)
 	defer os.RemoveAll(dir)
 	defer os.RemoveAll(dir2)
@@ -1421,7 +1421,7 @@ children: <
 }
 
 // Test sorting / ordering by dob.
-func TestToPBOrderCount(t *testing.T) {
+func TestToProtoOrderCount(t *testing.T) {
 	dir, dir2, ps := populateGraph(t)
 	defer os.RemoveAll(dir)
 	defer os.RemoveAll(dir2)
@@ -1491,7 +1491,7 @@ children: <
 }
 
 // Test sorting / ordering by dob.
-func TestToPBOrderOffsetCount(t *testing.T) {
+func TestToProtoOrderOffsetCount(t *testing.T) {
 	dir, dir2, ps := populateGraph(t)
 	defer os.RemoveAll(dir)
 	defer os.RemoveAll(dir2)
@@ -1581,48 +1581,6 @@ func TestSchema1(t *testing.T) {
 	require.JSONEq(t,
 		`{"person":[{"address":"31, 32 street, Jupiter","age":38,"alive":true,"friend":[{"address":"21, mark street, Mars","age":15,"name":"Rick Grimes"}],"name":"Michonne","survival_rate":98.99}]}`,
 		js)
-
-	//	resp := mp["person"]
-	//	name := resp.([]interface{})[0].(map[string]interface{})["name"].(string)
-	//	require.EqualValues(t, "Michonne", name)
-
-	//	alive, ok := resp.([]interface{})[0].(map[string]interface{})["alive"]
-	//	require.True(t, ok)
-	//	require.EqualValues(t, true, alive)
-
-	//	age, ok := resp.([]interface{})[0].(map[string]interface{})["age"]
-	//	require.True(t, ok)
-	//	require.EqualValues(t, 38, age.(float64))
-
-	//	_, ok = resp.([]interface{})[0].(map[string]interface{})["survival_rate"]
-	//	require.True(t, ok)
-
-	//	friends := resp.([]interface{})[0].(map[string]interface{})["friend"].([]interface{})
-	//	co := 0
-	//	res := 0
-	//	for _, it := range friends {
-	//		if len(it.(map[string]interface{})) == 0 {
-	//			co++
-	//		} else {
-	//			res = len(it.(map[string]interface{}))
-	//		}
-	//	}
-	//	require.EqualValues(t, 4, co)
-	//	require.EqualValues(t, 3, res)
-
-	//	actorMap := mp["person"].([]interface{})[0].(map[string]interface{})
-	//	_, success := actorMap["name"].(string)
-	//	require.True(t, success,
-	//		"Expected json type string for: %v", actorMap["name"])
-
-	//	// json parses ints as floats
-	//	_, success = actorMap["age"].(float64)
-	//	require.True(t, success,
-	//		"Expected json type int for: %v", actorMap["age"])
-
-	//	_, success = actorMap["survival_rate"].(float64)
-	//	require.True(t, success,
-	//		"Survival rate has to be coerced")
 }
 
 func TestMain(m *testing.M) {
