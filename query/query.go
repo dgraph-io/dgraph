@@ -1031,16 +1031,5 @@ func (sg *SubGraph) ToJSON(l *Latency) ([]byte, error) {
 	root := map[string]interface{}{
 		sg.Attr: []map[string]interface{}{n.(*jsonPreOutput).data},
 	}
-
-	if sg.GeoFilter != nil {
-		// This part for Geo filter is hackish. We should clean up soon.
-		x.AssertTrue(sg.Attr == "geometry")
-		x.AssertTrue(len(sg.Result) == 1 || len(sg.Result) == 2)
-		x.AssertTruef(sg.SrcUIDs.Size() == 1 || sg.SrcUIDs.Size() == 2,
-			sg.SrcUIDs.DebugString())
-		x.AssertTruef(sg.DestUIDs.Size() == 1 || sg.DestUIDs.Size() == 2,
-			sg.DestUIDs.DebugString())
-		root = root["geometry"].([]map[string]interface{})[0]
-	}
 	return json.Marshal(root)
 }

@@ -148,7 +148,7 @@ func BenchmarkToProto(b *testing.B) {
 
 func valueSubGraph(attr string, uid []uint64, data []string) *SubGraph {
 	x.AssertTrue(len(uid) == len(data))
-	r := make([]*algo.UIDList, 0)
+	var r []*algo.UIDList
 	for i := 0; i < len(uid); i++ {
 		r = append(r, algo.NewUIDList([]uint64{}))
 	}
@@ -161,15 +161,15 @@ func valueSubGraph(attr string, uid []uint64, data []string) *SubGraph {
 }
 
 func uint64Range(a, b int) *algo.UIDList {
-	out := make([]uint64, 0)
+	var out []uint64
 	for i := a; i < b; i++ {
 		out = append(out, uint64(i))
 	}
 	return algo.NewUIDList(out)
 }
 
-func sampleChildren(srcUID []uint64) []*SubGraph {
-	children := make([]*SubGraph, 0)
+func leafSubGraphs(srcUID []uint64) []*SubGraph {
+	var children []*SubGraph
 	data := make([]string, 0, len(srcUID))
 	for i := 0; i < len(srcUID); i++ {
 		data = append(data, "somedata")
@@ -184,9 +184,9 @@ func sampleChildren(srcUID []uint64) []*SubGraph {
 const uidStart = 10000
 const uidEnd = 15000
 
-// sampleSubGraph1 creates a subgraph with given number of unique descendents.
+// sampleSubGraph creates a subgraph with given number of unique descendents.
 func sampleSubGraph(numUnique int) *SubGraph {
-	r := make([]*algo.UIDList, 0)
+	var r []*algo.UIDList
 	for i := uidStart; i < uidEnd; i++ {
 		r = append(r, algo.NewUIDList([]uint64{uint64(100000000 + (i % numUnique))}))
 	}
@@ -202,7 +202,7 @@ func sampleSubGraph(numUnique int) *SubGraph {
 		DestUIDs: algo.NewUIDList(destUID),
 		Values:   createNilValuesList(len(r)),
 		Result:   r,
-		Children: sampleChildren(destUID),
+		Children: leafSubGraphs(destUID),
 	}
 
 	d := &SubGraph{
