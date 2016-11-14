@@ -86,9 +86,12 @@ func createTestData(t *testing.T, ps *store.Store) {
 	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
 }
 
-func runQuery(t *testing.T, sg *SubGraph) interface{} {
+func runQuery(t *testing.T, gq *gql.GraphQuery) interface{} {
 	ctx := context.Background()
 	ch := make(chan error)
+
+	sg, err := ToSubGraph(ctx, gq)
+	require.NoError(t, err)
 	go ProcessGraph(ctx, sg, nil, ch)
 	err := <-ch
 	require.NoError(t, err)
@@ -109,19 +112,19 @@ func TestWithinPoint(t *testing.T) {
 	defer ps.Close()
 
 	createTestData(t, ps)
-
-	p := geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{-122.082506, 37.4249518})
-	g := types.Geo{p}
-	data, err := g.MarshalBinary()
-	require.NoError(t, err)
-
-	sg := &SubGraph{
-		Attr:      "geometry",
-		GeoFilter: &geo.Filter{Data: data, Type: geo.QueryTypeWithin},
-		Children:  []*SubGraph{&SubGraph{Attr: "name"}},
+	/*
+		p := geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{-122.082506, 37.4249518})
+		g := types.Geo{p}
+		data, err := g.MarshalBinary()
+		require.NoError(t, err)
+	*/
+	gq := &gql.GraphQuery{
+		Attr:     "geometry",
+		Gen:      &gql.Gen{FuncName: "near", FuncArgs: []string{"geometry", "{\"Type\":\"Point\", \"Coordinates\":[-122.082506, 37.4249518]}", "0"}},
+		Children: []*SubGraph{&SubGraph{Attr: "name"}},
 	}
 
-	mp := runQuery(t, sg)
+	mp := runQuery(t, gq)
 	expected := map[string]interface{}{"name": "Googleplex"}
 	require.Equal(t, expected, mp)
 }
