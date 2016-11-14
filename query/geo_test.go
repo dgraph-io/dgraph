@@ -149,31 +149,46 @@ func TestWithinPolygon(t *testing.T) {
 	require.Equal(t, expected, mp)
 }
 
-/*
 func TestContainsPoint(t *testing.T) {
 	dir, ps := createTestStore(t)
 	defer os.RemoveAll(dir)
 	defer ps.Close()
 
 	createTestData(t, ps)
+	/*
+		p := geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{-122.082506, 37.4249518})
+		g := types.Geo{p}
+		data, err := g.MarshalBinary()
+		require.NoError(t, err)
 
-	p := geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{-122.082506, 37.4249518})
-	g := types.Geo{p}
-	data, err := g.MarshalBinary()
-	require.NoError(t, err)
-
-	sg := &SubGraph{
-		Attr:      "geometry",
-		GeoFilter: &geo.Filter{Data: data, Type: geo.QueryTypeContains},
-		Children:  []*SubGraph{&SubGraph{Attr: "name"}},
+		gq := &SubGraph{
+			Attr:      "geometry",
+			GeoFilter: &geo.Filter{Data: data, Type: geo.QueryTypeContains},
+			Children:  []*SubGraph{&SubGraph{Attr: "name"}},
+		}
+	*/
+	gq := &gql.GraphQuery{
+		Attr: "me",
+		Gen: &gql.Generator{FuncName: "contains", FuncArgs: []string{
+			"geometry",
+			"{\"Type\":\"Point\", \"Coordinates\":[-122.082506, 37.4249518]}"},
+		},
+		Children: []*gql.GraphQuery{&gql.GraphQuery{Attr: "name"}},
 	}
 
-	mp := runQuery(t, sg)
-	expected := []interface{}{map[string]interface{}{"name": "SF Bay area"},
-		map[string]interface{}{"name": "Mountain View"}}
-	EqualArrays(t, expected, mp)
+	mp := runQuery(t, gq)
+	expected := []string{"Mountain View", "SF Bay area"}
+
+	require.Equal(t, 2, len(mp.([]interface{})))
+
+	require.Contains(t, expected,
+		mp.([]interface{})[0].(map[string]interface{})["me"].([]interface{})[0].(map[string]interface{})["name"].(string))
+	require.Contains(t, expected,
+		mp.([]interface{})[1].(map[string]interface{})["me"].([]interface{})[0].(map[string]interface{})["name"].(string))
+
 }
 
+/*
 func TestNearPoint(t *testing.T) {
 	dir, ps := createTestStore(t)
 	defer os.RemoveAll(dir)
