@@ -218,9 +218,9 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 
 	r := sg.Result
 	x.AssertTruef(sg.SrcUIDs.Size() == len(r),
-		"Result uidmatrixlength: %v. Query uidslength: %v", sg.SrcUIDs.Size(), len(r))
+		"Result uidmatrixlength: %v. Query uidslength: %v", len(r), sg.SrcUIDs.Size())
 	x.AssertTruef(sg.SrcUIDs.Size() == sg.Values.ValuesLength(),
-		"Result valuelength: %v. Query uidslength: %v", sg.SrcUIDs.Size(), sg.Values.ValuesLength())
+		"Result valuelength: %v. Query uidslength: %v at node %v", sg.Values.ValuesLength(), sg.SrcUIDs.Size(), sg.Attr)
 
 	// Generate a matrix of maps
 	// Row -> .....
@@ -709,19 +709,17 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	if gq.Gen != nil {
 		err := sg.applyGenerator(ctx, gq.Gen)
 		if err != nil {
-			return nil, err
+			return nil, x.Wrapf(err, "Error while applying generator")
 		}
 	} else {
 		sg.SrcUIDs = algo.NewUIDList([]uint64{euid})
 		{
 			if euid != 0 {
 				sg.Result = []*algo.UIDList{algo.NewUIDList([]uint64{euid})}
+				// Also need to add nil value to keep this consistent.
+				sg.Values = createNilValuesList(1)
 			}
 		}
-	}
-	{
-		// Also need to add nil value to keep this consistent.
-		sg.Values = createNilValuesList(1)
 	}
 	return sg, nil
 }
@@ -996,6 +994,7 @@ func (sg *SubGraph) applyGenerator(ctx context.Context, gen *gql.Generator) erro
 	for i := 0; i < newSorted.Size(); i++ {
 		sg.Result = append(sg.Result, algo.NewUIDList([]uint64{newSorted.Get(i)}))
 	}
+	sg.Values = createNilValuesList(newSorted.Size())
 	return nil
 }
 
@@ -1024,6 +1023,18 @@ func runGenerator(ctx context.Context, gen *gql.Generator) (*algo.UIDList, error
 				return nil, err
 			}
 			return generateGeo(ctx, gen.FuncArgs[0], geo.QueryTypeNear, gb, maxD)
+		case "within":
+			var g types.Geo
+			geoD := strings.Replace(gen.FuncArgs[1], "'", "\"", -1)
+			err := g.UnmarshalText([]byte(geoD))
+			if err != nil {
+				return nil, x.Wrapf(err, "Cannot decode given geoJson input")
+			}
+			gb, err := g.MarshalBinary()
+			if err != nil {
+				return nil, err
+			}
+			return generateGeo(ctx, gen.FuncArgs[0], geo.QueryTypeWithin, gb, 0)
 		default:
 			return nil, fmt.Errorf("Invalid generator")
 		}
