@@ -84,8 +84,8 @@ type FilterTree struct {
 
 // Generator holds the information about generator functions.
 type Generator struct {
-	FuncName string
-	FuncArgs []string
+	FuncName string   // Specifies the name of the function.
+	FuncArgs []string // Contains the arguments of the function.
 }
 
 // filterOpPrecedence is a map from filterOp (a string) to its precedence.
