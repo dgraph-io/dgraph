@@ -27,7 +27,7 @@ import (
 func TestNewLexer(t *testing.T) {
 	input := `
 	query {
-		me( id: 10, _xid_: rick ) {
+		me(_xid_: rick, id:10 ) {
 			name0 # my name
 			_city, # 0what would fail lex.
 			profilePic(width: 100, height: 100)

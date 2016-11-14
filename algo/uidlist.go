@@ -297,7 +297,14 @@ func (u *UIDList) IndexOf(uid uint64) int {
 
 // AddTo adds a UidList to buffer and returns the offset.
 func (u *UIDList) AddTo(b *flatbuffers.Builder) flatbuffers.UOffsetT {
-	x.AssertTrue(u != nil && (u.uints != nil || u.list != nil))
+	x.AssertTrue(u != nil)
+	if u.uints == nil && u.list == nil {
+		task.UidListStartUidsVector(b, 0)
+		ulist := b.EndVector(0)
+		task.UidListStart(b)
+		task.UidListAddUids(b, ulist)
+		return task.UidListEnd(b)
+	}
 	n := u.Size()
 	task.UidListStartUidsVector(b, n)
 	for i := n - 1; i >= 0; i-- {

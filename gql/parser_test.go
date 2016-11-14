@@ -702,6 +702,22 @@ func TestParseFilter_unknowndirective(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestParseGenerator(t *testing.T) {
+	query := `
+	{
+		me(allof("name", "barack")) {
+			friends {
+				name
+			}
+			gender,age
+			hometown
+		}
+	}
+`
+	_, _, err := Parse(query)
+	require.NoError(t, err)
+}
+
 func TestParseGeoJson(t *testing.T) {
 	query := `
 	mutation {
