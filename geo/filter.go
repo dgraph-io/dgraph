@@ -38,15 +38,6 @@ const (
 	QueryTypeNear
 )
 
-/*
-// Filter describes the geo query.
-type Filter struct {
-	Type        QueryType // The type of the query
-	Data        []byte    // The geometry in binary form which is the parameter for the query
-	MaxDistance float64   // MaxDistance for near queries
-}
-*/
-
 // QueryData is internal data used by the geo query filter to additionally filter the geometries.
 type QueryData struct {
 	pt    *s2.Point // If not nil, the input data was a point

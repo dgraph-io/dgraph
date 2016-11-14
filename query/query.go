@@ -219,8 +219,8 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 	r := sg.Result
 	x.AssertTruef(sg.SrcUIDs.Size() == len(r),
 		"Result uidmatrixlength: %v. Query uidslength: %v", sg.SrcUIDs.Size(), len(r))
-	//x.AssertTruef(sg.SrcUIDs.Size() == sg.Values.ValuesLength(),
-	//		"Result valuelength: %v. Query uidslength: %v", sg.SrcUIDs.Size(), sg.Values.ValuesLength())
+	x.AssertTruef(sg.SrcUIDs.Size() == sg.Values.ValuesLength(),
+		"Result valuelength: %v. Query uidslength: %v", sg.SrcUIDs.Size(), sg.Values.ValuesLength())
 
 	// Generate a matrix of maps
 	// Row -> .....
@@ -270,16 +270,7 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 			} else {
 				m[sg.Attr] = l
 			}
-			/*
-				if sg.GeoFilter != nil {
-					x.AssertTruef(len(l) == 1, "There should be exactly 1 uid at the top level.")
-					// remove the top level attr from the result, that is only used
-					// for filtering the results.
-					result[sg.SrcUIDs.Get(i)] = l[0]
-				} else {
-			*/
 			result[sg.SrcUIDs.Get(i)] = m
-			// }
 		}
 	}
 
@@ -716,19 +707,15 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		Filter: gq.Filter,
 	}
 	if gq.Gen != nil {
-		sg.applyGenerator(ctx, gq.Gen)
+		err := sg.applyGenerator(ctx, gq.Gen)
+		if err != nil {
+			return nil, err
+		}
 	} else {
 		sg.SrcUIDs = algo.NewUIDList([]uint64{euid})
 		{
-			// Encode uid into result flatbuffer.
-			b := flatbuffers.NewBuilder(0)
-			b.Finish(algo.NewUIDList([]uint64{euid}).AddTo(b))
-			buf := b.FinishedBytes()
-			tl := task.GetRootAsUidList(buf, 0)
-			ul := new(algo.UIDList)
-			ul.FromTask(tl)
 			if euid != 0 {
-				sg.Result = []*algo.UIDList{ul}
+				sg.Result = []*algo.UIDList{algo.NewUIDList([]uint64{euid})}
 			}
 		}
 	}
@@ -854,13 +841,6 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, taskQuery []byte, rch chan 
 		rch <- nil
 		return
 	}
-
-	/*
-		if err = sg.applyGeoQuery(ctx); err != nil {
-			rch <- err
-			return
-		}
-	*/
 
 	sg.DestUIDs = algo.MergeLists(sg.Result)
 	if err != nil {
@@ -1019,16 +999,15 @@ func (sg *SubGraph) applyGenerator(ctx context.Context, gen *gql.Generator) erro
 	return nil
 }
 
-func runGenerator(ctx context.Context,
-	gen *gql.Generator) (l *algo.UIDList, rerr error) {
+func runGenerator(ctx context.Context, gen *gql.Generator) (*algo.UIDList, error) {
 	if len(gen.FuncName) > 0 { // Leaf node.
 		gen.FuncName = strings.ToLower(gen.FuncName) // Not sure if needed.
 
 		switch gen.FuncName {
 		case "anyof":
-			return anyof(ctx, nil, gen.FuncArgs[0], gen.FuncArgs[1])
+			return anyOf(ctx, nil, gen.FuncArgs[0], gen.FuncArgs[1])
 		case "allof":
-			return allof(ctx, nil, gen.FuncArgs[0], gen.FuncArgs[1])
+			return allOf(ctx, nil, gen.FuncArgs[0], gen.FuncArgs[1])
 		case "near":
 			maxD, err := strconv.ParseFloat(gen.FuncArgs[2], 64)
 			if err != nil {
@@ -1045,6 +1024,8 @@ func runGenerator(ctx context.Context,
 				return nil, err
 			}
 			return generateGeo(ctx, gen.FuncArgs[0], geo.QueryTypeNear, gb, maxD)
+		default:
+			return nil, fmt.Errorf("Invalid generator")
 		}
 	}
 	return nil, nil
@@ -1070,7 +1051,7 @@ func (sg *SubGraph) applyFilter(ctx context.Context) error {
 // runFilter traverses filter tree and produce a filtered list of UIDs.
 // Input "destUIDs" is the very original list of destination UIDs of a SubGraph.
 func runFilter(ctx context.Context, destUIDs *algo.UIDList,
-	filter *gql.FilterTree) (l *algo.UIDList, rerr error) {
+	filter *gql.FilterTree) (*algo.UIDList, error) {
 	if len(filter.FuncName) > 0 { // Leaf node.
 		filter.FuncName = strings.ToLower(filter.FuncName) // Not sure if needed.
 		x.AssertTruef(len(filter.FuncArgs) == 2,
@@ -1078,9 +1059,9 @@ func runFilter(ctx context.Context, destUIDs *algo.UIDList,
 
 		switch filter.FuncName {
 		case "anyof":
-			return anyof(ctx, destUIDs, filter.FuncArgs[0], filter.FuncArgs[1])
+			return anyOf(ctx, destUIDs, filter.FuncArgs[0], filter.FuncArgs[1])
 		case "allof":
-			return allof(ctx, destUIDs, filter.FuncArgs[0], filter.FuncArgs[1])
+			return allOf(ctx, destUIDs, filter.FuncArgs[0], filter.FuncArgs[1])
 		}
 	}
 

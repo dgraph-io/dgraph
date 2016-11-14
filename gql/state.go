@@ -146,12 +146,12 @@ func lexInside(l *lex.Lexer) lex.StateFn {
 				l.Backup()
 				l.Emit(itemArgument)
 				return lexArgInside
-			} else {
-				l.Backup()
-				l.Emit(itemGenerator)
-				l.FilterDepth++
-				return lexFilterInside
 			}
+			// This is a generator function.
+			l.Backup()
+			l.Emit(itemGenerator)
+			l.FilterDepth++
+			return lexFilterInside
 		case r == ':':
 			return lexAlias
 		case r == '@':

@@ -36,7 +36,6 @@ func TestQueryTokensPolygon(t *testing.T) {
 
 	qtypes := []QueryType{QueryTypeWithin, QueryTypeIntersects}
 	for _, qt := range qtypes {
-		//		f := &Filter{Data: data, Type: qt}
 		toks, qd, err := QueryTokens(data, qt, 0)
 		require.NoError(t, err)
 
@@ -62,7 +61,6 @@ func TestQueryTokensPolygonError(t *testing.T) {
 
 	qtypes := []QueryType{QueryTypeNear, QueryTypeContains}
 	for _, qt := range qtypes {
-		//f := &Filter{Data: data, Type: qt}
 		_, _, err := QueryTokens(data, qt, 0)
 		require.Error(t, err)
 	}
@@ -75,7 +73,6 @@ func TestQueryTokensPoint(t *testing.T) {
 
 	qtypes := []QueryType{QueryTypeWithin, QueryTypeIntersects, QueryTypeContains}
 	for _, qt := range qtypes {
-		//	f := &Filter{Data: data, Type: qt}
 		toks, qd, err := QueryTokens(data, qt, 0)
 		require.NoError(t, err)
 
@@ -99,7 +96,6 @@ func TestQueryTokensNear(t *testing.T) {
 	data, err := wkb.Marshal(p, binary.LittleEndian)
 	require.NoError(t, err)
 
-	//f := &Filter{Data: data, Type: QueryTypeNear, MaxDistance: 1000}
 	toks, qd, err := QueryTokens(data, QueryTypeNear, 1000)
 	require.NoError(t, err)
 
@@ -116,7 +112,6 @@ func TestQueryTokensNearError(t *testing.T) {
 	data, err := wkb.Marshal(p, binary.LittleEndian)
 	require.NoError(t, err)
 
-	//f := &Filter{Data: data, Type: QueryTypeNear}
 	_, _, err = QueryTokens(data, QueryTypeNear, 0)
 	require.Error(t, err) // no max distance
 }
@@ -125,32 +120,6 @@ func TestMatchesFilterWithinPoint(t *testing.T) {
 	p := geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{-122.082506, 37.4249518})
 	data, err := wkb.Marshal(p, binary.LittleEndian)
 	require.NoError(t, err)
-	//f := &Filter{Data: data, Type: QueryTypeWithin}
-	_, qd, err := QueryTokens(data, QueryTypeWithin, 0)
-	require.NoError(t, err)
-
-	p2 := geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{-122.082506, 37.4249518})
-	// Same point
-	require.True(t, qd.MatchesFilter(types.Geo{p2}))
-
-	p3 := geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{-123.082506, 37.4249518})
-	// Different point
-	require.False(t, qd.MatchesFilter(types.Geo{p3}))
-
-	poly := geom.NewPolygon(geom.XY).MustSetCoords([][]geom.Coord{
-		{{-122, 37}, {-123, 37}, {-123, 38}, {-122, 38}, {-122, 37}},
-	})
-	// Points don't contain polys
-	require.False(t, qd.MatchesFilter(types.Geo{poly}))
-}
-
-func TestMatchesFilterWithinPolygon(t *testing.T) {
-	p := geom.NewPolygon(geom.XY).MustSetCoords([][]geom.Coord{
-		{{-122, 37}, {-123, 37}, {-123, 38}, {-122, 38}, {-122, 37}},
-	})
-	data, err := wkb.Marshal(p, binary.LittleEndian)
-	require.NoError(t, err)
-	//f := &Filter{Data: data, Type: QueryTypeWithin}
 	_, qd, err := QueryTokens(data, QueryTypeWithin, 0)
 	require.NoError(t, err)
 
@@ -174,7 +143,6 @@ func TestMatchesFilterContainsPoint(t *testing.T) {
 	p := geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{-122.082506, 37.4249518})
 	data, err := wkb.Marshal(p, binary.LittleEndian)
 	require.NoError(t, err)
-	//f := &Filter{Data: data, Type: QueryTypeContains}
 	_, qd, err := QueryTokens(data, QueryTypeContains, 0)
 	require.NoError(t, err)
 
@@ -199,7 +167,6 @@ func TestMatchesFilterIntersectsPoint(t *testing.T) {
 	p := geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{-122.082506, 37.4249518})
 	data, err := wkb.Marshal(p, binary.LittleEndian)
 	require.NoError(t, err)
-	//f := &Filter{Data: data, Type: QueryTypeIntersects}
 	_, qd, err := QueryTokens(data, QueryTypeIntersects, 0)
 	require.NoError(t, err)
 
@@ -230,7 +197,6 @@ func TestMatchesFilterIntersectsPolygon(t *testing.T) {
 	})
 	data, err := wkb.Marshal(p, binary.LittleEndian)
 	require.NoError(t, err)
-	//f := &Filter{Data: data, Type: QueryTypeIntersects}
 	_, qd, err := QueryTokens(data, QueryTypeIntersects, 0)
 	require.NoError(t, err)
 
@@ -271,7 +237,6 @@ func TestMatchesFilterNearPoint(t *testing.T) {
 	p := geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{-122.082506, 37.4249518})
 	data, err := wkb.Marshal(p, binary.LittleEndian)
 	require.NoError(t, err)
-	//f := &Filter{Data: data, Type: QueryTypeNear, MaxDistance: 1000}
 	_, qd, err := QueryTokens(data, QueryTypeNear, 1000)
 	require.NoError(t, err)
 
