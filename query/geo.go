@@ -46,9 +46,7 @@ func generateGeo(ctx context.Context, attr string, qt geo.QueryType, g []byte, m
 	}
 
 	// Filter the values
-	l := filterUIDs(uids, values, data)
-
-	return l, nil
+	return filterUIDs(uids, values, data), nil
 }
 
 func fetchIndexEntries(ctx context.Context, attr string, tokens []string) (*algo.UIDList, error) {

@@ -82,6 +82,7 @@ type FilterTree struct {
 	Child    []*FilterTree
 }
 
+// Generator holds the information about generator functions.
 type Generator struct {
 	FuncName string
 	FuncArgs []string
