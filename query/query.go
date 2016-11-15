@@ -931,27 +931,27 @@ type protoOutputNode struct {
 	*graph.Node
 }
 
-// AddValue adds an attribute value for protoPreOutput.
+// AddValue adds an attribute value for protoOutputNode.
 func (p *protoOutputNode) AddValue(attr string, v types.Value) {
 	p.Node.Properties = append(p.Node.Properties, createProperty(attr, v))
 }
 
-// AddChild adds a child for protoPreOutput.
+// AddChild adds a child for protoOutputNode.
 func (p *protoOutputNode) AddChild(attr string, child outputNode) {
 	p.Node.Children = append(p.Node.Children, child.(*protoOutputNode).Node)
 }
 
-// New creates a new node for protoPreOutput.
+// New creates a new node for protoOutputNode.
 func (p *protoOutputNode) New(attr string) outputNode {
 	uc := nodePool.Get().(*graph.Node)
 	uc.Attribute = attr
 	return &protoOutputNode{uc}
 }
 
-// SetUID sets UID of a protoPreOutput.
+// SetUID sets UID of a protoOutputNode.
 func (p *protoOutputNode) SetUID(uid uint64) { p.Node.Uid = uid }
 
-// SetXID sets XID of a protoPreOutput.
+// SetXID sets XID of a protoOutputNode.
 func (p *protoOutputNode) SetXID(xid string) { p.Node.Xid = xid }
 
 // ToProtocolBuffer does preorder traversal to build a proto buffer. We have
@@ -983,12 +983,12 @@ type jsonOutputNode struct {
 	data map[string]interface{}
 }
 
-// AddValue adds an attribute value for jsonPreOutput.
+// AddValue adds an attribute value for jsonOutputNode.
 func (p *jsonOutputNode) AddValue(attr string, v types.Value) {
 	p.data[attr] = v
 }
 
-// AddChild adds a child for jsonPreOutput.
+// AddChild adds a child for jsonOutputNode.
 func (p *jsonOutputNode) AddChild(attr string, child outputNode) {
 	a := p.data[attr]
 	if a == nil {
@@ -1000,17 +1000,17 @@ func (p *jsonOutputNode) AddChild(attr string, child outputNode) {
 		child.(*jsonOutputNode).data)
 }
 
-// New creates a new node for jsonPreOutput.
+// New creates a new node for jsonOutputNode.
 func (p *jsonOutputNode) New(attr string) outputNode {
 	return &jsonOutputNode{make(map[string]interface{})}
 }
 
-// SetUID sets UID of a jsonPreOutput.
+// SetUID sets UID of a jsonOutputNode.
 func (p *jsonOutputNode) SetUID(uid uint64) {
 	p.data["_uid_"] = fmt.Sprintf("%#x", uid)
 }
 
-// SetXID sets XID of a jsonPreOutput.
+// SetXID sets XID of a jsonOutputNode.
 func (p *jsonOutputNode) SetXID(xid string) {
 	p.data["_xid_"] = xid
 }
