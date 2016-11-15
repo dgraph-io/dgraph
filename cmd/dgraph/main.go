@@ -477,23 +477,35 @@ func storeStatsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func shutDownHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
+		return
+	}
+
 	ip, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil || ip != "127.0.0.1" {
-		x.SetStatus(w, x.ErrorUnauthorized, "")
+		x.SetStatus(w, x.ErrorUnauthorized, fmt.Sprintf("Request from IP: %v", ip))
+		return
 	}
+
 	exitWithProfiles()
 	x.SetStatus(w, x.ErrorOk, "Server has been shutdown")
 }
 
 func backupHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
+		return
+	}
+
 	ip, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil || ip != "127.0.0.1" {
-		x.SetStatus(w, x.ErrorUnauthorized, "")
+		x.SetStatus(w, x.ErrorUnauthorized, fmt.Sprintf("Request from IP: %v", ip))
+		return
 	}
-	err = worker.StartBackup()
-	if err != nil {
-		x.SetStatus(w, x.Error, "Backup Failed.")
-	}
+
+	ctx := context.Background()
+	worker.BackupOverNetwork(ctx)
 	x.SetStatus(w, x.ErrorOk, "Backup completed.")
 }
 
