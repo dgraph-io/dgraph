@@ -211,7 +211,6 @@ func TestIntersectsPolygon1(t *testing.T) {
 			FuncArgs: []string{
 				"geometry",
 				"{\"Type\":\"Polygon\",	\"Coordinates\":[[[-122.06, 37.37], [-122.1, 37.36], [-122.12, 37.4], [-122.11, 37.43], [-122.04, 37.43], [-122.06, 37.37]]]}",
-				"1000",
 			},
 		},
 		Children: []*gql.GraphQuery{&gql.GraphQuery{Attr: "name"}},
@@ -243,7 +242,6 @@ func TestIntersectsPolygon2(t *testing.T) {
 			FuncArgs: []string{
 				"geometry",
 				"{\"Type\":\"Polygon\",	\"Coordinates\":[[[-121.6, 37.1], [-122.4, 37.3], [-122.6, 37.8], [-122.5, 38.3], [-121.9, 38], [-121.6, 37.1]]]}",
-				"1000",
 			},
 		},
 		Children: []*gql.GraphQuery{&gql.GraphQuery{Attr: "name"}},
