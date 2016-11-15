@@ -1031,5 +1031,8 @@ func (sg *SubGraph) ToJSON(l *Latency) ([]byte, error) {
 	root := map[string]interface{}{
 		sg.Attr: []map[string]interface{}{n.(*jsonPreOutput).data},
 	}
+	if sg.Params.isDebug {
+		root["server_latency"] = l.ToMap()
+	}
 	return json.Marshal(root)
 }
