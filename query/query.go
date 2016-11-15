@@ -926,41 +926,41 @@ type outputNode interface {
 	SetXID(xid string)
 }
 
-// protoPreOutput is the proto output for preTraverse.
-type protoPreOutput struct {
+// protoOutputNode is the proto output for preTraverse.
+type protoOutputNode struct {
 	*graph.Node
 }
 
 // AddValue adds an attribute value for protoPreOutput.
-func (p *protoPreOutput) AddValue(attr string, v types.Value) {
+func (p *protoOutputNode) AddValue(attr string, v types.Value) {
 	p.Node.Properties = append(p.Node.Properties, createProperty(attr, v))
 }
 
 // AddChild adds a child for protoPreOutput.
-func (p *protoPreOutput) AddChild(attr string, child outputNode) {
-	p.Node.Children = append(p.Node.Children, child.(*protoPreOutput).Node)
+func (p *protoOutputNode) AddChild(attr string, child outputNode) {
+	p.Node.Children = append(p.Node.Children, child.(*protoOutputNode).Node)
 }
 
 // New creates a new node for protoPreOutput.
-func (p *protoPreOutput) New(attr string) outputNode {
+func (p *protoOutputNode) New(attr string) outputNode {
 	uc := nodePool.Get().(*graph.Node)
 	uc.Attribute = attr
-	return &protoPreOutput{uc}
+	return &protoOutputNode{uc}
 }
 
 // SetUID sets UID of a protoPreOutput.
-func (p *protoPreOutput) SetUID(uid uint64) { p.Node.Uid = uid }
+func (p *protoOutputNode) SetUID(uid uint64) { p.Node.Uid = uid }
 
 // SetXID sets XID of a protoPreOutput.
-func (p *protoPreOutput) SetXID(xid string) { p.Node.Xid = xid }
+func (p *protoOutputNode) SetXID(xid string) { p.Node.Xid = xid }
 
 // ToProtocolBuffer does preorder traversal to build a proto buffer. We have
 // used postorder traversal before, but preorder seems simpler and faster for
 // most cases.
 func (sg *SubGraph) ToProtocolBuffer(l *Latency) (*graph.Node, error) {
-	var seedNode *protoPreOutput
+	var seedNode *protoOutputNode
 	if sg.SrcUIDs == nil {
-		return seedNode.New(sg.Attr).(*protoPreOutput).Node, nil
+		return seedNode.New(sg.Attr).(*protoOutputNode).Node, nil
 	}
 
 	x.AssertTrue(len(sg.Result) == 1)
@@ -971,25 +971,25 @@ func (sg *SubGraph) ToProtocolBuffer(l *Latency) (*graph.Node, error) {
 	}
 
 	if rerr := sg.preTraverse(ul.Get(0), n); rerr != nil {
-		return n.(*protoPreOutput).Node, rerr
+		return n.(*protoOutputNode).Node, rerr
 	}
 
 	l.ProtocolBuffer = time.Since(l.Start) - l.Parsing - l.Processing
-	return n.(*protoPreOutput).Node, nil
+	return n.(*protoOutputNode).Node, nil
 }
 
-// jsonPreOutput is the JSON output for preTraverse.
-type jsonPreOutput struct {
+// jsonOutputNode is the JSON output for preTraverse.
+type jsonOutputNode struct {
 	data map[string]interface{}
 }
 
 // AddValue adds an attribute value for jsonPreOutput.
-func (p *jsonPreOutput) AddValue(attr string, v types.Value) {
+func (p *jsonOutputNode) AddValue(attr string, v types.Value) {
 	p.data[attr] = v
 }
 
 // AddChild adds a child for jsonPreOutput.
-func (p *jsonPreOutput) AddChild(attr string, child outputNode) {
+func (p *jsonOutputNode) AddChild(attr string, child outputNode) {
 	a := p.data[attr]
 	if a == nil {
 		// Need to do this because we cannot cast nil interface to
@@ -997,28 +997,28 @@ func (p *jsonPreOutput) AddChild(attr string, child outputNode) {
 		a = make([]map[string]interface{}, 0, 5)
 	}
 	p.data[attr] = append(a.([]map[string]interface{}),
-		child.(*jsonPreOutput).data)
+		child.(*jsonOutputNode).data)
 }
 
 // New creates a new node for jsonPreOutput.
-func (p *jsonPreOutput) New(attr string) outputNode {
-	return &jsonPreOutput{make(map[string]interface{})}
+func (p *jsonOutputNode) New(attr string) outputNode {
+	return &jsonOutputNode{make(map[string]interface{})}
 }
 
 // SetUID sets UID of a jsonPreOutput.
-func (p *jsonPreOutput) SetUID(uid uint64) {
+func (p *jsonOutputNode) SetUID(uid uint64) {
 	p.data["_uid_"] = fmt.Sprintf("%#x", uid)
 }
 
 // SetXID sets XID of a jsonPreOutput.
-func (p *jsonPreOutput) SetXID(xid string) {
+func (p *jsonOutputNode) SetXID(xid string) {
 	p.data["_xid_"] = xid
 }
 
 // ToJSON converts the internal subgraph object to JSON format which is then\
 // sent to the HTTP client.
 func (sg *SubGraph) ToJSON(l *Latency) ([]byte, error) {
-	var seedNode *jsonPreOutput
+	var seedNode *jsonOutputNode
 	n := seedNode.New(sg.Attr)
 	ul := sg.Result[0]
 	if sg.Params.GetUID || sg.Params.isDebug {
@@ -1029,7 +1029,7 @@ func (sg *SubGraph) ToJSON(l *Latency) ([]byte, error) {
 		return nil, err
 	}
 	root := map[string]interface{}{
-		sg.Attr: []map[string]interface{}{n.(*jsonPreOutput).data},
+		sg.Attr: []map[string]interface{}{n.(*jsonOutputNode).data},
 	}
 	if sg.Params.isDebug {
 		root["server_latency"] = l.ToMap()
