@@ -127,7 +127,7 @@ func addEdgeToUID(t *testing.T, ps *store.Store, attr string, src uint64, dst ui
 		l.AddMutationWithIndex(context.Background(), edge, posting.Set))
 }
 
-func populateGraph(t *testing.T) (string, *store.Store) {
+func populateGraph(t *testing.T) (string, string, *store.Store) {
 	// logrus.SetLevel(logrus.DebugLevel)
 	dir, err := ioutil.TempDir("", "storetest_")
 	require.NoError(t, err)
@@ -182,10 +182,10 @@ func populateGraph(t *testing.T) (string, *store.Store) {
 	addEdgeToValue(t, ps, "dob", 31, "1901-01-15")
 
 	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
-	return dir, ps
+	return dir, dir2, ps
 }
 
-func processToJSON(t *testing.T, query string) map[string]interface{} {
+func processToJSON(t *testing.T, query string) string {
 	gq, _, err := gql.Parse(query)
 	require.NoError(t, err)
 
@@ -201,16 +201,39 @@ func processToJSON(t *testing.T, query string) map[string]interface{} {
 	var l Latency
 	js, err := sg.ToJSON(&l)
 	require.NoError(t, err)
-
-	var mp map[string]interface{}
-	require.NoError(t, json.Unmarshal(js, &mp))
-
-	return mp
+	return string(js)
 }
 
 func TestGetUID(t *testing.T) {
-	dir, _ := populateGraph(t)
+	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
+
+	// Alright. Now we have everything set up. Let's create the query.
+	query := `
+		{
+			me(_uid_:0x01) {
+				name
+				_uid_
+				gender
+				alive
+				friend {
+					_uid_
+					name
+				}
+			}
+		}
+	`
+	js := processToJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"_uid_":"0x1","alive":true,"friend":[{"_uid_":"0x17","name":"Rick Grimes"},{"_uid_":"0x18","name":"Glenn Rhee"},{"_uid_":"0x19","name":"Daryl Dixon"},{"_uid_":"0x1f","name":"Andrea"},{"_uid_":"0x65"}],"gender":"female","name":"Michonne"}]}`,
+		js)
+}
+
+func TestGetUIDCount(t *testing.T) {
+	dir, dir2, _ := populateGraph(t)
+	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
 
 	// Alright. Now we have everything set up. Let's create the query.
 	query := `
@@ -226,15 +249,16 @@ func TestGetUID(t *testing.T) {
 			}
 		}
 	`
-	mp := processToJSON(t, query)
-	resp := mp["me"]
-	uid := resp.([]interface{})[0].(map[string]interface{})["_uid_"].(string)
-	require.EqualValues(t, "0x1", uid)
+	js := processToJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"_uid_":"0x1","alive":true,"friend":[{"_count_":5}],"gender":"female","name":"Michonne"}]}`,
+		js)
 }
 
 func TestDebug1(t *testing.T) {
-	dir, _ := populateGraph(t)
+	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
 
 	// Alright. Now we have everything set up. Let's create the query.
 	query := `
@@ -250,15 +274,19 @@ func TestDebug1(t *testing.T) {
 		}
 	`
 
-	mp := processToJSON(t, query)
+	js := processToJSON(t, query)
+	var mp map[string]interface{}
+	require.NoError(t, json.Unmarshal([]byte(js), &mp))
+
 	resp := mp["debug"]
 	uid := resp.([]interface{})[0].(map[string]interface{})["_uid_"].(string)
 	require.EqualValues(t, "0x1", uid)
 }
 
 func TestDebug2(t *testing.T) {
-	dir, _ := populateGraph(t)
+	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
 
 	query := `
 		{
@@ -273,15 +301,19 @@ func TestDebug2(t *testing.T) {
 		}
 	`
 
-	mp := processToJSON(t, query)
+	js := processToJSON(t, query)
+	var mp map[string]interface{}
+	require.NoError(t, json.Unmarshal([]byte(js), &mp))
+
 	resp := mp["me"]
 	uid, ok := resp.([]interface{})[0].(map[string]interface{})["_uid_"].(string)
 	require.False(t, ok, "No uid expected but got one %s", uid)
 }
 
 func TestCount(t *testing.T) {
-	dir, _ := populateGraph(t)
+	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
 
 	// Alright. Now we have everything set up. Let's create the query.
 	query := `
@@ -297,11 +329,10 @@ func TestCount(t *testing.T) {
 		}
 	`
 
-	mp := processToJSON(t, query)
-	resp := mp["me"]
-	friend := resp.([]interface{})[0].(map[string]interface{})["friend"]
-	count := int(friend.(map[string]interface{})["_count_"].(float64))
-	require.EqualValues(t, count, 5)
+	js := processToJSON(t, query)
+	require.EqualValues(t,
+		`{"me":[{"alive":true,"friend":[{"_count_":5}],"gender":"female","name":"Michonne"}]}`,
+		js)
 }
 
 func TestCountError1(t *testing.T) {
@@ -352,8 +383,9 @@ func TestCountError2(t *testing.T) {
 }
 
 func TestProcessGraph(t *testing.T) {
-	dir, _ := populateGraph(t)
+	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
 
 	// Alright. Now we have everything set up. Let's create the query.
 	query := `
@@ -403,8 +435,9 @@ func TestProcessGraph(t *testing.T) {
 }
 
 func TestToJSON(t *testing.T) {
-	dir, _ := populateGraph(t)
+	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
 
 	// Alright. Now we have everything set up. Let's create the query.
 	query := `
@@ -435,12 +468,15 @@ func TestToJSON(t *testing.T) {
 	var l Latency
 	js, err := sg.ToJSON(&l)
 	require.NoError(t, err)
-	require.Contains(t, string(js), "Michonne")
+	require.EqualValues(t,
+		`{"me":[{"alive":true,"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"},{}],"gender":"female","name":"Michonne"}]}`,
+		string(js))
 }
 
 func TestToJSONFilter(t *testing.T) {
-	dir, _ := populateGraph(t)
+	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
 	query := `
 		{
 			me(_uid_:0x01) {
@@ -474,8 +510,9 @@ func TestToJSONFilter(t *testing.T) {
 }
 
 func TestToJSONFilterAllOf(t *testing.T) {
-	dir, _ := populateGraph(t)
+	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
 	query := `
 		{
 			me(_uid_:0x01) {
@@ -509,8 +546,9 @@ func TestToJSONFilterAllOf(t *testing.T) {
 }
 
 func TestToJSONFilterUID(t *testing.T) {
-	dir, _ := populateGraph(t)
+	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
 	query := `
 		{
 			me(_uid_:0x01) {
@@ -538,13 +576,15 @@ func TestToJSONFilterUID(t *testing.T) {
 	var l Latency
 	js, err := sg.ToJSON(&l)
 	require.NoError(t, err)
-	require.EqualValues(t, js,
-		`{"me":[{"friend":[{"_uid_":"0x1f"}],"gender":"female","name":"Michonne"}]}`)
+	require.EqualValues(t,
+		`{"me":[{"friend":[{"_uid_":"0x1f"}],"gender":"female","name":"Michonne"}]}`,
+		string(js))
 }
 
 func TestToJSONFilterOr(t *testing.T) {
-	dir, _ := populateGraph(t)
+	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
 	query := `
 		{
 			me(_uid_:0x01) {
@@ -572,13 +612,15 @@ func TestToJSONFilterOr(t *testing.T) {
 	var l Latency
 	js, err := sg.ToJSON(&l)
 	require.NoError(t, err)
-	require.EqualValues(t, js,
-		`{"me":[{"friend":[{"name":"Glenn Rhee"},{"name":"Andrea"}],"gender":"female","name":"Michonne"}]}`)
+	require.EqualValues(t,
+		`{"me":[{"friend":[{"name":"Glenn Rhee"},{"name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
+		string(js))
 }
 
 func TestToJSONFilterOrFirst(t *testing.T) {
-	dir, _ := populateGraph(t)
+	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
 	query := `
 		{
 			me(_uid_:0x01) {
@@ -606,13 +648,15 @@ func TestToJSONFilterOrFirst(t *testing.T) {
 	var l Latency
 	js, err := sg.ToJSON(&l)
 	require.NoError(t, err)
-	require.EqualValues(t, js,
-		`{"me":[{"friend":[{"name":"Glenn Rhee"},{"name":"Daryl Dixon"}],"gender":"female","name":"Michonne"}]}`)
+	require.EqualValues(t,
+		`{"me":[{"friend":[{"name":"Glenn Rhee"},{"name":"Daryl Dixon"}],"gender":"female","name":"Michonne"}]}`,
+		string(js))
 }
 
 func TestToJSONFilterOrOffset(t *testing.T) {
-	dir, _ := populateGraph(t)
+	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
 	query := `
 		{
 			me(_uid_:0x01) {
@@ -640,14 +684,16 @@ func TestToJSONFilterOrOffset(t *testing.T) {
 	var l Latency
 	js, err := sg.ToJSON(&l)
 	require.NoError(t, err)
-	require.EqualValues(t, js,
-		`{"me":[{"friend":[{"name":"Daryl Dixon"},{"name":"Andrea"}],"gender":"female","name":"Michonne"}]}`)
+	require.EqualValues(t,
+		`{"me":[{"friend":[{"name":"Daryl Dixon"},{"name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
+		string(js))
 }
 
 // No filter. Just to test first and offset.
 func TestToJSONFirstOffset(t *testing.T) {
-	dir, _ := populateGraph(t)
+	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
 	query := `
 		{
 			me(_uid_:0x01) {
@@ -675,13 +721,15 @@ func TestToJSONFirstOffset(t *testing.T) {
 	var l Latency
 	js, err := sg.ToJSON(&l)
 	require.NoError(t, err)
-	require.EqualValues(t, js,
-		`{"me":[{"friend":[{"name":"Glenn Rhee"}],"gender":"female","name":"Michonne"}]}`)
+	require.EqualValues(t,
+		`{"me":[{"friend":[{"name":"Glenn Rhee"}],"gender":"female","name":"Michonne"}]}`,
+		string(js))
 }
 
 func TestToJSONFilterOrFirstOffset(t *testing.T) {
-	dir, _ := populateGraph(t)
+	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
 	query := `
 		{
 			me(_uid_:0x01) {
@@ -709,13 +757,15 @@ func TestToJSONFilterOrFirstOffset(t *testing.T) {
 	var l Latency
 	js, err := sg.ToJSON(&l)
 	require.NoError(t, err)
-	require.EqualValues(t, js,
-		`{"me":[{"friend":[{"name":"Daryl Dixon"}],"gender":"female","name":"Michonne"}]}`)
+	require.EqualValues(t,
+		`{"me":[{"friend":[{"name":"Daryl Dixon"}],"gender":"female","name":"Michonne"}]}`,
+		string(js))
 }
 
 func TestToJSONFilterOrFirstNegative(t *testing.T) {
-	dir, _ := populateGraph(t)
+	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
 	// When negative first/count is specified, we ignore offset and returns the last
 	// few number of items.
 	query := `
@@ -745,13 +795,15 @@ func TestToJSONFilterOrFirstNegative(t *testing.T) {
 	var l Latency
 	js, err := sg.ToJSON(&l)
 	require.NoError(t, err)
-	require.EqualValues(t, js,
-		`{"me":[{"friend":[{"name":"Andrea"}],"gender":"female","name":"Michonne"}]}`)
+	require.EqualValues(t,
+		`{"me":[{"friend":[{"name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
+		string(js))
 }
 
 func TestToJSONFilterAnd(t *testing.T) {
-	dir, _ := populateGraph(t)
+	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
 	query := `
 		{
 			me(_uid_:0x01) {
@@ -779,8 +831,9 @@ func TestToJSONFilterAnd(t *testing.T) {
 	var l Latency
 	js, err := sg.ToJSON(&l)
 	require.NoError(t, err)
-	require.EqualValues(t, js,
-		`{"me":[{"gender":"female","name":"Michonne"}]}`)
+	require.EqualValues(t,
+		`{"me":[{"gender":"female","name":"Michonne"}]}`,
+		string(js))
 }
 
 func getProperty(properties []*graph.Property, prop string) *graph.Value {
@@ -792,9 +845,10 @@ func getProperty(properties []*graph.Property, prop string) *graph.Value {
 	return nil
 }
 
-func TestToPB(t *testing.T) {
-	dir, _ := populateGraph(t)
+func TestToProto(t *testing.T) {
+	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
 
 	query := `
 		{
@@ -828,34 +882,99 @@ func TestToPB(t *testing.T) {
 	gr, err := sg.ToProtocolBuffer(&l)
 	require.NoError(t, err)
 
-	require.EqualValues(t, "debug", gr.Attribute)
-	require.EqualValues(t, 1, gr.Uid)
-	require.EqualValues(t, "mich", gr.Xid)
-	require.Len(t, gr.Properties, 3)
-
-	require.EqualValues(t, "Michonne",
-		getProperty(gr.Properties, "name").GetStrVal())
-	require.Len(t, gr.Children, 10)
-
-	child := gr.Children[0]
-	require.EqualValues(t, 23, child.Uid)
-	require.EqualValues(t, "friend", child.Attribute)
-
-	require.Len(t, child.Properties, 1)
-	require.EqualValues(t, "Rick Grimes",
-		getProperty(child.Properties, "name").GetStrVal())
-	require.Empty(t, child.Children)
-
-	child = gr.Children[5]
-	require.EqualValues(t, 23, child.Uid)
-	require.EqualValues(t, "friend", child.Attribute)
-	require.Empty(t, child.Properties)
-	require.Empty(t, child.Children)
+	require.EqualValues(t,
+		`uid: 1
+xid: "mich"
+attribute: "debug"
+properties: <
+  prop: "name"
+  value: <
+    str_val: "Michonne"
+  >
+>
+properties: <
+  prop: "gender"
+  value: <
+    bytes_val: "female"
+  >
+>
+properties: <
+  prop: "alive"
+  value: <
+    bool_val: true
+  >
+>
+children: <
+  uid: 23
+  attribute: "friend"
+  properties: <
+    prop: "name"
+    value: <
+      str_val: "Rick Grimes"
+    >
+  >
+>
+children: <
+  uid: 24
+  attribute: "friend"
+  properties: <
+    prop: "name"
+    value: <
+      str_val: "Glenn Rhee"
+    >
+  >
+>
+children: <
+  uid: 25
+  attribute: "friend"
+  properties: <
+    prop: "name"
+    value: <
+      str_val: "Daryl Dixon"
+    >
+  >
+>
+children: <
+  uid: 31
+  attribute: "friend"
+  properties: <
+    prop: "name"
+    value: <
+      str_val: "Andrea"
+    >
+  >
+>
+children: <
+  uid: 101
+  attribute: "friend"
+>
+children: <
+  uid: 23
+  attribute: "friend"
+>
+children: <
+  uid: 24
+  attribute: "friend"
+>
+children: <
+  uid: 25
+  attribute: "friend"
+>
+children: <
+  uid: 31
+  attribute: "friend"
+>
+children: <
+  uid: 101
+  attribute: "friend"
+>
+`, proto.MarshalTextString(gr))
 }
 
 func TestSchema(t *testing.T) {
-	dir, _ := populateGraph(t)
+	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
 
 	query := `
 		{
@@ -914,9 +1033,10 @@ func TestSchema(t *testing.T) {
 	require.Empty(t, child.Children)
 }
 
-func TestToPBFilter(t *testing.T) {
-	dir, _ := populateGraph(t)
+func TestToProtoFilter(t *testing.T) {
+	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
 
 	// Alright. Now we have everything set up. Let's create the query.
 	query := `
@@ -973,9 +1093,10 @@ children: <
 	require.EqualValues(t, proto.MarshalTextString(pb), expectedPb)
 }
 
-func TestToPBFilterOr(t *testing.T) {
-	dir, _ := populateGraph(t)
+func TestToProtoFilterOr(t *testing.T) {
+	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
 
 	// Alright. Now we have everything set up. Let's create the query.
 	query := `
@@ -1041,9 +1162,10 @@ children: <
 	require.EqualValues(t, proto.MarshalTextString(pb), expectedPb)
 }
 
-func TestToPBFilterAnd(t *testing.T) {
-	dir, _ := populateGraph(t)
+func TestToProtoFilterAnd(t *testing.T) {
+	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
 
 	// Alright. Now we have everything set up. Let's create the query.
 	query := `
@@ -1093,8 +1215,9 @@ properties: <
 
 // Test sorting / ordering by dob.
 func TestToJSONOrder(t *testing.T) {
-	dir, ps := populateGraph(t)
+	dir, dir2, ps := populateGraph(t)
 	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
 	defer ps.Close()
 
 	query := `
@@ -1131,8 +1254,9 @@ func TestToJSONOrder(t *testing.T) {
 
 // Test sorting / ordering by dob.
 func TestToJSONOrderOffset(t *testing.T) {
-	dir, ps := populateGraph(t)
+	dir, dir2, ps := populateGraph(t)
 	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
 	defer ps.Close()
 
 	query := `
@@ -1169,8 +1293,9 @@ func TestToJSONOrderOffset(t *testing.T) {
 
 // Test sorting / ordering by dob.
 func TestToJSONOrderOffsetCount(t *testing.T) {
-	dir, ps := populateGraph(t)
+	dir, dir2, ps := populateGraph(t)
 	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
 	defer ps.Close()
 
 	query := `
@@ -1206,9 +1331,10 @@ func TestToJSONOrderOffsetCount(t *testing.T) {
 }
 
 // Test sorting / ordering by dob.
-func TestToPBOrder(t *testing.T) {
-	dir, ps := populateGraph(t)
+func TestToProtoOrder(t *testing.T) {
+	dir, dir2, ps := populateGraph(t)
 	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
 	defer ps.Close()
 
 	query := `
@@ -1293,9 +1419,10 @@ children: <
 }
 
 // Test sorting / ordering by dob.
-func TestToPBOrderCount(t *testing.T) {
-	dir, ps := populateGraph(t)
+func TestToProtoOrderCount(t *testing.T) {
+	dir, dir2, ps := populateGraph(t)
 	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
 	defer ps.Close()
 
 	query := `
@@ -1362,9 +1489,10 @@ children: <
 }
 
 // Test sorting / ordering by dob.
-func TestToPBOrderOffsetCount(t *testing.T) {
-	dir, ps := populateGraph(t)
+func TestToProtoOrderOffsetCount(t *testing.T) {
+	dir, dir2, ps := populateGraph(t)
 	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
 	defer ps.Close()
 
 	query := `
@@ -1433,8 +1561,9 @@ children: <
 func TestSchema1(t *testing.T) {
 	require.NoError(t, schema.Parse("test_schema"))
 
-	dir, _ := populateGraph(t)
+	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
 
 	// Alright. Now we have everything set up. Let's create the query.
 	query := `
@@ -1446,48 +1575,10 @@ func TestSchema1(t *testing.T) {
 			}
 		}
 	`
-	mp := processToJSON(t, query)
-	resp := mp["person"]
-	name := resp.([]interface{})[0].(map[string]interface{})["name"].(string)
-	require.EqualValues(t, "Michonne", name)
-
-	alive, ok := resp.([]interface{})[0].(map[string]interface{})["alive"]
-	require.True(t, ok)
-	require.EqualValues(t, true, alive)
-
-	age, ok := resp.([]interface{})[0].(map[string]interface{})["age"]
-	require.True(t, ok)
-	require.EqualValues(t, 38, age.(float64))
-
-	_, ok = resp.([]interface{})[0].(map[string]interface{})["survival_rate"]
-	require.True(t, ok)
-
-	friends := resp.([]interface{})[0].(map[string]interface{})["friend"].([]interface{})
-	co := 0
-	res := 0
-	for _, it := range friends {
-		if len(it.(map[string]interface{})) == 0 {
-			co++
-		} else {
-			res = len(it.(map[string]interface{}))
-		}
-	}
-	require.EqualValues(t, 4, co)
-	require.EqualValues(t, 3, res)
-
-	actorMap := mp["person"].([]interface{})[0].(map[string]interface{})
-	_, success := actorMap["name"].(string)
-	require.True(t, success,
-		"Expected json type string for: %v", actorMap["name"])
-
-	// json parses ints as floats
-	_, success = actorMap["age"].(float64)
-	require.True(t, success,
-		"Expected json type int for: %v", actorMap["age"])
-
-	_, success = actorMap["survival_rate"].(float64)
-	require.True(t, success,
-		"Survival rate has to be coerced")
+	js := processToJSON(t, query)
+	require.JSONEq(t,
+		`{"person":[{"address":"31, 32 street, Jupiter","age":38,"alive":true,"friend":[{"address":"21, mark street, Mars","age":15,"name":"Rick Grimes"}],"name":"Michonne","survival_rate":98.99}]}`,
+		js)
 }
 
 func TestMain(m *testing.M) {
