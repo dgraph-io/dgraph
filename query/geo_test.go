@@ -198,35 +198,39 @@ func TestNearPoint(t *testing.T) {
 
 }
 
-/*
 func TestIntersectsPolygon1(t *testing.T) {
 	dir, ps := createTestStore(t)
 	defer os.RemoveAll(dir)
 	defer ps.Close()
 
 	createTestData(t, ps)
-
-	p := geom.NewPolygon(geom.XY).MustSetCoords([][]geom.Coord{
-		{{-122.06, 37.37}, {-122.1, 37.36}, {-122.12, 37.4}, {-122.11, 37.43}, {-122.04, 37.43}, {-122.06, 37.37}},
-	})
-	g := types.Geo{p}
-	data, err := g.MarshalBinary()
-	require.NoError(t, err)
-
-	sg := &SubGraph{
-		Attr:      "geometry",
-		GeoFilter: &geo.Filter{Data: data, Type: geo.QueryTypeIntersects},
-		Children:  []*SubGraph{&SubGraph{Attr: "name"}},
+	gq := &gql.GraphQuery{
+		Attr: "me",
+		Gen: &gql.Generator{
+			FuncName: "Intersects",
+			FuncArgs: []string{
+				"geometry",
+				"{\"Type\":\"Polygon\",	\"Coordinates\":[[[-122.06, 37.37], [-122.1, 37.36], [-122.12, 37.4], [-122.11, 37.43], [-122.04, 37.43], [-122.06, 37.37]]]}",
+				"1000",
+			},
+		},
+		Children: []*gql.GraphQuery{&gql.GraphQuery{Attr: "name"}},
 	}
 
-	mp := runQuery(t, sg)
-	expected := []interface{}{map[string]interface{}{"name": "Googleplex"},
-		map[string]interface{}{"name": "Shoreline Amphitheater"},
-		map[string]interface{}{"name": "SF Bay area"},
-		map[string]interface{}{"name": "Mountain View"}}
-	EqualArrays(t, expected, mp)
+	mp := runQuery(t, gq)
+	expected := []string{"Googleplex", "Shoreline Amphitheater", "SF Bay area", "Mountain View"}
+	require.Equal(t, 4, len(mp.([]interface{})))
+	require.Contains(t, expected,
+		mp.([]interface{})[0].(map[string]interface{})["me"].([]interface{})[0].(map[string]interface{})["name"].(string))
+	require.Contains(t, expected,
+		mp.([]interface{})[1].(map[string]interface{})["me"].([]interface{})[0].(map[string]interface{})["name"].(string))
+	require.Contains(t, expected,
+		mp.([]interface{})[2].(map[string]interface{})["me"].([]interface{})[0].(map[string]interface{})["name"].(string))
+	require.Contains(t, expected,
+		mp.([]interface{})[3].(map[string]interface{})["me"].([]interface{})[0].(map[string]interface{})["name"].(string))
 }
 
+/*
 func TestIntersectsPolygon2(t *testing.T) {
 	dir, ps := createTestStore(t)
 	defer os.RemoveAll(dir)

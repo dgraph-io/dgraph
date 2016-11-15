@@ -1047,6 +1047,18 @@ func runGenerator(ctx context.Context, gen *gql.Generator) (*algo.UIDList, error
 				return nil, err
 			}
 			return generateGeo(ctx, gen.FuncArgs[0], geo.QueryTypeContains, gb, 0)
+		case "intersects":
+			var g types.Geo
+			geoD := strings.Replace(gen.FuncArgs[1], "'", "\"", -1)
+			err := g.UnmarshalText([]byte(geoD))
+			if err != nil {
+				return nil, x.Wrapf(err, "Cannot decode given geoJson input")
+			}
+			gb, err := g.MarshalBinary()
+			if err != nil {
+				return nil, err
+			}
+			return generateGeo(ctx, gen.FuncArgs[0], geo.QueryTypeIntersects, gb, 0)
 		default:
 			return nil, fmt.Errorf("Invalid generator")
 		}
