@@ -281,6 +281,11 @@ func TestDebug1(t *testing.T) {
 	resp := mp["debug"]
 	uid := resp.([]interface{})[0].(map[string]interface{})["_uid_"].(string)
 	require.EqualValues(t, "0x1", uid)
+
+	latency := mp["server_latency"]
+	require.NotNil(t, latency)
+	_, ok := latency.(map[string]interface{})
+	require.True(t, ok)
 }
 
 func TestDebug2(t *testing.T) {
