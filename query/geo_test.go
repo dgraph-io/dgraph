@@ -230,34 +230,38 @@ func TestIntersectsPolygon1(t *testing.T) {
 		mp.([]interface{})[3].(map[string]interface{})["me"].([]interface{})[0].(map[string]interface{})["name"].(string))
 }
 
-/*
 func TestIntersectsPolygon2(t *testing.T) {
 	dir, ps := createTestStore(t)
 	defer os.RemoveAll(dir)
 	defer ps.Close()
 
 	createTestData(t, ps)
-
-	p := geom.NewPolygon(geom.XY).MustSetCoords([][]geom.Coord{
-		{{-121.6, 37.1}, {-122.4, 37.3}, {-122.6, 37.8}, {-122.5, 38.3}, {-121.9, 38}, {-121.6, 37.1}},
-	})
-	g := types.Geo{p}
-	data, err := g.MarshalBinary()
-	require.NoError(t, err)
-
-	sg := &SubGraph{
-		Attr:      "geometry",
-		GeoFilter: &geo.Filter{Data: data, Type: geo.QueryTypeIntersects},
-		Children:  []*SubGraph{&SubGraph{Attr: "name"}},
+	gq := &gql.GraphQuery{
+		Attr: "me",
+		Gen: &gql.Generator{
+			FuncName: "Intersects",
+			FuncArgs: []string{
+				"geometry",
+				"{\"Type\":\"Polygon\",	\"Coordinates\":[[[-121.6, 37.1], [-122.4, 37.3], [-122.6, 37.8], [-122.5, 38.3], [-121.9, 38], [-121.6, 37.1]]]}",
+				"1000",
+			},
+		},
+		Children: []*gql.GraphQuery{&gql.GraphQuery{Attr: "name"}},
 	}
 
-	mp := runQuery(t, sg)
-	expected := []interface{}{map[string]interface{}{"name": "Googleplex"},
-		map[string]interface{}{"name": "Shoreline Amphitheater"},
-		map[string]interface{}{"name": "SF Bay area"},
-		map[string]interface{}{"name": "San Carlos"},
-		map[string]interface{}{"name": "San Carlos Airport"},
-		map[string]interface{}{"name": "Mountain View"}}
-	EqualArrays(t, expected, mp)
+	mp := runQuery(t, gq)
+	expected := []string{"Googleplex", "Shoreline Amphitheater", "SF Bay area", "Mountain View", "San Carlos", "San Carlos Airport"}
+	require.Equal(t, 6, len(mp.([]interface{})))
+	require.Contains(t, expected,
+		mp.([]interface{})[0].(map[string]interface{})["me"].([]interface{})[0].(map[string]interface{})["name"].(string))
+	require.Contains(t, expected,
+		mp.([]interface{})[1].(map[string]interface{})["me"].([]interface{})[0].(map[string]interface{})["name"].(string))
+	require.Contains(t, expected,
+		mp.([]interface{})[2].(map[string]interface{})["me"].([]interface{})[0].(map[string]interface{})["name"].(string))
+	require.Contains(t, expected,
+		mp.([]interface{})[3].(map[string]interface{})["me"].([]interface{})[0].(map[string]interface{})["name"].(string))
+	require.Contains(t, expected,
+		mp.([]interface{})[4].(map[string]interface{})["me"].([]interface{})[0].(map[string]interface{})["name"].(string))
+	require.Contains(t, expected,
+		mp.([]interface{})[5].(map[string]interface{})["me"].([]interface{})[0].(map[string]interface{})["name"].(string))
 }
-*/
