@@ -1,4 +1,4 @@
-package worker
+package group
 
 import (
 	"bufio"
@@ -61,6 +61,7 @@ func parseDefaultConfig(l string) (uint64, error) {
 	var err error
 	groupConfig.n, err = strconv.ParseUint(conf[2], 10, 64)
 	x.Check(err)
+	x.AssertTrue(groupConfig.n != 0)
 	if len(conf) == 5 {
 		if conf[3] != "+" {
 			return 0, fmt.Errorf("Default config format should be like: %v", "default: fp % n + k")

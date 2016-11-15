@@ -27,6 +27,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/loader"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/query"
@@ -66,7 +67,7 @@ func prepare() (dir1, dir2 string, ps *store.Store, rerr error) {
 
 	posting.Init(ps)
 	loader.Init(ps)
-	worker.ParseGroupConfig("")
+	group.ParseGroupConfig("groups.conf")
 	worker.StartRaftNodes(dir2)
 
 	{
@@ -75,7 +76,10 @@ func prepare() (dir1, dir2 string, ps *store.Store, rerr error) {
 		if err != nil {
 			return dir1, dir2, nil, err
 		}
-		_, err = loader.LoadEdges(f, 0, 1)
+		gm := map[uint32]bool{
+			0: true,
+		}
+		_, err = loader.LoadEdges(f, gm)
 		f.Close()
 		if err != nil {
 			return dir1, dir2, nil, err

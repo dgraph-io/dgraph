@@ -38,5 +38,5 @@ export LD_LIBRARY_PATH="${ICUDIR}/lib:${ROCKSDBDIR}:${LD_LIBRARY_PATH}"
 
 pushd cmd/dgraphloader &> /dev/null
 go build .
-./dgraphloader --num 1 --idx 0 --rdfgzips $benchmark/rdf-films.gz,$benchmark/names.gz --p ~/dgraph/p --stw_ram_mb 3000
+./dgraphloader --conf groups.conf --groups "0" --rdfgzips $benchmark/rdf-films.gz,$benchmark/names.gz --p ~/dgraph/p --stw_ram_mb 3000
 popd &> /dev/null

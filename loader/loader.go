@@ -31,19 +31,20 @@ import (
 	"time"
 
 	"github.com/Sirupsen/logrus"
-	"github.com/dgryski/go-farm"
 
+	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/x"
 )
 
-var glog = x.Log("loader")
-var dataStore *store.Store
-
-var maxRoutines = flag.Int("maxroutines", 3000,
-	"Maximum number of goroutines to execute concurrently")
+var (
+	glog        = x.Log("loader")
+	dataStore   *store.Store
+	maxRoutines = flag.Int("maxroutines", 3000,
+		"Maximum number of goroutines to execute concurrently")
+)
 
 type counters struct {
 	read      uint64
@@ -54,12 +55,11 @@ type counters struct {
 
 type state struct {
 	sync.RWMutex
-	input        chan string
-	cnq          chan rdf.NQuad
-	ctr          *counters
-	instanceIdx  uint64
-	numInstances uint64
-	err          error
+	input     chan string
+	cnq       chan rdf.NQuad
+	ctr       *counters
+	groupsMap map[uint32]bool
+	err       error
 }
 
 func Init(datastore *store.Store) {
@@ -194,19 +194,33 @@ func (s *state) parseStream(wg *sync.WaitGroup) {
 		atomic.AddUint64(&s.ctr.parsed, 1)
 	}
 }
+func markTaken(ctx context.Context, uid uint64) {
+	mu := x.DirectedEdge{
+		Entity:    uid,
+		Attribute: "_uid_",
+		Value:     []byte("_"), // not txid
+		Source:    "_loader_",
+		Timestamp: time.Now(),
+	}
+	key := posting.Key(uid, "_uid_")
+	plist, decr := posting.GetOrCreate(key)
+	plist.AddMutation(ctx, mu, posting.Set)
+	decr()
+}
 
 // handleNQuads converts the nQuads that satisfy the modulo
 // rule into posting lists.
 func (s *state) handleNQuads(wg *sync.WaitGroup) {
 	defer wg.Done()
-
+	// Check if we need to mark used UIDs.
+	markUids := s.groupsMap[group.BelongsTo("_uid_")]
 	ctx := context.Background()
 	for nq := range s.cnq {
 		if s.Error() != nil {
 			return
 		}
 		// Only handle this edge if the attribute satisfies the modulo rule
-		if farm.Fingerprint64([]byte(nq.Predicate))%s.numInstances != s.instanceIdx {
+		if !s.groupsMap[group.BelongsTo(nq.Predicate)] {
 			atomic.AddUint64(&s.ctr.ignored, 1)
 			continue
 		}
@@ -232,14 +246,22 @@ func (s *state) handleNQuads(wg *sync.WaitGroup) {
 		plist.AddMutationWithIndex(ctx, edge, posting.Set)
 		decr() // Don't defer, just call because we're in a channel loop.
 
+		// Mark UIDs and XIDs as taken
+		if markUids {
+			// Mark entity UID.
+			markTaken(ctx, edge.Entity)
+			// Mark the Value UID.
+			if edge.ValueId != 0 {
+				markTaken(ctx, edge.ValueId)
+			}
+		}
 		atomic.AddUint64(&s.ctr.processed, 1)
 	}
 }
 
 // LoadEdges is called with the reader object of a file whose
 // contents are to be converted to posting lists.
-func LoadEdges(reader io.Reader, instanceIdx uint64,
-	numInstances uint64) (uint64, error) {
+func LoadEdges(reader io.Reader, groupsMap map[uint32]bool) (uint64, error) {
 
 	s := new(state)
 	s.ctr = new(counters)
@@ -247,8 +269,7 @@ func LoadEdges(reader io.Reader, instanceIdx uint64,
 	go s.printCounters(ticker)
 
 	// Producer: Start buffering input to channel.
-	s.instanceIdx = instanceIdx
-	s.numInstances = numInstances
+	s.groupsMap = groupsMap
 	s.input = make(chan string, 10000)
 	go s.readLines(reader)
 
