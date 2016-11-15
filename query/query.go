@@ -781,11 +781,9 @@ func runFilter(ctx context.Context, destUIDs *algo.UIDList,
 
 	if filter.Op == "&" {
 		// For intersect operator, we process the children serially.
-		x.AssertTrue(filter.Op == "&")
 		for _, c := range filter.Child {
 			var err error
-			destUIDs, err = runFilter(ctx, destUIDs, c)
-			if err != nil {
+			if destUIDs, err = runFilter(ctx, destUIDs, c); err != nil {
 				return nil, err
 			}
 		}
@@ -800,10 +798,10 @@ func runFilter(ctx context.Context, destUIDs *algo.UIDList,
 	// For union operator, we do it in parallel.
 	// First, get UIDs for child filters in parallel.
 	type resultPair struct {
-		uid *algo.UIDList
-		err error
+		uids *algo.UIDList
+		err  error
 	}
-	resultChan := make(chan resultPair)
+	resultChan := make(chan resultPair, len(filter.Child))
 	for _, c := range filter.Child {
 		go func(c *gql.FilterTree) {
 			r, err := runFilter(ctx, destUIDs, c)
@@ -818,7 +816,7 @@ func runFilter(ctx context.Context, destUIDs *algo.UIDList,
 		if r.err != nil {
 			return destUIDs, r.err
 		}
-		lists = append(lists, r.uid)
+		lists = append(lists, r.uids)
 	}
 	return algo.MergeLists(lists), nil
 }
