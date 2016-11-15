@@ -779,39 +779,46 @@ func runFilter(ctx context.Context, destUIDs *algo.UIDList,
 		return algo.IntersectLists(sg.Result), nil
 	}
 
+	if filter.Op == "&" {
+		// For intersect operator, we process the children serially.
+		for _, c := range filter.Child {
+			var err error
+			if destUIDs, err = runFilter(ctx, destUIDs, c); err != nil {
+				return nil, err
+			}
+		}
+		return destUIDs, nil
+	}
+
 	// For now, we only handle AND and OR.
-	if filter.Op != "&" && filter.Op != "|" {
+	if filter.Op != "|" {
 		return destUIDs, x.Errorf("Unknown operator %v", filter.Op)
 	}
 
-	// Get UIDs for child filters.
+	// For union operator, we do it in parallel.
+	// First, get UIDs for child filters in parallel.
 	type resultPair struct {
-		uid *algo.UIDList
-		err error
+		uids *algo.UIDList
+		err  error
 	}
-	resultChan := make(chan resultPair)
+	resultChan := make(chan resultPair, len(filter.Child))
 	for _, c := range filter.Child {
 		go func(c *gql.FilterTree) {
 			r, err := runFilter(ctx, destUIDs, c)
 			resultChan <- resultPair{r, err}
 		}(c)
 	}
+
 	lists := make([]*algo.UIDList, 0, len(filter.Child))
-	// Collect the results from above goroutines.
+	// Next, collect the results from above goroutines.
 	for i := 0; i < len(filter.Child); i++ {
 		r := <-resultChan
 		if r.err != nil {
 			return destUIDs, r.err
 		}
-		lists = append(lists, r.uid)
+		lists = append(lists, r.uids)
 	}
-
-	// Either merge or intersect the UID lists.
-	if filter.Op == "|" {
-		return algo.MergeLists(lists), nil
-	}
-	x.AssertTrue(filter.Op == "&")
-	return algo.IntersectLists(lists), nil
+	return algo.MergeLists(lists), nil
 }
 
 // pageRange returns start and end indices given pagination params. Note that n
