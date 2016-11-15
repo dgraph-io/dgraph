@@ -502,7 +502,8 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
 
 	ip, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil || ip != "127.0.0.1" {
-		x.SetStatus(w, x.ErrorUnauthorized, fmt.Sprintf("Request from IP: %v", ip))
+		x.SetStatus(w, x.ErrorUnauthorized,
+			fmt.Sprintf("Request received from IP: %v. Only requests from localhost are allowed.", ip))
 		return
 	}
 
