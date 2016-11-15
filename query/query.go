@@ -194,7 +194,7 @@ func init() {
 }
 
 // This method gets the values and children for a subgraph.
-func (sg *SubGraph) preTraverse(uid uint64, dst preOutput) error {
+func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 	invalidUids := make(map[uint64]bool)
 	// We go through all predicate children of the subgraph.
 	for _, pc := range sg.Children {
@@ -917,11 +917,11 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 	return nil
 }
 
-// preOutput is the generic output / writer for preTraverse.
-type preOutput interface {
+// outputNode is the generic output / writer for preTraverse.
+type outputNode interface {
 	AddValue(attr string, v types.Value)
-	AddChild(attr string, child preOutput)
-	New(attr string) preOutput
+	AddChild(attr string, child outputNode)
+	New(attr string) outputNode
 	SetUID(uid uint64)
 	SetXID(xid string)
 }
@@ -937,12 +937,12 @@ func (p *protoPreOutput) AddValue(attr string, v types.Value) {
 }
 
 // AddChild adds a child for protoPreOutput.
-func (p *protoPreOutput) AddChild(attr string, child preOutput) {
+func (p *protoPreOutput) AddChild(attr string, child outputNode) {
 	p.Node.Children = append(p.Node.Children, child.(*protoPreOutput).Node)
 }
 
 // New creates a new node for protoPreOutput.
-func (p *protoPreOutput) New(attr string) preOutput {
+func (p *protoPreOutput) New(attr string) outputNode {
 	uc := nodePool.Get().(*graph.Node)
 	uc.Attribute = attr
 	return &protoPreOutput{uc}
@@ -958,13 +958,13 @@ func (p *protoPreOutput) SetXID(xid string) { p.Node.Xid = xid }
 // used postorder traversal before, but preorder seems simpler and faster for
 // most cases.
 func (sg *SubGraph) ToProtocolBuffer(l *Latency) (*graph.Node, error) {
-	var dummy *protoPreOutput
+	var seedNode *protoPreOutput
 	if sg.SrcUIDs == nil {
-		return dummy.New(sg.Attr).(*protoPreOutput).Node, nil
+		return seedNode.New(sg.Attr).(*protoPreOutput).Node, nil
 	}
 
 	x.AssertTrue(len(sg.Result) == 1)
-	n := dummy.New(sg.Attr)
+	n := seedNode.New(sg.Attr)
 	ul := sg.Result[0]
 	if sg.Params.GetUID || sg.Params.isDebug {
 		n.SetUID(ul.Get(0))
@@ -989,7 +989,7 @@ func (p *jsonPreOutput) AddValue(attr string, v types.Value) {
 }
 
 // AddChild adds a child for jsonPreOutput.
-func (p *jsonPreOutput) AddChild(attr string, child preOutput) {
+func (p *jsonPreOutput) AddChild(attr string, child outputNode) {
 	a := p.data[attr]
 	if a == nil {
 		// Need to do this because we cannot cast nil interface to
@@ -1001,7 +1001,7 @@ func (p *jsonPreOutput) AddChild(attr string, child preOutput) {
 }
 
 // New creates a new node for jsonPreOutput.
-func (p *jsonPreOutput) New(attr string) preOutput {
+func (p *jsonPreOutput) New(attr string) outputNode {
 	return &jsonPreOutput{make(map[string]interface{})}
 }
 
@@ -1018,8 +1018,8 @@ func (p *jsonPreOutput) SetXID(xid string) {
 // ToJSON converts the internal subgraph object to JSON format which is then\
 // sent to the HTTP client.
 func (sg *SubGraph) ToJSON(l *Latency) ([]byte, error) {
-	var dummy *jsonPreOutput
-	n := dummy.New(sg.Attr)
+	var seedNode *jsonPreOutput
+	n := seedNode.New(sg.Attr)
 	ul := sg.Result[0]
 	if sg.Params.GetUID || sg.Params.isDebug {
 		n.SetUID(ul.Get(0))
