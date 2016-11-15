@@ -32,7 +32,6 @@ import (
 	"github.com/google/flatbuffers/go"
 
 	"github.com/dgraph-io/dgraph/algo"
-	"github.com/dgraph-io/dgraph/geo"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/query/graph"
 	"github.com/dgraph-io/dgraph/schema"
@@ -130,7 +129,7 @@ type params struct {
 }
 
 // SubGraph is the way to represent data internally. It contains both the
-// query and the response. Once filtererated, this can then be encoded to other
+// query and the response. Once generated, this can then be encoded to other
 // client convenient formats, like GraphQL / JSON.
 type SubGraph struct {
 	Attr     string
@@ -222,7 +221,7 @@ func postTraverse(sg *SubGraph) (map[uint64]interface{}, error) {
 	x.AssertTruef(sg.SrcUIDs.Size() == sg.Values.ValuesLength(),
 		"Result valuelength: %v. Query uidslength: %v at node %v", sg.Values.ValuesLength(), sg.SrcUIDs.Size(), sg.Attr)
 
-	// filtererate a matrix of maps
+	// generate a matrix of maps
 	// Row -> .....
 	// Col
 	//  |
@@ -690,7 +689,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	}
 
 	if euid == 0 && gq.Gen == nil {
-		err := x.Errorf("Invalid query, query internal id is zero and filtererator is nil")
+		err := x.Errorf("Invalid query, query internal id is zero and generator is nil")
 		x.TraceError(ctx, err)
 		return nil, err
 	}
@@ -709,7 +708,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	if gq.Gen != nil {
 		err := sg.applyGenerator(ctx, gq.Gen)
 		if err != nil {
-			return nil, x.Wrapf(err, "Error while applying filtererator")
+			return nil, x.Wrapf(err, "Error while applying generator")
 		}
 	} else {
 		sg.SrcUIDs = algo.NewUIDList([]uint64{euid})
@@ -750,7 +749,7 @@ func createNilValuesList(count int) *x.ValueList {
 	return out
 }
 
-// createTaskQuery filtererates the query buffer.
+// createTaskQuery generates the query buffer.
 func createTaskQuery(sg *SubGraph, uids *algo.UIDList, tokens []string,
 	intersect *algo.UIDList) []byte {
 	x.AssertTrue(uids == nil || tokens == nil)
@@ -1011,66 +1010,22 @@ func runGenerator(ctx context.Context, gen *gql.Generator) (*algo.UIDList, error
 			if len(gen.FuncArgs) != 3 {
 				return nil, fmt.Errorf("near generator requires 3 arguments")
 			}
-			maxD, err := strconv.ParseFloat(gen.FuncArgs[2], 64)
-			if err != nil {
-				return nil, err
-			}
-			var g types.Geo
-			geoD := strings.Replace(gen.FuncArgs[1], "'", "\"", -1)
-			err = g.UnmarshalText([]byte(geoD))
-			if err != nil {
-				return nil, err
-			}
-			gb, err := g.MarshalBinary()
-			if err != nil {
-				return nil, err
-			}
-			return generateGeo(ctx, gen.FuncArgs[0], geo.QueryTypeNear, gb, maxD)
+			return near(ctx, nil, gen.FuncArgs[0], gen.FuncArgs[1], gen.FuncArgs[2])
 		case "within":
 			if len(gen.FuncArgs) != 2 {
 				return nil, fmt.Errorf("within generator requires 2 arguments")
 			}
-			var g types.Geo
-			geoD := strings.Replace(gen.FuncArgs[1], "'", "\"", -1)
-			err := g.UnmarshalText([]byte(geoD))
-			if err != nil {
-				return nil, x.Wrapf(err, "Cannot decode given geoJson input")
-			}
-			gb, err := g.MarshalBinary()
-			if err != nil {
-				return nil, err
-			}
-			return generateGeo(ctx, gen.FuncArgs[0], geo.QueryTypeWithin, gb, 0)
+			return within(ctx, nil, gen.FuncArgs[0], gen.FuncArgs[1])
 		case "contains":
 			if len(gen.FuncArgs) != 2 {
 				return nil, fmt.Errorf("contains generator requires 2 arguments")
 			}
-			var g types.Geo
-			geoD := strings.Replace(gen.FuncArgs[1], "'", "\"", -1)
-			err := g.UnmarshalText([]byte(geoD))
-			if err != nil {
-				return nil, err
-			}
-			gb, err := g.MarshalBinary()
-			if err != nil {
-				return nil, err
-			}
-			return generateGeo(ctx, gen.FuncArgs[0], geo.QueryTypeContains, gb, 0)
+			return contains(ctx, nil, gen.FuncArgs[0], gen.FuncArgs[1])
 		case "intersects":
 			if len(gen.FuncArgs) != 2 {
 				return nil, fmt.Errorf("intersects generator requires 2 arguments")
 			}
-			var g types.Geo
-			geoD := strings.Replace(gen.FuncArgs[1], "'", "\"", -1)
-			err := g.UnmarshalText([]byte(geoD))
-			if err != nil {
-				return nil, x.Wrapf(err, "Cannot decode given geoJson input")
-			}
-			gb, err := g.MarshalBinary()
-			if err != nil {
-				return nil, err
-			}
-			return generateGeo(ctx, gen.FuncArgs[0], geo.QueryTypeIntersects, gb, 0)
+			return intersects(ctx, nil, gen.FuncArgs[0], gen.FuncArgs[1])
 		default:
 			return nil, fmt.Errorf("Invalid generator")
 		}
@@ -1111,68 +1066,24 @@ func runFilter(ctx context.Context, destUIDs *algo.UIDList,
 			return allOf(ctx, destUIDs, filter.FuncArgs[0], filter.FuncArgs[1])
 		case "near":
 			if len(filter.FuncArgs) != 3 {
-				return nil, fmt.Errorf("near filter requires 3 arguments")
+				return nil, fmt.Errorf("near generator requires 3 arguments")
 			}
-			maxD, err := strconv.ParseFloat(filter.FuncArgs[2], 64)
-			if err != nil {
-				return nil, err
-			}
-			var g types.Geo
-			geoD := strings.Replace(filter.FuncArgs[1], "'", "\"", -1)
-			err = g.UnmarshalText([]byte(geoD))
-			if err != nil {
-				return nil, err
-			}
-			gb, err := g.MarshalBinary()
-			if err != nil {
-				return nil, err
-			}
-			return filterGeo(ctx, filter.FuncArgs[0], geo.QueryTypeNear, gb, maxD, destUIDs)
+			return near(ctx, destUIDs, filter.FuncArgs[0], filter.FuncArgs[1], filter.FuncArgs[2])
 		case "within":
 			if len(filter.FuncArgs) != 2 {
-				return nil, fmt.Errorf("within filter requires 2 arguments")
+				return nil, fmt.Errorf("within generator requires 2 arguments")
 			}
-			var g types.Geo
-			geoD := strings.Replace(filter.FuncArgs[1], "'", "\"", -1)
-			err := g.UnmarshalText([]byte(geoD))
-			if err != nil {
-				return nil, x.Wrapf(err, "Cannot decode given geoJson input")
-			}
-			gb, err := g.MarshalBinary()
-			if err != nil {
-				return nil, err
-			}
-			return filterGeo(ctx, filter.FuncArgs[0], geo.QueryTypeWithin, gb, 0, destUIDs)
+			return within(ctx, destUIDs, filter.FuncArgs[0], filter.FuncArgs[1])
 		case "contains":
 			if len(filter.FuncArgs) != 2 {
-				return nil, fmt.Errorf("contains filter requires 2 arguments")
+				return nil, fmt.Errorf("contains generator requires 2 arguments")
 			}
-			var g types.Geo
-			geoD := strings.Replace(filter.FuncArgs[1], "'", "\"", -1)
-			err := g.UnmarshalText([]byte(geoD))
-			if err != nil {
-				return nil, err
-			}
-			gb, err := g.MarshalBinary()
-			if err != nil {
-				return nil, err
-			}
-			return filterGeo(ctx, filter.FuncArgs[0], geo.QueryTypeContains, gb, 0, destUIDs)
+			return contains(ctx, destUIDs, filter.FuncArgs[0], filter.FuncArgs[1])
 		case "intersects":
 			if len(filter.FuncArgs) != 2 {
-				return nil, fmt.Errorf("intersects filter requires 2 arguments")
+				return nil, fmt.Errorf("intersects generator requires 2 arguments")
 			}
-			var g types.Geo
-			geoD := strings.Replace(filter.FuncArgs[1], "'", "\"", -1)
-			err := g.UnmarshalText([]byte(geoD))
-			if err != nil {
-				return nil, x.Wrapf(err, "Cannot decode given geoJson input")
-			}
-			gb, err := g.MarshalBinary()
-			if err != nil {
-				return nil, err
-			}
-			return filterGeo(ctx, filter.FuncArgs[0], geo.QueryTypeIntersects, gb, 0, destUIDs)
+			return intersects(ctx, destUIDs, filter.FuncArgs[0], filter.FuncArgs[1])
 		default:
 			return nil, fmt.Errorf("Invalid filter")
 		}

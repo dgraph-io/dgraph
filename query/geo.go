@@ -27,12 +27,6 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-func generateGeo(ctx context.Context, attr string, qt geo.QueryType,
-	g []byte, maxDist float64) (*algo.UIDList, error) {
-
-	return filterGeo(ctx, attr, qt, g, maxDist, nil)
-}
-
 func filterGeo(ctx context.Context, attr string, qt geo.QueryType, g []byte,
 	maxDist float64, intersectUids *algo.UIDList) (*algo.UIDList, error) {
 
