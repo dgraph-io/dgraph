@@ -530,6 +530,8 @@ func createTaskQuery(sg *SubGraph, uids *algo.UIDList, tokens []string,
 	task.QueryAddOffset(b, int32(sg.Params.Offset))
 	task.QueryAddAfterUid(b, sg.Params.AfterUID)
 	if sg.Filter != nil {
+		// If we are filtering, we never want to just get the counts from worker.
+		// Instead, we want the UIDs so that we can apply the filter.
 		task.QueryAddGetCount(b, 0)
 	} else {
 		task.QueryAddGetCount(b, sg.Params.GetCount)
@@ -571,6 +573,7 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, taskQuery []byte, rch chan 
 	}
 
 	if sg.Params.GetCount == 1 && sg.Filter == nil {
+		// If there is a filter, we need to do more work to get the actual count.
 		x.Trace(ctx, "Zero uids. Only count requested")
 		rch <- nil
 		return
@@ -586,12 +589,6 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, taskQuery []byte, rch chan 
 		x.TraceError(ctx, x.Wrapf(err, "Error while processing task"))
 		rch <- err
 		return
-	}
-
-	if sg.Attr == "friend" && sg.Filter != nil {
-		for _, v := range sg.Result {
-			x.Printf("~~~result [%v]", v.DebugString())
-		}
 	}
 
 	if sg.DestUIDs.Size() == 0 {
