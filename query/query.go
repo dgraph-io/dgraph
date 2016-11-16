@@ -121,10 +121,10 @@ func (l *Latency) ToMap() map[string]string {
 type params struct {
 	AttrType types.Type
 	Alias    string
-	Count    int
-	Offset   int
+	Count    int // Number of results we want.
+	Offset   int // Skip this many results.
 	AfterUID uint64
-	GetCount uint16
+	GetCount uint16 // Whether we are interested in only the counts.
 	GetUID   bool
 	Order    string
 	isDebug  bool
@@ -529,8 +529,11 @@ func createTaskQuery(sg *SubGraph, uids *algo.UIDList, tokens []string,
 	task.QueryAddCount(b, int32(sg.Params.Count))
 	task.QueryAddOffset(b, int32(sg.Params.Offset))
 	task.QueryAddAfterUid(b, sg.Params.AfterUID)
-	task.QueryAddGetCount(b, sg.Params.GetCount)
-
+	if sg.Filter != nil {
+		task.QueryAddGetCount(b, 0)
+	} else {
+		task.QueryAddGetCount(b, sg.Params.GetCount)
+	}
 	b.Finish(task.QueryEnd(b))
 	return b.FinishedBytes()
 }
@@ -567,7 +570,7 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, taskQuery []byte, rch chan 
 		x.AssertTrue(r.Count(&sg.Counts.CountList) != nil)
 	}
 
-	if sg.Params.GetCount == 1 {
+	if sg.Params.GetCount == 1 && sg.Filter == nil {
 		x.Trace(ctx, "Zero uids. Only count requested")
 		rch <- nil
 		return
@@ -583,6 +586,12 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, taskQuery []byte, rch chan 
 		x.TraceError(ctx, x.Wrapf(err, "Error while processing task"))
 		rch <- err
 		return
+	}
+
+	if sg.Attr == "friend" && sg.Filter != nil {
+		for _, v := range sg.Result {
+			x.Printf("~~~result [%v]", v.DebugString())
+		}
 	}
 
 	if sg.DestUIDs.Size() == 0 {
@@ -610,6 +619,25 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, taskQuery []byte, rch chan 
 			rch <- err
 			return
 		}
+	}
+
+	if sg.Params.GetCount == 1 {
+		x.Printf("~~~~~~~filtered count attr=%s len(result)=%d", sg.Attr, len(sg.Result))
+		x.AssertTrue(sg.Filter != nil)
+		b := flatbuffers.NewBuilder(0)
+		task.CountListStartCountVector(b, len(sg.Result))
+		for i := len(sg.Result) - 1; i >= 0; i-- {
+			b.PrependUint32(uint32(sg.Result[i].Size()))
+		}
+		countVecOffset := b.EndVector(len(sg.Result))
+		task.CountListStart(b)
+		task.CountListAddCount(b, countVecOffset)
+		b.Finish(task.CountListEnd(b))
+		sg.Counts = new(x.CountList)
+		sg.Counts.Init(b.FinishedBytes(), 0)
+		x.Printf("~~~~count length=%d", sg.Counts.CountLength())
+		rch <- nil
+		return
 	}
 
 	var processed, leftToProcess []*SubGraph
