@@ -61,8 +61,6 @@ var (
 	numcpu     = flag.Int("cores", runtime.NumCPU(),
 		"Number of cores to be used by the process")
 	nomutations  = flag.Bool("nomutations", false, "Don't allow mutations on this server.")
-	shutdown     = flag.Bool("shutdown", false, "Allow client to send shutdown signal.")
-	backup       = flag.Bool("bkp", false, "Allow client to request a backup.")
 	tracing      = flag.Float64("trace", 0.5, "The ratio of queries to trace.")
 	schemaFile   = flag.String("schema", "", "Path to schema file")
 	cpuprofile   = flag.String("cpu", "", "write cpu profile to file")
@@ -388,21 +386,9 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if *shutdown && q == "SHUTDOWN" {
-		exitWithProfiles()
-		x.SetStatus(w, x.ErrorOk, "Server has been shutdown")
-		return
-	}
-
-	// TODO(Ashwin): Move to /admin endpoint, and don't have a deadline for ctx.
-	if *backup && q == "BACKUP" {
-		worker.BackupOverNetwork(ctx)
-		x.SetStatus(w, x.ErrorOk, "Backup completed.")
-		return
-	}
-
 	x.Trace(ctx, "Query received: %v", q)
 	gq, mu, err := gql.Parse(q)
+
 	if err != nil {
 		x.TraceError(ctx, x.Wrapf(err, "Error while parsing query"))
 		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
@@ -492,6 +478,40 @@ func storeStatsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("</pre>"))
 }
 
+func shutDownHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
+		return
+	}
+
+	ip, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil || ip != "127.0.0.1" {
+		x.SetStatus(w, x.ErrorUnauthorized, fmt.Sprintf("Request from IP: %v", ip))
+		return
+	}
+
+	exitWithProfiles()
+	x.SetStatus(w, x.ErrorOk, "Server has been shutdown")
+}
+
+func backupHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
+		return
+	}
+
+	ip, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil || ip != "127.0.0.1" {
+		x.SetStatus(w, x.ErrorUnauthorized,
+			fmt.Sprintf("Request received from IP: %v. Only requests from localhost are allowed.", ip))
+		return
+	}
+
+	ctx := context.Background()
+	worker.BackupOverNetwork(ctx)
+	x.SetStatus(w, x.ErrorOk, "Backup completed.")
+}
+
 // server is used to implement graph.DgraphServer
 type grpcServer struct{}
 
@@ -511,11 +531,6 @@ func (s *grpcServer) Query(ctx context.Context,
 	if len(req.Query) == 0 && req.Mutation == nil {
 		x.TraceError(ctx, x.Errorf("Empty query and mutation."))
 		return resp, fmt.Errorf("Empty query and mutation.")
-	}
-
-	if *shutdown && req.Query == "SHUTDOWN" {
-		exitWithProfiles()
-		return nil, nil
 	}
 
 	var l query.Latency
@@ -627,6 +642,8 @@ func setupServer(che chan error) {
 
 	http.HandleFunc("/query", queryHandler)
 	http.HandleFunc("/debug/store", storeStatsHandler)
+	http.HandleFunc("/admin/shutdown", shutDownHandler)
+	http.HandleFunc("/admin/backup", backupHandler)
 	// Initilize the servers.
 	go serveGRPC(grpcl)
 	go serveHTTP(httpl)

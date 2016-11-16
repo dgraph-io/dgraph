@@ -34,7 +34,7 @@ go test -v ../../contrib/freebase
 pushd $BUILD/benchmarks/throughputtest &> /dev/null
 go build . && ./throughputtest --numsec 30 --ip "http://127.0.0.1:8080/query"  --numuser 100
 # shutdown Dgraph server.
-curl 127.0.0.1:8080/query -XPOST -d 'SHUTDOWN'
+curl 127.0.0.1:8080/admin/shutdown 
 echo "done running throughput test"
 popd &> /dev/null
 
