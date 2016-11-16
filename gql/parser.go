@@ -682,10 +682,8 @@ func parseGenerator(l *lex.Lexer) (*Generator, error) {
 			if itemInFunc.Typ != itemLeftRound {
 				return nil, x.Errorf("Expected ( after func name [%s]", g.FuncName)
 			}
-			var terminated bool
 			for itemInFunc = range l.Items {
 				if itemInFunc.Typ == itemRightRound {
-					terminated = true
 					break
 				} else if itemInFunc.Typ != itemFilterFuncArg {
 					return nil, x.Errorf("Expected arg after func [%s], but got item %v",
@@ -693,13 +691,10 @@ func parseGenerator(l *lex.Lexer) (*Generator, error) {
 				}
 				g.FuncArgs = append(g.FuncArgs, itemInFunc.Val)
 			}
-			if !terminated {
-				return nil, x.Errorf("Expected ) to terminate func definition")
-			}
 		} else if item.Typ == itemRightRound {
 			break
 		} else {
-			return nil, x.Errorf("Expected a generator function but got %v", item.Val)
+			return nil, x.Errorf("Expected a function but got %q", item.Val)
 		}
 	}
 	return g, nil

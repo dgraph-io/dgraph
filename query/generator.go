@@ -8,18 +8,19 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-func fetchTermUids(ctx context.Context, intersectUIDs *algo.UIDList, attr, terms string) (*SubGraph, error) {
-	sg := &SubGraph{Attr: attr}
-	sgChan := make(chan error, 1)
+func fetchTermUids(ctx context.Context, intersectUIDs *algo.UIDList,
+	attr, terms string) (*SubGraph, error) {
 
-	// Tokenize FuncArgs[1].
+	// Tokenize the terms.
 	tokenizer, err := tok.NewTokenizer([]byte(terms))
 	if err != nil {
 		return nil, x.Errorf("Could not create tokenizer: %v", terms)
 	}
 	defer tokenizer.Destroy()
-	x.AssertTrue(tokenizer != nil)
 	tokens := tokenizer.Tokens()
+
+	sg := &SubGraph{Attr: attr}
+	sgChan := make(chan error, 1)
 	taskQuery := createTaskQuery(sg, nil, tokens, intersectUIDs)
 	go ProcessGraph(ctx, sg, taskQuery, sgChan)
 	select {
@@ -35,7 +36,9 @@ func fetchTermUids(ctx context.Context, intersectUIDs *algo.UIDList, attr, terms
 	return sg, nil
 }
 
-func allOf(ctx context.Context, intersectUIDs *algo.UIDList, attr, terms string) (*algo.UIDList, error) {
+func allOf(ctx context.Context, intersectUIDs *algo.UIDList,
+	attr, terms string) (*algo.UIDList, error) {
+
 	sg, err := fetchTermUids(ctx, intersectUIDs, attr, terms)
 	if err != nil {
 		return nil, err
@@ -43,7 +46,9 @@ func allOf(ctx context.Context, intersectUIDs *algo.UIDList, attr, terms string)
 	return algo.IntersectLists(sg.Result), nil
 }
 
-func anyOf(ctx context.Context, intersectUIDs *algo.UIDList, attr, terms string) (*algo.UIDList, error) {
+func anyOf(ctx context.Context, intersectUIDs *algo.UIDList,
+	attr, terms string) (*algo.UIDList, error) {
+
 	sg, err := fetchTermUids(ctx, intersectUIDs, attr, terms)
 	if err != nil {
 		return nil, err

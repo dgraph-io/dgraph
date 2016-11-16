@@ -713,10 +713,8 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		}
 	} else {
 		sg.SrcUIDs = algo.NewUIDList([]uint64{euid})
-		{
-			if euid != 0 {
-				sg.Result = []*algo.UIDList{algo.NewUIDList([]uint64{euid})}
-			}
+		if euid != 0 {
+			sg.Result = []*algo.UIDList{algo.NewUIDList([]uint64{euid})}
 		}
 	}
 	{
@@ -1000,34 +998,35 @@ func (sg *SubGraph) applyGenerator(ctx context.Context, gen *gql.Generator) erro
 }
 
 func runGenerator(ctx context.Context, gen *gql.Generator) (*algo.UIDList, error) {
-	if len(gen.FuncName) > 0 { // Leaf node.
-		gen.FuncName = strings.ToLower(gen.FuncName) // Not sure if needed.
-
-		switch gen.FuncName {
-		case "anyof":
-			return anyOf(ctx, nil, gen.FuncArgs[0], gen.FuncArgs[1])
-		case "allof":
-			return allOf(ctx, nil, gen.FuncArgs[0], gen.FuncArgs[1])
-		case "near":
-			maxD, err := strconv.ParseFloat(gen.FuncArgs[2], 64)
-			if err != nil {
-				return nil, err
-			}
-			var g types.Geo
-			geoD := strings.Replace(gen.FuncArgs[1], "'", "\"", -1)
-			err = g.UnmarshalText([]byte(geoD))
-			if err != nil {
-				return nil, err
-			}
-			gb, err := g.MarshalBinary()
-			if err != nil {
-				return nil, err
-			}
-			return generateGeo(ctx, gen.FuncArgs[0], geo.QueryTypeNear, gb, maxD)
-		default:
-			return nil, fmt.Errorf("Invalid generator")
-		}
+	if len(gen.FuncName) == 0 {
+		return nil, nil
 	}
+	gen.FuncName = strings.ToLower(gen.FuncName)
+
+	switch gen.FuncName {
+	case "anyof":
+		return anyOf(ctx, nil, gen.FuncArgs[0], gen.FuncArgs[1])
+	case "allof":
+		return allOf(ctx, nil, gen.FuncArgs[0], gen.FuncArgs[1])
+	case "near":
+		maxD, err := strconv.ParseFloat(gen.FuncArgs[2], 64)
+		if err != nil {
+			return nil, err
+		}
+		var g types.Geo
+		geoD := strings.Replace(gen.FuncArgs[1], "'", "\"", -1)
+		if err = g.UnmarshalText([]byte(geoD)); err != nil {
+			return nil, err
+		}
+		gb, err := g.MarshalBinary()
+		if err != nil {
+			return nil, err
+		}
+		return generateGeo(ctx, gen.FuncArgs[0], geo.QueryTypeNear, gb, maxD)
+	default:
+		return nil, fmt.Errorf("Invalid generator")
+	}
+
 	return nil, nil
 }
 
@@ -1053,7 +1052,7 @@ func (sg *SubGraph) applyFilter(ctx context.Context) error {
 func runFilter(ctx context.Context, destUIDs *algo.UIDList,
 	filter *gql.FilterTree) (*algo.UIDList, error) {
 	if len(filter.FuncName) > 0 { // Leaf node.
-		filter.FuncName = strings.ToLower(filter.FuncName) // Not sure if needed.
+		filter.FuncName = strings.ToLower(filter.FuncName)
 		x.AssertTruef(len(filter.FuncArgs) == 2,
 			"Expect exactly two arguments: pred and predValue")
 
