@@ -140,9 +140,9 @@ func populateGraph(t *testing.T) (string, *store.Store) {
 	worker.Init(ps)
 
 	group.ParseGroupConfig("")
-	//dir2, err := ioutil.TempDir("", "wal_")
-	//require.NoError(t, err)
-	// worker.StartRaftNodes(dir2)
+	dir2, err := ioutil.TempDir("", "wal_")
+	require.NoError(t, err)
+	worker.StartRaftNodes(dir2)
 
 	// So, user we're interested in has uid: 1.
 	// She has 5 friends: 23, 24, 25, 31, and 101

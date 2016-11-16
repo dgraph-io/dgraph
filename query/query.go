@@ -746,6 +746,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	}
 
 	{
+		// TODO: We shouldn't need to do this.
 		// Encode uid into result flatbuffer.
 		b := flatbuffers.NewBuilder(0)
 		uo := algo.NewUIDList([]uint64{euid}).AddTo(b)
@@ -755,9 +756,16 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		// Also need to add nil value to keep this consistent.
 		vo := createNilValuesList(b, 1)
 
+		task.CountListStartCountVector(b, 0)
+		co := b.EndVector(0)
+		task.CountListStart(b)
+		task.CountListAddCount(b, co)
+		co = task.CountListEnd(b)
+
 		task.ResultStart(b)
 		task.ResultAddUidmatrix(b, mo)
 		task.ResultAddValues(b, vo)
+		task.ResultAddCount(b, co)
 		re := task.ResultEnd(b)
 		b.Finish(re)
 		sg.resultBuf = b.FinishedBytes()
