@@ -79,7 +79,7 @@ func (l *Lexer) Errorf(format string, args ...interface{}) StateFn {
 
 // Emit emits the item with it's type information.
 func (l *Lexer) Emit(t ItemType) {
-	if t != ItemEOF && l.Pos <= l.Start {
+	if t != ItemEOF && l.Pos < l.Start {
 		// Let ItemEOF go through.
 		return
 	}
