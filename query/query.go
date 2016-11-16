@@ -619,6 +619,8 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, taskQuery []byte, rch chan 
 	}
 
 	if sg.Params.GetCount == 1 {
+		// Only reason why we haven't returned is that there is a filter, and
+		// we need to actually obtain the UIDs that pass the filter.
 		x.AssertTrue(sg.Filter != nil)
 		b := flatbuffers.NewBuilder(0)
 		task.CountListStartCountVector(b, len(sg.Result))
