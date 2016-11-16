@@ -751,7 +751,8 @@ func (sg *SubGraph) applyGenerator(ctx context.Context, gen *gql.Generator) erro
 	}
 	sg.SrcUIDs = newSorted
 	for i := 0; i < newSorted.Size(); i++ {
-		sg.Result = append(sg.Result, algo.NewUIDList([]uint64{newSorted.Get(i)}))
+		// TODO: This following line is no longer possible.
+		// sg.Result = append(sg.Result, algo.NewUIDList([]uint64{newSorted.Get(i)}))
 	}
 	return nil
 }
