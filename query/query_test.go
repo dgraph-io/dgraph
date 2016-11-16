@@ -83,7 +83,9 @@ func TestNewGraph(t *testing.T) {
 
 const schemaStr = `
 scalar name:string @index
-scalar dob:date @index`
+scalar dob:date @index
+scalar loc:geo @index
+`
 
 func addEdgeToValue(t *testing.T, ps *store.Store, attr string, src uint64,
 	value string) {
@@ -155,6 +157,12 @@ func populateGraph(t *testing.T) (string, string, *store.Store) {
 	// Now let's add a few properties for the main user.
 	addEdgeToValue(t, ps, "name", 1, "Michonne")
 	addEdgeToValue(t, ps, "gender", 1, "female")
+	var coord types.Geo
+	err = coord.UnmarshalText([]byte("{\"Type\":\"Point\", \"Coordinates\":[1.1,2.0]}"))
+	require.NoError(t, err)
+	gData, err := coord.MarshalBinary()
+	require.NoError(t, err)
+	addEdgeToTypedValue(t, ps, "loc", 1, types.GeoID, gData)
 	data, err := types.Int32(15).MarshalBinary()
 	require.NoError(t, err)
 	addEdgeToTypedValue(t, ps, "age", 1, types.Int32ID, data)
@@ -1584,6 +1592,68 @@ func TestSchema1(t *testing.T) {
 	require.JSONEq(t,
 		`{"person":[{"address":"31, 32 street, Jupiter","age":38,"alive":true,"friend":[{"address":"21, mark street, Mars","age":15,"name":"Rick Grimes"}],"name":"Michonne","survival_rate":98.99}]}`,
 		js)
+}
+
+func TestGenerator(t *testing.T) {
+	dir1, dir2, _ := populateGraph(t)
+	defer os.RemoveAll(dir1)
+	defer os.RemoveAll(dir2)
+	query := `
+    {
+      me(anyof("name", "Michonne")) {
+        name
+        gender
+      }
+    }
+  `
+
+	gq, _, err := gql.Parse(query)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	sg, err := ToSubGraph(ctx, gq)
+	require.NoError(t, err)
+
+	ch := make(chan error)
+	go ProcessGraph(ctx, sg, nil, ch)
+	err = <-ch
+	require.NoError(t, err)
+
+	var l Latency
+	js, err := sg.ToJSON(&l)
+	require.NoError(t, err)
+	require.EqualValues(t, `{"me":[{"gender":"female","name":"Michonne"}]}`, string(js))
+}
+
+func TestNearGenerator(t *testing.T) {
+	dir1, dir2, _ := populateGraph(t)
+	defer os.RemoveAll(dir1)
+	defer os.RemoveAll(dir2)
+	query := `
+    {
+			me(near("loc", "{'Type':'Point', 'Coordinates':[1.1,2.0]}", "5")) { 
+        name
+        gender
+      }
+    }
+  `
+
+	gq, _, err := gql.Parse(query)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	sg, err := ToSubGraph(ctx, gq)
+	require.NoError(t, err)
+
+	ch := make(chan error)
+	go ProcessGraph(ctx, sg, nil, ch)
+	err = <-ch
+	require.NoError(t, err)
+
+	var l Latency
+	js, err := sg.ToJSON(&l)
+	require.NoError(t, err)
+	require.EqualValues(t, `{"me":[{"gender":"female","name":"Michonne"}]}`, string(js))
 }
 
 func TestMain(m *testing.M) {

@@ -16,40 +16,37 @@
 
 package query
 
-/*
-func (sg *SubGraph) applyGeoQuery(ctx context.Context) error {
-	if sg.GeoFilter == nil { // no geo filter
-		return nil
-	}
+import (
+	"bytes"
+	"context"
 
-	tokens, data, err := geo.QueryTokens(sg.GeoFilter)
+	"github.com/dgraph-io/dgraph/algo"
+	"github.com/dgraph-io/dgraph/geo"
+	"github.com/dgraph-io/dgraph/task"
+	"github.com/dgraph-io/dgraph/types"
+	"github.com/dgraph-io/dgraph/x"
+)
+
+func generateGeo(ctx context.Context, attr string, qt geo.QueryType, g []byte, maxDist float64) (*algo.UIDList, error) {
+	tokens, data, err := geo.QueryTokens(g, qt, maxDist)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// Lookup the geo index first
-	uids, err := fetchIndexEntries(ctx, sg.Attr, tokens)
+	uids, err := fetchIndexEntries(ctx, attr, tokens)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// Fetch the actual values from the predicate
-	values, err := fetchValues(ctx, sg.Attr, uids)
+	values, err := fetchValues(ctx, attr, uids)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// Filter the values
-	sg.SrcUIDs = filterUIDs(uids, values, data)
-	// Keep result and values consistent with srcUIDs
-
-	for i := 0; i < sg.SrcUIDs.Size(); i++ {
-		uid := sg.SrcUIDs.Get(i)
-		ulist := algo.NewUIDList([]uint64{uid})
-		sg.Result = append(sg.Result, ulist)
-	}
-	sg.Values = createNilValuesList(sg.SrcUIDs.Size())
-	return nil
+	return filterUIDs(uids, values, data), nil
 }
 
 func fetchIndexEntries(ctx context.Context, attr string, tokens []string) (*algo.UIDList, error) {
@@ -123,4 +120,3 @@ func filterUIDs(uids *algo.UIDList, values *x.ValueList, q *geo.QueryData) *algo
 	}
 	return algo.NewUIDList(rv)
 }
-*/

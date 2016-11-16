@@ -37,7 +37,6 @@ import (
 	"github.com/dgraph-io/dgraph/query/graph"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/task"
-	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
@@ -134,11 +133,10 @@ type params struct {
 // query and the response. Once generated, this can then be encoded to other
 // client convenient formats, like GraphQL / JSON.
 type SubGraph struct {
-	Attr      string
-	Children  []*SubGraph
-	Params    params
-	Filter    *gql.FilterTree
-	GeoFilter *geo.Filter // TODO: We shouldn't have a special case for this.
+	Attr     string
+	Children []*SubGraph
+	Params   params
+	Filter   *gql.FilterTree
 
 	resultBuf []byte // task.Result
 	counts    *task.CountList
@@ -449,8 +447,8 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		x.Trace(ctx, "Xid: %v Uid: %v", exid, euid)
 	}
 
-	if euid == 0 {
-		err := x.Errorf("Invalid query, query internal id is zero")
+	if euid == 0 && gq.Gen == nil {
+		err := x.Errorf("Invalid query, query internal id is zero and generator is nil")
 		x.TraceError(ctx, err)
 		return nil, err
 	}
@@ -460,14 +458,19 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		AttrType: schema.TypeOf(gq.Attr),
 		isDebug:  gq.Attr == "debug",
 	}
-	sg := &SubGraph{
-		Attr:    gq.Attr,
-		Params:  args,
-		Filter:  gq.Filter,
-		SrcUIDs: algo.NewUIDList([]uint64{euid}),
-	}
 
-	{
+	sg := &SubGraph{
+		Attr:   gq.Attr,
+		Params: args,
+		Filter: gq.Filter,
+	}
+	if gq.Gen != nil {
+		err := sg.applyGenerator(ctx, gq.Gen)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		sg.SrcUIDs = algo.NewUIDList([]uint64{euid})
 		// TODO: We shouldn't need to do this.
 		// Encode uid into result flatbuffer.
 		b := flatbuffers.NewBuilder(0)
@@ -595,14 +598,6 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, taskQuery []byte, rch chan 
 		rch <- nil
 		return
 	}
-
-	/*
-		TODO: Fix geo code.
-			if err = sg.applyGeoQuery(ctx); err != nil {
-				rch <- err
-				return
-			}
-	*/
 
 	sg.DestUIDs = algo.MergeLists(sg.UIDMatrix())
 	if err != nil {
@@ -746,6 +741,54 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, taskQuery []byte, rch chan 
 	rch <- nil
 }
 
+func (sg *SubGraph) applyGenerator(ctx context.Context, gen *gql.Generator) error {
+	if gen == nil { // No Generator.
+		return nil
+	}
+	newSorted, err := runGenerator(ctx, gen)
+	if err != nil {
+		return err
+	}
+	sg.SrcUIDs = newSorted
+	for i := 0; i < newSorted.Size(); i++ {
+		sg.Result = append(sg.Result, algo.NewUIDList([]uint64{newSorted.Get(i)}))
+	}
+	return nil
+}
+
+func runGenerator(ctx context.Context, gen *gql.Generator) (*algo.UIDList, error) {
+	if len(gen.FuncName) == 0 {
+		return nil, nil
+	}
+	gen.FuncName = strings.ToLower(gen.FuncName)
+
+	switch gen.FuncName {
+	case "anyof":
+		return anyOf(ctx, nil, gen.FuncArgs[0], gen.FuncArgs[1])
+	case "allof":
+		return allOf(ctx, nil, gen.FuncArgs[0], gen.FuncArgs[1])
+	case "near":
+		maxD, err := strconv.ParseFloat(gen.FuncArgs[2], 64)
+		if err != nil {
+			return nil, err
+		}
+		var g types.Geo
+		geoD := strings.Replace(gen.FuncArgs[1], "'", "\"", -1)
+		if err = g.UnmarshalText([]byte(geoD)); err != nil {
+			return nil, err
+		}
+		gb, err := g.MarshalBinary()
+		if err != nil {
+			return nil, err
+		}
+		return generateGeo(ctx, gen.FuncArgs[0], geo.QueryTypeNear, gb, maxD)
+	default:
+		return nil, fmt.Errorf("Invalid generator")
+	}
+
+	return nil, nil
+}
+
 // applyFilter applies filters to sg.sorted.
 func (sg *SubGraph) applyFilter(ctx context.Context) error {
 	if sg.Filter == nil { // No filter.
@@ -768,41 +811,16 @@ func (sg *SubGraph) applyFilter(ctx context.Context) error {
 func runFilter(ctx context.Context, destUIDs *algo.UIDList,
 	filter *gql.FilterTree) (*algo.UIDList, error) {
 	if len(filter.FuncName) > 0 { // Leaf node.
-		filter.FuncName = strings.ToLower(filter.FuncName) // Not sure if needed.
-		isAnyOf := filter.FuncName == "anyof"
-		isAllOf := filter.FuncName == "allof"
-		x.AssertTruef(isAnyOf || isAllOf, "FuncName invalid: %s", filter.FuncName)
+		filter.FuncName = strings.ToLower(filter.FuncName)
 		x.AssertTruef(len(filter.FuncArgs) == 2,
 			"Expect exactly two arguments: pred and predValue")
 
-		attr := filter.FuncArgs[0]
-		sg := &SubGraph{Attr: attr}
-		sgChan := make(chan error, 1)
-
-		// Tokenize FuncArgs[1].
-		tokenizer, err := tok.NewTokenizer([]byte(filter.FuncArgs[1]))
-		if err != nil {
-			return nil, x.Errorf("Could not create tokenizer: %v", filter.FuncArgs[1])
+		switch filter.FuncName {
+		case "anyof":
+			return anyOf(ctx, destUIDs, filter.FuncArgs[0], filter.FuncArgs[1])
+		case "allof":
+			return allOf(ctx, destUIDs, filter.FuncArgs[0], filter.FuncArgs[1])
 		}
-		defer tokenizer.Destroy()
-		x.AssertTrue(tokenizer != nil)
-		tokens := tokenizer.Tokens()
-		taskQuery := createTaskQuery(sg, nil, tokens, destUIDs)
-		go ProcessGraph(ctx, sg, taskQuery, sgChan)
-		select {
-		case <-ctx.Done():
-			return nil, x.Wrap(ctx.Err())
-		case err = <-sgChan:
-			if err != nil {
-				return nil, err
-			}
-		}
-
-		x.AssertTrue(len(sg.UIDMatrix()) == len(tokens))
-		if isAnyOf {
-			return algo.MergeLists(sg.UIDMatrix()), nil
-		}
-		return algo.IntersectLists(sg.UIDMatrix()), nil
 	}
 
 	if filter.Op == "&" {

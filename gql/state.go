@@ -65,6 +65,8 @@ const (
 	itemFilterOr                                // Or inside a filter.
 	itemFilterFunc                              // Function inside a filter.
 	itemFilterFuncArg                           // Function args inside a filter.
+	itemGenerator                               // To specify its a generator.
+	itemArgument                                // To specify its a argument list.
 )
 
 // lexText lexes the input string and calls other lex functions.
@@ -137,7 +139,19 @@ func lexInside(l *lex.Lexer) lex.StateFn {
 			return lexComment
 		case r == leftRound:
 			l.Emit(itemLeftRound)
-			return lexArgInside
+			l.AcceptRun(isSpace)
+			l.Ignore()
+			k := l.Next()
+			if k == '_' || l.Depth != 1 || l.Mode == fragmentMode {
+				l.Backup()
+				l.Emit(itemArgument)
+				return lexArgInside
+			}
+			// This is a generator function.
+			l.Backup()
+			l.Emit(itemGenerator)
+			l.FilterDepth++
+			return lexFilterInside
 		case r == ':':
 			return lexAlias
 		case r == '@':
