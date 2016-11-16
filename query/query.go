@@ -622,7 +622,6 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, taskQuery []byte, rch chan 
 	}
 
 	if sg.Params.GetCount == 1 {
-		x.Printf("~~~~~~~filtered count attr=%s len(result)=%d", sg.Attr, len(sg.Result))
 		x.AssertTrue(sg.Filter != nil)
 		b := flatbuffers.NewBuilder(0)
 		task.CountListStartCountVector(b, len(sg.Result))
@@ -634,8 +633,8 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, taskQuery []byte, rch chan 
 		task.CountListAddCount(b, countVecOffset)
 		b.Finish(task.CountListEnd(b))
 		sg.Counts = new(x.CountList)
-		sg.Counts.Init(b.FinishedBytes(), 0)
-		x.Printf("~~~~count length=%d", sg.Counts.CountLength())
+		buf := b.FinishedBytes()
+		sg.Counts.Init(buf, flatbuffers.GetUOffsetT(buf))
 		rch <- nil
 		return
 	}
