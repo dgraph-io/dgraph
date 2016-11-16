@@ -65,11 +65,11 @@ func fetchIndexEntries(ctx context.Context, attr string, tokens []string) (*algo
 		}
 	}
 
-	x.AssertTrue(len(sg.Result) == len(tokens))
-	return algo.MergeLists(sg.Result), nil
+	x.AssertTrue(len(sg.UIDMatrix()) == len(tokens))
+	return algo.MergeLists(sg.UIDMatrix()), nil
 }
 
-func fetchValues(ctx context.Context, attr string, uids *algo.UIDList) (*x.ValueList, error) {
+func fetchValues(ctx context.Context, attr string, uids *algo.UIDList) (*task.ValueList, error) {
 	sg := &SubGraph{Attr: attr}
 	sgChan := make(chan error, 1)
 
@@ -85,12 +85,12 @@ func fetchValues(ctx context.Context, attr string, uids *algo.UIDList) (*x.Value
 		}
 	}
 
-	values := sg.Values
+	values := sg.Values()
 	x.AssertTrue(values.ValuesLength() == uids.Size())
 	return values, nil
 }
 
-func filterUIDs(uids *algo.UIDList, values *x.ValueList, q *geo.QueryData) *algo.UIDList {
+func filterUIDs(uids *algo.UIDList, values *task.ValueList, q *geo.QueryData) *algo.UIDList {
 	x.AssertTrue(values.ValuesLength() == uids.Size())
 	var rv []uint64
 	for i := 0; i < values.ValuesLength(); i++ {

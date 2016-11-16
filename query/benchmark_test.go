@@ -16,27 +16,8 @@
 
 package query
 
-import (
-	"bytes"
-	"encoding/gob"
-	"fmt"
-	"io/ioutil"
-	"testing"
-	"time"
-
-	"github.com/google/flatbuffers/go"
-
-	"github.com/dgraph-io/dgraph/algo"
-	"github.com/dgraph-io/dgraph/group"
-	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/query/graph"
-	"github.com/dgraph-io/dgraph/schema"
-	"github.com/dgraph-io/dgraph/store"
-	"github.com/dgraph-io/dgraph/task"
-	"github.com/dgraph-io/dgraph/worker"
-	"github.com/dgraph-io/dgraph/x"
-)
-
+/*
+// TODO: Fix this test.
 func prepareTest(b *testing.B) (*store.Store, string, string) {
 	dir, err := ioutil.TempDir("", "storetest_")
 	if err != nil {
@@ -62,7 +43,7 @@ func prepareTest(b *testing.B) (*store.Store, string, string) {
 	return ps, dir, dir2
 }
 
-func buildValueList(data []string) *x.ValueList {
+func buildValueList(data []string) *task.ValueList {
 	b := flatbuffers.NewBuilder(0)
 	offsets := make([]flatbuffers.UOffsetT, 0, len(data))
 	for _, s := range data {
@@ -262,3 +243,4 @@ func BenchmarkToJSONSynthetic(b *testing.B) {
 		})
 	}
 }
+*/

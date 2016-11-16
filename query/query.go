@@ -138,9 +138,10 @@ type SubGraph struct {
 	Params   params
 	Filter   *gql.FilterTree
 
-	Counts *x.CountList
-	Values *x.ValueList
-	Result []*algo.UIDList
+	resultBuf []byte // task.Result
+	counts    *task.CountList
+	values    *task.ValueList
+	result    []*algo.UIDList
 
 	// SrcUIDs is a list of unique source UIDs. They are always copies of destUIDs
 	// of parent nodes in GraphQL structure.
@@ -148,6 +149,33 @@ type SubGraph struct {
 
 	// destUIDs is a list of destination UIDs, after applying filters, pagination.
 	DestUIDs *algo.UIDList
+}
+
+// UIDMatrix returns the lists of UIDs from task.Result
+func (sg *SubGraph) UIDMatrix() []*algo.UIDList {
+	if len(sg.result) == 0 && len(sg.resultBuf) > 0 {
+		r := task.GetRootAsResult(sg.resultBuf, 0)
+		sg.result = algo.FromTaskResult(r)
+	}
+	return sg.result
+}
+
+// Counts extracts counts of UIDs from task.Result
+func (sg *SubGraph) Counts() *task.CountList {
+	if sg.counts == nil && len(sg.resultBuf) > 0 {
+		r := task.GetRootAsResult(sg.resultBuf, 0)
+		sg.counts = r.Count(nil)
+	}
+	return sg.counts
+}
+
+// Values extracts values from task.Result.
+func (sg *SubGraph) Values() *task.ValueList {
+	if sg.values == nil && len(sg.resultBuf) > 0 {
+		r := task.GetRootAsResult(sg.resultBuf, 0)
+		sg.values = r.Values(nil)
+	}
+	return sg.values
 }
 
 // getValue gets the value from the task.
@@ -198,10 +226,10 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 	for _, pc := range sg.Children {
 		idx := pc.SrcUIDs.IndexOf(uid)
 		x.AssertTruef(idx >= 0, "Attribute with uid not found in child Query uids")
-		ul := pc.Result[idx]
+		ul := pc.UIDMatrix()[idx]
 
-		if pc.Counts != nil && pc.Counts.CountLength() > 0 {
-			c := types.Int32(pc.Counts.Count(idx))
+		if pc.Counts() != nil && pc.Counts().CountLength() > 0 {
+			c := types.Int32(pc.Counts().Count(idx))
 			uc := dst.New(pc.Attr)
 			uc.AddValue("_count_", &c)
 			dst.AddChild(pc.Attr, uc)
@@ -230,7 +258,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 			}
 		} else {
 			var tv task.Value
-			if ok := pc.Values.Values(&tv, idx); !ok {
+			if ok := pc.Values().Values(&tv, idx); !ok {
 				return x.Errorf("While parsing value")
 			}
 
@@ -443,19 +471,37 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		}
 	} else {
 		sg.SrcUIDs = algo.NewUIDList([]uint64{euid})
-		if euid != 0 {
-			sg.Result = []*algo.UIDList{algo.NewUIDList([]uint64{euid})}
-		}
-	}
-	{
+		// TODO: We shouldn't need to do this.
+		// Encode uid into result flatbuffer.
+		b := flatbuffers.NewBuilder(0)
+		uo := algo.NewUIDList([]uint64{euid}).AddTo(b)
+		task.ResultStartUidmatrixVector(b, 1)
+		b.PrependUOffsetT(uo)
+		mo := b.EndVector(1)
 		// Also need to add nil value to keep this consistent.
-		sg.Values = createNilValuesList(1)
+		vo := createNilValuesList(b, 1)
+
+		/*
+			task.CountListStartCountVector(b, 0)
+			co := b.EndVector(0)
+			task.CountListStart(b)
+			task.CountListAddCount(b, co)
+			co = task.CountListEnd(b)
+		*/
+
+		task.ResultStart(b)
+		task.ResultAddUidmatrix(b, mo)
+		task.ResultAddValues(b, vo)
+		// task.ResultAddCount(b, co)
+		re := task.ResultEnd(b)
+		b.Finish(re)
+		sg.resultBuf = b.FinishedBytes()
 	}
+
 	return sg, nil
 }
 
-func createNilValuesList(count int) *x.ValueList {
-	b := flatbuffers.NewBuilder(0)
+func createNilValuesList(b *flatbuffers.Builder, count int) flatbuffers.UOffsetT {
 	offsets := make([]flatbuffers.UOffsetT, count)
 	for i := 0; i < count; i++ {
 		bvo := b.CreateByteVector(x.Nilbyte)
@@ -472,12 +518,7 @@ func createNilValuesList(count int) *x.ValueList {
 
 	task.ValueListStart(b)
 	task.ValueListAddValues(b, voffset)
-	b.Finish(task.ValueListEnd(b))
-	buf := b.FinishedBytes()
-
-	out := new(x.ValueList)
-	x.Check(out.UnmarshalBinary(buf))
-	return out
+	return task.ValueListEnd(b)
 }
 
 // createTaskQuery generates the query buffer.
@@ -537,31 +578,19 @@ func createTaskQuery(sg *SubGraph, uids *algo.UIDList, tokens []string,
 func ProcessGraph(ctx context.Context, sg *SubGraph, taskQuery []byte, rch chan error) {
 	var err error
 	if taskQuery != nil {
-		resultBuf, err := worker.ProcessTaskOverNetwork(ctx, taskQuery)
+		sg.resultBuf, err = worker.ProcessTaskOverNetwork(ctx, taskQuery)
 		if err != nil {
 			x.TraceError(ctx, x.Wrapf(err, "Error while processing task"))
 			rch <- err
 			return
 		}
 
-		r := task.GetRootAsResult(resultBuf, 0)
-
-		// Extract UIDLists from task.Result.
-		sg.Result = algo.FromTaskResult(r)
-
-		// Extract values from task.Result.
-		sg.Values = new(x.ValueList)
-		x.AssertTrue(r.Values(&sg.Values.ValueList) != nil)
-		if sg.Values.ValuesLength() > 0 {
+		if sg.Values().ValuesLength() > 0 {
 			var v task.Value
-			if sg.Values.Values(&v, 0) {
+			if sg.Values().Values(&v, 0) {
 				x.Trace(ctx, "Sample value for attr: %v Val: %v", sg.Attr, string(v.ValBytes()))
 			}
 		}
-
-		// Extract counts from task.Result.
-		sg.Counts = new(x.CountList)
-		x.AssertTrue(r.Count(&sg.Counts.CountList) != nil)
 	}
 
 	if sg.Params.GetCount == 1 {
@@ -570,7 +599,7 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, taskQuery []byte, rch chan 
 		return
 	}
 
-	sg.DestUIDs = algo.MergeLists(sg.Result)
+	sg.DestUIDs = algo.MergeLists(sg.UIDMatrix())
 	if err != nil {
 		x.TraceError(ctx, x.Wrapf(err, "Error while processing task"))
 		rch <- err
@@ -652,9 +681,9 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, taskQuery []byte, rch chan 
 				continue
 			}
 			var tv task.Value
-			for i := 0; i < node.Values.ValuesLength(); i++ {
+			for i := 0; i < node.Values().ValuesLength(); i++ {
 				uid := sg.DestUIDs.Get(i)
-				if ok := node.Values.Values(&tv, i); !ok {
+				if ok := node.Values().Values(&tv, i); !ok {
 					invalidUids[uid] = true
 				}
 
@@ -722,7 +751,8 @@ func (sg *SubGraph) applyGenerator(ctx context.Context, gen *gql.Generator) erro
 	}
 	sg.SrcUIDs = newSorted
 	for i := 0; i < newSorted.Size(); i++ {
-		sg.Result = append(sg.Result, algo.NewUIDList([]uint64{newSorted.Get(i)}))
+		// TODO: This following line is no longer possible.
+		// sg.Result = append(sg.Result, algo.NewUIDList([]uint64{newSorted.Get(i)}))
 	}
 	return nil
 }
@@ -771,7 +801,7 @@ func (sg *SubGraph) applyFilter(ctx context.Context) error {
 	}
 	sg.DestUIDs = newSorted
 	// For each posting list, intersect with sg.destUIDs.
-	for _, l := range sg.Result {
+	for _, l := range sg.UIDMatrix() {
 		l.Intersect(sg.DestUIDs)
 	}
 	return nil
@@ -866,14 +896,14 @@ func (sg *SubGraph) applyPagination(ctx context.Context) error {
 	if params.Count == 0 && params.Offset == 0 { // No pagination.
 		return nil
 	}
-	x.AssertTrue(sg.SrcUIDs.Size() == len(sg.Result))
-	for _, l := range sg.Result {
+	x.AssertTrue(sg.SrcUIDs.Size() == len(sg.UIDMatrix()))
+	for _, l := range sg.UIDMatrix() {
 		l.Intersect(sg.DestUIDs)
 		start, end := pageRange(&sg.Params, l.Size())
 		l.Slice(start, end)
 	}
 	// Re-merge the UID matrix.
-	sg.DestUIDs = algo.MergeLists(sg.Result)
+	sg.DestUIDs = algo.MergeLists(sg.UIDMatrix())
 	return nil
 }
 
@@ -892,8 +922,8 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 	ao := b.CreateString(sg.Params.Order)
 
 	// Add UID matrix.
-	uidOffsets := make([]flatbuffers.UOffsetT, 0, len(sg.Result))
-	for _, ul := range sg.Result {
+	uidOffsets := make([]flatbuffers.UOffsetT, 0, len(sg.UIDMatrix()))
+	for _, ul := range sg.UIDMatrix() {
 		uidOffsets = append(uidOffsets, ul.AddTo(b))
 	}
 
@@ -910,22 +940,18 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 	task.SortAddCount(b, int32(sg.Params.Count))
 	b.Finish(task.SortEnd(b))
 
-	resultData, err := worker.SortOverNetwork(ctx, b.FinishedBytes())
+	var err error
+	sg.resultBuf, err = worker.SortOverNetwork(ctx, b.FinishedBytes())
 	if err != nil {
 		return err
 	}
-
-	// Copy result into our UID matrix.
-	result := task.GetRootAsSortResult(resultData, 0)
-	x.AssertTrue(result.UidmatrixLength() == len(sg.Result))
-	sg.Result = algo.FromSortResult(result)
 
 	// Update sg.destUID. Iterate over the UID matrix (which is not sorted by
 	// UID). For each element in UID matrix, we do a binary search in the
 	// current destUID and mark it. Then we scan over this bool array and
 	// rebuild destUIDs.
 	included := make([]bool, sg.DestUIDs.Size())
-	for _, ul := range sg.Result {
+	for _, ul := range sg.UIDMatrix() {
 		for i := 0; i < ul.Size(); i++ {
 			uid := ul.Get(i)
 			idx := sg.DestUIDs.IndexOf(uid) // Binary search.
@@ -985,9 +1011,9 @@ func (sg *SubGraph) ToProtocolBuffer(l *Latency) (*graph.Node, error) {
 		return seedNode.New(sg.Attr).(*protoOutputNode).Node, nil
 	}
 
-	x.AssertTrue(len(sg.Result) == 1)
+	x.AssertTrue(len(sg.UIDMatrix()) == 1)
 	n := seedNode.New(sg.Attr)
-	ul := sg.Result[0]
+	ul := sg.UIDMatrix()[0]
 	if sg.Params.GetUID || sg.Params.isDebug {
 		n.SetUID(ul.Get(0))
 	}
@@ -1042,7 +1068,7 @@ func (p *jsonOutputNode) SetXID(xid string) {
 func (sg *SubGraph) ToJSON(l *Latency) ([]byte, error) {
 	var seedNode *jsonOutputNode
 	n := seedNode.New(sg.Attr)
-	ul := sg.Result[0]
+	ul := sg.UIDMatrix()[0]
 	if sg.Params.GetUID || sg.Params.isDebug {
 		n.SetUID(ul.Get(0))
 	}
