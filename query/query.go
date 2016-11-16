@@ -32,7 +32,6 @@ import (
 	"github.com/google/flatbuffers/go"
 
 	"github.com/dgraph-io/dgraph/algo"
-	"github.com/dgraph-io/dgraph/geo"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/query/graph"
 	"github.com/dgraph-io/dgraph/schema"
@@ -439,17 +438,17 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	if gq.Gen != nil {
 		err := sg.applyGenerator(ctx, gq.Gen)
 		if err != nil {
-			return nil, err
+			return nil, x.Wrapf(err, "Error while applying generator")
 		}
 	} else {
 		sg.SrcUIDs = algo.NewUIDList([]uint64{euid})
-		if euid != 0 {
-			sg.Result = []*algo.UIDList{algo.NewUIDList([]uint64{euid})}
+		{
+			if euid != 0 {
+				sg.Result = []*algo.UIDList{algo.NewUIDList([]uint64{euid})}
+				// Also need to add nil value to keep this consistent.
+				sg.Values = createNilValuesList(1)
+			}
 		}
-	}
-	{
-		// Also need to add nil value to keep this consistent.
-		sg.Values = createNilValuesList(1)
 	}
 	return sg, nil
 }
@@ -724,39 +723,43 @@ func (sg *SubGraph) applyGenerator(ctx context.Context, gen *gql.Generator) erro
 	for i := 0; i < newSorted.Size(); i++ {
 		sg.Result = append(sg.Result, algo.NewUIDList([]uint64{newSorted.Get(i)}))
 	}
+	sg.Values = createNilValuesList(newSorted.Size())
 	return nil
 }
 
 func runGenerator(ctx context.Context, gen *gql.Generator) (*algo.UIDList, error) {
-	if len(gen.FuncName) == 0 {
-		return nil, nil
-	}
-	gen.FuncName = strings.ToLower(gen.FuncName)
+	if len(gen.FuncName) > 0 { // Leaf node.
+		gen.FuncName = strings.ToLower(gen.FuncName) // Not sure if needed.
 
-	switch gen.FuncName {
-	case "anyof":
-		return anyOf(ctx, nil, gen.FuncArgs[0], gen.FuncArgs[1])
-	case "allof":
-		return allOf(ctx, nil, gen.FuncArgs[0], gen.FuncArgs[1])
-	case "near":
-		maxD, err := strconv.ParseFloat(gen.FuncArgs[2], 64)
-		if err != nil {
-			return nil, err
+		switch gen.FuncName {
+		case "anyof":
+			return anyOf(ctx, nil, gen.FuncArgs[0], gen.FuncArgs[1])
+		case "allof":
+			return allOf(ctx, nil, gen.FuncArgs[0], gen.FuncArgs[1])
+		case "near":
+			if len(gen.FuncArgs) != 3 {
+				return nil, fmt.Errorf("near generator requires 3 arguments")
+			}
+			return near(ctx, nil, gen.FuncArgs[0], gen.FuncArgs[1], gen.FuncArgs[2])
+		case "within":
+			if len(gen.FuncArgs) != 2 {
+				return nil, fmt.Errorf("within generator requires 2 arguments")
+			}
+			return within(ctx, nil, gen.FuncArgs[0], gen.FuncArgs[1])
+		case "contains":
+			if len(gen.FuncArgs) != 2 {
+				return nil, fmt.Errorf("contains generator requires 2 arguments")
+			}
+			return contains(ctx, nil, gen.FuncArgs[0], gen.FuncArgs[1])
+		case "intersects":
+			if len(gen.FuncArgs) != 2 {
+				return nil, fmt.Errorf("intersects generator requires 2 arguments")
+			}
+			return intersects(ctx, nil, gen.FuncArgs[0], gen.FuncArgs[1])
+		default:
+			return nil, fmt.Errorf("Invalid generator")
 		}
-		var g types.Geo
-		geoD := strings.Replace(gen.FuncArgs[1], "'", "\"", -1)
-		if err = g.UnmarshalText([]byte(geoD)); err != nil {
-			return nil, err
-		}
-		gb, err := g.MarshalBinary()
-		if err != nil {
-			return nil, err
-		}
-		return generateGeo(ctx, gen.FuncArgs[0], geo.QueryTypeNear, gb, maxD)
-	default:
-		return nil, fmt.Errorf("Invalid generator")
 	}
-
 	return nil, nil
 }
 
@@ -791,18 +794,29 @@ func runFilter(ctx context.Context, destUIDs *algo.UIDList,
 			return anyOf(ctx, destUIDs, filter.FuncArgs[0], filter.FuncArgs[1])
 		case "allof":
 			return allOf(ctx, destUIDs, filter.FuncArgs[0], filter.FuncArgs[1])
-		}
-	}
-
-	if filter.Op == "&" {
-		// For intersect operator, we process the children serially.
-		for _, c := range filter.Child {
-			var err error
-			if destUIDs, err = runFilter(ctx, destUIDs, c); err != nil {
-				return nil, err
+		case "near":
+			if len(filter.FuncArgs) != 3 {
+				return nil, fmt.Errorf("near generator requires 3 arguments")
 			}
+			return near(ctx, destUIDs, filter.FuncArgs[0], filter.FuncArgs[1], filter.FuncArgs[2])
+		case "within":
+			if len(filter.FuncArgs) != 2 {
+				return nil, fmt.Errorf("within generator requires 2 arguments")
+			}
+			return within(ctx, destUIDs, filter.FuncArgs[0], filter.FuncArgs[1])
+		case "contains":
+			if len(filter.FuncArgs) != 2 {
+				return nil, fmt.Errorf("contains generator requires 2 arguments")
+			}
+			return contains(ctx, destUIDs, filter.FuncArgs[0], filter.FuncArgs[1])
+		case "intersects":
+			if len(filter.FuncArgs) != 2 {
+				return nil, fmt.Errorf("intersects generator requires 2 arguments")
+			}
+			return intersects(ctx, destUIDs, filter.FuncArgs[0], filter.FuncArgs[1])
+		default:
+			return nil, fmt.Errorf("Invalid filter")
 		}
-		return destUIDs, nil
 	}
 
 	// For now, we only handle AND and OR.

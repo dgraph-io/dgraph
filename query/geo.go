@@ -27,14 +27,16 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-func generateGeo(ctx context.Context, attr string, qt geo.QueryType, g []byte, maxDist float64) (*algo.UIDList, error) {
+func filterGeo(ctx context.Context, attr string, qt geo.QueryType, g []byte,
+	maxDist float64, intersectUids *algo.UIDList) (*algo.UIDList, error) {
+
 	tokens, data, err := geo.QueryTokens(g, qt, maxDist)
 	if err != nil {
 		return nil, err
 	}
 
 	// Lookup the geo index first
-	uids, err := fetchIndexEntries(ctx, attr, tokens)
+	uids, err := fetchIndexEntries(ctx, attr, tokens, intersectUids)
 	if err != nil {
 		return nil, err
 	}
@@ -49,12 +51,14 @@ func generateGeo(ctx context.Context, attr string, qt geo.QueryType, g []byte, m
 	return filterUIDs(uids, values, data), nil
 }
 
-func fetchIndexEntries(ctx context.Context, attr string, tokens []string) (*algo.UIDList, error) {
+func fetchIndexEntries(ctx context.Context, attr string, tokens []string,
+	intersectUids *algo.UIDList) (*algo.UIDList, error) {
+
 	sg := &SubGraph{Attr: attr}
 	sgChan := make(chan error, 1)
 
 	// Query the index for the uids
-	taskQuery := createTaskQuery(sg, nil, tokens, nil)
+	taskQuery := createTaskQuery(sg, nil, tokens, intersectUids)
 	go ProcessGraph(ctx, sg, taskQuery, sgChan)
 	select {
 	case <-ctx.Done():
