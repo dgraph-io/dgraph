@@ -1656,66 +1656,6 @@ func TestNearGenerator(t *testing.T) {
 	require.EqualValues(t, `{"me":[{"gender":"female","name":"Michonne"}]}`, string(js))
 }
 
-func TestGenerator(t *testing.T) {
-	dir, _ := populateGraph(t)
-	defer os.RemoveAll(dir)
-	query := `
-    {
-      me(anyof("name", "Michonne")) {
-        name
-        gender
-      }
-    }
-  `
-
-	gq, _, err := gql.Parse(query)
-	require.NoError(t, err)
-
-	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, gq)
-	require.NoError(t, err)
-
-	ch := make(chan error)
-	go ProcessGraph(ctx, sg, nil, ch)
-	err = <-ch
-	require.NoError(t, err)
-
-	var l Latency
-	js, err := sg.ToJSON(&l)
-	require.NoError(t, err)
-	require.EqualValues(t, `{"me":[{"gender":"female","name":"Michonne"}]}`, string(js))
-}
-
-func TestNearGenerator(t *testing.T) {
-	dir, _ := populateGraph(t)
-	defer os.RemoveAll(dir)
-	query := `
-    {
-			me(near("loc", "{'Type':'Point', 'Coordinates':[1.1,2.0]}", "5")) { 
-        name
-        gender
-      }
-    }
-  `
-
-	gq, _, err := gql.Parse(query)
-	require.NoError(t, err)
-
-	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, gq)
-	require.NoError(t, err)
-
-	ch := make(chan error)
-	go ProcessGraph(ctx, sg, nil, ch)
-	err = <-ch
-	require.NoError(t, err)
-
-	var l Latency
-	js, err := sg.ToJSON(&l)
-	require.NoError(t, err)
-	require.EqualValues(t, `{"me":[{"gender":"female","name":"Michonne"}]}`, string(js))
-}
-
 func TestMain(m *testing.M) {
 	x.Init()
 	os.Exit(m.Run())
