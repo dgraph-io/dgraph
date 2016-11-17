@@ -738,26 +738,26 @@ func runGenerator(ctx context.Context, gen *gql.Generator) (*algo.UIDList, error
 			return allOf(ctx, nil, gen.FuncArgs[0], gen.FuncArgs[1])
 		case "near":
 			if len(gen.FuncArgs) != 3 {
-				return nil, fmt.Errorf("near generator requires 3 arguments")
+				return nil, x.Errorf("near generator requires 3 arguments")
 			}
 			return near(ctx, nil, gen.FuncArgs[0], gen.FuncArgs[1], gen.FuncArgs[2])
 		case "within":
 			if len(gen.FuncArgs) != 2 {
-				return nil, fmt.Errorf("within generator requires 2 arguments")
+				return nil, x.Errorf("within generator requires 2 arguments")
 			}
 			return within(ctx, nil, gen.FuncArgs[0], gen.FuncArgs[1])
 		case "contains":
 			if len(gen.FuncArgs) != 2 {
-				return nil, fmt.Errorf("contains generator requires 2 arguments")
+				return nil, x.Errorf("contains generator requires 2 arguments")
 			}
 			return contains(ctx, nil, gen.FuncArgs[0], gen.FuncArgs[1])
 		case "intersects":
 			if len(gen.FuncArgs) != 2 {
-				return nil, fmt.Errorf("intersects generator requires 2 arguments")
+				return nil, x.Errorf("intersects generator requires 2 arguments")
 			}
 			return intersects(ctx, nil, gen.FuncArgs[0], gen.FuncArgs[1])
 		default:
-			return nil, fmt.Errorf("Invalid generator")
+			return nil, x.Errorf("Invalid generator")
 		}
 	}
 	return nil, nil
@@ -796,27 +796,38 @@ func runFilter(ctx context.Context, destUIDs *algo.UIDList,
 			return allOf(ctx, destUIDs, filter.FuncArgs[0], filter.FuncArgs[1])
 		case "near":
 			if len(filter.FuncArgs) != 3 {
-				return nil, fmt.Errorf("near generator requires 3 arguments")
+				return nil, x.Errorf("near generator requires 3 arguments")
 			}
 			return near(ctx, destUIDs, filter.FuncArgs[0], filter.FuncArgs[1], filter.FuncArgs[2])
 		case "within":
 			if len(filter.FuncArgs) != 2 {
-				return nil, fmt.Errorf("within generator requires 2 arguments")
+				return nil, x.Errorf("within generator requires 2 arguments")
 			}
 			return within(ctx, destUIDs, filter.FuncArgs[0], filter.FuncArgs[1])
 		case "contains":
 			if len(filter.FuncArgs) != 2 {
-				return nil, fmt.Errorf("contains generator requires 2 arguments")
+				return nil, x.Errorf("contains generator requires 2 arguments")
 			}
 			return contains(ctx, destUIDs, filter.FuncArgs[0], filter.FuncArgs[1])
 		case "intersects":
 			if len(filter.FuncArgs) != 2 {
-				return nil, fmt.Errorf("intersects generator requires 2 arguments")
+				return nil, x.Errorf("intersects generator requires 2 arguments")
 			}
 			return intersects(ctx, destUIDs, filter.FuncArgs[0], filter.FuncArgs[1])
 		default:
-			return nil, fmt.Errorf("Invalid filter")
+			return nil, x.Errorf("Invalid filter")
 		}
+	}
+
+	if filter.Op == "&" {
+		// For intersect operator, we process the children serially.
+		for _, c := range filter.Child {
+			var err error
+			if destUIDs, err = runFilter(ctx, destUIDs, c); err != nil {
+				return nil, err
+			}
+		}
+		return destUIDs, nil
 	}
 
 	// For now, we only handle AND and OR.
