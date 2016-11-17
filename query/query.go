@@ -37,6 +37,7 @@ import (
 	"github.com/dgraph-io/dgraph/query/graph"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/task"
+	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
@@ -146,6 +147,7 @@ type SubGraph struct {
 	// SrcUIDs is a list of unique source UIDs. They are always copies of destUIDs
 	// of parent nodes in GraphQL structure.
 	SrcUIDs *algo.UIDList
+	SrcFunc []string
 
 	// destUIDs is a list of destination UIDs, after applying filters, pagination.
 	DestUIDs *algo.UIDList
@@ -465,13 +467,13 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		Filter: gq.Filter,
 	}
 	if gq.Gen != nil {
-		err := sg.applyGenerator(ctx, gq.Gen)
-		if err != nil {
-			return nil, err
-		}
-	} else {
+		sg.Attr = gq.Gen.FuncArgs[0]
+		sg.SrcFunc = append(sg.SrcFunc, gq.Gen.FuncName, gq.Gen.FuncArgs[1:]...)
+	}
+	if euid > 0 {
 		sg.SrcUIDs = algo.NewUIDList([]uint64{euid})
-		// TODO: We shouldn't need to do this.
+
+		// TODO: We probably shouldn't need to do this.
 		// Encode uid into result flatbuffer.
 		b := flatbuffers.NewBuilder(0)
 		uo := algo.NewUIDList([]uint64{euid}).AddTo(b)
@@ -480,14 +482,6 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		mo := b.EndVector(1)
 		// Also need to add nil value to keep this consistent.
 		vo := createNilValuesList(b, 1)
-
-		/*
-			task.CountListStartCountVector(b, 0)
-			co := b.EndVector(0)
-			task.CountListStart(b)
-			task.CountListAddCount(b, co)
-			co = task.CountListEnd(b)
-		*/
 
 		task.ResultStart(b)
 		task.ResultAddUidmatrix(b, mo)
@@ -522,8 +516,8 @@ func createNilValuesList(b *flatbuffers.Builder, count int) flatbuffers.UOffsetT
 }
 
 // createTaskQuery generates the query buffer.
-func createTaskQuery(sg *SubGraph, uids *algo.UIDList, tokens []string,
-	intersect *algo.UIDList) []byte {
+func createTaskQuery(sg *SubGraph, tokens []string, intersect *algo.UIDList) []byte {
+	uids := sg.SrcUIDs
 	x.AssertTrue(uids == nil || tokens == nil)
 
 	b := flatbuffers.NewBuilder(0)
@@ -575,21 +569,42 @@ func createTaskQuery(sg *SubGraph, uids *algo.UIDList, tokens []string,
 
 // ProcessGraph processes the SubGraph instance accumulating result for the query
 // from different instances. Note: taskQuery is nil for root node.
-func ProcessGraph(ctx context.Context, sg *SubGraph, taskQuery []byte, rch chan error) {
+func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	var err error
-	if taskQuery != nil {
-		sg.resultBuf, err = worker.ProcessTaskOverNetwork(ctx, taskQuery)
-		if err != nil {
-			x.TraceError(ctx, x.Wrapf(err, "Error while processing task"))
-			rch <- err
-			return
-		}
+	var tokens []string
+	var intersect *algo.UIDList
+	var intersectDestination bool
 
-		if sg.Values().ValuesLength() > 0 {
-			var v task.Value
-			if sg.Values().Values(&v, 0) {
-				x.Trace(ctx, "Sample value for attr: %v Val: %v", sg.Attr, string(v.ValBytes()))
+	if len(sg.SrcFunc) > 0 {
+		switch sg.SrcFunc[0] {
+		case "anyof":
+			fallthrough
+		case "allof":
+			tokenizer, err := tok.NewTokenizer([]byte(terms))
+			if err != nil {
+				return nil, x.Errorf("Could not create tokenizer: %v", terms)
 			}
+			tokens = tokenizer.Tokens()
+			tokenizer.Destroy()
+			intersect = parent.DestUIDs
+			intersectDestination = true
+		default:
+			x.Fatalf("Unhandled function: %v", sg.SrcFunc)
+		}
+	}
+
+	taskQuery := createTaskQuery(sg, tokens, intersect)
+	sg.resultBuf, err = worker.ProcessTaskOverNetwork(ctx, taskQuery)
+	if err != nil {
+		x.TraceError(ctx, x.Wrapf(err, "Error while processing task"))
+		rch <- err
+		return
+	}
+
+	if sg.Values().ValuesLength() > 0 {
+		var v task.Value
+		if sg.Values().Values(&v, 0) {
+			x.Trace(ctx, "Sample value for attr: %v Val: %v", sg.Attr, string(v.ValBytes()))
 		}
 	}
 
@@ -599,7 +614,12 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, taskQuery []byte, rch chan 
 		return
 	}
 
-	sg.DestUIDs = algo.MergeLists(sg.UIDMatrix())
+	if intersectDestination {
+		sg.DestUIDs = algo.IntersectLists(sg.UIDMatrix())
+	} else {
+		sg.DestUIDs = algo.MergeLists(sg.UIDMatrix())
+	}
+
 	if err != nil {
 		x.TraceError(ctx, x.Wrapf(err, "Error while processing task"))
 		rch <- err
@@ -633,20 +653,12 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, taskQuery []byte, rch chan 
 		}
 	}
 
-	var processed, leftToProcess []*SubGraph
 	// First iterate over the value nodes and check for validity.
 	childChan := make(chan error, len(sg.Children))
 	for i := 0; i < len(sg.Children); i++ {
 		child := sg.Children[i]
 		child.SrcUIDs = sg.DestUIDs // Make the connection.
-		if child.Params.AttrType == nil || child.Params.AttrType.IsScalar() {
-			processed = append(processed, child)
-			taskQuery := createTaskQuery(child, sg.DestUIDs, nil, nil)
-			go ProcessGraph(ctx, child, taskQuery, childChan)
-		} else {
-			leftToProcess = append(leftToProcess, child)
-			childChan <- nil
-		}
+		go ProcessGraph(ctx, child, childChan)
 	}
 
 	// Now get all the results back.
@@ -665,79 +677,6 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, taskQuery []byte, rch chan 
 			return
 		}
 	}
-
-	// If all the child nodes are processed, return.
-	if len(leftToProcess) == 0 {
-		rch <- nil
-		return
-	}
-
-	sgObj, ok := schema.TypeOf(sg.Attr).(types.Object)
-	invalidUids := make(map[uint64]bool)
-	// Check the results of the child and eliminate uids without all results.
-	if ok {
-		for _, node := range processed {
-			if _, present := sgObj.Fields[node.Attr]; !present {
-				continue
-			}
-			var tv task.Value
-			for i := 0; i < node.Values().ValuesLength(); i++ {
-				uid := sg.DestUIDs.Get(i)
-				if ok := node.Values().Values(&tv, i); !ok {
-					invalidUids[uid] = true
-				}
-
-				valBytes := tv.ValBytes()
-				v, err := getValue(tv)
-				if err != nil || bytes.Equal(valBytes, nil) {
-					// The value is not as requested in schema.
-					invalidUids[uid] = true
-					continue
-				}
-
-				// type assertion for scalar type values.
-				if !node.Params.AttrType.IsScalar() {
-					rch <- x.Errorf("Fatal mistakes in type.")
-				}
-
-				// Check if compatible with schema type.
-				schemaType := node.Params.AttrType.(types.Scalar)
-				if _, err = schemaType.Convert(v); err != nil {
-					invalidUids[uid] = true
-				}
-			}
-		}
-	}
-
-	// Filter out the invalid UIDs.
-	sg.DestUIDs.ApplyFilter(func(uid uint64, idx int) bool {
-		return !invalidUids[uid]
-	})
-
-	// Now process next level with valid UIDs.
-	childChan = make(chan error, len(leftToProcess))
-	for _, child := range leftToProcess {
-		taskQuery := createTaskQuery(child, sg.DestUIDs, nil, nil)
-		go ProcessGraph(ctx, child, taskQuery, childChan)
-	}
-
-	// Now get the results back.
-	for i := 0; i < len(leftToProcess); i++ {
-		select {
-		case err = <-childChan:
-			x.Trace(ctx, "Reply from child. Index: %v Attr: %v", i, sg.Children[i].Attr)
-			if err != nil {
-				x.Trace(ctx, "Error while processing child task: %v", err)
-				rch <- err
-				return
-			}
-		case <-ctx.Done():
-			x.Trace(ctx, "Context done before full execution: %v", ctx.Err())
-			rch <- ctx.Err()
-			return
-		}
-	}
-
 	rch <- nil
 }
 
