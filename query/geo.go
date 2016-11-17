@@ -16,17 +16,7 @@
 
 package query
 
-import (
-	"bytes"
-	"context"
-
-	"github.com/dgraph-io/dgraph/algo"
-	"github.com/dgraph-io/dgraph/geo"
-	"github.com/dgraph-io/dgraph/task"
-	"github.com/dgraph-io/dgraph/types"
-	"github.com/dgraph-io/dgraph/x"
-)
-
+/*
 func generateGeo(ctx context.Context, attr string, qt geo.QueryType, g []byte, maxDist float64) (*algo.UIDList, error) {
 	tokens, data, err := geo.QueryTokens(g, qt, maxDist)
 	if err != nil {
@@ -54,8 +44,8 @@ func fetchIndexEntries(ctx context.Context, attr string, tokens []string) (*algo
 	sgChan := make(chan error, 1)
 
 	// Query the index for the uids
-	taskQuery := createTaskQuery(sg, nil, tokens, nil)
-	go ProcessGraph(ctx, sg, taskQuery, sgChan)
+	taskQuery := createTaskQuery(sg, tokens, nil)
+	go ProcessGraph(ctx, sg, nil, sgChan)
 	select {
 	case <-ctx.Done():
 		return nil, x.Wrap(ctx.Err())
@@ -75,7 +65,7 @@ func fetchValues(ctx context.Context, attr string, uids *algo.UIDList) (*task.Va
 
 	// Query the index for the uids
 	taskQuery := createTaskQuery(sg, uids, nil, nil)
-	go ProcessGraph(ctx, sg, taskQuery, sgChan)
+	go ProcessGraph(ctx, sg, nil, sgChan)
 	select {
 	case <-ctx.Done():
 		return nil, x.Wrap(ctx.Err())
@@ -120,3 +110,4 @@ func filterUIDs(uids *algo.UIDList, values *task.ValueList, q *geo.QueryData) *a
 	}
 	return algo.NewUIDList(rv)
 }
+*/

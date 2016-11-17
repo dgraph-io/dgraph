@@ -32,7 +32,6 @@ import (
 	"github.com/google/flatbuffers/go"
 
 	"github.com/dgraph-io/dgraph/algo"
-	"github.com/dgraph-io/dgraph/geo"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/query/graph"
 	"github.com/dgraph-io/dgraph/schema"
@@ -468,7 +467,8 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	}
 	if gq.Gen != nil {
 		sg.Attr = gq.Gen.FuncArgs[0]
-		sg.SrcFunc = append(sg.SrcFunc, gq.Gen.FuncName, gq.Gen.FuncArgs[1:]...)
+		sg.SrcFunc = append(sg.SrcFunc, gq.Gen.FuncName)
+		sg.SrcFunc = append(sg.SrcFunc, gq.Gen.FuncArgs[1:]...)
 	}
 	if euid > 0 {
 		sg.SrcUIDs = algo.NewUIDList([]uint64{euid})
@@ -567,6 +567,15 @@ func createTaskQuery(sg *SubGraph, tokens []string, intersect *algo.UIDList) []b
 	return b.FinishedBytes()
 }
 
+func getTokens(term string) ([]string, error) {
+	tokenizer, err := tok.NewTokenizer([]byte(term))
+	if err != nil {
+		return nil, x.Errorf("Could not create tokenizer: %v", term)
+	}
+	defer tokenizer.Destroy()
+	return tokenizer.Tokens(), nil
+}
+
 // ProcessGraph processes the SubGraph instance accumulating result for the query
 // from different instances. Note: taskQuery is nil for root node.
 func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
@@ -576,18 +585,39 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	var intersectDestination bool
 
 	if len(sg.SrcFunc) > 0 {
+		if len(sg.SrcFunc) < 2 {
+			err = x.Errorf("Expected at least 2 arguments in function. Got: %v", sg.SrcFunc)
+			x.TraceError(ctx, err)
+			rch <- err
+			return
+		}
+
 		switch sg.SrcFunc[0] {
 		case "anyof":
+			// TODO: Why only one argument, why not multiple terms?
+			tokens, err = getTokens(sg.SrcFunc[1])
+			if err != nil {
+				x.TraceError(ctx, x.Wrap(err))
+				rch <- err
+				return
+			}
+			if parent != nil {
+				intersect = parent.DestUIDs
+			}
+			intersectDestination = false
 			fallthrough
 		case "allof":
-			tokenizer, err := tok.NewTokenizer([]byte(terms))
+			tokens, err = getTokens(sg.SrcFunc[1])
 			if err != nil {
-				return nil, x.Errorf("Could not create tokenizer: %v", terms)
+				x.TraceError(ctx, x.Wrap(err))
+				rch <- err
+				return
 			}
-			tokens = tokenizer.Tokens()
-			tokenizer.Destroy()
-			intersect = parent.DestUIDs
+			if parent != nil {
+				intersect = parent.DestUIDs
+			}
 			intersectDestination = true
+			// TODO: Handle geo filtering, using two steps in SubGraph.
 		default:
 			x.Fatalf("Unhandled function: %v", sg.SrcFunc)
 		}
@@ -658,7 +688,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	for i := 0; i < len(sg.Children); i++ {
 		child := sg.Children[i]
 		child.SrcUIDs = sg.DestUIDs // Make the connection.
-		go ProcessGraph(ctx, child, childChan)
+		go ProcessGraph(ctx, child, sg, childChan)
 	}
 
 	// Now get all the results back.
@@ -678,55 +708,6 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		}
 	}
 	rch <- nil
-}
-
-func (sg *SubGraph) applyGenerator(ctx context.Context, gen *gql.Generator) error {
-	if gen == nil { // No Generator.
-		return nil
-	}
-	newSorted, err := runGenerator(ctx, gen)
-	if err != nil {
-		return err
-	}
-	sg.SrcUIDs = newSorted
-	for i := 0; i < newSorted.Size(); i++ {
-		// TODO: This following line is no longer possible.
-		// sg.Result = append(sg.Result, algo.NewUIDList([]uint64{newSorted.Get(i)}))
-	}
-	return nil
-}
-
-func runGenerator(ctx context.Context, gen *gql.Generator) (*algo.UIDList, error) {
-	if len(gen.FuncName) == 0 {
-		return nil, nil
-	}
-	gen.FuncName = strings.ToLower(gen.FuncName)
-
-	switch gen.FuncName {
-	case "anyof":
-		return anyOf(ctx, nil, gen.FuncArgs[0], gen.FuncArgs[1])
-	case "allof":
-		return allOf(ctx, nil, gen.FuncArgs[0], gen.FuncArgs[1])
-	case "near":
-		maxD, err := strconv.ParseFloat(gen.FuncArgs[2], 64)
-		if err != nil {
-			return nil, err
-		}
-		var g types.Geo
-		geoD := strings.Replace(gen.FuncArgs[1], "'", "\"", -1)
-		if err = g.UnmarshalText([]byte(geoD)); err != nil {
-			return nil, err
-		}
-		gb, err := g.MarshalBinary()
-		if err != nil {
-			return nil, err
-		}
-		return generateGeo(ctx, gen.FuncArgs[0], geo.QueryTypeNear, gb, maxD)
-	default:
-		return nil, fmt.Errorf("Invalid generator")
-	}
-
-	return nil, nil
 }
 
 // applyFilter applies filters to sg.sorted.
