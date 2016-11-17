@@ -17,13 +17,13 @@
 package worker
 
 import (
-	"github.com/google/flatbuffers/go"
 	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/task"
+	"github.com/dgraph-io/dgraph/taskpb"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -82,10 +82,17 @@ func processTask(query []byte) ([]byte, error) {
 		n = q.UidsLength()
 	}
 
-	b := flatbuffers.NewBuilder(0)
-	voffsets := make([]flatbuffers.UOffsetT, n)
-	uoffsets := make([]flatbuffers.UOffsetT, n)
-	var counts []uint64
+	countsList := new(taskpb.CountList)
+	valuesList := new(taskpb.ValueList)
+	out := &taskpb.Result{
+		Counts: countsList,
+		Values: valuesList,
+	}
+
+	var emptyUIDList *taskpb.UIDList // For handling _count_ only.
+	if q.GetCount() == 1 {
+		emptyUIDList = new(taskpb.UIDList)
+	}
 
 	for i := 0; i < n; i++ {
 		var key []byte
@@ -98,79 +105,44 @@ func processTask(query []byte) ([]byte, error) {
 		pl, decr := posting.GetOrCreate(key)
 		defer decr()
 
-		var valoffset flatbuffers.UOffsetT
 		// If a posting list contains a value, we store that or else we store a nil
 		// byte so that processing is consistent later.
 		vbytes, vtype, err := pl.Value()
-		if err != nil {
-			valoffset = b.CreateByteVector(x.Nilbyte)
+
+		newValue := &taskpb.Value{ValType: uint32(vtype)}
+		if err == nil {
+			newValue.Val = vbytes
 		} else {
-			valoffset = b.CreateByteVector(vbytes)
+			newValue.Val = x.Nilbyte
 		}
-		task.ValueStart(b)
-		task.ValueAddVal(b, valoffset)
-		task.ValueAddValType(b, vtype)
-		voffsets[i] = task.ValueEnd(b)
+		valuesList.Values = append(valuesList.Values, newValue)
 
 		if q.GetCount() == 1 {
-			count := uint64(pl.Length(0))
-			counts = append(counts, count)
+			countsList.Count = append(countsList.Count, uint32(pl.Length(0)))
 			// Add an empty UID list to make later processing consistent
-			uoffsets[i] = algo.NewUIDList([]uint64{}).AddTo(b)
-		} else {
-			opts := posting.ListOptions{
-				AfterUID: uint64(q.AfterUid()),
-			}
-
-			// Get taskQuery.Intersect field.
-			taskList := new(task.UidList)
-			if q.ToIntersect(taskList) != nil {
-				opts.Intersect = new(algo.UIDList)
-				opts.Intersect.FromTask(taskList)
-			}
-
-			ulist := pl.Uids(opts)
-			uoffsets[i] = ulist.AddTo(b)
+			out.UidMatrix = append(out.UidMatrix, emptyUIDList)
+			continue
 		}
+
+		// The more usual case: Getting the UIDs.
+		opts := posting.ListOptions{
+			AfterUID: uint64(q.AfterUid()),
+		}
+
+		// Get taskQuery.ToIntersect field.
+		taskList := new(task.UidList)
+		if q.ToIntersect(taskList) != nil {
+			opts.Intersect = new(algo.UIDList)
+			opts.Intersect.FromTask(taskList)
+		}
+		out.UidMatrix = append(out.UidMatrix, pl.Uids(opts).ToProto())
 	}
 
-	// Create a ValueList's vector of Values.
-	task.ValueListStartValuesVector(b, len(voffsets))
-	for i := len(voffsets) - 1; i >= 0; i-- {
-		b.PrependUOffsetT(voffsets[i])
+	outB, err := out.Marshal()
+	if err != nil {
+		return nil, err
 	}
-	valuesVecOffset := b.EndVector(len(voffsets))
-
-	// Create a ValueList.
-	task.ValueListStart(b)
-	task.ValueListAddValues(b, valuesVecOffset)
-	valuesVent := task.ValueListEnd(b)
-
-	// Prepare UID matrix.
-	task.ResultStartUidmatrixVector(b, len(uoffsets))
-	for i := len(uoffsets) - 1; i >= 0; i-- {
-		b.PrependUOffsetT(uoffsets[i])
-	}
-	matrixVent := b.EndVector(len(uoffsets))
-
-	// Create a CountList's vector of counts.
-	task.CountListStartCountVector(b, len(counts))
-	for i := len(counts) - 1; i >= 0; i-- {
-		b.PrependUint32(uint32(counts[i]))
-	}
-	countVecOffset := b.EndVector(len(counts))
-
-	// Create a CountList.
-	task.CountListStart(b)
-	task.CountListAddCount(b, countVecOffset)
-	countsVent := task.CountListEnd(b)
-
-	task.ResultStart(b)
-	task.ResultAddValues(b, valuesVent)
-	task.ResultAddUidmatrix(b, matrixVent)
-	task.ResultAddCount(b, countsVent)
-	b.Finish(task.ResultEnd(b))
-	return b.FinishedBytes(), nil
+	return outB, nil
 }
 
 // ServeTask is used to respond to a query.

@@ -1,0 +1,28 @@
+// protoc --gofast_out=.  task.proto
+syntax = "proto3";
+
+package taskpb;
+
+message UIDList {
+	repeated fixed64 uids = 1 [packed=true];
+}
+
+message Value {
+	bytes val = 1;
+	uint32 valType = 2;
+}
+
+message ValueList {
+	repeated Value values = 1;
+}
+
+message CountList {
+	// Most counts might be small.
+	repeated uint32 count = 1 [packed=true];
+}
+
+message Result {
+	repeated UIDList uidMatrix = 1;
+	ValueList values = 2;
+	CountList counts = 3;
+}

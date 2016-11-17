@@ -32,7 +32,7 @@ func fetchTermUids(ctx context.Context, intersectUIDs *algo.UIDList,
 		}
 	}
 
-	x.AssertTrue(len(sg.UIDMatrix()) == len(tokens))
+	x.AssertTrue(len(sg.uidMatrix) == len(tokens))
 	return sg, nil
 }
 
@@ -43,7 +43,7 @@ func allOf(ctx context.Context, intersectUIDs *algo.UIDList,
 	if err != nil {
 		return nil, err
 	}
-	return algo.IntersectLists(sg.UIDMatrix()), nil
+	return algo.IntersectLists(sg.uidMatrix), nil
 }
 
 func anyOf(ctx context.Context, intersectUIDs *algo.UIDList,
@@ -53,5 +53,5 @@ func anyOf(ctx context.Context, intersectUIDs *algo.UIDList,
 	if err != nil {
 		return nil, err
 	}
-	return algo.MergeLists(sg.UIDMatrix()), nil
+	return algo.MergeLists(sg.uidMatrix), nil
 }
