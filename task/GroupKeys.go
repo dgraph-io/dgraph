@@ -40,9 +40,6 @@ func (rcv *GroupKeys) Keys(obj *KC, j int) bool {
 		x := rcv._tab.Vector(o)
 		x += flatbuffers.UOffsetT(j) * 4
 		x = rcv._tab.Indirect(x)
-		if obj == nil {
-			obj = new(KC)
-		}
 		obj.Init(rcv._tab.Bytes, x)
 		return true
 	}
