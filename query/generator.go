@@ -63,7 +63,7 @@ func anyOf(ctx context.Context, intersectUIDs *algo.UIDList,
 func near(ctx context.Context, intersectUIDs *algo.UIDList, attr, point, dist string) (*algo.UIDList, error) {
 	maxD, err := strconv.ParseFloat(dist, 64)
 	if err != nil {
-		return nil, err
+		return nil, x.Wrap(err, "Error while converting distance to float")
 	}
 	var g types.Geo
 	geoD := strings.Replace(point, "'", "\"", -1)
@@ -83,7 +83,7 @@ func within(ctx context.Context, intersectUIDs *algo.UIDList, attr, region strin
 	geoD := strings.Replace(region, "'", "\"", -1)
 	err := g.UnmarshalText([]byte(geoD))
 	if err != nil {
-		return nil, x.Wrapf(err, "Cannot decode given geoJson input")
+		return nil, x.Wrap(err, "Cannot decode given geoJson input")
 	}
 	gb, err := g.MarshalBinary()
 	if err != nil {
@@ -97,7 +97,7 @@ func contains(ctx context.Context, intersectUIDs *algo.UIDList, attr, region str
 	geoD := strings.Replace(region, "'", "\"", -1)
 	err := g.UnmarshalText([]byte(geoD))
 	if err != nil {
-		return nil, err
+		return nil, x.Wrap(err, "Cannot decode given geoJson input")
 	}
 	gb, err := g.MarshalBinary()
 	if err != nil {
