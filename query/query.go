@@ -236,7 +236,6 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 			}
 		} else {
 			tv := pc.values.GetValues()[idx]
-			x.Printf("~~pre attr=%s uid=%d childattr=%s vtype=%d v=%v", sg.Attr, uid, pc.Attr, tv.ValType, tv.Val)
 			v, err := getValue(tv)
 			if err != nil {
 				return err
@@ -540,10 +539,6 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, taskQuery []byte, rch chan 
 		}
 
 		sg.values = result.GetValues()
-		if sg.Attr == "alive" && len(sg.values.GetValues()) > 0 {
-			x.Printf("~~~~~~~~hasValues attr=%s len=%d data=%v", sg.Attr,
-				len(sg.values.GetValues()), sg.values.GetValues()[0].Val)
-		}
 		if len(sg.values.GetValues()) > 0 {
 			v := sg.values.GetValues()[0]
 			x.Trace(ctx, "Sample value for attr: %v Val: %v", sg.Attr, string(v.Val))
@@ -1031,7 +1026,6 @@ func (sg *SubGraph) ToJSON(l *Latency) ([]byte, error) {
 		n.SetUID(ul.Get(0))
 	}
 
-	x.Printf("~~~attr=%s len(uidMatrix)=%d ul[0]=%d", sg.Attr, len(sg.uidMatrix), ul.Get(0))
 	if err := sg.preTraverse(ul.Get(0), n); err != nil {
 		return nil, err
 	}
