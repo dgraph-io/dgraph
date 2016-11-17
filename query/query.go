@@ -835,6 +835,17 @@ func runFilter(ctx context.Context, destUIDs *algo.UIDList,
 		return destUIDs, nil
 	}
 
+	if filter.Op == "&" {
+		// For intersect operator, we process the children serially.
+		for _, c := range filter.Child {
+			var err error
+			if destUIDs, err = runFilter(ctx, destUIDs, c); err != nil {
+				return nil, err
+			}
+		}
+		return destUIDs, nil
+	}
+
 	// For now, we only handle AND and OR.
 	if filter.Op != "|" {
 		return destUIDs, x.Errorf("Unknown operator %v", filter.Op)
