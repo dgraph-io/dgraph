@@ -19,7 +19,6 @@ package query
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -96,7 +95,6 @@ func runQuery(t *testing.T, gq *gql.GraphQuery) interface{} {
 	go ProcessGraph(ctx, sg, nil, ch)
 	err = <-ch
 	require.NoError(t, err)
-	fmt.Println(sg.Attr, sg.SrcUIDs)
 
 	var l Latency
 	js, err := sg.ToJSON(&l)
@@ -116,7 +114,7 @@ func TestWithinPoint(t *testing.T) {
 	createTestData(t, ps)
 	gq := &gql.GraphQuery{
 		Attr:     "me",
-		Gen:      &gql.Generator{FuncName: "near", FuncArgs: []string{"geometry", "{\"Type\":\"Point\", \"Coordinates\":[-122.082506, 37.4249518]}", "1"}},
+		Gen:      &gql.Generator{FuncName: "near", FuncArgs: []string{"geometry", `{"Type":"Point", "Coordinates":[-122.082506, 37.4249518]}`, "1"}},
 		Children: []*gql.GraphQuery{&gql.GraphQuery{Attr: "name"}},
 	}
 
@@ -136,7 +134,7 @@ func TestWithinPolygon(t *testing.T) {
 		Attr: "me",
 		Gen: &gql.Generator{FuncName: "within", FuncArgs: []string{
 			"geometry",
-			"{\"Type\":\"Polygon\", \"Coordinates\":[[[-122.06, 37.37], [-122.1, 37.36], [-122.12, 37.4], [-122.11, 37.43], [-122.04, 37.43], [-122.06, 37.37]]]}"},
+			`{"Type":"Polygon", "Coordinates":[[[-122.06, 37.37], [-122.1, 37.36], [-122.12, 37.4], [-122.11, 37.43], [-122.04, 37.43], [-122.06, 37.37]]]}`},
 		},
 		Children: []*gql.GraphQuery{&gql.GraphQuery{Attr: "name"}},
 	}
@@ -161,7 +159,7 @@ func TestContainsPoint(t *testing.T) {
 		Attr: "me",
 		Gen: &gql.Generator{FuncName: "contains", FuncArgs: []string{
 			"geometry",
-			"{\"Type\":\"Point\", \"Coordinates\":[-122.082506, 37.4249518]}"},
+			`{"Type":"Point", "Coordinates":[-122.082506, 37.4249518]}`},
 		},
 		Children: []*gql.GraphQuery{&gql.GraphQuery{Attr: "name"}},
 	}
@@ -184,7 +182,7 @@ func TestNearPoint(t *testing.T) {
 	createTestData(t, ps)
 	gq := &gql.GraphQuery{
 		Attr:     "me",
-		Gen:      &gql.Generator{FuncName: "near", FuncArgs: []string{"geometry", "{\"Type\":\"Point\", \"Coordinates\":[-122.082506, 37.4249518]}", "1000"}},
+		Gen:      &gql.Generator{FuncName: "near", FuncArgs: []string{"geometry", `{"Type":"Point", "Coordinates":[-122.082506, 37.4249518]}`, "1000"}},
 		Children: []*gql.GraphQuery{&gql.GraphQuery{Attr: "name"}},
 	}
 
@@ -210,7 +208,7 @@ func TestIntersectsPolygon1(t *testing.T) {
 			FuncName: "Intersects",
 			FuncArgs: []string{
 				"geometry",
-				"{\"Type\":\"Polygon\",	\"Coordinates\":[[[-122.06, 37.37], [-122.1, 37.36], [-122.12, 37.4], [-122.11, 37.43], [-122.04, 37.43], [-122.06, 37.37]]]}",
+				`{"Type":"Polygon",	"Coordinates":[[[-122.06, 37.37], [-122.1, 37.36], [-122.12, 37.4], [-122.11, 37.43], [-122.04, 37.43], [-122.06, 37.37]]]}`,
 			},
 		},
 		Children: []*gql.GraphQuery{&gql.GraphQuery{Attr: "name"}},
@@ -241,7 +239,7 @@ func TestIntersectsPolygon2(t *testing.T) {
 			FuncName: "Intersects",
 			FuncArgs: []string{
 				"geometry",
-				"{\"Type\":\"Polygon\",	\"Coordinates\":[[[-121.6, 37.1], [-122.4, 37.3], [-122.6, 37.8], [-122.5, 38.3], [-121.9, 38], [-121.6, 37.1]]]}",
+				`{"Type":"Polygon",	"Coordinates":[[[-121.6, 37.1], [-122.4, 37.3], [-122.6, 37.8], [-122.5, 38.3], [-121.9, 38], [-121.6, 37.1]]]}`,
 			},
 		},
 		Children: []*gql.GraphQuery{&gql.GraphQuery{Attr: "name"}},
