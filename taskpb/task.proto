@@ -4,7 +4,7 @@ syntax = "proto3";
 package taskpb;
 
 message UIDList {
-	repeated fixed64 uids = 1 [packed=true];
+	repeated fixed64 uids = 1;
 }
 
 message Value {
@@ -18,7 +18,7 @@ message ValueList {
 
 message CountList {
 	// Most counts might be small.
-	repeated uint32 count = 1 [packed=true];
+	repeated uint32 count = 1;
 }
 
 message Result {

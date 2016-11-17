@@ -319,6 +319,8 @@ func (u *UIDList) AddTo(b *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return task.UidListEnd(b)
 }
 
+// ToProto converts UIDList to a proto. It is only temporary.
+// TODO: Get rid of this in the next PR that will remove algo.UIDList.
 func (u *UIDList) ToProto() *taskpb.UIDList {
 	if u.uints != nil {
 		return u.uints

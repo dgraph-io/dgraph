@@ -438,10 +438,9 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 			return nil, err
 		}
 	} else {
+		// euid is the root UID.
 		sg.SrcUIDs = algo.NewUIDList([]uint64{euid})
-		if euid != 0 {
-			sg.uidMatrix = []*algo.UIDList{algo.NewUIDList([]uint64{euid})}
-		}
+		sg.uidMatrix = []*algo.UIDList{algo.NewUIDList([]uint64{euid})}
 	}
 	sg.values = createNilValuesList(1)
 	return sg, nil
@@ -517,9 +516,14 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, taskQuery []byte, rch chan 
 	var err error
 	if taskQuery != nil {
 		data, err := worker.ProcessTaskOverNetwork(ctx, taskQuery)
-		result := new(taskpb.Result)
-		if result.Unmarshal(data) != nil {
+		if err != nil {
 			x.TraceError(ctx, x.Wrapf(err, "Error while processing task"))
+			rch <- err
+			return
+		}
+		result := new(taskpb.Result)
+		if err = result.Unmarshal(data); err != nil {
+			x.TraceError(ctx, x.Wrapf(err, "Error while unmarshalling task.Result"))
 			rch <- err
 			return
 		}

@@ -91,6 +91,9 @@ func processTask(query []byte) ([]byte, error) {
 
 	var emptyUIDList *taskpb.UIDList // For handling _count_ only.
 	if q.GetCount() == 1 {
+		// If just getting counts, we do not need to return a UID matrix. But for
+		// consistency, we return a UID matrix with empty rows. We prepare this
+		// empty row here.
 		emptyUIDList = new(taskpb.UIDList)
 	}
 
