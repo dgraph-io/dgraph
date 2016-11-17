@@ -134,16 +134,10 @@ type params struct {
 // query and the response. Once generated, this can then be encoded to other
 // client convenient formats, like GraphQL / JSON.
 type SubGraph struct {
-	Attr     string
-	Children []*SubGraph
-	Params   params
-	Filter   *gql.FilterTree
-
-	//resultBuf []byte // task.Result
-
-	//counts    *task.CountList
-	//	values    *task.ValueList
-
+	Attr      string
+	Children  []*SubGraph
+	Params    params
+	Filter    *gql.FilterTree
 	counts    *taskpb.CountList
 	values    *taskpb.ValueList
 	uidMatrix []*algo.UIDList // TODO: This will be replaced with taskpb.UIDList.
