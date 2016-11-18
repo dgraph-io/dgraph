@@ -641,7 +641,6 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		}
 	}
 
-	// First iterate over the value nodes and check for validity.
 	childChan := make(chan error, len(sg.Children))
 	for i := 0; i < len(sg.Children); i++ {
 		child := sg.Children[i]
