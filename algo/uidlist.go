@@ -8,6 +8,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
+// NewUIDList returns a task.UIDList with given []uint64, for convenience.
 func NewUIDList(data []uint64) *task.UIDList {
 	return &task.UIDList{Uids: data}
 }
