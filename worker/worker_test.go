@@ -86,12 +86,10 @@ func populateGraph(t *testing.T) {
 	addEdge(t, edge, getOrCreate(posting.Key(10, "friend")))
 }
 
-func taskValues(t *testing.T, v *task.ValueList) []string {
-	out := make([]string, v.ValuesLength())
-	for i := 0; i < v.ValuesLength(); i++ {
-		var tv task.Value
-		require.True(t, v.Values(&tv, i))
-		out[i] = string(tv.ValBytes())
+func taskValues(t *testing.T, v []*task.Value) []string {
+	out := make([]string, len(v))
+	for i, tv := range v {
+		out[i] = string(tv.Val)
 	}
 	return out
 }
@@ -121,13 +119,14 @@ func TestProcessTask(t *testing.T) {
 	result, err := processTask(query)
 	require.NoError(t, err)
 
-	r := task.GetRootAsResult(result, 0)
+	r := new(task.Result)
+	require.NoError(t, r.Unmarshal(result))
 	require.EqualValues(t,
 		[][]uint64{
 			[]uint64{23, 31},
 			[]uint64{23},
 			[]uint64{23, 25, 26, 31},
-		}, algo.ToUintsListForTest(algo.FromTaskResult(r)))
+		}, algo.ToUintsListForTest(algo.FromTaskResultProto(r)))
 }
 
 // newQuery creates a Query flatbuffer table, serializes and returns it.
@@ -181,11 +180,13 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 	result, err := processTask(query)
 	require.NoError(t, err)
 
-	r := task.GetRootAsResult(result, 0)
+	r := new(task.Result)
+	require.NoError(t, r.Unmarshal(result))
+
 	require.EqualValues(t, [][]uint64{
 		[]uint64{},
 		[]uint64{10, 12},
-	}, algo.ToUintsListForTest(algo.FromTaskResult(r)))
+	}, algo.ToUintsListForTest(algo.FromTaskResultProto(r)))
 
 	// Now try changing 12's friend value from "photon" to "notphoton_extra" to
 	// "notphoton".
@@ -205,14 +206,15 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 	query = newQuery("friend", nil, []string{"hey", "photon", "notphoton", "notphoton_extra"})
 	result, err = processTask(query)
 	require.NoError(t, err)
+	r = new(task.Result)
+	require.NoError(t, r.Unmarshal(result))
 
-	r = task.GetRootAsResult(result, 0)
 	require.EqualValues(t, [][]uint64{
 		[]uint64{},
 		[]uint64{10},
 		[]uint64{12},
 		[]uint64{},
-	}, algo.ToUintsListForTest(algo.FromTaskResult(r)))
+	}, algo.ToUintsListForTest(algo.FromTaskResultProto(r)))
 
 	// Try deleting.
 	edge = x.DirectedEdge{
@@ -239,12 +241,14 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 	result, err = processTask(query)
 	require.NoError(t, err)
 
-	r = task.GetRootAsResult(result, 0)
+	r = new(task.Result)
+	require.NoError(t, r.Unmarshal(result))
+
 	require.EqualValues(t, [][]uint64{
 		[]uint64{},
 		[]uint64{},
 		[]uint64{12},
-	}, algo.ToUintsListForTest(algo.FromTaskResult(r)))
+	}, algo.ToUintsListForTest(algo.FromTaskResultProto(r)))
 
 	// Final touch: Merge everything to RocksDB.
 	posting.MergeLists(10)
@@ -254,12 +258,14 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 	result, err = processTask(query)
 	require.NoError(t, err)
 
-	r = task.GetRootAsResult(result, 0)
+	r = new(task.Result)
+	require.NoError(t, r.Unmarshal(result))
+
 	require.EqualValues(t, [][]uint64{
 		[]uint64{},
 		[]uint64{},
 		[]uint64{12},
-	}, algo.ToUintsListForTest(algo.FromTaskResult(r)))
+	}, algo.ToUintsListForTest(algo.FromTaskResultProto(r)))
 }
 
 // Index-related test. Similar to TestProcessTaskIndeMLayer except we call
@@ -273,11 +279,13 @@ func TestProcessTaskIndex(t *testing.T) {
 	result, err := processTask(query)
 	require.NoError(t, err)
 
-	r := task.GetRootAsResult(result, 0)
+	r := new(task.Result)
+	require.NoError(t, r.Unmarshal(result))
+
 	require.EqualValues(t, [][]uint64{
 		[]uint64{},
 		[]uint64{10, 12},
-	}, algo.ToUintsListForTest(algo.FromTaskResult(r)))
+	}, algo.ToUintsListForTest(algo.FromTaskResultProto(r)))
 
 	posting.MergeLists(10)
 	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
@@ -301,13 +309,15 @@ func TestProcessTaskIndex(t *testing.T) {
 	result, err = processTask(query)
 	require.NoError(t, err)
 
-	r = task.GetRootAsResult(result, 0)
+	r = new(task.Result)
+	require.NoError(t, r.Unmarshal(result))
+
 	require.EqualValues(t, [][]uint64{
 		[]uint64{},
 		[]uint64{10},
 		[]uint64{12},
 		[]uint64{},
-	}, algo.ToUintsListForTest(algo.FromTaskResult(r)))
+	}, algo.ToUintsListForTest(algo.FromTaskResultProto(r)))
 
 	posting.MergeLists(10)
 	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
@@ -337,12 +347,14 @@ func TestProcessTaskIndex(t *testing.T) {
 	result, err = processTask(query)
 	require.NoError(t, err)
 
-	r = task.GetRootAsResult(result, 0)
+	r = new(task.Result)
+	require.NoError(t, r.Unmarshal(result))
+
 	require.EqualValues(t, [][]uint64{
 		[]uint64{},
 		[]uint64{},
 		[]uint64{12},
-	}, algo.ToUintsListForTest(algo.FromTaskResult(r)))
+	}, algo.ToUintsListForTest(algo.FromTaskResultProto(r)))
 }
 
 func populateGraphForSort(t *testing.T, ps *store.Store) {

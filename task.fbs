@@ -1,3 +1,5 @@
+// flatc --go task.fbs
+
 namespace task;
 
 table Query {
@@ -16,15 +18,6 @@ table Query {
 	toIntersect:UidList;
 }
 
-table Value {
-	val:[ubyte];
-	valType:ubyte;
-}
-
-table ValueList {
-	values:[Value];
-}
-
 table Num {
 	group:uint;
 	val:int;
@@ -33,16 +26,6 @@ table Num {
 
 table UidList {
 	uids:[ulong];
-}
-
-table CountList {
-	count:[uint];
-}
-
-table Result {
-	uidmatrix:[UidList];
-	values:ValueList;
-	count:CountList;
 }
 
 table KV {

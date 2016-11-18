@@ -65,11 +65,11 @@ func fetchIndexEntries(ctx context.Context, attr string, tokens []string) (*algo
 		}
 	}
 
-	x.AssertTrue(len(sg.UIDMatrix()) == len(tokens))
-	return algo.MergeLists(sg.UIDMatrix()), nil
+	x.AssertTrue(len(sg.uidMatrix) == len(tokens))
+	return algo.MergeLists(sg.uidMatrix), nil
 }
 
-func fetchValues(ctx context.Context, attr string, uids *algo.UIDList) (*task.ValueList, error) {
+func fetchValues(ctx context.Context, attr string, uids *algo.UIDList) ([]*task.Value, error) {
 	sg := &SubGraph{Attr: attr}
 	sgChan := make(chan error, 1)
 
@@ -85,24 +85,19 @@ func fetchValues(ctx context.Context, attr string, uids *algo.UIDList) (*task.Va
 		}
 	}
 
-	values := sg.Values()
-	x.AssertTrue(values.ValuesLength() == uids.Size())
-	return values, nil
+	x.AssertTrue(len(sg.values) == uids.Size())
+	return sg.values, nil
 }
 
-func filterUIDs(uids *algo.UIDList, values *task.ValueList, q *geo.QueryData) *algo.UIDList {
-	x.AssertTrue(values.ValuesLength() == uids.Size())
+func filterUIDs(uids *algo.UIDList, values []*task.Value, q *geo.QueryData) *algo.UIDList {
+	x.AssertTrue(len(values) == uids.Size())
 	var rv []uint64
-	for i := 0; i < values.ValuesLength(); i++ {
-		var tv task.Value
-		if ok := values.Values(&tv, i); !ok {
-			continue
-		}
-		valBytes := tv.ValBytes()
+	for i, tv := range values {
+		valBytes := tv.Val
 		if bytes.Equal(valBytes, nil) {
 			continue
 		}
-		vType := tv.ValType()
+		vType := tv.ValType
 		if types.TypeID(vType) != types.GeoID {
 			continue
 		}
