@@ -198,11 +198,13 @@ func processToJSON(t *testing.T, query string) string {
 	ctx := context.Background()
 	sg, err := ToSubGraph(ctx, gq)
 	require.NoError(t, err)
+	sg.DebugPrint("")
 
 	ch := make(chan error)
 	go ProcessGraph(ctx, sg, nil, ch)
 	err = <-ch
 	require.NoError(t, err)
+	sg.DebugPrint("")
 
 	var l Latency
 	js, err := sg.ToJSON(&l)

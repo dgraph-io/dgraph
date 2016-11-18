@@ -152,6 +152,17 @@ type SubGraph struct {
 	DestUIDs *algo.UIDList
 }
 
+func (sg *SubGraph) DebugPrint(prefix string) {
+	fmt.Printf("%s[%q Func:%v SrcUids:%v Op:%q Dest:%v]\n",
+		prefix, sg.Attr, sg.SrcFunc, sg.SrcUIDs.Size(), sg.FilterOp, sg.uidMatrix)
+	for _, f := range sg.Filters {
+		f.DebugPrint(prefix + "|-f->")
+	}
+	for _, c := range sg.Children {
+		c.DebugPrint(prefix + "|->")
+	}
+}
+
 // getValue gets the value from the task.
 func getValue(tv *task.Value) (types.Value, error) {
 	vType := tv.ValType
@@ -453,7 +464,9 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		Params: args,
 	}
 	if gq.Func != nil {
-		filterCopy(sg, gq.Filter)
+		sg.Attr = gq.Func.Attr
+		sg.SrcFunc = append(sg.SrcFunc, gq.Func.Name)
+		sg.SrcFunc = append(sg.SrcFunc, gq.Func.Args...)
 	}
 	if euid > 0 {
 		// euid is the root UID.
@@ -587,6 +600,11 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		// it won't have any attribute to work on.
 		sg.DestUIDs = sg.SrcUIDs
 
+	} else if parent == nil && len(sg.SrcFunc) == 0 {
+		// I am root. I don't have any function to execute, and my
+		// result has been prepared for me already.
+		sg.DestUIDs = algo.MergeLists(sg.uidMatrix) // Could also be = sg.SrcUIDs
+
 	} else {
 		taskQuery := createTaskQuery(sg, tokens, intersect)
 		data, err := worker.ProcessTaskOverNetwork(ctx, taskQuery)
@@ -635,7 +653,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 
 	if sg.DestUIDs.Size() == 0 {
 		// Looks like we're done here. Be careful with nil srcUIDs!
-		x.Trace(ctx, "Zero uids. Num attr children: %v", len(sg.Children))
+		x.Trace(ctx, "Zero uids for %q. Num attr children: %v", sg.Attr, len(sg.Children))
 		rch <- nil
 		return
 	}
