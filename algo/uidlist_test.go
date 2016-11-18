@@ -19,201 +19,164 @@ package algo
 import (
 	"testing"
 
-	"github.com/google/flatbuffers/go"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgraph/task"
 )
 
-func toArray(u *UIDList) []uint64 {
-	n := u.Size()
-	out := make([]uint64, 0, n)
-	for i := 0; i < n; i++ {
-		out = append(out, u.Get(i))
-	}
-	return out
-}
-
-func newListFromTask(a []uint64) *UIDList {
-	b := flatbuffers.NewBuilder(0)
-	task.UidListStartUidsVector(b, len(a))
-	for i := len(a) - 1; i >= 0; i-- {
-		b.PrependUint64(a[i])
-	}
-	ve := b.EndVector(len(a))
-	task.UidListStart(b)
-	task.UidListAddUids(b, ve)
-	b.Finish(task.UidListEnd(b))
-	data := b.FinishedBytes()
-
-	ulist := task.GetRootAsUidList(data, 0)
-	out := new(UIDList)
-	out.FromTask(ulist)
-	return out
-}
-
-func TestEqual(t *testing.T) {
-	input1 := newListFromTask([]uint64{5, 8, 13})
-	input2 := NewUIDList([]uint64{5, 8, 13})
-	require.Equal(t, toArray(input1), toArray(input2))
-
-	input3 := NewUIDList([]uint64{5, 8, 12})
-	require.NotEqual(t, toArray(input1), toArray(input3))
-}
-
 func TestMergeSorted1(t *testing.T) {
-	input := []*UIDList{
+	input := []*task.UIDList{
 		NewUIDList([]uint64{55}),
 	}
-	require.Equal(t, toArray(MergeLists(input)), []uint64{55})
+	require.Equal(t, MergeSortedLists(input).Uids, []uint64{55})
 }
 
 func TestMergeSorted2(t *testing.T) {
-	input := []*UIDList{
+	input := []*task.UIDList{
 		NewUIDList([]uint64{1, 3, 6, 8, 10}),
 		NewUIDList([]uint64{2, 4, 5, 7, 15}),
 	}
-	require.Equal(t, toArray(MergeLists(input)),
+	require.Equal(t, MergeSortedLists(input).Uids,
 		[]uint64{1, 2, 3, 4, 5, 6, 7, 8, 10, 15})
 }
 
 func TestMergeSorted3(t *testing.T) {
-	input := []*UIDList{
-		newListFromTask([]uint64{1, 3, 6, 8, 10}),
+	input := []*task.UIDList{
+		NewUIDList([]uint64{1, 3, 6, 8, 10}),
 		NewUIDList([]uint64{}),
 	}
-	require.Equal(t, toArray(MergeLists(input)), []uint64{1, 3, 6, 8, 10})
+	require.Equal(t, MergeSortedLists(input).Uids, []uint64{1, 3, 6, 8, 10})
 }
 
 func TestMergeSorted4(t *testing.T) {
-	input := []*UIDList{
-		newListFromTask([]uint64{}),
-		newListFromTask([]uint64{1, 3, 6, 8, 10}),
+	input := []*task.UIDList{
+		NewUIDList([]uint64{}),
+		NewUIDList([]uint64{1, 3, 6, 8, 10}),
 	}
-	require.Equal(t, toArray(MergeLists(input)), []uint64{1, 3, 6, 8, 10})
+	require.Equal(t, MergeSortedLists(input).Uids, []uint64{1, 3, 6, 8, 10})
 }
 
 func TestMergeSorted5(t *testing.T) {
-	input := []*UIDList{
-		newListFromTask([]uint64{}),
-		newListFromTask([]uint64{}),
+	input := []*task.UIDList{
+		NewUIDList([]uint64{}),
+		NewUIDList([]uint64{}),
 	}
-	require.Empty(t, toArray(MergeLists(input)))
+	require.Empty(t, MergeSortedLists(input).Uids)
 }
 
 func TestMergeSorted6(t *testing.T) {
-	input := []*UIDList{
-		newListFromTask([]uint64{11, 13, 16, 18, 20}),
+	input := []*task.UIDList{
+		NewUIDList([]uint64{11, 13, 16, 18, 20}),
 		NewUIDList([]uint64{12, 14, 15, 15, 16, 16, 17, 25}),
 		NewUIDList([]uint64{1, 2}),
 	}
-	require.Equal(t, toArray(MergeLists(input)),
+	require.Equal(t, MergeSortedLists(input).Uids,
 		[]uint64{1, 2, 11, 12, 13, 14, 15, 16, 17, 18, 20, 25})
 }
 
 func TestMergeSorted7(t *testing.T) {
-	input := []*UIDList{
-		newListFromTask([]uint64{5, 6, 7}),
+	input := []*task.UIDList{
+		NewUIDList([]uint64{5, 6, 7}),
 		NewUIDList([]uint64{3, 4}),
-		newListFromTask([]uint64{1, 2}),
+		NewUIDList([]uint64{1, 2}),
 		NewUIDList([]uint64{}),
 	}
-	require.Equal(t, toArray(MergeLists(input)), []uint64{1, 2, 3, 4, 5, 6, 7})
+	require.Equal(t, MergeSortedLists(input).Uids, []uint64{1, 2, 3, 4, 5, 6, 7})
 }
 
 func TestMergeSorted8(t *testing.T) {
-	input := []*UIDList{}
-	require.Empty(t, toArray(MergeLists(input)))
+	input := []*task.UIDList{}
+	require.Empty(t, MergeSortedLists(input).Uids)
 }
 
 func TestMergeSorted9(t *testing.T) {
-	input := []*UIDList{
-		newListFromTask([]uint64{1, 1, 1}),
+	input := []*task.UIDList{
+		NewUIDList([]uint64{1, 1, 1}),
 	}
-	require.Equal(t, toArray(MergeLists(input)), []uint64{1})
+	require.Equal(t, MergeSortedLists(input).Uids, []uint64{1})
 }
 
 func TestMergeSorted10(t *testing.T) {
-	input := []*UIDList{
-		newListFromTask([]uint64{1, 2, 3, 3, 6}),
-		newListFromTask([]uint64{4, 8, 9}),
+	input := []*task.UIDList{
+		NewUIDList([]uint64{1, 2, 3, 3, 6}),
+		NewUIDList([]uint64{4, 8, 9}),
 	}
-	require.Equal(t, toArray(MergeLists(input)), []uint64{1, 2, 3, 4, 6, 8, 9})
+	require.Equal(t, MergeSortedLists(input).Uids, []uint64{1, 2, 3, 4, 6, 8, 9})
 }
 
 func TestIntersectSorted1(t *testing.T) {
-	input := []*UIDList{
-		newListFromTask([]uint64{1, 2, 3}),
+	input := []*task.UIDList{
+		NewUIDList([]uint64{1, 2, 3}),
 		NewUIDList([]uint64{2, 3, 4, 5}),
 	}
-	require.Equal(t, toArray(IntersectLists(input)), []uint64{2, 3})
+	require.Equal(t, IntersectSortedLists(input).Uids, []uint64{2, 3})
 }
 
 func TestIntersectSorted2(t *testing.T) {
-	input := []*UIDList{
-		newListFromTask([]uint64{1, 2, 3}),
+	input := []*task.UIDList{
+		NewUIDList([]uint64{1, 2, 3}),
 	}
-	require.Equal(t, toArray(IntersectLists(input)), []uint64{1, 2, 3})
+	require.Equal(t, IntersectSortedLists(input).Uids, []uint64{1, 2, 3})
 }
 
 func TestIntersectSorted3(t *testing.T) {
-	input := []*UIDList{}
-	require.Empty(t, toArray(IntersectLists(input)))
+	input := []*task.UIDList{}
+	require.Empty(t, IntersectSortedLists(input).Uids)
 }
 
 func TestIntersectSorted4(t *testing.T) {
-	input := []*UIDList{
+	input := []*task.UIDList{
 		NewUIDList([]uint64{100, 101}),
 	}
-	require.Equal(t, toArray(IntersectLists(input)), []uint64{100, 101})
+	require.Equal(t, IntersectSortedLists(input).Uids, []uint64{100, 101})
 }
 
 func TestIntersectSorted5(t *testing.T) {
-	input := []*UIDList{
+	input := []*task.UIDList{
 		NewUIDList([]uint64{1, 2, 3}),
-		newListFromTask([]uint64{2, 3, 4, 5}),
+		NewUIDList([]uint64{2, 3, 4, 5}),
 		NewUIDList([]uint64{4, 5, 6}),
 	}
-	require.Empty(t, toArray(IntersectLists(input)))
+	require.Empty(t, IntersectSortedLists(input).Uids)
 }
 
 func TestUIDListIntersect1(t *testing.T) {
 	u := NewUIDList([]uint64{1, 2, 3})
-	v := newListFromTask([]uint64{})
-	u.Intersect(v)
-	require.Empty(t, toArray(u))
+	v := NewUIDList([]uint64{})
+	IntersectSorted(u, v)
+	require.Empty(t, u.Uids)
 }
 
 func TestUIDListIntersect2(t *testing.T) {
 	u := NewUIDList([]uint64{1, 2, 3})
-	v := newListFromTask([]uint64{1, 2, 3, 4, 5})
-	u.Intersect(v)
-	require.Equal(t, toArray(u), []uint64{1, 2, 3})
+	v := NewUIDList([]uint64{1, 2, 3, 4, 5})
+	IntersectSorted(u, v)
+	require.Equal(t, u.Uids, []uint64{1, 2, 3})
 }
 
 func TestUIDListIntersect3(t *testing.T) {
 	u := NewUIDList([]uint64{1, 2, 3})
-	v := newListFromTask([]uint64{2})
-	u.Intersect(v)
-	require.Equal(t, toArray(u), []uint64{2})
+	v := NewUIDList([]uint64{2})
+	IntersectSorted(u, v)
+	require.Equal(t, u.Uids, []uint64{2})
 }
 
 func TestUIDListIntersect4(t *testing.T) {
 	u := NewUIDList([]uint64{1, 2, 3})
-	v := newListFromTask([]uint64{0, 5})
-	u.Intersect(v)
-	require.Empty(t, toArray(u))
+	v := NewUIDList([]uint64{0, 5})
+	IntersectSorted(u, v)
+	require.Empty(t, u.Uids)
 }
 
 func TestUIDListIntersect5(t *testing.T) {
 	u := NewUIDList([]uint64{1, 2, 3})
-	v := newListFromTask([]uint64{3, 5})
-	u.Intersect(v)
-	require.Equal(t, toArray(u), []uint64{3})
+	v := NewUIDList([]uint64{3, 5})
+	IntersectSorted(u, v)
+	require.Equal(t, u.Uids, []uint64{3})
 }
 
 func TestApplyFilterUint(t *testing.T) {
 	u := NewUIDList([]uint64{1, 2, 3, 4, 5})
-	u.ApplyFilter(func(a uint64, idx int) bool { return (a % 2) == 1 })
-	require.Equal(t, toArray(u), []uint64{1, 3, 5})
+	ApplyFilter(u, func(a uint64, idx int) bool { return (a % 2) == 1 })
+	require.Equal(t, u.Uids, []uint64{1, 3, 5})
 }
