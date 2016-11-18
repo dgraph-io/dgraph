@@ -37,7 +37,7 @@ message Result {
 message Sort {
 	string attr = 1;
 	repeated UIDList uidMatrix = 2;
-	int32 count = 3;  // Return this many elements.
+	int32 count = 3;   // Return this many elements.
 	int32 offset = 4;  // Skip this many elements.
 }
 
