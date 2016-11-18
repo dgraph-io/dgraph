@@ -11,8 +11,6 @@
 	It has these top-level messages:
 		UIDList
 		Value
-		ValueList
-		CountList
 		Result
 */
 package task
@@ -53,42 +51,16 @@ func (m *Value) String() string            { return proto.CompactTextString(m) }
 func (*Value) ProtoMessage()               {}
 func (*Value) Descriptor() ([]byte, []int) { return fileDescriptorTask, []int{1} }
 
-type ValueList struct {
-	Values []*Value `protobuf:"bytes,1,rep,name=values" json:"values,omitempty"`
-}
-
-func (m *ValueList) Reset()                    { *m = ValueList{} }
-func (m *ValueList) String() string            { return proto.CompactTextString(m) }
-func (*ValueList) ProtoMessage()               {}
-func (*ValueList) Descriptor() ([]byte, []int) { return fileDescriptorTask, []int{2} }
-
-func (m *ValueList) GetValues() []*Value {
-	if m != nil {
-		return m.Values
-	}
-	return nil
-}
-
-type CountList struct {
-	// Most counts might be small.
-	Count []uint32 `protobuf:"varint,1,rep,packed,name=count" json:"count,omitempty"`
-}
-
-func (m *CountList) Reset()                    { *m = CountList{} }
-func (m *CountList) String() string            { return proto.CompactTextString(m) }
-func (*CountList) ProtoMessage()               {}
-func (*CountList) Descriptor() ([]byte, []int) { return fileDescriptorTask, []int{3} }
-
 type Result struct {
 	UidMatrix []*UIDList `protobuf:"bytes,1,rep,name=uidMatrix" json:"uidMatrix,omitempty"`
-	Values    *ValueList `protobuf:"bytes,2,opt,name=values" json:"values,omitempty"`
-	Counts    *CountList `protobuf:"bytes,3,opt,name=counts" json:"counts,omitempty"`
+	Values    []*Value   `protobuf:"bytes,2,rep,name=values" json:"values,omitempty"`
+	Counts    []uint32   `protobuf:"varint,3,rep,packed,name=counts" json:"counts,omitempty"`
 }
 
 func (m *Result) Reset()                    { *m = Result{} }
 func (m *Result) String() string            { return proto.CompactTextString(m) }
 func (*Result) ProtoMessage()               {}
-func (*Result) Descriptor() ([]byte, []int) { return fileDescriptorTask, []int{4} }
+func (*Result) Descriptor() ([]byte, []int) { return fileDescriptorTask, []int{2} }
 
 func (m *Result) GetUidMatrix() []*UIDList {
 	if m != nil {
@@ -97,16 +69,9 @@ func (m *Result) GetUidMatrix() []*UIDList {
 	return nil
 }
 
-func (m *Result) GetValues() *ValueList {
+func (m *Result) GetValues() []*Value {
 	if m != nil {
 		return m.Values
-	}
-	return nil
-}
-
-func (m *Result) GetCounts() *CountList {
-	if m != nil {
-		return m.Counts
 	}
 	return nil
 }
@@ -114,8 +79,6 @@ func (m *Result) GetCounts() *CountList {
 func init() {
 	proto.RegisterType((*UIDList)(nil), "task.UIDList")
 	proto.RegisterType((*Value)(nil), "task.Value")
-	proto.RegisterType((*ValueList)(nil), "task.ValueList")
-	proto.RegisterType((*CountList)(nil), "task.CountList")
 	proto.RegisterType((*Result)(nil), "task.Result")
 }
 func (m *UIDList) Marshal() (data []byte, err error) {
@@ -188,71 +151,6 @@ func (m *Value) MarshalTo(data []byte) (int, error) {
 	return i, nil
 }
 
-func (m *ValueList) Marshal() (data []byte, err error) {
-	size := m.Size()
-	data = make([]byte, size)
-	n, err := m.MarshalTo(data)
-	if err != nil {
-		return nil, err
-	}
-	return data[:n], nil
-}
-
-func (m *ValueList) MarshalTo(data []byte) (int, error) {
-	var i int
-	_ = i
-	var l int
-	_ = l
-	if len(m.Values) > 0 {
-		for _, msg := range m.Values {
-			data[i] = 0xa
-			i++
-			i = encodeVarintTask(data, i, uint64(msg.Size()))
-			n, err := msg.MarshalTo(data[i:])
-			if err != nil {
-				return 0, err
-			}
-			i += n
-		}
-	}
-	return i, nil
-}
-
-func (m *CountList) Marshal() (data []byte, err error) {
-	size := m.Size()
-	data = make([]byte, size)
-	n, err := m.MarshalTo(data)
-	if err != nil {
-		return nil, err
-	}
-	return data[:n], nil
-}
-
-func (m *CountList) MarshalTo(data []byte) (int, error) {
-	var i int
-	_ = i
-	var l int
-	_ = l
-	if len(m.Count) > 0 {
-		data2 := make([]byte, len(m.Count)*10)
-		var j1 int
-		for _, num := range m.Count {
-			for num >= 1<<7 {
-				data2[j1] = uint8(uint64(num)&0x7f | 0x80)
-				num >>= 7
-				j1++
-			}
-			data2[j1] = uint8(num)
-			j1++
-		}
-		data[i] = 0xa
-		i++
-		i = encodeVarintTask(data, i, uint64(j1))
-		i += copy(data[i:], data2[:j1])
-	}
-	return i, nil
-}
-
 func (m *Result) Marshal() (data []byte, err error) {
 	size := m.Size()
 	data = make([]byte, size)
@@ -280,25 +178,34 @@ func (m *Result) MarshalTo(data []byte) (int, error) {
 			i += n
 		}
 	}
-	if m.Values != nil {
-		data[i] = 0x12
-		i++
-		i = encodeVarintTask(data, i, uint64(m.Values.Size()))
-		n3, err := m.Values.MarshalTo(data[i:])
-		if err != nil {
-			return 0, err
+	if len(m.Values) > 0 {
+		for _, msg := range m.Values {
+			data[i] = 0x12
+			i++
+			i = encodeVarintTask(data, i, uint64(msg.Size()))
+			n, err := msg.MarshalTo(data[i:])
+			if err != nil {
+				return 0, err
+			}
+			i += n
 		}
-		i += n3
 	}
-	if m.Counts != nil {
+	if len(m.Counts) > 0 {
+		data2 := make([]byte, len(m.Counts)*10)
+		var j1 int
+		for _, num := range m.Counts {
+			for num >= 1<<7 {
+				data2[j1] = uint8(uint64(num)&0x7f | 0x80)
+				num >>= 7
+				j1++
+			}
+			data2[j1] = uint8(num)
+			j1++
+		}
 		data[i] = 0x1a
 		i++
-		i = encodeVarintTask(data, i, uint64(m.Counts.Size()))
-		n4, err := m.Counts.MarshalTo(data[i:])
-		if err != nil {
-			return 0, err
-		}
-		i += n4
+		i = encodeVarintTask(data, i, uint64(j1))
+		i += copy(data[i:], data2[:j1])
 	}
 	return i, nil
 }
@@ -352,31 +259,6 @@ func (m *Value) Size() (n int) {
 	return n
 }
 
-func (m *ValueList) Size() (n int) {
-	var l int
-	_ = l
-	if len(m.Values) > 0 {
-		for _, e := range m.Values {
-			l = e.Size()
-			n += 1 + l + sovTask(uint64(l))
-		}
-	}
-	return n
-}
-
-func (m *CountList) Size() (n int) {
-	var l int
-	_ = l
-	if len(m.Count) > 0 {
-		l = 0
-		for _, e := range m.Count {
-			l += sovTask(uint64(e))
-		}
-		n += 1 + sovTask(uint64(l)) + l
-	}
-	return n
-}
-
 func (m *Result) Size() (n int) {
 	var l int
 	_ = l
@@ -386,13 +268,18 @@ func (m *Result) Size() (n int) {
 			n += 1 + l + sovTask(uint64(l))
 		}
 	}
-	if m.Values != nil {
-		l = m.Values.Size()
-		n += 1 + l + sovTask(uint64(l))
+	if len(m.Values) > 0 {
+		for _, e := range m.Values {
+			l = e.Size()
+			n += 1 + l + sovTask(uint64(l))
+		}
 	}
-	if m.Counts != nil {
-		l = m.Counts.Size()
-		n += 1 + l + sovTask(uint64(l))
+	if len(m.Counts) > 0 {
+		l = 0
+		for _, e := range m.Counts {
+			l += sovTask(uint64(e))
+		}
+		n += 1 + sovTask(uint64(l)) + l
 	}
 	return n
 }
@@ -618,199 +505,6 @@ func (m *Value) Unmarshal(data []byte) error {
 	}
 	return nil
 }
-func (m *ValueList) Unmarshal(data []byte) error {
-	l := len(data)
-	iNdEx := 0
-	for iNdEx < l {
-		preIndex := iNdEx
-		var wire uint64
-		for shift := uint(0); ; shift += 7 {
-			if shift >= 64 {
-				return ErrIntOverflowTask
-			}
-			if iNdEx >= l {
-				return io.ErrUnexpectedEOF
-			}
-			b := data[iNdEx]
-			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
-			if b < 0x80 {
-				break
-			}
-		}
-		fieldNum := int32(wire >> 3)
-		wireType := int(wire & 0x7)
-		if wireType == 4 {
-			return fmt.Errorf("proto: ValueList: wiretype end group for non-group")
-		}
-		if fieldNum <= 0 {
-			return fmt.Errorf("proto: ValueList: illegal tag %d (wire type %d)", fieldNum, wire)
-		}
-		switch fieldNum {
-		case 1:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Values", wireType)
-			}
-			var msglen int
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowTask
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := data[iNdEx]
-				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			if msglen < 0 {
-				return ErrInvalidLengthTask
-			}
-			postIndex := iNdEx + msglen
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			m.Values = append(m.Values, &Value{})
-			if err := m.Values[len(m.Values)-1].Unmarshal(data[iNdEx:postIndex]); err != nil {
-				return err
-			}
-			iNdEx = postIndex
-		default:
-			iNdEx = preIndex
-			skippy, err := skipTask(data[iNdEx:])
-			if err != nil {
-				return err
-			}
-			if skippy < 0 {
-				return ErrInvalidLengthTask
-			}
-			if (iNdEx + skippy) > l {
-				return io.ErrUnexpectedEOF
-			}
-			iNdEx += skippy
-		}
-	}
-
-	if iNdEx > l {
-		return io.ErrUnexpectedEOF
-	}
-	return nil
-}
-func (m *CountList) Unmarshal(data []byte) error {
-	l := len(data)
-	iNdEx := 0
-	for iNdEx < l {
-		preIndex := iNdEx
-		var wire uint64
-		for shift := uint(0); ; shift += 7 {
-			if shift >= 64 {
-				return ErrIntOverflowTask
-			}
-			if iNdEx >= l {
-				return io.ErrUnexpectedEOF
-			}
-			b := data[iNdEx]
-			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
-			if b < 0x80 {
-				break
-			}
-		}
-		fieldNum := int32(wire >> 3)
-		wireType := int(wire & 0x7)
-		if wireType == 4 {
-			return fmt.Errorf("proto: CountList: wiretype end group for non-group")
-		}
-		if fieldNum <= 0 {
-			return fmt.Errorf("proto: CountList: illegal tag %d (wire type %d)", fieldNum, wire)
-		}
-		switch fieldNum {
-		case 1:
-			if wireType == 2 {
-				var packedLen int
-				for shift := uint(0); ; shift += 7 {
-					if shift >= 64 {
-						return ErrIntOverflowTask
-					}
-					if iNdEx >= l {
-						return io.ErrUnexpectedEOF
-					}
-					b := data[iNdEx]
-					iNdEx++
-					packedLen |= (int(b) & 0x7F) << shift
-					if b < 0x80 {
-						break
-					}
-				}
-				if packedLen < 0 {
-					return ErrInvalidLengthTask
-				}
-				postIndex := iNdEx + packedLen
-				if postIndex > l {
-					return io.ErrUnexpectedEOF
-				}
-				for iNdEx < postIndex {
-					var v uint32
-					for shift := uint(0); ; shift += 7 {
-						if shift >= 64 {
-							return ErrIntOverflowTask
-						}
-						if iNdEx >= l {
-							return io.ErrUnexpectedEOF
-						}
-						b := data[iNdEx]
-						iNdEx++
-						v |= (uint32(b) & 0x7F) << shift
-						if b < 0x80 {
-							break
-						}
-					}
-					m.Count = append(m.Count, v)
-				}
-			} else if wireType == 0 {
-				var v uint32
-				for shift := uint(0); ; shift += 7 {
-					if shift >= 64 {
-						return ErrIntOverflowTask
-					}
-					if iNdEx >= l {
-						return io.ErrUnexpectedEOF
-					}
-					b := data[iNdEx]
-					iNdEx++
-					v |= (uint32(b) & 0x7F) << shift
-					if b < 0x80 {
-						break
-					}
-				}
-				m.Count = append(m.Count, v)
-			} else {
-				return fmt.Errorf("proto: wrong wireType = %d for field Count", wireType)
-			}
-		default:
-			iNdEx = preIndex
-			skippy, err := skipTask(data[iNdEx:])
-			if err != nil {
-				return err
-			}
-			if skippy < 0 {
-				return ErrInvalidLengthTask
-			}
-			if (iNdEx + skippy) > l {
-				return io.ErrUnexpectedEOF
-			}
-			iNdEx += skippy
-		}
-	}
-
-	if iNdEx > l {
-		return io.ErrUnexpectedEOF
-	}
-	return nil
-}
 func (m *Result) Unmarshal(data []byte) error {
 	l := len(data)
 	iNdEx := 0
@@ -897,46 +591,73 @@ func (m *Result) Unmarshal(data []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			if m.Values == nil {
-				m.Values = &ValueList{}
-			}
-			if err := m.Values.Unmarshal(data[iNdEx:postIndex]); err != nil {
+			m.Values = append(m.Values, &Value{})
+			if err := m.Values[len(m.Values)-1].Unmarshal(data[iNdEx:postIndex]); err != nil {
 				return err
 			}
 			iNdEx = postIndex
 		case 3:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Counts", wireType)
-			}
-			var msglen int
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowTask
+			if wireType == 2 {
+				var packedLen int
+				for shift := uint(0); ; shift += 7 {
+					if shift >= 64 {
+						return ErrIntOverflowTask
+					}
+					if iNdEx >= l {
+						return io.ErrUnexpectedEOF
+					}
+					b := data[iNdEx]
+					iNdEx++
+					packedLen |= (int(b) & 0x7F) << shift
+					if b < 0x80 {
+						break
+					}
 				}
-				if iNdEx >= l {
+				if packedLen < 0 {
+					return ErrInvalidLengthTask
+				}
+				postIndex := iNdEx + packedLen
+				if postIndex > l {
 					return io.ErrUnexpectedEOF
 				}
-				b := data[iNdEx]
-				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
-				if b < 0x80 {
-					break
+				for iNdEx < postIndex {
+					var v uint32
+					for shift := uint(0); ; shift += 7 {
+						if shift >= 64 {
+							return ErrIntOverflowTask
+						}
+						if iNdEx >= l {
+							return io.ErrUnexpectedEOF
+						}
+						b := data[iNdEx]
+						iNdEx++
+						v |= (uint32(b) & 0x7F) << shift
+						if b < 0x80 {
+							break
+						}
+					}
+					m.Counts = append(m.Counts, v)
 				}
+			} else if wireType == 0 {
+				var v uint32
+				for shift := uint(0); ; shift += 7 {
+					if shift >= 64 {
+						return ErrIntOverflowTask
+					}
+					if iNdEx >= l {
+						return io.ErrUnexpectedEOF
+					}
+					b := data[iNdEx]
+					iNdEx++
+					v |= (uint32(b) & 0x7F) << shift
+					if b < 0x80 {
+						break
+					}
+				}
+				m.Counts = append(m.Counts, v)
+			} else {
+				return fmt.Errorf("proto: wrong wireType = %d for field Counts", wireType)
 			}
-			if msglen < 0 {
-				return ErrInvalidLengthTask
-			}
-			postIndex := iNdEx + msglen
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			if m.Counts == nil {
-				m.Counts = &CountList{}
-			}
-			if err := m.Counts.Unmarshal(data[iNdEx:postIndex]); err != nil {
-				return err
-			}
-			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := skipTask(data[iNdEx:])
@@ -1066,21 +787,19 @@ var (
 func init() { proto.RegisterFile("task.proto", fileDescriptorTask) }
 
 var fileDescriptorTask = []byte{
-	// 250 bytes of a gzipped FileDescriptorProto
+	// 212 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0xe2, 0xe2, 0x2a, 0x49, 0x2c, 0xce,
 	0xd6, 0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x17, 0x62, 0x01, 0xb1, 0x95, 0x64, 0xb9, 0xd8, 0x43, 0x3d,
 	0x5d, 0x7c, 0x32, 0x8b, 0x4b, 0x84, 0x84, 0xb8, 0x58, 0x4a, 0x33, 0x53, 0x8a, 0x25, 0x18, 0x15,
 	0x98, 0x35, 0xd8, 0x82, 0xc0, 0x6c, 0x25, 0x63, 0x2e, 0xd6, 0xb0, 0xc4, 0x9c, 0xd2, 0x54, 0x21,
 	0x01, 0x2e, 0xe6, 0xb2, 0xc4, 0x1c, 0x09, 0x46, 0x05, 0x46, 0x0d, 0x9e, 0x20, 0x10, 0x53, 0x48,
 	0x82, 0x8b, 0xbd, 0x2c, 0x31, 0x27, 0xa4, 0xb2, 0x20, 0x55, 0x82, 0x49, 0x81, 0x51, 0x83, 0x37,
-	0x08, 0xc6, 0x55, 0x32, 0xe0, 0xe2, 0x04, 0x6b, 0x02, 0x9b, 0xaa, 0xcc, 0xc5, 0x56, 0x06, 0xe2,
-	0x40, 0xcc, 0xe5, 0x36, 0xe2, 0xd6, 0x03, 0xbb, 0x01, 0xac, 0x20, 0x08, 0x2a, 0xa5, 0xa4, 0xc8,
-	0xc5, 0xe9, 0x9c, 0x5f, 0x9a, 0x57, 0x02, 0xd6, 0x21, 0xc2, 0xc5, 0x9a, 0x0c, 0xe2, 0x80, 0x35,
-	0xf0, 0x06, 0x41, 0x38, 0x4a, 0xed, 0x8c, 0x5c, 0x6c, 0x41, 0xa9, 0xc5, 0xa5, 0x39, 0x25, 0x42,
-	0xda, 0x5c, 0x9c, 0xa5, 0x99, 0x29, 0xbe, 0x89, 0x25, 0x45, 0x99, 0x15, 0x50, 0x53, 0x79, 0x21,
-	0xa6, 0x42, 0xbd, 0x12, 0x84, 0x90, 0x17, 0x52, 0x87, 0xdb, 0x0f, 0x72, 0x25, 0xb7, 0x11, 0x3f,
-	0x92, 0xfd, 0x60, 0xb5, 0x50, 0x69, 0x90, 0x42, 0xb0, 0x4d, 0xc5, 0x12, 0xcc, 0xc8, 0x0a, 0xe1,
-	0xee, 0x0a, 0x82, 0x4a, 0x3b, 0x09, 0x9c, 0x78, 0x24, 0xc7, 0x78, 0xe1, 0x91, 0x1c, 0xe3, 0x83,
-	0x47, 0x72, 0x8c, 0x33, 0x1e, 0xcb, 0x31, 0x24, 0xb1, 0x81, 0x43, 0xd4, 0x18, 0x10, 0x00, 0x00,
-	0xff, 0xff, 0x2b, 0x23, 0x2c, 0xf5, 0x5f, 0x01, 0x00, 0x00,
+	0x08, 0xc6, 0x55, 0x2a, 0xe2, 0x62, 0x0b, 0x4a, 0x2d, 0x2e, 0xcd, 0x29, 0x11, 0xd2, 0xe6, 0xe2,
+	0x2c, 0xcd, 0x4c, 0xf1, 0x4d, 0x2c, 0x29, 0xca, 0xac, 0x00, 0x9b, 0xcb, 0x6d, 0xc4, 0xab, 0x07,
+	0x76, 0x03, 0xd4, 0xd2, 0x20, 0x84, 0xbc, 0x90, 0x32, 0x17, 0x5b, 0x19, 0xc8, 0xae, 0x62, 0x09,
+	0x26, 0xb0, 0x4a, 0x6e, 0x88, 0x4a, 0xb0, 0xfd, 0x41, 0x50, 0x29, 0x21, 0x31, 0x2e, 0xb6, 0xe4,
+	0xfc, 0xd2, 0xbc, 0x92, 0x62, 0x09, 0x66, 0x05, 0x66, 0x0d, 0xde, 0x20, 0x28, 0xcf, 0x49, 0xe0,
+	0xc4, 0x23, 0x39, 0xc6, 0x0b, 0x8f, 0xe4, 0x18, 0x1f, 0x3c, 0x92, 0x63, 0x9c, 0xf1, 0x58, 0x8e,
+	0x21, 0x89, 0x0d, 0xec, 0x4d, 0x63, 0x40, 0x00, 0x00, 0x00, 0xff, 0xff, 0x2e, 0x48, 0x8d, 0xbf,
+	0xf4, 0x00, 0x00, 0x00,
 }

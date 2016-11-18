@@ -66,6 +66,7 @@ func ProcessTaskOverNetwork(ctx context.Context, qu []byte) (result []byte, rerr
 }
 
 // processTask processes the query, accumulates and returns the result.
+// TODO: Change input and output to protos from []byte.
 func processTask(query []byte) ([]byte, error) {
 	q := task.GetRootAsQuery(query, 0)
 
@@ -81,13 +82,7 @@ func processTask(query []byte) ([]byte, error) {
 		n = q.UidsLength()
 	}
 
-	countsList := new(task.CountList)
-	valuesList := new(task.ValueList)
-	out := &task.Result{
-		Counts: countsList,
-		Values: valuesList,
-	}
-
+	var out task.Result
 	var emptyUIDList *task.UIDList // For handling _count_ only.
 	if q.GetCount() == 1 {
 		// If just getting counts, we do not need to return a UID matrix. But for
@@ -117,10 +112,10 @@ func processTask(query []byte) ([]byte, error) {
 		} else {
 			newValue.Val = x.Nilbyte
 		}
-		valuesList.Values = append(valuesList.Values, newValue)
+		out.Values = append(out.Values, newValue)
 
 		if q.GetCount() == 1 {
-			countsList.Count = append(countsList.Count, uint32(pl.Length(0)))
+			out.Counts = append(out.Counts, uint32(pl.Length(0)))
 			// Add an empty UID list to make later processing consistent
 			out.UidMatrix = append(out.UidMatrix, emptyUIDList)
 			continue

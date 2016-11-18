@@ -137,8 +137,8 @@ type SubGraph struct {
 	Children  []*SubGraph
 	Params    params
 	Filter    *gql.FilterTree
-	counts    *task.CountList
-	values    *task.ValueList
+	counts    []uint32
+	values    []*task.Value
 	uidMatrix []*algo.UIDList // TODO: This will be replaced with task.UIDList.
 
 	// SrcUIDs is a list of unique source UIDs. They are always copies of destUIDs
@@ -199,8 +199,8 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 		x.AssertTruef(idx >= 0, "Attribute with uid not found in child Query uids")
 		ul := pc.uidMatrix[idx]
 
-		if pc.counts != nil && len(pc.counts.Count) > 0 {
-			c := types.Int32(pc.counts.Count[idx])
+		if len(pc.counts) > 0 {
+			c := types.Int32(pc.counts[idx])
 			uc := dst.New(pc.Attr)
 			uc.AddValue("_count_", &c)
 			dst.AddChild(pc.Attr, uc)
@@ -228,7 +228,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 				dst.AddChild(pc.Attr, uc)
 			}
 		} else {
-			tv := pc.values.GetValues()[idx]
+			tv := pc.values[idx]
 			v, err := getValue(tv)
 			if err != nil {
 				return err
@@ -445,12 +445,10 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	return sg, nil
 }
 
-func createNilValuesList(count int) *task.ValueList {
-	out := &task.ValueList{
-		Values: make([]*task.Value, count),
-	}
+func createNilValuesList(count int) []*task.Value {
+	out := make([]*task.Value, count)
 	for i := 0; i < count; i++ {
-		out.Values[i] = &task.Value{
+		out[i] = &task.Value{
 			Val: x.Nilbyte,
 		}
 	}
@@ -520,7 +518,9 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, taskQuery []byte, rch chan 
 			rch <- err
 			return
 		}
-		result := new(task.Result)
+		var result task.Result
+		// TODO: This unmarshal should be unncessary. Endpoint could return a
+		// Result directly.
 		if err = result.Unmarshal(data); err != nil {
 			x.TraceError(ctx, x.Wrapf(err, "Error while unmarshalling task.Result"))
 			rch <- err
@@ -536,12 +536,12 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, taskQuery []byte, rch chan 
 		}
 
 		sg.values = result.GetValues()
-		if len(sg.values.GetValues()) > 0 {
-			v := sg.values.GetValues()[0]
+		if len(sg.values) > 0 {
+			v := sg.values[0]
 			x.Trace(ctx, "Sample value for attr: %v Val: %v", sg.Attr, string(v.Val))
 		}
 
-		sg.counts = result.GetCounts()
+		sg.counts = result.Counts
 	}
 
 	if sg.Params.GetCount == 1 {
@@ -633,7 +633,7 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, taskQuery []byte, rch chan 
 			}
 			for i := 0; i < sg.DestUIDs.Size(); i++ {
 				uid := sg.DestUIDs.Get(i)
-				tv := node.values.GetValues()[i]
+				tv := node.values[i]
 				valBytes := tv.Val
 				v, err := getValue(tv)
 				if err != nil || bytes.Equal(valBytes, nil) {
