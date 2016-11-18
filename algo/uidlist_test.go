@@ -217,9 +217,3 @@ func TestApplyFilterUint(t *testing.T) {
 	u.ApplyFilter(func(a uint64, idx int) bool { return (a % 2) == 1 })
 	require.Equal(t, toArray(u), []uint64{1, 3, 5})
 }
-
-func TestApplyFilterList(t *testing.T) {
-	u := newListFromTask([]uint64{1, 2, 3, 4, 5})
-	u.ApplyFilter(func(a uint64, idx int) bool { return (a % 2) == 1 })
-	require.Equal(t, toArray(u), []uint64{1, 3, 5})
-}

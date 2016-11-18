@@ -48,12 +48,10 @@ func childAttrs(sg *SubGraph) []string {
 	return out
 }
 
-func taskValues(t *testing.T, v *task.ValueList) []string {
-	out := make([]string, v.ValuesLength())
-	for i := 0; i < v.ValuesLength(); i++ {
-		var tv task.Value
-		require.True(t, v.Values(&tv, i))
-		out[i] = string(tv.ValBytes())
+func taskValues(t *testing.T, v []*task.Value) []string {
+	out := make([]string, len(v))
+	for i, tv := range v {
+		out[i] = string(tv.Val)
 	}
 	return out
 }
@@ -78,7 +76,7 @@ func TestNewGraph(t *testing.T) {
 	require.EqualValues(t,
 		[][]uint64{
 			[]uint64{101},
-		}, algo.ToUintsListForTest(sg.UIDMatrix()))
+		}, algo.ToUintsListForTest(sg.uidMatrix))
 }
 
 const schemaStr = `
@@ -432,19 +430,19 @@ func TestProcessGraph(t *testing.T) {
 	require.EqualValues(t,
 		[][]uint64{
 			[]uint64{23, 24, 25, 31, 101},
-		}, algo.ToUintsListForTest(child.UIDMatrix()))
+		}, algo.ToUintsListForTest(child.uidMatrix))
 
 	require.EqualValues(t, []string{"name"}, childAttrs(child))
 
 	child = child.Children[0]
 	require.EqualValues(t,
 		[]string{"Rick Grimes", "Glenn Rhee", "Daryl Dixon", "Andrea", ""},
-		taskValues(t, child.Values()))
+		taskValues(t, child.values))
 
 	require.EqualValues(t, []string{"Michonne"},
-		taskValues(t, sg.Children[1].Values()))
+		taskValues(t, sg.Children[1].values))
 	require.EqualValues(t, []string{"female"},
-		taskValues(t, sg.Children[2].Values()))
+		taskValues(t, sg.Children[2].values))
 }
 
 func TestToJSON(t *testing.T) {

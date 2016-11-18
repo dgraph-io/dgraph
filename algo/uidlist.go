@@ -14,7 +14,10 @@ import (
 
 // UIDList is a list of UIDs that can be stored in different forms.
 type UIDList struct {
-	uints []uint64
+	// Eventually algo.UIDList will be replaced with task.UIDList. While
+	// migrating from flatbuffers to protos, we will keep this around to make
+	// all tests pass.
+	uints *task.UIDList
 	list  *task.UidList
 }
 
@@ -23,14 +26,16 @@ type UIDList struct {
 // are certain you are allocating on heap, you can use this.
 func NewUIDList(data []uint64) *UIDList {
 	u := new(UIDList)
-	u.FromUints(data)
+	u.uints = new(task.UIDList)
+	u.uints.Uids = data
 	return u
 }
 
 // FromUints initialize UIDList from []uint64.
 func (u *UIDList) FromUints(data []uint64) {
 	x.AssertTrue(u != nil && u.uints == nil && u.list == nil)
-	u.uints = data
+	u.uints = new(task.UIDList)
+	u.uints.Uids = data
 }
 
 // FromTask initialize UIDList from task.UidList.
@@ -39,14 +44,12 @@ func (u *UIDList) FromTask(data *task.UidList) {
 	u.list = data
 }
 
-// FromTaskResult parses task.Result and extracts a []*UIDList.
-func FromTaskResult(r *task.Result) []*UIDList {
-	out := make([]*UIDList, r.UidmatrixLength())
-	for i := 0; i < r.UidmatrixLength(); i++ {
-		tl := new(task.UidList)
-		x.AssertTrue(r.Uidmatrix(tl, i))
+// FromTaskResultProto parses task.Result and extracts a []*UIDList.
+func FromTaskResultProto(r *task.Result) []*UIDList {
+	out := make([]*UIDList, len(r.GetUidMatrix()))
+	for i, tl := range r.GetUidMatrix() {
 		ul := new(UIDList)
-		ul.FromTask(tl)
+		ul.FromUints(tl.Uids)
 		out[i] = ul
 	}
 	return out
@@ -68,13 +71,13 @@ func FromSortResult(r *task.SortResult) []*UIDList {
 // AddSlice adds a list of uint64s to UIDList.
 func (u *UIDList) AddSlice(e []uint64) {
 	x.AssertTrue(u.uints != nil)
-	u.uints = append(u.uints, e...)
+	u.uints.Uids = append(u.uints.Uids, e...)
 }
 
 // Add adds a single uint64 to UIDList.
 func (u *UIDList) Add(e uint64) {
 	x.AssertTrue(u.uints != nil)
-	u.uints = append(u.uints, e)
+	u.uints.Uids = append(u.uints.Uids, e)
 }
 
 // Get returns the i-th element of UIDList.
@@ -82,7 +85,7 @@ func (u *UIDList) Get(i int) uint64 {
 	if u.list != nil {
 		return u.list.Uids(i)
 	}
-	return u.uints[i]
+	return u.uints.Uids[i]
 }
 
 // Size returns size of UIDList.
@@ -96,7 +99,7 @@ func (u *UIDList) Size() int {
 	if u.list != nil {
 		return u.list.UidsLength()
 	}
-	return len(u.uints)
+	return len(u.uints.Uids)
 }
 
 // ApplyFilter applies a filter to our data.
@@ -104,7 +107,7 @@ func (u *UIDList) ApplyFilter(f func(uint64, int) bool) {
 	x.AssertTrue(u != nil && (u.uints != nil || u.list != nil))
 	var out []uint64
 	if u.uints != nil {
-		out = u.uints[:0]
+		out = u.uints.Uids[:0]
 	} else {
 		out = make([]uint64, 0, 30)
 	}
@@ -115,7 +118,7 @@ func (u *UIDList) ApplyFilter(f func(uint64, int) bool) {
 			out = append(out, uid)
 		}
 	}
-	u.uints = out
+	u.uints.Uids = out
 	u.list = nil
 }
 
@@ -123,7 +126,7 @@ func (u *UIDList) ApplyFilter(f func(uint64, int) bool) {
 func (u *UIDList) Slice(start, end int) {
 	x.AssertTrue(u != nil && (u.uints != nil || u.list != nil))
 	if u.uints != nil {
-		u.uints = u.uints[start:end]
+		u.uints.Uids = u.uints.Uids[start:end]
 		return
 	}
 	// This is a task list. Let's copy what we want and convert to a []uint64.
@@ -134,7 +137,7 @@ func (u *UIDList) Slice(start, end int) {
 	for i := start; i < end; i++ {
 		output = append(output, u.list.Uids(i))
 	}
-	u.uints = output
+	u.uints.Uids = output
 	u.list = nil
 }
 
@@ -143,7 +146,7 @@ func (u *UIDList) Intersect(v *UIDList) {
 	x.AssertTrue(u != nil && (u.uints != nil || u.list != nil))
 	var out []uint64
 	if u.uints != nil {
-		out = u.uints[:0]
+		out = u.uints.Uids[:0]
 	} else {
 		n := u.Size()
 		if v.Size() < n {
@@ -163,7 +166,7 @@ func (u *UIDList) Intersect(v *UIDList) {
 			out = append(out, uid)
 		}
 	}
-	u.uints = out
+	u.uints.Uids = out
 	u.list = nil
 }
 
@@ -315,6 +318,21 @@ func (u *UIDList) AddTo(b *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return task.UidListEnd(b)
 }
 
+// ToProto converts UIDList to a proto. It is only temporary.
+// TODO: Get rid of this in the next PR that will remove algo.UIDList.
+func (u *UIDList) ToProto() *task.UIDList {
+	if u.uints != nil {
+		return u.uints
+	}
+	// Convert to proto.
+	out := new(task.UIDList)
+	n := u.Size()
+	for i := 0; i < n; i++ {
+		out.Uids = append(out.Uids, u.Get(i))
+	}
+	return out
+}
+
 // DebugString returns a debug string for UIDList.
 func (u *UIDList) DebugString() string {
 	var b bytes.Buffer
@@ -347,5 +365,5 @@ func ToUintsListForTest(ul []*UIDList) [][]uint64 {
 // Swap swaps two elements. Logs fatal if UIDList is not stored as []uint64.
 func (u *UIDList) Swap(i, j int) {
 	x.AssertTrue(u.uints != nil)
-	u.uints[i], u.uints[j] = u.uints[j], u.uints[i]
+	u.uints.Uids[i], u.uints.Uids[j] = u.uints.Uids[j], u.uints.Uids[i]
 }
