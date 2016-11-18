@@ -19,7 +19,6 @@ package worker
 import (
 	"golang.org/x/net/context"
 
-	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/task"
@@ -27,18 +26,22 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
+var (
+	emptyUIDList task.UIDList
+	emptyResult  task.Result
+)
+
 // ProcessTaskOverNetwork is used to process the query and get the result from
 // the instance which stores posting list corresponding to the predicate in the
 // query.
-func ProcessTaskOverNetwork(ctx context.Context, qu []byte) (result []byte, rerr error) {
-	q := task.GetRootAsQuery(qu, 0)
-	attr := string(q.Attr())
+func ProcessTaskOverNetwork(ctx context.Context, q *task.Query) (*task.Result, error) {
+	attr := q.Attr
 	gid := group.BelongsTo(attr)
 	x.Trace(ctx, "attr: %v groupId: %v", attr, gid)
 
 	if groups().ServesGroup(gid) {
 		// No need for a network call, as this should be run from within this instance.
-		return processTask(qu)
+		return processTask(q)
 	}
 
 	// Send this over the network.
@@ -48,55 +51,45 @@ func ProcessTaskOverNetwork(ctx context.Context, qu []byte) (result []byte, rerr
 
 	conn, err := pl.Get()
 	if err != nil {
-		return result, x.Wrapf(err, "ProcessTaskOverNetwork: while retrieving connection.")
+		return &emptyResult, x.Wrapf(err, "ProcessTaskOverNetwork: while retrieving connection.")
 	}
 	defer pl.Put(conn)
 	x.Trace(ctx, "Sending request to %v", addr)
 
 	c := NewWorkerClient(conn)
-	reply, err := c.ServeTask(ctx, &Payload{Data: qu})
+	reply, err := c.ServeTask(ctx, q)
 	if err != nil {
 		x.TraceError(ctx, x.Wrapf(err, "Error while calling Worker.ServeTask"))
-		return []byte(""), err
+		return &emptyResult, err
 	}
 
 	x.Trace(ctx, "Reply from server. length: %v Addr: %v Attr: %v",
-		len(reply.Data), addr, attr)
-	return reply.Data, nil
+		len(reply.UidMatrix), addr, attr)
+	return reply, nil
 }
 
 // processTask processes the query, accumulates and returns the result.
 // TODO: Change input and output to protos from []byte.
-func processTask(query []byte) ([]byte, error) {
-	q := task.GetRootAsQuery(query, 0)
+func processTask(q *task.Query) (*task.Result, error) {
+	attr := q.Attr
+	x.AssertTruef(len(q.Uids) == 0 || len(q.Tokens) == 0,
+		"At least one of Uids and Term should be empty: %d vs %d", len(q.Uids), len(q.Tokens))
 
-	attr := string(q.Attr())
-	x.AssertTruef(q.UidsLength() == 0 || q.TokensLength() == 0,
-		"At least one of Uids and Term should be empty: %d vs %d", q.UidsLength(), q.TokensLength())
-
-	useTerm := q.TokensLength() > 0
+	useTerm := len(q.Tokens) > 0
 	var n int
 	if useTerm {
-		n = q.TokensLength()
+		n = len(q.Tokens)
 	} else {
-		n = q.UidsLength()
+		n = len(q.Uids)
 	}
 
 	var out task.Result
-	var emptyUIDList *task.UIDList // For handling _count_ only.
-	if q.GetCount() == 1 {
-		// If just getting counts, we do not need to return a UID matrix. But for
-		// consistency, we return a UID matrix with empty rows. We prepare this
-		// empty row here.
-		emptyUIDList = new(task.UIDList)
-	}
-
 	for i := 0; i < n; i++ {
 		var key []byte
 		if useTerm {
-			key = types.IndexKey(attr, string(q.Tokens(i)))
+			key = types.IndexKey(attr, q.Tokens[i])
 		} else {
-			key = posting.Key(q.Uids(i), attr)
+			key = posting.Key(q.Uids[i], attr)
 		}
 		// Get or create the posting list for an entity, attribute combination.
 		pl, decr := posting.GetOrCreate(key)
@@ -114,52 +107,42 @@ func processTask(query []byte) ([]byte, error) {
 		}
 		out.Values = append(out.Values, newValue)
 
-		if q.GetCount() == 1 {
+		if q.DoCount == 1 {
 			out.Counts = append(out.Counts, uint32(pl.Length(0)))
 			// Add an empty UID list to make later processing consistent
-			out.UidMatrix = append(out.UidMatrix, emptyUIDList)
+			out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
 			continue
 		}
 
 		// The more usual case: Getting the UIDs.
 		opts := posting.ListOptions{
-			AfterUID: uint64(q.AfterUid()),
+			AfterUID: uint64(q.AfterUid),
 		}
-
-		// Get taskQuery.ToIntersect field.
-		taskList := new(task.UidList)
-		if q.ToIntersect(taskList) != nil {
-			opts.Intersect = new(algo.UIDList)
-			opts.Intersect.FromTask(taskList)
+		if q.ToIntersect != nil {
+			opts.Intersect = &task.UIDList{Uids: q.ToIntersect}
 		}
-		out.UidMatrix = append(out.UidMatrix, pl.Uids(opts).ToProto())
+		out.UidMatrix = append(out.UidMatrix, pl.Uids(opts))
 	}
-
-	outB, err := out.Marshal()
-	if err != nil {
-		return nil, err
-	}
-	return outB, nil
+	return &out, nil
 }
 
 // ServeTask is used to respond to a query.
-func (w *grpcWorker) ServeTask(ctx context.Context, query *Payload) (*Payload, error) {
+func (w *grpcWorker) ServeTask(ctx context.Context, q *task.Query) (*task.Result, error) {
 	if ctx.Err() != nil {
-		return &Payload{}, ctx.Err()
+		return &emptyResult, ctx.Err()
 	}
 
-	q := task.GetRootAsQuery(query.Data, 0)
-	gid := group.BelongsTo(string(q.Attr()))
-	x.Trace(ctx, "Attribute: %q NumUids: %v groupId: %v ServeTask", q.Attr(), q.UidsLength(), gid)
+	gid := group.BelongsTo(q.Attr)
+	x.Trace(ctx, "Attribute: %q NumUids: %v groupId: %v ServeTask", q.Attr, len(q.Uids), gid)
 
-	reply := new(Payload)
+	var reply *task.Result
 	x.AssertTruef(groups().ServesGroup(gid),
-		"attr: %q groupId: %v Request sent to wrong server.", q.Attr(), gid)
+		"attr: %q groupId: %v Request sent to wrong server.", q.Attr, gid)
 
 	c := make(chan error, 1)
 	go func() {
 		var err error
-		reply.Data, err = processTask(query.Data)
+		reply, err = processTask(q)
 		c <- err
 	}()
 

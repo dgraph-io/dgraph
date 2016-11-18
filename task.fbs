@@ -48,3 +48,8 @@ table MembershipUpdate {
 	members:[Membership];
 	lastUpdate:ulong;
 }
+
+// TODO: Deprecate.
+table UidList {
+	uids:[ulong];
+}

@@ -20,13 +20,13 @@ import (
 	"bytes"
 	"sort"
 
-	"github.com/dgraph-io/dgraph/algo"
+	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/x"
 )
 
 type sortBase struct {
 	values []Value
-	ul     *algo.UIDList
+	ul     *task.UIDList
 }
 
 // Len returns size of vector.
@@ -35,7 +35,8 @@ func (s sortBase) Len() int { return len(s.values) }
 // Swap swaps two elements.
 func (s sortBase) Swap(i, j int) {
 	s.values[i], s.values[j] = s.values[j], s.values[i]
-	s.ul.Swap(i, j)
+	data := s.ul.Uids
+	data[i], data[j] = data[j], data[i]
 }
 
 type byDate struct{ sortBase }
@@ -75,7 +76,7 @@ func (s byByteArray) Less(i, j int) bool {
 }
 
 // Sort sorts the given array in-place.
-func (s Scalar) Sort(v []Value, ul *algo.UIDList) error {
+func (s Scalar) Sort(v []Value, ul *task.UIDList) error {
 	b := sortBase{v, ul}
 	switch s.ID() {
 	case DateID:

@@ -14,7 +14,7 @@ message Value {
 
 message Query {
 	string attr = 1;
-	uint32 count = 2;      // Get this many elements.
+	int32 count = 2;      // Get this many elements.
 	int32 offset = 3;      // Skip this many elements.
 	fixed64 afterUid = 4;  // Only return UIDs greater than this.
 	uint32 doCount = 5;   // Are we just getting lengths?
@@ -37,7 +37,7 @@ message Result {
 message Sort {
 	string attr = 1;
 	repeated UIDList uidMatrix = 2;
-	uint32 count = 3;  // Return this many elements.
+	int32 count = 3;  // Return this many elements.
 	int32 offset = 4;  // Skip this many elements.
 }
 

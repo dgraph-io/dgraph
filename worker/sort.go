@@ -1,7 +1,6 @@
 package worker
 
 import (
-	"github.com/google/flatbuffers/go"
 	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/dgraph/algo"
@@ -13,16 +12,18 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
+var (
+	emptySortResult task.SortResult
+)
+
 // SortOverNetwork sends sort query over the network.
-func SortOverNetwork(ctx context.Context, qu []byte) ([]byte, error) {
-	q := task.GetRootAsSort(qu, 0)
-	attr := string(q.Attr())
-	gid := group.BelongsTo(attr)
-	x.Trace(ctx, "worker.Sort attr: %v groupId: %v", attr, gid)
+func SortOverNetwork(ctx context.Context, q *task.Sort) (*task.SortResult, error) {
+	gid := group.BelongsTo(q.Attr)
+	x.Trace(ctx, "worker.Sort attr: %v groupId: %v", q.Attr, gid)
 
 	if groups().ServesGroup(gid) {
 		// No need for a network call, as this should be run from within this instance.
-		return processSort(qu)
+		return processSort(q)
 	}
 
 	// Send this over the network.
@@ -32,55 +33,54 @@ func SortOverNetwork(ctx context.Context, qu []byte) ([]byte, error) {
 
 	conn, err := pl.Get()
 	if err != nil {
-		return []byte{}, x.Wrapf(err, "SortOverNetwork: while retrieving connection.")
+		return &emptySortResult, x.Wrapf(err, "SortOverNetwork: while retrieving connection.")
 	}
 	defer pl.Put(conn)
 	x.Trace(ctx, "Sending request to %v", addr)
 
 	c := NewWorkerClient(conn)
-	reply := new(Payload)
+	var reply *task.SortResult
 	cerr := make(chan error, 1)
 	go func() {
 		var err error
-		reply, err = c.Sort(ctx, &Payload{Data: qu})
+		reply, err = c.Sort(ctx, q)
 		cerr <- err
 	}()
 
 	select {
 	case <-ctx.Done():
-		return []byte{}, ctx.Err()
+		return &emptySortResult, ctx.Err()
 	case err := <-cerr:
 		if err != nil {
 			x.TraceError(ctx, x.Wrapf(err, "Error while calling Worker.Sort"))
 		}
-		return reply.Data, err
+		return reply, err
 	}
 }
 
 // Sort is used to sort given UID matrix.
-func (w *grpcWorker) Sort(ctx context.Context, query *Payload) (*Payload, error) {
+func (w *grpcWorker) Sort(ctx context.Context, s *task.Sort) (*task.SortResult, error) {
 	if ctx.Err() != nil {
-		return &Payload{}, ctx.Err()
+		return &emptySortResult, ctx.Err()
 	}
 
-	s := task.GetRootAsSort(query.Data, 0)
-	gid := group.BelongsTo(string(s.Attr()))
+	gid := group.BelongsTo(s.Attr)
 	//x.Trace(ctx, "Attribute: %q NumUids: %v groupId: %v Sort", q.Attr(), q.UidsLength(), gid)
 
-	reply := new(Payload)
+	var reply *task.SortResult
 	x.AssertTruef(groups().ServesGroup(gid),
-		"attr: %q groupId: %v Request sent to wrong server.", s.Attr(), gid)
+		"attr: %q groupId: %v Request sent to wrong server.", s.Attr, gid)
 
 	c := make(chan error, 1)
 	go func() {
 		var err error
-		reply.Data, err = processSort(query.Data)
+		reply, err = processSort(s)
 		c <- err
 	}()
 
 	select {
 	case <-ctx.Done():
-		return reply, ctx.Err()
+		return &emptySortResult, ctx.Err()
 	case err := <-c:
 		return reply, err
 	}
@@ -92,22 +92,19 @@ var (
 )
 
 // processSort does either a coarse or a fine sort.
-func processSort(qu []byte) ([]byte, error) {
-	ts := task.GetRootAsSort(qu, 0)
-	x.AssertTrue(ts != nil)
-
-	attr := string(ts.Attr())
-	x.AssertTruef(ts.Count() > 0,
+func processSort(ts *task.Sort) (*task.SortResult, error) {
+	attr := ts.Attr
+	x.AssertTruef(ts.Count > 0,
 		("We do not yet support negative or infinite count with sorting: %s %d. " +
 			"Try flipping order and return first few elements instead."),
-		attr, ts.Count())
+		attr, ts.Count)
 
-	n := ts.UidmatrixLength()
+	n := len(ts.UidMatrix)
 	out := make([]intersectedList, n)
 	for i := 0; i < n; i++ {
 		// offsets[i] is the offset for i-th posting list. It gets decremented as we
 		// iterate over buckets.
-		out[i].offset = int(ts.Offset())
+		out[i].offset = int(ts.Offset)
 		out[i].ulist = algo.NewUIDList([]uint64{})
 	}
 
@@ -123,34 +120,24 @@ BUCKETS:
 		case errContinue:
 			// Continue iterating over tokens.
 		default:
-			return []byte{}, err
+			return &emptySortResult, err
 		}
 	}
 
-	// Convert out to flatbuffers output.
-	b := flatbuffers.NewBuilder(0)
-	uidOffsets := make([]flatbuffers.UOffsetT, 0, n)
+	var r task.SortResult
 	for _, il := range out {
-		uidOffsets = append(uidOffsets, il.ulist.AddTo(b))
+		r.UidMatrix = append(r.UidMatrix, il.ulist)
 	}
-	task.SortResultStartUidmatrixVector(b, n)
-	for i := n - 1; i >= 0; i-- {
-		b.PrependUOffsetT(uidOffsets[i])
-	}
-	uend := b.EndVector(n)
-	task.SortResultStart(b)
-	task.SortResultAddUidmatrix(b, uend)
-	b.Finish(task.SortResultEnd(b))
-	return b.FinishedBytes(), nil
+	return &r, nil
 }
 
 type intersectedList struct {
 	offset int
-	ulist  *algo.UIDList
+	ulist  *task.UIDList
 }
 
-func intersectBucket(ts *task.Sort, attr string, token string, out []intersectedList) error {
-	count := int(ts.Count())
+func intersectBucket(ts *task.Sort, attr, token string, out []intersectedList) error {
+	count := int(ts.Count)
 	sType := schema.TypeOf(attr)
 	if !sType.IsScalar() {
 		return x.Errorf("Cannot sort attribute %s of type object.", attr)
@@ -161,22 +148,16 @@ func intersectBucket(ts *task.Sort, attr string, token string, out []intersected
 	pl, decr := posting.GetOrCreate(key)
 	defer decr()
 
-	for i := 0; i < ts.UidmatrixLength(); i++ { // Iterate over UID lists.
+	for i, ul := range ts.UidMatrix {
 		il := &out[i]
-		if count > 0 && il.ulist.Size() >= count {
+		if count > 0 && len(il.ulist.Uids) >= count {
 			continue
 		}
-		var result *algo.UIDList
-		{
-			var l algo.UIDList
-			var ul task.UidList
-			x.AssertTrue(ts.Uidmatrix(&ul, i))
-			l.FromTask(&ul)
-			listOpt := posting.ListOptions{Intersect: &l}
-			// Intersect index with i-th input UID list.
-			result = pl.Uids(listOpt)
-		}
-		n := result.Size()
+
+		// Intersect index with i-th input UID list.
+		listOpt := posting.ListOptions{Intersect: ul}
+		result := pl.Uids(listOpt)
+		n := len(result.Uids)
 
 		// Check offsets[i].
 		if il.offset >= n {
@@ -190,14 +171,14 @@ func intersectBucket(ts *task.Sort, attr string, token string, out []intersected
 		sortByValue(attr, result, scalar)
 
 		if il.offset > 0 {
-			result.Slice(il.offset, n)
+			result.Uids = result.Uids[il.offset:n]
 			il.offset = 0
-			n = result.Size()
+			n = len(result.Uids)
 		}
 
 		// n is number of elements to copy from result to out.
 		if count > 0 {
-			slack := count - il.ulist.Size()
+			slack := count - len(il.ulist.Uids)
 			if slack < n {
 				n = slack
 			}
@@ -205,25 +186,24 @@ func intersectBucket(ts *task.Sort, attr string, token string, out []intersected
 
 		// Copy from result to out.
 		for j := 0; j < n; j++ {
-			il.ulist.Add(result.Get(j))
+			il.ulist.Uids = append(il.ulist.Uids, result.Uids[j])
 		}
 	} // end for loop
 
 	// Check out[i] sizes for all i.
-	for i := 0; i < ts.UidmatrixLength(); i++ { // Iterate over UID lists.
-		if out[i].ulist.Size() < count {
+	for i := 0; i < len(ts.UidMatrix); i++ { // Iterate over UID lists.
+		if len(out[i].ulist.Uids) < count {
 			return errContinue
 		}
-		x.AssertTrue(out[i].ulist.Size() == count)
+		x.AssertTrue(len(out[i].ulist.Uids) == count)
 	}
 	return errDone
 }
 
 // sortByValue fetches values and sort UIDList.
-func sortByValue(attr string, ul *algo.UIDList, scalar types.Scalar) error {
-	values := make([]types.Value, ul.Size())
-	for i := 0; i < ul.Size(); i++ {
-		uid := ul.Get(i)
+func sortByValue(attr string, ul *task.UIDList, scalar types.Scalar) error {
+	values := make([]types.Value, len(ul.Uids))
+	for i, uid := range ul.Uids {
 		val, err := fetchValue(uid, attr, scalar)
 		if err != nil {
 			return err
