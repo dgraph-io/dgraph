@@ -120,10 +120,10 @@ func (l *Latency) ToMap() map[string]string {
 type params struct {
 	AttrType types.Type
 	Alias    string
-	Count    int
-	Offset   int
+	Count    int // Number of results we want.
+	Offset   int // Skip this many results.
 	AfterUID uint64
-	GetCount uint16
+	GetCount uint16 // Whether we are interested in only the counts.
 	GetUID   bool
 	Order    string
 	isDebug  bool
@@ -501,8 +501,13 @@ func createTaskQuery(sg *SubGraph, uids *algo.UIDList, tokens []string,
 	task.QueryAddCount(b, int32(sg.Params.Count))
 	task.QueryAddOffset(b, int32(sg.Params.Offset))
 	task.QueryAddAfterUid(b, sg.Params.AfterUID)
-	task.QueryAddGetCount(b, sg.Params.GetCount)
-
+	if sg.Filter != nil {
+		// If we are filtering, we never want to just get the counts from worker.
+		// Instead, we want the UIDs so that we can apply the filter.
+		task.QueryAddGetCount(b, 0)
+	} else {
+		task.QueryAddGetCount(b, sg.Params.GetCount)
+	}
 	b.Finish(task.QueryEnd(b))
 	return b.FinishedBytes()
 }
@@ -544,7 +549,8 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, taskQuery []byte, rch chan 
 		sg.counts = result.Counts
 	}
 
-	if sg.Params.GetCount == 1 {
+	if sg.Params.GetCount == 1 && sg.Filter == nil {
+		// If there is a filter, we need to do more work to get the actual count.
 		x.Trace(ctx, "Zero uids. Only count requested")
 		rch <- nil
 		return
@@ -582,6 +588,26 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, taskQuery []byte, rch chan 
 			rch <- err
 			return
 		}
+	}
+
+	if sg.Params.GetCount == 1 {
+		// Only reason why we haven't returned is that there is a filter, and
+		// we need to actually obtain the UIDs that pass the filter.
+		x.AssertTrue(sg.Filter != nil)
+		b := flatbuffers.NewBuilder(0)
+		task.CountListStartCountVector(b, len(sg.Result))
+		for i := len(sg.Result) - 1; i >= 0; i-- {
+			b.PrependUint32(uint32(sg.Result[i].Size()))
+		}
+		countVecOffset := b.EndVector(len(sg.Result))
+		task.CountListStart(b)
+		task.CountListAddCount(b, countVecOffset)
+		b.Finish(task.CountListEnd(b))
+		sg.Counts = new(x.CountList)
+		buf := b.FinishedBytes()
+		sg.Counts.Init(buf, flatbuffers.GetUOffsetT(buf))
+		rch <- nil
+		return
 	}
 
 	var processed, leftToProcess []*SubGraph
