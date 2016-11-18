@@ -296,6 +296,22 @@ func isPresent(list []string, str string) bool {
 	return false
 }
 
+func filterCopy(sg *SubGraph, ft *gql.FilterTree) {
+	// Either we'll have an operation specified, or the function specified.
+	if len(ft.Op) > 0 {
+		sg.FilterOp = ft.Op
+	} else {
+		sg.Attr = ft.Func.Attr
+		sg.SrcFunc = append(sg.SrcFunc, ft.Func.Name)
+		sg.SrcFunc = append(sg.SrcFunc, ft.Func.Args...)
+	}
+	for _, ftc := range ft.Child {
+		child := &SubGraph{}
+		filterCopy(child, ftc)
+		sg.Filters = append(sg.Filters, child)
+	}
+}
+
 func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 	// Typically you act on the current node, and leave recursion to deal with
 	// children. But, in this case, we don't want to muck with the current
@@ -361,9 +377,11 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 		dst := &SubGraph{
 			Attr:   gchild.Attr,
 			Params: args,
-			// TODO: Update here.
-			// Filter: gchild.Filter,
 		}
+		if gchild.Filter != nil {
+			filterCopy(dst, gchild.Filter)
+		}
+
 		if v, ok := gchild.Args["offset"]; ok {
 			offset, err := strconv.ParseInt(v, 0, 32)
 			if err != nil {
@@ -418,7 +436,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		x.Trace(ctx, "Xid: %v Uid: %v", exid, euid)
 	}
 
-	if euid == 0 && gq.Gen == nil {
+	if euid == 0 && gq.Func == nil {
 		err := x.Errorf("Invalid query, query internal id is zero and generator is nil")
 		x.TraceError(ctx, err)
 		return nil, err
@@ -433,13 +451,9 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	sg := &SubGraph{
 		Attr:   gq.Attr,
 		Params: args,
-		// TODO: Update here.
-		//  Filter: gq.Filter,
 	}
-	if gq.Gen != nil {
-		sg.Attr = gq.Gen.FuncArgs[0]
-		sg.SrcFunc = append(sg.SrcFunc, gq.Gen.FuncName)
-		sg.SrcFunc = append(sg.SrcFunc, gq.Gen.FuncArgs[1:]...)
+	if gq.Func != nil {
+		filterCopy(sg, gq.Filter)
 	}
 	if euid > 0 {
 		// euid is the root UID.
@@ -568,54 +582,55 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		}
 	}
 
-	taskQuery := createTaskQuery(sg, tokens, intersect)
-	data, err := worker.ProcessTaskOverNetwork(ctx, taskQuery)
-	if err != nil {
-		x.TraceError(ctx, x.Wrapf(err, "Error while processing task"))
-		rch <- err
-		return
-	}
-	var result task.Result
-	// TODO: This unmarshal should be unncessary. Endpoint could return a
-	// Result directly.
-	if err = result.Unmarshal(data); err != nil {
-		x.TraceError(ctx, x.Wrapf(err, "Error while unmarshalling task.Result"))
-		rch <- err
-		return
-	}
+	if len(sg.Attr) == 0 {
+		// If we have a filter SubGraph which only contains an operator,
+		// it won't have any attribute to work on.
+		sg.DestUIDs = sg.SrcUIDs
 
-	// TODO: Eventually we will get rid of algo.UIDList.
-	sg.uidMatrix = make([]*algo.UIDList, len(result.GetUidMatrix()))
-	for i, ul := range result.GetUidMatrix() {
-		u := new(algo.UIDList)
-		u.FromUints(ul.Uids)
-		sg.uidMatrix[i] = u
-	}
-
-	sg.values = result.GetValues()
-	if len(sg.values) > 0 {
-		v := sg.values[0]
-		x.Trace(ctx, "Sample value for attr: %v Val: %v", sg.Attr, string(v.Val))
-	}
-
-	sg.counts = result.Counts
-
-	if sg.Params.GetCount == 1 {
-		x.Trace(ctx, "Zero uids. Only count requested")
-		rch <- nil
-		return
-	}
-
-	if intersectDestination {
-		sg.DestUIDs = algo.IntersectLists(sg.uidMatrix)
 	} else {
-		sg.DestUIDs = algo.MergeLists(sg.uidMatrix)
-	}
+		taskQuery := createTaskQuery(sg, tokens, intersect)
+		data, err := worker.ProcessTaskOverNetwork(ctx, taskQuery)
+		if err != nil {
+			x.TraceError(ctx, x.Wrapf(err, "Error while processing task"))
+			rch <- err
+			return
+		}
+		var result task.Result
+		// TODO: This unmarshal should be unncessary. Endpoint could return a
+		// Result directly.
+		if err = result.Unmarshal(data); err != nil {
+			x.TraceError(ctx, x.Wrapf(err, "Error while unmarshalling task.Result"))
+			rch <- err
+			return
+		}
 
-	if err != nil {
-		x.TraceError(ctx, x.Wrapf(err, "Error while processing task"))
-		rch <- err
-		return
+		// TODO: Eventually we will get rid of algo.UIDList.
+		sg.uidMatrix = make([]*algo.UIDList, len(result.GetUidMatrix()))
+		for i, ul := range result.GetUidMatrix() {
+			u := new(algo.UIDList)
+			u.FromUints(ul.Uids)
+			sg.uidMatrix[i] = u
+		}
+
+		sg.values = result.GetValues()
+		if len(sg.values) > 0 {
+			v := sg.values[0]
+			x.Trace(ctx, "Sample value for attr: %v Val: %v", sg.Attr, string(v.Val))
+		}
+
+		sg.counts = result.Counts
+
+		if sg.Params.GetCount == 1 {
+			x.Trace(ctx, "Zero uids. Only count requested")
+			rch <- nil
+			return
+		}
+
+		if intersectDestination {
+			sg.DestUIDs = algo.IntersectLists(sg.uidMatrix)
+		} else {
+			sg.DestUIDs = algo.MergeLists(sg.uidMatrix)
+		}
 	}
 
 	if sg.DestUIDs.Size() == 0 {
