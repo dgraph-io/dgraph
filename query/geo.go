@@ -27,6 +27,10 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
+// filterGeo returns the list of UIDs that satisfy given filter conditions.
+// It takes as input the attribute, query type, g which is geo data in binary
+// format (point or region), masDist (for near queries), and UIDs with which
+// the result should be intersected.
 func filterGeo(ctx context.Context, attr string, qt geo.QueryType, g []byte,
 	maxDist float64, intersectUids *algo.UIDList) (*algo.UIDList, error) {
 

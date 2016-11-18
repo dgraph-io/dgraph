@@ -66,8 +66,8 @@ func near(ctx context.Context, intersectUIDs *algo.UIDList, attr, point, dist st
 		return nil, x.Wrapf(err, "Error while converting distance to float")
 	}
 	var g types.Geo
-	geoD := strings.Replace(point, "'", "\"", -1)
-	err = g.UnmarshalText([]byte(geoD))
+	point := strings.Replace(point, "'", "\"", -1)
+	err = g.UnmarshalText([]byte(point))
 	if err != nil {
 		return nil, err
 	}
@@ -80,8 +80,8 @@ func near(ctx context.Context, intersectUIDs *algo.UIDList, attr, point, dist st
 
 func within(ctx context.Context, intersectUIDs *algo.UIDList, attr, region string) (*algo.UIDList, error) {
 	var g types.Geo
-	geoD := strings.Replace(region, "'", "\"", -1)
-	err := g.UnmarshalText([]byte(geoD))
+	region := strings.Replace(region, "'", "\"", -1)
+	err := g.UnmarshalText([]byte(region))
 	if err != nil {
 		return nil, x.Wrapf(err, "Cannot decode given geoJson input")
 	}
@@ -94,8 +94,8 @@ func within(ctx context.Context, intersectUIDs *algo.UIDList, attr, region strin
 
 func contains(ctx context.Context, intersectUIDs *algo.UIDList, attr, region string) (*algo.UIDList, error) {
 	var g types.Geo
-	geoD := strings.Replace(region, "'", "\"", -1)
-	err := g.UnmarshalText([]byte(geoD))
+	region := strings.Replace(region, "'", "\"", -1)
+	err := g.UnmarshalText([]byte(region))
 	if err != nil {
 		return nil, x.Wrapf(err, "Cannot decode given geoJson input")
 	}
@@ -108,8 +108,8 @@ func contains(ctx context.Context, intersectUIDs *algo.UIDList, attr, region str
 
 func intersects(ctx context.Context, intersectUIDs *algo.UIDList, attr, region string) (*algo.UIDList, error) {
 	var g types.Geo
-	geoD := strings.Replace(region, "'", "\"", -1)
-	err := g.UnmarshalText([]byte(geoD))
+	region := strings.Replace(region, "'", "\"", -1)
+	err := g.UnmarshalText([]byte(region))
 	if err != nil {
 		return nil, x.Wrapf(err, "Cannot decode given geoJson input")
 	}
