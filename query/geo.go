@@ -22,7 +22,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/geo"
-	"github.com/dgraph-io/dgraph/taskpb"
+	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -69,7 +69,7 @@ func fetchIndexEntries(ctx context.Context, attr string, tokens []string) (*algo
 	return algo.MergeLists(sg.uidMatrix), nil
 }
 
-func fetchValues(ctx context.Context, attr string, uids *algo.UIDList) (*taskpb.ValueList, error) {
+func fetchValues(ctx context.Context, attr string, uids *algo.UIDList) (*task.ValueList, error) {
 	sg := &SubGraph{Attr: attr}
 	sgChan := make(chan error, 1)
 
@@ -89,7 +89,7 @@ func fetchValues(ctx context.Context, attr string, uids *algo.UIDList) (*taskpb.
 	return sg.values, nil
 }
 
-func filterUIDs(uids *algo.UIDList, values *taskpb.ValueList, q *geo.QueryData) *algo.UIDList {
+func filterUIDs(uids *algo.UIDList, values *task.ValueList, q *geo.QueryData) *algo.UIDList {
 	x.AssertTrue(len(values.GetValues()) == uids.Size())
 	var rv []uint64
 	for i, tv := range values.GetValues() {

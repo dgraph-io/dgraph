@@ -37,7 +37,6 @@ import (
 	"github.com/dgraph-io/dgraph/query/graph"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/task"
-	"github.com/dgraph-io/dgraph/taskpb"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
@@ -138,9 +137,9 @@ type SubGraph struct {
 	Children  []*SubGraph
 	Params    params
 	Filter    *gql.FilterTree
-	counts    *taskpb.CountList
-	values    *taskpb.ValueList
-	uidMatrix []*algo.UIDList // TODO: This will be replaced with taskpb.UIDList.
+	counts    *task.CountList
+	values    *task.ValueList
+	uidMatrix []*algo.UIDList // TODO: This will be replaced with task.UIDList.
 
 	// SrcUIDs is a list of unique source UIDs. They are always copies of destUIDs
 	// of parent nodes in GraphQL structure.
@@ -151,7 +150,7 @@ type SubGraph struct {
 }
 
 // getValue gets the value from the task.
-func getValue(tv *taskpb.Value) (types.Value, error) {
+func getValue(tv *task.Value) (types.Value, error) {
 	vType := tv.ValType
 	valBytes := tv.Val
 	val := types.ValueForType(types.TypeID(vType))
@@ -446,12 +445,12 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	return sg, nil
 }
 
-func createNilValuesList(count int) *taskpb.ValueList {
-	out := &taskpb.ValueList{
-		Values: make([]*taskpb.Value, count),
+func createNilValuesList(count int) *task.ValueList {
+	out := &task.ValueList{
+		Values: make([]*task.Value, count),
 	}
 	for i := 0; i < count; i++ {
-		out.Values[i] = &taskpb.Value{
+		out.Values[i] = &task.Value{
 			Val: x.Nilbyte,
 		}
 	}
@@ -521,7 +520,7 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, taskQuery []byte, rch chan 
 			rch <- err
 			return
 		}
-		result := new(taskpb.Result)
+		result := new(task.Result)
 		if err = result.Unmarshal(data); err != nil {
 			x.TraceError(ctx, x.Wrapf(err, "Error while unmarshalling task.Result"))
 			rch <- err

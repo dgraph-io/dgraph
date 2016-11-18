@@ -30,7 +30,6 @@ import (
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/task"
-	"github.com/dgraph-io/dgraph/taskpb"
 	"github.com/dgraph-io/dgraph/x"
 	flatbuffers "github.com/google/flatbuffers/go"
 )
@@ -87,7 +86,7 @@ func populateGraph(t *testing.T) {
 	addEdge(t, edge, getOrCreate(posting.Key(10, "friend")))
 }
 
-func taskValues(t *testing.T, v *taskpb.ValueList) []string {
+func taskValues(t *testing.T, v *task.ValueList) []string {
 	out := make([]string, len(v.Values))
 	for i, tv := range v.Values {
 		out[i] = string(tv.Val)
@@ -120,7 +119,7 @@ func TestProcessTask(t *testing.T) {
 	result, err := processTask(query)
 	require.NoError(t, err)
 
-	r := new(taskpb.Result)
+	r := new(task.Result)
 	require.NoError(t, r.Unmarshal(result))
 	require.EqualValues(t,
 		[][]uint64{
@@ -181,7 +180,7 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 	result, err := processTask(query)
 	require.NoError(t, err)
 
-	r := new(taskpb.Result)
+	r := new(task.Result)
 	require.NoError(t, r.Unmarshal(result))
 
 	require.EqualValues(t, [][]uint64{
@@ -207,7 +206,7 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 	query = newQuery("friend", nil, []string{"hey", "photon", "notphoton", "notphoton_extra"})
 	result, err = processTask(query)
 	require.NoError(t, err)
-	r = new(taskpb.Result)
+	r = new(task.Result)
 	require.NoError(t, r.Unmarshal(result))
 
 	require.EqualValues(t, [][]uint64{
@@ -242,7 +241,7 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 	result, err = processTask(query)
 	require.NoError(t, err)
 
-	r = new(taskpb.Result)
+	r = new(task.Result)
 	require.NoError(t, r.Unmarshal(result))
 
 	require.EqualValues(t, [][]uint64{
@@ -259,7 +258,7 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 	result, err = processTask(query)
 	require.NoError(t, err)
 
-	r = new(taskpb.Result)
+	r = new(task.Result)
 	require.NoError(t, r.Unmarshal(result))
 
 	require.EqualValues(t, [][]uint64{
@@ -280,7 +279,7 @@ func TestProcessTaskIndex(t *testing.T) {
 	result, err := processTask(query)
 	require.NoError(t, err)
 
-	r := new(taskpb.Result)
+	r := new(task.Result)
 	require.NoError(t, r.Unmarshal(result))
 
 	require.EqualValues(t, [][]uint64{
@@ -310,7 +309,7 @@ func TestProcessTaskIndex(t *testing.T) {
 	result, err = processTask(query)
 	require.NoError(t, err)
 
-	r = new(taskpb.Result)
+	r = new(task.Result)
 	require.NoError(t, r.Unmarshal(result))
 
 	require.EqualValues(t, [][]uint64{
@@ -348,7 +347,7 @@ func TestProcessTaskIndex(t *testing.T) {
 	result, err = processTask(query)
 	require.NoError(t, err)
 
-	r = new(taskpb.Result)
+	r = new(task.Result)
 	require.NoError(t, r.Unmarshal(result))
 
 	require.EqualValues(t, [][]uint64{

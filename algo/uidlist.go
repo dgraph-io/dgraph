@@ -9,16 +9,15 @@ import (
 	"github.com/google/flatbuffers/go"
 
 	"github.com/dgraph-io/dgraph/task"
-	"github.com/dgraph-io/dgraph/taskpb"
 	"github.com/dgraph-io/dgraph/x"
 )
 
 // UIDList is a list of UIDs that can be stored in different forms.
 type UIDList struct {
-	// Eventually algo.UIDList will be replaced with taskpb.UIDList. While
+	// Eventually algo.UIDList will be replaced with task.UIDList. While
 	// migrating from flatbuffers to protos, we will keep this around to make
 	// all tests pass.
-	uints *taskpb.UIDList
+	uints *task.UIDList
 	list  *task.UidList
 }
 
@@ -27,7 +26,7 @@ type UIDList struct {
 // are certain you are allocating on heap, you can use this.
 func NewUIDList(data []uint64) *UIDList {
 	u := new(UIDList)
-	u.uints = new(taskpb.UIDList)
+	u.uints = new(task.UIDList)
 	u.uints.Uids = data
 	return u
 }
@@ -35,7 +34,7 @@ func NewUIDList(data []uint64) *UIDList {
 // FromUints initialize UIDList from []uint64.
 func (u *UIDList) FromUints(data []uint64) {
 	x.AssertTrue(u != nil && u.uints == nil && u.list == nil)
-	u.uints = new(taskpb.UIDList)
+	u.uints = new(task.UIDList)
 	u.uints.Uids = data
 }
 
@@ -45,8 +44,8 @@ func (u *UIDList) FromTask(data *task.UidList) {
 	u.list = data
 }
 
-// FromTaskResultProto parses taskpb.Result and extracts a []*UIDList.
-func FromTaskResultProto(r *taskpb.Result) []*UIDList {
+// FromTaskResultProto parses task.Result and extracts a []*UIDList.
+func FromTaskResultProto(r *task.Result) []*UIDList {
 	out := make([]*UIDList, len(r.GetUidMatrix()))
 	for i, tl := range r.GetUidMatrix() {
 		ul := new(UIDList)
@@ -321,12 +320,12 @@ func (u *UIDList) AddTo(b *flatbuffers.Builder) flatbuffers.UOffsetT {
 
 // ToProto converts UIDList to a proto. It is only temporary.
 // TODO: Get rid of this in the next PR that will remove algo.UIDList.
-func (u *UIDList) ToProto() *taskpb.UIDList {
+func (u *UIDList) ToProto() *task.UIDList {
 	if u.uints != nil {
 		return u.uints
 	}
 	// Convert to proto.
-	out := new(taskpb.UIDList)
+	out := new(task.UIDList)
 	n := u.Size()
 	for i := 0; i < n; i++ {
 		out.Uids = append(out.Uids, u.Get(i))

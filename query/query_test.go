@@ -34,7 +34,7 @@ import (
 	"github.com/dgraph-io/dgraph/query/graph"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/store"
-	"github.com/dgraph-io/dgraph/taskpb"
+	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
@@ -48,7 +48,7 @@ func childAttrs(sg *SubGraph) []string {
 	return out
 }
 
-func taskValues(t *testing.T, v *taskpb.ValueList) []string {
+func taskValues(t *testing.T, v *task.ValueList) []string {
 	out := make([]string, len(v.Values))
 	for i, tv := range v.Values {
 		out[i] = string(tv.Val)

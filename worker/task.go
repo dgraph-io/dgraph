@@ -23,7 +23,6 @@ import (
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/task"
-	"github.com/dgraph-io/dgraph/taskpb"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -82,19 +81,19 @@ func processTask(query []byte) ([]byte, error) {
 		n = q.UidsLength()
 	}
 
-	countsList := new(taskpb.CountList)
-	valuesList := new(taskpb.ValueList)
-	out := &taskpb.Result{
+	countsList := new(task.CountList)
+	valuesList := new(task.ValueList)
+	out := &task.Result{
 		Counts: countsList,
 		Values: valuesList,
 	}
 
-	var emptyUIDList *taskpb.UIDList // For handling _count_ only.
+	var emptyUIDList *task.UIDList // For handling _count_ only.
 	if q.GetCount() == 1 {
 		// If just getting counts, we do not need to return a UID matrix. But for
 		// consistency, we return a UID matrix with empty rows. We prepare this
 		// empty row here.
-		emptyUIDList = new(taskpb.UIDList)
+		emptyUIDList = new(task.UIDList)
 	}
 
 	for i := 0; i < n; i++ {
@@ -112,7 +111,7 @@ func processTask(query []byte) ([]byte, error) {
 		// byte so that processing is consistent later.
 		vbytes, vtype, err := pl.Value()
 
-		newValue := &taskpb.Value{ValType: uint32(vtype)}
+		newValue := &task.Value{ValType: uint32(vtype)}
 		if err == nil {
 			newValue.Val = vbytes
 		} else {
