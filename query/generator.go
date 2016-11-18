@@ -4,11 +4,12 @@ import (
 	"context"
 
 	"github.com/dgraph-io/dgraph/algo"
+	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/x"
 )
 
-func fetchTermUids(ctx context.Context, intersectUIDs *algo.UIDList,
+func fetchTermUids(ctx context.Context, intersectUIDs *task.UIDList,
 	attr, terms string) (*SubGraph, error) {
 
 	// Tokenize the terms.
@@ -36,22 +37,21 @@ func fetchTermUids(ctx context.Context, intersectUIDs *algo.UIDList,
 	return sg, nil
 }
 
-func allOf(ctx context.Context, intersectUIDs *algo.UIDList,
-	attr, terms string) (*algo.UIDList, error) {
+func allOf(ctx context.Context, intersectUIDs *task.UIDList,
+	attr, terms string) (*task.UIDList, error) {
 
 	sg, err := fetchTermUids(ctx, intersectUIDs, attr, terms)
 	if err != nil {
 		return nil, err
 	}
-	return algo.IntersectLists(sg.uidMatrix), nil
+	return algo.IntersectSortedLists(sg.uidMatrix), nil
 }
 
-func anyOf(ctx context.Context, intersectUIDs *algo.UIDList,
-	attr, terms string) (*algo.UIDList, error) {
-
+func anyOf(ctx context.Context, intersectUIDs *task.UIDList,
+	attr, terms string) (*task.UIDList, error) {
 	sg, err := fetchTermUids(ctx, intersectUIDs, attr, terms)
 	if err != nil {
 		return nil, err
 	}
-	return algo.MergeLists(sg.uidMatrix), nil
+	return algo.MergeSortedLists(sg.uidMatrix), nil
 }
