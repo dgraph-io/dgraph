@@ -134,9 +134,7 @@ type params struct {
 // client convenient formats, like GraphQL / JSON.
 type SubGraph struct {
 	Attr      string
-	Children  []*SubGraph
 	Params    params
-	Filter    *gql.FilterTree
 	counts    []uint32
 	values    []*task.Value
 	uidMatrix []*algo.UIDList // TODO: This will be replaced with task.UIDList.
@@ -145,6 +143,10 @@ type SubGraph struct {
 	// of parent nodes in GraphQL structure.
 	SrcUIDs *algo.UIDList
 	SrcFunc []string
+
+	FilterOp string
+	Filters  []*SubGraph
+	Children []*SubGraph
 
 	// destUIDs is a list of destination UIDs, after applying filters, pagination.
 	DestUIDs *algo.UIDList
@@ -359,7 +361,8 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 		dst := &SubGraph{
 			Attr:   gchild.Attr,
 			Params: args,
-			Filter: gchild.Filter,
+			// TODO: Update here.
+			// Filter: gchild.Filter,
 		}
 		if v, ok := gchild.Args["offset"]; ok {
 			offset, err := strconv.ParseInt(v, 0, 32)
@@ -430,7 +433,8 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	sg := &SubGraph{
 		Attr:   gq.Attr,
 		Params: args,
-		Filter: gq.Filter,
+		// TODO: Update here.
+		//  Filter: gq.Filter,
 	}
 	if gq.Gen != nil {
 		sg.Attr = gq.Gen.FuncArgs[0]
@@ -622,9 +626,53 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	}
 
 	// Apply filters if any.
-	if err = sg.applyFilter(ctx); err != nil {
-		rch <- err
-		return
+	if len(sg.FilterOp) > 0 {
+		if len(sg.Filters) == 0 {
+			err = x.Errorf("Must contain some filters if op is set: %v", sg.FilterOp)
+			x.TraceError(ctx, x.Wrap(err))
+			rch <- err
+			return
+		}
+
+		// Run all filters in parallel.
+		filterChan := make(chan error, len(sg.Filters))
+		for i := 0; i < len(sg.Filters); i++ {
+			filter := sg.Filters[i]
+			filter.SrcUIDs = sg.DestUIDs
+			go ProcessGraph(ctx, filter, sg, filterChan)
+		}
+
+		var lists []*algo.UIDList
+		for i := 0; i < len(sg.Filters); i++ {
+			select {
+			case err = <-filterChan:
+				x.Trace(ctx, "Reply from filter. Index: %v Addr: %v", i, sg.Filters[i].Attr)
+				if err != nil {
+					x.TraceError(ctx, x.Wrapf(err, "Error while processing child task"))
+					rch <- err
+					return
+				}
+				filter := sg.Filters[i]
+				lists = append(lists, filter.DestUIDs)
+
+			case <-ctx.Done():
+				x.TraceError(ctx, x.Wrapf(ctx.Err(), "Context done before full execution"))
+				rch <- ctx.Err()
+				return
+			}
+		}
+
+		// Now apply the results from filter.
+		if sg.FilterOp == "&" {
+			sg.DestUIDs = algo.IntersectLists(lists)
+		} else if sg.FilterOp == "|" {
+			sg.DestUIDs = algo.MergeLists(lists)
+		} else {
+			err = x.Errorf("Unknown operator: %v", sg.FilterOp)
+			x.TraceError(ctx, x.Wrap(err))
+			rch <- err
+			return
+		}
 	}
 
 	if len(sg.Params.Order) == 0 {
@@ -665,82 +713,6 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		}
 	}
 	rch <- nil
-}
-
-// applyFilter applies filters to sg.sorted.
-func (sg *SubGraph) applyFilter(ctx context.Context) error {
-	if sg.Filter == nil { // No filter.
-		return nil
-	}
-	newSorted, err := runFilter(ctx, sg.DestUIDs, sg.Filter)
-	if err != nil {
-		return err
-	}
-	sg.DestUIDs = newSorted
-	// For each posting list, intersect with sg.destUIDs.
-	for _, l := range sg.uidMatrix {
-		l.Intersect(sg.DestUIDs)
-	}
-	return nil
-}
-
-// runFilter traverses filter tree and produce a filtered list of UIDs.
-// Input "destUIDs" is the very original list of destination UIDs of a SubGraph.
-func runFilter(ctx context.Context, destUIDs *algo.UIDList,
-	filter *gql.FilterTree) (*algo.UIDList, error) {
-	if len(filter.FuncName) > 0 { // Leaf node.
-		filter.FuncName = strings.ToLower(filter.FuncName)
-		x.AssertTruef(len(filter.FuncArgs) == 2,
-			"Expect exactly two arguments: pred and predValue")
-
-		switch filter.FuncName {
-		case "anyof":
-			// return anyOf(ctx, destUIDs, filter.FuncArgs[0], filter.FuncArgs[1])
-		case "allof":
-			// return allOf(ctx, destUIDs, filter.FuncArgs[0], filter.FuncArgs[1])
-		}
-	}
-
-	if filter.Op == "&" {
-		// For intersect operator, we process the children serially.
-		for _, c := range filter.Child {
-			var err error
-			if destUIDs, err = runFilter(ctx, destUIDs, c); err != nil {
-				return nil, err
-			}
-		}
-		return destUIDs, nil
-	}
-
-	// For now, we only handle AND and OR.
-	if filter.Op != "|" {
-		return destUIDs, x.Errorf("Unknown operator %v", filter.Op)
-	}
-
-	// For union operator, we do it in parallel.
-	// First, get UIDs for child filters in parallel.
-	type resultPair struct {
-		uids *algo.UIDList
-		err  error
-	}
-	resultChan := make(chan resultPair, len(filter.Child))
-	for _, c := range filter.Child {
-		go func(c *gql.FilterTree) {
-			r, err := runFilter(ctx, destUIDs, c)
-			resultChan <- resultPair{r, err}
-		}(c)
-	}
-
-	lists := make([]*algo.UIDList, 0, len(filter.Child))
-	// Next, collect the results from above goroutines.
-	for i := 0; i < len(filter.Child); i++ {
-		r := <-resultChan
-		if r.err != nil {
-			return destUIDs, r.err
-		}
-		lists = append(lists, r.uids)
-	}
-	return algo.MergeLists(lists), nil
 }
 
 // pageRange returns start and end indices given pagination params. Note that n
