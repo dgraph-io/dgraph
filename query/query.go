@@ -122,7 +122,7 @@ type params struct {
 	Count    int
 	Offset   int
 	AfterUID uint64
-	GetCount uint16
+	DoCount  bool
 	GetUID   bool
 	Order    string
 	isDebug  bool
@@ -138,14 +138,14 @@ type SubGraph struct {
 	Filter    *gql.FilterTree
 	counts    []uint32
 	values    []*task.Value
-	uidMatrix []*task.UIDList // TODO: This will be replaced with task.UIDList.
+	uidMatrix []*task.List // TODO: This will be replaced with task.UIDList.
 
 	// SrcUIDs is a list of unique source UIDs. They are always copies of destUIDs
 	// of parent nodes in GraphQL structure.
-	SrcUIDs *task.UIDList
+	SrcUIDs *task.List
 
 	// destUIDs is a list of destination UIDs, after applying filters, pagination.
-	DestUIDs *task.UIDList
+	DestUIDs *task.List
 }
 
 // getValue gets the value from the task.
@@ -327,7 +327,7 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 			if gchild.Children != nil {
 				return errors.New("Count cannot have other attributes")
 			}
-			sg.Params.GetCount = 1
+			sg.Params.DoCount = true
 			break
 		}
 		if gchild.Attr == "_uid_" {
@@ -436,8 +436,8 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		}
 	} else {
 		// euid is the root UID.
-		sg.SrcUIDs = algo.NewUIDList([]uint64{euid})
-		sg.uidMatrix = []*task.UIDList{algo.NewUIDList([]uint64{euid})}
+		sg.SrcUIDs = &task.List{Uids: []uint64{euid}}
+		sg.uidMatrix = []*task.List{&task.List{Uids: []uint64{euid}}}
 	}
 	sg.values = createNilValuesList(1)
 	return sg, nil
@@ -454,8 +454,8 @@ func createNilValuesList(count int) []*task.Value {
 }
 
 // createTaskQuery generates the query buffer.
-func createTaskQuery(sg *SubGraph, uids *task.UIDList, tokens []string,
-	intersect *task.UIDList) *task.Query {
+func createTaskQuery(sg *SubGraph, uids *task.List, tokens []string,
+	intersect *task.List) *task.Query {
 	x.AssertTrue(uids == nil || tokens == nil)
 	out := &task.Query{
 		Attr:     sg.Attr,
@@ -463,7 +463,7 @@ func createTaskQuery(sg *SubGraph, uids *task.UIDList, tokens []string,
 		Count:    int32(sg.Params.Count),
 		Offset:   int32(sg.Params.Offset),
 		AfterUid: sg.Params.AfterUID,
-		DoCount:  uint32(sg.Params.GetCount),
+		DoCount:  sg.Params.DoCount,
 	}
 	if uids != nil {
 		out.Uids = uids.Uids
@@ -494,7 +494,7 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, taskQuery *task.Query, rch 
 		sg.counts = result.Counts
 	}
 
-	if sg.Params.GetCount == 1 {
+	if sg.Params.DoCount {
 		x.Trace(ctx, "Zero uids. Only count requested")
 		rch <- nil
 		return
@@ -647,12 +647,12 @@ func (sg *SubGraph) applyGenerator(ctx context.Context, gen *gql.Generator) erro
 	}
 	sg.SrcUIDs = newSorted
 	for _, uid := range newSorted.Uids {
-		sg.uidMatrix = append(sg.uidMatrix, algo.NewUIDList([]uint64{uid}))
+		sg.uidMatrix = append(sg.uidMatrix, &task.List{Uids: []uint64{uid}})
 	}
 	return nil
 }
 
-func runGenerator(ctx context.Context, gen *gql.Generator) (*task.UIDList, error) {
+func runGenerator(ctx context.Context, gen *gql.Generator) (*task.List, error) {
 	if len(gen.FuncName) == 0 {
 		return nil, nil
 	}
@@ -704,8 +704,8 @@ func (sg *SubGraph) applyFilter(ctx context.Context) error {
 
 // runFilter traverses filter tree and produce a filtered list of UIDs.
 // Input "destUIDs" is the very original list of destination UIDs of a SubGraph.
-func runFilter(ctx context.Context, destUIDs *task.UIDList,
-	filter *gql.FilterTree) (*task.UIDList, error) {
+func runFilter(ctx context.Context, destUIDs *task.List,
+	filter *gql.FilterTree) (*task.List, error) {
 	if len(filter.FuncName) > 0 { // Leaf node.
 		filter.FuncName = strings.ToLower(filter.FuncName)
 		x.AssertTruef(len(filter.FuncArgs) == 2,
@@ -738,7 +738,7 @@ func runFilter(ctx context.Context, destUIDs *task.UIDList,
 	// For union operator, we do it in parallel.
 	// First, get UIDs for child filters in parallel.
 	type resultPair struct {
-		uids *task.UIDList
+		uids *task.List
 		err  error
 	}
 	resultChan := make(chan resultPair, len(filter.Child))
@@ -749,7 +749,7 @@ func runFilter(ctx context.Context, destUIDs *task.UIDList,
 		}(c)
 	}
 
-	lists := make([]*task.UIDList, 0, len(filter.Child))
+	lists := make([]*task.List, 0, len(filter.Child))
 	// Next, collect the results from above goroutines.
 	for i := 0; i < len(filter.Child); i++ {
 		r := <-resultChan

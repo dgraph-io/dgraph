@@ -339,9 +339,9 @@ func populateGraphForSort(t *testing.T, ps *store.Store) {
 // newSort creates a task.Sort for sorting.
 func newSort(uids [][]uint64, offset, count int) *task.Sort {
 	x.AssertTrue(uids != nil)
-	uidMatrix := make([]*task.UIDList, len(uids))
+	uidMatrix := make([]*task.List, len(uids))
 	for i, l := range uids {
-		uidMatrix[i] = algo.NewUIDList(l)
+		uidMatrix[i] = &task.List{Uids: l}
 	}
 	return &task.Sort{
 		Attr:      "dob",

@@ -27,7 +27,7 @@ import (
 )
 
 var (
-	emptyUIDList task.UIDList
+	emptyUIDList task.List
 	emptyResult  task.Result
 )
 
@@ -107,7 +107,7 @@ func processTask(q *task.Query) (*task.Result, error) {
 		}
 		out.Values = append(out.Values, newValue)
 
-		if q.DoCount == 1 {
+		if q.DoCount {
 			out.Counts = append(out.Counts, uint32(pl.Length(0)))
 			// Add an empty UID list to make later processing consistent
 			out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
@@ -119,7 +119,7 @@ func processTask(q *task.Query) (*task.Result, error) {
 			AfterUID: uint64(q.AfterUid),
 		}
 		if q.ToIntersect != nil {
-			opts.Intersect = &task.UIDList{Uids: q.ToIntersect}
+			opts.Intersect = &task.List{Uids: q.ToIntersect}
 		}
 		out.UidMatrix = append(out.UidMatrix, pl.Uids(opts))
 	}

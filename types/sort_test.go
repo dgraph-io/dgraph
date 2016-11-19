@@ -44,12 +44,12 @@ func getInput(tid TypeID, in []string) []Value {
 	return list
 }
 
-func getUIDList(n int) *task.UIDList {
+func getUIDList(n int) *task.List {
 	data := make([]uint64, 0, n)
 	for i := 1; i <= n; i++ {
 		data = append(data, uint64(i*100))
 	}
-	return &task.UIDList{Uids: data}
+	return &task.List{Uids: data}
 }
 
 func TestSortStrings(t *testing.T) {

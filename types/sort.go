@@ -26,7 +26,7 @@ import (
 
 type sortBase struct {
 	values []Value
-	ul     *task.UIDList
+	ul     *task.List
 }
 
 // Len returns size of vector.
@@ -76,7 +76,7 @@ func (s byByteArray) Less(i, j int) bool {
 }
 
 // Sort sorts the given array in-place.
-func (s Scalar) Sort(v []Value, ul *task.UIDList) error {
+func (s Scalar) Sort(v []Value, ul *task.List) error {
 	b := sortBase{v, ul}
 	switch s.ID() {
 	case DateID:

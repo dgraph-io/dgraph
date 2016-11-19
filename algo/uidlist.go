@@ -8,13 +8,8 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-// NewUIDList returns a task.UIDList with given []uint64, for convenience.
-func NewUIDList(data []uint64) *task.UIDList {
-	return &task.UIDList{Uids: data}
-}
-
 // ApplyFilter applies a filter to our UIDList.
-func ApplyFilter(u *task.UIDList, f func(uint64, int) bool) {
+func ApplyFilter(u *task.List, f func(uint64, int) bool) {
 	out := u.Uids[:0]
 	for i, uid := range u.Uids {
 		if f(uid, i) {
@@ -26,7 +21,7 @@ func ApplyFilter(u *task.UIDList, f func(uint64, int) bool) {
 
 // IntersectSorted intersects u with v. The update is made to u. It assumes
 // that u, v are sorted, which are not always the case.
-func IntersectSorted(u, v *task.UIDList) {
+func IntersectSorted(u, v *task.List) {
 	out := u.Uids[:0]
 	n := len(u.Uids)
 	m := len(v.Uids)
@@ -51,9 +46,9 @@ func IntersectSorted(u, v *task.UIDList) {
 // is the answer (or close to the answer). The following method requires nq
 // reads (each element is read only once) whereas pairwise intersections can
 // require np + nq - p reads, which can be up to ~twice as many.
-func IntersectSortedLists(lists []*task.UIDList) *task.UIDList {
+func IntersectSortedLists(lists []*task.List) *task.List {
 	if len(lists) == 0 {
-		return new(task.UIDList)
+		return new(task.List)
 	}
 
 	// Scan through the smallest list. Denote as A.
@@ -108,13 +103,13 @@ func IntersectSortedLists(lists []*task.UIDList) *task.UIDList {
 			output = append(output, val)
 		}
 	}
-	return NewUIDList(output)
+	return &task.List{Uids: output}
 }
 
 // MergeSortedLists merges sorted lists.
-func MergeSortedLists(lists []*task.UIDList) *task.UIDList {
+func MergeSortedLists(lists []*task.List) *task.List {
 	if len(lists) == 0 {
-		return new(task.UIDList)
+		return new(task.List)
 	}
 
 	h := &uint64Heap{}
@@ -150,12 +145,12 @@ func MergeSortedLists(lists []*task.UIDList) *task.UIDList {
 			heap.Fix(h, 0) // Faster than Pop() followed by Push().
 		}
 	}
-	return NewUIDList(output)
+	return &task.List{Uids: output}
 }
 
 // IndexOf performs a binary search on the uids slice and returns the index at
 // which it finds the uid, else returns -1
-func IndexOf(u *task.UIDList, uid uint64) int {
+func IndexOf(u *task.List, uid uint64) int {
 	i := sort.Search(len(u.Uids), func(i int) bool { return u.Uids[i] >= uid })
 	if i < len(u.Uids) && u.Uids[i] == uid {
 		return i
@@ -164,7 +159,7 @@ func IndexOf(u *task.UIDList, uid uint64) int {
 }
 
 // ToUintsListForTest converts to list of uints for testing purpose only.
-func ToUintsListForTest(ul []*task.UIDList) [][]uint64 {
+func ToUintsListForTest(ul []*task.List) [][]uint64 {
 	out := make([][]uint64, 0, len(ul))
 	for _, u := range ul {
 		out = append(out, u.Uids)

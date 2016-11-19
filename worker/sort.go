@@ -3,7 +3,6 @@ package worker
 import (
 	"golang.org/x/net/context"
 
-	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/schema"
@@ -12,9 +11,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-var (
-	emptySortResult task.SortResult
-)
+var emptySortResult task.SortResult
 
 // SortOverNetwork sends sort query over the network.
 func SortOverNetwork(ctx context.Context, q *task.Sort) (*task.SortResult, error) {
@@ -105,7 +102,7 @@ func processSort(ts *task.Sort) (*task.SortResult, error) {
 		// offsets[i] is the offset for i-th posting list. It gets decremented as we
 		// iterate over buckets.
 		out[i].offset = int(ts.Offset)
-		out[i].ulist = algo.NewUIDList([]uint64{})
+		out[i].ulist = &task.List{Uids: []uint64{}}
 	}
 
 	// Iterate over every bucket in TokensTable.
@@ -124,16 +121,16 @@ BUCKETS:
 		}
 	}
 
-	var r task.SortResult
+	r := new(task.SortResult)
 	for _, il := range out {
 		r.UidMatrix = append(r.UidMatrix, il.ulist)
 	}
-	return &r, nil
+	return r, nil
 }
 
 type intersectedList struct {
 	offset int
-	ulist  *task.UIDList
+	ulist  *task.List
 }
 
 func intersectBucket(ts *task.Sort, attr, token string, out []intersectedList) error {
@@ -201,7 +198,7 @@ func intersectBucket(ts *task.Sort, attr, token string, out []intersectedList) e
 }
 
 // sortByValue fetches values and sort UIDList.
-func sortByValue(attr string, ul *task.UIDList, scalar types.Scalar) error {
+func sortByValue(attr string, ul *task.List, scalar types.Scalar) error {
 	values := make([]types.Value, len(ul.Uids))
 	for i, uid := range ul.Uids {
 		val, err := fetchValue(uid, attr, scalar)

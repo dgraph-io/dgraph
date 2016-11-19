@@ -34,7 +34,6 @@ import (
 	"github.com/dgryski/go-farm"
 	"github.com/google/flatbuffers/go"
 
-	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/posting/types"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/task"
@@ -102,8 +101,8 @@ func getNew() *List {
 // ListOptions is used in List.Uids (in posting) to customize our output list of
 // UIDs, for each posting list. It should be internal to this package.
 type ListOptions struct {
-	AfterUID  uint64        // Any UID returned must be after this value.
-	Intersect *task.UIDList // Intersect results with this list of UIDs.
+	AfterUID  uint64     // Any UID returned must be after this value.
+	Intersect *task.List // Intersect results with this list of UIDs.
 }
 
 type ByUid []*types.Posting
@@ -649,7 +648,7 @@ func (l *List) LastCompactionTs() time.Time {
 
 // Uids returns the UIDs given some query params.
 // We have to apply the filtering before applying (offset, count).
-func (l *List) Uids(opt ListOptions) *task.UIDList {
+func (l *List) Uids(opt ListOptions) *task.List {
 	l.wg.Wait()
 	l.RLock()
 	defer l.RUnlock()
@@ -671,7 +670,7 @@ func (l *List) Uids(opt ListOptions) *task.UIDList {
 		result = append(result, uid)
 		return true
 	})
-	return algo.NewUIDList(result)
+	return &task.List{Uids: result}
 }
 
 func (l *List) Value() (val []byte, vtype byte, rerr error) {

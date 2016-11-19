@@ -27,7 +27,8 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-func generateGeo(ctx context.Context, attr string, qt geo.QueryType, g []byte, maxDist float64) (*task.UIDList, error) {
+func generateGeo(ctx context.Context, attr string, qt geo.QueryType, g []byte,
+	maxDist float64) (*task.List, error) {
 	tokens, data, err := geo.QueryTokens(g, qt, maxDist)
 	if err != nil {
 		return nil, err
@@ -49,7 +50,7 @@ func generateGeo(ctx context.Context, attr string, qt geo.QueryType, g []byte, m
 	return filterUIDs(uids, values, data), nil
 }
 
-func fetchIndexEntries(ctx context.Context, attr string, tokens []string) (*task.UIDList, error) {
+func fetchIndexEntries(ctx context.Context, attr string, tokens []string) (*task.List, error) {
 	sg := &SubGraph{Attr: attr}
 	sgChan := make(chan error, 1)
 
@@ -69,7 +70,7 @@ func fetchIndexEntries(ctx context.Context, attr string, tokens []string) (*task
 	return algo.MergeSortedLists(sg.uidMatrix), nil
 }
 
-func fetchValues(ctx context.Context, attr string, uids *task.UIDList) ([]*task.Value, error) {
+func fetchValues(ctx context.Context, attr string, uids *task.List) ([]*task.Value, error) {
 	sg := &SubGraph{Attr: attr}
 	sgChan := make(chan error, 1)
 
@@ -89,7 +90,7 @@ func fetchValues(ctx context.Context, attr string, uids *task.UIDList) ([]*task.
 	return sg.values, nil
 }
 
-func filterUIDs(uids *task.UIDList, values []*task.Value, q *geo.QueryData) *task.UIDList {
+func filterUIDs(uids *task.List, values []*task.Value, q *geo.QueryData) *task.List {
 	x.AssertTrue(len(values) == len(uids.Uids))
 	var rv []uint64
 	for i, tv := range values {
@@ -113,5 +114,5 @@ func filterUIDs(uids *task.UIDList, values []*task.Value, q *geo.QueryData) *tas
 		// we matched the geo filter, add the uid to the list
 		rv = append(rv, uids.Uids[i])
 	}
-	return algo.NewUIDList(rv)
+	return &task.List{Uids: rv}
 }
