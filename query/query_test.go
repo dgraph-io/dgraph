@@ -513,6 +513,7 @@ func TestToJSONFilter(t *testing.T) {
 	go ProcessGraph(ctx, sg, nil, ch)
 	err = <-ch
 	require.NoError(t, err)
+	sg.DebugPrint("  ")
 
 	var l Latency
 	js, err := sg.ToJSON(&l)

@@ -153,8 +153,8 @@ type SubGraph struct {
 }
 
 func (sg *SubGraph) DebugPrint(prefix string) {
-	fmt.Printf("%s[%q Func:%v SrcUids:%v Op:%q Dest:%v]\n",
-		prefix, sg.Attr, sg.SrcFunc, sg.SrcUIDs.Size(), sg.FilterOp, sg.uidMatrix)
+	fmt.Printf("%s[%q Func:%v SrcSz:%v Op:%q DestSz:%v ValueSz:%v]\n",
+		prefix, sg.Attr, sg.SrcFunc, sg.SrcUIDs.Size(), sg.FilterOp, sg.DestUIDs.Size(), len(sg.values))
 	for _, f := range sg.Filters {
 		f.DebugPrint(prefix + "|-f->")
 	}
@@ -390,7 +390,9 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 			Params: args,
 		}
 		if gchild.Filter != nil {
-			filterCopy(dst, gchild.Filter)
+			dstf := &SubGraph{}
+			filterCopy(dstf, gchild.Filter)
+			dst.Filters = append(dst.Filters, dstf)
 		}
 
 		if v, ok := gchild.Args["offset"]; ok {
@@ -433,6 +435,8 @@ func ToSubGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		return nil, err
 	}
 	err = treeCopy(ctx, gq, sg)
+	fmt.Println("ToSubGraph")
+	sg.DebugPrint("")
 	return sg, err
 }
 
@@ -489,8 +493,14 @@ func createNilValuesList(count int) []*task.Value {
 
 // createTaskQuery generates the query buffer.
 func createTaskQuery(sg *SubGraph, tokens []string, intersect *algo.UIDList) []byte {
-	uids := sg.SrcUIDs
-	x.AssertTrue(uids == nil || tokens == nil)
+	// TODO: Remove this concept of intersect, and move it to be processed in the dest server.
+	var uids *algo.UIDList
+	if len(tokens) > 0 {
+		intersect = sg.SrcUIDs
+	} else {
+		uids = sg.SrcUIDs
+	}
+	// x.AssertTrue(uids == nil || tokens == nil)
 
 	b := flatbuffers.NewBuilder(0)
 	var vend flatbuffers.UOffsetT
@@ -556,6 +566,8 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	var intersect *algo.UIDList
 	var intersectDestination bool
 
+	sg.DebugPrint("ProcessGraph ")
+
 	if len(sg.SrcFunc) > 0 {
 		if len(sg.SrcFunc) < 2 {
 			err = x.Errorf("Expected at least 2 arguments in function. Got: %v", sg.SrcFunc)
@@ -577,7 +589,6 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 				intersect = parent.DestUIDs
 			}
 			intersectDestination = false
-			fallthrough
 		case "allof":
 			tokens, err = getTokens(sg.SrcFunc[1])
 			if err != nil {
@@ -606,7 +617,9 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		sg.DestUIDs = algo.MergeLists(sg.uidMatrix) // Could also be = sg.SrcUIDs
 
 	} else {
-		taskQuery := createTaskQuery(sg, tokens, intersect)
+		sg.DebugPrint("CREATE ")
+		_ = intersect
+		taskQuery := createTaskQuery(sg, tokens, nil)
 		data, err := worker.ProcessTaskOverNetwork(ctx, taskQuery)
 		if err != nil {
 			x.TraceError(ctx, x.Wrapf(err, "Error while processing task"))
@@ -649,6 +662,9 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		} else {
 			sg.DestUIDs = algo.MergeLists(sg.uidMatrix)
 		}
+		fmt.Println()
+		sg.DebugPrint("ProcessWorker ")
+		fmt.Printf("UIDMatrix: %v\n", sg.uidMatrix[0].Size())
 	}
 
 	if sg.DestUIDs.Size() == 0 {
@@ -659,14 +675,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	}
 
 	// Apply filters if any.
-	if len(sg.FilterOp) > 0 {
-		if len(sg.Filters) == 0 {
-			err = x.Errorf("Must contain some filters if op is set: %v", sg.FilterOp)
-			x.TraceError(ctx, x.Wrap(err))
-			rch <- err
-			return
-		}
-
+	if len(sg.Filters) > 0 {
 		// Run all filters in parallel.
 		filterChan := make(chan error, len(sg.Filters))
 		for i := 0; i < len(sg.Filters); i++ {
@@ -698,14 +707,11 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		// Now apply the results from filter.
 		if sg.FilterOp == "&" {
 			sg.DestUIDs = algo.IntersectLists(lists)
-		} else if sg.FilterOp == "|" {
-			sg.DestUIDs = algo.MergeLists(lists)
 		} else {
-			err = x.Errorf("Unknown operator: %v", sg.FilterOp)
-			x.TraceError(ctx, x.Wrap(err))
-			rch <- err
-			return
+			sg.DestUIDs = algo.MergeLists(lists)
 		}
+		fmt.Printf("Set dest uids from filters: %v", sg.DestUIDs.Size())
+		sg.DebugPrint("AFTER FILTER: ")
 	}
 
 	if len(sg.Params.Order) == 0 {
