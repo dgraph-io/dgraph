@@ -210,7 +210,9 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 	// We go through all predicate children of the subgraph.
 	for _, pc := range sg.Children {
 		idx := pc.SrcUIDs.IndexOf(uid)
-		x.AssertTruef(idx >= 0, "Attribute with uid not found in child Query uids")
+		if idx < 0 {
+			continue
+		}
 		ul := pc.uidMatrix[idx]
 
 		if len(pc.counts) > 0 {
@@ -218,6 +220,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 			uc := dst.New(pc.Attr)
 			uc.AddValue("_count_", &c)
 			dst.AddChild(pc.Attr, uc)
+
 		} else if ul.Size() > 0 || len(pc.Children) > 0 {
 			// We create as many predicate entity children as the length of uids for
 			// this predicate.
@@ -239,7 +242,9 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 					log.Printf("Error while traversal: %v", rerr)
 					return rerr
 				}
-				dst.AddChild(pc.Attr, uc)
+				if !uc.IsEmpty() {
+					dst.AddChild(pc.Attr, uc)
+				}
 			}
 		} else {
 			tv := pc.values[idx]
@@ -664,7 +669,9 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		}
 		fmt.Println()
 		sg.DebugPrint("ProcessWorker ")
-		fmt.Printf("UIDMatrix: %v\n", sg.uidMatrix[0].Size())
+		if len(sg.uidMatrix) > 0 {
+			fmt.Printf("UIDMatrix: %v\n", sg.uidMatrix[0].Size())
+		}
 	}
 
 	if sg.DestUIDs.Size() == 0 {
@@ -704,14 +711,23 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			}
 		}
 
+		x.AssertTrue(len(lists) == len(sg.Filters))
 		// Now apply the results from filter.
-		if sg.FilterOp == "&" {
-			sg.DestUIDs = algo.IntersectLists(lists)
-		} else {
-			sg.DestUIDs = algo.MergeLists(lists)
+		for _, l := range lists {
+			fmt.Printf("LIST SIZE: %v\n", l.Size())
 		}
-		fmt.Printf("Set dest uids from filters: %v", sg.DestUIDs.Size())
+		if sg.FilterOp == "|" {
+			fmt.Println("DOING OR")
+			sg.DestUIDs = algo.MergeLists(lists)
+		} else {
+			fmt.Println("DOING AND")
+			sg.DestUIDs = algo.IntersectLists(lists)
+		}
+		fmt.Printf("Set dest uids from filters for attr: %v, %v\n", sg.DestUIDs.Size(), sg.Attr)
 		sg.DebugPrint("AFTER FILTER: ")
+		fmt.Println()
+		fmt.Println()
+		fmt.Println()
 	}
 
 	if len(sg.Params.Order) == 0 {
@@ -864,6 +880,7 @@ type outputNode interface {
 	New(attr string) outputNode
 	SetUID(uid uint64)
 	SetXID(xid string)
+	IsEmpty() bool
 }
 
 // protoOutputNode is the proto output for preTraverse.
@@ -893,6 +910,16 @@ func (p *protoOutputNode) SetUID(uid uint64) { p.Node.Uid = uid }
 
 // SetXID sets XID of a protoOutputNode.
 func (p *protoOutputNode) SetXID(xid string) { p.Node.Xid = xid }
+
+func (p *protoOutputNode) IsEmpty() bool {
+	if len(p.Node.Children) > 0 {
+		return false
+	}
+	if len(p.Node.Properties) > 0 {
+		return false
+	}
+	return true
+}
 
 // ToProtocolBuffer does preorder traversal to build a proto buffer. We have
 // used postorder traversal before, but preorder seems simpler and faster for
@@ -953,6 +980,10 @@ func (p *jsonOutputNode) SetUID(uid uint64) {
 // SetXID sets XID of a jsonOutputNode.
 func (p *jsonOutputNode) SetXID(xid string) {
 	p.data["_xid_"] = xid
+}
+
+func (p *jsonOutputNode) IsEmpty() bool {
+	return len(p.data) == 0
 }
 
 // ToJSON converts the internal subgraph object to JSON format which is then\
