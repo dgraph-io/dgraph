@@ -458,7 +458,7 @@ func TestToJSON(t *testing.T) {
 			me(_uid_:0x01) {
 				name
 				gender
-			  alive	
+			  alive
 				friend {
 					name
 				}
@@ -482,7 +482,7 @@ func TestToJSON(t *testing.T) {
 	js, err := sg.ToJSON(&l)
 	require.NoError(t, err)
 	require.EqualValues(t,
-		`{"me":[{"alive":true,"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"},{}],"gender":"female","name":"Michonne"}]}`,
+		`{"me":[{"alive":true,"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
 		string(js))
 }
 
@@ -676,7 +676,7 @@ func TestToJSONFilterOrOffset(t *testing.T) {
 			me(_uid_:0x01) {
 				name
 				gender
-				friend(offset:0) @filter(anyof("name", "Andrea") || anyof("name", "Glenn Rhee") || anyof("name", "Daryl Dixon")) {
+				friend(offset:1) @filter(anyof("name", "Andrea") || anyof("name", "Glenn Rhee") || anyof("name", "Daryl Dixon")) {
 					name
 				}
 			}
@@ -1628,36 +1628,36 @@ func TestGenerator(t *testing.T) {
 	require.EqualValues(t, `{"me":[{"gender":"female","name":"Michonne"}]}`, string(js))
 }
 
-func TestNearGenerator(t *testing.T) {
-	dir1, dir2, _ := populateGraph(t)
-	defer os.RemoveAll(dir1)
-	defer os.RemoveAll(dir2)
-	query := `
-    {
-			me(near("loc", "{'Type':'Point', 'Coordinates':[1.1,2.0]}", "5")) { 
-        name
-        gender
-      }
-    }
-  `
+//func TestNearGenerator(t *testing.T) {
+//dir1, dir2, _ := populateGraph(t)
+//defer os.RemoveAll(dir1)
+//defer os.RemoveAll(dir2)
+//query := `
+//{
+//me(near("loc", "{'Type':'Point', 'Coordinates':[1.1,2.0]}", "5")) {
+//name
+//gender
+//}
+//}
+//`
 
-	gq, _, err := gql.Parse(query)
-	require.NoError(t, err)
+//gq, _, err := gql.Parse(query)
+//require.NoError(t, err)
 
-	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, gq)
-	require.NoError(t, err)
+//ctx := context.Background()
+//sg, err := ToSubGraph(ctx, gq)
+//require.NoError(t, err)
 
-	ch := make(chan error)
-	go ProcessGraph(ctx, sg, nil, ch)
-	err = <-ch
-	require.NoError(t, err)
+//ch := make(chan error)
+//go ProcessGraph(ctx, sg, nil, ch)
+//err = <-ch
+//require.NoError(t, err)
 
-	var l Latency
-	js, err := sg.ToJSON(&l)
-	require.NoError(t, err)
-	require.EqualValues(t, `{"me":[{"gender":"female","name":"Michonne"}]}`, string(js))
-}
+//var l Latency
+//js, err := sg.ToJSON(&l)
+//require.NoError(t, err)
+//require.EqualValues(t, `{"me":[{"gender":"female","name":"Michonne"}]}`, string(js))
+//}
 
 func TestMain(m *testing.M) {
 	x.Init()

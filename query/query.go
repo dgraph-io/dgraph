@@ -152,9 +152,10 @@ type SubGraph struct {
 	DestUIDs *algo.UIDList
 }
 
+// DebugPrint prints out the SubGraph tree in a nice format for debugging purposes.
 func (sg *SubGraph) DebugPrint(prefix string) {
-	fmt.Printf("%s[%q Func:%v SrcSz:%v Op:%q DestSz:%v ValueSz:%v]\n",
-		prefix, sg.Attr, sg.SrcFunc, sg.SrcUIDs.Size(), sg.FilterOp, sg.DestUIDs.Size(), len(sg.values))
+	fmt.Printf("%s[%q Func:%v SrcSz:%v Op:%q DestSz:%v Dest: %p ValueSz:%v]\n",
+		prefix, sg.Attr, sg.SrcFunc, sg.SrcUIDs.Size(), sg.FilterOp, sg.DestUIDs.Size(), sg.DestUIDs, len(sg.values))
 	for _, f := range sg.Filters {
 		f.DebugPrint(prefix + "|-f->")
 	}
@@ -440,8 +441,6 @@ func ToSubGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		return nil, err
 	}
 	err = treeCopy(ctx, gq, sg)
-	fmt.Println("ToSubGraph")
-	sg.DebugPrint("")
 	return sg, err
 }
 
@@ -497,9 +496,10 @@ func createNilValuesList(count int) []*task.Value {
 }
 
 // createTaskQuery generates the query buffer.
-func createTaskQuery(sg *SubGraph, tokens []string, intersect *algo.UIDList) []byte {
+func createTaskQuery(sg *SubGraph, tokens []string) []byte {
 	// TODO: Remove this concept of intersect, and move it to be processed in the dest server.
 	var uids *algo.UIDList
+	var intersect *algo.UIDList
 	if len(tokens) > 0 {
 		intersect = sg.SrcUIDs
 	} else {
@@ -568,10 +568,7 @@ func getTokens(term string) ([]string, error) {
 func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	var err error
 	var tokens []string
-	var intersect *algo.UIDList
 	var intersectDestination bool
-
-	sg.DebugPrint("ProcessGraph ")
 
 	if len(sg.SrcFunc) > 0 {
 		if len(sg.SrcFunc) < 2 {
@@ -590,9 +587,6 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 				rch <- err
 				return
 			}
-			if parent != nil {
-				intersect = parent.DestUIDs
-			}
 			intersectDestination = false
 		case "allof":
 			tokens, err = getTokens(sg.SrcFunc[1])
@@ -600,9 +594,6 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 				x.TraceError(ctx, x.Wrap(err))
 				rch <- err
 				return
-			}
-			if parent != nil {
-				intersect = parent.DestUIDs
 			}
 			intersectDestination = true
 			// TODO: Handle geo filtering, using two steps in SubGraph.
@@ -614,6 +605,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	if len(sg.Attr) == 0 {
 		// If we have a filter SubGraph which only contains an operator,
 		// it won't have any attribute to work on.
+		// This is to allow providing SrcUIDs to the filter children.
 		sg.DestUIDs = sg.SrcUIDs
 
 	} else if parent == nil && len(sg.SrcFunc) == 0 {
@@ -622,9 +614,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		sg.DestUIDs = algo.MergeLists(sg.uidMatrix) // Could also be = sg.SrcUIDs
 
 	} else {
-		sg.DebugPrint("CREATE ")
-		_ = intersect
-		taskQuery := createTaskQuery(sg, tokens, nil)
+		taskQuery := createTaskQuery(sg, tokens)
 		data, err := worker.ProcessTaskOverNetwork(ctx, taskQuery)
 		if err != nil {
 			x.TraceError(ctx, x.Wrapf(err, "Error while processing task"))
@@ -668,7 +658,6 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			sg.DestUIDs = algo.MergeLists(sg.uidMatrix)
 		}
 		fmt.Println()
-		sg.DebugPrint("ProcessWorker ")
 		if len(sg.uidMatrix) > 0 {
 			fmt.Printf("UIDMatrix: %v\n", sg.uidMatrix[0].Size())
 		}
@@ -685,24 +674,19 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	if len(sg.Filters) > 0 {
 		// Run all filters in parallel.
 		filterChan := make(chan error, len(sg.Filters))
-		for i := 0; i < len(sg.Filters); i++ {
-			filter := sg.Filters[i]
+		for _, filter := range sg.Filters {
 			filter.SrcUIDs = sg.DestUIDs
 			go ProcessGraph(ctx, filter, sg, filterChan)
 		}
 
-		var lists []*algo.UIDList
-		for i := 0; i < len(sg.Filters); i++ {
+		for _ = range sg.Filters {
 			select {
 			case err = <-filterChan:
-				x.Trace(ctx, "Reply from filter. Index: %v Addr: %v", i, sg.Filters[i].Attr)
 				if err != nil {
 					x.TraceError(ctx, x.Wrapf(err, "Error while processing child task"))
 					rch <- err
 					return
 				}
-				filter := sg.Filters[i]
-				lists = append(lists, filter.DestUIDs)
 
 			case <-ctx.Done():
 				x.TraceError(ctx, x.Wrapf(ctx.Err(), "Context done before full execution"))
@@ -711,23 +695,16 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			}
 		}
 
-		x.AssertTrue(len(lists) == len(sg.Filters))
 		// Now apply the results from filter.
-		for _, l := range lists {
-			fmt.Printf("LIST SIZE: %v\n", l.Size())
+		var lists []*algo.UIDList
+		for _, fil := range sg.Filters {
+			lists = append(lists, fil.DestUIDs)
 		}
 		if sg.FilterOp == "|" {
-			fmt.Println("DOING OR")
 			sg.DestUIDs = algo.MergeLists(lists)
 		} else {
-			fmt.Println("DOING AND")
 			sg.DestUIDs = algo.IntersectLists(lists)
 		}
-		fmt.Printf("Set dest uids from filters for attr: %v, %v\n", sg.DestUIDs.Size(), sg.Attr)
-		sg.DebugPrint("AFTER FILTER: ")
-		fmt.Println()
-		fmt.Println()
-		fmt.Println()
 	}
 
 	if len(sg.Params.Order) == 0 {
@@ -755,7 +732,6 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	for i := 0; i < len(sg.Children); i++ {
 		select {
 		case err = <-childChan:
-			x.Trace(ctx, "Reply from child. Index: %v Attr: %v", i, sg.Children[i].Attr)
 			if err != nil {
 				x.TraceError(ctx, x.Wrapf(err, "Error while processing child task"))
 				rch <- err
