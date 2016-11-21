@@ -44,3 +44,9 @@ message Sort {
 message SortResult {
 	repeated List uidMatrix = 1;
 }
+
+message Num {
+	uint32 group = 1;
+	int64 val = 2;
+	repeated uint64 uids = 3;
+}

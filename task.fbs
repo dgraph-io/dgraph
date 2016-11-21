@@ -2,12 +2,6 @@
 
 namespace task;
 
-table Num {
-	group:uint;
-	val:int;
-	uids:[ulong];
-}
-
 table KV {
 	key:[ubyte];
 	val:[ubyte];
@@ -47,9 +41,4 @@ table Membership {
 table MembershipUpdate {
 	members:[Membership];
 	lastUpdate:ulong;
-}
-
-// TODO: Deprecate.
-table UidList {
-	uids:[ulong];
 }
