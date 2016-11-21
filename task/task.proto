@@ -60,3 +60,9 @@ message DirectedEdge {
 	string source = 6;     // Source of data, e.g., index.
 	bytes timestamp = 7;   // time.Time.
 }
+
+message Mutations {
+	uint32 groupId = 1;
+	repeated DirectedEdge set = 2;
+	repeated DirectedEdge del = 3;
+}

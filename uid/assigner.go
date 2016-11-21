@@ -108,7 +108,7 @@ func allocateUniqueUid(instanceIdx uint64, numInstances uint64) uint64 {
 }
 
 // AssignNew assigns N unique uids.
-func AssignNew(N int, instanceIdx uint64, numInstances uint64) *x.Mutations {
+func AssignNew(N int, instanceIdx uint64, numInstances uint64) *task.Mutations {
 	set := make([]*task.DirectedEdge, N)
 	for i := 0; i < N; i++ {
 		uid := allocateUniqueUid(instanceIdx, numInstances)
@@ -120,5 +120,5 @@ func AssignNew(N int, instanceIdx uint64, numInstances uint64) *x.Mutations {
 			Timestamp: x.CurrentTime(),
 		}
 	}
-	return &x.Mutations{Set: set}
+	return &task.Mutations{Set: set}
 }

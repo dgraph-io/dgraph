@@ -146,15 +146,9 @@ func MutateOverNetwork(ctx context.Context, m x.Mutations) (rerr error) {
 }
 
 // Mutate is used to apply mutations over the network on other instances.
-func (w *grpcWorker) Mutate(ctx context.Context, query *Payload) (*Payload, error) {
+func (w *grpcWorker) Mutate(ctx context.Context, m *task.Mutations) (*Payload, error) {
 	if ctx.Err() != nil {
 		return &Payload{}, ctx.Err()
-	}
-
-	m := new(x.Mutations)
-	// Ensure that this can be decoded. This is an optional step.
-	if err := m.Decode(query.Data); err != nil {
-		return nil, x.Wrapf(err, "While decoding mutation.")
 	}
 
 	if !groups().ServesGroup(m.GroupId) {
