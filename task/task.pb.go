@@ -9,9 +9,12 @@
 		task.proto
 
 	It has these top-level messages:
-		UIDList
+		List
 		Value
+		Query
 		Result
+		Sort
+		SortResult
 */
 package task
 
@@ -32,14 +35,14 @@ var _ = math.Inf
 // proto package needs to be updated.
 const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
 
-type UIDList struct {
+type List struct {
 	Uids []uint64 `protobuf:"fixed64,1,rep,packed,name=uids" json:"uids,omitempty"`
 }
 
-func (m *UIDList) Reset()                    { *m = UIDList{} }
-func (m *UIDList) String() string            { return proto.CompactTextString(m) }
-func (*UIDList) ProtoMessage()               {}
-func (*UIDList) Descriptor() ([]byte, []int) { return fileDescriptorTask, []int{0} }
+func (m *List) Reset()                    { *m = List{} }
+func (m *List) String() string            { return proto.CompactTextString(m) }
+func (*List) ProtoMessage()               {}
+func (*List) Descriptor() ([]byte, []int) { return fileDescriptorTask, []int{0} }
 
 type Value struct {
 	Val     []byte `protobuf:"bytes,1,opt,name=val,proto3" json:"val,omitempty"`
@@ -51,18 +54,37 @@ func (m *Value) String() string            { return proto.CompactTextString(m) }
 func (*Value) ProtoMessage()               {}
 func (*Value) Descriptor() ([]byte, []int) { return fileDescriptorTask, []int{1} }
 
+type Query struct {
+	Attr     string `protobuf:"bytes,1,opt,name=attr,proto3" json:"attr,omitempty"`
+	Count    int32  `protobuf:"varint,2,opt,name=count,proto3" json:"count,omitempty"`
+	Offset   int32  `protobuf:"varint,3,opt,name=offset,proto3" json:"offset,omitempty"`
+	AfterUid uint64 `protobuf:"fixed64,4,opt,name=afterUid,proto3" json:"afterUid,omitempty"`
+	DoCount  bool   `protobuf:"varint,5,opt,name=doCount,proto3" json:"doCount,omitempty"`
+	// Exactly one of uids and terms is populated.
+	Uids   []uint64 `protobuf:"fixed64,6,rep,packed,name=uids" json:"uids,omitempty"`
+	Tokens []string `protobuf:"bytes,7,rep,name=tokens" json:"tokens,omitempty"`
+	// Intersect results with this UID list. If uids is populated, then this is
+	// an "intersection query". If terms is populated, this is a "filter query".
+	ToIntersect []uint64 `protobuf:"fixed64,8,rep,packed,name=toIntersect" json:"toIntersect,omitempty"`
+}
+
+func (m *Query) Reset()                    { *m = Query{} }
+func (m *Query) String() string            { return proto.CompactTextString(m) }
+func (*Query) ProtoMessage()               {}
+func (*Query) Descriptor() ([]byte, []int) { return fileDescriptorTask, []int{2} }
+
 type Result struct {
-	UidMatrix []*UIDList `protobuf:"bytes,1,rep,name=uidMatrix" json:"uidMatrix,omitempty"`
-	Values    []*Value   `protobuf:"bytes,2,rep,name=values" json:"values,omitempty"`
-	Counts    []uint32   `protobuf:"varint,3,rep,packed,name=counts" json:"counts,omitempty"`
+	UidMatrix []*List  `protobuf:"bytes,1,rep,name=uidMatrix" json:"uidMatrix,omitempty"`
+	Values    []*Value `protobuf:"bytes,2,rep,name=values" json:"values,omitempty"`
+	Counts    []uint32 `protobuf:"varint,3,rep,packed,name=counts" json:"counts,omitempty"`
 }
 
 func (m *Result) Reset()                    { *m = Result{} }
 func (m *Result) String() string            { return proto.CompactTextString(m) }
 func (*Result) ProtoMessage()               {}
-func (*Result) Descriptor() ([]byte, []int) { return fileDescriptorTask, []int{2} }
+func (*Result) Descriptor() ([]byte, []int) { return fileDescriptorTask, []int{3} }
 
-func (m *Result) GetUidMatrix() []*UIDList {
+func (m *Result) GetUidMatrix() []*List {
 	if m != nil {
 		return m.UidMatrix
 	}
@@ -76,12 +98,50 @@ func (m *Result) GetValues() []*Value {
 	return nil
 }
 
-func init() {
-	proto.RegisterType((*UIDList)(nil), "task.UIDList")
-	proto.RegisterType((*Value)(nil), "task.Value")
-	proto.RegisterType((*Result)(nil), "task.Result")
+type Sort struct {
+	Attr      string  `protobuf:"bytes,1,opt,name=attr,proto3" json:"attr,omitempty"`
+	UidMatrix []*List `protobuf:"bytes,2,rep,name=uidMatrix" json:"uidMatrix,omitempty"`
+	Count     int32   `protobuf:"varint,3,opt,name=count,proto3" json:"count,omitempty"`
+	Offset    int32   `protobuf:"varint,4,opt,name=offset,proto3" json:"offset,omitempty"`
 }
-func (m *UIDList) Marshal() (data []byte, err error) {
+
+func (m *Sort) Reset()                    { *m = Sort{} }
+func (m *Sort) String() string            { return proto.CompactTextString(m) }
+func (*Sort) ProtoMessage()               {}
+func (*Sort) Descriptor() ([]byte, []int) { return fileDescriptorTask, []int{4} }
+
+func (m *Sort) GetUidMatrix() []*List {
+	if m != nil {
+		return m.UidMatrix
+	}
+	return nil
+}
+
+type SortResult struct {
+	UidMatrix []*List `protobuf:"bytes,1,rep,name=uidMatrix" json:"uidMatrix,omitempty"`
+}
+
+func (m *SortResult) Reset()                    { *m = SortResult{} }
+func (m *SortResult) String() string            { return proto.CompactTextString(m) }
+func (*SortResult) ProtoMessage()               {}
+func (*SortResult) Descriptor() ([]byte, []int) { return fileDescriptorTask, []int{5} }
+
+func (m *SortResult) GetUidMatrix() []*List {
+	if m != nil {
+		return m.UidMatrix
+	}
+	return nil
+}
+
+func init() {
+	proto.RegisterType((*List)(nil), "task.List")
+	proto.RegisterType((*Value)(nil), "task.Value")
+	proto.RegisterType((*Query)(nil), "task.Query")
+	proto.RegisterType((*Result)(nil), "task.Result")
+	proto.RegisterType((*Sort)(nil), "task.Sort")
+	proto.RegisterType((*SortResult)(nil), "task.SortResult")
+}
+func (m *List) Marshal() (data []byte, err error) {
 	size := m.Size()
 	data = make([]byte, size)
 	n, err := m.MarshalTo(data)
@@ -91,7 +151,7 @@ func (m *UIDList) Marshal() (data []byte, err error) {
 	return data[:n], nil
 }
 
-func (m *UIDList) MarshalTo(data []byte) (int, error) {
+func (m *List) MarshalTo(data []byte) (int, error) {
 	var i int
 	_ = i
 	var l int
@@ -147,6 +207,116 @@ func (m *Value) MarshalTo(data []byte) (int, error) {
 		data[i] = 0x10
 		i++
 		i = encodeVarintTask(data, i, uint64(m.ValType))
+	}
+	return i, nil
+}
+
+func (m *Query) Marshal() (data []byte, err error) {
+	size := m.Size()
+	data = make([]byte, size)
+	n, err := m.MarshalTo(data)
+	if err != nil {
+		return nil, err
+	}
+	return data[:n], nil
+}
+
+func (m *Query) MarshalTo(data []byte) (int, error) {
+	var i int
+	_ = i
+	var l int
+	_ = l
+	if len(m.Attr) > 0 {
+		data[i] = 0xa
+		i++
+		i = encodeVarintTask(data, i, uint64(len(m.Attr)))
+		i += copy(data[i:], m.Attr)
+	}
+	if m.Count != 0 {
+		data[i] = 0x10
+		i++
+		i = encodeVarintTask(data, i, uint64(m.Count))
+	}
+	if m.Offset != 0 {
+		data[i] = 0x18
+		i++
+		i = encodeVarintTask(data, i, uint64(m.Offset))
+	}
+	if m.AfterUid != 0 {
+		data[i] = 0x21
+		i++
+		i = encodeFixed64Task(data, i, uint64(m.AfterUid))
+	}
+	if m.DoCount {
+		data[i] = 0x28
+		i++
+		if m.DoCount {
+			data[i] = 1
+		} else {
+			data[i] = 0
+		}
+		i++
+	}
+	if len(m.Uids) > 0 {
+		data[i] = 0x32
+		i++
+		i = encodeVarintTask(data, i, uint64(len(m.Uids)*8))
+		for _, num := range m.Uids {
+			data[i] = uint8(num)
+			i++
+			data[i] = uint8(num >> 8)
+			i++
+			data[i] = uint8(num >> 16)
+			i++
+			data[i] = uint8(num >> 24)
+			i++
+			data[i] = uint8(num >> 32)
+			i++
+			data[i] = uint8(num >> 40)
+			i++
+			data[i] = uint8(num >> 48)
+			i++
+			data[i] = uint8(num >> 56)
+			i++
+		}
+	}
+	if len(m.Tokens) > 0 {
+		for _, s := range m.Tokens {
+			data[i] = 0x3a
+			i++
+			l = len(s)
+			for l >= 1<<7 {
+				data[i] = uint8(uint64(l)&0x7f | 0x80)
+				l >>= 7
+				i++
+			}
+			data[i] = uint8(l)
+			i++
+			i += copy(data[i:], s)
+		}
+	}
+	if len(m.ToIntersect) > 0 {
+		data[i] = 0x42
+		i++
+		i = encodeVarintTask(data, i, uint64(len(m.ToIntersect)*8))
+		for _, num := range m.ToIntersect {
+			data[i] = uint8(num)
+			i++
+			data[i] = uint8(num >> 8)
+			i++
+			data[i] = uint8(num >> 16)
+			i++
+			data[i] = uint8(num >> 24)
+			i++
+			data[i] = uint8(num >> 32)
+			i++
+			data[i] = uint8(num >> 40)
+			i++
+			data[i] = uint8(num >> 48)
+			i++
+			data[i] = uint8(num >> 56)
+			i++
+		}
 	}
 	return i, nil
 }
@@ -210,6 +380,82 @@ func (m *Result) MarshalTo(data []byte) (int, error) {
 	return i, nil
 }
 
+func (m *Sort) Marshal() (data []byte, err error) {
+	size := m.Size()
+	data = make([]byte, size)
+	n, err := m.MarshalTo(data)
+	if err != nil {
+		return nil, err
+	}
+	return data[:n], nil
+}
+
+func (m *Sort) MarshalTo(data []byte) (int, error) {
+	var i int
+	_ = i
+	var l int
+	_ = l
+	if len(m.Attr) > 0 {
+		data[i] = 0xa
+		i++
+		i = encodeVarintTask(data, i, uint64(len(m.Attr)))
+		i += copy(data[i:], m.Attr)
+	}
+	if len(m.UidMatrix) > 0 {
+		for _, msg := range m.UidMatrix {
+			data[i] = 0x12
+			i++
+			i = encodeVarintTask(data, i, uint64(msg.Size()))
+			n, err := msg.MarshalTo(data[i:])
+			if err != nil {
+				return 0, err
+			}
+			i += n
+		}
+	}
+	if m.Count != 0 {
+		data[i] = 0x18
+		i++
+		i = encodeVarintTask(data, i, uint64(m.Count))
+	}
+	if m.Offset != 0 {
+		data[i] = 0x20
+		i++
+		i = encodeVarintTask(data, i, uint64(m.Offset))
+	}
+	return i, nil
+}
+
+func (m *SortResult) Marshal() (data []byte, err error) {
+	size := m.Size()
+	data = make([]byte, size)
+	n, err := m.MarshalTo(data)
+	if err != nil {
+		return nil, err
+	}
+	return data[:n], nil
+}
+
+func (m *SortResult) MarshalTo(data []byte) (int, error) {
+	var i int
+	_ = i
+	var l int
+	_ = l
+	if len(m.UidMatrix) > 0 {
+		for _, msg := range m.UidMatrix {
+			data[i] = 0xa
+			i++
+			i = encodeVarintTask(data, i, uint64(msg.Size()))
+			n, err := msg.MarshalTo(data[i:])
+			if err != nil {
+				return 0, err
+			}
+			i += n
+		}
+	}
+	return i, nil
+}
+
 func encodeFixed64Task(data []byte, offset int, v uint64) int {
 	data[offset] = uint8(v)
 	data[offset+1] = uint8(v >> 8)
@@ -237,7 +483,7 @@ func encodeVarintTask(data []byte, offset int, v uint64) int {
 	data[offset] = uint8(v)
 	return offset + 1
 }
-func (m *UIDList) Size() (n int) {
+func (m *List) Size() (n int) {
 	var l int
 	_ = l
 	if len(m.Uids) > 0 {
@@ -255,6 +501,40 @@ func (m *Value) Size() (n int) {
 	}
 	if m.ValType != 0 {
 		n += 1 + sovTask(uint64(m.ValType))
+	}
+	return n
+}
+
+func (m *Query) Size() (n int) {
+	var l int
+	_ = l
+	l = len(m.Attr)
+	if l > 0 {
+		n += 1 + l + sovTask(uint64(l))
+	}
+	if m.Count != 0 {
+		n += 1 + sovTask(uint64(m.Count))
+	}
+	if m.Offset != 0 {
+		n += 1 + sovTask(uint64(m.Offset))
+	}
+	if m.AfterUid != 0 {
+		n += 9
+	}
+	if m.DoCount {
+		n += 2
+	}
+	if len(m.Uids) > 0 {
+		n += 1 + sovTask(uint64(len(m.Uids)*8)) + len(m.Uids)*8
+	}
+	if len(m.Tokens) > 0 {
+		for _, s := range m.Tokens {
+			l = len(s)
+			n += 1 + l + sovTask(uint64(l))
+		}
+	}
+	if len(m.ToIntersect) > 0 {
+		n += 1 + sovTask(uint64(len(m.ToIntersect)*8)) + len(m.ToIntersect)*8
 	}
 	return n
 }
@@ -284,6 +564,40 @@ func (m *Result) Size() (n int) {
 	return n
 }
 
+func (m *Sort) Size() (n int) {
+	var l int
+	_ = l
+	l = len(m.Attr)
+	if l > 0 {
+		n += 1 + l + sovTask(uint64(l))
+	}
+	if len(m.UidMatrix) > 0 {
+		for _, e := range m.UidMatrix {
+			l = e.Size()
+			n += 1 + l + sovTask(uint64(l))
+		}
+	}
+	if m.Count != 0 {
+		n += 1 + sovTask(uint64(m.Count))
+	}
+	if m.Offset != 0 {
+		n += 1 + sovTask(uint64(m.Offset))
+	}
+	return n
+}
+
+func (m *SortResult) Size() (n int) {
+	var l int
+	_ = l
+	if len(m.UidMatrix) > 0 {
+		for _, e := range m.UidMatrix {
+			l = e.Size()
+			n += 1 + l + sovTask(uint64(l))
+		}
+	}
+	return n
+}
+
 func sovTask(x uint64) (n int) {
 	for {
 		n++
@@ -297,7 +611,7 @@ func sovTask(x uint64) (n int) {
 func sozTask(x uint64) (n int) {
 	return sovTask(uint64((x << 1) ^ uint64((int64(x) >> 63))))
 }
-func (m *UIDList) Unmarshal(data []byte) error {
+func (m *List) Unmarshal(data []byte) error {
 	l := len(data)
 	iNdEx := 0
 	for iNdEx < l {
@@ -320,10 +634,10 @@ func (m *UIDList) Unmarshal(data []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: UIDList: wiretype end group for non-group")
+			return fmt.Errorf("proto: List: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: UIDList: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: List: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:
@@ -505,6 +819,305 @@ func (m *Value) Unmarshal(data []byte) error {
 	}
 	return nil
 }
+func (m *Query) Unmarshal(data []byte) error {
+	l := len(data)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowTask
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := data[iNdEx]
+			iNdEx++
+			wire |= (uint64(b) & 0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: Query: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: Query: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Attr", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowTask
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				stringLen |= (uint64(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthTask
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Attr = string(data[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Count", wireType)
+			}
+			m.Count = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowTask
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				m.Count |= (int32(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 3:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Offset", wireType)
+			}
+			m.Offset = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowTask
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				m.Offset |= (int32(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 4:
+			if wireType != 1 {
+				return fmt.Errorf("proto: wrong wireType = %d for field AfterUid", wireType)
+			}
+			m.AfterUid = 0
+			if (iNdEx + 8) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += 8
+			m.AfterUid = uint64(data[iNdEx-8])
+			m.AfterUid |= uint64(data[iNdEx-7]) << 8
+			m.AfterUid |= uint64(data[iNdEx-6]) << 16
+			m.AfterUid |= uint64(data[iNdEx-5]) << 24
+			m.AfterUid |= uint64(data[iNdEx-4]) << 32
+			m.AfterUid |= uint64(data[iNdEx-3]) << 40
+			m.AfterUid |= uint64(data[iNdEx-2]) << 48
+			m.AfterUid |= uint64(data[iNdEx-1]) << 56
+		case 5:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field DoCount", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowTask
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				v |= (int(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.DoCount = bool(v != 0)
+		case 6:
+			if wireType == 2 {
+				var packedLen int
+				for shift := uint(0); ; shift += 7 {
+					if shift >= 64 {
+						return ErrIntOverflowTask
+					}
+					if iNdEx >= l {
+						return io.ErrUnexpectedEOF
+					}
+					b := data[iNdEx]
+					iNdEx++
+					packedLen |= (int(b) & 0x7F) << shift
+					if b < 0x80 {
+						break
+					}
+				}
+				if packedLen < 0 {
+					return ErrInvalidLengthTask
+				}
+				postIndex := iNdEx + packedLen
+				if postIndex > l {
+					return io.ErrUnexpectedEOF
+				}
+				for iNdEx < postIndex {
+					var v uint64
+					if (iNdEx + 8) > l {
+						return io.ErrUnexpectedEOF
+					}
+					iNdEx += 8
+					v = uint64(data[iNdEx-8])
+					v |= uint64(data[iNdEx-7]) << 8
+					v |= uint64(data[iNdEx-6]) << 16
+					v |= uint64(data[iNdEx-5]) << 24
+					v |= uint64(data[iNdEx-4]) << 32
+					v |= uint64(data[iNdEx-3]) << 40
+					v |= uint64(data[iNdEx-2]) << 48
+					v |= uint64(data[iNdEx-1]) << 56
+					m.Uids = append(m.Uids, v)
+				}
+			} else if wireType == 1 {
+				var v uint64
+				if (iNdEx + 8) > l {
+					return io.ErrUnexpectedEOF
+				}
+				iNdEx += 8
+				v = uint64(data[iNdEx-8])
+				v |= uint64(data[iNdEx-7]) << 8
+				v |= uint64(data[iNdEx-6]) << 16
+				v |= uint64(data[iNdEx-5]) << 24
+				v |= uint64(data[iNdEx-4]) << 32
+				v |= uint64(data[iNdEx-3]) << 40
+				v |= uint64(data[iNdEx-2]) << 48
+				v |= uint64(data[iNdEx-1]) << 56
+				m.Uids = append(m.Uids, v)
+			} else {
+				return fmt.Errorf("proto: wrong wireType = %d for field Uids", wireType)
+			}
+		case 7:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Tokens", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowTask
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				stringLen |= (uint64(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthTask
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Tokens = append(m.Tokens, string(data[iNdEx:postIndex]))
+			iNdEx = postIndex
+		case 8:
+			if wireType == 2 {
+				var packedLen int
+				for shift := uint(0); ; shift += 7 {
+					if shift >= 64 {
+						return ErrIntOverflowTask
+					}
+					if iNdEx >= l {
+						return io.ErrUnexpectedEOF
+					}
+					b := data[iNdEx]
+					iNdEx++
+					packedLen |= (int(b) & 0x7F) << shift
+					if b < 0x80 {
+						break
+					}
+				}
+				if packedLen < 0 {
+					return ErrInvalidLengthTask
+				}
+				postIndex := iNdEx + packedLen
+				if postIndex > l {
+					return io.ErrUnexpectedEOF
+				}
+				for iNdEx < postIndex {
+					var v uint64
+					if (iNdEx + 8) > l {
+						return io.ErrUnexpectedEOF
+					}
+					iNdEx += 8
+					v = uint64(data[iNdEx-8])
+					v |= uint64(data[iNdEx-7]) << 8
+					v |= uint64(data[iNdEx-6]) << 16
+					v |= uint64(data[iNdEx-5]) << 24
+					v |= uint64(data[iNdEx-4]) << 32
+					v |= uint64(data[iNdEx-3]) << 40
+					v |= uint64(data[iNdEx-2]) << 48
+					v |= uint64(data[iNdEx-1]) << 56
+					m.ToIntersect = append(m.ToIntersect, v)
+				}
+			} else if wireType == 1 {
+				var v uint64
+				if (iNdEx + 8) > l {
+					return io.ErrUnexpectedEOF
+				}
+				iNdEx += 8
+				v = uint64(data[iNdEx-8])
+				v |= uint64(data[iNdEx-7]) << 8
+				v |= uint64(data[iNdEx-6]) << 16
+				v |= uint64(data[iNdEx-5]) << 24
+				v |= uint64(data[iNdEx-4]) << 32
+				v |= uint64(data[iNdEx-3]) << 40
+				v |= uint64(data[iNdEx-2]) << 48
+				v |= uint64(data[iNdEx-1]) << 56
+				m.ToIntersect = append(m.ToIntersect, v)
+			} else {
+				return fmt.Errorf("proto: wrong wireType = %d for field ToIntersect", wireType)
+			}
+		default:
+			iNdEx = preIndex
+			skippy, err := skipTask(data[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthTask
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
 func (m *Result) Unmarshal(data []byte) error {
 	l := len(data)
 	iNdEx := 0
@@ -560,7 +1173,7 @@ func (m *Result) Unmarshal(data []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.UidMatrix = append(m.UidMatrix, &UIDList{})
+			m.UidMatrix = append(m.UidMatrix, &List{})
 			if err := m.UidMatrix[len(m.UidMatrix)-1].Unmarshal(data[iNdEx:postIndex]); err != nil {
 				return err
 			}
@@ -658,6 +1271,235 @@ func (m *Result) Unmarshal(data []byte) error {
 			} else {
 				return fmt.Errorf("proto: wrong wireType = %d for field Counts", wireType)
 			}
+		default:
+			iNdEx = preIndex
+			skippy, err := skipTask(data[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthTask
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *Sort) Unmarshal(data []byte) error {
+	l := len(data)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowTask
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := data[iNdEx]
+			iNdEx++
+			wire |= (uint64(b) & 0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: Sort: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: Sort: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Attr", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowTask
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				stringLen |= (uint64(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthTask
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Attr = string(data[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field UidMatrix", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowTask
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				msglen |= (int(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthTask
+			}
+			postIndex := iNdEx + msglen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.UidMatrix = append(m.UidMatrix, &List{})
+			if err := m.UidMatrix[len(m.UidMatrix)-1].Unmarshal(data[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 3:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Count", wireType)
+			}
+			m.Count = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowTask
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				m.Count |= (int32(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 4:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Offset", wireType)
+			}
+			m.Offset = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowTask
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				m.Offset |= (int32(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		default:
+			iNdEx = preIndex
+			skippy, err := skipTask(data[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthTask
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *SortResult) Unmarshal(data []byte) error {
+	l := len(data)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowTask
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := data[iNdEx]
+			iNdEx++
+			wire |= (uint64(b) & 0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: SortResult: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: SortResult: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field UidMatrix", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowTask
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				msglen |= (int(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthTask
+			}
+			postIndex := iNdEx + msglen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.UidMatrix = append(m.UidMatrix, &List{})
+			if err := m.UidMatrix[len(m.UidMatrix)-1].Unmarshal(data[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := skipTask(data[iNdEx:])
@@ -787,19 +1629,27 @@ var (
 func init() { proto.RegisterFile("task.proto", fileDescriptorTask) }
 
 var fileDescriptorTask = []byte{
-	// 212 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0xe2, 0xe2, 0x2a, 0x49, 0x2c, 0xce,
-	0xd6, 0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x17, 0x62, 0x01, 0xb1, 0x95, 0x64, 0xb9, 0xd8, 0x43, 0x3d,
-	0x5d, 0x7c, 0x32, 0x8b, 0x4b, 0x84, 0x84, 0xb8, 0x58, 0x4a, 0x33, 0x53, 0x8a, 0x25, 0x18, 0x15,
-	0x98, 0x35, 0xd8, 0x82, 0xc0, 0x6c, 0x25, 0x63, 0x2e, 0xd6, 0xb0, 0xc4, 0x9c, 0xd2, 0x54, 0x21,
-	0x01, 0x2e, 0xe6, 0xb2, 0xc4, 0x1c, 0x09, 0x46, 0x05, 0x46, 0x0d, 0x9e, 0x20, 0x10, 0x53, 0x48,
-	0x82, 0x8b, 0xbd, 0x2c, 0x31, 0x27, 0xa4, 0xb2, 0x20, 0x55, 0x82, 0x49, 0x81, 0x51, 0x83, 0x37,
-	0x08, 0xc6, 0x55, 0x2a, 0xe2, 0x62, 0x0b, 0x4a, 0x2d, 0x2e, 0xcd, 0x29, 0x11, 0xd2, 0xe6, 0xe2,
-	0x2c, 0xcd, 0x4c, 0xf1, 0x4d, 0x2c, 0x29, 0xca, 0xac, 0x00, 0x9b, 0xcb, 0x6d, 0xc4, 0xab, 0x07,
-	0x76, 0x03, 0xd4, 0xd2, 0x20, 0x84, 0xbc, 0x90, 0x32, 0x17, 0x5b, 0x19, 0xc8, 0xae, 0x62, 0x09,
-	0x26, 0xb0, 0x4a, 0x6e, 0x88, 0x4a, 0xb0, 0xfd, 0x41, 0x50, 0x29, 0x21, 0x31, 0x2e, 0xb6, 0xe4,
-	0xfc, 0xd2, 0xbc, 0x92, 0x62, 0x09, 0x66, 0x05, 0x66, 0x0d, 0xde, 0x20, 0x28, 0xcf, 0x49, 0xe0,
-	0xc4, 0x23, 0x39, 0xc6, 0x0b, 0x8f, 0xe4, 0x18, 0x1f, 0x3c, 0x92, 0x63, 0x9c, 0xf1, 0x58, 0x8e,
-	0x21, 0x89, 0x0d, 0xec, 0x4d, 0x63, 0x40, 0x00, 0x00, 0x00, 0xff, 0xff, 0x2e, 0x48, 0x8d, 0xbf,
-	0xf4, 0x00, 0x00, 0x00,
+	// 348 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0x94, 0x92, 0xcb, 0x4a, 0x3b, 0x31,
+	0x18, 0xc5, 0xff, 0xe9, 0x5c, 0xda, 0x7e, 0xfd, 0x17, 0x4a, 0x10, 0x09, 0x5d, 0x0c, 0x61, 0xdc,
+	0x64, 0xd5, 0x85, 0x05, 0x1f, 0x40, 0x57, 0x82, 0x2e, 0x8c, 0x97, 0x7d, 0xec, 0xa4, 0x30, 0x74,
+	0x68, 0x4a, 0xf2, 0x4d, 0xb1, 0x6f, 0xe2, 0x23, 0xb9, 0x11, 0x7c, 0x04, 0xa9, 0x2f, 0x22, 0x49,
+	0xa7, 0x17, 0xa1, 0x08, 0xee, 0xce, 0x49, 0xf2, 0x25, 0xe7, 0xfc, 0x08, 0x00, 0x2a, 0x37, 0x1b,
+	0x2d, 0xac, 0x41, 0x43, 0x63, 0xaf, 0xf3, 0x21, 0xc4, 0x37, 0xa5, 0x43, 0x4a, 0x21, 0xae, 0xcb,
+	0xc2, 0x31, 0xc2, 0x23, 0x91, 0xca, 0xa0, 0xf3, 0x31, 0x24, 0x4f, 0xaa, 0xaa, 0x35, 0x1d, 0x40,
+	0xb4, 0x54, 0x15, 0x23, 0x9c, 0x88, 0xff, 0xd2, 0x4b, 0xca, 0xa0, 0xbd, 0x54, 0xd5, 0xc3, 0x6a,
+	0xa1, 0x59, 0x8b, 0x13, 0xd1, 0x97, 0x5b, 0x9b, 0xbf, 0x13, 0x48, 0xee, 0x6a, 0x6d, 0x57, 0xfe,
+	0x4a, 0x85, 0x68, 0xc3, 0x58, 0x57, 0x06, 0x4d, 0x4f, 0x20, 0x99, 0x98, 0x7a, 0x8e, 0x61, 0x2a,
+	0x91, 0x1b, 0x43, 0x4f, 0x21, 0x35, 0xd3, 0xa9, 0xd3, 0xc8, 0xa2, 0xb0, 0xdc, 0x38, 0x3a, 0x84,
+	0x8e, 0x9a, 0xa2, 0xb6, 0x8f, 0x65, 0xc1, 0x62, 0x4e, 0x44, 0x2a, 0x77, 0xde, 0x27, 0x28, 0xcc,
+	0x55, 0xb8, 0x2b, 0xe1, 0x44, 0x74, 0xe4, 0xd6, 0xee, 0xaa, 0xa4, 0xfb, 0x2a, 0xfe, 0x05, 0x34,
+	0x33, 0x3d, 0x77, 0xac, 0xcd, 0x23, 0xd1, 0x95, 0x8d, 0xa3, 0x1c, 0x7a, 0x68, 0xae, 0xe7, 0xa8,
+	0xad, 0xd3, 0x13, 0x64, 0x9d, 0x30, 0x72, 0xb8, 0x94, 0x1b, 0x48, 0xa5, 0x76, 0x75, 0x85, 0x54,
+	0x40, 0xb7, 0x2e, 0x8b, 0x5b, 0x85, 0xb6, 0x7c, 0x09, 0x9c, 0x7a, 0xe7, 0x30, 0x0a, 0x40, 0x3d,
+	0x41, 0xb9, 0xdf, 0xa4, 0x67, 0x90, 0x2e, 0x3d, 0x38, 0xc7, 0x5a, 0xe1, 0x58, 0x6f, 0x73, 0x2c,
+	0xc0, 0x94, 0xcd, 0x96, 0x8f, 0x14, 0xda, 0x3b, 0x16, 0xf1, 0x48, 0xf4, 0x65, 0xe3, 0x72, 0x0b,
+	0xf1, 0xbd, 0xb1, 0x78, 0x14, 0xdf, 0x8f, 0x08, 0xad, 0xdf, 0x22, 0xec, 0x40, 0x47, 0xc7, 0x41,
+	0xc7, 0x87, 0xa0, 0xf3, 0x0b, 0x00, 0xff, 0xe6, 0x5f, 0x8b, 0x5e, 0x0e, 0xde, 0xd6, 0x19, 0xf9,
+	0x58, 0x67, 0xe4, 0x73, 0x9d, 0x91, 0xd7, 0xaf, 0xec, 0xdf, 0x73, 0x1a, 0x3e, 0xd7, 0xf8, 0x3b,
+	0x00, 0x00, 0xff, 0xff, 0x78, 0x16, 0x94, 0x93, 0x6a, 0x02, 0x00, 0x00,
 }

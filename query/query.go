@@ -29,7 +29,6 @@ import (
 	"time"
 
 	farm "github.com/dgryski/go-farm"
-	"github.com/google/flatbuffers/go"
 
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/geo"
@@ -123,7 +122,7 @@ type params struct {
 	Count    int
 	Offset   int
 	AfterUID uint64
-	GetCount uint16
+	DoCount  bool
 	GetUID   bool
 	Order    string
 	isDebug  bool
@@ -139,14 +138,14 @@ type SubGraph struct {
 	Filter    *gql.FilterTree
 	counts    []uint32
 	values    []*task.Value
-	uidMatrix []*algo.UIDList // TODO: This will be replaced with task.UIDList.
+	uidMatrix []*task.List // TODO: This will be replaced with task.UIDList.
 
 	// SrcUIDs is a list of unique source UIDs. They are always copies of destUIDs
 	// of parent nodes in GraphQL structure.
-	SrcUIDs *algo.UIDList
+	SrcUIDs *task.List
 
 	// destUIDs is a list of destination UIDs, after applying filters, pagination.
-	DestUIDs *algo.UIDList
+	DestUIDs *task.List
 }
 
 // getValue gets the value from the task.
@@ -195,7 +194,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 	invalidUids := make(map[uint64]bool)
 	// We go through all predicate children of the subgraph.
 	for _, pc := range sg.Children {
-		idx := pc.SrcUIDs.IndexOf(uid)
+		idx := algo.IndexOf(pc.SrcUIDs, uid)
 		x.AssertTruef(idx >= 0, "Attribute with uid not found in child Query uids")
 		ul := pc.uidMatrix[idx]
 
@@ -204,11 +203,10 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 			uc := dst.New(pc.Attr)
 			uc.AddValue("_count_", &c)
 			dst.AddChild(pc.Attr, uc)
-		} else if ul.Size() > 0 || len(pc.Children) > 0 {
+		} else if len(ul.Uids) > 0 || len(pc.Children) > 0 {
 			// We create as many predicate entity children as the length of uids for
 			// this predicate.
-			for i := 0; i < ul.Size(); i++ {
-				uid := ul.Get(i)
+			for _, uid := range ul.Uids {
 				if invalidUids[uid] {
 					continue
 				}
@@ -329,7 +327,7 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 			if gchild.Children != nil {
 				return errors.New("Count cannot have other attributes")
 			}
-			sg.Params.GetCount = 1
+			sg.Params.DoCount = true
 			break
 		}
 		if gchild.Attr == "_uid_" {
@@ -438,8 +436,8 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		}
 	} else {
 		// euid is the root UID.
-		sg.SrcUIDs = algo.NewUIDList([]uint64{euid})
-		sg.uidMatrix = []*algo.UIDList{algo.NewUIDList([]uint64{euid})}
+		sg.SrcUIDs = &task.List{Uids: []uint64{euid}}
+		sg.uidMatrix = []*task.List{&task.List{Uids: []uint64{euid}}}
 	}
 	sg.values = createNilValuesList(1)
 	return sg, nil
@@ -456,108 +454,60 @@ func createNilValuesList(count int) []*task.Value {
 }
 
 // createTaskQuery generates the query buffer.
-func createTaskQuery(sg *SubGraph, uids *algo.UIDList, tokens []string,
-	intersect *algo.UIDList) []byte {
+func createTaskQuery(sg *SubGraph, uids *task.List, tokens []string,
+	intersect *task.List) *task.Query {
 	x.AssertTrue(uids == nil || tokens == nil)
-
-	b := flatbuffers.NewBuilder(0)
-	var vend flatbuffers.UOffsetT
-	if uids != nil {
-		task.QueryStartUidsVector(b, uids.Size())
-		for i := uids.Size() - 1; i >= 0; i-- {
-			b.PrependUint64(uids.Get(i))
-		}
-		vend = b.EndVector(uids.Size())
-	} else {
-		offsets := make([]flatbuffers.UOffsetT, 0, len(tokens))
-		for _, token := range tokens {
-			offsets = append(offsets, b.CreateString(token))
-		}
-		task.QueryStartTokensVector(b, len(tokens))
-		for i := len(tokens) - 1; i >= 0; i-- {
-			b.PrependUOffsetT(offsets[i])
-		}
-		vend = b.EndVector(len(tokens))
+	out := &task.Query{
+		Attr:     sg.Attr,
+		Tokens:   tokens,
+		Count:    int32(sg.Params.Count),
+		Offset:   int32(sg.Params.Offset),
+		AfterUid: sg.Params.AfterUID,
+		DoCount:  sg.Params.DoCount,
 	}
-
-	var intersectOffset flatbuffers.UOffsetT
-	if intersect != nil {
-		x.AssertTrue(uids == nil)
-		x.AssertTrue(len(tokens) > 0)
-		intersectOffset = intersect.AddTo(b)
-	}
-
-	ao := b.CreateString(sg.Attr)
-	task.QueryStart(b)
-	task.QueryAddAttr(b, ao)
 	if uids != nil {
-		task.QueryAddUids(b, vend)
-	} else {
-		task.QueryAddTokens(b, vend)
+		out.Uids = uids.Uids
 	}
 	if intersect != nil {
-		task.QueryAddToIntersect(b, intersectOffset)
+		out.ToIntersect = intersect.Uids
 	}
-	task.QueryAddCount(b, int32(sg.Params.Count))
-	task.QueryAddOffset(b, int32(sg.Params.Offset))
-	task.QueryAddAfterUid(b, sg.Params.AfterUID)
-	task.QueryAddGetCount(b, sg.Params.GetCount)
-
-	b.Finish(task.QueryEnd(b))
-	return b.FinishedBytes()
+	return out
 }
 
 // ProcessGraph processes the SubGraph instance accumulating result for the query
 // from different instances. Note: taskQuery is nil for root node.
-func ProcessGraph(ctx context.Context, sg *SubGraph, taskQuery []byte, rch chan error) {
+func ProcessGraph(ctx context.Context, sg *SubGraph, taskQuery *task.Query, rch chan error) {
 	var err error
 	if taskQuery != nil {
-		data, err := worker.ProcessTaskOverNetwork(ctx, taskQuery)
+		result, err := worker.ProcessTaskOverNetwork(ctx, taskQuery)
 		if err != nil {
 			x.TraceError(ctx, x.Wrapf(err, "Error while processing task"))
 			rch <- err
 			return
 		}
-		var result task.Result
-		// TODO: This unmarshal should be unncessary. Endpoint could return a
-		// Result directly.
-		if err = result.Unmarshal(data); err != nil {
-			x.TraceError(ctx, x.Wrapf(err, "Error while unmarshalling task.Result"))
-			rch <- err
-			return
-		}
-
-		// TODO: Eventually we will get rid of algo.UIDList.
-		sg.uidMatrix = make([]*algo.UIDList, len(result.GetUidMatrix()))
-		for i, ul := range result.GetUidMatrix() {
-			u := new(algo.UIDList)
-			u.FromUints(ul.Uids)
-			sg.uidMatrix[i] = u
-		}
-
-		sg.values = result.GetValues()
+		sg.uidMatrix = result.UidMatrix
+		sg.values = result.Values
 		if len(sg.values) > 0 {
 			v := sg.values[0]
 			x.Trace(ctx, "Sample value for attr: %v Val: %v", sg.Attr, string(v.Val))
 		}
-
 		sg.counts = result.Counts
 	}
 
-	if sg.Params.GetCount == 1 {
+	if sg.Params.DoCount {
 		x.Trace(ctx, "Zero uids. Only count requested")
 		rch <- nil
 		return
 	}
 
-	sg.DestUIDs = algo.MergeLists(sg.uidMatrix)
+	sg.DestUIDs = algo.MergeSortedLists(sg.uidMatrix)
 	if err != nil {
 		x.TraceError(ctx, x.Wrapf(err, "Error while processing task"))
 		rch <- err
 		return
 	}
 
-	if sg.DestUIDs.Size() == 0 {
+	if len(sg.DestUIDs.Uids) == 0 {
 		// Looks like we're done here. Be careful with nil srcUIDs!
 		x.Trace(ctx, "Zero uids. Num attr children: %v", len(sg.Children))
 		rch <- nil
@@ -631,8 +581,7 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, taskQuery []byte, rch chan 
 			if _, present := sgObj.Fields[node.Attr]; !present {
 				continue
 			}
-			for i := 0; i < sg.DestUIDs.Size(); i++ {
-				uid := sg.DestUIDs.Get(i)
+			for i, uid := range sg.DestUIDs.Uids {
 				tv := node.values[i]
 				valBytes := tv.Val
 				v, err := getValue(tv)
@@ -657,7 +606,7 @@ func ProcessGraph(ctx context.Context, sg *SubGraph, taskQuery []byte, rch chan 
 	}
 
 	// Filter out the invalid UIDs.
-	sg.DestUIDs.ApplyFilter(func(uid uint64, idx int) bool {
+	algo.ApplyFilter(sg.DestUIDs, func(uid uint64, idx int) bool {
 		return !invalidUids[uid]
 	})
 
@@ -697,13 +646,13 @@ func (sg *SubGraph) applyGenerator(ctx context.Context, gen *gql.Generator) erro
 		return err
 	}
 	sg.SrcUIDs = newSorted
-	for i := 0; i < newSorted.Size(); i++ {
-		sg.uidMatrix = append(sg.uidMatrix, algo.NewUIDList([]uint64{newSorted.Get(i)}))
+	for _, uid := range newSorted.Uids {
+		sg.uidMatrix = append(sg.uidMatrix, &task.List{Uids: []uint64{uid}})
 	}
 	return nil
 }
 
-func runGenerator(ctx context.Context, gen *gql.Generator) (*algo.UIDList, error) {
+func runGenerator(ctx context.Context, gen *gql.Generator) (*task.List, error) {
 	if len(gen.FuncName) == 0 {
 		return nil, nil
 	}
@@ -730,7 +679,7 @@ func runGenerator(ctx context.Context, gen *gql.Generator) (*algo.UIDList, error
 		}
 		return generateGeo(ctx, gen.FuncArgs[0], geo.QueryTypeNear, gb, maxD)
 	default:
-		return nil, fmt.Errorf("Invalid generator")
+		return nil, x.Errorf("Invalid generator")
 	}
 
 	return nil, nil
@@ -748,15 +697,15 @@ func (sg *SubGraph) applyFilter(ctx context.Context) error {
 	sg.DestUIDs = newSorted
 	// For each posting list, intersect with sg.destUIDs.
 	for _, l := range sg.uidMatrix {
-		l.Intersect(sg.DestUIDs)
+		algo.IntersectSorted(l, sg.DestUIDs)
 	}
 	return nil
 }
 
 // runFilter traverses filter tree and produce a filtered list of UIDs.
 // Input "destUIDs" is the very original list of destination UIDs of a SubGraph.
-func runFilter(ctx context.Context, destUIDs *algo.UIDList,
-	filter *gql.FilterTree) (*algo.UIDList, error) {
+func runFilter(ctx context.Context, destUIDs *task.List,
+	filter *gql.FilterTree) (*task.List, error) {
 	if len(filter.FuncName) > 0 { // Leaf node.
 		filter.FuncName = strings.ToLower(filter.FuncName)
 		x.AssertTruef(len(filter.FuncArgs) == 2,
@@ -789,7 +738,7 @@ func runFilter(ctx context.Context, destUIDs *algo.UIDList,
 	// For union operator, we do it in parallel.
 	// First, get UIDs for child filters in parallel.
 	type resultPair struct {
-		uids *algo.UIDList
+		uids *task.List
 		err  error
 	}
 	resultChan := make(chan resultPair, len(filter.Child))
@@ -800,7 +749,7 @@ func runFilter(ctx context.Context, destUIDs *algo.UIDList,
 		}(c)
 	}
 
-	lists := make([]*algo.UIDList, 0, len(filter.Child))
+	lists := make([]*task.List, 0, len(filter.Child))
 	// Next, collect the results from above goroutines.
 	for i := 0; i < len(filter.Child); i++ {
 		r := <-resultChan
@@ -809,7 +758,7 @@ func runFilter(ctx context.Context, destUIDs *algo.UIDList,
 		}
 		lists = append(lists, r.uids)
 	}
-	return algo.MergeLists(lists), nil
+	return algo.MergeSortedLists(lists), nil
 }
 
 // pageRange returns start and end indices given pagination params. Note that n
@@ -842,14 +791,14 @@ func (sg *SubGraph) applyPagination(ctx context.Context) error {
 	if params.Count == 0 && params.Offset == 0 { // No pagination.
 		return nil
 	}
-	x.AssertTrue(sg.SrcUIDs.Size() == len(sg.uidMatrix))
+	x.AssertTrue(len(sg.SrcUIDs.Uids) == len(sg.uidMatrix))
 	for _, l := range sg.uidMatrix {
-		l.Intersect(sg.DestUIDs)
-		start, end := pageRange(&sg.Params, l.Size())
-		l.Slice(start, end)
+		algo.IntersectSorted(l, sg.DestUIDs)
+		start, end := pageRange(&sg.Params, len(l.Uids))
+		l.Uids = l.Uids[start:end]
 	}
 	// Re-merge the UID matrix.
-	sg.DestUIDs = algo.MergeLists(sg.uidMatrix)
+	sg.DestUIDs = algo.MergeSortedLists(sg.uidMatrix)
 	return nil
 }
 
@@ -864,53 +813,34 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 		sg.Params.Count = 1000
 	}
 
-	b := flatbuffers.NewBuilder(0)
-	ao := b.CreateString(sg.Params.Order)
-
-	// Add UID matrix.
-	uidOffsets := make([]flatbuffers.UOffsetT, 0, len(sg.uidMatrix))
-	for _, ul := range sg.uidMatrix {
-		uidOffsets = append(uidOffsets, ul.AddTo(b))
+	sort := &task.Sort{
+		Attr:      sg.Params.Order,
+		UidMatrix: sg.uidMatrix,
+		Offset:    int32(sg.Params.Offset),
+		Count:     int32(sg.Params.Count),
 	}
-
-	task.SortStartUidmatrixVector(b, len(uidOffsets))
-	for i := len(uidOffsets) - 1; i >= 0; i-- {
-		b.PrependUOffsetT(uidOffsets[i])
-	}
-	uEnd := b.EndVector(len(uidOffsets))
-
-	task.SortStart(b)
-	task.SortAddAttr(b, ao)
-	task.SortAddUidmatrix(b, uEnd)
-	task.SortAddOffset(b, int32(sg.Params.Offset))
-	task.SortAddCount(b, int32(sg.Params.Count))
-	b.Finish(task.SortEnd(b))
-
-	resultData, err := worker.SortOverNetwork(ctx, b.FinishedBytes())
+	result, err := worker.SortOverNetwork(ctx, sort)
 	if err != nil {
 		return err
 	}
 
-	// Copy result into our UID matrix.
-	result := task.GetRootAsSortResult(resultData, 0)
-	x.AssertTrue(result.UidmatrixLength() == len(sg.uidMatrix))
-	sg.uidMatrix = algo.FromSortResult(result)
+	x.AssertTrue(len(result.UidMatrix) == len(sg.uidMatrix))
+	sg.uidMatrix = result.GetUidMatrix()
 
 	// Update sg.destUID. Iterate over the UID matrix (which is not sorted by
 	// UID). For each element in UID matrix, we do a binary search in the
 	// current destUID and mark it. Then we scan over this bool array and
 	// rebuild destUIDs.
-	included := make([]bool, sg.DestUIDs.Size())
+	included := make([]bool, len(sg.DestUIDs.Uids))
 	for _, ul := range sg.uidMatrix {
-		for i := 0; i < ul.Size(); i++ {
-			uid := ul.Get(i)
-			idx := sg.DestUIDs.IndexOf(uid) // Binary search.
+		for _, uid := range ul.Uids {
+			idx := algo.IndexOf(sg.DestUIDs, uid) // Binary search.
 			if idx >= 0 {
 				included[idx] = true
 			}
 		}
 	}
-	sg.DestUIDs.ApplyFilter(
+	algo.ApplyFilter(sg.DestUIDs,
 		func(uid uint64, idx int) bool { return included[idx] })
 	return nil
 }
@@ -965,10 +895,10 @@ func (sg *SubGraph) ToProtocolBuffer(l *Latency) (*graph.Node, error) {
 	n := seedNode.New(sg.Attr)
 	ul := sg.uidMatrix[0]
 	if sg.Params.GetUID || sg.Params.isDebug {
-		n.SetUID(ul.Get(0))
+		n.SetUID(ul.Uids[0])
 	}
 
-	if rerr := sg.preTraverse(ul.Get(0), n); rerr != nil {
+	if rerr := sg.preTraverse(ul.Uids[0], n); rerr != nil {
 		return n.(*protoOutputNode).Node, rerr
 	}
 
@@ -1020,10 +950,10 @@ func (sg *SubGraph) ToJSON(l *Latency) ([]byte, error) {
 	n := seedNode.New(sg.Attr)
 	ul := sg.uidMatrix[0]
 	if sg.Params.GetUID || sg.Params.isDebug {
-		n.SetUID(ul.Get(0))
+		n.SetUID(ul.Uids[0])
 	}
 
-	if err := sg.preTraverse(ul.Get(0), n); err != nil {
+	if err := sg.preTraverse(ul.Uids[0], n); err != nil {
 		return nil, err
 	}
 	root := map[string]interface{}{

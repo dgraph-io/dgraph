@@ -8,6 +8,7 @@ import (
 	"log"
 	"sync"
 
+	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/x"
 
 	"google.golang.org/grpc"
@@ -31,6 +32,18 @@ func (cb *PayloadCodec) Marshal(v interface{}) ([]byte, error) {
 	case *BackupPayload:
 		p := v.(*BackupPayload)
 		return p.Marshal()
+	case *task.Query:
+		p := v.(*task.Query)
+		return p.Marshal()
+	case *task.Result:
+		p := v.(*task.Result)
+		return p.Marshal()
+	case *task.Sort:
+		p := v.(*task.Sort)
+		return p.Marshal()
+	case *task.SortResult:
+		p := v.(*task.SortResult)
+		return p.Marshal()
 	default:
 		x.Fatalf("Invalid type of struct: %T\n", t)
 		return []byte{}, nil
@@ -46,6 +59,18 @@ func (cb *PayloadCodec) Unmarshal(data []byte, v interface{}) error {
 		return nil
 	case *BackupPayload:
 		p := v.(*BackupPayload)
+		return p.Unmarshal(data)
+	case *task.Query:
+		p := v.(*task.Query)
+		return p.Unmarshal(data)
+	case *task.Result:
+		p := v.(*task.Result)
+		return p.Unmarshal(data)
+	case *task.Sort:
+		p := v.(*task.Sort)
+		return p.Unmarshal(data)
+	case *task.SortResult:
+		p := v.(*task.SortResult)
 		return p.Unmarshal(data)
 	default:
 		x.Fatalf("Invalid type of struct: %T\n", t)

@@ -2,29 +2,9 @@
 
 namespace task;
 
-table Query {
-	attr:string;
-	count:int;
-	offset:int;
-	afterUid:ulong;
-	getCount:ushort;
-
-	// Exactly one of uids and terms is populated.
-	uids:[ulong];
-	tokens:[string];
-
-	// Intersect results with this UID list. If uids is populated, then this is
-	// an "intersection query". If terms is populated, this is a "filter query".
-	toIntersect:UidList;
-}
-
 table Num {
 	group:uint;
 	val:int;
-	uids:[ulong];
-}
-
-table UidList {
 	uids:[ulong];
 }
 
@@ -49,17 +29,6 @@ table RaftContext {
 	addr:string;
 }
 
-table Sort {
-	attr:string;
-	uidmatrix:[UidList];
-	count:int;
-	offset:int;
-}
-
-table SortResult {
-	uidmatrix:[UidList];
-}
-
 // Membership stores information about RAFT group membership for a single RAFT node.
 // Note that each server can be serving multiple RAFT groups. Each group would have
 // one RAFT node per server serving that group.
@@ -78,4 +47,9 @@ table Membership {
 table MembershipUpdate {
 	members:[Membership];
 	lastUpdate:ulong;
+}
+
+// TODO: Deprecate.
+table UidList {
+	uids:[ulong];
 }
