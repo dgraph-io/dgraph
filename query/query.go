@@ -467,14 +467,15 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		return nil, err
 	}
 
-	// sg is to be returned.
+	// For the root, the name to be used in result is stored in Alias, not Attr.
+	// The attr at root (if present) would stand for the source functions attr.
 	args := params{
-		AttrType: schema.TypeOf(gq.Attr),
-		isDebug:  gq.Attr == "debug",
+		AttrType: schema.TypeOf(gq.Alias),
+		isDebug:  gq.Alias == "debug",
+		Alias:    gq.Alias,
 	}
 
 	sg := &SubGraph{
-		Attr:   gq.Attr,
 		Params: args,
 	}
 	if gq.Func != nil {
@@ -844,7 +845,8 @@ func (sg *SubGraph) ToProtocolBuffer(l *Latency) (*graph.Node, error) {
 	}
 
 	x.AssertTrue(len(sg.uidMatrix) == 1)
-	n := seedNode.New(sg.Attr)
+	// For the root, the name is stored in Alias, not Attr.
+	n := seedNode.New(sg.Params.Alias)
 	ul := sg.uidMatrix[0]
 	if sg.Params.GetUID || sg.Params.isDebug {
 		n.SetUID(ul.Uids[0])
@@ -903,7 +905,8 @@ func (p *jsonOutputNode) IsEmpty() bool {
 // sent to the HTTP client.
 func (sg *SubGraph) ToJSON(l *Latency) ([]byte, error) {
 	var seedNode *jsonOutputNode
-	n := seedNode.New(sg.Attr)
+	// For the root, the name is stored in Alias, not Attr.
+	n := seedNode.New(sg.Params.Alias)
 	ul := sg.uidMatrix[0]
 	if sg.Params.GetUID || sg.Params.isDebug {
 		n.SetUID(ul.Uids[0])
@@ -913,7 +916,7 @@ func (sg *SubGraph) ToJSON(l *Latency) ([]byte, error) {
 		return nil, err
 	}
 	root := map[string]interface{}{
-		sg.Attr: []map[string]interface{}{n.(*jsonOutputNode).data},
+		sg.Params.Alias: []map[string]interface{}{n.(*jsonOutputNode).data},
 	}
 	if sg.Params.isDebug {
 		root["server_latency"] = l.ToMap()

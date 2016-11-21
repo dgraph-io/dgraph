@@ -1595,10 +1595,6 @@ func TestSchema1(t *testing.T) {
 		js)
 }
 
-/*
-TODO(ashwin): The GQL parser code should set "me" as an alias instead of an attribute.
-Once that happens, this test should PASS.
-
 func TestGenerator(t *testing.T) {
 	dir1, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir1)
@@ -1612,26 +1608,9 @@ func TestGenerator(t *testing.T) {
     }
   `
 
-	gq, _, err := gql.Parse(query)
-	require.NoError(t, err)
-	gq.DebugPrint("TestGenerator GQ ")
-
-	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, gq)
-	require.NoError(t, err)
-	sg.DebugPrint("TestGenerator SG ")
-
-	ch := make(chan error)
-	go ProcessGraph(ctx, sg, nil, ch)
-	err = <-ch
-	require.NoError(t, err)
-
-	var l Latency
-	js, err := sg.ToJSON(&l)
-	require.NoError(t, err)
-	require.EqualValues(t, `{"me":[{"gender":"female","name":"Michonne"}]}`, string(js))
+	js := processToJSON(t, query)
+	require.JSONEq(t, `{"me":[{"gender":"female","name":"Michonne"}]}`, js)
 }
-*/
 
 //func TestNearGenerator(t *testing.T) {
 //dir1, dir2, _ := populateGraph(t)
