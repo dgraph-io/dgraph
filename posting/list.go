@@ -467,10 +467,8 @@ func (l *List) AddMutation(ctx context.Context, t *task.DirectedEdge, op byte) (
 	// a)		check if the entity exists in main posting list.
 	// 				- If yes, store the mutation.
 	// 				- If no, disregard this mutation.
-	x.Trace(ctx, "Acquiring lock")
 	l.Lock()
 	defer l.Unlock()
-	x.Trace(ctx, "Lock acquired")
 
 	hasMutated := l.updateMutationLayer(mpost)
 	if len(l.mlayer) > 0 {
@@ -479,7 +477,6 @@ func (l *List) AddMutation(ctx context.Context, t *task.DirectedEdge, op byte) (
 			dirtyChan <- l.ghash
 		}
 	}
-	x.Trace(ctx, "Mutation done")
 	return hasMutated, nil
 }
 

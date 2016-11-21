@@ -16,17 +16,7 @@
 
 package query
 
-import (
-	"bytes"
-	"context"
-
-	"github.com/dgraph-io/dgraph/algo"
-	"github.com/dgraph-io/dgraph/geo"
-	"github.com/dgraph-io/dgraph/task"
-	"github.com/dgraph-io/dgraph/types"
-	"github.com/dgraph-io/dgraph/x"
-)
-
+/*
 func generateGeo(ctx context.Context, attr string, qt geo.QueryType, g []byte,
 	maxDist float64) (*task.List, error) {
 	tokens, data, err := geo.QueryTokens(g, qt, maxDist)
@@ -116,3 +106,4 @@ func filterUIDs(uids *task.List, values []*task.Value, q *geo.QueryData) *task.L
 	}
 	return &task.List{Uids: rv}
 }
+*/
