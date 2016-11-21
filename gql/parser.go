@@ -615,20 +615,26 @@ func (t *FilterTree) debugString() string {
 // stringHelper does simple DFS to convert FilterTree to string.
 func (t *FilterTree) stringHelper(buf *bytes.Buffer) {
 	x.AssertTrue(t != nil)
-	if len(t.Func.Name) > 0 {
+	if t.Func != nil && len(t.Func.Name) > 0 {
 		// Leaf node.
 		_, err := buf.WriteRune('(')
 		x.Check(err)
 		_, err = buf.WriteString(t.Func.Name)
 		x.Check(err)
 
-		for _, arg := range t.Func.Args {
-			_, err = buf.WriteString(" \"")
-			x.Check(err)
-			_, err = buf.WriteString(arg)
-			x.Check(err)
-			_, err := buf.WriteRune('"')
-			x.Check(err)
+		if len(t.Func.Attr) > 0 {
+			args := make([]string, len(t.Func.Args)+1)
+			args[0] = t.Func.Attr
+			copy(args[1:], t.Func.Args)
+
+			for _, arg := range args {
+				_, err = buf.WriteString(" \"")
+				x.Check(err)
+				_, err = buf.WriteString(arg)
+				x.Check(err)
+				_, err := buf.WriteRune('"')
+				x.Check(err)
+			}
 		}
 		_, err = buf.WriteRune(')')
 		x.Check(err)
@@ -643,7 +649,7 @@ func (t *FilterTree) stringHelper(buf *bytes.Buffer) {
 	case "|":
 		_, err = buf.WriteString("OR")
 	default:
-		err = x.Errorf("Unknown operator")
+		err = x.Errorf("Unknown operator: %q", t.Op)
 	}
 	x.Check(err)
 
