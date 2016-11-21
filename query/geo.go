@@ -17,7 +17,8 @@
 package query
 
 /*
-func generateGeo(ctx context.Context, attr string, qt geo.QueryType, g []byte, maxDist float64) (*algo.UIDList, error) {
+func generateGeo(ctx context.Context, attr string, qt geo.QueryType, g []byte,
+	maxDist float64) (*task.List, error) {
 	tokens, data, err := geo.QueryTokens(g, qt, maxDist)
 	if err != nil {
 		return nil, err
@@ -39,13 +40,13 @@ func generateGeo(ctx context.Context, attr string, qt geo.QueryType, g []byte, m
 	return filterUIDs(uids, values, data), nil
 }
 
-func fetchIndexEntries(ctx context.Context, attr string, tokens []string) (*algo.UIDList, error) {
+func fetchIndexEntries(ctx context.Context, attr string, tokens []string) (*task.List, error) {
 	sg := &SubGraph{Attr: attr}
 	sgChan := make(chan error, 1)
 
 	// Query the index for the uids
-	taskQuery := createTaskQuery(sg, tokens, nil)
-	go ProcessGraph(ctx, sg, nil, sgChan)
+	taskQuery := createTaskQuery(sg, nil, tokens, nil)
+	go ProcessGraph(ctx, sg, taskQuery, sgChan)
 	select {
 	case <-ctx.Done():
 		return nil, x.Wrap(ctx.Err())
@@ -56,16 +57,16 @@ func fetchIndexEntries(ctx context.Context, attr string, tokens []string) (*algo
 	}
 
 	x.AssertTrue(len(sg.uidMatrix) == len(tokens))
-	return algo.MergeLists(sg.uidMatrix), nil
+	return algo.MergeSortedLists(sg.uidMatrix), nil
 }
 
-func fetchValues(ctx context.Context, attr string, uids *algo.UIDList) ([]*task.Value, error) {
+func fetchValues(ctx context.Context, attr string, uids *task.List) ([]*task.Value, error) {
 	sg := &SubGraph{Attr: attr}
 	sgChan := make(chan error, 1)
 
 	// Query the index for the uids
 	taskQuery := createTaskQuery(sg, uids, nil, nil)
-	go ProcessGraph(ctx, sg, nil, sgChan)
+	go ProcessGraph(ctx, sg, taskQuery, sgChan)
 	select {
 	case <-ctx.Done():
 		return nil, x.Wrap(ctx.Err())
@@ -75,12 +76,12 @@ func fetchValues(ctx context.Context, attr string, uids *algo.UIDList) ([]*task.
 		}
 	}
 
-	x.AssertTrue(len(sg.values) == uids.Size())
+	x.AssertTrue(len(sg.values) == len(uids.Uids))
 	return sg.values, nil
 }
 
-func filterUIDs(uids *algo.UIDList, values []*task.Value, q *geo.QueryData) *algo.UIDList {
-	x.AssertTrue(len(values) == uids.Size())
+func filterUIDs(uids *task.List, values []*task.Value, q *geo.QueryData) *task.List {
+	x.AssertTrue(len(values) == len(uids.Uids))
 	var rv []uint64
 	for i, tv := range values {
 		valBytes := tv.Val
@@ -101,8 +102,8 @@ func filterUIDs(uids *algo.UIDList, values []*task.Value, q *geo.QueryData) *alg
 		}
 
 		// we matched the geo filter, add the uid to the list
-		rv = append(rv, uids.Get(i))
+		rv = append(rv, uids.Uids[i])
 	}
-	return algo.NewUIDList(rv)
+	return &task.List{Uids: rv}
 }
 */

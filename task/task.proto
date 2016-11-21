@@ -3,7 +3,7 @@ syntax = "proto3";
 
 package task;
 
-message UIDList {
+message List {
 	repeated fixed64 uids = 1;
 }
 
@@ -12,8 +12,35 @@ message Value {
 	uint32 valType = 2;
 }
 
+message Query {
+	string attr = 1;
+	int32 count = 2;       // Get this many elements.
+	int32 offset = 3;      // Skip this many elements.
+	fixed64 afterUid = 4;  // Only return UIDs greater than this.
+	bool doCount = 5;    // Are we just getting lengths?
+
+	// Exactly one of uids and terms is populated.
+	repeated fixed64 uids = 6;
+	repeated string tokens = 7;
+
+	// Intersect results with this UID list. If uids is populated, then this is
+	// an "intersection query". If terms is populated, this is a "filter query".
+	repeated fixed64 toIntersect = 8;
+}
+
 message Result {
-	repeated UIDList uidMatrix = 1;
+	repeated List uidMatrix = 1;
 	repeated Value values = 2;
 	repeated uint32 counts = 3;
+}
+
+message Sort {
+	string attr = 1;
+	repeated List uidMatrix = 2;
+	int32 count = 3;   // Return this many elements.
+	int32 offset = 4;  // Skip this many elements.
+}
+
+message SortResult {
+	repeated List uidMatrix = 1;
 }
