@@ -30,7 +30,7 @@ service Worker {
 	rpc Echo (Payload)             returns (Payload) {}
 
 	// Data serving RPCs.
-	rpc AssignUids (Payload)       returns (Payload) {}
+	rpc AssignUids (task.Num)      returns (task.List) {}
 	rpc Mutate (Payload)           returns (Payload) {}
 	rpc ServeTask (task.Query)     returns (task.Result) {}
 	rpc PredicateData (Payload)    returns (stream Payload) {}
@@ -42,4 +42,3 @@ service Worker {
 	rpc UpdateMembership (Payload)  returns (Payload) {}
 	rpc Backup (BackupPayload)      returns (BackupPayload) {}
 }
-
