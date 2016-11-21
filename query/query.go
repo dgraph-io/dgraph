@@ -161,7 +161,8 @@ func (sg *SubGraph) DebugPrint(prefix string) {
 		dst = len(sg.DestUIDs.Uids)
 	}
 	fmt.Printf("%s[%q Alias:%q Func:%v SrcSz:%v Op:%q DestSz:%v Dest: %p ValueSz:%v]\n",
-		prefix, sg.Attr, sg.Params.Alias, sg.SrcFunc, src, sg.FilterOp, dst, sg.DestUIDs, len(sg.values))
+		prefix, sg.Attr, sg.Params.Alias, sg.SrcFunc, src, sg.FilterOp,
+		dst, sg.DestUIDs, len(sg.values))
 	for _, f := range sg.Filters {
 		f.DebugPrint(prefix + "|-f->")
 	}
