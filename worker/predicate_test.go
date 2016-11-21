@@ -21,12 +21,12 @@ import (
 	"log"
 	"net"
 	"testing"
-	"time"
 
 	"google.golang.org/grpc"
 
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/store"
+	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -47,10 +47,10 @@ func writePLs(t *testing.T, count int, vid uint64, ps *store.Store) {
 		t.Logf("key: %v", k)
 		list, _ := posting.GetOrCreate([]byte(k))
 
-		de := x.DirectedEdge{
+		de := &task.DirectedEdge{
 			ValueId:   vid,
 			Source:    "test",
-			Timestamp: time.Now(),
+			Timestamp: x.CurrentTime(),
 		}
 		list.AddMutation(context.TODO(), de, posting.Set)
 		if merged, err := list.CommitIfDirty(context.TODO()); err != nil {

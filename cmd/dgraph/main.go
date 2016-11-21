@@ -47,6 +47,7 @@ import (
 	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/store"
+	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
@@ -71,7 +72,8 @@ var (
 )
 
 type mutationResult struct {
-	edges   []x.DirectedEdge
+	//edges   []x.DirectedEdge
+	edges   []*task.DirectedEdge
 	newUids map[string]uint64
 }
 
@@ -129,7 +131,7 @@ func convertToNQuad(ctx context.Context, mutation string) ([]rdf.NQuad, error) {
 }
 
 func convertToEdges(ctx context.Context, nquads []rdf.NQuad) (mutationResult, error) {
-	var edges []x.DirectedEdge
+	var edges []*task.DirectedEdge
 	var mr mutationResult
 
 	newUids := make(map[string]uint64)

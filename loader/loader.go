@@ -36,6 +36,7 @@ import (
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/store"
+	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -195,12 +196,12 @@ func (s *state) parseStream(wg *sync.WaitGroup) {
 	}
 }
 func markTaken(ctx context.Context, uid uint64) {
-	mu := x.DirectedEdge{
+	mu := &task.DirectedEdge{
 		Entity:    uid,
-		Attribute: "_uid_",
+		Attr:      "_uid_",
 		Value:     []byte("_"), // not txid
 		Source:    "_loader_",
-		Timestamp: time.Now(),
+		Timestamp: x.CurrentTime(),
 	}
 	key := posting.Key(uid, "_uid_")
 	plist, decr := posting.GetOrCreate(key)
@@ -240,7 +241,7 @@ func (s *state) handleNQuads(wg *sync.WaitGroup) {
 			edge, err = nq.ToEdge()
 		}
 
-		key := posting.Key(edge.Entity, edge.Attribute)
+		key := posting.Key(edge.Entity, edge.Attr)
 
 		plist, decr := posting.GetOrCreate(key)
 		plist.AddMutationWithIndex(ctx, edge, posting.Set)

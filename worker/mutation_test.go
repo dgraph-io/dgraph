@@ -20,11 +20,11 @@ import (
 	"io/ioutil"
 	"os"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgraph/group"
+	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -35,12 +35,12 @@ func TestAddToMutationArray(t *testing.T) {
 	defer os.RemoveAll(dir)
 
 	mutationsMap := make(map[uint32]*x.Mutations)
-	edges := []x.DirectedEdge{}
+	edges := []*task.DirectedEdge{}
 
-	edges = append(edges, x.DirectedEdge{
+	edges = append(edges, &task.DirectedEdge{
 		Value:     []byte("set edge"),
 		Source:    "test-mutation",
-		Timestamp: time.Now(),
+		Timestamp: x.CurrentTime(),
 	})
 
 	addToMutationMap(mutationsMap, edges, set)

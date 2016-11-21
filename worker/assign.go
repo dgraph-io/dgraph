@@ -17,8 +17,6 @@
 package worker
 
 import (
-	"time"
-
 	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/dgraph/group"
@@ -60,12 +58,12 @@ func assignUids(ctx context.Context, num *task.Num) (*task.List, error) {
 	mutations := uid.AssignNew(val, 0, 1)
 
 	for _, uid := range num.Uids {
-		mu := x.DirectedEdge{
+		mu := &task.DirectedEdge{
 			Entity:    uid,
-			Attribute: "_uid_",
+			Attr:      "_uid_",
 			Value:     []byte("_"), // not txid
 			Source:    "_XIDorUSER_",
-			Timestamp: time.Now(),
+			Timestamp: x.CurrentTime(),
 		}
 		mutations.Set = append(mutations.Set, mu)
 	}

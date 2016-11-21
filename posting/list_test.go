@@ -33,6 +33,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/posting/types"
 	"github.com/dgraph-io/dgraph/store"
+	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -54,7 +55,7 @@ func checkUids(t *testing.T, l *List, uids []uint64) {
 	}
 }
 
-func addMutation(t *testing.T, l *List, edge x.DirectedEdge, op byte) {
+func addMutation(t *testing.T, l *List, edge *task.DirectedEdge, op byte) {
 	_, err := l.AddMutation(context.Background(), edge, op)
 	require.NoError(t, err)
 }
@@ -88,10 +89,10 @@ func TestAddMutation(t *testing.T) {
 
 	l.init(key, ps)
 
-	edge := x.DirectedEdge{
+	edge := &task.DirectedEdge{
 		ValueId:   9,
 		Source:    "testing",
-		Timestamp: time.Now(),
+		Timestamp: x.CurrentTime(),
 	}
 	addMutation(t, l, edge, Set)
 
@@ -174,10 +175,10 @@ func TestAddMutation_Value(t *testing.T) {
 	ol.init(key, ps)
 	log.Println("Init successful.")
 
-	edge := x.DirectedEdge{
+	edge := &task.DirectedEdge{
 		Value:     []byte("oh hey there"),
 		Source:    "new-testing",
-		Timestamp: time.Now(),
+		Timestamp: x.CurrentTime(),
 	}
 	addMutation(t, ol, edge, Set)
 	checkValue(t, ol, "oh hey there")
@@ -205,10 +206,10 @@ func TestAddMutation_jchiu1(t *testing.T) {
 	ol.init(key, ps)
 
 	// Set value to cars and merge to RocksDB.
-	edge := x.DirectedEdge{
+	edge := &task.DirectedEdge{
 		Value:     []byte("cars"),
 		Source:    "jchiu",
-		Timestamp: time.Now(),
+		Timestamp: x.CurrentTime(),
 	}
 	ctx := context.Background()
 	addMutation(t, ol, edge, Set)
@@ -220,30 +221,30 @@ func TestAddMutation_jchiu1(t *testing.T) {
 	checkValue(t, ol, "cars")
 
 	// Set value to newcars, but don't merge yet.
-	edge = x.DirectedEdge{
+	edge = &task.DirectedEdge{
 		Value:     []byte("newcars"),
 		Source:    "jchiu",
-		Timestamp: time.Now(),
+		Timestamp: x.CurrentTime(),
 	}
 	addMutation(t, ol, edge, Set)
 	require.EqualValues(t, 1, ol.Length(0))
 	checkValue(t, ol, "newcars")
 
 	// Set value to someothercars, but don't merge yet.
-	edge = x.DirectedEdge{
+	edge = &task.DirectedEdge{
 		Value:     []byte("someothercars"),
 		Source:    "jchiu",
-		Timestamp: time.Now(),
+		Timestamp: x.CurrentTime(),
 	}
 	addMutation(t, ol, edge, Set)
 	require.EqualValues(t, 1, ol.Length(0))
 	checkValue(t, ol, "someothercars")
 
 	// Set value back to the committed value cars, but don't merge yet.
-	edge = x.DirectedEdge{
+	edge = &task.DirectedEdge{
 		Value:     []byte("cars"),
 		Source:    "jchiu",
-		Timestamp: time.Now(),
+		Timestamp: x.CurrentTime(),
 	}
 	addMutation(t, ol, edge, Set)
 	require.EqualValues(t, 1, ol.Length(0))
@@ -262,19 +263,19 @@ func TestAddMutation_jchiu2(t *testing.T) {
 	ol.init(key, ps)
 
 	// Del a value cars and but don't merge.
-	edge := x.DirectedEdge{
+	edge := &task.DirectedEdge{
 		Value:     []byte("cars"),
 		Source:    "jchiu",
-		Timestamp: time.Now(),
+		Timestamp: x.CurrentTime(),
 	}
 	addMutation(t, ol, edge, Del)
 	require.EqualValues(t, 0, ol.Length(0))
 
 	// Set value to newcars, but don't merge yet.
-	edge = x.DirectedEdge{
+	edge = &task.DirectedEdge{
 		Value:     []byte("newcars"),
 		Source:    "jchiu",
-		Timestamp: time.Now(),
+		Timestamp: x.CurrentTime(),
 	}
 	addMutation(t, ol, edge, Set)
 	require.NoError(t, err)
@@ -282,10 +283,10 @@ func TestAddMutation_jchiu2(t *testing.T) {
 	checkValue(t, ol, "newcars")
 
 	// Del a value cars. This operation should be ignored.
-	edge = x.DirectedEdge{
+	edge = &task.DirectedEdge{
 		Value:     []byte("cars"),
 		Source:    "jchiu",
-		Timestamp: time.Now(),
+		Timestamp: x.CurrentTime(),
 	}
 	addMutation(t, ol, edge, Del)
 	require.EqualValues(t, 1, ol.Length(0))
@@ -304,10 +305,10 @@ func TestAddMutation_jchiu3(t *testing.T) {
 	ol.init(key, ps)
 
 	// Set value to cars and merge to RocksDB.
-	edge := x.DirectedEdge{
+	edge := &task.DirectedEdge{
 		Value:     []byte("cars"),
 		Source:    "jchiu",
-		Timestamp: time.Now(),
+		Timestamp: x.CurrentTime(),
 	}
 	addMutation(t, ol, edge, Set)
 	require.Equal(t, 1, ol.Length(0))
@@ -318,39 +319,39 @@ func TestAddMutation_jchiu3(t *testing.T) {
 	checkValue(t, ol, "cars")
 
 	// Del a value cars and but don't merge.
-	edge = x.DirectedEdge{
+	edge = &task.DirectedEdge{
 		Value:     []byte("cars"),
 		Source:    "jchiu",
-		Timestamp: time.Now(),
+		Timestamp: x.CurrentTime(),
 	}
 	addMutation(t, ol, edge, Del)
 	require.Equal(t, 0, ol.Length(0))
 
 	// Set value to newcars, but don't merge yet.
-	edge = x.DirectedEdge{
+	edge = &task.DirectedEdge{
 		Value:     []byte("newcars"),
 		Source:    "jchiu",
-		Timestamp: time.Now(),
+		Timestamp: x.CurrentTime(),
 	}
 	addMutation(t, ol, edge, Set)
 	require.EqualValues(t, 1, ol.Length(0))
 	checkValue(t, ol, "newcars")
 
 	// Del a value othercars and but don't merge.
-	edge = x.DirectedEdge{
+	edge = &task.DirectedEdge{
 		Value:     []byte("othercars"),
 		Source:    "jchiu",
-		Timestamp: time.Now(),
+		Timestamp: x.CurrentTime(),
 	}
 	addMutation(t, ol, edge, Del)
 	require.NotEqual(t, 0, ol.Length(0))
 	checkValue(t, ol, "newcars")
 
 	// Del a value newcars and but don't merge.
-	edge = x.DirectedEdge{
+	edge = &task.DirectedEdge{
 		Value:     []byte("newcars"),
 		Source:    "jchiu",
-		Timestamp: time.Now(),
+		Timestamp: x.CurrentTime(),
 	}
 	addMutation(t, ol, edge, Del)
 	require.Equal(t, 0, ol.Length(0))
@@ -368,10 +369,10 @@ func TestAddMutation_mrjn1(t *testing.T) {
 	ol.init(key, ps)
 
 	// Set a value cars and merge.
-	edge := x.DirectedEdge{
+	edge := &task.DirectedEdge{
 		Value:     []byte("cars"),
 		Source:    "jchiu",
-		Timestamp: time.Now(),
+		Timestamp: x.CurrentTime(),
 	}
 	addMutation(t, ol, edge, Set)
 	merged, err := ol.CommitIfDirty(context.Background())
@@ -379,48 +380,48 @@ func TestAddMutation_mrjn1(t *testing.T) {
 	require.True(t, merged)
 
 	// Delete a non-existent value newcars. This should have no effect.
-	edge = x.DirectedEdge{
+	edge = &task.DirectedEdge{
 		Value:     []byte("newcars"),
 		Source:    "jchiu",
-		Timestamp: time.Now(),
+		Timestamp: x.CurrentTime(),
 	}
 	addMutation(t, ol, edge, Del)
 	checkValue(t, ol, "cars")
 
 	// Delete the previously committed value cars. But don't merge.
-	edge = x.DirectedEdge{
+	edge = &task.DirectedEdge{
 		Value:     []byte("cars"),
 		Source:    "jchiu",
-		Timestamp: time.Now(),
+		Timestamp: x.CurrentTime(),
 	}
 	addMutation(t, ol, edge, Del)
 	require.Equal(t, 0, ol.Length(0))
 
 	// Do this again to cover Del, muid == curUid, inPlist test case.
 	// Delete the previously committed value cars. But don't merge.
-	edge = x.DirectedEdge{
+	edge = &task.DirectedEdge{
 		Value:     []byte("cars"),
 		Source:    "jchiu",
-		Timestamp: time.Now(),
+		Timestamp: x.CurrentTime(),
 	}
 	addMutation(t, ol, edge, Del)
 	require.Equal(t, 0, ol.Length(0))
 
 	// Set the value again to cover Set, muid == curUid, inPlist test case.
 	// Set the previously committed value cars. But don't merge.
-	edge = x.DirectedEdge{
+	edge = &task.DirectedEdge{
 		Value:     []byte("cars"),
 		Source:    "jchiu",
-		Timestamp: time.Now(),
+		Timestamp: x.CurrentTime(),
 	}
 	addMutation(t, ol, edge, Set)
 	checkValue(t, ol, "cars")
 
 	// Delete it again, just for fun.
-	edge = x.DirectedEdge{
+	edge = &task.DirectedEdge{
 		Value:     []byte("cars"),
 		Source:    "jchiu",
-		Timestamp: time.Now(),
+		Timestamp: x.CurrentTime(),
 	}
 	addMutation(t, ol, edge, Del)
 	require.Equal(t, 0, ol.Length(0))
@@ -441,17 +442,17 @@ func TestAddMutation_checksum(t *testing.T) {
 		key := Key(10, "value")
 		ol.init(key, ps)
 
-		edge := x.DirectedEdge{
+		edge := &task.DirectedEdge{
 			ValueId:   1,
 			Source:    "jchiu",
-			Timestamp: time.Now(),
+			Timestamp: x.CurrentTime(),
 		}
 		addMutation(t, ol, edge, Set)
 
-		edge = x.DirectedEdge{
+		edge = &task.DirectedEdge{
 			ValueId:   3,
 			Source:    "jchiu",
-			Timestamp: time.Now(),
+			Timestamp: x.CurrentTime(),
 		}
 		addMutation(t, ol, edge, Set)
 
@@ -469,17 +470,17 @@ func TestAddMutation_checksum(t *testing.T) {
 		ol.init(key, ps)
 
 		// Add in reverse.
-		edge := x.DirectedEdge{
+		edge := &task.DirectedEdge{
 			ValueId:   3,
 			Source:    "jchiu",
-			Timestamp: time.Now(),
+			Timestamp: x.CurrentTime(),
 		}
 		addMutation(t, ol, edge, Set)
 
-		edge = x.DirectedEdge{
+		edge = &task.DirectedEdge{
 			ValueId:   1,
 			Source:    "jchiu",
-			Timestamp: time.Now(),
+			Timestamp: x.CurrentTime(),
 		}
 		addMutation(t, ol, edge, Set)
 
@@ -498,24 +499,24 @@ func TestAddMutation_checksum(t *testing.T) {
 		ol.init(key, ps)
 
 		// Add in reverse.
-		edge := x.DirectedEdge{
+		edge := &task.DirectedEdge{
 			ValueId:   3,
 			Source:    "jchiu",
-			Timestamp: time.Now(),
+			Timestamp: x.CurrentTime(),
 		}
 		addMutation(t, ol, edge, Set)
 
-		edge = x.DirectedEdge{
+		edge = &task.DirectedEdge{
 			ValueId:   1,
 			Source:    "jchiu",
-			Timestamp: time.Now(),
+			Timestamp: x.CurrentTime(),
 		}
 		addMutation(t, ol, edge, Set)
 
-		edge = x.DirectedEdge{
+		edge = &task.DirectedEdge{
 			ValueId:   4,
 			Source:    "jchiu",
-			Timestamp: time.Now(),
+			Timestamp: x.CurrentTime(),
 		}
 		addMutation(t, ol, edge, Set)
 
@@ -542,16 +543,16 @@ func TestAddMutation_gru(t *testing.T) {
 
 	{
 		// Set two tag ids and merge.
-		edge := x.DirectedEdge{
+		edge := &task.DirectedEdge{
 			ValueId:   0x2b693088816b04b7,
 			Source:    "gru",
-			Timestamp: time.Now(),
+			Timestamp: x.CurrentTime(),
 		}
 		addMutation(t, ol, edge, Set)
-		edge = x.DirectedEdge{
+		edge = &task.DirectedEdge{
 			ValueId:   0x29bf442b48a772e0,
 			Source:    "gru",
-			Timestamp: time.Now(),
+			Timestamp: x.CurrentTime(),
 		}
 		addMutation(t, ol, edge, Set)
 		merged, err := ol.CommitIfDirty(context.Background())
@@ -560,16 +561,16 @@ func TestAddMutation_gru(t *testing.T) {
 	}
 
 	{
-		edge := x.DirectedEdge{
+		edge := &task.DirectedEdge{
 			ValueId:   0x38dec821d2ac3a79,
 			Source:    "gru",
-			Timestamp: time.Now(),
+			Timestamp: x.CurrentTime(),
 		}
 		addMutation(t, ol, edge, Set)
-		edge = x.DirectedEdge{
+		edge = &task.DirectedEdge{
 			ValueId:   0x2b693088816b04b7,
 			Source:    "gru",
-			Timestamp: time.Now(),
+			Timestamp: x.CurrentTime(),
 		}
 		addMutation(t, ol, edge, Del)
 		merged, err := ol.CommitIfDirty(context.Background())
@@ -591,16 +592,16 @@ func TestAddMutation_gru2(t *testing.T) {
 
 	{
 		// Set two tag ids and merge.
-		edge := x.DirectedEdge{
+		edge := &task.DirectedEdge{
 			ValueId:   0x02,
 			Source:    "gru",
-			Timestamp: time.Now(),
+			Timestamp: x.CurrentTime(),
 		}
 		addMutation(t, ol, edge, Set)
-		edge = x.DirectedEdge{
+		edge = &task.DirectedEdge{
 			ValueId:   0x03,
 			Source:    "gru",
-			Timestamp: time.Now(),
+			Timestamp: x.CurrentTime(),
 		}
 		addMutation(t, ol, edge, Set)
 		merged, err := ol.CommitIfDirty(context.Background())
@@ -610,23 +611,23 @@ func TestAddMutation_gru2(t *testing.T) {
 
 	{
 		// Lets set a new tag and delete the two older ones.
-		edge := x.DirectedEdge{
+		edge := &task.DirectedEdge{
 			ValueId:   0x02,
 			Source:    "gru",
-			Timestamp: time.Now(),
+			Timestamp: x.CurrentTime(),
 		}
 		addMutation(t, ol, edge, Del)
-		edge = x.DirectedEdge{
+		edge = &task.DirectedEdge{
 			ValueId:   0x03,
 			Source:    "gru",
-			Timestamp: time.Now(),
+			Timestamp: x.CurrentTime(),
 		}
 		addMutation(t, ol, edge, Del)
 
-		edge = x.DirectedEdge{
+		edge = &task.DirectedEdge{
 			ValueId:   0x04,
 			Source:    "gru",
-			Timestamp: time.Now(),
+			Timestamp: x.CurrentTime(),
 		}
 		addMutation(t, ol, edge, Set)
 
@@ -652,9 +653,9 @@ func TestAfterUIDCount(t *testing.T) {
 	ol.init(key, ps)
 
 	// Set value to cars and merge to RocksDB.
-	edge := x.DirectedEdge{
+	edge := &task.DirectedEdge{
 		Source:    "jchiu",
-		Timestamp: time.Now(),
+		Timestamp: x.CurrentTime(),
 	}
 
 	for i := 100; i < 300; i++ {
@@ -702,7 +703,7 @@ func TestAfterUIDCount(t *testing.T) {
 	require.EqualValues(t, 0, ol.Length(300))
 
 	// Insert 1/4 of the edges.
-	edge.Timestamp = time.Now() // Force an update of the edge.
+	edge.Timestamp = x.CurrentTime() // Force an update of the edge.
 	edge.Source = "somethingelse"
 	for i := 100; i < 300; i += 4 {
 		edge.ValueId = uint64(i)
@@ -734,9 +735,9 @@ func TestAfterUIDCount2(t *testing.T) {
 	ol.init(key, ps)
 
 	// Set value to cars and merge to RocksDB.
-	edge := x.DirectedEdge{
+	edge := &task.DirectedEdge{
 		Source:    "jchiu",
-		Timestamp: time.Now(),
+		Timestamp: x.CurrentTime(),
 	}
 
 	for i := 100; i < 300; i++ {
@@ -748,7 +749,7 @@ func TestAfterUIDCount2(t *testing.T) {
 	require.EqualValues(t, 0, ol.Length(300))
 
 	// Re-insert 1/4 of the edges. Counts should not change.
-	edge.Timestamp = time.Now() // Force an update of the edge.
+	edge.Timestamp = x.CurrentTime() // Force an update of the edge.
 	edge.Source = "somethingelse"
 	for i := 100; i < 300; i += 4 {
 		edge.ValueId = uint64(i)
@@ -771,9 +772,9 @@ func TestAfterUIDCountWithCommit(t *testing.T) {
 	ol.init(key, ps)
 
 	// Set value to cars and merge to RocksDB.
-	edge := x.DirectedEdge{
+	edge := &task.DirectedEdge{
 		Source:    "jchiu",
-		Timestamp: time.Now(),
+		Timestamp: x.CurrentTime(),
 	}
 
 	for i := 100; i < 300; i++ {
@@ -827,7 +828,7 @@ func TestAfterUIDCountWithCommit(t *testing.T) {
 	require.EqualValues(t, 0, ol.Length(300))
 
 	// Insert 1/4 of the edges.
-	edge.Timestamp = time.Now() // Force an update of the edge.
+	edge.Timestamp = x.CurrentTime() // Force an update of the edge.
 	edge.Source = "somethingelse"
 	for i := 100; i < 300; i += 4 {
 		edge.ValueId = uint64(i)
@@ -872,13 +873,20 @@ func BenchmarkAddMutations(b *testing.B) {
 	l.init(key, ps)
 	b.ResetTimer()
 
+	//ts := x.CurrentTime()
 	ts := time.Now()
 	ctx := context.Background()
 	for i := 0; i < b.N; i++ {
-		edge := x.DirectedEdge{
+		ts.Add(time.Microsecond)
+		tsData, err := ts.MarshalBinary()
+		if err != nil {
+			b.Error(err)
+			return
+		}
+		edge := &task.DirectedEdge{
 			ValueId:   uint64(rand.Intn(b.N) + 1),
 			Source:    "testing",
-			Timestamp: ts.Add(time.Microsecond),
+			Timestamp: tsData,
 		}
 		if _, err := l.AddMutation(ctx, edge, Set); err != nil {
 			b.Error(err)

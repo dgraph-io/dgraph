@@ -28,6 +28,8 @@ import (
 
 	"github.com/Sirupsen/logrus"
 	"golang.org/x/net/trace"
+
+	"github.com/dgraph-io/dgraph/task"
 )
 
 // Error constants representing different types of errors.
@@ -55,21 +57,21 @@ type Status struct {
 }
 
 // DirectedEdge is passed to AddMutation to add edges to our graph DB.
-type DirectedEdge struct {
-	Entity    uint64 // Subject or source node / UID.
-	Attribute string // Attribute or predicate. Labels the edge.
-	Value     []byte // Edge points to a value.
-	ValueType byte   // The type of the value
-	ValueId   uint64 // Object or destination node / UID.
-	Source    string
-	Timestamp time.Time
-}
+//type DirectedEdge struct {
+//	Entity    uint64 // Subject or source node / UID.
+//	Attribute string // Attribute or predicate. Labels the edge.
+//	Value     []byte // Edge points to a value.
+//	ValueType byte   // The type of the value
+//	ValueId   uint64 // Object or destination node / UID.
+//	Source    string
+//	Timestamp time.Time
+//}
 
 // Mutations stores the directed edges for both the set and delete operations.
 type Mutations struct {
 	GroupId uint32
-	Set     []DirectedEdge
-	Del     []DirectedEdge
+	Set     []*task.DirectedEdge
+	Del     []*task.DirectedEdge
 }
 
 // Encode gob encodes the mutation which is then sent over to the instance which
@@ -150,4 +152,11 @@ func Trace(ctx context.Context, format string, args ...interface{}) {
 		return
 	}
 	tr.LazyPrintf(format, args...)
+}
+
+// CurrentTime returns the current time encoded.
+func CurrentTime() []byte {
+	data, err := time.Now().MarshalBinary()
+	Check(err)
+	return data
 }

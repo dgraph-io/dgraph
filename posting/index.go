@@ -20,12 +20,12 @@ import (
 	"context"
 	"sort"
 	"sync"
-	"time"
 
 	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/dgraph/geo"
 	"github.com/dgraph-io/dgraph/schema"
+	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -118,10 +118,10 @@ func addIndexMutations(ctx context.Context, attr string, uid uint64,
 		// This data is not indexable
 		return
 	}
-	edge := x.DirectedEdge{
-		Timestamp: time.Now(),
+	edge := &task.DirectedEdge{
+		Timestamp: x.CurrentTime(),
 		ValueId:   uid,
-		Attribute: attr,
+		Attr:      attr,
 		Source:    "idx",
 	}
 
@@ -129,52 +129,52 @@ func addIndexMutations(ctx context.Context, attr string, uid uint64,
 	x.AssertTruef(tokensTable != nil, "TokensTable missing for attr %s", attr)
 
 	for _, token := range tokens {
-		addIndexMutation(ctx, attr, token, tokensTable, &edge, del)
+		addIndexMutation(ctx, attr, token, tokensTable, edge, del)
 	}
 }
 
 func addIndexMutation(ctx context.Context, attr, token string,
-	tokensTable *TokensTable, edge *x.DirectedEdge, del bool) {
+	tokensTable *TokensTable, edge *task.DirectedEdge, del bool) {
 	plist, decr := GetOrCreate(types.IndexKey(attr, token))
 	defer decr()
 
 	x.AssertTruef(plist != nil, "plist is nil [%s] %d %s",
-		token, edge.ValueId, edge.Attribute)
+		token, edge.ValueId, edge.Attr)
 	if del {
-		_, err := plist.AddMutation(ctx, *edge, Del)
+		_, err := plist.AddMutation(ctx, edge, Del)
 		if err != nil {
 			x.TraceError(ctx, x.Wrapf(err,
 				"Error deleting %s for attr %s entity %d: %v",
-				token, edge.Attribute, edge.Entity))
+				token, edge.Attr, edge.Entity))
 		}
 		indexLog.Printf("DEL [%s] [%d] OldTerm [%s]",
-			edge.Attribute, edge.Entity, token)
+			edge.Attr, edge.Entity, token)
 
 	} else {
-		_, err := plist.AddMutation(ctx, *edge, Set)
+		_, err := plist.AddMutation(ctx, edge, Set)
 		if err != nil {
 			x.TraceError(ctx, x.Wrapf(err,
 				"Error adding %s for attr %s entity %d: %v",
-				token, edge.Attribute, edge.Entity))
+				token, edge.Attr, edge.Entity))
 		}
 		indexLog.Printf("SET [%s] [%d] NewTerm [%s]",
-			edge.Attribute, edge.Entity, token)
+			edge.Attr, edge.Entity, token)
 
 		tokensTable.Add(token)
 	}
 }
 
 // AddMutationWithIndex is AddMutation with support for indexing.
-func (l *List) AddMutationWithIndex(ctx context.Context, t x.DirectedEdge, op byte) error {
-	x.AssertTruef(len(t.Attribute) > 0 && t.Attribute[0] != ':',
-		"[%s] [%d] [%v] %d %d\n", t.Attribute, t.Entity, t.Value, t.ValueId, op)
+func (l *List) AddMutationWithIndex(ctx context.Context, t *task.DirectedEdge, op byte) error {
+	x.AssertTruef(len(t.Attr) > 0 && t.Attr[0] != ':',
+		"[%s] [%d] [%v] %d %d\n", t.Attr, t.Entity, t.Value, t.ValueId, op)
 
 	var vbytes []byte
 	var vtype byte
 	var verr error
 
 	doUpdateIndex := pstore != nil && (t.Value != nil) &&
-		schema.IsIndexed(t.Attribute)
+		schema.IsIndexed(t.Attr)
 	if doUpdateIndex {
 		// Check last posting for original value BEFORE any mutation actually happens.
 		vbytes, vtype, verr = l.Value()
@@ -195,14 +195,14 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t x.DirectedEdge, op by
 		if err := p.UnmarshalBinary(delTerm); err != nil {
 			return err
 		}
-		addIndexMutations(ctx, t.Attribute, t.Entity, p, true)
+		addIndexMutations(ctx, t.Attr, t.Entity, p, true)
 	}
 	if op == Set {
 		p := types.ValueForType(types.TypeID(t.ValueType))
 		if err := p.UnmarshalBinary(t.Value); err != nil {
 			return err
 		}
-		addIndexMutations(ctx, t.Attribute, t.Entity, p, false)
+		addIndexMutations(ctx, t.Attr, t.Entity, p, false)
 	}
 	return nil
 }

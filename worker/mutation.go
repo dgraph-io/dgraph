@@ -17,13 +17,11 @@
 package worker
 
 import (
-	"fmt"
-	"log"
-
 	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
+	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -34,18 +32,18 @@ const (
 
 // runMutations goes through all the edges and applies them. It returns the
 // mutations which were not applied in left.
-func runMutations(ctx context.Context, edges []x.DirectedEdge, op byte) error {
+func runMutations(ctx context.Context, edges []*task.DirectedEdge, op byte) error {
 	for _, edge := range edges {
-		if !groups().ServesGroup(group.BelongsTo(edge.Attribute)) {
-			return fmt.Errorf("Predicate fingerprint doesn't match this instance")
+		if !groups().ServesGroup(group.BelongsTo(edge.Attr)) {
+			return x.Errorf("Predicate fingerprint doesn't match this instance")
 		}
 
-		key := posting.Key(edge.Entity, edge.Attribute)
+		key := posting.Key(edge.Entity, edge.Attr)
 		plist, decr := posting.GetOrCreate(key)
 		defer decr()
 
 		if err := plist.AddMutationWithIndex(ctx, edge, op); err != nil {
-			log.Printf("Error while adding mutation: %v %v", edge, err)
+			x.Printf("Error while adding mutation: %v %v", edge, err)
 			return err // abort applying the rest of them.
 		}
 	}
@@ -97,9 +95,10 @@ func proposeOrSend(ctx context.Context, gid uint32, m *x.Mutations, che chan err
 
 // addToMutationArray adds the edges to the appropriate index in the mutationArray,
 // taking into account the op(operation) and the attribute.
-func addToMutationMap(mutationMap map[uint32]*x.Mutations, edges []x.DirectedEdge, op string) {
+func addToMutationMap(mutationMap map[uint32]*x.Mutations,
+	edges []*task.DirectedEdge, op string) {
 	for _, edge := range edges {
-		gid := group.BelongsTo(edge.Attribute)
+		gid := group.BelongsTo(edge.Attr)
 		mu := mutationMap[gid]
 		if mu == nil {
 			mu = new(x.Mutations)

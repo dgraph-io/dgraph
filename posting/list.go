@@ -169,7 +169,8 @@ func debugKey(key []byte) string {
 	return b.String()
 }
 
-func newPosting(t x.DirectedEdge, op byte) *types.Posting {
+func newPosting(t *task.DirectedEdge, op byte) *types.Posting {
+	// TODO: Use proto for Posting.
 	b := flatbuffers.NewBuilder(0)
 	var bo flatbuffers.UOffsetT
 	if !bytes.Equal(t.Value, nil) {
@@ -185,10 +186,13 @@ func newPosting(t x.DirectedEdge, op byte) *types.Posting {
 	}
 	types.PostingAddUid(b, t.ValueId)
 	types.PostingAddSource(b, so)
-	types.PostingAddTs(b, t.Timestamp.UnixNano())
+
+	var timestamp time.Time
+	x.Check(timestamp.UnmarshalBinary(t.Timestamp))
+	types.PostingAddTs(b, timestamp.UnixNano())
 	types.PostingAddOp(b, op)
 	if t.ValueType != 0 {
-		types.PostingAddValType(b, t.ValueType)
+		types.PostingAddValType(b, byte(t.ValueType))
 	}
 	vend := types.PostingEnd(b)
 	b.Finish(vend)
@@ -197,7 +201,7 @@ func newPosting(t x.DirectedEdge, op byte) *types.Posting {
 }
 
 func addEdgeToPosting(b *flatbuffers.Builder,
-	t x.DirectedEdge, op byte) flatbuffers.UOffsetT {
+	t *task.DirectedEdge, op byte) flatbuffers.UOffsetT {
 
 	var bo flatbuffers.UOffsetT
 	if !bytes.Equal(t.Value, nil) {
@@ -214,10 +218,13 @@ func addEdgeToPosting(b *flatbuffers.Builder,
 	}
 	types.PostingAddUid(b, t.ValueId)
 	types.PostingAddSource(b, so)
-	types.PostingAddTs(b, t.Timestamp.UnixNano())
+
+	var timestamp time.Time
+	x.Check(timestamp.UnmarshalBinary(t.Timestamp))
+	types.PostingAddTs(b, timestamp.UnixNano())
 	types.PostingAddOp(b, op)
 	if t.ValueType != 0 {
-		types.PostingAddValType(b, t.ValueType)
+		types.PostingAddValType(b, byte(t.ValueType))
 	}
 	return types.PostingEnd(b)
 }
@@ -435,7 +442,7 @@ func (l *List) updateMutationLayer(mpost *types.Posting) bool {
 // AddMutation adds mutation to mutation layers. Note that it does not write
 // anything to disk. Some other background routine will be responsible for merging
 // changes in mutation layers to RocksDB. Returns whether any mutation happens.
-func (l *List) AddMutation(ctx context.Context, t x.DirectedEdge, op byte) (bool, error) {
+func (l *List) AddMutation(ctx context.Context, t *task.DirectedEdge, op byte) (bool, error) {
 	l.wg.Wait()
 	if atomic.LoadInt32(&l.deleteMe) == 1 {
 		x.TraceError(ctx, x.Errorf("DELETEME set to true. Temporary error."))

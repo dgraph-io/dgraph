@@ -26,6 +26,7 @@ import (
 	"github.com/dgryski/go-farm"
 
 	"github.com/dgraph-io/dgraph/posting"
+	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -107,18 +108,17 @@ func allocateUniqueUid(instanceIdx uint64, numInstances uint64) uint64 {
 }
 
 // AssignNew assigns N unique uids.
-func AssignNew(N int, instanceIdx uint64, numInstances uint64) x.Mutations {
-	var m x.Mutations
+func AssignNew(N int, instanceIdx uint64, numInstances uint64) *x.Mutations {
+	set := make([]*task.DirectedEdge, N)
 	for i := 0; i < N; i++ {
 		uid := allocateUniqueUid(instanceIdx, numInstances)
-		t := x.DirectedEdge{
+		set[i] = &task.DirectedEdge{
 			Entity:    uid,
-			Attribute: "_uid_",
+			Attr:      "_uid_",
 			Value:     []byte("_"), // not txid
 			Source:    "_assigner_",
-			Timestamp: time.Now(),
+			Timestamp: x.CurrentTime(),
 		}
-		m.Set = append(m.Set, t)
 	}
-	return m
+	return &x.Mutations{Set: set}
 }

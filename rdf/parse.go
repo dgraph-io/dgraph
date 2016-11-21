@@ -21,14 +21,17 @@ import (
 	"log"
 	"strconv"
 	"strings"
-	"time"
 	"unicode"
 
+	farm "github.com/dgryski/go-farm"
+
 	"github.com/dgraph-io/dgraph/lex"
+	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
-	farm "github.com/dgryski/go-farm"
 )
+
+var emptyEdge task.DirectedEdge
 
 // NQuad is the data structure used for storing rdf N-Quads.
 type NQuad struct {
@@ -52,28 +55,31 @@ func GetUid(xid string) (uint64, error) {
 
 // ToEdge is useful when you want to find the UID corresponding to XID for
 // just one edge. The method doesn't automatically generate a UID for an XID.
-func (nq NQuad) ToEdge() (result x.DirectedEdge, rerr error) {
+func (nq NQuad) ToEdge() (*task.DirectedEdge, error) {
 	sid, err := GetUid(nq.Subject)
 	if err != nil {
-		return result, err
+		return &emptyEdge, err
 	}
 
-	result.Entity = sid
+	out := &task.DirectedEdge{
+		Attr:      nq.Predicate,
+		Source:    nq.Label,
+		Timestamp: x.CurrentTime(),
+		Entity:    sid,
+	}
+
 	// An edge can have an id or a value.
 	if len(nq.ObjectId) > 0 {
 		oid, err := GetUid(nq.ObjectId)
 		if err != nil {
-			return result, err
+			return &emptyEdge, err
 		}
-		result.ValueId = oid
+		out.ValueId = oid
 	} else {
-		result.Value = nq.ObjectValue
-		result.ValueType = nq.ObjectType
+		out.Value = nq.ObjectValue
+		out.ValueType = int32(nq.ObjectType)
 	}
-	result.Attribute = nq.Predicate
-	result.Source = nq.Label
-	result.Timestamp = time.Now()
-	return result, nil
+	return out, nil
 }
 
 func toUid(xid string, newToUid map[string]uint64) (uid uint64, rerr error) {
@@ -85,28 +91,30 @@ func toUid(xid string, newToUid map[string]uint64) (uid uint64, rerr error) {
 
 // ToEdgeUsing determines the UIDs for the provided XIDs and populates the
 // xidToUid map.
-func (nq NQuad) ToEdgeUsing(
-	newToUid map[string]uint64) (result x.DirectedEdge, rerr error) {
+func (nq NQuad) ToEdgeUsing(newToUid map[string]uint64) (*task.DirectedEdge, error) {
 	uid, err := toUid(nq.Subject, newToUid)
 	if err != nil {
-		return result, err
+		return &emptyEdge, err
 	}
-	result.Entity = uid
+
+	out := &task.DirectedEdge{
+		Entity:    uid,
+		Attr:      nq.Predicate,
+		Source:    nq.Label,
+		Timestamp: x.CurrentTime(),
+	}
 
 	if len(nq.ObjectId) == 0 {
-		result.Value = nq.ObjectValue
-		result.ValueType = nq.ObjectType
+		out.Value = nq.ObjectValue
+		out.ValueType = int32(nq.ObjectType)
 	} else {
 		uid, err = toUid(nq.ObjectId, newToUid)
 		if err != nil {
-			return result, err
+			return &emptyEdge, err
 		}
-		result.ValueId = uid
+		out.ValueId = uid
 	}
-	result.Attribute = nq.Predicate
-	result.Source = nq.Label
-	result.Timestamp = time.Now()
-	return result, nil
+	return out, nil
 }
 
 // This function is used to extract an IRI from an IRIREF.

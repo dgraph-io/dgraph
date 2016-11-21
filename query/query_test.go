@@ -87,11 +87,11 @@ scalar loc:geo @index
 
 func addEdgeToValue(t *testing.T, ps *store.Store, attr string, src uint64,
 	value string) {
-	edge := x.DirectedEdge{
+	edge := &task.DirectedEdge{
 		Value:     []byte(value),
 		Source:    "testing",
-		Timestamp: time.Now(),
-		Attribute: attr,
+		Timestamp: x.CurrentTime(),
+		Attr:      attr,
 		Entity:    src,
 	}
 	l, _ := posting.GetOrCreate(posting.Key(src, attr))
@@ -101,12 +101,12 @@ func addEdgeToValue(t *testing.T, ps *store.Store, attr string, src uint64,
 
 func addEdgeToTypedValue(t *testing.T, ps *store.Store, attr string, src uint64,
 	typ types.TypeID, value []byte) {
-	edge := x.DirectedEdge{
+	edge := &task.DirectedEdge{
 		Value:     value,
-		ValueType: byte(typ),
+		ValueType: int32(typ),
 		Source:    "testing",
-		Timestamp: time.Now(),
-		Attribute: attr,
+		Timestamp: x.CurrentTime(),
+		Attr:      attr,
 		Entity:    src,
 	}
 	l, _ := posting.GetOrCreate(posting.Key(src, attr))
@@ -115,11 +115,11 @@ func addEdgeToTypedValue(t *testing.T, ps *store.Store, attr string, src uint64,
 }
 
 func addEdgeToUID(t *testing.T, ps *store.Store, attr string, src uint64, dst uint64) {
-	edge := x.DirectedEdge{
+	edge := &task.DirectedEdge{
 		ValueId:   dst,
 		Source:    "testing",
-		Timestamp: time.Now(),
-		Attribute: attr,
+		Timestamp: x.CurrentTime(),
+		Attr:      attr,
 		Entity:    src,
 	}
 	l, _ := posting.GetOrCreate(posting.Key(src, attr))
