@@ -160,7 +160,7 @@ func (sg *SubGraph) DebugPrint(prefix string) {
 	if sg.DestUIDs != nil {
 		dst = len(sg.DestUIDs.Uids)
 	}
-	fmt.Printf("%s[%q Alias:%q Func:%v SrcSz:%v Op:%q DestSz:%v Dest: %p ValueSz:%v]\n",
+	x.Printf("%s[%q Alias:%q Func:%v SrcSz:%v Op:%q DestSz:%v Dest: %p ValueSz:%v]\n",
 		prefix, sg.Attr, sg.Params.Alias, sg.SrcFunc, src, sg.FilterOp,
 		dst, sg.DestUIDs, len(sg.values))
 	for _, f := range sg.Filters {
@@ -636,7 +636,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			select {
 			case err = <-filterChan:
 				if err != nil {
-					x.TraceError(ctx, x.Wrapf(err, "Error while processing child task"))
+					x.TraceError(ctx, x.Wrapf(err, "Error while processing filter task"))
 					rch <- err
 					return
 				}

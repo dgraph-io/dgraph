@@ -19,7 +19,6 @@ package gql
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"strconv"
 	"strings"
 
@@ -110,7 +109,7 @@ func run(l *lex.Lexer) {
 
 // DebugPrint is useful for debugging.
 func (gq *GraphQuery) DebugPrint(prefix string) {
-	fmt.Printf("%s[%x %q %q->%q]\n", prefix, gq.UID, gq.XID, gq.Attr, gq.Alias)
+	x.Printf("%s[%x %q %q->%q]\n", prefix, gq.UID, gq.XID, gq.Attr, gq.Alias)
 	for _, c := range gq.Children {
 		c.DebugPrint(prefix + "|->")
 	}
