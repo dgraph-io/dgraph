@@ -776,7 +776,6 @@ func TestToJSONFilterOrFirstOffset(t *testing.T) {
 		string(js))
 }
 
-/*
 func TestToJSONFilterOrFirstNegative(t *testing.T) {
 	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
@@ -814,7 +813,6 @@ func TestToJSONFilterOrFirstNegative(t *testing.T) {
 		`{"me":[{"friend":[{"name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
 		string(js))
 }
-*/
 
 func TestToJSONFilterAnd(t *testing.T) {
 	dir, dir2, _ := populateGraph(t)

@@ -821,9 +821,9 @@ func (p *protoOutputNode) SetUID(uid uint64) { p.Node.Uid = uid }
 func (p *protoOutputNode) SetXID(xid string) { p.Node.Xid = xid }
 
 func (p *protoOutputNode) IsEmpty() bool {
-	//if p.Uid > 0 {
-	//return false
-	//}
+	if p.Node.Uid > 0 {
+		return false
+	}
 	if len(p.Node.Children) > 0 {
 		return false
 	}
