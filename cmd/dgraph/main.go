@@ -411,7 +411,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if gq == nil || (gq.UID == 0 && gq.Gen == nil && len(gq.XID) == 0) {
+	if gq == nil || (gq.UID == 0 && gq.Func == nil && len(gq.XID) == 0) {
 		mp := map[string]interface{}{
 			"code":    x.ErrorOk,
 			"message": "Done",

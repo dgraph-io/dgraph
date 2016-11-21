@@ -29,14 +29,15 @@ import (
 // GraphQuery stores the parsed Query in a tree format. This gets converted to
 // internally used query.SubGraph before processing the query.
 type GraphQuery struct {
-	UID      uint64
-	XID      string
-	Attr     string
-	Alias    string
+	UID   uint64
+	XID   string
+	Attr  string
+	Alias string
+	Func  *Function
+
 	Args     map[string]string
 	Children []*GraphQuery
 	Filter   *FilterTree
-	Gen      *Generator
 
 	// Internal fields below.
 	// If gq.fragment is nonempty, then it is a fragment reference / spread.
@@ -76,16 +77,16 @@ type varMap map[string]varInfo
 
 // FilterTree is the result of parsing the filter directive.
 type FilterTree struct {
-	FuncName string   // For leaf nodes only.
-	FuncArgs []string // For leaf nodes only.
-	Op       string
-	Child    []*FilterTree
+	Op    string
+	Func  *Function
+	Child []*FilterTree
 }
 
-// Generator holds the information about generator functions.
-type Generator struct {
-	FuncName string   // Specifies the name of the function.
-	FuncArgs []string // Contains the arguments of the function.
+// Function holds the information about gql functions.
+type Function struct {
+	Attr string
+	Name string   // Specifies the name of the function.
+	Args []string // Contains the arguments of the function.
 }
 
 // filterOpPrecedence is a map from filterOp (a string) to its precedence.
@@ -104,6 +105,14 @@ func run(l *lex.Lexer) {
 		state = state(l)
 	}
 	close(l.Items) // No more tokens.
+}
+
+// DebugPrint is useful for debugging.
+func (gq *GraphQuery) DebugPrint(prefix string) {
+	x.Printf("%s[%x %q %q->%q]\n", prefix, gq.UID, gq.XID, gq.Attr, gq.Alias)
+	for _, c := range gq.Children {
+		c.DebugPrint(prefix + "|->")
+	}
 }
 
 func (gq *GraphQuery) isFragment() bool {
@@ -606,20 +615,26 @@ func (t *FilterTree) debugString() string {
 // stringHelper does simple DFS to convert FilterTree to string.
 func (t *FilterTree) stringHelper(buf *bytes.Buffer) {
 	x.AssertTrue(t != nil)
-	if len(t.FuncName) > 0 {
+	if t.Func != nil && len(t.Func.Name) > 0 {
 		// Leaf node.
 		_, err := buf.WriteRune('(')
 		x.Check(err)
-		_, err = buf.WriteString(t.FuncName)
+		_, err = buf.WriteString(t.Func.Name)
 		x.Check(err)
 
-		for _, arg := range t.FuncArgs {
-			_, err = buf.WriteString(" \"")
-			x.Check(err)
-			_, err = buf.WriteString(arg)
-			x.Check(err)
-			_, err := buf.WriteRune('"')
-			x.Check(err)
+		if len(t.Func.Attr) > 0 {
+			args := make([]string, len(t.Func.Args)+1)
+			args[0] = t.Func.Attr
+			copy(args[1:], t.Func.Args)
+
+			for _, arg := range args {
+				_, err = buf.WriteString(" \"")
+				x.Check(err)
+				_, err = buf.WriteString(arg)
+				x.Check(err)
+				_, err := buf.WriteRune('"')
+				x.Check(err)
+			}
 		}
 		_, err = buf.WriteRune(')')
 		x.Check(err)
@@ -634,7 +649,7 @@ func (t *FilterTree) stringHelper(buf *bytes.Buffer) {
 	case "|":
 		_, err = buf.WriteString("OR")
 	default:
-		err = x.Errorf("Unknown operator")
+		err = x.Errorf("Unknown operator: %q", t.Op)
 	}
 	x.Check(err)
 
@@ -673,23 +688,27 @@ func evalStack(opStack, valueStack *filterTreeStack) {
 	valueStack.push(topOp)
 }
 
-func parseGenerator(l *lex.Lexer) (*Generator, error) {
-	var g *Generator
+func parseFunction(l *lex.Lexer) (*Function, error) {
+	var g *Function
 	for item := range l.Items {
 		if item.Typ == itemFilterFunc { // Value.
-			g = &Generator{FuncName: item.Val}
+			g = &Function{Name: item.Val}
 			itemInFunc := <-l.Items
 			if itemInFunc.Typ != itemLeftRound {
-				return nil, x.Errorf("Expected ( after func name [%s]", g.FuncName)
+				return nil, x.Errorf("Expected ( after func name [%s]", g.Name)
 			}
 			for itemInFunc = range l.Items {
 				if itemInFunc.Typ == itemRightRound {
 					break
 				} else if itemInFunc.Typ != itemFilterFuncArg {
 					return nil, x.Errorf("Expected arg after func [%s], but got item %v",
-						g.FuncName, itemInFunc)
+						g.Name, itemInFunc)
 				}
-				g.FuncArgs = append(g.FuncArgs, itemInFunc.Val)
+				if len(g.Attr) == 0 {
+					g.Attr = itemInFunc.Val
+				} else {
+					g.Args = append(g.Args, itemInFunc.Val)
+				}
 			}
 		} else if item.Typ == itemRightRound {
 			break
@@ -713,10 +732,12 @@ func parseFilter(l *lex.Lexer) (*FilterTree, error) {
 
 	for item = range l.Items {
 		if item.Typ == itemFilterFunc { // Value.
-			leaf := &FilterTree{FuncName: item.Val}
+			f := &Function{}
+			leaf := &FilterTree{Func: f}
+			f.Name = item.Val
 			itemInFunc := <-l.Items
 			if itemInFunc.Typ != itemLeftRound {
-				return nil, x.Errorf("Expected ( after func name [%s]", leaf.FuncName)
+				return nil, x.Errorf("Expected ( after func name [%s]", leaf.Func.Name)
 			}
 			var terminated bool
 			for itemInFunc = range l.Items {
@@ -725,9 +746,13 @@ func parseFilter(l *lex.Lexer) (*FilterTree, error) {
 					break
 				} else if itemInFunc.Typ != itemFilterFuncArg {
 					return nil, x.Errorf("Expected arg after func [%s], but got item %v",
-						leaf.FuncName, itemInFunc)
+						leaf.Func.Name, itemInFunc)
 				}
-				leaf.FuncArgs = append(leaf.FuncArgs, itemInFunc.Val)
+				if len(f.Attr) == 0 {
+					f.Attr = itemInFunc.Val
+				} else {
+					f.Args = append(f.Args, itemInFunc.Val)
+				}
 			}
 			if !terminated {
 				return nil, x.Errorf("Expected ) to terminate func definition")
@@ -809,11 +834,11 @@ func getRoot(l *lex.Lexer) (gq *GraphQuery, rerr error) {
 	item = <-l.Items
 	if item.Typ == itemGenerator {
 		// Store the generator function.
-		gen, err := parseGenerator(l)
+		gen, err := parseFunction(l)
 		if err != nil {
 			return nil, err
 		}
-		gq.Gen = gen
+		gq.Func = gen
 	} else if item.Typ == itemArgument {
 		args, err := parseArguments(l)
 		if err != nil {

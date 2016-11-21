@@ -19,9 +19,9 @@ func ApplyFilter(u *task.List, f func(uint64, int) bool) {
 	u.Uids = out
 }
 
-// IntersectSorted intersects u with v. The update is made to u. It assumes
+// IntersectWith intersects u with v. The update is made to u. It assumes
 // that u, v are sorted, which are not always the case.
-func IntersectSorted(u, v *task.List) {
+func IntersectWith(u, v *task.List) {
 	out := u.Uids[:0]
 	n := len(u.Uids)
 	m := len(v.Uids)
@@ -37,7 +37,7 @@ func IntersectSorted(u, v *task.List) {
 	u.Uids = out
 }
 
-// IntersectSortedLists intersect a list of UIDLists. An alternative is to do
+// IntersectSorted intersect a list of UIDLists. An alternative is to do
 // pairwise intersections n-1 times where n=number of lists. This is less
 // efficient:
 // Let p be length of shortest list. Let q be average length of lists. So
@@ -46,7 +46,7 @@ func IntersectSorted(u, v *task.List) {
 // is the answer (or close to the answer). The following method requires nq
 // reads (each element is read only once) whereas pairwise intersections can
 // require np + nq - p reads, which can be up to ~twice as many.
-func IntersectSortedLists(lists []*task.List) *task.List {
+func IntersectSorted(lists []*task.List) *task.List {
 	if len(lists) == 0 {
 		return new(task.List)
 	}
@@ -106,8 +106,8 @@ func IntersectSortedLists(lists []*task.List) *task.List {
 	return &task.List{Uids: output}
 }
 
-// MergeSortedLists merges sorted lists.
-func MergeSortedLists(lists []*task.List) *task.List {
+// MergeSorted merges sorted lists.
+func MergeSorted(lists []*task.List) *task.List {
 	if len(lists) == 0 {
 		return new(task.List)
 	}
