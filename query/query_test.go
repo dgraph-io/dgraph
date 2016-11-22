@@ -897,90 +897,93 @@ func TestToProto(t *testing.T) {
 	require.NoError(t, err)
 
 	require.EqualValues(t,
-		`uid: 1
-xid: "mich"
-attribute: "debug"
-properties: <
-  prop: "name"
-  value: <
-    str_val: "Michonne"
-  >
->
-properties: <
-  prop: "gender"
-  value: <
-    bytes_val: "female"
-  >
->
-properties: <
-  prop: "alive"
-  value: <
-    bool_val: true
-  >
->
+		`attribute: "_root_"
 children: <
-  uid: 23
-  attribute: "friend"
+  uid: 1
+  xid: "mich"
+  attribute: "debug"
   properties: <
     prop: "name"
     value: <
-      str_val: "Rick Grimes"
+      str_val: "Michonne"
     >
   >
->
-children: <
-  uid: 24
-  attribute: "friend"
   properties: <
-    prop: "name"
+    prop: "gender"
     value: <
-      str_val: "Glenn Rhee"
+      bytes_val: "female"
     >
   >
->
-children: <
-  uid: 25
-  attribute: "friend"
   properties: <
-    prop: "name"
+    prop: "alive"
     value: <
-      str_val: "Daryl Dixon"
+      bool_val: true
     >
   >
->
-children: <
-  uid: 31
-  attribute: "friend"
-  properties: <
-    prop: "name"
-    value: <
-      str_val: "Andrea"
+  children: <
+    uid: 23
+    attribute: "friend"
+    properties: <
+      prop: "name"
+      value: <
+        str_val: "Rick Grimes"
+      >
     >
   >
->
-children: <
-  uid: 101
-  attribute: "friend"
->
-children: <
-  uid: 23
-  attribute: "friend"
->
-children: <
-  uid: 24
-  attribute: "friend"
->
-children: <
-  uid: 25
-  attribute: "friend"
->
-children: <
-  uid: 31
-  attribute: "friend"
->
-children: <
-  uid: 101
-  attribute: "friend"
+  children: <
+    uid: 24
+    attribute: "friend"
+    properties: <
+      prop: "name"
+      value: <
+        str_val: "Glenn Rhee"
+      >
+    >
+  >
+  children: <
+    uid: 25
+    attribute: "friend"
+    properties: <
+      prop: "name"
+      value: <
+        str_val: "Daryl Dixon"
+      >
+    >
+  >
+  children: <
+    uid: 31
+    attribute: "friend"
+    properties: <
+      prop: "name"
+      value: <
+        str_val: "Andrea"
+      >
+    >
+  >
+  children: <
+    uid: 101
+    attribute: "friend"
+  >
+  children: <
+    uid: 23
+    attribute: "friend"
+  >
+  children: <
+    uid: 24
+    attribute: "friend"
+  >
+  children: <
+    uid: 25
+    attribute: "friend"
+  >
+  children: <
+    uid: 31
+    attribute: "friend"
+  >
+  children: <
+    uid: 101
+    attribute: "friend"
+  >
 >
 `, proto.MarshalTextString(gr))
 }
@@ -1022,16 +1025,16 @@ func TestSchema(t *testing.T) {
 	gr, err := sg.ToProtocolBuffer(&l)
 	require.NoError(t, err)
 
-	require.EqualValues(t, "debug", gr.Attribute)
-	require.EqualValues(t, 1, gr.Uid)
-	require.EqualValues(t, "mich", gr.Xid)
-	require.Len(t, gr.Properties, 3)
+	require.EqualValues(t, "debug", gr.Children[0].Attribute)
+	require.EqualValues(t, 1, gr.Children[0].Uid)
+	require.EqualValues(t, "mich", gr.Children[0].Xid)
+	require.Len(t, gr.Children[0].Properties, 3)
 
 	require.EqualValues(t, "Michonne",
-		getProperty(gr.Properties, "name").GetStrVal())
-	require.Len(t, gr.Children, 10)
+		getProperty(gr.Children[0].Properties, "name").GetStrVal())
+	require.Len(t, gr.Children[0].Children, 10)
 
-	child := gr.Children[0]
+	child := gr.Children[0].Children[0]
 	require.EqualValues(t, 23, child.Uid)
 	require.EqualValues(t, "friend", child.Attribute)
 
@@ -1040,7 +1043,7 @@ func TestSchema(t *testing.T) {
 		getProperty(child.Properties, "name").GetStrVal())
 	require.Empty(t, child.Children)
 
-	child = gr.Children[5]
+	child = gr.Children[0].Children[5]
 	require.EqualValues(t, 23, child.Uid)
 	require.EqualValues(t, "friend", child.Attribute)
 	require.Empty(t, child.Properties)
@@ -1081,30 +1084,33 @@ func TestToProtoFilter(t *testing.T) {
 	pb, err := sg.ToProtocolBuffer(&l)
 	require.NoError(t, err)
 
-	expectedPb := `attribute: "me"
-properties: <
-  prop: "name"
-  value: <
-    str_val: "Michonne"
-  >
->
-properties: <
-  prop: "gender"
-  value: <
-    bytes_val: "female"
-  >
->
+	expectedPb := `attribute: "_root_"
 children: <
-  attribute: "friend"
+  attribute: "me"
   properties: <
     prop: "name"
     value: <
-      str_val: "Andrea"
+      str_val: "Michonne"
+    >
+  >
+  properties: <
+    prop: "gender"
+    value: <
+      bytes_val: "female"
+    >
+  >
+  children: <
+    attribute: "friend"
+    properties: <
+      prop: "name"
+      value: <
+        str_val: "Andrea"
+      >
     >
   >
 >
 `
-	require.EqualValues(t, proto.MarshalTextString(pb), expectedPb)
+	require.EqualValues(t, expectedPb, proto.MarshalTextString(pb))
 }
 
 func TestToProtoFilterOr(t *testing.T) {
@@ -1141,34 +1147,37 @@ func TestToProtoFilterOr(t *testing.T) {
 	pb, err := sg.ToProtocolBuffer(&l)
 	require.NoError(t, err)
 
-	expectedPb := `attribute: "me"
-properties: <
-  prop: "name"
-  value: <
-    str_val: "Michonne"
-  >
->
-properties: <
-  prop: "gender"
-  value: <
-    bytes_val: "female"
-  >
->
+	expectedPb := `attribute: "_root_"
 children: <
-  attribute: "friend"
+  attribute: "me"
   properties: <
     prop: "name"
     value: <
-      str_val: "Glenn Rhee"
+      str_val: "Michonne"
     >
   >
->
-children: <
-  attribute: "friend"
   properties: <
-    prop: "name"
+    prop: "gender"
     value: <
-      str_val: "Andrea"
+      bytes_val: "female"
+    >
+  >
+  children: <
+    attribute: "friend"
+    properties: <
+      prop: "name"
+      value: <
+        str_val: "Glenn Rhee"
+      >
+    >
+  >
+  children: <
+    attribute: "friend"
+    properties: <
+      prop: "name"
+      value: <
+        str_val: "Andrea"
+      >
     >
   >
 >
@@ -1210,21 +1219,24 @@ func TestToProtoFilterAnd(t *testing.T) {
 	pb, err := sg.ToProtocolBuffer(&l)
 	require.NoError(t, err)
 
-	expectedPb := `attribute: "me"
-properties: <
-  prop: "name"
-  value: <
-    str_val: "Michonne"
+	expectedPb := `attribute: "_root_"
+children: <
+  attribute: "me"
+  properties: <
+    prop: "name"
+    value: <
+      str_val: "Michonne"
+    >
   >
->
-properties: <
-  prop: "gender"
-  value: <
-    bytes_val: "female"
+  properties: <
+    prop: "gender"
+    value: <
+      bytes_val: "female"
+    >
   >
 >
 `
-	require.EqualValues(t, proto.MarshalTextString(pb), expectedPb)
+	require.EqualValues(t, expectedPb, proto.MarshalTextString(pb))
 }
 
 // Test sorting / ordering by dob.
@@ -1379,57 +1391,60 @@ func TestToProtoOrder(t *testing.T) {
 	pb, err := sg.ToProtocolBuffer(&l)
 	require.NoError(t, err)
 
-	expectedPb := `attribute: "me"
-properties: <
-  prop: "name"
-  value: <
-    str_val: "Michonne"
-  >
->
-properties: <
-  prop: "gender"
-  value: <
-    bytes_val: "female"
-  >
->
+	expectedPb := `attribute: "_root_"
 children: <
-  attribute: "friend"
+  attribute: "me"
   properties: <
     prop: "name"
     value: <
-      str_val: "Andrea"
+      str_val: "Michonne"
     >
   >
->
-children: <
-  attribute: "friend"
   properties: <
-    prop: "name"
+    prop: "gender"
     value: <
-      str_val: "Daryl Dixon"
+      bytes_val: "female"
     >
   >
->
-children: <
-  attribute: "friend"
-  properties: <
-    prop: "name"
-    value: <
-      str_val: "Glenn Rhee"
+  children: <
+    attribute: "friend"
+    properties: <
+      prop: "name"
+      value: <
+        str_val: "Andrea"
+      >
     >
   >
->
-children: <
-  attribute: "friend"
-  properties: <
-    prop: "name"
-    value: <
-      str_val: "Rick Grimes"
+  children: <
+    attribute: "friend"
+    properties: <
+      prop: "name"
+      value: <
+        str_val: "Daryl Dixon"
+      >
+    >
+  >
+  children: <
+    attribute: "friend"
+    properties: <
+      prop: "name"
+      value: <
+        str_val: "Glenn Rhee"
+      >
+    >
+  >
+  children: <
+    attribute: "friend"
+    properties: <
+      prop: "name"
+      value: <
+        str_val: "Rick Grimes"
+      >
     >
   >
 >
 `
-	require.EqualValues(t, proto.MarshalTextString(pb), expectedPb)
+	require.EqualValues(t, expectedPb, proto.MarshalTextString(pb))
 }
 
 // Test sorting / ordering by dob.
@@ -1467,39 +1482,42 @@ func TestToProtoOrderCount(t *testing.T) {
 	pb, err := sg.ToProtocolBuffer(&l)
 	require.NoError(t, err)
 
-	expectedPb := `attribute: "me"
-properties: <
-  prop: "name"
-  value: <
-    str_val: "Michonne"
-  >
->
-properties: <
-  prop: "gender"
-  value: <
-    bytes_val: "female"
-  >
->
+	expectedPb := `attribute: "_root_"
 children: <
-  attribute: "friend"
+  attribute: "me"
   properties: <
     prop: "name"
     value: <
-      str_val: "Andrea"
+      str_val: "Michonne"
     >
   >
->
-children: <
-  attribute: "friend"
   properties: <
-    prop: "name"
+    prop: "gender"
     value: <
-      str_val: "Daryl Dixon"
+      bytes_val: "female"
+    >
+  >
+  children: <
+    attribute: "friend"
+    properties: <
+      prop: "name"
+      value: <
+        str_val: "Andrea"
+      >
+    >
+  >
+  children: <
+    attribute: "friend"
+    properties: <
+      prop: "name"
+      value: <
+        str_val: "Daryl Dixon"
+      >
     >
   >
 >
 `
-	require.EqualValues(t, proto.MarshalTextString(pb), expectedPb)
+	require.EqualValues(t, expectedPb, proto.MarshalTextString(pb))
 }
 
 // Test sorting / ordering by dob.
@@ -1537,39 +1555,42 @@ func TestToProtoOrderOffsetCount(t *testing.T) {
 	pb, err := sg.ToProtocolBuffer(&l)
 	require.NoError(t, err)
 
-	expectedPb := `attribute: "me"
-properties: <
-  prop: "name"
-  value: <
-    str_val: "Michonne"
-  >
->
-properties: <
-  prop: "gender"
-  value: <
-    bytes_val: "female"
-  >
->
+	expectedPb := `attribute: "_root_"
 children: <
-  attribute: "friend"
+  attribute: "me"
   properties: <
     prop: "name"
     value: <
-      str_val: "Daryl Dixon"
+      str_val: "Michonne"
     >
   >
->
-children: <
-  attribute: "friend"
   properties: <
-    prop: "name"
+    prop: "gender"
     value: <
-      str_val: "Glenn Rhee"
+      bytes_val: "female"
+    >
+  >
+  children: <
+    attribute: "friend"
+    properties: <
+      prop: "name"
+      value: <
+        str_val: "Daryl Dixon"
+      >
+    >
+  >
+  children: <
+    attribute: "friend"
+    properties: <
+      prop: "name"
+      value: <
+        str_val: "Glenn Rhee"
+      >
     >
   >
 >
 `
-	require.EqualValues(t, proto.MarshalTextString(pb), expectedPb)
+	require.EqualValues(t, expectedPb, proto.MarshalTextString(pb))
 }
 
 func TestSchema1(t *testing.T) {
