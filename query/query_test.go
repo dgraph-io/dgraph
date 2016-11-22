@@ -1612,6 +1612,22 @@ func TestGenerator(t *testing.T) {
 	require.JSONEq(t, `{"me":[{"gender":"female","name":"Michonne"}]}`, js)
 }
 
+func TestGeneratorMultiRoot(t *testing.T) {
+	dir1, dir2, _ := populateGraph(t)
+	defer os.RemoveAll(dir1)
+	defer os.RemoveAll(dir2)
+	query := `
+    {
+      me(anyof("name", "Michonne Rick Glenn")) {
+        name
+      }
+    }
+  `
+
+	js := processToJSON(t, query)
+	require.JSONEq(t, `{"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"}]}`, js)
+}
+
 //func TestNearGenerator(t *testing.T) {
 //dir1, dir2, _ := populateGraph(t)
 //defer os.RemoveAll(dir1)
