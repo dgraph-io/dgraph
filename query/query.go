@@ -843,7 +843,7 @@ func (sg *SubGraph) ToProtocolBuffer(l *Latency) (*graph.Node, error) {
 	if sg.DestUIDs == nil {
 		return seedNode.New(sg.Params.Alias).(*protoOutputNode).Node, nil
 	}
-	//x.AssertTrue(len(sg.uidMatrix) == 1)
+
 	n := seedNode.New("_root_")
 	for _, uid := range sg.DestUIDs.Uids {
 		// For the root, the name is stored in Alias, not Attr.

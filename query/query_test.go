@@ -1628,7 +1628,6 @@ func TestGenerator(t *testing.T) {
       }
     }
   `
-
 	js := processToJSON(t, query)
 	require.JSONEq(t, `{"me":[{"gender":"female","name":"Michonne"}]}`, js)
 }
@@ -1644,7 +1643,6 @@ func TestGeneratorMultiRoot(t *testing.T) {
       }
     }
   `
-
 	js := processToJSON(t, query)
 	require.JSONEq(t, `{"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"}]}`, js)
 }
@@ -1708,7 +1706,6 @@ children: <
   >
 >
 `
-
 	require.EqualValues(t, expectedPb, proto.MarshalTextString(pb))
 }
 
