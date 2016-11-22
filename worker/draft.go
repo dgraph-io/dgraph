@@ -136,7 +136,7 @@ func (h *header) Decode(in []byte) {
 	h.msgId = binary.LittleEndian.Uint16(in[4:6])
 }
 
-func (n *node) ProposeAndWait(ctx context.Context, msg uint16, data []byte) error {
+func (n *node) ProposeAndWait(ctx context.Context, msg uint16, m *task.Mutations) error {
 	var h header
 	h.proposalId = rand.Uint32()
 	h.msgId = msg

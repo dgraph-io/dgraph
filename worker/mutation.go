@@ -116,7 +116,7 @@ func addToMutationMap(mutationMap map[uint32]*x.Mutations,
 
 // MutateOverNetwork checks which group should be running the mutations
 // according to fingerprint of the predicate and sends it to that instance.
-func MutateOverNetwork(ctx context.Context, m x.Mutations) (rerr error) {
+func MutateOverNetwork(ctx context.Context, m *task.Mutations) error {
 	mutationMap := make(map[uint32]*x.Mutations)
 
 	addToMutationMap(mutationMap, m.Set, set)
