@@ -35,7 +35,7 @@ do
         sleep 1
 done
 
-go test -v ../../contrib/freebase/simple_test.go
+go test -debugmode -v ../../contrib/freebase/simple_test.go
 
 killall dgraph
 popd &> /dev/null
