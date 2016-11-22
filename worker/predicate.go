@@ -70,7 +70,10 @@ func generateGroup(group uint64) (*task.GroupKeys, error) {
 	it := pstore.NewIterator()
 	defer it.Close()
 
-	g := &task.GroupKeys{}
+	g := &task.GroupKeys{
+		GroupId: group,
+	}
+
 	for it.SeekToFirst(); it.Valid(); it.Next() {
 		// TODO: Check if this key belongs to the group.
 
@@ -166,14 +169,14 @@ func (w *grpcWorker) PredicateData(group *task.GroupKeys, stream Worker_Predicat
 		x.Check(pl.Unmarshal(v.Data()))
 
 		// TODO: Check that key is part of the specified group id.
-		i := sort.Search(len(group.Keys), func(i int) bool {
+		idx := sort.Search(len(group.Keys), func(i int) bool {
 			t := group.Keys[i]
 			return bytes.Compare(k.Data(), t.Key) <= 0
 		})
 
-		if i < len(group.Keys) {
+		if idx < len(group.Keys) {
 			// Found a match.
-			t := group.Keys[i]
+			t := group.Keys[idx]
 			if bytes.Equal(k.Data(), t.Key) && bytes.Equal(pl.Checksum, t.Checksum) {
 				// No need to send this.
 				continue
