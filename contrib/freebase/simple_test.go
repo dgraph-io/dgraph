@@ -60,7 +60,7 @@ func TestSimple(t *testing.T) {
     	}
     }`
 
-	expectedRes := `{"me":[{"author":[{"born":"1832","died":"1898","name":"Lewis Carroll"}],"character":[{"name":"Alice","name.fr":"Adélaïde","name.ru":"Алисия"}],"name":"Alice in Wonderland","type":[{}],"written-in":"1865"}]}`
+	expectedRes := `{"me":[{"author":[{"born":"1832","died":"1898","name":"Lewis Carroll"}],"character":[{"name":"Alice","name.fr":"Adélaïde","name.ru":"Алисия"}],"name":"Alice in Wonderland","written-in":"1865"}]}`
 	res := decodeResponse(q)
 	if res != expectedRes {
 		log.Fatal("Query response is not as expected")

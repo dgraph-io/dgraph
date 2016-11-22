@@ -18,6 +18,9 @@
 		Num
 		DirectedEdge
 		Mutations
+		RaftContext
+		Membership
+		MembershipUpdate
 */
 package task
 
@@ -187,6 +190,56 @@ func (m *Mutations) GetDel() []*DirectedEdge {
 	return nil
 }
 
+type RaftContext struct {
+	Id    uint64 `protobuf:"fixed64,1,opt,name=id,proto3" json:"id,omitempty"`
+	Group uint32 `protobuf:"varint,2,opt,name=group,proto3" json:"group,omitempty"`
+	Addr  string `protobuf:"bytes,3,opt,name=addr,proto3" json:"addr,omitempty"`
+}
+
+func (m *RaftContext) Reset()                    { *m = RaftContext{} }
+func (m *RaftContext) String() string            { return proto.CompactTextString(m) }
+func (*RaftContext) ProtoMessage()               {}
+func (*RaftContext) Descriptor() ([]byte, []int) { return fileDescriptorTask, []int{9} }
+
+// Membership stores information about RAFT group membership for a single RAFT node.
+// Note that each server can be serving multiple RAFT groups. Each group would have
+// one RAFT node per server serving that group.
+type Membership struct {
+	Id         uint64 `protobuf:"fixed64,1,opt,name=id,proto3" json:"id,omitempty"`
+	Group      uint32 `protobuf:"varint,2,opt,name=group,proto3" json:"group,omitempty"`
+	Addr       string `protobuf:"bytes,3,opt,name=addr,proto3" json:"addr,omitempty"`
+	Leader     bool   `protobuf:"varint,4,opt,name=leader,proto3" json:"leader,omitempty"`
+	AmDead     bool   `protobuf:"varint,5,opt,name=amDead,proto3" json:"amDead,omitempty"`
+	LastUpdate uint64 `protobuf:"varint,6,opt,name=lastUpdate,proto3" json:"lastUpdate,omitempty"`
+}
+
+func (m *Membership) Reset()                    { *m = Membership{} }
+func (m *Membership) String() string            { return proto.CompactTextString(m) }
+func (*Membership) ProtoMessage()               {}
+func (*Membership) Descriptor() ([]byte, []int) { return fileDescriptorTask, []int{10} }
+
+// MembershipUpdate is used to pack together the current membership state of all the nodes
+// in the caller server; and the membership updates recorded by the callee server since
+// the provided lastUpdate.
+type MembershipUpdate struct {
+	Members      []*Membership `protobuf:"bytes,1,rep,name=members" json:"members,omitempty"`
+	LastUpdate   uint64        `protobuf:"varint,2,opt,name=lastUpdate,proto3" json:"lastUpdate,omitempty"`
+	Redirect     bool          `protobuf:"varint,3,opt,name=redirect,proto3" json:"redirect,omitempty"`
+	RedirectAddr string        `protobuf:"bytes,4,opt,name=redirectAddr,proto3" json:"redirectAddr,omitempty"`
+}
+
+func (m *MembershipUpdate) Reset()                    { *m = MembershipUpdate{} }
+func (m *MembershipUpdate) String() string            { return proto.CompactTextString(m) }
+func (*MembershipUpdate) ProtoMessage()               {}
+func (*MembershipUpdate) Descriptor() ([]byte, []int) { return fileDescriptorTask, []int{11} }
+
+func (m *MembershipUpdate) GetMembers() []*Membership {
+	if m != nil {
+		return m.Members
+	}
+	return nil
+}
+
 func init() {
 	proto.RegisterType((*List)(nil), "task.List")
 	proto.RegisterType((*Value)(nil), "task.Value")
@@ -197,6 +250,9 @@ func init() {
 	proto.RegisterType((*Num)(nil), "task.Num")
 	proto.RegisterType((*DirectedEdge)(nil), "task.DirectedEdge")
 	proto.RegisterType((*Mutations)(nil), "task.Mutations")
+	proto.RegisterType((*RaftContext)(nil), "task.RaftContext")
+	proto.RegisterType((*Membership)(nil), "task.Membership")
+	proto.RegisterType((*MembershipUpdate)(nil), "task.MembershipUpdate")
 }
 func (m *List) Marshal() (data []byte, err error) {
 	size := m.Size()
@@ -662,6 +718,150 @@ func (m *Mutations) MarshalTo(data []byte) (int, error) {
 	return i, nil
 }
 
+func (m *RaftContext) Marshal() (data []byte, err error) {
+	size := m.Size()
+	data = make([]byte, size)
+	n, err := m.MarshalTo(data)
+	if err != nil {
+		return nil, err
+	}
+	return data[:n], nil
+}
+
+func (m *RaftContext) MarshalTo(data []byte) (int, error) {
+	var i int
+	_ = i
+	var l int
+	_ = l
+	if m.Id != 0 {
+		data[i] = 0x9
+		i++
+		i = encodeFixed64Task(data, i, uint64(m.Id))
+	}
+	if m.Group != 0 {
+		data[i] = 0x10
+		i++
+		i = encodeVarintTask(data, i, uint64(m.Group))
+	}
+	if len(m.Addr) > 0 {
+		data[i] = 0x1a
+		i++
+		i = encodeVarintTask(data, i, uint64(len(m.Addr)))
+		i += copy(data[i:], m.Addr)
+	}
+	return i, nil
+}
+
+func (m *Membership) Marshal() (data []byte, err error) {
+	size := m.Size()
+	data = make([]byte, size)
+	n, err := m.MarshalTo(data)
+	if err != nil {
+		return nil, err
+	}
+	return data[:n], nil
+}
+
+func (m *Membership) MarshalTo(data []byte) (int, error) {
+	var i int
+	_ = i
+	var l int
+	_ = l
+	if m.Id != 0 {
+		data[i] = 0x9
+		i++
+		i = encodeFixed64Task(data, i, uint64(m.Id))
+	}
+	if m.Group != 0 {
+		data[i] = 0x10
+		i++
+		i = encodeVarintTask(data, i, uint64(m.Group))
+	}
+	if len(m.Addr) > 0 {
+		data[i] = 0x1a
+		i++
+		i = encodeVarintTask(data, i, uint64(len(m.Addr)))
+		i += copy(data[i:], m.Addr)
+	}
+	if m.Leader {
+		data[i] = 0x20
+		i++
+		if m.Leader {
+			data[i] = 1
+		} else {
+			data[i] = 0
+		}
+		i++
+	}
+	if m.AmDead {
+		data[i] = 0x28
+		i++
+		if m.AmDead {
+			data[i] = 1
+		} else {
+			data[i] = 0
+		}
+		i++
+	}
+	if m.LastUpdate != 0 {
+		data[i] = 0x30
+		i++
+		i = encodeVarintTask(data, i, uint64(m.LastUpdate))
+	}
+	return i, nil
+}
+
+func (m *MembershipUpdate) Marshal() (data []byte, err error) {
+	size := m.Size()
+	data = make([]byte, size)
+	n, err := m.MarshalTo(data)
+	if err != nil {
+		return nil, err
+	}
+	return data[:n], nil
+}
+
+func (m *MembershipUpdate) MarshalTo(data []byte) (int, error) {
+	var i int
+	_ = i
+	var l int
+	_ = l
+	if len(m.Members) > 0 {
+		for _, msg := range m.Members {
+			data[i] = 0xa
+			i++
+			i = encodeVarintTask(data, i, uint64(msg.Size()))
+			n, err := msg.MarshalTo(data[i:])
+			if err != nil {
+				return 0, err
+			}
+			i += n
+		}
+	}
+	if m.LastUpdate != 0 {
+		data[i] = 0x10
+		i++
+		i = encodeVarintTask(data, i, uint64(m.LastUpdate))
+	}
+	if m.Redirect {
+		data[i] = 0x18
+		i++
+		if m.Redirect {
+			data[i] = 1
+		} else {
+			data[i] = 0
+		}
+		i++
+	}
+	if len(m.RedirectAddr) > 0 {
+		data[i] = 0x22
+		i++
+		i = encodeVarintTask(data, i, uint64(len(m.RedirectAddr)))
+		i += copy(data[i:], m.RedirectAddr)
+	}
+	return i, nil
+}
+
 func encodeFixed64Task(data []byte, offset int, v uint64) int {
 	data[offset] = uint8(v)
 	data[offset+1] = uint8(v >> 8)
@@ -871,6 +1071,69 @@ func (m *Mutations) Size() (n int) {
 			l = e.Size()
 			n += 1 + l + sovTask(uint64(l))
 		}
+	}
+	return n
+}
+
+func (m *RaftContext) Size() (n int) {
+	var l int
+	_ = l
+	if m.Id != 0 {
+		n += 9
+	}
+	if m.Group != 0 {
+		n += 1 + sovTask(uint64(m.Group))
+	}
+	l = len(m.Addr)
+	if l > 0 {
+		n += 1 + l + sovTask(uint64(l))
+	}
+	return n
+}
+
+func (m *Membership) Size() (n int) {
+	var l int
+	_ = l
+	if m.Id != 0 {
+		n += 9
+	}
+	if m.Group != 0 {
+		n += 1 + sovTask(uint64(m.Group))
+	}
+	l = len(m.Addr)
+	if l > 0 {
+		n += 1 + l + sovTask(uint64(l))
+	}
+	if m.Leader {
+		n += 2
+	}
+	if m.AmDead {
+		n += 2
+	}
+	if m.LastUpdate != 0 {
+		n += 1 + sovTask(uint64(m.LastUpdate))
+	}
+	return n
+}
+
+func (m *MembershipUpdate) Size() (n int) {
+	var l int
+	_ = l
+	if len(m.Members) > 0 {
+		for _, e := range m.Members {
+			l = e.Size()
+			n += 1 + l + sovTask(uint64(l))
+		}
+	}
+	if m.LastUpdate != 0 {
+		n += 1 + sovTask(uint64(m.LastUpdate))
+	}
+	if m.Redirect {
+		n += 2
+	}
+	l = len(m.RedirectAddr)
+	if l > 0 {
+		n += 1 + l + sovTask(uint64(l))
 	}
 	return n
 }
@@ -2302,6 +2565,444 @@ func (m *Mutations) Unmarshal(data []byte) error {
 	}
 	return nil
 }
+func (m *RaftContext) Unmarshal(data []byte) error {
+	l := len(data)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowTask
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := data[iNdEx]
+			iNdEx++
+			wire |= (uint64(b) & 0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: RaftContext: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: RaftContext: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 1 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Id", wireType)
+			}
+			m.Id = 0
+			if (iNdEx + 8) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += 8
+			m.Id = uint64(data[iNdEx-8])
+			m.Id |= uint64(data[iNdEx-7]) << 8
+			m.Id |= uint64(data[iNdEx-6]) << 16
+			m.Id |= uint64(data[iNdEx-5]) << 24
+			m.Id |= uint64(data[iNdEx-4]) << 32
+			m.Id |= uint64(data[iNdEx-3]) << 40
+			m.Id |= uint64(data[iNdEx-2]) << 48
+			m.Id |= uint64(data[iNdEx-1]) << 56
+		case 2:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Group", wireType)
+			}
+			m.Group = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowTask
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				m.Group |= (uint32(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Addr", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowTask
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				stringLen |= (uint64(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthTask
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Addr = string(data[iNdEx:postIndex])
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipTask(data[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthTask
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *Membership) Unmarshal(data []byte) error {
+	l := len(data)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowTask
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := data[iNdEx]
+			iNdEx++
+			wire |= (uint64(b) & 0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: Membership: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: Membership: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 1 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Id", wireType)
+			}
+			m.Id = 0
+			if (iNdEx + 8) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += 8
+			m.Id = uint64(data[iNdEx-8])
+			m.Id |= uint64(data[iNdEx-7]) << 8
+			m.Id |= uint64(data[iNdEx-6]) << 16
+			m.Id |= uint64(data[iNdEx-5]) << 24
+			m.Id |= uint64(data[iNdEx-4]) << 32
+			m.Id |= uint64(data[iNdEx-3]) << 40
+			m.Id |= uint64(data[iNdEx-2]) << 48
+			m.Id |= uint64(data[iNdEx-1]) << 56
+		case 2:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Group", wireType)
+			}
+			m.Group = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowTask
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				m.Group |= (uint32(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Addr", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowTask
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				stringLen |= (uint64(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthTask
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Addr = string(data[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 4:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Leader", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowTask
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				v |= (int(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.Leader = bool(v != 0)
+		case 5:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field AmDead", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowTask
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				v |= (int(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.AmDead = bool(v != 0)
+		case 6:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field LastUpdate", wireType)
+			}
+			m.LastUpdate = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowTask
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				m.LastUpdate |= (uint64(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		default:
+			iNdEx = preIndex
+			skippy, err := skipTask(data[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthTask
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *MembershipUpdate) Unmarshal(data []byte) error {
+	l := len(data)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowTask
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := data[iNdEx]
+			iNdEx++
+			wire |= (uint64(b) & 0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: MembershipUpdate: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: MembershipUpdate: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Members", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowTask
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				msglen |= (int(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthTask
+			}
+			postIndex := iNdEx + msglen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Members = append(m.Members, &Membership{})
+			if err := m.Members[len(m.Members)-1].Unmarshal(data[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 2:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field LastUpdate", wireType)
+			}
+			m.LastUpdate = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowTask
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				m.LastUpdate |= (uint64(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 3:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Redirect", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowTask
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				v |= (int(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.Redirect = bool(v != 0)
+		case 4:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field RedirectAddr", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowTask
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				stringLen |= (uint64(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthTask
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.RedirectAddr = string(data[iNdEx:postIndex])
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipTask(data[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthTask
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
 func skipTask(data []byte) (n int, err error) {
 	l := len(data)
 	iNdEx := 0
@@ -2410,37 +3111,46 @@ var (
 func init() { proto.RegisterFile("task.proto", fileDescriptorTask) }
 
 var fileDescriptorTask = []byte{
-	// 507 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0x94, 0x93, 0xcd, 0x8a, 0xdb, 0x30,
-	0x10, 0xc7, 0xab, 0xd8, 0x51, 0x92, 0x49, 0x02, 0x8b, 0x28, 0x45, 0x2c, 0x25, 0x18, 0xb7, 0x07,
-	0x9f, 0xf6, 0xd0, 0x85, 0xde, 0xfb, 0x75, 0x08, 0x74, 0x0b, 0x55, 0x3f, 0xee, 0x6e, 0xa4, 0x2c,
-	0x66, 0x9d, 0x28, 0x95, 0x46, 0xa1, 0x79, 0x93, 0x3e, 0x4d, 0xcf, 0xbd, 0x14, 0xfa, 0x08, 0x25,
-	0x7d, 0x91, 0xa2, 0xb1, 0x9d, 0x64, 0x61, 0x5b, 0xe8, 0x6d, 0xfe, 0xf2, 0x68, 0x66, 0xfe, 0x3f,
-	0x8d, 0x01, 0xb0, 0xf4, 0x37, 0x17, 0x1b, 0x67, 0xd1, 0x8a, 0x34, 0xc6, 0xf9, 0x39, 0xa4, 0xaf,
-	0x2b, 0x8f, 0x42, 0x40, 0x1a, 0x2a, 0xed, 0x25, 0xcb, 0x92, 0x82, 0x2b, 0x8a, 0xf3, 0x4b, 0xe8,
-	0x7f, 0x2c, 0xeb, 0x60, 0xc4, 0x19, 0x24, 0xdb, 0xb2, 0x96, 0x2c, 0x63, 0xc5, 0x44, 0xc5, 0x50,
-	0x48, 0x18, 0x6c, 0xcb, 0xfa, 0xfd, 0x6e, 0x63, 0x64, 0x2f, 0x63, 0xc5, 0x54, 0x75, 0x32, 0xff,
-	0xc1, 0xa0, 0xff, 0x36, 0x18, 0xb7, 0x8b, 0x25, 0x4b, 0x44, 0x47, 0xd7, 0x46, 0x8a, 0x62, 0x71,
-	0x1f, 0xfa, 0x0b, 0x1b, 0xd6, 0x48, 0xb7, 0xfa, 0xaa, 0x11, 0xe2, 0x01, 0x70, 0xbb, 0x5c, 0x7a,
-	0x83, 0x32, 0xa1, 0xe3, 0x56, 0x89, 0x73, 0x18, 0x96, 0x4b, 0x34, 0xee, 0x43, 0xa5, 0x65, 0x9a,
-	0xb1, 0x82, 0xab, 0x83, 0x8e, 0x13, 0x68, 0xfb, 0x82, 0x6a, 0xf5, 0x33, 0x56, 0x0c, 0x55, 0x27,
-	0x0f, 0x56, 0xf8, 0xd1, 0x4a, 0xec, 0x80, 0xf6, 0xc6, 0xac, 0xbd, 0x1c, 0x64, 0x49, 0x31, 0x52,
-	0xad, 0x12, 0x19, 0x8c, 0xd1, 0xce, 0xd7, 0x68, 0x9c, 0x37, 0x0b, 0x94, 0x43, 0xba, 0x72, 0x7a,
-	0x94, 0x5b, 0xe0, 0xca, 0xf8, 0x50, 0xa3, 0x28, 0x60, 0x14, 0x2a, 0x7d, 0x55, 0xa2, 0xab, 0xbe,
-	0x10, 0xa7, 0xf1, 0x13, 0xb8, 0x20, 0xa0, 0x91, 0xa0, 0x3a, 0x7e, 0x14, 0x8f, 0x80, 0x6f, 0x23,
-	0x38, 0x2f, 0x7b, 0x94, 0x36, 0x6e, 0xd2, 0x08, 0xa6, 0x6a, 0x3f, 0xc5, 0x91, 0xc8, 0xbd, 0x97,
-	0x49, 0x96, 0x14, 0x53, 0xd5, 0xaa, 0xdc, 0x41, 0xfa, 0xce, 0x3a, 0xbc, 0x13, 0xdf, 0xad, 0x11,
-	0x7a, 0xff, 0x1a, 0xe1, 0x00, 0x3a, 0xb9, 0x1b, 0x74, 0x7a, 0x0a, 0x3a, 0x7f, 0x0a, 0x10, 0x7b,
-	0xfe, 0xaf, 0xd1, 0xfc, 0x19, 0x24, 0x6f, 0xc2, 0x2a, 0x36, 0xbb, 0x76, 0x36, 0x6c, 0x68, 0xd6,
-	0xa9, 0x6a, 0x44, 0xb7, 0x35, 0xf1, 0xa5, 0x93, 0x66, 0x6b, 0xba, 0x97, 0x89, 0x86, 0xd3, 0x76,
-	0xc9, 0xbe, 0x31, 0x98, 0xbc, 0xac, 0x9c, 0x59, 0xa0, 0xd1, 0xaf, 0xf4, 0xb5, 0x89, 0x33, 0x9a,
-	0x35, 0x56, 0xb8, 0xa3, 0x6a, 0x5c, 0xb5, 0xea, 0xc0, 0xa3, 0x77, 0x7b, 0x9d, 0x88, 0x26, 0xb9,
-	0x9c, 0xa8, 0x46, 0x88, 0x87, 0x30, 0xa2, 0x80, 0xd6, 0xb3, 0x31, 0x7a, 0x3c, 0x68, 0x57, 0x37,
-	0x98, 0xb9, 0xa6, 0xc5, 0xe1, 0xaa, 0x93, 0xb1, 0xb3, 0xb7, 0xc1, 0x2d, 0x8c, 0xe4, 0xd4, 0xa3,
-	0x55, 0xb1, 0x1e, 0x56, 0x2b, 0xe3, 0xb1, 0x5c, 0x6d, 0xe4, 0x80, 0x3a, 0x1d, 0x0f, 0xf2, 0xcf,
-	0x30, 0xba, 0x0a, 0x58, 0x62, 0x65, 0xd7, 0x3e, 0x16, 0x27, 0xf3, 0x73, 0xdd, 0xb2, 0xe8, 0xa4,
-	0x78, 0x0c, 0x49, 0xe4, 0xde, 0x3c, 0x9a, 0x68, 0x70, 0x9e, 0xfa, 0x56, 0xf1, 0x73, 0xcc, 0xd2,
-	0xa6, 0x26, 0x40, 0x7f, 0xc9, 0xd2, 0xa6, 0x7e, 0x7e, 0xf6, 0x7d, 0x3f, 0x63, 0x3f, 0xf7, 0x33,
-	0xf6, 0x6b, 0x3f, 0x63, 0x5f, 0x7f, 0xcf, 0xee, 0x7d, 0xe2, 0xf4, 0x4f, 0x5f, 0xfe, 0x09, 0x00,
-	0x00, 0xff, 0xff, 0xd7, 0x7d, 0x19, 0x5d, 0xe1, 0x03, 0x00, 0x00,
+	// 647 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0x9c, 0x94, 0xcf, 0x6e, 0xd3, 0x4e,
+	0x10, 0xc7, 0x7f, 0xfe, 0x13, 0x27, 0x99, 0xa4, 0x3f, 0x45, 0x2b, 0x84, 0xac, 0x0a, 0x45, 0x96,
+	0xe1, 0x60, 0x71, 0xe8, 0x81, 0x4a, 0xdc, 0x4b, 0x8b, 0x50, 0x25, 0x8a, 0xc4, 0x42, 0xb9, 0x6f,
+	0xb3, 0x9b, 0x62, 0xd5, 0xc9, 0x86, 0xdd, 0x71, 0xd5, 0xbe, 0x08, 0xe2, 0xc4, 0xa3, 0x70, 0xe6,
+	0x82, 0xc4, 0x23, 0xa0, 0xf2, 0x22, 0x68, 0xc7, 0xeb, 0x38, 0xa9, 0x0a, 0x12, 0xdc, 0xf6, 0x3b,
+	0x9e, 0x9d, 0x99, 0xef, 0x67, 0x27, 0x01, 0x40, 0x61, 0x2f, 0xf6, 0x56, 0x46, 0xa3, 0x66, 0xb1,
+	0x3b, 0xe7, 0xbb, 0x10, 0xbf, 0x2c, 0x2d, 0x32, 0x06, 0x71, 0x5d, 0x4a, 0x9b, 0x06, 0x59, 0x54,
+	0x24, 0x9c, 0xce, 0xf9, 0x3e, 0xf4, 0xde, 0x89, 0xaa, 0x56, 0x6c, 0x02, 0xd1, 0xa5, 0xa8, 0xd2,
+	0x20, 0x0b, 0x8a, 0x31, 0x77, 0x47, 0x96, 0x42, 0xff, 0x52, 0x54, 0x6f, 0xaf, 0x57, 0x2a, 0x0d,
+	0xb3, 0xa0, 0xd8, 0xe1, 0xad, 0xcc, 0xbf, 0x05, 0xd0, 0x7b, 0x5d, 0x2b, 0x73, 0xed, 0x4a, 0x0a,
+	0x44, 0x43, 0xd7, 0x86, 0x9c, 0xce, 0xec, 0x1e, 0xf4, 0x66, 0xba, 0x5e, 0x22, 0xdd, 0xea, 0xf1,
+	0x46, 0xb0, 0xfb, 0x90, 0xe8, 0xf9, 0xdc, 0x2a, 0x4c, 0x23, 0x0a, 0x7b, 0xc5, 0x76, 0x61, 0x20,
+	0xe6, 0xa8, 0xcc, 0x69, 0x29, 0xd3, 0x38, 0x0b, 0x8a, 0x84, 0xaf, 0xb5, 0x9b, 0x40, 0xea, 0x43,
+	0xaa, 0xd5, 0xcb, 0x82, 0x62, 0xc0, 0x5b, 0xb9, 0xb6, 0x92, 0x74, 0x56, 0x5c, 0x07, 0xd4, 0x17,
+	0x6a, 0x69, 0xd3, 0x7e, 0x16, 0x15, 0x43, 0xee, 0x15, 0xcb, 0x60, 0x84, 0xfa, 0x78, 0x89, 0xca,
+	0x58, 0x35, 0xc3, 0x74, 0x40, 0x57, 0x36, 0x43, 0xb9, 0x86, 0x84, 0x2b, 0x5b, 0x57, 0xc8, 0x0a,
+	0x18, 0xd6, 0xa5, 0x3c, 0x11, 0x68, 0xca, 0x2b, 0xe2, 0x34, 0x7a, 0x02, 0x7b, 0x04, 0xd4, 0x11,
+	0xe4, 0xdd, 0x47, 0xf6, 0x10, 0x92, 0x4b, 0x07, 0xce, 0xa6, 0x21, 0xa5, 0x8d, 0x9a, 0x34, 0x82,
+	0xc9, 0xfd, 0x27, 0x37, 0x12, 0xb9, 0xb7, 0x69, 0x94, 0x45, 0xc5, 0x0e, 0xf7, 0x2a, 0x37, 0x10,
+	0xbf, 0xd1, 0x06, 0xef, 0xc4, 0xb7, 0x35, 0x42, 0xf8, 0xa7, 0x11, 0xd6, 0xa0, 0xa3, 0xbb, 0x41,
+	0xc7, 0x9b, 0xa0, 0xf3, 0xa7, 0x00, 0xae, 0xe7, 0xdf, 0x1a, 0xcd, 0x0f, 0x20, 0x7a, 0x55, 0x2f,
+	0x5c, 0xb3, 0x73, 0xa3, 0xeb, 0x15, 0xcd, 0xba, 0xc3, 0x1b, 0xd1, 0x6e, 0x8d, 0x7b, 0xe9, 0xa8,
+	0xd9, 0x9a, 0xf6, 0x65, 0x9c, 0xe1, 0xd8, 0x2f, 0xd9, 0x97, 0x00, 0xc6, 0x47, 0xa5, 0x51, 0x33,
+	0x54, 0xf2, 0xb9, 0x3c, 0x57, 0x6e, 0x46, 0xb5, 0xc4, 0x12, 0xaf, 0xa9, 0x5a, 0xc2, 0xbd, 0x5a,
+	0xf3, 0x08, 0xb7, 0xd7, 0x89, 0x68, 0x92, 0xcb, 0x31, 0x6f, 0x04, 0x7b, 0x00, 0x43, 0x3a, 0xd0,
+	0x7a, 0x36, 0x46, 0xbb, 0x80, 0x5f, 0xdd, 0x5a, 0x1d, 0x4b, 0x5a, 0x9c, 0x84, 0xb7, 0xd2, 0x75,
+	0xb6, 0xba, 0x36, 0x33, 0x95, 0x26, 0xd4, 0xc3, 0x2b, 0x57, 0x0f, 0xcb, 0x85, 0xb2, 0x28, 0x16,
+	0xab, 0xb4, 0x4f, 0x9d, 0xba, 0x40, 0xfe, 0x01, 0x86, 0x27, 0x35, 0x0a, 0x2c, 0xf5, 0xd2, 0xba,
+	0xe2, 0x64, 0xfe, 0x58, 0x7a, 0x16, 0xad, 0x64, 0x8f, 0x20, 0x72, 0xdc, 0x9b, 0x47, 0x63, 0x0d,
+	0xce, 0x4d, 0xdf, 0xdc, 0x7d, 0x76, 0x59, 0x52, 0x55, 0x04, 0xe8, 0x37, 0x59, 0x52, 0x55, 0xf9,
+	0x0b, 0x18, 0x71, 0x31, 0xc7, 0x43, 0xbd, 0x44, 0x75, 0x85, 0xec, 0x7f, 0x08, 0x4b, 0xe9, 0x69,
+	0x85, 0xa5, 0xec, 0x9e, 0x23, 0xdc, 0x7c, 0x0e, 0xc7, 0x4f, 0x4a, 0x43, 0xa8, 0x1c, 0x3f, 0x29,
+	0x4d, 0xfe, 0x31, 0x00, 0x38, 0x51, 0x8b, 0x33, 0x65, 0xec, 0xfb, 0x72, 0xf5, 0xef, 0x85, 0x1c,
+	0xba, 0x4a, 0x09, 0xa9, 0x0c, 0xf1, 0x1e, 0x70, 0xaf, 0x5c, 0x5c, 0x2c, 0x8e, 0x94, 0x90, 0xfe,
+	0x47, 0xea, 0x15, 0x9b, 0x02, 0x54, 0xc2, 0xe2, 0xe9, 0x4a, 0x0a, 0x6c, 0x70, 0xc7, 0x7c, 0x23,
+	0x92, 0x7f, 0x0e, 0x60, 0xd2, 0x0d, 0xd6, 0x04, 0xd9, 0x63, 0xe8, 0x2f, 0x9a, 0x98, 0xdf, 0xca,
+	0x49, 0x03, 0xa8, 0x4b, 0xe4, 0x6d, 0xc2, 0xad, 0x06, 0xe1, 0xed, 0x06, 0xee, 0xaf, 0xc5, 0x28,
+	0x49, 0x64, 0xc9, 0xc8, 0x80, 0xaf, 0x35, 0xcb, 0x61, 0xdc, 0x9e, 0x0f, 0x9c, 0xd1, 0x98, 0x8c,
+	0x6e, 0xc5, 0x9e, 0x4d, 0xbe, 0xde, 0x4c, 0x83, 0xef, 0x37, 0xd3, 0xe0, 0xc7, 0xcd, 0x34, 0xf8,
+	0xf4, 0x73, 0xfa, 0xdf, 0x59, 0x42, 0x7f, 0xab, 0xfb, 0xbf, 0x02, 0x00, 0x00, 0xff, 0xff, 0x16,
+	0x7d, 0x06, 0x24, 0x64, 0x05, 0x00, 0x00,
 }

@@ -840,22 +840,24 @@ func (p *protoOutputNode) IsEmpty() bool {
 // most cases.
 func (sg *SubGraph) ToProtocolBuffer(l *Latency) (*graph.Node, error) {
 	var seedNode *protoOutputNode
-	if sg.SrcUIDs == nil {
-		return seedNode.New(sg.Attr).(*protoOutputNode).Node, nil
+	if sg.DestUIDs == nil {
+		return seedNode.New(sg.Params.Alias).(*protoOutputNode).Node, nil
 	}
 
-	x.AssertTrue(len(sg.uidMatrix) == 1)
-	// For the root, the name is stored in Alias, not Attr.
-	n := seedNode.New(sg.Params.Alias)
-	ul := sg.uidMatrix[0]
-	if sg.Params.GetUID || sg.Params.isDebug {
-		n.SetUID(ul.Uids[0])
-	}
+	n := seedNode.New("_root_")
+	for _, uid := range sg.DestUIDs.Uids {
+		// For the root, the name is stored in Alias, not Attr.
+		n1 := seedNode.New(sg.Params.Alias)
+		if sg.Params.GetUID || sg.Params.isDebug {
+			n1.SetUID(uid)
+		}
 
-	if rerr := sg.preTraverse(ul.Uids[0], n); rerr != nil {
-		return n.(*protoOutputNode).Node, rerr
-	}
+		if rerr := sg.preTraverse(uid, n1); rerr != nil {
+			return n.(*protoOutputNode).Node, rerr
+		}
 
+		n.AddChild(sg.Params.Alias, n1)
+	}
 	l.ProtocolBuffer = time.Since(l.Start) - l.Parsing - l.Processing
 	return n.(*protoOutputNode).Node, nil
 }
@@ -905,21 +907,22 @@ func (p *jsonOutputNode) IsEmpty() bool {
 // sent to the HTTP client.
 func (sg *SubGraph) ToJSON(l *Latency) ([]byte, error) {
 	var seedNode *jsonOutputNode
-	// For the root, the name is stored in Alias, not Attr.
-	n := seedNode.New(sg.Params.Alias)
-	ul := sg.uidMatrix[0]
-	if sg.Params.GetUID || sg.Params.isDebug {
-		n.SetUID(ul.Uids[0])
-	}
+	n := seedNode.New("_root_")
+	for _, uid := range sg.DestUIDs.Uids {
+		// For the root, the name is stored in Alias, not Attr.
+		n1 := seedNode.New(sg.Params.Alias)
+		if sg.Params.GetUID || sg.Params.isDebug {
+			n1.SetUID(uid)
+		}
 
-	if err := sg.preTraverse(ul.Uids[0], n); err != nil {
-		return nil, err
+		if err := sg.preTraverse(uid, n1); err != nil {
+			return nil, err
+		}
+		n.AddChild(sg.Params.Alias, n1)
 	}
-	root := map[string]interface{}{
-		sg.Params.Alias: []map[string]interface{}{n.(*jsonOutputNode).data},
-	}
+	res := n.(*jsonOutputNode).data
 	if sg.Params.isDebug {
-		root["server_latency"] = l.ToMap()
+		res["server_latency"] = l.ToMap()
 	}
-	return json.Marshal(root)
+	return json.Marshal(res)
 }
