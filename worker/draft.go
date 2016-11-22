@@ -13,7 +13,6 @@ import (
 
 	"github.com/coreos/etcd/raft"
 	"github.com/coreos/etcd/raft/raftpb"
-	flatbuffers "github.com/google/flatbuffers/go"
 	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/dgraph/raftwal"
@@ -85,7 +84,7 @@ type node struct {
 	props       proposals
 	raft        raft.Node
 	store       *raft.MemoryStorage
-	raftContext []byte
+	raftContext *task.RaftContext
 	wal         *raftwal.Wal
 	messages    chan sendmsg
 	canCampaign bool
@@ -106,12 +105,15 @@ func (n *node) AddToCluster(pid uint64) error {
 	addr := n.peers.Get(pid)
 	x.AssertTruef(len(addr) > 0, "Unable to find conn pool for peer: %d", pid)
 
-	rc := task.GetRootAsRaftContext(n.raftContext, 0)
+	rc := n.raftContext
+	rcNew := createRaftContext(pid, rc.Group, addr)
+	rcNewBytes, err := rcNew.Marshal()
+	x.Check(err)
 	return n.raft.ProposeConfChange(context.TODO(), raftpb.ConfChange{
 		ID:      pid,
 		Type:    raftpb.ConfChangeAddNode,
 		NodeID:  pid,
-		Context: createRaftContext(pid, rc.Group(), addr),
+		Context: rcNewBytes,
 	})
 }
 
@@ -138,6 +140,7 @@ func (h *header) Decode(in []byte) {
 
 func (n *node) ProposeAndWait(ctx context.Context, msg uint16, data []byte) error {
 	var h header
+	x.Printf("~~~~~ProposeAndWait")
 	h.proposalId = rand.Uint32()
 	h.msgId = msg
 	hdata := h.Encode()
@@ -254,10 +257,12 @@ func (n *node) processMutation(e raftpb.Entry, h header) error {
 func (n *node) processMembership(e raftpb.Entry, h header) error {
 	x.AssertTrue(n.gid == 0)
 
-	mm := task.GetRootAsMembership(e.Data[h.Length():], 0)
-	fmt.Printf("group: %v Addr: %q leader: %v dead: %v\n",
-		mm.Group(), mm.Addr(), mm.Leader(), mm.Amdead())
-	groups().applyMembershipUpdate(e.Index, mm)
+	var mm task.Membership
+	x.Check(mm.Unmarshal(e.Data[h.Length():]))
+
+	x.Printf("group: %v Addr: %q leader: %v dead: %v\n",
+		mm.Group, mm.Addr, mm.Leader, mm.AmDead)
+	groups().applyMembershipUpdate(e.Index, &mm)
 	return nil
 }
 
@@ -272,8 +277,9 @@ func (n *node) process(e raftpb.Entry) error {
 		cc.Unmarshal(e.Data)
 
 		if len(cc.Context) > 0 {
-			rc := task.GetRootAsRaftContext(cc.Context, 0)
-			n.Connect(rc.Id(), string(rc.Addr()))
+			var rc task.RaftContext
+			x.Check(rc.Unmarshal(cc.Context))
+			n.Connect(rc.Id, rc.Addr)
 		}
 
 		n.raft.ApplyConfChange(cc)
@@ -288,6 +294,7 @@ func (n *node) process(e raftpb.Entry) error {
 		if h.msgId == mutationMsg {
 			err = n.processMutation(e, h)
 		} else if h.msgId == membershipMsg {
+			x.Printf("~~~~~process membershipMsg proposalID=%d", h.proposalId)
 			err = n.processMembership(e, h)
 		}
 		n.props.Done(h.proposalId, err)
@@ -345,7 +352,9 @@ func (n *node) Run() {
 			n.saveToStorage(rd.Snapshot, rd.HardState, rd.Entries)
 			for _, msg := range rd.Messages {
 				// TODO: Do some optimizations here to drop messages.
-				msg.Context = n.raftContext
+				rcBytes, err := n.raftContext.Marshal()
+				x.Check(err)
+				msg.Context = rcBytes
 				n.send(msg)
 			}
 
@@ -428,29 +437,21 @@ func (n *node) joinPeers() {
 	_, err := populateShard(context.TODO(), pool, 0)
 	x.Checkf(err, "Error while populating shard")
 
-	query := &Payload{}
-	query.Data = n.raftContext
 	conn, err := pool.Get()
 	x.Check(err)
 	c := NewWorkerClient(conn)
-	fmt.Println("Calling JoinCluster")
-	_, err = c.JoinCluster(context.Background(), query)
+	x.Printf("Calling JoinCluster")
+	_, err = c.JoinCluster(context.Background(), n.raftContext)
 	x.Checkf(err, "Error while joining cluster")
-	fmt.Printf("Done with JoinCluster call\n")
+	x.Printf("Done with JoinCluster call\n")
 }
 
-func createRaftContext(id uint64, gid uint32, addr string) []byte {
-	// Create a flatbuffer for storing group id and local address.
-	// This needs to send along with every raft message.
-	b := flatbuffers.NewBuilder(0)
-	so := b.CreateString(addr)
-	task.RaftContextStart(b)
-	task.RaftContextAddId(b, id)
-	task.RaftContextAddGroup(b, gid)
-	task.RaftContextAddAddr(b, so)
-	uo := task.RaftContextEnd(b)
-	b.Finish(uo)
-	return b.Bytes[b.Head():]
+func createRaftContext(id uint64, gid uint32, addr string) *task.RaftContext {
+	return &task.RaftContext{
+		Addr:  addr,
+		Group: gid,
+		Id:    id,
+	}
 }
 
 func newNode(gid uint32, id uint64, myAddr string) *node {
@@ -565,9 +566,10 @@ func (n *node) AmLeader() bool {
 }
 
 func (w *grpcWorker) applyMessage(ctx context.Context, msg raftpb.Message) error {
-	rc := task.GetRootAsRaftContext(msg.Context, 0)
-	node := groups().Node(rc.Group())
-	node.Connect(msg.From, string(rc.Addr()))
+	var rc task.RaftContext
+	x.Check(rc.Unmarshal(msg.Context))
+	node := groups().Node(rc.Group)
+	node.Connect(msg.From, rc.Addr)
 
 	c := make(chan error, 1)
 	go func() { c <- node.Step(ctx, msg) }()
@@ -608,24 +610,19 @@ func (w *grpcWorker) RaftMessage(ctx context.Context, query *Payload) (*Payload,
 	return &Payload{}, nil
 }
 
-func (w *grpcWorker) JoinCluster(ctx context.Context, query *Payload) (*Payload, error) {
+func (w *grpcWorker) JoinCluster(ctx context.Context, rc *task.RaftContext) (*Payload, error) {
 	if ctx.Err() != nil {
 		return &Payload{}, ctx.Err()
 	}
 
-	if len(query.Data) == 0 {
-		return &Payload{}, x.Errorf("JoinCluster: No data provided")
-	}
-
-	rc := task.GetRootAsRaftContext(query.Data, 0)
-	node := groups().Node(rc.Group())
+	node := groups().Node(rc.Group)
 	if node == nil {
 		return &Payload{}, nil
 	}
-	node.Connect(rc.Id(), string(rc.Addr()))
+	node.Connect(rc.Id, rc.Addr)
 
 	c := make(chan error, 1)
-	go func() { c <- node.AddToCluster(rc.Id()) }()
+	go func() { c <- node.AddToCluster(rc.Id) }()
 
 	select {
 	case <-ctx.Done():
