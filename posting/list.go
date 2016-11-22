@@ -32,7 +32,6 @@ import (
 	"unsafe"
 
 	"github.com/dgryski/go-farm"
-	"github.com/google/flatbuffers/go"
 
 	"github.com/dgraph-io/dgraph/posting/types"
 	"github.com/dgraph-io/dgraph/store"
@@ -40,21 +39,20 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-var E_TMP_ERROR = fmt.Errorf("Temporary Error. Please retry.")
-var ErrNoValue = fmt.Errorf("No value found")
+var (
+	E_TMP_ERROR  = fmt.Errorf("Temporary Error. Please retry.")
+	ErrNoValue   = fmt.Errorf("No value found")
+	emptyPosting = &types.Posting{}
+)
 
 const (
 	// Set means overwrite in mutation layer. It contributes 0 in Length.
-	Set byte = 0x01
+	Set uint32 = 0x01
 	// Del means delete in mutation layer. It contributes -1 in Length.
-	Del byte = 0x02
+	Del uint32 = 0x02
 	// Add means add new element in mutation layer. It contributes 1 in Length.
-	Add byte = 0x03
+	Add uint32 = 0x03
 )
-
-type buffer struct {
-	d []byte
-}
 
 type List struct {
 	sync.RWMutex
@@ -109,23 +107,20 @@ type ByUid []*types.Posting
 
 func (pa ByUid) Len() int           { return len(pa) }
 func (pa ByUid) Swap(i, j int)      { pa[i], pa[j] = pa[j], pa[i] }
-func (pa ByUid) Less(i, j int) bool { return pa[i].Uid() < pa[j].Uid() }
+func (pa ByUid) Less(i, j int) bool { return pa[i].Uid < pa[j].Uid }
 
 func samePosting(a *types.Posting, b *types.Posting) bool {
-	if a.Uid() != b.Uid() {
+	if a.Uid != b.Uid {
 		return false
 	}
-	if a.ValueLength() != b.ValueLength() {
+	if a.ValType != b.ValType {
 		return false
 	}
-	if a.ValType() != b.ValType() {
-		return false
-	}
-	if !bytes.Equal(a.ValueBytes(), b.ValueBytes()) {
+	if !bytes.Equal(a.Value, b.Value) {
 		return false
 	}
 	// Checking source might not be necessary.
-	if !bytes.Equal(a.Source(), b.Source()) {
+	if a.Label != b.Label {
 		return false
 	}
 	return true
@@ -169,60 +164,50 @@ func debugKey(key []byte) string {
 	return b.String()
 }
 
-func newPosting(t x.DirectedEdge, op byte) *types.Posting {
-	b := flatbuffers.NewBuilder(0)
-	var bo flatbuffers.UOffsetT
-	if !bytes.Equal(t.Value, nil) {
-		if t.ValueId != math.MaxUint64 {
-			log.Fatal("This should have already been set by the caller.")
-		}
-		bo = b.CreateByteVector(t.Value)
+func newPosting(t x.DirectedEdge, op uint32) *types.Posting {
+	if !bytes.Equal(t.Value, nil) && t.ValueId != math.MaxUint64 {
+		log.Fatal("This should have already been set by the caller.")
 	}
-	so := b.CreateString(t.Source)
-	types.PostingStart(b)
-	if bo > 0 {
-		types.PostingAddValue(b, bo)
-	}
-	types.PostingAddUid(b, t.ValueId)
-	types.PostingAddSource(b, so)
-	types.PostingAddTs(b, t.Timestamp.UnixNano())
-	types.PostingAddOp(b, op)
-	if t.ValueType != 0 {
-		types.PostingAddValType(b, t.ValueType)
-	}
-	vend := types.PostingEnd(b)
-	b.Finish(vend)
 
-	return types.GetRootAsPosting(b.Bytes[b.Head():], 0)
+	return &types.Posting{
+		Uid:     t.ValueId,
+		Value:   t.Value,
+		ValType: uint32(t.ValueType),
+		Label:   t.Source,
+		Commit:  uint64(t.Timestamp.UnixNano()),
+		Op:      op,
+	}
 }
 
-func addEdgeToPosting(b *flatbuffers.Builder,
-	t x.DirectedEdge, op byte) flatbuffers.UOffsetT {
+/*
+ *func addEdgeToPosting(b *flatbuffers.Builder,
+ *  t x.DirectedEdge, op byte) flatbuffers.UOffsetT {
+ *
+ *  var bo flatbuffers.UOffsetT
+ *  if !bytes.Equal(t.Value, nil) {
+ *    if t.ValueId != math.MaxUint64 {
+ *      log.Fatal("This should have already been set by the caller.")
+ *    }
+ *    bo = b.CreateByteVector(t.Value)
+ *  }
+ *  so := b.CreateString(t.Source) // Do this before posting start.
+ *
+ *  types.PostingStart(b)
+ *  if bo > 0 {
+ *    types.PostingAddValue(b, bo)
+ *  }
+ *  types.PostingAddUid(b, t.ValueId)
+ *  types.PostingAddSource(b, so)
+ *  types.PostingAddTs(b, t.Timestamp.UnixNano())
+ *  types.PostingAddOp(b, op)
+ *  if t.ValueType != 0 {
+ *    types.PostingAddValType(b, t.ValueType)
+ *  }
+ *  return types.PostingEnd(b)
+ *}
+ */
 
-	var bo flatbuffers.UOffsetT
-	if !bytes.Equal(t.Value, nil) {
-		if t.ValueId != math.MaxUint64 {
-			log.Fatal("This should have already been set by the caller.")
-		}
-		bo = b.CreateByteVector(t.Value)
-	}
-	so := b.CreateString(t.Source) // Do this before posting start.
-
-	types.PostingStart(b)
-	if bo > 0 {
-		types.PostingAddValue(b, bo)
-	}
-	types.PostingAddUid(b, t.ValueId)
-	types.PostingAddSource(b, so)
-	types.PostingAddTs(b, t.Timestamp.UnixNano())
-	types.PostingAddOp(b, op)
-	if t.ValueType != 0 {
-		types.PostingAddValType(b, t.ValueType)
-	}
-	return types.PostingEnd(b)
-}
-
-func addPosting(b *flatbuffers.Builder, p types.Posting) flatbuffers.UOffsetT {
+/*func addPosting(b *flatbuffers.Builder, p types.Posting) flatbuffers.UOffsetT {
 	so := b.CreateByteString(p.Source()) // Do this before posting start.
 	var bo flatbuffers.UOffsetT
 	if p.ValueLength() > 0 {
@@ -241,30 +226,9 @@ func addPosting(b *flatbuffers.Builder, p types.Posting) flatbuffers.UOffsetT {
 		types.PostingAddValType(b, p.ValType())
 	}
 	return types.PostingEnd(b)
-}
+}*/
 
 var empty []byte
-var emptyPosting []byte
-
-// package level init
-func init() {
-	{
-		b := flatbuffers.NewBuilder(0)
-		types.PostingListStart(b)
-		of := types.PostingListEnd(b)
-		b.Finish(of)
-		empty = b.Bytes[b.Head():]
-	}
-
-	{
-		b := flatbuffers.NewBuilder(0)
-		types.PostingStart(b)
-		types.PostingAddUid(b, 0)
-		of := types.PostingEnd(b)
-		b.Finish(of)
-		emptyPosting = b.Bytes[b.Head():]
-	}
-}
 
 func (l *List) init(key []byte, pstore *store.Store) {
 	l.Lock()
@@ -285,24 +249,24 @@ func (l *List) init(key []byte, pstore *store.Store) {
 // we query RocksDB. There is no need for lock acquisition here.
 func (l *List) getPostingList() *types.PostingList {
 	pb := atomic.LoadPointer(&l.pbuffer)
-	buf := (*buffer)(pb)
+	plist := (*types.PostingList)(pb)
 
-	if buf == nil || len(buf.d) == 0 {
-		nbuf := new(buffer)
-		var err error
+	if plist == nil {
 		x.AssertTrue(l.pstore != nil)
-		if nbuf.d, err = l.pstore.Get(l.key); err != nil || nbuf.d == nil {
+
+		if data, err := l.pstore.Get(l.key); err != nil || len(data) == 0 {
 			// Error. Just set to empty.
-			nbuf.d = make([]byte, len(empty))
-			copy(nbuf.d, empty)
+			plist = new(types.PostingList)
+		} else {
+			x.Checkf(plist.Unmarshal(data), "Unable to Unmarshal PostingList from store")
 		}
-		if atomic.CompareAndSwapPointer(&l.pbuffer, pb, unsafe.Pointer(nbuf)) {
-			return types.GetRootAsPostingList(nbuf.d, 0)
+		if atomic.CompareAndSwapPointer(&l.pbuffer, pb, unsafe.Pointer(plist)) {
+			return plist
 		}
 		// Someone else replaced the pointer in the meantime. Retry recursively.
 		return l.getPostingList()
 	}
-	return types.GetRootAsPostingList(buf.d, 0)
+	return plist
 }
 
 // SetForDeletion will mark this List to be deleted, so no more mutations can be applied to this.
@@ -312,24 +276,23 @@ func (l *List) SetForDeletion() {
 }
 
 func (l *List) updateMutationLayer(mpost *types.Posting) bool {
-	x.AssertTrue(mpost.Op() == Set || mpost.Op() == Del)
-	findUid := mpost.Uid()
+	x.AssertTrue(mpost.Op == Set || mpost.Op == Del)
 
 	// First check the mutable layer.
 	midx := sort.Search(len(l.mlayer), func(idx int) bool {
 		mp := l.mlayer[idx]
-		return findUid <= mp.Uid()
+		return mpost.Uid <= mp.Uid
 	})
 
 	// This block handles the case where mpost.UID is found in mutation layer.
-	if midx < len(l.mlayer) && l.mlayer[midx].Uid() == mpost.Uid() {
+	if midx < len(l.mlayer) && l.mlayer[midx].Uid == mpost.Uid {
 		// mp is the posting found in mlayer.
 		oldPost := l.mlayer[midx]
 
 		// Note that mpost.Op is either Set or Del, whereas oldPost.Op can be
 		// either Set or Del or Add.
 		msame := samePosting(oldPost, mpost)
-		if msame && ((mpost.Op() == Del) == (oldPost.Op() == Del)) {
+		if msame && ((mpost.Op == Del) == (oldPost.Op == Del)) {
 			// This posting has similar content as what is found in mlayer. If the
 			// ops are similar, then we do nothing. Note that Add and Set are
 			// considered similar, and the second clause is true also when
@@ -337,7 +300,7 @@ func (l *List) updateMutationLayer(mpost *types.Posting) bool {
 			return false
 		}
 
-		if !msame && mpost.Op() == Del {
+		if !msame && mpost.Op == Del {
 			// Invalid Del as contents do not match.
 			return false
 		}
@@ -349,8 +312,8 @@ func (l *List) updateMutationLayer(mpost *types.Posting) bool {
 		// Set, Set: Replace with new post.
 		// Add, Del: Undo by removing oldPost.
 		// Add, Set: Replace with new post. Need to set mpost.Op to Add.
-		if oldPost.Op() == Add {
-			if mpost.Op() == Del {
+		if oldPost.Op == Add {
+			if mpost.Op == Del {
 				// Undo old post.
 				copy(l.mlayer[midx:], l.mlayer[midx+1:])
 				l.mlayer[len(l.mlayer)-1] = nil
@@ -358,7 +321,7 @@ func (l *List) updateMutationLayer(mpost *types.Posting) bool {
 				return true
 			}
 			// Add followed by Set is considered an Add. Hence, mutate mpost.Op.
-			x.AssertTrue(mpost.MutateOp(Add))
+			mpost.Op = Add
 		}
 		l.mlayer[midx] = mpost
 		return true
@@ -366,29 +329,26 @@ func (l *List) updateMutationLayer(mpost *types.Posting) bool {
 
 	// Didn't find it in mutable layer. Now check the immutable layer.
 	pl := l.getPostingList()
-	pidx := sort.Search(pl.PostingsLength(), func(idx int) bool {
-		var p types.Posting
-		x.AssertTrue(pl.Postings(&p, idx))
-		return findUid <= p.Uid()
+	pidx := sort.Search(len(pl.Postings), func(idx int) bool {
+		p := pl.Postings[idx]
+		return mpost.Uid <= p.Uid
 	})
 
 	var uidFound, psame bool
-	if pidx < pl.PostingsLength() {
-		p := new(types.Posting)
-		x.AssertTruef(pl.Postings(p, pidx), "Unable to parse Posting at index: %v", pidx)
-		uidFound = mpost.Uid() == p.Uid()
-		if uidFound {
+	if pidx < len(pl.Postings) {
+		p := pl.Postings[pidx]
+		if mpost.Uid == p.Uid { // uid found
 			psame = samePosting(p, mpost)
 		}
 	}
 
-	if mpost.Op() == Set {
+	if mpost.Op == Set {
 		if psame {
 			return false
 		}
 		if !uidFound {
 			// Posting not found in PL. This is considered an Add operation.
-			x.AssertTrue(mpost.MutateOp(Add))
+			mpost.Op = Add
 		}
 	} else if !psame { // mpost.Op==Del
 		// Either we fail to find UID in immutable PL or contents don't match.
@@ -435,7 +395,7 @@ func (l *List) updateMutationLayer(mpost *types.Posting) bool {
 // AddMutation adds mutation to mutation layers. Note that it does not write
 // anything to disk. Some other background routine will be responsible for merging
 // changes in mutation layers to RocksDB. Returns whether any mutation happens.
-func (l *List) AddMutation(ctx context.Context, t x.DirectedEdge, op byte) (bool, error) {
+func (l *List) AddMutation(ctx context.Context, t x.DirectedEdge, op uint32) (bool, error) {
 	l.wg.Wait()
 	if atomic.LoadInt32(&l.deleteMe) == 1 {
 		x.TraceError(ctx, x.Errorf("DELETEME set to true. Temporary error."))
@@ -496,45 +456,43 @@ func (l *List) iterate(afterUid uint64, f func(obj *types.Posting) bool) {
 	pl := l.getPostingList()
 
 	if afterUid > 0 {
-		pidx = sort.Search(pl.PostingsLength(), func(idx int) bool {
-			p := new(types.Posting)
-			x.AssertTrue(pl.Postings(p, idx))
-			return afterUid < p.Uid()
+		pidx = sort.Search(len(pl.Postings), func(idx int) bool {
+			p := pl.Postings[idx]
+			return afterUid < p.Uid
 		})
 		midx = sort.Search(len(l.mlayer), func(idx int) bool {
 			mp := l.mlayer[idx]
-			return afterUid < mp.Uid()
+			return afterUid < mp.Uid
 		})
 	}
 
-	empty := types.GetRootAsPosting(emptyPosting, 0)
-	mp, pp := new(types.Posting), new(types.Posting)
+	var mp, pp *types.Posting
 	cont := true
 	for cont {
-		if pidx < pl.PostingsLength() {
-			x.AssertTrue(pl.Postings(pp, pidx))
+		if pidx < len(pl.Postings) {
+			pp = pl.Postings[pidx]
 		} else {
-			pp = empty
+			pp = emptyPosting
 		}
 		if midx < len(l.mlayer) {
 			mp = l.mlayer[midx]
 		} else {
-			mp = empty
+			mp = emptyPosting
 		}
 
 		switch {
-		case pp.Uid() == 0 && mp.Uid() == 0:
+		case pp.Uid == 0 && mp.Uid == 0:
 			cont = false
-		case mp.Uid() == 0 || (pp.Uid() > 0 && pp.Uid() < mp.Uid()):
+		case mp.Uid == 0 || (pp.Uid > 0 && pp.Uid < mp.Uid):
 			cont = f(pp)
 			pidx++
-		case pp.Uid() == 0 || (mp.Uid() > 0 && mp.Uid() < pp.Uid()):
-			if mp.Op() != Del {
+		case pp.Uid == 0 || (mp.Uid > 0 && mp.Uid < pp.Uid):
+			if mp.Op != Del {
 				cont = f(mp)
 			}
 			midx++
-		case pp.Uid() == mp.Uid():
-			if mp.Op() != Del {
+		case pp.Uid == mp.Uid:
+			if mp.Op != Del {
 				cont = f(mp)
 			}
 			pidx++
@@ -551,22 +509,21 @@ func (l *List) Length(afterUid uint64) int {
 	pl := l.getPostingList()
 
 	if afterUid > 0 {
-		pidx = sort.Search(pl.PostingsLength(), func(idx int) bool {
-			p := new(types.Posting)
-			x.AssertTrue(pl.Postings(p, idx))
-			return afterUid < p.Uid()
+		pidx = sort.Search(len(pl.Postings), func(idx int) bool {
+			p := pl.Postings[idx]
+			return afterUid < p.Uid
 		})
 		midx = sort.Search(len(l.mlayer), func(idx int) bool {
 			mp := l.mlayer[idx]
-			return afterUid < mp.Uid()
+			return afterUid < mp.Uid
 		})
 	}
 
-	count := pl.PostingsLength() - pidx
+	count := len(pl.Postings) - pidx
 	for _, p := range l.mlayer[midx:] {
-		if p.Op() == Add {
+		if p.Op == Add {
 			count++
-		} else if p.Op() == Del {
+		} else if p.Op == Del {
 			count--
 		}
 	}
@@ -592,39 +549,33 @@ func (l *List) commit() (committed bool, rerr error) {
 		return false, nil
 	}
 
-	b := flatbuffers.NewBuilder(0)
-	offsets := make([]flatbuffers.UOffsetT, 0, 10)
-
+	final := &types.PostingList{}
 	ubuf := make([]byte, 16)
 	h := md5.New()
 	count := 0
 	l.iterate(0, func(p *types.Posting) bool {
+		// Checksum code.
 		n := binary.PutVarint(ubuf, int64(count))
 		h.Write(ubuf[0:n])
-		n = binary.PutUvarint(ubuf, p.Uid())
+		n = binary.PutUvarint(ubuf, p.Uid)
 		h.Write(ubuf[0:n])
-		h.Write(p.ValueBytes())
-		h.Write(p.Source())
+		h.Write(p.Value)
+		h.Write([]byte(p.Label))
 		count++
 
-		offsets = append(offsets, addPosting(b, *p))
+		/*newp := *p
+		newp.Value = make([]byte, len(p.Value))
+		copy(newp.Value, p.Value)*/
+		// TODO: Is it okay to just take the pointer of iterator here?
+		// TODO: Also remove op from posting.
+		final.Postings = append(final.Postings, p)
 		return true
 	})
+	final.Checksum = h.Sum(nil)
+	data, err := final.Marshal()
+	x.Checkf(err, "Unable to marshal posting list")
 
-	types.PostingListStartPostingsVector(b, count)
-	for i := len(offsets) - 1; i >= 0; i-- {
-		b.PrependUOffsetT(offsets[i])
-	}
-	vend := b.EndVector(count)
-
-	co := b.CreateString(fmt.Sprintf("%x", h.Sum(nil)))
-	types.PostingListStart(b)
-	types.PostingListAddChecksum(b, co)
-	types.PostingListAddPostings(b, vend)
-	end := types.PostingListEnd(b)
-	b.Finish(end)
-
-	if err := l.pstore.SetOne(l.key, b.Bytes[b.Head():]); err != nil {
+	if err := l.pstore.SetOne(l.key, data); err != nil {
 		log.Fatalf("Error while storing posting list: %v", err)
 		return true, err
 	}
@@ -653,10 +604,10 @@ func (l *List) Uids(opt ListOptions) *task.List {
 	result := make([]uint64, 0, 10)
 	var intersectIdx int // Indexes into opt.Intersect if it exists.
 	l.iterate(opt.AfterUID, func(p *types.Posting) bool {
-		if p.Uid() == math.MaxUint64 {
+		if p.Uid == math.MaxUint64 {
 			return false
 		}
-		uid := p.Uid()
+		uid := p.Uid
 		if opt.Intersect != nil {
 			for ; intersectIdx < len(opt.Intersect.Uids) && opt.Intersect.Uids[intersectIdx] < uid; intersectIdx++ {
 			}
@@ -677,10 +628,10 @@ func (l *List) Value() (val []byte, vtype byte, rerr error) {
 
 	var found bool
 	l.iterate(math.MaxUint64-1, func(p *types.Posting) bool {
-		if p.Uid() == math.MaxUint64 {
-			val = make([]byte, len(p.ValueBytes()))
-			copy(val, p.ValueBytes())
-			vtype = p.ValType()
+		if p.Uid == math.MaxUint64 {
+			val = make([]byte, len(p.Value))
+			copy(val, p.Value)
+			vtype = byte(p.ValType)
 			found = true
 		}
 		return false
