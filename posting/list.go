@@ -179,65 +179,11 @@ func newPosting(t x.DirectedEdge, op uint32) *types.Posting {
 	}
 }
 
-/*
- *func addEdgeToPosting(b *flatbuffers.Builder,
- *  t x.DirectedEdge, op byte) flatbuffers.UOffsetT {
- *
- *  var bo flatbuffers.UOffsetT
- *  if !bytes.Equal(t.Value, nil) {
- *    if t.ValueId != math.MaxUint64 {
- *      log.Fatal("This should have already been set by the caller.")
- *    }
- *    bo = b.CreateByteVector(t.Value)
- *  }
- *  so := b.CreateString(t.Source) // Do this before posting start.
- *
- *  types.PostingStart(b)
- *  if bo > 0 {
- *    types.PostingAddValue(b, bo)
- *  }
- *  types.PostingAddUid(b, t.ValueId)
- *  types.PostingAddSource(b, so)
- *  types.PostingAddTs(b, t.Timestamp.UnixNano())
- *  types.PostingAddOp(b, op)
- *  if t.ValueType != 0 {
- *    types.PostingAddValType(b, t.ValueType)
- *  }
- *  return types.PostingEnd(b)
- *}
- */
-
-/*func addPosting(b *flatbuffers.Builder, p types.Posting) flatbuffers.UOffsetT {
-	so := b.CreateByteString(p.Source()) // Do this before posting start.
-	var bo flatbuffers.UOffsetT
-	if p.ValueLength() > 0 {
-		bo = b.CreateByteVector(p.ValueBytes())
-	}
-
-	types.PostingStart(b)
-	types.PostingAddUid(b, p.Uid())
-	if bo > 0 {
-		types.PostingAddValue(b, bo)
-	}
-	types.PostingAddSource(b, so)
-	types.PostingAddTs(b, p.Ts())
-	types.PostingAddOp(b, p.Op())
-	if p.ValType() != 0 {
-		types.PostingAddValType(b, p.ValType())
-	}
-	return types.PostingEnd(b)
-}*/
-
-var empty []byte
-
 func (l *List) init(key []byte, pstore *store.Store) {
 	l.Lock()
 	defer l.Unlock()
 	defer l.wg.Done()
 
-	if len(empty) == 0 {
-		log.Fatal("empty should have some bytes.")
-	}
 	l.key = key
 	l.pstore = pstore
 
@@ -253,11 +199,9 @@ func (l *List) getPostingList() *types.PostingList {
 
 	if plist == nil {
 		x.AssertTrue(l.pstore != nil)
+		plist = new(types.PostingList)
 
-		if data, err := l.pstore.Get(l.key); err != nil || len(data) == 0 {
-			// Error. Just set to empty.
-			plist = new(types.PostingList)
-		} else {
+		if data, err := l.pstore.Get(l.key); err == nil && len(data) > 0 {
 			x.Checkf(plist.Unmarshal(data), "Unable to Unmarshal PostingList from store")
 		}
 		if atomic.CompareAndSwapPointer(&l.pbuffer, pb, unsafe.Pointer(plist)) {
@@ -337,7 +281,8 @@ func (l *List) updateMutationLayer(mpost *types.Posting) bool {
 	var uidFound, psame bool
 	if pidx < len(pl.Postings) {
 		p := pl.Postings[pidx]
-		if mpost.Uid == p.Uid { // uid found
+		uidFound = mpost.Uid == p.Uid
+		if uidFound {
 			psame = samePosting(p, mpost)
 		}
 	}
