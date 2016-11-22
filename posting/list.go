@@ -508,9 +508,6 @@ func (l *List) commit() (committed bool, rerr error) {
 		h.Write([]byte(p.Label))
 		count++
 
-		/*newp := *p
-		newp.Value = make([]byte, len(p.Value))
-		copy(newp.Value, p.Value)*/
 		// TODO: Is it okay to just take the pointer of iterator here?
 		// TODO: Also remove op from posting.
 		final.Postings = append(final.Postings, p)

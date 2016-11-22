@@ -177,7 +177,9 @@ func (w *grpcWorker) PredicateData(group *task.GroupKeys, stream Worker_Predicat
 		if idx < len(group.Keys) {
 			// Found a match.
 			t := group.Keys[idx]
-			if bytes.Equal(k.Data(), t.Key) && bytes.Equal(pl.Checksum, t.Checksum) {
+			// Different keys would have the same prefix. So, check Checksum first,
+			// it would be cheaper when there's no match.
+			if bytes.Equal(pl.Checksum, t.Checksum) && bytes.Equal(k.Data(), t.Key) {
 				// No need to send this.
 				continue
 			}

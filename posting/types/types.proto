@@ -10,7 +10,7 @@ message Posting {
 	string label = 4;
 	uint64 commit = 5;  // More inclination towards smaller values.
 
-  // op is only used temporarily.
+	// TODO: op is only used temporarily. See if we can remove it from here.
 	uint32 op = 12;
 }
 
