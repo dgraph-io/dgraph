@@ -78,9 +78,9 @@ func assignUids(ctx context.Context, num *task.Num) (*task.List, error) {
 	// Mutations successfully applied.
 
 	out := new(task.List)
-	// First N entities are newly assigned UIDs.
-	for _, s := range mutations.Set {
-		out.Uids = append(out.Uids, s.Entity)
+	// Only the First N entities are newly assigned UIDs, so we collect them.
+	for i := 0; i < val; i++ {
+		out.Uids = append(out.Uids, mutations.Set[i].Entity)
 	}
 	return out, nil
 }
