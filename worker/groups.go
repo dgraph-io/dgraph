@@ -264,10 +264,8 @@ func (g *groupi) syncMemberships() {
 					Group:  rc.Group,
 					Addr:   rc.Addr,
 				}
-				data, err := mm.Marshal()
-				x.Check(err)
 				zero := groups().Node(0)
-				x.Check(zero.ProposeAndWait(zero.ctx, membershipMsg, data))
+				x.Check(zero.ProposeAndWait(zero.ctx, &task.Proposal{Membership: mm}))
 
 			}(rc, n.AmLeader())
 		}
@@ -475,13 +473,11 @@ func (w *grpcWorker) UpdateMembership(ctx context.Context,
 			Group:  mm.Group,
 			Addr:   mm.Addr,
 		}
-		data, err := mmNew.Marshal()
-		x.Check(err)
 
-		go func(data []byte) {
+		go func(mmNew *task.Membership) {
 			zero := groups().Node(0)
-			che <- zero.ProposeAndWait(zero.ctx, membershipMsg, data)
-		}(data)
+			che <- zero.ProposeAndWait(zero.ctx, &task.Proposal{Membership: mmNew})
+		}(mmNew)
 	}
 
 	for _ = range update.Members {

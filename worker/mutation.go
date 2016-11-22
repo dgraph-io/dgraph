@@ -51,7 +51,7 @@ func runMutations(ctx context.Context, edges []*task.DirectedEdge, op byte) erro
 }
 
 // mutate runs the set and delete mutations.
-func mutate(ctx context.Context, m *x.Mutations) error {
+func mutate(ctx context.Context, m *task.Mutations) error {
 	// Running the set instructions first.
 	if err := runMutations(ctx, m.Set, posting.Set); err != nil {
 		return err
@@ -63,16 +63,10 @@ func mutate(ctx context.Context, m *x.Mutations) error {
 }
 
 // runMutate is used to run the mutations on an instance.
-func proposeOrSend(ctx context.Context, gid uint32, m *x.Mutations, che chan error) {
-	data, err := m.Encode()
-	if err != nil {
-		che <- err
-		return
-	}
-
+func proposeOrSend(ctx context.Context, gid uint32, m *task.Mutations, che chan error) {
 	if groups().ServesGroup(gid) {
 		node := groups().Node(gid)
-		che <- node.ProposeAndWait(ctx, mutationMsg, data)
+		che <- node.ProposeAndWait(ctx, &task.Proposal{Mutations: m})
 		return
 	}
 
@@ -85,27 +79,23 @@ func proposeOrSend(ctx context.Context, gid uint32, m *x.Mutations, che chan err
 		return
 	}
 	defer pl.Put(conn)
-	query := new(Payload)
-	query.Data = data
 
 	c := NewWorkerClient(conn)
-	_, err = c.Mutate(ctx, query)
+	_, err = c.Mutate(ctx, m)
 	che <- err
 }
 
 // addToMutationArray adds the edges to the appropriate index in the mutationArray,
 // taking into account the op(operation) and the attribute.
-func addToMutationMap(mutationMap map[uint32]*x.Mutations,
+func addToMutationMap(mutationMap map[uint32]*task.Mutations,
 	edges []*task.DirectedEdge, op string) {
 	for _, edge := range edges {
 		gid := group.BelongsTo(edge.Attr)
 		mu := mutationMap[gid]
 		if mu == nil {
-			mu = new(x.Mutations)
-			mu.GroupId = gid
+			mu = &task.Mutations{GroupId: gid}
 			mutationMap[gid] = mu
 		}
-
 		if op == set {
 			mu.Set = append(mu.Set, edge)
 		} else if op == del {
@@ -117,7 +107,7 @@ func addToMutationMap(mutationMap map[uint32]*x.Mutations,
 // MutateOverNetwork checks which group should be running the mutations
 // according to fingerprint of the predicate and sends it to that instance.
 func MutateOverNetwork(ctx context.Context, m *task.Mutations) error {
-	mutationMap := make(map[uint32]*x.Mutations)
+	mutationMap := make(map[uint32]*task.Mutations)
 
 	addToMutationMap(mutationMap, m.Set, set)
 	addToMutationMap(mutationMap, m.Del, del)
@@ -156,7 +146,7 @@ func (w *grpcWorker) Mutate(ctx context.Context, m *task.Mutations) (*Payload, e
 	}
 	c := make(chan error, 1)
 	node := groups().Node(m.GroupId)
-	go func() { c <- node.ProposeAndWait(ctx, mutationMsg, query.Data) }()
+	go func() { c <- node.ProposeAndWait(ctx, &task.Proposal{Mutations: m}) }()
 
 	select {
 	case <-ctx.Done():

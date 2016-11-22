@@ -56,6 +56,9 @@ func (cb *PayloadCodec) Marshal(v interface{}) ([]byte, error) {
 	case *task.MembershipUpdate:
 		p := v.(*task.MembershipUpdate)
 		return p.Marshal()
+	case *task.Mutations:
+		p := v.(*task.Mutations)
+		return p.Marshal()
 	default:
 		x.Fatalf("Invalid type of struct: %T\n", t)
 		return []byte{}, nil
@@ -95,6 +98,9 @@ func (cb *PayloadCodec) Unmarshal(data []byte, v interface{}) error {
 		return p.Unmarshal(data)
 	case *task.MembershipUpdate:
 		p := v.(*task.MembershipUpdate)
+		return p.Unmarshal(data)
+	case *task.Mutations:
+		p := v.(*task.Mutations)
 		return p.Unmarshal(data)
 	default:
 		x.Fatalf("Invalid type of struct: %T\n", t)

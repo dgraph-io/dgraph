@@ -72,7 +72,6 @@ var (
 )
 
 type mutationResult struct {
-	//edges   []x.DirectedEdge
 	edges   []*task.DirectedEdge
 	newUids map[string]uint64
 }
@@ -187,7 +186,7 @@ func convertToEdges(ctx context.Context, nquads []rdf.NQuad) (mutationResult, er
 	return mr, nil
 }
 
-func applyMutations(ctx context.Context, m x.Mutations) error {
+func applyMutations(ctx context.Context, m *task.Mutations) error {
 	err := worker.MutateOverNetwork(ctx, m)
 	if err != nil {
 		x.TraceError(ctx, x.Wrapf(err, "Error while MutateOverNetwork"))
@@ -258,7 +257,7 @@ func typeValueFromNQuad(nq *graph.NQuad) (types.Value, error) {
 
 func convertAndApply(ctx context.Context, set []rdf.NQuad, del []rdf.NQuad) (map[string]uint64, error) {
 	var allocIds map[string]uint64
-	var m x.Mutations
+	var m task.Mutations
 	var err error
 	var mr mutationResult
 
@@ -275,7 +274,7 @@ func convertAndApply(ctx context.Context, set []rdf.NQuad, del []rdf.NQuad) (map
 	}
 	m.Del = mr.edges
 
-	if err := applyMutations(ctx, m); err != nil {
+	if err := applyMutations(ctx, &m); err != nil {
 		return nil, x.Wrap(err)
 	}
 	return allocIds, nil

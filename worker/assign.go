@@ -58,19 +58,17 @@ func assignUids(ctx context.Context, num *task.Num) (*task.List, error) {
 	mutations := uid.AssignNew(val, 0, 1)
 
 	for _, uid := range num.Uids {
-		mu := &task.DirectedEdge{
+		mutations.Set = append(mutations.Set, &task.DirectedEdge{
 			Entity:    uid,
 			Attr:      "_uid_",
 			Value:     []byte("_"), // not txid
 			Source:    "_XIDorUSER_",
 			Timestamp: x.CurrentTime(),
-		}
-		mutations.Set = append(mutations.Set, mu)
+		})
 	}
 
-	data, err := mutations.Encode()
-	x.Checkf(err, "While encoding mutation: %v", mutations)
-	if err := node.ProposeAndWait(ctx, mutationMsg, data); err != nil {
+	proposal := &task.Proposal{Mutations: mutations}
+	if err := node.ProposeAndWait(ctx, proposal); err != nil {
 		return &emptyUIDList, err
 	}
 	// Mutations successfully applied.

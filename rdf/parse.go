@@ -77,7 +77,7 @@ func (nq NQuad) ToEdge() (*task.DirectedEdge, error) {
 		out.ValueId = oid
 	} else {
 		out.Value = nq.ObjectValue
-		out.ValueType = int32(nq.ObjectType)
+		out.ValueType = uint32(nq.ObjectType)
 	}
 	return out, nil
 }
@@ -106,7 +106,7 @@ func (nq NQuad) ToEdgeUsing(newToUid map[string]uint64) (*task.DirectedEdge, err
 
 	if len(nq.ObjectId) == 0 {
 		out.Value = nq.ObjectValue
-		out.ValueType = int32(nq.ObjectType)
+		out.ValueType = uint32(nq.ObjectType)
 	} else {
 		uid, err = toUid(nq.ObjectId, newToUid)
 		if err != nil {

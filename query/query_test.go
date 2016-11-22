@@ -103,7 +103,7 @@ func addEdgeToTypedValue(t *testing.T, ps *store.Store, attr string, src uint64,
 	typ types.TypeID, value []byte) {
 	edge := &task.DirectedEdge{
 		Value:     value,
-		ValueType: int32(typ),
+		ValueType: uint32(typ),
 		Source:    "testing",
 		Timestamp: x.CurrentTime(),
 		Attr:      attr,

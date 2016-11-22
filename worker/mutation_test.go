@@ -34,7 +34,7 @@ func TestAddToMutationArray(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 
-	mutationsMap := make(map[uint32]*x.Mutations)
+	mutationsMap := make(map[uint32]*task.Mutations)
 	edges := []*task.DirectedEdge{}
 
 	edges = append(edges, &task.DirectedEdge{
