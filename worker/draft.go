@@ -140,7 +140,6 @@ func (h *header) Decode(in []byte) {
 
 func (n *node) ProposeAndWait(ctx context.Context, msg uint16, data []byte) error {
 	var h header
-	x.Printf("~~~~~ProposeAndWait")
 	h.proposalId = rand.Uint32()
 	h.msgId = msg
 	hdata := h.Encode()
@@ -294,7 +293,6 @@ func (n *node) process(e raftpb.Entry) error {
 		if h.msgId == mutationMsg {
 			err = n.processMutation(e, h)
 		} else if h.msgId == membershipMsg {
-			x.Printf("~~~~~process membershipMsg proposalID=%d", h.proposalId)
 			err = n.processMembership(e, h)
 		}
 		n.props.Done(h.proposalId, err)

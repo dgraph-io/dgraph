@@ -271,7 +271,6 @@ func (g *groupi) syncMemberships() {
 				data, err := mm.Marshal()
 				x.Check(err)
 				zero := groups().Node(0)
-				x.Printf("~~~~~syncMemberships")
 				x.Check(zero.ProposeAndWait(zero.ctx, membershipMsg, data))
 
 			}(rc, n.AmLeader())
@@ -471,7 +470,6 @@ func (w *grpcWorker) UpdateMembership(ctx context.Context,
 
 		go func(data []byte) {
 			zero := groups().Node(0)
-			x.Printf("~~~~~updateMembership")
 			che <- zero.ProposeAndWait(zero.ctx, membershipMsg, data)
 		}(data)
 	}
