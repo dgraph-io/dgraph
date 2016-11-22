@@ -825,7 +825,7 @@ func getRoot(l *lex.Lexer) (gq *GraphQuery, rerr error) {
 		return nil, x.Errorf("Expected some name. Got: %v", item)
 	}
 
-	gq.Attr = item.Val
+	gq.Alias = item.Val
 	item = <-l.Items
 	if item.Typ != itemLeftRound {
 		return nil, x.Errorf("Expected variable start. Got: %v", item)
