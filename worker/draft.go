@@ -348,9 +348,9 @@ func (n *node) Run() {
 		case rd := <-n.raft.Ready():
 			x.Check(n.wal.Store(n.gid, rd.Snapshot, rd.HardState, rd.Entries))
 			n.saveToStorage(rd.Snapshot, rd.HardState, rd.Entries)
+			rcBytes, err := n.raftContext.Marshal()
 			for _, msg := range rd.Messages {
 				// TODO: Do some optimizations here to drop messages.
-				rcBytes, err := n.raftContext.Marshal()
 				x.Check(err)
 				msg.Context = rcBytes
 				n.send(msg)
