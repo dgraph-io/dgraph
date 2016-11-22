@@ -840,22 +840,24 @@ func (p *protoOutputNode) IsEmpty() bool {
 // most cases.
 func (sg *SubGraph) ToProtocolBuffer(l *Latency) (*graph.Node, error) {
 	var seedNode *protoOutputNode
-	if sg.SrcUIDs == nil {
-		return seedNode.New(sg.Attr).(*protoOutputNode).Node, nil
+	if sg.DestUIDs == nil {
+		return seedNode.New(sg.Params.Alias).(*protoOutputNode).Node, nil
 	}
+	//x.AssertTrue(len(sg.uidMatrix) == 1)
+	n := seedNode.New("_root_")
+	for _, uid := range sg.DestUIDs.Uids {
+		// For the root, the name is stored in Alias, not Attr.
+		n1 := seedNode.New(sg.Params.Alias)
+		if sg.Params.GetUID || sg.Params.isDebug {
+			n1.SetUID(uid)
+		}
 
-	x.AssertTrue(len(sg.uidMatrix) == 1)
-	// For the root, the name is stored in Alias, not Attr.
-	n := seedNode.New(sg.Params.Alias)
-	ul := sg.uidMatrix[0]
-	if sg.Params.GetUID || sg.Params.isDebug {
-		n.SetUID(ul.Uids[0])
+		if rerr := sg.preTraverse(uid, n1); rerr != nil {
+			return n.(*protoOutputNode).Node, rerr
+		}
+
+		n.AddChild(sg.Params.Alias, n1)
 	}
-
-	if rerr := sg.preTraverse(ul.Uids[0], n); rerr != nil {
-		return n.(*protoOutputNode).Node, rerr
-	}
-
 	l.ProtocolBuffer = time.Since(l.Start) - l.Parsing - l.Processing
 	return n.(*protoOutputNode).Node, nil
 }

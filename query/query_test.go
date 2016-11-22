@@ -1628,6 +1628,69 @@ func TestGeneratorMultiRoot(t *testing.T) {
 	require.JSONEq(t, `{"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"}]}`, js)
 }
 
+func TestToProtoMultiRoot(t *testing.T) {
+	dir, dir2, ps := populateGraph(t)
+	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
+	defer ps.Close()
+
+	query := `
+    {
+      me(anyof("name", "Michonne Rick Glenn")) {
+        name
+      }
+    }
+  `
+
+	gq, _, err := gql.Parse(query)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	sg, err := ToSubGraph(ctx, gq)
+	require.NoError(t, err)
+
+	ch := make(chan error)
+	go ProcessGraph(ctx, sg, nil, ch)
+	err = <-ch
+	require.NoError(t, err)
+
+	var l Latency
+	pb, err := sg.ToProtocolBuffer(&l)
+	require.NoError(t, err)
+
+	expectedPb := `attribute: "_root_"
+children: <
+  attribute: "me"
+  properties: <
+    prop: "name"
+    value: <
+      str_val: "Michonne"
+    >
+  >
+>
+children: <
+  attribute: "me"
+  properties: <
+    prop: "name"
+    value: <
+      str_val: "Rick Grimes"
+    >
+  >
+>
+children: <
+  attribute: "me"
+  properties: <
+    prop: "name"
+    value: <
+      str_val: "Glenn Rhee"
+    >
+  >
+>
+`
+
+	require.EqualValues(t, expectedPb, proto.MarshalTextString(pb))
+}
+
 //func TestNearGenerator(t *testing.T) {
 //dir1, dir2, _ := populateGraph(t)
 //defer os.RemoveAll(dir1)
