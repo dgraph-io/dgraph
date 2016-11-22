@@ -52,41 +52,6 @@ type Status struct {
 	Message string `json:"message"`
 }
 
-// DirectedEdge is passed to AddMutation to add edges to our graph DB.
-//type DirectedEdge struct {
-//	Entity    uint64 // Subject or source node / UID.
-//	Attribute string // Attribute or predicate. Labels the edge.
-//	Value     []byte // Edge points to a value.
-//	ValueType byte   // The type of the value
-//	ValueId   uint64 // Object or destination node / UID.
-//	Source    string
-//	Timestamp time.Time
-//}
-
-// Mutations stores the directed edges for both the set and delete operations.
-//type Mutations struct {
-//	GroupId uint32
-//	Set     []*task.DirectedEdge
-//	Del     []*task.DirectedEdge
-//}
-
-// Encode gob encodes the mutation which is then sent over to the instance which
-// is supposed to run it.
-//func (m *Mutations) Encode() (data []byte, rerr error) {
-//	var b bytes.Buffer
-//	enc := gob.NewEncoder(&b)
-//	rerr = enc.Encode(*m)
-//	return b.Bytes(), rerr
-//}
-
-// Decode decodes the mutation from a byte slice after receiving the byte slice over
-// the network.
-//func (m *Mutations) Decode(data []byte) error {
-//	r := bytes.NewReader(data)
-//	dec := gob.NewDecoder(r)
-//	return dec.Decode(m)
-//}
-
 // SetError sets the error logged in this package.
 func SetError(prev *error, n error) {
 	if prev == nil {
