@@ -104,16 +104,18 @@ func (n *node) Connect(pid uint64, addr string) {
 func (n *node) AddToCluster(pid uint64) error {
 	addr := n.peers.Get(pid)
 	x.AssertTruef(len(addr) > 0, "Unable to find conn pool for peer: %d", pid)
-
-	rc := n.raftContext
-	rcNew := createRaftContext(pid, rc.Group, addr)
-	rcNewBytes, err := rcNew.Marshal()
+	rc := &task.RaftContext{
+		Addr:  addr,
+		Group: n.raftContext.Group,
+		Id:    pid,
+	}
+	rcBytes, err := rc.Marshal()
 	x.Check(err)
 	return n.raft.ProposeConfChange(context.TODO(), raftpb.ConfChange{
 		ID:      pid,
 		Type:    raftpb.ConfChangeAddNode,
 		NodeID:  pid,
-		Context: rcNewBytes,
+		Context: rcBytes,
 	})
 }
 
@@ -444,14 +446,6 @@ func (n *node) joinPeers() {
 	x.Printf("Done with JoinCluster call\n")
 }
 
-func createRaftContext(id uint64, gid uint32, addr string) *task.RaftContext {
-	return &task.RaftContext{
-		Addr:  addr,
-		Group: gid,
-		Id:    id,
-	}
-}
-
 func newNode(gid uint32, id uint64, myAddr string) *node {
 	fmt.Printf("NEW NODE GID, ID: [%v, %v]\n", gid, id)
 
@@ -463,6 +457,12 @@ func newNode(gid uint32, id uint64, myAddr string) *node {
 	}
 
 	store := raft.NewMemoryStorage()
+	rc := &task.RaftContext{
+		Addr:  myAddr,
+		Group: gid,
+		Id:    id,
+	}
+
 	n := &node{
 		ctx:   context.TODO(),
 		id:    id,
@@ -478,7 +478,7 @@ func newNode(gid uint32, id uint64, myAddr string) *node {
 		},
 		peers:       peers,
 		props:       props,
-		raftContext: createRaftContext(id, gid, myAddr),
+		raftContext: rc,
 		messages:    make(chan sendmsg, 1000),
 	}
 	return n

@@ -234,15 +234,6 @@ func (g *groupi) TouchLastUpdate(u uint64) {
 	}
 }
 
-func buildTaskMembership(gid uint32, id uint64, addr string, leader bool) *task.Membership {
-	return &task.Membership{
-		Leader: leader,
-		Id:     id,
-		Group:  gid,
-		Addr:   addr,
-	}
-}
-
 // syncMemberships needs to be called in an periodic loop.
 // How syncMemberships works:
 // - Each server iterates over all the nodes it's serving, present in local.
@@ -267,7 +258,12 @@ func (g *groupi) syncMemberships() {
 			}
 
 			go func(rc *task.RaftContext, amleader bool) {
-				mm := buildTaskMembership(rc.Group, rc.Id, rc.Addr, amleader)
+				mm := &task.Membership{
+					Leader: amleader,
+					Id:     rc.Id,
+					Group:  rc.Group,
+					Addr:   rc.Addr,
+				}
 				data, err := mm.Marshal()
 				x.Check(err)
 				zero := groups().Node(0)
@@ -286,9 +282,13 @@ func (g *groupi) syncMemberships() {
 		for _, n := range g.local {
 			rc := n.raftContext
 			mu.Members = append(mu.Members,
-				buildTaskMembership(rc.Group, rc.Id, rc.Addr, n.AmLeader()))
+				&task.Membership{
+					Leader: n.AmLeader(),
+					Id:     rc.Id,
+					Group:  rc.Group,
+					Addr:   rc.Addr,
+				})
 		}
-
 		mu.LastUpdate = g.lastUpdate
 		g.RUnlock()
 	}
@@ -432,7 +432,12 @@ func (g *groupi) MembershipUpdateAfter(ridx uint64) *task.MembershipUpdate {
 				maxIdx = s.RaftIdx
 			}
 			out.Members = append(out.Members,
-				buildTaskMembership(gid, s.NodeId, s.Addr, s.Leader))
+				&task.Membership{
+					Leader: s.Leader,
+					Id:     s.NodeId,
+					Group:  gid,
+					Addr:   s.Addr,
+				})
 		}
 	}
 
@@ -464,7 +469,12 @@ func (w *grpcWorker) UpdateMembership(ctx context.Context,
 			continue
 		}
 
-		mmNew := buildTaskMembership(mm.Group, mm.Id, mm.Addr, mm.Leader)
+		mmNew := &task.Membership{
+			Leader: mm.Leader,
+			Id:     mm.Id,
+			Group:  mm.Group,
+			Addr:   mm.Addr,
+		}
 		data, err := mmNew.Marshal()
 		x.Check(err)
 
