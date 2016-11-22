@@ -50,3 +50,18 @@ message Num {
 	int64 val = 2;
 	repeated uint64 uids = 3;
 }
+
+message KV {
+	bytes key = 1;
+	bytes val = 2;
+}
+
+message KC {
+	bytes key = 1;
+	bytes checksum = 2;
+}
+
+message GroupKeys {
+	uint64 group_id = 1;
+	repeated KC keys = 2;
+}

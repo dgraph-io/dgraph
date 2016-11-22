@@ -2,21 +2,6 @@
 
 namespace task;
 
-table KV {
-	key:[ubyte];
-	val:[ubyte];
-}
-
-table KC {
-	key:[ubyte];
-	checksum:[ubyte];
-}
-
-table GroupKeys {
-	groupid:ulong;
-	keys:[KC];
-}
-
 table RaftContext {
 	id:ulong;
 	group:uint;
