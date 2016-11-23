@@ -37,8 +37,8 @@ service Worker {
 	rpc Sort (task.Sort)               returns (task.SortResult) {}
 
 	// RAFT serving RPCs.
-	rpc RaftMessage (Payload)       returns (Payload) {}
-	rpc JoinCluster (Payload)       returns (Payload) {}
-	rpc UpdateMembership (Payload)  returns (Payload) {}
-	rpc Backup (BackupPayload)      returns (BackupPayload) {}
+	rpc RaftMessage (Payload)                     returns (Payload) {}
+	rpc JoinCluster (task.RaftContext)            returns (Payload) {}
+	rpc UpdateMembership (task.MembershipUpdate)  returns (task.MembershipUpdate) {}
+	rpc Backup (BackupPayload)                    returns (BackupPayload) {}
 }

@@ -1,7 +1,6 @@
 package worker
 
 import (
-	"bytes"
 	"flag"
 	"fmt"
 	"math/rand"
@@ -11,13 +10,12 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/net/context"
+
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/x"
-
-	flatbuffers "github.com/google/flatbuffers/go"
-	"golang.org/x/net/context"
 )
 
 var (
@@ -27,6 +25,8 @@ var (
 	peer           = flag.String("peer", "", "Address of any peer.")
 	raftId         = flag.Uint64("idx", 1, "RAFT ID that this server will use to join RAFT groups.")
 	redirectPrefix = []byte("REDIRECT:")
+
+	emptyMembershipUpdate task.MembershipUpdate
 )
 
 type server struct {
@@ -234,22 +234,6 @@ func (g *groupi) TouchLastUpdate(u uint64) {
 	}
 }
 
-func buildTaskMembership(b *flatbuffers.Builder, gid uint32,
-	id uint64, addr []byte, leader bool) flatbuffers.UOffsetT {
-
-	var l byte
-	if leader {
-		l = 1
-	}
-	so := b.CreateByteString(addr)
-	task.MembershipStart(b)
-	task.MembershipAddId(b, id)
-	task.MembershipAddGroup(b, gid)
-	task.MembershipAddAddr(b, so)
-	task.MembershipAddLeader(b, l)
-	return task.MembershipEnd(b)
-}
-
 // syncMemberships needs to be called in an periodic loop.
 // How syncMemberships works:
 // - Each server iterates over all the nodes it's serving, present in local.
@@ -268,17 +252,20 @@ func (g *groupi) syncMemberships() {
 		g.RLock()
 		defer g.RUnlock()
 		for _, n := range g.local {
-			rc := task.GetRootAsRaftContext(n.raftContext, 0)
-			if g.duplicate(rc.Group(), rc.Id(), string(rc.Addr()), n.AmLeader()) {
+			rc := n.raftContext
+			if g.duplicate(rc.Group, rc.Id, rc.Addr, n.AmLeader()) {
 				continue
 			}
 
 			go func(rc *task.RaftContext, amleader bool) {
-				b := flatbuffers.NewBuilder(0)
-				uo := buildTaskMembership(b, rc.Group(), rc.Id(), rc.Addr(), amleader)
-				b.Finish(uo)
-				data := b.FinishedBytes()
-
+				mm := &task.Membership{
+					Leader: amleader,
+					Id:     rc.Id,
+					Group:  rc.Group,
+					Addr:   rc.Addr,
+				}
+				data, err := mm.Marshal()
+				x.Check(err)
 				zero := groups().Node(0)
 				x.Check(zero.ProposeAndWait(zero.ctx, membershipMsg, data))
 
@@ -289,31 +276,22 @@ func (g *groupi) syncMemberships() {
 
 	// This server doesn't serve group zero.
 	// Generate membership update of all local nodes.
-	var data []byte
+	var mu task.MembershipUpdate
 	{
 		g.RLock()
-		b := flatbuffers.NewBuilder(0)
-		uoffsets := make([]flatbuffers.UOffsetT, 0, 10)
 		for _, n := range g.local {
-			rc := task.GetRootAsRaftContext(n.raftContext, 0)
-			uo := buildTaskMembership(b, rc.Group(), rc.Id(), rc.Addr(), n.AmLeader())
-			uoffsets = append(uoffsets, uo)
+			rc := n.raftContext
+			mu.Members = append(mu.Members,
+				&task.Membership{
+					Leader: n.AmLeader(),
+					Id:     rc.Id,
+					Group:  rc.Group,
+					Addr:   rc.Addr,
+				})
 		}
-
-		task.MembershipUpdateStartMembersVector(b, len(uoffsets))
-		for _, uo := range uoffsets {
-			b.PrependUOffsetT(uo)
-		}
-		me := b.EndVector(len(uoffsets))
-
-		task.MembershipUpdateStart(b)
-		task.MembershipUpdateAddLastUpdate(b, g.lastUpdate)
-		task.MembershipUpdateAddMembers(b, me)
-		b.Finish(task.MembershipUpdateEnd(b))
-		data = b.FinishedBytes()
+		mu.LastUpdate = g.lastUpdate
 		g.RUnlock()
 	}
-	x.AssertTrue(len(data) > 0)
 
 	// Send an update to peer.
 	var pl *pool
@@ -334,18 +312,15 @@ UPDATEMEMBERSHIP:
 	defer pl.Put(conn)
 
 	c := NewWorkerClient(conn)
-	p := &Payload{Data: data}
-	out, err := c.UpdateMembership(g.ctx, p)
+	update, err := c.UpdateMembership(g.ctx, &mu)
 	if err != nil {
 		x.TraceError(g.ctx, err)
 		return
 	}
 
 	// Check if we got a redirect.
-	if len(out.Data) >= len(redirectPrefix) &&
-		bytes.Equal(out.Data[0:len(redirectPrefix)], redirectPrefix) {
-
-		addr = string(out.Data[len(redirectPrefix):])
+	if update.Redirect {
+		addr = update.RedirectAddr
 		if len(addr) == 0 {
 			return
 		}
@@ -355,13 +330,10 @@ UPDATEMEMBERSHIP:
 	}
 
 	var lu uint64
-	update := task.GetRootAsMembershipUpdate(out.Data, 0)
-	for i := 0; i < update.MembersLength(); i++ {
-		mm := new(task.Membership)
-		x.AssertTrue(update.Members(mm, i))
-		g.applyMembershipUpdate(update.LastUpdate(), mm)
-		if lu < update.LastUpdate() {
-			lu = update.LastUpdate()
+	for _, mm := range update.Members {
+		g.applyMembershipUpdate(update.LastUpdate, mm)
+		if lu < update.LastUpdate {
+			lu = update.LastUpdate
 		}
 	}
 	g.TouchLastUpdate(lu)
@@ -384,9 +356,9 @@ func (g *groupi) periodicSyncMemberships() {
 // membership update in group zero.
 func (g *groupi) applyMembershipUpdate(raftIdx uint64, mm *task.Membership) {
 	update := server{
-		NodeId:  mm.Id(),
-		Addr:    string(mm.Addr()),
-		Leader:  mm.Leader() == byte(1),
+		NodeId:  mm.Id,
+		Addr:    mm.Addr,
+		Leader:  mm.Leader,
 		RaftIdx: raftIdx,
 	}
 	if update.Addr != *myAddr {
@@ -403,10 +375,10 @@ func (g *groupi) applyMembershipUpdate(raftIdx uint64, mm *task.Membership) {
 		g.all = make(map[uint32]*servers)
 	}
 
-	sl := g.all[mm.Group()]
+	sl := g.all[mm.Group]
 	if sl == nil {
 		sl = new(servers)
-		g.all[mm.Group()] = sl
+		g.all[mm.Group] = sl
 	}
 
 	for {
@@ -444,13 +416,13 @@ func (g *groupi) applyMembershipUpdate(raftIdx uint64, mm *task.Membership) {
 
 // MembershipUpdateAfter generates the Flatbuffer response containing all the
 // membership updates after the provided raft index.
-func (g *groupi) MembershipUpdateAfter(ridx uint64) []byte {
+func (g *groupi) MembershipUpdateAfter(ridx uint64) *task.MembershipUpdate {
 	g.RLock()
 	defer g.RUnlock()
 
 	maxIdx := ridx
-	b := flatbuffers.NewBuilder(0)
-	uoffsets := make([]flatbuffers.UOffsetT, 0, 10)
+	out := new(task.MembershipUpdate)
+
 	for gid, peers := range g.all {
 		for _, s := range peers.list {
 			if s.RaftIdx <= ridx {
@@ -459,55 +431,52 @@ func (g *groupi) MembershipUpdateAfter(ridx uint64) []byte {
 			if s.RaftIdx > maxIdx {
 				maxIdx = s.RaftIdx
 			}
-			uo := buildTaskMembership(b, gid, s.NodeId, []byte(s.Addr), s.Leader)
-			uoffsets = append(uoffsets, uo)
+			out.Members = append(out.Members,
+				&task.Membership{
+					Leader: s.Leader,
+					Id:     s.NodeId,
+					Group:  gid,
+					Addr:   s.Addr,
+				})
 		}
 	}
 
-	task.MembershipUpdateStartMembersVector(b, len(uoffsets))
-	for _, uo := range uoffsets {
-		b.PrependUOffsetT(uo)
-	}
-	me := b.EndVector(len(uoffsets))
-
-	task.MembershipUpdateStart(b)
-	task.MembershipUpdateAddLastUpdate(b, maxIdx)
-	task.MembershipUpdateAddMembers(b, me)
-	b.Finish(task.MembershipUpdateEnd(b))
-
-	return b.FinishedBytes()
+	out.LastUpdate = maxIdx
+	return out
 }
 
 // UpdateMembership is the RPC call for updating membership for servers
 // which don't serve group zero.
-func (w *grpcWorker) UpdateMembership(ctx context.Context, query *Payload) (*Payload, error) {
+func (w *grpcWorker) UpdateMembership(ctx context.Context,
+	update *task.MembershipUpdate) (*task.MembershipUpdate, error) {
 	if ctx.Err() != nil {
-		return &Payload{}, ctx.Err()
+		return &emptyMembershipUpdate, ctx.Err()
 	}
 	if !groups().ServesGroup(0) {
 		addr := groups().AnyServer(0)
 		// fmt.Printf("I don't serve group zero. But, here's who does: %v\n", addr)
-		p := new(Payload)
-		p.Data = append(p.Data, redirectPrefix...)
-		p.Data = append(p.Data, []byte(addr)...)
-		return p, nil
+
+		return &task.MembershipUpdate{
+			Redirect:     true,
+			RedirectAddr: addr,
+		}, nil
 	}
 
-	update := task.GetRootAsMembershipUpdate(query.Data, 0)
-	che := make(chan error, update.MembersLength())
-
-	for i := 0; i < update.MembersLength(); i++ {
-		mm := new(task.Membership)
-		x.AssertTrue(update.Members(mm, i))
-		if groups().isDuplicate(mm.Group(), mm.Id(), string(mm.Addr()), mm.Leader() == 1) {
+	che := make(chan error, len(update.Members))
+	for _, mm := range update.Members {
+		if groups().isDuplicate(mm.Group, mm.Id, mm.Addr, mm.Leader) {
 			che <- nil
 			continue
 		}
 
-		b := flatbuffers.NewBuilder(0)
-		uo := buildTaskMembership(b, mm.Group(), mm.Id(), mm.Addr(), mm.Leader() == 1)
-		b.Finish(uo)
-		data := b.FinishedBytes()
+		mmNew := &task.Membership{
+			Leader: mm.Leader,
+			Id:     mm.Id,
+			Group:  mm.Group,
+			Addr:   mm.Addr,
+		}
+		data, err := mmNew.Marshal()
+		x.Check(err)
 
 		go func(data []byte) {
 			zero := groups().Node(0)
@@ -515,19 +484,19 @@ func (w *grpcWorker) UpdateMembership(ctx context.Context, query *Payload) (*Pay
 		}(data)
 	}
 
-	for i := 0; i < update.MembersLength(); i++ {
+	for _ = range update.Members {
 		select {
 		case <-ctx.Done():
-			return &Payload{}, ctx.Err()
+			return &emptyMembershipUpdate, ctx.Err()
 		case err := <-che:
 			if err != nil {
-				return &Payload{}, err
+				return &emptyMembershipUpdate, err
 			}
 		}
 	}
 
 	// Find all membership updates since the provided lastUpdate. LastUpdate is
 	// the last raft index that the caller has recorded an update for.
-	reply := groups().MembershipUpdateAfter(update.LastUpdate())
-	return &Payload{Data: reply}, nil
+	reply := groups().MembershipUpdateAfter(update.LastUpdate)
+	return reply, nil
 }
