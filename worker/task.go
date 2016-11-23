@@ -19,7 +19,6 @@ package worker
 import (
 	"golang.org/x/net/context"
 
-	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/geo"
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
@@ -135,12 +134,7 @@ func processTask(q *task.Query) (*task.Result, error) {
 		out.UidMatrix = append(out.UidMatrix, pl.Uids(opts))
 	}
 
-	if intersectDest {
-		out.DestUids = algo.IntersectSorted(out.UidMatrix)
-	} else {
-		out.DestUids = algo.MergeSorted(out.UidMatrix)
-	}
-
+	out.IntersectDest = intersectDest
 	return &out, nil
 }
 

@@ -6,14 +6,14 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-func getTokens(Func []string) (*geo.QueryType, []string, bool, error) {
-	x.AssertTruef(len(Func) > 1, "Invalid function")
-	switch Func[0] {
+func getTokens(funcArgs []string) (*geo.QueryType, []string, bool, error) {
+	x.AssertTruef(len(funcArgs) > 1, "Invalid function")
+	switch funcArgs[0] {
 	case "anyof":
-		tok, err := getStringTokens(Func[1])
+		tok, err := getStringTokens(funcArgs[1])
 		return nil, tok, false, err
 	case "allof":
-		tok, err := getStringTokens(Func[1])
+		tok, err := getStringTokens(funcArgs[1])
 		return nil, tok, true, err
 	default:
 		return nil, nil, false, x.Errorf("Invalid function")

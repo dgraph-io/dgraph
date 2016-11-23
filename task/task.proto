@@ -30,7 +30,7 @@ message Result {
 	repeated List uidMatrix = 1;
 	repeated Value values = 2;
 	repeated uint32 counts = 3;
-	List destUids = 4;
+	bool intersectDest = 4;
 }
 
 message Sort {

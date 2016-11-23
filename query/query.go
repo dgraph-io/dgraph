@@ -555,7 +555,11 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			return
 		}
 
-		sg.DestUIDs = result.DestUids
+		if result.IntersectDest {
+			sg.DestUIDs = algo.IntersectSorted(result.UidMatrix)
+		} else {
+			sg.DestUIDs = algo.MergeSorted(result.UidMatrix)
+		}
 	}
 
 	if len(sg.DestUIDs.Uids) == 0 {
