@@ -71,7 +71,7 @@ func newServer(port string) (*grpc.Server, net.Listener, error) {
 	}
 	log.Printf("Worker listening at address: %v", ln.Addr())
 
-	s := grpc.NewServer(grpc.CustomCodec(&PayloadCodec{}))
+	s := grpc.NewServer()
 	return s, ln, nil
 }
 

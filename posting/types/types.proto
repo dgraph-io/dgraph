@@ -1,4 +1,4 @@
-// protoc --gofast_out=.  task.proto
+// protoc --gofast_out=. posting/types/types.proto
 syntax = "proto3";
 
 package types;

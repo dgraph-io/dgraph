@@ -168,9 +168,8 @@ func debugKey(key []byte) string {
 }
 
 func newPosting(t x.DirectedEdge, op uint32) *types.Posting {
-	if !bytes.Equal(t.Value, nil) && t.ValueId != math.MaxUint64 {
-		log.Fatal("This should have already been set by the caller.")
-	}
+	x.AssertTruef(bytes.Equal(t.Value, nil) || t.ValueId == math.MaxUint64,
+		"This should have been set by the caller.")
 
 	return &types.Posting{
 		Uid:     t.ValueId,
@@ -497,7 +496,7 @@ func (l *List) commit() (committed bool, rerr error) {
 		return false, nil
 	}
 
-	final := &types.PostingList{}
+	var final types.PostingList
 	ubuf := make([]byte, 16)
 	h := md5.New()
 	count := 0
