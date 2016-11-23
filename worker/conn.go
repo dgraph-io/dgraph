@@ -8,7 +8,6 @@ import (
 	"log"
 	"sync"
 
-	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/x"
 
 	"google.golang.org/grpc"
@@ -17,100 +16,6 @@ import (
 var (
 	errNoConnection = fmt.Errorf("No connection exists")
 )
-
-// PayloadCodec is a custom codec that is that is used for internal worker
-// communication.
-type PayloadCodec struct{}
-
-// Marshal marshals v into a Payload instance. v contains serialised data
-// for a flatbuffer Query object.
-func (cb *PayloadCodec) Marshal(v interface{}) ([]byte, error) {
-	switch t := v.(type) {
-	case *Payload:
-		p := v.(*Payload)
-		return p.Data, nil
-	case *BackupPayload:
-		p := v.(*BackupPayload)
-		return p.Marshal()
-	case *task.Query:
-		p := v.(*task.Query)
-		return p.Marshal()
-	case *task.Result:
-		p := v.(*task.Result)
-		return p.Marshal()
-	case *task.Sort:
-		p := v.(*task.Sort)
-		return p.Marshal()
-	case *task.SortResult:
-		p := v.(*task.SortResult)
-		return p.Marshal()
-	case *task.Num:
-		p := v.(*task.Num)
-		return p.Marshal()
-	case *task.List:
-		p := v.(*task.List)
-		return p.Marshal()
-	case *task.RaftContext:
-		p := v.(*task.RaftContext)
-		return p.Marshal()
-	case *task.MembershipUpdate:
-		p := v.(*task.MembershipUpdate)
-		return p.Marshal()
-	case *task.Mutations:
-		p := v.(*task.Mutations)
-		return p.Marshal()
-	default:
-		x.Fatalf("Invalid type of struct: %T\n", t)
-		return []byte{}, nil
-	}
-}
-
-// Unmarshal unmarshals byte slice data into v.
-func (cb *PayloadCodec) Unmarshal(data []byte, v interface{}) error {
-	switch t := v.(type) {
-	case *Payload:
-		p := v.(*Payload)
-		p.Data = data
-		return nil
-	case *BackupPayload:
-		p := v.(*BackupPayload)
-		return p.Unmarshal(data)
-	case *task.Query:
-		p := v.(*task.Query)
-		return p.Unmarshal(data)
-	case *task.Result:
-		p := v.(*task.Result)
-		return p.Unmarshal(data)
-	case *task.Sort:
-		p := v.(*task.Sort)
-		return p.Unmarshal(data)
-	case *task.SortResult:
-		p := v.(*task.SortResult)
-		return p.Unmarshal(data)
-	case *task.Num:
-		p := v.(*task.Num)
-		return p.Unmarshal(data)
-	case *task.List:
-		p := v.(*task.List)
-		return p.Unmarshal(data)
-	case *task.RaftContext:
-		p := v.(*task.RaftContext)
-		return p.Unmarshal(data)
-	case *task.MembershipUpdate:
-		p := v.(*task.MembershipUpdate)
-		return p.Unmarshal(data)
-	case *task.Mutations:
-		p := v.(*task.Mutations)
-		return p.Unmarshal(data)
-	default:
-		x.Fatalf("Invalid type of struct: %T\n", t)
-		return nil
-	}
-}
-
-func (cb *PayloadCodec) String() string {
-	return "worker.PayloadCodec"
-}
 
 // Pool is used to manage the grpc client connections for communicating with
 // other worker instances.
@@ -203,7 +108,7 @@ func newPool(addr string, maxCap int) *pool {
 }
 
 func (p *pool) dialNew() (*grpc.ClientConn, error) {
-	return grpc.Dial(p.Addr, grpc.WithInsecure(), grpc.WithCodec(&PayloadCodec{}))
+	return grpc.Dial(p.Addr, grpc.WithInsecure())
 }
 
 // Get returns a connection from the pool of connections or a new connection if

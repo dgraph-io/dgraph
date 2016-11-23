@@ -75,7 +75,7 @@ message Membership {
 message MembershipUpdate {
 	repeated Membership members = 1;
 	uint64 lastUpdate = 2;
-	
+
 	bool redirect = 3;
 	string redirectAddr = 4;
 }
@@ -100,4 +100,19 @@ message Proposal {
 	uint32 proposalId = 1;
 	Mutations mutations = 2;
 	Membership membership = 3;
+}
+
+message KV {
+	bytes key = 1;
+	bytes val = 2;
+}
+
+message KC {
+	bytes key = 1;
+	bytes checksum = 2;
+}
+
+message GroupKeys {
+	uint64 group_id = 1;
+	repeated KC keys = 2;
 }

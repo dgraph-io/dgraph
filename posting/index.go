@@ -165,7 +165,7 @@ func addIndexMutation(ctx context.Context, attr, token string,
 }
 
 // AddMutationWithIndex is AddMutation with support for indexing.
-func (l *List) AddMutationWithIndex(ctx context.Context, t *task.DirectedEdge, op byte) error {
+func (l *List) AddMutationWithIndex(ctx context.Context, t *task.DirectedEdge, op uint32) error {
 	x.AssertTruef(len(t.Attr) > 0 && t.Attr[0] != ':',
 		"[%s] [%d] [%v] %d %d\n", t.Attr, t.Entity, t.Value, t.ValueId, op)
 

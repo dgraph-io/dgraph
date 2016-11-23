@@ -30,11 +30,11 @@ service Worker {
 	rpc Echo (Payload)             returns (Payload) {}
 
 	// Data serving RPCs.
-	rpc AssignUids (task.Num)      returns (task.List) {}
-	rpc Mutate (task.Mutations)    returns (Payload) {}
-	rpc ServeTask (task.Query)     returns (task.Result) {}
-	rpc PredicateData (Payload)    returns (stream Payload) {}
-	rpc Sort (task.Sort)           returns (task.SortResult) {}
+	rpc AssignUids (task.Num)          returns (task.List) {}
+	rpc Mutate (task.Mutations)        returns (Payload) {}
+	rpc ServeTask (task.Query)         returns (task.Result) {}
+	rpc PredicateData (task.GroupKeys) returns (stream task.KV) {}
+	rpc Sort (task.Sort)               returns (task.SortResult) {}
 
 	// RAFT serving RPCs.
 	rpc RaftMessage (Payload)                     returns (Payload) {}

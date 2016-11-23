@@ -229,7 +229,7 @@ func (s *state) handleNQuads(wg *sync.WaitGroup) {
 		edge, err := nq.ToEdge()
 		for err != nil {
 			// Just put in a retry loop to tackle temporary errors.
-			if err == posting.E_TMP_ERROR {
+			if err == posting.ErrRetry {
 				time.Sleep(time.Microsecond)
 
 			} else {

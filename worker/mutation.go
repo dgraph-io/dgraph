@@ -32,7 +32,7 @@ const (
 
 // runMutations goes through all the edges and applies them. It returns the
 // mutations which were not applied in left.
-func runMutations(ctx context.Context, edges []*task.DirectedEdge, op byte) error {
+func runMutations(ctx context.Context, edges []*task.DirectedEdge, op uint32) error {
 	for _, edge := range edges {
 		if !groups().ServesGroup(group.BelongsTo(edge.Attr)) {
 			return x.Errorf("Predicate fingerprint doesn't match this instance")
