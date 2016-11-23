@@ -125,7 +125,7 @@ func TestProcessTask(t *testing.T) {
 		}, algo.ToUintsListForTest(r.UidMatrix))
 }
 
-// newQuery creates a Query flatbuffer table, serializes and returns it.
+// newQuery creates a Query task and returns it.
 func newQuery(attr string, uids []uint64, tokens []string) *task.Query {
 	x.AssertTrue(uids == nil || tokens == nil)
 	return &task.Query{

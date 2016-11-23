@@ -107,12 +107,6 @@
 			"revisionTime": "2016-06-14T22:31:40Z"
 		},
 		{
-			"checksumSHA1": "DWpjU6gH7pFWn/CWPC4GE7OiiVY=",
-			"path": "github.com/google/flatbuffers/go",
-			"revision": "fc19f746b02cd12d4586c56b0695d4601a66559f",
-			"revisionTime": "2016-07-26T03:44:33Z"
-		},
-		{
 			"checksumSHA1": "Hky3u+8Rqum+wB5BHMj0A8ZmT4g=",
 			"path": "github.com/pkg/errors",
 			"revision": "17b591df37844cde689f4d5813e5cea0927d8dd2",
