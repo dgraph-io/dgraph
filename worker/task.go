@@ -82,7 +82,8 @@ func processTask(q *task.Query) (*task.Result, error) {
 	var intersectDest bool
 	if useFunc {
 		// Tokenize here.
-		geoQuery, tokens, intersectDest, err = getTokens(q.SrcFunc)
+		tokens, err = getTokens(q.SrcFunc)
+		intersectDest = (q.SrcFunc[0] == "allof")
 		if err != nil {
 			return nil, err
 		}
