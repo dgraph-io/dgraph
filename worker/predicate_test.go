@@ -21,13 +21,12 @@ import (
 	"log"
 	"net"
 	"testing"
-	"time"
 
 	"google.golang.org/grpc"
 
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/store"
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/task"
 )
 
 func checkShard(ps *store.Store) (int, []byte) {
@@ -47,10 +46,9 @@ func writePLs(t *testing.T, count int, vid uint64, ps *store.Store) {
 		t.Logf("key: %v", k)
 		list, _ := posting.GetOrCreate([]byte(k))
 
-		de := x.DirectedEdge{
-			ValueId:   vid,
-			Source:    "test",
-			Timestamp: time.Now(),
+		de := &task.DirectedEdge{
+			ValueId: vid,
+			Label:   "test",
 		}
 		list.AddMutation(context.TODO(), de, posting.Set)
 		if merged, err := list.CommitIfDirty(context.TODO()); err != nil {

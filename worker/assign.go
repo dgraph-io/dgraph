@@ -17,8 +17,6 @@
 package worker
 
 import (
-	"time"
-
 	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/dgraph/group"
@@ -60,19 +58,16 @@ func assignUids(ctx context.Context, num *task.Num) (*task.List, error) {
 	mutations := uid.AssignNew(val, 0, 1)
 
 	for _, uid := range num.Uids {
-		mu := x.DirectedEdge{
-			Entity:    uid,
-			Attribute: "_uid_",
-			Value:     []byte("_"), // not txid
-			Source:    "_XIDorUSER_",
-			Timestamp: time.Now(),
-		}
-		mutations.Set = append(mutations.Set, mu)
+		mutations.Set = append(mutations.Set, &task.DirectedEdge{
+			Entity: uid,
+			Attr:   "_uid_",
+			Value:  []byte("_"), // not txid
+			Label:  "A",
+		})
 	}
 
-	data, err := mutations.Encode()
-	x.Checkf(err, "While encoding mutation: %v", mutations)
-	if err := node.ProposeAndWait(ctx, mutationMsg, data); err != nil {
+	proposal := &task.Proposal{Mutations: mutations}
+	if err := node.ProposeAndWait(ctx, proposal); err != nil {
 		return &emptyUIDList, err
 	}
 	// Mutations successfully applied.

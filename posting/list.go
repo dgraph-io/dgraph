@@ -167,7 +167,7 @@ func debugKey(key []byte) string {
 	return b.String()
 }
 
-func newPosting(t x.DirectedEdge, op uint32) *types.Posting {
+func newPosting(t *task.DirectedEdge, op uint32) *types.Posting {
 	x.AssertTruef(bytes.Equal(t.Value, nil) || t.ValueId == math.MaxUint64,
 		"This should have been set by the caller.")
 
@@ -175,8 +175,7 @@ func newPosting(t x.DirectedEdge, op uint32) *types.Posting {
 		Uid:     t.ValueId,
 		Value:   t.Value,
 		ValType: uint32(t.ValueType),
-		Label:   t.Source,
-		Commit:  uint64(t.Timestamp.UnixNano()),
+		Label:   t.Label,
 		Op:      op,
 	}
 }
@@ -342,7 +341,7 @@ func (l *List) updateMutationLayer(mpost *types.Posting) bool {
 // AddMutation adds mutation to mutation layers. Note that it does not write
 // anything to disk. Some other background routine will be responsible for merging
 // changes in mutation layers to RocksDB. Returns whether any mutation happens.
-func (l *List) AddMutation(ctx context.Context, t x.DirectedEdge, op uint32) (bool, error) {
+func (l *List) AddMutation(ctx context.Context, t *task.DirectedEdge, op uint32) (bool, error) {
 	l.wg.Wait()
 	if atomic.LoadInt32(&l.deleteMe) == 1 {
 		x.TraceError(ctx, x.Errorf("DELETEME set to true. Temporary error."))

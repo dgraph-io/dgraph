@@ -33,12 +33,12 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-func addEdge(t *testing.T, edge x.DirectedEdge, l *posting.List) {
+func addEdge(t *testing.T, edge *task.DirectedEdge, l *posting.List) {
 	require.NoError(t,
 		l.AddMutationWithIndex(context.Background(), edge, posting.Set))
 }
 
-func delEdge(t *testing.T, edge x.DirectedEdge, l *posting.List) {
+func delEdge(t *testing.T, edge *task.DirectedEdge, l *posting.List) {
 	require.NoError(t,
 		l.AddMutationWithIndex(context.Background(), edge, posting.Del))
 }
@@ -49,11 +49,11 @@ func getOrCreate(key []byte) *posting.List {
 }
 
 func populateGraph(t *testing.T) {
-	edge := x.DirectedEdge{
-		ValueId:   23,
-		Source:    "author0",
-		Timestamp: time.Now(),
-		Attribute: "friend",
+	edge := &task.DirectedEdge{
+		ValueId: 23,
+		Label:   "author0",
+
+		Attr: "friend",
 	}
 	edge.Entity = 10
 	addEdge(t, edge, getOrCreate(posting.Key(10, "friend")))
@@ -154,12 +154,11 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 
 	// Now try changing 12's friend value from "photon" to "notphotonExtra" to
 	// "notphoton".
-	edge := x.DirectedEdge{
-		Value:     []byte("notphotonExtra"),
-		Source:    "author0",
-		Timestamp: time.Now(),
-		Attribute: "friend",
-		Entity:    12,
+	edge := &task.DirectedEdge{
+		Value:  []byte("notphotonExtra"),
+		Label:  "author0",
+		Attr:   "friend",
+		Entity: 12,
 	}
 	addEdge(t, edge, getOrCreate(posting.Key(12, "friend")))
 	edge.Value = []byte("notphoton")
@@ -179,12 +178,11 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 	}, algo.ToUintsListForTest(r.UidMatrix))
 
 	// Try deleting.
-	edge = x.DirectedEdge{
-		Value:     []byte("photon"),
-		Source:    "author0",
-		Timestamp: time.Now(),
-		Attribute: "friend",
-		Entity:    10,
+	edge = &task.DirectedEdge{
+		Value:  []byte("photon"),
+		Label:  "author0",
+		Attr:   "friend",
+		Entity: 10,
 	}
 	// Redundant deletes.
 	delEdge(t, edge, getOrCreate(posting.Key(10, "friend")))
@@ -245,12 +243,11 @@ func TestProcessTaskIndex(t *testing.T) {
 
 	// Now try changing 12's friend value from "photon" to "notphotonExtra" to
 	// "notphoton".
-	edge := x.DirectedEdge{
-		Value:     []byte("notphotonExtra"),
-		Source:    "author0",
-		Timestamp: time.Now(),
-		Attribute: "friend",
-		Entity:    12,
+	edge := &task.DirectedEdge{
+		Value:  []byte("notphotonExtra"),
+		Label:  "author0",
+		Attr:   "friend",
+		Entity: 12,
 	}
 	addEdge(t, edge, getOrCreate(posting.Key(12, "friend")))
 	edge.Value = []byte("notphoton")
@@ -273,12 +270,11 @@ func TestProcessTaskIndex(t *testing.T) {
 	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
 
 	// Try deleting.
-	edge = x.DirectedEdge{
-		Value:     []byte("photon"),
-		Source:    "author0",
-		Timestamp: time.Now(),
-		Attribute: "friend",
-		Entity:    10,
+	edge = &task.DirectedEdge{
+		Value:  []byte("photon"),
+		Label:  "author0",
+		Attr:   "friend",
+		Entity: 10,
 	}
 	// Redundant deletes.
 	delEdge(t, edge, getOrCreate(posting.Key(10, "friend")))
@@ -305,10 +301,9 @@ func TestProcessTaskIndex(t *testing.T) {
 }
 
 func populateGraphForSort(t *testing.T, ps *store.Store) {
-	edge := x.DirectedEdge{
-		Source:    "author1",
-		Timestamp: time.Now(),
-		Attribute: "dob",
+	edge := &task.DirectedEdge{
+		Label: "author1",
+		Attr:  "dob",
 	}
 
 	dobs := []string{
@@ -331,7 +326,7 @@ func populateGraphForSort(t *testing.T, ps *store.Store) {
 		edge.Entity = uint64(i + 10)
 		edge.Value = []byte(dob)
 		addEdge(t, edge,
-			getOrCreate(posting.Key(edge.Entity, edge.Attribute)))
+			getOrCreate(posting.Key(edge.Entity, edge.Attr)))
 	}
 	time.Sleep(200 * time.Millisecond) // Let indexing finish.
 }

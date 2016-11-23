@@ -10,21 +10,21 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/store"
-	"github.com/dgraph-io/dgraph/x"
-	"github.com/stretchr/testify/require"
+	"github.com/dgraph-io/dgraph/task"
 )
 
 func populateGraphBackup(t *testing.T) {
-	edge := x.DirectedEdge{
-		ValueId:   5,
-		Source:    "author0",
-		Timestamp: time.Now(),
-		Attribute: "friend",
+	edge := &task.DirectedEdge{
+		ValueId: 5,
+		Label:   "author0",
+		Attr:    "friend",
 	}
 	edge.Entity = 1
 	addEdge(t, edge, getOrCreate(posting.Key(1, "friend")))
@@ -41,7 +41,7 @@ func populateGraphBackup(t *testing.T) {
 	edge.Entity = 1
 	edge.ValueId = 0
 	edge.Value = []byte("photon")
-	edge.Attribute = "name"
+	edge.Attr = "name"
 	addEdge(t, edge, getOrCreate(posting.Key(1, "name")))
 
 	edge.Entity = 2

@@ -20,11 +20,6 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-const (
-	mutationMsg   = 1
-	membershipMsg = 2
-)
-
 type peerPool struct {
 	sync.RWMutex
 	peers map[uint64]string
@@ -140,26 +135,27 @@ func (h *header) Decode(in []byte) {
 	h.msgId = binary.LittleEndian.Uint16(in[4:6])
 }
 
-func (n *node) ProposeAndWait(ctx context.Context, msg uint16, data []byte) error {
-	var h header
-	h.proposalId = rand.Uint32()
-	h.msgId = msg
-	hdata := h.Encode()
-
-	proposalData := make([]byte, len(data)+len(hdata))
-	x.AssertTrue(copy(proposalData, hdata) == len(hdata))
-	x.AssertTrue(copy(proposalData[len(hdata):], data) == len(data))
+func (n *node) ProposeAndWait(ctx context.Context, proposal *task.Proposal) error {
+	proposal.Id = rand.Uint32()
+	proposalData, err := proposal.Marshal()
+	if err != nil {
+		return err
+	}
 
 	che := make(chan error, 1)
-	n.props.Store(h.proposalId, che)
+	n.props.Store(proposal.Id, che)
 
-	err := n.raft.Propose(ctx, proposalData)
-	if err != nil {
+	if err = n.raft.Propose(ctx, proposalData); err != nil {
 		return x.Wrapf(err, "While proposing")
 	}
 
 	// Wait for the proposal to be committed.
-	x.Trace(ctx, "Waiting for the proposal: %d to be applied.", msg)
+	if proposal.Mutations != nil {
+		x.Trace(ctx, "Waiting for the proposal: mutations.")
+	} else {
+		x.Trace(ctx, "Waiting for the proposal: membership update.")
+	}
+
 	select {
 	case err = <-che:
 		x.TraceError(ctx, err)
@@ -241,13 +237,7 @@ func (n *node) batchAndSendMessages() {
 	}
 }
 
-func (n *node) processMutation(e raftpb.Entry, h header) error {
-	m := new(x.Mutations)
-	// Ensure that this can be decoded.
-	if err := m.Decode(e.Data[h.Length():]); err != nil {
-		x.TraceError(n.ctx, err)
-		return err
-	}
+func (n *node) processMutation(e raftpb.Entry, m *task.Mutations) error {
 	if err := mutate(n.ctx, m); err != nil {
 		x.TraceError(n.ctx, err)
 		return err
@@ -255,15 +245,12 @@ func (n *node) processMutation(e raftpb.Entry, h header) error {
 	return nil
 }
 
-func (n *node) processMembership(e raftpb.Entry, h header) error {
+func (n *node) processMembership(e raftpb.Entry, mm *task.Membership) error {
 	x.AssertTrue(n.gid == 0)
-
-	var mm task.Membership
-	x.Check(mm.Unmarshal(e.Data[h.Length():]))
 
 	x.Printf("group: %v Addr: %q leader: %v dead: %v\n",
 		mm.Group, mm.Addr, mm.Leader, mm.AmDead)
-	groups().applyMembershipUpdate(e.Index, &mm)
+	groups().applyMembershipUpdate(e.Index, mm)
 	return nil
 }
 
@@ -288,16 +275,18 @@ func (n *node) process(e raftpb.Entry) error {
 	}
 
 	if e.Type == raftpb.EntryNormal {
-		var h header
-		h.Decode(e.Data[0:h.Length()])
-
-		var err error
-		if h.msgId == mutationMsg {
-			err = n.processMutation(e, h)
-		} else if h.msgId == membershipMsg {
-			err = n.processMembership(e, h)
+		var proposal task.Proposal
+		err := proposal.Unmarshal(e.Data)
+		if err != nil {
+			return err
 		}
-		n.props.Done(h.proposalId, err)
+
+		if proposal.Mutations != nil {
+			err = n.processMutation(e, proposal.Mutations)
+		} else if proposal.Membership != nil {
+			err = n.processMembership(e, proposal.Membership)
+		}
+		n.props.Done(proposal.Id, err)
 	}
 
 	return nil
