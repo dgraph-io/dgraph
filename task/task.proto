@@ -21,17 +21,16 @@ message Query {
 
 	// Exactly one of uids and terms is populated.
 	repeated fixed64 uids = 6;
-	repeated string tokens = 7;
-
-	// Intersect results with this UID list. If uids is populated, then this is
-	// an "intersection query". If terms is populated, this is a "filter query".
-	repeated fixed64 toIntersect = 8;
+	
+	// Function to generate or filter UIDs.
+	repeated string srcFunc = 7;
 }
 
 message Result {
 	repeated List uidMatrix = 1;
 	repeated Value values = 2;
 	repeated uint32 counts = 3;
+	bool intersectDest = 4;
 }
 
 message Sort {
