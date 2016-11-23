@@ -40,7 +40,10 @@ import (
 )
 
 var (
-	E_TMP_ERROR  = fmt.Errorf("Temporary Error. Please retry.")
+	// ErrRetry can be triggered if the posting list got deleted from memory due to a hard commit.
+	// In such a case, retry.
+	ErrRetry = fmt.Errorf("Temporary Error. Please retry.")
+	// ErrNoValue would be returned if no value was found in the posting list.
 	ErrNoValue   = fmt.Errorf("No value found")
 	emptyPosting = &types.Posting{}
 )
@@ -344,7 +347,7 @@ func (l *List) AddMutation(ctx context.Context, t x.DirectedEdge, op uint32) (bo
 	l.wg.Wait()
 	if atomic.LoadInt32(&l.deleteMe) == 1 {
 		x.TraceError(ctx, x.Errorf("DELETEME set to true. Temporary error."))
-		return false, E_TMP_ERROR
+		return false, ErrRetry
 	}
 
 	// All edges with a value set, have the same uid. In other words,
