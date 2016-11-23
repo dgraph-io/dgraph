@@ -510,8 +510,9 @@ func (l *List) commit() (committed bool, rerr error) {
 		h.Write([]byte(p.Label))
 		count++
 
-		// TODO: Is it okay to just take the pointer of iterator here?
-		// TODO: Also remove op from posting.
+		// I think it's okay to take the pointer from the iterator, because we have a lock
+		// over List; which won't be released until final has been marshalled. Thus, the
+		// underlying data wouldn't be changed.
 		final.Postings = append(final.Postings, p)
 		return true
 	})
