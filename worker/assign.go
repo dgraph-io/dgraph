@@ -59,11 +59,10 @@ func assignUids(ctx context.Context, num *task.Num) (*task.List, error) {
 
 	for _, uid := range num.Uids {
 		mutations.Set = append(mutations.Set, &task.DirectedEdge{
-			Entity:    uid,
-			Attr:      "_uid_",
-			Value:     []byte("_"), // not txid
-			Source:    "_XIDorUSER_",
-			Timestamp: x.CurrentTime(),
+			Entity: uid,
+			Attr:   "_uid_",
+			Value:  []byte("_"), // not txid
+			Label:  "_XIDorUSER_",
 		})
 	}
 

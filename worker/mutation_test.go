@@ -25,7 +25,6 @@ import (
 
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/task"
-	"github.com/dgraph-io/dgraph/x"
 )
 
 func TestAddToMutationArray(t *testing.T) {
@@ -38,9 +37,8 @@ func TestAddToMutationArray(t *testing.T) {
 	edges := []*task.DirectedEdge{}
 
 	edges = append(edges, &task.DirectedEdge{
-		Value:     []byte("set edge"),
-		Source:    "test-mutation",
-		Timestamp: x.CurrentTime(),
+		Value: []byte("set edge"),
+		Label: "test-mutation",
 	})
 
 	addToMutationMap(mutationsMap, edges, set)

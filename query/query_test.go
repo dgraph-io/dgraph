@@ -88,11 +88,10 @@ scalar loc:geo @index
 func addEdgeToValue(t *testing.T, ps *store.Store, attr string, src uint64,
 	value string) {
 	edge := &task.DirectedEdge{
-		Value:     []byte(value),
-		Source:    "testing",
-		Timestamp: x.CurrentTime(),
-		Attr:      attr,
-		Entity:    src,
+		Value:  []byte(value),
+		Label:  "testing",
+		Attr:   attr,
+		Entity: src,
 	}
 	l, _ := posting.GetOrCreate(posting.Key(src, attr))
 	require.NoError(t,
@@ -104,8 +103,7 @@ func addEdgeToTypedValue(t *testing.T, ps *store.Store, attr string, src uint64,
 	edge := &task.DirectedEdge{
 		Value:     value,
 		ValueType: uint32(typ),
-		Source:    "testing",
-		Timestamp: x.CurrentTime(),
+		Label:     "testing",
 		Attr:      attr,
 		Entity:    src,
 	}
@@ -116,11 +114,10 @@ func addEdgeToTypedValue(t *testing.T, ps *store.Store, attr string, src uint64,
 
 func addEdgeToUID(t *testing.T, ps *store.Store, attr string, src uint64, dst uint64) {
 	edge := &task.DirectedEdge{
-		ValueId:   dst,
-		Source:    "testing",
-		Timestamp: x.CurrentTime(),
-		Attr:      attr,
-		Entity:    src,
+		ValueId: dst,
+		Label:   "testing",
+		Attr:    attr,
+		Entity:  src,
 	}
 	l, _ := posting.GetOrCreate(posting.Key(src, attr))
 	require.NoError(t,

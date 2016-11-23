@@ -16,8 +16,8 @@ message Query {
 	string attr = 1;
 	int32 count = 2;       // Get this many elements.
 	int32 offset = 3;      // Skip this many elements.
-	fixed64 afterUid = 4;  // Only return UIDs greater than this.
-	bool doCount = 5;    // Are we just getting lengths?
+	fixed64 after_uid = 4;  // Only return UIDs greater than this.
+	bool do_count = 5;    // Are we just getting lengths?
 
 	// Exactly one of uids and terms is populated.
 	repeated fixed64 uids = 6;
@@ -25,24 +25,24 @@ message Query {
 
 	// Intersect results with this UID list. If uids is populated, then this is
 	// an "intersection query". If terms is populated, this is a "filter query".
-	repeated fixed64 toIntersect = 8;
+	repeated fixed64 to_intersect = 8;
 }
 
 message Result {
-	repeated List uidMatrix = 1;
+	repeated List uid_matrix = 1;
 	repeated Value values = 2;
 	repeated uint32 counts = 3;
 }
 
 message Sort {
 	string attr = 1;
-	repeated List uidMatrix = 2;
+	repeated List uid_matrix = 2;
 	int32 count = 3;   // Return this many elements.
 	int32 offset = 4;  // Skip this many elements.
 }
 
 message SortResult {
-	repeated List uidMatrix = 1;
+	repeated List uid_matrix = 1;
 }
 
 message Num {
@@ -66,7 +66,7 @@ message Membership {
 	string addr = 3;
 	bool leader = 4;
 	bool amDead = 5;
-	uint64 lastUpdate = 6;
+	uint64 last_update = 6;
 }
 
 // MembershipUpdate is used to pack together the current membership state of all the nodes
@@ -74,30 +74,29 @@ message Membership {
 // the provided lastUpdate.
 message MembershipUpdate {
 	repeated Membership members = 1;
-	uint64 lastUpdate = 2;
+	uint64 last_update = 2;
 
 	bool redirect = 3;
-	string redirectAddr = 4;
+	string redirect_addr = 4;
 }
 
 message DirectedEdge {
 	fixed64 entity = 1;    // Subject or source node / UID.
 	string attr = 2;       // Attribute or predicate. Labels the edge.
 	bytes value = 3;       // Edge points to a value.
-	uint32 valueType = 4;  // The type of the value
-	fixed64 valueId = 5;   // Object or destination node / UID.
-	string source = 6;
-	bytes timestamp = 7;
+	uint32 value_type = 4;  // The type of the value
+	fixed64 value_id = 5;   // Object or destination node / UID.
+	string label = 6;
 }
 
 message Mutations {
-	uint32 groupId = 1;
+	uint32 group_id = 1;
 	repeated DirectedEdge set = 2;
 	repeated DirectedEdge del = 3;
 }
 
 message Proposal {
-	uint32 proposalId = 1;
+	uint32 id = 1;
 	Mutations mutations = 2;
 	Membership membership = 3;
 }

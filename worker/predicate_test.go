@@ -27,7 +27,6 @@ import (
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/task"
-	"github.com/dgraph-io/dgraph/x"
 )
 
 func checkShard(ps *store.Store) (int, []byte) {
@@ -48,9 +47,8 @@ func writePLs(t *testing.T, count int, vid uint64, ps *store.Store) {
 		list, _ := posting.GetOrCreate([]byte(k))
 
 		de := &task.DirectedEdge{
-			ValueId:   vid,
-			Source:    "test",
-			Timestamp: x.CurrentTime(),
+			ValueId: vid,
+			Label:   "test",
 		}
 		list.AddMutation(context.TODO(), de, posting.Set)
 		if merged, err := list.CommitIfDirty(context.TODO()); err != nil {

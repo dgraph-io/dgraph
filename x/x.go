@@ -22,7 +22,6 @@ import (
 	"flag"
 	"fmt"
 	"net/http"
-	"time"
 
 	"github.com/Sirupsen/logrus"
 	"golang.org/x/net/trace"
@@ -113,11 +112,4 @@ func Trace(ctx context.Context, format string, args ...interface{}) {
 		return
 	}
 	tr.LazyPrintf(format, args...)
-}
-
-// CurrentTime returns the current time encoded.
-func CurrentTime() []byte {
-	data, err := time.Now().MarshalBinary()
-	Check(err)
-	return data
 }

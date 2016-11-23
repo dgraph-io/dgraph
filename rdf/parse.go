@@ -28,7 +28,6 @@ import (
 	"github.com/dgraph-io/dgraph/lex"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/types"
-	"github.com/dgraph-io/dgraph/x"
 )
 
 var emptyEdge task.DirectedEdge
@@ -62,10 +61,9 @@ func (nq NQuad) ToEdge() (*task.DirectedEdge, error) {
 	}
 
 	out := &task.DirectedEdge{
-		Attr:      nq.Predicate,
-		Source:    nq.Label,
-		Timestamp: x.CurrentTime(),
-		Entity:    sid,
+		Attr:   nq.Predicate,
+		Label:  nq.Label,
+		Entity: sid,
 	}
 
 	// An edge can have an id or a value.
@@ -98,10 +96,9 @@ func (nq NQuad) ToEdgeUsing(newToUid map[string]uint64) (*task.DirectedEdge, err
 	}
 
 	out := &task.DirectedEdge{
-		Entity:    uid,
-		Attr:      nq.Predicate,
-		Source:    nq.Label,
-		Timestamp: x.CurrentTime(),
+		Entity: uid,
+		Attr:   nq.Predicate,
+		Label:  nq.Label,
 	}
 
 	if len(nq.ObjectId) == 0 {

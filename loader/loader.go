@@ -197,11 +197,10 @@ func (s *state) parseStream(wg *sync.WaitGroup) {
 }
 func markTaken(ctx context.Context, uid uint64) {
 	mu := &task.DirectedEdge{
-		Entity:    uid,
-		Attr:      "_uid_",
-		Value:     []byte("_"), // not txid
-		Source:    "_loader_",
-		Timestamp: x.CurrentTime(),
+		Entity: uid,
+		Attr:   "_uid_",
+		Value:  []byte("_"), // not txid
+		Label:  "_loader_",
 	}
 	key := posting.Key(uid, "_uid_")
 	plist, decr := posting.GetOrCreate(key)

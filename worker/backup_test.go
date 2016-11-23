@@ -18,15 +18,13 @@ import (
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/task"
-	"github.com/dgraph-io/dgraph/x"
 )
 
 func populateGraphBackup(t *testing.T) {
 	edge := &task.DirectedEdge{
-		ValueId:   5,
-		Source:    "author0",
-		Timestamp: x.CurrentTime(),
-		Attr:      "friend",
+		ValueId: 5,
+		Label:   "author0",
+		Attr:    "friend",
 	}
 	edge.Entity = 1
 	addEdge(t, edge, getOrCreate(posting.Key(1, "friend")))

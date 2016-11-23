@@ -50,10 +50,10 @@ func getOrCreate(key []byte) *posting.List {
 
 func populateGraph(t *testing.T) {
 	edge := &task.DirectedEdge{
-		ValueId:   23,
-		Source:    "author0",
-		Timestamp: x.CurrentTime(),
-		Attr:      "friend",
+		ValueId: 23,
+		Label:   "author0",
+
+		Attr: "friend",
 	}
 	edge.Entity = 10
 	addEdge(t, edge, getOrCreate(posting.Key(10, "friend")))
@@ -155,11 +155,11 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 	// Now try changing 12's friend value from "photon" to "notphoton_extra" to
 	// "notphoton".
 	edge := &task.DirectedEdge{
-		Value:     []byte("notphoton_extra"),
-		Source:    "author0",
-		Timestamp: x.CurrentTime(),
-		Attr:      "friend",
-		Entity:    12,
+		Value: []byte("notphoton_extra"),
+		Label: "author0",
+
+		Attr:   "friend",
+		Entity: 12,
 	}
 	addEdge(t, edge, getOrCreate(posting.Key(12, "friend")))
 	edge.Value = []byte("notphoton")
@@ -180,11 +180,11 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 
 	// Try deleting.
 	edge = &task.DirectedEdge{
-		Value:     []byte("photon"),
-		Source:    "author0",
-		Timestamp: x.CurrentTime(),
-		Attr:      "friend",
-		Entity:    10,
+		Value: []byte("photon"),
+		Label: "author0",
+
+		Attr:   "friend",
+		Entity: 10,
 	}
 	// Redundant deletes.
 	delEdge(t, edge, getOrCreate(posting.Key(10, "friend")))
@@ -246,11 +246,11 @@ func TestProcessTaskIndex(t *testing.T) {
 	// Now try changing 12's friend value from "photon" to "notphoton_extra" to
 	// "notphoton".
 	edge := &task.DirectedEdge{
-		Value:     []byte("notphoton_extra"),
-		Source:    "author0",
-		Timestamp: x.CurrentTime(),
-		Attr:      "friend",
-		Entity:    12,
+		Value: []byte("notphoton_extra"),
+		Label: "author0",
+
+		Attr:   "friend",
+		Entity: 12,
 	}
 	addEdge(t, edge, getOrCreate(posting.Key(12, "friend")))
 	edge.Value = []byte("notphoton")
@@ -274,11 +274,11 @@ func TestProcessTaskIndex(t *testing.T) {
 
 	// Try deleting.
 	edge = &task.DirectedEdge{
-		Value:     []byte("photon"),
-		Source:    "author0",
-		Timestamp: x.CurrentTime(),
-		Attr:      "friend",
-		Entity:    10,
+		Value: []byte("photon"),
+		Label: "author0",
+
+		Attr:   "friend",
+		Entity: 10,
 	}
 	// Redundant deletes.
 	delEdge(t, edge, getOrCreate(posting.Key(10, "friend")))
@@ -306,9 +306,9 @@ func TestProcessTaskIndex(t *testing.T) {
 
 func populateGraphForSort(t *testing.T, ps *store.Store) {
 	edge := &task.DirectedEdge{
-		Source:    "author1",
-		Timestamp: x.CurrentTime(),
-		Attr:      "dob",
+		Label: "author1",
+
+		Attr: "dob",
 	}
 
 	dobs := []string{

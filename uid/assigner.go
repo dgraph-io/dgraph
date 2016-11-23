@@ -113,11 +113,10 @@ func AssignNew(N int, instanceIdx uint64, numInstances uint64) *task.Mutations {
 	for i := 0; i < N; i++ {
 		uid := allocateUniqueUid(instanceIdx, numInstances)
 		set[i] = &task.DirectedEdge{
-			Entity:    uid,
-			Attr:      "_uid_",
-			Value:     []byte("_"), // not txid
-			Source:    "_assigner_",
-			Timestamp: x.CurrentTime(),
+			Entity: uid,
+			Attr:   "_uid_",
+			Value:  []byte("_"), // not txid
+			Label:  "_assigner_",
 		}
 	}
 	return &task.Mutations{Set: set}

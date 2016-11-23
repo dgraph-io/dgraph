@@ -171,15 +171,11 @@ func newPosting(t *task.DirectedEdge, op uint32) *types.Posting {
 	x.AssertTruef(bytes.Equal(t.Value, nil) || t.ValueId == math.MaxUint64,
 		"This should have been set by the caller.")
 
-	var timestamp time.Time
-	x.Check(timestamp.UnmarshalBinary(t.Timestamp))
-
 	return &types.Posting{
 		Uid:     t.ValueId,
 		Value:   t.Value,
 		ValType: uint32(t.ValueType),
-		Label:   t.Source,
-		Commit:  uint64(timestamp.UnixNano()),
+		Label:   t.Label,
 		Op:      op,
 	}
 }

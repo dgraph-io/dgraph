@@ -119,10 +119,9 @@ func addIndexMutations(ctx context.Context, attr string, uid uint64,
 		return
 	}
 	edge := &task.DirectedEdge{
-		Timestamp: x.CurrentTime(),
-		ValueId:   uid,
-		Attr:      attr,
-		Source:    "idx",
+		ValueId: uid,
+		Attr:    attr,
+		Label:   "idx",
 	}
 
 	tokensTable := GetTokensTable(attr)

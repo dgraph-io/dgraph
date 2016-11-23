@@ -136,14 +136,14 @@ func (h *header) Decode(in []byte) {
 }
 
 func (n *node) ProposeAndWait(ctx context.Context, proposal *task.Proposal) error {
-	proposal.ProposalId = rand.Uint32()
+	proposal.Id = rand.Uint32()
 	proposalData, err := proposal.Marshal()
 	if err != nil {
 		return err
 	}
 
 	che := make(chan error, 1)
-	n.props.Store(proposal.ProposalId, che)
+	n.props.Store(proposal.Id, che)
 
 	if err = n.raft.Propose(ctx, proposalData); err != nil {
 		return x.Wrapf(err, "While proposing")
@@ -286,7 +286,7 @@ func (n *node) process(e raftpb.Entry) error {
 		} else if proposal.Membership != nil {
 			err = n.processMembership(e, proposal.Membership)
 		}
-		n.props.Done(proposal.ProposalId, err)
+		n.props.Done(proposal.Id, err)
 	}
 
 	return nil
