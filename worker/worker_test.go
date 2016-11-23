@@ -155,9 +155,8 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 	// Now try changing 12's friend value from "photon" to "notphoton_extra" to
 	// "notphoton".
 	edge := &task.DirectedEdge{
-		Value: []byte("notphoton_extra"),
-		Label: "author0",
-
+		Value:  []byte("notphoton_extra"),
+		Label:  "author0",
 		Attr:   "friend",
 		Entity: 12,
 	}
@@ -180,9 +179,8 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 
 	// Try deleting.
 	edge = &task.DirectedEdge{
-		Value: []byte("photon"),
-		Label: "author0",
-
+		Value:  []byte("photon"),
+		Label:  "author0",
 		Attr:   "friend",
 		Entity: 10,
 	}
@@ -274,9 +272,8 @@ func TestProcessTaskIndex(t *testing.T) {
 
 	// Try deleting.
 	edge = &task.DirectedEdge{
-		Value: []byte("photon"),
-		Label: "author0",
-
+		Value:  []byte("photon"),
+		Label:  "author0",
 		Attr:   "friend",
 		Entity: 10,
 	}
@@ -307,8 +304,7 @@ func TestProcessTaskIndex(t *testing.T) {
 func populateGraphForSort(t *testing.T, ps *store.Store) {
 	edge := &task.DirectedEdge{
 		Label: "author1",
-
-		Attr: "dob",
+		Attr:  "dob",
 	}
 
 	dobs := []string{

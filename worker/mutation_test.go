@@ -50,5 +50,4 @@ func TestAddToMutationArray(t *testing.T) {
 	mu = mutationsMap[0]
 	require.NotNil(t, mu)
 	require.NotNil(t, mu.Del)
-
 }
