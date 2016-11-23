@@ -35,7 +35,6 @@ import (
 	"github.com/dgraph-io/dgraph/query/graph"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/task"
-	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
@@ -503,79 +502,25 @@ func createNilValuesList(count int) []*task.Value {
 }
 
 // createTaskQuery generates the query buffer.
-func createTaskQuery(sg *SubGraph, tokens []string) *task.Query {
-	// TODO: Remove this concept of intersect, and move it to be processed in the dest server.
-	var uids *task.List
-	var intersect *task.List
-	if len(tokens) > 0 {
-		intersect = sg.SrcUIDs
-	} else {
-		uids = sg.SrcUIDs
-	}
+func createTaskQuery(sg *SubGraph) *task.Query {
 	out := &task.Query{
 		Attr:     sg.Attr,
-		Tokens:   tokens,
+		SrcFunc:  sg.SrcFunc,
 		Count:    int32(sg.Params.Count),
 		Offset:   int32(sg.Params.Offset),
 		AfterUid: sg.Params.AfterUID,
 		DoCount:  sg.Params.DoCount,
 	}
-	if uids != nil {
-		out.Uids = uids.Uids
-	}
-	if intersect != nil {
-		out.ToIntersect = intersect.Uids
+	if sg.SrcUIDs != nil {
+		out.Uids = sg.SrcUIDs.Uids
 	}
 	return out
-}
-
-func getTokens(term string) ([]string, error) {
-	tokenizer, err := tok.NewTokenizer([]byte(term))
-	if err != nil {
-		return nil, x.Errorf("Could not create tokenizer: %v", term)
-	}
-	defer tokenizer.Destroy()
-	return tokenizer.Tokens(), nil
 }
 
 // ProcessGraph processes the SubGraph instance accumulating result for the query
 // from different instances. Note: taskQuery is nil for root node.
 func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	var err error
-	var tokens []string
-	var intersectDestination bool
-
-	if len(sg.SrcFunc) > 0 {
-		if len(sg.SrcFunc) < 2 {
-			err = x.Errorf("Expected at least 2 arguments in function. Got: %v", sg.SrcFunc)
-			x.TraceError(ctx, err)
-			rch <- err
-			return
-		}
-
-		switch sg.SrcFunc[0] {
-		case "anyof":
-			// TODO: Why only one argument, why not multiple terms?
-			tokens, err = getTokens(sg.SrcFunc[1])
-			if err != nil {
-				x.TraceError(ctx, x.Wrap(err))
-				rch <- err
-				return
-			}
-			intersectDestination = false
-		case "allof":
-			tokens, err = getTokens(sg.SrcFunc[1])
-			if err != nil {
-				x.TraceError(ctx, x.Wrap(err))
-				rch <- err
-				return
-			}
-			intersectDestination = true
-			// TODO: Handle geo filtering, using two steps in SubGraph.
-		default:
-			x.Fatalf("Unhandled function: %v", sg.SrcFunc)
-		}
-	}
 
 	if len(sg.Attr) == 0 {
 		// If we have a filter SubGraph which only contains an operator,
@@ -589,7 +534,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		sg.DestUIDs = algo.MergeSorted(sg.uidMatrix) // Could also be = sg.SrcUIDs
 
 	} else {
-		taskQuery := createTaskQuery(sg, tokens)
+		taskQuery := createTaskQuery(sg)
 		result, err := worker.ProcessTaskOverNetwork(ctx, taskQuery)
 		if err != nil {
 			x.TraceError(ctx, x.Wrapf(err, "Error while processing task"))
@@ -610,11 +555,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			return
 		}
 
-		if intersectDestination {
-			sg.DestUIDs = algo.IntersectSorted(sg.uidMatrix)
-		} else {
-			sg.DestUIDs = algo.MergeSorted(sg.uidMatrix)
-		}
+		sg.DestUIDs = result.DestUids
 	}
 
 	if len(sg.DestUIDs.Uids) == 0 {
