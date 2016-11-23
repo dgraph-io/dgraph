@@ -39,7 +39,7 @@ import (
 func listToArray(t *testing.T, afterUid uint64, l *List) []uint64 {
 	out := make([]uint64, 0, 10)
 	l.Iterate(afterUid, func(p *types.Posting) bool {
-		out = append(out, p.Uid())
+		out = append(out, p.Uid)
 		return true
 	})
 	return out
@@ -54,7 +54,7 @@ func checkUids(t *testing.T, l *List, uids []uint64) {
 	}
 }
 
-func addMutation(t *testing.T, l *List, edge x.DirectedEdge, op byte) {
+func addMutation(t *testing.T, l *List, edge x.DirectedEdge, op uint32) {
 	_, err := l.AddMutation(context.Background(), edge, op)
 	require.NoError(t, err)
 }
@@ -99,7 +99,7 @@ func TestAddMutation(t *testing.T) {
 
 	p := getFirst(l)
 	require.NotNil(t, p, "Unable to retrieve posting")
-	require.EqualValues(t, p.Source(), "testing")
+	require.EqualValues(t, p.Label, "testing")
 
 	// Add another edge now.
 	edge.ValueId = 81
@@ -129,7 +129,7 @@ func TestAddMutation(t *testing.T) {
 
 	p = getFirst(l)
 	require.NotNil(t, p, "Unable to retrieve posting")
-	require.EqualValues(t, p.Source(), "anti-testing")
+	require.EqualValues(t, p.Label, "anti-testing")
 	l.CommitIfDirty(context.Background())
 
 	// Try reading the same data in another PostingList.
@@ -144,7 +144,6 @@ func TestAddMutation(t *testing.T) {
 }
 
 func getFirst(l *List) (res types.Posting) {
-	res = *types.GetRootAsPosting(emptyPosting, 0)
 	l.Iterate(0, func(p *types.Posting) bool {
 		res = *p
 		return false
@@ -154,8 +153,8 @@ func getFirst(l *List) (res types.Posting) {
 
 func checkValue(t *testing.T, ol *List, val string) {
 	p := getFirst(ol)
-	require.Equal(t, uint64(math.MaxUint64), p.Uid()) // Cast to prevent overflow.
-	require.EqualValues(t, val, p.ValueBytes())
+	require.Equal(t, uint64(math.MaxUint64), p.Uid) // Cast to prevent overflow.
+	require.EqualValues(t, val, p.Value)
 }
 
 func TestAddMutation_Value(t *testing.T) {
@@ -427,7 +426,7 @@ func TestAddMutation_mrjn1(t *testing.T) {
 }
 
 func TestAddMutation_checksum(t *testing.T) {
-	var c1, c2, c3 string
+	var c1, c2, c3 []byte
 
 	dir, err := ioutil.TempDir("", "storetest_")
 	require.NoError(t, err)
@@ -460,7 +459,7 @@ func TestAddMutation_checksum(t *testing.T) {
 		require.True(t, merged)
 
 		pl := ol.getPostingList()
-		c1 = string(pl.Checksum())
+		c1 = pl.Checksum
 	}
 
 	{
@@ -488,7 +487,7 @@ func TestAddMutation_checksum(t *testing.T) {
 		require.True(t, merged)
 
 		pl := ol.getPostingList()
-		c2 = string(pl.Checksum())
+		c2 = pl.Checksum
 	}
 	require.Equal(t, c1, c2)
 
@@ -524,7 +523,7 @@ func TestAddMutation_checksum(t *testing.T) {
 		require.True(t, merged)
 
 		pl := ol.getPostingList()
-		c3 = string(pl.Checksum())
+		c3 = pl.Checksum
 	}
 	require.NotEqual(t, c3, c1)
 }

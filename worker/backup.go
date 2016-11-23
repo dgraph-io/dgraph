@@ -30,34 +30,29 @@ type kv struct {
 
 func toRDF(buf *bytes.Buffer, item kv) {
 	pre := item.key
-	p := new(types.Posting)
-	pl := types.GetRootAsPostingList(item.value, 0)
+	var pl types.PostingList
+	x.Check(pl.Unmarshal(item.value))
 
-	for pidx := 0; pidx < pl.PostingsLength(); pidx++ {
-		x.AssertTruef(pl.Postings(p, pidx), "Unable to parse Posting at index: %v", pidx)
-		buf.Write(pre)
-		if p.Uid() == math.MaxUint64 && !bytes.Equal(p.ValueBytes(), nil) {
+	for _, p := range pl.Postings {
+		x.Check2(buf.Write(pre))
+
+		if p.Uid == math.MaxUint64 && !bytes.Equal(p.Value, nil) {
 			// Value posting
 			// Convert to appropriate type
-			val := p.ValueBytes()
-			typ := stype.ValueForType(stype.TypeID(p.ValType()))
-			x.Check(typ.UnmarshalBinary(val))
+			typ := stype.ValueForType(stype.TypeID(p.ValType))
+			x.Check(typ.UnmarshalBinary(p.Value))
 			str, err := typ.MarshalText()
 			x.Check(err)
 
-			_, err = buf.WriteString(fmt.Sprintf("%q", str))
-			x.Check(err)
-			if p.ValType() != 0 {
-				_, err = buf.WriteString(fmt.Sprintf("^^<xs:%s> ", typ.Type().Name))
-				x.Check(err)
+			x.Check2(buf.WriteString(fmt.Sprintf("%q", str)))
+			if p.ValType != 0 {
+				x.Check2(buf.WriteString(fmt.Sprintf("^^<xs:%s> ", typ.Type().Name)))
 			}
-			_, err = buf.WriteString(" .\n")
-			x.Check(err)
+			x.Check2(buf.WriteString(" .\n"))
 			break
 		}
 		// Uid list
-		destUID := p.Uid()
-		strUID := strconv.FormatUint(destUID, 16)
+		strUID := strconv.FormatUint(p.Uid, 16)
 
 		_, err := buf.WriteString(fmt.Sprintf("<_uid_:%s> .\n", strUID))
 		x.Check(err)
