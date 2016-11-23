@@ -62,7 +62,7 @@ func assignUids(ctx context.Context, num *task.Num) (*task.List, error) {
 			Entity: uid,
 			Attr:   "_uid_",
 			Value:  []byte("_"), // not txid
-			Label:  "_XIDorUSER_",
+			Label:  "A",
 		})
 	}
 

@@ -126,12 +126,12 @@ func TestProcessTask(t *testing.T) {
 }
 
 // newQuery creates a Query task and returns it.
-func newQuery(attr string, uids []uint64, tokens []string) *task.Query {
-	x.AssertTrue(uids == nil || tokens == nil)
+func newQuery(attr string, uids []uint64, srcFunc []string) *task.Query {
+	x.AssertTrue(uids == nil || srcFunc == nil)
 	return &task.Query{
-		Uids:   uids,
-		Tokens: tokens,
-		Attr:   attr,
+		Uids:    uids,
+		SrcFunc: srcFunc,
+		Attr:    attr,
 	}
 }
 
@@ -143,7 +143,7 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 	defer os.RemoveAll(dir)
 	defer ps.Close()
 
-	query := newQuery("friend", nil, []string{"hey", "photon"})
+	query := newQuery("friend", nil, []string{"anyof", "hey photon"})
 	r, err := processTask(query)
 	require.NoError(t, err)
 
@@ -152,10 +152,10 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 		[]uint64{10, 12},
 	}, algo.ToUintsListForTest(r.UidMatrix))
 
-	// Now try changing 12's friend value from "photon" to "notphoton_extra" to
+	// Now try changing 12's friend value from "photon" to "notphotonExtra" to
 	// "notphoton".
 	edge := &task.DirectedEdge{
-		Value:  []byte("notphoton_extra"),
+		Value:  []byte("notphotonExtra"),
 		Label:  "author0",
 		Attr:   "friend",
 		Entity: 12,
@@ -166,7 +166,7 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
 
 	// Issue a similar query.
-	query = newQuery("friend", nil, []string{"hey", "photon", "notphoton", "notphoton_extra"})
+	query = newQuery("friend", nil, []string{"anyof", "hey photon notphoton notphotonExtra"})
 	r, err = processTask(query)
 	require.NoError(t, err)
 
@@ -197,7 +197,7 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
 
 	// Issue a similar query.
-	query = newQuery("friend", nil, []string{"photon", "notphoton", "ignored"})
+	query = newQuery("friend", nil, []string{"anyof", "photon notphoton ignored"})
 	r, err = processTask(query)
 	require.NoError(t, err)
 
@@ -211,7 +211,7 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 	posting.MergeLists(10)
 	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
 
-	query = newQuery("friend", nil, []string{"photon", "notphoton", "ignored"})
+	query = newQuery("friend", nil, []string{"anyof", "photon notphoton ignored"})
 	r, err = processTask(query)
 	require.NoError(t, err)
 
@@ -229,7 +229,7 @@ func TestProcessTaskIndex(t *testing.T) {
 	defer os.RemoveAll(dir)
 	defer ps.Close()
 
-	query := newQuery("friend", nil, []string{"hey", "photon"})
+	query := newQuery("friend", nil, []string{"anyof", "hey photon"})
 	r, err := processTask(query)
 	require.NoError(t, err)
 
@@ -241,12 +241,11 @@ func TestProcessTaskIndex(t *testing.T) {
 	posting.MergeLists(10)
 	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
 
-	// Now try changing 12's friend value from "photon" to "notphoton_extra" to
+	// Now try changing 12's friend value from "photon" to "notphotonExtra" to
 	// "notphoton".
 	edge := &task.DirectedEdge{
-		Value: []byte("notphoton_extra"),
-		Label: "author0",
-
+		Value:  []byte("notphotonExtra"),
+		Label:  "author0",
 		Attr:   "friend",
 		Entity: 12,
 	}
@@ -256,7 +255,7 @@ func TestProcessTaskIndex(t *testing.T) {
 	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
 
 	// Issue a similar query.
-	query = newQuery("friend", nil, []string{"hey", "photon", "notphoton", "notphoton_extra"})
+	query = newQuery("friend", nil, []string{"anyof", "hey photon notphoton notphotonExtra"})
 	r, err = processTask(query)
 	require.NoError(t, err)
 
@@ -290,7 +289,7 @@ func TestProcessTaskIndex(t *testing.T) {
 	time.Sleep(200 * time.Millisecond) // Let indexing finish.
 
 	// Issue a similar query.
-	query = newQuery("friend", nil, []string{"photon", "notphoton", "ignored"})
+	query = newQuery("friend", nil, []string{"anyof", "photon notphoton ignored"})
 	r, err = processTask(query)
 	require.NoError(t, err)
 
