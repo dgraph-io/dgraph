@@ -140,9 +140,10 @@ func backup(gid uint32, bdir string) error {
 		cidx := bytes.IndexRune(key, ':')
 		if cidx > -1 {
 			// Seek to the end of index keys.
-			pre := make([]byte, cidx+1)
-			copy(pre, key)
-			pre = append(pre, '~')
+			// NOTE: We can't directly assign pre to key, because key is pointing to unsafe C array.
+			pre := make([]byte, cidx+2)
+			copy(pre[0:cidx+1], key)
+			pre[cidx+1] = '~'
 			it.Seek(pre)
 			continue
 		}
