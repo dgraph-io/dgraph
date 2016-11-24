@@ -249,7 +249,7 @@ func (n *node) processMembership(e raftpb.Entry, mm *task.Membership) error {
 	x.AssertTrue(n.gid == 0)
 
 	x.Printf("group: %v Addr: %q leader: %v dead: %v\n",
-		mm.Group, mm.Addr, mm.Leader, mm.AmDead)
+		mm.GroupId, mm.Addr, mm.Leader, mm.AmDead)
 	groups().applyMembershipUpdate(e.Index, mm)
 	return nil
 }

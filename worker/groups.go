@@ -260,10 +260,10 @@ func (g *groupi) syncMemberships() {
 
 			go func(rc *task.RaftContext, amleader bool) {
 				mm := &task.Membership{
-					Leader: amleader,
-					Id:     rc.Id,
-					Group:  rc.Group,
-					Addr:   rc.Addr,
+					Leader:  amleader,
+					Id:      rc.Id,
+					GroupId: rc.Group,
+					Addr:    rc.Addr,
 				}
 				zero := groups().Node(0)
 				x.Check(zero.ProposeAndWait(zero.ctx, &task.Proposal{Membership: mm}))
@@ -282,10 +282,10 @@ func (g *groupi) syncMemberships() {
 			rc := n.raftContext
 			mu.Members = append(mu.Members,
 				&task.Membership{
-					Leader: n.AmLeader(),
-					Id:     rc.Id,
-					Group:  rc.Group,
-					Addr:   rc.Addr,
+					Leader:  n.AmLeader(),
+					Id:      rc.Id,
+					GroupId: rc.Group,
+					Addr:    rc.Addr,
 				})
 		}
 		mu.LastUpdate = g.lastUpdate
@@ -374,10 +374,10 @@ func (g *groupi) applyMembershipUpdate(raftIdx uint64, mm *task.Membership) {
 		g.all = make(map[uint32]*servers)
 	}
 
-	sl := g.all[mm.Group]
+	sl := g.all[mm.GroupId]
 	if sl == nil {
 		sl = new(servers)
-		g.all[mm.Group] = sl
+		g.all[mm.GroupId] = sl
 	}
 
 	for {
@@ -432,10 +432,10 @@ func (g *groupi) MembershipUpdateAfter(ridx uint64) *task.MembershipUpdate {
 			}
 			out.Members = append(out.Members,
 				&task.Membership{
-					Leader: s.Leader,
-					Id:     s.NodeId,
-					Group:  gid,
-					Addr:   s.Addr,
+					Leader:  s.Leader,
+					Id:      s.NodeId,
+					GroupId: gid,
+					Addr:    s.Addr,
 				})
 		}
 	}
@@ -463,16 +463,16 @@ func (w *grpcWorker) UpdateMembership(ctx context.Context,
 
 	che := make(chan error, len(update.Members))
 	for _, mm := range update.Members {
-		if groups().isDuplicate(mm.Group, mm.Id, mm.Addr, mm.Leader) {
+		if groups().isDuplicate(mm.GroupId, mm.Id, mm.Addr, mm.Leader) {
 			che <- nil
 			continue
 		}
 
 		mmNew := &task.Membership{
-			Leader: mm.Leader,
-			Id:     mm.Id,
-			Group:  mm.Group,
-			Addr:   mm.Addr,
+			Leader:  mm.Leader,
+			Id:      mm.Id,
+			GroupId: mm.GroupId,
+			Addr:    mm.Addr,
 		}
 
 		go func(mmNew *task.Membership) {
