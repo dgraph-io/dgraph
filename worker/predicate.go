@@ -76,16 +76,31 @@ func generateGroup(group uint32) (*task.GroupKeys, error) {
 	}
 
 	for it.SeekToFirst(); it.Valid(); it.Next() {
-		// TODO: Check if this key belongs to the group.
 		k, v := it.Key(), it.Value()
+		if idx := bytes.IndexAny(k.Data(), ":|"); idx == -1 {
+			continue
+		} else {
+			pred := string(k.Data()[:idx])
+			if group.BelongsTo(pred) != gkeys.GroupId {
+				pred += "~"
+				it.Seek([]byte(pred)) // Skip over this predicate entirely.
+				it.Prev()             // To tackle it.Next() called by default.
+				continue
+			}
+		}
+
 		var pl types.PostingList
 		x.Check(pl.Unmarshal(v.Data()))
 
+		kdup := make([]byte, len(k.Data()))
+		copy(kdup, k.Data())
 		key := &task.KC{
-			Key:      k.Data(),
+			Key:      kdup,
 			Checksum: pl.Checksum,
 		}
 		g.Keys = append(g.Keys, key)
+		k.Free()
+		v.Free()
 	}
 	return g, it.Err()
 }
