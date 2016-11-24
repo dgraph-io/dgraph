@@ -21,7 +21,7 @@ message Query {
 
 	// Exactly one of uids and terms is populated.
 	repeated fixed64 uids = 6;
-	
+
 	// Function to generate or filter UIDs.
 	repeated string src_func = 7;
 }
@@ -111,6 +111,6 @@ message KC {
 }
 
 message GroupKeys {
-	uint64 group_id = 1;
+	uint32 group_id = 1;
 	repeated KC keys = 2;
 }

@@ -61,7 +61,8 @@ func groups() *groupi {
 
 // StartRaftNodes will read the WAL dir, create the RAFT groups,
 // and either start or restart RAFT nodes.
-// This function triggers RAFT nodes to be created.
+// This function triggers RAFT nodes to be created, and is the entrace to the RAFT
+// world from main.go.
 func StartRaftNodes(walDir string) {
 	gr = new(groupi)
 	gr.ctx, gr.cancel = context.WithCancel(context.Background())
@@ -81,9 +82,9 @@ func StartRaftNodes(walDir string) {
 		// itself in the memberships; and hence this node would think that no one is handling
 		// group zero. Therefore, we MUST wait to get pass a last update raft index of zero.
 		for gr.LastUpdate() == 0 {
+			time.Sleep(time.Second)
 			fmt.Println("Last update raft index for membership information is zero. Syncing...")
 			gr.syncMemberships()
-			time.Sleep(time.Second)
 		}
 		fmt.Printf("Last update is now: %d\n", gr.LastUpdate())
 	}

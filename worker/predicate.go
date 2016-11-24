@@ -22,6 +22,7 @@ import (
 	"io"
 	"sort"
 
+	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting/types"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/x"
@@ -66,7 +67,7 @@ func writeBatch(ctx context.Context, kv chan *task.KV, che chan error) {
 	che <- nil
 }
 
-func generateGroup(group uint64) (*task.GroupKeys, error) {
+func generateGroup(group uint32) (*task.GroupKeys, error) {
 	it := pstore.NewIterator()
 	defer it.Close()
 
@@ -76,7 +77,6 @@ func generateGroup(group uint64) (*task.GroupKeys, error) {
 
 	for it.SeekToFirst(); it.Valid(); it.Next() {
 		// TODO: Check if this key belongs to the group.
-
 		k, v := it.Key(), it.Value()
 		var pl types.PostingList
 		x.Check(pl.Unmarshal(v.Data()))
@@ -92,7 +92,7 @@ func generateGroup(group uint64) (*task.GroupKeys, error) {
 
 // PopulateShard gets data for predicate pred from server with id serverId and
 // writes it to RocksDB.
-func populateShard(ctx context.Context, pl *pool, group uint64) (int, error) {
+func populateShard(ctx context.Context, pl *pool, group uint32) (int, error) {
 	gkeys, err := generateGroup(group)
 	if err != nil {
 		return 0, x.Wrapf(err, "While generating keys group")
@@ -154,8 +154,14 @@ func populateShard(ctx context.Context, pl *pool, group uint64) (int, error) {
 
 // PredicateData can be used to return data corresponding to a predicate over
 // a stream.
-func (w *grpcWorker) PredicateData(group *task.GroupKeys, stream Worker_PredicateDataServer) error {
-	// TODO: Use group id.
+func (w *grpcWorker) PredicateData(gkeys *task.GroupKeys, stream Worker_PredicateDataServer) error {
+	if !groups().ServesGroup(gkeys.GroupId) {
+		return x.Errorf("Group %d not served.", gkeys.GroupId)
+	}
+	n := groups().Node(gkeys.GroupId)
+	if !n.AmLeader() {
+		return x.Errorf("Not leader of group: %d", gkeys.GroupId)
+	}
 
 	// TODO(pawan) - Shift to CheckPoints once we figure out how to add them to the
 	// RocksDB library we are using.
@@ -165,18 +171,29 @@ func (w *grpcWorker) PredicateData(group *task.GroupKeys, stream Worker_Predicat
 
 	for it.SeekToFirst(); it.Valid(); it.Next() {
 		k, v := it.Key(), it.Value()
+		if idx := bytes.IndexAny(k.Data(), ":|"); idx == -1 {
+			continue
+		} else {
+			pred := string(k.Data()[:idx])
+			if group.BelongsTo(pred) != gkeys.GroupId {
+				pred += "~"
+				it.Seek([]byte(pred)) // Skip over this predicate entirely.
+				it.Prev()             // To tackle it.Next() called by default.
+				continue
+			}
+		}
+
 		var pl types.PostingList
 		x.Check(pl.Unmarshal(v.Data()))
 
-		// TODO: Check that key is part of the specified group id.
-		idx := sort.Search(len(group.Keys), func(i int) bool {
-			t := group.Keys[i]
+		idx := sort.Search(len(gkeys.Keys), func(i int) bool {
+			t := gkeys.Keys[i]
 			return bytes.Compare(k.Data(), t.Key) <= 0
 		})
 
-		if idx < len(group.Keys) {
+		if idx < len(gkeys.Keys) {
 			// Found a match.
-			t := group.Keys[idx]
+			t := gkeys.Keys[idx]
 			// Different keys would have the same prefix. So, check Checksum first,
 			// it would be cheaper when there's no match.
 			if bytes.Equal(pl.Checksum, t.Checksum) && bytes.Equal(k.Data(), t.Key) {
@@ -195,7 +212,8 @@ func (w *grpcWorker) PredicateData(group *task.GroupKeys, stream Worker_Predicat
 		}
 		k.Free()
 		v.Free()
-	}
+	} // end of iterator
+
 	if err := it.Err(); err != nil {
 		return err
 	}
