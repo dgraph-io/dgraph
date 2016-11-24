@@ -17,6 +17,8 @@
 package worker
 
 import (
+	"strings"
+
 	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/dgraph/algo"
@@ -84,7 +86,7 @@ func processTask(q *task.Query) (*task.Result, error) {
 	if useFunc {
 		// Tokenize here.
 		tokens, geoQuery, err = getTokens(q.SrcFunc)
-		intersectDest = (q.SrcFunc[0] == "allof")
+		intersectDest = (strings.ToLower(q.SrcFunc[0]) == "allof")
 		if err != nil {
 			return nil, err
 		}

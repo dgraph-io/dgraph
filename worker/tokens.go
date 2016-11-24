@@ -2,6 +2,7 @@ package worker
 
 import (
 	"bytes"
+	"strings"
 
 	"github.com/dgraph-io/dgraph/geo"
 	"github.com/dgraph-io/dgraph/task"
@@ -12,20 +13,45 @@ import (
 
 func getTokens(funcArgs []string) ([]string, *geo.QueryData, error) {
 	x.AssertTruef(len(funcArgs) > 1, "Invalid function")
-	switch funcArgs[0] {
+	funcName := strings.ToLower(funcArgs[0])
+	switch funcName {
 	case "anyof":
+		if len(funcArgs) != 2 {
+			return nil, nil, x.Errorf("anyof function requires 2 arguments, but got %d",
+				len(funcArgs))
+		}
 		tok, err := getStringTokens(funcArgs[1])
 		return tok, nil, err
 	case "allof":
+		if len(funcArgs) != 2 {
+			return nil, nil, x.Errorf("allof function requires 2 arguments, but got %d",
+				len(funcArgs))
+		}
 		tok, err := getStringTokens(funcArgs[1])
 		return tok, nil, err
 	case "near":
+		if len(funcArgs) != 3 {
+			return nil, nil, x.Errorf("near function requires 3 arguments, but got %d",
+				len(funcArgs))
+		}
 		return geo.QueryTokens(geo.QueryTypeNear, funcArgs[1], funcArgs[2])
 	case "within":
+		if len(funcArgs) != 2 {
+			return nil, nil, x.Errorf("within function requires 2 arguments, but got %d",
+				len(funcArgs))
+		}
 		return geo.QueryTokens(geo.QueryTypeWithin, funcArgs[1], "0")
 	case "contains":
+		if len(funcArgs) != 2 {
+			return nil, nil, x.Errorf("contains function requires 2 arguments, but got %d",
+				len(funcArgs))
+		}
 		return geo.QueryTokens(geo.QueryTypeContains, funcArgs[1], "0")
 	case "intersects":
+		if len(funcArgs) != 2 {
+			return nil, nil, x.Errorf("intersects function requires 2 arguments, but got %d",
+				len(funcArgs))
+		}
 		return geo.QueryTokens(geo.QueryTypeIntersects, funcArgs[1], "0")
 	default:
 		return nil, nil, x.Errorf("Invalid function")
