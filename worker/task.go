@@ -135,6 +135,7 @@ func processTask(q *task.Query) (*task.Result, error) {
 		out.UidMatrix = append(out.UidMatrix, pl.Uids(opts))
 	}
 
+	// If geo filter, do value check for correctness.
 	var values []*task.Value
 	if geoQuery != nil {
 		uids := algo.MergeSorted(out.UidMatrix)
