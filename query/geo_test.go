@@ -18,7 +18,6 @@ package query
 
 import (
 	"context"
-	"encoding/json"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -86,7 +85,7 @@ func createTestData(t *testing.T, ps *store.Store) {
 	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
 }
 
-func runQuery(t *testing.T, gq *gql.GraphQuery) interface{} {
+func runQuery(t *testing.T, gq *gql.GraphQuery) string {
 	ctx := context.Background()
 	ch := make(chan error)
 
@@ -100,10 +99,7 @@ func runQuery(t *testing.T, gq *gql.GraphQuery) interface{} {
 	js, err := sg.ToJSON(&l)
 	require.NoError(t, err)
 
-	var v interface{}
-	err = json.Unmarshal(js, &v)
-	require.NoError(t, err)
-	return v
+	return string(js)
 }
 
 func TestWithinPoint(t *testing.T) {
@@ -119,11 +115,10 @@ func TestWithinPoint(t *testing.T) {
 	}
 
 	mp := runQuery(t, gq)
-	expected := map[string]interface{}{"me": []interface{}{map[string]interface{}{"name": "Googleplex"}}}
-	require.Equal(t, expected, mp)
+	expected := `{"me":[{"name":"Googleplex"}]}`
+	require.JSONEq(t, expected, mp)
 }
 
-/*
 func TestWithinPolygon(t *testing.T) {
 	dir, ps := createTestStore(t)
 	defer os.RemoveAll(dir)
@@ -132,22 +127,16 @@ func TestWithinPolygon(t *testing.T) {
 	createTestData(t, ps)
 
 	gq := &gql.GraphQuery{
-		Attr: "me",
-		Gen: &gql.Generator{FuncName: "within", FuncArgs: []string{
-			"geometry",
+		Alias: "me",
+		Func: &gql.Function{Attr: "geometry", Name: "within", Args: []string{
 			`{"Type":"Polygon", "Coordinates":[[[-122.06, 37.37], [-122.1, 37.36], [-122.12, 37.4], [-122.11, 37.43], [-122.04, 37.43], [-122.06, 37.37]]]}`},
 		},
 		Children: []*gql.GraphQuery{&gql.GraphQuery{Attr: "name"}},
 	}
 
 	mp := runQuery(t, gq)
-	expected := []string{"Googleplex", "Shoreline Amphitheater"}
-	require.Equal(t, 2, len(mp.([]interface{})))
-	require.Contains(t, expected,
-		mp.([]interface{})[0].(map[string]interface{})["me"].([]interface{})[0].(map[string]interface{})["name"].(string))
-	require.Contains(t, expected,
-		mp.([]interface{})[1].(map[string]interface{})["me"].([]interface{})[0].(map[string]interface{})["name"].(string))
-
+	expected := `{"me":[{"name":"Googleplex"},{"name":"Shoreline Amphitheater"}]}`
+	require.JSONEq(t, expected, mp)
 }
 
 func TestContainsPoint(t *testing.T) {
@@ -157,22 +146,16 @@ func TestContainsPoint(t *testing.T) {
 
 	createTestData(t, ps)
 	gq := &gql.GraphQuery{
-		Attr: "me",
-		Gen: &gql.Generator{FuncName: "contains", FuncArgs: []string{
-			"geometry",
+		Alias: "me",
+		Func: &gql.Function{Attr: "geometry", Name: "contains", Args: []string{
 			`{"Type":"Point", "Coordinates":[-122.082506, 37.4249518]}`},
 		},
 		Children: []*gql.GraphQuery{&gql.GraphQuery{Attr: "name"}},
 	}
 
 	mp := runQuery(t, gq)
-	expected := []string{"Mountain View", "SF Bay area"}
-	require.Equal(t, 2, len(mp.([]interface{})))
-	require.Contains(t, expected,
-		mp.([]interface{})[0].(map[string]interface{})["me"].([]interface{})[0].(map[string]interface{})["name"].(string))
-	require.Contains(t, expected,
-		mp.([]interface{})[1].(map[string]interface{})["me"].([]interface{})[0].(map[string]interface{})["name"].(string))
-
+	expected := `{"me":[{"name":"SF Bay area"},{"name":"Mountain View"}]}`
+	require.JSONEq(t, expected, mp)
 }
 
 func TestNearPoint(t *testing.T) {
@@ -182,19 +165,14 @@ func TestNearPoint(t *testing.T) {
 
 	createTestData(t, ps)
 	gq := &gql.GraphQuery{
-		Attr:     "me",
-		Gen:      &gql.Generator{FuncName: "near", FuncArgs: []string{"geometry", `{"Type":"Point", "Coordinates":[-122.082506, 37.4249518]}`, "1000"}},
+		Alias:    "me",
+		Func:     &gql.Function{Attr: "geometry", Name: "near", Args: []string{`{"Type":"Point", "Coordinates":[-122.082506, 37.4249518]}`, "1000"}},
 		Children: []*gql.GraphQuery{&gql.GraphQuery{Attr: "name"}},
 	}
 
 	mp := runQuery(t, gq)
-	expected := []string{"Googleplex", "Shoreline Amphitheater"}
-	require.Equal(t, 2, len(mp.([]interface{})))
-	require.Contains(t, expected,
-		mp.([]interface{})[0].(map[string]interface{})["me"].([]interface{})[0].(map[string]interface{})["name"].(string))
-	require.Contains(t, expected,
-		mp.([]interface{})[1].(map[string]interface{})["me"].([]interface{})[0].(map[string]interface{})["name"].(string))
-
+	expected := `{"me":[{"name":"Googleplex"},{"name":"Shoreline Amphitheater"}]}`
+	require.JSONEq(t, expected, mp)
 }
 
 func TestIntersectsPolygon1(t *testing.T) {
@@ -204,11 +182,11 @@ func TestIntersectsPolygon1(t *testing.T) {
 
 	createTestData(t, ps)
 	gq := &gql.GraphQuery{
-		Attr: "me",
-		Gen: &gql.Generator{
-			FuncName: "Intersects",
-			FuncArgs: []string{
-				"geometry",
+		Alias: "me",
+		Func: &gql.Function{
+			Attr: "geometry",
+			Name: "intersects",
+			Args: []string{
 				`{"Type":"Polygon",	"Coordinates":[[[-122.06, 37.37], [-122.1, 37.36], [-122.12, 37.4], [-122.11, 37.43], [-122.04, 37.43], [-122.06, 37.37]]]}`,
 			},
 		},
@@ -216,16 +194,8 @@ func TestIntersectsPolygon1(t *testing.T) {
 	}
 
 	mp := runQuery(t, gq)
-	expected := []string{"Googleplex", "Shoreline Amphitheater", "SF Bay area", "Mountain View"}
-	require.Equal(t, 4, len(mp.([]interface{})))
-	require.Contains(t, expected,
-		mp.([]interface{})[0].(map[string]interface{})["me"].([]interface{})[0].(map[string]interface{})["name"].(string))
-	require.Contains(t, expected,
-		mp.([]interface{})[1].(map[string]interface{})["me"].([]interface{})[0].(map[string]interface{})["name"].(string))
-	require.Contains(t, expected,
-		mp.([]interface{})[2].(map[string]interface{})["me"].([]interface{})[0].(map[string]interface{})["name"].(string))
-	require.Contains(t, expected,
-		mp.([]interface{})[3].(map[string]interface{})["me"].([]interface{})[0].(map[string]interface{})["name"].(string))
+	expected := `{"me":[{"name":"Googleplex"},{"name":"Shoreline Amphitheater"},{"name":"SF Bay area"},{"name":"Mountain View"}]}`
+	require.JSONEq(t, expected, mp)
 }
 
 func TestIntersectsPolygon2(t *testing.T) {
@@ -235,11 +205,11 @@ func TestIntersectsPolygon2(t *testing.T) {
 
 	createTestData(t, ps)
 	gq := &gql.GraphQuery{
-		Attr: "me",
-		Gen: &gql.Generator{
-			FuncName: "Intersects",
-			FuncArgs: []string{
-				"geometry",
+		Alias: "me",
+		Func: &gql.Function{
+			Attr: "geometry",
+			Name: "intersects",
+			Args: []string{
 				`{"Type":"Polygon",	"Coordinates":[[[-121.6, 37.1], [-122.4, 37.3], [-122.6, 37.8], [-122.5, 38.3], [-121.9, 38], [-121.6, 37.1]]]}`,
 			},
 		},
@@ -247,18 +217,6 @@ func TestIntersectsPolygon2(t *testing.T) {
 	}
 
 	mp := runQuery(t, gq)
-	expected := []string{"Googleplex", "Shoreline Amphitheater", "SF Bay area", "Mountain View", "San Carlos", "San Carlos Airport"}
-	require.Equal(t, 6, len(mp.([]interface{})))
-	require.Contains(t, expected,
-		mp.([]interface{})[0].(map[string]interface{})["me"].([]interface{})[0].(map[string]interface{})["name"].(string))
-	require.Contains(t, expected,
-		mp.([]interface{})[1].(map[string]interface{})["me"].([]interface{})[0].(map[string]interface{})["name"].(string))
-	require.Contains(t, expected,
-		mp.([]interface{})[2].(map[string]interface{})["me"].([]interface{})[0].(map[string]interface{})["name"].(string))
-	require.Contains(t, expected,
-		mp.([]interface{})[3].(map[string]interface{})["me"].([]interface{})[0].(map[string]interface{})["name"].(string))
-	require.Contains(t, expected,
-		mp.([]interface{})[4].(map[string]interface{})["me"].([]interface{})[0].(map[string]interface{})["name"].(string))
-	require.Contains(t, expected,
-		mp.([]interface{})[5].(map[string]interface{})["me"].([]interface{})[0].(map[string]interface{})["name"].(string))
-}*/
+	expected := `{"me":[{"name":"Googleplex"},{"name":"Shoreline Amphitheater"},{"name":"San Carlos Airport"},{"name":"SF Bay area"},{"name":"Mountain View"},{"name":"San Carlos"}]}`
+	require.JSONEq(t, expected, mp)
+}

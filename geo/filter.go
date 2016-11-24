@@ -17,6 +17,9 @@
 package geo
 
 import (
+	"strconv"
+	"strings"
+
 	"github.com/golang/geo/s2"
 	"github.com/twpayne/go-geom"
 
@@ -47,16 +50,22 @@ type QueryData struct {
 }
 
 // QueryTokens returns the tokens to be used to look up the geo index for a given filter.
-func QueryTokens(data []byte, qt QueryType, maxDistance float64) ([]string, *QueryData, error) {
+func QueryTokens(qt QueryType, data string, maxDist string) ([]string, *QueryData, error) {
 	// Try to parse the data as geo type.
 	var g types.Geo
-	err := g.UnmarshalBinary(data)
+	geoData := strings.Replace(data, "'", "\"", -1)
+	err := g.UnmarshalText([]byte(geoData))
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, x.Wrapf(err, "Cannot decode given geoJson input")
 	}
+
+	maxDistance, err := strconv.ParseFloat(maxDist, 64)
+	if err != nil {
+		return nil, nil, x.Wrapf(err, "Error while converting distance to float")
+	}
+
 	var l *s2.Loop
 	var pt *s2.Point
-
 	switch v := g.T.(type) {
 	case *geom.Point:
 		p := pointFromPoint(v)

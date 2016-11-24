@@ -19,6 +19,7 @@ package worker
 import (
 	"golang.org/x/net/context"
 
+	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/geo"
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
@@ -77,12 +78,12 @@ func processTask(q *task.Query) (*task.Result, error) {
 	useFunc := len(q.SrcFunc) != 0
 	var n int
 	var tokens []string
-	var geoQuery *geo.QueryType
+	var geoQuery *geo.QueryData
 	var err error
 	var intersectDest bool
 	if useFunc {
 		// Tokenize here.
-		tokens, err = getTokens(q.SrcFunc)
+		tokens, geoQuery, err = getTokens(q.SrcFunc)
 		intersectDest = (q.SrcFunc[0] == "allof")
 		if err != nil {
 			return nil, err
@@ -97,7 +98,6 @@ func processTask(q *task.Query) (*task.Result, error) {
 		var key []byte
 		if useFunc {
 			key = types.IndexKey(attr, tokens[i])
-			_ = geoQuery
 		} else {
 			key = posting.Key(q.Uids[i], attr)
 		}
@@ -135,6 +135,29 @@ func processTask(q *task.Query) (*task.Result, error) {
 		out.UidMatrix = append(out.UidMatrix, pl.Uids(opts))
 	}
 
+	var values []*task.Value
+	if geoQuery != nil {
+		uids := algo.MergeSorted(out.UidMatrix)
+		for _, uid := range uids.Uids {
+			key := posting.Key(uid, attr)
+			pl, decr := posting.GetOrCreate(key)
+			defer decr()
+
+			vbytes, vtype, err := pl.Value()
+			newValue := &task.Value{ValType: uint32(vtype)}
+			if err == nil {
+				newValue.Val = vbytes
+			} else {
+				newValue.Val = x.Nilbyte
+			}
+			values = append(values, newValue)
+		}
+
+		uidsNew := filterUids(uids, values, geoQuery)
+		for i := 0; i < len(out.UidMatrix); i++ {
+			out.UidMatrix[i] = algo.IntersectSorted([]*task.List{out.UidMatrix[i], uidsNew})
+		}
+	}
 	out.IntersectDest = intersectDest
 	return &out, nil
 }

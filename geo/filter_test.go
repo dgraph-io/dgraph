@@ -27,16 +27,44 @@ import (
 	"github.com/dgraph-io/dgraph/types"
 )
 
-func TestQueryTokensPolygon(t *testing.T) {
-	p, err := loadPolygon("zip.json")
+func formData(t *testing.T, str string) string {
+	p, err := loadPolygon(str)
 	require.NoError(t, err)
 
-	data, err := wkb.Marshal(p, binary.LittleEndian)
+	d, err := wkb.Marshal(p, binary.LittleEndian)
 	require.NoError(t, err)
+	var g types.Geo
+	require.NoError(t, g.UnmarshalBinary(d))
+	gb, err := g.MarshalText()
+	require.NoError(t, err)
+	return string(gb)
+}
+
+func formDataPoint(t *testing.T, p *geom.Point) string {
+	d, err := wkb.Marshal(p, binary.LittleEndian)
+	require.NoError(t, err)
+	var g types.Geo
+	require.NoError(t, g.UnmarshalBinary(d))
+	gb, err := g.MarshalText()
+	require.NoError(t, err)
+	return string(gb)
+}
+func formDataPolygon(t *testing.T, p *geom.Polygon) string {
+	d, err := wkb.Marshal(p, binary.LittleEndian)
+	require.NoError(t, err)
+	var g types.Geo
+	require.NoError(t, g.UnmarshalBinary(d))
+	gb, err := g.MarshalText()
+	require.NoError(t, err)
+	return string(gb)
+}
+
+func TestQueryTokensPolygon(t *testing.T) {
+	data := formData(t, "zip.json")
 
 	qtypes := []QueryType{QueryTypeWithin, QueryTypeIntersects}
 	for _, qt := range qtypes {
-		toks, qd, err := QueryTokens(data, qt, 0)
+		toks, qd, err := QueryTokens(qt, data, "0")
 		require.NoError(t, err)
 
 		if qt == QueryTypeWithin {
@@ -53,27 +81,21 @@ func TestQueryTokensPolygon(t *testing.T) {
 }
 
 func TestQueryTokensPolygonError(t *testing.T) {
-	p, err := loadPolygon("zip.json")
-	require.NoError(t, err)
-
-	data, err := wkb.Marshal(p, binary.LittleEndian)
-	require.NoError(t, err)
-
+	data := formData(t, "zip.json")
 	qtypes := []QueryType{QueryTypeNear, QueryTypeContains}
 	for _, qt := range qtypes {
-		_, _, err := QueryTokens(data, qt, 0)
+		_, _, err := QueryTokens(qt, data, "0")
 		require.Error(t, err)
 	}
 }
 
 func TestQueryTokensPoint(t *testing.T) {
 	p := geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{-122.082506, 37.4249518})
-	data, err := wkb.Marshal(p, binary.LittleEndian)
-	require.NoError(t, err)
+	data := formDataPoint(t, p)
 
 	qtypes := []QueryType{QueryTypeWithin, QueryTypeIntersects, QueryTypeContains}
 	for _, qt := range qtypes {
-		toks, qd, err := QueryTokens(data, qt, 0)
+		toks, qd, err := QueryTokens(qt, data, "0")
 		require.NoError(t, err)
 
 		if qt == QueryTypeWithin {
@@ -93,10 +115,9 @@ func TestQueryTokensPoint(t *testing.T) {
 
 func TestQueryTokensNear(t *testing.T) {
 	p := geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{-122.082506, 37.4249518})
-	data, err := wkb.Marshal(p, binary.LittleEndian)
-	require.NoError(t, err)
+	data := formDataPoint(t, p)
 
-	toks, qd, err := QueryTokens(data, QueryTypeNear, 1000)
+	toks, qd, err := QueryTokens(QueryTypeNear, data, "1000")
 	require.NoError(t, err)
 
 	require.Equal(t, len(toks), 15)
@@ -109,18 +130,16 @@ func TestQueryTokensNear(t *testing.T) {
 
 func TestQueryTokensNearError(t *testing.T) {
 	p := geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{-122.082506, 37.4249518})
-	data, err := wkb.Marshal(p, binary.LittleEndian)
-	require.NoError(t, err)
+	data := formDataPoint(t, p)
 
-	_, _, err = QueryTokens(data, QueryTypeNear, 0)
+	_, _, err := QueryTokens(QueryTypeNear, data, "0")
 	require.Error(t, err) // no max distance
 }
 
 func TestMatchesFilterWithinPoint(t *testing.T) {
 	p := geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{-122.082506, 37.4249518})
-	data, err := wkb.Marshal(p, binary.LittleEndian)
-	require.NoError(t, err)
-	_, qd, err := QueryTokens(data, QueryTypeWithin, 0)
+	data := formDataPoint(t, p)
+	_, qd, err := QueryTokens(QueryTypeWithin, data, "0")
 	require.NoError(t, err)
 
 	// Poly contains point
@@ -141,9 +160,8 @@ func TestMatchesFilterWithinPoint(t *testing.T) {
 
 func TestMatchesFilterContainsPoint(t *testing.T) {
 	p := geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{-122.082506, 37.4249518})
-	data, err := wkb.Marshal(p, binary.LittleEndian)
-	require.NoError(t, err)
-	_, qd, err := QueryTokens(data, QueryTypeContains, 0)
+	data := formDataPoint(t, p)
+	_, qd, err := QueryTokens(QueryTypeContains, data, "0")
 	require.NoError(t, err)
 
 	// Points aren't returned for contains queries
@@ -165,9 +183,9 @@ func TestMatchesFilterContainsPoint(t *testing.T) {
 
 func TestMatchesFilterIntersectsPoint(t *testing.T) {
 	p := geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{-122.082506, 37.4249518})
-	data, err := wkb.Marshal(p, binary.LittleEndian)
-	require.NoError(t, err)
-	_, qd, err := QueryTokens(data, QueryTypeIntersects, 0)
+	data := formDataPoint(t, p)
+
+	_, qd, err := QueryTokens(QueryTypeIntersects, data, "0")
 	require.NoError(t, err)
 
 	// Same point
@@ -195,9 +213,8 @@ func TestMatchesFilterIntersectsPolygon(t *testing.T) {
 	p := geom.NewPolygon(geom.XY).MustSetCoords([][]geom.Coord{
 		{{-122, 37}, {-123, 37}, {-123, 38}, {-122, 38}, {-122, 37}},
 	})
-	data, err := wkb.Marshal(p, binary.LittleEndian)
-	require.NoError(t, err)
-	_, qd, err := QueryTokens(data, QueryTypeIntersects, 0)
+	data := formDataPolygon(t, p)
+	_, qd, err := QueryTokens(QueryTypeIntersects, data, "0")
 	require.NoError(t, err)
 
 	// Poly contains point
@@ -235,9 +252,8 @@ func TestMatchesFilterIntersectsPolygon(t *testing.T) {
 
 func TestMatchesFilterNearPoint(t *testing.T) {
 	p := geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{-122.082506, 37.4249518})
-	data, err := wkb.Marshal(p, binary.LittleEndian)
-	require.NoError(t, err)
-	_, qd, err := QueryTokens(data, QueryTypeNear, 1000)
+	data := formDataPoint(t, p)
+	_, qd, err := QueryTokens(QueryTypeNear, data, "1000")
 	require.NoError(t, err)
 
 	// Same point
