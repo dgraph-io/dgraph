@@ -21,17 +21,16 @@ message Query {
 
 	// Exactly one of uids and terms is populated.
 	repeated fixed64 uids = 6;
-	repeated string tokens = 7;
-
-	// Intersect results with this UID list. If uids is populated, then this is
-	// an "intersection query". If terms is populated, this is a "filter query".
-	repeated fixed64 toIntersect = 8;
+	
+	// Function to generate or filter UIDs.
+	repeated string srcFunc = 7;
 }
 
 message Result {
 	repeated List uidMatrix = 1;
 	repeated Value values = 2;
 	repeated uint32 counts = 3;
+	bool intersectDest = 4;
 }
 
 message Sort {
@@ -49,4 +48,48 @@ message Num {
 	uint32 group = 1;
 	int64 val = 2;
 	repeated uint64 uids = 3;
+}
+
+message RaftContext {
+	fixed64 id = 1;
+	uint32 group = 2;
+	string addr = 3;
+}
+
+// Membership stores information about RAFT group membership for a single RAFT node.
+// Note that each server can be serving multiple RAFT groups. Each group would have
+// one RAFT node per server serving that group.
+message Membership {
+	fixed64 id = 1;
+	uint32 group = 2;
+	string addr = 3;
+	bool leader = 4;
+	bool amDead = 5;
+	uint64 lastUpdate = 6;
+}
+
+// MembershipUpdate is used to pack together the current membership state of all the nodes
+// in the caller server; and the membership updates recorded by the callee server since
+// the provided lastUpdate.
+message MembershipUpdate {
+	repeated Membership members = 1;
+	uint64 lastUpdate = 2;
+
+	bool redirect = 3;
+	string redirectAddr = 4;
+}
+
+message KV {
+	bytes key = 1;
+	bytes val = 2;
+}
+
+message KC {
+	bytes key = 1;
+	bytes checksum = 2;
+}
+
+message GroupKeys {
+	uint64 group_id = 1;
+	repeated KC keys = 2;
 }

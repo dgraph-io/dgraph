@@ -23,15 +23,13 @@ var count = flag.Bool("count", false, "Only output number of results."+
 	" Useful for range scanning with attribute.")
 
 func output(val []byte) {
-	pl := types.GetRootAsPostingList(val, 0)
-	fmt.Printf("Found posting list of length: %v\n", pl.PostingsLength())
-	var p types.Posting
-	for i := 0; i < pl.PostingsLength(); i++ {
-		if !pl.Postings(&p, i) {
-			glog.WithField("i", i).Fatal("Unable to get posting")
-		}
+	var pl types.PostingList
+	x.Check(pl.Unmarshal(val))
+	fmt.Printf("Found posting list of length: %v\n", len(pl.Postings))
+	for i, p := range pl.Postings {
+		// TODO: This needs to be modified to account for type system.
 		fmt.Printf("[%v] Uid: [%#x] Value: [%s]\n",
-			i, p.Uid(), string(p.ValueBytes()))
+			i, p.Uid, string(p.Value))
 	}
 }
 

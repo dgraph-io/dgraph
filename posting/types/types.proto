@@ -1,0 +1,21 @@
+// protoc --gofast_out=. posting/types/types.proto
+syntax = "proto3";
+
+package types;
+
+message Posting {
+	fixed64 uid = 1;
+	bytes value = 2;
+	uint32 valType = 3;
+	string label = 4;
+	uint64 commit = 5;  // More inclination towards smaller values.
+
+	// TODO: op is only used temporarily. See if we can remove it from here.
+	uint32 op = 12;
+}
+
+message PostingList {
+	repeated Posting postings = 1;
+	bytes checksum = 2;
+	uint64 commit = 3; // More inclination towards smaller values.
+}

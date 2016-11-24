@@ -30,15 +30,15 @@ service Worker {
 	rpc Echo (Payload)             returns (Payload) {}
 
 	// Data serving RPCs.
-	rpc AssignUids (task.Num)      returns (task.List) {}
-	rpc Mutate (Payload)           returns (Payload) {}
-	rpc ServeTask (task.Query)     returns (task.Result) {}
-	rpc PredicateData (Payload)    returns (stream Payload) {}
-	rpc Sort (task.Sort)           returns (task.SortResult) {}
+	rpc AssignUids (task.Num)          returns (task.List) {}
+	rpc Mutate (Payload)               returns (Payload) {}
+	rpc ServeTask (task.Query)         returns (task.Result) {}
+	rpc PredicateData (task.GroupKeys) returns (stream task.KV) {}
+	rpc Sort (task.Sort)               returns (task.SortResult) {}
 
 	// RAFT serving RPCs.
-	rpc RaftMessage (Payload)       returns (Payload) {}
-	rpc JoinCluster (Payload)       returns (Payload) {}
-	rpc UpdateMembership (Payload)  returns (Payload) {}
-	rpc Backup (BackupPayload)      returns (BackupPayload) {}
+	rpc RaftMessage (Payload)                     returns (Payload) {}
+	rpc JoinCluster (task.RaftContext)            returns (Payload) {}
+	rpc UpdateMembership (task.MembershipUpdate)  returns (task.MembershipUpdate) {}
+	rpc Backup (BackupPayload)                    returns (BackupPayload) {}
 }

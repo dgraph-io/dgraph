@@ -31,12 +31,10 @@ import (
 	farm "github.com/dgryski/go-farm"
 
 	"github.com/dgraph-io/dgraph/algo"
-	"github.com/dgraph-io/dgraph/geo"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/query/graph"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/task"
-	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
@@ -504,138 +502,25 @@ func createNilValuesList(count int) []*task.Value {
 }
 
 // createTaskQuery generates the query buffer.
-func createTaskQuery(sg *SubGraph, tokens []string) *task.Query {
-	// TODO: Remove this concept of intersect, and move it to be processed in the dest server.
-	var uids *task.List
-	var intersect *task.List
-	if len(tokens) > 0 {
-		intersect = sg.SrcUIDs
-	} else {
-		uids = sg.SrcUIDs
-	}
+func createTaskQuery(sg *SubGraph) *task.Query {
 	out := &task.Query{
 		Attr:     sg.Attr,
-		Tokens:   tokens,
+		SrcFunc:  sg.SrcFunc,
 		Count:    int32(sg.Params.Count),
 		Offset:   int32(sg.Params.Offset),
 		AfterUid: sg.Params.AfterUID,
 		DoCount:  sg.Params.DoCount,
 	}
-	if uids != nil {
-		out.Uids = uids.Uids
-	}
-	if intersect != nil {
-		out.ToIntersect = intersect.Uids
+	if sg.SrcUIDs != nil {
+		out.Uids = sg.SrcUIDs.Uids
 	}
 	return out
-}
-
-func getTokens(term string) ([]string, error) {
-	tokenizer, err := tok.NewTokenizer([]byte(term))
-	if err != nil {
-		return nil, x.Errorf("Could not create tokenizer: %v", term)
-	}
-	defer tokenizer.Destroy()
-	return tokenizer.Tokens(), nil
-}
-
-func filterUIDs(uids *task.List, values []*task.Value, q *geo.QueryData) *task.List {
-	x.AssertTruef(len(values) == len(uids.Uids), "Length not matching")
-	rv := &task.List{
-		Uids: make([]uint64, 0, len(values)),
-	}
-	for i := 0; i < len(values); i++ {
-		tv := values[i]
-		v, err := getValue(tv)
-		if err != nil {
-			return nil
-		}
-
-		valBytes := tv.Val
-		if bytes.Equal(valBytes, nil) {
-			continue
-		}
-		vType := v.Type()
-		if vType.ID() != types.GeoID {
-			continue
-		}
-		var g types.Geo
-		if err := g.UnmarshalBinary(valBytes); err != nil {
-			continue
-		}
-
-		if !q.MatchesFilter(g) {
-			continue
-		}
-
-		// we matched the geo filter, add the uid to the list
-		rv.Uids = append(rv.Uids, uids.Uids[i])
-	}
-	return rv
 }
 
 // ProcessGraph processes the SubGraph instance accumulating result for the query
 // from different instances. Note: taskQuery is nil for root node.
 func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	var err error
-	var tokens []string
-	var geoData *geo.QueryData
-	var intersectDestination bool
-
-	if len(sg.SrcFunc) > 0 {
-		if len(sg.SrcFunc) < 2 {
-			err = x.Errorf("Expected at least 2 arguments in function. Got: %v", sg.SrcFunc)
-			x.TraceError(ctx, err)
-			rch <- err
-			return
-		}
-
-		switch sg.SrcFunc[0] {
-		case "anyof":
-			// TODO: Why only one argument, why not multiple terms?
-			tokens, err = getTokens(sg.SrcFunc[1])
-			if err != nil {
-				x.TraceError(ctx, x.Wrap(err))
-				rch <- err
-				return
-			}
-			intersectDestination = false
-		case "allof":
-			tokens, err = getTokens(sg.SrcFunc[1])
-			if err != nil {
-				x.TraceError(ctx, x.Wrap(err))
-				rch <- err
-				return
-			}
-			intersectDestination = true
-			// TODO: Handle geo filtering, using two steps in SubGraph.
-		case "near":
-			maxDist, err := strconv.ParseFloat(sg.SrcFunc[2], 64)
-			if err != nil {
-				rch <- x.Wrapf(err, "Error while converting distance to float")
-				return
-			}
-			var g types.Geo
-			point := strings.Replace(sg.SrcFunc[1], "'", "\"", -1)
-			err = g.UnmarshalText([]byte(point))
-			if err != nil {
-				rch <- err
-				return
-			}
-			gb, err := g.MarshalBinary()
-			if err != nil {
-				rch <- err
-				return
-			}
-			tokens, geoData, err = geo.QueryTokens(gb, geo.QueryTypeNear, maxDist)
-			if err != nil {
-				rch <- err
-				return
-			}
-		default:
-			x.Fatalf("Unhandled function: %v", sg.SrcFunc)
-		}
-	}
 
 	if len(sg.Attr) == 0 {
 		// If we have a filter SubGraph which only contains an operator,
@@ -649,7 +534,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		sg.DestUIDs = algo.MergeSorted(sg.uidMatrix) // Could also be = sg.SrcUIDs
 
 	} else {
-		taskQuery := createTaskQuery(sg, tokens)
+		taskQuery := createTaskQuery(sg)
 		result, err := worker.ProcessTaskOverNetwork(ctx, taskQuery)
 		if err != nil {
 			x.TraceError(ctx, x.Wrapf(err, "Error while processing task"))
@@ -671,32 +556,33 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			return
 		}
 
-		if intersectDestination {
-			sg.DestUIDs = algo.IntersectSorted(sg.uidMatrix)
+		if result.IntersectDest {
+			sg.DestUIDs = algo.IntersectSorted(result.UidMatrix)
 		} else {
-			sg.DestUIDs = algo.MergeSorted(sg.uidMatrix)
+			sg.DestUIDs = algo.MergeSorted(result.UidMatrix)
 		}
 	}
 
-	// Second Step of filtering for geo.
-	if geoData != nil {
-		// TODO: Try to move it to worker (TaskQuery should contain function Type).
-		sgV := sg
-		// CreateTaskQuery works with srcUids, so create a dummy node with srcUids
-		// as the destUIDs of the previous step.
-		sgV.SrcUIDs = sg.DestUIDs
-		taskQuery := createTaskQuery(sgV, nil)
-		result, err := worker.ProcessTaskOverNetwork(ctx, taskQuery)
-		if err != nil {
-			x.TraceError(ctx, x.Wrapf(err, "Error while processing task"))
-			rch <- err
-			return
+	/*
+		// Second Step of filtering for geo.
+		if geoData != nil {
+			// TODO: Try to move it to worker (TaskQuery should contain function Type).
+			sgV := sg
+			// CreateTaskQuery works with srcUids, so create a dummy node with srcUids
+			// as the destUIDs of the previous step.
+			sgV.SrcUIDs = sg.DestUIDs
+			taskQuery := createTaskQuery(sgV, nil)
+			result, err := worker.ProcessTaskOverNetwork(ctx, taskQuery)
+			if err != nil {
+				x.TraceError(ctx, x.Wrapf(err, "Error while processing task"))
+				rch <- err
+				return
+			}
+			fmt.Println(sg.DestUIDs.Uids, result.Values)
+			values := result.Values
+			sg.DestUIDs = filterUIDs(sg.DestUIDs, values, geoData)
 		}
-		fmt.Println(sg.DestUIDs.Uids, result.Values)
-		values := result.Values
-		sg.DestUIDs = filterUIDs(sg.DestUIDs, values, geoData)
-	}
-
+	*/
 	if len(sg.DestUIDs.Uids) == 0 {
 		// Looks like we're done here. Be careful with nil srcUIDs!
 		x.Trace(ctx, "Zero uids for %q. Num attr children: %v", sg.Attr, len(sg.Children))

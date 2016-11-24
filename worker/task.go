@@ -19,6 +19,7 @@ package worker
 import (
 	"golang.org/x/net/context"
 
+	"github.com/dgraph-io/dgraph/geo"
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/task"
@@ -72,13 +73,21 @@ func ProcessTaskOverNetwork(ctx context.Context, q *task.Query) (*task.Result, e
 // TODO: Change input and output to protos from []byte.
 func processTask(q *task.Query) (*task.Result, error) {
 	attr := q.Attr
-	x.AssertTruef(len(q.Uids) == 0 || len(q.Tokens) == 0,
-		"At least one of Uids and Term should be empty: %d vs %d", len(q.Uids), len(q.Tokens))
 
-	useTerm := len(q.Tokens) > 0
+	useFunc := len(q.SrcFunc) != 0
 	var n int
-	if useTerm {
-		n = len(q.Tokens)
+	var tokens []string
+	var geoQuery *geo.QueryType
+	var err error
+	var intersectDest bool
+	if useFunc {
+		// Tokenize here.
+		tokens, err = getTokens(q.SrcFunc)
+		intersectDest = (q.SrcFunc[0] == "allof")
+		if err != nil {
+			return nil, err
+		}
+		n = len(tokens)
 	} else {
 		n = len(q.Uids)
 	}
@@ -86,8 +95,9 @@ func processTask(q *task.Query) (*task.Result, error) {
 	var out task.Result
 	for i := 0; i < n; i++ {
 		var key []byte
-		if useTerm {
-			key = types.IndexKey(attr, q.Tokens[i])
+		if useFunc {
+			key = types.IndexKey(attr, tokens[i])
+			_ = geoQuery
 		} else {
 			key = posting.Key(q.Uids[i], attr)
 		}
@@ -118,11 +128,14 @@ func processTask(q *task.Query) (*task.Result, error) {
 		opts := posting.ListOptions{
 			AfterUID: uint64(q.AfterUid),
 		}
-		if q.ToIntersect != nil {
-			opts.Intersect = &task.List{Uids: q.ToIntersect}
+		// If we have srcFunc and Uids, it means its a filter. So we intersect.
+		if useFunc && len(q.Uids) > 0 {
+			opts.Intersect = &task.List{Uids: q.Uids}
 		}
 		out.UidMatrix = append(out.UidMatrix, pl.Uids(opts))
 	}
+
+	out.IntersectDest = intersectDest
 	return &out, nil
 }
 
