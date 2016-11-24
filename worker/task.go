@@ -85,10 +85,18 @@ func processTask(q *task.Query) (*task.Result, error) {
 	var intersectDest bool
 	if useFunc {
 		// Tokenize here.
-		tokens, geoQuery, err = getTokens(q.SrcFunc)
-		intersectDest = (strings.ToLower(q.SrcFunc[0]) == "allof")
-		if err != nil {
-			return nil, err
+		if geo.IsGeoFunc(q.SrcFunc[0]) {
+			// For geo functions, we get extra information used for filtering.
+			tokens, geoQuery, err = geo.GetTokens(q.SrcFunc)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			tokens, err = getTokens(q.SrcFunc)
+			if err != nil {
+				return nil, err
+			}
+			intersectDest = (strings.ToLower(q.SrcFunc[0]) == "allof")
 		}
 		n = len(tokens)
 	} else {
@@ -156,7 +164,7 @@ func processTask(q *task.Query) (*task.Result, error) {
 			values = append(values, newValue)
 		}
 
-		uidsNew := filterUids(uids, values, geoQuery)
+		uidsNew := geo.FilterUids(uids, values, geoQuery)
 		for i := 0; i < len(out.UidMatrix); i++ {
 			out.UidMatrix[i] = algo.IntersectSorted([]*task.List{out.UidMatrix[i], uidsNew})
 		}

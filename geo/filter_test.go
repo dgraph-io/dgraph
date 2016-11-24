@@ -64,7 +64,7 @@ func TestQueryTokensPolygon(t *testing.T) {
 
 	qtypes := []QueryType{QueryTypeWithin, QueryTypeIntersects}
 	for _, qt := range qtypes {
-		toks, qd, err := QueryTokens(qt, data, "0")
+		toks, qd, err := queryTokens(qt, data, "0")
 		require.NoError(t, err)
 
 		if qt == QueryTypeWithin {
@@ -84,7 +84,7 @@ func TestQueryTokensPolygonError(t *testing.T) {
 	data := formData(t, "zip.json")
 	qtypes := []QueryType{QueryTypeNear, QueryTypeContains}
 	for _, qt := range qtypes {
-		_, _, err := QueryTokens(qt, data, "0")
+		_, _, err := queryTokens(qt, data, "0")
 		require.Error(t, err)
 	}
 }
@@ -95,7 +95,7 @@ func TestQueryTokensPoint(t *testing.T) {
 
 	qtypes := []QueryType{QueryTypeWithin, QueryTypeIntersects, QueryTypeContains}
 	for _, qt := range qtypes {
-		toks, qd, err := QueryTokens(qt, data, "0")
+		toks, qd, err := queryTokens(qt, data, "0")
 		require.NoError(t, err)
 
 		if qt == QueryTypeWithin {
@@ -117,7 +117,7 @@ func TestQueryTokensNear(t *testing.T) {
 	p := geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{-122.082506, 37.4249518})
 	data := formDataPoint(t, p)
 
-	toks, qd, err := QueryTokens(QueryTypeNear, data, "1000")
+	toks, qd, err := queryTokens(QueryTypeNear, data, "1000")
 	require.NoError(t, err)
 
 	require.Equal(t, len(toks), 15)
@@ -132,14 +132,14 @@ func TestQueryTokensNearError(t *testing.T) {
 	p := geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{-122.082506, 37.4249518})
 	data := formDataPoint(t, p)
 
-	_, _, err := QueryTokens(QueryTypeNear, data, "0")
+	_, _, err := queryTokens(QueryTypeNear, data, "0")
 	require.Error(t, err) // no max distance
 }
 
 func TestMatchesFilterWithinPoint(t *testing.T) {
 	p := geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{-122.082506, 37.4249518})
 	data := formDataPoint(t, p)
-	_, qd, err := QueryTokens(QueryTypeWithin, data, "0")
+	_, qd, err := queryTokens(QueryTypeWithin, data, "0")
 	require.NoError(t, err)
 
 	// Poly contains point
@@ -161,7 +161,7 @@ func TestMatchesFilterWithinPoint(t *testing.T) {
 func TestMatchesFilterContainsPoint(t *testing.T) {
 	p := geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{-122.082506, 37.4249518})
 	data := formDataPoint(t, p)
-	_, qd, err := QueryTokens(QueryTypeContains, data, "0")
+	_, qd, err := queryTokens(QueryTypeContains, data, "0")
 	require.NoError(t, err)
 
 	// Points aren't returned for contains queries
@@ -185,7 +185,7 @@ func TestMatchesFilterIntersectsPoint(t *testing.T) {
 	p := geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{-122.082506, 37.4249518})
 	data := formDataPoint(t, p)
 
-	_, qd, err := QueryTokens(QueryTypeIntersects, data, "0")
+	_, qd, err := queryTokens(QueryTypeIntersects, data, "0")
 	require.NoError(t, err)
 
 	// Same point
@@ -214,7 +214,7 @@ func TestMatchesFilterIntersectsPolygon(t *testing.T) {
 		{{-122, 37}, {-123, 37}, {-123, 38}, {-122, 38}, {-122, 37}},
 	})
 	data := formDataPolygon(t, p)
-	_, qd, err := QueryTokens(QueryTypeIntersects, data, "0")
+	_, qd, err := queryTokens(QueryTypeIntersects, data, "0")
 	require.NoError(t, err)
 
 	// Poly contains point
@@ -253,7 +253,7 @@ func TestMatchesFilterIntersectsPolygon(t *testing.T) {
 func TestMatchesFilterNearPoint(t *testing.T) {
 	p := geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{-122.082506, 37.4249518})
 	data := formDataPoint(t, p)
-	_, qd, err := QueryTokens(QueryTypeNear, data, "1000")
+	_, qd, err := queryTokens(QueryTypeNear, data, "1000")
 	require.NoError(t, err)
 
 	// Same point
