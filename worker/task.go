@@ -70,7 +70,6 @@ func ProcessTaskOverNetwork(ctx context.Context, q *task.Query) (*task.Result, e
 }
 
 // processTask processes the query, accumulates and returns the result.
-// TODO: Change input and output to protos from []byte.
 func processTask(q *task.Query) (*task.Result, error) {
 	attr := q.Attr
 
