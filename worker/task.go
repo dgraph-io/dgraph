@@ -164,9 +164,9 @@ func processTask(q *task.Query) (*task.Result, error) {
 			values = append(values, newValue)
 		}
 
-		uidsNew := geo.FilterUids(uids, values, geoQuery)
+		filtered := geo.FilterUids(uids, values, geoQuery)
 		for i := 0; i < len(out.UidMatrix); i++ {
-			out.UidMatrix[i] = algo.IntersectSorted([]*task.List{out.UidMatrix[i], uidsNew})
+			out.UidMatrix[i] = algo.IntersectSorted([]*task.List{out.UidMatrix[i], filtered})
 		}
 	}
 	out.IntersectDest = intersectDest

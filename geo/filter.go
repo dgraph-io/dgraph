@@ -78,43 +78,42 @@ func GetTokens(funcArgs []string) ([]string, *QueryData, error) {
 			return nil, nil, x.Errorf("near function requires 3 arguments, but got %d",
 				len(funcArgs))
 		}
-		return queryTokens(QueryTypeNear, funcArgs[1], funcArgs[2])
+		maxDist, err := strconv.ParseFloat(funcArgs[2], 64)
+		if err != nil {
+			return nil, nil, x.Wrapf(err, "Error while converting distance to float")
+		}
+		return queryTokens(QueryTypeNear, funcArgs[1], maxDist)
 	case "within":
 		if len(funcArgs) != 2 {
 			return nil, nil, x.Errorf("within function requires 2 arguments, but got %d",
 				len(funcArgs))
 		}
-		return queryTokens(QueryTypeWithin, funcArgs[1], "0")
+		return queryTokens(QueryTypeWithin, funcArgs[1], 0.0)
 	case "contains":
 		if len(funcArgs) != 2 {
 			return nil, nil, x.Errorf("contains function requires 2 arguments, but got %d",
 				len(funcArgs))
 		}
-		return queryTokens(QueryTypeContains, funcArgs[1], "0")
+		return queryTokens(QueryTypeContains, funcArgs[1], 0.0)
 	case "intersects":
 		if len(funcArgs) != 2 {
 			return nil, nil, x.Errorf("intersects function requires 2 arguments, but got %d",
 				len(funcArgs))
 		}
-		return queryTokens(QueryTypeIntersects, funcArgs[1], "0")
+		return queryTokens(QueryTypeIntersects, funcArgs[1], 0.0)
 	default:
 		return nil, nil, x.Errorf("Invalid geo function")
 	}
 }
 
 // queryTokens returns the tokens to be used to look up the geo index for a given filter.
-func queryTokens(qt QueryType, data string, maxDist string) ([]string, *QueryData, error) {
+func queryTokens(qt QueryType, data string, maxDistance float64) ([]string, *QueryData, error) {
 	// Try to parse the data as geo type.
 	var g types.Geo
 	geoData := strings.Replace(data, "'", "\"", -1)
 	err := g.UnmarshalText([]byte(geoData))
 	if err != nil {
 		return nil, nil, x.Wrapf(err, "Cannot decode given geoJson input")
-	}
-
-	maxDistance, err := strconv.ParseFloat(maxDist, 64)
-	if err != nil {
-		return nil, nil, x.Wrapf(err, "Error while converting distance to float")
 	}
 
 	var l *s2.Loop
