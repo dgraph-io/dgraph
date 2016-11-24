@@ -563,26 +563,6 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		}
 	}
 
-	/*
-		// Second Step of filtering for geo.
-		if geoData != nil {
-			// TODO: Try to move it to worker (TaskQuery should contain function Type).
-			sgV := sg
-			// CreateTaskQuery works with srcUids, so create a dummy node with srcUids
-			// as the destUIDs of the previous step.
-			sgV.SrcUIDs = sg.DestUIDs
-			taskQuery := createTaskQuery(sgV, nil)
-			result, err := worker.ProcessTaskOverNetwork(ctx, taskQuery)
-			if err != nil {
-				x.TraceError(ctx, x.Wrapf(err, "Error while processing task"))
-				rch <- err
-				return
-			}
-			fmt.Println(sg.DestUIDs.Uids, result.Values)
-			values := result.Values
-			sg.DestUIDs = filterUIDs(sg.DestUIDs, values, geoData)
-		}
-	*/
 	if len(sg.DestUIDs.Uids) == 0 {
 		// Looks like we're done here. Be careful with nil srcUIDs!
 		x.Trace(ctx, "Zero uids for %q. Num attr children: %v", sg.Attr, len(sg.Children))
