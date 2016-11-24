@@ -51,6 +51,7 @@ type QueryData struct {
 	qtype QueryType
 }
 
+// IsGeoFunc returns if a function is of geo type.
 func IsGeoFunc(str string) bool {
 	switch str {
 	case "near":
@@ -66,6 +67,8 @@ func IsGeoFunc(str string) bool {
 	return false
 }
 
+// GetTokens returns the corresponding index keys based on the type
+// of function.
 func GetTokens(funcArgs []string) ([]string, *QueryData, error) {
 	x.AssertTruef(len(funcArgs) > 1, "Invalid function")
 	funcName := strings.ToLower(funcArgs[0])
@@ -272,6 +275,7 @@ func (q QueryData) intersects(g types.Geo) bool {
 	}
 }
 
+// FilterUids filters the uids based on the corresponding values and QueryData.
 func FilterUids(uids *task.List, values []*task.Value, q *QueryData) *task.List {
 	x.AssertTruef(len(values) == len(uids.Uids), "lengths not matching")
 	rv := &task.List{}
