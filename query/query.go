@@ -635,6 +635,8 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			algo.IntersectWith(ul, sg.DestUIDs)
 			sg.counts[i] = uint32(len(ul.Uids))
 		}
+		rch <- nil
+		return
 	}
 
 	childChan := make(chan error, len(sg.Children))
