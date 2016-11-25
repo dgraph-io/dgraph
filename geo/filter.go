@@ -17,9 +17,14 @@
 package geo
 
 import (
+	"bytes"
+	"strconv"
+	"strings"
+
 	"github.com/golang/geo/s2"
 	"github.com/twpayne/go-geom"
 
+	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -46,17 +51,73 @@ type QueryData struct {
 	qtype QueryType
 }
 
-// QueryTokens returns the tokens to be used to look up the geo index for a given filter.
-func QueryTokens(data []byte, qt QueryType, maxDistance float64) ([]string, *QueryData, error) {
+// IsGeoFunc returns if a function is of geo type.
+func IsGeoFunc(str string) bool {
+	switch str {
+	case "near":
+		return true
+	case "contains":
+		return true
+	case "within":
+		return true
+	case "intersects":
+		return true
+	}
+
+	return false
+}
+
+// GetTokens returns the corresponding index keys based on the type
+// of function.
+func GetTokens(funcArgs []string) ([]string, *QueryData, error) {
+	x.AssertTruef(len(funcArgs) > 1, "Invalid function")
+	funcName := strings.ToLower(funcArgs[0])
+	switch funcName {
+	case "near":
+		if len(funcArgs) != 3 {
+			return nil, nil, x.Errorf("near function requires 3 arguments, but got %d",
+				len(funcArgs))
+		}
+		maxDist, err := strconv.ParseFloat(funcArgs[2], 64)
+		if err != nil {
+			return nil, nil, x.Wrapf(err, "Error while converting distance to float")
+		}
+		return queryTokens(QueryTypeNear, funcArgs[1], maxDist)
+	case "within":
+		if len(funcArgs) != 2 {
+			return nil, nil, x.Errorf("within function requires 2 arguments, but got %d",
+				len(funcArgs))
+		}
+		return queryTokens(QueryTypeWithin, funcArgs[1], 0.0)
+	case "contains":
+		if len(funcArgs) != 2 {
+			return nil, nil, x.Errorf("contains function requires 2 arguments, but got %d",
+				len(funcArgs))
+		}
+		return queryTokens(QueryTypeContains, funcArgs[1], 0.0)
+	case "intersects":
+		if len(funcArgs) != 2 {
+			return nil, nil, x.Errorf("intersects function requires 2 arguments, but got %d",
+				len(funcArgs))
+		}
+		return queryTokens(QueryTypeIntersects, funcArgs[1], 0.0)
+	default:
+		return nil, nil, x.Errorf("Invalid geo function")
+	}
+}
+
+// queryTokens returns the tokens to be used to look up the geo index for a given filter.
+func queryTokens(qt QueryType, data string, maxDistance float64) ([]string, *QueryData, error) {
 	// Try to parse the data as geo type.
 	var g types.Geo
-	err := g.UnmarshalBinary(data)
+	geoData := strings.Replace(data, "'", "\"", -1)
+	err := g.UnmarshalText([]byte(geoData))
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, x.Wrapf(err, "Cannot decode given geoJson input")
 	}
+
 	var l *s2.Loop
 	var pt *s2.Point
-
 	switch v := g.T.(type) {
 	case *geom.Point:
 		p := pointFromPoint(v)
@@ -211,4 +272,32 @@ func (q QueryData) intersects(g types.Geo) bool {
 		// A type that we don't know how to handle.
 		return false
 	}
+}
+
+// FilterUids filters the uids based on the corresponding values and QueryData.
+func FilterUids(uids *task.List, values []*task.Value, q *QueryData) *task.List {
+	x.AssertTruef(len(values) == len(uids.Uids), "lengths not matching")
+	rv := &task.List{}
+	for i := 0; i < len(values); i++ {
+		valBytes := values[i].Val
+		if bytes.Equal(valBytes, nil) {
+			continue
+		}
+		vType := values[i].ValType
+		if types.TypeID(vType) != types.GeoID {
+			continue
+		}
+		var g types.Geo
+		if err := g.UnmarshalBinary(valBytes); err != nil {
+			continue
+		}
+
+		if !q.MatchesFilter(g) {
+			continue
+		}
+
+		// we matched the geo filter, add the uid to the list
+		rv.Uids = append(rv.Uids, uids.Uids[i])
+	}
+	return rv
 }
