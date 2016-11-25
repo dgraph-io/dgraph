@@ -1004,6 +1004,7 @@ func TestSchema(t *testing.T) {
 				name
 				gender
 				alive
+				loc
 				friend {
 					name
 				}
@@ -1032,10 +1033,15 @@ func TestSchema(t *testing.T) {
 	require.EqualValues(t, "debug", gr.Children[0].Attribute)
 	require.EqualValues(t, 1, gr.Children[0].Uid)
 	require.EqualValues(t, "mich", gr.Children[0].Xid)
-	require.Len(t, gr.Children[0].Properties, 3)
+	require.Len(t, gr.Children[0].Properties, 4)
 
 	require.EqualValues(t, "Michonne",
 		getProperty(gr.Children[0].Properties, "name").GetStrVal())
+	var g types.Geo
+	x.Check(g.UnmarshalBinary(getProperty(gr.Children[0].Properties, "loc").GetGeoVal()))
+	received, err := g.MarshalText()
+	require.EqualValues(t, "{\"type\":\"Point\",\"coordinates\":[1.1,2]}", string(received))
+
 	require.Len(t, gr.Children[0].Children, 10)
 
 	child := gr.Children[0].Children[0]
