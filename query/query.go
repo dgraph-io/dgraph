@@ -509,7 +509,7 @@ func createTaskQuery(sg *SubGraph) *task.Query {
 		Count:    int32(sg.Params.Count),
 		Offset:   int32(sg.Params.Offset),
 		AfterUid: sg.Params.AfterUID,
-		DoCount:  sg.Params.DoCount,
+		DoCount:  len(sg.Filters) == 0 && sg.Params.DoCount,
 	}
 	if sg.SrcUIDs != nil {
 		out.Uids = sg.SrcUIDs.Uids
@@ -549,7 +549,8 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		}
 		sg.counts = result.Counts
 
-		if sg.Params.DoCount {
+		if sg.Params.DoCount && len(sg.Filters) == 0 {
+			// If there is a filter, we need to do more work to get the actual count.
 			x.Trace(ctx, "Zero uids. Only count requested")
 			rch <- nil
 			return
@@ -617,6 +618,21 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		if err = sg.applyOrderAndPagination(ctx); err != nil {
 			rch <- err
 			return
+		}
+	}
+
+	if sg.Params.DoCount {
+		x.AssertTrue(len(sg.Filters) > 0)
+		sg.counts = make([]uint32, len(sg.uidMatrix))
+		for i, ul := range sg.uidMatrix {
+			// COMMENT (to be deleted):
+			// We need to intersect each posting list with the filtered dest UIDs.
+			// Alternatively, we can just get the count of the intersection.
+			// Advantage: Slightly faster.
+			// Disadvantage: Slightly more code.
+			// For now, let me just do the actual intersection.
+			algo.IntersectWith(ul, sg.DestUIDs)
+			sg.counts[i] = uint32(len(ul.Uids))
 		}
 	}
 

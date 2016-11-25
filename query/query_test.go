@@ -628,6 +628,42 @@ func TestToJSONFilterOr(t *testing.T) {
 		string(js))
 }
 
+func TestToJSONFilterOrCount(t *testing.T) {
+	dir, dir2, _ := populateGraph(t)
+	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
+	query := `
+		{
+			me(_uid_:0x01) {
+				name
+				gender
+				friend @filter(anyof("name", "Andrea") || anyof("name", "Andrea Rhee")) {
+					_count_
+				}
+			}
+		}
+	`
+
+	gq, _, err := gql.Parse(query)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	sg, err := ToSubGraph(ctx, gq)
+	require.NoError(t, err)
+
+	ch := make(chan error)
+	go ProcessGraph(ctx, sg, nil, ch)
+	err = <-ch
+	require.NoError(t, err)
+
+	var l Latency
+	js, err := sg.ToJSON(&l)
+	require.NoError(t, err)
+	require.JSONEq(t,
+		`{"me":[{"friend":[{"_count_":2}],"gender":"female","name":"Michonne"}]}`,
+		string(js))
+}
+
 func TestToJSONFilterOrFirst(t *testing.T) {
 	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
@@ -770,6 +806,42 @@ func TestToJSONFilterOrFirstOffset(t *testing.T) {
 	require.NoError(t, err)
 	require.EqualValues(t,
 		`{"me":[{"friend":[{"name":"Daryl Dixon"}],"gender":"female","name":"Michonne"}]}`,
+		string(js))
+}
+
+func TestToJSONFilterOrFirstOffsetCount(t *testing.T) {
+	dir, dir2, _ := populateGraph(t)
+	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
+	query := `
+		{
+			me(_uid_:0x01) {
+				name
+				gender
+				friend(offset:1, first:1) @filter(anyof("name", "Andrea") || anyof("name", "SomethingElse Rhee") || anyof("name", "Daryl Dixon")) {
+					_count_
+				}
+			}
+		}
+	`
+
+	gq, _, err := gql.Parse(query)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	sg, err := ToSubGraph(ctx, gq)
+	require.NoError(t, err)
+
+	ch := make(chan error)
+	go ProcessGraph(ctx, sg, nil, ch)
+	err = <-ch
+	require.NoError(t, err)
+
+	var l Latency
+	js, err := sg.ToJSON(&l)
+	require.NoError(t, err)
+	require.JSONEq(t,
+		`{"me":[{"friend":[{"_count_":1}],"gender":"female","name":"Michonne"}]}`,
 		string(js))
 }
 
