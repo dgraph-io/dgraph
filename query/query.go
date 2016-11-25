@@ -621,16 +621,17 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		}
 	}
 
+	// Here we consider handling _count_ with filtering. We do this after
+	// pagination because otherwise, we need to do the count with pagination
+	// taken into account. For example, a PL might have only 50 entries but the
+	// user wants to skip 100 entries and return 10 entries. In this case, you
+	// should return a count of 0, not 10.
 	if sg.Params.DoCount {
 		x.AssertTrue(len(sg.Filters) > 0)
 		sg.counts = make([]uint32, len(sg.uidMatrix))
 		for i, ul := range sg.uidMatrix {
-			// COMMENT (to be deleted):
-			// We need to intersect each posting list with the filtered dest UIDs.
-			// Alternatively, we can just get the count of the intersection.
-			// Advantage: Slightly faster.
-			// Disadvantage: Slightly more code.
-			// For now, let me just do the actual intersection.
+			// A possible optimization is to return the size of the intersection
+			// without forming the intersection.
 			algo.IntersectWith(ul, sg.DestUIDs)
 			sg.counts[i] = uint32(len(ul.Uids))
 		}
