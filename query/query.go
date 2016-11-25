@@ -509,7 +509,7 @@ func createTaskQuery(sg *SubGraph) *task.Query {
 		Count:    int32(sg.Params.Count),
 		Offset:   int32(sg.Params.Offset),
 		AfterUid: sg.Params.AfterUID,
-		DoCount:  sg.Params.DoCount,
+		DoCount:  len(sg.Filters) == 0 && sg.Params.DoCount,
 	}
 	if sg.SrcUIDs != nil {
 		out.Uids = sg.SrcUIDs.Uids
@@ -550,7 +550,8 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		}
 		sg.counts = result.Counts
 
-		if sg.Params.DoCount {
+		if sg.Params.DoCount && len(sg.Filters) == 0 {
+			// If there is a filter, we need to do more work to get the actual count.
 			x.Trace(ctx, "Zero uids. Only count requested")
 			rch <- nil
 			return
@@ -619,6 +620,24 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			rch <- err
 			return
 		}
+	}
+
+	// Here we consider handling _count_ with filtering. We do this after
+	// pagination because otherwise, we need to do the count with pagination
+	// taken into account. For example, a PL might have only 50 entries but the
+	// user wants to skip 100 entries and return 10 entries. In this case, you
+	// should return a count of 0, not 10.
+	if sg.Params.DoCount {
+		x.AssertTrue(len(sg.Filters) > 0)
+		sg.counts = make([]uint32, len(sg.uidMatrix))
+		for i, ul := range sg.uidMatrix {
+			// A possible optimization is to return the size of the intersection
+			// without forming the intersection.
+			algo.IntersectWith(ul, sg.DestUIDs)
+			sg.counts[i] = uint32(len(ul.Uids))
+		}
+		rch <- nil
+		return
 	}
 
 	childChan := make(chan error, len(sg.Children))
