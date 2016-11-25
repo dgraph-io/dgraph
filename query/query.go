@@ -541,6 +541,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			rch <- err
 			return
 		}
+
 		sg.uidMatrix = result.UidMatrix
 		sg.values = result.Values
 		if len(sg.values) > 0 {

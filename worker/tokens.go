@@ -7,14 +7,11 @@ import (
 
 func getTokens(funcArgs []string) ([]string, error) {
 	x.AssertTruef(len(funcArgs) > 1, "Invalid function")
-	switch funcArgs[0] {
-	case "anyof":
-		return getStringTokens(funcArgs[1])
-	case "allof":
-		return getStringTokens(funcArgs[1])
-	default:
-		return nil, x.Errorf("Invalid function")
+	if len(funcArgs) != 2 {
+		return nil, x.Errorf("Function requires 2 arguments, but got %d",
+			len(funcArgs))
 	}
+	return getStringTokens(funcArgs[1])
 }
 
 func getStringTokens(term string) ([]string, error) {
