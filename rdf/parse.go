@@ -18,7 +18,6 @@ package rdf
 
 import (
 	"fmt"
-	"log"
 	"strconv"
 	"strings"
 	"unicode"
@@ -165,11 +164,11 @@ func Parse(line string) (rnq NQuad, rerr error) {
 			rnq.Predicate += "." + item.Val
 
 		case itemObjectType:
-			if len(oval) == 0 {
+			/*if len(oval) == 0 {
 				log.Fatalf(
 					"itemObject should be emitted before itemObjectType. Input: [%s]",
 					line)
-			}
+			}*/
 			val := stripBracketsAndTrim(item.Val)
 			if strings.Trim(val, " ") == "*" {
 				return rnq, fmt.Errorf("itemObject can't be *")
@@ -204,7 +203,7 @@ func Parse(line string) (rnq NQuad, rerr error) {
 	if !vend {
 		return rnq, fmt.Errorf("Invalid end of input. Input: [%s]", line)
 	}
-	if len(oval) > 0 {
+	if rnq.ObjectType == 0 {
 		rnq.ObjectValue = []byte(oval)
 		// If no type is specified, we default to string.
 		rnq.ObjectType = 0
