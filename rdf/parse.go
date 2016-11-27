@@ -212,7 +212,7 @@ func Parse(line string) (rnq NQuad, rerr error) {
 	if len(rnq.Subject) == 0 || len(rnq.Predicate) == 0 {
 		return rnq, fmt.Errorf("Empty required fields in NQuad. Input: [%s]", line)
 	}
-	if len(rnq.ObjectId) == 0 && rnq.ObjectValue == nil {
+	if rnq.ObjectValue == nil {
 		return rnq, fmt.Errorf("No Object in NQuad. Input: [%s]", line)
 	}
 	if !sane(rnq.Subject) || !sane(rnq.Predicate) || !sane(rnq.ObjectId) ||
