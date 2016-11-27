@@ -94,7 +94,7 @@ func TestAddMutation(t *testing.T) {
 	}
 	addMutation(t, l, edge, Set)
 
-	require.Equal(t, listToArray(t, 0, l), []uint64{9})
+	require.Equal(t, []uint64{9}, listToArray(t, 0, l))
 
 	p := getFirst(l)
 	require.NotNil(t, p, "Unable to retrieve posting")

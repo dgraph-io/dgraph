@@ -350,7 +350,7 @@ func (l *List) AddMutation(ctx context.Context, t *task.DirectedEdge, op uint32)
 
 	// All edges with a value set, have the same uid. In other words,
 	// an (entity, attribute) can only have one value.
-	if t.ValueType == 0 || t.ValueType == 5 || !bytes.Equal(t.Value, nil) {
+	if (bytes.Equal(t.Value, nil) && t.ValueId == 0 && (t.ValueType == 0 || t.ValueType == 5)) || !bytes.Equal(t.Value, nil) {
 		// Allow empty string and bytes.
 		t.ValueId = math.MaxUint64
 	}
