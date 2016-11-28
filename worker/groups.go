@@ -342,8 +342,7 @@ func (g *groupi) periodicSyncMemberships() {
 	t := time.NewTicker(10 * time.Second)
 	for {
 		select {
-		case tm := <-t.C:
-			fmt.Printf("%v: Syncing memberships\n", tm)
+		case <-t.C:
 			g.syncMemberships()
 		case <-g.ctx.Done():
 			return
