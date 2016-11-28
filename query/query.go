@@ -818,6 +818,9 @@ func (sg *SubGraph) ToProtocolBuffer(l *Latency) (*graph.Node, error) {
 		}
 
 		if rerr := sg.preTraverse(uid, n1); rerr != nil {
+			if rerr.Error() == "_INV_" {
+				continue
+			}
 			return n.(*protoOutputNode).Node, rerr
 		}
 
@@ -881,6 +884,9 @@ func (sg *SubGraph) ToJSON(l *Latency) ([]byte, error) {
 		}
 
 		if err := sg.preTraverse(uid, n1); err != nil {
+			if err.Error() == "_INV_" {
+				continue
+			}
 			return nil, err
 		}
 		n.AddChild(sg.Params.Alias, n1)
