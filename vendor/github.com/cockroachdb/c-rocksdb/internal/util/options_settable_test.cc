@@ -157,7 +157,8 @@ TEST_F(OptionsSettableTest, BlockBasedTableOptionsAllFieldsSettable) {
       "index_block_restart_interval=4;"
       "filter_policy=bloomfilter:4:true;whole_key_filtering=1;"
       "skip_table_builder_flush=1;format_version=1;"
-      "hash_index_allow_collision=false;",
+      "hash_index_allow_collision=false;"
+      "verify_compression=true;",
       new_bbto));
 
   ASSERT_EQ(unset_bytes_base,
@@ -196,6 +197,8 @@ TEST_F(OptionsSettableTest, DBOptionsAllFieldsSettable) {
       {offsetof(struct DBOptions, db_paths), sizeof(std::vector<DbPath>)},
       {offsetof(struct DBOptions, db_log_dir), sizeof(std::string)},
       {offsetof(struct DBOptions, wal_dir), sizeof(std::string)},
+      {offsetof(struct DBOptions, write_buffer_manager),
+       sizeof(std::shared_ptr<WriteBufferManager>)},
       {offsetof(struct DBOptions, listeners),
        sizeof(std::vector<std::shared_ptr<EventListener>>)},
       {offsetof(struct DBOptions, row_cache), sizeof(std::shared_ptr<Cache>)},
@@ -282,7 +285,8 @@ TEST_F(OptionsSettableTest, DBOptionsAllFieldsSettable) {
                              "access_hint_on_compaction_start=NONE;"
                              "info_log_level=DEBUG_LEVEL;"
                              "dump_malloc_stats=false;"
-                             "allow_2pc=false;",
+                             "allow_2pc=false;"
+                             "avoid_flush_during_recovery=false;",
                              new_options));
 
   ASSERT_EQ(unset_bytes_base, NumUnsetBytes(new_options_ptr, sizeof(DBOptions),
@@ -387,7 +391,7 @@ TEST_F(OptionsSettableTest, ColumnFamilyOptionsAllFieldsSettable) {
       "max_bytes_for_level_base=986;"
       "bloom_locality=8016;"
       "target_file_size_base=4294976376;"
-      "memtable_prefix_bloom_huge_page_tlb_size=2557;"
+      "memtable_huge_page_size=2557;"
       "max_successive_merges=5497;"
       "max_sequential_skip_in_iterations=4294971408;"
       "arena_block_size=1893;"
@@ -413,16 +417,14 @@ TEST_F(OptionsSettableTest, ColumnFamilyOptionsAllFieldsSettable) {
       "max_write_buffer_number_to_maintain=84;"
       "verify_checksums_in_compaction=false;"
       "merge_operator=aabcxehazrMergeOperator;"
-      "memtable_prefix_bloom_bits=4642;"
+      "memtable_prefix_bloom_size_ratio=0.4642;"
       "paranoid_file_checks=true;"
       "inplace_update_num_locks=7429;"
       "optimize_filters_for_hits=false;"
       "level_compaction_dynamic_level_bytes=false;"
       "inplace_update_support=false;"
       "compaction_style=kCompactionStyleFIFO;"
-      "memtable_prefix_bloom_probes=2511;"
       "purge_redundant_kvs_while_flush=true;"
-      "filter_deletes=false;"
       "hard_pending_compaction_bytes_limit=0;"
       "disable_auto_compactions=false;"
       "report_bg_io_stats=true;",

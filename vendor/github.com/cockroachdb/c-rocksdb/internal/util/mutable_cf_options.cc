@@ -70,16 +70,12 @@ void MutableCFOptions::Dump(Logger* log) const {
       max_write_buffer_number);
   Log(log, "                         arena_block_size: %" ROCKSDB_PRIszt,
       arena_block_size);
-  Log(log, "               memtable_prefix_bloom_bits: %" PRIu32,
-      memtable_prefix_bloom_bits);
-  Log(log, "             memtable_prefix_bloom_probes: %" PRIu32,
-      memtable_prefix_bloom_probes);
-  Log(log, " memtable_prefix_bloom_huge_page_tlb_size: %" ROCKSDB_PRIszt,
-      memtable_prefix_bloom_huge_page_tlb_size);
+  Log(log, "              memtable_prefix_bloom_ratio: %f",
+      memtable_prefix_bloom_size_ratio);
+  Log(log, " memtable_huge_page_size: %" ROCKSDB_PRIszt,
+      memtable_huge_page_size);
   Log(log, "                    max_successive_merges: %" ROCKSDB_PRIszt,
       max_successive_merges);
-  Log(log, "                           filter_deletes: %d",
-      filter_deletes);
   Log(log, "                 disable_auto_compactions: %d",
       disable_auto_compactions);
   Log(log, "      soft_pending_compaction_bytes_limit: %" PRIu64,

@@ -26,7 +26,6 @@
 #include "db/table_properties_collector.h"
 #include "db/version_set.h"
 #include "db/write_controller.h"
-#include "db/writebuffer.h"
 #include "memtable/hash_skiplist_rep.h"
 #include "util/autovector.h"
 #include "util/compression.h"
@@ -130,11 +129,6 @@ Status CheckConcurrentWritesSupported(const ColumnFamilyOptions& cf_options) {
         "In-place memtable updates (inplace_update_support) is not compatible "
         "with concurrent writes (allow_concurrent_memtable_write)");
   }
-  if (cf_options.filter_deletes) {
-    return Status::InvalidArgument(
-        "Delete filtering (filter_deletes) is not compatible with concurrent "
-        "memtable writes (allow_concurrent_memtable_writes)");
-  }
   if (!cf_options.memtable_factory->IsInsertConcurrentlySupported()) {
     return Status::InvalidArgument(
         "Memtable doesn't concurrent writes (allow_concurrent_memtable_write)");
@@ -176,6 +170,12 @@ ColumnFamilyOptions SanitizeOptions(const DBOptions& db_options,
   }
   if (result.max_write_buffer_number_to_maintain < 0) {
     result.max_write_buffer_number_to_maintain = result.max_write_buffer_number;
+  }
+  // bloom filter size shouldn't exceed 1/4 of memtable size.
+  if (result.memtable_prefix_bloom_size_ratio > 0.25) {
+    result.memtable_prefix_bloom_size_ratio = 0.25;
+  } else if (result.memtable_prefix_bloom_size_ratio < 0) {
+    result.memtable_prefix_bloom_size_ratio = 0;
   }
   XFUNC_TEST("memtablelist_history", "transaction_xftest_SanitizeOptions",
              xf_transaction_set_memtable_history1,
@@ -329,7 +329,7 @@ void SuperVersionUnrefHandle(void* ptr) {
 
 ColumnFamilyData::ColumnFamilyData(
     uint32_t id, const std::string& name, Version* _dummy_versions,
-    Cache* _table_cache, WriteBuffer* write_buffer,
+    Cache* _table_cache, WriteBufferManager* write_buffer_manager,
     const ColumnFamilyOptions& cf_options, const DBOptions* db_options,
     const EnvOptions& env_options, ColumnFamilySet* column_family_set)
     : id_(id),
@@ -343,7 +343,7 @@ ColumnFamilyData::ColumnFamilyData(
                SanitizeOptions(*db_options, &internal_comparator_, cf_options)),
       ioptions_(options_),
       mutable_cf_options_(options_, ioptions_),
-      write_buffer_(write_buffer),
+      write_buffer_manager_(write_buffer_manager),
       mem_(nullptr),
       imm_(options_.min_write_buffer_number_to_merge,
            options_.max_write_buffer_number_to_maintain),
@@ -558,8 +558,9 @@ void ColumnFamilyData::RecalculateWriteStallConditions(
           "(waiting for flush), max_write_buffer_number is set to %d",
           name_.c_str(), imm()->NumNotFlushed(),
           mutable_cf_options.max_write_buffer_number);
-    } else if (vstorage->l0_delay_trigger_count() >=
-               mutable_cf_options.level0_stop_writes_trigger) {
+    } else if (!mutable_cf_options.disable_auto_compactions &&
+               vstorage->l0_delay_trigger_count() >=
+                   mutable_cf_options.level0_stop_writes_trigger) {
       write_controller_token_ = write_controller->GetStopToken();
       internal_stats_->AddCFStats(InternalStats::LEVEL0_NUM_FILES_TOTAL, 1);
       if (compaction_picker_->IsLevel0CompactionInProgress()) {
@@ -569,7 +570,8 @@ void ColumnFamilyData::RecalculateWriteStallConditions(
       Log(InfoLogLevel::WARN_LEVEL, ioptions_.info_log,
           "[%s] Stopping writes because we have %d level-0 files",
           name_.c_str(), vstorage->l0_delay_trigger_count());
-    } else if (mutable_cf_options.hard_pending_compaction_bytes_limit > 0 &&
+    } else if (!mutable_cf_options.disable_auto_compactions &&
+               mutable_cf_options.hard_pending_compaction_bytes_limit > 0 &&
                compaction_needed_bytes >=
                    mutable_cf_options.hard_pending_compaction_bytes_limit) {
       write_controller_token_ = write_controller->GetStopToken();
@@ -594,7 +596,8 @@ void ColumnFamilyData::RecalculateWriteStallConditions(
           name_.c_str(), imm()->NumNotFlushed(),
           mutable_cf_options.max_write_buffer_number,
           write_controller->delayed_write_rate());
-    } else if (mutable_cf_options.level0_slowdown_writes_trigger >= 0 &&
+    } else if (!mutable_cf_options.disable_auto_compactions &&
+               mutable_cf_options.level0_slowdown_writes_trigger >= 0 &&
                vstorage->l0_delay_trigger_count() >=
                    mutable_cf_options.level0_slowdown_writes_trigger) {
       write_controller_token_ =
@@ -611,7 +614,8 @@ void ColumnFamilyData::RecalculateWriteStallConditions(
           "rate %" PRIu64,
           name_.c_str(), vstorage->l0_delay_trigger_count(),
           write_controller->delayed_write_rate());
-    } else if (mutable_cf_options.soft_pending_compaction_bytes_limit > 0 &&
+    } else if (!mutable_cf_options.disable_auto_compactions &&
+               mutable_cf_options.soft_pending_compaction_bytes_limit > 0 &&
                vstorage->estimated_compaction_needed_bytes() >=
                    mutable_cf_options.soft_pending_compaction_bytes_limit) {
       write_controller_token_ =
@@ -675,7 +679,7 @@ MemTable* ColumnFamilyData::ConstructNewMemtable(
     const MutableCFOptions& mutable_cf_options, SequenceNumber earliest_seq) {
   assert(current_ != nullptr);
   return new MemTable(internal_comparator_, ioptions_, mutable_cf_options,
-                      write_buffer_, earliest_seq);
+                      write_buffer_manager_, earliest_seq);
 }
 
 void ColumnFamilyData::CreateNewMemtable(
@@ -854,7 +858,7 @@ ColumnFamilySet::ColumnFamilySet(const std::string& dbname,
                                  const DBOptions* db_options,
                                  const EnvOptions& env_options,
                                  Cache* table_cache,
-                                 WriteBuffer* write_buffer,
+                                 WriteBufferManager* write_buffer_manager,
                                  WriteController* write_controller)
     : max_column_family_(0),
       dummy_cfd_(new ColumnFamilyData(0, "", nullptr, nullptr, nullptr,
@@ -865,7 +869,7 @@ ColumnFamilySet::ColumnFamilySet(const std::string& dbname,
       db_options_(db_options),
       env_options_(env_options),
       table_cache_(table_cache),
-      write_buffer_(write_buffer),
+      write_buffer_manager_(write_buffer_manager),
       write_controller_(write_controller) {
   // initialize linked list
   dummy_cfd_->prev_ = dummy_cfd_;
@@ -928,10 +932,9 @@ ColumnFamilyData* ColumnFamilySet::CreateColumnFamily(
     const std::string& name, uint32_t id, Version* dummy_versions,
     const ColumnFamilyOptions& options) {
   assert(column_families_.find(name) == column_families_.end());
-  ColumnFamilyData* new_cfd =
-      new ColumnFamilyData(id, name, dummy_versions, table_cache_,
-                           write_buffer_, options, db_options_,
-                           env_options_, this);
+  ColumnFamilyData* new_cfd = new ColumnFamilyData(
+      id, name, dummy_versions, table_cache_, write_buffer_manager_, options,
+      db_options_, env_options_, this);
   column_families_.insert({name, id});
   column_family_data_.insert({id, new_cfd});
   max_column_family_ = std::max(max_column_family_, id);

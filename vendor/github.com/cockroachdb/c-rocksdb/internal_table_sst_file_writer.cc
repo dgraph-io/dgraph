@@ -86,6 +86,7 @@ struct SstFileWriter::Rep {
   InternalKeyComparator internal_comparator;
   ExternalSstFileInfo file_info;
   std::string column_family_name;
+  InternalKey ikey;
 };
 
 SstFileWriter::SstFileWriter(const EnvOptions& env_options,
@@ -104,10 +105,14 @@ Status SstFileWriter::Open(const std::string& file_path) {
     return s;
   }
 
-  CompressionType compression_type = r->mutable_cf_options.compression;
-  if (!r->ioptions.compression_per_level.empty()) {
+  CompressionType compression_type;
+  if (r->ioptions.bottommost_compression != kDisableCompressionOption) {
+    compression_type = r->ioptions.bottommost_compression;
+  } else if (!r->ioptions.compression_per_level.empty()) {
     // Use the compression of the last level if we have per level compression
     compression_type = *(r->ioptions.compression_per_level.rbegin());
+  } else {
+    compression_type = r->mutable_cf_options.compression;
   }
 
   std::vector<std::unique_ptr<IntTblPropCollectorFactory>>
@@ -142,7 +147,7 @@ Status SstFileWriter::Add(const Slice& user_key, const Slice& value) {
   }
 
   if (r->file_info.num_entries == 0) {
-    r->file_info.smallest_key = user_key.ToString();
+    r->file_info.smallest_key.assign(user_key.data(), user_key.size());
   } else {
     if (r->internal_comparator.user_comparator()->Compare(
             user_key, r->file_info.largest_key) <= 0) {
@@ -153,12 +158,12 @@ Status SstFileWriter::Add(const Slice& user_key, const Slice& value) {
 
   // update file info
   r->file_info.num_entries++;
-  r->file_info.largest_key = user_key.ToString();
+  r->file_info.largest_key.assign(user_key.data(), user_key.size());
   r->file_info.file_size = r->builder->FileSize();
 
-  InternalKey ikey(user_key, 0 /* Sequence Number */,
-                   ValueType::kTypeValue /* Put */);
-  r->builder->Add(ikey.Encode(), value);
+  r->ikey.Set(user_key, 0 /* Sequence Number */,
+              ValueType::kTypeValue /* Put */);
+  r->builder->Add(r->ikey.Encode(), value);
 
   return Status::OK();
 }

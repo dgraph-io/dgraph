@@ -18,30 +18,47 @@
 
 namespace rocksdb {
 
-// TODO(agiardullo): Clean up merge callsites to use this func
-Status MergeHelper::TimedFullMerge(const Slice& key, const Slice* value,
-                                   const std::deque<std::string>& operands,
-                                   const MergeOperator* merge_operator,
+Status MergeHelper::TimedFullMerge(const MergeOperator* merge_operator,
+                                   const Slice& key, const Slice* value,
+                                   const std::vector<Slice>& operands,
+                                   std::string* result, Logger* logger,
                                    Statistics* statistics, Env* env,
-                                   Logger* logger, std::string* result) {
+                                   Slice* result_operand) {
+  assert(merge_operator != nullptr);
+
   if (operands.size() == 0) {
+    assert(value != nullptr && result != nullptr);
     result->assign(value->data(), value->size());
     return Status::OK();
   }
 
-  if (merge_operator == nullptr) {
-    return Status::NotSupported("Provide a merge_operator when opening DB");
+  bool success;
+  Slice tmp_result_operand(nullptr, 0);
+  const MergeOperator::MergeOperationInput merge_in(key, value, operands,
+                                                    logger);
+  MergeOperator::MergeOperationOutput merge_out(*result, tmp_result_operand);
+  {
+    // Setup to time the merge
+    StopWatchNano timer(env, statistics != nullptr);
+    PERF_TIMER_GUARD(merge_operator_time_nanos);
+
+    // Do the merge
+    success = merge_operator->FullMergeV2(merge_in, &merge_out);
+
+    if (tmp_result_operand.data()) {
+      // FullMergeV2 result is an existing operand
+      if (result_operand != nullptr) {
+        *result_operand = tmp_result_operand;
+      } else {
+        result->assign(tmp_result_operand.data(), tmp_result_operand.size());
+      }
+    } else if (result_operand) {
+      *result_operand = Slice(nullptr, 0);
+    }
+
+    RecordTick(statistics, MERGE_OPERATION_TOTAL_TIME,
+               statistics ? timer.ElapsedNanos() : 0);
   }
-
-  // Setup to time the merge
-  StopWatchNano timer(env, statistics != nullptr);
-  PERF_TIMER_GUARD(merge_operator_time_nanos);
-
-  // Do the merge
-  bool success =
-      merge_operator->FullMerge(key, value, operands, result, logger);
-
-  RecordTick(statistics, MERGE_OPERATION_TOTAL_TIME, timer.ElapsedNanosSafe());
 
   if (!success) {
     RecordTick(statistics, NUMBER_MERGE_FAILURES);
@@ -64,7 +81,7 @@ Status MergeHelper::MergeUntil(InternalIterator* iter,
   // Also maintain the list of merge operands seen.
   assert(HasOperator());
   keys_.clear();
-  operands_.clear();
+  merge_context_.Clear();
   assert(user_merge_operator_);
   bool first_key = true;
 
@@ -86,7 +103,7 @@ Status MergeHelper::MergeUntil(InternalIterator* iter,
   bool hit_the_next_user_key = false;
   for (; iter->Valid(); iter->Next(), original_key_is_iter = false) {
     ParsedInternalKey ikey;
-    assert(keys_.size() == operands_.size());
+    assert(keys_.size() == merge_context_.GetNumOperands());
 
     if (!ParseInternalKey(iter->key(), &ikey)) {
       // stop at corrupted key
@@ -140,9 +157,9 @@ Status MergeHelper::MergeUntil(InternalIterator* iter,
       const Slice val = iter->value();
       const Slice* val_ptr = (kTypeValue == ikey.type) ? &val : nullptr;
       std::string merge_result;
-      s = TimedFullMerge(ikey.user_key, val_ptr, operands_,
-                         user_merge_operator_, stats_, env_, logger_,
-                         &merge_result);
+      s = TimedFullMerge(user_merge_operator_, ikey.user_key, val_ptr,
+                         merge_context_.GetOperands(), &merge_result, logger_,
+                         stats_, env_);
 
       // We store the result in keys_.back() and operands_.back()
       // if nothing went wrong (i.e.: no operand corruption on disk)
@@ -152,9 +169,9 @@ Status MergeHelper::MergeUntil(InternalIterator* iter,
         orig_ikey.type = kTypeValue;
         UpdateInternalKey(&original_key, orig_ikey.sequence, orig_ikey.type);
         keys_.clear();
-        operands_.clear();
+        merge_context_.Clear();
         keys_.emplace_front(std::move(original_key));
-        operands_.emplace_front(std::move(merge_result));
+        merge_context_.PushOperand(merge_result);
       }
 
       // move iter to the next entry
@@ -188,12 +205,13 @@ Status MergeHelper::MergeUntil(InternalIterator* iter,
           // original_key before
           ParseInternalKey(keys_.back(), &orig_ikey);
         }
-        operands_.push_front(value_slice.ToString());
+        merge_context_.PushOperand(value_slice,
+                                   iter->IsValuePinned() /* operand_pinned */);
       }
     }
   }
 
-  if (operands_.size() == 0) {
+  if (merge_context_.GetNumOperands() == 0) {
     // we filtered out all the merge operands
     return Status::OK();
   }
@@ -218,12 +236,12 @@ Status MergeHelper::MergeUntil(InternalIterator* iter,
     // do a final merge with nullptr as the existing value and say
     // bye to the merge type (it's now converted to a Put)
     assert(kTypeMerge == orig_ikey.type);
-    assert(operands_.size() >= 1);
-    assert(operands_.size() == keys_.size());
+    assert(merge_context_.GetNumOperands() >= 1);
+    assert(merge_context_.GetNumOperands() == keys_.size());
     std::string merge_result;
-    s = TimedFullMerge(orig_ikey.user_key, nullptr, operands_,
-                       user_merge_operator_, stats_, env_, logger_,
-                       &merge_result);
+    s = TimedFullMerge(user_merge_operator_, orig_ikey.user_key, nullptr,
+                       merge_context_.GetOperands(), &merge_result, logger_,
+                       stats_, env_);
     if (s.ok()) {
       // The original key encountered
       // We are certain that keys_ is not empty here (see assertions couple of
@@ -232,9 +250,9 @@ Status MergeHelper::MergeUntil(InternalIterator* iter,
       orig_ikey.type = kTypeValue;
       UpdateInternalKey(&original_key, orig_ikey.sequence, orig_ikey.type);
       keys_.clear();
-      operands_.clear();
+      merge_context_.Clear();
       keys_.emplace_front(std::move(original_key));
-      operands_.emplace_front(std::move(merge_result));
+      merge_context_.PushOperand(merge_result);
     }
   } else {
     // We haven't seen the beginning of the key nor a Put/Delete.
@@ -245,8 +263,8 @@ Status MergeHelper::MergeUntil(InternalIterator* iter,
     // partial merge returns Status::OK(). Should we change the status code
     // after a successful partial merge?
     s = Status::MergeInProgress();
-    if (operands_.size() >= 2 &&
-        operands_.size() >= min_partial_merge_operands_) {
+    if (merge_context_.GetNumOperands() >= 2 &&
+        merge_context_.GetNumOperands() >= min_partial_merge_operands_) {
       bool merge_success = false;
       std::string merge_result;
       {
@@ -254,16 +272,17 @@ Status MergeHelper::MergeUntil(InternalIterator* iter,
         PERF_TIMER_GUARD(merge_operator_time_nanos);
         merge_success = user_merge_operator_->PartialMergeMulti(
             orig_ikey.user_key,
-            std::deque<Slice>(operands_.begin(), operands_.end()),
+            std::deque<Slice>(merge_context_.GetOperands().begin(),
+                              merge_context_.GetOperands().end()),
             &merge_result, logger_);
         RecordTick(stats_, MERGE_OPERATION_TOTAL_TIME,
-                   timer.ElapsedNanosSafe());
+                   stats_ ? timer.ElapsedNanosSafe() : 0);
       }
       if (merge_success) {
         // Merging of operands (associative merge) was successful.
         // Replace operands with the merge result
-        operands_.clear();
-        operands_.emplace_front(std::move(merge_result));
+        merge_context_.Clear();
+        merge_context_.PushOperand(merge_result);
         keys_.erase(keys_.begin(), keys_.end() - 1);
       }
     }

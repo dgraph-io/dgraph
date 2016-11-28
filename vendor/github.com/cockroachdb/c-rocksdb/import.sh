@@ -32,9 +32,10 @@ set -eu
 
 rm -rf internal/*
 find . -type l -not -path './.git/*' | xargs rm
-curl -sL https://github.com/facebook/rocksdb/archive/v4.9.tar.gz | tar zxf - -C internal --strip-components=1
+curl -sL https://github.com/facebook/rocksdb/archive/v4.11.2.tar.gz | tar zxf - -C internal --strip-components=1
 make -C internal util/build_version.cc
 patch -p1 < gitignore.patch
+patch -p1 < testharness.patch
 # Downcase some windows-only includes for compatibility with mingw64.
 grep -lRF '<Windows.h>' internal | xargs sed -i~ 's!<Windows.h>!<windows.h>!g'
 grep -lRF '<Rpc.h>' internal | xargs sed -i~ 's!<Rpc.h>!<rpc.h>!g'

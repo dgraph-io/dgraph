@@ -30,6 +30,8 @@ SpecialEnv::SpecialEnv(Env* base)
   manifest_write_error_.store(false, std::memory_order_release);
   log_write_error_.store(false, std::memory_order_release);
   random_file_open_counter_.store(0, std::memory_order_relaxed);
+  delete_count_.store(0, std::memory_order_relaxed);
+  num_open_wal_file_.store(0);
   log_write_slowdown_ = 0;
   bytes_written_ = 0;
   sync_counter_ = 0;
@@ -91,10 +93,6 @@ bool DBTestBase::ShouldSkipOptions(int option_config, int skip_mask) {
     }
 #endif
 
-    if ((skip_mask & kSkipDeletesFilterFirst) &&
-        option_config == kDeletesFilterFirst) {
-      return true;
-    }
     if ((skip_mask & kSkipUniversalCompaction) &&
         (option_config == kUniversalCompaction ||
          option_config == kUniversalCompactionMultiLevel)) {
@@ -311,9 +309,6 @@ Options DBTestBase::CurrentOptions(
       options.report_bg_io_stats = true;
       // TODO(3.13) -- test more options
       break;
-    case kDeletesFilterFirst:
-      options.filter_deletes = true;
-      break;
     case kUniversalCompaction:
       options.compaction_style = kCompactionStyleUniversal;
       options.num_levels = 1;
@@ -449,7 +444,7 @@ void DBTestBase::Reopen(const Options& options) {
 
 void DBTestBase::Close() {
   for (auto h : handles_) {
-    delete h;
+    db_->DestroyColumnFamilyHandle(h);
   }
   handles_.clear();
   delete db_;
@@ -1081,7 +1076,70 @@ std::vector<std::uint64_t> DBTestBase::ListTableFiles(Env* env,
   return file_numbers;
 }
 
+void DBTestBase::VerifyDBFromMap(std::map<std::string, std::string> true_data) {
+  for (auto& kv : true_data) {
+    ASSERT_EQ(Get(kv.first), kv.second);
+  }
+
+  ReadOptions ro;
+  ro.total_order_seek = true;
+  Iterator* iter = db_->NewIterator(ro);
+  // Verify Iterator::Next()
+  auto data_iter = true_data.begin();
+  for (iter->SeekToFirst(); iter->Valid(); iter->Next(), data_iter++) {
+    ASSERT_EQ(iter->key().ToString(), data_iter->first);
+    ASSERT_EQ(iter->value().ToString(), data_iter->second);
+  }
+  ASSERT_EQ(data_iter, true_data.end());
+
+  // Verify Iterator::Prev()
+  auto data_rev = true_data.rbegin();
+  for (iter->SeekToLast(); iter->Valid(); iter->Prev(), data_rev++) {
+    ASSERT_EQ(iter->key().ToString(), data_rev->first);
+    ASSERT_EQ(iter->value().ToString(), data_rev->second);
+  }
+  ASSERT_EQ(data_rev, true_data.rend());
+
+  // Verify Iterator::Seek()
+  for (auto kv : true_data) {
+    iter->Seek(kv.first);
+    ASSERT_EQ(kv.first, iter->key().ToString());
+    ASSERT_EQ(kv.second, iter->value().ToString());
+  }
+
+  delete iter;
+}
+
 #ifndef ROCKSDB_LITE
+
+Status DBTestBase::GenerateAndAddExternalFile(const Options options,
+                                              std::vector<int> keys,
+                                              size_t file_id) {
+  std::string file_path =
+      test::TmpDir(env_) + "/sst_files/" + ToString(file_id);
+  SstFileWriter sst_file_writer(EnvOptions(), options, options.comparator);
+
+  Status s = sst_file_writer.Open(file_path);
+  if (!s.ok()) {
+    return s;
+  }
+  for (auto& entry : keys) {
+    std::string k = Key(entry);
+    std::string v = k + ToString(file_id);
+    s = sst_file_writer.Add(k, v);
+    if (!s.ok()) {
+      return s;
+    }
+  }
+  s = sst_file_writer.Finish();
+
+  if (s.ok()) {
+    s = db_->AddFile(std::vector<std::string>(1, file_path));
+  }
+
+  return s;
+}
+
 uint64_t DBTestBase::GetNumberOfSstFilesForColumnFamily(
     DB* db, std::string column_family_name) {
   std::vector<LiveFileMetaData> metadata;

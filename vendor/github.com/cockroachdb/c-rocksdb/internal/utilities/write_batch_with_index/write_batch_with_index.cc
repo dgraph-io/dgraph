@@ -226,6 +226,8 @@ class BaseDeltaIterator : public Iterator {
   bool BaseValid() const { return base_iterator_->Valid(); }
   bool DeltaValid() const { return delta_iterator_->Valid(); }
   void UpdateCurrent() {
+// Suppress false positive clang analyzer warnings.
+#ifndef __clang_analyzer__
     while (true) {
       WriteEntry delta_entry;
       if (DeltaValid()) {
@@ -275,6 +277,7 @@ class BaseDeltaIterator : public Iterator {
     }
 
     AssertInvariants();
+#endif  // __clang_analyzer__
   }
 
   bool forward_;
@@ -739,9 +742,13 @@ Status WriteBatchWithIndex::GetFromBatchAndDB(DB* db,
         merge_data = nullptr;
       }
 
-      s = MergeHelper::TimedFullMerge(
-          key, merge_data, merge_context.GetOperands(), merge_operator,
-          statistics, env, logger, value);
+      if (merge_operator) {
+        s = MergeHelper::TimedFullMerge(merge_operator, key, merge_data,
+                                        merge_context.GetOperands(), value,
+                                        logger, statistics, env);
+      } else {
+        s = Status::InvalidArgument("Options::merge_operator must be set");
+      }
     }
   }
 

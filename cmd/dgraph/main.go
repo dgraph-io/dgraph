@@ -479,11 +479,6 @@ func storeStatsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("</pre>"))
 }
 
-func localhost(ip string) bool {
-	// Checking both IPv4 and IPv6 address.
-	return ip == "127.0.0.1" || ip == "::1"
-}
-
 func shutDownHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
 		x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
@@ -491,7 +486,7 @@ func shutDownHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ip, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil || !localhost(ip) {
+	if err != nil || !net.ParseIP(ip).IsLoopback() {
 		x.SetStatus(w, x.ErrorUnauthorized, fmt.Sprintf("Request from IP: %v", ip))
 		return
 	}
@@ -507,7 +502,7 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ip, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil || !localhost(ip) {
+	if err != nil || !net.ParseIP(ip).IsLoopback() {
 		x.SetStatus(w, x.ErrorUnauthorized,
 			fmt.Sprintf("Request received from IP: %v. Only requests from localhost are allowed.", ip))
 		return

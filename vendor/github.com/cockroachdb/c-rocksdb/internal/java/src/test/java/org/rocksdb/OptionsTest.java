@@ -232,15 +232,6 @@ public class OptionsTest {
   }
 
   @Test
-  public void filterDeletes() {
-    try (final Options opt = new Options()) {
-      final boolean boolValue = rand.nextBoolean();
-      opt.setFilterDeletes(boolValue);
-      assertThat(opt.filterDeletes()).isEqualTo(boolValue);
-    }
-  }
-
-  @Test
   public void maxSequentialSkipInIterations() {
     try (final Options opt = new Options()) {
       final long longValue = rand.nextLong();
@@ -268,20 +259,11 @@ public class OptionsTest {
   }
 
   @Test
-  public void memtablePrefixBloomBits() {
+  public void memtablePrefixBloomSizeRatio() {
     try (final Options opt = new Options()) {
-      final int intValue = rand.nextInt();
-      opt.setMemtablePrefixBloomBits(intValue);
-      assertThat(opt.memtablePrefixBloomBits()).isEqualTo(intValue);
-    }
-  }
-
-  @Test
-  public void memtablePrefixBloomProbes() {
-    try (final Options opt = new Options()) {
-      final int intValue = rand.nextInt();
-      opt.setMemtablePrefixBloomProbes(intValue);
-      assertThat(opt.memtablePrefixBloomProbes()).isEqualTo(intValue);
+      final double doubleValue = rand.nextDouble();
+      opt.setMemtablePrefixBloomSizeRatio(doubleValue);
+      assertThat(opt.memtablePrefixBloomSizeRatio()).isEqualTo(doubleValue);
     }
   }
 

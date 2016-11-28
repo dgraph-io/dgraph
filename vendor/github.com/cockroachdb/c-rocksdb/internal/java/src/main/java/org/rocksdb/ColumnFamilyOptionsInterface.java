@@ -882,29 +882,6 @@ public interface ColumnFamilyOptionsInterface {
   boolean verifyChecksumsInCompaction();
 
   /**
-   * Use KeyMayExist API to filter deletes when this is true.
-   * If KeyMayExist returns false, i.e. the key definitely does not exist, then
-   * the delete is a noop. KeyMayExist only incurs in-memory look up.
-   * This optimization avoids writing the delete to storage when appropriate.
-   * Default: false
-   *
-   * @param filterDeletes true if filter-deletes behavior is on.
-   * @return the reference to the current option.
-   */
-  Object setFilterDeletes(boolean filterDeletes);
-
-  /**
-   * Use KeyMayExist API to filter deletes when this is true.
-   * If KeyMayExist returns false, i.e. the key definitely does not exist, then
-   * the delete is a noop. KeyMayExist only incurs in-memory look up.
-   * This optimization avoids writing the delete to storage when appropriate.
-   * Default: false
-   *
-   * @return true if filter-deletes behavior is on.
-   */
-  boolean filterDeletes();
-
-  /**
    * An iteration-&gt;Next() sequentially skips over keys with the same
    * user-key unless this option is set. This number specifies the number
    * of keys (with the same userkey) that will be sequentially
@@ -1011,15 +988,15 @@ public interface ColumnFamilyOptionsInterface {
   long inplaceUpdateNumLocks();
 
   /**
-   * Sets the number of bits used in the prefix bloom filter.
+   * Sets the size ratio of the memtable used in the prefix bloom filter.
    *
    * This value will be used only when a prefix-extractor is specified.
    *
-   * @param memtablePrefixBloomBits the number of bits used in the
+   * @param memtablePrefixBloomSizeRatio the number of bits used in the
    *     prefix bloom filter.
    * @return the reference to the current option.
    */
-  Object setMemtablePrefixBloomBits(int memtablePrefixBloomBits);
+  Object setMemtablePrefixBloomSizeRatio(double memtablePrefixBloomSizeRatio);
 
   /**
    * Returns the number of bits used in the prefix bloom filter.
@@ -1029,22 +1006,7 @@ public interface ColumnFamilyOptionsInterface {
    * @return the number of bloom-bits.
    * @see #useFixedLengthPrefixExtractor(int)
    */
-  int memtablePrefixBloomBits();
-
-  /**
-   * The number of hash probes per key used in the mem-table.
-   *
-   * @param memtablePrefixBloomProbes the number of hash probes per key.
-   * @return the reference to the current option.
-   */
-  Object setMemtablePrefixBloomProbes(int memtablePrefixBloomProbes);
-
-  /**
-   * The number of hash probes per key used in the mem-table.
-   *
-   * @return the number of hash probes per key.
-   */
-  int memtablePrefixBloomProbes();
+  double memtablePrefixBloomSizeRatio();
 
   /**
    * Control locality of bloom filter probes to improve cache miss rate.
@@ -1074,7 +1036,7 @@ public interface ColumnFamilyOptionsInterface {
    * Default: 0
    *
    * @return the level of locality of bloom-filter probes.
-   * @see #setMemtablePrefixBloomProbes(int)
+   * @see #setBloomLocality(int)
    */
   int bloomLocality();
 

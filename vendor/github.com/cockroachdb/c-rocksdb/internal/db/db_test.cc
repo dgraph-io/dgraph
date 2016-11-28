@@ -1189,6 +1189,12 @@ bool MinLevelToCompress(CompressionType& type, Options& options, int wbits,
   } else if (LZ4_Supported()) {
     type = kLZ4Compression;
     fprintf(stderr, "using lz4\n");
+  } else if (XPRESS_Supported()) {
+    type = kXpressCompression;
+    fprintf(stderr, "using xpress\n");
+  } else if (ZSTD_Supported()) {
+    type = kZSTDNotFinalCompression;
+    fprintf(stderr, "using ZSTD\n");
   } else {
     fprintf(stderr, "skipping test, compression disabled\n");
     return false;
@@ -2067,8 +2073,8 @@ TEST_F(DBTest, SnapshotFiles) {
     dbfull()->DisableFileDeletions();
     dbfull()->GetLiveFiles(files, &manifest_size);
 
-    // CURRENT, MANIFEST, *.sst files (one for each CF)
-    ASSERT_EQ(files.size(), 4U);
+    // CURRENT, MANIFEST, OPTIONS, *.sst files (one for each CF)
+    ASSERT_EQ(files.size(), 5U);
 
     uint64_t number = 0;
     FileType type;
@@ -2284,130 +2290,6 @@ TEST_F(DBTest, FlushOneColumnFamily) {
     ASSERT_EQ(tables.size(), i + 1U);
   }
 }
-
-#ifndef ROCKSDB_LITE
-TEST_F(DBTest, SharedWriteBuffer) {
-  Options options = CurrentOptions();
-  options.db_write_buffer_size = 100000;  // this is the real limit
-  options.write_buffer_size = 500000;     // this is never hit
-  CreateAndReopenWithCF({"pikachu", "dobrynia", "nikitich"}, options);
-
-  // Trigger a flush on CF "nikitich"
-  ASSERT_OK(Put(0, Key(1), DummyString(1)));
-  ASSERT_OK(Put(1, Key(1), DummyString(1)));
-  ASSERT_OK(Put(3, Key(1), DummyString(90000)));
-  ASSERT_OK(Put(2, Key(2), DummyString(20000)));
-  ASSERT_OK(Put(2, Key(1), DummyString(1)));
-  dbfull()->TEST_WaitForFlushMemTable(handles_[0]);
-  dbfull()->TEST_WaitForFlushMemTable(handles_[1]);
-  dbfull()->TEST_WaitForFlushMemTable(handles_[2]);
-  dbfull()->TEST_WaitForFlushMemTable(handles_[3]);
-  {
-    ASSERT_EQ(GetNumberOfSstFilesForColumnFamily(db_, "default"),
-              static_cast<uint64_t>(0));
-    ASSERT_EQ(GetNumberOfSstFilesForColumnFamily(db_, "pikachu"),
-              static_cast<uint64_t>(0));
-    ASSERT_EQ(GetNumberOfSstFilesForColumnFamily(db_, "dobrynia"),
-              static_cast<uint64_t>(0));
-    ASSERT_EQ(GetNumberOfSstFilesForColumnFamily(db_, "nikitich"),
-              static_cast<uint64_t>(1));
-  }
-
-  // "dobrynia": 20KB
-  // Flush 'dobrynia'
-  ASSERT_OK(Put(3, Key(2), DummyString(40000)));
-  ASSERT_OK(Put(2, Key(2), DummyString(70000)));
-  ASSERT_OK(Put(0, Key(1), DummyString(1)));
-  dbfull()->TEST_WaitForFlushMemTable(handles_[1]);
-  dbfull()->TEST_WaitForFlushMemTable(handles_[2]);
-  dbfull()->TEST_WaitForFlushMemTable(handles_[3]);
-  {
-    ASSERT_EQ(GetNumberOfSstFilesForColumnFamily(db_, "default"),
-              static_cast<uint64_t>(0));
-    ASSERT_EQ(GetNumberOfSstFilesForColumnFamily(db_, "pikachu"),
-              static_cast<uint64_t>(0));
-    ASSERT_EQ(GetNumberOfSstFilesForColumnFamily(db_, "dobrynia"),
-              static_cast<uint64_t>(1));
-    ASSERT_EQ(GetNumberOfSstFilesForColumnFamily(db_, "nikitich"),
-              static_cast<uint64_t>(1));
-  }
-
-  // "nikitich" still has data of 80KB
-  // Inserting Data in "dobrynia" triggers "nikitich" flushing.
-  ASSERT_OK(Put(3, Key(2), DummyString(40000)));
-  ASSERT_OK(Put(2, Key(2), DummyString(40000)));
-  ASSERT_OK(Put(0, Key(1), DummyString(1)));
-  dbfull()->TEST_WaitForFlushMemTable(handles_[1]);
-  dbfull()->TEST_WaitForFlushMemTable(handles_[2]);
-  dbfull()->TEST_WaitForFlushMemTable(handles_[3]);
-  {
-    ASSERT_EQ(GetNumberOfSstFilesForColumnFamily(db_, "default"),
-              static_cast<uint64_t>(0));
-    ASSERT_EQ(GetNumberOfSstFilesForColumnFamily(db_, "pikachu"),
-              static_cast<uint64_t>(0));
-    ASSERT_EQ(GetNumberOfSstFilesForColumnFamily(db_, "dobrynia"),
-              static_cast<uint64_t>(1));
-    ASSERT_EQ(GetNumberOfSstFilesForColumnFamily(db_, "nikitich"),
-              static_cast<uint64_t>(2));
-  }
-
-  // "dobrynia" still has 40KB
-  ASSERT_OK(Put(1, Key(2), DummyString(20000)));
-  ASSERT_OK(Put(0, Key(1), DummyString(10000)));
-  ASSERT_OK(Put(0, Key(1), DummyString(1)));
-  dbfull()->TEST_WaitForFlushMemTable(handles_[0]);
-  dbfull()->TEST_WaitForFlushMemTable(handles_[1]);
-  dbfull()->TEST_WaitForFlushMemTable(handles_[2]);
-  dbfull()->TEST_WaitForFlushMemTable(handles_[3]);
-  // This should triggers no flush
-  {
-    ASSERT_EQ(GetNumberOfSstFilesForColumnFamily(db_, "default"),
-              static_cast<uint64_t>(0));
-    ASSERT_EQ(GetNumberOfSstFilesForColumnFamily(db_, "pikachu"),
-              static_cast<uint64_t>(0));
-    ASSERT_EQ(GetNumberOfSstFilesForColumnFamily(db_, "dobrynia"),
-              static_cast<uint64_t>(1));
-    ASSERT_EQ(GetNumberOfSstFilesForColumnFamily(db_, "nikitich"),
-              static_cast<uint64_t>(2));
-  }
-
-  // "default": 10KB, "pikachu": 20KB, "dobrynia": 40KB
-  ASSERT_OK(Put(1, Key(2), DummyString(40000)));
-  ASSERT_OK(Put(0, Key(1), DummyString(1)));
-  dbfull()->TEST_WaitForFlushMemTable(handles_[0]);
-  dbfull()->TEST_WaitForFlushMemTable(handles_[1]);
-  dbfull()->TEST_WaitForFlushMemTable(handles_[2]);
-  dbfull()->TEST_WaitForFlushMemTable(handles_[3]);
-  // This should triggers flush of "pikachu"
-  {
-    ASSERT_EQ(GetNumberOfSstFilesForColumnFamily(db_, "default"),
-              static_cast<uint64_t>(0));
-    ASSERT_EQ(GetNumberOfSstFilesForColumnFamily(db_, "pikachu"),
-              static_cast<uint64_t>(1));
-    ASSERT_EQ(GetNumberOfSstFilesForColumnFamily(db_, "dobrynia"),
-              static_cast<uint64_t>(1));
-    ASSERT_EQ(GetNumberOfSstFilesForColumnFamily(db_, "nikitich"),
-              static_cast<uint64_t>(2));
-  }
-
-  // "default": 10KB, "dobrynia": 40KB
-  // Some remaining writes so 'default', 'dobrynia' and 'nikitich' flush on
-  // closure.
-  ASSERT_OK(Put(3, Key(1), DummyString(1)));
-  ReopenWithColumnFamilies({"default", "pikachu", "dobrynia", "nikitich"},
-                           options);
-  {
-    ASSERT_EQ(GetNumberOfSstFilesForColumnFamily(db_, "default"),
-              static_cast<uint64_t>(1));
-    ASSERT_EQ(GetNumberOfSstFilesForColumnFamily(db_, "pikachu"),
-              static_cast<uint64_t>(1));
-    ASSERT_EQ(GetNumberOfSstFilesForColumnFamily(db_, "dobrynia"),
-              static_cast<uint64_t>(2));
-    ASSERT_EQ(GetNumberOfSstFilesForColumnFamily(db_, "nikitich"),
-              static_cast<uint64_t>(3));
-  }
-}
-#endif  // ROCKSDB_LITE
 
 TEST_F(DBTest, PurgeInfoLogs) {
   Options options = CurrentOptions();
@@ -2766,12 +2648,12 @@ class ModelDB : public DB {
 #ifndef ROCKSDB_LITE
   using DB::AddFile;
   virtual Status AddFile(ColumnFamilyHandle* column_family,
-                         const ExternalSstFileInfo* file_path,
+                         const std::vector<ExternalSstFileInfo>& file_info_list,
                          bool move_file) override {
     return Status::NotSupported("Not implemented.");
   }
   virtual Status AddFile(ColumnFamilyHandle* column_family,
-                         const std::string& file_path,
+                         const std::vector<std::string>& file_path_list,
                          bool move_file) override {
     return Status::NotSupported("Not implemented.");
   }
@@ -4182,7 +4064,7 @@ TEST_F(DBTest, DynamicLevelCompressionPerLevel) {
   options.level0_file_num_compaction_trigger = 2;
   options.level0_slowdown_writes_trigger = 2;
   options.level0_stop_writes_trigger = 2;
-  options.target_file_size_base = 2048;
+  options.target_file_size_base = 20480;
   options.level_compaction_dynamic_level_bytes = true;
   options.max_bytes_for_level_base = 102400;
   options.max_bytes_for_level_multiplier = 4;
@@ -4210,7 +4092,8 @@ TEST_F(DBTest, DynamicLevelCompressionPerLevel) {
   ASSERT_EQ(NumTableFilesAtLevel(1), 0);
   ASSERT_EQ(NumTableFilesAtLevel(2), 0);
   ASSERT_EQ(NumTableFilesAtLevel(3), 0);
-  ASSERT_GT(SizeAtLevel(0) + SizeAtLevel(4), 20U * 4000U);
+  // Assuming each files' metadata is at least 50 bytes/
+  ASSERT_GT(SizeAtLevel(0) + SizeAtLevel(4), 20U * 4000U + 50U * 4);
 
   // Insert 400KB. Some data will be compressed
   for (int i = 21; i < 120; i++) {
@@ -4220,7 +4103,8 @@ TEST_F(DBTest, DynamicLevelCompressionPerLevel) {
   dbfull()->TEST_WaitForCompact();
   ASSERT_EQ(NumTableFilesAtLevel(1), 0);
   ASSERT_EQ(NumTableFilesAtLevel(2), 0);
-  ASSERT_LT(SizeAtLevel(0) + SizeAtLevel(3) + SizeAtLevel(4), 120U * 4000U);
+  ASSERT_LT(SizeAtLevel(0) + SizeAtLevel(3) + SizeAtLevel(4),
+            120U * 4000U + 50U * 24);
   // Make sure data in files in L3 is not compacted by removing all files
   // in L4 and calculate number of rows
   ASSERT_OK(dbfull()->SetOptions({
@@ -4240,7 +4124,7 @@ TEST_F(DBTest, DynamicLevelCompressionPerLevel) {
     num_keys++;
   }
   ASSERT_OK(iter->status());
-  ASSERT_GT(SizeAtLevel(0) + SizeAtLevel(3), num_keys * 4000U);
+  ASSERT_GT(SizeAtLevel(0) + SizeAtLevel(3), num_keys * 4000U + num_keys * 10U);
 }
 
 TEST_F(DBTest, DynamicLevelCompressionPerLevel2) {
@@ -4807,6 +4691,77 @@ TEST_F(DBTest, EncodeDecompressedBlockSizeTest) {
   }
 }
 
+TEST_F(DBTest, CompressionStatsTest) {
+  CompressionType type;
+
+  if (Snappy_Supported()) {
+    type = kSnappyCompression;
+    fprintf(stderr, "using snappy\n");
+  } else if (Zlib_Supported()) {
+    type = kZlibCompression;
+    fprintf(stderr, "using zlib\n");
+  } else if (BZip2_Supported()) {
+    type = kBZip2Compression;
+    fprintf(stderr, "using bzip2\n");
+  } else if (LZ4_Supported()) {
+    type = kLZ4Compression;
+    fprintf(stderr, "using lz4\n");
+  } else if (XPRESS_Supported()) {
+    type = kXpressCompression;
+    fprintf(stderr, "using xpress\n");
+  } else if (ZSTD_Supported()) {
+    type = kZSTDNotFinalCompression;
+    fprintf(stderr, "using ZSTD\n");
+  } else {
+    fprintf(stderr, "skipping test, compression disabled\n");
+    return;
+  }
+
+  Options options = CurrentOptions();
+  options.compression = type;
+  options.statistics = rocksdb::CreateDBStatistics();
+  options.statistics->stats_level_ = StatsLevel::kAll;
+  DestroyAndReopen(options);
+
+  int kNumKeysWritten = 100000;
+
+  // Check that compressions occur and are counted when compression is turned on
+  Random rnd(301);
+  for (int i = 0; i < kNumKeysWritten; ++i) {
+    // compressible string
+    ASSERT_OK(Put(Key(i), RandomString(&rnd, 128) + std::string(128, 'a')));
+  }
+  ASSERT_OK(Flush());
+  ASSERT_GT(options.statistics->getTickerCount(NUMBER_BLOCK_COMPRESSED), 0);
+
+  for (int i = 0; i < kNumKeysWritten; ++i) {
+    auto r = Get(Key(i));
+  }
+  ASSERT_GT(options.statistics->getTickerCount(NUMBER_BLOCK_DECOMPRESSED), 0);
+
+  options.compression = kNoCompression;
+  DestroyAndReopen(options);
+  uint64_t currentCompressions =
+            options.statistics->getTickerCount(NUMBER_BLOCK_COMPRESSED);
+  uint64_t currentDecompressions =
+            options.statistics->getTickerCount(NUMBER_BLOCK_DECOMPRESSED);
+
+  // Check that compressions do not occur when turned off
+  for (int i = 0; i < kNumKeysWritten; ++i) {
+    // compressible string
+    ASSERT_OK(Put(Key(i), RandomString(&rnd, 128) + std::string(128, 'a')));
+  }
+  ASSERT_OK(Flush());
+  ASSERT_EQ(options.statistics->getTickerCount(NUMBER_BLOCK_COMPRESSED)
+            - currentCompressions, 0);
+
+  for (int i = 0; i < kNumKeysWritten; ++i) {
+    auto r = Get(Key(i));
+  }
+  ASSERT_EQ(options.statistics->getTickerCount(NUMBER_BLOCK_DECOMPRESSED)
+            - currentDecompressions, 0);
+}
+
 TEST_F(DBTest, MutexWaitStatsDisabledByDefault) {
   Options options = CurrentOptions();
   options.create_if_missing = true;
@@ -4895,12 +4850,11 @@ class DelayedMergeOperator : public MergeOperator {
 
  public:
   explicit DelayedMergeOperator(DBTest* d) : db_test_(d) {}
-  virtual bool FullMerge(const Slice& key, const Slice* existing_value,
-                         const std::deque<std::string>& operand_list,
-                         std::string* new_value,
-                         Logger* logger) const override {
+
+  virtual bool FullMergeV2(const MergeOperationInput& merge_in,
+                           MergeOperationOutput* merge_out) const override {
     db_test_->env_->addon_time_.fetch_add(1000);
-    *new_value = "";
+    merge_out->new_value = "";
     return true;
   }
 

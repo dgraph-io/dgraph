@@ -324,27 +324,27 @@ class TestPlainTableFactory : public PlainTableFactory {
         column_family_id_(column_family_id),
         column_family_name_(std::move(column_family_name)) {}
 
-  Status NewTableReader(const TableReaderOptions& table_reader_options,
-                        unique_ptr<RandomAccessFileReader>&& file,
-                        uint64_t file_size,
-                        unique_ptr<TableReader>* table) const override {
+  Status NewTableReader(
+      const TableReaderOptions& table_reader_options,
+      unique_ptr<RandomAccessFileReader>&& file, uint64_t file_size,
+      unique_ptr<TableReader>* table,
+      bool prefetch_index_and_filter_in_cache) const override {
     TableProperties* props = nullptr;
     auto s =
         ReadTableProperties(file.get(), file_size, kPlainTableMagicNumber,
-                            table_reader_options.ioptions.env,
-                            table_reader_options.ioptions.info_log, &props);
+                            table_reader_options.ioptions, &props);
     EXPECT_TRUE(s.ok());
 
     if (store_index_in_file_) {
       BlockHandle bloom_block_handle;
       s = FindMetaBlock(file.get(), file_size, kPlainTableMagicNumber,
-                        table_reader_options.ioptions.env,
+                        table_reader_options.ioptions,
                         BloomBlockBuilder::kBloomBlock, &bloom_block_handle);
       EXPECT_TRUE(s.ok());
 
       BlockHandle index_block_handle;
       s = FindMetaBlock(file.get(), file_size, kPlainTableMagicNumber,
-                        table_reader_options.ioptions.env,
+                        table_reader_options.ioptions,
                         PlainTableIndexBuilder::kPlainTableIndexBlock,
                         &index_block_handle);
       EXPECT_TRUE(s.ok());

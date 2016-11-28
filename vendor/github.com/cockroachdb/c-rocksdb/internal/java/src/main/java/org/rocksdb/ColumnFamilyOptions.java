@@ -512,18 +512,6 @@ public class ColumnFamilyOptions extends RocksObject
   }
 
   @Override
-  public ColumnFamilyOptions setFilterDeletes(
-      final boolean filterDeletes) {
-    setFilterDeletes(nativeHandle_, filterDeletes);
-    return this;
-  }
-
-  @Override
-  public boolean filterDeletes() {
-    return filterDeletes(nativeHandle_);
-  }
-
-  @Override
   public ColumnFamilyOptions setMaxSequentialSkipInIterations(
       final long maxSequentialSkipInIterations) {
     setMaxSequentialSkipInIterations(nativeHandle_,
@@ -589,27 +577,15 @@ public class ColumnFamilyOptions extends RocksObject
   }
 
   @Override
-  public ColumnFamilyOptions setMemtablePrefixBloomBits(
-      final int memtablePrefixBloomBits) {
-    setMemtablePrefixBloomBits(nativeHandle_, memtablePrefixBloomBits);
+  public ColumnFamilyOptions setMemtablePrefixBloomSizeRatio(
+      final double memtablePrefixBloomSizeRatio) {
+    setMemtablePrefixBloomSizeRatio(nativeHandle_, memtablePrefixBloomSizeRatio);
     return this;
   }
 
   @Override
-  public int memtablePrefixBloomBits() {
-    return memtablePrefixBloomBits(nativeHandle_);
-  }
-
-  @Override
-  public ColumnFamilyOptions setMemtablePrefixBloomProbes(
-      final int memtablePrefixBloomProbes) {
-    setMemtablePrefixBloomProbes(nativeHandle_, memtablePrefixBloomProbes);
-    return this;
-  }
-
-  @Override
-  public int memtablePrefixBloomProbes() {
-    return memtablePrefixBloomProbes(nativeHandle_);
+  public double memtablePrefixBloomSizeRatio() {
+    return memtablePrefixBloomSizeRatio(nativeHandle_);
   }
 
   @Override
@@ -770,9 +746,6 @@ public class ColumnFamilyOptions extends RocksObject
   private native void setVerifyChecksumsInCompaction(
       long handle, boolean verifyChecksumsInCompaction);
   private native boolean verifyChecksumsInCompaction(long handle);
-  private native void setFilterDeletes(
-      long handle, boolean filterDeletes);
-  private native boolean filterDeletes(long handle);
   private native void setMaxSequentialSkipInIterations(
       long handle, long maxSequentialSkipInIterations);
   private native long maxSequentialSkipInIterations(long handle);
@@ -787,12 +760,9 @@ public class ColumnFamilyOptions extends RocksObject
       long handle, long inplaceUpdateNumLocks)
       throws IllegalArgumentException;
   private native long inplaceUpdateNumLocks(long handle);
-  private native void setMemtablePrefixBloomBits(
-      long handle, int memtablePrefixBloomBits);
-  private native int memtablePrefixBloomBits(long handle);
-  private native void setMemtablePrefixBloomProbes(
-      long handle, int memtablePrefixBloomProbes);
-  private native int memtablePrefixBloomProbes(long handle);
+  private native void setMemtablePrefixBloomSizeRatio(
+      long handle, double memtablePrefixBloomSizeRatio);
+  private native double memtablePrefixBloomSizeRatio(long handle);
   private native void setBloomLocality(
       long handle, int bloomLocality);
   private native int bloomLocality(long handle);
