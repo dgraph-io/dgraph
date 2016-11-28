@@ -16,17 +16,21 @@
 package worker
 
 import (
+	"bytes"
 	"context"
-	"fmt"
+	"io/ioutil"
 	"log"
 	"net"
+	"os"
 	"testing"
 
 	"google.golang.org/grpc"
 
+	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/task"
+	"github.com/stretchr/testify/require"
 )
 
 func checkShard(ps *store.Store) (int, []byte) {
@@ -40,11 +44,10 @@ func checkShard(ps *store.Store) (int, []byte) {
 	return count, it.Key().Data()
 }
 
-func writePLs(t *testing.T, count int, vid uint64, ps *store.Store) {
+func writePLs(t *testing.T, pred string, count int, vid uint64, ps *store.Store) {
 	for i := 0; i < count; i++ {
-		k := fmt.Sprintf("%03d", i)
-		t.Logf("key: %v", k)
-		list, _ := posting.GetOrCreate([]byte(k))
+		k := posting.Key(uint64(i), pred)
+		list, _ := posting.GetOrCreate(k)
 
 		de := &task.DirectedEdge{
 			ValueId: vid,
@@ -226,6 +229,7 @@ func TestJoinCluster(t *testing.T) {
 		t.Fatalf("Expected key to be: %v. Got %v", "099", string(k))
 	}
 }
+*/
 
 func TestGenerateGroup(t *testing.T) {
 	dir, err := ioutil.TempDir("", "store3")
@@ -234,40 +238,47 @@ func TestGenerateGroup(t *testing.T) {
 	}
 	defer os.RemoveAll(dir)
 
+	r := bytes.NewReader([]byte("default: fp % 3"))
+	require.NoError(t, group.ParseConfig(r), "Unable to parse config.")
+
 	ps, err := store.NewStore(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer ps.Close()
 	posting.Init(ps)
+	Init(ps)
 
-	writePLs(t, 100, 2, ps)
-	data, err := generateGroup(0)
+	require.Equal(t, uint32(0), group.BelongsTo("pred0"))
+	writePLs(t, "pred0", 33, 1, ps)
+
+	require.Equal(t, uint32(1), group.BelongsTo("p1"))
+	writePLs(t, "p1", 34, 1, ps)
+
+	require.Equal(t, uint32(2), group.BelongsTo("pr2"))
+	writePLs(t, "pr2", 35, 1, ps)
+
+	g, err := generateGroup(0)
 	if err != nil {
 		t.Error(err)
 	}
-	t.Logf("Size of data: %v", len(data))
-
-	var g task.GroupKeys
-	uo := flatbuffers.GetUOffsetT(data)
-	t.Logf("Found offset: %v", uo)
-	g.Init(data, uo)
-
-	if g.KeysLength() != 100 {
-		t.Errorf("There should be 100 keys. Found: %v", g.KeysLength())
-		t.Fail()
+	require.Equal(t, 33, len(g.Keys))
+	for i, k := range g.Keys {
+		require.Equal(t, posting.Key(uint64(i), "pred0"), k.Key)
 	}
-	for i := 0; i < 100; i++ {
-		var k task.KC
-		if ok := g.Keys(&k, i); !ok {
-			t.Errorf("Unable to parse key at index: %v", i)
-		}
-		expected := fmt.Sprintf("%03d", i)
-		found := string(k.KeyBytes())
-		if expected != found {
-			t.Errorf("Key expected:[%q], found:[%q]", expected, found)
-		}
-		t.Logf("Checksum: %q", k.ChecksumBytes())
+
+	g, err = generateGroup(1)
+	if err != nil {
+		t.Error(err)
 	}
+	require.Equal(t, 34, len(g.Keys))
+	for i, k := range g.Keys {
+		require.Equal(t, posting.Key(uint64(i), "p1"), k.Key)
+	}
+
+	g, err = generateGroup(2)
+	if err != nil {
+		t.Error(err)
+	}
+	require.Equal(t, 35, len(g.Keys))
 }
-*/

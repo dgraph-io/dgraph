@@ -67,12 +67,12 @@ func writeBatch(ctx context.Context, kv chan *task.KV, che chan error) {
 	che <- nil
 }
 
-func generateGroup(group uint32) (*task.GroupKeys, error) {
+func generateGroup(groupId uint32) (*task.GroupKeys, error) {
 	it := pstore.NewIterator()
 	defer it.Close()
 
 	g := &task.GroupKeys{
-		GroupId: group,
+		GroupId: groupId,
 	}
 
 	for it.SeekToFirst(); it.Valid(); it.Next() {
@@ -81,7 +81,7 @@ func generateGroup(group uint32) (*task.GroupKeys, error) {
 			continue
 		} else {
 			pred := string(k.Data()[:idx])
-			if group.BelongsTo(pred) != gkeys.GroupId {
+			if group.BelongsTo(pred) != g.GroupId {
 				pred += "~"
 				it.Seek([]byte(pred)) // Skip over this predicate entirely.
 				it.Prev()             // To tackle it.Next() called by default.
