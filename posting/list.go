@@ -36,6 +36,7 @@ import (
 	"github.com/dgraph-io/dgraph/posting/types"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/task"
+	stype "github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -350,7 +351,8 @@ func (l *List) AddMutation(ctx context.Context, t *task.DirectedEdge, op uint32)
 
 	// All edges with a value set, have the same uid. In other words,
 	// an (entity, attribute) can only have one value.
-	if (bytes.Equal(t.Value, nil) && t.ValueId == 0 && (t.ValueType == 0 || t.ValueType == 5)) ||
+	if (bytes.Equal(t.Value, nil) && t.ValueId == 0 &&
+		(t.ValueType == uint32(stype.BytesID) || t.ValueType == uint32(stype.StringID))) ||
 		!bytes.Equal(t.Value, nil) {
 		// Allow empty string and bytes.
 		t.ValueId = math.MaxUint64
