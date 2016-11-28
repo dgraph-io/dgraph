@@ -1326,7 +1326,6 @@ func TestToJSONOrder(t *testing.T) {
 	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
 	defer os.RemoveAll(dir2)
-	// defer ps.Close()
 
 	query := `
 		{
@@ -1365,7 +1364,6 @@ func TestToJSONOrderOffset(t *testing.T) {
 	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
 	defer os.RemoveAll(dir2)
-	// defer ps.Close()
 
 	query := `
 		{
@@ -1404,7 +1402,6 @@ func TestToJSONOrderOffsetCount(t *testing.T) {
 	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
 	defer os.RemoveAll(dir2)
-	// defer ps.Close()
 
 	query := `
 		{
@@ -1443,7 +1440,6 @@ func TestToProtoOrder(t *testing.T) {
 	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
 	defer os.RemoveAll(dir2)
-	// defer ps.Close()
 
 	query := `
 		{
@@ -1534,7 +1530,6 @@ func TestToProtoOrderCount(t *testing.T) {
 	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
 	defer os.RemoveAll(dir2)
-	// defer ps.Close()
 
 	query := `
 		{
@@ -1607,7 +1602,6 @@ func TestToProtoOrderOffsetCount(t *testing.T) {
 	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
 	defer os.RemoveAll(dir2)
-	// defer ps.Close()
 
 	query := `
 		{
@@ -1733,7 +1727,6 @@ func TestToProtoMultiRoot(t *testing.T) {
 	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
 	defer os.RemoveAll(dir2)
-	// defer ps.Close()
 
 	query := `
     {
