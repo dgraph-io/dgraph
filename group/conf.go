@@ -3,6 +3,7 @@ package group
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"os"
 	"strconv"
 	"strings"
@@ -72,8 +73,10 @@ func parseDefaultConfig(l string) (uint64, error) {
 	return groupConfig.k, nil
 }
 
-func parseConfig(f *os.File) error {
-	scanner := bufio.NewScanner(f)
+// ParseConfig parses a group config provided by reader.
+func ParseConfig(r io.Reader) error {
+	groupConfig = config{}
+	scanner := bufio.NewScanner(r)
 	// To keep track of last groupId seen across lines. If we the groups ids are
 	// not sequential, we log.Fatal.
 	var curGroupId uint64
@@ -135,7 +138,7 @@ func ParseGroupConfig(file string) error {
 		return nil
 	}
 	x.Check(err)
-	if err = parseConfig(cf); err != nil {
+	if err = ParseConfig(cf); err != nil {
 		return err
 	}
 	if groupConfig.n == 0 {

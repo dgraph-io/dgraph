@@ -6,7 +6,7 @@ package types;
 message Posting {
 	fixed64 uid = 1;
 	bytes value = 2;
-	uint32 valType = 3;
+	uint32 val_type = 3;
 	string label = 4;
 	uint64 commit = 5;  // More inclination towards smaller values.
 

@@ -9,7 +9,7 @@ message List {
 
 message Value {
 	bytes val = 1;
-	uint32 valType = 2;
+	uint32 val_type = 2;
 }
 
 message Query {
@@ -21,7 +21,7 @@ message Query {
 
 	// Exactly one of uids and terms is populated.
 	repeated fixed64 uids = 6;
-	
+
 	// Function to generate or filter UIDs.
 	repeated string src_func = 7;
 }
@@ -30,7 +30,7 @@ message Result {
 	repeated List uid_matrix = 1;
 	repeated Value values = 2;
 	repeated uint32 counts = 3;
-	bool intersectDest = 4;
+	bool intersect_dest = 4;
 }
 
 message Sort {
@@ -61,7 +61,7 @@ message RaftContext {
 // one RAFT node per server serving that group.
 message Membership {
 	fixed64 id = 1;
-	uint32 group = 2;
+	uint32 group_id = 2;
 	string addr = 3;
 	bool leader = 4;
 	bool am_dead = 5;
@@ -111,6 +111,6 @@ message KC {
 }
 
 message GroupKeys {
-	uint64 group_id = 1;
+	uint32 group_id = 1;
 	repeated KC keys = 2;
 }

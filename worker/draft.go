@@ -96,7 +96,7 @@ func (n *node) Connect(pid uint64, addr string) {
 	n.peers.Set(pid, addr)
 }
 
-func (n *node) AddToCluster(pid uint64) error {
+func (n *node) AddToCluster(ctx context.Context, pid uint64) error {
 	addr := n.peers.Get(pid)
 	x.AssertTruef(len(addr) > 0, "Unable to find conn pool for peer: %d", pid)
 	rc := &task.RaftContext{
@@ -106,7 +106,7 @@ func (n *node) AddToCluster(pid uint64) error {
 	}
 	rcBytes, err := rc.Marshal()
 	x.Check(err)
-	return n.raft.ProposeConfChange(context.TODO(), raftpb.ConfChange{
+	return n.raft.ProposeConfChange(ctx, raftpb.ConfChange{
 		ID:      pid,
 		Type:    raftpb.ConfChangeAddNode,
 		NodeID:  pid,
@@ -249,7 +249,7 @@ func (n *node) processMembership(e raftpb.Entry, mm *task.Membership) error {
 	x.AssertTrue(n.gid == 0)
 
 	x.Printf("group: %v Addr: %q leader: %v dead: %v\n",
-		mm.Group, mm.Addr, mm.Leader, mm.AmDead)
+		mm.GroupId, mm.Addr, mm.Leader, mm.AmDead)
 	groups().applyMembershipUpdate(e.Index, mm)
 	return nil
 }
@@ -329,7 +329,7 @@ func (n *node) processSnapshot(s raftpb.Snapshot) {
 }
 
 func (n *node) Run() {
-	fr := true
+	firstRun := true
 	ticker := time.NewTicker(time.Second)
 	for {
 		select {
@@ -341,7 +341,7 @@ func (n *node) Run() {
 			n.saveToStorage(rd.Snapshot, rd.HardState, rd.Entries)
 			rcBytes, err := n.raftContext.Marshal()
 			for _, msg := range rd.Messages {
-				// TODO: Do some optimizations here to drop messages.
+				// NOTE: We can do some optimizations here to drop messages.
 				x.Check(err)
 				msg.Context = rcBytes
 				n.send(msg)
@@ -355,9 +355,9 @@ func (n *node) Run() {
 			}
 
 			n.raft.Advance()
-			if fr && n.canCampaign {
-				go n.raft.Campaign(context.TODO())
-				fr = false
+			if firstRun && n.canCampaign {
+				go n.raft.Campaign(n.ctx)
+				firstRun = false
 			}
 
 		case <-n.done:
@@ -413,6 +413,7 @@ func parsePeer(peer string) (uint64, string) {
 }
 
 func (n *node) joinPeers() {
+	// Get leader information for MY group.
 	pid, paddr := groups().Leader(n.gid)
 	n.Connect(pid, paddr)
 	fmt.Printf("Connected with: %v\n", paddr)
@@ -421,16 +422,17 @@ func (n *node) joinPeers() {
 	pool := pools().get(addr)
 	x.AssertTruef(pool != nil, "Unable to find addr for peer: %d", pid)
 
-	// TODO: Ask for the leader, before running populateShard.
 	// Bring the instance up to speed first.
-	_, err := populateShard(context.TODO(), pool, 0)
+	_, err := populateShard(n.ctx, pool, 0)
 	x.Checkf(err, "Error while populating shard")
 
 	conn, err := pool.Get()
 	x.Check(err)
+	defer pool.Put(conn)
+
 	c := NewWorkerClient(conn)
 	x.Printf("Calling JoinCluster")
-	_, err = c.JoinCluster(context.Background(), n.raftContext)
+	_, err = c.JoinCluster(n.ctx, n.raftContext)
 	x.Checkf(err, "Error while joining cluster")
 	x.Printf("Done with JoinCluster call\n")
 }
@@ -453,7 +455,7 @@ func newNode(gid uint32, id uint64, myAddr string) *node {
 	}
 
 	n := &node{
-		ctx:   context.TODO(),
+		ctx:   context.Background(),
 		id:    id,
 		gid:   gid,
 		store: store,
@@ -518,6 +520,7 @@ func (n *node) initFromWal(wal *raftwal.Wal) (restart bool, rerr error) {
 	return
 }
 
+// InitAndStartNode gets called after having at least one membership sync with the cluster.
 func (n *node) InitAndStartNode(wal *raftwal.Wal) {
 	restart, err := n.initFromWal(wal)
 	x.Check(err)
@@ -609,7 +612,7 @@ func (w *grpcWorker) JoinCluster(ctx context.Context, rc *task.RaftContext) (*Pa
 	node.Connect(rc.Id, rc.Addr)
 
 	c := make(chan error, 1)
-	go func() { c <- node.AddToCluster(rc.Id) }()
+	go func() { c <- node.AddToCluster(ctx, rc.Id) }()
 
 	select {
 	case <-ctx.Done():
