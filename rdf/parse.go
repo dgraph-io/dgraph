@@ -144,8 +144,7 @@ func Parse(line string) (rnq NQuad, rerr error) {
 
 	go run(l)
 	var oval string
-	var vend bool
-	var presentSchema bool
+	var vend, presentSchema bool
 	// We read items from the l.Items channel to which the lexer sends items.
 	for item := range l.Items {
 		switch item.Typ {
