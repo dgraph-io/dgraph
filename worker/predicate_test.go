@@ -82,7 +82,7 @@ func serve(s *grpc.Server, ln net.Listener) {
 }
 
 /*
- TODO: Make this work again!
+ TODO: Make PopulateShard work again!
 func TestPopulateShard(t *testing.T) {
 	var err error
 	dir, err := ioutil.TempDir("", "store0")
@@ -281,4 +281,7 @@ func TestGenerateGroup(t *testing.T) {
 		t.Error(err)
 	}
 	require.Equal(t, 35, len(g.Keys))
+	for i, k := range g.Keys {
+		require.Equal(t, posting.Key(uint64(i), "pr2"), k.Key)
+	}
 }
