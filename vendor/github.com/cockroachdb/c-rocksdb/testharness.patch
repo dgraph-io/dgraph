@@ -1,0 +1,13 @@
+diff --git a/internal/db/db_filesnapshot.cc b/internal/db/db_filesnapshot.cc
+index 7ed1f1d..fa8029e 100644
+--- a/internal/db/db_filesnapshot.cc
++++ b/internal/db/db_filesnapshot.cc
+@@ -27,7 +27,7 @@
+ #include "util/file_util.h"
+ #include "util/mutexlock.h"
+ #include "util/sync_point.h"
+-#include "util/testharness.h"
++// #include "util/testharness.h"
+ 
+ namespace rocksdb {
+ 

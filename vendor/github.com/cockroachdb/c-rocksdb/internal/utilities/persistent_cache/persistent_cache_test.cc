@@ -16,6 +16,7 @@
 
 namespace rocksdb {
 
+#if !(defined(__clang__) && defined(OS_LINUX))
 // Volatile cache tests
 TEST_F(PersistentCacheTierTest, VolatileCacheInsert) {
   for (auto nthreads : {1, 5}) {
@@ -25,8 +26,8 @@ TEST_F(PersistentCacheTierTest, VolatileCacheInsert) {
     }
   }
 }
+#endif  // !(defined(__clang__) && defined(OS_LINUX))
 
-#ifndef ROCKSDB_TSAN_RUN
 TEST_F(PersistentCacheTierTest, VolatileCacheInsertWithEviction) {
   for (auto nthreads : {1, 5}) {
     for (auto max_keys : {1 * 1024 * 1024}) {
@@ -36,12 +37,13 @@ TEST_F(PersistentCacheTierTest, VolatileCacheInsertWithEviction) {
     }
   }
 }
-#endif
 
+#if !(defined(__clang__) && defined(OS_LINUX))
 // test table with volatile page cache
 TEST_F(PersistentCacheDBTest, VolatileCacheTest) {
   RunTest(std::bind(&PersistentCacheDBTest::MakeVolatileCache, this));
 }
+#endif  // !(defined(__clang__) && defined(OS_LINUX))
 
 }  // namespace rocksdb
 

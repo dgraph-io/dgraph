@@ -319,7 +319,10 @@ static std::unordered_map<std::string, OptionTypeInfo> db_options_type_info = {
       OptionVerificationType::kNormal}},
     {"dump_malloc_stats",
      {offsetof(struct DBOptions, dump_malloc_stats), OptionType::kBoolean,
-      OptionVerificationType::kNormal}}};
+      OptionVerificationType::kNormal}},
+    {"avoid_flush_during_recovery",
+     {offsetof(struct DBOptions, avoid_flush_during_recovery),
+      OptionType::kBoolean, OptionVerificationType::kNormal}}};
 
 static std::unordered_map<std::string, OptionTypeInfo> cf_options_type_info = {
     /* not yet supported
@@ -345,8 +348,7 @@ static std::unordered_map<std::string, OptionTypeInfo> cf_options_type_info = {
      {offsetof(struct ColumnFamilyOptions, disable_auto_compactions),
       OptionType::kBoolean, OptionVerificationType::kNormal}},
     {"filter_deletes",
-     {offsetof(struct ColumnFamilyOptions, filter_deletes),
-      OptionType::kBoolean, OptionVerificationType::kNormal}},
+     {0, OptionType::kBoolean, OptionVerificationType::kDeprecated}},
     {"inplace_update_support",
      {offsetof(struct ColumnFamilyOptions, inplace_update_support),
       OptionType::kBoolean, OptionVerificationType::kNormal}},
@@ -426,10 +428,11 @@ static std::unordered_map<std::string, OptionTypeInfo> cf_options_type_info = {
     {"max_successive_merges",
      {offsetof(struct ColumnFamilyOptions, max_successive_merges),
       OptionType::kSizeT, OptionVerificationType::kNormal}},
-    {"memtable_prefix_bloom_huge_page_tlb_size",
-     {offsetof(struct ColumnFamilyOptions,
-               memtable_prefix_bloom_huge_page_tlb_size),
+    {"memtable_huge_page_size",
+     {offsetof(struct ColumnFamilyOptions, memtable_huge_page_size),
       OptionType::kSizeT, OptionVerificationType::kNormal}},
+    {"memtable_prefix_bloom_huge_page_tlb_size",
+     {0, OptionType::kSizeT, OptionVerificationType::kDeprecated}},
     {"write_buffer_size",
      {offsetof(struct ColumnFamilyOptions, write_buffer_size),
       OptionType::kSizeT, OptionVerificationType::kNormal}},
@@ -437,11 +440,12 @@ static std::unordered_map<std::string, OptionTypeInfo> cf_options_type_info = {
      {offsetof(struct ColumnFamilyOptions, bloom_locality),
       OptionType::kUInt32T, OptionVerificationType::kNormal}},
     {"memtable_prefix_bloom_bits",
-     {offsetof(struct ColumnFamilyOptions, memtable_prefix_bloom_bits),
-      OptionType::kUInt32T, OptionVerificationType::kNormal}},
+     {0, OptionType::kUInt32T, OptionVerificationType::kDeprecated}},
+    {"memtable_prefix_bloom_size_ratio",
+     {offsetof(struct ColumnFamilyOptions, memtable_prefix_bloom_size_ratio),
+      OptionType::kDouble, OptionVerificationType::kNormal}},
     {"memtable_prefix_bloom_probes",
-     {offsetof(struct ColumnFamilyOptions, memtable_prefix_bloom_probes),
-      OptionType::kUInt32T, OptionVerificationType::kNormal}},
+     {0, OptionType::kUInt32T, OptionVerificationType::kDeprecated}},
     {"min_partial_merge_operands",
      {offsetof(struct ColumnFamilyOptions, min_partial_merge_operands),
       OptionType::kUInt32T, OptionVerificationType::kNormal}},
@@ -545,7 +549,10 @@ static std::unordered_map<std::string, OptionTypeInfo>
           OptionType::kBoolean, OptionVerificationType::kNormal}},
         {"format_version",
          {offsetof(struct BlockBasedTableOptions, format_version),
-          OptionType::kUInt32T, OptionVerificationType::kNormal}}};
+          OptionType::kUInt32T, OptionVerificationType::kNormal}},
+        {"verify_compression",
+         {offsetof(struct BlockBasedTableOptions, verify_compression),
+          OptionType::kBoolean, OptionVerificationType::kNormal}}};
 
 static std::unordered_map<std::string, OptionTypeInfo> plain_table_type_info = {
     {"user_key_len",

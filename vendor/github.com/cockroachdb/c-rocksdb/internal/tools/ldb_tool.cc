@@ -79,6 +79,8 @@ void LDBCommandRunner::PrintHelp(const char* exec_name) {
   DBFileDumperCommand::Help(ret);
   InternalDumpCommand::Help(ret);
   RepairCommand::Help(ret);
+  BackupCommand::Help(ret);
+  RestoreCommand::Help(ret);
 
   fprintf(stderr, "%s\n", ret.c_str());
 }

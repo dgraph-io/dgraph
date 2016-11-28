@@ -17,9 +17,10 @@
 #include <limits>
 #include <unordered_map>
 
-#include "rocksdb/version.h"
 #include "rocksdb/listener.h"
 #include "rocksdb/universal_compaction.h"
+#include "rocksdb/version.h"
+#include "rocksdb/write_buffer_manager.h"
 
 #ifdef max
 #undef max
@@ -52,7 +53,7 @@ class WalFilter;
 // sequence of key,value pairs.  Each block may be compressed before
 // being stored in a file.  The following enum describes which
 // compression method (if any) is used to compress a block.
-enum CompressionType : char {
+enum CompressionType : unsigned char {
   // NOTE: do not change the values of existing entries, as these are
   // part of the persistent format on disk.
   kNoCompression = 0x0,
@@ -66,7 +67,7 @@ enum CompressionType : char {
   kZSTDNotFinalCompression = 0x40,
 
   // kDisableCompressionOption is used to disable some compression options.
-  kDisableCompressionOption = -1,
+  kDisableCompressionOption = 0xff,
 };
 
 enum CompactionStyle : char {
@@ -450,8 +451,8 @@ struct ColumnFamilyOptions {
   // (max_bytes_for_level_base) * (max_bytes_for_level_multiplier ^ (L-1))
   // For example, if max_bytes_for_level_base is 200MB, and if
   // max_bytes_for_level_multiplier is 10, total data size for level-1
-  // will be 2GB, total file size for level-2 will be 20GB,
-  // and total file size for level-3 will be 200GB.
+  // will be 200MB, total file size for level-2 will be 2GB,
+  // and total file size for level-3 will be 20GB.
   //
   // Default: 256MB.
   //
@@ -632,16 +633,6 @@ struct ColumnFamilyOptions {
   // The options for FIFO compaction style
   CompactionOptionsFIFO compaction_options_fifo;
 
-  // Use KeyMayExist API to filter deletes when this is true.
-  // If KeyMayExist returns false, i.e. the key definitely does not exist, then
-  // the delete is a noop. KeyMayExist only incurs in-memory look up.
-  // This optimization avoids writing the delete to storage when appropriate.
-  //
-  // Default: false
-  //
-  // Dynamically changeable through SetOptions() API
-  bool filter_deletes;
-
   // An iteration->Next() sequentially skips over keys with the same
   // user-key unless this option is set. This number specifies the number
   // of keys (with the same userkey) that will be sequentially
@@ -745,25 +736,27 @@ struct ColumnFamilyOptions {
                                    Slice delta_value,
                                    std::string* merged_value);
 
-  // if prefix_extractor is set and bloom_bits is not 0, create prefix bloom
-  // for memtable
+  // if prefix_extractor is set and memtable_prefix_bloom_size_ratio is not 0,
+  // create prefix bloom for memtable with the size of
+  // write_buffer_size * memtable_prefix_bloom_size_ratio.
+  // If it is larger than 0.25, it is santinized to 0.25.
+  //
+  // Default: 0 (disable)
   //
   // Dynamically changeable through SetOptions() API
-  uint32_t memtable_prefix_bloom_bits;
+  double memtable_prefix_bloom_size_ratio;
 
-  // number of hash probes per key
-  //
-  // Dynamically changeable through SetOptions() API
-  uint32_t memtable_prefix_bloom_probes;
-
-  // Page size for huge page TLB for bloom in memtable. If <=0, not allocate
-  // from huge page TLB but from malloc.
-  // Need to reserve huge pages for it to be allocated. For example:
+  // Page size for huge page for the arena used by the memtable. If <=0, it
+  // won't allocate from huge page but from malloc.
+  // Users are responsible to reserve huge pages for it to be allocated. For
+  // example:
   //      sysctl -w vm.nr_hugepages=20
   // See linux doc Documentation/vm/hugetlbpage.txt
+  // If there isn't enough free huge page available, it will fall back to
+  // malloc.
   //
   // Dynamically changeable through SetOptions() API
-  size_t memtable_prefix_bloom_huge_page_tlb_size;
+  size_t memtable_huge_page_size;
 
   // Control locality of bloom filter probes to improve cache miss rate.
   // This option only applies to memtable prefix bloom and plaintable
@@ -1149,6 +1142,22 @@ struct DBOptions {
   // Default: 0 (disabled)
   size_t db_write_buffer_size;
 
+  // The memory usage of memtable will report to this object. The same object
+  // can be passed into multiple DBs and it will track the sum of size of all
+  // the DBs. If the total size of all live memtables of all the DBs exceeds
+  // a limit, a flush will be triggered in the next DB to which the next write
+  // is issued.
+  //
+  // If the object is only passed to on DB, the behavior is the same as
+  // db_write_buffer_size. When write_buffer_manager is set, the value set will
+  // override db_write_buffer_size.
+  //
+  // This feature is disabled by default. Specify a non-zero value
+  // to enable it.
+  //
+  // Default: null
+  std::shared_ptr<WriteBufferManager> write_buffer_manager;
+
   // Specify the file access pattern once a compaction is started.
   // It will be applied to all input files of a compaction.
   // Default: NORMAL
@@ -1267,8 +1276,6 @@ struct DBOptions {
   // It is strongly recommended to set enable_write_thread_adaptive_yield
   // if you are going to use this feature.
   //
-  // THIS FEATURE IS NOT STABLE YET.
-  //
   // Default: false
   bool allow_concurrent_memtable_write;
 
@@ -1276,8 +1283,6 @@ struct DBOptions {
   // wait for up to write_thread_max_yield_usec before blocking on a mutex.
   // This can substantially improve throughput for concurrent workloads,
   // regardless of whether allow_concurrent_memtable_write is enabled.
-  //
-  // THIS FEATURE IS NOT STABLE YET.
   //
   // Default: false
   bool enable_write_thread_adaptive_yield;
@@ -1342,6 +1347,15 @@ struct DBOptions {
   // when printing to LOG.
   // DEFAULT: false
   bool dump_malloc_stats;
+
+  // By default RocksDB replay WAL logs and flush them on DB open, which may
+  // create very small SST files. If this option is enabled, RocksDB will try
+  // to avoid (but not guarantee not to) flush during recovery. Also, existing
+  // WAL logs will be kept, so that if crash happened before flush, we still
+  // have logs to recover from.
+  //
+  // DEFAULT: false
+  bool avoid_flush_during_recovery;
 };
 
 // Options to control the behavior of a database (passed to DB::Open)
@@ -1492,6 +1506,12 @@ struct ReadOptions {
   // return 1.
   // Default: false
   bool pin_data;
+
+  // If true, when PurgeObsoleteFile is called in CleanupIteratorState, we
+  // schedule a background job in the flush job queue and delete obsolete files
+  // in background.
+  // Default: false
+  bool background_purge_on_iterator_cleanup;
 
   // If non-zero, NewIterator will create a new table reader which
   // performs reads of the given size. Using a large size (> 2MB) can

@@ -27,10 +27,10 @@
 			"revision": ""
 		},
 		{
-			"checksumSHA1": "/TtGA6GCE03N2fo5qQbvebptUBg=",
+			"checksumSHA1": "7I4Di0rg3CwipuoVDkqvsb94ovk=",
 			"path": "github.com/cockroachdb/c-rocksdb",
-			"revision": "d869eb7bfa0d464deb838d591957797d1abf3b99",
-			"revisionTime": "2016-09-08T04:44:37Z",
+			"revision": "894d369c4ea259b65f75563feeb06bea322a8450",
+			"revisionTime": "2016-09-29T14:23:45Z",
 			"tree": true
 		},
 		{

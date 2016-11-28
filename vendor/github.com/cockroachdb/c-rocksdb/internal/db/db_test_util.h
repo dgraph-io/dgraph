@@ -39,6 +39,7 @@
 #include "rocksdb/filter_policy.h"
 #include "rocksdb/options.h"
 #include "rocksdb/slice.h"
+#include "rocksdb/sst_file_writer.h"
 #include "rocksdb/statistics.h"
 #include "rocksdb/table.h"
 #include "rocksdb/utilities/checkpoint.h"
@@ -284,7 +285,10 @@ class SpecialEnv : public EnvWrapper {
     class WalFile : public WritableFile {
      public:
       WalFile(SpecialEnv* env, unique_ptr<WritableFile>&& b)
-          : env_(env), base_(std::move(b)) {}
+          : env_(env), base_(std::move(b)) {
+        env_->num_open_wal_file_.fetch_add(1);
+      }
+      virtual ~WalFile() { env_->num_open_wal_file_.fetch_add(-1); }
       Status Append(const Slice& data) override {
 #if !(defined NDEBUG) || !defined(OS_WIN)
         TEST_SYNC_POINT("SpecialEnv::WalFile::Append:1");
@@ -442,6 +446,11 @@ class SpecialEnv : public EnvWrapper {
            addon_time_.load();
   }
 
+  virtual Status DeleteFile(const std::string& fname) override {
+    delete_count_.fetch_add(1);
+    return target()->DeleteFile(fname);
+  }
+
   Random rnd_;
   port::Mutex rnd_mutex_;  // Lock to pretect rnd_
 
@@ -469,6 +478,9 @@ class SpecialEnv : public EnvWrapper {
   // Slow down every log write, in micro-seconds.
   std::atomic<int> log_write_slowdown_;
 
+  // Number of WAL files that are still open for write.
+  std::atomic<int> num_open_wal_file_;
+
   bool count_random_reads_;
   anon::AtomicCounter random_read_counter_;
   std::atomic<size_t> random_read_bytes_counter_;
@@ -492,6 +504,8 @@ class SpecialEnv : public EnvWrapper {
   std::function<void()>* table_write_callback_;
 
   std::atomic<int64_t> addon_time_;
+
+  std::atomic<int> delete_count_;
 
   bool time_elapse_only_sleep_;
 
@@ -550,19 +564,18 @@ class DBTestBase : public testing::Test {
     kWalDirAndMmapReads = 16,
     kManifestFileSize = 17,
     kPerfOptions = 18,
-    kDeletesFilterFirst = 19,
-    kHashSkipList = 20,
-    kUniversalCompaction = 21,
-    kUniversalCompactionMultiLevel = 22,
-    kCompressedBlockCache = 23,
-    kInfiniteMaxOpenFiles = 24,
-    kxxHashChecksum = 25,
-    kFIFOCompaction = 26,
-    kOptimizeFiltersForHits = 27,
-    kRowCache = 28,
-    kRecycleLogFiles = 29,
-    kConcurrentSkipList = 30,
-    kEnd = 31,
+    kHashSkipList = 19,
+    kUniversalCompaction = 20,
+    kUniversalCompactionMultiLevel = 21,
+    kCompressedBlockCache = 22,
+    kInfiniteMaxOpenFiles = 23,
+    kxxHashChecksum = 24,
+    kFIFOCompaction = 25,
+    kOptimizeFiltersForHits = 26,
+    kRowCache = 27,
+    kRecycleLogFiles = 28,
+    kConcurrentSkipList = 29,
+    kEnd = 30,
     kLevelSubcompactions = 31,
     kUniversalSubcompactions = 32,
     kBlockBasedTableWithIndexRestartInterval = 33,
@@ -797,7 +810,12 @@ class DBTestBase : public testing::Test {
 
   std::vector<std::uint64_t> ListTableFiles(Env* env, const std::string& path);
 
+  void VerifyDBFromMap(std::map<std::string, std::string> true_data);
+
 #ifndef ROCKSDB_LITE
+  Status GenerateAndAddExternalFile(const Options options,
+                                    std::vector<int> keys, size_t file_id);
+
   uint64_t GetNumberOfSstFilesForColumnFamily(DB* db,
                                               std::string column_family_name);
 #endif  // ROCKSDB_LITE

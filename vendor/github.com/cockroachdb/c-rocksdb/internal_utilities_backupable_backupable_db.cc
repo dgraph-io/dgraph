@@ -29,17 +29,17 @@
 #include <inttypes.h>
 #include <stdlib.h>
 #include <algorithm>
-#include <vector>
+#include <atomic>
+#include <future>
+#include <limits>
 #include <map>
 #include <mutex>
 #include <sstream>
 #include <string>
-#include <limits>
-#include <atomic>
-#include <future>
 #include <thread>
 #include <unordered_map>
 #include <unordered_set>
+#include <vector>
 
 namespace rocksdb {
 
@@ -99,6 +99,8 @@ class BackupEngineImpl : public BackupEngine {
   }
   Status GarbageCollect() override;
 
+  // The returned BackupInfos are in chronological order, which means the
+  // latest backup comes last.
   void GetBackupInfo(std::vector<BackupInfo>* backup_info) override;
   void GetCorruptedBackups(std::vector<BackupID>* corrupt_backup_ids) override;
   Status RestoreDBFromBackup(
@@ -560,7 +562,7 @@ Status BackupEngineImpl::Initialize() {
   {
     auto s = backup_env_->GetChildren(GetBackupMetaDir(), &backup_meta_files);
     if (!s.ok()) {
-      return s;
+      return Status::NotFound(GetBackupMetaDir() + " is missing");
     }
   }
   // create backups_ structure
@@ -694,6 +696,7 @@ Status BackupEngineImpl::CreateNewBackupWithMetadata(
   TEST_SYNC_POINT("BackupEngineImpl::CreateNewBackup:SavedLiveFiles2");
 
   BackupID new_backup_id = latest_backup_id_ + 1;
+
   assert(backups_.find(new_backup_id) == backups_.end());
   auto ret = backups_.insert(
       std::make_pair(new_backup_id, unique_ptr<BackupMeta>(new BackupMeta(
@@ -745,7 +748,8 @@ Status BackupEngineImpl::CreateNewBackupWithMetadata(
     }
     // we should only get sst, manifest and current files here
     assert(type == kTableFile || type == kDescriptorFile ||
-           type == kCurrentFile);
+           type == kCurrentFile || type == kOptionsFile);
+
     if (type == kCurrentFile) {
       // We will craft the current file manually to ensure it's consistent with
       // the manifest number. This is necessary because current's file contents
@@ -1276,6 +1280,9 @@ Status BackupEngineImpl::CopyOrCreateFile(
   if (s.ok() && sync) {
     s = dest_writer->Sync(false);
   }
+  if (s.ok()) {
+    s = dest_writer->Close();
+  }
   return s;
 }
 
@@ -1764,6 +1771,8 @@ class BackupEngineReadOnlyImpl : public BackupEngineReadOnly {
 
   virtual ~BackupEngineReadOnlyImpl() {}
 
+  // The returned BackupInfos are in chronological order, which means the
+  // latest backup comes last.
   virtual void GetBackupInfo(std::vector<BackupInfo>* backup_info) override {
     backup_engine_->GetBackupInfo(backup_info);
   }
