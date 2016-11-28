@@ -160,6 +160,7 @@ func populateGraph(t *testing.T) (string, string, *store.Store) {
 	addEdgeToTypedValue(t, ps, "loc", 1, types.GeoID, gData)
 	data, err := types.Int32(15).MarshalBinary()
 	require.NoError(t, err)
+
 	addEdgeToTypedValue(t, ps, "age", 1, types.Int32ID, data)
 	addEdgeToValue(t, ps, "address", 1, "31, 32 street, Jupiter")
 	data, err = types.Bool(true).MarshalBinary()
@@ -173,6 +174,12 @@ func populateGraph(t *testing.T) (string, string, *store.Store) {
 	// Now let's add a name for each of the friends, except 101.
 	addEdgeToTypedValue(t, ps, "name", 23, types.StringID, []byte("Rick Grimes"))
 	addEdgeToValue(t, ps, "age", 23, "15")
+
+	err = coord.UnmarshalText([]byte(`{"Type":"Polygon", "Coordinates":[[[0.0,0.0], [2.0,0.0], [2.0, 2.0], [0.0, 2.0]]]}`))
+	require.NoError(t, err)
+	gData, err = coord.MarshalBinary()
+	require.NoError(t, err)
+	addEdgeToTypedValue(t, ps, "loc", 23, types.GeoID, gData)
 
 	addEdgeToValue(t, ps, "address", 23, "21, mark street, Mars")
 	addEdgeToValue(t, ps, "name", 24, "Glenn Rhee")
@@ -1069,6 +1076,7 @@ func TestSchema(t *testing.T) {
 				name
 				gender
 				alive
+				loc
 				friend {
 					name
 				}
@@ -1097,10 +1105,15 @@ func TestSchema(t *testing.T) {
 	require.EqualValues(t, "debug", gr.Children[0].Attribute)
 	require.EqualValues(t, 1, gr.Children[0].Uid)
 	require.EqualValues(t, "mich", gr.Children[0].Xid)
-	require.Len(t, gr.Children[0].Properties, 3)
+	require.Len(t, gr.Children[0].Properties, 4)
 
 	require.EqualValues(t, "Michonne",
 		getProperty(gr.Children[0].Properties, "name").GetStrVal())
+	var g types.Geo
+	x.Check(g.UnmarshalBinary(getProperty(gr.Children[0].Properties, "loc").GetGeoVal()))
+	received, err := g.MarshalText()
+	require.EqualValues(t, "{\"type\":\"Point\",\"coordinates\":[1.1,2]}", string(received))
+
 	require.Len(t, gr.Children[0].Children, 10)
 
 	child := gr.Children[0].Children[0]
@@ -1778,36 +1791,62 @@ children: <
 	require.EqualValues(t, expectedPb, proto.MarshalTextString(pb))
 }
 
-//func TestNearGenerator(t *testing.T) {
-//dir1, dir2, _ := populateGraph(t)
-//defer os.RemoveAll(dir1)
-//defer os.RemoveAll(dir2)
-//query := `
-//{
-//me(near("loc", "{'Type':'Point', 'Coordinates':[1.1,2.0]}", "5")) {
-//name
-//gender
-//}
-//}
-//`
+func TestNearGenerator(t *testing.T) {
+	dir1, dir2, _ := populateGraph(t)
+	defer os.RemoveAll(dir1)
+	defer os.RemoveAll(dir2)
+	query := `{
+		me(near("loc", "{'Type':'Point', 'Coordinates':[1.1,2.0]}", "5")) {
+			name
+			gender
+		}
+	}`
 
-//gq, _, err := gql.Parse(query)
-//require.NoError(t, err)
+	js := processToJSON(t, query)
+	require.JSONEq(t, `{"me":[{"gender":"female","name":"Michonne"}]}`, string(js))
+}
 
-//ctx := context.Background()
-//sg, err := ToSubGraph(ctx, gq)
-//require.NoError(t, err)
+func TestWithinGenerator(t *testing.T) {
+	dir1, dir2, _ := populateGraph(t)
+	defer os.RemoveAll(dir1)
+	defer os.RemoveAll(dir2)
+	query := `{
+		me(within("loc",  "{'Type':'Polygon', 'Coordinates':[[[0.0,0.0], [2.0,0.0], [1.5, 3.0], [0.0, 2.0]]]}")) {
+			name
+		}
+	}`
 
-//ch := make(chan error)
-//go ProcessGraph(ctx, sg, nil, ch)
-//err = <-ch
-//require.NoError(t, err)
+	js := processToJSON(t, query)
+	require.JSONEq(t, `{"me":[{"name":"Michonne"}]}`, string(js))
+}
 
-//var l Latency
-//js, err := sg.ToJSON(&l)
-//require.NoError(t, err)
-//require.EqualValues(t, `{"me":[{"gender":"female","name":"Michonne"}]}`, string(js))
-//}
+func TestContainsGenerator(t *testing.T) {
+	dir1, dir2, _ := populateGraph(t)
+	defer os.RemoveAll(dir1)
+	defer os.RemoveAll(dir2)
+	query := `{
+		me(contains("loc",  "{'Type':'Point', 'Coordinates':[2.0, 0.0]}")) {
+			name
+		}
+	}`
+
+	js := processToJSON(t, query)
+	require.JSONEq(t, `{"me":[{"name":"Rick Grimes"}]}`, string(js))
+}
+
+func TestIntersectsGenerator(t *testing.T) {
+	dir1, dir2, _ := populateGraph(t)
+	defer os.RemoveAll(dir1)
+	defer os.RemoveAll(dir2)
+	query := `{
+		me(intersects("loc", "{'Type':'Polygon', 'Coordinates':[[[0.0,0.0], [2.0,0.0], [1.5, 3.0], [0.0, 2.0]]]}")) {
+			name
+		}
+	}`
+
+	js := processToJSON(t, query)
+	require.JSONEq(t, `{"me":[{"name":"Michonne"}, {"name":"Rick Grimes"}]}`, string(js))
+}
 
 func TestMain(m *testing.M) {
 	x.Init()
