@@ -75,6 +75,7 @@ func parseDefaultConfig(l string) (uint64, error) {
 
 // ParseConfig parses a group config provided by reader.
 func ParseConfig(r io.Reader) error {
+	groupConfig = config{}
 	scanner := bufio.NewScanner(r)
 	// To keep track of last groupId seen across lines. If we the groups ids are
 	// not sequential, we log.Fatal.
