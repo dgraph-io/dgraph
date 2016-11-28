@@ -14,7 +14,7 @@ CFLAGS=""
 
 # libgcc
 LIBGCC_INCLUDE="$LIBGCC_BASE/include"
-LIBGCC_LIBS=" -L $LIBGCC_BASE/libs"
+LIBGCC_LIBS=" -L $LIBGCC_BASE/lib"
 
 # glibc
 GLIBC_INCLUDE="$GLIBC_BASE/include"
@@ -87,7 +87,7 @@ CLANG_LIB="$CLANG_BASE/lib"
 CLANG_SRC="$CLANG_BASE/../../src"
 
 CLANG_ANALYZER="$CLANG_BIN/clang++"
-CLANG_SCAN_BUILD="$CLANG_SRC/clang/tools/scan-build/scan-build"
+CLANG_SCAN_BUILD="$CLANG_SRC/llvm/tools/clang/tools/scan-build/bin/scan-build"
 
 if [ -z "$USE_CLANG" ]; then
   # gcc

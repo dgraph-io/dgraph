@@ -615,15 +615,15 @@ void InternalStats::DumpDBStats(std::string* value) {
   // Data
   // writes: total number of write requests.
   // keys: total number of key updates issued by all the write requests
-  // batches: number of group commits issued to the DB. Each group can contain
-  //          one or more writes.
+  // commit groups: number of group commits issued to the DB. Each group can
+  //                contain one or more writes.
   // so writes/keys is the average number of put in multi-put or put
-  // writes/batches is the average group commit size.
+  // writes/groups is the average group commit size.
   //
   // The format is the same for interval stats.
   snprintf(buf, sizeof(buf),
-           "Cumulative writes: %s writes, %s keys, %s batches, "
-           "%.1f writes per batch, ingest: %.2f GB, %.2f MB/s\n",
+           "Cumulative writes: %s writes, %s keys, %s commit groups, "
+           "%.1f writes per commit group, ingest: %.2f GB, %.2f MB/s\n",
            NumberToHumanString(write_other + write_self).c_str(),
            NumberToHumanString(num_keys_written).c_str(),
            NumberToHumanString(write_self).c_str(),
@@ -654,8 +654,8 @@ void InternalStats::DumpDBStats(std::string* value) {
   uint64_t interval_num_keys_written =
       num_keys_written - db_stats_snapshot_.num_keys_written;
   snprintf(buf, sizeof(buf),
-           "Interval writes: %s writes, %s keys, %s batches, "
-           "%.1f writes per batch, ingest: %.2f MB, %.2f MB/s\n",
+           "Interval writes: %s writes, %s keys, %s commit groups, "
+           "%.1f writes per commit group, ingest: %.2f MB, %.2f MB/s\n",
            NumberToHumanString(
                interval_write_other + interval_write_self).c_str(),
            NumberToHumanString(interval_num_keys_written).c_str(),
@@ -770,7 +770,9 @@ void InternalStats::DumpCFStats(std::string* value) {
     }
   }
 
-  uint64_t curr_ingest = cf_stats_value_[BYTES_FLUSHED];
+  uint64_t flush_ingest = cf_stats_value_[BYTES_FLUSHED];
+  uint64_t add_file_ingest = cf_stats_value_[BYTES_INGESTED_ADD_FILE];
+  uint64_t curr_ingest = flush_ingest + add_file_ingest;
   // Cumulative summary
   double w_amp = stats_sum.bytes_written / static_cast<double>(curr_ingest + 1);
   uint64_t total_stall_count =
@@ -785,8 +787,12 @@ void InternalStats::DumpCFStats(std::string* value) {
                   stats_sum);
   value->append(buf);
   // Interval summary
+  uint64_t interval_flush_ingest =
+      flush_ingest - cf_stats_snapshot_.ingest_bytes_flush;
+  uint64_t interval_add_file_inget =
+      add_file_ingest - cf_stats_snapshot_.ingest_bytes_add_file;
   uint64_t interval_ingest =
-      curr_ingest - cf_stats_snapshot_.ingest_bytes + 1;
+      interval_flush_ingest + interval_add_file_inget + 1;
   CompactionStats interval_stats(stats_sum);
   interval_stats.Subtract(cf_stats_snapshot_.comp_stats);
   w_amp = interval_stats.bytes_written / static_cast<double>(interval_ingest);
@@ -799,9 +805,10 @@ void InternalStats::DumpCFStats(std::string* value) {
            seconds_up, interval_seconds_up);
   value->append(buf);
 
-  snprintf(buf, sizeof(buf),
-           "Flush(GB): cumulative %.3f, interval %.3f\n",
-           curr_ingest / kGB, interval_ingest / kGB);
+  snprintf(buf, sizeof(buf), "Flush(GB): cumulative %.3f, interval %.3f\n",
+           flush_ingest / kGB, interval_flush_ingest / kGB);
+  snprintf(buf, sizeof(buf), "AddFile(GB): cumulative %.3f, interval %.3f\n",
+           add_file_ingest / kGB, interval_add_file_inget / kGB);
   value->append(buf);
 
   // Compact
@@ -873,7 +880,8 @@ void InternalStats::DumpCFStats(std::string* value) {
            total_stall_count - cf_stats_snapshot_.stall_count);
   value->append(buf);
 
-  cf_stats_snapshot_.ingest_bytes = curr_ingest;
+  cf_stats_snapshot_.ingest_bytes_flush = flush_ingest;
+  cf_stats_snapshot_.ingest_bytes_add_file = add_file_ingest;
   cf_stats_snapshot_.comp_stats = stats_sum;
   cf_stats_snapshot_.stall_count = total_stall_count;
 }

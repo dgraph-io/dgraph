@@ -1,5 +1,33 @@
 # Rocksdb Change Log
-## Unreleased
+## 4.11.2 (9/15/2016)
+### Bug fixes
+* Segfault when failing to open an SST file for read-ahead iterators.
+* WAL without data for all CFs is not deleted after recovery.
+
+## 4.11.1 (8/30/2016)
+### Bug Fixes
+* Mitigate the regression bug of deadlock condition during recovery when options.max_successive_merges hits.
+* Fix data race condition related to hash index in block based table when putting indexes in the block cache.
+
+## 4.11.0 (8/1/2016)
+### Public API Change
+* options.memtable_prefix_bloom_huge_page_tlb_size => memtable_huge_page_size. When it is set, RocksDB will try to allocate memory from huge page for memtable too, rather than just memtable bloom filter.
+
+### New Features
+* A tool to migrate DB after options change. See include/rocksdb/utilities/option_change_migration.h.
+* Add ReadOptions.background_purge_on_iterator_cleanup. If true, we avoid file deletion when destorying iterators.
+
+## 4.10.0 (7/5/2016)
+### Public API Change
+* options.memtable_prefix_bloom_bits changes to options.memtable_prefix_bloom_bits_ratio and deprecate options.memtable_prefix_bloom_probes
+* enum type CompressionType and PerfLevel changes from char to unsigned char. Value of all PerfLevel shift by one.
+* Deprecate options.filter_deletes.
+
+### New Features
+* Add avoid_flush_during_recovery option.
+* Add a read option background_purge_on_iterator_cleanup to avoid deleting files in foreground when destroying iterators. Instead, a job is scheduled in high priority queue and would be executed in a separate background thread.
+* RepairDB support for column families. RepairDB now associates data with non-default column families using information embedded in the SST/WAL files (4.7 or later). For data written by 4.6 or earlier, RepairDB associates it with the default column family.
+* Add options.write_buffer_manager which allows users to control total memtable sizes across multiple DB instances.
 
 ## 4.9.0 (6/9/2016)
 ### Public API changes
@@ -29,7 +57,7 @@
 ## 4.6.0 (3/10/2016)
 ### Public API Changes
 * Change default of BlockBasedTableOptions.format_version to 2. It means default DB created by 4.6 or up cannot be opened by RocksDB version 3.9 or earlier.
-* Added strict_capacity_limit option to NewLRUCache. If the flag is set to true, insert to cache will fail if no enough capacity can be free. Signiture of Cache::Insert() is updated accordingly.
+* Added strict_capacity_limit option to NewLRUCache. If the flag is set to true, insert to cache will fail if no enough capacity can be free. Signature of Cache::Insert() is updated accordingly.
 * Tickers [NUMBER_DB_NEXT, NUMBER_DB_PREV, NUMBER_DB_NEXT_FOUND, NUMBER_DB_PREV_FOUND, ITER_BYTES_READ] are not updated immediately. The are updated when the Iterator is deleted.
 * Add monotonically increasing counter (DB property "rocksdb.current-super-version-number") that increments upon any change to the LSM tree.
 
@@ -145,8 +173,8 @@
 * options.hard_rate_limit is deprecated.
 * When options.soft_rate_limit or options.level0_slowdown_writes_trigger is triggered, the way to slow down writes is changed to: write rate to DB is limited to to options.delayed_write_rate.
 * DB::GetApproximateSizes() adds a parameter to allow the estimation to include data in mem table, with default to be not to include. It is now only supported in skip list mem table.
-* DB::CompactRange() now accept CompactRangeOptions instead of multiple paramters. CompactRangeOptions is defined in include/rocksdb/options.h.
-* CompactRange() will now skip bottommost level compaction for level based compaction if there is no compaction filter, bottommost_level_compaction is introduced in CompactRangeOptions to control when it's possbile to skip bottommost level compaction. This mean that if you want the compaction to produce a single file you need to set bottommost_level_compaction to BottommostLevelCompaction::kForce.
+* DB::CompactRange() now accept CompactRangeOptions instead of multiple parameters. CompactRangeOptions is defined in include/rocksdb/options.h.
+* CompactRange() will now skip bottommost level compaction for level based compaction if there is no compaction filter, bottommost_level_compaction is introduced in CompactRangeOptions to control when it's possible to skip bottommost level compaction. This mean that if you want the compaction to produce a single file you need to set bottommost_level_compaction to BottommostLevelCompaction::kForce.
 * Add Cache.GetPinnedUsage() to get the size of memory occupied by entries that are in use by the system.
 * DB:Open() will fail if the compression specified in Options is not linked with the binary. If you see this failure, recompile RocksDB with compression libraries present on your system. Also, previously our default compression was snappy. This behavior is now changed. Now, the default compression is snappy only if it's available on the system. If it isn't we change the default to kNoCompression.
 * We changed how we account for memory used in block cache. Previously, we only counted the sum of block sizes currently present in block cache. Now, we count the actual memory usage of the blocks. For example, a block of size 4.5KB will use 8KB memory with jemalloc. This might decrease your memory usage and possibly decrease performance. Increase block cache size if you see this happening after an upgrade.
@@ -178,7 +206,7 @@
   Lower numbered levels will be placed earlier in the db_paths and higher
   numbered levels will be placed later in the db_paths vector.
 * Potentially big performance improvements if you're using RocksDB with lots of column families (100-1000)
-* Added BlockBasedTableOptions.format_version option, which allows user to specify which version of block based table he wants. As a general guidline, newer versions have more features, but might not be readable by older versions of RocksDB.
+* Added BlockBasedTableOptions.format_version option, which allows user to specify which version of block based table he wants. As a general guideline, newer versions have more features, but might not be readable by older versions of RocksDB.
 * Added new block based table format (version 2), which you can enable by setting BlockBasedTableOptions.format_version = 2. This format changes how we encode size information in compressed blocks and should help with memory allocations if you're using Zlib or BZip2 compressions.
 * MemEnv (env that stores data in memory) is now available in default library build. You can create it by calling NewMemEnv().
 * Add SliceTransform.SameResultWhenAppended() to help users determine it is safe to apply prefix bloom/hash.
@@ -254,7 +282,7 @@
 
 ## 3.5.0 (9/3/2014)
 ### New Features
-* Add include/utilities/write_batch_with_index.h, providing a utilitiy class to query data out of WriteBatch when building it.
+* Add include/utilities/write_batch_with_index.h, providing a utility class to query data out of WriteBatch when building it.
 * Move BlockBasedTable related options to BlockBasedTableOptions from Options. Change corresponding JNI interface. Options affected include:
   no_block_cache, block_cache, block_cache_compressed, block_size, block_size_deviation, block_restart_interval, filter_policy, whole_key_filtering. filter_policy is changed to shared_ptr from a raw pointer.
 * Remove deprecated options: disable_seek_compaction and db_stats_log_interval
@@ -283,7 +311,7 @@
 ### New Features
 * Added JSON API prototype.
 * HashLinklist reduces performance outlier caused by skewed bucket by switching data in the bucket from linked list to skip list. Add parameter threshold_use_skiplist in NewHashLinkListRepFactory().
-* RocksDB is now able to reclaim storage space more effectively during the compaction process.  This is done by compensating the size of each deletion entry by the 2X average value size, which makes compaction to be triggerred by deletion entries more easily.
+* RocksDB is now able to reclaim storage space more effectively during the compaction process.  This is done by compensating the size of each deletion entry by the 2X average value size, which makes compaction to be triggered by deletion entries more easily.
 * Add TimeOut API to write.  Now WriteOptions have a variable called timeout_hint_us.  With timeout_hint_us set to non-zero, any write associated with this timeout_hint_us may be aborted when it runs longer than the specified timeout_hint_us, and it is guaranteed that any write completes earlier than the specified time-out will not be aborted due to the time-out condition.
 * Add a rate_limiter option, which controls total throughput of flush and compaction. The throughput is specified in bytes/sec. Flush always has precedence over compaction when available bandwidth is constrained.
 
@@ -298,11 +326,11 @@
 2) It added some complexity to the important code-paths,
 3) None of our internal customers were really using it.
 Because of that, Options::disable_seek_compaction is now obsolete. It is still a parameter in Options, so it does not break the build, but it does not have any effect. We plan to completely remove it at some point, so we ask users to please remove this option from your code base.
-* Add two paramters to NewHashLinkListRepFactory() for logging on too many entries in a hash bucket when flushing.
+* Add two parameters to NewHashLinkListRepFactory() for logging on too many entries in a hash bucket when flushing.
 * Added new option BlockBasedTableOptions::hash_index_allow_collision. When enabled, prefix hash index for block-based table will not store prefix and allow hash collision, reducing memory consumption.
 
 ### New Features
-* PlainTable now supports a new key encoding: for keys of the same prefix, the prefix is only written once. It can be enabled through encoding_type paramter of NewPlainTableFactory()
+* PlainTable now supports a new key encoding: for keys of the same prefix, the prefix is only written once. It can be enabled through encoding_type parameter of NewPlainTableFactory()
 * Add AdaptiveTableFactory, which is used to convert from a DB of PlainTable to BlockBasedTabe, or vise versa. It can be created using NewAdaptiveTableFactory()
 
 ### Performance Improvements

@@ -32,8 +32,8 @@ project(rocksdb)
 include(${CMAKE_CURRENT_SOURCE_DIR}/thirdparty.inc)
 execute_process(COMMAND powershell -Command "Get-Date -format MM_dd_yyyy" OUTPUT_VARIABLE DATE)
 execute_process(COMMAND powershell -Command "Get-Date -format HH:mm:ss" OUTPUT_VARIABLE TIME)
-string(REGEX REPLACE "(..)_(..)_..(..).*" "\\1/\\2/\\3" DATE ${DATE})
-string(REGEX REPLACE "(..):(.....).*" " \\1:\\2" TIME ${TIME})
+string(REGEX REPLACE "(..)_(..)_..(..).*" "\\1/\\2/\\3" DATE "${DATE}")
+string(REGEX REPLACE "(..):(.....).*" " \\1:\\2" TIME "${TIME}")
 string(CONCAT GIT_DATE_TIME ${DATE} ${TIME})
 
 find_package(Git)
@@ -44,7 +44,7 @@ else()
     set(GIT_SHA 0)
 endif()
 
-string(REGEX REPLACE "[^0-9a-f]+" "" GIT_SHA ${GIT_SHA})
+string(REGEX REPLACE "[^0-9a-f]+" "" GIT_SHA "${GIT_SHA}")
 
 set(BUILD_VERSION_CC ${CMAKE_CURRENT_SOURCE_DIR}/util/build_version.cc)
 
@@ -113,6 +113,7 @@ set(SOURCES
         db/db_impl.cc
         db/db_impl_debug.cc
         db/db_impl_experimental.cc
+        db/db_impl_add_file.cc
         db/db_impl_readonly.cc
         db/db_info_dumper.cc
         db/db_iter.cc
@@ -133,7 +134,6 @@ set(SOURCES
         db/merge_helper.cc
         db/merge_operator.cc
         db/repair.cc
-        db/slice.cc
         db/snapshot_impl.cc
         db/table_cache.cc
         db/table_properties_collector.cc
@@ -193,7 +193,6 @@ set(SOURCES
         util/arena.cc
         util/bloom.cc
         util/build_version.cc
-        util/cache.cc
         util/coding.cc
         util/compaction_job_stats_impl.cc
         util/comparator.cc
@@ -214,6 +213,7 @@ set(SOURCES
         util/histogram_windowing.cc
         util/instrumented_mutex.cc
         util/iostats_context.cc
+        util/lru_cache.cc
         tools/ldb_cmd.cc
         tools/ldb_tool.cc
         util/logging.cc
@@ -229,6 +229,7 @@ set(SOURCES
         util/perf_level.cc
         util/random.cc
         util/rate_limiter.cc
+        util/sharded_cache.cc
         util/slice.cc
         util/statistics.cc
         util/status.cc
@@ -263,10 +264,12 @@ set(SOURCES
         utilities/merge_operators/put.cc
         utilities/merge_operators/max.cc
         utilities/merge_operators/uint64add.cc
+        utilities/option_change_migration/option_change_migration.cc
         utilities/options/options_util.cc
         utilities/persistent_cache/persistent_cache_tier.cc
         utilities/persistent_cache/volatile_tier_impl.cc
         utilities/redis/redis_lists.cc
+        utilities/simulator_cache/sim_cache.cc
         utilities/spatialdb/spatial_db.cc
         utilities/table_properties_collectors/compact_on_deletion_collector.cc
         utilities/transactions/optimistic_transaction_impl.cc
@@ -346,6 +349,7 @@ set(TESTS
         db/db_inplace_update_test.cc
         db/db_iter_test.cc
         db/db_log_iter_test.cc
+        db/db_options_test.cc
         db/db_properties_test.cc
         db/db_table_properties_test.cc
         db/db_tailing_iter_test.cc
@@ -353,6 +357,7 @@ set(TESTS
         db/db_test2.cc
         db/db_block_cache_test.cc
         db/db_bloom_filter_test.cc
+        db/db_flush_test.cc
         db/db_iterator_test.cc
         db/db_sst_test.cc
         db/db_universal_compaction_test.cc
@@ -417,6 +422,7 @@ set(TESTS
         util/options_test.cc
         util/rate_limiter_test.cc
         util/slice_transform_test.cc
+        util/statistics_test.cc
         util/thread_list_test.cc
         util/thread_local_test.cc
         utilities/backupable/backupable_db_test.cc
@@ -427,6 +433,7 @@ set(TESTS
         utilities/geodb/geodb_test.cc
         utilities/memory/memory_test.cc
         utilities/merge_operators/string_append/stringappend_test.cc
+        utilities/option_change_migration/option_change_migration_test.cc
         utilities/options/options_util_test.cc
         utilities/persistent_cache/hash_table_test.cc
         utilities/persistent_cache/persistent_cache_test.cc

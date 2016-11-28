@@ -269,15 +269,6 @@ public class ColumnFamilyOptionsTest {
   }
 
   @Test
-  public void filterDeletes() {
-    try (final ColumnFamilyOptions opt = new ColumnFamilyOptions()) {
-      final boolean boolValue = rand.nextBoolean();
-      opt.setFilterDeletes(boolValue);
-      assertThat(opt.filterDeletes()).isEqualTo(boolValue);
-    }
-  }
-
-  @Test
   public void maxSequentialSkipInIterations() {
     try (final ColumnFamilyOptions opt = new ColumnFamilyOptions()) {
       final long longValue = rand.nextLong();
@@ -305,20 +296,11 @@ public class ColumnFamilyOptionsTest {
   }
 
   @Test
-  public void memtablePrefixBloomBits() {
+  public void memtablePrefixBloomSizeRatio() {
     try (final ColumnFamilyOptions opt = new ColumnFamilyOptions()) {
-      final int intValue = rand.nextInt();
-      opt.setMemtablePrefixBloomBits(intValue);
-      assertThat(opt.memtablePrefixBloomBits()).isEqualTo(intValue);
-    }
-  }
-
-  @Test
-  public void memtablePrefixBloomProbes() {
-    try (final ColumnFamilyOptions opt = new ColumnFamilyOptions()) {
-      final int intValue = rand.nextInt();
-      opt.setMemtablePrefixBloomProbes(intValue);
-      assertThat(opt.memtablePrefixBloomProbes()).isEqualTo(intValue);
+      final double doubleValue = rand.nextDouble();
+      opt.setMemtablePrefixBloomSizeRatio(doubleValue);
+      assertThat(opt.memtablePrefixBloomSizeRatio()).isEqualTo(doubleValue);
     }
   }
 

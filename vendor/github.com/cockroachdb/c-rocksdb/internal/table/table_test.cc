@@ -20,7 +20,6 @@
 #include "db/dbformat.h"
 #include "db/memtable.h"
 #include "db/write_batch_internal.h"
-#include "db/writebuffer.h"
 #include "memtable/stl_wrappers.h"
 #include "rocksdb/cache.h"
 #include "rocksdb/db.h"
@@ -30,6 +29,7 @@
 #include "rocksdb/perf_context.h"
 #include "rocksdb/slice_transform.h"
 #include "rocksdb/statistics.h"
+#include "rocksdb/write_buffer_manager.h"
 #include "table/block.h"
 #include "table/block_based_table_builder.h"
 #include "table/block_based_table_factory.h"
@@ -45,6 +45,7 @@
 #include "util/random.h"
 #include "util/statistics.h"
 #include "util/string_util.h"
+#include "util/sync_point.h"
 #include "util/testharness.h"
 #include "util/testutil.h"
 #include "utilities/merge_operators.h"
@@ -400,10 +401,10 @@ uint64_t TableConstructor::cur_uniq_id_ = 1;
 
 class MemTableConstructor: public Constructor {
  public:
-  explicit MemTableConstructor(const Comparator* cmp, WriteBuffer* wb)
+  explicit MemTableConstructor(const Comparator* cmp, WriteBufferManager* wb)
       : Constructor(cmp),
         internal_comparator_(cmp),
-        write_buffer_(wb),
+        write_buffer_manager_(wb),
         table_factory_(new SkipListFactory) {
     options_.memtable_factory = table_factory_;
     ImmutableCFOptions ioptions(options_);
@@ -423,7 +424,7 @@ class MemTableConstructor: public Constructor {
     ImmutableCFOptions mem_ioptions(ioptions);
     memtable_ = new MemTable(internal_comparator_, mem_ioptions,
                              MutableCFOptions(options_, mem_ioptions),
-                             write_buffer_, kMaxSequenceNumber);
+                             write_buffer_manager_, kMaxSequenceNumber);
     memtable_->Ref();
     int seq = 1;
     for (const auto kv : kv_map) {
@@ -445,7 +446,7 @@ class MemTableConstructor: public Constructor {
   mutable Arena arena_;
   InternalKeyComparator internal_comparator_;
   Options options_;
-  WriteBuffer* write_buffer_;
+  WriteBufferManager* write_buffer_manager_;
   MemTable* memtable_;
   std::shared_ptr<SkipListFactory> table_factory_;
 };
@@ -941,7 +942,7 @@ class HarnessTest : public testing::Test {
   ImmutableCFOptions ioptions_;
   BlockBasedTableOptions table_options_ = BlockBasedTableOptions();
   Constructor* constructor_;
-  WriteBuffer write_buffer_;
+  WriteBufferManager write_buffer_;
   bool support_prev_;
   bool only_support_prefix_seek_;
   shared_ptr<InternalKeyComparator> internal_comparator_;
@@ -1765,7 +1766,6 @@ TEST_F(BlockBasedTableTest, FilterBlockInBlockCache) {
     ASSERT_GT(props.GetCacheBytesRead(), last_cache_bytes_read);
     ASSERT_EQ(props.GetCacheBytesWrite(),
               table_options.block_cache->GetUsage());
-    last_cache_bytes_read = props.GetCacheBytesRead();
   }
   // release the iterator so that the block cache can reset correctly.
   iter.reset();
@@ -2022,6 +2022,65 @@ TEST_F(BlockBasedTableTest, BlockCacheLeak) {
   c.ResetTableReader();
 }
 
+TEST_F(BlockBasedTableTest, NewIndexIteratorLeak) {
+  // A regression test to avoid data race described in
+  // https://github.com/facebook/rocksdb/issues/1267
+  TableConstructor c(BytewiseComparator(), true /* convert_to_internal_key_ */);
+  std::vector<std::string> keys;
+  stl_wrappers::KVMap kvmap;
+  c.Add("a1", "val1");
+  Options options;
+  options.prefix_extractor.reset(NewFixedPrefixTransform(1));
+  BlockBasedTableOptions table_options;
+  table_options.index_type = BlockBasedTableOptions::kHashSearch;
+  table_options.cache_index_and_filter_blocks = true;
+  table_options.block_cache = NewLRUCache(0);
+  options.table_factory.reset(NewBlockBasedTableFactory(table_options));
+  const ImmutableCFOptions ioptions(options);
+  c.Finish(options, ioptions, table_options,
+           GetPlainInternalComparator(options.comparator), &keys, &kvmap);
+
+  rocksdb::SyncPoint::GetInstance()->LoadDependencyAndMarkers(
+      {
+          {"BlockBasedTable::NewIndexIterator::thread1:1",
+           "BlockBasedTable::NewIndexIterator::thread2:2"},
+          {"BlockBasedTable::NewIndexIterator::thread2:3",
+           "BlockBasedTable::NewIndexIterator::thread1:4"},
+      },
+      {
+          {"BlockBasedTableTest::NewIndexIteratorLeak:Thread1Marker",
+           "BlockBasedTable::NewIndexIterator::thread1:1"},
+          {"BlockBasedTableTest::NewIndexIteratorLeak:Thread1Marker",
+           "BlockBasedTable::NewIndexIterator::thread1:4"},
+          {"BlockBasedTableTest::NewIndexIteratorLeak:Thread2Marker",
+           "BlockBasedTable::NewIndexIterator::thread2:2"},
+          {"BlockBasedTableTest::NewIndexIteratorLeak:Thread2Marker",
+           "BlockBasedTable::NewIndexIterator::thread2:3"},
+      });
+
+  rocksdb::SyncPoint::GetInstance()->EnableProcessing();
+  ReadOptions ro;
+  auto* reader = c.GetTableReader();
+
+  std::function<void()> func1 = [&]() {
+    TEST_SYNC_POINT("BlockBasedTableTest::NewIndexIteratorLeak:Thread1Marker");
+    std::unique_ptr<InternalIterator> iter(reader->NewIterator(ro));
+    iter->Seek(InternalKey("a1", 0, kTypeValue).Encode());
+  };
+
+  std::function<void()> func2 = [&]() {
+    TEST_SYNC_POINT("BlockBasedTableTest::NewIndexIteratorLeak:Thread2Marker");
+    std::unique_ptr<InternalIterator> iter(reader->NewIterator(ro));
+  };
+
+  auto thread1 = std::thread(func1);
+  auto thread2 = std::thread(func2);
+  thread1.join();
+  thread2.join();
+  rocksdb::SyncPoint::GetInstance()->DisableProcessing();
+  c.ResetTableReader();
+}
+
 // Plain table is not supported in ROCKSDB_LITE
 #ifndef ROCKSDB_LITE
 TEST_F(PlainTableTest, BasicPlainTableProperties) {
@@ -2065,7 +2124,7 @@ TEST_F(PlainTableTest, BasicPlainTableProperties) {
 
   TableProperties* props = nullptr;
   auto s = ReadTableProperties(file_reader.get(), ss->contents().size(),
-                               kPlainTableMagicNumber, Env::Default(), nullptr,
+                               kPlainTableMagicNumber, ioptions,
                                &props);
   std::unique_ptr<TableProperties> props_guard(props);
   ASSERT_OK(s);
@@ -2237,7 +2296,7 @@ TEST_F(MemTableTest, Simple) {
   Options options;
   options.memtable_factory = table_factory;
   ImmutableCFOptions ioptions(options);
-  WriteBuffer wb(options.db_write_buffer_size);
+  WriteBufferManager wb(options.db_write_buffer_size);
   MemTable* memtable =
       new MemTable(cmp, ioptions, MutableCFOptions(options, ioptions), &wb,
                    kMaxSequenceNumber);

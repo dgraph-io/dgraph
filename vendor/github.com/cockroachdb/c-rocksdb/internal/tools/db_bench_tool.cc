@@ -194,6 +194,9 @@ DEFINE_int32(
 DEFINE_int64(reads, -1, "Number of read operations to do.  "
              "If negative, do FLAGS_num reads.");
 
+DEFINE_int64(deletes, -1, "Number of delete operations to do.  "
+             "If negative, do FLAGS_num deletions.");
+
 DEFINE_int32(bloom_locality, 0, "Control bloom filter probes locality");
 
 DEFINE_int64(seed, 0, "Seed base for random number generators. "
@@ -396,8 +399,11 @@ DEFINE_int32(skip_table_builder_flush, false, "Skip flushing block in "
 
 DEFINE_int32(bloom_bits, -1, "Bloom filter bits per key. Negative means"
              " use default settings.");
-DEFINE_int32(memtable_bloom_bits, 0, "Bloom filter bits per key for memtable. "
-             "Negative means no bloom filter.");
+DEFINE_double(memtable_bloom_size_ratio, 0,
+              "Ratio of memtable size used for bloom filter. 0 means no bloom "
+              "filter.");
+DEFINE_bool(memtable_use_huge_page, false,
+            "Try to use huge page in memtables.");
 
 DEFINE_bool(use_existing_db, false, "If true, do not destroy the existing"
             " database.  If you set this flag and also specify a benchmark that"
@@ -658,7 +664,7 @@ DEFINE_int32(thread_status_per_interval, 0,
              "Takes and report a snapshot of the current status of each thread"
              " when this is greater than 0.");
 
-DEFINE_int32(perf_level, 0, "Level of perf collection");
+DEFINE_int32(perf_level, rocksdb::PerfLevel::kDisable, "Level of perf collection");
 
 static bool ValidateRateLimit(const char* flagname, double value) {
   const double EPSILON = 1e-10;
@@ -764,9 +770,6 @@ DEFINE_uint64(wal_bytes_per_sync,  rocksdb::Options().wal_bytes_per_sync,
               "Allows OS to incrementally sync WAL files to disk while they are"
               " being written, in the background. Issue one request for every"
               " wal_bytes_per_sync written. 0 turns it off.");
-
-DEFINE_bool(filter_deletes, false, " On true, deletes use bloom-filter and drop"
-            " the delete if key not present");
 
 DEFINE_bool(use_single_deletes, true,
             "Use single deletes (used in RandomReplaceKeys only).");
@@ -1612,6 +1615,7 @@ class Benchmark {
   WriteOptions write_options_;
   Options open_options_;  // keep options around to properly destroy db later
   int64_t reads_;
+  int64_t deletes_;
   double read_random_exp_range_;
   int64_t writes_;
   int64_t readwrites_;
@@ -1963,6 +1967,7 @@ class Benchmark {
       num_ = FLAGS_num;
       reads_ = (FLAGS_reads < 0 ? FLAGS_num : FLAGS_reads);
       writes_ = (FLAGS_writes < 0 ? FLAGS_num : FLAGS_writes);
+      deletes_ = (FLAGS_deletes < 0 ? FLAGS_num : FLAGS_deletes);
       value_size_ = FLAGS_value_size;
       key_size_ = FLAGS_key_size;
       entries_per_batch_ = FLAGS_batch_size;
@@ -2461,7 +2466,8 @@ class Benchmark {
         exit(1);
       }
     }
-    options.memtable_prefix_bloom_bits = FLAGS_memtable_bloom_bits;
+    options.memtable_huge_page_size = FLAGS_memtable_use_huge_page ? 2048 : 0;
+    options.memtable_prefix_bloom_size_ratio = FLAGS_memtable_bloom_size_ratio;
     options.bloom_locality = FLAGS_bloom_locality;
     options.max_file_opening_threads = FLAGS_file_opening_threads;
     options.new_table_reader_for_compaction_inputs =
@@ -2479,7 +2485,6 @@ class Benchmark {
         FLAGS_level_compaction_dynamic_level_bytes;
     options.max_bytes_for_level_multiplier =
         FLAGS_max_bytes_for_level_multiplier;
-    options.filter_deletes = FLAGS_filter_deletes;
     if ((FLAGS_prefix_size == 0) && (FLAGS_rep_factory == kPrefixHash ||
                                      FLAGS_rep_factory == kHashLinkedList)) {
       fprintf(stderr, "prefix_size should be non-zero if PrefixHash or "
@@ -2702,9 +2707,6 @@ class Benchmark {
     }
 #endif  // ROCKSDB_LITE
 
-    if (FLAGS_min_level_to_compress >= 0) {
-      options.compression_per_level.clear();
-    }
   }
 
   void InitializeOptionsGeneral(Options* opts) {
@@ -3089,7 +3091,7 @@ class Benchmark {
 
     thread->stats.AddMessage(msg);
 
-    if (FLAGS_perf_level > 0) {
+    if (FLAGS_perf_level > rocksdb::PerfLevel::kDisable) {
       thread->stats.AddMessage(perf_context.ToString());
     }
   }
@@ -3157,7 +3159,7 @@ class Benchmark {
     thread->stats.AddBytes(bytes);
     thread->stats.AddMessage(msg);
 
-    if (FLAGS_perf_level > 0) {
+    if (FLAGS_perf_level > rocksdb::PerfLevel::kDisable) {
       thread->stats.AddMessage(perf_context.ToString());
     }
   }
@@ -3300,7 +3302,7 @@ class Benchmark {
              found, read);
     thread->stats.AddBytes(bytes);
     thread->stats.AddMessage(msg);
-    if (FLAGS_perf_level > 0) {
+    if (FLAGS_perf_level > rocksdb::PerfLevel::kDisable) {
       thread->stats.AddMessage(perf_context.ToString());
     }
   }
@@ -3323,7 +3325,7 @@ class Benchmark {
 
   void DoDelete(ThreadState* thread, bool seq) {
     WriteBatch batch;
-    Duration duration(seq ? 0 : FLAGS_duration, num_);
+    Duration duration(seq ? 0 : FLAGS_duration, deletes_);
     int64_t i = 0;
     std::unique_ptr<const char[]> key_guard;
     Slice key = AllocateKey(&key_guard);
@@ -3937,7 +3939,7 @@ class Benchmark {
     }
     thread->stats.AddMessage(msg);
 
-    if (FLAGS_perf_level > 0) {
+    if (FLAGS_perf_level > rocksdb::PerfLevel::kDisable) {
       thread->stats.AddMessage(perf_context.ToString());
     }
   }

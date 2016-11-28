@@ -1104,7 +1104,8 @@ std::vector<rocksdb::CompressionType> rocksdb_compression_vector_helper(
  */
 jbyteArray rocksdb_compression_list_helper(JNIEnv* env,
     std::vector<rocksdb::CompressionType> compressionLevels) {
-  jbyte jbuf[compressionLevels.size()];
+  std::unique_ptr<jbyte[]> jbuf =
+      std::unique_ptr<jbyte[]>(new jbyte[compressionLevels.size()]);
   for (std::vector<rocksdb::CompressionType>::size_type i = 0;
         i != compressionLevels.size(); i++) {
       jbuf[i] = compressionLevels[i];
@@ -1113,7 +1114,7 @@ jbyteArray rocksdb_compression_list_helper(JNIEnv* env,
   jbyteArray jcompressionLevels = env->NewByteArray(
       static_cast<jsize>(compressionLevels.size()));
   env->SetByteArrayRegion(jcompressionLevels, 0,
-      static_cast<jsize>(compressionLevels.size()), jbuf);
+      static_cast<jsize>(compressionLevels.size()), jbuf.get());
   return jcompressionLevels;
 }
 
@@ -1634,27 +1635,6 @@ void Java_org_rocksdb_Options_setVerifyChecksumsInCompaction(
 
 /*
  * Class:     org_rocksdb_Options
- * Method:    filterDeletes
- * Signature: (J)Z
- */
-jboolean Java_org_rocksdb_Options_filterDeletes(
-    JNIEnv* env, jobject jobj, jlong jhandle) {
-  return reinterpret_cast<rocksdb::Options*>(jhandle)->filter_deletes;
-}
-
-/*
- * Class:     org_rocksdb_Options
- * Method:    setFilterDeletes
- * Signature: (JZ)V
- */
-void Java_org_rocksdb_Options_setFilterDeletes(
-    JNIEnv* env, jobject jobj, jlong jhandle, jboolean jfilter_deletes) {
-  reinterpret_cast<rocksdb::Options*>(jhandle)->filter_deletes =
-      static_cast<bool>(jfilter_deletes);
-}
-
-/*
- * Class:     org_rocksdb_Options
  * Method:    maxSequentialSkipInIterations
  * Signature: (J)J
  */
@@ -1732,50 +1712,27 @@ void Java_org_rocksdb_Options_setInplaceUpdateNumLocks(
 
 /*
  * Class:     org_rocksdb_Options
- * Method:    memtablePrefixBloomBits
+ * Method:    memtablePrefixBloomSizeRatio
  * Signature: (J)I
  */
-jint Java_org_rocksdb_Options_memtablePrefixBloomBits(
-    JNIEnv* env, jobject jobj, jlong jhandle) {
-  return reinterpret_cast<rocksdb::Options*>(
-      jhandle)->memtable_prefix_bloom_bits;
+jdouble Java_org_rocksdb_Options_memtablePrefixBloomSizeRatio(JNIEnv* env,
+                                                              jobject jobj,
+                                                              jlong jhandle) {
+  return reinterpret_cast<rocksdb::Options*>(jhandle)
+      ->memtable_prefix_bloom_size_ratio;
 }
 
 /*
  * Class:     org_rocksdb_Options
- * Method:    setMemtablePrefixBloomBits
+ * Method:    setMemtablePrefixBloomSizeRatio
  * Signature: (JI)V
  */
-void Java_org_rocksdb_Options_setMemtablePrefixBloomBits(
+void Java_org_rocksdb_Options_setMemtablePrefixBloomSizeRatio(
     JNIEnv* env, jobject jobj, jlong jhandle,
-    jint jmemtable_prefix_bloom_bits) {
-  reinterpret_cast<rocksdb::Options*>(
-      jhandle)->memtable_prefix_bloom_bits =
-          static_cast<int32_t>(jmemtable_prefix_bloom_bits);
-}
-
-/*
- * Class:     org_rocksdb_Options
- * Method:    memtablePrefixBloomProbes
- * Signature: (J)I
- */
-jint Java_org_rocksdb_Options_memtablePrefixBloomProbes(
-    JNIEnv* env, jobject jobj, jlong jhandle) {
-  return reinterpret_cast<rocksdb::Options*>(
-      jhandle)->memtable_prefix_bloom_probes;
-}
-
-/*
- * Class:     org_rocksdb_Options
- * Method:    setMemtablePrefixBloomProbes
- * Signature: (JI)V
- */
-void Java_org_rocksdb_Options_setMemtablePrefixBloomProbes(
-    JNIEnv* env, jobject jobj, jlong jhandle,
-    jint jmemtable_prefix_bloom_probes) {
-  reinterpret_cast<rocksdb::Options*>(
-      jhandle)->memtable_prefix_bloom_probes =
-          static_cast<int32_t>(jmemtable_prefix_bloom_probes);
+    jdouble jmemtable_prefix_bloom_size_ratio) {
+  reinterpret_cast<rocksdb::Options*>(jhandle)
+      ->memtable_prefix_bloom_size_ratio =
+      static_cast<double>(jmemtable_prefix_bloom_size_ratio);
 }
 
 /*
@@ -2816,28 +2773,6 @@ void Java_org_rocksdb_ColumnFamilyOptions_setVerifyChecksumsInCompaction(
 
 /*
  * Class:     org_rocksdb_ColumnFamilyOptions
- * Method:    filterDeletes
- * Signature: (J)Z
- */
-jboolean Java_org_rocksdb_ColumnFamilyOptions_filterDeletes(
-    JNIEnv* env, jobject jobj, jlong jhandle) {
-  return reinterpret_cast<rocksdb::ColumnFamilyOptions*>(jhandle)->
-      filter_deletes;
-}
-
-/*
- * Class:     org_rocksdb_ColumnFamilyOptions
- * Method:    setFilterDeletes
- * Signature: (JZ)V
- */
-void Java_org_rocksdb_ColumnFamilyOptions_setFilterDeletes(
-    JNIEnv* env, jobject jobj, jlong jhandle, jboolean jfilter_deletes) {
-  reinterpret_cast<rocksdb::ColumnFamilyOptions*>(jhandle)->filter_deletes =
-      static_cast<bool>(jfilter_deletes);
-}
-
-/*
- * Class:     org_rocksdb_ColumnFamilyOptions
  * Method:    maxSequentialSkipInIterations
  * Signature: (J)J
  */
@@ -2915,50 +2850,26 @@ void Java_org_rocksdb_ColumnFamilyOptions_setInplaceUpdateNumLocks(
 
 /*
  * Class:     org_rocksdb_ColumnFamilyOptions
- * Method:    memtablePrefixBloomBits
+ * Method:    memtablePrefixBloomSizeRatio
  * Signature: (J)I
  */
-jint Java_org_rocksdb_ColumnFamilyOptions_memtablePrefixBloomBits(
+jdouble Java_org_rocksdb_ColumnFamilyOptions_memtablePrefixBloomSizeRatio(
     JNIEnv* env, jobject jobj, jlong jhandle) {
-  return reinterpret_cast<rocksdb::ColumnFamilyOptions*>(
-      jhandle)->memtable_prefix_bloom_bits;
+  return reinterpret_cast<rocksdb::ColumnFamilyOptions*>(jhandle)
+      ->memtable_prefix_bloom_size_ratio;
 }
 
 /*
  * Class:     org_rocksdb_ColumnFamilyOptions
- * Method:    setMemtablePrefixBloomBits
+ * Method:    setMemtablePrefixBloomSizeRatio
  * Signature: (JI)V
  */
-void Java_org_rocksdb_ColumnFamilyOptions_setMemtablePrefixBloomBits(
+void Java_org_rocksdb_ColumnFamilyOptions_setMemtablePrefixBloomSizeRatio(
     JNIEnv* env, jobject jobj, jlong jhandle,
-    jint jmemtable_prefix_bloom_bits) {
-  reinterpret_cast<rocksdb::ColumnFamilyOptions*>(
-      jhandle)->memtable_prefix_bloom_bits =
-          static_cast<int32_t>(jmemtable_prefix_bloom_bits);
-}
-
-/*
- * Class:     org_rocksdb_ColumnFamilyOptions
- * Method:    memtablePrefixBloomProbes
- * Signature: (J)I
- */
-jint Java_org_rocksdb_ColumnFamilyOptions_memtablePrefixBloomProbes(
-    JNIEnv* env, jobject jobj, jlong jhandle) {
-  return reinterpret_cast<rocksdb::ColumnFamilyOptions*>(
-      jhandle)->memtable_prefix_bloom_probes;
-}
-
-/*
- * Class:     org_rocksdb_ColumnFamilyOptions
- * Method:    setMemtablePrefixBloomProbes
- * Signature: (JI)V
- */
-void Java_org_rocksdb_ColumnFamilyOptions_setMemtablePrefixBloomProbes(
-    JNIEnv* env, jobject jobj, jlong jhandle,
-    jint jmemtable_prefix_bloom_probes) {
-  reinterpret_cast<rocksdb::ColumnFamilyOptions*>(
-      jhandle)->memtable_prefix_bloom_probes =
-          static_cast<int32_t>(jmemtable_prefix_bloom_probes);
+    jdouble jmemtable_prefix_bloom_size_ratio) {
+  reinterpret_cast<rocksdb::ColumnFamilyOptions*>(jhandle)
+      ->memtable_prefix_bloom_size_ratio =
+      static_cast<double>(jmemtable_prefix_bloom_size_ratio);
 }
 
 /*
@@ -4016,6 +3927,90 @@ jboolean Java_org_rocksdb_ReadOptions_tailing(
 
 /*
  * Class:     org_rocksdb_ReadOptions
+ * Method:    managed
+ * Signature: (J)Z
+ */
+jboolean Java_org_rocksdb_ReadOptions_managed(
+    JNIEnv* env, jobject jobj, jlong jhandle) {
+  return reinterpret_cast<rocksdb::ReadOptions*>(jhandle)->managed;
+}
+
+/*
+ * Class:     org_rocksdb_ReadOptions
+ * Method:    setManaged
+ * Signature: (JZ)V
+ */
+void Java_org_rocksdb_ReadOptions_setManaged(
+    JNIEnv* env, jobject jobj, jlong jhandle, jboolean jmanaged) {
+  reinterpret_cast<rocksdb::ReadOptions*>(jhandle)->managed =
+      static_cast<bool>(jmanaged);
+}
+
+/*
+ * Class:     org_rocksdb_ReadOptions
+ * Method:    totalOrderSeek
+ * Signature: (J)Z
+ */
+jboolean Java_org_rocksdb_ReadOptions_totalOrderSeek(
+    JNIEnv* env, jobject jobj, jlong jhandle) {
+  return reinterpret_cast<rocksdb::ReadOptions*>(jhandle)->total_order_seek;
+}
+
+/*
+ * Class:     org_rocksdb_ReadOptions
+ * Method:    setTotalOrderSeek
+ * Signature: (JZ)V
+ */
+void Java_org_rocksdb_ReadOptions_setTotalOrderSeek(
+    JNIEnv* env, jobject jobj, jlong jhandle, jboolean jtotal_order_seek) {
+  reinterpret_cast<rocksdb::ReadOptions*>(jhandle)->total_order_seek =
+      static_cast<bool>(jtotal_order_seek);
+}
+
+/*
+ * Class:     org_rocksdb_ReadOptions
+ * Method:    prefixSameAsStart
+ * Signature: (J)Z
+ */
+jboolean Java_org_rocksdb_ReadOptions_prefixSameAsStart(
+    JNIEnv* env, jobject jobj, jlong jhandle) {
+  return reinterpret_cast<rocksdb::ReadOptions*>(jhandle)->prefix_same_as_start;
+}
+
+/*
+ * Class:     org_rocksdb_ReadOptions
+ * Method:    setPrefixSameAsStart
+ * Signature: (JZ)V
+ */
+void Java_org_rocksdb_ReadOptions_setPrefixSameAsStart(
+    JNIEnv* env, jobject jobj, jlong jhandle, jboolean jprefix_same_as_start) {
+  reinterpret_cast<rocksdb::ReadOptions*>(jhandle)->prefix_same_as_start =
+      static_cast<bool>(jprefix_same_as_start);
+}
+
+/*
+ * Class:     org_rocksdb_ReadOptions
+ * Method:    pinData
+ * Signature: (J)Z
+ */
+jboolean Java_org_rocksdb_ReadOptions_pinData(
+    JNIEnv* env, jobject jobj, jlong jhandle) {
+  return reinterpret_cast<rocksdb::ReadOptions*>(jhandle)->pin_data;
+}
+
+/*
+ * Class:     org_rocksdb_ReadOptions
+ * Method:    setPinData
+ * Signature: (JZ)V
+ */
+void Java_org_rocksdb_ReadOptions_setPinData(
+    JNIEnv* env, jobject jobj, jlong jhandle, jboolean jpin_data) {
+  reinterpret_cast<rocksdb::ReadOptions*>(jhandle)->pin_data =
+      static_cast<bool>(jpin_data);
+}
+
+/*
+ * Class:     org_rocksdb_ReadOptions
  * Method:    setSnapshot
  * Signature: (JJ)V
  */
@@ -4035,6 +4030,28 @@ jlong Java_org_rocksdb_ReadOptions_snapshot(
   auto& snapshot =
       reinterpret_cast<rocksdb::ReadOptions*>(jhandle)->snapshot;
   return reinterpret_cast<jlong>(snapshot);
+}
+
+/*
+ * Class:     org_rocksdb_ReadOptions
+ * Method:    readTier
+ * Signature: (J)B
+ */
+jbyte Java_org_rocksdb_ReadOptions_readTier(
+    JNIEnv* env, jobject jobj, jlong jhandle) {
+  return static_cast<jbyte>(
+      reinterpret_cast<rocksdb::ReadOptions*>(jhandle)->read_tier);
+}
+
+/*
+ * Class:     org_rocksdb_ReadOptions
+ * Method:    setReadTier
+ * Signature: (JB)V
+ */
+void Java_org_rocksdb_ReadOptions_setReadTier(
+    JNIEnv* env, jobject jobj, jlong jhandle, jbyte jread_tier) {
+  reinterpret_cast<rocksdb::ReadOptions*>(jhandle)->read_tier =
+      static_cast<rocksdb::ReadTier>(jread_tier);
 }
 
 /////////////////////////////////////////////////////////////////////

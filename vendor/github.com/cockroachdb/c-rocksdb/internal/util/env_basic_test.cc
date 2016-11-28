@@ -13,6 +13,41 @@
 
 namespace rocksdb {
 
+// Normalizes trivial differences across Envs such that these test cases can
+// run on all Envs.
+class NormalizingEnvWrapper : public EnvWrapper {
+ public:
+  explicit NormalizingEnvWrapper(Env* base) : EnvWrapper(base) {}
+
+  // Removes . and .. from directory listing
+  virtual Status GetChildren(const std::string& dir,
+                             std::vector<std::string>* result) override {
+    Status status = EnvWrapper::GetChildren(dir, result);
+    if (status.ok()) {
+      result->erase(std::remove_if(result->begin(), result->end(),
+                                   [](const std::string& s) {
+                                     return s == "." || s == "..";
+                                   }),
+                    result->end());
+    }
+    return status;
+  }
+
+  // Removes . and .. from directory listing
+  virtual Status GetChildrenFileAttributes(
+      const std::string& dir, std::vector<FileAttributes>* result) override {
+    Status status = EnvWrapper::GetChildrenFileAttributes(dir, result);
+    if (status.ok()) {
+      result->erase(std::remove_if(result->begin(), result->end(),
+                                   [](const FileAttributes& fa) {
+                                     return fa.name == "." || fa.name == "..";
+                                   }),
+                    result->end());
+    }
+    return status;
+  }
+};
+
 class EnvBasicTestWithParam : public testing::Test,
                               public ::testing::WithParamInterface<Env*> {
  public:
@@ -20,20 +55,36 @@ class EnvBasicTestWithParam : public testing::Test,
   const EnvOptions soptions_;
   std::string test_dir_;
 
-  EnvBasicTestWithParam() {
-    env_ = GetParam();
+  EnvBasicTestWithParam() : env_(GetParam()) {
     test_dir_ = test::TmpDir(env_) + "/env_basic_test";
   }
 
   void SetUp() {
     env_->CreateDirIfMissing(test_dir_);
+  }
+
+  void TearDown() {
     std::vector<std::string> files;
     env_->GetChildren(test_dir_, &files);
     for (const auto& file : files) {
-      env_->DeleteFile(test_dir_ + "/" + file);
+      // don't know whether it's file or directory, try both. The tests must
+      // only create files or empty directories, so one must succeed, else the
+      // directory's corrupted.
+      Status s = env_->DeleteFile(test_dir_ + "/" + file);
+      if (!s.ok()) {
+        ASSERT_OK(env_->DeleteDir(test_dir_ + "/" + file));
+      }
     }
   }
 };
+
+class EnvMoreTestWithParam : public EnvBasicTestWithParam {};
+
+static std::unique_ptr<Env> def_env(new NormalizingEnvWrapper(Env::Default()));
+INSTANTIATE_TEST_CASE_P(EnvDefault, EnvBasicTestWithParam,
+                        ::testing::Values(def_env.get()));
+INSTANTIATE_TEST_CASE_P(EnvDefault, EnvMoreTestWithParam,
+                        ::testing::Values(def_env.get()));
 
 static std::unique_ptr<Env> mock_env(new MockEnv(Env::Default()));
 INSTANTIATE_TEST_CASE_P(MockEnv, EnvBasicTestWithParam,
@@ -73,6 +124,10 @@ std::vector<Env*> GetCustomEnvs() {
 
 INSTANTIATE_TEST_CASE_P(CustomEnv, EnvBasicTestWithParam,
                         ::testing::ValuesIn(GetCustomEnvs()));
+
+INSTANTIATE_TEST_CASE_P(CustomEnv, EnvMoreTestWithParam,
+                        ::testing::ValuesIn(GetCustomEnvs()));
+
 #endif  // ROCKSDB_LITE
 
 TEST_P(EnvBasicTestWithParam, Basics) {
@@ -88,6 +143,7 @@ TEST_P(EnvBasicTestWithParam, Basics) {
 
   // Create a file.
   ASSERT_OK(env_->NewWritableFile(test_dir_ + "/f", &writable_file, soptions_));
+  ASSERT_OK(writable_file->Close());
   writable_file.reset();
 
   // Check that the file exists.
@@ -97,23 +153,36 @@ TEST_P(EnvBasicTestWithParam, Basics) {
   ASSERT_OK(env_->GetChildren(test_dir_, &children));
   ASSERT_EQ(1U, children.size());
   ASSERT_EQ("f", children[0]);
+  ASSERT_OK(env_->DeleteFile(test_dir_ + "/f"));
 
   // Write to the file.
-  ASSERT_OK(env_->NewWritableFile(test_dir_ + "/f", &writable_file, soptions_));
+  ASSERT_OK(
+      env_->NewWritableFile(test_dir_ + "/f1", &writable_file, soptions_));
   ASSERT_OK(writable_file->Append("abc"));
+  ASSERT_OK(writable_file->Close());
+  writable_file.reset();
+  ASSERT_OK(
+      env_->NewWritableFile(test_dir_ + "/f2", &writable_file, soptions_));
+  ASSERT_OK(writable_file->Close());
   writable_file.reset();
 
   // Check for expected size.
-  ASSERT_OK(env_->GetFileSize(test_dir_ + "/f", &file_size));
+  ASSERT_OK(env_->GetFileSize(test_dir_ + "/f1", &file_size));
   ASSERT_EQ(3U, file_size);
 
   // Check that renaming works.
-  ASSERT_TRUE(!env_->RenameFile(test_dir_ + "/non_existent", "/g").ok());
-  ASSERT_OK(env_->RenameFile(test_dir_ + "/f", test_dir_ + "/g"));
-  ASSERT_EQ(Status::NotFound(), env_->FileExists(test_dir_ + "/f"));
+  ASSERT_TRUE(
+      !env_->RenameFile(test_dir_ + "/non_existent", test_dir_ + "/g").ok());
+  ASSERT_OK(env_->RenameFile(test_dir_ + "/f1", test_dir_ + "/g"));
+  ASSERT_EQ(Status::NotFound(), env_->FileExists(test_dir_ + "/f1"));
   ASSERT_OK(env_->FileExists(test_dir_ + "/g"));
   ASSERT_OK(env_->GetFileSize(test_dir_ + "/g", &file_size));
   ASSERT_EQ(3U, file_size);
+
+  // Check that renaming overwriting works
+  ASSERT_OK(env_->RenameFile(test_dir_ + "/f2", test_dir_ + "/g"));
+  ASSERT_OK(env_->GetFileSize(test_dir_ + "/g", &file_size));
+  ASSERT_EQ(0U, file_size);
 
   // Check that opening non-existent file fails.
   unique_ptr<SequentialFile> seq_file;
@@ -133,7 +202,6 @@ TEST_P(EnvBasicTestWithParam, Basics) {
   ASSERT_EQ(Status::NotFound(), env_->FileExists(test_dir_ + "/g"));
   ASSERT_OK(env_->GetChildren(test_dir_, &children));
   ASSERT_EQ(0U, children.size());
-  ASSERT_OK(env_->DeleteDir(test_dir_));
 }
 
 TEST_P(EnvBasicTestWithParam, ReadWrite) {
@@ -146,6 +214,7 @@ TEST_P(EnvBasicTestWithParam, ReadWrite) {
   ASSERT_OK(env_->NewWritableFile(test_dir_ + "/f", &writable_file, soptions_));
   ASSERT_OK(writable_file->Append("hello "));
   ASSERT_OK(writable_file->Append("world"));
+  ASSERT_OK(writable_file->Close());
   writable_file.reset();
 
   // Read sequentially.
@@ -174,20 +243,7 @@ TEST_P(EnvBasicTestWithParam, ReadWrite) {
   ASSERT_TRUE(rand_file->Read(1000, 5, &result, scratch).ok());
 }
 
-TEST_P(EnvBasicTestWithParam, Locks) {
-  FileLock* lock;
-
-  // only test they return success.
-  // TODO(andrewkr): verify functionality
-  ASSERT_OK(env_->LockFile(test_dir_ + "lock_file", &lock));
-  ASSERT_OK(env_->UnlockFile(lock));
-}
-
 TEST_P(EnvBasicTestWithParam, Misc) {
-  std::string test_dir;
-  ASSERT_OK(env_->GetTestDirectory(&test_dir));
-  ASSERT_TRUE(!test_dir.empty());
-
   unique_ptr<WritableFile> writable_file;
   ASSERT_OK(env_->NewWritableFile(test_dir_ + "/b", &writable_file, soptions_));
 
@@ -211,6 +267,7 @@ TEST_P(EnvBasicTestWithParam, LargeWrite) {
   ASSERT_OK(env_->NewWritableFile(test_dir_ + "/f", &writable_file, soptions_));
   ASSERT_OK(writable_file->Append("foo"));
   ASSERT_OK(writable_file->Append(write_data));
+  ASSERT_OK(writable_file->Close());
   writable_file.reset();
 
   unique_ptr<SequentialFile> seq_file;
@@ -230,8 +287,66 @@ TEST_P(EnvBasicTestWithParam, LargeWrite) {
   delete [] scratch;
 }
 
-}  // namespace rocksdb
+TEST_P(EnvMoreTestWithParam, GetModTime) {
+  ASSERT_OK(env_->CreateDirIfMissing(test_dir_ + "/dir1"));
+  uint64_t mtime1 = 0x0;
+  ASSERT_OK(env_->GetFileModificationTime(test_dir_ + "/dir1", &mtime1));
+}
 
+TEST_P(EnvMoreTestWithParam, MakeDir) {
+  ASSERT_OK(env_->CreateDir(test_dir_ + "/j"));
+  ASSERT_OK(env_->FileExists(test_dir_ + "/j"));
+  std::vector<std::string> children;
+  env_->GetChildren(test_dir_, &children);
+  ASSERT_EQ(1U, children.size());
+  // fail because file already exists
+  ASSERT_TRUE(!env_->CreateDir(test_dir_ + "/j").ok());
+  ASSERT_OK(env_->CreateDirIfMissing(test_dir_ + "/j"));
+  ASSERT_OK(env_->DeleteDir(test_dir_ + "/j"));
+  ASSERT_EQ(Status::NotFound(), env_->FileExists(test_dir_ + "/j"));
+}
+
+TEST_P(EnvMoreTestWithParam, GetChildren) {
+  // empty folder returns empty vector
+  std::vector<std::string> children;
+  std::vector<Env::FileAttributes> childAttr;
+  ASSERT_OK(env_->CreateDirIfMissing(test_dir_));
+  ASSERT_OK(env_->GetChildren(test_dir_, &children));
+  ASSERT_OK(env_->FileExists(test_dir_));
+  ASSERT_OK(env_->GetChildrenFileAttributes(test_dir_, &childAttr));
+  ASSERT_EQ(0U, children.size());
+  ASSERT_EQ(0U, childAttr.size());
+
+  // folder with contents returns relative path to test dir
+  ASSERT_OK(env_->CreateDirIfMissing(test_dir_ + "/linda"));
+  ASSERT_OK(env_->CreateDirIfMissing(test_dir_ + "/wanning"));
+  ASSERT_OK(env_->CreateDirIfMissing(test_dir_ + "/jiang"));
+  ASSERT_OK(env_->GetChildren(test_dir_, &children));
+  ASSERT_OK(env_->GetChildrenFileAttributes(test_dir_, &childAttr));
+  ASSERT_EQ(3U, children.size());
+  ASSERT_EQ(3U, childAttr.size());
+  for (auto each : children) {
+    env_->DeleteDir(test_dir_ + "/" + each);
+  }  // necessary for default POSIX env
+
+  // non-exist directory returns IOError
+  ASSERT_OK(env_->DeleteDir(test_dir_));
+  ASSERT_TRUE(!env_->FileExists(test_dir_).ok());
+  ASSERT_TRUE(!env_->GetChildren(test_dir_, &children).ok());
+  ASSERT_TRUE(!env_->GetChildrenFileAttributes(test_dir_, &childAttr).ok());
+
+  // if dir is a file, returns IOError
+  ASSERT_OK(env_->CreateDir(test_dir_));
+  unique_ptr<WritableFile> writable_file;
+  ASSERT_OK(
+      env_->NewWritableFile(test_dir_ + "/file", &writable_file, soptions_));
+  ASSERT_OK(writable_file->Close());
+  writable_file.reset();
+  ASSERT_TRUE(!env_->GetChildren(test_dir_ + "/file", &children).ok());
+  ASSERT_EQ(0U, children.size());
+}
+
+}  // namespace rocksdb
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
