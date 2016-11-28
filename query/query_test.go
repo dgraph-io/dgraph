@@ -1323,10 +1323,10 @@ children: <
 
 // Test sorting / ordering by dob.
 func TestToJSONOrder(t *testing.T) {
-	dir, dir2, ps := populateGraph(t)
+	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
 	defer os.RemoveAll(dir2)
-	defer ps.Close()
+	// defer ps.Close()
 
 	query := `
 		{
@@ -1362,10 +1362,10 @@ func TestToJSONOrder(t *testing.T) {
 
 // Test sorting / ordering by dob.
 func TestToJSONOrderOffset(t *testing.T) {
-	dir, dir2, ps := populateGraph(t)
+	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
 	defer os.RemoveAll(dir2)
-	defer ps.Close()
+	// defer ps.Close()
 
 	query := `
 		{
@@ -1401,10 +1401,10 @@ func TestToJSONOrderOffset(t *testing.T) {
 
 // Test sorting / ordering by dob.
 func TestToJSONOrderOffsetCount(t *testing.T) {
-	dir, dir2, ps := populateGraph(t)
+	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
 	defer os.RemoveAll(dir2)
-	defer ps.Close()
+	// defer ps.Close()
 
 	query := `
 		{
@@ -1440,10 +1440,10 @@ func TestToJSONOrderOffsetCount(t *testing.T) {
 
 // Test sorting / ordering by dob.
 func TestToProtoOrder(t *testing.T) {
-	dir, dir2, ps := populateGraph(t)
+	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
 	defer os.RemoveAll(dir2)
-	defer ps.Close()
+	// defer ps.Close()
 
 	query := `
 		{
@@ -1531,10 +1531,10 @@ children: <
 
 // Test sorting / ordering by dob.
 func TestToProtoOrderCount(t *testing.T) {
-	dir, dir2, ps := populateGraph(t)
+	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
 	defer os.RemoveAll(dir2)
-	defer ps.Close()
+	// defer ps.Close()
 
 	query := `
 		{
@@ -1604,10 +1604,10 @@ children: <
 
 // Test sorting / ordering by dob.
 func TestToProtoOrderOffsetCount(t *testing.T) {
-	dir, dir2, ps := populateGraph(t)
+	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
 	defer os.RemoveAll(dir2)
-	defer ps.Close()
+	// defer ps.Close()
 
 	query := `
 		{
@@ -1730,10 +1730,10 @@ func TestGeneratorMultiRoot(t *testing.T) {
 }
 
 func TestToProtoMultiRoot(t *testing.T) {
-	dir, dir2, ps := populateGraph(t)
+	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
 	defer os.RemoveAll(dir2)
-	defer ps.Close()
+	// defer ps.Close()
 
 	query := `
     {
