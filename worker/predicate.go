@@ -99,8 +99,6 @@ func generateGroup(groupId uint32) (*task.GroupKeys, error) {
 			Checksum: pl.Checksum,
 		}
 		g.Keys = append(g.Keys, key)
-		k.Free()
-		v.Free()
 	}
 	return g, it.Err()
 }

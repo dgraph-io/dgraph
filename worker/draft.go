@@ -329,7 +329,7 @@ func (n *node) processSnapshot(s raftpb.Snapshot) {
 }
 
 func (n *node) Run() {
-	fr := true // first run
+	firstRun := true
 	ticker := time.NewTicker(time.Second)
 	for {
 		select {
@@ -355,9 +355,9 @@ func (n *node) Run() {
 			}
 
 			n.raft.Advance()
-			if fr && n.canCampaign {
+			if firstRun && n.canCampaign {
 				go n.raft.Campaign(n.ctx)
-				fr = false
+				firstRun = false
 			}
 
 		case <-n.done:
