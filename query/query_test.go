@@ -175,7 +175,7 @@ func populateGraph(t *testing.T) (string, string, *store.Store) {
 	addEdgeToTypedValue(t, ps, "name", 23, types.StringID, []byte("Rick Grimes"))
 	addEdgeToValue(t, ps, "age", 23, "15")
 
-	err = coord.UnmarshalText([]byte("{\"Type\":\"Polygon\", \"Coordinates\":[[[0.0,0.0], [2.0,0.0], [2.0, 2.0], [0.0, 2.0]]]}"))
+	err = coord.UnmarshalText([]byte(`{"Type":"Polygon", "Coordinates":[[[0.0,0.0], [2.0,0.0], [2.0, 2.0], [0.0, 2.0]]]}`))
 	require.NoError(t, err)
 	gData, err = coord.MarshalBinary()
 	require.NoError(t, err)
@@ -1730,19 +1730,7 @@ func TestNearGenerator(t *testing.T) {
 		}
 	}`
 
-	gq, _, err := gql.Parse(query)
-	require.NoError(t, err)
-	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, gq)
-	require.NoError(t, err)
-	ch := make(chan error)
-	go ProcessGraph(ctx, sg, nil, ch)
-	err = <-ch
-	require.NoError(t, err)
-
-	var l Latency
-	js, err := sg.ToJSON(&l)
-	require.NoError(t, err)
+	js := processToJSON(t, query)
 	require.JSONEq(t, `{"me":[{"gender":"female","name":"Michonne"}]}`, string(js))
 }
 
@@ -1756,19 +1744,7 @@ func TestWithinGenerator(t *testing.T) {
 		}
 	}`
 
-	gq, _, err := gql.Parse(query)
-	require.NoError(t, err)
-	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, gq)
-	require.NoError(t, err)
-	ch := make(chan error)
-	go ProcessGraph(ctx, sg, nil, ch)
-	err = <-ch
-	require.NoError(t, err)
-
-	var l Latency
-	js, err := sg.ToJSON(&l)
-	require.NoError(t, err)
+	js := processToJSON(t, query)
 	require.JSONEq(t, `{"me":[{"name":"Michonne"}]}`, string(js))
 }
 
@@ -1782,19 +1758,7 @@ func TestContainsGenerator(t *testing.T) {
 		}
 	}`
 
-	gq, _, err := gql.Parse(query)
-	require.NoError(t, err)
-	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, gq)
-	require.NoError(t, err)
-	ch := make(chan error)
-	go ProcessGraph(ctx, sg, nil, ch)
-	err = <-ch
-	require.NoError(t, err)
-
-	var l Latency
-	js, err := sg.ToJSON(&l)
-	require.NoError(t, err)
+	js := processToJSON(t, query)
 	require.JSONEq(t, `{"me":[{"name":"Rick Grimes"}]}`, string(js))
 }
 
@@ -1808,19 +1772,7 @@ func TestIntersectsGenerator(t *testing.T) {
 		}
 	}`
 
-	gq, _, err := gql.Parse(query)
-	require.NoError(t, err)
-	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, gq)
-	require.NoError(t, err)
-	ch := make(chan error)
-	go ProcessGraph(ctx, sg, nil, ch)
-	err = <-ch
-	require.NoError(t, err)
-
-	var l Latency
-	js, err := sg.ToJSON(&l)
-	require.NoError(t, err)
+	js := processToJSON(t, query)
 	require.JSONEq(t, `{"me":[{"name":"Michonne"}, {"name":"Rick Grimes"}]}`, string(js))
 }
 
