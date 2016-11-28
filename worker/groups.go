@@ -265,7 +265,8 @@ func (g *groupi) syncMemberships() {
 					GroupId: rc.Group,
 					Addr:    rc.Addr,
 				}
-				zero := groups().Node(0)
+				zero := g.Node(0)
+				x.AssertTruef(zero != nil, "Expected node 0")
 				x.Check(zero.ProposeAndWait(zero.ctx, &task.Proposal{Membership: mm}))
 
 			}(rc, n.AmLeader())
