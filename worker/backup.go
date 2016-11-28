@@ -271,11 +271,11 @@ func (w *grpcWorker) Backup(ctx context.Context, req *BackupPayload) (*BackupPay
 	}
 }
 
-func BackupOverNetwork(ctx context.Context) {
+func BackupOverNetwork(ctx context.Context) error {
 	// If we haven't even had a single membership update, don't run backup.
-	if groups().LastUpdate() == 0 {
+	if len(*peer) > 0 && groups().LastUpdate() == 0 {
 		x.Trace(ctx, "This server hasn't yet been fully initiated. Please retry later.")
-		return
+		return x.Errorf("Uninitiated server. Please retry later")
 	}
 	// Let's first collect all groups.
 	gids := groups().KnownGroups()
@@ -292,9 +292,11 @@ func BackupOverNetwork(ctx context.Context) {
 		bp := <-ch
 		if bp.Status != BackupPayload_SUCCESS {
 			x.Trace(ctx, "Backup status: %v for group id: %d", bp.Status, bp.GroupId)
+			return fmt.Errorf("Backup status: %v for group id: %d", bp.Status, bp.GroupId)
 		} else {
 			x.Trace(ctx, "Backup successful for group: %v", bp.GroupId)
 		}
 	}
 	x.Trace(ctx, "DONE backup")
+	return nil
 }

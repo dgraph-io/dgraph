@@ -514,8 +514,12 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := context.Background()
-	worker.BackupOverNetwork(ctx)
-	x.SetStatus(w, x.ErrorOk, "Backup completed.")
+	err = worker.BackupOverNetwork(ctx)
+	if err != nil {
+		x.SetStatus(w, err.Error(), "Backup failed.")
+	} else {
+		x.SetStatus(w, x.ErrorOk, "Backup completed.")
+	}
 }
 
 // server is used to implement graph.DgraphServer
