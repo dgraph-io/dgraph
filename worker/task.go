@@ -17,8 +17,11 @@
 package worker
 
 import (
+	"strings"
+
 	"golang.org/x/net/context"
 
+	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/geo"
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
@@ -76,15 +79,23 @@ func processTask(q *task.Query) (*task.Result, error) {
 	useFunc := len(q.SrcFunc) != 0
 	var n int
 	var tokens []string
-	var geoQuery *geo.QueryType
+	var geoQuery *geo.QueryData
 	var err error
 	var intersectDest bool
 	if useFunc {
 		// Tokenize here.
-		tokens, err = getTokens(q.SrcFunc)
-		intersectDest = (q.SrcFunc[0] == "allof")
-		if err != nil {
-			return nil, err
+		if geo.IsGeoFunc(q.SrcFunc[0]) {
+			// For geo functions, we get extra information used for filtering.
+			tokens, geoQuery, err = geo.GetTokens(q.SrcFunc)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			tokens, err = getTokens(q.SrcFunc)
+			if err != nil {
+				return nil, err
+			}
+			intersectDest = (strings.ToLower(q.SrcFunc[0]) == "allof")
 		}
 		n = len(tokens)
 	} else {
@@ -96,7 +107,6 @@ func processTask(q *task.Query) (*task.Result, error) {
 		var key []byte
 		if useFunc {
 			key = types.IndexKey(attr, tokens[i])
-			_ = geoQuery
 		} else {
 			key = posting.Key(q.Uids[i], attr)
 		}
@@ -134,6 +144,30 @@ func processTask(q *task.Query) (*task.Result, error) {
 		out.UidMatrix = append(out.UidMatrix, pl.Uids(opts))
 	}
 
+	// If geo filter, do value check for correctness.
+	var values []*task.Value
+	if geoQuery != nil {
+		uids := algo.MergeSorted(out.UidMatrix)
+		for _, uid := range uids.Uids {
+			key := posting.Key(uid, attr)
+			pl, decr := posting.GetOrCreate(key)
+
+			vbytes, vtype, err := pl.Value()
+			newValue := &task.Value{ValType: uint32(vtype)}
+			if err == nil {
+				newValue.Val = vbytes
+			} else {
+				newValue.Val = x.Nilbyte
+			}
+			values = append(values, newValue)
+			decr() // Decrement the reference count of the pl.
+		}
+
+		filtered := geo.FilterUids(uids, values, geoQuery)
+		for i := 0; i < len(out.UidMatrix); i++ {
+			out.UidMatrix[i] = algo.IntersectSorted([]*task.List{out.UidMatrix[i], filtered})
+		}
+	}
 	out.IntersectDest = intersectDest
 	return &out, nil
 }
