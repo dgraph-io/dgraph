@@ -297,6 +297,9 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 						continue
 					}
 				}
+				if bytes.Equal(tv.Val, nil) {
+					continue
+				}
 				dst.AddValue(pc.Attr, sv)
 			}
 		}
