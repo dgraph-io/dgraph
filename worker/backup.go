@@ -9,7 +9,6 @@ import (
 	"math/rand"
 	"os"
 	"path"
-	"strconv"
 	"sync"
 	"time"
 
@@ -51,10 +50,7 @@ func toRDF(buf *bytes.Buffer, item kv) {
 			x.Check2(buf.WriteString(" .\n"))
 			break
 		}
-		// Uid list
-		strUID := strconv.FormatUint(p.Uid, 16)
-
-		_, err := buf.WriteString(fmt.Sprintf("<_uid_:%s> .\n", strUID))
+		_, err := buf.WriteString(fmt.Sprintf("<_uid_:%#x> .\n", p.Uid))
 		x.Check(err)
 	}
 }
@@ -153,7 +149,7 @@ func backup(gid uint32, bdir string) error {
 			continue
 		}
 
-		k := []byte(fmt.Sprintf("<_uid_:%x> <%s> ", uid, pred))
+		k := []byte(fmt.Sprintf("<_uid_:%#x> <%s> ", uid, pred))
 		v := make([]byte, len(it.Value().Data()))
 		copy(v, it.Value().Data())
 		chkv <- kv{
