@@ -303,19 +303,24 @@ func mutationHandler(ctx context.Context, mu *gql.Mutation) (map[string]uint64, 
 	var allocIds map[string]uint64
 	var err error
 
-	if set, err = convertToNQuad(ctx, mu.Set); err != nil {
+	if len(mu.Set) > 0 {
+		if set, err = convertToNQuad(ctx, mu.Set); err != nil {
+			return nil, x.Wrap(err)
+		}
+	}
+	if len(mu.Del) > 0 {
+		if del, err = convertToNQuad(ctx, mu.Del); err != nil {
+			return nil, x.Wrap(err)
+		}
+	}
+
+	if err = validateTypes(set); err != nil {
 		return nil, x.Wrap(err)
 	}
-	if del, err = convertToNQuad(ctx, mu.Del); err != nil {
+	if err = validateTypes(del); err != nil {
 		return nil, x.Wrap(err)
 	}
-	m := set
-	for _, nquad := range del {
-		m = append(m, nquad)
-	}
-	if err = validateTypes(m); err != nil {
-		return nil, x.Wrap(err)
-	}
+
 	if allocIds, err = convertAndApply(ctx, set, del); err != nil {
 		return nil, err
 	}
@@ -342,6 +347,7 @@ func validateTypes(nquads []rdf.NQuad) error {
 					return err
 				}
 				nquad.ObjectType = byte(schemaType.ID())
+
 			} else if typeID != schemaType.ID() {
 				v := types.ValueForType(typeID)
 				err := v.UnmarshalBinary(nquad.ObjectValue)
