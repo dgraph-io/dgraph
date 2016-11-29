@@ -82,6 +82,7 @@ func main() {
 
 	// Create parent directory for postings.
 	var err error
+	x.AssertTruef(len(*postingDir) > 0, "Postings path should be nonempty")
 	err = os.MkdirAll(*postingDir, 0700)
 	if err != nil {
 		log.Fatalf("Error while creating the filepath for postings: %v", err)
