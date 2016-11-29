@@ -256,7 +256,6 @@ func (n *node) processMembership(e raftpb.Entry, mm *task.Membership) error {
 }
 
 func (n *node) process(e raftpb.Entry, pending chan struct{}) {
-	fmt.Printf("Entry type to process: [%d, %d] Type: %v\n", e.Term, e.Index, e.Type)
 	if e.Type != raftpb.EntryNormal {
 		return
 	}
