@@ -15,7 +15,7 @@ if [ -z "$OUT" ]; then
 fi
 rm -f $OUT
 
-ROCKSDBDIR=$BUILD/rocksdb-4.9
+ROCKSDBDIR=$BUILD/rocksdb-4.11.2
 ICUDIR=$BUILD/icu/build
 
 # build flags needed for rocksdb
