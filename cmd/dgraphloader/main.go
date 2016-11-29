@@ -33,6 +33,7 @@ import (
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/loader"
 	"github.com/dgraph-io/dgraph/posting"
+	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -46,6 +47,7 @@ var (
 	groups = flag.String("groups", "0",
 		"Only pick entities, where groupID matches the specified ones.")
 	postingDir = flag.String("p", "", "Directory to store posting lists")
+	schemaFile = flag.String("schema", "", "Path to schema file")
 	cpuprofile = flag.String("cpu", "", "write cpu profile to file")
 	memprofile = flag.String("mem", "", "write memory profile to file")
 	numcpu     = flag.Int("cores", runtime.NumCPU(),
@@ -83,6 +85,11 @@ func main() {
 	err = os.MkdirAll(*postingDir, 0700)
 	if err != nil {
 		log.Fatalf("Error while creating the filepath for postings: %v", err)
+	}
+
+	if len(*schemaFile) > 0 {
+		err = schema.Parse(*schemaFile)
+		x.Checkf(err, "Error while loading schema: %s", *schemaFile)
 	}
 
 	if len(*rdfGzips) == 0 {

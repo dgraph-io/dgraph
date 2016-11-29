@@ -679,9 +679,7 @@ func main() {
 
 	if len(*schemaFile) > 0 {
 		err = schema.Parse(*schemaFile)
-		if err != nil {
-			log.Fatalf("Error while loading schema:%v", err)
-		}
+		x.Checkf(err, "Error while loading schema: %s", *schemaFile)
 	}
 	// Posting will initialize index which requires schema. Hence, initialize
 	// schema before calling posting.Init().
