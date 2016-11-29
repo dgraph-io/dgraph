@@ -555,7 +555,7 @@ func (l *List) Uids(opt ListOptions) *task.List {
 		if opt.Intersect != nil {
 			for ; intersectIdx < len(opt.Intersect.Uids) && opt.Intersect.Uids[intersectIdx] < uid; intersectIdx++ {
 			}
-			if intersectIdx >= opt.Intersect.Size() || opt.Intersect.Uids[intersectIdx] > uid {
+			if intersectIdx >= len(opt.Intersect.Uids) || opt.Intersect.Uids[intersectIdx] > uid {
 				return true
 			}
 		}
