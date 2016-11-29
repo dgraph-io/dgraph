@@ -70,19 +70,20 @@ type sendmsg struct {
 }
 
 type node struct {
+	canCampaign bool
 	cfg         *raft.Config
+	commitCh    chan raftpb.Entry
 	ctx         context.Context
 	done        chan struct{}
-	id          uint64
 	gid         uint32
+	id          uint64
+	messages    chan sendmsg
 	peers       peerPool
 	props       proposals
 	raft        raft.Node
-	store       *raft.MemoryStorage
 	raftContext *task.RaftContext
+	store       *raft.MemoryStorage
 	wal         *raftwal.Wal
-	messages    chan sendmsg
-	canCampaign bool
 }
 
 func (n *node) Connect(pid uint64, addr string) {
@@ -254,42 +255,50 @@ func (n *node) processMembership(e raftpb.Entry, mm *task.Membership) error {
 	return nil
 }
 
-func (n *node) process(e raftpb.Entry) error {
-	if e.Data == nil {
-		return nil
-	}
+func (n *node) process(e raftpb.Entry, pending chan struct{}) {
 	fmt.Printf("Entry type to process: [%d, %d] Type: %v\n", e.Term, e.Index, e.Type)
-
-	if e.Type == raftpb.EntryConfChange {
-		var cc raftpb.ConfChange
-		cc.Unmarshal(e.Data)
-
-		if len(cc.Context) > 0 {
-			var rc task.RaftContext
-			x.Check(rc.Unmarshal(cc.Context))
-			n.Connect(rc.Id, rc.Addr)
-		}
-
-		n.raft.ApplyConfChange(cc)
-		return nil
+	if e.Type != raftpb.EntryNormal {
+		return
 	}
 
-	if e.Type == raftpb.EntryNormal {
-		var proposal task.Proposal
-		err := proposal.Unmarshal(e.Data)
-		if err != nil {
-			return err
-		}
+	pending <- struct{}{} // This will block until we can write to it.
+	var proposal task.Proposal
+	x.Check(proposal.Unmarshal(e.Data))
 
-		if proposal.Mutations != nil {
-			err = n.processMutation(e, proposal.Mutations)
-		} else if proposal.Membership != nil {
-			err = n.processMembership(e, proposal.Membership)
-		}
-		n.props.Done(proposal.Id, err)
+	var err error
+	if proposal.Mutations != nil {
+		err = n.processMutation(e, proposal.Mutations)
+	} else if proposal.Membership != nil {
+		err = n.processMembership(e, proposal.Membership)
 	}
+	n.props.Done(proposal.Id, err)
+	<-pending // Release one.
+}
 
-	return nil
+func (n *node) processCommitCh() {
+	pending := make(chan struct{}, 10000)
+
+	for e := range n.commitCh {
+		if e.Data == nil {
+			continue
+		}
+
+		if e.Type == raftpb.EntryConfChange {
+			var cc raftpb.ConfChange
+			cc.Unmarshal(e.Data)
+
+			if len(cc.Context) > 0 {
+				var rc task.RaftContext
+				x.Check(rc.Unmarshal(cc.Context))
+				n.Connect(rc.Id, rc.Addr)
+			}
+
+			n.raft.ApplyConfChange(cc)
+
+		} else {
+			go n.process(e, pending)
+		}
+	}
 }
 
 func (n *node) saveToStorage(s raftpb.Snapshot, h raftpb.HardState,
@@ -351,7 +360,8 @@ func (n *node) Run() {
 				n.processSnapshot(rd.Snapshot)
 			}
 			for _, entry := range rd.CommittedEntries {
-				x.Check(n.process(entry))
+				// Just queue up to be processed. Don't wait on them.
+				n.commitCh <- entry
 			}
 
 			n.raft.Advance()
@@ -467,6 +477,7 @@ func newNode(gid uint32, id uint64, myAddr string) *node {
 			MaxSizePerMsg:   4096,
 			MaxInflightMsgs: 256,
 		},
+		commitCh:    make(chan raftpb.Entry, 10000),
 		peers:       peers,
 		props:       props,
 		raftContext: rc,
@@ -541,6 +552,7 @@ func (n *node) InitAndStartNode(wal *raftwal.Wal) {
 			n.canCampaign = true
 		}
 	}
+	go n.processCommitCh()
 	go n.Run()
 	// TODO: Find a better way to snapshot, so we don't lose the membership
 	// state information, which isn't persisted.
