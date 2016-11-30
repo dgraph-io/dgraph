@@ -23,16 +23,14 @@ import (
 const numBackupRoutines = 10
 
 type kv struct {
-	key, value []byte
+	prefix string
+	list   *types.PostingList
 }
 
 func toRDF(buf *bytes.Buffer, item kv) {
-	pre := item.key
-	var pl types.PostingList
-	x.Check(pl.Unmarshal(item.value))
-
+	pl := item.list
 	for _, p := range pl.Postings {
-		x.Check2(buf.Write(pre))
+		x.Check2(buf.WriteString(item.prefix))
 
 		if p.Uid == math.MaxUint64 && !bytes.Equal(p.Value, nil) {
 			// Value posting
@@ -47,10 +45,9 @@ func toRDF(buf *bytes.Buffer, item kv) {
 				x.Check2(buf.WriteString(fmt.Sprintf("^^<xs:%s> ", typ.Type().Name)))
 			}
 			x.Check2(buf.WriteString(" .\n"))
-			break
+			return
 		}
-		_, err := buf.WriteString(fmt.Sprintf("<_uid_:%#x> .\n", p.Uid))
-		x.Check(err)
+		x.Check2(buf.WriteString(fmt.Sprintf("<_uid_:%#x> .\n", p.Uid)))
 	}
 }
 
@@ -109,12 +106,16 @@ func backup(gid uint32, bdir string) error {
 			for item := range chkv {
 				toRDF(buf, item)
 				if buf.Len() >= 40000 {
-					chb <- buf.Bytes()
+					tmp := make([]byte, buf.Len())
+					copy(tmp, buf.Bytes())
+					chb <- tmp
 					buf.Reset()
 				}
 			}
 			if buf.Len() > 0 {
-				chb <- buf.Bytes()
+				tmp := make([]byte, buf.Len())
+				copy(tmp, buf.Bytes())
+				chb <- tmp
 			}
 			wg.Done()
 		}()
@@ -146,12 +147,12 @@ func backup(gid uint32, bdir string) error {
 			continue
 		}
 
-		k := []byte(fmt.Sprintf("<_uid_:%#x> <%s> ", uid, pred))
-		v := make([]byte, len(it.Value().Data()))
-		copy(v, it.Value().Data())
+		prefix := fmt.Sprintf("<_uid_:%#x> <%s> ", uid, pred)
+		pl := &types.PostingList{}
+		x.Check(pl.Unmarshal(it.Value().Data()))
 		chkv <- kv{
-			key:   k,
-			value: v,
+			prefix: prefix,
+			list:   pl,
 		}
 		lastPred = pred
 		it.Next()
