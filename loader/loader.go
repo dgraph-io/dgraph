@@ -191,7 +191,7 @@ func (s *state) parseStream(wg *sync.WaitGroup) {
 			s.SetError(err)
 			return
 		}
-		s.cnq <- nq
+		s.cnq <- *nq
 		atomic.AddUint64(&s.ctr.parsed, 1)
 	}
 }
