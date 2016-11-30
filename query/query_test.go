@@ -599,7 +599,7 @@ func TestToJSONFilterUID(t *testing.T) {
 		string(js))
 }
 
-func TestToJSONFilterOr(t *testing.T) {
+func TestToJSONFilterOrUID(t *testing.T) {
 	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
 	defer os.RemoveAll(dir2)
@@ -609,6 +609,7 @@ func TestToJSONFilterOr(t *testing.T) {
 				name
 				gender
 				friend @filter(anyof("name", "Andrea") || anyof("name", "Andrea Rhee")) {
+					_uid_
 					name
 				}
 			}
@@ -631,7 +632,7 @@ func TestToJSONFilterOr(t *testing.T) {
 	js, err := sg.ToJSON(&l)
 	require.NoError(t, err)
 	require.EqualValues(t,
-		`{"me":[{"friend":[{"name":"Glenn Rhee"},{"name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
+		`{"me":[{"friend":[{"name":"Glenn Rhee", "_uid_": "0x18"},{"name":"Andrea", "_uid_": "0x1f"}],"gender":"female","name":"Michonne"}]}`,
 		string(js))
 }
 
