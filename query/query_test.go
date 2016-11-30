@@ -632,7 +632,7 @@ func TestToJSONFilterOrUID(t *testing.T) {
 	js, err := sg.ToJSON(&l)
 	require.NoError(t, err)
 	require.EqualValues(t,
-		`{"me":[{"friend":[{"name":"Glenn Rhee", "_uid_": "0x18"},{"name":"Andrea", "_uid_": "0x1f"}],"gender":"female","name":"Michonne"}]}`,
+		`{"me":[{"friend":[{"_uid_":"0x18","name":"Glenn Rhee"},{"_uid_":"0x1f","name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
 		string(js))
 }
 
