@@ -330,7 +330,8 @@ func mutationHandler(ctx context.Context, mu *gql.Mutation) (map[string]uint64, 
 // validateTypes checks for predicate types present in the schema and validates if the
 // input value is of the correct type
 func validateTypes(nquads []rdf.NQuad) error {
-	for _, nquad := range nquads {
+	for i := range nquads {
+		nquad := &nquads[i]
 		if t := schema.TypeOf(nquad.Predicate); t != nil && t.IsScalar() {
 			schemaType := t.(types.Scalar)
 			typeID := types.TypeID(nquad.ObjectType)
