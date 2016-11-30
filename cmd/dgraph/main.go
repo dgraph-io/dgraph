@@ -107,8 +107,8 @@ func addCorsHeaders(w http.ResponseWriter) {
 	w.Header().Set("Connection", "close")
 }
 
-func convertToNQuad(ctx context.Context, mutation string) ([]rdf.NQuad, error) {
-	var nquads []rdf.NQuad
+func convertToNQuad(ctx context.Context, mutation string) ([]*rdf.NQuad, error) {
+	var nquads []*rdf.NQuad
 	r := strings.NewReader(mutation)
 	scanner := bufio.NewScanner(r)
 	x.Trace(ctx, "Converting to NQuad")
@@ -129,7 +129,7 @@ func convertToNQuad(ctx context.Context, mutation string) ([]rdf.NQuad, error) {
 	return nquads, nil
 }
 
-func convertToEdges(ctx context.Context, nquads []rdf.NQuad) (mutationResult, error) {
+func convertToEdges(ctx context.Context, nquads []*rdf.NQuad) (mutationResult, error) {
 	var edges []*task.DirectedEdge
 	var mr mutationResult
 
@@ -195,11 +195,11 @@ func applyMutations(ctx context.Context, m *task.Mutations) error {
 	return nil
 }
 
-func mutationToNQuad(nq []*graph.NQuad) ([]rdf.NQuad, error) {
-	resp := make([]rdf.NQuad, 0, len(nq))
+func mutationToNQuad(nq []*graph.NQuad) ([]*rdf.NQuad, error) {
+	resp := make([]*rdf.NQuad, 0, len(nq))
 
 	for _, n := range nq {
-		nq := rdf.NQuad{
+		nq := &rdf.NQuad{
 			Subject:   n.Sub,
 			Predicate: n.Pred,
 			ObjectId:  n.ObjId,
@@ -255,7 +255,7 @@ func typeValueFromNQuad(nq *graph.NQuad) (types.Value, error) {
 	}
 }
 
-func convertAndApply(ctx context.Context, set []rdf.NQuad, del []rdf.NQuad) (map[string]uint64, error) {
+func convertAndApply(ctx context.Context, set []*rdf.NQuad, del []*rdf.NQuad) (map[string]uint64, error) {
 	var allocIds map[string]uint64
 	var m task.Mutations
 	var err error
@@ -298,8 +298,8 @@ func runMutations(ctx context.Context, mu *graph.Mutation) (map[string]uint64, e
 // This function is used to run mutations for the requests received from the
 // http client.
 func mutationHandler(ctx context.Context, mu *gql.Mutation) (map[string]uint64, error) {
-	var set []rdf.NQuad
-	var del []rdf.NQuad
+	var set []*rdf.NQuad
+	var del []*rdf.NQuad
 	var allocIds map[string]uint64
 	var err error
 
@@ -314,10 +314,10 @@ func mutationHandler(ctx context.Context, mu *gql.Mutation) (map[string]uint64, 
 		}
 	}
 
-	if err = validateTypes(set); err != nil {
+	if err = validateAndConvertTypes(set); err != nil {
 		return nil, x.Wrap(err)
 	}
-	if err = validateTypes(del); err != nil {
+	if err = validateAndConvertTypes(del); err != nil {
 		return nil, x.Wrap(err)
 	}
 
@@ -327,9 +327,9 @@ func mutationHandler(ctx context.Context, mu *gql.Mutation) (map[string]uint64, 
 	return allocIds, nil
 }
 
-// validateTypes checks for predicate types present in the schema and validates if the
+// validateAndConnvertTypes checks for predicate types present in the schema and validates if the
 // input value is of the correct type
-func validateTypes(nquads []rdf.NQuad) error {
+func validateAndConvertTypes(nquads []*rdf.NQuad) error {
 	for _, nquad := range nquads {
 		if t := schema.TypeOf(nquad.Predicate); t != nil && t.IsScalar() {
 			schemaType := t.(types.Scalar)

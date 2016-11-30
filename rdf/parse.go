@@ -139,10 +139,10 @@ func sane(s string) bool {
 }
 
 // Parse parses a mutation string and returns the NQuad representation for it.
-func Parse(line string) (rnq NQuad, rerr error) {
+func Parse(line string) (rnq *NQuad, rerr error) {
 	l := &lex.Lexer{}
 	l.Init(line)
-
+	rnq = &NQuad{}
 	go run(l)
 	var oval string
 	var vend bool
