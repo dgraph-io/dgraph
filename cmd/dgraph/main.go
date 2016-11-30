@@ -314,10 +314,10 @@ func mutationHandler(ctx context.Context, mu *gql.Mutation) (map[string]uint64, 
 		}
 	}
 
-	if err = validateTypes(set); err != nil {
+	if set, err = validateAndConvertTypes(set); err != nil {
 		return nil, x.Wrap(err)
 	}
-	if err = validateTypes(del); err != nil {
+	if del, err = validateAndConvertTypes(del); err != nil {
 		return nil, x.Wrap(err)
 	}
 
@@ -329,8 +329,8 @@ func mutationHandler(ctx context.Context, mu *gql.Mutation) (map[string]uint64, 
 
 // validateTypes checks for predicate types present in the schema and validates if the
 // input value is of the correct type
-func validateTypes(nquads []rdf.NQuad) error {
-	for _, nquad := range nquads {
+func validateAndConvertTypes(nquads []rdf.NQuad) ([]rdf.NQuad, error) {
+	for i, nquad := range nquads {
 		if t := schema.TypeOf(nquad.Predicate); t != nil && t.IsScalar() {
 			schemaType := t.(types.Scalar)
 			typeID := types.TypeID(nquad.ObjectType)
@@ -340,11 +340,11 @@ func validateTypes(nquads []rdf.NQuad) error {
 				v := types.ValueForType(schemaType.ID())
 				err := v.UnmarshalText(nquad.ObjectValue)
 				if err != nil {
-					return err
+					return nquads, err
 				}
 				nquad.ObjectValue, err = v.MarshalBinary()
 				if err != nil {
-					return err
+					return nquads, err
 				}
 				nquad.ObjectType = byte(schemaType.ID())
 
@@ -352,15 +352,16 @@ func validateTypes(nquads []rdf.NQuad) error {
 				v := types.ValueForType(typeID)
 				err := v.UnmarshalBinary(nquad.ObjectValue)
 				if err != nil {
-					return err
+					return nquads, err
 				}
 				if _, err := schemaType.Convert(v); err != nil {
-					return err
+					return nquads, err
 				}
 			}
+			nquads[i] = nquad
 		}
 	}
-	return nil
+	return nquads, nil
 }
 
 func queryHandler(w http.ResponseWriter, r *http.Request) {
