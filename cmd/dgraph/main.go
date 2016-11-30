@@ -18,10 +18,12 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/gob"
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"math/rand"
@@ -110,12 +112,17 @@ func addCorsHeaders(w http.ResponseWriter) {
 func convertToNQuad(ctx context.Context, mutation string) ([]rdf.NQuad, error) {
 	var nquads []rdf.NQuad
 	r := strings.NewReader(mutation)
-	scanner := bufio.NewScanner(r)
+	reader := bufio.NewReader(r)
 	x.Trace(ctx, "Converting to NQuad")
 
-	// Scanning the mutation string, one line at a time.
-	for scanner.Scan() {
-		ln := strings.Trim(scanner.Text(), " \t")
+	var strBuf bytes.Buffer
+	var err error
+	for {
+		err = x.ReadLine(reader, &strBuf)
+		if err != nil {
+			break
+		}
+		ln := strings.Trim(strBuf.String(), " \t")
 		if len(ln) == 0 {
 			continue
 		}
@@ -125,6 +132,9 @@ func convertToNQuad(ctx context.Context, mutation string) ([]rdf.NQuad, error) {
 			return nquads, err
 		}
 		nquads = append(nquads, nq)
+	}
+	if err != io.EOF {
+		return nquads, err
 	}
 	return nquads, nil
 }
