@@ -86,6 +86,45 @@ type node struct {
 	wal         *raftwal.Wal
 }
 
+func newNode(gid uint32, id uint64, myAddr string) *node {
+	fmt.Printf("NEW NODE GID, ID: [%v, %v]\n", gid, id)
+
+	peers := peerPool{
+		peers: make(map[uint64]string),
+	}
+	props := proposals{
+		ids: make(map[uint32]chan error),
+	}
+
+	store := raft.NewMemoryStorage()
+	rc := &task.RaftContext{
+		Addr:  myAddr,
+		Group: gid,
+		Id:    id,
+	}
+
+	n := &node{
+		ctx:   context.Background(),
+		id:    id,
+		gid:   gid,
+		store: store,
+		cfg: &raft.Config{
+			ID:              id,
+			ElectionTick:    10,
+			HeartbeatTick:   1,
+			Storage:         store,
+			MaxSizePerMsg:   4096,
+			MaxInflightMsgs: 256,
+		},
+		commitCh:    make(chan raftpb.Entry, numPendingMutations),
+		peers:       peers,
+		props:       props,
+		raftContext: rc,
+		messages:    make(chan sendmsg, 1000),
+	}
+	return n
+}
+
 func (n *node) Connect(pid uint64, addr string) {
 	if pid == n.id {
 		return
@@ -274,8 +313,10 @@ func (n *node) process(e raftpb.Entry, pending chan struct{}) {
 	<-pending // Release one.
 }
 
+const numPendingMutations = 100000
+
 func (n *node) processCommitCh() {
-	pending := make(chan struct{}, 10000)
+	pending := make(chan struct{}, numPendingMutations)
 
 	for e := range n.commitCh {
 		if e.Data == nil {
@@ -357,6 +398,9 @@ func (n *node) Run() {
 
 			if !raft.IsEmptySnap(rd.Snapshot) {
 				n.processSnapshot(rd.Snapshot)
+			}
+			if len(rd.CommittedEntries) > 0 {
+				x.Trace(n.ctx, "Found %d committed entries", len(rd.CommittedEntries))
 			}
 			for _, entry := range rd.CommittedEntries {
 				// Just queue up to be processed. Don't wait on them.
@@ -444,45 +488,6 @@ func (n *node) joinPeers() {
 	_, err = c.JoinCluster(n.ctx, n.raftContext)
 	x.Checkf(err, "Error while joining cluster")
 	x.Printf("Done with JoinCluster call\n")
-}
-
-func newNode(gid uint32, id uint64, myAddr string) *node {
-	fmt.Printf("NEW NODE GID, ID: [%v, %v]\n", gid, id)
-
-	peers := peerPool{
-		peers: make(map[uint64]string),
-	}
-	props := proposals{
-		ids: make(map[uint32]chan error),
-	}
-
-	store := raft.NewMemoryStorage()
-	rc := &task.RaftContext{
-		Addr:  myAddr,
-		Group: gid,
-		Id:    id,
-	}
-
-	n := &node{
-		ctx:   context.Background(),
-		id:    id,
-		gid:   gid,
-		store: store,
-		cfg: &raft.Config{
-			ID:              id,
-			ElectionTick:    10,
-			HeartbeatTick:   1,
-			Storage:         store,
-			MaxSizePerMsg:   4096,
-			MaxInflightMsgs: 256,
-		},
-		commitCh:    make(chan raftpb.Entry, 10000),
-		peers:       peers,
-		props:       props,
-		raftContext: rc,
-		messages:    make(chan sendmsg, 1000),
-	}
-	return n
 }
 
 func (n *node) initFromWal(wal *raftwal.Wal) (restart bool, rerr error) {
