@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgraph/group"
-	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/posting/types"
 	stype "github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
@@ -121,31 +120,29 @@ func backup(gid uint32, bdir string) error {
 		}()
 	}
 
-	uidPrefix := []byte("_uid_")
 	// Iterate over rocksdb.
 	it := pstore.NewIterator()
 	defer it.Close()
 	var lastPred string
 	for it.SeekToFirst(); it.Valid(); {
 		key := it.Key().Data()
-		cidx := bytes.IndexRune(key, ':')
-		if cidx > -1 {
+		pk := x.Parse(key)
+
+		if pk.IsIndex() {
 			// Seek to the end of index keys.
-			// NOTE: We can't directly assign pre to key, because key is pointing to unsafe C array.
-			pre := make([]byte, cidx+2)
-			copy(pre[0:cidx+1], key)
-			pre[cidx+1] = '~'
-			it.Seek(pre)
+			it.Seek(pk.SkipRangeOfSameType())
 			continue
 		}
-		if bytes.HasPrefix(key, uidPrefix) {
+		if pk.Attr == "_uid_" {
 			// Skip the UID mappings.
-			it.Seek([]byte("_uid_~"))
+			it.Seek(pk.SkipPredicate())
 			continue
 		}
-		pred, uid := posting.SplitKey(key)
+
+		x.AssertTrue(pk.IsData())
+		pred, uid := pk.Attr, pk.Uid
 		if pred != lastPred && group.BelongsTo(pred) != gid {
-			it.Seek([]byte(fmt.Sprintf("%s~", pred)))
+			it.Seek(pk.SkipPredicate())
 			continue
 		}
 

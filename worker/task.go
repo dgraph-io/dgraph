@@ -26,7 +26,6 @@ import (
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/task"
-	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -106,9 +105,9 @@ func processTask(q *task.Query) (*task.Result, error) {
 	for i := 0; i < n; i++ {
 		var key []byte
 		if useFunc {
-			key = types.IndexKey(attr, tokens[i])
+			key = x.IndexKey(attr, tokens[i])
 		} else {
-			key = posting.Key(q.Uids[i], attr)
+			key = x.DataKey(attr, q.Uids[i])
 		}
 		// Get or create the posting list for an entity, attribute combination.
 		pl, decr := posting.GetOrCreate(key)
@@ -149,7 +148,7 @@ func processTask(q *task.Query) (*task.Result, error) {
 	if geoQuery != nil {
 		uids := algo.MergeSorted(out.UidMatrix)
 		for _, uid := range uids.Uids {
-			key := posting.Key(uid, attr)
+			key := x.DataKey(attr, uid)
 			pl, decr := posting.GetOrCreate(key)
 
 			vbytes, vtype, err := pl.Value()

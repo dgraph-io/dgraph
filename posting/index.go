@@ -62,12 +62,18 @@ func initIndex() {
 			table := &TokensTable{
 				key: make([]string, 0, 50),
 			}
-			prefix := types.IndexKey(attr, "")
+			pk := x.ParsedKey{
+				Attr: attr,
+			}
+			prefix := pk.IndexPrefix()
 
 			it := pstore.NewIterator()
 			defer it.Close()
 			for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
-				table.push(types.TokenFromKey(it.Key().Data()))
+				pki := x.Parse(it.Key().Data())
+				x.AssertTrue(pki.IsIndex())
+				x.AssertTrue(len(pki.Term) > 0)
+				table.push(pki.Term)
 			}
 			results <- resultStruct{attr, table}
 		}(attr)
@@ -134,7 +140,8 @@ func addIndexMutations(ctx context.Context, attr string, uid uint64,
 
 func addIndexMutation(ctx context.Context, attr, token string,
 	tokensTable *TokensTable, edge *task.DirectedEdge, del bool) {
-	plist, decr := GetOrCreate(types.IndexKey(attr, token))
+	key := x.IndexKey(attr, token)
+	plist, decr := GetOrCreate(key)
 	defer decr()
 
 	x.AssertTruef(plist != nil, "plist is nil [%s] %d %s",

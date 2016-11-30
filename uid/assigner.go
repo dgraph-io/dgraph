@@ -95,7 +95,7 @@ func allocateUniqueUid(instanceIdx uint64, numInstances uint64) uint64 {
 		}
 
 		// Check if this uid has already been allocated.
-		key := posting.Key(uid, "_uid_")
+		key := x.DataKey("_uid_", uid)
 		pl, decr := posting.GetOrCreate(key)
 		defer decr()
 

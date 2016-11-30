@@ -93,7 +93,7 @@ func addEdgeToValue(t *testing.T, ps *store.Store, attr string, src uint64,
 		Attr:   attr,
 		Entity: src,
 	}
-	l, _ := posting.GetOrCreate(posting.Key(src, attr))
+	l, _ := posting.GetOrCreate(x.DataKey(attr, src))
 	require.NoError(t,
 		l.AddMutationWithIndex(context.Background(), edge, posting.Set))
 }
@@ -107,7 +107,7 @@ func addEdgeToTypedValue(t *testing.T, ps *store.Store, attr string, src uint64,
 		Attr:      attr,
 		Entity:    src,
 	}
-	l, _ := posting.GetOrCreate(posting.Key(src, attr))
+	l, _ := posting.GetOrCreate(x.DataKey(attr, src))
 	require.NoError(t,
 		l.AddMutationWithIndex(context.Background(), edge, posting.Set))
 }
@@ -119,7 +119,7 @@ func addEdgeToUID(t *testing.T, ps *store.Store, attr string, src uint64, dst ui
 		Attr:    attr,
 		Entity:  src,
 	}
-	l, _ := posting.GetOrCreate(posting.Key(src, attr))
+	l, _ := posting.GetOrCreate(x.DataKey(attr, src))
 	require.NoError(t,
 		l.AddMutationWithIndex(context.Background(), edge, posting.Set))
 }

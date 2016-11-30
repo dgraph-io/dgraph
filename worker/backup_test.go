@@ -18,6 +18,7 @@ import (
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/task"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 func populateGraphBackup(t *testing.T) {
@@ -27,25 +28,25 @@ func populateGraphBackup(t *testing.T) {
 		Attr:    "friend",
 	}
 	edge.Entity = 1
-	addEdge(t, edge, getOrCreate(posting.Key(1, "friend")))
+	addEdge(t, edge, getOrCreate(x.DataKey("friend", 1)))
 
 	edge.Entity = 2
-	addEdge(t, edge, getOrCreate(posting.Key(2, "friend")))
+	addEdge(t, edge, getOrCreate(x.DataKey("friend", 2)))
 
 	edge.Entity = 3
-	addEdge(t, edge, getOrCreate(posting.Key(3, "friend")))
+	addEdge(t, edge, getOrCreate(x.DataKey("friend", 3)))
 
 	edge.Entity = 4
-	addEdge(t, edge, getOrCreate(posting.Key(4, "friend")))
+	addEdge(t, edge, getOrCreate(x.DataKey("friend", 4)))
 
 	edge.Entity = 1
 	edge.ValueId = 0
 	edge.Value = []byte("photon")
 	edge.Attr = "name"
-	addEdge(t, edge, getOrCreate(posting.Key(1, "name")))
+	addEdge(t, edge, getOrCreate(x.DataKey("name", 1)))
 
 	edge.Entity = 2
-	addEdge(t, edge, getOrCreate(posting.Key(2, "name")))
+	addEdge(t, edge, getOrCreate(x.DataKey("name", 2)))
 }
 
 func initTestBackup(t *testing.T, schemaStr string) (string, *store.Store) {

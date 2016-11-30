@@ -30,6 +30,7 @@ import (
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/task"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
 )
 
@@ -46,7 +47,7 @@ func checkShard(ps *store.Store) (int, []byte) {
 
 func writePLs(t *testing.T, pred string, count int, vid uint64, ps *store.Store) {
 	for i := 0; i < count; i++ {
-		k := posting.Key(uint64(i), pred)
+		k := x.DataKey(pred, uint64(i))
 		list, _ := posting.GetOrCreate(k)
 
 		de := &task.DirectedEdge{
@@ -264,7 +265,7 @@ func TestGenerateGroup(t *testing.T) {
 	}
 	require.Equal(t, 33, len(g.Keys))
 	for i, k := range g.Keys {
-		require.Equal(t, posting.Key(uint64(i), "pred0"), k.Key)
+		require.Equal(t, x.DataKey("pred0", uint64(i)), k.Key)
 	}
 
 	g, err = generateGroup(1)
@@ -273,7 +274,7 @@ func TestGenerateGroup(t *testing.T) {
 	}
 	require.Equal(t, 34, len(g.Keys))
 	for i, k := range g.Keys {
-		require.Equal(t, posting.Key(uint64(i), "p1"), k.Key)
+		require.Equal(t, x.DataKey("p1", uint64(i)), k.Key)
 	}
 
 	g, err = generateGroup(2)
@@ -282,6 +283,6 @@ func TestGenerateGroup(t *testing.T) {
 	}
 	require.Equal(t, 35, len(g.Keys))
 	for i, k := range g.Keys {
-		require.Equal(t, posting.Key(uint64(i), "pr2"), k.Key)
+		require.Equal(t, x.DataKey("pr2", uint64(i)), k.Key)
 	}
 }

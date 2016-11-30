@@ -18,13 +18,11 @@ package posting
 
 import (
 	"context"
-	"fmt"
 	"io/ioutil"
 	"log"
 	"math"
 	"math/rand"
 	"os"
-	"sort"
 	"strconv"
 	"testing"
 
@@ -59,26 +57,9 @@ func addMutation(t *testing.T, l *List, edge *task.DirectedEdge, op uint32) {
 	require.NoError(t, err)
 }
 
-func TestKey(t *testing.T) {
-	var i uint64
-	keys := make([]string, 0, 1024)
-	for i = 1024; i >= 1; i-- {
-		key := Key(i, "testing.key")
-		keys = append(keys, string(key))
-		require.Equal(t, fmt.Sprintf("testing.key:%x", i), debugKey(key))
-	}
-	// Test that sorting is as expected.
-	sort.Strings(keys)
-	require.True(t, sort.StringsAreSorted(keys))
-	for i, key := range keys {
-		exp := Key(uint64(i+1), "testing.key")
-		require.Equal(t, key, string(exp))
-	}
-}
-
 func TestAddMutation(t *testing.T) {
 	l := getNew()
-	key := Key(1, "name")
+	key := x.DataKey("name", 1)
 	dir, err := ioutil.TempDir("", "storetest_")
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
@@ -158,7 +139,7 @@ func checkValue(t *testing.T, ol *List, val string) {
 
 func TestAddMutation_Value(t *testing.T) {
 	ol := getNew()
-	key := Key(10, "value")
+	key := x.DataKey("value", 10)
 	dir, err := ioutil.TempDir("", "storetest_")
 	if err != nil {
 		t.Error(err)
@@ -192,7 +173,7 @@ func TestAddMutation_Value(t *testing.T) {
 
 func TestAddMutation_jchiu1(t *testing.T) {
 	ol := getNew()
-	key := Key(10, "value")
+	key := x.DataKey("value", 10)
 	dir, err := ioutil.TempDir("", "storetest_")
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
@@ -245,7 +226,7 @@ func TestAddMutation_jchiu1(t *testing.T) {
 
 func TestAddMutation_jchiu2(t *testing.T) {
 	ol := getNew()
-	key := Key(10, "value")
+	key := x.DataKey("value", 10)
 	dir, err := ioutil.TempDir("", "storetest_")
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
@@ -284,7 +265,7 @@ func TestAddMutation_jchiu2(t *testing.T) {
 
 func TestAddMutation_jchiu3(t *testing.T) {
 	ol := getNew()
-	key := Key(10, "value")
+	key := x.DataKey("value", 10)
 	dir, err := ioutil.TempDir("", "storetest_")
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
@@ -343,7 +324,7 @@ func TestAddMutation_jchiu3(t *testing.T) {
 
 func TestAddMutation_mrjn1(t *testing.T) {
 	ol := getNew()
-	key := Key(10, "value")
+	key := x.DataKey("value", 10)
 	dir, err := ioutil.TempDir("", "storetest_")
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
@@ -417,7 +398,7 @@ func TestAddMutation_checksum(t *testing.T) {
 
 	{
 		ol := getNew()
-		key := Key(10, "value")
+		key := x.DataKey("value", 10)
 		ol.init(key, ps)
 
 		edge := &task.DirectedEdge{
@@ -442,7 +423,7 @@ func TestAddMutation_checksum(t *testing.T) {
 
 	{
 		ol := getNew()
-		key := Key(10, "value2")
+		key := x.DataKey("value2", 10)
 		ol.init(key, ps)
 
 		// Add in reverse.
@@ -469,7 +450,7 @@ func TestAddMutation_checksum(t *testing.T) {
 
 	{
 		ol := getNew()
-		key := Key(10, "value3")
+		key := x.DataKey("value3", 10)
 		ol.init(key, ps)
 
 		// Add in reverse.
@@ -503,7 +484,7 @@ func TestAddMutation_checksum(t *testing.T) {
 
 func TestAddMutation_gru(t *testing.T) {
 	ol := getNew()
-	key := Key(0x01, "question.tag")
+	key := x.DataKey("question.tag", 0x01)
 	dir, err := ioutil.TempDir("", "storetest_")
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
@@ -548,7 +529,7 @@ func TestAddMutation_gru(t *testing.T) {
 
 func TestAddMutation_gru2(t *testing.T) {
 	ol := getNew()
-	key := Key(0x01, "question.tag")
+	key := x.DataKey("question.tag", 0x01)
 	dir, err := ioutil.TempDir("", "storetest_")
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
@@ -605,7 +586,7 @@ func TestAddMutation_gru2(t *testing.T) {
 
 func TestAfterUIDCount(t *testing.T) {
 	ol := getNew()
-	key := Key(10, "value")
+	key := x.DataKey("value", 10)
 	dir, err := ioutil.TempDir("", "storetest_")
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
@@ -685,7 +666,7 @@ func TestAfterUIDCount(t *testing.T) {
 
 func TestAfterUIDCount2(t *testing.T) {
 	ol := getNew()
-	key := Key(10, "value")
+	key := x.DataKey("value", 10)
 	dir, err := ioutil.TempDir("", "storetest_")
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
@@ -720,7 +701,7 @@ func TestAfterUIDCount2(t *testing.T) {
 
 func TestAfterUIDCountWithCommit(t *testing.T) {
 	ol := getNew()
-	key := Key(10, "value")
+	key := x.DataKey("value", 10)
 	dir, err := ioutil.TempDir("", "storetest_")
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
@@ -812,7 +793,7 @@ func TestMain(m *testing.M) {
 func BenchmarkAddMutations(b *testing.B) {
 	// logrus.SetLevel(logrus.DebugLevel)
 	l := getNew()
-	key := Key(1, "name")
+	key := x.DataKey("name", 1)
 	dir, err := ioutil.TempDir("", "storetest_")
 	if err != nil {
 		b.Error(err)

@@ -25,7 +25,6 @@ import (
 	"log"
 	"math"
 	"sort"
-	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -127,44 +126,6 @@ func samePosting(a *types.Posting, b *types.Posting) bool {
 		return false
 	}
 	return true
-}
-
-// Key = attribute|uid
-func Key(uid uint64, attr string) []byte {
-	buf := make([]byte, len(attr)+9)
-	for i, ch := range attr {
-		buf[i] = byte(ch)
-	}
-	buf[len(attr)] = '|'
-	binary.BigEndian.PutUint64(buf[len(attr)+1:], uid)
-	return buf
-}
-
-// SplitKey returns the predicate and the uid.
-// (Note that it is not applicable to index keys)
-func SplitKey(key []byte) (string, uint64) {
-	sKeys := bytes.Split(key, []byte("|"))
-	x.AssertTrue(len(sKeys) == 2)
-	b := sKeys[0]
-	rest := sKeys[1]
-	uid := binary.BigEndian.Uint64(rest)
-	return string(b), uid
-}
-
-func debugKey(key []byte) string {
-	var b bytes.Buffer
-	var rest []byte
-	for i, ch := range key {
-		if ch == '|' {
-			b.WriteByte(':')
-			rest = key[i+1:]
-			break
-		}
-		b.WriteByte(ch)
-	}
-	uid := binary.BigEndian.Uint64(rest)
-	b.WriteString(strconv.FormatUint(uid, 16))
-	return b.String()
 }
 
 func newPosting(t *task.DirectedEdge, op uint32) *types.Posting {

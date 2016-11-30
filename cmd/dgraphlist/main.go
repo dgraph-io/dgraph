@@ -8,7 +8,6 @@ import (
 
 	"github.com/Sirupsen/logrus"
 
-	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/posting/types"
 	"github.com/dgraph-io/dgraph/rdb"
 	"github.com/dgraph-io/dgraph/x"
@@ -72,7 +71,7 @@ func main() {
 		if rerr != nil {
 			glog.WithError(rerr).Fatal("While parsing uid")
 		}
-		key = posting.Key(u, *attr)
+		key = x.DataKey(*attr, u)
 
 	} else if len(*attr) > 0 {
 		scanOverAttr(db)
@@ -83,7 +82,7 @@ func main() {
 		if rerr != nil {
 			glog.WithError(rerr).Fatal("While parsing uid")
 		}
-		key = posting.Key(u, "_xid_")
+		key = x.DataKey("_xid_", u)
 
 	} else {
 		glog.Fatal("Invalid request.")

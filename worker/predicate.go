@@ -77,16 +77,15 @@ func generateGroup(groupId uint32) (*task.GroupKeys, error) {
 
 	for it.SeekToFirst(); it.Valid(); it.Next() {
 		k, v := it.Key(), it.Value()
-		if idx := bytes.IndexAny(k.Data(), ":|"); idx == -1 {
+		pk := x.Parse(k.Data())
+
+		if pk == nil {
 			continue
-		} else {
-			pred := string(k.Data()[:idx])
-			if group.BelongsTo(pred) != g.GroupId {
-				pred += "~"
-				it.Seek([]byte(pred)) // Skip over this predicate entirely.
-				it.Prev()             // To tackle it.Next() called by default.
-				continue
-			}
+		}
+		if group.BelongsTo(pk.Attr) != g.GroupId {
+			it.Seek(pk.SkipPredicate())
+			it.Prev() // To tackle it.Next() called by default.
+			continue
 		}
 
 		var pl types.PostingList
@@ -184,16 +183,15 @@ func (w *grpcWorker) PredicateData(gkeys *task.GroupKeys, stream Worker_Predicat
 
 	for it.SeekToFirst(); it.Valid(); it.Next() {
 		k, v := it.Key(), it.Value()
-		if idx := bytes.IndexAny(k.Data(), ":|"); idx == -1 {
+		pk := x.Parse(k.Data())
+
+		if pk == nil {
 			continue
-		} else {
-			pred := string(k.Data()[:idx])
-			if group.BelongsTo(pred) != gkeys.GroupId {
-				pred += "~"
-				it.Seek([]byte(pred)) // Skip over this predicate entirely.
-				it.Prev()             // To tackle it.Next() called by default.
-				continue
-			}
+		}
+		if group.BelongsTo(pk.Attr) != gkeys.GroupId {
+			it.Seek(pk.SkipPredicate())
+			it.Prev() // To tackle it.Next() called by default.
+			continue
 		}
 
 		var pl types.PostingList
@@ -215,6 +213,8 @@ func (w *grpcWorker) PredicateData(gkeys *task.GroupKeys, stream Worker_Predicat
 			}
 		}
 
+		// We just need to stream this kv. So, we can directly use the key
+		// and val without any copying.
 		kv := &task.KV{
 			Key: k.Data(),
 			Val: v.Data(),
@@ -223,8 +223,6 @@ func (w *grpcWorker) PredicateData(gkeys *task.GroupKeys, stream Worker_Predicat
 		if err := stream.Send(kv); err != nil {
 			return err
 		}
-		k.Free()
-		v.Free()
 	} // end of iterator
 
 	if err := it.Err(); err != nil {

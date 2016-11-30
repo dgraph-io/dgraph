@@ -141,7 +141,7 @@ func intersectBucket(ts *task.Sort, attr, token string, out []intersectedList) e
 	}
 	scalar := sType.(types.Scalar)
 
-	key := types.IndexKey(attr, token)
+	key := x.IndexKey(attr, token)
 	pl, decr := posting.GetOrCreate(key)
 	defer decr()
 
@@ -212,7 +212,7 @@ func sortByValue(attr string, ul *task.List, scalar types.Scalar) error {
 
 // fetchValue gets the value for a given UID.
 func fetchValue(uid uint64, attr string, scalar types.Scalar) (types.Value, error) {
-	pl, decr := posting.GetOrCreate(posting.Key(uid, attr))
+	pl, decr := posting.GetOrCreate(x.DataKey(attr, uid))
 	defer decr()
 
 	valBytes, vType, err := pl.Value()

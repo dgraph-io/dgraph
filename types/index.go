@@ -5,7 +5,6 @@ import (
 	"encoding/binary"
 
 	"github.com/dgraph-io/dgraph/tok"
-	"github.com/dgraph-io/dgraph/x"
 )
 
 const (
@@ -15,23 +14,6 @@ const (
 	dateFormat1 = "2006-01-02"
 	dateFormat2 = "2006-01-02T15:04:05"
 )
-
-// IndexKey creates a key for indexing the term for given attribute.
-func IndexKey(attr, term string) []byte {
-	buf := make([]byte, len(attr)+len(term)+1)
-	copy(buf[0:len(attr)], attr[:])
-	buf[len(attr)] = indexRune
-	copy(buf[len(attr)+1:], term[:])
-	return buf
-}
-
-// TokenFromKey returns token from an index key. This is used to build
-// TokensTable by iterating over keys in RocksDB.
-func TokenFromKey(key []byte) string {
-	i := bytes.IndexRune(key, indexRune)
-	x.AssertTrue(i >= 0)
-	return string(key[i+1:])
-}
 
 // DefaultIndexKeys tokenizes data as a string and return keys for indexing.
 func DefaultIndexKeys(attr string, val *String) []string {

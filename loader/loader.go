@@ -202,7 +202,7 @@ func markTaken(ctx context.Context, uid uint64) {
 		Value:  []byte("_"), // not txid
 		Label:  "_loader_",
 	}
-	key := posting.Key(uid, "_uid_")
+	key := x.DataKey("_uid_", uid)
 	plist, decr := posting.GetOrCreate(key)
 	plist.AddMutation(ctx, mu, posting.Set)
 	decr()
@@ -240,7 +240,7 @@ func (s *state) handleNQuads(wg *sync.WaitGroup) {
 			edge, err = nq.ToEdge()
 		}
 
-		key := posting.Key(edge.Entity, edge.Attr)
+		key := x.DataKey(edge.Attr, edge.Entity)
 
 		plist, decr := posting.GetOrCreate(key)
 		plist.AddMutationWithIndex(ctx, edge, posting.Set)

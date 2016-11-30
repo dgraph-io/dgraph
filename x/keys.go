@@ -10,62 +10,99 @@ const (
 	byteIndex = byte(0x01)
 )
 
-func DataKey(attr string, uid uint64) []byte {
-	buf := make([]byte, 3+len(attr)+8)
-	buf[0] = byteData
+func writeAttr(buf []byte, attr string) []byte {
 	AssertTrue(len(attr) < math.MaxUint16)
-	binary.BigEndian.PutUint16(buf[1:3], uint16(len(attr)))
+	binary.BigEndian.PutUint16(buf[:2], uint16(len(attr)))
 
-	rest := buf[3:]
+	rest := buf[2:]
 	AssertTrue(len(attr) == copy(rest, attr[:]))
-	rest = rest[len(attr):]
+
+	return rest[len(attr):]
+}
+
+func DataKey(attr string, uid uint64) []byte {
+	buf := make([]byte, 2+len(attr)+1+8)
+
+	rest := writeAttr(buf, attr)
+	rest[0] = byteData
+
+	rest = rest[1:]
 	binary.BigEndian.PutUint64(rest, uid)
 	return buf
 }
 
 func IndexKey(attr, term string) []byte {
-	buf := make([]byte, 3+len(attr)+len(term))
-	buf[0] = byteIndex
-	AssertTrue(len(attr) < math.MaxUint16)
-	binary.BigEndian.PutUint16(buf[1:3], uint16(len(attr)))
+	buf := make([]byte, 2+len(attr)+1+len(term))
 
-	rest := buf[3:]
-	AssertTrue(len(attr) == copy(rest, attr[:]))
+	rest := writeAttr(buf, attr)
+	rest[0] = byteIndex
 
-	rest = rest[len(attr):]
+	rest = rest[1:]
 	AssertTrue(len(term) == copy(rest, term[:]))
 	return buf
 }
 
-func IsData(key []byte) bool {
-	return key[0] == byteData
+type ParsedKey struct {
+	byteType byte
+	Attr     string
+	Uid      uint64
+	Term     string
 }
 
-func IsIndex(key []byte) bool {
-	return key[0] == byteIndex
+func (p ParsedKey) IsIndex() bool {
+	return p.byteType == byteIndex
 }
 
-func TermFromIndex(key []byte) string {
-	AssertTruef(key[0] == byteIndex, "Expected an index key. Got key %q", key)
-	sz := binary.BigEndian.Uint16(key[1:3])
-	k := key[3+int(sz):]
-	return string(k)
+func (p ParsedKey) IsData() bool {
+	return p.byteType == byteData
 }
 
-func PredicateFrom(key []byte) string {
-	sz := binary.BigEndian.Uint16(key[1:3])
-	k := key[3:]
-	return string(k[:int(sz)])
+func (p ParsedKey) SkipPredicate() []byte {
+	buf := make([]byte, 2+len(p.Attr)+1)
+	k := writeAttr(buf, p.Attr)
+	AssertTrue(len(k) == 1)
+	k[0] = 0xFF
+	return buf
 }
 
-func ParseData(key []byte) (string, uint64) {
-	AssertTruef(key[0] == byteData, "Expected a data key. Got key %q", key)
-	sz := binary.BigEndian.Uint16(key[1:3])
-	AssertTruef(sz > 0, "Expected an attribute of size greater than zero. Key: %q", key)
+func (p ParsedKey) SkipRangeOfSameType() []byte {
+	buf := make([]byte, 2+len(p.Attr)+1+1)
+	k := writeAttr(buf, p.Attr)
+	AssertTrue(len(k) == 2)
+	k[0] = p.byteType
+	k[1] = 0xFF
+	return buf
+}
 
-	k := key[3:]
-	attr := string(k[:int(sz)])
-	k = k[int(sz):]
-	uid := binary.BigEndian.Uint64(k)
-	return attr, uid
+func (p ParsedKey) IndexPrefix() []byte {
+	buf := make([]byte, 2+len(p.Attr)+1)
+	k := writeAttr(buf, p.Attr)
+	AssertTrue(len(k) == 1)
+	k[0] = byteIndex
+	return buf
+}
+
+func Parse(key []byte) *ParsedKey {
+	p := &ParsedKey{}
+
+	sz := int(binary.BigEndian.Uint16(key[0:2]))
+	k := key[2:]
+
+	p.Attr = string(k[:sz])
+	k = k[sz:]
+
+	p.byteType = k[0]
+	k = k[1:]
+
+	if p.byteType == byteData {
+		p.Uid = binary.BigEndian.Uint64(k)
+
+	} else if p.byteType == byteIndex {
+		p.Term = string(k)
+
+	} else {
+		// Some other data type.
+		return nil
+	}
+	return p
 }
