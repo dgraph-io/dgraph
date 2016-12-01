@@ -840,7 +840,7 @@ type jsonOutputNode struct {
 
 // AddValue adds an attribute value for jsonOutputNode.
 func (p *jsonOutputNode) AddValue(attr string, v types.Value) {
-	p.data[attr] = v.String()
+	p.data[attr] = v
 }
 
 // AddChild adds a child for jsonOutputNode.
