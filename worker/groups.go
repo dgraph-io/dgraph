@@ -88,7 +88,6 @@ func StartRaftNodes(walDir string) {
 		}
 		fmt.Printf("Last update is now: %d\n", gr.LastUpdate())
 	}
-	go gr.periodicSyncMemberships() // Now set it to be run periodically.
 
 	x.Checkf(os.MkdirAll(walDir, 0700), "Error while creating WAL dir.")
 	wals, err := store.NewSyncStore(walDir)
@@ -105,6 +104,7 @@ func StartRaftNodes(walDir string) {
 		node := groups().newNode(uint32(gid), *raftId, *myAddr)
 		go node.InitAndStartNode(gr.wal)
 	}
+	go gr.periodicSyncMemberships() // Now set it to be run periodically.
 }
 
 func (g *groupi) Node(groupId uint32) *node {
