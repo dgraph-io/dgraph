@@ -41,7 +41,7 @@ func populateGraphBackup(t *testing.T) {
 
 	edge.Entity = 1
 	edge.ValueId = 0
-	edge.Value = []byte("pho\nton")
+	edge.Value = []byte("pho\\ton")
 	edge.Attr = "name"
 	addEdge(t, edge, getOrCreate(x.DataKey("name", 1)))
 
@@ -114,7 +114,7 @@ func TestBackup(t *testing.T) {
 			require.Contains(t, []string{"_uid_:0x1", "_uid_:0x2", "_uid_:0x3", "_uid_:0x4"}, nq.Subject)
 			// The only value we set was "photon".
 			if !bytes.Equal(nq.ObjectValue, nil) {
-				require.Equal(t, []byte("pho\\nton"), nq.ObjectValue)
+				require.Equal(t, []byte("pho\\ton"), nq.ObjectValue)
 			}
 			// The only objectId we set was uid 5.
 			if nq.ObjectId != "" {

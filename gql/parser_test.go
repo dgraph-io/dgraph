@@ -777,6 +777,6 @@ func TestMutationQuotes(t *testing.T) {
 		}
 	}
 	`
-	_, mu, err := Parse(query)
+	_, _, err := Parse(query)
 	require.NoError(t, err)
 }
