@@ -59,7 +59,7 @@ func (v Date) MarshalJSON() ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return json.Marshal(str)
+	return json.Marshal(string(str))
 }
 
 // Type returns the type of this value
