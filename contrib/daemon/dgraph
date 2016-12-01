@@ -1,0 +1,44 @@
+#!/bin/bash
+#
+# description: Dgraph server
+#
+
+# Start Dgraph
+start() {
+        initlog -c "echo -n Starting Dgraph server: "
+        /usr/local/bin/dgraph
+        ### Create the lock file ###
+        touch /var/lock/subsys/dgraph.lock
+        success $"Dgraph server started"
+        echo
+}
+
+stop() {
+        initlog -c "echo -n Stopping Dgraph server: "
+        pkill dgraph
+        ### Now, delete the lock file ###
+        rm -f /var/lock/subsys/dgraph.lock
+        echo
+}
+ 
+### main logic ###
+case "$1" in
+  start)
+        start
+        ;;
+  stop)
+        stop
+        ;;
+  status)
+        status dgraph
+        ;;
+  restart|reload)
+        stop
+        start
+        ;;
+  *)
+        echo $"Usage: $0 {start|stop|restart|reload|status}"
+        exit 1
+esac
+  
+exit 0

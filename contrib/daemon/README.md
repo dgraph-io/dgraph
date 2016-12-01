@@ -1,0 +1,7 @@
+- copy and save the above code as file "dgraph" (without quotes)
+- place the above file (dgraph) under /etc/init.d/ (cp dgraph /etc/init.d/)
+- give executable permission (chmod 755 /etc/init.d/dgraph)
+- reload systemctl daemon (systemctl daemon-reload)
+- start dgraph (service dgraph start)
+- stop dgraph (service dgraph stop)
+- restart dgraph (service dgraph restart)
