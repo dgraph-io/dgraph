@@ -55,11 +55,8 @@ func (v Date) MarshalText() ([]byte, error) {
 
 // MarshalJSON marshals to json
 func (v Date) MarshalJSON() ([]byte, error) {
-	str, err := v.MarshalText()
-	if err != nil {
-		return nil, err
-	}
-	return json.Marshal(string(str))
+	s := v.Time.Format(dateFormatYMD)
+	return json.Marshal(s)
 }
 
 // Type returns the type of this value
