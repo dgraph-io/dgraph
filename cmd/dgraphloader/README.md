@@ -1,3 +1,5 @@
+## DEPRECATED
+
 ### 6 June 2016
 
 ### Comparison of read write and read only configuration of rocksDB
