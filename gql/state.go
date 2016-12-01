@@ -36,6 +36,7 @@ const (
 	mutationMode = 2
 	fragmentMode = 3
 	equal        = '='
+	quote        = '"'
 )
 
 // Constants representing type of different graphql lexed items.
@@ -389,6 +390,9 @@ func lexTextMutation(l *lex.Lexer) lex.StateFn {
 		if r == lex.EOF {
 			return l.Errorf("Unclosed mutation text")
 		}
+		if r == quote {
+			return lexMutationValue
+		}
 		if r == leftCurl {
 			l.Depth++
 		}
@@ -407,6 +411,27 @@ func lexTextMutation(l *lex.Lexer) lex.StateFn {
 		break
 	}
 	return lexInsideMutation
+}
+
+// This function is used to absorb the object value.
+func lexMutationValue(l *lex.Lexer) lex.StateFn {
+	for {
+		r := l.Next()
+		if r == '\\' {
+			// So that we don't count \" as end of value.
+			if l.Next() == quote {
+				continue
+			}
+
+		}
+		// This is an end of value so lets return.
+		if r == quote {
+			break
+		}
+		// We absorb everything else.
+		continue
+	}
+	return lexTextMutation
 }
 
 // lexOperationType lexes a query or mutation operation type.

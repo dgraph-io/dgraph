@@ -732,3 +732,51 @@ func TestParseGeoJson(t *testing.T) {
 	_, _, err := Parse(query)
 	require.NoError(t, err)
 }
+
+func TestMutationOpenBrace(t *testing.T) {
+	query := `
+	mutation {
+		set {
+			<m.0jx79w>  <type.object.name>  "Emma Miller {documentary actor)"@en .
+		}
+	}
+	`
+	_, _, err := Parse(query)
+	require.NoError(t, err)
+}
+
+func TestMutationCloseBrace(t *testing.T) {
+	query := `
+	mutation {
+		set {
+			<m.0jx79w>  <type.object.name>  "Emma Miller }documentary actor)"@en .
+		}
+	}
+	`
+	_, _, err := Parse(query)
+	require.NoError(t, err)
+}
+
+func TestMutationOpenCloseBrace(t *testing.T) {
+	query := `
+	mutation {
+		set {
+			<m.0jx79w>  <type.object.name>  "Emma Miller {documentary actor})"@en .
+		}
+	}
+	`
+	_, _, err := Parse(query)
+	require.NoError(t, err)
+}
+
+func TestMutationQuotes(t *testing.T) {
+	query := `
+	mutation {
+		set {
+			<m.05vb159>  <type.object.name>  "\"Maison de Hoodle, Satoko Tachibana"@en  .
+		}
+	}
+	`
+	_, mu, err := Parse(query)
+	require.NoError(t, err)
+}
