@@ -36,7 +36,16 @@ export CGO_CPPFLAGS="-I${ROCKSDBDIR}/include -I${ICUDIR}/include"
 export CGO_LDFLAGS="-L${ROCKSDBDIR} -L${ICUDIR}/lib"
 export LD_LIBRARY_PATH="${ICUDIR}/lib:${ROCKSDBDIR}:${LD_LIBRARY_PATH}"
 
+pushd cmd/dgraphload &> /dev/null
+go build .
+dgraph -gentlemerge 0.5 &
+popd &> /dev/null
+
+sleep 5
+
 pushd cmd/dgraphloader &> /dev/null
 go build .
-./dgraphloader --conf groups.conf --groups "0" --rdfgzips $benchmark/rdf-films.gz,$benchmark/names.gz --p ~/dgraph/p --stw_ram_mb 3000
+./dgraphloader -r $benchmark/rdf-films.gz,$benchmark/names.gz
 popd &> /dev/null
+
+killall dgraph
