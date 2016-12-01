@@ -565,7 +565,7 @@ func (n *node) InitAndStartNode(wal *raftwal.Wal) {
 }
 
 func (n *node) AmLeader() bool {
-	if n == nil {
+	if n == nil || n.raft == nil {
 		return false
 	}
 	return n.raft.Status().Lead == n.raft.Status().ID
