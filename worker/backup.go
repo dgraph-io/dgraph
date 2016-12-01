@@ -40,7 +40,7 @@ func toRDF(buf *bytes.Buffer, item kv) {
 			str, err := typ.MarshalText()
 			x.Check(err)
 
-			x.Check2(buf.WriteString(fmt.Sprintf("%q", str)))
+			x.Check2(buf.WriteString(fmt.Sprintf("\"%s\"", str)))
 			if p.ValType == uint32(stype.GeoID) {
 				x.Check2(buf.WriteString(fmt.Sprintf("^^<geo:geojson> ")))
 			} else if p.ValType != uint32(stype.BytesID) {
