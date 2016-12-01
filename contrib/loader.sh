@@ -36,9 +36,9 @@ export CGO_CPPFLAGS="-I${ROCKSDBDIR}/include -I${ICUDIR}/include"
 export CGO_LDFLAGS="-L${ROCKSDBDIR} -L${ICUDIR}/lib"
 export LD_LIBRARY_PATH="${ICUDIR}/lib:${ROCKSDBDIR}:${LD_LIBRARY_PATH}"
 
-pushd cmd/dgraphload &> /dev/null
+pushd cmd/dgraph &> /dev/null
 go build .
-dgraph -gentlemerge 0.5 &
+./dgraph -gentlemerge 0.5 &
 popd &> /dev/null
 
 sleep 5
