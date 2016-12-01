@@ -317,7 +317,7 @@ func (n *node) process(e raftpb.Entry, pending chan struct{}) {
 	<-pending // Release one.
 }
 
-const numPendingMutations = 100000
+const numPendingMutations = 10000
 
 func (n *node) processCommitCh() {
 	pending := make(chan struct{}, numPendingMutations)
