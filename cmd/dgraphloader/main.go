@@ -2,7 +2,7 @@
 // mutations using the HTTP interface.
 //
 // You can run the script like
-// go build . && ./dgraphloader -r $GOPATH/src/github.com/dgraph-io/benchmarks/data/names.gz -m 500
+// go build . && ./dgraphloader -r path-to-gzipped-rdf.gz
 package main
 
 import (
@@ -67,7 +67,8 @@ func makeRequest(mutation chan string, c *uint64, wg *sync.WaitGroup) {
 			// Not doing x.Checkf(json.Unmarshal..., "Response..", string(body))
 			// to ensure that we don't try to convert body from []byte to string
 			// when there's no errors.
-			x.Checkf(err, "Response body: %s", string(body))
+			x.Checkf(err, "HTTP Status: %s Response body: %s.",
+				http.StatusText(res.StatusCode), string(body))
 		}
 		if r.Code != "ErrorOk" {
 			log.Fatalf("Error while performing mutation: %v, err: %v", m, r.Message)
