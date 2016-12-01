@@ -267,8 +267,9 @@ func (g *groupi) syncMemberships() {
 				}
 				zero := g.Node(0)
 				x.AssertTruef(zero != nil, "Expected node 0")
-				x.Check(zero.ProposeAndWait(zero.ctx, &task.Proposal{Membership: mm}))
-
+				if err := zero.ProposeAndWait(zero.ctx, &task.Proposal{Membership: mm}); err != nil {
+					x.TraceError(g.ctx, err)
+				}
 			}(rc, n.AmLeader())
 		}
 		return

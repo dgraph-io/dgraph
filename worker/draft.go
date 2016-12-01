@@ -176,6 +176,10 @@ func (h *header) Decode(in []byte) {
 }
 
 func (n *node) ProposeAndWait(ctx context.Context, proposal *task.Proposal) error {
+	if n.raft == nil {
+		return x.Errorf("RAFT isn't initialized yet")
+	}
+
 	proposal.Id = rand.Uint32()
 	proposalData, err := proposal.Marshal()
 	if err != nil {
