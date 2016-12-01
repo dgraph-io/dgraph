@@ -17,6 +17,7 @@
 package types
 
 import (
+	"bytes"
 	"encoding/binary"
 
 	"github.com/twpayne/go-geom"
@@ -37,7 +38,8 @@ func (v Geo) MarshalBinary() ([]byte, error) {
 // MarshalText marshals to text
 func (v Geo) MarshalText() ([]byte, error) {
 	// The text format is geojson
-	return geojson.Marshal(v.T)
+	res, err := geojson.Marshal(v.T)
+	return bytes.Replace(res, []byte("\""), []byte("'"), -1), err
 }
 
 // MarshalJSON marshals to json
@@ -64,6 +66,7 @@ func (v *Geo) UnmarshalBinary(data []byte) error {
 // UnmarshalText parses the data from a Geojson
 func (v *Geo) UnmarshalText(text []byte) error {
 	var g geom.T
+	text = bytes.Replace(text, []byte("'"), []byte("\""), -1)
 	if err := geojson.Unmarshal(text, &g); err != nil {
 		return err
 	}

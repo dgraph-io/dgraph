@@ -1113,7 +1113,7 @@ func TestSchema(t *testing.T) {
 	var g types.Geo
 	x.Check(g.UnmarshalBinary(getProperty(gr.Children[0].Properties, "loc").GetGeoVal()))
 	received, err := g.MarshalText()
-	require.EqualValues(t, "{\"type\":\"Point\",\"coordinates\":[1.1,2]}", string(received))
+	require.EqualValues(t, "{'type':'Point','coordinates':[1.1,2]}", string(received))
 
 	require.Len(t, gr.Children[0].Children, 10)
 

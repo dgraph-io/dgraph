@@ -159,7 +159,7 @@ func Parse(line string) (rnq NQuad, rerr error) {
 			rnq.ObjectId = stripBracketsAndTrim(item.Val)
 
 		case itemLiteral:
-			oval = strings.Replace(item.Val, "'", "\"", -1)
+			oval = item.Val
 
 		case itemLanguage:
 			rnq.Predicate += "." + item.Val
