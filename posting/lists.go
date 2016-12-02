@@ -381,8 +381,6 @@ type commitEntry struct {
 }
 
 func batchCommit() {
-	ticker := time.NewTicker(10 * time.Millisecond)
-
 	var b *rdb.WriteBatch
 	var sz int
 	var waits []*x.SafeWait
@@ -402,19 +400,12 @@ func batchCommit() {
 		case e := <-commitCh:
 			put(e)
 
-		case <-ticker.C:
-		PICKALL:
-			for {
-				select {
-				case e := <-commitCh:
-					put(e)
-				default:
-					break PICKALL
-				}
-			}
+		default:
+			// default is executed if no other case is ready.
 			if sz == 0 || b == nil {
 				break
 			}
+			start := time.Now()
 			loop++
 			fmt.Printf("[%4d] Writing batch of size: %v\n", loop, sz)
 			x.Checkf(pstore.WriteBatch(b), "Error while writing to RocksDB.")
@@ -425,6 +416,12 @@ func batchCommit() {
 			b = nil
 			sz = 0
 			waits = waits[:0]
+
+			// Add a sleep clause to avoid a busy wait loop if there's no input to commitCh.
+			sleepFor := 10*time.Millisecond - time.Now().Sub(start)
+			if sleepFor > time.Millisecond {
+				time.Sleep(sleepFor)
+			}
 		}
 	}
 }
