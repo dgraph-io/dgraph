@@ -18,7 +18,6 @@ package posting
 
 import (
 	"context"
-	"fmt"
 	"io/ioutil"
 	"log"
 	"math"
@@ -59,7 +58,6 @@ func addMutation(t *testing.T, l *List, edge *task.DirectedEdge, op uint32) {
 }
 
 func TestAddMutation(t *testing.T) {
-	l := getNew()
 	key := x.DataKey("name", 1)
 	dir, err := ioutil.TempDir("", "storetest_")
 	require.NoError(t, err)
@@ -69,7 +67,7 @@ func TestAddMutation(t *testing.T) {
 	require.NoError(t, err)
 	Init(ps)
 
-	l.init(key, ps)
+	l := getNew(key, ps)
 
 	edge := &task.DirectedEdge{
 		ValueId: 9,
@@ -115,8 +113,7 @@ func TestAddMutation(t *testing.T) {
 	l.CommitIfDirty(context.Background())
 
 	// Try reading the same data in another PostingList.
-	dl := getNew()
-	dl.init(key, ps)
+	dl := getNew(key, ps)
 	checkUids(t, dl, uids)
 	return
 
@@ -134,15 +131,12 @@ func getFirst(l *List) (res types.Posting) {
 }
 
 func checkValue(t *testing.T, ol *List, val string) {
-	fmt.Printf("Checking val: %v", val)
 	p := getFirst(ol)
-	fmt.Printf("Got first: %q", p.Value)
 	require.Equal(t, uint64(math.MaxUint64), p.Uid) // Cast to prevent overflow.
 	require.EqualValues(t, val, p.Value)
 }
 
 func TestAddMutation_Value(t *testing.T) {
-	ol := getNew()
 	key := x.DataKey("value", 10)
 	dir, err := ioutil.TempDir("", "storetest_")
 	if err != nil {
@@ -155,7 +149,7 @@ func TestAddMutation_Value(t *testing.T) {
 	require.NoError(t, err)
 	Init(ps)
 
-	ol.init(key, ps)
+	ol := getNew(key, ps)
 	log.Println("Init successful.")
 
 	edge := &task.DirectedEdge{
@@ -177,7 +171,6 @@ func TestAddMutation_Value(t *testing.T) {
 }
 
 func TestAddMutation_jchiu1(t *testing.T) {
-	ol := getNew()
 	key := x.DataKey("value", 10)
 	dir, err := ioutil.TempDir("", "storetest_")
 	require.NoError(t, err)
@@ -186,7 +179,7 @@ func TestAddMutation_jchiu1(t *testing.T) {
 	ps, err := store.NewStore(dir)
 	require.NoError(t, err)
 	Init(ps)
-	ol.init(key, ps)
+	ol := getNew(key, ps)
 
 	// Set value to cars and merge to RocksDB.
 	edge := &task.DirectedEdge{
@@ -231,7 +224,6 @@ func TestAddMutation_jchiu1(t *testing.T) {
 }
 
 func TestAddMutation_jchiu2(t *testing.T) {
-	ol := getNew()
 	key := x.DataKey("value", 10)
 	dir, err := ioutil.TempDir("", "storetest_")
 	require.NoError(t, err)
@@ -240,7 +232,7 @@ func TestAddMutation_jchiu2(t *testing.T) {
 	ps, err := store.NewStore(dir)
 	require.NoError(t, err)
 	Init(ps)
-	ol.init(key, ps)
+	ol := getNew(key, ps)
 
 	// Del a value cars and but don't merge.
 	edge := &task.DirectedEdge{
@@ -271,7 +263,6 @@ func TestAddMutation_jchiu2(t *testing.T) {
 }
 
 func TestAddMutation_jchiu3(t *testing.T) {
-	ol := getNew()
 	key := x.DataKey("value", 10)
 	dir, err := ioutil.TempDir("", "storetest_")
 	require.NoError(t, err)
@@ -280,7 +271,7 @@ func TestAddMutation_jchiu3(t *testing.T) {
 	ps, err := store.NewStore(dir)
 	require.NoError(t, err)
 	Init(ps)
-	ol.init(key, ps)
+	ol := getNew(key, ps)
 
 	// Set value to cars and merge to RocksDB.
 	edge := &task.DirectedEdge{
@@ -331,7 +322,6 @@ func TestAddMutation_jchiu3(t *testing.T) {
 }
 
 func TestAddMutation_mrjn1(t *testing.T) {
-	ol := getNew()
 	key := x.DataKey("value", 10)
 	dir, err := ioutil.TempDir("", "storetest_")
 	require.NoError(t, err)
@@ -340,7 +330,7 @@ func TestAddMutation_mrjn1(t *testing.T) {
 	ps, err := store.NewStore(dir)
 	require.NoError(t, err)
 	Init(ps)
-	ol.init(key, ps)
+	ol := getNew(key, ps)
 
 	// Set a value cars and merge.
 	edge := &task.DirectedEdge{
@@ -407,9 +397,8 @@ func TestAddMutation_checksum(t *testing.T) {
 	Init(ps)
 
 	{
-		ol := getNew()
 		key := x.DataKey("value", 10)
-		ol.init(key, ps)
+		ol := getNew(key, ps)
 
 		edge := &task.DirectedEdge{
 			ValueId: 1,
@@ -432,9 +421,8 @@ func TestAddMutation_checksum(t *testing.T) {
 	}
 
 	{
-		ol := getNew()
 		key := x.DataKey("value2", 10)
-		ol.init(key, ps)
+		ol := getNew(key, ps)
 
 		// Add in reverse.
 		edge := &task.DirectedEdge{
@@ -459,9 +447,8 @@ func TestAddMutation_checksum(t *testing.T) {
 	require.Equal(t, c1, c2)
 
 	{
-		ol := getNew()
 		key := x.DataKey("value3", 10)
-		ol.init(key, ps)
+		ol := getNew(key, ps)
 
 		// Add in reverse.
 		edge := &task.DirectedEdge{
@@ -493,7 +480,6 @@ func TestAddMutation_checksum(t *testing.T) {
 }
 
 func TestAddMutation_gru(t *testing.T) {
-	ol := getNew()
 	key := x.DataKey("question.tag", 0x01)
 	dir, err := ioutil.TempDir("", "storetest_")
 	require.NoError(t, err)
@@ -502,7 +488,7 @@ func TestAddMutation_gru(t *testing.T) {
 	ps, err := store.NewStore(dir)
 	require.NoError(t, err)
 	Init(ps)
-	ol.init(key, ps)
+	ol := getNew(key, ps)
 
 	{
 		// Set two tag ids and merge.
@@ -539,7 +525,6 @@ func TestAddMutation_gru(t *testing.T) {
 }
 
 func TestAddMutation_gru2(t *testing.T) {
-	ol := getNew()
 	key := x.DataKey("question.tag", 0x01)
 	dir, err := ioutil.TempDir("", "storetest_")
 	require.NoError(t, err)
@@ -548,7 +533,7 @@ func TestAddMutation_gru2(t *testing.T) {
 	ps, err := store.NewStore(dir)
 	require.NoError(t, err)
 	Init(ps)
-	ol.init(key, ps)
+	ol := getNew(key, ps)
 
 	{
 		// Set two tag ids and merge.
@@ -597,7 +582,6 @@ func TestAddMutation_gru2(t *testing.T) {
 }
 
 func TestAfterUIDCount(t *testing.T) {
-	ol := getNew()
 	key := x.DataKey("value", 10)
 	dir, err := ioutil.TempDir("", "storetest_")
 	require.NoError(t, err)
@@ -605,7 +589,7 @@ func TestAfterUIDCount(t *testing.T) {
 
 	ps, err := store.NewStore(dir)
 	require.NoError(t, err)
-	ol.init(key, ps)
+	ol := getNew(key, ps)
 
 	// Set value to cars and merge to RocksDB.
 	edge := &task.DirectedEdge{
@@ -677,7 +661,6 @@ func TestAfterUIDCount(t *testing.T) {
 }
 
 func TestAfterUIDCount2(t *testing.T) {
-	ol := getNew()
 	key := x.DataKey("value", 10)
 	dir, err := ioutil.TempDir("", "storetest_")
 	require.NoError(t, err)
@@ -685,7 +668,7 @@ func TestAfterUIDCount2(t *testing.T) {
 
 	ps, err := store.NewStore(dir)
 	require.NoError(t, err)
-	ol.init(key, ps)
+	ol := getNew(key, ps)
 
 	// Set value to cars and merge to RocksDB.
 	edge := &task.DirectedEdge{
@@ -712,7 +695,6 @@ func TestAfterUIDCount2(t *testing.T) {
 }
 
 func TestAfterUIDCountWithCommit(t *testing.T) {
-	ol := getNew()
 	key := x.DataKey("value", 10)
 	dir, err := ioutil.TempDir("", "storetest_")
 	require.NoError(t, err)
@@ -721,7 +703,7 @@ func TestAfterUIDCountWithCommit(t *testing.T) {
 	ps, err := store.NewStore(dir)
 	require.NoError(t, err)
 	Init(ps)
-	ol.init(key, ps)
+	ol := getNew(key, ps)
 
 	// Set value to cars and merge to RocksDB.
 	edge := &task.DirectedEdge{
@@ -805,7 +787,6 @@ func TestMain(m *testing.M) {
 
 func BenchmarkAddMutations(b *testing.B) {
 	// logrus.SetLevel(logrus.DebugLevel)
-	l := getNew()
 	key := x.DataKey("name", 1)
 	dir, err := ioutil.TempDir("", "storetest_")
 	if err != nil {
@@ -820,7 +801,7 @@ func BenchmarkAddMutations(b *testing.B) {
 		return
 	}
 
-	l.init(key, ps)
+	l := getNew(key, ps)
 	b.ResetTimer()
 
 	ctx := context.Background()

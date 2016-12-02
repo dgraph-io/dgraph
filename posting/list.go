@@ -64,7 +64,6 @@ type List struct {
 	mlayer      []*types.Posting // mutations
 	pstore      *store.Store     // postinglist store
 	lastCompact time.Time
-	wg          sync.WaitGroup
 	deleteMe    int32
 	refcount    int32
 
@@ -88,11 +87,12 @@ var listPool = sync.Pool{
 	},
 }
 
-func getNew() *List {
+func getNew(key []byte, pstore *store.Store) *List {
 	l := listPool.Get().(*List)
 	*l = List{}
-	l.wg.Add(1)
-	x.AssertTrue(len(l.key) == 0)
+	l.key = key
+	l.pstore = pstore
+	l.ghash = farm.Fingerprint64(key)
 	l.refcount = 1
 	return l
 }
@@ -140,17 +140,6 @@ func newPosting(t *task.DirectedEdge, op uint32) *types.Posting {
 	}
 }
 
-func (l *List) init(key []byte, pstore *store.Store) {
-	l.Lock()
-	defer l.Unlock()
-	defer l.wg.Done()
-
-	l.key = key
-	l.pstore = pstore
-
-	l.ghash = farm.Fingerprint64(key)
-}
-
 func (l *List) PostingList() *types.PostingList {
 	l.RLock()
 	defer l.RUnlock()
@@ -182,7 +171,6 @@ func (l *List) getPostingList() *types.PostingList {
 
 // SetForDeletion will mark this List to be deleted, so no more mutations can be applied to this.
 func (l *List) SetForDeletion() {
-	l.wg.Wait()
 	atomic.StoreInt32(&l.deleteMe, 1)
 }
 
@@ -309,7 +297,6 @@ func (l *List) updateMutationLayer(mpost *types.Posting) bool {
 // anything to disk. Some other background routine will be responsible for merging
 // changes in mutation layers to RocksDB. Returns whether any mutation happens.
 func (l *List) AddMutation(ctx context.Context, t *task.DirectedEdge, op uint32) (bool, error) {
-	l.wg.Wait()
 	if atomic.LoadInt32(&l.deleteMe) == 1 {
 		x.TraceError(ctx, x.Errorf("DELETEME set to true. Temporary error."))
 		return false, ErrRetry
@@ -358,7 +345,6 @@ func (l *List) AddMutation(ctx context.Context, t *task.DirectedEdge, op uint32)
 //    return false // to break iteration.
 //  })
 func (l *List) Iterate(afterUid uint64, f func(obj *types.Posting) bool) {
-	l.wg.Wait()
 	l.RLock()
 	defer l.RUnlock()
 	l.iterate(afterUid, f)
@@ -457,7 +443,6 @@ func (l *List) CommitIfDirty(ctx context.Context) (committed bool, err error) {
 }
 
 func (l *List) commit() (committed bool, rerr error) {
-	l.wg.Wait()
 	l.Lock()
 	defer l.Unlock()
 
@@ -520,7 +505,6 @@ func (l *List) LastCompactionTs() time.Time {
 // Uids returns the UIDs given some query params.
 // We have to apply the filtering before applying (offset, count).
 func (l *List) Uids(opt ListOptions) *task.List {
-	l.wg.Wait()
 	l.RLock()
 	defer l.RUnlock()
 
@@ -545,7 +529,6 @@ func (l *List) Uids(opt ListOptions) *task.List {
 }
 
 func (l *List) Value() (val []byte, vtype byte, rerr error) {
-	l.wg.Wait()
 	l.RLock()
 	defer l.RUnlock()
 

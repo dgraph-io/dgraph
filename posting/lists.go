@@ -293,15 +293,13 @@ func GetOrCreate(key []byte) (rlist *List, decr func()) {
 		return lp, lp.decr
 	}
 
-	l := getNew() // This retrieves a new *List and increments its ref count.
+	l := getNew(key, pstore) // This retrieves a new *List and sets refcount to 1.
 	lp = lhmap.PutIfMissing(fp, l)
 	// We are always going to return lp to caller, whether it is l or not. So, let's
 	// increment its reference counter.
 	lp.incr()
 
-	if lp == l {
-		l.init(key, pstore)
-	} else {
+	if lp != l {
 		// Undo the increment in getNew() call above.
 		l.decr()
 	}

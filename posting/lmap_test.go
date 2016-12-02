@@ -23,22 +23,24 @@ import (
 
 func BenchmarkGet(b *testing.B) {
 	// lmap := NewMap(false)
+	var key []byte
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
 			// i := uint64(rand.Int63())
 			_ = uint64(rand.Int63())
-			getNew()
+			getNew(key, nil)
 			// lmap.Get(i)
 		}
 	})
 }
 
 func BenchmarkGetLinear(b *testing.B) {
+	var key []byte
 	m := make(map[uint64]*List)
 	for i := 0; i < b.N; i++ {
 		k := uint64(i)
 		if l, ok := m[k]; !ok {
-			l = getNew()
+			l = getNew(key, nil)
 			m[k] = l
 		}
 	}
