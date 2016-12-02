@@ -357,12 +357,12 @@ func CommitLists(numRoutines int) {
 type commitEntry struct {
 	key []byte
 	val []byte
-	wg  *sync.WaitGroup
+	sw  *x.SafeWait
 }
 
 func StartCommit() {
 	startCommitOnce.Do(func() {
-		fmt.Printf("starting commit routine")
+		fmt.Println("Starting commit routine.")
 		commitCh = make(chan commitEntry, 10000)
 		go batchCommit()
 	})
@@ -379,17 +379,18 @@ func batchCommit() {
 
 	var b *rdb.WriteBatch
 	var sz int
-	var waits []*sync.WaitGroup
+	var waits []*x.SafeWait
 	var loop uint64
 	for {
 		select {
 		case e := <-commitCh:
+			fmt.Println("CommitCh entry")
 			if b == nil {
 				b = pstore.NewWriteBatch()
 			}
 			b.Put(e.key, e.val)
 			sz++
-			waits = append(waits, e.wg)
+			waits = append(waits, e.sw)
 			if sz >= 1000 {
 				fmt.Println("Size >= 1000")
 				// Ensure we don't block writing to writeCh.

@@ -111,6 +111,7 @@ func TestAddMutation(t *testing.T) {
 	require.NotNil(t, p, "Unable to retrieve posting")
 	require.EqualValues(t, p.Label, "anti-testing")
 	l.CommitIfDirty(context.Background())
+	l.WaitForCommit()
 
 	// Try reading the same data in another PostingList.
 	dl := getNew(key, ps)

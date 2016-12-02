@@ -140,16 +140,29 @@ func newPosting(t *task.DirectedEdge, op uint32) *types.Posting {
 	}
 }
 
+func (l *List) WaitForCommit() {
+	l.RLock()
+	defer l.RUnlock()
+	l.Wait()
+}
+
 func (l *List) PostingList() *types.PostingList {
 	l.RLock()
 	defer l.RUnlock()
-	return l.getPostingList()
+	return l.getPostingList(0)
 }
 
 // getPostingList tries to get posting list from l.pbuffer. If it is nil, then
 // we query RocksDB. There is no need for lock acquisition here.
-func (l *List) getPostingList() *types.PostingList {
+func (l *List) getPostingList(loop int) *types.PostingList {
+	if loop >= 10 {
+		x.Fatalf("This is over the 10th loop: %v", loop)
+	}
 	l.AssertRLock()
+	// Wait for any previous commits to happen before retrieving posting list again.
+	fmt.Println("Getting posting list.")
+	l.Wait()
+
 	pb := atomic.LoadPointer(&l.pbuffer)
 	plist := (*types.PostingList)(pb)
 
@@ -164,7 +177,7 @@ func (l *List) getPostingList() *types.PostingList {
 			return plist
 		}
 		// Someone else replaced the pointer in the meantime. Retry recursively.
-		return l.getPostingList()
+		return l.getPostingList(loop + 1)
 	}
 	return plist
 }
@@ -228,7 +241,7 @@ func (l *List) updateMutationLayer(mpost *types.Posting) bool {
 	}
 
 	// Didn't find it in mutable layer. Now check the immutable layer.
-	pl := l.getPostingList()
+	pl := l.getPostingList(0)
 	pidx := sort.Search(len(pl.Postings), func(idx int) bool {
 		p := pl.Postings[idx]
 		return mpost.Uid <= p.Uid
@@ -301,6 +314,8 @@ func (l *List) AddMutation(ctx context.Context, t *task.DirectedEdge, op uint32)
 		x.TraceError(ctx, x.Errorf("DELETEME set to true. Temporary error."))
 		return false, ErrRetry
 	}
+	x.Trace(ctx, "AddMutation called.")
+	defer x.Trace(ctx, "AddMutation done.")
 
 	// All edges with a value set, have the same uid. In other words,
 	// an (entity, attribute) can only have one value.
@@ -353,7 +368,7 @@ func (l *List) Iterate(afterUid uint64, f func(obj *types.Posting) bool) {
 func (l *List) iterate(afterUid uint64, f func(obj *types.Posting) bool) {
 	l.AssertRLock()
 	pidx, midx := 0, 0
-	pl := l.getPostingList()
+	pl := l.getPostingList(0)
 
 	if afterUid > 0 {
 		pidx = sort.Search(len(pl.Postings), func(idx int) bool {
@@ -409,7 +424,7 @@ func (l *List) Length(afterUid uint64) int {
 	defer l.RUnlock()
 
 	pidx, midx := 0, 0
-	pl := l.getPostingList()
+	pl := l.getPostingList(0)
 
 	if afterUid > 0 {
 		pidx = sort.Search(len(pl.Postings), func(idx int) bool {
@@ -475,18 +490,18 @@ func (l *List) commit() (committed bool, rerr error) {
 	data, err := final.Marshal()
 	x.Checkf(err, "Unable to marshal posting list")
 
-	w := &sync.WaitGroup{}
-	w.Add(1)
+	fmt.Println("Starting wait")
+	sw := l.StartWait()
 	ce := commitEntry{
 		key: l.key,
 		val: data,
-		wg:  w,
+		sw:  sw,
 	}
-	fmt.Println("pushing to commit")
-	commitCh <- ce
-	fmt.Println("Waiting for commit done.")
-	w.Wait() // Wait for it to be pushed to RocksDB, so that we can read back the new value.
-	fmt.Println("Done")
+	select {
+	case commitCh <- ce:
+	default:
+		x.Fatalf("Size of commit ch: %v", len(commitCh))
+	}
 
 	// Now reset the mutation variables.
 	atomic.StorePointer(&l.pbuffer, nil) // Make prev buffer eligible for GC.
