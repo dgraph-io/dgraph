@@ -421,6 +421,7 @@ func batchCommit() {
 			for _, w := range waits {
 				w.Done()
 			}
+			b.Destroy()
 			b = nil
 			sz = 0
 			waits = waits[:0]
