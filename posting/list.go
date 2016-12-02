@@ -160,7 +160,6 @@ func (l *List) getPostingList(loop int) *types.PostingList {
 	}
 	l.AssertRLock()
 	// Wait for any previous commits to happen before retrieving posting list again.
-	fmt.Println("Getting posting list.")
 	l.Wait()
 
 	pb := atomic.LoadPointer(&l.pbuffer)
@@ -490,18 +489,13 @@ func (l *List) commit() (committed bool, rerr error) {
 	data, err := final.Marshal()
 	x.Checkf(err, "Unable to marshal posting list")
 
-	fmt.Println("Starting wait")
 	sw := l.StartWait()
 	ce := commitEntry{
 		key: l.key,
 		val: data,
 		sw:  sw,
 	}
-	select {
-	case commitCh <- ce:
-	default:
-		x.Fatalf("Size of commit ch: %v", len(commitCh))
-	}
+	commitCh <- ce
 
 	// Now reset the mutation variables.
 	atomic.StorePointer(&l.pbuffer, nil) // Make prev buffer eligible for GC.

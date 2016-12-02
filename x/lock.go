@@ -1,7 +1,6 @@
 package x
 
 import (
-	"fmt"
 	"sync"
 	"sync/atomic"
 )
@@ -72,8 +71,6 @@ func (s *SafeMutex) Wait() {
 		return
 	}
 	atomic.AddInt32(&s.wait.waiting, 1)
-	fmt.Println("Waiting for WG")
 	s.wait.wg.Wait()
-	fmt.Println("Done waiting for WG")
 	atomic.AddInt32(&s.wait.waiting, -1)
 }

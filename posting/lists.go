@@ -107,26 +107,17 @@ func aggressivelyEvict() {
 	log.Printf("EVICT DONE! Memory usage after calling GC. Allocated MB: %v", megs)
 }
 
-func commitAndUpdate(keys []uint64) {
-	if len(keys) == 0 {
+func gentleCommit(dirtyMap map[uint64]struct{}, pending chan struct{}) {
+	select {
+	case pending <- struct{}{}:
+	default:
+		fmt.Println("Skipping gentleCommit")
 		return
 	}
-	ctr := newCounters()
-	defer ctr.ticker.Stop()
 
-	for _, key := range keys {
-		l, ok := lhmap.Get(key)
-		if !ok || l == nil {
-			continue
-		}
-		// Not removing the postings list from the map, to avoid a race condition,
-		// where another caller re-creates the posting list before a commit happens.
-		commitOne(l, ctr)
-	}
-	ctr.log()
-}
+	// NOTE: No need to acquire read lock for stopTheWorld. This portion is being run
+	// serially alongside aggressive commit.
 
-func gentleCommit(dirtyMap map[uint64]struct{}) {
 	n := int(float64(len(dirtyMap)) * *commitFraction)
 	if n < 1000 {
 		// Have a min value of n, so we can merge small number of dirty PLs fast.
@@ -142,7 +133,26 @@ func gentleCommit(dirtyMap map[uint64]struct{}) {
 			break
 		}
 	}
-	commitAndUpdate(keysBuffer)
+
+	go func(keys []uint64) {
+		defer func() { <-pending }()
+		if len(keys) == 0 {
+			return
+		}
+		ctr := newCounters()
+		defer ctr.ticker.Stop()
+
+		for _, key := range keys {
+			l, ok := lhmap.Get(key)
+			if !ok || l == nil {
+				continue
+			}
+			// Not removing the postings list from the map, to avoid a race condition,
+			// where another caller re-creates the posting list before a commit happens.
+			commitOne(l, ctr)
+		}
+		ctr.log()
+	}(keysBuffer)
 }
 
 // periodicMerging periodically merges the dirty posting lists. It also checks our memory
@@ -151,7 +161,9 @@ func gentleCommit(dirtyMap map[uint64]struct{}) {
 func periodicCommit() {
 	ticker := time.NewTicker(5 * time.Second)
 	dirtyMap := make(map[uint64]struct{}, 1000)
-	dsize := 0
+	// pending is used to ensure that we only have up to 15 goroutines doing gentle commits.
+	pending := make(chan struct{}, 15)
+	dsize := 0 // needed for better reporting.
 	for {
 		select {
 		case key := <-dirtyChan:
@@ -165,7 +177,7 @@ func periodicCommit() {
 
 			totMemory := getMemUsage()
 			if totMemory <= *maxmemory {
-				gentleCommit(dirtyMap)
+				gentleCommit(dirtyMap, pending)
 				break
 			}
 
@@ -256,6 +268,14 @@ var (
 	commitCh     chan commitEntry
 )
 
+func StartCommit() {
+	startCommitOnce.Do(func() {
+		fmt.Println("Starting commit routine.")
+		commitCh = make(chan commitEntry, 10000)
+		go batchCommit()
+	})
+}
+
 // Init initializes the posting lists package, the in memory and dirty list hash.
 func Init(ps *store.Store) {
 	pstore = ps
@@ -263,7 +283,7 @@ func Init(ps *store.Store) {
 	lhmap = newShardedListMap(*lhmapNumShards)
 	dirtyChan = make(chan uint64, 10000)
 	StartCommit()
-	go batchCommit()
+	go periodicCommit()
 }
 
 func getFromMap(key uint64) *List {
@@ -360,47 +380,38 @@ type commitEntry struct {
 	sw  *x.SafeWait
 }
 
-func StartCommit() {
-	startCommitOnce.Do(func() {
-		fmt.Println("Starting commit routine.")
-		commitCh = make(chan commitEntry, 10000)
-		go batchCommit()
-	})
-}
-
 func batchCommit() {
-	writeCh := make(chan struct{}, 10)
-	go func() {
-		ticker := time.NewTicker(100 * time.Millisecond)
-		for _ = range ticker.C {
-			writeCh <- struct{}{}
-		}
-	}()
+	ticker := time.NewTicker(10 * time.Millisecond)
 
 	var b *rdb.WriteBatch
 	var sz int
 	var waits []*x.SafeWait
 	var loop uint64
+
+	put := func(e commitEntry) {
+		if b == nil {
+			b = pstore.NewWriteBatch()
+		}
+		b.Put(e.key, e.val)
+		sz++
+		waits = append(waits, e.sw)
+	}
+
 	for {
 		select {
 		case e := <-commitCh:
-			fmt.Println("CommitCh entry")
-			if b == nil {
-				b = pstore.NewWriteBatch()
-			}
-			b.Put(e.key, e.val)
-			sz++
-			waits = append(waits, e.sw)
-			if sz >= 1000 {
-				fmt.Println("Size >= 1000")
-				// Ensure we don't block writing to writeCh.
+			put(e)
+
+		case <-ticker.C:
+		PICKALL:
+			for {
 				select {
-				case writeCh <- struct{}{}:
+				case e := <-commitCh:
+					put(e)
 				default:
+					break PICKALL
 				}
 			}
-
-		case <-writeCh:
 			if sz == 0 || b == nil {
 				break
 			}
