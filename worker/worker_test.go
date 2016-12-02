@@ -208,7 +208,7 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 	}, algo.ToUintsListForTest(r.UidMatrix))
 
 	// Final touch: Merge everything to RocksDB.
-	posting.MergeLists(10)
+	posting.CommitLists(10)
 	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
 
 	query = newQuery("friend", nil, []string{"anyof", "photon notphoton ignored"})
@@ -238,7 +238,7 @@ func TestProcessTaskIndex(t *testing.T) {
 		[]uint64{10, 12},
 	}, algo.ToUintsListForTest(r.UidMatrix))
 
-	posting.MergeLists(10)
+	posting.CommitLists(10)
 	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
 
 	// Now try changing 12's friend value from "photon" to "notphotonExtra" to
@@ -266,7 +266,7 @@ func TestProcessTaskIndex(t *testing.T) {
 		[]uint64{},
 	}, algo.ToUintsListForTest(r.UidMatrix))
 
-	posting.MergeLists(10)
+	posting.CommitLists(10)
 	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
 
 	// Try deleting.

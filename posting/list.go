@@ -57,10 +57,9 @@ const (
 )
 
 type List struct {
-	sync.RWMutex
+	x.SafeMutex
 	key         []byte
 	ghash       uint64
-	hash        uint32
 	pbuffer     unsafe.Pointer
 	mlayer      []*types.Posting // mutations
 	pstore      *store.Store     // postinglist store
@@ -149,13 +148,19 @@ func (l *List) init(key []byte, pstore *store.Store) {
 	l.key = key
 	l.pstore = pstore
 
-	l.hash = farm.Fingerprint32(key)
 	l.ghash = farm.Fingerprint64(key)
+}
+
+func (l *List) PostingList() *types.PostingList {
+	l.RLock()
+	defer l.RUnlock()
+	return l.getPostingList()
 }
 
 // getPostingList tries to get posting list from l.pbuffer. If it is nil, then
 // we query RocksDB. There is no need for lock acquisition here.
 func (l *List) getPostingList() *types.PostingList {
+	l.AssertRLock()
 	pb := atomic.LoadPointer(&l.pbuffer)
 	plist := (*types.PostingList)(pb)
 
@@ -182,6 +187,7 @@ func (l *List) SetForDeletion() {
 }
 
 func (l *List) updateMutationLayer(mpost *types.Posting) bool {
+	l.AssertLock()
 	x.AssertTrue(mpost.Op == Set || mpost.Op == Del)
 
 	// First check the mutable layer.
@@ -359,6 +365,7 @@ func (l *List) Iterate(afterUid uint64, f func(obj *types.Posting) bool) {
 }
 
 func (l *List) iterate(afterUid uint64, f func(obj *types.Posting) bool) {
+	l.AssertRLock()
 	pidx, midx := 0, 0
 	pl := l.getPostingList()
 
@@ -412,6 +419,9 @@ func (l *List) iterate(afterUid uint64, f func(obj *types.Posting) bool) {
 
 // Length iterates over the mutation layer and counts number of elements.
 func (l *List) Length(afterUid uint64) int {
+	l.RLock()
+	defer l.RUnlock()
+
 	pidx, midx := 0, 0
 	pl := l.getPostingList()
 
@@ -480,10 +490,18 @@ func (l *List) commit() (committed bool, rerr error) {
 	data, err := final.Marshal()
 	x.Checkf(err, "Unable to marshal posting list")
 
-	if err := l.pstore.SetOne(l.key, data); err != nil {
-		log.Fatalf("Error while storing posting list: %v", err)
-		return true, err
+	w := &sync.WaitGroup{}
+	w.Add(1)
+	ce := commitEntry{
+		key: l.key,
+		val: data,
+		wg:  w,
 	}
+	fmt.Println("pushing to commit")
+	commitCh <- ce
+	fmt.Println("Waiting for commit done.")
+	w.Wait() // Wait for it to be pushed to RocksDB, so that we can read back the new value.
+	fmt.Println("Done")
 
 	// Now reset the mutation variables.
 	atomic.StorePointer(&l.pbuffer, nil) // Make prev buffer eligible for GC.

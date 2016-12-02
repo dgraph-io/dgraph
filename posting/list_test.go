@@ -18,6 +18,7 @@ package posting
 
 import (
 	"context"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"math"
@@ -66,6 +67,7 @@ func TestAddMutation(t *testing.T) {
 
 	ps, err := store.NewStore(dir)
 	require.NoError(t, err)
+	Init(ps)
 
 	l.init(key, ps)
 
@@ -132,7 +134,9 @@ func getFirst(l *List) (res types.Posting) {
 }
 
 func checkValue(t *testing.T, ol *List, val string) {
+	fmt.Printf("Checking val: %v", val)
 	p := getFirst(ol)
+	fmt.Printf("Got first: %q", p.Value)
 	require.Equal(t, uint64(math.MaxUint64), p.Uid) // Cast to prevent overflow.
 	require.EqualValues(t, val, p.Value)
 }
@@ -149,6 +153,7 @@ func TestAddMutation_Value(t *testing.T) {
 
 	ps, err := store.NewStore(dir)
 	require.NoError(t, err)
+	Init(ps)
 
 	ol.init(key, ps)
 	log.Println("Init successful.")
@@ -180,6 +185,7 @@ func TestAddMutation_jchiu1(t *testing.T) {
 
 	ps, err := store.NewStore(dir)
 	require.NoError(t, err)
+	Init(ps)
 	ol.init(key, ps)
 
 	// Set value to cars and merge to RocksDB.
@@ -233,6 +239,7 @@ func TestAddMutation_jchiu2(t *testing.T) {
 
 	ps, err := store.NewStore(dir)
 	require.NoError(t, err)
+	Init(ps)
 	ol.init(key, ps)
 
 	// Del a value cars and but don't merge.
@@ -272,6 +279,7 @@ func TestAddMutation_jchiu3(t *testing.T) {
 
 	ps, err := store.NewStore(dir)
 	require.NoError(t, err)
+	Init(ps)
 	ol.init(key, ps)
 
 	// Set value to cars and merge to RocksDB.
@@ -331,6 +339,7 @@ func TestAddMutation_mrjn1(t *testing.T) {
 
 	ps, err := store.NewStore(dir)
 	require.NoError(t, err)
+	Init(ps)
 	ol.init(key, ps)
 
 	// Set a value cars and merge.
@@ -395,6 +404,7 @@ func TestAddMutation_checksum(t *testing.T) {
 
 	ps, err := store.NewStore(dir)
 	require.NoError(t, err)
+	Init(ps)
 
 	{
 		ol := getNew()
@@ -417,7 +427,7 @@ func TestAddMutation_checksum(t *testing.T) {
 		require.NoError(t, err)
 		require.True(t, merged)
 
-		pl := ol.getPostingList()
+		pl := ol.PostingList()
 		c1 = pl.Checksum
 	}
 
@@ -443,7 +453,7 @@ func TestAddMutation_checksum(t *testing.T) {
 		require.NoError(t, err)
 		require.True(t, merged)
 
-		pl := ol.getPostingList()
+		pl := ol.PostingList()
 		c2 = pl.Checksum
 	}
 	require.Equal(t, c1, c2)
@@ -476,7 +486,7 @@ func TestAddMutation_checksum(t *testing.T) {
 		require.NoError(t, err)
 		require.True(t, merged)
 
-		pl := ol.getPostingList()
+		pl := ol.PostingList()
 		c3 = pl.Checksum
 	}
 	require.NotEqual(t, c3, c1)
@@ -491,6 +501,7 @@ func TestAddMutation_gru(t *testing.T) {
 
 	ps, err := store.NewStore(dir)
 	require.NoError(t, err)
+	Init(ps)
 	ol.init(key, ps)
 
 	{
@@ -536,6 +547,7 @@ func TestAddMutation_gru2(t *testing.T) {
 
 	ps, err := store.NewStore(dir)
 	require.NoError(t, err)
+	Init(ps)
 	ol.init(key, ps)
 
 	{
@@ -708,6 +720,7 @@ func TestAfterUIDCountWithCommit(t *testing.T) {
 
 	ps, err := store.NewStore(dir)
 	require.NoError(t, err)
+	Init(ps)
 	ol.init(key, ps)
 
 	// Set value to cars and merge to RocksDB.
