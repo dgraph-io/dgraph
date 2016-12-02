@@ -169,8 +169,9 @@ func (l *List) getPostingList(loop int) *types.PostingList {
 		x.AssertTrue(l.pstore != nil)
 		plist = new(types.PostingList)
 
-		if data, err := l.pstore.Get(l.key); err == nil && len(data) > 0 {
-			x.Checkf(plist.Unmarshal(data), "Unable to Unmarshal PostingList from store")
+		if slice, err := l.pstore.Get(l.key); err == nil && slice != nil {
+			x.Checkf(plist.Unmarshal(slice.Data()), "Unable to Unmarshal PostingList from store")
+			slice.Free()
 		}
 		if atomic.CompareAndSwapPointer(&l.pbuffer, pb, unsafe.Pointer(plist)) {
 			return plist
