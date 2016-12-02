@@ -28,8 +28,8 @@ import (
 var (
 	files      = flag.String("r", "", "Location of rdf files to load")
 	dgraph     = flag.String("d", "http://127.0.0.1:8080/query", "Dgraph server address")
-	concurrent = flag.Int("c", 500, "Number of concurrent requests to make to Dgraph")
-	numRdf     = flag.Int("m", 100, "Number of RDF N-Quads to send as part of a mutation.")
+	concurrent = flag.Int("c", 100, "Number of concurrent requests to make to Dgraph")
+	numRdf     = flag.Int("m", 1000, "Number of RDF N-Quads to send as part of a mutation.")
 )
 
 func body(rdf string) string {

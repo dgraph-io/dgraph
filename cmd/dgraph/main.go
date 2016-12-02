@@ -70,7 +70,8 @@ var (
 	memprofile   = flag.String("mem", "", "write memory profile to file")
 	dumpSubgraph = flag.String("dumpsg", "", "Directory to save subgraph for testing, debugging")
 
-	closeCh = make(chan struct{})
+	closeCh        = make(chan struct{})
+	pendingQueries = make(chan struct{}, 10000*runtime.NumCPU())
 )
 
 type mutationResult struct {
@@ -375,6 +376,10 @@ func validateTypes(nquads []rdf.NQuad) error {
 }
 
 func queryHandler(w http.ResponseWriter, r *http.Request) {
+	// Add a limit on how many pending queries can be run in the system.
+	pendingQueries <- struct{}{}
+	defer func() { <-pendingQueries }()
+
 	addCorsHeaders(w)
 	if r.Method == "OPTIONS" {
 		return

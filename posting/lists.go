@@ -96,7 +96,7 @@ func aggressivelyEvict() {
 	log.Printf("Memory usage over threshold. STW. Allocated MB: %v\n", megs)
 
 	log.Println("Aggressive evict, committing to RocksDB")
-	CommitLists(100 * runtime.GOMAXPROCS(-1))
+	CommitLists(1)
 
 	log.Println("Trying to free OS memory")
 	// Forces garbage collection followed by returning as much memory to the OS
@@ -402,23 +402,22 @@ func batchCommit() {
 
 		default:
 			// default is executed if no other case is ready.
-			if sz == 0 || b == nil {
-				break
-			}
 			start := time.Now()
-			loop++
-			fmt.Printf("[%4d] Writing batch of size: %v\n", loop, sz)
-			x.Checkf(pstore.WriteBatch(b), "Error while writing to RocksDB.")
-			for _, w := range waits {
-				w.Done()
+			if sz > 0 {
+				x.AssertTrue(b != nil)
+				loop++
+				fmt.Printf("[%4d] Writing batch of size: %v\n", loop, sz)
+				x.Checkf(pstore.WriteBatch(b), "Error while writing to RocksDB.")
+				for _, w := range waits {
+					w.Done()
+				}
+				b.Destroy()
+				b = nil
+				sz = 0
+				waits = waits[:0]
 			}
-			b.Destroy()
-			b = nil
-			sz = 0
-			waits = waits[:0]
-
 			// Add a sleep clause to avoid a busy wait loop if there's no input to commitCh.
-			sleepFor := 10*time.Millisecond - time.Now().Sub(start)
+			sleepFor := 10*time.Millisecond - time.Since(start)
 			if sleepFor > time.Millisecond {
 				time.Sleep(sleepFor)
 			}
