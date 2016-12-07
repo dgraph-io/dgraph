@@ -108,7 +108,7 @@ func readLine(r *bufio.Reader, buf *bytes.Buffer) error {
 
 // processFile sends mutations for a given gz file.
 func processFile(file string) {
-	fmt.Printf("Processing %s\n\n", file)
+	fmt.Printf("\nProcessing %s\n", file)
 	f, err := os.Open(file)
 	x.Check(err)
 	defer f.Close()
