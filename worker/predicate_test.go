@@ -23,6 +23,7 @@ import (
 	"net"
 	"os"
 	"testing"
+	"time"
 
 	"google.golang.org/grpc"
 
@@ -258,6 +259,7 @@ func TestGenerateGroup(t *testing.T) {
 
 	require.Equal(t, uint32(2), group.BelongsTo("pr2"))
 	writePLs(t, "pr2", 35, 1, ps)
+	time.Sleep(time.Second)
 
 	g, err := generateGroup(0)
 	if err != nil {
