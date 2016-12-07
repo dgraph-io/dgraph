@@ -66,7 +66,8 @@ func (db *DB) Close() {
 	C.rdb_close(db.c)
 }
 
-// Get returns the data associated with the key from the database.
+// Get returns the data associated with the key from the database. Remember
+// to deallocate the returned Slice.
 func (db *DB) Get(opts *ReadOptions, key []byte) (*Slice, error) {
 	var (
 		cErr    *C.char

@@ -89,6 +89,7 @@ func (w *Wal) Store(gid uint32, s raftpb.Snapshot, h raftpb.HardState, es []raft
 		start := w.entryKey(gid, t, i+1)
 		prefix := w.prefix(gid)
 		itr := w.wals.NewIterator()
+		defer itr.Close()
 
 		for itr.Seek(start); itr.ValidForPrefix(prefix); itr.Next() {
 			b.Delete(itr.Key().Data())
@@ -123,6 +124,7 @@ func (w *Wal) Entries(gid uint32, fromTerm, fromIndex uint64) (es []raftpb.Entry
 	start := w.entryKey(gid, fromTerm, fromIndex)
 	prefix := w.prefix(gid)
 	itr := w.wals.NewIterator()
+	defer itr.Close()
 
 	for itr.Seek(start); itr.ValidForPrefix(prefix); itr.Next() {
 		data := itr.Value().Data()
