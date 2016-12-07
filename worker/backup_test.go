@@ -78,6 +78,7 @@ func TestBackup(t *testing.T) {
 	defer os.RemoveAll(bdir)
 
 	posting.CommitLists(10)
+	time.Sleep(time.Second)
 
 	// We have 4 friend type edges. FP("friends")%10 = 2.
 	err = backup(group.BelongsTo("friend"), bdir)
