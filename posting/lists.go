@@ -52,9 +52,8 @@ var (
 
 type counters struct {
 	ticker  *time.Ticker
-	added   uint64
-	merged  uint64
-	clean   uint64
+	done    uint64
+	noop    uint64
 	lastVal uint64
 }
 
@@ -65,27 +64,22 @@ func (c *counters) periodicLog() {
 }
 
 func (c *counters) log() {
-	added := atomic.LoadUint64(&c.added)
-	merged := atomic.LoadUint64(&c.merged)
+	done := atomic.LoadUint64(&c.done)
+	noop := atomic.LoadUint64(&c.noop)
 	lastVal := atomic.LoadUint64(&c.lastVal)
-	if merged == lastVal {
+	if done == lastVal {
 		// Ignore.
 		return
 	}
-	atomic.StoreUint64(&c.lastVal, merged)
+	atomic.StoreUint64(&c.lastVal, done)
 
-	var pending uint64
-	if added > merged {
-		pending = added - merged
-	}
-
-	log.Printf("List commit counters. added: %d commitd: %d clean: %d"+
-		" pending: %d\n", added, merged, atomic.LoadUint64(&c.clean), pending)
+	log.Printf("Commit counters. done: %5d noop: %5d\n", done, noop)
 }
 
 func newCounters() *counters {
 	c := new(counters)
 	c.ticker = time.NewTicker(time.Second)
+	go c.periodicLog()
 	return c
 }
 
@@ -117,7 +111,6 @@ func gentleCommit(dirtyMap map[uint64]struct{}, pending chan struct{}) {
 
 	// NOTE: No need to acquire read lock for stopTheWorld. This portion is being run
 	// serially alongside aggressive commit.
-
 	n := int(float64(len(dirtyMap)) * *commitFraction)
 	if n < 1000 {
 		// Have a min value of n, so we can merge small number of dirty PLs fast.
@@ -333,15 +326,14 @@ func commitOne(l *List, c *counters) {
 	if merged, err := l.CommitIfDirty(context.Background()); err != nil {
 		log.Printf("Error while commiting dirty list: %v\n", err)
 	} else if merged {
-		atomic.AddUint64(&c.merged, 1)
+		atomic.AddUint64(&c.done, 1)
 	} else {
-		atomic.AddUint64(&c.clean, 1)
+		atomic.AddUint64(&c.noop, 1)
 	}
 }
 
 func CommitLists(numRoutines int) {
 	c := newCounters()
-	go c.periodicLog()
 	defer c.ticker.Stop()
 
 	// We iterate over lhmap, deleting keys and pushing values (List) into this
