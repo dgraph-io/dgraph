@@ -175,16 +175,30 @@ func (h *header) Decode(in []byte) {
 	h.msgId = binary.LittleEndian.Uint16(in[4:6])
 }
 
+var slicePool = sync.Pool{
+	New: func() interface{} {
+		return make([]byte, 256<<10)
+	},
+}
+
 func (n *node) ProposeAndWait(ctx context.Context, proposal *task.Proposal) error {
 	if n.raft == nil {
 		return x.Errorf("RAFT isn't initialized yet")
 	}
 
 	proposal.Id = rand.Uint32()
-	proposalData, err := proposal.Marshal()
+
+	slice := slicePool.Get().([]byte)
+	if len(slice) < proposal.Size() {
+		slice = make([]byte, proposal.Size())
+	}
+	defer slicePool.Put(slice)
+
+	upto, err := proposal.MarshalTo(slice)
 	if err != nil {
 		return err
 	}
+	proposalData := slice[:upto]
 
 	che := make(chan error, 1)
 	n.props.Store(proposal.Id, che)
