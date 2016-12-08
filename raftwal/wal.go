@@ -89,6 +89,7 @@ func (w *Wal) Store(gid uint32, s raftpb.Snapshot, h raftpb.HardState, es []raft
 		start := w.entryKey(gid, t, i+1)
 		prefix := w.prefix(gid)
 		itr := w.wals.NewIterator()
+		defer itr.Close()
 
 		for itr.Seek(start); itr.ValidForPrefix(prefix); itr.Next() {
 			b.Delete(itr.Key().Data())
@@ -100,20 +101,22 @@ func (w *Wal) Store(gid uint32, s raftpb.Snapshot, h raftpb.HardState, es []raft
 }
 
 func (w *Wal) Snapshot(gid uint32) (snap raftpb.Snapshot, rerr error) {
-	data, err := w.wals.Get(w.snapshotKey(gid))
-	if err != nil {
+	slice, err := w.wals.Get(w.snapshotKey(gid))
+	if err != nil || slice == nil {
 		return snap, x.Wrapf(err, "While getting snapshot")
 	}
-	rerr = x.Wrapf(snap.Unmarshal(data), "While unmarshal snapshot")
+	rerr = x.Wrapf(snap.Unmarshal(slice.Data()), "While unmarshal snapshot")
+	slice.Free()
 	return
 }
 
 func (w *Wal) HardState(gid uint32) (hd raftpb.HardState, rerr error) {
-	data, err := w.wals.Get(w.hardStateKey(gid))
-	if err != nil {
+	slice, err := w.wals.Get(w.hardStateKey(gid))
+	if err != nil || slice == nil {
 		return hd, x.Wrapf(err, "While getting hardstate")
 	}
-	rerr = x.Wrapf(hd.Unmarshal(data), "While unmarshal hardstate")
+	rerr = x.Wrapf(hd.Unmarshal(slice.Data()), "While unmarshal hardstate")
+	slice.Free()
 	return
 }
 
@@ -121,6 +124,7 @@ func (w *Wal) Entries(gid uint32, fromTerm, fromIndex uint64) (es []raftpb.Entry
 	start := w.entryKey(gid, fromTerm, fromIndex)
 	prefix := w.prefix(gid)
 	itr := w.wals.NewIterator()
+	defer itr.Close()
 
 	for itr.Seek(start); itr.ValidForPrefix(prefix); itr.Next() {
 		data := itr.Value().Data()

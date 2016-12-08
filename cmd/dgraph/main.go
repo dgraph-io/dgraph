@@ -18,10 +18,12 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/gob"
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"math/rand"
@@ -68,7 +70,8 @@ var (
 	memprofile   = flag.String("mem", "", "write memory profile to file")
 	dumpSubgraph = flag.String("dumpsg", "", "Directory to save subgraph for testing, debugging")
 
-	closeCh = make(chan struct{})
+	closeCh        = make(chan struct{})
+	pendingQueries = make(chan struct{}, 10000*runtime.NumCPU())
 )
 
 type mutationResult struct {
@@ -110,12 +113,17 @@ func addCorsHeaders(w http.ResponseWriter) {
 func convertToNQuad(ctx context.Context, mutation string) ([]rdf.NQuad, error) {
 	var nquads []rdf.NQuad
 	r := strings.NewReader(mutation)
-	scanner := bufio.NewScanner(r)
+	reader := bufio.NewReader(r)
 	x.Trace(ctx, "Converting to NQuad")
 
-	// Scanning the mutation string, one line at a time.
-	for scanner.Scan() {
-		ln := strings.Trim(scanner.Text(), " \t")
+	var strBuf bytes.Buffer
+	var err error
+	for {
+		err = x.ReadLine(reader, &strBuf)
+		if err != nil {
+			break
+		}
+		ln := strings.Trim(strBuf.String(), " \t")
 		if len(ln) == 0 {
 			continue
 		}
@@ -125,6 +133,9 @@ func convertToNQuad(ctx context.Context, mutation string) ([]rdf.NQuad, error) {
 			return nquads, err
 		}
 		nquads = append(nquads, nq)
+	}
+	if err != io.EOF {
+		return nquads, err
 	}
 	return nquads, nil
 }
@@ -303,19 +314,24 @@ func mutationHandler(ctx context.Context, mu *gql.Mutation) (map[string]uint64, 
 	var allocIds map[string]uint64
 	var err error
 
-	if set, err = convertToNQuad(ctx, mu.Set); err != nil {
+	if len(mu.Set) > 0 {
+		if set, err = convertToNQuad(ctx, mu.Set); err != nil {
+			return nil, x.Wrap(err)
+		}
+	}
+	if len(mu.Del) > 0 {
+		if del, err = convertToNQuad(ctx, mu.Del); err != nil {
+			return nil, x.Wrap(err)
+		}
+	}
+
+	if err = validateTypes(set); err != nil {
 		return nil, x.Wrap(err)
 	}
-	if del, err = convertToNQuad(ctx, mu.Del); err != nil {
+	if err = validateTypes(del); err != nil {
 		return nil, x.Wrap(err)
 	}
-	m := set
-	for _, nquad := range del {
-		m = append(m, nquad)
-	}
-	if err = validateTypes(m); err != nil {
-		return nil, x.Wrap(err)
-	}
+
 	if allocIds, err = convertAndApply(ctx, set, del); err != nil {
 		return nil, err
 	}
@@ -325,7 +341,8 @@ func mutationHandler(ctx context.Context, mu *gql.Mutation) (map[string]uint64, 
 // validateTypes checks for predicate types present in the schema and validates if the
 // input value is of the correct type
 func validateTypes(nquads []rdf.NQuad) error {
-	for _, nquad := range nquads {
+	for i := range nquads {
+		nquad := &nquads[i]
 		if t := schema.TypeOf(nquad.Predicate); t != nil && t.IsScalar() {
 			schemaType := t.(types.Scalar)
 			typeID := types.TypeID(nquad.ObjectType)
@@ -342,6 +359,7 @@ func validateTypes(nquads []rdf.NQuad) error {
 					return err
 				}
 				nquad.ObjectType = byte(schemaType.ID())
+
 			} else if typeID != schemaType.ID() {
 				v := types.ValueForType(typeID)
 				err := v.UnmarshalBinary(nquad.ObjectValue)
@@ -358,6 +376,10 @@ func validateTypes(nquads []rdf.NQuad) error {
 }
 
 func queryHandler(w http.ResponseWriter, r *http.Request) {
+	// Add a limit on how many pending queries can be run in the system.
+	pendingQueries <- struct{}{}
+	defer func() { <-pendingQueries }()
+
 	addCorsHeaders(w)
 	if r.Method == "OPTIONS" {
 		return
@@ -679,9 +701,7 @@ func main() {
 
 	if len(*schemaFile) > 0 {
 		err = schema.Parse(*schemaFile)
-		if err != nil {
-			log.Fatalf("Error while loading schema:%v", err)
-		}
+		x.Checkf(err, "Error while loading schema: %s", *schemaFile)
 	}
 	// Posting will initialize index which requires schema. Hence, initialize
 	// schema before calling posting.Init().

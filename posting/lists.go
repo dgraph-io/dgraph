@@ -35,24 +35,24 @@ import (
 	"github.com/dgryski/go-farm"
 
 	"github.com/dgraph-io/dgraph/store"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 var (
 	maxmemory = flag.Int("stw_ram_mb", 4096,
 		"If RAM usage exceeds this, we stop the world, and flush our buffers.")
 
-	gentleMergeFrac = flag.Float64("gentlemerge", 0.10, "Fraction of dirty posting lists to merge every few seconds.")
-	lhmapNumShards  = flag.Int("lhmap", 32, "Number of shards for lhmap.")
+	commitFraction = flag.Float64("gentlecommit", 0.10, "Fraction of dirty posting lists to commit every few seconds.")
+	lhmapNumShards = flag.Int("lhmap", 32, "Number of shards for lhmap.")
 
-	dirtyChan       chan uint64   // All dirty posting list keys are pushed here.
-	gentleMergeChan chan struct{} // Used to avoid running too many gentle merges at the same time.
+	dirtyChan       chan uint64 // All dirty posting list keys are pushed here.
+	startCommitOnce sync.Once
 )
 
 type counters struct {
 	ticker  *time.Ticker
-	added   uint64
-	merged  uint64
-	clean   uint64
+	done    uint64
+	noop    uint64
 	lastVal uint64
 }
 
@@ -63,39 +63,33 @@ func (c *counters) periodicLog() {
 }
 
 func (c *counters) log() {
-	added := atomic.LoadUint64(&c.added)
-	merged := atomic.LoadUint64(&c.merged)
+	done := atomic.LoadUint64(&c.done)
+	noop := atomic.LoadUint64(&c.noop)
 	lastVal := atomic.LoadUint64(&c.lastVal)
-	if merged == lastVal {
+	if done == lastVal {
 		// Ignore.
 		return
 	}
-	atomic.StoreUint64(&c.lastVal, merged)
+	atomic.StoreUint64(&c.lastVal, done)
 
-	var pending uint64
-	if added > merged {
-		pending = added - merged
-	}
-
-	log.Printf("List merge counters. added: %d merged: %d clean: %d"+
-		" pending: %d\n", added, merged, atomic.LoadUint64(&c.clean), pending)
+	log.Printf("Commit counters. done: %5d noop: %5d\n", done, noop)
 }
 
 func newCounters() *counters {
 	c := new(counters)
 	c.ticker = time.NewTicker(time.Second)
+	go c.periodicLog()
 	return c
 }
 
 func aggressivelyEvict() {
 	// Okay, we exceed the max memory threshold.
 	// Stop the world, and deal with this first.
-
 	megs := getMemUsage()
 	log.Printf("Memory usage over threshold. STW. Allocated MB: %v\n", megs)
 
 	log.Println("Aggressive evict, committing to RocksDB")
-	MergeLists(100 * runtime.GOMAXPROCS(-1))
+	CommitLists(1)
 
 	log.Println("Trying to free OS memory")
 	// Forces garbage collection followed by returning as much memory to the OS
@@ -106,58 +100,62 @@ func aggressivelyEvict() {
 	log.Printf("EVICT DONE! Memory usage after calling GC. Allocated MB: %v", megs)
 }
 
-// mergeAndUpdateKeys calls mergeAndUpdate for each key in array "keys".
-func mergeAndUpdateKeys(keys []uint64) {
-	defer func() { <-gentleMergeChan }()
-	if len(keys) == 0 {
+func gentleCommit(dirtyMap map[uint64]struct{}, pending chan struct{}) {
+	select {
+	case pending <- struct{}{}:
+	default:
+		fmt.Println("Skipping gentleCommit")
 		return
 	}
-	ctr := newCounters()
-	defer ctr.ticker.Stop()
 
-	for _, key := range keys {
-		l, ok := lhmap.Get(key)
-		if !ok || l == nil {
-			continue
-		}
-		// Not removing the postings list from the map, to avoid a race condition,
-		// where another caller re-creates the posting list before a merge happens.
-		mergeAndUpdate(l, ctr)
+	// NOTE: No need to acquire read lock for stopTheWorld. This portion is being run
+	// serially alongside aggressive commit.
+	n := int(float64(len(dirtyMap)) * *commitFraction)
+	if n < 1000 {
+		// Have a min value of n, so we can merge small number of dirty PLs fast.
+		n = 1000
 	}
-	ctr.log()
-}
+	keysBuffer := make([]uint64, 0, n)
 
-func gentleMerge(dirtyMap map[uint64]struct{}) {
-	select {
-	case gentleMergeChan <- struct{}{}:
-		n := int(float64(len(dirtyMap)) * *gentleMergeFrac)
-		if n < 300 {
-			// Have a min value of n, so we can merge small number of dirty PLs fast.
-			n = 300
+	for key := range dirtyMap {
+		delete(dirtyMap, key)
+		keysBuffer = append(keysBuffer, key)
+		if len(keysBuffer) >= n {
+			// We don't want to process the entire dirtyMap in one go.
+			break
 		}
-		keysBuffer := make([]uint64, 0, n)
+	}
 
-		for key := range dirtyMap {
-			delete(dirtyMap, key)
-			keysBuffer = append(keysBuffer, key)
-			if len(keysBuffer) >= n {
-				// We don't want to process the entire dirtyMap in one go.
-				break
+	go func(keys []uint64) {
+		defer func() { <-pending }()
+		if len(keys) == 0 {
+			return
+		}
+		ctr := newCounters()
+		defer ctr.ticker.Stop()
+
+		for _, key := range keys {
+			l, ok := lhmap.Get(key)
+			if !ok || l == nil {
+				continue
 			}
+			// Not removing the postings list from the map, to avoid a race condition,
+			// where another caller re-creates the posting list before a commit happens.
+			commitOne(l, ctr)
 		}
-		go mergeAndUpdateKeys(keysBuffer)
-	default:
-		log.Println("Skipping gentle merge")
-	}
+		ctr.log()
+	}(keysBuffer)
 }
 
 // periodicMerging periodically merges the dirty posting lists. It also checks our memory
 // usage. If it exceeds a certain threshold, it would stop the world, and aggressively
 // merge and evict all posting lists from memory.
-func periodicMerging() {
+func periodicCommit() {
 	ticker := time.NewTicker(5 * time.Second)
 	dirtyMap := make(map[uint64]struct{}, 1000)
-	dsize := 0
+	// pending is used to ensure that we only have up to 15 goroutines doing gentle commits.
+	pending := make(chan struct{}, 15)
+	dsize := 0 // needed for better reporting.
 	for {
 		select {
 		case key := <-dirtyChan:
@@ -170,30 +168,31 @@ func periodicMerging() {
 			}
 
 			totMemory := getMemUsage()
-			if totMemory > *maxmemory {
-				// Acquire lock, so no new posting lists are given out.
-				stopTheWorld.Lock()
-
-			DIRTYLOOP:
-				// Flush out the dirtyChan after acquiring lock. This allow posting lists which
-				// are currently being processed to not get stuck on dirtyChan, which won't be
-				// processed until aggressive evict finishes.
-				for {
-					select {
-					case <-dirtyChan:
-						// pass
-					default:
-						break DIRTYLOOP
-					}
-				}
-				aggressivelyEvict()
-				for k := range dirtyMap {
-					delete(dirtyMap, k)
-				}
-				stopTheWorld.Unlock()
-			} else {
-				gentleMerge(dirtyMap)
+			if totMemory <= *maxmemory {
+				gentleCommit(dirtyMap, pending)
+				break
 			}
+
+			// Do aggressive commit, which would delete all the PLs from memory.
+			// Acquire lock, so no new posting lists are given out.
+			stopTheWorld.Lock()
+		DIRTYLOOP:
+			// Flush out the dirtyChan after acquiring lock. This allow posting lists which
+			// are currently being processed to not get stuck on dirtyChan, which won't be
+			// processed until aggressive evict finishes.
+			for {
+				select {
+				case <-dirtyChan:
+					// pass
+				default:
+					break DIRTYLOOP
+				}
+			}
+			aggressivelyEvict()
+			for k := range dirtyMap {
+				delete(dirtyMap, k)
+			}
+			stopTheWorld.Unlock()
 		}
 	}
 }
@@ -258,7 +257,16 @@ var (
 	stopTheWorld sync.RWMutex
 	lhmap        *listMap
 	pstore       *store.Store
+	commitCh     chan commitEntry
 )
+
+func StartCommit() {
+	startCommitOnce.Do(func() {
+		fmt.Println("Starting commit routine.")
+		commitCh = make(chan commitEntry, 10000)
+		go batchCommit()
+	})
+}
 
 // Init initializes the posting lists package, the in memory and dirty list hash.
 func Init(ps *store.Store) {
@@ -266,9 +274,8 @@ func Init(ps *store.Store) {
 	initIndex()
 	lhmap = newShardedListMap(*lhmapNumShards)
 	dirtyChan = make(chan uint64, 10000)
-	// Capacity is max number of gentle merges that can happen in parallel.
-	gentleMergeChan = make(chan struct{}, 18)
-	go periodicMerging()
+	StartCommit()
+	go periodicCommit()
 }
 
 func getFromMap(key uint64) *List {
@@ -298,37 +305,34 @@ func GetOrCreate(key []byte) (rlist *List, decr func()) {
 		return lp, lp.decr
 	}
 
-	l := getNew() // This retrieves a new *List and increments its ref count.
+	l := getNew(key, pstore) // This retrieves a new *List and sets refcount to 1.
 	lp = lhmap.PutIfMissing(fp, l)
 	// We are always going to return lp to caller, whether it is l or not. So, let's
 	// increment its reference counter.
 	lp.incr()
 
-	if lp == l {
-		l.init(key, pstore)
-	} else {
+	if lp != l {
 		// Undo the increment in getNew() call above.
 		l.decr()
 	}
 	return lp, lp.decr
 }
 
-func mergeAndUpdate(l *List, c *counters) {
+func commitOne(l *List, c *counters) {
 	if l == nil {
 		return
 	}
 	if merged, err := l.CommitIfDirty(context.Background()); err != nil {
 		log.Printf("Error while commiting dirty list: %v\n", err)
 	} else if merged {
-		atomic.AddUint64(&c.merged, 1)
+		atomic.AddUint64(&c.done, 1)
 	} else {
-		atomic.AddUint64(&c.clean, 1)
+		atomic.AddUint64(&c.noop, 1)
 	}
 }
 
-func MergeLists(numRoutines int) {
+func CommitLists(numRoutines int) {
 	c := newCounters()
-	go c.periodicLog()
 	defer c.ticker.Stop()
 
 	// We iterate over lhmap, deleting keys and pushing values (List) into this
@@ -342,7 +346,7 @@ func MergeLists(numRoutines int) {
 			defer wg.Done()
 			for l := range workChan {
 				l.SetForDeletion() // No more AddMutation.
-				mergeAndUpdate(l, c)
+				commitOne(l, c)
 				l.decr()
 			}
 		}()
@@ -358,4 +362,50 @@ func MergeLists(numRoutines int) {
 	})
 	close(workChan)
 	wg.Wait()
+}
+
+// The following logic is used to batch up all the writes to RocksDB.
+type commitEntry struct {
+	key []byte
+	val []byte
+	sw  *x.SafeWait
+}
+
+func batchCommit() {
+	var sz int
+	var waits []*x.SafeWait
+	var loop uint64
+
+	b := pstore.NewWriteBatch()
+	defer b.Destroy()
+
+	for {
+		select {
+		case e := <-commitCh:
+			b.Put(e.key, e.val)
+			sz++
+			waits = append(waits, e.sw)
+
+		default:
+			// default is executed if no other case is ready.
+			start := time.Now()
+			if sz > 0 {
+				x.AssertTrue(b != nil)
+				loop++
+				fmt.Printf("[%4d] Writing batch of size: %v\n", loop, sz)
+				x.Checkf(pstore.WriteBatch(b), "Error while writing to RocksDB.")
+				for _, w := range waits {
+					w.Done()
+				}
+				b.Clear()
+				sz = 0
+				waits = waits[:0]
+			}
+			// Add a sleep clause to avoid a busy wait loop if there's no input to commitCh.
+			sleepFor := 10*time.Millisecond - time.Since(start)
+			if sleepFor > time.Millisecond {
+				time.Sleep(sleepFor)
+			}
+		}
+	}
 }

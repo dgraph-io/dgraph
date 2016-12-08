@@ -82,16 +82,13 @@ func NewReadOnlyStore(filepath string) (*Store, error) {
 }
 
 // Get returns the value given a key for RocksDB.
-func (s *Store) Get(key []byte) ([]byte, error) {
+func (s *Store) Get(key []byte) (*rdb.Slice, error) {
 	valSlice, err := s.db.Get(s.ropt, key)
 	if err != nil {
 		return nil, x.Wrapf(err, "Key: %v", key)
 	}
 
-	if valSlice == nil {
-		return nil, nil
-	}
-	return valSlice.Data(), nil
+	return valSlice, nil
 }
 
 // SetOne adds a key-value to data store.

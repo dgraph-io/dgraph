@@ -70,19 +70,59 @@ type sendmsg struct {
 }
 
 type node struct {
+	canCampaign bool
 	cfg         *raft.Config
+	commitCh    chan raftpb.Entry
 	ctx         context.Context
 	done        chan struct{}
-	id          uint64
 	gid         uint32
+	id          uint64
+	messages    chan sendmsg
 	peers       peerPool
 	props       proposals
 	raft        raft.Node
-	store       *raft.MemoryStorage
 	raftContext *task.RaftContext
+	store       *raft.MemoryStorage
 	wal         *raftwal.Wal
-	messages    chan sendmsg
-	canCampaign bool
+}
+
+func newNode(gid uint32, id uint64, myAddr string) *node {
+	fmt.Printf("NEW NODE GID, ID: [%v, %v]\n", gid, id)
+
+	peers := peerPool{
+		peers: make(map[uint64]string),
+	}
+	props := proposals{
+		ids: make(map[uint32]chan error),
+	}
+
+	store := raft.NewMemoryStorage()
+	rc := &task.RaftContext{
+		Addr:  myAddr,
+		Group: gid,
+		Id:    id,
+	}
+
+	n := &node{
+		ctx:   context.Background(),
+		id:    id,
+		gid:   gid,
+		store: store,
+		cfg: &raft.Config{
+			ID:              id,
+			ElectionTick:    10,
+			HeartbeatTick:   1,
+			Storage:         store,
+			MaxSizePerMsg:   4096,
+			MaxInflightMsgs: 256,
+		},
+		commitCh:    make(chan raftpb.Entry, numPendingMutations),
+		peers:       peers,
+		props:       props,
+		raftContext: rc,
+		messages:    make(chan sendmsg, 1000),
+	}
+	return n
 }
 
 func (n *node) Connect(pid uint64, addr string) {
@@ -135,12 +175,30 @@ func (h *header) Decode(in []byte) {
 	h.msgId = binary.LittleEndian.Uint16(in[4:6])
 }
 
+var slicePool = sync.Pool{
+	New: func() interface{} {
+		return make([]byte, 256<<10)
+	},
+}
+
 func (n *node) ProposeAndWait(ctx context.Context, proposal *task.Proposal) error {
+	if n.raft == nil {
+		return x.Errorf("RAFT isn't initialized yet")
+	}
+
 	proposal.Id = rand.Uint32()
-	proposalData, err := proposal.Marshal()
+
+	slice := slicePool.Get().([]byte)
+	if len(slice) < proposal.Size() {
+		slice = make([]byte, proposal.Size())
+	}
+	defer slicePool.Put(slice)
+
+	upto, err := proposal.MarshalTo(slice)
 	if err != nil {
 		return err
 	}
+	proposalData := slice[:upto]
 
 	che := make(chan error, 1)
 	n.props.Store(proposal.Id, che)
@@ -254,42 +312,51 @@ func (n *node) processMembership(e raftpb.Entry, mm *task.Membership) error {
 	return nil
 }
 
-func (n *node) process(e raftpb.Entry) error {
-	if e.Data == nil {
-		return nil
-	}
-	fmt.Printf("Entry type to process: [%d, %d] Type: %v\n", e.Term, e.Index, e.Type)
-
-	if e.Type == raftpb.EntryConfChange {
-		var cc raftpb.ConfChange
-		cc.Unmarshal(e.Data)
-
-		if len(cc.Context) > 0 {
-			var rc task.RaftContext
-			x.Check(rc.Unmarshal(cc.Context))
-			n.Connect(rc.Id, rc.Addr)
-		}
-
-		n.raft.ApplyConfChange(cc)
-		return nil
+func (n *node) process(e raftpb.Entry, pending chan struct{}) {
+	if e.Type != raftpb.EntryNormal {
+		return
 	}
 
-	if e.Type == raftpb.EntryNormal {
-		var proposal task.Proposal
-		err := proposal.Unmarshal(e.Data)
-		if err != nil {
-			return err
-		}
+	pending <- struct{}{} // This will block until we can write to it.
+	var proposal task.Proposal
+	x.Check(proposal.Unmarshal(e.Data))
 
-		if proposal.Mutations != nil {
-			err = n.processMutation(e, proposal.Mutations)
-		} else if proposal.Membership != nil {
-			err = n.processMembership(e, proposal.Membership)
-		}
-		n.props.Done(proposal.Id, err)
+	var err error
+	if proposal.Mutations != nil {
+		err = n.processMutation(e, proposal.Mutations)
+	} else if proposal.Membership != nil {
+		err = n.processMembership(e, proposal.Membership)
 	}
+	n.props.Done(proposal.Id, err)
+	<-pending // Release one.
+}
 
-	return nil
+const numPendingMutations = 10000
+
+func (n *node) processCommitCh() {
+	pending := make(chan struct{}, numPendingMutations)
+
+	for e := range n.commitCh {
+		if e.Data == nil {
+			continue
+		}
+
+		if e.Type == raftpb.EntryConfChange {
+			var cc raftpb.ConfChange
+			cc.Unmarshal(e.Data)
+
+			if len(cc.Context) > 0 {
+				var rc task.RaftContext
+				x.Check(rc.Unmarshal(cc.Context))
+				n.Connect(rc.Id, rc.Addr)
+			}
+
+			n.raft.ApplyConfChange(cc)
+
+		} else {
+			go n.process(e, pending)
+		}
+	}
 }
 
 func (n *node) saveToStorage(s raftpb.Snapshot, h raftpb.HardState,
@@ -350,8 +417,12 @@ func (n *node) Run() {
 			if !raft.IsEmptySnap(rd.Snapshot) {
 				n.processSnapshot(rd.Snapshot)
 			}
+			if len(rd.CommittedEntries) > 0 {
+				x.Trace(n.ctx, "Found %d committed entries", len(rd.CommittedEntries))
+			}
 			for _, entry := range rd.CommittedEntries {
-				x.Check(n.process(entry))
+				// Just queue up to be processed. Don't wait on them.
+				n.commitCh <- entry
 			}
 
 			n.raft.Advance()
@@ -437,44 +508,6 @@ func (n *node) joinPeers() {
 	x.Printf("Done with JoinCluster call\n")
 }
 
-func newNode(gid uint32, id uint64, myAddr string) *node {
-	fmt.Printf("NEW NODE GID, ID: [%v, %v]\n", gid, id)
-
-	peers := peerPool{
-		peers: make(map[uint64]string),
-	}
-	props := proposals{
-		ids: make(map[uint32]chan error),
-	}
-
-	store := raft.NewMemoryStorage()
-	rc := &task.RaftContext{
-		Addr:  myAddr,
-		Group: gid,
-		Id:    id,
-	}
-
-	n := &node{
-		ctx:   context.Background(),
-		id:    id,
-		gid:   gid,
-		store: store,
-		cfg: &raft.Config{
-			ID:              id,
-			ElectionTick:    10,
-			HeartbeatTick:   1,
-			Storage:         store,
-			MaxSizePerMsg:   4096,
-			MaxInflightMsgs: 256,
-		},
-		peers:       peers,
-		props:       props,
-		raftContext: rc,
-		messages:    make(chan sendmsg, 1000),
-	}
-	return n
-}
-
 func (n *node) initFromWal(wal *raftwal.Wal) (restart bool, rerr error) {
 	n.wal = wal
 
@@ -541,6 +574,7 @@ func (n *node) InitAndStartNode(wal *raftwal.Wal) {
 			n.canCampaign = true
 		}
 	}
+	go n.processCommitCh()
 	go n.Run()
 	// TODO: Find a better way to snapshot, so we don't lose the membership
 	// state information, which isn't persisted.
@@ -549,7 +583,7 @@ func (n *node) InitAndStartNode(wal *raftwal.Wal) {
 }
 
 func (n *node) AmLeader() bool {
-	if n == nil {
+	if n == nil || n.raft == nil {
 		return false
 	}
 	return n.raft.Status().Lead == n.raft.Status().ID

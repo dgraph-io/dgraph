@@ -22,7 +22,6 @@ import (
 	"io/ioutil"
 	"os"
 	"testing"
-	"time"
 
 	"github.com/gogo/protobuf/proto"
 	"github.com/stretchr/testify/require"
@@ -93,7 +92,7 @@ func addEdgeToValue(t *testing.T, ps *store.Store, attr string, src uint64,
 		Attr:   attr,
 		Entity: src,
 	}
-	l, _ := posting.GetOrCreate(posting.Key(src, attr))
+	l, _ := posting.GetOrCreate(x.DataKey(attr, src))
 	require.NoError(t,
 		l.AddMutationWithIndex(context.Background(), edge, posting.Set))
 }
@@ -107,7 +106,7 @@ func addEdgeToTypedValue(t *testing.T, ps *store.Store, attr string, src uint64,
 		Attr:      attr,
 		Entity:    src,
 	}
-	l, _ := posting.GetOrCreate(posting.Key(src, attr))
+	l, _ := posting.GetOrCreate(x.DataKey(attr, src))
 	require.NoError(t,
 		l.AddMutationWithIndex(context.Background(), edge, posting.Set))
 }
@@ -119,7 +118,7 @@ func addEdgeToUID(t *testing.T, ps *store.Store, attr string, src uint64, dst ui
 		Attr:    attr,
 		Entity:  src,
 	}
-	l, _ := posting.GetOrCreate(posting.Key(src, attr))
+	l, _ := posting.GetOrCreate(x.DataKey(attr, src))
 	require.NoError(t,
 		l.AddMutationWithIndex(context.Background(), edge, posting.Set))
 }
@@ -191,7 +190,6 @@ func populateGraph(t *testing.T) (string, string, *store.Store) {
 	addEdgeToValue(t, ps, "dob", 25, "1909-01-10")
 	addEdgeToValue(t, ps, "dob", 31, "1901-01-15")
 
-	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
 	return dir, dir2, ps
 }
 
@@ -599,7 +597,7 @@ func TestToJSONFilterUID(t *testing.T) {
 		string(js))
 }
 
-func TestToJSONFilterOr(t *testing.T) {
+func TestToJSONFilterOrUID(t *testing.T) {
 	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
 	defer os.RemoveAll(dir2)
@@ -609,6 +607,7 @@ func TestToJSONFilterOr(t *testing.T) {
 				name
 				gender
 				friend @filter(anyof("name", "Andrea") || anyof("name", "Andrea Rhee")) {
+					_uid_
 					name
 				}
 			}
@@ -631,7 +630,7 @@ func TestToJSONFilterOr(t *testing.T) {
 	js, err := sg.ToJSON(&l)
 	require.NoError(t, err)
 	require.EqualValues(t,
-		`{"me":[{"friend":[{"name":"Glenn Rhee"},{"name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
+		`{"me":[{"friend":[{"_uid_":"0x18","name":"Glenn Rhee"},{"_uid_":"0x1f","name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
 		string(js))
 }
 
@@ -1112,7 +1111,7 @@ func TestSchema(t *testing.T) {
 	var g types.Geo
 	x.Check(g.UnmarshalBinary(getProperty(gr.Children[0].Properties, "loc").GetGeoVal()))
 	received, err := g.MarshalText()
-	require.EqualValues(t, "{\"type\":\"Point\",\"coordinates\":[1.1,2]}", string(received))
+	require.EqualValues(t, "{'type':'Point','coordinates':[1.1,2]}", string(received))
 
 	require.Len(t, gr.Children[0].Children, 10)
 
@@ -1326,7 +1325,6 @@ func TestToJSONOrder(t *testing.T) {
 	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
 	defer os.RemoveAll(dir2)
-	// defer ps.Close()
 
 	query := `
 		{
@@ -1335,6 +1333,7 @@ func TestToJSONOrder(t *testing.T) {
 				gender
 				friend(order: dob) {
 					name
+					dob
 				}
 			}
 		}
@@ -1356,7 +1355,7 @@ func TestToJSONOrder(t *testing.T) {
 	js, err := sg.ToJSON(&l)
 	require.NoError(t, err)
 	require.EqualValues(t,
-		`{"me":[{"friend":[{"name":"Andrea"},{"name":"Daryl Dixon"},{"name":"Glenn Rhee"},{"name":"Rick Grimes"}],"gender":"female","name":"Michonne"}]}`,
+		`{"me":[{"friend":[{"dob":"1901-01-15","name":"Andrea"},{"dob":"1909-01-10","name":"Daryl Dixon"},{"dob":"1909-05-05","name":"Glenn Rhee"},{"dob":"1910-01-02","name":"Rick Grimes"}],"gender":"female","name":"Michonne"}]}`,
 		string(js))
 }
 
@@ -1365,7 +1364,6 @@ func TestToJSONOrderOffset(t *testing.T) {
 	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
 	defer os.RemoveAll(dir2)
-	// defer ps.Close()
 
 	query := `
 		{
@@ -1404,7 +1402,6 @@ func TestToJSONOrderOffsetCount(t *testing.T) {
 	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
 	defer os.RemoveAll(dir2)
-	// defer ps.Close()
 
 	query := `
 		{
@@ -1443,7 +1440,6 @@ func TestToProtoOrder(t *testing.T) {
 	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
 	defer os.RemoveAll(dir2)
-	// defer ps.Close()
 
 	query := `
 		{
@@ -1534,7 +1530,6 @@ func TestToProtoOrderCount(t *testing.T) {
 	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
 	defer os.RemoveAll(dir2)
-	// defer ps.Close()
 
 	query := `
 		{
@@ -1607,7 +1602,6 @@ func TestToProtoOrderOffsetCount(t *testing.T) {
 	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
 	defer os.RemoveAll(dir2)
-	// defer ps.Close()
 
 	query := `
 		{
@@ -1733,7 +1727,6 @@ func TestToProtoMultiRoot(t *testing.T) {
 	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
 	defer os.RemoveAll(dir2)
-	// defer ps.Close()
 
 	query := `
     {

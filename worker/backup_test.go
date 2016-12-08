@@ -18,6 +18,7 @@ import (
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/task"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 func populateGraphBackup(t *testing.T) {
@@ -27,25 +28,25 @@ func populateGraphBackup(t *testing.T) {
 		Attr:    "friend",
 	}
 	edge.Entity = 1
-	addEdge(t, edge, getOrCreate(posting.Key(1, "friend")))
+	addEdge(t, edge, getOrCreate(x.DataKey("friend", 1)))
 
 	edge.Entity = 2
-	addEdge(t, edge, getOrCreate(posting.Key(2, "friend")))
+	addEdge(t, edge, getOrCreate(x.DataKey("friend", 2)))
 
 	edge.Entity = 3
-	addEdge(t, edge, getOrCreate(posting.Key(3, "friend")))
+	addEdge(t, edge, getOrCreate(x.DataKey("friend", 3)))
 
 	edge.Entity = 4
-	addEdge(t, edge, getOrCreate(posting.Key(4, "friend")))
+	addEdge(t, edge, getOrCreate(x.DataKey("friend", 4)))
 
 	edge.Entity = 1
 	edge.ValueId = 0
-	edge.Value = []byte("photon")
+	edge.Value = []byte("pho\\ton")
 	edge.Attr = "name"
-	addEdge(t, edge, getOrCreate(posting.Key(1, "name")))
+	addEdge(t, edge, getOrCreate(x.DataKey("name", 1)))
 
 	edge.Entity = 2
-	addEdge(t, edge, getOrCreate(posting.Key(2, "name")))
+	addEdge(t, edge, getOrCreate(x.DataKey("name", 2)))
 }
 
 func initTestBackup(t *testing.T, schemaStr string) (string, *store.Store) {
@@ -76,7 +77,8 @@ func TestBackup(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(bdir)
 
-	posting.MergeLists(10)
+	posting.CommitLists(10)
+	time.Sleep(time.Second)
 
 	// We have 4 friend type edges. FP("friends")%10 = 2.
 	err = backup(group.BelongsTo("friend"), bdir)
@@ -110,14 +112,14 @@ func TestBackup(t *testing.T) {
 			nq, err := rdf.Parse(scanner.Text())
 			require.NoError(t, err)
 			// Subject should have uid 1/2/3/4.
-			require.Contains(t, []string{"_uid_:1", "_uid_:2", "_uid_:3", "_uid_:4"}, nq.Subject)
+			require.Contains(t, []string{"_uid_:0x1", "_uid_:0x2", "_uid_:0x3", "_uid_:0x4"}, nq.Subject)
 			// The only value we set was "photon".
 			if !bytes.Equal(nq.ObjectValue, nil) {
-				require.Equal(t, []byte("photon"), nq.ObjectValue)
+				require.Equal(t, []byte("pho\\ton"), nq.ObjectValue)
 			}
 			// The only objectId we set was uid 5.
 			if nq.ObjectId != "" {
-				require.Equal(t, "_uid_:5", nq.ObjectId)
+				require.Equal(t, "_uid_:0x5", nq.ObjectId)
 			}
 			count++
 		}

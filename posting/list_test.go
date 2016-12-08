@@ -18,13 +18,11 @@ package posting
 
 import (
 	"context"
-	"fmt"
 	"io/ioutil"
 	"log"
 	"math"
 	"math/rand"
 	"os"
-	"sort"
 	"strconv"
 	"testing"
 
@@ -59,34 +57,17 @@ func addMutation(t *testing.T, l *List, edge *task.DirectedEdge, op uint32) {
 	require.NoError(t, err)
 }
 
-func TestKey(t *testing.T) {
-	var i uint64
-	keys := make([]string, 0, 1024)
-	for i = 1024; i >= 1; i-- {
-		key := Key(i, "testing.key")
-		keys = append(keys, string(key))
-		require.Equal(t, fmt.Sprintf("testing.key:%x", i), debugKey(key))
-	}
-	// Test that sorting is as expected.
-	sort.Strings(keys)
-	require.True(t, sort.StringsAreSorted(keys))
-	for i, key := range keys {
-		exp := Key(uint64(i+1), "testing.key")
-		require.Equal(t, key, string(exp))
-	}
-}
-
 func TestAddMutation(t *testing.T) {
-	l := getNew()
-	key := Key(1, "name")
+	key := x.DataKey("name", 1)
 	dir, err := ioutil.TempDir("", "storetest_")
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 
 	ps, err := store.NewStore(dir)
 	require.NoError(t, err)
+	Init(ps)
 
-	l.init(key, ps)
+	l := getNew(key, ps)
 
 	edge := &task.DirectedEdge{
 		ValueId: 9,
@@ -130,10 +111,10 @@ func TestAddMutation(t *testing.T) {
 	require.NotNil(t, p, "Unable to retrieve posting")
 	require.EqualValues(t, p.Label, "anti-testing")
 	l.CommitIfDirty(context.Background())
+	l.WaitForCommit()
 
 	// Try reading the same data in another PostingList.
-	dl := getNew()
-	dl.init(key, ps)
+	dl := getNew(key, ps)
 	checkUids(t, dl, uids)
 	return
 
@@ -157,8 +138,7 @@ func checkValue(t *testing.T, ol *List, val string) {
 }
 
 func TestAddMutation_Value(t *testing.T) {
-	ol := getNew()
-	key := Key(10, "value")
+	key := x.DataKey("value", 10)
 	dir, err := ioutil.TempDir("", "storetest_")
 	if err != nil {
 		t.Error(err)
@@ -168,8 +148,9 @@ func TestAddMutation_Value(t *testing.T) {
 
 	ps, err := store.NewStore(dir)
 	require.NoError(t, err)
+	Init(ps)
 
-	ol.init(key, ps)
+	ol := getNew(key, ps)
 	log.Println("Init successful.")
 
 	edge := &task.DirectedEdge{
@@ -191,15 +172,15 @@ func TestAddMutation_Value(t *testing.T) {
 }
 
 func TestAddMutation_jchiu1(t *testing.T) {
-	ol := getNew()
-	key := Key(10, "value")
+	key := x.DataKey("value", 10)
 	dir, err := ioutil.TempDir("", "storetest_")
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 
 	ps, err := store.NewStore(dir)
 	require.NoError(t, err)
-	ol.init(key, ps)
+	Init(ps)
+	ol := getNew(key, ps)
 
 	// Set value to cars and merge to RocksDB.
 	edge := &task.DirectedEdge{
@@ -244,15 +225,15 @@ func TestAddMutation_jchiu1(t *testing.T) {
 }
 
 func TestAddMutation_jchiu2(t *testing.T) {
-	ol := getNew()
-	key := Key(10, "value")
+	key := x.DataKey("value", 10)
 	dir, err := ioutil.TempDir("", "storetest_")
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 
 	ps, err := store.NewStore(dir)
 	require.NoError(t, err)
-	ol.init(key, ps)
+	Init(ps)
+	ol := getNew(key, ps)
 
 	// Del a value cars and but don't merge.
 	edge := &task.DirectedEdge{
@@ -283,15 +264,15 @@ func TestAddMutation_jchiu2(t *testing.T) {
 }
 
 func TestAddMutation_jchiu3(t *testing.T) {
-	ol := getNew()
-	key := Key(10, "value")
+	key := x.DataKey("value", 10)
 	dir, err := ioutil.TempDir("", "storetest_")
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 
 	ps, err := store.NewStore(dir)
 	require.NoError(t, err)
-	ol.init(key, ps)
+	Init(ps)
+	ol := getNew(key, ps)
 
 	// Set value to cars and merge to RocksDB.
 	edge := &task.DirectedEdge{
@@ -342,15 +323,15 @@ func TestAddMutation_jchiu3(t *testing.T) {
 }
 
 func TestAddMutation_mrjn1(t *testing.T) {
-	ol := getNew()
-	key := Key(10, "value")
+	key := x.DataKey("value", 10)
 	dir, err := ioutil.TempDir("", "storetest_")
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 
 	ps, err := store.NewStore(dir)
 	require.NoError(t, err)
-	ol.init(key, ps)
+	Init(ps)
+	ol := getNew(key, ps)
 
 	// Set a value cars and merge.
 	edge := &task.DirectedEdge{
@@ -414,11 +395,11 @@ func TestAddMutation_checksum(t *testing.T) {
 
 	ps, err := store.NewStore(dir)
 	require.NoError(t, err)
+	Init(ps)
 
 	{
-		ol := getNew()
-		key := Key(10, "value")
-		ol.init(key, ps)
+		key := x.DataKey("value", 10)
+		ol := getNew(key, ps)
 
 		edge := &task.DirectedEdge{
 			ValueId: 1,
@@ -436,14 +417,13 @@ func TestAddMutation_checksum(t *testing.T) {
 		require.NoError(t, err)
 		require.True(t, merged)
 
-		pl := ol.getPostingList()
+		pl := ol.PostingList()
 		c1 = pl.Checksum
 	}
 
 	{
-		ol := getNew()
-		key := Key(10, "value2")
-		ol.init(key, ps)
+		key := x.DataKey("value2", 10)
+		ol := getNew(key, ps)
 
 		// Add in reverse.
 		edge := &task.DirectedEdge{
@@ -462,15 +442,14 @@ func TestAddMutation_checksum(t *testing.T) {
 		require.NoError(t, err)
 		require.True(t, merged)
 
-		pl := ol.getPostingList()
+		pl := ol.PostingList()
 		c2 = pl.Checksum
 	}
 	require.Equal(t, c1, c2)
 
 	{
-		ol := getNew()
-		key := Key(10, "value3")
-		ol.init(key, ps)
+		key := x.DataKey("value3", 10)
+		ol := getNew(key, ps)
 
 		// Add in reverse.
 		edge := &task.DirectedEdge{
@@ -495,22 +474,22 @@ func TestAddMutation_checksum(t *testing.T) {
 		require.NoError(t, err)
 		require.True(t, merged)
 
-		pl := ol.getPostingList()
+		pl := ol.PostingList()
 		c3 = pl.Checksum
 	}
 	require.NotEqual(t, c3, c1)
 }
 
 func TestAddMutation_gru(t *testing.T) {
-	ol := getNew()
-	key := Key(0x01, "question.tag")
+	key := x.DataKey("question.tag", 0x01)
 	dir, err := ioutil.TempDir("", "storetest_")
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 
 	ps, err := store.NewStore(dir)
 	require.NoError(t, err)
-	ol.init(key, ps)
+	Init(ps)
+	ol := getNew(key, ps)
 
 	{
 		// Set two tag ids and merge.
@@ -547,15 +526,15 @@ func TestAddMutation_gru(t *testing.T) {
 }
 
 func TestAddMutation_gru2(t *testing.T) {
-	ol := getNew()
-	key := Key(0x01, "question.tag")
+	key := x.DataKey("question.tag", 0x01)
 	dir, err := ioutil.TempDir("", "storetest_")
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 
 	ps, err := store.NewStore(dir)
 	require.NoError(t, err)
-	ol.init(key, ps)
+	Init(ps)
+	ol := getNew(key, ps)
 
 	{
 		// Set two tag ids and merge.
@@ -604,15 +583,14 @@ func TestAddMutation_gru2(t *testing.T) {
 }
 
 func TestAfterUIDCount(t *testing.T) {
-	ol := getNew()
-	key := Key(10, "value")
+	key := x.DataKey("value", 10)
 	dir, err := ioutil.TempDir("", "storetest_")
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 
 	ps, err := store.NewStore(dir)
 	require.NoError(t, err)
-	ol.init(key, ps)
+	ol := getNew(key, ps)
 
 	// Set value to cars and merge to RocksDB.
 	edge := &task.DirectedEdge{
@@ -684,15 +662,14 @@ func TestAfterUIDCount(t *testing.T) {
 }
 
 func TestAfterUIDCount2(t *testing.T) {
-	ol := getNew()
-	key := Key(10, "value")
+	key := x.DataKey("value", 10)
 	dir, err := ioutil.TempDir("", "storetest_")
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 
 	ps, err := store.NewStore(dir)
 	require.NoError(t, err)
-	ol.init(key, ps)
+	ol := getNew(key, ps)
 
 	// Set value to cars and merge to RocksDB.
 	edge := &task.DirectedEdge{
@@ -719,15 +696,15 @@ func TestAfterUIDCount2(t *testing.T) {
 }
 
 func TestAfterUIDCountWithCommit(t *testing.T) {
-	ol := getNew()
-	key := Key(10, "value")
+	key := x.DataKey("value", 10)
 	dir, err := ioutil.TempDir("", "storetest_")
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 
 	ps, err := store.NewStore(dir)
 	require.NoError(t, err)
-	ol.init(key, ps)
+	Init(ps)
+	ol := getNew(key, ps)
 
 	// Set value to cars and merge to RocksDB.
 	edge := &task.DirectedEdge{
@@ -811,8 +788,7 @@ func TestMain(m *testing.M) {
 
 func BenchmarkAddMutations(b *testing.B) {
 	// logrus.SetLevel(logrus.DebugLevel)
-	l := getNew()
-	key := Key(1, "name")
+	key := x.DataKey("name", 1)
 	dir, err := ioutil.TempDir("", "storetest_")
 	if err != nil {
 		b.Error(err)
@@ -826,7 +802,7 @@ func BenchmarkAddMutations(b *testing.B) {
 		return
 	}
 
-	l.init(key, ps)
+	l := getNew(key, ps)
 	b.ResetTimer()
 
 	ctx := context.Background()

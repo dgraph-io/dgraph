@@ -40,12 +40,12 @@ func TestGet(t *testing.T) {
 
 	val, err := s.Get(k)
 	require.NoError(t, err)
-	require.EqualValues(t, val, "neo")
+	require.EqualValues(t, val.Data(), "neo")
 
 	require.NoError(t, s.SetOne(k, []byte("the one")))
 	val, err = s.Get(k)
 	require.NoError(t, err)
-	require.EqualValues(t, val, "the one")
+	require.EqualValues(t, val.Data(), "the one")
 }
 
 func TestSnapshot(t *testing.T) {
@@ -65,19 +65,19 @@ func TestSnapshot(t *testing.T) {
 	// Before setting snapshot, do a get. Expect to get trinity.
 	val, err := s.Get(k)
 	require.NoError(t, err)
-	require.EqualValues(t, val, "trinity")
+	require.EqualValues(t, val.Data(), "trinity")
 
 	s.SetSnapshot(snapshot)
 	// After setting snapshot, we expect to get neo.
 	val, err = s.Get(k)
 	require.NoError(t, err)
-	require.EqualValues(t, val, "neo")
+	require.EqualValues(t, val.Data(), "neo")
 
 	s.SetSnapshot(nil)
 	// After clearing snapshot, we expect to get trinity again.
 	val, err = s.Get(k)
 	require.NoError(t, err)
-	require.EqualValues(t, val, "trinity")
+	require.EqualValues(t, val.Data(), "trinity")
 }
 
 func TestCheckpoint(t *testing.T) {
@@ -94,7 +94,7 @@ func TestCheckpoint(t *testing.T) {
 	// Make sure neo did get written as we expect.
 	val, err := s.Get(key)
 	require.NoError(t, err)
-	require.EqualValues(t, val, "neo")
+	require.EqualValues(t, val.Data(), "neo")
 
 	// Do checkpointing. Checkpoint should contain neo.
 	checkpoint, err := s.NewCheckpoint()
@@ -110,7 +110,7 @@ func TestCheckpoint(t *testing.T) {
 	// Original store should contain trinity.
 	val, err = s.Get(key)
 	require.NoError(t, err)
-	require.EqualValues(t, val, "trinity")
+	require.EqualValues(t, val.Data(), "trinity")
 
 	// Open checkpoint and check that it contains neo, not trinity.
 	s2, err := NewStore(pathCheckpoint)
@@ -118,7 +118,7 @@ func TestCheckpoint(t *testing.T) {
 
 	val, err = s2.Get(key)
 	require.NoError(t, err)
-	require.EqualValues(t, val, "neo")
+	require.EqualValues(t, val.Data(), "neo")
 }
 
 func benchmarkGet(valSize int, b *testing.B) {
@@ -149,15 +149,15 @@ func benchmarkGet(valSize int, b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		k := rand.Int() % nkeys
 		key := []byte(fmt.Sprintf("key_%d", k))
-		val, err := s.Get(key)
-		if val == nil {
+		valSlice, err := s.Get(key)
+		if valSlice == nil {
 			b.Error("Missing value")
 		}
 		if err != nil {
 			b.Error(err)
 		}
-		if len(val) != valSize {
-			b.Errorf("Value size expected: %d. Found: %d", valSize, len(val))
+		if len(valSlice.Data()) != valSize {
+			b.Errorf("Value size expected: %d. Found: %d", valSize, len(valSlice.Data()))
 		}
 	}
 	b.StopTimer()

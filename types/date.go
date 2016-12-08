@@ -36,7 +36,9 @@ func createDate(y int, m time.Month, d int) Date {
 	return dt
 }
 
-const dateFormat = "2006-01-02"
+const dateFormatYMD = "2006-01-02"
+const dateFormatYM = "2006-01"
+const dateFormatY = "2006"
 
 // MarshalBinary marshals to binary
 func (v Date) MarshalBinary() ([]byte, error) {
@@ -47,17 +49,14 @@ func (v Date) MarshalBinary() ([]byte, error) {
 
 // MarshalText marshals to text
 func (v Date) MarshalText() ([]byte, error) {
-	s := v.Time.Format(dateFormat)
+	s := v.Time.Format(dateFormatYMD)
 	return []byte(s), nil
 }
 
 // MarshalJSON marshals to json
 func (v Date) MarshalJSON() ([]byte, error) {
-	str, err := v.MarshalText()
-	if err != nil {
-		return nil, err
-	}
-	return json.Marshal(str)
+	s := v.Time.Format(dateFormatYMD)
+	return json.Marshal(s)
 }
 
 // Type returns the type of this value
@@ -82,9 +81,15 @@ func (v *Date) UnmarshalBinary(data []byte) error {
 
 // UnmarshalText unmarshals the data from a text format.
 func (v *Date) UnmarshalText(text []byte) error {
-	val, err := time.Parse(dateFormat, string(text))
+	val, err := time.Parse(dateFormatYMD, string(text))
 	if err != nil {
-		return err
+		val, err = time.Parse(dateFormatYM, string(text))
+		if err != nil {
+			val, err = time.Parse(dateFormatY, string(text))
+			if err != nil {
+				return err
+			}
+		}
 	}
 	return v.fromTime(val)
 }

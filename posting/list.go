@@ -25,7 +25,6 @@ import (
 	"log"
 	"math"
 	"sort"
-	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -58,15 +57,13 @@ const (
 )
 
 type List struct {
-	sync.RWMutex
+	x.SafeMutex
 	key         []byte
 	ghash       uint64
-	hash        uint32
 	pbuffer     unsafe.Pointer
 	mlayer      []*types.Posting // mutations
 	pstore      *store.Store     // postinglist store
 	lastCompact time.Time
-	wg          sync.WaitGroup
 	deleteMe    int32
 	refcount    int32
 
@@ -90,11 +87,12 @@ var listPool = sync.Pool{
 	},
 }
 
-func getNew() *List {
+func getNew(key []byte, pstore *store.Store) *List {
 	l := listPool.Get().(*List)
 	*l = List{}
-	l.wg.Add(1)
-	x.AssertTrue(len(l.key) == 0)
+	l.key = key
+	l.pstore = pstore
+	l.ghash = farm.Fingerprint64(key)
 	l.refcount = 1
 	return l
 }
@@ -129,44 +127,6 @@ func samePosting(a *types.Posting, b *types.Posting) bool {
 	return true
 }
 
-// Key = attribute|uid
-func Key(uid uint64, attr string) []byte {
-	buf := make([]byte, len(attr)+9)
-	for i, ch := range attr {
-		buf[i] = byte(ch)
-	}
-	buf[len(attr)] = '|'
-	binary.BigEndian.PutUint64(buf[len(attr)+1:], uid)
-	return buf
-}
-
-// SplitKey returns the predicate and the uid.
-// (Note that it is not applicable to index keys)
-func SplitKey(key []byte) (string, uint64) {
-	sKeys := bytes.Split(key, []byte("|"))
-	x.AssertTrue(len(sKeys) == 2)
-	b := sKeys[0]
-	rest := sKeys[1]
-	uid := binary.BigEndian.Uint64(rest)
-	return string(b), uid
-}
-
-func debugKey(key []byte) string {
-	var b bytes.Buffer
-	var rest []byte
-	for i, ch := range key {
-		if ch == '|' {
-			b.WriteByte(':')
-			rest = key[i+1:]
-			break
-		}
-		b.WriteByte(ch)
-	}
-	uid := binary.BigEndian.Uint64(rest)
-	b.WriteString(strconv.FormatUint(uid, 16))
-	return b.String()
-}
-
 func newPosting(t *task.DirectedEdge, op uint32) *types.Posting {
 	x.AssertTruef(bytes.Equal(t.Value, nil) || t.ValueId == math.MaxUint64,
 		"This should have been set by the caller.")
@@ -180,21 +140,28 @@ func newPosting(t *task.DirectedEdge, op uint32) *types.Posting {
 	}
 }
 
-func (l *List) init(key []byte, pstore *store.Store) {
-	l.Lock()
-	defer l.Unlock()
-	defer l.wg.Done()
+func (l *List) WaitForCommit() {
+	l.RLock()
+	defer l.RUnlock()
+	l.Wait()
+}
 
-	l.key = key
-	l.pstore = pstore
-
-	l.hash = farm.Fingerprint32(key)
-	l.ghash = farm.Fingerprint64(key)
+func (l *List) PostingList() *types.PostingList {
+	l.RLock()
+	defer l.RUnlock()
+	return l.getPostingList(0)
 }
 
 // getPostingList tries to get posting list from l.pbuffer. If it is nil, then
 // we query RocksDB. There is no need for lock acquisition here.
-func (l *List) getPostingList() *types.PostingList {
+func (l *List) getPostingList(loop int) *types.PostingList {
+	if loop >= 10 {
+		x.Fatalf("This is over the 10th loop: %v", loop)
+	}
+	l.AssertRLock()
+	// Wait for any previous commits to happen before retrieving posting list again.
+	l.Wait()
+
 	pb := atomic.LoadPointer(&l.pbuffer)
 	plist := (*types.PostingList)(pb)
 
@@ -202,25 +169,26 @@ func (l *List) getPostingList() *types.PostingList {
 		x.AssertTrue(l.pstore != nil)
 		plist = new(types.PostingList)
 
-		if data, err := l.pstore.Get(l.key); err == nil && len(data) > 0 {
-			x.Checkf(plist.Unmarshal(data), "Unable to Unmarshal PostingList from store")
+		if slice, err := l.pstore.Get(l.key); err == nil && slice != nil {
+			x.Checkf(plist.Unmarshal(slice.Data()), "Unable to Unmarshal PostingList from store")
+			slice.Free()
 		}
 		if atomic.CompareAndSwapPointer(&l.pbuffer, pb, unsafe.Pointer(plist)) {
 			return plist
 		}
 		// Someone else replaced the pointer in the meantime. Retry recursively.
-		return l.getPostingList()
+		return l.getPostingList(loop + 1)
 	}
 	return plist
 }
 
 // SetForDeletion will mark this List to be deleted, so no more mutations can be applied to this.
 func (l *List) SetForDeletion() {
-	l.wg.Wait()
 	atomic.StoreInt32(&l.deleteMe, 1)
 }
 
 func (l *List) updateMutationLayer(mpost *types.Posting) bool {
+	l.AssertLock()
 	x.AssertTrue(mpost.Op == Set || mpost.Op == Del)
 
 	// First check the mutable layer.
@@ -273,7 +241,7 @@ func (l *List) updateMutationLayer(mpost *types.Posting) bool {
 	}
 
 	// Didn't find it in mutable layer. Now check the immutable layer.
-	pl := l.getPostingList()
+	pl := l.getPostingList(0)
 	pidx := sort.Search(len(pl.Postings), func(idx int) bool {
 		p := pl.Postings[idx]
 		return mpost.Uid <= p.Uid
@@ -342,11 +310,12 @@ func (l *List) updateMutationLayer(mpost *types.Posting) bool {
 // anything to disk. Some other background routine will be responsible for merging
 // changes in mutation layers to RocksDB. Returns whether any mutation happens.
 func (l *List) AddMutation(ctx context.Context, t *task.DirectedEdge, op uint32) (bool, error) {
-	l.wg.Wait()
 	if atomic.LoadInt32(&l.deleteMe) == 1 {
 		x.TraceError(ctx, x.Errorf("DELETEME set to true. Temporary error."))
 		return false, ErrRetry
 	}
+	x.Trace(ctx, "AddMutation called.")
+	defer x.Trace(ctx, "AddMutation done.")
 
 	// All edges with a value set, have the same uid. In other words,
 	// an (entity, attribute) can only have one value.
@@ -391,15 +360,15 @@ func (l *List) AddMutation(ctx context.Context, t *task.DirectedEdge, op uint32)
 //    return false // to break iteration.
 //  })
 func (l *List) Iterate(afterUid uint64, f func(obj *types.Posting) bool) {
-	l.wg.Wait()
 	l.RLock()
 	defer l.RUnlock()
 	l.iterate(afterUid, f)
 }
 
 func (l *List) iterate(afterUid uint64, f func(obj *types.Posting) bool) {
+	l.AssertRLock()
 	pidx, midx := 0, 0
-	pl := l.getPostingList()
+	pl := l.getPostingList(0)
 
 	if afterUid > 0 {
 		pidx = sort.Search(len(pl.Postings), func(idx int) bool {
@@ -451,8 +420,11 @@ func (l *List) iterate(afterUid uint64, f func(obj *types.Posting) bool) {
 
 // Length iterates over the mutation layer and counts number of elements.
 func (l *List) Length(afterUid uint64) int {
+	l.RLock()
+	defer l.RUnlock()
+
 	pidx, midx := 0, 0
-	pl := l.getPostingList()
+	pl := l.getPostingList(0)
 
 	if afterUid > 0 {
 		pidx = sort.Search(len(pl.Postings), func(idx int) bool {
@@ -486,7 +458,6 @@ func (l *List) CommitIfDirty(ctx context.Context) (committed bool, err error) {
 }
 
 func (l *List) commit() (committed bool, rerr error) {
-	l.wg.Wait()
 	l.Lock()
 	defer l.Unlock()
 
@@ -519,10 +490,13 @@ func (l *List) commit() (committed bool, rerr error) {
 	data, err := final.Marshal()
 	x.Checkf(err, "Unable to marshal posting list")
 
-	if err := l.pstore.SetOne(l.key, data); err != nil {
-		log.Fatalf("Error while storing posting list: %v", err)
-		return true, err
+	sw := l.StartWait()
+	ce := commitEntry{
+		key: l.key,
+		val: data,
+		sw:  sw,
 	}
+	commitCh <- ce
 
 	// Now reset the mutation variables.
 	atomic.StorePointer(&l.pbuffer, nil) // Make prev buffer eligible for GC.
@@ -541,7 +515,6 @@ func (l *List) LastCompactionTs() time.Time {
 // Uids returns the UIDs given some query params.
 // We have to apply the filtering before applying (offset, count).
 func (l *List) Uids(opt ListOptions) *task.List {
-	l.wg.Wait()
 	l.RLock()
 	defer l.RUnlock()
 
@@ -555,7 +528,7 @@ func (l *List) Uids(opt ListOptions) *task.List {
 		if opt.Intersect != nil {
 			for ; intersectIdx < len(opt.Intersect.Uids) && opt.Intersect.Uids[intersectIdx] < uid; intersectIdx++ {
 			}
-			if intersectIdx >= opt.Intersect.Size() || opt.Intersect.Uids[intersectIdx] > uid {
+			if intersectIdx >= len(opt.Intersect.Uids) || opt.Intersect.Uids[intersectIdx] > uid {
 				return true
 			}
 		}
@@ -566,7 +539,6 @@ func (l *List) Uids(opt ListOptions) *task.List {
 }
 
 func (l *List) Value() (val []byte, vtype byte, rerr error) {
-	l.wg.Wait()
 	l.RLock()
 	defer l.RUnlock()
 

@@ -23,8 +23,8 @@ import (
 
 func TestParse(t *testing.T) {
 	array := []string{
-		`{"type":"Point","coordinates":[1,2]}`,
-		`{"type":"MultiLineString","coordinates":[[[1,2,3],[4,5,6],[7,8,9],[1,2,3]]]}`,
+		`{'type':'Point','coordinates':[1,2]}`,
+		`{'type':'MultiLineString','coordinates':[[[1,2,3],[4,5,6],[7,8,9],[1,2,3]]]}`,
 	}
 	for _, v := range array {
 		var g Geo

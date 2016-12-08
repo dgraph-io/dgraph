@@ -17,10 +17,13 @@
 package types
 
 import (
+	"os"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/dgraph-io/dgraph/x"
 )
 
 func testBinary(val Value, t *testing.T) {
@@ -148,4 +151,9 @@ func TestTime(t *testing.T) {
 	v := time.Date(2009, time.November, 10, 23, 0, 0, 0, time.UTC)
 	testBinary(&Time{v}, t)
 	testText(&Time{v}, t)
+}
+
+func TestMain(m *testing.M) {
+	x.Init()
+	os.Exit(m.Run())
 }
