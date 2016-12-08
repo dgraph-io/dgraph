@@ -22,7 +22,6 @@ import (
 	"io/ioutil"
 	"os"
 	"testing"
-	"time"
 
 	"github.com/gogo/protobuf/proto"
 	"github.com/stretchr/testify/require"
@@ -191,7 +190,6 @@ func populateGraph(t *testing.T) (string, string, *store.Store) {
 	addEdgeToValue(t, ps, "dob", 25, "1909-01-10")
 	addEdgeToValue(t, ps, "dob", 31, "1901-01-15")
 
-	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
 	return dir, dir2, ps
 }
 
