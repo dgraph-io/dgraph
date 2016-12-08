@@ -5,7 +5,7 @@ set -e
 
 cur_dir=$(pwd);
 tmp_dir=/tmp/dgraph-build;
-release_version=0.4.4;
+release_version=0.7.0;
 
 # If temporary directory already exists delete it.
 if [ -d "$tmp_dir" ]; then
@@ -27,20 +27,18 @@ echo "dgraph"
 cd $dgraph_cmd/dgraph && go build $build_flags .;
 echo "dgraphloader"
 cd $dgraph_cmd/dgraphloader && go build $build_flags .;
-echo "dgraphlist"
-cd $dgraph_cmd/dgraphlist && go build $build_flags .;
 
 echo -e "\n\033[1;33mCopying binaries to tmp folder\033[0m"
 cd $tmp_dir;
 mkdir dgraph && pushd &> /dev/null dgraph;
-cp $dgraph_cmd/dgraph/dgraph $dgraph_cmd/dgraphlist/dgraphlist $dgraph_cmd/dgraphloader/dgraphloader .;
+cp $dgraph_cmd/dgraph/dgraph $dgraph_cmd/dgraphloader/dgraphloader .;
 
 platform="$(uname | tr '[:upper:]' '[:lower:]')"
 # Stripping the binaries.
 # Stripping binaries on Mac doesn't lead to much reduction in size and
 # instead gives an error.
 if [ "$platform" = "linux" ]; then
-  strip dgraph dgraphloader dgraphlist
+  strip dgraph dgraphloader
   echo -e "\n\033[1;34mSize of files after strip: $(du -sh)\033[0m"
 fi
 
