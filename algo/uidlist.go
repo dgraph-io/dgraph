@@ -26,10 +26,9 @@ func IntersectWith(u, v *task.List) {
 	n := len(u.Uids)
 	m := len(v.Uids)
 	var k int
-	for i := 0; i < n; i++ {
+	for i := 0; i < n && k < m; i++ {
 		uid := u.Uids[i]
-		for ; k < m && v.Uids[k] < uid; k++ {
-		}
+		k = indexOfEqualOrGreaterVal(v, k, uid)
 		if k < m && v.Uids[k] == uid {
 			out = append(out, uid)
 		}
@@ -79,7 +78,9 @@ func IntersectSorted(lists []*task.List) *task.List {
 			x.AssertTruef(false, "We shouldn't have duplicates in UIDLists")
 		}
 
-		var skip bool                     // Should we skip val in output?
+		var skip bool         // Should we skip val in output?
+		var noElemsLeft bool  // If some list has no elems left, we can't intersect more.
+
 		for j := 0; j < len(lists); j++ { // For each other list in lists.
 			if j == minLenIdx {
 				// No point checking yourself.
@@ -89,11 +90,11 @@ func IntersectSorted(lists []*task.List) *task.List {
 			lj := lists[j]
 			ljp := lptrs[j]
 			lsz := len(lj.Uids)
-			for ; ljp < lsz && lj.Uids[ljp] < val; ljp++ {
-			}
-
+			ljp = indexOfEqualOrGreaterVal(lj, ljp, val)
 			lptrs[j] = ljp
+
 			if ljp >= lsz || lj.Uids[ljp] > val {
+				noElemsLeft = ljp >= lsz
 				skip = true
 				break
 			}
@@ -101,6 +102,9 @@ func IntersectSorted(lists []*task.List) *task.List {
 		}
 		if !skip {
 			output = append(output, val)
+		}
+		if noElemsLeft {
+			break
 		}
 	}
 	return &task.List{Uids: output}
@@ -156,6 +160,13 @@ func IndexOf(u *task.List, uid uint64) int {
 		return i
 	}
 	return -1
+}
+
+// IndexOf value which is Equal (Eq) Or Greater than (Gt) the uid passed on
+// the Uids slice, starting to look from startIdx (pass 0 for whole range search).
+func indexOfEqualOrGreaterVal(u *task.List, startIdx int, uid uint64) int {
+	return startIdx + sort.Search(len(u.Uids)-startIdx,
+		func(i int) bool { return u.Uids[startIdx+i] >= uid })
 }
 
 // ToUintsListForTest converts to list of uints for testing purpose only.
