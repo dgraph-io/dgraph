@@ -45,7 +45,7 @@ func (v Geo) MarshalText() ([]byte, error) {
 // MarshalJSON marshals to json
 func (v Geo) MarshalJSON() ([]byte, error) {
 	// this same as MarshalText
-	return v.MarshalText()
+	return geojson.Marshal(v.T)
 }
 
 // Type returns the type of this value
