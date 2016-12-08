@@ -34,7 +34,6 @@ import (
 
 	"github.com/dgryski/go-farm"
 
-	"github.com/dgraph-io/dgraph/rdb"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -373,24 +372,19 @@ type commitEntry struct {
 }
 
 func batchCommit() {
-	var b *rdb.WriteBatch
 	var sz int
 	var waits []*x.SafeWait
 	var loop uint64
 
-	put := func(e commitEntry) {
-		if b == nil {
-			b = pstore.NewWriteBatch()
-		}
-		b.Put(e.key, e.val)
-		sz++
-		waits = append(waits, e.sw)
-	}
+	b := pstore.NewWriteBatch()
+	defer b.Destroy()
 
 	for {
 		select {
 		case e := <-commitCh:
-			put(e)
+			b.Put(e.key, e.val)
+			sz++
+			waits = append(waits, e.sw)
 
 		default:
 			// default is executed if no other case is ready.
@@ -403,8 +397,7 @@ func batchCommit() {
 				for _, w := range waits {
 					w.Done()
 				}
-				b.Destroy()
-				b = nil
+				b.Clear()
 				sz = 0
 				waits = waits[:0]
 			}
