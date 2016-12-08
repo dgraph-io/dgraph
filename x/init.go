@@ -23,7 +23,7 @@ import (
 	"os"
 )
 
-const dgraphVersion = "0.4.4"
+const dgraphVersion = "0.7.0"
 
 var (
 	version  = flag.Bool("version", false, "Prints the version of Dgraph")
