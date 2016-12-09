@@ -31,6 +31,7 @@ func IntersectWith(u, v *task.List) {
 		k = indexOfEqualOrGreaterVal(v, k, uid)
 		if k < m && v.Uids[k] == uid {
 			out = append(out, uid)
+			k++
 		}
 	}
 	u.Uids = out
