@@ -32,14 +32,14 @@ import (
 // data. When adding a new type *always* add to the end of this list.
 // Never delete anything from this list even if it becomes unused.
 const (
-	BytesID    TypeID = 0
-	Int32ID    TypeID = 1
-	FloatID    TypeID = 2
-	BoolID     TypeID = 3
-	DateTimeID TypeID = 4
-	StringID   TypeID = 5
-	DateID     TypeID = 6
-	GeoID      TypeID = 7
+	BytesID  TypeID = 0
+	Int32ID  TypeID = 1
+	FloatID  TypeID = 2
+	BoolID   TypeID = 3
+	TimeID   TypeID = 4
+	StringID TypeID = 5
+	DateID   TypeID = 6
+	GeoID    TypeID = 7
 )
 
 // added suffix 'type' to names to distinguish from Go types 'int' and 'string'
@@ -68,9 +68,9 @@ var (
 		Name: "id",
 		id:   StringID,
 	}
-	dateTimeType = Scalar{
-		Name: "datetime",
-		id:   DateTimeID,
+	timeType = Scalar{
+		Name: "time",
+		id:   TimeID,
 	}
 	dateType = Scalar{
 		Name: "date",
@@ -89,7 +89,7 @@ var typeNameMap = map[string]Type{
 	stringType.Name:    stringType,
 	booleanType.Name:   booleanType,
 	idType.Name:        idType,
-	dateTimeType.Name:  dateTimeType,
+	timeType.Name:      timeType,
 	dateType.Name:      dateType,
 	geoType.Name:       geoType,
 	byteArrayType.Name: byteArrayType,
@@ -121,7 +121,7 @@ func ValueForType(id TypeID) Value {
 		var b Bool
 		return &b
 
-	case DateTimeID:
+	case TimeID:
 		var t Time
 		return &t
 
@@ -384,7 +384,7 @@ type Time struct {
 
 // Type returns the type of this value
 func (v Time) Type() Scalar {
-	return dateTimeType
+	return timeType
 }
 
 // UnmarshalText unmarshals the data from a text format.
@@ -400,15 +400,38 @@ func (v *Time) UnmarshalText(text []byte) error {
 	return nil
 }
 
-func (v *Int32) fromFloat(f float64) error {
-	if f > math.MaxInt32 || f < math.MinInt32 || math.IsNaN(f) {
+func (v *Int32) fromInt(f Int32) error {
+	if f > math.MaxInt32 || f < math.MinInt32 {
+		return x.Errorf("Int out of int32 range")
+	}
+	*v = Int32(f)
+	return nil
+}
+
+func (v *Int32) fromFloat(f Float) error {
+	if f > math.MaxInt32 || f < math.MinInt32 || math.IsNaN(float64(f)) {
 		return x.Errorf("Float out of int32 range")
 	}
 	*v = Int32(f)
 	return nil
 }
 
-func (v *Int32) fromBool(b bool) error {
+func (v *Float) fromFloat(b Float) error {
+	*v = b
+	return nil
+}
+
+func (v *Geo) fromGeo(b Geo) error {
+	*v = b
+	return nil
+}
+
+func (v *Bool) fromBool(b Bool) error {
+	*v = b
+	return nil
+}
+
+func (v *Int32) fromBool(b Bool) error {
 	if b {
 		*v = 1
 	} else {
@@ -417,9 +440,9 @@ func (v *Int32) fromBool(b bool) error {
 	return nil
 }
 
-func (v *Int32) fromTime(t time.Time) error {
+func (v *Int32) fromTime(t Time) error {
 	// Represent the unix timestamp as a 32bit int.
-	secs := t.Unix()
+	secs := t.Time.Unix()
 	if secs > math.MaxInt32 || secs < math.MinInt32 {
 		return x.Errorf("Time out of int32 range")
 	}
@@ -427,13 +450,29 @@ func (v *Int32) fromTime(t time.Time) error {
 	return nil
 }
 
-func (v *Float) fromInt(i int32) error {
-	*v = Float(i)
+func (v *Int32) fromGeo(t Geo) error {
+	return cantConvert(t.Type(), v)
+}
+
+func (v *Bool) fromGeo(t Geo) error {
+	return cantConvert(t.Type(), v)
+}
+
+func (v *Float) fromGeo(t Geo) error {
+	return cantConvert(t.Type(), v)
+}
+
+func (v *Time) fromGeo(t Geo) error {
+	return cantConvert(t.Type(), v)
+}
+
+func (v *Float) fromInt(i Int32) error {
+	*v = Float(int32(i))
 	return nil
 }
 
-func (v *Float) fromBool(b bool) error {
-	if b {
+func (v *Float) fromBool(b Bool) error {
+	if bool(b) {
 		*v = 1
 	} else {
 		*v = 0
@@ -445,33 +484,33 @@ const (
 	nanoSecondsInSec = 1000000000
 )
 
-func (v *Float) fromTime(t time.Time) error {
+func (v *Float) fromTime(t Time) error {
 	// Represent the unix timestamp as a float (with fractional seconds)
-	secs := float64(t.Unix())
+	secs := float64(t.Time.Unix())
 	nano := float64(t.Nanosecond())
 	val := secs + nano/nanoSecondsInSec
 	*v = Float(val)
 	return nil
 }
 
-func (v *Bool) fromInt(i int32) error {
-	*v = i != 0
+func (v *Bool) fromInt(i Int32) error {
+	*v = int32(i) != 0
 	return nil
 }
 
-func (v *Bool) fromFloat(f float64) error {
-	*v = f != 0
+func (v *Bool) fromFloat(f Float) error {
+	*v = float64(f) != 0
 	return nil
 }
 
-func (v *Time) fromInt(i int32) error {
+func (v *Time) fromInt(i Int32) error {
 	v.Time = time.Unix(int64(i), 0).UTC()
 	return nil
 }
 
-func (v *Time) fromFloat(f float64) error {
+func (v *Time) fromFloat(f Float) error {
 	secs := int64(f)
-	fracSecs := f - float64(secs)
+	fracSecs := float64(f) - float64(secs)
 	nsecs := int64(fracSecs * nanoSecondsInSec)
 	v.Time = time.Unix(secs, nsecs).UTC()
 	return nil

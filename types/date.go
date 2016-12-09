@@ -76,7 +76,7 @@ func (v *Date) UnmarshalBinary(data []byte) error {
 	}
 	val := binary.LittleEndian.Uint64(data)
 	tm := time.Unix(int64(val), 0)
-	return v.fromTime(tm)
+	return v.fromTime(Time{tm})
 }
 
 // UnmarshalText unmarshals the data from a text format.
@@ -91,31 +91,62 @@ func (v *Date) UnmarshalText(text []byte) error {
 			}
 		}
 	}
-	return v.fromTime(val)
+	return v.fromTime(Time{val})
 }
 
-func (v *Date) fromFloat(f float64) error {
+func (v *Date) fromFloat(f Float) error {
 	var t Time
 	err := t.fromFloat(f)
 	if err != nil {
 		return err
 	}
-	return v.fromTime(t.Time)
+	return v.fromTime(t)
 }
 
-func (v *Date) fromTime(t time.Time) error {
+func (v *Date) fromTime(t Time) error {
 	// truncate the time to just a date.
 	*v = createDate(t.Date())
 	return nil
 }
 
-func (v *Date) fromInt(i int32) error {
+func (v *Time) fromTime(t Time) error {
+	// truncate the time to just a date.
+	*v = t
+	return nil
+}
+
+func (v *Bool) fromTime(t Time) error {
+	return cantConvert(t.Type(), v)
+}
+
+func (v *Geo) fromTime(t Time) error {
+	return cantConvert(t.Type(), v)
+}
+
+func (v *Date) fromGeo(t Geo) error {
+	return cantConvert(t.Type(), v)
+}
+
+func (v *Date) fromBool(t Bool) error {
+	return cantConvert(t.Type(), v)
+}
+
+func (v *Time) fromBool(t Bool) error {
+	return cantConvert(t.Type(), v)
+}
+
+func (v *Date) fromInt(i Int32) error {
 	var t Time
 	err := t.fromInt(i)
 	if err != nil {
 		return err
 	}
-	return v.fromTime(t.Time)
+	return v.fromTime(Time(t))
+}
+
+func (v *Date) fromDate(t Date) error {
+	*v = t
+	return nil
 }
 
 func (v *Time) fromDate(d Date) error {
@@ -124,9 +155,17 @@ func (v *Time) fromDate(d Date) error {
 }
 
 func (v *Float) fromDate(d Date) error {
-	return v.fromTime(d.Time)
+	return v.fromTime(Time{d.Time})
 }
 
 func (v *Int32) fromDate(d Date) error {
-	return v.fromTime(d.Time)
+	return v.fromTime(Time{d.Time})
+}
+
+func (v *Bool) fromDate(d Date) error {
+	return cantConvert(d.Type(), v)
+}
+
+func (v *Geo) fromDate(d Date) error {
+	return cantConvert(d.Type(), v)
 }

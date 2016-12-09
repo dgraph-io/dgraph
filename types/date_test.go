@@ -92,7 +92,7 @@ func TestConvertDateToTime(t *testing.T) {
 	}
 	for _, tc := range data {
 		tout := Time{tc.out}
-		if out, err := dateTimeType.Convert(&tc.in); err != nil {
+		if out, err := timeType.Convert(&tc.in); err != nil {
 			t.Errorf("Unexpected error converting date to time: %v", err)
 		} else if *(out.(*Time)) != tout {
 			t.Errorf("Converting date to time: Expected %v, got %v", tc.out, out)

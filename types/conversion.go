@@ -16,11 +16,7 @@
 
 package types
 
-import (
-	"time"
-
-	"github.com/dgraph-io/dgraph/x"
-)
+import "github.com/dgraph-io/dgraph/x"
 
 // Convert converts the value to given scalar type.
 func (to Scalar) Convert(value Value) (Value, error) {
@@ -39,6 +35,7 @@ func (to Scalar) Convert(value Value) (Value, error) {
 	}
 
 	u := ValueForType(to.ID())
+	c := u.(Unmarshaler)
 	// Otherwise we check if the conversion is defined.
 	switch v := value.(type) {
 	case *Bytes:
@@ -55,50 +52,32 @@ func (to Scalar) Convert(value Value) (Value, error) {
 		}
 
 	case *Int32:
-		c, ok := u.(int32Unmarshaler)
-		if !ok {
-			return nil, cantConvert(to, v)
-		}
-		if err := c.fromInt(int32(*v)); err != nil {
+		if err := c.fromInt(*v); err != nil {
 			return nil, err
 		}
 
 	case *Float:
-		c, ok := u.(floatUnmarshaler)
-		if !ok {
-			return nil, cantConvert(to, v)
-		}
-		if err := c.fromFloat(float64(*v)); err != nil {
+		if err := c.fromFloat(*v); err != nil {
 			return nil, err
 		}
 
 	case *Bool:
-		c, ok := u.(boolUnmarshaler)
-		if !ok {
-			return nil, cantConvert(to, v)
-		}
-		if err := c.fromBool(bool(*v)); err != nil {
+		if err := c.fromBool(*v); err != nil {
 			return nil, err
 		}
-
 	case *Time:
-		c, ok := u.(timeUnmarshaler)
-		if !ok {
-			return nil, cantConvert(to, v)
-		}
-		if err := c.fromTime(v.Time); err != nil {
+		if err := c.fromTime(*v); err != nil {
 			return nil, err
 		}
 
 	case *Date:
-		c, ok := u.(dateUnmarshaler)
-		if !ok {
-			return nil, cantConvert(to, v)
-		}
 		if err := c.fromDate(*v); err != nil {
 			return nil, err
 		}
-
+	case *Geo:
+		if err := c.fromGeo(*v); err != nil {
+			return nil, err
+		}
 	default:
 		return nil, cantConvert(to, v)
 	}
@@ -109,22 +88,11 @@ func cantConvert(to Scalar, val Value) error {
 	return x.Errorf("Cannot convert %v to type %s", val, to.Name)
 }
 
-type int32Unmarshaler interface {
-	fromInt(value int32) error
-}
-
-type floatUnmarshaler interface {
-	fromFloat(value float64) error
-}
-
-type boolUnmarshaler interface {
-	fromBool(value bool) error
-}
-
-type timeUnmarshaler interface {
-	fromTime(value time.Time) error
-}
-
-type dateUnmarshaler interface {
+type Unmarshaler interface {
+	fromInt(value Int32) error
+	fromFloat(value Float) error
+	fromBool(value Bool) error
+	fromTime(value Time) error
 	fromDate(value Date) error
+	fromGeo(value Geo) error
 }

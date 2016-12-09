@@ -229,7 +229,7 @@ func isNewline(r rune) bool {
 
 var typeMap = map[string]types.TypeID{
 	"xs:string":                                   types.StringID,
-	"xs:dateTime":                                 types.DateTimeID,
+	"xs:time":                                     types.TimeID,
 	"xs:date":                                     types.DateID,
 	"xs:int":                                      types.Int32ID,
 	"xs:boolean":                                  types.BoolID,
@@ -237,7 +237,7 @@ var typeMap = map[string]types.TypeID{
 	"xs:float":                                    types.FloatID,
 	"geo:geojson":                                 types.GeoID,
 	"http://www.w3.org/2001/XMLSchema#string":     types.StringID,
-	"http://www.w3.org/2001/XMLSchema#dateTime":   types.DateTimeID,
+	"http://www.w3.org/2001/XMLSchema#dateTime":   types.TimeID,
 	"http://www.w3.org/2001/XMLSchema#date":       types.DateID,
 	"http://www.w3.org/2001/XMLSchema#int":        types.Int32ID,
 	"http://www.w3.org/2001/XMLSchema#boolean":    types.BoolID,
