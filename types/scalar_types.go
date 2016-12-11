@@ -17,6 +17,7 @@
 package types
 
 import (
+	"bytes"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
@@ -25,6 +26,9 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgraph/x"
+	geom "github.com/twpayne/go-geom"
+	"github.com/twpayne/go-geom/encoding/geojson"
+	"github.com/twpayne/go-geom/encoding/wkb"
 )
 
 // Note: These ids are stored in the posting lists to indicate the type
@@ -514,4 +518,203 @@ func (v *Time) fromFloat(f Float) error {
 	nsecs := int64(fracSecs * nanoSecondsInSec)
 	v.Time = time.Unix(secs, nsecs).UTC()
 	return nil
+}
+
+// Geo represents geo-spatial data.
+type Geo struct {
+	geom.T
+}
+
+// MarshalBinary marshals to binary
+func (v Geo) MarshalBinary() ([]byte, error) {
+	return wkb.Marshal(v.T, binary.LittleEndian)
+}
+
+// MarshalText marshals to text
+func (v Geo) MarshalText() ([]byte, error) {
+	// The text format is geojson
+	res, err := geojson.Marshal(v.T)
+	return bytes.Replace(res, []byte("\""), []byte("'"), -1), err
+}
+
+// MarshalJSON marshals to json
+func (v Geo) MarshalJSON() ([]byte, error) {
+	// this same as MarshalText
+	return geojson.Marshal(v.T)
+}
+
+// Type returns the type of this value
+func (v Geo) Type() Scalar {
+	return geoType
+}
+
+// UnmarshalBinary unmarshals the data from WKB
+func (v *Geo) UnmarshalBinary(data []byte) error {
+	w, err := wkb.Unmarshal(data)
+	if err != nil {
+		return err
+	}
+	v.T = w
+	return nil
+}
+
+// UnmarshalText parses the data from a Geojson
+func (v *Geo) UnmarshalText(text []byte) error {
+	var g geom.T
+	text = bytes.Replace(text, []byte("'"), []byte("\""), -1)
+	if err := geojson.Unmarshal(text, &g); err != nil {
+		return err
+	}
+	v.T = g
+	return nil
+}
+
+func (v Geo) String() string {
+	return "<geodata>"
+}
+
+// Date represents a date (YYYY-MM-DD). There is no timezone information
+// attached.
+type Date struct {
+	time.Time
+}
+
+func createDate(y int, m time.Month, d int) Date {
+	var dt Date
+	dt.Time = time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
+	return dt
+}
+
+const dateFormatYMD = "2006-01-02"
+const dateFormatYM = "2006-01"
+const dateFormatY = "2006"
+
+// MarshalBinary marshals to binary
+func (v Date) MarshalBinary() ([]byte, error) {
+	var bs [8]byte
+	binary.LittleEndian.PutUint64(bs[:], uint64(v.Time.Unix()))
+	return bs[:], nil
+}
+
+// MarshalText marshals to text
+func (v Date) MarshalText() ([]byte, error) {
+	s := v.Time.Format(dateFormatYMD)
+	return []byte(s), nil
+}
+
+// MarshalJSON marshals to json
+func (v Date) MarshalJSON() ([]byte, error) {
+	s := v.Time.Format(dateFormatYMD)
+	return json.Marshal(s)
+}
+
+// Type returns the type of this value
+func (v Date) Type() Scalar {
+	return dateType
+}
+
+func (v Date) String() string {
+	str, _ := v.MarshalText()
+	return string(str)
+}
+
+// UnmarshalBinary unmarshals the data from a binary format.
+func (v *Date) UnmarshalBinary(data []byte) error {
+	if len(data) < 8 {
+		return x.Errorf("Invalid data for date %v", data)
+	}
+	val := binary.LittleEndian.Uint64(data)
+	tm := time.Unix(int64(val), 0)
+	return v.fromTime(Time{tm})
+}
+
+// UnmarshalText unmarshals the data from a text format.
+func (v *Date) UnmarshalText(text []byte) error {
+	val, err := time.Parse(dateFormatYMD, string(text))
+	if err != nil {
+		val, err = time.Parse(dateFormatYM, string(text))
+		if err != nil {
+			val, err = time.Parse(dateFormatY, string(text))
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return v.fromTime(Time{val})
+}
+
+func (v *Date) fromFloat(f Float) error {
+	var t Time
+	err := t.fromFloat(f)
+	if err != nil {
+		return err
+	}
+	return v.fromTime(t)
+}
+
+func (v *Date) fromTime(t Time) error {
+	// truncate the time to just a date.
+	*v = createDate(t.Date())
+	return nil
+}
+
+func (v *Time) fromTime(t Time) error {
+	// truncate the time to just a date.
+	*v = t
+	return nil
+}
+
+func (v *Bool) fromTime(t Time) error {
+	return cantConvert(t.Type(), v)
+}
+
+func (v *Geo) fromTime(t Time) error {
+	return cantConvert(t.Type(), v)
+}
+
+func (v *Date) fromGeo(t Geo) error {
+	return cantConvert(t.Type(), v)
+}
+
+func (v *Date) fromBool(t Bool) error {
+	return cantConvert(t.Type(), v)
+}
+
+func (v *Time) fromBool(t Bool) error {
+	return cantConvert(t.Type(), v)
+}
+
+func (v *Date) fromInt(i Int32) error {
+	var t Time
+	err := t.fromInt(i)
+	if err != nil {
+		return err
+	}
+	return v.fromTime(Time(t))
+}
+
+func (v *Date) fromDate(t Date) error {
+	*v = t
+	return nil
+}
+
+func (v *Time) fromDate(d Date) error {
+	v.Time = d.Time
+	return nil
+}
+
+func (v *Float) fromDate(d Date) error {
+	return v.fromTime(Time{d.Time})
+}
+
+func (v *Int32) fromDate(d Date) error {
+	return v.fromTime(Time{d.Time})
+}
+
+func (v *Bool) fromDate(d Date) error {
+	return cantConvert(d.Type(), v)
+}
+
+func (v *Geo) fromDate(d Date) error {
+	return cantConvert(d.Type(), v)
 }
