@@ -72,7 +72,7 @@ var (
 		Name: "id",
 		id:   StringID,
 	}
-	timeType = Scalar{
+	dateTimeType = Scalar{
 		Name: "time",
 		id:   TimeID,
 	}
@@ -93,7 +93,7 @@ var typeNameMap = map[string]Type{
 	stringType.Name:    stringType,
 	booleanType.Name:   booleanType,
 	idType.Name:        idType,
-	timeType.Name:      timeType,
+	dateTimeType.Name:  dateTimeType,
 	dateType.Name:      dateType,
 	geoType.Name:       geoType,
 	byteArrayType.Name: byteArrayType,
@@ -388,7 +388,7 @@ type Time struct {
 
 // Type returns the type of this value
 func (v Time) Type() Scalar {
-	return timeType
+	return dateTimeType
 }
 
 // UnmarshalText unmarshals the data from a text format.

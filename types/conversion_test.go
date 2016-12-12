@@ -360,7 +360,7 @@ func TestConvertDateTimeToFloat(t *testing.T) {
 
 func TestConvertBoolToTime(t *testing.T) {
 	b := Bool(false)
-	if _, err := timeType.Convert(&b); err == nil {
+	if _, err := dateTimeType.Convert(&b); err == nil {
 		t.Errorf("Expected error converting bool to time")
 	}
 }
@@ -376,7 +376,7 @@ func TestConvertInt32ToTime(t *testing.T) {
 	}
 	for _, tc := range data {
 		tout := Time{tc.out}
-		if out, err := timeType.Convert(&tc.in); err != nil {
+		if out, err := dateTimeType.Convert(&tc.in); err != nil {
 			t.Errorf("Unexpected error converting time to int: %v", err)
 		} else if *(out.(*Time)) != tout {
 			t.Errorf("Converting time to int: Expected %v, got %v", tc.out, out)
@@ -400,7 +400,7 @@ func TestConvertFloatToTime(t *testing.T) {
 	}
 	for _, tc := range data {
 		tout := Time{tc.out}
-		if out, err := timeType.Convert(&tc.in); err != nil {
+		if out, err := dateTimeType.Convert(&tc.in); err != nil {
 			t.Errorf("Unexpected error converting float to int: %v", err)
 		} else if *(out.(*Time)) != tout {
 			t.Errorf("Converting float to int: Expected %v, got %v", tc.out, out)
