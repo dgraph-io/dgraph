@@ -61,15 +61,6 @@ func TestSortStrings(t *testing.T) {
 		toString(t, list))
 }
 
-func TestSortByteArrays(t *testing.T) {
-	list := getInput(BytesID, []string{"bb", "aaa", "aa", "bab"})
-	ul := getUIDList(4)
-	require.NoError(t, Sort(BytesID, list, ul))
-	require.EqualValues(t, []uint64{300, 200, 400, 100}, ul.Uids)
-	require.EqualValues(t, []string{"aa", "aaa", "bab", "bb"},
-		toString(t, list))
-}
-
 func TestSortInts(t *testing.T) {
 	list := getInput(Int32ID, []string{"22", "111", "11", "212"})
 	ul := getUIDList(4)

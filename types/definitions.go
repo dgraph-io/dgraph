@@ -28,12 +28,11 @@ type Type interface {
 }
 
 // TypeID is the id used to identify a type.
-type TypeID byte
+// type TypeID byte
 
 // Object represents all types in the schema definition.
 type Object struct {
 	Name   string
-	Id     TypeID
 	Fields map[string]string //field to type relationship
 }
 
@@ -49,10 +48,11 @@ type Value interface {
 	fmt.Stringer
 }
 
+func (t TypeID) IsScalar() bool {
+	return true
+}
+
 // IsScalar returns true if the object is of scalar type.
 func (o Object) IsScalar() bool {
-	if o.Id == ObjectID {
-		return false
-	}
-	return true
+	return false
 }

@@ -234,9 +234,6 @@ func typeValueFromNQuad(nq *graph.NQuad) (types.Value, error) {
 		return nil, nil
 	}
 	switch v := nq.Value.Val.(type) {
-	case *graph.Value_BytesVal:
-		b := types.Bytes(v.BytesVal)
-		return &b, nil
 	case *graph.Value_IntVal:
 		i := types.Int32(v.IntVal)
 		return &i, nil
@@ -344,12 +341,12 @@ func validateTypes(nquads []rdf.NQuad) error {
 	for i := range nquads {
 		nquad := &nquads[i]
 		if t := schema.TypeOf(nquad.Predicate); t != nil && t.IsScalar() {
-			schemaType := t.(types.Object)
+			schemaType := t.(types.TypeID)
 			typeID := types.TypeID(nquad.ObjectType)
-			if typeID == types.BytesID {
+			if typeID == types.StringID {
 				// Storage type was unspecified in the RDF, so we convert the data to the schema
 				// type.
-				v := types.ValueForType(schemaType.Id)
+				v := types.ValueForType(schemaType)
 				err := v.UnmarshalText(nquad.ObjectValue)
 				if err != nil {
 					return err
@@ -358,15 +355,15 @@ func validateTypes(nquads []rdf.NQuad) error {
 				if err != nil {
 					return err
 				}
-				nquad.ObjectType = byte(schemaType.Id)
+				nquad.ObjectType = byte(schemaType)
 
-			} else if typeID != schemaType.Id {
+			} else if typeID != schemaType {
 				v := types.ValueForType(typeID)
 				err := v.UnmarshalBinary(nquad.ObjectValue)
 				if err != nil {
 					return err
 				}
-				if _, err := types.Convert(v, schemaType.Id); err != nil {
+				if _, err := types.Convert(v, schemaType); err != nil {
 					return err
 				}
 			}

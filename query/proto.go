@@ -26,9 +26,6 @@ import (
 
 func toProtoValue(v types.Value) *graph.Value {
 	switch val := v.(type) {
-	case *types.Bytes:
-		return &graph.Value{&graph.Value_BytesVal{*val}}
-
 	case *types.String:
 		return &graph.Value{&graph.Value_StrVal{string(*val)}}
 

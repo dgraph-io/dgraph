@@ -17,7 +17,6 @@
 package types
 
 import (
-	"bytes"
 	"sort"
 
 	"github.com/dgraph-io/dgraph/task"
@@ -69,12 +68,6 @@ func (s byString) Less(i, j int) bool {
 	return *(s.values[i].(*String)) < *(s.values[j].(*String))
 }
 
-type byByteArray struct{ sortBase }
-
-func (s byByteArray) Less(i, j int) bool {
-	return bytes.Compare(*(s.values[i].(*Bytes)), *(s.values[j].(*Bytes))) < 0
-}
-
 // Sort sorts the given array in-place.
 func Sort(sID TypeID, v []Value, ul *task.List) error {
 	b := sortBase{v, ul}
@@ -93,9 +86,6 @@ func Sort(sID TypeID, v []Value, ul *task.List) error {
 		return nil
 	case StringID:
 		sort.Sort(byString{b})
-		return nil
-	case BytesID:
-		sort.Sort(byByteArray{b})
 		return nil
 	}
 	return x.Errorf("Scalar doesn't support sorting %s", sID)

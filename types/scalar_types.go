@@ -24,6 +24,7 @@ import (
 	"strconv"
 	"time"
 
+	stype "github.com/dgraph-io/dgraph/posting/types"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -32,15 +33,13 @@ import (
 // data. When adding a new type *always* add to the end of this list.
 // Never delete anything from this list even if it becomes unused.
 const (
-	BytesID    TypeID = 0
-	Int32ID    TypeID = 1
-	FloatID    TypeID = 2
-	BoolID     TypeID = 3
-	DateTimeID TypeID = 4
-	StringID   TypeID = 5
-	DateID     TypeID = 6
-	GeoID      TypeID = 7
-	ObjectID   TypeID = 8
+	Int32ID    = TypeID(stype.Posting_INT32)
+	FloatID    = TypeID(stype.Posting_FLOAT)
+	BoolID     = TypeID(stype.Posting_BOOL)
+	DateTimeID = TypeID(stype.Posting_DATETIME)
+	StringID   = TypeID(stype.Posting_STRING)
+	DateID     = TypeID(stype.Posting_DATE)
+	GeoID      = TypeID(stype.Posting_GEO)
 )
 
 var typeNameMap = map[string]TypeID{
@@ -52,8 +51,9 @@ var typeNameMap = map[string]TypeID{
 	"dateTime": DateTimeID,
 	"date":     DateID,
 	"geo":      GeoID,
-	"bytes":    BytesID,
 }
+
+type TypeID stype.Posting_ValType
 
 // TypeForName returns the type corresponding to the given name.
 // If name is not recognized, it returns nil.
@@ -65,10 +65,6 @@ func TypeForName(name string) (TypeID, bool) {
 // ValueForType returns the zero value for a type id
 func ValueForType(id TypeID) Value {
 	switch id {
-	case BytesID:
-		var b Bytes
-		return &b
-
 	case Int32ID:
 		var i Int32
 		return &i
@@ -114,9 +110,6 @@ func (v Float) TypeID() TypeID {
 }
 func (v Bool) TypeID() TypeID {
 	return BoolID
-}
-func (v Bytes) TypeID() TypeID {
-	return BytesID
 }
 func (v Geo) TypeID() TypeID {
 	return GeoID

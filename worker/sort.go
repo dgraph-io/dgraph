@@ -139,7 +139,7 @@ func intersectBucket(ts *task.Sort, attr, token string, out []intersectedList) e
 	if !sType.IsScalar() {
 		return x.Errorf("Cannot sort attribute %s of type object.", attr)
 	}
-	scalar := sType.(types.Object)
+	scalar := sType.(types.TypeID)
 
 	key := x.IndexKey(attr, token)
 	pl, decr := posting.GetOrCreate(key)
@@ -198,7 +198,7 @@ func intersectBucket(ts *task.Sort, attr, token string, out []intersectedList) e
 }
 
 // sortByValue fetches values and sort UIDList.
-func sortByValue(attr string, ul *task.List, scalar types.Object) error {
+func sortByValue(attr string, ul *task.List, scalar types.TypeID) error {
 	values := make([]types.Value, len(ul.Uids))
 	for i, uid := range ul.Uids {
 		val, err := fetchValue(uid, attr, scalar)
@@ -207,11 +207,11 @@ func sortByValue(attr string, ul *task.List, scalar types.Object) error {
 		}
 		values[i] = val
 	}
-	return types.Sort(scalar.Id, values, ul)
+	return types.Sort(scalar, values, ul)
 }
 
 // fetchValue gets the value for a given UID.
-func fetchValue(uid uint64, attr string, scalar types.Object) (types.Value, error) {
+func fetchValue(uid uint64, attr string, scalar types.TypeID) (types.Value, error) {
 	pl, decr := posting.GetOrCreate(x.DataKey(attr, uid))
 	defer decr()
 
@@ -228,7 +228,7 @@ func fetchValue(uid uint64, attr string, scalar types.Object) (types.Value, erro
 		return nil, err
 	}
 
-	schemaVal, err := types.Convert(val, scalar.Id)
+	schemaVal, err := types.Convert(val, scalar)
 	if err != nil {
 		return nil, err
 	}

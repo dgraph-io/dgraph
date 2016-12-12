@@ -986,7 +986,7 @@ children: <
   properties: <
     prop: "gender"
     value: <
-      bytes_val: "female"
+      str_val: "female"
     >
   >
   properties: <
@@ -1177,7 +1177,7 @@ children: <
   properties: <
     prop: "gender"
     value: <
-      bytes_val: "female"
+      str_val: "female"
     >
   >
   children: <
@@ -1240,7 +1240,7 @@ children: <
   properties: <
     prop: "gender"
     value: <
-      bytes_val: "female"
+      str_val: "female"
     >
   >
   children: <
@@ -1312,7 +1312,7 @@ children: <
   properties: <
     prop: "gender"
     value: <
-      bytes_val: "female"
+      str_val: "female"
     >
   >
 >
@@ -1481,7 +1481,7 @@ children: <
   properties: <
     prop: "gender"
     value: <
-      bytes_val: "female"
+      str_val: "female"
     >
   >
   children: <
@@ -1571,7 +1571,7 @@ children: <
   properties: <
     prop: "gender"
     value: <
-      bytes_val: "female"
+      str_val: "female"
     >
   >
   children: <
@@ -1643,7 +1643,7 @@ children: <
   properties: <
     prop: "gender"
     value: <
-      bytes_val: "female"
+      str_val: "female"
     >
   >
   children: <

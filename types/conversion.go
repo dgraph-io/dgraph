@@ -28,7 +28,7 @@ func Convert(value Value, toID TypeID) (Value, error) {
 		return value, nil
 	}
 
-	if toID == StringID || toID == BytesID {
+	if toID == StringID {
 		// If we are converting to a string or bytes, simply use MarshalText
 		r, err := value.MarshalText()
 		if err != nil {
@@ -41,13 +41,6 @@ func Convert(value Value, toID TypeID) (Value, error) {
 	u := ValueForType(toID)
 	// Otherwise we check if the conversion is defined.
 	switch v := value.(type) {
-	case *Bytes:
-		// Bytes convert the same way as strings, as bytes denote an untyped value which is almost
-		// always a string.
-		if err := u.UnmarshalText([]byte(*v)); err != nil {
-			return nil, err
-		}
-
 	case *String:
 		// If the value is a string, then we can always Unmarshal it using the unmarshaller
 		if err := u.UnmarshalText([]byte(*v)); err != nil {

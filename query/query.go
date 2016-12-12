@@ -277,9 +277,9 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 						return x.Errorf("Unknown Scalar:%v. Leaf predicate:'%v' must be"+
 							" one of the scalar types defined in the schema.", pc.Params.AttrType, pc.Attr)
 					}
-					st := schemaType.(types.Object)
+					st := schemaType.(types.TypeID)
 					// Convert to schema type.
-					sv, err = types.Convert(v, st.Id)
+					sv, err = types.Convert(v, st)
 					if bytes.Equal(tv.Val, nil) || err != nil {
 						// skip values that don't convert.
 						return x.Errorf("_INV_")
@@ -290,9 +290,9 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 					if !globalType.IsScalar() {
 						return x.Errorf("Leaf predicate:'%v' must be a scalar.", pc.Attr)
 					}
-					gt := globalType.(types.Object)
+					gt := globalType.(types.TypeID)
 					// Convert to schema type.
-					sv, err = types.Convert(v, gt.Id)
+					sv, err = types.Convert(v, gt)
 					if bytes.Equal(tv.Val, nil) || err != nil {
 						continue
 					}

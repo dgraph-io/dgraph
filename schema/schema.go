@@ -68,12 +68,7 @@ func TypeOf(pred string) types.Type {
 }
 
 func getScalar(typ string) (types.Type, bool) {
-	id, ok := types.TypeForName(typ)
-	sc := types.Object{
-		Name: typ,
-		Id:   id,
-	}
-	return sc, ok
+	return types.TypeForName(typ)
 }
 
 // IndexedFields returns a list of indexed fields.
