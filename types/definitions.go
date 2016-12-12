@@ -33,14 +33,17 @@ type TypeID byte
 // Scalar type defines concrete structure for scalar types to use.
 // Almost all scalar types can also act as input types.
 // Scalars (along with Enums) form leaf nodes of request or input values to arguements.
+/*
 type Scalar struct {
 	Name string // name of scalar type
 	id   TypeID // The storage identifier for this type
 }
+*/
 
 // Object represents all object types in the schema definition.
 type Object struct {
 	Name   string
+	Id     TypeID
 	Fields map[string]string //field to type relationship
 }
 
@@ -52,26 +55,33 @@ type Value interface {
 	encoding.BinaryUnmarshaler
 	json.Marshaler
 	// Type returns the type of this value
-	Type() Scalar
+	TypeID() TypeID
 	fmt.Stringer
 }
 
 // String function to implement string interface
+/*
 func (s Scalar) String() string {
 	return s.Name
 }
+
 
 // ID function returns the storage identifier of this type
 func (s Scalar) ID() TypeID {
 	return s.id
 }
 
+
 // IsScalar returns true if the object is of scalar type.
 func (s Scalar) IsScalar() bool {
 	return true
 }
+*/
 
 // IsScalar returns true if the object is of scalar type.
 func (o Object) IsScalar() bool {
-	return false
+	if o.Id == ObjectID {
+		return false
+	}
+	return true
 }

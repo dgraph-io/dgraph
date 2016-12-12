@@ -40,9 +40,11 @@ const (
 	StringID   TypeID = 5
 	DateID     TypeID = 6
 	GeoID      TypeID = 7
+	ObjectID   TypeID = 8
 )
 
 // added suffix 'type' to names to distinguish from Go types 'int' and 'string'
+/*
 var (
 	int32Type = Scalar{
 		Name: "int",
@@ -81,8 +83,10 @@ var (
 		id:   GeoID,
 	}
 )
+*/
 
 // stores a mapping between a string name of a type
+/*
 var typeNameMap = map[string]Type{
 	int32Type.Name:     int32Type,
 	floatType.Name:     floatType,
@@ -94,10 +98,22 @@ var typeNameMap = map[string]Type{
 	geoType.Name:       geoType,
 	byteArrayType.Name: byteArrayType,
 }
+*/
+var typeNameMap = map[string]TypeID{
+	"int":      Int32ID,
+	"float":    FloatID,
+	"string":   StringID,
+	"bool":     BoolID,
+	"id":       StringID,
+	"dateTime": DateTimeID,
+	"date":     DateID,
+	"geo":      GeoID,
+	"bytes":    BytesID,
+}
 
 // TypeForName returns the type corresponding to the given name.
 // If name is not recognized, it returns nil.
-func TypeForName(name string) (Type, bool) {
+func TypeForName(name string) (TypeID, bool) {
 	t, ok := typeNameMap[name]
 	return t, ok
 }
@@ -145,6 +161,32 @@ func ValueForType(id TypeID) Value {
 // Int32 is the scalar type for int32
 type Int32 int32
 
+// Type returns the type of this value
+func (v Int32) TypeID() TypeID {
+	return Int32ID
+}
+func (v Float) TypeID() TypeID {
+	return FloatID
+}
+func (v Bool) TypeID() TypeID {
+	return BoolID
+}
+func (v Bytes) TypeID() TypeID {
+	return BytesID
+}
+func (v Geo) TypeID() TypeID {
+	return GeoID
+}
+func (v Date) TypeID() TypeID {
+	return DateID
+}
+func (v Time) TypeID() TypeID {
+	return DateTimeID
+}
+func (v String) TypeID() TypeID {
+	return StringID
+}
+
 // MarshalBinary marshals to binary
 func (v Int32) MarshalBinary() ([]byte, error) {
 	var bs [4]byte
@@ -161,11 +203,6 @@ func (v Int32) MarshalText() ([]byte, error) {
 // MarshalJSON marshals to json
 func (v Int32) MarshalJSON() ([]byte, error) {
 	return json.Marshal(int32(v))
-}
-
-// Type returns the type of this value
-func (v Int32) Type() Scalar {
-	return int32Type
 }
 
 func (v Int32) String() string {
@@ -213,11 +250,6 @@ func (v Float) MarshalJSON() ([]byte, error) {
 	return json.Marshal(float64(v))
 }
 
-// Type returns the type of this value
-func (v Float) Type() Scalar {
-	return floatType
-}
-
 // UnmarshalBinary unmarshals the data from a binary format.
 func (v *Float) UnmarshalBinary(data []byte) error {
 	if len(data) < 8 {
@@ -261,11 +293,6 @@ func (v String) MarshalJSON() ([]byte, error) {
 	return json.Marshal(string(v))
 }
 
-// Type returns the type of this value
-func (v String) Type() Scalar {
-	return stringType
-}
-
 // UnmarshalBinary unmarshals the data from a binary format.
 func (v *String) UnmarshalBinary(data []byte) error {
 	*v = String(data)
@@ -298,11 +325,6 @@ func (v Bytes) MarshalText() ([]byte, error) {
 func (v Bytes) MarshalJSON() ([]byte, error) {
 	// TODO: should we encode this somehow if they are are not printable characters.
 	return json.Marshal(string(v))
-}
-
-// Type returns the type of this value
-func (v Bytes) Type() Scalar {
-	return byteArrayType
 }
 
 // UnmarshalBinary unmarshals the data from a binary format.
@@ -345,11 +367,6 @@ func (v Bool) MarshalJSON() ([]byte, error) {
 	return json.Marshal(bool(v))
 }
 
-// Type returns the type of this value
-func (v Bool) Type() Scalar {
-	return booleanType
-}
-
 // UnmarshalBinary unmarshals the data from a binary format.
 func (v *Bool) UnmarshalBinary(data []byte) error {
 	if data[0] == 0 {
@@ -380,11 +397,6 @@ func (v Bool) String() string {
 // Time wraps time.Time to add the Value interface
 type Time struct {
 	time.Time
-}
-
-// Type returns the type of this value
-func (v Time) Type() Scalar {
-	return dateTimeType
 }
 
 // UnmarshalText unmarshals the data from a text format.

@@ -29,7 +29,7 @@ import (
 func testBinary(val Value, t *testing.T) {
 	bytes, err := val.MarshalBinary()
 	require.NoError(t, err)
-	val2 := ValueForType(val.Type().ID())
+	val2 := ValueForType(val.TypeID())
 	err = val2.UnmarshalBinary(bytes)
 	require.NoError(t, err)
 	require.Equal(t, val, val2,
@@ -39,7 +39,7 @@ func testBinary(val Value, t *testing.T) {
 func testText(val Value, t *testing.T) {
 	bytes, err := val.MarshalText()
 	require.NoError(t, err)
-	val2 := ValueForType(val.Type().ID())
+	val2 := ValueForType(val.TypeID())
 	err = val2.UnmarshalText(bytes)
 	require.NoError(t, err)
 	require.Equal(t, val, val2,

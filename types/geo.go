@@ -48,11 +48,6 @@ func (v Geo) MarshalJSON() ([]byte, error) {
 	return v.MarshalText()
 }
 
-// Type returns the type of this value
-func (v Geo) Type() Scalar {
-	return geoType
-}
-
 // UnmarshalBinary unmarshals the data from WKB
 func (v *Geo) UnmarshalBinary(data []byte) error {
 	w, err := wkb.Unmarshal(data)

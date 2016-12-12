@@ -76,9 +76,9 @@ func (s byByteArray) Less(i, j int) bool {
 }
 
 // Sort sorts the given array in-place.
-func (s Scalar) Sort(v []Value, ul *task.List) error {
+func Sort(sID TypeID, v []Value, ul *task.List) error {
 	b := sortBase{v, ul}
-	switch s.ID() {
+	switch sID {
 	case DateID:
 		sort.Sort(byDate{b})
 		return nil
@@ -98,5 +98,5 @@ func (s Scalar) Sort(v []Value, ul *task.List) error {
 		sort.Sort(byByteArray{b})
 		return nil
 	}
-	return x.Errorf("Scalar doesn't support sorting %s", s)
+	return x.Errorf("Scalar doesn't support sorting %s", sID)
 }

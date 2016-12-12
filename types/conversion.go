@@ -23,12 +23,12 @@ import (
 )
 
 // Convert converts the value to given scalar type.
-func (to Scalar) Convert(value Value) (Value, error) {
-	if to.ID() == value.Type().ID() {
+func Convert(value Value, toID TypeID) (Value, error) {
+	if toID == value.TypeID() {
 		return value, nil
 	}
 
-	if to.ID() == StringID || to.ID() == BytesID {
+	if toID == StringID || toID == BytesID {
 		// If we are converting to a string or bytes, simply use MarshalText
 		r, err := value.MarshalText()
 		if err != nil {
@@ -38,7 +38,7 @@ func (to Scalar) Convert(value Value) (Value, error) {
 		return &v, nil
 	}
 
-	u := ValueForType(to.ID())
+	u := ValueForType(toID)
 	// Otherwise we check if the conversion is defined.
 	switch v := value.(type) {
 	case *Bytes:
@@ -57,7 +57,7 @@ func (to Scalar) Convert(value Value) (Value, error) {
 	case *Int32:
 		c, ok := u.(int32Unmarshaler)
 		if !ok {
-			return nil, cantConvert(to, v)
+			return nil, cantConvert(toID, v)
 		}
 		if err := c.fromInt(int32(*v)); err != nil {
 			return nil, err
@@ -66,7 +66,7 @@ func (to Scalar) Convert(value Value) (Value, error) {
 	case *Float:
 		c, ok := u.(floatUnmarshaler)
 		if !ok {
-			return nil, cantConvert(to, v)
+			return nil, cantConvert(toID, v)
 		}
 		if err := c.fromFloat(float64(*v)); err != nil {
 			return nil, err
@@ -75,7 +75,7 @@ func (to Scalar) Convert(value Value) (Value, error) {
 	case *Bool:
 		c, ok := u.(boolUnmarshaler)
 		if !ok {
-			return nil, cantConvert(to, v)
+			return nil, cantConvert(toID, v)
 		}
 		if err := c.fromBool(bool(*v)); err != nil {
 			return nil, err
@@ -84,7 +84,7 @@ func (to Scalar) Convert(value Value) (Value, error) {
 	case *Time:
 		c, ok := u.(timeUnmarshaler)
 		if !ok {
-			return nil, cantConvert(to, v)
+			return nil, cantConvert(toID, v)
 		}
 		if err := c.fromTime(v.Time); err != nil {
 			return nil, err
@@ -93,20 +93,20 @@ func (to Scalar) Convert(value Value) (Value, error) {
 	case *Date:
 		c, ok := u.(dateUnmarshaler)
 		if !ok {
-			return nil, cantConvert(to, v)
+			return nil, cantConvert(toID, v)
 		}
 		if err := c.fromDate(*v); err != nil {
 			return nil, err
 		}
 
 	default:
-		return nil, cantConvert(to, v)
+		return nil, cantConvert(toID, v)
 	}
 	return u, nil
 }
 
-func cantConvert(to Scalar, val Value) error {
-	return x.Errorf("Cannot convert %v to type %s", val, to.Name)
+func cantConvert(to TypeID, val Value) error {
+	return x.Errorf("Cannot convert %v to type %s", val, to)
 }
 
 type int32Unmarshaler interface {

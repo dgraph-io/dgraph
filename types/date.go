@@ -59,11 +59,6 @@ func (v Date) MarshalJSON() ([]byte, error) {
 	return json.Marshal(s)
 }
 
-// Type returns the type of this value
-func (v Date) Type() Scalar {
-	return dateType
-}
-
 func (v Date) String() string {
 	str, _ := v.MarshalText()
 	return string(str)
