@@ -43,62 +43,6 @@ const (
 	ObjectID   TypeID = 8
 )
 
-// added suffix 'type' to names to distinguish from Go types 'int' and 'string'
-/*
-var (
-	int32Type = Scalar{
-		Name: "int",
-		id:   Int32ID,
-	}
-	floatType = Scalar{
-		Name: "float",
-		id:   FloatID,
-	}
-	stringType = Scalar{
-		Name: "string",
-		id:   StringID,
-	}
-	byteArrayType = Scalar{
-		Name: "bytes",
-		id:   BytesID,
-	}
-	booleanType = Scalar{
-		Name: "bool",
-		id:   BoolID,
-	}
-	idType = Scalar{
-		Name: "id",
-		id:   StringID,
-	}
-	dateTimeType = Scalar{
-		Name: "datetime",
-		id:   DateTimeID,
-	}
-	dateType = Scalar{
-		Name: "date",
-		id:   DateID,
-	}
-	geoType = Scalar{
-		Name: "geo",
-		id:   GeoID,
-	}
-)
-*/
-
-// stores a mapping between a string name of a type
-/*
-var typeNameMap = map[string]Type{
-	int32Type.Name:     int32Type,
-	floatType.Name:     floatType,
-	stringType.Name:    stringType,
-	booleanType.Name:   booleanType,
-	idType.Name:        idType,
-	dateTimeType.Name:  dateTimeType,
-	dateType.Name:      dateType,
-	geoType.Name:       geoType,
-	byteArrayType.Name: byteArrayType,
-}
-*/
 var typeNameMap = map[string]TypeID{
 	"int":      Int32ID,
 	"float":    FloatID,
