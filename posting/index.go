@@ -93,8 +93,8 @@ func indexTokens(attr string, p types.Value) ([]string, error) {
 	if !schemaType.IsScalar() {
 		return nil, x.Errorf("Cannot index attribute %s of type object.", attr)
 	}
-	s := schemaType.(types.Scalar)
-	schemaVal, err := s.Convert(p)
+	s := schemaType.(types.Object)
+	schemaVal, err := types.Convert(p, s.Id)
 	if err != nil {
 		return nil, err
 	}
