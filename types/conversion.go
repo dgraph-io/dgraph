@@ -88,6 +88,8 @@ func cantConvert(to Scalar, val Value) error {
 	return x.Errorf("Cannot convert %v to type %s", val, to.Name)
 }
 
+// Unmarshler interface is implemented by all types implement and it
+// facilitates conversion between types.
 type Unmarshaler interface {
 	fromInt(value Int32) error
 	fromFloat(value Float) error
