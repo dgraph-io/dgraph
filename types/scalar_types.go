@@ -404,39 +404,51 @@ func (v *Time) UnmarshalText(text []byte) error {
 	return nil
 }
 
-func (v *Int32) fromInt(f Int32) error {
-	if f > math.MaxInt32 || f < math.MinInt32 {
+func (v *Int32) fromInt(t Int32) error {
+	if t > math.MaxInt32 || t < math.MinInt32 {
 		return x.Errorf("Int out of int32 range")
 	}
-	*v = Int32(f)
+	*v = Int32(t)
 	return nil
 }
 
-func (v *Int32) fromFloat(f Float) error {
-	if f > math.MaxInt32 || f < math.MinInt32 || math.IsNaN(float64(f)) {
+func (v *Geo) fromInt(t Int32) error {
+	return cantConvert(t.Type(), v)
+}
+
+func (v *Geo) fromFloat(t Float) error {
+	return cantConvert(t.Type(), v)
+}
+
+func (v *Geo) fromBool(t Bool) error {
+	return cantConvert(t.Type(), v)
+}
+
+func (v *Int32) fromFloat(t Float) error {
+	if t > math.MaxInt32 || t < math.MinInt32 || math.IsNaN(float64(t)) {
 		return x.Errorf("Float out of int32 range")
 	}
-	*v = Int32(f)
+	*v = Int32(t)
 	return nil
 }
 
-func (v *Float) fromFloat(b Float) error {
-	*v = b
+func (v *Float) fromFloat(t Float) error {
+	*v = t
 	return nil
 }
 
-func (v *Geo) fromGeo(b Geo) error {
-	*v = b
+func (v *Geo) fromGeo(t Geo) error {
+	*v = t
 	return nil
 }
 
-func (v *Bool) fromBool(b Bool) error {
-	*v = b
+func (v *Bool) fromBool(t Bool) error {
+	*v = t
 	return nil
 }
 
-func (v *Int32) fromBool(b Bool) error {
-	if b {
+func (v *Int32) fromBool(t Bool) error {
+	if t {
 		*v = 1
 	} else {
 		*v = 0
@@ -470,13 +482,13 @@ func (v *Time) fromGeo(t Geo) error {
 	return cantConvert(t.Type(), v)
 }
 
-func (v *Float) fromInt(i Int32) error {
-	*v = Float(int32(i))
+func (v *Float) fromInt(t Int32) error {
+	*v = Float(int32(t))
 	return nil
 }
 
-func (v *Float) fromBool(b Bool) error {
-	if bool(b) {
+func (v *Float) fromBool(t Bool) error {
+	if bool(t) {
 		*v = 1
 	} else {
 		*v = 0
@@ -497,24 +509,24 @@ func (v *Float) fromTime(t Time) error {
 	return nil
 }
 
-func (v *Bool) fromInt(i Int32) error {
-	*v = int32(i) != 0
+func (v *Bool) fromInt(t Int32) error {
+	*v = int32(t) != 0
 	return nil
 }
 
-func (v *Bool) fromFloat(f Float) error {
-	*v = float64(f) != 0
+func (v *Bool) fromFloat(t Float) error {
+	*v = float64(t) != 0
 	return nil
 }
 
-func (v *Time) fromInt(i Int32) error {
-	v.Time = time.Unix(int64(i), 0).UTC()
+func (v *Time) fromInt(t Int32) error {
+	v.Time = time.Unix(int64(t), 0).UTC()
 	return nil
 }
 
-func (v *Time) fromFloat(f Float) error {
-	secs := int64(f)
-	fracSecs := float64(f) - float64(secs)
+func (v *Time) fromFloat(t Float) error {
+	secs := int64(t)
+	fracSecs := float64(t) - float64(secs)
 	nsecs := int64(fracSecs * nanoSecondsInSec)
 	v.Time = time.Unix(secs, nsecs).UTC()
 	return nil
