@@ -19,19 +19,25 @@ func ApplyFilter(u *task.List, f func(uint64, int) bool) {
 	u.Uids = out
 }
 
-// IntersectWith intersects u with v. The update is made to u. It assumes
-// that u, v are sorted, which are not always the case.
+// IntersectWith intersects u with v. The update is made to u.
+// u, v should be sorted.
 func IntersectWith(u, v *task.List) {
 	out := u.Uids[:0]
 	n := len(u.Uids)
 	m := len(v.Uids)
-	var k int
-	for i := 0; i < n && k < m; i++ {
+	for i, k := 0, 0; i < n && k < m; {
 		uid := u.Uids[i]
-		k = indexOfEqualOrGreaterVal(v, k, uid)
-		if k < m && v.Uids[k] == uid {
+		vid := v.Uids[k]
+		if uid > vid {
+			for k = k + 1; k < m && v.Uids[k] < uid; k++ {
+			}
+		} else if uid == vid {
 			out = append(out, uid)
 			k++
+			i++
+		} else {
+			for i = i + 1; i < n && u.Uids[i] < vid; i++ {
+			}
 		}
 	}
 	u.Uids = out
