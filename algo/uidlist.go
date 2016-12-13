@@ -19,19 +19,25 @@ func ApplyFilter(u *task.List, f func(uint64, int) bool) {
 	u.Uids = out
 }
 
-// IntersectWith intersects u with v. The update is made to u. It assumes
-// that u, v are sorted, which are not always the case.
+// IntersectWith intersects u with v. The update is made to u.
+// u, v should be sorted.
 func IntersectWith(u, v *task.List) {
 	out := u.Uids[:0]
 	n := len(u.Uids)
 	m := len(v.Uids)
-	var k int
-	for i := 0; i < n; i++ {
+	for i, k := 0, 0; i < n && k < m; {
 		uid := u.Uids[i]
-		for ; k < m && v.Uids[k] < uid; k++ {
-		}
-		if k < m && v.Uids[k] == uid {
+		vid := v.Uids[k]
+		if uid > vid {
+			for k = k + 1; k < m && v.Uids[k] < uid; k++ {
+			}
+		} else if uid == vid {
 			out = append(out, uid)
+			k++
+			i++
+		} else {
+			for i = i + 1; i < n && u.Uids[i] < vid; i++ {
+			}
 		}
 	}
 	u.Uids = out
@@ -73,7 +79,9 @@ func IntersectSorted(lists []*task.List) *task.List {
 	// lptrs[j] is the element we are looking at for lists[j].
 	lptrs := make([]int, len(lists))
 	shortList := lists[minLenIdx]
-	for i := 0; i < len(shortList.Uids); i++ {
+	elemsLeft := true  // If some list has no elems left, we can't intersect more.
+
+	for i := 0; i < len(shortList.Uids) && elemsLeft; i++ {
 		val := shortList.Uids[i]
 		if i > 0 && val == shortList.Uids[i-1] {
 			x.AssertTruef(false, "We shouldn't have duplicates in UIDLists")
@@ -94,6 +102,7 @@ func IntersectSorted(lists []*task.List) *task.List {
 
 			lptrs[j] = ljp
 			if ljp >= lsz || lj.Uids[ljp] > val {
+				elemsLeft = ljp < lsz
 				skip = true
 				break
 			}
