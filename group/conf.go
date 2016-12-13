@@ -19,8 +19,8 @@ type predMeta struct {
 }
 
 type config struct {
-	n    uint64
-	k    uint64
+	n    uint32
+	k    uint32
 	pred []predMeta
 }
 
@@ -46,7 +46,7 @@ func parsePredicates(groupId uint32, p string) error {
 	return nil
 }
 
-func parseDefaultConfig(l string) (uint64, error) {
+func parseDefaultConfig(l string) (uint32, error) {
 	// If we have already seen a default config line, and n has a value then we
 	// log.Fatal.
 	if groupConfig.n != 0 {
@@ -60,14 +60,17 @@ func parseDefaultConfig(l string) (uint64, error) {
 	}
 
 	var err error
-	groupConfig.n, err = strconv.ParseUint(conf[2], 10, 64)
+	var n uint64
+	n, err = strconv.ParseUint(conf[2], 10, 32)
 	x.Check(err)
+	groupConfig.n = uint32(n)
 	x.AssertTrue(groupConfig.n != 0)
 	if len(conf) == 5 {
 		if conf[3] != "+" {
 			return 0, fmt.Errorf("Default config format should be like: %v", "default: fp % n + k")
 		}
-		groupConfig.k, err = strconv.ParseUint(conf[4], 10, 64)
+		n, err = strconv.ParseUint(conf[4], 10, 32)
+		groupConfig.k = uint32(n)
 		x.Check(err)
 	}
 	return groupConfig.k, nil
@@ -79,7 +82,7 @@ func ParseConfig(r io.Reader) error {
 	scanner := bufio.NewScanner(r)
 	// To keep track of last groupId seen across lines. If we the groups ids are
 	// not sequential, we log.Fatal.
-	var curGroupId uint64
+	var curGroupId uint32
 	// If after seeing line with default config, we see other lines, we log.Fatal.
 	// Default config should be specified as the last line, so that we can check
 	// accurately that k in (fp % N + k) generates consecutive groups.
@@ -113,9 +116,9 @@ func ParseConfig(r io.Reader) error {
 				return fmt.Errorf("Default config should be specified as the last line. Found %v",
 					l)
 			}
-			groupId, err := strconv.ParseUint(c[0], 10, 64)
+			groupId, err := strconv.ParseUint(c[0], 10, 32)
 			x.Check(err)
-			if curGroupId != groupId {
+			if curGroupId != uint32(groupId) {
 				return fmt.Errorf("Group ids should be sequential and should start from 0. "+
 					"Found %v, should have been %v", groupId, curGroupId)
 			}
@@ -135,6 +138,7 @@ func ParseGroupConfig(file string) error {
 	cf, err := os.Open(file)
 	if os.IsNotExist(err) {
 		groupConfig.n = 1
+		groupConfig.k = 1
 		return nil
 	}
 	x.Check(err)
@@ -148,7 +152,11 @@ func ParseGroupConfig(file string) error {
 }
 
 func fpGroup(pred string) uint32 {
-	return farm.Fingerprint32([]byte(pred))%uint32(groupConfig.n) + uint32(groupConfig.k)
+	if groupConfig.n == 1 {
+		return groupConfig.k
+	}
+
+	return farm.Fingerprint32([]byte(pred))%groupConfig.n + groupConfig.k
 }
 
 func BelongsTo(pred string) uint32 {

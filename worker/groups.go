@@ -19,12 +19,11 @@ import (
 )
 
 var (
-	groupIds = flag.String("groups", "0", "RAFT groups handled by this server.")
+	groupIds = flag.String("groups", "0,1", "RAFT groups handled by this server.")
 	myAddr   = flag.String("my", "",
 		"addr:port of this server, so other Dgraph servers can talk to this.")
-	peer           = flag.String("peer", "", "Address of any peer.")
-	raftId         = flag.Uint64("idx", 1, "RAFT ID that this server will use to join RAFT groups.")
-	redirectPrefix = []byte("REDIRECT:")
+	peer   = flag.String("peer", "", "Address of any peer.")
+	raftId = flag.Uint64("idx", 1, "RAFT ID that this server will use to join RAFT groups.")
 
 	emptyMembershipUpdate task.MembershipUpdate
 )
