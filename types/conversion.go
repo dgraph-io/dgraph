@@ -31,8 +31,8 @@ import (
 )
 
 // Convert converts the value to given scalar type.
-func Convert(fromID TypeID, toID TypeID, data []byte) (interface{}, error) {
-	var v, res interface{}
+func Convert(fromID TypeID, toID TypeID, data []byte, res *interface{}) error {
+	var v interface{}
 
 	// First decode binary to corresponding type interface
 	// (Unmarshal from binary to the from type).
@@ -41,12 +41,12 @@ func Convert(fromID TypeID, toID TypeID, data []byte) (interface{}, error) {
 		v = String(data)
 	case Int32ID:
 		if len(data) < 4 {
-			return res, x.Errorf("Invalid data for int32 %v", data)
+			return x.Errorf("Invalid data for int32 %v", data)
 		}
 		v = Int32(binary.LittleEndian.Uint32(data))
 	case FloatID:
 		if len(data) < 8 {
-			return res, x.Errorf("Invalid data for float %v", data)
+			return x.Errorf("Invalid data for float %v", data)
 		}
 		i := binary.LittleEndian.Uint64(data)
 		val := math.Float64frombits(i)
@@ -54,16 +54,14 @@ func Convert(fromID TypeID, toID TypeID, data []byte) (interface{}, error) {
 	case BoolID:
 		if data[0] == 0 {
 			v = Bool(false)
-			return res, nil
 		} else if data[0] == 1 {
 			v = Bool(true)
-			return res, nil
 		} else {
-			return res, x.Errorf("Invalid value for bool %v", data[0])
+			return x.Errorf("Invalid value for bool %v", data[0])
 		}
 	case DateID:
 		if len(data) < 8 {
-			return res, x.Errorf("Invalid data for date %v", data)
+			return x.Errorf("Invalid data for date %v", data)
 		}
 		val := binary.LittleEndian.Uint64(data)
 		tm := time.Unix(int64(val), 0)
@@ -71,13 +69,13 @@ func Convert(fromID TypeID, toID TypeID, data []byte) (interface{}, error) {
 	case DateTimeID:
 		var t time.Time
 		if err := t.UnmarshalBinary(data); err != nil {
-			return res, err
+			return err
 		}
 		v = Time{t}
 	case GeoID:
 		w, err := wkb.Unmarshal(data)
 		if err != nil {
-			return res, err
+			return err
 		}
 		v = Geo{w}
 	case BinaryID:
@@ -91,83 +89,83 @@ func Convert(fromID TypeID, toID TypeID, data []byte) (interface{}, error) {
 			// Unmarshal from Binary to type interfaces.
 			switch toID {
 			case StringID:
-				res = String(data)
+				*res = String(data)
 			case Int32ID:
 				if len(data) < 4 {
-					return res, x.Errorf("Invalid data for int32 %v", data)
+					return x.Errorf("Invalid data for int32 %v", data)
 				}
-				res = Int32(binary.LittleEndian.Uint32(data))
+				*res = Int32(binary.LittleEndian.Uint32(data))
 			case FloatID:
 				if len(data) < 8 {
-					return res, x.Errorf("Invalid data for float %v", data)
+					return x.Errorf("Invalid data for float %v", data)
 				}
 				i := binary.LittleEndian.Uint64(data)
 				val := math.Float64frombits(i)
-				res = Float(val)
+				*res = Float(val)
 			case BoolID:
 				if data[0] == 0 {
-					res = Bool(false)
-					return res, nil
+					*res = Bool(false)
+					return nil
 				} else if data[0] == 1 {
-					res = Bool(true)
-					return res, nil
+					*res = Bool(true)
+					return nil
 				} else {
-					return res, x.Errorf("Invalid value for bool %v", data[0])
+					return x.Errorf("Invalid value for bool %v", data[0])
 				}
 			case DateID:
 				if len(data) < 8 {
-					return res, x.Errorf("Invalid data for date %v", data)
+					return x.Errorf("Invalid data for date %v", data)
 				}
 				val := binary.LittleEndian.Uint64(data)
 				tm := time.Unix(int64(val), 0)
-				res = createDate(tm.Date())
+				*res = createDate(tm.Date())
 			case DateTimeID:
 				var t time.Time
 				if err := t.UnmarshalBinary(data); err != nil {
-					return res, err
+					return err
 				}
-				res = Time{t}
+				*res = Time{t}
 			case GeoID:
 				w, err := wkb.Unmarshal(data)
 				if err != nil {
-					return res, err
+					return err
 				}
-				res = Geo{w}
+				*res = Geo{w}
 			default:
-				return res, cantConvert(fromID, toID)
+				return cantConvert(fromID, toID)
 			}
 		}
 	case StringID:
 		{
 			vc, ok := v.(String)
 			if !ok {
-				return res, x.Errorf("Expected a String type")
+				return x.Errorf("Expected a String type")
 			}
 			switch toID {
 			case BinaryID:
 				// Marshal Binary
-				res = []byte(vc)
+				*res = []byte(vc)
 			case Int32ID:
 				// Marshal text.
 				val, err := strconv.ParseInt(string(vc), 10, 32)
 				if err != nil {
-					return res, err
+					return err
 				}
-				res = Int32(val)
+				*res = Int32(val)
 			case FloatID:
 				val, err := strconv.ParseFloat(string(vc), 64)
 				if err != nil {
-					return res, err
+					return err
 				}
-				res = Float(val)
+				*res = Float(val)
 			case StringID:
-				res = String(vc)
+				*res = String(vc)
 			case BoolID:
 				val, err := strconv.ParseBool(string(vc))
 				if err != nil {
-					return res, err
+					return err
 				}
-				res = Bool(val)
+				*res = Bool(val)
 			case DateID:
 				val, err := time.Parse(dateFormatYMD, string(vc))
 				if err != nil {
@@ -175,38 +173,38 @@ func Convert(fromID TypeID, toID TypeID, data []byte) (interface{}, error) {
 					if err != nil {
 						val, err = time.Parse(dateFormatY, string(vc))
 						if err != nil {
-							return res, err
+							return err
 						}
 					}
 				}
-				res = createDate(val.Date())
+				*res = createDate(val.Date())
 			case DateTimeID:
 				var t time.Time
 				if err := t.UnmarshalText([]byte(vc)); err != nil {
 					fmt.Println(t)
 					// Try parsing without timezone since that is a valid format
 					if t, err = time.Parse("2006-01-02T15:04:05", string(vc)); err != nil {
-						return res, err
+						return err
 					}
 				}
 				fmt.Println(t)
-				res = Time{t}
+				*res = Time{t}
 			case GeoID:
 				var g geom.T
 				text := bytes.Replace([]byte(vc), []byte("'"), []byte("\""), -1)
 				if err := geojson.Unmarshal(text, &g); err != nil {
-					return res, err
+					return err
 				}
-				res = Geo{g}
+				*res = Geo{g}
 			default:
-				return res, cantConvert(fromID, toID)
+				return cantConvert(fromID, toID)
 			}
 		}
 	case Int32ID:
 		{
 			vc, ok := v.(Int32)
 			if !ok {
-				return res, x.Errorf("Expected a Int32 type")
+				return x.Errorf("Expected a Int32 type")
 			}
 
 			switch toID {
@@ -214,22 +212,22 @@ func Convert(fromID TypeID, toID TypeID, data []byte) (interface{}, error) {
 				// Marshal Binary
 				var bs [4]byte
 				binary.LittleEndian.PutUint32(bs[:], uint32(vc))
-				res = bs[:]
+				*res = bs[:]
 			case FloatID:
-				res = Float(vc)
+				*res = Float(vc)
 			case BoolID:
-				res = Bool(vc != 1)
+				*res = Bool(vc != 1)
 			case StringID:
 
 			default:
-				return res, cantConvert(fromID, toID)
+				return cantConvert(fromID, toID)
 			}
 		}
 	case FloatID:
 		{
 			vc, ok := v.(Float)
 			if !ok {
-				return res, x.Errorf("Expected a Float type")
+				return x.Errorf("Expected a Float type")
 			}
 			switch toID {
 			case BinaryID:
@@ -237,25 +235,25 @@ func Convert(fromID TypeID, toID TypeID, data []byte) (interface{}, error) {
 				var bs [8]byte
 				u := math.Float64bits(float64(vc))
 				binary.LittleEndian.PutUint64(bs[:], u)
-				res = bs[:]
+				*res = bs[:]
 			case Int32ID:
 				if vc > math.MaxInt32 || vc < math.MinInt32 || math.IsNaN(float64(vc)) {
-					return res, x.Errorf("Float out of int32 range")
+					return x.Errorf("Float out of int32 range")
 				}
-				res = Int32(vc)
+				*res = Int32(vc)
 			case BoolID:
-				res = Bool(vc != 1)
+				*res = Bool(vc != 1)
 			case StringID:
 
 			default:
-				return res, cantConvert(fromID, toID)
+				return cantConvert(fromID, toID)
 			}
 		}
 	case BoolID:
 		{
 			vc, ok := v.(Bool)
 			if !ok {
-				return res, x.Errorf("Expected a Bool type")
+				return x.Errorf("Expected a Bool type")
 			}
 			switch toID {
 			case BinaryID:
@@ -266,30 +264,30 @@ func Convert(fromID TypeID, toID TypeID, data []byte) (interface{}, error) {
 				} else {
 					bs[0] = 0
 				}
-				res = bs[:]
+				*res = bs[:]
 			case Int32ID:
 				if vc {
-					res = Int32(1)
+					*res = Int32(1)
 				} else {
-					res = Int32(0)
+					*res = Int32(0)
 				}
 			case FloatID:
 				if vc {
-					res = Float(1)
+					*res = Float(1)
 				} else {
-					res = Float(0)
+					*res = Float(0)
 				}
 			case StringID:
 
 			default:
-				return res, cantConvert(fromID, toID)
+				return cantConvert(fromID, toID)
 			}
 		}
 	case DateID:
 		{
 			vc, ok := v.(Date)
 			if !ok {
-				return res, x.Errorf("Expected a Date type")
+				return x.Errorf("Expected a Date type")
 			}
 
 			switch toID {
@@ -297,57 +295,64 @@ func Convert(fromID TypeID, toID TypeID, data []byte) (interface{}, error) {
 				// Marshal Binary
 				var bs [8]byte
 				binary.LittleEndian.PutUint64(bs[:], uint64(vc.Time.Unix()))
-				res = bs[:]
+				*res = bs[:]
 			case DateTimeID:
-				res = Time(createDate(vc.Date()))
+				*res = Time(createDate(vc.Date()))
 			case StringID:
 
 			default:
-				return res, cantConvert(fromID, toID)
+				return cantConvert(fromID, toID)
 			}
 		}
 	case DateTimeID:
 		{
 			vc, ok := v.(Time)
 			if !ok {
-				return res, x.Errorf("Expected a DateTime type")
+				return x.Errorf("Expected a DateTime type")
 			}
 			switch toID {
 			case BinaryID:
 				// Marshal Binary
-				return vc.MarshalBinary()
-
+				r, err := vc.MarshalBinary()
+				if err != nil {
+					return err
+				}
+				*res = r
 			case DateID:
-				res = Date(vc)
+				*res = Date(vc)
 			case StringID:
 
 			default:
-				return res, cantConvert(fromID, toID)
+				return cantConvert(fromID, toID)
 			}
 		}
 	case GeoID:
 		{
 			vc, ok := v.(Geo)
 			if !ok {
-				return res, x.Errorf("Expected a Geo type")
+				return x.Errorf("Expected a Geo type")
 			}
 
 			switch toID {
 			case BinaryID:
 				// Marshal Binary
-				return wkb.Marshal(vc.T, binary.LittleEndian)
+				r, err := wkb.Marshal(vc.T, binary.LittleEndian)
+				if err != nil {
+					return err
+				}
+				*res = r
 			case StringID:
 				val, err := geojson.Marshal(vc.T)
 				if err != nil {
-					return res, nil
+					return nil
 				}
-				res = String(bytes.Replace(val, []byte("\""), []byte("'"), -1))
+				*res = String(bytes.Replace(val, []byte("\""), []byte("'"), -1))
 			default:
-				return res, cantConvert(fromID, toID)
+				return cantConvert(fromID, toID)
 			}
 		}
 	}
-	return res, nil
+	return nil
 }
 
 func cantConvert(from TypeID, to TypeID) error {

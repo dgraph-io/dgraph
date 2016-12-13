@@ -28,10 +28,11 @@ func TestSameConversionString(t *testing.T) {
 		{"abc", "abc"},
 	}
 	for _, tc := range data {
-		if out, err := Convert(StringID, StringID, []byte(string(tc.in))); err != nil {
+		v := ValueForType(StringID)
+		if err := Convert(StringID, StringID, []byte(string(tc.in)), &v); err != nil {
 			t.Errorf("Unexpected error converting int to bool: %v", err)
-		} else if (out.(String)) != tc.out {
-			t.Errorf("Converting string to string: Expected %v, got %v", tc.out, out)
+		} else if (v.(String)) != tc.out {
+			t.Errorf("Converting string to string: Expected %v, got %v", tc.out, v)
 		}
 	}
 }

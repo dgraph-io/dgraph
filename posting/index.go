@@ -94,11 +94,12 @@ func indexTokens(attr string, pID types.TypeID, data []byte) ([]string, error) {
 		return nil, x.Errorf("Cannot index attribute %s of type object.", attr)
 	}
 	s := schemaType.(types.TypeID)
-	schemaVal, err := types.Convert(pID, s, data)
+	sv := types.ValueForType(s)
+	err := types.Convert(pID, s, data, &sv)
 	if err != nil {
 		return nil, err
 	}
-	switch v := schemaVal.(type) {
+	switch v := sv.(type) {
 	case types.Geo:
 		return geo.IndexTokens(&v)
 	case types.Int32:

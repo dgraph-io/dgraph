@@ -124,10 +124,10 @@ func TestKeyGeneratorPoint(t *testing.T) {
 	data, err := wkb.Marshal(p, binary.LittleEndian)
 	require.NoError(t, err)
 
-	var g types.Geo
-	gc, err := types.Convert(types.BinaryID, types.GeoID, data)
+	gc := types.ValueForType(types.GeoID)
+	err = types.Convert(types.BinaryID, types.GeoID, data, &gc)
 	require.NoError(t, err)
-	g = gc.(types.Geo)
+	g := gc.(types.Geo)
 
 	keys, err := IndexTokens(&g)
 	require.NoError(t, err)
@@ -140,10 +140,10 @@ func TestKeyGeneratorPolygon(t *testing.T) {
 	data, err := wkb.Marshal(p, binary.LittleEndian)
 	require.NoError(t, err)
 
-	var g types.Geo
-	gc, err := types.Convert(types.BinaryID, types.GeoID, data)
+	gc := types.ValueForType(types.GeoID)
+	err = types.Convert(types.BinaryID, types.GeoID, data, &gc)
 	require.NoError(t, err)
-	g = gc.(types.Geo)
+	g := gc.(types.Geo)
 
 	keys, err := IndexTokens(&g)
 	require.NoError(t, err)
@@ -234,10 +234,10 @@ func BenchmarkKeyGeneratorPoint(b *testing.B) {
 		b.Error(err)
 	}
 
-	var g types.Geo
-	gc, err := types.Convert(types.BinaryID, types.GeoID, data)
+	gc := types.ValueForType(types.GeoID)
+	err = types.Convert(types.BinaryID, types.GeoID, data, &gc)
 	require.NoError(b, err)
-	g = gc.(types.Geo)
+	g := gc.(types.Geo)
 
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
@@ -255,10 +255,10 @@ func BenchmarkKeyGeneratorPolygon(b *testing.B) {
 		b.Error(err)
 	}
 
-	var g types.Geo
-	gc, err := types.Convert(types.BinaryID, types.GeoID, data)
+	gc := types.ValueForType(types.GeoID)
+	err = types.Convert(types.BinaryID, types.GeoID, data, &gc)
 	require.NoError(b, err)
-	g = gc.(types.Geo)
+	g := gc.(types.Geo)
 
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
