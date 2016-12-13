@@ -16,20 +16,14 @@
 
 package types
 
-import (
-	"bytes"
-	"encoding/binary"
-
-	"github.com/twpayne/go-geom"
-	"github.com/twpayne/go-geom/encoding/geojson"
-	"github.com/twpayne/go-geom/encoding/wkb"
-)
+import "github.com/twpayne/go-geom"
 
 // Geo represents geo-spatial data.
 type Geo struct {
 	geom.T
 }
 
+/*
 // MarshalBinary marshals to binary
 func (v Geo) MarshalBinary() ([]byte, error) {
 	return wkb.Marshal(v.T, binary.LittleEndian)
@@ -72,3 +66,4 @@ func (v *Geo) UnmarshalText(text []byte) error {
 func (v Geo) String() string {
 	return "<geodata>"
 }
+*/

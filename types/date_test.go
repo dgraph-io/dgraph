@@ -16,12 +16,9 @@
 
 package types
 
-import (
-	//	"math"
-	"testing"
-	"time"
-)
+//	"math"
 
+/*
 func TestConvertDateToBool(t *testing.T) {
 	dt := createDate(2007, 1, 31)
 	if _, err := Convert(&dt, BoolID); err == nil {
@@ -167,3 +164,4 @@ func TestConvertDateTimeToDate(t *testing.T) {
 		}
 	}
 }
+*/

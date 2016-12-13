@@ -16,12 +16,6 @@
 
 package types
 
-import (
-	"encoding"
-	"encoding/json"
-	"fmt"
-)
-
 // Type interface is the wrapper interface for all types
 type Type interface {
 	IsScalar() bool
@@ -37,6 +31,7 @@ type Object struct {
 }
 
 // Value is the interface that all scalar values need to implement.
+/*
 type Value interface {
 	encoding.TextMarshaler
 	encoding.TextUnmarshaler
@@ -47,6 +42,7 @@ type Value interface {
 	TypeID() TypeID
 	fmt.Stringer
 }
+*/
 
 func (t TypeID) IsScalar() bool {
 	return true

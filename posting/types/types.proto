@@ -8,14 +8,15 @@ message Posting {
 	fixed64 uid = 1;
 	bytes value = 2;
 	enum ValType {
-    STRING = 0;
-    INT32 = 1;
-    FLOAT = 2;
-    BOOL = 3;
-    DATETIME = 4;
-    DATE = 5;
-    GEO = 6;
-  }
+		BINARY = 0;
+    STRING = 1;
+    INT32 = 2;
+    FLOAT = 3;
+    BOOL = 4;
+    DATETIME = 5;
+    DATE = 6;
+    GEO = 7;
+	}
 	ValType val_type = 3;
 	string label = 4;
 	uint64 commit = 5;  // More inclination towards smaller values.

@@ -33,6 +33,7 @@ import (
 // data. When adding a new type *always* add to the end of this list.
 // Never delete anything from this list even if it becomes unused.
 const (
+	BinaryID   = TypeID(stype.Posting_BINARY)
 	Int32ID    = TypeID(stype.Posting_INT32)
 	FloatID    = TypeID(stype.Posting_FLOAT)
 	BoolID     = TypeID(stype.Posting_BOOL)
@@ -55,6 +56,26 @@ var typeNameMap = map[string]TypeID{
 
 type TypeID stype.Posting_ValType
 
+func (t TypeID) Name() String {
+	switch t {
+	case Int32ID:
+		return "int"
+	case FloatID:
+		return "float"
+	case BoolID:
+		return "bool"
+	case StringID:
+		return "string"
+	case DateID:
+		return "date"
+	case DateTimeID:
+		return "dateTime"
+	case GeoID:
+		return "geo"
+	}
+	return ""
+}
+
 // TypeForName returns the type corresponding to the given name.
 // If name is not recognized, it returns nil.
 func TypeForName(name string) (TypeID, bool) {
@@ -63,7 +84,7 @@ func TypeForName(name string) (TypeID, bool) {
 }
 
 // ValueForType returns the zero value for a type id
-func ValueForType(id TypeID) Value {
+func ValueForType(id TypeID) interface{} {
 	switch id {
 	case Int32ID:
 		var i Int32
@@ -97,6 +118,8 @@ func ValueForType(id TypeID) Value {
 		return nil
 	}
 }
+
+type Binary []byte
 
 // Int32 is the scalar type for int32
 type Int32 int32

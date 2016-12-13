@@ -16,13 +16,7 @@
 
 package types
 
-import (
-	"encoding/binary"
-	"encoding/json"
-	"time"
-
-	"github.com/dgraph-io/dgraph/x"
-)
+import "time"
 
 // Date represents a date (YYYY-MM-DD). There is no timezone information
 // attached.
@@ -40,6 +34,7 @@ const dateFormatYMD = "2006-01-02"
 const dateFormatYM = "2006-01"
 const dateFormatY = "2006"
 
+/*
 // MarshalBinary marshals to binary
 func (v Date) MarshalBinary() ([]byte, error) {
 	var bs [8]byte
@@ -125,3 +120,4 @@ func (v *Float) fromDate(d Date) error {
 func (v *Int32) fromDate(d Date) error {
 	return v.fromTime(d.Time)
 }
+*/

@@ -24,7 +24,7 @@ import (
 )
 
 type sortBase struct {
-	values []Value
+	values []interface{}
 	ul     *task.List
 }
 
@@ -69,7 +69,7 @@ func (s byString) Less(i, j int) bool {
 }
 
 // Sort sorts the given array in-place.
-func Sort(sID TypeID, v []Value, ul *task.List) error {
+func Sort(sID TypeID, v []interface{}, ul *task.List) error {
 	b := sortBase{v, ul}
 	switch sID {
 	case DateID:

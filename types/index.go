@@ -17,7 +17,7 @@ const (
 
 // DefaultIndexKeys tokenizes data as a string and return keys for indexing.
 func DefaultIndexKeys(attr string, val *String) []string {
-	data := []byte((*val).String())
+	data := []byte((*val))
 	tokenizer, err := tok.NewTokenizer(data)
 	if err != nil {
 		return nil

@@ -24,7 +24,7 @@ import (
 	"github.com/dgraph-io/dgraph/task"
 )
 
-func toString(t *testing.T, values []Value) []string {
+func toString(t *testing.T, values []interface{}) []string {
 	out := make([]string, len(values))
 	for i, v := range values {
 		b, err := v.MarshalText()
@@ -34,7 +34,7 @@ func toString(t *testing.T, values []Value) []string {
 	return out
 }
 
-func getInput(tid TypeID, in []string) []Value {
+func getInput(tid TypeID, in []string) []interface{} {
 	list := make([]Value, len(in))
 	for i, s := range in {
 		v := ValueForType(tid)
