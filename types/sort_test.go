@@ -107,7 +107,7 @@ func TestSortDateTimes(t *testing.T) {
 		"2006-01-02T15:04:06",
 		"2006-01-02T15:04:01",
 	}
-	list := getInput(DateTimeID, in)
+	list := getInput(TimeID, in)
 	ul := getUIDList(4)
 	require.NoError(t, dateTimeType.Sort(list, ul))
 	require.EqualValues(t, []uint64{400, 200, 300, 100}, ul.Uids)

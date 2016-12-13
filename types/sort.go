@@ -82,7 +82,7 @@ func (s Scalar) Sort(v []Value, ul *task.List) error {
 	case DateID:
 		sort.Sort(byDate{b})
 		return nil
-	case DateTimeID:
+	case TimeID:
 		sort.Sort(byDateTime{b})
 		return nil
 	case Int32ID:

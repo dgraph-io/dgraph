@@ -17,6 +17,7 @@
 package types
 
 import (
+	"bytes"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
@@ -25,6 +26,9 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgraph/x"
+	geom "github.com/twpayne/go-geom"
+	"github.com/twpayne/go-geom/encoding/geojson"
+	"github.com/twpayne/go-geom/encoding/wkb"
 )
 
 // Note: These ids are stored in the posting lists to indicate the type
@@ -32,14 +36,14 @@ import (
 // data. When adding a new type *always* add to the end of this list.
 // Never delete anything from this list even if it becomes unused.
 const (
-	BytesID    TypeID = 0
-	Int32ID    TypeID = 1
-	FloatID    TypeID = 2
-	BoolID     TypeID = 3
-	DateTimeID TypeID = 4
-	StringID   TypeID = 5
-	DateID     TypeID = 6
-	GeoID      TypeID = 7
+	BytesID  TypeID = 0
+	Int32ID  TypeID = 1
+	FloatID  TypeID = 2
+	BoolID   TypeID = 3
+	TimeID   TypeID = 4
+	StringID TypeID = 5
+	DateID   TypeID = 6
+	GeoID    TypeID = 7
 )
 
 // added suffix 'type' to names to distinguish from Go types 'int' and 'string'
@@ -69,8 +73,8 @@ var (
 		id:   StringID,
 	}
 	dateTimeType = Scalar{
-		Name: "datetime",
-		id:   DateTimeID,
+		Name: "time",
+		id:   TimeID,
 	}
 	dateType = Scalar{
 		Name: "date",
@@ -121,7 +125,7 @@ func ValueForType(id TypeID) Value {
 		var b Bool
 		return &b
 
-	case DateTimeID:
+	case TimeID:
 		var t Time
 		return &t
 
@@ -400,16 +404,51 @@ func (v *Time) UnmarshalText(text []byte) error {
 	return nil
 }
 
-func (v *Int32) fromFloat(f float64) error {
-	if f > math.MaxInt32 || f < math.MinInt32 || math.IsNaN(f) {
-		return x.Errorf("Float out of int32 range")
+func (v *Int32) fromInt(t Int32) error {
+	if t > math.MaxInt32 || t < math.MinInt32 {
+		return x.Errorf("Int out of int32 range")
 	}
-	*v = Int32(f)
+	*v = Int32(t)
 	return nil
 }
 
-func (v *Int32) fromBool(b bool) error {
-	if b {
+func (v *Geo) fromInt(t Int32) error {
+	return cantConvert(t.Type(), v)
+}
+
+func (v *Geo) fromFloat(t Float) error {
+	return cantConvert(t.Type(), v)
+}
+
+func (v *Geo) fromBool(t Bool) error {
+	return cantConvert(t.Type(), v)
+}
+
+func (v *Int32) fromFloat(t Float) error {
+	if t > math.MaxInt32 || t < math.MinInt32 || math.IsNaN(float64(t)) {
+		return x.Errorf("Float out of int32 range")
+	}
+	*v = Int32(t)
+	return nil
+}
+
+func (v *Float) fromFloat(t Float) error {
+	*v = t
+	return nil
+}
+
+func (v *Geo) fromGeo(t Geo) error {
+	*v = t
+	return nil
+}
+
+func (v *Bool) fromBool(t Bool) error {
+	*v = t
+	return nil
+}
+
+func (v *Int32) fromBool(t Bool) error {
+	if t {
 		*v = 1
 	} else {
 		*v = 0
@@ -417,9 +456,9 @@ func (v *Int32) fromBool(b bool) error {
 	return nil
 }
 
-func (v *Int32) fromTime(t time.Time) error {
+func (v *Int32) fromTime(t Time) error {
 	// Represent the unix timestamp as a 32bit int.
-	secs := t.Unix()
+	secs := t.Time.Unix()
 	if secs > math.MaxInt32 || secs < math.MinInt32 {
 		return x.Errorf("Time out of int32 range")
 	}
@@ -427,13 +466,29 @@ func (v *Int32) fromTime(t time.Time) error {
 	return nil
 }
 
-func (v *Float) fromInt(i int32) error {
-	*v = Float(i)
+func (v *Int32) fromGeo(t Geo) error {
+	return cantConvert(t.Type(), v)
+}
+
+func (v *Bool) fromGeo(t Geo) error {
+	return cantConvert(t.Type(), v)
+}
+
+func (v *Float) fromGeo(t Geo) error {
+	return cantConvert(t.Type(), v)
+}
+
+func (v *Time) fromGeo(t Geo) error {
+	return cantConvert(t.Type(), v)
+}
+
+func (v *Float) fromInt(t Int32) error {
+	*v = Float(int32(t))
 	return nil
 }
 
-func (v *Float) fromBool(b bool) error {
-	if b {
+func (v *Float) fromBool(t Bool) error {
+	if bool(t) {
 		*v = 1
 	} else {
 		*v = 0
@@ -445,34 +500,233 @@ const (
 	nanoSecondsInSec = 1000000000
 )
 
-func (v *Float) fromTime(t time.Time) error {
+func (v *Float) fromTime(t Time) error {
 	// Represent the unix timestamp as a float (with fractional seconds)
-	secs := float64(t.Unix())
+	secs := float64(t.Time.Unix())
 	nano := float64(t.Nanosecond())
 	val := secs + nano/nanoSecondsInSec
 	*v = Float(val)
 	return nil
 }
 
-func (v *Bool) fromInt(i int32) error {
-	*v = i != 0
+func (v *Bool) fromInt(t Int32) error {
+	*v = int32(t) != 0
 	return nil
 }
 
-func (v *Bool) fromFloat(f float64) error {
-	*v = f != 0
+func (v *Bool) fromFloat(t Float) error {
+	*v = float64(t) != 0
 	return nil
 }
 
-func (v *Time) fromInt(i int32) error {
-	v.Time = time.Unix(int64(i), 0).UTC()
+func (v *Time) fromInt(t Int32) error {
+	v.Time = time.Unix(int64(t), 0).UTC()
 	return nil
 }
 
-func (v *Time) fromFloat(f float64) error {
-	secs := int64(f)
-	fracSecs := f - float64(secs)
+func (v *Time) fromFloat(t Float) error {
+	secs := int64(t)
+	fracSecs := float64(t) - float64(secs)
 	nsecs := int64(fracSecs * nanoSecondsInSec)
 	v.Time = time.Unix(secs, nsecs).UTC()
 	return nil
+}
+
+// Geo represents geo-spatial data.
+type Geo struct {
+	geom.T
+}
+
+// MarshalBinary marshals to binary
+func (v Geo) MarshalBinary() ([]byte, error) {
+	return wkb.Marshal(v.T, binary.LittleEndian)
+}
+
+// MarshalText marshals to text
+func (v Geo) MarshalText() ([]byte, error) {
+	// The text format is geojson
+	res, err := geojson.Marshal(v.T)
+	return bytes.Replace(res, []byte("\""), []byte("'"), -1), err
+}
+
+// MarshalJSON marshals to json
+func (v Geo) MarshalJSON() ([]byte, error) {
+	// this same as MarshalText
+	return geojson.Marshal(v.T)
+}
+
+// Type returns the type of this value
+func (v Geo) Type() Scalar {
+	return geoType
+}
+
+// UnmarshalBinary unmarshals the data from WKB
+func (v *Geo) UnmarshalBinary(data []byte) error {
+	w, err := wkb.Unmarshal(data)
+	if err != nil {
+		return err
+	}
+	v.T = w
+	return nil
+}
+
+// UnmarshalText parses the data from a Geojson
+func (v *Geo) UnmarshalText(text []byte) error {
+	var g geom.T
+	text = bytes.Replace(text, []byte("'"), []byte("\""), -1)
+	if err := geojson.Unmarshal(text, &g); err != nil {
+		return err
+	}
+	v.T = g
+	return nil
+}
+
+func (v Geo) String() string {
+	return "<geodata>"
+}
+
+// Date represents a date (YYYY-MM-DD). There is no timezone information
+// attached.
+type Date struct {
+	time.Time
+}
+
+func createDate(y int, m time.Month, d int) Date {
+	var dt Date
+	dt.Time = time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
+	return dt
+}
+
+const dateFormatYMD = "2006-01-02"
+const dateFormatYM = "2006-01"
+const dateFormatY = "2006"
+
+// MarshalBinary marshals to binary
+func (v Date) MarshalBinary() ([]byte, error) {
+	var bs [8]byte
+	binary.LittleEndian.PutUint64(bs[:], uint64(v.Time.Unix()))
+	return bs[:], nil
+}
+
+// MarshalText marshals to text
+func (v Date) MarshalText() ([]byte, error) {
+	s := v.Time.Format(dateFormatYMD)
+	return []byte(s), nil
+}
+
+// MarshalJSON marshals to json
+func (v Date) MarshalJSON() ([]byte, error) {
+	s := v.Time.Format(dateFormatYMD)
+	return json.Marshal(s)
+}
+
+// Type returns the type of this value
+func (v Date) Type() Scalar {
+	return dateType
+}
+
+func (v Date) String() string {
+	str, _ := v.MarshalText()
+	return string(str)
+}
+
+// UnmarshalBinary unmarshals the data from a binary format.
+func (v *Date) UnmarshalBinary(data []byte) error {
+	if len(data) < 8 {
+		return x.Errorf("Invalid data for date %v", data)
+	}
+	val := binary.LittleEndian.Uint64(data)
+	tm := time.Unix(int64(val), 0)
+	return v.fromTime(Time{tm})
+}
+
+// UnmarshalText unmarshals the data from a text format.
+func (v *Date) UnmarshalText(text []byte) error {
+	val, err := time.Parse(dateFormatYMD, string(text))
+	if err != nil {
+		val, err = time.Parse(dateFormatYM, string(text))
+		if err != nil {
+			val, err = time.Parse(dateFormatY, string(text))
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return v.fromTime(Time{val})
+}
+
+func (v *Date) fromFloat(f Float) error {
+	var t Time
+	err := t.fromFloat(f)
+	if err != nil {
+		return err
+	}
+	return v.fromTime(t)
+}
+
+func (v *Date) fromTime(t Time) error {
+	// truncate the time to just a date.
+	*v = createDate(t.Date())
+	return nil
+}
+
+func (v *Time) fromTime(t Time) error {
+	// truncate the time to just a date.
+	*v = t
+	return nil
+}
+
+func (v *Bool) fromTime(t Time) error {
+	return cantConvert(t.Type(), v)
+}
+
+func (v *Geo) fromTime(t Time) error {
+	return cantConvert(t.Type(), v)
+}
+
+func (v *Date) fromGeo(t Geo) error {
+	return cantConvert(t.Type(), v)
+}
+
+func (v *Date) fromBool(t Bool) error {
+	return cantConvert(t.Type(), v)
+}
+
+func (v *Time) fromBool(t Bool) error {
+	return cantConvert(t.Type(), v)
+}
+
+func (v *Date) fromInt(i Int32) error {
+	var t Time
+	err := t.fromInt(i)
+	if err != nil {
+		return err
+	}
+	return v.fromTime(Time(t))
+}
+
+func (v *Date) fromDate(t Date) error {
+	*v = t
+	return nil
+}
+
+func (v *Time) fromDate(d Date) error {
+	v.Time = d.Time
+	return nil
+}
+
+func (v *Float) fromDate(d Date) error {
+	return v.fromTime(Time{d.Time})
+}
+
+func (v *Int32) fromDate(d Date) error {
+	return v.fromTime(Time{d.Time})
+}
+
+func (v *Bool) fromDate(d Date) error {
+	return cantConvert(d.Type(), v)
+}
+
+func (v *Geo) fromDate(d Date) error {
+	return cantConvert(d.Type(), v)
 }
