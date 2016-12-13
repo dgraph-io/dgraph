@@ -144,6 +144,15 @@ func TestIntersectSorted5(t *testing.T) {
 	require.Empty(t, IntersectSorted(input).Uids)
 }
 
+func TestIntersectSorted6(t *testing.T) {
+	input := []*task.List{
+		newList([]uint64{10, 12, 13}),
+		newList([]uint64{2, 3, 4, 13}),
+		newList([]uint64{4, 5, 6}),
+	}
+	require.Empty(t, IntersectSorted(input).Uids)
+}
+
 func TestUIDListIntersect1(t *testing.T) {
 	u := newList([]uint64{1, 2, 3})
 	v := newList([]uint64{})

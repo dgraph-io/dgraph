@@ -79,15 +79,15 @@ func IntersectSorted(lists []*task.List) *task.List {
 	// lptrs[j] is the element we are looking at for lists[j].
 	lptrs := make([]int, len(lists))
 	shortList := lists[minLenIdx]
-	for i := 0; i < len(shortList.Uids); i++ {
+	elemsLeft := true  // If some list has no elems left, we can't intersect more.
+
+	for i := 0; i < len(shortList.Uids) && elemsLeft; i++ {
 		val := shortList.Uids[i]
 		if i > 0 && val == shortList.Uids[i-1] {
 			x.AssertTruef(false, "We shouldn't have duplicates in UIDLists")
 		}
 
-		var skip bool         // Should we skip val in output?
-		var noElemsLeft bool  // If some list has no elems left, we can't intersect more.
-
+		var skip bool                     // Should we skip val in output?
 		for j := 0; j < len(lists); j++ { // For each other list in lists.
 			if j == minLenIdx {
 				// No point checking yourself.
@@ -101,9 +101,8 @@ func IntersectSorted(lists []*task.List) *task.List {
 			}
 
 			lptrs[j] = ljp
-
 			if ljp >= lsz || lj.Uids[ljp] > val {
-				noElemsLeft = ljp >= lsz
+				elemsLeft = ljp < lsz
 				skip = true
 				break
 			}
@@ -111,9 +110,6 @@ func IntersectSorted(lists []*task.List) *task.List {
 		}
 		if !skip {
 			output = append(output, val)
-		}
-		if noElemsLeft {
-			break
 		}
 	}
 	return &task.List{Uids: output}
