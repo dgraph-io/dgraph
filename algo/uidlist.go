@@ -97,7 +97,9 @@ func IntersectSorted(lists []*task.List) *task.List {
 			lj := lists[j]
 			ljp := lptrs[j]
 			lsz := len(lj.Uids)
-			ljp = indexOfEqualOrGreaterVal(lj, ljp, val)
+			for ; ljp < lsz && lj.Uids[ljp] < val; ljp++ {
+			}
+
 			lptrs[j] = ljp
 
 			if ljp >= lsz || lj.Uids[ljp] > val {
@@ -167,13 +169,6 @@ func IndexOf(u *task.List, uid uint64) int {
 		return i
 	}
 	return -1
-}
-
-// IndexOf value which is Equal (Eq) Or Greater than (Gt) the uid passed on
-// the Uids slice, starting to look from startIdx (pass 0 for whole range search).
-func indexOfEqualOrGreaterVal(u *task.List, startIdx int, uid uint64) int {
-	return startIdx + sort.Search(len(u.Uids)-startIdx,
-		func(i int) bool { return u.Uids[startIdx+i] >= uid })
 }
 
 // ToUintsListForTest converts to list of uints for testing purpose only.
