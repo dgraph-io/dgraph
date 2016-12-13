@@ -69,7 +69,7 @@ func parseDefaultConfig(l string) (uint32, error) {
 		if conf[3] != "+" {
 			return 0, fmt.Errorf("Default config format should be like: %v", "default: fp % n + k")
 		}
-		n, err = strconv.ParseUint(conf[4], 10, 64)
+		n, err = strconv.ParseUint(conf[4], 10, 32)
 		groupConfig.k = uint32(n)
 		x.Check(err)
 	}
@@ -116,7 +116,7 @@ func ParseConfig(r io.Reader) error {
 				return fmt.Errorf("Default config should be specified as the last line. Found %v",
 					l)
 			}
-			groupId, err := strconv.ParseUint(c[0], 10, 64)
+			groupId, err := strconv.ParseUint(c[0], 10, 32)
 			x.Check(err)
 			if curGroupId != uint32(groupId) {
 				return fmt.Errorf("Group ids should be sequential and should start from 0. "+
