@@ -39,7 +39,7 @@ func runMutations(ctx context.Context, edges []*task.DirectedEdge, op uint32) er
 		}
 
 		key := x.DataKey(edge.Attr, edge.Entity)
-		plist, decr := posting.GetOrCreate(key)
+		plist, decr := posting.GetOrCreate(key) // TODO: Needs to have a node and entry index.
 		defer decr()
 
 		if err := plist.AddMutationWithIndex(ctx, edge, op); err != nil {
@@ -52,6 +52,7 @@ func runMutations(ctx context.Context, edges []*task.DirectedEdge, op uint32) er
 
 // mutate runs the set and delete mutations.
 func mutate(ctx context.Context, m *task.Mutations) error {
+	// TODO: Needs to have a node and entry index.
 	// Running the set instructions first.
 	if err := runMutations(ctx, m.Set, posting.Set); err != nil {
 		return err
