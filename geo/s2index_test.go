@@ -125,8 +125,9 @@ func TestKeyGeneratorPoint(t *testing.T) {
 	require.NoError(t, err)
 
 	var g types.Geo
-	err = g.UnmarshalBinary(data)
+	gc, err := types.Convert(types.BinaryID, types.GeoID, data)
 	require.NoError(t, err)
+	g = gc.(types.Geo)
 
 	keys, err := IndexTokens(&g)
 	require.NoError(t, err)
@@ -140,8 +141,10 @@ func TestKeyGeneratorPolygon(t *testing.T) {
 	require.NoError(t, err)
 
 	var g types.Geo
-	err = g.UnmarshalBinary(data)
+	gc, err := types.Convert(types.BinaryID, types.GeoID, data)
 	require.NoError(t, err)
+	g = gc.(types.Geo)
+
 	keys, err := IndexTokens(&g)
 	require.NoError(t, err)
 	require.Len(t, keys, 65)
@@ -230,8 +233,12 @@ func BenchmarkKeyGeneratorPoint(b *testing.B) {
 	if err != nil {
 		b.Error(err)
 	}
+
 	var g types.Geo
-	g.UnmarshalBinary(data)
+	gc, err := types.Convert(types.BinaryID, types.GeoID, data)
+	require.NoError(b, err)
+	g = gc.(types.Geo)
+
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
 		IndexTokens(&g)
@@ -247,8 +254,12 @@ func BenchmarkKeyGeneratorPolygon(b *testing.B) {
 	if err != nil {
 		b.Error(err)
 	}
+
 	var g types.Geo
-	g.UnmarshalBinary(data)
+	gc, err := types.Convert(types.BinaryID, types.GeoID, data)
+	require.NoError(b, err)
+	g = gc.(types.Geo)
+
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
 		IndexTokens(&g)

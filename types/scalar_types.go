@@ -17,15 +17,9 @@
 package types
 
 import (
-	"encoding/binary"
-	"encoding/json"
-	"fmt"
-	"math"
-	"strconv"
 	"time"
 
 	stype "github.com/dgraph-io/dgraph/posting/types"
-	"github.com/dgraph-io/dgraph/x"
 )
 
 // Note: These ids are stored in the posting lists to indicate the type
@@ -147,6 +141,7 @@ func (v String) TypeID() TypeID {
 	return StringID
 }
 
+/*
 // MarshalBinary marshals to binary
 func (v Int32) MarshalBinary() ([]byte, error) {
 	var bs [4]byte
@@ -187,10 +182,11 @@ func (v *Int32) UnmarshalText(text []byte) error {
 	*v = Int32(val)
 	return nil
 }
-
+*/
 // Float is the scalar type for float64
 type Float float64
 
+/*
 // MarshalBinary marshals to binary
 func (v Float) MarshalBinary() ([]byte, error) {
 	var bs [8]byte
@@ -234,10 +230,11 @@ func (v *Float) UnmarshalText(text []byte) error {
 func (v Float) String() string {
 	return fmt.Sprintf("%v", float64(v))
 }
-
+*/
 // String is the scalar type for string
 type String string
 
+/*
 // MarshalBinary marshals to binary
 func (v String) MarshalBinary() ([]byte, error) {
 	return []byte(v), nil
@@ -267,10 +264,9 @@ func (v *String) UnmarshalText(text []byte) error {
 func (v String) String() string {
 	return string(v)
 }
+*/
 
-// Bytes is the scalar type for []byte
-type Bytes []byte
-
+/*
 // MarshalBinary marshals to binary
 func (v Bytes) MarshalBinary() ([]byte, error) {
 	return []byte(v), nil
@@ -301,10 +297,11 @@ func (v *Bytes) UnmarshalText(text []byte) error {
 func (v Bytes) String() string {
 	return string(v)
 }
-
+*/
 // Bool is the scalar type for bool
 type Bool bool
 
+/*
 // MarshalBinary marshals to binary
 func (v Bool) MarshalBinary() ([]byte, error) {
 	var bs [1]byte
@@ -353,12 +350,13 @@ func (v *Bool) UnmarshalText(text []byte) error {
 func (v Bool) String() string {
 	return fmt.Sprintf("%v", bool(v))
 }
-
+*/
 // Time wraps time.Time to add the Value interface
 type Time struct {
 	time.Time
 }
 
+/*
 // UnmarshalText unmarshals the data from a text format.
 func (v *Time) UnmarshalText(text []byte) error {
 	var t time.Time
@@ -448,3 +446,4 @@ func (v *Time) fromFloat(f float64) error {
 	v.Time = time.Unix(secs, nsecs).UTC()
 	return nil
 }
+*/

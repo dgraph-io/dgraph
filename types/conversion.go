@@ -74,7 +74,6 @@ func Convert(fromID TypeID, toID TypeID, data []byte) (interface{}, error) {
 		}
 		v = Time{t}
 	case GeoID:
-		v = v.(Geo)
 		w, err := wkb.Unmarshal(data)
 		if err != nil {
 			return res, err
@@ -128,7 +127,6 @@ func Convert(fromID TypeID, toID TypeID, data []byte) (interface{}, error) {
 				}
 				res = Time{t}
 			case GeoID:
-				v = v.(Geo)
 				w, err := wkb.Unmarshal(data)
 				if err != nil {
 					return res, err
@@ -218,6 +216,8 @@ func Convert(fromID TypeID, toID TypeID, data []byte) (interface{}, error) {
 				res = Float(vc)
 			case BoolID:
 				res = Bool(vc != 1)
+			case StringID:
+
 			default:
 				return res, cantConvert(fromID, toID)
 			}
@@ -242,6 +242,8 @@ func Convert(fromID TypeID, toID TypeID, data []byte) (interface{}, error) {
 				res = Int32(vc)
 			case BoolID:
 				res = Bool(vc != 1)
+			case StringID:
+
 			default:
 				return res, cantConvert(fromID, toID)
 			}
@@ -274,6 +276,7 @@ func Convert(fromID TypeID, toID TypeID, data []byte) (interface{}, error) {
 				} else {
 					res = Float(0)
 				}
+			case StringID:
 
 			default:
 				return res, cantConvert(fromID, toID)
@@ -294,6 +297,8 @@ func Convert(fromID TypeID, toID TypeID, data []byte) (interface{}, error) {
 				res = bs[:]
 			case DateTimeID:
 				res = Time(createDate(vc.Date()))
+			case StringID:
+
 			default:
 				return res, cantConvert(fromID, toID)
 			}
@@ -311,6 +316,8 @@ func Convert(fromID TypeID, toID TypeID, data []byte) (interface{}, error) {
 
 			case DateID:
 				res = Date(vc)
+			case StringID:
+
 			default:
 				return res, cantConvert(fromID, toID)
 			}
@@ -326,6 +333,12 @@ func Convert(fromID TypeID, toID TypeID, data []byte) (interface{}, error) {
 			case BinaryID:
 				// Marshal Binary
 				return wkb.Marshal(vc.T, binary.LittleEndian)
+			case StringID:
+				val, err := geojson.Marshal(vc.T)
+				if err != nil {
+					return res, nil
+				}
+				res = String(bytes.Replace(val, []byte("\""), []byte("'"), -1))
 			default:
 				return res, cantConvert(fromID, toID)
 			}

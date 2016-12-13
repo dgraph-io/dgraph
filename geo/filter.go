@@ -111,7 +111,8 @@ func queryTokens(qt QueryType, data string, maxDistance float64) ([]string, *Que
 	// Try to parse the data as geo type.
 	var g types.Geo
 	geoData := strings.Replace(data, "'", "\"", -1)
-	err := g.UnmarshalText([]byte(geoData))
+	gc, err := types.Convert(types.StringID, types.GeoID, []byte(geoData))
+	g = gc.(types.Geo)
 	if err != nil {
 		return nil, nil, x.Wrapf(err, "Cannot decode given geoJson input")
 	}
@@ -288,7 +289,9 @@ func FilterUids(uids *task.List, values []*task.Value, q *QueryData) *task.List 
 			continue
 		}
 		var g types.Geo
-		if err := g.UnmarshalBinary(valBytes); err != nil {
+		gc, err := types.Convert(types.BinaryID, types.GeoID, valBytes)
+		g = gc.(types.Geo)
+		if err != nil {
 			continue
 		}
 
