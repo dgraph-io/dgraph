@@ -19,6 +19,7 @@ package types
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"math"
 	"strconv"
 	"time"
@@ -182,11 +183,13 @@ func Convert(fromID TypeID, toID TypeID, data []byte) (interface{}, error) {
 			case DateTimeID:
 				var t time.Time
 				if err := t.UnmarshalText([]byte(vc)); err != nil {
+					fmt.Println(t)
 					// Try parsing without timezone since that is a valid format
 					if t, err = time.Parse("2006-01-02T15:04:05", string(vc)); err != nil {
 						return res, err
 					}
 				}
+				fmt.Println(t)
 				res = Time{t}
 			case GeoID:
 				var g geom.T
