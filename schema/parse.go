@@ -217,7 +217,6 @@ L:
 				typ = next.Val
 				if t, ok := getScalar(typ); ok {
 					if t1, ok := str[name]; ok {
-						// TODO: Check this line
 						if t1.(types.TypeID) != t.(types.TypeID) {
 							return x.Errorf("Same field cant have multiple types")
 						}

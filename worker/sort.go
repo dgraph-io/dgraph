@@ -1,8 +1,6 @@
 package worker
 
 import (
-	"fmt"
-
 	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/dgraph/group"
@@ -208,7 +206,6 @@ func sortByValue(attr string, ul *task.List, scalar types.TypeID) error {
 			return err
 		}
 		values[i] = val
-		fmt.Println("**", val, scalar, attr)
 	}
 	return types.Sort(scalar, values, ul)
 }
