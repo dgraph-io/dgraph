@@ -38,6 +38,7 @@ message Sort {
 	repeated List uid_matrix = 2;
 	int32 count = 3;   // Return this many elements.
 	int32 offset = 4;  // Skip this many elements.
+	bool desc = 5;
 }
 
 message SortResult {

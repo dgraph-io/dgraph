@@ -8,8 +8,8 @@ func TestGroups(t *testing.T) {
 		t.Errorf("Expected nil error. Got: %v", err)
 	}
 	gid := BelongsTo("type.object.name.en")
-	if gid != 0 {
-		t.Errorf("Expected groupId to be: %v. Got: %v", 0, gid)
+	if gid != 1 {
+		t.Errorf("Expected groupId to be: %v. Got: %v", 1, gid)
 	}
 
 	groupConfig = config{}
