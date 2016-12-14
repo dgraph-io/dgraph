@@ -2,7 +2,6 @@ package worker
 
 import (
 	"bytes"
-	"container/heap"
 	"encoding/binary"
 	"fmt"
 	"log"
@@ -10,7 +9,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/coreos/etcd/raft"
@@ -66,81 +64,6 @@ func (p *proposals) Done(pid uint32, err error) {
 	ch <- err
 }
 
-type uint64Heap []uint64
-
-func (u uint64Heap) Len() int               { return len(u) }
-func (u uint64Heap) Less(i int, j int) bool { return u[i] < u[j] }
-func (u uint64Heap) Swap(i int, j int)      { u[i], u[j] = u[j], u[i] }
-func (u *uint64Heap) Push(x interface{})    { *u = append(*u, x.(uint64)) }
-func (u *uint64Heap) Pop() interface{} {
-	old := *u
-	n := len(old)
-	x := old[n-1]
-	*u = old[0 : n-1]
-	return x
-}
-
-type entryStatus struct {
-	index uint64
-	done  bool
-}
-
-type Watermark struct {
-	name      string
-	Ch        chan entryStatus
-	doneUntil uint64
-}
-
-func (w *Watermark) Init() {
-	w.Ch = make(chan entryStatus, 1000)
-	go w.Process()
-}
-
-func (w *Watermark) DoneUntil() uint64 {
-	return atomic.LoadUint64(&w.doneUntil)
-}
-
-func (w *Watermark) Process() {
-	var indices uint64Heap
-	pending := make(map[uint64]bool)
-
-	heap.Init(&indices)
-	for entry := range w.Ch {
-		// If not already done, then set. Otherwise, don't undo a done entry.
-		done, present := pending[entry.index]
-		if !present {
-			heap.Push(&indices, entry.index)
-		}
-		if !done {
-			pending[entry.index] = entry.done
-		}
-
-		if len(indices) > 0 {
-			fmt.Printf("%s: Done entry %4d. Size: %4d Watermark: %-4d Looking for: %-4d\n", w.name, entry.index, len(indices), w.DoneUntil(), indices[0])
-		}
-
-		// Update mark by going through all indices in order; and checking if they have
-		// been done. Stop at the first index, which isn't done.
-		doneUntil := w.DoneUntil()
-		until := doneUntil
-		loops := 0
-		for len(indices) > 0 {
-			min := indices[0]
-			if done := pending[min]; !done {
-				break
-			}
-			heap.Pop(&indices)
-			delete(pending, min)
-			until = min
-			loops++
-		}
-		if until != doneUntil {
-			x.AssertTrue(atomic.CompareAndSwapUint64(&w.doneUntil, doneUntil, until))
-			fmt.Printf("%s: Done until %d. Loops: %d\n", w.name, until, loops)
-		}
-	}
-}
-
 type sendmsg struct {
 	to   uint64
 	data []byte
@@ -161,8 +84,8 @@ type node struct {
 	raftContext *task.RaftContext
 	store       *raft.MemoryStorage
 	wal         *raftwal.Wal
-	committed   Watermark
-	synced      Watermark
+	committed   x.WaterMark
+	synced      x.WaterMark
 }
 
 func newNode(gid uint32, id uint64, myAddr string) *node {
@@ -201,9 +124,9 @@ func newNode(gid uint32, id uint64, myAddr string) *node {
 		raftContext: rc,
 		messages:    make(chan sendmsg, 1000),
 	}
-	n.committed = Watermark{name: "~~~~~~~~~~~~~~~ Committed Mark"}
+	n.committed = x.WaterMark{Name: "~~~~~~~~~~~~~~~ Committed Mark"}
 	n.committed.Init()
-	n.synced = Watermark{name: "~~~~~~~~~~~~~~~~~~ Synced Mark"}
+	n.synced = x.WaterMark{Name: "~~~~~~~~~~~~~~~~~~ Synced Mark"}
 	n.synced.Init()
 
 	return n
@@ -399,7 +322,7 @@ func (n *node) processMembership(e raftpb.Entry, mm *task.Membership) error {
 
 func (n *node) process(e raftpb.Entry, pending chan struct{}) {
 	defer func() {
-		n.committed.Ch <- entryStatus{index: e.Index, done: true}
+		n.committed.Ch <- x.Mark{Index: e.Index, Done: true}
 	}()
 
 	if e.Type != raftpb.EntryNormal {
@@ -427,8 +350,8 @@ func (n *node) processCommitCh() {
 
 	for e := range n.commitCh {
 		if e.Data == nil {
-			n.committed.Ch <- entryStatus{index: e.Index, done: true}
-			n.synced.Ch <- entryStatus{index: e.Index, done: true}
+			n.committed.Ch <- x.Mark{Index: e.Index, Done: true}
+			n.synced.Ch <- x.Mark{Index: e.Index, Done: true}
 			continue
 		}
 
@@ -443,8 +366,8 @@ func (n *node) processCommitCh() {
 			}
 
 			n.raft.ApplyConfChange(cc)
-			n.committed.Ch <- entryStatus{index: e.Index, done: true}
-			n.synced.Ch <- entryStatus{index: e.Index, done: true}
+			n.committed.Ch <- x.Mark{Index: e.Index, Done: true}
+			n.synced.Ch <- x.Mark{Index: e.Index, Done: true}
 
 		} else {
 			go n.process(e, pending)
@@ -516,7 +439,7 @@ func (n *node) Run() {
 			for _, entry := range rd.CommittedEntries {
 				// Just queue up to be processed. Don't wait on them.
 				n.commitCh <- entry
-				status := entryStatus{index: entry.Index, done: false}
+				status := x.Mark{Index: entry.Index, Done: false}
 				if entry.Index == 2 {
 					fmt.Printf("%+v\n", entry)
 				}

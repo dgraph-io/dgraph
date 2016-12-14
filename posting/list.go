@@ -66,6 +66,8 @@ type List struct {
 	lastCompact time.Time
 	deleteMe    int32
 	refcount    int32
+	pending     []uint64
+	waterMark   *x.WaterMark
 
 	dirtyTs int64 // Use atomics for this.
 }
