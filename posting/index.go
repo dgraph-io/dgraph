@@ -88,38 +88,42 @@ func initIndex() {
 }
 
 // indexTokens return tokens, without the predicate prefix and index rune.
-func indexTokens(attr string, p types.Value) ([]string, error) {
+func indexTokens(attr string, pID types.TypeID, data []byte) ([]string, error) {
 	schemaType := schema.TypeOf(attr)
 	if !schemaType.IsScalar() {
 		return nil, x.Errorf("Cannot index attribute %s of type object.", attr)
 	}
-	s := schemaType.(types.Scalar)
-	schemaVal, err := s.Convert(p)
+	s := schemaType.(types.TypeID)
+	sv := types.ValueForType(s)
+	err := types.Convert(pID, s, data, &sv)
 	if err != nil {
 		return nil, err
 	}
-	switch v := schemaVal.(type) {
-	case *types.Geo:
-		return geo.IndexTokens(v)
-	case *types.Int32:
-		return types.IntIndex(attr, v)
-	case *types.Float:
-		return types.FloatIndex(attr, v)
-	case *types.Date:
-		return types.DateIndex(attr, v)
-	case *types.Time:
-		return types.TimeIndex(attr, v)
-	case *types.String:
-		return types.DefaultIndexKeys(attr, v), nil
+	switch v := sv.(type) {
+	case types.Geo:
+		return geo.IndexTokens(&v)
+	case types.Int32:
+		return types.IntIndex(attr, &v)
+	case types.Float:
+		return types.FloatIndex(attr, &v)
+	case types.Date:
+		return types.DateIndex(attr, &v)
+	case types.Time:
+		return types.TimeIndex(attr, &v)
+	case types.String:
+		return types.DefaultIndexKeys(attr, &v), nil
+	default:
+		return nil, x.Errorf("Invalid type. Cannot be indexed")
 	}
 	return nil, nil
 }
 
 // addIndexMutations adds mutation(s) for a single term, to maintain index.
 func addIndexMutations(ctx context.Context, attr string, uid uint64,
-	p types.Value, del bool) {
+	typ byte, data []byte, del bool) {
 	x.AssertTrue(uid != 0)
-	tokens, err := indexTokens(attr, p)
+	typID := types.TypeID(typ)
+	tokens, err := indexTokens(attr, typID, data)
 	if err != nil {
 		// This data is not indexable
 		return
@@ -196,19 +200,22 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *task.DirectedEdge, o
 	// Exact matches.
 	if verr == nil && len(vbytes) > 0 {
 		delTerm := vbytes
-		delType := vtype
-		p := types.ValueForType(types.TypeID(delType))
-		if err := p.UnmarshalBinary(delTerm); err != nil {
-			return err
-		}
-		addIndexMutations(ctx, t.Attr, t.Entity, p, true)
+		/*
+			p := types.ValueForType(types.TypeID(delType))
+			if err := p.UnmarshalBinary(delTerm); err != nil {
+				return err
+			}
+		*/
+		addIndexMutations(ctx, t.Attr, t.Entity, vtype, delTerm, true)
 	}
 	if op == Set {
-		p := types.ValueForType(types.TypeID(t.ValueType))
-		if err := p.UnmarshalBinary(t.Value); err != nil {
-			return err
-		}
-		addIndexMutations(ctx, t.Attr, t.Entity, p, false)
+		/*
+			p := types.ValueForType(types.TypeID(t.ValueType))
+			if err := p.UnmarshalBinary(t.Value); err != nil {
+				return err
+			}
+		*/
+		addIndexMutations(ctx, t.Attr, t.Entity, byte(t.ValueType), t.Value, false)
 	}
 	return nil
 }

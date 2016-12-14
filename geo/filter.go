@@ -109,12 +109,13 @@ func GetTokens(funcArgs []string) ([]string, *QueryData, error) {
 // queryTokens returns the tokens to be used to look up the geo index for a given filter.
 func queryTokens(qt QueryType, data string, maxDistance float64) ([]string, *QueryData, error) {
 	// Try to parse the data as geo type.
-	var g types.Geo
 	geoData := strings.Replace(data, "'", "\"", -1)
-	err := g.UnmarshalText([]byte(geoData))
+	gc := types.ValueForType(types.GeoID)
+	err := types.Convert(types.StringID, types.GeoID, []byte(geoData), &gc)
 	if err != nil {
 		return nil, nil, x.Wrapf(err, "Cannot decode given geoJson input")
 	}
+	g := gc.(types.Geo)
 
 	var l *s2.Loop
 	var pt *s2.Point
@@ -287,10 +288,12 @@ func FilterUids(uids *task.List, values []*task.Value, q *QueryData) *task.List 
 		if types.TypeID(vType) != types.GeoID {
 			continue
 		}
-		var g types.Geo
-		if err := g.UnmarshalBinary(valBytes); err != nil {
+		gc := types.ValueForType(types.GeoID)
+		err := types.Convert(types.BinaryID, types.GeoID, valBytes, &gc)
+		if err != nil {
 			continue
 		}
+		g := gc.(types.Geo)
 
 		if !q.MatchesFilter(g) {
 			continue

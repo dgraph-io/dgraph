@@ -176,14 +176,19 @@ func Parse(line string) (rnq NQuad, rerr error) {
 			}
 			if t, ok := typeMap[val]; ok {
 				p := types.ValueForType(t)
-				err := p.UnmarshalText([]byte(oval))
+				err := types.Convert(types.StringID, t, []byte(oval), &p)
+				//p.UnmarshalText([]byte(oval))
 				if err != nil {
 					return rnq, err
 				}
-				rnq.ObjectValue, err = p.MarshalBinary()
+
+				p1 := types.ValueForType(types.BinaryID)
+				err = types.ConvertFromInterface(t, types.BinaryID, p, &p1)
 				if err != nil {
 					return rnq, err
 				}
+				rnq.ObjectValue = []byte(p1.([]byte))
+
 				rnq.ObjectType = byte(t)
 				oval = ""
 			} else {

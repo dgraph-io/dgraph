@@ -33,29 +33,34 @@ func formData(t *testing.T, str string) string {
 
 	d, err := wkb.Marshal(p, binary.LittleEndian)
 	require.NoError(t, err)
-	var g types.Geo
-	require.NoError(t, g.UnmarshalBinary(d))
-	gb, err := g.MarshalText()
+
+	gd := types.ValueForType(types.StringID)
+	err = types.Convert(types.GeoID, types.StringID, []byte(d), &gd)
 	require.NoError(t, err)
+	gb := gd.(types.String)
 	return string(gb)
 }
 
 func formDataPoint(t *testing.T, p *geom.Point) string {
 	d, err := wkb.Marshal(p, binary.LittleEndian)
 	require.NoError(t, err)
-	var g types.Geo
-	require.NoError(t, g.UnmarshalBinary(d))
-	gb, err := g.MarshalText()
+
+	gd := types.ValueForType(types.StringID)
+	err = types.Convert(types.GeoID, types.StringID, []byte(d), &gd)
 	require.NoError(t, err)
+	gb := gd.(types.String)
+
 	return string(gb)
 }
 func formDataPolygon(t *testing.T, p *geom.Polygon) string {
 	d, err := wkb.Marshal(p, binary.LittleEndian)
 	require.NoError(t, err)
-	var g types.Geo
-	require.NoError(t, g.UnmarshalBinary(d))
-	gb, err := g.MarshalText()
+
+	gd := types.ValueForType(types.StringID)
+	err = types.Convert(types.GeoID, types.StringID, []byte(d), &gd)
 	require.NoError(t, err)
+	gb := gd.(types.String)
+
 	return string(gb)
 }
 

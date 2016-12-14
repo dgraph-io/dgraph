@@ -1,6 +1,8 @@
 package worker
 
 import (
+	"fmt"
+
 	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/dgraph/group"
@@ -139,7 +141,7 @@ func intersectBucket(ts *task.Sort, attr, token string, out []intersectedList) e
 	if !sType.IsScalar() {
 		return x.Errorf("Cannot sort attribute %s of type object.", attr)
 	}
-	scalar := sType.(types.Scalar)
+	scalar := sType.(types.TypeID)
 
 	key := x.IndexKey(attr, token)
 	pl, decr := posting.GetOrCreate(key)
@@ -198,20 +200,21 @@ func intersectBucket(ts *task.Sort, attr, token string, out []intersectedList) e
 }
 
 // sortByValue fetches values and sort UIDList.
-func sortByValue(attr string, ul *task.List, scalar types.Scalar) error {
-	values := make([]types.Value, len(ul.Uids))
+func sortByValue(attr string, ul *task.List, scalar types.TypeID) error {
+	values := make([]interface{}, len(ul.Uids))
 	for i, uid := range ul.Uids {
 		val, err := fetchValue(uid, attr, scalar)
 		if err != nil {
 			return err
 		}
 		values[i] = val
+		fmt.Println("**", val, scalar, attr)
 	}
-	return scalar.Sort(values, ul)
+	return types.Sort(scalar, values, ul)
 }
 
 // fetchValue gets the value for a given UID.
-func fetchValue(uid uint64, attr string, scalar types.Scalar) (types.Value, error) {
+func fetchValue(uid uint64, attr string, scalar types.TypeID) (interface{}, error) {
 	pl, decr := posting.GetOrCreate(x.DataKey(attr, uid))
 	defer decr()
 
@@ -219,18 +222,15 @@ func fetchValue(uid uint64, attr string, scalar types.Scalar) (types.Value, erro
 	if err != nil {
 		return nil, err
 	}
-	val := types.ValueForType(types.TypeID(vType))
+	vID := types.TypeID(vType)
+	val := types.ValueForType(scalar)
 	if val == nil {
 		return nil, x.Errorf("Invalid type: %v", vType)
 	}
-	err = val.UnmarshalBinary(valBytes)
+	err = types.Convert(vID, scalar, valBytes, &val)
 	if err != nil {
 		return nil, err
 	}
 
-	schemaVal, err := scalar.Convert(val)
-	if err != nil {
-		return nil, err
-	}
-	return schemaVal, nil
+	return val, nil
 }

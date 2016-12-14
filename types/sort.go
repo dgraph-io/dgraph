@@ -17,7 +17,6 @@
 package types
 
 import (
-	"bytes"
 	"sort"
 
 	"github.com/dgraph-io/dgraph/task"
@@ -25,7 +24,7 @@ import (
 )
 
 type sortBase struct {
-	values []Value
+	values []interface{}
 	ul     *task.List
 }
 
@@ -42,43 +41,37 @@ func (s sortBase) Swap(i, j int) {
 type byDate struct{ sortBase }
 
 func (s byDate) Less(i, j int) bool {
-	return s.values[i].(*Date).Time.Before(s.values[j].(*Date).Time)
+	return s.values[i].(Date).Time.Before(s.values[j].(Date).Time)
 }
 
 type byDateTime struct{ sortBase }
 
 func (s byDateTime) Less(i, j int) bool {
-	return s.values[i].(*Time).Time.Before(s.values[j].(*Time).Time)
+	return s.values[i].(Time).Time.Before(s.values[j].(Time).Time)
 }
 
 type byInt32 struct{ sortBase }
 
 func (s byInt32) Less(i, j int) bool {
-	return *(s.values[i].(*Int32)) < *(s.values[j].(*Int32))
+	return (s.values[i].(Int32)) < (s.values[j].(Int32))
 }
 
 type byFloat struct{ sortBase }
 
 func (s byFloat) Less(i, j int) bool {
-	return *(s.values[i].(*Float)) < *(s.values[j].(*Float))
+	return (s.values[i].(Float)) < (s.values[j].(Float))
 }
 
 type byString struct{ sortBase }
 
 func (s byString) Less(i, j int) bool {
-	return *(s.values[i].(*String)) < *(s.values[j].(*String))
-}
-
-type byByteArray struct{ sortBase }
-
-func (s byByteArray) Less(i, j int) bool {
-	return bytes.Compare(*(s.values[i].(*Bytes)), *(s.values[j].(*Bytes))) < 0
+	return (s.values[i].(String)) < (s.values[j].(String))
 }
 
 // Sort sorts the given array in-place.
-func (s Scalar) Sort(v []Value, ul *task.List) error {
+func Sort(sID TypeID, v []interface{}, ul *task.List) error {
 	b := sortBase{v, ul}
-	switch s.ID() {
+	switch sID {
 	case DateID:
 		sort.Sort(byDate{b})
 		return nil
@@ -94,9 +87,6 @@ func (s Scalar) Sort(v []Value, ul *task.List) error {
 	case StringID:
 		sort.Sort(byString{b})
 		return nil
-	case BytesID:
-		sort.Sort(byByteArray{b})
-		return nil
 	}
-	return x.Errorf("Scalar doesn't support sorting %s", s)
+	return x.Errorf("Scalar doesn't support sorting %s", sID)
 }
