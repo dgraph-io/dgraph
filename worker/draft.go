@@ -84,7 +84,7 @@ type node struct {
 	raftContext *task.RaftContext
 	store       *raft.MemoryStorage
 	wal         *raftwal.Wal
-	committed   x.WaterMark
+	applied     x.WaterMark
 }
 
 func newNode(gid uint32, id uint64, myAddr string) *node {
@@ -123,8 +123,8 @@ func newNode(gid uint32, id uint64, myAddr string) *node {
 		raftContext: rc,
 		messages:    make(chan sendmsg, 1000),
 	}
-	n.committed = x.WaterMark{Name: "~~~~~~~~~~~~~~~ Committed Mark"}
-	n.committed.Init()
+	n.applied = x.WaterMark{Name: "Committed Mark"}
+	n.applied.Init()
 
 	return n
 }
@@ -321,7 +321,7 @@ func (n *node) processMembership(e raftpb.Entry, mm *task.Membership) error {
 
 func (n *node) process(e raftpb.Entry, pending chan struct{}) {
 	defer func() {
-		n.committed.Ch <- x.Mark{Index: e.Index, Done: true}
+		n.applied.Ch <- x.Mark{Index: e.Index, Done: true}
 	}()
 
 	if e.Type != raftpb.EntryNormal {
@@ -349,7 +349,7 @@ func (n *node) processCommitCh() {
 
 	for e := range n.commitCh {
 		if e.Data == nil {
-			n.committed.Ch <- x.Mark{Index: e.Index, Done: true}
+			n.applied.Ch <- x.Mark{Index: e.Index, Done: true}
 			continue
 		}
 
@@ -364,7 +364,7 @@ func (n *node) processCommitCh() {
 			}
 
 			n.raft.ApplyConfChange(cc)
-			n.committed.Ch <- x.Mark{Index: e.Index, Done: true}
+			n.applied.Ch <- x.Mark{Index: e.Index, Done: true}
 
 		} else {
 			go n.process(e, pending)
@@ -440,7 +440,7 @@ func (n *node) Run() {
 				if entry.Index == 2 {
 					fmt.Printf("%+v\n", entry)
 				}
-				n.committed.Ch <- status
+				n.applied.Ch <- status
 			}
 
 			n.raft.Advance()

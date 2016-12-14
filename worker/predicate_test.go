@@ -49,7 +49,7 @@ func checkShard(ps *store.Store) (int, []byte) {
 func writePLs(t *testing.T, pred string, count int, vid uint64, ps *store.Store) {
 	for i := 0; i < count; i++ {
 		k := x.DataKey(pred, uint64(i))
-		list, _ := posting.GetOrCreate(k)
+		list, _ := posting.GetOrCreate(k, 0)
 
 		de := &task.DirectedEdge{
 			ValueId: vid,

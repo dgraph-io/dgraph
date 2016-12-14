@@ -183,7 +183,8 @@ func markTaken(ctx context.Context, uid uint64) {
 		Op:     task.DirectedEdge_SET,
 	}
 	key := x.DataKey("_uid_", uid)
-	plist, decr := posting.GetOrCreate(key)
+	gid := group.BelongsTo("_uid_")
+	plist, decr := posting.GetOrCreate(key, gid)
 	plist.AddMutation(ctx, mu)
 	decr()
 }
@@ -200,7 +201,8 @@ func (s *state) handleNQuads(wg *sync.WaitGroup) {
 			return
 		}
 		// Only handle this edge if the attribute satisfies the modulo rule
-		if !s.groupsMap[group.BelongsTo(nq.Predicate)] {
+		gid := group.BelongsTo(nq.Predicate)
+		if !s.groupsMap[gid] {
 			atomic.AddUint64(&s.ctr.ignored, 1)
 			continue
 		}
@@ -223,7 +225,7 @@ func (s *state) handleNQuads(wg *sync.WaitGroup) {
 
 		key := x.DataKey(edge.Attr, edge.Entity)
 
-		plist, decr := posting.GetOrCreate(key)
+		plist, decr := posting.GetOrCreate(key, gid)
 		plist.AddMutationWithIndex(ctx, edge)
 		decr() // Don't defer, just call because we're in a channel loop.
 
