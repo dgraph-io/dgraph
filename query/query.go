@@ -267,7 +267,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 				if err != nil {
 					return err
 				}
-				dst.SetXID(*txt.Value.(*string))
+				dst.SetXID(txt.Value.(string))
 			} else if pc.Attr == "_uid_" {
 				dst.SetUID(uid)
 			} else {

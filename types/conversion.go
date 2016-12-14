@@ -338,6 +338,17 @@ func Marshal(from Val, to *Val) error {
 	res := &to.Value
 
 	switch fromID {
+	case BinaryID:
+		vc := val.([]byte)
+		switch toID {
+		case StringID:
+			*res = string(vc)
+		case BinaryID:
+			// Marshal Binary
+			*res = []byte(vc)
+		default:
+			return cantConvert(fromID, toID)
+		}
 	case StringID:
 		vc := val.(string)
 		switch toID {
@@ -441,6 +452,8 @@ func Marshal(from Val, to *Val) error {
 		default:
 			return cantConvert(fromID, toID)
 		}
+	default:
+		return cantConvert(fromID, toID)
 	}
 	return nil
 }
