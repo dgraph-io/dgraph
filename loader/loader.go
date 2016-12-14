@@ -180,10 +180,11 @@ func markTaken(ctx context.Context, uid uint64) {
 		Attr:   "_uid_",
 		Value:  []byte("_"), // not txid
 		Label:  "_loader_",
+		Op:     task.DirectedEdge_SET,
 	}
 	key := x.DataKey("_uid_", uid)
 	plist, decr := posting.GetOrCreate(key)
-	plist.AddMutation(ctx, mu, posting.Set)
+	plist.AddMutation(ctx, mu)
 	decr()
 }
 
@@ -218,11 +219,12 @@ func (s *state) handleNQuads(wg *sync.WaitGroup) {
 			}
 			edge, err = nq.ToEdge()
 		}
+		edge.Op = task.DirectedEdge_SET
 
 		key := x.DataKey(edge.Attr, edge.Entity)
 
 		plist, decr := posting.GetOrCreate(key)
-		plist.AddMutationWithIndex(ctx, edge, posting.Set)
+		plist.AddMutationWithIndex(ctx, edge)
 		decr() // Don't defer, just call because we're in a channel loop.
 
 		// Mark UIDs and XIDs as taken

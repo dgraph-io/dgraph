@@ -54,8 +54,9 @@ func writePLs(t *testing.T, pred string, count int, vid uint64, ps *store.Store)
 		de := &task.DirectedEdge{
 			ValueId: vid,
 			Label:   "test",
+			Op:      task.DirectedEdge_SET,
 		}
-		list.AddMutation(context.TODO(), de, posting.Set)
+		list.AddMutation(context.TODO(), de)
 		if merged, err := list.CommitIfDirty(context.TODO()); err != nil {
 			t.Errorf("While merging: %v", err)
 		} else if !merged {

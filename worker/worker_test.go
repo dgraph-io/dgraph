@@ -34,13 +34,15 @@ import (
 )
 
 func addEdge(t *testing.T, edge *task.DirectedEdge, l *posting.List) {
+	edge.Op = task.DirectedEdge_SET
 	require.NoError(t,
-		l.AddMutationWithIndex(context.Background(), edge, posting.Set))
+		l.AddMutationWithIndex(context.Background(), edge))
 }
 
 func delEdge(t *testing.T, edge *task.DirectedEdge, l *posting.List) {
+	edge.Op = task.DirectedEdge_DEL
 	require.NoError(t,
-		l.AddMutationWithIndex(context.Background(), edge, posting.Del))
+		l.AddMutationWithIndex(context.Background(), edge))
 }
 
 func getOrCreate(key []byte) *posting.List {
