@@ -18,24 +18,17 @@ package query
 
 import (
 	"context"
-	"encoding/json"
 	"io/ioutil"
-	"os"
 	"testing"
 
-	"github.com/gogo/protobuf/proto"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/gql"
-	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/query/graph"
-	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/types"
-	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -123,6 +116,7 @@ func addEdgeToUID(t *testing.T, ps *store.Store, attr string, src uint64, dst ui
 		l.AddMutationWithIndex(context.Background(), edge, posting.Set))
 }
 
+/*
 func populateGraph(t *testing.T) (string, string, *store.Store) {
 	// logrus.SetLevel(logrus.DebugLevel)
 	dir, err := ioutil.TempDir("", "storetest_")
@@ -411,7 +405,7 @@ func TestProcessGraph(t *testing.T) {
 				}
 				name
 				gender
-				alive	
+				alive
 			}
 		}
 	`
@@ -1845,3 +1839,4 @@ func TestMain(m *testing.M) {
 	x.Init()
 	os.Exit(m.Run())
 }
+*/

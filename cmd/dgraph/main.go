@@ -216,50 +216,50 @@ func mutationToNQuad(nq []*graph.NQuad) ([]rdf.NQuad, error) {
 			ObjectId:  n.ObjId,
 			Label:     n.Label,
 		}
-		v, err := typeValueFromNQuad(n)
+		v, vID, err := typeValueFromNQuad(n)
 		if err != nil {
 			return resp, err
 		}
 		if v != nil {
-			nq.ObjectValue, _ = v.MarshalBinary()
-			nq.ObjectType = byte(v.TypeID())
+			nq.ObjectValue, _ = v.(types.Binary)
+			nq.ObjectType = byte(vID)
 		}
 		resp = append(resp, nq)
 	}
 	return resp, nil
 }
 
-func typeValueFromNQuad(nq *graph.NQuad) (types.Value, error) {
+func typeValueFromNQuad(nq *graph.NQuad) (interface{}, types.TypeID, error) {
 	if nq.Value == nil || nq.Value.Val == nil {
-		return nil, nil
+		return nil, 0, nil
 	}
+	b := types.ValueForType(types.BinaryID)
 	switch v := nq.Value.Val.(type) {
 	case *graph.Value_IntVal:
 		i := types.Int32(v.IntVal)
-		return &i, nil
+		x.Check(types.ConvertFromInterface(types.Int32ID, types.BinaryID, i, &b))
+		return b, types.Int32ID, nil
 	case *graph.Value_StrVal:
 		s := types.String(v.StrVal)
-		return &s, nil
+		x.Check(types.ConvertFromInterface(types.StringID, types.BinaryID, s, &b))
+		return b, types.StringID, nil
 	case *graph.Value_BoolVal:
-		b := types.Bool(v.BoolVal)
-		return &b, nil
+		bo := types.Bool(v.BoolVal)
+		x.Check(types.ConvertFromInterface(types.BoolID, types.BinaryID, bo, &b))
+		return b, types.BoolID, nil
 	case *graph.Value_DoubleVal:
 		f := types.Float(v.DoubleVal)
-		return &f, nil
+		x.Check(types.ConvertFromInterface(types.FloatID, types.BinaryID, f, &b))
+		return b, types.FloatID, nil
 	case *graph.Value_GeoVal:
-		var geom types.Geo
-		err := geom.UnmarshalBinary(v.GeoVal)
-		if err != nil {
-			return nil, err
-		}
-		return &geom, nil
+		return v.GeoVal, types.GeoID, nil
 
 	case nil:
 		log.Fatalf("Val being nil is already handled")
-		return nil, nil
+		return nil, 0, nil
 	default:
 		// Unknown type
-		return nil, x.Errorf("Unknown value type %T", v)
+		return nil, 0, x.Errorf("Unknown value type %T", v)
 	}
 }
 
@@ -347,23 +347,22 @@ func validateTypes(nquads []rdf.NQuad) error {
 				// Storage type was unspecified in the RDF, so we convert the data to the schema
 				// type.
 				v := types.ValueForType(schemaType)
-				err := v.UnmarshalText(nquad.ObjectValue)
+				err := types.Convert(types.StringID, schemaType, nquad.ObjectValue, &v) // v.UnmarshalText(nquad.ObjectValue)
 				if err != nil {
 					return err
 				}
-				nquad.ObjectValue, err = v.MarshalBinary()
+				b := types.ValueForType(types.BinaryID)
+				err = types.ConvertFromInterface(schemaType, types.BinaryID, v, &b)
 				if err != nil {
 					return err
 				}
+				nquad.ObjectValue = b.(types.Binary)
 				nquad.ObjectType = byte(schemaType)
 
 			} else if typeID != schemaType {
 				v := types.ValueForType(typeID)
-				err := v.UnmarshalBinary(nquad.ObjectValue)
+				err := types.Convert(typeID, schemaType, nquad.ObjectValue, &v)
 				if err != nil {
-					return err
-				}
-				if _, err := types.Convert(v, schemaType); err != nil {
 					return err
 				}
 			}

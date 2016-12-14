@@ -80,6 +80,10 @@ func TypeForName(name string) (TypeID, bool) {
 // ValueForType returns the zero value for a type id
 func ValueForType(id TypeID) interface{} {
 	switch id {
+	case BinaryID:
+		var b Binary
+		return &b
+
 	case Int32ID:
 		var i Int32
 		return &i

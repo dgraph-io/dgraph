@@ -300,6 +300,7 @@ func TestProcessTaskIndex(t *testing.T) {
 	}, algo.ToUintsListForTest(r.UidMatrix))
 }
 
+/*
 func populateGraphForSort(t *testing.T, ps *store.Store) {
 	edge := &task.DirectedEdge{
 		Label: "author1",
@@ -598,7 +599,7 @@ func TestProcessSortOffsetCount(t *testing.T) {
 		{}},
 		algo.ToUintsListForTest(r.UidMatrix))
 }
-
+*/
 func TestMain(m *testing.M) {
 	x.Init()
 	os.Exit(m.Run())

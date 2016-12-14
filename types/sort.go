@@ -41,31 +41,31 @@ func (s sortBase) Swap(i, j int) {
 type byDate struct{ sortBase }
 
 func (s byDate) Less(i, j int) bool {
-	return s.values[i].(*Date).Time.Before(s.values[j].(*Date).Time)
+	return s.values[i].(Date).Time.Before(s.values[j].(Date).Time)
 }
 
 type byDateTime struct{ sortBase }
 
 func (s byDateTime) Less(i, j int) bool {
-	return s.values[i].(*Time).Time.Before(s.values[j].(*Time).Time)
+	return s.values[i].(Time).Time.Before(s.values[j].(Time).Time)
 }
 
 type byInt32 struct{ sortBase }
 
 func (s byInt32) Less(i, j int) bool {
-	return *(s.values[i].(*Int32)) < *(s.values[j].(*Int32))
+	return (s.values[i].(Int32)) < (s.values[j].(Int32))
 }
 
 type byFloat struct{ sortBase }
 
 func (s byFloat) Less(i, j int) bool {
-	return *(s.values[i].(*Float)) < *(s.values[j].(*Float))
+	return (s.values[i].(Float)) < (s.values[j].(Float))
 }
 
 type byString struct{ sortBase }
 
 func (s byString) Less(i, j int) bool {
-	return *(s.values[i].(*String)) < *(s.values[j].(*String))
+	return (s.values[i].(String)) < (s.values[j].(String))
 }
 
 // Sort sorts the given array in-place.

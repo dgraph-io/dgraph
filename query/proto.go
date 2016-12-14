@@ -19,12 +19,13 @@ package query
 import (
 	"github.com/dgraph-io/dgraph/query/graph"
 	"github.com/dgraph-io/dgraph/types"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 // This file contains helper functions for converting scalar types to
 // protobuf values.
 
-func toProtoValue(v types.Value) *graph.Value {
+func toProtoValue(v interface{}) *graph.Value {
 	switch val := v.(type) {
 	case *types.String:
 		return &graph.Value{&graph.Value_StrVal{string(*val)}}
@@ -39,8 +40,9 @@ func toProtoValue(v types.Value) *graph.Value {
 		return &graph.Value{&graph.Value_BoolVal{bool(*val)}}
 
 	case *types.Geo:
-		var b, _ = val.MarshalBinary()
-		return &graph.Value{&graph.Value_GeoVal{b}}
+		b := types.ValueForType(types.BinaryID)
+		x.Check(types.ConvertFromInterface(types.GeoID, types.BinaryID, val, &b))
+		return &graph.Value{&graph.Value_GeoVal{b.([]byte)}}
 
 	default:
 		// A type that isn't supported in the proto

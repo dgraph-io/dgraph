@@ -171,17 +171,19 @@ func (sg *SubGraph) DebugPrint(prefix string) {
 }
 
 // getValue gets the value from the task.
-func getValue(tv *task.Value) (types.Value, error) {
+func getValue(tv *task.Value) (interface{}, types.TypeID, error) {
 	vType := tv.ValType
 	valBytes := tv.Val
-	val := types.ValueForType(types.TypeID(vType))
+	vID := types.TypeID(vType)
+	val := types.ValueForType(vID)
 	if val == nil {
-		return nil, x.Errorf("Invalid type: %v", vType)
+		return nil, 0, x.Errorf("Invalid type: %v", vType)
 	}
-	if err := val.UnmarshalBinary(valBytes); err != nil {
-		return nil, err
-	}
-	return val, nil
+	x.Check(types.Convert(vID, vID, valBytes, &val))
+	//if err := val.UnmarshalBinary(valBytes); err != nil {
+	//	return nil, err
+	//}
+	return val, vID, nil
 }
 
 var nodePool = sync.Pool{
@@ -254,17 +256,19 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 			}
 		} else {
 			tv := pc.values[idx]
-			v, err := getValue(tv)
+			v, vID, err := getValue(tv)
 			if err != nil {
 				return err
 			}
 
 			if pc.Attr == "_xid_" {
-				txt, err := v.MarshalText()
+				txt := types.ValueForType(types.StringID)
+				err := types.ConvertFromInterface(vID, types.StringID, v, &txt)
+				//txt, err := v.MarshalText()
 				if err != nil {
 					return err
 				}
-				dst.SetXID(string(txt))
+				dst.SetXID(string(*txt.(*types.String)))
 			} else if pc.Attr == "_uid_" {
 				dst.SetUID(uid)
 			} else {
@@ -277,9 +281,10 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 						return x.Errorf("Unknown Scalar:%v. Leaf predicate:'%v' must be"+
 							" one of the scalar types defined in the schema.", pc.Params.AttrType, pc.Attr)
 					}
-					st := schemaType.(types.TypeID)
+					stID := schemaType.(types.TypeID)
+					sv = types.ValueForType(stID)
 					// Convert to schema type.
-					sv, err = types.Convert(v, st)
+					err = types.Convert(vID, stID, tv.Val, &sv)
 					if bytes.Equal(tv.Val, nil) || err != nil {
 						// skip values that don't convert.
 						return x.Errorf("_INV_")
@@ -290,9 +295,10 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 					if !globalType.IsScalar() {
 						return x.Errorf("Leaf predicate:'%v' must be a scalar.", pc.Attr)
 					}
-					gt := globalType.(types.TypeID)
+					gtID := globalType.(types.TypeID)
+					sv = types.ValueForType(gtID)
 					// Convert to schema type.
-					sv, err = types.Convert(v, gt)
+					err = types.Convert(vID, gtID, tv.Val, &sv)
 					if bytes.Equal(tv.Val, nil) || err != nil {
 						continue
 					}
@@ -307,7 +313,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 	return nil
 }
 
-func createProperty(prop string, v types.Value) *graph.Property {
+func createProperty(prop string, v interface{}) *graph.Property {
 	pval := toProtoValue(v)
 	return &graph.Property{Prop: prop, Value: pval}
 }
@@ -754,7 +760,7 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 
 // outputNode is the generic output / writer for preTraverse.
 type outputNode interface {
-	AddValue(attr string, v types.Value)
+	AddValue(attr string, v interface{})
 	AddChild(attr string, child outputNode)
 	New(attr string) outputNode
 	SetUID(uid uint64)
@@ -768,7 +774,7 @@ type protoOutputNode struct {
 }
 
 // AddValue adds an attribute value for protoOutputNode.
-func (p *protoOutputNode) AddValue(attr string, v types.Value) {
+func (p *protoOutputNode) AddValue(attr string, v interface{}) {
 	p.Node.Properties = append(p.Node.Properties, createProperty(attr, v))
 }
 
@@ -839,7 +845,7 @@ type jsonOutputNode struct {
 }
 
 // AddValue adds an attribute value for jsonOutputNode.
-func (p *jsonOutputNode) AddValue(attr string, v types.Value) {
+func (p *jsonOutputNode) AddValue(attr string, v interface{}) {
 	p.data[attr] = v
 }
 

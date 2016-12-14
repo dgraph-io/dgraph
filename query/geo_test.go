@@ -48,9 +48,11 @@ func createTestStore(t *testing.T) (string, *store.Store) {
 
 func addGeoData(t *testing.T, ps *store.Store, uid uint64, p geom.T, name string) {
 	g := types.Geo{p}
-	value, err := g.MarshalBinary()
+	value := types.ValueForType(types.BinaryID)
+	err := types.ConvertFromInterface(types.GeoID, types.BinaryID, g, &value)
+	//value, err := g.MarshalBinary()
 	require.NoError(t, err)
-	addEdgeToTypedValue(t, ps, "geometry", uid, types.GeoID, value)
+	addEdgeToTypedValue(t, ps, "geometry", uid, types.GeoID, value.(types.Binary))
 	addEdgeToTypedValue(t, ps, "name", uid, types.StringID, []byte(name))
 }
 

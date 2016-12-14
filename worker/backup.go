@@ -35,16 +35,15 @@ func toRDF(buf *bytes.Buffer, item kv) {
 		if p.Uid == math.MaxUint64 && !bytes.Equal(p.Value, nil) {
 			// Value posting
 			// Convert to appropriate type
-			typ := stype.ValueForType(stype.TypeID(p.ValType))
-			x.Check(typ.UnmarshalBinary(p.Value))
-			str, err := typ.MarshalText()
-			x.Check(err)
-
-			x.Check2(buf.WriteString(fmt.Sprintf("\"%s\"", str)))
+			vID := stype.TypeID(p.ValType)
+			str := stype.ValueForType(stype.StringID)
+			x.Check(stype.Convert(vID, stype.StringID, p.Value, &str))
+			fmt.Println(p.Value, vID)
+			x.Check2(buf.WriteString(fmt.Sprintf("\"%s\"", string(str.(stype.String)))))
 			if stype.TypeID(p.ValType) == stype.GeoID {
 				x.Check2(buf.WriteString(fmt.Sprintf("^^<geo:geojson> ")))
-			} else if stype.TypeID(p.ValType) != stype.StringID {
-				x.Check2(buf.WriteString(fmt.Sprintf("^^<xs:%s> ", typ.String())))
+			} else if stype.TypeID(p.ValType) != stype.BinaryID {
+				x.Check2(buf.WriteString(fmt.Sprintf("^^<xs:%s> ", vID.Name())))
 			}
 			x.Check2(buf.WriteString(" .\n"))
 			return
