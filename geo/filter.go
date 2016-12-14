@@ -111,11 +111,13 @@ func queryTokens(qt QueryType, data string, maxDistance float64) ([]string, *Que
 	// Try to parse the data as geo type.
 	geoData := strings.Replace(data, "'", "\"", -1)
 	gc := types.ValueForType(types.GeoID)
-	err := types.Convert(types.StringID, types.GeoID, []byte(geoData), &gc)
+	src := types.ValueForType(types.StringID)
+	src.Value = []byte(geoData)
+	err := types.Convert(src, &gc)
 	if err != nil {
 		return nil, nil, x.Wrapf(err, "Cannot decode given geoJson input")
 	}
-	g := gc.(geom.T)
+	g := gc.Value.(geom.T)
 
 	var l *s2.Loop
 	var pt *s2.Point
@@ -289,11 +291,13 @@ func FilterUids(uids *task.List, values []*task.Value, q *QueryData) *task.List 
 			continue
 		}
 		gc := types.ValueForType(types.GeoID)
-		err := types.Convert(types.BinaryID, types.GeoID, valBytes, &gc)
+		src := types.ValueForType(types.BinaryID)
+		src.Value = valBytes
+		err := types.Convert(src, &gc)
 		if err != nil {
 			continue
 		}
-		g := gc.(geom.T)
+		g := gc.Value.(geom.T)
 
 		if !q.MatchesFilter(g) {
 			continue

@@ -35,9 +35,11 @@ func formData(t *testing.T, str string) string {
 	require.NoError(t, err)
 
 	gd := types.ValueForType(types.StringID)
-	err = types.Convert(types.GeoID, types.StringID, []byte(d), &gd)
+	src := types.ValueForType(types.GeoID)
+	src.Value = []byte(d)
+	err = types.Convert(src, &gd)
 	require.NoError(t, err)
-	gb := gd.(string)
+	gb := gd.Value.(string)
 	return string(gb)
 }
 
@@ -46,9 +48,11 @@ func formDataPoint(t *testing.T, p *geom.Point) string {
 	require.NoError(t, err)
 
 	gd := types.ValueForType(types.StringID)
-	err = types.Convert(types.GeoID, types.StringID, []byte(d), &gd)
+	src := types.ValueForType(types.GeoID)
+	src.Value = []byte(d)
+	err = types.Convert(src, &gd)
 	require.NoError(t, err)
-	gb := gd.(string)
+	gb := gd.Value.(string)
 
 	return string(gb)
 }
@@ -57,9 +61,11 @@ func formDataPolygon(t *testing.T, p *geom.Polygon) string {
 	require.NoError(t, err)
 
 	gd := types.ValueForType(types.StringID)
-	err = types.Convert(types.GeoID, types.StringID, []byte(d), &gd)
+	src := types.ValueForType(types.GeoID)
+	src.Value = []byte(d)
+	err = types.Convert(src, &gd)
 	require.NoError(t, err)
-	gb := gd.(string)
+	gb := gd.Value.(string)
 
 	return string(gb)
 }
