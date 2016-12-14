@@ -32,55 +32,6 @@ import (
 
 // Convert converts the value to given scalar type.
 func Convert(fromID TypeID, toID TypeID, data []byte, res *interface{}) error {
-	var v interface{}
-
-	// First decode binary to corresponding type interface
-	// (Unmarshal from binary to the from type).
-	switch fromID {
-	case StringID:
-		v = String(data)
-	case Int32ID:
-		if len(data) < 4 {
-			return x.Errorf("Invalid data for int32 %v", data)
-		}
-		v = Int32(binary.LittleEndian.Uint32(data))
-	case FloatID:
-		if len(data) < 8 {
-			return x.Errorf("Invalid data for float %v", data)
-		}
-		i := binary.LittleEndian.Uint64(data)
-		val := math.Float64frombits(i)
-		v = Float(val)
-	case BoolID:
-		if data[0] == 0 {
-			v = Bool(false)
-		} else if data[0] == 1 {
-			v = Bool(true)
-		} else {
-			return x.Errorf("Invalid value for bool %v", data[0])
-		}
-	case DateID:
-		if len(data) < 8 {
-			return x.Errorf("Invalid data for date %v", data)
-		}
-		val := binary.LittleEndian.Uint64(data)
-		tm := time.Unix(int64(val), 0)
-		v = createDate(tm.Date())
-	case DateTimeID:
-		var t time.Time
-		if err := t.UnmarshalBinary(data); err != nil {
-			return err
-		}
-		v = Time{t}
-	case GeoID:
-		w, err := wkb.Unmarshal(data)
-		if err != nil {
-			return err
-		}
-		v = Geo{w}
-	case BinaryID:
-		// Nothing to decode here. handled later.
-	}
 
 	// Convert from-type to to-type and store in the result interface.
 	switch fromID {
@@ -139,10 +90,7 @@ func Convert(fromID TypeID, toID TypeID, data []byte, res *interface{}) error {
 		}
 	case StringID:
 		{
-			vc, ok := v.(String)
-			if !ok {
-				return x.Errorf("Expected a String type")
-			}
+			vc := String(data)
 			switch toID {
 			case BinaryID:
 				// Marshal Binary
@@ -202,11 +150,10 @@ func Convert(fromID TypeID, toID TypeID, data []byte, res *interface{}) error {
 		}
 	case Int32ID:
 		{
-			vc, ok := v.(Int32)
-			if !ok {
-				return x.Errorf("Expected a Int32 type")
+			if len(data) < 4 {
+				return x.Errorf("Invalid data for int32 %v", data)
 			}
-
+			vc := Int32(binary.LittleEndian.Uint32(data))
 			switch toID {
 			case Int32ID:
 				*res = vc
@@ -227,10 +174,12 @@ func Convert(fromID TypeID, toID TypeID, data []byte, res *interface{}) error {
 		}
 	case FloatID:
 		{
-			vc, ok := v.(Float)
-			if !ok {
-				return x.Errorf("Expected a Float type")
+			if len(data) < 8 {
+				return x.Errorf("Invalid data for float %v", data)
 			}
+			i := binary.LittleEndian.Uint64(data)
+			val := math.Float64frombits(i)
+			vc := Float(val)
 			switch toID {
 			case FloatID:
 				*res = vc
@@ -255,10 +204,15 @@ func Convert(fromID TypeID, toID TypeID, data []byte, res *interface{}) error {
 		}
 	case BoolID:
 		{
-			vc, ok := v.(Bool)
-			if !ok {
-				return x.Errorf("Expected a Bool type")
+			var vc Bool
+			if data[0] == 0 {
+				vc = Bool(false)
+			} else if data[0] == 1 {
+				vc = Bool(true)
+			} else {
+				return x.Errorf("Invalid value for bool %v", data[0])
 			}
+
 			switch toID {
 			case BoolID:
 				*res = vc
@@ -291,10 +245,12 @@ func Convert(fromID TypeID, toID TypeID, data []byte, res *interface{}) error {
 		}
 	case DateID:
 		{
-			vc, ok := v.(Date)
-			if !ok {
-				return x.Errorf("Expected a Date type")
+			if len(data) < 8 {
+				return x.Errorf("Invalid data for date %v", data)
 			}
+			val := binary.LittleEndian.Uint64(data)
+			tm := time.Unix(int64(val), 0)
+			vc := createDate(tm.Date())
 
 			switch toID {
 			case DateID:
@@ -314,10 +270,11 @@ func Convert(fromID TypeID, toID TypeID, data []byte, res *interface{}) error {
 		}
 	case DateTimeID:
 		{
-			vc, ok := v.(Time)
-			if !ok {
-				return x.Errorf("Expected a DateTime type")
+			var t time.Time
+			if err := t.UnmarshalBinary(data); err != nil {
+				return err
 			}
+			vc := Time{t}
 			switch toID {
 			case DateTimeID:
 				*res = vc
@@ -338,11 +295,11 @@ func Convert(fromID TypeID, toID TypeID, data []byte, res *interface{}) error {
 		}
 	case GeoID:
 		{
-			vc, ok := v.(Geo)
-			if !ok {
-				return x.Errorf("Expected a Geo type")
+			w, err := wkb.Unmarshal(data)
+			if err != nil {
+				return err
 			}
-
+			vc := Geo{w}
 			switch toID {
 			case GeoID:
 				*res = vc
