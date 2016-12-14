@@ -224,23 +224,20 @@ func Convert(from Val, to *Val) error {
 			case BinaryID:
 				// Marshal Binary
 				var bs [1]byte
+				bs[0] = 0
 				if vc {
 					bs[0] = 1
-				} else {
-					bs[0] = 0
 				}
 				*res = bs[:]
 			case Int32ID:
+				*res = int32(0)
 				if vc {
 					*res = int32(1)
-				} else {
-					*res = int32(0)
 				}
 			case FloatID:
+				*res = float64(0)
 				if vc {
 					*res = float64(1)
-				} else {
-					*res = float64(0)
 				}
 			case StringID:
 				*res = string(strconv.FormatBool(bool(vc)))
@@ -327,6 +324,8 @@ func Convert(from Val, to *Val) error {
 				return cantConvert(fromID, toID)
 			}
 		}
+	default:
+		return cantConvert(fromID, toID)
 	}
 	return nil
 }
@@ -347,6 +346,8 @@ func Marshal(from Val, to *Val) error {
 		case BinaryID:
 			// Marshal Binary
 			*res = []byte(vc)
+		default:
+			return cantConvert(fromID, toID)
 		}
 	case Int32ID:
 		vc := val.(int32)
@@ -358,6 +359,8 @@ func Marshal(from Val, to *Val) error {
 			var bs [4]byte
 			binary.LittleEndian.PutUint32(bs[:], uint32(vc))
 			*res = bs[:]
+		default:
+			return cantConvert(fromID, toID)
 		}
 	case FloatID:
 		vc := val.(float64)
@@ -370,6 +373,8 @@ func Marshal(from Val, to *Val) error {
 			u := math.Float64bits(float64(vc))
 			binary.LittleEndian.PutUint64(bs[:], u)
 			*res = bs[:]
+		default:
+			return cantConvert(fromID, toID)
 		}
 	case BoolID:
 		vc := val.(bool)
@@ -379,12 +384,13 @@ func Marshal(from Val, to *Val) error {
 		case BinaryID:
 			// Marshal Binary
 			var bs [1]byte
+			bs[0] = 0
 			if vc {
 				bs[0] = 1
-			} else {
-				bs[0] = 0
 			}
 			*res = bs[:]
+		default:
+			return cantConvert(fromID, toID)
 		}
 	case DateID:
 		vc := val.(time.Time)
@@ -395,6 +401,8 @@ func Marshal(from Val, to *Val) error {
 			var bs [8]byte
 			binary.LittleEndian.PutUint64(bs[:], uint64(vc.Unix()))
 			*res = bs[:]
+		default:
+			return cantConvert(fromID, toID)
 		}
 	case DateTimeID:
 		vc := val.(time.Time)
@@ -408,6 +416,8 @@ func Marshal(from Val, to *Val) error {
 				return err
 			}
 			*res = r
+		default:
+			return cantConvert(fromID, toID)
 		}
 	case GeoID:
 		vc, ok := val.(geom.T)
