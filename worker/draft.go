@@ -304,7 +304,7 @@ func (n *node) batchAndSendMessages() {
 
 func (n *node) processMutation(e raftpb.Entry, m *task.Mutations) error {
 	// TODO: Need to pass node and entry index.
-	if err := mutate(n.ctx, m); err != nil {
+	if err := runMutations(n.ctx, m.Edges); err != nil {
 		x.TraceError(n.ctx, err)
 		return err
 	}

@@ -50,16 +50,6 @@ func runMutations(ctx context.Context, edges []*task.DirectedEdge) error {
 	return nil
 }
 
-// mutate runs the set and delete mutations.
-func mutate(ctx context.Context, m *task.Mutations) error {
-	// TODO: Needs to have a node and entry index.
-	// Running the set instructions first.
-	if err := runMutations(ctx, m.Edges); err != nil {
-		return err
-	}
-	return nil
-}
-
 // runMutate is used to run the mutations on an instance.
 func proposeOrSend(ctx context.Context, gid uint32, m *task.Mutations, che chan error) {
 	if groups().ServesGroup(gid) {
