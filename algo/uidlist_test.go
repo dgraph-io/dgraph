@@ -242,31 +242,16 @@ func benchmarkListIntersectRandom(arrSz int, limit int64, r *rand.Rand, b *testi
 	sort.Sort(Uint64Slice(u1))
 	sort.Sort(Uint64Slice(v1))
 
-	makeCopy := func(x []uint64) []uint64 {
-		c := make([]uint64, len(x), len(x))
-		copy(c, x)
-		return c
-	}
 	b.Run(":2forLoops:"+strconv.Itoa(arrSz), func(b *testing.B) {
 		u := newList(u1)
 		v := newList(v1)
-		ucopy := makeCopy(u1)
+		ucopy := make([]uint64, len(u1), len(u1))
+		copy(ucopy, u1)
 		b.ResetTimer()
 		for k := 0; k < b.N; k++ {
 			IntersectWith(u, v)
 			u.Uids = u.Uids[:arrSz]
 			copy(u.Uids, ucopy)
-		}
-	})
-	b.Run(":2forLoops:ordChg:"+strconv.Itoa(arrSz), func(b *testing.B) {
-		uArg := newList(v1)
-		vArg := newList(u1)
-		ucopy := makeCopy(v1)
-		b.ResetTimer()
-		for k := 0; k < b.N; k++ {
-			IntersectWith(uArg, vArg)
-			uArg.Uids = uArg.Uids[:arrSz]
-			copy(uArg.Uids, ucopy)
 		}
 	})
 }
