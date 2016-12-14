@@ -55,7 +55,7 @@ func assignUids(ctx context.Context, num *task.Num) (*task.List, error) {
 		return &emptyUIDList, x.Errorf("Nothing to be marked or assigned")
 	}
 
-	mutations := uid.AssignNew(val, 0, 1)
+	mutations := uid.AssignNew(val, num.Group)
 
 	for _, uid := range num.Uids {
 		mutations.Edges = append(mutations.Edges, &task.DirectedEdge{

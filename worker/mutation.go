@@ -38,8 +38,13 @@ func runMutations(ctx context.Context, edges []*task.DirectedEdge) error {
 			return x.Errorf("Predicate fingerprint doesn't match this instance")
 		}
 
+		var group uint32
+		if rv, ok := ctx.Value("raft").(x.RaftValue); ok {
+			group = rv.Group
+		}
+
 		key := x.DataKey(edge.Attr, edge.Entity)
-		plist, decr := posting.GetOrCreate(key) // TODO: Needs to have a node and entry index.
+		plist, decr := posting.GetOrCreate(key, group)
 		defer decr()
 
 		if err := plist.AddMutationWithIndex(ctx, edge); err != nil {

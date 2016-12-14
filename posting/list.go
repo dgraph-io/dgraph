@@ -66,8 +66,9 @@ type List struct {
 	lastCompact time.Time
 	deleteMe    int32
 	refcount    int32
-	pending     []uint64
-	waterMark   *x.WaterMark
+
+	water   *x.WaterMark
+	pending []uint64
 
 	dirtyTs int64 // Use atomics for this.
 }
@@ -350,7 +351,11 @@ func (l *List) AddMutation(ctx context.Context, t *task.DirectedEdge) (bool, err
 	defer l.Unlock()
 
 	hasMutated := l.updateMutationLayer(mpost)
-	if len(l.mlayer) > 0 {
+	if hasMutated {
+		if rv, ok := ctx.Value("raft").(x.RaftValue); ok {
+			l.water.Ch <- x.Mark{Index: rv.Index}
+			l.pending = append(l.pending, rv.Index)
+		}
 		atomic.StoreInt64(&l.dirtyTs, time.Now().UnixNano())
 		if dirtyChan != nil {
 			dirtyChan <- l.ghash
@@ -473,6 +478,7 @@ func (l *List) commit() (committed bool, rerr error) {
 	defer l.Unlock()
 
 	if len(l.mlayer) == 0 {
+		x.AssertTrue(len(l.pending) == 0)
 		atomic.StoreInt64(&l.dirtyTs, 0)
 		return false, nil
 	}
@@ -501,15 +507,18 @@ func (l *List) commit() (committed bool, rerr error) {
 	data, err := final.Marshal()
 	x.Checkf(err, "Unable to marshal posting list")
 
-	sw := l.StartWait()
+	sw := l.StartWait() // Corresponding l.Wait() in getPostingList.
 	ce := commitEntry{
-		key: l.key,
-		val: data,
-		sw:  sw,
+		key:     l.key,
+		val:     data,
+		sw:      sw,
+		water:   l.water,
+		pending: l.pending,
 	}
 	commitCh <- ce
 
 	// Now reset the mutation variables.
+	l.pending = make([]uint64, 0, 3)
 	atomic.StorePointer(&l.pbuffer, nil) // Make prev buffer eligible for GC.
 	atomic.StoreInt64(&l.dirtyTs, 0)     // Set as clean.
 	l.mlayer = l.mlayer[:0]

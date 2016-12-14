@@ -147,7 +147,13 @@ func addIndexMutations(ctx context.Context, t *task.DirectedEdge, p types.Value,
 
 func addIndexMutation(ctx context.Context, edge *task.DirectedEdge, token string) {
 	key := x.IndexKey(edge.Attr, token)
-	plist, decr := GetOrCreate(key)
+
+	var groupId uint32
+	if rv, ok := ctx.Value("raft").(x.RaftValue); ok {
+		groupId = rv.Group
+	}
+
+	plist, decr := GetOrCreate(key, groupId)
 	defer decr()
 
 	x.AssertTruef(plist != nil, "plist is nil [%s] %d %s",

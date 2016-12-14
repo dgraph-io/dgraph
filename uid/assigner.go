@@ -79,24 +79,20 @@ func init() {
 // which hasn't already been allocated to other xids. It does this by
 // taking the fingerprint of the xid appended with zero or more spaces
 // until the obtained integer is unique.
-func allocateUniqueUid(instanceIdx uint64, numInstances uint64) uint64 {
-	mod := math.MaxUint64 / numInstances
-	minIdx := instanceIdx * mod
-
+func allocateUniqueUid(group uint32) uint64 {
 	buf := make([]byte, 128)
 	for {
 		_, err := rand.Read(buf)
 		x.Checkf(err, "rand.Read shouldn't throw an error")
 
-		uidb := farm.Fingerprint64(buf) // Generate from hash.
-		uid := (uidb % mod) + minIdx
+		uid := farm.Fingerprint64(buf) // Generate from hash.
 		if uid == math.MaxUint64 || !lmgr.isNew(uid) {
 			continue
 		}
 
 		// Check if this uid has already been allocated.
 		key := x.DataKey("_uid_", uid)
-		pl, decr := posting.GetOrCreate(key)
+		pl, decr := posting.GetOrCreate(key, group)
 		defer decr()
 
 		if pl.Length(0) == 0 {
@@ -108,10 +104,10 @@ func allocateUniqueUid(instanceIdx uint64, numInstances uint64) uint64 {
 }
 
 // AssignNew assigns N unique uids.
-func AssignNew(N int, instanceIdx uint64, numInstances uint64) *task.Mutations {
+func AssignNew(N int, group uint32) *task.Mutations {
 	set := make([]*task.DirectedEdge, N)
 	for i := 0; i < N; i++ {
-		uid := allocateUniqueUid(instanceIdx, numInstances)
+		uid := allocateUniqueUid(group)
 		set[i] = &task.DirectedEdge{
 			Entity: uid,
 			Attr:   "_uid_",

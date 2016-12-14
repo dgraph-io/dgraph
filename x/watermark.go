@@ -20,6 +20,11 @@ func (u *uint64Heap) Pop() interface{} {
 	return x
 }
 
+type RaftValue struct {
+	Group uint32
+	Index uint64
+}
+
 type Mark struct {
 	Index uint64
 	Done  bool
@@ -42,21 +47,24 @@ func (w *WaterMark) DoneUntil() uint64 {
 
 func (w *WaterMark) Process() {
 	var indices uint64Heap
-	pending := make(map[uint64]bool)
+	pending := make(map[uint64]int)
 
 	heap.Init(&indices)
 	for mark := range w.Ch {
 		// If not already done, then set. Otherwise, don't undo a done entry.
-		done, present := pending[mark.Index]
+		prev, present := pending[mark.Index]
 		if !present {
 			heap.Push(&indices, mark.Index)
 		}
-		if !done {
-			pending[mark.Index] = mark.Done
+		delta := 1
+		if mark.Done {
+			delta = -1
 		}
+		pending[mark.Index] = prev + delta
 
 		if len(indices) > 0 {
-			fmt.Printf("%s: Done entry %4d. Size: %4d Watermark: %-4d Looking for: %-4d\n", w.Name, mark.Index, len(indices), w.DoneUntil(), indices[0])
+			min := indices[0]
+			fmt.Printf("WaterMark %s: Done entry %4d. Size: %4d Watermark: %-4d Looking for: %-4d. Value: %d\n", w.Name, mark.Index, len(indices), w.DoneUntil(), min, pending[min])
 		}
 
 		// Update mark by going through all indices in order; and checking if they have
@@ -66,7 +74,7 @@ func (w *WaterMark) Process() {
 		loops := 0
 		for len(indices) > 0 {
 			min := indices[0]
-			if done := pending[min]; !done {
+			if done := pending[min]; done != 0 {
 				break
 			}
 			heap.Pop(&indices)

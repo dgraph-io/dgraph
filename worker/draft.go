@@ -304,7 +304,9 @@ func (n *node) batchAndSendMessages() {
 
 func (n *node) processMutation(e raftpb.Entry, m *task.Mutations) error {
 	// TODO: Need to pass node and entry index.
-	if err := runMutations(n.ctx, m.Edges); err != nil {
+	rv := x.RaftValue{Group: n.gid, Index: e.Index}
+	ctx := context.WithValue(n.ctx, "raft", rv)
+	if err := runMutations(ctx, m.Edges); err != nil {
 		x.TraceError(n.ctx, err)
 		return err
 	}
@@ -351,7 +353,6 @@ func (n *node) processCommitCh() {
 	for e := range n.commitCh {
 		if e.Data == nil {
 			n.committed.Ch <- x.Mark{Index: e.Index, Done: true}
-			n.synced.Ch <- x.Mark{Index: e.Index, Done: true}
 			continue
 		}
 
@@ -367,7 +368,6 @@ func (n *node) processCommitCh() {
 
 			n.raft.ApplyConfChange(cc)
 			n.committed.Ch <- x.Mark{Index: e.Index, Done: true}
-			n.synced.Ch <- x.Mark{Index: e.Index, Done: true}
 
 		} else {
 			go n.process(e, pending)
