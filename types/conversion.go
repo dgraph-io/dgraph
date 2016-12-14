@@ -19,7 +19,6 @@ package types
 import (
 	"bytes"
 	"encoding/binary"
-	"fmt"
 	"math"
 	"strconv"
 	"time"
@@ -297,10 +296,7 @@ func Convert(from Val, to *Val) error {
 		}
 	case GeoID:
 		{
-
-			fmt.Println("***", data)
 			vc, err := wkb.Unmarshal(data)
-			fmt.Println("###", vc)
 			if err != nil {
 				return err
 			}
@@ -353,7 +349,7 @@ func Marshal(from Val, to *Val) error {
 		vc := val.(string)
 		switch toID {
 		case StringID:
-			*res = string(vc)
+			*res = vc
 		case BinaryID:
 			// Marshal Binary
 			*res = []byte(vc)
@@ -364,7 +360,7 @@ func Marshal(from Val, to *Val) error {
 		vc := val.(int32)
 		switch toID {
 		case StringID:
-			*res = string(strconv.FormatInt(int64(vc), 10))
+			*res = strconv.FormatInt(int64(vc), 10)
 		case BinaryID:
 			// Marshal Binary
 			var bs [4]byte
@@ -377,7 +373,7 @@ func Marshal(from Val, to *Val) error {
 		vc := val.(float64)
 		switch toID {
 		case StringID:
-			*res = string(strconv.FormatFloat(float64(vc), 'E', -1, 64))
+			*res = strconv.FormatFloat(float64(vc), 'E', -1, 64)
 		case BinaryID:
 			// Marshal Binary
 			var bs [8]byte
@@ -391,7 +387,7 @@ func Marshal(from Val, to *Val) error {
 		vc := val.(bool)
 		switch toID {
 		case StringID:
-			*res = string(strconv.FormatBool(bool(vc)))
+			*res = strconv.FormatBool(bool(vc))
 		case BinaryID:
 			// Marshal Binary
 			var bs [1]byte
@@ -407,7 +403,7 @@ func Marshal(from Val, to *Val) error {
 		vc := val.(time.Time)
 		switch toID {
 		case StringID:
-			*res = string(vc.Format(dateFormatYMD))
+			*res = vc.Format(dateFormatYMD)
 		case BinaryID:
 			var bs [8]byte
 			binary.LittleEndian.PutUint64(bs[:], uint64(vc.Unix()))
@@ -419,7 +415,7 @@ func Marshal(from Val, to *Val) error {
 		vc := val.(time.Time)
 		switch toID {
 		case StringID:
-			*res = string(vc.String())
+			*res = vc.String()
 		case BinaryID:
 			// Marshal Binary
 			r, err := vc.MarshalBinary()

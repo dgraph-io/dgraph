@@ -220,7 +220,7 @@ func mutationToNQuad(nq []*graph.NQuad) ([]rdf.NQuad, error) {
 		if err != nil {
 			return resp, err
 		}
-		if (types.Val{}) != v {
+		if v.Value != nil {
 			nq.ObjectValue, _ = v.Value.([]byte)
 			nq.ObjectType = byte(v.Tid)
 		}

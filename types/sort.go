@@ -21,7 +21,6 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgraph/task"
-	"github.com/dgraph-io/dgraph/x"
 )
 
 type sortBase struct {
@@ -39,55 +38,26 @@ func (s sortBase) Swap(i, j int) {
 	data[i], data[j] = data[j], data[i]
 }
 
-type byDate struct{ sortBase }
+type byValue struct{ sortBase }
 
-func (s byDate) Less(i, j int) bool {
-	return s.values[i].Value.(time.Time).Before(s.values[j].Value.(time.Time))
-}
-
-type byDateTime struct{ sortBase }
-
-func (s byDateTime) Less(i, j int) bool {
-	return s.values[i].Value.(time.Time).Before(s.values[j].Value.(time.Time))
-}
-
-type byInt32 struct{ sortBase }
-
-func (s byInt32) Less(i, j int) bool {
-	return (s.values[i].Value.(int32)) < (s.values[j].Value.(int32))
-}
-
-type byFloat struct{ sortBase }
-
-func (s byFloat) Less(i, j int) bool {
-	return (s.values[i].Value.(float64)) < (s.values[j].Value.(float64))
-}
-
-type byString struct{ sortBase }
-
-func (s byString) Less(i, j int) bool {
-	return (s.values[i].Value.(string)) < (s.values[j].Value.(string))
+// Less compares two elements
+func (s byValue) Less(i, j int) bool {
+	switch s.values[i].Value.(type) {
+	case time.Time:
+		return s.values[i].Value.(time.Time).Before(s.values[j].Value.(time.Time))
+	case int32:
+		return (s.values[i].Value.(int32)) < (s.values[j].Value.(int32))
+	case float64:
+		return (s.values[i].Value.(float64)) < (s.values[j].Value.(float64))
+	case string:
+		return (s.values[i].Value.(string)) < (s.values[j].Value.(string))
+	}
+	return false
 }
 
 // Sort sorts the given array in-place.
 func Sort(sID TypeID, v []Val, ul *task.List) error {
 	b := sortBase{v, ul}
-	switch sID {
-	case DateID:
-		sort.Sort(byDate{b})
-		return nil
-	case DateTimeID:
-		sort.Sort(byDateTime{b})
-		return nil
-	case Int32ID:
-		sort.Sort(byInt32{b})
-		return nil
-	case FloatID:
-		sort.Sort(byFloat{b})
-		return nil
-	case StringID:
-		sort.Sort(byString{b})
-		return nil
-	}
-	return x.Errorf("Scalar doesn't support sorting %s", sID)
+	sort.Sort(byValue{b})
+	return nil
 }
