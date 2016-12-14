@@ -20,6 +20,7 @@ import (
 	"time"
 
 	stype "github.com/dgraph-io/dgraph/posting/types"
+	geom "github.com/twpayne/go-geom"
 )
 
 // Note: These ids are stored in the posting lists to indicate the type
@@ -117,11 +118,6 @@ func ValueForType(id TypeID) interface{} {
 	}
 }
 
-type Binary []byte
-
-// Int32 is the scalar type for int32
-type Int32 int32
-
 // Type returns the type of this value
 func (v Int32) TypeID() TypeID {
 	return Int32ID
@@ -145,309 +141,42 @@ func (v String) TypeID() TypeID {
 	return StringID
 }
 
-/*
-// MarshalBinary marshals to binary
-func (v Int32) MarshalBinary() ([]byte, error) {
-	var bs [4]byte
-	binary.LittleEndian.PutUint32(bs[:], uint32(v))
-	return bs[:], nil
-}
+type Binary []byte
 
-// MarshalText marshals to text
-func (v Int32) MarshalText() ([]byte, error) {
-	s := strconv.FormatInt(int64(v), 10)
-	return []byte(s), nil
-}
+// Int32 is the scalar type for int32
+type Int32 int32
 
-// MarshalJSON marshals to json
-func (v Int32) MarshalJSON() ([]byte, error) {
-	return json.Marshal(int32(v))
-}
-
-func (v Int32) String() string {
-	return fmt.Sprintf("%v", int32(v))
-}
-
-// UnmarshalBinary unmarshals the data from a binary format.
-func (v *Int32) UnmarshalBinary(data []byte) error {
-	if len(data) < 4 {
-		return x.Errorf("Invalid data for int32 %v", data)
-	}
-	*v = Int32(binary.LittleEndian.Uint32(data))
-	return nil
-}
-
-// UnmarshalText unmarshals the data from a text format.
-func (v *Int32) UnmarshalText(text []byte) error {
-	val, err := strconv.ParseInt(string(text), 10, 32)
-	if err != nil {
-		return err
-	}
-	*v = Int32(val)
-	return nil
-}
-*/
 // Float is the scalar type for float64
 type Float float64
 
-/*
-// MarshalBinary marshals to binary
-func (v Float) MarshalBinary() ([]byte, error) {
-	var bs [8]byte
-	u := math.Float64bits(float64(v))
-	binary.LittleEndian.PutUint64(bs[:], u)
-	return bs[:], nil
-}
-
-// MarshalText marshals to text
-func (v Float) MarshalText() ([]byte, error) {
-	s := strconv.FormatFloat(float64(v), 'E', -1, 64)
-	return []byte(s), nil
-}
-
-// MarshalJSON marshals to json
-func (v Float) MarshalJSON() ([]byte, error) {
-	return json.Marshal(float64(v))
-}
-
-// UnmarshalBinary unmarshals the data from a binary format.
-func (v *Float) UnmarshalBinary(data []byte) error {
-	if len(data) < 8 {
-		return x.Errorf("Invalid data for float %v", data)
-	}
-	i := binary.LittleEndian.Uint64(data)
-	val := math.Float64frombits(i)
-	*v = Float(val)
-	return nil
-}
-
-// UnmarshalText unmarshals the data from a text format.
-func (v *Float) UnmarshalText(text []byte) error {
-	val, err := strconv.ParseFloat(string(text), 64)
-	if err != nil {
-		return err
-	}
-	*v = Float(val)
-	return nil
-}
-
-func (v Float) String() string {
-	return fmt.Sprintf("%v", float64(v))
-}
-*/
 // String is the scalar type for string
 type String string
 
-/*
-// MarshalBinary marshals to binary
-func (v String) MarshalBinary() ([]byte, error) {
-	return []byte(v), nil
-}
-
-// MarshalText marshals to text
-func (v String) MarshalText() ([]byte, error) {
-	return v.MarshalBinary()
-}
-
-// MarshalJSON marshals to json
-func (v String) MarshalJSON() ([]byte, error) {
-	return json.Marshal(string(v))
-}
-
-// UnmarshalBinary unmarshals the data from a binary format.
-func (v *String) UnmarshalBinary(data []byte) error {
-	*v = String(data)
-	return nil
-}
-
-// UnmarshalText unmarshals the data from a text format.
-func (v *String) UnmarshalText(text []byte) error {
-	return v.UnmarshalBinary(text)
-}
-
-func (v String) String() string {
-	return string(v)
-}
-*/
-
-/*
-// MarshalBinary marshals to binary
-func (v Bytes) MarshalBinary() ([]byte, error) {
-	return []byte(v), nil
-}
-
-// MarshalText marshals to text
-func (v Bytes) MarshalText() ([]byte, error) {
-	return v.MarshalBinary()
-}
-
-// MarshalJSON marshals to json
-func (v Bytes) MarshalJSON() ([]byte, error) {
-	// TODO: should we encode this somehow if they are are not printable characters.
-	return json.Marshal(string(v))
-}
-
-// UnmarshalBinary unmarshals the data from a binary format.
-func (v *Bytes) UnmarshalBinary(data []byte) error {
-	*v = Bytes(data)
-	return nil
-}
-
-// UnmarshalText unmarshals the data from a text format.
-func (v *Bytes) UnmarshalText(text []byte) error {
-	return v.UnmarshalBinary(text)
-}
-
-func (v Bytes) String() string {
-	return string(v)
-}
-*/
 // Bool is the scalar type for bool
 type Bool bool
 
-/*
-// MarshalBinary marshals to binary
-func (v Bool) MarshalBinary() ([]byte, error) {
-	var bs [1]byte
-	if v {
-		bs[0] = 1
-	} else {
-		bs[0] = 0
-	}
-	return bs[:], nil
-}
-
-// MarshalText marshals to text
-func (v Bool) MarshalText() ([]byte, error) {
-	s := strconv.FormatBool(bool(v))
-	return []byte(s), nil
-}
-
-// MarshalJSON marshals to json
-func (v Bool) MarshalJSON() ([]byte, error) {
-	return json.Marshal(bool(v))
-}
-
-// UnmarshalBinary unmarshals the data from a binary format.
-func (v *Bool) UnmarshalBinary(data []byte) error {
-	if data[0] == 0 {
-		*v = Bool(false)
-		return nil
-	} else if data[0] == 1 {
-		*v = Bool(true)
-		return nil
-	} else {
-		return x.Errorf("Invalid value for bool %v", data[0])
-	}
-}
-
-// UnmarshalText unmarshals the data from a text format.
-func (v *Bool) UnmarshalText(text []byte) error {
-	val, err := strconv.ParseBool(string(text))
-	if err != nil {
-		return err
-	}
-	*v = Bool(val)
-	return nil
-}
-
-func (v Bool) String() string {
-	return fmt.Sprintf("%v", bool(v))
-}
-*/
 // Time wraps time.Time to add the Value interface
 type Time struct {
 	time.Time
 }
 
-/*
-// UnmarshalText unmarshals the data from a text format.
-func (v *Time) UnmarshalText(text []byte) error {
-	var t time.Time
-	if err := t.UnmarshalText(text); err != nil {
-		// Try parsing without timezone since that is a valid format
-		if t, err = time.Parse("2006-01-02T15:04:05", string(text)); err != nil {
-			return err
-		}
-	}
-	v.Time = t
-	return nil
+// Geo represents geo-spatial data.
+type Geo struct {
+	geom.T
 }
 
-func (v *Int32) fromFloat(f float64) error {
-	if f > math.MaxInt32 || f < math.MinInt32 || math.IsNaN(f) {
-		return x.Errorf("Float out of int32 range")
-	}
-	*v = Int32(f)
-	return nil
+// Date represents a date (YYYY-MM-DD). There is no timezone information
+// attached.
+type Date struct {
+	time.Time
 }
 
-func (v *Int32) fromBool(b bool) error {
-	if b {
-		*v = 1
-	} else {
-		*v = 0
-	}
-	return nil
+func createDate(y int, m time.Month, d int) Date {
+	var dt Date
+	dt.Time = time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
+	return dt
 }
 
-func (v *Int32) fromTime(t time.Time) error {
-	// Represent the unix timestamp as a 32bit int.
-	secs := t.Unix()
-	if secs > math.MaxInt32 || secs < math.MinInt32 {
-		return x.Errorf("Time out of int32 range")
-	}
-	*v = Int32(secs)
-	return nil
-}
-
-func (v *Float) fromInt(i int32) error {
-	*v = Float(i)
-	return nil
-}
-
-func (v *Float) fromBool(b bool) error {
-	if b {
-		*v = 1
-	} else {
-		*v = 0
-	}
-	return nil
-}
-
-const (
-	nanoSecondsInSec = 1000000000
-)
-
-func (v *Float) fromTime(t time.Time) error {
-	// Represent the unix timestamp as a float (with fractional seconds)
-	secs := float64(t.Unix())
-	nano := float64(t.Nanosecond())
-	val := secs + nano/nanoSecondsInSec
-	*v = Float(val)
-	return nil
-}
-
-func (v *Bool) fromInt(i int32) error {
-	*v = i != 0
-	return nil
-}
-
-func (v *Bool) fromFloat(f float64) error {
-	*v = f != 0
-	return nil
-}
-
-func (v *Time) fromInt(i int32) error {
-	v.Time = time.Unix(int64(i), 0).UTC()
-	return nil
-}
-
-func (v *Time) fromFloat(f float64) error {
-	secs := int64(f)
-	fracSecs := f - float64(secs)
-	nsecs := int64(fracSecs * nanoSecondsInSec)
-	v.Time = time.Unix(secs, nsecs).UTC()
-	return nil
-}
-*/
+const dateFormatYMD = "2006-01-02"
+const dateFormatYM = "2006-01"
+const dateFormatY = "2006"

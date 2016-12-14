@@ -30,20 +30,6 @@ type Object struct {
 	Fields map[string]string //field to type relationship
 }
 
-// Value is the interface that all scalar values need to implement.
-/*
-type Value interface {
-	encoding.TextMarshaler
-	encoding.TextUnmarshaler
-	encoding.BinaryMarshaler
-	encoding.BinaryUnmarshaler
-	json.Marshaler
-	// Type returns the type of this value
-	TypeID() TypeID
-	fmt.Stringer
-}
-*/
-
 func (t TypeID) IsScalar() bool {
 	return true
 }
