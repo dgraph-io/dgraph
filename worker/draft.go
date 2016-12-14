@@ -85,7 +85,6 @@ type node struct {
 	store       *raft.MemoryStorage
 	wal         *raftwal.Wal
 	committed   x.WaterMark
-	synced      x.WaterMark
 }
 
 func newNode(gid uint32, id uint64, myAddr string) *node {
@@ -126,8 +125,6 @@ func newNode(gid uint32, id uint64, myAddr string) *node {
 	}
 	n.committed = x.WaterMark{Name: "~~~~~~~~~~~~~~~ Committed Mark"}
 	n.committed.Init()
-	n.synced = x.WaterMark{Name: "~~~~~~~~~~~~~~~~~~ Synced Mark"}
-	n.synced.Init()
 
 	return n
 }
@@ -444,7 +441,6 @@ func (n *node) Run() {
 					fmt.Printf("%+v\n", entry)
 				}
 				n.committed.Ch <- status
-				n.synced.Ch <- status
 			}
 
 			n.raft.Advance()

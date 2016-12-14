@@ -50,6 +50,7 @@ func (w *WaterMark) Process() {
 	pending := make(map[uint64]int)
 
 	heap.Init(&indices)
+	var loop uint64
 	for mark := range w.Ch {
 		// If not already done, then set. Otherwise, don't undo a done entry.
 		prev, present := pending[mark.Index]
@@ -62,7 +63,8 @@ func (w *WaterMark) Process() {
 		}
 		pending[mark.Index] = prev + delta
 
-		if len(indices) > 0 {
+		loop++
+		if len(indices) > 0 && loop%10000 == 0 {
 			min := indices[0]
 			fmt.Printf("WaterMark %s: Done entry %4d. Size: %4d Watermark: %-4d Looking for: %-4d. Value: %d\n", w.Name, mark.Index, len(indices), w.DoneUntil(), min, pending[min])
 		}
@@ -70,6 +72,9 @@ func (w *WaterMark) Process() {
 		// Update mark by going through all indices in order; and checking if they have
 		// been done. Stop at the first index, which isn't done.
 		doneUntil := w.DoneUntil()
+		AssertTruef(doneUntil < mark.Index,
+			"Watermark %s: %d should be below current mark: %d", w.Name, doneUntil, mark.Index)
+
 		until := doneUntil
 		loops := 0
 		for len(indices) > 0 {
