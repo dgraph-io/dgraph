@@ -199,7 +199,7 @@ func intersectBucket(ts *task.Sort, attr, token string, out []intersectedList) e
 
 // sortByValue fetches values and sort UIDList.
 func sortByValue(attr string, ul *task.List, scalar types.TypeID) error {
-	values := make([]interface{}, len(ul.Uids))
+	values := make([]types.Val, len(ul.Uids))
 	for i, uid := range ul.Uids {
 		val, err := fetchValue(uid, attr, scalar)
 		if err != nil {
@@ -211,22 +211,21 @@ func sortByValue(attr string, ul *task.List, scalar types.TypeID) error {
 }
 
 // fetchValue gets the value for a given UID.
-func fetchValue(uid uint64, attr string, scalar types.TypeID) (interface{}, error) {
+func fetchValue(uid uint64, attr string, scalar types.TypeID) (types.Val, error) {
 	pl, decr := posting.GetOrCreate(x.DataKey(attr, uid))
 	defer decr()
 
 	valBytes, vType, err := pl.Value()
 	if err != nil {
-		return nil, err
+		return types.Val{}, err
 	}
 	vID := types.TypeID(vType)
 	val := types.ValueForType(scalar)
-	if val == nil {
-		return nil, x.Errorf("Invalid type: %v", vType)
-	}
-	err = types.Convert(vID, scalar, valBytes, &val)
+	src := types.ValueForType(vID)
+	src.Value = valBytes
+	err = types.Convert(src, &val)
 	if err != nil {
-		return nil, err
+		return types.Val{}, err
 	}
 
 	return val, nil
