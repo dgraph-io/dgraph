@@ -28,7 +28,6 @@ import (
 	"github.com/dgraph-io/dgraph/lex"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/types"
-	"github.com/dgraph-io/dgraph/x"
 )
 
 var emptyEdge task.DirectedEdge
@@ -184,41 +183,10 @@ func Parse(line string) (rnq NQuad, rerr error) {
 				}
 
 				p1 := types.ValueForType(types.BinaryID)
-				switch m := p.(type) {
-				case types.Geo:
-					err = types.ConvertFromInterface(t, types.BinaryID, m, &p1)
-					if err != nil {
-						return rnq, err
-					}
-				case types.Int32:
-					err = types.ConvertFromInterface(t, types.BinaryID, m, &p1)
-					if err != nil {
-						return rnq, err
-					}
-				case types.Float:
-					err = types.ConvertFromInterface(t, types.BinaryID, m, &p1)
-					if err != nil {
-						return rnq, err
-					}
-				case types.Date:
-					err = types.ConvertFromInterface(t, types.BinaryID, m, &p1)
-					if err != nil {
-						return rnq, err
-					}
-				case types.Time:
-					err = types.ConvertFromInterface(t, types.BinaryID, m, &p1)
-					if err != nil {
-						return rnq, err
-					}
-				case types.String:
-					err = types.ConvertFromInterface(t, types.BinaryID, m, &p1)
-					if err != nil {
-						return rnq, err
-					}
-				default:
-					return rnq, x.Errorf("Invalid type.")
+				err = types.ConvertFromInterface(t, types.BinaryID, p, &p1)
+				if err != nil {
+					return rnq, err
 				}
-
 				rnq.ObjectValue = []byte(p1.([]byte))
 
 				rnq.ObjectType = byte(t)
