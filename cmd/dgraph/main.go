@@ -216,50 +216,51 @@ func mutationToNQuad(nq []*graph.NQuad) ([]rdf.NQuad, error) {
 			ObjectId:  n.ObjId,
 			Label:     n.Label,
 		}
-		v, vID, err := typeValueFromNQuad(n)
+		v, err := typeValueFromNQuad(n)
 		if err != nil {
 			return resp, err
 		}
-		if v != nil {
-			nq.ObjectValue, _ = v.([]byte)
-			nq.ObjectType = byte(vID)
+		if (types.Val{}) != v {
+			nq.ObjectValue, _ = v.Value.([]byte)
+			nq.ObjectType = byte(v.Tid)
 		}
 		resp = append(resp, nq)
 	}
 	return resp, nil
 }
 
-func typeValueFromNQuad(nq *graph.NQuad) (interface{}, types.TypeID, error) {
+func typeValueFromNQuad(nq *graph.NQuad) (types.Val, error) {
 	if nq.Value == nil || nq.Value.Val == nil {
-		return nil, 0, nil
+		return types.Val{}, nil
 	}
-	b := types.ValueForType(types.BinaryID)
+	dst := types.ValueForType(types.BinaryID)
 	switch v := nq.Value.Val.(type) {
 	case *graph.Value_IntVal:
-		i := int32(v.IntVal)
-		x.Check(types.ConvertFromInterface(types.Int32ID, types.BinaryID, i, &b))
-		return b, types.Int32ID, nil
+		src := types.Val{types.Int32ID, nq.Value}
+		x.Check(types.Marshal(src, &dst))
+		return dst, nil
 	case *graph.Value_StrVal:
-		s := string(v.StrVal)
-		x.Check(types.ConvertFromInterface(types.StringID, types.BinaryID, s, &b))
-		return b, types.StringID, nil
+		src := types.Val{types.StringID, nq.Value}
+		x.Check(types.Marshal(src, &dst))
+		return dst, nil
 	case *graph.Value_BoolVal:
-		bo := bool(v.BoolVal)
-		x.Check(types.ConvertFromInterface(types.BoolID, types.BinaryID, bo, &b))
-		return b, types.BoolID, nil
+		src := types.Val{types.BoolID, nq.Value}
+		x.Check(types.Marshal(src, &dst))
+		return dst, nil
 	case *graph.Value_DoubleVal:
-		f := float64(v.DoubleVal)
-		x.Check(types.ConvertFromInterface(types.FloatID, types.BinaryID, f, &b))
-		return b, types.FloatID, nil
+		src := types.Val{types.FloatID, nq.Value}
+		x.Check(types.Marshal(src, &dst))
+		return dst, nil
 	case *graph.Value_GeoVal:
-		return v.GeoVal, types.GeoID, nil
+		src := types.Val{types.GeoID, nq.Value}
+		return src, nil
 
 	case nil:
 		log.Fatalf("Val being nil is already handled")
-		return nil, 0, nil
+		return types.Val{}, nil
 	default:
 		// Unknown type
-		return nil, 0, x.Errorf("Unknown value type %T", v)
+		return types.Val{}, x.Errorf("Unknown value type %T", v)
 	}
 }
 
@@ -347,21 +348,25 @@ func validateTypes(nquads []rdf.NQuad) error {
 				// Storage type was unspecified in the RDF, so we convert the data to the schema
 				// type.
 				v := types.ValueForType(schemaType)
-				err := types.Convert(types.StringID, schemaType, nquad.ObjectValue, &v) // v.UnmarshalText(nquad.ObjectValue)
+				src := types.ValueForType(types.StringID)
+				src.Value = nquad.ObjectValue
+				err := types.Convert(src, &v) // v.UnmarshalText(nquad.ObjectValue)
 				if err != nil {
 					return err
 				}
 				b := types.ValueForType(types.BinaryID)
-				err = types.ConvertFromInterface(schemaType, types.BinaryID, v, &b)
+				err = types.Marshal(v, &b)
 				if err != nil {
 					return err
 				}
-				nquad.ObjectValue = b.([]byte)
+				nquad.ObjectValue = b.Value.([]byte)
 				nquad.ObjectType = byte(schemaType)
 
 			} else if typeID != schemaType {
-				v := types.ValueForType(typeID)
-				err := types.Convert(typeID, schemaType, nquad.ObjectValue, &v)
+				v := types.ValueForType(schemaType)
+				src := types.ValueForType(typeID)
+				src.Value = nquad.ObjectValue
+				err := types.Convert(src, &v)
 				if err != nil {
 					return err
 				}

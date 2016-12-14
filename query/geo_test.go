@@ -18,6 +18,7 @@ package query
 
 import (
 	"context"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -47,6 +48,7 @@ func createTestStore(t *testing.T) (string, *store.Store) {
 }
 
 func addGeoData(t *testing.T, ps *store.Store, uid uint64, p geom.T, name string) {
+	fmt.Println(name)
 	value := types.ValueForType(types.BinaryID)
 	src := types.ValueForType(types.GeoID)
 	src.Value = p
@@ -54,6 +56,7 @@ func addGeoData(t *testing.T, ps *store.Store, uid uint64, p geom.T, name string
 	require.NoError(t, err)
 	addEdgeToTypedValue(t, ps, "geometry", uid, types.GeoID, value.Value.([]byte))
 	addEdgeToTypedValue(t, ps, "name", uid, types.StringID, []byte(name))
+	fmt.Println(name)
 }
 
 func createTestData(t *testing.T, ps *store.Store) {

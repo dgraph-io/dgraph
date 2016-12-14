@@ -176,7 +176,7 @@ func getValue(tv *task.Value) (types.Val, error) {
 	valBytes := tv.Val
 	vID := types.TypeID(vType)
 	val := types.ValueForType(vID)
-	src := types.ValueForType(types.GeoID)
+	src := types.ValueForType(types.BinaryID)
 	src.Value = valBytes
 	err := types.Convert(src, &val)
 	if err != nil {
@@ -305,7 +305,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 				if bytes.Equal(tv.Val, nil) {
 					continue
 				}
-				dst.AddValue(pc.Attr, sv)
+				dst.AddValue(pc.Attr, sv.Value)
 			}
 		}
 	}

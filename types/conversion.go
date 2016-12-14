@@ -84,10 +84,7 @@ func Convert(from Val, to *Val) error {
 				}
 				*res = t
 			case GeoID:
-				fmt.Println("***", data)
 				w, err := wkb.Unmarshal(data)
-
-				fmt.Println("###", w)
 				if err != nil {
 					return err
 				}
@@ -303,7 +300,10 @@ func Convert(from Val, to *Val) error {
 		}
 	case GeoID:
 		{
+
+			fmt.Println("***", data)
 			vc, err := wkb.Unmarshal(data)
+			fmt.Println("###", vc)
 			if err != nil {
 				return err
 			}
