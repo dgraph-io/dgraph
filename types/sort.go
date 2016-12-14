@@ -76,27 +76,28 @@ func (s byByteArray) Less(i, j int) bool {
 }
 
 // Sort sorts the given array in-place.
-func (s Scalar) Sort(v []Value, ul *task.List) error {
+func (s Scalar) Sort(v []Value, ul *task.List, desc bool) error {
 	b := sortBase{v, ul}
+	var toBeSorted sort.Interface
 	switch s.ID() {
 	case DateID:
-		sort.Sort(byDate{b})
-		return nil
+		toBeSorted = byDate{b}
 	case DateTimeID:
-		sort.Sort(byDateTime{b})
-		return nil
+		toBeSorted = byDateTime{b}
 	case Int32ID:
-		sort.Sort(byInt32{b})
-		return nil
+		toBeSorted = byInt32{b}
 	case FloatID:
-		sort.Sort(byFloat{b})
-		return nil
+		toBeSorted = byFloat{b}
 	case StringID:
-		sort.Sort(byString{b})
-		return nil
+		toBeSorted = byString{b}
 	case BytesID:
-		sort.Sort(byByteArray{b})
-		return nil
+		toBeSorted = byByteArray{b}
+	default:
+		return x.Errorf("Scalar doesn't support sorting %s", s)
 	}
-	return x.Errorf("Scalar doesn't support sorting %s", s)
+	if desc {
+		toBeSorted = sort.Reverse(toBeSorted)
+	}
+	sort.Sort(toBeSorted)
+	return nil
 }

@@ -221,8 +221,6 @@ func TestGetUID(t *testing.T) {
 	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
 	defer os.RemoveAll(dir2)
-
-	// Alright. Now we have everything set up. Let's create the query.
 	query := `
 		{
 			me(_uid_:0x01) {
@@ -243,12 +241,33 @@ func TestGetUID(t *testing.T) {
 		js)
 }
 
+func TestGetUIDNotInChild(t *testing.T) {
+	dir, dir2, _ := populateGraph(t)
+	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
+	query := `
+		{
+			me(_uid_:0x01) {
+				name
+				_uid_
+				gender
+				alive
+				friend {
+					name
+				}
+			}
+		}
+	`
+	js := processToJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"_uid_":"0x1","alive":true,"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
+		js)
+}
+
 func TestGetUIDCount(t *testing.T) {
 	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
 	defer os.RemoveAll(dir2)
-
-	// Alright. Now we have everything set up. Let's create the query.
 	query := `
 		{
 			me(_uid_:0x01) {
@@ -1042,26 +1061,6 @@ children: <
     uid: 101
     attribute: "friend"
   >
-  children: <
-    uid: 23
-    attribute: "friend"
-  >
-  children: <
-    uid: 24
-    attribute: "friend"
-  >
-  children: <
-    uid: 25
-    attribute: "friend"
-  >
-  children: <
-    uid: 31
-    attribute: "friend"
-  >
-  children: <
-    uid: 101
-    attribute: "friend"
-  >
 >
 `, proto.MarshalTextString(gr))
 }
@@ -1116,7 +1115,7 @@ func TestSchema(t *testing.T) {
 	received, err := g.MarshalText()
 	require.EqualValues(t, "{'type':'Point','coordinates':[1.1,2]}", string(received))
 
-	require.Len(t, gr.Children[0].Children, 10)
+	require.Len(t, gr.Children[0].Children, 5)
 
 	child := gr.Children[0].Children[0]
 	require.EqualValues(t, 23, child.Uid)
@@ -1127,11 +1126,20 @@ func TestSchema(t *testing.T) {
 		getProperty(child.Properties, "name").GetStrVal())
 	require.Empty(t, child.Children)
 
-	child = gr.Children[0].Children[5]
-	require.EqualValues(t, 23, child.Uid)
+	child = gr.Children[0].Children[1]
+	require.EqualValues(t, 24, child.Uid)
 	require.EqualValues(t, "friend", child.Attribute)
-	require.Empty(t, child.Properties)
+
+	require.Len(t, child.Properties, 1)
+	require.EqualValues(t, "Glenn Rhee",
+		getProperty(child.Properties, "name").GetStrVal())
 	require.Empty(t, child.Children)
+
+	child = gr.Children[0].Children[4]
+	require.EqualValues(t, 101, child.Uid)
+	require.EqualValues(t, "friend", child.Attribute)
+
+	require.Len(t, child.Properties, 0)
 }
 
 func TestToProtoFilter(t *testing.T) {
@@ -1359,6 +1367,45 @@ func TestToJSONOrder(t *testing.T) {
 	require.NoError(t, err)
 	require.EqualValues(t,
 		`{"me":[{"friend":[{"dob":"1901-01-15","name":"Andrea"},{"dob":"1909-01-10","name":"Daryl Dixon"},{"dob":"1909-05-05","name":"Glenn Rhee"},{"dob":"1910-01-02","name":"Rick Grimes"}],"gender":"female","name":"Michonne"}]}`,
+		string(js))
+}
+
+// Test sorting / ordering by dob.
+func TestToJSONOrderDesc(t *testing.T) {
+	dir, dir2, _ := populateGraph(t)
+	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
+
+	query := `
+		{
+			me(_uid_:0x01) {
+				name
+				gender
+				friend(orderdesc: dob) {
+					name
+					dob
+				}
+			}
+		}
+	`
+
+	gq, _, err := gql.Parse(query)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	sg, err := ToSubGraph(ctx, gq)
+	require.NoError(t, err)
+
+	ch := make(chan error)
+	go ProcessGraph(ctx, sg, nil, ch)
+	err = <-ch
+	require.NoError(t, err)
+
+	var l Latency
+	js, err := sg.ToJSON(&l)
+	require.NoError(t, err)
+	require.EqualValues(t,
+		`{"me":[{"friend":[{"dob":"1910-01-02","name":"Rick Grimes"},{"dob":"1909-05-05","name":"Glenn Rhee"},{"dob":"1909-01-10","name":"Daryl Dixon"},{"dob":"1901-01-15","name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
 		string(js))
 }
 

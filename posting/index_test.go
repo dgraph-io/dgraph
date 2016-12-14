@@ -58,3 +58,29 @@ func TestIndexing(t *testing.T) {
 	require.NoError(t, err)
 	require.EqualValues(t, "abc", string(a[0]))
 }
+
+func getTokensTable(t *testing.T) *TokensTable {
+	tt := NewTokensTable()
+	tt.Add("ccc")
+	tt.Add("aaa")
+	tt.Add("bbb")
+	tt.Add("aaa")
+	require.EqualValues(t, 3, tt.Size())
+	return tt
+}
+
+func TestTokensTableIterate(t *testing.T) {
+	tt := getTokensTable(t)
+	require.EqualValues(t, "aaa", tt.GetFirst())
+	require.EqualValues(t, "bbb", tt.GetNext("aaa"))
+	require.EqualValues(t, "ccc", tt.GetNext("bbb"))
+	require.EqualValues(t, "", tt.GetNext("ccc"))
+}
+
+func TestTokensTableIterateReverse(t *testing.T) {
+	tt := getTokensTable(t)
+	require.EqualValues(t, "ccc", tt.GetLast())
+	require.EqualValues(t, "bbb", tt.GetPrev("ccc"))
+	require.EqualValues(t, "aaa", tt.GetPrev("bbb"))
+	require.EqualValues(t, "", tt.GetPrev("aaa"))
+}
