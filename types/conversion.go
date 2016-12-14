@@ -31,8 +31,14 @@ import (
 )
 
 // Convert converts the value to given scalar type.
-func Convert(fromID TypeID, toID TypeID, data []byte, res *interface{}) error {
+func Convert(from Val, to *Val) error {
+	// fromID TypeID, toID TypeID, data []byte, res *interface{}) error {
 
+	fromID := from.Tid
+	toID := to.Tid
+	fmt.Println(from)
+	data := from.Value.([]byte)
+	res := &to.Value
 	// Convert from-type to to-type and store in the result interface.
 	switch fromID {
 	case BinaryID:
@@ -325,7 +331,13 @@ func Convert(fromID TypeID, toID TypeID, data []byte, res *interface{}) error {
 	return nil
 }
 
-func ConvertFromInterface(fromID TypeID, toID TypeID, val interface{}, res *interface{}) error {
+func Marshal(from Val, to *Val) error {
+	// toID TypeID, val interface{}, res *interface{}) error {
+	fromID := from.Tid
+	toID := to.Tid
+	val := from.Value
+	res := &to.Value
+
 	switch fromID {
 	case StringID:
 		vc := val.(string)

@@ -25,7 +25,7 @@ import (
 )
 
 type sortBase struct {
-	values []interface{}
+	values []Val
 	ul     *task.List
 }
 
@@ -42,35 +42,35 @@ func (s sortBase) Swap(i, j int) {
 type byDate struct{ sortBase }
 
 func (s byDate) Less(i, j int) bool {
-	return s.values[i].(time.Time).Before(s.values[j].(time.Time))
+	return s.values[i].Value.(time.Time).Before(s.values[j].Value.(time.Time))
 }
 
 type byDateTime struct{ sortBase }
 
 func (s byDateTime) Less(i, j int) bool {
-	return s.values[i].(time.Time).Before(s.values[j].(time.Time))
+	return s.values[i].Value.(time.Time).Before(s.values[j].Value.(time.Time))
 }
 
 type byInt32 struct{ sortBase }
 
 func (s byInt32) Less(i, j int) bool {
-	return (s.values[i].(int32)) < (s.values[j].(int32))
+	return (s.values[i].Value.(int32)) < (s.values[j].Value.(int32))
 }
 
 type byFloat struct{ sortBase }
 
 func (s byFloat) Less(i, j int) bool {
-	return (s.values[i].(float64)) < (s.values[j].(float64))
+	return (s.values[i].Value.(float64)) < (s.values[j].Value.(float64))
 }
 
 type byString struct{ sortBase }
 
 func (s byString) Less(i, j int) bool {
-	return (s.values[i].(string)) < (s.values[j].(string))
+	return (s.values[i].Value.(string)) < (s.values[j].Value.(string))
 }
 
 // Sort sorts the given array in-place.
-func Sort(sID TypeID, v []interface{}, ul *task.List) error {
+func Sort(sID TypeID, v []Val, ul *task.List) error {
 	b := sortBase{v, ul}
 	switch sID {
 	case DateID:

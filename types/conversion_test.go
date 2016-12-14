@@ -20,18 +20,18 @@ import "testing"
 
 func TestSameConversionString(t *testing.T) {
 	data := []struct {
-		in  string
-		out string
+		in  Val
+		out Val
 	}{
-		{"a", "a"},
-		{"", ""},
-		{"abc", "abc"},
+		{Val{StringID, []byte("a")}, Val{StringID, "a"}},
+		{Val{StringID, []byte("")}, Val{StringID, ""}},
+		{Val{StringID, []byte("abc")}, Val{StringID, "abc"}},
 	}
 	for _, tc := range data {
 		v := ValueForType(StringID)
-		if err := Convert(StringID, StringID, []byte(tc.in), &v); err != nil {
+		if err := Convert(tc.in, &v); err != nil {
 			t.Errorf("Unexpected error converting int to bool: %v", err)
-		} else if (v.(string)) != tc.out {
+		} else if v != tc.out {
 			t.Errorf("Converting string to string: Expected %v, got %v", tc.out, v)
 		}
 	}

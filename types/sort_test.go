@@ -24,21 +24,22 @@ import (
 	"github.com/dgraph-io/dgraph/task"
 )
 
-func toString(t *testing.T, values []interface{}, vID TypeID) []string {
+func toString(t *testing.T, values []Val, vID TypeID) []string {
 	out := make([]string, len(values))
 	for i, v := range values {
-		var b interface{}
-		require.NoError(t, ConvertFromInterface(vID, StringID, v, &b))
-		out[i] = b.(string)
+		b := ValueForType(StringID)
+		require.NoError(t, Marshal(v, &b))
+		out[i] = b.Value.(string)
 	}
 	return out
 }
 
-func getInput(t *testing.T, tid TypeID, in []string) []interface{} {
-	list := make([]interface{}, len(in))
+func getInput(t *testing.T, tid TypeID, in []string) []Val {
+	list := make([]Val, len(in))
 	for i, s := range in {
 		v := ValueForType(tid)
-		require.NoError(t, Convert(StringID, tid, []byte(s), &v))
+		va := Val{StringID, []byte(s)}
+		require.NoError(t, Convert(va, &v))
 		list[i] = v
 	}
 	return list

@@ -71,6 +71,11 @@ func (t TypeID) Name() string {
 	return ""
 }
 
+type Val struct {
+	Tid   TypeID
+	Value interface{}
+}
+
 // TypeForName returns the type corresponding to the given name.
 // If name is not recognized, it returns nil.
 func TypeForName(name string) (TypeID, bool) {
@@ -79,42 +84,42 @@ func TypeForName(name string) (TypeID, bool) {
 }
 
 // ValueForType returns the zero value for a type id
-func ValueForType(id TypeID) interface{} {
+func ValueForType(id TypeID) Val {
 	switch id {
 	case BinaryID:
 		var b []byte
-		return &b
+		return Val{BinaryID, &b}
 
 	case Int32ID:
 		var i int32
-		return &i
+		return Val{Int32ID, &i}
 
 	case FloatID:
 		var f float64
-		return &f
+		return Val{FloatID, &f}
 
 	case BoolID:
 		var b bool
-		return &b
+		return Val{BoolID, &b}
 
 	case DateTimeID:
 		var t time.Time
-		return &t
+		return Val{DateTimeID, &t}
 
 	case StringID:
 		var s string
-		return &s
+		return Val{StringID, &s}
 
 	case DateID:
 		var d time.Time
-		return &d
+		return Val{DateID, &d}
 
 	case GeoID:
 		var g geom.T
-		return &g
+		return Val{GeoID, &g}
 
 	default:
-		return nil
+		return Val{}
 	}
 }
 
