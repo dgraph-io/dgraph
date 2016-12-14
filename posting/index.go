@@ -332,7 +332,7 @@ func (t *TokensTable) GetLast() string {
 	return t.key[len(t.key)-1]
 }
 
-// GetGeq returns position of leftmost element that is greater or equal to s.
+// GetNextOrEqual returns position of leftmost element that is greater or equal to s.
 func (t *TokensTable) GetNextOrEqual(s string) string {
 	t.RLock()
 	defer t.RUnlock()
