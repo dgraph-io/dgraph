@@ -87,8 +87,8 @@ func initIndex() {
 
 }
 
-// indexTokens return tokens, without the predicate prefix and index rune.
-func indexTokens(attr string, p types.Value) ([]string, error) {
+// IndexTokens return tokens, without the predicate prefix and index rune.
+func IndexTokens(attr string, p types.Value) ([]string, error) {
 	schemaType := schema.TypeOf(attr)
 	if !schemaType.IsScalar() {
 		return nil, x.Errorf("Cannot index attribute %s of type object.", attr)
@@ -119,7 +119,7 @@ func indexTokens(attr string, p types.Value) ([]string, error) {
 func addIndexMutations(ctx context.Context, attr string, uid uint64,
 	p types.Value, del bool) {
 	x.AssertTrue(uid != 0)
-	tokens, err := indexTokens(attr, p)
+	tokens, err := IndexTokens(attr, p)
 	if err != nil {
 		// This data is not indexable
 		return
@@ -287,9 +287,7 @@ func (t *TokensTable) GetNext(key string) string {
 	t.RLock()
 	defer t.RUnlock()
 	i := sort.Search(len(t.key),
-		func(i int) bool {
-			return t.key[i] > key
-		})
+		func(i int) bool { return t.key[i] > key })
 	if i < len(t.key) {
 		return t.key[i]
 	}
@@ -315,9 +313,7 @@ func (t *TokensTable) GetPrev(key string) string {
 	defer t.RUnlock()
 	n := len(t.key)
 	i := sort.Search(len(t.key),
-		func(i int) bool {
-			return t.key[n-i-1] < key
-		})
+		func(i int) bool { return t.key[n-i-1] < key })
 	if i < len(t.key) {
 		return t.key[n-i-1]
 	}
@@ -334,4 +330,28 @@ func (t *TokensTable) GetLast() string {
 		return ""
 	}
 	return t.key[len(t.key)-1]
+}
+
+// GetGeq returns position of leftmost element that is greater or equal to s.
+func (t *TokensTable) GetNextOrEqual(s string) string {
+	t.RLock()
+	defer t.RUnlock()
+	n := len(t.key)
+	i := sort.Search(n, func(i int) bool { return t.key[i] >= s })
+	if i < n {
+		return t.key[i]
+	}
+	return ""
+}
+
+// GetPrevOrEqual returns position of rightmost element that is smaller or equal to s.
+func (t *TokensTable) GetPrevOrEqual(s string) string {
+	t.RLock()
+	defer t.RUnlock()
+	n := len(t.key)
+	i := sort.Search(n, func(i int) bool { return t.key[n-i-1] <= s })
+	if i < n {
+		return t.key[n-i-1]
+	}
+	return ""
 }

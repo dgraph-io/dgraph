@@ -26,30 +26,65 @@ func getStringTokens(term string) ([]string, error) {
 	return tokenizer.Tokens(), nil
 }
 
-func getInequalityTokens(funcArgs []string) ([]string, error) {
+// getInequalityTokens gets tokens geq / leq value given in funcArgs.
+// If value's token is in TokensTable, then we return the parsed value so
+// that for the bucket of the first token, we will compare against the parsed
+// value. Otherwise, we return the parsed value as nil.
+func getInequalityTokens(attr string, geq bool,
+	funcArgs []string) ([]string, *types.Value, error) {
 	x.AssertTruef(len(funcArgs) > 1, "Invalid function")
-	if len(funcArgs) != 3 {
-		return nil, x.Errorf("Function requires 3 arguments, but got %d",
-			len(funcArgs))
+	if len(funcArgs) != 2 {
+		return nil, nil, x.Errorf("Function requires 2 arguments, but got %d %v",
+			len(funcArgs), funcArgs)
 	}
-	// Example: "geq releaseDate 2016-01-02".
-	attr := funcArgs[1]
+
 	tt := posting.GetTokensTable(attr)
 	if tt == nil {
-		return nil, x.Errorf("Attribute %s is not indexed", attr)
+		return nil, nil, x.Errorf("Attribute %s is not indexed", attr)
 	}
 
 	// Parse given value and get token. There should be only one token.
 	t := schema.TypeOf(attr)
 	if t == nil || !t.IsScalar() {
-		return nil, x.Errorf("Attribute %s is not valid scalar type", attr)
+		return nil, nil, x.Errorf("Attribute %s is not valid scalar type", attr)
 	}
 
 	schemaType := t.(types.Scalar)
 	v := types.ValueForType(schemaType.ID())
-	err := v.UnmarshalText([]byte(funcArgs[2]))
+	err := v.UnmarshalText([]byte(funcArgs[1]))
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return nil, nil
+
+	tokens, err := posting.IndexTokens(attr, v)
+	if err != nil {
+		return nil, nil, err
+	}
+	if len(tokens) != 1 {
+		x.Printf("Expected only 1 token but got: %d %v", len(tokens), tokens)
+	}
+
+	var s string
+	if geq {
+		s = tt.GetNextOrEqual(tokens[0])
+	} else {
+		s = tt.GetPrevOrEqual(tokens[0])
+	}
+	if s == "" {
+		return []string{}, nil, nil
+	}
+	// At least one token.
+	out := make([]string, 0, 10)
+	for s != "" {
+		out = append(out, s)
+		if geq {
+			s = tt.GetNext(s)
+		} else {
+			s = tt.GetPrev(s)
+		}
+	}
+	if tokens[0] == out[0] {
+		return out, &v, nil
+	}
+	return out, nil, nil
 }

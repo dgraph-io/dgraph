@@ -17,6 +17,7 @@
 package worker
 
 import (
+	"bytes"
 	"strings"
 
 	"golang.org/x/net/context"
@@ -25,7 +26,9 @@ import (
 	"github.com/dgraph-io/dgraph/geo"
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
+	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/task"
+	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -80,21 +83,25 @@ func processTask(q *task.Query) (*task.Result, error) {
 	var tokens []string
 	var geoQuery *geo.QueryData
 	var err error
-	var intersectDest bool
-	//	var isInequality bool
+	var isGeq, isLeq, intersectDest bool
+
+	// For inequalities: Consider the filter "geq 2016-01-01", value's token is
+	// "2016". If 2016 is not found in TokensTable, ineqValue=nil. Otherwise,
+	// ineqValue="2016-01-01".
+	var ineqValue *types.Value
+
 	if useFunc {
+		isGeq = q.SrcFunc[0] == "geq"
+		isLeq = q.SrcFunc[0] == "leq"
 		// Tokenize here.
-		if geo.IsGeoFunc(q.SrcFunc[0]) {
-			// For geo functions, we get extra information used for filtering.
-			tokens, geoQuery, err = geo.GetTokens(q.SrcFunc)
+		if isGeq || isLeq {
+			tokens, ineqValue, err = getInequalityTokens(attr, isGeq, q.SrcFunc)
 			if err != nil {
 				return nil, err
 			}
-		} else if q.SrcFunc[0] == "geq" || q.SrcFunc[0] == "leq" {
-			// Inequality "functions". Need to iterate over TokensTable.
-			// We also want to check the actual property values.
-			//			isInequality = true
-			tokens, err = getInequalityTokens(q.SrcFunc)
+		} else if geo.IsGeoFunc(q.SrcFunc[0]) {
+			// For geo functions, we get extra information used for filtering.
+			tokens, geoQuery, err = geo.GetTokens(q.SrcFunc)
 			if err != nil {
 				return nil, err
 			}
@@ -152,6 +159,24 @@ func processTask(q *task.Query) (*task.Result, error) {
 		out.UidMatrix = append(out.UidMatrix, pl.Uids(opts))
 	}
 
+	if ineqValue != nil {
+		x.AssertTrue(isGeq || isLeq)
+
+		// Get scalar type.
+		typ := schema.TypeOf(attr)
+		if typ == nil || !typ.IsScalar() {
+			return nil, x.Errorf("Attribute not scalar: %s %v", attr, typ)
+		}
+		scalarType := typ.(types.Scalar)
+
+		x.AssertTrue(len(out.UidMatrix) > 0)
+		// Filter the first row of UidMatrix.
+		algo.ApplyFilter(out.UidMatrix[0], func(uid uint64, i int) bool {
+			key := x.DataKey(attr, uid)
+			return checkInequality(key, scalarType, isGeq, ineqValue)
+		})
+	}
+
 	// If geo filter, do value check for correctness.
 	var values []*task.Value
 	if geoQuery != nil {
@@ -178,6 +203,36 @@ func processTask(q *task.Query) (*task.Result, error) {
 	}
 	out.IntersectDest = intersectDest
 	return &out, nil
+}
+
+// checkInequality looks up value given key=(attr, uid). Then checks whether
+// PL's value satisfies the inequality.
+func checkInequality(key []byte, scalarType types.Scalar, isGeq bool,
+	ineqValue *types.Value) bool {
+	pl, decr := posting.GetOrCreate(key)
+	defer decr()
+
+	valBytes, vType, err := pl.Value()
+	if bytes.Equal(valBytes, nil) {
+		return false
+	}
+	val := types.ValueForType(types.TypeID(vType))
+	if val == nil {
+		return false
+	}
+	if err := val.UnmarshalBinary(valBytes); err != nil {
+		return false
+	}
+
+	// Convert to schema type.
+	sv, err := scalarType.Convert(val)
+	if err != nil {
+		return false
+	}
+	if isGeq {
+		return !scalarType.Less(sv, *ineqValue)
+	}
+	return !scalarType.Less(*ineqValue, sv)
 }
 
 // ServeTask is used to respond to a query.
