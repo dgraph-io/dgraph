@@ -118,29 +118,6 @@ func ValueForType(id TypeID) interface{} {
 	}
 }
 
-// Type returns the type of this value
-func (v Int32) TypeID() TypeID {
-	return Int32ID
-}
-func (v Float) TypeID() TypeID {
-	return FloatID
-}
-func (v Bool) TypeID() TypeID {
-	return BoolID
-}
-func (v Geo) TypeID() TypeID {
-	return GeoID
-}
-func (v Date) TypeID() TypeID {
-	return DateID
-}
-func (v Time) TypeID() TypeID {
-	return DateTimeID
-}
-func (v String) TypeID() TypeID {
-	return StringID
-}
-
 type Binary []byte
 
 // Int32 is the scalar type for int32
