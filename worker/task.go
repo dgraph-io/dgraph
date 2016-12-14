@@ -170,7 +170,8 @@ func processTask(q *task.Query) (*task.Result, error) {
 		scalarType := typ.(types.Scalar)
 
 		x.AssertTrue(len(out.UidMatrix) > 0)
-		// Filter the first row of UidMatrix.
+		// Filter the first row of UidMatrix. Since ineqValue != nil, we may
+		// assume that ineqValue is equal to the first token found in TokensTable.
 		algo.ApplyFilter(out.UidMatrix[0], func(uid uint64, i int) bool {
 			key := x.DataKey(attr, uid)
 			return checkInequality(key, scalarType, isGeq, ineqValue)
