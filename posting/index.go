@@ -97,11 +97,13 @@ func indexTokens(attr string, pID types.TypeID, data []byte) ([]string, error) {
 	}
 	s := schemaType.(types.TypeID)
 	sv := types.ValueForType(s)
-	err := types.Convert(pID, s, data, &sv)
+	src := types.ValueForType(pID)
+	src.Value = data
+	err := types.Convert(src, &sv)
 	if err != nil {
 		return nil, err
 	}
-	switch v := sv.(type) {
+	switch v := sv.Value.(type) {
 	case geom.T:
 		return geo.IndexTokens(&v)
 	case int32:
