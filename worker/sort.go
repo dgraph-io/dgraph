@@ -108,8 +108,15 @@ func processSort(ts *task.Sort) (*task.SortResult, error) {
 	// Iterate over every bucket in TokensTable.
 	t := posting.GetTokensTable(attr)
 
+	var token string
+	x.Printf("~~~~sort %v", ts.Desc)
+	if ts.Desc {
+		token = t.GetLast()
+	} else {
+		token = t.GetFirst()
+	}
 BUCKETS:
-	for token := t.GetFirst(); len(token) > 0; token = t.GetNext(token) {
+	for len(token) > 0 {
 		err := intersectBucket(ts, attr, token, out)
 		switch err {
 		case errDone:
@@ -118,6 +125,11 @@ BUCKETS:
 			// Continue iterating over tokens.
 		default:
 			return &emptySortResult, err
+		}
+		if ts.Desc {
+			token = t.GetPrev(token)
+		} else {
+			token = t.GetNext(token)
 		}
 	}
 
@@ -165,7 +177,7 @@ func intersectBucket(ts *task.Sort, attr, token string, out []intersectedList) e
 		}
 
 		// Sort results by value before applying offset.
-		sortByValue(attr, result, scalar)
+		sortByValue(attr, result, scalar, ts.Desc)
 
 		if il.offset > 0 {
 			result.Uids = result.Uids[il.offset:n]
@@ -198,7 +210,7 @@ func intersectBucket(ts *task.Sort, attr, token string, out []intersectedList) e
 }
 
 // sortByValue fetches values and sort UIDList.
-func sortByValue(attr string, ul *task.List, scalar types.Scalar) error {
+func sortByValue(attr string, ul *task.List, scalar types.Scalar, desc bool) error {
 	values := make([]types.Value, len(ul.Uids))
 	for i, uid := range ul.Uids {
 		val, err := fetchValue(uid, attr, scalar)
@@ -207,7 +219,7 @@ func sortByValue(attr string, ul *task.List, scalar types.Scalar) error {
 		}
 		values[i] = val
 	}
-	return scalar.Sort(values, ul)
+	return scalar.Sort(values, ul, desc)
 }
 
 // fetchValue gets the value for a given UID.

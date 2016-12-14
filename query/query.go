@@ -116,15 +116,16 @@ func (l *Latency) ToMap() map[string]string {
 }
 
 type params struct {
-	AttrType types.Type
-	Alias    string
-	Count    int
-	Offset   int
-	AfterUID uint64
-	DoCount  bool
-	GetUID   bool
-	Order    string
-	isDebug  bool
+	AttrType  types.Type
+	Alias     string
+	Count     int
+	Offset    int
+	AfterUID  uint64
+	DoCount   bool
+	GetUID    bool
+	Order     string
+	OrderDesc bool
+	isDebug   bool
 }
 
 // SubGraph is the way to represent data internally. It contains both the
@@ -222,6 +223,9 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 		}
 		ul := pc.uidMatrix[idx]
 
+		if sg.Params.GetUID || sg.Params.isDebug {
+			dst.SetUID(uid)
+		}
 		if len(pc.counts) > 0 {
 			c := types.Int32(pc.counts[idx])
 			uc := dst.New(pc.Attr)
@@ -231,17 +235,20 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 		} else if len(ul.Uids) > 0 || len(pc.Children) > 0 {
 			// We create as many predicate entity children as the length of uids for
 			// this predicate.
-			for _, uid := range ul.Uids {
-				if invalidUids[uid] {
+			for _, childUID := range ul.Uids {
+				if invalidUids[childUID] {
 					continue
 				}
 				uc := dst.New(pc.Attr)
-				if sg.Params.GetUID || sg.Params.isDebug {
-					uc.SetUID(uid)
-				}
-				if rerr := pc.preTraverse(uid, uc); rerr != nil {
+
+				// Doing check for UID here is no good because some of these might be
+				// invalid nodes.
+				// if pc.Params.GetUID || pc.Params.isDebug {
+				//	dst.SetUID(uid)
+				// }
+				if rerr := pc.preTraverse(childUID, uc); rerr != nil {
 					if rerr.Error() == "_INV_" {
-						invalidUids[uid] = true
+						invalidUids[childUID] = true
 						continue // next UID.
 					}
 					// Some other error.
@@ -265,8 +272,6 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 					return err
 				}
 				dst.SetXID(string(txt))
-			} else if pc.Attr == "_uid_" {
-				dst.SetUID(uid)
 			} else {
 				globalType := schema.TypeOf(pc.Attr)
 				schemaType := pc.Params.AttrType
@@ -432,6 +437,9 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 		}
 		if v, ok := gchild.Args["order"]; ok {
 			dst.Params.Order = v
+		} else if v, ok := gchild.Args["orderdesc"]; ok {
+			dst.Params.Order = v
+			dst.Params.OrderDesc = true
 		}
 		sg.Children = append(sg.Children, dst)
 		err := treeCopy(ctx, gchild, dst)
@@ -725,6 +733,7 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 		UidMatrix: sg.uidMatrix,
 		Offset:    int32(sg.Params.Offset),
 		Count:     int32(sg.Params.Count),
+		Desc:      sg.Params.OrderDesc,
 	}
 	result, err := worker.SortOverNetwork(ctx, sort)
 	if err != nil {
@@ -862,7 +871,10 @@ func (p *jsonOutputNode) New(attr string) outputNode {
 
 // SetUID sets UID of a jsonOutputNode.
 func (p *jsonOutputNode) SetUID(uid uint64) {
-	p.data["_uid_"] = fmt.Sprintf("%#x", uid)
+	_, found := p.data["_uid_"]
+	if !found {
+		p.data["_uid_"] = fmt.Sprintf("%#x", uid)
+	}
 }
 
 // SetXID sets XID of a jsonOutputNode.
