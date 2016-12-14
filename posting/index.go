@@ -116,64 +116,57 @@ func indexTokens(attr string, p types.Value) ([]string, error) {
 }
 
 // addIndexMutations adds mutation(s) for a single term, to maintain index.
-func addIndexMutations(ctx context.Context, attr string, uid uint64,
-	p types.Value, del bool) {
+func addIndexMutations(ctx context.Context, t *task.DirectedEdge, p types.Value, op task.DirectedEdge_Op) {
+	attr := t.Attr
+	uid := t.Entity
+
 	x.AssertTrue(uid != 0)
 	tokens, err := indexTokens(attr, p)
 	if err != nil {
 		// This data is not indexable
 		return
 	}
+
 	edge := &task.DirectedEdge{
 		ValueId: uid,
 		Attr:    attr,
 		Label:   "idx",
+		Op:      op,
 	}
 
 	tokensTable := GetTokensTable(attr)
 	x.AssertTruef(tokensTable != nil, "TokensTable missing for attr %s", attr)
 
 	for _, token := range tokens {
-		addIndexMutation(ctx, attr, token, tokensTable, edge, del)
+		addIndexMutation(ctx, edge, token)
+		if edge.Op == task.DirectedEdge_SET {
+			tokensTable.Add(token)
+		}
 	}
 }
 
-func addIndexMutation(ctx context.Context, attr, token string,
-	tokensTable *TokensTable, edge *task.DirectedEdge, del bool) {
-	key := x.IndexKey(attr, token)
+func addIndexMutation(ctx context.Context, edge *task.DirectedEdge, token string) {
+	key := x.IndexKey(edge.Attr, token)
 	plist, decr := GetOrCreate(key)
 	defer decr()
 
 	x.AssertTruef(plist != nil, "plist is nil [%s] %d %s",
 		token, edge.ValueId, edge.Attr)
-	if del {
-		_, err := plist.AddMutation(ctx, edge, Del)
-		if err != nil {
-			x.TraceError(ctx, x.Wrapf(err,
-				"Error deleting %s for attr %s entity %d: %v",
-				token, edge.Attr, edge.Entity))
-		}
-		indexLog.Printf("DEL [%s] [%d] OldTerm [%s]",
-			edge.Attr, edge.Entity, token)
-
-	} else {
-		_, err := plist.AddMutation(ctx, edge, Set)
-		if err != nil {
-			x.TraceError(ctx, x.Wrapf(err,
-				"Error adding %s for attr %s entity %d: %v",
-				token, edge.Attr, edge.Entity))
-		}
-		indexLog.Printf("SET [%s] [%d] NewTerm [%s]",
-			edge.Attr, edge.Entity, token)
-
-		tokensTable.Add(token)
+	_, err := plist.AddMutation(ctx, edge)
+	if err != nil {
+		x.TraceError(ctx, x.Wrapf(err,
+			"Error deleting %s for attr %s entity %d: %v",
+			token, edge.Attr, edge.Entity))
 	}
+	indexLog.Printf("%s [%s] [%d] Term [%s]",
+		edge.Op, edge.Attr, edge.Entity, token)
+
 }
 
 // AddMutationWithIndex is AddMutation with support for indexing.
-func (l *List) AddMutationWithIndex(ctx context.Context, t *task.DirectedEdge, op uint32) error {
+func (l *List) AddMutationWithIndex(ctx context.Context, t *task.DirectedEdge) error {
 	x.AssertTruef(len(t.Attr) > 0,
-		"[%s] [%d] [%v] %d %d\n", t.Attr, t.Entity, t.Value, t.ValueId, op)
+		"[%s] [%d] [%v] %d %d\n", t.Attr, t.Entity, t.Value, t.ValueId, t.Op)
 
 	var vbytes []byte
 	var vtype byte
@@ -185,7 +178,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *task.DirectedEdge, o
 		// Check last posting for original value BEFORE any mutation actually happens.
 		vbytes, vtype, verr = l.Value()
 	}
-	hasMutated, err := l.AddMutation(ctx, t, op)
+	hasMutated, err := l.AddMutation(ctx, t)
 	if err != nil {
 		return err
 	}
@@ -201,14 +194,14 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *task.DirectedEdge, o
 		if err := p.UnmarshalBinary(delTerm); err != nil {
 			return err
 		}
-		addIndexMutations(ctx, t.Attr, t.Entity, p, true)
+		addIndexMutations(ctx, t, p, task.DirectedEdge_DEL)
 	}
-	if op == Set {
+	if t.Op == task.DirectedEdge_SET {
 		p := types.ValueForType(types.TypeID(t.ValueType))
 		if err := p.UnmarshalBinary(t.Value); err != nil {
 			return err
 		}
-		addIndexMutations(ctx, t.Attr, t.Entity, p, false)
+		addIndexMutations(ctx, t, p, task.DirectedEdge_SET)
 	}
 	return nil
 }

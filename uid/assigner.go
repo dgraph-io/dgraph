@@ -117,7 +117,8 @@ func AssignNew(N int, instanceIdx uint64, numInstances uint64) *task.Mutations {
 			Attr:   "_uid_",
 			Value:  []byte("_"), // not txid
 			Label:  "_assigner_",
+			Op:     task.DirectedEdge_SET,
 		}
 	}
-	return &task.Mutations{Set: set}
+	return &task.Mutations{Edges: set}
 }

@@ -32,7 +32,7 @@ const (
 
 // runMutations goes through all the edges and applies them. It returns the
 // mutations which were not applied in left.
-func runMutations(ctx context.Context, edges []*task.DirectedEdge, op uint32) error {
+func runMutations(ctx context.Context, edges []*task.DirectedEdge) error {
 	for _, edge := range edges {
 		if !groups().ServesGroup(group.BelongsTo(edge.Attr)) {
 			return x.Errorf("Predicate fingerprint doesn't match this instance")
@@ -42,7 +42,7 @@ func runMutations(ctx context.Context, edges []*task.DirectedEdge, op uint32) er
 		plist, decr := posting.GetOrCreate(key) // TODO: Needs to have a node and entry index.
 		defer decr()
 
-		if err := plist.AddMutationWithIndex(ctx, edge, op); err != nil {
+		if err := plist.AddMutationWithIndex(ctx, edge); err != nil {
 			x.Printf("Error while adding mutation: %v %v", edge, err)
 			return err // abort applying the rest of them.
 		}
@@ -54,10 +54,7 @@ func runMutations(ctx context.Context, edges []*task.DirectedEdge, op uint32) er
 func mutate(ctx context.Context, m *task.Mutations) error {
 	// TODO: Needs to have a node and entry index.
 	// Running the set instructions first.
-	if err := runMutations(ctx, m.Set, posting.Set); err != nil {
-		return err
-	}
-	if err := runMutations(ctx, m.Del, posting.Del); err != nil {
+	if err := runMutations(ctx, m.Edges); err != nil {
 		return err
 	}
 	return nil
@@ -88,8 +85,7 @@ func proposeOrSend(ctx context.Context, gid uint32, m *task.Mutations, che chan 
 
 // addToMutationArray adds the edges to the appropriate index in the mutationArray,
 // taking into account the op(operation) and the attribute.
-func addToMutationMap(mutationMap map[uint32]*task.Mutations,
-	edges []*task.DirectedEdge, op string) {
+func addToMutationMap(mutationMap map[uint32]*task.Mutations, edges []*task.DirectedEdge) {
 	for _, edge := range edges {
 		gid := group.BelongsTo(edge.Attr)
 		mu := mutationMap[gid]
@@ -97,11 +93,7 @@ func addToMutationMap(mutationMap map[uint32]*task.Mutations,
 			mu = &task.Mutations{GroupId: gid}
 			mutationMap[gid] = mu
 		}
-		if op == set {
-			mu.Set = append(mu.Set, edge)
-		} else if op == del {
-			mu.Del = append(mu.Del, edge)
-		}
+		mu.Edges = append(mu.Edges, edge)
 	}
 }
 
@@ -109,9 +101,7 @@ func addToMutationMap(mutationMap map[uint32]*task.Mutations,
 // according to fingerprint of the predicate and sends it to that instance.
 func MutateOverNetwork(ctx context.Context, m *task.Mutations) error {
 	mutationMap := make(map[uint32]*task.Mutations)
-
-	addToMutationMap(mutationMap, m.Set, set)
-	addToMutationMap(mutationMap, m.Del, del)
+	addToMutationMap(mutationMap, m.Edges)
 
 	errors := make(chan error, len(mutationMap))
 	for gid, mu := range mutationMap {

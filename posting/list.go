@@ -129,9 +129,18 @@ func samePosting(a *types.Posting, b *types.Posting) bool {
 	return true
 }
 
-func newPosting(t *task.DirectedEdge, op uint32) *types.Posting {
+func newPosting(t *task.DirectedEdge) *types.Posting {
 	x.AssertTruef(bytes.Equal(t.Value, nil) || t.ValueId == math.MaxUint64,
 		"This should have been set by the caller.")
+
+	var op uint32
+	if t.Op == task.DirectedEdge_SET {
+		op = Set
+	} else if t.Op == task.DirectedEdge_DEL {
+		op = Del
+	} else {
+		x.Fatalf("Unhandled operation: %+v", t)
+	}
 
 	return &types.Posting{
 		Uid:     t.ValueId,
@@ -311,7 +320,7 @@ func (l *List) updateMutationLayer(mpost *types.Posting) bool {
 // AddMutation adds mutation to mutation layers. Note that it does not write
 // anything to disk. Some other background routine will be responsible for merging
 // changes in mutation layers to RocksDB. Returns whether any mutation happens.
-func (l *List) AddMutation(ctx context.Context, t *task.DirectedEdge, op uint32) (bool, error) {
+func (l *List) AddMutation(ctx context.Context, t *task.DirectedEdge) (bool, error) {
 	if atomic.LoadInt32(&l.deleteMe) == 1 {
 		x.TraceError(ctx, x.Errorf("DELETEME set to true. Temporary error."))
 		return false, ErrRetry
@@ -329,7 +338,7 @@ func (l *List) AddMutation(ctx context.Context, t *task.DirectedEdge, op uint32)
 		x.TraceError(ctx, err)
 		return false, err
 	}
-	mpost := newPosting(t, op)
+	mpost := newPosting(t)
 
 	// Mutation arrives:
 	// - Check if we had any(SET/DEL) before this, stored in the mutation list.

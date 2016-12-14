@@ -279,11 +279,19 @@ func convertAndApply(ctx context.Context, set []rdf.NQuad, del []rdf.NQuad) (map
 	if mr, err = convertToEdges(ctx, set); err != nil {
 		return nil, err
 	}
-	m.Set, allocIds = mr.edges, mr.newUids
+	m.Edges, allocIds = mr.edges, mr.newUids
+	for i := range m.Edges {
+		m.Edges[i].Op = task.DirectedEdge_SET
+	}
+
 	if mr, err = convertToEdges(ctx, del); err != nil {
 		return nil, err
 	}
-	m.Del = mr.edges
+	for i := range mr.edges {
+		edge := mr.edges[i]
+		edge.Op = task.DirectedEdge_DEL
+		m.Edges = append(m.Edges, edge)
+	}
 
 	if err := applyMutations(ctx, &m); err != nil {
 		return nil, x.Wrap(err)

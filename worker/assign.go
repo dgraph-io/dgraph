@@ -58,11 +58,12 @@ func assignUids(ctx context.Context, num *task.Num) (*task.List, error) {
 	mutations := uid.AssignNew(val, 0, 1)
 
 	for _, uid := range num.Uids {
-		mutations.Set = append(mutations.Set, &task.DirectedEdge{
+		mutations.Edges = append(mutations.Edges, &task.DirectedEdge{
 			Entity: uid,
 			Attr:   "_uid_",
 			Value:  []byte("_"), // not txid
 			Label:  "A",
+			Op:     task.DirectedEdge_SET,
 		})
 	}
 
@@ -75,7 +76,7 @@ func assignUids(ctx context.Context, num *task.Num) (*task.List, error) {
 	out := new(task.List)
 	// Only the First N entities are newly assigned UIDs, so we collect them.
 	for i := 0; i < val; i++ {
-		out.Uids = append(out.Uids, mutations.Set[i].Entity)
+		out.Uids = append(out.Uids, mutations.Edges[i].Entity)
 	}
 	return out, nil
 }
