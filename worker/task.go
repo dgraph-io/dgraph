@@ -81,11 +81,20 @@ func processTask(q *task.Query) (*task.Result, error) {
 	var geoQuery *geo.QueryData
 	var err error
 	var intersectDest bool
+	//	var isInequality bool
 	if useFunc {
 		// Tokenize here.
 		if geo.IsGeoFunc(q.SrcFunc[0]) {
 			// For geo functions, we get extra information used for filtering.
 			tokens, geoQuery, err = geo.GetTokens(q.SrcFunc)
+			if err != nil {
+				return nil, err
+			}
+		} else if q.SrcFunc[0] == "geq" || q.SrcFunc[0] == "leq" {
+			// Inequality "functions". Need to iterate over TokensTable.
+			// We also want to check the actual property values.
+			//			isInequality = true
+			tokens, err = getInequalityTokens(q.SrcFunc)
 			if err != nil {
 				return nil, err
 			}
