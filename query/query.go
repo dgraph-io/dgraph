@@ -728,9 +728,6 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 		sg.Params.Count = 1000
 	}
 
-	x.Printf("~~sort attr: %s", sg.Params.Order)
-	x.Printf("~~~%v", sg.uidMatrix)
-
 	sort := &task.Sort{
 		Attr:      sg.Params.Order,
 		UidMatrix: sg.uidMatrix,
