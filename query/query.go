@@ -225,7 +225,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 		ul := pc.uidMatrix[idx]
 
 		if len(pc.counts) > 0 {
-			c := types.Int32(pc.counts[idx])
+			c := int32(pc.counts[idx])
 			uc := dst.New(pc.Attr)
 			uc.AddValue("_count_", &c)
 			dst.AddChild(pc.Attr, uc)
@@ -268,7 +268,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 				if err != nil {
 					return err
 				}
-				dst.SetXID(string(*txt.(*types.String)))
+				dst.SetXID(*txt.(*string))
 			} else if pc.Attr == "_uid_" {
 				dst.SetUID(uid)
 			} else {

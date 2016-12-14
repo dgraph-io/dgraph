@@ -221,7 +221,7 @@ func mutationToNQuad(nq []*graph.NQuad) ([]rdf.NQuad, error) {
 			return resp, err
 		}
 		if v != nil {
-			nq.ObjectValue, _ = v.(types.Binary)
+			nq.ObjectValue, _ = v.([]byte)
 			nq.ObjectType = byte(vID)
 		}
 		resp = append(resp, nq)
@@ -236,19 +236,19 @@ func typeValueFromNQuad(nq *graph.NQuad) (interface{}, types.TypeID, error) {
 	b := types.ValueForType(types.BinaryID)
 	switch v := nq.Value.Val.(type) {
 	case *graph.Value_IntVal:
-		i := types.Int32(v.IntVal)
+		i := int32(v.IntVal)
 		x.Check(types.ConvertFromInterface(types.Int32ID, types.BinaryID, i, &b))
 		return b, types.Int32ID, nil
 	case *graph.Value_StrVal:
-		s := types.String(v.StrVal)
+		s := string(v.StrVal)
 		x.Check(types.ConvertFromInterface(types.StringID, types.BinaryID, s, &b))
 		return b, types.StringID, nil
 	case *graph.Value_BoolVal:
-		bo := types.Bool(v.BoolVal)
+		bo := bool(v.BoolVal)
 		x.Check(types.ConvertFromInterface(types.BoolID, types.BinaryID, bo, &b))
 		return b, types.BoolID, nil
 	case *graph.Value_DoubleVal:
-		f := types.Float(v.DoubleVal)
+		f := float64(v.DoubleVal)
 		x.Check(types.ConvertFromInterface(types.FloatID, types.BinaryID, f, &b))
 		return b, types.FloatID, nil
 	case *graph.Value_GeoVal:
@@ -356,7 +356,7 @@ func validateTypes(nquads []rdf.NQuad) error {
 				if err != nil {
 					return err
 				}
-				nquad.ObjectValue = b.(types.Binary)
+				nquad.ObjectValue = b.([]byte)
 				nquad.ObjectType = byte(schemaType)
 
 			} else if typeID != schemaType {

@@ -20,6 +20,7 @@ import (
 	"github.com/dgraph-io/dgraph/query/graph"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
+	geom "github.com/twpayne/go-geom"
 )
 
 // This file contains helper functions for converting scalar types to
@@ -27,19 +28,19 @@ import (
 
 func toProtoValue(v interface{}) *graph.Value {
 	switch val := v.(type) {
-	case *types.String:
+	case *string:
 		return &graph.Value{&graph.Value_StrVal{string(*val)}}
 
-	case *types.Int32:
+	case *int32:
 		return &graph.Value{&graph.Value_IntVal{int32(*val)}}
 
-	case *types.Float:
+	case *float64:
 		return &graph.Value{&graph.Value_DoubleVal{float64(*val)}}
 
-	case *types.Bool:
+	case *bool:
 		return &graph.Value{&graph.Value_BoolVal{bool(*val)}}
 
-	case *types.Geo:
+	case *geom.T:
 		b := types.ValueForType(types.BinaryID)
 		x.Check(types.ConvertFromInterface(types.GeoID, types.BinaryID, val, &b))
 		return &graph.Value{&graph.Value_GeoVal{b.([]byte)}}

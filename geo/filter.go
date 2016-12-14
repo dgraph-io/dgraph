@@ -115,11 +115,11 @@ func queryTokens(qt QueryType, data string, maxDistance float64) ([]string, *Que
 	if err != nil {
 		return nil, nil, x.Wrapf(err, "Cannot decode given geoJson input")
 	}
-	g := gc.(types.Geo)
+	g := gc.(geom.T)
 
 	var l *s2.Loop
 	var pt *s2.Point
-	switch v := g.T.(type) {
+	switch v := g.(type) {
 	case *geom.Point:
 		p := pointFromPoint(v)
 		pt = &p
@@ -188,7 +188,7 @@ func nearQueryKeys(pt s2.Point, d float64) ([]string, *QueryData, error) {
 }
 
 // MatchesFilter applies the query filter to a geo value
-func (q QueryData) MatchesFilter(g types.Geo) bool {
+func (q QueryData) MatchesFilter(g geom.T) bool {
 	switch q.qtype {
 	case QueryTypeWithin:
 		return q.isWithin(g)
@@ -206,9 +206,9 @@ func (q QueryData) MatchesFilter(g types.Geo) bool {
 }
 
 // returns true if the geometry represented by g is within the given loop or cap
-func (q QueryData) isWithin(g types.Geo) bool {
+func (q QueryData) isWithin(g geom.T) bool {
 	x.AssertTruef(q.pt != nil || q.loop != nil || q.cap != nil, "At least a point, loop or cap should be defined.")
-	gpt, ok := g.T.(*geom.Point)
+	gpt, ok := g.(*geom.Point)
 	if !ok {
 		// We will only consider points for within queries.
 		return false
@@ -226,14 +226,14 @@ func (q QueryData) isWithin(g types.Geo) bool {
 }
 
 // returns true if the geometry represented by uid/attr contains the given point
-func (q QueryData) contains(g types.Geo) bool {
+func (q QueryData) contains(g geom.T) bool {
 	x.AssertTruef(q.pt != nil || q.loop != nil, "At least a point or loop should be defined.")
 	if q.loop != nil {
 		// We don't support polygons containing polygons yet.
 		return false
 	}
 
-	poly, ok := g.T.(*geom.Polygon)
+	poly, ok := g.(*geom.Polygon)
 	if !ok {
 		// We will only consider polygons for contains queries.
 		return false
@@ -247,9 +247,9 @@ func (q QueryData) contains(g types.Geo) bool {
 }
 
 // returns true if the geometry represented by uid/attr intersects the given loop or point
-func (q QueryData) intersects(g types.Geo) bool {
+func (q QueryData) intersects(g geom.T) bool {
 	x.AssertTruef(q.pt != nil || q.loop != nil, "At least a point or loop should be defined.")
-	switch v := g.T.(type) {
+	switch v := g.(type) {
 	case *geom.Point:
 		p := pointFromPoint(v)
 		if q.pt != nil {
@@ -293,7 +293,7 @@ func FilterUids(uids *task.List, values []*task.Value, q *QueryData) *task.List 
 		if err != nil {
 			continue
 		}
-		g := gc.(types.Geo)
+		g := gc.(geom.T)
 
 		if !q.MatchesFilter(g) {
 			continue

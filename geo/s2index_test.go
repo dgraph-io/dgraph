@@ -57,7 +57,7 @@ func loadPolygon(name string) (*geom.Polygon, error) {
 
 func TestIndexCellsPoint(t *testing.T) {
 	p := geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{-122.082506, 37.4249518})
-	parents, cover, err := indexCells(types.Geo{p})
+	parents, cover, err := indexCells(p)
 	require.NoError(t, err)
 	require.Len(t, parents, MaxCellLevel-MinCellLevel+1)
 	c := parents[0]
@@ -105,7 +105,7 @@ func printCells(cu s2.CellUnion) {
 func TestIndexCellsPolygon(t *testing.T) {
 	p, err := loadPolygon("zip.json")
 	require.NoError(t, err)
-	parents, cover, err := indexCells(types.Geo{p})
+	parents, cover, err := indexCells(p)
 	require.NoError(t, err)
 	if len(cover) > MaxCells {
 		t.Errorf("Expected less than %d cells. Got %d instead.", MaxCells, len(cover))
@@ -127,7 +127,7 @@ func TestKeyGeneratorPoint(t *testing.T) {
 	gc := types.ValueForType(types.GeoID)
 	err = types.Convert(types.BinaryID, types.GeoID, data, &gc)
 	require.NoError(t, err)
-	g := gc.(types.Geo)
+	g := gc.(geom.T)
 
 	keys, err := IndexTokens(&g)
 	require.NoError(t, err)
@@ -143,7 +143,7 @@ func TestKeyGeneratorPolygon(t *testing.T) {
 	gc := types.ValueForType(types.GeoID)
 	err = types.Convert(types.BinaryID, types.GeoID, data, &gc)
 	require.NoError(t, err)
-	g := gc.(types.Geo)
+	g := gc.(geom.T)
 
 	keys, err := IndexTokens(&g)
 	require.NoError(t, err)
@@ -237,7 +237,7 @@ func BenchmarkKeyGeneratorPoint(b *testing.B) {
 	gc := types.ValueForType(types.GeoID)
 	err = types.Convert(types.BinaryID, types.GeoID, data, &gc)
 	require.NoError(b, err)
-	g := gc.(types.Geo)
+	g := gc.(geom.T)
 
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
@@ -258,7 +258,7 @@ func BenchmarkKeyGeneratorPolygon(b *testing.B) {
 	gc := types.ValueForType(types.GeoID)
 	err = types.Convert(types.BinaryID, types.GeoID, data, &gc)
 	require.NoError(b, err)
-	g := gc.(types.Geo)
+	g := gc.(geom.T)
 
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {

@@ -21,9 +21,6 @@ type Type interface {
 	IsScalar() bool
 }
 
-// TypeID is the id used to identify a type.
-// type TypeID byte
-
 // Object represents all types in the schema definition.
 type Object struct {
 	Name   string

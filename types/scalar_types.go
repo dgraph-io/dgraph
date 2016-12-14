@@ -51,7 +51,7 @@ var typeNameMap = map[string]TypeID{
 
 type TypeID stype.Posting_ValType
 
-func (t TypeID) Name() String {
+func (t TypeID) Name() string {
 	switch t {
 	case Int32ID:
 		return "int"
@@ -82,35 +82,35 @@ func TypeForName(name string) (TypeID, bool) {
 func ValueForType(id TypeID) interface{} {
 	switch id {
 	case BinaryID:
-		var b Binary
+		var b []byte
 		return &b
 
 	case Int32ID:
-		var i Int32
+		var i int32
 		return &i
 
 	case FloatID:
-		var f Float
+		var f float64
 		return &f
 
 	case BoolID:
-		var b Bool
+		var b bool
 		return &b
 
 	case DateTimeID:
-		var t Time
+		var t time.Time
 		return &t
 
 	case StringID:
-		var s String
+		var s string
 		return &s
 
 	case DateID:
-		var d Date
+		var d time.Time
 		return &d
 
 	case GeoID:
-		var g Geo
+		var g geom.T
 		return &g
 
 	default:
@@ -118,39 +118,9 @@ func ValueForType(id TypeID) interface{} {
 	}
 }
 
-type Binary []byte
-
-// Int32 is the scalar type for int32
-type Int32 int32
-
-// Float is the scalar type for float64
-type Float float64
-
-// String is the scalar type for string
-type String string
-
-// Bool is the scalar type for bool
-type Bool bool
-
-// Time wraps time.Time to add the Value interface
-type Time struct {
-	time.Time
-}
-
-// Geo represents geo-spatial data.
-type Geo struct {
-	geom.T
-}
-
-// Date represents a date (YYYY-MM-DD). There is no timezone information
-// attached.
-type Date struct {
-	time.Time
-}
-
-func createDate(y int, m time.Month, d int) Date {
-	var dt Date
-	dt.Time = time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
+func createDate(y int, m time.Month, d int) time.Time {
+	var dt time.Time
+	dt = time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
 	return dt
 }
 

@@ -18,6 +18,7 @@ package types
 
 import (
 	"sort"
+	"time"
 
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/x"
@@ -41,31 +42,31 @@ func (s sortBase) Swap(i, j int) {
 type byDate struct{ sortBase }
 
 func (s byDate) Less(i, j int) bool {
-	return s.values[i].(Date).Time.Before(s.values[j].(Date).Time)
+	return s.values[i].(time.Time).Before(s.values[j].(time.Time))
 }
 
 type byDateTime struct{ sortBase }
 
 func (s byDateTime) Less(i, j int) bool {
-	return s.values[i].(Time).Time.Before(s.values[j].(Time).Time)
+	return s.values[i].(time.Time).Before(s.values[j].(time.Time))
 }
 
 type byInt32 struct{ sortBase }
 
 func (s byInt32) Less(i, j int) bool {
-	return (s.values[i].(Int32)) < (s.values[j].(Int32))
+	return (s.values[i].(int32)) < (s.values[j].(int32))
 }
 
 type byFloat struct{ sortBase }
 
 func (s byFloat) Less(i, j int) bool {
-	return (s.values[i].(Float)) < (s.values[j].(Float))
+	return (s.values[i].(float64)) < (s.values[j].(float64))
 }
 
 type byString struct{ sortBase }
 
 func (s byString) Less(i, j int) bool {
-	return (s.values[i].(String)) < (s.values[j].(String))
+	return (s.values[i].(string)) < (s.values[j].(string))
 }
 
 // Sort sorts the given array in-place.

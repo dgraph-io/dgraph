@@ -22,7 +22,6 @@ import (
 	"github.com/golang/geo/s2"
 	"github.com/twpayne/go-geom"
 
-	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -40,7 +39,7 @@ func parentCoverTokens(parents s2.CellUnion, cover s2.CellUnion) []string {
 
 // IndexTokens returns the tokens to be used in a geospatial index for the given geometry. If the
 // geometry is not supported it returns an error.
-func IndexTokens(g *types.Geo) ([]string, error) {
+func IndexTokens(g *geom.T) ([]string, error) {
 	parents, cover, err := indexCells(*g)
 	if err != nil {
 		return nil, err
@@ -69,11 +68,11 @@ const (
 // possible cells required to cover the region. This makes it easier at query time to query only the
 // parents or only the cover or both depending on whether it is a within, contains or intersects
 // query.
-func indexCells(g types.Geo) (parents, cover s2.CellUnion, err error) {
+func indexCells(g geom.T) (parents, cover s2.CellUnion, err error) {
 	if g.Stride() != 2 {
 		return nil, nil, x.Errorf("Covering only available for 2D co-ordinates.")
 	}
-	switch v := g.T.(type) {
+	switch v := g.(type) {
 	case *geom.Point:
 		p, c := indexCellsForPoint(v, MinCellLevel, MaxCellLevel)
 		return p, c, nil
