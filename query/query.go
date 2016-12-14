@@ -116,15 +116,16 @@ func (l *Latency) ToMap() map[string]string {
 }
 
 type params struct {
-	AttrType types.Type
-	Alias    string
-	Count    int
-	Offset   int
-	AfterUID uint64
-	DoCount  bool
-	GetUID   bool
-	Order    string
-	isDebug  bool
+	AttrType  types.Type
+	Alias     string
+	Count     int
+	Offset    int
+	AfterUID  uint64
+	DoCount   bool
+	GetUID    bool
+	Order     string
+	OrderDesc bool
+	isDebug   bool
 }
 
 // SubGraph is the way to represent data internally. It contains both the
@@ -432,6 +433,9 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 		}
 		if v, ok := gchild.Args["order"]; ok {
 			dst.Params.Order = v
+		} else if v, ok := gchild.Args["orderdesc"]; ok {
+			dst.Params.Order = v
+			dst.Params.OrderDesc = true
 		}
 		sg.Children = append(sg.Children, dst)
 		err := treeCopy(ctx, gchild, dst)
@@ -725,6 +729,7 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 		UidMatrix: sg.uidMatrix,
 		Offset:    int32(sg.Params.Offset),
 		Count:     int32(sg.Params.Count),
+		Desc:      sg.Params.OrderDesc,
 	}
 	result, err := worker.SortOverNetwork(ctx, sort)
 	if err != nil {

@@ -281,7 +281,7 @@ func KeysForTest(attr string) []string {
 	return t.key
 }
 
-// GetNextKey returns the next key after given key. If we reach the end, we
+// GetNext returns the next key after given key. If we reach the end, we
 // return an empty string.
 func (t *TokensTable) GetNext(key string) string {
 	t.RLock()
@@ -306,4 +306,32 @@ func (t *TokensTable) GetFirst() string {
 		return ""
 	}
 	return t.key[0]
+}
+
+// GetPrev returns the key just before the given key. If we reach the start,
+// we return an empty string.
+func (t *TokensTable) GetPrev(key string) string {
+	t.RLock()
+	defer t.RUnlock()
+	n := len(t.key)
+	i := sort.Search(len(t.key),
+		func(i int) bool {
+			return t.key[n-i-1] < key
+		})
+	if i < len(t.key) {
+		return t.key[n-i-1]
+	}
+	return ""
+}
+
+// GetLast returns the first key in our list of keys. You could also call
+// GetPrev("") but that is less efficient.
+func (t *TokensTable) GetLast() string {
+	t.RLock()
+	defer t.RUnlock()
+	if len(t.key) == 0 {
+		// Assume all keys are nonempty. Returning empty string means there's no keys.
+		return ""
+	}
+	return t.key[len(t.key)-1]
 }
