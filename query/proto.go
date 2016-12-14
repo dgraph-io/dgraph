@@ -42,8 +42,10 @@ func toProtoValue(v interface{}) *graph.Value {
 
 	case *geom.T:
 		b := types.ValueForType(types.BinaryID)
-		x.Check(types.ConvertFromInterface(types.GeoID, types.BinaryID, val, &b))
-		return &graph.Value{&graph.Value_GeoVal{b.([]byte)}}
+		src := types.ValueForType(types.GeoID)
+		src.Value = val
+		x.Check(types.Convert(src, &b))
+		return &graph.Value{&graph.Value_GeoVal{b.Value.([]byte)}}
 
 	default:
 		// A type that isn't supported in the proto

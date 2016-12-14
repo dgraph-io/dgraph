@@ -171,19 +171,18 @@ func (sg *SubGraph) DebugPrint(prefix string) {
 }
 
 // getValue gets the value from the task.
-func getValue(tv *task.Value) (interface{}, types.TypeID, error) {
+func getValue(tv *task.Value) (types.Val, error) {
 	vType := tv.ValType
 	valBytes := tv.Val
 	vID := types.TypeID(vType)
 	val := types.ValueForType(vID)
-	if val == nil {
-		return nil, 0, x.Errorf("Invalid type: %v", vType)
+	src := types.ValueForType(types.GeoID)
+	src.Value = valBytes
+	err := types.Convert(src, &val)
+	if err != nil {
+		return types.Val{}, err
 	}
-	x.Check(types.Convert(vID, vID, valBytes, &val))
-	//if err := val.UnmarshalBinary(valBytes); err != nil {
-	//	return nil, err
-	//}
-	return val, vID, nil
+	return val, nil
 }
 
 var nodePool = sync.Pool{
@@ -256,19 +255,19 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 			}
 		} else {
 			tv := pc.values[idx]
-			v, vID, err := getValue(tv)
+			v, err := getValue(tv)
 			if err != nil {
 				return err
 			}
 
 			if pc.Attr == "_xid_" {
 				txt := types.ValueForType(types.StringID)
-				err := types.ConvertFromInterface(vID, types.StringID, v, &txt)
+				err := types.Marshal(v, &txt)
 				//txt, err := v.MarshalText()
 				if err != nil {
 					return err
 				}
-				dst.SetXID(*txt.(*string))
+				dst.SetXID(*txt.Value.(*string))
 			} else if pc.Attr == "_uid_" {
 				dst.SetUID(uid)
 			} else {
@@ -284,7 +283,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 					stID := schemaType.(types.TypeID)
 					sv = types.ValueForType(stID)
 					// Convert to schema type.
-					err = types.Convert(vID, stID, tv.Val, &sv)
+					err = types.Convert(v, &sv)
 					if bytes.Equal(tv.Val, nil) || err != nil {
 						// skip values that don't convert.
 						return x.Errorf("_INV_")
@@ -298,7 +297,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 					gtID := globalType.(types.TypeID)
 					sv = types.ValueForType(gtID)
 					// Convert to schema type.
-					err = types.Convert(vID, gtID, tv.Val, &sv)
+					err = types.Convert(v, &sv)
 					if bytes.Equal(tv.Val, nil) || err != nil {
 						continue
 					}
