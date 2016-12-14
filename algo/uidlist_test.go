@@ -261,7 +261,7 @@ func BenchmarkListIntersectRandom(b *testing.B) {
 	randomTests := func(sz int, factor int) {
 		sizeStr := strconv.Itoa(sz)
 		facStr := strconv.Itoa(factor)
-		b.Run("factor:"+facStr+":random:size="+sizeStr, func(b *testing.B) { benchmarkListIntersectRandom(sz, int64(sz*factor), r, b) })
+		b.Run(":random:factor="+facStr+":size="+sizeStr, func(b *testing.B) { benchmarkListIntersectRandom(sz, int64(sz*factor), r, b) })
 	}
 
 	randomTests(500, 3)
