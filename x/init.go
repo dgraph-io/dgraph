@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"log"
 	"os"
+
+	yaml "gopkg.in/yaml.v2"
 )
 
 const dgraphVersion = "0.7.0"
@@ -44,12 +46,62 @@ func Init() {
 	if !flag.Parsed() {
 		log.Fatal("Unable to parse flags")
 	}
+
+	var confFile = flag.Lookup("conf").Value.(flag.Getter).Get().(string)
+
+	if confFile == "" {
+		log.Println("No config file specified! Default configuration will be used.")
+	} else {
+		log.Println("Trying to load configuration from file:", confFile)
+		loadConfigFromYAML(confFile)
+	}
+
 	logger = log.New(os.Stderr, "", log.Lshortfile|log.Flags())
 	AssertTrue(logger != nil)
 	printVersionOnly()
 	// Next, run all the init functions that have been added.
 	for _, f := range initFunc {
 		f()
+	}
+}
+
+// loadConfigFromYAML reads configurations from specified YAML file.
+func loadConfigFromYAML(confFile string) {
+	file, err := os.Open(confFile)
+	if err != nil {
+		// handle the error here
+		log.Println("Cannot open specified config file. Default configuration will be used")
+		return
+	}
+
+	defer file.Close()
+
+	// get the file size
+	stat, err := file.Stat()
+	if err != nil {
+		log.Println("Cannot read config file.")
+		return
+	}
+
+	// read the file
+	bs := make([]byte, stat.Size())
+
+	_, err = file.Read(bs)
+	if err != nil {
+		log.Println("Error parsing config file.")
+		return
+	}
+
+	m := make(map[string]string)
+
+	err = yaml.Unmarshal([]byte(bs), &m)
+	if err != nil {
+		log.Println("Error in marshaling config file.")
+		return
+	}
+
+	for k, v := range m {
+		flag.Set(k, v)
 	}
 }
 
