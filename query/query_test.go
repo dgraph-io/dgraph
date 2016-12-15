@@ -519,7 +519,7 @@ func TestFieldAlias(t *testing.T) {
 			me(_uid_:0x01) {
 				MyName:name
 				gender
-			  alive
+				alive
 				Buddies:friend {
 					BudName:name
 				}
@@ -544,7 +544,7 @@ func TestFieldAliasProto(t *testing.T) {
 			me(_uid_:0x01) {
 				MyName:name
 				gender
-			  alive
+				alive
 				Buddies:friend {
 					BudName:name
 				}
