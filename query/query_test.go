@@ -502,8 +502,33 @@ func TestToJSON(t *testing.T) {
 	var l Latency
 	js, err := sg.ToJSON(&l)
 	require.NoError(t, err)
-	require.EqualValues(t,
+	require.JSONEq(t,
 		`{"me":[{"alive":true,"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
+		string(js))
+}
+
+func TestFieldAlias(t *testing.T) {
+	dir, dir2, _ := populateGraph(t)
+	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
+
+	// Alright. Now we have everything set up. Let's create the query.
+	query := `
+		{
+			me(_uid_:0x01) {
+				MyName:name
+				gender
+			  alive
+				Buddies:friend {
+					BudName:name
+				}
+			}
+		}
+	`
+
+	js := processToJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"alive":true,"Buddies":[{"BudName":"Rick Grimes"},{"BudName":"Glenn Rhee"},{"BudName":"Daryl Dixon"},{"BudName":"Andrea"}],"gender":"female","MyName":"Michonne"}]}`,
 		string(js))
 }
 

@@ -223,14 +223,18 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 		}
 		ul := pc.uidMatrix[idx]
 
+		fieldName := pc.Attr
+		if pc.Params.Alias != "" {
+			fieldName = pc.Params.Alias
+		}
 		if sg.Params.GetUID || sg.Params.isDebug {
 			dst.SetUID(uid)
 		}
 		if len(pc.counts) > 0 {
 			c := types.Int32(pc.counts[idx])
-			uc := dst.New(pc.Attr)
+			uc := dst.New(fieldName)
 			uc.AddValue("_count_", &c)
-			dst.AddChild(pc.Attr, uc)
+			dst.AddChild(fieldName, uc)
 
 		} else if len(ul.Uids) > 0 || len(pc.Children) > 0 {
 			// We create as many predicate entity children as the length of uids for
@@ -239,7 +243,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 				if invalidUids[childUID] {
 					continue
 				}
-				uc := dst.New(pc.Attr)
+				uc := dst.New(fieldName)
 
 				// Doing check for UID here is no good because some of these might be
 				// invalid nodes.
@@ -256,7 +260,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 					return rerr
 				}
 				if !uc.IsEmpty() {
-					dst.AddChild(pc.Attr, uc)
+					dst.AddChild(fieldName, uc)
 				}
 			}
 		} else {
@@ -305,7 +309,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 				if bytes.Equal(tv.Val, nil) {
 					continue
 				}
-				dst.AddValue(pc.Attr, sv)
+				dst.AddValue(fieldName, sv)
 			}
 		}
 	}
