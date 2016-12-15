@@ -1008,7 +1008,7 @@ children: <
   properties: <
     prop: "alive"
     value: <
-      bool_val: true
+      str_val: "true"
     >
   >
   children: <

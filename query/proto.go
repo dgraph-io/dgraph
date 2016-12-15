@@ -17,6 +17,8 @@
 package query
 
 import (
+	"fmt"
+
 	"github.com/dgraph-io/dgraph/query/graph"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
@@ -27,20 +29,21 @@ import (
 // protobuf values.
 
 func toProtoValue(v interface{}) *graph.Value {
-	switch val := v.(type) {
-	case *string:
-		return &graph.Value{&graph.Value_StrVal{string(*val)}}
+	fmt.Println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!", v)
+	switch val := v.(types.Val).Value.(type) {
+	case string:
+		return &graph.Value{&graph.Value_StrVal{string(val)}}
 
-	case *int32:
-		return &graph.Value{&graph.Value_IntVal{int32(*val)}}
+	case int32:
+		return &graph.Value{&graph.Value_IntVal{int32(val)}}
 
-	case *float64:
-		return &graph.Value{&graph.Value_DoubleVal{float64(*val)}}
+	case float64:
+		return &graph.Value{&graph.Value_DoubleVal{float64(val)}}
 
-	case *bool:
-		return &graph.Value{&graph.Value_BoolVal{bool(*val)}}
+	case bool:
+		return &graph.Value{&graph.Value_BoolVal{bool(val)}}
 
-	case *geom.T:
+	case geom.T:
 		b := types.ValueForType(types.BinaryID)
 		src := types.ValueForType(types.GeoID)
 		src.Value = val
@@ -49,6 +52,7 @@ func toProtoValue(v interface{}) *graph.Value {
 
 	default:
 		// A type that isn't supported in the proto
+		fmt.Println("Wrong")
 		return nil
 	}
 }
