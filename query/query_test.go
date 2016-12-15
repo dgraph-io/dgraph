@@ -234,7 +234,7 @@ func TestGetUID(t *testing.T) {
 	`
 	js := processToJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"_uid_":"0x1","alive":true,"friend":[{"_uid_":"0x17","name":"Rick Grimes"},{"_uid_":"0x18","name":"Glenn Rhee"},{"_uid_":"0x19","name":"Daryl Dixon"},{"_uid_":"0x1f","name":"Andrea"},{"_uid_":"0x65"}],"gender":"female","name":"Michonne"}]}`,
+		`{"me":[{"_uid_":"0x1","alive":true,"friend":[{"_uid_":"0x17","name":"Rick Grimes"},{"_uid_":"0x18","name":"Glenn Rhee"},{"_uid_":"0x19","name":"Daryl Dixon"},{"_uid_":"0x1f","name":"Andrea"},{"_uid_":"0x65", "name":""}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
 
@@ -503,7 +503,7 @@ func TestToJSON(t *testing.T) {
 	js, err := sg.ToJSON(&l)
 	require.NoError(t, err)
 	require.EqualValues(t,
-		`{"me":[{"alive":true,"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
+		`{"me":[{"alive":true,"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"},{"name":""}],"gender":"female","name":"Michonne"}]}`,
 		string(js))
 }
 
@@ -1057,6 +1057,12 @@ children: <
   children: <
     uid: 101
     attribute: "friend"
+    properties: <
+      prop: "name"
+      value: <
+        str_val: ""
+      >
+    >
   >
 >
 `, proto.MarshalTextString(gr))

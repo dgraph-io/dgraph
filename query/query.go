@@ -285,8 +285,12 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 					st := schemaType.(types.Scalar)
 					// Convert to schema type.
 					sv, err = st.Convert(v)
-					if bytes.Equal(tv.Val, nil) || err != nil {
+					if err != nil {
 						// skip values that don't convert.
+						fmt.Println(v)
+						return x.Errorf("_INV_")
+					}
+					if bytes.Equal(tv.Val, nil) && (st.ID() != types.StringID && st.ID() != types.BytesID) {
 						return x.Errorf("_INV_")
 					}
 				} else if globalType != nil {
@@ -298,7 +302,12 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 					gt := globalType.(types.Scalar)
 					// Convert to schema type.
 					sv, err = gt.Convert(v)
-					if bytes.Equal(tv.Val, nil) || err != nil {
+					if err != nil {
+						fmt.Println("@@@@@@@@", v)
+						continue
+					}
+					if bytes.Equal(tv.Val, nil) && (gt.ID() != types.StringID && gt.ID() != types.BytesID) {
+						fmt.Println("@@@@@@@@", pc.Attr, gt.ID())
 						continue
 					}
 				}

@@ -33,7 +33,7 @@ var testNQuads = []struct {
 			Subject:     "some_subject_id",
 			Predicate:   "predicate",
 			ObjectId:    "object_id",
-			ObjectValue: []byte(nil),
+			ObjectValue: []byte{},
 		},
 	},
 	{
@@ -42,7 +42,7 @@ var testNQuads = []struct {
 			Subject:     "some_subject_id",
 			Predicate:   "predicate",
 			ObjectId:    "object_id",
-			ObjectValue: []byte(nil),
+			ObjectValue: []byte{},
 		},
 	},
 	{
@@ -51,7 +51,7 @@ var testNQuads = []struct {
 			Subject:     "_:alice",
 			Predicate:   "predicate",
 			ObjectId:    "object_id",
-			ObjectValue: []byte(nil),
+			ObjectValue: []byte{},
 		},
 	},
 	{
@@ -60,7 +60,7 @@ var testNQuads = []struct {
 			Subject:     "_uid_:0x01",
 			Predicate:   "predicate",
 			ObjectId:    "object_id",
-			ObjectValue: []byte(nil),
+			ObjectValue: []byte{},
 		},
 	},
 	{
@@ -69,7 +69,7 @@ var testNQuads = []struct {
 			Subject:     "some_subject_id",
 			Predicate:   "predicate",
 			ObjectId:    "_uid_:0x01",
-			ObjectValue: []byte(nil),
+			ObjectValue: []byte{},
 		},
 	},
 	{
@@ -78,7 +78,7 @@ var testNQuads = []struct {
 			Subject:     "_uid_:0x01",
 			Predicate:   "predicate",
 			ObjectId:    "_uid_:0x02",
-			ObjectValue: []byte(nil),
+			ObjectValue: []byte{},
 		},
 	},
 	{
@@ -87,7 +87,7 @@ var testNQuads = []struct {
 			Subject:     "_:alice",
 			Predicate:   "follows",
 			ObjectId:    "_:bob0",
-			ObjectValue: []byte(nil),
+			ObjectValue: []byte{},
 		},
 	},
 	{
@@ -133,7 +133,7 @@ var testNQuads = []struct {
 			Subject:     "_:art",
 			Predicate:   "http://www.w3.org/1999/02/22-rdf-syntax-ns#type",
 			ObjectId:    "http://xmlns.com/foaf/0.1/Person",
-			ObjectValue: []byte(nil),
+			ObjectValue: []byte{},
 		},
 	},
 	{
@@ -304,9 +304,10 @@ var testNQuads = []struct {
 	{
 		input: `_:alice <knows> <bob> . <bob>`, // ignores the <bob> after dot.
 		nq: NQuad{
-			Subject:   "_:alice",
-			Predicate: "knows",
-			ObjectId:  "bob",
+			Subject:     "_:alice",
+			Predicate:   "knows",
+			ObjectId:    "bob",
+			ObjectValue: []byte{},
 		},
 	},
 	{

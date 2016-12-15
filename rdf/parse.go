@@ -18,7 +18,6 @@ package rdf
 
 import (
 	"fmt"
-	"log"
 	"strconv"
 	"strings"
 	"unicode"
@@ -145,7 +144,7 @@ func Parse(line string) (rnq NQuad, rerr error) {
 
 	go run(l)
 	var oval string
-	var vend bool
+	var vend, presentSchema bool
 	// We read items from the l.Items channel to which the lexer sends items.
 	for item := range l.Items {
 		switch item.Typ {
@@ -165,16 +164,12 @@ func Parse(line string) (rnq NQuad, rerr error) {
 			rnq.Predicate += "." + item.Val
 
 		case itemObjectType:
-			if len(oval) == 0 {
-				log.Fatalf(
-					"itemObject should be emitted before itemObjectType. Input: [%s]",
-					line)
-			}
 			val := stripBracketsAndTrim(item.Val)
 			if strings.Trim(val, " ") == "*" {
 				return rnq, fmt.Errorf("itemObject can't be *")
 			}
 			if t, ok := typeMap[val]; ok {
+				// Note: String and []byte types can have empty values.
 				p := types.ValueForType(t)
 				err := p.UnmarshalText([]byte(oval))
 				if err != nil {
@@ -185,7 +180,7 @@ func Parse(line string) (rnq NQuad, rerr error) {
 					return rnq, err
 				}
 				rnq.ObjectType = byte(t)
-				oval = ""
+				presentSchema = true
 			} else {
 				oval += "@@" + val
 			}
@@ -204,15 +199,15 @@ func Parse(line string) (rnq NQuad, rerr error) {
 	if !vend {
 		return rnq, fmt.Errorf("Invalid end of input. Input: [%s]", line)
 	}
-	if len(oval) > 0 {
+	// Not part of schema, So use byte type.
+	if !presentSchema {
 		rnq.ObjectValue = []byte(oval)
-		// If no type is specified, we default to string.
-		rnq.ObjectType = 0
+		rnq.ObjectType = byte(0)
 	}
 	if len(rnq.Subject) == 0 || len(rnq.Predicate) == 0 {
 		return rnq, fmt.Errorf("Empty required fields in NQuad. Input: [%s]", line)
 	}
-	if len(rnq.ObjectId) == 0 && rnq.ObjectValue == nil {
+	if rnq.ObjectValue == nil {
 		return rnq, fmt.Errorf("No Object in NQuad. Input: [%s]", line)
 	}
 	if !sane(rnq.Subject) || !sane(rnq.Predicate) || !sane(rnq.ObjectId) ||
