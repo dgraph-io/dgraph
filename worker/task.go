@@ -99,14 +99,19 @@ func processTask(q *task.Query) (*task.Result, error) {
 	var tokens []string
 	var geoQuery *geo.QueryData
 	var err error
-	var isGeq, isLeq, intersectDest bool
+	var intersectDest bool
 	var ineqValue types.Value
 	var ineqValueToken string
+	var isGeq, isLeq bool
 
 	if useFunc {
-		isGeq = q.SrcFunc[0] == "geq"
-		isLeq = q.SrcFunc[0] == "leq"
-		if isGeq || isLeq {
+		f := q.SrcFunc[0]
+		isGeq = f == "geq"
+		isLeq = f == "leq"
+		switch {
+		case isGeq:
+			fallthrough
+		case isLeq:
 			if len(q.SrcFunc) != 2 {
 				return nil, x.Errorf("Function requires 2 arguments, but got %d %v",
 					len(q.SrcFunc), q.SrcFunc)
@@ -129,13 +134,15 @@ func processTask(q *task.Query) (*task.Result, error) {
 			if err != nil {
 				return nil, err
 			}
-		} else if geo.IsGeoFunc(q.SrcFunc[0]) {
+
+		case geo.IsGeoFunc(q.SrcFunc[0]):
 			// For geo functions, we get extra information used for filtering.
 			tokens, geoQuery, err = geo.GetTokens(q.SrcFunc)
 			if err != nil {
 				return nil, err
 			}
-		} else {
+
+		default:
 			tokens, err = getTokens(q.SrcFunc)
 			if err != nil {
 				return nil, err
