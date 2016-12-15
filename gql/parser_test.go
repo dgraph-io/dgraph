@@ -20,6 +20,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/dgraph-io/dgraph/schema"
 	"github.com/stretchr/testify/require"
 )
 
@@ -703,6 +704,7 @@ func TestParseFilter_unknowndirective(t *testing.T) {
 }
 
 func TestParseGenerator(t *testing.T) {
+	schema.ParseBytes([]byte("scalar name:string @index"))
 	query := `
 	{
 		me(allof("name", "barack")) {
