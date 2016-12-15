@@ -74,6 +74,22 @@ func ProcessTaskOverNetwork(ctx context.Context, q *task.Query) (*task.Result, e
 	return reply, nil
 }
 
+func getValue(attr, data string) (types.Value, error) {
+	// Parse given value and get token. There should be only one token.
+	t := schema.TypeOf(attr)
+	if t == nil || !t.IsScalar() {
+		return nil, x.Errorf("Attribute %s is not valid scalar type", attr)
+	}
+
+	schemaType := t.(types.Scalar)
+	v := types.ValueForType(schemaType.ID())
+	err := v.UnmarshalText([]byte(data))
+	if err != nil {
+		return nil, err
+	}
+	return v, nil
+}
+
 // processTask processes the query, accumulates and returns the result.
 func processTask(q *task.Query) (*task.Result, error) {
 	attr := q.Attr
@@ -84,18 +100,32 @@ func processTask(q *task.Query) (*task.Result, error) {
 	var geoQuery *geo.QueryData
 	var err error
 	var isGeq, isLeq, intersectDest bool
-
-	// For inequalities: Consider the filter "geq 2016-01-01", value's token is
-	// "2016". If 2016 is not found in TokensTable, ineqValue=nil. Otherwise,
-	// ineqValue="2016-01-01".
-	var ineqValue *types.Value
+	var ineqValue types.Value
+	var ineqValueToken string
 
 	if useFunc {
 		isGeq = q.SrcFunc[0] == "geq"
 		isLeq = q.SrcFunc[0] == "leq"
-		// Tokenize here.
 		if isGeq || isLeq {
-			tokens, ineqValue, err = getInequalityTokens(attr, isGeq, q.SrcFunc)
+			if len(q.SrcFunc) != 2 {
+				return nil, x.Errorf("Function requires 2 arguments, but got %d %v",
+					len(q.SrcFunc), q.SrcFunc)
+			}
+			ineqValue, err = getValue(attr, q.SrcFunc[1])
+			if err != nil {
+				return nil, err
+			}
+			// Tokenizing RHS value of inequality.
+			ineqTokens, err := posting.IndexTokens(attr, ineqValue)
+			if err != nil {
+				return nil, err
+			}
+			if len(ineqTokens) != 1 {
+				return nil, x.Errorf("Expected only 1 token but got: %v", ineqTokens)
+			}
+			ineqValueToken = ineqTokens[0]
+			// Get tokens geq / leq ineqValueToken.
+			tokens, err = getInequalityTokens(attr, ineqValueToken, isGeq)
 			if err != nil {
 				return nil, err
 			}
@@ -159,10 +189,8 @@ func processTask(q *task.Query) (*task.Result, error) {
 		out.UidMatrix = append(out.UidMatrix, pl.Uids(opts))
 	}
 
-	if ineqValue != nil {
-		x.AssertTrue(isGeq || isLeq)
-
-		// Get scalar type.
+	if (isGeq || isLeq) && len(tokens) > 0 && ineqValueToken == tokens[0] {
+		// Need to evaluate inequality for entries in the first bucket.
 		typ := schema.TypeOf(attr)
 		if typ == nil || !typ.IsScalar() {
 			return nil, x.Errorf("Attribute not scalar: %s %v", attr, typ)
@@ -174,7 +202,14 @@ func processTask(q *task.Query) (*task.Result, error) {
 		// assume that ineqValue is equal to the first token found in TokensTable.
 		algo.ApplyFilter(out.UidMatrix[0], func(uid uint64, i int) bool {
 			key := x.DataKey(attr, uid)
-			return checkInequality(key, scalarType, isGeq, ineqValue)
+			sv := getPostingValue(key, scalarType)
+			if sv == nil {
+				return false
+			}
+			if isGeq {
+				return !scalarType.Less(*sv, ineqValue)
+			}
+			return !scalarType.Less(ineqValue, *sv)
 		})
 	}
 
@@ -206,34 +241,30 @@ func processTask(q *task.Query) (*task.Result, error) {
 	return &out, nil
 }
 
-// checkInequality looks up value given key=(attr, uid). Then checks whether
-// PL's value satisfies the inequality.
-func checkInequality(key []byte, scalarType types.Scalar, isGeq bool,
-	ineqValue *types.Value) bool {
+// getPostingValue looks up key, gets the value, converts it. If any error is
+// encountered, we return nil. This is used in some filtering where we do not
+// want to waste time creating errors.
+func getPostingValue(key []byte, scalarType types.Scalar) *types.Value {
 	pl, decr := posting.GetOrCreate(key)
 	defer decr()
 
 	valBytes, vType, err := pl.Value()
 	if bytes.Equal(valBytes, nil) {
-		return false
+		return nil
 	}
 	val := types.ValueForType(types.TypeID(vType))
 	if val == nil {
-		return false
+		return nil
 	}
 	if err := val.UnmarshalBinary(valBytes); err != nil {
-		return false
+		return nil
 	}
-
 	// Convert to schema type.
 	sv, err := scalarType.Convert(val)
 	if err != nil {
-		return false
+		return nil
 	}
-	if isGeq {
-		return !scalarType.Less(sv, *ineqValue)
-	}
-	return !scalarType.Less(*ineqValue, sv)
+	return &sv
 }
 
 // ServeTask is used to respond to a query.
