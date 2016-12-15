@@ -172,16 +172,9 @@ func (sg *SubGraph) DebugPrint(prefix string) {
 
 // getValue gets the value from the task.
 func getValue(tv *task.Value) (types.Val, error) {
-	vType := tv.ValType
-	valBytes := tv.Val
-	vID := types.TypeID(vType)
+	vID := types.TypeID(tv.ValType)
 	val := types.ValueForType(vID)
-	src := types.ValueForType(types.BinaryID)
-	src.Value = valBytes
-	err := types.Convert(src, &val)
-	if err != nil {
-		return types.Val{}, err
-	}
+	val.Value = tv.Val
 	return val, nil
 }
 
@@ -262,7 +255,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 
 			if pc.Attr == "_xid_" {
 				txt := types.ValueForType(types.StringID)
-				err := types.Marshal(v, &txt)
+				err := types.Convert(v, &txt)
 				//txt, err := v.MarshalText()
 				if err != nil {
 					return err
@@ -273,7 +266,11 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 			} else {
 				globalType := schema.TypeOf(pc.Attr)
 				schemaType := pc.Params.AttrType
-				sv := v
+				sv := types.ValueForType(types.StringID)
+				err := types.Convert(v, &sv)
+				if err != nil {
+					return err
+				}
 				if schemaType != nil {
 					// Do type checking on response values
 					if !schemaType.IsScalar() {
