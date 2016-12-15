@@ -17,14 +17,12 @@
 package algo
 
 import (
+	"fmt"
+	"github.com/dgraph-io/dgraph/task"
 	"github.com/stretchr/testify/require"
 	"math/rand"
 	"sort"
-	"strconv"
 	"testing"
-	"time"
-
-	"github.com/dgraph-io/dgraph/task"
 )
 
 func newList(data []uint64) *task.List {
@@ -219,58 +217,59 @@ func TestApplyFilterUint(t *testing.T) {
 }
 
 // sort interface for []uint64
-type Uint64Slice []uint64
+type uint64Slice []uint64
 
-func (xs Uint64Slice) Len() int {
+func (xs uint64Slice) Len() int {
 	return len(xs)
 }
-func (xs Uint64Slice) Less(i, j int) bool {
+func (xs uint64Slice) Less(i, j int) bool {
 	return xs[i] < xs[j]
 }
-func (xs Uint64Slice) Swap(i, j int) {
+func (xs uint64Slice) Swap(i, j int) {
 	xs[i], xs[j] = xs[j], xs[i]
 }
 
 // Benchmarks for IntersectWith
-// random data : u and v having data within range [0,limit] where limit = N * sizeof-list
-func benchmarkListIntersectRandom(arrSz int, limit int64, r *rand.Rand, b *testing.B) {
+// random data : u and v having data within range [0, limit)
+// where limit = N * sizeof-list ; for different N
+func runIntersectRandom(arrSz int, limit int64, b *testing.B) {
 	u1, v1 := make([]uint64, arrSz, arrSz), make([]uint64, arrSz, arrSz)
 	for i := 0; i < arrSz; i++ {
-		u1[i] = uint64(r.Int63n(limit))
-		v1[i] = uint64(r.Int63n(limit))
+		u1[i] = uint64(rand.Int63n(limit))
+		v1[i] = uint64(rand.Int63n(limit))
 	}
-	sort.Sort(Uint64Slice(u1))
-	sort.Sort(Uint64Slice(v1))
+	sort.Sort(uint64Slice(u1))
+	sort.Sort(uint64Slice(v1))
 
-	b.Run(":2forLoops:"+strconv.Itoa(arrSz), func(b *testing.B) {
-		u := newList(u1)
-		v := newList(v1)
-		ucopy := make([]uint64, len(u1), len(u1))
-		copy(ucopy, u1)
-		b.ResetTimer()
-		for k := 0; k < b.N; k++ {
-			IntersectWith(u, v)
-			u.Uids = u.Uids[:arrSz]
-			copy(u.Uids, ucopy)
-		}
-	})
+	u := newList(u1)
+	v := newList(v1)
+	ucopy := make([]uint64, len(u1), len(u1))
+	copy(ucopy, u1)
+
+	b.ResetTimer()
+	for k := 0; k < b.N; k++ {
+		IntersectWith(u, v)
+		u.Uids = u.Uids[:arrSz]
+		copy(u.Uids, ucopy)
+	}
+
 }
 
 func BenchmarkListIntersectRandom(b *testing.B) {
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	randomTests := func(sz int, factor int) {
-		sizeStr := strconv.Itoa(sz)
-		facStr := strconv.Itoa(factor)
-		b.Run(":random:factor="+facStr+":size="+sizeStr, func(b *testing.B) { benchmarkListIntersectRandom(sz, int64(sz*factor), r, b) })
+	randomTests := func(sz int, limit int) {
+		b.Run(fmt.Sprintf(":random:size=%d:overlap=%d%%:", sz, sz*100/limit),
+			func(b *testing.B) {
+				runIntersectRandom(sz, int64(limit), b)
+			})
 	}
 
-	randomTests(500, 3)
-	randomTests(10000, 3)
-	randomTests(1000000, 3)
-	randomTests(500, 10)
-	randomTests(10000, 10)
-	randomTests(1000000, 10)
-	randomTests(500, 100)
-	randomTests(10000, 100)
-	randomTests(1000000, 100)
+	randomTests(500, 1500)
+	randomTests(10000, 30000)
+	randomTests(1000000, 3000000)
+	randomTests(500, 5000)
+	randomTests(10000, 100000)
+	randomTests(1000000, 10000000)
+	randomTests(500, 50000)
+	randomTests(10000, 1000000)
+	randomTests(1000000, 100000000)
 }
