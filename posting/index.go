@@ -126,10 +126,10 @@ func indexTokens(attr string, pID types.TypeID, data []byte) ([]string, error) {
 
 // addIndexMutations adds mutation(s) for a single term, to maintain index.
 func addIndexMutations(ctx context.Context, attr string, uid uint64,
-	typ byte, data []byte, del bool) {
+	typ types.TypeID, data []byte, del bool) {
 	x.AssertTrue(uid != 0)
-	typID := types.TypeID(typ)
-	tokens, err := indexTokens(attr, typID, data)
+	dataType := types.TypeID(typ)
+	tokens, err := indexTokens(attr, dataType, data)
 	if err != nil {
 		// This data is not indexable
 		return
@@ -186,14 +186,16 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *task.DirectedEdge, o
 		"[%s] [%d] [%v] %d %d\n", t.Attr, t.Entity, t.Value, t.ValueId, op)
 
 	var vbytes []byte
-	var vtype byte
+	var vtype types.TypeID
+	var typ byte
 	var verr error
 
 	doUpdateIndex := pstore != nil && (t.Value != nil) &&
 		schema.IsIndexed(t.Attr)
 	if doUpdateIndex {
 		// Check last posting for original value BEFORE any mutation actually happens.
-		vbytes, vtype, verr = l.Value()
+		vbytes, typ, verr = l.Value()
+		vtype = types.TypeID(typ)
 	}
 	hasMutated, err := l.AddMutation(ctx, t, op)
 	if err != nil {
@@ -206,22 +208,10 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *task.DirectedEdge, o
 	// Exact matches.
 	if verr == nil && len(vbytes) > 0 {
 		delTerm := vbytes
-		/*
-			p := types.ValueForType(types.TypeID(delType))
-			if err := p.UnmarshalBinary(delTerm); err != nil {
-				return err
-			}
-		*/
 		addIndexMutations(ctx, t.Attr, t.Entity, vtype, delTerm, true)
 	}
 	if op == Set {
-		/*
-			p := types.ValueForType(types.TypeID(t.ValueType))
-			if err := p.UnmarshalBinary(t.Value); err != nil {
-				return err
-			}
-		*/
-		addIndexMutations(ctx, t.Attr, t.Entity, byte(t.ValueType), t.Value, false)
+		addIndexMutations(ctx, t.Attr, t.Entity, types.TypeID(t.ValueType), t.Value, false)
 	}
 	return nil
 }

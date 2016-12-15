@@ -198,16 +198,16 @@ func intersectBucket(ts *task.Sort, attr, token string, out []intersectedList) e
 }
 
 // sortByValue fetches values and sort UIDList.
-func sortByValue(attr string, ul *task.List, scalar types.TypeID) error {
+func sortByValue(attr string, ul *task.List, typ types.TypeID) error {
 	values := make([]types.Val, len(ul.Uids))
 	for i, uid := range ul.Uids {
-		val, err := fetchValue(uid, attr, scalar)
+		val, err := fetchValue(uid, attr, typ)
 		if err != nil {
 			return err
 		}
 		values[i] = val
 	}
-	return types.Sort(scalar, values, ul)
+	return types.Sort(typ, values, ul)
 }
 
 // fetchValue gets the value for a given UID.
