@@ -256,20 +256,20 @@ func runIntersectRandom(arrSz int, limit int64, b *testing.B) {
 }
 
 func BenchmarkListIntersectRandom(b *testing.B) {
-	randomTests := func(sz int, limit int) {
-		b.Run(fmt.Sprintf(":random:size=%d:overlap=%d%%:", sz, sz*100/limit),
+	randomTests := func(sz int, overlap float64) {
+		b.Run(fmt.Sprintf(":random:size=%d:overlap=%.2f%%:", sz, overlap),
 			func(b *testing.B) {
-				runIntersectRandom(sz, int64(limit), b)
+				runIntersectRandom(sz, int64(float64(sz)/overlap), b)
 			})
 	}
 
-	randomTests(500, 1500)
-	randomTests(10000, 30000)
-	randomTests(1000000, 3000000)
-	randomTests(500, 5000)
-	randomTests(10000, 100000)
-	randomTests(1000000, 10000000)
-	randomTests(500, 50000)
-	randomTests(10000, 1000000)
-	randomTests(1000000, 100000000)
+	randomTests(500, 0.3)
+	randomTests(10000, 0.3)
+	randomTests(1000000, 0.3)
+	randomTests(500, 0.1)
+	randomTests(10000, 0.1)
+	randomTests(1000000, 0.1)
+	randomTests(500, 0.01)
+	randomTests(10000, 0.01)
+	randomTests(1000000, 0.01)
 }
