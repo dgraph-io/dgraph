@@ -217,9 +217,10 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 		ul := pc.uidMatrix[idx]
 
 		if len(pc.counts) > 0 {
-			c := int32(pc.counts[idx])
+			c := types.ValueForType(types.Int32ID)
+			c.Value = int32(pc.counts[idx])
 			uc := dst.New(pc.Attr)
-			uc.AddValue("_count_", &c)
+			uc.AddValue("_count_", c)
 			dst.AddChild(pc.Attr, uc)
 
 		} else if len(ul.Uids) > 0 || len(pc.Children) > 0 {
@@ -267,10 +268,6 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 				globalType := schema.TypeOf(pc.Attr)
 				schemaType := pc.Params.AttrType
 				sv := types.ValueForType(types.StringID)
-				err := types.Convert(v, &sv)
-				if err != nil {
-					return err
-				}
 				if schemaType != nil {
 					// Do type checking on response values
 					if !schemaType.IsScalar() {
@@ -298,11 +295,16 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 					if bytes.Equal(tv.Val, nil) || err != nil {
 						continue
 					}
+				} else {
+					err = types.Convert(v, &sv)
+					if err != nil {
+						return err
+					}
 				}
 				if bytes.Equal(tv.Val, nil) {
 					continue
 				}
-				dst.AddValue(pc.Attr, sv.Value)
+				dst.AddValue(pc.Attr, sv)
 			}
 		}
 	}
@@ -310,7 +312,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 }
 
 func createProperty(prop string, v interface{}) *graph.Property {
-	pval := toProtoValue(v)
+	pval := toProtoValue(v.(types.Val).Value)
 	return &graph.Property{Prop: prop, Value: pval}
 }
 

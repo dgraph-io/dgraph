@@ -16,8 +16,6 @@
 
 package types
 
-//	"math"
-
 /*
 func TestConvertDateToBool(t *testing.T) {
 	dt := createDate(2007, 1, 31)

@@ -19,6 +19,7 @@ package types
 import (
 	"bytes"
 	"encoding/binary"
+	"encoding/json"
 	"math"
 	"strconv"
 	"time"
@@ -131,7 +132,7 @@ func Convert(from Val, to *Val) error {
 						}
 					}
 				}
-				*res = createDate(val.Date())
+				*res = val
 			case DateTimeID:
 				var t time.Time
 				if err := t.UnmarshalText([]byte(vc)); err != nil {
@@ -265,6 +266,17 @@ func Convert(from Val, to *Val) error {
 				*res = createDate(vc.Date())
 			case StringID:
 				*res = string(vc.Format(dateFormatYMD))
+			case Int32ID:
+				secs := vc.Unix()
+				if secs > math.MaxInt32 || secs < math.MinInt32 {
+					return x.Errorf("Time out of int32 range")
+				}
+				*res = int32(secs)
+			case FloatID:
+				secs := float64(vc.Unix())
+				nano := float64(vc.Nanosecond())
+				val := secs + nano/nanoSecondsInSec
+				*res = float64(val)
 			default:
 				return cantConvert(fromID, toID)
 			}
@@ -290,6 +302,17 @@ func Convert(from Val, to *Val) error {
 				*res = vc
 			case StringID:
 				*res = string(vc.String())
+			case Int32ID:
+				secs := vc.Unix()
+				if secs > math.MaxInt32 || secs < math.MinInt32 {
+					return x.Errorf("Time out of int32 range")
+				}
+				*res = int32(secs)
+			case FloatID:
+				secs := float64(vc.Unix())
+				nano := float64(vc.Nanosecond())
+				val := secs + nano/nanoSecondsInSec
+				*res = float64(val)
 			default:
 				return cantConvert(fromID, toID)
 			}
@@ -456,4 +479,25 @@ func Marshal(from Val, to *Val) error {
 
 func cantConvert(from TypeID, to TypeID) error {
 	return x.Errorf("Cannot convert %s to type %s", from.Name(), to.Name())
+}
+
+func (v Val) MarshalJSON() ([]byte, error) {
+	switch v.Tid {
+	case Int32ID:
+		return json.Marshal(v.Value.(int32))
+	case BoolID:
+		return json.Marshal(v.Value.(bool))
+	case FloatID:
+		return json.Marshal(v.Value.(float64))
+	case DateID:
+		s := v.Value.(time.Time).Format(dateFormatYMD)
+		return json.Marshal(s)
+	case DateTimeID:
+		return json.Marshal(v.Value.(time.Time))
+	case GeoID:
+		return json.Marshal(v.Value.(geom.T))
+	case StringID:
+		return json.Marshal(v.Value.(string))
+	}
+	return nil, x.Errorf("Invalid type")
 }

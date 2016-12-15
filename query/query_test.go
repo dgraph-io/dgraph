@@ -23,6 +23,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/gogo/protobuf/proto"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgraph/algo"
@@ -949,7 +950,6 @@ func getProperty(properties []*graph.Property, prop string) *graph.Value {
 	return nil
 }
 
-/*
 func TestToProto(t *testing.T) {
 	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
@@ -1079,7 +1079,7 @@ children: <
 `, proto.MarshalTextString(gr))
 }
 
-
+/*
 func TestSchema(t *testing.T) {
 	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
@@ -1147,7 +1147,7 @@ func TestSchema(t *testing.T) {
 	require.Empty(t, child.Properties)
 	require.Empty(t, child.Children)
 }
-
+*/
 func TestToProtoFilter(t *testing.T) {
 	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
@@ -1371,7 +1371,7 @@ func TestToJSONOrder(t *testing.T) {
 	var l Latency
 	js, err := sg.ToJSON(&l)
 	require.NoError(t, err)
-	require.EqualValues(t,
+	require.JSONEq(t,
 		`{"me":[{"friend":[{"dob":"1901-01-15","name":"Andrea"},{"dob":"1909-01-10","name":"Daryl Dixon"},{"dob":"1909-05-05","name":"Glenn Rhee"},{"dob":"1910-01-02","name":"Rick Grimes"}],"gender":"female","name":"Michonne"}]}`,
 		string(js))
 }
@@ -1708,7 +1708,6 @@ func TestSchema1(t *testing.T) {
 		`{"person":[{"address":"31, 32 street, Jupiter","age":38,"alive":true,"friend":[{"address":"21, mark street, Mars","age":15,"name":"Rick Grimes"}],"name":"Michonne","survival_rate":98.99}]}`,
 		js)
 }
-*/
 func TestGenerator(t *testing.T) {
 	dir1, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir1)
@@ -1740,7 +1739,6 @@ func TestGeneratorMultiRoot(t *testing.T) {
 	require.JSONEq(t, `{"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"}]}`, js)
 }
 
-/*
 func TestToProtoMultiRoot(t *testing.T) {
 	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
@@ -1801,7 +1799,7 @@ children: <
 `
 	require.EqualValues(t, expectedPb, proto.MarshalTextString(pb))
 }
-*/
+
 func TestNearGenerator(t *testing.T) {
 	dir1, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir1)

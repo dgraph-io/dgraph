@@ -23,6 +23,10 @@ import (
 	geom "github.com/twpayne/go-geom"
 )
 
+const (
+	nanoSecondsInSec = 1000000000
+)
+
 // Note: These ids are stored in the posting lists to indicate the type
 // of the data. The order *cannot* be changed without breaking existing
 // data. When adding a new type *always* add to the end of this list.
