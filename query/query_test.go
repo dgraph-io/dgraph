@@ -19,6 +19,7 @@ package query
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -502,9 +503,132 @@ func TestToJSON(t *testing.T) {
 	var l Latency
 	js, err := sg.ToJSON(&l)
 	require.NoError(t, err)
-	require.EqualValues(t,
+	require.JSONEq(t,
 		`{"me":[{"alive":true,"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
 		string(js))
+}
+
+func TestFieldAlias(t *testing.T) {
+	dir, dir2, _ := populateGraph(t)
+	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
+
+	// Alright. Now we have everything set up. Let's create the query.
+	query := `
+		{
+			me(_uid_:0x01) {
+				MyName:name
+				gender
+				alive
+				Buddies:friend {
+					BudName:name
+				}
+			}
+		}
+	`
+
+	js := processToJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"alive":true,"Buddies":[{"BudName":"Rick Grimes"},{"BudName":"Glenn Rhee"},{"BudName":"Daryl Dixon"},{"BudName":"Andrea"}],"gender":"female","MyName":"Michonne"}]}`,
+		string(js))
+}
+
+func TestFieldAliasProto(t *testing.T) {
+	dir, dir2, _ := populateGraph(t)
+	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
+
+	// Alright. Now we have everything set up. Let's create the query.
+	query := `
+		{
+			me(_uid_:0x01) {
+				MyName:name
+				gender
+				alive
+				Buddies:friend {
+					BudName:name
+				}
+			}
+		}
+	`
+	gq, _, err := gql.Parse(query)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	sg, err := ToSubGraph(ctx, gq)
+	require.NoError(t, err)
+
+	ch := make(chan error)
+	go ProcessGraph(ctx, sg, nil, ch)
+	err = <-ch
+	require.NoError(t, err)
+
+	var l Latency
+	pb, err := sg.ToProtocolBuffer(&l)
+	require.NoError(t, err)
+	fmt.Println(proto.MarshalTextString(pb))
+	expectedPb := `attribute: "_root_"
+children: <
+  attribute: "me"
+  properties: <
+    prop: "MyName"
+    value: <
+      str_val: "Michonne"
+    >
+  >
+  properties: <
+    prop: "gender"
+    value: <
+      bytes_val: "female"
+    >
+  >
+  properties: <
+    prop: "alive"
+    value: <
+      bool_val: true
+    >
+  >
+  children: <
+    attribute: "Buddies"
+    properties: <
+      prop: "BudName"
+      value: <
+        str_val: "Rick Grimes"
+      >
+    >
+  >
+  children: <
+    attribute: "Buddies"
+    properties: <
+      prop: "BudName"
+      value: <
+        str_val: "Glenn Rhee"
+      >
+    >
+  >
+  children: <
+    attribute: "Buddies"
+    properties: <
+      prop: "BudName"
+      value: <
+        str_val: "Daryl Dixon"
+      >
+    >
+  >
+  children: <
+    attribute: "Buddies"
+    properties: <
+      prop: "BudName"
+      value: <
+        str_val: "Andrea"
+      >
+    >
+  >
+>
+`
+	require.EqualValues(t,
+		expectedPb,
+		proto.MarshalTextString(pb))
 }
 
 func TestToJSONFilter(t *testing.T) {

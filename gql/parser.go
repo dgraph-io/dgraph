@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	"github.com/dgraph-io/dgraph/lex"
+	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -835,6 +836,11 @@ func getRoot(l *lex.Lexer) (gq *GraphQuery, rerr error) {
 	if item.Typ == itemGenerator {
 		// Store the generator function.
 		gen, err := parseFunction(l)
+		if !schema.IsIndexed(gen.Attr) {
+			return nil, x.Errorf(
+				"Field %s is not indexed and cannot be used in functions",
+				gen.Attr)
+		}
 		if err != nil {
 			return nil, err
 		}
