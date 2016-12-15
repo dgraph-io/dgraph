@@ -116,6 +116,7 @@ func indexTokens(attr string, p types.Value) ([]string, error) {
 }
 
 // addIndexMutations adds mutation(s) for a single term, to maintain index.
+// t represents the original uid -> value edge.
 func addIndexMutations(ctx context.Context, t *task.DirectedEdge, p types.Value, op task.DirectedEdge_Op) {
 	attr := t.Attr
 	uid := t.Entity
@@ -127,6 +128,7 @@ func addIndexMutations(ctx context.Context, t *task.DirectedEdge, p types.Value,
 		return
 	}
 
+	// Create a value token -> uid edge.
 	edge := &task.DirectedEdge{
 		ValueId: uid,
 		Attr:    attr,
@@ -161,7 +163,7 @@ func addIndexMutation(ctx context.Context, edge *task.DirectedEdge, token string
 	_, err := plist.AddMutation(ctx, edge)
 	if err != nil {
 		x.TraceError(ctx, x.Wrapf(err,
-			"Error deleting %s for attr %s entity %d: %v",
+			"Error adding/deleting %s for attr %s entity %d: %v",
 			token, edge.Attr, edge.Entity))
 	}
 	indexLog.Printf("%s [%s] [%d] Term [%s]",

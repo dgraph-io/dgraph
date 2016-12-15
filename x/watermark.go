@@ -20,32 +20,50 @@ func (u *uint64Heap) Pop() interface{} {
 	return x
 }
 
+// RaftValue contains the raft group and the raft proposal id.
+// This is attached to the context, so the information could be passed
+// down to the many posting lists, involved in mutations.
 type RaftValue struct {
 	Group uint32
 	Index uint64
 }
 
+// Mark contains raft proposal id and a done boolean. It is used to
+// update the WaterMark struct about the status of a proposal.
 type Mark struct {
 	Index uint64
 	Done  bool
 }
 
+// WaterMark is used to keep track of the maximum done index. The right way to use
+// this is to send a Mark with Done set to false, as soon as an index is known.
+// WaterMark will store the index in a min-heap. It would only advance, if the minimum
+// entry in the heap has been successfully done.
+//
+// Some time later, when this index task is completed, send another Mark, this time
+// with Done set to true. It would mark the index as done, and so the min-heap can
+// now advance and update the maximum done water mark.
 type WaterMark struct {
 	Name      string
 	Ch        chan Mark
 	doneUntil uint64
 }
 
+// Init initializes a WaterMark struct. MUST be called before using it.
 func (w *WaterMark) Init() {
-	w.Ch = make(chan Mark, 1000)
-	go w.Process()
+	w.Ch = make(chan Mark, 10000)
+	go w.process()
 }
 
+// DoneUntil returns the maximum index until which all tasks are done.
 func (w *WaterMark) DoneUntil() uint64 {
 	return atomic.LoadUint64(&w.doneUntil)
 }
 
-func (w *WaterMark) Process() {
+// process is used to process the Mark channel. This is not thread-safe,
+// so only run one goroutine for process. One is sufficient, because
+// all goroutine ops use purely memory and cpu.
+func (w *WaterMark) process() {
 	var indices uint64Heap
 	pending := make(map[uint64]int)
 

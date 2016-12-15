@@ -84,7 +84,10 @@ type node struct {
 	raftContext *task.RaftContext
 	store       *raft.MemoryStorage
 	wal         *raftwal.Wal
-	applied     x.WaterMark
+	// applied is used to keep track of the applied RAFT proposals.
+	// The stages are proposed -> committed (accepted by cluster) ->
+	// applied (to PL) -> synced (to RocksDB).
+	applied x.WaterMark
 }
 
 func newNode(gid uint32, id uint64, myAddr string) *node {
