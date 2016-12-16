@@ -3,6 +3,7 @@ package raftwal
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 
 	"github.com/coreos/etcd/raft"
 	"github.com/coreos/etcd/raft/raftpb"
@@ -51,32 +52,40 @@ func (w *Wal) prefix(gid uint32) []byte {
 	return b
 }
 
-// Store stores the snapshot, hardstate and entries for a given RAFT group.
-func (w *Wal) Store(gid uint32, s raftpb.Snapshot, h raftpb.HardState, es []raftpb.Entry) error {
+func (w *Wal) StoreSnapshot(gid uint32, s raftpb.Snapshot) error {
 	b := w.wals.NewWriteBatch()
 	defer b.Destroy()
 
-	if !raft.IsEmptySnap(s) {
-		data, err := s.Marshal()
-		if err != nil {
-			return x.Wrapf(err, "wal.Store: While marshal snapshot")
-		}
-
-		// Delete all entries before this snapshot to save disk space.
-		start := w.entryKey(gid, 0, 0)
-		last := w.entryKey(gid, s.Metadata.Term, s.Metadata.Index)
-		itr := w.wals.NewIterator()
-		defer itr.Close()
-		for itr.Seek(start); itr.Valid(); itr.Next() {
-			key := itr.Key().Data()
-			if bytes.Compare(key, last) > 0 {
-				break
-			}
-			b.Delete(key)
-		}
-
-		b.Put(w.snapshotKey(gid), data)
+	if raft.IsEmptySnap(s) {
+		return nil
 	}
+	data, err := s.Marshal()
+	if err != nil {
+		return x.Wrapf(err, "wal.Store: While marshal snapshot")
+	}
+
+	// Delete all entries before this snapshot to save disk space.
+	start := w.entryKey(gid, 0, 0)
+	last := w.entryKey(gid, s.Metadata.Term, s.Metadata.Index)
+	itr := w.wals.NewIterator()
+	defer itr.Close()
+	for itr.Seek(start); itr.Valid(); itr.Next() {
+		key := itr.Key().Data()
+		if bytes.Compare(key, last) > 0 {
+			break
+		}
+		b.Delete(key)
+	}
+	b.Put(w.snapshotKey(gid), data)
+	fmt.Printf("Writing snapshot to WAL: %+v\n", s)
+
+	return x.Wrapf(w.wals.WriteBatch(b), "wal.Store: While Store Snapshot")
+}
+
+// Store stores the snapshot, hardstate and entries for a given RAFT group.
+func (w *Wal) Store(gid uint32, h raftpb.HardState, es []raftpb.Entry) error {
+	b := w.wals.NewWriteBatch()
+	defer b.Destroy()
 
 	if !raft.IsEmptyHardState(h) {
 		data, err := h.Marshal()

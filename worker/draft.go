@@ -425,7 +425,8 @@ func (n *node) Run() {
 			n.raft.Tick()
 
 		case rd := <-n.raft.Ready():
-			x.Check(n.wal.Store(n.gid, rd.Snapshot, rd.HardState, rd.Entries))
+			x.Check(n.wal.StoreSnapshot(n.gid, rd.Snapshot))
+			x.Check(n.wal.Store(n.gid, rd.HardState, rd.Entries))
 
 			n.saveToStorage(rd.Snapshot, rd.HardState, rd.Entries)
 
@@ -483,7 +484,7 @@ func (n *node) snapshotPeriodically() {
 		return
 	}
 
-	ticker := time.NewTicker(10 * time.Minute)
+	ticker := time.NewTicker(time.Minute)
 	for {
 		select {
 		case <-ticker.C:
@@ -495,13 +496,16 @@ func (n *node) snapshotPeriodically() {
 
 			si := existing.Metadata.Index
 			if le <= si {
+				fmt.Printf("Current watermark %d <= previous snapshot %d. Skipping.\n", le, si)
 				continue
 			}
+			fmt.Printf("Taking snapshot for group: %d at watermark: %d\n", n.gid, le)
 
 			msg := fmt.Sprintf("Snapshot from %v", strconv.FormatUint(n.id, 10))
-			_, err = n.store.CreateSnapshot(le, nil, []byte(msg))
+			s, err := n.store.CreateSnapshot(le, nil, []byte(msg))
 			x.Checkf(err, "While creating snapshot")
 			x.Checkf(n.store.Compact(le), "While compacting snapshot")
+			x.Check(n.wal.StoreSnapshot(n.gid, s))
 
 		case <-n.done:
 			return
@@ -615,7 +619,7 @@ func (n *node) InitAndStartNode(wal *raftwal.Wal) {
 	go n.Run()
 	// TODO: Find a better way to snapshot, so we don't lose the membership
 	// state information, which isn't persisted.
-	// go n.snapshotPeriodically()
+	go n.snapshotPeriodically()
 	go n.batchAndSendMessages()
 }
 
