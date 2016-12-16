@@ -16,14 +16,18 @@
 
 package types
 
-/*
+import "testing"
+
 func TestConvertDateToBool(t *testing.T) {
-	dt := createDate(2007, 1, 31)
-	if _, err := Convert(&dt, BoolID); err == nil {
+	dt := ValueForType(DateID)
+	dt.Value = []byte{}
+	b := ValueForType(BoolID)
+	if err := Convert(dt, &b); err == nil {
 		t.Errorf("Expected error converting date to bool")
 	}
 }
 
+/*
 func TestConvertDateToInt32(t *testing.T) {
 	data := []struct {
 		in  Date
@@ -52,6 +56,7 @@ func TestConvertDateToInt32(t *testing.T) {
 	}
 }
 
+/*
 func TestConvertDateToFloat(t *testing.T) {
 	data := []struct {
 		in  Date
