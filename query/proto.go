@@ -28,9 +28,9 @@ import (
 // This file contains helper functions for converting scalar types to
 // protobuf values.
 
-func toProtoValue(v interface{}) *graph.Value {
+func toProtoValue(v types.Val) *graph.Value {
 	fmt.Println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!", v)
-	switch val := v.(types.Val).Value.(type) {
+	switch val := v.Value.(type) {
 	case string:
 		return &graph.Value{&graph.Value_StrVal{string(val)}}
 

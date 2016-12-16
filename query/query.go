@@ -312,7 +312,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 }
 
 func createProperty(prop string, v interface{}) *graph.Property {
-	pval := toProtoValue(v)
+	pval := toProtoValue(v.(types.Val))
 	return &graph.Property{Prop: prop, Value: pval}
 }
 
