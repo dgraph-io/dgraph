@@ -484,6 +484,7 @@ func (n *node) snapshotPeriodically() {
 		return
 	}
 
+	var prev string
 	ticker := time.NewTicker(time.Minute)
 	for {
 		select {
@@ -496,12 +497,20 @@ func (n *node) snapshotPeriodically() {
 
 			si := existing.Metadata.Index
 			if le <= si {
-				fmt.Printf("Current watermark %d <= previous snapshot %d. Skipping.\n", le, si)
+				msg := fmt.Sprintf("Current watermark %d <= previous snapshot %d. Skipping.", le, si)
+				if msg != prev {
+					prev = msg
+					fmt.Println(msg)
+				}
 				continue
 			}
-			fmt.Printf("Taking snapshot for group: %d at watermark: %d\n", n.gid, le)
+			msg := fmt.Sprintf("Taking snapshot for group: %d at watermark: %d\n", n.gid, le)
+			if msg != prev {
+				prev = msg
+				fmt.Println(msg)
+			}
 
-			msg := fmt.Sprintf("Snapshot from %v", strconv.FormatUint(n.id, 10))
+			msg = fmt.Sprintf("Snapshot from %v", strconv.FormatUint(n.id, 10))
 			s, err := n.store.CreateSnapshot(le, nil, []byte(msg))
 			x.Checkf(err, "While creating snapshot")
 			x.Checkf(n.store.Compact(le), "While compacting snapshot")
