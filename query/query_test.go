@@ -1079,75 +1079,6 @@ children: <
 `, proto.MarshalTextString(gr))
 }
 
-/*
-func TestSchema(t *testing.T) {
-	dir, dir2, _ := populateGraph(t)
-	defer os.RemoveAll(dir)
-	defer os.RemoveAll(dir2)
-
-	query := `
-		{
-			debug(_uid_:0x1) {
-				_xid_
-				name
-				gender
-				alive
-				loc
-				friend {
-					name
-				}
-				friend {
-				}
-			}
-		}
-  `
-
-	gq, _, err := gql.Parse(query)
-	require.NoError(t, err)
-
-	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, gq)
-	require.NoError(t, err)
-
-	ch := make(chan error)
-	go ProcessGraph(ctx, sg, nil, ch)
-	err = <-ch
-	require.NoError(t, err)
-
-	var l Latency
-	gr, err := sg.ToProtocolBuffer(&l)
-	require.NoError(t, err)
-
-	require.EqualValues(t, "debug", gr.Children[0].Attribute)
-	require.EqualValues(t, 1, gr.Children[0].Uid)
-	require.EqualValues(t, "mich", gr.Children[0].Xid)
-	require.Len(t, gr.Children[0].Properties, 4)
-
-	require.EqualValues(t, "Michonne",
-		getProperty(gr.Children[0].Properties, "name").GetStrVal())
-	var g types.Geo
-	x.Check(g.UnmarshalBinary(getProperty(gr.Children[0].Properties, "loc").GetGeoVal()))
-	received, err := g.MarshalText()
-	require.EqualValues(t, "{'type':'Point','coordinates':[1.1,2]}", string(received))
-
-	require.Len(t, gr.Children[0].Children, 10)
-
-	child := gr.Children[0].Children[0]
-	require.EqualValues(t, 23, child.Uid)
-	require.EqualValues(t, "friend", child.Attribute)
-
-	require.Len(t, child.Properties, 1)
-	require.EqualValues(t, "Rick Grimes",
-		getProperty(child.Properties, "name").GetStrVal())
-	require.Empty(t, child.Children)
-
-	child = gr.Children[0].Children[5]
-	require.EqualValues(t, 23, child.Uid)
-	require.EqualValues(t, "friend", child.Attribute)
-	require.Empty(t, child.Properties)
-	require.Empty(t, child.Children)
-}
-*/
 func TestToProtoFilter(t *testing.T) {
 	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
@@ -1860,4 +1791,74 @@ func TestIntersectsGenerator(t *testing.T) {
 func TestMain(m *testing.M) {
 	x.Init()
 	os.Exit(m.Run())
+}
+
+func TestSchema(t *testing.T) {
+	dir, dir2, _ := populateGraph(t)
+	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
+
+	query := `
+		{
+			debug(_uid_:0x1) {
+				_xid_
+				name
+				gender
+				alive
+				loc
+				friend {
+					name
+				}
+				friend {
+				}
+			}
+		}
+  `
+
+	gq, _, err := gql.Parse(query)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	sg, err := ToSubGraph(ctx, gq)
+	require.NoError(t, err)
+
+	ch := make(chan error)
+	go ProcessGraph(ctx, sg, nil, ch)
+	err = <-ch
+	require.NoError(t, err)
+
+	var l Latency
+	gr, err := sg.ToProtocolBuffer(&l)
+	require.NoError(t, err)
+
+	require.EqualValues(t, "debug", gr.Children[0].Attribute)
+	require.EqualValues(t, 1, gr.Children[0].Uid)
+	require.EqualValues(t, "mich", gr.Children[0].Xid)
+	require.Len(t, gr.Children[0].Properties, 4)
+
+	require.EqualValues(t, "Michonne",
+		getProperty(gr.Children[0].Properties, "name").GetStrVal())
+
+	g1 := types.ValueForType(types.StringID)
+	g := types.ValueForType(types.GeoID)
+	g.Value = getProperty(gr.Children[0].Properties, "loc").GetGeoVal()
+	x.Check(types.Convert(g, &g1))
+	require.EqualValues(t, "{'type':'Point','coordinates':[1.1,2]}", string(g1.Value.(string)))
+
+	require.Len(t, gr.Children[0].Children, 10)
+
+	child := gr.Children[0].Children[0]
+	require.EqualValues(t, 23, child.Uid)
+	require.EqualValues(t, "friend", child.Attribute)
+
+	require.Len(t, child.Properties, 1)
+	require.EqualValues(t, "Rick Grimes",
+		getProperty(child.Properties, "name").GetStrVal())
+	require.Empty(t, child.Children)
+
+	child = gr.Children[0].Children[5]
+	require.EqualValues(t, 23, child.Uid)
+	require.EqualValues(t, "friend", child.Attribute)
+	require.Empty(t, child.Properties)
+	require.Empty(t, child.Children)
 }
