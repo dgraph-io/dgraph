@@ -83,7 +83,7 @@ message MembershipUpdate {
 message DirectedEdge {
 	fixed64 entity = 1;    // Subject or source node / UID.
 	string attr = 2;       // Attribute or predicate. Labels the edge.
-	bytes value = 3;       // Edge points to a value.
+	bytes value = 3;      // Edge points to a value.
 	uint32 value_type = 4;  // The type of the value
 	fixed64 value_id = 5;   // Object or destination node / UID.
 	string label = 6;

@@ -71,6 +71,7 @@ func TestAddMutation(t *testing.T) {
 
 	edge := &task.DirectedEdge{
 		ValueId: 9,
+		Value:   x.Nilbyte,
 		Label:   "testing",
 	}
 	addMutation(t, l, edge, Set)
@@ -404,12 +405,14 @@ func TestAddMutation_checksum(t *testing.T) {
 		edge := &task.DirectedEdge{
 			ValueId: 1,
 			Label:   "jchiu",
+			Value:   x.Nilbyte,
 		}
 		addMutation(t, ol, edge, Set)
 
 		edge = &task.DirectedEdge{
 			ValueId: 3,
 			Label:   "jchiu",
+			Value:   x.Nilbyte,
 		}
 		addMutation(t, ol, edge, Set)
 
@@ -428,12 +431,14 @@ func TestAddMutation_checksum(t *testing.T) {
 		// Add in reverse.
 		edge := &task.DirectedEdge{
 			ValueId: 3,
+			Value:   x.Nilbyte,
 			Label:   "jchiu",
 		}
 		addMutation(t, ol, edge, Set)
 
 		edge = &task.DirectedEdge{
 			ValueId: 1,
+			Value:   x.Nilbyte,
 			Label:   "jchiu",
 		}
 		addMutation(t, ol, edge, Set)
@@ -454,18 +459,21 @@ func TestAddMutation_checksum(t *testing.T) {
 		// Add in reverse.
 		edge := &task.DirectedEdge{
 			ValueId: 3,
+			Value:   x.Nilbyte,
 			Label:   "jchiu",
 		}
 		addMutation(t, ol, edge, Set)
 
 		edge = &task.DirectedEdge{
 			ValueId: 1,
+			Value:   x.Nilbyte,
 			Label:   "jchiu",
 		}
 		addMutation(t, ol, edge, Set)
 
 		edge = &task.DirectedEdge{
 			ValueId: 4,
+			Value:   x.Nilbyte,
 			Label:   "jchiu",
 		}
 		addMutation(t, ol, edge, Set)
@@ -495,11 +503,13 @@ func TestAddMutation_gru(t *testing.T) {
 		// Set two tag ids and merge.
 		edge := &task.DirectedEdge{
 			ValueId: 0x2b693088816b04b7,
+			Value:   x.Nilbyte,
 			Label:   "gru",
 		}
 		addMutation(t, ol, edge, Set)
 		edge = &task.DirectedEdge{
 			ValueId: 0x29bf442b48a772e0,
+			Value:   x.Nilbyte,
 			Label:   "gru",
 		}
 		addMutation(t, ol, edge, Set)
@@ -511,11 +521,13 @@ func TestAddMutation_gru(t *testing.T) {
 	{
 		edge := &task.DirectedEdge{
 			ValueId: 0x38dec821d2ac3a79,
+			Value:   x.Nilbyte,
 			Label:   "gru",
 		}
 		addMutation(t, ol, edge, Set)
 		edge = &task.DirectedEdge{
 			ValueId: 0x2b693088816b04b7,
+			Value:   x.Nilbyte,
 			Label:   "gru",
 		}
 		addMutation(t, ol, edge, Del)
@@ -540,11 +552,13 @@ func TestAddMutation_gru2(t *testing.T) {
 		// Set two tag ids and merge.
 		edge := &task.DirectedEdge{
 			ValueId: 0x02,
+			Value:   x.Nilbyte,
 			Label:   "gru",
 		}
 		addMutation(t, ol, edge, Set)
 		edge = &task.DirectedEdge{
 			ValueId: 0x03,
+			Value:   x.Nilbyte,
 			Label:   "gru",
 		}
 		addMutation(t, ol, edge, Set)
@@ -557,17 +571,20 @@ func TestAddMutation_gru2(t *testing.T) {
 		// Lets set a new tag and delete the two older ones.
 		edge := &task.DirectedEdge{
 			ValueId: 0x02,
+			Value:   x.Nilbyte,
 			Label:   "gru",
 		}
 		addMutation(t, ol, edge, Del)
 		edge = &task.DirectedEdge{
 			ValueId: 0x03,
+			Value:   x.Nilbyte,
 			Label:   "gru",
 		}
 		addMutation(t, ol, edge, Del)
 
 		edge = &task.DirectedEdge{
 			ValueId: 0x04,
+			Value:   x.Nilbyte,
 			Label:   "gru",
 		}
 		addMutation(t, ol, edge, Set)
@@ -595,6 +612,7 @@ func TestAfterUIDCount(t *testing.T) {
 	// Set value to cars and merge to RocksDB.
 	edge := &task.DirectedEdge{
 		Label: "jchiu",
+		Value: x.Nilbyte,
 	}
 
 	for i := 100; i < 300; i++ {
@@ -674,6 +692,7 @@ func TestAfterUIDCount2(t *testing.T) {
 	// Set value to cars and merge to RocksDB.
 	edge := &task.DirectedEdge{
 		Label: "jchiu",
+		Value: x.Nilbyte,
 	}
 
 	for i := 100; i < 300; i++ {
@@ -709,6 +728,7 @@ func TestAfterUIDCountWithCommit(t *testing.T) {
 	// Set value to cars and merge to RocksDB.
 	edge := &task.DirectedEdge{
 		Label: "jchiu",
+		Value: x.Nilbyte,
 	}
 
 	for i := 100; i < 300; i++ {
@@ -814,6 +834,7 @@ func BenchmarkAddMutations(b *testing.B) {
 		edge := &task.DirectedEdge{
 			ValueId: uint64(rand.Intn(b.N) + 1),
 			Label:   "testing",
+			Value:   x.Nilbyte,
 		}
 		if _, err := l.AddMutation(ctx, edge, Set); err != nil {
 			b.Error(err)

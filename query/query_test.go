@@ -115,6 +115,7 @@ func addEdgeToTypedValue(t *testing.T, ps *store.Store, attr string, src uint64,
 func addEdgeToUID(t *testing.T, ps *store.Store, attr string, src uint64, dst uint64) {
 	edge := &task.DirectedEdge{
 		ValueId: dst,
+		Value:   x.Nilbyte,
 		Label:   "testing",
 		Attr:    attr,
 		Entity:  src,
@@ -460,7 +461,7 @@ func TestProcessGraph(t *testing.T) {
 
 	child = child.Children[0]
 	require.EqualValues(t,
-		[]string{"Rick Grimes", "Glenn Rhee", "Daryl Dixon", "Andrea", ""},
+		[]string{"Rick Grimes", "Glenn Rhee", "Daryl Dixon", "Andrea", "_nil_"},
 		taskValues(t, child.values))
 
 	require.EqualValues(t, []string{"Michonne"},

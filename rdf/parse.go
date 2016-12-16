@@ -17,6 +17,7 @@
 package rdf
 
 import (
+	"bytes"
 	"fmt"
 	"log"
 	"strconv"
@@ -28,9 +29,12 @@ import (
 	"github.com/dgraph-io/dgraph/lex"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/types"
+	"github.com/dgraph-io/dgraph/x"
 )
 
-var emptyEdge task.DirectedEdge
+var emptyEdge = task.DirectedEdge{
+	Value: x.Nilbyte,
+}
 
 // NQuad is the data structure used for storing rdf N-Quads.
 type NQuad struct {
@@ -64,6 +68,7 @@ func (nq NQuad) ToEdge() (*task.DirectedEdge, error) {
 		Attr:   nq.Predicate,
 		Label:  nq.Label,
 		Entity: sid,
+		Value:  x.Nilbyte,
 	}
 
 	// An edge can have an id or a value.
@@ -99,6 +104,7 @@ func (nq NQuad) ToEdgeUsing(newToUid map[string]uint64) (*task.DirectedEdge, err
 		Entity: uid,
 		Attr:   nq.Predicate,
 		Label:  nq.Label,
+		Value:  x.Nilbyte,
 	}
 
 	if len(nq.ObjectId) == 0 {
@@ -212,7 +218,7 @@ func Parse(line string) (rnq NQuad, rerr error) {
 	if len(rnq.Subject) == 0 || len(rnq.Predicate) == 0 {
 		return rnq, fmt.Errorf("Empty required fields in NQuad. Input: [%s]", line)
 	}
-	if len(rnq.ObjectId) == 0 && rnq.ObjectValue == nil {
+	if len(rnq.ObjectId) == 0 && bytes.Equal(rnq.ObjectValue, x.Nilbyte) {
 		return rnq, fmt.Errorf("No Object in NQuad. Input: [%s]", line)
 	}
 	if !sane(rnq.Subject) || !sane(rnq.Predicate) || !sane(rnq.ObjectId) ||

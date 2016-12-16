@@ -256,7 +256,7 @@ func getPostingValue(key []byte, scalarType types.Scalar) *types.Value {
 	defer decr()
 
 	valBytes, vType, err := pl.Value()
-	if bytes.Equal(valBytes, nil) {
+	if bytes.Equal(valBytes, x.Nilbyte) {
 		return nil
 	}
 	val := types.ValueForType(types.TypeID(vType))

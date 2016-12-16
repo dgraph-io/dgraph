@@ -126,6 +126,7 @@ func addIndexMutations(ctx context.Context, attr string, uid uint64,
 	}
 	edge := &task.DirectedEdge{
 		ValueId: uid,
+		Value:   x.Nilbyte,
 		Attr:    attr,
 		Label:   "idx",
 	}
