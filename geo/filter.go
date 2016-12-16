@@ -280,7 +280,7 @@ func FilterUids(uids *task.List, values []*task.Value, q *QueryData) *task.List 
 	rv := &task.List{}
 	for i := 0; i < len(values); i++ {
 		valBytes := values[i].Val
-		if bytes.Equal(valBytes, nil) {
+		if bytes.Equal(valBytes, x.Nilbyte) {
 			continue
 		}
 		vType := values[i].ValType

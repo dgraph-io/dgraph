@@ -101,7 +101,7 @@ func ParseRequest(w http.ResponseWriter, r *http.Request, data interface{}) bool
 	return true
 }
 
-var Nilbyte []byte
+var Nilbyte = []byte("_nil_")
 
 func Trace(ctx context.Context, format string, args ...interface{}) {
 	if *debugMode {

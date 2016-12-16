@@ -25,6 +25,7 @@ func populateGraphBackup(t *testing.T) {
 	edge := &task.DirectedEdge{
 		ValueId: 5,
 		Label:   "author0",
+		Value:   x.Nilbyte,
 		Attr:    "friend",
 	}
 	edge.Entity = 1

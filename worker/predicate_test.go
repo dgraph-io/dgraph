@@ -53,6 +53,7 @@ func writePLs(t *testing.T, pred string, count int, vid uint64, ps *store.Store)
 
 		de := &task.DirectedEdge{
 			ValueId: vid,
+			Value:   x.Nilbyte,
 			Label:   "test",
 		}
 		list.AddMutation(context.TODO(), de, posting.Set)

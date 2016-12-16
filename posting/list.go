@@ -128,7 +128,7 @@ func samePosting(a *types.Posting, b *types.Posting) bool {
 }
 
 func newPosting(t *task.DirectedEdge, op uint32) *types.Posting {
-	x.AssertTruef(bytes.Equal(t.Value, nil) || t.ValueId == math.MaxUint64,
+	x.AssertTruef(bytes.Equal(t.Value, x.Nilbyte) || t.ValueId == math.MaxUint64,
 		"This should have been set by the caller.")
 
 	return &types.Posting{
@@ -319,7 +319,7 @@ func (l *List) AddMutation(ctx context.Context, t *task.DirectedEdge, op uint32)
 
 	// All edges with a value set, have the same uid. In other words,
 	// an (entity, attribute) can only have one value.
-	if !bytes.Equal(t.Value, nil) {
+	if !bytes.Equal(t.Value, x.Nilbyte) {
 		t.ValueId = math.MaxUint64
 	}
 	if t.ValueId == 0 {

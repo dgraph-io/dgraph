@@ -52,8 +52,8 @@ func populateGraph(t *testing.T) {
 	edge := &task.DirectedEdge{
 		ValueId: 23,
 		Label:   "author0",
-
-		Attr: "friend",
+		Value:   x.Nilbyte,
+		Attr:    "friend",
 	}
 	edge.Entity = 10
 	addEdge(t, edge, getOrCreate(x.DataKey("friend", 10)))
@@ -304,6 +304,7 @@ func populateGraphForSort(t *testing.T, ps *store.Store) {
 	edge := &task.DirectedEdge{
 		Label: "author1",
 		Attr:  "dob",
+		Value: x.Nilbyte,
 	}
 
 	dobs := []string{

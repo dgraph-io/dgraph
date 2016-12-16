@@ -32,7 +32,7 @@ func toRDF(buf *bytes.Buffer, item kv) {
 	for _, p := range pl.Postings {
 		x.Check2(buf.WriteString(item.prefix))
 
-		if p.Uid == math.MaxUint64 && !bytes.Equal(p.Value, nil) {
+		if p.Uid == math.MaxUint64 && !bytes.Equal(p.Value, x.Nilbyte) {
 			// Value posting
 			// Convert to appropriate type
 			typ := stype.ValueForType(stype.TypeID(p.ValType))

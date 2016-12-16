@@ -289,7 +289,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 					st := schemaType.(types.Scalar)
 					// Convert to schema type.
 					sv, err = st.Convert(v)
-					if bytes.Equal(tv.Val, nil) || err != nil {
+					if bytes.Equal(tv.Val, x.Nilbyte) || err != nil {
 						// skip values that don't convert.
 						return x.Errorf("_INV_")
 					}
@@ -302,11 +302,11 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 					gt := globalType.(types.Scalar)
 					// Convert to schema type.
 					sv, err = gt.Convert(v)
-					if bytes.Equal(tv.Val, nil) || err != nil {
+					if bytes.Equal(tv.Val, x.Nilbyte) || err != nil {
 						continue
 					}
 				}
-				if bytes.Equal(tv.Val, nil) {
+				if bytes.Equal(tv.Val, x.Nilbyte) {
 					continue
 				}
 				dst.AddValue(fieldName, sv)
