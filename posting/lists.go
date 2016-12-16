@@ -70,6 +70,9 @@ type syncMarks struct {
 func (g *syncMarks) create(group uint32) *x.WaterMark {
 	g.Lock()
 	defer g.Unlock()
+	if g.m == nil {
+		g.m = make(map[uint32]*x.WaterMark)
+	}
 
 	if prev, present := g.m[group]; present {
 		return prev
@@ -91,6 +94,10 @@ func (g *syncMarks) Get(group uint32) *x.WaterMark {
 	}
 	g.RUnlock()
 	return g.create(group)
+}
+
+func WaterMarkFor(group uint32) *x.WaterMark {
+	return marks.Get(group)
 }
 
 type counters struct {

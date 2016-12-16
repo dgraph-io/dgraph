@@ -15,6 +15,7 @@ import (
 	"github.com/coreos/etcd/raft/raftpb"
 	"golang.org/x/net/context"
 
+	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/x"
@@ -205,7 +206,8 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *task.Proposal) erro
 	if err != nil {
 		return err
 	}
-	proposalData := slice[:upto]
+	proposalData := make([]byte, upto)
+	copy(proposalData, slice[:upto])
 
 	che := make(chan error, 1)
 	n.props.Store(proposal.Id, che)
@@ -245,6 +247,33 @@ func (n *node) send(m raftpb.Message) {
 	}
 }
 
+func (n *node) batchAndSendMessages() {
+	batches := make(map[uint64]*bytes.Buffer)
+	ticker := time.NewTicker(10 * time.Millisecond)
+	for {
+		select {
+		case sm := <-n.messages:
+			if _, ok := batches[sm.to]; !ok {
+				batches[sm.to] = new(bytes.Buffer)
+			}
+			buf := batches[sm.to]
+			x.Check(binary.Write(buf, binary.LittleEndian, uint32(len(sm.data))))
+			x.Check2(buf.Write(sm.data))
+
+		case <-ticker.C:
+			for to, buf := range batches {
+				if buf.Len() == 0 {
+					continue
+				}
+				data := make([]byte, buf.Len())
+				copy(data, buf.Bytes())
+				go n.doSendMessage(to, data)
+				buf.Reset()
+			}
+		}
+	}
+}
+
 func (n *node) doSendMessage(to uint64, data []byte) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
@@ -274,31 +303,6 @@ func (n *node) doSendMessage(to uint64, data []byte) {
 		// We don't need to do anything if we receive any error while sending message.
 		// RAFT would automatically retry.
 		return
-	}
-}
-
-func (n *node) batchAndSendMessages() {
-	batches := make(map[uint64]*bytes.Buffer)
-	ticker := time.NewTicker(10 * time.Millisecond)
-	for {
-		select {
-		case sm := <-n.messages:
-			if _, ok := batches[sm.to]; !ok {
-				batches[sm.to] = new(bytes.Buffer)
-			}
-			buf := batches[sm.to]
-			binary.Write(buf, binary.LittleEndian, uint32(len(sm.data)))
-			buf.Write(sm.data)
-
-		case <-ticker.C:
-			for to, buf := range batches {
-				if buf.Len() == 0 {
-					continue
-				}
-				go n.doSendMessage(to, buf.Bytes())
-				buf.Reset()
-			}
-		}
 	}
 }
 
@@ -333,7 +337,7 @@ func (n *node) process(e raftpb.Entry, pending chan struct{}) {
 
 	pending <- struct{}{} // This will block until we can write to it.
 	var proposal task.Proposal
-	x.Check(proposal.Unmarshal(e.Data))
+	x.Checkf(proposal.Unmarshal(e.Data), "Unable to parse entry: %+v", e)
 
 	var err error
 	if proposal.Mutations != nil {
@@ -351,7 +355,7 @@ func (n *node) processCommitCh() {
 	pending := make(chan struct{}, numPendingMutations)
 
 	for e := range n.commitCh {
-		if e.Data == nil {
+		if e.Data == nil || len(e.Data) == 0 {
 			n.applied.Ch <- x.Mark{Index: e.Index, Done: true}
 			continue
 		}
@@ -399,7 +403,7 @@ func (n *node) saveToStorage(s raftpb.Snapshot, h raftpb.HardState,
 
 func (n *node) processSnapshot(s raftpb.Snapshot) {
 	lead := n.raft.Status().Lead
-	if lead == 0 {
+	if lead == 0 { // If we don't know who the leader is, we can't do much.
 		return
 	}
 	addr := n.peers.Get(lead)
@@ -407,6 +411,7 @@ func (n *node) processSnapshot(s raftpb.Snapshot) {
 	pool := pools().get(addr)
 	x.AssertTruef(pool != nil, "Leader: %d pool should not be nil", lead)
 
+	x.Fatalf("populateShard called for group: %v", n.gid)
 	_, err := populateShard(context.TODO(), pool, 0)
 	x.Checkf(err, "processSnapshot")
 }
@@ -421,7 +426,9 @@ func (n *node) Run() {
 
 		case rd := <-n.raft.Ready():
 			x.Check(n.wal.Store(n.gid, rd.Snapshot, rd.HardState, rd.Entries))
+
 			n.saveToStorage(rd.Snapshot, rd.HardState, rd.Entries)
+
 			rcBytes, err := n.raftContext.Marshal()
 			for _, msg := range rd.Messages {
 				// NOTE: We can do some optimizations here to drop messages.
@@ -431,6 +438,8 @@ func (n *node) Run() {
 			}
 
 			if !raft.IsEmptySnap(rd.Snapshot) {
+				// Every time processSnapshot is called, we sync with the leader.
+				// Why? This should only happen when starting up the server the first time, never again.
 				n.processSnapshot(rd.Snapshot)
 			}
 			if len(rd.CommittedEntries) > 0 {
@@ -467,12 +476,19 @@ func (n *node) Step(ctx context.Context, msg raftpb.Message) error {
 }
 
 func (n *node) snapshotPeriodically() {
+	if n.gid == 0 {
+		// Group zero is dedicated for membership information, whose state we don't persist.
+		// So, taking snapshots would end up deleting the RAFT entries that we need to
+		// regenerate the state on a crash. Therefore, don't take snapshots.
+		return
+	}
+
 	ticker := time.NewTicker(10 * time.Minute)
 	for {
 		select {
 		case <-ticker.C:
-			le, err := n.store.LastIndex()
-			x.Checkf(err, "Unable to retrieve last index")
+			water := posting.WaterMarkFor(n.gid)
+			le := water.DoneUntil()
 
 			existing, err := n.store.Snapshot()
 			x.Checkf(err, "Unable to get existing snapshot")
@@ -633,6 +649,9 @@ func (w *grpcWorker) RaftMessage(ctx context.Context, query *Payload) (*Payload,
 	}
 
 	for idx := 0; idx < len(query.Data); {
+		if len(query.Data[idx:]) < 4 {
+			x.Fatalf("Slice left of size: %v. Expected at least 4.", len(query.Data[idx:]))
+		}
 		sz := int(binary.LittleEndian.Uint32(query.Data[idx : idx+4]))
 		idx += 4
 		msg := raftpb.Message{}

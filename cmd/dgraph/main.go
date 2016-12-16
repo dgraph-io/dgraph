@@ -704,7 +704,9 @@ func main() {
 	x.Init()
 	checkFlagsAndInitDirs()
 
-	ps, err := store.NewStore(*postingDir)
+	// All the writes to posting store should be synchronous. We use batched writers
+	// for posting lists, so the cost of sync writes is amortized.
+	ps, err := store.NewSyncStore(*postingDir)
 	x.Checkf(err, "Error initializing postings store")
 	defer ps.Close()
 
