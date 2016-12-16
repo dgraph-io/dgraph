@@ -17,8 +17,6 @@
 package query
 
 import (
-	"fmt"
-
 	"github.com/dgraph-io/dgraph/query/graph"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
@@ -29,7 +27,6 @@ import (
 // protobuf values.
 
 func toProtoValue(v types.Val) *graph.Value {
-	fmt.Println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!", v)
 	switch val := v.Value.(type) {
 	case string:
 		return &graph.Value{&graph.Value_StrVal{string(val)}}
@@ -48,7 +45,6 @@ func toProtoValue(v types.Val) *graph.Value {
 		src := types.ValueForType(types.GeoID)
 		src.Value = val
 		x.Check(types.Marshal(src, &b))
-		fmt.Println(b)
 		return &graph.Value{&graph.Value_GeoVal{b.Value.([]byte)}}
 
 	default:
