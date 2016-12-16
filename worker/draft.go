@@ -134,6 +134,10 @@ func newNode(gid uint32, id uint64, myAddr string) *node {
 }
 
 func (n *node) Connect(pid uint64, addr string) {
+	for n == nil {
+		// Sometimes this function causes a panic. My guess is that n is sometimes still uninitialized.
+		time.Sleep(time.Second)
+	}
 	if pid == n.id {
 		return
 	}
