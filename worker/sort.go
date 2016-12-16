@@ -109,7 +109,6 @@ func processSort(ts *task.Sort) (*task.SortResult, error) {
 	t := posting.GetTokensTable(attr)
 
 	var token string
-	x.Printf("~~~~sort %v", ts.Desc)
 	if ts.Desc {
 		token = t.GetLast()
 	} else {

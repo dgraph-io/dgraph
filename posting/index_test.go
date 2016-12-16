@@ -14,7 +14,7 @@ func TestIndexingInt(t *testing.T) {
 	v = 10
 
 	schema.ParseBytes([]byte("scalar age:int @index"))
-	a, err := indexTokens("age", types.Value(&v))
+	a, err := IndexTokens("age", types.Value(&v))
 	require.NoError(t, err)
 	require.EqualValues(t, []byte{0x0, 0x0, 0x0, 0xa}, a[0])
 }
@@ -24,7 +24,7 @@ func TestIndexingFloat(t *testing.T) {
 	v = 10.43
 
 	schema.ParseBytes([]byte("scalar age:float @index"))
-	a, err := indexTokens("age", types.Value(&v))
+	a, err := IndexTokens("age", types.Value(&v))
 	require.NoError(t, err)
 	require.EqualValues(t, []byte{0x0, 0x0, 0x0, 0xa}, a[0])
 }
@@ -34,7 +34,7 @@ func TestIndexingDate(t *testing.T) {
 	v.Time = time.Date(10, 1, 1, 1, 1, 1, 1, time.UTC)
 
 	schema.ParseBytes([]byte("scalar age:date @index"))
-	a, err := indexTokens("age", types.Value(&v))
+	a, err := IndexTokens("age", types.Value(&v))
 	require.NoError(t, err)
 	require.EqualValues(t, []byte{0x0, 0x0, 0x0, 0xa}, a[0])
 }
@@ -44,7 +44,7 @@ func TestIndexingTime(t *testing.T) {
 	v.Time = time.Date(10, 1, 1, 1, 1, 1, 1, time.UTC)
 
 	schema.ParseBytes([]byte("scalar age:datetime @index"))
-	a, err := indexTokens("age", types.Value(&v))
+	a, err := IndexTokens("age", types.Value(&v))
 	require.NoError(t, err)
 	require.EqualValues(t, []byte{0x0, 0x0, 0x0, 0xa}, a[0])
 }
@@ -54,7 +54,7 @@ func TestIndexing(t *testing.T) {
 	v = "abc"
 
 	schema.ParseBytes([]byte("scalar name:string @index"))
-	a, err := indexTokens("name", types.Value(&v))
+	a, err := IndexTokens("name", types.Value(&v))
 	require.NoError(t, err)
 	require.EqualValues(t, "abc", string(a[0]))
 }
@@ -83,4 +83,25 @@ func TestTokensTableIterateReverse(t *testing.T) {
 	require.EqualValues(t, "bbb", tt.GetPrev("ccc"))
 	require.EqualValues(t, "aaa", tt.GetPrev("bbb"))
 	require.EqualValues(t, "", tt.GetPrev("aaa"))
+}
+
+func TestTokensTableGetGeq(t *testing.T) {
+	tt := getTokensTable(t)
+
+	require.EqualValues(t, 1, tt.Get("bbb"))
+	require.EqualValues(t, -1, tt.Get("zzz"))
+
+	require.EqualValues(t, "aaa", tt.GetNextOrEqual("a"))
+	require.EqualValues(t, "aaa", tt.GetNextOrEqual("aaa"))
+	require.EqualValues(t, "bbb", tt.GetNextOrEqual("aab"))
+	require.EqualValues(t, "ccc", tt.GetNextOrEqual("cc"))
+	require.EqualValues(t, "ccc", tt.GetNextOrEqual("ccc"))
+	require.EqualValues(t, "", tt.GetNextOrEqual("cccc"))
+
+	require.EqualValues(t, "", tt.GetPrevOrEqual("a"))
+	require.EqualValues(t, "aaa", tt.GetPrevOrEqual("aaa"))
+	require.EqualValues(t, "aaa", tt.GetPrevOrEqual("aab"))
+	require.EqualValues(t, "bbb", tt.GetPrevOrEqual("cc"))
+	require.EqualValues(t, "ccc", tt.GetPrevOrEqual("ccc"))
+	require.EqualValues(t, "ccc", tt.GetPrevOrEqual("cccc"))
 }

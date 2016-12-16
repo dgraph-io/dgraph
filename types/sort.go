@@ -101,3 +101,23 @@ func (s Scalar) Sort(v []Value, ul *task.List, desc bool) error {
 	sort.Sort(toBeSorted)
 	return nil
 }
+
+// Less returns true if a is strictly less than b.
+func (s Scalar) Less(a, b Value) bool {
+	switch s.ID() {
+	case DateID:
+		return a.(*Date).Time.Before(b.(*Date).Time)
+	case DateTimeID:
+		return a.(*Time).Time.Before(b.(*Time).Time)
+	case Int32ID:
+		return *(a.(*Int32)) < *(b.(*Int32))
+	case FloatID:
+		return *(a.(*Float)) < *(b.(*Float))
+	case StringID:
+		return *(a.(*String)) < *(b.(*String))
+	case BytesID:
+		return bytes.Compare(*(a.(*Bytes)), *(b.(*Bytes))) < 0
+	}
+	x.Fatalf("Unexpected scalar: %v", s)
+	return false
+}

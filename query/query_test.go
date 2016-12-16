@@ -488,24 +488,10 @@ func TestToJSON(t *testing.T) {
 		}
 	`
 
-	gq, _, err := gql.Parse(query)
-	require.NoError(t, err)
-
-	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, gq)
-	require.NoError(t, err)
-
-	ch := make(chan error)
-	go ProcessGraph(ctx, sg, nil, ch)
-	err = <-ch
-	require.NoError(t, err)
-
-	var l Latency
-	js, err := sg.ToJSON(&l)
-	require.NoError(t, err)
+	js := processToJSON(t, query)
 	require.JSONEq(t,
 		`{"me":[{"alive":true,"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
-		string(js))
+		js)
 }
 
 func TestFieldAlias(t *testing.T) {
@@ -647,25 +633,10 @@ func TestToJSONFilter(t *testing.T) {
 		}
 	`
 
-	gq, _, err := gql.Parse(query)
-	require.NoError(t, err)
-
-	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, gq)
-	require.NoError(t, err)
-
-	ch := make(chan error)
-	go ProcessGraph(ctx, sg, nil, ch)
-	err = <-ch
-	require.NoError(t, err)
-	sg.DebugPrint("  ")
-
-	var l Latency
-	js, err := sg.ToJSON(&l)
-	require.NoError(t, err)
+	js := processToJSON(t, query)
 	require.EqualValues(t,
 		`{"me":[{"friend":[{"name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
-		string(js))
+		js)
 }
 
 func TestToJSONFilterAllOf(t *testing.T) {
@@ -684,24 +655,9 @@ func TestToJSONFilterAllOf(t *testing.T) {
 		}
 	`
 
-	gq, _, err := gql.Parse(query)
-	require.NoError(t, err)
-
-	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, gq)
-	require.NoError(t, err)
-
-	ch := make(chan error)
-	go ProcessGraph(ctx, sg, nil, ch)
-	err = <-ch
-	require.NoError(t, err)
-
-	var l Latency
-	js, err := sg.ToJSON(&l)
-	require.NoError(t, err)
+	js := processToJSON(t, query)
 	require.EqualValues(t,
-		`{"me":[{"gender":"female","name":"Michonne"}]}`,
-		string(js))
+		`{"me":[{"gender":"female","name":"Michonne"}]}`, js)
 }
 
 func TestToJSONFilterUID(t *testing.T) {
@@ -720,24 +676,10 @@ func TestToJSONFilterUID(t *testing.T) {
 		}
 	`
 
-	gq, _, err := gql.Parse(query)
-	require.NoError(t, err)
-
-	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, gq)
-	require.NoError(t, err)
-
-	ch := make(chan error)
-	go ProcessGraph(ctx, sg, nil, ch)
-	err = <-ch
-	require.NoError(t, err)
-
-	var l Latency
-	js, err := sg.ToJSON(&l)
-	require.NoError(t, err)
+	js := processToJSON(t, query)
 	require.EqualValues(t,
 		`{"me":[{"friend":[{"_uid_":"0x1f"}],"gender":"female","name":"Michonne"}]}`,
-		string(js))
+		js)
 }
 
 func TestToJSONFilterOrUID(t *testing.T) {
@@ -757,24 +699,10 @@ func TestToJSONFilterOrUID(t *testing.T) {
 		}
 	`
 
-	gq, _, err := gql.Parse(query)
-	require.NoError(t, err)
-
-	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, gq)
-	require.NoError(t, err)
-
-	ch := make(chan error)
-	go ProcessGraph(ctx, sg, nil, ch)
-	err = <-ch
-	require.NoError(t, err)
-
-	var l Latency
-	js, err := sg.ToJSON(&l)
-	require.NoError(t, err)
+	js := processToJSON(t, query)
 	require.EqualValues(t,
 		`{"me":[{"friend":[{"_uid_":"0x18","name":"Glenn Rhee"},{"_uid_":"0x1f","name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
-		string(js))
+		js)
 }
 
 func TestToJSONFilterOrCount(t *testing.T) {
@@ -793,24 +721,10 @@ func TestToJSONFilterOrCount(t *testing.T) {
 		}
 	`
 
-	gq, _, err := gql.Parse(query)
-	require.NoError(t, err)
-
-	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, gq)
-	require.NoError(t, err)
-
-	ch := make(chan error)
-	go ProcessGraph(ctx, sg, nil, ch)
-	err = <-ch
-	require.NoError(t, err)
-
-	var l Latency
-	js, err := sg.ToJSON(&l)
-	require.NoError(t, err)
+	js := processToJSON(t, query)
 	require.JSONEq(t,
 		`{"me":[{"friend":[{"_count_":2}],"gender":"female","name":"Michonne"}]}`,
-		string(js))
+		js)
 }
 
 func TestToJSONFilterOrFirst(t *testing.T) {
@@ -829,24 +743,10 @@ func TestToJSONFilterOrFirst(t *testing.T) {
 		}
 	`
 
-	gq, _, err := gql.Parse(query)
-	require.NoError(t, err)
-
-	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, gq)
-	require.NoError(t, err)
-
-	ch := make(chan error)
-	go ProcessGraph(ctx, sg, nil, ch)
-	err = <-ch
-	require.NoError(t, err)
-
-	var l Latency
-	js, err := sg.ToJSON(&l)
-	require.NoError(t, err)
+	js := processToJSON(t, query)
 	require.EqualValues(t,
 		`{"me":[{"friend":[{"name":"Glenn Rhee"},{"name":"Daryl Dixon"}],"gender":"female","name":"Michonne"}]}`,
-		string(js))
+		js)
 }
 
 func TestToJSONFilterOrOffset(t *testing.T) {
@@ -865,24 +765,97 @@ func TestToJSONFilterOrOffset(t *testing.T) {
 		}
 	`
 
-	gq, _, err := gql.Parse(query)
-	require.NoError(t, err)
-
-	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, gq)
-	require.NoError(t, err)
-
-	ch := make(chan error)
-	go ProcessGraph(ctx, sg, nil, ch)
-	err = <-ch
-	require.NoError(t, err)
-
-	var l Latency
-	js, err := sg.ToJSON(&l)
-	require.NoError(t, err)
+	js := processToJSON(t, query)
 	require.EqualValues(t,
 		`{"me":[{"friend":[{"name":"Daryl Dixon"},{"name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
-		string(js))
+		js)
+}
+
+func TestToJSONFilterGeq(t *testing.T) {
+	dir, dir2, _ := populateGraph(t)
+	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
+	query := `
+		{
+			me(_uid_:0x01) {
+				name
+				gender
+				friend @filter(geq("dob", "1909-03-20")) {
+					name
+				}
+			}
+		}
+	`
+
+	js := processToJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"}],"gender":"female","name":"Michonne"}]}`,
+		js)
+}
+
+func TestToJSONFilterLeq(t *testing.T) {
+	dir, dir2, _ := populateGraph(t)
+	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
+	query := `
+		{
+			me(_uid_:0x01) {
+				name
+				gender
+				friend @filter(leq("dob", "1909-03-20")) {
+					name
+				}
+			}
+		}
+	`
+
+	js := processToJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"friend":[{"name":"Daryl Dixon"},{"name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
+		js)
+}
+
+func TestToJSONFilterLeqOrder(t *testing.T) {
+	dir, dir2, _ := populateGraph(t)
+	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
+	query := `
+		{
+			me(_uid_:0x01) {
+				name
+				gender
+				friend(order: dob) @filter(leq("dob", "1909-03-20")) {
+					name
+				}
+			}
+		}
+	`
+
+	js := processToJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"friend":[{"name":"Andrea"},{"name":"Daryl Dixon"}],"gender":"female","name":"Michonne"}]}`,
+		js)
+}
+
+func TestToJSONFilterGeqNoResult(t *testing.T) {
+	dir, dir2, _ := populateGraph(t)
+	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
+	query := `
+		{
+			me(_uid_:0x01) {
+				name
+				gender
+				friend @filter(geq("dob", "1999-03-20")) {
+					name
+				}
+			}
+		}
+	`
+
+	js := processToJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"gender":"female","name":"Michonne"}]}`, js)
 }
 
 // No filter. Just to test first and offset.
@@ -902,24 +875,10 @@ func TestToJSONFirstOffset(t *testing.T) {
 		}
 	`
 
-	gq, _, err := gql.Parse(query)
-	require.NoError(t, err)
-
-	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, gq)
-	require.NoError(t, err)
-
-	ch := make(chan error)
-	go ProcessGraph(ctx, sg, nil, ch)
-	err = <-ch
-	require.NoError(t, err)
-
-	var l Latency
-	js, err := sg.ToJSON(&l)
-	require.NoError(t, err)
+	js := processToJSON(t, query)
 	require.EqualValues(t,
 		`{"me":[{"friend":[{"name":"Glenn Rhee"}],"gender":"female","name":"Michonne"}]}`,
-		string(js))
+		js)
 }
 
 func TestToJSONFilterOrFirstOffset(t *testing.T) {
@@ -938,24 +897,32 @@ func TestToJSONFilterOrFirstOffset(t *testing.T) {
 		}
 	`
 
-	gq, _, err := gql.Parse(query)
-	require.NoError(t, err)
-
-	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, gq)
-	require.NoError(t, err)
-
-	ch := make(chan error)
-	go ProcessGraph(ctx, sg, nil, ch)
-	err = <-ch
-	require.NoError(t, err)
-
-	var l Latency
-	js, err := sg.ToJSON(&l)
-	require.NoError(t, err)
+	js := processToJSON(t, query)
 	require.EqualValues(t,
 		`{"me":[{"friend":[{"name":"Daryl Dixon"}],"gender":"female","name":"Michonne"}]}`,
-		string(js))
+		js)
+}
+
+func TestToJSONFilterLeqFirstOffset(t *testing.T) {
+	dir, dir2, _ := populateGraph(t)
+	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
+	query := `
+		{
+			me(_uid_:0x01) {
+				name
+				gender
+				friend(offset:1, first:1) @filter(leq("dob", "1909-03-20")) {
+					name
+				}
+			}
+		}
+	`
+
+	js := processToJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"friend":[{"name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
+		js)
 }
 
 func TestToJSONFilterOrFirstOffsetCount(t *testing.T) {
@@ -974,24 +941,10 @@ func TestToJSONFilterOrFirstOffsetCount(t *testing.T) {
 		}
 	`
 
-	gq, _, err := gql.Parse(query)
-	require.NoError(t, err)
-
-	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, gq)
-	require.NoError(t, err)
-
-	ch := make(chan error)
-	go ProcessGraph(ctx, sg, nil, ch)
-	err = <-ch
-	require.NoError(t, err)
-
-	var l Latency
-	js, err := sg.ToJSON(&l)
-	require.NoError(t, err)
+	js := processToJSON(t, query)
 	require.JSONEq(t,
 		`{"me":[{"friend":[{"_count_":1}],"gender":"female","name":"Michonne"}]}`,
-		string(js))
+		js)
 }
 
 func TestToJSONFilterOrFirstNegative(t *testing.T) {
@@ -1012,24 +965,10 @@ func TestToJSONFilterOrFirstNegative(t *testing.T) {
 		}
 	`
 
-	gq, _, err := gql.Parse(query)
-	require.NoError(t, err)
-
-	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, gq)
-	require.NoError(t, err)
-
-	ch := make(chan error)
-	go ProcessGraph(ctx, sg, nil, ch)
-	err = <-ch
-	require.NoError(t, err)
-
-	var l Latency
-	js, err := sg.ToJSON(&l)
-	require.NoError(t, err)
+	js := processToJSON(t, query)
 	require.EqualValues(t,
 		`{"me":[{"friend":[{"name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
-		string(js))
+		js)
 }
 
 func TestToJSONFilterAnd(t *testing.T) {
@@ -1048,24 +987,9 @@ func TestToJSONFilterAnd(t *testing.T) {
 		}
 	`
 
-	gq, _, err := gql.Parse(query)
-	require.NoError(t, err)
-
-	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, gq)
-	require.NoError(t, err)
-
-	ch := make(chan error)
-	go ProcessGraph(ctx, sg, nil, ch)
-	err = <-ch
-	require.NoError(t, err)
-
-	var l Latency
-	js, err := sg.ToJSON(&l)
-	require.NoError(t, err)
+	js := processToJSON(t, query)
 	require.EqualValues(t,
-		`{"me":[{"gender":"female","name":"Michonne"}]}`,
-		string(js))
+		`{"me":[{"gender":"female","name":"Michonne"}]}`, js)
 }
 
 func getProperty(properties []*graph.Property, prop string) *graph.Value {
@@ -1471,24 +1395,10 @@ func TestToJSONOrder(t *testing.T) {
 		}
 	`
 
-	gq, _, err := gql.Parse(query)
-	require.NoError(t, err)
-
-	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, gq)
-	require.NoError(t, err)
-
-	ch := make(chan error)
-	go ProcessGraph(ctx, sg, nil, ch)
-	err = <-ch
-	require.NoError(t, err)
-
-	var l Latency
-	js, err := sg.ToJSON(&l)
-	require.NoError(t, err)
+	js := processToJSON(t, query)
 	require.EqualValues(t,
 		`{"me":[{"friend":[{"dob":"1901-01-15","name":"Andrea"},{"dob":"1909-01-10","name":"Daryl Dixon"},{"dob":"1909-05-05","name":"Glenn Rhee"},{"dob":"1910-01-02","name":"Rick Grimes"}],"gender":"female","name":"Michonne"}]}`,
-		string(js))
+		js)
 }
 
 // Test sorting / ordering by dob.
@@ -1510,24 +1420,10 @@ func TestToJSONOrderDesc(t *testing.T) {
 		}
 	`
 
-	gq, _, err := gql.Parse(query)
-	require.NoError(t, err)
-
-	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, gq)
-	require.NoError(t, err)
-
-	ch := make(chan error)
-	go ProcessGraph(ctx, sg, nil, ch)
-	err = <-ch
-	require.NoError(t, err)
-
-	var l Latency
-	js, err := sg.ToJSON(&l)
-	require.NoError(t, err)
+	js := processToJSON(t, query)
 	require.EqualValues(t,
 		`{"me":[{"friend":[{"dob":"1910-01-02","name":"Rick Grimes"},{"dob":"1909-05-05","name":"Glenn Rhee"},{"dob":"1909-01-10","name":"Daryl Dixon"},{"dob":"1901-01-15","name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
-		string(js))
+		js)
 }
 
 // Test sorting / ordering by dob.
@@ -1548,24 +1444,10 @@ func TestToJSONOrderOffset(t *testing.T) {
 		}
 	`
 
-	gq, _, err := gql.Parse(query)
-	require.NoError(t, err)
-
-	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, gq)
-	require.NoError(t, err)
-
-	ch := make(chan error)
-	go ProcessGraph(ctx, sg, nil, ch)
-	err = <-ch
-	require.NoError(t, err)
-
-	var l Latency
-	js, err := sg.ToJSON(&l)
-	require.NoError(t, err)
+	js := processToJSON(t, query)
 	require.EqualValues(t,
 		`{"me":[{"friend":[{"name":"Glenn Rhee"},{"name":"Rick Grimes"}],"gender":"female","name":"Michonne"}]}`,
-		string(js))
+		js)
 }
 
 // Test sorting / ordering by dob.
@@ -1586,24 +1468,10 @@ func TestToJSONOrderOffsetCount(t *testing.T) {
 		}
 	`
 
-	gq, _, err := gql.Parse(query)
-	require.NoError(t, err)
-
-	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, gq)
-	require.NoError(t, err)
-
-	ch := make(chan error)
-	go ProcessGraph(ctx, sg, nil, ch)
-	err = <-ch
-	require.NoError(t, err)
-
-	var l Latency
-	js, err := sg.ToJSON(&l)
-	require.NoError(t, err)
+	js := processToJSON(t, query)
 	require.EqualValues(t,
 		`{"me":[{"friend":[{"name":"Glenn Rhee"}],"gender":"female","name":"Michonne"}]}`,
-		string(js))
+		js)
 }
 
 // Test sorting / ordering by dob.
