@@ -42,14 +42,16 @@ type byValue struct{ sortBase }
 
 // Less compares two elements
 func (s byValue) Less(i, j int) bool {
-	switch s.values[i].Value.(type) {
-	case time.Time:
+	switch s.values[i].Tid {
+	case DateTimeID:
 		return s.values[i].Value.(time.Time).Before(s.values[j].Value.(time.Time))
-	case int32:
+	case DateID:
+		return s.values[i].Value.(time.Time).Before(s.values[j].Value.(time.Time))
+	case Int32ID:
 		return (s.values[i].Value.(int32)) < (s.values[j].Value.(int32))
-	case float64:
+	case FloatID:
 		return (s.values[i].Value.(float64)) < (s.values[j].Value.(float64))
-	case string:
+	case StringID:
 		return (s.values[i].Value.(string)) < (s.values[j].Value.(string))
 	}
 	return false

@@ -113,9 +113,8 @@ func indexTokens(attr string, pID types.TypeID, data []byte) ([]string, error) {
 	case time.Time:
 		if s == types.DateID {
 			return types.DateIndex(attr, &v)
-		} else {
-			return types.TimeIndex(attr, &v)
 		}
+		return types.TimeIndex(attr, &v)
 	case string:
 		return types.DefaultIndexKeys(attr, &v), nil
 	default:

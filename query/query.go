@@ -257,7 +257,6 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 			if pc.Attr == "_xid_" {
 				txt := types.ValueForType(types.StringID)
 				err := types.Convert(v, &txt)
-				//txt, err := v.MarshalText()
 				if err != nil {
 					return err
 				}
@@ -265,7 +264,12 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 			} else if pc.Attr == "_uid_" {
 				dst.SetUID(uid)
 			} else {
+				// globalType is the best effort type to which we try converting
+				// and if not possible, we ignore it in the result.
 				globalType := schema.TypeOf(pc.Attr)
+				// schemaType refers to the type we should convert the value
+				// compulsorily and if not possible we ignore the parent object
+				// as it wouldn't comply with the schema.
 				schemaType := pc.Params.AttrType
 				sv := types.ValueForType(types.StringID)
 				if schemaType != nil {
@@ -296,10 +300,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 						continue
 					}
 				} else {
-					err = types.Convert(v, &sv)
-					if err != nil {
-						return err
-					}
+					x.Check(types.Convert(v, &sv))
 				}
 				if bytes.Equal(tv.Val, nil) {
 					continue
@@ -311,8 +312,8 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 	return nil
 }
 
-func createProperty(prop string, v interface{}) *graph.Property {
-	pval := toProtoValue(v.(types.Val))
+func createProperty(prop string, v types.Val) *graph.Property {
+	pval := toProtoValue(v)
 	return &graph.Property{Prop: prop, Value: pval}
 }
 
@@ -758,7 +759,7 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 
 // outputNode is the generic output / writer for preTraverse.
 type outputNode interface {
-	AddValue(attr string, v interface{})
+	AddValue(attr string, v types.Val)
 	AddChild(attr string, child outputNode)
 	New(attr string) outputNode
 	SetUID(uid uint64)
@@ -772,7 +773,7 @@ type protoOutputNode struct {
 }
 
 // AddValue adds an attribute value for protoOutputNode.
-func (p *protoOutputNode) AddValue(attr string, v interface{}) {
+func (p *protoOutputNode) AddValue(attr string, v types.Val) {
 	p.Node.Properties = append(p.Node.Properties, createProperty(attr, v))
 }
 
@@ -843,7 +844,7 @@ type jsonOutputNode struct {
 }
 
 // AddValue adds an attribute value for jsonOutputNode.
-func (p *jsonOutputNode) AddValue(attr string, v interface{}) {
+func (p *jsonOutputNode) AddValue(attr string, v types.Val) {
 	p.data[attr] = v
 }
 

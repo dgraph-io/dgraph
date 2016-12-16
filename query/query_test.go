@@ -163,19 +163,13 @@ func populateGraph(t *testing.T) (string, string, *store.Store) {
 	addEdgeToTypedValue(t, ps, "loc", 1, types.GeoID, gData.Value.([]byte))
 
 	data := types.ValueForType(types.BinaryID)
-	intD := types.ValueForType(types.Int32ID)
-	src.Value = []byte("15")
-	err = types.Convert(src, &intD)
-	require.NoError(t, err)
+	intD := types.Val{types.Int32ID, int32(15)}
 	err = types.Marshal(intD, &data)
 	require.NoError(t, err)
 	addEdgeToTypedValue(t, ps, "age", 1, types.Int32ID, data.Value.([]byte))
 	addEdgeToValue(t, ps, "address", 1, "31, 32 street, Jupiter")
 
-	boolD := types.ValueForType(types.BoolID)
-	src.Value = []byte("true")
-	err = types.Convert(src, &boolD)
-	require.NoError(t, err)
+	boolD := types.Val{types.BoolID, true}
 	err = types.Marshal(boolD, &data)
 	require.NoError(t, err)
 	addEdgeToTypedValue(t, ps, "alive", 1, types.BoolID, data.Value.([]byte))

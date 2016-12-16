@@ -28,8 +28,7 @@ func TestParse(t *testing.T) {
 	}
 	for _, v := range array {
 		g := ValueForType(GeoID)
-		src := ValueForType(StringID)
-		src.Value = []byte(v)
+		src := Val{StringID, []byte(v)}
 
 		if err := Convert(src, &g); err != nil {
 			t.Errorf("Error parsing %s: %v", v, err)
@@ -48,8 +47,7 @@ func TestParse(t *testing.T) {
 			}
 
 			bg := ValueForType(GeoID)
-			src := ValueForType(GeoID)
-			src.Value = []byte(wkb.Value.([]byte))
+			src := Val{GeoID, []byte(wkb.Value.([]byte))}
 
 			if err := Convert(src, &bg); err != nil {
 				t.Errorf("Error unmarshaling WKB: %v", err)
@@ -69,8 +67,7 @@ func TestParseGeoJsonErrors(t *testing.T) {
 	}
 	for _, v := range array {
 		g := ValueForType(GeoID)
-		src := ValueForType(StringID)
-		src.Value = []byte(v)
+		src := Val{StringID, []byte(v)}
 		if err := Convert(src, &g); err == nil {
 			t.Errorf("Expected error parsing %s: %v", v, err)
 		}
