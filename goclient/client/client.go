@@ -22,6 +22,13 @@ import (
 	"github.com/dgraph-io/dgraph/query/graph"
 )
 
+type Op int
+
+const (
+	SET Op = iota
+	DEL
+)
+
 // Req wraps the graph.Request so that we can define helper methods for the
 // client around it.
 type Req struct {
@@ -40,31 +47,71 @@ func (req *Req) Request() *graph.Request {
 	return &req.gr
 }
 
-func checkNQuad(sub, pred, objId string, objVal Value) error {
-	if len(sub) == 0 {
+func checkNQuad(nq graph.NQuad) error {
+	if len(nq.Sub) == 0 {
 		return fmt.Errorf("Subject can't be empty")
 	}
-	if len(pred) == 0 {
+	if len(nq.Pred) == 0 {
 		return fmt.Errorf("Predicate can't be empty")
 	}
-	hasVal := objVal != nil && objVal.Val != nil
-	if len(objId) == 0 && !hasVal {
+	hasVal := nq.Value != nil && nq.Value.Val != nil
+	if len(nq.ObjId) == 0 && !hasVal {
 		return fmt.Errorf("Both objectId and objectValue can't be nil")
 	}
-	if len(objId) > 0 && hasVal {
+	if len(nq.ObjId) > 0 && hasVal {
 		return fmt.Errorf("Only one out of objectId and objectValue can be set")
 	}
 	return nil
 }
 
 // SetQuery sets a query as part of the request.
+// Example usage
+// req := client.NewRequest()
+// req.SetQuery("{ me(_xid_: alice) { name falls.in } }")
+// resp, err := c.Query(context.Background(), req.Request())
+// Check response and handle errors
 func (req *Req) SetQuery(q string) {
 	req.gr.Query = q
 }
 
-// SetMutation adds a set mutation operation.
-func (req *Req) SetMutation(sub, pred, objId string, value Value, label string) error {
-	if err := checkNQuad(sub, pred, objId, value); err != nil {
+// AddMutation adds a SET/DELETE mutation operation.
+//
+// Example usage
+// req := client.NewRequest()
+// To set a string value
+// if err := req.AddMutation(graph.NQuad{
+// 	Sub:   "alice",
+// 	Pred:  "name",
+// 	Value: client.Str("Alice"),
+// }, client.SET); err != nil {
+// ....
+// handle error
+// ....
+// }
+
+// To set an integer value
+// if err := req.AddMutation(graph.NQuad{
+// 	Sub:   "alice",
+// 	Pred:  "age",
+// 	Value: client.Int(13),
+// }, client.SET); err != nil {
+// ....
+// handle error
+// ....
+// }
+
+// To add a mutation with a DELETE operation
+// if err := req.AddMutation(graph.NQuad{
+// 	Sub:   "alice",
+// 	Pred:  "name",
+// 	Value: client.Str("Alice"),
+// }, client.DEL); err != nil {
+// ....
+// handle error
+// ....
+// }
+func (req *Req) AddMutation(nq graph.NQuad, op Op) error {
+	if err := checkNQuad(nq); err != nil {
 		return err
 	}
 
@@ -72,32 +119,10 @@ func (req *Req) SetMutation(sub, pred, objId string, value Value, label string) 
 		req.gr.Mutation = new(graph.Mutation)
 	}
 
-	req.gr.Mutation.Set = append(req.gr.Mutation.Set, &graph.NQuad{
-		Sub:   sub,
-		Pred:  pred,
-		ObjId: objId,
-		Value: value,
-		Label: label,
-	})
-	return nil
-}
-
-// DelMutation adds a delete mutation operation.
-func (req *Req) DelMutation(sub, pred, objId string, value Value, label string) error {
-	if err := checkNQuad(sub, pred, objId, value); err != nil {
-		return err
+	if op == SET {
+		req.gr.Mutation.Set = append(req.gr.Mutation.Set, &nq)
+	} else if op == DEL {
+		req.gr.Mutation.Del = append(req.gr.Mutation.Del, &nq)
 	}
-
-	if req.gr.Mutation == nil {
-		req.gr.Mutation = new(graph.Mutation)
-	}
-
-	req.gr.Mutation.Del = append(req.gr.Mutation.Del, &graph.NQuad{
-		Sub:   sub,
-		Pred:  pred,
-		ObjId: objId,
-		Value: value,
-		Label: label,
-	})
 	return nil
 }

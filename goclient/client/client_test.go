@@ -19,20 +19,35 @@ package client
 import (
 	"testing"
 
+	"github.com/dgraph-io/dgraph/query/graph"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestCheckNQuad(t *testing.T) {
-	if err := checkNQuad("", "name", "", Str("Alice")); err == nil {
+	if err := checkNQuad(graph.NQuad{
+		Pred:  "name",
+		Value: Str("Alice"),
+	}); err == nil {
 		t.Fatal(err)
 	}
-	if err := checkNQuad("alice", "", "", Str("Alice")); err == nil {
+	if err := checkNQuad(graph.NQuad{
+		Sub:   "alice",
+		Value: Str("Alice"),
+	}); err == nil {
 		t.Fatal(err)
 	}
-	if err := checkNQuad("alice", "name", "", nil); err == nil {
+	if err := checkNQuad(graph.NQuad{
+		Sub:  "alice",
+		Pred: "name",
+	}); err == nil {
 		t.Fatal(err)
 	}
-	if err := checkNQuad("alice", "name", "id", Str("Alice")); err == nil {
+	if err := checkNQuad(graph.NQuad{
+		Sub:   "alice",
+		Pred:  "name",
+		Value: Str("Alice"),
+		ObjId: "id",
+	}); err == nil {
 		t.Fatal(err)
 	}
 }
@@ -40,13 +55,27 @@ func TestCheckNQuad(t *testing.T) {
 func TestSetMutation(t *testing.T) {
 	req := NewRequest()
 
-	if err := req.SetMutation("alice", "name", "", Str("Alice"), ""); err != nil {
+	if err := req.AddMutation(graph.NQuad{
+		Sub:   "alice",
+		Pred:  "name",
+		Value: Str("Alice"),
+	}, SET); err != nil {
 		t.Fatal(err)
 	}
-	if err := req.SetMutation("alice", "falls.in", "", Str("rabbithole"), ""); err != nil {
+
+	if err := req.AddMutation(graph.NQuad{
+		Sub:   "alice",
+		Pred:  "falls.in",
+		Value: Str("rabbithole"),
+	}, SET); err != nil {
 		t.Fatal(err)
 	}
-	if err := req.DelMutation("alice", "falls.in", "", Str("rabbithole"), ""); err != nil {
+
+	if err := req.AddMutation(graph.NQuad{
+		Sub:   "alice",
+		Pred:  "falls.in",
+		Value: Str("rabbithole"),
+	}, DEL); err != nil {
 		t.Fatal(err)
 	}
 

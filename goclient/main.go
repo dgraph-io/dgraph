@@ -18,14 +18,13 @@ package main
 
 import (
 	"compress/gzip"
+	"context"
 	"flag"
 	"fmt"
 	"io"
 	"log"
 	"os"
 	"strings"
-
-	"context"
 
 	"google.golang.org/grpc"
 
@@ -55,53 +54,31 @@ func main() {
 	c := graph.NewDgraphClient(conn)
 
 	req := client.NewRequest()
-	if err := req.SetMutation("alice", "name", "", client.Str("Alice"), ""); err != nil {
-		log.Fatal(err)
-	}
-	if err := req.SetMutation("alice", "falls.in", "", client.Str("rabbithole"), ""); err != nil {
-		log.Fatal(err)
-	}
-	if err := req.SetMutation("alice", "age", "", client.Int(13), ""); err != nil {
-		log.Fatal(err)
-	}
+
 	loc, err := geo.ValueFromJson(`{"type":"Point","coordinates":[-122.2207184,37.72129059]}`)
 	if err != nil {
 		log.Fatal(err)
 	}
-	if err := req.SetMutation("alice", "location", "", loc, ""); err != nil {
+	if err := req.AddMutation(graph.NQuad{
+		Sub:   "alice",
+		Pred:  "location",
+		Value: loc,
+	}, client.SET); err != nil {
 		log.Fatal(err)
 	}
-
 	resp, err := c.Query(context.Background(), req.Request())
 	if err != nil {
 		log.Fatalf("Error in getting response from server, %s", err)
 	}
 
 	req = client.NewRequest()
-	req.SetQuery("{ me(_xid_: alice) { name age falls.in location } }")
+	req.SetQuery("{ me(_xid_: alice) { location } }")
 	resp, err = c.Query(context.Background(), req.Request())
 	if err != nil {
 		log.Fatalf("Error in getting response from server, %s", err)
 	}
 
-	fmt.Println("alice", resp)
-
-	req = client.NewRequest()
-	if err := req.DelMutation("alice", "name", "", client.Str("Alice"), ""); err != nil {
-		log.Fatal(err)
-	}
-	resp, err = c.Query(context.Background(), req.Request())
-	if err != nil {
-		log.Fatalf("Error in getting response from server, %s", err)
-	}
-
-	req = client.NewRequest()
-	req.SetQuery("{ me(_xid_: alice) { name falls.in } }")
-	resp, err = c.Query(context.Background(), req.Request())
-	if err != nil {
-		log.Fatalf("Error in getting response from server, %s", err)
-	}
-	fmt.Println("alice", resp)
+	fmt.Println(resp)
 }
 
 func uploadJSON(json string) {
