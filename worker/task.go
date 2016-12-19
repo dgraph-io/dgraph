@@ -17,7 +17,6 @@
 package worker
 
 import (
-	"fmt"
 	"strings"
 
 	"golang.org/x/net/context"
@@ -80,8 +79,13 @@ func getValue(attr, data string) (types.Val, error) {
 		return types.Val{}, x.Errorf("Attribute %s is not valid scalar type", attr)
 	}
 
-	v := types.Val{t.(types.TypeID), []byte(data)}
-	return v, nil
+	src := types.Val{types.StringID, []byte(data)}
+	dst := types.ValueForType(t.(types.TypeID))
+	x.Check(types.Convert(src, &dst))
+	//v := types.Val{t.(types.TypeID), []byte(data)}
+	//v := types.ValueForType(types.BinaryID)
+	//x.Check(types.Marshal(dst, &v))
+	return dst, nil
 }
 
 // processTask processes the query, accumulates and returns the result.
@@ -115,8 +119,10 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 				return nil, err
 			}
 			// Tokenizing RHS value of inequality.
-			ineqTokens, err := posting.IndexTokens(attr, ineqValue.Tid, ineqValue.Value.([]byte))
-			fmt.Println(string(ineqTokens[0]), "****")
+			v := types.ValueForType(types.BinaryID)
+			x.Check(types.Marshal(ineqValue, &v))
+
+			ineqTokens, err := posting.IndexTokens(attr, ineqValue.Tid, v.Value.([]byte))
 			if err != nil {
 				return nil, err
 			}
@@ -126,7 +132,6 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 			ineqValueToken = ineqTokens[0]
 			// Get tokens geq / leq ineqValueToken.
 			tokens, err = getInequalityTokens(attr, ineqValueToken, isGeq)
-			fmt.Println(tokens, "$$$$")
 			if err != nil {
 				return nil, err
 			}
@@ -208,13 +213,10 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 			if sv.Value == nil || err != nil {
 				return false
 			}
-			ival := types.ValueForType(ineqValue.Tid)
-			fmt.Println(ival, "^^^^^^^")
-			x.Check(types.Convert(ineqValue, &ival))
 			if isGeq {
-				return !types.Less(sv, ival)
+				return !types.Less(sv, ineqValue)
 			}
-			return !types.Less(ival, sv)
+			return !types.Less(ineqValue, sv)
 		})
 	}
 

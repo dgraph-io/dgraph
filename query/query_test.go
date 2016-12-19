@@ -804,7 +804,6 @@ func TestToJSONFilterGeq(t *testing.T) {
 		js)
 }
 
-/*
 func TestToJSONFilterLeq(t *testing.T) {
 	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
@@ -869,7 +868,7 @@ func TestToJSONFilterGeqNoResult(t *testing.T) {
 	require.JSONEq(t,
 		`{"me":[{"gender":"female","name":"Michonne"}]}`, js)
 }
-*/
+
 // No filter. Just to test first and offset.
 func TestToJSONFirstOffset(t *testing.T) {
 	dir, dir2, _ := populateGraph(t)
@@ -915,7 +914,6 @@ func TestToJSONFilterOrFirstOffset(t *testing.T) {
 		js)
 }
 
-/*
 func TestToJSONFilterLeqFirstOffset(t *testing.T) {
 	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
@@ -937,7 +935,7 @@ func TestToJSONFilterLeqFirstOffset(t *testing.T) {
 		`{"me":[{"friend":[{"name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
-*/
+
 func TestToJSONFilterOrFirstOffsetCount(t *testing.T) {
 	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
