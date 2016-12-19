@@ -83,7 +83,7 @@ scalar name:string @index
 scalar dob:date @index
 scalar loc:geo @index
 
-type  Person {
+type Person {
   friend: Person @reverse
 }
 `
@@ -246,7 +246,8 @@ func processToJSON(t *testing.T, query string) string {
 }
 
 func TestGetUID(t *testing.T) {
-	dir, dir2, _ := populateGraph(t)
+	dir, dir2, ps := populateGraph(t)
+	defer ps.Close()
 	defer os.RemoveAll(dir)
 	defer os.RemoveAll(dir2)
 	query := `
@@ -270,7 +271,8 @@ func TestGetUID(t *testing.T) {
 }
 
 func TestGetUIDNotInChild(t *testing.T) {
-	dir, dir2, _ := populateGraph(t)
+	dir, dir2, ps := populateGraph(t)
+	defer ps.Close()
 	defer os.RemoveAll(dir)
 	defer os.RemoveAll(dir2)
 	query := `
@@ -293,7 +295,8 @@ func TestGetUIDNotInChild(t *testing.T) {
 }
 
 func TestGetUIDCount(t *testing.T) {
-	dir, dir2, _ := populateGraph(t)
+	dir, dir2, ps := populateGraph(t)
+	defer ps.Close()
 	defer os.RemoveAll(dir)
 	defer os.RemoveAll(dir2)
 	query := `
@@ -316,7 +319,8 @@ func TestGetUIDCount(t *testing.T) {
 }
 
 func TestDebug1(t *testing.T) {
-	dir, dir2, _ := populateGraph(t)
+	dir, dir2, ps := populateGraph(t)
+	defer ps.Close()
 	defer os.RemoveAll(dir)
 	defer os.RemoveAll(dir2)
 
@@ -349,7 +353,8 @@ func TestDebug1(t *testing.T) {
 }
 
 func TestDebug2(t *testing.T) {
-	dir, dir2, _ := populateGraph(t)
+	dir, dir2, ps := populateGraph(t)
+	defer ps.Close()
 	defer os.RemoveAll(dir)
 	defer os.RemoveAll(dir2)
 
@@ -376,7 +381,8 @@ func TestDebug2(t *testing.T) {
 }
 
 func TestCount(t *testing.T) {
-	dir, dir2, _ := populateGraph(t)
+	dir, dir2, ps := populateGraph(t)
+	defer ps.Close()
 	defer os.RemoveAll(dir)
 	defer os.RemoveAll(dir2)
 
@@ -448,7 +454,8 @@ func TestCountError2(t *testing.T) {
 }
 
 func TestProcessGraph(t *testing.T) {
-	dir, dir2, _ := populateGraph(t)
+	dir, dir2, ps := populateGraph(t)
+	defer ps.Close()
 	defer os.RemoveAll(dir)
 	defer os.RemoveAll(dir2)
 
@@ -500,7 +507,8 @@ func TestProcessGraph(t *testing.T) {
 }
 
 func TestToJSON(t *testing.T) {
-	dir, dir2, _ := populateGraph(t)
+	dir, dir2, ps := populateGraph(t)
+	defer ps.Close()
 	defer os.RemoveAll(dir)
 	defer os.RemoveAll(dir2)
 
@@ -525,7 +533,8 @@ func TestToJSON(t *testing.T) {
 }
 
 func TestFieldAlias(t *testing.T) {
-	dir, dir2, _ := populateGraph(t)
+	dir, dir2, ps := populateGraph(t)
+	defer ps.Close()
 	defer os.RemoveAll(dir)
 	defer os.RemoveAll(dir2)
 
@@ -550,7 +559,8 @@ func TestFieldAlias(t *testing.T) {
 }
 
 func TestFieldAliasProto(t *testing.T) {
-	dir, dir2, _ := populateGraph(t)
+	dir, dir2, ps := populateGraph(t)
+	defer ps.Close()
 	defer os.RemoveAll(dir)
 	defer os.RemoveAll(dir2)
 
@@ -647,7 +657,8 @@ children: <
 }
 
 func TestToJSONFilter(t *testing.T) {
-	dir, dir2, _ := populateGraph(t)
+	dir, dir2, ps := populateGraph(t)
+	defer ps.Close()
 	defer os.RemoveAll(dir)
 	defer os.RemoveAll(dir2)
 	query := `
@@ -669,7 +680,8 @@ func TestToJSONFilter(t *testing.T) {
 }
 
 func TestToJSONFilterAllOf(t *testing.T) {
-	dir, dir2, _ := populateGraph(t)
+	dir, dir2, ps := populateGraph(t)
+	defer ps.Close()
 	defer os.RemoveAll(dir)
 	defer os.RemoveAll(dir2)
 	query := `
@@ -690,7 +702,8 @@ func TestToJSONFilterAllOf(t *testing.T) {
 }
 
 func TestToJSONFilterUID(t *testing.T) {
-	dir, dir2, _ := populateGraph(t)
+	dir, dir2, ps := populateGraph(t)
+	defer ps.Close()
 	defer os.RemoveAll(dir)
 	defer os.RemoveAll(dir2)
 	query := `
@@ -712,7 +725,8 @@ func TestToJSONFilterUID(t *testing.T) {
 }
 
 func TestToJSONFilterOrUID(t *testing.T) {
-	dir, dir2, _ := populateGraph(t)
+	dir, dir2, ps := populateGraph(t)
+	defer ps.Close()
 	defer os.RemoveAll(dir)
 	defer os.RemoveAll(dir2)
 	query := `
@@ -735,7 +749,8 @@ func TestToJSONFilterOrUID(t *testing.T) {
 }
 
 func TestToJSONFilterOrCount(t *testing.T) {
-	dir, dir2, _ := populateGraph(t)
+	dir, dir2, ps := populateGraph(t)
+	defer ps.Close()
 	defer os.RemoveAll(dir)
 	defer os.RemoveAll(dir2)
 	query := `
@@ -757,7 +772,8 @@ func TestToJSONFilterOrCount(t *testing.T) {
 }
 
 func TestToJSONFilterOrFirst(t *testing.T) {
-	dir, dir2, _ := populateGraph(t)
+	dir, dir2, ps := populateGraph(t)
+	defer ps.Close()
 	defer os.RemoveAll(dir)
 	defer os.RemoveAll(dir2)
 	query := `
@@ -779,7 +795,8 @@ func TestToJSONFilterOrFirst(t *testing.T) {
 }
 
 func TestToJSONFilterOrOffset(t *testing.T) {
-	dir, dir2, _ := populateGraph(t)
+	dir, dir2, ps := populateGraph(t)
+	defer ps.Close()
 	defer os.RemoveAll(dir)
 	defer os.RemoveAll(dir2)
 	query := `
@@ -801,7 +818,8 @@ func TestToJSONFilterOrOffset(t *testing.T) {
 }
 
 func TestToJSONFilterGeq(t *testing.T) {
-	dir, dir2, _ := populateGraph(t)
+	dir, dir2, ps := populateGraph(t)
+	defer ps.Close()
 	defer os.RemoveAll(dir)
 	defer os.RemoveAll(dir2)
 	query := `
@@ -823,7 +841,8 @@ func TestToJSONFilterGeq(t *testing.T) {
 }
 
 func TestToJSONFilterLeq(t *testing.T) {
-	dir, dir2, _ := populateGraph(t)
+	dir, dir2, ps := populateGraph(t)
+	defer ps.Close()
 	defer os.RemoveAll(dir)
 	defer os.RemoveAll(dir2)
 	query := `
@@ -845,7 +864,8 @@ func TestToJSONFilterLeq(t *testing.T) {
 }
 
 func TestToJSONFilterLeqOrder(t *testing.T) {
-	dir, dir2, _ := populateGraph(t)
+	dir, dir2, ps := populateGraph(t)
+	defer ps.Close()
 	defer os.RemoveAll(dir)
 	defer os.RemoveAll(dir2)
 	query := `
@@ -867,7 +887,8 @@ func TestToJSONFilterLeqOrder(t *testing.T) {
 }
 
 func TestToJSONFilterGeqNoResult(t *testing.T) {
-	dir, dir2, _ := populateGraph(t)
+	dir, dir2, ps := populateGraph(t)
+	defer ps.Close()
 	defer os.RemoveAll(dir)
 	defer os.RemoveAll(dir2)
 	query := `
@@ -889,7 +910,8 @@ func TestToJSONFilterGeqNoResult(t *testing.T) {
 
 // No filter. Just to test first and offset.
 func TestToJSONFirstOffset(t *testing.T) {
-	dir, dir2, _ := populateGraph(t)
+	dir, dir2, ps := populateGraph(t)
+	defer ps.Close()
 	defer os.RemoveAll(dir)
 	defer os.RemoveAll(dir2)
 	query := `
@@ -911,7 +933,8 @@ func TestToJSONFirstOffset(t *testing.T) {
 }
 
 func TestToJSONFilterOrFirstOffset(t *testing.T) {
-	dir, dir2, _ := populateGraph(t)
+	dir, dir2, ps := populateGraph(t)
+	defer ps.Close()
 	defer os.RemoveAll(dir)
 	defer os.RemoveAll(dir2)
 	query := `
@@ -1135,7 +1158,8 @@ func getProperty(properties []*graph.Property, prop string) *graph.Value {
 }
 
 func TestToProto(t *testing.T) {
-	dir, dir2, _ := populateGraph(t)
+	dir, dir2, ps := populateGraph(t)
+	defer ps.Close()
 	defer os.RemoveAll(dir)
 	defer os.RemoveAll(dir2)
 
@@ -1244,7 +1268,8 @@ children: <
 }
 
 func TestToProtoFilter(t *testing.T) {
-	dir, dir2, _ := populateGraph(t)
+	dir, dir2, ps := populateGraph(t)
+	defer ps.Close()
 	defer os.RemoveAll(dir)
 	defer os.RemoveAll(dir2)
 
@@ -1307,7 +1332,8 @@ children: <
 }
 
 func TestToProtoFilterOr(t *testing.T) {
-	dir, dir2, _ := populateGraph(t)
+	dir, dir2, ps := populateGraph(t)
+	defer ps.Close()
 	defer os.RemoveAll(dir)
 	defer os.RemoveAll(dir2)
 
@@ -1379,7 +1405,8 @@ children: <
 }
 
 func TestToProtoFilterAnd(t *testing.T) {
-	dir, dir2, _ := populateGraph(t)
+	dir, dir2, ps := populateGraph(t)
+	defer ps.Close()
 	defer os.RemoveAll(dir)
 	defer os.RemoveAll(dir2)
 
@@ -1434,7 +1461,8 @@ children: <
 
 // Test sorting / ordering by dob.
 func TestToJSONOrder(t *testing.T) {
-	dir, dir2, _ := populateGraph(t)
+	dir, dir2, ps := populateGraph(t)
+	defer ps.Close()
 	defer os.RemoveAll(dir)
 	defer os.RemoveAll(dir2)
 
@@ -1485,7 +1513,8 @@ func TestToJSONOrderDesc(t *testing.T) {
 */
 // Test sorting / ordering by dob.
 func TestToJSONOrderOffset(t *testing.T) {
-	dir, dir2, _ := populateGraph(t)
+	dir, dir2, ps := populateGraph(t)
+	defer ps.Close()
 	defer os.RemoveAll(dir)
 	defer os.RemoveAll(dir2)
 
@@ -1509,7 +1538,8 @@ func TestToJSONOrderOffset(t *testing.T) {
 
 // Test sorting / ordering by dob.
 func TestToJSONOrderOffsetCount(t *testing.T) {
-	dir, dir2, _ := populateGraph(t)
+	dir, dir2, ps := populateGraph(t)
+	defer ps.Close()
 	defer os.RemoveAll(dir)
 	defer os.RemoveAll(dir2)
 
@@ -1533,7 +1563,8 @@ func TestToJSONOrderOffsetCount(t *testing.T) {
 
 // Test sorting / ordering by dob.
 func TestToProtoOrder(t *testing.T) {
-	dir, dir2, _ := populateGraph(t)
+	dir, dir2, ps := populateGraph(t)
+	defer ps.Close()
 	defer os.RemoveAll(dir)
 	defer os.RemoveAll(dir2)
 
@@ -1623,7 +1654,8 @@ children: <
 
 // Test sorting / ordering by dob.
 func TestToProtoOrderCount(t *testing.T) {
-	dir, dir2, _ := populateGraph(t)
+	dir, dir2, ps := populateGraph(t)
+	defer ps.Close()
 	defer os.RemoveAll(dir)
 	defer os.RemoveAll(dir2)
 
@@ -1695,7 +1727,8 @@ children: <
 
 // Test sorting / ordering by dob.
 func TestToProtoOrderOffsetCount(t *testing.T) {
-	dir, dir2, _ := populateGraph(t)
+	dir, dir2, ps := populateGraph(t)
+	defer ps.Close()
 	defer os.RemoveAll(dir)
 	defer os.RemoveAll(dir2)
 
@@ -1768,7 +1801,8 @@ children: <
 func TestSchema1(t *testing.T) {
 	require.NoError(t, schema.Parse("test_schema"))
 
-	dir, dir2, _ := populateGraph(t)
+	dir, dir2, ps := populateGraph(t)
+	defer ps.Close()
 	defer os.RemoveAll(dir)
 	defer os.RemoveAll(dir2)
 
@@ -1788,7 +1822,8 @@ func TestSchema1(t *testing.T) {
 		js)
 }
 func TestGenerator(t *testing.T) {
-	dir1, dir2, _ := populateGraph(t)
+	dir1, dir2, ps := populateGraph(t)
+	defer ps.Close()
 	defer os.RemoveAll(dir1)
 	defer os.RemoveAll(dir2)
 	query := `
@@ -1804,7 +1839,8 @@ func TestGenerator(t *testing.T) {
 }
 
 func TestGeneratorMultiRoot(t *testing.T) {
-	dir1, dir2, _ := populateGraph(t)
+	dir1, dir2, ps := populateGraph(t)
+	defer ps.Close()
 	defer os.RemoveAll(dir1)
 	defer os.RemoveAll(dir2)
 	query := `
@@ -1819,7 +1855,8 @@ func TestGeneratorMultiRoot(t *testing.T) {
 }
 
 func TestToProtoMultiRoot(t *testing.T) {
-	dir, dir2, _ := populateGraph(t)
+	dir, dir2, ps := populateGraph(t)
+	defer ps.Close()
 	defer os.RemoveAll(dir)
 	defer os.RemoveAll(dir2)
 
@@ -1880,7 +1917,8 @@ children: <
 }
 
 func TestNearGenerator(t *testing.T) {
-	dir1, dir2, _ := populateGraph(t)
+	dir1, dir2, ps := populateGraph(t)
+	defer ps.Close()
 	defer os.RemoveAll(dir1)
 	defer os.RemoveAll(dir2)
 	query := `{
@@ -1895,7 +1933,8 @@ func TestNearGenerator(t *testing.T) {
 }
 
 func TestWithinGenerator(t *testing.T) {
-	dir1, dir2, _ := populateGraph(t)
+	dir1, dir2, ps := populateGraph(t)
+	defer ps.Close()
 	defer os.RemoveAll(dir1)
 	defer os.RemoveAll(dir2)
 	query := `{
@@ -1909,7 +1948,8 @@ func TestWithinGenerator(t *testing.T) {
 }
 
 func TestContainsGenerator(t *testing.T) {
-	dir1, dir2, _ := populateGraph(t)
+	dir1, dir2, ps := populateGraph(t)
+	defer ps.Close()
 	defer os.RemoveAll(dir1)
 	defer os.RemoveAll(dir2)
 	query := `{
@@ -1923,7 +1963,8 @@ func TestContainsGenerator(t *testing.T) {
 }
 
 func TestIntersectsGenerator(t *testing.T) {
-	dir1, dir2, _ := populateGraph(t)
+	dir1, dir2, ps := populateGraph(t)
+	defer ps.Close()
 	defer os.RemoveAll(dir1)
 	defer os.RemoveAll(dir2)
 	query := `{
@@ -1936,13 +1977,9 @@ func TestIntersectsGenerator(t *testing.T) {
 	require.JSONEq(t, `{"me":[{"name":"Michonne"}, {"name":"Rick Grimes"}]}`, string(js))
 }
 
-func TestMain(m *testing.M) {
-	x.Init()
-	os.Exit(m.Run())
-}
-
 func TestSchema(t *testing.T) {
-	dir, dir2, _ := populateGraph(t)
+	dir, dir2, ps := populateGraph(t)
+	defer ps.Close()
 	defer os.RemoveAll(dir)
 	defer os.RemoveAll(dir2)
 
@@ -2009,4 +2046,9 @@ func TestSchema(t *testing.T) {
 	require.EqualValues(t, "friend", child.Attribute)
 	require.Empty(t, child.Properties)
 	require.Empty(t, child.Children)
+}
+
+func TestMain(m *testing.M) {
+	x.Init()
+	os.Exit(m.Run())
 }
