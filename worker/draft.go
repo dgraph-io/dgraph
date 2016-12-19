@@ -681,8 +681,8 @@ func (w *grpcWorker) RaftMessage(ctx context.Context, query *Payload) (*Payload,
 	}
 
 	for idx := 0; idx < len(query.Data); {
-		x.AssertTruef(len(query.Data[idx:] >= 4,
-			"Slice left of size: %v. Expected at least 4.", len(query.Data[idx:])))
+		x.AssertTruef(len(query.Data[idx:]) >= 4,
+			"Slice left of size: %v. Expected at least 4.", len(query.Data[idx:]))
 
 		sz := int(binary.LittleEndian.Uint32(query.Data[idx : idx+4]))
 		idx += 4

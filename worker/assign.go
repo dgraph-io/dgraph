@@ -90,6 +90,12 @@ func AssignUidsOverNetwork(ctx context.Context, umap map[string]uint64) error {
 	var err error
 	lid, _ := groups().Leader(gid)
 	n := groups().Node(gid)
+	if n != nil && lid == 0 {
+		// This is useful for testing, when the membership information doesn't have chance
+		// to propagate.
+		lid = n.raft.Status().Lead
+	}
+
 	if n != nil && n.id == lid {
 		x.Trace(ctx, "Calling assignUids as I'm leader of group: %d", gid)
 		ul, err = assignUids(ctx, num)
