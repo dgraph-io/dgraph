@@ -96,6 +96,8 @@ func (g *syncMarks) Get(group uint32) *x.WaterMark {
 	return g.create(group)
 }
 
+// WaterMarkFor returns the synced watermark for the given RAFT group.
+// We use this to determine the index to use when creating a new snapshot.
 func WaterMarkFor(group uint32) *x.WaterMark {
 	return marks.Get(group)
 }
@@ -467,9 +469,7 @@ func batchCommit() {
 			}
 			// Add a sleep clause to avoid a busy wait loop if there's no input to commitCh.
 			sleepFor := 10*time.Millisecond - time.Since(start)
-			if sleepFor > time.Millisecond {
-				time.Sleep(sleepFor)
-			}
+			time.Sleep(sleepFor)
 		}
 	}
 }

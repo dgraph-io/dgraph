@@ -253,18 +253,21 @@ func (n *node) send(m raftpb.Message) {
 
 func (n *node) batchAndSendMessages() {
 	batches := make(map[uint64]*bytes.Buffer)
-	ticker := time.NewTicker(10 * time.Millisecond)
 	for {
 		select {
 		case sm := <-n.messages:
-			if _, ok := batches[sm.to]; !ok {
-				batches[sm.to] = new(bytes.Buffer)
+			var buf *bytes.Buffer
+			if b, ok := batches[sm.to]; !ok {
+				buf = new(bytes.Buffer)
+				batches[sm.to] = buf
+			} else {
+				buf = b
 			}
-			buf := batches[sm.to]
 			x.Check(binary.Write(buf, binary.LittleEndian, uint32(len(sm.data))))
 			x.Check2(buf.Write(sm.data))
 
-		case <-ticker.C:
+		default:
+			start := time.Now()
 			for to, buf := range batches {
 				if buf.Len() == 0 {
 					continue
@@ -274,6 +277,9 @@ func (n *node) batchAndSendMessages() {
 				go n.doSendMessage(to, data)
 				buf.Reset()
 			}
+			// Add a sleep clause to avoid a busy wait loop if there's no input to commitCh.
+			sleepFor := 10*time.Millisecond - time.Since(start)
+			time.Sleep(sleepFor)
 		}
 	}
 }
@@ -359,7 +365,7 @@ func (n *node) processCommitCh() {
 	pending := make(chan struct{}, numPendingMutations)
 
 	for e := range n.commitCh {
-		if e.Data == nil || len(e.Data) == 0 {
+		if len(e.Data) == 0 {
 			n.applied.Ch <- x.Mark{Index: e.Index, Done: true}
 			continue
 		}
@@ -418,6 +424,8 @@ func (n *node) retrieveSnapshot(rc task.RaftContext) {
 func (n *node) Run() {
 	firstRun := true
 	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+
 	for {
 		select {
 		case <-ticker.C:
@@ -494,6 +502,8 @@ func (n *node) snapshotPeriodically() {
 
 	var prev string
 	ticker := time.NewTicker(time.Minute)
+	defer ticker.Stop()
+
 	for {
 		select {
 		case <-ticker.C:
@@ -671,9 +681,9 @@ func (w *grpcWorker) RaftMessage(ctx context.Context, query *Payload) (*Payload,
 	}
 
 	for idx := 0; idx < len(query.Data); {
-		if len(query.Data[idx:]) < 4 {
-			x.Fatalf("Slice left of size: %v. Expected at least 4.", len(query.Data[idx:]))
-		}
+		x.AssertTruef(len(query.Data[idx:] >= 4,
+			"Slice left of size: %v. Expected at least 4.", len(query.Data[idx:])))
+
 		sz := int(binary.LittleEndian.Uint32(query.Data[idx : idx+4]))
 		idx += 4
 		msg := raftpb.Message{}
