@@ -28,9 +28,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/dgraph/posting/types"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/task"
+	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -53,7 +53,14 @@ func checkUids(t *testing.T, l *List, uids []uint64) {
 }
 
 func addMutation(t *testing.T, l *List, edge *task.DirectedEdge, op uint32) {
-	_, err := l.AddMutation(context.Background(), edge, op)
+	if op == Del {
+		edge.Op = task.DirectedEdge_DEL
+	} else if op == Set {
+		edge.Op = task.DirectedEdge_SET
+	} else {
+		x.Fatalf("Unhandled op: %v", op)
+	}
+	_, err := l.AddMutation(context.Background(), edge)
 	require.NoError(t, err)
 }
 
@@ -814,8 +821,9 @@ func BenchmarkAddMutations(b *testing.B) {
 		edge := &task.DirectedEdge{
 			ValueId: uint64(rand.Intn(b.N) + 1),
 			Label:   "testing",
+			Op:      task.DirectedEdge_SET,
 		}
-		if _, err := l.AddMutation(ctx, edge, Set); err != nil {
+		if _, err := l.AddMutation(ctx, edge); err != nil {
 			b.Error(err)
 		}
 	}

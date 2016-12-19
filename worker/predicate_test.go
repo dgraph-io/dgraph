@@ -49,13 +49,14 @@ func checkShard(ps *store.Store) (int, []byte) {
 func writePLs(t *testing.T, pred string, count int, vid uint64, ps *store.Store) {
 	for i := 0; i < count; i++ {
 		k := x.DataKey(pred, uint64(i))
-		list, _ := posting.GetOrCreate(k)
+		list, _ := posting.GetOrCreate(k, 0)
 
 		de := &task.DirectedEdge{
 			ValueId: vid,
 			Label:   "test",
+			Op:      task.DirectedEdge_SET,
 		}
-		list.AddMutation(context.TODO(), de, posting.Set)
+		list.AddMutation(context.TODO(), de)
 		if merged, err := list.CommitIfDirty(context.TODO()); err != nil {
 			t.Errorf("While merging: %v", err)
 		} else if !merged {

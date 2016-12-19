@@ -41,13 +41,8 @@ func TestAddToMutationArray(t *testing.T) {
 		Label: "test-mutation",
 	})
 
-	addToMutationMap(mutationsMap, edges, set)
+	addToMutationMap(mutationsMap, edges)
 	mu := mutationsMap[1]
 	require.NotNil(t, mu)
-	require.NotNil(t, mu.Set)
-
-	addToMutationMap(mutationsMap, edges, del)
-	mu = mutationsMap[1]
-	require.NotNil(t, mu)
-	require.NotNil(t, mu.Del)
+	require.NotNil(t, mu.Edges)
 }

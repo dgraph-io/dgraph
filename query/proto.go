@@ -19,31 +19,33 @@ package query
 import (
 	"github.com/dgraph-io/dgraph/query/graph"
 	"github.com/dgraph-io/dgraph/types"
+	"github.com/dgraph-io/dgraph/x"
+	geom "github.com/twpayne/go-geom"
 )
 
 // This file contains helper functions for converting scalar types to
 // protobuf values.
 
-func toProtoValue(v types.Value) *graph.Value {
-	switch val := v.(type) {
-	case *types.Bytes:
-		return &graph.Value{&graph.Value_BytesVal{*val}}
+func toProtoValue(v types.Val) *graph.Value {
+	switch val := v.Value.(type) {
+	case string:
+		return &graph.Value{&graph.Value_StrVal{string(val)}}
 
-	case *types.String:
-		return &graph.Value{&graph.Value_StrVal{string(*val)}}
+	case int32:
+		return &graph.Value{&graph.Value_IntVal{int32(val)}}
 
-	case *types.Int32:
-		return &graph.Value{&graph.Value_IntVal{int32(*val)}}
+	case float64:
+		return &graph.Value{&graph.Value_DoubleVal{float64(val)}}
 
-	case *types.Float:
-		return &graph.Value{&graph.Value_DoubleVal{float64(*val)}}
+	case bool:
+		return &graph.Value{&graph.Value_BoolVal{bool(val)}}
 
-	case *types.Bool:
-		return &graph.Value{&graph.Value_BoolVal{bool(*val)}}
-
-	case *types.Geo:
-		var b, _ = val.MarshalBinary()
-		return &graph.Value{&graph.Value_GeoVal{b}}
+	case geom.T:
+		b := types.ValueForType(types.BinaryID)
+		src := types.ValueForType(types.GeoID)
+		src.Value = val
+		x.Check(types.Marshal(src, &b))
+		return &graph.Value{&graph.Value_GeoVal{b.Value.([]byte)}}
 
 	default:
 		// A type that isn't supported in the proto

@@ -497,75 +497,75 @@ var _Dgraph_serviceDesc = grpc.ServiceDesc{
 	Metadata: fileDescriptorGraphresponse,
 }
 
-func (m *NQuad) Marshal() (data []byte, err error) {
+func (m *NQuad) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
-	data = make([]byte, size)
-	n, err := m.MarshalTo(data)
+	dAtA = make([]byte, size)
+	n, err := m.MarshalTo(dAtA)
 	if err != nil {
 		return nil, err
 	}
-	return data[:n], nil
+	return dAtA[:n], nil
 }
 
-func (m *NQuad) MarshalTo(data []byte) (int, error) {
+func (m *NQuad) MarshalTo(dAtA []byte) (int, error) {
 	var i int
 	_ = i
 	var l int
 	_ = l
 	if len(m.Sub) > 0 {
-		data[i] = 0xa
+		dAtA[i] = 0xa
 		i++
-		i = encodeVarintGraphresponse(data, i, uint64(len(m.Sub)))
-		i += copy(data[i:], m.Sub)
+		i = encodeVarintGraphresponse(dAtA, i, uint64(len(m.Sub)))
+		i += copy(dAtA[i:], m.Sub)
 	}
 	if len(m.Pred) > 0 {
-		data[i] = 0x12
+		dAtA[i] = 0x12
 		i++
-		i = encodeVarintGraphresponse(data, i, uint64(len(m.Pred)))
-		i += copy(data[i:], m.Pred)
+		i = encodeVarintGraphresponse(dAtA, i, uint64(len(m.Pred)))
+		i += copy(dAtA[i:], m.Pred)
 	}
 	if len(m.ObjId) > 0 {
-		data[i] = 0x1a
+		dAtA[i] = 0x1a
 		i++
-		i = encodeVarintGraphresponse(data, i, uint64(len(m.ObjId)))
-		i += copy(data[i:], m.ObjId)
+		i = encodeVarintGraphresponse(dAtA, i, uint64(len(m.ObjId)))
+		i += copy(dAtA[i:], m.ObjId)
 	}
 	if m.Value != nil {
-		data[i] = 0x22
+		dAtA[i] = 0x22
 		i++
-		i = encodeVarintGraphresponse(data, i, uint64(m.Value.Size()))
-		n1, err := m.Value.MarshalTo(data[i:])
+		i = encodeVarintGraphresponse(dAtA, i, uint64(m.Value.Size()))
+		n1, err := m.Value.MarshalTo(dAtA[i:])
 		if err != nil {
 			return 0, err
 		}
 		i += n1
 	}
 	if len(m.Label) > 0 {
-		data[i] = 0x2a
+		dAtA[i] = 0x2a
 		i++
-		i = encodeVarintGraphresponse(data, i, uint64(len(m.Label)))
-		i += copy(data[i:], m.Label)
+		i = encodeVarintGraphresponse(dAtA, i, uint64(len(m.Label)))
+		i += copy(dAtA[i:], m.Label)
 	}
 	return i, nil
 }
 
-func (m *Value) Marshal() (data []byte, err error) {
+func (m *Value) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
-	data = make([]byte, size)
-	n, err := m.MarshalTo(data)
+	dAtA = make([]byte, size)
+	n, err := m.MarshalTo(dAtA)
 	if err != nil {
 		return nil, err
 	}
-	return data[:n], nil
+	return dAtA[:n], nil
 }
 
-func (m *Value) MarshalTo(data []byte) (int, error) {
+func (m *Value) MarshalTo(dAtA []byte) (int, error) {
 	var i int
 	_ = i
 	var l int
 	_ = l
 	if m.Val != nil {
-		nn2, err := m.Val.MarshalTo(data[i:])
+		nn2, err := m.Val.MarshalTo(dAtA[i:])
 		if err != nil {
 			return 0, err
 		}
@@ -574,81 +574,81 @@ func (m *Value) MarshalTo(data []byte) (int, error) {
 	return i, nil
 }
 
-func (m *Value_BytesVal) MarshalTo(data []byte) (int, error) {
+func (m *Value_BytesVal) MarshalTo(dAtA []byte) (int, error) {
 	i := 0
 	if m.BytesVal != nil {
-		data[i] = 0xa
+		dAtA[i] = 0xa
 		i++
-		i = encodeVarintGraphresponse(data, i, uint64(len(m.BytesVal)))
-		i += copy(data[i:], m.BytesVal)
+		i = encodeVarintGraphresponse(dAtA, i, uint64(len(m.BytesVal)))
+		i += copy(dAtA[i:], m.BytesVal)
 	}
 	return i, nil
 }
-func (m *Value_IntVal) MarshalTo(data []byte) (int, error) {
+func (m *Value_IntVal) MarshalTo(dAtA []byte) (int, error) {
 	i := 0
-	data[i] = 0x10
+	dAtA[i] = 0x10
 	i++
-	i = encodeVarintGraphresponse(data, i, uint64(m.IntVal))
+	i = encodeVarintGraphresponse(dAtA, i, uint64(m.IntVal))
 	return i, nil
 }
-func (m *Value_BoolVal) MarshalTo(data []byte) (int, error) {
+func (m *Value_BoolVal) MarshalTo(dAtA []byte) (int, error) {
 	i := 0
-	data[i] = 0x18
+	dAtA[i] = 0x18
 	i++
 	if m.BoolVal {
-		data[i] = 1
+		dAtA[i] = 1
 	} else {
-		data[i] = 0
+		dAtA[i] = 0
 	}
 	i++
 	return i, nil
 }
-func (m *Value_StrVal) MarshalTo(data []byte) (int, error) {
+func (m *Value_StrVal) MarshalTo(dAtA []byte) (int, error) {
 	i := 0
-	data[i] = 0x22
+	dAtA[i] = 0x22
 	i++
-	i = encodeVarintGraphresponse(data, i, uint64(len(m.StrVal)))
-	i += copy(data[i:], m.StrVal)
+	i = encodeVarintGraphresponse(dAtA, i, uint64(len(m.StrVal)))
+	i += copy(dAtA[i:], m.StrVal)
 	return i, nil
 }
-func (m *Value_DoubleVal) MarshalTo(data []byte) (int, error) {
+func (m *Value_DoubleVal) MarshalTo(dAtA []byte) (int, error) {
 	i := 0
-	data[i] = 0x29
+	dAtA[i] = 0x29
 	i++
-	i = encodeFixed64Graphresponse(data, i, uint64(math.Float64bits(float64(m.DoubleVal))))
+	i = encodeFixed64Graphresponse(dAtA, i, uint64(math.Float64bits(float64(m.DoubleVal))))
 	return i, nil
 }
-func (m *Value_GeoVal) MarshalTo(data []byte) (int, error) {
+func (m *Value_GeoVal) MarshalTo(dAtA []byte) (int, error) {
 	i := 0
 	if m.GeoVal != nil {
-		data[i] = 0x32
+		dAtA[i] = 0x32
 		i++
-		i = encodeVarintGraphresponse(data, i, uint64(len(m.GeoVal)))
-		i += copy(data[i:], m.GeoVal)
+		i = encodeVarintGraphresponse(dAtA, i, uint64(len(m.GeoVal)))
+		i += copy(dAtA[i:], m.GeoVal)
 	}
 	return i, nil
 }
-func (m *Mutation) Marshal() (data []byte, err error) {
+func (m *Mutation) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
-	data = make([]byte, size)
-	n, err := m.MarshalTo(data)
+	dAtA = make([]byte, size)
+	n, err := m.MarshalTo(dAtA)
 	if err != nil {
 		return nil, err
 	}
-	return data[:n], nil
+	return dAtA[:n], nil
 }
 
-func (m *Mutation) MarshalTo(data []byte) (int, error) {
+func (m *Mutation) MarshalTo(dAtA []byte) (int, error) {
 	var i int
 	_ = i
 	var l int
 	_ = l
 	if len(m.Set) > 0 {
 		for _, msg := range m.Set {
-			data[i] = 0xa
+			dAtA[i] = 0xa
 			i++
-			i = encodeVarintGraphresponse(data, i, uint64(msg.Size()))
-			n, err := msg.MarshalTo(data[i:])
+			i = encodeVarintGraphresponse(dAtA, i, uint64(msg.Size()))
+			n, err := msg.MarshalTo(dAtA[i:])
 			if err != nil {
 				return 0, err
 			}
@@ -657,10 +657,10 @@ func (m *Mutation) MarshalTo(data []byte) (int, error) {
 	}
 	if len(m.Del) > 0 {
 		for _, msg := range m.Del {
-			data[i] = 0x12
+			dAtA[i] = 0x12
 			i++
-			i = encodeVarintGraphresponse(data, i, uint64(msg.Size()))
-			n, err := msg.MarshalTo(data[i:])
+			i = encodeVarintGraphresponse(dAtA, i, uint64(msg.Size()))
+			n, err := msg.MarshalTo(dAtA[i:])
 			if err != nil {
 				return 0, err
 			}
@@ -670,32 +670,32 @@ func (m *Mutation) MarshalTo(data []byte) (int, error) {
 	return i, nil
 }
 
-func (m *Request) Marshal() (data []byte, err error) {
+func (m *Request) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
-	data = make([]byte, size)
-	n, err := m.MarshalTo(data)
+	dAtA = make([]byte, size)
+	n, err := m.MarshalTo(dAtA)
 	if err != nil {
 		return nil, err
 	}
-	return data[:n], nil
+	return dAtA[:n], nil
 }
 
-func (m *Request) MarshalTo(data []byte) (int, error) {
+func (m *Request) MarshalTo(dAtA []byte) (int, error) {
 	var i int
 	_ = i
 	var l int
 	_ = l
 	if len(m.Query) > 0 {
-		data[i] = 0xa
+		dAtA[i] = 0xa
 		i++
-		i = encodeVarintGraphresponse(data, i, uint64(len(m.Query)))
-		i += copy(data[i:], m.Query)
+		i = encodeVarintGraphresponse(dAtA, i, uint64(len(m.Query)))
+		i += copy(dAtA[i:], m.Query)
 	}
 	if m.Mutation != nil {
-		data[i] = 0x12
+		dAtA[i] = 0x12
 		i++
-		i = encodeVarintGraphresponse(data, i, uint64(m.Mutation.Size()))
-		n3, err := m.Mutation.MarshalTo(data[i:])
+		i = encodeVarintGraphresponse(dAtA, i, uint64(m.Mutation.Size()))
+		n3, err := m.Mutation.MarshalTo(dAtA[i:])
 		if err != nil {
 			return 0, err
 		}
@@ -704,68 +704,68 @@ func (m *Request) MarshalTo(data []byte) (int, error) {
 	return i, nil
 }
 
-func (m *Latency) Marshal() (data []byte, err error) {
+func (m *Latency) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
-	data = make([]byte, size)
-	n, err := m.MarshalTo(data)
+	dAtA = make([]byte, size)
+	n, err := m.MarshalTo(dAtA)
 	if err != nil {
 		return nil, err
 	}
-	return data[:n], nil
+	return dAtA[:n], nil
 }
 
-func (m *Latency) MarshalTo(data []byte) (int, error) {
+func (m *Latency) MarshalTo(dAtA []byte) (int, error) {
 	var i int
 	_ = i
 	var l int
 	_ = l
 	if len(m.Parsing) > 0 {
-		data[i] = 0xa
+		dAtA[i] = 0xa
 		i++
-		i = encodeVarintGraphresponse(data, i, uint64(len(m.Parsing)))
-		i += copy(data[i:], m.Parsing)
+		i = encodeVarintGraphresponse(dAtA, i, uint64(len(m.Parsing)))
+		i += copy(dAtA[i:], m.Parsing)
 	}
 	if len(m.Processing) > 0 {
-		data[i] = 0x12
+		dAtA[i] = 0x12
 		i++
-		i = encodeVarintGraphresponse(data, i, uint64(len(m.Processing)))
-		i += copy(data[i:], m.Processing)
+		i = encodeVarintGraphresponse(dAtA, i, uint64(len(m.Processing)))
+		i += copy(dAtA[i:], m.Processing)
 	}
 	if len(m.Pb) > 0 {
-		data[i] = 0x1a
+		dAtA[i] = 0x1a
 		i++
-		i = encodeVarintGraphresponse(data, i, uint64(len(m.Pb)))
-		i += copy(data[i:], m.Pb)
+		i = encodeVarintGraphresponse(dAtA, i, uint64(len(m.Pb)))
+		i += copy(dAtA[i:], m.Pb)
 	}
 	return i, nil
 }
 
-func (m *Property) Marshal() (data []byte, err error) {
+func (m *Property) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
-	data = make([]byte, size)
-	n, err := m.MarshalTo(data)
+	dAtA = make([]byte, size)
+	n, err := m.MarshalTo(dAtA)
 	if err != nil {
 		return nil, err
 	}
-	return data[:n], nil
+	return dAtA[:n], nil
 }
 
-func (m *Property) MarshalTo(data []byte) (int, error) {
+func (m *Property) MarshalTo(dAtA []byte) (int, error) {
 	var i int
 	_ = i
 	var l int
 	_ = l
 	if len(m.Prop) > 0 {
-		data[i] = 0xa
+		dAtA[i] = 0xa
 		i++
-		i = encodeVarintGraphresponse(data, i, uint64(len(m.Prop)))
-		i += copy(data[i:], m.Prop)
+		i = encodeVarintGraphresponse(dAtA, i, uint64(len(m.Prop)))
+		i += copy(dAtA[i:], m.Prop)
 	}
 	if m.Value != nil {
-		data[i] = 0x12
+		dAtA[i] = 0x12
 		i++
-		i = encodeVarintGraphresponse(data, i, uint64(m.Value.Size()))
-		n4, err := m.Value.MarshalTo(data[i:])
+		i = encodeVarintGraphresponse(dAtA, i, uint64(m.Value.Size()))
+		n4, err := m.Value.MarshalTo(dAtA[i:])
 		if err != nil {
 			return 0, err
 		}
@@ -774,44 +774,44 @@ func (m *Property) MarshalTo(data []byte) (int, error) {
 	return i, nil
 }
 
-func (m *Node) Marshal() (data []byte, err error) {
+func (m *Node) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
-	data = make([]byte, size)
-	n, err := m.MarshalTo(data)
+	dAtA = make([]byte, size)
+	n, err := m.MarshalTo(dAtA)
 	if err != nil {
 		return nil, err
 	}
-	return data[:n], nil
+	return dAtA[:n], nil
 }
 
-func (m *Node) MarshalTo(data []byte) (int, error) {
+func (m *Node) MarshalTo(dAtA []byte) (int, error) {
 	var i int
 	_ = i
 	var l int
 	_ = l
 	if m.Uid != 0 {
-		data[i] = 0x8
+		dAtA[i] = 0x8
 		i++
-		i = encodeVarintGraphresponse(data, i, uint64(m.Uid))
+		i = encodeVarintGraphresponse(dAtA, i, uint64(m.Uid))
 	}
 	if len(m.Xid) > 0 {
-		data[i] = 0x12
+		dAtA[i] = 0x12
 		i++
-		i = encodeVarintGraphresponse(data, i, uint64(len(m.Xid)))
-		i += copy(data[i:], m.Xid)
+		i = encodeVarintGraphresponse(dAtA, i, uint64(len(m.Xid)))
+		i += copy(dAtA[i:], m.Xid)
 	}
 	if len(m.Attribute) > 0 {
-		data[i] = 0x1a
+		dAtA[i] = 0x1a
 		i++
-		i = encodeVarintGraphresponse(data, i, uint64(len(m.Attribute)))
-		i += copy(data[i:], m.Attribute)
+		i = encodeVarintGraphresponse(dAtA, i, uint64(len(m.Attribute)))
+		i += copy(dAtA[i:], m.Attribute)
 	}
 	if len(m.Properties) > 0 {
 		for _, msg := range m.Properties {
-			data[i] = 0x22
+			dAtA[i] = 0x22
 			i++
-			i = encodeVarintGraphresponse(data, i, uint64(msg.Size()))
-			n, err := msg.MarshalTo(data[i:])
+			i = encodeVarintGraphresponse(dAtA, i, uint64(msg.Size()))
+			n, err := msg.MarshalTo(dAtA[i:])
 			if err != nil {
 				return 0, err
 			}
@@ -820,10 +820,10 @@ func (m *Node) MarshalTo(data []byte) (int, error) {
 	}
 	if len(m.Children) > 0 {
 		for _, msg := range m.Children {
-			data[i] = 0x2a
+			dAtA[i] = 0x2a
 			i++
-			i = encodeVarintGraphresponse(data, i, uint64(msg.Size()))
-			n, err := msg.MarshalTo(data[i:])
+			i = encodeVarintGraphresponse(dAtA, i, uint64(msg.Size()))
+			n, err := msg.MarshalTo(dAtA[i:])
 			if err != nil {
 				return 0, err
 			}
@@ -833,36 +833,36 @@ func (m *Node) MarshalTo(data []byte) (int, error) {
 	return i, nil
 }
 
-func (m *Response) Marshal() (data []byte, err error) {
+func (m *Response) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
-	data = make([]byte, size)
-	n, err := m.MarshalTo(data)
+	dAtA = make([]byte, size)
+	n, err := m.MarshalTo(dAtA)
 	if err != nil {
 		return nil, err
 	}
-	return data[:n], nil
+	return dAtA[:n], nil
 }
 
-func (m *Response) MarshalTo(data []byte) (int, error) {
+func (m *Response) MarshalTo(dAtA []byte) (int, error) {
 	var i int
 	_ = i
 	var l int
 	_ = l
 	if m.N != nil {
-		data[i] = 0xa
+		dAtA[i] = 0xa
 		i++
-		i = encodeVarintGraphresponse(data, i, uint64(m.N.Size()))
-		n5, err := m.N.MarshalTo(data[i:])
+		i = encodeVarintGraphresponse(dAtA, i, uint64(m.N.Size()))
+		n5, err := m.N.MarshalTo(dAtA[i:])
 		if err != nil {
 			return 0, err
 		}
 		i += n5
 	}
 	if m.L != nil {
-		data[i] = 0x12
+		dAtA[i] = 0x12
 		i++
-		i = encodeVarintGraphresponse(data, i, uint64(m.L.Size()))
-		n6, err := m.L.MarshalTo(data[i:])
+		i = encodeVarintGraphresponse(dAtA, i, uint64(m.L.Size()))
+		n6, err := m.L.MarshalTo(dAtA[i:])
 		if err != nil {
 			return 0, err
 		}
@@ -870,48 +870,48 @@ func (m *Response) MarshalTo(data []byte) (int, error) {
 	}
 	if len(m.AssignedUids) > 0 {
 		for k, _ := range m.AssignedUids {
-			data[i] = 0x1a
+			dAtA[i] = 0x1a
 			i++
 			v := m.AssignedUids[k]
 			mapSize := 1 + len(k) + sovGraphresponse(uint64(len(k))) + 1 + sovGraphresponse(uint64(v))
-			i = encodeVarintGraphresponse(data, i, uint64(mapSize))
-			data[i] = 0xa
+			i = encodeVarintGraphresponse(dAtA, i, uint64(mapSize))
+			dAtA[i] = 0xa
 			i++
-			i = encodeVarintGraphresponse(data, i, uint64(len(k)))
-			i += copy(data[i:], k)
-			data[i] = 0x10
+			i = encodeVarintGraphresponse(dAtA, i, uint64(len(k)))
+			i += copy(dAtA[i:], k)
+			dAtA[i] = 0x10
 			i++
-			i = encodeVarintGraphresponse(data, i, uint64(v))
+			i = encodeVarintGraphresponse(dAtA, i, uint64(v))
 		}
 	}
 	return i, nil
 }
 
-func encodeFixed64Graphresponse(data []byte, offset int, v uint64) int {
-	data[offset] = uint8(v)
-	data[offset+1] = uint8(v >> 8)
-	data[offset+2] = uint8(v >> 16)
-	data[offset+3] = uint8(v >> 24)
-	data[offset+4] = uint8(v >> 32)
-	data[offset+5] = uint8(v >> 40)
-	data[offset+6] = uint8(v >> 48)
-	data[offset+7] = uint8(v >> 56)
+func encodeFixed64Graphresponse(dAtA []byte, offset int, v uint64) int {
+	dAtA[offset] = uint8(v)
+	dAtA[offset+1] = uint8(v >> 8)
+	dAtA[offset+2] = uint8(v >> 16)
+	dAtA[offset+3] = uint8(v >> 24)
+	dAtA[offset+4] = uint8(v >> 32)
+	dAtA[offset+5] = uint8(v >> 40)
+	dAtA[offset+6] = uint8(v >> 48)
+	dAtA[offset+7] = uint8(v >> 56)
 	return offset + 8
 }
-func encodeFixed32Graphresponse(data []byte, offset int, v uint32) int {
-	data[offset] = uint8(v)
-	data[offset+1] = uint8(v >> 8)
-	data[offset+2] = uint8(v >> 16)
-	data[offset+3] = uint8(v >> 24)
+func encodeFixed32Graphresponse(dAtA []byte, offset int, v uint32) int {
+	dAtA[offset] = uint8(v)
+	dAtA[offset+1] = uint8(v >> 8)
+	dAtA[offset+2] = uint8(v >> 16)
+	dAtA[offset+3] = uint8(v >> 24)
 	return offset + 4
 }
-func encodeVarintGraphresponse(data []byte, offset int, v uint64) int {
+func encodeVarintGraphresponse(dAtA []byte, offset int, v uint64) int {
 	for v >= 1<<7 {
-		data[offset] = uint8(v&0x7f | 0x80)
+		dAtA[offset] = uint8(v&0x7f | 0x80)
 		v >>= 7
 		offset++
 	}
-	data[offset] = uint8(v)
+	dAtA[offset] = uint8(v)
 	return offset + 1
 }
 func (m *NQuad) Size() (n int) {
@@ -1120,8 +1120,8 @@ func sovGraphresponse(x uint64) (n int) {
 func sozGraphresponse(x uint64) (n int) {
 	return sovGraphresponse(uint64((x << 1) ^ uint64((int64(x) >> 63))))
 }
-func (m *NQuad) Unmarshal(data []byte) error {
-	l := len(data)
+func (m *NQuad) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
 		preIndex := iNdEx
@@ -1133,7 +1133,7 @@ func (m *NQuad) Unmarshal(data []byte) error {
 			if iNdEx >= l {
 				return io.ErrUnexpectedEOF
 			}
-			b := data[iNdEx]
+			b := dAtA[iNdEx]
 			iNdEx++
 			wire |= (uint64(b) & 0x7F) << shift
 			if b < 0x80 {
@@ -1161,7 +1161,7 @@ func (m *NQuad) Unmarshal(data []byte) error {
 				if iNdEx >= l {
 					return io.ErrUnexpectedEOF
 				}
-				b := data[iNdEx]
+				b := dAtA[iNdEx]
 				iNdEx++
 				stringLen |= (uint64(b) & 0x7F) << shift
 				if b < 0x80 {
@@ -1176,7 +1176,7 @@ func (m *NQuad) Unmarshal(data []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Sub = string(data[iNdEx:postIndex])
+			m.Sub = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		case 2:
 			if wireType != 2 {
@@ -1190,7 +1190,7 @@ func (m *NQuad) Unmarshal(data []byte) error {
 				if iNdEx >= l {
 					return io.ErrUnexpectedEOF
 				}
-				b := data[iNdEx]
+				b := dAtA[iNdEx]
 				iNdEx++
 				stringLen |= (uint64(b) & 0x7F) << shift
 				if b < 0x80 {
@@ -1205,7 +1205,7 @@ func (m *NQuad) Unmarshal(data []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Pred = string(data[iNdEx:postIndex])
+			m.Pred = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		case 3:
 			if wireType != 2 {
@@ -1219,7 +1219,7 @@ func (m *NQuad) Unmarshal(data []byte) error {
 				if iNdEx >= l {
 					return io.ErrUnexpectedEOF
 				}
-				b := data[iNdEx]
+				b := dAtA[iNdEx]
 				iNdEx++
 				stringLen |= (uint64(b) & 0x7F) << shift
 				if b < 0x80 {
@@ -1234,7 +1234,7 @@ func (m *NQuad) Unmarshal(data []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.ObjId = string(data[iNdEx:postIndex])
+			m.ObjId = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		case 4:
 			if wireType != 2 {
@@ -1248,7 +1248,7 @@ func (m *NQuad) Unmarshal(data []byte) error {
 				if iNdEx >= l {
 					return io.ErrUnexpectedEOF
 				}
-				b := data[iNdEx]
+				b := dAtA[iNdEx]
 				iNdEx++
 				msglen |= (int(b) & 0x7F) << shift
 				if b < 0x80 {
@@ -1265,7 +1265,7 @@ func (m *NQuad) Unmarshal(data []byte) error {
 			if m.Value == nil {
 				m.Value = &Value{}
 			}
-			if err := m.Value.Unmarshal(data[iNdEx:postIndex]); err != nil {
+			if err := m.Value.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
 			iNdEx = postIndex
@@ -1281,7 +1281,7 @@ func (m *NQuad) Unmarshal(data []byte) error {
 				if iNdEx >= l {
 					return io.ErrUnexpectedEOF
 				}
-				b := data[iNdEx]
+				b := dAtA[iNdEx]
 				iNdEx++
 				stringLen |= (uint64(b) & 0x7F) << shift
 				if b < 0x80 {
@@ -1296,11 +1296,11 @@ func (m *NQuad) Unmarshal(data []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Label = string(data[iNdEx:postIndex])
+			m.Label = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
-			skippy, err := skipGraphresponse(data[iNdEx:])
+			skippy, err := skipGraphresponse(dAtA[iNdEx:])
 			if err != nil {
 				return err
 			}
@@ -1319,8 +1319,8 @@ func (m *NQuad) Unmarshal(data []byte) error {
 	}
 	return nil
 }
-func (m *Value) Unmarshal(data []byte) error {
-	l := len(data)
+func (m *Value) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
 		preIndex := iNdEx
@@ -1332,7 +1332,7 @@ func (m *Value) Unmarshal(data []byte) error {
 			if iNdEx >= l {
 				return io.ErrUnexpectedEOF
 			}
-			b := data[iNdEx]
+			b := dAtA[iNdEx]
 			iNdEx++
 			wire |= (uint64(b) & 0x7F) << shift
 			if b < 0x80 {
@@ -1360,7 +1360,7 @@ func (m *Value) Unmarshal(data []byte) error {
 				if iNdEx >= l {
 					return io.ErrUnexpectedEOF
 				}
-				b := data[iNdEx]
+				b := dAtA[iNdEx]
 				iNdEx++
 				byteLen |= (int(b) & 0x7F) << shift
 				if b < 0x80 {
@@ -1375,7 +1375,7 @@ func (m *Value) Unmarshal(data []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			v := make([]byte, postIndex-iNdEx)
-			copy(v, data[iNdEx:postIndex])
+			copy(v, dAtA[iNdEx:postIndex])
 			m.Val = &Value_BytesVal{v}
 			iNdEx = postIndex
 		case 2:
@@ -1390,7 +1390,7 @@ func (m *Value) Unmarshal(data []byte) error {
 				if iNdEx >= l {
 					return io.ErrUnexpectedEOF
 				}
-				b := data[iNdEx]
+				b := dAtA[iNdEx]
 				iNdEx++
 				v |= (int32(b) & 0x7F) << shift
 				if b < 0x80 {
@@ -1410,7 +1410,7 @@ func (m *Value) Unmarshal(data []byte) error {
 				if iNdEx >= l {
 					return io.ErrUnexpectedEOF
 				}
-				b := data[iNdEx]
+				b := dAtA[iNdEx]
 				iNdEx++
 				v |= (int(b) & 0x7F) << shift
 				if b < 0x80 {
@@ -1431,7 +1431,7 @@ func (m *Value) Unmarshal(data []byte) error {
 				if iNdEx >= l {
 					return io.ErrUnexpectedEOF
 				}
-				b := data[iNdEx]
+				b := dAtA[iNdEx]
 				iNdEx++
 				stringLen |= (uint64(b) & 0x7F) << shift
 				if b < 0x80 {
@@ -1446,7 +1446,7 @@ func (m *Value) Unmarshal(data []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Val = &Value_StrVal{string(data[iNdEx:postIndex])}
+			m.Val = &Value_StrVal{string(dAtA[iNdEx:postIndex])}
 			iNdEx = postIndex
 		case 5:
 			if wireType != 1 {
@@ -1457,14 +1457,14 @@ func (m *Value) Unmarshal(data []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			iNdEx += 8
-			v = uint64(data[iNdEx-8])
-			v |= uint64(data[iNdEx-7]) << 8
-			v |= uint64(data[iNdEx-6]) << 16
-			v |= uint64(data[iNdEx-5]) << 24
-			v |= uint64(data[iNdEx-4]) << 32
-			v |= uint64(data[iNdEx-3]) << 40
-			v |= uint64(data[iNdEx-2]) << 48
-			v |= uint64(data[iNdEx-1]) << 56
+			v = uint64(dAtA[iNdEx-8])
+			v |= uint64(dAtA[iNdEx-7]) << 8
+			v |= uint64(dAtA[iNdEx-6]) << 16
+			v |= uint64(dAtA[iNdEx-5]) << 24
+			v |= uint64(dAtA[iNdEx-4]) << 32
+			v |= uint64(dAtA[iNdEx-3]) << 40
+			v |= uint64(dAtA[iNdEx-2]) << 48
+			v |= uint64(dAtA[iNdEx-1]) << 56
 			m.Val = &Value_DoubleVal{float64(math.Float64frombits(v))}
 		case 6:
 			if wireType != 2 {
@@ -1478,7 +1478,7 @@ func (m *Value) Unmarshal(data []byte) error {
 				if iNdEx >= l {
 					return io.ErrUnexpectedEOF
 				}
-				b := data[iNdEx]
+				b := dAtA[iNdEx]
 				iNdEx++
 				byteLen |= (int(b) & 0x7F) << shift
 				if b < 0x80 {
@@ -1493,12 +1493,12 @@ func (m *Value) Unmarshal(data []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			v := make([]byte, postIndex-iNdEx)
-			copy(v, data[iNdEx:postIndex])
+			copy(v, dAtA[iNdEx:postIndex])
 			m.Val = &Value_GeoVal{v}
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
-			skippy, err := skipGraphresponse(data[iNdEx:])
+			skippy, err := skipGraphresponse(dAtA[iNdEx:])
 			if err != nil {
 				return err
 			}
@@ -1517,8 +1517,8 @@ func (m *Value) Unmarshal(data []byte) error {
 	}
 	return nil
 }
-func (m *Mutation) Unmarshal(data []byte) error {
-	l := len(data)
+func (m *Mutation) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
 		preIndex := iNdEx
@@ -1530,7 +1530,7 @@ func (m *Mutation) Unmarshal(data []byte) error {
 			if iNdEx >= l {
 				return io.ErrUnexpectedEOF
 			}
-			b := data[iNdEx]
+			b := dAtA[iNdEx]
 			iNdEx++
 			wire |= (uint64(b) & 0x7F) << shift
 			if b < 0x80 {
@@ -1558,7 +1558,7 @@ func (m *Mutation) Unmarshal(data []byte) error {
 				if iNdEx >= l {
 					return io.ErrUnexpectedEOF
 				}
-				b := data[iNdEx]
+				b := dAtA[iNdEx]
 				iNdEx++
 				msglen |= (int(b) & 0x7F) << shift
 				if b < 0x80 {
@@ -1573,7 +1573,7 @@ func (m *Mutation) Unmarshal(data []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			m.Set = append(m.Set, &NQuad{})
-			if err := m.Set[len(m.Set)-1].Unmarshal(data[iNdEx:postIndex]); err != nil {
+			if err := m.Set[len(m.Set)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
 			iNdEx = postIndex
@@ -1589,7 +1589,7 @@ func (m *Mutation) Unmarshal(data []byte) error {
 				if iNdEx >= l {
 					return io.ErrUnexpectedEOF
 				}
-				b := data[iNdEx]
+				b := dAtA[iNdEx]
 				iNdEx++
 				msglen |= (int(b) & 0x7F) << shift
 				if b < 0x80 {
@@ -1604,13 +1604,13 @@ func (m *Mutation) Unmarshal(data []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			m.Del = append(m.Del, &NQuad{})
-			if err := m.Del[len(m.Del)-1].Unmarshal(data[iNdEx:postIndex]); err != nil {
+			if err := m.Del[len(m.Del)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
-			skippy, err := skipGraphresponse(data[iNdEx:])
+			skippy, err := skipGraphresponse(dAtA[iNdEx:])
 			if err != nil {
 				return err
 			}
@@ -1629,8 +1629,8 @@ func (m *Mutation) Unmarshal(data []byte) error {
 	}
 	return nil
 }
-func (m *Request) Unmarshal(data []byte) error {
-	l := len(data)
+func (m *Request) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
 		preIndex := iNdEx
@@ -1642,7 +1642,7 @@ func (m *Request) Unmarshal(data []byte) error {
 			if iNdEx >= l {
 				return io.ErrUnexpectedEOF
 			}
-			b := data[iNdEx]
+			b := dAtA[iNdEx]
 			iNdEx++
 			wire |= (uint64(b) & 0x7F) << shift
 			if b < 0x80 {
@@ -1670,7 +1670,7 @@ func (m *Request) Unmarshal(data []byte) error {
 				if iNdEx >= l {
 					return io.ErrUnexpectedEOF
 				}
-				b := data[iNdEx]
+				b := dAtA[iNdEx]
 				iNdEx++
 				stringLen |= (uint64(b) & 0x7F) << shift
 				if b < 0x80 {
@@ -1685,7 +1685,7 @@ func (m *Request) Unmarshal(data []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Query = string(data[iNdEx:postIndex])
+			m.Query = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		case 2:
 			if wireType != 2 {
@@ -1699,7 +1699,7 @@ func (m *Request) Unmarshal(data []byte) error {
 				if iNdEx >= l {
 					return io.ErrUnexpectedEOF
 				}
-				b := data[iNdEx]
+				b := dAtA[iNdEx]
 				iNdEx++
 				msglen |= (int(b) & 0x7F) << shift
 				if b < 0x80 {
@@ -1716,13 +1716,13 @@ func (m *Request) Unmarshal(data []byte) error {
 			if m.Mutation == nil {
 				m.Mutation = &Mutation{}
 			}
-			if err := m.Mutation.Unmarshal(data[iNdEx:postIndex]); err != nil {
+			if err := m.Mutation.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
-			skippy, err := skipGraphresponse(data[iNdEx:])
+			skippy, err := skipGraphresponse(dAtA[iNdEx:])
 			if err != nil {
 				return err
 			}
@@ -1741,8 +1741,8 @@ func (m *Request) Unmarshal(data []byte) error {
 	}
 	return nil
 }
-func (m *Latency) Unmarshal(data []byte) error {
-	l := len(data)
+func (m *Latency) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
 		preIndex := iNdEx
@@ -1754,7 +1754,7 @@ func (m *Latency) Unmarshal(data []byte) error {
 			if iNdEx >= l {
 				return io.ErrUnexpectedEOF
 			}
-			b := data[iNdEx]
+			b := dAtA[iNdEx]
 			iNdEx++
 			wire |= (uint64(b) & 0x7F) << shift
 			if b < 0x80 {
@@ -1782,7 +1782,7 @@ func (m *Latency) Unmarshal(data []byte) error {
 				if iNdEx >= l {
 					return io.ErrUnexpectedEOF
 				}
-				b := data[iNdEx]
+				b := dAtA[iNdEx]
 				iNdEx++
 				stringLen |= (uint64(b) & 0x7F) << shift
 				if b < 0x80 {
@@ -1797,7 +1797,7 @@ func (m *Latency) Unmarshal(data []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Parsing = string(data[iNdEx:postIndex])
+			m.Parsing = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		case 2:
 			if wireType != 2 {
@@ -1811,7 +1811,7 @@ func (m *Latency) Unmarshal(data []byte) error {
 				if iNdEx >= l {
 					return io.ErrUnexpectedEOF
 				}
-				b := data[iNdEx]
+				b := dAtA[iNdEx]
 				iNdEx++
 				stringLen |= (uint64(b) & 0x7F) << shift
 				if b < 0x80 {
@@ -1826,7 +1826,7 @@ func (m *Latency) Unmarshal(data []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Processing = string(data[iNdEx:postIndex])
+			m.Processing = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		case 3:
 			if wireType != 2 {
@@ -1840,7 +1840,7 @@ func (m *Latency) Unmarshal(data []byte) error {
 				if iNdEx >= l {
 					return io.ErrUnexpectedEOF
 				}
-				b := data[iNdEx]
+				b := dAtA[iNdEx]
 				iNdEx++
 				stringLen |= (uint64(b) & 0x7F) << shift
 				if b < 0x80 {
@@ -1855,11 +1855,11 @@ func (m *Latency) Unmarshal(data []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Pb = string(data[iNdEx:postIndex])
+			m.Pb = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
-			skippy, err := skipGraphresponse(data[iNdEx:])
+			skippy, err := skipGraphresponse(dAtA[iNdEx:])
 			if err != nil {
 				return err
 			}
@@ -1878,8 +1878,8 @@ func (m *Latency) Unmarshal(data []byte) error {
 	}
 	return nil
 }
-func (m *Property) Unmarshal(data []byte) error {
-	l := len(data)
+func (m *Property) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
 		preIndex := iNdEx
@@ -1891,7 +1891,7 @@ func (m *Property) Unmarshal(data []byte) error {
 			if iNdEx >= l {
 				return io.ErrUnexpectedEOF
 			}
-			b := data[iNdEx]
+			b := dAtA[iNdEx]
 			iNdEx++
 			wire |= (uint64(b) & 0x7F) << shift
 			if b < 0x80 {
@@ -1919,7 +1919,7 @@ func (m *Property) Unmarshal(data []byte) error {
 				if iNdEx >= l {
 					return io.ErrUnexpectedEOF
 				}
-				b := data[iNdEx]
+				b := dAtA[iNdEx]
 				iNdEx++
 				stringLen |= (uint64(b) & 0x7F) << shift
 				if b < 0x80 {
@@ -1934,7 +1934,7 @@ func (m *Property) Unmarshal(data []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Prop = string(data[iNdEx:postIndex])
+			m.Prop = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		case 2:
 			if wireType != 2 {
@@ -1948,7 +1948,7 @@ func (m *Property) Unmarshal(data []byte) error {
 				if iNdEx >= l {
 					return io.ErrUnexpectedEOF
 				}
-				b := data[iNdEx]
+				b := dAtA[iNdEx]
 				iNdEx++
 				msglen |= (int(b) & 0x7F) << shift
 				if b < 0x80 {
@@ -1965,13 +1965,13 @@ func (m *Property) Unmarshal(data []byte) error {
 			if m.Value == nil {
 				m.Value = &Value{}
 			}
-			if err := m.Value.Unmarshal(data[iNdEx:postIndex]); err != nil {
+			if err := m.Value.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
-			skippy, err := skipGraphresponse(data[iNdEx:])
+			skippy, err := skipGraphresponse(dAtA[iNdEx:])
 			if err != nil {
 				return err
 			}
@@ -1990,8 +1990,8 @@ func (m *Property) Unmarshal(data []byte) error {
 	}
 	return nil
 }
-func (m *Node) Unmarshal(data []byte) error {
-	l := len(data)
+func (m *Node) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
 		preIndex := iNdEx
@@ -2003,7 +2003,7 @@ func (m *Node) Unmarshal(data []byte) error {
 			if iNdEx >= l {
 				return io.ErrUnexpectedEOF
 			}
-			b := data[iNdEx]
+			b := dAtA[iNdEx]
 			iNdEx++
 			wire |= (uint64(b) & 0x7F) << shift
 			if b < 0x80 {
@@ -2031,7 +2031,7 @@ func (m *Node) Unmarshal(data []byte) error {
 				if iNdEx >= l {
 					return io.ErrUnexpectedEOF
 				}
-				b := data[iNdEx]
+				b := dAtA[iNdEx]
 				iNdEx++
 				m.Uid |= (uint64(b) & 0x7F) << shift
 				if b < 0x80 {
@@ -2050,7 +2050,7 @@ func (m *Node) Unmarshal(data []byte) error {
 				if iNdEx >= l {
 					return io.ErrUnexpectedEOF
 				}
-				b := data[iNdEx]
+				b := dAtA[iNdEx]
 				iNdEx++
 				stringLen |= (uint64(b) & 0x7F) << shift
 				if b < 0x80 {
@@ -2065,7 +2065,7 @@ func (m *Node) Unmarshal(data []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Xid = string(data[iNdEx:postIndex])
+			m.Xid = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		case 3:
 			if wireType != 2 {
@@ -2079,7 +2079,7 @@ func (m *Node) Unmarshal(data []byte) error {
 				if iNdEx >= l {
 					return io.ErrUnexpectedEOF
 				}
-				b := data[iNdEx]
+				b := dAtA[iNdEx]
 				iNdEx++
 				stringLen |= (uint64(b) & 0x7F) << shift
 				if b < 0x80 {
@@ -2094,7 +2094,7 @@ func (m *Node) Unmarshal(data []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Attribute = string(data[iNdEx:postIndex])
+			m.Attribute = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		case 4:
 			if wireType != 2 {
@@ -2108,7 +2108,7 @@ func (m *Node) Unmarshal(data []byte) error {
 				if iNdEx >= l {
 					return io.ErrUnexpectedEOF
 				}
-				b := data[iNdEx]
+				b := dAtA[iNdEx]
 				iNdEx++
 				msglen |= (int(b) & 0x7F) << shift
 				if b < 0x80 {
@@ -2123,7 +2123,7 @@ func (m *Node) Unmarshal(data []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			m.Properties = append(m.Properties, &Property{})
-			if err := m.Properties[len(m.Properties)-1].Unmarshal(data[iNdEx:postIndex]); err != nil {
+			if err := m.Properties[len(m.Properties)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
 			iNdEx = postIndex
@@ -2139,7 +2139,7 @@ func (m *Node) Unmarshal(data []byte) error {
 				if iNdEx >= l {
 					return io.ErrUnexpectedEOF
 				}
-				b := data[iNdEx]
+				b := dAtA[iNdEx]
 				iNdEx++
 				msglen |= (int(b) & 0x7F) << shift
 				if b < 0x80 {
@@ -2154,13 +2154,13 @@ func (m *Node) Unmarshal(data []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			m.Children = append(m.Children, &Node{})
-			if err := m.Children[len(m.Children)-1].Unmarshal(data[iNdEx:postIndex]); err != nil {
+			if err := m.Children[len(m.Children)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
-			skippy, err := skipGraphresponse(data[iNdEx:])
+			skippy, err := skipGraphresponse(dAtA[iNdEx:])
 			if err != nil {
 				return err
 			}
@@ -2179,8 +2179,8 @@ func (m *Node) Unmarshal(data []byte) error {
 	}
 	return nil
 }
-func (m *Response) Unmarshal(data []byte) error {
-	l := len(data)
+func (m *Response) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
 		preIndex := iNdEx
@@ -2192,7 +2192,7 @@ func (m *Response) Unmarshal(data []byte) error {
 			if iNdEx >= l {
 				return io.ErrUnexpectedEOF
 			}
-			b := data[iNdEx]
+			b := dAtA[iNdEx]
 			iNdEx++
 			wire |= (uint64(b) & 0x7F) << shift
 			if b < 0x80 {
@@ -2220,7 +2220,7 @@ func (m *Response) Unmarshal(data []byte) error {
 				if iNdEx >= l {
 					return io.ErrUnexpectedEOF
 				}
-				b := data[iNdEx]
+				b := dAtA[iNdEx]
 				iNdEx++
 				msglen |= (int(b) & 0x7F) << shift
 				if b < 0x80 {
@@ -2237,7 +2237,7 @@ func (m *Response) Unmarshal(data []byte) error {
 			if m.N == nil {
 				m.N = &Node{}
 			}
-			if err := m.N.Unmarshal(data[iNdEx:postIndex]); err != nil {
+			if err := m.N.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
 			iNdEx = postIndex
@@ -2253,7 +2253,7 @@ func (m *Response) Unmarshal(data []byte) error {
 				if iNdEx >= l {
 					return io.ErrUnexpectedEOF
 				}
-				b := data[iNdEx]
+				b := dAtA[iNdEx]
 				iNdEx++
 				msglen |= (int(b) & 0x7F) << shift
 				if b < 0x80 {
@@ -2270,7 +2270,7 @@ func (m *Response) Unmarshal(data []byte) error {
 			if m.L == nil {
 				m.L = &Latency{}
 			}
-			if err := m.L.Unmarshal(data[iNdEx:postIndex]); err != nil {
+			if err := m.L.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
 			iNdEx = postIndex
@@ -2286,7 +2286,7 @@ func (m *Response) Unmarshal(data []byte) error {
 				if iNdEx >= l {
 					return io.ErrUnexpectedEOF
 				}
-				b := data[iNdEx]
+				b := dAtA[iNdEx]
 				iNdEx++
 				msglen |= (int(b) & 0x7F) << shift
 				if b < 0x80 {
@@ -2308,7 +2308,7 @@ func (m *Response) Unmarshal(data []byte) error {
 				if iNdEx >= l {
 					return io.ErrUnexpectedEOF
 				}
-				b := data[iNdEx]
+				b := dAtA[iNdEx]
 				iNdEx++
 				keykey |= (uint64(b) & 0x7F) << shift
 				if b < 0x80 {
@@ -2323,7 +2323,7 @@ func (m *Response) Unmarshal(data []byte) error {
 				if iNdEx >= l {
 					return io.ErrUnexpectedEOF
 				}
-				b := data[iNdEx]
+				b := dAtA[iNdEx]
 				iNdEx++
 				stringLenmapkey |= (uint64(b) & 0x7F) << shift
 				if b < 0x80 {
@@ -2338,7 +2338,7 @@ func (m *Response) Unmarshal(data []byte) error {
 			if postStringIndexmapkey > l {
 				return io.ErrUnexpectedEOF
 			}
-			mapkey := string(data[iNdEx:postStringIndexmapkey])
+			mapkey := string(dAtA[iNdEx:postStringIndexmapkey])
 			iNdEx = postStringIndexmapkey
 			if m.AssignedUids == nil {
 				m.AssignedUids = make(map[string]uint64)
@@ -2352,7 +2352,7 @@ func (m *Response) Unmarshal(data []byte) error {
 					if iNdEx >= l {
 						return io.ErrUnexpectedEOF
 					}
-					b := data[iNdEx]
+					b := dAtA[iNdEx]
 					iNdEx++
 					valuekey |= (uint64(b) & 0x7F) << shift
 					if b < 0x80 {
@@ -2367,7 +2367,7 @@ func (m *Response) Unmarshal(data []byte) error {
 					if iNdEx >= l {
 						return io.ErrUnexpectedEOF
 					}
-					b := data[iNdEx]
+					b := dAtA[iNdEx]
 					iNdEx++
 					mapvalue |= (uint64(b) & 0x7F) << shift
 					if b < 0x80 {
@@ -2382,7 +2382,7 @@ func (m *Response) Unmarshal(data []byte) error {
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
-			skippy, err := skipGraphresponse(data[iNdEx:])
+			skippy, err := skipGraphresponse(dAtA[iNdEx:])
 			if err != nil {
 				return err
 			}
@@ -2401,8 +2401,8 @@ func (m *Response) Unmarshal(data []byte) error {
 	}
 	return nil
 }
-func skipGraphresponse(data []byte) (n int, err error) {
-	l := len(data)
+func skipGraphresponse(dAtA []byte) (n int, err error) {
+	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
 		var wire uint64
@@ -2413,7 +2413,7 @@ func skipGraphresponse(data []byte) (n int, err error) {
 			if iNdEx >= l {
 				return 0, io.ErrUnexpectedEOF
 			}
-			b := data[iNdEx]
+			b := dAtA[iNdEx]
 			iNdEx++
 			wire |= (uint64(b) & 0x7F) << shift
 			if b < 0x80 {
@@ -2431,7 +2431,7 @@ func skipGraphresponse(data []byte) (n int, err error) {
 					return 0, io.ErrUnexpectedEOF
 				}
 				iNdEx++
-				if data[iNdEx-1] < 0x80 {
+				if dAtA[iNdEx-1] < 0x80 {
 					break
 				}
 			}
@@ -2448,7 +2448,7 @@ func skipGraphresponse(data []byte) (n int, err error) {
 				if iNdEx >= l {
 					return 0, io.ErrUnexpectedEOF
 				}
-				b := data[iNdEx]
+				b := dAtA[iNdEx]
 				iNdEx++
 				length |= (int(b) & 0x7F) << shift
 				if b < 0x80 {
@@ -2471,7 +2471,7 @@ func skipGraphresponse(data []byte) (n int, err error) {
 					if iNdEx >= l {
 						return 0, io.ErrUnexpectedEOF
 					}
-					b := data[iNdEx]
+					b := dAtA[iNdEx]
 					iNdEx++
 					innerWire |= (uint64(b) & 0x7F) << shift
 					if b < 0x80 {
@@ -2482,7 +2482,7 @@ func skipGraphresponse(data []byte) (n int, err error) {
 				if innerWireType == 4 {
 					break
 				}
-				next, err := skipGraphresponse(data[start:])
+				next, err := skipGraphresponse(dAtA[start:])
 				if err != nil {
 					return 0, err
 				}
