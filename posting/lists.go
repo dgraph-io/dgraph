@@ -70,6 +70,9 @@ type syncMarks struct {
 func (g *syncMarks) create(group uint32) *x.WaterMark {
 	g.Lock()
 	defer g.Unlock()
+	if g.m == nil {
+		g.m = make(map[uint32]*x.WaterMark)
+	}
 
 	if prev, present := g.m[group]; present {
 		return prev
@@ -91,6 +94,12 @@ func (g *syncMarks) Get(group uint32) *x.WaterMark {
 	}
 	g.RUnlock()
 	return g.create(group)
+}
+
+// WaterMarkFor returns the synced watermark for the given RAFT group.
+// We use this to determine the index to use when creating a new snapshot.
+func WaterMarkFor(group uint32) *x.WaterMark {
+	return marks.Get(group)
 }
 
 type counters struct {
@@ -460,9 +469,7 @@ func batchCommit() {
 			}
 			// Add a sleep clause to avoid a busy wait loop if there's no input to commitCh.
 			sleepFor := 10*time.Millisecond - time.Since(start)
-			if sleepFor > time.Millisecond {
-				time.Sleep(sleepFor)
-			}
+			time.Sleep(sleepFor)
 		}
 	}
 }

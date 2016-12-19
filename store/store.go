@@ -126,10 +126,7 @@ func (s *Store) NewWriteBatch() *rdb.WriteBatch { return rdb.NewWriteBatch() }
 
 // WriteBatch does a batch write to RocksDB from the data in WriteBatch object.
 func (s *Store) WriteBatch(wb *rdb.WriteBatch) error {
-	if err := s.db.Write(s.wopt, wb); err != nil {
-		return x.Wrap(err)
-	}
-	return nil
+	return x.Wrap(s.db.Write(s.wopt, wb))
 }
 
 // NewCheckpoint creates new checkpoint from current store.
