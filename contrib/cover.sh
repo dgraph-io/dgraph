@@ -25,6 +25,8 @@ export LD_LIBRARY_PATH="${ICUDIR}/lib:${ROCKSDBDIR}:${LD_LIBRARY_PATH}"
 
 set -e
 
+go get golang.org/x/net/context
+go get google.golang.org/grpc/...
 pushd $SRC &> /dev/null
 
 # create coverage output
