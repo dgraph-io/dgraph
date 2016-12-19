@@ -77,7 +77,7 @@ func loadConfigFromYAML(confFile string) {
 
 	err = yaml.Unmarshal([]byte(bs), &m)
 	if err != nil {
-		log.Println("Error in marshaling config file.")
+		Fatalf("Error while parsing config file: %v", err)
 		return
 	}
 
