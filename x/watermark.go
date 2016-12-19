@@ -32,7 +32,7 @@ type RaftValue struct {
 // update the WaterMark struct about the status of a proposal.
 type Mark struct {
 	Index uint64
-	Done  bool
+	Done  bool // Set to true if the pending mutation is done.
 }
 
 // WaterMark is used to keep track of the maximum done index. The right way to use
@@ -65,6 +65,7 @@ func (w *WaterMark) DoneUntil() uint64 {
 // all goroutine ops use purely memory and cpu.
 func (w *WaterMark) process() {
 	var indices uint64Heap
+	// pending maps raft proposal index to the number of pending mutations for this proposal.
 	pending := make(map[uint64]int)
 
 	heap.Init(&indices)

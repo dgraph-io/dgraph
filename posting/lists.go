@@ -76,6 +76,9 @@ func (g *syncMarks) create(group uint32) *x.WaterMark {
 	}
 	w := &x.WaterMark{Name: fmt.Sprintf("group: %d", group)}
 	w.Init()
+	if g.m == nil {
+		g.m = make(map[uint32]*x.WaterMark)
+	}
 	g.m[group] = w
 	return w
 }
