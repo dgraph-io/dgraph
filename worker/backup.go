@@ -13,8 +13,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgraph/group"
-	"github.com/dgraph-io/dgraph/posting/types"
-	stype "github.com/dgraph-io/dgraph/types"
+	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
@@ -35,15 +34,15 @@ func toRDF(buf *bytes.Buffer, item kv) {
 		if p.Uid == math.MaxUint64 && !bytes.Equal(p.Value, nil) {
 			// Value posting
 			// Convert to appropriate type
-			vID := stype.TypeID(p.ValType)
-			str := stype.ValueForType(stype.StringID)
-			src := stype.ValueForType(vID)
+			vID := types.TypeID(p.ValType)
+			str := types.ValueForType(types.StringID)
+			src := types.ValueForType(vID)
 			src.Value = p.Value
-			x.Check(stype.Convert(src, &str))
+			x.Check(types.Convert(src, &str))
 			x.Check2(buf.WriteString(fmt.Sprintf("\"%s\"", str.Value)))
-			if stype.TypeID(p.ValType) == stype.GeoID {
+			if types.TypeID(p.ValType) == types.GeoID {
 				x.Check2(buf.WriteString(fmt.Sprintf("^^<geo:geojson> ")))
-			} else if stype.TypeID(p.ValType) != stype.BinaryID {
+			} else if types.TypeID(p.ValType) != types.BinaryID {
 				x.Check2(buf.WriteString(fmt.Sprintf("^^<xs:%s> ", vID.Name())))
 			}
 			x.Check2(buf.WriteString(" .\n"))

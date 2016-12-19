@@ -15,6 +15,7 @@ message Posting {
 		DATE = 5;
 		DATETIME = 6;
 		GEO = 7;
+		OBJECT = 15;
 	}
 	ValType val_type = 3;
 	string label = 4;
