@@ -49,9 +49,7 @@ func Init() {
 
 	var confFile = flag.Lookup("conf").Value.(flag.Getter).Get().(string)
 
-	if confFile == "" {
-		log.Println("No config file specified! Default configuration will be used.")
-	} else {
+	if confFile != "" {
 		log.Println("Trying to load configuration from file:", confFile)
 		loadConfigFromYAML(confFile)
 	}
