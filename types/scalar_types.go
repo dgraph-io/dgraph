@@ -19,7 +19,6 @@ package types
 import (
 	"time"
 
-	stype "github.com/dgraph-io/dgraph/posting/types"
 	geom "github.com/twpayne/go-geom"
 )
 
@@ -32,14 +31,14 @@ const (
 // data. When adding a new type *always* add to the end of this list.
 // Never delete anything from this list even if it becomes unused.
 const (
-	BinaryID   = TypeID(stype.Posting_BINARY)
-	Int32ID    = TypeID(stype.Posting_INT32)
-	FloatID    = TypeID(stype.Posting_FLOAT)
-	BoolID     = TypeID(stype.Posting_BOOL)
-	DateTimeID = TypeID(stype.Posting_DATETIME)
-	StringID   = TypeID(stype.Posting_STRING)
-	DateID     = TypeID(stype.Posting_DATE)
-	GeoID      = TypeID(stype.Posting_GEO)
+	BinaryID   = TypeID(Posting_BINARY)
+	Int32ID    = TypeID(Posting_INT32)
+	FloatID    = TypeID(Posting_FLOAT)
+	BoolID     = TypeID(Posting_BOOL)
+	DateTimeID = TypeID(Posting_DATETIME)
+	StringID   = TypeID(Posting_STRING)
+	DateID     = TypeID(Posting_DATE)
+	GeoID      = TypeID(Posting_GEO)
 )
 
 var typeNameMap = map[string]TypeID{
@@ -53,7 +52,7 @@ var typeNameMap = map[string]TypeID{
 	"geo":      GeoID,
 }
 
-type TypeID stype.Posting_ValType
+type TypeID Posting_ValType
 
 func (t TypeID) Name() string {
 	switch t {
