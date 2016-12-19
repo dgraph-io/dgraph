@@ -782,7 +782,6 @@ func TestToJSONFilterOrOffset(t *testing.T) {
 		js)
 }
 
-/*
 func TestToJSONFilterGeq(t *testing.T) {
 	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
@@ -805,6 +804,7 @@ func TestToJSONFilterGeq(t *testing.T) {
 		js)
 }
 
+/*
 func TestToJSONFilterLeq(t *testing.T) {
 	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)

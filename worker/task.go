@@ -17,6 +17,7 @@
 package worker
 
 import (
+	"fmt"
 	"strings"
 
 	"golang.org/x/net/context"
@@ -115,6 +116,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 			}
 			// Tokenizing RHS value of inequality.
 			ineqTokens, err := posting.IndexTokens(attr, ineqValue.Tid, ineqValue.Value.([]byte))
+			fmt.Println(string(ineqTokens[0]), "****")
 			if err != nil {
 				return nil, err
 			}
@@ -124,6 +126,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 			ineqValueToken = ineqTokens[0]
 			// Get tokens geq / leq ineqValueToken.
 			tokens, err = getInequalityTokens(attr, ineqValueToken, isGeq)
+			fmt.Println(tokens, "$$$$")
 			if err != nil {
 				return nil, err
 			}
@@ -205,12 +208,13 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 			if sv.Value == nil || err != nil {
 				return false
 			}
-			ival := ineqValue
+			ival := types.ValueForType(ineqValue.Tid)
+			fmt.Println(ival, "^^^^^^^")
 			x.Check(types.Convert(ineqValue, &ival))
 			if isGeq {
-				return !types.Less(sv, ineqValue)
+				return !types.Less(sv, ival)
 			}
-			return !types.Less(ineqValue, sv)
+			return !types.Less(ival, sv)
 		})
 	}
 
