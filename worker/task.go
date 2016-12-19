@@ -17,7 +17,6 @@
 package worker
 
 import (
-	"bytes"
 	"strings"
 
 	"golang.org/x/net/context"
@@ -163,11 +162,11 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 
 		// If a posting list contains a value, we store that or else we store a nil
 		// byte so that processing is consistent later.
-		vbytes, vtype, err := pl.Value()
+		val, err := pl.Value()
 
-		newValue := &task.Value{ValType: uint32(vtype)}
+		newValue := &task.Value{ValType: int32(val.Tid)}
 		if err == nil {
-			newValue.Val = vbytes
+			newValue.Val = val.Value.([]byte)
 		} else {
 			newValue.Val = x.Nilbyte
 		}
@@ -203,9 +202,8 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 		// Filter the first row of UidMatrix. Since ineqValue != nil, we may
 		// assume that ineqValue is equal to the first token found in TokensTable.
 		algo.ApplyFilter(out.UidMatrix[0], func(uid uint64, i int) bool {
-			key := x.DataKey(attr, uid)
-			sv := getPostingValue(key, scalarType)
-			if sv.Value == nil {
+			sv, err := fetchValue(uid, attr, scalarType)
+			if sv.Value == nil || err != nil {
 				return false
 			}
 			ival := ineqValue
@@ -225,10 +223,10 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 			key := x.DataKey(attr, uid)
 			pl, decr := posting.GetOrCreate(key, gid)
 
-			vbytes, vtype, err := pl.Value()
-			newValue := &task.Value{ValType: uint32(vtype)}
+			val, err := pl.Value()
+			newValue := &task.Value{ValType: int32(val.Tid)}
 			if err == nil {
-				newValue.Val = vbytes
+				newValue.Val = val.Value.([]byte)
 			} else {
 				newValue.Val = x.Nilbyte
 			}
@@ -243,27 +241,6 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 	}
 	out.IntersectDest = intersectDest
 	return &out, nil
-}
-
-// getPostingValue looks up key, gets the value, converts it. If any error is
-// encountered, we return nil. This is used in some filtering where we do not
-// want to waste time creating errors.
-func getPostingValue(key []byte, scalarID types.TypeID) types.Val {
-	// TODO: Use posting.Get
-	pl, decr := posting.GetOrCreate(key, 0)
-	defer decr()
-
-	valBytes, vType, err := pl.Value()
-	if bytes.Equal(valBytes, nil) {
-		return types.Val{}
-	}
-	val := types.Val{types.TypeID(vType), valBytes}
-	sv := types.ValueForType(scalarID)
-	err = types.Convert(val, &sv)
-	if err != nil {
-		return types.Val{}
-	}
-	return sv
 }
 
 // ServeTask is used to respond to a query.

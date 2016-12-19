@@ -9,7 +9,7 @@ message List {
 
 message Value {
 	bytes val = 1;
-	uint32 val_type = 2;
+	int32 val_type = 2;
 }
 
 message Query {

@@ -186,17 +186,14 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *task.DirectedEdge) e
 	x.AssertTruef(len(t.Attr) > 0,
 		"[%s] [%d] [%v] %d %d\n", t.Attr, t.Entity, t.Value, t.ValueId, t.Op)
 
-	var vbytes []byte
-	var vtype types.TypeID
-	var typ byte
+	var val types.Val
 	var verr error
 
 	doUpdateIndex := pstore != nil && (t.Value != nil) &&
 		schema.IsIndexed(t.Attr)
 	if doUpdateIndex {
 		// Check last posting for original value BEFORE any mutation actually happens.
-		vbytes, typ, verr = l.Value()
-		vtype = types.TypeID(typ)
+		val, verr = l.Value()
 	}
 	hasMutated, err := l.AddMutation(ctx, t)
 	if err != nil {
@@ -207,12 +204,8 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *task.DirectedEdge) e
 	}
 
 	// Exact matches.
-	if verr == nil && len(vbytes) > 0 {
-		p := types.Val{
-			Tid:   vtype,
-			Value: vbytes,
-		}
-		addIndexMutations(ctx, t, p, task.DirectedEdge_DEL)
+	if verr == nil && val.Value != nil {
+		addIndexMutations(ctx, t, val, task.DirectedEdge_DEL)
 	}
 	if t.Op == task.DirectedEdge_SET {
 		p := types.Val{
