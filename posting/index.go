@@ -20,7 +20,6 @@ import (
 	"context"
 	"sort"
 	"sync"
-	"time"
 
 	"golang.org/x/net/trace"
 
@@ -28,7 +27,6 @@ import (
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
-	geom "github.com/twpayne/go-geom"
 )
 
 // TokensTable tracks the keys / tokens / buckets for an indexed attribute.
@@ -102,24 +100,7 @@ func IndexTokens(attr string, pID types.TypeID, data []byte) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	switch v := sv.Value.(type) {
-	case geom.T:
-		return types.IndexGeoTokens(&v)
-	case int32:
-		return types.IntIndex(attr, &v)
-	case float64:
-		return types.FloatIndex(attr, &v)
-	case time.Time:
-		if s == types.DateID {
-			return types.DateIndex(attr, &v)
-		}
-		return types.TimeIndex(attr, &v)
-	case string:
-		return types.DefaultIndexKeys(attr, &v), nil
-	default:
-		return nil, x.Errorf("Invalid type. Cannot be indexed")
-	}
-	return nil, nil
+	return types.IndexTokens(attr, sv)
 }
 
 // addIndexMutations adds mutation(s) for a single term, to maintain index.

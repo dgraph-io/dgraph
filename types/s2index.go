@@ -39,8 +39,8 @@ func parentCoverTokens(parents s2.CellUnion, cover s2.CellUnion) []string {
 
 // IndexTokens returns the tokens to be used in a geospatial index for the given geometry. If the
 // geometry is not supported it returns an error.
-func IndexGeoTokens(g *geom.T) ([]string, error) {
-	parents, cover, err := indexCells(*g)
+func IndexGeoTokens(g geom.T) ([]string, error) {
+	parents, cover, err := indexCells(g)
 	if err != nil {
 		return nil, err
 	}

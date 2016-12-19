@@ -129,7 +129,7 @@ func TestKeyGeneratorPoint(t *testing.T) {
 	require.NoError(t, err)
 	g := gc.Value.(geom.T)
 
-	keys, err := IndexGeoTokens(&g)
+	keys, err := IndexGeoTokens(g)
 	require.NoError(t, err)
 	require.Len(t, keys, MaxCellLevel-MinCellLevel+1+1) // +1 for the cover
 }
@@ -147,7 +147,7 @@ func TestKeyGeneratorPolygon(t *testing.T) {
 	require.NoError(t, err)
 	g := gc.Value.(geom.T)
 
-	keys, err := IndexGeoTokens(&g)
+	keys, err := IndexGeoTokens(g)
 	require.NoError(t, err)
 	require.Len(t, keys, 65)
 }
@@ -245,7 +245,7 @@ func BenchmarkKeyGeneratorPoint(b *testing.B) {
 
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		IndexGeoTokens(&g)
+		IndexGeoTokens(g)
 	}
 }
 
@@ -268,7 +268,7 @@ func BenchmarkKeyGeneratorPolygon(b *testing.B) {
 
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		IndexGeoTokens(&g)
+		IndexGeoTokens(g)
 	}
 }
 
