@@ -159,6 +159,8 @@ func processTask(q *task.Query) (*task.Result, error) {
 		var key []byte
 		if useFunc {
 			key = x.IndexKey(attr, tokens[i])
+		} else if q.Reverse {
+			key = x.ReverseKey(attr, q.Uids[i])
 		} else {
 			key = x.DataKey(attr, q.Uids[i])
 		}

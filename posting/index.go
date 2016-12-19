@@ -193,7 +193,6 @@ func addReverseMutation(ctx context.Context, attr string, src, dst uint64, del b
 				attr, src, dst))
 		}
 		reverseLog.Printf("DEL [%s] [%d] [%d]", attr, src, dst)
-		x.Printf("~~~DEL [%s] [%d] [%d]", attr, src, dst)
 
 	} else {
 		_, err := plist.AddMutation(ctx, edge, Set)
@@ -203,7 +202,6 @@ func addReverseMutation(ctx context.Context, attr string, src, dst uint64, del b
 				attr, src, dst))
 		}
 		reverseLog.Printf("SET [%s] [%d] [%d]", attr, src, dst)
-		x.Printf("~~~SET [%s] [%d] [%d]", attr, src, dst)
 	}
 }
 

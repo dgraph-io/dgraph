@@ -1004,19 +1004,18 @@ func TestToJSONReverse(t *testing.T) {
 		{
 			me(_uid_:0x18) {
 				name
-				gender
-			  alive
 				~friend {
 					name
+					gender
+			  	alive
 				}
 			}
 		}
 	`
 
 	js := processToJSON(t, query)
-	x.Printf("~~~output js=[%s]", js)
 	require.JSONEq(t,
-		`{"me":[{"alive":true,"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
+		`{"me":[{"name":"Glenn Rhee","~friend":[{"alive":true,"gender":"female","name":"Michonne"}]}]}`,
 		js)
 }
 
