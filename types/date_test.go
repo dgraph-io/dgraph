@@ -16,7 +16,14 @@
 
 package types
 
-import "testing"
+import (
+	"encoding/binary"
+	"math"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/require"
+)
 
 func TestConvertDateToBool(t *testing.T) {
 	dt := ValueForType(DateID)
@@ -27,40 +34,31 @@ func TestConvertDateToBool(t *testing.T) {
 	}
 }
 
-/*
 func TestConvertDateToInt32(t *testing.T) {
 	data := []struct {
-		in  Date
-		out Int32
+		in  time.Time
+		out int32
 	}{
 		{createDate(2009, time.November, 10), 1257811200},
 		{createDate(1969, time.November, 10), -4492800},
 	}
 	for _, tc := range data {
-		if out, err := Convert(&tc.in, Int32ID); err != nil {
+		bs := make([]byte, 8)
+		binary.LittleEndian.PutUint64(bs, uint64(tc.in.Unix()))
+		src := Val{DateID, bs}
+		dst := ValueForType(Int32ID)
+		if err := Convert(src, &dst); err != nil {
 			t.Errorf("Unexpected error converting date to int: %v", err)
-		} else if *(out.(*Int32)) != tc.out {
-			t.Errorf("Converting time to int: Expected %v, got %v", tc.out, out)
-		}
-	}
-
-	errData := []Date{
-		createDate(2039, time.November, 10),
-		createDate(1901, time.November, 10),
-	}
-
-	for _, tc := range errData {
-		if out, err := Convert(&tc, Int32ID); err == nil {
-			t.Errorf("Expected error converting date %s to int %v", tc, out)
+		} else if dst.Value.(int32) != tc.out {
+			t.Errorf("Converting time to int: Expected %v, got %v", tc.out, dst.Value)
 		}
 	}
 }
 
-/*
 func TestConvertDateToFloat(t *testing.T) {
 	data := []struct {
-		in  Date
-		out Float
+		in  time.Time
+		out float64
 	}{
 		{createDate(2009, time.November, 10), 1257811200},
 		{createDate(1969, time.November, 10), -4492800},
@@ -68,17 +66,21 @@ func TestConvertDateToFloat(t *testing.T) {
 		{createDate(1901, time.November, 10), -2150409600},
 	}
 	for _, tc := range data {
-		if out, err := Convert(&tc.in, FloatID); err != nil {
+		bs := make([]byte, 8)
+		binary.LittleEndian.PutUint64(bs, uint64(tc.in.Unix()))
+		src := Val{DateID, bs}
+		dst := ValueForType(FloatID)
+		if err := Convert(src, &dst); err != nil {
 			t.Errorf("Unexpected error converting date to float: %v", err)
-		} else if *(out.(*Float)) != tc.out {
-			t.Errorf("Converting date to float: Expected %v, got %v", tc.out, out)
+		} else if dst.Value.(float64) != tc.out {
+			t.Errorf("Converting date to float: Expected %v, got %v", tc.out, dst.Value)
 		}
 	}
 }
 
 func TestConvertDateToTime(t *testing.T) {
 	data := []struct {
-		in  Date
+		in  time.Time
 		out time.Time
 	}{
 		{createDate(2009, time.November, 10),
@@ -91,26 +93,22 @@ func TestConvertDateToTime(t *testing.T) {
 			time.Date(1901, time.November, 10, 0, 0, 0, 0, time.UTC)},
 	}
 	for _, tc := range data {
-		tout := Time{tc.out}
-		if out, err := Convert(&tc.in, DateTimeID); err != nil {
+		bs := make([]byte, 8)
+		binary.LittleEndian.PutUint64(bs, uint64(tc.in.Unix()))
+		src := Val{DateID, bs}
+		tout := ValueForType(DateTimeID)
+		if err := Convert(src, &tout); err != nil {
 			t.Errorf("Unexpected error converting date to time: %v", err)
-		} else if *(out.(*Time)) != tout {
-			t.Errorf("Converting date to time: Expected %v, got %v", tc.out, out)
+		} else if tout.Value.(time.Time) != tc.out {
+			t.Errorf("Converting date to time: Expected %v, got %v", tc.out, tout.Value)
 		}
-	}
-}
-
-func TestConvertBoolToDate(t *testing.T) {
-	b := Bool(false)
-	if _, err := Convert(&b, DateID); err == nil {
-		t.Errorf("Expected error converting bool to date")
 	}
 }
 
 func TestConvertInt32ToDate(t *testing.T) {
 	data := []struct {
-		in  Int32
-		out Date
+		in  int32
+		out time.Time
 	}{
 		{1257811200, createDate(2009, time.November, 10)},
 		{1257894000, createDate(2009, time.November, 10)}, //truncation
@@ -118,18 +116,22 @@ func TestConvertInt32ToDate(t *testing.T) {
 		{0, createDate(1970, time.January, 1)},
 	}
 	for _, tc := range data {
-		if out, err := Convert(&tc.in, DateID); err != nil {
+		bs := make([]byte, 4)
+		binary.LittleEndian.PutUint32(bs[:], uint32(tc.in))
+		src := Val{Int32ID, bs[:]}
+		dst := ValueForType(DateID)
+		if err := Convert(src, &dst); err != nil {
 			t.Errorf("Unexpected error converting int to date: %v", err)
-		} else if *(out.(*Date)) != tc.out {
-			t.Errorf("Converting int to date: Expected %v, got %v", tc.out, out)
+		} else if dst.Value.(time.Time) != tc.out {
+			t.Errorf("Converting int to date: Expected %v, got %v", tc.out, dst.Value)
 		}
 	}
 }
 
 func TestConvertFloatToDate(t *testing.T) {
 	data := []struct {
-		in  Float
-		out Date
+		in  float64
+		out time.Time
 	}{
 		{1257811200, createDate(2009, time.November, 10)},
 		{1257894000.001, createDate(2009, time.November, 10)}, //truncation
@@ -139,10 +141,15 @@ func TestConvertFloatToDate(t *testing.T) {
 		{-2150326800.12, createDate(1901, time.November, 10)},
 	}
 	for _, tc := range data {
-		if out, err := Convert(&tc.in, DateID); err != nil {
+		bs := make([]byte, 8)
+		u := math.Float64bits(tc.in)
+		binary.LittleEndian.PutUint64(bs[:], u)
+		src := Val{FloatID, bs[:]}
+		dst := ValueForType(DateID)
+		if err := Convert(src, &dst); err != nil {
 			t.Errorf("Unexpected error converting float to date: %v", err)
-		} else if *(out.(*Date)) != tc.out {
-			t.Errorf("Converting float to date: Expected %v, got %v", tc.out, out)
+		} else if dst.Value.(time.Time) != tc.out {
+			t.Errorf("Converting float to date: Expected %v, got %v", tc.out, dst.Value)
 		}
 	}
 }
@@ -150,7 +157,7 @@ func TestConvertFloatToDate(t *testing.T) {
 func TestConvertDateTimeToDate(t *testing.T) {
 	data := []struct {
 		in  time.Time
-		out Date
+		out time.Time
 	}{
 		{time.Date(2009, time.November, 10, 0, 0, 0, 0, time.UTC),
 			createDate(2009, time.November, 10)},
@@ -160,11 +167,14 @@ func TestConvertDateTimeToDate(t *testing.T) {
 			createDate(1969, time.November, 10)},
 	}
 	for _, tc := range data {
-		if out, err := Convert(&Time{tc.in}, DateID); err != nil {
+		bs, err := tc.in.MarshalBinary()
+		require.NoError(t, err)
+		src := Val{DateTimeID, bs}
+		dst := ValueForType(DateID)
+		if err := Convert(src, &dst); err != nil {
 			t.Errorf("Unexpected error converting time to date: %v", err)
-		} else if *(out.(*Date)) != tc.out {
-			t.Errorf("Converting time to date: Expected %v, got %v", tc.out, out)
+		} else if dst.Value.(time.Time) != tc.out {
+			t.Errorf("Converting time to date: Expected %v, got %v", tc.out, dst.Value)
 		}
 	}
 }
-*/
