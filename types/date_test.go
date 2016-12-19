@@ -105,15 +105,6 @@ func TestConvertDateToTime(t *testing.T) {
 	}
 }
 
-/*
-func TestConvertBoolToDate(t *testing.T) {
-	b := Bool(false)
-	if _, err := Convert(&b, DateID); err == nil {
-		t.Errorf("Expected error converting bool to date")
-	}
-}
-*/
-
 func TestConvertInt32ToDate(t *testing.T) {
 	data := []struct {
 		in  int32
