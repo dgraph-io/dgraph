@@ -84,6 +84,10 @@ type node struct {
 	raftContext *task.RaftContext
 	store       *raft.MemoryStorage
 	wal         *raftwal.Wal
+	// applied is used to keep track of the applied RAFT proposals.
+	// The stages are proposed -> committed (accepted by cluster) ->
+	// applied (to PL) -> synced (to RocksDB).
+	applied x.WaterMark
 }
 
 func newNode(gid uint32, id uint64, myAddr string) *node {
@@ -122,6 +126,9 @@ func newNode(gid uint32, id uint64, myAddr string) *node {
 		raftContext: rc,
 		messages:    make(chan sendmsg, 1000),
 	}
+	n.applied = x.WaterMark{Name: "Committed Mark"}
+	n.applied.Init()
+
 	return n
 }
 
@@ -296,7 +303,10 @@ func (n *node) batchAndSendMessages() {
 }
 
 func (n *node) processMutation(e raftpb.Entry, m *task.Mutations) error {
-	if err := mutate(n.ctx, m); err != nil {
+	// TODO: Need to pass node and entry index.
+	rv := x.RaftValue{Group: n.gid, Index: e.Index}
+	ctx := context.WithValue(n.ctx, "raft", rv)
+	if err := runMutations(ctx, m.Edges); err != nil {
 		x.TraceError(n.ctx, err)
 		return err
 	}
@@ -313,6 +323,10 @@ func (n *node) processMembership(e raftpb.Entry, mm *task.Membership) error {
 }
 
 func (n *node) process(e raftpb.Entry, pending chan struct{}) {
+	defer func() {
+		n.applied.Ch <- x.Mark{Index: e.Index, Done: true}
+	}()
+
 	if e.Type != raftpb.EntryNormal {
 		return
 	}
@@ -338,6 +352,7 @@ func (n *node) processCommitCh() {
 
 	for e := range n.commitCh {
 		if e.Data == nil {
+			n.applied.Ch <- x.Mark{Index: e.Index, Done: true}
 			continue
 		}
 
@@ -352,6 +367,7 @@ func (n *node) processCommitCh() {
 			}
 
 			n.raft.ApplyConfChange(cc)
+			n.applied.Ch <- x.Mark{Index: e.Index, Done: true}
 
 		} else {
 			go n.process(e, pending)
@@ -423,6 +439,11 @@ func (n *node) Run() {
 			for _, entry := range rd.CommittedEntries {
 				// Just queue up to be processed. Don't wait on them.
 				n.commitCh <- entry
+				status := x.Mark{Index: entry.Index, Done: false}
+				if entry.Index == 2 {
+					fmt.Printf("%+v\n", entry)
+				}
+				n.applied.Ch <- status
 			}
 
 			n.raft.Advance()

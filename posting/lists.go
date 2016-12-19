@@ -47,7 +47,51 @@ var (
 
 	dirtyChan       chan uint64 // All dirty posting list keys are pushed here.
 	startCommitOnce sync.Once
+	marks           syncMarks
 )
+
+// syncMarks stores the watermark for synced RAFT proposals. Each RAFT proposal consists
+// of many individual mutations, which could be applied to many different posting lists.
+// Thus, each PL when being mutated would send an undone Mark, and each list would
+// accumulate all such pending marks. When the PL is synced to RocksDB, it would
+// mark all the pending ones as done.
+// This ideally belongs to RAFT node struct (where committed watermark is being tracked),
+// but because the logic of mutations is
+// present here and to avoid a circular dependency, we've placed it here.
+// Note that there's one watermark for each RAFT node/group.
+// This watermark would be used for taking snapshots, to ensure that all the data and
+// index mutations have been syned to RocksDB, before a snapshot is taken, and previous
+// RAFT entries discarded.
+type syncMarks struct {
+	sync.RWMutex
+	m map[uint32]*x.WaterMark
+}
+
+func (g *syncMarks) create(group uint32) *x.WaterMark {
+	g.Lock()
+	defer g.Unlock()
+
+	if prev, present := g.m[group]; present {
+		return prev
+	}
+	w := &x.WaterMark{Name: fmt.Sprintf("group: %d", group)}
+	w.Init()
+	if g.m == nil {
+		g.m = make(map[uint32]*x.WaterMark)
+	}
+	g.m[group] = w
+	return w
+}
+
+func (g *syncMarks) Get(group uint32) *x.WaterMark {
+	g.RLock()
+	if w, present := g.m[group]; present {
+		g.RUnlock()
+		return w
+	}
+	g.RUnlock()
+	return g.create(group)
+}
 
 type counters struct {
 	ticker  *time.Ticker
@@ -293,7 +337,12 @@ func getFromMap(key uint64) *List {
 // plist, decr := GetOrCreate(key, store)
 // defer decr()
 // ... // Use plist
-func GetOrCreate(key []byte) (rlist *List, decr func()) {
+// TODO: This should take a node id and index. And just append all indices to a list.
+// When doing a commit, it should update all the sync index watermarks.
+// worker pkg would push the indices to the watermarks held by lists.
+// And watermark stuff would have to be located outside worker pkg, maybe in x.
+// That way, we don't have a dependency conflict.
+func GetOrCreate(key []byte, group uint32) (rlist *List, decr func()) {
 	fp := farm.Fingerprint64(key)
 
 	stopTheWorld.RLock()
@@ -315,6 +364,7 @@ func GetOrCreate(key []byte) (rlist *List, decr func()) {
 		// Undo the increment in getNew() call above.
 		l.decr()
 	}
+	lp.water = marks.Get(group)
 	return lp, lp.decr
 }
 
@@ -366,14 +416,15 @@ func CommitLists(numRoutines int) {
 
 // The following logic is used to batch up all the writes to RocksDB.
 type commitEntry struct {
-	key []byte
-	val []byte
-	sw  *x.SafeWait
+	key     []byte
+	val     []byte
+	water   *x.WaterMark
+	pending []uint64
+	sw      *x.SafeWait
 }
 
 func batchCommit() {
-	var sz int
-	var waits []*x.SafeWait
+	var entries []commitEntry
 	var loop uint64
 
 	b := pstore.NewWriteBatch()
@@ -382,24 +433,30 @@ func batchCommit() {
 	for {
 		select {
 		case e := <-commitCh:
-			b.Put(e.key, e.val)
-			sz++
-			waits = append(waits, e.sw)
+			entries = append(entries, e)
 
 		default:
 			// default is executed if no other case is ready.
 			start := time.Now()
-			if sz > 0 {
+			if len(entries) > 0 {
 				x.AssertTrue(b != nil)
 				loop++
-				fmt.Printf("[%4d] Writing batch of size: %v\n", loop, sz)
-				x.Checkf(pstore.WriteBatch(b), "Error while writing to RocksDB.")
-				for _, w := range waits {
-					w.Done()
+				fmt.Printf("[%4d] Writing batch of size: %v\n", loop, len(entries))
+				for _, e := range entries {
+					b.Put(e.key, e.val)
 				}
+				x.Checkf(pstore.WriteBatch(b), "Error while writing to RocksDB.")
 				b.Clear()
-				sz = 0
-				waits = waits[:0]
+
+				for _, e := range entries {
+					e.sw.Done()
+					if e.water != nil {
+						for _, index := range e.pending {
+							e.water.Ch <- x.Mark{Index: index, Done: true}
+						}
+					}
+				}
+				entries = entries[:0]
 			}
 			// Add a sleep clause to avoid a busy wait loop if there's no input to commitCh.
 			sleepFor := 10*time.Millisecond - time.Since(start)

@@ -66,7 +66,6 @@ func prepare() (dir1, dir2 string, ps *store.Store, rerr error) {
 	}
 
 	posting.Init(ps)
-	loader.Init(ps)
 	group.ParseGroupConfig("groups.conf")
 	worker.StartRaftNodes(dir2)
 

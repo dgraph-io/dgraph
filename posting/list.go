@@ -67,6 +67,9 @@ type List struct {
 	deleteMe    int32
 	refcount    int32
 
+	water   *x.WaterMark
+	pending []uint64
+
 	dirtyTs int64 // Use atomics for this.
 }
 
@@ -127,9 +130,18 @@ func samePosting(a *types.Posting, b *types.Posting) bool {
 	return true
 }
 
-func newPosting(t *task.DirectedEdge, op uint32) *types.Posting {
+func newPosting(t *task.DirectedEdge) *types.Posting {
 	x.AssertTruef(bytes.Equal(t.Value, nil) || t.ValueId == math.MaxUint64,
 		"This should have been set by the caller.")
+
+	var op uint32
+	if t.Op == task.DirectedEdge_SET {
+		op = Set
+	} else if t.Op == task.DirectedEdge_DEL {
+		op = Del
+	} else {
+		x.Fatalf("Unhandled operation: %+v", t)
+	}
 
 	return &types.Posting{
 		Uid:     t.ValueId,
@@ -309,7 +321,7 @@ func (l *List) updateMutationLayer(mpost *types.Posting) bool {
 // AddMutation adds mutation to mutation layers. Note that it does not write
 // anything to disk. Some other background routine will be responsible for merging
 // changes in mutation layers to RocksDB. Returns whether any mutation happens.
-func (l *List) AddMutation(ctx context.Context, t *task.DirectedEdge, op uint32) (bool, error) {
+func (l *List) AddMutation(ctx context.Context, t *task.DirectedEdge) (bool, error) {
 	if atomic.LoadInt32(&l.deleteMe) == 1 {
 		x.TraceError(ctx, x.Errorf("DELETEME set to true. Temporary error."))
 		return false, ErrRetry
@@ -327,7 +339,7 @@ func (l *List) AddMutation(ctx context.Context, t *task.DirectedEdge, op uint32)
 		x.TraceError(ctx, err)
 		return false, err
 	}
-	mpost := newPosting(t, op)
+	mpost := newPosting(t)
 
 	// Mutation arrives:
 	// - Check if we had any(SET/DEL) before this, stored in the mutation list.
@@ -339,7 +351,11 @@ func (l *List) AddMutation(ctx context.Context, t *task.DirectedEdge, op uint32)
 	defer l.Unlock()
 
 	hasMutated := l.updateMutationLayer(mpost)
-	if len(l.mlayer) > 0 {
+	if hasMutated {
+		if rv, ok := ctx.Value("raft").(x.RaftValue); ok {
+			l.water.Ch <- x.Mark{Index: rv.Index}
+			l.pending = append(l.pending, rv.Index)
+		}
 		atomic.StoreInt64(&l.dirtyTs, time.Now().UnixNano())
 		if dirtyChan != nil {
 			dirtyChan <- l.ghash
@@ -462,6 +478,7 @@ func (l *List) commit() (committed bool, rerr error) {
 	defer l.Unlock()
 
 	if len(l.mlayer) == 0 {
+		x.AssertTrue(len(l.pending) == 0)
 		atomic.StoreInt64(&l.dirtyTs, 0)
 		return false, nil
 	}
@@ -490,15 +507,18 @@ func (l *List) commit() (committed bool, rerr error) {
 	data, err := final.Marshal()
 	x.Checkf(err, "Unable to marshal posting list")
 
-	sw := l.StartWait()
+	sw := l.StartWait() // Corresponding l.Wait() in getPostingList.
 	ce := commitEntry{
-		key: l.key,
-		val: data,
-		sw:  sw,
+		key:     l.key,
+		val:     data,
+		sw:      sw,
+		water:   l.water,
+		pending: l.pending,
 	}
 	commitCh <- ce
 
 	// Now reset the mutation variables.
+	l.pending = make([]uint64, 0, 3)
 	atomic.StorePointer(&l.pbuffer, nil) // Make prev buffer eligible for GC.
 	atomic.StoreInt64(&l.dirtyTs, 0)     // Set as clean.
 	l.mlayer = l.mlayer[:0]

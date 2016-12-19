@@ -91,10 +91,11 @@ func addEdgeToValue(t *testing.T, ps *store.Store, attr string, src uint64,
 		Label:  "testing",
 		Attr:   attr,
 		Entity: src,
+		Op:     task.DirectedEdge_SET,
 	}
-	l, _ := posting.GetOrCreate(x.DataKey(attr, src))
+	l, _ := posting.GetOrCreate(x.DataKey(attr, src), 0)
 	require.NoError(t,
-		l.AddMutationWithIndex(context.Background(), edge, posting.Set))
+		l.AddMutationWithIndex(context.Background(), edge))
 }
 
 func addEdgeToTypedValue(t *testing.T, ps *store.Store, attr string, src uint64,
@@ -105,10 +106,11 @@ func addEdgeToTypedValue(t *testing.T, ps *store.Store, attr string, src uint64,
 		Label:     "testing",
 		Attr:      attr,
 		Entity:    src,
+		Op:        task.DirectedEdge_SET,
 	}
-	l, _ := posting.GetOrCreate(x.DataKey(attr, src))
+	l, _ := posting.GetOrCreate(x.DataKey(attr, src), 0)
 	require.NoError(t,
-		l.AddMutationWithIndex(context.Background(), edge, posting.Set))
+		l.AddMutationWithIndex(context.Background(), edge))
 }
 
 func addEdgeToUID(t *testing.T, ps *store.Store, attr string, src uint64, dst uint64) {
@@ -117,10 +119,11 @@ func addEdgeToUID(t *testing.T, ps *store.Store, attr string, src uint64, dst ui
 		Label:   "testing",
 		Attr:    attr,
 		Entity:  src,
+		Op:      task.DirectedEdge_SET,
 	}
-	l, _ := posting.GetOrCreate(x.DataKey(attr, src))
+	l, _ := posting.GetOrCreate(x.DataKey(attr, src), 0)
 	require.NoError(t,
-		l.AddMutationWithIndex(context.Background(), edge, posting.Set))
+		l.AddMutationWithIndex(context.Background(), edge))
 }
 
 func populateGraph(t *testing.T) (string, string, *store.Store) {

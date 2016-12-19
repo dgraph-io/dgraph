@@ -47,7 +47,7 @@ func ProcessTaskOverNetwork(ctx context.Context, q *task.Query) (*task.Result, e
 
 	if groups().ServesGroup(gid) {
 		// No need for a network call, as this should be run from within this instance.
-		return processTask(q)
+		return processTask(q, gid)
 	}
 
 	// Send this over the network.
@@ -86,7 +86,7 @@ func getValue(attr, data string) (types.Val, error) {
 }
 
 // processTask processes the query, accumulates and returns the result.
-func processTask(q *task.Query) (*task.Result, error) {
+func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 	attr := q.Attr
 
 	useFunc := len(q.SrcFunc) != 0
@@ -158,7 +158,7 @@ func processTask(q *task.Query) (*task.Result, error) {
 			key = x.DataKey(attr, q.Uids[i])
 		}
 		// Get or create the posting list for an entity, attribute combination.
-		pl, decr := posting.GetOrCreate(key)
+		pl, decr := posting.GetOrCreate(key, gid)
 		defer decr()
 
 		// If a posting list contains a value, we store that or else we store a nil
@@ -223,7 +223,7 @@ func processTask(q *task.Query) (*task.Result, error) {
 		uids := algo.MergeSorted(out.UidMatrix)
 		for _, uid := range uids.Uids {
 			key := x.DataKey(attr, uid)
-			pl, decr := posting.GetOrCreate(key)
+			pl, decr := posting.GetOrCreate(key, gid)
 
 			vbytes, vtype, err := pl.Value()
 			newValue := &task.Value{ValType: uint32(vtype)}
@@ -249,7 +249,8 @@ func processTask(q *task.Query) (*task.Result, error) {
 // encountered, we return nil. This is used in some filtering where we do not
 // want to waste time creating errors.
 func getPostingValue(key []byte, scalarID types.TypeID) types.Val {
-	pl, decr := posting.GetOrCreate(key)
+	// TODO: Use posting.Get
+	pl, decr := posting.GetOrCreate(key, 0)
 	defer decr()
 
 	valBytes, vType, err := pl.Value()
@@ -281,7 +282,7 @@ func (w *grpcWorker) ServeTask(ctx context.Context, q *task.Query) (*task.Result
 	c := make(chan error, 1)
 	go func() {
 		var err error
-		reply, err = processTask(q)
+		reply, err = processTask(q, gid)
 		c <- err
 	}()
 
