@@ -37,7 +37,6 @@ const (
 	fragmentMode = 3
 	equal        = '='
 	quote        = '"'
-	tilde        = '~'
 )
 
 // Constants representing type of different graphql lexed items.
@@ -616,7 +615,7 @@ func isEndLiteral(r rune) bool {
 	return r == '"' || r == '\u000d' || r == '\u000a'
 }
 
-// isNameBegin returns true if the rune is an alphabet or an '_'.
+// isNameBegin returns true if the rune is an alphabet or an '_' or '~'.
 func isNameBegin(r rune) bool {
 	switch {
 	case r >= 'a' && r <= 'z':
