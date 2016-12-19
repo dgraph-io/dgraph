@@ -72,15 +72,18 @@ func ProcessTaskOverNetwork(ctx context.Context, q *task.Query) (*task.Result, e
 	return reply, nil
 }
 
-func getValue(attr, data string) (types.Val, error) {
+// convertValue converts the data to the schema type of predicate.
+func convertValue(attr, data string) (types.Val, error) {
 	// Parse given value and get token. There should be only one token.
 	t := schema.TypeOf(attr)
 	if t == nil || !t.IsScalar() {
 		return types.Val{}, x.Errorf("Attribute %s is not valid scalar type", attr)
 	}
 
-	v := types.Val{t.(types.TypeID), []byte(data)}
-	return v, nil
+	src := types.Val{types.StringID, []byte(data)}
+	dst := types.ValueForType(t.(types.TypeID))
+	x.Check(types.Convert(src, &dst))
+	return dst, nil
 }
 
 // processTask processes the query, accumulates and returns the result.
@@ -109,12 +112,14 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 				return nil, x.Errorf("Function requires 2 arguments, but got %d %v",
 					len(q.SrcFunc), q.SrcFunc)
 			}
-			ineqValue, err = getValue(attr, q.SrcFunc[1])
+			ineqValue, err = convertValue(attr, q.SrcFunc[1])
 			if err != nil {
 				return nil, err
 			}
 			// Tokenizing RHS value of inequality.
-			ineqTokens, err := posting.IndexTokens(attr, ineqValue.Tid, ineqValue.Value.([]byte))
+			v := types.ValueForType(types.BinaryID)
+			x.Check(types.Marshal(ineqValue, &v))
+			ineqTokens, err := posting.IndexTokens(attr, types.Val{ineqValue.Tid, v.Value.([]byte)})
 			if err != nil {
 				return nil, err
 			}
@@ -205,8 +210,6 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 			if sv.Value == nil || err != nil {
 				return false
 			}
-			ival := ineqValue
-			x.Check(types.Convert(ineqValue, &ival))
 			if isGeq {
 				return !types.Less(sv, ineqValue)
 			}

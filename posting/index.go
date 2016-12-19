@@ -87,15 +87,13 @@ func initIndex() {
 }
 
 // IndexTokens return tokens, without the predicate prefix and index rune.
-func IndexTokens(attr string, pID types.TypeID, data []byte) ([]string, error) {
+func IndexTokens(attr string, src types.Val) ([]string, error) {
 	schemaType := schema.TypeOf(attr)
 	if !schemaType.IsScalar() {
 		return nil, x.Errorf("Cannot index attribute %s of type object.", attr)
 	}
 	s := schemaType.(types.TypeID)
 	sv := types.ValueForType(s)
-	src := types.ValueForType(pID)
-	src.Value = data
 	err := types.Convert(src, &sv)
 	if err != nil {
 		return nil, err
@@ -108,11 +106,8 @@ func IndexTokens(attr string, pID types.TypeID, data []byte) ([]string, error) {
 func addIndexMutations(ctx context.Context, t *task.DirectedEdge, p types.Val, op task.DirectedEdge_Op) {
 	attr := t.Attr
 	uid := t.Entity
-	typ := p.Tid
-	data := p.Value.([]byte)
 	x.AssertTrue(uid != 0)
-	dataType := types.TypeID(typ)
-	tokens, err := IndexTokens(attr, dataType, data)
+	tokens, err := IndexTokens(attr, p)
 	if err != nil {
 		// This data is not indexable
 		return
