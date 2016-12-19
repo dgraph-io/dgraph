@@ -72,7 +72,7 @@ func ProcessTaskOverNetwork(ctx context.Context, q *task.Query) (*task.Result, e
 	return reply, nil
 }
 
-// convertValue converts the data the predicates schema type.
+// convertValue converts the data to the schema type of predicate.
 func convertValue(attr, data string) (types.Val, error) {
 	// Parse given value and get token. There should be only one token.
 	t := schema.TypeOf(attr)
