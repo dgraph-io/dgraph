@@ -24,7 +24,6 @@ import (
 
 	"golang.org/x/net/trace"
 
-	"github.com/dgraph-io/dgraph/geo"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/types"
@@ -105,7 +104,7 @@ func IndexTokens(attr string, pID types.TypeID, data []byte) ([]string, error) {
 	}
 	switch v := sv.Value.(type) {
 	case geom.T:
-		return geo.IndexTokens(&v)
+		return types.IndexGeoTokens(&v)
 	case int32:
 		return types.IntIndex(attr, &v)
 	case float64:
