@@ -6,8 +6,9 @@ import (
 )
 
 const (
-	byteData  = byte(0x00)
-	byteIndex = byte(0x01)
+	byteData    = byte(0x00)
+	byteIndex   = byte(0x01)
+	byteReverse = byte(0x02)
 )
 
 func writeAttr(buf []byte, attr string) []byte {
@@ -39,6 +40,17 @@ func IndexKey(attr, term string) []byte {
 
 	rest = rest[1:]
 	AssertTrue(len(term) == copy(rest, term[:]))
+	return buf
+}
+
+func ReverseKey(attr string, uid uint64) []byte {
+	buf := make([]byte, 2+len(attr)+1+8)
+
+	rest := writeAttr(buf, attr)
+	rest[0] = byteReverse
+
+	rest = rest[1:]
+	binary.BigEndian.PutUint64(rest, uid)
 	return buf
 }
 

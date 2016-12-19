@@ -37,12 +37,14 @@ type TokensTable struct {
 }
 
 var (
-	indexLog trace.EventLog
-	tables   map[string]*TokensTable
+	indexLog   trace.EventLog
+	reverseLog trace.EventLog
+	tables     map[string]*TokensTable
 )
 
 func init() {
 	indexLog = trace.NewEventLog("index", "Logger")
+	reverseLog = trace.NewEventLog("reverse", "Logger")
 }
 
 // initIndex initializes the index with the given data store.
@@ -170,7 +172,43 @@ func addIndexMutation(ctx context.Context, attr, token string,
 	}
 }
 
-// AddMutationWithIndex is AddMutation with support for indexing.
+func addReverseMutation(ctx context.Context, attr string, src, dst uint64, del bool) {
+	key := x.ReverseKey(attr, dst)
+	plist, decr := GetOrCreate(key)
+	defer decr()
+
+	x.AssertTruef(plist != nil, "plist is nil [%s] %d %d", attr, src, dst)
+	edge := &task.DirectedEdge{
+		Entity:  dst,
+		ValueId: src,
+		Attr:    attr,
+		Label:   "rev",
+	}
+
+	if del {
+		_, err := plist.AddMutation(ctx, edge, Del)
+		if err != nil {
+			x.TraceError(ctx, x.Wrapf(err,
+				"Error deleting reverse edge for attr %s src %d dst %d",
+				attr, src, dst))
+		}
+		reverseLog.Printf("DEL [%s] [%d] [%d]", attr, src, dst)
+		x.Printf("~~~DEL [%s] [%d] [%d]", attr, src, dst)
+
+	} else {
+		_, err := plist.AddMutation(ctx, edge, Set)
+		if err != nil {
+			x.TraceError(ctx, x.Wrapf(err,
+				"Error adding reverse edge for attr %s src %d dst %d",
+				attr, src, dst))
+		}
+		reverseLog.Printf("SET [%s] [%d] [%d]", attr, src, dst)
+		x.Printf("~~~SET [%s] [%d] [%d]", attr, src, dst)
+	}
+}
+
+// AddMutationWithIndex is AddMutation with support for indexing. It also
+// supports reverse edges.
 func (l *List) AddMutationWithIndex(ctx context.Context, t *task.DirectedEdge, op uint32) error {
 	x.AssertTruef(len(t.Attr) > 0,
 		"[%s] [%d] [%v] %d %d\n", t.Attr, t.Entity, t.Value, t.ValueId, op)
@@ -181,6 +219,8 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *task.DirectedEdge, o
 
 	doUpdateIndex := pstore != nil && (t.Value != nil) &&
 		schema.IsIndexed(t.Attr)
+	doReverseEdge := pstore != nil && (t.ValueId != 0) &&
+		schema.IsReversed(t.Attr)
 	if doUpdateIndex {
 		// Check last posting for original value BEFORE any mutation actually happens.
 		vbytes, vtype, verr = l.Value()
@@ -189,26 +229,35 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *task.DirectedEdge, o
 	if err != nil {
 		return err
 	}
-	if !hasMutated || !doUpdateIndex {
+	if !hasMutated {
 		return nil
 	}
-
-	// Exact matches.
-	if verr == nil && len(vbytes) > 0 {
-		delTerm := vbytes
-		delType := vtype
-		p := types.ValueForType(types.TypeID(delType))
-		if err := p.UnmarshalBinary(delTerm); err != nil {
-			return err
+	if doUpdateIndex {
+		// Exact matches.
+		if verr == nil && len(vbytes) > 0 {
+			delTerm := vbytes
+			delType := vtype
+			p := types.ValueForType(types.TypeID(delType))
+			if err := p.UnmarshalBinary(delTerm); err != nil {
+				return err
+			}
+			addIndexMutations(ctx, t.Attr, t.Entity, p, true)
 		}
-		addIndexMutations(ctx, t.Attr, t.Entity, p, true)
+		if op == Set {
+			p := types.ValueForType(types.TypeID(t.ValueType))
+			if err := p.UnmarshalBinary(t.Value); err != nil {
+				return err
+			}
+			addIndexMutations(ctx, t.Attr, t.Entity, p, false)
+		}
 	}
-	if op == Set {
-		p := types.ValueForType(types.TypeID(t.ValueType))
-		if err := p.UnmarshalBinary(t.Value); err != nil {
-			return err
+	if doReverseEdge {
+		// Consider reverse edge.
+		if op == Del {
+			addReverseMutation(ctx, t.Attr, t.Entity, t.ValueId, true)
+		} else { // SET
+			addReverseMutation(ctx, t.Attr, t.Entity, t.ValueId, false)
 		}
-		addIndexMutations(ctx, t.Attr, t.Entity, p, false)
 	}
 	return nil
 }

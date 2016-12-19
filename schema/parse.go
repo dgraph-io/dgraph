@@ -228,6 +228,17 @@ L:
 					return x.Errorf("Repeated field %v in object %v", name, objName)
 				}
 				obj.Fields[name] = typ
+
+				// Check for reverse.
+				next = <-l.Items
+				if next.Typ == itemAt {
+					index := <-l.Items
+					if index.Typ == itemReverse {
+						reversedFields[name] = true
+					} else {
+						return x.Errorf("Invalid reverse specification")
+					}
+				}
 			}
 		case lex.ItemError:
 			return x.Errorf(item.Val)

@@ -83,6 +83,10 @@ const schemaStr = `
 scalar name:string @index
 scalar dob:date @index
 scalar loc:geo @index
+
+type  Person {
+  friend: Person @reverse
+}
 `
 
 func addEdgeToValue(t *testing.T, ps *store.Store, attr string, src uint64,
@@ -990,6 +994,30 @@ func TestToJSONFilterAnd(t *testing.T) {
 	js := processToJSON(t, query)
 	require.EqualValues(t,
 		`{"me":[{"gender":"female","name":"Michonne"}]}`, js)
+}
+
+func TestToJSONReverse(t *testing.T) {
+	dir, dir2, _ := populateGraph(t)
+	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
+	query := `
+		{
+			me(_uid_:0x18) {
+				name
+				gender
+			  alive
+				~friend {
+					name
+				}
+			}
+		}
+	`
+
+	js := processToJSON(t, query)
+	x.Printf("~~~output js=[%s]", js)
+	require.JSONEq(t,
+		`{"me":[{"alive":true,"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
+		js)
 }
 
 func getProperty(properties []*graph.Property, prop string) *graph.Value {

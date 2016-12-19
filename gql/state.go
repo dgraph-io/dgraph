@@ -37,6 +37,7 @@ const (
 	fragmentMode = 3
 	equal        = '='
 	quote        = '"'
+	tilde        = '~'
 )
 
 // Constants representing type of different graphql lexed items.
@@ -623,6 +624,8 @@ func isNameBegin(r rune) bool {
 	case r >= 'A' && r <= 'Z':
 		return true
 	case r == '_':
+		return true
+	case r == '~':
 		return true
 	default:
 		return false

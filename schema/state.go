@@ -44,6 +44,7 @@ const (
 	itemCollon
 	itemAt
 	itemIndex
+	itemReverse
 	itemDummy // Used if index specification is missing
 )
 
@@ -360,8 +361,42 @@ L:
 		break
 	}
 
+	// Check for mention of @reverse.
+	var isReversed bool
+L1:
+	for {
+		switch r := l.Next(); {
+		case isSpace(r):
+			l.Ignore()
+		case isEndOfLine(r):
+			break L1
+		case r == '@':
+			l.Emit(itemAt)
+			isReversed = true
+			for {
+				r := l.Next()
+				if isNameSuffix(r) {
+					continue // absorb
+				}
+				l.Backup()
+				// l.Pos would be index of the end of operation type + 1.
+				word := l.Input[l.Start:l.Pos]
+				if word == "reverse" {
+					l.Emit(itemReverse)
+					break L1
+				} else {
+					return l.Errorf("Invalid mention of reverse")
+				}
+			}
+			break L1
+		default:
+			return l.Errorf("Invalid schema. Unexpected %s", l.Input[l.Start:l.Pos])
+		}
+	}
+	if !isReversed {
+		l.Emit(itemDummy)
+	}
 	return lexObjectBlock
-
 }
 
 // isNameBegin returns true if the rune is an alphabet.

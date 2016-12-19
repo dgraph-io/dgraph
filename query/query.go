@@ -537,6 +537,8 @@ func createTaskQuery(sg *SubGraph) *task.Query {
 func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	var err error
 
+	x.Printf("~~~~processGraph attr=[%s]", sg.Attr)
+
 	if len(sg.Attr) == 0 {
 		// If we have a filter SubGraph which only contains an operator,
 		// it won't have any attribute to work on.
