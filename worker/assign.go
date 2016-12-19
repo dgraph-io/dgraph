@@ -88,10 +88,13 @@ func AssignUidsOverNetwork(ctx context.Context, umap map[string]uint64) error {
 
 	var ul *task.List
 	var err error
-	if groups().ServesGroup(gid) {
+	lid, _ := groups().Leader(gid)
+	n := groups().Node(gid)
+	if n != nil && n.id == lid {
+		x.Trace(ctx, "Calling assignUids as I'm leader of group: %d", gid)
 		ul, err = assignUids(ctx, num)
 		if err != nil {
-			return err
+			return x.Wrap(err)
 		}
 
 	} else {
@@ -103,6 +106,7 @@ func AssignUidsOverNetwork(ctx context.Context, umap map[string]uint64) error {
 			return err
 		}
 		defer p.Put(conn)
+		x.Trace(ctx, "Calling AssignUids for group: %d, addr: %s", gid, addr)
 
 		c := NewWorkerClient(conn)
 		ul, err = c.AssignUids(ctx, num)

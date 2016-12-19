@@ -405,19 +405,14 @@ func (n *node) saveToStorage(s raftpb.Snapshot, h raftpb.HardState,
 	n.store.Append(es)
 }
 
-func (n *node) processSnapshot(s raftpb.Snapshot) {
-	lead := n.raft.Status().Lead
-	if lead == 0 { // If we don't know who the leader is, we can't do much.
-		return
-	}
-	addr := n.peers.Get(lead)
-	x.AssertTruef(addr != "", "Should have the leader address: %v", lead)
+func (n *node) retrieveSnapshot(rc task.RaftContext) {
+	addr := n.peers.Get(rc.Id)
+	x.AssertTruef(addr != "", "Should have the address for %d", rc.Id)
 	pool := pools().get(addr)
-	x.AssertTruef(pool != nil, "Leader: %d pool should not be nil", lead)
+	x.AssertTruef(pool != nil, "Pool shouldn't be nil for address: %v for id: %v", addr, rc.Id)
 
-	x.Fatalf("populateShard called for group: %v", n.gid)
-	_, err := populateShard(context.TODO(), pool, 0)
-	x.Checkf(err, "processSnapshot")
+	x.AssertTrue(rc.Group == n.gid)
+	x.Check2(populateShard(n.ctx, pool, n.gid))
 }
 
 func (n *node) Run() {
@@ -443,9 +438,18 @@ func (n *node) Run() {
 			}
 
 			if !raft.IsEmptySnap(rd.Snapshot) {
-				// Every time processSnapshot is called, we sync with the leader.
-				// Why? This should only happen when starting up the server the first time, never again.
-				n.processSnapshot(rd.Snapshot)
+				// We don't send snapshots to other nodes. But, if we get one, that means
+				// either the leader is trying to bring us up to state; or this is the
+				// snapshot that I created. Only the former case should be handled.
+				var rc task.RaftContext
+				x.Check(rc.Unmarshal(rd.Snapshot.Data))
+				if rc.Id != n.id {
+					fmt.Printf("-------> SNAPSHOT [%d] from %d\n", n.gid, rc.Id)
+					n.retrieveSnapshot(rc)
+					fmt.Printf("-------> SNAPSHOT [%d]. DONE.\n", n.gid)
+				} else {
+					fmt.Printf("-------> SNAPSHOT [%d] from %d [SELF]. Ignoring.\n", n.gid, rc.Id)
+				}
 			}
 			if len(rd.CommittedEntries) > 0 {
 				x.Trace(n.ctx, "Found %d committed entries", len(rd.CommittedEntries))
@@ -514,8 +518,9 @@ func (n *node) snapshotPeriodically() {
 				fmt.Println(msg)
 			}
 
-			msg = fmt.Sprintf("Snapshot from %v", strconv.FormatUint(n.id, 10))
-			s, err := n.store.CreateSnapshot(le, nil, []byte(msg))
+			rc, err := n.raftContext.Marshal()
+			x.Check(err)
+			s, err := n.store.CreateSnapshot(le, nil, rc)
 			x.Checkf(err, "While creating snapshot")
 			x.Checkf(n.store.Compact(le), "While compacting snapshot")
 			x.Check(n.wal.StoreSnapshot(n.gid, s))
@@ -548,7 +553,7 @@ func (n *node) joinPeers() {
 	x.AssertTruef(pool != nil, "Unable to find addr for peer: %d", pid)
 
 	// Bring the instance up to speed first.
-	_, err := populateShard(n.ctx, pool, 0)
+	_, err := populateShard(n.ctx, pool, n.gid)
 	x.Checkf(err, "Error while populating shard")
 
 	conn, err := pool.Get()
