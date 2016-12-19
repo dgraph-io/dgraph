@@ -3,6 +3,7 @@ package types
 import (
 	"bytes"
 	"encoding/binary"
+	"time"
 
 	"github.com/dgraph-io/dgraph/tok"
 )
@@ -16,8 +17,8 @@ const (
 )
 
 // DefaultIndexKeys tokenizes data as a string and return keys for indexing.
-func DefaultIndexKeys(attr string, val *String) []string {
-	data := []byte((*val).String())
+func DefaultIndexKeys(attr string, val *string) []string {
+	data := []byte((*val))
 	tokenizer, err := tok.NewTokenizer(data)
 	if err != nil {
 		return nil
@@ -36,7 +37,7 @@ func DefaultIndexKeys(attr string, val *String) []string {
 }
 
 // IntIndex indexs int type.
-func IntIndex(attr string, val *Int32) ([]string, error) {
+func IntIndex(attr string, val *int32) ([]string, error) {
 	buf := new(bytes.Buffer)
 	err := binary.Write(buf, binary.BigEndian, int32(*val))
 	if err != nil {
@@ -46,7 +47,7 @@ func IntIndex(attr string, val *Int32) ([]string, error) {
 }
 
 // FloatIndex indexs float type.
-func FloatIndex(attr string, val *Float) ([]string, error) {
+func FloatIndex(attr string, val *float64) ([]string, error) {
 	in := int32(*val)
 	buf := new(bytes.Buffer)
 	err := binary.Write(buf, binary.BigEndian, in)
@@ -57,9 +58,9 @@ func FloatIndex(attr string, val *Float) ([]string, error) {
 }
 
 // DateIndex indexs time type.
-func DateIndex(attr string, val *Date) ([]string, error) {
+func DateIndex(attr string, val *time.Time) ([]string, error) {
 	buf := new(bytes.Buffer)
-	err := binary.Write(buf, binary.BigEndian, int32((*val).Time.Year()))
+	err := binary.Write(buf, binary.BigEndian, int32((*val).Year()))
 	if err != nil {
 		return nil, err
 	}
@@ -67,9 +68,9 @@ func DateIndex(attr string, val *Date) ([]string, error) {
 }
 
 // TimeIndex indexs time type.
-func TimeIndex(attr string, val *Time) ([]string, error) {
+func TimeIndex(attr string, val *time.Time) ([]string, error) {
 	buf := new(bytes.Buffer)
-	err := binary.Write(buf, binary.BigEndian, int32((*val).Time.Year()))
+	err := binary.Write(buf, binary.BigEndian, int32((*val).Year()))
 	if err != nil {
 		return nil, err
 	}

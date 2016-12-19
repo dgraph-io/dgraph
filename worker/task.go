@@ -74,19 +74,14 @@ func ProcessTaskOverNetwork(ctx context.Context, q *task.Query) (*task.Result, e
 	return reply, nil
 }
 
-func getValue(attr, data string) (types.Value, error) {
+func getValue(attr, data string) (types.Val, error) {
 	// Parse given value and get token. There should be only one token.
 	t := schema.TypeOf(attr)
 	if t == nil || !t.IsScalar() {
-		return nil, x.Errorf("Attribute %s is not valid scalar type", attr)
+		return types.Val{}, x.Errorf("Attribute %s is not valid scalar type", attr)
 	}
 
-	schemaType := t.(types.Scalar)
-	v := types.ValueForType(schemaType.ID())
-	err := v.UnmarshalText([]byte(data))
-	if err != nil {
-		return nil, err
-	}
+	v := types.Val{t.(types.TypeID), []byte(data)}
 	return v, nil
 }
 
@@ -100,7 +95,7 @@ func processTask(q *task.Query) (*task.Result, error) {
 	var geoQuery *geo.QueryData
 	var err error
 	var intersectDest bool
-	var ineqValue types.Value
+	var ineqValue types.Val
 	var ineqValueToken string
 	var isGeq, isLeq bool
 
@@ -121,7 +116,7 @@ func processTask(q *task.Query) (*task.Result, error) {
 				return nil, err
 			}
 			// Tokenizing RHS value of inequality.
-			ineqTokens, err := posting.IndexTokens(attr, ineqValue)
+			ineqTokens, err := posting.IndexTokens(attr, ineqValue.Tid, ineqValue.Value.([]byte))
 			if err != nil {
 				return nil, err
 			}
@@ -202,21 +197,23 @@ func processTask(q *task.Query) (*task.Result, error) {
 		if typ == nil || !typ.IsScalar() {
 			return nil, x.Errorf("Attribute not scalar: %s %v", attr, typ)
 		}
-		scalarType := typ.(types.Scalar)
 
+		scalarType := typ.(types.TypeID)
 		x.AssertTrue(len(out.UidMatrix) > 0)
 		// Filter the first row of UidMatrix. Since ineqValue != nil, we may
 		// assume that ineqValue is equal to the first token found in TokensTable.
 		algo.ApplyFilter(out.UidMatrix[0], func(uid uint64, i int) bool {
 			key := x.DataKey(attr, uid)
 			sv := getPostingValue(key, scalarType)
-			if sv == nil {
+			if sv.Value == nil {
 				return false
 			}
+			ival := ineqValue
+			x.Check(types.Convert(ineqValue, &ival))
 			if isGeq {
-				return !scalarType.Less(*sv, ineqValue)
+				return !types.Less(sv, ineqValue)
 			}
-			return !scalarType.Less(ineqValue, *sv)
+			return !types.Less(ineqValue, sv)
 		})
 	}
 
@@ -251,27 +248,21 @@ func processTask(q *task.Query) (*task.Result, error) {
 // getPostingValue looks up key, gets the value, converts it. If any error is
 // encountered, we return nil. This is used in some filtering where we do not
 // want to waste time creating errors.
-func getPostingValue(key []byte, scalarType types.Scalar) *types.Value {
+func getPostingValue(key []byte, scalarID types.TypeID) types.Val {
 	pl, decr := posting.GetOrCreate(key)
 	defer decr()
 
 	valBytes, vType, err := pl.Value()
 	if bytes.Equal(valBytes, nil) {
-		return nil
+		return types.Val{}
 	}
-	val := types.ValueForType(types.TypeID(vType))
-	if val == nil {
-		return nil
-	}
-	if err := val.UnmarshalBinary(valBytes); err != nil {
-		return nil
-	}
-	// Convert to schema type.
-	sv, err := scalarType.Convert(val)
+	val := types.Val{types.TypeID(vType), valBytes}
+	sv := types.ValueForType(scalarID)
+	err = types.Convert(val, &sv)
 	if err != nil {
-		return nil
+		return types.Val{}
 	}
-	return &sv
+	return sv
 }
 
 // ServeTask is used to respond to a query.

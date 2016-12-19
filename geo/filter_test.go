@@ -33,29 +33,40 @@ func formData(t *testing.T, str string) string {
 
 	d, err := wkb.Marshal(p, binary.LittleEndian)
 	require.NoError(t, err)
-	var g types.Geo
-	require.NoError(t, g.UnmarshalBinary(d))
-	gb, err := g.MarshalText()
+
+	gd := types.ValueForType(types.StringID)
+	src := types.ValueForType(types.GeoID)
+	src.Value = []byte(d)
+	err = types.Convert(src, &gd)
 	require.NoError(t, err)
+	gb := gd.Value.(string)
 	return string(gb)
 }
 
 func formDataPoint(t *testing.T, p *geom.Point) string {
 	d, err := wkb.Marshal(p, binary.LittleEndian)
 	require.NoError(t, err)
-	var g types.Geo
-	require.NoError(t, g.UnmarshalBinary(d))
-	gb, err := g.MarshalText()
+
+	gd := types.ValueForType(types.StringID)
+	src := types.ValueForType(types.GeoID)
+	src.Value = []byte(d)
+	err = types.Convert(src, &gd)
 	require.NoError(t, err)
+	gb := gd.Value.(string)
+
 	return string(gb)
 }
 func formDataPolygon(t *testing.T, p *geom.Polygon) string {
 	d, err := wkb.Marshal(p, binary.LittleEndian)
 	require.NoError(t, err)
-	var g types.Geo
-	require.NoError(t, g.UnmarshalBinary(d))
-	gb, err := g.MarshalText()
+
+	gd := types.ValueForType(types.StringID)
+	src := types.ValueForType(types.GeoID)
+	src.Value = []byte(d)
+	err = types.Convert(src, &gd)
 	require.NoError(t, err)
+	gb := gd.Value.(string)
+
 	return string(gb)
 }
 
@@ -144,18 +155,18 @@ func TestMatchesFilterWithinPoint(t *testing.T) {
 
 	// Poly contains point
 	p2 := geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{-122.082506, 37.4249518})
-	require.True(t, qd.MatchesFilter(types.Geo{p2}))
+	require.True(t, qd.MatchesFilter(p2))
 
 	// Poly doesn't contain point
 	p3 := geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{-123.082506, 37.4249518})
-	require.False(t, qd.MatchesFilter(types.Geo{p3}))
+	require.False(t, qd.MatchesFilter(p3))
 
 	// Poly within poly not supported
 	poly := geom.NewPolygon(geom.XY).MustSetCoords([][]geom.Coord{
 		{{-122.1, 37.1}, {-122.9, 37.1}, {-122.9, 37.9}, {-122.1, 37.9}, {-122.1, 37.1}},
 	})
 	// Poly containment not supported
-	require.False(t, qd.MatchesFilter(types.Geo{poly}))
+	require.False(t, qd.MatchesFilter(poly))
 }
 
 func TestMatchesFilterContainsPoint(t *testing.T) {
@@ -166,19 +177,19 @@ func TestMatchesFilterContainsPoint(t *testing.T) {
 
 	// Points aren't returned for contains queries
 	p2 := geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{-122.082506, 37.4249518})
-	require.False(t, qd.MatchesFilter(types.Geo{p2}))
+	require.False(t, qd.MatchesFilter(p2))
 
 	// Polygon contains
 	poly := geom.NewPolygon(geom.XY).MustSetCoords([][]geom.Coord{
 		{{-122, 37}, {-123, 37}, {-123, 38}, {-122, 38}, {-122, 37}},
 	})
-	require.True(t, qd.MatchesFilter(types.Geo{poly}))
+	require.True(t, qd.MatchesFilter(poly))
 
 	// Polygon doesn't contains
 	poly = geom.NewPolygon(geom.XY).MustSetCoords([][]geom.Coord{
 		{{-122, 36}, {-123, 36}, {-123, 37}, {-122, 37}, {-122, 36}},
 	})
-	require.False(t, qd.MatchesFilter(types.Geo{poly}))
+	require.False(t, qd.MatchesFilter(poly))
 }
 
 func TestMatchesFilterIntersectsPoint(t *testing.T) {
@@ -190,23 +201,23 @@ func TestMatchesFilterIntersectsPoint(t *testing.T) {
 
 	// Same point
 	p2 := geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{-122.082506, 37.4249518})
-	require.True(t, qd.MatchesFilter(types.Geo{p2}))
+	require.True(t, qd.MatchesFilter(p2))
 
 	// Different point
 	p3 := geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{-123.082506, 37.4249518})
-	require.False(t, qd.MatchesFilter(types.Geo{p3}))
+	require.False(t, qd.MatchesFilter(p3))
 
 	// containing poly
 	poly := geom.NewPolygon(geom.XY).MustSetCoords([][]geom.Coord{
 		{{-122, 37}, {-123, 37}, {-123, 38}, {-122, 38}, {-122, 37}},
 	})
-	require.True(t, qd.MatchesFilter(types.Geo{poly}))
+	require.True(t, qd.MatchesFilter(poly))
 
 	// Polygon doesn't contains
 	poly = geom.NewPolygon(geom.XY).MustSetCoords([][]geom.Coord{
 		{{-122, 36}, {-123, 36}, {-123, 37}, {-122, 37}, {-122, 36}},
 	})
-	require.False(t, qd.MatchesFilter(types.Geo{poly}))
+	require.False(t, qd.MatchesFilter(poly))
 }
 
 func TestMatchesFilterIntersectsPolygon(t *testing.T) {
@@ -219,35 +230,35 @@ func TestMatchesFilterIntersectsPolygon(t *testing.T) {
 
 	// Poly contains point
 	p2 := geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{-122.082506, 37.4249518})
-	require.True(t, qd.MatchesFilter(types.Geo{p2}))
+	require.True(t, qd.MatchesFilter(p2))
 
 	// Poly doesn't contain point
 	p3 := geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{-123.082506, 37.4249518})
-	require.False(t, qd.MatchesFilter(types.Geo{p3}))
+	require.False(t, qd.MatchesFilter(p3))
 
 	// Poly contains poly
 	poly := geom.NewPolygon(geom.XY).MustSetCoords([][]geom.Coord{
 		{{-122.1, 37.1}, {-122.9, 37.1}, {-122.9, 37.9}, {-122.1, 37.9}, {-122.1, 37.1}},
 	})
-	require.True(t, qd.MatchesFilter(types.Geo{poly}))
+	require.True(t, qd.MatchesFilter(poly))
 
 	// Poly contained in poly
 	poly = geom.NewPolygon(geom.XY).MustSetCoords([][]geom.Coord{
 		{{-121, 36}, {-124, 36}, {-124, 39}, {-121, 39}, {-121, 36}},
 	})
-	require.True(t, qd.MatchesFilter(types.Geo{poly}))
+	require.True(t, qd.MatchesFilter(poly))
 
 	// Poly intersecting poly
 	poly = geom.NewPolygon(geom.XY).MustSetCoords([][]geom.Coord{
 		{{-121.5, 36.5}, {-122.5, 36.5}, {-122.5, 37.5}, {-121.5, 37.5}, {-121.5, 36.5}},
 	})
-	require.True(t, qd.MatchesFilter(types.Geo{poly}))
+	require.True(t, qd.MatchesFilter(poly))
 
 	// Poly not intersecting poly
 	poly = geom.NewPolygon(geom.XY).MustSetCoords([][]geom.Coord{
 		{{-120, 35}, {-121, 35}, {-121, 36}, {-120, 36}, {-120, 35}},
 	})
-	require.False(t, qd.MatchesFilter(types.Geo{poly}))
+	require.False(t, qd.MatchesFilter(poly))
 }
 
 func TestMatchesFilterNearPoint(t *testing.T) {
@@ -258,19 +269,19 @@ func TestMatchesFilterNearPoint(t *testing.T) {
 
 	// Same point
 	p2 := geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{-122.082506, 37.4249518})
-	require.True(t, qd.MatchesFilter(types.Geo{p2}))
+	require.True(t, qd.MatchesFilter(p2))
 
 	// Close point
 	p3 := geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{-122.080668, 37.426753})
-	require.True(t, qd.MatchesFilter(types.Geo{p3}))
+	require.True(t, qd.MatchesFilter(p3))
 
 	// Far point
 	p3 = geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{-123.082506, 37.4249518})
-	require.False(t, qd.MatchesFilter(types.Geo{p3}))
+	require.False(t, qd.MatchesFilter(p3))
 
 	// Polys aren't returned for near queries
 	poly := geom.NewPolygon(geom.XY).MustSetCoords([][]geom.Coord{
 		{{-122, 37}, {-123, 37}, {-123, 38}, {-122, 38}, {-122, 37}},
 	})
-	require.False(t, qd.MatchesFilter(types.Geo{poly}))
+	require.False(t, qd.MatchesFilter(poly))
 }

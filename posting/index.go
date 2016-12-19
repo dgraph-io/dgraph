@@ -20,6 +20,7 @@ import (
 	"context"
 	"sort"
 	"sync"
+	"time"
 
 	"golang.org/x/net/trace"
 
@@ -28,6 +29,7 @@ import (
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
+	geom "github.com/twpayne/go-geom"
 )
 
 // TokensTable tracks the keys / tokens / buckets for an indexed attribute.
@@ -88,38 +90,45 @@ func initIndex() {
 }
 
 // IndexTokens return tokens, without the predicate prefix and index rune.
-func IndexTokens(attr string, p types.Value) ([]string, error) {
+func IndexTokens(attr string, pID types.TypeID, data []byte) ([]string, error) {
 	schemaType := schema.TypeOf(attr)
 	if !schemaType.IsScalar() {
 		return nil, x.Errorf("Cannot index attribute %s of type object.", attr)
 	}
-	s := schemaType.(types.Scalar)
-	schemaVal, err := s.Convert(p)
+	s := schemaType.(types.TypeID)
+	sv := types.ValueForType(s)
+	src := types.ValueForType(pID)
+	src.Value = data
+	err := types.Convert(src, &sv)
 	if err != nil {
 		return nil, err
 	}
-	switch v := schemaVal.(type) {
-	case *types.Geo:
-		return geo.IndexTokens(v)
-	case *types.Int32:
-		return types.IntIndex(attr, v)
-	case *types.Float:
-		return types.FloatIndex(attr, v)
-	case *types.Date:
-		return types.DateIndex(attr, v)
-	case *types.Time:
-		return types.TimeIndex(attr, v)
-	case *types.String:
-		return types.DefaultIndexKeys(attr, v), nil
+	switch v := sv.Value.(type) {
+	case geom.T:
+		return geo.IndexTokens(&v)
+	case int32:
+		return types.IntIndex(attr, &v)
+	case float64:
+		return types.FloatIndex(attr, &v)
+	case time.Time:
+		if s == types.DateID {
+			return types.DateIndex(attr, &v)
+		}
+		return types.TimeIndex(attr, &v)
+	case string:
+		return types.DefaultIndexKeys(attr, &v), nil
+	default:
+		return nil, x.Errorf("Invalid type. Cannot be indexed")
 	}
 	return nil, nil
 }
 
 // addIndexMutations adds mutation(s) for a single term, to maintain index.
 func addIndexMutations(ctx context.Context, attr string, uid uint64,
-	p types.Value, del bool) {
+	typ types.TypeID, data []byte, del bool) {
 	x.AssertTrue(uid != 0)
-	tokens, err := IndexTokens(attr, p)
+	dataType := types.TypeID(typ)
+	tokens, err := IndexTokens(attr, dataType, data)
 	if err != nil {
 		// This data is not indexable
 		return
@@ -176,14 +185,16 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *task.DirectedEdge, o
 		"[%s] [%d] [%v] %d %d\n", t.Attr, t.Entity, t.Value, t.ValueId, op)
 
 	var vbytes []byte
-	var vtype byte
+	var vtype types.TypeID
+	var typ byte
 	var verr error
 
 	doUpdateIndex := pstore != nil && (t.Value != nil) &&
 		schema.IsIndexed(t.Attr)
 	if doUpdateIndex {
 		// Check last posting for original value BEFORE any mutation actually happens.
-		vbytes, vtype, verr = l.Value()
+		vbytes, typ, verr = l.Value()
+		vtype = types.TypeID(typ)
 	}
 	hasMutated, err := l.AddMutation(ctx, t, op)
 	if err != nil {
@@ -196,19 +207,10 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *task.DirectedEdge, o
 	// Exact matches.
 	if verr == nil && len(vbytes) > 0 {
 		delTerm := vbytes
-		delType := vtype
-		p := types.ValueForType(types.TypeID(delType))
-		if err := p.UnmarshalBinary(delTerm); err != nil {
-			return err
-		}
-		addIndexMutations(ctx, t.Attr, t.Entity, p, true)
+		addIndexMutations(ctx, t.Attr, t.Entity, vtype, delTerm, true)
 	}
 	if op == Set {
-		p := types.ValueForType(types.TypeID(t.ValueType))
-		if err := p.UnmarshalBinary(t.Value); err != nil {
-			return err
-		}
-		addIndexMutations(ctx, t.Attr, t.Entity, p, false)
+		addIndexMutations(ctx, t.Attr, t.Entity, types.TypeID(t.ValueType), t.Value, false)
 	}
 	return nil
 }
