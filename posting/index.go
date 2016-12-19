@@ -20,16 +20,13 @@ import (
 	"context"
 	"sort"
 	"sync"
-	"time"
 
 	"golang.org/x/net/trace"
 
-	"github.com/dgraph-io/dgraph/geo"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
-	geom "github.com/twpayne/go-geom"
 )
 
 // TokensTable tracks the keys / tokens / buckets for an indexed attribute.
@@ -90,37 +87,18 @@ func initIndex() {
 }
 
 // IndexTokens return tokens, without the predicate prefix and index rune.
-func IndexTokens(attr string, pID types.TypeID, data []byte) ([]string, error) {
+func IndexTokens(attr string, src types.Val) ([]string, error) {
 	schemaType := schema.TypeOf(attr)
 	if !schemaType.IsScalar() {
 		return nil, x.Errorf("Cannot index attribute %s of type object.", attr)
 	}
 	s := schemaType.(types.TypeID)
 	sv := types.ValueForType(s)
-	src := types.ValueForType(pID)
-	src.Value = data
 	err := types.Convert(src, &sv)
 	if err != nil {
 		return nil, err
 	}
-	switch v := sv.Value.(type) {
-	case geom.T:
-		return geo.IndexTokens(&v)
-	case int32:
-		return types.IntIndex(attr, &v)
-	case float64:
-		return types.FloatIndex(attr, &v)
-	case time.Time:
-		if s == types.DateID {
-			return types.DateIndex(attr, &v)
-		}
-		return types.TimeIndex(attr, &v)
-	case string:
-		return types.DefaultIndexKeys(attr, &v), nil
-	default:
-		return nil, x.Errorf("Invalid type. Cannot be indexed")
-	}
-	return nil, nil
+	return types.IndexTokens(attr, sv)
 }
 
 // addIndexMutations adds mutation(s) for a single term, to maintain index.
@@ -128,11 +106,8 @@ func IndexTokens(attr string, pID types.TypeID, data []byte) ([]string, error) {
 func addIndexMutations(ctx context.Context, t *task.DirectedEdge, p types.Val, op task.DirectedEdge_Op) {
 	attr := t.Attr
 	uid := t.Entity
-	typ := p.Tid
-	data := p.Value.([]byte)
 	x.AssertTrue(uid != 0)
-	dataType := types.TypeID(typ)
-	tokens, err := IndexTokens(attr, dataType, data)
+	tokens, err := IndexTokens(attr, p)
 	if err != nil {
 		// This data is not indexable
 		return
@@ -186,17 +161,14 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *task.DirectedEdge) e
 	x.AssertTruef(len(t.Attr) > 0,
 		"[%s] [%d] [%v] %d %d\n", t.Attr, t.Entity, t.Value, t.ValueId, t.Op)
 
-	var vbytes []byte
-	var vtype types.TypeID
-	var typ byte
+	var val types.Val
 	var verr error
 
 	doUpdateIndex := pstore != nil && (t.Value != nil) &&
 		schema.IsIndexed(t.Attr)
 	if doUpdateIndex {
 		// Check last posting for original value BEFORE any mutation actually happens.
-		vbytes, typ, verr = l.Value()
-		vtype = types.TypeID(typ)
+		val, verr = l.Value()
 	}
 	hasMutated, err := l.AddMutation(ctx, t)
 	if err != nil {
@@ -207,12 +179,8 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *task.DirectedEdge) e
 	}
 
 	// Exact matches.
-	if verr == nil && len(vbytes) > 0 {
-		p := types.Val{
-			Tid:   vtype,
-			Value: vbytes,
-		}
-		addIndexMutations(ctx, t, p, task.DirectedEdge_DEL)
+	if verr == nil && val.Value != nil {
+		addIndexMutations(ctx, t, val, task.DirectedEdge_DEL)
 	}
 	if t.Op == task.DirectedEdge_SET {
 		p := types.Val{

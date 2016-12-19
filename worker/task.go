@@ -17,13 +17,11 @@
 package worker
 
 import (
-	"bytes"
 	"strings"
 
 	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/dgraph/algo"
-	"github.com/dgraph-io/dgraph/geo"
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/schema"
@@ -74,15 +72,18 @@ func ProcessTaskOverNetwork(ctx context.Context, q *task.Query) (*task.Result, e
 	return reply, nil
 }
 
-func getValue(attr, data string) (types.Val, error) {
+// convertValue converts the data to the schema type of predicate.
+func convertValue(attr, data string) (types.Val, error) {
 	// Parse given value and get token. There should be only one token.
 	t := schema.TypeOf(attr)
 	if t == nil || !t.IsScalar() {
 		return types.Val{}, x.Errorf("Attribute %s is not valid scalar type", attr)
 	}
 
-	v := types.Val{t.(types.TypeID), []byte(data)}
-	return v, nil
+	src := types.Val{types.StringID, []byte(data)}
+	dst := types.ValueForType(t.(types.TypeID))
+	x.Check(types.Convert(src, &dst))
+	return dst, nil
 }
 
 // processTask processes the query, accumulates and returns the result.
@@ -92,7 +93,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 	useFunc := len(q.SrcFunc) != 0
 	var n int
 	var tokens []string
-	var geoQuery *geo.QueryData
+	var geoQuery *types.GeoQueryData
 	var err error
 	var intersectDest bool
 	var ineqValue types.Val
@@ -111,12 +112,14 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 				return nil, x.Errorf("Function requires 2 arguments, but got %d %v",
 					len(q.SrcFunc), q.SrcFunc)
 			}
-			ineqValue, err = getValue(attr, q.SrcFunc[1])
+			ineqValue, err = convertValue(attr, q.SrcFunc[1])
 			if err != nil {
 				return nil, err
 			}
 			// Tokenizing RHS value of inequality.
-			ineqTokens, err := posting.IndexTokens(attr, ineqValue.Tid, ineqValue.Value.([]byte))
+			v := types.ValueForType(types.BinaryID)
+			x.Check(types.Marshal(ineqValue, &v))
+			ineqTokens, err := posting.IndexTokens(attr, types.Val{ineqValue.Tid, v.Value.([]byte)})
 			if err != nil {
 				return nil, err
 			}
@@ -130,9 +133,9 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 				return nil, err
 			}
 
-		case geo.IsGeoFunc(q.SrcFunc[0]):
+		case types.IsGeoFunc(q.SrcFunc[0]):
 			// For geo functions, we get extra information used for filtering.
-			tokens, geoQuery, err = geo.GetTokens(q.SrcFunc)
+			tokens, geoQuery, err = types.GetGeoTokens(q.SrcFunc)
 			if err != nil {
 				return nil, err
 			}
@@ -163,11 +166,11 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 
 		// If a posting list contains a value, we store that or else we store a nil
 		// byte so that processing is consistent later.
-		vbytes, vtype, err := pl.Value()
+		val, err := pl.Value()
 
-		newValue := &task.Value{ValType: uint32(vtype)}
+		newValue := &task.Value{ValType: int32(val.Tid)}
 		if err == nil {
-			newValue.Val = vbytes
+			newValue.Val = val.Value.([]byte)
 		} else {
 			newValue.Val = x.Nilbyte
 		}
@@ -203,13 +206,10 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 		// Filter the first row of UidMatrix. Since ineqValue != nil, we may
 		// assume that ineqValue is equal to the first token found in TokensTable.
 		algo.ApplyFilter(out.UidMatrix[0], func(uid uint64, i int) bool {
-			key := x.DataKey(attr, uid)
-			sv := getPostingValue(key, scalarType)
-			if sv.Value == nil {
+			sv, err := fetchValue(uid, attr, scalarType)
+			if sv.Value == nil || err != nil {
 				return false
 			}
-			ival := ineqValue
-			x.Check(types.Convert(ineqValue, &ival))
 			if isGeq {
 				return !types.Less(sv, ineqValue)
 			}
@@ -225,10 +225,10 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 			key := x.DataKey(attr, uid)
 			pl, decr := posting.GetOrCreate(key, gid)
 
-			vbytes, vtype, err := pl.Value()
-			newValue := &task.Value{ValType: uint32(vtype)}
+			val, err := pl.Value()
+			newValue := &task.Value{ValType: int32(val.Tid)}
 			if err == nil {
-				newValue.Val = vbytes
+				newValue.Val = val.Value.([]byte)
 			} else {
 				newValue.Val = x.Nilbyte
 			}
@@ -236,34 +236,13 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 			decr() // Decrement the reference count of the pl.
 		}
 
-		filtered := geo.FilterUids(uids, values, geoQuery)
+		filtered := types.FilterGeoUids(uids, values, geoQuery)
 		for i := 0; i < len(out.UidMatrix); i++ {
 			out.UidMatrix[i] = algo.IntersectSorted([]*task.List{out.UidMatrix[i], filtered})
 		}
 	}
 	out.IntersectDest = intersectDest
 	return &out, nil
-}
-
-// getPostingValue looks up key, gets the value, converts it. If any error is
-// encountered, we return nil. This is used in some filtering where we do not
-// want to waste time creating errors.
-func getPostingValue(key []byte, scalarID types.TypeID) types.Val {
-	// TODO: Use posting.Get
-	pl, decr := posting.GetOrCreate(key, 0)
-	defer decr()
-
-	valBytes, vType, err := pl.Value()
-	if bytes.Equal(valBytes, nil) {
-		return types.Val{}
-	}
-	val := types.Val{types.TypeID(vType), valBytes}
-	sv := types.ValueForType(scalarID)
-	err = types.Convert(val, &sv)
-	if err != nil {
-		return types.Val{}
-	}
-	return sv
 }
 
 // ServeTask is used to respond to a query.

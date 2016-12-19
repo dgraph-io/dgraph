@@ -227,18 +227,15 @@ func fetchValue(uid uint64, attr string, scalar types.TypeID) (types.Val, error)
 	pl, decr := posting.GetOrCreate(x.DataKey(attr, uid), group.BelongsTo(attr))
 	defer decr()
 
-	valBytes, vType, err := pl.Value()
+	src, err := pl.Value()
 	if err != nil {
 		return types.Val{}, err
 	}
-	vID := types.TypeID(vType)
-	val := types.ValueForType(scalar)
-	src := types.ValueForType(vID)
-	src.Value = valBytes
-	err = types.Convert(src, &val)
+	dst := types.ValueForType(scalar)
+	err = types.Convert(src, &dst)
 	if err != nil {
 		return types.Val{}, err
 	}
 
-	return val, nil
+	return dst, nil
 }

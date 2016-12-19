@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package geo
+package types
 
 import (
 	"bytes"
@@ -25,7 +25,6 @@ import (
 	"github.com/twpayne/go-geom"
 
 	"github.com/dgraph-io/dgraph/task"
-	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -43,8 +42,8 @@ const (
 	QueryTypeNear
 )
 
-// QueryData is internal data used by the geo query filter to additionally filter the geometries.
-type QueryData struct {
+// GeoQueryData is internal data used by the geo query filter to additionally filter the geometries.
+type GeoQueryData struct {
 	pt    *s2.Point // If not nil, the input data was a point
 	loop  *s2.Loop  // If not nil, the input data was a polygon
 	cap   *s2.Cap   // If not nil, the cap to be used for a near query
@@ -67,9 +66,9 @@ func IsGeoFunc(str string) bool {
 	return false
 }
 
-// GetTokens returns the corresponding index keys based on the type
+// GetGeoTokens returns the corresponding index keys based on the type
 // of function.
-func GetTokens(funcArgs []string) ([]string, *QueryData, error) {
+func GetGeoTokens(funcArgs []string) ([]string, *GeoQueryData, error) {
 	x.AssertTruef(len(funcArgs) > 1, "Invalid function")
 	funcName := strings.ToLower(funcArgs[0])
 	switch funcName {
@@ -107,13 +106,13 @@ func GetTokens(funcArgs []string) ([]string, *QueryData, error) {
 }
 
 // queryTokens returns the tokens to be used to look up the geo index for a given filter.
-func queryTokens(qt QueryType, data string, maxDistance float64) ([]string, *QueryData, error) {
+func queryTokens(qt QueryType, data string, maxDistance float64) ([]string, *GeoQueryData, error) {
 	// Try to parse the data as geo type.
 	geoData := strings.Replace(data, "'", "\"", -1)
-	gc := types.ValueForType(types.GeoID)
-	src := types.ValueForType(types.StringID)
+	gc := ValueForType(GeoID)
+	src := ValueForType(StringID)
 	src.Value = []byte(geoData)
-	err := types.Convert(src, &gc)
+	err := Convert(src, &gc)
 	if err != nil {
 		return nil, nil, x.Wrapf(err, "Cannot decode given geoJson input")
 	}
@@ -148,7 +147,7 @@ func queryTokens(qt QueryType, data string, maxDistance float64) ([]string, *Que
 		// For a within query we only need to look at the objects whose parents match our cover.
 		// So we take our cover and prefix with the parentPrefix to look in the index.
 		toks := toTokens(cover, parentPrefix)
-		return toks, &QueryData{pt: pt, loop: l, qtype: qt}, nil
+		return toks, &GeoQueryData{pt: pt, loop: l, qtype: qt}, nil
 
 	case QueryTypeContains:
 		if l != nil {
@@ -156,7 +155,7 @@ func queryTokens(qt QueryType, data string, maxDistance float64) ([]string, *Que
 		}
 		// For a contains query, we only need to look at the objects whose cover matches our
 		// parents. So we take our parents and prefix with the coverPrefix to look in the index.
-		return toTokens(parents, coverPrefix), &QueryData{pt: pt, qtype: qt}, nil
+		return toTokens(parents, coverPrefix), &GeoQueryData{pt: pt, qtype: qt}, nil
 
 	case QueryTypeNear:
 		if l != nil {
@@ -169,7 +168,7 @@ func queryTokens(qt QueryType, data string, maxDistance float64) ([]string, *Que
 		// the objects whose parents match our cover as well as all the objects whose cover matches
 		// our parents.
 		toks := parentCoverTokens(parents, cover)
-		return toks, &QueryData{pt: pt, loop: l, qtype: qt}, nil
+		return toks, &GeoQueryData{pt: pt, loop: l, qtype: qt}, nil
 
 	default:
 		return nil, nil, x.Errorf("Unknown query type")
@@ -177,7 +176,7 @@ func queryTokens(qt QueryType, data string, maxDistance float64) ([]string, *Que
 }
 
 // nearQueryKeys creates a QueryKeys object for a near query.
-func nearQueryKeys(pt s2.Point, d float64) ([]string, *QueryData, error) {
+func nearQueryKeys(pt s2.Point, d float64) ([]string, *GeoQueryData, error) {
 	if d <= 0 {
 		return nil, nil, x.Errorf("Invalid max distance specified for a near query")
 	}
@@ -186,11 +185,11 @@ func nearQueryKeys(pt s2.Point, d float64) ([]string, *QueryData, error) {
 	cu := indexCellsForCap(c)
 	// A near query is similar to within, where we are looking for points within the cap. So we need
 	// all objects whose parents match the cover of the cap.
-	return toTokens(cu, parentPrefix), &QueryData{cap: &c, qtype: QueryTypeNear}, nil
+	return toTokens(cu, parentPrefix), &GeoQueryData{cap: &c, qtype: QueryTypeNear}, nil
 }
 
 // MatchesFilter applies the query filter to a geo value
-func (q QueryData) MatchesFilter(g geom.T) bool {
+func (q GeoQueryData) MatchesFilter(g geom.T) bool {
 	switch q.qtype {
 	case QueryTypeWithin:
 		return q.isWithin(g)
@@ -208,7 +207,7 @@ func (q QueryData) MatchesFilter(g geom.T) bool {
 }
 
 // returns true if the geometry represented by g is within the given loop or cap
-func (q QueryData) isWithin(g geom.T) bool {
+func (q GeoQueryData) isWithin(g geom.T) bool {
 	x.AssertTruef(q.pt != nil || q.loop != nil || q.cap != nil, "At least a point, loop or cap should be defined.")
 	gpt, ok := g.(*geom.Point)
 	if !ok {
@@ -228,7 +227,7 @@ func (q QueryData) isWithin(g geom.T) bool {
 }
 
 // returns true if the geometry represented by uid/attr contains the given point
-func (q QueryData) contains(g geom.T) bool {
+func (q GeoQueryData) contains(g geom.T) bool {
 	x.AssertTruef(q.pt != nil || q.loop != nil, "At least a point or loop should be defined.")
 	if q.loop != nil {
 		// We don't support polygons containing polygons yet.
@@ -249,7 +248,7 @@ func (q QueryData) contains(g geom.T) bool {
 }
 
 // returns true if the geometry represented by uid/attr intersects the given loop or point
-func (q QueryData) intersects(g geom.T) bool {
+func (q GeoQueryData) intersects(g geom.T) bool {
 	x.AssertTruef(q.pt != nil || q.loop != nil, "At least a point or loop should be defined.")
 	switch v := g.(type) {
 	case *geom.Point:
@@ -277,8 +276,8 @@ func (q QueryData) intersects(g geom.T) bool {
 	}
 }
 
-// FilterUids filters the uids based on the corresponding values and QueryData.
-func FilterUids(uids *task.List, values []*task.Value, q *QueryData) *task.List {
+// FilterGeoUids filters the uids based on the corresponding values and GeoQueryData.
+func FilterGeoUids(uids *task.List, values []*task.Value, q *GeoQueryData) *task.List {
 	x.AssertTruef(len(values) == len(uids.Uids), "lengths not matching")
 	rv := &task.List{}
 	for i := 0; i < len(values); i++ {
@@ -287,13 +286,13 @@ func FilterUids(uids *task.List, values []*task.Value, q *QueryData) *task.List 
 			continue
 		}
 		vType := values[i].ValType
-		if types.TypeID(vType) != types.GeoID {
+		if TypeID(vType) != GeoID {
 			continue
 		}
-		gc := types.ValueForType(types.GeoID)
-		src := types.ValueForType(types.BinaryID)
+		gc := ValueForType(GeoID)
+		src := ValueForType(BinaryID)
 		src.Value = valBytes
-		err := types.Convert(src, &gc)
+		err := Convert(src, &gc)
 		if err != nil {
 			continue
 		}

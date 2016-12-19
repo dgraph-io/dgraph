@@ -32,9 +32,9 @@ import (
 
 	"github.com/dgryski/go-farm"
 
-	"github.com/dgraph-io/dgraph/posting/types"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/task"
+	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -558,23 +558,24 @@ func (l *List) Uids(opt ListOptions) *task.List {
 	return &task.List{Uids: result}
 }
 
-func (l *List) Value() (val []byte, vtype byte, rerr error) {
+func (l *List) Value() (rval types.Val, rerr error) {
 	l.RLock()
 	defer l.RUnlock()
 
 	var found bool
 	l.iterate(math.MaxUint64-1, func(p *types.Posting) bool {
 		if p.Uid == math.MaxUint64 {
-			val = make([]byte, len(p.Value))
+			val := make([]byte, len(p.Value))
 			copy(val, p.Value)
-			vtype = byte(p.ValType)
+			rval.Value = val
+			rval.Tid = types.TypeID(p.ValType)
 			found = true
 		}
 		return false
 	})
 
 	if !found {
-		return val, vtype, ErrNoValue
+		return rval, ErrNoValue
 	}
-	return val, vtype, nil
+	return rval, nil
 }

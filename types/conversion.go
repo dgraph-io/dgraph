@@ -173,6 +173,11 @@ func Convert(from Val, to *Val) error {
 				*res = bool(vc != 1)
 			case StringID:
 				*res = string(strconv.FormatInt(int64(vc), 10))
+			case DateID:
+				date := time.Unix(int64(vc), 0).UTC()
+				*res = createDate(date.Date())
+			case DateTimeID:
+				*res = time.Unix(int64(vc), 0).UTC()
 			default:
 				return cantConvert(fromID, toID)
 			}
@@ -203,6 +208,17 @@ func Convert(from Val, to *Val) error {
 				*res = bool(vc != 1)
 			case StringID:
 				*res = string(strconv.FormatFloat(float64(vc), 'E', -1, 64))
+			case DateID:
+				secs := int64(vc)
+				fracSecs := vc - float64(secs)
+				nsecs := int64(fracSecs * nanoSecondsInSec)
+				date := time.Unix(secs, nsecs).UTC()
+				*res = createDate(date.Date())
+			case DateTimeID:
+				secs := int64(vc)
+				fracSecs := vc - float64(secs)
+				nsecs := int64(fracSecs * nanoSecondsInSec)
+				*res = time.Unix(secs, nsecs).UTC()
 			default:
 				return cantConvert(fromID, toID)
 			}
@@ -299,7 +315,7 @@ func Convert(from Val, to *Val) error {
 				}
 				*res = r
 			case DateID:
-				*res = vc
+				*res = createDate(vc.Date())
 			case StringID:
 				*res = string(vc.String())
 			case Int32ID:
