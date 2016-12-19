@@ -17,15 +17,15 @@
 package types
 
 import (
-	"bytes"
 	"sort"
+	"time"
 
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/x"
 )
 
 type sortBase struct {
-	values []Value
+	values []Val
 	ul     *task.List
 }
 
@@ -39,65 +39,51 @@ func (s sortBase) Swap(i, j int) {
 	data[i], data[j] = data[j], data[i]
 }
 
-type byDate struct{ sortBase }
+type byValue struct{ sortBase }
 
-func (s byDate) Less(i, j int) bool {
-	return s.values[i].(*Date).Time.Before(s.values[j].(*Date).Time)
-}
-
-type byDateTime struct{ sortBase }
-
-func (s byDateTime) Less(i, j int) bool {
-	return s.values[i].(*Time).Time.Before(s.values[j].(*Time).Time)
-}
-
-type byInt32 struct{ sortBase }
-
-func (s byInt32) Less(i, j int) bool {
-	return *(s.values[i].(*Int32)) < *(s.values[j].(*Int32))
-}
-
-type byFloat struct{ sortBase }
-
-func (s byFloat) Less(i, j int) bool {
-	return *(s.values[i].(*Float)) < *(s.values[j].(*Float))
-}
-
-type byString struct{ sortBase }
-
-func (s byString) Less(i, j int) bool {
-	return *(s.values[i].(*String)) < *(s.values[j].(*String))
-}
-
-type byByteArray struct{ sortBase }
-
-func (s byByteArray) Less(i, j int) bool {
-	return bytes.Compare(*(s.values[i].(*Bytes)), *(s.values[j].(*Bytes))) < 0
+// Less compares two elements
+func (s byValue) Less(i, j int) bool {
+	switch s.values[i].Tid {
+	case DateTimeID:
+		return s.values[i].Value.(time.Time).Before(s.values[j].Value.(time.Time))
+	case DateID:
+		return s.values[i].Value.(time.Time).Before(s.values[j].Value.(time.Time))
+	case Int32ID:
+		return (s.values[i].Value.(int32)) < (s.values[j].Value.(int32))
+	case FloatID:
+		return (s.values[i].Value.(float64)) < (s.values[j].Value.(float64))
+	case StringID:
+		return (s.values[i].Value.(string)) < (s.values[j].Value.(string))
+	}
+	return false
 }
 
 // Sort sorts the given array in-place.
-func (s Scalar) Sort(v []Value, ul *task.List, desc bool) error {
-	b := sortBase{v, ul}
+func Sort(sID TypeID, v []Val, ul *task.List, desc bool) error {
 	var toBeSorted sort.Interface
-	switch s.ID() {
-	case DateID:
-		toBeSorted = byDate{b}
-	case DateTimeID:
-		toBeSorted = byDateTime{b}
-	case Int32ID:
-		toBeSorted = byInt32{b}
-	case FloatID:
-		toBeSorted = byFloat{b}
-	case StringID:
-		toBeSorted = byString{b}
-	case BytesID:
-		toBeSorted = byByteArray{b}
-	default:
-		return x.Errorf("Scalar doesn't support sorting %s", s)
-	}
+	b := sortBase{v, ul}
+	toBeSorted = byValue{b}
 	if desc {
 		toBeSorted = sort.Reverse(toBeSorted)
 	}
 	sort.Sort(toBeSorted)
 	return nil
+}
+
+// Less returns true if a is strictly less than b.
+func Less(a, b Val) bool {
+	switch a.Tid {
+	case DateID:
+		return a.Value.(time.Time).Before(b.Value.(time.Time))
+	case DateTimeID:
+		return a.Value.(time.Time).Before(b.Value.(time.Time))
+	case Int32ID:
+		return (a.Value.(int32)) < (b.Value.(int32))
+	case FloatID:
+		return (a.Value.(float64)) < (b.Value.(float64))
+	case StringID:
+		return (a.Value.(string)) < (b.Value.(string))
+	}
+	x.Fatalf("Unexpected scalar: %v", a.Tid)
+	return false
 }

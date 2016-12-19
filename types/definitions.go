@@ -16,58 +16,18 @@
 
 package types
 
-import (
-	"encoding"
-	"encoding/json"
-	"fmt"
-)
-
 // Type interface is the wrapper interface for all types
 type Type interface {
 	IsScalar() bool
 }
 
-// TypeID is the id used to identify a type.
-type TypeID byte
-
-// Scalar type defines concrete structure for scalar types to use.
-// Almost all scalar types can also act as input types.
-// Scalars (along with Enums) form leaf nodes of request or input values to arguements.
-type Scalar struct {
-	Name string // name of scalar type
-	id   TypeID // The storage identifier for this type
-}
-
-// Object represents all object types in the schema definition.
+// Object represents all types in the schema definition.
 type Object struct {
 	Name   string
 	Fields map[string]string //field to type relationship
 }
 
-// Value is the interface that all scalar values need to implement.
-type Value interface {
-	encoding.TextMarshaler
-	encoding.TextUnmarshaler
-	encoding.BinaryMarshaler
-	encoding.BinaryUnmarshaler
-	json.Marshaler
-	// Type returns the type of this value
-	Type() Scalar
-	fmt.Stringer
-}
-
-// String function to implement string interface
-func (s Scalar) String() string {
-	return s.Name
-}
-
-// ID function returns the storage identifier of this type
-func (s Scalar) ID() TypeID {
-	return s.id
-}
-
-// IsScalar returns true if the object is of scalar type.
-func (s Scalar) IsScalar() bool {
+func (t TypeID) IsScalar() bool {
 	return true
 }
 

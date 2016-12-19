@@ -17,11 +17,12 @@
 package algo
 
 import (
-	"testing"
-
-	"github.com/stretchr/testify/require"
-
+	"fmt"
 	"github.com/dgraph-io/dgraph/task"
+	"github.com/stretchr/testify/require"
+	"math/rand"
+	"sort"
+	"testing"
 )
 
 func newList(data []uint64) *task.List {
@@ -213,4 +214,62 @@ func TestApplyFilterUint(t *testing.T) {
 	u := newList([]uint64{1, 2, 3, 4, 5})
 	ApplyFilter(u, func(a uint64, idx int) bool { return (a % 2) == 1 })
 	require.Equal(t, u.Uids, []uint64{1, 3, 5})
+}
+
+// sort interface for []uint64
+type uint64Slice []uint64
+
+func (xs uint64Slice) Len() int {
+	return len(xs)
+}
+func (xs uint64Slice) Less(i, j int) bool {
+	return xs[i] < xs[j]
+}
+func (xs uint64Slice) Swap(i, j int) {
+	xs[i], xs[j] = xs[j], xs[i]
+}
+
+// Benchmarks for IntersectWith
+// random data : u and v having data within range [0, limit)
+// where limit = N * sizeof-list ; for different N
+func runIntersectRandom(arrSz int, limit int64, b *testing.B) {
+	u1, v1 := make([]uint64, arrSz, arrSz), make([]uint64, arrSz, arrSz)
+	for i := 0; i < arrSz; i++ {
+		u1[i] = uint64(rand.Int63n(limit))
+		v1[i] = uint64(rand.Int63n(limit))
+	}
+	sort.Sort(uint64Slice(u1))
+	sort.Sort(uint64Slice(v1))
+
+	u := newList(u1)
+	v := newList(v1)
+	ucopy := make([]uint64, len(u1), len(u1))
+	copy(ucopy, u1)
+
+	b.ResetTimer()
+	for k := 0; k < b.N; k++ {
+		IntersectWith(u, v)
+		u.Uids = u.Uids[:arrSz]
+		copy(u.Uids, ucopy)
+	}
+
+}
+
+func BenchmarkListIntersectRandom(b *testing.B) {
+	randomTests := func(sz int, overlap float64) {
+		b.Run(fmt.Sprintf(":random:size=%d:overlap=%.2f:", sz, overlap),
+			func(b *testing.B) {
+				runIntersectRandom(sz, int64(float64(sz)/overlap), b)
+			})
+	}
+
+	randomTests(500, 0.3)
+	randomTests(10000, 0.3)
+	randomTests(1000000, 0.3)
+	randomTests(500, 0.1)
+	randomTests(10000, 0.1)
+	randomTests(1000000, 0.1)
+	randomTests(500, 0.01)
+	randomTests(10000, 0.01)
+	randomTests(1000000, 0.01)
 }

@@ -80,7 +80,6 @@ func ParseBytes(schema []byte) (rerr error) {
 			}
 		}
 	}
-
 	return nil
 }
 
@@ -217,7 +216,7 @@ L:
 				typ = next.Val
 				if t, ok := getScalar(typ); ok {
 					if t1, ok := str[name]; ok {
-						if t1.(types.Scalar).Name != t.(types.Scalar).Name {
+						if t1.(types.TypeID) != t.(types.TypeID) {
 							return x.Errorf("Same field cant have multiple types")
 						}
 					} else {

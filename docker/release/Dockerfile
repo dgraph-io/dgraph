@@ -8,15 +8,12 @@
 # To go into bash:
 #   docker run -it dgraph/dgraph bash
 
-# We need libc (not the lightweight version). Otherwise, dgraph cannot run.
-FROM frolvlad/alpine-glibc
+FROM ubuntu:14.04
 MAINTAINER Dgraph Labs <contact@dgraph.io>
 
-# We need libstdc++ as the embedded binaries are dynamically linked with libstdc++.
-# You might see warnings such as the following, but dgraph will run fine.
-# Your stdout won't be flooded with these warnings.
-#   dgraph: /usr/lib/libstdc++.so.6: no version information available (required by dgraph)
-RUN apk add --no-cache bash wget curl libstdc++
+RUN apt-get update
+
+RUN apt-get -y --force-yes install wget curl tar
 
 # Get embedded binaries from Dgraph.
 RUN curl https://get.dgraph.io | bash

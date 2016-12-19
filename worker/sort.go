@@ -109,7 +109,6 @@ func processSort(ts *task.Sort) (*task.SortResult, error) {
 	t := posting.GetTokensTable(attr)
 
 	var token string
-	x.Printf("~~~~sort %v", ts.Desc)
 	if ts.Desc {
 		token = t.GetLast()
 	} else {
@@ -151,7 +150,7 @@ func intersectBucket(ts *task.Sort, attr, token string, out []intersectedList) e
 	if !sType.IsScalar() {
 		return x.Errorf("Cannot sort attribute %s of type object.", attr)
 	}
-	scalar := sType.(types.Scalar)
+	scalar := sType.(types.TypeID)
 
 	key := x.IndexKey(attr, token)
 	pl, decr := posting.GetOrCreate(key, 0)
@@ -210,39 +209,36 @@ func intersectBucket(ts *task.Sort, attr, token string, out []intersectedList) e
 }
 
 // sortByValue fetches values and sort UIDList.
-func sortByValue(attr string, ul *task.List, scalar types.Scalar, desc bool) error {
-	values := make([]types.Value, len(ul.Uids))
+func sortByValue(attr string, ul *task.List, typ types.TypeID, desc bool) error {
+	values := make([]types.Val, len(ul.Uids))
 	for i, uid := range ul.Uids {
-		val, err := fetchValue(uid, attr, scalar)
+		val, err := fetchValue(uid, attr, typ)
 		if err != nil {
 			return err
 		}
 		values[i] = val
 	}
-	return scalar.Sort(values, ul, desc)
+	return types.Sort(typ, values, ul, desc)
 }
 
 // fetchValue gets the value for a given UID.
-func fetchValue(uid uint64, attr string, scalar types.Scalar) (types.Value, error) {
-	pl, decr := posting.GetOrCreate(x.DataKey(attr, uid), 0)
+func fetchValue(uid uint64, attr string, scalar types.TypeID) (types.Val, error) {
+	// TODO: Maybe use posting.Get
+	pl, decr := posting.GetOrCreate(x.DataKey(attr, uid), group.BelongsTo(attr))
 	defer decr()
 
 	valBytes, vType, err := pl.Value()
 	if err != nil {
-		return nil, err
+		return types.Val{}, err
 	}
-	val := types.ValueForType(types.TypeID(vType))
-	if val == nil {
-		return nil, x.Errorf("Invalid type: %v", vType)
-	}
-	err = val.UnmarshalBinary(valBytes)
+	vID := types.TypeID(vType)
+	val := types.ValueForType(scalar)
+	src := types.ValueForType(vID)
+	src.Value = valBytes
+	err = types.Convert(src, &val)
 	if err != nil {
-		return nil, err
+		return types.Val{}, err
 	}
 
-	schemaVal, err := scalar.Convert(val)
-	if err != nil {
-		return nil, err
-	}
-	return schemaVal, nil
+	return val, nil
 }

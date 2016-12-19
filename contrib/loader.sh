@@ -45,7 +45,7 @@ sleep 5
 
 pushd cmd/dgraphloader &> /dev/null
 go build .
-./dgraphloader -r $benchmark/rdf-films.gz,$benchmark/names.gz
+./dgraphloader -r $benchmark/goldendata.rdf.gz
 popd &> /dev/null
 
 killall dgraph

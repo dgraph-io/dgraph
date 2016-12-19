@@ -172,16 +172,10 @@ func (sg *SubGraph) DebugPrint(prefix string) {
 }
 
 // getValue gets the value from the task.
-func getValue(tv *task.Value) (types.Value, error) {
-	vType := tv.ValType
-	valBytes := tv.Val
-	val := types.ValueForType(types.TypeID(vType))
-	if val == nil {
-		return nil, x.Errorf("Invalid type: %v", vType)
-	}
-	if err := val.UnmarshalBinary(valBytes); err != nil {
-		return nil, err
-	}
+func getValue(tv *task.Value) (types.Val, error) {
+	vID := types.TypeID(tv.ValType)
+	val := types.ValueForType(vID)
+	val.Value = tv.Val
 	return val, nil
 }
 
@@ -223,13 +217,18 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 		}
 		ul := pc.uidMatrix[idx]
 
+		fieldName := pc.Attr
+		if pc.Params.Alias != "" {
+			fieldName = pc.Params.Alias
+		}
 		if sg.Params.GetUID || sg.Params.isDebug {
 			dst.SetUID(uid)
 		}
 		if len(pc.counts) > 0 {
-			c := types.Int32(pc.counts[idx])
+			c := types.ValueForType(types.Int32ID)
+			c.Value = int32(pc.counts[idx])
 			uc := dst.New(pc.Attr)
-			uc.AddValue("_count_", &c)
+			uc.AddValue("_count_", c)
 			dst.AddChild(pc.Attr, uc)
 
 		} else if len(ul.Uids) > 0 || len(pc.Children) > 0 {
@@ -239,7 +238,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 				if invalidUids[childUID] {
 					continue
 				}
-				uc := dst.New(pc.Attr)
+				uc := dst.New(fieldName)
 
 				// Doing check for UID here is no good because some of these might be
 				// invalid nodes.
@@ -256,7 +255,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 					return rerr
 				}
 				if !uc.IsEmpty() {
-					dst.AddChild(pc.Attr, uc)
+					dst.AddChild(fieldName, uc)
 				}
 			}
 		} else {
@@ -267,24 +266,33 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 			}
 
 			if pc.Attr == "_xid_" {
-				txt, err := v.MarshalText()
+				txt := types.ValueForType(types.StringID)
+				err := types.Convert(v, &txt)
 				if err != nil {
 					return err
 				}
-				dst.SetXID(string(txt))
+				dst.SetXID(txt.Value.(string))
+			} else if pc.Attr == "_uid_" {
+				dst.SetUID(uid)
 			} else {
+				// globalType is the best effort type to which we try converting
+				// and if not possible, we ignore it in the result.
 				globalType := schema.TypeOf(pc.Attr)
+				// schemaType refers to the type we should convert the value
+				// compulsorily and if not possible we ignore the parent object
+				// as it wouldn't comply with the schema.
 				schemaType := pc.Params.AttrType
-				sv := v
+				sv := types.ValueForType(types.StringID)
 				if schemaType != nil {
 					// Do type checking on response values
 					if !schemaType.IsScalar() {
 						return x.Errorf("Unknown Scalar:%v. Leaf predicate:'%v' must be"+
 							" one of the scalar types defined in the schema.", pc.Params.AttrType, pc.Attr)
 					}
-					st := schemaType.(types.Scalar)
+					stID := schemaType.(types.TypeID)
+					sv = types.ValueForType(stID)
 					// Convert to schema type.
-					sv, err = st.Convert(v)
+					err = types.Convert(v, &sv)
 					if bytes.Equal(tv.Val, nil) || err != nil {
 						// skip values that don't convert.
 						return x.Errorf("_INV_")
@@ -295,24 +303,27 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 					if !globalType.IsScalar() {
 						return x.Errorf("Leaf predicate:'%v' must be a scalar.", pc.Attr)
 					}
-					gt := globalType.(types.Scalar)
+					gtID := globalType.(types.TypeID)
+					sv = types.ValueForType(gtID)
 					// Convert to schema type.
-					sv, err = gt.Convert(v)
+					err = types.Convert(v, &sv)
 					if bytes.Equal(tv.Val, nil) || err != nil {
 						continue
 					}
+				} else {
+					x.Check(types.Convert(v, &sv))
 				}
 				if bytes.Equal(tv.Val, nil) {
 					continue
 				}
-				dst.AddValue(pc.Attr, sv)
+				dst.AddValue(fieldName, sv)
 			}
 		}
 	}
 	return nil
 }
 
-func createProperty(prop string, v types.Value) *graph.Property {
+func createProperty(prop string, v types.Val) *graph.Property {
 	pval := toProtoValue(v)
 	return &graph.Property{Prop: prop, Value: pval}
 }
@@ -763,7 +774,7 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 
 // outputNode is the generic output / writer for preTraverse.
 type outputNode interface {
-	AddValue(attr string, v types.Value)
+	AddValue(attr string, v types.Val)
 	AddChild(attr string, child outputNode)
 	New(attr string) outputNode
 	SetUID(uid uint64)
@@ -777,7 +788,7 @@ type protoOutputNode struct {
 }
 
 // AddValue adds an attribute value for protoOutputNode.
-func (p *protoOutputNode) AddValue(attr string, v types.Value) {
+func (p *protoOutputNode) AddValue(attr string, v types.Val) {
 	p.Node.Properties = append(p.Node.Properties, createProperty(attr, v))
 }
 
@@ -848,7 +859,7 @@ type jsonOutputNode struct {
 }
 
 // AddValue adds an attribute value for jsonOutputNode.
-func (p *jsonOutputNode) AddValue(attr string, v types.Value) {
+func (p *jsonOutputNode) AddValue(attr string, v types.Val) {
 	p.data[attr] = v
 }
 

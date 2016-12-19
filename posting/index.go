@@ -20,6 +20,7 @@ import (
 	"context"
 	"sort"
 	"sync"
+	"time"
 
 	"golang.org/x/net/trace"
 
@@ -28,6 +29,7 @@ import (
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
+	geom "github.com/twpayne/go-geom"
 )
 
 // TokensTable tracks the keys / tokens / buckets for an indexed attribute.
@@ -87,42 +89,50 @@ func initIndex() {
 
 }
 
-// indexTokens return tokens, without the predicate prefix and index rune.
-func indexTokens(attr string, p types.Value) ([]string, error) {
+// IndexTokens return tokens, without the predicate prefix and index rune.
+func IndexTokens(attr string, pID types.TypeID, data []byte) ([]string, error) {
 	schemaType := schema.TypeOf(attr)
 	if !schemaType.IsScalar() {
 		return nil, x.Errorf("Cannot index attribute %s of type object.", attr)
 	}
-	s := schemaType.(types.Scalar)
-	schemaVal, err := s.Convert(p)
+	s := schemaType.(types.TypeID)
+	sv := types.ValueForType(s)
+	src := types.ValueForType(pID)
+	src.Value = data
+	err := types.Convert(src, &sv)
 	if err != nil {
 		return nil, err
 	}
-	switch v := schemaVal.(type) {
-	case *types.Geo:
-		return geo.IndexTokens(v)
-	case *types.Int32:
-		return types.IntIndex(attr, v)
-	case *types.Float:
-		return types.FloatIndex(attr, v)
-	case *types.Date:
-		return types.DateIndex(attr, v)
-	case *types.Time:
-		return types.TimeIndex(attr, v)
-	case *types.String:
-		return types.DefaultIndexKeys(attr, v), nil
+	switch v := sv.Value.(type) {
+	case geom.T:
+		return geo.IndexTokens(&v)
+	case int32:
+		return types.IntIndex(attr, &v)
+	case float64:
+		return types.FloatIndex(attr, &v)
+	case time.Time:
+		if s == types.DateID {
+			return types.DateIndex(attr, &v)
+		}
+		return types.TimeIndex(attr, &v)
+	case string:
+		return types.DefaultIndexKeys(attr, &v), nil
+	default:
+		return nil, x.Errorf("Invalid type. Cannot be indexed")
 	}
 	return nil, nil
 }
 
 // addIndexMutations adds mutation(s) for a single term, to maintain index.
 // t represents the original uid -> value edge.
-func addIndexMutations(ctx context.Context, t *task.DirectedEdge, p types.Value, op task.DirectedEdge_Op) {
+func addIndexMutations(ctx context.Context, t *task.DirectedEdge, p types.Val, op task.DirectedEdge_Op) {
 	attr := t.Attr
 	uid := t.Entity
-
+	typ := p.Tid
+	data := p.Value.([]byte)
 	x.AssertTrue(uid != 0)
-	tokens, err := indexTokens(attr, p)
+	dataType := types.TypeID(typ)
+	tokens, err := IndexTokens(attr, dataType, data)
 	if err != nil {
 		// This data is not indexable
 		return
@@ -177,14 +187,16 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *task.DirectedEdge) e
 		"[%s] [%d] [%v] %d %d\n", t.Attr, t.Entity, t.Value, t.ValueId, t.Op)
 
 	var vbytes []byte
-	var vtype byte
+	var vtype types.TypeID
+	var typ byte
 	var verr error
 
 	doUpdateIndex := pstore != nil && (t.Value != nil) &&
 		schema.IsIndexed(t.Attr)
 	if doUpdateIndex {
 		// Check last posting for original value BEFORE any mutation actually happens.
-		vbytes, vtype, verr = l.Value()
+		vbytes, typ, verr = l.Value()
+		vtype = types.TypeID(typ)
 	}
 	hasMutated, err := l.AddMutation(ctx, t)
 	if err != nil {
@@ -196,18 +208,16 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *task.DirectedEdge) e
 
 	// Exact matches.
 	if verr == nil && len(vbytes) > 0 {
-		delTerm := vbytes
-		delType := vtype
-		p := types.ValueForType(types.TypeID(delType))
-		if err := p.UnmarshalBinary(delTerm); err != nil {
-			return err
+		p := types.Val{
+			Tid:   vtype,
+			Value: vbytes,
 		}
 		addIndexMutations(ctx, t, p, task.DirectedEdge_DEL)
 	}
 	if t.Op == task.DirectedEdge_SET {
-		p := types.ValueForType(types.TypeID(t.ValueType))
-		if err := p.UnmarshalBinary(t.Value); err != nil {
-			return err
+		p := types.Val{
+			Tid:   types.TypeID(t.ValueType),
+			Value: t.Value,
 		}
 		addIndexMutations(ctx, t, p, task.DirectedEdge_SET)
 	}
@@ -288,9 +298,7 @@ func (t *TokensTable) GetNext(key string) string {
 	t.RLock()
 	defer t.RUnlock()
 	i := sort.Search(len(t.key),
-		func(i int) bool {
-			return t.key[i] > key
-		})
+		func(i int) bool { return t.key[i] > key })
 	if i < len(t.key) {
 		return t.key[i]
 	}
@@ -316,9 +324,7 @@ func (t *TokensTable) GetPrev(key string) string {
 	defer t.RUnlock()
 	n := len(t.key)
 	i := sort.Search(len(t.key),
-		func(i int) bool {
-			return t.key[n-i-1] < key
-		})
+		func(i int) bool { return t.key[n-i-1] < key })
 	if i < len(t.key) {
 		return t.key[n-i-1]
 	}
@@ -335,4 +341,28 @@ func (t *TokensTable) GetLast() string {
 		return ""
 	}
 	return t.key[len(t.key)-1]
+}
+
+// GetNextOrEqual returns position of leftmost element that is greater or equal to s.
+func (t *TokensTable) GetNextOrEqual(s string) string {
+	t.RLock()
+	defer t.RUnlock()
+	n := len(t.key)
+	i := sort.Search(n, func(i int) bool { return t.key[i] >= s })
+	if i < n {
+		return t.key[i]
+	}
+	return ""
+}
+
+// GetPrevOrEqual returns position of rightmost element that is smaller or equal to s.
+func (t *TokensTable) GetPrevOrEqual(s string) string {
+	t.RLock()
+	defer t.RUnlock()
+	n := len(t.key)
+	i := sort.Search(n, func(i int) bool { return t.key[n-i-1] <= s })
+	if i < n {
+		return t.key[n-i-1]
+	}
+	return ""
 }
