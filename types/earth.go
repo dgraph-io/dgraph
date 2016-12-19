@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package geo
+package types
 
 import (
 	"fmt"

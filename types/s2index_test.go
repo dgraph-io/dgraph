@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package geo
+package types
 
 import (
 	"bytes"
@@ -29,8 +29,6 @@ import (
 	"github.com/twpayne/go-geom"
 	"github.com/twpayne/go-geom/encoding/geojson"
 	"github.com/twpayne/go-geom/encoding/wkb"
-
-	"github.com/dgraph-io/dgraph/types"
 )
 
 func loadPolygon(name string) (*geom.Polygon, error) {
@@ -103,7 +101,7 @@ func printCells(cu s2.CellUnion) {
 }
 
 func TestIndexCellsPolygon(t *testing.T) {
-	p, err := loadPolygon("zip.json")
+	p, err := loadPolygon("testdata/zip.json")
 	require.NoError(t, err)
 	parents, cover, err := indexCells(p)
 	require.NoError(t, err)
@@ -124,32 +122,32 @@ func TestKeyGeneratorPoint(t *testing.T) {
 	data, err := wkb.Marshal(p, binary.LittleEndian)
 	require.NoError(t, err)
 
-	gc := types.ValueForType(types.GeoID)
-	src := types.ValueForType(types.BinaryID)
+	gc := ValueForType(GeoID)
+	src := ValueForType(BinaryID)
 	src.Value = data
-	err = types.Convert(src, &gc)
+	err = Convert(src, &gc)
 	require.NoError(t, err)
 	g := gc.Value.(geom.T)
 
-	keys, err := IndexTokens(&g)
+	keys, err := IndexGeoTokens(g)
 	require.NoError(t, err)
 	require.Len(t, keys, MaxCellLevel-MinCellLevel+1+1) // +1 for the cover
 }
 
 func TestKeyGeneratorPolygon(t *testing.T) {
-	p, err := loadPolygon("zip.json")
+	p, err := loadPolygon("testdata/zip.json")
 	require.NoError(t, err)
 	data, err := wkb.Marshal(p, binary.LittleEndian)
 	require.NoError(t, err)
 
-	gc := types.ValueForType(types.GeoID)
-	src := types.ValueForType(types.BinaryID)
+	gc := ValueForType(GeoID)
+	src := ValueForType(BinaryID)
 	src.Value = data
-	err = types.Convert(src, &gc)
+	err = Convert(src, &gc)
 	require.NoError(t, err)
 	g := gc.Value.(geom.T)
 
-	keys, err := IndexTokens(&g)
+	keys, err := IndexGeoTokens(g)
 	require.NoError(t, err)
 	require.Len(t, keys, 65)
 }
@@ -192,43 +190,43 @@ func loopArea(l *s2.Loop) float64 {
 }
 
 func BenchmarkToLoopZip(b *testing.B) {
-	benchToLoop(b, "zip.json")
+	benchToLoop(b, "testdata/zip.json")
 }
 
 func BenchmarkToLoopAruba(b *testing.B) {
-	benchToLoop(b, "aruba.json")
+	benchToLoop(b, "testdata/aruba.json")
 }
 
 func BenchmarkCoverZip_10(b *testing.B) {
-	benchCover(b, "zip.json", 10)
+	benchCover(b, "testdata/zip.json", 10)
 }
 
 func BenchmarkCoverZip_15(b *testing.B) {
-	benchCover(b, "zip.json", 15)
+	benchCover(b, "testdata/zip.json", 15)
 }
 
 func BenchmarkCoverZip_18(b *testing.B) {
-	benchCover(b, "zip.json", 18)
+	benchCover(b, "testdata/zip.json", 18)
 }
 
 func BenchmarkCoverZip_30(b *testing.B) {
-	benchCover(b, "zip.json", 30)
+	benchCover(b, "testdata/zip.json", 30)
 }
 
 func BenchmarkCoverAruba_10(b *testing.B) {
-	benchCover(b, "aruba.json", 10)
+	benchCover(b, "testdata/aruba.json", 10)
 }
 
 func BenchmarkCoverAruba_15(b *testing.B) {
-	benchCover(b, "aruba.json", 15)
+	benchCover(b, "testdata/aruba.json", 15)
 }
 
 func BenchmarkCoverAruba_18(b *testing.B) {
-	benchCover(b, "aruba.json", 18)
+	benchCover(b, "testdata/aruba.json", 18)
 }
 
 func BenchmarkCoverAruba_30(b *testing.B) {
-	benchCover(b, "aruba.json", 30)
+	benchCover(b, "testdata/aruba.json", 30)
 }
 
 func BenchmarkKeyGeneratorPoint(b *testing.B) {
@@ -238,21 +236,21 @@ func BenchmarkKeyGeneratorPoint(b *testing.B) {
 		b.Error(err)
 	}
 
-	gc := types.ValueForType(types.GeoID)
-	src := types.ValueForType(types.BinaryID)
+	gc := ValueForType(GeoID)
+	src := ValueForType(BinaryID)
 	src.Value = data
-	err = types.Convert(src, &gc)
+	err = Convert(src, &gc)
 	require.NoError(b, err)
 	g := gc.Value.(geom.T)
 
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		IndexTokens(&g)
+		IndexGeoTokens(g)
 	}
 }
 
 func BenchmarkKeyGeneratorPolygon(b *testing.B) {
-	p, err := loadPolygon("zip.json")
+	p, err := loadPolygon("testdata/zip.json")
 	if err != nil {
 		b.Error(err)
 	}
@@ -261,16 +259,16 @@ func BenchmarkKeyGeneratorPolygon(b *testing.B) {
 		b.Error(err)
 	}
 
-	gc := types.ValueForType(types.GeoID)
-	src := types.ValueForType(types.GeoID)
+	gc := ValueForType(GeoID)
+	src := ValueForType(GeoID)
 	src.Value = data
-	err = types.Convert(src, &gc)
+	err = Convert(src, &gc)
 	require.NoError(b, err)
 	g := gc.Value.(geom.T)
 
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		IndexTokens(&g)
+		IndexGeoTokens(g)
 	}
 }
 

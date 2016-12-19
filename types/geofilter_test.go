@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package geo
+package types
 
 import (
 	"encoding/binary"
@@ -23,8 +23,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/twpayne/go-geom"
 	"github.com/twpayne/go-geom/encoding/wkb"
-
-	"github.com/dgraph-io/dgraph/types"
 )
 
 func formData(t *testing.T, str string) string {
@@ -34,10 +32,10 @@ func formData(t *testing.T, str string) string {
 	d, err := wkb.Marshal(p, binary.LittleEndian)
 	require.NoError(t, err)
 
-	gd := types.ValueForType(types.StringID)
-	src := types.ValueForType(types.GeoID)
+	gd := ValueForType(StringID)
+	src := ValueForType(GeoID)
 	src.Value = []byte(d)
-	err = types.Convert(src, &gd)
+	err = Convert(src, &gd)
 	require.NoError(t, err)
 	gb := gd.Value.(string)
 	return string(gb)
@@ -47,10 +45,10 @@ func formDataPoint(t *testing.T, p *geom.Point) string {
 	d, err := wkb.Marshal(p, binary.LittleEndian)
 	require.NoError(t, err)
 
-	gd := types.ValueForType(types.StringID)
-	src := types.ValueForType(types.GeoID)
+	gd := ValueForType(StringID)
+	src := ValueForType(GeoID)
 	src.Value = []byte(d)
-	err = types.Convert(src, &gd)
+	err = Convert(src, &gd)
 	require.NoError(t, err)
 	gb := gd.Value.(string)
 
@@ -60,10 +58,10 @@ func formDataPolygon(t *testing.T, p *geom.Polygon) string {
 	d, err := wkb.Marshal(p, binary.LittleEndian)
 	require.NoError(t, err)
 
-	gd := types.ValueForType(types.StringID)
-	src := types.ValueForType(types.GeoID)
+	gd := ValueForType(StringID)
+	src := ValueForType(GeoID)
 	src.Value = []byte(d)
-	err = types.Convert(src, &gd)
+	err = Convert(src, &gd)
 	require.NoError(t, err)
 	gb := gd.Value.(string)
 
@@ -71,7 +69,7 @@ func formDataPolygon(t *testing.T, p *geom.Polygon) string {
 }
 
 func TestQueryTokensPolygon(t *testing.T) {
-	data := formData(t, "zip.json")
+	data := formData(t, "testdata/zip.json")
 
 	qtypes := []QueryType{QueryTypeWithin, QueryTypeIntersects}
 	for _, qt := range qtypes {
@@ -92,7 +90,7 @@ func TestQueryTokensPolygon(t *testing.T) {
 }
 
 func TestQueryTokensPolygonError(t *testing.T) {
-	data := formData(t, "zip.json")
+	data := formData(t, "testdata/zip.json")
 	qtypes := []QueryType{QueryTypeNear, QueryTypeContains}
 	for _, qt := range qtypes {
 		_, _, err := queryTokens(qt, data, 0.0)

@@ -22,7 +22,6 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/dgraph/algo"
-	"github.com/dgraph-io/dgraph/geo"
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/schema"
@@ -91,7 +90,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 	useFunc := len(q.SrcFunc) != 0
 	var n int
 	var tokens []string
-	var geoQuery *geo.QueryData
+	var geoQuery *types.GeoQueryData
 	var err error
 	var intersectDest bool
 	var ineqValue types.Val
@@ -129,9 +128,9 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 				return nil, err
 			}
 
-		case geo.IsGeoFunc(q.SrcFunc[0]):
+		case types.IsGeoFunc(q.SrcFunc[0]):
 			// For geo functions, we get extra information used for filtering.
-			tokens, geoQuery, err = geo.GetTokens(q.SrcFunc)
+			tokens, geoQuery, err = types.GetGeoTokens(q.SrcFunc)
 			if err != nil {
 				return nil, err
 			}
@@ -234,7 +233,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 			decr() // Decrement the reference count of the pl.
 		}
 
-		filtered := geo.FilterUids(uids, values, geoQuery)
+		filtered := types.FilterGeoUids(uids, values, geoQuery)
 		for i := 0; i < len(out.UidMatrix); i++ {
 			out.UidMatrix[i] = algo.IntersectSorted([]*task.List{out.UidMatrix[i], filtered})
 		}
