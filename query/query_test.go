@@ -128,6 +128,18 @@ func addEdgeToUID(t *testing.T, ps *store.Store, attr string, src uint64, dst ui
 		l.AddMutationWithIndex(context.Background(), edge, posting.Set))
 }
 
+func delEdgeToUID(t *testing.T, ps *store.Store, attr string, src uint64, dst uint64) {
+	edge := &task.DirectedEdge{
+		ValueId: dst,
+		Label:   "testing",
+		Attr:    attr,
+		Entity:  src,
+	}
+	l, _ := posting.GetOrCreate(x.DataKey(attr, src))
+	require.NoError(t,
+		l.AddMutationWithIndex(context.Background(), edge, posting.Del))
+}
+
 func populateGraph(t *testing.T) (string, string, *store.Store) {
 	// logrus.SetLevel(logrus.DebugLevel)
 	dir, err := ioutil.TempDir("", "storetest_")
@@ -152,6 +164,7 @@ func populateGraph(t *testing.T) (string, string, *store.Store) {
 	addEdgeToUID(t, ps, "friend", 1, 25)
 	addEdgeToUID(t, ps, "friend", 1, 31)
 	addEdgeToUID(t, ps, "friend", 1, 101)
+	addEdgeToUID(t, ps, "friend", 31, 24)
 
 	// Now let's add a few properties for the main user.
 	addEdgeToValue(t, ps, "name", 1, "Michonne")
@@ -976,7 +989,8 @@ func TestToJSONFilterOrFirstNegative(t *testing.T) {
 }
 
 func TestToJSONFilterAnd(t *testing.T) {
-	dir, dir2, _ := populateGraph(t)
+	dir, dir2, ps := populateGraph(t)
+	defer ps.Close()
 	defer os.RemoveAll(dir)
 	defer os.RemoveAll(dir2)
 	query := `
@@ -997,7 +1011,8 @@ func TestToJSONFilterAnd(t *testing.T) {
 }
 
 func TestToJSONReverse(t *testing.T) {
-	dir, dir2, _ := populateGraph(t)
+	dir, dir2, ps := populateGraph(t)
+	defer ps.Close()
 	defer os.RemoveAll(dir)
 	defer os.RemoveAll(dir2)
 	query := `
@@ -1012,10 +1027,86 @@ func TestToJSONReverse(t *testing.T) {
 			}
 		}
 	`
-
 	js := processToJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"name":"Glenn Rhee","~friend":[{"alive":true,"gender":"female","name":"Michonne"}]}]}`,
+		`{"me":[{"name":"Glenn Rhee","~friend":[{"alive":true,"gender":"female","name":"Michonne"},{"name":"Andrea"}]}]}`,
+		js)
+}
+
+func TestToJSONReverseFilter(t *testing.T) {
+	dir, dir2, ps := populateGraph(t)
+	defer ps.Close()
+	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
+	query := `
+		{
+			me(_uid_:0x18) {
+				name
+				~friend @filter(allof("name", "Andrea")) {
+					name
+					gender
+			  	alive
+				}
+			}
+		}
+	`
+	js := processToJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"name":"Glenn Rhee","~friend":[{"name":"Andrea"}]}]}`,
+		js)
+}
+
+func TestToJSONReverseDelSet(t *testing.T) {
+	dir, dir2, ps := populateGraph(t)
+	defer ps.Close()
+	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
+
+	delEdgeToUID(t, ps, "friend", 1, 24)  // Delete Michonne.
+	delEdgeToUID(t, ps, "friend", 23, 24) // Ignored.
+	addEdgeToUID(t, ps, "friend", 25, 24) // Add Daryl.
+
+	query := `
+		{
+			me(_uid_:0x18) {
+				name
+				~friend {
+					name
+					gender
+			  	alive
+				}
+			}
+		}
+	`
+	js := processToJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"name":"Glenn Rhee","~friend":[{"name":"Daryl Dixon"},{"name":"Andrea"}]}]}`,
+		js)
+}
+
+func TestToJSONReverseDelSetCount(t *testing.T) {
+	dir, dir2, ps := populateGraph(t)
+	defer ps.Close()
+	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
+
+	delEdgeToUID(t, ps, "friend", 1, 24)  // Delete Michonne.
+	delEdgeToUID(t, ps, "friend", 23, 24) // Ignored.
+	addEdgeToUID(t, ps, "friend", 25, 24) // Add Daryl.
+
+	query := `
+		{
+			me(_uid_:0x18) {
+				name
+				~friend {
+					_count_
+				}
+			}
+		}
+	`
+	js := processToJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"name":"Glenn Rhee","~friend":[{"_count_":2}]}]}`,
 		js)
 }
 
