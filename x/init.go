@@ -19,6 +19,7 @@ package x
 import (
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"os"
 
@@ -50,7 +51,7 @@ func Init() {
 	var confFile = flag.Lookup("conf").Value.(flag.Getter).Get().(string)
 
 	if confFile != "" {
-		log.Println("Trying to load configuration from file:", confFile)
+		log.Println("Loading configuration from file:", confFile)
 		loadConfigFromYAML(confFile)
 	}
 
@@ -65,28 +66,10 @@ func Init() {
 
 // loadConfigFromYAML reads configurations from specified YAML file.
 func loadConfigFromYAML(confFile string) {
-	file, err := os.Open(confFile)
+	bs, err := ioutil.ReadFile(confFile)
 	if err != nil {
 		// handle the error here
-		log.Println("Cannot open specified config file. Default configuration will be used")
-		return
-	}
-
-	defer file.Close()
-
-	// get the file size
-	stat, err := file.Stat()
-	if err != nil {
-		log.Println("Cannot read config file.")
-		return
-	}
-
-	// read the file
-	bs := make([]byte, stat.Size())
-
-	_, err = file.Read(bs)
-	if err != nil {
-		log.Println("Error parsing config file.")
+		log.Println("Cannot open specified config file. Default configuration will be used!")
 		return
 	}
 
