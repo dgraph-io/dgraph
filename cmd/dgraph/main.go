@@ -57,6 +57,7 @@ import (
 )
 
 var (
+	configFile = flag.String("configFile", "", "YAML configuration file containing dgraph settings.")
 	conf       = flag.String("conf", "", "group configuration file")
 	postingDir = flag.String("p", "p", "Directory to store posting lists.")
 	walDir     = flag.String("w", "w", "Directory to store raft write-ahead logs.")
