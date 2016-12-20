@@ -651,15 +651,16 @@ func checkFlagsAndInitDirs() {
 func serveGRPC(l net.Listener) {
 	s := grpc.NewServer(grpc.CustomCodec(&query.Codec{}))
 	graph.RegisterDgraphServer(s, &grpcServer{})
-	if err := s.Serve(l); err != nil {
-		log.Fatalf("While serving gRpc request: %v", err)
-	}
+	x.Checkf(s.Serve(l), "Error while serving gRpc request")
 }
 
 func serveHTTP(l net.Listener) {
-	if err := http.Serve(l, nil); err != nil {
-		log.Fatalf("While serving http request: %v", err)
+	srv := &http.Server{
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 60 * time.Second,
+		// TODO(Ashwin): Add idle timeout while switching to Go 1.8.
 	}
+	x.Checkf(srv.Serve(l), "Error while serving http request")
 }
 
 func setupServer(che chan error) {
