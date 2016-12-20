@@ -46,21 +46,21 @@ func DefaultIndexKeys(val string) []string {
 	for _, it := range words {
 		if it == "_nil_" {
 			tokens = append(tokens, it)
-		} else {
-			data := []byte(it)
-			tokenizer, err := tok.NewTokenizer(data)
-			if err != nil {
-				return nil
-			}
-			for {
-				s := tokenizer.Next()
-				if s == nil {
-					break
-				}
-				tokens = append(tokens, string(s))
-			}
-			tokenizer.Destroy()
+			continue
 		}
+
+		tokenizer, err := tok.NewTokenizer([]byte(it))
+		if err != nil {
+			return nil
+		}
+		for {
+			s := tokenizer.Next()
+			if s == nil {
+				break
+			}
+			tokens = append(tokens, string(s))
+		}
+		tokenizer.Destroy()
 	}
 	return tokens
 }
