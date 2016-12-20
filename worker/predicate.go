@@ -260,7 +260,7 @@ func (w *grpcWorker) PredicateData(stream Worker_PredicateDataServer) error {
 			return err
 		}
 	} // end of iterator
-	x.Trace(ctx, "Sent %d keys to client. Done.\n", count)
+	x.Trace(stream.Context(), "Sent %d keys to client. Done.\n", count)
 
 	if err := it.Err(); err != nil {
 		return err
