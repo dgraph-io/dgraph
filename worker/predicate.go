@@ -37,6 +37,7 @@ const (
 func writeBatch(ctx context.Context, kv chan *task.KV, che chan error) {
 	wb := pstore.NewWriteBatch()
 	defer wb.Destroy()
+
 	batchSize := 0
 	batchWriteNum := 1
 	for i := range kv {
@@ -44,7 +45,7 @@ func writeBatch(ctx context.Context, kv chan *task.KV, che chan error) {
 		batchSize += len(i.Key) + len(i.Val)
 		// We write in batches of size 32MB.
 		if batchSize >= 32*MB {
-			x.Trace(ctx, "Doing batch write %d.", batchWriteNum)
+			x.Trace(ctx, "SNAPSHOT: Doing batch write num: %d", batchWriteNum)
 			if err := pstore.WriteBatch(wb); err != nil {
 				che <- err
 				return
@@ -68,7 +69,7 @@ func writeBatch(ctx context.Context, kv chan *task.KV, che chan error) {
 	che <- nil
 }
 
-func generateGroup(groupId uint32) (*task.GroupKeys, error) {
+func streamKeys(stream Worker_PredicateDataClient, groupId uint32) error {
 	it := pstore.NewIterator()
 	defer it.Close()
 
@@ -99,18 +100,22 @@ func generateGroup(groupId uint32) (*task.GroupKeys, error) {
 			Checksum: pl.Checksum,
 		}
 		g.Keys = append(g.Keys, key)
+		if len(g.Keys) >= 1000 {
+			if err := stream.Send(g); err != nil {
+				return x.Wrapf(err, "While sending group keys to server.")
+			}
+			g.Keys = g.Keys[:0]
+		}
 	}
-	return g, it.Err()
+	if err := stream.Send(g); err != nil {
+		return x.Wrapf(err, "While sending group keys to server.")
+	}
+	return stream.CloseSend()
 }
 
 // PopulateShard gets data for predicate pred from server with id serverId and
 // writes it to RocksDB.
 func populateShard(ctx context.Context, pl *pool, group uint32) (int, error) {
-	gkeys, err := generateGroup(group)
-	if err != nil {
-		return 0, x.Wrapf(err, "While generating keys group")
-	}
-
 	conn, err := pl.Get()
 	if err != nil {
 		return 0, err
@@ -118,11 +123,17 @@ func populateShard(ctx context.Context, pl *pool, group uint32) (int, error) {
 	defer pl.Put(conn)
 	c := NewWorkerClient(conn)
 
-	stream, err := c.PredicateData(context.Background(), gkeys)
+	stream, err := c.PredicateData(context.Background())
 	if err != nil {
+		x.TraceError(ctx, err)
 		return 0, err
 	}
 	x.Trace(ctx, "Streaming data for group: %v", group)
+
+	if err := streamKeys(stream, group); err != nil {
+		x.TraceError(ctx, err)
+		return 0, x.Wrapf(err, "While streaming keys group")
+	}
 
 	kvs := make(chan *task.KV, 1000)
 	che := make(chan error)
@@ -136,6 +147,7 @@ func populateShard(ctx context.Context, pl *pool, group uint32) (int, error) {
 			break
 		}
 		if err != nil {
+			x.TraceError(ctx, err)
 			close(kvs)
 			return count, err
 		}
@@ -167,7 +179,28 @@ func populateShard(ctx context.Context, pl *pool, group uint32) (int, error) {
 
 // PredicateData can be used to return data corresponding to a predicate over
 // a stream.
-func (w *grpcWorker) PredicateData(gkeys *task.GroupKeys, stream Worker_PredicateDataServer) error {
+func (w *grpcWorker) PredicateData(stream Worker_PredicateDataServer) error {
+	gkeys := &task.GroupKeys{}
+
+	// Receive all keys from client first.
+	for {
+		keys, err := stream.Recv()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return x.Wrap(err)
+		}
+		if gkeys.GroupId == 0 {
+			gkeys.GroupId = keys.GroupId
+		}
+		x.AssertTruef(gkeys.GroupId == keys.GroupId,
+			"Group ids don't match [%v] v/s [%v]", gkeys.GroupId, keys.GroupId)
+		// Do we need to check if keys are sorted? They should already be.
+		gkeys.Keys = append(gkeys.Keys, keys.Keys...)
+	}
+	x.Trace(stream.Context(), "Got %d keys from client\n", len(gkeys.Keys))
+
 	if !groups().ServesGroup(gkeys.GroupId) {
 		return x.Errorf("Group %d not served.", gkeys.GroupId)
 	}
@@ -182,6 +215,7 @@ func (w *grpcWorker) PredicateData(gkeys *task.GroupKeys, stream Worker_Predicat
 	it := pstore.NewIterator()
 	defer it.Close()
 
+	var count int
 	for it.SeekToFirst(); it.Valid(); it.Next() {
 		k, v := it.Key(), it.Value()
 		pk := x.Parse(k.Data())
@@ -221,10 +255,12 @@ func (w *grpcWorker) PredicateData(gkeys *task.GroupKeys, stream Worker_Predicat
 			Val: v.Data(),
 		}
 
+		count++
 		if err := stream.Send(kv); err != nil {
 			return err
 		}
 	} // end of iterator
+	x.Trace(stream.Context(), "Sent %d keys to client. Done.\n", count)
 
 	if err := it.Err(); err != nil {
 		return err

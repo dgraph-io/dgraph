@@ -77,10 +77,14 @@ func (p *poolsi) connect(addr string) {
 
 	c := NewWorkerClient(conn)
 	resp, err := c.Echo(context.Background(), query)
-	x.Checkf(err, "Unable to Echo")
-	x.AssertTrue(bytes.Equal(resp.Data, query.Data))
-	x.Check(pool.Put(conn))
-	fmt.Printf("Connection with %q successful.\n", addr)
+	if err != nil {
+		log.Printf("While trying to connect to %q, got error: %v\n", addr, err)
+		pool = nil
+	} else {
+		x.AssertTrue(bytes.Equal(resp.Data, query.Data))
+		x.Check(pool.Put(conn))
+		fmt.Printf("Connection with %q successful.\n", addr)
+	}
 
 	p.Lock()
 	defer p.Unlock()

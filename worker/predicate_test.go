@@ -16,23 +16,17 @@
 package worker
 
 import (
-	"bytes"
 	"context"
-	"io/ioutil"
 	"log"
 	"net"
-	"os"
 	"testing"
-	"time"
 
 	"google.golang.org/grpc"
 
-	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/stretchr/testify/require"
 )
 
 func checkShard(ps *store.Store) (int, []byte) {
@@ -234,58 +228,61 @@ func TestJoinCluster(t *testing.T) {
 }
 */
 
-func TestGenerateGroup(t *testing.T) {
-	dir, err := ioutil.TempDir("", "store3")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
-
-	r := bytes.NewReader([]byte("default: fp % 3"))
-	require.NoError(t, group.ParseConfig(r), "Unable to parse config.")
-
-	ps, err := store.NewStore(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer ps.Close()
-	posting.Init(ps)
-	Init(ps)
-
-	require.Equal(t, uint32(0), group.BelongsTo("pred0"))
-	writePLs(t, "pred0", 33, 1, ps)
-
-	require.Equal(t, uint32(1), group.BelongsTo("p1"))
-	writePLs(t, "p1", 34, 1, ps)
-
-	require.Equal(t, uint32(2), group.BelongsTo("pr2"))
-	writePLs(t, "pr2", 35, 1, ps)
-	time.Sleep(time.Second)
-
-	g, err := generateGroup(0)
-	if err != nil {
-		t.Error(err)
-	}
-	require.Equal(t, 33, len(g.Keys))
-	for i, k := range g.Keys {
-		require.Equal(t, x.DataKey("pred0", uint64(i)), k.Key)
-	}
-
-	g, err = generateGroup(1)
-	if err != nil {
-		t.Error(err)
-	}
-	require.Equal(t, 34, len(g.Keys))
-	for i, k := range g.Keys {
-		require.Equal(t, x.DataKey("p1", uint64(i)), k.Key)
-	}
-
-	g, err = generateGroup(2)
-	if err != nil {
-		t.Error(err)
-	}
-	require.Equal(t, 35, len(g.Keys))
-	for i, k := range g.Keys {
-		require.Equal(t, x.DataKey("pr2", uint64(i)), k.Key)
-	}
-}
+/*
+ * TODO: Fix this when we find a way to mock grpc.
+ *func TestGenerateGroup(t *testing.T) {
+ *  dir, err := ioutil.TempDir("", "store3")
+ *  if err != nil {
+ *    t.Fatal(err)
+ *  }
+ *  defer os.RemoveAll(dir)
+ *
+ *  r := bytes.NewReader([]byte("default: fp % 3"))
+ *  require.NoError(t, group.ParseConfig(r), "Unable to parse config.")
+ *
+ *  ps, err := store.NewStore(dir)
+ *  if err != nil {
+ *    t.Fatal(err)
+ *  }
+ *  defer ps.Close()
+ *  posting.Init(ps)
+ *  Init(ps)
+ *
+ *  require.Equal(t, uint32(0), group.BelongsTo("pred0"))
+ *  writePLs(t, "pred0", 33, 1, ps)
+ *
+ *  require.Equal(t, uint32(1), group.BelongsTo("p1"))
+ *  writePLs(t, "p1", 34, 1, ps)
+ *
+ *  require.Equal(t, uint32(2), group.BelongsTo("pr2"))
+ *  writePLs(t, "pr2", 35, 1, ps)
+ *  time.Sleep(time.Second)
+ *
+ *  g, err := generateGroup(0)
+ *  if err != nil {
+ *    t.Error(err)
+ *  }
+ *  require.Equal(t, 33, len(g.Keys))
+ *  for i, k := range g.Keys {
+ *    require.Equal(t, x.DataKey("pred0", uint64(i)), k.Key)
+ *  }
+ *
+ *  g, err = generateGroup(1)
+ *  if err != nil {
+ *    t.Error(err)
+ *  }
+ *  require.Equal(t, 34, len(g.Keys))
+ *  for i, k := range g.Keys {
+ *    require.Equal(t, x.DataKey("p1", uint64(i)), k.Key)
+ *  }
+ *
+ *  g, err = generateGroup(2)
+ *  if err != nil {
+ *    t.Error(err)
+ *  }
+ *  require.Equal(t, 35, len(g.Keys))
+ *  for i, k := range g.Keys {
+ *    require.Equal(t, x.DataKey("pr2", uint64(i)), k.Key)
+ *  }
+ *}
+ */
