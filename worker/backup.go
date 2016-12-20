@@ -135,6 +135,11 @@ func backup(gid uint32, bdir string) error {
 			it.Seek(pk.SkipRangeOfSameType())
 			continue
 		}
+		if pk.IsReverse() {
+			// Seek to the end of reverse keys.
+			it.Seek(pk.SkipRangeOfSameType())
+			continue
+		}
 		if pk.Attr == "_uid_" {
 			// Skip the UID mappings.
 			it.Seek(pk.SkipPredicate())

@@ -39,6 +39,7 @@ const (
 	StringID   = TypeID(Posting_STRING)
 	DateID     = TypeID(Posting_DATE)
 	GeoID      = TypeID(Posting_GEO)
+	UidID      = TypeID(Posting_UID)
 )
 
 var typeNameMap = map[string]TypeID{
@@ -50,6 +51,7 @@ var typeNameMap = map[string]TypeID{
 	"datetime": DateTimeID,
 	"date":     DateID,
 	"geo":      GeoID,
+	"uid":      UidID,
 }
 
 type TypeID Posting_ValType
@@ -70,6 +72,8 @@ func (t TypeID) Name() string {
 		return "dateTime"
 	case GeoID:
 		return "geo"
+	case UidID:
+		return "uid"
 	}
 	return ""
 }
@@ -120,6 +124,10 @@ func ValueForType(id TypeID) Val {
 	case GeoID:
 		var g geom.T
 		return Val{GeoID, &g}
+
+	case UidID:
+		var i uint64
+		return Val{UidID, &i}
 
 	default:
 		return Val{}

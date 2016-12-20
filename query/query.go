@@ -531,13 +531,14 @@ func isReversedEdge(attr string) bool {
 // createTaskQuery generates the query buffer.
 func createTaskQuery(sg *SubGraph) *task.Query {
 	attr := sg.Attr
-	reverse := isReversedEdge(attr)
+	// Might be safer than just checking first byte due to i18n
+	reverse := strings.HasPrefix(attr, "~")
 	if reverse {
 		attr = strings.TrimPrefix(attr, "~")
 	}
 	out := &task.Query{
 		Attr:     attr,
-		Reverse:  reverse,
+		Reverse:  reverse, // reverse used here.
 		SrcFunc:  sg.SrcFunc,
 		Count:    int32(sg.Params.Count),
 		Offset:   int32(sg.Params.Offset),

@@ -109,12 +109,17 @@ func processScalarBlock(l *lex.Lexer) error {
 				}
 				str[name] = t
 
-				// Check for index.
+				// Check for index / reverse.
 				next = <-l.Items
 				if next.Typ == itemAt {
-					index := <-l.Items
-					if index.Typ == itemIndex {
+					next = <-l.Items
+					if next.Typ == itemIndex {
 						indexedFields[name] = true
+					} else if next.Typ == itemReverse {
+						if t != types.UidID {
+							return x.Errorf("Cannot reverse for non-UID type")
+						}
+						reversedFields[name] = true
 					} else {
 						return x.Errorf("Invalid index specification")
 					}
@@ -151,7 +156,8 @@ func processScalar(l *lex.Lexer) error {
 				}
 				typ = next.Val
 
-				if t, ok := getScalar(typ); ok {
+				t, ok := getScalar(typ)
+				if ok {
 					str[name] = t
 				} else {
 					return x.Errorf("Invalid type")
@@ -160,9 +166,14 @@ func processScalar(l *lex.Lexer) error {
 				// Check for index.
 				next = <-l.Items
 				if next.Typ == itemAt {
-					index := <-l.Items
-					if index.Typ == itemIndex {
+					next = <-l.Items
+					if next.Typ == itemIndex {
 						indexedFields[name] = true
+					} else if next.Typ == itemReverse {
+						if t != types.UidID {
+							return x.Errorf("Cannot reverse for non-UID type")
+						}
+						reversedFields[name] = true
 					} else {
 						return x.Errorf("Invalid index specification")
 					}

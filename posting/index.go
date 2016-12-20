@@ -23,6 +23,7 @@ import (
 
 	"golang.org/x/net/trace"
 
+	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/types"
@@ -160,10 +161,7 @@ func addIndexMutation(ctx context.Context, edge *task.DirectedEdge, token string
 
 func addReverseMutation(ctx context.Context, t *task.DirectedEdge) {
 	key := x.ReverseKey(t.Attr, t.ValueId)
-	var groupId uint32
-	if rv, ok := ctx.Value("raft").(x.RaftValue); ok {
-		groupId = rv.Group
-	}
+	groupId := group.BelongsTo(t.Attr)
 
 	plist, decr := GetOrCreate(key, groupId)
 	defer decr()
@@ -196,10 +194,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *task.DirectedEdge) e
 	var val types.Val
 	var verr error
 
-	doUpdateIndex := pstore != nil && (t.Value != nil) &&
-		schema.IsIndexed(t.Attr)
-	doReverseEdge := pstore != nil && (t.ValueId != 0) &&
-		schema.IsReversed(t.Attr)
+	doUpdateIndex := pstore != nil && (t.Value != nil) && schema.IsIndexed(t.Attr)
 	if doUpdateIndex {
 		// Check last posting for original value BEFORE any mutation actually happens.
 		val, verr = l.Value()
@@ -224,7 +219,8 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *task.DirectedEdge) e
 			addIndexMutations(ctx, t, p, task.DirectedEdge_SET)
 		}
 	}
-	if doReverseEdge && t.ValueId != 0 {
+
+	if (pstore != nil) && (t.ValueId != 0) && schema.IsReversed(t.Attr) {
 		addReverseMutation(ctx, t)
 	}
 	return nil

@@ -32,17 +32,6 @@ func DataKey(attr string, uid uint64) []byte {
 	return buf
 }
 
-func IndexKey(attr, term string) []byte {
-	buf := make([]byte, 2+len(attr)+1+len(term))
-
-	rest := writeAttr(buf, attr)
-	rest[0] = byteIndex
-
-	rest = rest[1:]
-	AssertTrue(len(term) == copy(rest, term[:]))
-	return buf
-}
-
 func ReverseKey(attr string, uid uint64) []byte {
 	buf := make([]byte, 2+len(attr)+1+8)
 
@@ -54,19 +43,35 @@ func ReverseKey(attr string, uid uint64) []byte {
 	return buf
 }
 
+func IndexKey(attr, term string) []byte {
+	buf := make([]byte, 2+len(attr)+1+len(term))
+
+	rest := writeAttr(buf, attr)
+	rest[0] = byteIndex
+
+	rest = rest[1:]
+	AssertTrue(len(term) == copy(rest, term[:]))
+	return buf
+}
+
 type ParsedKey struct {
 	byteType byte
 	Attr     string
 	Uid      uint64
 	Term     string
-}
-
-func (p ParsedKey) IsIndex() bool {
-	return p.byteType == byteIndex
+	Reverse  bool
 }
 
 func (p ParsedKey) IsData() bool {
 	return p.byteType == byteData
+}
+
+func (p ParsedKey) IsReverse() bool {
+	return p.byteType == byteReverse
+}
+
+func (p ParsedKey) IsIndex() bool {
+	return p.byteType == byteIndex
 }
 
 func (p ParsedKey) SkipPredicate() []byte {
@@ -108,6 +113,10 @@ func Parse(key []byte) *ParsedKey {
 
 	if p.byteType == byteData {
 		p.Uid = binary.BigEndian.Uint64(k)
+
+	} else if p.byteType == byteReverse {
+		p.Uid = binary.BigEndian.Uint64(k)
+		p.Reverse = true
 
 	} else if p.byteType == byteIndex {
 		p.Term = string(k)
