@@ -53,7 +53,7 @@ func TestCheckNQuad(t *testing.T) {
 }
 
 func TestSetMutation(t *testing.T) {
-	req := NewRequest()
+	req := Req{}
 
 	if err := req.AddMutation(graph.NQuad{
 		Sub:   "alice",
