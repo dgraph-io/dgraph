@@ -164,8 +164,9 @@ func main() {
 	for _, file := range filesList {
 		processFile(file)
 	}
+	numSec := 1 + uint64(time.Since(s.start).Seconds())
 	fmt.Printf("Number of mutations run   : %d\n", s.mutations)
 	fmt.Printf("Number of RDFs processed  : %d\n", s.rdfs)
 	fmt.Printf("Time spent                : %v\n", time.Since(s.start))
-	fmt.Printf("RDFs processed per second : %d\n", s.rdfs/uint64(time.Since(s.start).Seconds()))
+	fmt.Printf("RDFs processed per second : %d\n", s.rdfs/numSec)
 }

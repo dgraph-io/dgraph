@@ -511,7 +511,7 @@ func (v Val) MarshalJSON() ([]byte, error) {
 	case DateTimeID:
 		return json.Marshal(v.Value.(time.Time))
 	case GeoID:
-		return json.Marshal(v.Value.(geom.T))
+		return geojson.Marshal(v.Value.(geom.T))
 	case StringID:
 		return json.Marshal(v.Value.(string))
 	}
