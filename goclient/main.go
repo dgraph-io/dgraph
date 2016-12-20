@@ -66,14 +66,14 @@ func main() {
 	}, client.SET); err != nil {
 		log.Fatal(err)
 	}
-	resp, err := c.Query(context.Background(), req.Request())
+	resp, err := c.Run(context.Background(), req.Request())
 	if err != nil {
 		log.Fatalf("Error in getting response from server, %s", err)
 	}
 
 	req = client.NewRequest()
 	req.SetQuery("{ me(_xid_: alice) { location } }")
-	resp, err = c.Query(context.Background(), req.Request())
+	resp, err = c.Run(context.Background(), req.Request())
 	if err != nil {
 		log.Fatalf("Error in getting response from server, %s", err)
 	}
