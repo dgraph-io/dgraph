@@ -3,6 +3,7 @@ package types
 import (
 	"bytes"
 	"encoding/binary"
+	"strings"
 	"time"
 
 	"github.com/dgraph-io/dgraph/tok"
@@ -31,7 +32,7 @@ func IndexTokens(attr string, sv Val) ([]string, error) {
 	case DateTimeID:
 		return TimeIndex(attr, sv.Value.(time.Time))
 	case StringID:
-		return DefaultIndexKeys(attr, sv.Value.(string)), nil
+		return DefaultIndexKeys(sv.Value.(string)), nil
 	default:
 		return nil, x.Errorf("Invalid type. Cannot be indexed")
 	}
@@ -39,21 +40,27 @@ func IndexTokens(attr string, sv Val) ([]string, error) {
 }
 
 // DefaultIndexKeys tokenizes data as a string and return keys for indexing.
-func DefaultIndexKeys(attr string, val string) []string {
-	data := []byte(val)
-	tokenizer, err := tok.NewTokenizer(data)
-	if err != nil {
-		return nil
-	}
-	defer tokenizer.Destroy()
-
+func DefaultIndexKeys(val string) []string {
+	words := strings.Fields(val)
 	tokens := make([]string, 0, 5)
-	for {
-		s := tokenizer.Next()
-		if s == nil {
-			break
+	for _, it := range words {
+		if it == "_nil_" {
+			tokens = append(tokens, it)
+		} else {
+			data := []byte(it)
+			tokenizer, err := tok.NewTokenizer(data)
+			if err != nil {
+				return nil
+			}
+			for {
+				s := tokenizer.Next()
+				if s == nil {
+					break
+				}
+				tokens = append(tokens, string(s))
+			}
+			tokenizer.Destroy()
 		}
-		tokens = append(tokens, string(s))
 	}
 	return tokens
 }
