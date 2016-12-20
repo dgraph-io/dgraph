@@ -40,6 +40,11 @@ func IndexTokens(attr string, sv Val) ([]string, error) {
 
 // DefaultIndexKeys tokenizes data as a string and return keys for indexing.
 func DefaultIndexKeys(attr string, val string) []string {
+	// if the value was empty we substitute with _nil_, so we should skip
+	// indexing it.
+	if val == "_nil_" {
+		return nil
+	}
 	data := []byte(val)
 	tokenizer, err := tok.NewTokenizer(data)
 	if err != nil {
