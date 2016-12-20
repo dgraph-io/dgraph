@@ -1,0 +1,32 @@
+# Folder in which to store backups.
+backup: backup
+
+# Number of cores to be used by the process.
+cores: 4
+      
+# Fraction of dirty posting lists to commit every few seconds.
+gentlecommit: 0.1
+      
+# RAFT ID that this server will use to join RAFT groups.
+idx: 1
+      
+# Number of shards for lhmap.
+lhmap: 32
+
+# Directory to store posting lists.
+p: pp
+      
+# Port to run server on. (default 8080)
+port: 8080
+
+# If RAM usage exceeds this, we stop the world, and flush our buffers.
+stw_ram_mb: 4096
+
+# The ratio of queries to trace.
+trace float: 0.5
+
+# Directory to store raft write-ahead logs.
+w: ww
+
+# Port used by worker for internal communication.
+workerport: 12345
