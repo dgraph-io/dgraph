@@ -66,6 +66,7 @@ func main() {
 	}, client.SET); err != nil {
 		log.Fatal(err)
 	}
+
 	resp, err := c.Run(context.Background(), req.Request())
 	if err != nil {
 		log.Fatalf("Error in getting response from server, %s", err)

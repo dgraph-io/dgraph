@@ -131,7 +131,6 @@ func (req *Req) AddMutation(nq graph.NQuad, op Op) error {
 	if err := checkNQuad(nq); err != nil {
 		return err
 	}
-
 	req.addMutation(nq, op)
 	return nil
 }
