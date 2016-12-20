@@ -107,7 +107,7 @@ func makeRequests(wg *sync.WaitGroup, c graph.DgraphClient, in <-chan client.Req
 	ctx := context.Background()
 	for req := range in {
 		atomic.AddUint64(&ctr.writing, 1)
-		_, err := c.Query(ctx, req.Request())
+		_, err := c.Run(ctx, req.Request())
 		if err != nil {
 			log.Printf("Error in getting response from server, %v\n", err)
 		}

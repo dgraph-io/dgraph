@@ -5,7 +5,7 @@ syntax="proto3";
 package graph;
 
 service Dgraph {
-    rpc Query (Request) returns (Response) {};
+    rpc Run (Request) returns (Response) {};
 }
 
 message NQuad {
