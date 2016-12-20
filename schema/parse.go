@@ -110,18 +110,26 @@ func processScalarBlock(l *lex.Lexer) error {
 				str[name] = t
 
 				// Check for index / reverse.
-				next = <-l.Items
-				if next.Typ == itemAt {
+				for {
 					next = <-l.Items
-					if next.Typ == itemIndex {
-						indexedFields[name] = true
-					} else if next.Typ == itemReverse {
-						if t != types.UidID {
-							return x.Errorf("Cannot reverse for non-UID type")
+					if next.Typ == lex.ItemError {
+						return x.Errorf(next.Val)
+					}
+					if next.Typ == itemDummy {
+						break
+					}
+					if next.Typ == itemAt {
+						next = <-l.Items
+						if next.Typ == itemIndex {
+							indexedFields[name] = true
+						} else if next.Typ == itemReverse {
+							if t != types.UidID {
+								return x.Errorf("Cannot reverse for non-UID type")
+							}
+							reversedFields[name] = true
+						} else {
+							return x.Errorf("Invalid index specification")
 						}
-						reversedFields[name] = true
-					} else {
-						return x.Errorf("Invalid index specification")
 					}
 				}
 			}
@@ -164,18 +172,26 @@ func processScalar(l *lex.Lexer) error {
 				}
 
 				// Check for index.
-				next = <-l.Items
-				if next.Typ == itemAt {
+				for {
 					next = <-l.Items
-					if next.Typ == itemIndex {
-						indexedFields[name] = true
-					} else if next.Typ == itemReverse {
-						if t != types.UidID {
-							return x.Errorf("Cannot reverse for non-UID type")
+					if next.Typ == lex.ItemError {
+						return x.Errorf(next.Val)
+					}
+					if next.Typ == itemDummy {
+						break
+					}
+					if next.Typ == itemAt {
+						next = <-l.Items
+						if next.Typ == itemIndex {
+							indexedFields[name] = true
+						} else if next.Typ == itemReverse {
+							if t != types.UidID {
+								return x.Errorf("Cannot reverse for non-UID type")
+							}
+							reversedFields[name] = true
+						} else {
+							return x.Errorf("Invalid index specification")
 						}
-						reversedFields[name] = true
-					} else {
-						return x.Errorf("Invalid index specification")
 					}
 				}
 				return nil
@@ -225,7 +241,8 @@ L:
 					return x.Errorf("Missing Type")
 				}
 				typ = next.Val
-				if t, ok := getScalar(typ); ok {
+				t, isScalar := getScalar(typ)
+				if isScalar {
 					if t1, ok := str[name]; ok {
 						if t1.(types.TypeID) != t.(types.TypeID) {
 							return x.Errorf("Same field cant have multiple types")
@@ -244,6 +261,10 @@ L:
 				if next.Typ == itemAt {
 					index := <-l.Items
 					if index.Typ == itemReverse {
+						// TODO(jchiu): Add test for this check.
+						if isScalar && t != types.UidID {
+							return x.Errorf("Cannot reverse non-UID scalar")
+						}
 						reversedFields[name] = true
 					} else {
 						return x.Errorf("Invalid reverse specification")

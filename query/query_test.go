@@ -78,14 +78,23 @@ func TestNewGraph(t *testing.T) {
 		}, algo.ToUintsListForTest(sg.uidMatrix))
 }
 
+// TODO(jchiu): Modify tests to try all equivalent schemas.
+//const schemaStr = `
+//scalar name:string @index
+//scalar dob:date @index
+//scalar loc:geo @index
+
+//type Person {
+//  friend: Person @reverse
+//}`
+
 const schemaStr = `
 scalar name:string @index
 scalar dob:date @index
 scalar loc:geo @index
-
-type Person {
-  friend: Person @reverse
-}
+scalar (
+  friend:uid @reverse
+)
 `
 
 func addEdgeToValue(t *testing.T, ps *store.Store, attr string, src uint64,

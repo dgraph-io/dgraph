@@ -210,8 +210,10 @@ L:
 		break
 	}
 
-	// Check for the mention of @index.
-	var isIndexed bool
+	// Keep reading for terms that start with @. Keep outputting. If we see
+	// something that doesn't start with @, we output ItemDummy. It is like
+	// null-terminatino of C strings.
+
 L1:
 	for {
 		switch r := l.Next(); {
@@ -221,7 +223,6 @@ L1:
 			break L1
 		case r == '@':
 			l.Emit(itemAt)
-			isIndexed = true
 			for {
 				r := l.Next()
 				if isNameSuffix(r) {
@@ -232,19 +233,18 @@ L1:
 				word := l.Input[l.Start:l.Pos]
 				if word == "index" {
 					l.Emit(itemIndex)
-					break L1
+				} else if word == "reverse" {
+					l.Emit(itemReverse)
 				} else {
-					return l.Errorf("Invalid mention of index")
+					return l.Errorf("Unexpected directive %s", l.Input[l.Start:l.Pos])
 				}
+				break
 			}
-			break L1
 		default:
 			return l.Errorf("Invalid schema. Unexpected %s", l.Input[l.Start:l.Pos])
 		}
 	}
-	if !isIndexed {
-		l.Emit(itemDummy)
-	}
+	l.Emit(itemDummy)
 	return lexText
 }
 
@@ -286,8 +286,6 @@ L:
 		break
 	}
 
-	// Check for the mention of @index.
-	var isIndexed bool
 L1:
 	for {
 		switch r := l.Next(); {
@@ -297,7 +295,6 @@ L1:
 			break L1
 		case r == '@':
 			l.Emit(itemAt)
-			isIndexed = true
 			for {
 				r := l.Next()
 				if isNameSuffix(r) {
@@ -308,19 +305,18 @@ L1:
 				word := l.Input[l.Start:l.Pos]
 				if word == "index" {
 					l.Emit(itemIndex)
-					break L1
+				} else if word == "reverse" {
+					l.Emit(itemReverse)
 				} else {
 					return l.Errorf("Invalid mention of index")
 				}
+				break
 			}
-			break L1
 		default:
 			return l.Errorf("Invalid schema. Unexpected %s", l.Input[l.Start:l.Pos])
 		}
 	}
-	if !isIndexed {
-		l.Emit(itemDummy)
-	}
+	l.Emit(itemDummy)
 	return lexScalarBlock
 }
 
