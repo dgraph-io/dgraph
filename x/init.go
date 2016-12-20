@@ -66,19 +66,11 @@ func Init() {
 // loadConfigFromYAML reads configurations from specified YAML file.
 func loadConfigFromYAML() {
 	bs, err := ioutil.ReadFile(*configFile)
-	if err != nil {
-		// handle the error here
-		log.Println("Cannot open specified config file. Default configuration will be used!")
-		return
-	}
+	Checkf(err, "Can't open ...: %v", configFile)
 
 	m := make(map[string]string)
 
-	err = yaml.Unmarshal(bs, &m)
-	if err != nil {
-		Fatalf("Error while parsing config file: %v", err)
-		return
-	}
+	Checkf(yaml.Unmarshal(bs, &m), "Error while parsing: ..")
 
 	for k, v := range m {
 		flag.Set(k, v)
