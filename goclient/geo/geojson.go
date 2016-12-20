@@ -138,7 +138,7 @@ func toMutations(f *geojson.Feature, out chan<- client.Req) {
 		return
 	}
 
-	req := client.NewRequest()
+	req := client.Req{}
 	for k, v := range f.Properties {
 		k := strings.Replace(k, " ", "_", -1)
 		if f, ok := v.(float64); ok && f == float64(int32(f)) {

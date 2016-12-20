@@ -53,7 +53,7 @@ func main() {
 
 	c := graph.NewDgraphClient(conn)
 
-	req := client.NewRequest()
+	req := client.Req{}
 
 	loc, err := geo.ValueFromJson(`{"type":"Point","coordinates":[-122.2207184,37.72129059]}`)
 	if err != nil {
@@ -72,7 +72,7 @@ func main() {
 		log.Fatalf("Error in getting response from server, %s", err)
 	}
 
-	req = client.NewRequest()
+	req = client.Req{}
 	req.SetQuery("{ me(_xid_: alice) { location } }")
 	resp, err = c.Run(context.Background(), req.Request())
 	if err != nil {

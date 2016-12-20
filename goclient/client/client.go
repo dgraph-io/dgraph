@@ -19,6 +19,7 @@ package client
 import (
 	"context"
 	"fmt"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -40,12 +41,6 @@ type Req struct {
 	gr graph.Request
 }
 
-// NewRequest initializes and returns a new request which can be used to query
-// or perform set/delete mutations.
-func NewRequest() Req {
-	return Req{}
-}
-
 // Request returns the graph request object which is sent to the server to perform
 // a query/mutation.
 func (req *Req) Request() *graph.Request {
@@ -59,6 +54,7 @@ func checkNQuad(nq graph.NQuad) error {
 	if len(nq.Pred) == 0 {
 		return fmt.Errorf("Predicate can't be empty")
 	}
+	// TODO - Check empty value for different types.
 	hasVal := nq.Value != nil && nq.Value.Val.(*graph.Value_StrVal).StrVal != ""
 	if len(nq.ObjId) == 0 && !hasVal {
 		return fmt.Errorf("Both objectId and objectValue can't be nil")
@@ -71,7 +67,7 @@ func checkNQuad(nq graph.NQuad) error {
 
 // SetQuery sets a query as part of the request.
 // Example usage
-// req := client.NewRequest()
+// req := client.Req{}
 // req.SetQuery("{ me(_xid_: alice) { name falls.in } }")
 // resp, err := c.Query(context.Background(), req.Request())
 // Check response and handle errors
@@ -94,7 +90,7 @@ func (req *Req) addMutation(nq graph.NQuad, op Op) {
 // AddMutation adds a SET/DELETE mutation operation.
 //
 // Example usage
-// req := client.NewRequest()
+// req := client.Req{}
 // To set a string value
 // if err := req.AddMutation(graph.NQuad{
 // 	Sub:   "alice",
@@ -140,8 +136,9 @@ func (req *Req) size() int {
 }
 
 func (req *Req) reset() {
-	req.gr = graph.Request{}
-	req.gr.Mutation = new(graph.Mutation)
+	req.gr.Query = ""
+	req.gr.Mutation.Set = req.gr.Mutation.Set[:0]
+	req.gr.Mutation.Del = req.gr.Mutation.Del[:0]
 }
 
 type NQuadOp struct {
@@ -156,6 +153,7 @@ type BatchMutation struct {
 	nquads   chan NQuadOp
 	requests []*Req
 	dc       graph.DgraphClient
+	wg       sync.WaitGroup
 
 	// Miscellaneous information to print counters.
 	// Num of RDF's sent
@@ -169,10 +167,9 @@ type BatchMutation struct {
 func (batch *BatchMutation) request(req *Req) {
 	counter := atomic.AddUint64(&batch.mutations, 1)
 RETRY:
-	ctx, _ := context.WithTimeout(context.Background(), time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
 	_, err := batch.dc.Run(ctx, &req.gr)
-	// TODO - Check can Dgraph return any other errors? Should we return
-	// them to the user?
 	if err != nil {
 		fmt.Printf("Retrying req: %d. Error: %v\n", counter, err)
 		time.Sleep(5 * time.Millisecond)
@@ -188,6 +185,10 @@ func (batch *BatchMutation) makeRequests(req *Req) {
 			batch.request(req)
 		}
 	}
+	if req.size() > 0 {
+		batch.request(req)
+	}
+	batch.wg.Done()
 }
 
 func NewBatchMutation(ctx context.Context, conn *grpc.ClientConn,
@@ -195,12 +196,13 @@ func NewBatchMutation(ctx context.Context, conn *grpc.ClientConn,
 	bm := BatchMutation{
 		size:    size,
 		pending: pending,
-		nquads:  make(chan NQuadOp, 3*(pending)),
+		nquads:  make(chan NQuadOp, 2*size),
 		start:   time.Now(),
 		dc:      graph.NewDgraphClient(conn),
 	}
 
 	for i := 0; i < pending; i++ {
+		bm.wg.Add(1)
 		req := new(Req)
 		bm.requests = append(bm.requests, req)
 		go bm.makeRequests(req)
@@ -234,7 +236,5 @@ func (batch *BatchMutation) Counter() Counter {
 
 func (batch *BatchMutation) Flush() {
 	close(batch.nquads)
-	for _, req := range batch.requests {
-		batch.request(req)
-	}
+	batch.wg.Wait()
 }
