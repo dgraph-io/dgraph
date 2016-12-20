@@ -225,15 +225,30 @@ var testNQuads = []struct {
 		expectedErr: true,
 	},
 	{
-		input: `_:alice <knows> "stuff"^^<xs:string> .`,
+		input: `_:alice <knows> "" .`,
 		nq: NQuad{
 			Subject:     "_:alice",
 			Predicate:   "knows",
 			ObjectId:    "",
-			ObjectValue: []byte("stuff"),
+			ObjectValue: []byte("_nil_"),
 			ObjectType:  0,
 		},
 		expectedErr: false,
+	},
+	{
+		input: `_:alice <knows> ""^^<xs:string> .`,
+		nq: NQuad{
+			Subject:     "_:alice",
+			Predicate:   "knows",
+			ObjectId:    "",
+			ObjectValue: []byte("_nil_"),
+			ObjectType:  0,
+		},
+		expectedErr: false,
+	},
+	{
+		input:       `_:alice <knows> ""^^<xs:int> .`,
+		expectedErr: true,
 	},
 	{
 		input: `<alice> <knows> "*" .`,

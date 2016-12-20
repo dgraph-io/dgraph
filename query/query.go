@@ -316,6 +316,10 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 				if bytes.Equal(tv.Val, nil) {
 					continue
 				}
+				// Only strings can have empty values.
+				if sv.Tid == types.StringID && sv.Value.(string) == "_nil_" {
+					sv.Value = ""
+				}
 				dst.AddValue(fieldName, sv)
 			}
 		}

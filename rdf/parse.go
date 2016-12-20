@@ -17,7 +17,6 @@
 package rdf
 
 import (
-	"fmt"
 	"log"
 	"strconv"
 	"strings"
@@ -28,6 +27,7 @@ import (
 	"github.com/dgraph-io/dgraph/lex"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/types"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 var emptyEdge task.DirectedEdge
@@ -160,6 +160,9 @@ func Parse(line string) (rnq NQuad, rerr error) {
 
 		case itemLiteral:
 			oval = item.Val
+			if oval == "" {
+				oval = "_nil_"
+			}
 
 		case itemLanguage:
 			rnq.Predicate += "." + item.Val
@@ -171,15 +174,18 @@ func Parse(line string) (rnq NQuad, rerr error) {
 					line)
 			}
 			val := stripBracketsAndTrim(item.Val)
+			// TODO: Check if this condition is required.
 			if strings.Trim(val, " ") == "*" {
-				return rnq, fmt.Errorf("itemObject can't be *")
+				return rnq, x.Errorf("itemObject can't be *")
 			}
 			if t, ok := typeMap[val]; ok {
+				if oval == "_nil_" && t != types.StringID {
+					return rnq, x.Errorf("Invalid ObjectValue")
+				}
 				p := types.ValueForType(t)
 				src := types.ValueForType(types.StringID)
 				src.Value = []byte(oval)
 				err := types.Convert(src, &p)
-				//p.UnmarshalText([]byte(oval))
 				if err != nil {
 					return rnq, err
 				}
@@ -198,7 +204,7 @@ func Parse(line string) (rnq NQuad, rerr error) {
 			}
 
 		case lex.ItemError:
-			return rnq, fmt.Errorf(item.Val)
+			return rnq, x.Errorf(item.Val)
 
 		case itemValidEnd:
 			vend = true
@@ -209,7 +215,7 @@ func Parse(line string) (rnq NQuad, rerr error) {
 	}
 
 	if !vend {
-		return rnq, fmt.Errorf("Invalid end of input. Input: [%s]", line)
+		return rnq, x.Errorf("Invalid end of input. Input: [%s]", line)
 	}
 	if len(oval) > 0 {
 		rnq.ObjectValue = []byte(oval)
@@ -217,14 +223,14 @@ func Parse(line string) (rnq NQuad, rerr error) {
 		rnq.ObjectType = 0
 	}
 	if len(rnq.Subject) == 0 || len(rnq.Predicate) == 0 {
-		return rnq, fmt.Errorf("Empty required fields in NQuad. Input: [%s]", line)
+		return rnq, x.Errorf("Empty required fields in NQuad. Input: [%s]", line)
 	}
 	if len(rnq.ObjectId) == 0 && rnq.ObjectValue == nil {
-		return rnq, fmt.Errorf("No Object in NQuad. Input: [%s]", line)
+		return rnq, x.Errorf("No Object in NQuad. Input: [%s]", line)
 	}
 	if !sane(rnq.Subject) || !sane(rnq.Predicate) || !sane(rnq.ObjectId) ||
 		!sane(rnq.Label) {
-		return rnq, fmt.Errorf("NQuad failed sanity check:%+v", rnq)
+		return rnq, x.Errorf("NQuad failed sanity check:%+v", rnq)
 	}
 
 	return rnq, nil
