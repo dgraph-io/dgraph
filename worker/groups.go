@@ -22,8 +22,8 @@ var (
 	groupIds = flag.String("groups", "0,1", "RAFT groups handled by this server.")
 	myAddr   = flag.String("my", "",
 		"addr:port of this server, so other Dgraph servers can talk to this.")
-	peer   = flag.String("peer", "", "Address of any peer.")
-	raftId = flag.Uint64("idx", 1, "RAFT ID that this server will use to join RAFT groups.")
+	peerAddr = flag.String("peer", "", "IP_ADDRESS:PORT of any healthy peer.")
+	raftId   = flag.Uint64("idx", 1, "RAFT ID that this server will use to join RAFT groups.")
 
 	emptyMembershipUpdate task.MembershipUpdate
 )
@@ -67,9 +67,8 @@ func StartRaftNodes(walDir string) {
 	gr.ctx, gr.cancel = context.WithCancel(context.Background())
 
 	// Successfully connect with the peer, before doing anything else.
-	if len(*peer) > 0 {
-		_, paddr := parsePeer(*peer)
-		pools().connect(paddr)
+	if len(*peerAddr) > 0 {
+		pools().connect(*peerAddr)
 
 		// Force run syncMemberships with this peer, so our nodes know if they have other
 		// servers who are serving the same groups. That way, they can talk to them

@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
-	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -539,17 +537,6 @@ func (n *node) snapshotPeriodically() {
 			return
 		}
 	}
-}
-
-func parsePeer(peer string) (uint64, string) {
-	x.AssertTrue(len(peer) > 0)
-
-	kv := strings.SplitN(peer, ":", 2)
-	x.AssertTruef(len(kv) == 2, "Invalid peer format: %v", peer)
-	pid, err := strconv.ParseUint(kv[0], 10, 64)
-	x.Checkf(err, "Invalid peer id: %v", kv[0])
-	// TODO: Validate the url kv[1]
-	return pid, kv[1]
 }
 
 func (n *node) joinPeers() {
