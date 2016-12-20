@@ -29,9 +29,10 @@ import (
 const dgraphVersion = "0.7.0"
 
 var (
-	version  = flag.Bool("version", false, "Prints the version of Dgraph")
-	initFunc []func()
-	logger   *log.Logger
+	configFile = flag.String("configFile", "", "YAML configuration file containing dgraph settings.")
+	version    = flag.Bool("version", false, "Prints the version of Dgraph")
+	initFunc   []func()
+	logger     *log.Logger
 )
 
 // AddInit adds a function to be run in x.Init, which should be called at the
@@ -48,11 +49,9 @@ func Init() {
 		log.Fatal("Unable to parse flags")
 	}
 
-	var configFile = flag.Lookup("configFile").Value.(flag.Getter).Get().(string)
-
-	if configFile != "" {
+	if *configFile != "" {
 		log.Println("Loading configuration from file:", configFile)
-		loadConfigFromYAML(configFile)
+		loadConfigFromYAML()
 	}
 
 	logger = log.New(os.Stderr, "", log.Lshortfile|log.Flags())
@@ -65,8 +64,8 @@ func Init() {
 }
 
 // loadConfigFromYAML reads configurations from specified YAML file.
-func loadConfigFromYAML(configFile string) {
-	bs, err := ioutil.ReadFile(configFile)
+func loadConfigFromYAML() {
+	bs, err := ioutil.ReadFile(*configFile)
 	if err != nil {
 		// handle the error here
 		log.Println("Cannot open specified config file. Default configuration will be used!")
