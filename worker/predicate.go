@@ -122,6 +122,7 @@ func populateShard(ctx context.Context, pl *pool, group uint32) (int, error) {
 	}
 	defer pl.Put(conn)
 	c := NewWorkerClient(conn)
+
 	stream, err := c.PredicateData(context.Background())
 	if err != nil {
 		x.TraceError(ctx, err)
