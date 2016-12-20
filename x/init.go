@@ -48,11 +48,11 @@ func Init() {
 		log.Fatal("Unable to parse flags")
 	}
 
-	var confFile = flag.Lookup("conf").Value.(flag.Getter).Get().(string)
+	var configFile = flag.Lookup("configFile").Value.(flag.Getter).Get().(string)
 
-	if confFile != "" {
-		log.Println("Loading configuration from file:", confFile)
-		loadConfigFromYAML(confFile)
+	if configFile != "" {
+		log.Println("Loading configuration from file:", configFile)
+		loadConfigFromYAML(configFile)
 	}
 
 	logger = log.New(os.Stderr, "", log.Lshortfile|log.Flags())
@@ -65,8 +65,8 @@ func Init() {
 }
 
 // loadConfigFromYAML reads configurations from specified YAML file.
-func loadConfigFromYAML(confFile string) {
-	bs, err := ioutil.ReadFile(confFile)
+func loadConfigFromYAML(configFile string) {
+	bs, err := ioutil.ReadFile(configFile)
 	if err != nil {
 		// handle the error here
 		log.Println("Cannot open specified config file. Default configuration will be used!")
@@ -75,7 +75,7 @@ func loadConfigFromYAML(confFile string) {
 
 	m := make(map[string]string)
 
-	err = yaml.Unmarshal([]byte(bs), &m)
+	err = yaml.Unmarshal(bs, &m)
 	if err != nil {
 		Fatalf("Error while parsing config file: %v", err)
 		return
