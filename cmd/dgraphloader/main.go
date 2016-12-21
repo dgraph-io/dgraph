@@ -26,8 +26,9 @@ import (
 )
 
 var (
-	files  = flag.String("r", "", "Location of rdf files to load")
-	dgraph = flag.String("d", "127.0.0.1:8080", "Dgraph server address")
+	files   = flag.String("r", "", "Location of rdf files to load")
+	dgraph  = flag.String("d", "127.0.0.1:8080", "Dgraph server address")
+	geoJSON = flag.String("json", "", "Json file from which to upload geo data")
 )
 
 // Reads a single line from a buffered reader. The line is read into the
@@ -101,6 +102,11 @@ func main() {
 
 	batch := client.NewBatchMutation(context.Background(), conn, 1000, 10)
 	go printCounters(batch)
+
+	if *geoJSON != "" {
+		uploadJSON(*geoJSON, batch)
+		return
+	}
 
 	filesList := strings.Split(*files, ",")
 	x.AssertTrue(len(filesList) > 0)

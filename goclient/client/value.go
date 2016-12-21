@@ -17,9 +17,14 @@
 package client
 
 import (
+	"encoding/binary"
 	"time"
 
 	"github.com/dgraph-io/dgraph/query/graph"
+	"github.com/dgraph-io/dgraphgoclient/client"
+	geom "github.com/twpayne/go-geom"
+	"github.com/twpayne/go-geom/encoding/geojson"
+	"github.com/twpayne/go-geom/encoding/wkb"
 )
 
 // Value represents a value sent in a mutation.
@@ -103,4 +108,41 @@ func IsEmpty(val *graph.Value) bool {
 		// Unknown type
 		return false
 	}
+}
+
+// ValueFromJson converts geojson into a client.Value
+// Example usage
+// req := client.Req{}
+
+// loc, err := geo.ValueFromJson(`{"type":"Point","coordinates":[-122.2207184,37.72129059]}`)
+// if err != nil {
+// 	log.Fatal(err)
+// }
+// b, err := client.Date(time.Now())
+// if err != nil {
+// 	log.Fatal(err)
+// }
+
+// if err := req.AddMutation(graph.NQuad{
+// 	Subject:     "alice",
+// 	Predicate:   "birthday",
+// 	ObjectValue: loc,
+// }, client.SET); err != nil {
+// 	log.Fatal(err)
+// }
+//
+func ValueFromJson(json string) (client.Value, error) {
+	var g geom.T
+	// Parse the json
+	err := geojson.Unmarshal([]byte(json), &g)
+	if err != nil {
+		return nil, err
+	}
+
+	// parse the geometry object to WKB
+	b, err := wkb.Marshal(g, binary.LittleEndian)
+	if err != nil {
+		return nil, err
+	}
+	return client.Geo(b), nil
 }

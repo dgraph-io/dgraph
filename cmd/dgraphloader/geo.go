@@ -27,10 +27,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
-
-	"google.golang.org/grpc"
-
-	"context"
+	"sync"
 
 	geom "github.com/twpayne/go-geom"
 	"github.com/twpayne/go-geom/encoding/geojson"
@@ -41,26 +38,18 @@ import (
 )
 
 var (
-	idname   = flag.String("geoid", "", "The name of property to use as the xid")
-	jsonFile = flag.String("json", "", "Json file from which to upload geo data")
+	idname = flag.String("geoid", "", "The name of property to use as the xid")
 )
 
-func uploadJSON(json string) {
+func uploadJSON(json string, batch *client.BatchMutation) {
 	f, err := os.Open(json)
 	if err != nil {
 		log.Fatalf("Error opening file %s: %v", json, err)
 	}
 	defer f.Close()
 
-	conn, err := grpc.Dial(*dgraph, grpc.WithInsecure())
-	if err != nil {
-		log.Fatal("DialTCPConnection")
-	}
-	defer conn.Close()
-
 	var r io.Reader
 	r = f
-	batch := client.NewBatchMutation(context.Background(), conn, 1000, 10)
 
 	if strings.HasSuffix(json, ".gz") {
 		r, err = gzip.NewReader(f)
@@ -76,15 +65,11 @@ func Upload(batch *client.BatchMutation, r io.Reader) {
 	cfeat := make(chan result, 1000)
 
 	go parse(r, cfeat)
-	go createRequest(cfeat, batch)
-
-	// maxConcurrent := 20
-	// var wg sync.WaitGroup
-	// wg.Add(maxConcurrent)
-	// for i := 0; i < maxConcurrent; i++ {
-	// 	go makeRequests(&wg, c, creq)
-	// }
-	// wg.Wait()
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go createRequest(cfeat, batch, &wg)
+	wg.Wait()
+	batch.Flush()
 }
 
 // ValueFromJson converts geojson into a client.Value
@@ -109,14 +94,15 @@ type result struct {
 	err error
 }
 
-func createRequest(in <-chan result, batch *client.BatchMutation) {
+func createRequest(in <-chan result, batch *client.BatchMutation, wg *sync.WaitGroup) {
 	for v := range in {
 		if v.err != nil {
-			log.Printf("Error parsing file: %v\n", v.err)
+			log.Fatalf("Error parsing file: %v\n", v.err)
 			return
 		}
 		toMutations(v.f, batch)
 	}
+	wg.Done()
 }
 
 func toMutations(f *geojson.Feature, batch *client.BatchMutation) {

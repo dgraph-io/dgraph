@@ -55,7 +55,7 @@ func checkNQuad(nq graph.NQuad) error {
 		return fmt.Errorf("Predicate can't be empty")
 	}
 
-	hasVal := nq.ObjectValue != nil && !IsEmpty(nq.ObjectValue)
+	hasVal := nq.ObjectValue != nil
 	if len(nq.ObjectId) == 0 && !hasVal {
 		return fmt.Errorf("Atleast one out of objectId and objectValue should be set")
 	}
