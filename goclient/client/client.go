@@ -48,18 +48,18 @@ func (req *Req) Request() *graph.Request {
 }
 
 func checkNQuad(nq graph.NQuad) error {
-	if len(nq.Sub) == 0 {
+	if len(nq.Subject) == 0 {
 		return fmt.Errorf("Subject can't be empty")
 	}
-	if len(nq.Pred) == 0 {
+	if len(nq.Predicate) == 0 {
 		return fmt.Errorf("Predicate can't be empty")
 	}
 	// TODO - Check empty value for different types.
-	hasVal := nq.Value != nil && nq.Value.Val.(*graph.Value_StrVal).StrVal != ""
-	if len(nq.ObjId) == 0 && !hasVal {
+	hasVal := len(nq.ObjectValue) != 0
+	if len(nq.ObjectId) == 0 && !hasVal {
 		return fmt.Errorf("Both objectId and objectValue can't be nil")
 	}
-	if len(nq.ObjId) > 0 && hasVal {
+	if len(nq.ObjectId) > 0 && hasVal {
 		return fmt.Errorf("Only one out of objectId and objectValue can be set")
 	}
 	return nil

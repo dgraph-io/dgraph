@@ -55,17 +55,17 @@ func main() {
 
 	req := client.Req{}
 
-	loc, err := geo.ValueFromJson(`{"type":"Point","coordinates":[-122.2207184,37.72129059]}`)
-	if err != nil {
-		log.Fatal(err)
-	}
-	if err := req.AddMutation(graph.NQuad{
-		Sub:   "alice",
-		Pred:  "location",
-		Value: loc,
-	}, client.SET); err != nil {
-		log.Fatal(err)
-	}
+	// 	loc, err := geo.ValueFromJson(`{"type":"Point","coordinates":[-122.2207184,37.72129059]}`)
+	// 	if err != nil {
+	// 		log.Fatal(err)
+	// 	}
+	// 	if err := req.AddMutation(graph.NQuad{
+	// 		Subject:     "alice",
+	// 		Predicate:   "location",
+	// 		ObjectValue: loc,
+	// 	}, client.SET); err != nil {
+	// 		log.Fatal(err)
+	// 	}
 
 	resp, err := c.Run(context.Background(), req.Request())
 	if err != nil {

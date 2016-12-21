@@ -28,7 +28,6 @@ import (
 
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/group"
-	"github.com/dgraph-io/dgraph/loader"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/store"
@@ -68,22 +67,6 @@ func prepare() (dir1, dir2 string, ps *store.Store, rerr error) {
 	posting.Init(ps)
 	group.ParseGroupConfig("groups.conf")
 	worker.StartRaftNodes(dir2)
-
-	{
-		// Then load data.
-		f, err := os.Open("testdata.nq")
-		if err != nil {
-			return dir1, dir2, nil, err
-		}
-		gm := map[uint32]bool{
-			0: true,
-		}
-		_, err = loader.LoadEdges(f, gm)
-		f.Close()
-		if err != nil {
-			return dir1, dir2, nil, err
-		}
-	}
 
 	return dir1, dir2, ps, nil
 }

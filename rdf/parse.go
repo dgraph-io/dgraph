@@ -25,22 +25,13 @@ import (
 	farm "github.com/dgryski/go-farm"
 
 	"github.com/dgraph-io/dgraph/lex"
+	"github.com/dgraph-io/dgraph/query/graph"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
 
 var emptyEdge task.DirectedEdge
-
-// NQuad is the data structure used for storing rdf N-Quads.
-type NQuad struct {
-	Subject     string
-	Predicate   string
-	ObjectId    string
-	ObjectValue []byte
-	ObjectType  byte
-	Label       string
-}
 
 // Gets the uid corresponding to an xid from the posting list which stores the
 // mapping.
@@ -52,30 +43,34 @@ func GetUid(xid string) (uint64, error) {
 	return farm.Fingerprint64([]byte(xid)), nil
 }
 
+type NQuad struct {
+	Gnq *graph.NQuad
+}
+
 // ToEdge is useful when you want to find the UID corresponding to XID for
 // just one edge. The method doesn't automatically generate a UID for an XID.
 func (nq NQuad) ToEdge() (*task.DirectedEdge, error) {
-	sid, err := GetUid(nq.Subject)
+	sid, err := GetUid(nq.Gnq.Subject)
 	if err != nil {
 		return &emptyEdge, err
 	}
 
 	out := &task.DirectedEdge{
-		Attr:   nq.Predicate,
-		Label:  nq.Label,
+		Attr:   nq.Gnq.Predicate,
+		Label:  nq.Gnq.Label,
 		Entity: sid,
 	}
 
 	// An edge can have an id or a value.
-	if len(nq.ObjectId) > 0 {
-		oid, err := GetUid(nq.ObjectId)
+	if len(nq.Gnq.ObjectId) > 0 {
+		oid, err := GetUid(nq.Gnq.ObjectId)
 		if err != nil {
 			return &emptyEdge, err
 		}
 		out.ValueId = oid
 	} else {
-		out.Value = nq.ObjectValue
-		out.ValueType = uint32(nq.ObjectType)
+		out.Value = nq.Gnq.ObjectValue
+		out.ValueType = uint32(nq.Gnq.ObjectType)
 	}
 	return out, nil
 }
@@ -90,22 +85,22 @@ func toUid(xid string, newToUid map[string]uint64) (uid uint64, rerr error) {
 // ToEdgeUsing determines the UIDs for the provided XIDs and populates the
 // xidToUid map.
 func (nq NQuad) ToEdgeUsing(newToUid map[string]uint64) (*task.DirectedEdge, error) {
-	uid, err := toUid(nq.Subject, newToUid)
+	uid, err := toUid(nq.Gnq.Subject, newToUid)
 	if err != nil {
 		return &emptyEdge, err
 	}
 
 	out := &task.DirectedEdge{
 		Entity: uid,
-		Attr:   nq.Predicate,
-		Label:  nq.Label,
+		Attr:   nq.Gnq.Predicate,
+		Label:  nq.Gnq.Label,
 	}
 
-	if len(nq.ObjectId) == 0 {
-		out.Value = nq.ObjectValue
-		out.ValueType = uint32(nq.ObjectType)
+	if len(nq.Gnq.ObjectId) == 0 {
+		out.Value = nq.Gnq.ObjectValue
+		out.ValueType = uint32(nq.Gnq.ObjectType)
 	} else {
-		uid, err = toUid(nq.ObjectId, newToUid)
+		uid, err = toUid(nq.Gnq.ObjectId, newToUid)
 		if err != nil {
 			return &emptyEdge, err
 		}
@@ -139,7 +134,7 @@ func sane(s string) bool {
 }
 
 // Parse parses a mutation string and returns the NQuad representation for it.
-func Parse(line string) (rnq NQuad, rerr error) {
+func Parse(line string) (rnq graph.NQuad, rerr error) {
 	l := &lex.Lexer{}
 	l.Init(line)
 
@@ -197,7 +192,7 @@ func Parse(line string) (rnq NQuad, rerr error) {
 				}
 				rnq.ObjectValue = []byte(p1.Value.([]byte))
 
-				rnq.ObjectType = byte(t)
+				rnq.ObjectType = int32(t)
 				oval = ""
 			} else {
 				oval += "@@" + val
@@ -220,7 +215,7 @@ func Parse(line string) (rnq NQuad, rerr error) {
 	if len(oval) > 0 {
 		rnq.ObjectValue = []byte(oval)
 		// If no type is specified, we default to string.
-		rnq.ObjectType = 0
+		rnq.ObjectType = int32(0)
 	}
 	if len(rnq.Subject) == 0 || len(rnq.Predicate) == 0 {
 		return rnq, x.Errorf("Empty required fields in NQuad. Input: [%s]", line)

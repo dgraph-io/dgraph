@@ -148,24 +148,25 @@ func toMutations(f *geojson.Feature, out chan<- client.Req) {
 		val := client.ToValue(v)
 		if val != nil {
 			if err := req.AddMutation(graph.NQuad{
-				Sub:   id,
-				Pred:  k,
-				Value: val,
+				Subject:   id,
+				Predicate: k,
+				// ObjectValue: val,
 			}, client.SET); err != nil {
 				log.Fatalf("Error creating mutation for (%s, %s): %v\n", id, k, err)
 			}
 		}
 	}
 	// parse the geometry object to WKB
-	b, err := wkb.Marshal(f.Geometry, binary.LittleEndian)
-	if err != nil {
-		log.Printf("Error converting geometry to wkb: %s", err)
-		return
-	}
+	// 	b, err := wkb.Marshal(f.Geometry, binary.LittleEndian)
+	//	if err != nil {
+	//		log.Printf("Error converting geometry to wkb: %s", err)
+	//		return
+	//	}
+	var err error
 	if req.AddMutation(graph.NQuad{
-		Sub:   id,
-		Pred:  "geometry",
-		Value: client.Geo(b),
+		Subject:   id,
+		Predicate: "geometry",
+		// ObjectValue: client.Geo(b),
 	}, client.SET); err != nil {
 		log.Fatalf("Error creating to geometry mutation: %v\n", err)
 	}
