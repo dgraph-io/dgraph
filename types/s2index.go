@@ -30,8 +30,8 @@ func parentCoverTokens(parents s2.CellUnion, cover s2.CellUnion) []string {
 	// performant at query time to only look up parents/cover depending on what
 	// kind of query it is.
 	tokens := make([]string, 0, len(parents)+len(cover))
-	tokens = appendTokens(tokens, parents, parentPrefix)
-	tokens = appendTokens(tokens, cover, coverPrefix)
+	tokens = append(tokens, createTokens(parents, parentPrefix)...)
+	tokens = append(tokens, createTokens(cover, coverPrefix)...)
 	x.AssertTruef(len(tokens) == len(parents)+len(cover), "%d %d %d",
 		len(tokens), len(parents), len(cover))
 	return tokens
@@ -209,14 +209,9 @@ func coverLoop(l *s2.Loop, minLevel int, maxLevel int, maxCells int) s2.CellUnio
 }
 
 // appendTokens creates tokens with a certain prefix and append.
-func appendTokens(toks []string, cu s2.CellUnion, prefix string) []string {
+func createTokens(cu s2.CellUnion, prefix string) (toks []string) {
 	for _, c := range cu {
 		toks = append(toks, prefix+c.ToToken())
 	}
 	return toks
-}
-
-// toTokens creates tokens with a certain prefix.
-func toTokens(cu s2.CellUnion, prefix string) []string {
-	return appendTokens(nil, cu, prefix)
 }
