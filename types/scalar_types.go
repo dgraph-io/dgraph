@@ -19,7 +19,6 @@ package types
 import (
 	"time"
 
-	"github.com/dgraph-io/dgraph/query/graph"
 	geom "github.com/twpayne/go-geom"
 )
 
@@ -124,37 +123,6 @@ func ValueForType(id TypeID) Val {
 
 	default:
 		return Val{}
-	}
-}
-
-func ConvertToGraphValue(v Val) graph.Value {
-	switch v.Tid {
-	case BinaryID:
-		return graph.Value{&graph.Value_BytesVal{v.Value.([]byte)}}
-
-	case Int32ID:
-		return graph.Value{&graph.Value_IntVal{v.Value.(int32)}}
-
-	case FloatID:
-		return graph.Value{&graph.Value_DoubleVal{v.Value.(float64)}}
-
-	case BoolID:
-		return graph.Value{&graph.Value_BoolVal{v.Value.(bool)}}
-
-	case DateTimeID:
-		return graph.Value{&graph.Value_DatetimeVal{v.Value.([]byte)}}
-
-	case StringID:
-		return graph.Value{&graph.Value_StrVal{v.Value.(string)}}
-
-	case DateID:
-		return graph.Value{&graph.Value_DateVal{v.Value.([]byte)}}
-
-	case GeoID:
-		return graph.Value{&graph.Value_GeoVal{v.Value.([]byte)}}
-
-	default:
-		return graph.Value{&graph.Value_StrVal{""}}
 	}
 }
 
