@@ -14,16 +14,18 @@ message Value {
 
 message Query {
 	string attr = 1;
-	int32 count = 2;       // Get this many elements.
-	int32 offset = 3;      // Skip this many elements.
+	int32 count = 2;        // Get this many elements.
+	int32 offset = 3;       // Skip this many elements.
 	fixed64 after_uid = 4;  // Only return UIDs greater than this.
-	bool do_count = 5;    // Are we just getting lengths?
+	bool do_count = 5;      // Are we just getting lengths?
 
 	// Exactly one of uids and terms is populated.
 	repeated fixed64 uids = 6;
 
 	// Function to generate or filter UIDs.
 	repeated string src_func = 7;
+	
+	bool reverse = 8;  // Whether this is a reverse edge.
 }
 
 message Result {

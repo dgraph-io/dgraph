@@ -23,6 +23,7 @@ import (
 
 	"golang.org/x/net/trace"
 
+	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/types"
@@ -36,12 +37,14 @@ type TokensTable struct {
 }
 
 var (
-	indexLog trace.EventLog
-	tables   map[string]*TokensTable
+	indexLog   trace.EventLog
+	reverseLog trace.EventLog
+	tables     map[string]*TokensTable
 )
 
 func init() {
 	indexLog = trace.NewEventLog("index", "Logger")
+	reverseLog = trace.NewEventLog("reverse", "Logger")
 }
 
 // initIndex initializes the index with the given data store.
@@ -156,7 +159,34 @@ func addIndexMutation(ctx context.Context, edge *task.DirectedEdge, token string
 
 }
 
-// AddMutationWithIndex is AddMutation with support for indexing.
+func addReverseMutation(ctx context.Context, t *task.DirectedEdge) {
+	key := x.ReverseKey(t.Attr, t.ValueId)
+	groupId := group.BelongsTo(t.Attr)
+
+	plist, decr := GetOrCreate(key, groupId)
+	defer decr()
+
+	x.AssertTruef(plist != nil, "plist is nil [%s] %d %d",
+		t.Attr, t.Entity, t.ValueId)
+	edge := &task.DirectedEdge{
+		Entity:  t.ValueId,
+		ValueId: t.Entity,
+		Attr:    t.Attr,
+		Label:   "rev",
+		Op:      t.Op,
+	}
+
+	_, err := plist.AddMutation(ctx, edge)
+	if err != nil {
+		x.TraceError(ctx, x.Wrapf(err,
+			"Error adding/deleting reverse edge for attr %s src %d dst %d",
+			t.Attr, t.Entity, t.ValueId))
+	}
+	reverseLog.Printf("%s [%s] [%d] [%d]", t.Op, t.Attr, t.Entity, t.ValueId)
+}
+
+// AddMutationWithIndex is AddMutation with support for indexing. It also
+// supports reverse edges.
 func (l *List) AddMutationWithIndex(ctx context.Context, t *task.DirectedEdge) error {
 	x.AssertTruef(len(t.Attr) > 0,
 		"[%s] [%d] [%v] %d %d\n", t.Attr, t.Entity, t.Value, t.ValueId, t.Op)
@@ -164,8 +194,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *task.DirectedEdge) e
 	var val types.Val
 	var verr error
 
-	doUpdateIndex := pstore != nil && (t.Value != nil) &&
-		schema.IsIndexed(t.Attr)
+	doUpdateIndex := pstore != nil && (t.Value != nil) && schema.IsIndexed(t.Attr)
 	if doUpdateIndex {
 		// Check last posting for original value BEFORE any mutation actually happens.
 		val, verr = l.Value()
@@ -174,20 +203,25 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *task.DirectedEdge) e
 	if err != nil {
 		return err
 	}
-	if !hasMutated || !doUpdateIndex {
+	if !hasMutated {
 		return nil
 	}
-
-	// Exact matches.
-	if verr == nil && val.Value != nil {
-		addIndexMutations(ctx, t, val, task.DirectedEdge_DEL)
-	}
-	if t.Op == task.DirectedEdge_SET {
-		p := types.Val{
-			Tid:   types.TypeID(t.ValueType),
-			Value: t.Value,
+	if doUpdateIndex {
+		// Exact matches.
+		if verr == nil && val.Value != nil {
+			addIndexMutations(ctx, t, val, task.DirectedEdge_DEL)
 		}
-		addIndexMutations(ctx, t, p, task.DirectedEdge_SET)
+		if t.Op == task.DirectedEdge_SET {
+			p := types.Val{
+				Tid:   types.TypeID(t.ValueType),
+				Value: t.Value,
+			}
+			addIndexMutations(ctx, t, p, task.DirectedEdge_SET)
+		}
+	}
+
+	if (pstore != nil) && (t.ValueId != 0) && schema.IsReversed(t.Attr) {
+		addReverseMutation(ctx, t)
 	}
 	return nil
 }
