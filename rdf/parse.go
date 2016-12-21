@@ -47,20 +47,53 @@ type NQuad struct {
 	*graph.NQuad
 }
 
-func byteVal(nq NQuad) ([]byte, error) {
-	p := types.ValueForType(types.TypeID(nq.ObjectType))
-	src := types.Val{
-		Tid:   types.StringID,
-		Value: []byte(nq.ObjectValue.GetStrVal()),
+func typeFromValue(val *graph.Value) types.TypeID {
+	switch val.Val.(type) {
+	case *graph.Value_IntVal:
+		return types.Int32ID
+	case *graph.Value_StrVal:
+		return types.StringID
+	case *graph.Value_BoolVal:
+		return types.BoolID
+	case *graph.Value_DoubleVal:
+		return types.BoolID
+	case *graph.Value_GeoVal:
+		return types.GeoID
+	case *graph.Value_DateVal:
+		return types.DateID
+	case *graph.Value_DatetimeVal:
+		return types.DateTimeID
 	}
-	err := types.Convert(src, &p)
-	if err != nil {
-		return []byte{}, err
-	}
+	return types.StringID
+}
 
+func getValue(val *graph.Value) interface{} {
+	switch val.Val.(type) {
+	case *graph.Value_IntVal:
+		return val.GetIntVal()
+	case *graph.Value_StrVal:
+		return val.GetStrVal()
+	case *graph.Value_BoolVal:
+		return val.GetBoolVal()
+	case *graph.Value_DoubleVal:
+		return val.GetDoubleVal()
+	case *graph.Value_GeoVal:
+		return val.GetGeoVal()
+	case *graph.Value_DateVal:
+		return val.GetDateVal()
+	case *graph.Value_DatetimeVal:
+		return val.GetDatetimeVal()
+	}
+	return ""
+}
+
+func byteVal(nq NQuad) ([]byte, error) {
+	// We infer object type from type of value. We set appropriate type in parse
+	// function or the Go client has already set.
+	p := types.ValueForType(typeFromValue(nq.ObjectValue))
+	p.Value = getValue(nq.ObjectValue)
 	p1 := types.ValueForType(types.BinaryID)
-	err = types.Marshal(p, &p1)
-	if err != nil {
+	if err := types.Marshal(p, &p1); err != nil {
 		return []byte{}, err
 	}
 	return []byte(p1.Value.([]byte)), nil
@@ -201,7 +234,34 @@ func Parse(line string) (rnq graph.NQuad, rerr error) {
 					return rnq, x.Errorf("Invalid ObjectValue")
 				}
 				rnq.ObjectType = int32(t)
-				rnq.ObjectValue = &graph.Value{&graph.Value_StrVal{oval}}
+				p := types.ValueForType(t)
+				src := types.ValueForType(types.StringID)
+				src.Value = []byte(oval)
+				err := types.Convert(src, &p)
+				if err != nil {
+					return rnq, err
+				}
+
+				// Lets set the object value according to the storage type.
+				switch t {
+				case types.StringID:
+					rnq.ObjectValue = &graph.Value{&graph.Value_StrVal{oval}}
+				case types.Int32ID:
+					rnq.ObjectValue = &graph.Value{&graph.Value_IntVal{p.Value.(int32)}}
+				case types.FloatID:
+					rnq.ObjectValue = &graph.Value{&graph.Value_DoubleVal{p.Value.(float64)}}
+				case types.BoolID:
+					rnq.ObjectValue = &graph.Value{&graph.Value_BoolVal{p.Value.(bool)}}
+				case types.GeoID:
+					rnq.ObjectValue = &graph.Value{&graph.Value_GeoVal{p.Value.([]byte)}}
+				case types.DateID:
+					rnq.ObjectValue = &graph.Value{&graph.Value_DateVal{p.Value.([]byte)}}
+				case types.DateTimeID:
+					rnq.ObjectValue = &graph.Value{&graph.Value_DatetimeVal{p.Value.([]byte)}}
+				default:
+					// Unknown type
+					return rnq, x.Errorf("Unknown value type %T", t)
+				}
 				oval = ""
 			} else {
 				oval += "@@" + val

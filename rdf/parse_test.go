@@ -115,7 +115,7 @@ var testNQuads = []struct {
 			Subject:     "_:alice",
 			Predicate:   "age",
 			ObjectId:    "",
-			ObjectValue: &graph.Value{&graph.Value_StrVal{"013"}},
+			ObjectValue: &graph.Value{&graph.Value_IntVal{13}},
 			ObjectType:  2,
 		},
 	},
@@ -189,10 +189,11 @@ var testNQuads = []struct {
 		input:       `_:alice <knows> "stuff"^^xs:string .`,
 		expectedErr: true,
 	},
-	// {
-	// 	input:       `_:alice <age> "thirteen"^^<xs:int> .`,
-	// 	expectedErr: true,
-	// },
+	{
+		input:       `_:alice <age> "thirteen"^^<xs:int> .`,
+		expectedErr: true,
+	},
+
 	{
 		input:       `<alice> <knows> * .`,
 		expectedErr: true,
