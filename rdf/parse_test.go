@@ -97,7 +97,7 @@ var testNQuads = []struct {
 			Subject:     "_:alice",
 			Predicate:   "name",
 			ObjectId:    "",
-			ObjectValue: &graph.Value{&graph.Value_BytesVal{[]byte("Alice In Wonderland")}},
+			ObjectValue: &graph.Value{&graph.Value_StrVal{"Alice In Wonderland"}},
 		},
 	},
 	{
@@ -106,7 +106,7 @@ var testNQuads = []struct {
 			Subject:     "_:alice",
 			Predicate:   "name.en-0",
 			ObjectId:    "",
-			ObjectValue: &graph.Value{&graph.Value_BytesVal{[]byte("Alice In Wonderland")}},
+			ObjectValue: &graph.Value{&graph.Value_StrVal{"Alice In Wonderland"}},
 		},
 	},
 	{
@@ -125,7 +125,7 @@ var testNQuads = []struct {
 			Subject:     "http://www.w3.org/2001/sw/RDFCore/nedges/",
 			Predicate:   "http://purl.org/dc/terms/title.en-US",
 			ObjectId:    "",
-			ObjectValue: &graph.Value{&graph.Value_BytesVal{[]byte("N-Edges")}},
+			ObjectValue: &graph.Value{&graph.Value_StrVal{"N-Edges"}},
 		},
 	},
 	{
@@ -225,39 +225,39 @@ var testNQuads = []struct {
 		input:       `_:alice <knows> "stuff"^^< * > .`,
 		expectedErr: true,
 	},
-	// {
-	// 	input: `_:alice <knows> "" .`,
-	// 	nq: graph.NQuad{
-	// 		Subject:     "_:alice",
-	// 		Predicate:   "knows",
-	// 		ObjectId:    "",
-	// 		ObjectValue: &graph.Value{&graph.Value_StrVal{""}},
-	// 		ObjectType:  0,
-	// 	},
-	// 	expectedErr: false,
-	// },
-	// {
-	// 	input: `_:alice <knows> ""^^<xs:string> .`,
-	// 	nq: graph.NQuad{
-	// 		Subject:     "_:alice",
-	// 		Predicate:   "knows",
-	// 		ObjectId:    "",
-	// 		ObjectValue: &graph.Value{&graph.Value_StrVal{""}},
-	// 		ObjectType:  0,
-	// 	},
-	// 	expectedErr: false,
-	// },
-	// {
-	// 	input:       `_:alice <knows> ""^^<xs:int> .`,
-	// 	expectedErr: true,
-	// },
+	{
+		input: `_:alice <knows> "" .`,
+		nq: graph.NQuad{
+			Subject:     "_:alice",
+			Predicate:   "knows",
+			ObjectId:    "",
+			ObjectValue: &graph.Value{&graph.Value_StrVal{"_nil_"}},
+			ObjectType:  0,
+		},
+		expectedErr: false,
+	},
+	{
+		input: `_:alice <knows> ""^^<xs:string> .`,
+		nq: graph.NQuad{
+			Subject:     "_:alice",
+			Predicate:   "knows",
+			ObjectId:    "",
+			ObjectValue: &graph.Value{&graph.Value_StrVal{"_nil_"}},
+			ObjectType:  0,
+		},
+		expectedErr: false,
+	},
+	{
+		input:       `_:alice <knows> ""^^<xs:int> .`,
+		expectedErr: true,
+	},
 	{
 		input: `<alice> <knows> "*" .`,
 		nq: graph.NQuad{
 			Subject:     "alice",
 			Predicate:   "knows",
 			ObjectId:    "",
-			ObjectValue: &graph.Value{&graph.Value_BytesVal{[]byte("*")}},
+			ObjectValue: &graph.Value{&graph.Value_StrVal{"*"}},
 		},
 		expectedErr: false,
 	},
@@ -330,7 +330,7 @@ var testNQuads = []struct {
 		nq: graph.NQuad{
 			Subject:     "_:alice",
 			Predicate:   "likes",
-			ObjectValue: &graph.Value{&graph.Value_BytesVal{[]byte(`mov\"enpick`)}},
+			ObjectValue: &graph.Value{&graph.Value_StrVal{`mov\"enpick`}},
 		},
 	},
 }

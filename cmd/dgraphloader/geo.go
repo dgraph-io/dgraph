@@ -19,6 +19,7 @@ package main
 import (
 	"compress/gzip"
 	"encoding/binary"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -26,8 +27,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"sync"
-	"sync/atomic"
 
 	"google.golang.org/grpc"
 
@@ -42,10 +41,9 @@ import (
 )
 
 var (
-	idname = flag.String("geoid", "", "The name of property to use as the xid")
-	json   = flag.String("json", "", "Json file from which to upload geo data")
+	idname   = flag.String("geoid", "", "The name of property to use as the xid")
+	jsonFile = flag.String("json", "", "Json file from which to upload geo data")
 )
-var ctr *counters
 
 func uploadJSON(json string) {
 	f, err := os.Open(json)
@@ -54,7 +52,7 @@ func uploadJSON(json string) {
 	}
 	defer f.Close()
 
-	conn, err := grpc.Dial(*ip, grpc.WithInsecure())
+	conn, err := grpc.Dial(*dgraph, grpc.WithInsecure())
 	if err != nil {
 		log.Fatal("DialTCPConnection")
 	}
@@ -80,13 +78,13 @@ func Upload(batch *client.BatchMutation, r io.Reader) {
 	go parse(r, cfeat)
 	go createRequest(cfeat, batch)
 
-	maxConcurrent := 20
-	var wg sync.WaitGroup
-	wg.Add(maxConcurrent)
-	for i := 0; i < maxConcurrent; i++ {
-		go makeRequests(&wg, c, creq)
-	}
-	wg.Wait()
+	// maxConcurrent := 20
+	// var wg sync.WaitGroup
+	// wg.Add(maxConcurrent)
+	// for i := 0; i < maxConcurrent; i++ {
+	// 	go makeRequests(&wg, c, creq)
+	// }
+	// wg.Wait()
 }
 
 // ValueFromJson converts geojson into a client.Value
@@ -106,26 +104,12 @@ func ValueFromJson(json string) (client.Value, error) {
 	return client.Geo(b), nil
 }
 
-func makeRequests(wg *sync.WaitGroup, c graph.DgraphClient, in <-chan client.Req) {
-	defer wg.Done()
-	ctx := context.Background()
-	for req := range in {
-		atomic.AddUint64(&ctr.writing, 1)
-		_, err := c.Run(ctx, req.Request())
-		if err != nil {
-			log.Printf("Error in getting response from server, %v\n", err)
-		}
-		atomic.AddUint64(&ctr.done, 1)
-	}
-}
-
 type result struct {
 	f   *geojson.Feature
 	err error
 }
 
 func createRequest(in <-chan result, batch *client.BatchMutation) {
-	defer close(out)
 	for v := range in {
 		if v.err != nil {
 			log.Printf("Error parsing file: %v\n", v.err)
@@ -135,7 +119,7 @@ func createRequest(in <-chan result, batch *client.BatchMutation) {
 	}
 }
 
-func toMutations(f *geojson.Feature, batch client.BatchMutation) {
+func toMutations(f *geojson.Feature, batch *client.BatchMutation) {
 	id, ok := getID(f)
 	if !ok {
 		log.Println("Skipping feature, cannot find id.")
@@ -165,7 +149,7 @@ func toMutations(f *geojson.Feature, batch client.BatchMutation) {
 		log.Printf("Error converting geometry to wkb: %s", err)
 		return
 	}
-	if req.AddMutation(graph.NQuad{
+	if batch.AddMutation(graph.NQuad{
 		Subject:     id,
 		Predicate:   "geometry",
 		ObjectValue: client.Geo(b),

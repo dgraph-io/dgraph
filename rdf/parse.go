@@ -44,35 +44,54 @@ func GetUid(xid string) (uint64, error) {
 }
 
 type NQuad struct {
-	Gnq *graph.NQuad
+	*graph.NQuad
+}
+
+func byteVal(nq NQuad) ([]byte, error) {
+	p := types.ValueForType(types.TypeID(nq.ObjectType))
+	src := types.Val{
+		Tid:   types.StringID,
+		Value: []byte(nq.ObjectValue.GetStrVal()),
+	}
+	err := types.Convert(src, &p)
+	if err != nil {
+		return []byte{}, err
+	}
+
+	p1 := types.ValueForType(types.BinaryID)
+	err = types.Marshal(p, &p1)
+	if err != nil {
+		return []byte{}, err
+	}
+	return []byte(p1.Value.([]byte)), nil
 }
 
 // ToEdge is useful when you want to find the UID corresponding to XID for
 // just one edge. The method doesn't automatically generate a UID for an XID.
 func (nq NQuad) ToEdge() (*task.DirectedEdge, error) {
-	sid, err := GetUid(nq.Gnq.Subject)
+	sid, err := GetUid(nq.Subject)
 	if err != nil {
 		return &emptyEdge, err
 	}
 
 	out := &task.DirectedEdge{
-		Attr:   nq.Gnq.Predicate,
-		Label:  nq.Gnq.Label,
+		Attr:   nq.Predicate,
+		Label:  nq.Label,
 		Entity: sid,
 	}
 
 	// An edge can have an id or a value.
-	if len(nq.Gnq.ObjectId) > 0 {
-		oid, err := GetUid(nq.Gnq.ObjectId)
+	if len(nq.ObjectId) > 0 {
+		oid, err := GetUid(nq.ObjectId)
 		if err != nil {
 			return &emptyEdge, err
 		}
 		out.ValueId = oid
 	} else {
-		if out.Value, err = types.ByteVal(nq.Gnq); err != nil {
+		if out.Value, err = byteVal(nq); err != nil {
 			return &emptyEdge, err
 		}
-		out.ValueType = uint32(nq.Gnq.ObjectType)
+		out.ValueType = uint32(nq.ObjectType)
 	}
 	return out, nil
 }
@@ -87,24 +106,24 @@ func toUid(xid string, newToUid map[string]uint64) (uid uint64, rerr error) {
 // ToEdgeUsing determines the UIDs for the provided XIDs and populates the
 // xidToUid map.
 func (nq NQuad) ToEdgeUsing(newToUid map[string]uint64) (*task.DirectedEdge, error) {
-	uid, err := toUid(nq.Gnq.Subject, newToUid)
+	uid, err := toUid(nq.Subject, newToUid)
 	if err != nil {
 		return &emptyEdge, err
 	}
 
 	out := &task.DirectedEdge{
 		Entity: uid,
-		Attr:   nq.Gnq.Predicate,
-		Label:  nq.Gnq.Label,
+		Attr:   nq.Predicate,
+		Label:  nq.Label,
 	}
 
-	if len(nq.Gnq.ObjectId) == 0 {
-		if out.Value, err = types.ByteVal(nq.Gnq); err != nil {
+	if len(nq.ObjectId) == 0 {
+		if out.Value, err = byteVal(nq); err != nil {
 			return &emptyEdge, err
 		}
-		out.ValueType = uint32(nq.Gnq.ObjectType)
+		out.ValueType = uint32(nq.ObjectType)
 	} else {
-		uid, err = toUid(nq.Gnq.ObjectId, newToUid)
+		uid, err = toUid(nq.ObjectId, newToUid)
 		if err != nil {
 			return &emptyEdge, err
 		}
@@ -203,7 +222,7 @@ func Parse(line string) (rnq graph.NQuad, rerr error) {
 		return rnq, x.Errorf("Invalid end of input. Input: [%s]", line)
 	}
 	if len(oval) > 0 {
-		rnq.ObjectValue = &graph.Value{&graph.Value_BytesVal{[]byte(oval)}}
+		rnq.ObjectValue = &graph.Value{&graph.Value_StrVal{oval}}
 		// If no type is specified, we default to string.
 		rnq.ObjectType = int32(0)
 	}

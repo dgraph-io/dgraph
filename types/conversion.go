@@ -24,32 +24,11 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/dgraph-io/dgraph/query/graph"
 	"github.com/dgraph-io/dgraph/x"
 	geom "github.com/twpayne/go-geom"
 	"github.com/twpayne/go-geom/encoding/geojson"
 	"github.com/twpayne/go-geom/encoding/wkb"
 )
-
-func ByteVal(nq *graph.NQuad) ([]byte, error) {
-	if nq.ObjectType == int32(BinaryID) {
-		return nq.ObjectValue.GetBytesVal(), nil
-	}
-	p := ValueForType(TypeID(nq.ObjectType))
-	src := ValueForType(StringID)
-	src.Value = []byte(nq.ObjectValue.GetStrVal())
-	err := Convert(src, &p)
-	if err != nil {
-		return []byte{}, err
-	}
-
-	p1 := ValueForType(BinaryID)
-	err = Marshal(p, &p1)
-	if err != nil {
-		return []byte{}, err
-	}
-	return []byte(p1.Value.([]byte)), nil
-}
 
 // Convert converts the value to given scalar type.
 func Convert(from Val, to *Val) error {

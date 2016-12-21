@@ -173,10 +173,10 @@ func convertToEdges(ctx context.Context, nquads []*graph.NQuad) (mutationResult,
 	}
 
 	// Wrapper for a pointer to graph.Nquad
-	wnq := rdf.NQuad{}
+	var wnq rdf.NQuad
 	for _, nq := range nquads {
 		// Get edges from nquad using newUids.
-		wnq.Gnq = nq
+		wnq = rdf.NQuad{nq}
 		edge, err := wnq.ToEdgeUsing(newUids)
 		if err != nil {
 			x.TraceError(ctx, x.Wrapf(err, "Error while converting to edge: %v", nq))
