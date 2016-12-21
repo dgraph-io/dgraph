@@ -29,7 +29,7 @@ import (
 const dgraphVersion = "0.7.0"
 
 var (
-	configFile = flag.String("configFile", "",
+	configFile = flag.String("config", "",
 		"YAML configuration file containing dgraph settings.")
 	version  = flag.Bool("version", false, "Prints the version of Dgraph")
 	initFunc []func()
@@ -70,10 +70,10 @@ func loadConfigFromYAML() {
 	Checkf(err, "Cannot open specified config file: %v", *configFile)
 
 	m := make(map[string]string)
-
-	Checkf(yaml.Unmarshal(bs, &m), "Error while parsing config file:")
+	Checkf(yaml.Unmarshal(bs, &m), "Error while parsing config file: %v", *configFile)
 
 	for k, v := range m {
+		fmt.Printf("Picked flag from config: [%q = %v]\n", k, v)
 		flag.Set(k, v)
 	}
 }

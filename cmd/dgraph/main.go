@@ -57,7 +57,7 @@ import (
 )
 
 var (
-	conf       = flag.String("conf", "", "group configuration file")
+	gconf      = flag.String("group_conf", "", "group configuration file")
 	postingDir = flag.String("p", "p", "Directory to store posting lists.")
 	walDir     = flag.String("w", "w", "Directory to store raft write-ahead logs.")
 	port       = flag.Int("port", 8080, "Port to run server on.")
@@ -719,7 +719,7 @@ func main() {
 	// schema before calling posting.Init().
 	posting.Init(ps)
 	worker.Init(ps)
-	x.Check(group.ParseGroupConfig(*conf))
+	x.Check(group.ParseGroupConfig(*gconf))
 
 	// Setup external communication.
 	che := make(chan error, 1)

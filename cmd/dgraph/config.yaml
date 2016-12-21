@@ -5,7 +5,7 @@ backup: backup
 cores: 4
 
 # Fraction of dirty posting lists to commit every few seconds.
-gentlecommit: 0.1
+gentlecommit: 0.33
 
 # RAFT ID that this server will use to join RAFT groups.
 idx: 1
@@ -14,7 +14,7 @@ idx: 1
 lhmap: 32
 
 # Directory to store posting lists.
-p: pp
+p: p
 
 # Port to run server on. (default 8080)
 port: 8080
@@ -26,7 +26,10 @@ stw_ram_mb: 4096
 trace: 0.5
 
 # Directory to store raft write-ahead logs.
-w: ww
+w: w
 
 # Port used by worker for internal communication.
 workerport: 12345
+
+# Debug mode for testing.
+debugmode: false
