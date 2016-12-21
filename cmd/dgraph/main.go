@@ -110,8 +110,8 @@ func addCorsHeaders(w http.ResponseWriter) {
 	w.Header().Set("Connection", "close")
 }
 
-func convertToNQuad(ctx context.Context, mutation string) ([]rdf.NQuad, error) {
-	var nquads []rdf.NQuad
+func convertToNQuad(ctx context.Context, mutation string) ([]*graph.NQuad, error) {
+	var nquads []*graph.NQuad
 	r := strings.NewReader(mutation)
 	reader := bufio.NewReader(r)
 	x.Trace(ctx, "Converting to NQuad")
@@ -132,7 +132,7 @@ func convertToNQuad(ctx context.Context, mutation string) ([]rdf.NQuad, error) {
 			x.TraceError(ctx, x.Wrapf(err, "Error while parsing RDF"))
 			return nquads, err
 		}
-		nquads = append(nquads, nq)
+		nquads = append(nquads, &nq)
 	}
 	if err != io.EOF {
 		return nquads, err
@@ -140,7 +140,7 @@ func convertToNQuad(ctx context.Context, mutation string) ([]rdf.NQuad, error) {
 	return nquads, nil
 }
 
-func convertToEdges(ctx context.Context, nquads []rdf.NQuad) (mutationResult, error) {
+func convertToEdges(ctx context.Context, nquads []*graph.NQuad) (mutationResult, error) {
 	var edges []*task.DirectedEdge
 	var mr mutationResult
 
@@ -172,9 +172,12 @@ func convertToEdges(ctx context.Context, nquads []rdf.NQuad) (mutationResult, er
 		}
 	}
 
+	// Wrapper for a pointer to graph.Nquad
+	wnq := rdf.NQuad{}
 	for _, nq := range nquads {
 		// Get edges from nquad using newUids.
-		edge, err := nq.ToEdgeUsing(newUids)
+		wnq.Gnq = nq
+		edge, err := wnq.ToEdgeUsing(newUids)
 		if err != nil {
 			x.TraceError(ctx, x.Wrapf(err, "Error while converting to edge: %v", nq))
 			return mr, err
@@ -206,65 +209,7 @@ func applyMutations(ctx context.Context, m *task.Mutations) error {
 	return nil
 }
 
-func mutationToNQuad(nq []*graph.NQuad) ([]rdf.NQuad, error) {
-	resp := make([]rdf.NQuad, 0, len(nq))
-
-	for _, n := range nq {
-		nq := rdf.NQuad{
-			Subject:   n.Sub,
-			Predicate: n.Pred,
-			ObjectId:  n.ObjId,
-			Label:     n.Label,
-		}
-		v, err := typeValueFromNQuad(n)
-		if err != nil {
-			return resp, err
-		}
-		if v.Value != nil {
-			nq.ObjectValue, _ = v.Value.([]byte)
-			nq.ObjectType = byte(v.Tid)
-		}
-		resp = append(resp, nq)
-	}
-	return resp, nil
-}
-
-func typeValueFromNQuad(nq *graph.NQuad) (types.Val, error) {
-	if nq.Value == nil || nq.Value.Val == nil {
-		return types.Val{}, nil
-	}
-	dst := types.ValueForType(types.BinaryID)
-	switch v := nq.Value.Val.(type) {
-	case *graph.Value_IntVal:
-		src := types.Val{types.Int32ID, nq.Value}
-		x.Check(types.Marshal(src, &dst))
-		return dst, nil
-	case *graph.Value_StrVal:
-		src := types.Val{types.StringID, nq.Value}
-		x.Check(types.Marshal(src, &dst))
-		return dst, nil
-	case *graph.Value_BoolVal:
-		src := types.Val{types.BoolID, nq.Value}
-		x.Check(types.Marshal(src, &dst))
-		return dst, nil
-	case *graph.Value_DoubleVal:
-		src := types.Val{types.FloatID, nq.Value}
-		x.Check(types.Marshal(src, &dst))
-		return dst, nil
-	case *graph.Value_GeoVal:
-		src := types.Val{types.GeoID, nq.Value}
-		return src, nil
-
-	case nil:
-		log.Fatalf("Val being nil is already handled")
-		return types.Val{}, nil
-	default:
-		// Unknown type
-		return types.Val{}, x.Errorf("Unknown value type %T", v)
-	}
-}
-
-func convertAndApply(ctx context.Context, set []rdf.NQuad, del []rdf.NQuad) (map[string]uint64, error) {
+func convertAndApply(ctx context.Context, set []*graph.NQuad, del []*graph.NQuad) (map[string]uint64, error) {
 	var allocIds map[string]uint64
 	var m task.Mutations
 	var err error
@@ -303,10 +248,7 @@ func runMutations(ctx context.Context, mu *graph.Mutation) (map[string]uint64, e
 	var allocIds map[string]uint64
 	var err error
 
-	set, _ := mutationToNQuad(mu.Set)
-	del, _ := mutationToNQuad(mu.Del)
-
-	if allocIds, err = convertAndApply(ctx, set, del); err != nil {
+	if allocIds, err = convertAndApply(ctx, mu.Set, mu.Del); err != nil {
 		return nil, err
 	}
 	return allocIds, nil
@@ -315,8 +257,8 @@ func runMutations(ctx context.Context, mu *graph.Mutation) (map[string]uint64, e
 // This function is used to run mutations for the requests received from the
 // http client.
 func mutationHandler(ctx context.Context, mu *gql.Mutation) (map[string]uint64, error) {
-	var set []rdf.NQuad
-	var del []rdf.NQuad
+	var set []*graph.NQuad
+	var del []*graph.NQuad
 	var allocIds map[string]uint64
 	var err error
 
@@ -346,9 +288,9 @@ func mutationHandler(ctx context.Context, mu *gql.Mutation) (map[string]uint64, 
 
 // validateTypes checks for predicate types present in the schema and validates if the
 // input value is of the correct type
-func validateTypes(nquads []rdf.NQuad) error {
+func validateTypes(nquads []*graph.NQuad) error {
 	for i := range nquads {
-		nquad := &nquads[i]
+		nquad := nquads[i]
 		if t := schema.TypeOf(nquad.Predicate); t != nil && t.IsScalar() {
 			schemaType := t.(types.TypeID)
 			typeID := types.TypeID(nquad.ObjectType)
@@ -368,7 +310,7 @@ func validateTypes(nquads []rdf.NQuad) error {
 					return err
 				}
 				nquad.ObjectValue = b.Value.([]byte)
-				nquad.ObjectType = byte(schemaType)
+				nquad.ObjectType = int32(schemaType)
 
 			} else if typeID != schemaType {
 				v := types.ValueForType(schemaType)
@@ -553,7 +495,7 @@ type grpcServer struct{}
 
 // This method is used to execute the query and return the response to the
 // client as a protocol buffer message.
-func (s *grpcServer) Query(ctx context.Context,
+func (s *grpcServer) Run(ctx context.Context,
 	req *graph.Request) (*graph.Response, error) {
 
 	var allocIds map[string]uint64

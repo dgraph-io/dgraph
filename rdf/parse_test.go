@@ -19,17 +19,18 @@ package rdf
 import (
 	"testing"
 
+	"github.com/dgraph-io/dgraph/query/graph"
 	"github.com/stretchr/testify/assert"
 )
 
 var testNQuads = []struct {
 	input       string
-	nq          NQuad
+	nq          graph.NQuad
 	expectedErr bool
 }{
 	{
 		input: `<some_subject_id> <predicate> <object_id> .`,
-		nq: NQuad{
+		nq: graph.NQuad{
 			Subject:     "some_subject_id",
 			Predicate:   "predicate",
 			ObjectId:    "object_id",
@@ -38,7 +39,7 @@ var testNQuads = []struct {
 	},
 	{
 		input: "<some_subject_id>\t<predicate>\t<object_id>\t.",
-		nq: NQuad{
+		nq: graph.NQuad{
 			Subject:     "some_subject_id",
 			Predicate:   "predicate",
 			ObjectId:    "object_id",
@@ -47,7 +48,7 @@ var testNQuads = []struct {
 	},
 	{
 		input: `_:alice <predicate> <object_id> .`,
-		nq: NQuad{
+		nq: graph.NQuad{
 			Subject:     "_:alice",
 			Predicate:   "predicate",
 			ObjectId:    "object_id",
@@ -56,7 +57,7 @@ var testNQuads = []struct {
 	},
 	{
 		input: `_uid_:0x01 <predicate> <object_id> .`,
-		nq: NQuad{
+		nq: graph.NQuad{
 			Subject:     "_uid_:0x01",
 			Predicate:   "predicate",
 			ObjectId:    "object_id",
@@ -65,7 +66,7 @@ var testNQuads = []struct {
 	},
 	{
 		input: `<some_subject_id> <predicate> _uid_:0x01 .`,
-		nq: NQuad{
+		nq: graph.NQuad{
 			Subject:     "some_subject_id",
 			Predicate:   "predicate",
 			ObjectId:    "_uid_:0x01",
@@ -74,7 +75,7 @@ var testNQuads = []struct {
 	},
 	{
 		input: `_uid_:0x01 <predicate> _uid_:0x02 .`,
-		nq: NQuad{
+		nq: graph.NQuad{
 			Subject:     "_uid_:0x01",
 			Predicate:   "predicate",
 			ObjectId:    "_uid_:0x02",
@@ -83,7 +84,7 @@ var testNQuads = []struct {
 	},
 	{
 		input: `_:alice <follows> _:bob0 .`,
-		nq: NQuad{
+		nq: graph.NQuad{
 			Subject:     "_:alice",
 			Predicate:   "follows",
 			ObjectId:    "_:bob0",
@@ -92,7 +93,7 @@ var testNQuads = []struct {
 	},
 	{
 		input: `_:alice <name> "Alice In Wonderland" .`,
-		nq: NQuad{
+		nq: graph.NQuad{
 			Subject:     "_:alice",
 			Predicate:   "name",
 			ObjectId:    "",
@@ -101,7 +102,7 @@ var testNQuads = []struct {
 	},
 	{
 		input: `_:alice <name> "Alice In Wonderland"@en-0 .`,
-		nq: NQuad{
+		nq: graph.NQuad{
 			Subject:     "_:alice",
 			Predicate:   "name.en-0",
 			ObjectId:    "",
@@ -110,7 +111,7 @@ var testNQuads = []struct {
 	},
 	{
 		input: `_:alice <age> "013"^^<xs:int> .`,
-		nq: NQuad{
+		nq: graph.NQuad{
 			Subject:     "_:alice",
 			Predicate:   "age",
 			ObjectId:    "",
@@ -120,7 +121,7 @@ var testNQuads = []struct {
 	},
 	{
 		input: `<http://www.w3.org/2001/sw/RDFCore/nedges/> <http://purl.org/dc/terms/title> "N-Edges"@en-US .`,
-		nq: NQuad{
+		nq: graph.NQuad{
 			Subject:     "http://www.w3.org/2001/sw/RDFCore/nedges/",
 			Predicate:   "http://purl.org/dc/terms/title.en-US",
 			ObjectId:    "",
@@ -129,7 +130,7 @@ var testNQuads = []struct {
 	},
 	{
 		input: `_:art <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://xmlns.com/foaf/0.1/Person> .`,
-		nq: NQuad{
+		nq: graph.NQuad{
 			Subject:     "_:art",
 			Predicate:   "http://www.w3.org/1999/02/22-rdf-syntax-ns#type",
 			ObjectId:    "http://xmlns.com/foaf/0.1/Person",
@@ -226,7 +227,7 @@ var testNQuads = []struct {
 	},
 	{
 		input: `_:alice <knows> "" .`,
-		nq: NQuad{
+		nq: graph.NQuad{
 			Subject:     "_:alice",
 			Predicate:   "knows",
 			ObjectId:    "",
@@ -237,7 +238,7 @@ var testNQuads = []struct {
 	},
 	{
 		input: `_:alice <knows> ""^^<xs:string> .`,
-		nq: NQuad{
+		nq: graph.NQuad{
 			Subject:     "_:alice",
 			Predicate:   "knows",
 			ObjectId:    "",
@@ -252,7 +253,7 @@ var testNQuads = []struct {
 	},
 	{
 		input: `<alice> <knows> "*" .`,
-		nq: NQuad{
+		nq: graph.NQuad{
 			Subject:     "alice",
 			Predicate:   "knows",
 			ObjectId:    "",
@@ -262,7 +263,7 @@ var testNQuads = []struct {
 	},
 	{
 		input: `_:alice <knows> "stuff"^^<xs:string> <label> .`,
-		nq: NQuad{
+		nq: graph.NQuad{
 			Subject:     "_:alice",
 			Predicate:   "knows",
 			ObjectId:    "",
@@ -274,7 +275,7 @@ var testNQuads = []struct {
 	},
 	{
 		input: `_:alice <knows> "stuff"^^<xs:string> _:label .`,
-		nq: NQuad{
+		nq: graph.NQuad{
 			Subject:     "_:alice",
 			Predicate:   "knows",
 			ObjectId:    "",
@@ -286,7 +287,7 @@ var testNQuads = []struct {
 	},
 	{
 		input: `_:alice <knows> "stuff"^^<xs:string> _:label . # comment`,
-		nq: NQuad{
+		nq: graph.NQuad{
 			Subject:     "_:alice",
 			Predicate:   "knows",
 			ObjectId:    "",
@@ -318,7 +319,7 @@ var testNQuads = []struct {
 	},
 	{
 		input: `_:alice <knows> <bob> . <bob>`, // ignores the <bob> after dot.
-		nq: NQuad{
+		nq: graph.NQuad{
 			Subject:   "_:alice",
 			Predicate: "knows",
 			ObjectId:  "bob",
@@ -326,7 +327,7 @@ var testNQuads = []struct {
 	},
 	{
 		input: `_:alice <likes> "mov\"enpick" .`,
-		nq: NQuad{
+		nq: graph.NQuad{
 			Subject:     "_:alice",
 			Predicate:   "likes",
 			ObjectValue: []byte(`mov\"enpick`),
