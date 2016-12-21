@@ -2,8 +2,10 @@ package x
 
 import (
 	"container/heap"
-	"fmt"
 	"sync/atomic"
+	"time"
+
+	"golang.org/x/net/trace"
 )
 
 type uint64Heap []uint64
@@ -31,8 +33,9 @@ type RaftValue struct {
 // Mark contains raft proposal id and a done boolean. It is used to
 // update the WaterMark struct about the status of a proposal.
 type Mark struct {
-	Index uint64
-	Done  bool // Set to true if the pending mutation is done.
+	Index    uint64
+	Done     bool      // Set to true if the pending mutation is done.
+	Deadline time.Time // Automatically set to true after deadline passes.
 }
 
 // WaterMark is used to keep track of the maximum done index. The right way to use
@@ -47,11 +50,13 @@ type WaterMark struct {
 	Name      string
 	Ch        chan Mark
 	doneUntil uint64
+	elog      trace.EventLog
 }
 
 // Init initializes a WaterMark struct. MUST be called before using it.
 func (w *WaterMark) Init() {
 	w.Ch = make(chan Mark, 10000)
+	w.elog = trace.NewEventLog("Watermark", w.Name)
 	go w.process()
 }
 
@@ -76,16 +81,26 @@ func (w *WaterMark) process() {
 		if !present {
 			heap.Push(&indices, mark.Index)
 		}
+
 		delta := 1
 		if mark.Done {
 			delta = -1
 		}
 		pending[mark.Index] = prev + delta
 
+		if !mark.Deadline.IsZero() {
+			AssertTruef(delta == 1, "Invalid Mark: %+v", mark)
+			go func(m Mark) {
+				time.Sleep(m.Deadline.Sub(time.Now()))
+				w.Ch <- Mark{Index: m.Index, Done: true}
+			}(mark)
+		}
+
 		loop++
 		if len(indices) > 0 && loop%10000 == 0 {
 			min := indices[0]
-			fmt.Printf("WaterMark %s: Done entry %4d. Size: %4d Watermark: %-4d Looking for: %-4d. Value: %d\n", w.Name, mark.Index, len(indices), w.DoneUntil(), min, pending[min])
+			w.elog.Printf("WaterMark %s: Done entry %4d. Size: %4d Watermark: %-4d Looking for: %-4d. Value: %d\n",
+				w.Name, mark.Index, len(indices), w.DoneUntil(), min, pending[min])
 		}
 
 		// Update mark by going through all indices in order; and checking if they have
@@ -108,7 +123,7 @@ func (w *WaterMark) process() {
 		}
 		if until != doneUntil {
 			AssertTrue(atomic.CompareAndSwapUint64(&w.doneUntil, doneUntil, until))
-			fmt.Printf("%s: Done until %d. Loops: %d\n", w.Name, until, loops)
+			w.elog.Printf("%s: Done until %d. Loops: %d\n", w.Name, until, loops)
 		}
 	}
 }
