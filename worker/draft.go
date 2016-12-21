@@ -382,6 +382,13 @@ func (n *node) processCommitCh() {
 			n.applied.Ch <- x.Mark{Index: e.Index, Done: true}
 
 		} else {
+			// Add a pending mark for synced watermark. This would be marked as done
+			// automatically after a minute. By then the mutation would have had a
+			// chance to be committed to posting list.
+			posting.WaterMarkFor(n.gid).Ch <- x.Mark{
+				Index:    e.Index,
+				Deadline: time.Now().Add(time.Minute),
+			}
 			go n.process(e, pending)
 		}
 	}

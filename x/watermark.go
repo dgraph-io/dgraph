@@ -4,6 +4,7 @@ import (
 	"container/heap"
 	"fmt"
 	"sync/atomic"
+	"time"
 )
 
 type uint64Heap []uint64
@@ -31,8 +32,9 @@ type RaftValue struct {
 // Mark contains raft proposal id and a done boolean. It is used to
 // update the WaterMark struct about the status of a proposal.
 type Mark struct {
-	Index uint64
-	Done  bool // Set to true if the pending mutation is done.
+	Index    uint64
+	Done     bool      // Set to true if the pending mutation is done.
+	Deadline time.Time // Automatically set to true after deadline passes.
 }
 
 // WaterMark is used to keep track of the maximum done index. The right way to use
@@ -76,11 +78,20 @@ func (w *WaterMark) process() {
 		if !present {
 			heap.Push(&indices, mark.Index)
 		}
+
 		delta := 1
 		if mark.Done {
 			delta = -1
 		}
 		pending[mark.Index] = prev + delta
+
+		if !mark.Deadline.IsZero() {
+			AssertTruef(delta == 1, "Invalid Mark: %+v", mark)
+			go func(m Mark) {
+				time.Sleep(m.Deadline.Sub(time.Now()))
+				w.Ch <- Mark{Index: m.Index, Done: true}
+			}(mark)
+		}
 
 		loop++
 		if len(indices) > 0 && loop%10000 == 0 {

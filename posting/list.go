@@ -69,8 +69,6 @@ type List struct {
 
 	water   *x.WaterMark
 	pending []uint64
-
-	dirtyTs int64 // Use atomics for this.
 }
 
 func (l *List) refCount() int32 { return atomic.LoadInt32(&l.refcount) }
@@ -356,7 +354,6 @@ func (l *List) AddMutation(ctx context.Context, t *task.DirectedEdge) (bool, err
 			l.water.Ch <- x.Mark{Index: rv.Index}
 			l.pending = append(l.pending, rv.Index)
 		}
-		atomic.StoreInt64(&l.dirtyTs, time.Now().UnixNano())
 		if dirtyChan != nil {
 			dirtyChan <- l.ghash
 		}
@@ -465,21 +462,11 @@ func (l *List) Length(afterUid uint64) int {
 }
 
 func (l *List) CommitIfDirty(ctx context.Context) (committed bool, err error) {
-	if atomic.LoadInt64(&l.dirtyTs) == 0 {
-		x.Trace(ctx, "Not committing")
-		return false, nil
-	}
-	x.Trace(ctx, "Committing")
-	return l.commit()
-}
-
-func (l *List) commit() (committed bool, rerr error) {
 	l.Lock()
 	defer l.Unlock()
 
 	if len(l.mlayer) == 0 {
 		x.AssertTrue(len(l.pending) == 0)
-		atomic.StoreInt64(&l.dirtyTs, 0)
 		return false, nil
 	}
 
@@ -520,7 +507,6 @@ func (l *List) commit() (committed bool, rerr error) {
 	// Now reset the mutation variables.
 	l.pending = make([]uint64, 0, 3)
 	atomic.StorePointer(&l.pbuffer, nil) // Make prev buffer eligible for GC.
-	atomic.StoreInt64(&l.dirtyTs, 0)     // Set as clean.
 	l.mlayer = l.mlayer[:0]
 	l.lastCompact = time.Now()
 	return true, nil
