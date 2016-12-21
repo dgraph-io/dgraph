@@ -73,7 +73,6 @@ func encodeInt(val int32) ([]string, error) {
 		buf[0] = 1
 	}
 	return []string{string(buf)}, nil
-
 }
 
 // IntIndex indexs int type.
