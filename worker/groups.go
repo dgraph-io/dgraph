@@ -181,6 +181,7 @@ func (g *groupi) HasPeer(group uint32) bool {
 func (g *groupi) Leader(group uint32) (uint64, string) {
 	g.RLock()
 	defer g.RUnlock()
+
 	all := g.all[group]
 	if all == nil {
 		return 0, ""
@@ -246,6 +247,7 @@ func (g *groupi) TouchLastUpdate(u uint64) {
 // - Once iteration is over without errors, it would return back all new updates.
 // - These updates are then applied to groups().all state via applyMembershipUpdate.
 func (g *groupi) syncMemberships() {
+	return // HACK HACK HACK
 	if g.ServesGroup(0) {
 		// This server serves group zero.
 		g.RLock()

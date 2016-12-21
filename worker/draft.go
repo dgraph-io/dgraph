@@ -81,6 +81,7 @@ type node struct {
 	props       proposals
 	raft        raft.Node
 	raftContext *task.RaftContext
+	confState   *raftpb.ConfState
 	store       *raft.MemoryStorage
 	wal         *raftwal.Wal
 	// applied is used to keep track of the applied RAFT proposals.
@@ -125,7 +126,7 @@ func newNode(gid uint32, id uint64, myAddr string) *node {
 		raftContext: rc,
 		messages:    make(chan sendmsg, 1000),
 	}
-	n.applied = x.WaterMark{Name: "Committed Mark"}
+	n.applied = x.WaterMark{Name: fmt.Sprintf("Committed Mark: Group %d", n.gid)}
 	n.applied.Init()
 
 	return n
@@ -378,7 +379,8 @@ func (n *node) processCommitCh() {
 				n.Connect(rc.Id, rc.Addr)
 			}
 
-			n.raft.ApplyConfChange(cc)
+			// TODO: Protect with mutex lock.
+			n.confState = n.raft.ApplyConfChange(cc)
 			n.applied.Ch <- x.Mark{Index: e.Index, Done: true}
 
 		} else {
@@ -436,6 +438,7 @@ func (n *node) Run() {
 	for {
 		select {
 		case <-ticker.C:
+			fmt.Printf("Tick for group: %d. RAFT: %p\n", n.gid, n.raft)
 			n.raft.Tick()
 
 		case rd := <-n.raft.Ready():
@@ -537,7 +540,7 @@ func (n *node) snapshotPeriodically() {
 
 			rc, err := n.raftContext.Marshal()
 			x.Check(err)
-			s, err := n.store.CreateSnapshot(le, nil, rc)
+			s, err := n.store.CreateSnapshot(le, n.confState, rc)
 			x.Checkf(err, "While creating snapshot")
 			x.Checkf(n.store.Compact(le), "While compacting snapshot")
 			x.Check(n.wal.StoreSnapshot(n.gid, s))
@@ -649,8 +652,10 @@ func (n *node) InitAndStartNode(wal *raftwal.Wal) {
 
 func (n *node) AmLeader() bool {
 	if n == nil || n.raft == nil {
+		fmt.Printf("AmLeader: RAFT is nil")
 		return false
 	}
+	fmt.Printf("RAFT addr for group %d is: %p. Leader: %d\n", n.gid, n.raft, n.raft.Status().Lead)
 	return n.raft.Status().Lead == n.raft.Status().ID
 }
 
