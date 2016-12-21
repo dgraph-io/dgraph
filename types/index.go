@@ -1,7 +1,6 @@
 package types
 
 import (
-	"bytes"
 	"encoding/binary"
 	"strings"
 	"time"
@@ -19,18 +18,18 @@ const (
 	dateFormat2 = "2006-01-02T15:04:05"
 )
 
-func IndexTokens(attr string, sv Val) ([]string, error) {
+func IndexTokens(sv Val) ([]string, error) {
 	switch sv.Tid {
 	case GeoID:
 		return IndexGeoTokens(sv.Value.(geom.T))
 	case Int32ID:
-		return IntIndex(attr, sv.Value.(int32))
+		return IntIndex(sv.Value.(int32))
 	case FloatID:
-		return FloatIndex(attr, sv.Value.(float64))
+		return FloatIndex(sv.Value.(float64))
 	case DateID:
-		return DateIndex(attr, sv.Value.(time.Time))
+		return DateIndex(sv.Value.(time.Time))
 	case DateTimeID:
-		return TimeIndex(attr, sv.Value.(time.Time))
+		return TimeIndex(sv.Value.(time.Time))
 	case StringID:
 		return DefaultIndexKeys(sv.Value.(string)), nil
 	default:
@@ -65,51 +64,37 @@ func DefaultIndexKeys(val string) []string {
 	return tokens
 }
 
-// IntIndex indexs int type.
-func IntIndex(attr string, val int32) ([]string, error) {
-	buf := new(bytes.Buffer)
-	err := binary.Write(buf, binary.BigEndian, val)
-	if err != nil {
-		return nil, err
+func encodeInt(val int32) ([]string, error) {
+	buf := make([]byte, 5)
+	binary.BigEndian.PutUint32(buf[1:], uint32(val))
+	if val < 0 {
+		buf[0] = 0
+	} else {
+		buf[0] = 1
 	}
-	b := buf.Bytes()
-	b[0] = ^b[0]
-	return []string{string(b)}, nil
+	return []string{string(buf)}, nil
+
+}
+
+// IntIndex indexs int type.
+func IntIndex(val int32) ([]string, error) {
+	return encodeInt(val)
 }
 
 // FloatIndex indexs float type.
-func FloatIndex(attr string, val float64) ([]string, error) {
+func FloatIndex(val float64) ([]string, error) {
 	in := int32(val)
-	buf := new(bytes.Buffer)
-	err := binary.Write(buf, binary.BigEndian, in)
-	if err != nil {
-		return nil, err
-	}
-	b := buf.Bytes()
-	b[0] = ^b[0]
-	return []string{string(b)}, nil
+	return encodeInt(in)
 }
 
 // DateIndex indexs time type.
-func DateIndex(attr string, val time.Time) ([]string, error) {
-	buf := new(bytes.Buffer)
-	err := binary.Write(buf, binary.BigEndian, int32(val.Year()))
-	if err != nil {
-		return nil, err
-	}
-	b := buf.Bytes()
-	b[0] = ^b[0]
-	return []string{string(b)}, nil
+func DateIndex(val time.Time) ([]string, error) {
+	in := int32(val.Year())
+	return encodeInt(in)
 }
 
 // TimeIndex indexs time type.
-func TimeIndex(attr string, val time.Time) ([]string, error) {
-	buf := new(bytes.Buffer)
-	err := binary.Write(buf, binary.BigEndian, int32(val.Year()))
-	if err != nil {
-		return nil, err
-	}
-	b := buf.Bytes()
-	b[0] = ^b[0]
-	return []string{string(b)}, nil
+func TimeIndex(val time.Time) ([]string, error) {
+	in := int32(val.Year())
+	return encodeInt(in)
 }
