@@ -34,7 +34,7 @@ var testNQuads = []struct {
 			Subject:     "some_subject_id",
 			Predicate:   "predicate",
 			ObjectId:    "object_id",
-			ObjectValue: []byte(nil),
+			ObjectValue: graph.Value{&graph.Value_BytesVal{[]byte()]},
 		},
 	},
 	{

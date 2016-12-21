@@ -17,6 +17,8 @@
 package client
 
 import (
+	"time"
+
 	"github.com/dgraph-io/dgraph/query/graph"
 )
 
@@ -53,6 +55,22 @@ func Geo(val []byte) Value {
 	return &graph.Value{&graph.Value_GeoVal{val}}
 }
 
+func Date(date time.Time) (Value, error) {
+	b, err := date.MarshalBinary()
+	if err != nil {
+		return &graph.Value{}, err
+	}
+	return &graph.Value{&graph.Value_DateVal{b}}
+}
+
+func Datetime(date time.Time) (Value, error) {
+	b, err := date.MarshalBinary()
+	if err != nil {
+		return &graph.Value{}, err
+	}
+	return &graph.Value{&graph.Value_DatetimeVal{b}}
+}
+
 // ToValue converts val into the appropriate Value
 func ToValue(val interface{}) Value {
 	switch v := val.(type) {
@@ -66,5 +84,23 @@ func ToValue(val interface{}) Value {
 		return Bool(v)
 	default:
 		return nil
+	}
+}
+
+func IsEmpty(val *graph.Value) bool {
+	switch val.Val.(type) {
+	case *graph.Value_IntVal:
+		return val.GetIntVal() == 0
+	case *graph.Value_StrVal:
+		return val.GetStrVal() == ""
+	case *graph.Value_BoolVal:
+		return val.GetBoolVal() == false
+	case *graph.Value_DoubleVal:
+		return val.GetDoubleVal() == 0.0
+	case *graph.Value_GeoVal:
+		return len(val.GetGeoVal()) == 0
+	default:
+		// Unknown type
+		return false
 	}
 }

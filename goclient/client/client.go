@@ -54,8 +54,11 @@ func checkNQuad(nq graph.NQuad) error {
 	if len(nq.Predicate) == 0 {
 		return fmt.Errorf("Predicate can't be empty")
 	}
-	// TODO - Check empty value for different types.
-	hasVal := len(nq.ObjectValue) != 0
+
+	hasVal := nq.ObjectValue != nil && !IsEmpty(nq.ObjectValue)
+	if len(nq.ObjectId) == 0 && !hasVal {
+		return fmt.Errorf("Atleast one out of objectId and objectValue should be set")
+	}
 	if len(nq.ObjectId) == 0 && !hasVal {
 		return fmt.Errorf("Both objectId and objectValue can't be nil")
 	}

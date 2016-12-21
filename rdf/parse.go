@@ -69,6 +69,11 @@ func (nq NQuad) ToEdge() (*task.DirectedEdge, error) {
 		}
 		out.ValueId = oid
 	} else {
+		// p1 := types.ValueForType(types.BinaryID)
+		// err = types.Marshal(p, &p1)
+		// if err != nil {
+		// 	return rnq, err
+		// }
 		out.Value = nq.Gnq.ObjectValue
 		out.ValueType = uint32(nq.Gnq.ObjectType)
 	}
@@ -185,12 +190,7 @@ func Parse(line string) (rnq graph.NQuad, rerr error) {
 					return rnq, err
 				}
 
-				p1 := types.ValueForType(types.BinaryID)
-				err = types.Marshal(p, &p1)
-				if err != nil {
-					return rnq, err
-				}
-				rnq.ObjectValue = []byte(p1.Value.([]byte))
+				rnq.ObjectValue = types.ConvertToGraphValue(p)
 
 				rnq.ObjectType = int32(t)
 				oval = ""

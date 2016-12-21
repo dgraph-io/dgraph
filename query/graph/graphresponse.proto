@@ -12,7 +12,7 @@ message NQuad {
     string subject = 1;
     string predicate = 2;
     string objectId = 3;
-    bytes objectValue = 4;
+    Value objectValue = 4;
     string label = 5;
     sint32 objectType = 6;
 }
@@ -25,6 +25,8 @@ message Value {
         string str_val = 4;
         double double_val = 5;
         bytes geo_val = 6;  // Geo data in WKB format
+        bytes date_val = 7;
+        bytes datetime_val = 8;
     }
 }
 
