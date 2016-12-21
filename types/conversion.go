@@ -137,7 +137,7 @@ func Convert(from Val, to *Val) error {
 				var t time.Time
 				if err := t.UnmarshalText([]byte(vc)); err != nil {
 					// Try parsing without timezone since that is a valid format
-					if t, err = time.Parse("2006-01-02T15:04:05", string(vc)); err != nil {
+					if t, err = time.Parse(dateTimeFormat, vc); err != nil {
 						return err
 					}
 				}
@@ -281,7 +281,7 @@ func Convert(from Val, to *Val) error {
 			case DateTimeID:
 				*res = createDate(vc.Date())
 			case StringID:
-				*res = string(vc.Format(dateFormatYMD))
+				*res = vc.Format(dateFormatYMD)
 			case Int32ID:
 				secs := vc.Unix()
 				if secs > math.MaxInt32 || secs < math.MinInt32 {
@@ -317,7 +317,11 @@ func Convert(from Val, to *Val) error {
 			case DateID:
 				*res = createDate(vc.Date())
 			case StringID:
-				*res = string(vc.String())
+				val, err := vc.MarshalText()
+				if err != nil {
+					return err
+				}
+				*res = string(val)
 			case Int32ID:
 				secs := vc.Unix()
 				if secs > math.MaxInt32 || secs < math.MinInt32 {
@@ -454,7 +458,11 @@ func Marshal(from Val, to *Val) error {
 		vc := val.(time.Time)
 		switch toID {
 		case StringID:
-			*res = vc.String()
+			val, err := vc.MarshalText()
+			if err != nil {
+				return err
+			}
+			*res = string(val)
 		case BinaryID:
 			// Marshal Binary
 			r, err := vc.MarshalBinary()

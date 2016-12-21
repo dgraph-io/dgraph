@@ -143,3 +143,4 @@ func createDate(y int, m time.Month, d int) time.Time {
 const dateFormatYMD = "2006-01-02"
 const dateFormatYM = "2006-01"
 const dateFormatY = "2006"
+const dateTimeFormat = "2006-01-02T15:04:05"
