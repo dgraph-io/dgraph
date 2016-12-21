@@ -55,11 +55,39 @@ func (m *NQuad) String() string            { return proto.CompactTextString(m) }
 func (*NQuad) ProtoMessage()               {}
 func (*NQuad) Descriptor() ([]byte, []int) { return fileDescriptorGraphresponse, []int{0} }
 
+func (m *NQuad) GetSub() string {
+	if m != nil {
+		return m.Sub
+	}
+	return ""
+}
+
+func (m *NQuad) GetPred() string {
+	if m != nil {
+		return m.Pred
+	}
+	return ""
+}
+
+func (m *NQuad) GetObjId() string {
+	if m != nil {
+		return m.ObjId
+	}
+	return ""
+}
+
 func (m *NQuad) GetValue() *Value {
 	if m != nil {
 		return m.Value
 	}
 	return nil
+}
+
+func (m *NQuad) GetLabel() string {
+	if m != nil {
+		return m.Label
+	}
+	return ""
 }
 
 type Value struct {
@@ -320,6 +348,13 @@ func (m *Request) String() string            { return proto.CompactTextString(m)
 func (*Request) ProtoMessage()               {}
 func (*Request) Descriptor() ([]byte, []int) { return fileDescriptorGraphresponse, []int{3} }
 
+func (m *Request) GetQuery() string {
+	if m != nil {
+		return m.Query
+	}
+	return ""
+}
+
 func (m *Request) GetMutation() *Mutation {
 	if m != nil {
 		return m.Mutation
@@ -338,6 +373,27 @@ func (m *Latency) String() string            { return proto.CompactTextString(m)
 func (*Latency) ProtoMessage()               {}
 func (*Latency) Descriptor() ([]byte, []int) { return fileDescriptorGraphresponse, []int{4} }
 
+func (m *Latency) GetParsing() string {
+	if m != nil {
+		return m.Parsing
+	}
+	return ""
+}
+
+func (m *Latency) GetProcessing() string {
+	if m != nil {
+		return m.Processing
+	}
+	return ""
+}
+
+func (m *Latency) GetPb() string {
+	if m != nil {
+		return m.Pb
+	}
+	return ""
+}
+
 type Property struct {
 	Prop  string `protobuf:"bytes,1,opt,name=prop,proto3" json:"prop,omitempty"`
 	Value *Value `protobuf:"bytes,2,opt,name=value" json:"value,omitempty"`
@@ -347,6 +403,13 @@ func (m *Property) Reset()                    { *m = Property{} }
 func (m *Property) String() string            { return proto.CompactTextString(m) }
 func (*Property) ProtoMessage()               {}
 func (*Property) Descriptor() ([]byte, []int) { return fileDescriptorGraphresponse, []int{5} }
+
+func (m *Property) GetProp() string {
+	if m != nil {
+		return m.Prop
+	}
+	return ""
+}
 
 func (m *Property) GetValue() *Value {
 	if m != nil {
@@ -367,6 +430,27 @@ func (m *Node) Reset()                    { *m = Node{} }
 func (m *Node) String() string            { return proto.CompactTextString(m) }
 func (*Node) ProtoMessage()               {}
 func (*Node) Descriptor() ([]byte, []int) { return fileDescriptorGraphresponse, []int{6} }
+
+func (m *Node) GetUid() uint64 {
+	if m != nil {
+		return m.Uid
+	}
+	return 0
+}
+
+func (m *Node) GetXid() string {
+	if m != nil {
+		return m.Xid
+	}
+	return ""
+}
+
+func (m *Node) GetAttribute() string {
+	if m != nil {
+		return m.Attribute
+	}
+	return ""
+}
 
 func (m *Node) GetProperties() []*Property {
 	if m != nil {
@@ -431,7 +515,7 @@ var _ grpc.ClientConn
 
 // This is a compile-time assertion to ensure that this generated file
 // is compatible with the grpc package it is being compiled against.
-const _ = grpc.SupportPackageIsVersion3
+const _ = grpc.SupportPackageIsVersion4
 
 // Client API for Dgraph service
 
@@ -494,7 +578,7 @@ var _Dgraph_serviceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: fileDescriptorGraphresponse,
+	Metadata: "graphresponse.proto",
 }
 
 func (m *NQuad) Marshal() (dAtA []byte, err error) {

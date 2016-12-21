@@ -146,7 +146,7 @@ func queryTokens(qt QueryType, data string, maxDistance float64) ([]string, *Geo
 	case QueryTypeWithin:
 		// For a within query we only need to look at the objects whose parents match our cover.
 		// So we take our cover and prefix with the parentPrefix to look in the index.
-		toks := toTokens(cover, parentPrefix)
+		toks := createTokens(cover, parentPrefix)
 		return toks, &GeoQueryData{pt: pt, loop: l, qtype: qt}, nil
 
 	case QueryTypeContains:
@@ -155,7 +155,7 @@ func queryTokens(qt QueryType, data string, maxDistance float64) ([]string, *Geo
 		}
 		// For a contains query, we only need to look at the objects whose cover matches our
 		// parents. So we take our parents and prefix with the coverPrefix to look in the index.
-		return toTokens(parents, coverPrefix), &GeoQueryData{pt: pt, qtype: qt}, nil
+		return createTokens(parents, coverPrefix), &GeoQueryData{pt: pt, qtype: qt}, nil
 
 	case QueryTypeNear:
 		if l != nil {
@@ -164,9 +164,9 @@ func queryTokens(qt QueryType, data string, maxDistance float64) ([]string, *Geo
 		return nearQueryKeys(*pt, maxDistance)
 
 	case QueryTypeIntersects:
-		// An intersects query is essentially the union of contains and within. So we look at all
-		// the objects whose parents match our cover as well as all the objects whose cover matches
-		// our parents.
+		// An intersects query is as the name suggests all the entities which intersect with the
+		// given region. So we look at all the objects whose parents match our cover as well as
+		// all the objects whose cover matches our parents.
 		toks := parentCoverTokens(parents, cover)
 		return toks, &GeoQueryData{pt: pt, loop: l, qtype: qt}, nil
 
@@ -185,7 +185,7 @@ func nearQueryKeys(pt s2.Point, d float64) ([]string, *GeoQueryData, error) {
 	cu := indexCellsForCap(c)
 	// A near query is similar to within, where we are looking for points within the cap. So we need
 	// all objects whose parents match the cover of the cap.
-	return toTokens(cu, parentPrefix), &GeoQueryData{cap: &c, qtype: QueryTypeNear}, nil
+	return createTokens(cu, parentPrefix), &GeoQueryData{cap: &c, qtype: QueryTypeNear}, nil
 }
 
 // MatchesFilter applies the query filter to a geo value

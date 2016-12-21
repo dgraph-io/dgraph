@@ -57,7 +57,7 @@ import (
 )
 
 var (
-	conf       = flag.String("conf", "", "group configuration file")
+	gconf      = flag.String("group_conf", "", "group configuration file")
 	postingDir = flag.String("p", "p", "Directory to store posting lists.")
 	walDir     = flag.String("w", "w", "Directory to store raft write-ahead logs.")
 	port       = flag.Int("port", 8080, "Port to run server on.")
@@ -167,7 +167,7 @@ func convertToEdges(ctx context.Context, nquads []rdf.NQuad) (mutationResult, er
 
 	if len(newUids) > 0 {
 		if err := worker.AssignUidsOverNetwork(ctx, newUids); err != nil {
-			x.TraceError(ctx, x.Wrapf(err, "Error while GetOrAssignUidsOverNetwork"))
+			x.TraceError(ctx, x.Wrapf(err, "Error while AssignUidsOverNetwork for newUids: %v", newUids))
 			return mr, err
 		}
 	}
@@ -651,15 +651,16 @@ func checkFlagsAndInitDirs() {
 func serveGRPC(l net.Listener) {
 	s := grpc.NewServer(grpc.CustomCodec(&query.Codec{}))
 	graph.RegisterDgraphServer(s, &grpcServer{})
-	if err := s.Serve(l); err != nil {
-		log.Fatalf("While serving gRpc request: %v", err)
-	}
+	x.Checkf(s.Serve(l), "Error while serving gRpc request")
 }
 
 func serveHTTP(l net.Listener) {
-	if err := http.Serve(l, nil); err != nil {
-		log.Fatalf("While serving http request: %v", err)
+	srv := &http.Server{
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 60 * time.Second,
+		// TODO(Ashwin): Add idle timeout while switching to Go 1.8.
 	}
+	x.Checkf(srv.Serve(l), "Error while serving http request")
 }
 
 func setupServer(che chan error) {
@@ -704,7 +705,9 @@ func main() {
 	x.Init()
 	checkFlagsAndInitDirs()
 
-	ps, err := store.NewStore(*postingDir)
+	// All the writes to posting store should be synchronous. We use batched writers
+	// for posting lists, so the cost of sync writes is amortized.
+	ps, err := store.NewSyncStore(*postingDir)
 	x.Checkf(err, "Error initializing postings store")
 	defer ps.Close()
 
@@ -716,7 +719,7 @@ func main() {
 	// schema before calling posting.Init().
 	posting.Init(ps)
 	worker.Init(ps)
-	x.Check(group.ParseGroupConfig(*conf))
+	x.Check(group.ParseGroupConfig(*gconf))
 
 	// Setup external communication.
 	che := make(chan error, 1)
