@@ -688,6 +688,26 @@ func TestToJSONFilter(t *testing.T) {
 		js)
 }
 
+func TestToJSONFilterMissBrac(t *testing.T) {
+	dir, dir2, ps := populateGraph(t)
+	defer ps.Close()
+	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
+	query := `
+		{
+			me(_uid_:0x01) {
+				name
+				gender
+				friend @filter(anyof("name", "Andrea SomethingElse") {
+					name
+				}
+			}
+		}
+	`
+	_, _, err := gql.Parse(query)
+	require.Error(t, err)
+}
+
 func TestToJSONFilterAllOf(t *testing.T) {
 	dir, dir2, ps := populateGraph(t)
 	defer ps.Close()
