@@ -72,7 +72,9 @@ func IntIndex(attr string, val int32) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	return []string{buf.String()}, nil
+	b := buf.Bytes()
+	b[0] = ^b[0]
+	return []string{string(b)}, nil
 }
 
 // FloatIndex indexs float type.
@@ -83,7 +85,9 @@ func FloatIndex(attr string, val float64) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	return []string{buf.String()}, nil
+	b := buf.Bytes()
+	b[0] = ^b[0]
+	return []string{string(b)}, nil
 }
 
 // DateIndex indexs time type.
@@ -93,7 +97,9 @@ func DateIndex(attr string, val time.Time) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	return []string{buf.String()}, nil
+	b := buf.Bytes()
+	b[0] = ^b[0]
+	return []string{string(b)}, nil
 }
 
 // TimeIndex indexs time type.
@@ -103,5 +109,7 @@ func TimeIndex(attr string, val time.Time) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	return []string{buf.String()}, nil
+	b := buf.Bytes()
+	b[0] = ^b[0]
+	return []string{string(b)}, nil
 }
