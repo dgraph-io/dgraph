@@ -267,6 +267,7 @@ func mutationHandler(ctx context.Context, mu *gql.Mutation) (map[string]uint64, 
 			return nil, x.Wrap(err)
 		}
 	}
+
 	if len(mu.Del) > 0 {
 		if del, err = convertToNQuad(ctx, mu.Del); err != nil {
 			return nil, x.Wrap(err)
@@ -309,7 +310,7 @@ func validateTypes(nquads []*graph.NQuad) error {
 				if err != nil {
 					return err
 				}
-				nquad.ObjectValue = b.Value.([]byte)
+				nquad.ObjectValue = &graph.Value{&graph.Value_BytesVal{b.Value.([]byte)}}
 				nquad.ObjectType = int32(schemaType)
 
 			} else if typeID != schemaType {

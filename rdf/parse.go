@@ -69,12 +69,9 @@ func (nq NQuad) ToEdge() (*task.DirectedEdge, error) {
 		}
 		out.ValueId = oid
 	} else {
-		// p1 := types.ValueForType(types.BinaryID)
-		// err = types.Marshal(p, &p1)
-		// if err != nil {
-		// 	return rnq, err
-		// }
-		out.Value = nq.Gnq.ObjectValue
+		if out.Value, err = types.ByteVal(nq.Gnq); err != nil {
+			return &emptyEdge, err
+		}
 		out.ValueType = uint32(nq.Gnq.ObjectType)
 	}
 	return out, nil
@@ -102,7 +99,9 @@ func (nq NQuad) ToEdgeUsing(newToUid map[string]uint64) (*task.DirectedEdge, err
 	}
 
 	if len(nq.Gnq.ObjectId) == 0 {
-		out.Value = nq.Gnq.ObjectValue
+		if out.Value, err = types.ByteVal(nq.Gnq); err != nil {
+			return &emptyEdge, err
+		}
 		out.ValueType = uint32(nq.Gnq.ObjectType)
 	} else {
 		uid, err = toUid(nq.Gnq.ObjectId, newToUid)
@@ -182,17 +181,8 @@ func Parse(line string) (rnq graph.NQuad, rerr error) {
 				if oval == "_nil_" && t != types.StringID {
 					return rnq, x.Errorf("Invalid ObjectValue")
 				}
-				p := types.ValueForType(t)
-				src := types.ValueForType(types.StringID)
-				src.Value = []byte(oval)
-				err := types.Convert(src, &p)
-				if err != nil {
-					return rnq, err
-				}
-
-				rnq.ObjectValue = types.ConvertToGraphValue(p)
-
 				rnq.ObjectType = int32(t)
+				rnq.ObjectValue = &graph.Value{&graph.Value_StrVal{oval}}
 				oval = ""
 			} else {
 				oval += "@@" + val
@@ -213,7 +203,7 @@ func Parse(line string) (rnq graph.NQuad, rerr error) {
 		return rnq, x.Errorf("Invalid end of input. Input: [%s]", line)
 	}
 	if len(oval) > 0 {
-		rnq.ObjectValue = []byte(oval)
+		rnq.ObjectValue = &graph.Value{&graph.Value_BytesVal{[]byte(oval)}}
 		// If no type is specified, we default to string.
 		rnq.ObjectType = int32(0)
 	}

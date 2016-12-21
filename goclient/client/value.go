@@ -60,7 +60,7 @@ func Date(date time.Time) (Value, error) {
 	if err != nil {
 		return &graph.Value{}, err
 	}
-	return &graph.Value{&graph.Value_DateVal{b}}
+	return &graph.Value{&graph.Value_DateVal{b}}, nil
 }
 
 func Datetime(date time.Time) (Value, error) {
@@ -68,7 +68,7 @@ func Datetime(date time.Time) (Value, error) {
 	if err != nil {
 		return &graph.Value{}, err
 	}
-	return &graph.Value{&graph.Value_DatetimeVal{b}}
+	return &graph.Value{&graph.Value_DatetimeVal{b}}, nil
 }
 
 // ToValue converts val into the appropriate Value

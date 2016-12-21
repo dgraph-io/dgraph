@@ -2,7 +2,6 @@ package worker
 
 import (
 	"bufio"
-	"bytes"
 	"compress/gzip"
 	"io/ioutil"
 	"os"
@@ -14,6 +13,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
+	"github.com/dgraph-io/dgraph/query/graph"
 	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/store"
@@ -114,8 +114,8 @@ func TestBackup(t *testing.T) {
 			// Subject should have uid 1/2/3/4.
 			require.Contains(t, []string{"_uid_:0x1", "_uid_:0x2", "_uid_:0x3", "_uid_:0x4"}, nq.Subject)
 			// The only value we set was "photon".
-			if !bytes.Equal(nq.ObjectValue, nil) {
-				require.Equal(t, []byte("pho\\ton"), nq.ObjectValue)
+			if nq.ObjectValue != nil {
+				require.Equal(t, &graph.Value{&graph.Value_StrVal{"pho\\ton"}}, nq.ObjectValue)
 			}
 			// The only objectId we set was uid 5.
 			if nq.ObjectId != "" {
