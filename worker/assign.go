@@ -93,7 +93,7 @@ func AssignUidsOverNetwork(ctx context.Context, umap map[string]uint64) error {
 	if n != nil {
 		// This is useful for testing, when the membership information doesn't have chance
 		// to propagate.
-		lid = n.raft.Status().Lead
+		lid = n.Raft().Status().Lead
 	}
 
 	if n != nil && n.id == lid {

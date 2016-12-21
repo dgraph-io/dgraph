@@ -247,7 +247,6 @@ func (g *groupi) TouchLastUpdate(u uint64) {
 // - Once iteration is over without errors, it would return back all new updates.
 // - These updates are then applied to groups().all state via applyMembershipUpdate.
 func (g *groupi) syncMemberships() {
-	return // HACK HACK HACK
 	if g.ServesGroup(0) {
 		// This server serves group zero.
 		g.RLock()

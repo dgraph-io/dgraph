@@ -19,6 +19,8 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
+// peerPool stores the peers per node and the addresses corresponding to them.
+// We then use pool() to get an active connection to those addresses.
 type peerPool struct {
 	sync.RWMutex
 	peers map[uint64]string
@@ -69,25 +71,46 @@ type sendmsg struct {
 }
 
 type node struct {
-	canCampaign bool
+	x.SafeMutex
+
+	// SafeMutex is for fields which can be changed after init.
+	_raft      raft.Node
+	_confState *raftpb.ConfState
+
+	// Fields which are never changed after init.
 	cfg         *raft.Config
 	commitCh    chan raftpb.Entry
 	ctx         context.Context
-	done        chan struct{}
 	gid         uint32
 	id          uint64
-	messages    chan sendmsg
-	peers       peerPool
 	props       proposals
-	raft        raft.Node
 	raftContext *task.RaftContext
-	confState   *raftpb.ConfState
 	store       *raft.MemoryStorage
 	wal         *raftwal.Wal
+	peers       peerPool
+	done        chan struct{}
+	messages    chan sendmsg
+
+	canCampaign bool
 	// applied is used to keep track of the applied RAFT proposals.
 	// The stages are proposed -> committed (accepted by cluster) ->
 	// applied (to PL) -> synced (to RocksDB).
 	applied x.WaterMark
+}
+
+func (n *node) SetRaft(r raft.Node) {
+	n.Lock()
+	defer n.Unlock()
+	n._raft = r
+}
+
+func (n *node) Raft() raft.Node {
+	if n == nil {
+		return nil
+	}
+	n.RLock()
+	defer n.RUnlock()
+	return n._raft
 }
 
 func newNode(gid uint32, id uint64, myAddr string) *node {
@@ -157,7 +180,7 @@ func (n *node) AddToCluster(ctx context.Context, pid uint64) error {
 	}
 	rcBytes, err := rc.Marshal()
 	x.Check(err)
-	return n.raft.ProposeConfChange(ctx, raftpb.ConfChange{
+	return n.Raft().ProposeConfChange(ctx, raftpb.ConfChange{
 		ID:      pid,
 		Type:    raftpb.ConfChangeAddNode,
 		NodeID:  pid,
@@ -193,7 +216,7 @@ var slicePool = sync.Pool{
 }
 
 func (n *node) ProposeAndWait(ctx context.Context, proposal *task.Proposal) error {
-	if n.raft == nil {
+	if n.Raft() == nil {
 		return x.Errorf("RAFT isn't initialized yet")
 	}
 
@@ -215,7 +238,7 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *task.Proposal) erro
 	che := make(chan error, 1)
 	n.props.Store(proposal.Id, che)
 
-	if err = n.raft.Propose(ctx, proposalData); err != nil {
+	if err = n.Raft().Propose(ctx, proposalData); err != nil {
 		return x.Wrapf(err, "While proposing")
 	}
 
@@ -379,8 +402,10 @@ func (n *node) processCommitCh() {
 				n.Connect(rc.Id, rc.Addr)
 			}
 
-			// TODO: Protect with mutex lock.
-			n.confState = n.raft.ApplyConfChange(cc)
+			n.Lock()
+			n._confState = n.Raft().ApplyConfChange(cc)
+			n.Unlock()
+
 			n.applied.Ch <- x.Mark{Index: e.Index, Done: true}
 
 		} else {
@@ -434,20 +459,20 @@ func (n *node) Run() {
 	firstRun := true
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
+	rcBytes, err := n.raftContext.Marshal()
+	x.Check(err)
 
 	for {
 		select {
 		case <-ticker.C:
-			fmt.Printf("Tick for group: %d. RAFT: %p\n", n.gid, n.raft)
-			n.raft.Tick()
+			n.Raft().Tick()
 
-		case rd := <-n.raft.Ready():
+		case rd := <-n.Raft().Ready():
 			x.Check(n.wal.StoreSnapshot(n.gid, rd.Snapshot))
 			x.Check(n.wal.Store(n.gid, rd.HardState, rd.Entries))
 
 			n.saveToStorage(rd.Snapshot, rd.HardState, rd.Entries)
 
-			rcBytes, err := n.raftContext.Marshal()
 			for _, msg := range rd.Messages {
 				// NOTE: We can do some optimizations here to drop messages.
 				x.Check(err)
@@ -482,9 +507,9 @@ func (n *node) Run() {
 				n.applied.Ch <- status
 			}
 
-			n.raft.Advance()
+			n.Raft().Advance()
 			if firstRun && n.canCampaign {
-				go n.raft.Campaign(n.ctx)
+				go n.Raft().Campaign(n.ctx)
 				firstRun = false
 			}
 
@@ -499,7 +524,7 @@ func (n *node) Stop() {
 }
 
 func (n *node) Step(ctx context.Context, msg raftpb.Message) error {
-	return n.raft.Step(ctx, msg)
+	return n.Raft().Step(ctx, msg)
 }
 
 func (n *node) snapshotPeriodically() {
@@ -540,7 +565,12 @@ func (n *node) snapshotPeriodically() {
 
 			rc, err := n.raftContext.Marshal()
 			x.Check(err)
-			s, err := n.store.CreateSnapshot(le, n.confState, rc)
+
+			n.RLock()
+			cf := n._confState
+			n.RUnlock()
+
+			s, err := n.store.CreateSnapshot(le, cf, rc)
 			x.Checkf(err, "While creating snapshot")
 			x.Checkf(n.store.Compact(le), "While compacting snapshot")
 			x.Check(n.wal.StoreSnapshot(n.gid, s))
@@ -628,16 +658,16 @@ func (n *node) InitAndStartNode(wal *raftwal.Wal) {
 
 	if restart {
 		fmt.Printf("RESTARTING\n")
-		n.raft = raft.RestartNode(n.cfg)
+		n.SetRaft(raft.RestartNode(n.cfg))
 
 	} else {
 		if groups().HasPeer(n.gid) {
 			n.joinPeers()
-			n.raft = raft.StartNode(n.cfg, nil)
+			n.SetRaft(raft.StartNode(n.cfg, nil))
 
 		} else {
 			peers := []raft.Peer{{ID: n.id}}
-			n.raft = raft.StartNode(n.cfg, peers)
+			n.SetRaft(raft.StartNode(n.cfg, peers))
 			// Trigger election, so this node can become the leader of this single-node cluster.
 			n.canCampaign = true
 		}
@@ -651,18 +681,19 @@ func (n *node) InitAndStartNode(wal *raftwal.Wal) {
 }
 
 func (n *node) AmLeader() bool {
-	if n == nil || n.raft == nil {
+	if n.Raft() == nil {
 		fmt.Printf("AmLeader: RAFT is nil")
 		return false
 	}
-	fmt.Printf("RAFT addr for group %d is: %p. Leader: %d\n", n.gid, n.raft, n.raft.Status().Lead)
-	return n.raft.Status().Lead == n.raft.Status().ID
+	r := n.Raft()
+	return r.Status().Lead == r.Status().ID
 }
 
 func (w *grpcWorker) applyMessage(ctx context.Context, msg raftpb.Message) error {
 	var rc task.RaftContext
 	x.Check(rc.Unmarshal(msg.Context))
 	node := groups().Node(rc.Group)
+	// TODO: Handle the case where node isn't present for this group.
 	node.Connect(msg.From, rc.Addr)
 
 	c := make(chan error, 1)
