@@ -207,6 +207,12 @@
 			"path": "golang.org/x/text/unicode/norm",
 			"revision": "d69c40b4be55797923cec7457fac7a244d91a9b6",
 			"revisionTime": "2016-08-15T22:39:46Z"
+		},
+		{
+			"checksumSHA1": "12GqsW8PiRPnezDDy0v4brZrndM=",
+			"path": "gopkg.in/yaml.v2",
+			"revision": "a5b47d31c556af34a302ce5d659e6fea44d90de0",
+			"revisionTime": "2016-09-28T15:37:09Z"
 		}
 	],
 	"rootPath": "github.com/dgraph-io/dgraph"
