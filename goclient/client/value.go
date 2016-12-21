@@ -20,7 +20,6 @@ import (
 	"encoding/binary"
 	"time"
 
-	"github.com/dgraph-io/dgraph/goclient/client"
 	"github.com/dgraph-io/dgraph/query/graph"
 	geom "github.com/twpayne/go-geom"
 	"github.com/twpayne/go-geom/encoding/geojson"
@@ -131,7 +130,7 @@ func IsEmpty(val *graph.Value) bool {
 // 	log.Fatal(err)
 // }
 //
-func ValueFromJson(json string) (client.Value, error) {
+func ValueFromJson(json string) (Value, error) {
 	var g geom.T
 	// Parse the json
 	err := geojson.Unmarshal([]byte(json), &g)
@@ -144,5 +143,5 @@ func ValueFromJson(json string) (client.Value, error) {
 	if err != nil {
 		return nil, err
 	}
-	return client.Geo(b), nil
+	return Geo(b), nil
 }
