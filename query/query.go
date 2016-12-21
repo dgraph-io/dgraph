@@ -529,8 +529,15 @@ func createNilValuesList(count int) []*task.Value {
 
 // createTaskQuery generates the query buffer.
 func createTaskQuery(sg *SubGraph) *task.Query {
+	attr := sg.Attr
+	// Might be safer than just checking first byte due to i18n
+	reverse := strings.HasPrefix(attr, "~")
+	if reverse {
+		attr = strings.TrimPrefix(attr, "~")
+	}
 	out := &task.Query{
-		Attr:     sg.Attr,
+		Attr:     attr,
+		Reverse:  reverse,
 		SrcFunc:  sg.SrcFunc,
 		Count:    int32(sg.Params.Count),
 		Offset:   int32(sg.Params.Offset),
@@ -547,7 +554,6 @@ func createTaskQuery(sg *SubGraph) *task.Query {
 // from different instances. Note: taskQuery is nil for root node.
 func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	var err error
-
 	if len(sg.Attr) == 0 {
 		// If we have a filter SubGraph which only contains an operator,
 		// it won't have any attribute to work on.

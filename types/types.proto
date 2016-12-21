@@ -1,4 +1,4 @@
-// protoc --gofast_out=. posting/types/types.proto
+// protoc --gofast_out=. types.proto
 syntax = "proto3";
 
 package types;
@@ -15,6 +15,7 @@ message Posting {
 		DATE = 5;
 		DATETIME = 6;
 		GEO = 7;
+		UID = 8;
 	}
 	ValType val_type = 3;
 	string label = 4;
