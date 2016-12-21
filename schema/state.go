@@ -212,7 +212,7 @@ L:
 
 	// Keep reading for terms that start with @. Keep outputting. If we see
 	// something that doesn't start with @, we output ItemDummy. It is like
-	// null-terminatino of C strings.
+	// null-termination of C strings.
 
 L1:
 	for {
@@ -308,7 +308,7 @@ L1:
 				} else if word == "reverse" {
 					l.Emit(itemReverse)
 				} else {
-					return l.Errorf("Invalid mention of index")
+					return l.Errorf("Unexpected directive %s", word)
 				}
 				break
 			}

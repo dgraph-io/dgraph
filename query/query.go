@@ -527,11 +527,6 @@ func createNilValuesList(count int) []*task.Value {
 	return out
 }
 
-func isReversedEdge(attr string) bool {
-	x.AssertTrue(len(attr) > 0)
-	return strings.HasPrefix(attr, "~") // Might be safer for i18n.
-}
-
 // createTaskQuery generates the query buffer.
 func createTaskQuery(sg *SubGraph) *task.Query {
 	attr := sg.Attr
@@ -542,7 +537,7 @@ func createTaskQuery(sg *SubGraph) *task.Query {
 	}
 	out := &task.Query{
 		Attr:     attr,
-		Reverse:  reverse, // reverse used here.
+		Reverse:  reverse,
 		SrcFunc:  sg.SrcFunc,
 		Count:    int32(sg.Params.Count),
 		Offset:   int32(sg.Params.Offset),

@@ -59,7 +59,6 @@ type ParsedKey struct {
 	Attr     string
 	Uid      uint64
 	Term     string
-	Reverse  bool
 }
 
 func (p ParsedKey) IsData() bool {
@@ -111,17 +110,14 @@ func Parse(key []byte) *ParsedKey {
 	p.byteType = k[0]
 	k = k[1:]
 
-	if p.byteType == byteData {
+	switch p.byteType {
+	case byteData:
+		fallthrough
+	case byteReverse:
 		p.Uid = binary.BigEndian.Uint64(k)
-
-	} else if p.byteType == byteReverse {
-		p.Uid = binary.BigEndian.Uint64(k)
-		p.Reverse = true
-
-	} else if p.byteType == byteIndex {
+	case byteIndex:
 		p.Term = string(k)
-
-	} else {
+	default:
 		// Some other data type.
 		return nil
 	}
