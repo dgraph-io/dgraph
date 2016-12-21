@@ -116,8 +116,8 @@ func TestSortDateTimes(t *testing.T) {
 	require.NoError(t, Sort(DateTimeID, list, ul, false))
 	require.EqualValues(t, []uint64{400, 200, 300, 100}, ul.Uids)
 	require.EqualValues(t,
-		[]string{"2006-01-02 15:04:01 +0000 UTC", "2006-01-02 15:04:05 +0000 UTC",
-			"2006-01-02 15:04:06 +0000 UTC", "2016-01-02 15:04:05 +0000 UTC"},
+		[]string{"2006-01-02T15:04:01Z", "2006-01-02T15:04:05Z",
+			"2006-01-02T15:04:06Z", "2016-01-02T15:04:05Z"},
 		toString(t, list, DateTimeID))
 }
 
