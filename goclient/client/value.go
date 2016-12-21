@@ -20,8 +20,8 @@ import (
 	"encoding/binary"
 	"time"
 
+	"github.com/dgraph-io/dgraph/goclient/client"
 	"github.com/dgraph-io/dgraph/query/graph"
-	"github.com/dgraph-io/dgraphgoclient/client"
 	geom "github.com/twpayne/go-geom"
 	"github.com/twpayne/go-geom/encoding/geojson"
 	"github.com/twpayne/go-geom/encoding/wkb"
