@@ -74,22 +74,22 @@ type node struct {
 	x.SafeMutex
 
 	// SafeMutex is for fields which can be changed after init.
-	_raft      raft.Node
 	_confState *raftpb.ConfState
+	_raft      raft.Node
 
 	// Fields which are never changed after init.
 	cfg         *raft.Config
 	commitCh    chan raftpb.Entry
 	ctx         context.Context
+	done        chan struct{}
 	gid         uint32
 	id          uint64
+	messages    chan sendmsg
+	peers       peerPool
 	props       proposals
 	raftContext *task.RaftContext
 	store       *raft.MemoryStorage
 	wal         *raftwal.Wal
-	peers       peerPool
-	done        chan struct{}
-	messages    chan sendmsg
 
 	canCampaign bool
 	// applied is used to keep track of the applied RAFT proposals.
