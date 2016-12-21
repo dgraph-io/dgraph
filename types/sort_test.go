@@ -122,19 +122,21 @@ func TestSortDateTimes(t *testing.T) {
 }
 
 type encL struct {
-	intList   []int32
-	tokenList []string
+	ints   []int32
+	tokens []string
 }
 
-func (o encL) Less(i, j int) bool {
-	return o.intList[i] < o.intList[j]
+type byEnc struct{ encL }
+
+func (o byEnc) Less(i, j int) bool {
+	return o.ints[i] < o.ints[j]
 }
 
-func (o encL) Len() int { return len(o.intList) }
+func (o byEnc) Len() int { return len(o.ints) }
 
-func (o encL) Swap(i, j int) {
-	o.intList[i], o.intList[j] = o.intList[j], o.intList[i]
-	o.tokenList[i], o.tokenList[j] = o.tokenList[j], o.tokenList[i]
+func (o byEnc) Swap(i, j int) {
+	o.ints[i], o.ints[j] = o.ints[j], o.ints[i]
+	o.tokens[i], o.tokens[j] = o.tokens[j], o.tokens[i]
 }
 
 func TestIntEncoding(t *testing.T) {
@@ -144,21 +146,15 @@ func TestIntEncoding(t *testing.T) {
 	d := int32(math.MinInt32)
 	enc := encL{}
 	arr := []int32{a, b, c, d, 1, 2, 3, 4, -1, -2, -3, 0, 234, 10000, 123, -1543}
-	enc.intList = arr
+	enc.ints = arr
 	for _, it := range arr {
 		encoded, err := encodeInt(int32(it))
 		require.NoError(t, err)
-		enc.tokenList = append(enc.tokenList, encoded[0])
+		enc.tokens = append(enc.tokens, encoded[0])
 	}
-
-	var toBeSorted sort.Interface
-	toBeSorted = enc
-	sort.Sort(toBeSorted)
-
-	cur := enc.tokenList[0]
-	for i := 1; i < len(enc.tokenList); i++ {
+	sort.Sort(byEnc{enc})
+	for i := 1; i < len(enc.tokens); i++ {
 		// The corresponding string tokens should be greater.
-		require.True(t, cur < enc.tokenList[i])
-		cur = enc.tokenList[i]
+		require.True(t, enc.tokens[i-1] < enc.tokens[i])
 	}
 }
