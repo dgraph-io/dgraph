@@ -26,6 +26,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/goclient/client"
 	"github.com/dgraph-io/dgraph/query/graph"
+	"github.com/dgraph-io/dgraphgoclient/geo"
 )
 
 var ip = flag.String("ip", "127.0.0.1:8080", "Port to communicate with server")
@@ -43,6 +44,19 @@ func main() {
 	c := graph.NewDgraphClient(conn)
 
 	req := client.Req{}
+
+	loc, err := geo.ValueFromJson(`{"type":"Point","coordinates":[-122.2207184,37.72129059]}`)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	if err := req.AddMutation(graph.NQuad{
+		Subject:     "alice",
+		Predicate:   "birthday",
+		ObjectValue: loc,
+	}, client.SET); err != nil {
+		log.Fatal(err)
+	}
 	resp, err := c.Run(context.Background(), req.Request())
 	if err != nil {
 		log.Fatalf("Error in getting response from server, %s", err)

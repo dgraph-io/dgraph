@@ -90,8 +90,15 @@ func getValue(val *graph.Value) interface{} {
 func byteVal(nq NQuad) ([]byte, error) {
 	// We infer object type from type of value. We set appropriate type in parse
 	// function or the Go client has already set.
-	p := types.ValueForType(typeFromValue(nq.ObjectValue))
+	t := typeFromValue(nq.ObjectValue)
+	p := types.ValueForType(t)
 	p.Value = getValue(nq.ObjectValue)
+	// These three would have already been marshalled to bytes by the client or
+	// in parse function.
+	if t == types.GeoID || t == types.DateID || t == types.DateTimeID {
+		return p.Value.([]byte), nil
+	}
+
 	p1 := types.ValueForType(types.BinaryID)
 	if err := types.Marshal(p, &p1); err != nil {
 		return []byte{}, err
@@ -252,12 +259,26 @@ func Parse(line string) (rnq graph.NQuad, rerr error) {
 					rnq.ObjectValue = &graph.Value{&graph.Value_DoubleVal{p.Value.(float64)}}
 				case types.BoolID:
 					rnq.ObjectValue = &graph.Value{&graph.Value_BoolVal{p.Value.(bool)}}
+				// Geo, date and datetime are stored in binary format in the NQuad, so lets
+				// convert them here.
 				case types.GeoID:
-					rnq.ObjectValue = &graph.Value{&graph.Value_GeoVal{p.Value.([]byte)}}
+					p1 := types.ValueForType(types.BinaryID)
+					if err := types.Marshal(p, &p1); err != nil {
+						return rnq, err
+					}
+					rnq.ObjectValue = &graph.Value{&graph.Value_GeoVal{p1.Value.([]byte)}}
 				case types.DateID:
-					rnq.ObjectValue = &graph.Value{&graph.Value_DateVal{p.Value.([]byte)}}
+					p1 := types.ValueForType(types.BinaryID)
+					if err := types.Marshal(p, &p1); err != nil {
+						return rnq, err
+					}
+					rnq.ObjectValue = &graph.Value{&graph.Value_DateVal{p1.Value.([]byte)}}
 				case types.DateTimeID:
-					rnq.ObjectValue = &graph.Value{&graph.Value_DatetimeVal{p.Value.([]byte)}}
+					p1 := types.ValueForType(types.BinaryID)
+					if err := types.Marshal(p, &p1); err != nil {
+						return rnq, err
+					}
+					rnq.ObjectValue = &graph.Value{&graph.Value_DatetimeVal{p1.Value.([]byte)}}
 				default:
 					// Unknown type
 					return rnq, x.Errorf("Unknown value type %T", t)
