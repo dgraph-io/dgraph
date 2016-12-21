@@ -215,10 +215,3 @@ func createTokens(cu s2.CellUnion, prefix string) (toks []string) {
 	}
 	return toks
 }
-
-/*
-// toTokens creates tokens with a certain prefix.
-func toTokens(cu s2.CellUnion, prefix string) []string {
-	return appendTokens(nil, cu, prefix)
-}
-*/
