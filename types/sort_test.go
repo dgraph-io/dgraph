@@ -17,6 +17,8 @@
 package types
 
 import (
+	"math"
+	"sort"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -117,4 +119,46 @@ func TestSortDateTimes(t *testing.T) {
 		[]string{"2006-01-02 15:04:01 +0000 UTC", "2006-01-02 15:04:05 +0000 UTC",
 			"2006-01-02 15:04:06 +0000 UTC", "2016-01-02 15:04:05 +0000 UTC"},
 		toString(t, list, DateTimeID))
+}
+
+type encL struct {
+	intList   []int32
+	tokenList []string
+}
+
+func (o encL) Less(i, j int) bool {
+	return o.intList[i] < o.intList[j]
+}
+
+func (o encL) Len() int { return len(o.intList) }
+
+func (o encL) Swap(i, j int) {
+	o.intList[i], o.intList[j] = o.intList[j], o.intList[i]
+	o.tokenList[i], o.tokenList[j] = o.tokenList[j], o.tokenList[i]
+}
+
+func TestIntEncoding(t *testing.T) {
+	a := int32(2<<24 + 10)
+	b := int32(-2<<24 - 1)
+	c := int32(math.MaxInt32)
+	d := int32(math.MinInt32)
+	enc := encL{}
+	arr := []int32{a, b, c, d, 1, 2, 3, 4, -1, -2, -3, 0, 234, 10000, 123, -1543}
+	enc.intList = arr
+	for _, it := range arr {
+		encoded, err := encodeInt(int32(it))
+		require.NoError(t, err)
+		enc.tokenList = append(enc.tokenList, encoded[0])
+	}
+
+	var toBeSorted sort.Interface
+	toBeSorted = enc
+	sort.Sort(toBeSorted)
+
+	cur := enc.tokenList[0]
+	for i := 1; i < len(enc.tokenList); i++ {
+		// The corresponding string tokens should be greater.
+		require.True(t, cur < enc.tokenList[i])
+		cur = enc.tokenList[i]
+	}
 }
