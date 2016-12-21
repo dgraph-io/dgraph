@@ -101,7 +101,7 @@ func IndexTokens(attr string, src types.Val) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	return types.IndexTokens(attr, sv)
+	return types.IndexTokens(sv)
 }
 
 // addIndexMutations adds mutation(s) for a single term, to maintain index.
