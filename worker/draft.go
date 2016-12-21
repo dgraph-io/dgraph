@@ -682,7 +682,6 @@ func (n *node) InitAndStartNode(wal *raftwal.Wal) {
 
 func (n *node) AmLeader() bool {
 	if n.Raft() == nil {
-		fmt.Printf("AmLeader: RAFT is nil")
 		return false
 	}
 	r := n.Raft()
