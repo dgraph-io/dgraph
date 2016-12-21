@@ -19,13 +19,18 @@ package x
 import (
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"os"
+
+	yaml "gopkg.in/yaml.v2"
 )
 
 const dgraphVersion = "0.7.0"
 
 var (
+	configFile = flag.String("configFile", "",
+		"YAML configuration file containing dgraph settings.")
 	version  = flag.Bool("version", false, "Prints the version of Dgraph")
 	initFunc []func()
 	logger   *log.Logger
@@ -44,12 +49,32 @@ func Init() {
 	if !flag.Parsed() {
 		log.Fatal("Unable to parse flags")
 	}
+
+	if *configFile != "" {
+		log.Println("Loading configuration from file:", *configFile)
+		loadConfigFromYAML()
+	}
+
 	logger = log.New(os.Stderr, "", log.Lshortfile|log.Flags())
 	AssertTrue(logger != nil)
 	printVersionOnly()
 	// Next, run all the init functions that have been added.
 	for _, f := range initFunc {
 		f()
+	}
+}
+
+// loadConfigFromYAML reads configurations from specified YAML file.
+func loadConfigFromYAML() {
+	bs, err := ioutil.ReadFile(*configFile)
+	Checkf(err, "Cannot open specified config file: %v", *configFile)
+
+	m := make(map[string]string)
+
+	Checkf(yaml.Unmarshal(bs, &m), "Error while parsing config file:")
+
+	for k, v := range m {
+		flag.Set(k, v)
 	}
 }
 
