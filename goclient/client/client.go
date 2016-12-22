@@ -132,6 +132,9 @@ func (req *Req) AddMutation(nq graph.NQuad, op Op) error {
 }
 
 func (req *Req) size() int {
+	if req.gr.Mutation == nil {
+		return 0
+	}
 	return len(req.gr.Mutation.Set) + len(req.gr.Mutation.Del)
 }
 

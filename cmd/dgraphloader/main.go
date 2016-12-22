@@ -111,11 +111,18 @@ func main() {
 	ticker.Stop()
 
 	c := batch.Counter()
+	var rate uint64
+	if c.Elapsed.Seconds() < 1 {
+		rate = c.Rdfs
+	} else {
+		rate = c.Rdfs / uint64(c.Elapsed.Seconds())
+	}
 	// Lets print an empty line, otherwise Number of Mutations overwrites the previous
 	// printed line.
 	fmt.Printf("%100s\r", "")
 	fmt.Printf("Number of mutations run   : %d\n", c.Mutations)
 	fmt.Printf("Number of RDFs processed  : %d\n", c.Rdfs)
 	fmt.Printf("Time spent                : %v\n", c.Elapsed)
-	fmt.Printf("RDFs processed per second : %d\n", c.Rdfs/uint64(c.Elapsed.Seconds()))
+
+	fmt.Printf("RDFs processed per second : %d\n", rate)
 }
