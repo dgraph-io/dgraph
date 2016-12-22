@@ -277,10 +277,6 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 				// globalType is the best effort type to which we try converting
 				// and if not possible, we ignore it in the result.
 				globalType, hasType := schema.TypeOf(pc.Attr)
-				// schemaType refers to the type we should convert the value
-				// compulsorily and if not possible we ignore the parent object
-				// as it wouldn't comply with the schema.
-
 				sv := types.ValueForType(types.StringID)
 				if hasType == nil {
 					// Try to coerce types if this is an optional scalar outside an

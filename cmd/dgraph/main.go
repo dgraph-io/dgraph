@@ -374,9 +374,7 @@ func validateTypes(nquads []rdf.NQuad) error {
 				v := types.ValueForType(schemaType)
 				src := types.ValueForType(typeID)
 				src.Value = nquad.ObjectValue
-				fmt.Println("****")
 				err := types.Convert(src, &v)
-				fmt.Println("****")
 				if err != nil {
 					return err
 				}

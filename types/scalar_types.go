@@ -91,10 +91,7 @@ func TypeForName(name string) (TypeID, bool) {
 }
 
 func (t TypeID) IsScalar() bool {
-	if t == UidID {
-		return false
-	}
-	return true
+	return t != UidID
 }
 
 // ValueForType returns the zero value for a type id

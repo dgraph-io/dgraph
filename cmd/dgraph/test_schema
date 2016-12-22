@@ -1,3 +1,0 @@
-type person {
-	friend: uid @reverse
-}
