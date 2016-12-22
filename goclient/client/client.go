@@ -167,8 +167,7 @@ type BatchMutation struct {
 func (batch *BatchMutation) request(req *Req) {
 	counter := atomic.AddUint64(&batch.mutations, 1)
 RETRY:
-	ctx := context.Background()
-	_, err := batch.dc.Run(ctx, &req.gr)
+	_, err := batch.dc.Run(context.Background(), &req.gr)
 	if err != nil {
 		fmt.Printf("Retrying req: %d. Error: %v\n", counter, err)
 		time.Sleep(5 * time.Millisecond)
