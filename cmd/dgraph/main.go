@@ -248,6 +248,13 @@ func runMutations(ctx context.Context, mu *graph.Mutation) (map[string]uint64, e
 	var allocIds map[string]uint64
 	var err error
 
+	if err = validateTypes(mu.Set); err != nil {
+		return nil, x.Wrap(err)
+	}
+	if err = validateTypes(mu.Del); err != nil {
+		return nil, x.Wrap(err)
+	}
+
 	if allocIds, err = convertAndApply(ctx, mu.Set, mu.Del); err != nil {
 		return nil, err
 	}
@@ -299,8 +306,7 @@ func validateTypes(nquads []*graph.NQuad) error {
 				// Storage type was unspecified in the RDF, so we convert the data to the schema
 				// type.
 				v := types.ValueForType(schemaType)
-				src := types.ValueForType(types.StringID)
-				src.Value = nquad.ObjectValue
+				src := types.Val{types.StringID, []byte(nquad.ObjectValue.GetStrVal())}
 				err := types.Convert(src, &v) // v.UnmarshalText(nquad.ObjectValue)
 				if err != nil {
 					return err
