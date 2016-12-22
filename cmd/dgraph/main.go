@@ -558,7 +558,7 @@ type grpcServer struct{}
 
 // This method is used to execute the query and return the response to the
 // client as a protocol buffer message.
-func (s *grpcServer) Query(ctx context.Context,
+func (s *grpcServer) Run(ctx context.Context,
 	req *graph.Request) (*graph.Response, error) {
 
 	var allocIds map[string]uint64
