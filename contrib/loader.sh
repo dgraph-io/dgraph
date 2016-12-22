@@ -26,7 +26,7 @@ if [ ! -d $gitlfsfile ]; then
 fi
 
 if [ ! -f "benchmarks/data/goldendata.rdf.gz" ]; then
-	git lfs init
+	git lfs install
     git clone https://github.com/dgraph-io/benchmarks.git
 fi
 benchmark=$(pwd)/benchmarks/data
