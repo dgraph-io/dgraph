@@ -16,8 +16,8 @@ func TestSpielberg(t *testing.T) {
       }
     }`
 
-	expectedRes := `{"me":[{"film.director.film":[{"type.object.name.en":"Indiana Jones and the Temple of Doom"},{"type.object.name.en":"Jaws"},{"type.object.name.en":"Saving Private Ryan"},{"type.object.name.en":"Close Encounters of the Third Kind"}],"type.object.name.en":"Steven Spielberg"}]}`
 	res := decodeResponse(q)
+	expectedRes := `{"me":[{"film.director.film":[{"type.object.name.en":"Indiana Jones and the Temple of Doom"},{"type.object.name.en":"Jaws"},{"type.object.name.en":"Saving Private Ryan"},{"type.object.name.en":"Close Encounters of the Third Kind"}],"type.object.name.en":"Steven Spielberg"}]}`
 	if res != expectedRes {
 		log.Fatal("Query response is not as expected")
 	}
