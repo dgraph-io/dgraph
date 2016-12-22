@@ -101,16 +101,26 @@ type node struct {
 func (n *node) SetRaft(r raft.Node) {
 	n.Lock()
 	defer n.Unlock()
+	x.AssertTrue(n._raft == nil)
 	n._raft = r
 }
 
 func (n *node) Raft() raft.Node {
-	if n == nil {
-		return nil
-	}
 	n.RLock()
 	defer n.RUnlock()
 	return n._raft
+}
+
+func (n *node) SetConfState(cs *raftpb.ConfState) {
+	n.Lock()
+	defer n.Unlock()
+	n._confState = cs
+}
+
+func (n *node) ConfState() *raftpb.ConfState {
+	n.RLock()
+	defer n.RUnlock()
+	return n._confState
 }
 
 func newNode(gid uint32, id uint64, myAddr string) *node {
@@ -402,10 +412,8 @@ func (n *node) processCommitCh() {
 				n.Connect(rc.Id, rc.Addr)
 			}
 
-			n.Lock()
-			n._confState = n.Raft().ApplyConfChange(cc)
-			n.Unlock()
-
+			cs := n.Raft().ApplyConfChange(cc)
+			n.SetConfState(cs)
 			n.applied.Ch <- x.Mark{Index: e.Index, Done: true}
 
 		} else {
@@ -566,11 +574,7 @@ func (n *node) snapshotPeriodically() {
 			rc, err := n.raftContext.Marshal()
 			x.Check(err)
 
-			n.RLock()
-			cf := n._confState
-			n.RUnlock()
-
-			s, err := n.store.CreateSnapshot(le, cf, rc)
+			s, err := n.store.CreateSnapshot(le, n.ConfState(), rc)
 			x.Checkf(err, "While creating snapshot")
 			x.Checkf(n.store.Compact(le), "While compacting snapshot")
 			x.Check(n.wal.StoreSnapshot(n.gid, s))
