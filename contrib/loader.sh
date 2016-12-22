@@ -38,7 +38,7 @@ export LD_LIBRARY_PATH="${ICUDIR}/lib:${ROCKSDBDIR}:${LD_LIBRARY_PATH}"
 
 pushd cmd/dgraph &> /dev/null
 go build .
-./dgraph -gentlcommit 0.5 &
+./dgraph -gentlecommit 0.5 &
 popd &> /dev/null
 
 sleep 5
