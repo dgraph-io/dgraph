@@ -25,7 +25,7 @@ if [ ! -d $gitlfsfile ]; then
   popd &> /dev/null
 fi
 
-if [ ! -f "benchmarks/data/rdf-films.gz" ]; then
+if [ ! -f "benchmarks/data/goldendata.rdf.gz" ]; then
     git clone https://github.com/dgraph-io/benchmarks.git
 fi
 benchmark=$(pwd)/benchmarks/data
