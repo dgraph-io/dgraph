@@ -384,6 +384,11 @@ func validateTypes(nquads []rdf.NQuad) error {
 	return nil
 }
 
+func healthCheck(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("OK"))
+}
+
 func queryHandler(w http.ResponseWriter, r *http.Request) {
 	// Add a limit on how many pending queries can be run in the system.
 	pendingQueries <- struct{}{}
@@ -677,6 +682,7 @@ func setupServer(che chan error) {
 		cmux.HTTP2MatchHeaderFieldSendSettings("content-type", "application/grpc"))
 	http2 := tcpm.Match(cmux.HTTP2())
 
+	http.HandleFunc("/health", healthCheck)
 	http.HandleFunc("/query", queryHandler)
 	http.HandleFunc("/debug/store", storeStatsHandler)
 	http.HandleFunc("/admin/shutdown", shutDownHandler)
