@@ -25,22 +25,13 @@ import (
 	farm "github.com/dgryski/go-farm"
 
 	"github.com/dgraph-io/dgraph/lex"
+	"github.com/dgraph-io/dgraph/query/graph"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
 
 var emptyEdge task.DirectedEdge
-
-// NQuad is the data structure used for storing rdf N-Quads.
-type NQuad struct {
-	Subject     string
-	Predicate   string
-	ObjectId    string
-	ObjectValue []byte
-	ObjectType  byte
-	Label       string
-}
 
 // Gets the uid corresponding to an xid from the posting list which stores the
 // mapping.
@@ -50,6 +41,49 @@ func GetUid(xid string) (uint64, error) {
 		return strconv.ParseUint(xid[6:], 0, 64)
 	}
 	return farm.Fingerprint64([]byte(xid)), nil
+}
+
+type NQuad struct {
+	*graph.NQuad
+}
+
+func typeValFrom(val *graph.Value) types.Val {
+	switch val.Val.(type) {
+	case *graph.Value_BytesVal:
+		return types.Val{types.BinaryID, val.GetBytesVal()}
+	case *graph.Value_IntVal:
+		return types.Val{types.Int32ID, val.GetIntVal()}
+	case *graph.Value_StrVal:
+		return types.Val{types.StringID, val.GetStrVal()}
+	case *graph.Value_BoolVal:
+		return types.Val{types.BoolID, val.GetBoolVal()}
+	case *graph.Value_DoubleVal:
+		return types.Val{types.FloatID, val.GetDoubleVal()}
+	case *graph.Value_GeoVal:
+		return types.Val{types.GeoID, val.GetGeoVal()}
+	case *graph.Value_DateVal:
+		return types.Val{types.DateID, val.GetDateVal()}
+	case *graph.Value_DatetimeVal:
+		return types.Val{types.DateTimeID, val.GetDatetimeVal()}
+	}
+	return types.Val{types.StringID, ""}
+}
+
+func byteVal(nq NQuad) ([]byte, error) {
+	// We infer object type from type of value. We set appropriate type in parse
+	// function or the Go client has already set.
+	p := typeValFrom(nq.ObjectValue)
+	// These three would have already been marshalled to bytes by the client or
+	// in parse function.
+	if p.Tid == types.GeoID || p.Tid == types.DateID || p.Tid == types.DateTimeID {
+		return p.Value.([]byte), nil
+	}
+
+	p1 := types.ValueForType(types.BinaryID)
+	if err := types.Marshal(p, &p1); err != nil {
+		return []byte{}, err
+	}
+	return []byte(p1.Value.([]byte)), nil
 }
 
 // ToEdge is useful when you want to find the UID corresponding to XID for
@@ -74,7 +108,9 @@ func (nq NQuad) ToEdge() (*task.DirectedEdge, error) {
 		}
 		out.ValueId = oid
 	} else {
-		out.Value = nq.ObjectValue
+		if out.Value, err = byteVal(nq); err != nil {
+			return &emptyEdge, err
+		}
 		out.ValueType = uint32(nq.ObjectType)
 	}
 	return out, nil
@@ -102,7 +138,9 @@ func (nq NQuad) ToEdgeUsing(newToUid map[string]uint64) (*task.DirectedEdge, err
 	}
 
 	if len(nq.ObjectId) == 0 {
-		out.Value = nq.ObjectValue
+		if out.Value, err = byteVal(nq); err != nil {
+			return &emptyEdge, err
+		}
 		out.ValueType = uint32(nq.ObjectType)
 	} else {
 		uid, err = toUid(nq.ObjectId, newToUid)
@@ -139,7 +177,7 @@ func sane(s string) bool {
 }
 
 // Parse parses a mutation string and returns the NQuad representation for it.
-func Parse(line string) (rnq NQuad, rerr error) {
+func Parse(line string) (rnq graph.NQuad, rerr error) {
 	l := &lex.Lexer{}
 	l.Init(line)
 
@@ -182,6 +220,7 @@ func Parse(line string) (rnq NQuad, rerr error) {
 				if oval == "_nil_" && t != types.StringID {
 					return rnq, x.Errorf("Invalid ObjectValue")
 				}
+				rnq.ObjectType = int32(t)
 				p := types.ValueForType(t)
 				src := types.ValueForType(types.StringID)
 				src.Value = []byte(oval)
@@ -190,14 +229,9 @@ func Parse(line string) (rnq NQuad, rerr error) {
 					return rnq, err
 				}
 
-				p1 := types.ValueForType(types.BinaryID)
-				err = types.Marshal(p, &p1)
-				if err != nil {
+				if rnq.ObjectValue, err = types.ObjectValue(t, p.Value); err != nil {
 					return rnq, err
 				}
-				rnq.ObjectValue = []byte(p1.Value.([]byte))
-
-				rnq.ObjectType = byte(t)
 				oval = ""
 			} else {
 				oval += "@@" + val
@@ -218,9 +252,9 @@ func Parse(line string) (rnq NQuad, rerr error) {
 		return rnq, x.Errorf("Invalid end of input. Input: [%s]", line)
 	}
 	if len(oval) > 0 {
-		rnq.ObjectValue = []byte(oval)
+		rnq.ObjectValue = &graph.Value{&graph.Value_StrVal{oval}}
 		// If no type is specified, we default to string.
-		rnq.ObjectType = 0
+		rnq.ObjectType = int32(0)
 	}
 	if len(rnq.Subject) == 0 || len(rnq.Predicate) == 0 {
 		return rnq, x.Errorf("Empty required fields in NQuad. Input: [%s]", line)

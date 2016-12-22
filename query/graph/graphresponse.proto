@@ -5,15 +5,16 @@ syntax="proto3";
 package graph;
 
 service Dgraph {
-    rpc Query (Request) returns (Response) {};
+    rpc Run (Request) returns (Response) {};
 }
 
 message NQuad {
-    string sub = 1;
-    string pred = 2;
-    string objId = 3;
-    Value value = 4;
+    string subject = 1;
+    string predicate = 2;
+    string objectId = 3;
+    Value objectValue = 4;
     string label = 5;
+    sint32 objectType = 6;
 }
 
 message Value {
@@ -24,8 +25,11 @@ message Value {
         string str_val = 4;
         double double_val = 5;
         bytes geo_val = 6;  // Geo data in WKB format
+        bytes date_val = 7;
+        bytes datetime_val = 8;
     }
 }
+
 
 message Mutation {
     repeated NQuad set = 1;
