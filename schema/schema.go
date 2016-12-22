@@ -16,17 +16,14 @@
 
 package schema
 
-import "github.com/dgraph-io/dgraph/types"
-
-// Item contains the name of the field and its type
-type Item struct {
-	Field string
-	Typ   types.Type
-}
+import (
+	"github.com/dgraph-io/dgraph/types"
+	"github.com/dgraph-io/dgraph/x"
+)
 
 var (
 	// Map containing predicate to type information.
-	str map[string]types.Type
+	str map[string]types.TypeID
 	// Map containing fields / predicates that are indexed.
 	indexedFields map[string]bool
 	// Map containing fields / predicates that are reversed.
@@ -34,7 +31,7 @@ var (
 )
 
 func init() {
-	str = make(map[string]types.Type)
+	str = make(map[string]types.TypeID)
 	indexedFields = make(map[string]bool)
 	reversedFields = make(map[string]bool)
 }
@@ -49,34 +46,12 @@ func IsReversed(str string) bool {
 	return reversedFields[str]
 }
 
-// ScalarList returns the list of scalars in the geiven object.
-func ScalarList(obj string) []Item {
-	var res []Item
-	objstr, ok := str[obj].(types.Object)
-	if !ok {
-		return res
-	}
-	for k, v := range objstr.Fields {
-		if t, ok := getScalar(v); ok {
-			res = append(res, Item{Field: k, Typ: t})
-		}
-	}
-	return res
-}
-
 // TypeOf returns the type of given field.
-func TypeOf(pred string) types.Type {
-	if obj, ok := str[pred]; ok {
-		return obj
+func TypeOf(pred string) (types.TypeID, error) {
+	if typ, ok := str[pred]; ok {
+		return typ, nil
 	}
-	if typ, ok := getScalar(pred); ok {
-		return typ
-	}
-	return nil
-}
-
-func getScalar(typ string) (types.Type, bool) {
-	return types.TypeForName(typ)
+	return types.TypeID(100), x.Errorf("Undefined predicate")
 }
 
 // IndexedFields returns a list of indexed fields.

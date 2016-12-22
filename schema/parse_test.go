@@ -24,65 +24,60 @@ import (
 )
 
 func TestSchema(t *testing.T) {
-	str = make(map[string]types.Type)
+	str = make(map[string]types.TypeID)
 	require.NoError(t, Parse("testfiles/test_schema"))
 }
 
 func TestSchema1_Error(t *testing.T) {
-	str = make(map[string]types.Type)
+	str = make(map[string]types.TypeID)
 	require.Error(t, Parse("testfiles/test_schema1"))
 }
 
 func TestSchema2_Error(t *testing.T) {
-	str = make(map[string]types.Type)
+	str = make(map[string]types.TypeID)
 	require.Error(t, Parse("testfiles/test_schema2"))
 }
 
 func TestSchema3_Error(t *testing.T) {
-	str = make(map[string]types.Type)
+	str = make(map[string]types.TypeID)
 	require.Error(t, Parse("testfiles/test_schema3"))
 }
 
 func TestSchema4_Error(t *testing.T) {
-	str = make(map[string]types.Type)
+	str = make(map[string]types.TypeID)
 	err := Parse("testfiles/test_schema4")
-	if err.Error() != "Object type Person with no fields" {
-		t.Error(err)
-	}
+	require.Error(t, err)
 }
 
+/*
 func TestSchema5_Error(t *testing.T) {
-	str = make(map[string]types.Type)
+	str = make(map[string]types.TypeID)
 	err := Parse("testfiles/test_schema5")
-	if err.Error() != "Repeated field name in object Person" {
-		t.Error(err)
-	}
+	require.Error(t, err)
 }
 
 func TestSchema6_Error(t *testing.T) {
-	str = make(map[string]types.Type)
+	str = make(map[string]types.TypeID)
 	err := Parse("testfiles/test_schema6")
-	if err.Error() != "Type not defined Film" {
-		t.Error(err)
-	}
+	require.Error(t, err)
 }
-
+*/
 // Correct specification of indexing
 func TestSchemaIndex(t *testing.T) {
-	str = make(map[string]types.Type)
+	str = make(map[string]types.TypeID)
 	require.NoError(t, Parse("testfiles/test_schema_index1"))
 }
 
 // Indexing can't be specified inside object types.
 func TestSchemaIndex_Error1(t *testing.T) {
-	str = make(map[string]types.Type)
+	str = make(map[string]types.TypeID)
 	indexedFields = make(map[string]bool)
 	require.Error(t, Parse("testfiles/test_schema_index2"))
 }
 
 // Object types cant be indexed.
 func TestSchemaIndex_Error2(t *testing.T) {
-	str = make(map[string]types.Type)
+	str = make(map[string]types.TypeID)
 	indexedFields = make(map[string]bool)
 	require.Error(t, Parse("testfiles/test_schema_index3"))
 }

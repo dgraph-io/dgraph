@@ -91,13 +91,13 @@ func initIndex() {
 
 // IndexTokens return tokens, without the predicate prefix and index rune.
 func IndexTokens(attr string, src types.Val) ([]string, error) {
-	schemaType := schema.TypeOf(attr)
-	if !schemaType.IsScalar() {
+	schemaType, err := schema.TypeOf(attr)
+	if err != nil || !schemaType.IsScalar() {
 		return nil, x.Errorf("Cannot index attribute %s of type object.", attr)
 	}
-	s := schemaType.(types.TypeID)
+	s := schemaType
 	sv := types.ValueForType(s)
-	err := types.Convert(src, &sv)
+	err = types.Convert(src, &sv)
 	if err != nil {
 		return nil, err
 	}
