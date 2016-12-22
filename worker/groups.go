@@ -181,6 +181,7 @@ func (g *groupi) HasPeer(group uint32) bool {
 func (g *groupi) Leader(group uint32) (uint64, string) {
 	g.RLock()
 	defer g.RUnlock()
+
 	all := g.all[group]
 	if all == nil {
 		return 0, ""
