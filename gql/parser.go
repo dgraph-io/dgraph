@@ -649,6 +649,8 @@ func (t *FilterTree) stringHelper(buf *bytes.Buffer) {
 		_, err = buf.WriteString("AND")
 	case "|":
 		_, err = buf.WriteString("OR")
+	case "(":
+		_, err = buf.WriteString("(")
 	default:
 		err = x.Errorf("Unknown operator: %q", t.Op)
 	}
@@ -793,6 +795,8 @@ func parseFilter(l *lex.Lexer) (*FilterTree, error) {
 				evalStack(opStack, valueStack)
 			}
 			opStack.push(&FilterTree{Op: op}) // Push current operator.
+		} else {
+			return nil, x.Errorf("Unexpected item while parsing @filter: %v", item)
 		}
 	}
 
