@@ -150,10 +150,9 @@ type BatchMutation struct {
 	size    int
 	pending int
 
-	nquads   chan nquadOp
-	requests []*Req
-	dc       graph.DgraphClient
-	wg       sync.WaitGroup
+	nquads chan nquadOp
+	dc     graph.DgraphClient
+	wg     sync.WaitGroup
 
 	// Miscellaneous information to print counters.
 	// Num of RDF's sent
@@ -176,7 +175,8 @@ RETRY:
 	req.reset()
 }
 
-func (batch *BatchMutation) makeRequests(req *Req) {
+func (batch *BatchMutation) makeRequests() {
+	req := new(Req)
 	for n := range batch.nquads {
 		req.addMutation(n.nq, n.op)
 		if req.size() == batch.size {
@@ -201,9 +201,7 @@ func NewBatchMutation(ctx context.Context, conn *grpc.ClientConn,
 
 	for i := 0; i < pending; i++ {
 		bm.wg.Add(1)
-		req := new(Req)
-		bm.requests = append(bm.requests, req)
-		go bm.makeRequests(req)
+		go bm.makeRequests()
 	}
 	return &bm
 }

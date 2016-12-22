@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/json"
+	"fmt"
 	"math"
 	"strconv"
 	"time"
@@ -494,41 +495,71 @@ func Marshal(from Val, to *Val) error {
 	return nil
 }
 
-func ObjectValue(from Val) (*graph.Value, error) {
-	def := Str("")
+func ObjectValue(id TypeID, value interface{}) (*graph.Value, error) {
+	def := &graph.Value{&graph.Value_StrVal{""}}
+	var ok bool
 	// Lets set the object value according to the storage type.
-	switch from.Tid {
+	switch id {
 	case StringID:
-		return Str(from.Value.(string)), nil
+		var x string
+		if x, ok = value.(string); !ok {
+			return def, fmt.Errorf("Expected value of type string. Got : %v", value)
+		}
+		return &graph.Value{&graph.Value_StrVal{x}}, nil
 	case Int32ID:
-		return Int(from.Value.(int32)), nil
-		// fmt.Printf("%+v\n", to)
+		var x int32
+		if x, ok = value.(int32); !ok {
+			return def, fmt.Errorf("Expected value of type int32. Got : %v", value)
+		}
+		return &graph.Value{&graph.Value_IntVal{x}}, nil
 	case FloatID:
-		return Float(from.Value.(float64)), nil
+		var x float64
+		if x, ok = value.(float64); !ok {
+			return def, fmt.Errorf("Expected value of type float64. Got : %v", value)
+		}
+		return &graph.Value{&graph.Value_DoubleVal{x}}, nil
 	case BoolID:
-		return Bool(from.Value.(bool)), nil
+		var x bool
+		if x, ok = value.(bool); !ok {
+			return def, fmt.Errorf("Expected value of type bool. Got : %v", value)
+		}
+		return &graph.Value{&graph.Value_BoolVal{x}}, nil
+	case BinaryID:
+		var x []byte
+		if x, ok = value.([]byte); !ok {
+			return def, fmt.Errorf("Expected value of type []byte. Got : %v", value)
+		}
+		return &graph.Value{&graph.Value_BytesVal{x}}, nil
 	// Geo, date and datetime are stored in binary format in the NQuad, so lets
 	// convert them here.
 	case GeoID:
-		p1 := ValueForType(BinaryID)
-		if err := Marshal(from, &p1); err != nil {
+		b, err := toBinary(id, value)
+		if err != nil {
 			return def, err
 		}
-		return Geo(p1.Value.([]byte)), nil
+		return &graph.Value{&graph.Value_GeoVal{b}}, nil
 	case DateID:
-		p1 := ValueForType(BinaryID)
-		if err := Marshal(from, &p1); err != nil {
+		b, err := toBinary(id, value)
+		if err != nil {
 			return def, err
 		}
-		return Date(p1.Value.([]byte)), nil
+		return &graph.Value{&graph.Value_DateVal{b}}, nil
 	case DateTimeID:
-		p1 := ValueForType(BinaryID)
-		if err := Marshal(from, &p1); err != nil {
+		b, err := toBinary(id, value)
+		if err != nil {
 			return def, err
 		}
-		return Datetime(p1.Value.([]byte)), nil
+		return &graph.Value{&graph.Value_DatetimeVal{b}}, nil
 	}
 	return def, nil
+}
+
+func toBinary(id TypeID, b interface{}) ([]byte, error) {
+	p1 := ValueForType(BinaryID)
+	if err := Marshal(Val{id, b}, &p1); err != nil {
+		return nil, err
+	}
+	return p1.Value.([]byte), nil
 }
 
 func cantConvert(from TypeID, to TypeID) error {

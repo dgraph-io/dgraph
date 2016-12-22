@@ -45,7 +45,7 @@ import (
 // 	log.Fatal(err)
 // }
 //
-func ValueFromGeoJson(json string) (types.Value, error) {
+func ValueFromGeoJson(json string) (*graph.Value, error) {
 	var g geom.T
 	// Parse the json
 	err := geojson.Unmarshal([]byte(json), &g)
@@ -58,23 +58,35 @@ func ValueFromGeoJson(json string) (types.Value, error) {
 	if err != nil {
 		return &graph.Value{}, err
 	}
-	return types.Geo(b), nil
+	geo, err := types.ObjectValue(types.GeoID, b)
+	if err != nil {
+		return &graph.Value{}, err
+	}
+	return geo, nil
 }
 
-func Date(date time.Time) (types.Value, error) {
+func Date(date time.Time) (*graph.Value, error) {
 	b, err := date.MarshalBinary()
 	if err != nil {
 		return &graph.Value{}, err
 	}
-	return types.Date(b), nil
+	d, err := types.ObjectValue(types.DateID, b)
+	if err != nil {
+		return &graph.Value{}, err
+	}
+	return d, nil
 }
 
-func Datetime(date time.Time) (types.Value, error) {
+func Datetime(date time.Time) (*graph.Value, error) {
 	b, err := date.MarshalBinary()
 	if err != nil {
 		return &graph.Value{}, err
 	}
-	return types.Datetime(b), nil
+	d, err := types.ObjectValue(types.DateTimeID, b)
+	if err != nil {
+		return &graph.Value{}, err
+	}
+	return d, nil
 }
 
 // Uid converts an uint64 to a string, which can be used as part of

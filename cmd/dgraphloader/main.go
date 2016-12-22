@@ -82,8 +82,7 @@ func processFile(file string, batch *client.BatchMutation) {
 	}
 }
 
-func printCounters(batch *client.BatchMutation) {
-	ticker := time.NewTicker(2 * time.Second)
+func printCounters(batch *client.BatchMutation, ticker *time.Ticker) {
 	for range ticker.C {
 		c := batch.Counter()
 		rate := float64(c.Rdfs) / c.Elapsed.Seconds()
@@ -100,13 +99,16 @@ func main() {
 	defer conn.Close()
 
 	batch := client.NewBatchMutation(context.Background(), conn, *numRdf, *concurrent)
-	go printCounters(batch)
+
+	ticker := time.NewTicker(2 * time.Second)
+	go printCounters(batch, ticker)
 	filesList := strings.Split(*files, ",")
 	x.AssertTrue(len(filesList) > 0)
 	for _, file := range filesList {
 		processFile(file, batch)
 	}
 	batch.Flush()
+	ticker.Stop()
 
 	c := batch.Counter()
 	// Lets print an empty line, otherwise Number of Mutations overwrites the previous

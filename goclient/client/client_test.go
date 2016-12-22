@@ -25,15 +25,19 @@ import (
 )
 
 func TestCheckNQuad(t *testing.T) {
+	s, err := types.ObjectValue(types.StringID, "Alice")
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := checkNQuad(graph.NQuad{
 		Predicate:   "name",
-		ObjectValue: types.Str("Alice"),
+		ObjectValue: s,
 	}); err == nil {
 		t.Fatal(err)
 	}
 	if err := checkNQuad(graph.NQuad{
 		Subject:     "alice",
-		ObjectValue: types.Str("Alice"),
+		ObjectValue: s,
 	}); err == nil {
 		t.Fatal(err)
 	}
@@ -46,7 +50,7 @@ func TestCheckNQuad(t *testing.T) {
 	if err := checkNQuad(graph.NQuad{
 		Subject:     "alice",
 		Predicate:   "name",
-		ObjectValue: types.Str("Alice"),
+		ObjectValue: s,
 		ObjectId:    "id",
 	}); err == nil {
 		t.Fatal(err)
@@ -56,10 +60,26 @@ func TestCheckNQuad(t *testing.T) {
 func TestSetMutation(t *testing.T) {
 	req := Req{}
 
+	s, err := types.ObjectValue(types.StringID, "Alice")
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := req.AddMutation(graph.NQuad{
 		Subject:     "alice",
 		Predicate:   "name",
-		ObjectValue: types.Str("Alice"),
+		ObjectValue: s,
+	}, SET); err != nil {
+		t.Fatal(err)
+	}
+
+	s, err = types.ObjectValue(types.StringID, "rabbithole")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := req.AddMutation(graph.NQuad{
+		Subject:     "alice",
+		Predicate:   "falls.in",
+		ObjectValue: s,
 	}, SET); err != nil {
 		t.Fatal(err)
 	}
@@ -67,15 +87,7 @@ func TestSetMutation(t *testing.T) {
 	if err := req.AddMutation(graph.NQuad{
 		Subject:     "alice",
 		Predicate:   "falls.in",
-		ObjectValue: types.Str("rabbithole"),
-	}, SET); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := req.AddMutation(graph.NQuad{
-		Subject:     "alice",
-		Predicate:   "falls.in",
-		ObjectValue: types.Str("rabbithole"),
+		ObjectValue: s,
 	}, DEL); err != nil {
 		t.Fatal(err)
 	}

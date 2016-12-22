@@ -47,8 +47,10 @@ type NQuad struct {
 	*graph.NQuad
 }
 
-func typeValFromValue(val *graph.Value) types.Val {
+func typeValFrom(val *graph.Value) types.Val {
 	switch val.Val.(type) {
+	case *graph.Value_BytesVal:
+		return types.Val{types.BinaryID, val.GetBytesVal()}
 	case *graph.Value_IntVal:
 		return types.Val{types.Int32ID, val.GetIntVal()}
 	case *graph.Value_StrVal:
@@ -70,7 +72,7 @@ func typeValFromValue(val *graph.Value) types.Val {
 func byteVal(nq NQuad) ([]byte, error) {
 	// We infer object type from type of value. We set appropriate type in parse
 	// function or the Go client has already set.
-	p := typeValFromValue(nq.ObjectValue)
+	p := typeValFrom(nq.ObjectValue)
 	// These three would have already been marshalled to bytes by the client or
 	// in parse function.
 	if p.Tid == types.GeoID || p.Tid == types.DateID || p.Tid == types.DateTimeID {
@@ -227,7 +229,7 @@ func Parse(line string) (rnq graph.NQuad, rerr error) {
 					return rnq, err
 				}
 
-				if rnq.ObjectValue, err = types.ObjectValue(p); err != nil {
+				if rnq.ObjectValue, err = types.ObjectValue(t, p.Value); err != nil {
 					return rnq, err
 				}
 				oval = ""
