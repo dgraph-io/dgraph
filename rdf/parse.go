@@ -47,55 +47,33 @@ type NQuad struct {
 	*graph.NQuad
 }
 
-func typeFromValue(val *graph.Value) types.TypeID {
+func typeValFromValue(val *graph.Value) types.Val {
 	switch val.Val.(type) {
 	case *graph.Value_IntVal:
-		return types.Int32ID
+		return types.Val{types.Int32ID, val.GetIntVal()}
 	case *graph.Value_StrVal:
-		return types.StringID
+		return types.Val{types.StringID, val.GetStrVal()}
 	case *graph.Value_BoolVal:
-		return types.BoolID
+		return types.Val{types.BoolID, val.GetBoolVal()}
 	case *graph.Value_DoubleVal:
-		return types.BoolID
+		return types.Val{types.FloatID, val.GetDoubleVal()}
 	case *graph.Value_GeoVal:
-		return types.GeoID
+		return types.Val{types.GeoID, val.GetGeoVal()}
 	case *graph.Value_DateVal:
-		return types.DateID
+		return types.Val{types.DateID, val.GetDateVal()}
 	case *graph.Value_DatetimeVal:
-		return types.DateTimeID
+		return types.Val{types.DateTimeID, val.GetDatetimeVal()}
 	}
-	return types.StringID
-}
-
-func getValue(val *graph.Value) interface{} {
-	switch val.Val.(type) {
-	case *graph.Value_IntVal:
-		return val.GetIntVal()
-	case *graph.Value_StrVal:
-		return val.GetStrVal()
-	case *graph.Value_BoolVal:
-		return val.GetBoolVal()
-	case *graph.Value_DoubleVal:
-		return val.GetDoubleVal()
-	case *graph.Value_GeoVal:
-		return val.GetGeoVal()
-	case *graph.Value_DateVal:
-		return val.GetDateVal()
-	case *graph.Value_DatetimeVal:
-		return val.GetDatetimeVal()
-	}
-	return ""
+	return types.Val{types.StringID, ""}
 }
 
 func byteVal(nq NQuad) ([]byte, error) {
 	// We infer object type from type of value. We set appropriate type in parse
 	// function or the Go client has already set.
-	t := typeFromValue(nq.ObjectValue)
-	p := types.ValueForType(t)
-	p.Value = getValue(nq.ObjectValue)
+	p := typeValFromValue(nq.ObjectValue)
 	// These three would have already been marshalled to bytes by the client or
 	// in parse function.
-	if t == types.GeoID || t == types.DateID || t == types.DateTimeID {
+	if p.Tid == types.GeoID || p.Tid == types.DateID || p.Tid == types.DateTimeID {
 		return p.Value.([]byte), nil
 	}
 
@@ -249,39 +227,8 @@ func Parse(line string) (rnq graph.NQuad, rerr error) {
 					return rnq, err
 				}
 
-				// Lets set the object value according to the storage type.
-				switch t {
-				case types.StringID:
-					rnq.ObjectValue = &graph.Value{&graph.Value_StrVal{oval}}
-				case types.Int32ID:
-					rnq.ObjectValue = &graph.Value{&graph.Value_IntVal{p.Value.(int32)}}
-				case types.FloatID:
-					rnq.ObjectValue = &graph.Value{&graph.Value_DoubleVal{p.Value.(float64)}}
-				case types.BoolID:
-					rnq.ObjectValue = &graph.Value{&graph.Value_BoolVal{p.Value.(bool)}}
-				// Geo, date and datetime are stored in binary format in the NQuad, so lets
-				// convert them here.
-				case types.GeoID:
-					p1 := types.ValueForType(types.BinaryID)
-					if err := types.Marshal(p, &p1); err != nil {
-						return rnq, err
-					}
-					rnq.ObjectValue = &graph.Value{&graph.Value_GeoVal{p1.Value.([]byte)}}
-				case types.DateID:
-					p1 := types.ValueForType(types.BinaryID)
-					if err := types.Marshal(p, &p1); err != nil {
-						return rnq, err
-					}
-					rnq.ObjectValue = &graph.Value{&graph.Value_DateVal{p1.Value.([]byte)}}
-				case types.DateTimeID:
-					p1 := types.ValueForType(types.BinaryID)
-					if err := types.Marshal(p, &p1); err != nil {
-						return rnq, err
-					}
-					rnq.ObjectValue = &graph.Value{&graph.Value_DatetimeVal{p1.Value.([]byte)}}
-				default:
-					// Unknown type
-					return rnq, x.Errorf("Unknown value type %T", t)
+				if rnq.ObjectValue, err = types.ObjectValue(p); err != nil {
+					return rnq, err
 				}
 				oval = ""
 			} else {

@@ -24,6 +24,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/dgraph-io/dgraph/query/graph"
 	"github.com/dgraph-io/dgraph/x"
 	geom "github.com/twpayne/go-geom"
 	"github.com/twpayne/go-geom/encoding/geojson"
@@ -491,6 +492,43 @@ func Marshal(from Val, to *Val) error {
 		return cantConvert(fromID, toID)
 	}
 	return nil
+}
+
+func ObjectValue(from Val) (*graph.Value, error) {
+	def := Str("")
+	// Lets set the object value according to the storage type.
+	switch from.Tid {
+	case StringID:
+		return Str(from.Value.(string)), nil
+	case Int32ID:
+		return Int(from.Value.(int32)), nil
+		// fmt.Printf("%+v\n", to)
+	case FloatID:
+		return Float(from.Value.(float64)), nil
+	case BoolID:
+		return Bool(from.Value.(bool)), nil
+	// Geo, date and datetime are stored in binary format in the NQuad, so lets
+	// convert them here.
+	case GeoID:
+		p1 := ValueForType(BinaryID)
+		if err := Marshal(from, &p1); err != nil {
+			return def, err
+		}
+		return Geo(p1.Value.([]byte)), nil
+	case DateID:
+		p1 := ValueForType(BinaryID)
+		if err := Marshal(from, &p1); err != nil {
+			return def, err
+		}
+		return Date(p1.Value.([]byte)), nil
+	case DateTimeID:
+		p1 := ValueForType(BinaryID)
+		if err := Marshal(from, &p1); err != nil {
+			return def, err
+		}
+		return Datetime(p1.Value.([]byte)), nil
+	}
+	return def, nil
 }
 
 func cantConvert(from TypeID, to TypeID) error {

@@ -20,19 +20,20 @@ import (
 	"testing"
 
 	"github.com/dgraph-io/dgraph/query/graph"
+	"github.com/dgraph-io/dgraph/types"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestCheckNQuad(t *testing.T) {
 	if err := checkNQuad(graph.NQuad{
 		Predicate:   "name",
-		ObjectValue: Str("Alice"),
+		ObjectValue: types.Str("Alice"),
 	}); err == nil {
 		t.Fatal(err)
 	}
 	if err := checkNQuad(graph.NQuad{
 		Subject:     "alice",
-		ObjectValue: Str("Alice"),
+		ObjectValue: types.Str("Alice"),
 	}); err == nil {
 		t.Fatal(err)
 	}
@@ -45,7 +46,7 @@ func TestCheckNQuad(t *testing.T) {
 	if err := checkNQuad(graph.NQuad{
 		Subject:     "alice",
 		Predicate:   "name",
-		ObjectValue: Str("Alice"),
+		ObjectValue: types.Str("Alice"),
 		ObjectId:    "id",
 	}); err == nil {
 		t.Fatal(err)
@@ -58,7 +59,7 @@ func TestSetMutation(t *testing.T) {
 	if err := req.AddMutation(graph.NQuad{
 		Subject:     "alice",
 		Predicate:   "name",
-		ObjectValue: Str("Alice"),
+		ObjectValue: types.Str("Alice"),
 	}, SET); err != nil {
 		t.Fatal(err)
 	}
@@ -66,7 +67,7 @@ func TestSetMutation(t *testing.T) {
 	if err := req.AddMutation(graph.NQuad{
 		Subject:     "alice",
 		Predicate:   "falls.in",
-		ObjectValue: Str("rabbithole"),
+		ObjectValue: types.Str("rabbithole"),
 	}, SET); err != nil {
 		t.Fatal(err)
 	}
@@ -74,7 +75,7 @@ func TestSetMutation(t *testing.T) {
 	if err := req.AddMutation(graph.NQuad{
 		Subject:     "alice",
 		Predicate:   "falls.in",
-		ObjectValue: Str("rabbithole"),
+		ObjectValue: types.Str("rabbithole"),
 	}, DEL); err != nil {
 		t.Fatal(err)
 	}

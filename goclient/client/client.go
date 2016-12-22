@@ -57,9 +57,6 @@ func checkNQuad(nq graph.NQuad) error {
 
 	hasVal := nq.ObjectValue != nil
 	if len(nq.ObjectId) == 0 && !hasVal {
-		return fmt.Errorf("Atleast one out of objectId and objectValue should be set")
-	}
-	if len(nq.ObjectId) == 0 && !hasVal {
 		return fmt.Errorf("Both objectId and objectValue can't be nil")
 	}
 	if len(nq.ObjectId) > 0 && hasVal {
@@ -144,7 +141,7 @@ func (req *Req) reset() {
 	req.gr.Mutation.Del = req.gr.Mutation.Del[:0]
 }
 
-type NQuadOp struct {
+type nquadOp struct {
 	nq graph.NQuad
 	op Op
 }
@@ -153,7 +150,7 @@ type BatchMutation struct {
 	size    int
 	pending int
 
-	nquads   chan NQuadOp
+	nquads   chan nquadOp
 	requests []*Req
 	dc       graph.DgraphClient
 	wg       sync.WaitGroup
@@ -170,8 +167,7 @@ type BatchMutation struct {
 func (batch *BatchMutation) request(req *Req) {
 	counter := atomic.AddUint64(&batch.mutations, 1)
 RETRY:
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	defer cancel()
+	ctx := context.Background()
 	_, err := batch.dc.Run(ctx, &req.gr)
 	if err != nil {
 		fmt.Printf("Retrying req: %d. Error: %v\n", counter, err)
@@ -199,7 +195,7 @@ func NewBatchMutation(ctx context.Context, conn *grpc.ClientConn,
 	bm := BatchMutation{
 		size:    size,
 		pending: pending,
-		nquads:  make(chan NQuadOp, 2*size),
+		nquads:  make(chan nquadOp, 2*size),
 		start:   time.Now(),
 		dc:      graph.NewDgraphClient(conn),
 	}
@@ -217,8 +213,7 @@ func (batch *BatchMutation) AddMutation(nq graph.NQuad, op Op) error {
 	if err := checkNQuad(nq); err != nil {
 		return err
 	}
-	batch.nquads <- NQuadOp{nq: nq,
-		op: op}
+	batch.nquads <- nquadOp{nq: nq, op: op}
 	atomic.AddUint64(&batch.rdfs, 1)
 	return nil
 }
