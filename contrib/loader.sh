@@ -27,6 +27,7 @@ fi
 
 if [ ! -f "benchmarks/data/goldendata.rdf.gz" ]; then
     git clone https://github.com/dgraph-io/benchmarks.git
+    git lfs pull
 fi
 benchmark=$(pwd)/benchmarks/data
 popd &> /dev/null
