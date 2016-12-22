@@ -1807,6 +1807,7 @@ children: <
 	require.EqualValues(t, expectedPb, proto.MarshalTextString(pb))
 }
 
+/*
 func TestSchema1(t *testing.T) {
 	require.NoError(t, schema.Parse("test_schema"))
 
@@ -1830,6 +1831,8 @@ func TestSchema1(t *testing.T) {
 		`{"person":[{"address":"31, 32 street, Jupiter","age":38,"alive":true,"friend":[{"address":"21, mark street, Mars","age":15,"name":"Rick Grimes"}],"name":"Michonne","survival_rate":98.99}]}`,
 		js)
 }
+*/
+
 func TestGenerator(t *testing.T) {
 	dir1, dir2, ps := populateGraph(t)
 	defer ps.Close()

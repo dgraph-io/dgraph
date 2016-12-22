@@ -75,13 +75,13 @@ func ProcessTaskOverNetwork(ctx context.Context, q *task.Query) (*task.Result, e
 // convertValue converts the data to the schema type of predicate.
 func convertValue(attr, data string) (types.Val, error) {
 	// Parse given value and get token. There should be only one token.
-	t := schema.TypeOf(attr)
-	if t == nil || !t.IsScalar() {
+	t, err := schema.TypeOf(attr)
+	if err != nil || !t.IsScalar() {
 		return types.Val{}, x.Errorf("Attribute %s is not valid scalar type", attr)
 	}
 
 	src := types.Val{types.StringID, []byte(data)}
-	dst := types.ValueForType(t.(types.TypeID))
+	dst := types.ValueForType(t)
 	x.Check(types.Convert(src, &dst))
 	return dst, nil
 }
@@ -198,17 +198,16 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 
 	if (isGeq || isLeq) && len(tokens) > 0 && ineqValueToken == tokens[0] {
 		// Need to evaluate inequality for entries in the first bucket.
-		typ := schema.TypeOf(attr)
-		if typ == nil || !typ.IsScalar() {
+		typ, err := schema.TypeOf(attr)
+		if err != nil || !typ.IsScalar() {
 			return nil, x.Errorf("Attribute not scalar: %s %v", attr, typ)
 		}
 
-		scalarType := typ.(types.TypeID)
 		x.AssertTrue(len(out.UidMatrix) > 0)
 		// Filter the first row of UidMatrix. Since ineqValue != nil, we may
 		// assume that ineqValue is equal to the first token found in TokensTable.
 		algo.ApplyFilter(out.UidMatrix[0], func(uid uint64, i int) bool {
-			sv, err := fetchValue(uid, attr, scalarType)
+			sv, err := fetchValue(uid, attr, typ)
 			if sv.Value == nil || err != nil {
 				return false
 			}

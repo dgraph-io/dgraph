@@ -349,8 +349,8 @@ func mutationHandler(ctx context.Context, mu *gql.Mutation) (map[string]uint64, 
 func validateTypes(nquads []rdf.NQuad) error {
 	for i := range nquads {
 		nquad := &nquads[i]
-		if t := schema.TypeOf(nquad.Predicate); t != nil && t.IsScalar() {
-			schemaType := t.(types.TypeID)
+		if t, err := schema.TypeOf(nquad.Predicate); err == nil && t.IsScalar() {
+			schemaType := t
 			typeID := types.TypeID(nquad.ObjectType)
 			if typeID == types.StringID {
 				// Storage type was unspecified in the RDF, so we convert the data to the schema
@@ -374,7 +374,9 @@ func validateTypes(nquads []rdf.NQuad) error {
 				v := types.ValueForType(schemaType)
 				src := types.ValueForType(typeID)
 				src.Value = nquad.ObjectValue
+				fmt.Println("****")
 				err := types.Convert(src, &v)
+				fmt.Println("****")
 				if err != nil {
 					return err
 				}

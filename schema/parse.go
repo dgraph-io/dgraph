@@ -67,19 +67,6 @@ func ParseBytes(schema []byte) (rerr error) {
 		}
 	}
 
-	for _, v := range str {
-		if obj, ok := v.(types.Object); ok {
-			for p, q := range obj.Fields {
-				typ := TypeOf(q)
-				if typ == nil {
-					return x.Errorf("Type not defined %v", q)
-				}
-				if typ != nil && !typ.IsScalar() {
-					str[p] = typ
-				}
-			}
-		}
-	}
 	return nil
 }
 
@@ -103,7 +90,7 @@ func processScalarBlock(l *lex.Lexer) error {
 				}
 				typ = next.Val
 
-				t, ok := getScalar(typ)
+				t, ok := types.TypeForName(typ)
 				if !ok {
 					return x.Errorf("Invalid type")
 				}
@@ -164,7 +151,7 @@ func processScalar(l *lex.Lexer) error {
 				}
 				typ = next.Val
 
-				t, ok := getScalar(typ)
+				t, ok := types.TypeForName(typ)
 				if ok {
 					str[name] = t
 				} else {
@@ -210,17 +197,14 @@ func processObject(l *lex.Lexer) error {
 		return x.Errorf("Missing object name")
 	}
 	objName = next.Val
-
-	obj := types.Object{
-		Name:   objName,
-		Fields: make(map[string]string),
-	}
+	str[objName] = types.UidID
 
 	next = <-l.Items
 	if next.Typ != itemLeftCurl {
 		return x.Errorf("Missing left curly brace")
 	}
 
+	fieldCount := 0
 L:
 	for item := range l.Items {
 		switch item.Typ {
@@ -241,28 +225,23 @@ L:
 					return x.Errorf("Missing Type")
 				}
 				typ = next.Val
-				t, isScalar := getScalar(typ)
-				if isScalar {
+				t, ok := types.TypeForName(typ)
+				if ok {
 					if t1, ok := str[name]; ok {
-						if t1.(types.TypeID) != t.(types.TypeID) {
+						if t1 != t {
 							return x.Errorf("Same field cant have multiple types")
 						}
 					} else {
 						str[name] = t
 					}
 				}
-				if _, ok := obj.Fields[name]; ok {
-					return x.Errorf("Repeated field %v in object %v", name, objName)
-				}
-				obj.Fields[name] = typ
-
 				// Check for reverse.
 				next = <-l.Items
 				if next.Typ == itemAt {
 					index := <-l.Items
 					if index.Typ == itemReverse {
 						// TODO(jchiu): Add test for this check.
-						if isScalar && t != types.UidID {
+						if t.IsScalar() /* && t != types.UidID */ {
 							return x.Errorf("Cannot reverse non-UID scalar")
 						}
 						reversedFields[name] = true
@@ -270,14 +249,14 @@ L:
 						return x.Errorf("Invalid reverse specification")
 					}
 				}
+				fieldCount++
 			}
 		case lex.ItemError:
 			return x.Errorf(item.Val)
 		}
 	}
-	if len(obj.Fields) == 0 {
+	if fieldCount == 0 {
 		return x.Errorf("Object type %v with no fields", objName)
 	}
-	str[objName] = obj
 	return nil
 }

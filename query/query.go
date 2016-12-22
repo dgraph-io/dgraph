@@ -116,7 +116,6 @@ func (l *Latency) ToMap() map[string]string {
 }
 
 type params struct {
-	AttrType  types.Type
 	Alias     string
 	Count     int
 	Offset    int
@@ -277,33 +276,19 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 			} else {
 				// globalType is the best effort type to which we try converting
 				// and if not possible, we ignore it in the result.
-				globalType := schema.TypeOf(pc.Attr)
+				globalType, hasType := schema.TypeOf(pc.Attr)
 				// schemaType refers to the type we should convert the value
 				// compulsorily and if not possible we ignore the parent object
 				// as it wouldn't comply with the schema.
-				schemaType := pc.Params.AttrType
+
 				sv := types.ValueForType(types.StringID)
-				if schemaType != nil {
-					// Do type checking on response values
-					if !schemaType.IsScalar() {
-						return x.Errorf("Unknown Scalar:%v. Leaf predicate:'%v' must be"+
-							" one of the scalar types defined in the schema.", pc.Params.AttrType, pc.Attr)
-					}
-					stID := schemaType.(types.TypeID)
-					sv = types.ValueForType(stID)
-					// Convert to schema type.
-					err = types.Convert(v, &sv)
-					if bytes.Equal(tv.Val, nil) || err != nil {
-						// skip values that don't convert.
-						return x.Errorf("_INV_")
-					}
-				} else if globalType != nil {
+				if hasType == nil {
 					// Try to coerce types if this is an optional scalar outside an
 					// object definition.
 					if !globalType.IsScalar() {
 						return x.Errorf("Leaf predicate:'%v' must be a scalar.", pc.Attr)
 					}
-					gtID := globalType.(types.TypeID)
+					gtID := globalType
 					sv = types.ValueForType(gtID)
 					// Convert to schema type.
 					err = types.Convert(v, &sv)
@@ -363,29 +348,7 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 	// node, because of the way we're dealing with the root node.
 	// So, we work on the children, and then recurse for grand children.
 
-	var scalars []string
-	// Add scalar children nodes based on schema
-	if obj, ok := sg.Params.AttrType.(types.Object); ok {
-		// Add scalar fields in the level to children
-		list := schema.ScalarList(obj.Name)
-		for _, it := range list {
-			args := params{
-				AttrType: it.Typ,
-				isDebug:  sg.Params.isDebug,
-			}
-			dst := &SubGraph{
-				Attr:   it.Field,
-				Params: args,
-			}
-			sg.Children = append(sg.Children, dst)
-			scalars = append(scalars, it.Field)
-		}
-	}
-
 	for _, gchild := range gq.Children {
-		if isPresent(scalars, gchild.Attr) {
-			continue
-		}
 		if gchild.Attr == "_count_" {
 			if len(gq.Children) > 1 {
 				return errors.New("Cannot have other attributes with count")
@@ -400,24 +363,9 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 			sg.Params.GetUID = true
 		}
 
-		// Determine the type of current node.
-		var attrType types.Type
-		if sg.Params.AttrType != nil {
-			if objType, ok := sg.Params.AttrType.(types.Object); ok {
-				attrType = schema.TypeOf(objType.Fields[gchild.Attr])
-			}
-		} else {
-			// Child is explicitly specified as some type.
-			if objType := schema.TypeOf(gchild.Attr); objType != nil {
-				if o, ok := objType.(types.Object); ok && o.Name == gchild.Attr {
-					attrType = objType
-				}
-			}
-		}
 		args := params{
-			AttrType: attrType,
-			Alias:    gchild.Alias,
-			isDebug:  sg.Params.isDebug,
+			Alias:   gchild.Alias,
+			isDebug: sg.Params.isDebug,
 		}
 		dst := &SubGraph{
 			Attr:   gchild.Attr,
@@ -495,9 +443,8 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	// For the root, the name to be used in result is stored in Alias, not Attr.
 	// The attr at root (if present) would stand for the source functions attr.
 	args := params{
-		AttrType: schema.TypeOf(gq.Alias),
-		isDebug:  gq.Alias == "debug",
-		Alias:    gq.Alias,
+		isDebug: gq.Alias == "debug",
+		Alias:   gq.Alias,
 	}
 
 	sg := &SubGraph{
