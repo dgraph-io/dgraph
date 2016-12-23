@@ -15,20 +15,10 @@ set -e
 
 pushd $BUILD &> /dev/null
 
-gitlfsfile="git-lfs-1.3.1"
-if [ ! -d $gitlfsfile ]; then
-  # Get git-lfs and benchmark data.
-  wget https://github.com/github/git-lfs/releases/download/v1.3.1/git-lfs-linux-amd64-1.3.1.tar.gz
-  tar -xzf git-lfs-linux-amd64-1.3.1.tar.gz
-  pushd git-lfs-1.3.1 &> /dev/null
-  sudo /bin/bash ./install.sh
-  popd &> /dev/null
+if [ ! -f "goldendata.rdf.gz" ]; then
+  wget https://github.com/dgraph-io/benchmarks/raw/master/data/goldendata.rdf.gz
 fi
-
-if [ ! -f "benchmarks/data/rdf-films.gz" ]; then
-    git clone https://github.com/dgraph-io/benchmarks.git
-fi
-benchmark=$(pwd)/benchmarks/data
+benchmark=$(pwd)
 popd &> /dev/null
 
 # build flags needed for rocksdb
@@ -38,7 +28,7 @@ export LD_LIBRARY_PATH="${ICUDIR}/lib:${ROCKSDBDIR}:${LD_LIBRARY_PATH}"
 
 pushd cmd/dgraph &> /dev/null
 go build .
-./dgraph -gentlemerge 0.5 &
+./dgraph -gentlecommit 1.0 &
 popd &> /dev/null
 
 sleep 5
@@ -47,5 +37,8 @@ pushd cmd/dgraphloader &> /dev/null
 go build .
 ./dgraphloader -r $benchmark/goldendata.rdf.gz
 popd &> /dev/null
+
+# Lets wait for stuff to be committed to RocksDB.
+sleep 20
 
 killall dgraph
