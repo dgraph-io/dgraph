@@ -12,9 +12,10 @@ if ! hash dgraph 2>/dev/null; then
 fi
 
 # Double quotes are used to store the command in a variable which can be used later. `${i}` is how you access value of a variable in a double quoted string. Also other double quotes have to be escaped like for workers with a double quoted string. Also tee is used in append mode to redirect out to log file apart from displaying it on stdout.
-server1="dgraph --nomutations --idx '${i}' --m $dir/m'${i}' --port 8080 --p $dir/p'${i}' --workers \":12345,:12346\" --u $dir/u --workerport \":12345\" --stw_ram_mb=3000 2>&1 | tee -a dgraph.log &"
 i=1;
-server2="dgraph --nomutations --idx '${i}' --m $dir/m'${i}' --port 8082 --p $dir/p'${i}' --workers \":12345,:12346\" --u $dir/u --workerport \":12346\" 2>&1 | tee -a dgraph.log &"
+server1="./dgraph --nomutations --idx '${i}' --groups \"0\" --port 8080 --p $dir/p'${i}' --w $dir/w'${i}' --my \"127.0.0.1:8080\" --group_conf --group_conf groups.conf 2>&1 | tee -a dgraph.log &"
+i=2;
+server2="./dgraph --nomutations --idx '${i}' --groups \"1\" --port 8082 --p $dir/p'${i}' --w $dir/w'${i}' --my \"127.0.0.1:8082\" --peer \"127.0.0.1:8080\" --workerport 12346 --group_conf groups.conf 2>&1 | tee -a dgraph.log &"
 
 function checkServer {
 	port=$1
