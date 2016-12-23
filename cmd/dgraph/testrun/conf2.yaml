@@ -17,6 +17,7 @@ groups: 0,1
 
 nomutations: true
 
-peer: 127.0.0.1:12345
+peer: localhost:12345
 
 group_conf: groups.conf
+

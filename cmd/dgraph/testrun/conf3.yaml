@@ -1,3 +1,6 @@
+# RAFT ID that this server will use to join RAFT groups.
+idx: 3
+
 # Directory to store posting lists.
 p: p3
 
@@ -14,6 +17,7 @@ groups: 0,1
 
 nomutations: true
 
-peer: 127.0.0.1:12345
+peer: localhost:12345
 
 group_conf: groups.conf
+
