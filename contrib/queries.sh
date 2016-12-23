@@ -31,23 +31,6 @@ done
 
 go test -v ../../contrib/freebase
 
-# shutdown Dgraph server.
-if curl 127.0.0.1:8080/admin/shutdown
-then
-	echo "done running throughput test"
-else
-	return 0
-fi
+killall dgraph
 
 popd &> /dev/null
-
-# Write top x from memory and cpu profile to a file.
-go tool pprof -text dgraph dmem-"$TRAVIS_COMMIT".prof | head -25 > topmem.txt
-go tool pprof -svg dgraph dmem-"$TRAVIS_COMMIT".prof > topmem.svg
-
-go tool pprof -text --alloc_space dgraph dmem-"$TRAVIS_COMMIT".prof | head -25 > topmem-alloc.txt
-go tool pprof -svg --alloc_space dgraph dmem-"$TRAVIS_COMMIT".prof > topmem-alloc.svg
-
-go tool pprof -text dgraph dcpu-"$TRAVIS_COMMIT".prof | head -25 > topcpu.txt
-go tool pprof -svg dgraph dcpu-"$TRAVIS_COMMIT".prof > topcpu.svg
-
