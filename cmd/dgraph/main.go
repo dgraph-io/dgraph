@@ -294,6 +294,28 @@ func mutationHandler(ctx context.Context, mu *gql.Mutation) (map[string]uint64, 
 	return allocIds, nil
 }
 
+func getVal(t types.TypeID, val *graph.Value) interface{} {
+	switch t {
+	case types.StringID:
+		return val.GetStrVal()
+	case types.Int32ID:
+		return val.GetIntVal()
+	case types.FloatID:
+		return val.GetDoubleVal()
+	case types.BoolID:
+		return val.GetBoolVal()
+	case types.BinaryID:
+		return val.GetBytesVal()
+	case types.GeoID:
+		return val.GetGeoVal()
+	case types.DateID:
+		return val.GetDateVal()
+	case types.DateTimeID:
+		return val.GetDatetimeVal()
+	}
+	return val.GetStrVal()
+}
+
 // validateTypes checks for predicate types present in the schema and validates if the
 // input value is of the correct type
 func validateTypes(nquads []*graph.NQuad) error {
@@ -322,7 +344,7 @@ func validateTypes(nquads []*graph.NQuad) error {
 			} else if typeID != schemaType {
 				v := types.ValueForType(schemaType)
 				src := types.ValueForType(typeID)
-				src.Value = nquad.ObjectValue
+				src.Value = getVal(typeID, nquad.ObjectValue)
 				err := types.Convert(src, &v)
 				if err != nil {
 					return err
