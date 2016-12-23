@@ -35,7 +35,7 @@ pushd $SRC &> /dev/null
 echo 'mode: atomic' > $OUT
 for PKG in $(go list ./...|grep -v '/vendor/' | grep -v '/contrib/'); do
   echo "TESTING: $PKG"
-  # go test -v -covermode=atomic -coverprofile=$TMP $PKG
+  go test -v -covermode=atomic -coverprofile=$TMP $PKG
   tail -n +2 $TMP >> $OUT
 done
 
