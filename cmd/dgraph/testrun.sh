@@ -12,11 +12,11 @@ fi
 
 # Double quotes are used to store the command in a variable which can be used later. `${i}` is how you access value of a variable in a double quoted string. Also other double quotes have to be escaped like for workers with a double quoted string. Also tee is used in append mode to redirect out to log file apart from displaying it on stdout.
 i=1;
-server1="./dgraph --config testrun/conf1.yaml 2>&1 | tee -a dgraph1.log &"
+server1="dgraph --config testrun/conf1.yaml 2>&1 | tee -a dgraph1.log &"
 i=2;
-server2="./dgraph --config testrun/conf2.yaml 2>&1 | tee -a dgraph2.log &"
+server2="dgraph --config testrun/conf2.yaml 2>&1 | tee -a dgraph2.log &"
 i=3;
-server3="./dgraph --config testrun/conf3.yaml 2>&1 | tee -a dgraph3.log &"
+server3="dgraph --config testrun/conf3.yaml 2>&1 | tee -a dgraph3.log &"
 
 function checkServer {
 	port=$1
