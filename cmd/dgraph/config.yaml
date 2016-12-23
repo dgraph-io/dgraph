@@ -23,7 +23,7 @@ port: 8080
 stw_ram_mb: 4096
 
 # The ratio of queries to trace.
-trace: 0.5
+trace: 1.0
 
 # Directory to store raft write-ahead logs.
 w: w
