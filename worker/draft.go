@@ -129,7 +129,7 @@ func (n *node) ConfState() *raftpb.ConfState {
 }
 
 func newNode(gid uint32, id uint64, myAddr string) *node {
-	fmt.Printf("NEW NODE GID, ID: [%v, %v]\n", gid, id)
+	fmt.Printf("Node with GroupID: %v, ID: %v\n", gid, id)
 
 	peers := peerPool{
 		peers: make(map[uint64]string),
@@ -594,11 +594,10 @@ func (n *node) joinPeers() {
 	// Get leader information for MY group.
 	pid, paddr := groups().Leader(n.gid)
 	n.Connect(pid, paddr)
-	fmt.Printf("Connected with: %v\n", paddr)
+	fmt.Printf("joinPeers connected with: %q with peer id: %d\n", paddr, pid)
 
-	addr := n.peers.Get(pid)
-	pool := pools().get(addr)
-	x.AssertTruef(pool != nil, "Unable to find addr for peer: %d", pid)
+	pool := pools().get(paddr)
+	x.AssertTruef(pool != nil, "Unable to get pool for addr: %q for peer: %d", paddr, pid)
 
 	// Bring the instance up to speed first.
 	_, err := populateShard(n.ctx, pool, n.gid)
@@ -652,7 +651,7 @@ func (n *node) initFromWal(wal *raftwal.Wal) (restart bool, rerr error) {
 	if rerr != nil {
 		return
 	}
-	fmt.Printf("Found %d entries\n", len(es))
+	fmt.Printf("Group %d found %d entries\n", n.gid, len(es))
 	if len(es) > 0 {
 		restart = true
 	}
@@ -666,10 +665,11 @@ func (n *node) InitAndStartNode(wal *raftwal.Wal) {
 	x.Check(err)
 
 	if restart {
-		fmt.Printf("RESTARTING\n")
+		fmt.Printf("Restarting node for group: %d\n", n.gid)
 		n.SetRaft(raft.RestartNode(n.cfg))
 
 	} else {
+		fmt.Printf("New Node for group: %d\n", n.gid)
 		if groups().HasPeer(n.gid) {
 			n.joinPeers()
 			n.SetRaft(raft.StartNode(n.cfg, nil))
