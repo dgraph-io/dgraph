@@ -20,8 +20,9 @@ export LD_LIBRARY_PATH="${ICUDIR}/lib:${ROCKSDBDIR}:${LD_LIBRARY_PATH}"
 
 pushd cmd/dgraph &> /dev/null
 go build .
+echo $pwd
 # Start dgraph in the background.
-./dgraph --p ~/dgraph/p --w ~/dgraph/w2 --mem dmem-"$TRAVIS_COMMIT".prof --cpu dcpu-"$TRAVIS_COMMIT".prof &
+./dgraph --w ~/dgraph/w2 --mem dmem-"$TRAVIS_COMMIT".prof --cpu dcpu-"$TRAVIS_COMMIT".prof &
 
 # Wait for server to start in the background.
 until nc -z 127.0.0.1 8080;
