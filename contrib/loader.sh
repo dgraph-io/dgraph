@@ -15,7 +15,7 @@ set -e
 
 pushd $BUILD &> /dev/null
 
-if [ ! -f "benchmarks/data/goldendata.rdf.gz" ]; then
+if [ ! -f "goldendata.rdf.gz" ]; then
   wget https://github.com/dgraph-io/benchmarks/raw/master/data/goldendata.rdf.gz
 fi
 benchmark=$(pwd)

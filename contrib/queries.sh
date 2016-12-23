@@ -31,11 +31,14 @@ done
 
 go test -v ../../contrib/freebase
 
-pushd $BUILD/benchmarks/throughputtest &> /dev/null
-go build . && ./throughputtest --numsec 30 --ip "http://127.0.0.1:8080/query"  --numuser 100
 # shutdown Dgraph server.
-curl 127.0.0.1:8080/admin/shutdown 
-echo "done running throughput test"
+if curl 127.0.0.1:8080/admin/shutdown
+then
+	echo "done running throughput test"
+else
+	return 0
+fi
+
 popd &> /dev/null
 
 # Write top x from memory and cpu profile to a file.
