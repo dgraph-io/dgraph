@@ -50,8 +50,11 @@ fi
 # Start the servers.
 echo "Starting server 1"
 eval $server1
+# Lets wait for the first server to bootup because it will form the cluster.
+sleep 5
 echo "Starting server 2"
 eval $server2
+sleep 5
 echo "Starting server 3"
 eval $server3
 
