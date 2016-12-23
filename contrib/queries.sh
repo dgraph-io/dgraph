@@ -21,7 +21,7 @@ export LD_LIBRARY_PATH="${ICUDIR}/lib:${ROCKSDBDIR}:${LD_LIBRARY_PATH}"
 pushd cmd/dgraph &> /dev/null
 go build .
 # Start dgraph in the background.
-./dgraph --p ~/dgraph/p --w ~/dgraph/w2 --mem dmem-"$TRAVIS_COMMIT".prof --cpu dcpu-"$TRAVIS_COMMIT".prof &
+./dgraph --w ~/dgraph/w2 --mem dmem-"$TRAVIS_COMMIT".prof --cpu dcpu-"$TRAVIS_COMMIT".prof &
 
 # Wait for server to start in the background.
 until nc -z 127.0.0.1 8080;
@@ -31,20 +31,6 @@ done
 
 go test -v ../../contrib/freebase
 
-pushd $BUILD/benchmarks/throughputtest &> /dev/null
-go build . && ./throughputtest --numsec 30 --ip "http://127.0.0.1:8080/query"  --numuser 100
-# shutdown Dgraph server.
-curl 127.0.0.1:8080/admin/shutdown 
-echo "done running throughput test"
+killall dgraph
+
 popd &> /dev/null
-
-# Write top x from memory and cpu profile to a file.
-go tool pprof -text dgraph dmem-"$TRAVIS_COMMIT".prof | head -25 > topmem.txt
-go tool pprof -svg dgraph dmem-"$TRAVIS_COMMIT".prof > topmem.svg
-
-go tool pprof -text --alloc_space dgraph dmem-"$TRAVIS_COMMIT".prof | head -25 > topmem-alloc.txt
-go tool pprof -svg --alloc_space dgraph dmem-"$TRAVIS_COMMIT".prof > topmem-alloc.svg
-
-go tool pprof -text dgraph dcpu-"$TRAVIS_COMMIT".prof | head -25 > topcpu.txt
-go tool pprof -svg dgraph dcpu-"$TRAVIS_COMMIT".prof > topcpu.svg
-
