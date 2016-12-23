@@ -28,7 +28,7 @@ export LD_LIBRARY_PATH="${ICUDIR}/lib:${ROCKSDBDIR}:${LD_LIBRARY_PATH}"
 
 pushd cmd/dgraph &> /dev/null
 go build .
-./dgraph -gentlecommit 0.5 &
+./dgraph -gentlecommit 1.0 &
 popd &> /dev/null
 
 sleep 5
@@ -37,5 +37,8 @@ pushd cmd/dgraphloader &> /dev/null
 go build .
 ./dgraphloader -r $benchmark/goldendata.rdf.gz
 popd &> /dev/null
+
+# Lets wait for stuff to be committed to RocksDB.
+sleep 20
 
 killall dgraph
