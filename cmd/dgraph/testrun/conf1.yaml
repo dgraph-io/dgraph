@@ -1,0 +1,21 @@
+# RAFT ID that this server will use to join RAFT groups.
+idx: 1
+
+# Port to run server on. (default 8080)
+port: 8080
+
+# Directory to store posting lists.
+p: p1
+
+# Directory to store raft write-ahead logs.
+w: w1
+
+# Port used by worker for internal communication.
+workerport: 12345
+
+groups: 0,1
+
+nomutations: true
+
+group_conf: groups.conf
+
