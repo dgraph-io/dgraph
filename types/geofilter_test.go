@@ -91,7 +91,7 @@ func TestQueryTokensPolygon(t *testing.T) {
 
 func TestQueryTokensPolygonError(t *testing.T) {
 	data := formData(t, "testdata/zip.json")
-	qtypes := []QueryType{QueryTypeNear /*, QueryTypeContains*/}
+	qtypes := []QueryType{QueryTypeNear}
 	for _, qt := range qtypes {
 		_, _, err := queryTokens(qt, data, 0.0)
 		require.Error(t, err)

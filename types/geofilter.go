@@ -18,7 +18,6 @@ package types
 
 import (
 	"bytes"
-	"fmt"
 	"strconv"
 	"strings"
 
@@ -151,14 +150,8 @@ func queryTokens(qt QueryType, data string, maxDistance float64) ([]string, *Geo
 		return toks, &GeoQueryData{pt: pt, loop: l, qtype: qt}, nil
 
 	case QueryTypeContains:
-		/*
-			if l != nil {
-				return nil, nil, x.Errorf("Cannot use a polygon in a contains query")
-			}
-		*/
 		// For a contains query, we only need to look at the objects whose cover matches our
 		// parents. So we take our parents and prefix with the coverPrefix to look in the index.
-		fmt.Println("***** In contains")
 		return createTokens(parents, coverPrefix), &GeoQueryData{pt: pt, loop: l, qtype: qt}, nil
 
 	case QueryTypeNear:
