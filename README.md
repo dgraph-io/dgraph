@@ -26,6 +26,11 @@ Dgraph supports [GraphQL-like query syntax](https://wiki.dgraph.io/Query_Languag
 **Please see releases tab to find the latest release and corresponding release notes.**
 [See the Roadmap](https://github.com/dgraph-io/dgraph/issues/1) for list of working and planned features.
 
+## Performance
+
+![Loader performance](static/loader.gif)
+
+[See performance page](https://wiki.dgraph.io/Performance) for more details.
 
 ## Contact
 - Please use [discuss.dgraph.io](https://discuss.dgraph.io) for documentation, questions, feature requests and discussions.
