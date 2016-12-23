@@ -13,9 +13,11 @@ fi
 
 # Double quotes are used to store the command in a variable which can be used later. `${i}` is how you access value of a variable in a double quoted string. Also other double quotes have to be escaped like for workers with a double quoted string. Also tee is used in append mode to redirect out to log file apart from displaying it on stdout.
 i=1;
-server1="./dgraph --nomutations --idx '${i}' --groups \"0\" --port 8080 --p $dir/p'${i}' --w $dir/w'${i}' --my \"127.0.0.1:8080\" --group_conf --group_conf groups.conf 2>&1 | tee -a dgraph.log &"
+server1="./dgraph --config testrun/conf1.yaml 2>&1 | tee -a dgraph1.log &"
 i=2;
-server2="./dgraph --nomutations --idx '${i}' --groups \"1\" --port 8082 --p $dir/p'${i}' --w $dir/w'${i}' --my \"127.0.0.1:8082\" --peer \"127.0.0.1:8080\" --workerport 12346 --group_conf groups.conf 2>&1 | tee -a dgraph.log &"
+server2="./dgraph --config testrun/conf2.yaml 2>&1 | tee -a dgraph2.log &"
+i=3;
+server3="./dgraph --config testrun/conf3.yaml 2>&1 | tee -a dgraph3.log &"
 
 function checkServer {
 	port=$1
@@ -33,6 +35,10 @@ function checkServer {
 		 echo "Restarting server 2"
 		 eval $server2
 	 fi
+	 if [ $port -eq "8084" ]; then
+		 echo "Restarting server 3"
+		 eval $server2
+	 fi
 	fi
 }
 
@@ -46,10 +52,13 @@ echo "Starting server 1"
 eval $server1
 echo "Starting server 2"
 eval $server2
+echo "Starting server 3"
+eval $server3
 
 # Check that the servers should be running every 30 seconds.
 while true; do
 	sleep 30
 	checkServer 8080
 	checkServer 8082
+	checkServer 8084
 done

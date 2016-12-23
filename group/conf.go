@@ -106,7 +106,7 @@ func ParseConfig(r io.Reader) error {
 			if k == 0 {
 				continue
 			}
-			if k > curGroupId {
+			if curGroupId != 0 && k > curGroupId {
 				return fmt.Errorf("k in (fp mod N + k) should be <= the last groupno %v.",
 					curGroupId)
 			}
