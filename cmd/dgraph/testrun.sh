@@ -3,7 +3,6 @@
 set -e
 
 dir="$HOME/dgraph"
-i=0;
 
 # We display error to the user if Dgraph isn't installed.
 if ! hash dgraph 2>/dev/null; then
@@ -37,7 +36,7 @@ function checkServer {
 	 fi
 	 if [ $port -eq "8084" ]; then
 		 echo "Restarting server 3"
-		 eval $server2
+		 eval $server3
 	 fi
 	fi
 }
@@ -60,7 +59,7 @@ eval $server3
 
 # Check that the servers should be running every 30 seconds.
 while true; do
-	sleep 30
+	sleep 10
 	checkServer 8080
 	checkServer 8082
 	checkServer 8084
