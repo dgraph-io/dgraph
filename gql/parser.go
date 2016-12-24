@@ -840,6 +840,11 @@ func getRoot(l *lex.Lexer) (gq *GraphQuery, rerr error) {
 	if item.Typ == itemGenerator {
 		// Store the generator function.
 		gen, err := parseFunction(l)
+		if !schema.IsIndexed(gen.Attr) {
+			return nil, x.Errorf(
+				"Field %s is not indexed and cannot be used in functions",
+				gen.Attr)
+		}
 		if err != nil {
 			return gq, err
 		}
