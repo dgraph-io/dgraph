@@ -51,7 +51,7 @@ func (l loopRegion) edgesCross(c s2.Cell) bool {
 func (l loopRegion) edgesCrossPoints(pts []s2.Point) bool {
 	n := len(pts)
 	for i := 0; i < n; i++ {
-		crosser := s2.NewChainEdgeCrosser(pts[i], pts[(i+1)%n], pts[0])
+		crosser := s2.NewChainEdgeCrosser(pts[i], pts[(i+1)%n], l.Vertex(0))
 		for i := 1; i <= l.NumEdges(); i++ { // add vertex 0 twice as it is a closed loop
 			if crosser.EdgeOrVertexChainCrossing(l.Vertex(i)) {
 				return true
