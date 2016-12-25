@@ -799,7 +799,9 @@ func (sg *SubGraph) ToProtocolBuffer(l *Latency) (*graph.Node, error) {
 			}
 			return n.(*protoOutputNode).Node, rerr
 		}
-
+		if n1.IsEmpty() {
+			continue
+		}
 		n.AddChild(sg.Params.Alias, n1)
 	}
 	l.ProtocolBuffer = time.Since(l.Start) - l.Parsing - l.Processing
@@ -867,6 +869,9 @@ func (sg *SubGraph) ToJSON(l *Latency) ([]byte, error) {
 				continue
 			}
 			return nil, err
+		}
+		if n1.IsEmpty() {
+			continue
 		}
 		n.AddChild(sg.Params.Alias, n1)
 	}
