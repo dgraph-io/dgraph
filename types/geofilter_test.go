@@ -257,8 +257,19 @@ func TestMatchesFilterIntersectsPolygon(t *testing.T) {
 		{{-120, 35}, {-121, 35}, {-121, 36}, {-120, 36}, {-120, 35}},
 	})
 	require.False(t, qd.MatchesFilter(poly))
-}
 
+	// These two polygons don't intersect.
+	polyOut := geom.NewPolygon(geom.XY).MustSetCoords([][]geom.Coord{
+		{{-122.4989104270935, 37.736953437345356}, {-122.50504732131958, 37.729096212099975}, {-122.49515533447264, 37.732049133202324}, {-122.4989104270935, 37.736953437345356}},
+	})
+
+	poly2 := geom.NewPolygon(geom.XY).MustSetCoords([][]geom.Coord{
+		{{-122.5033039, 37.7334601}, {-122.503128, 37.7335189}, {-122.5031222, 37.7335205}, {-122.5030813, 37.7335868}, {-122.5031511, 37.73359}, {-122.5031933, 37.7335916}, {-122.5032228, 37.7336022}, {-122.5032697, 37.7335937}, {-122.5033194, 37.7335874}, {-122.5033723, 37.7335518}, {-122.503369, 37.7335068}, {-122.5033462, 37.7334474}, {-122.5033039, 37.7334601}},
+	})
+	data = formDataPolygon(t, polyOut)
+	_, qd, err = queryTokens(QueryTypeIntersects, data, 0.0)
+	require.False(t, qd.MatchesFilter(poly2))
+}
 func TestMatchesFilterNearPoint(t *testing.T) {
 	p := geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{-122.082506, 37.4249518})
 	data := formDataPoint(t, p)
