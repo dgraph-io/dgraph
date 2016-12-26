@@ -5,7 +5,7 @@ set -e
 
 cur_dir=$(pwd);
 tmp_dir=/tmp/dgraph-build;
-release_version=0.7.0;
+release_version=0.7.1;
 
 # If temporary directory already exists delete it.
 if [ -d "$tmp_dir" ]; then
