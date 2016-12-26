@@ -590,10 +590,13 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			return
 		}
 	} else {
-		// We need to sort first before pagination.
-		if err = sg.applyOrderAndPagination(ctx); err != nil {
-			rch <- err
-			return
+		// If we are asked for count, we don't need to change the order of results.
+		if !sg.Params.DoCount {
+			// We need to sort first before pagination.
+			if err = sg.applyOrderAndPagination(ctx); err != nil {
+				rch <- err
+				return
+			}
 		}
 	}
 
@@ -608,6 +611,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		for i, ul := range sg.uidMatrix {
 			// A possible optimization is to return the size of the intersection
 			// without forming the intersection.
+
 			algo.IntersectWith(ul, sg.DestUIDs)
 			sg.counts[i] = uint32(len(ul.Uids))
 		}
