@@ -73,6 +73,7 @@ func parseDefaultConfig(l string) (uint32, error) {
 		groupConfig.k = uint32(n)
 		x.Check(err)
 	}
+	x.AssertTruef(groupConfig.k != 0, `k in fp % n + k can't be zero.`)
 	return groupConfig.k, nil
 }
 
