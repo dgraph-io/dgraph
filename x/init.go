@@ -26,7 +26,7 @@ import (
 	yaml "gopkg.in/yaml.v2"
 )
 
-const dgraphVersion = "0.7.0"
+const dgraphVersion = "0.7.1"
 
 var (
 	configFile = flag.String("config", "",
