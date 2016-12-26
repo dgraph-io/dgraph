@@ -527,7 +527,7 @@ func TestToJSON(t *testing.T) {
 			me(_uid_:0x01) {
 				name
 				gender
-			  alive
+				alive
 				friend {
 					name
 				}
@@ -1514,7 +1514,6 @@ func TestToJSONOrder(t *testing.T) {
 		js)
 }
 
-/*
 // Test sorting / ordering by dob.
 func TestToJSONOrderDesc(t *testing.T) {
 	dir, dir2, _ := populateGraph(t)
@@ -1536,10 +1535,34 @@ func TestToJSONOrderDesc(t *testing.T) {
 
 	js := processToJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"friend":[{"dob":"1901-01-15","name":"Andrea"},{"dob":"1909-01-10","name":"Daryl Dixon"},{"dob":"1909-05-05","name":"Glenn Rhee"},{"dob":"1910-01-02","name":"Rick Grimes"}],"gender":"female","name":"Michonne"}]}`,
+		`{"me":[{"friend":[{"dob":"1910-01-02","name":"Rick Grimes"},{"dob":"1909-05-05","name":"Glenn Rhee"},{"dob":"1909-01-10","name":"Daryl Dixon"},{"dob":"1901-01-15","name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
 		string(js))
 }
-*/
+
+// Test sorting / ordering by dob and count.
+func TestToJSONOrderDescCount(t *testing.T) {
+	dir, dir2, _ := populateGraph(t)
+	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
+
+	query := `
+		{
+			me(_uid_:0x01) {
+				name
+				gender
+				friend @filter(anyof("name", "Rick")) (order: dob) {
+					_count_
+				}
+			}
+		}
+	`
+
+	js := processToJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"friend":[{"_count_":1}],"gender":"female","name":"Michonne"}]}`,
+		string(js))
+}
+
 // Test sorting / ordering by dob.
 func TestToJSONOrderOffset(t *testing.T) {
 	dir, dir2, ps := populateGraph(t)
