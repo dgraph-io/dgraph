@@ -73,7 +73,7 @@ func parseDefaultConfig(l string) (uint32, error) {
 		groupConfig.k = uint32(n)
 		x.Check(err)
 	}
-	if groupConfig.k <= 0 {
+	if groupConfig.k == 0 {
 		return 0, fmt.Errorf(`k in fp % n + k should be greater than zero.`)
 	}
 	return groupConfig.k, nil
@@ -121,7 +121,7 @@ func ParseConfig(r io.Reader) error {
 			}
 			groupId, err := strconv.ParseUint(c[0], 10, 32)
 			x.Check(err)
-			if groupId <= 0 {
+			if groupId == 0 {
 				return fmt.Errorf("Group ids should be greater than zero. For predicates: %v", c[1])
 			}
 			if curGroupId != uint32(groupId) {
