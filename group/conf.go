@@ -73,7 +73,9 @@ func parseDefaultConfig(l string) (uint32, error) {
 		groupConfig.k = uint32(n)
 		x.Check(err)
 	}
-	x.AssertTruef(groupConfig.k != 0, `k in fp % n + k can't be zero.`)
+	if groupConfig.k == 0 {
+		return 0, fmt.Errorf(`k in fp % n + k should be greater than zero.`)
+	}
 	return groupConfig.k, nil
 }
 
@@ -83,7 +85,7 @@ func ParseConfig(r io.Reader) error {
 	scanner := bufio.NewScanner(r)
 	// To keep track of last groupId seen across lines. If we the groups ids are
 	// not sequential, we log.Fatal.
-	var curGroupId uint32
+	var curGroupId uint32 = 1
 	// If after seeing line with default config, we see other lines, we log.Fatal.
 	// Default config should be specified as the last line, so that we can check
 	// accurately that k in (fp % N + k) generates consecutive groups.
@@ -119,8 +121,11 @@ func ParseConfig(r io.Reader) error {
 			}
 			groupId, err := strconv.ParseUint(c[0], 10, 32)
 			x.Check(err)
+			if groupId == 0 {
+				return fmt.Errorf("Group ids should be greater than zero. Instead set to 0 for predicates: %v", c[1])
+			}
 			if curGroupId != uint32(groupId) {
-				return fmt.Errorf("Group ids should be sequential and should start from 0. "+
+				return fmt.Errorf("Group ids should be sequential and should start from 1. "+
 					"Found %v, should have been %v", groupId, curGroupId)
 			}
 			curGroupId++
