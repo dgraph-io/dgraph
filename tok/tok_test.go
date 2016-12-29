@@ -57,8 +57,8 @@ func TestTokenizeBasic(t *testing.T) {
 		func(in string, expected []string) {
 			tokenizer, err := NewTokenizer([]byte(d.in))
 			defer tokenizer.Destroy()
-			require.NotNil(t, tokenizer)
 			require.NoError(t, err)
+			require.NotNil(t, tokenizer)
 			tokensBytes := tokenizer.Tokens()
 			var tokens []string
 			for _, token := range tokensBytes {
