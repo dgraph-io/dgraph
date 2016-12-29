@@ -48,6 +48,7 @@ func DefaultIndexKeys(val string) []string {
 			continue
 		}
 
+		x.AssertTruef(!tok.Disabled(), "Indexing requires ICU to be enabled.")
 		tokenizer, err := tok.NewTokenizer([]byte(it))
 		if err != nil {
 			return nil
