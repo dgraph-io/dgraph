@@ -41,6 +41,10 @@ var (
 	disableICU  bool
 )
 
+// ICUDisabled returns whether ICU is disabled. It may be disabled if we are in
+// embed mode and no data file is specified.
+func ICUDisabled() bool { return disableICU }
+
 // Tokenizer wraps the Tokenizer object in icuc.c.
 type Tokenizer struct {
 	c *C.Tokenizer
