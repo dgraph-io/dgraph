@@ -146,7 +146,7 @@ func convertToEdges(ctx context.Context, nquads []*graph.NQuad) (mutationResult,
 
 	newUids := make(map[string]uint64)
 	for _, nq := range nquads {
-		if strings.HasPrefix(nq.Subject, "_new_:") {
+		if strings.HasPrefix(nq.Subject, "_:") {
 			newUids[nq.Subject] = 0
 		} else if !strings.HasPrefix(nq.Subject, "_uid_:") {
 			uid, err := rdf.GetUid(nq.Subject)
@@ -155,7 +155,7 @@ func convertToEdges(ctx context.Context, nquads []*graph.NQuad) (mutationResult,
 		}
 
 		if len(nq.ObjectId) > 0 {
-			if strings.HasPrefix(nq.ObjectId, "_new_:") {
+			if strings.HasPrefix(nq.ObjectId, "_:") {
 				newUids[nq.ObjectId] = 0
 			} else if !strings.HasPrefix(nq.ObjectId, "_uid_:") {
 				uid, err := rdf.GetUid(nq.ObjectId)
@@ -186,10 +186,10 @@ func convertToEdges(ctx context.Context, nquads []*graph.NQuad) (mutationResult,
 	}
 
 	resultUids := make(map[string]uint64)
-	// Strip out _new_: prefix from the keys.
+	// Strip out _: prefix from the blank node keys.
 	for k, v := range newUids {
-		if strings.HasPrefix(k, "_new_:") {
-			resultUids[k[6:]] = v
+		if strings.HasPrefix(k, "_:") {
+			resultUids[k[2:]] = v
 		}
 	}
 
