@@ -48,7 +48,7 @@ func toRDF(buf *bytes.Buffer, item kv) {
 			x.Check2(buf.WriteString(" .\n"))
 			return
 		}
-		x.Check2(buf.WriteString(fmt.Sprintf("<_uid_:%#x> .\n", p.Uid)))
+		x.Check2(buf.WriteString(fmt.Sprintf("<%#x> .\n", p.Uid)))
 	}
 }
 
@@ -153,7 +153,7 @@ func backup(gid uint32, bdir string) error {
 			continue
 		}
 
-		prefix := fmt.Sprintf("<_uid_:%#x> <%s> ", uid, pred)
+		prefix := fmt.Sprintf("<%#x> <%s> ", uid, pred)
 		pl := &types.PostingList{}
 		x.Check(pl.Unmarshal(it.Value().Data()))
 		chkv <- kv{
