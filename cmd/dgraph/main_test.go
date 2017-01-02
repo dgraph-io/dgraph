@@ -115,10 +115,10 @@ func TestQuery(t *testing.T) {
 var qm = `
 	mutation {
 		set {
-			<0x0a> <pred.rel> <_:x> .
-			<_:x> <pred.val> "value" .
-			<_:x> <pred.rel> <_:y> .
-			<_:y> <pred.val> "value2" .
+			<0x0a> <pred.rel> _:x .
+			_:x <pred.val> "value" .
+			_:x <pred.rel> _:y .
+			_:y <pred.val> "value2" .
 		}
 	}
 `
