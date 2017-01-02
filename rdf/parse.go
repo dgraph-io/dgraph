@@ -179,12 +179,18 @@ func Parse(line string) (rnq graph.NQuad, rerr error) {
 	for item := range l.Items {
 		switch item.Typ {
 		case itemSubject:
+			if len(item.Val) > 3 && item.Val[0] == '<' && item.Val[1:3] == "_:" {
+				return rnq, x.Errorf("Blank nodes cannot be in IRI")
+			}
 			rnq.Subject = stripBracketsAndTrim(item.Val)
 
 		case itemPredicate:
 			rnq.Predicate = stripBracketsAndTrim(item.Val)
 
 		case itemObject:
+			if len(item.Val) > 3 && item.Val[0] == '<' && item.Val[1:3] == "_:" {
+				return rnq, x.Errorf("Blank nodes cannot be in IRI")
+			}
 			rnq.ObjectId = stripBracketsAndTrim(item.Val)
 
 		case itemLiteral:
