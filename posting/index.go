@@ -18,8 +18,10 @@ package posting
 
 import (
 	"context"
+	"math"
 	"sort"
 	"sync"
+	"time"
 
 	"golang.org/x/net/trace"
 
@@ -47,6 +49,24 @@ func init() {
 	reverseLog = trace.NewEventLog("reverse", "Logger")
 }
 
+// newTokensTable creates a new TokensTable by iterating over index keys in store.
+func newTokensTable(attr string) *TokensTable {
+	table := &TokensTable{
+		key: make([]string, 0, 50),
+	}
+	pk := x.ParsedKey{Attr: attr}
+	prefix := pk.IndexPrefix()
+	it := pstore.NewIterator()
+	defer it.Close()
+	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+		pki := x.Parse(it.Key().Data())
+		x.AssertTrue(pki.IsIndex())
+		x.AssertTrue(len(pki.Term) > 0)
+		table.push(pki.Term)
+	}
+	return table
+}
+
 // initIndex initializes the index with the given data store.
 func initIndex() {
 	x.AssertTrue(pstore != nil)
@@ -61,22 +81,7 @@ func initIndex() {
 
 	for _, attr := range indexedFields {
 		go func(attr string) {
-			table := &TokensTable{
-				key: make([]string, 0, 50),
-			}
-			pk := x.ParsedKey{
-				Attr: attr,
-			}
-			prefix := pk.IndexPrefix()
-
-			it := pstore.NewIterator()
-			defer it.Close()
-			for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
-				pki := x.Parse(it.Key().Data())
-				x.AssertTrue(pki.IsIndex())
-				x.AssertTrue(len(pki.Term) > 0)
-				table.push(pki.Term)
-			}
+			table := newTokensTable(attr)
 			results <- resultStruct{attr, table}
 		}(attr)
 	}
@@ -86,7 +91,6 @@ func initIndex() {
 		r := <-results
 		tables[r.attr] = r.table
 	}
-
 }
 
 // IndexTokens return tokens, without the predicate prefix and index rune.
@@ -156,7 +160,6 @@ func addIndexMutation(ctx context.Context, edge *task.DirectedEdge, token string
 	}
 	indexLog.Printf("%s [%s] [%d] Term [%s]",
 		edge.Op, edge.Attr, edge.Entity, token)
-
 }
 
 func addReverseMutation(ctx context.Context, t *task.DirectedEdge) {
@@ -231,13 +234,6 @@ func GetTokensTable(attr string) *TokensTable {
 	x.AssertTruef(tables != nil,
 		"TokensTable uninitialized. You need to call InitIndex.")
 	return tables[attr]
-}
-
-// NewTokensTable returns a new TokensTable.
-func NewTokensTable() *TokensTable {
-	return &TokensTable{
-		key: make([]string, 0, 50),
-	}
 }
 
 // Get returns position of element. If not found, it returns -1.
@@ -367,4 +363,63 @@ func (t *TokensTable) GetPrevOrEqual(s string) string {
 		return t.key[n-i-1]
 	}
 	return ""
+}
+
+// RebuildIndex rebuilds index for a given attribute.
+func RebuildIndex(ctx context.Context, attr string) error {
+	x.AssertTrue(schema.IsIndexed(attr))
+
+	// Empty the TokensTable. Let addIndexMutations populate it later.
+	tt := tables[attr]
+	x.AssertTruef(tt != nil,
+		"Expected %s to be indexed and its TokensTable to be initialized", attr)
+	tt.Lock()
+	tt.key = tt.key[:0]
+	tt.Unlock()
+
+	// Force an aggressive evict. We need to prevent further commits...
+	CommitLists(10)
+	for len(commitCh) > 0 {
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	// Delete index entries from data store.
+	pk := x.ParsedKey{Attr: attr}
+	prefix := pk.IndexPrefix()
+	idxIt := pstore.NewIterator()
+	defer idxIt.Close()
+	for idxIt.Seek(prefix); idxIt.ValidForPrefix(prefix); idxIt.Next() {
+		if err := pstore.Delete(idxIt.Key().Data()); err != nil {
+			return err
+		}
+	}
+
+	// Add index entries to data store.
+	edge := task.DirectedEdge{Attr: attr}
+	prefix = pk.Prefix()
+	it := pstore.NewIterator()
+	defer it.Close()
+	var pl types.PostingList
+	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+		pki := x.Parse(it.Key().Data())
+		edge.Entity = pki.Uid
+		x.Check(pl.Unmarshal(it.Value().Data()))
+
+		// Check last entry for value.
+		if len(pl.Postings) == 0 {
+			continue
+		}
+		p := pl.Postings[len(pl.Postings)-1]
+		if p.Uid != math.MaxUint64 {
+			continue
+		}
+
+		// Add index entries based on p.
+		val := types.Val{
+			Value: p.Value,
+			Tid:   types.TypeID(p.ValType),
+		}
+		addIndexMutations(ctx, &edge, val, task.DirectedEdge_SET)
+	}
+	return nil
 }
