@@ -152,8 +152,7 @@ func convertToEdges(ctx context.Context, nquads []*graph.NQuad) (mutationResult,
 		} else {
 			// Only store xids that need to be marked as used.
 			if _, err := strconv.ParseInt(nq.Subject, 0, 64); err != nil {
-				uid := rdf.GetUid(nq.Subject)
-				newUids[nq.Subject] = uid
+				newUids[nq.Subject] = rdf.GetUid(nq.Subject)
 			}
 		}
 
