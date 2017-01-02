@@ -146,6 +146,14 @@ var testNQuads = []struct {
 		expectedErr: true,
 	},
 	{
+		input:       "<_:alice> <knows> <something> .",
+		expectedErr: true,
+	},
+	{
+		input:       "_:alice <knows> <_:something> .",
+		expectedErr: true,
+	},
+	{
 		input:       "<alice> <knows> .",
 		expectedErr: true,
 	},
