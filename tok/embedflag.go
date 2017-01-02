@@ -30,6 +30,8 @@ func init() {
 		if disableICU {
 			x.Printf("Disabling ICU because tokenizer fails simple test case: %v",
 				tokens)
+			return
 		}
+		x.Printf("ICU is working fine!")
 	})
 }
