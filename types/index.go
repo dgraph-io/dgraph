@@ -31,7 +31,7 @@ func IndexTokens(sv Val) ([]string, error) {
 	case DateTimeID:
 		return TimeIndex(sv.Value.(time.Time))
 	case StringID:
-		return DefaultIndexKeys(sv.Value.(string)), nil
+		return DefaultIndexKeys(sv.Value.(string))
 	default:
 		return nil, x.Errorf("Invalid type. Cannot be indexed")
 	}
@@ -39,7 +39,7 @@ func IndexTokens(sv Val) ([]string, error) {
 }
 
 // DefaultIndexKeys tokenizes data as a string and return keys for indexing.
-func DefaultIndexKeys(val string) []string {
+func DefaultIndexKeys(val string) ([]string, error) {
 	words := strings.Fields(val)
 	tokens := make([]string, 0, 5)
 	for _, it := range words {
@@ -51,7 +51,7 @@ func DefaultIndexKeys(val string) []string {
 		x.AssertTruef(!tok.ICUDisabled(), "Indexing requires ICU to be enabled.")
 		tokenizer, err := tok.NewTokenizer([]byte(it))
 		if err != nil {
-			return nil
+			return nil, err
 		}
 		for {
 			s := tokenizer.Next()
@@ -62,7 +62,7 @@ func DefaultIndexKeys(val string) []string {
 		}
 		tokenizer.Destroy()
 	}
-	return tokens
+	return tokens, nil
 }
 
 func encodeInt(val int32) ([]string, error) {
