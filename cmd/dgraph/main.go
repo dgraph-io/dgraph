@@ -34,6 +34,7 @@ import (
 	"path"
 	"runtime"
 	"runtime/pprof"
+	"strconv"
 	"strings"
 	"time"
 
@@ -148,18 +149,19 @@ func convertToEdges(ctx context.Context, nquads []*graph.NQuad) (mutationResult,
 	for _, nq := range nquads {
 		if strings.HasPrefix(nq.Subject, "_:") {
 			newUids[nq.Subject] = 0
-		} else if !strings.HasPrefix(nq.Subject, "_uid_:") {
-			uid, err := rdf.GetUid(nq.Subject)
-			x.Check(err)
-			newUids[nq.Subject] = uid
+		} else {
+			// Only store xids that need to be marked as used.
+			if _, err := strconv.ParseInt(nq.Subject, 0, 64); err != nil {
+				uid := rdf.GetUid(nq.Subject)
+				newUids[nq.Subject] = uid
+			}
 		}
 
 		if len(nq.ObjectId) > 0 {
 			if strings.HasPrefix(nq.ObjectId, "_:") {
 				newUids[nq.ObjectId] = 0
 			} else if !strings.HasPrefix(nq.ObjectId, "_uid_:") {
-				uid, err := rdf.GetUid(nq.ObjectId)
-				x.Check(err)
+				uid := rdf.GetUid(nq.ObjectId)
 				newUids[nq.ObjectId] = uid
 			}
 		}

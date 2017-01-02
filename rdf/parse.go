@@ -35,13 +35,13 @@ var emptyEdge task.DirectedEdge
 
 // Gets the uid corresponding to an xid from the posting list which stores the
 // mapping.
-func GetUid(xid string) (uint64, error) {
+func GetUid(xid string) uint64 {
 	// If string represents a UID, convert to uint64 and return.
 	uid, err := strconv.ParseUint(xid[:], 0, 64)
 	if err != nil {
-		return farm.Fingerprint64([]byte(xid)), nil
+		return farm.Fingerprint64([]byte(xid))
 	}
-	return uid, err
+	return uid
 }
 
 type NQuad struct {
@@ -90,10 +90,8 @@ func byteVal(nq NQuad) ([]byte, error) {
 // ToEdge is useful when you want to find the UID corresponding to XID for
 // just one edge. The method doesn't automatically generate a UID for an XID.
 func (nq NQuad) ToEdge() (*task.DirectedEdge, error) {
-	sid, err := GetUid(nq.Subject)
-	if err != nil {
-		return &emptyEdge, err
-	}
+	var err error
+	sid := GetUid(nq.Subject)
 
 	out := &task.DirectedEdge{
 		Attr:   nq.Predicate,
@@ -103,10 +101,7 @@ func (nq NQuad) ToEdge() (*task.DirectedEdge, error) {
 
 	// An edge can have an id or a value.
 	if len(nq.ObjectId) > 0 {
-		oid, err := GetUid(nq.ObjectId)
-		if err != nil {
-			return &emptyEdge, err
-		}
+		oid := GetUid(nq.ObjectId)
 		out.ValueId = oid
 	} else {
 		if out.Value, err = byteVal(nq); err != nil {
@@ -117,9 +112,9 @@ func (nq NQuad) ToEdge() (*task.DirectedEdge, error) {
 	return out, nil
 }
 
-func toUid(xid string, newToUid map[string]uint64) (uid uint64, rerr error) {
+func toUid(xid string, newToUid map[string]uint64) (uid uint64) {
 	if id, present := newToUid[xid]; present {
-		return id, nil
+		return id
 	}
 	return GetUid(xid)
 }
@@ -127,10 +122,8 @@ func toUid(xid string, newToUid map[string]uint64) (uid uint64, rerr error) {
 // ToEdgeUsing determines the UIDs for the provided XIDs and populates the
 // xidToUid map.
 func (nq NQuad) ToEdgeUsing(newToUid map[string]uint64) (*task.DirectedEdge, error) {
-	uid, err := toUid(nq.Subject, newToUid)
-	if err != nil {
-		return &emptyEdge, err
-	}
+	var err error
+	uid := toUid(nq.Subject, newToUid)
 
 	out := &task.DirectedEdge{
 		Entity: uid,
@@ -144,10 +137,7 @@ func (nq NQuad) ToEdgeUsing(newToUid map[string]uint64) (*task.DirectedEdge, err
 		}
 		out.ValueType = uint32(nq.ObjectType)
 	} else {
-		uid, err = toUid(nq.ObjectId, newToUid)
-		if err != nil {
-			return &emptyEdge, err
-		}
+		uid = toUid(nq.ObjectId, newToUid)
 		out.ValueId = uid
 	}
 	return out, nil
