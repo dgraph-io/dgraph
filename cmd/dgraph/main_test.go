@@ -115,7 +115,7 @@ func TestQuery(t *testing.T) {
 var qm = `
 	mutation {
 		set {
-			<_uid_:0x0a> <pred.rel> <_:x> .
+			<0x0a> <pred.rel> <_:x> .
 			<_:x> <pred.val> "value" .
 			<_:x> <pred.rel> <_:y> .
 			<_:y> <pred.val> "value2" .
@@ -145,8 +145,8 @@ func TestAssignUid(t *testing.T) {
 }
 
 func TestConvertToEdges(t *testing.T) {
-	q1 := `_uid_:0x01 <type> _uid_:0x02 .
-	       _uid_:0x01 <character> _uid_:0x03 .`
+	q1 := `<0x01> <type> <0x02> .
+	       <0x01> <character> <0x03> .`
 	nquads, err := convertToNQuad(context.Background(), q1)
 	require.NoError(t, err)
 
