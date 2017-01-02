@@ -139,12 +139,6 @@ func lexUidNode(l *lex.Lexer, styp lex.ItemType, sfn lex.StateFn) lex.StateFn {
 	}
 
 	in := l.Input[l.Start:l.Pos]
-	/*
-		if !strings.HasPrefix(in, "_uid_:") {
-			return l.Errorf("Expected _uid_: Found: %v", l.Input[l.Start:l.Pos])
-		}
-	*/
-
 	if _, err := strconv.ParseUint(in[:], 0, 64); err != nil {
 		return l.Errorf("Unable to convert '%v' to UID", in[:])
 	}
@@ -191,14 +185,10 @@ func lexSubject(l *lex.Lexer) lex.StateFn {
 	if r == '_' {
 		l.Depth++
 		r = l.Next()
-		/*
-			// TODO - Remove this, doesn't conform to the spec.
-			if r == 'u' {
-				return lexUidNode(l, itemSubject, lexText)
-			}
-		*/
 		if r == ':' {
 			return lexBlankNode(l, itemSubject, lexText)
+		} else {
+			return l.Errorf("Invalid character after _ during lexSubject: %v", r)
 		}
 	} else {
 		// See if its an uid
@@ -299,15 +289,13 @@ func lexObject(l *lex.Lexer) lex.StateFn {
 	if r == '_' {
 		l.Depth++
 		r = l.Next()
-		// TODO - Remove this, doesn't conform to the spec.
-		if r == 'u' {
-			return lexUidNode(l, itemObject, lexText)
-		}
-
 		if r == ':' {
 			return lexBlankNode(l, itemObject, lexText)
+		} else {
+			return l.Errorf("Invalid char after _: %v at lexObject", r)
 		}
 	}
+
 	if r == '"' {
 		l.Ignore()
 		return lexLiteral(l)
