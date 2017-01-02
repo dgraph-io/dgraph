@@ -20,7 +20,6 @@ package rdf
 
 import (
 	"strconv"
-	"strings"
 
 	"github.com/dgraph-io/dgraph/lex"
 )
@@ -140,12 +139,14 @@ func lexUidNode(l *lex.Lexer, styp lex.ItemType, sfn lex.StateFn) lex.StateFn {
 	}
 
 	in := l.Input[l.Start:l.Pos]
-	if !strings.HasPrefix(in, "_uid_:") {
-		return l.Errorf("Expected _uid_: Found: %v", l.Input[l.Start:l.Pos])
-	}
+	/*
+		if !strings.HasPrefix(in, "_uid_:") {
+			return l.Errorf("Expected _uid_: Found: %v", l.Input[l.Start:l.Pos])
+		}
+	*/
 
-	if _, err := strconv.ParseUint(in[6:], 0, 64); err != nil {
-		return l.Errorf("Unable to convert '%v' to UID", in[6:])
+	if _, err := strconv.ParseUint(in[:], 0, 64); err != nil {
+		return l.Errorf("Unable to convert '%v' to UID", in[:])
 	}
 
 	if isSpace(r) {
@@ -190,14 +191,18 @@ func lexSubject(l *lex.Lexer) lex.StateFn {
 	if r == '_' {
 		l.Depth++
 		r = l.Next()
-		// TODO - Remove this, doesn't conform to the spec.
-		if r == 'u' {
-			return lexUidNode(l, itemSubject, lexText)
-		}
-
+		/*
+			// TODO - Remove this, doesn't conform to the spec.
+			if r == 'u' {
+				return lexUidNode(l, itemSubject, lexText)
+			}
+		*/
 		if r == ':' {
 			return lexBlankNode(l, itemSubject, lexText)
 		}
+	} else {
+		// See if its an uid
+		return lexUidNode(l, itemSubject, lexText)
 	}
 	// else go to error
 	return l.Errorf("Invalid character during lexSubject: %v", r)

@@ -37,10 +37,11 @@ var emptyEdge task.DirectedEdge
 // mapping.
 func GetUid(xid string) (uint64, error) {
 	// If string represents a UID, convert to uint64 and return.
-	if strings.HasPrefix(xid, "_uid_:") {
-		return strconv.ParseUint(xid[6:], 0, 64)
+	uid, err := strconv.ParseUint(xid[6:], 0, 64)
+	if err != nil {
+		return farm.Fingerprint64([]byte(xid)), nil
 	}
-	return farm.Fingerprint64([]byte(xid)), nil
+	return uid, err
 }
 
 type NQuad struct {
