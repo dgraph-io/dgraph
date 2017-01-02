@@ -190,12 +190,9 @@ func lexSubject(l *lex.Lexer) lex.StateFn {
 		} else {
 			return l.Errorf("Invalid character after _ during lexSubject: %v", r)
 		}
-	} else {
-		// See if its an uid
-		return lexUidNode(l, itemSubject, lexText)
 	}
-	// else go to error
-	return l.Errorf("Invalid character during lexSubject: %v", r)
+	// See if its an uid
+	return lexUidNode(l, itemSubject, lexText)
 }
 
 func lexPredicate(l *lex.Lexer) lex.StateFn {
