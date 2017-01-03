@@ -675,7 +675,7 @@ func TestToJSONFilter(t *testing.T) {
 			me(_uid_:0x01) {
 				name
 				gender
-				friend @filter(anyof("name", "Andrea SomethingElse")) {
+				friend @filter(anyof(name, "Andrea SomethingElse")) {
 					name
 				}
 			}
@@ -698,7 +698,7 @@ func TestToJSONFilterMissBrac(t *testing.T) {
 			me(_uid_:0x01) {
 				name
 				gender
-				friend @filter(anyof("name", "Andrea SomethingElse") {
+				friend @filter(anyof(name, "Andrea SomethingElse") {
 					name
 				}
 			}
@@ -740,7 +740,7 @@ func TestToJSONFilterUID(t *testing.T) {
 			me(_uid_:0x01) {
 				name
 				gender
-				friend @filter(anyof("name", "Andrea")) {
+				friend @filter(anyof(name, "Andrea")) {
 					_uid_
 				}
 			}
@@ -763,7 +763,7 @@ func TestToJSONFilterOrUID(t *testing.T) {
 			me(_uid_:0x01) {
 				name
 				gender
-				friend @filter(anyof("name", "Andrea") || anyof("name", "Andrea Rhee")) {
+				friend @filter(anyof(name, "Andrea") || anyof(name, "Andrea Rhee")) {
 					_uid_
 					name
 				}
@@ -787,7 +787,7 @@ func TestToJSONFilterOrCount(t *testing.T) {
 			me(_uid_:0x01) {
 				name
 				gender
-				friend @filter(anyof("name", "Andrea") || anyof("name", "Andrea Rhee")) {
+				friend @filter(anyof(name, "Andrea") || anyof(name, "Andrea Rhee")) {
 					_count_
 				}
 			}
@@ -810,7 +810,7 @@ func TestToJSONFilterOrFirst(t *testing.T) {
 			me(_uid_:0x01) {
 				name
 				gender
-				friend(first:2) @filter(anyof("name", "Andrea") || anyof("name", "Glenn SomethingElse") || anyof("name", "Daryl")) {
+				friend(first:2) @filter(anyof(name, "Andrea") || anyof(name, "Glenn SomethingElse") || anyof(name, "Daryl")) {
 					name
 				}
 			}
@@ -833,7 +833,7 @@ func TestToJSONFilterOrOffset(t *testing.T) {
 			me(_uid_:0x01) {
 				name
 				gender
-				friend(offset:1) @filter(anyof("name", "Andrea") || anyof("name", "Glenn Rhee") || anyof("name", "Daryl Dixon")) {
+				friend(offset:1) @filter(anyof(name, "Andrea") || anyof("name", "Glenn Rhee") || anyof("name", "Daryl Dixon")) {
 					name
 				}
 			}
@@ -1981,7 +1981,7 @@ func TestNearGenerator(t *testing.T) {
 	defer os.RemoveAll(dir1)
 	defer os.RemoveAll(dir2)
 	query := `{
-		me(near("loc", "{'Type':'Point', 'Coordinates':[1.1,2.0]}", "5")) {
+		me(near(loc, "{'Type':'Point', 'Coordinates':[1.1,2.0]}", 5)) {
 			name
 			gender
 		}
@@ -1997,7 +1997,7 @@ func TestWithinGenerator(t *testing.T) {
 	defer os.RemoveAll(dir1)
 	defer os.RemoveAll(dir2)
 	query := `{
-		me(within("loc",  "{'Type':'Polygon', 'Coordinates':[[[0.0,0.0], [2.0,0.0], [1.5, 3.0], [0.0, 2.0]]]}")) {
+		me(within(loc,  "{'Type':'Polygon', 'Coordinates':[[[0.0,0.0], [2.0,0.0], [1.5, 3.0], [0.0, 2.0]]]}")) {
 			name
 		}
 	}`
@@ -2012,7 +2012,7 @@ func TestContainsGenerator(t *testing.T) {
 	defer os.RemoveAll(dir1)
 	defer os.RemoveAll(dir2)
 	query := `{
-		me(contains("loc",  "{'Type':'Point', 'Coordinates':[2.0, 0.0]}")) {
+		me(contains(loc,  "{'Type':'Point', 'Coordinates':[2.0, 0.0]}")) {
 			name
 		}
 	}`
@@ -2027,7 +2027,7 @@ func TestIntersectsGenerator(t *testing.T) {
 	defer os.RemoveAll(dir1)
 	defer os.RemoveAll(dir2)
 	query := `{
-		me(intersects("loc", "{'Type':'Polygon', 'Coordinates':[[[0.0,0.0], [2.0,0.0], [1.5, 3.0], [0.0, 2.0]]]}")) {
+		me(intersects(loc, "{'Type':'Polygon', 'Coordinates':[[[0.0,0.0], [2.0,0.0], [1.5, 3.0], [0.0, 2.0]]]}")) {
 			name
 		}
 	}`

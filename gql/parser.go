@@ -707,10 +707,11 @@ func parseFunction(l *lex.Lexer) (*Function, error) {
 					return nil, x.Errorf("Expected arg after func [%s], but got item %v",
 						g.Name, itemInFunc)
 				}
+				it := strings.Trim(itemInFunc.Val, "\" \t")
 				if len(g.Attr) == 0 {
-					g.Attr = itemInFunc.Val
+					g.Attr = it
 				} else {
-					g.Args = append(g.Args, itemInFunc.Val)
+					g.Args = append(g.Args, it)
 				}
 			}
 		} else if item.Typ == itemRightRound {
@@ -751,10 +752,11 @@ func parseFilter(l *lex.Lexer) (*FilterTree, error) {
 					return nil, x.Errorf("Expected arg after func [%s], but got item %v",
 						leaf.Func.Name, itemInFunc)
 				}
+				it := strings.Trim(itemInFunc.Val, "\" \t")
 				if len(f.Attr) == 0 {
-					f.Attr = itemInFunc.Val
+					f.Attr = it
 				} else {
-					f.Args = append(f.Args, itemInFunc.Val)
+					f.Args = append(f.Args, it)
 				}
 			}
 			if !terminated {

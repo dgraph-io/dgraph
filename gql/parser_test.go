@@ -596,12 +596,12 @@ func TestParseFilter_simplest(t *testing.T) {
 	gq, _, err := Parse(query)
 	require.NoError(t, err)
 	require.NotNil(t, gq)
-	require.Equal(t, childAttrs(gq), []string{"friends", "gender", "age", "hometown"})
-	require.Equal(t, childAttrs(gq.Children[0]), []string{"name"})
+	require.Equal(t, []string{"friends", "gender", "age", "hometown"}, childAttrs(gq))
+	require.Equal(t, []string{"name"}, childAttrs(gq.Children[0]))
 	require.Nil(t, gq.Children[0].Filter)
-	require.Equal(t, gq.Children[1].Filter.debugString(), `(eq)`)
-	require.Equal(t, gq.Children[2].Filter.debugString(), `(neq "a" "b")`)
-	require.Equal(t, gq.Children[0].Children[0].Filter.debugString(), "(namefilter)")
+	require.Equal(t, `(eq)`, gq.Children[1].Filter.debugString())
+	require.Equal(t, `(neq "a" "b")`, gq.Children[2].Filter.debugString())
+	require.Equal(t, "(namefilter)", gq.Children[0].Children[0].Filter.debugString())
 }
 
 // Test operator precedence. && should be evaluated before ||.
@@ -621,9 +621,9 @@ func TestParseFilter_op(t *testing.T) {
 	gq, _, err := Parse(query)
 	require.NoError(t, err)
 	require.NotNil(t, gq)
-	require.Equal(t, childAttrs(gq), []string{"friends", "gender", "age", "hometown"})
-	require.Equal(t, childAttrs(gq.Children[0]), []string{"name"})
-	require.Equal(t, gq.Children[0].Filter.debugString(), `(OR (a) (AND (b) (c)))`)
+	require.Equal(t, []string{"friends", "gender", "age", "hometown"}, childAttrs(gq))
+	require.Equal(t, []string{"name"}, childAttrs(gq.Children[0]))
+	require.Equal(t, `(OR (a) (AND (b) (c)))`, gq.Children[0].Filter.debugString())
 }
 
 // Test operator precedence. Let brackets make || evaluates before &&.
@@ -643,9 +643,9 @@ func TestParseFilter_op2(t *testing.T) {
 	gq, _, err := Parse(query)
 	require.NoError(t, err)
 	require.NotNil(t, gq)
-	require.Equal(t, childAttrs(gq), []string{"friends", "gender", "age", "hometown"})
-	require.Equal(t, childAttrs(gq.Children[0]), []string{"name"})
-	require.Equal(t, gq.Children[0].Filter.debugString(), `(AND (OR (a) (b)) (c))`)
+	require.Equal(t, []string{"friends", "gender", "age", "hometown"}, childAttrs(gq))
+	require.Equal(t, []string{"name"}, childAttrs(gq.Children[0]))
+	require.Equal(t, `(AND (OR (a) (b)) (c))`, gq.Children[0].Filter.debugString())
 }
 
 // Test operator precedence. More elaborate brackets.
@@ -664,10 +664,11 @@ func TestParseFilter_brac(t *testing.T) {
 	gq, _, err := Parse(query)
 	require.NoError(t, err)
 	require.NotNil(t, gq)
-	require.Equal(t, childAttrs(gq), []string{"friends", "gender", "age", "hometown"})
-	require.Equal(t, childAttrs(gq.Children[0]), []string{"name"})
-	require.Equal(t, gq.Children[0].Filter.debugString(),
-		`(OR (a "hello") (AND (AND (b "world" "is") (OR (c) (OR (d "haha") (e)))) (f)))`)
+	require.Equal(t, []string{"friends", "gender", "age", "hometown"}, childAttrs(gq))
+	require.Equal(t, []string{"name"}, childAttrs(gq.Children[0]))
+	require.Equal(t,
+		`(OR (a "hello") (AND (AND (b "world" "is") (OR (c) (OR (d "haha") (e)))) (f)))`,
+		gq.Children[0].Filter.debugString())
 }
 
 // Test if unbalanced brac will lead to errors.
