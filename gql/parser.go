@@ -708,6 +708,9 @@ func parseFunction(l *lex.Lexer) (*Function, error) {
 						g.Name, itemInFunc)
 				}
 				it := strings.Trim(itemInFunc.Val, "\" \t")
+				if it == "" {
+					return nil, x.Errorf("Empty argument received")
+				}
 				if len(g.Attr) == 0 {
 					g.Attr = it
 				} else {
@@ -753,6 +756,9 @@ func parseFilter(l *lex.Lexer) (*FilterTree, error) {
 						leaf.Func.Name, itemInFunc)
 				}
 				it := strings.Trim(itemInFunc.Val, "\" \t")
+				if it == "" {
+					return nil, x.Errorf("Empty argument received")
+				}
 				if len(f.Attr) == 0 {
 					f.Attr = it
 				} else {

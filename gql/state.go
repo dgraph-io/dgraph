@@ -167,23 +167,30 @@ func lexInside(l *lex.Lexer) lex.StateFn {
 func lexFilterFuncInside(l *lex.Lexer) lex.StateFn {
 	l.AcceptRun(isSpace)
 	l.Ignore() // Any spaces encountered.
-
+	var empty bool
 	for {
 		r := l.Next()
 		if isSpace(r) || r == ',' {
 			l.Ignore()
+			empty = true
 		} else if r == leftRound {
+			empty = true
 			l.Emit(itemLeftRound)
 		} else if r == rightRound {
 			l.Emit(itemRightRound)
+			if empty {
+				return l.Errorf("Empty Argument")
+			}
 			return lexFilterInside
 		} else if isEndLiteral(r) {
+			empty = false
 			l.Ignore()
 			l.AcceptUntil(isEndLiteral) // This call will backup the ending ".
 			l.Emit(itemFilterFuncArg)
 			l.Next() // Consume the " and ignore it.
 			l.Ignore()
 		} else {
+			empty = false
 			// Accept this argument. Till comma or right bracket.
 			l.AcceptUntil(isEndArg)
 			l.Emit(itemFilterFuncArg)
@@ -617,7 +624,7 @@ func isEndLiteral(r rune) bool {
 	return r == '"' || r == '\u000d' || r == '\u000a'
 }
 
-// isEndArg returns true if rune is a comma.
+// isEndArg returns true if rune is a comma or right round bracket.
 func isEndArg(r rune) bool {
 	return r == ',' || r == ')'
 }

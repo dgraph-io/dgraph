@@ -17,6 +17,7 @@
 package gql
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -586,9 +587,9 @@ func TestParseFilter_simplest(t *testing.T) {
 	query {
 		me(_uid_:0x0a) {
 			friends @filter() {
-				name @filter(namefilter())
+				name @filter(namefilter("a"))
 			}
-			gender @filter(eq()),age @filter(neq("a", "b"))
+			gender @filter(eq("a")),age @filter(neq("a", "b"))
 			hometown
 		}
 	}
@@ -599,9 +600,9 @@ func TestParseFilter_simplest(t *testing.T) {
 	require.Equal(t, []string{"friends", "gender", "age", "hometown"}, childAttrs(gq))
 	require.Equal(t, []string{"name"}, childAttrs(gq.Children[0]))
 	require.Nil(t, gq.Children[0].Filter)
-	require.Equal(t, `(eq)`, gq.Children[1].Filter.debugString())
+	require.Equal(t, `(eq "a")`, gq.Children[1].Filter.debugString())
 	require.Equal(t, `(neq "a" "b")`, gq.Children[2].Filter.debugString())
-	require.Equal(t, "(namefilter)", gq.Children[0].Children[0].Filter.debugString())
+	require.Equal(t, `(namefilter "a")`, gq.Children[0].Children[0].Filter.debugString())
 }
 
 // Test operator precedence. && should be evaluated before ||.
@@ -609,8 +610,8 @@ func TestParseFilter_op(t *testing.T) {
 	query := `
 	query {
 		me(_uid_:0x0a) {
-			friends @filter(a() || b() 
-			&& c()) {
+			friends @filter(a("a") || b("a") 
+			&& c("a")) {
 				name
 			}
 			gender,age
@@ -623,7 +624,7 @@ func TestParseFilter_op(t *testing.T) {
 	require.NotNil(t, gq)
 	require.Equal(t, []string{"friends", "gender", "age", "hometown"}, childAttrs(gq))
 	require.Equal(t, []string{"name"}, childAttrs(gq.Children[0]))
-	require.Equal(t, `(OR (a) (AND (b) (c)))`, gq.Children[0].Filter.debugString())
+	require.Equal(t, `(OR (a "a") (AND (b "a") (c "a")))`, gq.Children[0].Filter.debugString())
 }
 
 // Test operator precedence. Let brackets make || evaluates before &&.
@@ -631,8 +632,8 @@ func TestParseFilter_op2(t *testing.T) {
 	query := `
 	query {
 		me(_uid_:0x0a) {
-			friends @filter((a() || b())
-			 && c()) {
+			friends @filter((a("a") || b("a"))
+			 && c("a")) {
 				name
 			}
 			gender,age
@@ -645,7 +646,7 @@ func TestParseFilter_op2(t *testing.T) {
 	require.NotNil(t, gq)
 	require.Equal(t, []string{"friends", "gender", "age", "hometown"}, childAttrs(gq))
 	require.Equal(t, []string{"name"}, childAttrs(gq.Children[0]))
-	require.Equal(t, `(AND (OR (a) (b)) (c))`, gq.Children[0].Filter.debugString())
+	require.Equal(t, `(AND (OR (a "a") (b "a")) (c "a"))`, gq.Children[0].Filter.debugString())
 }
 
 // Test operator precedence. More elaborate brackets.
@@ -653,7 +654,7 @@ func TestParseFilter_brac(t *testing.T) {
 	query := `
 	query {
 		me(_uid_:0x0a) {
-			friends @filter(  a("hello") || b("world", "is") && (c() || (d("haha") || e())) && f()){
+			friends @filter(  a("hello") || b("world", "is") && (c("a") || (d("haha") || e("a"))) && f("a")){
 				name
 			}
 			gender,age
@@ -667,13 +668,13 @@ func TestParseFilter_brac(t *testing.T) {
 	require.Equal(t, []string{"friends", "gender", "age", "hometown"}, childAttrs(gq))
 	require.Equal(t, []string{"name"}, childAttrs(gq.Children[0]))
 	require.Equal(t,
-		`(OR (a "hello") (AND (AND (b "world" "is") (OR (c) (OR (d "haha") (e)))) (f)))`,
+		`(OR (a "hello") (AND (AND (b "world" "is") (OR (c "a") (OR (d "haha") (e "a")))) (f "a")))`,
 		gq.Children[0].Filter.debugString())
 }
 
 // Test if unbalanced brac will lead to errors.
 func TestParseFilter_unbalancedbrac(t *testing.T) {
-	query := `
+	query := `{
 	query {
 		me(_uid_:0x0a) {
 			friends @filter(  ()
@@ -688,11 +689,12 @@ func TestParseFilter_unbalancedbrac(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestParseFilter_unknowndirective(t *testing.T) {
+// Test if empty brackets will lead to errors.
+func TestParseFilter_emptyargument(t *testing.T) {
 	query := `
 	query {
 		me(_uid_:0x0a) {
-			friends @filtererr
+			friends @filter(allof(name, )) {
 				name
 			}
 			gender,age
@@ -701,12 +703,27 @@ func TestParseFilter_unknowndirective(t *testing.T) {
 	}
 `
 	_, _, err := Parse(query)
+	fmt.Println(err)
+	require.Error(t, err)
+}
+func TestParseFilter_unknowndirective(t *testing.T) {
+	query := `
+	query {
+		me(_uid_:0x0a) {
+			friends @filtererr {
+				name
+			}
+			gender,age
+			hometown
+		}
+	
+`
+	_, _, err := Parse(query)
 	require.Error(t, err)
 }
 
 func TestParseGeneratorError(t *testing.T) {
-	query := `
-	{
+	query := `{
 		me(allof("name", "barack")) {
 			friends {
 				name
@@ -722,8 +739,7 @@ func TestParseGeneratorError(t *testing.T) {
 
 func TestParseGenerator(t *testing.T) {
 	schema.ParseBytes([]byte("scalar name:string @index"))
-	query := `
-	{
+	query := `{
 		me(allof("name", "barack")) {
 			friends {
 				name
