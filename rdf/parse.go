@@ -144,11 +144,11 @@ func (nq NQuad) ToEdgeUsing(newToUid map[string]uint64) (*task.DirectedEdge, err
 }
 
 // This function is used to extract an IRI from an IRIREF.
-func stripBracketsAndTrim(val string) string {
+func stripBracketsAndTrim(val string) (string, bool) {
 	if val[0] != '<' && val[len(val)-1] != '>' {
-		return strings.Trim(val, " ")
+		return strings.Trim(val, " "), false
 	}
-	return strings.Trim(val[1:len(val)-1], " ")
+	return strings.Trim(val[1:len(val)-1], " "), true
 }
 
 // Function to do sanity check for subject, predicate, object and label strings.
@@ -174,24 +174,24 @@ func Parse(line string) (rnq graph.NQuad, rerr error) {
 
 	go run(l)
 	var oval string
-	var vend bool
+	var vend, hasBrackets bool
 	// We read items from the l.Items channel to which the lexer sends items.
 	for item := range l.Items {
 		switch item.Typ {
 		case itemSubject:
-			if len(item.Val) > 3 && item.Val[0] == '<' && item.Val[1:3] == "_:" {
+			rnq.Subject, hasBrackets = stripBracketsAndTrim(item.Val)
+			if hasBrackets && len(rnq.Subject) > 1 && rnq.Subject[0:2] == "_:" {
 				return rnq, x.Errorf("Blank nodes cannot be in IRI")
 			}
-			rnq.Subject = stripBracketsAndTrim(item.Val)
 
 		case itemPredicate:
-			rnq.Predicate = stripBracketsAndTrim(item.Val)
+			rnq.Predicate, _ = stripBracketsAndTrim(item.Val)
 
 		case itemObject:
-			if len(item.Val) > 3 && item.Val[0] == '<' && item.Val[1:3] == "_:" {
+			rnq.ObjectId, hasBrackets = stripBracketsAndTrim(item.Val)
+			if hasBrackets && len(rnq.ObjectId) > 1 && rnq.ObjectId[0:2] == "_:" {
 				return rnq, x.Errorf("Blank nodes cannot be in IRI")
 			}
-			rnq.ObjectId = stripBracketsAndTrim(item.Val)
 
 		case itemLiteral:
 			oval = item.Val
@@ -208,7 +208,7 @@ func Parse(line string) (rnq graph.NQuad, rerr error) {
 					"itemObject should be emitted before itemObjectType. Input: [%s]",
 					line)
 			}
-			val := stripBracketsAndTrim(item.Val)
+			val, _ := stripBracketsAndTrim(item.Val)
 			// TODO: Check if this condition is required.
 			if strings.Trim(val, " ") == "*" {
 				return rnq, x.Errorf("itemObject can't be *")
@@ -241,7 +241,7 @@ func Parse(line string) (rnq graph.NQuad, rerr error) {
 			vend = true
 
 		case itemLabel:
-			rnq.Label = stripBracketsAndTrim(item.Val)
+			rnq.Label, _ = stripBracketsAndTrim(item.Val)
 		}
 	}
 
