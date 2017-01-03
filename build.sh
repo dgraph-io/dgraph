@@ -5,7 +5,7 @@ set -e
 
 cur_dir=$(pwd);
 tmp_dir=/tmp/dgraph-build;
-release_version=0.7.1;
+release_version=$(git describe --abbrev=0);
 
 # If temporary directory already exists delete it.
 if [ -d "$tmp_dir" ]; then
@@ -24,9 +24,9 @@ build_flags='-tags=embed -v'
 
 echo -e "\033[1;33mBuilding binaries\033[0m"
 echo "dgraph"
-cd $dgraph_cmd/dgraph && go build $build_flags .;
+cd $dgraph_cmd/dgraph && go build $build_flags -ldflags="-X github.com/dgraph-io/dgraph/x.dgraphVersion=$release_version" .;
 echo "dgraphloader"
-cd $dgraph_cmd/dgraphloader && go build $build_flags .;
+cd $dgraph_cmd/dgraphloader && go build $build_flags -ldflags="-X github.com/dgraph-io/dgraph/x.dgraphVersion=$release_version" .;
 
 echo -e "\n\033[1;33mCopying binaries to tmp folder\033[0m"
 cd $tmp_dir;
@@ -43,7 +43,7 @@ if [ "$platform" = "linux" ]; then
 fi
 
 echo -e "\n\033[1;33mCreating tar file\033[0m"
-tar_file=dgraph-"$platform"-amd64-v$release_version
+tar_file=dgraph-"$platform"-amd64-$release_version
 popd &> /dev/null
 # Create a tar file with the contents of the dgraph folder (i.e the binaries)
 tar -zcf $tar_file.tar.gz dgraph;
