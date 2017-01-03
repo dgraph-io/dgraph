@@ -95,23 +95,6 @@ func convertValue(attr, data string) (types.Val, error) {
 	return dst, nil
 }
 
-// ineqType returns the inequality type of the given function.
-func getIneqType(s string) int {
-	switch s {
-	case "leq":
-		return ineqLeq
-	case "geq":
-		return ineqGeq
-	case "lt":
-		return ineqLt
-	case "gt":
-		return ineqGt
-	case "eq":
-		return ineqEqual
-	}
-	return ineqNone
-}
-
 // processTask processes the query, accumulates and returns the result.
 func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 	attr := q.Attr
@@ -128,7 +111,19 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 
 	if useFunc {
 		f := q.SrcFunc[0]
-		ineqType = getIneqType(f)
+		switch f {
+		case "leq":
+			ineqType = ineqLeq
+		case "geq":
+			ineqType = ineqGeq
+		case "lt":
+			ineqType = ineqLt
+		case "gt":
+			ineqType = ineqGt
+		case "eq":
+			ineqType = ineqEqual
+		}
+
 		switch {
 		case ineqType != ineqNone:
 			if len(q.SrcFunc) != 2 {
