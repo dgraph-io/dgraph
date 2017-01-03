@@ -18,6 +18,7 @@ package types
 
 import (
 	"encoding/json"
+	"fmt"
 	"reflect"
 	"strings"
 
@@ -137,24 +138,24 @@ func ConvertToGeoJson(str string) (geom.T, error) {
 	var g geojson.Geometry
 	var m json.RawMessage
 	var err error
-
+	fmt.Println(s)
 	if s[0] == '[' && s[1] != '[' {
 		g.Type = "Point"
 		err = m.UnmarshalJSON([]byte(s))
 		if err != nil {
-			return nil, x.Errorf("Invalid coordinates")
+			return nil, x.Wrapf(err, "Invalid coordinates")
 		}
 		g.Coordinates = &m
 	} else if s[0] == '[' && s[1] == '[' {
 		g.Type = "Polygon"
 		err = m.UnmarshalJSON([]byte("[" + s + "]"))
 		if err != nil {
-			return nil, x.Errorf("Invalid coordinates")
+			return nil, x.Wrapf(err, "Invalid coordinates")
 		}
 		g.Coordinates = &m
 		g1, err := g.Decode()
 		if err != nil {
-			return nil, err
+			return nil, x.Wrapf(err, "Invalid coordinates")
 		}
 		coords := g1.(*geom.Polygon).Coords()
 		if !reflect.DeepEqual(coords[0][0], coords[0][len(coords[0])-1]) {

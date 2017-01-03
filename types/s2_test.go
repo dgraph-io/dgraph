@@ -10,7 +10,7 @@ import (
 )
 
 func TestConvertToGeoJson_Point(t *testing.T) {
-	s := `[1, 2] `
+	s := `[1.0, 2.0] `
 	b, err := ConvertToGeoJson(s)
 	require.NoError(t, err)
 	require.Equal(t, geom.Coord{1, 2}, b.(*geom.Point).Coords())

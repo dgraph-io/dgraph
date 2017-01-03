@@ -689,6 +689,40 @@ func TestParseFilter_unbalancedbrac(t *testing.T) {
 	require.Error(t, err)
 }
 
+// Test if unbalanced brac will lead to errors.
+func TestParseFilter_Geo1(t *testing.T) {
+	query := `
+	query {
+		me(_uid_:0x0a) {
+			friends @filter(near(loc, [1 , 2 ] )) {
+				name
+			}
+			gender,age
+			hometown
+		}
+	}
+`
+	_, _, err := Parse(query)
+	require.NoError(t, err)
+}
+
+// Test if unbalanced brac will lead to errors.
+func TestParseFilter_Geo2(t *testing.T) {
+	query := `
+	query {
+		me(_uid_:0x0a) {
+			friends @filter(near(loc, [[1 , 2 ], [3, 4] , [5, 6]] )) {
+				name
+			}
+			gender,age
+			hometown
+		}
+	}
+`
+	_, _, err := Parse(query)
+	require.NoError(t, err)
+}
+
 // Test if empty brackets will lead to errors.
 func TestParseFilter_emptyargument(t *testing.T) {
 	query := `

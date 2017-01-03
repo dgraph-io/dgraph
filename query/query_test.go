@@ -1981,7 +1981,7 @@ func TestNearGenerator(t *testing.T) {
 	defer os.RemoveAll(dir1)
 	defer os.RemoveAll(dir2)
 	query := `{
-		me(near(loc, "{'Type':'Point', 'Coordinates':[1.1,2.0]}", 5)) {
+		me(near(loc, [1.1,2.0], 5)) {
 			name
 			gender
 		}
@@ -1997,7 +1997,7 @@ func TestWithinGenerator(t *testing.T) {
 	defer os.RemoveAll(dir1)
 	defer os.RemoveAll(dir2)
 	query := `{
-		me(within(loc,  "{'Type':'Polygon', 'Coordinates':[[[0.0,0.0], [2.0,0.0], [1.5, 3.0], [0.0, 2.0]]]}")) {
+		me(within(loc,  [[0.0,0.0], [2.0,0.0], [1.5, 3.0], [0.0, 2.0]])) {
 			name
 		}
 	}`
@@ -2012,7 +2012,7 @@ func TestContainsGenerator(t *testing.T) {
 	defer os.RemoveAll(dir1)
 	defer os.RemoveAll(dir2)
 	query := `{
-		me(contains(loc,  "{'Type':'Point', 'Coordinates':[2.0, 0.0]}")) {
+		me(contains(loc,  [2.0, 0.0])) {
 			name
 		}
 	}`
@@ -2027,7 +2027,7 @@ func TestIntersectsGenerator(t *testing.T) {
 	defer os.RemoveAll(dir1)
 	defer os.RemoveAll(dir2)
 	query := `{
-		me(intersects(loc, "{'Type':'Polygon', 'Coordinates':[[[0.0,0.0], [2.0,0.0], [1.5, 3.0], [0.0, 2.0]]]}")) {
+		me(intersects(loc, [[0.0,0.0], [2.0,0.0], [1.5, 3.0], [0.0, 2.0]])) {
 			name
 		}
 	}`

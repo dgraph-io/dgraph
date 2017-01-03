@@ -118,7 +118,7 @@ func TestWithinPoint(t *testing.T) {
 		Func: &gql.Function{
 			Attr: "geometry",
 			Name: "near",
-			Args: []string{`{"Type":"Point", "Coordinates":[-122.082506, 37.4249518]}`, "1"},
+			Args: []string{`[-122.082506, 37.4249518]`, "1"},
 		},
 		Children: []*gql.GraphQuery{&gql.GraphQuery{Attr: "name"}},
 	}
@@ -138,8 +138,7 @@ func TestWithinPolygon(t *testing.T) {
 	gq := &gql.GraphQuery{
 		Alias: "me",
 		Func: &gql.Function{Attr: "geometry", Name: "within", Args: []string{
-			`{"Type":"Polygon", "Coordinates":[[[-122.06, 37.37], [-122.1, 37.36], 
-			[-122.12, 37.4], [-122.11, 37.43], [-122.04, 37.43], [-122.06, 37.37]]]}`},
+			`[[-122.06, 37.37], [-122.1, 37.36], [-122.12, 37.4], [-122.11, 37.43], [-122.04, 37.43], [-122.06, 37.37]]`},
 		},
 		Children: []*gql.GraphQuery{&gql.GraphQuery{Attr: "name"}},
 	}
@@ -158,7 +157,7 @@ func TestContainsPoint(t *testing.T) {
 	gq := &gql.GraphQuery{
 		Alias: "me",
 		Func: &gql.Function{Attr: "geometry", Name: "contains", Args: []string{
-			`{"Type":"Point", "Coordinates":[-122.082506, 37.4249518]}`},
+			`[-122.082506, 37.4249518]`},
 		},
 		Children: []*gql.GraphQuery{&gql.GraphQuery{Attr: "name"}},
 	}
@@ -179,7 +178,7 @@ func TestNearPoint(t *testing.T) {
 		Func: &gql.Function{
 			Attr: "geometry",
 			Name: "near",
-			Args: []string{`{"Type":"Point", "Coordinates":[-122.082506, 37.4249518]}`, "1000"},
+			Args: []string{`[-122.082506, 37.4249518]`, "1000"},
 		},
 		Children: []*gql.GraphQuery{&gql.GraphQuery{Attr: "name"}},
 	}
@@ -201,8 +200,8 @@ func TestIntersectsPolygon1(t *testing.T) {
 			Attr: "geometry",
 			Name: "intersects",
 			Args: []string{
-				`{"Type":"Polygon",	"Coordinates":[[[-122.06, 37.37], [-122.1, 37.36], 
-					[-122.12, 37.4], [-122.11, 37.43], [-122.04, 37.43], [-122.06, 37.37]]]}`,
+				`[[-122.06, 37.37], [-122.1, 37.36], 
+					[-122.12, 37.4], [-122.11, 37.43], [-122.04, 37.43], [-122.06, 37.37]]`,
 			},
 		},
 		Children: []*gql.GraphQuery{&gql.GraphQuery{Attr: "name"}},
@@ -226,8 +225,8 @@ func TestIntersectsPolygon2(t *testing.T) {
 			Attr: "geometry",
 			Name: "intersects",
 			Args: []string{
-				`{"Type":"Polygon",	"Coordinates":[[[-121.6, 37.1], [-122.4, 37.3], 
-					[-122.6, 37.8], [-122.5, 38.3], [-121.9, 38], [-121.6, 37.1]]]}`,
+				`[[-121.6, 37.1], [-122.4, 37.3], 
+					[-122.6, 37.8], [-122.5, 38.3], [-121.9, 38], [-121.6, 37.1]]`,
 			},
 		},
 		Children: []*gql.GraphQuery{&gql.GraphQuery{Attr: "name"}},

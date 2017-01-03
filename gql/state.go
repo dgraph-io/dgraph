@@ -189,6 +189,24 @@ func lexFilterFuncInside(l *lex.Lexer) lex.StateFn {
 			l.Emit(itemFilterFuncArg)
 			l.Next() // Consume the " and ignore it.
 			l.Ignore()
+		} else if r == '[' {
+			depth := 1
+			for {
+				r := l.Next()
+				if r == '[' {
+					depth++
+				}
+				if r == ']' {
+					depth--
+				}
+				if depth == 0 {
+					break
+				}
+			}
+			l.Emit(itemFilterFuncArg)
+			empty = false
+			l.AcceptRun(isSpace)
+			l.Ignore()
 		} else {
 			empty = false
 			// Accept this argument. Till comma or right bracket.
