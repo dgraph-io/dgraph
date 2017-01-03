@@ -185,7 +185,7 @@ func lexFilterFuncInside(l *lex.Lexer) lex.StateFn {
 			l.Ignore()
 		} else {
 			// Accept this argument. Till comma or right bracket.
-			l.AcceptUntil(isEndFunc)
+			l.AcceptUntil(isEndArg)
 			l.Emit(itemFilterFuncArg)
 		}
 	}
@@ -617,8 +617,8 @@ func isEndLiteral(r rune) bool {
 	return r == '"' || r == '\u000d' || r == '\u000a'
 }
 
-// isEndFunc returns true if rune is a comma.
-func isEndFunc(r rune) bool {
+// isEndArg returns true if rune is a comma.
+func isEndArg(r rune) bool {
 	return r == ',' || r == ')'
 }
 
