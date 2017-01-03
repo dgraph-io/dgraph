@@ -199,6 +199,9 @@ func lexFilterFuncInside(l *lex.Lexer) lex.StateFn {
 				if r == ']' {
 					depth--
 				}
+				if depth > 2 || depth < 0 {
+					return l.Errorf("Invalid bracket sequence")
+				}
 				if depth == 0 {
 					break
 				}
@@ -207,6 +210,10 @@ func lexFilterFuncInside(l *lex.Lexer) lex.StateFn {
 			empty = false
 			l.AcceptRun(isSpace)
 			l.Ignore()
+			if !isEndArg(l.Peek()) {
+				return l.Errorf("Invalid bracket sequence")
+			}
+
 		} else {
 			empty = false
 			// Accept this argument. Till comma or right bracket.
