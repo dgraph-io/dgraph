@@ -1997,7 +1997,7 @@ func TestWithinGenerator(t *testing.T) {
 	defer os.RemoveAll(dir1)
 	defer os.RemoveAll(dir2)
 	query := `{
-		me(within(loc,  [[0.0,0.0], [2.0,0.0], [1.5, 3.0], [0.0, 2.0]])) {
+		me(within(loc,  [[0.0,0.0], [2.0,0.0], [1.5, 3.0], [0.0, 2.0], [0.0, 0.0]])) {
 			name
 		}
 	}`
