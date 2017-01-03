@@ -35,6 +35,15 @@ var (
 	emptyResult  task.Result
 )
 
+const (
+	ineqNone  = iota
+	ineqEqual = iota
+	ineqLeq   = iota
+	ineqGeq   = iota
+	ineqLt    = iota
+	ineqGt    = iota
+)
+
 // ProcessTaskOverNetwork is used to process the query and get the result from
 // the instance which stores posting list corresponding to the predicate in the
 // query.
@@ -86,6 +95,23 @@ func convertValue(attr, data string) (types.Val, error) {
 	return dst, nil
 }
 
+// ineqType returns the inequality type of the given function.
+func getIneqType(s string) int {
+	switch s {
+	case "leq":
+		return ineqLeq
+	case "geq":
+		return ineqGeq
+	case "lt":
+		return ineqLt
+	case "gt":
+		return ineqGt
+	case "eq":
+		return ineqEqual
+	}
+	return ineqNone
+}
+
 // processTask processes the query, accumulates and returns the result.
 func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 	attr := q.Attr
@@ -98,16 +124,13 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 	var intersectDest bool
 	var ineqValue types.Val
 	var ineqValueToken string
-	var isGeq, isLeq bool
+	ineqType := ineqNone
 
 	if useFunc {
 		f := q.SrcFunc[0]
-		isGeq = f == "geq"
-		isLeq = f == "leq"
+		ineqType = getIneqType(f)
 		switch {
-		case isGeq:
-			fallthrough
-		case isLeq:
+		case ineqType != ineqNone:
 			if len(q.SrcFunc) != 2 {
 				return nil, x.Errorf("Function requires 2 arguments, but got %d %v",
 					len(q.SrcFunc), q.SrcFunc)
@@ -128,7 +151,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 			}
 			ineqValueToken = ineqTokens[0]
 			// Get tokens geq / leq ineqValueToken.
-			tokens, err = getInequalityTokens(attr, ineqValueToken, isGeq)
+			tokens, err = getInequalityTokens(attr, ineqValueToken, ineqType)
 			if err != nil {
 				return nil, err
 			}
@@ -196,7 +219,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 		out.UidMatrix = append(out.UidMatrix, pl.Uids(opts))
 	}
 
-	if (isGeq || isLeq) && len(tokens) > 0 && ineqValueToken == tokens[0] {
+	if ineqType != ineqNone && len(tokens) > 0 && ineqValueToken == tokens[0] {
 		// Need to evaluate inequality for entries in the first bucket.
 		typ, err := schema.TypeOf(attr)
 		if err != nil || !typ.IsScalar() {
@@ -211,10 +234,22 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 			if sv.Value == nil || err != nil {
 				return false
 			}
-			if isGeq {
+
+			switch ineqType {
+			case ineqGeq:
 				return !types.Less(sv, ineqValue)
+			case ineqGt:
+				return types.Less(ineqValue, sv)
+			case ineqLeq:
+				return !types.Less(ineqValue, sv)
+			case ineqLt:
+				return types.Less(sv, ineqValue)
+			case ineqEqual:
+				return !types.Less(sv, ineqValue) && !types.Less(ineqValue, sv)
+			default:
+				x.Fatalf("Unknown ineqType %v", ineqType)
+				return false
 			}
-			return !types.Less(ineqValue, sv)
 		})
 	}
 
