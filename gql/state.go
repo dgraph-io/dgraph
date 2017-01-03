@@ -181,7 +181,7 @@ func lexFilterFuncInside(l *lex.Lexer) lex.StateFn {
 			l.Ignore()
 			l.AcceptUntil(isEndLiteral) // This call will backup the ending ".
 			l.Emit(itemFilterFuncArg)
-			l.Next() // Consume the , and ignore it.
+			l.Next() // Consume the " and ignore it.
 			l.Ignore()
 		} else {
 			// Accept this argument. Till comma or right bracket.
