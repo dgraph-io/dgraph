@@ -181,11 +181,11 @@ func populateGraph(t *testing.T) (string, string, *store.Store) {
 	// Now let's add a few properties for the main user.
 	addEdgeToValue(t, ps, "name", 1, "Michonne")
 	addEdgeToValue(t, ps, "gender", 1, "female")
+
 	coord := types.ValueForType(types.GeoID)
 	src := types.ValueForType(types.StringID)
 	src.Value = []byte("{\"Type\":\"Point\", \"Coordinates\":[1.1,2.0]}")
 	err = types.Convert(src, &coord)
-	//coord.UnmarshalText([]byte("{\"Type\":\"Point\", \"Coordinates\":[1.1,2.0]}"))
 	require.NoError(t, err)
 	gData := types.ValueForType(types.BinaryID)
 	err = types.Marshal(coord, &gData)
@@ -222,8 +222,23 @@ func populateGraph(t *testing.T) (string, string, *store.Store) {
 
 	addEdgeToValue(t, ps, "address", 23, "21, mark street, Mars")
 	addEdgeToValue(t, ps, "name", 24, "Glenn Rhee")
+	src.Value = []byte(`{"Type":"Point", "Coordinates":[1.10001,2.000001]}`)
+	err = types.Convert(src, &coord)
+	require.NoError(t, err)
+	gData = types.ValueForType(types.BinaryID)
+	err = types.Marshal(coord, &gData)
+	require.NoError(t, err)
+	addEdgeToTypedValue(t, ps, "loc", 24, types.GeoID, gData.Value.([]byte))
+
 	addEdgeToValue(t, ps, "name", 25, "Daryl Dixon")
 	addEdgeToValue(t, ps, "name", 31, "Andrea")
+	src.Value = []byte(`{"Type":"Point", "Coordinates":[2.0, 2.0]}`)
+	err = types.Convert(src, &coord)
+	require.NoError(t, err)
+	gData = types.ValueForType(types.BinaryID)
+	err = types.Marshal(coord, &gData)
+	require.NoError(t, err)
+	addEdgeToTypedValue(t, ps, "loc", 31, types.GeoID, gData.Value.([]byte))
 
 	addEdgeToValue(t, ps, "dob", 23, "1910-01-02")
 	addEdgeToValue(t, ps, "dob", 24, "1909-05-05")
@@ -1988,7 +2003,7 @@ func TestNearGenerator(t *testing.T) {
 	}`
 
 	js := processToJSON(t, query)
-	require.JSONEq(t, `{"me":[{"gender":"female","name":"Michonne"}]}`, string(js))
+	require.JSONEq(t, `{"me":[{"gender":"female","name":"Michonne"},{"name":"Glenn Rhee"}]}`, string(js))
 }
 
 func TestNearGeneratorError(t *testing.T) {
@@ -2081,7 +2096,7 @@ func TestWithinGenerator(t *testing.T) {
 	}`
 
 	js := processToJSON(t, query)
-	require.JSONEq(t, `{"me":[{"name":"Michonne"}]}`, string(js))
+	require.JSONEq(t, `{"me":[{"name":"Michonne"},{"name":"Glenn Rhee"}]}`, string(js))
 }
 
 func TestContainsGenerator(t *testing.T) {
@@ -2151,7 +2166,7 @@ func TestIntersectsGenerator(t *testing.T) {
 	}`
 
 	js := processToJSON(t, query)
-	require.JSONEq(t, `{"me":[{"name":"Michonne"}, {"name":"Rick Grimes"}]}`, string(js))
+	require.JSONEq(t, `{"me":[{"name":"Michonne"}, {"name":"Rick Grimes"}, {"name":"Glenn Rhee"}]}`, string(js))
 }
 
 func TestSchema(t *testing.T) {

@@ -124,22 +124,7 @@ func GetGeoTokens(funcArgs []string) ([]string, *GeoQueryData, error) {
 	}
 }
 
-func queryTokens(qt QueryType, data string, maxDistance float64) ([]string, *GeoQueryData, error) {
-	// Try to parse the data as geo type.
-	geoData := strings.Replace(data, "'", "\"", -1)
-	gc := ValueForType(GeoID)
-	src := ValueForType(StringID)
-	src.Value = []byte(geoData)
-	err := Convert(src, &gc)
-	if err != nil {
-		return nil, nil, x.Wrapf(err, "Cannot decode given geoJson input")
-	}
-	g := gc.Value.(geom.T)
-
-	return queryTokensGeo(qt, g, maxDistance)
-}
-
-// queryTokens returns the tokens to be used to look up the geo index for a given filter.
+// queryTokensGeo returns the tokens to be used to look up the geo index for a given filter.
 func queryTokensGeo(qt QueryType, g geom.T, maxDistance float64) ([]string, *GeoQueryData, error) {
 	var l *s2.Loop
 	var pt *s2.Point

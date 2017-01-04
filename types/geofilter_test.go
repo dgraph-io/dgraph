@@ -18,12 +18,29 @@ package types
 
 import (
 	"encoding/binary"
+	"strings"
 	"testing"
 
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
 	"github.com/twpayne/go-geom"
 	"github.com/twpayne/go-geom/encoding/wkb"
 )
+
+func queryTokens(qt QueryType, data string, maxDistance float64) ([]string, *GeoQueryData, error) {
+	// Try to parse the data as geo type.
+	geoData := strings.Replace(data, "'", "\"", -1)
+	gc := ValueForType(GeoID)
+	src := ValueForType(StringID)
+	src.Value = []byte(geoData)
+	err := Convert(src, &gc)
+	if err != nil {
+		return nil, nil, x.Wrapf(err, "Cannot decode given geoJson input")
+	}
+	g := gc.Value.(geom.T)
+
+	return queryTokensGeo(qt, g, maxDistance)
+}
 
 func formData(t *testing.T, str string) string {
 	p, err := loadPolygon(str)
