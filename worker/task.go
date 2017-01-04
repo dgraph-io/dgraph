@@ -35,15 +35,6 @@ var (
 	emptyResult  task.Result
 )
 
-const (
-	ineqNone  = iota
-	ineqEqual = iota
-	ineqLeq   = iota
-	ineqGeq   = iota
-	ineqLt    = iota
-	ineqGt    = iota
-)
-
 // ProcessTaskOverNetwork is used to process the query and get the result from
 // the instance which stores posting list corresponding to the predicate in the
 // query.
@@ -107,25 +98,13 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 	var intersectDest bool
 	var ineqValue types.Val
 	var ineqValueToken string
-	ineqType := ineqNone
+	var isIneq bool
 
 	if useFunc {
 		f := q.SrcFunc[0]
-		switch f {
-		case "leq":
-			ineqType = ineqLeq
-		case "geq":
-			ineqType = ineqGeq
-		case "lt":
-			ineqType = ineqLt
-		case "gt":
-			ineqType = ineqGt
-		case "eq":
-			ineqType = ineqEqual
-		}
-
+		isIneq = f == "leq" || f == "geq" || f == "lt" || f == "gt" || f == "eq"
 		switch {
-		case ineqType != ineqNone:
+		case isIneq:
 			if len(q.SrcFunc) != 2 {
 				return nil, x.Errorf("Function requires 2 arguments, but got %d %v",
 					len(q.SrcFunc), q.SrcFunc)
@@ -146,7 +125,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 			}
 			ineqValueToken = ineqTokens[0]
 			// Get tokens geq / leq ineqValueToken.
-			tokens, err = getInequalityTokens(attr, ineqValueToken, ineqType)
+			tokens, err = getInequalityTokens(attr, ineqValueToken, f)
 			if err != nil {
 				return nil, err
 			}
@@ -214,7 +193,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 		out.UidMatrix = append(out.UidMatrix, pl.Uids(opts))
 	}
 
-	if ineqType != ineqNone && len(tokens) > 0 && ineqValueToken == tokens[0] {
+	if isIneq && len(tokens) > 0 && ineqValueToken == tokens[0] {
 		// Need to evaluate inequality for entries in the first bucket.
 		typ, err := schema.TypeOf(attr)
 		if err != nil || !typ.IsScalar() {
@@ -224,27 +203,27 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 		x.AssertTrue(len(out.UidMatrix) > 0)
 		// Filter the first row of UidMatrix. Since ineqValue != nil, we may
 		// assume that ineqValue is equal to the first token found in TokensTable.
+		var cmp func(a, b types.Val) bool
+		switch q.SrcFunc[0] {
+		case "geq":
+			cmp = func(a, b types.Val) bool { return !types.Less(a, b) }
+		case "gt":
+			cmp = func(a, b types.Val) bool { return types.Less(b, a) }
+		case "leq":
+			cmp = func(a, b types.Val) bool { return !types.Less(b, a) }
+		case "lt":
+			cmp = types.Less
+		case "eq":
+			cmp = func(a, b types.Val) bool { return !types.Less(b, a) && !types.Less(a, b) }
+		default:
+			x.Fatalf("Unknown ineqType %v", q.SrcFunc[0])
+		}
 		algo.ApplyFilter(out.UidMatrix[0], func(uid uint64, i int) bool {
 			sv, err := fetchValue(uid, attr, typ)
 			if sv.Value == nil || err != nil {
 				return false
 			}
-
-			switch ineqType {
-			case ineqGeq:
-				return !types.Less(sv, ineqValue)
-			case ineqGt:
-				return types.Less(ineqValue, sv)
-			case ineqLeq:
-				return !types.Less(ineqValue, sv)
-			case ineqLt:
-				return types.Less(sv, ineqValue)
-			case ineqEqual:
-				return !types.Less(sv, ineqValue) && !types.Less(ineqValue, sv)
-			default:
-				x.Fatalf("Unknown ineqType %v", ineqType)
-				return false
-			}
+			return cmp(sv, ineqValue)
 		})
 	}
 

@@ -16,13 +16,13 @@ func getTokens(funcArgs []string) ([]string, error) {
 }
 
 // getInequalityTokens gets tokens geq / leq compared to given token.
-func getInequalityTokens(attr, ineqValueToken string, ineqType int) ([]string, error) {
+func getInequalityTokens(attr, ineqValueToken string, f string) ([]string, error) {
 	tt := posting.GetTokensTable(attr)
 	if tt == nil {
 		return nil, x.Errorf("Attribute %s is not indexed", attr)
 	}
 
-	if ineqType == ineqEqual {
+	if f == "eq" {
 		pos := tt.Get(ineqValueToken)
 		if pos == -1 {
 			return []string{}, nil
@@ -31,7 +31,8 @@ func getInequalityTokens(attr, ineqValueToken string, ineqType int) ([]string, e
 	}
 
 	var s string
-	if ineqType == ineqGeq || ineqType == ineqGt {
+	isGeqOrGt := f == "geq" || f == "gt"
+	if isGeqOrGt {
 		s = tt.GetNextOrEqual(ineqValueToken)
 	} else {
 		s = tt.GetPrevOrEqual(ineqValueToken)
@@ -40,7 +41,7 @@ func getInequalityTokens(attr, ineqValueToken string, ineqType int) ([]string, e
 	out := make([]string, 0, 10)
 	for s != "" {
 		out = append(out, s)
-		if ineqType == ineqGeq || ineqType == ineqGt {
+		if isGeqOrGt {
 			s = tt.GetNext(s)
 		} else {
 			s = tt.GetPrev(s)
