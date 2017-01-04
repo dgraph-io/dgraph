@@ -81,6 +81,9 @@ func GetGeoTokens(funcArgs []string) ([]string, *GeoQueryData, error) {
 		if err != nil {
 			return nil, nil, x.Wrapf(err, "Error while converting distance to float")
 		}
+		if maxDist < 0 {
+			return nil, nil, x.Wrapf(err, "Distance cannot be negative")
+		}
 		g, err := ConvertToGeoJson(funcArgs[1])
 		if err != nil {
 			return nil, nil, err
