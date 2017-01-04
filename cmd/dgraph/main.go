@@ -703,6 +703,7 @@ func main() {
 	che := make(chan error, 1)
 	go setupServer(che)
 	go worker.StartRaftNodes(*walDir)
+	go worker.TempDebug()
 
 	if err := <-che; !strings.Contains(err.Error(),
 		"use of closed network connection") {
