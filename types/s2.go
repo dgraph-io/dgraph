@@ -19,7 +19,6 @@ package types
 import (
 	"encoding/json"
 	"fmt"
-	"reflect"
 	"strings"
 
 	"github.com/dgraph-io/dgraph/x"
@@ -130,7 +129,7 @@ func Intersects(l1 *s2.Loop, l2 *s2.Loop) bool {
 	return loopRegion{l1}.intersects(l2)
 }
 
-func ConvertToGeoJson(str string) (geom.T, error) {
+func convertToGeom(str string) (geom.T, error) {
 	s := strings.Replace(str, " ", "", -1)
 	if len(s) < 5 {
 		return nil, x.Errorf("Invalid coordinates")
@@ -139,16 +138,9 @@ func ConvertToGeoJson(str string) (geom.T, error) {
 	var m json.RawMessage
 	var err error
 	fmt.Println(s)
-	if s[0] == '[' && s[1] != '[' {
-		g.Type = "Point"
-		err = m.UnmarshalJSON([]byte(s))
-		if err != nil {
-			return nil, x.Wrapf(err, "Invalid coordinates")
-		}
-		g.Coordinates = &m
-	} else if s[0] == '[' && s[1] == '[' {
+	if s[0:2] == "[[" {
 		g.Type = "Polygon"
-		err = m.UnmarshalJSON([]byte("[" + s + "]"))
+		err = m.UnmarshalJSON([]byte(fmt.Sprintf("[%s]", s)))
 		if err != nil {
 			return nil, x.Wrapf(err, "Invalid coordinates")
 		}
@@ -158,9 +150,18 @@ func ConvertToGeoJson(str string) (geom.T, error) {
 			return nil, x.Wrapf(err, "Invalid coordinates")
 		}
 		coords := g1.(*geom.Polygon).Coords()
-		if !reflect.DeepEqual(coords[0][0], coords[0][len(coords[0])-1]) {
+		if coords[0][0][0] != coords[0][len(coords[0])-1][0] ||
+			coords[0][0][1] != coords[0][len(coords[0])-1][1] {
 			return nil, x.Errorf("Last coord not same as first")
 		}
+
+	} else if s[0] == '[' {
+		g.Type = "Point"
+		err = m.UnmarshalJSON([]byte(s))
+		if err != nil {
+			return nil, x.Wrapf(err, "Invalid coordinates")
+		}
+		g.Coordinates = &m
 	} else {
 		return nil, x.Errorf("invalid coordinates")
 	}

@@ -82,9 +82,9 @@ func GetGeoTokens(funcArgs []string) ([]string, *GeoQueryData, error) {
 			return nil, nil, x.Wrapf(err, "Error while converting distance to float")
 		}
 		if maxDist < 0 {
-			return nil, nil, x.Wrapf(err, "Distance cannot be negative")
+			return nil, nil, x.Errorf("Distance cannot be negative")
 		}
-		g, err := ConvertToGeoJson(funcArgs[1])
+		g, err := convertToGeom(funcArgs[1])
 		if err != nil {
 			return nil, nil, err
 		}
@@ -94,7 +94,7 @@ func GetGeoTokens(funcArgs []string) ([]string, *GeoQueryData, error) {
 			return nil, nil, x.Errorf("within function requires 2 arguments, but got %d",
 				len(funcArgs))
 		}
-		g, err := ConvertToGeoJson(funcArgs[1])
+		g, err := convertToGeom(funcArgs[1])
 		if err != nil {
 			return nil, nil, err
 		}
@@ -104,7 +104,7 @@ func GetGeoTokens(funcArgs []string) ([]string, *GeoQueryData, error) {
 			return nil, nil, x.Errorf("contains function requires 2 arguments, but got %d",
 				len(funcArgs))
 		}
-		g, err := ConvertToGeoJson(funcArgs[1])
+		g, err := convertToGeom(funcArgs[1])
 		if err != nil {
 			return nil, nil, err
 		}
@@ -114,7 +114,7 @@ func GetGeoTokens(funcArgs []string) ([]string, *GeoQueryData, error) {
 			return nil, nil, x.Errorf("intersects function requires 2 arguments, but got %d",
 				len(funcArgs))
 		}
-		g, err := ConvertToGeoJson(funcArgs[1])
+		g, err := convertToGeom(funcArgs[1])
 		if err != nil {
 			return nil, nil, err
 		}
