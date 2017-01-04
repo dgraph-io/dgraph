@@ -189,6 +189,31 @@ func lexFilterFuncInside(l *lex.Lexer) lex.StateFn {
 			l.Emit(itemFilterFuncArg)
 			l.Next() // Consume the " and ignore it.
 			l.Ignore()
+		} else if r == '[' {
+			depth := 1
+			for {
+				r := l.Next()
+				if r == lex.EOF || r == ')' {
+					return l.Errorf("Invalid bracket sequence")
+				} else if r == '[' {
+					depth++
+				} else if r == ']' {
+					depth--
+				}
+				if depth > 2 || depth < 0 {
+					return l.Errorf("Invalid bracket sequence")
+				} else if depth == 0 {
+					break
+				}
+			}
+			l.Emit(itemFilterFuncArg)
+			empty = false
+			l.AcceptRun(isSpace)
+			l.Ignore()
+			if !isEndArg(l.Peek()) {
+				return l.Errorf("Invalid bracket sequence")
+			}
+
 		} else {
 			empty = false
 			// Accept this argument. Till comma or right bracket.

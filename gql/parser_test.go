@@ -689,6 +689,70 @@ func TestParseFilter_unbalancedbrac(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestParseFilter_Geo1(t *testing.T) {
+	query := `
+	query {
+		me(_uid_:0x0a) {
+			friends @filter(near(loc, [-1.12 , 2.0123 ], 100.123 )) {
+				name
+			}
+			gender,age
+			hometown
+		}
+	}
+`
+	_, _, err := Parse(query)
+	require.NoError(t, err)
+}
+
+func TestParseFilter_Geo2(t *testing.T) {
+	query := `
+	query {
+		me(_uid_:0x0a) {
+			friends @filter(within(loc, [[11.2 , -2.234 ], [ -31.23, 4.3214] , [5.312, 6.53]] )) {
+				name
+			}
+			gender,age
+			hometown
+		}
+	}
+`
+	_, _, err := Parse(query)
+	require.NoError(t, err)
+}
+
+func TestParseFilter_Geo3(t *testing.T) {
+	query := `
+	query {
+		me(_uid_:0x0a) {
+			friends @filter(near(loc, [[1 , 2 ], [[3, 4] , [5, 6]] )) {
+				name
+			}
+			gender,age
+			hometown
+		}
+	}
+`
+	_, _, err := Parse(query)
+	require.Error(t, err)
+}
+
+func TestParseFilter_Geo4(t *testing.T) {
+	query := `
+	query {
+		me(_uid_:0x0a) {
+			friends @filter(near(loc, [[1 , 2 ], [3, 4] , [5, 6]]] )) {
+				name
+			}
+			gender,age
+			hometown
+		}
+	}
+`
+	_, _, err := Parse(query)
+	require.Error(t, err)
+}
+
 // Test if empty brackets will lead to errors.
 func TestParseFilter_emptyargument(t *testing.T) {
 	query := `

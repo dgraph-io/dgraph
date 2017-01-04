@@ -18,12 +18,29 @@ package types
 
 import (
 	"encoding/binary"
+	"strings"
 	"testing"
 
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
 	"github.com/twpayne/go-geom"
 	"github.com/twpayne/go-geom/encoding/wkb"
 )
+
+func queryTokens(qt QueryType, data string, maxDistance float64) ([]string, *GeoQueryData, error) {
+	// Try to parse the data as geo type.
+	geoData := strings.Replace(data, "'", "\"", -1)
+	gc := ValueForType(GeoID)
+	src := ValueForType(StringID)
+	src.Value = []byte(geoData)
+	err := Convert(src, &gc)
+	if err != nil {
+		return nil, nil, x.Wrapf(err, "Cannot decode given geoJson input")
+	}
+	g := gc.Value.(geom.T)
+
+	return queryTokensGeo(qt, g, maxDistance)
+}
 
 func formData(t *testing.T, str string) string {
 	p, err := loadPolygon(str)
@@ -102,7 +119,7 @@ func TestQueryTokensPoint(t *testing.T) {
 	p := geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{-122.082506, 37.4249518})
 	data := formDataPoint(t, p)
 
-	qtypes := []QueryType{QueryTypeWithin, QueryTypeIntersects, QueryTypeContains}
+	qtypes := []QueryType{QueryTypeContains}
 	for _, qt := range qtypes {
 		toks, qd, err := queryTokens(qt, data, 0.0)
 		require.NoError(t, err)
@@ -145,6 +162,7 @@ func TestQueryTokensNearError(t *testing.T) {
 	require.Error(t, err) // no max distance
 }
 
+/*
 func TestMatchesFilterWithinPoint(t *testing.T) {
 	p := geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{-122.082506, 37.4249518})
 	data := formDataPoint(t, p)
@@ -166,6 +184,7 @@ func TestMatchesFilterWithinPoint(t *testing.T) {
 	// Poly containment not supported
 	require.False(t, qd.MatchesFilter(poly))
 }
+*/
 
 func TestMatchesFilterContainsPoint(t *testing.T) {
 	p := geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{-122.082506, 37.4249518})
@@ -190,6 +209,7 @@ func TestMatchesFilterContainsPoint(t *testing.T) {
 	require.False(t, qd.MatchesFilter(poly))
 }
 
+/*
 func TestMatchesFilterIntersectsPoint(t *testing.T) {
 	p := geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{-122.082506, 37.4249518})
 	data := formDataPoint(t, p)
@@ -217,6 +237,7 @@ func TestMatchesFilterIntersectsPoint(t *testing.T) {
 	})
 	require.False(t, qd.MatchesFilter(poly))
 }
+*/
 
 func TestMatchesFilterIntersectsPolygon(t *testing.T) {
 	p := geom.NewPolygon(geom.XY).MustSetCoords([][]geom.Coord{
