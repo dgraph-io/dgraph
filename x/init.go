@@ -26,7 +26,7 @@ import (
 	yaml "gopkg.in/yaml.v2"
 )
 
-const dgraphVersion = "0.7.1"
+var dgraphVersion string
 
 var (
 	configFile = flag.String("config", "",
@@ -81,7 +81,7 @@ func loadConfigFromYAML() {
 // printVersionOnly prints version and other helpful information if --version.
 func printVersionOnly() {
 	if *version {
-		fmt.Printf("Dgraph version %s\n", dgraphVersion)
+		fmt.Printf("Dgraph %s\n", dgraphVersion)
 		fmt.Println("\nCopyright 2016 Dgraph Labs, Inc.")
 		fmt.Println(`
 Licensed under the Apache License, version 2.0.
