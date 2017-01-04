@@ -193,16 +193,18 @@ func lexFilterFuncInside(l *lex.Lexer) lex.StateFn {
 			depth := 1
 			for {
 				r := l.Next()
-				if r == '[' {
+				if r == lex.EOF {
+					return l.Errorf("Invalid bracket sequence")
+				} else if r == '[' {
 					depth++
-				}
-				if r == ']' {
+				} else if r == ']' {
 					depth--
+				} else if r == ')' {
+					return l.Errorf("Invalid bracket sequence")
 				}
 				if depth > 2 || depth < 0 {
 					return l.Errorf("Invalid bracket sequence")
-				}
-				if depth == 0 {
+				} else if depth == 0 {
 					break
 				}
 			}
