@@ -2027,7 +2027,7 @@ func TestWithinGenerator(t *testing.T) {
 	}`
 
 	js := processToJSON(t, query)
-	require.JSONEq(t, `{"me":[{"name":"Michonne"},{"name":"Rick Grimes"}]}`, string(js))
+	require.JSONEq(t, `{"me":[{"name":"Michonne"}]}`, string(js))
 }
 
 func TestContainsGenerator(t *testing.T) {
@@ -2045,7 +2045,6 @@ func TestContainsGenerator(t *testing.T) {
 	require.JSONEq(t, `{"me":[{"name":"Rick Grimes"}]}`, string(js))
 }
 
-/*
 func TestIntersectsGenerator(t *testing.T) {
 	dir1, dir2, ps := populateGraph(t)
 	defer ps.Close()
@@ -2060,7 +2059,6 @@ func TestIntersectsGenerator(t *testing.T) {
 	js := processToJSON(t, query)
 	require.JSONEq(t, `{"me":[{"name":"Michonne"}, {"name":"Rick Grimes"}]}`, string(js))
 }
-*/
 
 func TestSchema(t *testing.T) {
 	dir, dir2, ps := populateGraph(t)
