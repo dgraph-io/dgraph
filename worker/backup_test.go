@@ -112,14 +112,14 @@ func TestBackup(t *testing.T) {
 			nq, err := rdf.Parse(scanner.Text())
 			require.NoError(t, err)
 			// Subject should have uid 1/2/3/4.
-			require.Contains(t, []string{"_uid_:0x1", "_uid_:0x2", "_uid_:0x3", "_uid_:0x4"}, nq.Subject)
+			require.Contains(t, []string{"0x1", "0x2", "0x3", "0x4"}, nq.Subject)
 			// The only value we set was "photon".
 			if nq.ObjectValue != nil {
 				require.Equal(t, &graph.Value{&graph.Value_StrVal{"pho\\ton"}}, nq.ObjectValue)
 			}
 			// The only objectId we set was uid 5.
 			if nq.ObjectId != "" {
-				require.Equal(t, "_uid_:0x5", nq.ObjectId)
+				require.Equal(t, "0x5", nq.ObjectId)
 			}
 			count++
 		}

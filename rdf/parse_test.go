@@ -56,29 +56,29 @@ var testNQuads = []struct {
 		},
 	},
 	{
-		input: `_uid_:0x01 <predicate> <object_id> .`,
+		input: `<0x01> <predicate> <object_id> .`,
 		nq: graph.NQuad{
-			Subject:     "_uid_:0x01",
+			Subject:     "0x01",
 			Predicate:   "predicate",
 			ObjectId:    "object_id",
 			ObjectValue: nil,
 		},
 	},
 	{
-		input: `<some_subject_id> <predicate> _uid_:0x01 .`,
+		input: `<some_subject_id> <predicate> <0x01> .`,
 		nq: graph.NQuad{
 			Subject:     "some_subject_id",
 			Predicate:   "predicate",
-			ObjectId:    "_uid_:0x01",
+			ObjectId:    "0x01",
 			ObjectValue: nil,
 		},
 	},
 	{
-		input: `_uid_:0x01 <predicate> _uid_:0x02 .`,
+		input: `<0x01> <predicate> <0x02> .`,
 		nq: graph.NQuad{
-			Subject:     "_uid_:0x01",
+			Subject:     "0x01",
 			Predicate:   "predicate",
-			ObjectId:    "_uid_:0x02",
+			ObjectId:    "0x02",
 			ObjectValue: nil,
 		},
 	},
@@ -146,15 +146,23 @@ var testNQuads = []struct {
 		expectedErr: true,
 	},
 	{
+		input:       "<_:alice> <knows> <something> .",
+		expectedErr: true,
+	},
+	{
+		input:       "_:alice <knows> <_:something> .",
+		expectedErr: true,
+	},
+	{
 		input:       "<alice> <knows> .",
 		expectedErr: true,
 	},
 	{
-		input:       "_uid_: 0x01 <knows> <something> .",
+		input:       " 0x01 <knows> <something> .",
 		expectedErr: true,
 	},
 	{
-		input:       "<alice> <knows> _uid_: 0x01 .",
+		input:       "<alice> <knows>  0x01 .",
 		expectedErr: true,
 	},
 	{
@@ -303,7 +311,7 @@ var testNQuads = []struct {
 		expectedErr: true,
 	},
 	{
-		input:       `_:alice <knows> "stuff"^^<xs:string> _uid_:0x01 .`,
+		input:       `_:alice <knows> "stuff"^^<xs:string> 0x01 .`,
 		expectedErr: true,
 	},
 	{

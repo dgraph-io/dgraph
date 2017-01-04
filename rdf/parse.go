@@ -35,12 +35,13 @@ var emptyEdge task.DirectedEdge
 
 // Gets the uid corresponding to an xid from the posting list which stores the
 // mapping.
-func GetUid(xid string) (uint64, error) {
+func GetUid(xid string) uint64 {
 	// If string represents a UID, convert to uint64 and return.
-	if strings.HasPrefix(xid, "_uid_:") {
-		return strconv.ParseUint(xid[6:], 0, 64)
+	uid, err := strconv.ParseUint(xid, 0, 64)
+	if err != nil {
+		return farm.Fingerprint64([]byte(xid))
 	}
-	return farm.Fingerprint64([]byte(xid)), nil
+	return uid
 }
 
 type NQuad struct {
@@ -89,10 +90,8 @@ func byteVal(nq NQuad) ([]byte, error) {
 // ToEdge is useful when you want to find the UID corresponding to XID for
 // just one edge. The method doesn't automatically generate a UID for an XID.
 func (nq NQuad) ToEdge() (*task.DirectedEdge, error) {
-	sid, err := GetUid(nq.Subject)
-	if err != nil {
-		return &emptyEdge, err
-	}
+	var err error
+	sid := GetUid(nq.Subject)
 
 	out := &task.DirectedEdge{
 		Attr:   nq.Predicate,
@@ -102,10 +101,7 @@ func (nq NQuad) ToEdge() (*task.DirectedEdge, error) {
 
 	// An edge can have an id or a value.
 	if len(nq.ObjectId) > 0 {
-		oid, err := GetUid(nq.ObjectId)
-		if err != nil {
-			return &emptyEdge, err
-		}
+		oid := GetUid(nq.ObjectId)
 		out.ValueId = oid
 	} else {
 		if out.Value, err = byteVal(nq); err != nil {
@@ -116,9 +112,9 @@ func (nq NQuad) ToEdge() (*task.DirectedEdge, error) {
 	return out, nil
 }
 
-func toUid(xid string, newToUid map[string]uint64) (uid uint64, rerr error) {
+func toUid(xid string, newToUid map[string]uint64) (uid uint64) {
 	if id, present := newToUid[xid]; present {
-		return id, nil
+		return id
 	}
 	return GetUid(xid)
 }
@@ -126,10 +122,8 @@ func toUid(xid string, newToUid map[string]uint64) (uid uint64, rerr error) {
 // ToEdgeUsing determines the UIDs for the provided XIDs and populates the
 // xidToUid map.
 func (nq NQuad) ToEdgeUsing(newToUid map[string]uint64) (*task.DirectedEdge, error) {
-	uid, err := toUid(nq.Subject, newToUid)
-	if err != nil {
-		return &emptyEdge, err
-	}
+	var err error
+	uid := toUid(nq.Subject, newToUid)
 
 	out := &task.DirectedEdge{
 		Entity: uid,
@@ -143,21 +137,18 @@ func (nq NQuad) ToEdgeUsing(newToUid map[string]uint64) (*task.DirectedEdge, err
 		}
 		out.ValueType = uint32(nq.ObjectType)
 	} else {
-		uid, err = toUid(nq.ObjectId, newToUid)
-		if err != nil {
-			return &emptyEdge, err
-		}
+		uid = toUid(nq.ObjectId, newToUid)
 		out.ValueId = uid
 	}
 	return out, nil
 }
 
 // This function is used to extract an IRI from an IRIREF.
-func stripBracketsAndTrim(val string) string {
+func stripBracketsAndTrim(val string) (string, bool) {
 	if val[0] != '<' && val[len(val)-1] != '>' {
-		return strings.Trim(val, " ")
+		return strings.Trim(val, " "), false
 	}
-	return strings.Trim(val[1:len(val)-1], " ")
+	return strings.Trim(val[1:len(val)-1], " "), true
 }
 
 // Function to do sanity check for subject, predicate, object and label strings.
@@ -183,18 +174,24 @@ func Parse(line string) (rnq graph.NQuad, rerr error) {
 
 	go run(l)
 	var oval string
-	var vend bool
+	var vend, hasBrackets bool
 	// We read items from the l.Items channel to which the lexer sends items.
 	for item := range l.Items {
 		switch item.Typ {
 		case itemSubject:
-			rnq.Subject = stripBracketsAndTrim(item.Val)
+			rnq.Subject, hasBrackets = stripBracketsAndTrim(item.Val)
+			if hasBrackets && len(rnq.Subject) > 1 && rnq.Subject[0:2] == "_:" {
+				return rnq, x.Errorf("Blank nodes cannot be in IRI")
+			}
 
 		case itemPredicate:
-			rnq.Predicate = stripBracketsAndTrim(item.Val)
+			rnq.Predicate, _ = stripBracketsAndTrim(item.Val)
 
 		case itemObject:
-			rnq.ObjectId = stripBracketsAndTrim(item.Val)
+			rnq.ObjectId, hasBrackets = stripBracketsAndTrim(item.Val)
+			if hasBrackets && len(rnq.ObjectId) > 1 && rnq.ObjectId[0:2] == "_:" {
+				return rnq, x.Errorf("Blank nodes cannot be in IRI")
+			}
 
 		case itemLiteral:
 			oval = item.Val
@@ -211,7 +208,7 @@ func Parse(line string) (rnq graph.NQuad, rerr error) {
 					"itemObject should be emitted before itemObjectType. Input: [%s]",
 					line)
 			}
-			val := stripBracketsAndTrim(item.Val)
+			val, _ := stripBracketsAndTrim(item.Val)
 			// TODO: Check if this condition is required.
 			if strings.Trim(val, " ") == "*" {
 				return rnq, x.Errorf("itemObject can't be *")
@@ -244,7 +241,7 @@ func Parse(line string) (rnq graph.NQuad, rerr error) {
 			vend = true
 
 		case itemLabel:
-			rnq.Label = stripBracketsAndTrim(item.Val)
+			rnq.Label, _ = stripBracketsAndTrim(item.Val)
 		}
 	}
 

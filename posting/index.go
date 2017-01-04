@@ -197,6 +197,9 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *task.DirectedEdge) e
 	var val types.Val
 	var verr error
 
+	l.Lock()
+	defer l.Unlock()
+
 	doUpdateIndex := pstore != nil && (t.Value != nil) && schema.IsIndexed(t.Attr)
 	if doUpdateIndex {
 		// Check last posting for original value BEFORE any mutation actually happens.

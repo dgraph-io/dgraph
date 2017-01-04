@@ -168,7 +168,7 @@ func (l *List) getPostingList(loop int) *types.PostingList {
 	if loop >= 10 {
 		x.Fatalf("This is over the 10th loop: %v", loop)
 	}
-	l.AssertRLock()
+	x.AssertTrue(l.HasRLock())
 	// Wait for any previous commits to happen before retrieving posting list again.
 	l.Wait()
 
@@ -198,7 +198,7 @@ func (l *List) SetForDeletion() {
 }
 
 func (l *List) updateMutationLayer(mpost *types.Posting) bool {
-	l.AssertLock()
+	x.AssertTrue(l.HasLock())
 	x.AssertTrue(mpost.Op == Set || mpost.Op == Del)
 
 	// First check the mutable layer.
@@ -293,29 +293,6 @@ func (l *List) updateMutationLayer(mpost *types.Posting) bool {
 	return true
 }
 
-// In benchmarks, the time taken per AddMutation before was
-// plateauing at 2.5 ms with sync per 10 log entries, and increasing
-// for sync per 100 log entries (to 3 ms per AddMutation), largely because
-// of how index generation was being done.
-//
-// With this change, the benchmarks perform as good as benchmarks for
-// commit.Logger, where the less frequently file sync happens, the faster
-// AddMutations run.
-//
-// PASS
-// BenchmarkAddMutations_SyncEveryLogEntry-6    	     100	  24712455 ns/op
-// BenchmarkAddMutations_SyncEvery10LogEntry-6  	     500	   2485961 ns/op
-// BenchmarkAddMutations_SyncEvery100LogEntry-6 	   10000	    298352 ns/op
-// BenchmarkAddMutations_SyncEvery1000LogEntry-6	   30000	     63544 ns/op
-// ok  	github.com/dgraph-io/dgraph/posting	10.291s
-//
-// Update: With the latest changes, we no longer use commit.Log, in fact, the
-// commit package is not present anymore. With RAFT, everything goes into WAL
-// before being applied to PL. So, AddMutation now is solely a memory based operation.
-// This is the result with the latest changes, running on my i5 laptop.
-//
-// BenchmarkAddMutations-4    	  300000	     26737 ns/op
-
 // AddMutation adds mutation to mutation layers. Note that it does not write
 // anything to disk. Some other background routine will be responsible for merging
 // changes in mutation layers to RocksDB. Returns whether any mutation happens.
@@ -324,8 +301,6 @@ func (l *List) AddMutation(ctx context.Context, t *task.DirectedEdge) (bool, err
 		x.TraceError(ctx, x.Errorf("DELETEME set to true. Temporary error."))
 		return false, ErrRetry
 	}
-	x.Trace(ctx, "AddMutation called.")
-	defer x.Trace(ctx, "AddMutation done.")
 
 	// All edges with a value set, have the same uid. In other words,
 	// an (entity, attribute) can only have one value.
@@ -345,8 +320,10 @@ func (l *List) AddMutation(ctx context.Context, t *task.DirectedEdge) (bool, err
 	// a)		check if the entity exists in main posting list.
 	// 				- If yes, store the mutation.
 	// 				- If no, disregard this mutation.
-	l.Lock()
-	defer l.Unlock()
+	if !l.HasLock() {
+		l.Lock()
+		defer l.Unlock()
+	}
 
 	hasMutated := l.updateMutationLayer(mpost)
 	if hasMutated {
@@ -373,13 +350,11 @@ func (l *List) AddMutation(ctx context.Context, t *task.DirectedEdge) (bool, err
 //    return false // to break iteration.
 //  })
 func (l *List) Iterate(afterUid uint64, f func(obj *types.Posting) bool) {
-	l.RLock()
-	defer l.RUnlock()
-	l.iterate(afterUid, f)
-}
+	if !l.HasRLock() {
+		l.RLock()
+		defer l.RUnlock()
+	}
 
-func (l *List) iterate(afterUid uint64, f func(obj *types.Posting) bool) {
-	l.AssertRLock()
 	pidx, midx := 0, 0
 	pl := l.getPostingList(0)
 
@@ -474,7 +449,7 @@ func (l *List) CommitIfDirty(ctx context.Context) (committed bool, err error) {
 	ubuf := make([]byte, 16)
 	h := md5.New()
 	count := 0
-	l.iterate(0, func(p *types.Posting) bool {
+	l.Iterate(0, func(p *types.Posting) bool {
 		// Checksum code.
 		n := binary.PutVarint(ubuf, int64(count))
 		h.Write(ubuf[0:n])
@@ -526,7 +501,7 @@ func (l *List) Uids(opt ListOptions) *task.List {
 
 	result := make([]uint64, 0, 10)
 	var intersectIdx int // Indexes into opt.Intersect if it exists.
-	l.iterate(opt.AfterUID, func(p *types.Posting) bool {
+	l.Iterate(opt.AfterUID, func(p *types.Posting) bool {
 		if p.Uid == math.MaxUint64 {
 			return false
 		}
@@ -545,11 +520,13 @@ func (l *List) Uids(opt ListOptions) *task.List {
 }
 
 func (l *List) Value() (rval types.Val, rerr error) {
-	l.RLock()
-	defer l.RUnlock()
+	if !l.HasRLock() {
+		l.RLock()
+		defer l.RUnlock()
+	}
 
 	var found bool
-	l.iterate(math.MaxUint64-1, func(p *types.Posting) bool {
+	l.Iterate(math.MaxUint64-1, func(p *types.Posting) bool {
 		if p.Uid == math.MaxUint64 {
 			val := make([]byte, len(p.Value))
 			copy(val, p.Value)

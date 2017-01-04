@@ -12,7 +12,7 @@ func getTokens(funcArgs []string) ([]string, error) {
 		return nil, x.Errorf("Function requires 2 arguments, but got %d",
 			len(funcArgs))
 	}
-	return types.DefaultIndexKeys(funcArgs[1]), nil
+	return types.DefaultIndexKeys(funcArgs[1])
 }
 
 // getInequalityTokens gets tokens geq / leq compared to given token.
