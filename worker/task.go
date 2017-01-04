@@ -203,27 +203,26 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 		x.AssertTrue(len(out.UidMatrix) > 0)
 		// Filter the first row of UidMatrix. Since ineqValue != nil, we may
 		// assume that ineqValue is equal to the first token found in TokensTable.
-		var cmp func(a, b types.Val) bool
-		switch q.SrcFunc[0] {
-		case "geq":
-			cmp = func(a, b types.Val) bool { return !types.Less(a, b) }
-		case "gt":
-			cmp = func(a, b types.Val) bool { return types.Less(b, a) }
-		case "leq":
-			cmp = func(a, b types.Val) bool { return !types.Less(b, a) }
-		case "lt":
-			cmp = types.Less
-		case "eq":
-			cmp = func(a, b types.Val) bool { return !types.Less(b, a) && !types.Less(a, b) }
-		default:
-			x.Fatalf("Unknown ineqType %v", q.SrcFunc[0])
-		}
 		algo.ApplyFilter(out.UidMatrix[0], func(uid uint64, i int) bool {
 			sv, err := fetchValue(uid, attr, typ)
 			if sv.Value == nil || err != nil {
 				return false
 			}
-			return cmp(sv, ineqValue)
+			switch q.SrcFunc[0] {
+			case "geq":
+				return !types.Less(sv, ineqValue)
+			case "gt":
+				return types.Less(ineqValue, sv)
+			case "leq":
+				return !types.Less(ineqValue, sv)
+			case "lt":
+				return types.Less(sv, ineqValue)
+			case "eq":
+				return !types.Less(sv, ineqValue) && !types.Less(ineqValue, sv)
+			default:
+				x.Fatalf("Unknown ineqType %v", q.SrcFunc[0])
+			}
+			return false
 		})
 	}
 
