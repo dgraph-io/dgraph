@@ -1991,30 +1991,6 @@ func TestNearGenerator(t *testing.T) {
 	require.JSONEq(t, `{"me":[{"gender":"female","name":"Michonne"}]}`, string(js))
 }
 
-func TestNearGenerator_Erorr(t *testing.T) {
-	dir1, dir2, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir1)
-	defer os.RemoveAll(dir2)
-	query := `{
-		me(near(loc, [1.1,2.0], -5)) {
-			name
-			gender
-		}
-	}`
-	gq, _, err := gql.Parse(query)
-	require.NoError(t, err)
-
-	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, gq)
-	require.NoError(t, err)
-
-	ch := make(chan error)
-	go ProcessGraph(ctx, sg, nil, ch)
-	err = <-ch
-	require.Error(t, err)
-}
-
 func TestWithinGenerator(t *testing.T) {
 	dir1, dir2, ps := populateGraph(t)
 	defer ps.Close()
@@ -2036,7 +2012,7 @@ func TestContainsGenerator(t *testing.T) {
 	defer os.RemoveAll(dir1)
 	defer os.RemoveAll(dir2)
 	query := `{
-		me(containedby(loc,  [2.0, 0.0])) {
+		me(contains(loc,  [2.0, 0.0])) {
 			name
 		}
 	}`

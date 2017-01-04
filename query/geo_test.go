@@ -156,7 +156,7 @@ func TestContainsPoint(t *testing.T) {
 	createTestData(t, ps)
 	gq := &gql.GraphQuery{
 		Alias: "me",
-		Func: &gql.Function{Attr: "geometry", Name: "containedby", Args: []string{
+		Func: &gql.Function{Attr: "geometry", Name: "contains", Args: []string{
 			`[-122.082506, 37.4249518]`},
 		},
 		Children: []*gql.GraphQuery{&gql.GraphQuery{Attr: "name"}},

@@ -37,7 +37,7 @@ const (
 	// QueryTypeContains finds all polygons that contain the given point
 	QueryTypeContains
 	// QueryTypeIntersects finds all objects that intersect the given geometry
-	// QueryTypeIntersects
+	QueryTypeIntersects
 	// QueryTypeNear finds all points that are within the given distance from the given point.
 	QueryTypeNear
 )
@@ -55,12 +55,12 @@ func IsGeoFunc(str string) bool {
 	switch str {
 	case "near":
 		return true
-	case "containedby":
+	case "contains":
 		return true
 	case "within":
 		return true
-		//case "intersects":
-		//	return true
+	case "intersects":
+		return true
 	}
 
 	return false
@@ -81,9 +81,6 @@ func GetGeoTokens(funcArgs []string) ([]string, *GeoQueryData, error) {
 		if err != nil {
 			return nil, nil, x.Wrapf(err, "Error while converting distance to float")
 		}
-		if maxDist < 0 {
-			return nil, nil, x.Errorf("Max Distance cannot be negative")
-		}
 		g, err := ConvertToGeoJson(funcArgs[1])
 		if err != nil {
 			return nil, nil, err
@@ -99,9 +96,9 @@ func GetGeoTokens(funcArgs []string) ([]string, *GeoQueryData, error) {
 			return nil, nil, err
 		}
 		return queryTokensGeo(QueryTypeWithin, g, 0.0)
-	case "containedby":
+	case "contains":
 		if len(funcArgs) != 2 {
-			return nil, nil, x.Errorf("containedby function requires 2 arguments, but got %d",
+			return nil, nil, x.Errorf("contains function requires 2 arguments, but got %d",
 				len(funcArgs))
 		}
 		g, err := ConvertToGeoJson(funcArgs[1])
@@ -109,18 +106,16 @@ func GetGeoTokens(funcArgs []string) ([]string, *GeoQueryData, error) {
 			return nil, nil, err
 		}
 		return queryTokensGeo(QueryTypeContains, g, 0.0)
-	/*
-		case "intersects":
-			if len(funcArgs) != 2 {
-				return nil, nil, x.Errorf("intersects function requires 2 arguments, but got %d",
-					len(funcArgs))
-			}
-			g, err := ConvertToGeoJson(funcArgs[1])
-			if err != nil {
-				return nil, nil, err
-			}
-			return queryTokensGeo(QueryTypeIntersects, g, 0.0)
-	*/
+	case "intersects":
+		if len(funcArgs) != 2 {
+			return nil, nil, x.Errorf("intersects function requires 2 arguments, but got %d",
+				len(funcArgs))
+		}
+		g, err := ConvertToGeoJson(funcArgs[1])
+		if err != nil {
+			return nil, nil, err
+		}
+		return queryTokensGeo(QueryTypeIntersects, g, 0.0)
 	default:
 		return nil, nil, x.Errorf("Invalid geo function")
 	}
@@ -186,14 +181,13 @@ func queryTokensGeo(qt QueryType, g geom.T, maxDistance float64) ([]string, *Geo
 		}
 		return nearQueryKeys(*pt, maxDistance)
 
-	/*
-		case QueryTypeIntersects:
-			// An intersects query is as the name suggests all the entities which intersect with the
-			// given region. So we look at all the objects whose parents match our cover as well as
-			// all the objects whose cover matches our parents.
-			toks := parentCoverTokens(parents, cover)
-			return toks, &GeoQueryData{pt: pt, loop: l, qtype: qt}, nil
-	*/
+	case QueryTypeIntersects:
+		// An intersects query is as the name suggests all the entities which intersect with the
+		// given region. So we look at all the objects whose parents match our cover as well as
+		// all the objects whose cover matches our parents.
+		toks := parentCoverTokens(parents, cover)
+		return toks, &GeoQueryData{pt: pt, loop: l, qtype: qt}, nil
+
 	default:
 		return nil, nil, x.Errorf("Unknown query type")
 	}
@@ -219,10 +213,8 @@ func (q GeoQueryData) MatchesFilter(g geom.T) bool {
 		return q.isWithin(g)
 	case QueryTypeContains:
 		return q.contains(g)
-	/*
-		case QueryTypeIntersects:
-			return q.intersects(g)
-	*/
+	case QueryTypeIntersects:
+		return q.intersects(g)
 	case QueryTypeNear:
 		if q.cap == nil {
 			return false
@@ -236,7 +228,6 @@ func (q GeoQueryData) MatchesFilter(g geom.T) bool {
 // Note that this is very far from accurate within function and is
 // a temporary fix.
 // TODO(Ashwin): Improve this to make it more accurate.
-/*
 func WithinPolygon(g1 *s2.Loop, g2 *s2.Loop) bool {
 	for _, point := range g1.Vertices() {
 		if !g2.ContainsPoint(point) {
@@ -245,17 +236,15 @@ func WithinPolygon(g1 *s2.Loop, g2 *s2.Loop) bool {
 	}
 	return true
 }
-*/
 
-// Returns true if one of the points lies within the cap
 // TODO(Ashwin): Improve this to make it more accurate.
-func IntersectsCapPolygon(g1 *s2.Loop, g2 *s2.Cap) bool {
+func WithinCapPolygon(g1 *s2.Loop, g2 *s2.Cap) bool {
 	for _, point := range g1.Vertices() {
-		if g2.ContainsPoint(point) {
-			return true
+		if !g2.ContainsPoint(point) {
+			return false
 		}
 	}
-	return false
+	return true
 }
 
 // returns true if the geometry represented by g is within the given loop or cap
@@ -272,11 +261,10 @@ func (q GeoQueryData) isWithin(g geom.T) bool {
 			return false
 		}
 		if q.loop != nil {
-			return Intersects(s2loop, q.loop)
-			//return WithinPolygon(s2loop, q.loop)
+			return WithinPolygon(s2loop, q.loop)
 		}
 		if q.cap != nil {
-			return IntersectsCapPolygon(s2loop, q.cap)
+			return WithinCapPolygon(s2loop, q.cap)
 		}
 	}
 
@@ -311,13 +299,12 @@ func (q GeoQueryData) contains(g geom.T) bool {
 	}
 	// If its a loop check if it lies within other loop. Else Check the point.
 	if q.loop != nil {
-		return Intersects(q.loop, s2loop)
-		//return WithinPolygon(q.loop, s2loop)
+		// We don't support polygons containing polygons yet.
+		return WithinPolygon(q.loop, s2loop)
 	}
 	return s2loop.ContainsPoint(*q.pt)
 }
 
-/*
 // returns true if the geometry represented by uid/attr intersects the given loop or point
 func (q GeoQueryData) intersects(g geom.T) bool {
 	x.AssertTruef(q.pt != nil || q.loop != nil, "At least a point or loop should be defined.")
@@ -346,7 +333,6 @@ func (q GeoQueryData) intersects(g geom.T) bool {
 		return false
 	}
 }
-*/
 
 // FilterGeoUids filters the uids based on the corresponding values and GeoQueryData.
 func FilterGeoUids(uids *task.List, values []*task.Value, q *GeoQueryData) *task.List {
