@@ -168,7 +168,7 @@ func (l *List) getPostingList(loop int) *types.PostingList {
 	if loop >= 10 {
 		x.Fatalf("This is over the 10th loop: %v", loop)
 	}
-	x.AssertTrue(l.HasRLock())
+	l.AssertRLock()
 	// Wait for any previous commits to happen before retrieving posting list again.
 	l.Wait()
 
@@ -194,11 +194,13 @@ func (l *List) getPostingList(loop int) *types.PostingList {
 
 // SetForDeletion will mark this List to be deleted, so no more mutations can be applied to this.
 func (l *List) SetForDeletion() {
-	atomic.StoreInt32(&l.deleteMe, 1)
+	l.Lock()
+	defer l.Unlock()
+	l.deleteMe = 1
 }
 
 func (l *List) updateMutationLayer(mpost *types.Posting) bool {
-	x.AssertTrue(l.HasLock())
+	l.AssertLock()
 	x.AssertTrue(mpost.Op == Set || mpost.Op == Del)
 
 	// First check the mutable layer.
@@ -297,7 +299,14 @@ func (l *List) updateMutationLayer(mpost *types.Posting) bool {
 // anything to disk. Some other background routine will be responsible for merging
 // changes in mutation layers to RocksDB. Returns whether any mutation happens.
 func (l *List) AddMutation(ctx context.Context, t *task.DirectedEdge) (bool, error) {
-	if atomic.LoadInt32(&l.deleteMe) == 1 {
+	l.Lock()
+	defer l.Unlock()
+	return l.addMutation(ctx, t)
+}
+
+func (l *List) addMutation(ctx context.Context, t *task.DirectedEdge) (bool, error) {
+	l.AssertLock()
+	if l.deleteMe == 1 {
 		x.TraceError(ctx, x.Errorf("DELETEME set to true. Temporary error."))
 		return false, ErrRetry
 	}
@@ -320,10 +329,6 @@ func (l *List) AddMutation(ctx context.Context, t *task.DirectedEdge) (bool, err
 	// a)		check if the entity exists in main posting list.
 	// 				- If yes, store the mutation.
 	// 				- If no, disregard this mutation.
-	if !l.HasLock() {
-		l.Lock()
-		defer l.Unlock()
-	}
 
 	hasMutated := l.updateMutationLayer(mpost)
 	if hasMutated {
@@ -350,11 +355,13 @@ func (l *List) AddMutation(ctx context.Context, t *task.DirectedEdge) (bool, err
 //    return false // to break iteration.
 //  })
 func (l *List) Iterate(afterUid uint64, f func(obj *types.Posting) bool) {
-	if !l.HasRLock() {
-		l.RLock()
-		defer l.RUnlock()
-	}
+	l.RLock()
+	defer l.RUnlock()
+	l.iterate(afterUid, f)
+}
 
+func (l *List) iterate(afterUid uint64, f func(obj *types.Posting) bool) {
+	l.AssertRLock()
 	pidx, midx := 0, 0
 	pl := l.getPostingList(0)
 
@@ -449,7 +456,7 @@ func (l *List) CommitIfDirty(ctx context.Context) (committed bool, err error) {
 	ubuf := make([]byte, 16)
 	h := md5.New()
 	count := 0
-	l.Iterate(0, func(p *types.Posting) bool {
+	l.iterate(0, func(p *types.Posting) bool {
 		// Checksum code.
 		n := binary.PutVarint(ubuf, int64(count))
 		h.Write(ubuf[0:n])
@@ -501,7 +508,7 @@ func (l *List) Uids(opt ListOptions) *task.List {
 
 	result := make([]uint64, 0, 10)
 	var intersectIdx int // Indexes into opt.Intersect if it exists.
-	l.Iterate(opt.AfterUID, func(p *types.Posting) bool {
+	l.iterate(opt.AfterUID, func(p *types.Posting) bool {
 		if p.Uid == math.MaxUint64 {
 			return false
 		}
@@ -520,13 +527,15 @@ func (l *List) Uids(opt ListOptions) *task.List {
 }
 
 func (l *List) Value() (rval types.Val, rerr error) {
-	if !l.HasRLock() {
-		l.RLock()
-		defer l.RUnlock()
-	}
+	l.RLock()
+	defer l.RUnlock()
+	return l.value()
+}
 
+func (l *List) value() (rval types.Val, rerr error) {
+	l.AssertRLock()
 	var found bool
-	l.Iterate(math.MaxUint64-1, func(p *types.Posting) bool {
+	l.iterate(math.MaxUint64-1, func(p *types.Posting) bool {
 		if p.Uid == math.MaxUint64 {
 			val := make([]byte, len(p.Value))
 			copy(val, p.Value)

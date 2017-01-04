@@ -181,11 +181,11 @@ func populateGraph(t *testing.T) (string, string, *store.Store) {
 	// Now let's add a few properties for the main user.
 	addEdgeToValue(t, ps, "name", 1, "Michonne")
 	addEdgeToValue(t, ps, "gender", 1, "female")
+
 	coord := types.ValueForType(types.GeoID)
 	src := types.ValueForType(types.StringID)
 	src.Value = []byte("{\"Type\":\"Point\", \"Coordinates\":[1.1,2.0]}")
 	err = types.Convert(src, &coord)
-	//coord.UnmarshalText([]byte("{\"Type\":\"Point\", \"Coordinates\":[1.1,2.0]}"))
 	require.NoError(t, err)
 	gData := types.ValueForType(types.BinaryID)
 	err = types.Marshal(coord, &gData)
@@ -212,7 +212,7 @@ func populateGraph(t *testing.T) (string, string, *store.Store) {
 	addEdgeToTypedValue(t, ps, "name", 23, types.StringID, []byte("Rick Grimes"))
 	addEdgeToValue(t, ps, "age", 23, "15")
 
-	src.Value = []byte(`{"Type":"Polygon", "Coordinates":[[[0.0,0.0], [2.0,0.0], [2.0, 2.0], [0.0, 2.0]]]}`)
+	src.Value = []byte(`{"Type":"Polygon", "Coordinates":[[[0.0,0.0], [2.0,0.0], [2.0, 2.0], [0.0, 2.0], [0.0, 0.0]]]}`)
 	err = types.Convert(src, &coord)
 	require.NoError(t, err)
 	gData = types.ValueForType(types.BinaryID)
@@ -222,8 +222,23 @@ func populateGraph(t *testing.T) (string, string, *store.Store) {
 
 	addEdgeToValue(t, ps, "address", 23, "21, mark street, Mars")
 	addEdgeToValue(t, ps, "name", 24, "Glenn Rhee")
+	src.Value = []byte(`{"Type":"Point", "Coordinates":[1.10001,2.000001]}`)
+	err = types.Convert(src, &coord)
+	require.NoError(t, err)
+	gData = types.ValueForType(types.BinaryID)
+	err = types.Marshal(coord, &gData)
+	require.NoError(t, err)
+	addEdgeToTypedValue(t, ps, "loc", 24, types.GeoID, gData.Value.([]byte))
+
 	addEdgeToValue(t, ps, "name", 25, "Daryl Dixon")
 	addEdgeToValue(t, ps, "name", 31, "Andrea")
+	src.Value = []byte(`{"Type":"Point", "Coordinates":[2.0, 2.0]}`)
+	err = types.Convert(src, &coord)
+	require.NoError(t, err)
+	gData = types.ValueForType(types.BinaryID)
+	err = types.Marshal(coord, &gData)
+	require.NoError(t, err)
+	addEdgeToTypedValue(t, ps, "loc", 31, types.GeoID, gData.Value.([]byte))
 
 	addEdgeToValue(t, ps, "dob", 23, "1910-01-02")
 	addEdgeToValue(t, ps, "dob", 24, "1909-05-05")
@@ -1981,14 +1996,92 @@ func TestNearGenerator(t *testing.T) {
 	defer os.RemoveAll(dir1)
 	defer os.RemoveAll(dir2)
 	query := `{
-		me(near(loc, "{'Type':'Point', 'Coordinates':[1.1,2.0]}", 5)) {
+		me(near(loc, [1.1,2.0], 5.001)) {
 			name
 			gender
 		}
 	}`
 
 	js := processToJSON(t, query)
-	require.JSONEq(t, `{"me":[{"gender":"female","name":"Michonne"}]}`, string(js))
+	require.JSONEq(t, `{"me":[{"gender":"female","name":"Michonne"},{"name":"Glenn Rhee"}]}`, string(js))
+}
+
+func TestNearGeneratorError(t *testing.T) {
+	dir1, dir2, ps := populateGraph(t)
+	defer ps.Close()
+	defer os.RemoveAll(dir1)
+	defer os.RemoveAll(dir2)
+	query := `{
+		me(near(loc, [1.1,2.0], -5.0)) {
+			name
+			gender
+		}
+	}`
+
+	gq, _, err := gql.Parse(query)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	sg, err := ToSubGraph(ctx, gq)
+	require.NoError(t, err)
+	sg.DebugPrint("")
+
+	ch := make(chan error)
+	go ProcessGraph(ctx, sg, nil, ch)
+	err = <-ch
+	require.Error(t, err)
+}
+
+func TestNearGeneratorErrorMissDist(t *testing.T) {
+	dir1, dir2, ps := populateGraph(t)
+	defer ps.Close()
+	defer os.RemoveAll(dir1)
+	defer os.RemoveAll(dir2)
+	query := `{
+		me(near(loc, [1.1,2.0])) {
+			name
+			gender
+		}
+	}`
+
+	gq, _, err := gql.Parse(query)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	sg, err := ToSubGraph(ctx, gq)
+	require.NoError(t, err)
+	sg.DebugPrint("")
+
+	ch := make(chan error)
+	go ProcessGraph(ctx, sg, nil, ch)
+	err = <-ch
+	require.Error(t, err)
+}
+
+func TestWithinGeneratorError(t *testing.T) {
+	dir1, dir2, ps := populateGraph(t)
+	defer ps.Close()
+	defer os.RemoveAll(dir1)
+	defer os.RemoveAll(dir2)
+	query := `{
+		me(within(loc, [[0.0,0.0], [2.0,0.0], [1.5, 3.0], [0.0, 2.0], [0.0, 0.0]], 12.2)) {
+			name
+			gender
+		}
+	}`
+
+	gq, _, err := gql.Parse(query)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	sg, err := ToSubGraph(ctx, gq)
+	require.NoError(t, err)
+	sg.DebugPrint("")
+
+	ch := make(chan error)
+	go ProcessGraph(ctx, sg, nil, ch)
+	err = <-ch
+	require.Error(t, err)
 }
 
 func TestWithinGenerator(t *testing.T) {
@@ -1997,13 +2090,13 @@ func TestWithinGenerator(t *testing.T) {
 	defer os.RemoveAll(dir1)
 	defer os.RemoveAll(dir2)
 	query := `{
-		me(within(loc,  "{'Type':'Polygon', 'Coordinates':[[[0.0,0.0], [2.0,0.0], [1.5, 3.0], [0.0, 2.0]]]}")) {
+		me(within(loc,  [[0.0,0.0], [2.0,0.0], [1.5, 3.0], [0.0, 2.0], [0.0, 0.0]])) {
 			name
 		}
 	}`
 
 	js := processToJSON(t, query)
-	require.JSONEq(t, `{"me":[{"name":"Michonne"}]}`, string(js))
+	require.JSONEq(t, `{"me":[{"name":"Michonne"},{"name":"Glenn Rhee"}]}`, string(js))
 }
 
 func TestContainsGenerator(t *testing.T) {
@@ -2012,7 +2105,7 @@ func TestContainsGenerator(t *testing.T) {
 	defer os.RemoveAll(dir1)
 	defer os.RemoveAll(dir2)
 	query := `{
-		me(contains(loc,  "{'Type':'Point', 'Coordinates':[2.0, 0.0]}")) {
+		me(contains(loc, [2.0,0.0])) {
 			name
 		}
 	}`
@@ -2021,19 +2114,59 @@ func TestContainsGenerator(t *testing.T) {
 	require.JSONEq(t, `{"me":[{"name":"Rick Grimes"}]}`, string(js))
 }
 
+func TestContainsGenerator2(t *testing.T) {
+	dir1, dir2, ps := populateGraph(t)
+	defer ps.Close()
+	defer os.RemoveAll(dir1)
+	defer os.RemoveAll(dir2)
+	query := `{
+		me(contains(loc,  [[1.0,1.0], [1.9,1.0], [1.9, 1.9], [1.0, 1.9], [1.0, 1.0]])) {
+			name
+		}
+	}`
+
+	js := processToJSON(t, query)
+	require.JSONEq(t, `{"me":[{"name":"Rick Grimes"}]}`, string(js))
+}
+
+func TestIntersectsGeneratorError(t *testing.T) {
+	dir1, dir2, ps := populateGraph(t)
+	defer ps.Close()
+	defer os.RemoveAll(dir1)
+	defer os.RemoveAll(dir2)
+	query := `{
+		me(intersects(loc, [0.0,0.0])) {
+			name
+		}
+	}`
+
+	gq, _, err := gql.Parse(query)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	sg, err := ToSubGraph(ctx, gq)
+	require.NoError(t, err)
+	sg.DebugPrint("")
+
+	ch := make(chan error)
+	go ProcessGraph(ctx, sg, nil, ch)
+	err = <-ch
+	require.Error(t, err)
+}
+
 func TestIntersectsGenerator(t *testing.T) {
 	dir1, dir2, ps := populateGraph(t)
 	defer ps.Close()
 	defer os.RemoveAll(dir1)
 	defer os.RemoveAll(dir2)
 	query := `{
-		me(intersects(loc, "{'Type':'Polygon', 'Coordinates':[[[0.0,0.0], [2.0,0.0], [1.5, 3.0], [0.0, 2.0]]]}")) {
+		me(intersects(loc, [[0.0,0.0], [2.0,0.0], [1.5, 3.0], [0.0, 2.0], [0.0, 0.0]])) {
 			name
 		}
 	}`
 
 	js := processToJSON(t, query)
-	require.JSONEq(t, `{"me":[{"name":"Michonne"}, {"name":"Rick Grimes"}]}`, string(js))
+	require.JSONEq(t, `{"me":[{"name":"Michonne"}, {"name":"Rick Grimes"}, {"name":"Glenn Rhee"}]}`, string(js))
 }
 
 func TestSchema(t *testing.T) {

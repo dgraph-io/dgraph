@@ -46,9 +46,15 @@ if [ "$platform" = "linux" ]; then
   echo -e "\n\033[1;34mSize of files after strip: $(du -sh)\033[0m"
 fi
 
-checksum=$(md5sum dgraph | awk '{print $1}')
+if [ "$platform" = "linux" ]; then
+	md5cmd=md5sum
+else
+	md5cmd="md5 -r"
+fi
+
+checksum=$($md5cmd dgraph | awk '{print $1}')
 echo "$checksum /usr/local/bin/dgraph" >> $checksum_file
-checksum=$(md5sum dgraphloader | awk '{print $1}')
+checksum=$($md5cmd dgraphloader | awk '{print $1}')
 echo "$checksum /usr/local/bin/dgraphloader" >> $checksum_file
 
 echo -e "\n\033[1;33mCreating tar file\033[0m"
@@ -63,5 +69,5 @@ mv $tar_file.tar.gz $cur_dir
 rm -rf $tmp_dir
 
 echo -e "\nCalculating and storing checksum for ICU data file."
-checksum=$(md5sum $GOPATH/src/github.com/dgraph-io/goicu/icudt58l.dat | awk '{print $1}')
+checksum=$($md5cmd $GOPATH/src/github.com/dgraph-io/goicu/icudt58l.dat | awk '{print $1}')
 echo "$checksum /usr/local/share/icudt58l.dat" >> $checksum_file

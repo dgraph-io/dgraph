@@ -23,8 +23,8 @@ func (s *SafeMutex) Unlock() {
 	s.m.Unlock()
 }
 
-func (s *SafeMutex) HasLock() bool {
-	return atomic.LoadInt32(&s.writer) == 1
+func (s *SafeMutex) AssertLock() {
+	AssertTrue(atomic.LoadInt32(&s.writer) == 1)
 }
 
 func (s *SafeMutex) RLock() {
@@ -37,9 +37,9 @@ func (s *SafeMutex) RUnlock() {
 	s.m.RUnlock()
 }
 
-func (s *SafeMutex) HasRLock() bool {
-	return atomic.LoadInt32(&s.readers) > 0 ||
-		atomic.LoadInt32(&s.writer) == 1
+func (s *SafeMutex) AssertRLock() {
+	AssertTrue(atomic.LoadInt32(&s.readers) > 0 ||
+		atomic.LoadInt32(&s.writer) == 1)
 }
 
 type SafeWait struct {
@@ -54,7 +54,7 @@ func (s *SafeWait) Done() {
 }
 
 func (s *SafeMutex) StartWait() *SafeWait {
-	AssertTrue(s.HasLock())
+	s.AssertLock()
 	if s.wait != nil {
 		AssertTrue(atomic.LoadInt32(&s.wait.waiting) == 0)
 	}
@@ -66,7 +66,7 @@ func (s *SafeMutex) StartWait() *SafeWait {
 }
 
 func (s *SafeMutex) Wait() {
-	AssertTrue(s.HasRLock())
+	s.AssertRLock()
 	if s.wait == nil {
 		return
 	}

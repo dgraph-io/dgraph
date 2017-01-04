@@ -207,7 +207,7 @@ func (g *groupi) isDuplicate(gid uint32, nid uint64, addr string, leader bool) b
 // duplicate will return true if we already have a server which matches the arguments
 // provided to the function exactly. This is used to avoid re-applying the same update.
 func (g *groupi) duplicate(gid uint32, nid uint64, addr string, leader bool) bool {
-	x.AssertTrue(g.HasRLock())
+	g.AssertRLock()
 	sl := g.all[gid]
 	if sl == nil {
 		return false
