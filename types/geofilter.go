@@ -167,8 +167,11 @@ func queryTokensGeo(qt QueryType, g geom.T, maxDistance float64) ([]string, *Geo
 	case QueryTypeWithin:
 		// For a within query we only need to look at the objects whose parents match our cover.
 		// So we take our cover and prefix with the parentPrefix to look in the index.
+		if l == nil {
+			return nil, nil, x.Errorf("Require a polygon for within query")
+		}
 		toks := createTokens(cover, parentPrefix)
-		return toks, &GeoQueryData{pt: pt, loop: l, qtype: qt}, nil
+		return toks, &GeoQueryData{loop: l, qtype: qt}, nil
 
 	case QueryTypeContains:
 		// For a contains query, we only need to look at the objects whose cover matches our
@@ -185,8 +188,11 @@ func queryTokensGeo(qt QueryType, g geom.T, maxDistance float64) ([]string, *Geo
 		// An intersects query is as the name suggests all the entities which intersect with the
 		// given region. So we look at all the objects whose parents match our cover as well as
 		// all the objects whose cover matches our parents.
+		if l == nil {
+			return nil, nil, x.Errorf("Require a polygon for intersects query")
+		}
 		toks := parentCoverTokens(parents, cover)
-		return toks, &GeoQueryData{pt: pt, loop: l, qtype: qt}, nil
+		return toks, &GeoQueryData{loop: l, qtype: qt}, nil
 
 	default:
 		return nil, nil, x.Errorf("Unknown query type")
@@ -307,14 +313,10 @@ func (q GeoQueryData) contains(g geom.T) bool {
 
 // returns true if the geometry represented by uid/attr intersects the given loop or point
 func (q GeoQueryData) intersects(g geom.T) bool {
-	x.AssertTruef(q.pt != nil || q.loop != nil, "At least a point or loop should be defined.")
+	x.AssertTruef(q.loop != nil, "Loop should be defined for intersects.")
 	switch v := g.(type) {
 	case *geom.Point:
 		p := pointFromPoint(v)
-		if q.pt != nil {
-			// Points only intersect if they are the same. (We allow for small rounding errors)
-			return q.pt.ApproxEqual(p)
-		}
 		// else loop is not nil
 		return q.loop.ContainsPoint(p)
 
@@ -322,9 +324,6 @@ func (q GeoQueryData) intersects(g geom.T) bool {
 		l, err := loopFromPolygon(v)
 		if err != nil {
 			return false
-		}
-		if q.pt != nil {
-			return l.ContainsPoint(*q.pt)
 		}
 		// else loop is not nil
 		return Intersects(l, q.loop)
