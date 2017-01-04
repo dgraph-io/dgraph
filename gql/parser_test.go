@@ -693,7 +693,7 @@ func TestParseFilter_Geo1(t *testing.T) {
 	query := `
 	query {
 		me(_uid_:0x0a) {
-			friends @filter(near(loc, [1 , 2 ] )) {
+			friends @filter(near(loc, [1 , 2 ], 50.0 )) {
 				name
 			}
 			gender,age
@@ -709,7 +709,7 @@ func TestParseFilter_Geo2(t *testing.T) {
 	query := `
 	query {
 		me(_uid_:0x0a) {
-			friends @filter(near(loc, [[1 , 2 ], [3, 4] , [5, 6]] )) {
+			friends @filter(within(loc, [[1 , 2 ], [3, 4] , [5, 6]] )) {
 				name
 			}
 			gender,age
@@ -725,7 +725,7 @@ func TestParseFilter_Geo3(t *testing.T) {
 	query := `
 	query {
 		me(_uid_:0x0a) {
-			friends @filter(near(loc, [[1 , 2 ], [[3, 4] , [5, 6]] )) {
+			friends @filter(within(loc, [[1 , 2 ], [[3, 4] , [5, 6]] )) {
 				name
 			}
 			gender,age
@@ -741,7 +741,7 @@ func TestParseFilter_Geo4(t *testing.T) {
 	query := `
 	query {
 		me(_uid_:0x0a) {
-			friends @filter(near(loc, [[1 , 2 ], [3, 4] , [5, 6]]] )) {
+			friends @filter(within(loc, [[1 , 2 ], [3, 4] , [5, 6] )) {
 				name
 			}
 			gender,age
