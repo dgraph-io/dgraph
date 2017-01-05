@@ -583,9 +583,10 @@ func TestParseVariablesiError8(t *testing.T) {
 }
 
 func TestParseFilter_root(t *testing.T) {
+	schema.ParseBytes([]byte("scalar abc: string @index"))
 	query := `
 	query {
-		me(_uid_:0x0a) @filter(allof(name, "alice")) {
+		me(abc(abc)) @filter(allof(name, "alice")) {
 			friends @filter() {
 				name @filter(namefilter("a"))
 			}

@@ -400,6 +400,8 @@ func getQuery(l *lex.Lexer) (gq *GraphQuery, rerr error) {
 		return nil, rerr
 	}
 
+	var seenFilter bool
+L:
 	// Recurse to deeper levels through godeep.
 	item := <-l.Items
 	if item.Typ == itemLeftCurl {
@@ -409,6 +411,10 @@ func getQuery(l *lex.Lexer) (gq *GraphQuery, rerr error) {
 	} else if item.Typ == itemDirectiveName {
 		switch item.Val {
 		case "@filter":
+			if seenFilter {
+				return nil, x.Errorf("Repeated filter at root")
+			}
+			seenFilter = true
 			filter, err := parseFilter(l)
 			if err != nil {
 				return nil, err
@@ -418,15 +424,7 @@ func getQuery(l *lex.Lexer) (gq *GraphQuery, rerr error) {
 		default:
 			return nil, x.Errorf("Unknown directive [%s]", item.Val)
 		}
-
-		item := <-l.Items
-		if item.Typ == itemLeftCurl {
-			if rerr = godeep(l, gq); rerr != nil {
-				return nil, rerr
-			}
-		} else {
-			return nil, x.Errorf("Malformed Query. Missing {")
-		}
+		goto L
 
 	} else {
 		return nil, x.Errorf("Malformed Query. Missing {")
