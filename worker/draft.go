@@ -487,78 +487,73 @@ func (n *node) Run() {
 	defer ticker.Stop()
 	rcBytes, err := n.raftContext.Marshal()
 	x.Check(err)
-	for n.runBody(ticker, rcBytes, &firstRun) {
+	for {
+		select {
+		case <-ticker.C:
+			n.Raft().Tick()
+
+		case rd := <-n.Raft().Ready():
+			x.Check(n.wal.StoreSnapshot(n.gid, rd.Snapshot))
+			x.Check(n.wal.Store(n.gid, rd.HardState, rd.Entries))
+
+			n.saveToStorage(rd.Snapshot, rd.HardState, rd.Entries)
+
+			for _, msg := range rd.Messages {
+				// NOTE: We can do some optimizations here to drop messages.
+				msg.Context = rcBytes
+				n.send(msg)
+			}
+
+			if !raft.IsEmptySnap(rd.Snapshot) {
+				// We don't send snapshots to other nodes. But, if we get one, that means
+				// either the leader is trying to bring us up to state; or this is the
+				// snapshot that I created. Only the former case should be handled.
+				var rc task.RaftContext
+				x.Check(rc.Unmarshal(rd.Snapshot.Data))
+				if rc.Id != n.id {
+					fmt.Printf("-------> SNAPSHOT [%d] from %d\n", n.gid, rc.Id)
+					n.retrieveSnapshot(rc)
+					fmt.Printf("-------> SNAPSHOT [%d]. DONE.\n", n.gid)
+				} else {
+					fmt.Printf("-------> SNAPSHOT [%d] from %d [SELF]. Ignoring.\n", n.gid, rc.Id)
+				}
+			}
+			if len(rd.CommittedEntries) > 0 {
+				x.Trace(n.ctx, "Found %d committed entries", len(rd.CommittedEntries))
+			}
+			var indexEntry *raftpb.Entry
+			for _, entry := range rd.CommittedEntries {
+				if len(entry.Data) > 0 && entry.Data[0] == proposalIndex {
+					x.AssertTruef(indexEntry == nil, "Multiple index proposals found")
+					indexEntry = &entry
+					// This is an index-related proposal. Do not break.
+					continue
+				}
+
+				// Just queue up to be processed. Don't wait on them.
+				n.commitCh <- entry
+				status := x.Mark{Index: entry.Index, Done: false}
+
+				if entry.Index == 2 {
+					fmt.Printf("%+v\n", entry)
+				}
+				n.applied.Ch <- status
+			}
+
+			if indexEntry != nil {
+				x.Check(n.rebuildIndex(indexEntry.Data))
+			}
+
+			n.Raft().Advance()
+			if *firstRun && n.canCampaign {
+				go n.Raft().Campaign(n.ctx)
+				*firstRun = false
+			}
+
+		case <-n.done:
+			return
+		}
 	}
-}
-
-// runBody returns false if we want to stop.
-func (n *node) runBody(ticker *time.Ticker, rcBytes []byte, firstRun *bool) bool {
-	select {
-	case <-ticker.C:
-		n.Raft().Tick()
-
-	case rd := <-n.Raft().Ready():
-		x.Check(n.wal.StoreSnapshot(n.gid, rd.Snapshot))
-		x.Check(n.wal.Store(n.gid, rd.HardState, rd.Entries))
-
-		n.saveToStorage(rd.Snapshot, rd.HardState, rd.Entries)
-
-		for _, msg := range rd.Messages {
-			// NOTE: We can do some optimizations here to drop messages.
-			msg.Context = rcBytes
-			n.send(msg)
-		}
-
-		if !raft.IsEmptySnap(rd.Snapshot) {
-			// We don't send snapshots to other nodes. But, if we get one, that means
-			// either the leader is trying to bring us up to state; or this is the
-			// snapshot that I created. Only the former case should be handled.
-			var rc task.RaftContext
-			x.Check(rc.Unmarshal(rd.Snapshot.Data))
-			if rc.Id != n.id {
-				fmt.Printf("-------> SNAPSHOT [%d] from %d\n", n.gid, rc.Id)
-				n.retrieveSnapshot(rc)
-				fmt.Printf("-------> SNAPSHOT [%d]. DONE.\n", n.gid)
-			} else {
-				fmt.Printf("-------> SNAPSHOT [%d] from %d [SELF]. Ignoring.\n", n.gid, rc.Id)
-			}
-		}
-		if len(rd.CommittedEntries) > 0 {
-			x.Trace(n.ctx, "Found %d committed entries", len(rd.CommittedEntries))
-		}
-		var indexEntry *raftpb.Entry
-		for _, entry := range rd.CommittedEntries {
-			if len(entry.Data) > 0 && entry.Data[0] == proposalIndex {
-				x.AssertTruef(indexEntry == nil, "Multiple index proposals found")
-				indexEntry = &entry
-				// This is an index-related proposal. Do not break.
-				continue
-			}
-
-			// Just queue up to be processed. Don't wait on them.
-			n.commitCh <- entry
-			status := x.Mark{Index: entry.Index, Done: false}
-
-			if entry.Index == 2 {
-				fmt.Printf("%+v\n", entry)
-			}
-			n.applied.Ch <- status
-		}
-
-		if indexEntry != nil {
-			x.Check(n.rebuildIndex(indexEntry.Data))
-		}
-
-		n.Raft().Advance()
-		if *firstRun && n.canCampaign {
-			go n.Raft().Campaign(n.ctx)
-			*firstRun = false
-		}
-
-	case <-n.done:
-		return false
-	}
-	return true
 }
 
 func (n *node) Stop() {
