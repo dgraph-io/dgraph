@@ -525,6 +525,35 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func indexHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
+		return
+	}
+
+	ip, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil || !net.ParseIP(ip).IsLoopback() {
+		x.SetStatus(w, x.ErrorUnauthorized,
+			fmt.Sprintf("Request received from IP: %v. Only requests from localhost are allowed.", ip))
+		return
+	}
+
+	ctx := context.Background()
+	attrs := r.URL.Query()["attrs"]
+	if len(attrs) == 0 {
+		x.SetStatus(w, x.ErrorMissingRequired,
+			fmt.Sprintf("Request did not have attrs param."))
+		return
+	}
+
+	err = worker.RebuildIndexOverNetwork(ctx, attrs)
+	if err != nil {
+		x.SetStatus(w, err.Error(), "RebuildIndex failed.")
+	} else {
+		x.SetStatus(w, x.ErrorOk, "RebuildIndex completed.")
+	}
+}
+
 // server is used to implement graph.DgraphServer
 type grpcServer struct{}
 
@@ -656,6 +685,7 @@ func setupServer(che chan error) {
 
 	http.HandleFunc("/health", healthCheck)
 	http.HandleFunc("/query", queryHandler)
+	http.HandleFunc("/index", indexHandler)
 	http.HandleFunc("/debug/store", storeStatsHandler)
 	http.HandleFunc("/admin/shutdown", shutDownHandler)
 	http.HandleFunc("/admin/backup", backupHandler)
@@ -703,7 +733,6 @@ func main() {
 	che := make(chan error, 1)
 	go setupServer(che)
 	go worker.StartRaftNodes(*walDir)
-	go worker.TempDebug()
 
 	if err := <-che; !strings.Contains(err.Error(),
 		"use of closed network connection") {

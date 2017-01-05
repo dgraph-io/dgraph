@@ -236,6 +236,7 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *task.Proposal) erro
 		return x.Errorf("RAFT isn't initialized yet")
 	}
 
+	// ~~~check proposal if index rebuild.
 	proposal.Id = rand.Uint32()
 
 	slice := slicePool.Get().([]byte)
@@ -249,7 +250,7 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *task.Proposal) erro
 		return err
 	}
 	proposalData := make([]byte, upto)
-	copy(proposalData, slice[:upto])
+	copy(proposalData, slice[:upto]) // ~~~~ +1
 
 	che := make(chan error, 1)
 	n.props.Store(proposal.Id, che)
@@ -517,14 +518,30 @@ func (n *node) runBody(ticker *time.Ticker, rcBytes []byte, firstRun *bool) bool
 			x.Trace(n.ctx, "Found %d committed entries", len(rd.CommittedEntries))
 		}
 		for _, entry := range rd.CommittedEntries {
+
+			//		~~~	if f(entry.Data) {
+			//				// mark
+			//				continue
+			//			}
+
 			// Just queue up to be processed. Don't wait on them.
 			n.commitCh <- entry
 			status := x.Mark{Index: entry.Index, Done: false}
+
 			if entry.Index == 2 {
 				fmt.Printf("%+v\n", entry)
 			}
 			n.applied.Ch <- status
 		}
+
+		//		~~~~~~if mark {
+		//			// rebuildIndexfunc call. use proto / dirty info
+		//		}
+
+		// entry.Data = special string + predicates
+		// once we see this in for loop, don't break, but mark and after loop finishes, do the rebuild / blocking
+
+		// Block here.
 
 		n.Raft().Advance()
 		if *firstRun && n.canCampaign {

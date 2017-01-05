@@ -105,6 +105,12 @@ message Proposal {
 	uint32 id = 1;
 	Mutations mutations = 2;
 	Membership membership = 3;
+	RebuildIndex rebuild_index = 4;
+}
+
+message RebuildIndex {
+	repeated string attrs = 1;
+	uint32 group_id = 2;
 }
 
 message KV {

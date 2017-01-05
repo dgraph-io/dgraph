@@ -370,7 +370,7 @@ func (t *TokensTable) GetPrevOrEqual(s string) string {
 
 // RebuildIndex rebuilds index for a given attribute.
 func RebuildIndex(ctx context.Context, attr string) error {
-	x.AssertTrue(schema.IsIndexed(attr))
+	x.AssertTruef(schema.IsIndexed(attr), "Attr %s not indexed", attr)
 
 	// Empty the TokensTable. Let addIndexMutations populate it later.
 	tt := tables[attr]
