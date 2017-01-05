@@ -406,6 +406,28 @@ func getQuery(l *lex.Lexer) (gq *GraphQuery, rerr error) {
 		if rerr = godeep(l, gq); rerr != nil {
 			return nil, rerr
 		}
+	} else if item.Typ == itemDirectiveName {
+		switch item.Val {
+		case "@filter":
+			filter, err := parseFilter(l)
+			if err != nil {
+				return nil, err
+			}
+			gq.Filter = filter
+
+		default:
+			return nil, x.Errorf("Unknown directive [%s]", item.Val)
+		}
+
+		item := <-l.Items
+		if item.Typ == itemLeftCurl {
+			if rerr = godeep(l, gq); rerr != nil {
+				return nil, rerr
+			}
+		} else {
+			return nil, x.Errorf("Malformed Query. Missing {")
+		}
+
 	} else {
 		return nil, x.Errorf("Malformed Query. Missing {")
 	}

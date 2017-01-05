@@ -457,6 +457,12 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		sg.uidMatrix = []*task.List{&task.List{Uids: []uint64{euid}}}
 	}
 	sg.values = createNilValuesList(1)
+	// Copy roots filter.
+	if gq.Filter != nil {
+		sgf := &SubGraph{}
+		filterCopy(sgf, gq.Filter)
+		sg.Filters = append(sg.Filters, sgf)
+	}
 	return sg, nil
 }
 
