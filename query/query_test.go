@@ -1925,7 +1925,7 @@ func TestGeneratorMultiRoot(t *testing.T) {
     }
   `
 	js := processToJSON(t, query)
-	require.JSONEq(t, `{"me":[{"name":"Daryl Dixon"}]}`, js)
+	require.JSONEq(t, `{"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"}]}`, js)
 }
 
 func TestGeneratorMultiRootFilter1(t *testing.T) {
@@ -1941,7 +1941,7 @@ func TestGeneratorMultiRootFilter1(t *testing.T) {
     }
   `
 	js := processToJSON(t, query)
-	require.JSONEq(t, `{"me":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"}]}`, js)
+	require.JSONEq(t, `{"me":[{"name":"Daryl Dixon"}]}`, js)
 }
 
 func TestGeneratorMultiRootFilter2(t *testing.T) {
@@ -1958,6 +1958,22 @@ func TestGeneratorMultiRootFilter2(t *testing.T) {
   `
 	js := processToJSON(t, query)
 	require.JSONEq(t, `{"me":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"}]}`, js)
+}
+
+func TestGeneratorMultiRootFilter3(t *testing.T) {
+	dir1, dir2, ps := populateGraph(t)
+	defer ps.Close()
+	defer os.RemoveAll(dir1)
+	defer os.RemoveAll(dir2)
+	query := `
+    {
+      me(anyof("name", "Michonne Rick Glenn")) @filter(anyof(name, "Glenn") && geq(dob, 1909-01-10)) {
+        name
+      }
+    }
+  `
+	js := processToJSON(t, query)
+	require.JSONEq(t, `{"me":[{"name":"Glenn Rhee"}]}`, js)
 }
 
 func TestToProtoMultiRoot(t *testing.T) {
