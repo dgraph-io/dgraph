@@ -582,6 +582,48 @@ func TestParseVariablesiError8(t *testing.T) {
 	require.Error(t, err, "Variables type ending with ! cant have default value")
 }
 
+func TestParseFilter_root(t *testing.T) {
+	schema.ParseBytes([]byte("scalar abc: string @index"))
+	query := `
+	query {
+		me(abc(abc)) @filter(allof(name, "alice")) {
+			friends @filter() {
+				name @filter(namefilter("a"))
+			}
+			gender @filter(eq("a")),age @filter(neq("a", "b"))
+			hometown
+		}
+	}
+`
+	gq, _, err := Parse(query)
+	require.NoError(t, err)
+	require.NotNil(t, gq)
+	require.NotNil(t, gq.Filter)
+	require.Equal(t, `(allof "name" "alice")`, gq.Filter.debugString())
+	require.Equal(t, []string{"friends", "gender", "age", "hometown"}, childAttrs(gq))
+	require.Equal(t, []string{"name"}, childAttrs(gq.Children[0]))
+	require.Nil(t, gq.Children[0].Filter)
+	require.Equal(t, `(eq "a")`, gq.Children[1].Filter.debugString())
+	require.Equal(t, `(neq "a" "b")`, gq.Children[2].Filter.debugString())
+	require.Equal(t, `(namefilter "a")`, gq.Children[0].Children[0].Filter.debugString())
+}
+
+func TestParseFilter_root_Error(t *testing.T) {
+	query := `
+	query {
+		me(_uid_:0x0a) @filter(allof(name, "alice") {
+			friends @filter() {
+				name @filter(namefilter("a"))
+			}
+			gender @filter(eq("a")),age @filter(neq("a", "b"))
+			hometown
+		}
+	}
+`
+	_, _, err := Parse(query)
+	require.Error(t, err)
+}
+
 func TestParseFilter_simplest(t *testing.T) {
 	query := `
 	query {
