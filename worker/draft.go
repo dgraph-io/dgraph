@@ -19,6 +19,11 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
+const (
+	proposalNormal = 0
+	proposalIndex  = 1
+)
+
 // peerPool stores the peers per node and the addresses corresponding to them.
 // We then use pool() to get an active connection to those addresses.
 type peerPool struct {
@@ -90,7 +95,6 @@ type node struct {
 	raftContext *task.RaftContext
 	store       *raft.MemoryStorage
 	wal         *raftwal.Wal
-	pauseLock   sync.RWMutex // Used to pause node.Run.
 
 	canCampaign bool
 	// applied is used to keep track of the applied RAFT proposals.
@@ -236,7 +240,6 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *task.Proposal) erro
 		return x.Errorf("RAFT isn't initialized yet")
 	}
 
-	// ~~~check proposal if index rebuild.
 	proposal.Id = rand.Uint32()
 
 	slice := slicePool.Get().([]byte)
@@ -249,8 +252,15 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *task.Proposal) erro
 	if err != nil {
 		return err
 	}
-	proposalData := make([]byte, upto)
-	copy(proposalData, slice[:upto]) // ~~~~ +1
+	proposalData := make([]byte, upto+1)
+	// Examining first byte of proposalData will quickly tell us what kind of
+	// proposal this is.
+	if proposal.RebuildIndex == nil {
+		proposalData[0] = proposalNormal
+	} else {
+		proposalData[0] = proposalIndex
+	}
+	copy(proposalData[1:], slice)
 
 	che := make(chan error, 1)
 	n.props.Store(proposal.Id, che)
@@ -386,7 +396,8 @@ func (n *node) process(e raftpb.Entry, pending chan struct{}) {
 
 	pending <- struct{}{} // This will block until we can write to it.
 	var proposal task.Proposal
-	x.Checkf(proposal.Unmarshal(e.Data), "Unable to parse entry: %+v", e)
+	x.AssertTrue(len(e.Data) > 0)
+	x.Checkf(proposal.Unmarshal(e.Data[1:]), "Unable to parse entry: %+v", e)
 
 	var err error
 	if proposal.Mutations != nil {
@@ -482,8 +493,6 @@ func (n *node) Run() {
 
 // runBody returns false if we want to stop.
 func (n *node) runBody(ticker *time.Ticker, rcBytes []byte, firstRun *bool) bool {
-	n.pauseLock.RLock()
-	defer n.pauseLock.RUnlock()
 	select {
 	case <-ticker.C:
 		n.Raft().Tick()
@@ -517,12 +526,14 @@ func (n *node) runBody(ticker *time.Ticker, rcBytes []byte, firstRun *bool) bool
 		if len(rd.CommittedEntries) > 0 {
 			x.Trace(n.ctx, "Found %d committed entries", len(rd.CommittedEntries))
 		}
+		var indexEntry *raftpb.Entry
 		for _, entry := range rd.CommittedEntries {
-
-			//		~~~	if f(entry.Data) {
-			//				// mark
-			//				continue
-			//			}
+			if len(entry.Data) > 0 && entry.Data[0] == proposalIndex {
+				x.AssertTruef(indexEntry == nil, "Multiple index proposals found")
+				indexEntry = &entry
+				// This is an index-related proposal. Do not break.
+				continue
+			}
 
 			// Just queue up to be processed. Don't wait on them.
 			n.commitCh <- entry
@@ -534,14 +545,9 @@ func (n *node) runBody(ticker *time.Ticker, rcBytes []byte, firstRun *bool) bool
 			n.applied.Ch <- status
 		}
 
-		//		~~~~~~if mark {
-		//			// rebuildIndexfunc call. use proto / dirty info
-		//		}
-
-		// entry.Data = special string + predicates
-		// once we see this in for loop, don't break, but mark and after loop finishes, do the rebuild / blocking
-
-		// Block here.
+		if indexEntry != nil {
+			x.Check(n.rebuildIndex(indexEntry.Data))
+		}
 
 		n.Raft().Advance()
 		if *firstRun && n.canCampaign {
@@ -735,14 +741,6 @@ func (w *grpcWorker) applyMessage(ctx context.Context, msg raftpb.Message) error
 		return ctx.Err()
 	case err := <-c:
 		return err
-	}
-}
-
-// Pause will pause node.Run and will return a function for resuming node.Run.
-func (n *node) Pause() func() {
-	n.pauseLock.Lock()
-	return func() {
-		n.pauseLock.Unlock()
 	}
 }
 

@@ -6,20 +6,25 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
-	"google.golang.org/grpc"
 
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
+	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/x"
 )
 
-func (n *node) rebuildIndex(ctx context.Context, req *IndexPayload) error {
-	gid := n.gid
-	x.AssertTrue(gid == req.GroupId)
-	x.Printf("Pausing")
-	doResume := n.Pause() // Enter lame duck mode.
-	defer doResume()
+func (n *node) rebuildIndex(proposalData []byte) error {
+	x.AssertTrue(proposalData[0] == proposalIndex)
+	var proposal task.Proposal
+	x.Check(proposal.Unmarshal(proposalData[1:]))
+	x.AssertTrue(proposal.RebuildIndex != nil)
 
+	gid := n.gid
+	x.AssertTrue(gid == proposal.RebuildIndex.GroupId)
+
+	x.Printf("Processing proposal to rebuild index: %v", proposal.RebuildIndex)
+
+	// Get index of last committed.
 	lastIndex, err := n.store.LastIndex()
 	if err != nil {
 		return err
@@ -29,23 +34,21 @@ func (n *node) rebuildIndex(ctx context.Context, req *IndexPayload) error {
 	for n.applied.WaitingFor() {
 		// watermark: add function waitingfor that returns an index that it is waiting for, and if it is zero, we can skip the wait
 		doneUntil := n.applied.DoneUntil() // applied until.
-		x.Printf("Waiting for aplied until to reach last index: %d %d", doneUntil, lastIndex)
+		x.Printf("RebuildIndex waiting, appliedUntil:%d lastIndex: %d", doneUntil, lastIndex)
 		if doneUntil >= lastIndex {
-			// Do the check before sleep.
-			break
+			break // Do the check before sleep.
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
 
 	// Aggressive evict.
-	x.Printf("Aggressive evict")
 	posting.CommitLists(10)
 
 	// Wait for posting lists applying.
 	w := posting.WaterMarkFor(gid)
 	for w.WaitingFor() {
 		doneUntil := w.DoneUntil() // synced until.
-		x.Printf("Waiting for synced until to reach last index: %d %d", doneUntil, lastIndex)
+		x.Printf("RebuildIndex waiting, syncedUntil:%d lastIndex:%d", doneUntil, lastIndex)
 		if doneUntil >= lastIndex {
 			break // Do the check before sleep.
 		}
@@ -53,115 +56,134 @@ func (n *node) rebuildIndex(ctx context.Context, req *IndexPayload) error {
 	}
 
 	// Do actual index work.
-	for _, attr := range req.Attr {
+	for _, attr := range proposal.RebuildIndex.Attrs {
 		x.AssertTrue(group.BelongsTo(attr) == gid)
-		if err = posting.RebuildIndex(ctx, attr); err != nil {
+		if err = posting.RebuildIndex(attr); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func handleIndexForGroup(ctx context.Context, req *IndexPayload) *IndexPayload {
-	gid := req.GroupId
-	n := groups().Node(gid)
-	if n.AmLeader() {
-		x.Trace(ctx, "Leader of group: %d. Running rebuild index.", gid)
-		if err := n.rebuildIndex(ctx, req); err != nil {
-			x.TraceError(ctx, err)
-			return &IndexPayload{
-				ReqId:  req.ReqId,
-				Status: IndexPayload_FAILED,
-			}
-		}
-		x.Trace(ctx, "RebuildIndex done for group: %d.", gid)
-		return &IndexPayload{
-			ReqId:   req.ReqId,
-			Status:  IndexPayload_SUCCESS,
-			GroupId: gid,
-		}
-	}
-
-	// I'm not the leader. Relay to someone who I think is.
-	var addrs []string
-	{
-		// Try in order: leader of given group, any server from given group, leader of group zero.
-		_, addr := groups().Leader(gid)
-		addrs = append(addrs, addr)
-		addrs = append(addrs, groups().AnyServer(gid))
-		_, addr = groups().Leader(0)
-		addrs = append(addrs, addr)
-	}
-
-	var conn *grpc.ClientConn
-	for _, addr := range addrs {
-		pl := pools().get(addr)
-		var err error
-		conn, err = pl.Get()
-		if err == nil {
-			x.Trace(ctx, "Relaying rebuild index request for group %d to %q", gid, pl.Addr)
-			defer pl.Put(conn)
-			break
-		}
-		x.TraceError(ctx, err)
-	}
-
-	// Unable to find any connection to any of these servers. This should be
-	// exceedingly rare. But probably not worthy of crashing the server. We can just
-	// skip the rebuilding of index.
-	if conn == nil {
-		x.Trace(ctx, fmt.Sprintf("Unable to find a server to rebuild index for group: %d", gid))
-		return &IndexPayload{
-			ReqId:   req.ReqId,
-			Status:  IndexPayload_FAILED,
-			GroupId: gid,
-		}
-	}
-
-	c := NewWorkerClient(conn)
-	nr := &IndexPayload{
-		ReqId:   req.ReqId,
-		GroupId: gid,
-	}
-	nrep, err := c.RebuildIndex(ctx, nr)
-	if err != nil {
-		x.TraceError(ctx, err)
-		return &IndexPayload{
-			ReqId:   req.ReqId,
-			Status:  IndexPayload_FAILED,
-			GroupId: gid,
-		}
-	}
-	return nrep
-}
-
 // RebuildIndex request is used to trigger rebuilding of index for the requested
 // list of attributes. It is assumed that the attributes all belong to the same
-// group. If a server receives request to index a group that it doesn't handle, it
-// would automatically relay that request to the server that it thinks should
-// handle the request.
+// group.
 func (w *grpcWorker) RebuildIndex(ctx context.Context, req *IndexPayload) (*IndexPayload, error) {
-	reply := &IndexPayload{ReqId: req.ReqId}
-	reply.Status = IndexPayload_FAILED // Set by default.
+	reply := &IndexPayload{
+		ReqId:  req.ReqId,
+		Status: IndexPayload_FAILED, // Default.
+	}
 
 	if ctx.Err() != nil {
 		return reply, ctx.Err()
 	}
 	if !w.addIfNotPresent(req.ReqId) {
+		// We don't really expect duplicates actually. But if we change the
+		// propagation strategy, this might happen. Maybe keep this logic?
 		reply.Status = IndexPayload_DUPLICATE
 		return reply, nil
 	}
 
-	chb := make(chan *IndexPayload, 1)
+	ch := make(chan *IndexPayload, 1)
 	go func() {
-		chb <- handleIndexForGroup(ctx, req)
+		ch <- handleIndexForGroup(ctx, req)
 	}()
 
 	select {
-	case rep := <-chb:
+	case rep := <-ch:
 		return rep, nil
 	case <-ctx.Done():
 		return reply, ctx.Err()
+	}
+}
+
+func (n *node) proposeRebuildIndex(ctx context.Context, req *IndexPayload) *IndexPayload {
+	proposal := &task.Proposal{RebuildIndex: req.RebuildIndex}
+	err := n.ProposeAndWait(ctx, proposal)
+	if err != nil {
+		return &IndexPayload{
+			ReqId:        req.ReqId,
+			Status:       IndexPayload_FAILED,
+			RebuildIndex: req.RebuildIndex,
+		}
+	}
+	return &IndexPayload{
+		ReqId:        req.ReqId,
+		Status:       IndexPayload_SUCCESS,
+		RebuildIndex: req.RebuildIndex,
+	}
+}
+
+func handleIndexForGroup(ctx context.Context, req *IndexPayload) *IndexPayload {
+	gid := req.RebuildIndex.GroupId
+	n := groups().Node(gid)
+
+	if !req.DoBroadcast {
+		return n.proposeRebuildIndex(ctx, req)
+	}
+
+	// CAUTION
+	// Parallelize across groups, and members inside group seems bad. We will
+	// be trying to open too many connections. Perhaps batch the groups to be
+	// processed for each addr.
+
+	addrs := groups().Servers(gid)
+	chp := make(chan *IndexPayload, len(addrs)+1)
+
+	// Send jobs to other machines in the group.
+	for _, addr := range addrs {
+		go func(addr string) {
+			pl := pools().get(addr)
+			conn, err := pl.Get()
+			if err != nil {
+				x.TraceError(ctx, err)
+				chp <- &IndexPayload{
+					ReqId:        req.ReqId,
+					Status:       IndexPayload_FAILED,
+					RebuildIndex: req.RebuildIndex,
+				}
+				return
+			}
+			if conn == nil {
+				x.TraceError(ctx, x.Errorf("Failed to get connection to %s for gid %d", addr, gid))
+				chp <- &IndexPayload{
+					ReqId:        req.ReqId,
+					Status:       IndexPayload_FAILED,
+					RebuildIndex: req.RebuildIndex,
+				}
+				return
+			}
+			defer pl.Put(conn)
+
+			x.Trace(ctx, "Relaying rebuild index request for group %d to %s", gid, pl.Addr)
+			c := NewWorkerClient(conn)
+			req := &IndexPayload{
+				ReqId:        req.ReqId,
+				RebuildIndex: req.RebuildIndex,
+				DoBroadcast:  false,
+			}
+			resp, err := c.RebuildIndex(ctx, req)
+			if err != nil {
+				x.TraceError(ctx, err)
+			}
+			chp <- resp
+		}(addr)
+	}
+
+	// Do indexing on our own server.
+	chp <- n.proposeRebuildIndex(ctx, req)
+
+	// Collect results.
+	for i := 0; i < len(addrs)+1; i++ {
+		p := <-chp
+		if p.GetStatus() == IndexPayload_FAILED {
+			return p
+		}
+	}
+	return &IndexPayload{
+		ReqId:        req.ReqId,
+		Status:       IndexPayload_SUCCESS,
+		RebuildIndex: req.RebuildIndex,
 	}
 }
 
@@ -171,21 +193,21 @@ func RebuildIndexOverNetwork(ctx context.Context, attrs []string) error {
 		x.Trace(ctx, "This server hasn't yet been fully initiated. Please retry later.")
 		return x.Errorf("Uninitiated server. Please retry later")
 	}
-	// Let's first collect all groups.
+
 	gids := groups().KnownGroups()
 
-	// Map groupID to list of attributes that we want to re-index.
+	// Map gid to list of attributes.
 	gidMap := make(map[uint32][]string)
 	for _, gid := range gids {
 		gidMap[gid] = []string{} // Distinguish from nil.
 	}
-
 	for _, attr := range attrs {
 		gid := group.BelongsTo(attr)
 		x.AssertTruef(gidMap[gid] != nil, "Attr %s in unknown group %d", attr, gid)
 		gidMap[gid] = append(gidMap[gid], attr)
 	}
 
+	// Parallelize across different groups.
 	ch := make(chan *IndexPayload, len(gidMap))
 	var numJobs int
 	for gid, a := range gidMap {
@@ -194,21 +216,26 @@ func RebuildIndexOverNetwork(ctx context.Context, attrs []string) error {
 		}
 		numJobs++
 		go func(gid uint32, a []string) {
-			ch <- handleIndexForGroup(ctx, &IndexPayload{
-				ReqId:   uint64(rand.Int63()),
+			ri := &task.RebuildIndex{
 				GroupId: gid,
-				Attr:    a,
+				Attrs:   a,
+			}
+			ch <- handleIndexForGroup(ctx, &IndexPayload{
+				ReqId:        uint64(rand.Int63()),
+				RebuildIndex: ri,
+				DoBroadcast:  true,
 			})
 		}(gid, a)
 	}
 
+	// Collect results from groups.
 	for i := 0; i < numJobs; i++ {
 		r := <-ch
 		if r.Status != IndexPayload_SUCCESS {
-			x.Trace(ctx, "RebuildIndex status: %v for group id: %d", r.Status, r.GroupId)
-			return fmt.Errorf("RebuildIndex status: %v for group id: %d", r.Status, r.GroupId)
+			x.Trace(ctx, "RebuildIndex status: %v for group id: %d", r.Status, r.RebuildIndex.GroupId)
+			return fmt.Errorf("RebuildIndex status: %v for group id: %d", r.Status, r.RebuildIndex.GroupId)
 		} else {
-			x.Trace(ctx, "RebuildIndex successful for group: %v", r.GroupId)
+			x.Trace(ctx, "RebuildIndex successful for group: %v", r.RebuildIndex.GroupId)
 		}
 	}
 	x.Trace(ctx, "DONE rebuild index")

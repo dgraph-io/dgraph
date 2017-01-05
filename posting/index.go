@@ -38,6 +38,8 @@ type TokensTable struct {
 	key []string
 }
 
+const maxBatchSize = 32 * (1 << 20)
+
 var (
 	indexLog   trace.EventLog
 	reverseLog trace.EventLog
@@ -369,7 +371,7 @@ func (t *TokensTable) GetPrevOrEqual(s string) string {
 }
 
 // RebuildIndex rebuilds index for a given attribute.
-func RebuildIndex(ctx context.Context, attr string) error {
+func RebuildIndex(attr string) error {
 	x.AssertTruef(schema.IsIndexed(attr), "Attr %s not indexed", attr)
 
 	// Empty the TokensTable. Let addIndexMutations populate it later.
@@ -391,10 +393,28 @@ func RebuildIndex(ctx context.Context, attr string) error {
 	prefix := pk.IndexPrefix()
 	idxIt := pstore.NewIterator()
 	defer idxIt.Close()
+
+	wb := pstore.NewWriteBatch()
+	defer wb.Destroy()
+	var batchSize int
 	for idxIt.Seek(prefix); idxIt.ValidForPrefix(prefix); idxIt.Next() {
-		if err := pstore.Delete(idxIt.Key().Data()); err != nil {
+		key := idxIt.Key().Data()
+		batchSize += len(key)
+		wb.Delete(key)
+
+		if batchSize >= maxBatchSize {
+			if err := pstore.WriteBatch(wb); err != nil {
+				return err
+			}
+			wb.Clear()
+			batchSize = 0
+		}
+	}
+	if wb.Count() > 0 {
+		if err := pstore.WriteBatch(wb); err != nil {
 			return err
 		}
+		wb.Clear()
 	}
 
 	// Add index entries to data store.
@@ -403,6 +423,7 @@ func RebuildIndex(ctx context.Context, attr string) error {
 	it := pstore.NewIterator()
 	defer it.Close()
 	var pl types.PostingList
+	ctx := context.Background()
 	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
 		pki := x.Parse(it.Key().Data())
 		edge.Entity = pki.Uid
