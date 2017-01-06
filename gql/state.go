@@ -116,7 +116,7 @@ Loop:
 				l.Emit(itemText)
 				l.Next()
 				l.Emit(itemLeftRound)
-				return lexVarInside
+				return lexPairsInside
 			case isNameBegin(r):
 				l.Backup()
 				l.Emit(itemText)
@@ -158,7 +158,7 @@ Loop:
 				if k == '_' || l.Depth != 1 || l.Mode == fragmentMode {
 					l.Backup()
 					l.Emit(itemArgument)
-					return lexArgInside
+					return lexPairsInside
 				}
 				// This is a generator function.
 				l.Backup()
@@ -461,7 +461,8 @@ func lexOperationType(l *lex.Lexer) lex.StateFn {
 	return lexText
 }
 
-func lexVarInside(l *lex.Lexer) lex.StateFn {
+// lexPairsInside is used to lex the key value pairs inside ().
+func lexPairsInside(l *lex.Lexer) lex.StateFn {
 	for {
 		switch r := l.Next(); {
 		case r == lex.EOF:
@@ -469,10 +470,10 @@ func lexVarInside(l *lex.Lexer) lex.StateFn {
 		case isSpace(r) || isEndOfLine(r) || r == comma:
 			l.Ignore()
 		case isNameBegin(r) || isNumber(r):
-			return lexVarName
+			return lexArgName
 		case isDollar(r):
 			l.Emit(itemDollar)
-			return lexVarName
+			return lexArgName
 		case r == ':':
 			l.Emit(itemCollon)
 		case r == equal:
@@ -481,7 +482,7 @@ func lexVarInside(l *lex.Lexer) lex.StateFn {
 			l.Emit(itemRightRound)
 			return lexText
 		default:
-			return l.Errorf("variable list invalid %v", l.Items[l.Start:l.Pos])
+			return l.Errorf("argument list invalid %v", l.Input[l.Start:l.Pos])
 		}
 	}
 }
@@ -497,32 +498,7 @@ func lexVarName(l *lex.Lexer) lex.StateFn {
 		l.Emit(itemName)
 		break
 	}
-	return lexVarInside
-}
-
-// lexArgInside is used to lex the arguments inside ().
-func lexArgInside(l *lex.Lexer) lex.StateFn {
-	for {
-		switch r := l.Next(); {
-		case r == lex.EOF:
-			return l.Errorf("unclosed argument")
-		case isSpace(r) || isEndOfLine(r) || r == comma:
-			l.Ignore()
-		case isNameBegin(r) || isNumber(r) || isDollar(r):
-			return lexArgName
-		case r == ':':
-			l.Emit(itemCollon)
-			//return lexArgVal
-		case r == rightRound:
-			l.Emit(itemRightRound)
-			return lexText
-		case r == lex.EOF:
-			return l.Errorf("Reached lex.EOF while reading var value: %v",
-				l.Input[l.Start:l.Pos])
-		default:
-			return l.Errorf("argument list invalid %v", l.Input[l.Start:l.Pos])
-		}
-	}
+	return lexPairsInside
 }
 
 // lexArgName lexes and emits the name part of an argument.
@@ -536,7 +512,7 @@ func lexArgName(l *lex.Lexer) lex.StateFn {
 		l.Emit(itemName)
 		break
 	}
-	return lexArgInside
+	return lexPairsInside
 }
 
 // isDollar returns true if the rune is a Dollar($).

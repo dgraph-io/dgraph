@@ -632,11 +632,18 @@ func parseArguments(l *lex.Lexer) (result []pair, rerr error) {
 
 		// Get value.
 		item = l.NextTok()
-		if item.Typ != itemName {
+		var val string
+		if item.Typ == itemDollar {
+			val = "$"
+			item = l.NextTok()
+			if item.Typ != itemName {
+				return result, x.Errorf("Expecting argument value. Got: %v", item)
+			}
+		} else if item.Typ != itemName {
 			return result, x.Errorf("Expecting argument value. Got: %v", item)
 		}
 
-		p.Val = item.Val
+		p.Val = val + item.Val
 		result = append(result, p)
 	}
 	return result, nil
