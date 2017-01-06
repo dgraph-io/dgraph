@@ -599,13 +599,10 @@ func parseVariables(l *lex.Lexer, vmap varMap) error {
 					Type:  varType,
 				}
 			}
-			item = l.NextTok()
-		}
-
-		if item.Typ == itemComma {
-			continue
 		} else if item.Typ == itemRightRound {
 			break
+		} else {
+			l.GoBack()
 		}
 	}
 	return nil

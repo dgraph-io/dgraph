@@ -80,6 +80,13 @@ func (l *Lexer) NextTok() item {
 	return l.Items[l.Idx]
 }
 
+func (l *Lexer) GoBack() {
+	if l.Idx > 0 {
+		l.Idx--
+	}
+	return
+}
+
 func (l *Lexer) PeekN(num int) ([]item, error) {
 	if (l.Idx + num) > len(l.Items) {
 		return nil, x.Errorf("Out of range for peek")

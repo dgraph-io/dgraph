@@ -45,7 +45,6 @@ const (
 	itemText            lex.ItemType = 5 + iota // plain text
 	itemLeftCurl                                // left curly bracket
 	itemRightCurl                               // right curly bracket
-	itemComma                                   // a comma
 	itemEqual                                   // equals to symbol
 	itemComment                                 // comment
 	itemName                                    // [9] names
@@ -73,32 +72,86 @@ const (
 func lexText(l *lex.Lexer) lex.StateFn {
 Loop:
 	for {
-		switch r := l.Next(); {
-		case r == leftCurl:
-			l.Backup()
-			l.Emit(itemText) // emit whatever we have so far.
-			l.Next()         // advance one to get back to where we saw leftCurl.
-			l.Depth++        // one level down.
-			l.Emit(itemLeftCurl)
-			if l.Mode == mutationMode {
-				return lexInsideMutation
+		if l.Depth == 0 {
+			switch r := l.Next(); {
+			case r == leftCurl:
+				l.Backup()
+				l.Emit(itemText) // emit whatever we have so far.
+				l.Next()         // advance one to get back to where we saw leftCurl.
+				l.Depth++        // one level down.
+				l.Emit(itemLeftCurl)
+				if l.Mode == mutationMode {
+					return lexInsideMutation
+				}
+				// Both queryMode and fragmentMode are handled by lexInside.
+				return lexText
+			case r == rightCurl:
+				return l.Errorf("Too many right characters")
+			case r == lex.EOF:
+				break Loop
+			case r == leftRound:
+				l.Backup()
+				l.Emit(itemText)
+				l.Next()
+				l.Emit(itemLeftRound)
+				return lexVarInside
+			case isNameBegin(r):
+				l.Backup()
+				l.Emit(itemText)
+				return lexOperationType
 			}
-			// Both queryMode and fragmentMode are handled by lexInside.
-			return lexInside
-		case r == rightCurl:
-			return l.Errorf("Too many right characters")
-		case r == lex.EOF:
-			break Loop
-		case r == leftRound:
-			l.Backup()
-			l.Emit(itemText)
-			l.Next()
-			l.Emit(itemLeftRound)
-			return lexVarInside
-		case isNameBegin(r):
-			l.Backup()
-			l.Emit(itemText)
-			return lexOperationType
+		} else {
+			switch r := l.Next(); {
+			case r == period:
+				if l.Next() == period && l.Next() == period {
+					return lexFragmentSpread
+				}
+				// We do not expect a period at all. If you do, you may want to
+				// backup the two extra periods we try to read.
+				return l.Errorf("Unrecognized character in lexText: %#U", r)
+			case r == rightCurl:
+				l.Depth--
+				l.Emit(itemRightCurl)
+				if l.Depth == 0 {
+					return lexText
+				}
+			case r == leftCurl:
+				l.Depth++
+				l.Emit(itemLeftCurl)
+			case r == lex.EOF:
+				return l.Errorf("Unclosed action")
+			case isSpace(r) || isEndOfLine(r) || r == comma:
+				l.Ignore()
+			case isNameBegin(r):
+				return lexName
+			case r == '#':
+				l.Backup()
+				return lexComment
+			case r == leftRound:
+				l.Emit(itemLeftRound)
+				l.AcceptRun(isSpace)
+				l.Ignore()
+				k := l.Next()
+				if k == '_' || l.Depth != 1 || l.Mode == fragmentMode {
+					l.Backup()
+					l.Emit(itemArgument)
+					return lexArgInside
+				}
+				// This is a generator function.
+				l.Backup()
+				l.Emit(itemGenerator)
+				l.FilterDepth++
+				return lexFilterInside
+			case r == ':':
+				l.Emit(itemCollon)
+				return lexAlias
+			case r == attherate:
+				l.Emit(itemAt)
+				return lexDirective
+			default:
+				return l.Errorf("Unrecognized character in lexText: %#U", r)
+			}
+
 		}
 	}
 	if l.Pos > l.Start {
@@ -106,62 +159,6 @@ Loop:
 	}
 	l.Emit(lex.ItemEOF)
 	return nil
-}
-
-// lexInside lexes the content inside a query block.
-func lexInside(l *lex.Lexer) lex.StateFn {
-	for {
-		switch r := l.Next(); {
-		case r == period:
-			if l.Next() == period && l.Next() == period {
-				return lexFragmentSpread
-			}
-			// We do not expect a period at all. If you do, you may want to
-			// backup the two extra periods we try to read.
-			return l.Errorf("Unrecognized character in lexInside: %#U", r)
-		case r == rightCurl:
-			l.Depth--
-			l.Emit(itemRightCurl)
-			if l.Depth == 0 {
-				return lexText
-			}
-		case r == leftCurl:
-			l.Depth++
-			l.Emit(itemLeftCurl)
-		case r == lex.EOF:
-			return l.Errorf("Unclosed action")
-		case isSpace(r) || isEndOfLine(r) || r == comma:
-			l.Ignore()
-		case isNameBegin(r):
-			return lexName
-		case r == '#':
-			l.Backup()
-			return lexComment
-		case r == leftRound:
-			l.Emit(itemLeftRound)
-			l.AcceptRun(isSpace)
-			l.Ignore()
-			k := l.Next()
-			if k == '_' || l.Depth != 1 || l.Mode == fragmentMode {
-				l.Backup()
-				l.Emit(itemArgument)
-				return lexArgInside
-			}
-			// This is a generator function.
-			l.Backup()
-			l.Emit(itemGenerator)
-			l.FilterDepth++
-			return lexFilterInside
-		case r == ':':
-			l.Emit(itemCollon)
-			return lexAlias
-		case r == attherate:
-			l.Emit(itemAt)
-			return lexDirective
-		default:
-			return l.Errorf("Unrecognized character in lexInside: %#U", r)
-		}
-	}
 }
 
 // lexFilterFuncInside expects input to look like ("...", "...").
@@ -254,7 +251,7 @@ func lexFilterInside(l *lex.Lexer) lex.StateFn {
 			l.FilterDepth--
 			l.Emit(itemRightRound)
 			if l.FilterDepth == 0 {
-				return lexInside // Filter directive is done.
+				return lexText // Filter directive is done.
 			}
 		case r == lex.EOF:
 			return l.Errorf("Unclosed directive")
@@ -277,7 +274,7 @@ func lexFilterInside(l *lex.Lexer) lex.StateFn {
 			}
 			return l.Errorf("Expected | but got %v", r2)
 		default:
-			return l.Errorf("Unrecognized character in lexInside: %#U", r)
+			return l.Errorf("Unrecognized character in lexText: %#U", r)
 		}
 	}
 }
@@ -311,7 +308,7 @@ func lexDirective(l *lex.Lexer) lex.StateFn {
 		}
 		return l.Errorf("Unhandled directive %s", directive)
 	}
-	return lexInside
+	return lexText
 }
 
 func lexAlias(l *lex.Lexer) lex.StateFn {
@@ -326,7 +323,7 @@ func lexAlias(l *lex.Lexer) lex.StateFn {
 		l.Emit(itemName)
 		break
 	}
-	return lexInside
+	return lexText
 }
 
 func lexFragmentSpread(l *lex.Lexer) lex.StateFn {
@@ -339,7 +336,7 @@ func lexFragmentSpread(l *lex.Lexer) lex.StateFn {
 		l.Emit(itemFragmentSpread)
 		break
 	}
-	return lexInside
+	return lexText
 }
 
 func lexName(l *lex.Lexer) lex.StateFn {
@@ -353,7 +350,7 @@ func lexName(l *lex.Lexer) lex.StateFn {
 		l.Emit(itemName)
 		break
 	}
-	return lexInside
+	return lexText
 }
 
 // lexComment lexes a comment text.
@@ -362,7 +359,7 @@ func lexComment(l *lex.Lexer) lex.StateFn {
 		r := l.Next()
 		if isEndOfLine(r) {
 			l.Emit(itemComment)
-			return lexInside
+			return lexText
 		}
 		if r == lex.EOF {
 			break
@@ -503,7 +500,7 @@ func lexVarInside(l *lex.Lexer) lex.StateFn {
 		switch r := l.Next(); {
 		case r == lex.EOF:
 			return l.Errorf("unclosed argument")
-		case isSpace(r) || isEndOfLine(r):
+		case isSpace(r) || isEndOfLine(r) || r == comma:
 			l.Ignore()
 		case isDollar(r):
 			l.Emit(itemDollar)
@@ -513,13 +510,10 @@ func lexVarInside(l *lex.Lexer) lex.StateFn {
 			return lexVarType
 		case r == equal:
 			l.Emit(itemEqual)
-			l.Ignore()
 			return lexVarDefault
 		case r == rightRound:
 			l.Emit(itemRightRound)
 			return lexText
-		case r == comma:
-			l.Emit(itemComma)
 		default:
 			return l.Errorf("variable list invalid")
 		}
@@ -591,7 +585,7 @@ func lexArgInside(l *lex.Lexer) lex.StateFn {
 			return lexArgVal
 		case r == rightRound:
 			l.Emit(itemRightRound)
-			return lexInside
+			return lexText
 		default:
 			return l.Errorf("argument list invalid")
 		}
