@@ -59,8 +59,6 @@ const (
 	itemMutationContent                         // mutation content
 	itemFragmentSpread                          // three dots and name
 
-	//itemVarName // dollar followed by a name
-
 	itemAnd // And inside a filter.
 	itemOr  // Or inside a filter.
 
@@ -144,7 +142,6 @@ Loop:
 				return lexFilterInside
 			case r == ':':
 				l.Emit(itemCollon)
-				return lexAlias
 			case r == attherate:
 				l.Emit(itemAt)
 				return lexDirective
@@ -307,21 +304,6 @@ func lexDirective(l *lex.Lexer) lex.StateFn {
 			return lexFilterInside
 		}
 		return l.Errorf("Unhandled directive %s", directive)
-	}
-	return lexText
-}
-
-func lexAlias(l *lex.Lexer) lex.StateFn {
-	l.AcceptRun(isSpace)
-	l.Ignore() // Any spaces encountered.
-	for {
-		r := l.Next()
-		if isNameSuffix(r) {
-			continue
-		}
-		l.Backup()
-		l.Emit(itemName)
-		break
 	}
 	return lexText
 }
