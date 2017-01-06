@@ -560,16 +560,19 @@ func lexArgInside(l *lex.Lexer) lex.StateFn {
 			return l.Errorf("unclosed argument")
 		case isSpace(r) || isEndOfLine(r) || r == comma:
 			l.Ignore()
-		case isNameBegin(r):
+		case isNameBegin(r) || isNumber(r) || isDollar(r):
 			return lexArgName
 		case r == ':':
 			l.Emit(itemCollon)
-			return lexArgVal
+			//return lexArgVal
 		case r == rightRound:
 			l.Emit(itemRightRound)
 			return lexText
+		case r == lex.EOF:
+			return l.Errorf("Reached lex.EOF while reading var value: %v",
+				l.Input[l.Start:l.Pos])
 		default:
-			return l.Errorf("argument list invalid")
+			return l.Errorf("argument list invalid %v", l.Input[l.Start:l.Pos])
 		}
 	}
 }
@@ -586,24 +589,6 @@ func lexArgName(l *lex.Lexer) lex.StateFn {
 		break
 	}
 	return lexArgInside
-}
-
-// lexArgVal lexes and emits the value part of an argument.
-func lexArgVal(l *lex.Lexer) lex.StateFn {
-	l.AcceptRun(isSpace)
-	l.Ignore() // Any spaces encountered.
-	for {
-		r := l.Next()
-		if isSpace(r) || isEndOfLine(r) || r == rightRound || r == comma {
-			l.Backup()
-			l.Emit(itemName)
-			return lexArgInside
-		}
-		if r == lex.EOF {
-			return l.Errorf("Reached lex.EOF while reading var value: %v",
-				l.Input[l.Start:l.Pos])
-		}
-	}
 }
 
 // isDollar returns true if the rune is a Dollar($).
@@ -646,7 +631,14 @@ func isNameBegin(r rune) bool {
 		return false
 	}
 }
-
+func isNumber(r rune) bool {
+	switch {
+	case r >= '0' && r <= '9':
+		return true
+	default:
+		return false
+	}
+}
 func isNameSuffix(r rune) bool {
 	if isNameBegin(r) {
 		return true
