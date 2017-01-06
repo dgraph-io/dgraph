@@ -98,16 +98,13 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 	var intersectDest bool
 	var ineqValue types.Val
 	var ineqValueToken string
-	var isGeq, isLeq bool
+	var isIneq bool
 
 	if useFunc {
 		f := q.SrcFunc[0]
-		isGeq = f == "geq"
-		isLeq = f == "leq"
+		isIneq = f == "leq" || f == "geq" || f == "lt" || f == "gt" || f == "eq"
 		switch {
-		case isGeq:
-			fallthrough
-		case isLeq:
+		case isIneq:
 			if len(q.SrcFunc) != 2 {
 				return nil, x.Errorf("Function requires 2 arguments, but got %d %v",
 					len(q.SrcFunc), q.SrcFunc)
@@ -128,7 +125,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 			}
 			ineqValueToken = ineqTokens[0]
 			// Get tokens geq / leq ineqValueToken.
-			tokens, err = getInequalityTokens(attr, ineqValueToken, isGeq)
+			tokens, err = getInequalityTokens(attr, ineqValueToken, f)
 			if err != nil {
 				return nil, err
 			}
@@ -196,7 +193,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 		out.UidMatrix = append(out.UidMatrix, pl.Uids(opts))
 	}
 
-	if (isGeq || isLeq) && len(tokens) > 0 && ineqValueToken == tokens[0] {
+	if isIneq && len(tokens) > 0 && ineqValueToken == tokens[0] {
 		// Need to evaluate inequality for entries in the first bucket.
 		typ, err := schema.TypeOf(attr)
 		if err != nil || !typ.IsScalar() {
@@ -211,10 +208,21 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 			if sv.Value == nil || err != nil {
 				return false
 			}
-			if isGeq {
+			switch q.SrcFunc[0] {
+			case "geq":
 				return !types.Less(sv, ineqValue)
+			case "gt":
+				return types.Less(ineqValue, sv)
+			case "leq":
+				return !types.Less(ineqValue, sv)
+			case "lt":
+				return types.Less(sv, ineqValue)
+			case "eq":
+				return !types.Less(sv, ineqValue) && !types.Less(ineqValue, sv)
+			default:
+				x.Fatalf("Unknown ineqType %v", q.SrcFunc[0])
 			}
-			return !types.Less(ineqValue, sv)
+			return false
 		})
 	}
 

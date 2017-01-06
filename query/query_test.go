@@ -871,7 +871,7 @@ func TestToJSONFilterGeq(t *testing.T) {
 			me(_uid_:0x01) {
 				name
 				gender
-				friend @filter(geq("dob", "1909-03-20")) {
+				friend @filter(geq("dob", "1909-05-05")) {
 					name
 				}
 			}
@@ -881,6 +881,29 @@ func TestToJSONFilterGeq(t *testing.T) {
 	js := processToJSON(t, query)
 	require.JSONEq(t,
 		`{"me":[{"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"}],"gender":"female","name":"Michonne"}]}`,
+		js)
+}
+
+func TestToJSONFilterGt(t *testing.T) {
+	dir, dir2, ps := populateGraph(t)
+	defer ps.Close()
+	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
+	query := `
+		{
+			me(_uid_:0x01) {
+				name
+				gender
+				friend @filter(gt("dob", "1909-05-05")) {
+					name
+				}
+			}
+		}
+	`
+
+	js := processToJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"friend":[{"name":"Rick Grimes"}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
 
@@ -894,7 +917,7 @@ func TestToJSONFilterLeq(t *testing.T) {
 			me(_uid_:0x01) {
 				name
 				gender
-				friend @filter(leq("dob", "1909-03-20")) {
+				friend @filter(leq("dob", "1909-01-10")) {
 					name
 				}
 			}
@@ -904,6 +927,75 @@ func TestToJSONFilterLeq(t *testing.T) {
 	js := processToJSON(t, query)
 	require.JSONEq(t,
 		`{"me":[{"friend":[{"name":"Daryl Dixon"},{"name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
+		js)
+}
+
+func TestToJSONFilterLt(t *testing.T) {
+	dir, dir2, ps := populateGraph(t)
+	defer ps.Close()
+	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
+	query := `
+		{
+			me(_uid_:0x01) {
+				name
+				gender
+				friend @filter(lt("dob", "1909-01-10")) {
+					name
+				}
+			}
+		}
+	`
+
+	js := processToJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"friend":[{"name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
+		js)
+}
+
+func TestToJSONFilterEqualNoHit(t *testing.T) {
+	dir, dir2, ps := populateGraph(t)
+	defer ps.Close()
+	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
+	query := `
+		{
+			me(_uid_:0x01) {
+				name
+				gender
+				friend @filter(eq("dob", "1909-03-20")) {
+					name
+				}
+			}
+		}
+	`
+
+	js := processToJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"gender":"female","name":"Michonne"}]}`,
+		js)
+}
+
+func TestToJSONFilterEqual(t *testing.T) {
+	dir, dir2, ps := populateGraph(t)
+	defer ps.Close()
+	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
+	query := `
+		{
+			me(_uid_:0x01) {
+				name
+				gender
+				friend @filter(eq("dob", "1909-01-10")) {
+					name
+				}
+			}
+		}
+	`
+
+	js := processToJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"friend":[{"name":"Daryl Dixon"}], "gender":"female","name":"Michonne"}]}`,
 		js)
 }
 
