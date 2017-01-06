@@ -62,9 +62,6 @@ const (
 
 	itemVarName // dollar followed by a name
 
-	itemAlias // Alias for a field
-	//itemDirectiveName // Name starting with @
-
 	itemAnd // And inside a filter.
 	itemOr  // Or inside a filter.
 
@@ -326,7 +323,7 @@ func lexAlias(l *lex.Lexer) lex.StateFn {
 			continue
 		}
 		l.Backup()
-		l.Emit(itemAlias)
+		l.Emit(itemName)
 		break
 	}
 	return lexInside

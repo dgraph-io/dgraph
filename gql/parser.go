@@ -956,7 +956,7 @@ func godeep(l *lex.Lexer, gq *GraphQuery) error {
 
 		} else if item.Typ == itemCollon {
 			item = l.NextTok()
-			if item.Typ != itemAlias {
+			if item.Typ != itemName {
 				return x.Errorf("Predicate Expected but got: %s", item.Val)
 			}
 			curp.Alias = curp.Attr
