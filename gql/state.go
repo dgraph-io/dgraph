@@ -484,20 +484,20 @@ func lexVarInside(l *lex.Lexer) lex.StateFn {
 			return l.Errorf("unclosed argument")
 		case isSpace(r) || isEndOfLine(r) || r == comma:
 			l.Ignore()
+		case isNameBegin(r) || isNumber(r):
+			return lexVarName
 		case isDollar(r):
 			l.Emit(itemDollar)
 			return lexVarName
 		case r == ':':
 			l.Emit(itemCollon)
-			return lexVarType
 		case r == equal:
 			l.Emit(itemEqual)
-			return lexVarDefault
 		case r == rightRound:
 			l.Emit(itemRightRound)
 			return lexText
 		default:
-			return l.Errorf("variable list invalid")
+			return l.Errorf("variable list invalid %v", l.Items[l.Start:l.Pos])
 		}
 	}
 }
@@ -514,42 +514,6 @@ func lexVarName(l *lex.Lexer) lex.StateFn {
 		break
 	}
 	return lexVarInside
-}
-
-// lexVarType lexes and emits the type of a variable.
-func lexVarType(l *lex.Lexer) lex.StateFn {
-	l.AcceptRun(isSpace)
-	l.Ignore() // Any spaces encountered.
-	for {
-		r := l.Next()
-		if isSpace(r) || isEndOfLine(r) || r == rightRound || r == comma {
-			l.Backup()
-			l.Emit(itemName)
-			return lexVarInside
-		}
-		if r == lex.EOF {
-			return l.Errorf("Reached lex.EOF while reading var value: %v",
-				l.Input[l.Start:l.Pos])
-		}
-	}
-}
-
-// lexVarDefault lexes and emits the Default value of a variable.
-func lexVarDefault(l *lex.Lexer) lex.StateFn {
-	l.AcceptRun(isSpace)
-	l.Ignore() // Any spaces encountered.
-	for {
-		r := l.Next()
-		if isSpace(r) || isEndOfLine(r) || r == rightRound || r == comma {
-			l.Backup()
-			l.Emit(itemName)
-			return lexVarInside
-		}
-		if r == lex.EOF {
-			return l.Errorf("Reached lex.EOF while reading default value: %v",
-				l.Input[l.Start:l.Pos])
-		}
-	}
 }
 
 // lexArgInside is used to lex the arguments inside ().
@@ -643,10 +607,10 @@ func isNameSuffix(r rune) bool {
 	if isNameBegin(r) {
 		return true
 	}
-	if r >= '0' && r <= '9' {
+	if isNumber(r) {
 		return true
 	}
-	if r == '.' || r == '-' { // Use by freebase.
+	if r == '.' || r == '-' || r == '!' { // Use by freebase.
 		return true
 	}
 	return false
