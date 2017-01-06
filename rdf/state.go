@@ -49,7 +49,7 @@ func run(l *lex.Lexer) {
 	for state := lexText; state != nil; {
 		state = state(l)
 	}
-	close(l.Items) // No more tokens.
+	//close(l.Items) // No more tokens.
 }
 
 // This function inspects the next rune and calls the appropriate stateFn.

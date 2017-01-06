@@ -172,11 +172,11 @@ func Parse(line string) (rnq graph.NQuad, rerr error) {
 	l := &lex.Lexer{}
 	l.Init(line)
 
-	go run(l)
+	run(l)
 	var oval string
 	var vend, hasBrackets bool
 	// We read items from the l.Items channel to which the lexer sends items.
-	for item := range l.Items {
+	for item := l.NextTok(); item.Typ != lex.ItemEOF; item = l.NextTok() {
 		switch item.Typ {
 		case itemSubject:
 			rnq.Subject, hasBrackets = stripBracketsAndTrim(item.Val)
