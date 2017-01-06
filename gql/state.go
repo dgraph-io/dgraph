@@ -597,7 +597,7 @@ func isNameBegin(r rune) bool {
 }
 func isNumber(r rune) bool {
 	switch {
-	case r >= '0' && r <= '9':
+	case (r >= '0' && r <= '9') || r == '-' || r == '+':
 		return true
 	default:
 		return false
