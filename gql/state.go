@@ -70,7 +70,31 @@ const (
 func lexText(l *lex.Lexer) lex.StateFn {
 Loop:
 	for {
-		if l.Depth == 0 {
+		if l.Mode == mutationMode {
+			switch r := l.Next(); {
+			case r == rightCurl:
+				l.Depth--
+				l.Emit(itemRightCurl)
+				if l.Depth == 0 {
+					l.Mode = 0 // Set it to default before levaving the mode.
+					return lexText
+				}
+			case r == leftCurl:
+				l.Depth++
+				l.Emit(itemLeftCurl)
+				if l.Depth >= 2 {
+					return lexTextMutation
+				}
+			case r == lex.EOF:
+				return l.Errorf("Unclosed mutation action")
+			case isSpace(r) || isEndOfLine(r):
+				l.Ignore()
+			case isNameBegin(r):
+				return lexNameMutation
+			default:
+				return l.Errorf("Unrecognized character inside mutation: %#U", r)
+			}
+		} else if l.Depth == 0 {
 			switch r := l.Next(); {
 			case r == leftCurl:
 				l.Backup()
@@ -79,7 +103,7 @@ Loop:
 				l.Depth++        // one level down.
 				l.Emit(itemLeftCurl)
 				if l.Mode == mutationMode {
-					return lexInsideMutation
+					return lexText
 				}
 				// Both queryMode and fragmentMode are handled by lexInside.
 				return lexText
@@ -354,34 +378,6 @@ func lexComment(l *lex.Lexer) lex.StateFn {
 	return nil // Stop the run loop.
 }
 
-// lexInsideMutation lexes the text inside a mutation block.
-func lexInsideMutation(l *lex.Lexer) lex.StateFn {
-	for {
-		switch r := l.Next(); {
-		case r == rightCurl:
-			l.Depth--
-			l.Emit(itemRightCurl)
-			if l.Depth == 0 {
-				return lexText
-			}
-		case r == leftCurl:
-			l.Depth++
-			l.Emit(itemLeftCurl)
-			if l.Depth >= 2 {
-				return lexTextMutation
-			}
-		case r == lex.EOF:
-			return l.Errorf("Unclosed mutation action")
-		case isSpace(r) || isEndOfLine(r):
-			l.Ignore()
-		case isNameBegin(r):
-			return lexNameMutation
-		default:
-			return l.Errorf("Unrecognized character in lexInsideMutation: %#U", r)
-		}
-	}
-}
-
 // lexNameMutation lexes the itemMutationOp, which could be set or delete.
 func lexNameMutation(l *lex.Lexer) lex.StateFn {
 	for {
@@ -394,7 +390,7 @@ func lexNameMutation(l *lex.Lexer) lex.StateFn {
 		l.Emit(itemMutationOp)
 		break
 	}
-	return lexInsideMutation
+	return lexText
 }
 
 // lexTextMutation lexes and absorbs the text inside a mutation operation block.
@@ -424,7 +420,7 @@ func lexTextMutation(l *lex.Lexer) lex.StateFn {
 		l.Emit(itemMutationContent)
 		break
 	}
-	return lexInsideMutation
+	return lexText
 }
 
 // This function is used to absorb the object value.
