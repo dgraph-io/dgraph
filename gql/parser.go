@@ -408,24 +408,26 @@ L:
 		if rerr = godeep(l, gq); rerr != nil {
 			return nil, rerr
 		}
-	} else if item.Typ == itemDirectiveName {
-		switch item.Val {
-		case "@filter":
-			if seenFilter {
-				return nil, x.Errorf("Repeated filter at root")
-			}
-			seenFilter = true
-			filter, err := parseFilter(l)
-			if err != nil {
-				return nil, err
-			}
-			gq.Filter = filter
+	} else if item.Typ == itemAt {
+		item := l.NextTok()
+		if item.Typ == itemName {
+			switch item.Val {
+			case "filter":
+				if seenFilter {
+					return nil, x.Errorf("Repeated filter at root")
+				}
+				seenFilter = true
+				filter, err := parseFilter(l)
+				if err != nil {
+					return nil, err
+				}
+				gq.Filter = filter
 
-		default:
-			return nil, x.Errorf("Unknown directive [%s]", item.Val)
+			default:
+				return nil, x.Errorf("Unknown directive [%s]", item.Val)
+			}
+			goto L
 		}
-		goto L
-
 	} else {
 		return nil, x.Errorf("Malformed Query. Missing {")
 	}
@@ -980,17 +982,20 @@ func godeep(l *lex.Lexer, gq *GraphQuery) error {
 					curp.Args[p.Key] = p.Val
 				}
 			}
-		} else if item.Typ == itemDirectiveName {
-			switch item.Val {
-			case "@filter":
-				filter, err := parseFilter(l)
-				if err != nil {
-					return err
-				}
-				curp.Filter = filter
+		} else if item.Typ == itemAt {
+			item := l.NextTok()
+			if item.Typ == itemName {
+				switch item.Val {
+				case "filter":
+					filter, err := parseFilter(l)
+					if err != nil {
+						return err
+					}
+					curp.Filter = filter
 
-			default:
-				return x.Errorf("Unknown directive [%s]", item.Val)
+				default:
+					return x.Errorf("Unknown directive [%s]", item.Val)
+				}
 			}
 		}
 	}

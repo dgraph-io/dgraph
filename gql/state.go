@@ -37,6 +37,7 @@ const (
 	fragmentMode = 3
 	equal        = '='
 	quote        = '"'
+	attherate    = '@'
 )
 
 // Constants representing type of different graphql lexed items.
@@ -53,6 +54,7 @@ const (
 	itemLeftRound                          // left round bracket
 	itemRightRound                         // right round bracket
 	itemCollon                             // Collon
+	itemAt                                 // @
 
 	itemMutationOp      // mutation operation
 	itemMutationContent // mutation content
@@ -60,8 +62,8 @@ const (
 
 	itemVarName // dollar followed by a name
 
-	itemAlias         // Alias for a field
-	itemDirectiveName // Name starting with @
+	itemAlias // Alias for a field
+	//itemDirectiveName // Name starting with @
 
 	itemAnd // And inside a filter.
 	itemOr  // Or inside a filter.
@@ -156,7 +158,8 @@ func lexInside(l *lex.Lexer) lex.StateFn {
 		case r == ':':
 			l.Emit(itemCollon)
 			return lexAlias
-		case r == '@':
+		case r == attherate:
+			l.Emit(itemAt)
 			return lexDirective
 		default:
 			return l.Errorf("Unrecognized character in lexInside: %#U", r)
@@ -171,7 +174,7 @@ func lexFilterFuncInside(l *lex.Lexer) lex.StateFn {
 	var empty bool
 	for {
 		r := l.Next()
-		if isSpace(r) || r == ',' {
+		if isSpace(r) || r == comma {
 			l.Ignore()
 			empty = true
 		} else if r == leftRound {
@@ -301,7 +304,7 @@ func lexDirective(l *lex.Lexer) lex.StateFn {
 			continue
 		}
 		l.Backup()
-		l.Emit(itemDirectiveName)
+		l.Emit(itemName)
 
 		directive := buf.Bytes()[:buf.Len()-1]
 		// The lexer may behave differently for different directives. Hence, we need
@@ -519,7 +522,6 @@ func lexVarInside(l *lex.Lexer) lex.StateFn {
 			return lexText
 		case r == comma:
 			l.Emit(itemComma)
-			l.Ignore()
 		default:
 			return l.Errorf("variable list invalid")
 		}
@@ -652,7 +654,7 @@ func isEndLiteral(r rune) bool {
 
 // isEndArg returns true if rune is a comma or right round bracket.
 func isEndArg(r rune) bool {
-	return r == ',' || r == ')'
+	return r == comma || r == ')'
 }
 
 // isNameBegin returns true if the rune is an alphabet or an '_' or '~'.
