@@ -206,6 +206,26 @@ func TestParse_alias(t *testing.T) {
 	require.Equal(t, childAttrs(gq.Children[1]), []string{"name"})
 }
 
+func TestParse_alias1(t *testing.T) {
+	query := `
+		{
+			me(_uid_:0x0a) {
+				name: type.object.name.en
+				bestFriend: friends(first: 10) { 
+					name: type.object.name.hi	
+				}
+			}
+		}
+	`
+	gq, _, err := Parse(query)
+	require.NoError(t, err)
+	require.NotNil(t, gq)
+	require.Equal(t, childAttrs(gq), []string{"type.object.name.en", "friends"})
+	require.Equal(t, gq.Children[1].Alias, "bestFriend")
+	require.Equal(t, gq.Children[1].Children[0].Alias, "name")
+	require.Equal(t, childAttrs(gq.Children[1]), []string{"type.object.name.hi"})
+}
+
 func TestParse_block(t *testing.T) {
 	query := `
 		{

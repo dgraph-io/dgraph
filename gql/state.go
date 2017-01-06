@@ -52,6 +52,7 @@ const (
 	itemString                             // quoted string
 	itemLeftRound                          // left round bracket
 	itemRightRound                         // right round bracket
+	itemCollon                             // Collon
 
 	itemMutationOp      // mutation operation
 	itemMutationContent // mutation content
@@ -153,6 +154,7 @@ func lexInside(l *lex.Lexer) lex.StateFn {
 			l.FilterDepth++
 			return lexFilterInside
 		case r == ':':
+			l.Emit(itemCollon)
 			return lexAlias
 		case r == '@':
 			return lexDirective
@@ -506,7 +508,7 @@ func lexVarInside(l *lex.Lexer) lex.StateFn {
 		case isDollar(r):
 			return lexVarName
 		case r == ':':
-			l.Ignore()
+			l.Emit(itemCollon)
 			return lexVarType
 		case r == equal:
 			l.Emit(itemEqual)
@@ -585,7 +587,7 @@ func lexArgInside(l *lex.Lexer) lex.StateFn {
 		case isNameBegin(r):
 			return lexArgName
 		case r == ':':
-			l.Ignore()
+			l.Emit(itemCollon)
 			return lexArgVal
 		case r == rightRound:
 			l.Emit(itemRightRound)

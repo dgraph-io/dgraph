@@ -541,6 +541,11 @@ func parseVariables(l *lex.Lexer, vmap varMap) error {
 			return x.Errorf("Expecting a variable name. Got: %v", item)
 		}
 
+		item = l.NextTok()
+		if item.Typ != itemCollon {
+			return x.Errorf("Expecting a collon. Got: %v", item)
+		}
+
 		// Get variable type.
 		item = l.NextTok()
 		if item.Typ != itemName {
@@ -613,6 +618,11 @@ func parseArguments(l *lex.Lexer) (result []pair, rerr error) {
 
 		} else {
 			return result, x.Errorf("Expecting argument name. Got: %v", item)
+		}
+
+		item = l.NextTok()
+		if item.Typ != itemCollon {
+			return result, x.Errorf("Expecting a collon. Got: %v", item)
 		}
 
 		// Get value.
@@ -942,7 +952,11 @@ func godeep(l *lex.Lexer, gq *GraphQuery) error {
 			gq.Children = append(gq.Children, child)
 			curp = child
 
-		} else if item.Typ == itemAlias {
+		} else if item.Typ == itemCollon {
+			item = l.NextTok()
+			if item.Typ != itemAlias {
+				return x.Errorf("Predicate Expected but got: %s", item.Val)
+			}
 			curp.Alias = curp.Attr
 			curp.Attr = item.Val
 		} else if item.Typ == itemLeftCurl {
