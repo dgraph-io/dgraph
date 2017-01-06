@@ -57,7 +57,7 @@ const (
 	itemDollar                                  // $
 	itemMutationOp                              // mutation operation
 	itemMutationContent                         // mutation content
-	itemFragmentSpread                          // three dots and name
+	itemThreeDots                               // three dots (...)
 
 	itemAnd // And inside a filter.
 	itemOr  // Or inside a filter.
@@ -126,7 +126,8 @@ Loop:
 			switch r := l.Next(); {
 			case r == period:
 				if l.Next() == period && l.Next() == period {
-					return lexFragmentSpread
+					l.Emit(itemThreeDots)
+					return lexName
 				}
 				// We do not expect a period at all. If you do, you may want to
 				// backup the two extra periods we try to read.
@@ -328,19 +329,6 @@ func lexDirective(l *lex.Lexer) lex.StateFn {
 			return lexFilterInside
 		}
 		return l.Errorf("Unhandled directive %s", directive)
-	}
-	return lexText
-}
-
-func lexFragmentSpread(l *lex.Lexer) lex.StateFn {
-	for {
-		r := l.Next()
-		if isNameSuffix(r) {
-			continue
-		}
-		l.Backup()
-		l.Emit(itemFragmentSpread)
-		break
 	}
 	return lexText
 }

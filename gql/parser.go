@@ -940,15 +940,13 @@ func godeep(l *lex.Lexer, gq *GraphQuery) error {
 			return nil
 		}
 
-		if item.Typ == itemFragmentSpread {
-			// item.Val is expected to start with "..." and to have len >3.
-			if len(item.Val) <= 3 {
-				return x.Errorf("Fragment name invalid: %s", item.Val)
+		if item.Typ == itemThreeDots {
+			item = l.NextTok()
+			if item.Typ == itemName /*FragmentSpread*/ {
+				// item.Val is expected to start with "..." and to have len >3.
+				gq.Children = append(gq.Children, &GraphQuery{fragment: item.Val})
+				// Unlike itemName, there is no nesting, so do not change "curp".
 			}
-
-			gq.Children = append(gq.Children, &GraphQuery{fragment: item.Val[3:]})
-			// Unlike itemName, there is no nesting, so do not change "curp".
-
 		} else if item.Typ == itemName {
 			child := &GraphQuery{
 				Args: make(map[string]string),
