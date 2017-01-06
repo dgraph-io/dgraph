@@ -82,8 +82,8 @@ func convertValue(attr, data string) (types.Val, error) {
 
 	src := types.Val{types.StringID, []byte(data)}
 	dst := types.ValueForType(t)
-	x.Check(types.Convert(src, &dst))
-	return dst, nil
+	err = types.Convert(src, &dst)
+	return dst, err
 }
 
 // processTask processes the query, accumulates and returns the result.
