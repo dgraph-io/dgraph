@@ -41,33 +41,32 @@ const (
 
 // Constants representing type of different graphql lexed items.
 const (
-	itemText            lex.ItemType = 5 + iota // plain text
-	itemLeftCurl                                // left curly bracket
-	itemRightCurl                               // right curly bracket
-	itemComma                                   // a comma
-	itemEqual                                   // equals to symbol
-	itemComment                                 // comment
-	itemName                                    // [9] names
-	itemOpType                                  // operation type
-	itemString                                  // quoted string
-	itemLeftRound                               // left round bracket
-	itemRightRound                              // right round bracket
-	itemArgName                                 // argument name
-	itemArgVal                                  // argument val
-	itemMutationOp                              // mutation operation
-	itemMutationContent                         // mutation content
-	itemFragmentSpread                          // three dots and name
-	itemVarName                                 // dollar followed by a name
-	itemVarType                                 // type a variable
-	itemVarDefault                              // default value of a variable
-	itemAlias                                   // Alias for a field
-	itemDirectiveName                           // Name starting with @
-	itemFilterAnd                               // And inside a filter.
-	itemFilterOr                                // Or inside a filter.
-	itemFilterFunc                              // Function inside a filter.
-	itemFilterFuncArg                           // Function args inside a filter.
-	itemGenerator                               // To specify its a generator.
-	itemArgument                                // To specify its a argument list.
+	itemText       lex.ItemType = 5 + iota // plain text
+	itemLeftCurl                           // left curly bracket
+	itemRightCurl                          // right curly bracket
+	itemComma                              // a comma
+	itemEqual                              // equals to symbol
+	itemComment                            // comment
+	itemName                               // [9] names
+	itemOpType                             // operation type
+	itemString                             // quoted string
+	itemLeftRound                          // left round bracket
+	itemRightRound                         // right round bracket
+
+	itemMutationOp      // mutation operation
+	itemMutationContent // mutation content
+	itemFragmentSpread  // three dots and name
+
+	itemVarName // dollar followed by a name
+
+	itemAlias         // Alias for a field
+	itemDirectiveName // Name starting with @
+
+	itemAnd // And inside a filter.
+	itemOr  // Or inside a filter.
+
+	itemGenerator // To specify its a generator.
+	itemArgument  // To specify its a argument list.
 )
 
 // lexText lexes the input string and calls other lex functions.
@@ -186,7 +185,7 @@ func lexFilterFuncInside(l *lex.Lexer) lex.StateFn {
 			empty = false
 			l.Ignore()
 			l.AcceptUntil(isEndLiteral) // This call will backup the ending ".
-			l.Emit(itemFilterFuncArg)
+			l.Emit(itemName)
 			l.Next() // Consume the " and ignore it.
 			l.Ignore()
 		} else if r == '[' {
@@ -206,7 +205,7 @@ func lexFilterFuncInside(l *lex.Lexer) lex.StateFn {
 					break
 				}
 			}
-			l.Emit(itemFilterFuncArg)
+			l.Emit(itemName)
 			empty = false
 			l.AcceptRun(isSpace)
 			l.Ignore()
@@ -218,7 +217,7 @@ func lexFilterFuncInside(l *lex.Lexer) lex.StateFn {
 			empty = false
 			// Accept this argument. Till comma or right bracket.
 			l.AcceptUntil(isEndArg)
-			l.Emit(itemFilterFuncArg)
+			l.Emit(itemName)
 		}
 	}
 }
@@ -232,7 +231,7 @@ func lexFilterFuncName(l *lex.Lexer) lex.StateFn {
 			continue
 		}
 		l.Backup()
-		l.Emit(itemFilterFunc)
+		l.Emit(itemName)
 		break
 	}
 	return lexFilterFuncInside
@@ -264,14 +263,14 @@ func lexFilterInside(l *lex.Lexer) lex.StateFn {
 		case r == '&':
 			r2 := l.Next()
 			if r2 == '&' {
-				l.Emit(itemFilterAnd)
+				l.Emit(itemAnd)
 				return lexFilterInside
 			}
 			return l.Errorf("Expected & but got %v", r2)
 		case r == '|':
 			r2 := l.Next()
 			if r2 == '|' {
-				l.Emit(itemFilterOr)
+				l.Emit(itemOr)
 				return lexFilterInside
 			}
 			return l.Errorf("Expected | but got %v", r2)
@@ -547,7 +546,7 @@ func lexVarType(l *lex.Lexer) lex.StateFn {
 		r := l.Next()
 		if isSpace(r) || isEndOfLine(r) || r == rightRound || r == comma {
 			l.Backup()
-			l.Emit(itemVarType)
+			l.Emit(itemName)
 			return lexVarInside
 		}
 		if r == lex.EOF {
@@ -565,7 +564,7 @@ func lexVarDefault(l *lex.Lexer) lex.StateFn {
 		r := l.Next()
 		if isSpace(r) || isEndOfLine(r) || r == rightRound || r == comma {
 			l.Backup()
-			l.Emit(itemVarDefault)
+			l.Emit(itemName)
 			return lexVarInside
 		}
 		if r == lex.EOF {
@@ -605,7 +604,7 @@ func lexArgName(l *lex.Lexer) lex.StateFn {
 			continue
 		}
 		l.Backup()
-		l.Emit(itemArgName)
+		l.Emit(itemName)
 		break
 	}
 	return lexArgInside
@@ -619,7 +618,7 @@ func lexArgVal(l *lex.Lexer) lex.StateFn {
 		r := l.Next()
 		if isSpace(r) || isEndOfLine(r) || r == rightRound || r == comma {
 			l.Backup()
-			l.Emit(itemArgVal)
+			l.Emit(itemName)
 			return lexArgInside
 		}
 		if r == lex.EOF {

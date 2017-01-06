@@ -543,7 +543,7 @@ func parseVariables(l *lex.Lexer, vmap varMap) error {
 
 		// Get variable type.
 		item = l.NextTok()
-		if item.Typ != itemVarType {
+		if item.Typ != itemName {
 			return x.Errorf("Expecting a variable type. Got: %v", item)
 		}
 
@@ -570,7 +570,7 @@ func parseVariables(l *lex.Lexer, vmap varMap) error {
 		item = l.NextTok()
 		if item.Typ == itemEqual {
 			it := l.NextTok()
-			if it.Typ != itemVarDefault {
+			if it.Typ != itemName {
 				return x.Errorf("Expecting default value of a variable. Got: %v", item)
 			}
 
@@ -605,7 +605,7 @@ func parseArguments(l *lex.Lexer) (result []pair, rerr error) {
 
 		// Get key.
 		item := l.NextTok()
-		if item.Typ == itemArgName {
+		if item.Typ == itemName {
 			p.Key = item.Val
 
 		} else if item.Typ == itemRightRound {
@@ -617,7 +617,7 @@ func parseArguments(l *lex.Lexer) (result []pair, rerr error) {
 
 		// Get value.
 		item = l.NextTok()
-		if item.Typ != itemArgVal {
+		if item.Typ != itemName {
 			return result, x.Errorf("Expecting argument value. Got: %v", item)
 		}
 
@@ -716,7 +716,7 @@ func parseFunction(l *lex.Lexer) (*Function, error) {
 	var g *Function
 	for {
 		item := l.NextTok()
-		if item.Typ == itemFilterFunc { // Value.
+		if item.Typ == itemName { // Value.
 			g = &Function{Name: item.Val}
 			itemInFunc := l.NextTok()
 			if itemInFunc.Typ != itemLeftRound {
@@ -726,7 +726,7 @@ func parseFunction(l *lex.Lexer) (*Function, error) {
 				itemInFunc := l.NextTok()
 				if itemInFunc.Typ == itemRightRound {
 					break
-				} else if itemInFunc.Typ != itemFilterFuncArg {
+				} else if itemInFunc.Typ != itemName {
 					return nil, x.Errorf("Expected arg after func [%s], but got item %v",
 						g.Name, itemInFunc)
 				}
@@ -762,7 +762,7 @@ func parseFilter(l *lex.Lexer) (*FilterTree, error) {
 
 	for {
 		item := l.NextTok()
-		if item.Typ == itemFilterFunc { // Value.
+		if item.Typ == itemName { // Value.
 			f := &Function{}
 			leaf := &FilterTree{Func: f}
 			f.Name = item.Val
@@ -776,7 +776,7 @@ func parseFilter(l *lex.Lexer) (*FilterTree, error) {
 				if itemInFunc.Typ == itemRightRound {
 					terminated = true
 					break
-				} else if itemInFunc.Typ != itemFilterFuncArg {
+				} else if itemInFunc.Typ != itemName {
 					return nil, x.Errorf("Expected arg after func [%s], but got item %v",
 						leaf.Func.Name, itemInFunc)
 				}
@@ -812,9 +812,9 @@ func parseFilter(l *lex.Lexer) (*FilterTree, error) {
 				break
 			}
 
-		} else if item.Typ == itemFilterAnd || item.Typ == itemFilterOr {
+		} else if item.Typ == itemAnd || item.Typ == itemOr {
 			op := "&"
-			if item.Typ == itemFilterOr {
+			if item.Typ == itemOr {
 				op = "|"
 			}
 			opPred := filterOpPrecedence[op]
