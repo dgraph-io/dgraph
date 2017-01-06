@@ -19,6 +19,7 @@ package gql
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -535,12 +536,17 @@ func parseVariables(l *lex.Lexer, vmap varMap) error {
 		var varName string
 		// Get variable name.
 		item := l.NextTok()
-		if item.Typ == itemVarName {
-			varName = item.Val
+		if item.Typ == itemDollar {
+			item = l.NextTok()
+			if item.Typ == itemName {
+				varName = fmt.Sprintf("$%s", item.Val)
+			} else {
+				return x.Errorf("Expecting a variable name. Got: %v", item)
+			}
 		} else if item.Typ == itemRightRound {
 			break
 		} else {
-			return x.Errorf("Expecting a variable name. Got: %v", item)
+			return x.Errorf("Unexpected item in place of variable. Got: %v", item)
 		}
 
 		item = l.NextTok()

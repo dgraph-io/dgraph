@@ -42,25 +42,25 @@ const (
 
 // Constants representing type of different graphql lexed items.
 const (
-	itemText       lex.ItemType = 5 + iota // plain text
-	itemLeftCurl                           // left curly bracket
-	itemRightCurl                          // right curly bracket
-	itemComma                              // a comma
-	itemEqual                              // equals to symbol
-	itemComment                            // comment
-	itemName                               // [9] names
-	itemOpType                             // operation type
-	itemString                             // quoted string
-	itemLeftRound                          // left round bracket
-	itemRightRound                         // right round bracket
-	itemCollon                             // Collon
-	itemAt                                 // @
+	itemText            lex.ItemType = 5 + iota // plain text
+	itemLeftCurl                                // left curly bracket
+	itemRightCurl                               // right curly bracket
+	itemComma                                   // a comma
+	itemEqual                                   // equals to symbol
+	itemComment                                 // comment
+	itemName                                    // [9] names
+	itemOpType                                  // operation type
+	itemString                                  // quoted string
+	itemLeftRound                               // left round bracket
+	itemRightRound                              // right round bracket
+	itemCollon                                  // Collon
+	itemAt                                      // @
+	itemDollar                                  // $
+	itemMutationOp                              // mutation operation
+	itemMutationContent                         // mutation content
+	itemFragmentSpread                          // three dots and name
 
-	itemMutationOp      // mutation operation
-	itemMutationContent // mutation content
-	itemFragmentSpread  // three dots and name
-
-	itemVarName // dollar followed by a name
+	//itemVarName // dollar followed by a name
 
 	itemAnd // And inside a filter.
 	itemOr  // Or inside a filter.
@@ -506,6 +506,7 @@ func lexVarInside(l *lex.Lexer) lex.StateFn {
 		case isSpace(r) || isEndOfLine(r):
 			l.Ignore()
 		case isDollar(r):
+			l.Emit(itemDollar)
 			return lexVarName
 		case r == ':':
 			l.Emit(itemCollon)
@@ -533,7 +534,7 @@ func lexVarName(l *lex.Lexer) lex.StateFn {
 			continue
 		}
 		l.Backup()
-		l.Emit(itemVarName)
+		l.Emit(itemName)
 		break
 	}
 	return lexVarInside
@@ -631,7 +632,7 @@ func lexArgVal(l *lex.Lexer) lex.StateFn {
 
 // isDollar returns true if the rune is a Dollar($).
 func isDollar(r rune) bool {
-	return r == '\u0024'
+	return r == '$' || r == '\u0024'
 }
 
 // isSpace returns true if the rune is a tab or space.
