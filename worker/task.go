@@ -115,7 +115,10 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 			}
 			// Tokenizing RHS value of inequality.
 			v := types.ValueForType(types.BinaryID)
-			x.Check(types.Marshal(ineqValue, &v))
+			err = types.Marshal(ineqValue, &v)
+			if err != nil {
+				return nil, err
+			}
 			ineqTokens, err := posting.IndexTokens(attr, types.Val{ineqValue.Tid, v.Value.([]byte)})
 			if err != nil {
 				return nil, err
