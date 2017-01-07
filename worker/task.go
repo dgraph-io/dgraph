@@ -82,8 +82,8 @@ func convertValue(attr, data string) (types.Val, error) {
 
 	src := types.Val{types.StringID, []byte(data)}
 	dst := types.ValueForType(t)
-	x.Check(types.Convert(src, &dst))
-	return dst, nil
+	err = types.Convert(src, &dst)
+	return dst, err
 }
 
 // processTask processes the query, accumulates and returns the result.
@@ -118,7 +118,10 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 			}
 			// Tokenizing RHS value of inequality.
 			v := types.ValueForType(types.BinaryID)
-			x.Check(types.Marshal(ineqValue, &v))
+			err = types.Marshal(ineqValue, &v)
+			if err != nil {
+				return nil, err
+			}
 			ineqTokens, err := posting.IndexTokens(attr, types.Val{ineqValue.Tid, v.Value.([]byte)})
 			if err != nil {
 				return nil, err
