@@ -9,22 +9,30 @@
 
 Dgraph's goal is to provide [Google](https://www.google.com) production level scale and throughput,
 with low enough latency to be serving real time user queries, over terabytes of structured data.
-Dgraph supports [GraphQL-like query syntax](https://wiki.dgraph.io/Query_Language_Spec), and responds in [JSON](http://www.json.org/) and [Protocol Buffers](https://developers.google.com/protocol-buffers/).
+Dgraph supports [GraphQL-like query syntax](https://wiki.dgraph.io/Query_Language_Spec), and responds in [JSON](http://www.json.org/) and [Protocol Buffers](https://developers.google.com/protocol-buffers/) over [GRPC](http://www.grpc.io/).
+
+## Get Started
+**To get started with Dgraph, follow [this 5-step tutorial](https://wiki.dgraph.io/Get_Started).**
+
+## Current Status
+
+Dgraph is currently at version 0.7. It has 90% of the features planned for v1.0; and implements RAFT protocol for data replication, high availability and crash recovery. We recommend using it for internal projects at companies. If you plan to use Dgraph for user-facing production environment, [come talk to us](https://discuss.dgraph.io).
+
 
 ## Users
 - **Dgraph official documentation is present at [wiki.dgraph.io](https://wiki.dgraph.io).**
 - For feature requests or questions, visit [https://discuss.dgraph.io](https://discuss.dgraph.io).
 - Check out [the demo at dgraph.io](http://dgraph.io).
+- Please see [releases tab](https://github.com/dgraph-io/dgraph/releases) to find the latest release and corresponding release notes.
+- [See the Roadmap](https://github.com/dgraph-io/dgraph/issues/1) for list of working and planned features.
+- Read about the latest updates from Dgraph team [on our blog](https://open.dgraph.io/).
 
 ## Developers
 - See a list of issues [that we need help with](https://github.com/dgraph-io/dgraph/issues?q=is%3Aissue+is%3Aopen+label%3Ahelp_wanted).
 - Please see [contributing to Dgraph](https://wiki.dgraph.io/Contributing_to_Dgraph) for guidelines on contributions.
-- *Alpha Program*: If you want to contribute to Dgraph on a continuous basis and need some Bitcoins to pay for healthy food, talk to us.
 
-## Current Status
-
-**Please see releases tab to find the latest release and corresponding release notes.**
-[See the Roadmap](https://github.com/dgraph-io/dgraph/issues/1) for list of working and planned features.
+## Data Loading and Persistence
+[![Dgraph data persistence](https://img.youtube.com/vi/dzTEXxF0TGs/0.jpg)](https://www.youtube.com/watch?v=dzTEXxF0TGs)
 
 ## Performance
 
