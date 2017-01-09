@@ -46,48 +46,6 @@ func init() {
 	reverseLog = trace.NewEventLog("reverse", "Logger")
 }
 
-// initIndex initializes the index with the given data store.
-func initIndex() {
-	//	x.AssertTrue(pstore != nil)
-
-	//	// Initialize TokensTables.
-	//	indexedFields := schema.IndexedFields()
-	//	type resultStruct struct {
-	//		attr  string
-	//		table *TokensTable
-	//	}
-	//	results := make(chan resultStruct, len(indexedFields))
-
-	//	for _, attr := range indexedFields {
-	//		go func(attr string) {
-	//			table := &TokensTable{
-	//				key: make([]string, 0, 50),
-	//			}
-	//			pk := x.ParsedKey{
-	//				Attr: attr,
-	//			}
-	//			prefix := pk.IndexPrefix()
-
-	//			it := pstore.NewIterator()
-	//			defer it.Close()
-	//			for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
-	//				pki := x.Parse(it.Key().Data())
-	//				x.AssertTrue(pki.IsIndex())
-	//				x.AssertTrue(len(pki.Term) > 0)
-	//				table.push(pki.Term)
-	//			}
-	//			results <- resultStruct{attr, table}
-	//		}(attr)
-	//	}
-
-	//	tables = make(map[string]*TokensTable)
-	//	for i := 0; i < len(indexedFields); i++ {
-	//		r := <-results
-	//		tables[r.attr] = r.table
-	//	}
-
-}
-
 // IndexTokens return tokens, without the predicate prefix and index rune.
 func IndexTokens(attr string, src types.Val) ([]string, error) {
 	schemaType, err := schema.TypeOf(attr)
