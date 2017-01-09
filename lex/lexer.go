@@ -52,14 +52,14 @@ func (i item) String() string {
 }
 
 type ItemIterator struct {
-	items *[]item
-	idx   int
+	l   *Lexer
+	idx int
 }
 
 func (l *Lexer) NewIterator() *ItemIterator {
 	it := &ItemIterator{
-		items: &l.items,
-		idx:   -1,
+		l:   l,
+		idx: -1,
 	}
 	return it
 }
@@ -67,7 +67,7 @@ func (l *Lexer) NewIterator() *ItemIterator {
 // Valid returns true if we haven't consumed all the items.
 func (p *ItemIterator) Next() bool {
 	p.idx++
-	if p.idx >= len(*p.items) {
+	if p.idx >= len(p.l.items) {
 		return false
 	}
 	return true
@@ -75,7 +75,7 @@ func (p *ItemIterator) Next() bool {
 
 // Item returns the current item and advances the index.
 func (p *ItemIterator) Item() item {
-	return (*p.items)[p.idx]
+	return (p.l.items)[p.idx]
 }
 
 // Prev moves the index back by one.
@@ -89,10 +89,10 @@ func (p *ItemIterator) Prev() bool {
 
 // Peek returns the next n items without consuming them.
 func (p *ItemIterator) Peek(num int) ([]item, error) {
-	if (p.idx + num + 1) > len(*p.items) {
+	if (p.idx + num + 1) > len(p.l.items) {
 		return nil, x.Errorf("Out of range for peek")
 	}
-	return (*p.items)[p.idx+1 : p.idx+num+1], nil
+	return (p.l.items)[p.idx+1 : p.idx+num+1], nil
 }
 
 type Lexer struct {
