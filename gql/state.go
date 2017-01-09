@@ -52,7 +52,7 @@ const (
 	itemString                                  // quoted string
 	itemLeftRound                               // left round bracket
 	itemRightRound                              // right round bracket
-	itemCollon                                  // Collon
+	itemColon                                   // Colon
 	itemAt                                      // @
 	itemDollar                                  // $
 	itemMutationOp                              // mutation operation
@@ -63,194 +63,157 @@ const (
 
 )
 
-// lexText lexes the input string and calls other lex functions.
-func lexText(l *lex.Lexer) lex.StateFn {
-	var empty bool
-Loop:
+func lexInsideMutation(l *lex.Lexer) lex.StateFn {
 	for {
-		if l.Mode == mutationMode {
-			switch r := l.Next(); {
-			case r == rightCurl:
-				l.Depth--
-				l.Emit(itemRightCurl)
-				if l.Depth == 0 {
-					l.Mode = 0 // Set it to default before levaving the mode.
-					return lexText
-				}
-			case r == leftCurl:
-				l.Depth++
-				l.Emit(itemLeftCurl)
-				if l.Depth >= 2 {
-					return lexTextMutation
-				}
-			case r == lex.EOF:
-				return l.Errorf("Unclosed mutation action")
-			case isSpace(r) || isEndOfLine(r):
-				l.Ignore()
-			case isNameBegin(r):
-				return lexNameMutation
-			default:
-				return l.Errorf("Unrecognized character inside mutation: %#U", r)
+		switch r := l.Next(); {
+		case r == rightCurl:
+			l.Depth--
+			l.Emit(itemRightCurl)
+			if l.Depth == 0 {
+				l.Mode = 0 // Set it to default before levaving the mode.
+				return lexText
 			}
-		} else if l.ArgDepth > 0 || l.InsideDirective {
-			switch r := l.Next(); {
-			case r == leftRound:
-				l.Emit(itemLeftRound)
-				l.ArgDepth++
-			case r == rightRound:
-				if l.ArgDepth == 0 {
-					return l.Errorf("Unexpected right round bracket")
-				}
-				l.ArgDepth--
-				l.Emit(itemRightRound)
-				if empty {
-					return l.Errorf("Empty Argument")
-				}
-				if l.ArgDepth == 0 {
-					l.InsideDirective = false
-					return lexText // Filter directive is done.
-				}
-			case r == lex.EOF:
-				return l.Errorf("Unclosed Brackets")
-			case isSpace(r) || isEndOfLine(r):
-				l.Ignore()
-			case r == comma:
-				empty = true
-				l.Ignore()
-			case r == '&':
-				r2 := l.Next()
-				if r2 == '&' {
-					l.Emit(itemAnd)
-					return lexText
-				}
-				return l.Errorf("Expected & but got %v", r2)
-			case r == '|':
-				r2 := l.Next()
-				if r2 == '|' {
-					l.Emit(itemOr)
-					return lexText
-				}
-				return l.Errorf("Expected | but got %v", r2)
-			case isDollar(r):
-				l.Emit(itemDollar)
-			case isNameBegin(r) || isNumber(r):
-				empty = false
-				return lexArgName
-			case r == ':':
-				l.Emit(itemCollon)
-			case r == equal:
-				l.Emit(itemEqual)
-			case isEndLiteral(r):
-				{
-					empty = false
-					l.Ignore()
-					l.AcceptUntil(isEndLiteral) // This call will backup the ending ".
-					l.Emit(itemName)
-					l.Next() // Consume the " and ignore it.
-					l.Ignore()
-				}
-			case r == '[':
-				{
-					depth := 1
-					for {
-						r := l.Next()
-						if r == lex.EOF || r == ')' {
-							return l.Errorf("Invalid bracket sequence")
-						} else if r == '[' {
-							depth++
-						} else if r == ']' {
-							depth--
-						}
-						if depth > 2 || depth < 0 {
-							return l.Errorf("Invalid bracket sequence")
-						} else if depth == 0 {
-							break
-						}
-					}
-					l.Emit(itemName)
-					empty = false
-					l.AcceptRun(isSpace)
-					l.Ignore()
-					if !isEndArg(l.Peek()) {
-						return l.Errorf("Invalid bracket sequence")
-					}
+		case r == leftCurl:
+			l.Depth++
+			l.Emit(itemLeftCurl)
+			if l.Depth >= 2 {
+				return lexTextMutation
+			}
+		case isSpace(r) || isEndOfLine(r):
+			l.Ignore()
+		case isNameBegin(r):
+			return lexNameMutation
+		case r == lex.EOF:
+			return l.Errorf("Unclosed mutation action")
+		default:
+			return l.Errorf("Unrecognized character inside mutation: %#U", r)
+		}
+	}
+	return nil
+}
 
-				}
-			default:
-				return l.Errorf("Unrecognized character in lexText: %#U", r)
+func lexFuncOrArg(l *lex.Lexer) lex.StateFn {
+	var empty bool
+	for {
+		switch r := l.Next(); {
+		case r == leftRound:
+			l.Emit(itemLeftRound)
+			l.ArgDepth++
+		case r == rightRound:
+			if l.ArgDepth == 0 {
+				return l.Errorf("Unexpected right round bracket")
 			}
-		} else if l.Depth == 0 {
-			switch r := l.Next(); {
-			case r == leftCurl:
-				l.Backup()
-				l.Emit(itemText) // emit whatever we have so far.
-				l.Next()         // advance one to get back to where we saw leftCurl.
-				l.Depth++        // one level down.
-				l.Emit(itemLeftCurl)
-				if l.Mode == mutationMode {
-					return lexText
-				}
-				// Both queryMode and fragmentMode are handled by lexInside.
-				return lexText
-			case r == rightCurl:
-				return l.Errorf("Too many right characters")
-			case r == lex.EOF:
-				break Loop
-			case r == leftRound:
-				l.Backup()
-				l.Emit(itemText)
-				l.Next()
-				l.Emit(itemLeftRound)
-				l.ArgDepth++
-				return lexText
-			case isNameBegin(r):
-				l.Backup()
-				l.Emit(itemText)
-				return lexOperationType
+			l.ArgDepth--
+			l.Emit(itemRightRound)
+			if empty {
+				return l.Errorf("Empty Argument")
 			}
-		} else {
-			switch r := l.Next(); {
-			case r == period:
-				if l.Next() == period && l.Next() == period {
-					l.Emit(itemThreeDots)
-					return lexName
-				}
-				// We do not expect a period at all. If you do, you may want to
-				// backup the two extra periods we try to read.
-				return l.Errorf("Unrecognized character in lexText: %#U", r)
-			case r == rightCurl:
-				l.Depth--
-				l.Emit(itemRightCurl)
-				if l.Depth == 0 {
-					return lexText
-				}
-			case r == leftCurl:
-				l.Depth++
-				l.Emit(itemLeftCurl)
-			case r == lex.EOF:
-				return l.Errorf("Unclosed action")
-			case isSpace(r) || isEndOfLine(r) || r == comma:
+			if l.ArgDepth == 0 {
+				l.InsideDirective = false
+				return lexText // Filter directive is done.
+			}
+		case r == lex.EOF:
+			return l.Errorf("Unclosed Brackets")
+		case isSpace(r) || isEndOfLine(r):
+			l.Ignore()
+		case r == comma:
+			empty = true
+			l.Ignore()
+		case r == '&':
+			r2 := l.Next()
+			if r2 == '&' {
+				l.Emit(itemAnd)
+				return lexText
+			}
+			return l.Errorf("Expected & but got %v", r2)
+		case r == '|':
+			r2 := l.Next()
+			if r2 == '|' {
+				l.Emit(itemOr)
+				return lexText
+			}
+			return l.Errorf("Expected | but got %v", r2)
+		case isDollar(r):
+			l.Emit(itemDollar)
+		case isNameBegin(r) || isNumber(r):
+			empty = false
+			return lexArgName
+		case r == ':':
+			l.Emit(itemCollon)
+		case r == equal:
+			l.Emit(itemEqual)
+		case isEndLiteral(r):
+			{
+				empty = false
 				l.Ignore()
-			case isNameBegin(r):
-				return lexName
-			case r == '#':
-				l.Backup()
-				return lexComment
-			case r == leftRound:
-				l.Emit(itemLeftRound)
+				l.AcceptUntil(isEndLiteral) // This call will backup the ending ".
+				l.Emit(itemName)
+				l.Next() // Consume the " and ignore it.
+				l.Ignore()
+			}
+		case r == '[':
+			{
+				depth := 1
+				for {
+					r := l.Next()
+					if r == lex.EOF || r == ')' {
+						return l.Errorf("Invalid bracket sequence")
+					} else if r == '[' {
+						depth++
+					} else if r == ']' {
+						depth--
+					}
+					if depth > 2 || depth < 0 {
+						return l.Errorf("Invalid bracket sequence")
+					} else if depth == 0 {
+						break
+					}
+				}
+				l.Emit(itemName)
+				empty = false
 				l.AcceptRun(isSpace)
 				l.Ignore()
-				l.ArgDepth++
-				return lexText
-			case r == ':':
-				l.Emit(itemCollon)
-			case r == attherate:
-				l.Emit(itemAt)
-				return lexDirective
-			default:
-				return l.Errorf("Unrecognized character in lexText: %#U", r)
+				if !isEndArg(l.Peek()) {
+					return l.Errorf("Invalid bracket sequence")
+				}
 			}
+		default:
+			return l.Errorf("Unrecognized character in lexText: %#U", r)
+		}
+	}
+	return nil
+}
 
+func lexTopLevel(l *lex.Lexer) lex.StateFn {
+Loop:
+	for {
+		switch r := l.Next(); {
+		case r == leftCurl:
+			l.Backup()
+			l.Emit(itemText) // emit whatever we have so far.
+			l.Next()         // advance one to get back to where we saw leftCurl.
+			l.Depth++        // one level down.
+			l.Emit(itemLeftCurl)
+			if l.Mode == mutationMode {
+				return lexText
+			}
+			// Both queryMode and fragmentMode are handled by lexInside.
+			return lexText
+		case r == rightCurl:
+			return l.Errorf("Too many right characters")
+		case r == lex.EOF:
+			break Loop
+		case r == leftRound:
+			l.Backup()
+			l.Emit(itemText)
+			l.Next()
+			l.Emit(itemLeftRound)
+			l.ArgDepth++
+			return lexText
+		case isNameBegin(r):
+			l.Backup()
+			l.Emit(itemText)
+			return lexOperationType
 		}
 	}
 	if l.Pos > l.Start {
@@ -258,6 +221,61 @@ Loop:
 	}
 	l.Emit(lex.ItemEOF)
 	return nil
+}
+
+// lexText lexes the input string and calls other lex functions.
+func lexText(l *lex.Lexer) lex.StateFn {
+	for {
+		if l.Mode == mutationMode {
+			return lexInsideMutation
+		} else if l.ArgDepth > 0 || l.InsideDirective {
+			return lexFuncOrArg
+		} else if l.Depth == 0 {
+			return lexTopLevel
+		}
+
+		switch r := l.Next(); {
+		case r == period:
+			if l.Next() == period && l.Next() == period {
+				l.Emit(itemThreeDots)
+				return lexName
+			}
+			// We do not expect a period at all. If you do, you may want to
+			// backup the two extra periods we try to read.
+			return l.Errorf("Unrecognized character in lexText: %#U", r)
+		case r == rightCurl:
+			l.Depth--
+			l.Emit(itemRightCurl)
+			if l.Depth == 0 {
+				return lexText
+			}
+		case r == leftCurl:
+			l.Depth++
+			l.Emit(itemLeftCurl)
+		case r == lex.EOF:
+			return l.Errorf("Unclosed action")
+		case isSpace(r) || isEndOfLine(r) || r == comma:
+			l.Ignore()
+		case isNameBegin(r):
+			return lexName
+		case r == '#':
+			l.Backup()
+			return lexComment
+		case r == leftRound:
+			l.Emit(itemLeftRound)
+			l.AcceptRun(isSpace)
+			l.Ignore()
+			l.ArgDepth++
+			return lexText
+		case r == ':':
+			l.Emit(itemCollon)
+		case r == attherate:
+			l.Emit(itemAt)
+			return lexDirective
+		default:
+			return l.Errorf("Unrecognized character in lexText: %#U", r)
+		}
+	}
 }
 
 // lexFilterFuncName expects input to look like equal("...", "...").
