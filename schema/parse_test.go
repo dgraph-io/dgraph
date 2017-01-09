@@ -28,7 +28,6 @@ func TestSchema(t *testing.T) {
 	require.NoError(t, Parse("testfiles/test_schema"))
 }
 
-/*
 func TestSchema1_Error(t *testing.T) {
 	str = make(map[string]types.TypeID)
 	require.Error(t, Parse("testfiles/test_schema1"))
@@ -38,7 +37,7 @@ func TestSchema2_Error(t *testing.T) {
 	str = make(map[string]types.TypeID)
 	require.Error(t, Parse("testfiles/test_schema2"))
 }
-*/
+
 func TestSchema3_Error(t *testing.T) {
 	str = make(map[string]types.TypeID)
 	require.Error(t, Parse("testfiles/test_schema3"))

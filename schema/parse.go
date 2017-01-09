@@ -17,7 +17,6 @@
 package schema
 
 import (
-	"fmt"
 	"io/ioutil"
 
 	"github.com/dgraph-io/dgraph/lex"
@@ -61,8 +60,6 @@ func ParseBytes(schema []byte) (rerr error) {
 		}
 	}
 
-	fmt.Println(str)
-	fmt.Println(indexedFields)
 	return nil
 }
 
