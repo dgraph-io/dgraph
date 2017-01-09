@@ -169,8 +169,7 @@ func sane(s string) bool {
 
 // Parse parses a mutation string and returns the NQuad representation for it.
 func Parse(line string) (rnq graph.NQuad, rerr error) {
-	l := lex.NewLexer(line)
-	l.Run(lexText)
+	l := lex.NewLexer(line).Run(lexText)
 	it := l.NewIterator()
 	var oval string
 	var vend, hasBrackets bool

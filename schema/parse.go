@@ -38,8 +38,7 @@ func Parse(file string) (rerr error) {
 func ParseBytes(schema []byte) (rerr error) {
 	s := string(schema)
 
-	l := lex.NewLexer(s)
-	l.Run(lexText)
+	l := lex.NewLexer(s).Run(lexText)
 
 	it := l.NewIterator()
 	for it.Next() {

@@ -36,8 +36,7 @@ func TestNewLexer(t *testing.T) {
 			}
 		}
 	}`
-	l := lex.NewLexer(input)
-	l.Run(lexText)
+	l := lex.NewLexer(input).Run(lexText)
 
 	it := l.NewIterator()
 	for it.Next() {
@@ -64,8 +63,7 @@ func TestNewLexerMutation(t *testing.T) {
 			_city
 		}
 	}`
-	l := lex.NewLexer(input)
-	l.Run(lexText)
+	l := lex.NewLexer(input).Run(lexText)
 	it := l.NewIterator()
 	for it.Next() {
 		item := it.Item()
@@ -82,8 +80,7 @@ func TestAbruptMutation(t *testing.T) {
 			Why is this #!!?
 			How is this?
 	}`
-	l := lex.NewLexer(input)
-	l.Run(lexText)
+	l := lex.NewLexer(input).Run(lexText)
 	var typ lex.ItemType
 	it := l.NewIterator()
 	for it.Next() {
@@ -101,8 +98,7 @@ func TestVariables1(t *testing.T) {
 			_city
 		}
 	}`
-	l := lex.NewLexer(input)
-	l.Run(lexText)
+	l := lex.NewLexer(input).Run(lexText)
 	it := l.NewIterator()
 	for it.Next() {
 		item := it.Item()
@@ -118,8 +114,7 @@ func TestVariables2(t *testing.T) {
 			_city
 		}
 	}`
-	l := lex.NewLexer(input)
-	l.Run(lexText)
+	l := lex.NewLexer(input).Run(lexText)
 	it := l.NewIterator()
 	for it.Next() {
 		item := it.Item()
@@ -135,8 +130,7 @@ func TestVariablesDefault(t *testing.T) {
 			_city
 		}
 	}`
-	l := lex.NewLexer(input)
-	l.Run(lexText)
+	l := lex.NewLexer(input).Run(lexText)
 	it := l.NewIterator()
 	for it.Next() {
 		item := it.Item()

@@ -117,10 +117,11 @@ func NewLexer(input string) *Lexer {
 	return &l
 }
 
-func (l *Lexer) Run(f StateFn) {
+func (l *Lexer) Run(f StateFn) *Lexer {
 	for state := f; state != nil; {
 		state = state(l)
 	}
+	return l
 }
 
 // Errorf returns the error state function.

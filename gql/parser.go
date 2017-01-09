@@ -289,8 +289,7 @@ func Parse(input string) (gq *GraphQuery, mu *Mutation, rerr error) {
 		return nil, nil, err
 	}
 
-	l := lex.NewLexer(query)
-	l.Run(lexText)
+	l := lex.NewLexer(query).Run(lexText)
 
 	it := l.NewIterator()
 	fmap := make(fragmentMap)
