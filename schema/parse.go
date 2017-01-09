@@ -48,17 +48,19 @@ func ParseBytes(schema []byte) (rerr error) {
 	l.Init(s)
 	run(l)
 
-	for item := l.NextTok(); item.Typ != lex.ItemEOF; item = l.NextTok() {
+	it := l.NewIterator()
+	for it.Valid() {
+		item := it.Item()
 		switch item.Typ {
 		case itemScalar:
 			{
-				if rerr = processScalar(l); rerr != nil {
+				if rerr = processScalar(it); rerr != nil {
 					return rerr
 				}
 			}
 		case itemType:
 			{
-				if rerr = processObject(l); rerr != nil {
+				if rerr = processObject(it); rerr != nil {
 					return rerr
 				}
 			}
@@ -68,11 +70,13 @@ func ParseBytes(schema []byte) (rerr error) {
 	}
 
 	fmt.Println(str)
+	fmt.Println(indexedFields)
 	return nil
 }
 
-func processScalarBlock(l *lex.Lexer) error {
-	for item := l.NextTok(); item.Typ != lex.ItemEOF; item = l.NextTok() {
+func processScalarBlock(it *lex.ParseIterator) error {
+	for it.Valid() {
+		item := it.Item()
 		switch item.Typ {
 		case itemRightRound:
 			return nil
@@ -81,11 +85,11 @@ func processScalarBlock(l *lex.Lexer) error {
 				var name, typ string
 				name = item.Val
 
-				if next := l.NextTok(); next.Typ != itemCollon {
+				if next := it.Item(); next.Typ != itemCollon {
 					return x.Errorf("Missing collon")
 				}
 
-				next := l.NextTok()
+				next := it.Item()
 				if next.Typ != itemScalarType {
 					return x.Errorf("Missing Type")
 				}
@@ -98,8 +102,8 @@ func processScalarBlock(l *lex.Lexer) error {
 				str[name] = t
 
 				// Check for index / reverse.
-				for {
-					next = l.NextTok()
+				for it.Valid() {
+					next = it.Item()
 					if next.Typ == lex.ItemError {
 						return x.Errorf(next.Val)
 					}
@@ -107,7 +111,7 @@ func processScalarBlock(l *lex.Lexer) error {
 						break
 					}
 					if next.Typ == itemAt {
-						next = l.NextTok()
+						next = it.Item()
 						if next.Typ == itemIndex {
 							indexedFields[name] = true
 						} else if next.Typ == itemReverse {
@@ -129,24 +133,26 @@ func processScalarBlock(l *lex.Lexer) error {
 	return nil
 }
 
-func processScalar(l *lex.Lexer) error {
-	for item := l.NextTok(); item.Typ != lex.ItemEOF; item = l.NextTok() {
+func processScalar(it *lex.ParseIterator) error {
+
+	for it.Valid() {
+		item := it.Item()
 		switch item.Typ {
 		case itemLeftRound:
 			{
-				return processScalarBlock(l)
+				return processScalarBlock(it)
 			}
 		case itemScalarName:
 			{
 				var name, typ string
 				name = item.Val
 
-				next := l.NextTok()
+				next := it.Item()
 				if next.Typ != itemCollon {
 					return x.Errorf("Missing collon")
 				}
 
-				next = l.NextTok()
+				next = it.Item()
 				if next.Typ != itemScalarType {
 					return x.Errorf("Missing Type")
 				}
@@ -160,8 +166,8 @@ func processScalar(l *lex.Lexer) error {
 				}
 
 				// Check for index.
-				for {
-					next = l.NextTok()
+				for it.Valid() {
+					next = it.Item()
 					if next.Typ == lex.ItemError {
 						return x.Errorf(next.Val)
 					}
@@ -169,7 +175,7 @@ func processScalar(l *lex.Lexer) error {
 						break
 					}
 					if next.Typ == itemAt {
-						next = l.NextTok()
+						next = it.Item()
 						if next.Typ == itemIndex {
 							indexedFields[name] = true
 						} else if next.Typ == itemReverse {
@@ -191,23 +197,25 @@ func processScalar(l *lex.Lexer) error {
 	return nil
 }
 
-func processObject(l *lex.Lexer) error {
+func processObject(it *lex.ParseIterator) error {
 	var objName string
-	next := l.NextTok()
+	next := it.Item()
 	if next.Typ != itemObject {
 		return x.Errorf("Missing object name")
 	}
 	objName = next.Val
 	str[objName] = types.UidID
 
-	next = l.NextTok()
+	next = it.Item()
 	if next.Typ != itemLeftCurl {
 		return x.Errorf("Missing left curly brace")
 	}
 
 	fieldCount := 0
+
 L:
-	for item := l.NextTok(); item.Typ != lex.ItemEOF; item = l.NextTok() {
+	for it.Valid() {
+		item := it.Item()
 		switch item.Typ {
 		case itemRightCurl:
 			break L
@@ -216,12 +224,12 @@ L:
 				var name, typ string
 				name = item.Val
 
-				next := l.NextTok()
+				next := it.Item()
 				if next.Typ != itemCollon {
 					return x.Errorf("Missing collon")
 				}
 
-				next = l.NextTok()
+				next = it.Item()
 				if next.Typ != itemObjectType {
 					return x.Errorf("Missing Type")
 				}
@@ -237,9 +245,9 @@ L:
 					}
 				}
 				// Check for reverse.
-				next = l.NextTok()
+				next = it.Item()
 				if next.Typ == itemAt {
-					index := l.NextTok()
+					index := it.Item()
 					if index.Typ == itemReverse {
 						// TODO(jchiu): Add test for this check.
 						if t.IsScalar() /* && t != types.UidID */ {

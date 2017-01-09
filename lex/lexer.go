@@ -64,15 +64,15 @@ func (l *Lexer) NewIterator() *ParseIterator {
 	return it
 }
 
-func (p *ParseIterator) Next() bool {
-	p.idx++
-	if p.idx >= len(p.items) || p.items[p.idx].Typ == ItemEOF || p.items[p.idx].Typ == ItemError {
+func (p *ParseIterator) Valid() bool {
+	if p.idx >= len(p.items) {
 		return false
 	}
 	return true
 }
 
 func (p *ParseIterator) Item() item {
+	defer func() { p.idx++ }()
 	return p.items[p.idx]
 }
 

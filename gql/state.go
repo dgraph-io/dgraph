@@ -200,7 +200,7 @@ Loop:
 			// Both queryMode and fragmentMode are handled by lexInside.
 			return lexText
 		case r == rightCurl:
-			return l.Errorf("Too many right characters")
+			return l.Errorf("Too many right curl")
 		case r == lex.EOF:
 			break Loop
 		case r == leftRound:

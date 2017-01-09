@@ -39,7 +39,10 @@ func TestNewLexer(t *testing.T) {
 	l := &lex.Lexer{}
 	l.Init(input)
 	run(l)
-	for item := l.NextTok(); item.Typ != lex.ItemEOF; item = l.NextTok() {
+
+	it := l.NewIterator()
+	for it.Valid() {
+		item := it.Item()
 		require.NotEqual(t, item.Typ, lex.ItemError)
 		t.Log(item.String())
 	}
@@ -65,7 +68,9 @@ func TestNewLexerMutation(t *testing.T) {
 	l := &lex.Lexer{}
 	l.Init(input)
 	run(l)
-	for item := l.NextTok(); item.Typ != lex.ItemEOF; item = l.NextTok() {
+	it := l.NewIterator()
+	for it.Valid() {
+		item := it.Item()
 		require.NotEqual(t, item.Typ, lex.ItemError)
 		t.Log(item.String())
 	}
@@ -83,11 +88,13 @@ func TestAbruptMutation(t *testing.T) {
 	l.Init(input)
 	run(l)
 	var typ lex.ItemType
-	for item := l.NextTok(); item.Typ != lex.ItemEOF; item = l.NextTok() {
+	it := l.NewIterator()
+	for it.Valid() {
+		item := it.Item()
 		t.Log(item.String())
 		typ = item.Typ
 	}
-	require.Equal(t, typ, lex.ItemError)
+	require.Equal(t, lex.ItemError, typ)
 }
 
 func TestVariables1(t *testing.T) {
@@ -100,7 +107,9 @@ func TestVariables1(t *testing.T) {
 	l := &lex.Lexer{}
 	l.Init(input)
 	run(l)
-	for item := l.NextTok(); item.Typ != lex.ItemEOF; item = l.NextTok() {
+	it := l.NewIterator()
+	for it.Valid() {
+		item := it.Item()
 		require.NotEqual(t, item.Typ, lex.ItemError)
 		t.Log(item.String(), item.Typ)
 	}
@@ -116,7 +125,9 @@ func TestVariables2(t *testing.T) {
 	l := &lex.Lexer{}
 	l.Init(input)
 	run(l)
-	for item := l.NextTok(); item.Typ != lex.ItemEOF; item = l.NextTok() {
+	it := l.NewIterator()
+	for it.Valid() {
+		item := it.Item()
 		require.NotEqual(t, item.Typ, lex.ItemError)
 		t.Log(item.String(), item.Typ)
 	}
@@ -132,7 +143,9 @@ func TestVariablesDefault(t *testing.T) {
 	l := &lex.Lexer{}
 	l.Init(input)
 	run(l)
-	for item := l.NextTok(); item.Typ != lex.ItemEOF; item = l.NextTok() {
+	it := l.NewIterator()
+	for it.Valid() {
+		item := it.Item()
 		require.NotEqual(t, item.Typ, lex.ItemError)
 		t.Log(item.String(), item.Typ)
 	}
@@ -147,11 +160,13 @@ func TestVariablesError(t *testing.T) {
 	}`
 	l := &lex.Lexer{}
 	l.Init(input)
-	run(l)
 	var typ lex.ItemType
-	for item := l.NextTok(); item.Typ != lex.ItemEOF; item = l.NextTok() {
+	run(l)
+	it := l.NewIterator()
+	for it.Valid() {
+		item := it.Item()
 		t.Log(item.String())
 		typ = item.Typ
 	}
-	require.Equal(t, typ, lex.ItemError)
+	require.Equal(t, lex.ItemError, typ)
 }

@@ -300,8 +300,10 @@ func Parse(input string) (gq *GraphQuery, mu *Mutation, rerr error) {
 	l.Init(query)
 	run(l)
 
+	it := l.NewIterator()
 	fmap := make(fragmentMap)
-	for item := l.NextTok(); item.Typ != lex.ItemEOF; item = l.NextTok() {
+	for it.Valid() {
+		item := it.Item()
 		switch item.Typ {
 		case lex.ItemError:
 			return nil, nil, x.Errorf(item.Val)
@@ -313,23 +315,23 @@ func Parse(input string) (gq *GraphQuery, mu *Mutation, rerr error) {
 				if mu != nil {
 					return nil, nil, x.Errorf("Only one mutation block allowed.")
 				}
-				if mu, rerr = getMutation(l); rerr != nil {
+				if mu, rerr = getMutation(it); rerr != nil {
 					return nil, nil, rerr
 				}
 			} else if item.Val == "fragment" {
 				// TODO(jchiu0): This is to be done in ParseSchema once it is ready.
-				fnode, rerr := getFragment(l)
+				fnode, rerr := getFragment(it)
 				if rerr != nil {
 					return nil, nil, rerr
 				}
 				fmap[fnode.Name] = fnode
 			} else if item.Val == "query" {
-				if gq, rerr = getVariablesAndQuery(l, vmap); rerr != nil {
+				if gq, rerr = getVariablesAndQuery(it, vmap); rerr != nil {
 					return nil, nil, rerr
 				}
 			}
 		case itemLeftCurl:
-			if gq, rerr = getQuery(l); rerr != nil {
+			if gq, rerr = getQuery(it); rerr != nil {
 				return nil, nil, rerr
 			}
 		}
@@ -353,11 +355,12 @@ func Parse(input string) (gq *GraphQuery, mu *Mutation, rerr error) {
 // getVariablesAndQuery checks if the query has a variable list and stores it in
 // vmap. For variable list to be present, the query should have a name which is
 // also checked for. It also calls getQuery to create the GraphQuery object tree.
-func getVariablesAndQuery(l *lex.Lexer, vmap varMap) (gq *GraphQuery,
+func getVariablesAndQuery(it *lex.ParseIterator, vmap varMap) (gq *GraphQuery,
 	rerr error) {
 	var name string
 L2:
-	for item := l.NextTok(); item.Typ != lex.ItemEOF; item = l.NextTok() {
+	for it.Valid() {
+		item := it.Item()
 		switch item.Typ {
 		case lex.ItemError:
 			return nil, x.Errorf(item.Val)
@@ -374,7 +377,7 @@ L2:
 				return nil, x.Errorf("Variables can be defined only in named queries.")
 			}
 
-			if rerr = parseVariables(l, vmap); rerr != nil {
+			if rerr = parseVariables(it, vmap); rerr != nil {
 				return nil, rerr
 			}
 
@@ -382,7 +385,7 @@ L2:
 				return nil, rerr
 			}
 		case itemLeftCurl:
-			if gq, rerr = getQuery(l); rerr != nil {
+			if gq, rerr = getQuery(it); rerr != nil {
 				return nil, rerr
 			}
 			break L2
@@ -393,9 +396,9 @@ L2:
 
 // getQuery creates a GraphQuery object tree by calling getRoot
 // and goDeep functions by looking at '{'.
-func getQuery(l *lex.Lexer) (gq *GraphQuery, rerr error) {
+func getQuery(it *lex.ParseIterator) (gq *GraphQuery, rerr error) {
 	// First, get the root
-	gq, rerr = getRoot(l)
+	gq, rerr = getRoot(it)
 	if rerr != nil {
 		return nil, rerr
 	}
@@ -403,13 +406,13 @@ func getQuery(l *lex.Lexer) (gq *GraphQuery, rerr error) {
 	var seenFilter bool
 L:
 	// Recurse to deeper levels through godeep.
-	item := l.NextTok()
+	item := it.Item()
 	if item.Typ == itemLeftCurl {
-		if rerr = godeep(l, gq); rerr != nil {
+		if rerr = godeep(it, gq); rerr != nil {
 			return nil, rerr
 		}
 	} else if item.Typ == itemAt {
-		item := l.NextTok()
+		item := it.Item()
 		if item.Typ == itemName {
 			switch item.Val {
 			case "filter":
@@ -417,7 +420,7 @@ L:
 					return nil, x.Errorf("Repeated filter at root")
 				}
 				seenFilter = true
-				filter, err := parseFilter(l)
+				filter, err := parseFilter(it)
 				if err != nil {
 					return nil, err
 				}
@@ -436,10 +439,10 @@ L:
 }
 
 // getFragment parses a fragment definition (not reference).
-func getFragment(l *lex.Lexer) (*fragmentNode, error) {
+func getFragment(it *lex.ParseIterator) (*fragmentNode, error) {
 	var name string
-	for {
-		item := l.NextTok()
+	for it.Valid() {
+		item := it.Item()
 		if item.Typ == itemText {
 			v := strings.TrimSpace(item.Val)
 			if len(v) > 0 && name == "" {
@@ -461,7 +464,7 @@ func getFragment(l *lex.Lexer) (*fragmentNode, error) {
 	gq := &GraphQuery{
 		Args: make(map[string]string),
 	}
-	if err := godeep(l, gq); err != nil {
+	if err := godeep(it, gq); err != nil {
 		return nil, err
 	}
 	fn := &fragmentNode{
@@ -473,9 +476,10 @@ func getFragment(l *lex.Lexer) (*fragmentNode, error) {
 
 // getMutation function parses and stores the set and delete
 // operation in Mutation.
-func getMutation(l *lex.Lexer) (*Mutation, error) {
+func getMutation(it *lex.ParseIterator) (*Mutation, error) {
 	var mu *Mutation
-	for item := l.NextTok(); item.Typ != lex.ItemEOF; item = l.NextTok() {
+	for it.Valid() {
+		item := it.Item()
 		if item.Typ == itemText {
 			continue
 		}
@@ -486,7 +490,7 @@ func getMutation(l *lex.Lexer) (*Mutation, error) {
 			return mu, nil
 		}
 		if item.Typ == itemMutationOp {
-			if err := parseMutationOp(l, item.Val, mu); err != nil {
+			if err := parseMutationOp(it, item.Val, mu); err != nil {
 				return nil, err
 			}
 		}
@@ -495,13 +499,14 @@ func getMutation(l *lex.Lexer) (*Mutation, error) {
 }
 
 // parseMutationOp parses and stores set or delete operation string in Mutation.
-func parseMutationOp(l *lex.Lexer, op string, mu *Mutation) error {
+func parseMutationOp(it *lex.ParseIterator, op string, mu *Mutation) error {
 	if mu == nil {
 		return x.Errorf("Mutation is nil.")
 	}
 
 	parse := false
-	for item := l.NextTok(); item.Typ != lex.ItemEOF; item = l.NextTok() {
+	for it.Valid() {
+		item := it.Item()
 		if item.Typ == itemText {
 			continue
 		}
@@ -530,13 +535,13 @@ func parseMutationOp(l *lex.Lexer, op string, mu *Mutation) error {
 	return x.Errorf("Invalid mutation formatting.")
 }
 
-func parseVariables(l *lex.Lexer, vmap varMap) error {
-	for {
+func parseVariables(it *lex.ParseIterator, vmap varMap) error {
+	for it.Valid() {
 		var varName string
 		// Get variable name.
-		item := l.NextTok()
+		item := it.Item()
 		if item.Typ == itemDollar {
-			item = l.NextTok()
+			item = it.Item()
 			if item.Typ == itemName {
 				varName = fmt.Sprintf("$%s", item.Val)
 			} else {
@@ -548,13 +553,13 @@ func parseVariables(l *lex.Lexer, vmap varMap) error {
 			return x.Errorf("Unexpected item in place of variable. Got: %v %v", item, item.Typ == itemDollar)
 		}
 
-		item = l.NextTok()
+		item = it.Item()
 		if item.Typ != itemColon {
 			return x.Errorf("Expecting a collon. Got: %v", item)
 		}
 
 		// Get variable type.
-		item = l.NextTok()
+		item = it.Item()
 		if item.Typ != itemName {
 			return x.Errorf("Expecting a variable type. Got: %v", item)
 		}
@@ -579,9 +584,9 @@ func parseVariables(l *lex.Lexer, vmap varMap) error {
 		}
 
 		// Check for '=' sign and optional default value.
-		item = l.NextTok()
+		item = it.Item()
 		if item.Typ == itemEqual {
-			it := l.NextTok()
+			it := it.Item()
 			if it.Typ != itemName {
 				return x.Errorf("Expecting default value of a variable. Got: %v", item)
 			}
@@ -601,19 +606,18 @@ func parseVariables(l *lex.Lexer, vmap varMap) error {
 		} else if item.Typ == itemRightRound {
 			break
 		} else {
-			l.GoBack()
+			it.Prev()
 		}
 	}
 	return nil
 }
 
 // parseArguments parses the arguments part of the GraphQL query root.
-func parseArguments(l *lex.Lexer) (result []pair, rerr error) {
-	for {
+func parseArguments(it *lex.ParseIterator) (result []pair, rerr error) {
+	for it.Valid() {
 		var p pair
-
 		// Get key.
-		item := l.NextTok()
+		item := it.Item()
 		if item.Typ == itemName {
 			p.Key = item.Val
 
@@ -624,17 +628,17 @@ func parseArguments(l *lex.Lexer) (result []pair, rerr error) {
 			return result, x.Errorf("Expecting argument name. Got: %v", item)
 		}
 
-		item = l.NextTok()
+		item = it.Item()
 		if item.Typ != itemColon {
 			return result, x.Errorf("Expecting a collon. Got: %v", item)
 		}
 
 		// Get value.
-		item = l.NextTok()
+		item = it.Item()
 		var val string
 		if item.Typ == itemDollar {
 			val = "$"
-			item = l.NextTok()
+			item = it.Item()
 			if item.Typ != itemName {
 				return result, x.Errorf("Expecting argument value. Got: %v", item)
 			}
@@ -733,18 +737,18 @@ func evalStack(opStack, valueStack *filterTreeStack) {
 	valueStack.push(topOp)
 }
 
-func parseFunction(l *lex.Lexer) (*Function, error) {
+func parseFunction(it *lex.ParseIterator) (*Function, error) {
 	var g *Function
-	for {
-		item := l.NextTok()
+	for it.Valid() {
+		item := it.Item()
 		if item.Typ == itemName { // Value.
 			g = &Function{Name: item.Val}
-			itemInFunc := l.NextTok()
+			itemInFunc := it.Item()
 			if itemInFunc.Typ != itemLeftRound {
 				return nil, x.Errorf("Expected ( after func name [%s]", g.Name)
 			}
-			for {
-				itemInFunc := l.NextTok()
+			for it.Valid() {
+				itemInFunc := it.Item()
 				if itemInFunc.Typ == itemRightRound {
 					break
 				} else if itemInFunc.Typ != itemName {
@@ -771,8 +775,8 @@ func parseFunction(l *lex.Lexer) (*Function, error) {
 }
 
 // parseFilter parses the filter directive to produce a QueryFilter / parse tree.
-func parseFilter(l *lex.Lexer) (*FilterTree, error) {
-	item := l.NextTok()
+func parseFilter(it *lex.ParseIterator) (*FilterTree, error) {
+	item := it.Item()
 	if item.Typ != itemLeftRound {
 		return nil, x.Errorf("Expected ( after filter directive")
 	}
@@ -781,19 +785,19 @@ func parseFilter(l *lex.Lexer) (*FilterTree, error) {
 	opStack.push(&FilterTree{Op: "("}) // Push ( onto operator stack.
 	valueStack := new(filterTreeStack)
 
-	for {
-		item := l.NextTok()
+	for it.Valid() {
+		item := it.Item()
 		if item.Typ == itemName { // Value.
 			f := &Function{}
 			leaf := &FilterTree{Func: f}
 			f.Name = item.Val
-			itemInFunc := l.NextTok()
+			itemInFunc := it.Item()
 			if itemInFunc.Typ != itemLeftRound {
 				return nil, x.Errorf("Expected ( after func name [%s]", leaf.Func.Name)
 			}
 			var terminated bool
-			for {
-				itemInFunc := l.NextTok()
+			for it.Valid() {
+				itemInFunc := it.Item()
 				if itemInFunc.Typ == itemRightRound {
 					terminated = true
 					break
@@ -875,29 +879,29 @@ func parseFilter(l *lex.Lexer) (*FilterTree, error) {
 }
 
 // getRoot gets the root graph query object after parsing the args.
-func getRoot(l *lex.Lexer) (gq *GraphQuery, rerr error) {
+func getRoot(it *lex.ParseIterator) (gq *GraphQuery, rerr error) {
 	gq = &GraphQuery{
 		Args: make(map[string]string),
 	}
-	item := l.NextTok()
+	item := it.Item()
 	if item.Typ != itemName {
 		return nil, x.Errorf("Expected some name. Got: %v", item)
 	}
 
 	gq.Alias = item.Val
-	item = l.NextTok()
+	item = it.Item()
 	if item.Typ != itemLeftRound {
 		return nil, x.Errorf("Expected variable start. Got: %v", item)
 	}
 
 	// Peeks items to see if its an argument or function.
-	peekItems, err := l.PeekN(2)
+	peekItems, err := it.Peek(2)
 	if err != nil {
 		return gq, err
 	}
 	if peekItems[1].Typ == itemLeftRound {
 		// Store the generator function.
-		gen, err := parseFunction(l)
+		gen, err := parseFunction(it)
 		if err != nil {
 			return gq, err
 		}
@@ -911,7 +915,7 @@ func getRoot(l *lex.Lexer) (gq *GraphQuery, rerr error) {
 		}
 		gq.Func = gen
 	} else if peekItems[1].Typ == itemColon {
-		args, err := parseArguments(l)
+		args, err := parseArguments(it)
 		if err != nil {
 			return nil, err
 		}
@@ -935,9 +939,10 @@ func getRoot(l *lex.Lexer) (gq *GraphQuery, rerr error) {
 }
 
 // godeep constructs the subgraph from the lexed items and a GraphQuery node.
-func godeep(l *lex.Lexer, gq *GraphQuery) error {
+func godeep(it *lex.ParseIterator, gq *GraphQuery) error {
 	curp := gq // Used to track current node, for nesting.
-	for item := l.NextTok(); item.Typ != lex.ItemEOF; item = l.NextTok() {
+	for it.Valid() {
+		item := it.Item()
 		if item.Typ == lex.ItemError {
 			return x.Errorf(item.Val)
 		}
@@ -951,7 +956,7 @@ func godeep(l *lex.Lexer, gq *GraphQuery) error {
 		}
 
 		if item.Typ == itemThreeDots {
-			item = l.NextTok()
+			item = it.Item()
 			if item.Typ == itemName {
 				// item.Val is expected to start with "..." and to have len >3.
 				gq.Children = append(gq.Children, &GraphQuery{fragment: item.Val})
@@ -966,19 +971,19 @@ func godeep(l *lex.Lexer, gq *GraphQuery) error {
 			curp = child
 
 		} else if item.Typ == itemColon {
-			item = l.NextTok()
+			item = it.Item()
 			if item.Typ != itemName {
 				return x.Errorf("Predicate Expected but got: %s", item.Val)
 			}
 			curp.Alias = curp.Attr
 			curp.Attr = item.Val
 		} else if item.Typ == itemLeftCurl {
-			if err := godeep(l, curp); err != nil {
+			if err := godeep(it, curp); err != nil {
 				return err
 			}
 
 		} else if item.Typ == itemLeftRound {
-			args, err := parseArguments(l)
+			args, err := parseArguments(it)
 			if err != nil {
 				return err
 			}
@@ -991,11 +996,11 @@ func godeep(l *lex.Lexer, gq *GraphQuery) error {
 				curp.Args[p.Key] = p.Val
 			}
 		} else if item.Typ == itemAt {
-			item := l.NextTok()
+			item := it.Item()
 			if item.Typ == itemName {
 				switch item.Val {
 				case "filter":
-					filter, err := parseFilter(l)
+					filter, err := parseFilter(it)
 					if err != nil {
 						return err
 					}
