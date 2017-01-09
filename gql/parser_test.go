@@ -17,7 +17,6 @@
 package gql
 
 import (
-	"fmt"
 	"strings"
 	"testing"
 
@@ -94,8 +93,8 @@ func TestParseFirst(t *testing.T) {
 	gq, _, err := Parse(query)
 	require.NoError(t, err)
 	require.NotNil(t, gq)
-	require.Equal(t, childAttrs(gq), []string{"type.object.name", "friends"})
-	require.Equal(t, gq.Children[1].Args["first"], "10")
+	require.Equal(t, []string{"type.object.name", "friends"}, childAttrs(gq))
+	require.Equal(t, "10", gq.Children[1].Args["first"])
 }
 
 func TestParseFirst_error(t *testing.T) {
@@ -204,6 +203,26 @@ func TestParse_alias(t *testing.T) {
 	require.Equal(t, childAttrs(gq), []string{"name", "friends"})
 	require.Equal(t, gq.Children[1].Alias, "bestFriend")
 	require.Equal(t, childAttrs(gq.Children[1]), []string{"name"})
+}
+
+func TestParse_alias1(t *testing.T) {
+	query := `
+		{
+			me(_uid_:0x0a) {
+				name: type.object.name.en
+				bestFriend: friends(first: 10) { 
+					name: type.object.name.hi	
+				}
+			}
+		}
+	`
+	gq, _, err := Parse(query)
+	require.NoError(t, err)
+	require.NotNil(t, gq)
+	require.Equal(t, childAttrs(gq), []string{"type.object.name.en", "friends"})
+	require.Equal(t, gq.Children[1].Alias, "bestFriend")
+	require.Equal(t, gq.Children[1].Children[0].Alias, "name")
+	require.Equal(t, childAttrs(gq.Children[1]), []string{"type.object.name.hi"})
 }
 
 func TestParse_block(t *testing.T) {
@@ -716,10 +735,10 @@ func TestParseFilter_brac(t *testing.T) {
 
 // Test if unbalanced brac will lead to errors.
 func TestParseFilter_unbalancedbrac(t *testing.T) {
-	query := `{
+	query := `
 	query {
 		me(_uid_:0x0a) {
-			friends @filter(  ()
+			friends @filter(  () {
 				name
 			}
 			gender,age
@@ -800,7 +819,7 @@ func TestParseFilter_emptyargument(t *testing.T) {
 	query := `
 	query {
 		me(_uid_:0x0a) {
-			friends @filter(allof(name, )) {
+			friends @filter(allof(name,)) {
 				name
 			}
 			gender,age
@@ -809,7 +828,6 @@ func TestParseFilter_emptyargument(t *testing.T) {
 	}
 `
 	_, _, err := Parse(query)
-	fmt.Println(err)
 	require.Error(t, err)
 }
 func TestParseFilter_unknowndirective(t *testing.T) {
