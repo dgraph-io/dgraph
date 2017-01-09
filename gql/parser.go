@@ -549,7 +549,7 @@ func parseVariables(l *lex.Lexer, vmap varMap) error {
 		}
 
 		item = l.NextTok()
-		if item.Typ != itemCollon {
+		if item.Typ != itemColon {
 			return x.Errorf("Expecting a collon. Got: %v", item)
 		}
 
@@ -625,7 +625,7 @@ func parseArguments(l *lex.Lexer) (result []pair, rerr error) {
 		}
 
 		item = l.NextTok()
-		if item.Typ != itemCollon {
+		if item.Typ != itemColon {
 			return result, x.Errorf("Expecting a collon. Got: %v", item)
 		}
 
@@ -910,7 +910,7 @@ func getRoot(l *lex.Lexer) (gq *GraphQuery, rerr error) {
 			return nil, err
 		}
 		gq.Func = gen
-	} else if peekItems[1].Typ == itemCollon {
+	} else if peekItems[1].Typ == itemColon {
 		args, err := parseArguments(l)
 		if err != nil {
 			return nil, err
@@ -965,7 +965,7 @@ func godeep(l *lex.Lexer, gq *GraphQuery) error {
 			gq.Children = append(gq.Children, child)
 			curp = child
 
-		} else if item.Typ == itemCollon {
+		} else if item.Typ == itemColon {
 			item = l.NextTok()
 			if item.Typ != itemName {
 				return x.Errorf("Predicate Expected but got: %s", item.Val)

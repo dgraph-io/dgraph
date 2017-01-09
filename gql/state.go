@@ -139,7 +139,7 @@ func lexFuncOrArg(l *lex.Lexer) lex.StateFn {
 			empty = false
 			return lexArgName
 		case r == ':':
-			l.Emit(itemCollon)
+			l.Emit(itemColon)
 		case r == equal:
 			l.Emit(itemEqual)
 		case isEndLiteral(r):
@@ -268,7 +268,7 @@ func lexText(l *lex.Lexer) lex.StateFn {
 			l.ArgDepth++
 			return lexText
 		case r == ':':
-			l.Emit(itemCollon)
+			l.Emit(itemColon)
 		case r == attherate:
 			l.Emit(itemAt)
 			return lexDirective
