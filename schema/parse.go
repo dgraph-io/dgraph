@@ -29,7 +29,6 @@ func run(l *lex.Lexer) {
 	for state := lexText; state != nil; {
 		state = state(l)
 	}
-	// close(l.Items) // No more tokens.
 }
 
 // Parse parses the schema file.

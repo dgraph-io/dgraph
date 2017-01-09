@@ -121,19 +121,18 @@ Loop:
 				r2 := l.Next()
 				if r2 == '&' {
 					l.Emit(itemAnd)
-					return lexText //lexPairsOrFilterInside
+					return lexText
 				}
 				return l.Errorf("Expected & but got %v", r2)
 			case r == '|':
 				r2 := l.Next()
 				if r2 == '|' {
 					l.Emit(itemOr)
-					return lexText //lexPairsOrFilterInside
+					return lexText
 				}
 				return l.Errorf("Expected | but got %v", r2)
 			case isDollar(r):
 				l.Emit(itemDollar)
-				//return lexArgName
 			case isNameBegin(r) || isNumber(r):
 				empty = false
 				return lexArgName
@@ -203,7 +202,7 @@ Loop:
 				l.Next()
 				l.Emit(itemLeftRound)
 				l.FilterDepth++
-				return lexText //lexPairsOrFilterInside
+				return lexText
 			case isNameBegin(r):
 				l.Backup()
 				l.Emit(itemText)
@@ -242,7 +241,7 @@ Loop:
 				l.AcceptRun(isSpace)
 				l.Ignore()
 				l.FilterDepth++
-				return lexText //lexPairsOrFilterInside
+				return lexText
 			case r == ':':
 				l.Emit(itemCollon)
 			case r == attherate:
@@ -273,7 +272,7 @@ func lexFilterFuncName(l *lex.Lexer) lex.StateFn {
 		l.Emit(itemName)
 		break
 	}
-	return lexText //lexPairsOrFilterInside
+	return lexText
 }
 
 // lexDirective is called right after we see a @.
@@ -302,7 +301,7 @@ func lexDirective(l *lex.Lexer) lex.StateFn {
 		// to check the directive here and go into the right state.
 		if string(directive) == "filter" {
 			l.InsideDirective = true
-			return lexText //lexPairsOrFilterInside
+			return lexText
 		}
 		return l.Errorf("Unhandled directive %s", directive)
 	}
@@ -448,7 +447,7 @@ func lexArgName(l *lex.Lexer) lex.StateFn {
 		l.Emit(itemName)
 		break
 	}
-	return lexText //lexPairsOrFilterInside
+	return lexText
 }
 
 // isDollar returns true if the rune is a Dollar($).
