@@ -18,6 +18,7 @@ package posting
 
 import (
 	"context"
+	"crypto/md5"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -35,6 +36,7 @@ import (
 	"github.com/dgryski/go-farm"
 
 	"github.com/dgraph-io/dgraph/store"
+	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -45,9 +47,10 @@ var (
 	commitFraction = flag.Float64("gentlecommit", 0.10, "Fraction of dirty posting lists to commit every few seconds.")
 	lhmapNumShards = flag.Int("lhmap", 32, "Number of shards for lhmap.")
 
-	dirtyChan       chan uint64 // All dirty posting list keys are pushed here.
-	startCommitOnce sync.Once
-	marks           syncMarks
+	dirtyChan        chan uint64 // All dirty posting list keys are pushed here.
+	startCommitOnce  sync.Once
+	marks            syncMarks
+	dummyPostingList []byte // Used for indexing.
 )
 
 // syncMarks stores the watermark for synced RAFT proposals. Each RAFT proposal consists
@@ -65,6 +68,18 @@ var (
 type syncMarks struct {
 	sync.RWMutex
 	m map[uint32]*x.WaterMark
+}
+
+func init() {
+	x.AddInit(func() {
+		h := md5.New()
+		pl := types.PostingList{
+			Checksum: h.Sum(nil),
+		}
+		var err error
+		dummyPostingList, err = pl.Marshal()
+		x.Check(err)
+	})
 }
 
 func (g *syncMarks) create(group uint32) *x.WaterMark {
@@ -371,6 +386,18 @@ func GetOrCreate(key []byte, group uint32) (rlist *List, decr func()) {
 		l.decr()
 	}
 	lp.water = marks.Get(group)
+
+	// If it is index, commit to RocksDB.
+	pk := x.Parse(key)
+	if pk.IsIndex() {
+		// Look up RocksDB. If missing, commit empty value.
+		slice, err := pstore.Get(key)
+		x.Check(err)
+		if slice.Size() == 0 {
+			// Key was missing. Let's commit a dummy PostingList.
+			x.Check(pstore.SetOne(key, dummyPostingList))
+		}
+	}
 	return lp, lp.decr
 }
 

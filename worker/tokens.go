@@ -1,7 +1,6 @@
 package worker
 
 import (
-	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -17,35 +16,53 @@ func getTokens(funcArgs []string) ([]string, error) {
 
 // getInequalityTokens gets tokens geq / leq compared to given token.
 func getInequalityTokens(attr, ineqValueToken string, f string) ([]string, error) {
-	tt := posting.GetTokensTable(attr)
-	if tt == nil {
-		return nil, x.Errorf("Attribute %s is not indexed", attr)
-	}
+	it := pstore.NewIterator()
+	defer it.Close()
+	it.Seek(x.IndexKey(attr, ineqValueToken))
 
+	hit := it.Value() != nil && it.Value().Size() > 0
 	if f == "eq" {
-		pos := tt.Get(ineqValueToken)
-		if pos == -1 {
-			return []string{}, nil
+		if hit {
+			return []string{ineqValueToken}, nil
 		}
-		return []string{ineqValueToken}, nil
+		return []string{}, nil
 	}
 
-	var s string
+	var out []string
+	if hit {
+		out = []string{ineqValueToken}
+	}
+
+	//	if f == "eq" {
+	//		pos := tt.Get(ineqValueToken)
+	//		if pos == -1 {
+	//			return []string{}, nil
+	//		}
+	//		return []string{ineqValueToken}, nil
+	//	}
+
+	//	var s string
+	indexPrefix := x.ParsedKey{Attr: attr}.IndexPrefix()
 	isGeqOrGt := f == "geq" || f == "gt"
-	if isGeqOrGt {
-		s = tt.GetNextOrEqual(ineqValueToken)
-	} else {
-		s = tt.GetPrevOrEqual(ineqValueToken)
-	}
+	//	if isGeqOrGt {
+	//		s = tt.GetNextOrEqual(ineqValueToken)
+	//	} else {
+	//		s = tt.GetPrevOrEqual(ineqValueToken)
+	//	}
 
-	out := make([]string, 0, 10)
-	for s != "" {
-		out = append(out, s)
+	for {
 		if isGeqOrGt {
-			s = tt.GetNext(s)
+			it.Next()
 		} else {
-			s = tt.GetPrev(s)
+			it.Prev()
 		}
+		if !it.ValidForPrefix(indexPrefix) {
+			break
+		}
+
+		k := x.Parse(it.Key().Data())
+		x.AssertTrue(k != nil)
+		out = append(out, k.Term)
 	}
 	return out, nil
 }

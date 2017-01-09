@@ -1,12 +1,24 @@
 package posting
 
 import (
+	"io/ioutil"
+	"os"
 	"testing"
+	"time"
+
+	"github.com/stretchr/testify/require"
+	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/dgraph/schema"
+	"github.com/dgraph-io/dgraph/store"
+	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/types"
-	"github.com/stretchr/testify/require"
+	"github.com/dgraph-io/dgraph/x"
 )
+
+const schemaStr = `
+scalar name:string @index
+`
 
 func TestIndexingInt(t *testing.T) {
 	schema.ParseBytes([]byte("scalar age:int @index"))
@@ -50,49 +62,55 @@ func TestIndexing(t *testing.T) {
 	require.EqualValues(t, "abc", string(a[0]))
 }
 
-func getTokensTable(t *testing.T) *TokensTable {
-	tt := NewTokensTable()
-	tt.Add("ccc")
-	tt.Add("aaa")
-	tt.Add("bbb")
-	tt.Add("aaa")
-	require.EqualValues(t, 3, tt.Size())
-	return tt
+func addMutationWithIndex(t *testing.T, l *List, edge *task.DirectedEdge, op uint32) {
+	if op == Del {
+		edge.Op = task.DirectedEdge_DEL
+	} else if op == Set {
+		edge.Op = task.DirectedEdge_SET
+	} else {
+		x.Fatalf("Unhandled op: %v", op)
+	}
+	require.NoError(t, l.AddMutationWithIndex(context.Background(), edge))
 }
 
-func TestTokensTableIterate(t *testing.T) {
-	tt := getTokensTable(t)
-	require.EqualValues(t, "aaa", tt.GetFirst())
-	require.EqualValues(t, "bbb", tt.GetNext("aaa"))
-	require.EqualValues(t, "ccc", tt.GetNext("bbb"))
-	require.EqualValues(t, "", tt.GetNext("ccc"))
-}
+func TestAddMutationA(t *testing.T) {
+	dir, err := ioutil.TempDir("", "storetest_")
+	require.NoError(t, err)
+	defer os.RemoveAll(dir)
 
-func TestTokensTableIterateReverse(t *testing.T) {
-	tt := getTokensTable(t)
-	require.EqualValues(t, "ccc", tt.GetLast())
-	require.EqualValues(t, "bbb", tt.GetPrev("ccc"))
-	require.EqualValues(t, "aaa", tt.GetPrev("bbb"))
-	require.EqualValues(t, "", tt.GetPrev("aaa"))
-}
+	schema.ParseBytes([]byte(schemaStr))
 
-func TestTokensTableGetGeq(t *testing.T) {
-	tt := getTokensTable(t)
+	ps, err := store.NewStore(dir)
+	defer ps.Close()
+	require.NoError(t, err)
+	Init(ps)
 
-	require.EqualValues(t, 1, tt.Get("bbb"))
-	require.EqualValues(t, -1, tt.Get("zzz"))
+	key := x.DataKey("name", 1)
+	l := getNew(key, ps)
 
-	require.EqualValues(t, "aaa", tt.GetNextOrEqual("a"))
-	require.EqualValues(t, "aaa", tt.GetNextOrEqual("aaa"))
-	require.EqualValues(t, "bbb", tt.GetNextOrEqual("aab"))
-	require.EqualValues(t, "ccc", tt.GetNextOrEqual("cc"))
-	require.EqualValues(t, "ccc", tt.GetNextOrEqual("ccc"))
-	require.EqualValues(t, "", tt.GetNextOrEqual("cccc"))
+	edge := &task.DirectedEdge{
+		Value:  []byte("david"),
+		Label:  "testing",
+		Attr:   "name",
+		Entity: 157,
+	}
+	addMutationWithIndex(t, l, edge, Set)
 
-	require.EqualValues(t, "", tt.GetPrevOrEqual("a"))
-	require.EqualValues(t, "aaa", tt.GetPrevOrEqual("aaa"))
-	require.EqualValues(t, "aaa", tt.GetPrevOrEqual("aab"))
-	require.EqualValues(t, "bbb", tt.GetPrevOrEqual("cc"))
-	require.EqualValues(t, "ccc", tt.GetPrevOrEqual("ccc"))
-	require.EqualValues(t, "ccc", tt.GetPrevOrEqual("cccc"))
+	key = x.IndexKey("name", "david")
+	slice, err := ps.Get(key)
+	require.NoError(t, err)
+
+	var pl types.PostingList
+	x.Check(pl.Unmarshal(slice.Data()))
+
+	require.EqualValues(t, []string{"david"}, TokensForTest("name"))
+
+	CommitLists(10)
+	time.Sleep(time.Second)
+
+	slice, err = ps.Get(key)
+	require.NoError(t, err)
+	x.Check(pl.Unmarshal(slice.Data()))
+
+	require.EqualValues(t, []string{"david"}, TokensForTest("name"))
 }

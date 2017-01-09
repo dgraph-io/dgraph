@@ -61,6 +61,15 @@ type ParsedKey struct {
 	Term     string
 }
 
+// IndexParsedKey is like IndexedKey but returns a ParsedKey object.
+func IndexParsedKey(attr, term string) ParsedKey {
+	return ParsedKey{
+		byteType: byteIndex,
+		Attr:     attr,
+		Term:     term,
+	}
+}
+
 func (p ParsedKey) IsData() bool {
 	return p.byteType == byteData
 }
@@ -86,7 +95,7 @@ func (p ParsedKey) SkipRangeOfSameType() []byte {
 	k := writeAttr(buf, p.Attr)
 	AssertTrue(len(k) == 2)
 	k[0] = p.byteType
-	k[1] = 0xFF
+	k[1] = 0xFF // Why not k[0] = p.byteType + 1?
 	return buf
 }
 
