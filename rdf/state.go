@@ -45,12 +45,6 @@ const (
 	atLabel
 )
 
-func run(l *lex.Lexer) {
-	for state := lexText; state != nil; {
-		state = state(l)
-	}
-}
-
 // This function inspects the next rune and calls the appropriate stateFn.
 func lexText(l *lex.Lexer) lex.StateFn {
 Loop:

@@ -25,12 +25,6 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-func run(l *lex.Lexer) {
-	for state := lexText; state != nil; {
-		state = state(l)
-	}
-}
-
 // Parse parses the schema file.
 func Parse(file string) (rerr error) {
 	b, err := ioutil.ReadFile(file)
@@ -44,9 +38,8 @@ func Parse(file string) (rerr error) {
 func ParseBytes(schema []byte) (rerr error) {
 	s := string(schema)
 
-	l := &lex.Lexer{}
-	l.Init(s)
-	run(l)
+	l := lex.NewLexer(s)
+	l.Run(lexText)
 
 	it := l.NewIterator()
 	for it.Next() {

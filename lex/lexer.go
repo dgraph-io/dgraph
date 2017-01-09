@@ -58,7 +58,7 @@ type ItemIterator struct {
 
 func (l *Lexer) NewIterator() *ItemIterator {
 	it := &ItemIterator{
-		items: l.Items,
+		items: l.items,
 		idx:   -1,
 	}
 	return it
@@ -97,27 +97,35 @@ func (p *ItemIterator) Peek(num int) ([]item, error) {
 
 type Lexer struct {
 	// NOTE: Using a text scanner wouldn't work because it's designed for parsing
-	// Golang. It won't keep track of start position, or allow us to retrieve
-	// slice from [start:pos]. Better to just use normal string.
+	// Golang. It won't keep track of Start Position, or allow us to retrieve
+	// slice from [Start:Pos]. Better to just use normal string.
 	Input           string // string being scanned.
-	Start           int    // start position of this item.
-	Pos             int    // current position of this item.
-	Width           int    // width of last rune read from input.
-	Items           []item // channel of scanned items.
+	Start           int    // Start Position of this item.
+	Pos             int    // current Position of this item.
+	Width           int    // Width of last rune read from input.
+	items           []item // channel of scanned items.
 	Depth           int    // nesting of {}
 	ArgDepth        int    // nesting of ()
 	Mode            int    // mode based on information so far.
 	InsideDirective bool   // To indicate we are inside directive.
 }
 
-func (l *Lexer) Init(input string) {
+func NewLexer(input string) *Lexer {
+	l := Lexer{}
 	l.Input = input
-	l.Items = make([]item, 0, 100)
+	l.items = make([]item, 0, 100)
+	return &l
+}
+
+func (l *Lexer) Run(f StateFn) {
+	for state := f; state != nil; {
+		state = state(l)
+	}
 }
 
 // Errorf returns the error state function.
 func (l *Lexer) Errorf(format string, args ...interface{}) StateFn {
-	l.Items = append(l.Items, item{
+	l.items = append(l.items, item{
 		Typ: ItemError,
 		Val: fmt.Sprintf(format, args...),
 	})
@@ -130,7 +138,7 @@ func (l *Lexer) Emit(t ItemType) {
 		// Let ItemEOF go through.
 		return
 	}
-	l.Items = append(l.Items, item{
+	l.items = append(l.items, item{
 		Typ: t,
 		Val: l.Input[l.Start:l.Pos],
 	})

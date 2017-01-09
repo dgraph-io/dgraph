@@ -101,13 +101,6 @@ func init() {
 	}
 }
 
-// run is used to run the lexer until we encounter nil state.
-func run(l *lex.Lexer) {
-	for state := lexText; state != nil; {
-		state = state(l)
-	}
-}
-
 // DebugPrint is useful for debugging.
 func (gq *GraphQuery) DebugPrint(prefix string) {
 	x.Printf("%s[%x %q %q->%q]\n", prefix, gq.UID, gq.XID, gq.Attr, gq.Alias)
@@ -291,14 +284,13 @@ func substituteVariables(gq *GraphQuery, vmap varMap) error {
 // Parse initializes and runs the lexer. It also constructs the GraphQuery subgraph
 // from the lexed items.
 func Parse(input string) (gq *GraphQuery, mu *Mutation, rerr error) {
-	l := &lex.Lexer{}
 	query, vmap, err := parseQueryWithVariables(input)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	l.Init(query)
-	run(l)
+	l := lex.NewLexer(query)
+	l.Run(lexText)
 
 	it := l.NewIterator()
 	fmap := make(fragmentMap)
