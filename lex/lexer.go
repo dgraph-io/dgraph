@@ -64,6 +64,7 @@ func (l *Lexer) NewIterator() *ParseIterator {
 	return it
 }
 
+// Valid returns true if we haven't consumed all the items.
 func (p *ParseIterator) Valid() bool {
 	if p.idx >= len(p.items) {
 		return false
@@ -71,11 +72,13 @@ func (p *ParseIterator) Valid() bool {
 	return true
 }
 
+// Item returns the current item and advances the index.
 func (p *ParseIterator) Item() item {
 	defer func() { p.idx++ }()
 	return p.items[p.idx]
 }
 
+// Prev moves the index back by one.
 func (p *ParseIterator) Prev() bool {
 	if p.idx > 0 {
 		p.idx--
@@ -84,6 +87,7 @@ func (p *ParseIterator) Prev() bool {
 	return false
 }
 
+// Peek returns the next n items without consuming them.
 func (p *ParseIterator) Peek(num int) ([]item, error) {
 	if (p.idx + num) > len(p.items) {
 		return nil, x.Errorf("Out of range for peek")

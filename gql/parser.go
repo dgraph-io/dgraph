@@ -606,6 +606,7 @@ func parseVariables(it *lex.ParseIterator, vmap varMap) error {
 		} else if item.Typ == itemRightRound {
 			break
 		} else {
+			// We consumed an extra item to see if it was an '=' sign, so move back.
 			it.Prev()
 		}
 	}
