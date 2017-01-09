@@ -194,10 +194,6 @@ Loop:
 			l.Next()         // advance one to get back to where we saw leftCurl.
 			l.Depth++        // one level down.
 			l.Emit(itemLeftCurl)
-			if l.Mode == mutationMode {
-				return lexText
-			}
-			// Both queryMode and fragmentMode are handled by lexInside.
 			return lexText
 		case r == rightCurl:
 			return l.Errorf("Too many right curl")
