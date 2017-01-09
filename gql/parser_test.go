@@ -733,13 +733,12 @@ func TestParseFilter_brac(t *testing.T) {
 		gq.Children[0].Filter.debugString())
 }
 
-/*
 // Test if unbalanced brac will lead to errors.
 func TestParseFilter_unbalancedbrac(t *testing.T) {
 	query := `
 	query {
 		me(_uid_:0x0a) {
-			friends @filter(  ()
+			friends @filter(  () {
 				name
 			}
 			gender,age
@@ -750,7 +749,7 @@ func TestParseFilter_unbalancedbrac(t *testing.T) {
 	_, _, err := Parse(query)
 	require.Error(t, err)
 }
-*/
+
 func TestParseFilter_Geo1(t *testing.T) {
 	query := `
 	query {
