@@ -33,22 +33,8 @@ func getInequalityTokens(attr, ineqValueToken string, f string) ([]string, error
 		out = []string{ineqValueToken}
 	}
 
-	//	if f == "eq" {
-	//		pos := tt.Get(ineqValueToken)
-	//		if pos == -1 {
-	//			return []string{}, nil
-	//		}
-	//		return []string{ineqValueToken}, nil
-	//	}
-
-	//	var s string
 	indexPrefix := x.ParsedKey{Attr: attr}.IndexPrefix()
 	isGeqOrGt := f == "geq" || f == "gt"
-	//	if isGeqOrGt {
-	//		s = tt.GetNextOrEqual(ineqValueToken)
-	//	} else {
-	//		s = tt.GetPrevOrEqual(ineqValueToken)
-	//	}
 
 	for {
 		if isGeqOrGt {
