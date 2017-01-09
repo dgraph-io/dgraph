@@ -18,7 +18,6 @@ package posting
 
 import (
 	"context"
-	//	"sort"
 	"sync"
 
 	"golang.org/x/net/trace"
@@ -81,14 +80,8 @@ func addIndexMutations(ctx context.Context, t *task.DirectedEdge, p types.Val, o
 		Op:      op,
 	}
 
-	//	tokensTable := GetTokensTable(attr)
-	//	x.AssertTruef(tokensTable != nil, "TokensTable missing for attr %s", attr)
-
 	for _, token := range tokens {
 		addIndexMutation(ctx, edge, token)
-		//		if edge.Op == task.DirectedEdge_SET {
-		//			tokensTable.Add(token)
-		//		}
 	}
 }
 
@@ -188,7 +181,6 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *task.DirectedEdge) e
 
 // TokensForTest returns keys for a table. This is just for testing / debugging.
 func TokensForTest(attr string) []string {
-	//	t := GetTokensTable(attr)
 	pk := x.ParsedKey{Attr: attr}
 	prefix := pk.IndexPrefix()
 	it := pstore.NewIterator()
