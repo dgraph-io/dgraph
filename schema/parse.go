@@ -24,13 +24,6 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-func run(l *lex.Lexer) {
-	for state := lexText; state != nil; {
-		state = state(l)
-	}
-	close(l.Items) // No more tokens.
-}
-
 // Parse parses the schema file.
 func Parse(file string) (rerr error) {
 	b, err := ioutil.ReadFile(file)
@@ -44,21 +37,21 @@ func Parse(file string) (rerr error) {
 func ParseBytes(schema []byte) (rerr error) {
 	s := string(schema)
 
-	l := &lex.Lexer{}
-	l.Init(s)
-	go run(l)
+	l := lex.NewLexer(s).Run(lexText)
 
-	for item := range l.Items {
+	it := l.NewIterator()
+	for it.Next() {
+		item := it.Item()
 		switch item.Typ {
 		case itemScalar:
 			{
-				if rerr = processScalar(l); rerr != nil {
+				if rerr = processScalar(it); rerr != nil {
 					return rerr
 				}
 			}
 		case itemType:
 			{
-				if rerr = processObject(l); rerr != nil {
+				if rerr = processObject(it); rerr != nil {
 					return rerr
 				}
 			}
@@ -70,8 +63,9 @@ func ParseBytes(schema []byte) (rerr error) {
 	return nil
 }
 
-func processScalarBlock(l *lex.Lexer) error {
-	for item := range l.Items {
+func processScalarBlock(it *lex.ItemIterator) error {
+	for it.Next() {
+		item := it.Item()
 		switch item.Typ {
 		case itemRightRound:
 			return nil
@@ -80,11 +74,13 @@ func processScalarBlock(l *lex.Lexer) error {
 				var name, typ string
 				name = item.Val
 
-				if next := <-l.Items; next.Typ != itemCollon {
+				it.Next()
+				if next := it.Item(); next.Typ != itemCollon {
 					return x.Errorf("Missing collon")
 				}
 
-				next := <-l.Items
+				it.Next()
+				next := it.Item()
 				if next.Typ != itemScalarType {
 					return x.Errorf("Missing Type")
 				}
@@ -97,8 +93,8 @@ func processScalarBlock(l *lex.Lexer) error {
 				str[name] = t
 
 				// Check for index / reverse.
-				for {
-					next = <-l.Items
+				for it.Next() {
+					next = it.Item()
 					if next.Typ == lex.ItemError {
 						return x.Errorf(next.Val)
 					}
@@ -106,7 +102,8 @@ func processScalarBlock(l *lex.Lexer) error {
 						break
 					}
 					if next.Typ == itemAt {
-						next = <-l.Items
+						it.Next()
+						next = it.Item()
 						if next.Typ == itemIndex {
 							indexedFields[name] = true
 						} else if next.Typ == itemReverse {
@@ -128,24 +125,28 @@ func processScalarBlock(l *lex.Lexer) error {
 	return nil
 }
 
-func processScalar(l *lex.Lexer) error {
-	for item := range l.Items {
+func processScalar(it *lex.ItemIterator) error {
+
+	for it.Next() {
+		item := it.Item()
 		switch item.Typ {
 		case itemLeftRound:
 			{
-				return processScalarBlock(l)
+				return processScalarBlock(it)
 			}
 		case itemScalarName:
 			{
 				var name, typ string
 				name = item.Val
 
-				next := <-l.Items
+				it.Next()
+				next := it.Item()
 				if next.Typ != itemCollon {
 					return x.Errorf("Missing collon")
 				}
 
-				next = <-l.Items
+				it.Next()
+				next = it.Item()
 				if next.Typ != itemScalarType {
 					return x.Errorf("Missing Type")
 				}
@@ -159,8 +160,8 @@ func processScalar(l *lex.Lexer) error {
 				}
 
 				// Check for index.
-				for {
-					next = <-l.Items
+				for it.Next() {
+					next = it.Item()
 					if next.Typ == lex.ItemError {
 						return x.Errorf(next.Val)
 					}
@@ -168,7 +169,8 @@ func processScalar(l *lex.Lexer) error {
 						break
 					}
 					if next.Typ == itemAt {
-						next = <-l.Items
+						it.Next()
+						next = it.Item()
 						if next.Typ == itemIndex {
 							indexedFields[name] = true
 						} else if next.Typ == itemReverse {
@@ -190,23 +192,27 @@ func processScalar(l *lex.Lexer) error {
 	return nil
 }
 
-func processObject(l *lex.Lexer) error {
+func processObject(it *lex.ItemIterator) error {
 	var objName string
-	next := <-l.Items
+	it.Next()
+	next := it.Item()
 	if next.Typ != itemObject {
 		return x.Errorf("Missing object name")
 	}
 	objName = next.Val
 	str[objName] = types.UidID
 
-	next = <-l.Items
+	it.Next()
+	next = it.Item()
 	if next.Typ != itemLeftCurl {
 		return x.Errorf("Missing left curly brace")
 	}
 
 	fieldCount := 0
+
 L:
-	for item := range l.Items {
+	for it.Next() {
+		item := it.Item()
 		switch item.Typ {
 		case itemRightCurl:
 			break L
@@ -215,12 +221,14 @@ L:
 				var name, typ string
 				name = item.Val
 
-				next := <-l.Items
+				it.Next()
+				next := it.Item()
 				if next.Typ != itemCollon {
 					return x.Errorf("Missing collon")
 				}
 
-				next = <-l.Items
+				it.Next()
+				next = it.Item()
 				if next.Typ != itemObjectType {
 					return x.Errorf("Missing Type")
 				}
@@ -236,9 +244,11 @@ L:
 					}
 				}
 				// Check for reverse.
-				next = <-l.Items
+				it.Next()
+				next = it.Item()
 				if next.Typ == itemAt {
-					index := <-l.Items
+					it.Next()
+					index := it.Item()
 					if index.Typ == itemReverse {
 						// TODO(jchiu): Add test for this check.
 						if t.IsScalar() /* && t != types.UidID */ {
