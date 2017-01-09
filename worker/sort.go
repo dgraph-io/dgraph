@@ -136,10 +136,8 @@ BUCKETS:
 			return &emptySortResult, err
 		}
 		if ts.Desc {
-			//token = t.GetPrev(token)
 			it.Prev()
 		} else {
-			//token = t.GetNext(token)
 			it.Next()
 		}
 	}
