@@ -177,7 +177,7 @@ func Parse(line string) (rnq graph.NQuad, rerr error) {
 	var oval string
 	var vend, hasBrackets bool
 	// We read items from the l.Items channel to which the lexer sends items.
-	for it.Valid() {
+	for it.Next() {
 		item := it.Item()
 		switch item.Typ {
 		case itemSubject:

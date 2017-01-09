@@ -49,7 +49,7 @@ func ParseBytes(schema []byte) (rerr error) {
 	run(l)
 
 	it := l.NewIterator()
-	for it.Valid() {
+	for it.Next() {
 		item := it.Item()
 		switch item.Typ {
 		case itemScalar:
@@ -75,7 +75,7 @@ func ParseBytes(schema []byte) (rerr error) {
 }
 
 func processScalarBlock(it *lex.ParseIterator) error {
-	for it.Valid() {
+	for it.Next() {
 		item := it.Item()
 		switch item.Typ {
 		case itemRightRound:
@@ -85,10 +85,12 @@ func processScalarBlock(it *lex.ParseIterator) error {
 				var name, typ string
 				name = item.Val
 
+				it.Next()
 				if next := it.Item(); next.Typ != itemCollon {
 					return x.Errorf("Missing collon")
 				}
 
+				it.Next()
 				next := it.Item()
 				if next.Typ != itemScalarType {
 					return x.Errorf("Missing Type")
@@ -102,7 +104,7 @@ func processScalarBlock(it *lex.ParseIterator) error {
 				str[name] = t
 
 				// Check for index / reverse.
-				for it.Valid() {
+				for it.Next() {
 					next = it.Item()
 					if next.Typ == lex.ItemError {
 						return x.Errorf(next.Val)
@@ -111,6 +113,7 @@ func processScalarBlock(it *lex.ParseIterator) error {
 						break
 					}
 					if next.Typ == itemAt {
+						it.Next()
 						next = it.Item()
 						if next.Typ == itemIndex {
 							indexedFields[name] = true
@@ -135,7 +138,7 @@ func processScalarBlock(it *lex.ParseIterator) error {
 
 func processScalar(it *lex.ParseIterator) error {
 
-	for it.Valid() {
+	for it.Next() {
 		item := it.Item()
 		switch item.Typ {
 		case itemLeftRound:
@@ -147,11 +150,13 @@ func processScalar(it *lex.ParseIterator) error {
 				var name, typ string
 				name = item.Val
 
+				it.Next()
 				next := it.Item()
 				if next.Typ != itemCollon {
 					return x.Errorf("Missing collon")
 				}
 
+				it.Next()
 				next = it.Item()
 				if next.Typ != itemScalarType {
 					return x.Errorf("Missing Type")
@@ -166,7 +171,7 @@ func processScalar(it *lex.ParseIterator) error {
 				}
 
 				// Check for index.
-				for it.Valid() {
+				for it.Next() {
 					next = it.Item()
 					if next.Typ == lex.ItemError {
 						return x.Errorf(next.Val)
@@ -175,6 +180,7 @@ func processScalar(it *lex.ParseIterator) error {
 						break
 					}
 					if next.Typ == itemAt {
+						it.Next()
 						next = it.Item()
 						if next.Typ == itemIndex {
 							indexedFields[name] = true
@@ -199,6 +205,7 @@ func processScalar(it *lex.ParseIterator) error {
 
 func processObject(it *lex.ParseIterator) error {
 	var objName string
+	it.Next()
 	next := it.Item()
 	if next.Typ != itemObject {
 		return x.Errorf("Missing object name")
@@ -206,6 +213,7 @@ func processObject(it *lex.ParseIterator) error {
 	objName = next.Val
 	str[objName] = types.UidID
 
+	it.Next()
 	next = it.Item()
 	if next.Typ != itemLeftCurl {
 		return x.Errorf("Missing left curly brace")
@@ -214,7 +222,7 @@ func processObject(it *lex.ParseIterator) error {
 	fieldCount := 0
 
 L:
-	for it.Valid() {
+	for it.Next() {
 		item := it.Item()
 		switch item.Typ {
 		case itemRightCurl:
@@ -224,11 +232,13 @@ L:
 				var name, typ string
 				name = item.Val
 
+				it.Next()
 				next := it.Item()
 				if next.Typ != itemCollon {
 					return x.Errorf("Missing collon")
 				}
 
+				it.Next()
 				next = it.Item()
 				if next.Typ != itemObjectType {
 					return x.Errorf("Missing Type")
@@ -245,8 +255,10 @@ L:
 					}
 				}
 				// Check for reverse.
+				it.Next()
 				next = it.Item()
 				if next.Typ == itemAt {
+					it.Next()
 					index := it.Item()
 					if index.Typ == itemReverse {
 						// TODO(jchiu): Add test for this check.

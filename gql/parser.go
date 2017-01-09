@@ -302,7 +302,7 @@ func Parse(input string) (gq *GraphQuery, mu *Mutation, rerr error) {
 
 	it := l.NewIterator()
 	fmap := make(fragmentMap)
-	for it.Valid() {
+	for it.Next() {
 		item := it.Item()
 		switch item.Typ {
 		case lex.ItemError:
@@ -359,7 +359,7 @@ func getVariablesAndQuery(it *lex.ParseIterator, vmap varMap) (gq *GraphQuery,
 	rerr error) {
 	var name string
 L2:
-	for it.Valid() {
+	for it.Next() {
 		item := it.Item()
 		switch item.Typ {
 		case lex.ItemError:
@@ -406,12 +406,14 @@ func getQuery(it *lex.ParseIterator) (gq *GraphQuery, rerr error) {
 	var seenFilter bool
 L:
 	// Recurse to deeper levels through godeep.
+	it.Next()
 	item := it.Item()
 	if item.Typ == itemLeftCurl {
 		if rerr = godeep(it, gq); rerr != nil {
 			return nil, rerr
 		}
 	} else if item.Typ == itemAt {
+		it.Next()
 		item := it.Item()
 		if item.Typ == itemName {
 			switch item.Val {
@@ -441,7 +443,7 @@ L:
 // getFragment parses a fragment definition (not reference).
 func getFragment(it *lex.ParseIterator) (*fragmentNode, error) {
 	var name string
-	for it.Valid() {
+	for it.Next() {
 		item := it.Item()
 		if item.Typ == itemText {
 			v := strings.TrimSpace(item.Val)
@@ -478,7 +480,7 @@ func getFragment(it *lex.ParseIterator) (*fragmentNode, error) {
 // operation in Mutation.
 func getMutation(it *lex.ParseIterator) (*Mutation, error) {
 	var mu *Mutation
-	for it.Valid() {
+	for it.Next() {
 		item := it.Item()
 		if item.Typ == itemText {
 			continue
@@ -505,7 +507,7 @@ func parseMutationOp(it *lex.ParseIterator, op string, mu *Mutation) error {
 	}
 
 	parse := false
-	for it.Valid() {
+	for it.Next() {
 		item := it.Item()
 		if item.Typ == itemText {
 			continue
@@ -536,11 +538,12 @@ func parseMutationOp(it *lex.ParseIterator, op string, mu *Mutation) error {
 }
 
 func parseVariables(it *lex.ParseIterator, vmap varMap) error {
-	for it.Valid() {
+	for it.Next() {
 		var varName string
 		// Get variable name.
 		item := it.Item()
 		if item.Typ == itemDollar {
+			it.Next()
 			item = it.Item()
 			if item.Typ == itemName {
 				varName = fmt.Sprintf("$%s", item.Val)
@@ -553,12 +556,14 @@ func parseVariables(it *lex.ParseIterator, vmap varMap) error {
 			return x.Errorf("Unexpected item in place of variable. Got: %v %v", item, item.Typ == itemDollar)
 		}
 
+		it.Next()
 		item = it.Item()
 		if item.Typ != itemColon {
 			return x.Errorf("Expecting a collon. Got: %v", item)
 		}
 
 		// Get variable type.
+		it.Next()
 		item = it.Item()
 		if item.Typ != itemName {
 			return x.Errorf("Expecting a variable type. Got: %v", item)
@@ -584,8 +589,10 @@ func parseVariables(it *lex.ParseIterator, vmap varMap) error {
 		}
 
 		// Check for '=' sign and optional default value.
+		it.Next()
 		item = it.Item()
 		if item.Typ == itemEqual {
+			it.Next()
 			it := it.Item()
 			if it.Typ != itemName {
 				return x.Errorf("Expecting default value of a variable. Got: %v", item)
@@ -615,7 +622,7 @@ func parseVariables(it *lex.ParseIterator, vmap varMap) error {
 
 // parseArguments parses the arguments part of the GraphQL query root.
 func parseArguments(it *lex.ParseIterator) (result []pair, rerr error) {
-	for it.Valid() {
+	for it.Next() {
 		var p pair
 		// Get key.
 		item := it.Item()
@@ -629,16 +636,19 @@ func parseArguments(it *lex.ParseIterator) (result []pair, rerr error) {
 			return result, x.Errorf("Expecting argument name. Got: %v", item)
 		}
 
+		it.Next()
 		item = it.Item()
 		if item.Typ != itemColon {
 			return result, x.Errorf("Expecting a collon. Got: %v", item)
 		}
 
 		// Get value.
+		it.Next()
 		item = it.Item()
 		var val string
 		if item.Typ == itemDollar {
 			val = "$"
+			it.Next()
 			item = it.Item()
 			if item.Typ != itemName {
 				return result, x.Errorf("Expecting argument value. Got: %v", item)
@@ -740,15 +750,16 @@ func evalStack(opStack, valueStack *filterTreeStack) {
 
 func parseFunction(it *lex.ParseIterator) (*Function, error) {
 	var g *Function
-	for it.Valid() {
+	for it.Next() {
 		item := it.Item()
 		if item.Typ == itemName { // Value.
 			g = &Function{Name: item.Val}
+			it.Next()
 			itemInFunc := it.Item()
 			if itemInFunc.Typ != itemLeftRound {
 				return nil, x.Errorf("Expected ( after func name [%s]", g.Name)
 			}
-			for it.Valid() {
+			for it.Next() {
 				itemInFunc := it.Item()
 				if itemInFunc.Typ == itemRightRound {
 					break
@@ -777,6 +788,7 @@ func parseFunction(it *lex.ParseIterator) (*Function, error) {
 
 // parseFilter parses the filter directive to produce a QueryFilter / parse tree.
 func parseFilter(it *lex.ParseIterator) (*FilterTree, error) {
+	it.Next()
 	item := it.Item()
 	if item.Typ != itemLeftRound {
 		return nil, x.Errorf("Expected ( after filter directive")
@@ -786,18 +798,19 @@ func parseFilter(it *lex.ParseIterator) (*FilterTree, error) {
 	opStack.push(&FilterTree{Op: "("}) // Push ( onto operator stack.
 	valueStack := new(filterTreeStack)
 
-	for it.Valid() {
+	for it.Next() {
 		item := it.Item()
 		if item.Typ == itemName { // Value.
 			f := &Function{}
 			leaf := &FilterTree{Func: f}
 			f.Name = item.Val
+			it.Next()
 			itemInFunc := it.Item()
 			if itemInFunc.Typ != itemLeftRound {
 				return nil, x.Errorf("Expected ( after func name [%s]", leaf.Func.Name)
 			}
 			var terminated bool
-			for it.Valid() {
+			for it.Next() {
 				itemInFunc := it.Item()
 				if itemInFunc.Typ == itemRightRound {
 					terminated = true
@@ -884,12 +897,14 @@ func getRoot(it *lex.ParseIterator) (gq *GraphQuery, rerr error) {
 	gq = &GraphQuery{
 		Args: make(map[string]string),
 	}
+	it.Next()
 	item := it.Item()
 	if item.Typ != itemName {
 		return nil, x.Errorf("Expected some name. Got: %v", item)
 	}
 
 	gq.Alias = item.Val
+	it.Next()
 	item = it.Item()
 	if item.Typ != itemLeftRound {
 		return nil, x.Errorf("Expected variable start. Got: %v", item)
@@ -942,7 +957,7 @@ func getRoot(it *lex.ParseIterator) (gq *GraphQuery, rerr error) {
 // godeep constructs the subgraph from the lexed items and a GraphQuery node.
 func godeep(it *lex.ParseIterator, gq *GraphQuery) error {
 	curp := gq // Used to track current node, for nesting.
-	for it.Valid() {
+	for it.Next() {
 		item := it.Item()
 		if item.Typ == lex.ItemError {
 			return x.Errorf(item.Val)
@@ -957,6 +972,7 @@ func godeep(it *lex.ParseIterator, gq *GraphQuery) error {
 		}
 
 		if item.Typ == itemThreeDots {
+			it.Next()
 			item = it.Item()
 			if item.Typ == itemName {
 				// item.Val is expected to start with "..." and to have len >3.
@@ -972,6 +988,7 @@ func godeep(it *lex.ParseIterator, gq *GraphQuery) error {
 			curp = child
 
 		} else if item.Typ == itemColon {
+			it.Next()
 			item = it.Item()
 			if item.Typ != itemName {
 				return x.Errorf("Predicate Expected but got: %s", item.Val)
@@ -997,6 +1014,7 @@ func godeep(it *lex.ParseIterator, gq *GraphQuery) error {
 				curp.Args[p.Key] = p.Val
 			}
 		} else if item.Typ == itemAt {
+			it.Next()
 			item := it.Item()
 			if item.Typ == itemName {
 				switch item.Val {

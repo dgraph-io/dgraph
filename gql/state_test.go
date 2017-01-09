@@ -41,7 +41,7 @@ func TestNewLexer(t *testing.T) {
 	run(l)
 
 	it := l.NewIterator()
-	for it.Valid() {
+	for it.Next() {
 		item := it.Item()
 		require.NotEqual(t, item.Typ, lex.ItemError)
 		t.Log(item.String())
@@ -69,7 +69,7 @@ func TestNewLexerMutation(t *testing.T) {
 	l.Init(input)
 	run(l)
 	it := l.NewIterator()
-	for it.Valid() {
+	for it.Next() {
 		item := it.Item()
 		require.NotEqual(t, item.Typ, lex.ItemError)
 		t.Log(item.String())
@@ -89,7 +89,7 @@ func TestAbruptMutation(t *testing.T) {
 	run(l)
 	var typ lex.ItemType
 	it := l.NewIterator()
-	for it.Valid() {
+	for it.Next() {
 		item := it.Item()
 		t.Log(item.String())
 		typ = item.Typ
@@ -108,7 +108,7 @@ func TestVariables1(t *testing.T) {
 	l.Init(input)
 	run(l)
 	it := l.NewIterator()
-	for it.Valid() {
+	for it.Next() {
 		item := it.Item()
 		require.NotEqual(t, item.Typ, lex.ItemError)
 		t.Log(item.String(), item.Typ)
@@ -126,7 +126,7 @@ func TestVariables2(t *testing.T) {
 	l.Init(input)
 	run(l)
 	it := l.NewIterator()
-	for it.Valid() {
+	for it.Next() {
 		item := it.Item()
 		require.NotEqual(t, item.Typ, lex.ItemError)
 		t.Log(item.String(), item.Typ)
@@ -144,7 +144,7 @@ func TestVariablesDefault(t *testing.T) {
 	l.Init(input)
 	run(l)
 	it := l.NewIterator()
-	for it.Valid() {
+	for it.Next() {
 		item := it.Item()
 		require.NotEqual(t, item.Typ, lex.ItemError)
 		t.Log(item.String(), item.Typ)
@@ -163,7 +163,7 @@ func TestVariablesError(t *testing.T) {
 	var typ lex.ItemType
 	run(l)
 	it := l.NewIterator()
-	for it.Valid() {
+	for it.Next() {
 		item := it.Item()
 		t.Log(item.String())
 		typ = item.Typ

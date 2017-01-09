@@ -59,13 +59,14 @@ type ParseIterator struct {
 func (l *Lexer) NewIterator() *ParseIterator {
 	it := &ParseIterator{
 		items: l.Items,
-		idx:   0,
+		idx:   -1,
 	}
 	return it
 }
 
 // Valid returns true if we haven't consumed all the items.
-func (p *ParseIterator) Valid() bool {
+func (p *ParseIterator) Next() bool {
+	p.idx++
 	if p.idx >= len(p.items) {
 		return false
 	}
@@ -74,7 +75,6 @@ func (p *ParseIterator) Valid() bool {
 
 // Item returns the current item and advances the index.
 func (p *ParseIterator) Item() item {
-	defer func() { p.idx++ }()
 	return p.items[p.idx]
 }
 
@@ -89,10 +89,10 @@ func (p *ParseIterator) Prev() bool {
 
 // Peek returns the next n items without consuming them.
 func (p *ParseIterator) Peek(num int) ([]item, error) {
-	if (p.idx + num) > len(p.items) {
+	if (p.idx + num + 1) > len(p.items) {
 		return nil, x.Errorf("Out of range for peek")
 	}
-	return p.items[p.idx : p.idx+num], nil
+	return p.items[p.idx+1 : p.idx+num+1], nil
 }
 
 type Lexer struct {
