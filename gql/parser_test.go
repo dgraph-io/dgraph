@@ -17,7 +17,6 @@
 package gql
 
 import (
-	"fmt"
 	"strings"
 	"testing"
 
@@ -94,8 +93,8 @@ func TestParseFirst(t *testing.T) {
 	gq, _, err := Parse(query)
 	require.NoError(t, err)
 	require.NotNil(t, gq)
-	require.Equal(t, childAttrs(gq), []string{"type.object.name", "friends"})
-	require.Equal(t, gq.Children[1].Args["first"], "10")
+	require.Equal(t, []string{"type.object.name", "friends"}, childAttrs(gq))
+	require.Equal(t, "10", gq.Children[1].Args["first"])
 }
 
 func TestParseFirst_error(t *testing.T) {
@@ -821,7 +820,7 @@ func TestParseFilter_emptyargument(t *testing.T) {
 	query := `
 	query {
 		me(_uid_:0x0a) {
-			friends @filter(allof(name, )) {
+			friends @filter(allof(name,)) {
 				name
 			}
 			gender,age
@@ -830,7 +829,6 @@ func TestParseFilter_emptyargument(t *testing.T) {
 	}
 `
 	_, _, err := Parse(query)
-	fmt.Println(err)
 	require.Error(t, err)
 }
 func TestParseFilter_unknowndirective(t *testing.T) {

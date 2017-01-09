@@ -546,7 +546,7 @@ func parseVariables(l *lex.Lexer, vmap varMap) error {
 		} else if item.Typ == itemRightRound {
 			break
 		} else {
-			return x.Errorf("Unexpected item in place of variable. Got: %v", item)
+			return x.Errorf("Unexpected item in place of variable. Got: %v %v", item, item.Typ == itemDollar)
 		}
 
 		item = l.NextTok()
@@ -891,8 +891,12 @@ func getRoot(l *lex.Lexer) (gq *GraphQuery, rerr error) {
 		return nil, x.Errorf("Expected variable start. Got: %v", item)
 	}
 
-	item = l.NextTok()
-	if item.Typ == itemGenerator {
+	// Peeks items to see if its an argument or function.
+	peekItems, err := l.PeekN(2)
+	if err != nil {
+		return gq, err
+	}
+	if peekItems[1].Typ == itemLeftRound {
 		// Store the generator function.
 		gen, err := parseFunction(l)
 		if err != nil {
@@ -907,7 +911,7 @@ func getRoot(l *lex.Lexer) (gq *GraphQuery, rerr error) {
 			return nil, err
 		}
 		gq.Func = gen
-	} else if item.Typ == itemArgument {
+	} else if peekItems[1].Typ == itemCollon {
 		args, err := parseArguments(l)
 		if err != nil {
 			return nil, err
@@ -925,7 +929,7 @@ func getRoot(l *lex.Lexer) (gq *GraphQuery, rerr error) {
 			}
 		}
 	} else {
-		return nil, x.Errorf("Unexpected root argument.")
+		return nil, x.Errorf("Unexpected root argument. Got: %v", peekItems)
 	}
 
 	return gq, nil
@@ -949,7 +953,7 @@ func godeep(l *lex.Lexer, gq *GraphQuery) error {
 
 		if item.Typ == itemThreeDots {
 			item = l.NextTok()
-			if item.Typ == itemName /*FragmentSpread*/ {
+			if item.Typ == itemName {
 				// item.Val is expected to start with "..." and to have len >3.
 				gq.Children = append(gq.Children, &GraphQuery{fragment: item.Val})
 				// Unlike itemName, there is no nesting, so do not change "curp".
@@ -975,20 +979,17 @@ func godeep(l *lex.Lexer, gq *GraphQuery) error {
 			}
 
 		} else if item.Typ == itemLeftRound {
-			item = l.NextTok()
-			if item.Typ == itemArgument {
-				args, err := parseArguments(l)
-				if err != nil {
-					return err
+			args, err := parseArguments(l)
+			if err != nil {
+				return err
+			}
+			// Stores args in GraphQuery, will be used later while retrieving results.
+			for _, p := range args {
+				if p.Val == "" {
+					return x.Errorf("Got empty argument")
 				}
-				// Stores args in GraphQuery, will be used later while retrieving results.
-				for _, p := range args {
-					if p.Val == "" {
-						return x.Errorf("Got empty argument")
-					}
 
-					curp.Args[p.Key] = p.Val
-				}
+				curp.Args[p.Key] = p.Val
 			}
 		} else if item.Typ == itemAt {
 			item := l.NextTok()
