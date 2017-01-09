@@ -62,7 +62,7 @@ type Lexer struct {
 	Items           []item // channel of scanned items.
 	Idx             int    // Index of current token.
 	Depth           int    // nesting of {}
-	FilterDepth     int    // nesting of () inside filter directive.
+	ArgDepth        int    // nesting of ()
 	Mode            int    // mode based on information so far.
 	InsideDirective bool   // To indicate we are inside directive.
 }

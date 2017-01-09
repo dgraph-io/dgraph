@@ -92,21 +92,21 @@ Loop:
 			default:
 				return l.Errorf("Unrecognized character inside mutation: %#U", r)
 			}
-		} else if l.FilterDepth > 0 || l.InsideDirective {
+		} else if l.ArgDepth > 0 || l.InsideDirective {
 			switch r := l.Next(); {
 			case r == leftRound:
 				l.Emit(itemLeftRound)
-				l.FilterDepth++
+				l.ArgDepth++
 			case r == rightRound:
-				if l.FilterDepth == 0 {
+				if l.ArgDepth == 0 {
 					return l.Errorf("Unexpected right round bracket")
 				}
-				l.FilterDepth--
+				l.ArgDepth--
 				l.Emit(itemRightRound)
 				if empty {
 					return l.Errorf("Empty Argument")
 				}
-				if l.FilterDepth == 0 {
+				if l.ArgDepth == 0 {
 					l.InsideDirective = false
 					return lexText // Filter directive is done.
 				}
@@ -201,7 +201,7 @@ Loop:
 				l.Emit(itemText)
 				l.Next()
 				l.Emit(itemLeftRound)
-				l.FilterDepth++
+				l.ArgDepth++
 				return lexText
 			case isNameBegin(r):
 				l.Backup()
@@ -240,7 +240,7 @@ Loop:
 				l.Emit(itemLeftRound)
 				l.AcceptRun(isSpace)
 				l.Ignore()
-				l.FilterDepth++
+				l.ArgDepth++
 				return lexText
 			case r == ':':
 				l.Emit(itemCollon)
