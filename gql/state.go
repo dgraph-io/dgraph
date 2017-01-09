@@ -116,7 +116,8 @@ Loop:
 				l.Emit(itemText)
 				l.Next()
 				l.Emit(itemLeftRound)
-				return lexPairsInside
+				l.FilterDepth++
+				return lexPairsOrFilterInside
 			case isNameBegin(r):
 				l.Backup()
 				l.Emit(itemText)
@@ -158,13 +159,14 @@ Loop:
 				if k == '_' || l.Depth != 1 || l.Mode == fragmentMode {
 					l.Backup()
 					l.Emit(itemArgument)
-					return lexPairsInside
+					l.FilterDepth++
+					return lexPairsOrFilterInside
 				}
 				// This is a generator function.
 				l.Backup()
 				l.Emit(itemGenerator)
 				l.FilterDepth++
-				return lexFilterInside
+				return lexPairsOrFilterInside
 			case r == ':':
 				l.Emit(itemCollon)
 			case r == attherate:
@@ -183,66 +185,6 @@ Loop:
 	return nil
 }
 
-// lexFilterFuncInside expects input to look like ("...", "...").
-func lexFilterFuncInside(l *lex.Lexer) lex.StateFn {
-	l.AcceptRun(isSpace)
-	l.Ignore() // Any spaces encountered.
-	var empty bool
-	for {
-		r := l.Next()
-		if isSpace(r) || r == comma {
-			l.Ignore()
-			empty = true
-		} else if r == leftRound {
-			empty = true
-			l.Emit(itemLeftRound)
-		} else if r == rightRound {
-			l.Emit(itemRightRound)
-			if empty {
-				return l.Errorf("Empty Argument")
-			}
-			return lexFilterInside
-		} else if isEndLiteral(r) {
-			empty = false
-			l.Ignore()
-			l.AcceptUntil(isEndLiteral) // This call will backup the ending ".
-			l.Emit(itemName)
-			l.Next() // Consume the " and ignore it.
-			l.Ignore()
-		} else if r == '[' {
-			depth := 1
-			for {
-				r := l.Next()
-				if r == lex.EOF || r == ')' {
-					return l.Errorf("Invalid bracket sequence")
-				} else if r == '[' {
-					depth++
-				} else if r == ']' {
-					depth--
-				}
-				if depth > 2 || depth < 0 {
-					return l.Errorf("Invalid bracket sequence")
-				} else if depth == 0 {
-					break
-				}
-			}
-			l.Emit(itemName)
-			empty = false
-			l.AcceptRun(isSpace)
-			l.Ignore()
-			if !isEndArg(l.Peek()) {
-				return l.Errorf("Invalid bracket sequence")
-			}
-
-		} else {
-			empty = false
-			// Accept this argument. Till comma or right bracket.
-			l.AcceptUntil(isEndArg)
-			l.Emit(itemName)
-		}
-	}
-}
-
 // lexFilterFuncName expects input to look like equal("...", "...").
 func lexFilterFuncName(l *lex.Lexer) lex.StateFn {
 	for {
@@ -255,15 +197,17 @@ func lexFilterFuncName(l *lex.Lexer) lex.StateFn {
 		l.Emit(itemName)
 		break
 	}
-	return lexFilterFuncInside
+	return lexPairsOrFilterInside
 }
 
-// lexFilterInside expects input like (  (equal(...) && f(...)) || g(...)  ).
-func lexFilterInside(l *lex.Lexer) lex.StateFn {
+// lexPairsOrFilterInside expects input like (  (equal(...) && f(...)) || g(...)  ).
+func lexPairsOrFilterInside(l *lex.Lexer) lex.StateFn {
+	var empty bool
 	for {
 		r := l.Next()
 		switch {
 		case r == leftRound:
+			empty = true
 			l.Emit(itemLeftRound)
 			l.FilterDepth++
 		case r == rightRound:
@@ -275,26 +219,76 @@ func lexFilterInside(l *lex.Lexer) lex.StateFn {
 			if l.FilterDepth == 0 {
 				return lexText // Filter directive is done.
 			}
+			if empty {
+				return l.Errorf("Empty Argument")
+			}
 		case r == lex.EOF:
-			return l.Errorf("Unclosed directive")
+			return l.Errorf("Unclosed Brackets")
 		case isSpace(r) || isEndOfLine(r):
 			l.Ignore()
-		case isNameBegin(r):
-			return lexFilterFuncName
+		case r == comma:
+			empty = true
+			l.Ignore()
 		case r == '&':
 			r2 := l.Next()
 			if r2 == '&' {
 				l.Emit(itemAnd)
-				return lexFilterInside
+				return lexPairsOrFilterInside
 			}
 			return l.Errorf("Expected & but got %v", r2)
 		case r == '|':
 			r2 := l.Next()
 			if r2 == '|' {
 				l.Emit(itemOr)
-				return lexFilterInside
+				return lexPairsOrFilterInside
 			}
 			return l.Errorf("Expected | but got %v", r2)
+		case isNameBegin(r) || isNumber(r):
+			empty = false
+			return lexArgName
+		case isDollar(r):
+			l.Emit(itemDollar)
+			return lexArgName
+		case r == ':':
+			l.Emit(itemCollon)
+		case r == equal:
+			l.Emit(itemEqual)
+		case isEndLiteral(r):
+			{
+				empty = false
+				l.Ignore()
+				l.AcceptUntil(isEndLiteral) // This call will backup the ending ".
+				l.Emit(itemName)
+				l.Next() // Consume the " and ignore it.
+				l.Ignore()
+			}
+		case r == '[':
+			{
+				depth := 1
+				for {
+					r := l.Next()
+					if r == lex.EOF || r == ')' {
+						return l.Errorf("Invalid bracket sequence")
+					} else if r == '[' {
+						depth++
+					} else if r == ']' {
+						depth--
+					}
+					if depth > 2 || depth < 0 {
+						return l.Errorf("Invalid bracket sequence")
+					} else if depth == 0 {
+						break
+					}
+				}
+				l.Emit(itemName)
+				empty = false
+				l.AcceptRun(isSpace)
+				l.Ignore()
+				if !isEndArg(l.Peek()) {
+					return l.Errorf("Invalid bracket sequence")
+				}
+
+			}
 		default:
 			return l.Errorf("Unrecognized character in lexText: %#U", r)
 		}
@@ -326,7 +320,7 @@ func lexDirective(l *lex.Lexer) lex.StateFn {
 		// The lexer may behave differently for different directives. Hence, we need
 		// to check the directive here and go into the right state.
 		if string(directive) == "filter" {
-			return lexFilterInside
+			return lexPairsOrFilterInside
 		}
 		return l.Errorf("Unhandled directive %s", directive)
 	}
@@ -461,32 +455,6 @@ func lexOperationType(l *lex.Lexer) lex.StateFn {
 	return lexText
 }
 
-// lexPairsInside is used to lex the key value pairs inside ().
-func lexPairsInside(l *lex.Lexer) lex.StateFn {
-	for {
-		switch r := l.Next(); {
-		case r == lex.EOF:
-			return l.Errorf("unclosed argument")
-		case isSpace(r) || isEndOfLine(r) || r == comma:
-			l.Ignore()
-		case isNameBegin(r) || isNumber(r):
-			return lexArgName
-		case isDollar(r):
-			l.Emit(itemDollar)
-			return lexArgName
-		case r == ':':
-			l.Emit(itemCollon)
-		case r == equal:
-			l.Emit(itemEqual)
-		case r == rightRound:
-			l.Emit(itemRightRound)
-			return lexText
-		default:
-			return l.Errorf("argument list invalid %v", l.Input[l.Start:l.Pos])
-		}
-	}
-}
-
 // lexVarName lexes and emits the name of a variable.
 func lexVarName(l *lex.Lexer) lex.StateFn {
 	for {
@@ -498,7 +466,7 @@ func lexVarName(l *lex.Lexer) lex.StateFn {
 		l.Emit(itemName)
 		break
 	}
-	return lexPairsInside
+	return lexPairsOrFilterInside
 }
 
 // lexArgName lexes and emits the name part of an argument.
@@ -512,7 +480,7 @@ func lexArgName(l *lex.Lexer) lex.StateFn {
 		l.Emit(itemName)
 		break
 	}
-	return lexPairsInside
+	return lexPairsOrFilterInside
 }
 
 // isDollar returns true if the rune is a Dollar($).
