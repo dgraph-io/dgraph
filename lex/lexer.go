@@ -51,6 +51,46 @@ func (i item) String() string {
 	return fmt.Sprintf("lex.Item [%v] %q", i.Typ, i.Val)
 }
 
+type ParseIterator struct {
+	items []item
+	idx   int
+}
+
+func (l *Lexer) NewIterator() *ParseIterator {
+	it := &ParseIterator{
+		items: l.Items,
+		idx:   0,
+	}
+	return it
+}
+
+func (p *ParseIterator) Next() bool {
+	p.idx++
+	if p.idx >= len(p.items) || p.items[p.idx].Typ == ItemEOF || p.items[p.idx].Typ == ItemError {
+		return false
+	}
+	return true
+}
+
+func (p *ParseIterator) Item() item {
+	return p.items[p.idx]
+}
+
+func (p *ParseIterator) Prev() bool {
+	if p.idx > 0 {
+		p.idx--
+		return true
+	}
+	return false
+}
+
+func (p *ParseIterator) Peek(num int) ([]item, error) {
+	if (p.idx + num) > len(p.items) {
+		return nil, x.Errorf("Out of range for peek")
+	}
+	return p.items[p.idx : p.idx+num], nil
+}
+
 type Lexer struct {
 	// NOTE: Using a text scanner wouldn't work because it's designed for parsing
 	// Golang. It won't keep track of start position, or allow us to retrieve
@@ -60,7 +100,6 @@ type Lexer struct {
 	Pos             int    // current position of this item.
 	Width           int    // width of last rune read from input.
 	Items           []item // channel of scanned items.
-	Idx             int    // Index of current token.
 	Depth           int    // nesting of {}
 	ArgDepth        int    // nesting of ()
 	Mode            int    // mode based on information so far.
@@ -69,30 +108,7 @@ type Lexer struct {
 
 func (l *Lexer) Init(input string) {
 	l.Input = input
-	l.Idx = 0
 	l.Items = make([]item, 0, 100)
-}
-
-func (l *Lexer) NextTok() item {
-	defer func() { l.Idx++ }()
-	if l.Idx >= len(l.Items) {
-		return item{ItemEOF, ""}
-	}
-	return l.Items[l.Idx]
-}
-
-func (l *Lexer) GoBack() {
-	if l.Idx > 0 {
-		l.Idx--
-	}
-	return
-}
-
-func (l *Lexer) PeekN(num int) ([]item, error) {
-	if (l.Idx + num) > len(l.Items) {
-		return nil, x.Errorf("Out of range for peek")
-	}
-	return l.Items[l.Idx : l.Idx+num], nil
 }
 
 // Errorf returns the error state function.
