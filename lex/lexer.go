@@ -51,13 +51,13 @@ func (i item) String() string {
 	return fmt.Sprintf("lex.Item [%v] %q", i.Typ, i.Val)
 }
 
-type ParseIterator struct {
+type ItemIterator struct {
 	items []item
 	idx   int
 }
 
-func (l *Lexer) NewIterator() *ParseIterator {
-	it := &ParseIterator{
+func (l *Lexer) NewIterator() *ItemIterator {
+	it := &ItemIterator{
 		items: l.Items,
 		idx:   -1,
 	}
@@ -65,7 +65,7 @@ func (l *Lexer) NewIterator() *ParseIterator {
 }
 
 // Valid returns true if we haven't consumed all the items.
-func (p *ParseIterator) Next() bool {
+func (p *ItemIterator) Next() bool {
 	p.idx++
 	if p.idx >= len(p.items) {
 		return false
@@ -74,12 +74,12 @@ func (p *ParseIterator) Next() bool {
 }
 
 // Item returns the current item and advances the index.
-func (p *ParseIterator) Item() item {
+func (p *ItemIterator) Item() item {
 	return p.items[p.idx]
 }
 
 // Prev moves the index back by one.
-func (p *ParseIterator) Prev() bool {
+func (p *ItemIterator) Prev() bool {
 	if p.idx > 0 {
 		p.idx--
 		return true
@@ -88,7 +88,7 @@ func (p *ParseIterator) Prev() bool {
 }
 
 // Peek returns the next n items without consuming them.
-func (p *ParseIterator) Peek(num int) ([]item, error) {
+func (p *ItemIterator) Peek(num int) ([]item, error) {
 	if (p.idx + num + 1) > len(p.items) {
 		return nil, x.Errorf("Out of range for peek")
 	}

@@ -355,7 +355,7 @@ func Parse(input string) (gq *GraphQuery, mu *Mutation, rerr error) {
 // getVariablesAndQuery checks if the query has a variable list and stores it in
 // vmap. For variable list to be present, the query should have a name which is
 // also checked for. It also calls getQuery to create the GraphQuery object tree.
-func getVariablesAndQuery(it *lex.ParseIterator, vmap varMap) (gq *GraphQuery,
+func getVariablesAndQuery(it *lex.ItemIterator, vmap varMap) (gq *GraphQuery,
 	rerr error) {
 	var name string
 L2:
@@ -396,7 +396,7 @@ L2:
 
 // getQuery creates a GraphQuery object tree by calling getRoot
 // and goDeep functions by looking at '{'.
-func getQuery(it *lex.ParseIterator) (gq *GraphQuery, rerr error) {
+func getQuery(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 	// First, get the root
 	gq, rerr = getRoot(it)
 	if rerr != nil {
@@ -441,7 +441,7 @@ L:
 }
 
 // getFragment parses a fragment definition (not reference).
-func getFragment(it *lex.ParseIterator) (*fragmentNode, error) {
+func getFragment(it *lex.ItemIterator) (*fragmentNode, error) {
 	var name string
 	for it.Next() {
 		item := it.Item()
@@ -478,7 +478,7 @@ func getFragment(it *lex.ParseIterator) (*fragmentNode, error) {
 
 // getMutation function parses and stores the set and delete
 // operation in Mutation.
-func getMutation(it *lex.ParseIterator) (*Mutation, error) {
+func getMutation(it *lex.ItemIterator) (*Mutation, error) {
 	var mu *Mutation
 	for it.Next() {
 		item := it.Item()
@@ -501,7 +501,7 @@ func getMutation(it *lex.ParseIterator) (*Mutation, error) {
 }
 
 // parseMutationOp parses and stores set or delete operation string in Mutation.
-func parseMutationOp(it *lex.ParseIterator, op string, mu *Mutation) error {
+func parseMutationOp(it *lex.ItemIterator, op string, mu *Mutation) error {
 	if mu == nil {
 		return x.Errorf("Mutation is nil.")
 	}
@@ -537,7 +537,7 @@ func parseMutationOp(it *lex.ParseIterator, op string, mu *Mutation) error {
 	return x.Errorf("Invalid mutation formatting.")
 }
 
-func parseVariables(it *lex.ParseIterator, vmap varMap) error {
+func parseVariables(it *lex.ItemIterator, vmap varMap) error {
 	for it.Next() {
 		var varName string
 		// Get variable name.
@@ -621,7 +621,7 @@ func parseVariables(it *lex.ParseIterator, vmap varMap) error {
 }
 
 // parseArguments parses the arguments part of the GraphQL query root.
-func parseArguments(it *lex.ParseIterator) (result []pair, rerr error) {
+func parseArguments(it *lex.ItemIterator) (result []pair, rerr error) {
 	for it.Next() {
 		var p pair
 		// Get key.
@@ -748,7 +748,7 @@ func evalStack(opStack, valueStack *filterTreeStack) {
 	valueStack.push(topOp)
 }
 
-func parseFunction(it *lex.ParseIterator) (*Function, error) {
+func parseFunction(it *lex.ItemIterator) (*Function, error) {
 	var g *Function
 	for it.Next() {
 		item := it.Item()
@@ -787,7 +787,7 @@ func parseFunction(it *lex.ParseIterator) (*Function, error) {
 }
 
 // parseFilter parses the filter directive to produce a QueryFilter / parse tree.
-func parseFilter(it *lex.ParseIterator) (*FilterTree, error) {
+func parseFilter(it *lex.ItemIterator) (*FilterTree, error) {
 	it.Next()
 	item := it.Item()
 	if item.Typ != itemLeftRound {
@@ -893,7 +893,7 @@ func parseFilter(it *lex.ParseIterator) (*FilterTree, error) {
 }
 
 // getRoot gets the root graph query object after parsing the args.
-func getRoot(it *lex.ParseIterator) (gq *GraphQuery, rerr error) {
+func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 	gq = &GraphQuery{
 		Args: make(map[string]string),
 	}
@@ -955,7 +955,7 @@ func getRoot(it *lex.ParseIterator) (gq *GraphQuery, rerr error) {
 }
 
 // godeep constructs the subgraph from the lexed items and a GraphQuery node.
-func godeep(it *lex.ParseIterator, gq *GraphQuery) error {
+func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 	curp := gq // Used to track current node, for nesting.
 	for it.Next() {
 		item := it.Item()

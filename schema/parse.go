@@ -74,7 +74,7 @@ func ParseBytes(schema []byte) (rerr error) {
 	return nil
 }
 
-func processScalarBlock(it *lex.ParseIterator) error {
+func processScalarBlock(it *lex.ItemIterator) error {
 	for it.Next() {
 		item := it.Item()
 		switch item.Typ {
@@ -136,7 +136,7 @@ func processScalarBlock(it *lex.ParseIterator) error {
 	return nil
 }
 
-func processScalar(it *lex.ParseIterator) error {
+func processScalar(it *lex.ItemIterator) error {
 
 	for it.Next() {
 		item := it.Item()
@@ -203,7 +203,7 @@ func processScalar(it *lex.ParseIterator) error {
 	return nil
 }
 
-func processObject(it *lex.ParseIterator) error {
+func processObject(it *lex.ItemIterator) error {
 	var objName string
 	it.Next()
 	next := it.Item()
