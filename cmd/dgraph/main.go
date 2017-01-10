@@ -420,7 +420,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if gq == nil || (gq.UID == 0 && gq.Func == nil && len(gq.XID) == 0) {
+	if gq == nil || (len(gq.UID) == 0 && gq.Func == nil && len(gq.XID) == 0) {
 		mp := map[string]interface{}{
 			"code":    x.ErrorOk,
 			"message": "Done",
@@ -574,7 +574,7 @@ func (s *grpcServer) Run(ctx context.Context,
 	}
 	resp.AssignedUids = allocIds
 
-	if gq == nil || (gq.UID == 0 && len(gq.XID) == 0) {
+	if gq == nil || (len(gq.UID) == 0 && len(gq.XID) == 0) {
 		return resp, err
 	}
 
