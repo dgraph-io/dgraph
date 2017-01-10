@@ -351,7 +351,6 @@ L:
 	}
 
 	// Check for mention of @reverse.
-	var isReversed bool
 L1:
 	for {
 		switch r := l.Next(); {
@@ -361,7 +360,6 @@ L1:
 			break L1
 		case r == '@':
 			l.Emit(itemAt)
-			isReversed = true
 			for {
 				r := l.Next()
 				if isNameSuffix(r) {
