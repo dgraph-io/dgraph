@@ -23,6 +23,7 @@ import (
 	"os"
 	"testing"
 
+	farm "github.com/dgryski/go-farm"
 	"github.com/gogo/protobuf/proto"
 	"github.com/stretchr/testify/require"
 
@@ -60,7 +61,7 @@ func TestNewGraph(t *testing.T) {
 	require.NoError(t, err)
 
 	gq := &gql.GraphQuery{
-		UID:  101,
+		UID:  []uint64{101},
 		Attr: "me",
 	}
 	ps, err := store.NewStore(dir)
@@ -230,6 +231,7 @@ func populateGraph(t *testing.T) (string, string, *store.Store) {
 	require.NoError(t, err)
 	addEdgeToTypedValue(t, ps, "loc", 24, types.GeoID, gData.Value.([]byte))
 
+	addEdgeToValue(t, ps, "name", farm.Fingerprint64([]byte("a.bc")), "Alice")
 	addEdgeToValue(t, ps, "name", 25, "Daryl Dixon")
 	addEdgeToValue(t, ps, "name", 31, "Andrea")
 	src.Value = []byte(`{"Type":"Point", "Coordinates":[2.0, 2.0]}`)
@@ -276,7 +278,7 @@ func TestGetUID(t *testing.T) {
 	defer os.RemoveAll(dir2)
 	query := `
 		{
-			me(_uid_:0x01) {
+			me(id:0x01) {
 				name
 				_uid_
 				gender
@@ -301,7 +303,7 @@ func TestGetUIDNotInChild(t *testing.T) {
 	defer os.RemoveAll(dir2)
 	query := `
 		{
-			me(_uid_:0x01) {
+			me(id:0x01) {
 				name
 				_uid_
 				gender
@@ -325,7 +327,7 @@ func TestGetUIDCount(t *testing.T) {
 	defer os.RemoveAll(dir2)
 	query := `
 		{
-			me(_uid_:0x01) {
+			me(id:0x01) {
 				name
 				_uid_
 				gender
@@ -351,7 +353,7 @@ func TestDebug1(t *testing.T) {
 	// Alright. Now we have everything set up. Let's create the query.
 	query := `
 		{
-			debug(_uid_:0x01) {
+			debug(id:0x01) {
 				name
 				gender
 				alive
@@ -384,7 +386,7 @@ func TestDebug2(t *testing.T) {
 
 	query := `
 		{
-			me(_uid_:0x01) {
+			me(id:0x01) {
 				name
 				gender
 				alive
@@ -413,7 +415,7 @@ func TestCount(t *testing.T) {
 	// Alright. Now we have everything set up. Let's create the query.
 	query := `
 		{
-			me(_uid_:0x01) {
+			me(id:0x01) {
 				name
 				gender
 				alive
@@ -434,7 +436,7 @@ func TestCountError1(t *testing.T) {
 	// Alright. Now we have everything set up. Let's create the query.
 	query := `
 		{
-			me(_uid_: 0x01) {
+			me(id: 0x01) {
 				friend {
 					name
 					_count_
@@ -457,7 +459,7 @@ func TestCountError2(t *testing.T) {
 	// Alright. Now we have everything set up. Let's create the query.
 	query := `
 		{
-			me(_uid_: 0x01) {
+			me(id: 0x01) {
 				friend {
 					_count_ {
 						friend
@@ -486,7 +488,7 @@ func TestProcessGraph(t *testing.T) {
 	// Alright. Now we have everything set up. Let's create the query.
 	query := `
 		{
-			me(_uid_: 0x01) {
+			me(id: 0x01) {
 				friend {
 					name
 				}
@@ -539,7 +541,7 @@ func TestToJSON(t *testing.T) {
 	// Alright. Now we have everything set up. Let's create the query.
 	query := `
 		{
-			me(_uid_:0x01) {
+			me(id:0x01) {
 				name
 				gender
 				alive
@@ -565,7 +567,7 @@ func TestFieldAlias(t *testing.T) {
 	// Alright. Now we have everything set up. Let's create the query.
 	query := `
 		{
-			me(_uid_:0x01) {
+			me(id:0x01) {
 				MyName:name
 				gender
 				alive
@@ -591,7 +593,7 @@ func TestFieldAliasProto(t *testing.T) {
 	// Alright. Now we have everything set up. Let's create the query.
 	query := `
 		{
-			me(_uid_:0x01) {
+			me(id:0x01) {
 				MyName:name
 				gender
 				alive
@@ -687,7 +689,7 @@ func TestToJSONFilter(t *testing.T) {
 	defer os.RemoveAll(dir2)
 	query := `
 		{
-			me(_uid_:0x01) {
+			me(id:0x01) {
 				name
 				gender
 				friend @filter(anyof(name, "Andrea SomethingElse")) {
@@ -710,7 +712,7 @@ func TestToJSONFilterMissBrac(t *testing.T) {
 	defer os.RemoveAll(dir2)
 	query := `
 		{
-			me(_uid_:0x01) {
+			me(id:0x01) {
 				name
 				gender
 				friend @filter(anyof(name, "Andrea SomethingElse") {
@@ -730,7 +732,7 @@ func TestToJSONFilterAllOf(t *testing.T) {
 	defer os.RemoveAll(dir2)
 	query := `
 		{
-			me(_uid_:0x01) {
+			me(id:0x01) {
 				name
 				gender
 				friend @filter(allof("name", "Andrea SomethingElse")) {
@@ -752,7 +754,7 @@ func TestToJSONFilterUID(t *testing.T) {
 	defer os.RemoveAll(dir2)
 	query := `
 		{
-			me(_uid_:0x01) {
+			me(id:0x01) {
 				name
 				gender
 				friend @filter(anyof(name, "Andrea")) {
@@ -775,7 +777,7 @@ func TestToJSONFilterOrUID(t *testing.T) {
 	defer os.RemoveAll(dir2)
 	query := `
 		{
-			me(_uid_:0x01) {
+			me(id:0x01) {
 				name
 				gender
 				friend @filter(anyof(name, "Andrea") || anyof(name, "Andrea Rhee")) {
@@ -799,7 +801,7 @@ func TestToJSONFilterOrCount(t *testing.T) {
 	defer os.RemoveAll(dir2)
 	query := `
 		{
-			me(_uid_:0x01) {
+			me(id:0x01) {
 				name
 				gender
 				friend @filter(anyof(name, "Andrea") || anyof(name, "Andrea Rhee")) {
@@ -822,7 +824,7 @@ func TestToJSONFilterOrFirst(t *testing.T) {
 	defer os.RemoveAll(dir2)
 	query := `
 		{
-			me(_uid_:0x01) {
+			me(id:0x01) {
 				name
 				gender
 				friend(first:2) @filter(anyof(name, "Andrea") || anyof(name, "Glenn SomethingElse") || anyof(name, "Daryl")) {
@@ -845,7 +847,7 @@ func TestToJSONFilterOrOffset(t *testing.T) {
 	defer os.RemoveAll(dir2)
 	query := `
 		{
-			me(_uid_:0x01) {
+			me(id:0x01) {
 				name
 				gender
 				friend(offset:1) @filter(anyof(name, "Andrea") || anyof("name", "Glenn Rhee") || anyof("name", "Daryl Dixon")) {
@@ -868,7 +870,7 @@ func TestToJSONFilterGeq(t *testing.T) {
 	defer os.RemoveAll(dir2)
 	query := `
 		{
-			me(_uid_:0x01) {
+			me(id:0x01) {
 				name
 				gender
 				friend @filter(geq("dob", "1909-05-05")) {
@@ -891,7 +893,7 @@ func TestToJSONFilterGt(t *testing.T) {
 	defer os.RemoveAll(dir2)
 	query := `
 		{
-			me(_uid_:0x01) {
+			me(id:0x01) {
 				name
 				gender
 				friend @filter(gt("dob", "1909-05-05")) {
@@ -914,7 +916,7 @@ func TestToJSONFilterLeq(t *testing.T) {
 	defer os.RemoveAll(dir2)
 	query := `
 		{
-			me(_uid_:0x01) {
+			me(id:0x01) {
 				name
 				gender
 				friend @filter(leq("dob", "1909-01-10")) {
@@ -937,7 +939,7 @@ func TestToJSONFilterLt(t *testing.T) {
 	defer os.RemoveAll(dir2)
 	query := `
 		{
-			me(_uid_:0x01) {
+			me(id:0x01) {
 				name
 				gender
 				friend @filter(lt("dob", "1909-01-10")) {
@@ -960,7 +962,7 @@ func TestToJSONFilterEqualNoHit(t *testing.T) {
 	defer os.RemoveAll(dir2)
 	query := `
 		{
-			me(_uid_:0x01) {
+			me(id:0x01) {
 				name
 				gender
 				friend @filter(eq("dob", "1909-03-20")) {
@@ -983,7 +985,7 @@ func TestToJSONFilterEqual(t *testing.T) {
 	defer os.RemoveAll(dir2)
 	query := `
 		{
-			me(_uid_:0x01) {
+			me(id:0x01) {
 				name
 				gender
 				friend @filter(eq("dob", "1909-01-10")) {
@@ -1006,7 +1008,7 @@ func TestToJSONFilterLeqOrder(t *testing.T) {
 	defer os.RemoveAll(dir2)
 	query := `
 		{
-			me(_uid_:0x01) {
+			me(id:0x01) {
 				name
 				gender
 				friend(order: dob) @filter(leq("dob", "1909-03-20")) {
@@ -1029,7 +1031,7 @@ func TestToJSONFilterGeqNoResult(t *testing.T) {
 	defer os.RemoveAll(dir2)
 	query := `
 		{
-			me(_uid_:0x01) {
+			me(id:0x01) {
 				name
 				gender
 				friend @filter(geq("dob", "1999-03-20")) {
@@ -1052,7 +1054,7 @@ func TestToJSONFirstOffset(t *testing.T) {
 	defer os.RemoveAll(dir2)
 	query := `
 		{
-			me(_uid_:0x01) {
+			me(id:0x01) {
 				name
 				gender
 				friend(offset:1, first:1) {
@@ -1075,7 +1077,7 @@ func TestToJSONFilterOrFirstOffset(t *testing.T) {
 	defer os.RemoveAll(dir2)
 	query := `
 		{
-			me(_uid_:0x01) {
+			me(id:0x01) {
 				name
 				gender
 				friend(offset:1, first:1) @filter(anyof("name", "Andrea") || anyof("name", "SomethingElse Rhee") || anyof("name", "Daryl Dixon")) {
@@ -1098,7 +1100,7 @@ func TestToJSONFilterLeqFirstOffset(t *testing.T) {
 	defer os.RemoveAll(dir2)
 	query := `
 		{
-			me(_uid_:0x01) {
+			me(id:0x01) {
 				name
 				gender
 				friend(offset:1, first:1) @filter(leq("dob", "1909-03-20")) {
@@ -1121,7 +1123,7 @@ func TestToJSONFilterOrFirstOffsetCount(t *testing.T) {
 	defer os.RemoveAll(dir2)
 	query := `
 		{
-			me(_uid_:0x01) {
+			me(id:0x01) {
 				name
 				gender
 				friend(offset:1, first:1) @filter(anyof("name", "Andrea") || anyof("name", "SomethingElse Rhee") || anyof("name", "Daryl Dixon")) {
@@ -1146,7 +1148,7 @@ func TestToJSONFilterOrFirstNegative(t *testing.T) {
 	// few number of items.
 	query := `
 		{
-			me(_uid_:0x01) {
+			me(id:0x01) {
 				name
 				gender
 				friend(first:-1, offset:0) @filter(anyof("name", "Andrea") || anyof("name", "Glenn Rhee") || anyof("name", "Daryl Dixon")) {
@@ -1169,7 +1171,7 @@ func TestToJSONFilterAnd(t *testing.T) {
 	defer os.RemoveAll(dir2)
 	query := `
 		{
-			me(_uid_:0x01) {
+			me(id:0x01) {
 				name
 				gender
 				friend @filter(anyof("name", "Andrea") && anyof("name", "SomethingElse Rhee")) {
@@ -1191,7 +1193,7 @@ func TestToJSONReverse(t *testing.T) {
 	defer os.RemoveAll(dir2)
 	query := `
 		{
-			me(_uid_:0x18) {
+			me(id:0x18) {
 				name
 				~friend {
 					name
@@ -1214,7 +1216,7 @@ func TestToJSONReverseFilter(t *testing.T) {
 	defer os.RemoveAll(dir2)
 	query := `
 		{
-			me(_uid_:0x18) {
+			me(id:0x18) {
 				name
 				~friend @filter(allof("name", "Andrea")) {
 					name
@@ -1242,7 +1244,7 @@ func TestToJSONReverseDelSet(t *testing.T) {
 
 	query := `
 		{
-			me(_uid_:0x18) {
+			me(id:0x18) {
 				name
 				~friend {
 					name
@@ -1270,7 +1272,7 @@ func TestToJSONReverseDelSetCount(t *testing.T) {
 
 	query := `
 		{
-			me(_uid_:0x18) {
+			me(id:0x18) {
 				name
 				~friend {
 					_count_
@@ -1301,7 +1303,7 @@ func TestToProto(t *testing.T) {
 
 	query := `
 		{
-			debug(_uid_:0x1) {
+			debug(id:0x1) {
 				_xid_
 				name
 				gender
@@ -1412,7 +1414,7 @@ func TestToProtoFilter(t *testing.T) {
 	// Alright. Now we have everything set up. Let's create the query.
 	query := `
 		{
-			me(_uid_:0x01) {
+			me(id:0x01) {
 				name
 				gender
 				friend @filter(anyof("name", "Andrea")) {
@@ -1476,7 +1478,7 @@ func TestToProtoFilterOr(t *testing.T) {
 	// Alright. Now we have everything set up. Let's create the query.
 	query := `
 		{
-			me(_uid_:0x01) {
+			me(id:0x01) {
 				name
 				gender
 				friend @filter(anyof("name", "Andrea") || anyof("name", "Glenn Rhee")) {
@@ -1549,7 +1551,7 @@ func TestToProtoFilterAnd(t *testing.T) {
 	// Alright. Now we have everything set up. Let's create the query.
 	query := `
 		{
-			me(_uid_:0x01) {
+			me(id:0x01) {
 				name
 				gender
 				friend @filter(anyof("name", "Andrea") && anyof("name", "Glenn Rhee")) {
@@ -1604,7 +1606,7 @@ func TestToJSONOrder(t *testing.T) {
 
 	query := `
 		{
-			me(_uid_:0x01) {
+			me(id:0x01) {
 				name
 				gender
 				friend(order: dob) {
@@ -1629,7 +1631,7 @@ func TestToJSONOrderDesc(t *testing.T) {
 
 	query := `
 		{
-			me(_uid_:0x01) {
+			me(id:0x01) {
 				name
 				gender
 				friend(orderdesc: dob) {
@@ -1654,7 +1656,7 @@ func TestToJSONOrderDescCount(t *testing.T) {
 
 	query := `
 		{
-			me(_uid_:0x01) {
+			me(id:0x01) {
 				name
 				gender
 				friend @filter(anyof("name", "Rick")) (order: dob) {
@@ -1679,7 +1681,7 @@ func TestToJSONOrderOffset(t *testing.T) {
 
 	query := `
 		{
-			me(_uid_:0x01) {
+			me(id:0x01) {
 				name
 				gender
 				friend(order: dob, offset: 2) {
@@ -1704,7 +1706,7 @@ func TestToJSONOrderOffsetCount(t *testing.T) {
 
 	query := `
 		{
-			me(_uid_:0x01) {
+			me(id:0x01) {
 				name
 				gender
 				friend(order: dob, offset: 2, first: 1) {
@@ -1729,7 +1731,7 @@ func TestToProtoOrder(t *testing.T) {
 
 	query := `
 		{
-			me(_uid_:0x01) {
+			me(id:0x01) {
 				name
 				gender
 				friend(order: dob) {
@@ -1820,7 +1822,7 @@ func TestToProtoOrderCount(t *testing.T) {
 
 	query := `
 		{
-			me(_uid_:0x01) {
+			me(id:0x01) {
 				name
 				gender
 				friend(order: dob, first: 2) {
@@ -1893,7 +1895,7 @@ func TestToProtoOrderOffsetCount(t *testing.T) {
 
 	query := `
 		{
-			me(_uid_:0x01) {
+			me(id:0x01) {
 				name
 				gender
 				friend(order: dob, first: 2, offset: 1) {
@@ -1968,7 +1970,7 @@ func TestSchema1(t *testing.T) {
 	// Alright. Now we have everything set up. Let's create the query.
 	query := `
 		{
-			person(_uid_:0x01) {
+			person(id:0x01) {
 				name
 				age 
 				address
@@ -2018,6 +2020,34 @@ func TestGeneratorMultiRoot(t *testing.T) {
   `
 	js := processToJSON(t, query)
 	require.JSONEq(t, `{"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"}]}`, js)
+}
+
+func TestRootList(t *testing.T) {
+	dir1, dir2, ps := populateGraph(t)
+	defer ps.Close()
+	defer os.RemoveAll(dir1)
+	defer os.RemoveAll(dir2)
+	query := `{
+	me(id:[1, 23, 24]) {
+		name
+	}
+}`
+	js := processToJSON(t, query)
+	require.JSONEq(t, `{"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"}]}`, js)
+}
+
+func TestRootList1(t *testing.T) {
+	dir1, dir2, ps := populateGraph(t)
+	defer ps.Close()
+	defer os.RemoveAll(dir1)
+	defer os.RemoveAll(dir2)
+	query := `{
+	me(id:[0x01, 23, 24, a.bc]) {
+		name
+	}
+}`
+	js := processToJSON(t, query)
+	require.JSONEq(t, `{"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Alice"}]}`, js)
 }
 
 func TestGeneratorMultiRootFilter1(t *testing.T) {
@@ -2333,7 +2363,7 @@ func TestSchema(t *testing.T) {
 
 	query := `
 		{
-			debug(_uid_:0x1) {
+			debug(id:0x1) {
 				_xid_
 				name
 				gender

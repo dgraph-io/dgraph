@@ -26,13 +26,13 @@ import (
 	"github.com/dgraph-io/dgraph/lex"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
+	farm "github.com/dgryski/go-farm"
 )
 
 // GraphQuery stores the parsed Query in a tree format. This gets converted to
 // internally used query.SubGraph before processing the query.
 type GraphQuery struct {
-	UID   uint64
-	XID   string
+	UID   []uint64
 	Attr  string
 	Alias string
 	Func  *Function
@@ -103,7 +103,7 @@ func init() {
 
 // DebugPrint is useful for debugging.
 func (gq *GraphQuery) DebugPrint(prefix string) {
-	x.Printf("%s[%x %q %q->%q]\n", prefix, gq.UID, gq.XID, gq.Attr, gq.Alias)
+	x.Printf("%s[%x %q %q->%q]\n", prefix, gq.UID, gq.Attr, gq.Alias)
 	for _, c := range gq.Children {
 		c.DebugPrint(prefix + "|->")
 	}
@@ -888,6 +888,42 @@ func parseFilter(it *lex.ItemIterator) (*FilterTree, error) {
 	return valueStack.pop(), nil
 }
 
+func parseID(gq *GraphQuery, val string) error {
+	val = strings.Replace(val, " ", "", -1)
+	toUid := func(str string) {
+		uid, rerr := strconv.ParseUint(str, 0, 64)
+		if rerr == nil {
+			gq.UID = append(gq.UID, uid)
+		} else {
+			gq.UID = append(gq.UID, farm.Fingerprint64([]byte(str)))
+		}
+	}
+	if val[0] != '[' {
+		toUid(val)
+		return nil
+	}
+
+	if val[len(val)-1] != ']' {
+		return x.Errorf("Invalid id list at root. Got: %+v", val)
+	}
+	var buf bytes.Buffer
+	for _, c := range val[1:] {
+		if c == ',' || c == ']' {
+			if buf.Len() == 0 {
+				continue
+			}
+			toUid(buf.String())
+			buf.Reset()
+			continue
+		}
+		if c == '[' || c == ')' {
+			return x.Errorf("Invalid id list at root. Got: %+v", val)
+		}
+		buf.WriteRune(c)
+	}
+	return nil
+}
+
 // getRoot gets the root graph query object after parsing the args.
 func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 	gq = &GraphQuery{
@@ -931,16 +967,16 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 		if err != nil {
 			return nil, err
 		}
+
 		for _, p := range args {
-			if p.Key == "_uid_" {
-				gq.UID, rerr = strconv.ParseUint(p.Val, 0, 64)
-				if rerr != nil {
-					return nil, rerr
+			if p.Key == "id" {
+				// Check and parse if its a list.
+				err := parseID(gq, p.Val)
+				if err != nil {
+					return nil, err
 				}
-			} else if p.Key == "_xid_" {
-				gq.XID = p.Val
 			} else {
-				return nil, x.Errorf("Expecting _uid_ or _xid_. Got: %+v", p)
+				return nil, x.Errorf("Expecting id at root. Got: %+v", p)
 			}
 		}
 	} else {

@@ -37,12 +37,10 @@ import (
 
 var q0 = `
 	{
-		user(_xid_:alice) {
+		user(id:alice) {
 			follows {
-				_xid_
 				status
 			}
-			_xid_
 			status
 		}
 	}
@@ -98,8 +96,8 @@ func TestQuery(t *testing.T) {
 	require.NoError(t, err)
 
 	// Test internal query representation.
-	require.EqualValues(t, childAttrs(g), []string{"follows", "_xid_", "status"})
-	require.EqualValues(t, childAttrs(g.Children[0]), []string{"_xid_", "status"})
+	require.EqualValues(t, []string{"follows", "status"}, childAttrs(g))
+	require.EqualValues(t, []string{"status"}, childAttrs(g.Children[0]))
 
 	ch := make(chan error)
 	go query.ProcessGraph(ctx, g, nil, ch)
@@ -158,23 +156,18 @@ func TestConvertToEdges(t *testing.T) {
 
 var q1 = `
 {
-	al(_xid_: alice) {
+	al(id: alice) {
 		status
-		_xid_
 		follows {
 			status
-			_xid_
 			follows {
 				status
-				_xid_
 				follows {
-					_xid_
 					status
 				}
 			}
 		}
 		status
-		_xid_
 	}
 }
 `

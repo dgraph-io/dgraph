@@ -445,7 +445,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	gq := res.Query
-	if gq == nil || (gq.UID == 0 && gq.Func == nil && len(gq.XID) == 0) {
+	if gq == nil || (len(gq.UID) == 0 && gq.Func == nil) {
 		mp := map[string]interface{}{
 			"code":    x.ErrorOk,
 			"message": "Done",
@@ -627,8 +627,8 @@ func (s *grpcServer) Run(ctx context.Context,
 	resp.AssignedUids = allocIds
 
 	gq := res.Query
-	if gq == nil || (gq.UID == 0 && len(gq.XID) == 0) {
-		return resp, nil
+	if gq == nil || (len(gq.UID) == 0) {
+		return resp, err
 	}
 
 	sg, err := query.ToSubGraph(ctx, gq)
