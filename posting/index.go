@@ -21,7 +21,6 @@ import (
 	"math"
 	"sort"
 	"sync"
-	"time"
 
 	"golang.org/x/net/trace"
 
@@ -413,7 +412,7 @@ func RebuildIndex(ctx context.Context, attr string) error {
 
 	// Add index entries to data store.
 	edge := task.DirectedEdge{Attr: attr}
-	prefix = pk.Prefix()
+	prefix = pk.DataPrefix()
 	it := pstore.NewIterator()
 	defer it.Close()
 	var pl types.PostingList

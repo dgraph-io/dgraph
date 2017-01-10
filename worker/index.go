@@ -41,7 +41,7 @@ func (n *node) rebuildIndex(ctx context.Context, proposalData []byte) error {
 	}
 
 	// Force an aggressive evict.
-	CommitLists(10)
+	posting.CommitLists(10)
 
 	// Wait for posting lists applying.
 	w := posting.WaterMarkFor(gid)

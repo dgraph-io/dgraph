@@ -90,8 +90,8 @@ func (p ParsedKey) SkipRangeOfSameType() []byte {
 	return buf
 }
 
-// Prefix returns the prefix for data keys.
-func (p ParsedKey) Prefix() []byte {
+// DataPrefix returns the prefix for data keys.
+func (p ParsedKey) DataPrefix() []byte {
 	buf := make([]byte, 2+len(p.Attr)+1)
 	k := writeAttr(buf, p.Attr)
 	AssertTrue(len(k) == 1)
