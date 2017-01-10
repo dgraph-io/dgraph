@@ -390,7 +390,6 @@ func parseQueryAndMutation(ctx context.Context, query string) (res gql.Result, e
 }
 
 func queryHandler(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("Query handler called")
 	// Add a limit on how many pending queries can be run in the system.
 	pendingQueries <- struct{}{}
 	defer func() { <-pendingQueries }()
