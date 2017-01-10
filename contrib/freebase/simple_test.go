@@ -43,7 +43,7 @@ func TestSimple(t *testing.T) {
 
 	q := `
     {
-    	me(_xid_: alice-in-wonderland) {
+    	me(id: alice-in-wonderland) {
     		type
     		written-in
     		name

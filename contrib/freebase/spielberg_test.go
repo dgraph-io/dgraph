@@ -8,7 +8,7 @@ import (
 func TestSpielberg(t *testing.T) {
 	q := `
     {
-      me(_xid_: m.06pj8) {
+      me(id: m.06pj8) {
         type.object.name.en
         film.director.film (first: 4)  {
             type.object.name.en
