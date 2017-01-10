@@ -60,7 +60,7 @@ func TestNewGraph(t *testing.T) {
 	require.NoError(t, err)
 
 	gq := &gql.GraphQuery{
-		UID:  101,
+		UID:  []uint64{101},
 		Attr: "me",
 	}
 	ps, err := store.NewStore(dir)

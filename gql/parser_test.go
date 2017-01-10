@@ -81,6 +81,21 @@ func TestParseXid(t *testing.T) {
 	require.Equal(t, childAttrs(gq), []string{"type.object.name"})
 }
 
+func TestParseIdList(t *testing.T) {
+	query := `
+	query {
+		user(id: [m.abcd, 0x1, abc, ade, 0x34]) {
+			type.object.name
+		}
+	}`
+	gq, _, err := Parse(query)
+	require.NoError(t, err)
+	require.NotNil(t, gq)
+	require.Equal(t, []string{"type.object.name"}, childAttrs(gq))
+	require.Equal(t, []uint64{1, 52}, gq.UID)
+	require.Equal(t, []string{"m.abcd", "abc", "ade"}, gq.XID)
+}
+
 func TestParseFirst(t *testing.T) {
 	query := `
 	query {
@@ -321,7 +336,7 @@ func TestParseMutationAndQuery(t *testing.T) {
 	require.NotEqual(t, strings.Index(mu.Del, "<name> <is> <something-else> ."), -1)
 
 	require.NotNil(t, gq)
-	require.Equal(t, gq.XID, "tomhanks")
+	require.Equal(t, []string{"tomhanks"}, gq.XID)
 	require.Equal(t, childAttrs(gq), []string{"name", "hometown"})
 }
 

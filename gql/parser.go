@@ -31,8 +31,8 @@ import (
 // GraphQuery stores the parsed Query in a tree format. This gets converted to
 // internally used query.SubGraph before processing the query.
 type GraphQuery struct {
-	UID   uint64
-	XID   string
+	UID   []uint64
+	XID   []string
 	Attr  string
 	Alias string
 	Func  *Function
@@ -928,12 +928,34 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 		}
 		for _, p := range args {
 			if p.Key == "id" {
-				gq.UID, rerr = strconv.ParseUint(p.Val, 0, 64)
-				if rerr != nil {
-					gq.XID = p.Val
-					//	return nil, rerr
+				// Check and parse if its a list.
+				if p.Val[0] == '[' {
+					var buf bytes.Buffer
+					for _, c := range p.Val[1:] {
+						if c == ' ' || c == ',' || c == ']' {
+							if buf.Len() == 0 {
+								continue
+							}
+
+							uid, err := strconv.ParseUint(buf.String(), 0, 64)
+							if err == nil {
+								gq.UID = append(gq.UID, uid)
+							} else {
+								gq.XID = append(gq.XID, buf.String())
+							}
+							buf.Reset()
+							continue
+						}
+						buf.WriteRune(c)
+					}
+				} else {
+					uid, rerr := strconv.ParseUint(p.Val, 0, 64)
+					if rerr == nil {
+						gq.UID = append(gq.UID, uid)
+					} else {
+						gq.XID = append(gq.XID, p.Val)
+					}
 				}
-				//} else if p.Key == "_xid_" {
 			} else {
 				return nil, x.Errorf("Expecting id at root. Got: %+v", p)
 			}
