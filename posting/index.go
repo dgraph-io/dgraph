@@ -382,12 +382,6 @@ func RebuildIndex(ctx context.Context, attr string) error {
 	tt.key = tt.key[:0]
 	tt.Unlock()
 
-	// Force an aggressive evict. We need to prevent further commits...
-	CommitLists(10)
-	for len(commitCh) > 0 {
-		time.Sleep(100 * time.Millisecond)
-	}
-
 	// Delete index entries from data store.
 	pk := x.ParsedKey{Attr: attr}
 	prefix := pk.IndexPrefix()

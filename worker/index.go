@@ -29,6 +29,9 @@ func (n *node) rebuildIndex(ctx context.Context, proposalData []byte) error {
 		return err
 	}
 
+	// Force an aggressive evict.
+	CommitLists(10)
+
 	// Wait for syncing to data store.
 	for n.applied.WaitingFor() {
 		doneUntil := n.applied.DoneUntil() // applied until.
