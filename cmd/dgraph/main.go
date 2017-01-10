@@ -364,7 +364,6 @@ func healthCheck(w http.ResponseWriter, r *http.Request) {
 // parseQueryAndMutation handles the cases where the query parsing code can hang indefinitely.
 // We allow 1 second for parsing the query; and then give up.
 func parseQueryAndMutation(ctx context.Context, query string) (res gql.Result, err error) {
-	fmt.Printf("Query received: %v", query)
 	x.Trace(ctx, "Query received: %v", query)
 	errc := make(chan error, 1)
 
