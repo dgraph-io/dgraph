@@ -1,37 +1,23 @@
-Comparing the old and new methods, we find that using slice makes the parsing 20% to 25% faster
-than using channels even though we lose concurreny. Also, using slices allows the parser to 
-backtrack and peek the tokens which couldn't be done using channels as each token can only be 
+Comparing the old and new methods, we find that using slice makes the parsing 20% faster on 
+average than using channels even though we lose concurreny. Also, using slices allows the parser 
+to backtrack and peek the tokens which couldn't be done using channels as each token can only be 
 consumed once.
 
 ```
-Using slice (new):
-------------
-Benchmark_directors-4            	  100000	     14201 ns/op
-Benchmark_Movies-4               	  100000	     12807 ns/op
-Benchmark_Filters-4              	  200000	      9634 ns/op
-Benchmark_Geq-4                  	  200000	      8602 ns/op
-Benchmark_Date-4                 	  200000	      8630 ns/op
-Benchmark_Mutation-4             	  300000	      4155 ns/op
-Benchmark_directors_parallel-4   	  200000	      6966 ns/op
-Benchmark_Movies_parallel-4      	  200000	      6151 ns/op
-Benchmark_Filters_parallel-4     	  300000	      5015 ns/op
-Benchmark_Geq_parallel-4         	  300000	      4485 ns/op
-Benchmark_Date_parallel-4        	  300000	      4515 ns/op
-Benchmark_Mutation_parallel-4    	 1000000	      2161 ns/op
-
-
-Using Channel (old):
---------------
-Benchmark_directors-4            	  100000	     18663 ns/op
-Benchmark_Movies-4               	  100000	     16097 ns/op
-Benchmark_Filters-4              	  100000	     14007 ns/op
-Benchmark_Geq-4                  	  200000	     11701 ns/op
-Benchmark_Date-4                 	  200000	     11687 ns/op
-Benchmark_Mutation-4             	  300000	      5167 ns/op
-Benchmark_directors_parallel-4   	  200000	      8766 ns/op
-Benchmark_Movies_parallel-4      	  200000	      7537 ns/op
-Benchmark_Filters_parallel-4     	  200000	      6486 ns/op
-Benchmark_Geq_parallel-4         	  300000	      5390 ns/op
-Benchmark_Date_parallel-4        	  200000	      5462 ns/op
-Benchmark_Mutation_parallel-4    	 1000000	      2326 ns/op
+Name                              unit    Old     New     Improvement
+----------------------------------------------------------------------
+Benchmark_Filters-4               ns/op   14007   9634    31 %
+Benchmark_Geq-4                   ns/op   11701   8602    26 %
+Benchmark_Date-4                  ns/op   11687   8630    26 %
+Benchmark_directors-4             ns/op   18663   14201   23 %
+Benchmark_Filters_parallel-4      ns/op   6486    5015    22 %
+Benchmark_Movies-4                ns/op   16097   12807   20 %
+Benchmark_directors_parallel-4    ns/op   8766    6966    20 %
+Benchmark_Mutation-4              ns/op   5167    4155    19 %
+Benchmark_Movies_parallel-4       ns/op   7537    6151    18 %
+Benchmark_Date_parallel-4         ns/op   5462    4515    17 %
+Benchmark_Geq_parallel-4          ns/op   5390    4485    16 %
+Benchmark_Mutation_parallel-4     ns/op   2326    2161    07 %
+Benchmark_Mutation1000-4          ns/op   549428  512851  06 %
+Benchmark_Mutation1000_parallel-4 ns/op   261785  254911  02 %
 ```
