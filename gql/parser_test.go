@@ -35,7 +35,7 @@ func childAttrs(g *GraphQuery) []string {
 func TestParse(t *testing.T) {
 	query := `
 	query {
-		me(_uid_:0x0a) {
+		me(id:0x0a) {
 			friends {
 				name
 			}
@@ -53,7 +53,7 @@ func TestParse(t *testing.T) {
 
 func TestParseError(t *testing.T) {
 	query := `
-		me(_uid_:0x0a) {
+		me(id:0x0a) {
 			friends {
 				name
 			}
@@ -71,7 +71,7 @@ func TestParseXid(t *testing.T) {
 	// TODO: Why does the query not have _xid_ attribute?
 	query := `
 	query {
-		user(_uid_: 0x11) {
+		user(id: 0x11) {
 			type.object.name
 		}
 	}`
@@ -84,7 +84,7 @@ func TestParseXid(t *testing.T) {
 func TestParseFirst(t *testing.T) {
 	query := `
 	query {
-		user(_xid_: m.abcd) {
+		user(id: m.abcd) {
 			type.object.name
 			friends (first: 10) {
 			}
@@ -100,7 +100,7 @@ func TestParseFirst(t *testing.T) {
 func TestParseFirst_error(t *testing.T) {
 	query := `
 	query {
-		user(_xid_: m.abcd) {
+		user(id: m.abcd) {
 			type.object.name
 			friends (first: ) {
 			}
@@ -113,7 +113,7 @@ func TestParseFirst_error(t *testing.T) {
 func TestParseAfter(t *testing.T) {
 	query := `
 	query {
-		user(_xid_: m.abcd) {
+		user(id: m.abcd) {
 			type.object.name
 			friends (first: 10, after: 3) {
 			}
@@ -130,7 +130,7 @@ func TestParseAfter(t *testing.T) {
 func TestParseOffset(t *testing.T) {
 	query := `
 	query {
-		user(_xid_: m.abcd) {
+		user(id: m.abcd) {
 			type.object.name
 			friends (first: 10, offset: 3) {
 			}
@@ -147,7 +147,7 @@ func TestParseOffset(t *testing.T) {
 func TestParseOffset_error(t *testing.T) {
 	query := `
 	query {
-		user(_xid_: m.abcd) {
+		user(id: m.abcd) {
 			type.object.name
 			friends (first: 10, offset: ) {
 			}
@@ -172,7 +172,7 @@ func TestParse_error2(t *testing.T) {
 func TestParse_pass1(t *testing.T) {
 	query := `
 		{
-			me(_uid_:0x0a) {
+			me(id:0x0a) {
 				name,
 				friends(xid:what) {  # xid would be ignored.
 				}
@@ -189,7 +189,7 @@ func TestParse_pass1(t *testing.T) {
 func TestParse_alias(t *testing.T) {
 	query := `
 		{
-			me(_uid_:0x0a) {
+			me(id:0x0a) {
 				name,
 				bestFriend: friends(first: 10) { 
 					name	
@@ -208,7 +208,7 @@ func TestParse_alias(t *testing.T) {
 func TestParse_alias1(t *testing.T) {
 	query := `
 		{
-			me(_uid_:0x0a) {
+			me(id:0x0a) {
 				name: type.object.name.en
 				bestFriend: friends(first: 10) { 
 					name: type.object.name.hi	
@@ -228,7 +228,7 @@ func TestParse_alias1(t *testing.T) {
 func TestParse_block(t *testing.T) {
 	query := `
 		{
-			root(_uid_: 0x0a) {
+			root(id: 0x0a) {
 				type.object.name.es-419
 			}
 		}
@@ -307,7 +307,7 @@ func TestParseMutationAndQuery(t *testing.T) {
 			}
 		}
 		query {
-			me(_xid_: tomhanks) {
+			me(id: tomhanks) {
 				name
 				hometown
 			}
@@ -328,7 +328,7 @@ func TestParseMutationAndQuery(t *testing.T) {
 func TestParseFragmentNoNesting(t *testing.T) {
 	query := `
 	query {
-		user(_uid_:0x0a) {
+		user(id:0x0a) {
 			...fragmenta,...fragmentb
 			friends {
 				name
@@ -364,7 +364,7 @@ func TestParseFragmentNoNesting(t *testing.T) {
 func TestParseFragmentNest1(t *testing.T) {
 	query := `
 	query {
-		user(_uid_:0x0a) {
+		user(id:0x0a) {
 			...fragmenta
 			friends {
 				name
@@ -390,7 +390,7 @@ func TestParseFragmentNest1(t *testing.T) {
 func TestParseFragmentNest2(t *testing.T) {
 	query := `
 	query {
-		user(_uid_:0x0a) {
+		user(id:0x0a) {
 			friends {
 				...fragmenta
 			}
@@ -414,7 +414,7 @@ func TestParseFragmentNest2(t *testing.T) {
 func TestParseFragmentCycle(t *testing.T) {
 	query := `
 	query {
-		user(_uid_:0x0a) {
+		user(id:0x0a) {
 			...fragmenta
 		}
 	}
@@ -437,7 +437,7 @@ func TestParseFragmentCycle(t *testing.T) {
 func TestParseFragmentMissing(t *testing.T) {
 	query := `
 	query {
-		user(_uid_:0x0a) {
+		user(id:0x0a) {
 			...fragmenta
 		}
 	}
@@ -455,7 +455,7 @@ func TestParseFragmentMissing(t *testing.T) {
 
 func TestParseVariables(t *testing.T) {
 	query := `{
-		"query": "query testQuery( $a  : int   , $b: int){root(_uid_: 0x0a) {name(first: $b, after: $a){english}}}", 
+		"query": "query testQuery( $a  : int   , $b: int){root(id: 0x0a) {name(first: $b, after: $a){english}}}", 
 		"variables": {"$a": "6", "$b": "5" } 
 	}`
 	_, _, err := Parse(query)
@@ -464,7 +464,7 @@ func TestParseVariables(t *testing.T) {
 
 func TestParseVariables1(t *testing.T) {
 	query := `{
-		"query": "query testQuery($a: int , $b: int!){root(_uid_: 0x0a) {name(first: $b){english}}}", 
+		"query": "query testQuery($a: int , $b: int!){root(id: 0x0a) {name(first: $b){english}}}", 
 		"variables": {"$b": "5" } 
 	}`
 	_, _, err := Parse(query)
@@ -473,7 +473,7 @@ func TestParseVariables1(t *testing.T) {
 
 func TestParseVariables2(t *testing.T) {
 	query := `{
-		"query": "query testQuery($a: float , $b: bool!){root(_uid_: 0x0a) {name{english}}}", 
+		"query": "query testQuery($a: float , $b: bool!){root(id: 0x0a) {name{english}}}", 
 		"variables": {"$b": "false", "$a": "3.33" } 
 	}`
 	_, _, err := Parse(query)
@@ -482,7 +482,7 @@ func TestParseVariables2(t *testing.T) {
 
 func TestParseVariables3(t *testing.T) {
 	query := `{
-		"query": "query testQuery($a: int , $b: int! ){root(_uid_: 0x0a) {name(first: $b){english}}}", 
+		"query": "query testQuery($a: int , $b: int! ){root(id: 0x0a) {name(first: $b){english}}}", 
 		"variables": {"$a": "5", "$b": "3"} 
 	}`
 	_, _, err := Parse(query)
@@ -491,7 +491,7 @@ func TestParseVariables3(t *testing.T) {
 
 func TestParseVariablesStringfiedJSON(t *testing.T) {
 	query := `{
-		"query": "query testQuery($a: int! , $b: int){root(_uid_: 0x0a) {name(first: $b){english}}}", 
+		"query": "query testQuery($a: int! , $b: int){root(id: 0x0a) {name(first: $b){english}}}", 
 		"variables": "{\"$a\": \"5\" }" 
 	}`
 	_, _, err := Parse(query)
@@ -500,7 +500,7 @@ func TestParseVariablesStringfiedJSON(t *testing.T) {
 
 func TestParseVariablesDefault1(t *testing.T) {
 	query := `{
-		"query": "query testQuery($a: int = 3  , $b: int =  4 ,  $c : int = 3){root(_uid_: 0x0a) {name(first: $b, after: $a, offset: $c){english}}}", 
+		"query": "query testQuery($a: int = 3  , $b: int =  4 ,  $c : int = 3){root(id: 0x0a) {name(first: $b, after: $a, offset: $c){english}}}", 
 		"variables": {"$b": "5" } 
 	}`
 	_, _, err := Parse(query)
@@ -508,7 +508,7 @@ func TestParseVariablesDefault1(t *testing.T) {
 }
 func TestParseVariablesFragments(t *testing.T) {
 	query := `{
-	"query": "query test($a: int){user(_uid_:0x0a) {...fragmentd,friends(first: $a, offset: $a) {name}}} fragment fragmentd {id(first: $a)}",
+	"query": "query test($a: int){user(id:0x0a) {...fragmentd,friends(first: $a, offset: $a) {name}}} fragment fragmentd {id(first: $a)}",
 	"variables": {"$a": "5"}
 }`
 	gq, _, err := Parse(query)
@@ -523,7 +523,7 @@ func TestParseVariablesFragments(t *testing.T) {
 func TestParseVariablesError1(t *testing.T) {
 	query := `
 	query testQuery($a: string, $b: int!){
-			root(_uid_: 0x0a) {
+			root(id: 0x0a) {
 				type.object.name.es-419
 			}
 		}
@@ -535,7 +535,7 @@ func TestParseVariablesError1(t *testing.T) {
 func TestParseVariablesError2(t *testing.T) {
 	query := `{
 		"query": "query testQuery($a: int, $b: int, $c: int!){
-			root(_uid_: 0x0a) {name(first: $b, after: $a){english}}
+			root(id: 0x0a) {name(first: $b, after: $a){english}}
 		}", 
 		"variables": {"$a": "6", "$b": "5" } 
 	}`
@@ -546,7 +546,7 @@ func TestParseVariablesError2(t *testing.T) {
 func TestParseVariablesError3(t *testing.T) {
 	query := `{
 		"query": "query testQuery($a: int, $b: , $c: int!){
-			root(_uid_: 0x0a) {name(first: $b, after: $a){english}}
+			root(id: 0x0a) {name(first: $b, after: $a){english}}
 		}", 
 		"variables": {"$a": "6", "$b": "5" } 
 	}`
@@ -556,7 +556,7 @@ func TestParseVariablesError3(t *testing.T) {
 
 func TestParseVariablesError4(t *testing.T) {
 	query := `{
-		"query": "query testQuery($a: bool , $b: float! = 3){root(_uid_: 0x0a) {name(first: $b){english}}}", 
+		"query": "query testQuery($a: bool , $b: float! = 3){root(id: 0x0a) {name(first: $b){english}}}", 
 		"variables": {"$a": "5" } 
 	}`
 	_, _, err := Parse(query)
@@ -565,7 +565,7 @@ func TestParseVariablesError4(t *testing.T) {
 
 func TestParseVariablesError5(t *testing.T) {
 	query := `{
-		"query": "query ($a: int, $b: int){root(_uid_: 0x0a) {name(first: $b, after: $a){english}}}", 
+		"query": "query ($a: int, $b: int){root(id: 0x0a) {name(first: $b, after: $a){english}}}", 
 		"variables": {"$a": "6", "$b": "5" } 
 	}`
 	_, _, err := Parse(query)
@@ -574,7 +574,7 @@ func TestParseVariablesError5(t *testing.T) {
 
 func TestParseVariablesError6(t *testing.T) {
 	query := `{
-		"query": "query ($a: int, $b: random){root(_uid_: 0x0a) {name(first: $b, after: $a){english}}}", 
+		"query": "query ($a: int, $b: random){root(id: 0x0a) {name(first: $b, after: $a){english}}}", 
 		"variables": {"$a": "6", "$b": "5" } 
 	}`
 	_, _, err := Parse(query)
@@ -584,7 +584,7 @@ func TestParseVariablesError6(t *testing.T) {
 func TestParseVariablesError7(t *testing.T) {
 	query := `{
 		"query": "query testQuery($a: int, $b: int, $c: int!){
-			root(_uid_: 0x0a) {name(first: $b, after: $a){english}}
+			root(id: 0x0a) {name(first: $b, after: $a){english}}
 		}", 
 		"variables": {"$a": "6", "$b": "5", "$d": "abc" } 
 	}`
@@ -594,7 +594,7 @@ func TestParseVariablesError7(t *testing.T) {
 
 func TestParseVariablesiError8(t *testing.T) {
 	query := `{
-		"query": "query testQuery($a: int = 3  , $b: int! =  4 ,  $c : int = 3){root(_uid_: 0x0a) {name(first: $b, after: $a, offset: $c){english}}}", 
+		"query": "query testQuery($a: int = 3  , $b: int! =  4 ,  $c : int = 3){root(id: 0x0a) {name(first: $b, after: $a, offset: $c){english}}}", 
 		"variables": {"$b": "5" } 
 	}`
 	_, _, err := Parse(query)
@@ -630,7 +630,7 @@ func TestParseFilter_root(t *testing.T) {
 func TestParseFilter_root_Error(t *testing.T) {
 	query := `
 	query {
-		me(_uid_:0x0a) @filter(allof(name, "alice") {
+		me(id:0x0a) @filter(allof(name, "alice") {
 			friends @filter() {
 				name @filter(namefilter("a"))
 			}
@@ -646,7 +646,7 @@ func TestParseFilter_root_Error(t *testing.T) {
 func TestParseFilter_simplest(t *testing.T) {
 	query := `
 	query {
-		me(_uid_:0x0a) {
+		me(id:0x0a) {
 			friends @filter() {
 				name @filter(namefilter("a"))
 			}
@@ -670,7 +670,7 @@ func TestParseFilter_simplest(t *testing.T) {
 func TestParseFilter_op(t *testing.T) {
 	query := `
 	query {
-		me(_uid_:0x0a) {
+		me(id:0x0a) {
 			friends @filter(a("a") || b("a") 
 			&& c("a")) {
 				name
@@ -692,7 +692,7 @@ func TestParseFilter_op(t *testing.T) {
 func TestParseFilter_op2(t *testing.T) {
 	query := `
 	query {
-		me(_uid_:0x0a) {
+		me(id:0x0a) {
 			friends @filter((a("a") || b("a"))
 			 && c("a")) {
 				name
@@ -714,7 +714,7 @@ func TestParseFilter_op2(t *testing.T) {
 func TestParseFilter_brac(t *testing.T) {
 	query := `
 	query {
-		me(_uid_:0x0a) {
+		me(id:0x0a) {
 			friends @filter(  a("hello") || b("world", "is") && (c("a") || (d("haha") || e("a"))) && f("a")){
 				name
 			}
@@ -737,7 +737,7 @@ func TestParseFilter_brac(t *testing.T) {
 func TestParseFilter_unbalancedbrac(t *testing.T) {
 	query := `
 	query {
-		me(_uid_:0x0a) {
+		me(id:0x0a) {
 			friends @filter(  () {
 				name
 			}
@@ -753,7 +753,7 @@ func TestParseFilter_unbalancedbrac(t *testing.T) {
 func TestParseFilter_Geo1(t *testing.T) {
 	query := `
 	query {
-		me(_uid_:0x0a) {
+		me(id:0x0a) {
 			friends @filter(near(loc, [-1.12 , 2.0123 ], 100.123 )) {
 				name
 			}
@@ -769,7 +769,7 @@ func TestParseFilter_Geo1(t *testing.T) {
 func TestParseFilter_Geo2(t *testing.T) {
 	query := `
 	query {
-		me(_uid_:0x0a) {
+		me(id:0x0a) {
 			friends @filter(within(loc, [[11.2 , -2.234 ], [ -31.23, 4.3214] , [5.312, 6.53]] )) {
 				name
 			}
@@ -785,7 +785,7 @@ func TestParseFilter_Geo2(t *testing.T) {
 func TestParseFilter_Geo3(t *testing.T) {
 	query := `
 	query {
-		me(_uid_:0x0a) {
+		me(id:0x0a) {
 			friends @filter(near(loc, [[1 , 2 ], [[3, 4] , [5, 6]] )) {
 				name
 			}
@@ -801,7 +801,7 @@ func TestParseFilter_Geo3(t *testing.T) {
 func TestParseFilter_Geo4(t *testing.T) {
 	query := `
 	query {
-		me(_uid_:0x0a) {
+		me(id:0x0a) {
 			friends @filter(near(loc, [[1 , 2 ], [3, 4] , [5, 6]]] )) {
 				name
 			}
@@ -818,7 +818,7 @@ func TestParseFilter_Geo4(t *testing.T) {
 func TestParseFilter_emptyargument(t *testing.T) {
 	query := `
 	query {
-		me(_uid_:0x0a) {
+		me(id:0x0a) {
 			friends @filter(allof(name,)) {
 				name
 			}
@@ -833,7 +833,7 @@ func TestParseFilter_emptyargument(t *testing.T) {
 func TestParseFilter_unknowndirective(t *testing.T) {
 	query := `
 	query {
-		me(_uid_:0x0a) {
+		me(id:0x0a) {
 			friends @filtererr {
 				name
 			}

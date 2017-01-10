@@ -927,15 +927,15 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 			return nil, err
 		}
 		for _, p := range args {
-			if p.Key == "_uid_" {
+			if p.Key == "id" {
 				gq.UID, rerr = strconv.ParseUint(p.Val, 0, 64)
 				if rerr != nil {
-					return nil, rerr
+					gq.XID = p.Val
+					//	return nil, rerr
 				}
-			} else if p.Key == "_xid_" {
-				gq.XID = p.Val
+				//} else if p.Key == "_xid_" {
 			} else {
-				return nil, x.Errorf("Expecting _uid_ or _xid_. Got: %+v", p)
+				return nil, x.Errorf("Expecting id at root. Got: %+v", p)
 			}
 		}
 	} else {
