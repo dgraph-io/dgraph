@@ -23,6 +23,7 @@ import (
 	"os"
 	"testing"
 
+	farm "github.com/dgryski/go-farm"
 	"github.com/gogo/protobuf/proto"
 	"github.com/stretchr/testify/require"
 
@@ -230,6 +231,7 @@ func populateGraph(t *testing.T) (string, string, *store.Store) {
 	require.NoError(t, err)
 	addEdgeToTypedValue(t, ps, "loc", 24, types.GeoID, gData.Value.([]byte))
 
+	addEdgeToValue(t, ps, "name", farm.Fingerprint64([]byte("a.bc")), "Alice")
 	addEdgeToValue(t, ps, "name", 25, "Daryl Dixon")
 	addEdgeToValue(t, ps, "name", 31, "Andrea")
 	src.Value = []byte(`{"Type":"Point", "Coordinates":[2.0, 2.0]}`)
@@ -2025,15 +2027,27 @@ func TestRootList(t *testing.T) {
 	defer ps.Close()
 	defer os.RemoveAll(dir1)
 	defer os.RemoveAll(dir2)
-	query := `
-    {
-			me(id:[1, 23, 24]) {
-        name
-      }
-    }
-  `
+	query := `{
+	me(id:[1, 23, 24]) {
+		name
+	}
+}`
 	js := processToJSON(t, query)
 	require.JSONEq(t, `{"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"}]}`, js)
+}
+
+func TestRootList1(t *testing.T) {
+	dir1, dir2, ps := populateGraph(t)
+	defer ps.Close()
+	defer os.RemoveAll(dir1)
+	defer os.RemoveAll(dir2)
+	query := `{
+	me(id:[1, 23, 24, a.bc]) {
+		name
+	}
+}`
+	js := processToJSON(t, query)
+	require.JSONEq(t, `{"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Alice"}]}`, js)
 }
 
 func TestGeneratorMultiRootFilter1(t *testing.T) {

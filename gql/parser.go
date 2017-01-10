@@ -926,41 +926,47 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 		if err != nil {
 			return nil, err
 		}
+
 		for _, p := range args {
 			if p.Key == "id" {
 				// Check and parse if its a list.
-				if p.Val[0] == '[' {
-					if p.Val[len(p.Val)-1] != ']' {
-						return nil, x.Errorf("Invalid id list at root. Got: %+v", p)
+				err := func() error {
+					val := strings.Replace(p.Val, " ", "", -1)
+					toUid := func(str string) {
+						uid, rerr := strconv.ParseUint(str, 0, 64)
+						if rerr == nil {
+							gq.UID = append(gq.UID, uid)
+						} else {
+							gq.UID = append(gq.UID, farm.Fingerprint64([]byte(str)))
+						}
+					}
+					if val[0] != '[' {
+						toUid(val)
+						return nil
+					}
+
+					if val[len(val)-1] != ']' {
+						return x.Errorf("Invalid id list at root. Got: %+v", p)
 					}
 					var buf bytes.Buffer
-					for _, c := range p.Val[1:] {
+					for _, c := range val[1:] {
 						if c == ' ' || c == ',' || c == ']' {
 							if buf.Len() == 0 {
 								continue
 							}
-
-							uid, err := strconv.ParseUint(buf.String(), 0, 64)
-							if err == nil {
-								gq.UID = append(gq.UID, uid)
-							} else {
-								gq.UID = append(gq.UID, farm.Fingerprint64(buf.Bytes()))
-							}
+							toUid(buf.String())
 							buf.Reset()
 							continue
 						}
 						if c == '[' || c == ')' {
-							return nil, x.Errorf("Invalid id list at root. Got: %+v", p)
+							return x.Errorf("Invalid id list at root. Got: %+v", p)
 						}
 						buf.WriteRune(c)
 					}
-				} else {
-					uid, rerr := strconv.ParseUint(p.Val, 0, 64)
-					if rerr == nil {
-						gq.UID = append(gq.UID, uid)
-					} else {
-						gq.UID = append(gq.UID, farm.Fingerprint64([]byte(p.Val)))
-					}
+					return nil
+				}()
+				if err != nil {
+					return nil, err
 				}
 			} else {
 				return nil, x.Errorf("Expecting id at root. Got: %+v", p)
