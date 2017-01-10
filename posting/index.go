@@ -18,7 +18,7 @@ package posting
 
 import (
 	"context"
-	"sort"
+	//	"sort"
 	"sync"
 
 	"golang.org/x/net/trace"
@@ -39,54 +39,11 @@ type TokensTable struct {
 var (
 	indexLog   trace.EventLog
 	reverseLog trace.EventLog
-	tables     map[string]*TokensTable
 )
 
 func init() {
 	indexLog = trace.NewEventLog("index", "Logger")
 	reverseLog = trace.NewEventLog("reverse", "Logger")
-}
-
-// initIndex initializes the index with the given data store.
-func initIndex() {
-	x.AssertTrue(pstore != nil)
-
-	// Initialize TokensTables.
-	indexedFields := schema.IndexedFields()
-	type resultStruct struct {
-		attr  string
-		table *TokensTable
-	}
-	results := make(chan resultStruct, len(indexedFields))
-
-	for _, attr := range indexedFields {
-		go func(attr string) {
-			table := &TokensTable{
-				key: make([]string, 0, 50),
-			}
-			pk := x.ParsedKey{
-				Attr: attr,
-			}
-			prefix := pk.IndexPrefix()
-
-			it := pstore.NewIterator()
-			defer it.Close()
-			for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
-				pki := x.Parse(it.Key().Data())
-				x.AssertTrue(pki.IsIndex())
-				x.AssertTrue(len(pki.Term) > 0)
-				table.push(pki.Term)
-			}
-			results <- resultStruct{attr, table}
-		}(attr)
-	}
-
-	tables = make(map[string]*TokensTable)
-	for i := 0; i < len(indexedFields); i++ {
-		r := <-results
-		tables[r.attr] = r.table
-	}
-
 }
 
 // IndexTokens return tokens, without the predicate prefix and index rune.
@@ -124,14 +81,14 @@ func addIndexMutations(ctx context.Context, t *task.DirectedEdge, p types.Val, o
 		Op:      op,
 	}
 
-	tokensTable := GetTokensTable(attr)
-	x.AssertTruef(tokensTable != nil, "TokensTable missing for attr %s", attr)
+	//	tokensTable := GetTokensTable(attr)
+	//	x.AssertTruef(tokensTable != nil, "TokensTable missing for attr %s", attr)
 
 	for _, token := range tokens {
 		addIndexMutation(ctx, edge, token)
-		if edge.Op == task.DirectedEdge_SET {
-			tokensTable.Add(token)
-		}
+		//		if edge.Op == task.DirectedEdge_SET {
+		//			tokensTable.Add(token)
+		//		}
 	}
 }
 
@@ -229,145 +186,19 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *task.DirectedEdge) e
 	return nil
 }
 
-// GetTokensTable returns TokensTable for an indexed attribute.
-func GetTokensTable(attr string) *TokensTable {
-	x.AssertTruef(tables != nil,
-		"TokensTable uninitialized. You need to call InitIndex.")
-	return tables[attr]
-}
+// TokensForTest returns keys for a table. This is just for testing / debugging.
+func TokensForTest(attr string) []string {
+	//	t := GetTokensTable(attr)
+	pk := x.ParsedKey{Attr: attr}
+	prefix := pk.IndexPrefix()
+	it := pstore.NewIterator()
+	defer it.Close()
 
-// NewTokensTable returns a new TokensTable.
-func NewTokensTable() *TokensTable {
-	return &TokensTable{
-		key: make([]string, 0, 50),
+	var out []string
+	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+		k := x.Parse(it.Key().Data())
+		x.AssertTrue(k.IsIndex())
+		out = append(out, k.Term)
 	}
-}
-
-// Get returns position of element. If not found, it returns -1.
-func (t *TokensTable) Get(s string) int {
-	t.RLock()
-	defer t.RUnlock()
-	i := sort.SearchStrings(t.key, s)
-	if i < len(t.key) && t.key[i] == s {
-		return i
-	}
-	return -1
-}
-
-// Add increments counter for a given key. If it doesn't exist, we create a
-// new entry in TokensTable. We don't support delete yet. We are using a very
-// simple implementation. In the future, as balanced trees / skip lists
-// implementations become standardized for Go, we may consider using them.
-// We also didn't support Delete operations yet. For that, we need to store
-// the counts for each key.
-func (t *TokensTable) Add(s string) {
-	t.Lock()
-	defer t.Unlock()
-	i := sort.SearchStrings(t.key, s)
-	if i < len(t.key) && t.key[i] == s {
-		return
-	}
-	t.key = append(t.key, "")
-	for j := len(t.key) - 1; j > i; j-- {
-		t.key[j] = t.key[j-1]
-	}
-	t.key[i] = s
-}
-
-// push appends a key to the table. It assumes that this key is the largest
-// and that order is preserved.
-func (t *TokensTable) push(s string) {
-	t.Lock()
-	defer t.Unlock()
-	t.key = append(t.key, s)
-}
-
-// Size returns size of TokensTable.
-func (t *TokensTable) Size() int {
-	t.RLock()
-	defer t.RUnlock()
-	return len(t.key)
-}
-
-// KeysForTest returns keys for a table. This is just for testing / debugging.
-func KeysForTest(attr string) []string {
-	t := GetTokensTable(attr)
-	t.RLock()
-	defer t.RUnlock()
-	return t.key
-}
-
-// GetNext returns the next key after given key. If we reach the end, we
-// return an empty string.
-func (t *TokensTable) GetNext(key string) string {
-	t.RLock()
-	defer t.RUnlock()
-	i := sort.Search(len(t.key),
-		func(i int) bool { return t.key[i] > key })
-	if i < len(t.key) {
-		return t.key[i]
-	}
-	return ""
-}
-
-// GetFirst returns the first key in our list of keys. You could also call
-// GetNext("") but that is less efficient.
-func (t *TokensTable) GetFirst() string {
-	t.RLock()
-	defer t.RUnlock()
-	if len(t.key) == 0 {
-		// Assume all keys are nonempty. Returning empty string means there's no keys.
-		return ""
-	}
-	return t.key[0]
-}
-
-// GetPrev returns the key just before the given key. If we reach the start,
-// we return an empty string.
-func (t *TokensTable) GetPrev(key string) string {
-	t.RLock()
-	defer t.RUnlock()
-	n := len(t.key)
-	i := sort.Search(len(t.key),
-		func(i int) bool { return t.key[n-i-1] < key })
-	if i < len(t.key) {
-		return t.key[n-i-1]
-	}
-	return ""
-}
-
-// GetLast returns the first key in our list of keys. You could also call
-// GetPrev("") but that is less efficient.
-func (t *TokensTable) GetLast() string {
-	t.RLock()
-	defer t.RUnlock()
-	if len(t.key) == 0 {
-		// Assume all keys are nonempty. Returning empty string means there's no keys.
-		return ""
-	}
-	return t.key[len(t.key)-1]
-}
-
-// GetNextOrEqual returns position of leftmost element that is greater or equal to s.
-func (t *TokensTable) GetNextOrEqual(s string) string {
-	t.RLock()
-	defer t.RUnlock()
-	n := len(t.key)
-	i := sort.Search(n, func(i int) bool { return t.key[i] >= s })
-	if i < n {
-		return t.key[i]
-	}
-	return ""
-}
-
-// GetPrevOrEqual returns position of rightmost element that is smaller or equal to s.
-func (t *TokensTable) GetPrevOrEqual(s string) string {
-	t.RLock()
-	defer t.RUnlock()
-	n := len(t.key)
-	i := sort.Search(n, func(i int) bool { return t.key[n-i-1] <= s })
-	if i < n {
-		return t.key[n-i-1]
-	}
-	return ""
+	return out
 }

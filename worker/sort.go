@@ -106,16 +106,26 @@ func processSort(ts *task.Sort) (*task.SortResult, error) {
 	}
 
 	// Iterate over every bucket in TokensTable.
-	t := posting.GetTokensTable(attr)
+	it := pstore.NewIterator()
+	defer it.Close()
+	pk := x.IndexParsedKey(attr, "")
+	indexPrefix := pk.IndexPrefix()
 
-	var token string
-	if ts.Desc {
-		token = t.GetLast()
+	if !ts.Desc {
+		it.Seek(indexPrefix)
 	} else {
-		token = t.GetFirst()
+		it.Seek(pk.SkipRangeOfSameType())
+		it.Prev()
 	}
+
 BUCKETS:
-	for len(token) > 0 {
+
+	for it.ValidForPrefix(indexPrefix) {
+		k := x.Parse(it.Key().Data())
+		x.AssertTrue(k != nil)
+		x.AssertTrue(k.IsIndex())
+		token := k.Term
+
 		err := intersectBucket(ts, attr, token, out)
 		switch err {
 		case errDone:
@@ -126,9 +136,11 @@ BUCKETS:
 			return &emptySortResult, err
 		}
 		if ts.Desc {
-			token = t.GetPrev(token)
+			//token = t.GetPrev(token)
+			it.Prev()
 		} else {
-			token = t.GetNext(token)
+			//token = t.GetNext(token)
+			it.Next()
 		}
 	}
 
