@@ -36,10 +36,11 @@ func TestNewLexer(t *testing.T) {
 			}
 		}
 	}`
-	l := &lex.Lexer{}
-	l.Init(input)
-	go run(l)
-	for item := range l.Items {
+	l := lex.NewLexer(input).Run(lexText)
+
+	it := l.NewIterator()
+	for it.Next() {
+		item := it.Item()
 		require.NotEqual(t, item.Typ, lex.ItemError)
 		t.Log(item.String())
 	}
@@ -62,10 +63,10 @@ func TestNewLexerMutation(t *testing.T) {
 			_city
 		}
 	}`
-	l := &lex.Lexer{}
-	l.Init(input)
-	go run(l)
-	for item := range l.Items {
+	l := lex.NewLexer(input).Run(lexText)
+	it := l.NewIterator()
+	for it.Next() {
+		item := it.Item()
 		require.NotEqual(t, item.Typ, lex.ItemError)
 		t.Log(item.String())
 	}
@@ -79,15 +80,15 @@ func TestAbruptMutation(t *testing.T) {
 			Why is this #!!?
 			How is this?
 	}`
-	l := &lex.Lexer{}
-	l.Init(input)
-	go run(l)
+	l := lex.NewLexer(input).Run(lexText)
 	var typ lex.ItemType
-	for item := range l.Items {
+	it := l.NewIterator()
+	for it.Next() {
+		item := it.Item()
 		t.Log(item.String())
 		typ = item.Typ
 	}
-	require.Equal(t, typ, lex.ItemError)
+	require.Equal(t, lex.ItemError, typ)
 }
 
 func TestVariables1(t *testing.T) {
@@ -97,10 +98,10 @@ func TestVariables1(t *testing.T) {
 			_city
 		}
 	}`
-	l := &lex.Lexer{}
-	l.Init(input)
-	go run(l)
-	for item := range l.Items {
+	l := lex.NewLexer(input).Run(lexText)
+	it := l.NewIterator()
+	for it.Next() {
+		item := it.Item()
 		require.NotEqual(t, item.Typ, lex.ItemError)
 		t.Log(item.String(), item.Typ)
 	}
@@ -113,10 +114,10 @@ func TestVariables2(t *testing.T) {
 			_city
 		}
 	}`
-	l := &lex.Lexer{}
-	l.Init(input)
-	go run(l)
-	for item := range l.Items {
+	l := lex.NewLexer(input).Run(lexText)
+	it := l.NewIterator()
+	for it.Next() {
+		item := it.Item()
 		require.NotEqual(t, item.Typ, lex.ItemError)
 		t.Log(item.String(), item.Typ)
 	}
@@ -129,29 +130,11 @@ func TestVariablesDefault(t *testing.T) {
 			_city
 		}
 	}`
-	l := &lex.Lexer{}
-	l.Init(input)
-	go run(l)
-	for item := range l.Items {
+	l := lex.NewLexer(input).Run(lexText)
+	it := l.NewIterator()
+	for it.Next() {
+		item := it.Item()
 		require.NotEqual(t, item.Typ, lex.ItemError)
-		t.Log(item.String(), item.Typ)
-	}
-}
-
-func TestVariablesError(t *testing.T) {
-	input := `
-	query testQuery($username: string {
-		me(_xid_: rick) {
-			_city
-		}
-	}`
-	l := &lex.Lexer{}
-	l.Init(input)
-	go run(l)
-	var typ lex.ItemType
-	for item := range l.Items {
 		t.Log(item.String())
-		typ = item.Typ
 	}
-	require.Equal(t, typ, lex.ItemError)
 }

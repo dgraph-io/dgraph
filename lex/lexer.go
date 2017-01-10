@@ -19,6 +19,8 @@ package lex
 import (
 	"fmt"
 	"unicode/utf8"
+
+	"github.com/dgraph-io/dgraph/x"
 )
 
 const EOF = -1
@@ -49,31 +51,87 @@ func (i item) String() string {
 	return fmt.Sprintf("lex.Item [%v] %q", i.Typ, i.Val)
 }
 
-type Lexer struct {
-	// NOTE: Using a text scanner wouldn't work because it's designed for parsing
-	// Golang. It won't keep track of start position, or allow us to retrieve
-	// slice from [start:pos]. Better to just use normal string.
-	Input       string    // string being scanned.
-	Start       int       // start position of this item.
-	Pos         int       // current position of this item.
-	Width       int       // width of last rune read from input.
-	Items       chan item // channel of scanned items.
-	Depth       int       // nesting of {}
-	FilterDepth int       // nesting of () inside filter directive.
-	Mode        int       // mode based on information so far.
+type ItemIterator struct {
+	l   *Lexer
+	idx int
 }
 
-func (l *Lexer) Init(input string) {
+func (l *Lexer) NewIterator() *ItemIterator {
+	it := &ItemIterator{
+		l:   l,
+		idx: -1,
+	}
+	return it
+}
+
+// Valid returns true if we haven't consumed all the items.
+func (p *ItemIterator) Next() bool {
+	p.idx++
+	if p.idx >= len(p.l.items) {
+		return false
+	}
+	return true
+}
+
+// Item returns the current item and advances the index.
+func (p *ItemIterator) Item() item {
+	return (p.l.items)[p.idx]
+}
+
+// Prev moves the index back by one.
+func (p *ItemIterator) Prev() bool {
+	if p.idx > 0 {
+		p.idx--
+		return true
+	}
+	return false
+}
+
+// Peek returns the next n items without consuming them.
+func (p *ItemIterator) Peek(num int) ([]item, error) {
+	if (p.idx + num + 1) > len(p.l.items) {
+		return nil, x.Errorf("Out of range for peek")
+	}
+	return (p.l.items)[p.idx+1 : p.idx+num+1], nil
+}
+
+type Lexer struct {
+	// NOTE: Using a text scanner wouldn't work because it's designed for parsing
+	// Golang. It won't keep track of Start Position, or allow us to retrieve
+	// slice from [Start:Pos]. Better to just use normal string.
+	Input           string // string being scanned.
+	Start           int    // Start Position of this item.
+	Pos             int    // current Position of this item.
+	Width           int    // Width of last rune read from input.
+	items           []item // channel of scanned items.
+	Depth           int    // nesting of {}
+	ArgDepth        int    // nesting of ()
+	Mode            int    // mode based on information so far.
+	InsideDirective bool   // To indicate we are inside directive.
+}
+
+func NewLexer(input string) *Lexer {
+	l := Lexer{}
 	l.Input = input
-	l.Items = make(chan item, 5)
+	l.items = make([]item, 0, 100)
+	return &l
+}
+
+func (l *Lexer) Run(f StateFn) *Lexer {
+	for state := f; state != nil; {
+		// The following statement is useful for debugging.
+		// fmt.Printf("Func: %v\n", runtime.FuncForPC(reflect.ValueOf(state).Pointer()).Name())
+		state = state(l)
+	}
+	return l
 }
 
 // Errorf returns the error state function.
 func (l *Lexer) Errorf(format string, args ...interface{}) StateFn {
-	l.Items <- item{
+	l.items = append(l.items, item{
 		Typ: ItemError,
 		Val: fmt.Sprintf(format, args...),
-	}
+	})
 	return nil
 }
 
@@ -83,10 +141,10 @@ func (l *Lexer) Emit(t ItemType) {
 		// Let ItemEOF go through.
 		return
 	}
-	l.Items <- item{
+	l.items = append(l.items, item{
 		Typ: t,
 		Val: l.Input[l.Start:l.Pos],
-	}
+	})
 	l.Start = l.Pos
 }
 
