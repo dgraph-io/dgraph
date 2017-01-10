@@ -883,6 +883,42 @@ func parseFilter(it *lex.ItemIterator) (*FilterTree, error) {
 	return valueStack.pop(), nil
 }
 
+func ParseID(gq *GraphQuery, val string) error {
+	val = strings.Replace(val, " ", "", -1)
+	toUid := func(str string) {
+		uid, rerr := strconv.ParseUint(str, 0, 64)
+		if rerr == nil {
+			gq.UID = append(gq.UID, uid)
+		} else {
+			gq.UID = append(gq.UID, farm.Fingerprint64([]byte(str)))
+		}
+	}
+	if val[0] != '[' {
+		toUid(val)
+		return nil
+	}
+
+	if val[len(val)-1] != ']' {
+		return x.Errorf("Invalid id list at root. Got: %+v", val)
+	}
+	var buf bytes.Buffer
+	for _, c := range val[1:] {
+		if c == ',' || c == ']' {
+			if buf.Len() == 0 {
+				continue
+			}
+			toUid(buf.String())
+			buf.Reset()
+			continue
+		}
+		if c == '[' || c == ')' {
+			return x.Errorf("Invalid id list at root. Got: %+v", val)
+		}
+		buf.WriteRune(c)
+	}
+	return nil
+}
+
 // getRoot gets the root graph query object after parsing the args.
 func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 	gq = &GraphQuery{
@@ -930,41 +966,7 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 		for _, p := range args {
 			if p.Key == "id" {
 				// Check and parse if its a list.
-				err := func() error {
-					val := strings.Replace(p.Val, " ", "", -1)
-					toUid := func(str string) {
-						uid, rerr := strconv.ParseUint(str, 0, 64)
-						if rerr == nil {
-							gq.UID = append(gq.UID, uid)
-						} else {
-							gq.UID = append(gq.UID, farm.Fingerprint64([]byte(str)))
-						}
-					}
-					if val[0] != '[' {
-						toUid(val)
-						return nil
-					}
-
-					if val[len(val)-1] != ']' {
-						return x.Errorf("Invalid id list at root. Got: %+v", p)
-					}
-					var buf bytes.Buffer
-					for _, c := range val[1:] {
-						if c == ',' || c == ']' {
-							if buf.Len() == 0 {
-								continue
-							}
-							toUid(buf.String())
-							buf.Reset()
-							continue
-						}
-						if c == '[' || c == ')' {
-							return x.Errorf("Invalid id list at root. Got: %+v", p)
-						}
-						buf.WriteRune(c)
-					}
-					return nil
-				}()
+				err := ParseID(gq, p.Val)
 				if err != nil {
 					return nil, err
 				}

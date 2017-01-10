@@ -2042,7 +2042,7 @@ func TestRootList1(t *testing.T) {
 	defer os.RemoveAll(dir1)
 	defer os.RemoveAll(dir2)
 	query := `{
-	me(id:[1, 23, 24, a.bc]) {
+	me(id:[0x01, 23, 24, a.bc]) {
 		name
 	}
 }`
