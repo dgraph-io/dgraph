@@ -149,6 +149,12 @@ func TestRebuildIndex(t *testing.T) {
 	defer ps.Close()
 	defer os.RemoveAll(dir)
 
+	// RebuildIndex requires the data to be committed to data store.
+	CommitLists(10)
+	for len(commitCh) > 0 {
+		time.Sleep(100 * time.Millisecond)
+	}
+
 	// Create some fake wrong entries for TokensTable.
 	tt := GetTokensTable("name")
 	tt.Add("wronga")
