@@ -541,13 +541,13 @@ func (n *node) Run() {
 			}
 
 			if indexEntry != nil {
-				x.Check(n.rebuildIndex(indexEntry.Data))
+				x.Check(n.rebuildIndex(n.ctx, indexEntry.Data))
 			}
 
 			n.Raft().Advance()
-			if *firstRun && n.canCampaign {
+			if firstRun && n.canCampaign {
 				go n.Raft().Campaign(n.ctx)
-				*firstRun = false
+				firstRun = false
 			}
 
 		case <-n.done:

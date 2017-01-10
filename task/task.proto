@@ -103,7 +103,7 @@ message Mutations {
 
 message RebuildIndex {
 	uint32 group_id = 1;
-	repeated string attrs = 2;
+	string attr = 2;  // For simplicity, just do one attribute per request.
 }
 
 message Proposal {

@@ -371,7 +371,7 @@ func (t *TokensTable) GetPrevOrEqual(s string) string {
 }
 
 // RebuildIndex rebuilds index for a given attribute.
-func RebuildIndex(attr string) error {
+func RebuildIndex(ctx context.Context, attr string) error {
 	x.AssertTruef(schema.IsIndexed(attr), "Attr %s not indexed", attr)
 
 	// Empty the TokensTable. Let addIndexMutations populate it later.
@@ -423,7 +423,6 @@ func RebuildIndex(attr string) error {
 	it := pstore.NewIterator()
 	defer it.Close()
 	var pl types.PostingList
-	ctx := context.Background()
 	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
 		pki := x.Parse(it.Key().Data())
 		edge.Entity = pki.Uid

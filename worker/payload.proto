@@ -25,22 +25,6 @@ message BackupPayload {
 	Status status = 3;
 }
 
-// IndexPayload is for RebuildIndex request and response.
-message IndexPayload {
-	uint64 req_id = 1;    // Use req_id to handle duplicate requests.
-	
-	// If true, we need to broadcast to other addresses.
-	bool do_broadcast = 2;
-	enum Status {
-		NONE      = 0;
-		SUCCESS   = 1;
-		DUPLICATE = 2;
-		FAILED    = 3;
-	}
-	Status status = 3;
-	task.RebuildIndex rebuild_index = 4;
-}
-
 service Worker {
 	// Connection testing RPC.
 	rpc Echo (Payload)             returns (Payload) {}
@@ -51,7 +35,7 @@ service Worker {
 	rpc ServeTask (task.Query)                returns (task.Result) {}
 	rpc PredicateData (stream task.GroupKeys) returns (stream task.KV) {}
 	rpc Sort (task.Sort)                      returns (task.SortResult) {}
-	rpc RebuildIndex (IndexPayload)           returns (IndexPayload) {}  // To remove
+	rpc RebuildIndex (task.RebuildIndex)      returns (Payload) {}
 
 	// RAFT serving RPCs.
 	rpc RaftMessage (Payload)                     returns (Payload) {}

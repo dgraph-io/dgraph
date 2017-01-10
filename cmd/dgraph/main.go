@@ -539,14 +539,7 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := context.Background()
-	attrs := r.URL.Query()["attrs"]
-	if len(attrs) == 0 {
-		x.SetStatus(w, x.ErrorMissingRequired,
-			fmt.Sprintf("Request did not have attrs param."))
-		return
-	}
-
-	err = worker.RebuildIndexOverNetwork(ctx, attrs)
+	err = worker.RebuildIndexOverNetwork(ctx, r.URL.Query().Get("attr"))
 	if err != nil {
 		x.SetStatus(w, err.Error(), "RebuildIndex failed.")
 	} else {
@@ -685,8 +678,8 @@ func setupServer(che chan error) {
 
 	http.HandleFunc("/health", healthCheck)
 	http.HandleFunc("/query", queryHandler)
-	http.HandleFunc("/index", indexHandler)
 	http.HandleFunc("/debug/store", storeStatsHandler)
+	http.HandleFunc("/admin/index", indexHandler)
 	http.HandleFunc("/admin/shutdown", shutDownHandler)
 	http.HandleFunc("/admin/backup", backupHandler)
 	// Initilize the servers.
