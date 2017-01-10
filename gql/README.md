@@ -3,6 +3,7 @@ than using channels even though we lose concurreny. Also, using slices allows th
 backtrack and peek the tokens which couldn't be done using channels as each token can only be 
 consumed once.
 
+```
 Using slice (new):
 ------------
 Benchmark_directors-4            	  100000	     14201 ns/op
@@ -33,3 +34,4 @@ Benchmark_Filters_parallel-4     	  200000	      6486 ns/op
 Benchmark_Geq_parallel-4         	  300000	      5390 ns/op
 Benchmark_Date_parallel-4        	  200000	      5462 ns/op
 Benchmark_Mutation_parallel-4    	 1000000	      2326 ns/op
+```
