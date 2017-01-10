@@ -950,7 +950,7 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 					}
 					var buf bytes.Buffer
 					for _, c := range val[1:] {
-						if c == ' ' || c == ',' || c == ']' {
+						if c == ',' || c == ']' {
 							if buf.Len() == 0 {
 								continue
 							}
