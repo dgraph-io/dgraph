@@ -90,6 +90,16 @@ func (p ParsedKey) SkipRangeOfSameType() []byte {
 	return buf
 }
 
+// DataPrefix returns the prefix for data keys.
+func (p ParsedKey) DataPrefix() []byte {
+	buf := make([]byte, 2+len(p.Attr)+1)
+	k := writeAttr(buf, p.Attr)
+	AssertTrue(len(k) == 1)
+	k[0] = byteData
+	return buf
+}
+
+// IndexPrefix returns the prefix for index keys.
 func (p ParsedKey) IndexPrefix() []byte {
 	buf := make([]byte, 2+len(p.Attr)+1)
 	k := writeAttr(buf, p.Attr)

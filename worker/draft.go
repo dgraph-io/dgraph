@@ -19,6 +19,11 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
+const (
+	proposalMutation = 0
+	proposalReindex  = 1
+)
+
 // peerPool stores the peers per node and the addresses corresponding to them.
 // We then use pool() to get an active connection to those addresses.
 type peerPool struct {
@@ -247,8 +252,15 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *task.Proposal) erro
 	if err != nil {
 		return err
 	}
-	proposalData := make([]byte, upto)
-	copy(proposalData, slice[:upto])
+	proposalData := make([]byte, upto+1)
+	// Examining first byte of proposalData will quickly tell us what kind of
+	// proposal this is.
+	if proposal.RebuildIndex == nil {
+		proposalData[0] = proposalMutation
+	} else {
+		proposalData[0] = proposalReindex
+	}
+	copy(proposalData[1:], slice)
 
 	che := make(chan error, 1)
 	n.props.Store(proposal.Id, che)
@@ -384,7 +396,8 @@ func (n *node) process(e raftpb.Entry, pending chan struct{}) {
 
 	pending <- struct{}{} // This will block until we can write to it.
 	var proposal task.Proposal
-	x.Checkf(proposal.Unmarshal(e.Data), "Unable to parse entry: %+v", e)
+	x.AssertTrue(len(e.Data) > 0)
+	x.Checkf(proposal.Unmarshal(e.Data[1:]), "Unable to parse entry: %+v", e)
 
 	var err error
 	if proposal.Mutations != nil {
@@ -474,7 +487,6 @@ func (n *node) Run() {
 	defer ticker.Stop()
 	rcBytes, err := n.raftContext.Marshal()
 	x.Check(err)
-
 	for {
 		select {
 		case <-ticker.C:
@@ -488,7 +500,6 @@ func (n *node) Run() {
 
 			for _, msg := range rd.Messages {
 				// NOTE: We can do some optimizations here to drop messages.
-				x.Check(err)
 				msg.Context = rcBytes
 				n.send(msg)
 			}
@@ -510,14 +521,27 @@ func (n *node) Run() {
 			if len(rd.CommittedEntries) > 0 {
 				x.Trace(n.ctx, "Found %d committed entries", len(rd.CommittedEntries))
 			}
+			var indexEntry *raftpb.Entry
 			for _, entry := range rd.CommittedEntries {
+				if len(entry.Data) > 0 && entry.Data[0] == proposalReindex {
+					x.AssertTruef(indexEntry == nil, "Multiple index proposals found")
+					indexEntry = &entry
+					// This is an index-related proposal. Do not break.
+					continue
+				}
+
 				// Just queue up to be processed. Don't wait on them.
 				n.commitCh <- entry
 				status := x.Mark{Index: entry.Index, Done: false}
+
 				if entry.Index == 2 {
 					fmt.Printf("%+v\n", entry)
 				}
 				n.applied.Ch <- status
+			}
+
+			if indexEntry != nil {
+				x.Check(n.rebuildIndex(n.ctx, indexEntry.Data))
 			}
 
 			n.Raft().Advance()
