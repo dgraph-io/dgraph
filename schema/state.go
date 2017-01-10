@@ -45,7 +45,6 @@ const (
 	itemAt
 	itemIndex
 	itemReverse
-	itemDummy // Used if index specification is missing
 )
 
 // lexText lexes the input string and calls other lex functions.
@@ -210,10 +209,6 @@ L:
 		break
 	}
 
-	// Keep reading for terms that start with @. Keep outputting. If we see
-	// something that doesn't start with @, we output ItemDummy. It is like
-	// null-termination of C strings.
-
 L1:
 	for {
 		switch r := l.Next(); {
@@ -244,7 +239,6 @@ L1:
 			return l.Errorf("Invalid schema. Unexpected %s", l.Input[l.Start:l.Pos])
 		}
 	}
-	l.Emit(itemDummy)
 	return lexText
 }
 
@@ -316,7 +310,6 @@ L1:
 			return l.Errorf("Invalid schema. Unexpected %s", l.Input[l.Start:l.Pos])
 		}
 	}
-	l.Emit(itemDummy)
 	return lexScalarBlock
 }
 
@@ -388,9 +381,6 @@ L1:
 		default:
 			return l.Errorf("Invalid schema. Unexpected %s", l.Input[l.Start:l.Pos])
 		}
-	}
-	if !isReversed {
-		l.Emit(itemDummy)
 	}
 	return lexObjectBlock
 }

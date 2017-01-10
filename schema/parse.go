@@ -92,15 +92,14 @@ func processScalarBlock(it *lex.ItemIterator) error {
 				}
 				str[name] = t
 
-				// Check for index / reverse.
-				for it.Next() {
+				peekIt, err := it.Peek(1)
+				if err != nil {
+					continue
+				}
+				if peekIt[0].Typ == itemAt {
+					// Check for index / reverse.
+					it.Next()
 					next = it.Item()
-					if next.Typ == lex.ItemError {
-						return x.Errorf(next.Val)
-					}
-					if next.Typ == itemDummy {
-						break
-					}
 					if next.Typ == itemAt {
 						it.Next()
 						next = it.Item()
@@ -159,15 +158,13 @@ func processScalar(it *lex.ItemIterator) error {
 					return x.Errorf("Invalid type")
 				}
 
-				// Check for index.
-				for it.Next() {
+				peekIt, err := it.Peek(1)
+				if err != nil {
+					continue
+				}
+				if peekIt[0].Typ == itemAt {
+					it.Next()
 					next = it.Item()
-					if next.Typ == lex.ItemError {
-						return x.Errorf(next.Val)
-					}
-					if next.Typ == itemDummy {
-						break
-					}
 					if next.Typ == itemAt {
 						it.Next()
 						next = it.Item()
