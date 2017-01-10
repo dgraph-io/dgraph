@@ -29,9 +29,6 @@ func (n *node) rebuildIndex(ctx context.Context, proposalData []byte) error {
 		return err
 	}
 
-	// Force an aggressive evict.
-	CommitLists(10)
-
 	// Wait for syncing to data store.
 	for n.applied.WaitingFor() {
 		doneUntil := n.applied.DoneUntil() // applied until.
@@ -42,6 +39,9 @@ func (n *node) rebuildIndex(ctx context.Context, proposalData []byte) error {
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
+
+	// Force an aggressive evict.
+	CommitLists(10)
 
 	// Wait for posting lists applying.
 	w := posting.WaterMarkFor(gid)
