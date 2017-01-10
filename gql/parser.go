@@ -930,6 +930,9 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 			if p.Key == "id" {
 				// Check and parse if its a list.
 				if p.Val[0] == '[' {
+					if p.Val[len(p.Val)-1] != ']' {
+						return nil, x.Errorf("Invalid id list at root. Got: %+v", p)
+					}
 					var buf bytes.Buffer
 					for _, c := range p.Val[1:] {
 						if c == ' ' || c == ',' || c == ']' {
@@ -945,6 +948,9 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 							}
 							buf.Reset()
 							continue
+						}
+						if c == '[' || c == ')' {
+							return nil, x.Errorf("Invalid id list at root. Got: %+v", p)
 						}
 						buf.WriteRune(c)
 					}

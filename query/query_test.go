@@ -2020,6 +2020,22 @@ func TestGeneratorMultiRoot(t *testing.T) {
 	require.JSONEq(t, `{"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"}]}`, js)
 }
 
+func TestRootList(t *testing.T) {
+	dir1, dir2, ps := populateGraph(t)
+	defer ps.Close()
+	defer os.RemoveAll(dir1)
+	defer os.RemoveAll(dir2)
+	query := `
+    {
+			me(id:[1, 23, 24]) {
+        name
+      }
+    }
+  `
+	js := processToJSON(t, query)
+	require.JSONEq(t, `{"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"}]}`, js)
+}
+
 func TestGeneratorMultiRootFilter1(t *testing.T) {
 	dir1, dir2, ps := populateGraph(t)
 	defer ps.Close()

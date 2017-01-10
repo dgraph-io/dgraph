@@ -84,6 +84,20 @@ func TestParseXid(t *testing.T) {
 func TestParseIdList(t *testing.T) {
 	query := `
 	query {
+		user(id: [0x1]) {
+			type.object.name
+		}
+	}`
+	gq, _, err := Parse(query)
+	require.NoError(t, err)
+	require.NotNil(t, gq)
+	require.Equal(t, []string{"type.object.name"}, childAttrs(gq))
+	require.Equal(t, []uint64{1}, gq.UID)
+}
+
+func TestParseIdList1(t *testing.T) {
+	query := `
+	query {
 		user(id: [m.abcd, 0x1, abc, ade, 0x34]) {
 			type.object.name
 		}
@@ -94,6 +108,17 @@ func TestParseIdList(t *testing.T) {
 	require.Equal(t, []string{"type.object.name"}, childAttrs(gq))
 	require.Equal(t, []uint64{1, 52}, gq.UID)
 	require.Equal(t, []string{"m.abcd", "abc", "ade"}, gq.XID)
+}
+
+func TestParseIdListError(t *testing.T) {
+	query := `
+	query {
+		user(id: [m.abcd, 0x1, abc, ade, 0x34) {
+			type.object.name
+		}
+	}`
+	_, _, err := Parse(query)
+	require.Error(t, err)
 }
 
 func TestParseFirst(t *testing.T) {
