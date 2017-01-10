@@ -106,8 +106,8 @@ func TestParseIdList1(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, gq)
 	require.Equal(t, []string{"type.object.name"}, childAttrs(gq))
-	require.Equal(t, []uint64{1, 52}, gq.UID)
-	require.Equal(t, []string{"m.abcd", "abc", "ade"}, gq.XID)
+	require.Equal(t, []uint64{0xfe5de827fdf27a88, 0x1, 0x24a5b3a074e7f369, 0xf023e8d0d7c08cf3, 0x34}, gq.UID)
+	require.Equal(t, 5, len(gq.UID))
 }
 
 func TestParseIdListError(t *testing.T) {
@@ -361,7 +361,7 @@ func TestParseMutationAndQuery(t *testing.T) {
 	require.NotEqual(t, strings.Index(mu.Del, "<name> <is> <something-else> ."), -1)
 
 	require.NotNil(t, gq)
-	require.Equal(t, []string{"tomhanks"}, gq.XID)
+	require.Equal(t, 1, len(gq.UID))
 	require.Equal(t, childAttrs(gq), []string{"name", "hometown"})
 }
 

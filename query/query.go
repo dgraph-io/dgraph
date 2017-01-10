@@ -28,8 +28,6 @@ import (
 	"sync"
 	"time"
 
-	farm "github.com/dgryski/go-farm"
-
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/query/graph"
@@ -421,18 +419,9 @@ func ToSubGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 
 // newGraph returns the SubGraph and its task query.
 func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
-	euid, exid := gq.UID, gq.XID
 	// This would set the Result field in SubGraph,
 	// and populate the children for attributes.
-	if len(exid) > 0 {
-		for _, it := range exid {
-			x.AssertTruef(!strings.HasPrefix(it, "_:"), "Query shouldn't contain blank nodes")
-			euid = append(euid, farm.Fingerprint64([]byte(it)))
-			x.Trace(ctx, "Xid: %v", it)
-		}
-	}
-
-	if len(euid) == 0 && gq.Func == nil {
+	if len(gq.UID) == 0 && gq.Func == nil {
 		err := x.Errorf("Invalid query, query internal id is zero and generator is nil")
 		x.TraceError(ctx, err)
 		return nil, err
@@ -453,10 +442,9 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		sg.SrcFunc = append(sg.SrcFunc, gq.Func.Name)
 		sg.SrcFunc = append(sg.SrcFunc, gq.Func.Args...)
 	}
-	if len(euid) > 0 {
-		// euid is the root UID.
-		sg.SrcUIDs = &task.List{Uids: euid}
-		sg.uidMatrix = []*task.List{&task.List{Uids: euid}}
+	if len(gq.UID) > 0 {
+		sg.SrcUIDs = &task.List{Uids: gq.UID}
+		sg.uidMatrix = []*task.List{&task.List{Uids: gq.UID}}
 	}
 	sg.values = createNilValuesList(1)
 	// Copy roots filter.

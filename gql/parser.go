@@ -26,13 +26,13 @@ import (
 	"github.com/dgraph-io/dgraph/lex"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
+	farm "github.com/dgryski/go-farm"
 )
 
 // GraphQuery stores the parsed Query in a tree format. This gets converted to
 // internally used query.SubGraph before processing the query.
 type GraphQuery struct {
 	UID   []uint64
-	XID   []string
 	Attr  string
 	Alias string
 	Func  *Function
@@ -103,7 +103,7 @@ func init() {
 
 // DebugPrint is useful for debugging.
 func (gq *GraphQuery) DebugPrint(prefix string) {
-	x.Printf("%s[%x %q %q->%q]\n", prefix, gq.UID, gq.XID, gq.Attr, gq.Alias)
+	x.Printf("%s[%x %q %q->%q]\n", prefix, gq.UID, gq.Attr, gq.Alias)
 	for _, c := range gq.Children {
 		c.DebugPrint(prefix + "|->")
 	}
@@ -944,7 +944,7 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 							if err == nil {
 								gq.UID = append(gq.UID, uid)
 							} else {
-								gq.XID = append(gq.XID, buf.String())
+								gq.UID = append(gq.UID, farm.Fingerprint64(buf.Bytes()))
 							}
 							buf.Reset()
 							continue
@@ -959,7 +959,7 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 					if rerr == nil {
 						gq.UID = append(gq.UID, uid)
 					} else {
-						gq.XID = append(gq.XID, p.Val)
+						gq.UID = append(gq.UID, farm.Fingerprint64([]byte(p.Val)))
 					}
 				}
 			} else {
