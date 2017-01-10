@@ -281,12 +281,17 @@ func substituteVariables(gq *GraphQuery, vmap varMap) error {
 	return nil
 }
 
+type Result struct {
+	Query    *GraphQuery
+	Mutation *Mutation
+}
+
 // Parse initializes and runs the lexer. It also constructs the GraphQuery subgraph
 // from the lexed items.
-func Parse(input string) (gq *GraphQuery, mu *Mutation, rerr error) {
+func Parse(input string) (res Result, rerr error) {
 	query, vmap, err := parseQueryWithVariables(input)
 	if err != nil {
-		return nil, nil, err
+		return res, err
 	}
 
 	l := lex.NewLexer(query).Run(lexText)
@@ -297,50 +302,50 @@ func Parse(input string) (gq *GraphQuery, mu *Mutation, rerr error) {
 		item := it.Item()
 		switch item.Typ {
 		case lex.ItemError:
-			return nil, nil, x.Errorf(item.Val)
+			return res, x.Errorf(item.Val)
 		case itemText:
 			continue
 
 		case itemOpType:
 			if item.Val == "mutation" {
-				if mu != nil {
-					return nil, nil, x.Errorf("Only one mutation block allowed.")
+				if res.Mutation != nil {
+					return res, x.Errorf("Only one mutation block allowed.")
 				}
-				if mu, rerr = getMutation(it); rerr != nil {
-					return nil, nil, rerr
+				if res.Mutation, rerr = getMutation(it); rerr != nil {
+					return res, rerr
 				}
 			} else if item.Val == "fragment" {
 				// TODO(jchiu0): This is to be done in ParseSchema once it is ready.
 				fnode, rerr := getFragment(it)
 				if rerr != nil {
-					return nil, nil, rerr
+					return res, rerr
 				}
 				fmap[fnode.Name] = fnode
 			} else if item.Val == "query" {
-				if gq, rerr = getVariablesAndQuery(it, vmap); rerr != nil {
-					return nil, nil, rerr
+				if res.Query, rerr = getVariablesAndQuery(it, vmap); rerr != nil {
+					return res, rerr
 				}
 			}
 		case itemLeftCurl:
-			if gq, rerr = getQuery(it); rerr != nil {
-				return nil, nil, rerr
+			if res.Query, rerr = getQuery(it); rerr != nil {
+				return res, rerr
 			}
 		}
 	}
 
-	if gq != nil {
+	if res.Query != nil {
 		// Try expanding fragments using fragment map.
-		if err := gq.expandFragments(fmap); err != nil {
-			return nil, nil, err
+		if err := res.Query.expandFragments(fmap); err != nil {
+			return res, err
 		}
 
 		// Substitute all variables with corresponding values
-		if err := substituteVariables(gq, vmap); err != nil {
-			return nil, nil, err
+		if err := substituteVariables(res.Query, vmap); err != nil {
+			return res, err
 		}
 	}
 
-	return gq, mu, nil
+	return res, nil
 }
 
 // getVariablesAndQuery checks if the query has a variable list and stores it in
