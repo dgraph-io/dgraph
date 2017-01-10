@@ -539,7 +539,12 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := context.Background()
-	err = worker.RebuildIndexOverNetwork(ctx, r.URL.Query().Get("attr"))
+	attr := r.URL.Query().Get("attr")
+	if len(attr) == 0 {
+		x.SetStatus(w, x.ErrorInvalidRequest, "Invalid request. No attr defined.")
+		return
+	}
+	err = worker.RebuildIndexOverNetwork(ctx, attr)
 	if err != nil {
 		x.SetStatus(w, err.Error(), "RebuildIndex failed.")
 	} else {

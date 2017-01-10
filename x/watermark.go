@@ -119,18 +119,22 @@ func (w *WaterMark) process() {
 
 		until := doneUntil
 		loops := 0
+		var doWait bool
+
 		for len(indices) > 0 {
 			min := indices[0]
 			if done := pending[min]; done != 0 {
-				break
+				doWait = true
+				break // len(indices) will be > 0.
 			}
 			heap.Pop(&indices)
 			delete(pending, min)
 			until = min
 			loops++
 		}
-		// indices is now empty. Update waitingFor.
-		atomic.StoreUint32(&w.waitingFor, 0)
+		if !doWait {
+			atomic.StoreUint32(&w.waitingFor, 0)
+		}
 
 		if until != doneUntil {
 			AssertTrue(atomic.CompareAndSwapUint64(&w.doneUntil, doneUntil, until))

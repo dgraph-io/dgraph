@@ -7,6 +7,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
+	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -39,9 +40,6 @@ func (n *node) rebuildIndex(ctx context.Context, proposalData []byte) error {
 		time.Sleep(100 * time.Millisecond)
 	}
 
-	// Aggressive evict.
-	posting.CommitLists(10)
-
 	// Wait for posting lists applying.
 	w := posting.WaterMarkFor(gid)
 	for w.WaitingFor() {
@@ -69,13 +67,13 @@ func (w *grpcWorker) RebuildIndex(ctx context.Context, req *task.RebuildIndex) (
 	if ctx.Err() != nil {
 		return &Payload{}, ctx.Err()
 	}
-	if err := processRebuildIndex(ctx, req); err != nil {
+	if err := proposeRebuildIndex(ctx, req); err != nil {
 		return &Payload{}, err
 	}
 	return &Payload{}, nil
 }
 
-func processRebuildIndex(ctx context.Context, ri *task.RebuildIndex) error {
+func proposeRebuildIndex(ctx context.Context, ri *task.RebuildIndex) error {
 	gid := ri.GroupId
 	n := groups().Node(gid)
 	proposal := &task.Proposal{RebuildIndex: ri}
@@ -89,12 +87,16 @@ func processRebuildIndex(ctx context.Context, ri *task.RebuildIndex) error {
 // it will rebuild index. Otherwise, it will send a request to a server that
 // serves the attr.
 func RebuildIndexOverNetwork(ctx context.Context, attr string) error {
+	if !schema.IsIndexed(attr) {
+		return x.Errorf("Attribute %s is indexed", attr)
+	}
+
 	gid := group.BelongsTo(attr)
 	x.Trace(ctx, "RebuildIndex attr: %v groupId: %v", attr, gid)
 
 	if groups().ServesGroup(gid) {
 		// No need for a network call, as this should be run from within this instance.
-		return processRebuildIndex(ctx, &task.RebuildIndex{GroupId: gid, Attr: attr})
+		return proposeRebuildIndex(ctx, &task.RebuildIndex{GroupId: gid, Attr: attr})
 	}
 
 	// Send this over the network.
