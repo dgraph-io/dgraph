@@ -20,8 +20,8 @@ import (
 )
 
 const (
-	proposalNormal = 0
-	proposalIndex  = 1
+	proposalMutation = 0
+	proposalReindex  = 1
 )
 
 // peerPool stores the peers per node and the addresses corresponding to them.
@@ -256,9 +256,9 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *task.Proposal) erro
 	// Examining first byte of proposalData will quickly tell us what kind of
 	// proposal this is.
 	if proposal.RebuildIndex == nil {
-		proposalData[0] = proposalNormal
+		proposalData[0] = proposalMutation
 	} else {
-		proposalData[0] = proposalIndex
+		proposalData[0] = proposalReindex
 	}
 	copy(proposalData[1:], slice)
 
@@ -523,7 +523,7 @@ func (n *node) Run() {
 			}
 			var indexEntry *raftpb.Entry
 			for _, entry := range rd.CommittedEntries {
-				if len(entry.Data) > 0 && entry.Data[0] == proposalIndex {
+				if len(entry.Data) > 0 && entry.Data[0] == proposalReindex {
 					x.AssertTruef(indexEntry == nil, "Multiple index proposals found")
 					indexEntry = &entry
 					// This is an index-related proposal. Do not break.

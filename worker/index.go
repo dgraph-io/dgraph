@@ -13,15 +13,14 @@ import (
 
 // rebuildIndex is called by node.Run to rebuild index.
 func (n *node) rebuildIndex(ctx context.Context, proposalData []byte) error {
-	x.AssertTrue(proposalData[0] == proposalIndex)
+	x.AssertTrue(proposalData[0] == proposalReindex)
 	var proposal task.Proposal
 	x.Check(proposal.Unmarshal(proposalData[1:]))
 	x.AssertTrue(proposal.RebuildIndex != nil)
 
 	gid := n.gid
 	x.AssertTrue(gid == proposal.RebuildIndex.GroupId)
-
-	x.Printf("Processing proposal to rebuild index: %v", proposal.RebuildIndex)
+	x.Trace(ctx, "Processing proposal to rebuild index: %v", proposal.RebuildIndex)
 
 	// Get index of last committed.
 	lastIndex, err := n.store.LastIndex()
@@ -31,9 +30,9 @@ func (n *node) rebuildIndex(ctx context.Context, proposalData []byte) error {
 
 	// Wait for syncing to data store.
 	for n.applied.WaitingFor() {
-		// watermark: add function waitingfor that returns an index that it is waiting for, and if it is zero, we can skip the wait
 		doneUntil := n.applied.DoneUntil() // applied until.
-		x.Printf("RebuildIndex waiting, appliedUntil:%d lastIndex: %d", doneUntil, lastIndex)
+		x.Trace(ctx, "RebuildIndex waiting, appliedUntil:%d lastIndex: %d",
+			doneUntil, lastIndex)
 		if doneUntil >= lastIndex {
 			break // Do the check before sleep.
 		}
@@ -47,7 +46,8 @@ func (n *node) rebuildIndex(ctx context.Context, proposalData []byte) error {
 	w := posting.WaterMarkFor(gid)
 	for w.WaitingFor() {
 		doneUntil := w.DoneUntil() // synced until.
-		x.Printf("RebuildIndex waiting, syncedUntil:%d lastIndex:%d", doneUntil, lastIndex)
+		x.Trace(ctx, "RebuildIndex waiting, syncedUntil:%d lastIndex:%d",
+			doneUntil, lastIndex)
 		if doneUntil >= lastIndex {
 			break // Do the check before sleep.
 		}
@@ -85,6 +85,9 @@ func processRebuildIndex(ctx context.Context, ri *task.RebuildIndex) error {
 	return nil
 }
 
+// RebuildIndexOverNetwork rebuilds index for attr. If it serves the attr, then
+// it will rebuild index. Otherwise, it will send a request to a server that
+// serves the attr.
 func RebuildIndexOverNetwork(ctx context.Context, attr string) error {
 	gid := group.BelongsTo(attr)
 	x.Trace(ctx, "RebuildIndex attr: %v groupId: %v", attr, gid)
@@ -100,20 +103,17 @@ func RebuildIndexOverNetwork(ctx context.Context, attr string) error {
 
 	conn, err := pl.Get()
 	if err != nil {
-		return x.Wrapf(err, "ProcessTaskOverNetwork: while retrieving connection.")
+		return x.Wrapf(err, "RebuildIndexOverNetwork: while retrieving connection.")
 	}
 	defer pl.Put(conn)
 	x.Trace(ctx, "Sending request to %v", addr)
 
 	c := NewWorkerClient(conn)
-	_, err = c.RebuildIndex(ctx, &task.RebuildIndex{
-		Attr:    attr,
-		GroupId: gid,
-	})
+	_, err = c.RebuildIndex(ctx, &task.RebuildIndex{Attr: attr, GroupId: gid})
 	if err != nil {
 		x.TraceError(ctx, x.Wrapf(err, "Error while calling Worker.RebuildIndex"))
 		return err
 	}
-	x.Trace(ctx, "Reply from server. Addr: %v Attr: %v", addr, attr)
+	x.Trace(ctx, "RebuildIndex reply from server. Addr: %v Attr: %v", addr, attr)
 	return nil
 }
