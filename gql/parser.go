@@ -883,7 +883,7 @@ func parseFilter(it *lex.ItemIterator) (*FilterTree, error) {
 	return valueStack.pop(), nil
 }
 
-func ParseID(gq *GraphQuery, val string) error {
+func parseID(gq *GraphQuery, val string) error {
 	val = strings.Replace(val, " ", "", -1)
 	toUid := func(str string) {
 		uid, rerr := strconv.ParseUint(str, 0, 64)
@@ -966,7 +966,7 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 		for _, p := range args {
 			if p.Key == "id" {
 				// Check and parse if its a list.
-				err := ParseID(gq, p.Val)
+				err := parseID(gq, p.Val)
 				if err != nil {
 					return nil, err
 				}
