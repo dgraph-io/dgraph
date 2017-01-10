@@ -342,6 +342,10 @@ var testNQuads = []struct {
 			ObjectValue: &graph.Value{&graph.Value_StrVal{`mov\"enpick`}},
 		},
 	},
+	{
+		input:       `_:gabe <name> "Gabe' .`,
+		expectedErr: true,
+	},
 }
 
 func TestLex(t *testing.T) {

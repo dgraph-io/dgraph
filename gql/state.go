@@ -402,21 +402,17 @@ func lexTextMutation(l *lex.Lexer) lex.StateFn {
 
 // This function is used to absorb the object value.
 func lexMutationValue(l *lex.Lexer) lex.StateFn {
+LOOP:
 	for {
 		r := l.Next()
-		if r == '\\' {
-			// So that we don't count \" as end of value.
-			if l.Next() == quote {
-				continue
-			}
-
+		switch r {
+		case lex.EOF:
+			return l.Errorf("Unclosed mutation value")
+		case quote:
+			break LOOP
+		case '\\':
+			l.Next() // skip one.
 		}
-		// This is an end of value so lets return.
-		if r == quote {
-			break
-		}
-		// We absorb everything else.
-		continue
 	}
 	return lexTextMutation
 }
