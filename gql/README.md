@@ -1,3 +1,8 @@
+Comparing the old and new methods, we find that using slice makes the parsing 20% to 25% faster
+than using channels even though we lose concurreny. Also, using slices allows the parser to 
+backtrack and peek the tokens which couldn't be done using channels as each token can only be 
+consumed once.
+
 Using slice (new):
 ------------
 Benchmark_directors-4            	  100000	     14201 ns/op
