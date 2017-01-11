@@ -318,10 +318,8 @@ func Init(ps *store.Store) {
 	fmt.Println("Starting commit routine.")
 	syncCh = make(chan syncEntry, 10000)
 
-	x.AddInit(func() {
-		go batchSync()
-		go periodicCommit()
-	})
+	go periodicCommit()
+	go batchSync()
 }
 
 func getFromMap(key uint64) *List {
