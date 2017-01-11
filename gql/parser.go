@@ -103,7 +103,7 @@ func init() {
 
 // DebugPrint is useful for debugging.
 func (gq *GraphQuery) DebugPrint(prefix string) {
-	x.Printf("%s[%x %q %q->%q]\n", prefix, gq.UID, gq.Attr, gq.Alias)
+	fmt.Printf("%s[%x %q %q->%q]\n", prefix, gq.UID, gq.Attr, gq.Alias)
 	for _, c := range gq.Children {
 		c.DebugPrint(prefix + "|->")
 	}
@@ -282,7 +282,7 @@ func substituteVariables(gq *GraphQuery, vmap varMap) error {
 }
 
 type Result struct {
-	Query    *GraphQuery
+	Query    []*GraphQuery
 	Mutation *Mutation
 }
 
@@ -296,6 +296,7 @@ func Parse(input string) (res Result, rerr error) {
 
 	l := lex.NewLexer(query).Run(lexText)
 
+	var qu *GraphQuery
 	it := l.NewIterator()
 	fmap := make(fragmentMap)
 	for it.Next() {
@@ -303,9 +304,6 @@ func Parse(input string) (res Result, rerr error) {
 		switch item.Typ {
 		case lex.ItemError:
 			return res, x.Errorf(item.Val)
-		case itemText:
-			continue
-
 		case itemOpType:
 			if item.Val == "mutation" {
 				if res.Mutation != nil {
@@ -322,26 +320,36 @@ func Parse(input string) (res Result, rerr error) {
 				}
 				fmap[fnode.Name] = fnode
 			} else if item.Val == "query" {
-				if res.Query, rerr = getVariablesAndQuery(it, vmap); rerr != nil {
+				if qu, rerr = getVariablesAndQuery(it, vmap); rerr != nil {
 					return res, rerr
 				}
+				res.Query = append(res.Query, qu)
 			}
 		case itemLeftCurl:
-			if res.Query, rerr = getQuery(it); rerr != nil {
+			if qu, rerr = getQuery(it); rerr != nil {
 				return res, rerr
 			}
+			res.Query = append(res.Query, qu)
+		case itemName:
+			it.Prev()
+			if qu, rerr = getQuery(it); rerr != nil {
+				return res, rerr
+			}
+			res.Query = append(res.Query, qu)
 		}
 	}
 
-	if res.Query != nil {
-		// Try expanding fragments using fragment map.
-		if err := res.Query.expandFragments(fmap); err != nil {
-			return res, err
-		}
+	if len(res.Query) != 0 {
+		for _, qu := range res.Query {
+			// Try expanding fragments using fragment map.
+			if err := qu.expandFragments(fmap); err != nil {
+				return res, err
+			}
 
-		// Substitute all variables with corresponding values
-		if err := substituteVariables(res.Query, vmap); err != nil {
-			return res, err
+			// Substitute all variables with corresponding values
+			if err := substituteVariables(qu, vmap); err != nil {
+				return res, err
+			}
 		}
 	}
 
