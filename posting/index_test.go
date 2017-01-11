@@ -151,7 +151,7 @@ func TestRebuildIndex(t *testing.T) {
 
 	// RebuildIndex requires the data to be committed to data store.
 	CommitLists(10)
-	for len(commitCh) > 0 {
+	for len(syncCh) > 0 {
 		time.Sleep(100 * time.Millisecond)
 	}
 
@@ -170,7 +170,7 @@ func TestRebuildIndex(t *testing.T) {
 
 	// Let's force a commit.
 	CommitLists(10)
-	for len(commitCh) > 0 {
+	for len(syncCh) > 0 {
 		time.Sleep(100 * time.Millisecond)
 	}
 

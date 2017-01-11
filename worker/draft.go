@@ -84,7 +84,7 @@ type node struct {
 
 	// Fields which are never changed after init.
 	cfg         *raft.Config
-	commitCh    chan raftpb.Entry
+	applyCh     chan raftpb.Entry
 	ctx         context.Context
 	done        chan struct{}
 	gid         uint32
@@ -163,7 +163,7 @@ func newNode(gid uint32, id uint64, myAddr string) *node {
 			MaxSizePerMsg:   4096,
 			MaxInflightMsgs: 256,
 		},
-		commitCh:    make(chan raftpb.Entry, numPendingMutations),
+		applyCh:     make(chan raftpb.Entry, numPendingMutations),
 		peers:       peers,
 		props:       props,
 		raftContext: rc,
@@ -388,7 +388,7 @@ func (n *node) processMembership(e raftpb.Entry, mm *task.Membership) error {
 func (n *node) process(e raftpb.Entry, pending chan struct{}) {
 	defer func() {
 		n.applied.Ch <- x.Mark{Index: e.Index, Done: true}
-		posting.WaterMarkFor(n.gid).Ch <- x.Mark{Index: e.Index, Done: true}
+		posting.SyncMarkFor(n.gid).Ch <- x.Mark{Index: e.Index, Done: true}
 	}()
 
 	if e.Type != raftpb.EntryNormal {
@@ -412,13 +412,13 @@ func (n *node) process(e raftpb.Entry, pending chan struct{}) {
 
 const numPendingMutations = 10000
 
-func (n *node) processCommitCh() {
+func (n *node) processApplyCh() {
 	pending := make(chan struct{}, numPendingMutations)
 
-	for e := range n.commitCh {
+	for e := range n.applyCh {
 		if len(e.Data) == 0 {
 			n.applied.Ch <- x.Mark{Index: e.Index, Done: true}
-			posting.WaterMarkFor(n.gid).Ch <- x.Mark{Index: e.Index, Done: true}
+			posting.SyncMarkFor(n.gid).Ch <- x.Mark{Index: e.Index, Done: true}
 			continue
 		}
 
@@ -435,7 +435,7 @@ func (n *node) processCommitCh() {
 			cs := n.Raft().ApplyConfChange(cc)
 			n.SetConfState(cs)
 			n.applied.Ch <- x.Mark{Index: e.Index, Done: true}
-			posting.WaterMarkFor(n.gid).Ch <- x.Mark{Index: e.Index, Done: true}
+			posting.SyncMarkFor(n.gid).Ch <- x.Mark{Index: e.Index, Done: true}
 
 		} else {
 			go n.process(e, pending)
@@ -526,10 +526,10 @@ func (n *node) Run() {
 
 				status := x.Mark{Index: entry.Index, Done: false}
 				n.applied.Ch <- status
-				posting.WaterMarkFor(n.gid).Ch <- status
+				posting.SyncMarkFor(n.gid).Ch <- status
 
 				// Just queue up to be processed. Don't wait on them.
-				n.commitCh <- entry
+				n.applyCh <- entry
 			}
 
 			if indexEntry != nil {
@@ -571,7 +571,7 @@ func (n *node) snapshotPeriodically() {
 	for {
 		select {
 		case <-ticker.C:
-			water := posting.WaterMarkFor(n.gid)
+			water := posting.SyncMarkFor(n.gid)
 			le := water.DoneUntil()
 
 			existing, err := n.store.Snapshot()
@@ -697,7 +697,7 @@ func (n *node) InitAndStartNode(wal *raftwal.Wal) {
 			n.canCampaign = true
 		}
 	}
-	go n.processCommitCh()
+	go n.processApplyCh()
 	go n.Run()
 	// TODO: Find a better way to snapshot, so we don't lose the membership
 	// state information, which isn't persisted.
