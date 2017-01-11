@@ -361,6 +361,34 @@ func healthCheck(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("OK"))
 }
 
+// parseQueryAndMutation handles the cases where the query parsing code can hang indefinitely.
+// We allow 1 second for parsing the query; and then give up.
+func parseQueryAndMutation(ctx context.Context, query string) (res gql.Result, err error) {
+	x.Trace(ctx, "Query received: %v", query)
+	errc := make(chan error, 1)
+
+	go func() {
+		var err error
+		res, err = gql.Parse(query)
+		errc <- err
+	}()
+
+	child, cancel := context.WithTimeout(ctx, time.Second)
+	defer cancel()
+
+	select {
+	case <-child.Done():
+		return res, child.Err()
+	case err := <-errc:
+		if err != nil {
+			x.TraceError(ctx, x.Wrapf(err, "Error while parsing query"))
+			return res, err
+		}
+		x.Trace(ctx, "Query parsed")
+	}
+	return res, nil
+}
+
 func queryHandler(w http.ResponseWriter, r *http.Request) {
 	// Add a limit on how many pending queries can be run in the system.
 	pendingQueries <- struct{}{}
@@ -394,21 +422,17 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		x.SetStatus(w, x.ErrorInvalidRequest, "Invalid request encountered.")
 		return
 	}
-
-	x.Trace(ctx, "Query received: %v", q)
-	gq, mu, err := gql.Parse(q)
-
+	res, err := parseQueryAndMutation(ctx, q)
 	if err != nil {
-		x.TraceError(ctx, x.Wrapf(err, "Error while parsing query"))
-		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	var allocIds map[string]uint64
 	var allocIdsStr map[string]string
 	// If we have mutations, run them first.
-	if mu != nil && (len(mu.Set) > 0 || len(mu.Del) > 0) {
-		if allocIds, err = mutationHandler(ctx, mu); err != nil {
+	if res.Mutation != nil && (len(res.Mutation.Set) > 0 || len(res.Mutation.Del) > 0) {
+		if allocIds, err = mutationHandler(ctx, res.Mutation); err != nil {
 			x.TraceError(ctx, x.Wrapf(err, "Error while handling mutations"))
 			x.SetStatus(w, x.Error, err.Error())
 			return
@@ -420,7 +444,8 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if gq == nil || (gq.UID == 0 && gq.Func == nil && len(gq.XID) == 0) {
+	gq := res.Query
+	if gq == nil || (len(gq.UID) == 0 && gq.Func == nil) {
 		mp := map[string]interface{}{
 			"code":    x.ErrorOk,
 			"message": "Done",
@@ -525,11 +550,39 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func indexHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
+		return
+	}
+
+	ip, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil || !net.ParseIP(ip).IsLoopback() {
+		x.SetStatus(w, x.ErrorUnauthorized,
+			fmt.Sprintf("Request received from IP: %v. Only requests from localhost are allowed.", ip))
+		return
+	}
+
+	ctx := context.Background()
+	attr := r.URL.Query().Get("attr")
+	if len(attr) == 0 {
+		x.SetStatus(w, x.ErrorInvalidRequest, "Invalid request. No attr defined.")
+		return
+	}
+	err = worker.RebuildIndexOverNetwork(ctx, attr)
+	if err != nil {
+		x.SetStatus(w, err.Error(), "RebuildIndex failed.")
+	} else {
+		x.SetStatus(w, x.ErrorOk, "RebuildIndex completed.")
+	}
+}
+
 // server is used to implement graph.DgraphServer
 type grpcServer struct{}
 
 // This method is used to execute the query and return the response to the
 // client as a protocol buffer message.
+// TODO: Refactor this, so both Query and Run follow the same logic.
 func (s *grpcServer) Run(ctx context.Context,
 	req *graph.Request) (*graph.Response, error) {
 
@@ -549,16 +602,15 @@ func (s *grpcServer) Run(ctx context.Context,
 	var l query.Latency
 	l.Start = time.Now()
 	x.Trace(ctx, "Query received: %v", req.Query)
-	gq, mu, err := gql.Parse(req.Query)
+	res, err := parseQueryAndMutation(ctx, req.Query)
 	if err != nil {
-		x.TraceError(ctx, x.Wrapf(err, "Error while parsing query"))
 		return resp, err
 	}
 
 	// If mutations are part of the query, we run them through the mutation handler
 	// same as the http client.
-	if mu != nil && (len(mu.Set) > 0 || len(mu.Del) > 0) {
-		if allocIds, err = mutationHandler(ctx, mu); err != nil {
+	if res.Mutation != nil && (len(res.Mutation.Set) > 0 || len(res.Mutation.Del) > 0) {
+		if allocIds, err = mutationHandler(ctx, res.Mutation); err != nil {
 			x.TraceError(ctx, x.Wrapf(err, "Error while handling mutations"))
 			return resp, err
 		}
@@ -574,7 +626,8 @@ func (s *grpcServer) Run(ctx context.Context,
 	}
 	resp.AssignedUids = allocIds
 
-	if gq == nil || (gq.UID == 0 && len(gq.XID) == 0) {
+	gq := res.Query
+	if gq == nil || (len(gq.UID) == 0) {
 		return resp, err
 	}
 
@@ -657,6 +710,7 @@ func setupServer(che chan error) {
 	http.HandleFunc("/health", healthCheck)
 	http.HandleFunc("/query", queryHandler)
 	http.HandleFunc("/debug/store", storeStatsHandler)
+	http.HandleFunc("/admin/index", indexHandler)
 	http.HandleFunc("/admin/shutdown", shutDownHandler)
 	http.HandleFunc("/admin/backup", backupHandler)
 	// Initilize the servers.

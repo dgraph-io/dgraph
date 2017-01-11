@@ -37,12 +37,10 @@ import (
 
 var q0 = `
 	{
-		user(_xid_:alice) {
+		user(id:alice) {
 			follows {
-				_xid_
 				status
 			}
-			_xid_
 			status
 		}
 	}
@@ -90,16 +88,16 @@ func TestQuery(t *testing.T) {
 	defer closeAll(dir1, dir2)
 
 	// Parse GQL into internal query representation.
-	gq, _, err := gql.Parse(q0)
+	res, err := gql.Parse(q0)
 	require.NoError(t, err)
 
 	ctx := context.Background()
-	g, err := query.ToSubGraph(ctx, gq)
+	g, err := query.ToSubGraph(ctx, res.Query)
 	require.NoError(t, err)
 
 	// Test internal query representation.
-	require.EqualValues(t, childAttrs(g), []string{"follows", "_xid_", "status"})
-	require.EqualValues(t, childAttrs(g.Children[0]), []string{"_xid_", "status"})
+	require.EqualValues(t, []string{"follows", "status"}, childAttrs(g))
+	require.EqualValues(t, []string{"status"}, childAttrs(g.Children[0]))
 
 	ch := make(chan error)
 	go query.ProcessGraph(ctx, g, nil, ch)
@@ -130,11 +128,11 @@ func TestAssignUid(t *testing.T) {
 	time.Sleep(5 * time.Second) // Wait for ME to become leader.
 
 	// Parse GQL into internal query representation.
-	_, mu, err := gql.Parse(qm)
+	res, err := gql.Parse(qm)
 	require.NoError(t, err)
 
 	ctx := context.Background()
-	allocIds, err := mutationHandler(ctx, mu)
+	allocIds, err := mutationHandler(ctx, res.Mutation)
 	require.NoError(t, err)
 
 	require.EqualValues(t, len(allocIds), 2, "Expected two UIDs to be allocated")
@@ -158,23 +156,18 @@ func TestConvertToEdges(t *testing.T) {
 
 var q1 = `
 {
-	al(_xid_: alice) {
+	al(id: alice) {
 		status
-		_xid_
 		follows {
 			status
-			_xid_
 			follows {
 				status
-				_xid_
 				follows {
-					_xid_
 					status
 				}
 			}
 		}
 		status
-		_xid_
 	}
 }
 `
@@ -189,13 +182,13 @@ func BenchmarkQuery(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		gq, _, err := gql.Parse(q1)
+		res, err := gql.Parse(q1)
 		if err != nil {
 			b.Error(err)
 			return
 		}
 		ctx := context.Background()
-		g, err := query.ToSubGraph(ctx, gq)
+		g, err := query.ToSubGraph(ctx, res.Query)
 		if err != nil {
 			b.Error(err)
 			return

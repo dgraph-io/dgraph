@@ -35,6 +35,7 @@ service Worker {
 	rpc ServeTask (task.Query)                returns (task.Result) {}
 	rpc PredicateData (stream task.GroupKeys) returns (stream task.KV) {}
 	rpc Sort (task.Sort)                      returns (task.SortResult) {}
+	rpc RebuildIndex (task.RebuildIndex)      returns (Payload) {}
 
 	// RAFT serving RPCs.
 	rpc RaftMessage (Payload)                     returns (Payload) {}

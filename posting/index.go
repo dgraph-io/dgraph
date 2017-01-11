@@ -18,6 +18,7 @@ package posting
 
 import (
 	"context"
+	"math"
 	"sync"
 
 	"golang.org/x/net/trace"
@@ -34,6 +35,8 @@ type TokensTable struct {
 	sync.RWMutex
 	key []string
 }
+
+const maxBatchSize = 32 * (1 << 20)
 
 var (
 	indexLog   trace.EventLog
@@ -106,7 +109,6 @@ func addIndexMutation(ctx context.Context, edge *task.DirectedEdge, token string
 	}
 	indexLog.Printf("%s [%s] [%d] Term [%s]",
 		edge.Op, edge.Attr, edge.Entity, token)
-
 }
 
 func addReverseMutation(ctx context.Context, t *task.DirectedEdge) {
@@ -193,4 +195,67 @@ func TokensForTest(attr string) []string {
 		out = append(out, k.Term)
 	}
 	return out
+}
+
+// RebuildIndex rebuilds index for a given attribute.
+func RebuildIndex(ctx context.Context, attr string) error {
+	x.AssertTruef(schema.IsIndexed(attr), "Attr %s not indexed", attr)
+
+	// Delete index entries from data store.
+	pk := x.ParsedKey{Attr: attr}
+	prefix := pk.IndexPrefix()
+	idxIt := pstore.NewIterator()
+	defer idxIt.Close()
+
+	wb := pstore.NewWriteBatch()
+	defer wb.Destroy()
+	var batchSize int
+	for idxIt.Seek(prefix); idxIt.ValidForPrefix(prefix); idxIt.Next() {
+		key := idxIt.Key().Data()
+		batchSize += len(key)
+		wb.Delete(key)
+
+		if batchSize >= maxBatchSize {
+			if err := pstore.WriteBatch(wb); err != nil {
+				return err
+			}
+			wb.Clear()
+			batchSize = 0
+		}
+	}
+	if wb.Count() > 0 {
+		if err := pstore.WriteBatch(wb); err != nil {
+			return err
+		}
+		wb.Clear()
+	}
+
+	// Add index entries to data store.
+	edge := task.DirectedEdge{Attr: attr}
+	prefix = pk.DataPrefix()
+	it := pstore.NewIterator()
+	defer it.Close()
+	var pl types.PostingList
+	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+		pki := x.Parse(it.Key().Data())
+		edge.Entity = pki.Uid
+		x.Check(pl.Unmarshal(it.Value().Data()))
+
+		// Check last entry for value.
+		if len(pl.Postings) == 0 {
+			continue
+		}
+		p := pl.Postings[len(pl.Postings)-1]
+		if p.Uid != math.MaxUint64 {
+			continue
+		}
+
+		// Add index entries based on p.
+		val := types.Val{
+			Value: p.Value,
+			Tid:   types.TypeID(p.ValType),
+		}
+		addIndexMutations(ctx, &edge, val, task.DirectedEdge_SET)
+	}
+	return nil
 }

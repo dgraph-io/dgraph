@@ -165,6 +165,21 @@ func (g *groupi) AnyServer(group uint32) string {
 	return all.list[idx].Addr
 }
 
+// Servers return addresses of all servers in group.
+func (g *groupi) Servers(group uint32) []string {
+	g.RLock()
+	defer g.RUnlock()
+	all := g.all[group]
+	if all == nil {
+		return nil
+	}
+	out := make([]string, 0, len(all.list))
+	for _, s := range all.list {
+		out = append(out, s.Addr)
+	}
+	return out
+}
+
 func (g *groupi) HasPeer(group uint32) bool {
 	g.RLock()
 	defer g.RUnlock()
