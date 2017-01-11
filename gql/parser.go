@@ -1082,6 +1082,8 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				return x.Errorf("Invalid mention of brackets")
 			}
 			isCount = false
+		} else if item.Typ == itemLeftRound {
+			return x.Errorf("Invalid use of (")
 		}
 	}
 	return nil

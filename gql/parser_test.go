@@ -17,7 +17,6 @@
 package gql
 
 import (
-	"fmt"
 	"strings"
 	"testing"
 
@@ -902,6 +901,29 @@ func TestParseGeneratorError(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestParseCountAsFuncMultiple(t *testing.T) {
+	schema.ParseBytes([]byte("scalar name:string @index"))
+	query := `{
+		me(id:1) {
+			count(friends, relatives
+			classmates)
+			gender,age
+			hometown
+		}
+	}
+`
+	gq, err := Parse(query)
+	require.NoError(t, err)
+	require.Equal(t, 6, len(gq.Query.Children))
+	require.Equal(t, true, gq.Query.Children[0].IsCount)
+	require.Equal(t, "friends", gq.Query.Children[0].Attr)
+	require.Equal(t, true, gq.Query.Children[1].IsCount)
+	require.Equal(t, "relatives", gq.Query.Children[1].Attr)
+	require.Equal(t, true, gq.Query.Children[2].IsCount)
+	require.Equal(t, "classmates", gq.Query.Children[2].Attr)
+
+}
+
 func TestParseCountAsFunc(t *testing.T) {
 	schema.ParseBytes([]byte("scalar name:string @index"))
 	query := `{
@@ -915,9 +937,6 @@ func TestParseCountAsFunc(t *testing.T) {
 	gq, err := Parse(query)
 	require.NoError(t, err)
 	require.Equal(t, true, gq.Query.Children[0].IsCount)
-	for _, it := range gq.Query.Children {
-		fmt.Println(it)
-	}
 	require.Equal(t, 4, len(gq.Query.Children))
 
 }
