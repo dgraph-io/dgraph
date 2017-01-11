@@ -96,6 +96,9 @@ func lexFuncOrArg(l *lex.Lexer) lex.StateFn {
 	var empty bool
 	for {
 		switch r := l.Next(); {
+		case r == attherate:
+			l.Emit(itemAt)
+			return lexDirective
 		case r == leftRound:
 			l.Emit(itemLeftRound)
 			l.ArgDepth++

@@ -32,10 +32,11 @@ import (
 // GraphQuery stores the parsed Query in a tree format. This gets converted to
 // internally used query.SubGraph before processing the query.
 type GraphQuery struct {
-	UID   []uint64
-	Attr  string
-	Alias string
-	Func  *Function
+	UID     []uint64
+	Attr    string
+	Alias   string
+	IsCount bool
+	Func    *Function
 
 	Args     map[string]string
 	Children []*GraphQuery
@@ -988,6 +989,7 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 
 // godeep constructs the subgraph from the lexed items and a GraphQuery node.
 func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
+	var isCount bool
 	curp := gq // Used to track current node, for nesting.
 	for it.Next() {
 		item := it.Item()
@@ -1012,9 +1014,20 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				// Unlike itemName, there is no nesting, so do not change "curp".
 			}
 		} else if item.Typ == itemName {
+			// Handle count.
+			if !isCount && item.Val == "count" {
+				isCount = true
+				it.Next()
+				item = it.Item()
+				if item.Typ != itemLeftRound {
+					return x.Errorf("Invalid mention of count.")
+				}
+				continue
+			}
 			child := &GraphQuery{
-				Args: make(map[string]string),
-				Attr: item.Val,
+				Args:    make(map[string]string),
+				Attr:    item.Val,
+				IsCount: isCount,
 			}
 			gq.Children = append(gq.Children, child)
 			curp = child
@@ -1033,6 +1046,9 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 			}
 
 		} else if item.Typ == itemLeftRound {
+			if curp.Attr == "" {
+				return x.Errorf("Predicate name cannot be empty.")
+			}
 			args, err := parseArguments(it)
 			if err != nil {
 				return err
@@ -1061,6 +1077,11 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 					return x.Errorf("Unknown directive [%s]", item.Val)
 				}
 			}
+		} else if item.Typ == itemRightRound {
+			if !isCount {
+				return x.Errorf("Invalid mention of brackets")
+			}
+			isCount = false
 		}
 	}
 	return nil

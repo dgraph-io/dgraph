@@ -332,9 +332,7 @@ func TestGetUIDCount(t *testing.T) {
 				_uid_
 				gender
 				alive
-				friend {
-					_count_
-				}
+				count(friend) 
 			}
 		}
 	`
@@ -357,9 +355,7 @@ func TestDebug1(t *testing.T) {
 				name
 				gender
 				alive
-				friend {
-					_count_
-				}
+				count(friend)
 			}
 		}
 	`
@@ -390,9 +386,7 @@ func TestDebug2(t *testing.T) {
 				name
 				gender
 				alive
-				friend {
-					_count_
-				}
+				count(friend)
 			}
 		}
 	`
@@ -419,9 +413,7 @@ func TestCount(t *testing.T) {
 				name
 				gender
 				alive
-				friend {
-					_count_
-				}
+				count(friend)
 			}
 		}
 	`
@@ -437,10 +429,9 @@ func TestCountError1(t *testing.T) {
 	query := `
 		{
 			me(id: 0x01) {
-				friend {
+				count(friend {
 					name
-					_count_
-				}
+				})
 				name
 				gender
 				alive
@@ -460,11 +451,11 @@ func TestCountError2(t *testing.T) {
 	query := `
 		{
 			me(id: 0x01) {
-				friend {
-					_count_ {
+				count(friend {
+					c {
 						friend
 					}
-				}
+				})
 				name
 				gender
 				alive
@@ -476,6 +467,22 @@ func TestCountError2(t *testing.T) {
 
 	ctx := context.Background()
 	_, err = ToSubGraph(ctx, res.Query)
+	require.Error(t, err)
+}
+
+func TestCountError3(t *testing.T) {
+	// Alright. Now we have everything set up. Let's create the query.
+	query := `
+		{
+			me(id: 0x01) {
+				count(friend
+				name
+				gender
+				alive
+			}
+		}
+	`
+	_, err := gql.Parse(query)
 	require.Error(t, err)
 }
 
@@ -804,9 +811,7 @@ func TestToJSONFilterOrCount(t *testing.T) {
 			me(id:0x01) {
 				name
 				gender
-				friend @filter(anyof(name, "Andrea") || anyof(name, "Andrea Rhee")) {
-					_count_
-				}
+				count(friend @filter(anyof(name, "Andrea") || anyof(name, "Andrea Rhee")))
 			}
 		}
 	`
@@ -1126,9 +1131,7 @@ func TestToJSONFilterOrFirstOffsetCount(t *testing.T) {
 			me(id:0x01) {
 				name
 				gender
-				friend(offset:1, first:1) @filter(anyof("name", "Andrea") || anyof("name", "SomethingElse Rhee") || anyof("name", "Daryl Dixon")) {
-					_count_
-				}
+				count(friend(offset:1, first:1) @filter(anyof("name", "Andrea") || anyof("name", "SomethingElse Rhee") || anyof("name", "Daryl Dixon"))) 
 			}
 		}
 	`
@@ -1274,9 +1277,7 @@ func TestToJSONReverseDelSetCount(t *testing.T) {
 		{
 			me(id:0x18) {
 				name
-				~friend {
-					_count_
-				}
+				count(~friend)
 			}
 		}
 	`
@@ -1659,9 +1660,7 @@ func TestToJSONOrderDescCount(t *testing.T) {
 			me(id:0x01) {
 				name
 				gender
-				friend @filter(anyof("name", "Rick")) (order: dob) {
-					_count_
-				}
+				count(friend @filter(anyof("name", "Rick")) (order: dob)) 
 			}
 		}
 	`

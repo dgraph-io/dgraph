@@ -17,6 +17,7 @@
 package gql
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -881,9 +882,7 @@ func TestParseFilter_unknowndirective(t *testing.T) {
 			}
 			gender,age
 			hometown
-		}
-	
-`
+		}`
 	_, err := Parse(query)
 	require.Error(t, err)
 }
@@ -894,6 +893,54 @@ func TestParseGeneratorError(t *testing.T) {
 			friends {
 				name
 			}
+			gender,age
+			hometown
+		}
+	}
+`
+	_, err := Parse(query)
+	require.Error(t, err)
+}
+
+func TestParseCountAsFunc(t *testing.T) {
+	schema.ParseBytes([]byte("scalar name:string @index"))
+	query := `{
+		me(id:1) {
+			count(friends)
+			gender,age
+			hometown
+		}
+	}
+`
+	gq, err := Parse(query)
+	require.NoError(t, err)
+	require.Equal(t, true, gq.Query.Children[0].IsCount)
+	for _, it := range gq.Query.Children {
+		fmt.Println(it)
+	}
+	require.Equal(t, 4, len(gq.Query.Children))
+
+}
+
+func TestParseCountError1(t *testing.T) {
+	schema.ParseBytes([]byte("scalar name:string @index"))
+	query := `{
+		me(id:1) {
+			count(friends
+			gender,age
+			hometown
+		}
+	}
+`
+	_, err := Parse(query)
+	require.Error(t, err)
+}
+
+func TestParseCountError2(t *testing.T) {
+	schema.ParseBytes([]byte("scalar name:string @index"))
+	query := `{
+		me(id:1) {
+			count((friends)
 			gender,age
 			hometown
 		}

@@ -343,16 +343,18 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 	// So, we work on the children, and then recurse for grand children.
 
 	for _, gchild := range gq.Children {
-		if gchild.Attr == "_count_" {
-			if len(gq.Children) > 1 {
-				return errors.New("Cannot have other attributes with count")
+		/*
+			if gchild.Attr == "_count_" {
+				if len(gq.Children) > 1 {
+					return errors.New("Cannot have other attributes with count")
+				}
+				if gchild.Children != nil {
+					return errors.New("Count cannot have other attributes")
+				}
+				sg.Params.DoCount = true
+				break
 			}
-			if gchild.Children != nil {
-				return errors.New("Count cannot have other attributes")
-			}
-			sg.Params.DoCount = true
-			break
-		}
+		*/
 		if gchild.Attr == "_uid_" {
 			sg.Params.GetUID = true
 		}
@@ -360,6 +362,12 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 		args := params{
 			Alias:   gchild.Alias,
 			isDebug: sg.Params.isDebug,
+		}
+		if gchild.IsCount {
+			if len(gchild.Children) != 0 {
+				return errors.New("Node with count cannot have child attributes")
+			}
+			args.DoCount = true
 		}
 		dst := &SubGraph{
 			Attr:   gchild.Attr,
