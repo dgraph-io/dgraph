@@ -21,7 +21,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"log"
 	"strconv"
 	"strings"
@@ -755,7 +754,7 @@ func (sg *SubGraph) ToJSON(l *Latency) ([]byte, error) {
 	return json.Marshal(res)
 }
 
-func (sg *SubGraph) ToFastJson(l *Latency) ([]byte, error) {
+func (sg *SubGraph) FastToJSON(l *Latency) ([]byte, error) {
 	var seedNode *fastJsonNode
 	n := seedNode.New("_root_")
 	for _, uid := range sg.DestUIDs.Uids {
@@ -774,7 +773,6 @@ func (sg *SubGraph) ToFastJson(l *Latency) ([]byte, error) {
 		if n1.IsEmpty() {
 			continue
 		}
-		fmt.Println(sg.Params.Alias)
 		n.AddChild(sg.Params.Alias, n1)
 	}
 	return n.(*fastJsonNode).fastJsonNodeToJSON(), nil

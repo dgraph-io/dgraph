@@ -2478,6 +2478,79 @@ func TestFastToJSON(t *testing.T) {
 	sg := makeSubgraph(query, t)
 
 	var l Latency
-	js, _ := sg.ToFastJson(&l)
+	js, _ := sg.FastToJSON(&l)
 	fmt.Println("fasttojson:", string(js))
+}
+
+func TestBFastJsonNode(t *testing.T) {
+	query := `
+		{
+			me(id:0x01) {
+				name
+				_uid_
+				gender
+				alive
+				friend {
+					_uid_
+					name
+				}
+			}
+		}
+	`
+
+	// js := processToJSON(t, query)
+	// fmt.Println("response js:", js)
+
+	sgFastJson := makeSubgraph(query, t)
+	var l Latency
+	fastjs, _ := sgFastJson.FastToJSON(&l)
+	fmt.Println("response fastjs:", string(fastjs))
+	bFastJson := testing.Benchmark(func(b *testing.B) {
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			var l Latency
+			if _, err := sgFastJson.FastToJSON(&l); err != nil {
+				b.FailNow()
+				break
+			}
+		}
+	})
+	fmt.Println("fastToJson: ", bFastJson.N, bFastJson.T, bFastJson.NsPerOp())
+}
+
+func TestBCurrJsonNode(t *testing.T) {
+	query := `
+		{
+			me(id:0x01) {
+				name
+				_uid_
+				gender
+				alive
+				friend {
+					_uid_
+					name
+				}
+			}
+		}
+	`
+
+	// js := processToJSON(t, query)
+	// fmt.Println("response js:", js)
+
+	sgJson := makeSubgraph(query, t)
+	var l Latency
+	js, _ := sgJson.ToJSON(&l)
+	fmt.Println("response js:", string(js))
+
+	bresJson := testing.Benchmark(func(b *testing.B) {
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			var l Latency
+			if _, err := sgJson.ToJSON(&l); err != nil {
+				b.FailNow()
+				break
+			}
+		}
+	})
+	fmt.Println("tojson: ", bresJson.N, bresJson.T, bresJson.NsPerOp())
 }
