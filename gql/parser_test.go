@@ -894,6 +894,7 @@ func TestParseGeneratorError(t *testing.T) {
 			}
 			gender,age
 			hometown
+			count(friends)
 		}
 	}
 `
@@ -905,8 +906,8 @@ func TestParseCountAsFuncMultiple(t *testing.T) {
 	schema.ParseBytes([]byte("scalar name:string @index"))
 	query := `{
 		me(id:1) {
-			count(friends, relatives
-			classmates)
+			count(friends), count(relatives)
+			count(classmates)
 			gender,age
 			hometown
 		}
@@ -922,6 +923,21 @@ func TestParseCountAsFuncMultiple(t *testing.T) {
 	require.Equal(t, true, gq.Query.Children[2].IsCount)
 	require.Equal(t, "classmates", gq.Query.Children[2].Attr)
 
+}
+
+func TestParseCountAsFuncMultipleError(t *testing.T) {
+	schema.ParseBytes([]byte("scalar name:string @index"))
+	query := `{
+		me(id:1) {
+			count(friends, relatives
+			classmates)
+			gender,age
+			hometown
+		}
+	}
+`
+	_, err := Parse(query)
+	require.Error(t, err)
 }
 
 func TestParseCountAsFunc(t *testing.T) {

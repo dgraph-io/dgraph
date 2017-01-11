@@ -804,13 +804,16 @@ func TestToJSONFilterOrCount(t *testing.T) {
 				name
 				gender
 				count(friend @filter(anyof(name, "Andrea") || anyof(name, "Andrea Rhee")))
+				friend @filter(anyof(name, "Andrea")) {
+					name
+				}
 			}
 		}
 	`
 
 	js := processToJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"friend":[{"_count_":2}],"gender":"female","name":"Michonne"}]}`,
+		`{"me":[{"friend":[{"_count_":2}, {"name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
 
