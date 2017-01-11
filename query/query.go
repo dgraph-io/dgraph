@@ -225,7 +225,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 			c := types.ValueForType(types.Int32ID)
 			c.Value = int32(pc.counts[idx])
 			uc := dst.New(pc.Attr)
-			uc.AddValue("_count_", c)
+			uc.AddValue("count", c)
 			dst.AddChild(pc.Attr, uc)
 
 		} else if len(ul.Uids) > 0 || len(pc.Children) > 0 {
@@ -592,7 +592,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		}
 	}
 
-	// Here we consider handling _count_ with filtering. We do this after
+	// Here we consider handling count with filtering. We do this after
 	// pagination because otherwise, we need to do the count with pagination
 	// taken into account. For example, a PL might have only 50 entries but the
 	// user wants to skip 100 entries and return 10 entries. In this case, you

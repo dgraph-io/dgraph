@@ -338,7 +338,7 @@ func TestGetUIDCount(t *testing.T) {
 	`
 	js := processToJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"_uid_":"0x1","alive":"true","friend":[{"_count_":5}],"gender":"female","name":"Michonne"}]}`,
+		`{"me":[{"_uid_":"0x1","alive":"true","friend":[{"count":5}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
 
@@ -420,7 +420,7 @@ func TestCount(t *testing.T) {
 
 	js := processToJSON(t, query)
 	require.EqualValues(t,
-		`{"me":[{"alive":"true","friend":[{"_count_":5}],"gender":"female","name":"Michonne"}]}`,
+		`{"me":[{"alive":"true","friend":[{"count":5}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
 
@@ -813,7 +813,7 @@ func TestToJSONFilterOrCount(t *testing.T) {
 
 	js := processToJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"friend":[{"_count_":2}, {"name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
+		`{"me":[{"friend":[{"count":2}, {"name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
 
@@ -1133,7 +1133,7 @@ func TestToJSONFilterOrFirstOffsetCount(t *testing.T) {
 
 	js := processToJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"friend":[{"_count_":1}],"gender":"female","name":"Michonne"}]}`,
+		`{"me":[{"friend":[{"count":1}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
 
@@ -1278,7 +1278,7 @@ func TestToJSONReverseDelSetCount(t *testing.T) {
 	`
 	js := processToJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"name":"Glenn Rhee","~friend":[{"_count_":2}]}]}`,
+		`{"me":[{"name":"Glenn Rhee","~friend":[{"count":2}]}]}`,
 		js)
 }
 
@@ -1662,7 +1662,7 @@ func TestToJSONOrderDescCount(t *testing.T) {
 
 	js := processToJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"friend":[{"_count_":1}],"gender":"female","name":"Michonne"}]}`,
+		`{"me":[{"friend":[{"count":1}],"gender":"female","name":"Michonne"}]}`,
 		string(js))
 }
 

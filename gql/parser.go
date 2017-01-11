@@ -995,115 +995,94 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 		item := it.Item()
 		switch item.Typ {
 		case lex.ItemError:
-			{
-				return x.Errorf(item.Val)
-			}
+			return x.Errorf(item.Val)
 		case lex.ItemEOF:
-			{
-				return nil
-			}
+			return nil
 		case itemRightCurl:
-			{
-				return nil
-			}
+			return nil
 		case itemThreeDots:
-			{
-				it.Next()
-				item = it.Item()
-				if item.Typ == itemName {
-					// item.Val is expected to start with "..." and to have len >3.
-					gq.Children = append(gq.Children, &GraphQuery{fragment: item.Val})
-					// Unlike itemName, there is no nesting, so do not change "curp".
-				}
+			it.Next()
+			item = it.Item()
+			if item.Typ == itemName {
+				// item.Val is expected to start with "..." and to have len >3.
+				gq.Children = append(gq.Children, &GraphQuery{fragment: item.Val})
+				// Unlike itemName, there is no nesting, so do not change "curp".
 			}
 		case itemName:
-			{
-				// Handle count.
-				if item.Val == "count" {
-					if isCount != 0 {
-						return x.Errorf("Invalid mention of count.")
-					}
-					isCount = 1
-					it.Next()
-					item = it.Item()
-					if item.Typ != itemLeftRound {
-						return x.Errorf("Invalid mention of count.")
-					}
-					continue
+			// Handle count.
+			if item.Val == "count" {
+				if isCount != 0 {
+					return x.Errorf("Invalid mention of count.")
 				}
-				if isCount == 2 {
-					return x.Errorf("Multiple predicates not allowed in single count.")
-				}
-				child := &GraphQuery{
-					Args:    make(map[string]string),
-					Attr:    item.Val,
-					IsCount: isCount == 1,
-				}
-				gq.Children = append(gq.Children, child)
-				curp = child
-				if isCount == 1 {
-					isCount = 2
-				}
-			}
-		case itemColon:
-			{
+				isCount = 1
 				it.Next()
 				item = it.Item()
-				if item.Typ != itemName {
-					return x.Errorf("Predicate Expected but got: %s", item.Val)
+				if item.Typ != itemLeftRound {
+					return x.Errorf("Invalid mention of count.")
 				}
-				curp.Alias = curp.Attr
-				curp.Attr = item.Val
+				continue
 			}
+			if isCount == 2 {
+				return x.Errorf("Multiple predicates not allowed in single count.")
+			}
+			child := &GraphQuery{
+				Args:    make(map[string]string),
+				Attr:    item.Val,
+				IsCount: isCount == 1,
+			}
+			gq.Children = append(gq.Children, child)
+			curp = child
+			if isCount == 1 {
+				isCount = 2
+			}
+		case itemColon:
+			it.Next()
+			item = it.Item()
+			if item.Typ != itemName {
+				return x.Errorf("Predicate Expected but got: %s", item.Val)
+			}
+			curp.Alias = curp.Attr
+			curp.Attr = item.Val
 		case itemLeftCurl:
-			{
-				if err := godeep(it, curp); err != nil {
-					return err
-				}
-
+			if err := godeep(it, curp); err != nil {
+				return err
 			}
 		case itemLeftRound:
-			{
-				if curp.Attr == "" {
-					return x.Errorf("Predicate name cannot be empty.")
+			if curp.Attr == "" {
+				return x.Errorf("Predicate name cannot be empty.")
+			}
+			args, err := parseArguments(it)
+			if err != nil {
+				return err
+			}
+			// Stores args in GraphQuery, will be used later while retrieving results.
+			for _, p := range args {
+				if p.Val == "" {
+					return x.Errorf("Got empty argument")
 				}
-				args, err := parseArguments(it)
-				if err != nil {
-					return err
-				}
-				// Stores args in GraphQuery, will be used later while retrieving results.
-				for _, p := range args {
-					if p.Val == "" {
-						return x.Errorf("Got empty argument")
-					}
-					curp.Args[p.Key] = p.Val
-				}
+				curp.Args[p.Key] = p.Val
 			}
 		case itemAt:
-			{
-				it.Next()
-				item := it.Item()
-				if item.Typ == itemName {
-					switch item.Val {
-					case "filter":
-						filter, err := parseFilter(it)
-						if err != nil {
-							return err
-						}
-						curp.Filter = filter
-
-					default:
-						return x.Errorf("Unknown directive [%s]", item.Val)
+			it.Next()
+			item := it.Item()
+			if item.Typ == itemName {
+				switch item.Val {
+				case "filter":
+					filter, err := parseFilter(it)
+					if err != nil {
+						return err
 					}
+					curp.Filter = filter
+
+				default:
+					return x.Errorf("Unknown directive [%s]", item.Val)
 				}
 			}
 		case itemRightRound:
-			{
-				if isCount != 2 {
-					return x.Errorf("Invalid mention of brackets")
-				}
-				isCount = 0
+			if isCount != 2 {
+				return x.Errorf("Invalid mention of brackets")
 			}
+			isCount = 0
 		}
 	}
 	return nil
