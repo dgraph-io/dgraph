@@ -36,7 +36,6 @@ import (
 )
 
 func createTestStore(t *testing.T) (string, *store.Store) {
-	time.Sleep(time.Second)
 	dir, err := ioutil.TempDir("", "storetest_")
 	require.NoError(t, err)
 

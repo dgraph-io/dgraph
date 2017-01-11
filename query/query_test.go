@@ -22,7 +22,6 @@ import (
 	"io/ioutil"
 	"os"
 	"testing"
-	"time"
 
 	farm "github.com/dgryski/go-farm"
 	"github.com/gogo/protobuf/proto"
@@ -155,7 +154,6 @@ func delEdgeToUID(t *testing.T, ps *store.Store, attr string, src uint64, dst ui
 }
 
 func populateGraph(t *testing.T) (string, string, *store.Store) {
-	time.Sleep(time.Second)
 	// logrus.SetLevel(logrus.DebugLevel)
 	dir, err := ioutil.TempDir("", "storetest_")
 	require.NoError(t, err)
@@ -2429,6 +2427,7 @@ func TestSchema(t *testing.T) {
 }
 
 func TestMain(m *testing.M) {
+	x.SetTestRun()
 	x.Init()
 	os.Exit(m.Run())
 }
