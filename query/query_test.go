@@ -332,15 +332,13 @@ func TestGetUIDCount(t *testing.T) {
 				_uid_
 				gender
 				alive
-				friend {
-					_count_
-				}
+				count(friend) 
 			}
 		}
 	`
 	js := processToJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"_uid_":"0x1","alive":"true","friend":[{"_count_":5}],"gender":"female","name":"Michonne"}]}`,
+		`{"me":[{"_uid_":"0x1","alive":"true","friend":[{"count":5}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
 
@@ -357,9 +355,7 @@ func TestDebug1(t *testing.T) {
 				name
 				gender
 				alive
-				friend {
-					_count_
-				}
+				count(friend)
 			}
 		}
 	`
@@ -390,9 +386,7 @@ func TestDebug2(t *testing.T) {
 				name
 				gender
 				alive
-				friend {
-					_count_
-				}
+				count(friend)
 			}
 		}
 	`
@@ -419,16 +413,14 @@ func TestCount(t *testing.T) {
 				name
 				gender
 				alive
-				friend {
-					_count_
-				}
+				count(friend)
 			}
 		}
 	`
 
 	js := processToJSON(t, query)
 	require.EqualValues(t,
-		`{"me":[{"alive":"true","friend":[{"_count_":5}],"gender":"female","name":"Michonne"}]}`,
+		`{"me":[{"alive":"true","friend":[{"count":5}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
 
@@ -437,21 +429,16 @@ func TestCountError1(t *testing.T) {
 	query := `
 		{
 			me(id: 0x01) {
-				friend {
+				count(friend {
 					name
-					_count_
-				}
+				})
 				name
 				gender
 				alive
 			}
 		}
 	`
-	res, err := gql.Parse(query)
-	require.NoError(t, err)
-
-	ctx := context.Background()
-	_, err = ToSubGraph(ctx, res.Query)
+	_, err := gql.Parse(query)
 	require.Error(t, err)
 }
 
@@ -460,22 +447,34 @@ func TestCountError2(t *testing.T) {
 	query := `
 		{
 			me(id: 0x01) {
-				friend {
-					_count_ {
+				count(friend {
+					c {
 						friend
 					}
-				}
+				})
 				name
 				gender
 				alive
 			}
 		}
 	`
-	res, err := gql.Parse(query)
-	require.NoError(t, err)
+	_, err := gql.Parse(query)
+	require.Error(t, err)
+}
 
-	ctx := context.Background()
-	_, err = ToSubGraph(ctx, res.Query)
+func TestCountError3(t *testing.T) {
+	// Alright. Now we have everything set up. Let's create the query.
+	query := `
+		{
+			me(id: 0x01) {
+				count(friend
+				name
+				gender
+				alive
+			}
+		}
+	`
+	_, err := gql.Parse(query)
 	require.Error(t, err)
 }
 
@@ -804,8 +803,9 @@ func TestToJSONFilterOrCount(t *testing.T) {
 			me(id:0x01) {
 				name
 				gender
-				friend @filter(anyof(name, "Andrea") || anyof(name, "Andrea Rhee")) {
-					_count_
+				count(friend @filter(anyof(name, "Andrea") || anyof(name, "Andrea Rhee")))
+				friend @filter(anyof(name, "Andrea")) {
+					name
 				}
 			}
 		}
@@ -813,7 +813,7 @@ func TestToJSONFilterOrCount(t *testing.T) {
 
 	js := processToJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"friend":[{"_count_":2}],"gender":"female","name":"Michonne"}]}`,
+		`{"me":[{"friend":[{"count":2}, {"name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
 
@@ -1126,16 +1126,14 @@ func TestToJSONFilterOrFirstOffsetCount(t *testing.T) {
 			me(id:0x01) {
 				name
 				gender
-				friend(offset:1, first:1) @filter(anyof("name", "Andrea") || anyof("name", "SomethingElse Rhee") || anyof("name", "Daryl Dixon")) {
-					_count_
-				}
+				count(friend(offset:1, first:1) @filter(anyof("name", "Andrea") || anyof("name", "SomethingElse Rhee") || anyof("name", "Daryl Dixon"))) 
 			}
 		}
 	`
 
 	js := processToJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"friend":[{"_count_":1}],"gender":"female","name":"Michonne"}]}`,
+		`{"me":[{"friend":[{"count":1}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
 
@@ -1274,15 +1272,13 @@ func TestToJSONReverseDelSetCount(t *testing.T) {
 		{
 			me(id:0x18) {
 				name
-				~friend {
-					_count_
-				}
+				count(~friend)
 			}
 		}
 	`
 	js := processToJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"name":"Glenn Rhee","~friend":[{"_count_":2}]}]}`,
+		`{"me":[{"name":"Glenn Rhee","~friend":[{"count":2}]}]}`,
 		js)
 }
 
@@ -1659,16 +1655,14 @@ func TestToJSONOrderDescCount(t *testing.T) {
 			me(id:0x01) {
 				name
 				gender
-				friend @filter(anyof("name", "Rick")) (order: dob) {
-					_count_
-				}
+				count(friend @filter(anyof("name", "Rick")) (order: dob)) 
 			}
 		}
 	`
 
 	js := processToJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"friend":[{"_count_":1}],"gender":"female","name":"Michonne"}]}`,
+		`{"me":[{"friend":[{"count":1}],"gender":"female","name":"Michonne"}]}`,
 		string(js))
 }
 

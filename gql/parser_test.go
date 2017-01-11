@@ -902,9 +902,7 @@ func TestParseFilter_unknowndirective(t *testing.T) {
 			}
 			gender,age
 			hometown
-		}
-
-`
+		}`
 	_, err := Parse(query)
 	require.Error(t, err)
 }
@@ -915,6 +913,90 @@ func TestParseGeneratorError(t *testing.T) {
 			friends {
 				name
 			}
+			gender,age
+			hometown
+			count(friends)
+		}
+	}
+`
+	_, err := Parse(query)
+	require.Error(t, err)
+}
+
+func TestParseCountAsFuncMultiple(t *testing.T) {
+	schema.ParseBytes([]byte("scalar name:string @index"))
+	query := `{
+		me(id:1) {
+			count(friends), count(relatives)
+			count(classmates)
+			gender,age
+			hometown
+		}
+	}
+`
+	gq, err := Parse(query)
+	require.NoError(t, err)
+	require.Equal(t, 6, len(gq.Query.Children))
+	require.Equal(t, true, gq.Query.Children[0].IsCount)
+	require.Equal(t, "friends", gq.Query.Children[0].Attr)
+	require.Equal(t, true, gq.Query.Children[1].IsCount)
+	require.Equal(t, "relatives", gq.Query.Children[1].Attr)
+	require.Equal(t, true, gq.Query.Children[2].IsCount)
+	require.Equal(t, "classmates", gq.Query.Children[2].Attr)
+
+}
+
+func TestParseCountAsFuncMultipleError(t *testing.T) {
+	schema.ParseBytes([]byte("scalar name:string @index"))
+	query := `{
+		me(id:1) {
+			count(friends, relatives
+			classmates)
+			gender,age
+			hometown
+		}
+	}
+`
+	_, err := Parse(query)
+	require.Error(t, err)
+}
+
+func TestParseCountAsFunc(t *testing.T) {
+	schema.ParseBytes([]byte("scalar name:string @index"))
+	query := `{
+		me(id:1) {
+			count(friends)
+			gender,age
+			hometown
+		}
+	}
+`
+	gq, err := Parse(query)
+	require.NoError(t, err)
+	require.Equal(t, true, gq.Query.Children[0].IsCount)
+	require.Equal(t, 4, len(gq.Query.Children))
+
+}
+
+func TestParseCountError1(t *testing.T) {
+	schema.ParseBytes([]byte("scalar name:string @index"))
+	query := `{
+		me(id:1) {
+			count(friends
+			gender,age
+			hometown
+		}
+	}
+`
+	_, err := Parse(query)
+	require.Error(t, err)
+}
+
+func TestParseCountError2(t *testing.T) {
+	schema.ParseBytes([]byte("scalar name:string @index"))
+	query := `{
+		me(id:1) {
+			count((friends)
 			gender,age
 			hometown
 		}
