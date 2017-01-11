@@ -181,22 +181,6 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *task.DirectedEdge) e
 	return nil
 }
 
-// TokensForTest returns keys for a table. This is just for testing / debugging.
-func TokensForTest(attr string) []string {
-	pk := x.ParsedKey{Attr: attr}
-	prefix := pk.IndexPrefix()
-	it := pstore.NewIterator()
-	defer it.Close()
-
-	var out []string
-	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
-		k := x.Parse(it.Key().Data())
-		x.AssertTrue(k.IsIndex())
-		out = append(out, k.Term)
-	}
-	return out
-}
-
 // RebuildIndex rebuilds index for a given attribute.
 func RebuildIndex(ctx context.Context, attr string) error {
 	x.AssertTruef(schema.IsIndexed(attr), "Attr %s not indexed", attr)

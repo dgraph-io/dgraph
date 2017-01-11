@@ -73,7 +73,7 @@ func addMutationWithIndex(t *testing.T, l *List, edge *task.DirectedEdge, op uin
 	require.NoError(t, l.AddMutationWithIndex(context.Background(), edge))
 }
 
-func TestAddMutationA(t *testing.T) {
+func TestTokensTable(t *testing.T) {
 	dir, err := ioutil.TempDir("", "storetest_")
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
@@ -103,7 +103,7 @@ func TestAddMutationA(t *testing.T) {
 	var pl types.PostingList
 	x.Check(pl.Unmarshal(slice.Data()))
 
-	require.EqualValues(t, []string{"david"}, TokensForTest("name"))
+	require.EqualValues(t, []string{"david"}, tokensForTest("name"))
 
 	CommitLists(10)
 	time.Sleep(time.Second)
@@ -112,13 +112,29 @@ func TestAddMutationA(t *testing.T) {
 	require.NoError(t, err)
 	x.Check(pl.Unmarshal(slice.Data()))
 
-	require.EqualValues(t, []string{"david"}, TokensForTest("name"))
+	require.EqualValues(t, []string{"david"}, tokensForTest("name"))
 }
 
 const schemaStrAlt = `
 scalar name:string @index
 scalar dob:date @index
 `
+
+// tokensForTest returns keys for a table. This is just for testing / debugging.
+func tokensForTest(attr string) []string {
+	pk := x.ParsedKey{Attr: attr}
+	prefix := pk.IndexPrefix()
+	it := pstore.NewIterator()
+	defer it.Close()
+
+	var out []string
+	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+		k := x.Parse(it.Key().Data())
+		x.AssertTrue(k.IsIndex())
+		out = append(out, k.Term)
+	}
+	return out
+}
 
 // addEdgeToValue adds edge without indexing.
 func addEdgeToValue(t *testing.T, ps *store.Store, attr string, src uint64,

@@ -105,10 +105,10 @@ func processSort(ts *task.Sort) (*task.SortResult, error) {
 		out[i].ulist = &task.List{Uids: []uint64{}}
 	}
 
-	// Iterate over every bucket in TokensTable.
+	// Iterate over every bucket / token.
 	it := pstore.NewIterator()
 	defer it.Close()
-	pk := x.IndexParsedKey(attr, "")
+	pk := x.Parse(x.IndexKey(attr, ""))
 	indexPrefix := pk.IndexPrefix()
 
 	if !ts.Desc {

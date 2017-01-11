@@ -385,17 +385,22 @@ func GetOrCreate(key []byte, group uint32) (rlist *List, decr func()) {
 		l.decr()
 	}
 	lp.water = marks.Get(group)
-
-	// If it is index, commit to RocksDB.
 	pk := x.Parse(key)
-	if pk.IsIndex() {
-		// Look up RocksDB. If missing, commit empty value.
-		slice, err := pstore.Get(key)
-		x.Check(err)
-		if slice.Size() == 0 {
-			// Key was missing. Let's commit a dummy PostingList.
-			x.Check(pstore.SetOne(key, dummyPostingList))
-		}
+
+	// This replaces "TokensTable". The idea is that we want to quickly add the
+	// index key to the data store, with essentially an empty value. We just need
+	// the keys for filtering / sorting.
+	if l == lp && pk.IsIndex() {
+		// Lock before entering goroutine. Otherwise, some tests in query will fail.
+		l.Lock()
+		go func() {
+			defer l.Unlock()
+			slice, err := pstore.Get(key)
+			x.Check(err)
+			if slice.Size() == 0 {
+				x.Check(pstore.SetOne(l.key, dummyPostingList))
+			}
+		}()
 	}
 	return lp, lp.decr
 }

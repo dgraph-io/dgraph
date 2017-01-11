@@ -222,6 +222,8 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 		[]uint64{},
 		[]uint64{12},
 	}, algo.ToUintsListForTest(r.UidMatrix))
+
+	//	x.WaitGroup.Wait()
 }
 
 // Index-related test. Similar to TestProcessTaskIndeMLayer except we call
@@ -300,6 +302,8 @@ func TestProcessTaskIndex(t *testing.T) {
 		[]uint64{},
 		[]uint64{12},
 	}, algo.ToUintsListForTest(r.UidMatrix))
+
+	//	x.WaitGroup.Wait()
 }
 
 /*
@@ -602,6 +606,7 @@ func TestProcessSortOffsetCount(t *testing.T) {
 		algo.ToUintsListForTest(r.UidMatrix))
 }
 */
+
 func TestMain(m *testing.M) {
 	x.Init()
 	os.Exit(m.Run())
