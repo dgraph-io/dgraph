@@ -3,7 +3,6 @@ package x
 import (
 	"container/heap"
 	"sync/atomic"
-	"time"
 
 	"golang.org/x/net/trace"
 )
@@ -33,9 +32,8 @@ type RaftValue struct {
 // Mark contains raft proposal id and a done boolean. It is used to
 // update the WaterMark struct about the status of a proposal.
 type Mark struct {
-	Index    uint64
-	Done     bool      // Set to true if the pending mutation is done.
-	Deadline time.Time // Automatically set to true after deadline passes.
+	Index uint64
+	Done  bool // Set to true if the pending mutation is done.
 }
 
 // WaterMark is used to keep track of the maximum done index. The right way to use
@@ -95,14 +93,6 @@ func (w *WaterMark) process() {
 			delta = -1
 		}
 		pending[mark.Index] = prev + delta
-
-		if !mark.Deadline.IsZero() {
-			AssertTruef(delta == 1, "Invalid Mark: %+v", mark)
-			go func(m Mark) {
-				time.Sleep(m.Deadline.Sub(time.Now()))
-				w.Ch <- Mark{Index: m.Index, Done: true}
-			}(mark)
-		}
 
 		loop++
 		if len(indices) > 0 && loop%10000 == 0 {

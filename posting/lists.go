@@ -77,7 +77,7 @@ func (g *syncMarks) create(group uint32) *x.WaterMark {
 	if prev, present := g.m[group]; present {
 		return prev
 	}
-	w := &x.WaterMark{Name: fmt.Sprintf("group: %d", group)}
+	w := &x.WaterMark{Name: fmt.Sprintf("Synced: Group %d", group)}
 	w.Init()
 	g.m[group] = w
 	return w

@@ -169,7 +169,7 @@ func newNode(gid uint32, id uint64, myAddr string) *node {
 		raftContext: rc,
 		messages:    make(chan sendmsg, 1000),
 	}
-	n.applied = x.WaterMark{Name: fmt.Sprintf("Committed Mark: Group %d", n.gid)}
+	n.applied = x.WaterMark{Name: fmt.Sprintf("Committed: Group %d", n.gid)}
 	n.applied.Init()
 
 	return n
@@ -388,6 +388,7 @@ func (n *node) processMembership(e raftpb.Entry, mm *task.Membership) error {
 func (n *node) process(e raftpb.Entry, pending chan struct{}) {
 	defer func() {
 		n.applied.Ch <- x.Mark{Index: e.Index, Done: true}
+		posting.WaterMarkFor(n.gid).Ch <- x.Mark{Index: e.Index, Done: true}
 	}()
 
 	if e.Type != raftpb.EntryNormal {
@@ -417,6 +418,7 @@ func (n *node) processCommitCh() {
 	for e := range n.commitCh {
 		if len(e.Data) == 0 {
 			n.applied.Ch <- x.Mark{Index: e.Index, Done: true}
+			posting.WaterMarkFor(n.gid).Ch <- x.Mark{Index: e.Index, Done: true}
 			continue
 		}
 
@@ -433,17 +435,9 @@ func (n *node) processCommitCh() {
 			cs := n.Raft().ApplyConfChange(cc)
 			n.SetConfState(cs)
 			n.applied.Ch <- x.Mark{Index: e.Index, Done: true}
+			posting.WaterMarkFor(n.gid).Ch <- x.Mark{Index: e.Index, Done: true}
 
 		} else {
-			// Add a pending mark for synced watermark. This would be marked as done
-			// automatically after a minute. This is important to avoid the case where
-			// an index doesn't get registered by synced watermark, and a later index
-			// gets synced first. Using this deadline technique, we register it asap,
-			// and then let the mutation be applied and synced later.
-			posting.WaterMarkFor(n.gid).Ch <- x.Mark{
-				Index:    e.Index,
-				Deadline: time.Now().Add(time.Minute),
-			}
 			go n.process(e, pending)
 		}
 	}
@@ -530,14 +524,12 @@ func (n *node) Run() {
 					continue
 				}
 
+				status := x.Mark{Index: entry.Index, Done: false}
+				n.applied.Ch <- status
+				posting.WaterMarkFor(n.gid).Ch <- status
+
 				// Just queue up to be processed. Don't wait on them.
 				n.commitCh <- entry
-				status := x.Mark{Index: entry.Index, Done: false}
-
-				if entry.Index == 2 {
-					fmt.Printf("%+v\n", entry)
-				}
-				n.applied.Ch <- status
 			}
 
 			if indexEntry != nil {
