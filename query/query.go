@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"strconv"
 	"strings"
@@ -752,4 +753,29 @@ func (sg *SubGraph) ToJSON(l *Latency) ([]byte, error) {
 		res["server_latency"] = l.ToMap()
 	}
 	return json.Marshal(res)
+}
+
+func (sg *SubGraph) ToFastJson(l *Latency) ([]byte, error) {
+	var seedNode *fastJsonNode
+	n := seedNode.New("_root_")
+	for _, uid := range sg.DestUIDs.Uids {
+		// For the root, the name is stored in Alias, not Attr.
+		n1 := seedNode.New(sg.Params.Alias)
+		if sg.Params.GetUID || sg.Params.isDebug {
+			n1.SetUID(uid)
+		}
+
+		if err := sg.preTraverse(uid, n1); err != nil {
+			if err.Error() == "_INV_" {
+				continue
+			}
+			return nil, err
+		}
+		if n1.IsEmpty() {
+			continue
+		}
+		fmt.Println(sg.Params.Alias)
+		n.AddChild(sg.Params.Alias, n1)
+	}
+	return n.(*fastJsonNode).fastJsonNodeToJSON(), nil
 }

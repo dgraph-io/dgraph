@@ -19,6 +19,7 @@ package query
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -2429,4 +2430,54 @@ func TestSchema(t *testing.T) {
 func TestMain(m *testing.M) {
 	x.Init()
 	os.Exit(m.Run())
+}
+
+func makeSubgraph(query string, t *testing.T) *SubGraph {
+	dir, dir2, ps := populateGraph(t)
+	defer ps.Close()
+	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
+
+	res, err := gql.Parse(query)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	sg, err := ToSubGraph(ctx, res.Query)
+	require.NoError(t, err)
+	sg.DebugPrint("")
+
+	ch := make(chan error)
+	go ProcessGraph(ctx, sg, nil, ch)
+	err = <-ch
+	require.NoError(t, err)
+	sg.DebugPrint("")
+
+	var l Latency
+	_, err = sg.ToJSON(&l)
+	require.NoError(t, err)
+
+	return sg
+}
+
+func TestFastToJSON(t *testing.T) {
+	query := `
+		{
+			me(id:0x01) {
+				name
+				_uid_
+				gender
+				alive
+				friend {
+					_uid_
+					name
+				}
+			}
+		}
+	`
+
+	sg := makeSubgraph(query, t)
+
+	var l Latency
+	js, _ := sg.ToFastJson(&l)
+	fmt.Println("fasttojson:", string(js))
 }

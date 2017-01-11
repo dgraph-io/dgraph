@@ -17,7 +17,8 @@
 package query
 
 import (
-	"encoding/json"
+	//	"encoding/json"
+	"bytes"
 	"fmt"
 	"time"
 
@@ -165,10 +166,10 @@ func (fj *fastJsonNode) AddChild(attr string, child outputNode) {
 	if !found {
 		fj.data[attr] = make([]string, 0, 5)
 	}
-	bs, err := json.Marshal(child.(*fastJsonNode).data)
-	if err != nil {
-		fj.data[attr] = append(fj.data[attr], string(bs))
-	}
+	bs := child.(*fastJsonNode).fastJsonNodeToJSON()
+	// if err == nil {
+	fj.data[attr] = append(fj.data[attr], string(bs))
+	//}
 }
 
 func (fj *fastJsonNode) New(attr string) outputNode {
@@ -205,4 +206,41 @@ func valToString(v types.Val) string {
 		return "not yet implemented"
 
 	}
+}
+
+func (fj *fastJsonNode) fastJsonNodeToJSON() []byte {
+	res := fj.data
+	finalRes := make(map[string]string)
+	for k, v := range res {
+		if len(v) == 1 {
+			finalRes[k] = "\"" + v[0] + "\""
+		} else {
+			var buf bytes.Buffer
+			first := true
+			for _, vi := range v {
+				if !first {
+					buf.WriteString(",")
+				}
+				first = false
+				buf.WriteString(vi)
+			}
+			finalRes[k] = "[" + string(buf.Bytes()) + "]"
+		}
+	}
+
+	var buf bytes.Buffer
+	buf.WriteString("{")
+	first := true
+	for k, v := range finalRes {
+		if !first {
+			buf.WriteString(",")
+		}
+		first = false
+		buf.WriteString("\"" + k + "\"")
+		buf.WriteString(":")
+		buf.WriteString(v)
+	}
+	buf.WriteString("}")
+
+	return buf.Bytes()
 }
