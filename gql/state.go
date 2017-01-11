@@ -181,7 +181,7 @@ func lexFuncOrArg(l *lex.Lexer) lex.StateFn {
 				}
 			}
 		default:
-			return l.Errorf("Unrecognized character in lexText: %#U", r)
+			return l.Errorf("Unrecognized character in inside a func: %#U", r)
 		}
 	}
 	return nil

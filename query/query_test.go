@@ -438,11 +438,7 @@ func TestCountError1(t *testing.T) {
 			}
 		}
 	`
-	res, err := gql.Parse(query)
-	require.NoError(t, err)
-
-	ctx := context.Background()
-	_, err = ToSubGraph(ctx, res.Query)
+	_, err := gql.Parse(query)
 	require.Error(t, err)
 }
 
@@ -462,11 +458,7 @@ func TestCountError2(t *testing.T) {
 			}
 		}
 	`
-	res, err := gql.Parse(query)
-	require.NoError(t, err)
-
-	ctx := context.Background()
-	_, err = ToSubGraph(ctx, res.Query)
+	_, err := gql.Parse(query)
 	require.Error(t, err)
 }
 
