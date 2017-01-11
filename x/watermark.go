@@ -2,6 +2,8 @@ package x
 
 import (
 	"container/heap"
+	"fmt"
+	"math/rand"
 	"sync/atomic"
 
 	"golang.org/x/net/trace"
@@ -77,9 +79,12 @@ func (w *WaterMark) process() {
 	// pending maps raft proposal index to the number of pending mutations for this proposal.
 	pending := make(map[uint64]int)
 
+	r := rand.Uint32()
 	heap.Init(&indices)
 	var loop uint64
+	fmt.Printf("\n-------> [%d] START: %v done until: %v\n\n", r, w.Name, w.DoneUntil())
 	for mark := range w.Ch {
+		fmt.Printf("\n-----> [%d] %v mark: %+v. Done until: %v\n", r, w.Name, mark, w.DoneUntil())
 		// If not already done, then set. Otherwise, don't undo a done entry.
 		prev, present := pending[mark.Index]
 		if !present {
@@ -105,7 +110,7 @@ func (w *WaterMark) process() {
 		// been done. Stop at the first index, which isn't done.
 		doneUntil := w.DoneUntil()
 		AssertTruef(doneUntil < mark.Index,
-			"Watermark %s: %d should be below current mark: %d", w.Name, doneUntil, mark.Index)
+			"Watermark %s: Done until %d should be below new index: %d", w.Name, doneUntil, mark.Index)
 
 		until := doneUntil
 		loops := 0

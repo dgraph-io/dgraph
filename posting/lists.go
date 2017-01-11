@@ -44,10 +44,6 @@ var (
 
 	commitFraction = flag.Float64("gentlecommit", 0.10, "Fraction of dirty posting lists to commit every few seconds.")
 	lhmapNumShards = flag.Int("lhmap", 32, "Number of shards for lhmap.")
-
-	dirtyChan       chan uint64 // All dirty posting list keys are pushed here.
-	startCommitOnce sync.Once
-	marks           syncMarks
 )
 
 // syncMarks stores the watermark for synced RAFT proposals. Each RAFT proposal consists
@@ -308,24 +304,24 @@ var (
 	lhmap        *listMap
 	pstore       *store.Store
 	syncCh       chan syncEntry
+	dirtyChan    chan uint64 // All dirty posting list keys are pushed here.
+	marks        *syncMarks
 )
-
-func StartCommit() {
-	startCommitOnce.Do(func() {
-		fmt.Println("Starting commit routine.")
-		syncCh = make(chan syncEntry, 10000)
-		go batchSync()
-	})
-}
 
 // Init initializes the posting lists package, the in memory and dirty list hash.
 func Init(ps *store.Store) {
+	marks = new(syncMarks)
 	pstore = ps
 	initIndex()
 	lhmap = newShardedListMap(*lhmapNumShards)
 	dirtyChan = make(chan uint64, 10000)
-	StartCommit()
-	go periodicCommit()
+	fmt.Println("Starting commit routine.")
+	syncCh = make(chan syncEntry, 10000)
+
+	x.AddInit(func() {
+		go batchSync()
+		go periodicCommit()
+	})
 }
 
 func getFromMap(key uint64) *List {
