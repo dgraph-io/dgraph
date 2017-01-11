@@ -17,6 +17,7 @@
 package query
 
 import (
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -149,4 +150,59 @@ func (p *jsonOutputNode) SetXID(xid string) {
 
 func (p *jsonOutputNode) IsEmpty() bool {
 	return len(p.data) == 0
+}
+
+type fastJsonNode struct {
+	data map[string][]string
+}
+
+func (fj *fastJsonNode) AddValue(attr string, v types.Val) {
+	fj.data[attr] = []string{valToString(v)}
+}
+
+func (fj *fastJsonNode) AddChild(attr string, child outputNode) {
+	_, found := fj.data[attr]
+	if !found {
+		fj.data[attr] = make([]string, 0, 5)
+	}
+	bs, err := json.Marshal(child.(*fastJsonNode).data)
+	if err != nil {
+		fj.data[attr] = append(fj.data[attr], string(bs))
+	}
+}
+
+func (fj *fastJsonNode) New(attr string) outputNode {
+	return &fastJsonNode{make(map[string][]string)}
+}
+
+func (fj *fastJsonNode) SetUID(uid uint64) {
+	_, found := fj.data["_uid_"]
+	if !found {
+		fj.data["_uid_"] = []string{fmt.Sprintf("%#x", uid)}
+	}
+}
+
+func (fj *fastJsonNode) SetXID(xid string) {
+	fj.data["_xid_"] = []string{xid}
+}
+
+func (fj *fastJsonNode) IsEmpty() bool {
+	return len(fj.data) == 0
+}
+
+func valToString(v types.Val) string {
+	switch v.Tid {
+	case types.Int32ID:
+		return fmt.Sprintf("%d", v.Value)
+	case types.BoolID:
+		if v.Value.(bool) == true {
+			return "true"
+		}
+		return "false"
+	case types.StringID:
+		return v.Value.(string)
+	default:
+		return "not yet implemented"
+
+	}
 }
