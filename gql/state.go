@@ -192,9 +192,6 @@ Loop:
 	for {
 		switch r := l.Next(); {
 		case r == leftCurl:
-			//			l.Backup()
-			//			l.Emit(itemText) // emit whatever we have so far.
-			//			l.Next()         // advance one to get back to where we saw leftCurl.
 			l.Depth++ // one level down.
 			l.Emit(itemLeftCurl)
 			return lexText

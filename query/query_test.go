@@ -2007,6 +2007,49 @@ func TestMultiQuery(t *testing.T) {
 	require.JSONEq(t, `{"me":[{"gender":"female","name":"Michonne"}], "you":[{"name":"Andrea"}]}`, js)
 }
 
+func TestMultiQueryError1(t *testing.T) {
+	dir1, dir2, ps := populateGraph(t)
+	defer ps.Close()
+	defer os.RemoveAll(dir1)
+	defer os.RemoveAll(dir2)
+	query := `
+    {
+      me(anyof("name", "Michonne")) {
+        name
+        gender
+			
+
+      you(anyof("name", "Andrea")) {
+        name
+      }
+    }
+  `
+	_, err := gql.Parse(query)
+	require.Error(t, err)
+}
+
+func TestMultiQueryError2(t *testing.T) {
+	dir1, dir2, ps := populateGraph(t)
+	defer ps.Close()
+	defer os.RemoveAll(dir1)
+	defer os.RemoveAll(dir2)
+	query := `
+    {
+      me(anyof("name", "Michonne")) {
+        name
+        gender
+			}
+		}
+
+      you(anyof("name", "Andrea")) {
+        name
+      }
+    }
+  `
+	_, err := gql.Parse(query)
+	require.Error(t, err)
+}
+
 func TestGenerator(t *testing.T) {
 	dir1, dir2, ps := populateGraph(t)
 	defer ps.Close()
