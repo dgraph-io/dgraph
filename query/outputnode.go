@@ -18,6 +18,7 @@ package query
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -153,6 +154,36 @@ func (p *jsonOutputNode) IsEmpty() bool {
 	return len(p.data) == 0
 }
 
+// ToJSON converts the internal subgraph object to JSON format which is then\
+// sent to the HTTP client.
+func (sg *SubGraph) ToJSON(l *Latency) ([]byte, error) {
+	var seedNode *jsonOutputNode
+	n := seedNode.New("_root_")
+	for _, uid := range sg.DestUIDs.Uids {
+		// For the root, the name is stored in Alias, not Attr.
+		n1 := seedNode.New(sg.Params.Alias)
+		if sg.Params.GetUID || sg.Params.isDebug {
+			n1.SetUID(uid)
+		}
+
+		if err := sg.preTraverse(uid, n1); err != nil {
+			if err.Error() == "_INV_" {
+				continue
+			}
+			return nil, err
+		}
+		if n1.IsEmpty() {
+			continue
+		}
+		n.AddChild(sg.Params.Alias, n1)
+	}
+	res := n.(*jsonOutputNode).data
+	if sg.Params.isDebug {
+		res["server_latency"] = l.ToMap()
+	}
+	return json.Marshal(res)
+}
+
 type fastJsonNode struct {
 	attrsWithChildren map[string][][]byte
 	attrs             map[string][]byte
@@ -250,4 +281,28 @@ func (fj *fastJsonNode) fastJsonNodeToJSON() []byte {
 	buf.WriteString("}")
 
 	return buf.Bytes()
+}
+
+func (sg *SubGraph) FastToJSON(l *Latency) ([]byte, error) {
+	var seedNode *fastJsonNode
+	n := seedNode.New("_root_")
+	for _, uid := range sg.DestUIDs.Uids {
+		// For the root, the name is stored in Alias, not Attr.
+		n1 := seedNode.New(sg.Params.Alias)
+		if sg.Params.GetUID || sg.Params.isDebug {
+			n1.SetUID(uid)
+		}
+
+		if err := sg.preTraverse(uid, n1); err != nil {
+			if err.Error() == "_INV_" {
+				continue
+			}
+			return nil, err
+		}
+		if n1.IsEmpty() {
+			continue
+		}
+		n.AddChild(sg.Params.Alias, n1)
+	}
+	return n.(*fastJsonNode).fastJsonNodeToJSON(), nil
 }

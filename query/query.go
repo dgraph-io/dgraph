@@ -19,7 +19,6 @@ package query
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"log"
 	"strconv"
@@ -722,58 +721,4 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 	algo.ApplyFilter(sg.DestUIDs,
 		func(uid uint64, idx int) bool { return included[idx] })
 	return nil
-}
-
-// ToJSON converts the internal subgraph object to JSON format which is then\
-// sent to the HTTP client.
-func (sg *SubGraph) ToJSON(l *Latency) ([]byte, error) {
-	var seedNode *jsonOutputNode
-	n := seedNode.New("_root_")
-	for _, uid := range sg.DestUIDs.Uids {
-		// For the root, the name is stored in Alias, not Attr.
-		n1 := seedNode.New(sg.Params.Alias)
-		if sg.Params.GetUID || sg.Params.isDebug {
-			n1.SetUID(uid)
-		}
-
-		if err := sg.preTraverse(uid, n1); err != nil {
-			if err.Error() == "_INV_" {
-				continue
-			}
-			return nil, err
-		}
-		if n1.IsEmpty() {
-			continue
-		}
-		n.AddChild(sg.Params.Alias, n1)
-	}
-	res := n.(*jsonOutputNode).data
-	if sg.Params.isDebug {
-		res["server_latency"] = l.ToMap()
-	}
-	return json.Marshal(res)
-}
-
-func (sg *SubGraph) FastToJSON(l *Latency) ([]byte, error) {
-	var seedNode *fastJsonNode
-	n := seedNode.New("_root_")
-	for _, uid := range sg.DestUIDs.Uids {
-		// For the root, the name is stored in Alias, not Attr.
-		n1 := seedNode.New(sg.Params.Alias)
-		if sg.Params.GetUID || sg.Params.isDebug {
-			n1.SetUID(uid)
-		}
-
-		if err := sg.preTraverse(uid, n1); err != nil {
-			if err.Error() == "_INV_" {
-				continue
-			}
-			return nil, err
-		}
-		if n1.IsEmpty() {
-			continue
-		}
-		n.AddChild(sg.Params.Alias, n1)
-	}
-	return n.(*fastJsonNode).fastJsonNodeToJSON(), nil
 }

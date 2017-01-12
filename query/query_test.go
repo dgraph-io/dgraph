@@ -2493,13 +2493,14 @@ func TestBFastJsonNode(t *testing.T) {
 				friend {
 					_uid_
 					name
+				        friend {
+					   _uid_
+					   name
+				        }
 				}
 			}
 		}
 	`
-
-	// js := processToJSON(t, query)
-	// fmt.Println("response js:", js)
 
 	sgFastJson := makeSubgraph(query, t)
 	var l Latency
@@ -2515,7 +2516,7 @@ func TestBFastJsonNode(t *testing.T) {
 			}
 		}
 	})
-	fmt.Println("fastToJson: ", bFastJson.N, bFastJson.T, bFastJson.NsPerOp())
+	fmt.Println("fastToJson: Benchmarks: times: ", bFastJson.N, " total time: ", bFastJson.T, " ns/op: ", bFastJson.NsPerOp())
 }
 
 func TestBCurrJsonNode(t *testing.T) {
@@ -2529,13 +2530,14 @@ func TestBCurrJsonNode(t *testing.T) {
 				friend {
 					_uid_
 					name
+				        friend {
+					   _uid_
+					   name
+				        }
 				}
 			}
 		}
 	`
-
-	// js := processToJSON(t, query)
-	// fmt.Println("response js:", js)
 
 	sgJson := makeSubgraph(query, t)
 	var l Latency
@@ -2552,5 +2554,5 @@ func TestBCurrJsonNode(t *testing.T) {
 			}
 		}
 	})
-	fmt.Println("tojson: ", bresJson.N, bresJson.T, bresJson.NsPerOp())
+	fmt.Println("tojson: Benchmarks: times: ", bresJson.N, " total time: ", bresJson.T, " ns/op: ", bresJson.NsPerOp())
 }
