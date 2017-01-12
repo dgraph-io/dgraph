@@ -23,6 +23,9 @@ import (
 	"fmt"
 	"time"
 
+	geom "github.com/twpayne/go-geom"
+	"github.com/twpayne/go-geom/encoding/geojson"
+
 	"github.com/dgraph-io/dgraph/query/graph"
 	"github.com/dgraph-io/dgraph/types"
 )
@@ -242,7 +245,7 @@ func valToString(v types.Val) ([]byte, error) {
 	case types.DateID:
 		return v.Value.(time.Time).MarshalJSON()
 	case types.GeoID:
-		return []byte("\"Need to figure it out.\""), nil
+		return geojson.Marshal(v.Value.(geom.T))
 	case types.UidID:
 		return []byte(fmt.Sprintf("%#x", v.Value)), nil
 	default:

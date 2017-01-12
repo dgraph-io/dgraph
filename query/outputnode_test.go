@@ -286,6 +286,43 @@ func TestEnvFastToJSONNestedQuery(t *testing.T) {
 	require.JSONEq(t, string(jsFast), string(jsCurr))
 }
 
+func TestEnvFastToJSONGeoQuery(t *testing.T) {
+	dir, dir2, ps := populateGraph(t)
+	defer ps.Close()
+	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
+
+	query := `
+		{
+			me(id:0x01) {
+				name
+				_uid_
+				gender
+                                loc
+				friend {
+		                        loc
+                                        name
+                                        friend {
+                                           alive
+                                           name
+                                        }
+				}
+			}
+		}
+	`
+
+	sg := makeSubgraph(query, t)
+	var l Latency
+	jsFast, err := sg.FastToJSON(&l)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"me":[{"_uid_":"0x1","friend":[{"loc":{"type":"Polygon","coordinates":[[[0,0],[2,0],[2,2],[0,2],[0,0]]]},"name":"Rick Grimes"},{"loc":{"type":"Point","coordinates":[1.10001,2.000001]},"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"friend":[{"name":"Glenn Rhee"}],"loc":{"type":"Point","coordinates":[2,2]},"name":"Andrea"}],"gender":"female","loc":{"type":"Point","coordinates":[1.1,2]},"name":"Michonne"}]}`,
+		string(jsFast))
+
+	jsCurr, err := sg.ToJSON(&l)
+	require.NoError(t, err)
+	require.JSONEq(t, string(jsFast), string(jsCurr))
+}
+
 func TestBenchmarkFastJsonNode(t *testing.T) {
 	dir, dir2, ps := populateGraph(t)
 	defer ps.Close()
