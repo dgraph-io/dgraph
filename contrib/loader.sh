@@ -58,7 +58,7 @@ run_index_test allof_the_first object 4383
 run_index_test releasedate release 137858
 run_index_test releasedate_sort release 137858
 run_index_test releasedate_sort_first_offset release 2315
-run_index_test 	 release 60991
+run_index_test release 60991
 run_index_test gen_anyof_good_bad object 1103
 
 killall dgraph
