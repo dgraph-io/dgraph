@@ -199,11 +199,6 @@ func populateGraph(t *testing.T) (string, string, *store.Store) {
 }
 
 func makeSubgraph(query string, t *testing.T) *SubGraph {
-	dir, dir2, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir)
-	defer os.RemoveAll(dir2)
-
 	res, err := gql.Parse(query)
 	require.NoError(t, err)
 
@@ -224,6 +219,11 @@ func makeSubgraph(query string, t *testing.T) *SubGraph {
 }
 
 func TestFastToJSONSimpleQuery(t *testing.T) {
+	dir, dir2, ps := populateGraph(t)
+	defer ps.Close()
+	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
+
 	query := `
 		{
 			me(id:0x01) {
@@ -248,6 +248,11 @@ func TestFastToJSONSimpleQuery(t *testing.T) {
 }
 
 func TestBenchmarkFastJsonNode(t *testing.T) {
+	dir, dir2, ps := populateGraph(t)
+	defer ps.Close()
+	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
+
 	query := `
 		{
 			me(id:0x01) {
@@ -281,10 +286,15 @@ func TestBenchmarkFastJsonNode(t *testing.T) {
 			}
 		}
 	})
-	fmt.Println("fastToJson: Benchmarks: times: ", bFastJson.N, " total time: ", bFastJson.T, " ns/op: ", bFastJson.NsPerOp())
+	fmt.Println("fastToJson: Benchmarks: ", bFastJson.N, " times ; ", bFastJson.T, " total time ; ", bFastJson.NsPerOp(), " ns/op")
 }
 
 func TestBenchmarkOutputJsonNode(t *testing.T) {
+	dir, dir2, ps := populateGraph(t)
+	defer ps.Close()
+	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
+
 	query := `
 		{
 			me(id:0x01) {
@@ -319,5 +329,10 @@ func TestBenchmarkOutputJsonNode(t *testing.T) {
 			}
 		}
 	})
-	fmt.Println("tojson: Benchmarks: times: ", bresJson.N, " total time: ", bresJson.T, " ns/op: ", bresJson.NsPerOp())
+	fmt.Println("tojson: Benchmarks: ", bresJson.N, " times ; ", bresJson.T, " total time ; ", bresJson.NsPerOp(), " ns/op")
+}
+
+func TestMain(m *testing.M) {
+	x.Init()
+	os.Exit(m.Run())
 }
