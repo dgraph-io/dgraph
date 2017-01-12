@@ -17,8 +17,8 @@
 package query
 
 import (
-	//	"encoding/json"
 	"bytes"
+	"errors"
 	"fmt"
 	"time"
 
@@ -159,7 +159,9 @@ type fastJsonNode struct {
 }
 
 func (fj *fastJsonNode) AddValue(attr string, v types.Val) {
-	fj.attrs[attr] = valToString(v)
+	if bs, err := valToString(v); err == nil {
+		fj.attrs[attr] = bs
+	}
 }
 
 func (fj *fastJsonNode) AddChild(attr string, child outputNode) {
@@ -190,24 +192,30 @@ func (fj *fastJsonNode) IsEmpty() bool {
 	return len(fj.attrs) == 0
 }
 
-func valToString(v types.Val) []byte {
+func valToString(v types.Val) ([]byte, error) {
 	switch v.Tid {
 	case types.BinaryID:
-		return []byte("\"Not supported.\"")
+		return []byte("\"Not supported.\""), nil
 	case types.Int32ID:
-		return []byte(fmt.Sprintf("\"%d\"", v.Value))
+		// are we always sure that v.Value is an int ?
+		return []byte(fmt.Sprintf("\"%d\"", v.Value)), nil
 	case types.FloatID:
-		return []byte(fmt.Sprintf("\"%f\"", v.Value))
+		return []byte(fmt.Sprintf("\"%f\"", v.Value)), nil
 	case types.BoolID:
 		if v.Value.(bool) == true {
-			return []byte("\"true\"")
+			return []byte("\"true\""), nil
 		}
-		return []byte("\"false\"")
+		return []byte("\"false\""), nil
 	case types.StringID:
-		return []byte("\"" + v.Value.(string) + "\"")
+		return []byte("\"" + v.Value.(string) + "\""), nil
+	case types.DateID:
+		return v.Value.(time.Time).MarshalJSON()
+	case types.GeoID:
+		return []byte("\"Need to figure it out.\""), nil
+	case types.UidID:
+		return []byte(fmt.Sprintf("%#x", v.Value)), nil
 	default:
-		return []byte("\"not implemented\"")
-
+		return nil, errors.New("unsupported types.Val.Tid")
 	}
 }
 
