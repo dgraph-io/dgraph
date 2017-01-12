@@ -36,7 +36,9 @@ type GraphQuery struct {
 	Attr    string
 	Alias   string
 	IsCount bool
+	Var     string
 	Func    *Function
+	HasVar  bool
 
 	Args     map[string]string
 	Children []*GraphQuery
@@ -944,6 +946,10 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 		return nil, x.Errorf("Expected some name. Got: %v", item)
 	}
 
+	if item.Val == "var" {
+		gq.HasVar = true
+	}
+
 	gq.Alias = item.Val
 	it.Next()
 	item = it.Item()
@@ -1018,6 +1024,26 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 			}
 		case itemName:
 			// Handle count.
+			peekIt, err := it.Peek(1)
+			if err != nil {
+				return x.Errorf("Invalid query")
+			}
+
+			if peekIt[0].Typ == itemName && peekIt[0].Val == "AS" {
+				varName := item.Val
+				it.Next() // "As" was checked before.
+				it.Next()
+				pred := it.Item()
+				child := &GraphQuery{
+					Args: make(map[string]string),
+					Attr: pred.Val,
+					Var:  varName,
+				}
+				gq.Children = append(gq.Children, child)
+				curp = child
+				continue
+			}
+
 			if item.Val == "count" {
 				if isCount != 0 {
 					return x.Errorf("Invalid mention of count.")
