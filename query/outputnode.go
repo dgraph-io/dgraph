@@ -140,7 +140,7 @@ func (p *jsonOutputNode) New(attr string) outputNode {
 func (p *jsonOutputNode) SetUID(uid uint64) {
 	_, found := p.data["_uid_"]
 	if !found {
-		p.data["_uid_"] = fmt.Sprintf("\"%#x\"", uid)
+		p.data["_uid_"] = fmt.Sprintf("%#x", uid)
 	}
 }
 
@@ -154,8 +154,8 @@ func (p *jsonOutputNode) IsEmpty() bool {
 }
 
 type fastJsonNode struct {
-	attrsWithChildren map[string][]string
-	attrs             map[string]string
+	attrsWithChildren map[string][][]byte
+	attrs             map[string][]byte
 }
 
 func (fj *fastJsonNode) AddValue(attr string, v types.Val) {
@@ -165,46 +165,48 @@ func (fj *fastJsonNode) AddValue(attr string, v types.Val) {
 func (fj *fastJsonNode) AddChild(attr string, child outputNode) {
 	_, found := fj.attrsWithChildren[attr]
 	if !found {
-		fj.attrsWithChildren[attr] = make([]string, 0, 5)
+		fj.attrsWithChildren[attr] = make([][]byte, 0, 5)
 	}
 	bs := child.(*fastJsonNode).fastJsonNodeToJSON()
-	// if err == nil {
-	fj.attrsWithChildren[attr] = append(fj.attrsWithChildren[attr], string(bs))
-	//}
+	fj.attrsWithChildren[attr] = append(fj.attrsWithChildren[attr], bs)
 }
 
 func (fj *fastJsonNode) New(attr string) outputNode {
-	return &fastJsonNode{make(map[string][]string), make(map[string]string)}
+	return &fastJsonNode{make(map[string][][]byte), make(map[string][]byte)}
 }
 
 func (fj *fastJsonNode) SetUID(uid uint64) {
 	_, found := fj.attrs["_uid_"]
 	if !found {
-		fj.attrs["_uid_"] = fmt.Sprintf("\"%#x\"", uid)
+		fj.attrs["_uid_"] = []byte(fmt.Sprintf("\"%#x\"", uid))
 	}
 }
 
 func (fj *fastJsonNode) SetXID(xid string) {
-	fj.attrs["_xid_"] = xid
+	fj.attrs["_xid_"] = []byte(xid)
 }
 
 func (fj *fastJsonNode) IsEmpty() bool {
 	return len(fj.attrs) == 0
 }
 
-func valToString(v types.Val) string {
+func valToString(v types.Val) []byte {
 	switch v.Tid {
+	case types.BinaryID:
+		return []byte("\"Not supported.\"")
 	case types.Int32ID:
-		return fmt.Sprintf("\"%d\"", v.Value)
+		return []byte(fmt.Sprintf("\"%d\"", v.Value))
+	case types.FloatID:
+		return []byte(fmt.Sprintf("\"%f\"", v.Value))
 	case types.BoolID:
 		if v.Value.(bool) == true {
-			return "\"true\""
+			return []byte("\"true\"")
 		}
-		return "\"false\""
+		return []byte("\"false\"")
 	case types.StringID:
-		return "\"" + v.Value.(string) + "\""
+		return []byte("\"" + v.Value.(string) + "\"")
 	default:
-		return "\"not implemented\""
+		return []byte("\"not implemented\"")
 
 	}
 }
@@ -213,14 +215,16 @@ func (fj *fastJsonNode) fastJsonNodeToJSON() []byte {
 	for k, v := range fj.attrsWithChildren {
 		var buf bytes.Buffer
 		first := true
+		buf.WriteString("[")
 		for _, vi := range v {
 			if !first {
 				buf.WriteString(",")
 			}
 			first = false
-			buf.WriteString(vi)
+			buf.Write(vi)
 		}
-		fj.attrs[k] = "[" + string(buf.Bytes()) + "]"
+		buf.WriteString("]")
+		fj.attrs[k] = buf.Bytes()
 	}
 
 	var buf bytes.Buffer
@@ -233,7 +237,7 @@ func (fj *fastJsonNode) fastJsonNodeToJSON() []byte {
 		first = false
 		buf.WriteString("\"" + k + "\"")
 		buf.WriteString(":")
-		buf.WriteString(v)
+		buf.Write(v)
 	}
 	buf.WriteString("}")
 
