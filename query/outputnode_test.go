@@ -347,7 +347,7 @@ func ageSg(uidMatrix []*task.List, srcUids *task.List, ages []uint32) *SubGraph 
 		uidMatrix: uidMatrix,
 		SrcUIDs:   srcUids,
 		values:    as,
-		Params:    params{isDebug: true, GetUID: true},
+		Params:    params{isDebug: false, GetUID: true},
 	}
 }
 func nameSg(uidMatrix []*task.List, srcUids *task.List, names []string) *SubGraph {
@@ -360,7 +360,7 @@ func nameSg(uidMatrix []*task.List, srcUids *task.List, names []string) *SubGrap
 		uidMatrix: uidMatrix,
 		SrcUIDs:   srcUids,
 		values:    ns,
-		Params:    params{isDebug: true, GetUID: true},
+		Params:    params{isDebug: false, GetUID: true},
 	}
 
 }
@@ -369,7 +369,7 @@ func friendsSg(uidMatrix []*task.List, srcUids *task.List, friends []*SubGraph) 
 		Attr:      "friend",
 		uidMatrix: uidMatrix,
 		SrcUIDs:   srcUids,
-		Params:    params{isDebug: true, GetUID: true},
+		Params:    params{isDebug: false, GetUID: true},
 		Children:  friends,
 	}
 }
@@ -379,13 +379,13 @@ func rootSg(uidMatrix []*task.List, srcUids *task.List, names []string, ages []u
 
 	return &SubGraph{
 		Children:  []*SubGraph{nameSg, ageSg},
-		Params:    params{isDebug: true, GetUID: true},
+		Params:    params{isDebug: false, GetUID: true},
 		SrcUIDs:   srcUids,
 		uidMatrix: uidMatrix,
 	}
 }
 
-func TestSelfSubGraphFastJson(t *testing.T) {
+func TestMockSubGraphFastJson(t *testing.T) {
 	emptyUids := []uint64{}
 	uidMatrix := []*task.List{&task.List{Uids: emptyUids}, &task.List{Uids: emptyUids}}
 	srcUids := &task.List{Uids: []uint64{2, 3}}
@@ -408,5 +408,9 @@ func TestSelfSubGraphFastJson(t *testing.T) {
 
 	var l Latency
 	js, _ := sg.FastToJSON(&l)
-	fmt.Println(string(js))
+	require.JSONEq(t, `{"me":[{"name":"unknown","age":"39","friend":[{"_uid_":"0x2","name":"ashish","age":"26"},{"_uid_":"0x3","name":"messi","age":"29"}],"_uid_":"0x1"}]}`,
+		string(js))
+	js2, err := sg.ToJSON(&l)
+	require.NoError(t, err)
+	require.JSONEq(t, string(js), string(js2))
 }
