@@ -772,26 +772,25 @@ func (p *protoOutputNode) IsEmpty() bool {
 	return true
 }
 
-func ToProtocolBuf(sgl []*SubGraph) (*graph.Node, error) {
-	var resNode *protoOutputNode
+func ToProtocolBuf(l *Latency, sgl []*SubGraph) ([]*graph.Node, error) {
+	var resNode []*graph.Node
 	for _, sg := range sgl {
-		var l Latency
-		node, err := sg.ToProtocolBuffer(&l)
+		node, err := sg.ToProtocolBuffer(l)
 		if err != nil {
 			return nil, err
 		}
-		resNode.AddChild("_rooot_", node)
+		resNode = append(resNode, node)
 	}
-	return resNode.Node, nil
+	return resNode, nil
 }
 
 // ToProtocolBuffer does preorder traversal to build a proto buffer. We have
 // used postorder traversal before, but preorder seems simpler and faster for
 // most cases.
-func (sg *SubGraph) ToProtocolBuffer(l *Latency) (*protoOutputNode /*graph.Node*/, error) {
+func (sg *SubGraph) ToProtocolBuffer(l *Latency) (*graph.Node, error) {
 	var seedNode *protoOutputNode
 	if sg.DestUIDs == nil {
-		return seedNode.New(sg.Params.Alias).(*protoOutputNode), nil
+		return seedNode.New(sg.Params.Alias).(*protoOutputNode).Node, nil
 	}
 
 	n := seedNode.New("_root_")
@@ -806,7 +805,7 @@ func (sg *SubGraph) ToProtocolBuffer(l *Latency) (*protoOutputNode /*graph.Node*
 			if rerr.Error() == "_INV_" {
 				continue
 			}
-			return n.(*protoOutputNode), rerr
+			return n.(*protoOutputNode).Node, rerr
 		}
 		if n1.IsEmpty() {
 			continue
@@ -814,7 +813,7 @@ func (sg *SubGraph) ToProtocolBuffer(l *Latency) (*protoOutputNode /*graph.Node*
 		n.AddChild(sg.Params.Alias, n1)
 	}
 	l.ProtocolBuffer = time.Since(l.Start) - l.Parsing - l.Processing
-	return n.(*protoOutputNode), nil
+	return n.(*protoOutputNode).Node, nil
 }
 
 // jsonOutputNode is the JSON output for preTraverse.
@@ -861,11 +860,10 @@ func (p *jsonOutputNode) IsEmpty() bool {
 	return len(p.data) == 0
 }
 
-func ToJson(sgl []*SubGraph) ([]byte, error) {
+func ToJson(l *Latency, sgl []*SubGraph) ([]byte, error) {
 	mp := make(map[string]interface{})
 	for _, sg := range sgl {
-		var l Latency
-		res, err := sg.ToJSON(&l)
+		res, err := sg.ToJSON(l)
 		if err != nil {
 			return nil, err
 		}

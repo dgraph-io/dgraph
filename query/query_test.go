@@ -268,7 +268,8 @@ func processToJSON(t *testing.T, query string) string {
 		sg.DebugPrint("")
 		sgl = append(sgl, sg)
 	}
-	js, err := ToJson(sgl)
+	var l Latency
+	js, err := ToJson(&l, sgl)
 	require.NoError(t, err)
 	return string(js)
 }
@@ -680,7 +681,7 @@ children: <
 `
 	require.EqualValues(t,
 		expectedPb,
-		proto.MarshalTextString(pb.Node))
+		proto.MarshalTextString(pb))
 }
 
 func TestToJSONFilter(t *testing.T) {
@@ -1400,7 +1401,7 @@ children: <
     attribute: "friend"
   >
 >
-`, proto.MarshalTextString(gr.Node))
+`, proto.MarshalTextString(gr))
 }
 
 func TestToProtoFilter(t *testing.T) {
@@ -1464,7 +1465,7 @@ children: <
   >
 >
 `
-	require.EqualValues(t, expectedPb, proto.MarshalTextString(pb.Node))
+	require.EqualValues(t, expectedPb, proto.MarshalTextString(pb))
 }
 
 func TestToProtoFilterOr(t *testing.T) {
@@ -1537,7 +1538,7 @@ children: <
   >
 >
 `
-	require.EqualValues(t, expectedPb, proto.MarshalTextString(pb.Node))
+	require.EqualValues(t, expectedPb, proto.MarshalTextString(pb))
 }
 
 func TestToProtoFilterAnd(t *testing.T) {
@@ -1592,7 +1593,7 @@ children: <
   >
 >
 `
-	require.EqualValues(t, expectedPb, proto.MarshalTextString(pb.Node))
+	require.EqualValues(t, expectedPb, proto.MarshalTextString(pb))
 }
 
 // Test sorting / ordering by dob.
@@ -1806,7 +1807,7 @@ children: <
   >
 >
 `
-	require.EqualValues(t, expectedPb, proto.MarshalTextString(pb.Node))
+	require.EqualValues(t, expectedPb, proto.MarshalTextString(pb))
 }
 
 // Test sorting / ordering by dob.
@@ -1879,7 +1880,7 @@ children: <
   >
 >
 `
-	require.EqualValues(t, expectedPb, proto.MarshalTextString(pb.Node))
+	require.EqualValues(t, expectedPb, proto.MarshalTextString(pb))
 }
 
 // Test sorting / ordering by dob.
@@ -1952,7 +1953,7 @@ children: <
   >
 >
 `
-	require.EqualValues(t, expectedPb, proto.MarshalTextString(pb.Node))
+	require.EqualValues(t, expectedPb, proto.MarshalTextString(pb))
 }
 
 func TestSchema1(t *testing.T) {
@@ -2174,7 +2175,7 @@ children: <
   >
 >
 `
-	require.EqualValues(t, expectedPb, proto.MarshalTextString(pb.Node))
+	require.EqualValues(t, expectedPb, proto.MarshalTextString(pb))
 }
 
 func TestNearGenerator(t *testing.T) {
