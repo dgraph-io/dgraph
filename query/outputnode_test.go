@@ -18,6 +18,7 @@ package query
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -211,10 +212,6 @@ func makeSubgraph(query string, t *testing.T) *SubGraph {
 	err = <-ch
 	require.NoError(t, err)
 
-	var l Latency
-	_, err = sg.ToJSON(&l)
-	require.NoError(t, err)
-
 	return sg
 }
 
@@ -335,4 +332,81 @@ func TestBenchmarkOutputJsonNode(t *testing.T) {
 func TestMain(m *testing.M) {
 	x.Init()
 	os.Exit(m.Run())
+}
+
+func ageSg(uidMatrix []*task.List, srcUids *task.List, ages []uint32) *SubGraph {
+	var as []*task.Value
+	for _, a := range ages {
+		bs := make([]byte, 4)
+		binary.LittleEndian.PutUint32(bs, a)
+		as = append(as, &task.Value{[]byte(bs), 2})
+	}
+
+	return &SubGraph{
+		Attr:      "age",
+		uidMatrix: uidMatrix,
+		SrcUIDs:   srcUids,
+		values:    as,
+		Params:    params{isDebug: true, GetUID: true},
+	}
+}
+func nameSg(uidMatrix []*task.List, srcUids *task.List, names []string) *SubGraph {
+	var ns []*task.Value
+	for _, n := range names {
+		ns = append(ns, &task.Value{[]byte(n), 0})
+	}
+	return &SubGraph{
+		Attr:      "name",
+		uidMatrix: uidMatrix,
+		SrcUIDs:   srcUids,
+		values:    ns,
+		Params:    params{isDebug: true, GetUID: true},
+	}
+
+}
+func friendsSg(uidMatrix []*task.List, srcUids *task.List, friends []*SubGraph) *SubGraph {
+	return &SubGraph{
+		Attr:      "friend",
+		uidMatrix: uidMatrix,
+		SrcUIDs:   srcUids,
+		Params:    params{isDebug: true, GetUID: true},
+		Children:  friends,
+	}
+}
+func rootSg(uidMatrix []*task.List, srcUids *task.List, names []string, ages []uint32) *SubGraph {
+	nameSg := nameSg(uidMatrix, srcUids, names)
+	ageSg := ageSg(uidMatrix, srcUids, ages)
+
+	return &SubGraph{
+		Children:  []*SubGraph{nameSg, ageSg},
+		Params:    params{isDebug: true, GetUID: true},
+		SrcUIDs:   srcUids,
+		uidMatrix: uidMatrix,
+	}
+}
+
+func TestSelfSubGraphFastJson(t *testing.T) {
+	emptyUids := []uint64{}
+	uidMatrix := []*task.List{&task.List{Uids: emptyUids}, &task.List{Uids: emptyUids}}
+	srcUids := &task.List{Uids: []uint64{2, 3}}
+
+	names := []string{"ashish", "messi"}
+	ages := []uint32{26, 29}
+	namesSg := nameSg(uidMatrix, srcUids, names)
+	agesSg := ageSg(uidMatrix, srcUids, ages)
+
+	sgSrcUids := &task.List{Uids: []uint64{1}}
+	sgUidMatrix := []*task.List{&task.List{Uids: emptyUids}}
+
+	friendUidMatrix := []*task.List{&task.List{Uids: []uint64{2, 3}}}
+	friendsSg1 := friendsSg(friendUidMatrix, sgSrcUids, []*SubGraph{namesSg, agesSg})
+
+	sg := rootSg(sgUidMatrix, sgSrcUids, []string{"unknown"}, []uint32{39})
+	sg.Children = append(sg.Children, friendsSg1)
+	sg.DestUIDs = &task.List{Uids: []uint64{1}}
+	sg.Params.Alias = "me"
+
+	var l Latency
+	js, _ := sg.FastToJSON(&l)
+	fmt.Println(string(js))
 }
