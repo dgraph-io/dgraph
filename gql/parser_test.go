@@ -39,8 +39,8 @@ func TestParseQueryWithVar(t *testing.T) {
 			L AS friends
 		}
 	
-		me(id:0x0b) {
-		 friends	
+		me(L) {
+		 name	
 		}
 	}
 `
@@ -49,7 +49,11 @@ func TestParseQueryWithVar(t *testing.T) {
 	require.NotNil(t, res.Query)
 	require.Equal(t, 2, len(res.Query))
 	require.Equal(t, true, res.Query[0].HasVar)
-	require.Equal(t, "L", res.Query[0].Children[0].Var)
+	require.Equal(t, "L", res.Query[0].Children[0].VarDef)
+	require.Equal(t, "L", res.Query[1].VarUse)
+	require.Equal(t, 0, len(res.Deps[0]))
+	require.Equal(t, 1, len(res.Deps[1]))
+	require.Equal(t, res.Query[0], res.Deps[1][0])
 }
 
 func TestParseMultipleQueries(t *testing.T) {

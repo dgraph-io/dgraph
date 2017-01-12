@@ -123,6 +123,7 @@ type params struct {
 	Order     string
 	OrderDesc bool
 	isDebug   bool
+	hasVar    bool
 }
 
 // SubGraph is the way to represent data internally. It contains both the
@@ -428,6 +429,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	args := params{
 		isDebug: gq.Alias == "debug",
 		Alias:   gq.Alias,
+		hasVar:  gq.HasVar,
 	}
 
 	sg := &SubGraph{
