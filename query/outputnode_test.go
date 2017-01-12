@@ -215,7 +215,7 @@ func makeSubgraph(query string, t *testing.T) *SubGraph {
 	return sg
 }
 
-func TestFastToJSONSimpleQuery(t *testing.T) {
+func TestEnvFastToJSONSimpleQuery(t *testing.T) {
 	dir, dir2, ps := populateGraph(t)
 	defer ps.Close()
 	defer os.RemoveAll(dir)
@@ -238,10 +238,52 @@ func TestFastToJSONSimpleQuery(t *testing.T) {
 
 	sg := makeSubgraph(query, t)
 	var l Latency
-	js, _ := sg.FastToJSON(&l)
+	jsFast, err := sg.FastToJSON(&l)
+	require.NoError(t, err)
 
 	require.JSONEq(t, `{"me":[{"_uid_":"0x1","name":"Michonne","gender":"female","alive":"true","friend":[{"_uid_":"0x17","name":"Rick Grimes"},{"_uid_":"0x18","name":"Glenn Rhee"},{"_uid_":"0x19","name":"Daryl Dixon"},{"_uid_":"0x1f","name":"Andrea"},{"_uid_":"0x65"}]}]}`,
-		string(js))
+		string(jsFast))
+
+	jsCurr, err := sg.ToJSON(&l)
+	require.NoError(t, err)
+	require.JSONEq(t, string(jsFast), string(jsCurr))
+}
+
+func TestEnvFastToJSONNestedQuery(t *testing.T) {
+	dir, dir2, ps := populateGraph(t)
+	defer ps.Close()
+	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
+
+	query := `
+		{
+			me(id:0x01) {
+				name
+				_uid_
+				gender
+				alive
+				friend {
+					_uid_
+					name
+                                        friend {
+                                           alive
+                                           name
+                                        }
+				}
+			}
+		}
+	`
+
+	sg := makeSubgraph(query, t)
+	var l Latency
+	jsFast, err := sg.FastToJSON(&l)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"me":[{"_uid_":"0x1","name":"Michonne","gender":"female","alive":"true","friend":[{"_uid_":"0x17","name":"Rick Grimes"},{"_uid_":"0x18","name":"Glenn Rhee"},{"_uid_":"0x19","name":"Daryl Dixon"},{"_uid_":"0x1f","name":"Andrea","friend":[{"name":"Glenn Rhee"}]},{"_uid_":"0x65"}]}]}`,
+		string(jsFast))
+
+	jsCurr, err := sg.ToJSON(&l)
+	require.NoError(t, err)
+	require.JSONEq(t, string(jsFast), string(jsCurr))
 }
 
 func TestBenchmarkFastJsonNode(t *testing.T) {
@@ -334,6 +376,7 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
+// Mocking Subgraph and Testing fast-json with it.
 func ageSg(uidMatrix []*task.List, srcUids *task.List, ages []uint32) *SubGraph {
 	var as []*task.Value
 	for _, a := range ages {
