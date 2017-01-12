@@ -2421,6 +2421,7 @@ func TestSchema(t *testing.T) {
 }
 
 func TestMain(m *testing.M) {
+	x.SetTestRun()
 	x.Init()
 	os.Exit(m.Run())
 }

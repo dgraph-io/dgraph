@@ -84,7 +84,7 @@ type node struct {
 
 	// Fields which are never changed after init.
 	cfg         *raft.Config
-	commitCh    chan raftpb.Entry
+	applyCh     chan raftpb.Entry
 	ctx         context.Context
 	done        chan struct{}
 	gid         uint32
@@ -163,13 +163,13 @@ func newNode(gid uint32, id uint64, myAddr string) *node {
 			MaxSizePerMsg:   4096,
 			MaxInflightMsgs: 256,
 		},
-		commitCh:    make(chan raftpb.Entry, numPendingMutations),
+		applyCh:     make(chan raftpb.Entry, numPendingMutations),
 		peers:       peers,
 		props:       props,
 		raftContext: rc,
 		messages:    make(chan sendmsg, 1000),
 	}
-	n.applied = x.WaterMark{Name: fmt.Sprintf("Committed Mark: Group %d", n.gid)}
+	n.applied = x.WaterMark{Name: fmt.Sprintf("Committed: Group %d", n.gid)}
 	n.applied.Init()
 
 	return n
@@ -388,6 +388,7 @@ func (n *node) processMembership(e raftpb.Entry, mm *task.Membership) error {
 func (n *node) process(e raftpb.Entry, pending chan struct{}) {
 	defer func() {
 		n.applied.Ch <- x.Mark{Index: e.Index, Done: true}
+		posting.SyncMarkFor(n.gid).Ch <- x.Mark{Index: e.Index, Done: true}
 	}()
 
 	if e.Type != raftpb.EntryNormal {
@@ -411,12 +412,15 @@ func (n *node) process(e raftpb.Entry, pending chan struct{}) {
 
 const numPendingMutations = 10000
 
-func (n *node) processCommitCh() {
+func (n *node) processApplyCh() {
 	pending := make(chan struct{}, numPendingMutations)
 
-	for e := range n.commitCh {
+	for e := range n.applyCh {
+		mark := x.Mark{Index: e.Index, Done: true}
+
 		if len(e.Data) == 0 {
-			n.applied.Ch <- x.Mark{Index: e.Index, Done: true}
+			n.applied.Ch <- mark
+			posting.SyncMarkFor(n.gid).Ch <- mark
 			continue
 		}
 
@@ -432,20 +436,12 @@ func (n *node) processCommitCh() {
 
 			cs := n.Raft().ApplyConfChange(cc)
 			n.SetConfState(cs)
-			n.applied.Ch <- x.Mark{Index: e.Index, Done: true}
-
-		} else {
-			// Add a pending mark for synced watermark. This would be marked as done
-			// automatically after a minute. This is important to avoid the case where
-			// an index doesn't get registered by synced watermark, and a later index
-			// gets synced first. Using this deadline technique, we register it asap,
-			// and then let the mutation be applied and synced later.
-			posting.WaterMarkFor(n.gid).Ch <- x.Mark{
-				Index:    e.Index,
-				Deadline: time.Now().Add(time.Minute),
-			}
-			go n.process(e, pending)
+			n.applied.Ch <- mark
+			posting.SyncMarkFor(n.gid).Ch <- mark
+			continue
 		}
+
+		go n.process(e, pending)
 	}
 }
 
@@ -530,14 +526,12 @@ func (n *node) Run() {
 					continue
 				}
 
-				// Just queue up to be processed. Don't wait on them.
-				n.commitCh <- entry
 				status := x.Mark{Index: entry.Index, Done: false}
-
-				if entry.Index == 2 {
-					fmt.Printf("%+v\n", entry)
-				}
 				n.applied.Ch <- status
+				posting.SyncMarkFor(n.gid).Ch <- status
+
+				// Just queue up to be processed. Don't wait on them.
+				n.applyCh <- entry
 			}
 
 			if indexEntry != nil {
@@ -579,7 +573,7 @@ func (n *node) snapshotPeriodically() {
 	for {
 		select {
 		case <-ticker.C:
-			water := posting.WaterMarkFor(n.gid)
+			water := posting.SyncMarkFor(n.gid)
 			le := water.DoneUntil()
 
 			existing, err := n.store.Snapshot()
@@ -705,7 +699,7 @@ func (n *node) InitAndStartNode(wal *raftwal.Wal) {
 			n.canCampaign = true
 		}
 	}
-	go n.processCommitCh()
+	go n.processApplyCh()
 	go n.Run()
 	// TODO: Find a better way to snapshot, so we don't lose the membership
 	// state information, which isn't persisted.
