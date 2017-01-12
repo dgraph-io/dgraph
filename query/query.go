@@ -772,13 +772,26 @@ func (p *protoOutputNode) IsEmpty() bool {
 	return true
 }
 
+func ToProtocolBuf(sgl []*SubGraph) (*graph.Node, error) {
+	var resNode *protoOutputNode
+	for _, sg := range sgl {
+		var l Latency
+		node, err := sg.ToProtocolBuffer(&l)
+		if err != nil {
+			return nil, err
+		}
+		resNode.AddChild("_rooot_", node)
+	}
+	return resNode.Node, nil
+}
+
 // ToProtocolBuffer does preorder traversal to build a proto buffer. We have
 // used postorder traversal before, but preorder seems simpler and faster for
 // most cases.
-func (sg *SubGraph) ToProtocolBuffer(l *Latency) (*graph.Node, error) {
+func (sg *SubGraph) ToProtocolBuffer(l *Latency) (*protoOutputNode /*graph.Node*/, error) {
 	var seedNode *protoOutputNode
 	if sg.DestUIDs == nil {
-		return seedNode.New(sg.Params.Alias).(*protoOutputNode).Node, nil
+		return seedNode.New(sg.Params.Alias).(*protoOutputNode), nil
 	}
 
 	n := seedNode.New("_root_")
@@ -793,7 +806,7 @@ func (sg *SubGraph) ToProtocolBuffer(l *Latency) (*graph.Node, error) {
 			if rerr.Error() == "_INV_" {
 				continue
 			}
-			return n.(*protoOutputNode).Node, rerr
+			return n.(*protoOutputNode), rerr
 		}
 		if n1.IsEmpty() {
 			continue
@@ -801,7 +814,7 @@ func (sg *SubGraph) ToProtocolBuffer(l *Latency) (*graph.Node, error) {
 		n.AddChild(sg.Params.Alias, n1)
 	}
 	l.ProtocolBuffer = time.Since(l.Start) - l.Parsing - l.Processing
-	return n.(*protoOutputNode).Node, nil
+	return n.(*protoOutputNode), nil
 }
 
 // jsonOutputNode is the JSON output for preTraverse.
@@ -848,9 +861,24 @@ func (p *jsonOutputNode) IsEmpty() bool {
 	return len(p.data) == 0
 }
 
+func ToJson(sgl []*SubGraph) ([]byte, error) {
+	mp := make(map[string]interface{})
+	for _, sg := range sgl {
+		var l Latency
+		res, err := sg.ToJSON(&l)
+		if err != nil {
+			return nil, err
+		}
+		for k, v := range res {
+			mp[k] = v
+		}
+	}
+	return json.Marshal(mp)
+}
+
 // ToJSON converts the internal subgraph object to JSON format which is then\
 // sent to the HTTP client.
-func (sg *SubGraph) ToJSON(l *Latency) ([]byte, error) {
+func (sg *SubGraph) ToJSON(l *Latency) (map[string]interface{}, error) {
 	var seedNode *jsonOutputNode
 	n := seedNode.New("_root_")
 	for _, uid := range sg.DestUIDs.Uids {
@@ -875,5 +903,5 @@ func (sg *SubGraph) ToJSON(l *Latency) ([]byte, error) {
 	if sg.Params.isDebug {
 		res["server_latency"] = l.ToMap()
 	}
-	return json.Marshal(res)
+	return res, nil
 }

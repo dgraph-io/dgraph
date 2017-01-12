@@ -450,7 +450,7 @@ func getFragment(it *lex.ItemIterator) (*fragmentNode, error) {
 	var name string
 	for it.Next() {
 		item := it.Item()
-		if item.Typ == itemText {
+		if item.Typ == itemName {
 			v := strings.TrimSpace(item.Val)
 			if len(v) > 0 && name == "" {
 				// Currently, we take the first nontrivial token as the

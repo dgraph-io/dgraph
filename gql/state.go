@@ -229,7 +229,7 @@ func lexText(l *lex.Lexer) lex.StateFn {
 			return lexInsideMutation
 		} else if l.ArgDepth > 0 || l.InsideDirective {
 			return lexFuncOrArg
-		} else if l.Depth == 0 {
+		} else if l.Depth == 0 && l.Mode != fragmentMode {
 			return lexTopLevel
 		}
 
@@ -245,9 +245,9 @@ func lexText(l *lex.Lexer) lex.StateFn {
 		case r == rightCurl:
 			l.Depth--
 			l.Emit(itemRightCurl)
-			/*			if l.Depth == 0 {
-						return lexText
-					}*/
+			if l.Depth == 0 && l.Mode == fragmentMode {
+				l.Mode = 0
+			}
 		case r == leftCurl:
 			l.Depth++
 			l.Emit(itemLeftCurl)

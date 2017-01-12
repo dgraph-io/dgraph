@@ -936,13 +936,13 @@ func TestParseCountAsFuncMultiple(t *testing.T) {
 `
 	gq, err := Parse(query)
 	require.NoError(t, err)
-	require.Equal(t, 6, len(gq.Query.Children))
-	require.Equal(t, true, gq.Query.Children[0].IsCount)
-	require.Equal(t, "friends", gq.Query.Children[0].Attr)
-	require.Equal(t, true, gq.Query.Children[1].IsCount)
-	require.Equal(t, "relatives", gq.Query.Children[1].Attr)
-	require.Equal(t, true, gq.Query.Children[2].IsCount)
-	require.Equal(t, "classmates", gq.Query.Children[2].Attr)
+	require.Equal(t, 6, len(gq.Query[0].Children))
+	require.Equal(t, true, gq.Query[0].Children[0].IsCount)
+	require.Equal(t, "friends", gq.Query[0].Children[0].Attr)
+	require.Equal(t, true, gq.Query[0].Children[1].IsCount)
+	require.Equal(t, "relatives", gq.Query[0].Children[1].Attr)
+	require.Equal(t, true, gq.Query[0].Children[2].IsCount)
+	require.Equal(t, "classmates", gq.Query[0].Children[2].Attr)
 
 }
 
@@ -973,8 +973,8 @@ func TestParseCountAsFunc(t *testing.T) {
 `
 	gq, err := Parse(query)
 	require.NoError(t, err)
-	require.Equal(t, true, gq.Query.Children[0].IsCount)
-	require.Equal(t, 4, len(gq.Query.Children))
+	require.Equal(t, true, gq.Query[0].Children[0].IsCount)
+	require.Equal(t, 4, len(gq.Query[0].Children))
 
 }
 
