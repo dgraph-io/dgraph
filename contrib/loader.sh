@@ -31,11 +31,11 @@ echo -e "
 scalar (
 	type.object.name.en: string @index
 	film.film.initial_release_date: date @index
-)" > /tmp/schema.txt
+)" > $BUILD/schema.txt
 
 pushd cmd/dgraph &> /dev/null
 go build .
-./dgraph -gentlecommit 1.0 -schema /tmp/schema.txt &
+./dgraph -gentlecommit 1.0 -schema $BUILD/schema.txt &
 popd &> /dev/null
 
 sleep 5
