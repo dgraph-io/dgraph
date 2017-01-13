@@ -26,16 +26,23 @@ export CGO_CPPFLAGS="-I${ROCKSDBDIR}/include -I${ICUDIR}/include"
 export CGO_LDFLAGS="-L${ROCKSDBDIR} -L${ICUDIR}/lib"
 export LD_LIBRARY_PATH="${ICUDIR}/lib:${ROCKSDBDIR}:${LD_LIBRARY_PATH}"
 
+# schema file
+echo -e "
+scalar (
+	type.object.name.en: string @index
+	film.film.initial_release_date: date @index
+)" > /tmp/schema.txt
+
 pushd cmd/dgraph &> /dev/null
 go build .
-./dgraph -gentlecommit 1.0 &
+./dgraph -gentlecommit 1.0 -schema /tmp/schema.txt &
 popd &> /dev/null
 
 sleep 5
 
 pushd cmd/dgraphloader &> /dev/null
 go build .
-./dgraphloader -r $benchmark/goldendata.rdf.gz
+./dgraphloader -r $benchmark/goldendata.rdf.gz -schema /tmp/schema.txt
 popd &> /dev/null
 
 # Lets wait for stuff to be committed to RocksDB.
