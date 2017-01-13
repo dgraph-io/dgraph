@@ -18,6 +18,10 @@ pushd $BUILD &> /dev/null
 if [ ! -f "goldendata.rdf.gz" ]; then
   wget https://github.com/dgraph-io/benchmarks/raw/master/data/goldendata.rdf.gz
 fi
+
+# log file size.
+ls -la goldendata.rdf.gz
+
 benchmark=$(pwd)
 popd &> /dev/null
 
@@ -52,6 +56,8 @@ function run_index_test {
 	X=$1
 	GREPFOR=$2
 	ANS=$3
+	curl localhost:8080/query -XPOST -d @indextest/${X}.in 2> /dev/null
+	
 	N=`curl localhost:8080/query -XPOST -d @indextest/${X}.in 2> /dev/null | python -m json.tool | grep $GREPFOR | wc -l`
 	if [[ ! "$N" -eq "$ANS" ]]; then
 	  echo "Index test failed: ${X}  Expected: $ANS  Got: $N"
