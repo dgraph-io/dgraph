@@ -44,12 +44,8 @@ var (
 	maxmemory = flag.Int("stw_ram_mb", 4096,
 		"If RAM usage exceeds this, we stop the world, and flush our buffers.")
 
-	commitFraction = flag.Float64("gentlecommit", 0.10, "Fraction of dirty posting lists to commit every few seconds.")
-	lhmapNumShards = flag.Int("lhmap", 32, "Number of shards for lhmap.")
-
-	dirtyChan        chan uint64 // All dirty posting list keys are pushed here.
-	startCommitOnce  sync.Once
-	marks            syncMarks
+	commitFraction   = flag.Float64("gentlecommit", 0.10, "Fraction of dirty posting lists to commit every few seconds.")
+	lhmapNumShards   = flag.Int("lhmap", 32, "Number of shards for lhmap.")
 	dummyPostingList []byte // Used for indexing.
 )
 
@@ -92,7 +88,7 @@ func (g *syncMarks) create(group uint32) *x.WaterMark {
 	if prev, present := g.m[group]; present {
 		return prev
 	}
-	w := &x.WaterMark{Name: fmt.Sprintf("group: %d", group)}
+	w := &x.WaterMark{Name: fmt.Sprintf("Synced: Group %d", group)}
 	w.Init()
 	g.m[group] = w
 	return w
@@ -108,9 +104,9 @@ func (g *syncMarks) Get(group uint32) *x.WaterMark {
 	return g.create(group)
 }
 
-// WaterMarkFor returns the synced watermark for the given RAFT group.
+// SyncMarkFor returns the synced watermark for the given RAFT group.
 // We use this to determine the index to use when creating a new snapshot.
-func WaterMarkFor(group uint32) *x.WaterMark {
+func SyncMarkFor(group uint32) *x.WaterMark {
 	return marks.Get(group)
 }
 
@@ -322,24 +318,22 @@ var (
 	stopTheWorld sync.RWMutex
 	lhmap        *listMap
 	pstore       *store.Store
-	commitCh     chan commitEntry
+	syncCh       chan syncEntry
+	dirtyChan    chan uint64 // All dirty posting list keys are pushed here.
+	marks        *syncMarks
 )
-
-func StartCommit() {
-	startCommitOnce.Do(func() {
-		fmt.Println("Starting commit routine.")
-		commitCh = make(chan commitEntry, 10000)
-		go batchCommit()
-	})
-}
 
 // Init initializes the posting lists package, the in memory and dirty list hash.
 func Init(ps *store.Store) {
+	marks = new(syncMarks)
 	pstore = ps
 	lhmap = newShardedListMap(*lhmapNumShards)
 	dirtyChan = make(chan uint64, 10000)
-	StartCommit()
+	fmt.Println("Starting commit routine.")
+	syncCh = make(chan syncEntry, 10000)
+
 	go periodicCommit()
+	go batchSync()
 }
 
 func getFromMap(key uint64) *List {
@@ -409,7 +403,7 @@ func commitOne(l *List, c *counters) {
 	if l == nil {
 		return
 	}
-	if merged, err := l.CommitIfDirty(context.Background()); err != nil {
+	if merged, err := l.SyncIfDirty(context.Background()); err != nil {
 		log.Printf("Error while commiting dirty list: %v\n", err)
 	} else if merged {
 		atomic.AddUint64(&c.done, 1)
@@ -452,7 +446,7 @@ func CommitLists(numRoutines int) {
 }
 
 // The following logic is used to batch up all the writes to RocksDB.
-type commitEntry struct {
+type syncEntry struct {
 	key     []byte
 	val     []byte
 	water   *x.WaterMark
@@ -460,8 +454,8 @@ type commitEntry struct {
 	sw      *x.SafeWait
 }
 
-func batchCommit() {
-	var entries []commitEntry
+func batchSync() {
+	var entries []syncEntry
 	var loop uint64
 
 	b := pstore.NewWriteBatch()
@@ -469,7 +463,7 @@ func batchCommit() {
 
 	for {
 		select {
-		case e := <-commitCh:
+		case e := <-syncCh:
 			entries = append(entries, e)
 
 		default:

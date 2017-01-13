@@ -20,15 +20,15 @@ import (
 	"testing"
 
 	"github.com/dgraph-io/dgraph/query/graph"
-	"github.com/dgraph-io/dgraph/types"
 	"github.com/stretchr/testify/assert"
 )
 
+func graphValue(x string) *graph.Value {
+	return &graph.Value{&graph.Value_StrVal{x}}
+}
+
 func TestCheckNQuad(t *testing.T) {
-	s, err := types.ObjectValue(types.StringID, "Alice")
-	if err != nil {
-		t.Fatal(err)
-	}
+	s := graphValue("Alice")
 	if err := checkNQuad(graph.NQuad{
 		Predicate:   "name",
 		ObjectValue: s,
@@ -60,10 +60,7 @@ func TestCheckNQuad(t *testing.T) {
 func TestSetMutation(t *testing.T) {
 	req := Req{}
 
-	s, err := types.ObjectValue(types.StringID, "Alice")
-	if err != nil {
-		t.Fatal(err)
-	}
+	s := graphValue("Alice")
 	if err := req.AddMutation(graph.NQuad{
 		Subject:     "alice",
 		Predicate:   "name",
@@ -72,10 +69,7 @@ func TestSetMutation(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	s, err = types.ObjectValue(types.StringID, "rabbithole")
-	if err != nil {
-		t.Fatal(err)
-	}
+	s = graphValue("rabbithole")
 	if err := req.AddMutation(graph.NQuad{
 		Subject:     "alice",
 		Predicate:   "falls.in",

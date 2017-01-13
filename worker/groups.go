@@ -98,7 +98,7 @@ func StartRaftNodes(walDir string) {
 	for _, id := range strings.Split(*groupIds, ",") {
 		gid, err := strconv.ParseUint(id, 0, 32)
 		x.Checkf(err, "Unable to parse group id: %v", id)
-		node := groups().newNode(uint32(gid), *raftId, *myAddr)
+		node := gr.newNode(uint32(gid), *raftId, *myAddr)
 		go node.InitAndStartNode(gr.wal)
 	}
 	go gr.periodicSyncMemberships() // Now set it to be run periodically.
