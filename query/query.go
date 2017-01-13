@@ -487,6 +487,44 @@ func createTaskQuery(sg *SubGraph) *task.Query {
 	return out
 }
 
+func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph, error) {
+	var sgl []*SubGraph
+
+	// varUidList will store the UID list of the corresponding variables.
+	varUidList := make(map[string]*task.List)
+	_ = varUidList
+	// Do a topological sort here and exectue nodes that are at the highest level first.
+	// Also, nodes with same depth can be executed parallely.
+
+	// Modify this to run the query from stack.
+	for _, gq := range res.Query {
+		loopStart := time.Now()
+		if gq == nil || (len(gq.UID) == 0 && gq.Func == nil) {
+			continue
+		}
+		sg, err := ToSubGraph(ctx, gq)
+		if err != nil {
+			return nil, err
+		}
+		l.Parsing += time.Since(loopStart)
+
+		execStart := time.Now()
+		x.Trace(ctx, "Query parsed")
+
+		rch := make(chan error)
+		go ProcessGraph(ctx, sg, nil, rch)
+		err = <-rch
+		if err != nil {
+			return nil, err
+		}
+		l.Processing += time.Since(execStart)
+		x.Trace(ctx, "Graph processed")
+
+		sgl = append(sgl, sg)
+	}
+	return sgl, nil
+}
+
 // ProcessGraph processes the SubGraph instance accumulating result for the query
 // from different instances. Note: taskQuery is nil for root node.
 func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {

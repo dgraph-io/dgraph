@@ -458,35 +458,15 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var sgl []*query.SubGraph
-	for _, gq := range res.Query {
-		loopStart := time.Now()
-		if gq == nil || (len(gq.UID) == 0 && gq.Func == nil) {
-			continue
-		}
-		sg, err := query.ToSubGraph(ctx, gq)
-		if err != nil {
-			x.TraceError(ctx, x.Wrapf(err, "Error while conversion o internal format"))
-			x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
-			return
-		}
-		l.Parsing += time.Since(loopStart)
+	sgl, err := query.ProcessQuery(ctx, res, &l)
+	if err != nil {
+		x.TraceError(ctx, x.Wrapf(err, "Error while Executing query"))
+		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+		return
+	}
 
-		execStart := time.Now()
-		x.Trace(ctx, "Query parsed")
-
-		rch := make(chan error)
-		go query.ProcessGraph(ctx, sg, nil, rch)
-		err = <-rch
-		if err != nil {
-			x.TraceError(ctx, x.Wrapf(err, "Error while executing query"))
-			x.SetStatus(w, x.Error, err.Error())
-			return
-		}
-		l.Processing += time.Since(execStart)
-		x.Trace(ctx, "Graph processed")
-
-		if len(*dumpSubgraph) > 0 {
+	if len(*dumpSubgraph) > 0 {
+		for _, sg := range sgl {
 			x.Checkf(os.MkdirAll(*dumpSubgraph, 0700), *dumpSubgraph)
 			s := time.Now().Format("20060102.150405.000000.gob")
 			filename := path.Join(*dumpSubgraph, s)
@@ -496,8 +476,50 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 			x.Check(enc.Encode(sg))
 			x.Checkf(f.Close(), filename)
 		}
-		sgl = append(sgl, sg)
 	}
+
+	/*
+		var sgl []*query.SubGraph
+		for _, gq := range res.Query {
+			loopStart := time.Now()
+			if gq == nil || (len(gq.UID) == 0 && gq.Func == nil) {
+				continue
+			}
+			sg, err := query.ToSubGraph(ctx, gq)
+			if err != nil {
+				x.TraceError(ctx, x.Wrapf(err, "Error while conversion o internal format"))
+				x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+				return
+			}
+			l.Parsing += time.Since(loopStart)
+
+			execStart := time.Now()
+			x.Trace(ctx, "Query parsed")
+
+			rch := make(chan error)
+			go query.ProcessGraph(ctx, sg, nil, rch)
+			err = <-rch
+			if err != nil {
+				x.TraceError(ctx, x.Wrapf(err, "Error while executing query"))
+				x.SetStatus(w, x.Error, err.Error())
+				return
+			}
+			l.Processing += time.Since(execStart)
+			x.Trace(ctx, "Graph processed")
+
+			if len(*dumpSubgraph) > 0 {
+				x.Checkf(os.MkdirAll(*dumpSubgraph, 0700), *dumpSubgraph)
+				s := time.Now().Format("20060102.150405.000000.gob")
+				filename := path.Join(*dumpSubgraph, s)
+				f, err := os.Create(filename)
+				x.Checkf(err, filename)
+				enc := gob.NewEncoder(f)
+				x.Check(enc.Encode(sg))
+				x.Checkf(f.Close(), filename)
+			}
+			sgl = append(sgl, sg)
+		}
+	*/
 	js, err := query.ToJson(&l, sgl) //sg.ToJSON(&l)
 	if err != nil {
 		x.TraceError(ctx, x.Wrapf(err, "Error while converting to Json"))

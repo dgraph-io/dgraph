@@ -32,6 +32,46 @@ func childAttrs(g *GraphQuery) []string {
 	return out
 }
 
+func TestParseQueryWithVarTopsort(t *testing.T) {
+	query := `
+	{	
+		me(L) {
+		 name	
+		}
+
+		him(J) {
+			name
+		}
+	
+		you(K) {
+			name
+		}
+
+		var(id:0x0a) {
+			L AS friends
+		}
+		
+		var(id:0x0a) {
+			J AS friends
+		}
+		
+		var(id:0x0a) {
+			K AS friends
+		}
+	}
+`
+	res, err := Parse(query)
+	require.NoError(t, err)
+	require.NotNil(t, res.Query)
+	require.Equal(t, 6, len(res.Query))
+	require.Equal(t, "L", res.Query[1].VarUse)
+	require.Equal(t, "J", res.Query[3].VarUse)
+	require.Equal(t, "K", res.Query[5].VarUse)
+	require.Equal(t, "L", res.Query[0].Children[0].VarDef)
+	require.Equal(t, "J", res.Query[2].Children[0].VarDef)
+	require.Equal(t, "K", res.Query[4].Children[0].VarDef)
+}
+
 func TestParseQueryWithVar(t *testing.T) {
 	query := `
 	{
