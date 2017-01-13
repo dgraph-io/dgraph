@@ -19,6 +19,7 @@ package query
 import (
 	"context"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -241,6 +242,10 @@ func TestEnvFastToJSONSimpleQuery(t *testing.T) {
 	jsFast, err := sg.FastToJSON(&l)
 	require.NoError(t, err)
 
+	// check validity of json
+	var unmarshalJs map[string]interface{}
+	require.NoError(t, json.Unmarshal([]byte(jsFast), &unmarshalJs))
+
 	require.JSONEq(t, `{"me":[{"_uid_":"0x1","name":"Michonne","gender":"female","alive":"true","friend":[{"_uid_":"0x17","name":"Rick Grimes"},{"_uid_":"0x18","name":"Glenn Rhee"},{"_uid_":"0x19","name":"Daryl Dixon"},{"_uid_":"0x1f","name":"Andrea"},{"_uid_":"0x65"}]}]}`,
 		string(jsFast))
 
@@ -278,6 +283,11 @@ func TestEnvFastToJSONNestedQuery(t *testing.T) {
 	var l Latency
 	jsFast, err := sg.FastToJSON(&l)
 	require.NoError(t, err)
+
+	// check validity of json
+	var unmarshalJs map[string]interface{}
+	require.NoError(t, json.Unmarshal([]byte(jsFast), &unmarshalJs))
+
 	require.JSONEq(t, `{"me":[{"_uid_":"0x1","name":"Michonne","gender":"female","alive":"true","friend":[{"_uid_":"0x17","name":"Rick Grimes"},{"_uid_":"0x18","name":"Glenn Rhee"},{"_uid_":"0x19","name":"Daryl Dixon"},{"_uid_":"0x1f","name":"Andrea","friend":[{"name":"Glenn Rhee"}]},{"_uid_":"0x65"}]}]}`,
 		string(jsFast))
 
@@ -315,6 +325,10 @@ func TestEnvFastToJSONGeoQuery(t *testing.T) {
 	var l Latency
 	jsFast, err := sg.FastToJSON(&l)
 	require.NoError(t, err)
+	// check validity of json
+	var unmarshalJs map[string]interface{}
+	require.NoError(t, json.Unmarshal([]byte(jsFast), &unmarshalJs))
+
 	require.JSONEq(t, `{"me":[{"_uid_":"0x1","friend":[{"loc":{"type":"Polygon","coordinates":[[[0,0],[2,0],[2,2],[0,2],[0,0]]]},"name":"Rick Grimes"},{"loc":{"type":"Point","coordinates":[1.10001,2.000001]},"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"friend":[{"name":"Glenn Rhee"}],"loc":{"type":"Point","coordinates":[2,2]},"name":"Andrea"}],"gender":"female","loc":{"type":"Point","coordinates":[1.1,2]},"name":"Michonne"}]}`,
 		string(jsFast))
 
@@ -348,12 +362,12 @@ func TestBenchmarkFastJsonNode(t *testing.T) {
 		}
 	`
 
-	sgFastJson := makeSubgraph(query, t)
+	sg := makeSubgraph(query, t)
 	bFastJson := testing.Benchmark(func(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			var l Latency
-			if _, err := sgFastJson.FastToJSON(&l); err != nil {
+			if _, err := sg.FastToJSON(&l); err != nil {
 				b.FailNow()
 				break
 			}
@@ -387,12 +401,12 @@ func TestBenchmarkOutputJsonNode(t *testing.T) {
 		}
 	`
 
-	sgJson := makeSubgraph(query, t)
+	sg := makeSubgraph(query, t)
 	bresJson := testing.Benchmark(func(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			var l Latency
-			if _, err := sgJson.ToJSON(&l); err != nil {
+			if _, err := sg.ToJSON(&l); err != nil {
 				b.FailNow()
 				break
 			}
@@ -485,6 +499,10 @@ func TestMockSubGraphFastJson(t *testing.T) {
 	sg := mockSubGraph()
 	var l Latency
 	js, _ := sg.FastToJSON(&l)
+	// check validity of json
+	var unmarshalJs map[string]interface{}
+	require.NoError(t, json.Unmarshal([]byte(js), &unmarshalJs))
+
 	require.JSONEq(t, `{"me":[{"_uid_":"0x1","age":"39","friend":[{"_uid_":"0x2","age":"56","name":"lincon"},{"_uid_":"0x3","age":"29","name":"messi"},{"_uid_":"0x4","age":"45","name":"martin"},{"_uid_":"0x5","age":"36","name":"aishwarya"}],"name":"unknown"}]}`,
 		string(js))
 	js2, err := sg.ToJSON(&l)
