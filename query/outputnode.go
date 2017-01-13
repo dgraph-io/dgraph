@@ -195,7 +195,7 @@ type fastJsonNode struct {
 }
 
 func (fj *fastJsonNode) AddValue(attr string, v types.Val) {
-	if bs, err := valToString(v); err == nil {
+	if bs, err := valToBytes(v); err == nil {
 		fj.attrs[attr] = bs
 	}
 }
@@ -228,7 +228,7 @@ func (fj *fastJsonNode) IsEmpty() bool {
 	return len(fj.attrs) == 0 && len(fj.attrsWithChildren) == 0
 }
 
-func valToString(v types.Val) ([]byte, error) {
+func valToBytes(v types.Val) ([]byte, error) {
 	switch v.Tid {
 	case types.BinaryID:
 		return v.Value.([]byte), nil
@@ -264,15 +264,15 @@ func (fj *fastJsonNode) encode() []byte {
 	for k, v := range fj.attrsWithChildren {
 		var buf bytes.Buffer
 		first := true
-		buf.WriteString("[")
+		buf.WriteRune('[')
 		for _, vi := range v {
 			if !first {
-				buf.WriteString(",")
+				buf.WriteRune(',')
 			}
 			first = false
 			buf.Write(vi)
 		}
-		buf.WriteString("]")
+		buf.WriteRune(']')
 		fj.attrs[k] = buf.Bytes()
 		delete(fj.attrsWithChildren, k)
 	}
@@ -284,18 +284,20 @@ func (fj *fastJsonNode) encode() []byte {
 	sort.Sort(stringW(allKeys))
 
 	var buf bytes.Buffer
-	buf.WriteString("{")
+	buf.WriteRune('{')
 	first := true
 	for _, k := range allKeys {
 		if !first {
-			buf.WriteString(",")
+			buf.WriteRune(',')
 		}
 		first = false
-		buf.WriteString("\"" + k + "\"")
-		buf.WriteString(":")
+		buf.WriteRune('"')
+		buf.WriteString(k)
+		buf.WriteRune('"')
+		buf.WriteRune(':')
 		buf.Write(fj.attrs[k])
 	}
-	buf.WriteString("}")
+	buf.WriteRune('}')
 
 	return buf.Bytes()
 }
