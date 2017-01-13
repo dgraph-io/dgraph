@@ -306,6 +306,51 @@ func TestEnvFastToJSONNestedQuery(t *testing.T) {
 	require.JSONEq(t, string(jsFast), string(jsCurr))
 }
 
+func TestEnvFastToJSONComplexQuery(t *testing.T) {
+	dir, dir2, ps := populateGraph(t)
+	defer ps.Close()
+	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
+
+	query := `
+		{
+			me(id:0x01) {
+				name
+				_uid_
+				gender
+				alive
+				friend @filter(anyof("name", "Rick Glenn Andrea")) {
+					_uid_
+					name
+                                        friend @filter(anyof("name", "Rhee")) {
+                                           alive
+                                           name
+                                           friend { name }
+                                        }
+				}
+			}
+		}
+	`
+
+	sg := makeSubgraph(query, t)
+	var l Latency
+	jsFast, err := sg.FastToJSON(&l)
+	require.NoError(t, err)
+
+	// check validity of json
+	var unmarshalJs map[string]interface{}
+	require.NoError(t, json.Unmarshal([]byte(jsFast), &unmarshalJs))
+
+	fmt.Println(string(jsFast))
+	require.JSONEq(t, `{"me":[{"_uid_":"0x1","alive":"true","friend":[{"_uid_":"0x17","name":"Rick Grimes"},{"_uid_":"0x18","name":"Glenn Rhee"},{"_uid_":"0x1f","friend":[{"name":"Glenn Rhee"}],"name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
+		string(jsFast))
+
+	jsCurr, err := sg.ToJSON(&l)
+	require.NoError(t, err)
+	fmt.Println(string(jsCurr))
+	require.JSONEq(t, string(jsFast), string(jsCurr))
+}
+
 func TestEnvFastToJSONDataTypesQuery(t *testing.T) {
 	dir, dir2, ps := populateGraph(t)
 	defer ps.Close()
