@@ -42,7 +42,7 @@ sleep 5
 
 pushd cmd/dgraphloader &> /dev/null
 go build .
-./dgraphloader -r $benchmark/goldendata.rdf.gz -schema /tmp/schema.txt
+./dgraphloader -r $benchmark/goldendata.rdf.gz
 popd &> /dev/null
 
 # Lets wait for stuff to be committed to RocksDB.
