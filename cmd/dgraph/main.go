@@ -512,38 +512,35 @@ func storeStatsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("</pre>"))
 }
 
-func shutDownHandler(w http.ResponseWriter, r *http.Request) {
+// handlerInit does some standard checks. Returns false if something is wrong.
+func handlerInit(w http.ResponseWriter, r *http.Request) bool {
 	if r.Method != "GET" {
 		x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
-		return
+		return false
 	}
 
 	ip, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil || !net.ParseIP(ip).IsLoopback() {
 		x.SetStatus(w, x.ErrorUnauthorized, fmt.Sprintf("Request from IP: %v", ip))
+		return false
+	}
+	return true
+}
+
+func shutDownHandler(w http.ResponseWriter, r *http.Request) {
+	if !handlerInit(w, r) {
 		return
 	}
-
 	exitWithProfiles()
 	x.SetStatus(w, x.ErrorOk, "Server has been shutdown")
 }
 
 func backupHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != "GET" {
-		x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
+	if !handlerInit(w, r) {
 		return
 	}
-
-	ip, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil || !net.ParseIP(ip).IsLoopback() {
-		x.SetStatus(w, x.ErrorUnauthorized,
-			fmt.Sprintf("Request received from IP: %v. Only requests from localhost are allowed.", ip))
-		return
-	}
-
 	ctx := context.Background()
-	err = worker.BackupOverNetwork(ctx)
-	if err != nil {
+	if err := worker.BackupOverNetwork(ctx); err != nil {
 		x.SetStatus(w, err.Error(), "Backup failed.")
 	} else {
 		x.SetStatus(w, x.ErrorOk, "Backup completed.")
@@ -551,26 +548,16 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func indexHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != "GET" {
-		x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
+	if !handlerInit(w, r) {
 		return
 	}
-
-	ip, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil || !net.ParseIP(ip).IsLoopback() {
-		x.SetStatus(w, x.ErrorUnauthorized,
-			fmt.Sprintf("Request received from IP: %v. Only requests from localhost are allowed.", ip))
-		return
-	}
-
 	ctx := context.Background()
 	attr := r.URL.Query().Get("attr")
 	if len(attr) == 0 {
 		x.SetStatus(w, x.ErrorInvalidRequest, "Invalid request. No attr defined.")
 		return
 	}
-	err = worker.RebuildIndexOverNetwork(ctx, attr)
-	if err != nil {
+	if err := worker.RebuildIndexOverNetwork(ctx, attr); err != nil {
 		x.SetStatus(w, err.Error(), "RebuildIndex failed.")
 	} else {
 		x.SetStatus(w, x.ErrorOk, "RebuildIndex completed.")
