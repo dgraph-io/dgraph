@@ -493,11 +493,9 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 	// varUidList will store the UID list of the corresponding variables.
 	varUidList := make(map[string]*task.List)
 	_ = varUidList
-	// Do a topological sort here and exectue nodes that are at the highest level first.
-	// Also, nodes with same depth can be executed parallely.
 
-	// Modify this to run the query from stack.
-	for _, gq := range res.Query {
+	for i := len(res.Query); i >= 0; i-- {
+		gq := res.Query[i]
 		loopStart := time.Now()
 		if gq == nil || (len(gq.UID) == 0 && gq.Func == nil) {
 			continue

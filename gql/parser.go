@@ -429,6 +429,8 @@ func Parse(input string) (res Result, rerr error) {
 			}
 		}
 
+		// Do a topological sort here and exectue nodes that are at the highest level first.
+		// Also, nodes with same depth can be executed parallely.
 		execOrder := topSort(res)
 		if len(execOrder) != len(res.Query) {
 			return res, x.Errorf("Error while executing query")
