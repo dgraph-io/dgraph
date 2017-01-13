@@ -143,11 +143,20 @@ func populateGraph(t *testing.T) (string, string, *store.Store) {
 	require.NoError(t, err)
 	addEdgeToTypedValue(t, ps, "loc", 1, types.GeoID, gData.Value.([]byte))
 
+	// Int32ID
 	data := types.ValueForType(types.BinaryID)
 	intD := types.Val{types.Int32ID, int32(15)}
 	err = types.Marshal(intD, &data)
 	require.NoError(t, err)
 	addEdgeToTypedValue(t, ps, "age", 1, types.Int32ID, data.Value.([]byte))
+
+	// FloatID
+	fdata := types.ValueForType(types.BinaryID)
+	floatD := types.Val{types.FloatID, float64(13.25)}
+	err = types.Marshal(floatD, &fdata)
+	require.NoError(t, err)
+	addEdgeToTypedValue(t, ps, "power", 1, types.FloatID, fdata.Value.([]byte))
+
 	addEdgeToValue(t, ps, "address", 1, "31, 32 street, Jupiter")
 
 	boolD := types.Val{types.BoolID, true}
@@ -273,6 +282,7 @@ func TestEnvFastToJSONNestedQuery(t *testing.T) {
                                         friend {
                                            alive
                                            name
+                                           friend { name }
                                         }
 				}
 			}
@@ -288,7 +298,7 @@ func TestEnvFastToJSONNestedQuery(t *testing.T) {
 	var unmarshalJs map[string]interface{}
 	require.NoError(t, json.Unmarshal([]byte(jsFast), &unmarshalJs))
 
-	require.JSONEq(t, `{"me":[{"_uid_":"0x1","name":"Michonne","gender":"female","alive":"true","friend":[{"_uid_":"0x17","name":"Rick Grimes"},{"_uid_":"0x18","name":"Glenn Rhee"},{"_uid_":"0x19","name":"Daryl Dixon"},{"_uid_":"0x1f","name":"Andrea","friend":[{"name":"Glenn Rhee"}]},{"_uid_":"0x65"}]}]}`,
+	require.JSONEq(t, `{"me":[{"_uid_":"0x1","alive":"true","friend":[{"_uid_":"0x17","name":"Rick Grimes"},{"_uid_":"0x18","name":"Glenn Rhee"},{"_uid_":"0x19","name":"Daryl Dixon"},{"_uid_":"0x1f","friend":[{"name":"Glenn Rhee"}],"name":"Andrea"},{"_uid_":"0x65"}],"gender":"female","name":"Michonne"}]}`,
 		string(jsFast))
 
 	jsCurr, err := sg.ToJSON(&l)
@@ -296,7 +306,7 @@ func TestEnvFastToJSONNestedQuery(t *testing.T) {
 	require.JSONEq(t, string(jsFast), string(jsCurr))
 }
 
-func TestEnvFastToJSONGeoQuery(t *testing.T) {
+func TestEnvFastToJSONDataTypesQuery(t *testing.T) {
 	dir, dir2, ps := populateGraph(t)
 	defer ps.Close()
 	defer os.RemoveAll(dir)
@@ -309,12 +319,16 @@ func TestEnvFastToJSONGeoQuery(t *testing.T) {
 				_uid_
 				gender
                                 loc
+                                dob
+                                address
+                                power
 				friend {
 		                        loc
                                         name
                                         friend {
                                            alive
                                            name
+                                           dob
                                         }
 				}
 			}
@@ -329,7 +343,7 @@ func TestEnvFastToJSONGeoQuery(t *testing.T) {
 	var unmarshalJs map[string]interface{}
 	require.NoError(t, json.Unmarshal([]byte(jsFast), &unmarshalJs))
 
-	require.JSONEq(t, `{"me":[{"_uid_":"0x1","friend":[{"loc":{"type":"Polygon","coordinates":[[[0,0],[2,0],[2,2],[0,2],[0,0]]]},"name":"Rick Grimes"},{"loc":{"type":"Point","coordinates":[1.10001,2.000001]},"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"friend":[{"name":"Glenn Rhee"}],"loc":{"type":"Point","coordinates":[2,2]},"name":"Andrea"}],"gender":"female","loc":{"type":"Point","coordinates":[1.1,2]},"name":"Michonne"}]}`,
+	require.JSONEq(t, `{"me":[{"_uid_":"0x1","address":"31, 32 street, Jupiter","friend":[{"loc":{"type":"Polygon","coordinates":[[[0,0],[2,0],[2,2],[0,2],[0,0]]]},"name":"Rick Grimes"},{"loc":{"type":"Point","coordinates":[1.10001,2.000001]},"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"friend":[{"dob":"1909-05-05","name":"Glenn Rhee"}],"loc":{"type":"Point","coordinates":[2,2]},"name":"Andrea"}],"gender":"female","loc":{"type":"Point","coordinates":[1.1,2]},"name":"Michonne","power":"1.325E+01"}]}`,
 		string(jsFast))
 
 	jsCurr, err := sg.ToJSON(&l)
@@ -534,6 +548,7 @@ func BenchmarkMockSubGraphToJSON(b *testing.B) {
 	}
 }
 
+// run : go test -memprofile memmock.out -run=TestMemoryUsageMockSGFastJSON
 func TestMemoryUsageMockSGFastJSON(t *testing.T) {
 	sg := mockSubGraph()
 	var l Latency
@@ -545,7 +560,8 @@ func TestMemoryUsageMockSGFastJSON(t *testing.T) {
 	}
 }
 
-func TestMemoryUsageRealSGFastJSON(t *testing.T) {
+// run : go test -memprofile memenv.out -run=TestMemoryUsageMockSGFastJSON
+func TestMemoryUsageEnvSGFastJSON(t *testing.T) {
 	dir, dir2, ps := populateGraph(t)
 	defer ps.Close()
 	defer os.RemoveAll(dir)
