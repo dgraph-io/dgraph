@@ -465,7 +465,7 @@ func rootSg(uidMatrix []*task.List, srcUids *task.List, names []string, ages []u
 	}
 }
 
-func TestMockSubGraphFastJson(t *testing.T) {
+func mockSubGraph() *SubGraph {
 	emptyUids := []uint64{}
 	uidMatrix := []*task.List{&task.List{Uids: emptyUids}, &task.List{Uids: emptyUids}, &task.List{Uids: emptyUids}, &task.List{Uids: emptyUids}}
 	srcUids := &task.List{Uids: []uint64{2, 3, 4, 5}}
@@ -485,7 +485,11 @@ func TestMockSubGraphFastJson(t *testing.T) {
 	sg.Children = append(sg.Children, friendsSg1)
 	sg.DestUIDs = &task.List{Uids: []uint64{1}}
 	sg.Params.Alias = "me"
+	return sg
+}
 
+func TestMockSubGraphFastJson(t *testing.T) {
+	sg := mockSubGraph()
 	var l Latency
 	js, _ := sg.FastToJSON(&l)
 	require.JSONEq(t, `{"me":[{"_uid_":"0x1","age":"39","friend":[{"_uid_":"0x2","age":"56","name":"lincon"},{"_uid_":"0x3","age":"29","name":"messi"},{"_uid_":"0x4","age":"45","name":"martin"},{"_uid_":"0x5","age":"36","name":"aishwarya"}],"name":"unknown"}]}`,
@@ -496,28 +500,8 @@ func TestMockSubGraphFastJson(t *testing.T) {
 }
 
 func BenchmarkMockSubGraphFastJson(b *testing.B) {
-	emptyUids := []uint64{}
-	uidMatrix := []*task.List{&task.List{Uids: emptyUids}, &task.List{Uids: emptyUids}, &task.List{Uids: emptyUids}, &task.List{Uids: emptyUids}}
-	srcUids := &task.List{Uids: []uint64{2, 3, 4, 5}}
-
-	names := []string{"lincon", "messi", "martin", "aishwarya"}
-	ages := []uint32{56, 29, 45, 36}
-	namesSg := nameSg(uidMatrix, srcUids, names)
-	agesSg := ageSg(uidMatrix, srcUids, ages)
-
-	sgSrcUids := &task.List{Uids: []uint64{1}}
-	sgUidMatrix := []*task.List{&task.List{Uids: emptyUids}}
-
-	friendUidMatrix := []*task.List{&task.List{Uids: []uint64{2, 3, 4, 5}}}
-	friendsSg1 := friendsSg(friendUidMatrix, sgSrcUids, []*SubGraph{namesSg, agesSg})
-
-	sg := rootSg(sgUidMatrix, sgSrcUids, []string{"unknown"}, []uint32{39})
-	sg.Children = append(sg.Children, friendsSg1)
-	sg.DestUIDs = &task.List{Uids: []uint64{1}}
-	sg.Params.Alias = "me"
-
+	sg := mockSubGraph()
 	var l Latency
-
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		if _, err := sg.FastToJSON(&l); err != nil {
@@ -528,32 +512,57 @@ func BenchmarkMockSubGraphFastJson(b *testing.B) {
 }
 
 func BenchmarkMockSubGraphToJSON(b *testing.B) {
-	emptyUids := []uint64{}
-	uidMatrix := []*task.List{&task.List{Uids: emptyUids}, &task.List{Uids: emptyUids}, &task.List{Uids: emptyUids}, &task.List{Uids: emptyUids}}
-	srcUids := &task.List{Uids: []uint64{2, 3, 4, 5}}
-
-	names := []string{"lincon", "messi", "martin", "aishwarya"}
-	ages := []uint32{56, 29, 45, 36}
-	namesSg := nameSg(uidMatrix, srcUids, names)
-	agesSg := ageSg(uidMatrix, srcUids, ages)
-
-	sgSrcUids := &task.List{Uids: []uint64{1}}
-	sgUidMatrix := []*task.List{&task.List{Uids: emptyUids}}
-
-	friendUidMatrix := []*task.List{&task.List{Uids: []uint64{2, 3, 4, 5}}}
-	friendsSg1 := friendsSg(friendUidMatrix, sgSrcUids, []*SubGraph{namesSg, agesSg})
-
-	sg := rootSg(sgUidMatrix, sgSrcUids, []string{"unknown"}, []uint32{39})
-	sg.Children = append(sg.Children, friendsSg1)
-	sg.DestUIDs = &task.List{Uids: []uint64{1}}
-	sg.Params.Alias = "me"
-
+	sg := mockSubGraph()
 	var l Latency
-
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		if _, err := sg.ToJSON(&l); err != nil {
 			b.FailNow()
+			break
+		}
+	}
+}
+
+func TestMemoryUsageMockSGFastJSON(t *testing.T) {
+	sg := mockSubGraph()
+	var l Latency
+	for i := 0; i < 100000; i++ {
+		if _, err := sg.FastToJSON(&l); err != nil {
+			t.FailNow()
+			break
+		}
+	}
+}
+
+func TestMemoryUsageRealSGFastJSON(t *testing.T) {
+	dir, dir2, ps := populateGraph(t)
+	defer ps.Close()
+	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
+	query := `
+		{
+			me(id:0x01) {
+				name
+				_uid_
+				gender
+				alive
+				friend {
+					_uid_
+					name
+				        friend {
+					   _uid_
+					   name
+				        }
+				}
+			}
+		}
+	`
+	sg := makeSubgraph(query, t)
+
+	var l Latency
+	for i := 0; i < 100000; i++ {
+		if _, err := sg.FastToJSON(&l); err != nil {
+			t.FailNow()
 			break
 		}
 	}

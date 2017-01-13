@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"time"
 
 	geom "github.com/twpayne/go-geom"
@@ -223,7 +224,7 @@ func (fj *fastJsonNode) SetXID(xid string) {
 }
 
 func (fj *fastJsonNode) IsEmpty() bool {
-	return len(fj.attrs) == 0
+	return len(fj.attrs) == 0 && len(fj.attrsWithChildren) == 0
 }
 
 func valToString(v types.Val) ([]byte, error) {
@@ -252,6 +253,12 @@ func valToString(v types.Val) ([]byte, error) {
 	}
 }
 
+type stringW []string
+
+func (a stringW) Len() int           { return len(a) }
+func (a stringW) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a stringW) Less(i, j int) bool { return a[i] < a[j] }
+
 func (fj *fastJsonNode) fastJsonNodeToJSON() []byte {
 	for k, v := range fj.attrsWithChildren {
 		var buf bytes.Buffer
@@ -268,17 +275,23 @@ func (fj *fastJsonNode) fastJsonNodeToJSON() []byte {
 		fj.attrs[k] = buf.Bytes()
 	}
 
+	allKeys := make([]string, 0, len(fj.attrs))
+	for k, _ := range fj.attrs {
+		allKeys = append(allKeys, k)
+	}
+	sort.Sort(stringW(allKeys))
+
 	var buf bytes.Buffer
 	buf.WriteString("{")
 	first := true
-	for k, v := range fj.attrs {
+	for _, k := range allKeys {
 		if !first {
 			buf.WriteString(",")
 		}
 		first = false
 		buf.WriteString("\"" + k + "\"")
 		buf.WriteString(":")
-		buf.Write(v)
+		buf.Write(fj.attrs[k])
 	}
 	buf.WriteString("}")
 
