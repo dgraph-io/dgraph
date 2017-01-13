@@ -254,21 +254,26 @@ func processToJSON(t *testing.T, query string) string {
 	res, err := gql.Parse(query)
 	require.NoError(t, err)
 
-	ctx := context.Background()
-	var sgl []*SubGraph
-	for _, gq := range res.Query {
-		sg, err := ToSubGraph(ctx, gq)
-		require.NoError(t, err)
-		sg.DebugPrint("")
-
-		ch := make(chan error)
-		go ProcessGraph(ctx, sg, nil, ch)
-		err = <-ch
-		require.NoError(t, err)
-		sg.DebugPrint("")
-		sgl = append(sgl, sg)
-	}
 	var l Latency
+	ctx := context.Background()
+	sgl, err := ProcessQuery(ctx, res, &l)
+	/*
+		var sgl []*SubGraph
+		for _, gq := range res.Query {
+			sg, err := ToSubGraph(ctx, gq)
+			require.NoError(t, err)
+			sg.DebugPrint("")
+
+			mp := make(map[string]*task.List)
+			ch := make(chan error)
+			go ProcessGraph(ctx, sg, nil, ch, mp)
+			err = <-ch
+			require.NoError(t, err)
+			sg.DebugPrint("")
+			sgl = append(sgl, sg)
+		}*/
+	require.NoError(t, err)
+
 	js, err := ToJson(&l, sgl)
 	require.NoError(t, err)
 	return string(js)
@@ -319,7 +324,30 @@ func TestGetUIDNotInChild(t *testing.T) {
 	`
 	js := processToJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"_uid_":"0x1","alive":"true","friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
+		`{"me":["_uid_":"0x1","alive":"true","gender":"female","name":"Michonne"{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]]}`,
+		js)
+}
+
+func TestUseVars(t *testing.T) {
+	dir, dir2, ps := populateGraph(t)
+	defer ps.Close()
+	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
+	query := `
+		{
+			var(id:0x01) {
+				L AS friend 
+				
+			}
+
+			me(L) {
+				name
+			}
+		}
+	`
+	js := processToJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}`,
 		js)
 }
 
@@ -508,7 +536,7 @@ func TestProcessGraph(t *testing.T) {
 	require.NoError(t, err)
 
 	ch := make(chan error)
-	go ProcessGraph(ctx, sg, nil, ch)
+	go ProcessGraph(ctx, sg, nil, ch, nil)
 	err = <-ch
 	require.NoError(t, err)
 
@@ -613,7 +641,7 @@ func TestFieldAliasProto(t *testing.T) {
 	require.NoError(t, err)
 
 	ch := make(chan error)
-	go ProcessGraph(ctx, sg, nil, ch)
+	go ProcessGraph(ctx, sg, nil, ch, nil)
 	err = <-ch
 	require.NoError(t, err)
 
@@ -1324,7 +1352,7 @@ func TestToProto(t *testing.T) {
 	require.NoError(t, err)
 
 	ch := make(chan error)
-	go ProcessGraph(ctx, sg, nil, ch)
+	go ProcessGraph(ctx, sg, nil, ch, nil)
 	err = <-ch
 	require.NoError(t, err)
 
@@ -1431,7 +1459,7 @@ func TestToProtoFilter(t *testing.T) {
 	require.NoError(t, err)
 
 	ch := make(chan error)
-	go ProcessGraph(ctx, sg, nil, ch)
+	go ProcessGraph(ctx, sg, nil, ch, nil)
 	err = <-ch
 	require.NoError(t, err)
 
@@ -1495,7 +1523,7 @@ func TestToProtoFilterOr(t *testing.T) {
 	require.NoError(t, err)
 
 	ch := make(chan error)
-	go ProcessGraph(ctx, sg, nil, ch)
+	go ProcessGraph(ctx, sg, nil, ch, nil)
 	err = <-ch
 	require.NoError(t, err)
 
@@ -1568,7 +1596,7 @@ func TestToProtoFilterAnd(t *testing.T) {
 	require.NoError(t, err)
 
 	ch := make(chan error)
-	go ProcessGraph(ctx, sg, nil, ch)
+	go ProcessGraph(ctx, sg, nil, ch, nil)
 	err = <-ch
 	require.NoError(t, err)
 
@@ -1746,7 +1774,7 @@ func TestToProtoOrder(t *testing.T) {
 	require.NoError(t, err)
 
 	ch := make(chan error)
-	go ProcessGraph(ctx, sg, nil, ch)
+	go ProcessGraph(ctx, sg, nil, ch, nil)
 	err = <-ch
 	require.NoError(t, err)
 
@@ -1837,7 +1865,7 @@ func TestToProtoOrderCount(t *testing.T) {
 	require.NoError(t, err)
 
 	ch := make(chan error)
-	go ProcessGraph(ctx, sg, nil, ch)
+	go ProcessGraph(ctx, sg, nil, ch, nil)
 	err = <-ch
 	require.NoError(t, err)
 
@@ -1910,7 +1938,7 @@ func TestToProtoOrderOffsetCount(t *testing.T) {
 	require.NoError(t, err)
 
 	ch := make(chan error)
-	go ProcessGraph(ctx, sg, nil, ch)
+	go ProcessGraph(ctx, sg, nil, ch, nil)
 	err = <-ch
 	require.NoError(t, err)
 
@@ -2200,7 +2228,7 @@ func TestToProtoMultiRoot(t *testing.T) {
 	require.NoError(t, err)
 
 	ch := make(chan error)
-	go ProcessGraph(ctx, sg, nil, ch)
+	go ProcessGraph(ctx, sg, nil, ch, nil)
 	err = <-ch
 	require.NoError(t, err)
 
@@ -2293,7 +2321,7 @@ func TestNearGeneratorError(t *testing.T) {
 	sg.DebugPrint("")
 
 	ch := make(chan error)
-	go ProcessGraph(ctx, sg, nil, ch)
+	go ProcessGraph(ctx, sg, nil, ch, nil)
 	err = <-ch
 	require.Error(t, err)
 }
@@ -2319,7 +2347,7 @@ func TestNearGeneratorErrorMissDist(t *testing.T) {
 	sg.DebugPrint("")
 
 	ch := make(chan error)
-	go ProcessGraph(ctx, sg, nil, ch)
+	go ProcessGraph(ctx, sg, nil, ch, nil)
 	err = <-ch
 	require.Error(t, err)
 }
@@ -2345,7 +2373,7 @@ func TestWithinGeneratorError(t *testing.T) {
 	sg.DebugPrint("")
 
 	ch := make(chan error)
-	go ProcessGraph(ctx, sg, nil, ch)
+	go ProcessGraph(ctx, sg, nil, ch, nil)
 	err = <-ch
 	require.Error(t, err)
 }
@@ -2415,7 +2443,7 @@ func TestIntersectsGeneratorError(t *testing.T) {
 	sg.DebugPrint("")
 
 	ch := make(chan error)
-	go ProcessGraph(ctx, sg, nil, ch)
+	go ProcessGraph(ctx, sg, nil, ch, nil)
 	err = <-ch
 	require.Error(t, err)
 }
@@ -2466,7 +2494,7 @@ func TestSchema(t *testing.T) {
 	require.NoError(t, err)
 
 	ch := make(chan error)
-	go ProcessGraph(ctx, sg, nil, ch)
+	go ProcessGraph(ctx, sg, nil, ch, nil)
 	err = <-ch
 	require.NoError(t, err)
 

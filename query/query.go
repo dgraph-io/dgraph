@@ -123,7 +123,9 @@ type params struct {
 	Order     string
 	OrderDesc bool
 	isDebug   bool
-	hasVar    bool
+	HasVar    bool
+	VarDef    string
+	VarUse    string
 }
 
 // SubGraph is the way to represent data internally. It contains both the
@@ -351,6 +353,8 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 		args := params{
 			Alias:   gchild.Alias,
 			isDebug: sg.Params.isDebug,
+			VarDef:  gchild.VarDef,
+			VarUse:  gchild.VarUse,
 		}
 		if gchild.IsCount {
 			if len(gchild.Children) != 0 {
@@ -418,7 +422,7 @@ func ToSubGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	// This would set the Result field in SubGraph,
 	// and populate the children for attributes.
-	if len(gq.UID) == 0 && gq.Func == nil {
+	if len(gq.UID) == 0 && gq.Func == nil && gq.VarUse == "" {
 		err := x.Errorf("Invalid query, query internal id is zero and generator is nil")
 		x.TraceError(ctx, err)
 		return nil, err
@@ -429,7 +433,9 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	args := params{
 		isDebug: gq.Alias == "debug",
 		Alias:   gq.Alias,
-		hasVar:  gq.HasVar,
+		HasVar:  gq.HasVar,
+		VarDef:  gq.VarDef,
+		VarUse:  gq.VarUse,
 	}
 
 	sg := &SubGraph{
@@ -492,12 +498,11 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 
 	// varUidList will store the UID list of the corresponding variables.
 	varUidList := make(map[string]*task.List)
-	_ = varUidList
 
-	for i := len(res.Query); i >= 0; i-- {
+	for i := 0; i < len(res.Query); i++ {
 		gq := res.Query[i]
 		loopStart := time.Now()
-		if gq == nil || (len(gq.UID) == 0 && gq.Func == nil) {
+		if gq == nil || (len(gq.UID) == 0 && gq.Func == nil && gq.VarUse == "") {
 			continue
 		}
 		sg, err := ToSubGraph(ctx, gq)
@@ -510,14 +515,13 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 		x.Trace(ctx, "Query parsed")
 
 		rch := make(chan error)
-		go ProcessGraph(ctx, sg, nil, rch)
+		go ProcessGraph(ctx, sg, nil, rch, varUidList)
 		err = <-rch
 		if err != nil {
 			return nil, err
 		}
 		l.Processing += time.Since(execStart)
 		x.Trace(ctx, "Graph processed")
-
 		sgl = append(sgl, sg)
 	}
 	return sgl, nil
@@ -525,9 +529,11 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 
 // ProcessGraph processes the SubGraph instance accumulating result for the query
 // from different instances. Note: taskQuery is nil for root node.
-func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
+func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error, varUidList map[string]*task.List) {
 	var err error
-	if len(sg.Attr) == 0 {
+	if sg.Params.VarUse != "" {
+		sg.DestUIDs = varUidList[sg.Params.VarUse]
+	} else if len(sg.Attr) == 0 {
 		// If we have a filter SubGraph which only contains an operator,
 		// it won't have any attribute to work on.
 		// This is to allow providing SrcUIDs to the filter children.
@@ -537,7 +543,6 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		// I am root. I don't have any function to execute, and my
 		// result has been prepared for me already.
 		sg.DestUIDs = algo.MergeSorted(sg.uidMatrix) // Could also be = sg.SrcUIDs
-
 	} else {
 		taskQuery := createTaskQuery(sg)
 		result, err := worker.ProcessTaskOverNetwork(ctx, taskQuery)
@@ -569,7 +574,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		}
 	}
 
-	if len(sg.DestUIDs.Uids) == 0 {
+	if sg.DestUIDs == nil || len(sg.DestUIDs.Uids) == 0 {
 		// Looks like we're done here. Be careful with nil srcUIDs!
 		x.Trace(ctx, "Zero uids for %q. Num attr children: %v", sg.Attr, len(sg.Children))
 		rch <- nil
@@ -582,7 +587,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		filterChan := make(chan error, len(sg.Filters))
 		for _, filter := range sg.Filters {
 			filter.SrcUIDs = sg.DestUIDs
-			go ProcessGraph(ctx, filter, sg, filterChan)
+			go ProcessGraph(ctx, filter, sg, filterChan, varUidList)
 		}
 
 		for _ = range sg.Filters {
@@ -630,6 +635,10 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		}
 	}
 
+	if varUidList != nil && sg.Params.VarDef != "" {
+		varUidList[sg.Params.VarDef] = sg.DestUIDs
+	}
+
 	// Here we consider handling count with filtering. We do this after
 	// pagination because otherwise, we need to do the count with pagination
 	// taken into account. For example, a PL might have only 50 entries but the
@@ -653,7 +662,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	for i := 0; i < len(sg.Children); i++ {
 		child := sg.Children[i]
 		child.SrcUIDs = sg.DestUIDs // Make the connection.
-		go ProcessGraph(ctx, child, sg, childChan)
+		go ProcessGraph(ctx, child, sg, childChan, varUidList)
 	}
 
 	// Now get all the results back.
@@ -917,6 +926,9 @@ func ToJson(l *Latency, sgl []*SubGraph) ([]byte, error) {
 func (sg *SubGraph) ToJSON(l *Latency) (map[string]interface{}, error) {
 	var seedNode *jsonOutputNode
 	n := seedNode.New("_root_")
+	if sg.DestUIDs == nil {
+		return nil, nil
+	}
 	for _, uid := range sg.DestUIDs.Uids {
 		// For the root, the name is stored in Alias, not Attr.
 		n1 := seedNode.New(sg.Params.Alias)
