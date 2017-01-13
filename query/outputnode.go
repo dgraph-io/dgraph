@@ -229,9 +229,8 @@ func (fj *fastJsonNode) IsEmpty() bool {
 func valToString(v types.Val) ([]byte, error) {
 	switch v.Tid {
 	case types.BinaryID:
-		return []byte("\"Not supported.\""), nil
+		return v.Value.([]byte), nil
 	case types.Int32ID:
-		// are we always sure that v.Value is an int ?
 		return []byte(fmt.Sprintf("\"%d\"", v.Value)), nil
 	case types.FloatID:
 		return []byte(fmt.Sprintf("\"%f\"", v.Value)), nil
@@ -247,7 +246,7 @@ func valToString(v types.Val) ([]byte, error) {
 	case types.GeoID:
 		return geojson.Marshal(v.Value.(geom.T))
 	case types.UidID:
-		return []byte(fmt.Sprintf("%#x", v.Value)), nil
+		return []byte(fmt.Sprintf("\"%#x\"", v.Value)), nil
 	default:
 		return nil, errors.New("unsupported types.Val.Tid")
 	}
