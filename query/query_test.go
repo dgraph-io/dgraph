@@ -19,7 +19,6 @@ package query
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"os"
 	"testing"

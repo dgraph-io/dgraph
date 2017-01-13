@@ -341,13 +341,11 @@ func TestEnvFastToJSONComplexQuery(t *testing.T) {
 	var unmarshalJs map[string]interface{}
 	require.NoError(t, json.Unmarshal([]byte(jsFast), &unmarshalJs))
 
-	fmt.Println(string(jsFast))
 	require.JSONEq(t, `{"me":[{"_uid_":"0x1","alive":"true","friend":[{"_uid_":"0x17","name":"Rick Grimes"},{"_uid_":"0x18","name":"Glenn Rhee"},{"_uid_":"0x1f","friend":[{"name":"Glenn Rhee"}],"name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
 		string(jsFast))
 
 	jsCurr, err := sg.ToJSON(&l)
 	require.NoError(t, err)
-	fmt.Println(string(jsCurr))
 	require.JSONEq(t, string(jsFast), string(jsCurr))
 }
 
