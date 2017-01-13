@@ -18,6 +18,7 @@ package posting
 
 import (
 	"context"
+	"crypto/md5"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -35,6 +36,7 @@ import (
 	"github.com/dgryski/go-farm"
 
 	"github.com/dgraph-io/dgraph/store"
+	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -42,8 +44,9 @@ var (
 	maxmemory = flag.Int("stw_ram_mb", 4096,
 		"If RAM usage exceeds this, we stop the world, and flush our buffers.")
 
-	commitFraction = flag.Float64("gentlecommit", 0.10, "Fraction of dirty posting lists to commit every few seconds.")
-	lhmapNumShards = flag.Int("lhmap", 32, "Number of shards for lhmap.")
+	commitFraction   = flag.Float64("gentlecommit", 0.10, "Fraction of dirty posting lists to commit every few seconds.")
+	lhmapNumShards   = flag.Int("lhmap", 32, "Number of shards for lhmap.")
+	dummyPostingList []byte // Used for indexing.
 )
 
 // syncMarks stores the watermark for synced RAFT proposals. Each RAFT proposal consists
@@ -61,6 +64,18 @@ var (
 type syncMarks struct {
 	sync.RWMutex
 	m map[uint32]*x.WaterMark
+}
+
+func init() {
+	x.AddInit(func() {
+		h := md5.New()
+		pl := types.PostingList{
+			Checksum: h.Sum(nil),
+		}
+		var err error
+		dummyPostingList, err = pl.Marshal()
+		x.Check(err)
+	})
 }
 
 func (g *syncMarks) create(group uint32) *x.WaterMark {
@@ -312,7 +327,6 @@ var (
 func Init(ps *store.Store) {
 	marks = new(syncMarks)
 	pstore = ps
-	initIndex()
 	lhmap = newShardedListMap(*lhmapNumShards)
 	dirtyChan = make(chan uint64, 10000)
 	fmt.Println("Starting commit routine.")
@@ -365,6 +379,23 @@ func GetOrCreate(key []byte, group uint32) (rlist *List, decr func()) {
 		l.decr()
 	}
 	lp.water = marks.Get(group)
+	pk := x.Parse(key)
+
+	// This replaces "TokensTable". The idea is that we want to quickly add the
+	// index key to the data store, with essentially an empty value. We just need
+	// the keys for filtering / sorting.
+	if l == lp && pk.IsIndex() {
+		// Lock before entering goroutine. Otherwise, some tests in query will fail.
+		l.Lock()
+		go func(key []byte) {
+			defer l.Unlock()
+			slice, err := pstore.Get(key)
+			x.Check(err)
+			if slice.Size() == 0 {
+				x.Check(pstore.SetOne(key, dummyPostingList))
+			}
+		}(key)
+	}
 	return lp, lp.decr
 }
 
