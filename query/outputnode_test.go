@@ -349,9 +349,6 @@ func TestBenchmarkFastJsonNode(t *testing.T) {
 	`
 
 	sgFastJson := makeSubgraph(query, t)
-	var l Latency
-	fastjs, _ := sgFastJson.FastToJSON(&l)
-	fmt.Println("response fastjs:", string(fastjs))
 	bFastJson := testing.Benchmark(func(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
@@ -391,10 +388,6 @@ func TestBenchmarkOutputJsonNode(t *testing.T) {
 	`
 
 	sgJson := makeSubgraph(query, t)
-	var l Latency
-	js, _ := sgJson.ToJSON(&l)
-	fmt.Println("response js:", string(js))
-
 	bresJson := testing.Benchmark(func(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {

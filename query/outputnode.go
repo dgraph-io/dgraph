@@ -188,6 +188,7 @@ func (sg *SubGraph) ToJSON(l *Latency) ([]byte, error) {
 	return json.Marshal(res)
 }
 
+// Implementation of jsonNode : we do encoding to json ourselves.
 type fastJsonNode struct {
 	attrsWithChildren map[string][][]byte
 	attrs             map[string][]byte
@@ -204,7 +205,7 @@ func (fj *fastJsonNode) AddChild(attr string, child outputNode) {
 	if !found {
 		fj.attrsWithChildren[attr] = make([][]byte, 0, 5)
 	}
-	bs := child.(*fastJsonNode).fastJsonNodeToJSON()
+	bs := child.(*fastJsonNode).encode()
 	fj.attrsWithChildren[attr] = append(fj.attrsWithChildren[attr], bs)
 }
 
@@ -241,7 +242,7 @@ func valToString(v types.Val) ([]byte, error) {
 		}
 		return []byte("\"false\""), nil
 	case types.StringID:
-		return []byte("\"" + v.Value.(string) + "\""), nil
+		return []byte(fmt.Sprintf("%q", v.Value.(string))), nil
 	case types.DateID:
 		return v.Value.(time.Time).MarshalJSON()
 	case types.GeoID:
@@ -259,7 +260,7 @@ func (a stringW) Len() int           { return len(a) }
 func (a stringW) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a stringW) Less(i, j int) bool { return a[i] < a[j] }
 
-func (fj *fastJsonNode) fastJsonNodeToJSON() []byte {
+func (fj *fastJsonNode) encode() []byte {
 	for k, v := range fj.attrsWithChildren {
 		var buf bytes.Buffer
 		first := true
@@ -273,6 +274,7 @@ func (fj *fastJsonNode) fastJsonNodeToJSON() []byte {
 		}
 		buf.WriteString("]")
 		fj.attrs[k] = buf.Bytes()
+		delete(fj.attrsWithChildren, k)
 	}
 
 	allKeys := make([]string, 0, len(fj.attrs))
@@ -302,7 +304,6 @@ func (sg *SubGraph) FastToJSON(l *Latency) ([]byte, error) {
 	var seedNode *fastJsonNode
 	n := seedNode.New("_root_")
 	for _, uid := range sg.DestUIDs.Uids {
-		// For the root, the name is stored in Alias, not Attr.
 		n1 := seedNode.New(sg.Params.Alias)
 		if sg.Params.GetUID || sg.Params.isDebug {
 			n1.SetUID(uid)
@@ -319,5 +320,5 @@ func (sg *SubGraph) FastToJSON(l *Latency) ([]byte, error) {
 		}
 		n.AddChild(sg.Params.Alias, n1)
 	}
-	return n.(*fastJsonNode).fastJsonNodeToJSON(), nil
+	return n.(*fastJsonNode).encode(), nil
 }
