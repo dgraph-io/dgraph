@@ -396,7 +396,8 @@ type wrappedErr struct {
 	Message string
 }
 
-func processRequest(ctx context.Context, gq *gql.GraphQuery, l *query.Latency) (*query.SubGraph, wrappedErr) {
+func processRequest(ctx context.Context, gq *gql.GraphQuery,
+	l *query.Latency) (*query.SubGraph, wrappedErr) {
 	if gq == nil || (len(gq.UID) == 0 && gq.Func == nil) {
 		return &query.SubGraph{}, wrappedErr{nil, x.ErrorOk}
 	}
