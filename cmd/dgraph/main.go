@@ -62,7 +62,9 @@ var (
 	postingDir = flag.String("p", "p", "Directory to store posting lists.")
 	walDir     = flag.String("w", "w", "Directory to store raft write-ahead logs.")
 	port       = flag.Int("port", 8080, "Port to run server on.")
-	numcpu     = flag.Int("cores", runtime.NumCPU(),
+	bindall    = flag.Bool("bindall", false,
+		"Use 0.0.0.0 instead of localhost to bind to all addresses on local machine.")
+	numcpu = flag.Int("cores", runtime.NumCPU(),
 		"Number of cores to be used by the process")
 	nomutations  = flag.Bool("nomutations", false, "Don't allow mutations on this server.")
 	tracing      = flag.Float64("trace", 0.5, "The ratio of queries to trace.")
@@ -681,9 +683,14 @@ func serveHTTP(l net.Listener) {
 }
 
 func setupServer(che chan error) {
-	go worker.RunServer() // For internal communication.
+	go worker.RunServer(*bindall) // For internal communication.
 
-	l, err := net.Listen("tcp", fmt.Sprintf(":%d", *port))
+	laddr := "localhost"
+	if *bindall {
+		laddr = "0.0.0.0"
+	}
+
+	l, err := net.Listen("tcp", fmt.Sprintf("%s:%d", laddr, *port))
 	if err != nil {
 		log.Fatal(err)
 	}
