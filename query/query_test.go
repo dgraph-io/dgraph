@@ -255,18 +255,21 @@ func processToJSON(t *testing.T, query string) string {
 	require.NoError(t, err)
 
 	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, res.Query)
-	require.NoError(t, err)
-	sg.DebugPrint("")
+	var sgl []*SubGraph
+	for _, gq := range res.Query {
+		sg, err := ToSubGraph(ctx, gq)
+		require.NoError(t, err)
+		sg.DebugPrint("")
 
-	ch := make(chan error)
-	go ProcessGraph(ctx, sg, nil, ch)
-	err = <-ch
-	require.NoError(t, err)
-	sg.DebugPrint("")
-
+		ch := make(chan error)
+		go ProcessGraph(ctx, sg, nil, ch)
+		err = <-ch
+		require.NoError(t, err)
+		sg.DebugPrint("")
+		sgl = append(sgl, sg)
+	}
 	var l Latency
-	js, err := sg.ToJSON(&l)
+	js, err := ToJson(&l, sgl)
 	require.NoError(t, err)
 	return string(js)
 }
@@ -501,7 +504,7 @@ func TestProcessGraph(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, res.Query)
+	sg, err := ToSubGraph(ctx, res.Query[0])
 	require.NoError(t, err)
 
 	ch := make(chan error)
@@ -606,7 +609,7 @@ func TestFieldAliasProto(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, res.Query)
+	sg, err := ToSubGraph(ctx, res.Query[0])
 	require.NoError(t, err)
 
 	ch := make(chan error)
@@ -1317,7 +1320,7 @@ func TestToProto(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, res.Query)
+	sg, err := ToSubGraph(ctx, res.Query[0])
 	require.NoError(t, err)
 
 	ch := make(chan error)
@@ -1424,7 +1427,7 @@ func TestToProtoFilter(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, res.Query)
+	sg, err := ToSubGraph(ctx, res.Query[0])
 	require.NoError(t, err)
 
 	ch := make(chan error)
@@ -1488,7 +1491,7 @@ func TestToProtoFilterOr(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, res.Query)
+	sg, err := ToSubGraph(ctx, res.Query[0])
 	require.NoError(t, err)
 
 	ch := make(chan error)
@@ -1535,7 +1538,7 @@ children: <
   >
 >
 `
-	require.EqualValues(t, proto.MarshalTextString(pb), expectedPb)
+	require.EqualValues(t, expectedPb, proto.MarshalTextString(pb))
 }
 
 func TestToProtoFilterAnd(t *testing.T) {
@@ -1561,7 +1564,7 @@ func TestToProtoFilterAnd(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, res.Query)
+	sg, err := ToSubGraph(ctx, res.Query[0])
 	require.NoError(t, err)
 
 	ch := make(chan error)
@@ -1739,7 +1742,7 @@ func TestToProtoOrder(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, res.Query)
+	sg, err := ToSubGraph(ctx, res.Query[0])
 	require.NoError(t, err)
 
 	ch := make(chan error)
@@ -1830,7 +1833,7 @@ func TestToProtoOrderCount(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, res.Query)
+	sg, err := ToSubGraph(ctx, res.Query[0])
 	require.NoError(t, err)
 
 	ch := make(chan error)
@@ -1903,7 +1906,7 @@ func TestToProtoOrderOffsetCount(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, res.Query)
+	sg, err := ToSubGraph(ctx, res.Query[0])
 	require.NoError(t, err)
 
 	ch := make(chan error)
@@ -1983,6 +1986,70 @@ func TestSchema1(t *testing.T) {
 		js)
 }
 
+func TestMultiQuery(t *testing.T) {
+	dir1, dir2, ps := populateGraph(t)
+	defer ps.Close()
+	defer os.RemoveAll(dir1)
+	defer os.RemoveAll(dir2)
+	query := `
+    {
+      me(anyof("name", "Michonne")) {
+        name
+        gender
+			}
+
+      you(anyof("name", "Andrea")) {
+        name
+      }
+    }
+  `
+	js := processToJSON(t, query)
+	require.JSONEq(t, `{"me":[{"gender":"female","name":"Michonne"}], "you":[{"name":"Andrea"}]}`, js)
+}
+
+func TestMultiQueryError1(t *testing.T) {
+	dir1, dir2, ps := populateGraph(t)
+	defer ps.Close()
+	defer os.RemoveAll(dir1)
+	defer os.RemoveAll(dir2)
+	query := `
+    {
+      me(anyof("name", "Michonne")) {
+        name
+        gender
+			
+
+      you(anyof("name", "Andrea")) {
+        name
+      }
+    }
+  `
+	_, err := gql.Parse(query)
+	require.Error(t, err)
+}
+
+func TestMultiQueryError2(t *testing.T) {
+	dir1, dir2, ps := populateGraph(t)
+	defer ps.Close()
+	defer os.RemoveAll(dir1)
+	defer os.RemoveAll(dir2)
+	query := `
+    {
+      me(anyof("name", "Michonne")) {
+        name
+        gender
+			}
+		}
+
+      you(anyof("name", "Andrea")) {
+        name
+      }
+    }
+  `
+	_, err := gql.Parse(query)
+	require.Error(t, err)
+}
+
 func TestGenerator(t *testing.T) {
 	dir1, dir2, ps := populateGraph(t)
 	defer ps.Close()
@@ -2000,6 +2067,25 @@ func TestGenerator(t *testing.T) {
 	require.JSONEq(t, `{"me":[{"gender":"female","name":"Michonne"}]}`, js)
 }
 
+func TestGeneratorMultiRootMultiQuery(t *testing.T) {
+	dir1, dir2, ps := populateGraph(t)
+	defer ps.Close()
+	defer os.RemoveAll(dir1)
+	defer os.RemoveAll(dir2)
+	query := `
+    {
+      me(anyof("name", "Michonne Rick Glenn")) {
+        name
+      }
+
+			you(id:[1, 23, 24]) {
+				name
+			}
+    }
+  `
+	js := processToJSON(t, query)
+	require.JSONEq(t, `{"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"}], "you":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"}]}`, js)
+}
 func TestGeneratorMultiRoot(t *testing.T) {
 	dir1, dir2, ps := populateGraph(t)
 	defer ps.Close()
@@ -2110,7 +2196,7 @@ func TestToProtoMultiRoot(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, res.Query)
+	sg, err := ToSubGraph(ctx, res.Query[0])
 	require.NoError(t, err)
 
 	ch := make(chan error)
@@ -2202,7 +2288,7 @@ func TestNearGeneratorError(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, res.Query)
+	sg, err := ToSubGraph(ctx, res.Query[0])
 	require.NoError(t, err)
 	sg.DebugPrint("")
 
@@ -2228,7 +2314,7 @@ func TestNearGeneratorErrorMissDist(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, res.Query)
+	sg, err := ToSubGraph(ctx, res.Query[0])
 	require.NoError(t, err)
 	sg.DebugPrint("")
 
@@ -2254,7 +2340,7 @@ func TestWithinGeneratorError(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, res.Query)
+	sg, err := ToSubGraph(ctx, res.Query[0])
 	require.NoError(t, err)
 	sg.DebugPrint("")
 
@@ -2324,7 +2410,7 @@ func TestIntersectsGeneratorError(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, res.Query)
+	sg, err := ToSubGraph(ctx, res.Query[0])
 	require.NoError(t, err)
 	sg.DebugPrint("")
 
@@ -2376,7 +2462,7 @@ func TestSchema(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, res.Query)
+	sg, err := ToSubGraph(ctx, res.Query[0])
 	require.NoError(t, err)
 
 	ch := make(chan error)

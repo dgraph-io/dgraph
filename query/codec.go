@@ -22,10 +22,12 @@ func (c *Codec) Marshal(v interface{}) ([]byte, error) {
 		return []byte{}, err
 	}
 
-	select {
-	// Passing onto to channel which would put it into the sync pool.
-	case nodeCh <- r.N:
-	default:
+	for _, it := range r.N {
+		select {
+		// Passing onto to channel which would put it into the sync pool.
+		case nodeCh <- it:
+		default:
+		}
 	}
 
 	return b, nil

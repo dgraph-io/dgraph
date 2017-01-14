@@ -446,8 +446,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	gq := res.Query
-	if gq == nil || (len(gq.UID) == 0 && gq.Func == nil) {
+	if len(res.Query) == 0 {
 		mp := map[string]interface{}{
 			"code":    x.ErrorOk,
 			"message": "Done",
@@ -461,38 +460,47 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sg, err := query.ToSubGraph(ctx, gq)
-	if err != nil {
-		x.TraceError(ctx, x.Wrapf(err, "Error while conversion o internal format"))
-		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
-		return
-	}
-	l.Parsing = time.Since(l.Start)
-	x.Trace(ctx, "Query parsed")
+	var sgl []*query.SubGraph
+	for _, gq := range res.Query {
+		loopStart := time.Now()
+		if gq == nil || (len(gq.UID) == 0 && gq.Func == nil) {
+			continue
+		}
+		sg, err := query.ToSubGraph(ctx, gq)
+		if err != nil {
+			x.TraceError(ctx, x.Wrapf(err, "Error while conversion o internal format"))
+			x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+			return
+		}
+		l.Parsing += time.Since(loopStart)
 
-	rch := make(chan error)
-	go query.ProcessGraph(ctx, sg, nil, rch)
-	err = <-rch
-	if err != nil {
-		x.TraceError(ctx, x.Wrapf(err, "Error while executing query"))
-		x.SetStatus(w, x.Error, err.Error())
-		return
-	}
-	l.Processing = time.Since(l.Start) - l.Parsing
-	x.Trace(ctx, "Graph processed")
+		execStart := time.Now()
+		x.Trace(ctx, "Query parsed")
 
-	if len(*dumpSubgraph) > 0 {
-		x.Checkf(os.MkdirAll(*dumpSubgraph, 0700), *dumpSubgraph)
-		s := time.Now().Format("20060102.150405.000000.gob")
-		filename := path.Join(*dumpSubgraph, s)
-		f, err := os.Create(filename)
-		x.Checkf(err, filename)
-		enc := gob.NewEncoder(f)
-		x.Check(enc.Encode(sg))
-		x.Checkf(f.Close(), filename)
-	}
+		rch := make(chan error)
+		go query.ProcessGraph(ctx, sg, nil, rch)
+		err = <-rch
+		if err != nil {
+			x.TraceError(ctx, x.Wrapf(err, "Error while executing query"))
+			x.SetStatus(w, x.Error, err.Error())
+			return
+		}
+		l.Processing += time.Since(execStart)
+		x.Trace(ctx, "Graph processed")
 
-	js, err := sg.ToJSON(&l)
+		if len(*dumpSubgraph) > 0 {
+			x.Checkf(os.MkdirAll(*dumpSubgraph, 0700), *dumpSubgraph)
+			s := time.Now().Format("20060102.150405.000000.gob")
+			filename := path.Join(*dumpSubgraph, s)
+			f, err := os.Create(filename)
+			x.Checkf(err, filename)
+			enc := gob.NewEncoder(f)
+			x.Check(enc.Encode(sg))
+			x.Checkf(f.Close(), filename)
+		}
+		sgl = append(sgl, sg)
+	}
+	js, err := query.ToJson(&l, sgl) //sg.ToJSON(&l)
 	if err != nil {
 		x.TraceError(ctx, x.Wrapf(err, "Error while converting to Json"))
 		x.SetStatus(w, x.Error, err.Error())
@@ -573,8 +581,7 @@ type grpcServer struct{}
 // client as a protocol buffer message.
 // TODO: Refactor this, so both Query and Run follow the same logic.
 func (s *grpcServer) Run(ctx context.Context,
-	req *graph.Request) (*graph.Response, error) {
-
+	req *graph.Request) (resp *graph.Response, err error) {
 	var allocIds map[string]uint64
 	if rand.Float64() < *tracing {
 		tr := trace.New("Dgraph", "GrpcQuery")
@@ -582,7 +589,7 @@ func (s *grpcServer) Run(ctx context.Context,
 		ctx = trace.NewContext(ctx, tr)
 	}
 
-	resp := new(graph.Response)
+	resp = new(graph.Response)
 	if len(req.Query) == 0 && req.Mutation == nil {
 		x.TraceError(ctx, x.Errorf("Empty query and mutation."))
 		return resp, fmt.Errorf("Empty query and mutation.")
@@ -615,35 +622,40 @@ func (s *grpcServer) Run(ctx context.Context,
 	}
 	resp.AssignedUids = allocIds
 
-	gq := res.Query
-	if gq == nil || (len(gq.UID) == 0) {
-		return resp, err
+	var sgl []*query.SubGraph
+	for _, gq := range res.Query {
+		loopStart := time.Now()
+		if gq == nil || (len(gq.UID) == 0) {
+			return resp, err
+		}
+
+		sg, err := query.ToSubGraph(ctx, gq)
+		if err != nil {
+			x.TraceError(ctx, x.Wrapf(err, "Error while conversion to internal format"))
+			return resp, err
+		}
+		l.Parsing += time.Since(loopStart)
+		execStart := time.Now()
+		x.Trace(ctx, "Query parsed")
+
+		rch := make(chan error)
+		go query.ProcessGraph(ctx, sg, nil, rch)
+		err = <-rch
+		if err != nil {
+			x.TraceError(ctx, x.Wrapf(err, "Error while executing query"))
+			return resp, err
+		}
+		l.Processing += time.Since(execStart)
+		x.Trace(ctx, "Graph processed")
+		sgl = append(sgl, sg)
 	}
 
-	sg, err := query.ToSubGraph(ctx, gq)
-	if err != nil {
-		x.TraceError(ctx, x.Wrapf(err, "Error while conversion to internal format"))
-		return resp, err
-	}
-	l.Parsing = time.Since(l.Start)
-	x.Trace(ctx, "Query parsed")
-
-	rch := make(chan error)
-	go query.ProcessGraph(ctx, sg, nil, rch)
-	err = <-rch
-	if err != nil {
-		x.TraceError(ctx, x.Wrapf(err, "Error while executing query"))
-		return resp, err
-	}
-	l.Processing = time.Since(l.Start) - l.Parsing
-	x.Trace(ctx, "Graph processed")
-
-	node, err := sg.ToProtocolBuffer(&l)
+	nodes, err := query.ToProtocolBuf(&l, sgl)
 	if err != nil {
 		x.TraceError(ctx, x.Wrapf(err, "Error while converting to ProtocolBuffer"))
 		return resp, err
 	}
-	resp.N = node
+	resp.N = nodes
 
 	gl := new(graph.Latency)
 	gl.Parsing, gl.Processing, gl.Pb = l.Parsing.String(), l.Processing.String(),

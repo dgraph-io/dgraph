@@ -18,6 +18,7 @@ package query
 
 import (
 	"context"
+	"encoding/json"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -107,8 +108,9 @@ func runQuery(t *testing.T, gq *gql.GraphQuery) string {
 	var l Latency
 	js, err := sg.ToJSON(&l)
 	require.NoError(t, err)
-
-	return string(js)
+	j, err := json.Marshal(js)
+	require.NoError(t, err)
+	return string(j)
 }
 
 func TestWithinPoint(t *testing.T) {

@@ -772,6 +772,18 @@ func (p *protoOutputNode) IsEmpty() bool {
 	return true
 }
 
+func ToProtocolBuf(l *Latency, sgl []*SubGraph) ([]*graph.Node, error) {
+	var resNode []*graph.Node
+	for _, sg := range sgl {
+		node, err := sg.ToProtocolBuffer(l)
+		if err != nil {
+			return nil, err
+		}
+		resNode = append(resNode, node)
+	}
+	return resNode, nil
+}
+
 // ToProtocolBuffer does preorder traversal to build a proto buffer. We have
 // used postorder traversal before, but preorder seems simpler and faster for
 // most cases.
@@ -848,9 +860,23 @@ func (p *jsonOutputNode) IsEmpty() bool {
 	return len(p.data) == 0
 }
 
+func ToJson(l *Latency, sgl []*SubGraph) ([]byte, error) {
+	mp := make(map[string]interface{})
+	for _, sg := range sgl {
+		res, err := sg.ToJSON(l)
+		if err != nil {
+			return nil, err
+		}
+		for k, v := range res {
+			mp[k] = v
+		}
+	}
+	return json.Marshal(mp)
+}
+
 // ToJSON converts the internal subgraph object to JSON format which is then\
 // sent to the HTTP client.
-func (sg *SubGraph) ToJSON(l *Latency) ([]byte, error) {
+func (sg *SubGraph) ToJSON(l *Latency) (map[string]interface{}, error) {
 	var seedNode *jsonOutputNode
 	n := seedNode.New("_root_")
 	for _, uid := range sg.DestUIDs.Uids {
@@ -875,5 +901,5 @@ func (sg *SubGraph) ToJSON(l *Latency) ([]byte, error) {
 	if sg.Params.isDebug {
 		res["server_latency"] = l.ToMap()
 	}
-	return json.Marshal(res)
+	return res, nil
 }

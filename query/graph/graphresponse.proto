@@ -61,7 +61,7 @@ message Node {
 }
 
 message Response {
-    Node n = 1;
+    repeated Node n = 1;
     Latency l = 2;
     map<string, uint64> AssignedUids = 3;
 }
