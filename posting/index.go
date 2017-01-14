@@ -258,14 +258,6 @@ func RebuildIndex(ctx context.Context, attr string) error {
 	return nil
 }
 
-const (
-	// Posting list keys are prefixed with this rune if it is a mutation meant for
-	// the index.
-	indexRune   = ':'
-	dateFormat1 = "2006-01-02"
-	dateFormat2 = "2006-01-02T15:04:05"
-)
-
 // DefaultIndexKeys tokenizes data as a string and return keys for indexing.
 func DefaultIndexKeys(val string) ([]string, error) {
 	words := strings.Fields(val)
