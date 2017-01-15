@@ -190,7 +190,7 @@ func (sg *SubGraph) ToJSON(l *Latency) ([]byte, error) {
 
 // Implementation of jsonNode : we do encoding to json ourselves.
 type fastJsonNode struct {
-	attrsWithChildren map[string][][]byte
+	attrsWithChildren map[string][]*fastJsonNode
 	attrs             map[string][]byte
 }
 
@@ -203,14 +203,13 @@ func (fj *fastJsonNode) AddValue(attr string, v types.Val) {
 func (fj *fastJsonNode) AddChild(attr string, child outputNode) {
 	_, found := fj.attrsWithChildren[attr]
 	if !found {
-		fj.attrsWithChildren[attr] = make([][]byte, 0, 5)
+		fj.attrsWithChildren[attr] = make([]*fastJsonNode, 0, 5)
 	}
-	bs := child.(*fastJsonNode).encode()
-	fj.attrsWithChildren[attr] = append(fj.attrsWithChildren[attr], bs)
+	fj.attrsWithChildren[attr] = append(fj.attrsWithChildren[attr], child.(*fastJsonNode))
 }
 
 func (fj *fastJsonNode) New(attr string) outputNode {
-	return &fastJsonNode{make(map[string][][]byte), make(map[string][]byte)}
+	return &fastJsonNode{make(map[string][]*fastJsonNode), make(map[string][]byte)}
 }
 
 func (fj *fastJsonNode) SetUID(uid uint64) {
@@ -260,46 +259,45 @@ func (a stringW) Len() int           { return len(a) }
 func (a stringW) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a stringW) Less(i, j int) bool { return a[i] < a[j] }
 
-func (fj *fastJsonNode) encode() []byte {
-	for k, v := range fj.attrsWithChildren {
-		var buf bytes.Buffer
-		first := true
-		buf.WriteRune('[')
-		for _, vi := range v {
-			if !first {
-				buf.WriteRune(',')
-			}
-			first = false
-			buf.Write(vi)
-		}
-		buf.WriteRune(']')
-		fj.attrs[k] = buf.Bytes()
-		delete(fj.attrsWithChildren, k)
-	}
-
+func (fj *fastJsonNode) encode(jsBuf *bytes.Buffer) {
 	allKeys := make([]string, 0, len(fj.attrs))
 	for k, _ := range fj.attrs {
 		allKeys = append(allKeys, k)
 	}
+	for k, _ := range fj.attrsWithChildren {
+		allKeys = append(allKeys, k)
+	}
 	sort.Sort(stringW(allKeys))
 
-	var buf bytes.Buffer
-	buf.WriteRune('{')
+	jsBuf.WriteRune('{')
 	first := true
 	for _, k := range allKeys {
 		if !first {
-			buf.WriteRune(',')
+			jsBuf.WriteRune(',')
 		}
 		first = false
-		buf.WriteRune('"')
-		buf.WriteString(k)
-		buf.WriteRune('"')
-		buf.WriteRune(':')
-		buf.Write(fj.attrs[k])
-	}
-	buf.WriteRune('}')
+		jsBuf.WriteRune('"')
+		jsBuf.WriteString(k)
+		jsBuf.WriteRune('"')
+		jsBuf.WriteRune(':')
 
-	return buf.Bytes()
+		if v, ok := fj.attrs[k]; ok {
+			jsBuf.Write(v)
+		} else {
+			v := fj.attrsWithChildren[k]
+			first := true
+			jsBuf.WriteRune('[')
+			for _, vi := range v {
+				if !first {
+					jsBuf.WriteRune(',')
+				}
+				first = false
+				vi.encode(jsBuf)
+			}
+			jsBuf.WriteRune(']')
+		}
+	}
+	jsBuf.WriteRune('}')
 }
 
 func (sg *SubGraph) FastToJSON(l *Latency) ([]byte, error) {
@@ -323,12 +321,18 @@ func (sg *SubGraph) FastToJSON(l *Latency) ([]byte, error) {
 		n.AddChild(sg.Params.Alias, n1)
 	}
 
+	var buf bytes.Buffer
 	if sg.Params.isDebug {
 		sl := seedNode.New("serverLatency").(*fastJsonNode)
 		for k, v := range l.ToMap() {
 			sl.attrs[k] = []byte(fmt.Sprintf("%q", v))
 		}
-		n.(*fastJsonNode).attrs["server_latency"] = sl.encode()
+
+		sl.encode(&buf)
+		n.(*fastJsonNode).attrs["server_latency"] = buf.Bytes()
+		buf.Reset()
 	}
-	return n.(*fastJsonNode).encode(), nil
+	n.(*fastJsonNode).encode(&buf)
+
+	return buf.Bytes(), nil
 }
