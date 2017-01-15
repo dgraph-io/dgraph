@@ -322,5 +322,13 @@ func (sg *SubGraph) FastToJSON(l *Latency) ([]byte, error) {
 		}
 		n.AddChild(sg.Params.Alias, n1)
 	}
+
+	if sg.Params.isDebug {
+		sl := seedNode.New("serverLatency").(*fastJsonNode)
+		for k, v := range l.ToMap() {
+			sl.attrs[k] = []byte(fmt.Sprintf("%q", v))
+		}
+		n.(*fastJsonNode).attrs["server_latency"] = sl.encode()
+	}
 	return n.(*fastJsonNode).encode(), nil
 }
