@@ -324,7 +324,7 @@ func TestGetUIDNotInChild(t *testing.T) {
 	`
 	js := processToJSON(t, query)
 	require.JSONEq(t,
-		`{"me":["_uid_":"0x1","alive":"true","gender":"female","name":"Michonne"{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]]}`,
+		`{"me":[{"_uid_":"0x1","alive":"true","gender":"female","name":"Michonne", "friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}]}`,
 		js)
 }
 

@@ -101,7 +101,7 @@ func TestQuery(t *testing.T) {
 	require.EqualValues(t, []string{"status"}, childAttrs(g.Children[0]))
 
 	ch := make(chan error)
-	go query.ProcessGraph(ctx, g, nil, ch)
+	go query.ProcessGraph(ctx, g, nil, ch, nil)
 	err = <-ch
 	require.NoError(t, err)
 
@@ -198,7 +198,7 @@ func BenchmarkQuery(b *testing.B) {
 		}
 
 		ch := make(chan error)
-		go query.ProcessGraph(ctx, g, nil, ch)
+		go query.ProcessGraph(ctx, g, nil, ch, nil)
 		err = <-ch
 		require.NoError(b, err)
 		var l query.Latency

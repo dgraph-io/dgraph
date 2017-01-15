@@ -655,33 +655,39 @@ func (s *grpcServer) Run(ctx context.Context,
 	}
 	resp.AssignedUids = allocIds
 
-	var sgl []*query.SubGraph
-	for _, gq := range res.Query {
-		loopStart := time.Now()
-		if gq == nil || (len(gq.UID) == 0) {
-			return resp, err
-		}
-
-		sg, err := query.ToSubGraph(ctx, gq)
-		if err != nil {
-			x.TraceError(ctx, x.Wrapf(err, "Error while conversion to internal format"))
-			return resp, err
-		}
-		l.Parsing += time.Since(loopStart)
-		execStart := time.Now()
-		x.Trace(ctx, "Query parsed")
-
-		rch := make(chan error)
-		go query.ProcessGraph(ctx, sg, nil, rch)
-		err = <-rch
-		if err != nil {
-			x.TraceError(ctx, x.Wrapf(err, "Error while executing query"))
-			return resp, err
-		}
-		l.Processing += time.Since(execStart)
-		x.Trace(ctx, "Graph processed")
-		sgl = append(sgl, sg)
+	sgl, err := query.ProcessQuery(ctx, res, &l)
+	if err != nil {
+		x.TraceError(ctx, x.Wrapf(err, "Error while converting to ProtocolBuffer"))
+		return resp, err
 	}
+	/*
+		var sgl []*query.SubGraph
+		for _, gq := range res.Query {
+			loopStart := time.Now()
+			if gq == nil || (len(gq.UID) == 0) {
+				return resp, err
+			}
+
+			sg, err := query.ToSubGraph(ctx, gq)
+			if err != nil {
+				x.TraceError(ctx, x.Wrapf(err, "Error while conversion to internal format"))
+				return resp, err
+			}
+			l.Parsing += time.Since(loopStart)
+			execStart := time.Now()
+			x.Trace(ctx, "Query parsed")
+
+			rch := make(chan error)
+			go query.ProcessGraph(ctx, sg, nil, rch)
+			err = <-rch
+			if err != nil {
+				x.TraceError(ctx, x.Wrapf(err, "Error while executing query"))
+				return resp, err
+			}
+			l.Processing += time.Since(execStart)
+			x.Trace(ctx, "Graph processed")
+			sgl = append(sgl, sg)
+		}*/
 
 	nodes, err := query.ToProtocolBuf(&l, sgl)
 	if err != nil {
