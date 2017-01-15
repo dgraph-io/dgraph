@@ -189,6 +189,14 @@ func (sg *SubGraph) ToJSON(l *Latency) ([]byte, error) {
 }
 
 // Implementation of jsonNode : we do encoding to json ourselves.
+// /query$ go test -v -run=Benchmark outputnode_test.go query.go outputnode.go proto.go
+// tojson:     Benchmarks: 30000 times; 2.361178574s total time; 78705 ns/op
+// fastToJson: Benchmarks: 50000 times; 2.181345374s total time; 43626 ns/op
+// /query$ go test -run=XXX -bench=Mock -benchtime=4s outputnode_test.go query.go
+//           outputnode.go proto.go
+// BenchmarkMockSubGraphFastJson-4   	  200000	     57500 ns/op
+// BenchmarkMockSubGraphToJSON-4     	  100000	     98768 ns/op
+
 type fastJsonNode struct {
 	attrsWithChildren map[string][]*fastJsonNode
 	attrs             map[string][]byte
