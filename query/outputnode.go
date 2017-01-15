@@ -253,12 +253,6 @@ func valToBytes(v types.Val) ([]byte, error) {
 	}
 }
 
-type stringW []string
-
-func (a stringW) Len() int           { return len(a) }
-func (a stringW) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
-func (a stringW) Less(i, j int) bool { return a[i] < a[j] }
-
 func (fj *fastJsonNode) encode(jsBuf *bytes.Buffer) {
 	allKeys := make([]string, 0, len(fj.attrs))
 	for k, _ := range fj.attrs {
@@ -267,7 +261,7 @@ func (fj *fastJsonNode) encode(jsBuf *bytes.Buffer) {
 	for k, _ := range fj.attrsWithChildren {
 		allKeys = append(allKeys, k)
 	}
-	sort.Sort(stringW(allKeys))
+	sort.Strings(allKeys)
 
 	jsBuf.WriteRune('{')
 	first := true
@@ -300,7 +294,7 @@ func (fj *fastJsonNode) encode(jsBuf *bytes.Buffer) {
 	jsBuf.WriteRune('}')
 }
 
-func (sg *SubGraph) FastToJSON(l *Latency) ([]byte, error) {
+func (sg *SubGraph) ToFastJSON(l *Latency) ([]byte, error) {
 	var seedNode *fastJsonNode
 	n := seedNode.New("_root_")
 	for _, uid := range sg.DestUIDs.Uids {

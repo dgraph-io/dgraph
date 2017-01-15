@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 DGraph Labs, Inc.
+ * Copyright 2017 Dgraph Labs, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -225,7 +225,7 @@ func makeSubgraph(query string, t *testing.T) *SubGraph {
 	return sg
 }
 
-func TestEnvFastToJSONSimpleQuery(t *testing.T) {
+func TestEnvToFastJSONSimpleQuery(t *testing.T) {
 	dir, dir2, ps := populateGraph(t)
 	defer ps.Close()
 	defer os.RemoveAll(dir)
@@ -248,7 +248,7 @@ func TestEnvFastToJSONSimpleQuery(t *testing.T) {
 
 	sg := makeSubgraph(query, t)
 	var l Latency
-	jsFast, err := sg.FastToJSON(&l)
+	jsFast, err := sg.ToFastJSON(&l)
 	require.NoError(t, err)
 
 	// check validity of json
@@ -263,7 +263,7 @@ func TestEnvFastToJSONSimpleQuery(t *testing.T) {
 	require.JSONEq(t, string(jsFast), string(jsCurr))
 }
 
-func TestEnvFastToJSONNestedQuery(t *testing.T) {
+func TestEnvToFastJSONNestedQuery(t *testing.T) {
 	dir, dir2, ps := populateGraph(t)
 	defer ps.Close()
 	defer os.RemoveAll(dir)
@@ -291,7 +291,7 @@ func TestEnvFastToJSONNestedQuery(t *testing.T) {
 
 	sg := makeSubgraph(query, t)
 	var l Latency
-	jsFast, err := sg.FastToJSON(&l)
+	jsFast, err := sg.ToFastJSON(&l)
 	require.NoError(t, err)
 
 	// check validity of json
@@ -306,7 +306,7 @@ func TestEnvFastToJSONNestedQuery(t *testing.T) {
 	require.JSONEq(t, string(jsFast), string(jsCurr))
 }
 
-func TestEnvFastToJSONComplexQuery(t *testing.T) {
+func TestEnvToFastJSONComplexQuery(t *testing.T) {
 	dir, dir2, ps := populateGraph(t)
 	defer ps.Close()
 	defer os.RemoveAll(dir)
@@ -334,7 +334,7 @@ func TestEnvFastToJSONComplexQuery(t *testing.T) {
 
 	sg := makeSubgraph(query, t)
 	var l Latency
-	jsFast, err := sg.FastToJSON(&l)
+	jsFast, err := sg.ToFastJSON(&l)
 	require.NoError(t, err)
 
 	// check validity of json
@@ -349,7 +349,7 @@ func TestEnvFastToJSONComplexQuery(t *testing.T) {
 	require.JSONEq(t, string(jsFast), string(jsCurr))
 }
 
-func TestEnvFastToJSONDataTypesQuery(t *testing.T) {
+func TestEnvToFastJSONDataTypesQuery(t *testing.T) {
 	dir, dir2, ps := populateGraph(t)
 	defer ps.Close()
 	defer os.RemoveAll(dir)
@@ -380,7 +380,7 @@ func TestEnvFastToJSONDataTypesQuery(t *testing.T) {
 
 	sg := makeSubgraph(query, t)
 	var l Latency
-	jsFast, err := sg.FastToJSON(&l)
+	jsFast, err := sg.ToFastJSON(&l)
 	require.NoError(t, err)
 	// check validity of json
 	var unmarshalJs map[string]interface{}
@@ -424,7 +424,7 @@ func TestBenchmarkFastJsonNode(t *testing.T) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			var l Latency
-			if _, err := sg.FastToJSON(&l); err != nil {
+			if _, err := sg.ToFastJSON(&l); err != nil {
 				b.FailNow()
 				break
 			}
@@ -555,7 +555,7 @@ func mockSubGraph() *SubGraph {
 func TestMockSubGraphFastJson(t *testing.T) {
 	sg := mockSubGraph()
 	var l Latency
-	js, _ := sg.FastToJSON(&l)
+	js, _ := sg.ToFastJSON(&l)
 	// check validity of json
 	var unmarshalJs map[string]interface{}
 	require.NoError(t, json.Unmarshal([]byte(js), &unmarshalJs))
@@ -572,7 +572,7 @@ func BenchmarkMockSubGraphFastJson(b *testing.B) {
 	var l Latency
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if _, err := sg.FastToJSON(&l); err != nil {
+		if _, err := sg.ToFastJSON(&l); err != nil {
 			b.FailNow()
 			break
 		}
@@ -596,7 +596,7 @@ func TestMemoryUsageMockSGFastJSON(t *testing.T) {
 	sg := mockSubGraph()
 	var l Latency
 	for i := 0; i < 100000; i++ {
-		if _, err := sg.FastToJSON(&l); err != nil {
+		if _, err := sg.ToFastJSON(&l); err != nil {
 			t.FailNow()
 			break
 		}
@@ -631,7 +631,7 @@ func TestMemoryUsageEnvSGFastJSON(t *testing.T) {
 
 	var l Latency
 	for i := 0; i < 100000; i++ {
-		if _, err := sg.FastToJSON(&l); err != nil {
+		if _, err := sg.ToFastJSON(&l); err != nil {
 			t.FailNow()
 			break
 		}
