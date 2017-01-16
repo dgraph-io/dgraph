@@ -89,7 +89,7 @@ func addIndexMutations(ctx context.Context, t *task.DirectedEdge, p types.Val, o
 }
 
 func addIndexMutation(ctx context.Context, edge *task.DirectedEdge, token string) {
-	key := x.IndexKey(edge.Attr, token)
+	key := x.IndexKey(edge.Attr, token, edge.PluginContexts)
 
 	var groupId uint32
 	if rv, ok := ctx.Value("raft").(x.RaftValue); ok {
@@ -112,7 +112,7 @@ func addIndexMutation(ctx context.Context, edge *task.DirectedEdge, token string
 }
 
 func addReverseMutation(ctx context.Context, t *task.DirectedEdge) {
-	key := x.ReverseKey(t.Attr, t.ValueId)
+	key := x.ReverseKey(t.Attr, t.ValueId, t.PluginContexts)
 	groupId := group.BelongsTo(t.Attr)
 
 	plist, decr := GetOrCreate(key, groupId)

@@ -27,7 +27,7 @@ message Query {
 	
 	bool reverse = 8;  // Whether this is a reverse edge.
 
-	repeated bytes plugins = 9;
+	repeated string plugin_contexts = 9;
 }
 
 message Result {
@@ -43,7 +43,7 @@ message Sort {
 	int32 count = 3;   // Return this many elements.
 	int32 offset = 4;  // Skip this many elements.
 	bool desc = 5;
-	repeated bytes plugins = 6;
+	repeated string plugin_contexts = 6;
 }
 
 message SortResult {
@@ -97,12 +97,12 @@ message DirectedEdge {
 		DEL = 1;
 	}
 	Op op = 7;
+	repeated string plugin_contexts = 8;
 }
 
 message Mutations {
 	uint32 group_id = 1;
 	repeated DirectedEdge edges = 2;
-	repeated bytes plugin = 3;
 }
 
 message RebuildIndex {

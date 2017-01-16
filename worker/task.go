@@ -128,7 +128,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 			}
 			ineqValueToken = ineqTokens[0]
 			// Get tokens geq / leq ineqValueToken.
-			tokens, err = getInequalityTokens(attr, ineqValueToken, f)
+			tokens, err = getInequalityTokens(attr, ineqValueToken, f, q.PluginContexts)
 			if err != nil {
 				return nil, err
 			}
@@ -156,11 +156,11 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 	for i := 0; i < n; i++ {
 		var key []byte
 		if useFunc {
-			key = x.IndexKey(attr, tokens[i])
+			key = x.IndexKey(attr, tokens[i], q.PluginContexts)
 		} else if q.Reverse {
-			key = x.ReverseKey(attr, q.Uids[i])
+			key = x.ReverseKey(attr, q.Uids[i], q.PluginContexts)
 		} else {
-			key = x.DataKey(attr, q.Uids[i])
+			key = x.DataKey(attr, q.Uids[i], q.PluginContexts)
 		}
 		// Get or create the posting list for an entity, attribute combination.
 		pl, decr := posting.GetOrCreate(key, gid)
@@ -207,7 +207,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 		// Filter the first row of UidMatrix. Since ineqValue != nil, we may
 		// assume that ineqValue is equal to the first token found in TokensTable.
 		algo.ApplyFilter(out.UidMatrix[0], func(uid uint64, i int) bool {
-			sv, err := fetchValue(uid, attr, typ)
+			sv, err := fetchValue(uid, attr, typ, q.PluginContexts)
 			if sv.Value == nil || err != nil {
 				return false
 			}
@@ -234,7 +234,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 	if geoQuery != nil {
 		uids := algo.MergeSorted(out.UidMatrix)
 		for _, uid := range uids.Uids {
-			key := x.DataKey(attr, uid)
+			key := x.DataKey(attr, uid, q.PluginContexts)
 			pl, decr := posting.GetOrCreate(key, gid)
 
 			val, err := pl.Value()

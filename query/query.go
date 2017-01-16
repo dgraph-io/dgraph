@@ -146,6 +146,8 @@ type SubGraph struct {
 
 	// destUIDs is a list of destination UIDs, after applying filters, pagination.
 	DestUIDs *task.List
+
+	PluginContexts []string
 }
 
 // DebugPrint prints out the SubGraph tree in a nice format for debugging purposes.
@@ -471,13 +473,14 @@ func createTaskQuery(sg *SubGraph) *task.Query {
 		attr = strings.TrimPrefix(attr, "~")
 	}
 	out := &task.Query{
-		Attr:     attr,
-		Reverse:  reverse,
-		SrcFunc:  sg.SrcFunc,
-		Count:    int32(sg.Params.Count),
-		Offset:   int32(sg.Params.Offset),
-		AfterUid: sg.Params.AfterUID,
-		DoCount:  len(sg.Filters) == 0 && sg.Params.DoCount,
+		Attr:           attr,
+		Reverse:        reverse,
+		SrcFunc:        sg.SrcFunc,
+		Count:          int32(sg.Params.Count),
+		Offset:         int32(sg.Params.Offset),
+		AfterUid:       sg.Params.AfterUID,
+		DoCount:        len(sg.Filters) == 0 && sg.Params.DoCount,
+		PluginContexts: sg.PluginContexts,
 	}
 	if sg.SrcUIDs != nil {
 		out.Uids = sg.SrcUIDs.Uids

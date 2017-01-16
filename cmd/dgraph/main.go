@@ -38,12 +38,15 @@ import (
 	"strings"
 	"time"
 
+	"github.com/soheilhy/cmux"
 	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc"
 
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/group"
+	"github.com/dgraph-io/dgraph/plugin"
+	_ "github.com/dgraph-io/dgraph/pluginload"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/query/graph"
@@ -54,7 +57,6 @@ import (
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/soheilhy/cmux"
 )
 
 var (
@@ -212,14 +214,15 @@ func applyMutations(ctx context.Context, m *task.Mutations) error {
 	return nil
 }
 
-func convertAndApply(ctx context.Context, set []*graph.NQuad, del []*graph.NQuad) (map[string]uint64, error) {
+func convertAndApply(ctx context.Context, set []*graph.NQuad, del []*graph.NQuad,
+	pluginContexts []string) (map[string]uint64, error) {
 	var allocIds map[string]uint64
 	var m task.Mutations
 	var err error
 	var mr mutationResult
 
 	if *nomutations {
-		return nil, fmt.Errorf("Mutations are forbidden on this server.")
+		return nil, x.Errorf("Mutations are forbidden on this server.")
 	}
 
 	if mr, err = convertToEdges(ctx, set); err != nil {
@@ -228,6 +231,7 @@ func convertAndApply(ctx context.Context, set []*graph.NQuad, del []*graph.NQuad
 	m.Edges, allocIds = mr.edges, mr.newUids
 	for i := range m.Edges {
 		m.Edges[i].Op = task.DirectedEdge_SET
+		m.Edges[i].PluginContexts = pluginContexts // At mutation/edge level.
 	}
 
 	if mr, err = convertToEdges(ctx, del); err != nil {
@@ -247,7 +251,8 @@ func convertAndApply(ctx context.Context, set []*graph.NQuad, del []*graph.NQuad
 
 // This function is used to run mutations for the requests from different
 // language clients.
-func runMutations(ctx context.Context, mu *graph.Mutation) (map[string]uint64, error) {
+func runMutations(ctx context.Context, mu *graph.Mutation,
+	pluginContexts []string) (map[string]uint64, error) {
 	var allocIds map[string]uint64
 	var err error
 
@@ -258,7 +263,7 @@ func runMutations(ctx context.Context, mu *graph.Mutation) (map[string]uint64, e
 		return nil, x.Wrap(err)
 	}
 
-	if allocIds, err = convertAndApply(ctx, mu.Set, mu.Del); err != nil {
+	if allocIds, err = convertAndApply(ctx, mu.Set, mu.Del, pluginContexts); err != nil {
 		return nil, err
 	}
 	return allocIds, nil
@@ -266,7 +271,8 @@ func runMutations(ctx context.Context, mu *graph.Mutation) (map[string]uint64, e
 
 // This function is used to run mutations for the requests received from the
 // http client.
-func mutationHandler(ctx context.Context, mu *gql.Mutation) (map[string]uint64, error) {
+func mutationHandler(ctx context.Context, mu *gql.Mutation,
+	pluginContexts []string) (map[string]uint64, error) {
 	var set []*graph.NQuad
 	var del []*graph.NQuad
 	var allocIds map[string]uint64
@@ -291,7 +297,7 @@ func mutationHandler(ctx context.Context, mu *gql.Mutation) (map[string]uint64, 
 		return nil, x.Wrap(err)
 	}
 
-	if allocIds, err = convertAndApply(ctx, set, del); err != nil {
+	if allocIds, err = convertAndApply(ctx, set, del, pluginContexts); err != nil {
 		return nil, err
 	}
 	return allocIds, nil
@@ -474,11 +480,18 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	pluginContexts, err := plugin.RunQueryHandlers(r)
+	if err != nil {
+		x.TraceError(ctx, x.Wrapf(err, "Error while processing plugins"))
+		x.SetStatus(w, x.Error, err.Error())
+		return
+	}
+
 	var allocIds map[string]uint64
 	var allocIdsStr map[string]string
 	// If we have mutations, run them first.
 	if res.Mutation != nil && (len(res.Mutation.Set) > 0 || len(res.Mutation.Del) > 0) {
-		if allocIds, err = mutationHandler(ctx, res.Mutation); err != nil {
+		if allocIds, err = mutationHandler(ctx, res.Mutation, pluginContexts); err != nil {
 			x.TraceError(ctx, x.Wrapf(err, "Error while handling mutations"))
 			x.SetStatus(w, x.Error, err.Error())
 			return
@@ -490,6 +503,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// TODO: pass in plugin contexts.
 	sg, werr := processRequest(ctx, res.Query, &l)
 	if werr.Err != nil {
 		x.SetStatus(w, werr.Message, werr.Err.Error())
@@ -614,7 +628,7 @@ func (s *grpcServer) Run(ctx context.Context,
 	// If mutations are part of the query, we run them through the mutation handler
 	// same as the http client.
 	if res.Mutation != nil && (len(res.Mutation.Set) > 0 || len(res.Mutation.Del) > 0) {
-		if allocIds, err = mutationHandler(ctx, res.Mutation); err != nil {
+		if allocIds, err = mutationHandler(ctx, res.Mutation, req.PluginContexts); err != nil {
 			x.TraceError(ctx, x.Wrapf(err, "Error while handling mutations"))
 			return resp, err
 		}
@@ -623,7 +637,7 @@ func (s *grpcServer) Run(ctx context.Context,
 	// If mutations are sent as part of the mutation object in the request we run
 	// them here.
 	if req.Mutation != nil && (len(req.Mutation.Set) > 0 || len(req.Mutation.Del) > 0) {
-		if allocIds, err = runMutations(ctx, req.Mutation); err != nil {
+		if allocIds, err = runMutations(ctx, req.Mutation, req.PluginContexts); err != nil {
 			x.TraceError(ctx, x.Wrapf(err, "Error while handling mutations"))
 			return resp, err
 		}

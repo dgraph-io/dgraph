@@ -86,7 +86,7 @@ func allocateUniqueUid(group uint32) uint64 {
 		}
 
 		// Check if this uid has already been allocated.
-		key := x.DataKey("_uid_", uid)
+		key := x.DataKey("_uid_", uid, nil) // TODO: Add pluginContexts.
 		pl, decr := posting.GetOrCreate(key, group)
 		defer decr()
 

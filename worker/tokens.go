@@ -15,10 +15,11 @@ func getTokens(funcArgs []string) ([]string, error) {
 }
 
 // getInequalityTokens gets tokens geq / leq compared to given token.
-func getInequalityTokens(attr, ineqValueToken string, f string) ([]string, error) {
+func getInequalityTokens(attr, ineqValueToken string, f string,
+	pluginContexts []string) ([]string, error) {
 	it := pstore.NewIterator()
 	defer it.Close()
-	it.Seek(x.IndexKey(attr, ineqValueToken))
+	it.Seek(x.IndexKey(attr, ineqValueToken, pluginContexts))
 
 	hit := it.Value() != nil && it.Value().Size() > 0
 	if f == "eq" {

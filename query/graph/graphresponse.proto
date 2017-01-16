@@ -39,6 +39,7 @@ message Mutation {
 message Request {
     string query = 1;
     Mutation mutation = 2;
+	repeated string plugin_contexts = 3;
 }
 
 message Latency {

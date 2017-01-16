@@ -21,6 +21,7 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/dgraph-io/dgraph/client"
+	_ "github.com/dgraph-io/dgraph/pluginload"
 	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/x"
 )

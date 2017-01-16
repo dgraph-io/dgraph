@@ -43,7 +43,11 @@ func runMutations(ctx context.Context, edges []*task.DirectedEdge) error {
 			group = rv.Group
 		}
 
-		key := x.DataKey(edge.Attr, edge.Entity)
+		x.Printf("~~~~pluginContexts %d", len(edge.PluginContexts))
+		for i, ss := range edge.PluginContexts {
+			x.Printf("~~~~i=%d [%v]", i, []byte(ss))
+		}
+		key := x.DataKey(edge.Attr, edge.Entity, edge.PluginContexts)
 		plist, decr := posting.GetOrCreate(key, group)
 		defer decr()
 

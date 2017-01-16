@@ -21,7 +21,8 @@ func writeAttr(buf []byte, attr string) []byte {
 	return rest[len(attr):]
 }
 
-func DataKey(attr string, uid uint64) []byte {
+// DataKey returns the data key (not index, not reversed edge keys).
+func DataKey(attr string, uid uint64, pluginContexts []string) []byte {
 	buf := make([]byte, 2+len(attr)+1+8)
 
 	rest := writeAttr(buf, attr)
@@ -32,7 +33,7 @@ func DataKey(attr string, uid uint64) []byte {
 	return buf
 }
 
-func ReverseKey(attr string, uid uint64) []byte {
+func ReverseKey(attr string, uid uint64, pluginContexts []string) []byte {
 	buf := make([]byte, 2+len(attr)+1+8)
 
 	rest := writeAttr(buf, attr)
@@ -43,7 +44,7 @@ func ReverseKey(attr string, uid uint64) []byte {
 	return buf
 }
 
-func IndexKey(attr, term string) []byte {
+func IndexKey(attr, term string, pluginContexts []string) []byte {
 	buf := make([]byte, 2+len(attr)+1+len(term))
 
 	rest := writeAttr(buf, attr)
