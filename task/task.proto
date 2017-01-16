@@ -26,6 +26,8 @@ message Query {
 	repeated string src_func = 7;
 	
 	bool reverse = 8;  // Whether this is a reverse edge.
+
+	repeated bytes plugins = 9;
 }
 
 message Result {
@@ -41,6 +43,7 @@ message Sort {
 	int32 count = 3;   // Return this many elements.
 	int32 offset = 4;  // Skip this many elements.
 	bool desc = 5;
+	repeated bytes plugins = 6;
 }
 
 message SortResult {
@@ -99,6 +102,7 @@ message DirectedEdge {
 message Mutations {
 	uint32 group_id = 1;
 	repeated DirectedEdge edges = 2;
+	repeated bytes plugin = 3;
 }
 
 message RebuildIndex {
