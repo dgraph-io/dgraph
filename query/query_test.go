@@ -1733,6 +1733,93 @@ func TestToFastJSONOrderOffsetCount(t *testing.T) {
 		js)
 }
 
+// Mocking Subgraph and Testing fast-json with it.
+func ageSg(uidMatrix []*task.List, srcUids *task.List, ages []uint32) *SubGraph {
+	var as []*task.Value
+	for _, a := range ages {
+		bs := make([]byte, 4)
+		binary.LittleEndian.PutUint32(bs, a)
+		as = append(as, &task.Value{[]byte(bs), 2})
+	}
+
+	return &SubGraph{
+		Attr:      "age",
+		uidMatrix: uidMatrix,
+		SrcUIDs:   srcUids,
+		values:    as,
+		Params:    params{isDebug: false, GetUID: true},
+	}
+}
+func nameSg(uidMatrix []*task.List, srcUids *task.List, names []string) *SubGraph {
+	var ns []*task.Value
+	for _, n := range names {
+		ns = append(ns, &task.Value{[]byte(n), 0})
+	}
+	return &SubGraph{
+		Attr:      "name",
+		uidMatrix: uidMatrix,
+		SrcUIDs:   srcUids,
+		values:    ns,
+		Params:    params{isDebug: false, GetUID: true},
+	}
+
+}
+func friendsSg(uidMatrix []*task.List, srcUids *task.List, friends []*SubGraph) *SubGraph {
+	return &SubGraph{
+		Attr:      "friend",
+		uidMatrix: uidMatrix,
+		SrcUIDs:   srcUids,
+		Params:    params{isDebug: false, GetUID: true},
+		Children:  friends,
+	}
+}
+func rootSg(uidMatrix []*task.List, srcUids *task.List, names []string, ages []uint32) *SubGraph {
+	nameSg := nameSg(uidMatrix, srcUids, names)
+	ageSg := ageSg(uidMatrix, srcUids, ages)
+
+	return &SubGraph{
+		Children:  []*SubGraph{nameSg, ageSg},
+		Params:    params{isDebug: false, GetUID: true},
+		SrcUIDs:   srcUids,
+		uidMatrix: uidMatrix,
+	}
+}
+
+func mockSubGraph() *SubGraph {
+	emptyUids := []uint64{}
+	uidMatrix := []*task.List{&task.List{Uids: emptyUids}, &task.List{Uids: emptyUids}, &task.List{Uids: emptyUids}, &task.List{Uids: emptyUids}}
+	srcUids := &task.List{Uids: []uint64{2, 3, 4, 5}}
+
+	names := []string{"lincon", "messi", "martin", "aishwarya"}
+	ages := []uint32{56, 29, 45, 36}
+	namesSg := nameSg(uidMatrix, srcUids, names)
+	agesSg := ageSg(uidMatrix, srcUids, ages)
+
+	sgSrcUids := &task.List{Uids: []uint64{1}}
+	sgUidMatrix := []*task.List{&task.List{Uids: emptyUids}}
+
+	friendUidMatrix := []*task.List{&task.List{Uids: []uint64{2, 3, 4, 5}}}
+	friendsSg1 := friendsSg(friendUidMatrix, sgSrcUids, []*SubGraph{namesSg, agesSg})
+
+	sg := rootSg(sgUidMatrix, sgSrcUids, []string{"unknown"}, []uint32{39})
+	sg.Children = append(sg.Children, friendsSg1)
+	sg.DestUIDs = &task.List{Uids: []uint64{1}}
+	sg.Params.Alias = "me"
+	return sg
+}
+
+func TestMockSubGraphFastJson(t *testing.T) {
+	sg := mockSubGraph()
+	var l Latency
+	js, _ := sg.ToFastJSON(&l)
+	// check validity of json
+	var unmarshalJs map[string]interface{}
+	require.NoError(t, json.Unmarshal([]byte(js), &unmarshalJs))
+
+	require.JSONEq(t, `{"me":[{"_uid_":"0x1","age":"39","friend":[{"_uid_":"0x2","age":"56","name":"lincon"},{"_uid_":"0x3","age":"29","name":"messi"},{"_uid_":"0x4","age":"45","name":"martin"},{"_uid_":"0x5","age":"36","name":"aishwarya"}],"name":"unknown"}]}`,
+		string(js))
+}
+
 // Test sorting / ordering by dob.
 func TestToProtoOrder(t *testing.T) {
 	dir, dir2, ps := populateGraph(t)
@@ -2490,93 +2577,6 @@ func TestBenchmarkFastJsonNode(t *testing.T) {
 		}
 	})
 	fmt.Println("fastToJson: Benchmarks: ", bFastJson.N, " times ; ", bFastJson.T, " total time ; ", bFastJson.NsPerOp(), " ns/op")
-}
-
-// Mocking Subgraph and Testing fast-json with it.
-func ageSg(uidMatrix []*task.List, srcUids *task.List, ages []uint32) *SubGraph {
-	var as []*task.Value
-	for _, a := range ages {
-		bs := make([]byte, 4)
-		binary.LittleEndian.PutUint32(bs, a)
-		as = append(as, &task.Value{[]byte(bs), 2})
-	}
-
-	return &SubGraph{
-		Attr:      "age",
-		uidMatrix: uidMatrix,
-		SrcUIDs:   srcUids,
-		values:    as,
-		Params:    params{isDebug: false, GetUID: true},
-	}
-}
-func nameSg(uidMatrix []*task.List, srcUids *task.List, names []string) *SubGraph {
-	var ns []*task.Value
-	for _, n := range names {
-		ns = append(ns, &task.Value{[]byte(n), 0})
-	}
-	return &SubGraph{
-		Attr:      "name",
-		uidMatrix: uidMatrix,
-		SrcUIDs:   srcUids,
-		values:    ns,
-		Params:    params{isDebug: false, GetUID: true},
-	}
-
-}
-func friendsSg(uidMatrix []*task.List, srcUids *task.List, friends []*SubGraph) *SubGraph {
-	return &SubGraph{
-		Attr:      "friend",
-		uidMatrix: uidMatrix,
-		SrcUIDs:   srcUids,
-		Params:    params{isDebug: false, GetUID: true},
-		Children:  friends,
-	}
-}
-func rootSg(uidMatrix []*task.List, srcUids *task.List, names []string, ages []uint32) *SubGraph {
-	nameSg := nameSg(uidMatrix, srcUids, names)
-	ageSg := ageSg(uidMatrix, srcUids, ages)
-
-	return &SubGraph{
-		Children:  []*SubGraph{nameSg, ageSg},
-		Params:    params{isDebug: false, GetUID: true},
-		SrcUIDs:   srcUids,
-		uidMatrix: uidMatrix,
-	}
-}
-
-func mockSubGraph() *SubGraph {
-	emptyUids := []uint64{}
-	uidMatrix := []*task.List{&task.List{Uids: emptyUids}, &task.List{Uids: emptyUids}, &task.List{Uids: emptyUids}, &task.List{Uids: emptyUids}}
-	srcUids := &task.List{Uids: []uint64{2, 3, 4, 5}}
-
-	names := []string{"lincon", "messi", "martin", "aishwarya"}
-	ages := []uint32{56, 29, 45, 36}
-	namesSg := nameSg(uidMatrix, srcUids, names)
-	agesSg := ageSg(uidMatrix, srcUids, ages)
-
-	sgSrcUids := &task.List{Uids: []uint64{1}}
-	sgUidMatrix := []*task.List{&task.List{Uids: emptyUids}}
-
-	friendUidMatrix := []*task.List{&task.List{Uids: []uint64{2, 3, 4, 5}}}
-	friendsSg1 := friendsSg(friendUidMatrix, sgSrcUids, []*SubGraph{namesSg, agesSg})
-
-	sg := rootSg(sgUidMatrix, sgSrcUids, []string{"unknown"}, []uint32{39})
-	sg.Children = append(sg.Children, friendsSg1)
-	sg.DestUIDs = &task.List{Uids: []uint64{1}}
-	sg.Params.Alias = "me"
-	return sg
-}
-
-func TestMockSubGraphFastJson(t *testing.T) {
-	sg := mockSubGraph()
-	var l Latency
-	js, _ := sg.ToFastJSON(&l)
-	// check validity of json
-	var unmarshalJs map[string]interface{}
-	require.NoError(t, json.Unmarshal([]byte(js), &unmarshalJs))
-
-	require.JSONEq(t, `{"me":[{"_uid_":"0x1","age":"39","friend":[{"_uid_":"0x2","age":"56","name":"lincon"},{"_uid_":"0x3","age":"29","name":"messi"},{"_uid_":"0x4","age":"45","name":"martin"},{"_uid_":"0x5","age":"36","name":"aishwarya"}],"name":"unknown"}]}`,
-		string(js))
 }
 
 func BenchmarkMockSubGraphFastJson(b *testing.B) {
