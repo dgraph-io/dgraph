@@ -18,6 +18,7 @@ package query
 
 import (
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"io/ioutil"
 	"os"
@@ -193,11 +194,20 @@ func populateGraph(t *testing.T) (string, string, *store.Store) {
 	require.NoError(t, err)
 	addEdgeToTypedValue(t, ps, "loc", 1, types.GeoID, gData.Value.([]byte))
 
+	// Int32ID
 	data := types.ValueForType(types.BinaryID)
 	intD := types.Val{types.Int32ID, int32(15)}
 	err = types.Marshal(intD, &data)
 	require.NoError(t, err)
 	addEdgeToTypedValue(t, ps, "age", 1, types.Int32ID, data.Value.([]byte))
+
+	// FloatID
+	fdata := types.ValueForType(types.BinaryID)
+	floatD := types.Val{types.FloatID, float64(13.25)}
+	err = types.Marshal(floatD, &fdata)
+	require.NoError(t, err)
+	addEdgeToTypedValue(t, ps, "power", 1, types.FloatID, fdata.Value.([]byte))
+
 	addEdgeToValue(t, ps, "address", 1, "31, 32 street, Jupiter")
 
 	boolD := types.Val{types.BoolID, true}
@@ -250,7 +260,7 @@ func populateGraph(t *testing.T) (string, string, *store.Store) {
 	return dir, dir2, ps
 }
 
-func processToJSON(t *testing.T, query string) string {
+func processToFastJSON(t *testing.T, query string) string {
 	res, err := gql.Parse(query)
 	require.NoError(t, err)
 
@@ -283,7 +293,7 @@ func TestGetUID(t *testing.T) {
 			}
 		}
 	`
-	js := processToJSON(t, query)
+	js := processToFastJSON(t, query)
 	require.JSONEq(t,
 		`{"me":[{"_uid_":"0x1","alive":"true","friend":[{"_uid_":"0x17","name":"Rick Grimes"},{"_uid_":"0x18","name":"Glenn Rhee"},{"_uid_":"0x19","name":"Daryl Dixon"},{"_uid_":"0x1f","name":"Andrea"},{"_uid_":"0x65"}],"gender":"female","name":"Michonne"}]}`,
 		js)
@@ -307,7 +317,7 @@ func TestGetUIDNotInChild(t *testing.T) {
 			}
 		}
 	`
-	js := processToJSON(t, query)
+	js := processToFastJSON(t, query)
 	require.JSONEq(t,
 		`{"me":[{"_uid_":"0x1","alive":"true","gender":"female","name":"Michonne", "friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}]}`,
 		js)
@@ -327,7 +337,7 @@ func TestMultiEmptyBlocks(t *testing.T) {
 			}
 		}
 	`
-	js := processToJSON(t, query)
+	js := processToFastJSON(t, query)
 	require.JSONEq(t,
 		`{}`,
 		js)
@@ -349,7 +359,7 @@ func TestUseVars(t *testing.T) {
 			}
 		}
 	`
-	js := processToJSON(t, query)
+	js := processToFastJSON(t, query)
 	require.JSONEq(t,
 		`{"me":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}`,
 		js)
@@ -371,7 +381,7 @@ func TestGetUIDCount(t *testing.T) {
 			}
 		}
 	`
-	js := processToJSON(t, query)
+	js := processToFastJSON(t, query)
 	require.JSONEq(t,
 		`{"me":[{"_uid_":"0x1","alive":"true","friend":[{"count":5}],"gender":"female","name":"Michonne"}]}`,
 		js)
@@ -395,7 +405,7 @@ func TestDebug1(t *testing.T) {
 		}
 	`
 
-	js := processToJSON(t, query)
+	js := processToFastJSON(t, query)
 	var mp map[string]interface{}
 	require.NoError(t, json.Unmarshal([]byte(js), &mp))
 
@@ -426,7 +436,7 @@ func TestDebug2(t *testing.T) {
 		}
 	`
 
-	js := processToJSON(t, query)
+	js := processToFastJSON(t, query)
 	var mp map[string]interface{}
 	require.NoError(t, json.Unmarshal([]byte(js), &mp))
 
@@ -453,7 +463,7 @@ func TestCount(t *testing.T) {
 		}
 	`
 
-	js := processToJSON(t, query)
+	js := processToFastJSON(t, query)
 	require.EqualValues(t,
 		`{"me":[{"alive":"true","friend":[{"count":5}],"gender":"female","name":"Michonne"}]}`,
 		js)
@@ -566,7 +576,7 @@ func TestProcessGraph(t *testing.T) {
 		taskValues(t, sg.Children[2].values))
 }
 
-func TestToJSON(t *testing.T) {
+func TestToFastJSON(t *testing.T) {
 	dir, dir2, ps := populateGraph(t)
 	defer ps.Close()
 	defer os.RemoveAll(dir)
@@ -586,7 +596,7 @@ func TestToJSON(t *testing.T) {
 		}
 	`
 
-	js := processToJSON(t, query)
+	js := processToFastJSON(t, query)
 	require.JSONEq(t,
 		`{"me":[{"alive":"true","friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
 		js)
@@ -612,7 +622,7 @@ func TestFieldAlias(t *testing.T) {
 		}
 	`
 
-	js := processToJSON(t, query)
+	js := processToFastJSON(t, query)
 	require.JSONEq(t,
 		`{"me":[{"alive":"true","Buddies":[{"BudName":"Rick Grimes"},{"BudName":"Glenn Rhee"},{"BudName":"Daryl Dixon"},{"BudName":"Andrea"}],"gender":"female","MyName":"Michonne"}]}`,
 		string(js))
@@ -716,7 +726,7 @@ children: <
 		proto.MarshalTextString(pb))
 }
 
-func TestToJSONFilter(t *testing.T) {
+func TestToFastJSONFilter(t *testing.T) {
 	dir, dir2, ps := populateGraph(t)
 	defer ps.Close()
 	defer os.RemoveAll(dir)
@@ -733,13 +743,13 @@ func TestToJSONFilter(t *testing.T) {
 		}
 	`
 
-	js := processToJSON(t, query)
+	js := processToFastJSON(t, query)
 	require.EqualValues(t,
 		`{"me":[{"friend":[{"name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
 
-func TestToJSONFilterMissBrac(t *testing.T) {
+func TestToFastJSONFilterMissBrac(t *testing.T) {
 	dir, dir2, ps := populateGraph(t)
 	defer ps.Close()
 	defer os.RemoveAll(dir)
@@ -759,7 +769,7 @@ func TestToJSONFilterMissBrac(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestToJSONFilterAllOf(t *testing.T) {
+func TestToFastJSONFilterAllOf(t *testing.T) {
 	dir, dir2, ps := populateGraph(t)
 	defer ps.Close()
 	defer os.RemoveAll(dir)
@@ -776,12 +786,12 @@ func TestToJSONFilterAllOf(t *testing.T) {
 		}
 	`
 
-	js := processToJSON(t, query)
+	js := processToFastJSON(t, query)
 	require.EqualValues(t,
 		`{"me":[{"gender":"female","name":"Michonne"}]}`, js)
 }
 
-func TestToJSONFilterUID(t *testing.T) {
+func TestToFastJSONFilterUID(t *testing.T) {
 	dir, dir2, ps := populateGraph(t)
 	defer ps.Close()
 	defer os.RemoveAll(dir)
@@ -798,13 +808,13 @@ func TestToJSONFilterUID(t *testing.T) {
 		}
 	`
 
-	js := processToJSON(t, query)
+	js := processToFastJSON(t, query)
 	require.EqualValues(t,
 		`{"me":[{"friend":[{"_uid_":"0x1f"}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
 
-func TestToJSONFilterOrUID(t *testing.T) {
+func TestToFastJSONFilterOrUID(t *testing.T) {
 	dir, dir2, ps := populateGraph(t)
 	defer ps.Close()
 	defer os.RemoveAll(dir)
@@ -822,13 +832,13 @@ func TestToJSONFilterOrUID(t *testing.T) {
 		}
 	`
 
-	js := processToJSON(t, query)
+	js := processToFastJSON(t, query)
 	require.EqualValues(t,
 		`{"me":[{"friend":[{"_uid_":"0x18","name":"Glenn Rhee"},{"_uid_":"0x1f","name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
 
-func TestToJSONFilterOrCount(t *testing.T) {
+func TestToFastJSONFilterOrCount(t *testing.T) {
 	dir, dir2, ps := populateGraph(t)
 	defer ps.Close()
 	defer os.RemoveAll(dir)
@@ -846,13 +856,13 @@ func TestToJSONFilterOrCount(t *testing.T) {
 		}
 	`
 
-	js := processToJSON(t, query)
+	js := processToFastJSON(t, query)
 	require.JSONEq(t,
 		`{"me":[{"friend":[{"count":2}, {"name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
 
-func TestToJSONFilterOrFirst(t *testing.T) {
+func TestToFastJSONFilterOrFirst(t *testing.T) {
 	dir, dir2, ps := populateGraph(t)
 	defer ps.Close()
 	defer os.RemoveAll(dir)
@@ -869,13 +879,13 @@ func TestToJSONFilterOrFirst(t *testing.T) {
 		}
 	`
 
-	js := processToJSON(t, query)
+	js := processToFastJSON(t, query)
 	require.EqualValues(t,
 		`{"me":[{"friend":[{"name":"Glenn Rhee"},{"name":"Daryl Dixon"}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
 
-func TestToJSONFilterOrOffset(t *testing.T) {
+func TestToFastJSONFilterOrOffset(t *testing.T) {
 	dir, dir2, ps := populateGraph(t)
 	defer ps.Close()
 	defer os.RemoveAll(dir)
@@ -892,13 +902,13 @@ func TestToJSONFilterOrOffset(t *testing.T) {
 		}
 	`
 
-	js := processToJSON(t, query)
+	js := processToFastJSON(t, query)
 	require.EqualValues(t,
 		`{"me":[{"friend":[{"name":"Daryl Dixon"},{"name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
 
-func TestToJSONFilterGeq(t *testing.T) {
+func TestToFastJSONFilterGeq(t *testing.T) {
 	dir, dir2, ps := populateGraph(t)
 	defer ps.Close()
 	defer os.RemoveAll(dir)
@@ -915,13 +925,13 @@ func TestToJSONFilterGeq(t *testing.T) {
 		}
 	`
 
-	js := processToJSON(t, query)
+	js := processToFastJSON(t, query)
 	require.JSONEq(t,
 		`{"me":[{"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
 
-func TestToJSONFilterGt(t *testing.T) {
+func TestToFastJSONFilterGt(t *testing.T) {
 	dir, dir2, ps := populateGraph(t)
 	defer ps.Close()
 	defer os.RemoveAll(dir)
@@ -938,13 +948,13 @@ func TestToJSONFilterGt(t *testing.T) {
 		}
 	`
 
-	js := processToJSON(t, query)
+	js := processToFastJSON(t, query)
 	require.JSONEq(t,
 		`{"me":[{"friend":[{"name":"Rick Grimes"}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
 
-func TestToJSONFilterLeq(t *testing.T) {
+func TestToFastJSONFilterLeq(t *testing.T) {
 	dir, dir2, ps := populateGraph(t)
 	defer ps.Close()
 	defer os.RemoveAll(dir)
@@ -961,13 +971,13 @@ func TestToJSONFilterLeq(t *testing.T) {
 		}
 	`
 
-	js := processToJSON(t, query)
+	js := processToFastJSON(t, query)
 	require.JSONEq(t,
 		`{"me":[{"friend":[{"name":"Daryl Dixon"},{"name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
 
-func TestToJSONFilterLt(t *testing.T) {
+func TestToFastJSONFilterLt(t *testing.T) {
 	dir, dir2, ps := populateGraph(t)
 	defer ps.Close()
 	defer os.RemoveAll(dir)
@@ -984,13 +994,13 @@ func TestToJSONFilterLt(t *testing.T) {
 		}
 	`
 
-	js := processToJSON(t, query)
+	js := processToFastJSON(t, query)
 	require.JSONEq(t,
 		`{"me":[{"friend":[{"name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
 
-func TestToJSONFilterEqualNoHit(t *testing.T) {
+func TestToFastJSONFilterEqualNoHit(t *testing.T) {
 	dir, dir2, ps := populateGraph(t)
 	defer ps.Close()
 	defer os.RemoveAll(dir)
@@ -1007,13 +1017,13 @@ func TestToJSONFilterEqualNoHit(t *testing.T) {
 		}
 	`
 
-	js := processToJSON(t, query)
+	js := processToFastJSON(t, query)
 	require.JSONEq(t,
 		`{"me":[{"gender":"female","name":"Michonne"}]}`,
 		js)
 }
 
-func TestToJSONFilterEqual(t *testing.T) {
+func TestToFastJSONFilterEqual(t *testing.T) {
 	dir, dir2, ps := populateGraph(t)
 	defer ps.Close()
 	defer os.RemoveAll(dir)
@@ -1030,13 +1040,13 @@ func TestToJSONFilterEqual(t *testing.T) {
 		}
 	`
 
-	js := processToJSON(t, query)
+	js := processToFastJSON(t, query)
 	require.JSONEq(t,
 		`{"me":[{"friend":[{"name":"Daryl Dixon"}], "gender":"female","name":"Michonne"}]}`,
 		js)
 }
 
-func TestToJSONFilterLeqOrder(t *testing.T) {
+func TestToFastJSONFilterLeqOrder(t *testing.T) {
 	dir, dir2, ps := populateGraph(t)
 	defer ps.Close()
 	defer os.RemoveAll(dir)
@@ -1053,13 +1063,13 @@ func TestToJSONFilterLeqOrder(t *testing.T) {
 		}
 	`
 
-	js := processToJSON(t, query)
+	js := processToFastJSON(t, query)
 	require.JSONEq(t,
 		`{"me":[{"friend":[{"name":"Andrea"},{"name":"Daryl Dixon"}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
 
-func TestToJSONFilterGeqNoResult(t *testing.T) {
+func TestToFastJSONFilterGeqNoResult(t *testing.T) {
 	dir, dir2, ps := populateGraph(t)
 	defer ps.Close()
 	defer os.RemoveAll(dir)
@@ -1076,13 +1086,13 @@ func TestToJSONFilterGeqNoResult(t *testing.T) {
 		}
 	`
 
-	js := processToJSON(t, query)
+	js := processToFastJSON(t, query)
 	require.JSONEq(t,
 		`{"me":[{"gender":"female","name":"Michonne"}]}`, js)
 }
 
 // No filter. Just to test first and offset.
-func TestToJSONFirstOffset(t *testing.T) {
+func TestToFastJSONFirstOffset(t *testing.T) {
 	dir, dir2, ps := populateGraph(t)
 	defer ps.Close()
 	defer os.RemoveAll(dir)
@@ -1099,13 +1109,13 @@ func TestToJSONFirstOffset(t *testing.T) {
 		}
 	`
 
-	js := processToJSON(t, query)
+	js := processToFastJSON(t, query)
 	require.EqualValues(t,
 		`{"me":[{"friend":[{"name":"Glenn Rhee"}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
 
-func TestToJSONFilterOrFirstOffset(t *testing.T) {
+func TestToFastJSONFilterOrFirstOffset(t *testing.T) {
 	dir, dir2, ps := populateGraph(t)
 	defer ps.Close()
 	defer os.RemoveAll(dir)
@@ -1122,13 +1132,13 @@ func TestToJSONFilterOrFirstOffset(t *testing.T) {
 		}
 	`
 
-	js := processToJSON(t, query)
+	js := processToFastJSON(t, query)
 	require.EqualValues(t,
 		`{"me":[{"friend":[{"name":"Daryl Dixon"}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
 
-func TestToJSONFilterLeqFirstOffset(t *testing.T) {
+func TestToFastJSONFilterLeqFirstOffset(t *testing.T) {
 	dir, dir2, ps := populateGraph(t)
 	defer ps.Close()
 	defer os.RemoveAll(dir)
@@ -1145,13 +1155,13 @@ func TestToJSONFilterLeqFirstOffset(t *testing.T) {
 		}
 	`
 
-	js := processToJSON(t, query)
+	js := processToFastJSON(t, query)
 	require.JSONEq(t,
 		`{"me":[{"friend":[{"name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
 
-func TestToJSONFilterOrFirstOffsetCount(t *testing.T) {
+func TestToFastJSONFilterOrFirstOffsetCount(t *testing.T) {
 	dir, dir2, ps := populateGraph(t)
 	defer ps.Close()
 	defer os.RemoveAll(dir)
@@ -1166,13 +1176,13 @@ func TestToJSONFilterOrFirstOffsetCount(t *testing.T) {
 		}
 	`
 
-	js := processToJSON(t, query)
+	js := processToFastJSON(t, query)
 	require.JSONEq(t,
 		`{"me":[{"friend":[{"count":1}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
 
-func TestToJSONFilterOrFirstNegative(t *testing.T) {
+func TestToFastJSONFilterOrFirstNegative(t *testing.T) {
 	dir, dir2, ps := populateGraph(t)
 	defer ps.Close()
 	defer os.RemoveAll(dir)
@@ -1191,13 +1201,13 @@ func TestToJSONFilterOrFirstNegative(t *testing.T) {
 		}
 	`
 
-	js := processToJSON(t, query)
+	js := processToFastJSON(t, query)
 	require.EqualValues(t,
 		`{"me":[{"friend":[{"name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
 
-func TestToJSONFilterAnd(t *testing.T) {
+func TestToFastJSONFilterAnd(t *testing.T) {
 	dir, dir2, ps := populateGraph(t)
 	defer ps.Close()
 	defer os.RemoveAll(dir)
@@ -1214,12 +1224,12 @@ func TestToJSONFilterAnd(t *testing.T) {
 		}
 	`
 
-	js := processToJSON(t, query)
+	js := processToFastJSON(t, query)
 	require.EqualValues(t,
 		`{"me":[{"gender":"female","name":"Michonne"}]}`, js)
 }
 
-func TestToJSONReverse(t *testing.T) {
+func TestToFastJSONReverse(t *testing.T) {
 	dir, dir2, ps := populateGraph(t)
 	defer ps.Close()
 	defer os.RemoveAll(dir)
@@ -1236,13 +1246,13 @@ func TestToJSONReverse(t *testing.T) {
 			}
 		}
 	`
-	js := processToJSON(t, query)
+	js := processToFastJSON(t, query)
 	require.JSONEq(t,
 		`{"me":[{"name":"Glenn Rhee","~friend":[{"alive":"true","gender":"female","name":"Michonne"},{"name":"Andrea"}]}]}`,
 		js)
 }
 
-func TestToJSONReverseFilter(t *testing.T) {
+func TestToFastJSONReverseFilter(t *testing.T) {
 	dir, dir2, ps := populateGraph(t)
 	defer ps.Close()
 	defer os.RemoveAll(dir)
@@ -1259,13 +1269,13 @@ func TestToJSONReverseFilter(t *testing.T) {
 			}
 		}
 	`
-	js := processToJSON(t, query)
+	js := processToFastJSON(t, query)
 	require.JSONEq(t,
 		`{"me":[{"name":"Glenn Rhee","~friend":[{"name":"Andrea"}]}]}`,
 		js)
 }
 
-func TestToJSONReverseDelSet(t *testing.T) {
+func TestToFastJSONReverseDelSet(t *testing.T) {
 	dir, dir2, ps := populateGraph(t)
 	defer ps.Close()
 	defer os.RemoveAll(dir)
@@ -1287,13 +1297,13 @@ func TestToJSONReverseDelSet(t *testing.T) {
 			}
 		}
 	`
-	js := processToJSON(t, query)
+	js := processToFastJSON(t, query)
 	require.JSONEq(t,
 		`{"me":[{"name":"Glenn Rhee","~friend":[{"name":"Daryl Dixon"},{"name":"Andrea"}]}]}`,
 		js)
 }
 
-func TestToJSONReverseDelSetCount(t *testing.T) {
+func TestToFastJSONReverseDelSetCount(t *testing.T) {
 	dir, dir2, ps := populateGraph(t)
 	defer ps.Close()
 	defer os.RemoveAll(dir)
@@ -1311,7 +1321,7 @@ func TestToJSONReverseDelSetCount(t *testing.T) {
 			}
 		}
 	`
-	js := processToJSON(t, query)
+	js := processToFastJSON(t, query)
 	require.JSONEq(t,
 		`{"me":[{"name":"Glenn Rhee","~friend":[{"count":2}]}]}`,
 		js)
@@ -1629,7 +1639,7 @@ children: <
 }
 
 // Test sorting / ordering by dob.
-func TestToJSONOrder(t *testing.T) {
+func TestToFastJSONOrder(t *testing.T) {
 	dir, dir2, ps := populateGraph(t)
 	defer ps.Close()
 	defer os.RemoveAll(dir)
@@ -1648,14 +1658,14 @@ func TestToJSONOrder(t *testing.T) {
 		}
 	`
 
-	js := processToJSON(t, query)
+	js := processToFastJSON(t, query)
 	require.EqualValues(t,
 		`{"me":[{"friend":[{"dob":"1901-01-15","name":"Andrea"},{"dob":"1909-01-10","name":"Daryl Dixon"},{"dob":"1909-05-05","name":"Glenn Rhee"},{"dob":"1910-01-02","name":"Rick Grimes"}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
 
 // Test sorting / ordering by dob.
-func TestToJSONOrderDesc(t *testing.T) {
+func TestToFastJSONOrderDesc(t *testing.T) {
 	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
 	defer os.RemoveAll(dir2)
@@ -1673,14 +1683,14 @@ func TestToJSONOrderDesc(t *testing.T) {
 		}
 	`
 
-	js := processToJSON(t, query)
+	js := processToFastJSON(t, query)
 	require.JSONEq(t,
 		`{"me":[{"friend":[{"dob":"1910-01-02","name":"Rick Grimes"},{"dob":"1909-05-05","name":"Glenn Rhee"},{"dob":"1909-01-10","name":"Daryl Dixon"},{"dob":"1901-01-15","name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
 		string(js))
 }
 
 // Test sorting / ordering by dob and count.
-func TestToJSONOrderDescCount(t *testing.T) {
+func TestToFastJSONOrderDescCount(t *testing.T) {
 	dir, dir2, _ := populateGraph(t)
 	defer os.RemoveAll(dir)
 	defer os.RemoveAll(dir2)
@@ -1695,14 +1705,14 @@ func TestToJSONOrderDescCount(t *testing.T) {
 		}
 	`
 
-	js := processToJSON(t, query)
+	js := processToFastJSON(t, query)
 	require.JSONEq(t,
 		`{"me":[{"friend":[{"count":1}],"gender":"female","name":"Michonne"}]}`,
 		string(js))
 }
 
 // Test sorting / ordering by dob.
-func TestToJSONOrderOffset(t *testing.T) {
+func TestToFastJSONOrderOffset(t *testing.T) {
 	dir, dir2, ps := populateGraph(t)
 	defer ps.Close()
 	defer os.RemoveAll(dir)
@@ -1720,14 +1730,14 @@ func TestToJSONOrderOffset(t *testing.T) {
 		}
 	`
 
-	js := processToJSON(t, query)
+	js := processToFastJSON(t, query)
 	require.EqualValues(t,
 		`{"me":[{"friend":[{"name":"Glenn Rhee"},{"name":"Rick Grimes"}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
 
 // Test sorting / ordering by dob.
-func TestToJSONOrderOffsetCount(t *testing.T) {
+func TestToFastJSONOrderOffsetCount(t *testing.T) {
 	dir, dir2, ps := populateGraph(t)
 	defer ps.Close()
 	defer os.RemoveAll(dir)
@@ -1745,10 +1755,97 @@ func TestToJSONOrderOffsetCount(t *testing.T) {
 		}
 	`
 
-	js := processToJSON(t, query)
+	js := processToFastJSON(t, query)
 	require.EqualValues(t,
 		`{"me":[{"friend":[{"name":"Glenn Rhee"}],"gender":"female","name":"Michonne"}]}`,
 		js)
+}
+
+// Mocking Subgraph and Testing fast-json with it.
+func ageSg(uidMatrix []*task.List, srcUids *task.List, ages []uint32) *SubGraph {
+	var as []*task.Value
+	for _, a := range ages {
+		bs := make([]byte, 4)
+		binary.LittleEndian.PutUint32(bs, a)
+		as = append(as, &task.Value{[]byte(bs), 2})
+	}
+
+	return &SubGraph{
+		Attr:      "age",
+		uidMatrix: uidMatrix,
+		SrcUIDs:   srcUids,
+		values:    as,
+		Params:    params{isDebug: false, GetUID: true},
+	}
+}
+func nameSg(uidMatrix []*task.List, srcUids *task.List, names []string) *SubGraph {
+	var ns []*task.Value
+	for _, n := range names {
+		ns = append(ns, &task.Value{[]byte(n), 0})
+	}
+	return &SubGraph{
+		Attr:      "name",
+		uidMatrix: uidMatrix,
+		SrcUIDs:   srcUids,
+		values:    ns,
+		Params:    params{isDebug: false, GetUID: true},
+	}
+
+}
+func friendsSg(uidMatrix []*task.List, srcUids *task.List, friends []*SubGraph) *SubGraph {
+	return &SubGraph{
+		Attr:      "friend",
+		uidMatrix: uidMatrix,
+		SrcUIDs:   srcUids,
+		Params:    params{isDebug: false, GetUID: true},
+		Children:  friends,
+	}
+}
+func rootSg(uidMatrix []*task.List, srcUids *task.List, names []string, ages []uint32) *SubGraph {
+	nameSg := nameSg(uidMatrix, srcUids, names)
+	ageSg := ageSg(uidMatrix, srcUids, ages)
+
+	return &SubGraph{
+		Children:  []*SubGraph{nameSg, ageSg},
+		Params:    params{isDebug: false, GetUID: true},
+		SrcUIDs:   srcUids,
+		uidMatrix: uidMatrix,
+	}
+}
+
+func mockSubGraph() *SubGraph {
+	emptyUids := []uint64{}
+	uidMatrix := []*task.List{&task.List{Uids: emptyUids}, &task.List{Uids: emptyUids}, &task.List{Uids: emptyUids}, &task.List{Uids: emptyUids}}
+	srcUids := &task.List{Uids: []uint64{2, 3, 4, 5}}
+
+	names := []string{"lincon", "messi", "martin", "aishwarya"}
+	ages := []uint32{56, 29, 45, 36}
+	namesSg := nameSg(uidMatrix, srcUids, names)
+	agesSg := ageSg(uidMatrix, srcUids, ages)
+
+	sgSrcUids := &task.List{Uids: []uint64{1}}
+	sgUidMatrix := []*task.List{&task.List{Uids: emptyUids}}
+
+	friendUidMatrix := []*task.List{&task.List{Uids: []uint64{2, 3, 4, 5}}}
+	friendsSg1 := friendsSg(friendUidMatrix, sgSrcUids, []*SubGraph{namesSg, agesSg})
+
+	sg := rootSg(sgUidMatrix, sgSrcUids, []string{"unknown"}, []uint32{39})
+	sg.Children = append(sg.Children, friendsSg1)
+	sg.DestUIDs = &task.List{Uids: []uint64{1}}
+	sg.Params.Alias = "me"
+	return sg
+}
+
+func TestMockSubGraphFastJson(t *testing.T) {
+	sg := mockSubGraph()
+	var l Latency
+	js, _ := sg.ToFastJSON(&l)
+	// check validity of json
+	var unmarshalJs map[string]interface{}
+	require.NoError(t, json.Unmarshal([]byte(js), &unmarshalJs))
+
+	require.JSONEq(t, `{"me":[{"_uid_":"0x1","age":"39","friend":[{"_uid_":"0x2","age":"56","name":"lincon"},{"_uid_":"0x3","age":"29","name":"messi"},{"_uid_":"0x4","age":"45","name":"martin"},{"_uid_":"0x5","age":"36","name":"aishwarya"}],"name":"unknown"}]}`,
+		string(js))
 }
 
 // Test sorting / ordering by dob.
@@ -2012,7 +2109,7 @@ func TestSchema1(t *testing.T) {
 			}
 		}
 	`
-	js := processToJSON(t, query)
+	js := processToFastJSON(t, query)
 	require.JSONEq(t,
 		`{"person":[{"address":"31, 32 street, Jupiter","age":38,"alive":true,"friend":[{"address":"21, mark street, Mars","age":15}],"name":"Michonne","survival_rate":98.99}]}`,
 		js)
@@ -2035,7 +2132,7 @@ func TestMultiQuery(t *testing.T) {
 			}
 		}
   `
-	js := processToJSON(t, query)
+	js := processToFastJSON(t, query)
 	require.JSONEq(t, `{"me":[{"gender":"female","name":"Michonne"}], "you":[{"name":"Andrea"}]}`, js)
 }
 
@@ -2095,7 +2192,7 @@ func TestGenerator(t *testing.T) {
       }
     }
   `
-	js := processToJSON(t, query)
+	js := processToFastJSON(t, query)
 	require.JSONEq(t, `{"me":[{"gender":"female","name":"Michonne"}]}`, js)
 }
 
@@ -2115,7 +2212,7 @@ func TestGeneratorMultiRootMultiQuery(t *testing.T) {
 			}
     }
   `
-	js := processToJSON(t, query)
+	js := processToFastJSON(t, query)
 	require.JSONEq(t, `{"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"}], "you":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"}]}`, js)
 }
 func TestGeneratorMultiRoot(t *testing.T) {
@@ -2130,7 +2227,7 @@ func TestGeneratorMultiRoot(t *testing.T) {
       }
     }
   `
-	js := processToJSON(t, query)
+	js := processToFastJSON(t, query)
 	require.JSONEq(t, `{"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"}]}`, js)
 }
 
@@ -2144,7 +2241,7 @@ func TestRootList(t *testing.T) {
 		name
 	}
 }`
-	js := processToJSON(t, query)
+	js := processToFastJSON(t, query)
 	require.JSONEq(t, `{"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"}]}`, js)
 }
 
@@ -2158,7 +2255,7 @@ func TestRootList1(t *testing.T) {
 		name
 	}
 }`
-	js := processToJSON(t, query)
+	js := processToFastJSON(t, query)
 	require.JSONEq(t, `{"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Alice"}]}`, js)
 }
 
@@ -2174,7 +2271,7 @@ func TestGeneratorMultiRootFilter1(t *testing.T) {
       }
     }
   `
-	js := processToJSON(t, query)
+	js := processToFastJSON(t, query)
 	require.JSONEq(t, `{"me":[{"name":"Daryl Dixon"}]}`, js)
 }
 
@@ -2190,7 +2287,7 @@ func TestGeneratorMultiRootFilter2(t *testing.T) {
       }
     }
   `
-	js := processToJSON(t, query)
+	js := processToFastJSON(t, query)
 	require.JSONEq(t, `{"me":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"}]}`, js)
 }
 
@@ -2206,7 +2303,7 @@ func TestGeneratorMultiRootFilter3(t *testing.T) {
       }
     }
   `
-	js := processToJSON(t, query)
+	js := processToFastJSON(t, query)
 	require.JSONEq(t, `{"me":[{"name":"Glenn Rhee"}]}`, js)
 }
 
@@ -2284,7 +2381,7 @@ func TestNearGenerator(t *testing.T) {
 		}
 	}`
 
-	js := processToJSON(t, query)
+	js := processToFastJSON(t, query)
 	require.JSONEq(t, `{"me":[{"gender":"female","name":"Michonne"},{"name":"Glenn Rhee"}]}`, string(js))
 }
 
@@ -2300,7 +2397,7 @@ func TestNearGeneratorFilter(t *testing.T) {
 		}
 	}`
 
-	js := processToJSON(t, query)
+	js := processToFastJSON(t, query)
 	require.JSONEq(t, `{"me":[{"gender":"female","name":"Michonne"}]}`, string(js))
 }
 
@@ -2393,7 +2490,7 @@ func TestWithinGenerator(t *testing.T) {
 		}
 	}`
 
-	js := processToJSON(t, query)
+	js := processToFastJSON(t, query)
 	require.JSONEq(t, `{"me":[{"name":"Michonne"},{"name":"Glenn Rhee"}]}`, string(js))
 }
 
@@ -2408,7 +2505,7 @@ func TestContainsGenerator(t *testing.T) {
 		}
 	}`
 
-	js := processToJSON(t, query)
+	js := processToFastJSON(t, query)
 	require.JSONEq(t, `{"me":[{"name":"Rick Grimes"}]}`, string(js))
 }
 
@@ -2423,7 +2520,7 @@ func TestContainsGenerator2(t *testing.T) {
 		}
 	}`
 
-	js := processToJSON(t, query)
+	js := processToFastJSON(t, query)
 	require.JSONEq(t, `{"me":[{"name":"Rick Grimes"}]}`, string(js))
 }
 
@@ -2463,7 +2560,7 @@ func TestIntersectsGenerator(t *testing.T) {
 		}
 	}`
 
-	js := processToJSON(t, query)
+	js := processToFastJSON(t, query)
 	require.JSONEq(t, `{"me":[{"name":"Michonne"}, {"name":"Rick Grimes"}, {"name":"Glenn Rhee"}]}`, string(js))
 }
 
@@ -2539,6 +2636,7 @@ func TestSchema(t *testing.T) {
 }
 
 func TestMain(m *testing.M) {
+	x.SetTestRun()
 	x.Init()
 	os.Exit(m.Run())
 }

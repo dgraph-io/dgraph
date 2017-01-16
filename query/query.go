@@ -19,9 +19,7 @@ package query
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
-	"fmt"
 	"log"
 	"strconv"
 	"strings"
@@ -830,57 +828,6 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 	return nil
 }
 
-// outputNode is the generic output / writer for preTraverse.
-type outputNode interface {
-	AddValue(attr string, v types.Val)
-	AddChild(attr string, child outputNode)
-	New(attr string) outputNode
-	SetUID(uid uint64)
-	SetXID(xid string)
-	IsEmpty() bool
-}
-
-// protoOutputNode is the proto output for preTraverse.
-type protoOutputNode struct {
-	*graph.Node
-}
-
-// AddValue adds an attribute value for protoOutputNode.
-func (p *protoOutputNode) AddValue(attr string, v types.Val) {
-	p.Node.Properties = append(p.Node.Properties, createProperty(attr, v))
-}
-
-// AddChild adds a child for protoOutputNode.
-func (p *protoOutputNode) AddChild(attr string, child outputNode) {
-	p.Node.Children = append(p.Node.Children, child.(*protoOutputNode).Node)
-}
-
-// New creates a new node for protoOutputNode.
-func (p *protoOutputNode) New(attr string) outputNode {
-	uc := nodePool.Get().(*graph.Node)
-	uc.Attribute = attr
-	return &protoOutputNode{uc}
-}
-
-// SetUID sets UID of a protoOutputNode.
-func (p *protoOutputNode) SetUID(uid uint64) { p.Node.Uid = uid }
-
-// SetXID sets XID of a protoOutputNode.
-func (p *protoOutputNode) SetXID(xid string) { p.Node.Xid = xid }
-
-func (p *protoOutputNode) IsEmpty() bool {
-	if p.Node.Uid > 0 {
-		return false
-	}
-	if len(p.Node.Children) > 0 {
-		return false
-	}
-	if len(p.Node.Properties) > 0 {
-		return false
-	}
-	return true
-}
-
 func ToProtocolBuf(l *Latency, sgl []*SubGraph) ([]*graph.Node, error) {
 	var resNode []*graph.Node
 	for _, sg := range sgl {
@@ -893,128 +840,24 @@ func ToProtocolBuf(l *Latency, sgl []*SubGraph) ([]*graph.Node, error) {
 	return resNode, nil
 }
 
-// ToProtocolBuffer does preorder traversal to build a proto buffer. We have
-// used postorder traversal before, but preorder seems simpler and faster for
-// most cases.
-func (sg *SubGraph) ToProtocolBuffer(l *Latency) (*graph.Node, error) {
-	var seedNode *protoOutputNode
-	if sg.DestUIDs == nil {
-		return seedNode.New(sg.Params.Alias).(*protoOutputNode).Node, nil
-	}
-
-	n := seedNode.New("_root_")
-	for _, uid := range sg.DestUIDs.Uids {
-		// For the root, the name is stored in Alias, not Attr.
-		n1 := seedNode.New(sg.Params.Alias)
-		if sg.Params.GetUID || sg.Params.isDebug {
-			n1.SetUID(uid)
-		}
-
-		if rerr := sg.preTraverse(uid, n1); rerr != nil {
-			if rerr.Error() == "_INV_" {
-				continue
-			}
-			return n.(*protoOutputNode).Node, rerr
-		}
-		if n1.IsEmpty() {
-			continue
-		}
-		n.AddChild(sg.Params.Alias, n1)
-	}
-	l.ProtocolBuffer = time.Since(l.Start) - l.Parsing - l.Processing
-	return n.(*protoOutputNode).Node, nil
-}
-
-// jsonOutputNode is the JSON output for preTraverse.
-type jsonOutputNode struct {
-	data map[string]interface{}
-}
-
-// AddValue adds an attribute value for jsonOutputNode.
-func (p *jsonOutputNode) AddValue(attr string, v types.Val) {
-	p.data[attr] = v
-}
-
-// AddChild adds a child for jsonOutputNode.
-func (p *jsonOutputNode) AddChild(attr string, child outputNode) {
-	a := p.data[attr]
-	if a == nil {
-		// Need to do this because we cannot cast nil interface to
-		// []map[string]interface{}.
-		a = make([]map[string]interface{}, 0, 5)
-	}
-	p.data[attr] = append(a.([]map[string]interface{}),
-		child.(*jsonOutputNode).data)
-}
-
-// New creates a new node for jsonOutputNode.
-func (p *jsonOutputNode) New(attr string) outputNode {
-	return &jsonOutputNode{make(map[string]interface{})}
-}
-
-// SetUID sets UID of a jsonOutputNode.
-func (p *jsonOutputNode) SetUID(uid uint64) {
-	_, found := p.data["_uid_"]
-	if !found {
-		p.data["_uid_"] = fmt.Sprintf("%#x", uid)
-	}
-}
-
-// SetXID sets XID of a jsonOutputNode.
-func (p *jsonOutputNode) SetXID(xid string) {
-	p.data["_xid_"] = xid
-}
-
-func (p *jsonOutputNode) IsEmpty() bool {
-	return len(p.data) == 0
-}
-
 func ToJson(l *Latency, sgl []*SubGraph) ([]byte, error) {
-	mp := make(map[string]interface{})
+	sgr := &SubGraph{
+		Attr: "_root_",
+	}
 	for _, sg := range sgl {
 		if sg.Params.Alias == "var" {
 			continue
 		}
-		res, err := sg.ToJSON(l)
-		if err != nil {
-			return nil, err
-		}
-		for k, v := range res {
-			mp[k] = v
-		}
-	}
-	return json.Marshal(mp)
-}
-
-// ToJSON converts the internal subgraph object to JSON format which is then\
-// sent to the HTTP client.
-func (sg *SubGraph) ToJSON(l *Latency) (map[string]interface{}, error) {
-	var seedNode *jsonOutputNode
-	n := seedNode.New("_root_")
-	if sg.DestUIDs == nil {
-		return nil, nil
-	}
-	for _, uid := range sg.DestUIDs.Uids {
-		// For the root, the name is stored in Alias, not Attr.
-		n1 := seedNode.New(sg.Params.Alias)
-		if sg.Params.GetUID || sg.Params.isDebug {
-			n1.SetUID(uid)
-		}
-
-		if err := sg.preTraverse(uid, n1); err != nil {
-			if err.Error() == "_INV_" {
-				continue
+		sgr.Children = append(sgr.Children, sg)
+		/*
+			res, err := sg.ToJSON(l)
+			if err != nil {
+				return nil, err
 			}
-			return nil, err
-		}
-		if n1.IsEmpty() {
-			continue
-		}
-		n.AddChild(sg.Params.Alias, n1)
+			for k, v := range res {
+				mp[k] = v
+			}
+		*/
 	}
-	res := n.(*jsonOutputNode).data
-	if sg.Params.isDebug {
-		res["server_latency"] = l.ToMap()
-	}
-	return res, nil
+	return sgr.ToFastJSON(l)
 }

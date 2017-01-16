@@ -208,6 +208,7 @@ func BenchmarkQuery(b *testing.B) {
 }
 
 func TestMain(m *testing.M) {
+	x.SetTestRun()
 	x.Init()
 	os.Exit(m.Run())
 }

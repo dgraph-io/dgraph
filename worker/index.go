@@ -44,7 +44,7 @@ func (n *node) rebuildIndex(ctx context.Context, proposalData []byte) error {
 	posting.CommitLists(10)
 
 	// Wait for posting lists applying.
-	w := posting.WaterMarkFor(gid)
+	w := posting.SyncMarkFor(gid)
 	for w.WaitingFor() {
 		doneUntil := w.DoneUntil() // synced until.
 		x.Trace(ctx, "RebuildIndex waiting, syncedUntil:%d lastIndex:%d",
