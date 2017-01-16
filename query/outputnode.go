@@ -305,48 +305,45 @@ func (fj *fastJsonNode) encode(jsBuf *bytes.Buffer) {
 	jsBuf.WriteRune('}')
 }
 
+func processNodeUids(n *fastJsonNode, sg *SubGraph) error {
+	var seedNode *fastJsonNode
+	for _, uid := range sg.DestUIDs.Uids {
+		n1 := seedNode.New(sg.Params.Alias)
+		if sg.Params.GetUID || sg.Params.isDebug {
+			n1.SetUID(uid)
+		}
+
+		if err := sg.preTraverse(uid, n1); err != nil {
+			if err.Error() == "_INV_" {
+				continue
+			}
+			return err
+		}
+		if n1.IsEmpty() {
+			continue
+		}
+		n.AddChild(sg.Params.Alias, n1)
+	}
+	return nil
+}
+
 func (sg *SubGraph) ToFastJSON(l *Latency) ([]byte, error) {
 	var seedNode *fastJsonNode
 	n := seedNode.New("_root_")
 	if sg.Attr == "_root_" {
 		for _, sg := range sg.Children {
-			for _, uid := range sg.DestUIDs.Uids {
-				n1 := seedNode.New(sg.Params.Alias)
-				if sg.Params.GetUID || sg.Params.isDebug {
-					n1.SetUID(uid)
-				}
-
-				if err := sg.preTraverse(uid, n1); err != nil {
-					if err.Error() == "_INV_" {
-						continue
-					}
-					return nil, err
-				}
-				if n1.IsEmpty() {
-					continue
-				}
-				n.AddChild(sg.Params.Alias, n1)
+			err := processNodeUids(n.(*fastJsonNode), sg)
+			if err != nil {
+				return nil, err
 			}
 		}
 	} else {
-		for _, uid := range sg.DestUIDs.Uids {
-			n1 := seedNode.New(sg.Params.Alias)
-			if sg.Params.GetUID || sg.Params.isDebug {
-				n1.SetUID(uid)
-			}
-
-			if err := sg.preTraverse(uid, n1); err != nil {
-				if err.Error() == "_INV_" {
-					continue
-				}
-				return nil, err
-			}
-			if n1.IsEmpty() {
-				continue
-			}
-			n.AddChild(sg.Params.Alias, n1)
+		err := processNodeUids(n.(*fastJsonNode), sg)
+		if err != nil {
+			return nil, err
 		}
 	}
+
 	if sg.Params.isDebug {
 		var buf bytes.Buffer
 		sl := seedNode.New("serverLatency").(*fastJsonNode)

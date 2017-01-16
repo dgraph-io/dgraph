@@ -848,16 +848,10 @@ func ToJson(l *Latency, sgl []*SubGraph) ([]byte, error) {
 		if sg.Params.Alias == "var" {
 			continue
 		}
+		if sg.Params.isDebug {
+			sgr.Params.isDebug = true
+		}
 		sgr.Children = append(sgr.Children, sg)
-		/*
-			res, err := sg.ToJSON(l)
-			if err != nil {
-				return nil, err
-			}
-			for k, v := range res {
-				mp[k] = v
-			}
-		*/
 	}
 	return sgr.ToFastJSON(l)
 }
