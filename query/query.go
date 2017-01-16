@@ -510,20 +510,65 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 			return nil, err
 		}
 		l.Parsing += time.Since(loopStart)
-
-		execStart := time.Now()
 		x.Trace(ctx, "Query parsed")
-
-		rch := make(chan error)
-		go ProcessGraph(ctx, sg, nil, rch, varUidList)
-		err = <-rch
-		if err != nil {
-			return nil, err
-		}
-		l.Processing += time.Since(execStart)
-		x.Trace(ctx, "Graph processed")
 		sgl = append(sgl, sg)
 	}
+
+	execStart := time.Now()
+	hasExecuted := make([]bool, len(sgl))
+	totCount := 0
+	for i := 0; i < len(sgl); i++ {
+		if totCount == len(sgl) {
+			break
+		}
+		errChan := make(chan error, len(sgl))
+		count := 0
+		for idx, sg := range sgl {
+			if sg.Params.VarUse != "" {
+				fmt.Println(varUidList, "%%%%%%%%%%%")
+				if _, ok := varUidList[sg.Params.VarUse]; !ok || hasExecuted[idx] {
+					continue
+				}
+			}
+			if hasExecuted[idx] {
+				continue
+			}
+			fmt.Println(sg.Attr, sg.Params.Alias, "^^^^^^^^")
+			hasExecuted[idx] = true
+			count++
+			totCount++
+			go func() {
+				rch := make(chan error)
+				go ProcessGraph(ctx, sg, nil, rch, varUidList)
+				err := <-rch
+				errChan <- err
+			}()
+			x.Trace(ctx, "Graph processed")
+		}
+
+		fmt.Println(count, "$$$$$$$$$$$$$$$$$$$$$$$$$$$")
+		for i := 0; i < count; i++ {
+			select {
+			case err := <-errChan:
+				if err != nil {
+					x.TraceError(ctx, x.Wrapf(err, "Error while processing Query"))
+					return nil, err
+				}
+			case <-ctx.Done():
+				x.TraceError(ctx, x.Wrapf(ctx.Err(), "Context done before full execution"))
+				return nil, ctx.Err()
+			}
+		}
+	}
+
+	fmt.Println("^^^^^^^^^^^", hasExecuted)
+	for _, it := range hasExecuted {
+		if !it {
+			return nil, x.Errorf("Query couldn't be executed")
+		}
+	}
+	l.Processing += time.Since(execStart)
+
 	return sgl, nil
 }
 
@@ -636,6 +681,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error, var
 	}
 
 	if varUidList != nil && sg.Params.VarDef != "" {
+		fmt.Println("************************************************** RIGHT!", sg.DestUIDs)
 		varUidList[sg.Params.VarDef] = sg.DestUIDs
 	}
 
