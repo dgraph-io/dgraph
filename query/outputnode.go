@@ -240,14 +240,14 @@ func valToBytes(v types.Val) ([]byte, error) {
 	case types.BinaryID:
 		return v.Value.([]byte), nil
 	case types.Int32ID:
-		return []byte(fmt.Sprintf("\"%d\"", v.Value)), nil
+		return []byte(fmt.Sprintf("%d", v.Value)), nil
 	case types.FloatID:
-		return []byte(fmt.Sprintf("\"%f\"", v.Value)), nil
+		return []byte(fmt.Sprintf("%f", v.Value)), nil
 	case types.BoolID:
 		if v.Value.(bool) == true {
-			return []byte("\"true\""), nil
+			return []byte("true"), nil
 		}
-		return []byte("\"false\""), nil
+		return []byte("false"), nil
 	case types.StringID:
 		return []byte(fmt.Sprintf("%q", v.Value.(string))), nil
 	case types.DateID:
