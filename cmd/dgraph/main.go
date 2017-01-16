@@ -478,7 +478,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	js, err := query.ToJson(&l, sgl) //sg.ToJSON(&l)
+	js, err := query.ToJson(&l, sgl)
 	if err != nil {
 		x.TraceError(ctx, x.Wrapf(err, "Error while converting to Json"))
 		x.SetStatus(w, x.Error, err.Error())
