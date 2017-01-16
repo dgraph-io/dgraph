@@ -36,74 +36,9 @@ import (
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/worker"
-	"github.com/dgraph-io/dgraph/x"
 )
 
-const schemaStr = `
-scalar name:string @index
-scalar dob:date @index
-scalar loc:geo @index
-scalar (
-  friend:uid @reverse
-)
-`
-
-func addEdgeToValue(t *testing.T, ps *store.Store, attr string, src uint64,
-	value string) {
-	edge := &task.DirectedEdge{
-		Value:  []byte(value),
-		Label:  "testing",
-		Attr:   attr,
-		Entity: src,
-		Op:     task.DirectedEdge_SET,
-	}
-	l, _ := posting.GetOrCreate(x.DataKey(attr, src), 0)
-	require.NoError(t,
-		l.AddMutationWithIndex(context.Background(), edge))
-}
-
-func addEdgeToTypedValue(t *testing.T, ps *store.Store, attr string, src uint64,
-	typ types.TypeID, value []byte) {
-	edge := &task.DirectedEdge{
-		Value:     value,
-		ValueType: uint32(typ),
-		Label:     "testing",
-		Attr:      attr,
-		Entity:    src,
-		Op:        task.DirectedEdge_SET,
-	}
-	l, _ := posting.GetOrCreate(x.DataKey(attr, src), 0)
-	require.NoError(t,
-		l.AddMutationWithIndex(context.Background(), edge))
-}
-
-func addEdgeToUID(t *testing.T, ps *store.Store, attr string, src uint64, dst uint64) {
-	edge := &task.DirectedEdge{
-		ValueId: dst,
-		Label:   "testing",
-		Attr:    attr,
-		Entity:  src,
-		Op:      task.DirectedEdge_SET,
-	}
-	l, _ := posting.GetOrCreate(x.DataKey(attr, src), 0)
-	require.NoError(t,
-		l.AddMutationWithIndex(context.Background(), edge))
-}
-
-func delEdgeToUID(t *testing.T, ps *store.Store, attr string, src uint64, dst uint64) {
-	edge := &task.DirectedEdge{
-		ValueId: dst,
-		Label:   "testing",
-		Attr:    attr,
-		Entity:  src,
-		Op:      task.DirectedEdge_DEL,
-	}
-	l, _ := posting.GetOrCreate(x.DataKey(attr, src), 0)
-	require.NoError(t,
-		l.AddMutationWithIndex(context.Background(), edge))
-}
-
-func populateGraph(t *testing.T) (string, string, *store.Store) {
+func populateGraph2(t *testing.T) (string, string, *store.Store) {
 	// logrus.SetLevel(logrus.DebugLevel)
 	dir, err := ioutil.TempDir("", "storetest_")
 	require.NoError(t, err)
@@ -226,7 +161,7 @@ func makeSubgraph(query string, t *testing.T) *SubGraph {
 }
 
 func TestEnvToFastJSONSimpleQuery(t *testing.T) {
-	dir, dir2, ps := populateGraph(t)
+	dir, dir2, ps := populateGraph2(t)
 	defer ps.Close()
 	defer os.RemoveAll(dir)
 	defer os.RemoveAll(dir2)
@@ -264,7 +199,7 @@ func TestEnvToFastJSONSimpleQuery(t *testing.T) {
 }
 
 func TestEnvToFastJSONNestedQuery(t *testing.T) {
-	dir, dir2, ps := populateGraph(t)
+	dir, dir2, ps := populateGraph2(t)
 	defer ps.Close()
 	defer os.RemoveAll(dir)
 	defer os.RemoveAll(dir2)
@@ -307,7 +242,7 @@ func TestEnvToFastJSONNestedQuery(t *testing.T) {
 }
 
 func TestEnvToFastJSONComplexQuery(t *testing.T) {
-	dir, dir2, ps := populateGraph(t)
+	dir, dir2, ps := populateGraph2(t)
 	defer ps.Close()
 	defer os.RemoveAll(dir)
 	defer os.RemoveAll(dir2)
@@ -350,7 +285,7 @@ func TestEnvToFastJSONComplexQuery(t *testing.T) {
 }
 
 func TestEnvToFastJSONDataTypesQuery(t *testing.T) {
-	dir, dir2, ps := populateGraph(t)
+	dir, dir2, ps := populateGraph2(t)
 	defer ps.Close()
 	defer os.RemoveAll(dir)
 	defer os.RemoveAll(dir2)
@@ -395,7 +330,7 @@ func TestEnvToFastJSONDataTypesQuery(t *testing.T) {
 }
 
 func TestBenchmarkFastJsonNode(t *testing.T) {
-	dir, dir2, ps := populateGraph(t)
+	dir, dir2, ps := populateGraph2(t)
 	defer ps.Close()
 	defer os.RemoveAll(dir)
 	defer os.RemoveAll(dir2)
@@ -434,7 +369,7 @@ func TestBenchmarkFastJsonNode(t *testing.T) {
 }
 
 func TestBenchmarkOutputJsonNode(t *testing.T) {
-	dir, dir2, ps := populateGraph(t)
+	dir, dir2, ps := populateGraph2(t)
 	defer ps.Close()
 	defer os.RemoveAll(dir)
 	defer os.RemoveAll(dir2)
@@ -470,11 +405,6 @@ func TestBenchmarkOutputJsonNode(t *testing.T) {
 		}
 	})
 	fmt.Println("tojson: Benchmarks: ", bresJson.N, " times ; ", bresJson.T, " total time ; ", bresJson.NsPerOp(), " ns/op")
-}
-
-func TestMain(m *testing.M) {
-	x.Init()
-	os.Exit(m.Run())
 }
 
 // Mocking Subgraph and Testing fast-json with it.
@@ -605,7 +535,7 @@ func TestMemoryUsageMockSGFastJSON(t *testing.T) {
 
 // run : go test -memprofile memenv.out -run=TestMemoryUsageMockSGFastJSON
 func TestMemoryUsageEnvSGFastJSON(t *testing.T) {
-	dir, dir2, ps := populateGraph(t)
+	dir, dir2, ps := populateGraph2(t)
 	defer ps.Close()
 	defer os.RemoveAll(dir)
 	defer os.RemoveAll(dir2)
