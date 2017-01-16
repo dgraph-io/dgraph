@@ -40,7 +40,6 @@ type GraphQuery struct {
 	VarDef     string
 	VarUse     string
 	Func       *Function
-	HasVar     bool
 
 	Args     map[string]string
 	Children []*GraphQuery
@@ -1040,10 +1039,6 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 	item := it.Item()
 	if item.Typ != itemName {
 		return nil, x.Errorf("Expected some name. Got: %v", item)
-	}
-
-	if item.Val == "var" {
-		gq.HasVar = true
 	}
 
 	gq.Alias = item.Val

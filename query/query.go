@@ -123,7 +123,6 @@ type params struct {
 	Order     string
 	OrderDesc bool
 	isDebug   bool
-	HasVar    bool
 	VarDef    string
 	VarUse    string
 }
@@ -433,7 +432,6 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	args := params{
 		isDebug: gq.Alias == "debug",
 		Alias:   gq.Alias,
-		HasVar:  gq.HasVar,
 		VarDef:  gq.VarDef,
 		VarUse:  gq.VarUse,
 	}

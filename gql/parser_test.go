@@ -88,7 +88,6 @@ func TestParseQueryWithVar1(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, res.Query)
 	require.Equal(t, 2, len(res.Query))
-	require.Equal(t, true, res.Query[0].HasVar)
 	require.Equal(t, "L", res.Query[0].Children[0].VarDef)
 	require.Equal(t, "L", res.Query[1].VarUse)
 	require.Equal(t, 0, len(res.Deps[0]))
