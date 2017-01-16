@@ -1,0 +1,12 @@
+{
+ me(id: 15161013152876854722) {
+  film.director.film {
+   film.film.directed_by {
+    film.director.film(order: film.film.initial_release_date) {
+     _uid_
+     film.film.initial_release_date
+    }
+   }
+  }
+ }
+}

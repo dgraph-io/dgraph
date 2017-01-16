@@ -38,11 +38,16 @@ import (
 func createTestStore(t *testing.T) (string, *store.Store) {
 	dir, err := ioutil.TempDir("", "storetest_")
 	require.NoError(t, err)
+
 	ps, err := store.NewStore(dir)
 	require.NoError(t, err)
 
 	schema.ParseBytes([]byte(`scalar geometry:geo @index`))
 	posting.Init(ps)
+	worker.Init(ps)
+
+	group.ParseGroupConfig("")
+	createTestData(t, ps)
 	return dir, ps
 }
 
@@ -59,7 +64,6 @@ func addGeoData(t *testing.T, ps *store.Store, uid uint64, p geom.T, name string
 func createTestData(t *testing.T, ps *store.Store) {
 	dir, err := ioutil.TempDir("", "wal")
 	require.NoError(t, err)
-	group.ParseGroupConfig("")
 	worker.StartRaftNodes(dir)
 
 	p := geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{-122.082506, 37.4249518})
@@ -112,7 +116,6 @@ func TestWithinPoint(t *testing.T) {
 	defer os.RemoveAll(dir)
 	defer ps.Close()
 
-	createTestData(t, ps)
 	gq := &gql.GraphQuery{
 		Alias: "me",
 		Func: &gql.Function{
@@ -133,8 +136,6 @@ func TestWithinPolygon(t *testing.T) {
 	defer os.RemoveAll(dir)
 	defer ps.Close()
 
-	createTestData(t, ps)
-
 	gq := &gql.GraphQuery{
 		Alias: "me",
 		Func: &gql.Function{Attr: "geometry", Name: "within", Args: []string{
@@ -153,7 +154,6 @@ func TestContainsPoint(t *testing.T) {
 	defer os.RemoveAll(dir)
 	defer ps.Close()
 
-	createTestData(t, ps)
 	gq := &gql.GraphQuery{
 		Alias: "me",
 		Func: &gql.Function{Attr: "geometry", Name: "contains", Args: []string{
@@ -172,7 +172,6 @@ func TestNearPoint(t *testing.T) {
 	defer os.RemoveAll(dir)
 	defer ps.Close()
 
-	createTestData(t, ps)
 	gq := &gql.GraphQuery{
 		Alias: "me",
 		Func: &gql.Function{
@@ -193,7 +192,6 @@ func TestIntersectsPolygon1(t *testing.T) {
 	defer os.RemoveAll(dir)
 	defer ps.Close()
 
-	createTestData(t, ps)
 	gq := &gql.GraphQuery{
 		Alias: "me",
 		Func: &gql.Function{
@@ -218,7 +216,6 @@ func TestIntersectsPolygon2(t *testing.T) {
 	defer os.RemoveAll(dir)
 	defer ps.Close()
 
-	createTestData(t, ps)
 	gq := &gql.GraphQuery{
 		Alias: "me",
 		Func: &gql.Function{

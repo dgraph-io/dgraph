@@ -78,6 +78,7 @@ func (t TypeID) Name() string {
 	return ""
 }
 
+// Val is a value with type information.
 type Val struct {
 	Tid   TypeID
 	Value interface{}

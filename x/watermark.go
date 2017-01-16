@@ -3,7 +3,6 @@ package x
 import (
 	"container/heap"
 	"sync/atomic"
-	"time"
 
 	"golang.org/x/net/trace"
 )
@@ -33,9 +32,8 @@ type RaftValue struct {
 // Mark contains raft proposal id and a done boolean. It is used to
 // update the WaterMark struct about the status of a proposal.
 type Mark struct {
-	Index    uint64
-	Done     bool      // Set to true if the pending mutation is done.
-	Deadline time.Time // Automatically set to true after deadline passes.
+	Index uint64
+	Done  bool // Set to true if the pending mutation is done.
 }
 
 // WaterMark is used to keep track of the maximum done index. The right way to use
@@ -82,6 +80,11 @@ func (w *WaterMark) process() {
 	heap.Init(&indices)
 	var loop uint64
 	for mark := range w.Ch {
+		if IsTestRun() {
+			// Don't run this during testing.
+			continue
+		}
+
 		// If not already done, then set. Otherwise, don't undo a done entry.
 		prev, present := pending[mark.Index]
 		if !present {
@@ -96,14 +99,6 @@ func (w *WaterMark) process() {
 		}
 		pending[mark.Index] = prev + delta
 
-		if !mark.Deadline.IsZero() {
-			AssertTruef(delta == 1, "Invalid Mark: %+v", mark)
-			go func(m Mark) {
-				time.Sleep(m.Deadline.Sub(time.Now()))
-				w.Ch <- Mark{Index: m.Index, Done: true}
-			}(mark)
-		}
-
 		loop++
 		if len(indices) > 0 && loop%10000 == 0 {
 			min := indices[0]
@@ -115,7 +110,7 @@ func (w *WaterMark) process() {
 		// been done. Stop at the first index, which isn't done.
 		doneUntil := w.DoneUntil()
 		AssertTruef(doneUntil < mark.Index,
-			"Watermark %s: %d should be below current mark: %d", w.Name, doneUntil, mark.Index)
+			"Watermark %s: Done until %d should be below new index: %d", w.Name, doneUntil, mark.Index)
 
 		until := doneUntil
 		loops := 0

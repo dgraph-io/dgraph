@@ -37,7 +37,7 @@ const (
 	fragmentMode = 3
 	equal        = '='
 	quote        = '"'
-	attherate    = '@'
+	at           = '@'
 )
 
 // Constants representing type of different graphql lexed items.
@@ -96,6 +96,9 @@ func lexFuncOrArg(l *lex.Lexer) lex.StateFn {
 	var empty bool
 	for {
 		switch r := l.Next(); {
+		case r == at:
+			l.Emit(itemAt)
+			return lexDirective
 		case r == leftRound:
 			l.Emit(itemLeftRound)
 			l.ArgDepth++
@@ -178,7 +181,7 @@ func lexFuncOrArg(l *lex.Lexer) lex.StateFn {
 				}
 			}
 		default:
-			return l.Errorf("Unrecognized character in lexText: %#U", r)
+			return l.Errorf("Unrecognized character in inside a func: %#U", r)
 		}
 	}
 	return nil
@@ -265,7 +268,7 @@ func lexText(l *lex.Lexer) lex.StateFn {
 			return lexText
 		case r == ':':
 			l.Emit(itemColon)
-		case r == attherate:
+		case r == at:
 			l.Emit(itemAt)
 			return lexDirective
 		default:

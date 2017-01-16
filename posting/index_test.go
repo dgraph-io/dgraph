@@ -16,6 +16,10 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
+const schemaStr = `
+scalar name:string @index
+`
+
 func TestIndexingInt(t *testing.T) {
 	schema.ParseBytes([]byte("scalar age:int @index"))
 	a, err := IndexTokens("age", types.Val{types.StringID, []byte("10")})
@@ -58,59 +62,79 @@ func TestIndexing(t *testing.T) {
 	require.EqualValues(t, "abc", string(a[0]))
 }
 
-func getTokensTable(t *testing.T) *TokensTable {
-	table := &TokensTable{
-		key: make([]string, 0, 50),
+func addMutationWithIndex(t *testing.T, l *List, edge *task.DirectedEdge, op uint32) {
+	if op == Del {
+		edge.Op = task.DirectedEdge_DEL
+	} else if op == Set {
+		edge.Op = task.DirectedEdge_SET
+	} else {
+		x.Fatalf("Unhandled op: %v", op)
 	}
-	table.Add("ccc")
-	table.Add("aaa")
-	table.Add("bbb")
-	table.Add("aaa")
-	require.EqualValues(t, 3, table.Size())
-	return table
+	require.NoError(t, l.AddMutationWithIndex(context.Background(), edge))
 }
 
-func TestTokensTableIterate(t *testing.T) {
-	tt := getTokensTable(t)
-	require.EqualValues(t, "aaa", tt.GetFirst())
-	require.EqualValues(t, "bbb", tt.GetNext("aaa"))
-	require.EqualValues(t, "ccc", tt.GetNext("bbb"))
-	require.EqualValues(t, "", tt.GetNext("ccc"))
+func TestTokensTable(t *testing.T) {
+	dir, err := ioutil.TempDir("", "storetest_")
+	require.NoError(t, err)
+	defer os.RemoveAll(dir)
+
+	schema.ParseBytes([]byte(schemaStr))
+
+	ps, err := store.NewStore(dir)
+	defer ps.Close()
+	require.NoError(t, err)
+	Init(ps)
+
+	key := x.DataKey("name", 1)
+	l := getNew(key, ps)
+
+	edge := &task.DirectedEdge{
+		Value:  []byte("david"),
+		Label:  "testing",
+		Attr:   "name",
+		Entity: 157,
+	}
+	addMutationWithIndex(t, l, edge, Set)
+
+	key = x.IndexKey("name", "david")
+	slice, err := ps.Get(key)
+	require.NoError(t, err)
+
+	var pl types.PostingList
+	x.Check(pl.Unmarshal(slice.Data()))
+
+	require.EqualValues(t, []string{"david"}, tokensForTest("name"))
+
+	CommitLists(10)
+	time.Sleep(time.Second)
+
+	slice, err = ps.Get(key)
+	require.NoError(t, err)
+	x.Check(pl.Unmarshal(slice.Data()))
+
+	require.EqualValues(t, []string{"david"}, tokensForTest("name"))
 }
 
-func TestTokensTableIterateReverse(t *testing.T) {
-	tt := getTokensTable(t)
-	require.EqualValues(t, "ccc", tt.GetLast())
-	require.EqualValues(t, "bbb", tt.GetPrev("ccc"))
-	require.EqualValues(t, "aaa", tt.GetPrev("bbb"))
-	require.EqualValues(t, "", tt.GetPrev("aaa"))
-}
-
-func TestTokensTableGetGeq(t *testing.T) {
-	tt := getTokensTable(t)
-
-	require.EqualValues(t, 1, tt.Get("bbb"))
-	require.EqualValues(t, -1, tt.Get("zzz"))
-
-	require.EqualValues(t, "aaa", tt.GetNextOrEqual("a"))
-	require.EqualValues(t, "aaa", tt.GetNextOrEqual("aaa"))
-	require.EqualValues(t, "bbb", tt.GetNextOrEqual("aab"))
-	require.EqualValues(t, "ccc", tt.GetNextOrEqual("cc"))
-	require.EqualValues(t, "ccc", tt.GetNextOrEqual("ccc"))
-	require.EqualValues(t, "", tt.GetNextOrEqual("cccc"))
-
-	require.EqualValues(t, "", tt.GetPrevOrEqual("a"))
-	require.EqualValues(t, "aaa", tt.GetPrevOrEqual("aaa"))
-	require.EqualValues(t, "aaa", tt.GetPrevOrEqual("aab"))
-	require.EqualValues(t, "bbb", tt.GetPrevOrEqual("cc"))
-	require.EqualValues(t, "ccc", tt.GetPrevOrEqual("ccc"))
-	require.EqualValues(t, "ccc", tt.GetPrevOrEqual("cccc"))
-}
-
-const schemaStr = `
+const schemaStrAlt = `
 scalar name:string @index
 scalar dob:date @index
 `
+
+// tokensForTest returns keys for a table. This is just for testing / debugging.
+func tokensForTest(attr string) []string {
+	pk := x.ParsedKey{Attr: attr}
+	prefix := pk.IndexPrefix()
+	it := pstore.NewIterator()
+	defer it.Close()
+
+	var out []string
+	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+		k := x.Parse(it.Key().Data())
+		x.AssertTrue(k.IsIndex())
+		out = append(out, k.Term)
+	}
+	return out
+}
 
 // addEdgeToValue adds edge without indexing.
 func addEdgeToValue(t *testing.T, ps *store.Store, attr string, src uint64,
@@ -136,7 +160,7 @@ func populateGraph(t *testing.T) (string, *store.Store) {
 	ps, err := store.NewStore(dir)
 	require.NoError(t, err)
 
-	schema.ParseBytes([]byte(schemaStr))
+	schema.ParseBytes([]byte(schemaStrAlt))
 	Init(ps)
 
 	addEdgeToValue(t, ps, "name", 1, "Michonne")
@@ -151,16 +175,9 @@ func TestRebuildIndex(t *testing.T) {
 
 	// RebuildIndex requires the data to be committed to data store.
 	CommitLists(10)
-	for len(commitCh) > 0 {
+	for len(syncCh) > 0 {
 		time.Sleep(100 * time.Millisecond)
 	}
-
-	// Create some fake wrong entries for TokensTable.
-	tt := GetTokensTable("name")
-	tt.Add("wronga")
-	tt.Add("wrongb")
-	tt.Add("wrongc")
-	require.EqualValues(t, 3, tt.Size())
 
 	// Create some fake wrong entries for data store.
 	ps.SetOne(x.IndexKey("name", "wrongname1"), []byte("nothing"))
@@ -170,16 +187,9 @@ func TestRebuildIndex(t *testing.T) {
 
 	// Let's force a commit.
 	CommitLists(10)
-	for len(commitCh) > 0 {
+	for len(syncCh) > 0 {
 		time.Sleep(100 * time.Millisecond)
 	}
-
-	// Check rebuilt TokensTable.
-	tt = GetTokensTable("name")
-	require.NotNil(t, tt)
-	require.EqualValues(t, 2, tt.Size())
-	require.EqualValues(t, "david", tt.GetFirst())
-	require.EqualValues(t, "michonne", tt.GetNext("david"))
 
 	// Check index entries in data store.
 	it := ps.NewIterator()

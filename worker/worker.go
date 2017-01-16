@@ -71,8 +71,12 @@ func (w *grpcWorker) Echo(ctx context.Context, in *Payload) (*Payload, error) {
 
 // runServer initializes a tcp server on port which listens to requests from
 // other workers for internal communication.
-func RunServer() {
-	ln, err := net.Listen("tcp", fmt.Sprintf(":%d", *workerPort))
+func RunServer(bindall bool) {
+	laddr := "localhost"
+	if bindall {
+		laddr = "0.0.0.0"
+	}
+	ln, err := net.Listen("tcp", fmt.Sprintf("%s:%d", laddr, *workerPort))
 	if err != nil {
 		log.Fatalf("While running server: %v", err)
 		return
