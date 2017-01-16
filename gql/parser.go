@@ -287,7 +287,6 @@ func substituteVariables(gq *GraphQuery, vmap varMap) error {
 
 type Result struct {
 	Query    []*GraphQuery
-	Deps     [][]*GraphQuery // Dependency of each entry in Query
 	Mutation *Mutation
 }
 
@@ -344,7 +343,7 @@ func Parse(input string) (res Result, rerr error) {
 		}
 	}
 
-	definedBy := make(map[string]*GraphQuery)
+	//definedBy := make(map[string]*GraphQuery)
 	if len(res.Query) != 0 {
 		for _, qu := range res.Query {
 			// Try expanding fragments using fragment map.
@@ -359,27 +358,6 @@ func Parse(input string) (res Result, rerr error) {
 
 			// Store variables at root and create dependancy list.
 			collectVariables(qu, qu)
-
-			// TODO: We might Need to collect the VarUse List later as well.
-
-			for _, v := range qu.VarDefList {
-				definedBy[v] = qu
-			}
-		}
-
-		// Iterate through the roots and populate dependency.
-		for idx, qu := range res.Query {
-			res.Deps = append(res.Deps, []*GraphQuery{})
-			// VarUse will be a list later.
-			if qu.VarUse == "" {
-				continue
-			}
-
-			if g, ok := definedBy[qu.VarUse]; !ok {
-				return res, x.Errorf("Variable not defined but used")
-			} else {
-				res.Deps[idx] = append(res.Deps[idx], g)
-			}
 		}
 	}
 
