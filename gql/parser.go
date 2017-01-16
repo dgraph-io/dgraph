@@ -291,53 +291,6 @@ type Result struct {
 	Mutation *Mutation
 }
 
-/*
-type depStack struct{ a []*GraphQuery }
-
-func (s *depStack) empty() bool        { return len(s.a) == 0 }
-func (s *depStack) size() int          { return len(s.a) }
-func (s *depStack) push(t *GraphQuery) { s.a = append(s.a, t) }
-
-func (s *depStack) pop() *GraphQuery {
-	x.AssertTruef(!s.empty(), "Trying to pop empty stack")
-	last := s.a[len(s.a)-1]
-	s.a = s.a[:len(s.a)-1]
-	return last
-}
-
-func findIdx(res Result, gq *GraphQuery) int {
-	for i := range res.Query {
-		if gq == res.Query[i] {
-			return i
-		}
-	}
-	return 0
-}
-
-func topSortUtil(i int, gq *GraphQuery, res Result, visited map[*GraphQuery]bool, st *depStack) {
-	visited[gq] = true
-	for _, neigh := range res.Deps[i] {
-		if !visited[neigh] {
-			j := findIdx(res, neigh)
-			topSortUtil(j, neigh, res, visited, st)
-		}
-	}
-	st.push(gq)
-}
-
-func topSort(res Result ) []*GraphQuery {
-	st := new(depStack)
-	visited := make(map[*GraphQuery]bool)
-
-	for i, gq := range res.Query {
-		if _, ok := visited[gq]; !ok {
-			topSortUtil(i, gq, res, visited, st)
-		}
-	}
-
-	return st.a
-}
-*/
 // Parse initializes and runs the lexer. It also constructs the GraphQuery subgraph
 // from the lexed items.
 func Parse(input string) (res Result, rerr error) {
@@ -428,18 +381,6 @@ func Parse(input string) (res Result, rerr error) {
 				res.Deps[idx] = append(res.Deps[idx], g)
 			}
 		}
-
-		// Do a topological sort here and exectue nodes that are at the highest level first.
-		// Also, nodes with same depth can be executed parallely.
-		/*
-			execOrder := topSort(res)
-			if len(execOrder) != len(res.Query) {
-				return res, x.Errorf("Error while executing query")
-			}
-		*/
-
-		// This has to be executed in reverse order.
-		// res.Query = execOrder
 	}
 
 	return res, nil
