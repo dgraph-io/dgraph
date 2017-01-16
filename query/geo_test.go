@@ -97,7 +97,7 @@ func runQuery(t *testing.T, gq *gql.GraphQuery) string {
 
 	sg, err := ToSubGraph(ctx, gq)
 	require.NoError(t, err)
-	go ProcessGraph(ctx, sg, nil, ch, nil)
+	go ProcessGraph(ctx, sg, nil, ch)
 	err = <-ch
 	require.NoError(t, err)
 

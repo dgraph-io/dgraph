@@ -523,30 +523,31 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 		}
 		errChan := make(chan error, len(sgl))
 		count := 0
-		for idx, sg := range sgl {
+		var idxList []int
+		for idx := 0; idx < len(sgl); idx++ {
+			sg := sgl[idx]
 			if sg.Params.VarUse != "" {
-				fmt.Println(varUidList, "%%%%%%%%%%%")
 				if _, ok := varUidList[sg.Params.VarUse]; !ok || hasExecuted[idx] {
 					continue
 				}
+				fillUpVariables(sg, varUidList)
 			}
 			if hasExecuted[idx] {
 				continue
 			}
-			fmt.Println(sg.Attr, sg.Params.Alias, "^^^^^^^^")
 			hasExecuted[idx] = true
+			idxList = append(idxList, idx)
 			count++
 			totCount++
 			go func() {
 				rch := make(chan error)
-				go ProcessGraph(ctx, sg, nil, rch, varUidList)
+				go ProcessGraph(ctx, sg, nil, rch)
 				err := <-rch
 				errChan <- err
 			}()
 			x.Trace(ctx, "Graph processed")
 		}
 
-		fmt.Println(count, "$$$$$$$$$$$$$$$$$$$$$$$$$$$")
 		for i := 0; i < count; i++ {
 			select {
 			case err := <-errChan:
@@ -559,9 +560,13 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 				return nil, ctx.Err()
 			}
 		}
+
+		for _, idx := range idxList {
+			sg := sgl[idx]
+			populateVarMap(sg, varUidList)
+		}
 	}
 
-	fmt.Println("^^^^^^^^^^^", hasExecuted)
 	for _, it := range hasExecuted {
 		if !it {
 			return nil, x.Errorf("Query couldn't be executed")
@@ -572,12 +577,30 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 	return sgl, nil
 }
 
-// ProcessGraph processes the SubGraph instance accumulating result for the query
-// from different instances. Note: taskQuery is nil for root node.
-func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error, varUidList map[string]*task.List) {
-	var err error
+func populateVarMap(sg *SubGraph, varUidList map[string]*task.List) {
+	if sg.Params.VarDef != "" {
+		varUidList[sg.Params.VarDef] = sg.DestUIDs
+	}
+	for _, child := range sg.Children {
+		populateVarMap(child, varUidList)
+	}
+}
+
+func fillUpVariables(sg *SubGraph, varUidList map[string]*task.List) {
 	if sg.Params.VarUse != "" {
 		sg.DestUIDs = varUidList[sg.Params.VarUse]
+	}
+	for _, child := range sg.Children {
+		fillUpVariables(child, varUidList)
+	}
+}
+
+// ProcessGraph processes the SubGraph instance accumulating result for the query
+// from different instances. Note: taskQuery is nil for root node.
+func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
+	var err error
+	if len(sg.Params.VarUse) != 0 {
+		// Do nothing as the list has already been populated.
 	} else if len(sg.Attr) == 0 {
 		// If we have a filter SubGraph which only contains an operator,
 		// it won't have any attribute to work on.
@@ -632,7 +655,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error, var
 		filterChan := make(chan error, len(sg.Filters))
 		for _, filter := range sg.Filters {
 			filter.SrcUIDs = sg.DestUIDs
-			go ProcessGraph(ctx, filter, sg, filterChan, varUidList)
+			go ProcessGraph(ctx, filter, sg, filterChan)
 		}
 
 		for _ = range sg.Filters {
@@ -680,11 +703,6 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error, var
 		}
 	}
 
-	if varUidList != nil && sg.Params.VarDef != "" {
-		fmt.Println("************************************************** RIGHT!", sg.DestUIDs)
-		varUidList[sg.Params.VarDef] = sg.DestUIDs
-	}
-
 	// Here we consider handling count with filtering. We do this after
 	// pagination because otherwise, we need to do the count with pagination
 	// taken into account. For example, a PL might have only 50 entries but the
@@ -708,7 +726,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error, var
 	for i := 0; i < len(sg.Children); i++ {
 		child := sg.Children[i]
 		child.SrcUIDs = sg.DestUIDs // Make the connection.
-		go ProcessGraph(ctx, child, sg, childChan, varUidList)
+		go ProcessGraph(ctx, child, sg, childChan)
 	}
 
 	// Now get all the results back.
@@ -956,6 +974,9 @@ func (p *jsonOutputNode) IsEmpty() bool {
 func ToJson(l *Latency, sgl []*SubGraph) ([]byte, error) {
 	mp := make(map[string]interface{})
 	for _, sg := range sgl {
+		if sg.Params.Alias == "var" {
+			continue
+		}
 		res, err := sg.ToJSON(l)
 		if err != nil {
 			return nil, err
