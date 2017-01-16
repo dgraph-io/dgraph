@@ -32,14 +32,13 @@ import (
 // GraphQuery stores the parsed Query in a tree format. This gets converted to
 // internally used query.SubGraph before processing the query.
 type GraphQuery struct {
-	UID        []uint64
-	Attr       string
-	Alias      string
-	IsCount    bool
-	VarDefList []string
-	VarDef     string
-	VarUse     string
-	Func       *Function
+	UID      []uint64
+	Attr     string
+	Alias    string
+	IsCount  bool
+	Var      string
+	NeedsVar string
+	Func     *Function
 
 	Args     map[string]string
 	Children []*GraphQuery
@@ -107,7 +106,7 @@ func init() {
 
 // DebugPrint is useful for debugging.
 func (gq *GraphQuery) DebugPrint(prefix string) {
-	fmt.Printf("%s[%x %q %q->%q]\n", prefix, gq.UID, gq.Attr, gq.Alias)
+	x.Printf("%s[%x %q %q->%q]\n", prefix, gq.UID, gq.Attr, gq.Alias)
 	for _, c := range gq.Children {
 		c.DebugPrint(prefix + "|->")
 	}
@@ -343,7 +342,6 @@ func Parse(input string) (res Result, rerr error) {
 		}
 	}
 
-	//definedBy := make(map[string]*GraphQuery)
 	if len(res.Query) != 0 {
 		for _, qu := range res.Query {
 			// Try expanding fragments using fragment map.
@@ -355,22 +353,10 @@ func Parse(input string) (res Result, rerr error) {
 			if err := substituteVariables(qu, vmap); err != nil {
 				return res, err
 			}
-
-			// Store variables at root and create dependancy list.
-			collectVariables(qu, qu)
 		}
 	}
 
 	return res, nil
-}
-
-func collectVariables(root, qu *GraphQuery) {
-	for _, ch := range qu.Children {
-		if ch.VarDef != "" {
-			root.VarDefList = append(root.VarDefList, ch.VarDef)
-		}
-		collectVariables(root, ch)
-	}
 }
 
 // getVariablesAndQuery checks if the query has a variable list and stores it in
@@ -973,10 +959,9 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 		return gq, err
 	}
 	if peekItems[1].Typ == itemRightRound {
-		// Temporary format for using a variable.
 		it.Next()
 		item := it.Item()
-		gq.VarUse = item.Val
+		gq.NeedsVar = item.Val
 		it.Next() // consume the right round.
 	} else if peekItems[1].Typ == itemLeftRound {
 		// Store the generator function.
@@ -1051,9 +1036,9 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				it.Next()
 				pred := it.Item()
 				child := &GraphQuery{
-					Args:   make(map[string]string),
-					Attr:   pred.Val,
-					VarDef: varName,
+					Args: make(map[string]string),
+					Attr: pred.Val,
+					Var:  varName,
 				}
 				gq.Children = append(gq.Children, child)
 				curp = child

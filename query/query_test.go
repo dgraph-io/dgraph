@@ -313,6 +313,26 @@ func TestGetUIDNotInChild(t *testing.T) {
 		js)
 }
 
+func TestMultiEmptyBlocks(t *testing.T) {
+	dir, dir2, ps := populateGraph(t)
+	defer ps.Close()
+	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
+	query := `
+		{
+			you(id:0x01) {
+			}
+
+			me(id: 0x02) {
+			}
+		}
+	`
+	js := processToJSON(t, query)
+	require.JSONEq(t,
+		`{}`,
+		js)
+}
+
 func TestUseVars(t *testing.T) {
 	dir, dir2, ps := populateGraph(t)
 	defer ps.Close()
@@ -321,8 +341,7 @@ func TestUseVars(t *testing.T) {
 	query := `
 		{
 			var(id:0x01) {
-				L AS friend 
-				
+				L AS friend 	
 			}
 
 			me(L) {
@@ -2005,16 +2024,16 @@ func TestMultiQuery(t *testing.T) {
 	defer os.RemoveAll(dir1)
 	defer os.RemoveAll(dir2)
 	query := `
-    {
-      me(anyof("name", "Michonne")) {
-        name
-        gender
+		{
+			me(anyof("name", "Michonne")) {
+				name
+				gender
 			}
 
-      you(anyof("name", "Andrea")) {
-        name
-      }
-    }
+			you(anyof("name", "Andrea")) {
+				name
+			}
+		}
   `
 	js := processToJSON(t, query)
 	require.JSONEq(t, `{"me":[{"gender":"female","name":"Michonne"}], "you":[{"name":"Andrea"}]}`, js)

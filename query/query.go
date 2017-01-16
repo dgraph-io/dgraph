@@ -123,8 +123,8 @@ type params struct {
 	Order     string
 	OrderDesc bool
 	isDebug   bool
-	VarDef    string
-	VarUse    string
+	Var       string
+	NeedsVar  string
 }
 
 // SubGraph is the way to represent data internally. It contains both the
@@ -350,10 +350,10 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 		}
 
 		args := params{
-			Alias:   gchild.Alias,
-			isDebug: sg.Params.isDebug,
-			VarDef:  gchild.VarDef,
-			VarUse:  gchild.VarUse,
+			Alias:    gchild.Alias,
+			isDebug:  sg.Params.isDebug,
+			Var:      gchild.Var,
+			NeedsVar: gchild.NeedsVar,
 		}
 		if gchild.IsCount {
 			if len(gchild.Children) != 0 {
@@ -421,7 +421,7 @@ func ToSubGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	// This would set the Result field in SubGraph,
 	// and populate the children for attributes.
-	if len(gq.UID) == 0 && gq.Func == nil && gq.VarUse == "" {
+	if len(gq.UID) == 0 && gq.Func == nil && gq.NeedsVar == "" {
 		err := x.Errorf("Invalid query, query internal id is zero and generator is nil")
 		x.TraceError(ctx, err)
 		return nil, err
@@ -430,10 +430,10 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	// For the root, the name to be used in result is stored in Alias, not Attr.
 	// The attr at root (if present) would stand for the source functions attr.
 	args := params{
-		isDebug: gq.Alias == "debug",
-		Alias:   gq.Alias,
-		VarDef:  gq.VarDef,
-		VarUse:  gq.VarUse,
+		isDebug:  gq.Alias == "debug",
+		Alias:    gq.Alias,
+		Var:      gq.Var,
+		NeedsVar: gq.NeedsVar,
 	}
 
 	sg := &SubGraph{
@@ -494,13 +494,12 @@ func createTaskQuery(sg *SubGraph) *task.Query {
 func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph, error) {
 	var sgl []*SubGraph
 
-	// varUidList will store the UID list of the corresponding variables.
-	varUidList := make(map[string]*task.List)
-
+	// doneVars will store the UID list of the corresponding variables.
+	doneVars := make(map[string]*task.List)
 	loopStart := time.Now()
 	for i := 0; i < len(res.Query); i++ {
 		gq := res.Query[i]
-		if gq == nil || (len(gq.UID) == 0 && gq.Func == nil && gq.VarUse == "") {
+		if gq == nil || (len(gq.UID) == 0 && gq.Func == nil && gq.NeedsVar == "") {
 			continue
 		}
 		sg, err := ToSubGraph(ctx, gq)
@@ -514,31 +513,27 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 
 	execStart := time.Now()
 	hasExecuted := make([]bool, len(sgl))
-	numQueryExecuted := 0
+	numQueriesDone := 0
 	for i := 0; i < len(sgl); i++ {
-		if numQueryExecuted == len(sgl) {
+		if numQueriesDone == len(sgl) {
 			break
 		}
 		errChan := make(chan error, len(sgl))
-		count := 0
 		var idxList []int
 		// If we have N blocks in a query, it can take a maximum of N iterations for all of them
 		// to be executed.
 		for idx := 0; idx < len(sgl); idx++ {
-			sg := sgl[idx]
-			if sg.Params.VarUse != "" {
-				if _, ok := varUidList[sg.Params.VarUse]; !ok || hasExecuted[idx] {
-					continue
-				}
-				fillUpVariables(sg, varUidList)
-			}
 			if hasExecuted[idx] {
 				continue
 			}
+			sg := sgl[idx]
+			if _, ok := doneVars[sg.Params.NeedsVar]; !ok && sg.Params.NeedsVar != "" {
+				continue
+			}
+			fillUpVariables(sg, doneVars)
 			hasExecuted[idx] = true
 			idxList = append(idxList, idx)
-			count++
-			numQueryExecuted++
+			numQueriesDone++
 			go func() {
 				rch := make(chan error)
 				go ProcessGraph(ctx, sg, nil, rch)
@@ -549,7 +544,7 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 		}
 
 		// Wait for the execution that was started in this iteration.
-		for i := 0; i < count; i++ {
+		for i := 0; i < len(idxList); i++ {
 			select {
 			case err := <-errChan:
 				if err != nil {
@@ -565,7 +560,7 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 		// If the executed subgraph had some variable defined in it, Populate it in the map.
 		for _, idx := range idxList {
 			sg := sgl[idx]
-			populateVarMap(sg, varUidList)
+			populateVarMap(sg, doneVars)
 		}
 	}
 
@@ -580,21 +575,21 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 	return sgl, nil
 }
 
-func populateVarMap(sg *SubGraph, varUidList map[string]*task.List) {
-	if sg.Params.VarDef != "" {
-		varUidList[sg.Params.VarDef] = sg.DestUIDs
+func populateVarMap(sg *SubGraph, doneVars map[string]*task.List) {
+	if sg.Params.Var != "" {
+		doneVars[sg.Params.Var] = sg.DestUIDs
 	}
 	for _, child := range sg.Children {
-		populateVarMap(child, varUidList)
+		populateVarMap(child, doneVars)
 	}
 }
 
-func fillUpVariables(sg *SubGraph, varUidList map[string]*task.List) {
-	if sg.Params.VarUse != "" {
-		sg.DestUIDs = varUidList[sg.Params.VarUse]
+func fillUpVariables(sg *SubGraph, doneVars map[string]*task.List) {
+	if sg.Params.NeedsVar != "" {
+		sg.DestUIDs = doneVars[sg.Params.NeedsVar]
 	}
 	for _, child := range sg.Children {
-		fillUpVariables(child, varUidList)
+		fillUpVariables(child, doneVars)
 	}
 }
 
@@ -602,7 +597,7 @@ func fillUpVariables(sg *SubGraph, varUidList map[string]*task.List) {
 // from different instances. Note: taskQuery is nil for root node.
 func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	var err error
-	if len(sg.Params.VarUse) != 0 {
+	if len(sg.Params.NeedsVar) != 0 {
 		// Do nothing as the list has already been populated.
 	} else if len(sg.Attr) == 0 {
 		// If we have a filter SubGraph which only contains an operator,

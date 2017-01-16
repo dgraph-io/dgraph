@@ -64,12 +64,12 @@ func TestParseQueryWithVar(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, res.Query)
 	require.Equal(t, 6, len(res.Query))
-	require.Equal(t, "L", res.Query[0].VarUse)
-	require.Equal(t, "J", res.Query[1].VarUse)
-	require.Equal(t, "K", res.Query[2].VarUse)
-	require.Equal(t, "L", res.Query[3].Children[0].VarDef)
-	require.Equal(t, "J", res.Query[4].Children[0].VarDef)
-	require.Equal(t, "K", res.Query[5].Children[0].VarDef)
+	require.Equal(t, "L", res.Query[0].NeedsVar)
+	require.Equal(t, "J", res.Query[1].NeedsVar)
+	require.Equal(t, "K", res.Query[2].NeedsVar)
+	require.Equal(t, "L", res.Query[3].Children[0].Var)
+	require.Equal(t, "J", res.Query[4].Children[0].Var)
+	require.Equal(t, "K", res.Query[5].Children[0].Var)
 }
 
 func TestParseQueryWithVar1(t *testing.T) {
@@ -88,11 +88,8 @@ func TestParseQueryWithVar1(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, res.Query)
 	require.Equal(t, 2, len(res.Query))
-	require.Equal(t, "L", res.Query[0].Children[0].VarDef)
-	require.Equal(t, "L", res.Query[1].VarUse)
-	//	require.Equal(t, 0, len(res.Deps[0]))
-	//	require.Equal(t, 1, len(res.Deps[1]))
-	//require.Equal(t, res.Query[0], res.Deps[1][0])
+	require.Equal(t, "L", res.Query[0].Children[0].Var)
+	require.Equal(t, "L", res.Query[1].NeedsVar)
 }
 
 func TestParseMultipleQueries(t *testing.T) {
@@ -111,8 +108,6 @@ func TestParseMultipleQueries(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, res.Query)
 	require.Equal(t, 2, len(res.Query))
-	//require.Equal(t, childAttrs(res.Query), []string{"friends", "gender", "age", "hometown"})
-	//require.Equal(t, childAttrs(res.Query.Children[0]), []string{"name"})
 }
 
 func TestParse(t *testing.T) {
