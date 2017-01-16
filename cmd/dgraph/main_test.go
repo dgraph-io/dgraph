@@ -18,6 +18,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -92,7 +93,7 @@ func TestQuery(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := context.Background()
-	g, err := query.ToSubGraph(ctx, res.Query)
+	g, err := query.ToSubGraph(ctx, res.Query[0])
 	require.NoError(t, err)
 
 	// Test internal query representation.
@@ -107,7 +108,9 @@ func TestQuery(t *testing.T) {
 	var l query.Latency
 	js, err := g.ToJSON(&l)
 	require.NoError(t, err)
-	fmt.Println(string(js))
+	j, err := json.Marshal(js)
+	require.NoError(t, err)
+	fmt.Println(string(j))
 }
 
 var qm = `
@@ -188,7 +191,7 @@ func BenchmarkQuery(b *testing.B) {
 			return
 		}
 		ctx := context.Background()
-		g, err := query.ToSubGraph(ctx, res.Query)
+		g, err := query.ToSubGraph(ctx, res.Query[0])
 		if err != nil {
 			b.Error(err)
 			return
@@ -196,16 +199,11 @@ func BenchmarkQuery(b *testing.B) {
 
 		ch := make(chan error)
 		go query.ProcessGraph(ctx, g, nil, ch)
-		if err := <-ch; err != nil {
-			b.Error(err)
-			return
-		}
+		err = <-ch
+		require.NoError(b, err)
 		var l query.Latency
 		_, err = g.ToJSON(&l)
-		if err != nil {
-			b.Error(err)
-			return
-		}
+		require.NoError(b, err)
 	}
 }
 

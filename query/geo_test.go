@@ -105,9 +105,8 @@ func runQuery(t *testing.T, gq *gql.GraphQuery) string {
 	require.NoError(t, err)
 
 	var l Latency
-	js, err := sg.ToJSON(&l)
+	js, err := sg.ToFastJSON(&l)
 	require.NoError(t, err)
-
 	return string(js)
 }
 

@@ -32,11 +32,13 @@ import (
 // GraphQuery stores the parsed Query in a tree format. This gets converted to
 // internally used query.SubGraph before processing the query.
 type GraphQuery struct {
-	UID     []uint64
-	Attr    string
-	Alias   string
-	IsCount bool
-	Func    *Function
+	UID      []uint64
+	Attr     string
+	Alias    string
+	IsCount  bool
+	Var      string
+	NeedsVar string
+	Func     *Function
 
 	Args     map[string]string
 	Children []*GraphQuery
@@ -283,7 +285,7 @@ func substituteVariables(gq *GraphQuery, vmap varMap) error {
 }
 
 type Result struct {
-	Query    *GraphQuery
+	Query    []*GraphQuery
 	Mutation *Mutation
 }
 
@@ -297,6 +299,7 @@ func Parse(input string) (res Result, rerr error) {
 
 	l := lex.NewLexer(query).Run(lexText)
 
+	var qu *GraphQuery
 	it := l.NewIterator()
 	fmap := make(fragmentMap)
 	for it.Next() {
@@ -304,9 +307,6 @@ func Parse(input string) (res Result, rerr error) {
 		switch item.Typ {
 		case lex.ItemError:
 			return res, x.Errorf(item.Val)
-		case itemText:
-			continue
-
 		case itemOpType:
 			if item.Val == "mutation" {
 				if res.Mutation != nil {
@@ -323,26 +323,36 @@ func Parse(input string) (res Result, rerr error) {
 				}
 				fmap[fnode.Name] = fnode
 			} else if item.Val == "query" {
-				if res.Query, rerr = getVariablesAndQuery(it, vmap); rerr != nil {
+				if qu, rerr = getVariablesAndQuery(it, vmap); rerr != nil {
 					return res, rerr
 				}
+				res.Query = append(res.Query, qu)
 			}
 		case itemLeftCurl:
-			if res.Query, rerr = getQuery(it); rerr != nil {
+			if qu, rerr = getQuery(it); rerr != nil {
 				return res, rerr
 			}
+			res.Query = append(res.Query, qu)
+		case itemName:
+			it.Prev()
+			if qu, rerr = getQuery(it); rerr != nil {
+				return res, rerr
+			}
+			res.Query = append(res.Query, qu)
 		}
 	}
 
-	if res.Query != nil {
-		// Try expanding fragments using fragment map.
-		if err := res.Query.expandFragments(fmap); err != nil {
-			return res, err
-		}
+	if len(res.Query) != 0 {
+		for _, qu := range res.Query {
+			// Try expanding fragments using fragment map.
+			if err := qu.expandFragments(fmap); err != nil {
+				return res, err
+			}
 
-		// Substitute all variables with corresponding values
-		if err := substituteVariables(res.Query, vmap); err != nil {
-			return res, err
+			// Substitute all variables with corresponding values
+			if err := substituteVariables(qu, vmap); err != nil {
+				return res, err
+			}
 		}
 	}
 
@@ -442,7 +452,7 @@ func getFragment(it *lex.ItemIterator) (*fragmentNode, error) {
 	var name string
 	for it.Next() {
 		item := it.Item()
-		if item.Typ == itemText {
+		if item.Typ == itemName {
 			v := strings.TrimSpace(item.Val)
 			if len(v) > 0 && name == "" {
 				// Currently, we take the first nontrivial token as the
@@ -940,7 +950,7 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 	it.Next()
 	item = it.Item()
 	if item.Typ != itemLeftRound {
-		return nil, x.Errorf("Expected variable start. Got: %v", item)
+		return nil, x.Errorf("Expected Left round brackets. Got: %v", item)
 	}
 
 	// Peeks items to see if its an argument or function.
@@ -948,7 +958,12 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 	if err != nil {
 		return gq, err
 	}
-	if peekItems[1].Typ == itemLeftRound {
+	if peekItems[1].Typ == itemRightRound {
+		it.Next()
+		item := it.Item()
+		gq.NeedsVar = item.Val
+		it.Next() // consume the right round.
+	} else if peekItems[1].Typ == itemLeftRound {
 		// Store the generator function.
 		gen, err := parseFunction(it)
 		if err != nil {
@@ -1010,6 +1025,26 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 			}
 		case itemName:
 			// Handle count.
+			peekIt, err := it.Peek(1)
+			if err != nil {
+				return x.Errorf("Invalid query")
+			}
+
+			if peekIt[0].Typ == itemName && peekIt[0].Val == "AS" {
+				varName := item.Val
+				it.Next() // "As" was checked before.
+				it.Next()
+				pred := it.Item()
+				child := &GraphQuery{
+					Args: make(map[string]string),
+					Attr: pred.Val,
+					Var:  varName,
+				}
+				gq.Children = append(gq.Children, child)
+				curp = child
+				continue
+			}
+
 			if item.Val == "count" {
 				if isCount != 0 {
 					return x.Errorf("Invalid mention of count.")

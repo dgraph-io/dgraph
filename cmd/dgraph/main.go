@@ -490,12 +490,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	sg, werr := processRequest(ctx, res.Query, &l)
-	if werr.Err != nil {
-		x.SetStatus(w, werr.Message, werr.Err.Error())
-		return
-	}
-	if werr.Message == x.ErrorOk {
+	if len(res.Query) == 0 {
 		mp := map[string]interface{}{
 			"code":    x.ErrorOk,
 			"message": "Done",
@@ -509,7 +504,27 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	js, err := sg.ToFastJSON(&l)
+	sgl, err := query.ProcessQuery(ctx, res, &l)
+	if err != nil {
+		x.TraceError(ctx, x.Wrapf(err, "Error while Executing query"))
+		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+		return
+	}
+
+	if len(*dumpSubgraph) > 0 {
+		for _, sg := range sgl {
+			x.Checkf(os.MkdirAll(*dumpSubgraph, 0700), *dumpSubgraph)
+			s := time.Now().Format("20060102.150405.000000.gob")
+			filename := path.Join(*dumpSubgraph, s)
+			f, err := os.Create(filename)
+			x.Checkf(err, filename)
+			enc := gob.NewEncoder(f)
+			x.Check(enc.Encode(sg))
+			x.Checkf(f.Close(), filename)
+		}
+	}
+
+	js, err := query.ToJson(&l, sgl)
 	if err != nil {
 		x.TraceError(ctx, x.Wrapf(err, "Error while converting to Json"))
 		x.SetStatus(w, x.Error, err.Error())
@@ -589,7 +604,7 @@ type grpcServer struct{}
 // This method is used to execute the query and return the response to the
 // client as a protocol buffer message.
 func (s *grpcServer) Run(ctx context.Context,
-	req *graph.Request) (*graph.Response, error) {
+	req *graph.Request) (resp *graph.Response, err error) {
 	var allocIds map[string]uint64
 	if rand.Float64() < *tracing {
 		tr := trace.New("Dgraph", "GrpcQuery")
@@ -597,7 +612,7 @@ func (s *grpcServer) Run(ctx context.Context,
 		ctx = trace.NewContext(ctx, tr)
 	}
 
-	resp := new(graph.Response)
+	resp = new(graph.Response)
 	if len(req.Query) == 0 && req.Mutation == nil {
 		x.TraceError(ctx, x.Errorf("Empty query and mutation."))
 		return resp, fmt.Errorf("Empty query and mutation.")
@@ -630,20 +645,18 @@ func (s *grpcServer) Run(ctx context.Context,
 	}
 	resp.AssignedUids = allocIds
 
-	sg, werr := processRequest(ctx, res.Query, &l)
-	if werr.Err != nil {
-		return resp, werr.Err
-	}
-	if werr.Message == x.ErrorOk {
-		return resp, nil
-	}
-
-	node, err := sg.ToProtocolBuffer(&l)
+	sgl, err := query.ProcessQuery(ctx, res, &l)
 	if err != nil {
 		x.TraceError(ctx, x.Wrapf(err, "Error while converting to ProtocolBuffer"))
 		return resp, err
 	}
-	resp.N = node
+
+	nodes, err := query.ToProtocolBuf(&l, sgl)
+	if err != nil {
+		x.TraceError(ctx, x.Wrapf(err, "Error while converting to ProtocolBuffer"))
+		return resp, err
+	}
+	resp.N = nodes
 
 	gl := new(graph.Latency)
 	gl.Parsing, gl.Processing, gl.Pb = l.Parsing.String(), l.Processing.String(),

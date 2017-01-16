@@ -305,9 +305,8 @@ func (fj *fastJsonNode) encode(jsBuf *bytes.Buffer) {
 	jsBuf.WriteRune('}')
 }
 
-func (sg *SubGraph) ToFastJSON(l *Latency) ([]byte, error) {
+func processNodeUids(n *fastJsonNode, sg *SubGraph) error {
 	var seedNode *fastJsonNode
-	n := seedNode.New("_root_")
 	for _, uid := range sg.DestUIDs.Uids {
 		n1 := seedNode.New(sg.Params.Alias)
 		if sg.Params.GetUID || sg.Params.isDebug {
@@ -318,12 +317,31 @@ func (sg *SubGraph) ToFastJSON(l *Latency) ([]byte, error) {
 			if err.Error() == "_INV_" {
 				continue
 			}
-			return nil, err
+			return err
 		}
 		if n1.IsEmpty() {
 			continue
 		}
 		n.AddChild(sg.Params.Alias, n1)
+	}
+	return nil
+}
+
+func (sg *SubGraph) ToFastJSON(l *Latency) ([]byte, error) {
+	var seedNode *fastJsonNode
+	n := seedNode.New("_root_")
+	if sg.Attr == "_root_" {
+		for _, sg := range sg.Children {
+			err := processNodeUids(n.(*fastJsonNode), sg)
+			if err != nil {
+				return nil, err
+			}
+		}
+	} else {
+		err := processNodeUids(n.(*fastJsonNode), sg)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	if sg.Params.isDebug {

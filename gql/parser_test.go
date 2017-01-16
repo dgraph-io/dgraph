@@ -32,6 +32,84 @@ func childAttrs(g *GraphQuery) []string {
 	return out
 }
 
+func TestParseQueryWithVar(t *testing.T) {
+	query := `
+	{	
+		me(L) {
+		 name	
+		}
+
+		him(J) {
+			name
+		}
+	
+		you(K) {
+			name
+		}
+
+		var(id:0x0a) {
+			L AS friends
+		}
+		
+		var(id:0x0a) {
+			J AS friends
+		}
+		
+		var(id:0x0a) {
+			K AS friends
+		}
+	}
+`
+	res, err := Parse(query)
+	require.NoError(t, err)
+	require.NotNil(t, res.Query)
+	require.Equal(t, 6, len(res.Query))
+	require.Equal(t, "L", res.Query[0].NeedsVar)
+	require.Equal(t, "J", res.Query[1].NeedsVar)
+	require.Equal(t, "K", res.Query[2].NeedsVar)
+	require.Equal(t, "L", res.Query[3].Children[0].Var)
+	require.Equal(t, "J", res.Query[4].Children[0].Var)
+	require.Equal(t, "K", res.Query[5].Children[0].Var)
+}
+
+func TestParseQueryWithVar1(t *testing.T) {
+	query := `
+	{
+		var(id:0x0a) {
+			L AS friends
+		}
+	
+		me(L) {
+		 name	
+		}
+	}
+`
+	res, err := Parse(query)
+	require.NoError(t, err)
+	require.NotNil(t, res.Query)
+	require.Equal(t, 2, len(res.Query))
+	require.Equal(t, "L", res.Query[0].Children[0].Var)
+	require.Equal(t, "L", res.Query[1].NeedsVar)
+}
+
+func TestParseMultipleQueries(t *testing.T) {
+	query := `
+	{
+		you(id:0x0a) {
+			name
+		}
+	
+		me(id:0x0b) {
+		 friends	
+		}
+	}
+`
+	res, err := Parse(query)
+	require.NoError(t, err)
+	require.NotNil(t, res.Query)
+	require.Equal(t, 2, len(res.Query))
+}
+
 func TestParse(t *testing.T) {
 	query := `
 	query {
@@ -47,8 +125,9 @@ func TestParse(t *testing.T) {
 	res, err := Parse(query)
 	require.NoError(t, err)
 	require.NotNil(t, res.Query)
-	require.Equal(t, childAttrs(res.Query), []string{"friends", "gender", "age", "hometown"})
-	require.Equal(t, childAttrs(res.Query.Children[0]), []string{"name"})
+	require.Equal(t, 1, len(res.Query))
+	require.Equal(t, childAttrs(res.Query[0]), []string{"friends", "gender", "age", "hometown"})
+	require.Equal(t, childAttrs(res.Query[0].Children[0]), []string{"name"})
 }
 
 func TestParseError(t *testing.T) {
@@ -77,8 +156,8 @@ func TestParseXid(t *testing.T) {
 	}`
 	res, err := Parse(query)
 	require.NoError(t, err)
-	require.NotNil(t, res.Query)
-	require.Equal(t, childAttrs(res.Query), []string{"type.object.name"})
+	require.NotNil(t, res.Query[0])
+	require.Equal(t, childAttrs(res.Query[0]), []string{"type.object.name"})
 }
 
 func TestParseIdList(t *testing.T) {
@@ -89,7 +168,7 @@ func TestParseIdList(t *testing.T) {
 		}
 	}`
 	r, err := Parse(query)
-	gq := r.Query
+	gq := r.Query[0]
 	require.NoError(t, err)
 	require.NotNil(t, gq)
 	require.Equal(t, []string{"type.object.name"}, childAttrs(gq))
@@ -104,7 +183,7 @@ func TestParseIdList1(t *testing.T) {
 		}
 	}`
 	r, err := Parse(query)
-	gq := r.Query
+	gq := r.Query[0]
 	require.NoError(t, err)
 	require.NotNil(t, gq)
 	require.Equal(t, []string{"type.object.name"}, childAttrs(gq))
@@ -134,9 +213,9 @@ func TestParseFirst(t *testing.T) {
 	}`
 	res, err := Parse(query)
 	require.NoError(t, err)
-	require.NotNil(t, res.Query)
-	require.Equal(t, []string{"type.object.name", "friends"}, childAttrs(res.Query))
-	require.Equal(t, "10", res.Query.Children[1].Args["first"])
+	require.NotNil(t, res.Query[0])
+	require.Equal(t, []string{"type.object.name", "friends"}, childAttrs(res.Query[0]))
+	require.Equal(t, "10", res.Query[0].Children[1].Args["first"])
 }
 
 func TestParseFirst_error(t *testing.T) {
@@ -163,10 +242,10 @@ func TestParseAfter(t *testing.T) {
 	}`
 	res, err := Parse(query)
 	require.NoError(t, err)
-	require.NotNil(t, res.Query)
-	require.Equal(t, childAttrs(res.Query), []string{"type.object.name", "friends"})
-	require.Equal(t, res.Query.Children[1].Args["first"], "10")
-	require.Equal(t, res.Query.Children[1].Args["after"], "3")
+	require.NotNil(t, res.Query[0])
+	require.Equal(t, childAttrs(res.Query[0]), []string{"type.object.name", "friends"})
+	require.Equal(t, res.Query[0].Children[1].Args["first"], "10")
+	require.Equal(t, res.Query[0].Children[1].Args["after"], "3")
 }
 
 func TestParseOffset(t *testing.T) {
@@ -180,10 +259,10 @@ func TestParseOffset(t *testing.T) {
 	}`
 	res, err := Parse(query)
 	require.NoError(t, err)
-	require.NotNil(t, res.Query)
-	require.Equal(t, childAttrs(res.Query), []string{"type.object.name", "friends"})
-	require.Equal(t, res.Query.Children[1].Args["first"], "10")
-	require.Equal(t, res.Query.Children[1].Args["offset"], "3")
+	require.NotNil(t, res.Query[0])
+	require.Equal(t, childAttrs(res.Query[0]), []string{"type.object.name", "friends"})
+	require.Equal(t, res.Query[0].Children[1].Args["first"], "10")
+	require.Equal(t, res.Query[0].Children[1].Args["offset"], "3")
 }
 
 func TestParseOffset_error(t *testing.T) {
@@ -223,9 +302,9 @@ func TestParse_pass1(t *testing.T) {
 	`
 	res, err := Parse(query)
 	require.NoError(t, err)
-	require.NotNil(t, res.Query)
-	require.Equal(t, childAttrs(res.Query), []string{"name", "friends"})
-	require.Empty(t, childAttrs(res.Query.Children[1]))
+	require.NotNil(t, res.Query[0])
+	require.Equal(t, childAttrs(res.Query[0]), []string{"name", "friends"})
+	require.Empty(t, childAttrs(res.Query[0].Children[1]))
 }
 
 func TestParse_alias(t *testing.T) {
@@ -233,18 +312,18 @@ func TestParse_alias(t *testing.T) {
 		{
 			me(id:0x0a) {
 				name,
-				bestFriend: friends(first: 10) { 
-					name	
+				bestFriend: friends(first: 10) {
+					name
 				}
 			}
 		}
 	`
 	res, err := Parse(query)
 	require.NoError(t, err)
-	require.NotNil(t, res.Query)
-	require.Equal(t, childAttrs(res.Query), []string{"name", "friends"})
-	require.Equal(t, res.Query.Children[1].Alias, "bestFriend")
-	require.Equal(t, childAttrs(res.Query.Children[1]), []string{"name"})
+	require.NotNil(t, res.Query[0])
+	require.Equal(t, childAttrs(res.Query[0]), []string{"name", "friends"})
+	require.Equal(t, res.Query[0].Children[1].Alias, "bestFriend")
+	require.Equal(t, childAttrs(res.Query[0].Children[1]), []string{"name"})
 }
 
 func TestParse_alias1(t *testing.T) {
@@ -252,19 +331,19 @@ func TestParse_alias1(t *testing.T) {
 		{
 			me(id:0x0a) {
 				name: type.object.name.en
-				bestFriend: friends(first: 10) { 
-					name: type.object.name.hi	
+				bestFriend: friends(first: 10) {
+					name: type.object.name.hi
 				}
 			}
 		}
 	`
 	res, err := Parse(query)
 	require.NoError(t, err)
-	require.NotNil(t, res.Query)
-	require.Equal(t, childAttrs(res.Query), []string{"type.object.name.en", "friends"})
-	require.Equal(t, res.Query.Children[1].Alias, "bestFriend")
-	require.Equal(t, res.Query.Children[1].Children[0].Alias, "name")
-	require.Equal(t, childAttrs(res.Query.Children[1]), []string{"type.object.name.hi"})
+	require.NotNil(t, res.Query[0])
+	require.Equal(t, childAttrs(res.Query[0]), []string{"type.object.name.en", "friends"})
+	require.Equal(t, res.Query[0].Children[1].Alias, "bestFriend")
+	require.Equal(t, res.Query[0].Children[1].Children[0].Alias, "name")
+	require.Equal(t, childAttrs(res.Query[0].Children[1]), []string{"type.object.name.hi"})
 }
 
 func TestParse_block(t *testing.T) {
@@ -277,8 +356,8 @@ func TestParse_block(t *testing.T) {
 	`
 	res, err := Parse(query)
 	require.NoError(t, err)
-	require.NotNil(t, res.Query)
-	require.Equal(t, childAttrs(res.Query), []string{"type.object.name.es-419"})
+	require.NotNil(t, res.Query[0])
+	require.Equal(t, childAttrs(res.Query[0]), []string{"type.object.name.es-419"})
 }
 
 func TestParseMutation(t *testing.T) {
@@ -362,9 +441,51 @@ func TestParseMutationAndQuery(t *testing.T) {
 	require.NotEqual(t, strings.Index(res.Mutation.Set, "<hometown> <is> <san francisco> ."), -1)
 	require.NotEqual(t, strings.Index(res.Mutation.Del, "<name> <is> <something-else> ."), -1)
 
-	require.NotNil(t, res.Query)
-	require.Equal(t, 1, len(res.Query.UID))
-	require.Equal(t, childAttrs(res.Query), []string{"name", "hometown"})
+	require.NotNil(t, res.Query[0])
+	require.Equal(t, 1, len(res.Query[0].UID))
+	require.Equal(t, childAttrs(res.Query[0]), []string{"name", "hometown"})
+}
+
+func TestParseFragmentMultiQuery(t *testing.T) {
+	query := `
+	{
+		user(id:0x0a) {
+			...fragmenta,...fragmentb
+			friends {
+				name
+			}
+			...fragmentc
+			hobbies
+			...fragmentd
+		}
+	
+		me(id:0x01) {
+			...fragmenta
+			...fragmentb
+		}
+	}
+
+	fragment fragmenta {
+		name
+	}
+
+	fragment fragmentb {
+		id
+	}
+
+	fragment fragmentc {
+		name
+	}
+
+	fragment fragmentd {
+		id
+	}
+`
+	res, err := Parse(query)
+	require.NoError(t, err)
+	require.NotNil(t, res.Query[0])
+	require.Equal(t, []string{"name", "id", "friends", "name", "hobbies", "id"}, childAttrs(res.Query[0]))
+	require.Equal(t, []string{"name", "id"}, childAttrs(res.Query[1]))
 }
 
 func TestParseFragmentNoNesting(t *testing.T) {
@@ -380,27 +501,27 @@ func TestParseFragmentNoNesting(t *testing.T) {
 			...fragmentd
 		}
 	}
-	
+
 	fragment fragmenta {
 		name
 	}
-	
+
 	fragment fragmentb {
 		id
 	}
-	
+
 	fragment fragmentc {
 		name
 	}
-	
+
 	fragment fragmentd {
 		id
 	}
 `
 	res, err := Parse(query)
 	require.NoError(t, err)
-	require.NotNil(t, res.Query)
-	require.Equal(t, childAttrs(res.Query), []string{"name", "id", "friends", "name", "hobbies", "id"})
+	require.NotNil(t, res.Query[0])
+	require.Equal(t, childAttrs(res.Query[0]), []string{"name", "id", "friends", "name", "hobbies", "id"})
 }
 
 func TestParseFragmentNest1(t *testing.T) {
@@ -413,20 +534,20 @@ func TestParseFragmentNest1(t *testing.T) {
 			}
 		}
 	}
-	
+
 	fragment fragmenta {
 		id
 		...fragmentb
 	}
-	
+
 	fragment fragmentb {
 		hobbies
 	}
 `
 	res, err := Parse(query)
 	require.NoError(t, err)
-	require.NotNil(t, res.Query)
-	require.Equal(t, childAttrs(res.Query), []string{"id", "hobbies", "friends"})
+	require.NotNil(t, res.Query[0])
+	require.Equal(t, childAttrs(res.Query[0]), []string{"id", "hobbies", "friends"})
 }
 
 func TestParseFragmentNest2(t *testing.T) {
@@ -448,9 +569,9 @@ func TestParseFragmentNest2(t *testing.T) {
 `
 	res, err := Parse(query)
 	require.NoError(t, err)
-	require.NotNil(t, res.Query)
-	require.Equal(t, childAttrs(res.Query), []string{"friends"})
-	require.Equal(t, childAttrs(res.Query.Children[0]), []string{"name", "nickname"})
+	require.NotNil(t, res.Query[0])
+	require.Equal(t, childAttrs(res.Query[0]), []string{"friends"})
+	require.Equal(t, childAttrs(res.Query[0].Children[0]), []string{"name", "nickname"})
 }
 
 func TestParseFragmentCycle(t *testing.T) {
@@ -497,8 +618,8 @@ func TestParseFragmentMissing(t *testing.T) {
 
 func TestParseVariables(t *testing.T) {
 	query := `{
-		"query": "query testQuery( $a  : int   , $b: int){root(id: 0x0a) {name(first: $b, after: $a){english}}}", 
-		"variables": {"$a": "6", "$b": "5" } 
+		"query": "query testQuery( $a  : int   , $b: int){root(id: 0x0a) {name(first: $b, after: $a){english}}}",
+		"variables": {"$a": "6", "$b": "5" }
 	}`
 	_, err := Parse(query)
 	require.NoError(t, err)
@@ -506,8 +627,8 @@ func TestParseVariables(t *testing.T) {
 
 func TestParseVariables1(t *testing.T) {
 	query := `{
-		"query": "query testQuery($a: int , $b: int!){root(id: 0x0a) {name(first: $b){english}}}", 
-		"variables": {"$b": "5" } 
+		"query": "query testQuery($a: int , $b: int!){root(id: 0x0a) {name(first: $b){english}}}",
+		"variables": {"$b": "5" }
 	}`
 	_, err := Parse(query)
 	require.NoError(t, err)
@@ -515,8 +636,8 @@ func TestParseVariables1(t *testing.T) {
 
 func TestParseVariables2(t *testing.T) {
 	query := `{
-		"query": "query testQuery($a: float , $b: bool!){root(id: 0x0a) {name{english}}}", 
-		"variables": {"$b": "false", "$a": "3.33" } 
+		"query": "query testQuery($a: float , $b: bool!){root(id: 0x0a) {name{english}}}",
+		"variables": {"$b": "false", "$a": "3.33" }
 	}`
 	_, err := Parse(query)
 	require.NoError(t, err)
@@ -524,8 +645,8 @@ func TestParseVariables2(t *testing.T) {
 
 func TestParseVariables3(t *testing.T) {
 	query := `{
-		"query": "query testQuery($a: int , $b: int! ){root(id: 0x0a) {name(first: $b){english}}}", 
-		"variables": {"$a": "5", "$b": "3"} 
+		"query": "query testQuery($a: int , $b: int! ){root(id: 0x0a) {name(first: $b){english}}}",
+		"variables": {"$a": "5", "$b": "3"}
 	}`
 	_, err := Parse(query)
 	require.NoError(t, err)
@@ -533,8 +654,8 @@ func TestParseVariables3(t *testing.T) {
 
 func TestParseVariablesStringfiedJSON(t *testing.T) {
 	query := `{
-		"query": "query testQuery($a: int! , $b: int){root(id: 0x0a) {name(first: $b){english}}}", 
-		"variables": "{\"$a\": \"5\" }" 
+		"query": "query testQuery($a: int! , $b: int){root(id: 0x0a) {name(first: $b){english}}}",
+		"variables": "{\"$a\": \"5\" }"
 	}`
 	_, err := Parse(query)
 	require.NoError(t, err)
@@ -542,8 +663,8 @@ func TestParseVariablesStringfiedJSON(t *testing.T) {
 
 func TestParseVariablesDefault1(t *testing.T) {
 	query := `{
-		"query": "query testQuery($a: int = 3  , $b: int =  4 ,  $c : int = 3){root(id: 0x0a) {name(first: $b, after: $a, offset: $c){english}}}", 
-		"variables": {"$b": "5" } 
+		"query": "query testQuery($a: int = 3  , $b: int =  4 ,  $c : int = 3){root(id: 0x0a) {name(first: $b, after: $a, offset: $c){english}}}",
+		"variables": {"$b": "5" }
 	}`
 	_, err := Parse(query)
 	require.NoError(t, err)
@@ -555,11 +676,11 @@ func TestParseVariablesFragments(t *testing.T) {
 }`
 	res, err := Parse(query)
 	require.NoError(t, err)
-	require.NotNil(t, res.Query)
-	require.Equal(t, childAttrs(res.Query), []string{"id", "friends"})
-	require.Empty(t, childAttrs(res.Query.Children[0]))
-	require.Equal(t, childAttrs(res.Query.Children[1]), []string{"name"})
-	require.Equal(t, res.Query.Children[0].Args["first"], "5")
+	require.NotNil(t, res.Query[0])
+	require.Equal(t, childAttrs(res.Query[0]), []string{"id", "friends"})
+	require.Empty(t, childAttrs(res.Query[0].Children[0]))
+	require.Equal(t, childAttrs(res.Query[0].Children[1]), []string{"name"})
+	require.Equal(t, res.Query[0].Children[0].Args["first"], "5")
 }
 
 func TestParseVariablesError1(t *testing.T) {
@@ -578,8 +699,8 @@ func TestParseVariablesError2(t *testing.T) {
 	query := `{
 		"query": "query testQuery($a: int, $b: int, $c: int!){
 			root(id: 0x0a) {name(first: $b, after: $a){english}}
-		}", 
-		"variables": {"$a": "6", "$b": "5" } 
+		}",
+		"variables": {"$a": "6", "$b": "5" }
 	}`
 	_, err := Parse(query)
 	require.Error(t, err, "Expected value for variable $c")
@@ -589,8 +710,8 @@ func TestParseVariablesError3(t *testing.T) {
 	query := `{
 		"query": "query testQuery($a: int, $b: , $c: int!){
 			root(id: 0x0a) {name(first: $b, after: $a){english}}
-		}", 
-		"variables": {"$a": "6", "$b": "5" } 
+		}",
+		"variables": {"$a": "6", "$b": "5" }
 	}`
 	_, err := Parse(query)
 	require.Error(t, err, "Expected type for variable $b")
@@ -598,8 +719,8 @@ func TestParseVariablesError3(t *testing.T) {
 
 func TestParseVariablesError4(t *testing.T) {
 	query := `{
-		"query": "query testQuery($a: bool , $b: float! = 3){root(id: 0x0a) {name(first: $b){english}}}", 
-		"variables": {"$a": "5" } 
+		"query": "query testQuery($a: bool , $b: float! = 3){root(id: 0x0a) {name(first: $b){english}}}",
+		"variables": {"$a": "5" }
 	}`
 	_, err := Parse(query)
 	require.Error(t, err, "Expected type error")
@@ -607,8 +728,8 @@ func TestParseVariablesError4(t *testing.T) {
 
 func TestParseVariablesError5(t *testing.T) {
 	query := `{
-		"query": "query ($a: int, $b: int){root(id: 0x0a) {name(first: $b, after: $a){english}}}", 
-		"variables": {"$a": "6", "$b": "5" } 
+		"query": "query ($a: int, $b: int){root(id: 0x0a) {name(first: $b, after: $a){english}}}",
+		"variables": {"$a": "6", "$b": "5" }
 	}`
 	_, err := Parse(query)
 	require.Error(t, err, "Expected error: Query with variables should be named")
@@ -616,8 +737,8 @@ func TestParseVariablesError5(t *testing.T) {
 
 func TestParseVariablesError6(t *testing.T) {
 	query := `{
-		"query": "query ($a: int, $b: random){root(id: 0x0a) {name(first: $b, after: $a){english}}}", 
-		"variables": {"$a": "6", "$b": "5" } 
+		"query": "query ($a: int, $b: random){root(id: 0x0a) {name(first: $b, after: $a){english}}}",
+		"variables": {"$a": "6", "$b": "5" }
 	}`
 	_, err := Parse(query)
 	require.Error(t, err, "Expected error: Type random not supported")
@@ -627,8 +748,8 @@ func TestParseVariablesError7(t *testing.T) {
 	query := `{
 		"query": "query testQuery($a: int, $b: int, $c: int!){
 			root(id: 0x0a) {name(first: $b, after: $a){english}}
-		}", 
-		"variables": {"$a": "6", "$b": "5", "$d": "abc" } 
+		}",
+		"variables": {"$a": "6", "$b": "5", "$d": "abc" }
 	}`
 	_, err := Parse(query)
 	require.Error(t, err, "Expected type for variable $d")
@@ -636,8 +757,8 @@ func TestParseVariablesError7(t *testing.T) {
 
 func TestParseVariablesiError8(t *testing.T) {
 	query := `{
-		"query": "query testQuery($a: int = 3  , $b: int! =  4 ,  $c : int = 3){root(id: 0x0a) {name(first: $b, after: $a, offset: $c){english}}}", 
-		"variables": {"$b": "5" } 
+		"query": "query testQuery($a: int = 3  , $b: int! =  4 ,  $c : int = 3){root(id: 0x0a) {name(first: $b, after: $a, offset: $c){english}}}",
+		"variables": {"$b": "5" }
 	}`
 	_, err := Parse(query)
 	require.Error(t, err, "Variables type ending with ! cant have default value")
@@ -658,15 +779,15 @@ func TestParseFilter_root(t *testing.T) {
 `
 	res, err := Parse(query)
 	require.NoError(t, err)
-	require.NotNil(t, res.Query)
-	require.NotNil(t, res.Query.Filter)
-	require.Equal(t, `(allof "name" "alice")`, res.Query.Filter.debugString())
-	require.Equal(t, []string{"friends", "gender", "age", "hometown"}, childAttrs(res.Query))
-	require.Equal(t, []string{"name"}, childAttrs(res.Query.Children[0]))
-	require.Nil(t, res.Query.Children[0].Filter)
-	require.Equal(t, `(eq "a")`, res.Query.Children[1].Filter.debugString())
-	require.Equal(t, `(neq "a" "b")`, res.Query.Children[2].Filter.debugString())
-	require.Equal(t, `(namefilter "a")`, res.Query.Children[0].Children[0].Filter.debugString())
+	require.NotNil(t, res.Query[0])
+	require.NotNil(t, res.Query[0].Filter)
+	require.Equal(t, `(allof "name" "alice")`, res.Query[0].Filter.debugString())
+	require.Equal(t, []string{"friends", "gender", "age", "hometown"}, childAttrs(res.Query[0]))
+	require.Equal(t, []string{"name"}, childAttrs(res.Query[0].Children[0]))
+	require.Nil(t, res.Query[0].Children[0].Filter)
+	require.Equal(t, `(eq "a")`, res.Query[0].Children[1].Filter.debugString())
+	require.Equal(t, `(neq "a" "b")`, res.Query[0].Children[2].Filter.debugString())
+	require.Equal(t, `(namefilter "a")`, res.Query[0].Children[0].Children[0].Filter.debugString())
 }
 
 func TestParseFilter_root_Error(t *testing.T) {
@@ -699,13 +820,13 @@ func TestParseFilter_simplest(t *testing.T) {
 `
 	res, err := Parse(query)
 	require.NoError(t, err)
-	require.NotNil(t, res.Query)
-	require.Equal(t, []string{"friends", "gender", "age", "hometown"}, childAttrs(res.Query))
-	require.Equal(t, []string{"name"}, childAttrs(res.Query.Children[0]))
-	require.Nil(t, res.Query.Children[0].Filter)
-	require.Equal(t, `(eq "a")`, res.Query.Children[1].Filter.debugString())
-	require.Equal(t, `(neq "a" "b")`, res.Query.Children[2].Filter.debugString())
-	require.Equal(t, `(namefilter "a")`, res.Query.Children[0].Children[0].Filter.debugString())
+	require.NotNil(t, res.Query[0])
+	require.Equal(t, []string{"friends", "gender", "age", "hometown"}, childAttrs(res.Query[0]))
+	require.Equal(t, []string{"name"}, childAttrs(res.Query[0].Children[0]))
+	require.Nil(t, res.Query[0].Children[0].Filter)
+	require.Equal(t, `(eq "a")`, res.Query[0].Children[1].Filter.debugString())
+	require.Equal(t, `(neq "a" "b")`, res.Query[0].Children[2].Filter.debugString())
+	require.Equal(t, `(namefilter "a")`, res.Query[0].Children[0].Children[0].Filter.debugString())
 }
 
 // Test operator precedence. && should be evaluated before ||.
@@ -713,7 +834,7 @@ func TestParseFilter_op(t *testing.T) {
 	query := `
 	query {
 		me(id:0x0a) {
-			friends @filter(a("a") || b("a") 
+			friends @filter(a("a") || b("a")
 			&& c("a")) {
 				name
 			}
@@ -724,10 +845,10 @@ func TestParseFilter_op(t *testing.T) {
 `
 	res, err := Parse(query)
 	require.NoError(t, err)
-	require.NotNil(t, res.Query)
-	require.Equal(t, []string{"friends", "gender", "age", "hometown"}, childAttrs(res.Query))
-	require.Equal(t, []string{"name"}, childAttrs(res.Query.Children[0]))
-	require.Equal(t, `(OR (a "a") (AND (b "a") (c "a")))`, res.Query.Children[0].Filter.debugString())
+	require.NotNil(t, res.Query[0])
+	require.Equal(t, []string{"friends", "gender", "age", "hometown"}, childAttrs(res.Query[0]))
+	require.Equal(t, []string{"name"}, childAttrs(res.Query[0].Children[0]))
+	require.Equal(t, `(OR (a "a") (AND (b "a") (c "a")))`, res.Query[0].Children[0].Filter.debugString())
 }
 
 // Test operator precedence. Let brackets make || evaluates before &&.
@@ -746,10 +867,10 @@ func TestParseFilter_op2(t *testing.T) {
 `
 	res, err := Parse(query)
 	require.NoError(t, err)
-	require.NotNil(t, res.Query)
-	require.Equal(t, []string{"friends", "gender", "age", "hometown"}, childAttrs(res.Query))
-	require.Equal(t, []string{"name"}, childAttrs(res.Query.Children[0]))
-	require.Equal(t, `(AND (OR (a "a") (b "a")) (c "a"))`, res.Query.Children[0].Filter.debugString())
+	require.NotNil(t, res.Query[0])
+	require.Equal(t, []string{"friends", "gender", "age", "hometown"}, childAttrs(res.Query[0]))
+	require.Equal(t, []string{"name"}, childAttrs(res.Query[0].Children[0]))
+	require.Equal(t, `(AND (OR (a "a") (b "a")) (c "a"))`, res.Query[0].Children[0].Filter.debugString())
 }
 
 // Test operator precedence. More elaborate brackets.
@@ -767,12 +888,12 @@ func TestParseFilter_brac(t *testing.T) {
 `
 	res, err := Parse(query)
 	require.NoError(t, err)
-	require.NotNil(t, res.Query)
-	require.Equal(t, []string{"friends", "gender", "age", "hometown"}, childAttrs(res.Query))
-	require.Equal(t, []string{"name"}, childAttrs(res.Query.Children[0]))
+	require.NotNil(t, res.Query[0])
+	require.Equal(t, []string{"friends", "gender", "age", "hometown"}, childAttrs(res.Query[0]))
+	require.Equal(t, []string{"name"}, childAttrs(res.Query[0].Children[0]))
 	require.Equal(t,
 		`(OR (a "hello") (AND (AND (b "world" "is") (OR (c "a") (OR (d "haha") (e "a")))) (f "a")))`,
-		res.Query.Children[0].Filter.debugString())
+		res.Query[0].Children[0].Filter.debugString())
 }
 
 // Test if unbalanced brac will lead to errors.
@@ -915,13 +1036,13 @@ func TestParseCountAsFuncMultiple(t *testing.T) {
 `
 	gq, err := Parse(query)
 	require.NoError(t, err)
-	require.Equal(t, 6, len(gq.Query.Children))
-	require.Equal(t, true, gq.Query.Children[0].IsCount)
-	require.Equal(t, "friends", gq.Query.Children[0].Attr)
-	require.Equal(t, true, gq.Query.Children[1].IsCount)
-	require.Equal(t, "relatives", gq.Query.Children[1].Attr)
-	require.Equal(t, true, gq.Query.Children[2].IsCount)
-	require.Equal(t, "classmates", gq.Query.Children[2].Attr)
+	require.Equal(t, 6, len(gq.Query[0].Children))
+	require.Equal(t, true, gq.Query[0].Children[0].IsCount)
+	require.Equal(t, "friends", gq.Query[0].Children[0].Attr)
+	require.Equal(t, true, gq.Query[0].Children[1].IsCount)
+	require.Equal(t, "relatives", gq.Query[0].Children[1].Attr)
+	require.Equal(t, true, gq.Query[0].Children[2].IsCount)
+	require.Equal(t, "classmates", gq.Query[0].Children[2].Attr)
 
 }
 
@@ -952,8 +1073,8 @@ func TestParseCountAsFunc(t *testing.T) {
 `
 	gq, err := Parse(query)
 	require.NoError(t, err)
-	require.Equal(t, true, gq.Query.Children[0].IsCount)
-	require.Equal(t, 4, len(gq.Query.Children))
+	require.Equal(t, true, gq.Query[0].Children[0].IsCount)
+	require.Equal(t, 4, len(gq.Query[0].Children))
 
 }
 
@@ -1006,9 +1127,9 @@ func TestParseGeoJson(t *testing.T) {
 	mutation {
 		set {
 			<_uid_:1> <loc> "{
-				\'Type\':\'Point\' , 
+				\'Type\':\'Point\' ,
 				\'Coordinates\':[1.1,2.0]
-			}"^^<geo:geojson> . 
+			}"^^<geo:geojson> .
 		}
 	}
 	`
