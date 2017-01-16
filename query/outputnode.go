@@ -251,6 +251,9 @@ func valToBytes(v types.Val) ([]byte, error) {
 	case types.StringID:
 		return []byte(fmt.Sprintf("%q", v.Value.(string))), nil
 	case types.DateID:
+		s := v.Value.(time.Time).Format("2006-01-02")
+		return json.Marshal(s)
+	case types.DateTimeID:
 		return v.Value.(time.Time).MarshalJSON()
 	case types.GeoID:
 		return geojson.Marshal(v.Value.(geom.T))
