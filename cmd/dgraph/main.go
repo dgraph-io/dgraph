@@ -316,7 +316,7 @@ func getVal(t types.TypeID, val *graph.Value) interface{} {
 	case types.DateTimeID:
 		return val.GetDatetimeVal()
 	}
-  return val.GetStrVal()
+	return val.GetStrVal()
 }
 
 // validateTypes checks for predicate types present in the schema and validates if the
@@ -508,9 +508,9 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-  
+
 	js, err := sg.ToFastJSON(&l)
-  if err != nil {
+	if err != nil {
 		x.TraceError(ctx, x.Wrapf(err, "Error while converting to Json"))
 		x.SetStatus(w, x.Error, err.Error())
 		return
