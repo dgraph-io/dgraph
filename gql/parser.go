@@ -32,11 +32,13 @@ import (
 // GraphQuery stores the parsed Query in a tree format. This gets converted to
 // internally used query.SubGraph before processing the query.
 type GraphQuery struct {
-	UID     []uint64
-	Attr    string
-	Alias   string
-	IsCount bool
-	Func    *Function
+	UID      []uint64
+	Attr     string
+	Alias    string
+	IsCount  bool
+	Var      string
+	NeedsVar string
+	Func     *Function
 
 	Args     map[string]string
 	Children []*GraphQuery
@@ -104,7 +106,7 @@ func init() {
 
 // DebugPrint is useful for debugging.
 func (gq *GraphQuery) DebugPrint(prefix string) {
-	fmt.Printf("%s[%x %q %q->%q]\n", prefix, gq.UID, gq.Attr, gq.Alias)
+	x.Printf("%s[%x %q %q->%q]\n", prefix, gq.UID, gq.Attr, gq.Alias)
 	for _, c := range gq.Children {
 		c.DebugPrint(prefix + "|->")
 	}
@@ -948,7 +950,7 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 	it.Next()
 	item = it.Item()
 	if item.Typ != itemLeftRound {
-		return nil, x.Errorf("Expected variable start. Got: %v", item)
+		return nil, x.Errorf("Expected Left round brackets. Got: %v", item)
 	}
 
 	// Peeks items to see if its an argument or function.
@@ -956,7 +958,12 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 	if err != nil {
 		return gq, err
 	}
-	if peekItems[1].Typ == itemLeftRound {
+	if peekItems[1].Typ == itemRightRound {
+		it.Next()
+		item := it.Item()
+		gq.NeedsVar = item.Val
+		it.Next() // consume the right round.
+	} else if peekItems[1].Typ == itemLeftRound {
 		// Store the generator function.
 		gen, err := parseFunction(it)
 		if err != nil {
@@ -1018,6 +1025,26 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 			}
 		case itemName:
 			// Handle count.
+			peekIt, err := it.Peek(1)
+			if err != nil {
+				return x.Errorf("Invalid query")
+			}
+
+			if peekIt[0].Typ == itemName && peekIt[0].Val == "AS" {
+				varName := item.Val
+				it.Next() // "As" was checked before.
+				it.Next()
+				pred := it.Item()
+				child := &GraphQuery{
+					Args: make(map[string]string),
+					Attr: pred.Val,
+					Var:  varName,
+				}
+				gq.Children = append(gq.Children, child)
+				curp = child
+				continue
+			}
+
 			if item.Val == "count" {
 				if isCount != 0 {
 					return x.Errorf("Invalid mention of count.")

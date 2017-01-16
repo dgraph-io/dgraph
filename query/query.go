@@ -19,9 +19,7 @@ package query
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
-	"fmt"
 	"log"
 	"strconv"
 	"strings"
@@ -123,6 +121,8 @@ type params struct {
 	Order     string
 	OrderDesc bool
 	isDebug   bool
+	Var       string
+	NeedsVar  string
 }
 
 // SubGraph is the way to represent data internally. It contains both the
@@ -348,8 +348,10 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 		}
 
 		args := params{
-			Alias:   gchild.Alias,
-			isDebug: sg.Params.isDebug,
+			Alias:    gchild.Alias,
+			isDebug:  sg.Params.isDebug,
+			Var:      gchild.Var,
+			NeedsVar: gchild.NeedsVar,
 		}
 		if gchild.IsCount {
 			if len(gchild.Children) != 0 {
@@ -417,7 +419,7 @@ func ToSubGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	// This would set the Result field in SubGraph,
 	// and populate the children for attributes.
-	if len(gq.UID) == 0 && gq.Func == nil {
+	if len(gq.UID) == 0 && gq.Func == nil && gq.NeedsVar == "" {
 		err := x.Errorf("Invalid query, query internal id is zero and generator is nil")
 		x.TraceError(ctx, err)
 		return nil, err
@@ -426,8 +428,10 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	// For the root, the name to be used in result is stored in Alias, not Attr.
 	// The attr at root (if present) would stand for the source functions attr.
 	args := params{
-		isDebug: gq.Alias == "debug",
-		Alias:   gq.Alias,
+		isDebug:  gq.Alias == "debug",
+		Alias:    gq.Alias,
+		Var:      gq.Var,
+		NeedsVar: gq.NeedsVar,
 	}
 
 	sg := &SubGraph{
@@ -485,11 +489,115 @@ func createTaskQuery(sg *SubGraph) *task.Query {
 	return out
 }
 
+func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph, error) {
+	var sgl []*SubGraph
+
+	// doneVars will store the UID list of the corresponding variables.
+	doneVars := make(map[string]*task.List)
+	loopStart := time.Now()
+	for i := 0; i < len(res.Query); i++ {
+		gq := res.Query[i]
+		if gq == nil || (len(gq.UID) == 0 && gq.Func == nil && gq.NeedsVar == "") {
+			continue
+		}
+		sg, err := ToSubGraph(ctx, gq)
+		if err != nil {
+			return nil, err
+		}
+		x.Trace(ctx, "Query parsed")
+		sgl = append(sgl, sg)
+	}
+	l.Parsing += time.Since(loopStart)
+
+	execStart := time.Now()
+	hasExecuted := make([]bool, len(sgl))
+	numQueriesDone := 0
+	for i := 0; i < len(sgl); i++ {
+		if numQueriesDone == len(sgl) {
+			break
+		}
+		errChan := make(chan error, len(sgl))
+		var idxList []int
+		// If we have N blocks in a query, it can take a maximum of N iterations for all of them
+		// to be executed.
+		for idx := 0; idx < len(sgl); idx++ {
+			if hasExecuted[idx] {
+				continue
+			}
+			sg := sgl[idx]
+			if _, ok := doneVars[sg.Params.NeedsVar]; !ok && sg.Params.NeedsVar != "" {
+				continue
+			}
+			fillUpVariables(sg, doneVars)
+			hasExecuted[idx] = true
+			idxList = append(idxList, idx)
+			numQueriesDone++
+			go func() {
+				rch := make(chan error)
+				go ProcessGraph(ctx, sg, nil, rch)
+				err := <-rch
+				errChan <- err
+			}()
+			x.Trace(ctx, "Graph processed")
+		}
+
+		// Wait for the execution that was started in this iteration.
+		for i := 0; i < len(idxList); i++ {
+			select {
+			case err := <-errChan:
+				if err != nil {
+					x.TraceError(ctx, x.Wrapf(err, "Error while processing Query"))
+					return nil, err
+				}
+			case <-ctx.Done():
+				x.TraceError(ctx, x.Wrapf(ctx.Err(), "Context done before full execution"))
+				return nil, ctx.Err()
+			}
+		}
+
+		// If the executed subgraph had some variable defined in it, Populate it in the map.
+		for _, idx := range idxList {
+			sg := sgl[idx]
+			populateVarMap(sg, doneVars)
+		}
+	}
+
+	// Ensure all the queries are executed.
+	for _, it := range hasExecuted {
+		if !it {
+			return nil, x.Errorf("Query couldn't be executed")
+		}
+	}
+	l.Processing += time.Since(execStart)
+
+	return sgl, nil
+}
+
+func populateVarMap(sg *SubGraph, doneVars map[string]*task.List) {
+	if sg.Params.Var != "" {
+		doneVars[sg.Params.Var] = sg.DestUIDs
+	}
+	for _, child := range sg.Children {
+		populateVarMap(child, doneVars)
+	}
+}
+
+func fillUpVariables(sg *SubGraph, doneVars map[string]*task.List) {
+	if sg.Params.NeedsVar != "" {
+		sg.DestUIDs = doneVars[sg.Params.NeedsVar]
+	}
+	for _, child := range sg.Children {
+		fillUpVariables(child, doneVars)
+	}
+}
+
 // ProcessGraph processes the SubGraph instance accumulating result for the query
 // from different instances. Note: taskQuery is nil for root node.
 func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	var err error
-	if len(sg.Attr) == 0 {
+	if len(sg.Params.NeedsVar) != 0 {
+		// Do nothing as the list has already been populated.
+	} else if len(sg.Attr) == 0 {
 		// If we have a filter SubGraph which only contains an operator,
 		// it won't have any attribute to work on.
 		// This is to allow providing SrcUIDs to the filter children.
@@ -499,7 +607,6 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		// I am root. I don't have any function to execute, and my
 		// result has been prepared for me already.
 		sg.DestUIDs = algo.MergeSorted(sg.uidMatrix) // Could also be = sg.SrcUIDs
-
 	} else {
 		taskQuery := createTaskQuery(sg)
 		result, err := worker.ProcessTaskOverNetwork(ctx, taskQuery)
@@ -531,7 +638,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		}
 	}
 
-	if len(sg.DestUIDs.Uids) == 0 {
+	if sg.DestUIDs == nil || len(sg.DestUIDs.Uids) == 0 {
 		// Looks like we're done here. Be careful with nil srcUIDs!
 		x.Trace(ctx, "Zero uids for %q. Num attr children: %v", sg.Attr, len(sg.Children))
 		rch <- nil
@@ -721,57 +828,6 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 	return nil
 }
 
-// outputNode is the generic output / writer for preTraverse.
-type outputNode interface {
-	AddValue(attr string, v types.Val)
-	AddChild(attr string, child outputNode)
-	New(attr string) outputNode
-	SetUID(uid uint64)
-	SetXID(xid string)
-	IsEmpty() bool
-}
-
-// protoOutputNode is the proto output for preTraverse.
-type protoOutputNode struct {
-	*graph.Node
-}
-
-// AddValue adds an attribute value for protoOutputNode.
-func (p *protoOutputNode) AddValue(attr string, v types.Val) {
-	p.Node.Properties = append(p.Node.Properties, createProperty(attr, v))
-}
-
-// AddChild adds a child for protoOutputNode.
-func (p *protoOutputNode) AddChild(attr string, child outputNode) {
-	p.Node.Children = append(p.Node.Children, child.(*protoOutputNode).Node)
-}
-
-// New creates a new node for protoOutputNode.
-func (p *protoOutputNode) New(attr string) outputNode {
-	uc := nodePool.Get().(*graph.Node)
-	uc.Attribute = attr
-	return &protoOutputNode{uc}
-}
-
-// SetUID sets UID of a protoOutputNode.
-func (p *protoOutputNode) SetUID(uid uint64) { p.Node.Uid = uid }
-
-// SetXID sets XID of a protoOutputNode.
-func (p *protoOutputNode) SetXID(xid string) { p.Node.Xid = xid }
-
-func (p *protoOutputNode) IsEmpty() bool {
-	if p.Node.Uid > 0 {
-		return false
-	}
-	if len(p.Node.Children) > 0 {
-		return false
-	}
-	if len(p.Node.Properties) > 0 {
-		return false
-	}
-	return true
-}
-
 func ToProtocolBuf(l *Latency, sgl []*SubGraph) ([]*graph.Node, error) {
 	var resNode []*graph.Node
 	for _, sg := range sgl {
@@ -784,122 +840,18 @@ func ToProtocolBuf(l *Latency, sgl []*SubGraph) ([]*graph.Node, error) {
 	return resNode, nil
 }
 
-// ToProtocolBuffer does preorder traversal to build a proto buffer. We have
-// used postorder traversal before, but preorder seems simpler and faster for
-// most cases.
-func (sg *SubGraph) ToProtocolBuffer(l *Latency) (*graph.Node, error) {
-	var seedNode *protoOutputNode
-	if sg.DestUIDs == nil {
-		return seedNode.New(sg.Params.Alias).(*protoOutputNode).Node, nil
-	}
-
-	n := seedNode.New("_root_")
-	for _, uid := range sg.DestUIDs.Uids {
-		// For the root, the name is stored in Alias, not Attr.
-		n1 := seedNode.New(sg.Params.Alias)
-		if sg.Params.GetUID || sg.Params.isDebug {
-			n1.SetUID(uid)
-		}
-
-		if rerr := sg.preTraverse(uid, n1); rerr != nil {
-			if rerr.Error() == "_INV_" {
-				continue
-			}
-			return n.(*protoOutputNode).Node, rerr
-		}
-		if n1.IsEmpty() {
-			continue
-		}
-		n.AddChild(sg.Params.Alias, n1)
-	}
-	l.ProtocolBuffer = time.Since(l.Start) - l.Parsing - l.Processing
-	return n.(*protoOutputNode).Node, nil
-}
-
-// jsonOutputNode is the JSON output for preTraverse.
-type jsonOutputNode struct {
-	data map[string]interface{}
-}
-
-// AddValue adds an attribute value for jsonOutputNode.
-func (p *jsonOutputNode) AddValue(attr string, v types.Val) {
-	p.data[attr] = v
-}
-
-// AddChild adds a child for jsonOutputNode.
-func (p *jsonOutputNode) AddChild(attr string, child outputNode) {
-	a := p.data[attr]
-	if a == nil {
-		// Need to do this because we cannot cast nil interface to
-		// []map[string]interface{}.
-		a = make([]map[string]interface{}, 0, 5)
-	}
-	p.data[attr] = append(a.([]map[string]interface{}),
-		child.(*jsonOutputNode).data)
-}
-
-// New creates a new node for jsonOutputNode.
-func (p *jsonOutputNode) New(attr string) outputNode {
-	return &jsonOutputNode{make(map[string]interface{})}
-}
-
-// SetUID sets UID of a jsonOutputNode.
-func (p *jsonOutputNode) SetUID(uid uint64) {
-	_, found := p.data["_uid_"]
-	if !found {
-		p.data["_uid_"] = fmt.Sprintf("%#x", uid)
-	}
-}
-
-// SetXID sets XID of a jsonOutputNode.
-func (p *jsonOutputNode) SetXID(xid string) {
-	p.data["_xid_"] = xid
-}
-
-func (p *jsonOutputNode) IsEmpty() bool {
-	return len(p.data) == 0
-}
-
 func ToJson(l *Latency, sgl []*SubGraph) ([]byte, error) {
-	mp := make(map[string]interface{})
-	for _, sg := range sgl {
-		res, err := sg.ToJSON(l)
-		if err != nil {
-			return nil, err
-		}
-		for k, v := range res {
-			mp[k] = v
-		}
+	sgr := &SubGraph{
+		Attr: "_root_",
 	}
-	return json.Marshal(mp)
-}
-
-// ToJSON converts the internal subgraph object to JSON format which is then\
-// sent to the HTTP client.
-func (sg *SubGraph) ToJSON(l *Latency) (map[string]interface{}, error) {
-	var seedNode *jsonOutputNode
-	n := seedNode.New("_root_")
-	for _, uid := range sg.DestUIDs.Uids {
-		// For the root, the name is stored in Alias, not Attr.
-		n1 := seedNode.New(sg.Params.Alias)
-		if sg.Params.GetUID || sg.Params.isDebug {
-			n1.SetUID(uid)
-		}
-
-		if err := sg.preTraverse(uid, n1); err != nil {
-			if err.Error() == "_INV_" {
-				continue
-			}
-			return nil, err
-		}
-		if n1.IsEmpty() {
+	for _, sg := range sgl {
+		if sg.Params.Alias == "var" {
 			continue
 		}
-		n.AddChild(sg.Params.Alias, n1)
+		if sg.Params.isDebug {
+			sgr.Params.isDebug = true
+		}
+		sgr.Children = append(sgr.Children, sg)
 	}
-	res := n.(*jsonOutputNode).data
-	if sg.Params.isDebug {
-		res["server_latency"] = l.ToMap()
-	}
-	return res, nil
+	return sgr.ToFastJSON(l)
 }

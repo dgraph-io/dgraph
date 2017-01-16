@@ -20,16 +20,16 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/json"
-	"fmt"
 	"math"
 	"strconv"
 	"time"
 
-	"github.com/dgraph-io/dgraph/query/graph"
-	"github.com/dgraph-io/dgraph/x"
 	geom "github.com/twpayne/go-geom"
 	"github.com/twpayne/go-geom/encoding/geojson"
 	"github.com/twpayne/go-geom/encoding/wkb"
+
+	"github.com/dgraph-io/dgraph/query/graph"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 // Convert converts the value to given scalar type.
@@ -503,41 +503,42 @@ func Marshal(from Val, to *Val) error {
 	return nil
 }
 
+// ObjectValue converts into graph.Value.
 func ObjectValue(id TypeID, value interface{}) (*graph.Value, error) {
 	def := &graph.Value{&graph.Value_StrVal{""}}
 	var ok bool
 	// Lets set the object value according to the storage type.
 	switch id {
 	case StringID:
-		var x string
-		if x, ok = value.(string); !ok {
-			return def, fmt.Errorf("Expected value of type string. Got : %v", value)
+		var v string
+		if v, ok = value.(string); !ok {
+			return def, x.Errorf("Expected value of type string. Got : %v", value)
 		}
-		return &graph.Value{&graph.Value_StrVal{x}}, nil
+		return &graph.Value{&graph.Value_StrVal{v}}, nil
 	case Int32ID:
-		var x int32
-		if x, ok = value.(int32); !ok {
-			return def, fmt.Errorf("Expected value of type int32. Got : %v", value)
+		var v int32
+		if v, ok = value.(int32); !ok {
+			return def, x.Errorf("Expected value of type int32. Got : %v", value)
 		}
-		return &graph.Value{&graph.Value_IntVal{x}}, nil
+		return &graph.Value{&graph.Value_IntVal{v}}, nil
 	case FloatID:
-		var x float64
-		if x, ok = value.(float64); !ok {
-			return def, fmt.Errorf("Expected value of type float64. Got : %v", value)
+		var v float64
+		if v, ok = value.(float64); !ok {
+			return def, x.Errorf("Expected value of type float64. Got : %v", value)
 		}
-		return &graph.Value{&graph.Value_DoubleVal{x}}, nil
+		return &graph.Value{&graph.Value_DoubleVal{v}}, nil
 	case BoolID:
-		var x bool
-		if x, ok = value.(bool); !ok {
-			return def, fmt.Errorf("Expected value of type bool. Got : %v", value)
+		var v bool
+		if v, ok = value.(bool); !ok {
+			return def, x.Errorf("Expected value of type bool. Got : %v", value)
 		}
-		return &graph.Value{&graph.Value_BoolVal{x}}, nil
+		return &graph.Value{&graph.Value_BoolVal{v}}, nil
 	case BinaryID:
-		var x []byte
-		if x, ok = value.([]byte); !ok {
-			return def, fmt.Errorf("Expected value of type []byte. Got : %v", value)
+		var v []byte
+		if v, ok = value.([]byte); !ok {
+			return def, x.Errorf("Expected value of type []byte. Got : %v", value)
 		}
-		return &graph.Value{&graph.Value_BytesVal{x}}, nil
+		return &graph.Value{&graph.Value_BytesVal{v}}, nil
 	// Geo, date and datetime are stored in binary format in the NQuad, so lets
 	// convert them here.
 	case GeoID:
@@ -558,6 +559,8 @@ func ObjectValue(id TypeID, value interface{}) (*graph.Value, error) {
 			return def, err
 		}
 		return &graph.Value{&graph.Value_DatetimeVal{b}}, nil
+	default:
+		return def, x.Errorf("ObjectValue not available for: %v", id)
 	}
 	return def, nil
 }
@@ -592,5 +595,5 @@ func (v Val) MarshalJSON() ([]byte, error) {
 	case StringID:
 		return json.Marshal(v.Value.(string))
 	}
-	return nil, x.Errorf("Invalid type")
+	return nil, x.Errorf("Invalid type for MarshalJSON: %v", v.Tid)
 }

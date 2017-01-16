@@ -443,7 +443,7 @@ func (l *List) Length(afterUid uint64) int {
 	return count
 }
 
-func (l *List) CommitIfDirty(ctx context.Context) (committed bool, err error) {
+func (l *List) SyncIfDirty(ctx context.Context) (committed bool, err error) {
 	l.Lock()
 	defer l.Unlock()
 
@@ -477,14 +477,14 @@ func (l *List) CommitIfDirty(ctx context.Context) (committed bool, err error) {
 	x.Checkf(err, "Unable to marshal posting list")
 
 	sw := l.StartWait() // Corresponding l.Wait() in getPostingList.
-	ce := commitEntry{
+	ce := syncEntry{
 		key:     l.key,
 		val:     data,
 		sw:      sw,
 		water:   l.water,
 		pending: l.pending,
 	}
-	commitCh <- ce
+	syncCh <- ce
 
 	// Now reset the mutation variables.
 	l.pending = make([]uint64, 0, 3)

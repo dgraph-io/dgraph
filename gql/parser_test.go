@@ -32,6 +32,66 @@ func childAttrs(g *GraphQuery) []string {
 	return out
 }
 
+func TestParseQueryWithVar(t *testing.T) {
+	query := `
+	{	
+		me(L) {
+		 name	
+		}
+
+		him(J) {
+			name
+		}
+	
+		you(K) {
+			name
+		}
+
+		var(id:0x0a) {
+			L AS friends
+		}
+		
+		var(id:0x0a) {
+			J AS friends
+		}
+		
+		var(id:0x0a) {
+			K AS friends
+		}
+	}
+`
+	res, err := Parse(query)
+	require.NoError(t, err)
+	require.NotNil(t, res.Query)
+	require.Equal(t, 6, len(res.Query))
+	require.Equal(t, "L", res.Query[0].NeedsVar)
+	require.Equal(t, "J", res.Query[1].NeedsVar)
+	require.Equal(t, "K", res.Query[2].NeedsVar)
+	require.Equal(t, "L", res.Query[3].Children[0].Var)
+	require.Equal(t, "J", res.Query[4].Children[0].Var)
+	require.Equal(t, "K", res.Query[5].Children[0].Var)
+}
+
+func TestParseQueryWithVar1(t *testing.T) {
+	query := `
+	{
+		var(id:0x0a) {
+			L AS friends
+		}
+	
+		me(L) {
+		 name	
+		}
+	}
+`
+	res, err := Parse(query)
+	require.NoError(t, err)
+	require.NotNil(t, res.Query)
+	require.Equal(t, 2, len(res.Query))
+	require.Equal(t, "L", res.Query[0].Children[0].Var)
+	require.Equal(t, "L", res.Query[1].NeedsVar)
+}
+
 func TestParseMultipleQueries(t *testing.T) {
 	query := `
 	{
@@ -48,8 +108,6 @@ func TestParseMultipleQueries(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, res.Query)
 	require.Equal(t, 2, len(res.Query))
-	//require.Equal(t, childAttrs(res.Query), []string{"friends", "gender", "age", "hometown"})
-	//require.Equal(t, childAttrs(res.Query.Children[0]), []string{"name"})
 }
 
 func TestParse(t *testing.T) {
@@ -386,6 +444,48 @@ func TestParseMutationAndQuery(t *testing.T) {
 	require.NotNil(t, res.Query[0])
 	require.Equal(t, 1, len(res.Query[0].UID))
 	require.Equal(t, childAttrs(res.Query[0]), []string{"name", "hometown"})
+}
+
+func TestParseFragmentMultiQuery(t *testing.T) {
+	query := `
+	{
+		user(id:0x0a) {
+			...fragmenta,...fragmentb
+			friends {
+				name
+			}
+			...fragmentc
+			hobbies
+			...fragmentd
+		}
+	
+		me(id:0x01) {
+			...fragmenta
+			...fragmentb
+		}
+	}
+
+	fragment fragmenta {
+		name
+	}
+
+	fragment fragmentb {
+		id
+	}
+
+	fragment fragmentc {
+		name
+	}
+
+	fragment fragmentd {
+		id
+	}
+`
+	res, err := Parse(query)
+	require.NoError(t, err)
+	require.NotNil(t, res.Query[0])
+	require.Equal(t, []string{"name", "id", "friends", "name", "hobbies", "id"}, childAttrs(res.Query[0]))
+	require.Equal(t, []string{"name", "id"}, childAttrs(res.Query[1]))
 }
 
 func TestParseFragmentNoNesting(t *testing.T) {

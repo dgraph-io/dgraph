@@ -62,7 +62,9 @@ var (
 	postingDir = flag.String("p", "p", "Directory to store posting lists.")
 	walDir     = flag.String("w", "w", "Directory to store raft write-ahead logs.")
 	port       = flag.Int("port", 8080, "Port to run server on.")
-	numcpu     = flag.Int("cores", runtime.NumCPU(),
+	bindall    = flag.Bool("bindall", false,
+		"Use 0.0.0.0 instead of localhost to bind to all addresses on local machine.")
+	numcpu = flag.Int("cores", runtime.NumCPU(),
 		"Number of cores to be used by the process")
 	nomutations  = flag.Bool("nomutations", false, "Don't allow mutations on this server.")
 	tracing      = flag.Float64("trace", 0.5, "The ratio of queries to trace.")
@@ -389,6 +391,50 @@ func parseQueryAndMutation(ctx context.Context, query string) (res gql.Result, e
 	return res, nil
 }
 
+type wrappedErr struct {
+	Err     error
+	Message string
+}
+
+func processRequest(ctx context.Context, gq *gql.GraphQuery,
+	l *query.Latency) (*query.SubGraph, wrappedErr) {
+	if gq == nil || (len(gq.UID) == 0 && gq.Func == nil) {
+		return &query.SubGraph{}, wrappedErr{nil, x.ErrorOk}
+	}
+
+	sg, err := query.ToSubGraph(ctx, gq)
+	if err != nil {
+		x.TraceError(ctx, x.Wrapf(err, "Error while conversion to internal format"))
+		return &query.SubGraph{}, wrappedErr{err, x.ErrorInvalidRequest}
+	}
+
+	l.Parsing = time.Since(l.Start)
+	x.Trace(ctx, "Query parsed")
+
+	rch := make(chan error)
+	go query.ProcessGraph(ctx, sg, nil, rch)
+	err = <-rch
+	if err != nil {
+		x.TraceError(ctx, x.Wrapf(err, "Error while executing query"))
+		return &query.SubGraph{}, wrappedErr{err, x.Error}
+	}
+
+	l.Processing = time.Since(l.Start) - l.Parsing
+	x.Trace(ctx, "Graph processed")
+
+	if len(*dumpSubgraph) > 0 {
+		x.Checkf(os.MkdirAll(*dumpSubgraph, 0700), *dumpSubgraph)
+		s := time.Now().Format("20060102.150405.000000.gob")
+		filename := path.Join(*dumpSubgraph, s)
+		f, err := os.Create(filename)
+		x.Checkf(err, filename)
+		enc := gob.NewEncoder(f)
+		x.Check(enc.Encode(sg))
+		x.Checkf(f.Close(), filename)
+	}
+	return sg, wrappedErr{nil, ""}
+}
+
 func queryHandler(w http.ResponseWriter, r *http.Request) {
 	// Add a limit on how many pending queries can be run in the system.
 	pendingQueries <- struct{}{}
@@ -458,35 +504,15 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var sgl []*query.SubGraph
-	for _, gq := range res.Query {
-		loopStart := time.Now()
-		if gq == nil || (len(gq.UID) == 0 && gq.Func == nil) {
-			continue
-		}
-		sg, err := query.ToSubGraph(ctx, gq)
-		if err != nil {
-			x.TraceError(ctx, x.Wrapf(err, "Error while conversion o internal format"))
-			x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
-			return
-		}
-		l.Parsing += time.Since(loopStart)
+	sgl, err := query.ProcessQuery(ctx, res, &l)
+	if err != nil {
+		x.TraceError(ctx, x.Wrapf(err, "Error while Executing query"))
+		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+		return
+	}
 
-		execStart := time.Now()
-		x.Trace(ctx, "Query parsed")
-
-		rch := make(chan error)
-		go query.ProcessGraph(ctx, sg, nil, rch)
-		err = <-rch
-		if err != nil {
-			x.TraceError(ctx, x.Wrapf(err, "Error while executing query"))
-			x.SetStatus(w, x.Error, err.Error())
-			return
-		}
-		l.Processing += time.Since(execStart)
-		x.Trace(ctx, "Graph processed")
-
-		if len(*dumpSubgraph) > 0 {
+	if len(*dumpSubgraph) > 0 {
+		for _, sg := range sgl {
 			x.Checkf(os.MkdirAll(*dumpSubgraph, 0700), *dumpSubgraph)
 			s := time.Now().Format("20060102.150405.000000.gob")
 			filename := path.Join(*dumpSubgraph, s)
@@ -496,9 +522,9 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 			x.Check(enc.Encode(sg))
 			x.Checkf(f.Close(), filename)
 		}
-		sgl = append(sgl, sg)
 	}
-	js, err := query.ToJson(&l, sgl) //sg.ToJSON(&l)
+
+	js, err := query.ToJson(&l, sgl)
 	if err != nil {
 		x.TraceError(ctx, x.Wrapf(err, "Error while converting to Json"))
 		x.SetStatus(w, x.Error, err.Error())
@@ -520,38 +546,35 @@ func storeStatsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("</pre>"))
 }
 
-func shutDownHandler(w http.ResponseWriter, r *http.Request) {
+// handlerInit does some standard checks. Returns false if something is wrong.
+func handlerInit(w http.ResponseWriter, r *http.Request) bool {
 	if r.Method != "GET" {
 		x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
-		return
+		return false
 	}
 
 	ip, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil || !net.ParseIP(ip).IsLoopback() {
 		x.SetStatus(w, x.ErrorUnauthorized, fmt.Sprintf("Request from IP: %v", ip))
+		return false
+	}
+	return true
+}
+
+func shutDownHandler(w http.ResponseWriter, r *http.Request) {
+	if !handlerInit(w, r) {
 		return
 	}
-
 	exitWithProfiles()
 	x.SetStatus(w, x.ErrorOk, "Server has been shutdown")
 }
 
 func backupHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != "GET" {
-		x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
+	if !handlerInit(w, r) {
 		return
 	}
-
-	ip, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil || !net.ParseIP(ip).IsLoopback() {
-		x.SetStatus(w, x.ErrorUnauthorized,
-			fmt.Sprintf("Request received from IP: %v. Only requests from localhost are allowed.", ip))
-		return
-	}
-
 	ctx := context.Background()
-	err = worker.BackupOverNetwork(ctx)
-	if err != nil {
+	if err := worker.BackupOverNetwork(ctx); err != nil {
 		x.SetStatus(w, err.Error(), "Backup failed.")
 	} else {
 		x.SetStatus(w, x.ErrorOk, "Backup completed.")
@@ -559,26 +582,16 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func indexHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != "GET" {
-		x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
+	if !handlerInit(w, r) {
 		return
 	}
-
-	ip, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil || !net.ParseIP(ip).IsLoopback() {
-		x.SetStatus(w, x.ErrorUnauthorized,
-			fmt.Sprintf("Request received from IP: %v. Only requests from localhost are allowed.", ip))
-		return
-	}
-
 	ctx := context.Background()
 	attr := r.URL.Query().Get("attr")
 	if len(attr) == 0 {
 		x.SetStatus(w, x.ErrorInvalidRequest, "Invalid request. No attr defined.")
 		return
 	}
-	err = worker.RebuildIndexOverNetwork(ctx, attr)
-	if err != nil {
+	if err := worker.RebuildIndexOverNetwork(ctx, attr); err != nil {
 		x.SetStatus(w, err.Error(), "RebuildIndex failed.")
 	} else {
 		x.SetStatus(w, x.ErrorOk, "RebuildIndex completed.")
@@ -590,7 +603,6 @@ type grpcServer struct{}
 
 // This method is used to execute the query and return the response to the
 // client as a protocol buffer message.
-// TODO: Refactor this, so both Query and Run follow the same logic.
 func (s *grpcServer) Run(ctx context.Context,
 	req *graph.Request) (resp *graph.Response, err error) {
 	var allocIds map[string]uint64
@@ -633,32 +645,10 @@ func (s *grpcServer) Run(ctx context.Context,
 	}
 	resp.AssignedUids = allocIds
 
-	var sgl []*query.SubGraph
-	for _, gq := range res.Query {
-		loopStart := time.Now()
-		if gq == nil || (len(gq.UID) == 0) {
-			return resp, err
-		}
-
-		sg, err := query.ToSubGraph(ctx, gq)
-		if err != nil {
-			x.TraceError(ctx, x.Wrapf(err, "Error while conversion to internal format"))
-			return resp, err
-		}
-		l.Parsing += time.Since(loopStart)
-		execStart := time.Now()
-		x.Trace(ctx, "Query parsed")
-
-		rch := make(chan error)
-		go query.ProcessGraph(ctx, sg, nil, rch)
-		err = <-rch
-		if err != nil {
-			x.TraceError(ctx, x.Wrapf(err, "Error while executing query"))
-			return resp, err
-		}
-		l.Processing += time.Since(execStart)
-		x.Trace(ctx, "Graph processed")
-		sgl = append(sgl, sg)
+	sgl, err := query.ProcessQuery(ctx, res, &l)
+	if err != nil {
+		x.TraceError(ctx, x.Wrapf(err, "Error while converting to ProtocolBuffer"))
+		return resp, err
 	}
 
 	nodes, err := query.ToProtocolBuf(&l, sgl)
@@ -706,9 +696,14 @@ func serveHTTP(l net.Listener) {
 }
 
 func setupServer(che chan error) {
-	go worker.RunServer() // For internal communication.
+	go worker.RunServer(*bindall) // For internal communication.
 
-	l, err := net.Listen("tcp", fmt.Sprintf(":%d", *port))
+	laddr := "localhost"
+	if *bindall {
+		laddr = "0.0.0.0"
+	}
+
+	l, err := net.Listen("tcp", fmt.Sprintf("%s:%d", laddr, *port))
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -20,7 +20,7 @@ import (
 
 	"google.golang.org/grpc"
 
-	"github.com/dgraph-io/dgraph/goclient/client"
+	"github.com/dgraph-io/dgraph/client"
 	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/x"
 )

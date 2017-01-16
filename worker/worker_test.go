@@ -602,6 +602,7 @@ func TestProcessSortOffsetCount(t *testing.T) {
 		algo.ToUintsListForTest(r.UidMatrix))
 }
 */
+
 func TestMain(m *testing.M) {
 	x.Init()
 	os.Exit(m.Run())

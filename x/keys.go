@@ -82,11 +82,10 @@ func (p ParsedKey) SkipPredicate() []byte {
 }
 
 func (p ParsedKey) SkipRangeOfSameType() []byte {
-	buf := make([]byte, 2+len(p.Attr)+1+1)
+	buf := make([]byte, 2+len(p.Attr)+1)
 	k := writeAttr(buf, p.Attr)
-	AssertTrue(len(k) == 2)
-	k[0] = p.byteType
-	k[1] = 0xFF
+	AssertTrue(len(k) == 1)
+	k[0] = p.byteType + 1
 	return buf
 }
 

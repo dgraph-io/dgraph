@@ -55,6 +55,7 @@ func (s byValue) Less(i, j int) bool {
 	case StringID:
 		return (s.values[i].Value.(string)) < (s.values[j].Value.(string))
 	}
+	x.Fatalf("Unexpected scalar: %v", s.values[i].Tid)
 	return false
 }
 
