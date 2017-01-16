@@ -1,7 +1,7 @@
 package worker
 
 import (
-	"github.com/dgraph-io/dgraph/types"
+	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -11,7 +11,7 @@ func getTokens(funcArgs []string) ([]string, error) {
 		return nil, x.Errorf("Function requires 2 arguments, but got %d",
 			len(funcArgs))
 	}
-	return types.DefaultIndexKeys(funcArgs[1])
+	return posting.DefaultIndexKeys(funcArgs[1])
 }
 
 // getInequalityTokens gets tokens geq / leq compared to given token.
