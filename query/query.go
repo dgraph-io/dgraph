@@ -497,9 +497,9 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 	// varUidList will store the UID list of the corresponding variables.
 	varUidList := make(map[string]*task.List)
 
+	loopStart := time.Now()
 	for i := 0; i < len(res.Query); i++ {
 		gq := res.Query[i]
-		loopStart := time.Now()
 		if gq == nil || (len(gq.UID) == 0 && gq.Func == nil && gq.VarUse == "") {
 			continue
 		}
@@ -507,21 +507,23 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 		if err != nil {
 			return nil, err
 		}
-		l.Parsing += time.Since(loopStart)
 		x.Trace(ctx, "Query parsed")
 		sgl = append(sgl, sg)
 	}
+	l.Parsing += time.Since(loopStart)
 
 	execStart := time.Now()
 	hasExecuted := make([]bool, len(sgl))
-	totCount := 0
+	numQueryExecuted := 0
 	for i := 0; i < len(sgl); i++ {
-		if totCount == len(sgl) {
+		if numQueryExecuted == len(sgl) {
 			break
 		}
 		errChan := make(chan error, len(sgl))
 		count := 0
 		var idxList []int
+		// If we have N blocks in a query, it can take a maximum of N iterations for all of them
+		// to be executed.
 		for idx := 0; idx < len(sgl); idx++ {
 			sg := sgl[idx]
 			if sg.Params.VarUse != "" {
@@ -536,7 +538,7 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 			hasExecuted[idx] = true
 			idxList = append(idxList, idx)
 			count++
-			totCount++
+			numQueryExecuted++
 			go func() {
 				rch := make(chan error)
 				go ProcessGraph(ctx, sg, nil, rch)
@@ -546,6 +548,7 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 			x.Trace(ctx, "Graph processed")
 		}
 
+		// Wait for the execution that was started in this iteration.
 		for i := 0; i < count; i++ {
 			select {
 			case err := <-errChan:
@@ -559,12 +562,14 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 			}
 		}
 
+		// If the executed subgraph had some variable defined in it, Populate it in the map.
 		for _, idx := range idxList {
 			sg := sgl[idx]
 			populateVarMap(sg, varUidList)
 		}
 	}
 
+	// Ensure all the queries are executed.
 	for _, it := range hasExecuted {
 		if !it {
 			return nil, x.Errorf("Query couldn't be executed")
