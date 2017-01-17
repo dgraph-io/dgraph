@@ -38,7 +38,6 @@ func DataKey(attr string, uid uint64, pluginContexts []string) []byte {
 
 	rest = rest[1:]
 	binary.BigEndian.PutUint64(rest, uid)
-	//	x.Printf("~~~key.DataKey: %v", buf)
 	return buf
 }
 
@@ -72,11 +71,13 @@ func IndexKey(attr, term string, pluginContexts []string) []byte {
 	return buf
 }
 
+// ParsedKey is the key parsed into different components.
 type ParsedKey struct {
-	byteType byte
-	Attr     string
-	Uid      uint64
-	Term     string
+	byteType     byte
+	PluginPrefix string
+	Attr         string
+	Uid          uint64
+	Term         string
 }
 
 func (p ParsedKey) IsData() bool {
@@ -109,8 +110,10 @@ func (p ParsedKey) SkipRangeOfSameType() []byte {
 
 // DataPrefix returns the prefix for data keys.
 func (p ParsedKey) DataPrefix() []byte {
-	buf := make([]byte, 2+len(p.Attr)+1)
-	k := writeAttr(buf, p.Attr)
+	prefixLen := plugin.PrefixLen()
+	buf := make([]byte, prefixLen+2+len(p.Attr)+1)
+	x.AssertTrue(prefixLen == copy(buf, p.PluginPrefix[:]))
+	k := writeAttr(buf[prefixLen:], p.Attr)
 	x.AssertTrue(len(k) == 1)
 	k[0] = byteData
 	return buf
@@ -118,8 +121,10 @@ func (p ParsedKey) DataPrefix() []byte {
 
 // IndexPrefix returns the prefix for index keys.
 func (p ParsedKey) IndexPrefix() []byte {
-	buf := make([]byte, 2+len(p.Attr)+1)
-	k := writeAttr(buf, p.Attr)
+	prefixLen := plugin.PrefixLen()
+	buf := make([]byte, prefixLen+2+len(p.Attr)+1)
+	x.AssertTrue(prefixLen == copy(buf, p.PluginPrefix[:]))
+	k := writeAttr(buf[prefixLen:], p.Attr)
 	x.AssertTrue(len(k) == 1)
 	k[0] = byteIndex
 	return buf
@@ -127,9 +132,11 @@ func (p ParsedKey) IndexPrefix() []byte {
 
 // Parse parses the key in data store.
 func Parse(key []byte) *ParsedKey {
-	key = key[plugin.PrefixLen():]
-	p := &ParsedKey{}
-
+	prefixLen := plugin.PrefixLen()
+	p := &ParsedKey{
+		PluginPrefix: string(key[:prefixLen]),
+	}
+	key = key[prefixLen:]
 	sz := int(binary.BigEndian.Uint16(key[0:2]))
 	k := key[2:]
 

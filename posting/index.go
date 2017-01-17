@@ -25,6 +25,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/keys"
+	"github.com/dgraph-io/dgraph/plugin"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/types"
@@ -189,7 +190,10 @@ func RebuildIndex(ctx context.Context, attr string, pluginContexts []string) err
 	x.AssertTruef(schema.IsIndexed(attr), "Attr %s not indexed", attr)
 
 	// Delete index entries from data store.
-	pk := keys.ParsedKey{Attr: attr}
+	pk := keys.ParsedKey{
+		Attr:         attr,
+		PluginPrefix: string(plugin.Prefix(pluginContexts)),
+	}
 	prefix := pk.IndexPrefix()
 	idxIt := pstore.NewIterator()
 	defer idxIt.Close()

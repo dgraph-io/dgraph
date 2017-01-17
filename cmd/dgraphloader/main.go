@@ -95,7 +95,7 @@ func printCounters(batch *client.BatchMutation, ticker *time.Ticker) {
 
 func main() {
 	x.Init()
-	pluginContexts, err := plugin.ClientInit()
+	pluginContexts, err := plugin.Init(true)
 	x.Check(err)
 
 	conn, err := grpc.Dial(*dgraph, grpc.WithInsecure())

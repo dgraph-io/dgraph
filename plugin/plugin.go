@@ -8,46 +8,51 @@ import (
 )
 
 var (
+	inits           = make([]func(bool) (string, error), 0)
 	contextBuilders = make([]func(*http.Request) (string, error), 0)
 	keyPrefixes     = make([]KeyPrefix, 0)
 	prefixLen       int
-
-	// For client.
-	clientInits = make([]func() (string, error), 0)
 )
+
+// Init loads all plugins. If isClient, we return pluginContexts for client.
+func Init(isClient bool) ([]string, error) {
+	var out []string
+	for _, f := range inits {
+		s, err := f(isClient)
+		if err != nil {
+			return nil, err
+		}
+		if isClient {
+			out = append(out, s)
+		}
+	}
+	return out, nil
+}
 
 // PrefixLen returns total prefix length.
 func PrefixLen() int { return prefixLen }
 
+// AddContextBuilder adds a context builder. Call this in your plugin Init function.
 func AddContextBuilder(f func(*http.Request) (string, error)) {
 	contextBuilders = append(contextBuilders, f)
 }
 
-func AddClientInit(f func() (string, error)) {
-	clientInits = append(clientInits, f)
+// AddInit adds a init function for a plugin.
+func AddInit(f func(bool) (string, error)) {
+	inits = append(inits, f)
 }
 
+// AddKeyPrefix adds a KeyPrefix function.
 func AddKeyPrefix(kp KeyPrefix) {
 	keyPrefixes = append(keyPrefixes, kp)
 	prefixLen += kp.Length()
 }
 
+// Contexts build pluginContexts from HTTP request. It uses list of context builders.
 func Contexts(r *http.Request) ([]string, error) {
 	var out []string
 	for _, f := range contextBuilders {
 		s, err := f(r)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, s)
-	}
-	return out, nil
-}
-
-func ClientInit() ([]string, error) {
-	var out []string
-	for _, f := range clientInits {
-		s, err := f()
 		if err != nil {
 			return nil, err
 		}

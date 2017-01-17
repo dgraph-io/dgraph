@@ -92,7 +92,7 @@ func TestQuery(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := context.Background()
-	g, err := query.ToSubGraph(ctx, res.Query)
+	g, err := query.ToSubGraph(ctx, res.Query, nil)
 	require.NoError(t, err)
 
 	// Test internal query representation.
@@ -132,7 +132,7 @@ func TestAssignUid(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := context.Background()
-	allocIds, err := mutationHandler(ctx, res.Mutation)
+	allocIds, err := mutationHandler(ctx, res.Mutation, nil)
 	require.NoError(t, err)
 
 	require.EqualValues(t, len(allocIds), 2, "Expected two UIDs to be allocated")
@@ -148,7 +148,7 @@ func TestConvertToEdges(t *testing.T) {
 	nquads, err := convertToNQuad(context.Background(), q1)
 	require.NoError(t, err)
 
-	mr, err := convertToEdges(context.Background(), nquads)
+	mr, err := convertToEdges(context.Background(), nquads, nil)
 	require.NoError(t, err)
 
 	require.EqualValues(t, len(mr.edges), 2)
@@ -188,7 +188,7 @@ func BenchmarkQuery(b *testing.B) {
 			return
 		}
 		ctx := context.Background()
-		g, err := query.ToSubGraph(ctx, res.Query)
+		g, err := query.ToSubGraph(ctx, res.Query, nil)
 		if err != nil {
 			b.Error(err)
 			return

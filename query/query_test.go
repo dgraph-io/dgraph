@@ -30,6 +30,7 @@ import (
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/group"
+	"github.com/dgraph-io/dgraph/keys"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/query/graph"
 	"github.com/dgraph-io/dgraph/schema"
@@ -70,7 +71,7 @@ func TestNewGraph(t *testing.T) {
 	posting.Init(ps)
 
 	ctx := context.Background()
-	sg, err := newGraph(ctx, gq)
+	sg, err := newGraph(ctx, gq, nil)
 	require.NoError(t, err)
 
 	require.EqualValues(t,
@@ -107,7 +108,7 @@ func addEdgeToValue(t *testing.T, ps *store.Store, attr string, src uint64,
 		Entity: src,
 		Op:     task.DirectedEdge_SET,
 	}
-	l, _ := posting.GetOrCreate(x.DataKey(attr, src), 0)
+	l, _ := posting.GetOrCreate(keys.DataKey(attr, src, nil), 0)
 	require.NoError(t,
 		l.AddMutationWithIndex(context.Background(), edge))
 }
@@ -122,7 +123,7 @@ func addEdgeToTypedValue(t *testing.T, ps *store.Store, attr string, src uint64,
 		Entity:    src,
 		Op:        task.DirectedEdge_SET,
 	}
-	l, _ := posting.GetOrCreate(x.DataKey(attr, src), 0)
+	l, _ := posting.GetOrCreate(keys.DataKey(attr, src, nil), 0)
 	require.NoError(t,
 		l.AddMutationWithIndex(context.Background(), edge))
 }
@@ -135,7 +136,7 @@ func addEdgeToUID(t *testing.T, ps *store.Store, attr string, src uint64, dst ui
 		Entity:  src,
 		Op:      task.DirectedEdge_SET,
 	}
-	l, _ := posting.GetOrCreate(x.DataKey(attr, src), 0)
+	l, _ := posting.GetOrCreate(keys.DataKey(attr, src, nil), 0)
 	require.NoError(t,
 		l.AddMutationWithIndex(context.Background(), edge))
 }
@@ -148,7 +149,7 @@ func delEdgeToUID(t *testing.T, ps *store.Store, attr string, src uint64, dst ui
 		Entity:  src,
 		Op:      task.DirectedEdge_DEL,
 	}
-	l, _ := posting.GetOrCreate(x.DataKey(attr, src), 0)
+	l, _ := posting.GetOrCreate(keys.DataKey(attr, src, nil), 0)
 	require.NoError(t,
 		l.AddMutationWithIndex(context.Background(), edge))
 }
@@ -255,7 +256,7 @@ func processToJSON(t *testing.T, query string) string {
 	require.NoError(t, err)
 
 	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, res.Query)
+	sg, err := ToSubGraph(ctx, res.Query, nil)
 	require.NoError(t, err)
 	sg.DebugPrint("")
 
@@ -501,7 +502,7 @@ func TestProcessGraph(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, res.Query)
+	sg, err := ToSubGraph(ctx, res.Query, nil)
 	require.NoError(t, err)
 
 	ch := make(chan error)
@@ -606,7 +607,7 @@ func TestFieldAliasProto(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, res.Query)
+	sg, err := ToSubGraph(ctx, res.Query, nil)
 	require.NoError(t, err)
 
 	ch := make(chan error)
@@ -1317,7 +1318,7 @@ func TestToProto(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, res.Query)
+	sg, err := ToSubGraph(ctx, res.Query, nil)
 	require.NoError(t, err)
 
 	ch := make(chan error)
@@ -1424,7 +1425,7 @@ func TestToProtoFilter(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, res.Query)
+	sg, err := ToSubGraph(ctx, res.Query, nil)
 	require.NoError(t, err)
 
 	ch := make(chan error)
@@ -1488,7 +1489,7 @@ func TestToProtoFilterOr(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, res.Query)
+	sg, err := ToSubGraph(ctx, res.Query, nil)
 	require.NoError(t, err)
 
 	ch := make(chan error)
@@ -1561,7 +1562,7 @@ func TestToProtoFilterAnd(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, res.Query)
+	sg, err := ToSubGraph(ctx, res.Query, nil)
 	require.NoError(t, err)
 
 	ch := make(chan error)
@@ -1739,7 +1740,7 @@ func TestToProtoOrder(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, res.Query)
+	sg, err := ToSubGraph(ctx, res.Query, nil)
 	require.NoError(t, err)
 
 	ch := make(chan error)
@@ -1830,7 +1831,7 @@ func TestToProtoOrderCount(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, res.Query)
+	sg, err := ToSubGraph(ctx, res.Query, nil)
 	require.NoError(t, err)
 
 	ch := make(chan error)
@@ -1903,7 +1904,7 @@ func TestToProtoOrderOffsetCount(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, res.Query)
+	sg, err := ToSubGraph(ctx, res.Query, nil)
 	require.NoError(t, err)
 
 	ch := make(chan error)
@@ -2110,7 +2111,7 @@ func TestToProtoMultiRoot(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, res.Query)
+	sg, err := ToSubGraph(ctx, res.Query, nil)
 	require.NoError(t, err)
 
 	ch := make(chan error)
@@ -2202,7 +2203,7 @@ func TestNearGeneratorError(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, res.Query)
+	sg, err := ToSubGraph(ctx, res.Query, nil)
 	require.NoError(t, err)
 	sg.DebugPrint("")
 
@@ -2228,7 +2229,7 @@ func TestNearGeneratorErrorMissDist(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, res.Query)
+	sg, err := ToSubGraph(ctx, res.Query, nil)
 	require.NoError(t, err)
 	sg.DebugPrint("")
 
@@ -2254,7 +2255,7 @@ func TestWithinGeneratorError(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, res.Query)
+	sg, err := ToSubGraph(ctx, res.Query, nil)
 	require.NoError(t, err)
 	sg.DebugPrint("")
 
@@ -2324,7 +2325,7 @@ func TestIntersectsGeneratorError(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, res.Query)
+	sg, err := ToSubGraph(ctx, res.Query, nil)
 	require.NoError(t, err)
 	sg.DebugPrint("")
 
@@ -2376,7 +2377,7 @@ func TestSchema(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, res.Query)
+	sg, err := ToSubGraph(ctx, res.Query, nil)
 	require.NoError(t, err)
 
 	ch := make(chan error)

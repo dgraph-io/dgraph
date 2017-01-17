@@ -147,7 +147,6 @@ func convertToNQuad(ctx context.Context, mutation string) ([]*graph.NQuad, error
 
 func convertToEdges(ctx context.Context, nquads []*graph.NQuad,
 	pluginContexts []string) (mutationResult, error) {
-	x.Printf("~~~~~~~~~~here1")
 	var edges []*task.DirectedEdge
 	var mr mutationResult
 
@@ -171,7 +170,6 @@ func convertToEdges(ctx context.Context, nquads []*graph.NQuad,
 			}
 		}
 	}
-	x.Printf("~~~~~~~~~~here2")
 
 	if len(newUids) > 0 {
 		if err := worker.AssignUidsOverNetwork(ctx, newUids, pluginContexts); err != nil {
@@ -179,8 +177,6 @@ func convertToEdges(ctx context.Context, nquads []*graph.NQuad,
 			return mr, err
 		}
 	}
-
-	x.Printf("~~~~~~~~~~here3")
 
 	// Wrapper for a pointer to graph.Nquad
 	var wnq rdf.NQuad
@@ -211,10 +207,6 @@ func convertToEdges(ctx context.Context, nquads []*graph.NQuad,
 }
 
 func applyMutations(ctx context.Context, m *task.Mutations) error {
-	// ~~~~~
-	//	for _, e := range m.Edges {
-	//		x.Printf("~~~applyMutations: %d", len(e.PluginContexts))
-	//	}
 	err := worker.MutateOverNetwork(ctx, m)
 	if err != nil {
 		x.TraceError(ctx, x.Wrapf(err, "Error while MutateOverNetwork"))
@@ -234,7 +226,6 @@ func convertAndApply(ctx context.Context, set []*graph.NQuad, del []*graph.NQuad
 		return nil, x.Errorf("Mutations are forbidden on this server.")
 	}
 
-	//	x.Printf("~~~~convertAndApply %d", len(pluginContexts))
 	if mr, err = convertToEdges(ctx, set, pluginContexts); err != nil {
 		return nil, err
 	}
@@ -272,7 +263,6 @@ func runMutations(ctx context.Context, mu *graph.Mutation,
 		return nil, x.Wrap(err)
 	}
 
-	x.Printf("~~~runMutations %d %d", len(pluginContexts), len(mu.Set)+len(mu.Del))
 	if allocIds, err = convertAndApply(ctx, mu.Set, mu.Del, pluginContexts); err != nil {
 		return nil, err
 	}
@@ -628,8 +618,6 @@ func (s *grpcServer) Run(ctx context.Context,
 		ctx = trace.NewContext(ctx, tr)
 	}
 
-	x.Printf("~~~~grpc server: req %v", len(req.PluginContexts))
-
 	resp := new(graph.Response)
 	if len(req.Query) == 0 && req.Mutation == nil {
 		x.TraceError(ctx, x.Errorf("Empty query and mutation."))
@@ -647,7 +635,6 @@ func (s *grpcServer) Run(ctx context.Context,
 	// If mutations are part of the query, we run them through the mutation handler
 	// same as the http client.
 	if res.Mutation != nil && (len(res.Mutation.Set) > 0 || len(res.Mutation.Del) > 0) {
-		x.Printf("~~~~from req.Query")
 		if allocIds, err = mutationHandler(ctx, res.Mutation, req.PluginContexts); err != nil {
 			x.TraceError(ctx, x.Wrapf(err, "Error while handling mutations"))
 			return resp, err
@@ -657,7 +644,6 @@ func (s *grpcServer) Run(ctx context.Context,
 	// If mutations are sent as part of the mutation object in the request we run
 	// them here.
 	if req.Mutation != nil && (len(req.Mutation.Set) > 0 || len(req.Mutation.Del) > 0) {
-		x.Printf("~~~~from req.Mutation %d", len(req.PluginContexts))
 		if allocIds, err = runMutations(ctx, req.Mutation, req.PluginContexts); err != nil {
 			x.TraceError(ctx, x.Wrapf(err, "Error while handling mutations"))
 			return resp, err
@@ -665,7 +651,6 @@ func (s *grpcServer) Run(ctx context.Context,
 	}
 	resp.AssignedUids = allocIds
 
-	x.Printf("~~~~~processRequest")
 	sg, werr := processRequest(ctx, res.Query, req.PluginContexts, &l)
 	if werr.Err != nil {
 		return resp, werr.Err
@@ -765,6 +750,7 @@ func setupServer(che chan error) {
 func main() {
 	rand.Seed(time.Now().UnixNano())
 	x.Init()
+	x.Check2(plugin.Init(false))
 	checkFlagsAndInitDirs()
 
 	// All the writes to posting store should be synchronous. We use batched writers

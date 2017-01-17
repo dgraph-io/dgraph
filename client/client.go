@@ -26,7 +26,6 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/dgraph-io/dgraph/query/graph"
-	"github.com/dgraph-io/dgraph/x"
 )
 
 type Op int
@@ -183,7 +182,6 @@ RETRY:
 
 func (batch *BatchMutation) makeRequests() {
 	req := new(Req)
-	x.Printf("~~~~makeRequests: %d", len(batch.pluginContexts))
 	req.gr.PluginContexts = batch.pluginContexts
 	for n := range batch.nquads {
 		req.addMutation(n.nq, n.op)

@@ -98,7 +98,7 @@ func runQuery(t *testing.T, gq *gql.GraphQuery) string {
 	ctx := context.Background()
 	ch := make(chan error)
 
-	sg, err := ToSubGraph(ctx, gq)
+	sg, err := ToSubGraph(ctx, gq, nil)
 	require.NoError(t, err)
 	go ProcessGraph(ctx, sg, nil, ch)
 	err = <-ch

@@ -2,6 +2,7 @@ package worker
 
 import (
 	"github.com/dgraph-io/dgraph/keys"
+	"github.com/dgraph-io/dgraph/plugin"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -35,7 +36,12 @@ func getInequalityTokens(attr, ineqValueToken string, f string,
 		out = []string{ineqValueToken}
 	}
 
-	indexPrefix := keys.ParsedKey{Attr: attr}.IndexPrefix()
+	pluginPrefix := string(plugin.Prefix(pluginContexts))
+	pk := keys.ParsedKey{
+		Attr:         attr,
+		PluginPrefix: pluginPrefix,
+	}
+	indexPrefix := pk.IndexPrefix()
 	isGeqOrGt := f == "geq" || f == "gt"
 
 	for {
