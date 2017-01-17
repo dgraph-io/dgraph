@@ -365,12 +365,14 @@ func (l *List) iterate(afterUid uint64, f func(obj *types.Posting) bool) {
 	pidx, midx := 0, 0
 	pl := l.getPostingList(0)
 
+	postingLen := len(pl.Postings)
+	mlayerLen := len(l.mlayer)
 	if afterUid > 0 {
-		pidx = sort.Search(len(pl.Postings), func(idx int) bool {
+		pidx = sort.Search(postingLen, func(idx int) bool {
 			p := pl.Postings[idx]
 			return afterUid < p.Uid
 		})
-		midx = sort.Search(len(l.mlayer), func(idx int) bool {
+		midx = sort.Search(mlayerLen, func(idx int) bool {
 			mp := l.mlayer[idx]
 			return afterUid < mp.Uid
 		})
@@ -379,12 +381,12 @@ func (l *List) iterate(afterUid uint64, f func(obj *types.Posting) bool) {
 	var mp, pp *types.Posting
 	cont := true
 	for cont {
-		if pidx < len(pl.Postings) {
+		if pidx < postingLen {
 			pp = pl.Postings[pidx]
 		} else {
 			pp = emptyPosting
 		}
-		if midx < len(l.mlayer) {
+		if midx < mlayerLen {
 			mp = l.mlayer[midx]
 		} else {
 			mp = emptyPosting
@@ -514,9 +516,10 @@ func (l *List) Uids(opt ListOptions) *task.List {
 		}
 		uid := p.Uid
 		if opt.Intersect != nil {
-			for ; intersectIdx < len(opt.Intersect.Uids) && opt.Intersect.Uids[intersectIdx] < uid; intersectIdx++ {
+			intersectUidsLen := len(opt.Intersect.Uids)
+			for ; intersectIdx < intersectUidsLen && opt.Intersect.Uids[intersectIdx] < uid; intersectIdx++ {
 			}
-			if intersectIdx >= len(opt.Intersect.Uids) || opt.Intersect.Uids[intersectIdx] > uid {
+			if intersectIdx >= intersectUidsLen || opt.Intersect.Uids[intersectIdx] > uid {
 				return true
 			}
 		}
