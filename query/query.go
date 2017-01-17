@@ -332,7 +332,7 @@ func filterCopy(sg *SubGraph, ft *gql.FilterTree) {
 		sg.SrcFunc = append(sg.SrcFunc, ft.Func.Args...)
 	}
 	for _, ftc := range ft.Child {
-		child := &SubGraph{}
+		child := &SubGraph{PluginContexts: sg.PluginContexts}
 		filterCopy(child, ftc)
 		sg.Filters = append(sg.Filters, child)
 	}
@@ -365,7 +365,7 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 			PluginContexts: sg.PluginContexts,
 		}
 		if gchild.Filter != nil {
-			dstf := &SubGraph{}
+			dstf := &SubGraph{PluginContexts: sg.PluginContexts}
 			filterCopy(dstf, gchild.Filter)
 			dst.Filters = append(dst.Filters, dstf)
 		}
@@ -451,7 +451,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery,
 	sg.values = createNilValuesList(1)
 	// Copy roots filter.
 	if gq.Filter != nil {
-		sgf := &SubGraph{}
+		sgf := &SubGraph{PluginContexts: pluginContexts}
 		filterCopy(sgf, gq.Filter)
 		sg.Filters = append(sg.Filters, sgf)
 	}
