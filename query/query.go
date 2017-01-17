@@ -570,6 +570,9 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 		// If the executed subgraph had some variable defined in it, Populate it in the map.
 		for _, idx := range idxList {
 			sg := sgl[idx]
+			if sg.Params.Alias != "var" {
+				continue
+			}
 			populateVarMap(sg, doneVars)
 		}
 	}
@@ -586,11 +589,41 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 }
 
 func populateVarMap(sg *SubGraph, doneVars map[string]*task.List) {
-	if sg.Params.Var != "" {
-		doneVars[sg.Params.Var] = sg.DestUIDs
+	if sg.Params.Alias != "var" {
+		// This function should only execute for "var" blocks.
+		return
 	}
+
+	// Filter out UIDs that don't have atleast one UID in every child.
+	excluded := make(map[uint64]bool)
 	for _, child := range sg.Children {
 		populateVarMap(child, doneVars)
+		for i := 0; i < len(child.uidMatrix); i++ {
+			if len(child.uidMatrix[i].Uids) == 0 {
+				excluded[sg.DestUIDs.Uids[i]] = true
+			}
+		}
+	}
+
+	// Remove the excluded UIDs from the UID matrix of this level.
+	if sg.uidMatrix != nil {
+		for i := 0; i < len(sg.uidMatrix); i++ {
+			algo.ApplyFilter(sg.uidMatrix[i],
+				func(uid uint64, idx int) bool {
+					return !excluded[uid]
+				})
+		}
+	}
+	// Remove the excluded UIDs from the DestUIDs of this level.
+	if sg.DestUIDs != nil {
+		algo.ApplyFilter(sg.DestUIDs,
+			func(uid uint64, idx int) bool {
+				return !excluded[uid]
+			})
+	}
+
+	if sg.Params.Var != "" {
+		doneVars[sg.Params.Var] = sg.DestUIDs
 	}
 }
 
