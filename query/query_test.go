@@ -343,6 +343,58 @@ func TestMultiEmptyBlocks(t *testing.T) {
 		js)
 }
 
+func TestUseVarsMultiCascade(t *testing.T) {
+	dir, dir2, ps := populateGraph(t)
+	defer ps.Close()
+	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
+	query := `
+		{
+			var(id:0x01) {
+				L AS friend {
+				 B AS friend	
+				}
+			}
+
+			me(L) {
+				name
+			}
+
+			friend(B) {
+				name
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"name":"Andrea"}], "friend":[{"name":"Glenn Rhee"}]}`,
+		js)
+}
+
+func TestUseVarsCascade(t *testing.T) {
+	dir, dir2, ps := populateGraph(t)
+	defer ps.Close()
+	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
+	query := `
+		{
+			var(id:0x01) {
+				L AS friend {
+				  friend	
+				}
+			}
+
+			me(L) {
+				name
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"name":"Andrea"}]}`,
+		js)
+}
+
 func TestUseVars(t *testing.T) {
 	dir, dir2, ps := populateGraph(t)
 	defer ps.Close()
