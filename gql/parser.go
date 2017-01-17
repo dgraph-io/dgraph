@@ -386,7 +386,7 @@ func collectVars(idx int, qu *GraphQuery, res *Result) {
 }
 
 func collectVarsFilter(idx int, f *FilterTree, res *Result) {
-	if f.Func.NeedsVar != "" {
+	if f.Func != nil && f.Func.NeedsVar != "" {
 		res.NeedsVarList[idx] = append(res.NeedsVarList[idx], f.Func.NeedsVar)
 	}
 
