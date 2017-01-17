@@ -589,11 +589,6 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 }
 
 func populateVarMap(sg *SubGraph, doneVars map[string]*task.List) {
-	if sg.Params.Alias != "var" {
-		// This function should only execute for "var" blocks.
-		return
-	}
-
 	// Filter out UIDs that don't have atleast one UID in every child.
 	excluded := make(map[uint64]bool)
 	for _, child := range sg.Children {
