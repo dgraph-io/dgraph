@@ -314,10 +314,6 @@ func (sg *SubGraph) ToFastJSON(l *Latency) ([]byte, error) {
 	n := seedNode.New("_root_")
 	for _, uid := range sg.DestUIDs.Uids {
 		n1 := seedNode.New(sg.Params.Alias)
-		if sg.Params.GetUID || sg.Params.isDebug {
-			n1.SetUID(uid)
-		}
-
 		if err := sg.preTraverse(uid, n1); err != nil {
 			if err.Error() == "_INV_" {
 				continue
