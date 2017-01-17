@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"sort"
 	"strconv"
+	"sync"
 	"time"
 
 	geom "github.com/twpayne/go-geom"
@@ -352,19 +353,34 @@ func (sg *SubGraph) ToFastJSON(l *Latency) ([]byte, error) {
 		}
 	}
 
+	buf := bufferPool.Get()
+	defer bufferPool.Put(buf)
+
+	jsBuf := buf.(bytes.Buffer)
 	if sg.Params.isDebug {
-		var buf bytes.Buffer
 		sl := seedNode.New("serverLatency").(*fastJsonNode)
 		for k, v := range l.ToMap() {
 			sl.attrs[k] = []byte(fmt.Sprintf("%q", v))
 		}
 
-		sl.encode(&buf)
-		n.(*fastJsonNode).attrs["server_latency"] = buf.Bytes()
+		jsBuf.Reset()
+		sl.encode(&jsBuf)
+		slBs := make([]byte, jsBuf.Len())
+		copy(slBs, jsBuf.Bytes())
+		n.(*fastJsonNode).attrs["server_latency"] = slBs
 	}
 
-	var jsBuf bytes.Buffer
+	jsBuf.Reset()
 	n.(*fastJsonNode).encode(&jsBuf)
+	jsBs := make([]byte, jsBuf.Len())
+	copy(jsBs, jsBuf.Bytes())
+	return jsBs, nil
+}
 
-	return jsBuf.Bytes(), nil
+var bufferPool = sync.Pool{
+	New: func() interface{} {
+		var buf bytes.Buffer
+		buf.Grow(4096)
+		return buf
+	},
 }
