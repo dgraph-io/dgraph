@@ -512,6 +512,16 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 	execStart := time.Now()
 	hasExecuted := make([]bool, len(sgl))
 	numQueriesDone := 0
+
+	canExecute := func(idx int) bool {
+		for _, v := range res.NeedsVarList[idx] {
+			if _, ok := doneVars[v]; !ok {
+				return false
+			}
+		}
+		return true
+	}
+
 	for i := 0; i < len(sgl); i++ {
 		if numQueriesDone == len(sgl) {
 			break
@@ -525,9 +535,11 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 				continue
 			}
 			sg := sgl[idx]
-			if _, ok := doneVars[sg.Params.NeedsVar]; !ok && sg.Params.NeedsVar != "" {
+			// Check the list for the requires variables.
+			if !canExecute(idx) {
 				continue
 			}
+
 			fillUpVariables(sg, doneVars)
 			hasExecuted[idx] = true
 			idxList = append(idxList, idx)
@@ -826,32 +838,4 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 	algo.ApplyFilter(sg.DestUIDs,
 		func(uid uint64, idx int) bool { return included[idx] })
 	return nil
-}
-
-func ToProtocolBuf(l *Latency, sgl []*SubGraph) ([]*graph.Node, error) {
-	var resNode []*graph.Node
-	for _, sg := range sgl {
-		node, err := sg.ToProtocolBuffer(l)
-		if err != nil {
-			return nil, err
-		}
-		resNode = append(resNode, node)
-	}
-	return resNode, nil
-}
-
-func ToJson(l *Latency, sgl []*SubGraph) ([]byte, error) {
-	sgr := &SubGraph{
-		Attr: "_root_",
-	}
-	for _, sg := range sgl {
-		if sg.Params.Alias == "var" {
-			continue
-		}
-		if sg.Params.isDebug {
-			sgr.Params.isDebug = true
-		}
-		sgr.Children = append(sgr.Children, sg)
-	}
-	return sgr.ToFastJSON(l)
 }

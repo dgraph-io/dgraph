@@ -31,6 +31,34 @@ import (
 	"github.com/dgraph-io/dgraph/types"
 )
 
+func ToProtocolBuf(l *Latency, sgl []*SubGraph) ([]*graph.Node, error) {
+	var resNode []*graph.Node
+	for _, sg := range sgl {
+		node, err := sg.ToProtocolBuffer(l)
+		if err != nil {
+			return nil, err
+		}
+		resNode = append(resNode, node)
+	}
+	return resNode, nil
+}
+
+func ToJson(l *Latency, sgl []*SubGraph) ([]byte, error) {
+	sgr := &SubGraph{
+		Attr: "_root_",
+	}
+	for _, sg := range sgl {
+		if sg.Params.Alias == "var" {
+			continue
+		}
+		if sg.Params.isDebug {
+			sgr.Params.isDebug = true
+		}
+		sgr.Children = append(sgr.Children, sg)
+	}
+	return sgr.ToFastJSON(l)
+}
+
 // outputNode is the generic output / writer for preTraverse.
 type outputNode interface {
 	AddValue(attr string, v types.Val)
