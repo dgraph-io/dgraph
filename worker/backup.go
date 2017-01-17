@@ -17,6 +17,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/keys"
+	"github.com/dgraph-io/dgraph/plugin"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -128,7 +129,8 @@ func backup(gid uint32, bdir string, pluginContexts []string) error {
 	it := pstore.NewIterator()
 	defer it.Close()
 	var lastPred string
-	for it.SeekToFirst(); it.Valid(); {
+	pluginPrefix := plugin.Prefix(pluginContexts)
+	for it.Seek(pluginPrefix); it.ValidForPrefix(pluginPrefix); {
 		key := it.Key().Data()
 		pk := keys.Parse(key)
 

@@ -93,16 +93,20 @@ func (p ParsedKey) IsIndex() bool {
 }
 
 func (p ParsedKey) SkipPredicate() []byte {
-	buf := make([]byte, 2+len(p.Attr)+1)
-	k := writeAttr(buf, p.Attr)
+	prefixLen := plugin.PrefixLen()
+	buf := make([]byte, prefixLen+2+len(p.Attr)+1)
+	x.AssertTrue(prefixLen == copy(buf, p.PluginPrefix[:]))
+	k := writeAttr(buf[prefixLen:], p.Attr)
 	x.AssertTrue(len(k) == 1)
 	k[0] = 0xFF
 	return buf
 }
 
 func (p ParsedKey) SkipRangeOfSameType() []byte {
-	buf := make([]byte, 2+len(p.Attr)+1)
-	k := writeAttr(buf, p.Attr)
+	prefixLen := plugin.PrefixLen()
+	buf := make([]byte, prefixLen+2+len(p.Attr)+1)
+	x.AssertTrue(prefixLen == copy(buf, p.PluginPrefix[:]))
+	k := writeAttr(buf[prefixLen:], p.Attr)
 	x.AssertTrue(len(k) == 1)
 	k[0] = p.byteType + 1
 	return buf
