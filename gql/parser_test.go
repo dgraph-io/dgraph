@@ -72,6 +72,28 @@ func TestParseQueryWithVar(t *testing.T) {
 	require.Equal(t, "K", res.Query[5].Children[0].Var)
 }
 
+func TestParseQueryWithVarAtRootFilterID(t *testing.T) {
+	query := `
+	{
+		K AS var(id:0x0a) {
+			L AS friends
+		}
+	
+		me(id:0xa) @filter(id(L)) {
+		 name	
+		}
+	}
+`
+	res, err := Parse(query)
+	require.NoError(t, err)
+	require.NotNil(t, res.Query)
+	require.Equal(t, 2, len(res.Query))
+	require.Equal(t, "K", res.Query[0].Var)
+	require.Equal(t, "L", res.Query[0].Children[0].Var)
+	require.Equal(t, "L", res.Query[1].Filter.Func.NeedsVar)
+	require.Equal(t, [][]string{[]string{"K", "L"}, []string(nil)}, res.VarList)
+}
+
 func TestParseQueryWithVarAtRoot(t *testing.T) {
 	query := `
 	{

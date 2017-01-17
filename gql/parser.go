@@ -89,9 +89,10 @@ type FilterTree struct {
 
 // Function holds the information about gql functions.
 type Function struct {
-	Attr string
-	Name string   // Specifies the name of the function.
-	Args []string // Contains the arguments of the function.
+	Attr     string
+	Name     string   // Specifies the name of the function.
+	Args     []string // Contains the arguments of the function.
+	NeedsVar string   // If the function requires some variable
 }
 
 // filterOpPrecedence is a map from filterOp (a string) to its precedence.
@@ -377,6 +378,20 @@ func collectVars(idx int, qu *GraphQuery, res *Result) {
 
 	for _, ch := range qu.Children {
 		collectVars(idx, ch, res)
+	}
+
+	if qu.Filter != nil {
+		collectVarsFilter(idx, qu.Filter, res)
+	}
+}
+
+func collectVarsFilter(idx int, f *FilterTree, res *Result) {
+	if f.Func.NeedsVar != "" {
+		res.NeedsVarList[idx] = append(res.NeedsVarList[idx], f.Func.NeedsVar)
+	}
+
+	for _, fch := range f.Child {
+		collectVarsFilter(idx, fch, res)
 	}
 }
 
@@ -853,6 +868,9 @@ func parseFilter(it *lex.ItemIterator) (*FilterTree, error) {
 				}
 				if len(f.Attr) == 0 {
 					f.Attr = it
+					if f.Name == "id" {
+						f.NeedsVar = f.Attr
+					}
 				} else {
 					f.Args = append(f.Args, it)
 				}

@@ -328,6 +328,7 @@ func filterCopy(sg *SubGraph, ft *gql.FilterTree) {
 		sg.Attr = ft.Func.Attr
 		sg.SrcFunc = append(sg.SrcFunc, ft.Func.Name)
 		sg.SrcFunc = append(sg.SrcFunc, ft.Func.Args...)
+		sg.Params.NeedsVar = ft.Func.NeedsVar
 	}
 	for _, ftc := range ft.Child {
 		child := &SubGraph{}
@@ -629,13 +630,16 @@ func fillUpVariables(sg *SubGraph, doneVars map[string]*task.List) {
 	for _, child := range sg.Children {
 		fillUpVariables(child, doneVars)
 	}
+	for _, fchild := range sg.Filters {
+		fillUpVariables(fchild, doneVars)
+	}
 }
 
 // ProcessGraph processes the SubGraph instance accumulating result for the query
 // from different instances. Note: taskQuery is nil for root node.
 func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	var err error
-	if len(sg.Params.NeedsVar) != 0 {
+	if len(sg.Params.NeedsVar) != 0 && len(sg.SrcFunc) == 0 {
 		// Do nothing as the list has already been populated.
 	} else if len(sg.Attr) == 0 {
 		// If we have a filter SubGraph which only contains an operator,
@@ -648,33 +652,41 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		// result has been prepared for me already.
 		sg.DestUIDs = algo.MergeSorted(sg.uidMatrix) // Could also be = sg.SrcUIDs
 	} else {
-		taskQuery := createTaskQuery(sg)
-		result, err := worker.ProcessTaskOverNetwork(ctx, taskQuery)
-		if err != nil {
-			x.TraceError(ctx, x.Wrapf(err, "Error while processing task"))
-			rch <- err
-			return
-		}
-
-		sg.uidMatrix = result.UidMatrix
-		sg.values = result.Values
-		if len(sg.values) > 0 {
-			v := sg.values[0]
-			x.Trace(ctx, "Sample value for attr: %v Val: %v", sg.Attr, string(v.Val))
-		}
-		sg.counts = result.Counts
-
-		if sg.Params.DoCount && len(sg.Filters) == 0 {
-			// If there is a filter, we need to do more work to get the actual count.
-			x.Trace(ctx, "Zero uids. Only count requested")
+		if len(sg.SrcFunc) > 0 && sg.SrcFunc[0] == "id" {
+			// If its an id() filter, we just have to intersect the SrcUIDs with DestUIDs
+			// and return.
+			algo.IntersectWith(sg.DestUIDs, sg.SrcUIDs)
 			rch <- nil
 			return
-		}
-
-		if result.IntersectDest {
-			sg.DestUIDs = algo.IntersectSorted(result.UidMatrix)
 		} else {
-			sg.DestUIDs = algo.MergeSorted(result.UidMatrix)
+			taskQuery := createTaskQuery(sg)
+			result, err := worker.ProcessTaskOverNetwork(ctx, taskQuery)
+			if err != nil {
+				x.TraceError(ctx, x.Wrapf(err, "Error while processing task"))
+				rch <- err
+				return
+			}
+
+			sg.uidMatrix = result.UidMatrix
+			sg.values = result.Values
+			if len(sg.values) > 0 {
+				v := sg.values[0]
+				x.Trace(ctx, "Sample value for attr: %v Val: %v", sg.Attr, string(v.Val))
+			}
+			sg.counts = result.Counts
+
+			if sg.Params.DoCount && len(sg.Filters) == 0 {
+				// If there is a filter, we need to do more work to get the actual count.
+				x.Trace(ctx, "Zero uids. Only count requested")
+				rch <- nil
+				return
+			}
+
+			if result.IntersectDest {
+				sg.DestUIDs = algo.IntersectSorted(result.UidMatrix)
+			} else {
+				sg.DestUIDs = algo.MergeSorted(result.UidMatrix)
+			}
 		}
 	}
 
@@ -718,6 +730,8 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		if sg.FilterOp == "|" {
 			sg.DestUIDs = algo.MergeSorted(lists)
 		} else {
+			// If one of the arguments was id so append it once more
+			lists = append(lists, sg.DestUIDs)
 			sg.DestUIDs = algo.IntersectSorted(lists)
 		}
 	}
