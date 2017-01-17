@@ -4,6 +4,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/dgraph/group"
+	"github.com/dgraph-io/dgraph/keys"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/task"
@@ -108,7 +109,7 @@ func processSort(ts *task.Sort) (*task.SortResult, error) {
 	// Iterate over every bucket / token.
 	it := pstore.NewIterator()
 	defer it.Close()
-	pk := x.Parse(x.IndexKey(attr, "", ts.PluginContexts))
+	pk := keys.Parse(keys.IndexKey(attr, "", ts.PluginContexts))
 	indexPrefix := pk.IndexPrefix()
 
 	if !ts.Desc {
@@ -121,7 +122,7 @@ func processSort(ts *task.Sort) (*task.SortResult, error) {
 BUCKETS:
 
 	for it.ValidForPrefix(indexPrefix) {
-		k := x.Parse(it.Key().Data())
+		k := keys.Parse(it.Key().Data())
 		x.AssertTrue(k != nil)
 		x.AssertTrue(k.IsIndex())
 		token := k.Term
@@ -162,7 +163,7 @@ func intersectBucket(ts *task.Sort, attr, token string, out []intersectedList) e
 	}
 	scalar := sType
 
-	key := x.IndexKey(attr, token, ts.PluginContexts)
+	key := keys.IndexKey(attr, token, ts.PluginContexts)
 	pl, decr := posting.GetOrCreate(key, 0)
 	defer decr()
 
@@ -236,7 +237,7 @@ func sortByValue(attr string, ul *task.List, typ types.TypeID, desc bool,
 func fetchValue(uid uint64, attr string, scalar types.TypeID,
 	pluginContexts []string) (types.Val, error) {
 	// TODO: Maybe use posting.Get
-	pl, decr := posting.GetOrCreate(x.DataKey(attr, uid, pluginContexts),
+	pl, decr := posting.GetOrCreate(keys.DataKey(attr, uid, pluginContexts),
 		group.BelongsTo(attr))
 	defer decr()
 

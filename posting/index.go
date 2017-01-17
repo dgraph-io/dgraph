@@ -24,6 +24,7 @@ import (
 	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/dgraph/group"
+	"github.com/dgraph-io/dgraph/keys"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/types"
@@ -89,7 +90,7 @@ func addIndexMutations(ctx context.Context, t *task.DirectedEdge, p types.Val, o
 }
 
 func addIndexMutation(ctx context.Context, edge *task.DirectedEdge, token string) {
-	key := x.IndexKey(edge.Attr, token, edge.PluginContexts)
+	key := keys.IndexKey(edge.Attr, token, edge.PluginContexts)
 
 	var groupId uint32
 	if rv, ok := ctx.Value("raft").(x.RaftValue); ok {
@@ -112,7 +113,7 @@ func addIndexMutation(ctx context.Context, edge *task.DirectedEdge, token string
 }
 
 func addReverseMutation(ctx context.Context, t *task.DirectedEdge) {
-	key := x.ReverseKey(t.Attr, t.ValueId, t.PluginContexts)
+	key := keys.ReverseKey(t.Attr, t.ValueId, t.PluginContexts)
 	groupId := group.BelongsTo(t.Attr)
 
 	plist, decr := GetOrCreate(key, groupId)
@@ -186,7 +187,7 @@ func RebuildIndex(ctx context.Context, attr string) error {
 	x.AssertTruef(schema.IsIndexed(attr), "Attr %s not indexed", attr)
 
 	// Delete index entries from data store.
-	pk := x.ParsedKey{Attr: attr}
+	pk := keys.ParsedKey{Attr: attr}
 	prefix := pk.IndexPrefix()
 	idxIt := pstore.NewIterator()
 	defer idxIt.Close()
@@ -221,7 +222,7 @@ func RebuildIndex(ctx context.Context, attr string) error {
 	defer it.Close()
 	var pl types.PostingList
 	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
-		pki := x.Parse(it.Key().Data())
+		pki := keys.Parse(it.Key().Data())
 		edge.Entity = pki.Uid
 		x.Check(pl.Unmarshal(it.Value().Data()))
 

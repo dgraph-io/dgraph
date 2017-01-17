@@ -35,6 +35,7 @@ import (
 
 	"github.com/dgryski/go-farm"
 
+	"github.com/dgraph-io/dgraph/keys"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
@@ -379,7 +380,7 @@ func GetOrCreate(key []byte, group uint32) (rlist *List, decr func()) {
 		l.decr()
 	}
 	lp.water = marks.Get(group)
-	pk := x.Parse(key)
+	pk := keys.Parse(key)
 
 	// This replaces "TokensTable". The idea is that we want to quickly add the
 	// index key to the data store, with essentially an empty value. We just need

@@ -12,11 +12,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dgraph-io/dgraph/group"
-	"github.com/dgraph-io/dgraph/types"
-	"github.com/dgraph-io/dgraph/x"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
+
+	"github.com/dgraph-io/dgraph/group"
+	"github.com/dgraph-io/dgraph/keys"
+	"github.com/dgraph-io/dgraph/types"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 const numBackupRoutines = 10
@@ -128,7 +130,7 @@ func backup(gid uint32, bdir string) error {
 	var lastPred string
 	for it.SeekToFirst(); it.Valid(); {
 		key := it.Key().Data()
-		pk := x.Parse(key)
+		pk := keys.Parse(key)
 
 		if pk.IsIndex() {
 			// Seek to the end of index keys.

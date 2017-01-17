@@ -164,6 +164,8 @@ type BatchMutation struct {
 	mutations uint64
 	// To get time elapsed.
 	start time.Time
+
+	pluginContexts []string
 }
 
 func (batch *BatchMutation) request(req *Req) {
@@ -180,6 +182,7 @@ RETRY:
 
 func (batch *BatchMutation) makeRequests() {
 	req := new(Req)
+	req.gr.PluginContexts = batch.pluginContexts
 	for n := range batch.nquads {
 		req.addMutation(n.nq, n.op)
 		if req.size() == batch.size {
@@ -193,13 +196,14 @@ func (batch *BatchMutation) makeRequests() {
 }
 
 func NewBatchMutation(ctx context.Context, conn *grpc.ClientConn,
-	size int, pending int) *BatchMutation {
+	size int, pending int, pluginContexts []string) *BatchMutation {
 	bm := BatchMutation{
-		size:    size,
-		pending: pending,
-		nquads:  make(chan nquadOp, 2*size),
-		start:   time.Now(),
-		dc:      graph.NewDgraphClient(conn),
+		size:           size,
+		pending:        pending,
+		nquads:         make(chan nquadOp, 2*size),
+		start:          time.Now(),
+		dc:             graph.NewDgraphClient(conn),
+		pluginContexts: pluginContexts,
 	}
 
 	for i := 0; i < pending; i++ {

@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"github.com/dgraph-io/dgraph/keys"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -19,7 +20,7 @@ func getInequalityTokens(attr, ineqValueToken string, f string,
 	pluginContexts []string) ([]string, error) {
 	it := pstore.NewIterator()
 	defer it.Close()
-	it.Seek(x.IndexKey(attr, ineqValueToken, pluginContexts))
+	it.Seek(keys.IndexKey(attr, ineqValueToken, pluginContexts))
 
 	hit := it.Value() != nil && it.Value().Size() > 0
 	if f == "eq" {
@@ -34,7 +35,7 @@ func getInequalityTokens(attr, ineqValueToken string, f string,
 		out = []string{ineqValueToken}
 	}
 
-	indexPrefix := x.ParsedKey{Attr: attr}.IndexPrefix()
+	indexPrefix := keys.ParsedKey{Attr: attr}.IndexPrefix()
 	isGeqOrGt := f == "geq" || f == "gt"
 
 	for {
@@ -47,7 +48,7 @@ func getInequalityTokens(attr, ineqValueToken string, f string,
 			break
 		}
 
-		k := x.Parse(it.Key().Data())
+		k := keys.Parse(it.Key().Data())
 		x.AssertTrue(k != nil)
 		out = append(out, k.Term)
 	}

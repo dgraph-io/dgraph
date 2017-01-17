@@ -23,6 +23,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/group"
+	"github.com/dgraph-io/dgraph/keys"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/task"
@@ -156,11 +157,11 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 	for i := 0; i < n; i++ {
 		var key []byte
 		if useFunc {
-			key = x.IndexKey(attr, tokens[i], q.PluginContexts)
+			key = keys.IndexKey(attr, tokens[i], q.PluginContexts)
 		} else if q.Reverse {
-			key = x.ReverseKey(attr, q.Uids[i], q.PluginContexts)
+			key = keys.ReverseKey(attr, q.Uids[i], q.PluginContexts)
 		} else {
-			key = x.DataKey(attr, q.Uids[i], q.PluginContexts)
+			key = keys.DataKey(attr, q.Uids[i], q.PluginContexts)
 		}
 		// Get or create the posting list for an entity, attribute combination.
 		pl, decr := posting.GetOrCreate(key, gid)
@@ -234,7 +235,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 	if geoQuery != nil {
 		uids := algo.MergeSorted(out.UidMatrix)
 		for _, uid := range uids.Uids {
-			key := x.DataKey(attr, uid, q.PluginContexts)
+			key := keys.DataKey(attr, uid, q.PluginContexts)
 			pl, decr := posting.GetOrCreate(key, gid)
 
 			val, err := pl.Value()

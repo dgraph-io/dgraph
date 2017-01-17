@@ -1,4 +1,4 @@
-package x
+package keys
 
 import (
 	"fmt"
@@ -12,7 +12,7 @@ func TestDataKey(t *testing.T) {
 	var uid uint64
 	for uid = 0; uid < 1001; uid++ {
 		sattr := fmt.Sprintf("attr:%d", uid)
-		key := DataKey(sattr, uid)
+		key := DataKey(sattr, uid, nil)
 		pk := Parse(key)
 
 		require.True(t, pk.IsData())
@@ -22,14 +22,14 @@ func TestDataKey(t *testing.T) {
 
 	keys := make([]string, 0, 1024)
 	for uid = 1024; uid >= 1; uid-- {
-		key := DataKey("testing.key", uid)
+		key := DataKey("testing.key", uid, nil)
 		keys = append(keys, string(key))
 	}
 	// Test that sorting is as expected.
 	sort.Strings(keys)
 	require.True(t, sort.StringsAreSorted(keys))
 	for i, key := range keys {
-		exp := DataKey("testing.key", uint64(i+1))
+		exp := DataKey("testing.key", uint64(i+1), nil)
 		require.Equal(t, string(exp), key)
 	}
 }
@@ -40,7 +40,7 @@ func TestIndexKey(t *testing.T) {
 		sattr := fmt.Sprintf("attr:%d", uid)
 		sterm := fmt.Sprintf("term:%d", uid)
 
-		key := IndexKey(sattr, sterm)
+		key := IndexKey(sattr, sterm, nil)
 		pk := Parse(key)
 
 		require.True(t, pk.IsIndex())

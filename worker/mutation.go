@@ -20,6 +20,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/dgraph/group"
+	"github.com/dgraph-io/dgraph/keys"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/x"
@@ -47,7 +48,7 @@ func runMutations(ctx context.Context, edges []*task.DirectedEdge) error {
 		for i, ss := range edge.PluginContexts {
 			x.Printf("~~~~i=%d [%v]", i, []byte(ss))
 		}
-		key := x.DataKey(edge.Attr, edge.Entity, edge.PluginContexts)
+		key := keys.DataKey(edge.Attr, edge.Entity, edge.PluginContexts)
 		plist, decr := posting.GetOrCreate(key, group)
 		defer decr()
 

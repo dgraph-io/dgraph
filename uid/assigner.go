@@ -25,6 +25,7 @@ import (
 
 	"github.com/dgryski/go-farm"
 
+	"github.com/dgraph-io/dgraph/keys"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/x"
@@ -86,7 +87,7 @@ func allocateUniqueUid(group uint32) uint64 {
 		}
 
 		// Check if this uid has already been allocated.
-		key := x.DataKey("_uid_", uid, nil) // TODO: Add pluginContexts.
+		key := keys.DataKey("_uid_", uid, nil) // TODO: Add pluginContexts.
 		pl, decr := posting.GetOrCreate(key, group)
 		defer decr()
 

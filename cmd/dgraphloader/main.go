@@ -21,6 +21,7 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/dgraph-io/dgraph/client"
+	"github.com/dgraph-io/dgraph/plugin"
 	_ "github.com/dgraph-io/dgraph/pluginload"
 	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/x"
@@ -87,19 +88,22 @@ func printCounters(batch *client.BatchMutation, ticker *time.Ticker) {
 	for range ticker.C {
 		c := batch.Counter()
 		rate := float64(c.Rdfs) / c.Elapsed.Seconds()
-		fmt.Printf("[Request: %6d] Total RDFs done: %8d RDFs per second: %7.0f\r", c.Mutations, c.Rdfs, rate)
+		fmt.Printf("[Request: %6d] Total RDFs done: %8d RDFs per second: %7.0f\r",
+			c.Mutations, c.Rdfs, rate)
 	}
 }
 
 func main() {
 	x.Init()
+	pluginContexts, err := plugin.ClientInit()
+	x.Check(err)
 
-	var err error
 	conn, err := grpc.Dial(*dgraph, grpc.WithInsecure())
 	x.Checkf(err, "While trying to dial gRPC")
 	defer conn.Close()
 
-	batch := client.NewBatchMutation(context.Background(), conn, *numRdf, *concurrent)
+	batch := client.NewBatchMutation(context.Background(), conn, *numRdf,
+		*concurrent, pluginContexts)
 
 	ticker := time.NewTicker(2 * time.Second)
 	go printCounters(batch, ticker)

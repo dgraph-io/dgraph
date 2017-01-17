@@ -23,6 +23,7 @@ import (
 	"sort"
 
 	"github.com/dgraph-io/dgraph/group"
+	"github.com/dgraph-io/dgraph/keys"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
@@ -79,7 +80,7 @@ func streamKeys(stream Worker_PredicateDataClient, groupId uint32) error {
 
 	for it.SeekToFirst(); it.Valid(); it.Next() {
 		k, v := it.Key(), it.Value()
-		pk := x.Parse(k.Data())
+		pk := keys.Parse(k.Data())
 
 		if pk == nil {
 			continue
@@ -218,7 +219,7 @@ func (w *grpcWorker) PredicateData(stream Worker_PredicateDataServer) error {
 	var count int
 	for it.SeekToFirst(); it.Valid(); it.Next() {
 		k, v := it.Key(), it.Value()
-		pk := x.Parse(k.Data())
+		pk := keys.Parse(k.Data())
 
 		if pk == nil {
 			continue
