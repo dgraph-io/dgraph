@@ -23,6 +23,7 @@ message BackupPayload {
 		FAILED    = 3;
 	}
 	Status status = 3;
+	repeated string plugin_contexts = 4;
 }
 
 service Worker {

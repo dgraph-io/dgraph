@@ -9,6 +9,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/dgraph-io/dgraph/keys"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/task"
@@ -85,7 +86,7 @@ func TestTokensTable(t *testing.T) {
 	require.NoError(t, err)
 	Init(ps)
 
-	key := x.DataKey("name", 1)
+	key := keys.DataKey("name", 1, nil)
 	l := getNew(key, ps)
 
 	edge := &task.DirectedEdge{
@@ -96,7 +97,7 @@ func TestTokensTable(t *testing.T) {
 	}
 	addMutationWithIndex(t, l, edge, Set)
 
-	key = x.IndexKey("name", "david")
+	key = keys.IndexKey("name", "david", nil)
 	slice, err := ps.Get(key)
 	require.NoError(t, err)
 
@@ -122,14 +123,14 @@ scalar dob:date @index
 
 // tokensForTest returns keys for a table. This is just for testing / debugging.
 func tokensForTest(attr string) []string {
-	pk := x.ParsedKey{Attr: attr}
+	pk := keys.ParsedKey{Attr: attr}
 	prefix := pk.IndexPrefix()
 	it := pstore.NewIterator()
 	defer it.Close()
 
 	var out []string
 	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
-		k := x.Parse(it.Key().Data())
+		k := keys.Parse(it.Key().Data())
 		x.AssertTrue(k.IsIndex())
 		out = append(out, k.Term)
 	}
@@ -146,7 +147,7 @@ func addEdgeToValue(t *testing.T, ps *store.Store, attr string, src uint64,
 		Entity: src,
 		Op:     task.DirectedEdge_SET,
 	}
-	l, _ := GetOrCreate(x.DataKey(attr, src), 0)
+	l, _ := GetOrCreate(keys.DataKey(attr, src, nil), 0)
 	// No index entries added here as we do not call AddMutationWithIndex.
 	ok, err := l.AddMutation(context.Background(), edge)
 	require.NoError(t, err)
@@ -180,10 +181,10 @@ func TestRebuildIndex(t *testing.T) {
 	}
 
 	// Create some fake wrong entries for data store.
-	ps.SetOne(x.IndexKey("name", "wrongname1"), []byte("nothing"))
-	ps.SetOne(x.IndexKey("name", "wrongname2"), []byte("nothing"))
+	ps.SetOne(keys.IndexKey("name", "wrongname1", nil), []byte("nothing"))
+	ps.SetOne(keys.IndexKey("name", "wrongname2", nil), []byte("nothing"))
 
-	require.NoError(t, RebuildIndex(context.Background(), "name"))
+	require.NoError(t, RebuildIndex(context.Background(), "name", nil))
 
 	// Let's force a commit.
 	CommitLists(10)
@@ -194,7 +195,7 @@ func TestRebuildIndex(t *testing.T) {
 	// Check index entries in data store.
 	it := ps.NewIterator()
 	defer it.Close()
-	pk := x.ParsedKey{Attr: "name"}
+	pk := keys.ParsedKey{Attr: "name"}
 	prefix := pk.IndexPrefix()
 	var idxKeys []string
 	var idxVals []*types.PostingList
@@ -206,8 +207,8 @@ func TestRebuildIndex(t *testing.T) {
 	}
 	require.Len(t, idxKeys, 2)
 	require.Len(t, idxVals, 2)
-	require.EqualValues(t, x.IndexKey("name", "david"), idxKeys[0])
-	require.EqualValues(t, x.IndexKey("name", "michonne"), idxKeys[1])
+	require.EqualValues(t, keys.IndexKey("name", "david", nil), idxKeys[0])
+	require.EqualValues(t, keys.IndexKey("name", "michonne", nil), idxKeys[1])
 	require.Len(t, idxVals[0].Postings, 1)
 	require.Len(t, idxVals[1].Postings, 1)
 	require.EqualValues(t, idxVals[0].Postings[0].Uid, 20)

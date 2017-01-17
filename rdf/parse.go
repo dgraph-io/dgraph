@@ -121,14 +121,16 @@ func toUid(xid string, newToUid map[string]uint64) (uid uint64) {
 
 // ToEdgeUsing determines the UIDs for the provided XIDs and populates the
 // xidToUid map.
-func (nq NQuad) ToEdgeUsing(newToUid map[string]uint64) (*task.DirectedEdge, error) {
+func (nq NQuad) ToEdgeUsing(newToUid map[string]uint64,
+	pluginContexts []string) (*task.DirectedEdge, error) {
 	var err error
 	uid := toUid(nq.Subject, newToUid)
 
 	out := &task.DirectedEdge{
-		Entity: uid,
-		Attr:   nq.Predicate,
-		Label:  nq.Label,
+		Entity:         uid,
+		Attr:           nq.Predicate,
+		Label:          nq.Label,
+		PluginContexts: pluginContexts,
 	}
 
 	if len(nq.ObjectId) == 0 {

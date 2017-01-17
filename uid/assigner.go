@@ -75,7 +75,7 @@ func init() {
 	go lmgr.clean()
 }
 
-func allocateUniqueUid(group uint32) uint64 {
+func allocateUniqueUid(group uint32, pluginContexts []string) uint64 {
 	buf := make([]byte, 128)
 	for {
 		_, err := rand.Read(buf)
@@ -87,7 +87,7 @@ func allocateUniqueUid(group uint32) uint64 {
 		}
 
 		// Check if this uid has already been allocated.
-		key := keys.DataKey("_uid_", uid, nil) // TODO: Add pluginContexts.
+		key := keys.DataKey("_uid_", uid, pluginContexts)
 		pl, decr := posting.GetOrCreate(key, group)
 		defer decr()
 
@@ -100,16 +100,17 @@ func allocateUniqueUid(group uint32) uint64 {
 }
 
 // AssignNew assigns N unique uids.
-func AssignNew(N int, group uint32) *task.Mutations {
+func AssignNew(N int, group uint32, pluginContexts []string) *task.Mutations {
 	set := make([]*task.DirectedEdge, N)
 	for i := 0; i < N; i++ {
-		uid := allocateUniqueUid(group)
+		uid := allocateUniqueUid(group, pluginContexts)
 		set[i] = &task.DirectedEdge{
-			Entity: uid,
-			Attr:   "_uid_",
-			Value:  []byte("_"), // not txid
-			Label:  "_assigner_",
-			Op:     task.DirectedEdge_SET,
+			Entity:         uid,
+			Attr:           "_uid_",
+			Value:          []byte("_"), // not txid
+			Label:          "_assigner_",
+			Op:             task.DirectedEdge_SET,
+			PluginContexts: pluginContexts,
 		}
 	}
 	return &task.Mutations{Edges: set}

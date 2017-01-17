@@ -78,10 +78,11 @@ func addIndexMutations(ctx context.Context, t *task.DirectedEdge, p types.Val, o
 
 	// Create a value token -> uid edge.
 	edge := &task.DirectedEdge{
-		ValueId: uid,
-		Attr:    attr,
-		Label:   "idx",
-		Op:      op,
+		ValueId:        uid,
+		Attr:           attr,
+		Label:          "idx",
+		Op:             op,
+		PluginContexts: t.PluginContexts,
 	}
 
 	for _, token := range tokens {
@@ -122,11 +123,12 @@ func addReverseMutation(ctx context.Context, t *task.DirectedEdge) {
 	x.AssertTruef(plist != nil, "plist is nil [%s] %d %d",
 		t.Attr, t.Entity, t.ValueId)
 	edge := &task.DirectedEdge{
-		Entity:  t.ValueId,
-		ValueId: t.Entity,
-		Attr:    t.Attr,
-		Label:   "rev",
-		Op:      t.Op,
+		Entity:         t.ValueId,
+		ValueId:        t.Entity,
+		Attr:           t.Attr,
+		Label:          "rev",
+		Op:             t.Op,
+		PluginContexts: t.PluginContexts,
 	}
 
 	_, err := plist.AddMutation(ctx, edge)
@@ -183,7 +185,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *task.DirectedEdge) e
 }
 
 // RebuildIndex rebuilds index for a given attribute.
-func RebuildIndex(ctx context.Context, attr string) error {
+func RebuildIndex(ctx context.Context, attr string, pluginContexts []string) error {
 	x.AssertTruef(schema.IsIndexed(attr), "Attr %s not indexed", attr)
 
 	// Delete index entries from data store.
@@ -216,13 +218,14 @@ func RebuildIndex(ctx context.Context, attr string) error {
 	}
 
 	// Add index entries to data store.
-	edge := task.DirectedEdge{Attr: attr}
+	edge := task.DirectedEdge{Attr: attr, PluginContexts: pluginContexts}
 	prefix = pk.DataPrefix()
 	it := pstore.NewIterator()
 	defer it.Close()
 	var pl types.PostingList
 	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
-		pki := keys.Parse(it.Key().Data())
+		data := it.Key().Data()
+		pki := keys.Parse(data)
 		edge.Entity = pki.Uid
 		x.Check(pl.Unmarshal(it.Value().Data()))
 

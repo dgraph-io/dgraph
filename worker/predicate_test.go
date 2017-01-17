@@ -23,10 +23,10 @@ import (
 
 	"google.golang.org/grpc"
 
+	"github.com/dgraph-io/dgraph/keys"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/task"
-	"github.com/dgraph-io/dgraph/x"
 )
 
 func checkShard(ps *store.Store) (int, []byte) {
@@ -42,7 +42,7 @@ func checkShard(ps *store.Store) (int, []byte) {
 
 func writePLs(t *testing.T, pred string, count int, vid uint64, ps *store.Store) {
 	for i := 0; i < count; i++ {
-		k := x.DataKey(pred, uint64(i))
+		k := keys.DataKey(pred, uint64(i), nil)
 		list, _ := posting.GetOrCreate(k, 0)
 
 		de := &task.DirectedEdge{

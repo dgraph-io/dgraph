@@ -28,27 +28,28 @@ func writeAttr(buf []byte, attr string) []byte {
 func DataKey(attr string, uid uint64, pluginContexts []string) []byte {
 	// It might be better for DataKey to use a bytes.Buffer instead of []byte and
 	// just ask each plugin to write there.
-	pluginPrefix := plugin.DataKeyPrefix(attr, uid, pluginContexts)
+	pluginPrefix := plugin.Prefix(pluginContexts)
 	buf := make([]byte, len(pluginPrefix)+2+len(attr)+1+8)
 	x.AssertTrue(len(pluginPrefix) == copy(buf, pluginPrefix[:]))
-	buf = buf[len(pluginPrefix):]
+	rest := buf[len(pluginPrefix):]
 
-	rest := writeAttr(buf, attr)
+	rest = writeAttr(rest, attr)
 	rest[0] = byteData
 
 	rest = rest[1:]
 	binary.BigEndian.PutUint64(rest, uid)
+	//	x.Printf("~~~key.DataKey: %v", buf)
 	return buf
 }
 
 // ReverseKey returns the key for reverse edges.
 func ReverseKey(attr string, uid uint64, pluginContexts []string) []byte {
-	pluginPrefix := plugin.ReverseKeyPrefix(attr, uid, pluginContexts)
+	pluginPrefix := plugin.Prefix(pluginContexts)
 	buf := make([]byte, len(pluginPrefix)+2+len(attr)+1+8)
 	x.AssertTrue(len(pluginPrefix) == copy(buf, pluginPrefix[:]))
-	buf = buf[len(pluginPrefix):]
+	rest := buf[len(pluginPrefix):]
 
-	rest := writeAttr(buf, attr)
+	rest = writeAttr(rest, attr)
 	rest[0] = byteReverse
 
 	rest = rest[1:]
@@ -58,12 +59,12 @@ func ReverseKey(attr string, uid uint64, pluginContexts []string) []byte {
 
 // IndexKey returns the key for index edges.
 func IndexKey(attr, term string, pluginContexts []string) []byte {
-	pluginPrefix := plugin.IndexKeyPrefix(attr, term, pluginContexts)
+	pluginPrefix := plugin.Prefix(pluginContexts)
 	buf := make([]byte, len(pluginPrefix)+2+len(attr)+1+len(term))
 	x.AssertTrue(len(pluginPrefix) == copy(buf, pluginPrefix[:]))
-	buf = buf[len(pluginPrefix):]
+	rest := buf[len(pluginPrefix):]
 
-	rest := writeAttr(buf, attr)
+	rest = writeAttr(rest, attr)
 	rest[0] = byteIndex
 
 	rest = rest[1:]
@@ -124,7 +125,9 @@ func (p ParsedKey) IndexPrefix() []byte {
 	return buf
 }
 
+// Parse parses the key in data store.
 func Parse(key []byte) *ParsedKey {
+	key = key[plugin.PrefixLen():]
 	p := &ParsedKey{}
 
 	sz := int(binary.BigEndian.Uint16(key[0:2]))

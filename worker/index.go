@@ -57,8 +57,9 @@ func (n *node) rebuildIndex(ctx context.Context, proposalData []byte) error {
 
 	// Do actual index work.
 	attr := proposal.RebuildIndex.Attr
+	pluginContexts := proposal.RebuildIndex.PluginContexts
 	x.AssertTrue(group.BelongsTo(attr) == gid)
-	if err = posting.RebuildIndex(ctx, attr); err != nil {
+	if err = posting.RebuildIndex(ctx, attr, pluginContexts); err != nil {
 		return err
 	}
 	return nil
@@ -89,7 +90,7 @@ func proposeRebuildIndex(ctx context.Context, ri *task.RebuildIndex) error {
 // RebuildIndexOverNetwork rebuilds index for attr. If it serves the attr, then
 // it will rebuild index. Otherwise, it will send a request to a server that
 // serves the attr.
-func RebuildIndexOverNetwork(ctx context.Context, attr string) error {
+func RebuildIndexOverNetwork(ctx context.Context, attr string, pluginContexts []string) error {
 	if !schema.IsIndexed(attr) {
 		return x.Errorf("Attribute %s is indexed", attr)
 	}
@@ -99,7 +100,11 @@ func RebuildIndexOverNetwork(ctx context.Context, attr string) error {
 
 	if groups().ServesGroup(gid) {
 		// No need for a network call, as this should be run from within this instance.
-		return proposeRebuildIndex(ctx, &task.RebuildIndex{GroupId: gid, Attr: attr})
+		return proposeRebuildIndex(ctx, &task.RebuildIndex{
+			GroupId:        gid,
+			Attr:           attr,
+			PluginContexts: pluginContexts,
+		})
 	}
 
 	// Send this over the network.
@@ -114,7 +119,11 @@ func RebuildIndexOverNetwork(ctx context.Context, attr string) error {
 	x.Trace(ctx, "Sending request to %v", addr)
 
 	c := NewWorkerClient(conn)
-	_, err = c.RebuildIndex(ctx, &task.RebuildIndex{Attr: attr, GroupId: gid})
+	_, err = c.RebuildIndex(ctx, &task.RebuildIndex{
+		Attr:           attr,
+		GroupId:        gid,
+		PluginContexts: pluginContexts,
+	})
 	if err != nil {
 		x.TraceError(ctx, x.Wrapf(err, "Error while calling Worker.RebuildIndex"))
 		return err

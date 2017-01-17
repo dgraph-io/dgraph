@@ -12,13 +12,13 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgraph/group"
+	"github.com/dgraph-io/dgraph/keys"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/query/graph"
 	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/task"
-	"github.com/dgraph-io/dgraph/x"
 )
 
 func populateGraphBackup(t *testing.T) {
@@ -28,25 +28,25 @@ func populateGraphBackup(t *testing.T) {
 		Attr:    "friend",
 	}
 	edge.Entity = 1
-	addEdge(t, edge, getOrCreate(x.DataKey("friend", 1)))
+	addEdge(t, edge, getOrCreate(keys.DataKey("friend", 1, nil)))
 
 	edge.Entity = 2
-	addEdge(t, edge, getOrCreate(x.DataKey("friend", 2)))
+	addEdge(t, edge, getOrCreate(keys.DataKey("friend", 2, nil)))
 
 	edge.Entity = 3
-	addEdge(t, edge, getOrCreate(x.DataKey("friend", 3)))
+	addEdge(t, edge, getOrCreate(keys.DataKey("friend", 3, nil)))
 
 	edge.Entity = 4
-	addEdge(t, edge, getOrCreate(x.DataKey("friend", 4)))
+	addEdge(t, edge, getOrCreate(keys.DataKey("friend", 4, nil)))
 
 	edge.Entity = 1
 	edge.ValueId = 0
 	edge.Value = []byte("pho\\ton")
 	edge.Attr = "name"
-	addEdge(t, edge, getOrCreate(x.DataKey("name", 1)))
+	addEdge(t, edge, getOrCreate(keys.DataKey("name", 1, nil)))
 
 	edge.Entity = 2
-	addEdge(t, edge, getOrCreate(x.DataKey("name", 2)))
+	addEdge(t, edge, getOrCreate(keys.DataKey("name", 2, nil)))
 }
 
 func initTestBackup(t *testing.T, schemaStr string) (string, *store.Store) {
@@ -81,11 +81,11 @@ func TestBackup(t *testing.T) {
 	time.Sleep(time.Second)
 
 	// We have 4 friend type edges. FP("friends")%10 = 2.
-	err = backup(group.BelongsTo("friend"), bdir)
+	err = backup(group.BelongsTo("friend"), bdir, nil)
 	require.NoError(t, err)
 
 	// We have 2 name type edges(with index). FP("name")%10 =7.
-	err = backup(group.BelongsTo("name"), bdir)
+	err = backup(group.BelongsTo("name"), bdir, nil)
 	require.NoError(t, err)
 
 	searchDir := bdir

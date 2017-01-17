@@ -237,8 +237,7 @@ func sortByValue(attr string, ul *task.List, typ types.TypeID, desc bool,
 func fetchValue(uid uint64, attr string, scalar types.TypeID,
 	pluginContexts []string) (types.Val, error) {
 	// TODO: Maybe use posting.Get
-	pl, decr := posting.GetOrCreate(keys.DataKey(attr, uid, pluginContexts),
-		group.BelongsTo(attr))
+	pl, decr := posting.GetOrCreate(keys.DataKey(attr, uid, pluginContexts), group.BelongsTo(attr))
 	defer decr()
 
 	src, err := pl.Value()

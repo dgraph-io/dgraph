@@ -28,6 +28,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/dgraph-io/dgraph/keys"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/types"
@@ -65,7 +66,7 @@ func addMutation(t *testing.T, l *List, edge *task.DirectedEdge, op uint32) {
 }
 
 func TestAddMutation(t *testing.T) {
-	key := x.DataKey("name", 1)
+	key := keys.DataKey("name", 1, nil)
 	dir, err := ioutil.TempDir("", "storetest_")
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
@@ -145,7 +146,7 @@ func checkValue(t *testing.T, ol *List, val string) {
 }
 
 func TestAddMutation_Value(t *testing.T) {
-	key := x.DataKey("value", 10)
+	key := keys.DataKey("value", 10, nil)
 	dir, err := ioutil.TempDir("", "storetest_")
 	if err != nil {
 		t.Error(err)
@@ -179,7 +180,7 @@ func TestAddMutation_Value(t *testing.T) {
 }
 
 func TestAddMutation_jchiu1(t *testing.T) {
-	key := x.DataKey("value", 10)
+	key := keys.DataKey("value", 10, nil)
 	dir, err := ioutil.TempDir("", "storetest_")
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
@@ -232,7 +233,7 @@ func TestAddMutation_jchiu1(t *testing.T) {
 }
 
 func TestAddMutation_jchiu2(t *testing.T) {
-	key := x.DataKey("value", 10)
+	key := keys.DataKey("value", 10, nil)
 	dir, err := ioutil.TempDir("", "storetest_")
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
@@ -271,7 +272,7 @@ func TestAddMutation_jchiu2(t *testing.T) {
 }
 
 func TestAddMutation_jchiu3(t *testing.T) {
-	key := x.DataKey("value", 10)
+	key := keys.DataKey("value", 10, nil)
 	dir, err := ioutil.TempDir("", "storetest_")
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
@@ -330,7 +331,7 @@ func TestAddMutation_jchiu3(t *testing.T) {
 }
 
 func TestAddMutation_mrjn1(t *testing.T) {
-	key := x.DataKey("value", 10)
+	key := keys.DataKey("value", 10, nil)
 	dir, err := ioutil.TempDir("", "storetest_")
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
@@ -405,7 +406,7 @@ func TestAddMutation_checksum(t *testing.T) {
 	Init(ps)
 
 	{
-		key := x.DataKey("value", 10)
+		key := keys.DataKey("value", 10, nil)
 		ol := getNew(key, ps)
 
 		edge := &task.DirectedEdge{
@@ -429,7 +430,7 @@ func TestAddMutation_checksum(t *testing.T) {
 	}
 
 	{
-		key := x.DataKey("value2", 10)
+		key := keys.DataKey("value2", 10, nil)
 		ol := getNew(key, ps)
 
 		// Add in reverse.
@@ -455,7 +456,7 @@ func TestAddMutation_checksum(t *testing.T) {
 	require.Equal(t, c1, c2)
 
 	{
-		key := x.DataKey("value3", 10)
+		key := keys.DataKey("value3", 10, nil)
 		ol := getNew(key, ps)
 
 		// Add in reverse.
@@ -488,7 +489,7 @@ func TestAddMutation_checksum(t *testing.T) {
 }
 
 func TestAddMutation_gru(t *testing.T) {
-	key := x.DataKey("question.tag", 0x01)
+	key := keys.DataKey("question.tag", 0x01, nil)
 	dir, err := ioutil.TempDir("", "storetest_")
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
@@ -533,7 +534,7 @@ func TestAddMutation_gru(t *testing.T) {
 }
 
 func TestAddMutation_gru2(t *testing.T) {
-	key := x.DataKey("question.tag", 0x01)
+	key := keys.DataKey("question.tag", 0x01, nil)
 	dir, err := ioutil.TempDir("", "storetest_")
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
@@ -590,7 +591,7 @@ func TestAddMutation_gru2(t *testing.T) {
 }
 
 func TestAfterUIDCount(t *testing.T) {
-	key := x.DataKey("value", 10)
+	key := keys.DataKey("value", 10, nil)
 	dir, err := ioutil.TempDir("", "storetest_")
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
@@ -669,7 +670,7 @@ func TestAfterUIDCount(t *testing.T) {
 }
 
 func TestAfterUIDCount2(t *testing.T) {
-	key := x.DataKey("value", 10)
+	key := keys.DataKey("value", 10, nil)
 	dir, err := ioutil.TempDir("", "storetest_")
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
@@ -703,7 +704,7 @@ func TestAfterUIDCount2(t *testing.T) {
 }
 
 func TestAfterUIDCountWithCommit(t *testing.T) {
-	key := x.DataKey("value", 10)
+	key := keys.DataKey("value", 10, nil)
 	dir, err := ioutil.TempDir("", "storetest_")
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
@@ -795,7 +796,7 @@ func TestMain(m *testing.M) {
 
 func BenchmarkAddMutations(b *testing.B) {
 	// logrus.SetLevel(logrus.DebugLevel)
-	key := x.DataKey("name", 1)
+	key := keys.DataKey("name", 1, nil)
 	dir, err := ioutil.TempDir("", "storetest_")
 	if err != nil {
 		b.Error(err)

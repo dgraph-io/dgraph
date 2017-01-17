@@ -54,6 +54,7 @@ message Num {
 	uint32 group = 1;
 	int64 val = 2;
 	repeated uint64 uids = 3;
+	repeated string plugin_contexts = 4;
 }
 
 message RaftContext {
@@ -108,6 +109,7 @@ message Mutations {
 message RebuildIndex {
 	uint32 group_id = 1;
 	string attr = 2;  // For simplicity, just do one attribute per request.
+	repeated string plugin_contexts = 3;
 }
 
 message Proposal {

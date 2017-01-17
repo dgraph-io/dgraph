@@ -27,8 +27,11 @@ import (
 
 var emptyNum task.Num
 
-func createNumQuery(group uint32, umap map[string]uint64) *task.Num {
-	out := &task.Num{Group: group}
+func createNumQuery(group uint32, umap map[string]uint64, pluginContexts []string) *task.Num {
+	out := &task.Num{
+		Group:          group,
+		PluginContexts: pluginContexts,
+	}
 	for _, v := range umap {
 		if v != 0 {
 			out.Uids = append(out.Uids, v)
@@ -55,15 +58,16 @@ func assignUids(ctx context.Context, num *task.Num) (*task.List, error) {
 		return &emptyUIDList, x.Errorf("Nothing to be marked or assigned")
 	}
 
-	mutations := uid.AssignNew(val, num.Group)
+	mutations := uid.AssignNew(val, num.Group, num.PluginContexts)
 
 	for _, uid := range num.Uids {
 		mutations.Edges = append(mutations.Edges, &task.DirectedEdge{
-			Entity: uid,
-			Attr:   "_uid_",
-			Value:  []byte("_"), // not txid
-			Label:  "A",
-			Op:     task.DirectedEdge_SET,
+			Entity:         uid,
+			Attr:           "_uid_",
+			Value:          []byte("_"), // not txid
+			Label:          "A",
+			Op:             task.DirectedEdge_SET,
+			PluginContexts: num.PluginContexts,
 		})
 	}
 
@@ -82,9 +86,10 @@ func assignUids(ctx context.Context, num *task.Num) (*task.List, error) {
 }
 
 // AssignUidsOverNetwork assigns new uids and writes them to the umap.
-func AssignUidsOverNetwork(ctx context.Context, umap map[string]uint64) error {
+func AssignUidsOverNetwork(ctx context.Context, umap map[string]uint64,
+	pluginContexts []string) error {
 	gid := group.BelongsTo("_uid_")
-	num := createNumQuery(gid, umap)
+	num := createNumQuery(gid, umap, pluginContexts)
 
 	var ul *task.List
 	var err error

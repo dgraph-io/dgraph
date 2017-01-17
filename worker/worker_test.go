@@ -26,6 +26,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgraph/algo"
+	"github.com/dgraph-io/dgraph/keys"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/store"
@@ -58,33 +59,33 @@ func populateGraph(t *testing.T) {
 		Attr: "friend",
 	}
 	edge.Entity = 10
-	addEdge(t, edge, getOrCreate(x.DataKey("friend", 10)))
+	addEdge(t, edge, getOrCreate(keys.DataKey("friend", 10, nil)))
 
 	edge.Entity = 11
-	addEdge(t, edge, getOrCreate(x.DataKey("friend", 11)))
+	addEdge(t, edge, getOrCreate(keys.DataKey("friend", 11, nil)))
 
 	edge.Entity = 12
-	addEdge(t, edge, getOrCreate(x.DataKey("friend", 12)))
+	addEdge(t, edge, getOrCreate(keys.DataKey("friend", 12, nil)))
 
 	edge.ValueId = 25
-	addEdge(t, edge, getOrCreate(x.DataKey("friend", 12)))
+	addEdge(t, edge, getOrCreate(keys.DataKey("friend", 12, nil)))
 
 	edge.ValueId = 26
-	addEdge(t, edge, getOrCreate(x.DataKey("friend", 12)))
+	addEdge(t, edge, getOrCreate(keys.DataKey("friend", 12, nil)))
 
 	edge.Entity = 10
 	edge.ValueId = 31
-	addEdge(t, edge, getOrCreate(x.DataKey("friend", 10)))
+	addEdge(t, edge, getOrCreate(keys.DataKey("friend", 10, nil)))
 
 	edge.Entity = 12
-	addEdge(t, edge, getOrCreate(x.DataKey("friend", 12)))
+	addEdge(t, edge, getOrCreate(keys.DataKey("friend", 12, nil)))
 
 	edge.Entity = 12
 	edge.Value = []byte("photon")
-	addEdge(t, edge, getOrCreate(x.DataKey("friend", 12)))
+	addEdge(t, edge, getOrCreate(keys.DataKey("friend", 12, nil)))
 
 	edge.Entity = 10
-	addEdge(t, edge, getOrCreate(x.DataKey("friend", 10)))
+	addEdge(t, edge, getOrCreate(keys.DataKey("friend", 10, nil)))
 }
 
 func taskValues(t *testing.T, v []*task.Value) []string {
@@ -162,9 +163,9 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 		Attr:   "friend",
 		Entity: 12,
 	}
-	addEdge(t, edge, getOrCreate(x.DataKey("friend", 12)))
+	addEdge(t, edge, getOrCreate(keys.DataKey("friend", 12, nil)))
 	edge.Value = []byte("notphoton")
-	addEdge(t, edge, getOrCreate(x.DataKey("friend", 12)))
+	addEdge(t, edge, getOrCreate(keys.DataKey("friend", 12, nil)))
 	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
 
 	// Issue a similar query.
@@ -187,15 +188,15 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 		Entity: 10,
 	}
 	// Redundant deletes.
-	delEdge(t, edge, getOrCreate(x.DataKey("friend", 10)))
-	delEdge(t, edge, getOrCreate(x.DataKey("friend", 10)))
+	delEdge(t, edge, getOrCreate(keys.DataKey("friend", 10, nil)))
+	delEdge(t, edge, getOrCreate(keys.DataKey("friend", 10, nil)))
 
 	// Delete followed by set.
 	edge.Entity = 12
 	edge.Value = []byte("notphoton")
-	delEdge(t, edge, getOrCreate(x.DataKey("friend", 12)))
+	delEdge(t, edge, getOrCreate(keys.DataKey("friend", 12, nil)))
 	edge.Value = []byte("ignored")
-	addEdge(t, edge, getOrCreate(x.DataKey("friend", 12)))
+	addEdge(t, edge, getOrCreate(keys.DataKey("friend", 12, nil)))
 	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
 
 	// Issue a similar query.
@@ -251,9 +252,9 @@ func TestProcessTaskIndex(t *testing.T) {
 		Attr:   "friend",
 		Entity: 12,
 	}
-	addEdge(t, edge, getOrCreate(x.DataKey("friend", 12)))
+	addEdge(t, edge, getOrCreate(keys.DataKey("friend", 12, nil)))
 	edge.Value = []byte("notphoton")
-	addEdge(t, edge, getOrCreate(x.DataKey("friend", 12)))
+	addEdge(t, edge, getOrCreate(keys.DataKey("friend", 12, nil)))
 	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
 
 	// Issue a similar query.
@@ -279,15 +280,15 @@ func TestProcessTaskIndex(t *testing.T) {
 		Entity: 10,
 	}
 	// Redundant deletes.
-	delEdge(t, edge, getOrCreate(x.DataKey("friend", 10)))
-	delEdge(t, edge, getOrCreate(x.DataKey("friend", 10)))
+	delEdge(t, edge, getOrCreate(keys.DataKey("friend", 10, nil)))
+	delEdge(t, edge, getOrCreate(keys.DataKey("friend", 10, nil)))
 
 	// Delete followed by set.
 	edge.Entity = 12
 	edge.Value = []byte("notphoton")
-	delEdge(t, edge, getOrCreate(x.DataKey("friend", 12)))
+	delEdge(t, edge, getOrCreate(keys.DataKey("friend", 12, nil)))
 	edge.Value = []byte("ignored")
-	addEdge(t, edge, getOrCreate(x.DataKey("friend", 12)))
+	addEdge(t, edge, getOrCreate(keys.DataKey("friend", 12, nil)))
 	time.Sleep(200 * time.Millisecond) // Let indexing finish.
 
 	// Issue a similar query.

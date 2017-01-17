@@ -360,8 +360,9 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 			args.DoCount = true
 		}
 		dst := &SubGraph{
-			Attr:   gchild.Attr,
-			Params: args,
+			Attr:           gchild.Attr,
+			Params:         args,
+			PluginContexts: sg.PluginContexts,
 		}
 		if gchild.Filter != nil {
 			dstf := &SubGraph{}
@@ -406,8 +407,9 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 }
 
 // ToSubGraph converts the GraphQuery into the internal SubGraph instance type.
-func ToSubGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
-	sg, err := newGraph(ctx, gq)
+func ToSubGraph(ctx context.Context, gq *gql.GraphQuery,
+	pluginContexts []string) (*SubGraph, error) {
+	sg, err := newGraph(ctx, gq, pluginContexts)
 	if err != nil {
 		return nil, err
 	}
@@ -416,7 +418,8 @@ func ToSubGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 }
 
 // newGraph returns the SubGraph and its task query.
-func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
+func newGraph(ctx context.Context, gq *gql.GraphQuery,
+	pluginContexts []string) (*SubGraph, error) {
 	// This would set the Result field in SubGraph,
 	// and populate the children for attributes.
 	if len(gq.UID) == 0 && gq.Func == nil {
@@ -433,7 +436,8 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	}
 
 	sg := &SubGraph{
-		Params: args,
+		Params:         args,
+		PluginContexts: pluginContexts,
 	}
 	if gq.Func != nil {
 		sg.Attr = gq.Func.Attr

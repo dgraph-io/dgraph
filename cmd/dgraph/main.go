@@ -145,7 +145,9 @@ func convertToNQuad(ctx context.Context, mutation string) ([]*graph.NQuad, error
 	return nquads, nil
 }
 
-func convertToEdges(ctx context.Context, nquads []*graph.NQuad) (mutationResult, error) {
+func convertToEdges(ctx context.Context, nquads []*graph.NQuad,
+	pluginContexts []string) (mutationResult, error) {
+	x.Printf("~~~~~~~~~~here1")
 	var edges []*task.DirectedEdge
 	var mr mutationResult
 
@@ -169,20 +171,23 @@ func convertToEdges(ctx context.Context, nquads []*graph.NQuad) (mutationResult,
 			}
 		}
 	}
+	x.Printf("~~~~~~~~~~here2")
 
 	if len(newUids) > 0 {
-		if err := worker.AssignUidsOverNetwork(ctx, newUids); err != nil {
+		if err := worker.AssignUidsOverNetwork(ctx, newUids, pluginContexts); err != nil {
 			x.TraceError(ctx, x.Wrapf(err, "Error while AssignUidsOverNetwork for newUids: %v", newUids))
 			return mr, err
 		}
 	}
+
+	x.Printf("~~~~~~~~~~here3")
 
 	// Wrapper for a pointer to graph.Nquad
 	var wnq rdf.NQuad
 	for _, nq := range nquads {
 		// Get edges from nquad using newUids.
 		wnq = rdf.NQuad{nq}
-		edge, err := wnq.ToEdgeUsing(newUids)
+		edge, err := wnq.ToEdgeUsing(newUids, pluginContexts)
 		if err != nil {
 			x.TraceError(ctx, x.Wrapf(err, "Error while converting to edge: %v", nq))
 			return mr, err
@@ -206,6 +211,10 @@ func convertToEdges(ctx context.Context, nquads []*graph.NQuad) (mutationResult,
 }
 
 func applyMutations(ctx context.Context, m *task.Mutations) error {
+	// ~~~~~
+	//	for _, e := range m.Edges {
+	//		x.Printf("~~~applyMutations: %d", len(e.PluginContexts))
+	//	}
 	err := worker.MutateOverNetwork(ctx, m)
 	if err != nil {
 		x.TraceError(ctx, x.Wrapf(err, "Error while MutateOverNetwork"))
@@ -225,16 +234,16 @@ func convertAndApply(ctx context.Context, set []*graph.NQuad, del []*graph.NQuad
 		return nil, x.Errorf("Mutations are forbidden on this server.")
 	}
 
-	if mr, err = convertToEdges(ctx, set); err != nil {
+	//	x.Printf("~~~~convertAndApply %d", len(pluginContexts))
+	if mr, err = convertToEdges(ctx, set, pluginContexts); err != nil {
 		return nil, err
 	}
 	m.Edges, allocIds = mr.edges, mr.newUids
 	for i := range m.Edges {
 		m.Edges[i].Op = task.DirectedEdge_SET
-		m.Edges[i].PluginContexts = pluginContexts // At mutation/edge level.
 	}
 
-	if mr, err = convertToEdges(ctx, del); err != nil {
+	if mr, err = convertToEdges(ctx, del, pluginContexts); err != nil {
 		return nil, err
 	}
 	for i := range mr.edges {
@@ -263,6 +272,7 @@ func runMutations(ctx context.Context, mu *graph.Mutation,
 		return nil, x.Wrap(err)
 	}
 
+	x.Printf("~~~runMutations %d %d", len(pluginContexts), len(mu.Set)+len(mu.Del))
 	if allocIds, err = convertAndApply(ctx, mu.Set, mu.Del, pluginContexts); err != nil {
 		return nil, err
 	}
@@ -402,13 +412,13 @@ type wrappedErr struct {
 	Message string
 }
 
-func processRequest(ctx context.Context, gq *gql.GraphQuery,
+func processRequest(ctx context.Context, gq *gql.GraphQuery, pluginContexts []string,
 	l *query.Latency) (*query.SubGraph, wrappedErr) {
 	if gq == nil || (len(gq.UID) == 0 && gq.Func == nil) {
 		return &query.SubGraph{}, wrappedErr{nil, x.ErrorOk}
 	}
 
-	sg, err := query.ToSubGraph(ctx, gq)
+	sg, err := query.ToSubGraph(ctx, gq, pluginContexts)
 	if err != nil {
 		x.TraceError(ctx, x.Wrapf(err, "Error while conversion to internal format"))
 		return &query.SubGraph{}, wrappedErr{err, x.ErrorInvalidRequest}
@@ -480,7 +490,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	pluginContexts, err := plugin.RunQueryHandlers(r)
+	pluginContexts, err := plugin.Contexts(r)
 	if err != nil {
 		x.TraceError(ctx, x.Wrapf(err, "Error while processing plugins"))
 		x.SetStatus(w, x.Error, err.Error())
@@ -503,8 +513,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// TODO: pass in plugin contexts.
-	sg, werr := processRequest(ctx, res.Query, &l)
+	sg, werr := processRequest(ctx, res.Query, pluginContexts, &l)
 	if werr.Err != nil {
 		x.SetStatus(w, werr.Message, werr.Err.Error())
 		return
@@ -546,22 +555,28 @@ func storeStatsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // handlerInit does some standard checks. Returns false if something is wrong.
-func handlerInit(w http.ResponseWriter, r *http.Request) bool {
+func handlerInit(w http.ResponseWriter, r *http.Request) ([]string, bool) {
 	if r.Method != "GET" {
 		x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
-		return false
+		return nil, false
 	}
 
 	ip, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil || !net.ParseIP(ip).IsLoopback() {
 		x.SetStatus(w, x.ErrorUnauthorized, fmt.Sprintf("Request from IP: %v", ip))
-		return false
+		return nil, false
 	}
-	return true
+	pluginContexts, err := plugin.Contexts(r)
+	if err != nil {
+		x.SetStatus(w, x.Error, err.Error())
+		return nil, false
+	}
+	return pluginContexts, true
 }
 
 func shutDownHandler(w http.ResponseWriter, r *http.Request) {
-	if !handlerInit(w, r) {
+	_, ok := handlerInit(w, r)
+	if !ok {
 		return
 	}
 	exitWithProfiles()
@@ -569,11 +584,12 @@ func shutDownHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func backupHandler(w http.ResponseWriter, r *http.Request) {
-	if !handlerInit(w, r) {
+	pluginContexts, ok := handlerInit(w, r)
+	if !ok {
 		return
 	}
 	ctx := context.Background()
-	if err := worker.BackupOverNetwork(ctx); err != nil {
+	if err := worker.BackupOverNetwork(ctx, pluginContexts); err != nil {
 		x.SetStatus(w, err.Error(), "Backup failed.")
 	} else {
 		x.SetStatus(w, x.ErrorOk, "Backup completed.")
@@ -581,7 +597,8 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func indexHandler(w http.ResponseWriter, r *http.Request) {
-	if !handlerInit(w, r) {
+	pluginContexts, ok := handlerInit(w, r)
+	if !ok {
 		return
 	}
 	ctx := context.Background()
@@ -590,7 +607,7 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 		x.SetStatus(w, x.ErrorInvalidRequest, "Invalid request. No attr defined.")
 		return
 	}
-	if err := worker.RebuildIndexOverNetwork(ctx, attr); err != nil {
+	if err := worker.RebuildIndexOverNetwork(ctx, attr, pluginContexts); err != nil {
 		x.SetStatus(w, err.Error(), "RebuildIndex failed.")
 	} else {
 		x.SetStatus(w, x.ErrorOk, "RebuildIndex completed.")
@@ -611,6 +628,8 @@ func (s *grpcServer) Run(ctx context.Context,
 		ctx = trace.NewContext(ctx, tr)
 	}
 
+	x.Printf("~~~~grpc server: req %v", len(req.PluginContexts))
+
 	resp := new(graph.Response)
 	if len(req.Query) == 0 && req.Mutation == nil {
 		x.TraceError(ctx, x.Errorf("Empty query and mutation."))
@@ -628,6 +647,7 @@ func (s *grpcServer) Run(ctx context.Context,
 	// If mutations are part of the query, we run them through the mutation handler
 	// same as the http client.
 	if res.Mutation != nil && (len(res.Mutation.Set) > 0 || len(res.Mutation.Del) > 0) {
+		x.Printf("~~~~from req.Query")
 		if allocIds, err = mutationHandler(ctx, res.Mutation, req.PluginContexts); err != nil {
 			x.TraceError(ctx, x.Wrapf(err, "Error while handling mutations"))
 			return resp, err
@@ -637,6 +657,7 @@ func (s *grpcServer) Run(ctx context.Context,
 	// If mutations are sent as part of the mutation object in the request we run
 	// them here.
 	if req.Mutation != nil && (len(req.Mutation.Set) > 0 || len(req.Mutation.Del) > 0) {
+		x.Printf("~~~~from req.Mutation %d", len(req.PluginContexts))
 		if allocIds, err = runMutations(ctx, req.Mutation, req.PluginContexts); err != nil {
 			x.TraceError(ctx, x.Wrapf(err, "Error while handling mutations"))
 			return resp, err
@@ -644,7 +665,8 @@ func (s *grpcServer) Run(ctx context.Context,
 	}
 	resp.AssignedUids = allocIds
 
-	sg, werr := processRequest(ctx, res.Query, &l)
+	x.Printf("~~~~~processRequest")
+	sg, werr := processRequest(ctx, res.Query, req.PluginContexts, &l)
 	if werr.Err != nil {
 		return resp, werr.Err
 	}

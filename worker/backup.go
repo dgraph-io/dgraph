@@ -83,7 +83,7 @@ func writeToFile(fpath string, ch chan []byte) error {
 }
 
 // Backup creates a backup of data by exporting it as an RDF gzip.
-func backup(gid uint32, bdir string) error {
+func backup(gid uint32, bdir string, pluginContexts []string) error {
 	// Use a goroutine to write to file.
 	err := os.MkdirAll(bdir, 0700)
 	if err != nil {
@@ -174,11 +174,12 @@ func backup(gid uint32, bdir string) error {
 	return err
 }
 
-func handleBackupForGroup(ctx context.Context, reqId uint64, gid uint32) *BackupPayload {
+func handleBackupForGroup(ctx context.Context, reqId uint64, gid uint32,
+	pluginContexts []string) *BackupPayload {
 	n := groups().Node(gid)
 	if n.AmLeader() {
 		x.Trace(ctx, "Leader of group: %d. Running backup.", gid)
-		if err := backup(gid, *backupPath); err != nil {
+		if err := backup(gid, *backupPath, pluginContexts); err != nil {
 			x.TraceError(ctx, err)
 			return &BackupPayload{
 				ReqId:  reqId,
@@ -230,8 +231,9 @@ func handleBackupForGroup(ctx context.Context, reqId uint64, gid uint32) *Backup
 
 	c := NewWorkerClient(conn)
 	nr := &BackupPayload{
-		ReqId:   reqId,
-		GroupId: gid,
+		ReqId:          reqId,
+		GroupId:        gid,
+		PluginContexts: pluginContexts,
 	}
 	nrep, err := c.Backup(ctx, nr)
 	if err != nil {
@@ -262,7 +264,7 @@ func (w *grpcWorker) Backup(ctx context.Context, req *BackupPayload) (*BackupPay
 
 	chb := make(chan *BackupPayload, 1)
 	go func() {
-		chb <- handleBackupForGroup(ctx, req.ReqId, req.GroupId)
+		chb <- handleBackupForGroup(ctx, req.ReqId, req.GroupId, req.PluginContexts)
 	}()
 
 	select {
@@ -273,7 +275,7 @@ func (w *grpcWorker) Backup(ctx context.Context, req *BackupPayload) (*BackupPay
 	}
 }
 
-func BackupOverNetwork(ctx context.Context) error {
+func BackupOverNetwork(ctx context.Context, pluginContexts []string) error {
 	// If we haven't even had a single membership update, don't run backup.
 	if len(*peerAddr) > 0 && groups().LastUpdate() == 0 {
 		x.Trace(ctx, "This server hasn't yet been fully initiated. Please retry later.")
@@ -286,7 +288,7 @@ func BackupOverNetwork(ctx context.Context) error {
 	for _, gid := range gids {
 		go func(group uint32) {
 			reqId := uint64(rand.Int63())
-			ch <- handleBackupForGroup(ctx, reqId, group)
+			ch <- handleBackupForGroup(ctx, reqId, group, pluginContexts)
 		}(gid)
 	}
 
