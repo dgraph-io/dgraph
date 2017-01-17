@@ -24,50 +24,40 @@ func writeAttr(buf []byte, attr string) []byte {
 	return rest[len(attr):]
 }
 
+// attrPrefix returns the prefix with only the attribute and pluginPrefix and given
+// number of extra bytes. Returns the full buffer and the buffer with "extra" bytes.
+func attrPrefix(attr, pluginPrefix string, extra int) ([]byte, []byte) {
+	buf := make([]byte, len(pluginPrefix)+len(attr)+2+extra)
+	x.AssertTrue(len(pluginPrefix) == copy(buf, pluginPrefix[:]))
+	k := writeAttr(buf[len(pluginPrefix):], attr)
+	x.AssertTrue(len(k) == extra)
+	return buf, k
+}
+
 // DataKey returns the data key (not index, not reversed edge keys).
 func DataKey(attr string, uid uint64, pluginContexts []string) []byte {
-	// It might be better for DataKey to use a bytes.Buffer instead of []byte and
-	// just ask each plugin to write there.
 	pluginPrefix := plugin.Prefix(pluginContexts)
-	buf := make([]byte, len(pluginPrefix)+2+len(attr)+1+8)
-	x.AssertTrue(len(pluginPrefix) == copy(buf, pluginPrefix[:]))
-	rest := buf[len(pluginPrefix):]
-
-	rest = writeAttr(rest, attr)
+	buf, rest := attrPrefix(attr, pluginPrefix, 1+8)
 	rest[0] = byteData
-
-	rest = rest[1:]
-	binary.BigEndian.PutUint64(rest, uid)
+	binary.BigEndian.PutUint64(rest[1:], uid)
 	return buf
 }
 
 // ReverseKey returns the key for reverse edges.
 func ReverseKey(attr string, uid uint64, pluginContexts []string) []byte {
 	pluginPrefix := plugin.Prefix(pluginContexts)
-	buf := make([]byte, len(pluginPrefix)+2+len(attr)+1+8)
-	x.AssertTrue(len(pluginPrefix) == copy(buf, pluginPrefix[:]))
-	rest := buf[len(pluginPrefix):]
-
-	rest = writeAttr(rest, attr)
+	buf, rest := attrPrefix(attr, pluginPrefix, 1+8)
 	rest[0] = byteReverse
-
-	rest = rest[1:]
-	binary.BigEndian.PutUint64(rest, uid)
+	binary.BigEndian.PutUint64(rest[1:], uid)
 	return buf
 }
 
 // IndexKey returns the key for index edges.
 func IndexKey(attr, term string, pluginContexts []string) []byte {
 	pluginPrefix := plugin.Prefix(pluginContexts)
-	buf := make([]byte, len(pluginPrefix)+2+len(attr)+1+len(term))
-	x.AssertTrue(len(pluginPrefix) == copy(buf, pluginPrefix[:]))
-	rest := buf[len(pluginPrefix):]
-
-	rest = writeAttr(rest, attr)
+	buf, rest := attrPrefix(attr, pluginPrefix, 1+len(term))
 	rest[0] = byteIndex
-
-	rest = rest[1:]
-	x.AssertTrue(len(term) == copy(rest, term[:]))
+	x.AssertTrue(len(term) == copy(rest[1:], term[:]))
 	return buf
 }
 
@@ -93,43 +83,27 @@ func (p ParsedKey) IsIndex() bool {
 }
 
 func (p ParsedKey) SkipPredicate() []byte {
-	prefixLen := plugin.PrefixLen()
-	buf := make([]byte, prefixLen+2+len(p.Attr)+1)
-	x.AssertTrue(prefixLen == copy(buf, p.PluginPrefix[:]))
-	k := writeAttr(buf[prefixLen:], p.Attr)
-	x.AssertTrue(len(k) == 1)
+	buf, k := attrPrefix(p.Attr, p.PluginPrefix, 1)
 	k[0] = 0xFF
 	return buf
 }
 
 func (p ParsedKey) SkipRangeOfSameType() []byte {
-	prefixLen := plugin.PrefixLen()
-	buf := make([]byte, prefixLen+2+len(p.Attr)+1)
-	x.AssertTrue(prefixLen == copy(buf, p.PluginPrefix[:]))
-	k := writeAttr(buf[prefixLen:], p.Attr)
-	x.AssertTrue(len(k) == 1)
+	buf, k := attrPrefix(p.Attr, p.PluginPrefix, 1)
 	k[0] = p.byteType + 1
 	return buf
 }
 
 // DataPrefix returns the prefix for data keys.
 func (p ParsedKey) DataPrefix() []byte {
-	prefixLen := plugin.PrefixLen()
-	buf := make([]byte, prefixLen+2+len(p.Attr)+1)
-	x.AssertTrue(prefixLen == copy(buf, p.PluginPrefix[:]))
-	k := writeAttr(buf[prefixLen:], p.Attr)
-	x.AssertTrue(len(k) == 1)
+	buf, k := attrPrefix(p.Attr, p.PluginPrefix, 1)
 	k[0] = byteData
 	return buf
 }
 
 // IndexPrefix returns the prefix for index keys.
 func (p ParsedKey) IndexPrefix() []byte {
-	prefixLen := plugin.PrefixLen()
-	buf := make([]byte, prefixLen+2+len(p.Attr)+1)
-	x.AssertTrue(prefixLen == copy(buf, p.PluginPrefix[:]))
-	k := writeAttr(buf[prefixLen:], p.Attr)
-	x.AssertTrue(len(k) == 1)
+	buf, k := attrPrefix(p.Attr, p.PluginPrefix, 1)
 	k[0] = byteIndex
 	return buf
 }

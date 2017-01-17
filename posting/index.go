@@ -192,7 +192,7 @@ func RebuildIndex(ctx context.Context, attr string, pluginContexts []string) err
 	// Delete index entries from data store.
 	pk := keys.ParsedKey{
 		Attr:         attr,
-		PluginPrefix: string(plugin.Prefix(pluginContexts)),
+		PluginPrefix: plugin.Prefix(pluginContexts),
 	}
 	prefix := pk.IndexPrefix()
 	idxIt := pstore.NewIterator()

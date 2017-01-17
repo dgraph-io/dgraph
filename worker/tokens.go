@@ -36,10 +36,9 @@ func getInequalityTokens(attr, ineqValueToken string, f string,
 		out = []string{ineqValueToken}
 	}
 
-	pluginPrefix := string(plugin.Prefix(pluginContexts))
 	pk := keys.ParsedKey{
 		Attr:         attr,
-		PluginPrefix: pluginPrefix,
+		PluginPrefix: plugin.Prefix(pluginContexts),
 	}
 	indexPrefix := pk.IndexPrefix()
 	isGeqOrGt := f == "geq" || f == "gt"

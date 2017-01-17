@@ -129,7 +129,7 @@ func backup(gid uint32, bdir string, pluginContexts []string) error {
 	it := pstore.NewIterator()
 	defer it.Close()
 	var lastPred string
-	pluginPrefix := plugin.Prefix(pluginContexts)
+	pluginPrefix := []byte(plugin.Prefix(pluginContexts))
 	for it.Seek(pluginPrefix); it.ValidForPrefix(pluginPrefix); {
 		key := it.Key().Data()
 		pk := keys.Parse(key)

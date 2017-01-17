@@ -68,7 +68,7 @@ type KeyPrefix interface {
 }
 
 // Prefix returns prefixes of all plugins.
-func Prefix(pluginContexts []string) []byte {
+func Prefix(pluginContexts []string) string {
 	// For now, we assume all plugins modify key prefixes. This can be easily
 	// generalized. For example, pluginContexts can contain a few string arrays.
 	x.AssertTruef(len(pluginContexts) == len(keyPrefixes), "%d vs %d",
@@ -77,5 +77,5 @@ func Prefix(pluginContexts []string) []byte {
 	for i, m := range keyPrefixes {
 		x.Check2(buf.WriteString(m.Prefix(pluginContexts[i])))
 	}
-	return buf.Bytes()
+	return buf.String()
 }
