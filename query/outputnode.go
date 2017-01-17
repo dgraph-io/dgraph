@@ -213,9 +213,8 @@ func (fj *fastJsonNode) AddChild(attr string, child outputNode) {
 	children, found := fj.children[attr]
 	if !found {
 		children = make([]*fastJsonNode, 0, 5)
-		fj.children[attr] = children
 	}
-	children = append(children, child.(*fastJsonNode))
+	fj.children[attr] = append(children, child.(*fastJsonNode))
 }
 
 func (fj *fastJsonNode) New(attr string) outputNode {
