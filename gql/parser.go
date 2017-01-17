@@ -967,6 +967,17 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 		return nil, x.Errorf("Expected some name. Got: %v", item)
 	}
 
+	peekIt, err := it.Peek(1)
+	if err != nil {
+		return nil, x.Errorf("Invalid Query")
+	}
+	if peekIt[0].Typ == itemName && peekIt[0].Val == "AS" {
+		gq.Var = item.Val
+		it.Next() // Consume the "AS".
+		it.Next()
+		item = it.Item()
+	}
+
 	gq.Alias = item.Val
 	it.Next()
 	item = it.Item()
