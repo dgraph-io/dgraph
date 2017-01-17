@@ -218,6 +218,10 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 		if pc.Params.Alias != "" {
 			fieldName = pc.Params.Alias
 		}
+		if !hasSetUid && (sg.Params.GetUID || sg.Params.isDebug) {
+			hasSetUid = true
+			dst.SetUID(uid)
+		}
 		if len(pc.counts) > 0 {
 			c := types.ValueForType(types.Int32ID)
 			c.Value = int32(pc.counts[idx])
@@ -266,7 +270,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 					return err
 				}
 				dst.SetXID(txt.Value.(string))
-			} else if pc.Attr == "_uid_" {
+			} else if pc.Attr == "_uid_" && !hasSetUid {
 				hasSetUid = true
 				dst.SetUID(uid)
 			} else {
@@ -302,9 +306,6 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 		}
 	}
 
-	if !hasSetUid && (sg.Params.GetUID || sg.Params.isDebug) {
-		dst.SetUID(uid)
-	}
 	return nil
 }
 
