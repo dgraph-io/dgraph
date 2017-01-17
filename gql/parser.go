@@ -285,8 +285,10 @@ func substituteVariables(gq *GraphQuery, vmap varMap) error {
 }
 
 type Result struct {
-	Query    []*GraphQuery
-	Mutation *Mutation
+	Query        []*GraphQuery
+	Mutation     *Mutation
+	VarList      [][]string
+	NeedsVarList [][]string
 }
 
 // Parse initializes and runs the lexer. It also constructs the GraphQuery subgraph
@@ -343,7 +345,10 @@ func Parse(input string) (res Result, rerr error) {
 	}
 
 	if len(res.Query) != 0 {
-		for _, qu := range res.Query {
+		res.VarList = make([][]string, len(res.Query))
+		res.NeedsVarList = make([][]string, len(res.Query))
+		for i := 0; i < len(res.Query); i++ {
+			qu := res.Query[i]
 			// Try expanding fragments using fragment map.
 			if err := qu.expandFragments(fmap); err != nil {
 				return res, err
@@ -353,10 +358,26 @@ func Parse(input string) (res Result, rerr error) {
 			if err := substituteVariables(qu, vmap); err != nil {
 				return res, err
 			}
+
+			// Collect vars used and defined in Result struct.
+			collectVars(i, qu, &res)
 		}
 	}
-
 	return res, nil
+}
+
+func collectVars(idx int, qu *GraphQuery, res *Result) {
+	if qu.Var != "" {
+		res.VarList[idx] = append(res.VarList[idx], qu.Var)
+	}
+
+	if qu.NeedsVar != "" {
+		res.NeedsVarList[idx] = append(res.NeedsVarList[idx], qu.NeedsVar)
+	}
+
+	for _, ch := range qu.Children {
+		collectVars(idx, ch, res)
+	}
 }
 
 // getVariablesAndQuery checks if the query has a variable list and stores it in

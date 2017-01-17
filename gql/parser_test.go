@@ -92,6 +92,36 @@ func TestParseQueryWithVar1(t *testing.T) {
 	require.Equal(t, "L", res.Query[1].NeedsVar)
 }
 
+func TestParseQueryWithMultipleVar(t *testing.T) {
+	query := `
+	{
+		var(id:0x0a) {
+			L AS friends {
+				B AS relatives
+			}
+		}
+	
+		me(L) {
+		 name	
+		}
+
+		relatives(B) {
+			name
+		}
+	}
+`
+	res, err := Parse(query)
+	require.NoError(t, err)
+	require.NotNil(t, res.Query)
+	require.Equal(t, 3, len(res.Query))
+	require.Equal(t, "L", res.Query[0].Children[0].Var)
+	require.Equal(t, "B", res.Query[0].Children[0].Children[0].Var)
+	require.Equal(t, "L", res.Query[1].NeedsVar)
+	require.Equal(t, "B", res.Query[2].NeedsVar)
+	require.Equal(t, [][]string{[]string{"L", "B"}, []string(nil), []string(nil)}, res.VarList)
+	require.Equal(t, [][]string{[]string(nil), []string{"L"}, []string{"B"}}, res.NeedsVarList)
+}
+
 func TestParseMultipleQueries(t *testing.T) {
 	query := `
 	{
