@@ -594,7 +594,7 @@ func populateVarMap(sg *SubGraph, doneVars map[string]*task.List) {
 	for _, child := range sg.Children {
 		populateVarMap(child, doneVars)
 		for i := 0; i < len(child.uidMatrix); i++ {
-			if len(child.uidMatrix[i].Uids) == 0 {
+			if len(child.values[i].Val) == 0 && len(child.uidMatrix[i].Uids) == 0 {
 				excluded[sg.DestUIDs.Uids[i]] = true
 			}
 		}

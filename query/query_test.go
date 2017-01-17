@@ -2248,6 +2248,26 @@ func TestGenerator(t *testing.T) {
 	require.JSONEq(t, `{"me":[{"gender":"female","name":"Michonne"}]}`, js)
 }
 
+func TestGeneratorMultiRootMultiQueryRootVar(t *testing.T) {
+	dir1, dir2, ps := populateGraph(t)
+	defer ps.Close()
+	defer os.RemoveAll(dir1)
+	defer os.RemoveAll(dir2)
+	query := `
+    {
+			friend AS var(anyof("name", "Michonne Rick Glenn")) {
+      	name
+			}
+
+			you(friend) {
+				name
+			}
+    }
+  `
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"you":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"}]}`, js)
+}
+
 func TestGeneratorMultiRootMultiQuery(t *testing.T) {
 	dir1, dir2, ps := populateGraph(t)
 	defer ps.Close()
