@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strconv"
 	"time"
 
 	geom "github.com/twpayne/go-geom"
@@ -225,9 +226,14 @@ func (fj *fastJsonNode) New(attr string) outputNode {
 }
 
 func (fj *fastJsonNode) SetUID(uid uint64) {
-	_, found := fj.attrs["_uid_"]
-	x.AssertTruef(!found, "Setting the same uid again.")
-	fj.attrs["_uid_"] = []byte(fmt.Sprintf("\"%#x\"", uid))
+	uidBs, found := fj.attrs["_uid_"]
+	if found {
+		lUidBs := len(uidBs)
+		currUid, err := strconv.ParseUint(string(uidBs[1:lUidBs-1]), 0, 64)
+		x.AssertTruef(err == nil && currUid == uid, "Setting two different uids on same node.")
+	} else {
+		fj.attrs["_uid_"] = []byte(fmt.Sprintf("\"%#x\"", uid))
+	}
 }
 
 func (fj *fastJsonNode) SetXID(xid string) {
@@ -313,6 +319,9 @@ func (sg *SubGraph) ToFastJSON(l *Latency) ([]byte, error) {
 	n := seedNode.New("_root_")
 	for _, uid := range sg.DestUIDs.Uids {
 		n1 := seedNode.New(sg.Params.Alias)
+		if sg.Params.GetUID || sg.Params.isDebug {
+			n1.SetUID(uid)
+		}
 		if err := sg.preTraverse(uid, n1); err != nil {
 			if err.Error() == "_INV_" {
 				continue
