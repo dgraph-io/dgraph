@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strconv"
 	"time"
 
 	geom "github.com/twpayne/go-geom"
@@ -29,6 +30,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/query/graph"
 	"github.com/dgraph-io/dgraph/types"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 // outputNode is the generic output / writer for preTraverse.
@@ -41,35 +43,35 @@ type outputNode interface {
 	IsEmpty() bool
 }
 
-// protoOutputNode is the proto output for preTraverse.
-type protoOutputNode struct {
+// protoNode is the proto output for preTraverse.
+type protoNode struct {
 	*graph.Node
 }
 
 // AddValue adds an attribute value for protoOutputNode.
-func (p *protoOutputNode) AddValue(attr string, v types.Val) {
+func (p *protoNode) AddValue(attr string, v types.Val) {
 	p.Node.Properties = append(p.Node.Properties, createProperty(attr, v))
 }
 
 // AddChild adds a child for protoOutputNode.
-func (p *protoOutputNode) AddChild(attr string, child outputNode) {
-	p.Node.Children = append(p.Node.Children, child.(*protoOutputNode).Node)
+func (p *protoNode) AddChild(attr string, child outputNode) {
+	p.Node.Children = append(p.Node.Children, child.(*protoNode).Node)
 }
 
 // New creates a new node for protoOutputNode.
-func (p *protoOutputNode) New(attr string) outputNode {
+func (p *protoNode) New(attr string) outputNode {
 	uc := nodePool.Get().(*graph.Node)
 	uc.Attribute = attr
-	return &protoOutputNode{uc}
+	return &protoNode{uc}
 }
 
 // SetUID sets UID of a protoOutputNode.
-func (p *protoOutputNode) SetUID(uid uint64) { p.Node.Uid = uid }
+func (p *protoNode) SetUID(uid uint64) { p.Node.Uid = uid }
 
 // SetXID sets XID of a protoOutputNode.
-func (p *protoOutputNode) SetXID(xid string) { p.Node.Xid = xid }
+func (p *protoNode) SetXID(xid string) { p.Node.Xid = xid }
 
-func (p *protoOutputNode) IsEmpty() bool {
+func (p *protoNode) IsEmpty() bool {
 	if p.Node.Uid > 0 {
 		return false
 	}
@@ -86,9 +88,9 @@ func (p *protoOutputNode) IsEmpty() bool {
 // used postorder traversal before, but preorder seems simpler and faster for
 // most cases.
 func (sg *SubGraph) ToProtocolBuffer(l *Latency) (*graph.Node, error) {
-	var seedNode *protoOutputNode
+	var seedNode *protoNode
 	if sg.DestUIDs == nil {
-		return seedNode.New(sg.Params.Alias).(*protoOutputNode).Node, nil
+		return seedNode.New(sg.Params.Alias).(*protoNode).Node, nil
 	}
 
 	n := seedNode.New("_root_")
@@ -103,7 +105,7 @@ func (sg *SubGraph) ToProtocolBuffer(l *Latency) (*graph.Node, error) {
 			if rerr.Error() == "_INV_" {
 				continue
 			}
-			return n.(*protoOutputNode).Node, rerr
+			return n.(*protoNode).Node, rerr
 		}
 		if n1.IsEmpty() {
 			continue
@@ -111,21 +113,21 @@ func (sg *SubGraph) ToProtocolBuffer(l *Latency) (*graph.Node, error) {
 		n.AddChild(sg.Params.Alias, n1)
 	}
 	l.ProtocolBuffer = time.Since(l.Start) - l.Parsing - l.Processing
-	return n.(*protoOutputNode).Node, nil
+	return n.(*protoNode).Node, nil
 }
 
-// jsonOutputNode is the JSON output for preTraverse.
-type jsonOutputNode struct {
+// jsonNode is the JSON output for preTraverse.
+type jsonNode struct {
 	data map[string]interface{}
 }
 
 // AddValue adds an attribute value for jsonOutputNode.
-func (p *jsonOutputNode) AddValue(attr string, v types.Val) {
+func (p *jsonNode) AddValue(attr string, v types.Val) {
 	p.data[attr] = v
 }
 
 // AddChild adds a child for jsonOutputNode.
-func (p *jsonOutputNode) AddChild(attr string, child outputNode) {
+func (p *jsonNode) AddChild(attr string, child outputNode) {
 	a := p.data[attr]
 	if a == nil {
 		// Need to do this because we cannot cast nil interface to
@@ -133,16 +135,16 @@ func (p *jsonOutputNode) AddChild(attr string, child outputNode) {
 		a = make([]map[string]interface{}, 0, 5)
 	}
 	p.data[attr] = append(a.([]map[string]interface{}),
-		child.(*jsonOutputNode).data)
+		child.(*jsonNode).data)
 }
 
 // New creates a new node for jsonOutputNode.
-func (p *jsonOutputNode) New(attr string) outputNode {
-	return &jsonOutputNode{make(map[string]interface{})}
+func (p *jsonNode) New(attr string) outputNode {
+	return &jsonNode{make(map[string]interface{})}
 }
 
 // SetUID sets UID of a jsonOutputNode.
-func (p *jsonOutputNode) SetUID(uid uint64) {
+func (p *jsonNode) SetUID(uid uint64) {
 	_, found := p.data["_uid_"]
 	if !found {
 		p.data["_uid_"] = fmt.Sprintf("%#x", uid)
@@ -150,18 +152,18 @@ func (p *jsonOutputNode) SetUID(uid uint64) {
 }
 
 // SetXID sets XID of a jsonOutputNode.
-func (p *jsonOutputNode) SetXID(xid string) {
+func (p *jsonNode) SetXID(xid string) {
 	p.data["_xid_"] = xid
 }
 
-func (p *jsonOutputNode) IsEmpty() bool {
+func (p *jsonNode) IsEmpty() bool {
 	return len(p.data) == 0
 }
 
 // ToJSON converts the internal subgraph object to JSON format which is then\
 // sent to the HTTP client.
 func (sg *SubGraph) ToJSON(l *Latency) ([]byte, error) {
-	var seedNode *jsonOutputNode
+	var seedNode *jsonNode
 	n := seedNode.New("_root_")
 	for _, uid := range sg.DestUIDs.Uids {
 		// For the root, the name is stored in Alias, not Attr.
@@ -181,7 +183,7 @@ func (sg *SubGraph) ToJSON(l *Latency) ([]byte, error) {
 		}
 		n.AddChild(sg.Params.Alias, n1)
 	}
-	res := n.(*jsonOutputNode).data
+	res := n.(*jsonNode).data
 	if sg.Params.isDebug {
 		res["server_latency"] = l.ToMap()
 	}
@@ -198,8 +200,8 @@ func (sg *SubGraph) ToJSON(l *Latency) ([]byte, error) {
 // BenchmarkMockSubGraphToJSON-4     	  100000	     98768 ns/op
 
 type fastJsonNode struct {
-	attrsWithChildren map[string][]*fastJsonNode
-	attrs             map[string][]byte
+	children map[string][]*fastJsonNode
+	attrs    map[string][]byte
 }
 
 func (fj *fastJsonNode) AddValue(attr string, v types.Val) {
@@ -209,20 +211,27 @@ func (fj *fastJsonNode) AddValue(attr string, v types.Val) {
 }
 
 func (fj *fastJsonNode) AddChild(attr string, child outputNode) {
-	_, found := fj.attrsWithChildren[attr]
+	children, found := fj.children[attr]
 	if !found {
-		fj.attrsWithChildren[attr] = make([]*fastJsonNode, 0, 5)
+		children = make([]*fastJsonNode, 0, 5)
 	}
-	fj.attrsWithChildren[attr] = append(fj.attrsWithChildren[attr], child.(*fastJsonNode))
+	fj.children[attr] = append(children, child.(*fastJsonNode))
 }
 
 func (fj *fastJsonNode) New(attr string) outputNode {
-	return &fastJsonNode{make(map[string][]*fastJsonNode), make(map[string][]byte)}
+	return &fastJsonNode{
+		children: make(map[string][]*fastJsonNode),
+		attrs:    make(map[string][]byte),
+	}
 }
 
 func (fj *fastJsonNode) SetUID(uid uint64) {
-	_, found := fj.attrs["_uid_"]
-	if !found {
+	uidBs, found := fj.attrs["_uid_"]
+	if found {
+		lUidBs := len(uidBs)
+		currUid, err := strconv.ParseUint(string(uidBs[1:lUidBs-1]), 0, 64)
+		x.AssertTruef(err == nil && currUid == uid, "Setting two different uids on same node.")
+	} else {
 		fj.attrs["_uid_"] = []byte(fmt.Sprintf("\"%#x\"", uid))
 	}
 }
@@ -232,7 +241,7 @@ func (fj *fastJsonNode) SetXID(xid string) {
 }
 
 func (fj *fastJsonNode) IsEmpty() bool {
-	return len(fj.attrs) == 0 && len(fj.attrsWithChildren) == 0
+	return len(fj.attrs) == 0 && len(fj.children) == 0
 }
 
 func valToBytes(v types.Val) ([]byte, error) {
@@ -269,7 +278,7 @@ func (fj *fastJsonNode) encode(jsBuf *bytes.Buffer) {
 	for k, _ := range fj.attrs {
 		allKeys = append(allKeys, k)
 	}
-	for k, _ := range fj.attrsWithChildren {
+	for k, _ := range fj.children {
 		allKeys = append(allKeys, k)
 	}
 	sort.Strings(allKeys)
@@ -289,7 +298,7 @@ func (fj *fastJsonNode) encode(jsBuf *bytes.Buffer) {
 		if v, ok := fj.attrs[k]; ok {
 			jsBuf.Write(v)
 		} else {
-			v := fj.attrsWithChildren[k]
+			v := fj.children[k]
 			first := true
 			jsBuf.WriteRune('[')
 			for _, vi := range v {
@@ -312,7 +321,6 @@ func processNodeUids(n *fastJsonNode, sg *SubGraph) error {
 		if sg.Params.GetUID || sg.Params.isDebug {
 			n1.SetUID(uid)
 		}
-
 		if err := sg.preTraverse(uid, n1); err != nil {
 			if err.Error() == "_INV_" {
 				continue

@@ -206,6 +206,8 @@ func init() {
 // This method gets the values and children for a subgraph.
 func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 	invalidUids := make(map[uint64]bool)
+	uidAlreadySet := false
+
 	// We go through all predicate children of the subgraph.
 	for _, pc := range sg.Children {
 		idx := algo.IndexOf(pc.SrcUIDs, uid)
@@ -218,7 +220,8 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 		if pc.Params.Alias != "" {
 			fieldName = pc.Params.Alias
 		}
-		if sg.Params.GetUID || sg.Params.isDebug {
+		if !uidAlreadySet && (sg.Params.GetUID || sg.Params.isDebug) {
+			uidAlreadySet = true
 			dst.SetUID(uid)
 		}
 		if len(pc.counts) > 0 {
@@ -269,7 +272,8 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 					return err
 				}
 				dst.SetXID(txt.Value.(string))
-			} else if pc.Attr == "_uid_" {
+			} else if pc.Attr == "_uid_" && !uidAlreadySet {
+				uidAlreadySet = true
 				dst.SetUID(uid)
 			} else {
 				// globalType is the best effort type to which we try converting
@@ -303,6 +307,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 			}
 		}
 	}
+
 	return nil
 }
 
