@@ -376,39 +376,39 @@ func Parse(input string) (res Result, rerr error) {
 }
 
 func checkDependency(vl []*Vars) error {
-	l1, l2 := make([]string, 0, 10), make([]string, 0, 10)
+	needs, defines := make([]string, 0, 10), make([]string, 0, 10)
 	for _, it := range vl {
 		for _, v := range it.Needs {
-			l1 = append(l1, v)
+			needs = append(needs, v)
 		}
 		for _, v := range it.Defines {
-			l2 = append(l2, v)
+			defines = append(defines, v)
 		}
 	}
 
-	sort.Strings(l1)
-	sort.Strings(l2)
+	sort.Strings(needs)
+	sort.Strings(defines)
 	i, j := 0, 0
-	if len(l2) > len(l1) {
+	if len(defines) > len(needs) {
 		return x.Errorf("Some variables are defined and not used")
 	}
 
-	for i < len(l1) && j < len(l2) {
-		if l1[i] != l2[j] {
-			return x.Errorf("Variable %s defined but not used", l2[j])
+	for i < len(needs) && j < len(defines) {
+		if needs[i] != defines[j] {
+			return x.Errorf("Variable %s defined but not used", defines[j])
 		}
 
 		i++
-		for i < len(l1) && l1[i-1] == l1[i] {
+		for i < len(needs) && needs[i-1] == needs[i] {
 			i++
 		}
 		j++
-		if j < len(l2) && l2[j] == l2[j-1] {
-			return x.Errorf("Variable %s defined multiple times", l2[j])
+		if j < len(defines) && defines[j] == defines[j-1] {
+			return x.Errorf("Variable %s defined multiple times", defines[j])
 		}
 	}
 
-	if i != len(l1) || j != len(l2) {
+	if i != len(needs) || j != len(defines) {
 		return x.Errorf("Some variables are used but not defined")
 	}
 
