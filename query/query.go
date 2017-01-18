@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 DGraph Labs, Inc.
+ * Copyright 2017 DGraph Labs, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -333,6 +333,7 @@ func filterCopy(sg *SubGraph, ft *gql.FilterTree) {
 		sg.Attr = ft.Func.Attr
 		sg.SrcFunc = append(sg.SrcFunc, ft.Func.Name)
 		sg.SrcFunc = append(sg.SrcFunc, ft.Func.Args...)
+		sg.Params.NeedsVar = ft.Func.NeedsVar
 	}
 	for _, ftc := range ft.Child {
 		child := &SubGraph{}
@@ -517,10 +518,17 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 	execStart := time.Now()
 	hasExecuted := make([]bool, len(sgl))
 	numQueriesDone := 0
-	for i := 0; i < len(sgl); i++ {
-		if numQueriesDone == len(sgl) {
-			break
+
+	canExecute := func(idx int) bool {
+		for _, v := range res.QueryVars[idx].Needs {
+			if _, ok := doneVars[v]; !ok {
+				return false
+			}
 		}
+		return true
+	}
+
+	for numQueriesDone < len(sgl) {
 		errChan := make(chan error, len(sgl))
 		var idxList []int
 		// If we have N blocks in a query, it can take a maximum of N iterations for all of them
@@ -530,19 +538,16 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 				continue
 			}
 			sg := sgl[idx]
-			if _, ok := doneVars[sg.Params.NeedsVar]; !ok && sg.Params.NeedsVar != "" {
+			// Check the list for the requires variables.
+			if !canExecute(idx) {
 				continue
 			}
+
 			fillUpVariables(sg, doneVars)
 			hasExecuted[idx] = true
 			idxList = append(idxList, idx)
 			numQueriesDone++
-			go func() {
-				rch := make(chan error)
-				go ProcessGraph(ctx, sg, nil, rch)
-				err := <-rch
-				errChan <- err
-			}()
+			go ProcessGraph(ctx, sg, nil, errChan)
 			x.Trace(ctx, "Graph processed")
 		}
 
@@ -563,6 +568,9 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 		// If the executed subgraph had some variable defined in it, Populate it in the map.
 		for _, idx := range idxList {
 			sg := sgl[idx]
+			if sg.Params.Alias != "var" {
+				continue
+			}
 			populateVarMap(sg, doneVars)
 		}
 	}
@@ -578,21 +586,52 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 	return sgl, nil
 }
 
+// TODO(Ashwin): Benchmark this function. Map implementation might be slow.
 func populateVarMap(sg *SubGraph, doneVars map[string]*task.List) {
-	if sg.Params.Var != "" {
-		doneVars[sg.Params.Var] = sg.DestUIDs
-	}
+	// Filter out UIDs that don't have atleast one UID in every child.
+	excluded := make(map[uint64]struct{})
 	for _, child := range sg.Children {
 		populateVarMap(child, doneVars)
+		for i := 0; i < len(child.uidMatrix); i++ {
+			if len(child.values[i].Val) == 0 && len(child.uidMatrix[i].Uids) == 0 {
+				excluded[sg.DestUIDs.Uids[i]] = struct{}{}
+			}
+		}
+	}
+
+	// Remove the excluded UIDs from the UID matrix of this level.
+	if sg.uidMatrix != nil {
+		for i := 0; i < len(sg.uidMatrix); i++ {
+			algo.ApplyFilter(sg.uidMatrix[i],
+				func(uid uint64, idx int) bool {
+					_, ok := excluded[uid]
+					return !ok
+				})
+		}
+	}
+	// Remove the excluded UIDs from the DestUIDs of this level.
+	if sg.DestUIDs != nil {
+		algo.ApplyFilter(sg.DestUIDs,
+			func(uid uint64, idx int) bool {
+				_, ok := excluded[uid]
+				return !ok
+			})
+	}
+
+	if sg.Params.Var != "" {
+		doneVars[sg.Params.Var] = sg.DestUIDs
 	}
 }
 
 func fillUpVariables(sg *SubGraph, doneVars map[string]*task.List) {
-	if sg.Params.NeedsVar != "" {
-		sg.DestUIDs = doneVars[sg.Params.NeedsVar]
+	if v, ok := doneVars[sg.Params.NeedsVar]; ok {
+		sg.DestUIDs = v
 	}
 	for _, child := range sg.Children {
 		fillUpVariables(child, doneVars)
+	}
+	for _, fchild := range sg.Filters {
+		fillUpVariables(fchild, doneVars)
 	}
 }
 
@@ -600,7 +639,7 @@ func fillUpVariables(sg *SubGraph, doneVars map[string]*task.List) {
 // from different instances. Note: taskQuery is nil for root node.
 func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	var err error
-	if len(sg.Params.NeedsVar) != 0 {
+	if len(sg.Params.NeedsVar) != 0 && len(sg.SrcFunc) == 0 {
 		// Do nothing as the list has already been populated.
 	} else if len(sg.Attr) == 0 {
 		// If we have a filter SubGraph which only contains an operator,
@@ -613,6 +652,14 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		// result has been prepared for me already.
 		sg.DestUIDs = algo.MergeSorted(sg.uidMatrix) // Could also be = sg.SrcUIDs
 	} else {
+		if len(sg.SrcFunc) > 0 && sg.SrcFunc[0] == "id" {
+			// If its an id() filter, we just have to intersect the SrcUIDs with DestUIDs
+			// and return.
+			algo.IntersectWith(sg.DestUIDs, sg.SrcUIDs)
+			rch <- nil
+			return
+		}
+
 		taskQuery := createTaskQuery(sg)
 		result, err := worker.ProcessTaskOverNetwork(ctx, taskQuery)
 		if err != nil {
@@ -683,10 +730,15 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		if sg.FilterOp == "|" {
 			sg.DestUIDs = algo.MergeSorted(lists)
 		} else {
+			// If one of the arguments was id so append it once more
+			lists = append(lists, sg.DestUIDs)
 			sg.DestUIDs = algo.IntersectSorted(lists)
 		}
 	}
 
+	for _, l := range sg.uidMatrix {
+		algo.IntersectWith(l, sg.DestUIDs)
+	}
 	if len(sg.Params.Order) == 0 {
 		// There is no ordering. Just apply pagination and return.
 		if err = sg.applyPagination(ctx); err != nil {
@@ -775,12 +827,12 @@ func pageRange(p *params, n int) (int, int) {
 // applyWindow applies windowing to sg.sorted.
 func (sg *SubGraph) applyPagination(ctx context.Context) error {
 	params := sg.Params
+
 	if params.Count == 0 && params.Offset == 0 { // No pagination.
 		return nil
 	}
 	x.AssertTrue(len(sg.SrcUIDs.Uids) == len(sg.uidMatrix))
 	for _, l := range sg.uidMatrix {
-		algo.IntersectWith(l, sg.DestUIDs)
 		start, end := pageRange(&sg.Params, len(l.Uids))
 		l.Uids = l.Uids[start:end]
 	}
@@ -831,32 +883,4 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 	algo.ApplyFilter(sg.DestUIDs,
 		func(uid uint64, idx int) bool { return included[idx] })
 	return nil
-}
-
-func ToProtocolBuf(l *Latency, sgl []*SubGraph) ([]*graph.Node, error) {
-	var resNode []*graph.Node
-	for _, sg := range sgl {
-		node, err := sg.ToProtocolBuffer(l)
-		if err != nil {
-			return nil, err
-		}
-		resNode = append(resNode, node)
-	}
-	return resNode, nil
-}
-
-func ToJson(l *Latency, sgl []*SubGraph) ([]byte, error) {
-	sgr := &SubGraph{
-		Attr: "_root_",
-	}
-	for _, sg := range sgl {
-		if sg.Params.Alias == "var" {
-			continue
-		}
-		if sg.Params.isDebug {
-			sgr.Params.isDebug = true
-		}
-		sgr.Children = append(sgr.Children, sg)
-	}
-	return sgr.ToFastJSON(l)
 }

@@ -343,6 +343,58 @@ func TestMultiEmptyBlocks(t *testing.T) {
 		js)
 }
 
+func TestUseVarsMultiCascade(t *testing.T) {
+	dir, dir2, ps := populateGraph(t)
+	defer ps.Close()
+	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
+	query := `
+		{
+			var(id:0x01) {
+				L AS friend {
+				 B AS friend	
+				}
+			}
+
+			me(L) {
+				name
+			}
+
+			friend(B) {
+				name
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"name":"Andrea"}], "friend":[{"name":"Glenn Rhee"}]}`,
+		js)
+}
+
+func TestUseVarsCascade(t *testing.T) {
+	dir, dir2, ps := populateGraph(t)
+	defer ps.Close()
+	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
+	query := `
+		{
+			var(id:0x01) {
+				L AS friend {
+				  friend	
+				}
+			}
+
+			me(L) {
+				name
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"name":"Andrea"}]}`,
+		js)
+}
+
 func TestUseVars(t *testing.T) {
 	dir, dir2, ps := populateGraph(t)
 	defer ps.Close()
@@ -2194,6 +2246,67 @@ func TestGenerator(t *testing.T) {
   `
 	js := processToFastJSON(t, query)
 	require.JSONEq(t, `{"me":[{"gender":"female","name":"Michonne"}]}`, js)
+}
+
+func TestGeneratorMultiRootMultiQueryRootVar(t *testing.T) {
+	dir1, dir2, ps := populateGraph(t)
+	defer ps.Close()
+	defer os.RemoveAll(dir1)
+	defer os.RemoveAll(dir2)
+	query := `
+    {
+			friend AS var(anyof("name", "Michonne Rick Glenn")) {
+      	name
+			}
+
+			you(friend) {
+				name
+			}
+    }
+  `
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"you":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"}]}`, js)
+}
+
+func TestGeneratorMultiRootMultiQueryVarFilter(t *testing.T) {
+	dir1, dir2, ps := populateGraph(t)
+	defer ps.Close()
+	defer os.RemoveAll(dir1)
+	defer os.RemoveAll(dir2)
+	query := `
+    {
+			f AS var(anyof("name", "Michonne Rick Glenn")) {
+      	name
+			}
+
+			you(anyof(name, "Michonne")) {
+				friend @filter(id(f)) {
+					name
+				}
+			}
+    }
+  `
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"you":[{"friend":[{"name":"Rick Grimes"}, {"name":"Glenn Rhee"}]}]}`, js)
+}
+
+func TestGeneratorMultiRootMultiQueryRootVarFilter(t *testing.T) {
+	dir1, dir2, ps := populateGraph(t)
+	defer ps.Close()
+	defer os.RemoveAll(dir1)
+	defer os.RemoveAll(dir2)
+	query := `
+    {
+			friend AS var(anyof("name", "Michonne Rick Glenn")) {
+			}
+
+			you(anyof(name, "Michonne Andrea Glenn")) @filter(id(friend)) {
+				name
+			}
+    }
+  `
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"you":[{"name":"Michonne"}, {"name":"Glenn Rhee"}]}`, js)
 }
 
 func TestGeneratorMultiRootMultiQuery(t *testing.T) {

@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -89,9 +90,10 @@ type FilterTree struct {
 
 // Function holds the information about gql functions.
 type Function struct {
-	Attr string
-	Name string   // Specifies the name of the function.
-	Args []string // Contains the arguments of the function.
+	Attr     string
+	Name     string   // Specifies the name of the function.
+	Args     []string // Contains the arguments of the function.
+	NeedsVar string   // If the function requires some variable
 }
 
 // filterOpPrecedence is a map from filterOp (a string) to its precedence.
@@ -216,7 +218,7 @@ func parseQueryWithVariables(str string) (string, varMap, error) {
 	return q.Query, vm, nil
 }
 
-func checkValidity(vm varMap) error {
+func checkValueType(vm varMap) error {
 	for k, v := range vm {
 		typ := v.Type
 
@@ -284,9 +286,15 @@ func substituteVariables(gq *GraphQuery, vmap varMap) error {
 	return nil
 }
 
+type Vars struct {
+	Defines []string
+	Needs   []string
+}
+
 type Result struct {
-	Query    []*GraphQuery
-	Mutation *Mutation
+	Query     []*GraphQuery
+	QueryVars []*Vars
+	Mutation  *Mutation
 }
 
 // Parse initializes and runs the lexer. It also constructs the GraphQuery subgraph
@@ -343,7 +351,9 @@ func Parse(input string) (res Result, rerr error) {
 	}
 
 	if len(res.Query) != 0 {
-		for _, qu := range res.Query {
+		res.QueryVars = make([]*Vars, 0, len(res.Query))
+		for i := 0; i < len(res.Query); i++ {
+			qu := res.Query[i]
 			// Try expanding fragments using fragment map.
 			if err := qu.expandFragments(fmap); err != nil {
 				return res, err
@@ -353,10 +363,84 @@ func Parse(input string) (res Result, rerr error) {
 			if err := substituteVariables(qu, vmap); err != nil {
 				return res, err
 			}
+
+			res.QueryVars = append(res.QueryVars, &Vars{})
+			// Collect vars used and defined in Result struct.
+			qu.collectVars(res.QueryVars[i])
+		}
+		if err := checkDependency(res.QueryVars); err != nil {
+			return res, err
+		}
+	}
+	return res, nil
+}
+
+func checkDependency(vl []*Vars) error {
+	needs, defines := make([]string, 0, 10), make([]string, 0, 10)
+	for _, it := range vl {
+		for _, v := range it.Needs {
+			needs = append(needs, v)
+		}
+		for _, v := range it.Defines {
+			defines = append(defines, v)
 		}
 	}
 
-	return res, nil
+	sort.Strings(needs)
+	sort.Strings(defines)
+	i, j := 0, 0
+	if len(defines) > len(needs) {
+		return x.Errorf("Some variables are defined and not used")
+	}
+
+	for i < len(needs) && j < len(defines) {
+		if needs[i] != defines[j] {
+			return x.Errorf("Variable %s defined but not used", defines[j])
+		}
+
+		i++
+		for i < len(needs) && needs[i-1] == needs[i] {
+			i++
+		}
+		j++
+		if j < len(defines) && defines[j] == defines[j-1] {
+			return x.Errorf("Variable %s defined multiple times", defines[j])
+		}
+	}
+
+	if i != len(needs) || j != len(defines) {
+		return x.Errorf("Some variables are used but not defined")
+	}
+
+	return nil
+}
+
+func (qu *GraphQuery) collectVars(v *Vars) {
+	if qu.Var != "" {
+		v.Defines = append(v.Defines, qu.Var)
+	}
+
+	if qu.NeedsVar != "" {
+		v.Needs = append(v.Needs, qu.NeedsVar)
+	}
+
+	for _, ch := range qu.Children {
+		ch.collectVars(v)
+	}
+
+	if qu.Filter != nil {
+		qu.Filter.collectVars(v)
+	}
+}
+
+func (f *FilterTree) collectVars(v *Vars) {
+	if f.Func != nil && f.Func.NeedsVar != "" {
+		v.Needs = append(v.Needs, f.Func.NeedsVar)
+	}
+
+	for _, fch := range f.Child {
+		fch.collectVars(v)
+	}
 }
 
 // getVariablesAndQuery checks if the query has a variable list and stores it in
@@ -388,7 +472,7 @@ L2:
 				return nil, rerr
 			}
 
-			if rerr = checkValidity(vmap); rerr != nil {
+			if rerr = checkValueType(vmap); rerr != nil {
 				return nil, rerr
 			}
 		case itemLeftCurl:
@@ -760,7 +844,7 @@ func parseFunction(it *lex.ItemIterator) (*Function, error) {
 	for it.Next() {
 		item := it.Item()
 		if item.Typ == itemName { // Value.
-			g = &Function{Name: item.Val}
+			g = &Function{Name: strings.ToLower(item.Val)}
 			it.Next()
 			itemInFunc := it.Item()
 			if itemInFunc.Typ != itemLeftRound {
@@ -810,7 +894,7 @@ func parseFilter(it *lex.ItemIterator) (*FilterTree, error) {
 		if item.Typ == itemName { // Value.
 			f := &Function{}
 			leaf := &FilterTree{Func: f}
-			f.Name = item.Val
+			f.Name = strings.ToLower(item.Val)
 			it.Next()
 			itemInFunc := it.Item()
 			if itemInFunc.Typ != itemLeftRound {
@@ -832,6 +916,9 @@ func parseFilter(it *lex.ItemIterator) (*FilterTree, error) {
 				}
 				if len(f.Attr) == 0 {
 					f.Attr = it
+					if f.Name == "id" {
+						f.NeedsVar = f.Attr
+					}
 				} else {
 					f.Args = append(f.Args, it)
 				}
@@ -946,6 +1033,17 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 		return nil, x.Errorf("Expected some name. Got: %v", item)
 	}
 
+	peekIt, err := it.Peek(1)
+	if err != nil {
+		return nil, x.Errorf("Invalid Query")
+	}
+	if peekIt[0].Typ == itemName && strings.ToLower(peekIt[0].Val) == "as" {
+		gq.Var = item.Val
+		it.Next() // Consume the "AS".
+		it.Next()
+		item = it.Item()
+	}
+
 	gq.Alias = item.Val
 	it.Next()
 	item = it.Item()
@@ -1030,7 +1128,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				return x.Errorf("Invalid query")
 			}
 
-			if peekIt[0].Typ == itemName && peekIt[0].Val == "AS" {
+			if peekIt[0].Typ == itemName && strings.ToLower(peekIt[0].Val) == "as" {
 				varName := item.Val
 				it.Next() // "As" was checked before.
 				it.Next()
