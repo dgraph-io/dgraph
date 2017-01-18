@@ -450,7 +450,10 @@ func (l *List) SyncIfDirty(ctx context.Context) (committed bool, err error) {
 	defer l.Unlock()
 
 	if len(l.mlayer) == 0 {
-		x.AssertTrue(len(l.pending) == 0)
+		for _, idx := range l.pending {
+			l.water.Ch <- x.Mark{Index: idx, Done: true}
+		}
+		l.pending = l.pending[:0]
 		return false, nil
 	}
 
