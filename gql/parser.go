@@ -397,7 +397,6 @@ func checkDependency(vl []*Vars) error {
 		if needs[i] != defines[j] {
 			return x.Errorf("Variable %s defined but not used", defines[j])
 		}
-
 		i++
 		for i < len(needs) && needs[i-1] == needs[i] {
 			i++
@@ -407,11 +406,9 @@ func checkDependency(vl []*Vars) error {
 			return x.Errorf("Variable %s defined multiple times", defines[j])
 		}
 	}
-
 	if i != len(needs) || j != len(defines) {
 		return x.Errorf("Some variables are used but not defined")
 	}
-
 	return nil
 }
 
@@ -419,15 +416,12 @@ func (qu *GraphQuery) collectVars(v *Vars) {
 	if qu.Var != "" {
 		v.Defines = append(v.Defines, qu.Var)
 	}
-
 	if qu.NeedsVar != "" {
 		v.Needs = append(v.Needs, qu.NeedsVar)
 	}
-
 	for _, ch := range qu.Children {
 		ch.collectVars(v)
 	}
-
 	if qu.Filter != nil {
 		qu.Filter.collectVars(v)
 	}
@@ -437,7 +431,6 @@ func (f *FilterTree) collectVars(v *Vars) {
 	if f.Func != nil && f.Func.NeedsVar != "" {
 		v.Needs = append(v.Needs, f.Func.NeedsVar)
 	}
-
 	for _, fch := range f.Child {
 		fch.collectVars(v)
 	}
