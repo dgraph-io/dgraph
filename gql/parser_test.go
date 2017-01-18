@@ -35,29 +35,12 @@ func childAttrs(g *GraphQuery) []string {
 func TestParseQueryWithVar(t *testing.T) {
 	query := `
 	{	
-		me(L) {
-		 name	
-		}
-
-		him(J) {
-			name
-		}
-	
-		you(K) {
-			name
-		}
-
-		var(id:0x0a) {
-			L AS friends
-		}
-		
-		var(id:0x0a) {
-			J AS friends
-		}
-		
-		var(id:0x0a) {
-			K AS friends
-		}
+		me(L) {name}
+		him(J) {name}
+		you(K) {name}
+		var(id:0x0a) {L AS friends}
+		var(id:0x0a) {J AS friends}
+		var(id:0x0a) {K AS friends}
 	}
 `
 	res, err := Parse(query)
@@ -75,25 +58,11 @@ func TestParseQueryWithVar(t *testing.T) {
 func TestParseQueryWithVarError1(t *testing.T) {
 	query := `
 	{	
-		him(J) {
-			name
-		}
-	
-		you(K) {
-			name
-		}
-
-		var(id:0x0a) {
-			L AS friends
-		}
-		
-		var(id:0x0a) {
-			J AS friends
-		}
-		
-		var(id:0x0a) {
-			K AS friends
-		}
+		him(J) {name}
+		you(K) {name}
+		var(id:0x0a) {L AS friends}
+		var(id:0x0a) {J AS friends}
+		var(id:0x0a) {K AS friends}
 	}
 `
 	_, err := Parse(query)
@@ -103,25 +72,11 @@ func TestParseQueryWithVarError1(t *testing.T) {
 func TestParseQueryWithVarError2(t *testing.T) {
 	query := `
 	{	
-		me(L) {
-		 name	
-		}
-
-		him(J) {
-			name
-		}
-	
-		you(K) {
-			name
-		}
-
-		var(id:0x0a) {
-			L AS friends
-		}
-		
-		var(id:0x0a) {
-			K AS friends
-		}
+		me(L) {name}
+		him(J) {name}	
+		you(K) {name}
+		var(id:0x0a) {L AS friends}
+		var(id:0x0a) {K AS friends}
 	}
 `
 	_, err := Parse(query)

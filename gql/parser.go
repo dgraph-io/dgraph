@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -217,7 +218,7 @@ func parseQueryWithVariables(str string) (string, varMap, error) {
 	return q.Query, vm, nil
 }
 
-func checkValidity(vm varMap) error {
+func checkValueType(vm varMap) error {
 	for k, v := range vm {
 		typ := v.Type
 
@@ -367,37 +368,50 @@ func Parse(input string) (res Result, rerr error) {
 			// Collect vars used and defined in Result struct.
 			qu.collectVars(res.QueryVars[i])
 		}
-		if err := checkValidityVariables(res.QueryVars); err != nil {
+		if err := checkDependency(res.QueryVars); err != nil {
 			return res, err
 		}
 	}
 	return res, nil
 }
 
-func checkValidityVariables(vl []*Vars) error {
-	mp1 := make(map[string]struct{})
-	mp2 := make(map[string]struct{})
+func checkDependency(vl []*Vars) error {
+	l1, l2 := make([]string, 0, 10), make([]string, 0, 10)
 	for _, it := range vl {
 		for _, v := range it.Needs {
-			mp1[v] = struct{}{}
+			l1 = append(l1, v)
 		}
 		for _, v := range it.Defines {
-			mp2[v] = struct{}{}
+			l2 = append(l2, v)
 		}
 	}
 
-	for _, it := range vl {
-		for _, v := range it.Needs {
-			if _, ok := mp2[v]; !ok {
-				return x.Errorf("Variable %s needed but not defined", v)
-			}
+	sort.Strings(l1)
+	sort.Strings(l2)
+	i, j := 0, 0
+	if len(l2) > len(l1) {
+		return x.Errorf("Some variables are defined and not used")
+	}
+
+	for i < len(l1) && j < len(l2) {
+		if l1[i] != l2[j] {
+			return x.Errorf("Variable %s defined but not used", l2[j])
 		}
-		for _, v := range it.Defines {
-			if _, ok := mp1[v]; !ok {
-				return x.Errorf("Variable %s defined but not used", v)
-			}
+
+		i++
+		for i < len(l1) && l1[i-1] == l1[i] {
+			i++
+		}
+		j++
+		if j < len(l2) && l2[j] == l2[j-1] {
+			return x.Errorf("Variable %s defined multiple times", l2[j])
 		}
 	}
+
+	if i != len(l1) || j != len(l2) {
+		return x.Errorf("Some variables are used but not defined")
+	}
+
 	return nil
 }
 
@@ -458,7 +472,7 @@ L2:
 				return nil, rerr
 			}
 
-			if rerr = checkValidity(vmap); rerr != nil {
+			if rerr = checkValueType(vmap); rerr != nil {
 				return nil, rerr
 			}
 		case itemLeftCurl:
