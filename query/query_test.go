@@ -17,6 +17,7 @@
 package query
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"encoding/json"
@@ -269,9 +270,10 @@ func processToFastJSON(t *testing.T, query string) string {
 	sgl, err := ProcessQuery(ctx, res, &l)
 	require.NoError(t, err)
 
-	js, err := ToJson(&l, sgl)
+	var buf bytes.Buffer
+	err = ToJson(&l, sgl, &buf)
 	require.NoError(t, err)
-	return string(js)
+	return string(buf.Bytes())
 }
 
 func TestGetUID(t *testing.T) {
@@ -1839,7 +1841,9 @@ func mockSubGraph() *SubGraph {
 func TestMockSubGraphFastJson(t *testing.T) {
 	sg := mockSubGraph()
 	var l Latency
-	js, _ := sg.ToFastJSON(&l)
+	var buf bytes.Buffer
+	require.NoError(t, ToJson(&l, []*SubGraph{sg}, &buf))
+	js := buf.Bytes()
 	// check validity of json
 	var unmarshalJs map[string]interface{}
 	require.NoError(t, json.Unmarshal([]byte(js), &unmarshalJs))

@@ -17,6 +17,7 @@
 package query
 
 import (
+	"bytes"
 	"context"
 	"io/ioutil"
 	"os"
@@ -105,9 +106,10 @@ func runQuery(t *testing.T, gq *gql.GraphQuery) string {
 	require.NoError(t, err)
 
 	var l Latency
-	js, err := sg.ToFastJSON(&l)
+	var buf bytes.Buffer
+	err = sg.ToFastJSON(&l, &buf)
 	require.NoError(t, err)
-	return string(js)
+	return string(buf.Bytes())
 }
 
 func TestWithinPoint(t *testing.T) {

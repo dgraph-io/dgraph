@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"io"
 	"log"
 	"strconv"
 	"strings"
@@ -845,7 +846,7 @@ func ToProtocolBuf(l *Latency, sgl []*SubGraph) ([]*graph.Node, error) {
 	return resNode, nil
 }
 
-func ToJson(l *Latency, sgl []*SubGraph) ([]byte, error) {
+func ToJson(l *Latency, sgl []*SubGraph, w io.Writer) error {
 	sgr := &SubGraph{
 		Attr: "_root_",
 	}
@@ -858,5 +859,5 @@ func ToJson(l *Latency, sgl []*SubGraph) ([]byte, error) {
 		}
 		sgr.Children = append(sgr.Children, sg)
 	}
-	return sgr.ToFastJSON(l)
+	return sgr.ToFastJSON(l, w)
 }

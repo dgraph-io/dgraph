@@ -17,10 +17,12 @@
 package query
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"sort"
 	"strconv"
 	"sync"
@@ -274,7 +276,7 @@ func valToBytes(v types.Val) ([]byte, error) {
 	}
 }
 
-func (fj *fastJsonNode) encode(jsBuf *bytes.Buffer) {
+func (fj *fastJsonNode) encode(bufW *bufio.Writer) {
 	allKeys := make([]string, 0, len(fj.attrs))
 	for k, _ := range fj.attrs {
 		allKeys = append(allKeys, k)
@@ -284,35 +286,35 @@ func (fj *fastJsonNode) encode(jsBuf *bytes.Buffer) {
 	}
 	sort.Strings(allKeys)
 
-	jsBuf.WriteRune('{')
+	bufW.WriteRune('{')
 	first := true
 	for _, k := range allKeys {
 		if !first {
-			jsBuf.WriteRune(',')
+			bufW.WriteRune(',')
 		}
 		first = false
-		jsBuf.WriteRune('"')
-		jsBuf.WriteString(k)
-		jsBuf.WriteRune('"')
-		jsBuf.WriteRune(':')
+		bufW.WriteRune('"')
+		bufW.WriteString(k)
+		bufW.WriteRune('"')
+		bufW.WriteRune(':')
 
 		if v, ok := fj.attrs[k]; ok {
-			jsBuf.Write(v)
+			bufW.Write(v)
 		} else {
 			v := fj.children[k]
 			first := true
-			jsBuf.WriteRune('[')
+			bufW.WriteRune('[')
 			for _, vi := range v {
 				if !first {
-					jsBuf.WriteRune(',')
+					bufW.WriteRune(',')
 				}
 				first = false
-				vi.encode(jsBuf)
+				vi.encode(bufW)
 			}
-			jsBuf.WriteRune(']')
+			bufW.WriteRune(']')
 		}
 	}
-	jsBuf.WriteRune('}')
+	bufW.WriteRune('}')
 }
 
 func processNodeUids(n *fastJsonNode, sg *SubGraph) error {
@@ -336,45 +338,41 @@ func processNodeUids(n *fastJsonNode, sg *SubGraph) error {
 	return nil
 }
 
-func (sg *SubGraph) ToFastJSON(l *Latency) ([]byte, error) {
+func (sg *SubGraph) ToFastJSON(l *Latency, w io.Writer) error {
 	var seedNode *fastJsonNode
 	n := seedNode.New("_root_")
 	if sg.Attr == "_root_" {
 		for _, sg := range sg.Children {
 			err := processNodeUids(n.(*fastJsonNode), sg)
 			if err != nil {
-				return nil, err
+				return err
 			}
 		}
 	} else {
 		err := processNodeUids(n.(*fastJsonNode), sg)
 		if err != nil {
-			return nil, err
+			return err
 		}
 	}
 
-	buf := bufferPool.Get()
-	defer bufferPool.Put(buf)
-
-	jsBuf := buf.(bytes.Buffer)
+	// start writing to the buffer as all errors are checked.
 	if sg.Params.isDebug {
 		sl := seedNode.New("serverLatency").(*fastJsonNode)
 		for k, v := range l.ToMap() {
 			sl.attrs[k] = []byte(fmt.Sprintf("%q", v))
 		}
 
-		jsBuf.Reset()
-		sl.encode(&jsBuf)
-		slBs := make([]byte, jsBuf.Len())
-		copy(slBs, jsBuf.Bytes())
-		n.(*fastJsonNode).attrs["server_latency"] = slBs
+		var slBuf bytes.Buffer
+		bufW := bufio.NewWriter(&slBuf)
+		sl.encode(bufW)
+		bufW.Flush()
+		n.(*fastJsonNode).attrs["server_latency"] = slBuf.Bytes()
 	}
 
-	jsBuf.Reset()
-	n.(*fastJsonNode).encode(&jsBuf)
-	jsBs := make([]byte, jsBuf.Len())
-	copy(jsBs, jsBuf.Bytes())
-	return jsBs, nil
+	bufW := bufio.NewWriter(w)
+	n.(*fastJsonNode).encode(bufW)
+	bufW.Flush()
+	return nil
 }
 
 var bufferPool = sync.Pool{
