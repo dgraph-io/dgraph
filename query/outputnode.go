@@ -25,7 +25,6 @@ import (
 	"io"
 	"sort"
 	"strconv"
-	"sync"
 	"time"
 
 	geom "github.com/twpayne/go-geom"
@@ -373,12 +372,4 @@ func (sg *SubGraph) ToFastJSON(l *Latency, w io.Writer) error {
 	n.(*fastJsonNode).encode(bufW)
 	bufW.Flush()
 	return nil
-}
-
-var bufferPool = sync.Pool{
-	New: func() interface{} {
-		var buf bytes.Buffer
-		buf.Grow(4096)
-		return buf
-	},
 }
