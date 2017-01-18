@@ -830,7 +830,7 @@ func parseFunction(it *lex.ItemIterator) (*Function, error) {
 	for it.Next() {
 		item := it.Item()
 		if item.Typ == itemName { // Value.
-			g = &Function{Name: item.Val}
+			g = &Function{Name: strings.ToLower(item.Val)}
 			it.Next()
 			itemInFunc := it.Item()
 			if itemInFunc.Typ != itemLeftRound {
@@ -880,7 +880,7 @@ func parseFilter(it *lex.ItemIterator) (*FilterTree, error) {
 		if item.Typ == itemName { // Value.
 			f := &Function{}
 			leaf := &FilterTree{Func: f}
-			f.Name = item.Val
+			f.Name = strings.ToLower(item.Val)
 			it.Next()
 			itemInFunc := it.Item()
 			if itemInFunc.Typ != itemLeftRound {
