@@ -35,6 +35,37 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
+// ToProtocolBuf returns the list of graph.Node which would be returned to the go
+// client.
+func ToProtocolBuf(l *Latency, sgl []*SubGraph) ([]*graph.Node, error) {
+	var resNode []*graph.Node
+	for _, sg := range sgl {
+		node, err := sg.ToProtocolBuffer(l)
+		if err != nil {
+			return nil, err
+		}
+		resNode = append(resNode, node)
+	}
+	return resNode, nil
+}
+
+// ToJson converts the list of subgraph into a JSON response by calling ToFastJSON.
+func ToJson(l *Latency, sgl []*SubGraph, w io.Writer) error {
+	sgr := &SubGraph{
+		Attr: "__",
+	}
+	for _, sg := range sgl {
+		if sg.Params.Alias == "var" {
+			continue
+		}
+		if sg.Params.isDebug {
+			sgr.Params.isDebug = true
+		}
+		sgr.Children = append(sgr.Children, sg)
+	}
+	return sgr.ToFastJSON(l, w)
+}
+
 // outputNode is the generic output / writer for preTraverse.
 type outputNode interface {
 	AddValue(attr string, v types.Val)
@@ -318,6 +349,9 @@ func (fj *fastJsonNode) encode(bufw *bufio.Writer) {
 
 func processNodeUids(n *fastJsonNode, sg *SubGraph) error {
 	var seedNode *fastJsonNode
+	if sg.DestUIDs == nil {
+		return nil
+	}
 	for _, uid := range sg.DestUIDs.Uids {
 		n1 := seedNode.New(sg.Params.Alias)
 		if sg.Params.GetUID || sg.Params.isDebug {
@@ -340,7 +374,7 @@ func processNodeUids(n *fastJsonNode, sg *SubGraph) error {
 func (sg *SubGraph) ToFastJSON(l *Latency, w io.Writer) error {
 	var seedNode *fastJsonNode
 	n := seedNode.New("_root_")
-	if sg.Attr == "_root_" {
+	if sg.Attr == "__" {
 		for _, sg := range sg.Children {
 			err := processNodeUids(n.(*fastJsonNode), sg)
 			if err != nil {
