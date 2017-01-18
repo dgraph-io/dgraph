@@ -275,7 +275,7 @@ func valToBytes(v types.Val) ([]byte, error) {
 	}
 }
 
-func (fj *fastJsonNode) encode(bufW *bufio.Writer) {
+func (fj *fastJsonNode) encode(bufw *bufio.Writer) {
 	allKeys := make([]string, 0, len(fj.attrs))
 	for k, _ := range fj.attrs {
 		allKeys = append(allKeys, k)
@@ -285,35 +285,35 @@ func (fj *fastJsonNode) encode(bufW *bufio.Writer) {
 	}
 	sort.Strings(allKeys)
 
-	bufW.WriteRune('{')
+	bufw.WriteRune('{')
 	first := true
 	for _, k := range allKeys {
 		if !first {
-			bufW.WriteRune(',')
+			bufw.WriteRune(',')
 		}
 		first = false
-		bufW.WriteRune('"')
-		bufW.WriteString(k)
-		bufW.WriteRune('"')
-		bufW.WriteRune(':')
+		bufw.WriteRune('"')
+		bufw.WriteString(k)
+		bufw.WriteRune('"')
+		bufw.WriteRune(':')
 
 		if v, ok := fj.attrs[k]; ok {
-			bufW.Write(v)
+			bufw.Write(v)
 		} else {
 			v := fj.children[k]
 			first := true
-			bufW.WriteRune('[')
+			bufw.WriteRune('[')
 			for _, vi := range v {
 				if !first {
-					bufW.WriteRune(',')
+					bufw.WriteRune(',')
 				}
 				first = false
-				vi.encode(bufW)
+				vi.encode(bufw)
 			}
-			bufW.WriteRune(']')
+			bufw.WriteRune(']')
 		}
 	}
-	bufW.WriteRune('}')
+	bufw.WriteRune('}')
 }
 
 func processNodeUids(n *fastJsonNode, sg *SubGraph) error {
@@ -354,7 +354,6 @@ func (sg *SubGraph) ToFastJSON(l *Latency, w io.Writer) error {
 		}
 	}
 
-	// start writing to the buffer as all errors are checked.
 	if sg.Params.isDebug {
 		sl := seedNode.New("serverLatency").(*fastJsonNode)
 		for k, v := range l.ToMap() {
@@ -362,15 +361,15 @@ func (sg *SubGraph) ToFastJSON(l *Latency, w io.Writer) error {
 		}
 
 		var slBuf bytes.Buffer
-		slW := bufio.NewWriter(&slBuf)
-		sl.encode(slW)
-		if slW.Flush() != nil {
-			return slW.Flush()
+		slw := bufio.NewWriter(&slBuf)
+		sl.encode(slw)
+		if slw.Flush() != nil {
+			return slw.Flush()
 		}
-		n.(*fastJsonNode).attrs["server_latency"] = slB.Bytes()
+		n.(*fastJsonNode).attrs["server_latency"] = slBuf.Bytes()
 	}
 
-	bufW := bufio.NewWriter(w)
-	n.(*fastJsonNode).encode(bufW)
-	return bufW.Flush()
+	bufw := bufio.NewWriter(w)
+	n.(*fastJsonNode).encode(bufw)
+	return bufw.Flush()
 }

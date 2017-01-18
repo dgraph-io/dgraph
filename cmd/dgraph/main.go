@@ -527,6 +527,8 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	err = query.ToJson(&l, sgl, w)
 	if err != nil {
+		// since we performed w.Write in ToJson above,
+		// calling WriteHeader with 500 code will be ignored.
 		x.TraceError(ctx, x.Wrapf(err, "Error while converting to Json"))
 		x.SetStatus(w, x.Error, err.Error())
 		return
