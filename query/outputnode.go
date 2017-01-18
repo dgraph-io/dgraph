@@ -31,6 +31,8 @@ import (
 	"github.com/dgraph-io/dgraph/types"
 )
 
+// ToProtocolBuf returns the list of graph.Node which would be returned to the go
+// client.
 func ToProtocolBuf(l *Latency, sgl []*SubGraph) ([]*graph.Node, error) {
 	var resNode []*graph.Node
 	for _, sg := range sgl {
@@ -43,6 +45,7 @@ func ToProtocolBuf(l *Latency, sgl []*SubGraph) ([]*graph.Node, error) {
 	return resNode, nil
 }
 
+// ToJson converts the list of subgraph into a JSON response by calling ToFastJSON.
 func ToJson(l *Latency, sgl []*SubGraph) ([]byte, error) {
 	sgr := &SubGraph{
 		Attr: "__",

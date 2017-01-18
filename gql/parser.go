@@ -286,11 +286,15 @@ func substituteVariables(gq *GraphQuery, vmap varMap) error {
 	return nil
 }
 
+// Vars struct contains the list of variables defined and used by a
+// query block.
 type Vars struct {
 	Defines []string
 	Needs   []string
 }
 
+// Result struct contains the Query list, its corresponding variable use list
+// and the mutation block.
 type Result struct {
 	Query     []*GraphQuery
 	QueryVars []*Vars

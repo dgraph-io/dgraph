@@ -371,6 +371,61 @@ func TestUseVarsMultiCascade(t *testing.T) {
 		js)
 }
 
+func TestUseVarsMultiOrder(t *testing.T) {
+	dir, dir2, ps := populateGraph(t)
+	defer ps.Close()
+	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
+	query := `
+		{
+			var(id:0x01) {
+				L AS friend(first:2, order: dob)
+			}
+			
+			var(id:0x01) {
+				G AS friend(first:2, offset:2, order: dob)
+			}
+
+			friend1(L) {
+				name
+			}
+
+			friend2(G) {
+				name
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"friend1":[{"name":"Daryl Dixon"}, {"name":"Andrea"}],"friend2":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"}]}`,
+		js)
+}
+func TestUseVarsMultiFilterId(t *testing.T) {
+	dir, dir2, ps := populateGraph(t)
+	defer ps.Close()
+	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
+	query := `
+		{
+			var(id:0x01) {
+				L AS friend
+			}
+
+			var(id:31) {
+				G AS friend
+			}
+
+			friend(L) @filter(id(G)) {
+				name
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"friend":[{"name":"Glenn Rhee"}]}`,
+		js)
+}
+
 func TestUseVarsCascade(t *testing.T) {
 	dir, dir2, ps := populateGraph(t)
 	defer ps.Close()
