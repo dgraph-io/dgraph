@@ -72,6 +72,62 @@ func TestParseQueryWithVar(t *testing.T) {
 	require.Equal(t, "K", res.Query[5].Children[0].Var)
 }
 
+func TestParseQueryWithVarError1(t *testing.T) {
+	query := `
+	{	
+		him(J) {
+			name
+		}
+	
+		you(K) {
+			name
+		}
+
+		var(id:0x0a) {
+			L AS friends
+		}
+		
+		var(id:0x0a) {
+			J AS friends
+		}
+		
+		var(id:0x0a) {
+			K AS friends
+		}
+	}
+`
+	_, err := Parse(query)
+	require.Error(t, err)
+}
+
+func TestParseQueryWithVarError2(t *testing.T) {
+	query := `
+	{	
+		me(L) {
+		 name	
+		}
+
+		him(J) {
+			name
+		}
+	
+		you(K) {
+			name
+		}
+
+		var(id:0x0a) {
+			L AS friends
+		}
+		
+		var(id:0x0a) {
+			K AS friends
+		}
+	}
+`
+	_, err := Parse(query)
+	require.Error(t, err)
+}
+
 func TestParseQueryWithVarAtRootFilterID(t *testing.T) {
 	query := `
 	{
