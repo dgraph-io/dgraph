@@ -524,17 +524,17 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	js, err := query.ToJson(&l, sgl)
+	w.Header().Set("Content-Type", "application/json")
+	err = query.ToJson(&l, sgl, w)
 	if err != nil {
+		// since we performed w.Write in ToJson above,
+		// calling WriteHeader with 500 code will be ignored.
 		x.TraceError(ctx, x.Wrapf(err, "Error while converting to Json"))
 		x.SetStatus(w, x.Error, err.Error())
 		return
 	}
 	x.Trace(ctx, "Latencies: Total: %v Parsing: %v Process: %v Json: %v",
 		time.Since(l.Start), l.Parsing, l.Processing, l.Json)
-
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(js)
 }
 
 // storeStatsHandler outputs some basic stats for data store.
