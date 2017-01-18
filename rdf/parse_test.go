@@ -343,6 +343,46 @@ var testNQuads = []struct {
 		},
 	},
 	{
+		input:       `<messi with space> <friend> <ronaldo> .`,
+		expectedErr: true, // should fail because of spaces in subject
+	},
+	{
+		input:       `<with<> <with> <with> .`,
+		expectedErr: true, // should fail because of < after with in subject
+	},
+	{
+		input:       `<wi>th> <with> <with> .`,
+		expectedErr: true, // should fail
+	},
+	{
+		input:       `<"with> <with> <with> .`,
+		expectedErr: true, // should fail because of "
+	},
+	{
+		input:       `<{with> <with> <with> .`,
+		expectedErr: true, // should fail because of {
+	},
+	{
+		input:       `<wi{th> <with> <with> .`,
+		expectedErr: true, // should fail because of }
+	},
+	{
+		input:       `<with|> <with> <with> .`,
+		expectedErr: true, // should fail because of |
+	},
+	{
+		input:       `<wit^h> <with> <with> .`,
+		expectedErr: true, // should fail because of ^
+	},
+	{
+		input:       "<w`ith> <with> <with> .",
+		expectedErr: true, // should fail because of `
+	},
+	{
+		input:       `<wi\th> <with> <with> .`,
+		expectedErr: true, // should fail because of \
+	},
+	{
 		input:       `_:gabe <name> "Gabe' .`,
 		expectedErr: true,
 	},
