@@ -67,7 +67,7 @@ var (
 	numcpu = flag.Int("cores", runtime.NumCPU(),
 		"Number of cores to be used by the process")
 	nomutations  = flag.Bool("nomutations", false, "Don't allow mutations on this server.")
-	tracing      = flag.Float64("trace", 0.5, "The ratio of queries to trace.")
+	tracing      = flag.Float64("trace", 0.0, "The ratio of queries to trace.")
 	schemaFile   = flag.String("schema", "", "Path to schema file")
 	cpuprofile   = flag.String("cpu", "", "write cpu profile to file")
 	memprofile   = flag.String("mem", "", "write memory profile to file")
