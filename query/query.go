@@ -515,7 +515,7 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 	numQueriesDone := 0
 
 	canExecute := func(idx int) bool {
-		for _, v := range res.NeedsVarList[idx] {
+		for _, v := range res.QueryVars[idx].Needs {
 			if _, ok := doneVars[v]; !ok {
 				return false
 			}
@@ -523,10 +523,7 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 		return true
 	}
 
-	for i := 0; i < len(sgl); i++ {
-		if numQueriesDone == len(sgl) {
-			break
-		}
+	for numQueriesDone < len(sgl) {
 		errChan := make(chan error, len(sgl))
 		var idxList []int
 		// If we have N blocks in a query, it can take a maximum of N iterations for all of them
@@ -545,12 +542,7 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 			hasExecuted[idx] = true
 			idxList = append(idxList, idx)
 			numQueriesDone++
-			go func() {
-				rch := make(chan error)
-				go ProcessGraph(ctx, sg, nil, rch)
-				err := <-rch
-				errChan <- err
-			}()
+			go ProcessGraph(ctx, sg, nil, errChan)
 			x.Trace(ctx, "Graph processed")
 		}
 
@@ -589,14 +581,15 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 	return sgl, nil
 }
 
+// TODO(Ashwin): Benchmark this function. Map implementation might be slow.
 func populateVarMap(sg *SubGraph, doneVars map[string]*task.List) {
 	// Filter out UIDs that don't have atleast one UID in every child.
-	excluded := make(map[uint64]bool)
+	excluded := make(map[uint64]struct{})
 	for _, child := range sg.Children {
 		populateVarMap(child, doneVars)
 		for i := 0; i < len(child.uidMatrix); i++ {
 			if len(child.values[i].Val) == 0 && len(child.uidMatrix[i].Uids) == 0 {
-				excluded[sg.DestUIDs.Uids[i]] = true
+				excluded[sg.DestUIDs.Uids[i]] = struct{}{}
 			}
 		}
 	}
@@ -606,7 +599,8 @@ func populateVarMap(sg *SubGraph, doneVars map[string]*task.List) {
 		for i := 0; i < len(sg.uidMatrix); i++ {
 			algo.ApplyFilter(sg.uidMatrix[i],
 				func(uid uint64, idx int) bool {
-					return !excluded[uid]
+					_, ok := excluded[uid]
+					return !ok
 				})
 		}
 	}
@@ -614,7 +608,8 @@ func populateVarMap(sg *SubGraph, doneVars map[string]*task.List) {
 	if sg.DestUIDs != nil {
 		algo.ApplyFilter(sg.DestUIDs,
 			func(uid uint64, idx int) bool {
-				return !excluded[uid]
+				_, ok := excluded[uid]
+				return !ok
 			})
 	}
 
@@ -624,8 +619,8 @@ func populateVarMap(sg *SubGraph, doneVars map[string]*task.List) {
 }
 
 func fillUpVariables(sg *SubGraph, doneVars map[string]*task.List) {
-	if sg.Params.NeedsVar != "" {
-		sg.DestUIDs = doneVars[sg.Params.NeedsVar]
+	if v, ok := doneVars[sg.Params.NeedsVar]; ok {
+		sg.DestUIDs = v
 	}
 	for _, child := range sg.Children {
 		fillUpVariables(child, doneVars)
@@ -658,35 +653,35 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			algo.IntersectWith(sg.DestUIDs, sg.SrcUIDs)
 			rch <- nil
 			return
+		}
+
+		taskQuery := createTaskQuery(sg)
+		result, err := worker.ProcessTaskOverNetwork(ctx, taskQuery)
+		if err != nil {
+			x.TraceError(ctx, x.Wrapf(err, "Error while processing task"))
+			rch <- err
+			return
+		}
+
+		sg.uidMatrix = result.UidMatrix
+		sg.values = result.Values
+		if len(sg.values) > 0 {
+			v := sg.values[0]
+			x.Trace(ctx, "Sample value for attr: %v Val: %v", sg.Attr, string(v.Val))
+		}
+		sg.counts = result.Counts
+
+		if sg.Params.DoCount && len(sg.Filters) == 0 {
+			// If there is a filter, we need to do more work to get the actual count.
+			x.Trace(ctx, "Zero uids. Only count requested")
+			rch <- nil
+			return
+		}
+
+		if result.IntersectDest {
+			sg.DestUIDs = algo.IntersectSorted(result.UidMatrix)
 		} else {
-			taskQuery := createTaskQuery(sg)
-			result, err := worker.ProcessTaskOverNetwork(ctx, taskQuery)
-			if err != nil {
-				x.TraceError(ctx, x.Wrapf(err, "Error while processing task"))
-				rch <- err
-				return
-			}
-
-			sg.uidMatrix = result.UidMatrix
-			sg.values = result.Values
-			if len(sg.values) > 0 {
-				v := sg.values[0]
-				x.Trace(ctx, "Sample value for attr: %v Val: %v", sg.Attr, string(v.Val))
-			}
-			sg.counts = result.Counts
-
-			if sg.Params.DoCount && len(sg.Filters) == 0 {
-				// If there is a filter, we need to do more work to get the actual count.
-				x.Trace(ctx, "Zero uids. Only count requested")
-				rch <- nil
-				return
-			}
-
-			if result.IntersectDest {
-				sg.DestUIDs = algo.IntersectSorted(result.UidMatrix)
-			} else {
-				sg.DestUIDs = algo.MergeSorted(result.UidMatrix)
-			}
+			sg.DestUIDs = algo.MergeSorted(result.UidMatrix)
 		}
 	}
 

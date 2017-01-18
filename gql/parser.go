@@ -285,11 +285,15 @@ func substituteVariables(gq *GraphQuery, vmap varMap) error {
 	return nil
 }
 
+type Vars struct {
+	Defines []string
+	Needs   []string
+}
+
 type Result struct {
-	Query        []*GraphQuery
-	Mutation     *Mutation
-	VarList      [][]string
-	NeedsVarList [][]string
+	Query     []*GraphQuery
+	QueryVars []*Vars
+	Mutation  *Mutation
 }
 
 // Parse initializes and runs the lexer. It also constructs the GraphQuery subgraph
@@ -346,8 +350,7 @@ func Parse(input string) (res Result, rerr error) {
 	}
 
 	if len(res.Query) != 0 {
-		res.VarList = make([][]string, len(res.Query))
-		res.NeedsVarList = make([][]string, len(res.Query))
+		res.QueryVars = make([]*Vars, 0, len(res.Query))
 		for i := 0; i < len(res.Query); i++ {
 			qu := res.Query[i]
 			// Try expanding fragments using fragment map.
@@ -360,38 +363,39 @@ func Parse(input string) (res Result, rerr error) {
 				return res, err
 			}
 
+			res.QueryVars = append(res.QueryVars, &Vars{})
 			// Collect vars used and defined in Result struct.
-			collectVars(i, qu, &res)
+			qu.collectVars(res.QueryVars[i])
 		}
 	}
 	return res, nil
 }
 
-func collectVars(idx int, qu *GraphQuery, res *Result) {
+func (qu *GraphQuery) collectVars(v *Vars) {
 	if qu.Var != "" {
-		res.VarList[idx] = append(res.VarList[idx], qu.Var)
+		v.Defines = append(v.Defines, qu.Var)
 	}
 
 	if qu.NeedsVar != "" {
-		res.NeedsVarList[idx] = append(res.NeedsVarList[idx], qu.NeedsVar)
+		v.Needs = append(v.Needs, qu.NeedsVar)
 	}
 
 	for _, ch := range qu.Children {
-		collectVars(idx, ch, res)
+		ch.collectVars(v)
 	}
 
 	if qu.Filter != nil {
-		collectVarsFilter(idx, qu.Filter, res)
+		qu.Filter.collectVars(v)
 	}
 }
 
-func collectVarsFilter(idx int, f *FilterTree, res *Result) {
+func (f *FilterTree) collectVars(v *Vars) {
 	if f.Func != nil && f.Func.NeedsVar != "" {
-		res.NeedsVarList[idx] = append(res.NeedsVarList[idx], f.Func.NeedsVar)
+		v.Needs = append(v.Needs, f.Func.NeedsVar)
 	}
 
 	for _, fch := range f.Child {
-		collectVarsFilter(idx, fch, res)
+		fch.collectVars(v)
 	}
 }
 
@@ -989,7 +993,7 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 	if err != nil {
 		return nil, x.Errorf("Invalid Query")
 	}
-	if peekIt[0].Typ == itemName && peekIt[0].Val == "AS" {
+	if peekIt[0].Typ == itemName && strings.ToLower(peekIt[0].Val) == "as" {
 		gq.Var = item.Val
 		it.Next() // Consume the "AS".
 		it.Next()
@@ -1080,7 +1084,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				return x.Errorf("Invalid query")
 			}
 
-			if peekIt[0].Typ == itemName && peekIt[0].Val == "AS" {
+			if peekIt[0].Typ == itemName && strings.ToLower(peekIt[0].Val) == "as" {
 				varName := item.Val
 				it.Next() // "As" was checked before.
 				it.Next()

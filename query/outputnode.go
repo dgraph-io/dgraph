@@ -45,7 +45,7 @@ func ToProtocolBuf(l *Latency, sgl []*SubGraph) ([]*graph.Node, error) {
 
 func ToJson(l *Latency, sgl []*SubGraph) ([]byte, error) {
 	sgr := &SubGraph{
-		Attr: "_root_",
+		Attr: "__",
 	}
 	for _, sg := range sgl {
 		if sg.Params.Alias == "var" {
@@ -335,6 +335,9 @@ func (fj *fastJsonNode) encode(jsBuf *bytes.Buffer) {
 
 func processNodeUids(n *fastJsonNode, sg *SubGraph) error {
 	var seedNode *fastJsonNode
+	if sg.DestUIDs == nil {
+		return nil
+	}
 	for _, uid := range sg.DestUIDs.Uids {
 		n1 := seedNode.New(sg.Params.Alias)
 		if sg.Params.GetUID || sg.Params.isDebug {
@@ -358,7 +361,7 @@ func processNodeUids(n *fastJsonNode, sg *SubGraph) error {
 func (sg *SubGraph) ToFastJSON(l *Latency) ([]byte, error) {
 	var seedNode *fastJsonNode
 	n := seedNode.New("_root_")
-	if sg.Attr == "_root_" {
+	if sg.Attr == "__" {
 		for _, sg := range sg.Children {
 			err := processNodeUids(n.(*fastJsonNode), sg)
 			if err != nil {

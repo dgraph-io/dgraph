@@ -2298,7 +2298,6 @@ func TestGeneratorMultiRootMultiQueryRootVarFilter(t *testing.T) {
 	query := `
     {
 			friend AS var(anyof("name", "Michonne Rick Glenn")) {
-      	name
 			}
 
 			you(anyof(name, "Michonne Andrea Glenn")) @filter(id(friend)) {
