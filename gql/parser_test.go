@@ -79,7 +79,7 @@ func TestParseQueryWithVarAtRootFilterID(t *testing.T) {
 			L AS friends
 		}
 	
-		me(id:0xa) @filter(id(L)) {
+		me(K) @filter(id(L)) {
 		 name	
 		}
 	}
@@ -101,8 +101,8 @@ func TestParseQueryWithVarAtRoot(t *testing.T) {
 			fr as friends
 		}
 	
-		me(fr) {
-		 name	
+		me(fr) @filter(id(K)) {
+		 name	@filter(id(fr))
 		}
 	}
 `
@@ -164,6 +164,7 @@ func TestParseQueryWithMultipleVar(t *testing.T) {
 	require.Equal(t, "B", res.Query[2].NeedsVar)
 	require.Equal(t, []string{"L", "B"}, res.QueryVars[0].Defines)
 	require.Equal(t, []string{"L"}, res.QueryVars[1].Needs)
+	require.Equal(t, []string{"B"}, res.QueryVars[2].Needs)
 }
 
 func TestParseMultipleQueries(t *testing.T) {

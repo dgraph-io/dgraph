@@ -367,8 +367,38 @@ func Parse(input string) (res Result, rerr error) {
 			// Collect vars used and defined in Result struct.
 			qu.collectVars(res.QueryVars[i])
 		}
+		if err := checkValidityVariables(res.QueryVars); err != nil {
+			return res, err
+		}
 	}
 	return res, nil
+}
+
+func checkValidityVariables(vl []*Vars) error {
+	mp1 := make(map[string]struct{})
+	mp2 := make(map[string]struct{})
+	for _, it := range vl {
+		for _, v := range it.Needs {
+			mp1[v] = struct{}{}
+		}
+		for _, v := range it.Defines {
+			mp2[v] = struct{}{}
+		}
+	}
+
+	for _, it := range vl {
+		for _, v := range it.Needs {
+			if _, ok := mp2[v]; !ok {
+				return x.Errorf("Variable %s needed but not defined", v)
+			}
+		}
+		for _, v := range it.Defines {
+			if _, ok := mp1[v]; !ok {
+				return x.Errorf("Variable %s defined but not used", v)
+			}
+		}
+	}
+	return nil
 }
 
 func (qu *GraphQuery) collectVars(v *Vars) {
