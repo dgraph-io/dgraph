@@ -175,11 +175,22 @@ func (l *Lexer) Ignore() {
 }
 
 type CheckRune func(r rune) bool
+type CheckRuneRec func(r rune, l *Lexer) bool
 
 func (l *Lexer) AcceptRun(c CheckRune) {
 	for {
 		r := l.Next()
 		if r == EOF || !c(r) {
+			break
+		}
+	}
+	l.Backup()
+}
+
+func (l *Lexer) AcceptRunRec(c CheckRuneRec) {
+	for {
+		r := l.Next()
+		if r == EOF || !c(r, l) {
 			break
 		}
 	}
@@ -194,4 +205,18 @@ func (l *Lexer) AcceptUntil(c CheckRune) {
 		}
 	}
 	l.Backup()
+}
+
+// Tries to accept checkrune given number of times.
+// returns number of times it was successful.
+func (l *Lexer) AcceptRunTimes(c CheckRune, times int) int {
+	i := 0
+	for ; i < times; i++ {
+		r := l.Next()
+		if r == EOF || !c(r) {
+			break
+		}
+	}
+	l.Backup()
+	return i
 }

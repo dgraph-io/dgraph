@@ -343,6 +343,14 @@ var testNQuads = []struct {
 		},
 	},
 	{
+		input: `<\u0021> <\U123abcdE> <\u0024> .`,
+		nq: graph.NQuad{
+			Subject:   `\u0021`,
+			Predicate: `\U123abcdE`,
+			ObjectId:  `\u0024`,
+		},
+	},
+	{
 		input:       `<messi with space> <friend> <ronaldo> .`,
 		expectedErr: true, // should fail because of spaces in subject
 	},

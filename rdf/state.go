@@ -113,7 +113,7 @@ func lexIRIRef(l *lex.Lexer, styp lex.ItemType,
 	if r != '<' {
 		return l.Errorf("IRIRef should start from < , instead found %v", r)
 	}
-	l.AcceptRun(isIRIChar)
+	l.AcceptRunRec(isIRIChar)
 	r = l.Next()
 	if r == lex.EOF {
 		return l.Errorf("Unexpected end of subject")
@@ -363,7 +363,7 @@ func isLangTag(r rune) bool {
 	}
 }
 
-func isIRIChar(r rune) bool {
+func isIRIChar(r rune, l *lex.Lexer) bool {
 	if r <= 32 { // no chars b/w 0x00 to 0x20 inclusive
 		return false
 	}
@@ -377,8 +377,31 @@ func isIRIChar(r rune) bool {
 	case '^':
 	case '`':
 	case '\\':
+		r2 := l.Next()
+		times := 4
+		if r2 != 'u' && r2 != 'U' {
+			l.Backup()
+			return false
+		} else {
+			if r2 == 'U' {
+				times = 8
+			}
+			rs := l.AcceptRunTimes(isHex, times)
+			return rs == times
+		}
 	default:
 		return true
 	}
 	return false
+}
+
+func isHex(r rune) bool {
+	switch {
+	case r >= '0' && r <= '9':
+	case r >= 'a' && r <= 'z':
+	case r >= 'A' && r <= 'Z':
+	default:
+		return false
+	}
+	return true
 }
