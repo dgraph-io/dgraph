@@ -271,8 +271,7 @@ func processToFastJSON(t *testing.T, query string) string {
 	require.NoError(t, err)
 
 	var buf bytes.Buffer
-	err = ToJson(&l, sgl, &buf)
-	require.NoError(t, err)
+	require.NoError(t, ToJson(&l, sgl, &buf))
 	return string(buf.Bytes())
 }
 
