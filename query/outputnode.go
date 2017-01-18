@@ -362,14 +362,15 @@ func (sg *SubGraph) ToFastJSON(l *Latency, w io.Writer) error {
 		}
 
 		var slBuf bytes.Buffer
-		bufW := bufio.NewWriter(&slBuf)
-		sl.encode(bufW)
-		bufW.Flush()
-		n.(*fastJsonNode).attrs["server_latency"] = slBuf.Bytes()
+		slW := bufio.NewWriter(&slBuf)
+		sl.encode(slW)
+		if slW.Flush() != nil {
+			return slW.Flush()
+		}
+		n.(*fastJsonNode).attrs["server_latency"] = slB.Bytes()
 	}
 
 	bufW := bufio.NewWriter(w)
 	n.(*fastJsonNode).encode(bufW)
-	bufW.Flush()
-	return nil
+	return bufW.Flush()
 }

@@ -524,6 +524,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	w.Header().Set("Content-Type", "application/json")
 	err = query.ToJson(&l, sgl, w)
 	if err != nil {
 		x.TraceError(ctx, x.Wrapf(err, "Error while converting to Json"))
@@ -532,8 +533,6 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	x.Trace(ctx, "Latencies: Total: %v Parsing: %v Process: %v Json: %v",
 		time.Since(l.Start), l.Parsing, l.Processing, l.Json)
-
-	w.Header().Set("Content-Type", "application/json")
 }
 
 // storeStatsHandler outputs some basic stats for data store.
