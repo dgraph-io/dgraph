@@ -351,6 +351,11 @@ var testNQuads = []struct {
 		},
 	},
 	{
+		input:       `<\u0021> <\U123abcdg> <\u0024> .`,
+		expectedErr: true, // `g` is not a Hex char
+	},
+
+	{
 		input:       `<messi with space> <friend> <ronaldo> .`,
 		expectedErr: true, // should fail because of spaces in subject
 	},

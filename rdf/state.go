@@ -398,8 +398,8 @@ func isIRIChar(r rune, l *lex.Lexer) bool {
 func isHex(r rune) bool {
 	switch {
 	case r >= '0' && r <= '9':
-	case r >= 'a' && r <= 'z':
-	case r >= 'A' && r <= 'Z':
+	case r >= 'a' && r <= 'f':
+	case r >= 'A' && r <= 'F':
 	default:
 		return false
 	}
