@@ -220,7 +220,10 @@ func lexLanguage(l *lex.Lexer) lex.StateFn {
 		return l.Errorf("Invalid language tag prefix: %v", r)
 	}
 
-	l.AcceptRun(isLangTag)
+	lastRune, validRune := l.AcceptRun(isLangTag)
+	if validRune && lastRune == '-' {
+		return l.Errorf("Invalid character - at the end of language literal.")
+	}
 	l.Emit(itemLanguage)
 	return lexText
 }
@@ -233,13 +236,10 @@ func lexLiteral(l *lex.Lexer) lex.StateFn {
 		r := l.Next()
 		if r == '\u005c' { // backslash
 			r = l.Next()
-			if !isEscChar(r) {
-				if (r == 'u' || r == 'U') && hasUChars(r, l) {
-					continue
-				}
-				return l.Errorf("Invalid escape character : %v in literal", r)
+			if isEscChar(r) || hasUChars(r, l) {
+				continue // This would skip over the escaped rune.
 			}
-			continue // This would skip over the escaped rune.
+			return l.Errorf("Invalid escape character : %v in literal", r)
 		} else {
 			if r == 0x5c || r == 0xa || r == 0xd { // 0x22 ('"') is endLiteral
 				return l.Errorf("Invalid character %v in literal.", r)
@@ -366,7 +366,6 @@ func isLangTag(r rune) bool {
 }
 
 // IRIREF ::= '<' ([^#x00-#x20<>"{}|^`\] | UCHAR)* '>'
-// UCHAR ::= '\u' HEX HEX HEX HEX | '\U' HEX HEX HEX HEX HEX HEX HEX HEX
 func isIRIChar(r rune, l *lex.Lexer) bool {
 	if r <= 32 { // no chars b/w 0x00 to 0x20 inclusive
 		return false

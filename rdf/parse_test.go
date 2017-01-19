@@ -440,6 +440,10 @@ var testNQuads = []struct {
 		},
 		expectedErr: false,
 	},
+	{
+		input:       `<alice> <lives> "wonderful land"@a- .`,
+		expectedErr: true, // object langtag can not end with -
+	},
 }
 
 func TestLex(t *testing.T) {
