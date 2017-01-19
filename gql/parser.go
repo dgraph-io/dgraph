@@ -38,7 +38,7 @@ type GraphQuery struct {
 	Alias    string
 	IsCount  bool
 	Var      string
-	NeedsVar string
+	NeedsVar []string
 	Func     *Function
 
 	Args     map[string]string
@@ -93,7 +93,7 @@ type Function struct {
 	Attr     string
 	Name     string   // Specifies the name of the function.
 	Args     []string // Contains the arguments of the function.
-	NeedsVar string   // If the function requires some variable
+	NeedsVar []string // If the function requires some variable
 }
 
 // filterOpPrecedence is a map from filterOp (a string) to its precedence.
@@ -420,8 +420,8 @@ func (qu *GraphQuery) collectVars(v *Vars) {
 	if qu.Var != "" {
 		v.Defines = append(v.Defines, qu.Var)
 	}
-	if qu.NeedsVar != "" {
-		v.Needs = append(v.Needs, qu.NeedsVar)
+	for _, it := range qu.NeedsVar {
+		v.Needs = append(v.Needs, it)
 	}
 	for _, ch := range qu.Children {
 		ch.collectVars(v)
@@ -432,8 +432,10 @@ func (qu *GraphQuery) collectVars(v *Vars) {
 }
 
 func (f *FilterTree) collectVars(v *Vars) {
-	if f.Func != nil && f.Func.NeedsVar != "" {
-		v.Needs = append(v.Needs, f.Func.NeedsVar)
+	if f.Func != nil {
+		for _, it := range f.Func.NeedsVar {
+			v.Needs = append(v.Needs, it)
+		}
 	}
 	for _, fch := range f.Child {
 		fch.collectVars(v)
@@ -913,11 +915,11 @@ func parseFilter(it *lex.ItemIterator) (*FilterTree, error) {
 				}
 				if len(f.Attr) == 0 {
 					f.Attr = it
-					if f.Name == "id" {
-						f.NeedsVar = f.Attr
-					}
 				} else {
 					f.Args = append(f.Args, it)
+				}
+				if f.Name == "id" {
+					f.NeedsVar = append(f.NeedsVar, it)
 				}
 			}
 			if !terminated {
@@ -1019,6 +1021,34 @@ func parseID(gq *GraphQuery, val string) error {
 	return nil
 }
 
+func parseVarList(gq *GraphQuery, val string) error {
+	val = strings.Replace(val, " ", "", -1)
+	if val[0] != '[' {
+		gq.NeedsVar = append(gq.NeedsVar, val)
+		return nil
+	}
+
+	if val[len(val)-1] != ']' {
+		return x.Errorf("Invalid var list at root. Got: %+v", val)
+	}
+	var buf bytes.Buffer
+	for _, c := range val[1:] {
+		if c == ',' || c == ']' {
+			if buf.Len() == 0 {
+				continue
+			}
+			gq.NeedsVar = append(gq.NeedsVar, buf.String())
+			buf.Reset()
+			continue
+		}
+		if c == '[' || c == ')' {
+			return x.Errorf("Invalid id list at root. Got: %+v", val)
+		}
+		buf.WriteRune(c)
+	}
+	return nil
+}
+
 // getRoot gets the root graph query object after parsing the args.
 func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 	gq = &GraphQuery{
@@ -1056,7 +1086,7 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 	if peekItems[1].Typ == itemRightRound {
 		it.Next()
 		item := it.Item()
-		gq.NeedsVar = item.Val
+		parseVarList(gq, item.Val)
 		it.Next() // consume the right round.
 	} else if peekItems[1].Typ == itemLeftRound {
 		// Store the generator function.
