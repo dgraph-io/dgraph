@@ -107,10 +107,10 @@ Loop:
 	return nil
 }
 
-// This function lexes text until it finds the '>' bracket.
-func lexUntilClosing(l *lex.Lexer, styp lex.ItemType,
+// Assumes that caller has consumed initial '<'
+func lexIRIRef(l *lex.Lexer, styp lex.ItemType,
 	sfn lex.StateFn) lex.StateFn {
-	l.AcceptUntil(isClosingBracket)
+	l.AcceptRunRec(isIRIChar)
 	r := l.Next()
 	if r == lex.EOF {
 		return l.Errorf("Unexpected end of subject")
@@ -171,7 +171,7 @@ func lexSubject(l *lex.Lexer) lex.StateFn {
 	// The subject is an IRI, so we lex till we encounter '>'.
 	if r == '<' {
 		l.Depth++
-		return lexUntilClosing(l, itemSubject, lexText)
+		return lexIRIRef(l, itemSubject, lexText)
 	}
 
 	// The subject represents a blank node.
@@ -196,7 +196,7 @@ func lexPredicate(l *lex.Lexer) lex.StateFn {
 	}
 
 	l.Depth++
-	return lexUntilClosing(l, itemPredicate, lexText)
+	return lexIRIRef(l, itemPredicate, lexText)
 }
 
 func lexLanguage(l *lex.Lexer) lex.StateFn {
@@ -265,7 +265,7 @@ func lexObjectType(l *lex.Lexer) lex.StateFn {
 		return l.Errorf("Expected < for lexObjectType")
 	}
 
-	return lexUntilClosing(l, itemObjectType, lexText)
+	return lexIRIRef(l, itemObjectType, lexText)
 }
 
 func lexObject(l *lex.Lexer) lex.StateFn {
@@ -273,7 +273,7 @@ func lexObject(l *lex.Lexer) lex.StateFn {
 	// The object can be an IRI, blank node or a literal.
 	if r == '<' {
 		l.Depth++
-		return lexUntilClosing(l, itemObject, lexText)
+		return lexIRIRef(l, itemObject, lexText)
 	}
 
 	if r == '_' {
@@ -299,7 +299,7 @@ func lexLabel(l *lex.Lexer) lex.StateFn {
 	// Graph label can either be an IRI or a blank node according to spec.
 	if r == '<' {
 		l.Depth++
-		return lexUntilClosing(l, itemLabel, lexText)
+		return lexIRIRef(l, itemLabel, lexText)
 	}
 
 	if r == '_' {
@@ -353,4 +353,47 @@ func isLangTag(r rune) bool {
 	default:
 		return false
 	}
+}
+
+func isIRIChar(r rune, l *lex.Lexer) bool {
+	if r <= 32 { // no chars b/w 0x00 to 0x20 inclusive
+		return false
+	}
+	switch r {
+	case '<':
+	case '>':
+	case '"':
+	case '{':
+	case '}':
+	case '|':
+	case '^':
+	case '`':
+	case '\\':
+		r2 := l.Next()
+		times := 4
+		if r2 != 'u' && r2 != 'U' {
+			l.Backup()
+			return false
+		} else {
+			if r2 == 'U' {
+				times = 8
+			}
+			rs := l.AcceptRunTimes(isHex, times)
+			return rs == times
+		}
+	default:
+		return true
+	}
+	return false
+}
+
+func isHex(r rune) bool {
+	switch {
+	case r >= '0' && r <= '9':
+	case r >= 'a' && r <= 'f':
+	case r >= 'A' && r <= 'F':
+	default:
+		return false
+	}
+	return true
 }
