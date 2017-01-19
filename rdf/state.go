@@ -146,7 +146,7 @@ func lexUidNode(l *lex.Lexer, styp lex.ItemType, sfn lex.StateFn) lex.StateFn {
 }
 
 // Assumes that caller has consumed '_'.
-// BLANK_NODE_LABEL ::=	'_:' (PN_CHARS_U | [0-9]) ((PN_CHARS | '.')* PN_CHARS)?
+// BLANK_NODE_LABEL ::= '_:' (PN_CHARS_U | [0-9]) ((PN_CHARS | '.')* PN_CHARS)?
 func lexBlankNode(l *lex.Lexer, styp lex.ItemType,
 	sfn lex.StateFn) lex.StateFn {
 	r := l.Next()
