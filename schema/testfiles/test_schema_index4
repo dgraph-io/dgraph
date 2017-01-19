@@ -1,0 +1,14 @@
+scalar age:int @index(default)
+
+scalar (
+  name: string @index(exact)
+  address: string @index(default)
+  age: int
+)
+
+type  Person {
+  name: string
+  age: int
+  address: string
+  friend: Person
+}

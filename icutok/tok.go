@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package tok
+package icutok
 
 // #include <stdint.h>
 // #include <stdlib.h>

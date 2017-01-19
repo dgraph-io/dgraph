@@ -27,9 +27,9 @@ import (
 	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/dgraph/group"
+	"github.com/dgraph-io/dgraph/icutok"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/task"
-	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -273,8 +273,8 @@ func DefaultIndexKeys(val string) ([]string, error) {
 			continue
 		}
 
-		x.AssertTruef(!tok.ICUDisabled(), "Indexing requires ICU to be enabled.")
-		tokenizer, err := tok.NewTokenizer([]byte(it))
+		x.AssertTruef(!icutok.ICUDisabled(), "Indexing requires ICU to be enabled.")
+		tokenizer, err := icutok.NewTokenizer([]byte(it))
 		if err != nil {
 			return nil, err
 		}

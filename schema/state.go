@@ -45,6 +45,7 @@ const (
 	itemAt
 	itemIndex
 	itemReverse
+	itemDirectiveArg
 	itemDummy // Used if index specification is missing
 )
 
@@ -223,22 +224,8 @@ L1:
 			break L1
 		case r == '@':
 			l.Emit(itemAt)
-			for {
-				r := l.Next()
-				if isNameSuffix(r) {
-					continue // absorb
-				}
-				l.Backup()
-				// l.Pos would be index of the end of operation type + 1.
-				word := l.Input[l.Start:l.Pos]
-				if word == "index" {
-					l.Emit(itemIndex)
-				} else if word == "reverse" {
-					l.Emit(itemReverse)
-				} else {
-					return l.Errorf("Unexpected directive %s", l.Input[l.Start:l.Pos])
-				}
-				break
+			if errState := processDirective(l); errState != nil {
+				return errState
 			}
 		default:
 			return l.Errorf("Invalid schema. Unexpected %s", l.Input[l.Start:l.Pos])
@@ -246,6 +233,64 @@ L1:
 	}
 	l.Emit(itemDummy)
 	return lexText
+}
+
+// processDirective returns nil if we are ok. Otherwise, it returns error state.
+func processDirective(l *lex.Lexer) lex.StateFn {
+	for {
+		r := l.Next()
+		if isNameSuffix(r) {
+			continue // absorb
+		}
+		l.Backup()
+		// l.Pos would be index of the end of operation type + 1.
+		word := l.Input[l.Start:l.Pos]
+		if word == "index" {
+			l.Emit(itemIndex)
+		} else if word == "reverse" {
+			l.Emit(itemReverse)
+		} else {
+			return l.Errorf("Unexpected directive %s", word)
+		}
+
+		for {
+			r = l.Next()
+			switch {
+			case r == leftRound:
+				l.Emit(itemLeftRound)
+				// Read until we see a right round.
+				for {
+					r = l.Next()
+					if isSpace(r) || isEndOfLine(r) {
+						l.Ignore()
+						continue
+					}
+					if r == rightRound {
+						// We are done with parsing this directive.
+						l.Emit(itemRightRound)
+						return nil
+					}
+					if isNameBegin(r) {
+						// Start of a directive argument.
+						for {
+							r = l.Next()
+							if isNameSuffix(r) {
+								continue
+							}
+							l.Backup()
+							l.Emit(itemDirectiveArg)
+							break
+						}
+					}
+				}
+			case isSpace(r) || isEndOfLine(r):
+				l.Ignore()
+			default:
+				l.Backup()
+				return nil
+			}
+		}
+	}
 }
 
 func lexScalarPair1(l *lex.Lexer) lex.StateFn {
@@ -295,22 +340,8 @@ L1:
 			break L1
 		case r == '@':
 			l.Emit(itemAt)
-			for {
-				r := l.Next()
-				if isNameSuffix(r) {
-					continue // absorb
-				}
-				l.Backup()
-				// l.Pos would be index of the end of operation type + 1.
-				word := l.Input[l.Start:l.Pos]
-				if word == "index" {
-					l.Emit(itemIndex)
-				} else if word == "reverse" {
-					l.Emit(itemReverse)
-				} else {
-					return l.Errorf("Unexpected directive %s", word)
-				}
-				break
+			if errState := processDirective(l); errState != nil {
+				return errState
 			}
 		default:
 			return l.Errorf("Invalid schema. Unexpected %s", l.Input[l.Start:l.Pos])

@@ -24,21 +24,22 @@ import (
 var (
 	// Map containing predicate to type information.
 	str map[string]types.TypeID
-	// Map containing fields / predicates that are indexed.
-	indexedFields map[string]bool
+	// Map predicate to tokenizer.
+	indexedFields map[string]string
 	// Map containing fields / predicates that are reversed.
 	reversedFields map[string]bool
 )
 
 func init() {
 	str = make(map[string]types.TypeID)
-	indexedFields = make(map[string]bool)
+	indexedFields = make(map[string]string)
 	reversedFields = make(map[string]bool)
 }
 
 // IsIndexed returns if a given predicate is indexed or not.
 func IsIndexed(str string) bool {
-	return indexedFields[str]
+	_, found := indexedFields[str]
+	return found
 }
 
 // IsReversed returns if a given predicate is reversed or not.

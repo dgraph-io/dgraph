@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package tok
+package icutok
 
 /*
 For testing embedded version, try:

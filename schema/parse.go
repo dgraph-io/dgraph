@@ -105,7 +105,9 @@ func processScalarBlock(it *lex.ItemIterator) error {
 						it.Next()
 						next = it.Item()
 						if next.Typ == itemIndex {
-							indexedFields[name] = true
+							if err := processIndexDirective(it, name); err != nil {
+								return err
+							}
 						} else if next.Typ == itemReverse {
 							if t != types.UidID {
 								return x.Errorf("Cannot reverse for non-UID type")
@@ -122,6 +124,38 @@ func processScalarBlock(it *lex.ItemIterator) error {
 		}
 	}
 
+	return nil
+}
+
+func processIndexDirective(it *lex.ItemIterator, name string) error {
+	indexedFields[name] = ""
+	if !it.Next() {
+		// Nothing to read.
+		return nil
+	}
+	next := it.Item()
+	if next.Typ != itemLeftRound {
+		it.Prev() // Backup.
+		return nil
+	}
+
+	// Look for tokenizer.
+	var hasArg bool
+	for {
+		it.Next()
+		next = it.Item()
+		if next.Typ == itemRightRound {
+			break
+		}
+		if next.Typ != itemDirectiveArg {
+			return x.Errorf("Expected directive arg but got: %v", next)
+		}
+		// We have the argument.
+		if hasArg {
+			return x.Errorf("Found more than one arguments for index directive")
+		}
+		x.Printf("~~~~~name=%s arg=%s", name, next.Val)
+	}
 	return nil
 }
 
@@ -172,7 +206,9 @@ func processScalar(it *lex.ItemIterator) error {
 						it.Next()
 						next = it.Item()
 						if next.Typ == itemIndex {
-							indexedFields[name] = true
+							if err := processIndexDirective(it, name); err != nil {
+								return err
+							}
 						} else if next.Typ == itemReverse {
 							if t != types.UidID {
 								return x.Errorf("Cannot reverse for non-UID type")

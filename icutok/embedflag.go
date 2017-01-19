@@ -1,6 +1,6 @@
 // +build embed
 
-package tok
+package icutok
 
 // #cgo CPPFLAGS: -I../vendor/github.com/dgraph-io/goicu/icuembed
 // #cgo darwin LDFLAGS: -Wl,-undefined -Wl,dynamic_lookup
