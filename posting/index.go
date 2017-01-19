@@ -18,16 +18,11 @@ package posting
 
 import (
 	"context"
-	"encoding/binary"
 	"math"
-	"strings"
-	"time"
 
-	geom "github.com/twpayne/go-geom"
 	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/dgraph/group"
-	"github.com/dgraph-io/dgraph/icutok"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/types"
@@ -58,23 +53,8 @@ func IndexTokens(attr string, src types.Val) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	switch sv.Tid {
-	case types.GeoID:
-		return types.IndexGeoTokens(sv.Value.(geom.T))
-	case types.Int32ID:
-		return IntIndex(sv.Value.(int32))
-	case types.FloatID:
-		return FloatIndex(sv.Value.(float64))
-	case types.DateID:
-		return DateIndex(sv.Value.(time.Time))
-	case types.DateTimeID:
-		return TimeIndex(sv.Value.(time.Time))
-	case types.StringID:
-		return DefaultIndexKeys(sv.Value.(string))
-	default:
-		return nil, x.Errorf("Invalid type. Cannot be indexed")
-	}
-	return nil, nil
+	// Schema will know the mapping from attr to tokenizer.
+	return schema.Tokenizer(attr).Tokens(sv)
 }
 
 // addIndexMutations adds mutation(s) for a single term, to maintain index.
@@ -261,65 +241,4 @@ func RebuildIndex(ctx context.Context, attr string) error {
 		addIndexMutations(ctx, &edge, val, task.DirectedEdge_SET)
 	}
 	return nil
-}
-
-// DefaultIndexKeys tokenizes data as a string and return keys for indexing.
-func DefaultIndexKeys(val string) ([]string, error) {
-	words := strings.Fields(val)
-	tokens := make([]string, 0, 5)
-	for _, it := range words {
-		if it == "_nil_" {
-			tokens = append(tokens, it)
-			continue
-		}
-
-		x.AssertTruef(!icutok.ICUDisabled(), "Indexing requires ICU to be enabled.")
-		tokenizer, err := icutok.NewTokenizer([]byte(it))
-		if err != nil {
-			return nil, err
-		}
-		for {
-			s := tokenizer.Next()
-			if s == nil {
-				break
-			}
-			tokens = append(tokens, string(s))
-		}
-		tokenizer.Destroy()
-	}
-	return tokens, nil
-}
-
-func encodeInt(val int32) ([]string, error) {
-	buf := make([]byte, 5)
-	binary.BigEndian.PutUint32(buf[1:], uint32(val))
-	if val < 0 {
-		buf[0] = 0
-	} else {
-		buf[0] = 1
-	}
-	return []string{string(buf)}, nil
-}
-
-// IntIndex indexs int type.
-func IntIndex(val int32) ([]string, error) {
-	return encodeInt(val)
-}
-
-// FloatIndex indexs float type.
-func FloatIndex(val float64) ([]string, error) {
-	in := int32(val)
-	return encodeInt(in)
-}
-
-// DateIndex indexs time type.
-func DateIndex(val time.Time) ([]string, error) {
-	in := int32(val.Year())
-	return encodeInt(in)
-}
-
-// TimeIndex indexs time type.
-func TimeIndex(val time.Time) ([]string, error) {
-	in := int32(val.Year())
-	return encodeInt(in)
 }

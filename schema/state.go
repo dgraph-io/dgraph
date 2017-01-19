@@ -227,6 +227,7 @@ L1:
 			if errState := processDirective(l); errState != nil {
 				return errState
 			}
+			break L1
 		default:
 			return l.Errorf("Invalid schema. Unexpected %s", l.Input[l.Start:l.Pos])
 		}
@@ -343,6 +344,7 @@ L1:
 			if errState := processDirective(l); errState != nil {
 				return errState
 			}
+			break L1
 		default:
 			return l.Errorf("Invalid schema. Unexpected %s", l.Input[l.Start:l.Pos])
 		}

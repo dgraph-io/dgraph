@@ -1,8 +1,8 @@
-scalar age:int @index(default)
+scalar age:int @index(int)
 
 scalar (
   name: string @index(exact)
-  address: string @index(default)
+  address: string @index(term)
   age: int
 )
 

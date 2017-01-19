@@ -17,6 +17,7 @@
 package schema
 
 import (
+	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -25,21 +26,26 @@ var (
 	// Map containing predicate to type information.
 	str map[string]types.TypeID
 	// Map predicate to tokenizer.
-	indexedFields map[string]string
+	indexedFields map[string]tok.Tokenizer
 	// Map containing fields / predicates that are reversed.
 	reversedFields map[string]bool
 )
 
 func init() {
 	str = make(map[string]types.TypeID)
-	indexedFields = make(map[string]string)
+	indexedFields = make(map[string]tok.Tokenizer)
 	reversedFields = make(map[string]bool)
 }
 
 // IsIndexed returns if a given predicate is indexed or not.
-func IsIndexed(str string) bool {
-	_, found := indexedFields[str]
+func IsIndexed(attr string) bool {
+	_, found := indexedFields[attr]
 	return found
+}
+
+// Tokenizer returns tokenizer for given predicate.
+func Tokenizer(attr string) tok.Tokenizer {
+	return indexedFields[attr]
 }
 
 // IsReversed returns if a given predicate is reversed or not.

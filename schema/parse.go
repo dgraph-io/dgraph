@@ -20,6 +20,7 @@ import (
 	"io/ioutil"
 
 	"github.com/dgraph-io/dgraph/lex"
+	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -105,7 +106,7 @@ func processScalarBlock(it *lex.ItemIterator) error {
 						it.Next()
 						next = it.Item()
 						if next.Typ == itemIndex {
-							if err := processIndexDirective(it, name); err != nil {
+							if err := processIndexDirective(it, name, t); err != nil {
 								return err
 							}
 						} else if next.Typ == itemReverse {
@@ -127,8 +128,8 @@ func processScalarBlock(it *lex.ItemIterator) error {
 	return nil
 }
 
-func processIndexDirective(it *lex.ItemIterator, name string) error {
-	indexedFields[name] = ""
+func processIndexDirective(it *lex.ItemIterator, name string, typ types.TypeID) error {
+	indexedFields[name] = tok.Default(typ)
 	if !it.Next() {
 		// Nothing to read.
 		return nil
@@ -154,7 +155,8 @@ func processIndexDirective(it *lex.ItemIterator, name string) error {
 		if hasArg {
 			return x.Errorf("Found more than one arguments for index directive")
 		}
-		x.Printf("~~~~~name=%s arg=%s", name, next.Val)
+		// Look for custom tokenizer.
+		indexedFields[name] = tok.GetTokenizer(next.Val)
 	}
 	return nil
 }
@@ -206,7 +208,7 @@ func processScalar(it *lex.ItemIterator) error {
 						it.Next()
 						next = it.Item()
 						if next.Typ == itemIndex {
-							if err := processIndexDirective(it, name); err != nil {
+							if err := processIndexDirective(it, name, t); err != nil {
 								return err
 							}
 						} else if next.Typ == itemReverse {
