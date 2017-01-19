@@ -24,9 +24,10 @@ import (
 )
 
 var testNQuads = []struct {
-	input       string
-	nq          graph.NQuad
-	expectedErr bool
+	input        string
+	nq           graph.NQuad
+	expectedErr  bool
+	shouldIgnore bool
 }{
 	{
 		input: `<some_subject_id> <predicate> <object_id> .`,
@@ -348,17 +349,25 @@ var testNQuads = []struct {
 	},
 	{
 		input: `# nothing happened`,
-		nq: graph.NQuad{},
-		expectedErr: false,
+		expectedErr: true,
+		shouldIgnore: true,
 	},
 	{
-		input: `  `,
-		nq: graph.NQuad{},
-		expectedErr: false,
+		input: `<some_subject_id> # <predicate> <object_id> .`,
+		expectedErr: true,
+	},
+	{
+		input: `<some_subject_id> <predicate> <object_id> # .`,
+		expectedErr: true,
 	},
 	{
 		input: `check me as error`,
 		expectedErr: true,
+	},
+	{
+		input: `   `,
+		expectedErr: true,
+		shouldIgnore: true,
 	},
 }
 
@@ -366,7 +375,10 @@ func TestLex(t *testing.T) {
 	for _, test := range testNQuads {
 		t.Logf("Testing %v", test.input)
 		rnq, err := Parse(test.input)
-		if test.expectedErr {
+		if test.expectedErr && test.shouldIgnore {
+			assert.Equal(t, "EMPTY_LINE", err.Error(), "Catch an ignorable case: %v", 
+				err.Error())
+		} else if test.expectedErr {
 			assert.Error(t, err, "Expected error for input: %q. Output: %+v",
 				test.input, rnq)
 		} else {
