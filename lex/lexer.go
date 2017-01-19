@@ -174,8 +174,15 @@ func (l *Lexer) Ignore() {
 	l.Start = l.Pos
 }
 
+// CheckRune is predicate signature for accepting valid runes on input.
 type CheckRune func(r rune) bool
 
+// CheckRuneRec is like CheckRune with getting Lexer in input. This can
+// be used to recursively call other CheckRune(s).
+type CheckRuneRec func(r rune, l *Lexer) bool
+
+// AcceptRun accepts tokens based on CheckRune
+// untill it returns false or EOF is reached.
 func (l *Lexer) AcceptRun(c CheckRune) {
 	for {
 		r := l.Next()
@@ -186,6 +193,20 @@ func (l *Lexer) AcceptRun(c CheckRune) {
 	l.Backup()
 }
 
+// AcceptRunRec accepts tokens based on CheckRuneRec
+// untill it returns false or EOF is reached.
+func (l *Lexer) AcceptRunRec(c CheckRuneRec) {
+	for {
+		r := l.Next()
+		if r == EOF || !c(r, l) {
+			break
+		}
+	}
+	l.Backup()
+}
+
+// AcceptUntil accepts tokens based on CheckRune
+// till it returns false or EOF is reached.
 func (l *Lexer) AcceptUntil(c CheckRune) {
 	for {
 		r := l.Next()
@@ -194,4 +215,18 @@ func (l *Lexer) AcceptUntil(c CheckRune) {
 		}
 	}
 	l.Backup()
+}
+
+// AcceptRunTimes accepts tokens with CheckRune given number of times.
+// returns number of times it was successful.
+func (l *Lexer) AcceptRunTimes(c CheckRune, times int) int {
+	i := 0
+	for ; i < times; i++ {
+		r := l.Next()
+		if r == EOF || !c(r) {
+			break
+		}
+	}
+	l.Backup()
+	return i
 }
