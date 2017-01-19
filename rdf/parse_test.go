@@ -406,6 +406,26 @@ var testNQuads = []struct {
 		input:       `_:gabe <name> "Gabe' .`,
 		expectedErr: true,
 	},
+	{
+		input: `_:0 <name> <good> .`,
+		nq: graph.NQuad{
+			Subject:   "_:0",
+			Predicate: "name",
+			ObjectId:  "good",
+		},
+	},
+	{
+		input: `_:0a.b <name> <good> .`,
+		nq: graph.NQuad{
+			Subject:   "_:0a.b",
+			Predicate: "name",
+			ObjectId:  "good",
+		},
+	},
+	{
+		input:       `_:0a. <name> <bad> .`,
+		expectedErr: true, // blanknode can not end with .
+	},
 }
 
 func TestLex(t *testing.T) {
