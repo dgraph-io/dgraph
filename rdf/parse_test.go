@@ -346,6 +346,20 @@ var testNQuads = []struct {
 		input:       `_:gabe <name> "Gabe' .`,
 		expectedErr: true,
 	},
+	{
+		input: `# nothing happened`,
+		nq: graph.NQuad{},
+		expectedErr: false,
+	},
+	{
+		input: `  `,
+		nq: graph.NQuad{},
+		expectedErr: false,
+	},
+	{
+		input: `check me as error`,
+		expectedErr: true,
+	},
 }
 
 func TestLex(t *testing.T) {

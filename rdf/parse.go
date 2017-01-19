@@ -173,6 +173,7 @@ func Parse(line string) (rnq graph.NQuad, rerr error) {
 	it := l.NewIterator()
 	var oval string
 	var vend, hasBrackets bool
+	isCommentLine := false
 	// We read items from the l.Items channel to which the lexer sends items.
 	for it.Next() {
 		item := it.Item()
@@ -236,6 +237,10 @@ func Parse(line string) (rnq graph.NQuad, rerr error) {
 		case lex.ItemError:
 			return rnq, x.Errorf(item.Val)
 
+		case itemComment:
+			isCommentLine = true
+			vend = true
+
 		case itemValidEnd:
 			vend = true
 
@@ -246,6 +251,9 @@ func Parse(line string) (rnq graph.NQuad, rerr error) {
 
 	if !vend {
 		return rnq, x.Errorf("Invalid end of input. Input: [%s]", line)
+	}
+	if isCommentLine {
+		return rnq, nil
 	}
 	if len(oval) > 0 {
 		rnq.ObjectValue = &graph.Value{&graph.Value_StrVal{oval}}
