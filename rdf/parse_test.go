@@ -426,6 +426,20 @@ var testNQuads = []struct {
 		input:       `_:0a. <name> <bad> .`,
 		expectedErr: true, // blanknode can not end with .
 	},
+	{
+		input:       `<alice> <lives> "wonder \a land" .`,
+		expectedErr: true, // \a not valid escape char.
+	},
+	{
+		input: `<alice> <lives> "\u0045 wonderland" .`,
+		nq: graph.NQuad{
+			Subject:     "alice",
+			Predicate:   "lives",
+			ObjectId:    "",
+			ObjectValue: &graph.Value{&graph.Value_StrVal{`\u0045 wonderland`}},
+		},
+		expectedErr: false,
+	},
 }
 
 func TestLex(t *testing.T) {
