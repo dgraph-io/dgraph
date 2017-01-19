@@ -146,7 +146,7 @@ func lexUidNode(l *lex.Lexer, styp lex.ItemType, sfn lex.StateFn) lex.StateFn {
 }
 
 // Assumes that caller has consumed '_'.
-// BLANK_NODE_LABEL ::=	'_:' (PN_CHARS_U | [0-9]) ((PN_CHARS | '.')* PN_CHARS)?
+// BLANK_NODE_LABEL ::= '_:' (PN_CHARS_U | [0-9]) ((PN_CHARS | '.')* PN_CHARS)?
 func lexBlankNode(l *lex.Lexer, styp lex.ItemType,
 	sfn lex.StateFn) lex.StateFn {
 	r := l.Next()
@@ -354,6 +354,8 @@ func isLangTag(r rune) bool {
 	}
 }
 
+// IRIREF ::= '<' ([^#x00-#x20<>"{}|^`\] | UCHAR)* '>'
+// UCHAR ::= '\u' HEX HEX HEX HEX | '\U' HEX HEX HEX HEX HEX HEX HEX HEX
 func isIRIChar(r rune, l *lex.Lexer) bool {
 	if r <= 32 { // no chars b/w 0x00 to 0x20 inclusive
 		return false
@@ -386,6 +388,7 @@ func isIRIChar(r rune, l *lex.Lexer) bool {
 	return false
 }
 
+// HEX ::= [0-9] | [A-F] | [a-f]
 func isHex(r rune) bool {
 	switch {
 	case r >= '0' && r <= '9':
@@ -427,7 +430,7 @@ func isPNCharsU(r rune) bool {
 	return r == '_' || r == ':' || isPnCharsBase(r)
 }
 
-// PN_CHARS ::=	PN_CHARS_U | '-' | [0-9] | #x00B7 | [#x0300-#x036F] | [#x203F-#x2040]
+// PN_CHARS ::= PN_CHARS_U | '-' | [0-9] | #x00B7 | [#x0300-#x036F] | [#x203F-#x2040]
 func isPNChar(r rune) bool {
 	switch {
 	case r == '-':

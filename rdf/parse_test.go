@@ -395,6 +395,14 @@ var testNQuads = []struct {
 		expectedErr: true, // should fail because of \
 	},
 	{
+		input:       `_:|alice <abc> <abc> .`,
+		expectedErr: true, // | is not allowed first char in blanknode.
+	},
+	{
+		input:       "_:al\u00d7ice <abc> <abc> .",
+		expectedErr: true, // 0xd7 is not allowed
+	},
+	{
 		input:       `_:gabe <name> "Gabe' .`,
 		expectedErr: true,
 	},
