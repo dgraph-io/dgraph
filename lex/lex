@@ -1,0 +1,54 @@
+@mrjn After AcceptRun, lexer is now at state where AcceptRun failed to get more runes for CheckRune.
+There seems to be no way to get back last-valid rune from lexer without storing more information.
+Either i store lastrune/or its width explicitly OR calculate it from l.Start to l.Pos doing utf decode again.
+Or we can change AcceptRun func signature to return []rune
+
+
+
+```
+=== RUN   TestNearGeneratorErrorMissDist 2017/01/20 06:18:00 lists.go:228: Dirty map size: 181
+ 2017/01/20 06:18:00 lists.go:136: Commit counters. done:     1 noop:     0
+ [   1] Writing batch of size: 1
+ fatal error: unexpected signal during runtime execution
+ [signal SIGSEGV: segmentation violation code=0x80 addr=0x0 pc=0x9152e5]
+
+runtime stack:
+ runtime.throw(0xa4e0dc, 0x2a)
+ 	/home/travis/.gimme/versions/go1.7.linux.amd64/src/runtime/panic.go:566 +0x95
+ runtime.sigpanic()
+ 	/home/travis/.gimme/versions/go1.7.linux.amd64/src/runtime/sigpanic_unix.go:12 +0x2cc
+
+goroutine 2106 [syscall, locked to thread]:
+ runtime.cgocall(0x914580, 0xc42c80fbb8, 0xc400000000)
+ 	/home/travis/.gimme/versions/go1.7.linux.amd64/src/runtime/cgocall.go:131 +0x110 fp=0xc42c80fb88 sp=0xc42c80fb48
+ github.com/dgraph-io/dgraph/rdb._Cfunc_rdb_write(0x7f2d7023cb10, 0x7f2d70095250, 0x7f2d700f7930, 0xc420173160)
+ 	github.com/dgraph-io/dgraph/rdb/_obj/_cgo_gotypes.go:721 +0x45 fp=0xc42c80fbb8 sp=0xc42c80fb88
+ github.com/dgraph-io/dgraph/rdb.(*DB).Write(0xc42a4461a0, 0xc420030cd8, 0xc420172210, 0x0, 0x0)
+ 	/home/travis/gopath/src/github.com/dgraph-io/dgraph/rdb/db.go:136 +0x27e fp=0xc42c80fc60 sp=0xc42c80fbb8
+ github.com/dgraph-io/dgraph/store.(*Store).WriteBatch(0xc4211e0ed0, 0xc420172210, 0xf, 0xf)
+ 	/home/travis/gopath/src/github.com/dgraph-io/dgraph/store/store.go:129 +0x41 fp=0xc42c80fc98 sp=0xc42c80fc60
+ github.com/dgraph-io/dgraph/posting.batchSync()
+ 	/home/travis/gopath/src/github.com/dgraph-io/dgraph/posting/lists.go:479 +0x504 fp=0xc42c80ffb0 sp=0xc42c80fc98
+ runtime.goexit()
+ 	/home/travis/.gimme/versions/go1.7.linux.amd64/src/runtime/asm_amd64.s:2086 +0x1 fp=0xc42c80ffb8 sp=0xc42c80ffb0
+ created by github.com/dgraph-io/dgraph/posting.Init
+ 	/home/travis/gopath/src/github.com/dgraph-io/dgraph/posting/lists.go:336 +0x1a2
+
+goroutine 1 [chan receive]:
+ testing.(*T).Run(0xc420082180, 0xa46af0, 0x1e, 0xa88fb0, 0xc420051c01)
+ 	/home/travis/.gimme/versions/go1.7.linux.amd64/src/testing/testing.go:647 +0x316
+ testing.RunTests.func1(0xc420082180)
+ 	/home/travis/.gimme/versions/go1.7.linux.amd64/src/testing/testing.go:793 +0x6d
+ testing.tRunner(0xc420082180, 0xc420042d78)
+ 	/home/travis/.gimme/versions/go1.7.linux.amd64/src/testing/testing.go:610 +0x81
+ testing.RunTests(0xa8a400, 0xef5cc0, 0x5c, 0x5c, 0xc420030018)
+ 	/home/travis/.gimme/versions/go1.7.linux.amd64/src/testing/testing.go:799 +0x2f5
+ testing.(*M).Run(0xc420042ef8, 0x2200000374)
+ 	/home/travis/.gimme/versions/go1.7.linux.amd64/src/testing/testing.go:743 +0x85
+ github.com/dgraph-io/dgraph/query.TestMain(0xc420042ef8) 
+	/home/travis/gopath/src/github.com/dgraph-io/dgraph/query/query_test.go:2812 +0x37 
+ main.main() 
+	github.com/dgraph-io/dgraph/query/_test/_testmain.go:286 +0x1bd 
+goroutine 17 [syscall, locked to thread]: 
+runtime.goexit()
+```
