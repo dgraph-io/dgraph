@@ -153,7 +153,6 @@ func lexBlankNode(l *lex.Lexer, styp lex.ItemType,
 	if r != ':' {
 		return l.Errorf("Invalid character after _. Expected :, found %v", r)
 	}
-
 	r = l.Next()
 	if r == lex.EOF {
 		return l.Errorf("Unexpected end of subject")
