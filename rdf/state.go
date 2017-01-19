@@ -109,12 +109,8 @@ Loop:
 
 func lexIRIRef(l *lex.Lexer, styp lex.ItemType,
 	sfn lex.StateFn) lex.StateFn {
-	r := l.Next()
-	if r != '<' {
-		return l.Errorf("IRIRef should start from < , instead found %v", r)
-	}
 	l.AcceptRunRec(isIRIChar)
-	r = l.Next()
+	r := l.Next()
 	if r == lex.EOF {
 		return l.Errorf("Unexpected end of subject")
 	}
@@ -174,7 +170,6 @@ func lexSubject(l *lex.Lexer) lex.StateFn {
 	// The subject is an IRI, so we lex till we encounter '>'.
 	if r == '<' {
 		l.Depth++
-		l.Backup()
 		return lexIRIRef(l, itemSubject, lexText)
 	}
 
@@ -200,7 +195,6 @@ func lexPredicate(l *lex.Lexer) lex.StateFn {
 	}
 
 	l.Depth++
-	l.Backup()
 	return lexIRIRef(l, itemPredicate, lexText)
 }
 
@@ -270,7 +264,6 @@ func lexObjectType(l *lex.Lexer) lex.StateFn {
 		return l.Errorf("Expected < for lexObjectType")
 	}
 
-	l.Backup()
 	return lexIRIRef(l, itemObjectType, lexText)
 }
 
@@ -279,7 +272,6 @@ func lexObject(l *lex.Lexer) lex.StateFn {
 	// The object can be an IRI, blank node or a literal.
 	if r == '<' {
 		l.Depth++
-		l.Backup()
 		return lexIRIRef(l, itemObject, lexText)
 	}
 
@@ -306,7 +298,6 @@ func lexLabel(l *lex.Lexer) lex.StateFn {
 	// Graph label can either be an IRI or a blank node according to spec.
 	if r == '<' {
 		l.Depth++
-		l.Backup()
 		return lexIRIRef(l, itemLabel, lexText)
 	}
 
