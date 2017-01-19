@@ -226,15 +226,27 @@ func lexLanguage(l *lex.Lexer) lex.StateFn {
 }
 
 // Assumes '"' has already been encountered.
+// literal ::= STRING_LITERAL_QUOTE ('^^' IRIREF | LANGTAG)?
+// STRING_LITERAL_QUOTE ::= '"' ([^#x22#x5C#xA#xD] | ECHAR | UCHAR)* '"'
 func lexLiteral(l *lex.Lexer) lex.StateFn {
 	for {
 		r := l.Next()
 		if r == '\u005c' { // backslash
 			r = l.Next()
+			if !isEscChar(r) {
+				if (r == 'u' || r == 'U') && hasUChars(r, l) {
+					continue
+				}
+				return l.Errorf("Invalid escape character : %v in literal", r)
+			}
 			continue // This would skip over the escaped rune.
+		} else {
+			if r == 0x5c || r == 0xa || r == 0xd { // 0x22 ('"') is endLiteral
+				return l.Errorf("Invalid character %v in literal.", r)
+			}
 		}
 
-		if r == lex.EOF || isEndLiteral(r) {
+		if r == lex.EOF || isEndLiteral(r) { // should not we check for only '"' here ?
 			break
 		}
 	}
@@ -370,16 +382,11 @@ func isIRIChar(r rune, l *lex.Lexer) bool {
 	case '`':
 	case '\\':
 		r2 := l.Next()
-		times := 4
 		if r2 != 'u' && r2 != 'U' {
 			l.Backup()
 			return false
 		} else {
-			if r2 == 'U' {
-				times = 8
-			}
-			rs := l.AcceptRunTimes(isHex, times)
-			return rs == times
+			return hasUChars(r2, l)
 		}
 	default:
 		return true
@@ -439,6 +446,35 @@ func isPNChar(r rune) bool {
 	case r >= 0x203F && r <= 0x2040:
 	default:
 		return isPNCharsU(r)
+	}
+	return true
+}
+
+// UCHAR ::= '\u' HEX HEX HEX HEX | '\U' HEX HEX HEX HEX HEX HEX HEX HEX
+func hasUChars(r rune, l *lex.Lexer) bool {
+	times := 4
+	if r == 'U' {
+		times = 8
+	} else if r != 'u' {
+		return false
+	}
+	return times == l.AcceptRunTimes(isHex, times)
+}
+
+// ECHAR ::= '\' [tbnrf"'\]
+func isEscChar(r rune) bool {
+	switch r {
+	case 't':
+	case 'b':
+	case 'n':
+	case 'r':
+	case 'f':
+	case '"':
+	case '\'':
+	case '\\':
+		// true for all above.
+	default:
+		return false
 	}
 	return true
 }
