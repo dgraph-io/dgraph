@@ -357,18 +357,14 @@ func TestUseVarsMultiCascade(t *testing.T) {
 				}
 			}
 
-			me(L) {
-				name
-			}
-
-			friend(B) {
+			me([L, B]) {
 				name
 			}
 		}
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"name":"Andrea"}], "friend":[{"name":"Glenn Rhee"}]}`,
+		`{"me":[{"name":"Glenn Rhee"}, {"name":"Andrea"}]}`,
 		js)
 }
 
