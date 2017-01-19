@@ -105,8 +105,8 @@ var testNQuads = []struct {
 		input: `_:alice <name> "Alice In Wonderland"@en-0 .`,
 		nq: graph.NQuad{
 			Subject:     "_:alice",
-			Predicate:   "name.en-0",
-			ObjectId:    "",
+			Predicate:   "name",
+			ObjectId:    "en-0",
 			ObjectValue: &graph.Value{&graph.Value_StrVal{"Alice In Wonderland"}},
 		},
 	},
@@ -124,8 +124,8 @@ var testNQuads = []struct {
 		input: `<http://www.w3.org/2001/sw/RDFCore/nedges/> <http://purl.org/dc/terms/title> "N-Edges"@en-US .`,
 		nq: graph.NQuad{
 			Subject:     "http://www.w3.org/2001/sw/RDFCore/nedges/",
-			Predicate:   "http://purl.org/dc/terms/title.en-US",
-			ObjectId:    "",
+			Predicate:   "http://purl.org/dc/terms/title",
+			ObjectId:    "en-US",
 			ObjectValue: &graph.Value{&graph.Value_StrVal{"N-Edges"}},
 		},
 	},

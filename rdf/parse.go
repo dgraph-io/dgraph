@@ -103,15 +103,19 @@ func (nq NQuad) ToEdge() (*task.DirectedEdge, error) {
 		Entity: sid,
 	}
 
-	// An edge can have an id or a value.
-	if len(nq.ObjectId) > 0 {
+	switch nq.valueType() {
+	case nQuadUid:
 		oid := GetUid(nq.ObjectId)
 		out.ValueId = oid
-	} else {
-		if out.Value, err = byteVal(nq); err != nil {
+	case nQuadValue:
+		if err = copyValue(out, nq); err != nil {
 			return &emptyEdge, err
 		}
-		out.ValueType = uint32(nq.ObjectType)
+	case nQuadTaggedValue:
+		if err = copyValue(out, nq); err != nil {
+			return &emptyEdge, err
+		}
+		out.ValueId = farm.Fingerprint64([]byte(nq.ObjectId))
 	}
 	return out, nil
 }
@@ -135,16 +139,78 @@ func (nq NQuad) ToEdgeUsing(newToUid map[string]uint64) (*task.DirectedEdge, err
 		Label:  nq.Label,
 	}
 
-	if len(nq.ObjectId) == 0 {
-		if out.Value, err = byteVal(nq); err != nil {
-			return &emptyEdge, err
-		}
-		out.ValueType = uint32(nq.ObjectType)
-	} else {
+	switch nq.valueType() {
+	case nQuadUid:
 		uid = toUid(nq.ObjectId, newToUid)
 		out.ValueId = uid
+	case nQuadValue:
+		if err = copyValue(out, nq); err != nil {
+			return &emptyEdge, err
+		}
+	case nQuadTaggedValue:
+		if err = copyValue(out, nq); err != nil {
+			return &emptyEdge, err
+		}
+		out.ValueId = farm.Fingerprint64([]byte(nq.ObjectId))
 	}
 	return out, nil
+}
+
+// TODO(tzdybal) - remove
+/*
+func (nq NQuad) hasUid() bool {
+	return len(nq.ObjectId) > 0 && nq.ObjectValue == nil
+}
+
+func (nq NQuad) hasLangTag() bool {
+	return len(nq.ObjectId) > 0 && nq.ObjectValue != nil
+}
+
+func (nq NQuad) hasValue() bool {
+	return len(nq.ObjectId) == 0 && nq.ObjectValue != nil
+}
+*/
+
+func copyValue(out *task.DirectedEdge, nq NQuad) error {
+	var err error
+	if out.Value, err = byteVal(nq); err != nil {
+		return err
+	}
+	out.ValueType = uint32(nq.ObjectType)
+	return nil
+}
+
+type nQuadTypeInfo int32
+
+const (
+	nQuadEmpty       nQuadTypeInfo = iota
+	nQuadUid         nQuadTypeInfo = iota
+	nQuadValue       nQuadTypeInfo = iota
+	nQuadTaggedValue nQuadTypeInfo = iota
+)
+
+func (nq NQuad) valueType() nQuadTypeInfo {
+	if len(nq.ObjectId) == 0 {
+		if nq.ObjectValue != nil {
+			return nQuadValue // value without lang tag
+		} else {
+			return nQuadEmpty // empty NQuad - no Uid and no Value
+		}
+	} else {
+		if nq.ObjectValue != nil {
+			return nQuadTaggedValue // value with lang tag
+		} else {
+			return nQuadUid // Uid
+		}
+	}
+}
+
+// This function is used to extract an IRI from an IRIREF.
+func stripBracketsAndTrim(val string) (string, bool) {
+	if val[0] != '<' && val[len(val)-1] != '>' {
+		return strings.Trim(val, " "), false
+	}
+	return strings.Trim(val[1:len(val)-1], " "), true
 }
 
 // Function to do sanity check for subject, predicate, object and label strings.
@@ -189,7 +255,7 @@ func Parse(line string) (rnq graph.NQuad, rerr error) {
 			}
 
 		case itemLanguage:
-			rnq.Predicate += "." + item.Val
+			rnq.ObjectId = item.Val
 
 		case itemObjectType:
 			if len(oval) == 0 {
