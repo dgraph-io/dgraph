@@ -160,20 +160,25 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *task.DirectedEdge) e
 	var val types.Val
 	var verr error
 
-	l.Lock()
-	defer l.Unlock()
+	l.index.Lock()
+	defer l.index.Unlock()
 
 	doUpdateIndex := pstore != nil && (t.Value != nil) && schema.IsIndexed(t.Attr)
-	if doUpdateIndex {
-		// Check last posting for original value BEFORE any mutation actually happens.
-		val, verr = l.value()
-	}
-	hasMutated, err := l.addMutation(ctx, t)
-	if err != nil {
-		return err
-	}
-	if !hasMutated {
-		return nil
+	{
+		l.Lock()
+		if doUpdateIndex {
+			// Check last posting for original value BEFORE any mutation actually happens.
+			val, verr = l.value()
+		}
+		hasMutated, err := l.addMutation(ctx, t)
+		l.Unlock()
+
+		if err != nil {
+			return err
+		}
+		if !hasMutated {
+			return nil
+		}
 	}
 	if doUpdateIndex {
 		// Exact matches.

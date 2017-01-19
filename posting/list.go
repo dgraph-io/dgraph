@@ -58,6 +58,7 @@ const (
 
 type List struct {
 	x.SafeMutex
+	index       x.SafeMutex
 	key         []byte
 	ghash       uint64
 	pbuffer     unsafe.Pointer
