@@ -145,15 +145,15 @@ func lexUidNode(l *lex.Lexer, styp lex.ItemType, sfn lex.StateFn) lex.StateFn {
 		styp)
 }
 
-// Assumes that the current rune is '_'.
+// Assumes that caller has consumed '_'.
 func lexBlankNode(l *lex.Lexer, styp lex.ItemType,
 	sfn lex.StateFn) lex.StateFn {
-
-	// RDF Blank Node.
-	// TODO: At some point do checkings based on the guidelines. For now,
-	// just accept everything until space.
+	r := l.Next()
+	if r != ':' {
+		return l.Errorf("Invalid character after _. Expected :, found %v", r)
+	}
 	l.AcceptUntil(isSpace)
-	r := l.Peek()
+	r = l.Peek()
 	if r == lex.EOF {
 		return l.Errorf("Unexpected end of subject")
 	}
@@ -177,12 +177,7 @@ func lexSubject(l *lex.Lexer) lex.StateFn {
 	// The subject represents a blank node.
 	if r == '_' {
 		l.Depth++
-		r = l.Next()
-		if r == ':' {
-			return lexBlankNode(l, itemSubject, lexText)
-		} else {
-			return l.Errorf("Invalid character after _ during lexSubject: %v", r)
-		}
+		return lexBlankNode(l, itemSubject, lexText)
 	}
 	// See if its an uid
 	return lexUidNode(l, itemSubject, lexText)
@@ -278,12 +273,7 @@ func lexObject(l *lex.Lexer) lex.StateFn {
 
 	if r == '_' {
 		l.Depth++
-		r = l.Next()
-		if r == ':' {
-			return lexBlankNode(l, itemObject, lexText)
-		} else {
-			return l.Errorf("Invalid char after _: %v at lexObject", r)
-		}
+		return lexBlankNode(l, itemObject, lexText)
 	}
 
 	if r == '"' {
@@ -304,12 +294,6 @@ func lexLabel(l *lex.Lexer) lex.StateFn {
 
 	if r == '_' {
 		l.Depth++
-		r = l.Next()
-		if r != ':' {
-			return l.Errorf("Invalid char: %c at lexLabel", r)
-		}
-
-		l.Backup()
 		return lexBlankNode(l, itemLabel, lexText)
 	}
 	return l.Errorf("Invalid char: %v at lexLabel", r)
