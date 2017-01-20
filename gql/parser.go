@@ -986,8 +986,7 @@ func parseFilter(it *lex.ItemIterator) (*FilterTree, error) {
 }
 
 func parseID(gq *GraphQuery, val string) error {
-	r := strings.NewReplacer(" ", "", "\t", "")
-	val = r.Replace(val)
+	val = x.WhiteSpace.Replace(val)
 	toUid := func(str string) {
 		uid, rerr := strconv.ParseUint(str, 0, 64)
 		if rerr == nil {
@@ -1023,8 +1022,7 @@ func parseID(gq *GraphQuery, val string) error {
 }
 
 func parseVarList(gq *GraphQuery, val string) error {
-	r := strings.NewReplacer(" ", "", "\t", "")
-	val = r.Replace(val)
+	val = x.WhiteSpace.Replace(val)
 	if val[0] != '[' {
 		gq.NeedsVar = append(gq.NeedsVar, val)
 		return nil
