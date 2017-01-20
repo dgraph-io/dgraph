@@ -69,7 +69,7 @@ func processFile(file string, batch *client.BatchMutation) {
 			break
 		}
 		nq, err := rdf.Parse(buf.String())
-		if err != nil && err.Error() == "EMPTY_LINE" { // special case: comment/empty line
+		if err == rdf.ErrEmpty { // special case: comment/empty line
 			buf.Reset()
 			continue
 		} else if err != nil {

@@ -17,6 +17,7 @@
 package rdf
 
 import (
+	"errors"
 	"log"
 	"strconv"
 	"strings"
@@ -32,6 +33,9 @@ import (
 )
 
 var emptyEdge task.DirectedEdge
+var (
+	ErrEmpty = errors.New("rdf: harmless error, e.g. comment line")
+)
 
 // Gets the uid corresponding to an xid from the posting list which stores the
 // mapping.
@@ -253,7 +257,7 @@ func Parse(line string) (rnq graph.NQuad, rerr error) {
 		return rnq, x.Errorf("Invalid end of input. Input: [%s]", line)
 	}
 	if isCommentLine {
-		return rnq, x.Errorf("EMPTY_LINE")
+		return rnq, ErrEmpty
 	}
 	if len(oval) > 0 {
 		rnq.ObjectValue = &graph.Value{&graph.Value_StrVal{oval}}
