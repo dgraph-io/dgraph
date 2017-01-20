@@ -395,8 +395,36 @@ var testNQuads = []struct {
 		expectedErr: true, // should fail because of \
 	},
 	{
+		input:       `_:|alice <abc> <abc> .`,
+		expectedErr: true, // | is not allowed first char in blanknode.
+	},
+	{
+		input:       "_:al\u00d7ice <abc> <abc> .",
+		expectedErr: true, // 0xd7 is not allowed
+	},
+	{
 		input:       `_:gabe <name> "Gabe' .`,
 		expectedErr: true,
+	},
+	{
+		input: `_:0 <name> <good> .`,
+		nq: graph.NQuad{
+			Subject:   "_:0",
+			Predicate: "name",
+			ObjectId:  "good",
+		},
+	},
+	{
+		input: `_:0a.b <name> <good> .`,
+		nq: graph.NQuad{
+			Subject:   "_:0a.b",
+			Predicate: "name",
+			ObjectId:  "good",
+		},
+	},
+	{
+		input:       `_:0a. <name> <bad> .`,
+		expectedErr: true, // blanknode can not end with .
 	},
 }
 
