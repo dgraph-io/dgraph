@@ -570,7 +570,7 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 		// If the executed subgraph had some variable defined in it, Populate it in the map.
 		for _, idx := range idxList {
 			sg := sgl[idx]
-			if sg.Params.Alias != "var" {
+			if len(res.QueryVars[idx].Defines) == 0 {
 				continue
 			}
 			populateVarMap(sg, doneVars)
