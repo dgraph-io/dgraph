@@ -441,8 +441,24 @@ var testNQuads = []struct {
 		expectedErr: false,
 	},
 	{
+		input:       `<alice> <lives> "\u004 wonderland" .`,
+		expectedErr: true, // should have 4 hex values after \u
+	},
+	{
 		input:       `<alice> <lives> "wonderful land"@a- .`,
 		expectedErr: true, // object langtag can not end with -
+	},
+	{
+		input: `<alice> <lives> "\t\b\n\r\f\"\'\\"@a-b .`,
+		nq: graph.NQuad{
+			Subject:     "alice",
+			Predicate:   "lives.a-b",
+			ObjectValue: &graph.Value{&graph.Value_StrVal{`\t\b\n\r\f\"\'\\`}},
+		},
+	},
+	{
+		input:       `<alice> <lives> "\a" .`,
+		expectedErr: true, // \a is not valid escape char
 	},
 }
 

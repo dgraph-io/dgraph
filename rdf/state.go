@@ -246,7 +246,7 @@ func lexLiteral(l *lex.Lexer) lex.StateFn {
 			}
 		}
 
-		if r == lex.EOF || isEndLiteral(r) { // should not we check for only '"' here ?
+		if r == lex.EOF || isEndLiteral(r) {
 			break
 		}
 	}
