@@ -161,10 +161,10 @@ func lexBlankNode(l *lex.Lexer, styp lex.ItemType,
 	if !(isPNCharsU(r) || (r >= '0' && r <= '9')) {
 		return l.Errorf("Invalid character in %v after _: , Got %v", styp, r)
 	}
-	lastAccRune, times := l.AcceptRun(func(r rune) bool {
+	lastAccRune, validRune := l.AcceptRun(func(r rune) bool {
 		return r == '.' || isPNChar(r)
 	})
-	if times > 0 && lastAccRune == '.' {
+	if validRune && lastAccRune == '.' {
 		return l.Errorf("Can not end %v with '.'", styp)
 	}
 

@@ -183,19 +183,19 @@ type CheckRuneRec func(r rune, l *Lexer) bool
 
 // AcceptRun accepts tokens based on CheckRune
 // untill it returns false or EOF is reached.
-// Returns last rune accepted and total no of runes accepted.
-func (l *Lexer) AcceptRun(c CheckRune) (lastr rune, nAccRunes int) {
-	nAccRunes = 0
+// Returns last rune accepted and valid flag for rune.
+func (l *Lexer) AcceptRun(c CheckRune) (lastr rune, validr bool) {
+	validr = false
 	for {
 		r := l.Next()
 		if r == EOF || !c(r) {
 			break
 		}
-		nAccRunes++
+		validr = true
 		lastr = r
 	}
 	l.Backup()
-	return lastr, nAccRunes
+	return lastr, validr
 }
 
 // AcceptRunRec accepts tokens based on CheckRuneRec
