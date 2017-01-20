@@ -266,8 +266,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 			}
 
 			if pc.Attr == "_xid_" {
-				txt := types.ValueForType(types.StringID)
-				err := types.Convert(v, &txt)
+				txt, err := types.Convert(v, types.StringID)
 				if err != nil {
 					return err
 				}
@@ -287,14 +286,14 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 						return x.Errorf("Leaf predicate:'%v' must be a scalar.", pc.Attr)
 					}
 					gtID := globalType
-					sv = types.ValueForType(gtID)
 					// Convert to schema type.
-					err = types.Convert(v, &sv)
+					sv, err = types.Convert(v, gtID)
 					if bytes.Equal(tv.Val, nil) || err != nil {
 						continue
 					}
 				} else {
-					x.Check(types.Convert(v, &sv))
+					sv, err = types.Convert(v, types.StringID)
+					x.Check(err)
 				}
 				if bytes.Equal(tv.Val, nil) {
 					continue

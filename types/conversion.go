@@ -33,11 +33,11 @@ import (
 )
 
 // Convert converts the value to given scalar type.
-func Convert(from Val, to *Val) error {
+func Convert(from Val, toID TypeID) (Val, error) {
 	// fromID TypeID, toID TypeID, data []byte, res *interface{}) error {
 
+	to := ValueForType(toID)
 	fromID := from.Tid
-	toID := to.Tid
 	data := from.Value.([]byte)
 	res := &to.Value
 	// Convert from-type to to-type and store in the result interface.
@@ -52,12 +52,12 @@ func Convert(from Val, to *Val) error {
 				*res = string(data)
 			case Int32ID:
 				if len(data) < 4 {
-					return x.Errorf("Invalid data for int32 %v", data)
+					return to, x.Errorf("Invalid data for int32 %v", data)
 				}
 				*res = int32(binary.LittleEndian.Uint32(data))
 			case FloatID:
 				if len(data) < 8 {
-					return x.Errorf("Invalid data for float %v", data)
+					return to, x.Errorf("Invalid data for float %v", data)
 				}
 				i := binary.LittleEndian.Uint64(data)
 				val := math.Float64frombits(i)
@@ -65,16 +65,16 @@ func Convert(from Val, to *Val) error {
 			case BoolID:
 				if data[0] == 0 {
 					*res = bool(false)
-					return nil
+					return to, nil
 				} else if data[0] == 1 {
 					*res = bool(true)
-					return nil
+					return to, nil
 				} else {
-					return x.Errorf("Invalid value for bool %v", data[0])
+					return to, x.Errorf("Invalid value for bool %v", data[0])
 				}
 			case DateID:
 				if len(data) < 8 {
-					return x.Errorf("Invalid data for date %v", data)
+					return to, x.Errorf("Invalid data for date %v", data)
 				}
 				val := binary.LittleEndian.Uint64(data)
 				tm := time.Unix(int64(val), 0)
@@ -82,17 +82,17 @@ func Convert(from Val, to *Val) error {
 			case DateTimeID:
 				var t time.Time
 				if err := t.UnmarshalBinary(data); err != nil {
-					return err
+					return to, err
 				}
 				*res = t
 			case GeoID:
 				w, err := wkb.Unmarshal(data)
 				if err != nil {
-					return err
+					return to, err
 				}
 				*res = w
 			default:
-				return cantConvert(fromID, toID)
+				return to, cantConvert(fromID, toID)
 			}
 		}
 	case StringID:
@@ -106,13 +106,13 @@ func Convert(from Val, to *Val) error {
 				// Marshal text.
 				val, err := strconv.ParseInt(string(vc), 10, 32)
 				if err != nil {
-					return err
+					return to, err
 				}
 				*res = int32(val)
 			case FloatID:
 				val, err := strconv.ParseFloat(string(vc), 64)
 				if err != nil {
-					return err
+					return to, err
 				}
 				*res = float64(val)
 			case StringID:
@@ -120,7 +120,7 @@ func Convert(from Val, to *Val) error {
 			case BoolID:
 				val, err := strconv.ParseBool(string(vc))
 				if err != nil {
-					return err
+					return to, err
 				}
 				*res = bool(val)
 			case DateID:
@@ -130,7 +130,7 @@ func Convert(from Val, to *Val) error {
 					if err != nil {
 						val, err = time.Parse(dateFormatY, string(vc))
 						if err != nil {
-							return err
+							return to, err
 						}
 					}
 				}
@@ -140,7 +140,7 @@ func Convert(from Val, to *Val) error {
 				if err := t.UnmarshalText([]byte(vc)); err != nil {
 					// Try parsing without timezone since that is a valid format
 					if t, err = time.Parse(dateTimeFormat, vc); err != nil {
-						return err
+						return to, err
 					}
 				}
 				*res = t
@@ -148,17 +148,17 @@ func Convert(from Val, to *Val) error {
 				var g geom.T
 				text := bytes.Replace([]byte(vc), []byte("'"), []byte("\""), -1)
 				if err := geojson.Unmarshal(text, &g); err != nil {
-					return err
+					return to, err
 				}
 				*res = g
 			default:
-				return cantConvert(fromID, toID)
+				return to, cantConvert(fromID, toID)
 			}
 		}
 	case Int32ID:
 		{
 			if len(data) < 4 {
-				return x.Errorf("Invalid data for int32 %v", data)
+				return to, x.Errorf("Invalid data for int32 %v", data)
 			}
 			vc := int32(binary.LittleEndian.Uint32(data))
 			switch toID {
@@ -181,13 +181,13 @@ func Convert(from Val, to *Val) error {
 			case DateTimeID:
 				*res = time.Unix(int64(vc), 0).UTC()
 			default:
-				return cantConvert(fromID, toID)
+				return to, cantConvert(fromID, toID)
 			}
 		}
 	case FloatID:
 		{
 			if len(data) < 8 {
-				return x.Errorf("Invalid data for float %v", data)
+				return to, x.Errorf("Invalid data for float %v", data)
 			}
 			i := binary.LittleEndian.Uint64(data)
 			val := math.Float64frombits(i)
@@ -203,7 +203,7 @@ func Convert(from Val, to *Val) error {
 				*res = bs[:]
 			case Int32ID:
 				if vc > math.MaxInt32 || vc < math.MinInt32 || math.IsNaN(float64(vc)) {
-					return x.Errorf("Float out of int32 range")
+					return to, x.Errorf("Float out of int32 range")
 				}
 				*res = int32(vc)
 			case BoolID:
@@ -222,7 +222,7 @@ func Convert(from Val, to *Val) error {
 				nsecs := int64(fracSecs * nanoSecondsInSec)
 				*res = time.Unix(secs, nsecs).UTC()
 			default:
-				return cantConvert(fromID, toID)
+				return to, cantConvert(fromID, toID)
 			}
 		}
 	case BoolID:
@@ -233,7 +233,7 @@ func Convert(from Val, to *Val) error {
 			} else if data[0] == 1 {
 				vc = bool(true)
 			} else {
-				return x.Errorf("Invalid value for bool %v", data[0])
+				return to, x.Errorf("Invalid value for bool %v", data[0])
 			}
 
 			switch toID {
@@ -260,13 +260,13 @@ func Convert(from Val, to *Val) error {
 			case StringID:
 				*res = string(strconv.FormatBool(bool(vc)))
 			default:
-				return cantConvert(fromID, toID)
+				return to, cantConvert(fromID, toID)
 			}
 		}
 	case DateID:
 		{
 			if len(data) < 8 {
-				return x.Errorf("Invalid data for date %v", data)
+				return to, x.Errorf("Invalid data for date %v", data)
 			}
 			val := binary.LittleEndian.Uint64(data)
 			tm := time.Unix(int64(val), 0)
@@ -287,7 +287,7 @@ func Convert(from Val, to *Val) error {
 			case Int32ID:
 				secs := vc.Unix()
 				if secs > math.MaxInt32 || secs < math.MinInt32 {
-					return x.Errorf("Time out of int32 range")
+					return to, x.Errorf("Time out of int32 range")
 				}
 				*res = int32(secs)
 			case FloatID:
@@ -296,14 +296,14 @@ func Convert(from Val, to *Val) error {
 				val := secs + nano/nanoSecondsInSec
 				*res = float64(val)
 			default:
-				return cantConvert(fromID, toID)
+				return to, cantConvert(fromID, toID)
 			}
 		}
 	case DateTimeID:
 		{
 			var t time.Time
 			if err := t.UnmarshalBinary(data); err != nil {
-				return err
+				return to, err
 			}
 			vc := t
 			switch toID {
@@ -313,7 +313,7 @@ func Convert(from Val, to *Val) error {
 				// Marshal Binary
 				r, err := vc.MarshalBinary()
 				if err != nil {
-					return err
+					return to, err
 				}
 				*res = r
 			case DateID:
@@ -321,13 +321,13 @@ func Convert(from Val, to *Val) error {
 			case StringID:
 				val, err := vc.MarshalText()
 				if err != nil {
-					return err
+					return to, err
 				}
 				*res = string(val)
 			case Int32ID:
 				secs := vc.Unix()
 				if secs > math.MaxInt32 || secs < math.MinInt32 {
-					return x.Errorf("Time out of int32 range")
+					return to, x.Errorf("Time out of int32 range")
 				}
 				*res = int32(secs)
 			case FloatID:
@@ -336,14 +336,14 @@ func Convert(from Val, to *Val) error {
 				val := secs + nano/nanoSecondsInSec
 				*res = float64(val)
 			default:
-				return cantConvert(fromID, toID)
+				return to, cantConvert(fromID, toID)
 			}
 		}
 	case GeoID:
 		{
 			vc, err := wkb.Unmarshal(data)
 			if err != nil {
-				return err
+				return to, err
 			}
 			switch toID {
 			case GeoID:
@@ -352,23 +352,23 @@ func Convert(from Val, to *Val) error {
 				// Marshal Binary
 				r, err := wkb.Marshal(vc, binary.LittleEndian)
 				if err != nil {
-					return err
+					return to, err
 				}
 				*res = r
 			case StringID:
 				val, err := geojson.Marshal(vc)
 				if err != nil {
-					return nil
+					return to, nil
 				}
 				*res = string(bytes.Replace(val, []byte("\""), []byte("'"), -1))
 			default:
-				return cantConvert(fromID, toID)
+				return to, cantConvert(fromID, toID)
 			}
 		}
 	default:
-		return cantConvert(fromID, toID)
+		return to, cantConvert(fromID, toID)
 	}
-	return nil
+	return to, nil
 }
 
 func Marshal(from Val, to *Val) error {
