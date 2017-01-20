@@ -17,6 +17,8 @@
 package query
 
 import (
+	"time"
+
 	"github.com/dgraph-io/dgraph/query/graph"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
@@ -27,23 +29,35 @@ import (
 // protobuf values.
 
 func toProtoValue(v types.Val) *graph.Value {
-	switch val := v.Value.(type) {
-	case string:
-		return &graph.Value{&graph.Value_StrVal{string(val)}}
+	switch v.Tid {
+	case types.StringID:
+		return &graph.Value{&graph.Value_StrVal{v.Value.(string)}}
 
-	case int32:
-		return &graph.Value{&graph.Value_IntVal{int32(val)}}
+	case types.Int32ID:
+		return &graph.Value{&graph.Value_IntVal{v.Value.(int32)}}
 
-	case float64:
-		return &graph.Value{&graph.Value_DoubleVal{float64(val)}}
+	case types.FloatID:
+		return &graph.Value{&graph.Value_DoubleVal{v.Value.(float64)}}
 
-	case bool:
-		return &graph.Value{&graph.Value_BoolVal{bool(val)}}
+	case types.BoolID:
+		return &graph.Value{&graph.Value_BoolVal{v.Value.(bool)}}
 
-	case geom.T:
+	case types.DateID:
+		val := v.Value.(time.Time)
+		b, err := val.MarshalBinary()
+		x.Check(err)
+		return &graph.Value{&graph.Value_DateVal{b}}
+
+	case types.DateTimeID:
+		val := v.Value.(time.Time)
+		b, err := val.MarshalBinary()
+		x.Check(err)
+		return &graph.Value{&graph.Value_DatetimeVal{b}}
+
+	case types.GeoID:
 		b := types.ValueForType(types.BinaryID)
 		src := types.ValueForType(types.GeoID)
-		src.Value = val
+		src.Value = v.Value.(geom.T)
 		x.Check(types.Marshal(src, &b))
 		return &graph.Value{&graph.Value_GeoVal{b.Value.([]byte)}}
 

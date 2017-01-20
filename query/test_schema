@@ -5,6 +5,7 @@ scalar (
   address: string
   alive: bool
   survival_rate: float
+  dob: date
 )
 
 type  person {
