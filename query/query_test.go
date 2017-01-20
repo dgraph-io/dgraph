@@ -24,6 +24,7 @@ import (
 	"io/ioutil"
 	"os"
 	"testing"
+	"time"
 
 	farm "github.com/dgryski/go-farm"
 	"github.com/gogo/protobuf/proto"
@@ -2233,11 +2234,12 @@ func TestSchema1(t *testing.T) {
 		{
 			person(id:0x01) {
 				name
-				age 
+				age
 				address
 				alive
 				survival_rate
 				friend {
+					name
 					address
 					age
 				}
@@ -2246,8 +2248,7 @@ func TestSchema1(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"person":[{"address":"31, 32 street, Jupiter","age":38,"alive":true,"friend":[{"address":"21, mark street, Mars","age":15}],"name":"Michonne","survival_rate":98.99}]}`,
-		js)
+		`{"person":[{"address":"31, 32 street, Jupiter","age":38,"alive":true,"friend":[{"address":"21, mark street, Mars","age":15,"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}],"name":"Michonne","survival_rate":98.990000}]}`, js)
 }
 
 func TestMultiQuery(t *testing.T) {
@@ -2281,7 +2282,6 @@ func TestMultiQueryError1(t *testing.T) {
       me(anyof("name", "Michonne")) {
         name
         gender
-			
 
       you(anyof("name", "Andrea")) {
         name
@@ -2775,6 +2775,7 @@ func TestSchema(t *testing.T) {
 				alive
 				loc
 				friend {
+					dob
 					name
 				}
 				friend {
@@ -2819,9 +2820,13 @@ func TestSchema(t *testing.T) {
 	require.EqualValues(t, 23, child.Uid)
 	require.EqualValues(t, "friend", child.Attribute)
 
-	require.Len(t, child.Properties, 1)
+	require.Len(t, child.Properties, 2)
 	require.EqualValues(t, "Rick Grimes",
 		getProperty(child.Properties, "name").GetStrVal())
+	dob := getProperty(child.Properties, "dob").GetDateVal()
+	var date time.Time
+	date.UnmarshalBinary(dob)
+	require.EqualValues(t, "1910-01-02 00:00:00 +0000 UTC", date.String())
 	require.Empty(t, child.Children)
 
 	child = gr.Children[0].Children[4]
