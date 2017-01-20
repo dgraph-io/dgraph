@@ -1089,7 +1089,7 @@ func TestParseFilter_emptyargument(t *testing.T) {
 	query := `
 	query {
 		me(id:0x0a) {
-			friends @filter(allof(name,)) {
+			friends @filter(allof(name,,)) {
 				name
 			}
 			gender,age

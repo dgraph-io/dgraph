@@ -333,9 +333,7 @@ func filterCopy(sg *SubGraph, ft *gql.FilterTree) {
 		sg.Attr = ft.Func.Attr
 		sg.SrcFunc = append(sg.SrcFunc, ft.Func.Name)
 		sg.SrcFunc = append(sg.SrcFunc, ft.Func.Args...)
-		for _, it := range ft.Func.NeedsVar {
-			sg.Params.NeedsVar = append(sg.Params.NeedsVar, it)
-		}
+		sg.Params.NeedsVar = append(sg.Params.NeedsVar, ft.Func.NeedsVar)
 	}
 	for _, ftc := range ft.Child {
 		child := &SubGraph{}
@@ -360,9 +358,7 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 			isDebug: sg.Params.isDebug,
 			Var:     gchild.Var,
 		}
-		for _, it := range gchild.NeedsVar {
-			args.NeedsVar = append(args.NeedsVar, it)
-		}
+		args.NeedsVar = append(args.NeedsVar, gchild.NeedsVar)
 		if gchild.IsCount {
 			if len(gchild.Children) != 0 {
 				return errors.New("Node with count cannot have child attributes")

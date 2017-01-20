@@ -120,6 +120,9 @@ func lexFuncOrArg(l *lex.Lexer) lex.StateFn {
 		case isSpace(r) || isEndOfLine(r):
 			l.Ignore()
 		case r == comma:
+			if empty {
+				return l.Errorf("Consecutive commas not allowed.")
+			}
 			empty = true
 			l.Ignore()
 		case r == '&':
