@@ -382,12 +382,8 @@ func Parse(input string) (res Result, rerr error) {
 func checkDependency(vl []*Vars) error {
 	needs, defines := make([]string, 0, 10), make([]string, 0, 10)
 	for _, it := range vl {
-		for _, v := range it.Needs {
-			needs = append(needs, v)
-		}
-		for _, v := range it.Defines {
-			defines = append(defines, v)
-		}
+		needs = append(needs, it.Needs...)
+		defines = append(defines, it.Defines...)
 	}
 
 	sort.Strings(needs)
@@ -433,9 +429,7 @@ func (qu *GraphQuery) collectVars(v *Vars) {
 
 func (f *FilterTree) collectVars(v *Vars) {
 	if f.Func != nil {
-		for _, it := range f.Func.NeedsVar {
-			v.Needs = append(v.Needs, it)
-		}
+		v.Needs = append(v.Needs, f.Func.NeedsVar...)
 	}
 	for _, fch := range f.Child {
 		fch.collectVars(v)
