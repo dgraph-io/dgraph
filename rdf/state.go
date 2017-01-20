@@ -35,6 +35,7 @@ const (
 	itemLanguage                           // language, 11
 	itemObjectType                         // object type, 12
 	itemValidEnd                           // end with dot, 13
+	itemComment                            // comment, 14
 )
 
 // These constants keep a track of the depth while parsing an rdf N-Quad.
@@ -85,6 +86,12 @@ Loop:
 			l.Emit(itemText)
 			return lexObject
 
+		case r == '#':
+			if l.Depth != atSubject {
+				return l.Errorf("Invalid input: %c at lexText", r)
+			}
+			return lexComment
+
 		case r == lex.EOF:
 			break Loop
 
@@ -102,6 +109,9 @@ Loop:
 	}
 	if l.Pos > l.Start {
 		l.Emit(itemText)
+	}
+	if l.Depth == atSubject { // no valid term encountered, taken as comment-line
+		return lexComment
 	}
 	l.Emit(lex.ItemEOF)
 	return nil
@@ -325,6 +335,20 @@ func lexLabel(l *lex.Lexer) lex.StateFn {
 	return l.Errorf("Invalid char: %v at lexLabel", r)
 }
 
+// lexComment lexes a comment text.
+func lexComment(l *lex.Lexer) lex.StateFn {
+	l.Backup()
+	for {
+		r := l.Next()
+		if isEndOfLine(r) || r == lex.EOF {
+			break
+		}
+	}
+	l.Emit(itemComment)
+	l.Emit(lex.ItemEOF)
+	return nil // Stop the run loop.
+}
+
 func isClosingBracket(r rune) bool {
 	return r == '>'
 }
@@ -332,6 +356,11 @@ func isClosingBracket(r rune) bool {
 // isSpace returns true if the rune is a tab or space.
 func isSpace(r rune) bool {
 	return r == '\u0009' || r == '\u0020'
+}
+
+// isEndOfLine returns true if the rune is a Linefeed or a Carriage return.
+func isEndOfLine(r rune) bool {
+	return r == '\u000A' || r == '\u000D'
 }
 
 func isEndLiteral(r rune) bool {
