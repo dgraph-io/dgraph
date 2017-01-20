@@ -40,6 +40,9 @@ import (
 func ToProtocolBuf(l *Latency, sgl []*SubGraph) ([]*graph.Node, error) {
 	var resNode []*graph.Node
 	for _, sg := range sgl {
+		if sg.Params.Alias == "var" {
+			continue
+		}
 		node, err := sg.ToProtocolBuffer(l)
 		if err != nil {
 			return nil, err
