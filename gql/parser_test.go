@@ -32,6 +32,27 @@ func childAttrs(g *GraphQuery) []string {
 	return out
 }
 
+func TestParseQueryWithVarMultiRoot(t *testing.T) {
+	query := `
+	{	
+		me([L, J, K]) {name}
+		var(id:0x0a) {L AS friends}
+		var(id:0x0a) {J AS friends}
+		var(id:0x0a) {K AS friends}
+	}
+`
+	res, err := Parse(query)
+	require.NoError(t, err)
+	require.NotNil(t, res.Query)
+	require.Equal(t, 4, len(res.Query))
+	require.Equal(t, "L", res.Query[0].NeedsVar[0])
+	require.Equal(t, "J", res.Query[0].NeedsVar[1])
+	require.Equal(t, "K", res.Query[0].NeedsVar[2])
+	require.Equal(t, "L", res.Query[1].Children[0].Var)
+	require.Equal(t, "J", res.Query[2].Children[0].Var)
+	require.Equal(t, "K", res.Query[3].Children[0].Var)
+}
+
 func TestParseQueryWithVar(t *testing.T) {
 	query := `
 	{	
@@ -47,9 +68,9 @@ func TestParseQueryWithVar(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, res.Query)
 	require.Equal(t, 6, len(res.Query))
-	require.Equal(t, "L", res.Query[0].NeedsVar)
-	require.Equal(t, "J", res.Query[1].NeedsVar)
-	require.Equal(t, "K", res.Query[2].NeedsVar)
+	require.Equal(t, "L", res.Query[0].NeedsVar[0])
+	require.Equal(t, "J", res.Query[1].NeedsVar[0])
+	require.Equal(t, "K", res.Query[2].NeedsVar[0])
 	require.Equal(t, "L", res.Query[3].Children[0].Var)
 	require.Equal(t, "J", res.Query[4].Children[0].Var)
 	require.Equal(t, "K", res.Query[5].Children[0].Var)
@@ -101,7 +122,7 @@ func TestParseQueryWithVarAtRootFilterID(t *testing.T) {
 	require.Equal(t, 2, len(res.Query))
 	require.Equal(t, "K", res.Query[0].Var)
 	require.Equal(t, "L", res.Query[0].Children[0].Var)
-	require.Equal(t, "L", res.Query[1].Filter.Func.NeedsVar)
+	require.Equal(t, "L", res.Query[1].Filter.Func.NeedsVar[0])
 	require.Equal(t, []string{"K", "L"}, res.QueryVars[0].Defines)
 }
 
@@ -123,7 +144,7 @@ func TestParseQueryWithVarAtRoot(t *testing.T) {
 	require.Equal(t, 2, len(res.Query))
 	require.Equal(t, "K", res.Query[0].Var)
 	require.Equal(t, "fr", res.Query[0].Children[0].Var)
-	require.Equal(t, "fr", res.Query[1].NeedsVar)
+	require.Equal(t, "fr", res.Query[1].NeedsVar[0])
 	require.Equal(t, []string{"K", "fr"}, res.QueryVars[0].Defines)
 }
 
@@ -144,7 +165,7 @@ func TestParseQueryWithVar1(t *testing.T) {
 	require.NotNil(t, res.Query)
 	require.Equal(t, 2, len(res.Query))
 	require.Equal(t, "L", res.Query[0].Children[0].Var)
-	require.Equal(t, "L", res.Query[1].NeedsVar)
+	require.Equal(t, "L", res.Query[1].NeedsVar[0])
 }
 
 func TestParseQueryWithMultipleVar(t *testing.T) {
@@ -171,8 +192,8 @@ func TestParseQueryWithMultipleVar(t *testing.T) {
 	require.Equal(t, 3, len(res.Query))
 	require.Equal(t, "L", res.Query[0].Children[0].Var)
 	require.Equal(t, "B", res.Query[0].Children[0].Children[0].Var)
-	require.Equal(t, "L", res.Query[1].NeedsVar)
-	require.Equal(t, "B", res.Query[2].NeedsVar)
+	require.Equal(t, "L", res.Query[1].NeedsVar[0])
+	require.Equal(t, "B", res.Query[2].NeedsVar[0])
 	require.Equal(t, []string{"L", "B"}, res.QueryVars[0].Defines)
 	require.Equal(t, []string{"L"}, res.QueryVars[1].Needs)
 	require.Equal(t, []string{"B"}, res.QueryVars[2].Needs)
@@ -500,6 +521,40 @@ func TestParseMutation_error2(t *testing.T) {
 	`
 	_, err := Parse(query)
 	require.Error(t, err)
+}
+
+func TestParseMutationAndQueryWithComments(t *testing.T) {
+	query := `
+	# Mutation
+		mutation {
+			# Set block
+			set {
+				<name> <is> <something> .
+				<hometown> <is> <san francisco> .
+			}
+			# Delete block
+			delete {
+				<name> <is> <something-else> .
+			}
+		}
+		# Query starts here.
+		query {
+			me(id: tomhanks) { # now mention children
+				name		# Name
+				hometown # hometown of the person
+			}
+		}
+	`
+	res, err := Parse(query)
+	require.NoError(t, err)
+	require.NotNil(t, res.Mutation)
+	require.NotEqual(t, strings.Index(res.Mutation.Set, "<name> <is> <something> ."), -1)
+	require.NotEqual(t, strings.Index(res.Mutation.Set, "<hometown> <is> <san francisco> ."), -1)
+	require.NotEqual(t, strings.Index(res.Mutation.Del, "<name> <is> <something-else> ."), -1)
+
+	require.NotNil(t, res.Query[0])
+	require.Equal(t, 1, len(res.Query[0].UID))
+	require.Equal(t, childAttrs(res.Query[0]), []string{"name", "hometown"})
 }
 
 func TestParseMutationAndQuery(t *testing.T) {
@@ -1068,7 +1123,7 @@ func TestParseFilter_emptyargument(t *testing.T) {
 	query := `
 	query {
 		me(id:0x0a) {
-			friends @filter(allof(name,)) {
+			friends @filter(allof(name,,)) {
 				name
 			}
 			gender,age
@@ -1190,6 +1245,41 @@ func TestParseCountError2(t *testing.T) {
 `
 	_, err := Parse(query)
 	require.Error(t, err)
+}
+
+func TestParseComments(t *testing.T) {
+	schema.ParseBytes([]byte("scalar name:string @index"))
+	query := `
+	# Something
+	{
+		me(allof("name", "barack")) {
+			friends {
+				name
+			} # Something
+			gender,age
+			hometown
+		}
+	}
+`
+	_, err := Parse(query)
+	require.NoError(t, err)
+}
+
+func TestParseComments1(t *testing.T) {
+	schema.ParseBytes([]byte("scalar name:string @index"))
+	query := `{
+		#Something 
+		me(allof("name", "barack")) {
+			friends {
+				name  # Name of my friend
+			}
+			gender,age
+			hometown
+		}
+	}
+`
+	_, err := Parse(query)
+	require.NoError(t, err)
 }
 
 func TestParseGenerator(t *testing.T) {

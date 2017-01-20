@@ -46,7 +46,6 @@ const (
 	itemLeftCurl                                // left curly bracket
 	itemRightCurl                               // right curly bracket
 	itemEqual                                   // equals to symbol
-	itemComment                                 // comment
 	itemName                                    // [9] names
 	itemOpType                                  // operation type
 	itemString                                  // quoted string
@@ -83,6 +82,8 @@ func lexInsideMutation(l *lex.Lexer) lex.StateFn {
 			l.Ignore()
 		case isNameBegin(r):
 			return lexNameMutation
+		case r == '#':
+			return lexComment
 		case r == lex.EOF:
 			return l.Errorf("Unclosed mutation action")
 		default:
@@ -120,6 +121,9 @@ func lexFuncOrArg(l *lex.Lexer) lex.StateFn {
 		case isSpace(r) || isEndOfLine(r):
 			l.Ignore()
 		case r == comma:
+			if empty {
+				return l.Errorf("Consecutive commas not allowed.")
+			}
 			empty = true
 			l.Ignore()
 		case r == '&':
@@ -180,6 +184,8 @@ func lexFuncOrArg(l *lex.Lexer) lex.StateFn {
 					return l.Errorf("Invalid bracket sequence")
 				}
 			}
+		case r == '#':
+			return lexComment
 		default:
 			return l.Errorf("Unrecognized character in inside a func: %#U", r)
 		}
@@ -199,6 +205,8 @@ Loop:
 			return l.Errorf("Too many right curl")
 		case r == lex.EOF:
 			break Loop
+		case r == '#':
+			return lexComment
 		case r == leftRound:
 			l.Backup()
 			l.Emit(itemText)
@@ -255,7 +263,6 @@ func lexText(l *lex.Lexer) lex.StateFn {
 		case isNameBegin(r):
 			return lexName
 		case r == '#':
-			l.Backup()
 			return lexComment
 		case r == leftRound:
 			l.Emit(itemLeftRound)
@@ -341,16 +348,14 @@ func lexComment(l *lex.Lexer) lex.StateFn {
 	for {
 		r := l.Next()
 		if isEndOfLine(r) {
-			l.Emit(itemComment)
+			l.Ignore()
 			return lexText
 		}
 		if r == lex.EOF {
 			break
 		}
 	}
-	if l.Pos > l.Start {
-		l.Emit(itemComment)
-	}
+	l.Ignore()
 	l.Emit(lex.ItemEOF)
 	return nil // Stop the run loop.
 }

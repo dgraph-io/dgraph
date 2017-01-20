@@ -122,7 +122,7 @@ type params struct {
 	OrderDesc bool
 	isDebug   bool
 	Var       string
-	NeedsVar  string
+	NeedsVar  []string
 }
 
 // SubGraph is the way to represent data internally. It contains both the
@@ -333,7 +333,7 @@ func filterCopy(sg *SubGraph, ft *gql.FilterTree) {
 		sg.Attr = ft.Func.Attr
 		sg.SrcFunc = append(sg.SrcFunc, ft.Func.Name)
 		sg.SrcFunc = append(sg.SrcFunc, ft.Func.Args...)
-		sg.Params.NeedsVar = ft.Func.NeedsVar
+		sg.Params.NeedsVar = append(sg.Params.NeedsVar, ft.Func.NeedsVar...)
 	}
 	for _, ftc := range ft.Child {
 		child := &SubGraph{}
@@ -354,11 +354,11 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 		}
 
 		args := params{
-			Alias:    gchild.Alias,
-			isDebug:  sg.Params.isDebug,
-			Var:      gchild.Var,
-			NeedsVar: gchild.NeedsVar,
+			Alias:   gchild.Alias,
+			isDebug: sg.Params.isDebug,
+			Var:     gchild.Var,
 		}
+		args.NeedsVar = append(args.NeedsVar, gchild.NeedsVar...)
 		if gchild.IsCount {
 			if len(gchild.Children) != 0 {
 				return errors.New("Node with count cannot have child attributes")
@@ -425,7 +425,7 @@ func ToSubGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	// This would set the Result field in SubGraph,
 	// and populate the children for attributes.
-	if len(gq.UID) == 0 && gq.Func == nil && gq.NeedsVar == "" {
+	if len(gq.UID) == 0 && gq.Func == nil && len(gq.NeedsVar) == 0 {
 		err := x.Errorf("Invalid query, query internal id is zero and generator is nil")
 		x.TraceError(ctx, err)
 		return nil, err
@@ -434,10 +434,12 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	// For the root, the name to be used in result is stored in Alias, not Attr.
 	// The attr at root (if present) would stand for the source functions attr.
 	args := params{
-		isDebug:  gq.Alias == "debug",
-		Alias:    gq.Alias,
-		Var:      gq.Var,
-		NeedsVar: gq.NeedsVar,
+		isDebug: gq.Alias == "debug",
+		Alias:   gq.Alias,
+		Var:     gq.Var,
+	}
+	for _, it := range gq.NeedsVar {
+		args.NeedsVar = append(args.NeedsVar, it)
 	}
 
 	sg := &SubGraph{
@@ -503,7 +505,7 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 	loopStart := time.Now()
 	for i := 0; i < len(res.Query); i++ {
 		gq := res.Query[i]
-		if gq == nil || (len(gq.UID) == 0 && gq.Func == nil && gq.NeedsVar == "") {
+		if gq == nil || (len(gq.UID) == 0 && gq.Func == nil && len(gq.NeedsVar) == 0) {
 			continue
 		}
 		sg, err := ToSubGraph(ctx, gq)
@@ -624,9 +626,13 @@ func populateVarMap(sg *SubGraph, doneVars map[string]*task.List) {
 }
 
 func fillUpVariables(sg *SubGraph, doneVars map[string]*task.List) {
-	if v, ok := doneVars[sg.Params.NeedsVar]; ok {
-		sg.DestUIDs = v
+	lists := make([]*task.List, 0, len(sg.Params.NeedsVar))
+	for _, it := range sg.Params.NeedsVar {
+		if v, ok := doneVars[it]; ok {
+			lists = append(lists, v)
+		}
 	}
+	sg.DestUIDs = algo.MergeSorted(lists)
 	for _, child := range sg.Children {
 		fillUpVariables(child, doneVars)
 	}

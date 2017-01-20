@@ -19,7 +19,6 @@ package types
 import (
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/geo/s2"
@@ -130,7 +129,7 @@ func Intersects(l1 *s2.Loop, l2 *s2.Loop) bool {
 }
 
 func convertToGeom(str string) (geom.T, error) {
-	s := strings.Replace(str, " ", "", -1)
+	s := x.WhiteSpace.Replace(str)
 	if len(s) < 5 { // [1,2]
 		return nil, x.Errorf("Invalid coordinates")
 	}

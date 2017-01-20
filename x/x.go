@@ -24,6 +24,7 @@ import (
 	"flag"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/Sirupsen/logrus"
 	"golang.org/x/net/trace"
@@ -47,6 +48,9 @@ var (
 	debugMode = flag.Bool("debugmode", false,
 		"enable debug mode for more debug information")
 )
+
+// WhiteSpace Replacer removes spaces and tabs from a string.
+var WhiteSpace = strings.NewReplacer(" ", "", "\t", "")
 
 type Status struct {
 	Code    string `json:"code"`
