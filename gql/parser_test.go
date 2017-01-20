@@ -502,6 +502,40 @@ func TestParseMutation_error2(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestParseMutationAndQueryWithComments(t *testing.T) {
+	query := `
+	# Mutation
+		mutation {
+			# Set block
+			set {
+				<name> <is> <something> .
+				<hometown> <is> <san francisco> .
+			}
+			# Delete block
+			delete {
+				<name> <is> <something-else> .
+			}
+		}
+		# Query starts here.
+		query {
+			me(id: tomhanks) { # now mention children
+				name		# Name
+				hometown # hometown of the person
+			}
+		}
+	`
+	res, err := Parse(query)
+	require.NoError(t, err)
+	require.NotNil(t, res.Mutation)
+	require.NotEqual(t, strings.Index(res.Mutation.Set, "<name> <is> <something> ."), -1)
+	require.NotEqual(t, strings.Index(res.Mutation.Set, "<hometown> <is> <san francisco> ."), -1)
+	require.NotEqual(t, strings.Index(res.Mutation.Del, "<name> <is> <something-else> ."), -1)
+
+	require.NotNil(t, res.Query[0])
+	require.Equal(t, 1, len(res.Query[0].UID))
+	require.Equal(t, childAttrs(res.Query[0]), []string{"name", "hometown"})
+}
+
 func TestParseMutationAndQuery(t *testing.T) {
 	query := `
 		mutation {
@@ -1190,6 +1224,41 @@ func TestParseCountError2(t *testing.T) {
 `
 	_, err := Parse(query)
 	require.Error(t, err)
+}
+
+func TestParseComments(t *testing.T) {
+	schema.ParseBytes([]byte("scalar name:string @index"))
+	query := `
+	# Something
+	{
+		me(allof("name", "barack")) {
+			friends {
+				name
+			} # Something
+			gender,age
+			hometown
+		}
+	}
+`
+	_, err := Parse(query)
+	require.NoError(t, err)
+}
+
+func TestParseComments1(t *testing.T) {
+	schema.ParseBytes([]byte("scalar name:string @index"))
+	query := `{
+		#Something 
+		me(allof("name", "barack")) {
+			friends {
+				name  # Name of my friend
+			}
+			gender,age
+			hometown
+		}
+	}
+`
+	_, err := Parse(query)
+	require.NoError(t, err)
 }
 
 func TestParseGenerator(t *testing.T) {
