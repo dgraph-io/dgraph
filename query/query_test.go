@@ -185,10 +185,9 @@ func populateGraph(t *testing.T) (string, string, *store.Store) {
 	addEdgeToValue(t, ps, "name", 1, "Michonne")
 	addEdgeToValue(t, ps, "gender", 1, "female")
 
-	coord := types.ValueForType(types.GeoID)
 	src := types.ValueForType(types.StringID)
 	src.Value = []byte("{\"Type\":\"Point\", \"Coordinates\":[1.1,2.0]}")
-	err = types.Convert(src, &coord)
+	coord, err := types.Convert(src, types.GeoID)
 	require.NoError(t, err)
 	gData := types.ValueForType(types.BinaryID)
 	err = types.Marshal(coord, &gData)
@@ -225,7 +224,7 @@ func populateGraph(t *testing.T) (string, string, *store.Store) {
 	addEdgeToValue(t, ps, "age", 23, "15")
 
 	src.Value = []byte(`{"Type":"Polygon", "Coordinates":[[[0.0,0.0], [2.0,0.0], [2.0, 2.0], [0.0, 2.0], [0.0, 0.0]]]}`)
-	err = types.Convert(src, &coord)
+	coord, err = types.Convert(src, types.GeoID)
 	require.NoError(t, err)
 	gData = types.ValueForType(types.BinaryID)
 	err = types.Marshal(coord, &gData)
@@ -235,7 +234,7 @@ func populateGraph(t *testing.T) (string, string, *store.Store) {
 	addEdgeToValue(t, ps, "address", 23, "21, mark street, Mars")
 	addEdgeToValue(t, ps, "name", 24, "Glenn Rhee")
 	src.Value = []byte(`{"Type":"Point", "Coordinates":[1.10001,2.000001]}`)
-	err = types.Convert(src, &coord)
+	coord, err = types.Convert(src, types.GeoID)
 	require.NoError(t, err)
 	gData = types.ValueForType(types.BinaryID)
 	err = types.Marshal(coord, &gData)
@@ -246,7 +245,7 @@ func populateGraph(t *testing.T) (string, string, *store.Store) {
 	addEdgeToValue(t, ps, "name", 25, "Daryl Dixon")
 	addEdgeToValue(t, ps, "name", 31, "Andrea")
 	src.Value = []byte(`{"Type":"Point", "Coordinates":[2.0, 2.0]}`)
-	err = types.Convert(src, &coord)
+	coord, err = types.Convert(src, types.GeoID)
 	require.NoError(t, err)
 	gData = types.ValueForType(types.BinaryID)
 	err = types.Marshal(coord, &gData)
@@ -2807,10 +2806,10 @@ func TestSchema(t *testing.T) {
 	require.EqualValues(t, "Michonne",
 		getProperty(gr.Children[0].Properties, "name").GetStrVal())
 
-	g1 := types.ValueForType(types.StringID)
 	g := types.ValueForType(types.GeoID)
 	g.Value = getProperty(gr.Children[0].Properties, "loc").GetGeoVal()
-	x.Check(types.Convert(g, &g1))
+	g1, err := types.Convert(g, types.StringID)
+	x.Check(err)
 	require.EqualValues(t, "{'type':'Point','coordinates':[1.1,2]}", string(g1.Value.(string)))
 
 	require.Len(t, gr.Children[0].Children, 5)

@@ -334,10 +334,9 @@ func FilterGeoUids(uids *task.List, values []*task.Value, q *GeoQueryData) *task
 		if TypeID(vType) != GeoID {
 			continue
 		}
-		gc := ValueForType(GeoID)
 		src := ValueForType(BinaryID)
 		src.Value = valBytes
-		err := Convert(src, &gc)
+		gc, err := Convert(src, GeoID)
 		if err != nil {
 			continue
 		}
