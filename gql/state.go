@@ -46,7 +46,6 @@ const (
 	itemLeftCurl                                // left curly bracket
 	itemRightCurl                               // right curly bracket
 	itemEqual                                   // equals to symbol
-	itemComment                                 // comment
 	itemName                                    // [9] names
 	itemOpType                                  // operation type
 	itemString                                  // quoted string
