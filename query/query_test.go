@@ -241,6 +241,11 @@ func populateGraph(t *testing.T) {
 	})
 	addGeoData(t, ps, 5106, poly, "San Carlos")
 
+	addEdgeToValue(t, "film.film.initial_release_date", 23, "1900-01-02")
+	addEdgeToValue(t, "film.film.initial_release_date", 24, "1909-05-05")
+	addEdgeToValue(t, "film.film.initial_release_date", 25, "1929-01-10")
+	addEdgeToValue(t, "film.film.initial_release_date", 31, "1801-01-15")
+
 	time.Sleep(5 * time.Millisecond)
 }
 
@@ -346,7 +351,7 @@ func TestUseVarsMultiOrder(t *testing.T) {
 			var(id:0x01) {
 				L AS friend(first:2, order: dob)
 			}
-			
+
 			var(id:0x01) {
 				G AS friend(first:2, offset:2, order: dob)
 			}
@@ -1649,6 +1654,28 @@ func TestToFastJSONOrderDesc(t *testing.T) {
 		string(js))
 }
 
+// Test sorting / ordering by dob.
+func TestToFastJSONOrderDesc_pawan(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id:0x01) {
+				name
+				gender
+				friend(orderdesc: film.film.initial_release_date) {
+					name
+					film.film.initial_release_date
+				}
+			}
+		}
+	`
+
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"friend":[{"film.film.initial_release_date":"1929-01-10","name":"Daryl Dixon"},{"film.film.initial_release_date":"1909-05-05","name":"Glenn Rhee"},{"film.film.initial_release_date":"1900-01-02","name":"Rick Grimes"},{"film.film.initial_release_date":"1801-01-15","name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
+		string(js))
+}
+
 // Test sorting / ordering by dob and count.
 func TestToFastJSONOrderDescCount(t *testing.T) {
 	populateGraph(t)
@@ -2680,6 +2707,7 @@ func TestIntersectsPolygon2(t *testing.T) {
 const schemaStr = `
 scalar name:string @index
 scalar dob:date @index
+scalar film.film.initial_release_date:date @index
 scalar loc:geo @index
 scalar (
 	survival_rate : float
