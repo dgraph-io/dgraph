@@ -116,6 +116,10 @@ func processSort(ts *task.Sort) (*task.SortResult, error) {
 	} else {
 		it.Seek(pk.SkipRangeOfSameType())
 		it.Prev()
+		k := x.Parse(it.Key().Data())
+		if !k.IsIndex() {
+			it.SeekToLast()
+		}
 	}
 
 BUCKETS:
