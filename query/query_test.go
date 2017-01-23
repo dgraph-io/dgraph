@@ -398,24 +398,19 @@ func TestUseVarsMultiOrder(t *testing.T) {
 		js)
 }
 
-func TestUseVarsFilterMultiId(t *testing.T) {
+func TestUseVarsFilterVarReuse(t *testing.T) {
 	dir, dir2, ps := populateGraph(t)
 	defer ps.Close()
 	defer os.RemoveAll(dir)
 	defer os.RemoveAll(dir2)
 	query := `
 		{
-			var(id:0x01) {
-				L AS friend {
-					friend
+			friend(anyof(name, "Michonne Andrea Glenn")) {
+				L As friend {
+					friend @filter(id(L)) {
+						name
+					}
 				}
-			}
-
-			var(id:31) {
-				G AS friend
-			}
-
-			friend(anyof(name, "Michonne Andrea Glenn")) @filter(id(G, L)) {
 				name
 			}
 		}
