@@ -60,41 +60,6 @@ func taskValues(t *testing.T, v []*task.Value) []string {
 	return out
 }
 
-/*
- *func TestNewGraph(t *testing.T) {
- *  dir, err := ioutil.TempDir("", "storetest_")
- *  require.NoError(t, err)
- *
- *  gq := &gql.GraphQuery{
- *    UID:  []uint64{101},
- *    Attr: "me",
- *  }
- *  ps, err := store.NewStore(dir)
- *  require.NoError(t, err)
- *
- *  posting.Init(ps)
- *
- *  ctx := context.Background()
- *  sg, err := newGraph(ctx, gq)
- *  require.NoError(t, err)
- *
- *  require.EqualValues(t,
- *    [][]uint64{
- *      []uint64{101},
- *    }, algo.ToUintsListForTest(sg.uidMatrix))
- *}
- */
-
-// TODO(jchiu): Modify tests to try all equivalent schemas.
-//const schemaStr = `
-//scalar name:string @index
-//scalar dob:date @index
-//scalar loc:geo @index
-
-//type Person {
-//  friend: Person @reverse
-//}`
-
 func addEdgeToValue(t *testing.T, attr string, src uint64,
 	value string) {
 	edge := &task.DirectedEdge{
