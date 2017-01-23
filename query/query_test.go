@@ -365,7 +365,7 @@ func TestUseVarsMultiCascade(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"name":"Glenn Rhee"}, {"name":"Andrea"}]}`,
+		`{"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"}, {"name":"Daryl Dixon"}, {"name":"Andrea"}]}`,
 		js)
 }
 
@@ -523,7 +523,7 @@ func TestUseVarsCascade(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"name":"Andrea"}]}`,
+		`{"me":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"}, {"name":"Daryl Dixon"}, {"name":"Andrea"} ]}`,
 		js)
 }
 

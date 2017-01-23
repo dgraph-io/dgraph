@@ -609,6 +609,7 @@ func populateVarMap(sg *SubGraph, doneVars map[string]*task.List) {
 	for _, child := range sg.Children {
 		populateVarMap(child, doneVars)
 		if len(child.Params.DefinesVar) != 0 {
+			// If we defined some variable at this level or above, don't cascade
 			continue
 		}
 		for i := 0; i < len(child.uidMatrix); i++ {
