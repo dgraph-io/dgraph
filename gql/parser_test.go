@@ -1298,6 +1298,35 @@ func TestParseGenerator(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestParseIRIRef(t *testing.T) {
+	query := `{
+		me(id:<http://helloworld.com/how/are/you>) {
+                        <http://verygood.com/what/about/you>
+			friends @filter(allof(<http://verygood.com/what/about/you>, "good better bad")){
+				name
+			}
+			gender,age
+			hometown
+		}
+	}`
+
+	gq, err := Parse(query)
+	require.NoError(t, err)
+	require.Equal(t, 5, len(gq.Query[0].Children))
+	require.Equal(t, "http://verygood.com/what/about/you", gq.Query[0].Children[0].Attr)
+	require.Equal(t, `(allof "http://verygood.com/what/about/you" "good better bad")`, gq.Query[0].Children[1].Filter.debugString())
+}
+
+func TestParseIRIRefSpace(t *testing.T) {
+	query := `{
+		me(id:<http://helloworld.com/how/are/ you>) {
+                }
+              }`
+
+	_, err := Parse(query)
+	require.Error(t, err) // because of space.
+}
+
 func TestParseGeoJson(t *testing.T) {
 	query := `
 	mutation {

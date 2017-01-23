@@ -138,3 +138,19 @@ func TestVariablesDefault(t *testing.T) {
 		t.Log(item.String())
 	}
 }
+
+func TestIRIRef(t *testing.T) {
+	input := `
+	query testQuery {
+		me(_xid_: <http://helloworld.com/how/are/you>) {
+                     <http://verygood.com/what/about/you>
+		}
+	}`
+	l := lex.NewLexer(input).Run(lexText)
+	it := l.NewIterator()
+	for it.Next() {
+		item := it.Item()
+		require.NotEqual(t, item.Typ, lex.ItemError)
+		t.Log(item.String())
+	}
+}

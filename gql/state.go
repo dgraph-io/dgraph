@@ -38,6 +38,9 @@ const (
 	equal        = '='
 	quote        = '"'
 	at           = '@'
+	colon        = ':'
+	lsThan       = '<'
+	grThan       = '>'
 )
 
 // Constants representing type of different graphql lexed items.
@@ -145,7 +148,7 @@ func lexFuncOrArg(l *lex.Lexer) lex.StateFn {
 		case isNameBegin(r) || isNumber(r):
 			empty = false
 			return lexArgName
-		case r == ':':
+		case r == colon:
 			l.Emit(itemColon)
 		case r == equal:
 			l.Emit(itemEqual)
@@ -158,6 +161,8 @@ func lexFuncOrArg(l *lex.Lexer) lex.StateFn {
 				l.Next() // Consume the " and ignore it.
 				l.Ignore()
 			}
+		case r == lsThan:
+			return lexIRIRef
 		case r == '[':
 			{
 				depth := 1
@@ -270,15 +275,32 @@ func lexText(l *lex.Lexer) lex.StateFn {
 			l.Ignore()
 			l.ArgDepth++
 			return lexText
-		case r == ':':
+		case r == colon:
 			l.Emit(itemColon)
 		case r == at:
 			l.Emit(itemAt)
 			return lexDirective
+		case r == lsThan:
+			return lexIRIRef
 		default:
 			return l.Errorf("Unrecognized character in lexText: %#U", r)
 		}
 	}
+}
+
+func lexIRIRef(l *lex.Lexer) lex.StateFn {
+	l.Ignore() // ignore '<'
+	lastr, validr := l.AcceptRun(func(r rune) bool {
+		return r != grThan && !isSpace(r)
+	})
+	if validr && isSpace(lastr) {
+		return l.Errorf("Spaces are not allowed in IRI")
+	}
+
+	l.Emit(itemName)
+	l.Next()
+	l.Ignore() // ignore '>'
+	return lexText
 }
 
 // lexFilterFuncName expects input to look like equal("...", "...").
