@@ -322,36 +322,36 @@ func getVal(t types.TypeID, val *graph.Value) interface{} {
 // validateTypes checks for predicate types present in the schema and validates if the
 // input value is of the correct type
 func validateTypes(nquads []*graph.NQuad) error {
+	var schemaType types.TypeID
+	var err error
 	for i := range nquads {
 		nquad := nquads[i]
-		if t, err := schema.TypeOf(nquad.Predicate); err == nil && t.IsScalar() {
-			schemaType := t
-			typeID := types.TypeID(nquad.ObjectType)
-			if typeID == types.StringID {
-				// Storage type was unspecified in the RDF, so we convert the data to the schema
-				// type.
-				v := types.ValueForType(schemaType)
-				src := types.Val{types.StringID, []byte(nquad.ObjectValue.GetStrVal())}
-				err := types.Convert(src, &v) // v.UnmarshalText(nquad.ObjectValue)
-				if err != nil {
-					return err
-				}
-				b := types.ValueForType(types.BinaryID)
-				err = types.Marshal(v, &b)
-				if err != nil {
-					return err
-				}
-				nquad.ObjectValue = &graph.Value{&graph.Value_BytesVal{b.Value.([]byte)}}
-				nquad.ObjectType = int32(schemaType)
-
-			} else if typeID != schemaType {
-				v := types.ValueForType(schemaType)
-				src := types.ValueForType(typeID)
-				src.Value = getVal(typeID, nquad.ObjectValue)
-				err := types.Convert(src, &v)
-				if err != nil {
-					return err
-				}
+		// Lets try to get the type of the predicate from the schema file.
+		if schemaType, err = schema.TypeOf(nquad.Predicate); err != nil || !schemaType.IsScalar() {
+			continue
+		}
+		// Lets get the storage type for the object now. nquad.ObjectType should either be
+		// supplied by the language clients or should have been assigned in rdf.Parse.
+		storageType := types.TypeID(nquad.ObjectType)
+		if storageType == types.StringID {
+			// Storage type was not specified in the RDF, so try to convert the data to the schema
+			// type.
+			src := types.Val{types.StringID, []byte(nquad.ObjectValue.GetStrVal())}
+			dst, err := types.Convert(src, schemaType)
+			if err != nil {
+				return err
+			}
+			b := types.ValueForType(types.BinaryID)
+			if err = types.Marshal(dst, &b); err != nil {
+				return err
+			}
+			nquad.ObjectValue = &graph.Value{&graph.Value_BytesVal{b.Value.([]byte)}}
+			nquad.ObjectType = int32(schemaType)
+		} else if storageType != schemaType {
+			src := types.ValueForType(storageType)
+			src.Value = getVal(storageType, nquad.ObjectValue)
+			if _, err = types.Convert(src, schemaType); err != nil {
+				return err
 			}
 		}
 	}
@@ -626,17 +626,7 @@ func (s *grpcServer) Run(ctx context.Context,
 		return resp, err
 	}
 
-	// If mutations are part of the query, we run them through the mutation handler
-	// same as the http client.
-	if res.Mutation != nil && (len(res.Mutation.Set) > 0 || len(res.Mutation.Del) > 0) {
-		if allocIds, err = mutationHandler(ctx, res.Mutation); err != nil {
-			x.TraceError(ctx, x.Wrapf(err, "Error while handling mutations"))
-			return resp, err
-		}
-	}
-
-	// If mutations are sent as part of the mutation object in the request we run
-	// them here.
+	// Mutations are sent as part of the mutation object
 	if req.Mutation != nil && (len(req.Mutation.Set) > 0 || len(req.Mutation.Del) > 0) {
 		if allocIds, err = runMutations(ctx, req.Mutation); err != nil {
 			x.TraceError(ctx, x.Wrapf(err, "Error while handling mutations"))

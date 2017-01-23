@@ -27,9 +27,9 @@ func TestSameConversionString(t *testing.T) {
 		{Val{StringID, []byte("")}, Val{StringID, ""}},
 		{Val{StringID, []byte("abc")}, Val{StringID, "abc"}},
 	}
+
 	for _, tc := range data {
-		v := ValueForType(StringID)
-		if err := Convert(tc.in, &v); err != nil {
+		if v, err := Convert(tc.in, StringID); err != nil {
 			t.Errorf("Unexpected error converting int to bool: %v", err)
 		} else if v != tc.out {
 			t.Errorf("Converting string to string: Expected %v, got %v", tc.out, v)

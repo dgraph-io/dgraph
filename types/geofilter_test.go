@@ -30,10 +30,9 @@ import (
 func queryTokens(qt QueryType, data string, maxDistance float64) ([]string, *GeoQueryData, error) {
 	// Try to parse the data as geo type.
 	geoData := strings.Replace(data, "'", "\"", -1)
-	gc := ValueForType(GeoID)
 	src := ValueForType(StringID)
 	src.Value = []byte(geoData)
-	err := Convert(src, &gc)
+	gc, err := Convert(src, GeoID)
 	if err != nil {
 		return nil, nil, x.Wrapf(err, "Cannot decode given geoJson input")
 	}
@@ -49,10 +48,9 @@ func formData(t *testing.T, str string) string {
 	d, err := wkb.Marshal(p, binary.LittleEndian)
 	require.NoError(t, err)
 
-	gd := ValueForType(StringID)
 	src := ValueForType(GeoID)
 	src.Value = []byte(d)
-	err = Convert(src, &gd)
+	gd, err := Convert(src, StringID)
 	require.NoError(t, err)
 	gb := gd.Value.(string)
 	return string(gb)
@@ -62,10 +60,9 @@ func formDataPoint(t *testing.T, p *geom.Point) string {
 	d, err := wkb.Marshal(p, binary.LittleEndian)
 	require.NoError(t, err)
 
-	gd := ValueForType(StringID)
 	src := ValueForType(GeoID)
 	src.Value = []byte(d)
-	err = Convert(src, &gd)
+	gd, err := Convert(src, StringID)
 	require.NoError(t, err)
 	gb := gd.Value.(string)
 
@@ -75,10 +72,9 @@ func formDataPolygon(t *testing.T, p *geom.Polygon) string {
 	d, err := wkb.Marshal(p, binary.LittleEndian)
 	require.NoError(t, err)
 
-	gd := ValueForType(StringID)
 	src := ValueForType(GeoID)
 	src.Value = []byte(d)
-	err = Convert(src, &gd)
+	gd, err := Convert(src, StringID)
 	require.NoError(t, err)
 	gb := gd.Value.(string)
 

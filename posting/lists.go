@@ -482,9 +482,7 @@ func batchSync() {
 				for _, e := range entries {
 					e.sw.Done()
 					if e.water != nil {
-						for _, index := range e.pending {
-							e.water.Ch <- x.Mark{Index: index, Done: true}
-						}
+						e.water.Ch <- x.Mark{Indices: e.pending, Done: true}
 					}
 				}
 				entries = entries[:0]

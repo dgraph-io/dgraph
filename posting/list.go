@@ -65,7 +65,7 @@ type List struct {
 	mlayer      []*types.Posting // mutations
 	pstore      *store.Store     // postinglist store
 	lastCompact time.Time
-	deleteMe    int32
+	deleteMe    int32 // Using atomic for this, to avoid expensive SetForDeletion operation.
 	refcount    int32
 
 	water   *x.WaterMark
@@ -195,9 +195,7 @@ func (l *List) getPostingList(loop int) *types.PostingList {
 
 // SetForDeletion will mark this List to be deleted, so no more mutations can be applied to this.
 func (l *List) SetForDeletion() {
-	l.Lock()
-	defer l.Unlock()
-	l.deleteMe = 1
+	atomic.StoreInt32(&l.deleteMe, 1)
 }
 
 func (l *List) updateMutationLayer(mpost *types.Posting) bool {
@@ -306,12 +304,12 @@ func (l *List) AddMutation(ctx context.Context, t *task.DirectedEdge) (bool, err
 }
 
 func (l *List) addMutation(ctx context.Context, t *task.DirectedEdge) (bool, error) {
-	l.AssertLock()
-	if l.deleteMe == 1 {
+	if atomic.LoadInt32(&l.deleteMe) == 1 {
 		x.TraceError(ctx, x.Errorf("DELETEME set to true. Temporary error."))
 		return false, ErrRetry
 	}
 
+	l.AssertLock()
 	// All edges with a value set, have the same uid. In other words,
 	// an (entity, attribute) can only have one value.
 	if !bytes.Equal(t.Value, nil) {
@@ -451,10 +449,8 @@ func (l *List) SyncIfDirty(ctx context.Context) (committed bool, err error) {
 	defer l.Unlock()
 
 	if len(l.mlayer) == 0 {
-		for _, idx := range l.pending {
-			l.water.Ch <- x.Mark{Index: idx, Done: true}
-		}
-		l.pending = l.pending[:0]
+		l.water.Ch <- x.Mark{Indices: l.pending, Done: true}
+		l.pending = make([]uint64, 0, 3)
 		return false, nil
 	}
 

@@ -217,15 +217,15 @@ func Parse(line string) (rnq graph.NQuad, rerr error) {
 			if strings.Trim(val, " ") == "*" {
 				return rnq, x.Errorf("itemObject can't be *")
 			}
+			// Lets find out the storage type from the type map.
 			if t, ok := typeMap[val]; ok {
 				if oval == "_nil_" && t != types.StringID {
 					return rnq, x.Errorf("Invalid ObjectValue")
 				}
 				rnq.ObjectType = int32(t)
-				p := types.ValueForType(t)
 				src := types.ValueForType(types.StringID)
 				src.Value = []byte(oval)
-				err := types.Convert(src, &p)
+				p, err := types.Convert(src, t)
 				if err != nil {
 					return rnq, err
 				}
