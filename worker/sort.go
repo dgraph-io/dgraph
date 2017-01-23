@@ -115,9 +115,9 @@ func processSort(ts *task.Sort) (*task.SortResult, error) {
 		it.Seek(indexPrefix)
 	} else {
 		it.Seek(pk.SkipRangeOfSameType())
-		it.Prev()
-		k := x.Parse(it.Key().Data())
-		if !k.IsIndex() {
+		if it.Valid() {
+			it.Prev()
+		} else {
 			it.SeekToLast()
 		}
 	}
