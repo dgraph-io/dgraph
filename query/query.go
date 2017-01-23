@@ -111,18 +111,24 @@ func (l *Latency) ToMap() map[string]string {
 	return m
 }
 
+type VarL struct {
+	Name string
+	Uids *task.List
+}
+
 type params struct {
-	Alias     string
-	Count     int
-	Offset    int
-	AfterUID  uint64
-	DoCount   bool
-	GetUID    bool
-	Order     string
-	OrderDesc bool
-	isDebug   bool
-	Var       string
-	NeedsVar  []string
+	Alias      string
+	Count      int
+	Offset     int
+	AfterUID   uint64
+	DoCount    bool
+	GetUID     bool
+	Order      string
+	OrderDesc  bool
+	isDebug    bool
+	Var        string
+	NeedsVar   []string
+	DefinesVar []VarL
 }
 
 // SubGraph is the way to represent data internally. It contains both the
@@ -647,6 +653,15 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	var err error
 	if len(sg.Params.NeedsVar) != 0 && len(sg.SrcFunc) == 0 {
 		// Do nothing as the list has already been populated.
+		if sg.DestUIDs == nil {
+			for _, v := range sg.Params.NeedsVar {
+				for _, it := range sg.Params.DefinesVar {
+					if v == it.Name {
+						sg.DestUIDs = it.Uids
+					}
+				}
+			}
+		}
 	} else if len(sg.Attr) == 0 {
 		// If we have a filter SubGraph which only contains an operator,
 		// it won't have any attribute to work on.
@@ -762,6 +777,10 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		}
 	}
 
+	if sg.Params.Var != "" {
+		sg.Params.DefinesVar = append(sg.Params.DefinesVar, VarL{sg.Params.Var, sg.DestUIDs})
+	}
+
 	// Here we consider handling count with filtering. We do this after
 	// pagination because otherwise, we need to do the count with pagination
 	// taken into account. For example, a PL might have only 50 entries but the
@@ -784,7 +803,8 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	childChan := make(chan error, len(sg.Children))
 	for i := 0; i < len(sg.Children); i++ {
 		child := sg.Children[i]
-		child.SrcUIDs = sg.DestUIDs // Make the connection.
+		child.Params.DefinesVar = sg.Params.DefinesVar // Pass the definesVar to the child.
+		child.SrcUIDs = sg.DestUIDs                    // Make the connection.
 		go ProcessGraph(ctx, child, sg, childChan)
 	}
 
