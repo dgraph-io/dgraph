@@ -129,7 +129,7 @@ type params struct {
 	isDebug    bool
 	Var        string
 	NeedsVar   []string
-	DefinesVar []VarL
+	ParentVars map[string]*task.List
 }
 
 // SubGraph is the way to represent data internally. It contains both the
@@ -440,9 +440,10 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	// For the root, the name to be used in result is stored in Alias, not Attr.
 	// The attr at root (if present) would stand for the source functions attr.
 	args := params{
-		isDebug: gq.Alias == "debug",
-		Alias:   gq.Alias,
-		Var:     gq.Var,
+		isDebug:    gq.Alias == "debug",
+		Alias:      gq.Alias,
+		Var:        gq.Var,
+		ParentVars: make(map[string]*task.List),
 	}
 	for _, it := range gq.NeedsVar {
 		args.NeedsVar = append(args.NeedsVar, it)
@@ -668,14 +669,11 @@ func fillUpVariables(sg *SubGraph, doneVars map[string]*task.List) {
 }
 
 func (sg *SubGraph) FillVariable() {
-	fmt.Println(sg.Params.NeedsVar, sg.Params.DefinesVar, "****")
 	lists := make([]*task.List, 0)
 	lists = append(lists, sg.DestUIDs)
 	for _, v := range sg.Params.NeedsVar {
-		for _, it := range sg.Params.DefinesVar {
-			if v == it.Name {
-				lists = append(lists, it.Uids)
-			}
+		if l, ok := sg.Params.ParentVars[v]; ok {
+			lists = append(lists, l)
 		}
 	}
 	sg.DestUIDs = algo.MergeSorted(lists)
@@ -752,7 +750,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		filterChan := make(chan error, len(sg.Filters))
 		for _, filter := range sg.Filters {
 			filter.SrcUIDs = sg.DestUIDs
-			filter.Params.DefinesVar = sg.Params.DefinesVar // Pass the definesVar to the child.
+			filter.Params.ParentVars = sg.Params.ParentVars // Pass to the child.
 			go ProcessGraph(ctx, filter, sg, filterChan)
 		}
 
@@ -807,8 +805,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	}
 
 	if sg.Params.Var != "" {
-		fmt.Println(sg.Params.Var, "##########", sg.DestUIDs)
-		sg.Params.DefinesVar = append(sg.Params.DefinesVar, VarL{sg.Params.Var, sg.DestUIDs})
+		sg.Params.ParentVars[sg.Params.Var] = sg.DestUIDs
 	}
 
 	// Here we consider handling count with filtering. We do this after
@@ -833,7 +830,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	childChan := make(chan error, len(sg.Children))
 	for i := 0; i < len(sg.Children); i++ {
 		child := sg.Children[i]
-		child.Params.DefinesVar = sg.Params.DefinesVar // Pass the definesVar to the child.
+		child.Params.ParentVars = sg.Params.ParentVars // Pass to the child.
 		child.SrcUIDs = sg.DestUIDs                    // Make the connection.
 		go ProcessGraph(ctx, child, sg, childChan)
 	}
