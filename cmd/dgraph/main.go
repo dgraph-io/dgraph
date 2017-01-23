@@ -336,9 +336,9 @@ func validateTypes(nquads []*graph.NQuad) error {
 		if storageType == types.StringID {
 			// Storage type was not specified in the RDF, so try to convert the data to the schema
 			// type.
-			dst := types.ValueForType(schemaType)
 			src := types.Val{types.StringID, []byte(nquad.ObjectValue.GetStrVal())}
-			if err = types.Convert(src, &dst); err != nil {
+			dst, err := types.Convert(src, schemaType)
+			if err != nil {
 				return err
 			}
 			b := types.ValueForType(types.BinaryID)
@@ -348,10 +348,9 @@ func validateTypes(nquads []*graph.NQuad) error {
 			nquad.ObjectValue = &graph.Value{&graph.Value_BytesVal{b.Value.([]byte)}}
 			nquad.ObjectType = int32(schemaType)
 		} else if storageType != schemaType {
-			dst := types.ValueForType(schemaType)
 			src := types.ValueForType(storageType)
 			src.Value = getVal(storageType, nquad.ObjectValue)
-			if err = types.Convert(src, &dst); err != nil {
+			if _, err = types.Convert(src, schemaType); err != nil {
 				return err
 			}
 		}

@@ -35,10 +35,10 @@ func toRDF(buf *bytes.Buffer, item kv) {
 			// Value posting
 			// Convert to appropriate type
 			vID := types.TypeID(p.ValType)
-			str := types.ValueForType(types.StringID)
 			src := types.ValueForType(vID)
 			src.Value = p.Value
-			x.Check(types.Convert(src, &str))
+			str, err := types.Convert(src, types.StringID)
+			x.Check(err)
 			x.Check2(buf.WriteString(fmt.Sprintf("\"%s\"", str.Value)))
 			if types.TypeID(p.ValType) == types.GeoID {
 				x.Check2(buf.WriteString(fmt.Sprintf("^^<geo:geojson> ")))

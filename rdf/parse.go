@@ -223,10 +223,9 @@ func Parse(line string) (rnq graph.NQuad, rerr error) {
 					return rnq, x.Errorf("Invalid ObjectValue")
 				}
 				rnq.ObjectType = int32(t)
-				p := types.ValueForType(t)
 				src := types.ValueForType(types.StringID)
 				src.Value = []byte(oval)
-				err := types.Convert(src, &p)
+				p, err := types.Convert(src, t)
 				if err != nil {
 					return rnq, err
 				}
