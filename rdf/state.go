@@ -163,7 +163,6 @@ func lexBlankNode(l *lex.Lexer, styp lex.ItemType,
 	if r != ':' {
 		return l.Errorf("Invalid character after _. Expected :, found %v", r)
 	}
-
 	r = l.Next()
 	if r == lex.EOF {
 		return l.Errorf("Unexpected end of subject")
@@ -231,18 +230,30 @@ func lexLanguage(l *lex.Lexer) lex.StateFn {
 		return l.Errorf("Invalid language tag prefix: %v", r)
 	}
 
-	l.AcceptRun(isLangTag)
+	lastRune, validRune := l.AcceptRun(isLangTag)
+	if validRune && lastRune == '-' {
+		return l.Errorf("Invalid character - at the end of language literal.")
+	}
 	l.Emit(itemLanguage)
 	return lexText
 }
 
 // Assumes '"' has already been encountered.
+// literal ::= STRING_LITERAL_QUOTE ('^^' IRIREF | LANGTAG)?
+// STRING_LITERAL_QUOTE ::= '"' ([^#x22#x5C#xA#xD] | ECHAR | UCHAR)* '"'
 func lexLiteral(l *lex.Lexer) lex.StateFn {
 	for {
 		r := l.Next()
 		if r == '\u005c' { // backslash
 			r = l.Next()
-			continue // This would skip over the escaped rune.
+			if isEscChar(r) || hasUChars(r, l) {
+				continue // This would skip over the escaped rune.
+			}
+			return l.Errorf("Invalid escape character : %v in literal", r)
+		} else {
+			if r == 0x5c || r == 0xa || r == 0xd { // 0x22 ('"') is endLiteral
+				return l.Errorf("Invalid character %v in literal.", r)
+			}
 		}
 
 		if r == lex.EOF || isEndLiteral(r) {
@@ -384,7 +395,6 @@ func isLangTag(r rune) bool {
 }
 
 // IRIREF ::= '<' ([^#x00-#x20<>"{}|^`\] | UCHAR)* '>'
-// UCHAR ::= '\u' HEX HEX HEX HEX | '\U' HEX HEX HEX HEX HEX HEX HEX HEX
 func isIRIChar(r rune, l *lex.Lexer) bool {
 	if r <= 32 { // no chars b/w 0x00 to 0x20 inclusive
 		return false
@@ -400,16 +410,11 @@ func isIRIChar(r rune, l *lex.Lexer) bool {
 	case '`':
 	case '\\':
 		r2 := l.Next()
-		times := 4
 		if r2 != 'u' && r2 != 'U' {
 			l.Backup()
 			return false
 		} else {
-			if r2 == 'U' {
-				times = 8
-			}
-			rs := l.AcceptRunTimes(isHex, times)
-			return rs == times
+			return hasUChars(r2, l)
 		}
 	default:
 		return true
@@ -469,6 +474,36 @@ func isPNChar(r rune) bool {
 	case r >= 0x203F && r <= 0x2040:
 	default:
 		return isPNCharsU(r)
+	}
+	return true
+}
+
+// UCHAR ::= '\u' HEX HEX HEX HEX | '\U' HEX HEX HEX HEX HEX HEX HEX HEX
+func hasUChars(r rune, l *lex.Lexer) bool {
+	if r != 'u' && r != 'U' {
+		return false
+	}
+	times := 4
+	if r == 'U' {
+		times = 8
+	}
+	return times == l.AcceptRunTimes(isHex, times)
+}
+
+// ECHAR ::= '\' [tbnrf"'\]
+func isEscChar(r rune) bool {
+	switch r {
+	case 't':
+	case 'b':
+	case 'n':
+	case 'r':
+	case 'f':
+	case '"':
+	case '\'':
+	case '\\':
+		// true for all above.
+	default:
+		return false
 	}
 	return true
 }
