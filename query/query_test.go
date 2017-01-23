@@ -385,7 +385,7 @@ func TestUseVarsFilterVarReuse1(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"friend":[{"friend":[{"friend":[{"name":"Michonne", "friend":[{"name":"Glenn Rhee"}]}]}]}]}`,
+		`{"friend":[{"friend":[{"friend":[{"name":"Michonne", "friend":[{"name":"Glenn Rhee"}]}]}, {"friend":[{"name":"Glenn Rhee"}]}]}]}`,
 		js)
 }
 
@@ -407,7 +407,7 @@ func TestUseVarsFilterVarReuse2(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"friend":[{"friend":[{"friend":[{"name":"Michonne", "friend":[{"name":"Glenn Rhee"}]}]}]}]}`,
+		`{"friend":[{"friend":[{"friend":[{"name":"Michonne", "friend":[{"name":"Glenn Rhee"}]}]}, {"friend":[{"name":"Glenn Rhee"}]}]}]}`,
 		js)
 }
 

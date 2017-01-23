@@ -586,7 +586,16 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 			if len(res.QueryVars[idx].Defines) == 0 {
 				continue
 			}
-			populateVarMap(sg, doneVars)
+
+			var noCascade bool
+			for _, def := range res.QueryVars[idx].Defines {
+				for _, need := range res.QueryVars[idx].Needs {
+					if def == need {
+						noCascade = true
+					}
+				}
+			}
+			populateVarMap(sg, noCascade, doneVars)
 		}
 	}
 
@@ -602,20 +611,11 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 }
 
 // TODO(Ashwin): Benchmark this function. Map implementation might be slow.
-func populateVarMap(sg *SubGraph, doneVars map[string]*task.List) {
+func populateVarMap(sg *SubGraph, noCascade bool, doneVars map[string]*task.List) {
 	// Filter out UIDs that don't have atleast one UID in every child.
 	excluded := make(map[uint64]struct{})
-	var skipCascade bool
 	for _, child := range sg.Children {
-		populateVarMap(child, doneVars)
-		// If we defined some variable at this level or above, don't cascade
-		for _, v := range child.Params.NeedsVar {
-			for _, v1 := range sg.Params.DefinesVar {
-				if v == v1.Name {
-					skipCascade = true
-				}
-			}
-		}
+		populateVarMap(child, noCascade, doneVars)
 		for i := 0; i < len(child.uidMatrix); i++ {
 			if len(child.values[i].Val) == 0 && len(child.uidMatrix[i].Uids) == 0 {
 				excluded[sg.DestUIDs.Uids[i]] = struct{}{}
@@ -623,7 +623,7 @@ func populateVarMap(sg *SubGraph, doneVars map[string]*task.List) {
 		}
 	}
 
-	if skipCascade {
+	if noCascade {
 		goto L
 	}
 
@@ -645,7 +645,6 @@ func populateVarMap(sg *SubGraph, doneVars map[string]*task.List) {
 				return !ok
 			})
 	}
-
 L:
 	if sg.Params.Var != "" {
 		doneVars[sg.Params.Var] = sg.DestUIDs
