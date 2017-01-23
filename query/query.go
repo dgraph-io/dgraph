@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"log"
 	"strconv"
 	"strings"
@@ -653,13 +652,7 @@ L:
 }
 
 func fillUpVariables(sg *SubGraph, doneVars map[string]*task.List) {
-	lists := make([]*task.List, 0, len(sg.Params.NeedsVar))
-	for _, it := range sg.Params.NeedsVar {
-		if v, ok := doneVars[it]; ok {
-			lists = append(lists, v)
-		}
-	}
-	sg.DestUIDs = algo.MergeSorted(lists)
+	sg.FillVariable(doneVars)
 	for _, child := range sg.Children {
 		fillUpVariables(child, doneVars)
 	}
@@ -668,16 +661,18 @@ func fillUpVariables(sg *SubGraph, doneVars map[string]*task.List) {
 	}
 }
 
-func (sg *SubGraph) FillVariable() {
+func (sg *SubGraph) FillVariable(mp map[string]*task.List) {
 	lists := make([]*task.List, 0)
-	lists = append(lists, sg.DestUIDs)
+	if sg.DestUIDs != nil {
+		lists = append(lists, sg.DestUIDs)
+	}
 	for _, v := range sg.Params.NeedsVar {
-		if l, ok := sg.Params.ParentVars[v]; ok {
+		if l, ok := mp[v]; ok {
 			lists = append(lists, l)
 		}
 	}
 	sg.DestUIDs = algo.MergeSorted(lists)
-	fmt.Println(sg.DestUIDs, "****")
+
 }
 
 // ProcessGraph processes the SubGraph instance accumulating result for the query
@@ -686,7 +681,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	var err error
 	if len(sg.Params.NeedsVar) != 0 && len(sg.SrcFunc) == 0 {
 		// Do nothing as the list has already been populated.
-		sg.FillVariable()
+		sg.FillVariable(sg.Params.ParentVars)
 	} else if len(sg.Attr) == 0 {
 		// If we have a filter SubGraph which only contains an operator,
 		// it won't have any attribute to work on.
@@ -701,7 +696,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		if len(sg.SrcFunc) > 0 && sg.SrcFunc[0] == "id" {
 			// If its an id() filter, we just have to intersect the SrcUIDs with DestUIDs
 			// and return.
-			sg.FillVariable()
+			sg.FillVariable(sg.Params.ParentVars)
 			algo.IntersectWith(sg.DestUIDs, sg.SrcUIDs)
 			rch <- nil
 			return
