@@ -606,17 +606,26 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 func populateVarMap(sg *SubGraph, doneVars map[string]*task.List) {
 	// Filter out UIDs that don't have atleast one UID in every child.
 	excluded := make(map[uint64]struct{})
+	var skipCascade bool
 	for _, child := range sg.Children {
 		populateVarMap(child, doneVars)
-		if len(child.Params.DefinesVar) != 0 {
-			// If we defined some variable at this level or above, don't cascade
-			continue
+		// If we defined some variable at this level or above, don't cascade
+		for _, v := range child.Params.NeedsVar {
+			for _, v1 := range sg.Params.DefinesVar {
+				if v == v1.Name {
+					skipCascade = true
+				}
+			}
 		}
 		for i := 0; i < len(child.uidMatrix); i++ {
 			if len(child.values[i].Val) == 0 && len(child.uidMatrix[i].Uids) == 0 {
 				excluded[sg.DestUIDs.Uids[i]] = struct{}{}
 			}
 		}
+	}
+
+	if skipCascade {
+		goto L
 	}
 
 	// Remove the excluded UIDs from the UID matrix of this level.
@@ -638,6 +647,7 @@ func populateVarMap(sg *SubGraph, doneVars map[string]*task.List) {
 			})
 	}
 
+L:
 	if sg.Params.Var != "" {
 		doneVars[sg.Params.Var] = sg.DestUIDs
 	}
