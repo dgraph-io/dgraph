@@ -6,7 +6,6 @@ import (
 )
 
 func getTokens(funcArgs []string) ([]string, error) {
-	x.AssertTruef(len(funcArgs) > 1, "Invalid function")
 	if len(funcArgs) != 2 {
 		return nil, x.Errorf("Function requires 2 arguments, but got %d",
 			len(funcArgs))
