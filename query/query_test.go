@@ -180,6 +180,7 @@ func populateGraph(t *testing.T) (string, string, *store.Store) {
 	addEdgeToUID(t, ps, "friend", 1, 31)
 	addEdgeToUID(t, ps, "friend", 1, 101)
 	addEdgeToUID(t, ps, "friend", 31, 24)
+	addEdgeToUID(t, ps, "friend", 23, 1)
 
 	// Now let's add a few properties for the main user.
 	addEdgeToValue(t, ps, "name", 1, "Michonne")
@@ -398,7 +399,32 @@ func TestUseVarsMultiOrder(t *testing.T) {
 		js)
 }
 
-func TestUseVarsFilterVarReuse(t *testing.T) {
+func TestUseVarsFilterVarReuse1(t *testing.T) {
+	dir, dir2, ps := populateGraph(t)
+	defer ps.Close()
+	defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir2)
+	query := `
+		{
+			friend(id:0x01) {
+				friend {
+					L as friend {
+						name
+						friend @filter(id(L)) {
+							name
+						}
+					}
+				}
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"friend":[{"friend":[{"friend":[{"name":"Michonne", "friend":[{"name":"Glenn Rhee"}]}]}, {"friend":[{"name":"Glenn Rhee"}]}]}]}`,
+		js)
+}
+
+func TestUseVarsFilterVarReuse2(t *testing.T) {
 	dir, dir2, ps := populateGraph(t)
 	defer ps.Close()
 	defer os.RemoveAll(dir)
@@ -406,18 +432,20 @@ func TestUseVarsFilterVarReuse(t *testing.T) {
 	query := `
 		{
 			friend(anyof(name, "Michonne Andrea Glenn")) {
-				L As friend {
-					friend @filter(id(L)) {
+				friend {
+				 L as friend {
+					 name
+					 friend @filter(id(L)) {
 						name
 					}
 				}
-				name
 			}
 		}
+	}
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"friend":[{"name":"Glenn Rhee"},{"name":"Andrea"}]}`,
+		`{"friend":[{"friend":[{"friend":[{"name":"Michonne", "friend":[{"name":"Glenn Rhee"}]}]}, {"friend":[{"name":"Glenn Rhee"}]}]}]}`,
 		js)
 }
 

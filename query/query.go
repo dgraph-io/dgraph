@@ -530,7 +530,14 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 
 	canExecute := func(idx int) bool {
 		for _, v := range res.QueryVars[idx].Needs {
-			if _, ok := doneVars[v]; !ok {
+			var selfDep bool
+			for _, vd := range res.QueryVars[idx].Defines {
+				if v == vd {
+					selfDep = true
+					break
+				}
+			}
+			if _, ok := doneVars[v]; !ok && !selfDep {
 				return false
 			}
 		}
@@ -601,6 +608,9 @@ func populateVarMap(sg *SubGraph, doneVars map[string]*task.List) {
 	excluded := make(map[uint64]struct{})
 	for _, child := range sg.Children {
 		populateVarMap(child, doneVars)
+		if len(child.Params.DefinesVar) != 0 {
+			continue
+		}
 		for i := 0; i < len(child.uidMatrix); i++ {
 			if len(child.values[i].Val) == 0 && len(child.uidMatrix[i].Uids) == 0 {
 				excluded[sg.DestUIDs.Uids[i]] = struct{}{}
@@ -648,22 +658,28 @@ func fillUpVariables(sg *SubGraph, doneVars map[string]*task.List) {
 	}
 }
 
+func (sg *SubGraph) FillVariable() {
+	fmt.Println(sg.Params.NeedsVar, sg.Params.DefinesVar, "****")
+	lists := make([]*task.List, 0)
+	lists = append(lists, sg.DestUIDs)
+	for _, v := range sg.Params.NeedsVar {
+		for _, it := range sg.Params.DefinesVar {
+			if v == it.Name {
+				lists = append(lists, it.Uids)
+			}
+		}
+	}
+	sg.DestUIDs = algo.MergeSorted(lists)
+	fmt.Println(sg.DestUIDs, "****")
+}
+
 // ProcessGraph processes the SubGraph instance accumulating result for the query
 // from different instances. Note: taskQuery is nil for root node.
 func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	var err error
-	fmt.Println(sg.Attr)
 	if len(sg.Params.NeedsVar) != 0 && len(sg.SrcFunc) == 0 {
 		// Do nothing as the list has already been populated.
-		if sg.DestUIDs == nil {
-			for _, v := range sg.Params.NeedsVar {
-				for _, it := range sg.Params.DefinesVar {
-					if v == it.Name {
-						sg.DestUIDs = it.Uids
-					}
-				}
-			}
-		}
+		sg.FillVariable()
 	} else if len(sg.Attr) == 0 {
 		// If we have a filter SubGraph which only contains an operator,
 		// it won't have any attribute to work on.
@@ -678,6 +694,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		if len(sg.SrcFunc) > 0 && sg.SrcFunc[0] == "id" {
 			// If its an id() filter, we just have to intersect the SrcUIDs with DestUIDs
 			// and return.
+			sg.FillVariable()
 			algo.IntersectWith(sg.DestUIDs, sg.SrcUIDs)
 			rch <- nil
 			return
@@ -726,6 +743,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		filterChan := make(chan error, len(sg.Filters))
 		for _, filter := range sg.Filters {
 			filter.SrcUIDs = sg.DestUIDs
+			filter.Params.DefinesVar = sg.Params.DefinesVar // Pass the definesVar to the child.
 			go ProcessGraph(ctx, filter, sg, filterChan)
 		}
 
@@ -780,6 +798,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	}
 
 	if sg.Params.Var != "" {
+		fmt.Println(sg.Params.Var, "##########", sg.DestUIDs)
 		sg.Params.DefinesVar = append(sg.Params.DefinesVar, VarL{sg.Params.Var, sg.DestUIDs})
 	}
 
