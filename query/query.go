@@ -111,11 +111,6 @@ func (l *Latency) ToMap() map[string]string {
 	return m
 }
 
-type VarL struct {
-	Name string
-	Uids *task.List
-}
-
 type params struct {
 	Alias      string
 	Count      int
@@ -588,10 +583,12 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 			}
 
 			var noCascade bool
+		L:
 			for _, def := range res.QueryVars[idx].Defines {
 				for _, need := range res.QueryVars[idx].Needs {
 					if def == need {
 						noCascade = true
+						break L
 					}
 				}
 			}
@@ -624,7 +621,7 @@ func populateVarMap(sg *SubGraph, noCascade bool, doneVars map[string]*task.List
 	}
 
 	if noCascade {
-		goto L
+		goto AssignStep
 	}
 
 	// Remove the excluded UIDs from the UID matrix of this level.
@@ -645,14 +642,14 @@ func populateVarMap(sg *SubGraph, noCascade bool, doneVars map[string]*task.List
 				return !ok
 			})
 	}
-L:
+AssignStep:
 	if sg.Params.Var != "" {
 		doneVars[sg.Params.Var] = sg.DestUIDs
 	}
 }
 
 func fillUpVariables(sg *SubGraph, doneVars map[string]*task.List) {
-	sg.FillVariable(doneVars)
+	sg.fillVariable(doneVars)
 	for _, child := range sg.Children {
 		fillUpVariables(child, doneVars)
 	}
@@ -661,7 +658,7 @@ func fillUpVariables(sg *SubGraph, doneVars map[string]*task.List) {
 	}
 }
 
-func (sg *SubGraph) FillVariable(mp map[string]*task.List) {
+func (sg *SubGraph) fillVariable(mp map[string]*task.List) {
 	lists := make([]*task.List, 0)
 	if sg.DestUIDs != nil {
 		lists = append(lists, sg.DestUIDs)
@@ -681,7 +678,6 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	var err error
 	if len(sg.Params.NeedsVar) != 0 && len(sg.SrcFunc) == 0 {
 		// Do nothing as the list has already been populated.
-		sg.FillVariable(sg.Params.ParentVars)
 	} else if len(sg.Attr) == 0 {
 		// If we have a filter SubGraph which only contains an operator,
 		// it won't have any attribute to work on.
@@ -696,7 +692,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		if len(sg.SrcFunc) > 0 && sg.SrcFunc[0] == "id" {
 			// If its an id() filter, we just have to intersect the SrcUIDs with DestUIDs
 			// and return.
-			sg.FillVariable(sg.Params.ParentVars)
+			sg.fillVariable(sg.Params.ParentVars)
 			algo.IntersectWith(sg.DestUIDs, sg.SrcUIDs)
 			rch <- nil
 			return
