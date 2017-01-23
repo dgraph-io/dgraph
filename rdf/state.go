@@ -480,11 +480,12 @@ func isPNChar(r rune) bool {
 
 // UCHAR ::= '\u' HEX HEX HEX HEX | '\U' HEX HEX HEX HEX HEX HEX HEX HEX
 func hasUChars(r rune, l *lex.Lexer) bool {
+	if r != 'u' && r != 'U' {
+		return false
+	}
 	times := 4
 	if r == 'U' {
 		times = 8
-	} else if r != 'u' {
-		return false
 	}
 	return times == l.AcceptRunTimes(isHex, times)
 }
