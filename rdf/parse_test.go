@@ -147,12 +147,22 @@ var testNQuads = []struct {
 		expectedErr: true,
 	},
 	{
-		input:       "<_:alice> <knows> <something> .",
-		expectedErr: true,
+		input: "<_:alice> <knows> <something> .",
+		nq: graph.NQuad{
+			Subject:   "_:alice",
+			Predicate: "knows",
+			ObjectId:  "something",
+		},
+		expectedErr: false,
 	},
 	{
-		input:       "_:alice <knows> <_:something> .",
-		expectedErr: true,
+		input: "_:alice <knows> <_:something> .",
+		nq: graph.NQuad{
+			Subject:   "_:alice",
+			Predicate: "knows",
+			ObjectId:  "_:something",
+		},
+		expectedErr: false,
 	},
 	{
 		input:       "<alice> <knows> .",
@@ -460,27 +470,27 @@ var testNQuads = []struct {
 	{
 		input:       `<alice> <lives> "\a" .`,
 		expectedErr: true, // \a is not valid escape char
-  },
-  {
-		input: `# nothing happened`,
-		expectedErr: true,
+	},
+	{
+		input:        `# nothing happened`,
+		expectedErr:  true,
 		shouldIgnore: true,
 	},
 	{
-		input: `<some_subject_id> # <predicate> <object_id> .`,
+		input:       `<some_subject_id> # <predicate> <object_id> .`,
 		expectedErr: true,
 	},
 	{
-		input: `<some_subject_id> <predicate> <object_id> # .`,
+		input:       `<some_subject_id> <predicate> <object_id> # .`,
 		expectedErr: true,
 	},
 	{
-		input: `check me as error`,
+		input:       `check me as error`,
 		expectedErr: true,
 	},
 	{
-		input: `   `,
-		expectedErr: true,
+		input:        `   `,
+		expectedErr:  true,
 		shouldIgnore: true,
 	},
 }
@@ -490,7 +500,7 @@ func TestLex(t *testing.T) {
 		t.Logf("Testing %v", test.input)
 		rnq, err := Parse(test.input)
 		if test.expectedErr && test.shouldIgnore {
-			assert.Equal(t, ErrEmpty, err, "Catch an ignorable case: %v", 
+			assert.Equal(t, ErrEmpty, err, "Catch an ignorable case: %v",
 				err.Error())
 		} else if test.expectedErr {
 			assert.Error(t, err, "Expected error for input: %q. Output: %+v",

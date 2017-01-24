@@ -120,18 +120,10 @@ Loop:
 // Assumes that caller has consumed initial '<'
 func lexIRIRef(l *lex.Lexer, styp lex.ItemType,
 	sfn lex.StateFn) lex.StateFn {
-	l.AcceptRunRec(isIRIChar)
-	r := l.Next()
-	if r == lex.EOF {
-		return l.Errorf("Unexpected end of subject")
+	if err := lex.LexIRIRef(l, styp); err != nil {
+		return l.Errorf(err.Error())
 	}
-
-	if r == '>' {
-		l.Emit(styp)
-		return sfn
-	}
-
-	return l.Errorf("Invalid character %v found for itemType: %v", r, styp)
+	return sfn
 }
 
 func lexUidNode(l *lex.Lexer, styp lex.ItemType, sfn lex.StateFn) lex.StateFn {
@@ -246,7 +238,7 @@ func lexLiteral(l *lex.Lexer) lex.StateFn {
 		r := l.Next()
 		if r == '\u005c' { // backslash
 			r = l.Next()
-			if isEscChar(r) || hasUChars(r, l) {
+			if isEscChar(r) || lex.HasUChars(r, l) {
 				continue // This would skip over the escaped rune.
 			}
 			return l.Errorf("Invalid escape character : %v in literal", r)
@@ -394,45 +386,6 @@ func isLangTag(r rune) bool {
 	}
 }
 
-// IRIREF ::= '<' ([^#x00-#x20<>"{}|^`\] | UCHAR)* '>'
-func isIRIChar(r rune, l *lex.Lexer) bool {
-	if r <= 32 { // no chars b/w 0x00 to 0x20 inclusive
-		return false
-	}
-	switch r {
-	case '<':
-	case '>':
-	case '"':
-	case '{':
-	case '}':
-	case '|':
-	case '^':
-	case '`':
-	case '\\':
-		r2 := l.Next()
-		if r2 != 'u' && r2 != 'U' {
-			l.Backup()
-			return false
-		}
-		return hasUChars(r2, l)
-	default:
-		return true
-	}
-	return false
-}
-
-// HEX ::= [0-9] | [A-F] | [a-f]
-func isHex(r rune) bool {
-	switch {
-	case r >= '0' && r <= '9':
-	case r >= 'a' && r <= 'f':
-	case r >= 'A' && r <= 'F':
-	default:
-		return false
-	}
-	return true
-}
-
 // PN_CHARS_BASE ::=   [A-Z] | [a-z] | [#x00C0-#x00D6] | [#x00D8-#x00F6] |
 // [#x00F8-#x02FF] | [#x0370-#x037D] | [#x037F-#x1FFF] | [#x200C-#x200D] | [#x2070-#x218F] |
 // [#x2C00-#x2FEF] | [#x3001-#xD7FF] | [#xF900-#xFDCF] | [#xFDF0-#xFFFD] | [#x10000-#xEFFFF]
@@ -475,18 +428,6 @@ func isPNChar(r rune) bool {
 		return isPNCharsU(r)
 	}
 	return true
-}
-
-// UCHAR ::= '\u' HEX HEX HEX HEX | '\U' HEX HEX HEX HEX HEX HEX HEX HEX
-func hasUChars(r rune, l *lex.Lexer) bool {
-	if r != 'u' && r != 'U' {
-		return false
-	}
-	times := 4
-	if r == 'U' {
-		times = 8
-	}
-	return times == l.AcceptRunTimes(isHex, times)
 }
 
 // ECHAR ::= '\' [tbnrf"'\]
