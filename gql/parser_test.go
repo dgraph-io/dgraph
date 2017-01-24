@@ -970,13 +970,13 @@ func TestParseFilter_simplest(t *testing.T) {
 	require.Equal(t, `(namefilter "a")`, res.Query[0].Children[0].Children[0].Filter.debugString())
 }
 
-// Test operator precedence. && should be evaluated before ||.
+// Test operator precedence. and should be evaluated before or.
 func TestParseFilter_op(t *testing.T) {
 	query := `
 	query {
 		me(id:0x0a) {
-			friends @filter(a("a") || b("a")
-			&& c("a")) {
+			friends @filter(a("a") or b("a")
+			and c("a")) {
 				name
 			}
 			gender,age
@@ -992,13 +992,13 @@ func TestParseFilter_op(t *testing.T) {
 	require.Equal(t, `(OR (a "a") (AND (b "a") (c "a")))`, res.Query[0].Children[0].Filter.debugString())
 }
 
-// Test operator precedence. Let brackets make || evaluates before &&.
+// Test operator precedence. Let brackets make or evaluates before and.
 func TestParseFilter_op2(t *testing.T) {
 	query := `
 	query {
 		me(id:0x0a) {
-			friends @filter((a("a") || b("a"))
-			 && c("a")) {
+			friends @filter((a("a") Or b("a"))
+			 and c("a")) {
 				name
 			}
 			gender,age
@@ -1019,7 +1019,7 @@ func TestParseFilter_brac(t *testing.T) {
 	query := `
 	query {
 		me(id:0x0a) {
-			friends @filter(  a("hello") || b("world", "is") && (c("a") || (d("haha") || e("a"))) && f("a")){
+			friends @filter(  a("hello") or b("world", "is") and (c("a") or (d("haha") or e("a"))) and f("a")){
 				name
 			}
 			gender,age

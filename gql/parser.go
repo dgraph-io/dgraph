@@ -884,10 +884,27 @@ func parseFilter(it *lex.ItemIterator) (*FilterTree, error) {
 
 	for it.Next() {
 		item := it.Item()
-		if item.Typ == itemName { // Value.
+		lval := strings.ToLower(item.Val)
+		if lval == "and" || lval == "or" { // Handle operators.
+			op := "&"
+			if lval == "or" {
+				op = "|"
+			}
+			opPred := filterOpPrecedence[op]
+			x.AssertTruef(opPred > 0, "Expected opPred > 0: %d", opPred)
+			// Evaluate the stack until we see an operator with strictly lower pred.
+			for !opStack.empty() {
+				topOp := opStack.peek()
+				if filterOpPrecedence[topOp.Op] < opPred {
+					break
+				}
+				evalStack(opStack, valueStack)
+			}
+			opStack.push(&FilterTree{Op: op}) // Push current operator.
+		} else if item.Typ == itemName { // Value.
 			f := &Function{}
 			leaf := &FilterTree{Func: f}
-			f.Name = strings.ToLower(item.Val)
+			f.Name = lval
 			it.Next()
 			itemInFunc := it.Item()
 			if itemInFunc.Typ != itemLeftRound {
@@ -937,23 +954,6 @@ func parseFilter(it *lex.ItemIterator) (*FilterTree, error) {
 				// The parentheses are balanced out. Let's break.
 				break
 			}
-
-		} else if item.Typ == itemAnd || item.Typ == itemOr {
-			op := "&"
-			if item.Typ == itemOr {
-				op = "|"
-			}
-			opPred := filterOpPrecedence[op]
-			x.AssertTruef(opPred > 0, "Expected opPred > 0: %d", opPred)
-			// Evaluate the stack until we see an operator with strictly lower pred.
-			for !opStack.empty() {
-				topOp := opStack.peek()
-				if filterOpPrecedence[topOp.Op] < opPred {
-					break
-				}
-				evalStack(opStack, valueStack)
-			}
-			opStack.push(&FilterTree{Op: op}) // Push current operator.
 		} else {
 			return nil, x.Errorf("Unexpected item while parsing @filter: %v", item)
 		}
