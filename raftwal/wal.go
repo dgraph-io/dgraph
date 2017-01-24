@@ -87,19 +87,28 @@ func (w *Wal) StoreSnapshot(gid uint32, s raftpb.Snapshot) error {
 	return x.Wrapf(err, "wal.Store: While Store Snapshot")
 }
 
+type put struct {
+	k []byte
+	v []byte
+}
+
+type Batch struct {
+	del [][]byte
+	put []put
+}
+
 // Store stores the snapshot, hardstate and entries for a given RAFT group.
 func (w *Wal) Store(gid uint32, h raftpb.HardState, es []raftpb.Entry) error {
 
-	err := w.wals.Update(func(tx *bolt.Tx) error {
+	var batch Batch
+	err := w.wals.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte("data"))
 		if !raft.IsEmptyHardState(h) {
 			data, err := h.Marshal()
 			if err != nil {
 				return x.Wrapf(err, "wal.Store: While marshal hardstate")
 			}
-			if err = b.Put(w.hardStateKey(gid), data); err != nil {
-				return err
-			}
+			batch.put = append(batch.put, put{w.hardStateKey(gid), data})
 		}
 
 		var t, i uint64
@@ -110,9 +119,7 @@ func (w *Wal) Store(gid uint32, h raftpb.HardState, es []raftpb.Entry) error {
 				return x.Wrapf(err, "wal.Store: While marshal entry")
 			}
 			k := w.entryKey(gid, e.Term, e.Index)
-			if err = b.Put(k, data); err != nil {
-				return err
-			}
+			batch.put = append(batch.put, put{k, data})
 		}
 
 		// If we get no entries, then the default value of t and i would be zero. That would
@@ -125,13 +132,32 @@ func (w *Wal) Store(gid uint32, h raftpb.HardState, es []raftpb.Entry) error {
 
 			c := b.Cursor()
 			for k, _ := c.Seek(start); k != nil && bytes.HasPrefix(k, prefix); k, _ = c.Next() {
-				if err := b.Delete(k); err != nil {
-					return err
-				}
+				batch.del = append(batch.del, k)
 			}
 		}
 		return nil
 	})
+	if err != nil {
+		return err
+	}
+
+	err = w.wals.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte("data"))
+		for _, p := range batch.put {
+			if err = b.Put(p.k, p.v); err != nil {
+				return err
+			}
+		}
+		for _, k := range batch.del {
+			if err := b.Delete(k); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
 
 	return x.Wrapf(err, "wal.Store: While WriteBatch")
 }
