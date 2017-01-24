@@ -734,8 +734,16 @@ func main() {
 	x.Init()
 	checkFlagsAndInitDirs()
 
-	db, err := bolt.Open("dgraph.db", 0600, nil)
+	db, err := bolt.Open("posting.db", 0600, nil)
+	x.Checkf(err, "While opening boltdb")
+	err = db.Update(func(tx *bolt.Tx) error {
+		if _, err := tx.CreateBucketIfNotExists([]byte("data")); err != nil {
+			return err
+		}
+		return nil
+	})
 	x.Check(err)
+
 	defer db.Close()
 
 	if len(*schemaFile) > 0 {
@@ -751,7 +759,17 @@ func main() {
 	// Setup external communication.
 	che := make(chan error, 1)
 	go setupServer(che)
-	go worker.StartRaftNodes(*walDir)
+	wal, err := bolt.Open("wal.db", 0600, nil)
+	x.Checkf(err, "While opening boltdb")
+	err = wal.Update(func(tx *bolt.Tx) error {
+		if _, err := tx.CreateBucketIfNotExists([]byte("data")); err != nil {
+			return err
+		}
+		return nil
+	})
+	x.Check(err)
+
+	go worker.StartRaftNodes(wal)
 
 	if err := <-che; !strings.Contains(err.Error(),
 		"use of closed network connection") {

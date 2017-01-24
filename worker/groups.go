@@ -4,15 +4,14 @@ import (
 	"flag"
 	"fmt"
 	"math/rand"
-	"os"
 	"strconv"
 	"strings"
 	"time"
 
 	"golang.org/x/net/context"
 
+	"github.com/boltdb/bolt"
 	"github.com/dgraph-io/dgraph/raftwal"
-	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -61,7 +60,7 @@ func groups() *groupi {
 // and either start or restart RAFT nodes.
 // This function triggers RAFT nodes to be created, and is the entrace to the RAFT
 // world from main.go.
-func StartRaftNodes(walDir string) {
+func StartRaftNodes(wal *bolt.DB) {
 	gr = new(groupi)
 	gr.ctx, gr.cancel = context.WithCancel(context.Background())
 
@@ -86,10 +85,7 @@ func StartRaftNodes(walDir string) {
 		fmt.Printf("Last update is now: %d\n", gr.LastUpdate())
 	}
 
-	x.Checkf(os.MkdirAll(walDir, 0700), "Error while creating WAL dir.")
-	wals, err := store.NewSyncStore(walDir)
-	x.Checkf(err, "Error initializing wal store")
-	gr.wal = raftwal.Init(wals, *raftId)
+	gr.wal = raftwal.Init(wal, *raftId)
 
 	if len(*myAddr) == 0 {
 		*myAddr = fmt.Sprintf("localhost:%d", *workerPort)

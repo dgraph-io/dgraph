@@ -472,7 +472,7 @@ func batchSync() {
 			if len(entries) > 0 {
 				loop++
 				fmt.Printf("[%4d] Writing batch of size: %v\n", loop, len(entries))
-				x.Checkf(pstore.Batch(func(tx *bolt.Tx) error {
+				x.Checkf(pstore.Update(func(tx *bolt.Tx) error {
 					b, _ := tx.CreateBucketIfNotExists([]byte("data"))
 					for _, e := range entries {
 						x.Checkf(b.Put(e.key, e.val), "Error while doing b.Put")

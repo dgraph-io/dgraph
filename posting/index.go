@@ -203,7 +203,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *task.DirectedEdge) e
 }
 
 func batchDelete(batch chan []byte, errCh chan error) {
-	if err := pstore.Batch(func(tx *bolt.Tx) error {
+	if err := pstore.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte("data"))
 		for k := range batch {
 			if err := b.Delete(k); err != nil {
