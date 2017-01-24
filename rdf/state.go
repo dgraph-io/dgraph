@@ -46,12 +46,25 @@ const (
 	atLabel
 )
 
+const (
+	lsThan     = '<'
+	grThan     = '>'
+	underscore = '_'
+	colon      = ':'
+	dash       = '-'
+	quote      = '"'
+	hash       = '#'
+	dot        = '.'
+	at         = '@'
+	caret      = '^'
+)
+
 // This function inspects the next rune and calls the appropriate stateFn.
 func lexText(l *lex.Lexer) lex.StateFn {
 Loop:
 	for {
 		switch r := l.Next(); {
-		case r == '<' || r == '_':
+		case r == lsThan || r == underscore:
 			if l.Depth == atSubject {
 				l.Backup()
 				l.Emit(itemText) // emit whatever we have so far.
@@ -78,7 +91,7 @@ Loop:
 
 			return l.Errorf("Invalid input: %c at lexText", r)
 
-		case r == '"':
+		case r == quote:
 			if l.Depth != atObject {
 				return l.Errorf("Invalid quote for non-object.")
 			}
@@ -86,7 +99,7 @@ Loop:
 			l.Emit(itemText)
 			return lexObject
 
-		case r == '#':
+		case r == hash:
 			if l.Depth != atSubject {
 				return l.Errorf("Invalid input: %c at lexText", r)
 			}
@@ -95,7 +108,7 @@ Loop:
 		case r == lex.EOF:
 			break Loop
 
-		case r == '.':
+		case r == dot:
 			if l.Depth > atObject {
 				l.Emit(itemValidEnd)
 			}
@@ -152,7 +165,7 @@ func lexUidNode(l *lex.Lexer, styp lex.ItemType, sfn lex.StateFn) lex.StateFn {
 func lexBlankNode(l *lex.Lexer, styp lex.ItemType,
 	sfn lex.StateFn) lex.StateFn {
 	r := l.Next()
-	if r != ':' {
+	if r != colon {
 		return l.Errorf("Invalid character after _. Expected :, found %v", r)
 	}
 	r = l.Next()
@@ -163,9 +176,9 @@ func lexBlankNode(l *lex.Lexer, styp lex.ItemType,
 		return l.Errorf("Invalid character in %v after _: , Got %v", styp, r)
 	}
 	lastAccRune, validRune := l.AcceptRun(func(r rune) bool {
-		return r == '.' || isPNChar(r)
+		return r == dot || isPNChar(r)
 	})
-	if validRune && lastAccRune == '.' {
+	if validRune && lastAccRune == dot {
 		return l.Errorf("Can not end %v with '.'", styp)
 	}
 
@@ -185,13 +198,13 @@ func lexBlankNode(l *lex.Lexer, styp lex.ItemType,
 func lexSubject(l *lex.Lexer) lex.StateFn {
 	r := l.Next()
 	// The subject is an IRI, so we lex till we encounter '>'.
-	if r == '<' {
+	if r == lsThan {
 		l.Depth++
 		return lexIRIRef(l, itemSubject, lexText)
 	}
 
 	// The subject represents a blank node.
-	if r == '_' {
+	if r == underscore {
 		l.Depth++
 		return lexBlankNode(l, itemSubject, lexText)
 	}
@@ -202,7 +215,7 @@ func lexSubject(l *lex.Lexer) lex.StateFn {
 func lexPredicate(l *lex.Lexer) lex.StateFn {
 	r := l.Next()
 	// The predicate can only be an IRI according to the spec.
-	if r != '<' {
+	if r != lsThan {
 		return l.Errorf("Invalid character in lexPredicate: %v", r)
 	}
 
@@ -212,7 +225,7 @@ func lexPredicate(l *lex.Lexer) lex.StateFn {
 
 func lexLanguage(l *lex.Lexer) lex.StateFn {
 	r := l.Next()
-	if r != '@' {
+	if r != at {
 		return l.Errorf("Expected @ prefix for lexLanguage")
 	}
 
@@ -223,7 +236,7 @@ func lexLanguage(l *lex.Lexer) lex.StateFn {
 	}
 
 	lastRune, validRune := l.AcceptRun(isLangTag)
-	if validRune && lastRune == '-' {
+	if validRune && lastRune == dash {
 		return l.Errorf("Invalid character - at the end of language literal.")
 	}
 	l.Emit(itemLanguage)
@@ -260,11 +273,11 @@ func lexLiteral(l *lex.Lexer) lex.StateFn {
 	l.Depth++
 
 	r := l.Peek()
-	if r == '@' {
+	if r == at {
 		return lexLanguage(l)
 	}
 
-	if r == '^' {
+	if r == caret {
 		return lexObjectType(l)
 	}
 
@@ -273,18 +286,18 @@ func lexLiteral(l *lex.Lexer) lex.StateFn {
 
 func lexObjectType(l *lex.Lexer) lex.StateFn {
 	r := l.Next()
-	if r != '^' {
+	if r != caret {
 		return l.Errorf("Expected ^ for lexObjectType")
 	}
 
 	r = l.Next()
-	if r != '^' {
+	if r != caret {
 		return l.Errorf("Expected ^^ for lexObjectType")
 	}
 
 	l.Ignore()
 	r = l.Next()
-	if r != '<' {
+	if r != lsThan {
 		return l.Errorf("Expected < for lexObjectType")
 	}
 
@@ -294,17 +307,17 @@ func lexObjectType(l *lex.Lexer) lex.StateFn {
 func lexObject(l *lex.Lexer) lex.StateFn {
 	r := l.Next()
 	// The object can be an IRI, blank node or a literal.
-	if r == '<' {
+	if r == lsThan {
 		l.Depth++
 		return lexIRIRef(l, itemObject, lexText)
 	}
 
-	if r == '_' {
+	if r == underscore {
 		l.Depth++
 		return lexBlankNode(l, itemObject, lexText)
 	}
 
-	if r == '"' {
+	if r == quote {
 		l.Ignore()
 		return lexLiteral(l)
 	}
@@ -315,12 +328,12 @@ func lexObject(l *lex.Lexer) lex.StateFn {
 func lexLabel(l *lex.Lexer) lex.StateFn {
 	r := l.Next()
 	// Graph label can either be an IRI or a blank node according to spec.
-	if r == '<' {
+	if r == lsThan {
 		l.Depth++
 		return lexIRIRef(l, itemLabel, lexText)
 	}
 
-	if r == '_' {
+	if r == underscore {
 		l.Depth++
 		return lexBlankNode(l, itemLabel, lexText)
 	}
@@ -342,7 +355,7 @@ func lexComment(l *lex.Lexer) lex.StateFn {
 }
 
 func isClosingBracket(r rune) bool {
-	return r == '>'
+	return r == grThan
 }
 
 // isSpace returns true if the rune is a tab or space.
@@ -356,7 +369,7 @@ func isEndOfLine(r rune) bool {
 }
 
 func isEndLiteral(r rune) bool {
-	return r == '"' || r == '\u000d' || r == '\u000a'
+	return r == quote || r == '\u000d' || r == '\u000a'
 }
 
 func isLangTagPrefix(r rune) bool {
@@ -377,7 +390,7 @@ func isLangTag(r rune) bool {
 	}
 
 	switch {
-	case r == '-':
+	case r == dash:
 		return true
 	case r >= '0' && r <= '9':
 		return true
@@ -413,13 +426,13 @@ func isPnCharsBase(r rune) bool {
 
 // PN_CHARS_U ::= PN_CHARS_BASE | '_' | ':'
 func isPNCharsU(r rune) bool {
-	return r == '_' || r == ':' || isPnCharsBase(r)
+	return r == underscore || r == colon || isPnCharsBase(r)
 }
 
 // PN_CHARS ::= PN_CHARS_U | '-' | [0-9] | #x00B7 | [#x0300-#x036F] | [#x203F-#x2040]
 func isPNChar(r rune) bool {
 	switch {
-	case r == '-':
+	case r == dash:
 	case r >= '0' && r <= '9':
 	case r == 0xB7:
 	case r >= 0x300 && r <= 0x36F:

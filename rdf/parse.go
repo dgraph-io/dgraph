@@ -175,12 +175,12 @@ func Parse(line string) (rnq graph.NQuad, rerr error) {
 		item := it.Item()
 		switch item.Typ {
 		case itemSubject:
-			rnq.Subject = strings.Trim(item.val, " ")
+			rnq.Subject = strings.Trim(item.Val, " ")
 		case itemPredicate:
-			rnq.Predicate = strings.Trim(item.val, " ")
+			rnq.Predicate = strings.Trim(item.Val, " ")
 
 		case itemObject:
-			rnq.ObjectId = strings.Trim(item.val, " ")
+			rnq.ObjectId = strings.Trim(item.Val, " ")
 
 		case itemLiteral:
 			oval = item.Val
@@ -197,7 +197,7 @@ func Parse(line string) (rnq graph.NQuad, rerr error) {
 					"itemObject should be emitted before itemObjectType. Input: [%s]",
 					line)
 			}
-			val := strings.Trim(item.val, " ")
+			val := strings.Trim(item.Val, " ")
 			// TODO: Check if this condition is required.
 			if strings.Trim(val, " ") == "*" {
 				return rnq, x.Errorf("itemObject can't be *")
@@ -234,7 +234,7 @@ func Parse(line string) (rnq graph.NQuad, rerr error) {
 			vend = true
 
 		case itemLabel:
-			rnq.Label = strings.Trim(item.val, " ")
+			rnq.Label = strings.Trim(item.Val, " ")
 		}
 	}
 
