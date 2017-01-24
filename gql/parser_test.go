@@ -1300,8 +1300,8 @@ func TestParseGenerator(t *testing.T) {
 
 func TestParseIRIRef(t *testing.T) {
 	query := `{
-		me(id:<http://helloworld.com/how/are/you>) {
-                        <http://verygood.com/what/about/you>
+		me(id: <http://helloworld.com/how/are/you>) {
+			<http://verygood.com/what/about/you>
 			friends @filter(allof(<http://verygood.com/what/about/you>, "good better bad")){
 				name
 			}
@@ -1314,14 +1314,33 @@ func TestParseIRIRef(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 5, len(gq.Query[0].Children))
 	require.Equal(t, "http://verygood.com/what/about/you", gq.Query[0].Children[0].Attr)
-	require.Equal(t, `(allof "http://verygood.com/what/about/you" "good better bad")`, gq.Query[0].Children[1].Filter.debugString())
+	require.Equal(t, `(allof "http://verygood.com/what/about/you" "good better bad")`,
+		gq.Query[0].Children[1].Filter.debugString())
+}
+
+func TestParseIRIRef2(t *testing.T) {
+	query := `{
+		me(anyof(<http://helloworld.com/how/are/you>, "good better bad")) {
+			<http://verygood.com/what/about/you>
+			friends @filter(allof(<http://verygood.com/what/about/you>, "good better bad")){
+				name
+			}
+		}
+	}`
+
+	gq, err := Parse(query)
+	require.NoError(t, err)
+	require.Equal(t, 3, len(gq.Query[0].Children))
+	require.Equal(t, "http://verygood.com/what/about/you", gq.Query[0].Children[0].Attr)
+	require.Equal(t, `(allof "http://verygood.com/what/about/you" "good better bad")`,
+		gq.Query[0].Children[1].Filter.debugString())
 }
 
 func TestParseIRIRefSpace(t *testing.T) {
 	query := `{
-		me(id:<http://helloworld.com/how/are/ you>) {
-                }
-              }`
+		me(id: <http://helloworld.com/how/are/ you>) {
+		}
+	      }`
 
 	_, err := Parse(query)
 	require.Error(t, err) // because of space.
@@ -1329,9 +1348,9 @@ func TestParseIRIRefSpace(t *testing.T) {
 
 func TestParseIRIRefInvalidChar(t *testing.T) {
 	query := `{
-		me(id:<http://helloworld.com/how/are/^you>) {
-                }
-              }`
+		me(id: <http://helloworld.com/how/are/^you>) {
+		}
+	      }`
 
 	_, err := Parse(query)
 	require.Error(t, err) // because of ^
