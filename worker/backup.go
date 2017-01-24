@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/boltdb/bolt"
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
@@ -123,46 +124,47 @@ func backup(gid uint32, bdir string) error {
 	}
 
 	// Iterate over rocksdb.
-	it := pstore.NewIterator()
-	defer it.Close()
 	var lastPred string
-	for it.SeekToFirst(); it.Valid(); {
-		key := it.Key().Data()
-		pk := x.Parse(key)
+	pstore.View(func(tx *bolt.Tx) error {
+		c := tx.Bucket([]byte("data")).Cursor()
 
-		if pk.IsIndex() {
-			// Seek to the end of index keys.
-			it.Seek(pk.SkipRangeOfSameType())
-			continue
-		}
-		if pk.IsReverse() {
-			// Seek to the end of reverse keys.
-			it.Seek(pk.SkipRangeOfSameType())
-			continue
-		}
-		if pk.Attr == "_uid_" {
-			// Skip the UID mappings.
-			it.Seek(pk.SkipPredicate())
-			continue
-		}
+		for key, v := c.First(); key != nil; key, v = c.Next() {
+			pk := x.Parse(key)
 
-		x.AssertTrue(pk.IsData())
-		pred, uid := pk.Attr, pk.Uid
-		if pred != lastPred && group.BelongsTo(pred) != gid {
-			it.Seek(pk.SkipPredicate())
-			continue
-		}
+			if pk.IsIndex() {
+				// Seek to the end of index keys.
+				c.Seek(pk.SkipRangeOfSameType())
+				continue
+			}
+			if pk.IsReverse() {
+				// Seek to the end of reverse keys.
+				c.Seek(pk.SkipRangeOfSameType())
+				continue
+			}
+			if pk.Attr == "_uid_" {
+				// Skip the UID mappings.
+				c.Seek(pk.SkipPredicate())
+				continue
+			}
 
-		prefix := fmt.Sprintf("<%#x> <%s> ", uid, pred)
-		pl := &types.PostingList{}
-		x.Check(pl.Unmarshal(it.Value().Data()))
-		chkv <- kv{
-			prefix: prefix,
-			list:   pl,
+			x.AssertTrue(pk.IsData())
+			pred, uid := pk.Attr, pk.Uid
+			if pred != lastPred && group.BelongsTo(pred) != gid {
+				c.Seek(pk.SkipPredicate())
+				continue
+			}
+
+			prefix := fmt.Sprintf("<%#x> <%s> ", uid, pred)
+			pl := &types.PostingList{}
+			x.Check(pl.Unmarshal(v))
+			chkv <- kv{
+				prefix: prefix,
+				list:   pl,
+			}
+			lastPred = pred
 		}
-		lastPred = pred
-		it.Next()
-	}
+		return nil
+	})
 
 	close(chkv) // We have stopped output to chkv.
 	wg.Wait()   // Wait for numBackupRoutines to finish.

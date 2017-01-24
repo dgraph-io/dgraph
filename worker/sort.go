@@ -1,8 +1,11 @@
 package worker
 
 import (
+	"bytes"
+
 	"golang.org/x/net/context"
 
+	"github.com/boltdb/bolt"
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/schema"
@@ -105,45 +108,51 @@ func processSort(ts *task.Sort) (*task.SortResult, error) {
 		out[i].ulist = &task.List{Uids: []uint64{}}
 	}
 
-	// Iterate over every bucket / token.
-	it := pstore.NewIterator()
-	defer it.Close()
-	pk := x.Parse(x.IndexKey(attr, ""))
-	indexPrefix := pk.IndexPrefix()
+	if err := pstore.View(func(tx *bolt.Tx) error {
+		c := tx.Bucket([]byte("data")).Cursor()
 
-	if !ts.Desc {
-		it.Seek(indexPrefix)
-	} else {
-		it.Seek(pk.SkipRangeOfSameType())
-		if it.Valid() {
-			it.Prev()
+		// Iterate over every bucket / token.
+		pk := x.Parse(x.IndexKey(attr, ""))
+		indexPrefix := pk.IndexPrefix()
+
+		var k, v []byte
+		if !ts.Desc {
+			k, v = c.Seek(indexPrefix)
 		} else {
-			it.SeekToLast()
+			k, v = c.Seek(pk.SkipRangeOfSameType())
+			if k != nil {
+				k, v = c.Prev()
+			} else {
+				k, v = c.Last()
+			}
 		}
-	}
 
-BUCKETS:
+	BUCKETS:
 
-	for it.ValidForPrefix(indexPrefix) {
-		k := x.Parse(it.Key().Data())
-		x.AssertTrue(k != nil)
-		x.AssertTrue(k.IsIndex())
-		token := k.Term
+		for k, v = k, v; k != nil && bytes.HasPrefix(k, indexPrefix); k, v = c.Next() {
+			key := x.Parse(k)
+			x.AssertTrue(key != nil)
+			x.AssertTrue(key.IsIndex())
+			token := key.Term
 
-		err := intersectBucket(ts, attr, token, out)
-		switch err {
-		case errDone:
-			break BUCKETS
-		case errContinue:
-			// Continue iterating over tokens.
-		default:
-			return &emptySortResult, err
+			err := intersectBucket(ts, attr, token, out)
+			switch err {
+			case errDone:
+				break BUCKETS
+			case errContinue:
+				// Continue iterating over tokens.
+			default:
+				return err
+			}
+			if ts.Desc {
+				c.Prev()
+			} else {
+				c.Next()
+			}
 		}
-		if ts.Desc {
-			it.Prev()
-		} else {
-			it.Next()
-		}
+		return nil
+	}); err != nil {
+		return &emptySortResult, err
 	}
 
 	r := new(task.SortResult)

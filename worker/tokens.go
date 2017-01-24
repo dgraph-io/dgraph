@@ -1,6 +1,9 @@
 package worker
 
 import (
+	"bytes"
+
+	"github.com/boltdb/bolt"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -15,39 +18,42 @@ func getTokens(funcArgs []string) ([]string, error) {
 
 // getInequalityTokens gets tokens geq / leq compared to given token.
 func getInequalityTokens(attr, ineqValueToken string, f string) ([]string, error) {
-	it := pstore.NewIterator()
-	defer it.Close()
-	it.Seek(x.IndexKey(attr, ineqValueToken))
-
-	hit := it.Value() != nil && it.Value().Size() > 0
-	if f == "eq" {
-		if hit {
-			return []string{ineqValueToken}, nil
-		}
-		return []string{}, nil
-	}
-
 	var out []string
-	if hit {
-		out = []string{ineqValueToken}
-	}
+	pstore.View(func(tx *bolt.Tx) error {
+		c := tx.Bucket([]byte("data")).Cursor()
+		k, v := c.Seek(x.IndexKey(attr, ineqValueToken))
 
-	indexPrefix := x.ParsedKey{Attr: attr}.IndexPrefix()
-	isGeqOrGt := f == "geq" || f == "gt"
-
-	for {
-		if isGeqOrGt {
-			it.Next()
-		} else {
-			it.Prev()
-		}
-		if !it.ValidForPrefix(indexPrefix) {
-			break
+		hit := v != nil && len(v) > 0
+		if f == "eq" {
+			if hit {
+				out = []string{ineqValueToken}
+				return nil
+			}
+			return nil
 		}
 
-		k := x.Parse(it.Key().Data())
-		x.AssertTrue(k != nil)
-		out = append(out, k.Term)
-	}
+		if hit {
+			out = []string{ineqValueToken}
+		}
+
+		indexPrefix := x.ParsedKey{Attr: attr}.IndexPrefix()
+		isGeqOrGt := f == "geq" || f == "gt"
+
+		for {
+			if isGeqOrGt {
+				c.Next()
+			} else {
+				c.Prev()
+			}
+			if k == nil || !bytes.HasPrefix(k, indexPrefix) {
+				break
+			}
+
+			pk := x.Parse(k)
+			x.AssertTrue(pk != nil)
+			out = append(out, pk.Term)
+		}
+		return nil
+	})
 	return out, nil
 }

@@ -42,6 +42,7 @@ import (
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc"
 
+	"github.com/boltdb/bolt"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
@@ -49,7 +50,6 @@ import (
 	"github.com/dgraph-io/dgraph/query/graph"
 	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/schema"
-	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/worker"
@@ -734,11 +734,9 @@ func main() {
 	x.Init()
 	checkFlagsAndInitDirs()
 
-	// All the writes to posting store should be synchronous. We use batched writers
-	// for posting lists, so the cost of sync writes is amortized.
-	ps, err := store.NewSyncStore(*postingDir)
-	x.Checkf(err, "Error initializing postings store")
-	defer ps.Close()
+	db, err := bolt.Open("dgraph.db", 0600, nil)
+	x.Check(err)
+	defer db.Close()
 
 	if len(*schemaFile) > 0 {
 		err = schema.Parse(*schemaFile)
@@ -746,8 +744,8 @@ func main() {
 	}
 	// Posting will initialize index which requires schema. Hence, initialize
 	// schema before calling posting.Init().
-	posting.Init(ps)
-	worker.Init(ps)
+	posting.Init(db)
+	worker.Init(db)
 	x.Check(group.ParseGroupConfig(*gconf))
 
 	// Setup external communication.

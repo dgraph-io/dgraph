@@ -25,7 +25,7 @@ import (
 	"net"
 	"sync"
 
-	"github.com/dgraph-io/dgraph/store"
+	"github.com/boltdb/bolt"
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
@@ -36,10 +36,10 @@ var (
 		"Port used by worker for internal communication.")
 	backupPath = flag.String("backup", "backup",
 		"Folder in which to store backups.")
-	pstore *store.Store
+	pstore *bolt.DB
 )
 
-func Init(ps *store.Store) {
+func Init(ps *bolt.DB) {
 	pstore = ps
 }
 
@@ -90,5 +90,6 @@ func RunServer(bindall bool) {
 
 // StoreStats returns stats for data store.
 func StoreStats() string {
-	return pstore.GetStats()
+	return ""
+	//	return pstore.GetStats()
 }

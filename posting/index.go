@@ -17,12 +17,15 @@
 package posting
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
+	"fmt"
 	"math"
 	"strings"
 	"time"
 
+	"github.com/boltdb/bolt"
 	geom "github.com/twpayne/go-geom"
 	"golang.org/x/net/trace"
 
@@ -199,6 +202,22 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *task.DirectedEdge) e
 	return nil
 }
 
+func batchDelete(batch chan []byte, errCh chan error) {
+	if err := pstore.Batch(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte("data"))
+		for k := range batch {
+			if err := b.Delete(k); err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
+		errCh <- err
+		return
+	}
+	errCh <- nil
+}
+
 // RebuildIndex rebuilds index for a given attribute.
 func RebuildIndex(ctx context.Context, attr string) error {
 	x.AssertTruef(schema.IsIndexed(attr), "Attr %s not indexed", attr)
@@ -206,59 +225,56 @@ func RebuildIndex(ctx context.Context, attr string) error {
 	// Delete index entries from data store.
 	pk := x.ParsedKey{Attr: attr}
 	prefix := pk.IndexPrefix()
-	idxIt := pstore.NewIterator()
-	defer idxIt.Close()
+	batchCh := make(chan []byte, 1000)
+	errCh := make(chan error, 1)
+	go batchDelete(batchCh, errCh)
 
-	wb := pstore.NewWriteBatch()
-	defer wb.Destroy()
-	var batchSize int
-	for idxIt.Seek(prefix); idxIt.ValidForPrefix(prefix); idxIt.Next() {
-		key := idxIt.Key().Data()
-		batchSize += len(key)
-		wb.Delete(key)
+	pstore.View(func(tx *bolt.Tx) error {
+		c := tx.Bucket([]byte("data")).Cursor()
 
-		if batchSize >= maxBatchSize {
-			if err := pstore.WriteBatch(wb); err != nil {
-				return err
-			}
-			wb.Clear()
-			batchSize = 0
+		for k, _ := c.Seek(prefix); k != nil && bytes.HasPrefix(k, prefix); k, _ = c.Next() {
+			batchCh <- k
 		}
-	}
-	if wb.Count() > 0 {
-		if err := pstore.WriteBatch(wb); err != nil {
-			return err
-		}
-		wb.Clear()
+		return nil
+	})
+	close(batchCh)
+
+	if err := <-errCh; err != nil {
+		fmt.Println(err)
+		return err
 	}
 
 	// Add index entries to data store.
 	edge := task.DirectedEdge{Attr: attr}
 	prefix = pk.DataPrefix()
-	it := pstore.NewIterator()
-	defer it.Close()
 	var pl types.PostingList
-	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
-		pki := x.Parse(it.Key().Data())
-		edge.Entity = pki.Uid
-		x.Check(pl.Unmarshal(it.Value().Data()))
 
-		// Check last entry for value.
-		if len(pl.Postings) == 0 {
-			continue
-		}
-		p := pl.Postings[len(pl.Postings)-1]
-		if p.Uid != math.MaxUint64 {
-			continue
-		}
+	pstore.View(func(tx *bolt.Tx) error {
+		c := tx.Bucket([]byte("data")).Cursor()
 
-		// Add index entries based on p.
-		val := types.Val{
-			Value: p.Value,
-			Tid:   types.TypeID(p.ValType),
+		for k, v := c.Seek(prefix); k != nil && bytes.HasPrefix(k, prefix); k, v = c.Next() {
+			pki := x.Parse(k)
+			edge.Entity = pki.Uid
+			x.Check(pl.Unmarshal(v))
+
+			// Check last entry for value.
+			if len(pl.Postings) == 0 {
+				continue
+			}
+			p := pl.Postings[len(pl.Postings)-1]
+			if p.Uid != math.MaxUint64 {
+				continue
+			}
+
+			// Add index entries based on p.
+			val := types.Val{
+				Value: p.Value,
+				Tid:   types.TypeID(p.ValType),
+			}
+			addIndexMutations(ctx, &edge, val, task.DirectedEdge_SET)
 		}
-		addIndexMutations(ctx, &edge, val, task.DirectedEdge_SET)
-	}
+		return nil
+	})
 	return nil
 }
 
