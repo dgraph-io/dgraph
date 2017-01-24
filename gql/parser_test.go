@@ -1302,7 +1302,8 @@ func TestParseIRIRef(t *testing.T) {
 	query := `{
 		me(id: <http://helloworld.com/how/are/you>) {
 			<http://verygood.com/what/about/you>
-			friends @filter(allof(<http://verygood.com/what/about/you>, "good better bad")){
+			friends @filter(allof(<http://verygood.com/what/about/you>,
+				"good better bad")){
 				name
 			}
 			gender,age
@@ -1319,11 +1320,13 @@ func TestParseIRIRef(t *testing.T) {
 }
 
 func TestParseIRIRef2(t *testing.T) {
-	require.NoError(t, schema.ParseBytes([]byte("scalar <http://helloworld.com/how/are/you>:string @index")))
+	require.NoError(t, schema.ParseBytes(
+		[]byte("scalar <http://helloworld.com/how/are/you>:string @index")))
 	query := `{
 		me(anyof(<http://helloworld.com/how/are/you>, "good better bad")) {
 			<http://verygood.com/what/about/you>
-			friends @filter(allof(<http://verygood.com/what/about/you>, "good better bad")){
+			friends @filter(allof(<http://verygood.com/what/about/you>,
+				"good better bad")){
 				name
 			}
 		}

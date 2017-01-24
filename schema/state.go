@@ -291,7 +291,8 @@ L:
 			l.Backup()
 			break L
 		default:
-			return l.Errorf("Invalid schema. Unexpected %s", l.Input[l.Start:l.Pos])
+			return l.Errorf("Invalid schema. Unexpected %s and %v",
+				l.Input[l.Start:l.Pos], r)
 		}
 	}
 
