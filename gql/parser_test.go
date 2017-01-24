@@ -1188,7 +1188,7 @@ func TestParseCountAsFuncMultiple(t *testing.T) {
 }
 
 func TestParseCountAsFuncMultipleError(t *testing.T) {
-	schema.ParseBytes([]byte("scalar name:string @index"))
+	require.NoError(t, schema.ParseBytes([]byte("scalar name:string @index")))
 	query := `{
 		me(id:1) {
 			count(friends, relatives
@@ -1296,6 +1296,69 @@ func TestParseGenerator(t *testing.T) {
 `
 	_, err := Parse(query)
 	require.NoError(t, err)
+}
+
+func TestParseIRIRef(t *testing.T) {
+	query := `{
+		me(id: <http://helloworld.com/how/are/you>) {
+			<http://verygood.com/what/about/you>
+			friends @filter(allof(<http://verygood.com/what/about/you>,
+				"good better bad")){
+				name
+			}
+			gender,age
+			hometown
+		}
+	}`
+
+	gq, err := Parse(query)
+	require.NoError(t, err)
+	require.Equal(t, 5, len(gq.Query[0].Children))
+	require.Equal(t, "http://verygood.com/what/about/you", gq.Query[0].Children[0].Attr)
+	require.Equal(t, `(allof "http://verygood.com/what/about/you" "good better bad")`,
+		gq.Query[0].Children[1].Filter.debugString())
+}
+
+func TestParseIRIRef2(t *testing.T) {
+	require.NoError(t, schema.ParseBytes(
+		[]byte("scalar <http://helloworld.com/how/are/you>:string @index")))
+	query := `{
+		me(anyof(<http://helloworld.com/how/are/you>, "good better bad")) {
+			<http://verygood.com/what/about/you>
+			friends @filter(allof(<http://verygood.com/what/about/you>,
+				"good better bad")){
+				name
+			}
+		}
+	}`
+
+	gq, err := Parse(query)
+	require.NoError(t, err)
+	require.Equal(t, 2, len(gq.Query[0].Children))
+	require.Equal(t, "http://verygood.com/what/about/you", gq.Query[0].Children[0].Attr)
+	require.Equal(t, `(allof "http://verygood.com/what/about/you" "good better bad")`,
+		gq.Query[0].Children[1].Filter.debugString())
+	require.Equal(t, "http://helloworld.com/how/are/you", gq.Query[0].Func.Attr)
+}
+
+func TestParseIRIRefSpace(t *testing.T) {
+	query := `{
+		me(id: <http://helloworld.com/how/are/ you>) {
+		}
+	      }`
+
+	_, err := Parse(query)
+	require.Error(t, err) // because of space.
+}
+
+func TestParseIRIRefInvalidChar(t *testing.T) {
+	query := `{
+		me(id: <http://helloworld.com/how/are/^you>) {
+		}
+	      }`
+
+	_, err := Parse(query)
+	require.Error(t, err) // because of ^
 }
 
 func TestParseGeoJson(t *testing.T) {

@@ -16,7 +16,12 @@
 
 package schema
 
-import "github.com/dgraph-io/dgraph/lex"
+import (
+	"errors"
+	"fmt"
+
+	"github.com/dgraph-io/dgraph/lex"
+)
 
 const (
 	leftCurl   = '{'
@@ -24,6 +29,8 @@ const (
 	leftRound  = '('
 	rightRound = ')'
 	collon     = ':'
+	lsThan     = '<'
+	grThan     = '>'
 )
 
 // Constants representing type of different graphql lexed items.
@@ -96,7 +103,7 @@ func lexStart(l *lex.Lexer) lex.StateFn {
 func lexScalar(l *lex.Lexer) lex.StateFn {
 	for {
 		switch r := l.Next(); {
-		case isNameBegin(r):
+		case r == lsThan || isNameBegin(r):
 			l.Backup()
 			return lexScalarPair
 		case r == leftRound:
@@ -117,7 +124,7 @@ func lexScalarBlock(l *lex.Lexer) lex.StateFn {
 		case r == ')':
 			l.Emit(itemRightRound)
 			return lexText
-		case isNameBegin(r):
+		case r == lsThan || isNameBegin(r):
 			l.Backup()
 			return lexScalarPair1
 		case isSpace(r) || isEndOfLine(r):
@@ -135,19 +142,12 @@ func lexObject(l *lex.Lexer) lex.StateFn {
 			return lexText
 		case isSpace(r) || isEndOfLine(r):
 			l.Ignore()
-		case isNameBegin(r):
-			{
-				for {
-					r := l.Next()
-					if isNameSuffix(r) {
-						continue // absorb
-					}
-					l.Backup()
-					l.Emit(itemObject)
-					break
-				}
-				return lexObjectBlock
+		case r == lsThan || isNameBegin(r):
+			l.Backup()
+			if err := lexName(l, itemObject); err != nil {
+				return l.Errorf("Invalid schema. Error: ", err.Error())
 			}
+			return lexObjectBlock
 		default:
 			return l.Errorf("Invalid schema. Unexpected %s", l.Input[l.Start:l.Pos])
 		}
@@ -164,7 +164,8 @@ func lexObjectBlock(l *lex.Lexer) lex.StateFn {
 		case r == rightCurl:
 			l.Emit(itemRightCurl)
 			return lexText
-		case isNameBegin(r):
+		case r == '<' || isNameBegin(r):
+			l.Backup()
 			return lexObjectPair
 		default:
 			return l.Errorf("Invalid schema. Unexpected %s", l.Input[l.Start:l.Pos])
@@ -173,15 +174,8 @@ func lexObjectBlock(l *lex.Lexer) lex.StateFn {
 }
 
 func lexScalarPair(l *lex.Lexer) lex.StateFn {
-	for {
-		r := l.Next()
-		if isNameSuffix(r) {
-			continue // absorb
-		}
-		l.Backup()
-		// l.Pos would be index of the end of operation type + 1.
-		l.Emit(itemScalarName)
-		break
+	if err := lexName(l, itemScalarName); err != nil {
+		return l.Errorf("Invalid schema. Error : %s", err.Error())
 	}
 
 L:
@@ -219,7 +213,7 @@ L1:
 		switch r := l.Next(); {
 		case isSpace(r):
 			l.Ignore()
-		case isEndOfLine(r):
+		case r == lex.EOF || isEndOfLine(r):
 			break L1
 		case r == '@':
 			l.Emit(itemAt)
@@ -248,7 +242,12 @@ L1:
 	return lexText
 }
 
-func lexScalarPair1(l *lex.Lexer) lex.StateFn {
+func lexName(l *lex.Lexer, styp lex.ItemType) error {
+	r := l.Next()
+	if r == lsThan {
+		return lexIRIRef(l, styp)
+	}
+
 	for {
 		r := l.Next()
 		if isNameSuffix(r) {
@@ -256,8 +255,28 @@ func lexScalarPair1(l *lex.Lexer) lex.StateFn {
 		}
 		l.Backup()
 		// l.Pos would be index of the end of operation type + 1.
-		l.Emit(itemScalarName)
+		l.Emit(styp)
 		break
+	}
+	return nil
+}
+
+// assumes '<' is already lexed.
+func lexIRIRef(l *lex.Lexer, styp lex.ItemType) error {
+	l.Ignore() // ignore '<'
+	l.AcceptRunRec(isIRIChar)
+	l.Emit(styp) // will emit without '<' and '>'
+	r := l.Next()
+	if r != grThan {
+		return errors.New(fmt.Sprintf("Unexpected character %v. Expected '>'.", r))
+	}
+	l.Ignore() // ignore '>'
+	return nil
+}
+
+func lexScalarPair1(l *lex.Lexer) lex.StateFn {
+	if err := lexName(l, itemScalarName); err != nil {
+		return l.Errorf("Invalid schema. Error : %s", err.Error())
 	}
 
 L:
@@ -272,7 +291,8 @@ L:
 			l.Backup()
 			break L
 		default:
-			return l.Errorf("Invalid schema. Unexpected %s", l.Input[l.Start:l.Pos])
+			return l.Errorf("Invalid schema. Unexpected %s and %v",
+				l.Input[l.Start:l.Pos], r)
 		}
 	}
 
@@ -321,14 +341,8 @@ L1:
 }
 
 func lexObjectPair(l *lex.Lexer) lex.StateFn {
-	for {
-		r := l.Next()
-		if isNameSuffix(r) {
-			continue // absorb
-		}
-		l.Backup()
-		l.Emit(itemObjectName)
-		break
+	if err := lexName(l, itemObjectName); err != nil {
+		return l.Errorf("Invalid schema. Error: ", err.Error())
 	}
 
 L:
@@ -428,4 +442,55 @@ func isSpace(r rune) bool {
 // isEndOfLine returns true if the rune is a Linefeed or a Carriage return.
 func isEndOfLine(r rune) bool {
 	return r == '\u000A' || r == '\u000D'
+}
+
+// IRIREF ::= '<' ([^#x00-#x20<>"{}|^`\] | UCHAR)* '>'
+func isIRIChar(r rune, l *lex.Lexer) bool {
+	if r <= 32 { // no chars b/w 0x00 to 0x20 inclusive
+		return false
+	}
+	switch r {
+	case '<':
+	case '>':
+	case '"':
+	case '{':
+	case '}':
+	case '|':
+	case '^':
+	case '`':
+	case '\\':
+		r2 := l.Next()
+		if r2 != 'u' && r2 != 'U' {
+			l.Backup()
+			return false
+		}
+		return hasUChars(r2, l)
+	default:
+		return true
+	}
+	return false
+}
+
+// UCHAR ::= '\u' HEX HEX HEX HEX | '\U' HEX HEX HEX HEX HEX HEX HEX HEX
+func hasUChars(r rune, l *lex.Lexer) bool {
+	if r != 'u' && r != 'U' {
+		return false
+	}
+	times := 4
+	if r == 'U' {
+		times = 8
+	}
+	return times == l.AcceptRunTimes(isHex, times)
+}
+
+// HEX ::= [0-9] | [A-F] | [a-f]
+func isHex(r rune) bool {
+	switch {
+	case r >= '0' && r <= '9':
+	case r >= 'a' && r <= 'f':
+	case r >= 'A' && r <= 'F':
+	default:
+		return false
+	}
+	return true
 }
