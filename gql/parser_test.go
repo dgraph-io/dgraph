@@ -1327,6 +1327,16 @@ func TestParseIRIRefSpace(t *testing.T) {
 	require.Error(t, err) // because of space.
 }
 
+func TestParseIRIRefInvalidChar(t *testing.T) {
+	query := `{
+		me(id:<http://helloworld.com/how/are/^you>) {
+                }
+              }`
+
+	_, err := Parse(query)
+	require.Error(t, err) // because of ^
+}
+
 func TestParseGeoJson(t *testing.T) {
 	query := `
 	mutation {
