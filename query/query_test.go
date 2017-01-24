@@ -411,6 +411,32 @@ func TestUseVarsFilterVarReuse2(t *testing.T) {
 		js)
 }
 
+func TestUseVarsFilterVarReuse3(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			var(id:0x01) {
+				fr AS friend(first:2, offset:2, order: dob)
+			}
+
+			friend(id:0x01) {
+				L as friend {
+					friend {
+						name
+						friend @filter(id(L) && id(fr)) {
+							name
+						}
+					}
+				}
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"friend":[{"friend":[{"friend":[{"name":"Michonne", "friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"}]}]}, {"friend":[{"name":"Glenn Rhee"}]}]}]}`,
+		js)
+}
+
 func TestUseVarsFilterMultiId(t *testing.T) {
 	populateGraph(t)
 	query := `

@@ -553,7 +553,7 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 				continue
 			}
 
-			fillUpVariables(sg, doneVars)
+			sg.recursiveFillVars(doneVars)
 			hasExecuted[idx] = true
 			idxList = append(idxList, idx)
 			numQueriesDone++
@@ -582,17 +582,8 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 				continue
 			}
 
-			var noCascade bool
-		L:
-			for _, def := range res.QueryVars[idx].Defines {
-				for _, need := range res.QueryVars[idx].Needs {
-					if def == need {
-						noCascade = true
-						break L
-					}
-				}
-			}
-			populateVarMap(sg, noCascade, doneVars)
+			isCascade := shouldCascade(res, idx)
+			populateVarMap(sg, doneVars, isCascade)
 		}
 	}
 
@@ -606,13 +597,26 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 
 	return sgl, nil
 }
+func shouldCascade(res gql.Result, idx int) bool {
+	for _, def := range res.QueryVars[idx].Defines {
+		for _, need := range res.QueryVars[idx].Needs {
+			if def == need {
+				return false
+			}
+		}
+	}
+	return true
+}
 
 // TODO(Ashwin): Benchmark this function. Map implementation might be slow.
-func populateVarMap(sg *SubGraph, noCascade bool, doneVars map[string]*task.List) {
+func populateVarMap(sg *SubGraph, doneVars map[string]*task.List, isCascade bool) {
 	// Filter out UIDs that don't have atleast one UID in every child.
 	excluded := make(map[uint64]struct{})
 	for _, child := range sg.Children {
-		populateVarMap(child, noCascade, doneVars)
+		populateVarMap(child, doneVars, isCascade)
+		if !isCascade {
+			continue
+		}
 		for i := 0; i < len(child.uidMatrix); i++ {
 			if len(child.values[i].Val) == 0 && len(child.uidMatrix[i].Uids) == 0 {
 				excluded[sg.DestUIDs.Uids[i]] = struct{}{}
@@ -620,7 +624,7 @@ func populateVarMap(sg *SubGraph, noCascade bool, doneVars map[string]*task.List
 		}
 	}
 
-	if noCascade {
+	if !isCascade {
 		goto AssignStep
 	}
 
@@ -642,24 +646,25 @@ func populateVarMap(sg *SubGraph, noCascade bool, doneVars map[string]*task.List
 				return !ok
 			})
 	}
+
 AssignStep:
 	if sg.Params.Var != "" {
 		doneVars[sg.Params.Var] = sg.DestUIDs
 	}
 }
 
-func fillUpVariables(sg *SubGraph, doneVars map[string]*task.List) {
-	sg.fillVariable(doneVars)
+func (sg *SubGraph) recursiveFillVars(doneVars map[string]*task.List) {
+	sg.fillVars(doneVars)
 	for _, child := range sg.Children {
-		fillUpVariables(child, doneVars)
+		child.recursiveFillVars(doneVars)
 	}
 	for _, fchild := range sg.Filters {
-		fillUpVariables(fchild, doneVars)
+		fchild.recursiveFillVars(doneVars)
 	}
 }
 
-func (sg *SubGraph) fillVariable(mp map[string]*task.List) {
-	lists := make([]*task.List, 0)
+func (sg *SubGraph) fillVars(mp map[string]*task.List) {
+	lists := make([]*task.List, 0, 3)
 	if sg.DestUIDs != nil {
 		lists = append(lists, sg.DestUIDs)
 	}
@@ -669,7 +674,6 @@ func (sg *SubGraph) fillVariable(mp map[string]*task.List) {
 		}
 	}
 	sg.DestUIDs = algo.MergeSorted(lists)
-
 }
 
 // ProcessGraph processes the SubGraph instance accumulating result for the query
@@ -692,7 +696,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		if len(sg.SrcFunc) > 0 && sg.SrcFunc[0] == "id" {
 			// If its an id() filter, we just have to intersect the SrcUIDs with DestUIDs
 			// and return.
-			sg.fillVariable(sg.Params.ParentVars)
+			sg.fillVars(sg.Params.ParentVars)
 			algo.IntersectWith(sg.DestUIDs, sg.SrcUIDs)
 			rch <- nil
 			return
