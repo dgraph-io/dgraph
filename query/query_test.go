@@ -138,6 +138,7 @@ func populateGraph(t *testing.T) {
 	addEdgeToUID(t, "friend", 1, 31)
 	addEdgeToUID(t, "friend", 1, 101)
 	addEdgeToUID(t, "friend", 31, 24)
+	addEdgeToUID(t, "friend", 23, 1)
 
 	// Now let's add a few properties for the main user.
 	addEdgeToValue(t, "name", 1, "Michonne")
@@ -340,7 +341,7 @@ func TestUseVarsMultiCascade(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"name":"Glenn Rhee"}, {"name":"Andrea"}]}`,
+		`{"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"}, {"name":"Andrea"}]}`,
 		js)
 }
 
@@ -368,6 +369,76 @@ func TestUseVarsMultiOrder(t *testing.T) {
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
 		`{"friend1":[{"name":"Daryl Dixon"}, {"name":"Andrea"}],"friend2":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"}]}`,
+		js)
+}
+
+func TestUseVarsFilterVarReuse1(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			friend(id:0x01) {
+				friend {
+					L as friend {
+						name
+						friend @filter(id(L)) {
+							name
+						}
+					}
+				}
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"friend":[{"friend":[{"friend":[{"name":"Michonne", "friend":[{"name":"Glenn Rhee"}]}]}, {"friend":[{"name":"Glenn Rhee"}]}]}]}`,
+		js)
+}
+
+func TestUseVarsFilterVarReuse2(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			friend(anyof(name, "Michonne Andrea Glenn")) {
+				friend {
+				 L as friend {
+					 name
+					 friend @filter(id(L)) {
+						name
+					}
+				}
+			}
+		}
+	}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"friend":[{"friend":[{"friend":[{"name":"Michonne", "friend":[{"name":"Glenn Rhee"}]}]}, {"friend":[{"name":"Glenn Rhee"}]}]}]}`,
+		js)
+}
+
+func TestUseVarsFilterVarReuse3(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			var(id:0x01) {
+				fr AS friend(first:2, offset:2, order: dob)
+			}
+
+			friend(id:0x01) {
+				L as friend {
+					friend {
+						name
+						friend @filter(id(L) && id(fr)) {
+							name
+						}
+					}
+				}
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"friend":[{"friend":[{"friend":[{"name":"Michonne", "friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"}]}]}, {"friend":[{"name":"Glenn Rhee"}]}]}]}`,
 		js)
 }
 
@@ -436,7 +507,7 @@ func TestUseVarsCascade(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"name":"Andrea"}]}`,
+		`{"me":[{"name":"Rick Grimes"}, {"name":"Andrea"} ]}`,
 		js)
 }
 
