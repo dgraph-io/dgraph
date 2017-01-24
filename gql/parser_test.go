@@ -1188,7 +1188,7 @@ func TestParseCountAsFuncMultiple(t *testing.T) {
 }
 
 func TestParseCountAsFuncMultipleError(t *testing.T) {
-	schema.ParseBytes([]byte("scalar name:string @index"))
+	require.NoError(t, schema.ParseBytes([]byte("scalar name:string @index")))
 	query := `{
 		me(id:1) {
 			count(friends, relatives
@@ -1319,6 +1319,7 @@ func TestParseIRIRef(t *testing.T) {
 }
 
 func TestParseIRIRef2(t *testing.T) {
+	require.NoError(t, schema.ParseBytes([]byte("scalar <http://helloworld.com/how/are/you>:string @index")))
 	query := `{
 		me(anyof(<http://helloworld.com/how/are/you>, "good better bad")) {
 			<http://verygood.com/what/about/you>
@@ -1330,10 +1331,11 @@ func TestParseIRIRef2(t *testing.T) {
 
 	gq, err := Parse(query)
 	require.NoError(t, err)
-	require.Equal(t, 3, len(gq.Query[0].Children))
+	require.Equal(t, 2, len(gq.Query[0].Children))
 	require.Equal(t, "http://verygood.com/what/about/you", gq.Query[0].Children[0].Attr)
 	require.Equal(t, `(allof "http://verygood.com/what/about/you" "good better bad")`,
 		gq.Query[0].Children[1].Filter.debugString())
+	require.Equal(t, "http://helloworld.com/how/are/you", gq.Query[0].Func.Attr)
 }
 
 func TestParseIRIRefSpace(t *testing.T) {

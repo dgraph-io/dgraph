@@ -142,8 +142,8 @@ func TestVariablesDefault(t *testing.T) {
 func TestIRIRef(t *testing.T) {
 	input := `
 	query testQuery {
-		me(_xid_: <http://helloworld.com/how/are/you>) {
-                     <http://verygood.com/what/about/you>
+		me(id : <http://helloworld.com/how/are/you>) {
+		        <http://verygood.com/what/about/you>
 		}
 	}`
 	l := lex.NewLexer(input).Run(lexText)

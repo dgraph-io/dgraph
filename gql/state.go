@@ -564,9 +564,8 @@ func isIRIChar(r rune, l *lex.Lexer) bool {
 		if r2 != 'u' && r2 != 'U' {
 			l.Backup()
 			return false
-		} else {
-			return hasUChars(r2, l)
 		}
+		return hasUChars(r2, l)
 	default:
 		return true
 	}

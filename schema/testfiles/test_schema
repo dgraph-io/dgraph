@@ -1,8 +1,9 @@
- scalar age:int
+scalar age:int
 
 scalar (
   name: string
   address: string
+  <http://scalar.com/helloworld/> : string
   )
 
 type  Person {
@@ -23,4 +24,9 @@ films: Film
 type Film {
 name: string
 budget: int
+}
+
+type <http://film.com/> {
+     <http://film.com/name>: string
+     <http://film.com/budget>: int
 }
