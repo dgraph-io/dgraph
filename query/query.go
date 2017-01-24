@@ -522,8 +522,11 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 	hasExecuted := make([]bool, len(sgl))
 	numQueriesDone := 0
 
+	// canExecute returns true if a query block is ready to execute with all the variables
+	// that it depends on are already populated or are defined in the same block.
 	canExecute := func(idx int) bool {
 		for _, v := range res.QueryVars[idx].Needs {
+			// here we check if this block defines the variable v.
 			var selfDep bool
 			for _, vd := range res.QueryVars[idx].Defines {
 				if v == vd {
@@ -531,6 +534,8 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 					break
 				}
 			}
+			// The variable should be defined in this block or should have already been
+			// populated by some other block, otherwise we are not ready to execute yet.
 			if _, ok := doneVars[v]; !ok && !selfDep {
 				return false
 			}
@@ -597,6 +602,9 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 
 	return sgl, nil
 }
+
+// shouldCascade returns true if the query block is not self depenedent and we should
+// remove the uids from the bottom up if the children are empty.
 func shouldCascade(res gql.Result, idx int) bool {
 	for _, def := range res.QueryVars[idx].Defines {
 		for _, need := range res.QueryVars[idx].Needs {
@@ -617,6 +625,9 @@ func populateVarMap(sg *SubGraph, doneVars map[string]*task.List, isCascade bool
 		if !isCascade {
 			continue
 		}
+		// If the length of child UID list is zero and it has no valid value, then the
+		// current UID should be removed form this level; which would be stored in excluded
+		// map.
 		for i := 0; i < len(child.uidMatrix); i++ {
 			if len(child.values[i].Val) == 0 && len(child.uidMatrix[i].Uids) == 0 {
 				excluded[sg.DestUIDs.Uids[i]] = struct{}{}
@@ -799,6 +810,8 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		}
 	}
 
+	// If the current node defines a variable, we store it in the map and pass it on
+	// to the children later which might depend on it.
 	if sg.Params.Var != "" {
 		sg.Params.ParentVars[sg.Params.Var] = sg.DestUIDs
 	}
