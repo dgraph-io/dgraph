@@ -991,6 +991,45 @@ func TestParseFilter_op(t *testing.T) {
 	require.Equal(t, []string{"name"}, childAttrs(res.Query[0].Children[0]))
 	require.Equal(t, `(OR (a "a") (AND (b "a") (c "a")))`, res.Query[0].Children[0].Filter.debugString())
 }
+func TestParseFilter_opNot1(t *testing.T) {
+	query := `
+	query {
+		me(id:0x0a) {
+			friends @filter(not a("a")) {
+				name
+			}
+			gender,age
+			hometown
+		}
+	}
+`
+	res, err := Parse(query)
+	require.NoError(t, err)
+	require.NotNil(t, res.Query[0])
+	require.Equal(t, []string{"friends", "gender", "age", "hometown"}, childAttrs(res.Query[0]))
+	require.Equal(t, []string{"name"}, childAttrs(res.Query[0].Children[0]))
+	require.Equal(t, `(NOT (a "a"))`, res.Query[0].Children[0].Filter.debugString())
+}
+
+func TestParseFilter_opNot2(t *testing.T) {
+	query := `
+	query {
+		me(id:0x0a) {
+			friends @filter(not(a("a") or (b("a"))) and c("a")) {
+				name
+			}
+			gender,age
+			hometown
+		}
+	}
+`
+	res, err := Parse(query)
+	require.NoError(t, err)
+	require.NotNil(t, res.Query[0])
+	require.Equal(t, []string{"friends", "gender", "age", "hometown"}, childAttrs(res.Query[0]))
+	require.Equal(t, []string{"name"}, childAttrs(res.Query[0].Children[0]))
+	require.Equal(t, `(AND (NOT (OR (a "a") (b "a"))) (c "a"))`, res.Query[0].Children[0].Filter.debugString())
+}
 
 // Test operator precedence. Let brackets make or evaluates before and.
 func TestParseFilter_op2(t *testing.T) {

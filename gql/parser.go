@@ -101,8 +101,9 @@ var filterOpPrecedence map[string]int
 
 func init() {
 	filterOpPrecedence = map[string]int{
-		"&": 2,
-		"|": 1,
+		"&": 3,
+		"|": 2,
+		"!": 1,
 	}
 }
 
@@ -790,8 +791,10 @@ func (t *FilterTree) stringHelper(buf *bytes.Buffer) {
 		_, err = buf.WriteString("AND")
 	case "|":
 		_, err = buf.WriteString("OR")
-	case "(":
-		_, err = buf.WriteString("(")
+	case "!":
+		_, err = buf.WriteString("NOT")
+	//case "(":
+	//	_, err = buf.WriteString("(")
 	default:
 		err = x.Errorf("Unknown operator: %q", t.Op)
 	}
@@ -826,9 +829,14 @@ func (s *filterTreeStack) peek() *FilterTree {
 
 func evalStack(opStack, valueStack *filterTreeStack) {
 	topOp := opStack.pop()
-	topVal1 := valueStack.pop()
-	topVal2 := valueStack.pop()
-	topOp.Child = []*FilterTree{topVal2, topVal1}
+	if topOp.Op == "!" {
+		topVal := valueStack.pop()
+		topOp.Child = []*FilterTree{topVal}
+	} else {
+		topVal1 := valueStack.pop()
+		topVal2 := valueStack.pop()
+		topOp.Child = []*FilterTree{topVal2, topVal1}
+	}
 	valueStack.push(topOp)
 }
 
@@ -885,10 +893,12 @@ func parseFilter(it *lex.ItemIterator) (*FilterTree, error) {
 	for it.Next() {
 		item := it.Item()
 		lval := strings.ToLower(item.Val)
-		if lval == "and" || lval == "or" { // Handle operators.
+		if lval == "and" || lval == "or" || lval == "not" { // Handle operators.
 			op := "&"
 			if lval == "or" {
 				op = "|"
+			} else if lval == "not" {
+				op = "!"
 			}
 			opPred := filterOpPrecedence[op]
 			x.AssertTruef(opPred > 0, "Expected opPred > 0: %d", opPred)
@@ -937,7 +947,9 @@ func parseFilter(it *lex.ItemIterator) (*FilterTree, error) {
 				return nil, x.Errorf("Expected ) to terminate func definition")
 			}
 			valueStack.push(leaf)
-
+			if opStack.peek().Op == "!" {
+				evalStack(opStack, valueStack)
+			}
 		} else if item.Typ == itemLeftRound { // Just push to op stack.
 			opStack.push(&FilterTree{Op: "("})
 
@@ -953,6 +965,9 @@ func parseFilter(it *lex.ItemIterator) (*FilterTree, error) {
 			if opStack.empty() {
 				// The parentheses are balanced out. Let's break.
 				break
+			}
+			if opStack.peek().Op == "!" {
+				evalStack(opStack, valueStack)
 			}
 		} else {
 			return nil, x.Errorf("Unexpected item while parsing @filter: %v", item)
