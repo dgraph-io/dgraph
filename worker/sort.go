@@ -115,21 +115,21 @@ func processSort(ts *task.Sort) (*task.SortResult, error) {
 		pk := x.Parse(x.IndexKey(attr, ""))
 		indexPrefix := pk.IndexPrefix()
 
-		var k, v []byte
+		var k []byte
 		if !ts.Desc {
-			k, v = c.Seek(indexPrefix)
+			k, _ = c.Seek(indexPrefix)
 		} else {
-			k, v = c.Seek(pk.SkipRangeOfSameType())
+			k, _ = c.Seek(pk.SkipRangeOfSameType())
 			if k != nil {
-				k, v = c.Prev()
+				k, _ = c.Prev()
 			} else {
-				k, v = c.Last()
+				k, _ = c.Last()
 			}
 		}
 
 	BUCKETS:
 
-		for k, v = k, v; k != nil && bytes.HasPrefix(k, indexPrefix); k, v = c.Next() {
+		for ; k != nil && bytes.HasPrefix(k, indexPrefix); k, _ = c.Next() {
 			key := x.Parse(k)
 			x.AssertTrue(key != nil)
 			x.AssertTrue(key.IsIndex())
@@ -140,7 +140,7 @@ func processSort(ts *task.Sort) (*task.SortResult, error) {
 			case errDone:
 				break BUCKETS
 			case errContinue:
-				// Continue iterating over tokens.
+			// Continue iterating over tokens.
 			default:
 				return err
 			}
@@ -150,6 +150,7 @@ func processSort(ts *task.Sort) (*task.SortResult, error) {
 				c.Next()
 			}
 		}
+
 		return nil
 	}); err != nil {
 		return &emptySortResult, err
