@@ -270,7 +270,7 @@ func Convert(from Val, toID TypeID) (Val, error) {
 			}
 			val := binary.LittleEndian.Uint64(data)
 			tm := time.Unix(int64(val), 0)
-			vc := createDate(tm.Date())
+			vc := createDate(tm.UTC().Date())
 
 			switch toID {
 			case DateID:

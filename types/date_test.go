@@ -19,10 +19,13 @@ package types
 import (
 	"encoding/binary"
 	"math"
+	"os"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/dgraph-io/dgraph/x"
 )
 
 func TestConvertDateToBool(t *testing.T) {
@@ -173,4 +176,9 @@ func TestConvertDateTimeToDate(t *testing.T) {
 			t.Errorf("Converting time to date: Expected %v, got %v", tc.out, dst.Value)
 		}
 	}
+}
+
+func TestMain(m *testing.M) {
+	x.Init()
+	os.Exit(m.Run())
 }
