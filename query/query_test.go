@@ -428,7 +428,7 @@ func TestUseVarsFilterVarReuse3(t *testing.T) {
 				L as friend {
 					friend {
 						name
-						friend @filter(id(L) && id(fr)) {
+						friend @filter(id(L) and id(fr)) {
 							name
 						}
 					}
@@ -948,7 +948,7 @@ func TestToFastJSONFilterOrUID(t *testing.T) {
 			me(id:0x01) {
 				name
 				gender
-				friend @filter(anyof(name, "Andrea") || anyof(name, "Andrea Rhee")) {
+				friend @filter(anyof(name, "Andrea") or anyof(name, "Andrea Rhee")) {
 					_uid_
 					name
 				}
@@ -969,7 +969,7 @@ func TestToFastJSONFilterOrCount(t *testing.T) {
 			me(id:0x01) {
 				name
 				gender
-				count(friend @filter(anyof(name, "Andrea") || anyof(name, "Andrea Rhee")))
+				count(friend @filter(anyof(name, "Andrea") or anyof(name, "Andrea Rhee")))
 				friend @filter(anyof(name, "Andrea")) {
 					name
 				}
@@ -990,7 +990,7 @@ func TestToFastJSONFilterOrFirst(t *testing.T) {
 			me(id:0x01) {
 				name
 				gender
-				friend(first:2) @filter(anyof(name, "Andrea") || anyof(name, "Glenn SomethingElse") || anyof(name, "Daryl")) {
+				friend(first:2) @filter(anyof(name, "Andrea") or anyof(name, "Glenn SomethingElse") or anyof(name, "Daryl")) {
 					name
 				}
 			}
@@ -1010,7 +1010,7 @@ func TestToFastJSONFilterOrOffset(t *testing.T) {
 			me(id:0x01) {
 				name
 				gender
-				friend(offset:1) @filter(anyof(name, "Andrea") || anyof("name", "Glenn Rhee") || anyof("name", "Daryl Dixon")) {
+				friend(offset:1) @filter(anyof(name, "Andrea") or anyof("name", "Glenn Rhee") or anyof("name", "Daryl Dixon")) {
 					name
 				}
 			}
@@ -1210,7 +1210,7 @@ func TestToFastJSONFilterOrFirstOffset(t *testing.T) {
 			me(id:0x01) {
 				name
 				gender
-				friend(offset:1, first:1) @filter(anyof("name", "Andrea") || anyof("name", "SomethingElse Rhee") || anyof("name", "Daryl Dixon")) {
+				friend(offset:1, first:1) @filter(anyof("name", "Andrea") or anyof("name", "SomethingElse Rhee") or anyof("name", "Daryl Dixon")) {
 					name
 				}
 			}
@@ -1250,7 +1250,7 @@ func TestToFastJSONFilterOrFirstOffsetCount(t *testing.T) {
 			me(id:0x01) {
 				name
 				gender
-				count(friend(offset:1, first:1) @filter(anyof("name", "Andrea") || anyof("name", "SomethingElse Rhee") || anyof("name", "Daryl Dixon"))) 
+				count(friend(offset:1, first:1) @filter(anyof("name", "Andrea") or anyof("name", "SomethingElse Rhee") or anyof("name", "Daryl Dixon"))) 
 			}
 		}
 	`
@@ -1270,7 +1270,7 @@ func TestToFastJSONFilterOrFirstNegative(t *testing.T) {
 			me(id:0x01) {
 				name
 				gender
-				friend(first:-1, offset:0) @filter(anyof("name", "Andrea") || anyof("name", "Glenn Rhee") || anyof("name", "Daryl Dixon")) {
+				friend(first:-1, offset:0) @filter(anyof("name", "Andrea") or anyof("name", "Glenn Rhee") or anyof("name", "Daryl Dixon")) {
 					name
 				}
 			}
@@ -1283,6 +1283,63 @@ func TestToFastJSONFilterOrFirstNegative(t *testing.T) {
 		js)
 }
 
+func TestToFastJSONFilterNot1(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id:0x01) {
+				name
+				gender
+				friend @filter(not anyof("name", "Andrea rick")) {
+					name
+				}
+			}
+		}
+	`
+
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"gender":"female","name":"Michonne","friend":[{"name":"Glenn Rhee"},{"name":"Daryl Dixon"}]}]}`, js)
+}
+
+func TestToFastJSONFilterNot2(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id:0x01) {
+				name
+				gender
+				friend @filter(not anyof("name", "Andrea") and anyof(name, "Glenn Andrea")) {
+					name
+				}
+			}
+		}
+	`
+
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"gender":"female","name":"Michonne","friend":[{"name":"Glenn Rhee"}]}]}`, js)
+}
+
+func TestToFastJSONFilterNot3(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id:0x01) {
+				name
+				gender
+				friend @filter(not (anyof("name", "Andrea") or anyof(name, "Glenn Rick Andrea"))) {
+					name
+				}
+			}
+		}
+	`
+
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"gender":"female","name":"Michonne","friend":[{"name":"Daryl Dixon"}]}]}`, js)
+}
+
 func TestToFastJSONFilterAnd(t *testing.T) {
 	populateGraph(t)
 	query := `
@@ -1290,7 +1347,7 @@ func TestToFastJSONFilterAnd(t *testing.T) {
 			me(id:0x01) {
 				name
 				gender
-				friend @filter(anyof("name", "Andrea") && anyof("name", "SomethingElse Rhee")) {
+				friend @filter(anyof("name", "Andrea") and anyof("name", "SomethingElse Rhee")) {
 					name
 				}
 			}
@@ -1569,7 +1626,7 @@ func TestToProtoFilterOr(t *testing.T) {
 			me(id:0x01) {
 				name
 				gender
-				friend @filter(anyof("name", "Andrea") || anyof("name", "Glenn Rhee")) {
+				friend @filter(anyof("name", "Andrea") or anyof("name", "Glenn Rhee")) {
 					name
 				}
 			}
@@ -1638,7 +1695,7 @@ func TestToProtoFilterAnd(t *testing.T) {
 			me(id:0x01) {
 				name
 				gender
-				friend @filter(anyof("name", "Andrea") && anyof("name", "Glenn Rhee")) {
+				friend @filter(anyof("name", "Andrea") and anyof("name", "Glenn Rhee")) {
 					name
 				}
 			}
@@ -2347,7 +2404,7 @@ func TestGeneratorMultiRootFilter3(t *testing.T) {
 	populateGraph(t)
 	query := `
     {
-      me(anyof("name", "Michonne Rick Glenn")) @filter(anyof(name, "Glenn") && geq(dob, 1909-01-10)) {
+      me(anyof("name", "Michonne Rick Glenn")) @filter(anyof(name, "Glenn") and geq(dob, 1909-01-10)) {
         name
       }
     }

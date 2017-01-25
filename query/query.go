@@ -750,7 +750,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		return
 	}
 
-	// Apply filters if any.
+	// Run filters if any.
 	if len(sg.Filters) > 0 {
 		// Run all filters in parallel.
 		filterChan := make(chan error, len(sg.Filters))
@@ -781,11 +781,12 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		for _, filter := range sg.Filters {
 			lists = append(lists, filter.DestUIDs)
 		}
-		if sg.FilterOp == "|" {
+		if sg.FilterOp == "or" {
 			sg.DestUIDs = algo.MergeSorted(lists)
+		} else if sg.FilterOp == "not" {
+			x.AssertTrue(len(sg.Filters) == 1)
+			algo.Difference(sg.DestUIDs, sg.Filters[0].DestUIDs)
 		} else {
-			// If one of the arguments was id so append it once more
-			lists = append(lists, sg.DestUIDs)
 			sg.DestUIDs = algo.IntersectSorted(lists)
 		}
 	}

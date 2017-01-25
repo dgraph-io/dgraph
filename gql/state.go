@@ -60,9 +60,6 @@ const (
 	itemMutationOp                              // mutation operation
 	itemMutationContent                         // mutation content
 	itemThreeDots                               // three dots (...)
-	itemAnd                                     // And inside a filter.
-	itemOr                                      // Or inside a filter.
-
 )
 
 func lexInsideMutation(l *lex.Lexer) lex.StateFn {
@@ -129,20 +126,6 @@ func lexFuncOrArg(l *lex.Lexer) lex.StateFn {
 			}
 			empty = true
 			l.Ignore()
-		case r == '&':
-			r2 := l.Next()
-			if r2 == '&' {
-				l.Emit(itemAnd)
-				return lexText
-			}
-			return l.Errorf("Expected & but got %v", r2)
-		case r == '|':
-			r2 := l.Next()
-			if r2 == '|' {
-				l.Emit(itemOr)
-				return lexText
-			}
-			return l.Errorf("Expected | but got %v", r2)
 		case isDollar(r):
 			l.Emit(itemDollar)
 		case isNameBegin(r) || isNumber(r):

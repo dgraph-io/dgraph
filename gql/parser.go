@@ -101,8 +101,9 @@ var filterOpPrecedence map[string]int
 
 func init() {
 	filterOpPrecedence = map[string]int{
-		"&": 2,
-		"|": 1,
+		"not": 3,
+		"and": 2,
+		"or":  1,
 	}
 }
 
@@ -786,12 +787,12 @@ func (t *FilterTree) stringHelper(buf *bytes.Buffer) {
 	_, err := buf.WriteRune('(')
 	x.Check(err)
 	switch t.Op {
-	case "&":
-		_, err = buf.WriteString("AND")
-	case "|":
-		_, err = buf.WriteString("OR")
-	case "(":
-		_, err = buf.WriteString("(")
+	case "and":
+		buf.WriteString("AND")
+	case "or":
+		buf.WriteString("OR")
+	case "not":
+		buf.WriteString("NOT")
 	default:
 		err = x.Errorf("Unknown operator: %q", t.Op)
 	}
@@ -826,9 +827,17 @@ func (s *filterTreeStack) peek() *FilterTree {
 
 func evalStack(opStack, valueStack *filterTreeStack) {
 	topOp := opStack.pop()
-	topVal1 := valueStack.pop()
-	topVal2 := valueStack.pop()
-	topOp.Child = []*FilterTree{topVal2, topVal1}
+	if topOp.Op == "not" {
+		// Since "not" is a unary operator, just pop one value.
+		topVal := valueStack.pop()
+		topOp.Child = []*FilterTree{topVal}
+	} else {
+		// "and" and "or" are binary operators, so pop two values.
+		topVal1 := valueStack.pop()
+		topVal2 := valueStack.pop()
+		topOp.Child = []*FilterTree{topVal2, topVal1}
+	}
+	// Push the new value (tree) into the valueStack.
 	valueStack.push(topOp)
 }
 
@@ -878,16 +887,32 @@ func parseFilter(it *lex.ItemIterator) (*FilterTree, error) {
 		return nil, x.Errorf("Expected ( after filter directive")
 	}
 
+	// opStack is used to collect the operators in right order.
 	opStack := new(filterTreeStack)
 	opStack.push(&FilterTree{Op: "("}) // Push ( onto operator stack.
+	// valueStack is used to collect the values.
 	valueStack := new(filterTreeStack)
 
 	for it.Next() {
 		item := it.Item()
-		if item.Typ == itemName { // Value.
+		lval := strings.ToLower(item.Val)
+		if lval == "and" || lval == "or" || lval == "not" { // Handle operators.
+			op := lval
+			opPred := filterOpPrecedence[op]
+			x.AssertTruef(opPred > 0, "Expected opPred > 0: %d", opPred)
+			// Evaluate the stack until we see an operator with strictly lower pred.
+			for !opStack.empty() {
+				topOp := opStack.peek()
+				if filterOpPrecedence[topOp.Op] < opPred {
+					break
+				}
+				evalStack(opStack, valueStack)
+			}
+			opStack.push(&FilterTree{Op: op}) // Push current operator.
+		} else if item.Typ == itemName { // Value.
 			f := &Function{}
 			leaf := &FilterTree{Func: f}
-			f.Name = strings.ToLower(item.Val)
+			f.Name = lval
 			it.Next()
 			itemInFunc := it.Item()
 			if itemInFunc.Typ != itemLeftRound {
@@ -920,7 +945,6 @@ func parseFilter(it *lex.ItemIterator) (*FilterTree, error) {
 				return nil, x.Errorf("Expected ) to terminate func definition")
 			}
 			valueStack.push(leaf)
-
 		} else if item.Typ == itemLeftRound { // Just push to op stack.
 			opStack.push(&FilterTree{Op: "("})
 
@@ -937,23 +961,6 @@ func parseFilter(it *lex.ItemIterator) (*FilterTree, error) {
 				// The parentheses are balanced out. Let's break.
 				break
 			}
-
-		} else if item.Typ == itemAnd || item.Typ == itemOr {
-			op := "&"
-			if item.Typ == itemOr {
-				op = "|"
-			}
-			opPred := filterOpPrecedence[op]
-			x.AssertTruef(opPred > 0, "Expected opPred > 0: %d", opPred)
-			// Evaluate the stack until we see an operator with strictly lower pred.
-			for !opStack.empty() {
-				topOp := opStack.peek()
-				if filterOpPrecedence[topOp.Op] < opPred {
-					break
-				}
-				evalStack(opStack, valueStack)
-			}
-			opStack.push(&FilterTree{Op: op}) // Push current operator.
 		} else {
 			return nil, x.Errorf("Unexpected item while parsing @filter: %v", item)
 		}
