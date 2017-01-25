@@ -788,13 +788,11 @@ func (t *FilterTree) stringHelper(buf *bytes.Buffer) {
 	x.Check(err)
 	switch t.Op {
 	case "and":
-		_, err = buf.WriteString("AND")
+		buf.WriteString("AND")
 	case "or":
-		_, err = buf.WriteString("OR")
+		buf.WriteString("OR")
 	case "not":
-		_, err = buf.WriteString("NOT")
-	//case "(":
-	//	_, err = buf.WriteString("(")
+		buf.WriteString("NOT")
 	default:
 		err = x.Errorf("Unknown operator: %q", t.Op)
 	}
@@ -947,11 +945,6 @@ func parseFilter(it *lex.ItemIterator) (*FilterTree, error) {
 				return nil, x.Errorf("Expected ) to terminate func definition")
 			}
 			valueStack.push(leaf)
-			// If the top of the stack was a "not" operator then we immediately apply
-			// it on the function.
-			if opStack.peek().Op == "not" {
-				evalStack(opStack, valueStack)
-			}
 		} else if item.Typ == itemLeftRound { // Just push to op stack.
 			opStack.push(&FilterTree{Op: "("})
 
@@ -967,11 +960,6 @@ func parseFilter(it *lex.ItemIterator) (*FilterTree, error) {
 			if opStack.empty() {
 				// The parentheses are balanced out. Let's break.
 				break
-			}
-			// If the top operator was a "not" it has to be applied immediately to the
-			// val tree as it has highest precedence.
-			if opStack.peek().Op == "not" {
-				evalStack(opStack, valueStack)
 			}
 		} else {
 			return nil, x.Errorf("Unexpected item while parsing @filter: %v", item)

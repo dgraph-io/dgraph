@@ -787,8 +787,6 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			x.AssertTrue(len(sg.Filters) == 1)
 			algo.Difference(sg.DestUIDs, sg.Filters[0].DestUIDs)
 		} else {
-			// If one of the arguments was id so append it once more
-			//lists = append(lists, sg.DestUIDs)
 			sg.DestUIDs = algo.IntersectSorted(lists)
 		}
 	}
