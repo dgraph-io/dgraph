@@ -19,7 +19,6 @@ package posting
 import (
 	"context"
 	"encoding/binary"
-	"math"
 	"strings"
 	"time"
 
@@ -248,11 +247,13 @@ func RebuildIndex(ctx context.Context, attr string) error {
 			continue
 		}
 		p := pl.Postings[len(pl.Postings)-1]
-		if p.Uid != math.MaxUint64 {
+		pt := postingType(p)
+		if pt != valueTagged && pt != valueUntagged {
 			continue
 		}
 
 		// Add index entries based on p.
+		// TODO(tzdybal) - what about the LANGTAG?
 		val := types.Val{
 			Value: p.Value,
 			Tid:   types.TypeID(p.ValType),

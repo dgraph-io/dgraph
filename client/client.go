@@ -59,9 +59,6 @@ func checkNQuad(nq graph.NQuad) error {
 	if len(nq.ObjectId) == 0 && !hasVal {
 		return fmt.Errorf("Both objectId and objectValue can't be nil")
 	}
-	if len(nq.ObjectId) > 0 && hasVal {
-		return fmt.Errorf("Only one out of objectId and objectValue can be set")
-	}
 	return nil
 }
 

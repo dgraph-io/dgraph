@@ -130,7 +130,7 @@ func samePosting(a *types.Posting, b *types.Posting) bool {
 }
 
 func newPosting(t *task.DirectedEdge) *types.Posting {
-	x.AssertTruef(bytes.Equal(t.Value, nil) || t.ValueId == math.MaxUint64,
+	x.AssertTruef(edgeType(t) != valueEmpty,
 		"This should have been set by the caller.")
 
 	var op uint32
@@ -303,6 +303,49 @@ func (l *List) AddMutation(ctx context.Context, t *task.DirectedEdge) (bool, err
 	return l.addMutation(ctx, t)
 }
 
+// TODO(tzdybal) - this is almost the same as in rdf/parse.go - maybe some refactoring?
+type valueTypeInfo int32
+
+const (
+	valueEmpty    valueTypeInfo = iota
+	valueUid      valueTypeInfo = iota
+	valueUntagged valueTypeInfo = iota
+	valueTagged   valueTypeInfo = iota
+)
+
+func edgeType(t *task.DirectedEdge) valueTypeInfo {
+	if !bytes.Equal(t.Value, nil) {
+		if t.ValueId == 0 {
+			return valueUntagged // value without lang tag
+		} else {
+			return valueTagged // value with lang tag
+		}
+	} else {
+		if t.ValueId == 0 {
+			return valueEmpty // empty - no Uid and no Value
+		} else {
+			return valueUid // Uid
+		}
+	}
+}
+
+func postingType(p *types.Posting) valueTypeInfo {
+	if !bytes.Equal(p.Value, nil) {
+		if p.Uid == math.MaxUint64 {
+			return valueUntagged // value without lang tag
+		} else {
+			return valueTagged // value with lang tag
+		}
+	} else {
+		if p.Uid == math.MaxUint64 {
+			return valueEmpty // empty - no Uid and no Value
+		} else {
+			return valueUid // Uid
+		}
+
+	}
+}
+
 func (l *List) addMutation(ctx context.Context, t *task.DirectedEdge) (bool, error) {
 	if atomic.LoadInt32(&l.deleteMe) == 1 {
 		x.TraceError(ctx, x.Errorf("DELETEME set to true. Temporary error."))
@@ -310,9 +353,9 @@ func (l *List) addMutation(ctx context.Context, t *task.DirectedEdge) (bool, err
 	}
 
 	l.AssertLock()
-	// All edges with a value set, have the same uid. In other words,
-	// an (entity, attribute) can only have one value.
-	if !bytes.Equal(t.Value, nil) {
+	// All edges with a value without LANGTAG, have the same uid. In other words,
+	// an (entity, attribute) can only have one untagged value.
+	if !bytes.Equal(t.Value, nil) && t.ValueId == 0 { // TODO(tzdybal) refactoring - use function defined in rdf
 		t.ValueId = math.MaxUint64
 	}
 	if t.ValueId == 0 {
@@ -511,7 +554,7 @@ func (l *List) Uids(opt ListOptions) *task.List {
 	result := make([]uint64, 0, 10)
 	var intersectIdx int // Indexes into opt.Intersect if it exists.
 	l.iterate(opt.AfterUID, func(p *types.Posting) bool {
-		if p.Uid == math.MaxUint64 {
+		if postingType(p) != valueUid {
 			return false
 		}
 		uid := p.Uid
@@ -539,6 +582,7 @@ func (l *List) value() (rval types.Val, rerr error) {
 	l.AssertRLock()
 	var found bool
 	l.iterate(math.MaxUint64-1, func(p *types.Posting) bool {
+		// TODO(tzdybal)
 		if p.Uid == math.MaxUint64 {
 			val := make([]byte, len(p.Value))
 			copy(val, p.Value)

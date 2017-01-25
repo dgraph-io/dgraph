@@ -32,6 +32,7 @@ func toRDF(buf *bytes.Buffer, item kv) {
 		x.Check2(buf.WriteString(item.prefix))
 
 		if p.Uid == math.MaxUint64 && !bytes.Equal(p.Value, nil) {
+			// TODO(tzdybal)
 			// Value posting
 			// Convert to appropriate type
 			vID := types.TypeID(p.ValType)
