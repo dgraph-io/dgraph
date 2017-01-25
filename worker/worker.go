@@ -71,7 +71,9 @@ func (w *grpcWorker) Echo(ctx context.Context, in *Payload) (*Payload, error) {
 
 // runServer initializes a tcp server on port which listens to requests from
 // other workers for internal communication.
-func RunServer(bindall bool) {
+func RunServer(bindall bool, sdCh chan struct{}, sdWg *sync.WaitGroup) {
+	sdWg.Add(1)
+	defer sdWg.Done()
 	laddr := "localhost"
 	if bindall {
 		laddr = "0.0.0.0"
@@ -85,6 +87,10 @@ func RunServer(bindall bool) {
 
 	s := grpc.NewServer()
 	RegisterWorkerServer(s, &grpcWorker{})
+	go func() {
+		<-sdCh     // wait for shutdown channel to signal.
+		ln.Close() // to close listening more reqs.
+	}()
 	s.Serve(ln)
 }
 

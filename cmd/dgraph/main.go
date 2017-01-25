@@ -23,7 +23,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"gopkg.in/tylerb/graceful.v1"
 	"io"
 	"io/ioutil"
 	"log"
@@ -37,6 +36,7 @@ import (
 	"runtime/pprof"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/net/context"
@@ -76,6 +76,8 @@ var (
 
 	closeCh        = make(chan struct{})
 	isShuttingDown = false
+	shutdownWg     = new(sync.WaitGroup)
+
 	pendingQueries = make(chan struct{}, 10000*runtime.NumCPU())
 )
 
@@ -564,6 +566,8 @@ func handlerInit(w http.ResponseWriter, r *http.Request) bool {
 }
 
 func shutDownHandler(w http.ResponseWriter, r *http.Request) {
+	shutdownWg.Add(1)
+	defer shutdownWg.Done()
 	if !handlerInit(w, r) {
 		return
 	}
@@ -680,8 +684,9 @@ func checkFlagsAndInitDirs() {
 	x.Check(os.MkdirAll(*postingDir, 0700))
 }
 
-func serveGRPC(l net.Listener, fnCh chan struct{}) {
-	defer func() { fnCh <- struct{}{} }()
+func serveGRPC(l net.Listener, sdWg *sync.WaitGroup) {
+	sdWg.Add(1)
+	defer sdWg.Done()
 	s := grpc.NewServer(grpc.CustomCodec(&query.Codec{}))
 	graph.RegisterDgraphServer(s, &grpcServer{})
 	err := s.Serve(l)
@@ -693,28 +698,26 @@ func serveGRPC(l net.Listener, fnCh chan struct{}) {
 	}
 }
 
-func serveHTTP(l net.Listener, fnCh chan struct{}) {
-	defer func() { fnCh <- struct{}{} }()
-	gSrv := &graceful.Server{
-		Timeout: 1 * time.Minute,
-		Server: &http.Server{
-			ReadTimeout:  10 * time.Second,
-			WriteTimeout: 60 * time.Second,
-			// TODO(Ashwin): Add idle timeout while switching to Go 1.8.
-		},
+func serveHTTP(l net.Listener, sdWg *sync.WaitGroup) {
+	sdWg.Add(1)
+	defer sdWg.Done()
+	srv := &http.Server{
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 60 * time.Second,
+		// TODO(Ashwin): Add idle timeout while switching to Go 1.8.
 	}
 
-	err := gSrv.Serve(l)
+	err := srv.Serve(l)
 	if !isShuttingDown {
 		x.Checkf(err, "Error while serving http request")
 	} else {
-		gSrv.Stop(2 * time.Minute)
-		<-gSrv.StopChan() // block untill we are stopped..
+		// TODO(ashish): Use srv.Shutdown go 1.8
 	}
 }
 
 func setupServer(che chan error) {
-	go worker.RunServer(*bindall) // For internal communication.
+	var shutdownCh chan struct{}
+	go worker.RunServer(*bindall, shutdownCh, shutdownWg) // For internal communication.
 
 	laddr := "localhost"
 	if *bindall {
@@ -739,14 +742,14 @@ func setupServer(che chan error) {
 	http.HandleFunc("/admin/shutdown", shutDownHandler)
 	http.HandleFunc("/admin/backup", backupHandler)
 
-	finishCh := make(chan struct{})
 	// Initilize the servers.
-	go serveGRPC(grpcl, finishCh)
-	go serveHTTP(httpl, finishCh)
-	go serveHTTP(http2, finishCh)
+	go serveGRPC(grpcl, shutdownWg)
+	go serveHTTP(httpl, shutdownWg)
+	go serveHTTP(http2, shutdownWg)
 
 	go func() {
 		<-closeCh
+		shutdownCh <- struct{}{}
 		isShuttingDown = true
 		// Stops listening further but already accepted connections are not closed.
 		l.Close()
@@ -759,9 +762,7 @@ func setupServer(che chan error) {
 	// Start cmux serving.
 	err = tcpm.Serve()
 	// wait for grpc, http and http2 to stop
-	<-finishCh
-	<-finishCh
-	<-finishCh
+	shutdownWg.Wait()
 
 	che <- err // final close
 }
