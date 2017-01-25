@@ -213,7 +213,7 @@ func (g *groupi) KnownGroups() (gids []uint32) {
 	return
 }
 
-func (g *groupi) Nodes() (nodes []*node) {
+func (g *groupi) nodes() (nodes []*node) {
 	g.RLock()
 	defer g.RUnlock()
 	for _, n := range g.local {
@@ -526,7 +526,7 @@ func (w *grpcWorker) UpdateMembership(ctx context.Context,
 func SyncMarksAllNodes(ctx context.Context) []error {
 	var wg sync.WaitGroup
 	errs := make([]error, 0)
-	for _, n := range groups().Nodes() {
+	for _, n := range groups().nodes() {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()

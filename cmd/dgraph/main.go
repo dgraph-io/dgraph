@@ -693,7 +693,6 @@ func serveGRPC(l net.Listener, sdWg *sync.WaitGroup) {
 	if !isShuttingDown {
 		x.Checkf(err, "Error while serving gRpc request")
 	} else {
-		// gracefulstop with a timeout will be better.
 		s.GracefulStop()
 	}
 }
@@ -716,7 +715,7 @@ func serveHTTP(l net.Listener, sdWg *sync.WaitGroup) {
 }
 
 func setupServer(che chan error) {
-	var shutdownCh chan struct{}
+	shutdownCh := make(chan struct{}, 1)
 	go worker.RunServer(*bindall, shutdownCh, shutdownWg) // For internal communication.
 
 	laddr := "localhost"
@@ -761,10 +760,9 @@ func setupServer(che chan error) {
 
 	// Start cmux serving.
 	err = tcpm.Serve()
-	// wait for grpc, http and http2 to stop
-	shutdownWg.Wait()
 
-	che <- err // final close
+	shutdownWg.Wait() // wait for grpc, http and http2 to stop
+	che <- err        // final close
 }
 
 func main() {

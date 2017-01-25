@@ -88,7 +88,7 @@ func RunServer(bindall bool, sdCh chan struct{}, sdWg *sync.WaitGroup) {
 	s := grpc.NewServer()
 	RegisterWorkerServer(s, &grpcWorker{})
 	go func() {
-		<-sdCh     // wait for shutdown channel to signal.
+		<-sdCh     // wait for shutdown channel to signal
 		ln.Close() // to close listening more reqs.
 	}()
 	s.Serve(ln)
