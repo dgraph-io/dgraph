@@ -1283,6 +1283,63 @@ func TestToFastJSONFilterOrFirstNegative(t *testing.T) {
 		js)
 }
 
+func TestToFastJSONFilterNot1(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id:0x01) {
+				name
+				gender
+				friend @filter(not anyof("name", "Andrea rick")) {
+					name
+				}
+			}
+		}
+	`
+
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"gender":"female","name":"Michonne","friend":[{"name":"Glenn Rhee"},{"name":"Daryl Dixon"}]}]}`, js)
+}
+
+func TestToFastJSONFilterNot2(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id:0x01) {
+				name
+				gender
+				friend @filter(not anyof("name", "Andrea") and anyof(name, "Glenn Andrea")) {
+					name
+				}
+			}
+		}
+	`
+
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"gender":"female","name":"Michonne","friend":[{"name":"Glenn Rhee"}]}]}`, js)
+}
+
+func TestToFastJSONFilterNot3(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id:0x01) {
+				name
+				gender
+				friend @filter(not (anyof("name", "Andrea") or anyof(name, "Glenn Rick Andrea"))) {
+					name
+				}
+			}
+		}
+	`
+
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"gender":"female","name":"Michonne","friend":[{"name":"Daryl Dixon"}]}]}`, js)
+}
+
 func TestToFastJSONFilterAnd(t *testing.T) {
 	populateGraph(t)
 	query := `
