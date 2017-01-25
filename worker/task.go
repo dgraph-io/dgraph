@@ -18,6 +18,8 @@ package worker
 
 import (
 	"strings"
+	"strconv"
+	"fmt"
 
 	"golang.org/x/net/context"
 
@@ -86,11 +88,14 @@ func convertValue(attr, data string) (types.Val, error) {
 	return dst, err
 }
 
+
+
 // processTask processes the query, accumulates and returns the result.
 func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 	attr := q.Attr
 
 	useFunc := len(q.SrcFunc) != 0
+	fmt.Printf("[processTask] task.Query: %#v\n", q)
 	var n int
 	var tokens []string
 	var geoQuery *types.GeoQueryData
@@ -98,12 +103,23 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 	var intersectDest bool
 	var ineqValue types.Val
 	var ineqValueToken string
-	var isIneq bool
+	var isIneq, isAgrt, isCmp bool
+	var threshold int64
 
 	if useFunc {
 		f := q.SrcFunc[0]
 		isIneq = f == "leq" || f == "geq" || f == "lt" || f == "gt" || f == "eq"
+		isAgrt = f == "count"
+		isCmp = f == "cmp"
 		switch {
+		case isAgrt:
+		case isCmp:
+			if len(q.SrcFunc) != 3 {
+				return nil, x.Errorf("Function requires 3 arguments, but got %d %v",
+					len(q.SrcFunc), q.SrcFunc)
+			}
+			threshold, _ = strconv.ParseInt(q.SrcFunc[2], 10, 64)
+
 		case isIneq:
 			if len(q.SrcFunc) != 2 {
 				return nil, x.Errorf("Function requires 2 arguments, but got %d %v",
@@ -147,15 +163,34 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 			}
 			intersectDest = (strings.ToLower(q.SrcFunc[0]) == "allof")
 		}
-		n = len(tokens)
+		if isAgrt || isCmp {
+			n = len(q.Uids)
+		} else {
+			n = len(tokens)
+		}
 	} else {
 		n = len(q.Uids)
 	}
 
 	var out task.Result
+	if isCmp {
+		for i := 0; i < n; i++ {
+			// eval cmp, only 'gt' currently. 
+			// TODO: support 'geq', 'leq', 'lt'. Should check q.ChainData[] as well
+			if q.ChainData[i] > threshold { 
+				result := q.Uids[i : i+1]
+				out.UidMatrix = append(out.UidMatrix, &task.List{Uids: result})
+			} else {
+				out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
+			}
+		}
+		return &out, nil
+	}
 	for i := 0; i < n; i++ {
 		var key []byte
-		if useFunc {
+		if isAgrt {
+			key = x.DataKey(attr, q.Uids[i])
+		} else if useFunc {
 			key = x.IndexKey(attr, tokens[i])
 		} else if q.Reverse {
 			key = x.ReverseKey(attr, q.Uids[i])
@@ -184,7 +219,12 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 			out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
 			continue
 		}
-
+		if isAgrt {
+			out.ChainData = append(out.ChainData, int64(pl.Length(0)))
+			result := q.Uids[i : i+1]
+			out.UidMatrix = append(out.UidMatrix, &task.List{Uids: result})
+			continue
+		}
 		// The more usual case: Getting the UIDs.
 		opts := posting.ListOptions{
 			AfterUID: uint64(q.AfterUid),

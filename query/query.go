@@ -146,6 +146,10 @@ type SubGraph struct {
 
 	// destUIDs is a list of destination UIDs, after applying filters, pagination.
 	DestUIDs *task.List
+
+	// execution of SubGraph is chained, one's output is another's input besides UIDs
+	// use int64 currently
+	chainData []int64
 }
 
 // DebugPrint prints out the SubGraph tree in a nice format for debugging purposes.
@@ -490,6 +494,7 @@ func createTaskQuery(sg *SubGraph) *task.Query {
 		Offset:   int32(sg.Params.Offset),
 		AfterUid: sg.Params.AfterUID,
 		DoCount:  len(sg.Filters) == 0 && sg.Params.DoCount,
+		ChainData: sg.chainData,
 	}
 	if sg.SrcUIDs != nil {
 		out.Uids = sg.SrcUIDs.Uids
@@ -514,6 +519,7 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 		}
 		x.Trace(ctx, "Query parsed")
 		sgl = append(sgl, sg)
+		sg.DebugPrint("---")
 	}
 	l.Parsing += time.Since(loopStart)
 
@@ -681,6 +687,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			x.Trace(ctx, "Sample value for attr: %v Val: %v", sg.Attr, string(v.Val))
 		}
 		sg.counts = result.Counts
+		sg.chainData = result.ChainData
 
 		if sg.Params.DoCount && len(sg.Filters) == 0 {
 			// If there is a filter, we need to do more work to get the actual count.
@@ -709,6 +716,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		filterChan := make(chan error, len(sg.Filters))
 		for _, filter := range sg.Filters {
 			filter.SrcUIDs = sg.DestUIDs
+			filter.chainData = sg.chainData
 			go ProcessGraph(ctx, filter, sg, filterChan)
 		}
 

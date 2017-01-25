@@ -26,6 +26,7 @@ message Query {
 	repeated string src_func = 7;
 	
 	bool reverse = 8;  // Whether this is a reverse edge.
+	repeated int64 chain_data = 9;
 }
 
 message Result {
@@ -33,6 +34,7 @@ message Result {
 	repeated Value values = 2;
 	repeated uint32 counts = 3;
 	bool intersect_dest = 4;
+	repeated int64 chain_data = 5;
 }
 
 message Sort {

@@ -506,7 +506,7 @@ L:
 					return nil, x.Errorf("Repeated filter at root")
 				}
 				seenFilter = true
-				filter, err := parseFilter(it)
+				filter, err := parseFilter(it, true/*atRoot*/)
 				if err != nil {
 					return nil, err
 				}
@@ -871,7 +871,7 @@ func parseFunction(it *lex.ItemIterator) (*Function, error) {
 }
 
 // parseFilter parses the filter directive to produce a QueryFilter / parse tree.
-func parseFilter(it *lex.ItemIterator) (*FilterTree, error) {
+func parseFilter(it *lex.ItemIterator, atRoot bool) (*FilterTree, error) {
 	it.Next()
 	item := it.Item()
 	if item.Typ != itemLeftRound {
@@ -903,17 +903,39 @@ func parseFilter(it *lex.ItemIterator) (*FilterTree, error) {
 					return nil, x.Errorf("Expected arg after func [%s], but got item %v",
 						leaf.Func.Name, itemInFunc)
 				}
-				it := strings.Trim(itemInFunc.Val, "\" \t")
-				if it == "" {
+				term := strings.Trim(itemInFunc.Val, "\" \t")
+				switch {
+				case term == "count":
+					if len(f.Attr) > 0 || len(f.Args) > 0 {
+						return nil, x.Errorf("Aggregator 'count' appear at invalid position")
+					} else if !atRoot {
+						return nil, x.Errorf("Aggregator 'count' could only appear at root")
+					}
+					agrtFilterTree, err := parseAggregator(it, term)
+					if err != nil {
+						return nil, err
+					}
+					// restruct 'f' from {Name: 'gt', Attr: 'film.director.film' } ->
+					//                   {Name: 'cmp', Attr: 'film.direcotr.file', Args: ['gt']}
+					// in this way, gt(count('film.director.film'), 0) could be constructed as
+					//     FilterTree{Name: 'count', Attr: 'film', Child: ->
+					//         FilterTree{Name: 'cmp', Attr: 'film', Args:['gt', '0']}
+					// which is a chained operation, which supports Aggregator & Compare now
+					f.Args = append(f.Args, f.Name)
+					f.Name, f.Attr = "cmp", agrtFilterTree.Func.Attr
+					agrtFilterTree.Child = append(agrtFilterTree.Child, leaf)
+					leaf = agrtFilterTree
+				case term == "":
 					return nil, x.Errorf("Empty argument received")
-				}
-				if len(f.Attr) == 0 {
-					f.Attr = it
-				} else {
-					f.Args = append(f.Args, it)
+				default:
+					if len(f.Attr) == 0 {
+						f.Attr = term
+					} else {
+						f.Args = append(f.Args, term)
+					}
 				}
 				if f.Name == "id" {
-					f.NeedsVar = append(f.NeedsVar, it)
+					f.NeedsVar = append(f.NeedsVar, term)
 				}
 			}
 			if !terminated {
@@ -978,6 +1000,30 @@ func parseFilter(it *lex.ItemIterator) (*FilterTree, error) {
 	}
 	return valueStack.pop(), nil
 }
+
+// to parse Aggregator('count', 'sum', 'max', etc.) embedded in some Filter
+func parseAggregator(it *lex.ItemIterator, agrt string) (*FilterTree, error) {
+	f := &Function{Name: strings.ToLower(agrt)}
+	leaf := &FilterTree{Func: f}
+	// skip '('
+	it.Next()
+	if it.Item().Typ != itemLeftRound {
+		return nil, x.Errorf("Expected ( after filter directive")
+	}
+	// check item
+	it.Next()
+	if it.Item().Typ != itemName {
+		return nil, x.Errorf("Expected arg after func [count], but got item %v", it.Item())
+	}
+	f.Attr = strings.Trim(it.Item().Val, "\" \t")
+	// skip ')'
+	it.Next()
+	if it.Item().Typ != itemRightRound {
+		return nil, x.Errorf("Expected arg after func [count], but got item %v", it.Item())
+	}
+	return leaf, nil
+}
+
 
 func parseID(gq *GraphQuery, val string) error {
 	val = x.WhiteSpace.Replace(val)
@@ -1222,7 +1268,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 			if item.Typ == itemName {
 				switch item.Val {
 				case "filter":
-					filter, err := parseFilter(it)
+					filter, err := parseFilter(it, false/*atRoot*/)
 					if err != nil {
 						return err
 					}
