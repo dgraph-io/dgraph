@@ -119,7 +119,6 @@ func Subtract(u, v *task.List) {
 	if u == nil || v == nil {
 		return
 	}
-	IntersectWith(v, u)
 	out := u.Uids[:0]
 	n := len(u.Uids)
 	m := len(v.Uids)
@@ -127,15 +126,19 @@ func Subtract(u, v *task.List) {
 		uid := u.Uids[i]
 		vid := v.Uids[k]
 		if uid < vid {
-			out = append(out, uid)
+			for i < n && u.Uids[i] < vid {
+				out = append(out, u.Uids[i])
+				i++
+			}
+		} else if uid == vid {
 			i++
-		} else {
 			k++
-			i++
+		} else {
+			for k = k + 1; k < m && v.Uids[k] < uid; k++ {
+			}
 		}
 	}
 	u.Uids = out
-
 }
 
 // MergeSorted merges sorted lists.
