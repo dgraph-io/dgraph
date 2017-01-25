@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"gopkg.in/tylerb/graceful.v1"
 	"io"
 	"io/ioutil"
 	"log"
@@ -74,6 +75,7 @@ var (
 	dumpSubgraph = flag.String("dumpsg", "", "Directory to save subgraph for testing, debugging")
 
 	closeCh        = make(chan struct{})
+	isShuttingDown = false
 	pendingQueries = make(chan struct{}, 10000*runtime.NumCPU())
 )
 
@@ -566,7 +568,15 @@ func shutDownHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	exitWithProfiles()
-	x.SetStatus(w, x.Success, "Server has been shutdown")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	if errs := worker.SyncMarksAllNodes(ctx); len(errs) != 0 {
+		x.SetStatus(w, x.Error, "Error: "+x.StringifyErrors(errs))
+	} else {
+		x.SetStatus(w, x.Success, "Server has been shutdown")
+	}
 }
 
 func backupHandler(w http.ResponseWriter, r *http.Request) {
@@ -670,19 +680,37 @@ func checkFlagsAndInitDirs() {
 	x.Check(os.MkdirAll(*postingDir, 0700))
 }
 
-func serveGRPC(l net.Listener) {
+func serveGRPC(l net.Listener, fnCh chan struct{}) {
+	defer func() { fnCh <- struct{}{} }()
 	s := grpc.NewServer(grpc.CustomCodec(&query.Codec{}))
 	graph.RegisterDgraphServer(s, &grpcServer{})
-	x.Checkf(s.Serve(l), "Error while serving gRpc request")
+	err := s.Serve(l)
+	if !isShuttingDown {
+		x.Checkf(err, "Error while serving gRpc request")
+	} else {
+		// gracefulstop with a timeout will be better.
+		s.GracefulStop()
+	}
 }
 
-func serveHTTP(l net.Listener) {
-	srv := &http.Server{
-		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 60 * time.Second,
-		// TODO(Ashwin): Add idle timeout while switching to Go 1.8.
+func serveHTTP(l net.Listener, fnCh chan struct{}) {
+	defer func() { fnCh <- struct{}{} }()
+	gSrv := &graceful.Server{
+		Timeout: 1 * time.Minute,
+		Server: &http.Server{
+			ReadTimeout:  10 * time.Second,
+			WriteTimeout: 60 * time.Second,
+			// TODO(Ashwin): Add idle timeout while switching to Go 1.8.
+		},
 	}
-	x.Checkf(srv.Serve(l), "Error while serving http request")
+
+	err := gSrv.Serve(l)
+	if !isShuttingDown {
+		x.Checkf(err, "Error while serving http request")
+	} else {
+		gSrv.Stop(2 * time.Minute)
+		<-gSrv.StopChan() // block untill we are stopped..
+	}
 }
 
 func setupServer(che chan error) {
@@ -710,13 +738,16 @@ func setupServer(che chan error) {
 	http.HandleFunc("/admin/index", indexHandler)
 	http.HandleFunc("/admin/shutdown", shutDownHandler)
 	http.HandleFunc("/admin/backup", backupHandler)
+
+	finishCh := make(chan struct{})
 	// Initilize the servers.
-	go serveGRPC(grpcl)
-	go serveHTTP(httpl)
-	go serveHTTP(http2)
+	go serveGRPC(grpcl, finishCh)
+	go serveHTTP(httpl, finishCh)
+	go serveHTTP(http2, finishCh)
 
 	go func() {
 		<-closeCh
+		isShuttingDown = true
 		// Stops listening further but already accepted connections are not closed.
 		l.Close()
 	}()
@@ -726,7 +757,13 @@ func setupServer(che chan error) {
 	log.Println("Server listening on port", *port)
 
 	// Start cmux serving.
-	che <- tcpm.Serve()
+	err = tcpm.Serve()
+	// wait for grpc, http and http2 to stop
+	<-finishCh
+	<-finishCh
+	<-finishCh
+
+	che <- err // final close
 }
 
 func main() {

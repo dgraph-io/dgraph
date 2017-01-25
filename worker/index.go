@@ -23,6 +23,21 @@ func (n *node) rebuildIndex(ctx context.Context, proposalData []byte) error {
 	x.AssertTrue(gid == proposal.RebuildIndex.GroupId)
 	x.Trace(ctx, "Processing proposal to rebuild index: %v", proposal.RebuildIndex)
 
+	if err := n.syncAllMarks(ctx); err != nil {
+		return err
+	}
+
+	// Do actual index work.
+	attr := proposal.RebuildIndex.Attr
+	x.AssertTrue(group.BelongsTo(attr) == gid)
+	if err := posting.RebuildIndex(ctx, attr); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (n *node) syncAllMarks(ctx context.Context) error {
+	gid := n.gid
 	// Get index of last committed.
 	lastIndex, err := n.store.LastIndex()
 	if err != nil {
@@ -53,13 +68,6 @@ func (n *node) rebuildIndex(ctx context.Context, proposalData []byte) error {
 			break // Do the check before sleep.
 		}
 		time.Sleep(100 * time.Millisecond)
-	}
-
-	// Do actual index work.
-	attr := proposal.RebuildIndex.Attr
-	x.AssertTrue(group.BelongsTo(attr) == gid)
-	if err = posting.RebuildIndex(ctx, attr); err != nil {
-		return err
 	}
 	return nil
 }

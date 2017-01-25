@@ -33,6 +33,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strconv"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -187,4 +188,16 @@ func TraceError(ctx context.Context, err error) {
 		return
 	}
 	Trace(ctx, shortenedErrorString(err))
+}
+
+func StringifyErrors(errs []error) string {
+	var buf bytes.Buffer
+	// error returned by buf.Write* are always nil : by doc
+	for i, err := range errs {
+		buf.WriteString(strconv.FormatInt(int64(i), 10))
+		buf.WriteString(": ")
+		buf.WriteString(err.Error())
+		buf.WriteRune('\n')
+	}
+	return buf.String()
 }
