@@ -33,8 +33,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/boltdb/bolt"
 	"github.com/dgryski/go-farm"
+	"github.com/syndtr/goleveldb/leveldb"
 
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
@@ -317,14 +317,14 @@ func getMemUsage() int {
 var (
 	stopTheWorld sync.RWMutex
 	lhmap        *listMap
-	pstore       *bolt.DB
+	pstore       *leveldb.DB
 	syncCh       chan syncEntry
 	dirtyChan    chan uint64 // All dirty posting list keys are pushed here.
 	marks        *syncMarks
 )
 
 // Init initializes the posting lists package, the in memory and dirty list hash.
-func Init(ps *bolt.DB) {
+func Init(ps *leveldb.DB) {
 	marks = new(syncMarks)
 	pstore = ps
 	lhmap = newShardedListMap(*lhmapNumShards)
@@ -389,14 +389,10 @@ func GetOrCreate(key []byte, group uint32) (rlist *List, decr func()) {
 		l.Lock()
 		go func(key []byte) {
 			defer l.Unlock()
-			x.Check(pstore.Update(func(tx *bolt.Tx) error {
-				b := tx.Bucket([]byte("data"))
-				v := b.Get(key)
-				if len(v) == 0 {
-					x.Check(b.Put(key, dummyPostingList))
-				}
-				return nil
-			}))
+			v, err := pstore.Get(key, nil)
+			if err != nil || v == nil {
+				x.Check(pstore.Put(key, dummyPostingList, nil))
+			}
 		}(key)
 	}
 	return lp, lp.decr
@@ -461,6 +457,7 @@ func batchSync() {
 	var entries []syncEntry
 	var loop uint64
 
+	batch := new(leveldb.Batch)
 	for {
 		select {
 		case e := <-syncCh:
@@ -472,13 +469,10 @@ func batchSync() {
 			if len(entries) > 0 {
 				loop++
 				fmt.Printf("[%4d] Writing batch of size: %v\n", loop, len(entries))
-				x.Checkf(pstore.Update(func(tx *bolt.Tx) error {
-					b := tx.Bucket([]byte("data"))
-					for _, e := range entries {
-						x.Checkf(b.Put(e.key, e.val), "Error while doing b.Put")
-					}
-					return nil
-				}), "Error while doing a batch write to BoltDB")
+				for _, e := range entries {
+					batch.Put(e.key, e.val)
+				}
+				x.Checkf(pstore.Write(batch, nil), "Error while doing a batch write to BoltDB")
 
 				for _, e := range entries {
 					e.sw.Done()

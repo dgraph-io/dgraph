@@ -1,11 +1,8 @@
 package worker
 
 import (
-	"bytes"
-
 	"golang.org/x/net/context"
 
-	"github.com/boltdb/bolt"
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/schema"
@@ -108,54 +105,54 @@ func processSort(ts *task.Sort) (*task.SortResult, error) {
 		out[i].ulist = &task.List{Uids: []uint64{}}
 	}
 
-	if err := pstore.View(func(tx *bolt.Tx) error {
-		c := tx.Bucket([]byte("data")).Cursor()
-
-		// Iterate over every bucket / token.
-		pk := x.Parse(x.IndexKey(attr, ""))
-		indexPrefix := pk.IndexPrefix()
-
-		var k []byte
-		if !ts.Desc {
-			k, _ = c.Seek(indexPrefix)
-		} else {
-			k, _ = c.Seek(pk.SkipRangeOfSameType())
-			if k != nil {
-				k, _ = c.Prev()
-			} else {
-				k, _ = c.Last()
-			}
-		}
-
-	BUCKETS:
-
-		for ; k != nil && bytes.HasPrefix(k, indexPrefix); k, _ = c.Next() {
-			key := x.Parse(k)
-			x.AssertTrue(key != nil)
-			x.AssertTrue(key.IsIndex())
-			token := key.Term
-
-			err := intersectBucket(ts, attr, token, out)
-			switch err {
-			case errDone:
-				break BUCKETS
-			case errContinue:
-			// Continue iterating over tokens.
-			default:
-				return err
-			}
-			if ts.Desc {
-				c.Prev()
-			} else {
-				c.Next()
-			}
-		}
-
-		return nil
-	}); err != nil {
-		return &emptySortResult, err
-	}
-
+	//	if err := pstore.View(func(tx *bolt.Tx) error {
+	//		c := tx.Bucket([]byte("data")).Cursor()
+	//
+	//		// Iterate over every bucket / token.
+	//		pk := x.Parse(x.IndexKey(attr, ""))
+	//		indexPrefix := pk.IndexPrefix()
+	//
+	//		var k []byte
+	//		if !ts.Desc {
+	//			k, _ = c.Seek(indexPrefix)
+	//		} else {
+	//			k, _ = c.Seek(pk.SkipRangeOfSameType())
+	//			if k != nil {
+	//				k, _ = c.Prev()
+	//			} else {
+	//				k, _ = c.Last()
+	//			}
+	//		}
+	//
+	//	BUCKETS:
+	//
+	//		for ; k != nil && bytes.HasPrefix(k, indexPrefix); k, _ = c.Next() {
+	//			key := x.Parse(k)
+	//			x.AssertTrue(key != nil)
+	//			x.AssertTrue(key.IsIndex())
+	//			token := key.Term
+	//
+	//			err := intersectBucket(ts, attr, token, out)
+	//			switch err {
+	//			case errDone:
+	//				break BUCKETS
+	//			case errContinue:
+	//			// Continue iterating over tokens.
+	//			default:
+	//				return err
+	//			}
+	//			if ts.Desc {
+	//				c.Prev()
+	//			} else {
+	//				c.Next()
+	//			}
+	//		}
+	//
+	//		return nil
+	//	}); err != nil {
+	//		return &emptySortResult, err
+	//	}
+	//
 	r := new(task.SortResult)
 	for _, il := range out {
 		r.UidMatrix = append(r.UidMatrix, il.ulist)

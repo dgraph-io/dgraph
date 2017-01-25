@@ -42,7 +42,6 @@ import (
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc"
 
-	"github.com/boltdb/bolt"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
@@ -55,6 +54,7 @@ import (
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/soheilhy/cmux"
+	"github.com/syndtr/goleveldb/leveldb"
 )
 
 var (
@@ -732,15 +732,8 @@ func main() {
 	x.Init()
 	checkFlagsAndInitDirs()
 
-	db, err := bolt.Open("posting.db", 0600, nil)
+	db, err := leveldb.OpenFile("posting.db", nil)
 	x.Checkf(err, "While opening boltdb")
-	err = db.Update(func(tx *bolt.Tx) error {
-		if _, err := tx.CreateBucketIfNotExists([]byte("data")); err != nil {
-			return err
-		}
-		return nil
-	})
-	x.Check(err)
 
 	defer db.Close()
 

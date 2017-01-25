@@ -12,8 +12,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/boltdb/bolt"
-	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 	"golang.org/x/net/context"
@@ -124,48 +122,48 @@ func backup(gid uint32, bdir string) error {
 	}
 
 	// Iterate over rocksdb.
-	var lastPred string
-	pstore.View(func(tx *bolt.Tx) error {
-		c := tx.Bucket([]byte("data")).Cursor()
-
-		for key, v := c.First(); key != nil; key, v = c.Next() {
-			pk := x.Parse(key)
-
-			if pk.IsIndex() {
-				// Seek to the end of index keys.
-				c.Seek(pk.SkipRangeOfSameType())
-				continue
-			}
-			if pk.IsReverse() {
-				// Seek to the end of reverse keys.
-				c.Seek(pk.SkipRangeOfSameType())
-				continue
-			}
-			if pk.Attr == "_uid_" {
-				// Skip the UID mappings.
-				c.Seek(pk.SkipPredicate())
-				continue
-			}
-
-			x.AssertTrue(pk.IsData())
-			pred, uid := pk.Attr, pk.Uid
-			if pred != lastPred && group.BelongsTo(pred) != gid {
-				c.Seek(pk.SkipPredicate())
-				continue
-			}
-
-			prefix := fmt.Sprintf("<%#x> <%s> ", uid, pred)
-			pl := &types.PostingList{}
-			x.Check(pl.Unmarshal(v))
-			chkv <- kv{
-				prefix: prefix,
-				list:   pl,
-			}
-			lastPred = pred
-		}
-		return nil
-	})
-
+	//var lastPred string
+	//	pstore.View(func(tx *bolt.Tx) error {
+	//		c := tx.Bucket([]byte("data")).Cursor()
+	//
+	//		for key, v := c.First(); key != nil; key, v = c.Next() {
+	//			pk := x.Parse(key)
+	//
+	//			if pk.IsIndex() {
+	//				// Seek to the end of index keys.
+	//				c.Seek(pk.SkipRangeOfSameType())
+	//				continue
+	//			}
+	//			if pk.IsReverse() {
+	//				// Seek to the end of reverse keys.
+	//				c.Seek(pk.SkipRangeOfSameType())
+	//				continue
+	//			}
+	//			if pk.Attr == "_uid_" {
+	//				// Skip the UID mappings.
+	//				c.Seek(pk.SkipPredicate())
+	//				continue
+	//			}
+	//
+	//			x.AssertTrue(pk.IsData())
+	//			pred, uid := pk.Attr, pk.Uid
+	//			if pred != lastPred && group.BelongsTo(pred) != gid {
+	//				c.Seek(pk.SkipPredicate())
+	//				continue
+	//			}
+	//
+	//			prefix := fmt.Sprintf("<%#x> <%s> ", uid, pred)
+	//			pl := &types.PostingList{}
+	//			x.Check(pl.Unmarshal(v))
+	//			chkv <- kv{
+	//				prefix: prefix,
+	//				list:   pl,
+	//			}
+	//			lastPred = pred
+	//		}
+	//		return nil
+	//	})
+	//
 	close(chkv) // We have stopped output to chkv.
 	wg.Wait()   // Wait for numBackupRoutines to finish.
 	close(chb)  // We have stopped output to chb.

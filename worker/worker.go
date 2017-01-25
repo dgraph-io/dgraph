@@ -25,7 +25,7 @@ import (
 	"net"
 	"sync"
 
-	"github.com/boltdb/bolt"
+	"github.com/syndtr/goleveldb/leveldb"
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
@@ -36,10 +36,10 @@ var (
 		"Port used by worker for internal communication.")
 	backupPath = flag.String("backup", "backup",
 		"Folder in which to store backups.")
-	pstore *bolt.DB
+	pstore *leveldb.DB
 )
 
-func Init(ps *bolt.DB) {
+func Init(ps *leveldb.DB) {
 	pstore = ps
 }
 
