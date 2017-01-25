@@ -101,9 +101,9 @@ var filterOpPrecedence map[string]int
 
 func init() {
 	filterOpPrecedence = map[string]int{
-		"&": 3,
-		"|": 2,
-		"!": 1,
+		"not": 3,
+		"and": 2,
+		"or":  1,
 	}
 }
 
@@ -787,11 +787,11 @@ func (t *FilterTree) stringHelper(buf *bytes.Buffer) {
 	_, err := buf.WriteRune('(')
 	x.Check(err)
 	switch t.Op {
-	case "&":
+	case "and":
 		_, err = buf.WriteString("AND")
-	case "|":
+	case "or":
 		_, err = buf.WriteString("OR")
-	case "!":
+	case "not":
 		_, err = buf.WriteString("NOT")
 	//case "(":
 	//	_, err = buf.WriteString("(")
@@ -829,7 +829,7 @@ func (s *filterTreeStack) peek() *FilterTree {
 
 func evalStack(opStack, valueStack *filterTreeStack) {
 	topOp := opStack.pop()
-	if topOp.Op == "!" {
+	if topOp.Op == "not" {
 		topVal := valueStack.pop()
 		topOp.Child = []*FilterTree{topVal}
 	} else {
@@ -894,12 +894,7 @@ func parseFilter(it *lex.ItemIterator) (*FilterTree, error) {
 		item := it.Item()
 		lval := strings.ToLower(item.Val)
 		if lval == "and" || lval == "or" || lval == "not" { // Handle operators.
-			op := "&"
-			if lval == "or" {
-				op = "|"
-			} else if lval == "not" {
-				op = "!"
-			}
+			op := lval
 			opPred := filterOpPrecedence[op]
 			x.AssertTruef(opPred > 0, "Expected opPred > 0: %d", opPred)
 			// Evaluate the stack until we see an operator with strictly lower pred.
@@ -947,7 +942,7 @@ func parseFilter(it *lex.ItemIterator) (*FilterTree, error) {
 				return nil, x.Errorf("Expected ) to terminate func definition")
 			}
 			valueStack.push(leaf)
-			if opStack.peek().Op == "!" {
+			if opStack.peek().Op == "not" {
 				evalStack(opStack, valueStack)
 			}
 		} else if item.Typ == itemLeftRound { // Just push to op stack.
@@ -966,7 +961,7 @@ func parseFilter(it *lex.ItemIterator) (*FilterTree, error) {
 				// The parentheses are balanced out. Let's break.
 				break
 			}
-			if opStack.peek().Op == "!" {
+			if opStack.peek().Op == "not" {
 				evalStack(opStack, valueStack)
 			}
 		} else {

@@ -160,7 +160,7 @@ func TestSubSorted1(t *testing.T) {
 		newList([]uint64{1, 2, 3}),
 		newList([]uint64{2, 3, 4, 5}),
 	}
-	Subtract(input[0], input[1])
+	Difference(input[0], input[1])
 	require.Equal(t, []uint64{1}, input[0].Uids)
 }
 
@@ -169,7 +169,7 @@ func TestSubSorted6(t *testing.T) {
 		newList([]uint64{10, 12, 13}),
 		newList([]uint64{2, 3, 4, 13}),
 	}
-	Subtract(input[0], input[1])
+	Difference(input[0], input[1])
 	require.Equal(t, []uint64{10, 12}, input[0].Uids)
 }
 

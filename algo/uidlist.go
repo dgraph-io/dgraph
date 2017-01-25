@@ -115,7 +115,7 @@ func IntersectSorted(lists []*task.List) *task.List {
 	return &task.List{Uids: output}
 }
 
-func Subtract(u, v *task.List) {
+func Difference(u, v *task.List) {
 	if u == nil || v == nil {
 		return
 	}

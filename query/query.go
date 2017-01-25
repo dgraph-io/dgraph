@@ -781,11 +781,11 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		for _, filter := range sg.Filters {
 			lists = append(lists, filter.DestUIDs)
 		}
-		if sg.FilterOp == "|" {
+		if sg.FilterOp == "or" {
 			sg.DestUIDs = algo.MergeSorted(lists)
-		} else if sg.FilterOp == "!" {
+		} else if sg.FilterOp == "not" {
 			x.AssertTrue(len(sg.Filters) == 1)
-			algo.Subtract(sg.DestUIDs, sg.Filters[0].DestUIDs)
+			algo.Difference(sg.DestUIDs, sg.Filters[0].DestUIDs)
 		} else {
 			// If one of the arguments was id so append it once more
 			//lists = append(lists, sg.DestUIDs)
