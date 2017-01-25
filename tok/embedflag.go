@@ -2,7 +2,7 @@
 
 package tok
 
-// #cgo CPPFLAGS: -I../vendor/github.com/dgraph-io/goicu/icuembed
+// #cgo CPPFLAGS: -I../../goicu/icuembed
 // #cgo darwin LDFLAGS: -Wl,-undefined -Wl,dynamic_lookup
 // #cgo !darwin LDFLAGS: -Wl,-unresolved-symbols=ignore-all -lrt
 import "C"
