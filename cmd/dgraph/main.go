@@ -666,8 +666,6 @@ func checkFlagsAndInitDirs() {
 	prev := runtime.GOMAXPROCS(numCpus)
 	log.Printf("num_cpu: %v. prev_maxprocs: %v. Set max procs to num cpus",
 		numCpus, prev)
-	// Create parent directories for postings, uids and mutations
-	x.Check(os.MkdirAll(*postingDir, 0700))
 }
 
 func serveGRPC(l net.Listener) {
@@ -759,17 +757,7 @@ func main() {
 	// Setup external communication.
 	che := make(chan error, 1)
 	go setupServer(che)
-	wal, err := bolt.Open("wal.db", 0600, nil)
-	x.Checkf(err, "While opening boltdb")
-	err = wal.Update(func(tx *bolt.Tx) error {
-		if _, err := tx.CreateBucketIfNotExists([]byte("data")); err != nil {
-			return err
-		}
-		return nil
-	})
-	x.Check(err)
-
-	go worker.StartRaftNodes(wal)
+	go worker.StartRaftNodes(*walDir)
 
 	if err := <-che; !strings.Contains(err.Error(),
 		"use of closed network connection") {
