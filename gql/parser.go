@@ -830,13 +830,16 @@ func (s *filterTreeStack) peek() *FilterTree {
 func evalStack(opStack, valueStack *filterTreeStack) {
 	topOp := opStack.pop()
 	if topOp.Op == "not" {
+		// Since "not" is a unary operator, just pop one value.
 		topVal := valueStack.pop()
 		topOp.Child = []*FilterTree{topVal}
 	} else {
+		// "and" and "or" are binary operators, so pop two values.
 		topVal1 := valueStack.pop()
 		topVal2 := valueStack.pop()
 		topOp.Child = []*FilterTree{topVal2, topVal1}
 	}
+	// Push the new value (tree) into the valueStack.
 	valueStack.push(topOp)
 }
 
@@ -886,8 +889,10 @@ func parseFilter(it *lex.ItemIterator) (*FilterTree, error) {
 		return nil, x.Errorf("Expected ( after filter directive")
 	}
 
+	// opStack is used to collect the operators in right order.
 	opStack := new(filterTreeStack)
 	opStack.push(&FilterTree{Op: "("}) // Push ( onto operator stack.
+	// valueStack is used to collect the values.
 	valueStack := new(filterTreeStack)
 
 	for it.Next() {
@@ -942,6 +947,8 @@ func parseFilter(it *lex.ItemIterator) (*FilterTree, error) {
 				return nil, x.Errorf("Expected ) to terminate func definition")
 			}
 			valueStack.push(leaf)
+			// If the top of the stack was a "not" operator then we immediately apply
+			// it on the function.
 			if opStack.peek().Op == "not" {
 				evalStack(opStack, valueStack)
 			}
@@ -961,6 +968,8 @@ func parseFilter(it *lex.ItemIterator) (*FilterTree, error) {
 				// The parentheses are balanced out. Let's break.
 				break
 			}
+			// If the top operator was a "not" it has to be applied immediately to the
+			// val tree as it has highest precedence.
 			if opStack.peek().Op == "not" {
 				evalStack(opStack, valueStack)
 			}
