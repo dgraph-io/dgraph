@@ -209,12 +209,6 @@
 			"revisionTime": "2016-08-15T22:39:46Z"
 		},
 		{
-			"checksumSHA1": "lgNSTxay86o7/HxemA3ilBfazIk=",
-			"path": "gopkg.in/tylerb/graceful.v1",
-			"revision": "0e9129e9c6d47da90dc0c188b26bd7bb1dab53cd",
-			"revisionTime": "2017-01-16T09:04:26Z"
-		},
-		{
 			"checksumSHA1": "12GqsW8PiRPnezDDy0v4brZrndM=",
 			"path": "gopkg.in/yaml.v2",
 			"revision": "a5b47d31c556af34a302ce5d659e6fea44d90de0",
