@@ -202,22 +202,6 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *task.DirectedEdge) e
 	return nil
 }
 
-func batchDelete(batch chan []byte, errCh chan error) {
-	if err := pstore.Update(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte("data"))
-		for k := range batch {
-			if err := b.Delete(k); err != nil {
-				return err
-			}
-		}
-		return nil
-	}); err != nil {
-		errCh <- err
-		return
-	}
-	errCh <- nil
-}
-
 // RebuildIndex rebuilds index for a given attribute.
 func RebuildIndex(ctx context.Context, attr string) error {
 	x.AssertTruef(schema.IsIndexed(attr), "Attr %s not indexed", attr)
@@ -225,21 +209,19 @@ func RebuildIndex(ctx context.Context, attr string) error {
 	// Delete index entries from data store.
 	pk := x.ParsedKey{Attr: attr}
 	prefix := pk.IndexPrefix()
-	batchCh := make(chan []byte, 1000)
-	errCh := make(chan error, 1)
-	go batchDelete(batchCh, errCh)
 
-	pstore.View(func(tx *bolt.Tx) error {
-		c := tx.Bucket([]byte("data")).Cursor()
-
+	err := pstore.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte("data"))
+		c := b.Cursor()
 		for k, _ := c.Seek(prefix); k != nil && bytes.HasPrefix(k, prefix); k, _ = c.Next() {
-			batchCh <- k
+			if err := b.Delete(k); err != nil {
+				return err
+			}
 		}
 		return nil
 	})
-	close(batchCh)
 
-	if err := <-errCh; err != nil {
+	if err != nil {
 		fmt.Println(err)
 		return err
 	}

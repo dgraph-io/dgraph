@@ -182,7 +182,10 @@ func (l *List) getPostingList(loop int) *types.PostingList {
 
 		l.pstore.View(func(tx *bolt.Tx) error {
 			b := tx.Bucket([]byte("data"))
-			x.Checkf(plist.Unmarshal(b.Get(l.key)), "Unable to Unmarshal PostingList from store")
+			v := b.Get(l.key)
+			if v != nil {
+				x.Checkf(plist.Unmarshal(v), "Unable to Unmarshal PostingList from store")
+			}
 			return nil
 		})
 		if atomic.CompareAndSwapPointer(&l.pbuffer, pb, unsafe.Pointer(plist)) {

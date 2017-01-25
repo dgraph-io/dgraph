@@ -36,18 +36,18 @@ const (
 
 // writeBatch performs a batch write of key value pairs to RocksDB.
 func writeBatch(ctx context.Context, kv chan *task.KV, che chan error) {
-	for i := range kv {
-		if err := pstore.Batch(func(tx *bolt.Tx) error {
-			b := tx.Bucket([]byte("data"))
+	if err := pstore.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte("data"))
+		for i := range kv {
 			if err := b.Put(i.Key, i.Val); err != nil {
 				return err
 			}
-			x.Trace(ctx, "Doing batch write.")
-			return nil
-		}); err != nil {
-			che <- err
-			return
 		}
+		x.Trace(ctx, "Doing batch write.")
+		return nil
+	}); err != nil {
+		che <- err
+		return
 	}
 	che <- nil
 }
