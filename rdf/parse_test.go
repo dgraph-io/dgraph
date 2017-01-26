@@ -465,7 +465,8 @@ var testNQuads = []struct {
 		input: `<alice> <lives> "\t\b\n\r\f\"\'\\"@a-b .`,
 		nq: graph.NQuad{
 			Subject:     "alice",
-			Predicate:   "lives.a-b",
+			Predicate:   "lives",
+			Lang:        "a-b",
 			ObjectValue: &graph.Value{&graph.Value_StrVal{`\t\b\n\r\f\"\'\\`}},
 		},
 	},
