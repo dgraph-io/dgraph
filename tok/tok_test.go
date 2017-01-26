@@ -31,9 +31,7 @@ type encL struct {
 
 type byEnc struct{ encL }
 
-func (o byEnc) Less(i, j int) bool {
-	return o.ints[i] < o.ints[j]
-}
+func (o byEnc) Less(i, j int) bool { return o.ints[i] < o.ints[j] }
 
 func (o byEnc) Len() int { return len(o.ints) }
 
@@ -43,8 +41,8 @@ func (o byEnc) Swap(i, j int) {
 }
 
 func TestIntEncoding(t *testing.T) {
-	a := int32(2<<24 + 10)
-	b := int32(-2<<24 - 1)
+	a := int32(1<<24 + 10)
+	b := int32(-1<<24 - 1)
 	c := int32(math.MaxInt32)
 	d := int32(math.MinInt32)
 	enc := encL{}
@@ -58,6 +56,7 @@ func TestIntEncoding(t *testing.T) {
 	sort.Sort(byEnc{enc})
 	for i := 1; i < len(enc.tokens); i++ {
 		// The corresponding string tokens should be greater.
-		require.True(t, enc.tokens[i-1] < enc.tokens[i])
+		require.True(t, enc.tokens[i-1] < enc.tokens[i], "%d %v vs %d %v",
+			enc.ints[i-1], []byte(enc.tokens[i-1]), enc.ints[i], []byte(enc.tokens[i]))
 	}
 }

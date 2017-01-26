@@ -148,7 +148,7 @@ func processIndexDirective(it *lex.ItemIterator, name string, typ types.TypeID) 
 		if next.Typ == itemRightRound {
 			break
 		}
-		if next.Typ != itemDirectiveArg {
+		if next.Typ != itemText {
 			return x.Errorf("Expected directive arg but got: %v", next)
 		}
 		// We have the argument.
