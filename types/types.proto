@@ -18,6 +18,7 @@ message Posting {
 		UID = 8;
 	}
 	ValType val_type = 3;
+	string lang = 6;
 	string label = 4;
 	uint64 commit = 5;  // More inclination towards smaller values.
 

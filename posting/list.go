@@ -147,6 +147,7 @@ func newPosting(t *task.DirectedEdge) *types.Posting {
 		Value:   t.Value,
 		ValType: types.Posting_ValType(t.ValueType),
 		Label:   t.Label,
+		Lang:    t.Lang,
 		Op:      op,
 	}
 }
@@ -331,7 +332,7 @@ func edgeType(t *task.DirectedEdge) valueTypeInfo {
 
 func postingType(p *types.Posting) valueTypeInfo {
 	if !bytes.Equal(p.Value, nil) {
-		if p.Uid == math.MaxUint64 {
+		if len(p.Lang) == 0 {
 			return valueUntagged // value without lang tag
 		} else {
 			return valueTagged // value with lang tag
@@ -355,8 +356,12 @@ func (l *List) addMutation(ctx context.Context, t *task.DirectedEdge) (bool, err
 	l.AssertLock()
 	// All edges with a value without LANGTAG, have the same uid. In other words,
 	// an (entity, attribute) can only have one untagged value.
-	if !bytes.Equal(t.Value, nil) && t.ValueId == 0 { // TODO(tzdybal) refactoring - use function defined in rdf
-		t.ValueId = math.MaxUint64
+	if !bytes.Equal(t.Value, nil) {
+		if len(t.Lang) > 0 {
+			t.ValueId = farm.Fingerprint64([]byte(t.Lang))
+		} else {
+			t.ValueId = math.MaxUint64
+		}
 	}
 	if t.ValueId == 0 {
 		err := x.Errorf("ValueId cannot be zero")
@@ -582,7 +587,6 @@ func (l *List) value() (rval types.Val, rerr error) {
 	l.AssertRLock()
 	var found bool
 	l.iterate(math.MaxUint64-1, func(p *types.Posting) bool {
-		// TODO(tzdybal)
 		if p.Uid == math.MaxUint64 {
 			val := make([]byte, len(p.Value))
 			copy(val, p.Value)
@@ -598,3 +602,5 @@ func (l *List) value() (rval types.Val, rerr error) {
 	}
 	return rval, nil
 }
+
+// TODO(tzdybal) function for value in given language

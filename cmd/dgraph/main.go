@@ -165,7 +165,6 @@ func convertToEdges(ctx context.Context, nquads []*graph.NQuad) (mutationResult,
 				uid := rdf.GetUid(nq.ObjectId)
 				newUids[nq.ObjectId] = uid
 			}
-			// TODO(tzdybal) - what about LANGTAG?
 		}
 	}
 

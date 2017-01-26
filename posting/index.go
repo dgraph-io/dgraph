@@ -246,6 +246,7 @@ func RebuildIndex(ctx context.Context, attr string) error {
 		if len(pl.Postings) == 0 {
 			continue
 		}
+		// TODO(tzdybal) - what about the values with Lang?
 		p := pl.Postings[len(pl.Postings)-1]
 		pt := postingType(p)
 		if pt != valueTagged && pt != valueUntagged {
@@ -253,7 +254,6 @@ func RebuildIndex(ctx context.Context, attr string) error {
 		}
 
 		// Add index entries based on p.
-		// TODO(tzdybal) - what about the LANGTAG?
 		val := types.Val{
 			Value: p.Value,
 			Tid:   types.TypeID(p.ValType),

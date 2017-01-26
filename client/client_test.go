@@ -47,17 +47,14 @@ func TestCheckNQuad(t *testing.T) {
 	}); err == nil {
 		t.Fatal(err)
 	}
-	// TODO(tzdybal) - remove/replace
-	/*
-		if err := checkNQuad(graph.NQuad{
-			Subject:     "alice",
-			Predicate:   "name",
-			ObjectValue: s,
-			ObjectId:    "id",
-		}); err == nil {
-			t.Fatal(err)
-		}
-	*/
+	if err := checkNQuad(graph.NQuad{
+		Subject:     "alice",
+		Predicate:   "name",
+		ObjectValue: s,
+		ObjectId:    "id",
+	}); err == nil {
+		t.Fatal(err)
+	}
 }
 
 func TestSetMutation(t *testing.T) {

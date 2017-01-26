@@ -100,6 +100,7 @@ func (nq NQuad) ToEdge() (*task.DirectedEdge, error) {
 	out := &task.DirectedEdge{
 		Attr:   nq.Predicate,
 		Label:  nq.Label,
+		Lang:   nq.Lang,
 		Entity: sid,
 	}
 
@@ -107,15 +108,10 @@ func (nq NQuad) ToEdge() (*task.DirectedEdge, error) {
 	case nQuadUid:
 		oid := GetUid(nq.ObjectId)
 		out.ValueId = oid
-	case nQuadValue:
+	case nQuadValue, nQuadTaggedValue:
 		if err = copyValue(out, nq); err != nil {
 			return &emptyEdge, err
 		}
-	case nQuadTaggedValue:
-		if err = copyValue(out, nq); err != nil {
-			return &emptyEdge, err
-		}
-		out.ValueId = farm.Fingerprint64([]byte(nq.ObjectId))
 	}
 	return out, nil
 }
@@ -137,21 +133,17 @@ func (nq NQuad) ToEdgeUsing(newToUid map[string]uint64) (*task.DirectedEdge, err
 		Entity: uid,
 		Attr:   nq.Predicate,
 		Label:  nq.Label,
+		Lang:   nq.Lang,
 	}
 
 	switch nq.valueType() {
 	case nQuadUid:
 		uid = toUid(nq.ObjectId, newToUid)
 		out.ValueId = uid
-	case nQuadValue:
+	case nQuadValue, nQuadTaggedValue:
 		if err = copyValue(out, nq); err != nil {
 			return &emptyEdge, err
 		}
-	case nQuadTaggedValue:
-		if err = copyValue(out, nq); err != nil {
-			return &emptyEdge, err
-		}
-		out.ValueId = farm.Fingerprint64([]byte(nq.ObjectId))
 	}
 	return out, nil
 }
@@ -190,15 +182,15 @@ const (
 )
 
 func (nq NQuad) valueType() nQuadTypeInfo {
-	if len(nq.ObjectId) == 0 {
-		if nq.ObjectValue != nil {
+	if nq.ObjectValue != nil {
+		if len(nq.Lang) == 0 {
 			return nQuadValue // value without lang tag
 		} else {
-			return nQuadEmpty // empty NQuad - no Uid and no Value
+			return nQuadTaggedValue // value with lang tag
 		}
 	} else {
-		if nq.ObjectValue != nil {
-			return nQuadTaggedValue // value with lang tag
+		if len(nq.ObjectId) == 0 {
+			return nQuadEmpty // empty NQuad - no Uid and no Value
 		} else {
 			return nQuadUid // Uid
 		}
@@ -255,7 +247,7 @@ func Parse(line string) (rnq graph.NQuad, rerr error) {
 			}
 
 		case itemLanguage:
-			rnq.ObjectId = item.Val
+			rnq.Lang = item.Val
 
 		case itemObjectType:
 			if len(oval) == 0 {
