@@ -115,7 +115,11 @@ func processSort(ts *task.Sort) (*task.SortResult, error) {
 		it.Seek(indexPrefix)
 	} else {
 		it.Seek(pk.SkipRangeOfSameType())
-		it.Prev()
+		if it.Valid() {
+			it.Prev()
+		} else {
+			it.SeekToLast()
+		}
 	}
 
 BUCKETS:
@@ -241,8 +245,7 @@ func fetchValue(uid uint64, attr string, scalar types.TypeID) (types.Val, error)
 	if err != nil {
 		return types.Val{}, err
 	}
-	dst := types.ValueForType(scalar)
-	err = types.Convert(src, &dst)
+	dst, err := types.Convert(src, scalar)
 	if err != nil {
 		return types.Val{}, err
 	}

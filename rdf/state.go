@@ -35,6 +35,7 @@ const (
 	itemLanguage                           // language, 11
 	itemObjectType                         // object type, 12
 	itemValidEnd                           // end with dot, 13
+	itemComment                            // comment, 14
 )
 
 // These constants keep a track of the depth while parsing an rdf N-Quad.
@@ -85,6 +86,12 @@ Loop:
 			l.Emit(itemText)
 			return lexObject
 
+		case r == '#':
+			if l.Depth != atSubject {
+				return l.Errorf("Invalid input: %c at lexText", r)
+			}
+			return lexComment
+
 		case r == lex.EOF:
 			break Loop
 
@@ -102,6 +109,9 @@ Loop:
 	}
 	if l.Pos > l.Start {
 		l.Emit(itemText)
+	}
+	if l.Depth == atSubject { // no valid term encountered, taken as comment-line
+		return lexComment
 	}
 	l.Emit(lex.ItemEOF)
 	return nil
@@ -145,17 +155,31 @@ func lexUidNode(l *lex.Lexer, styp lex.ItemType, sfn lex.StateFn) lex.StateFn {
 		styp)
 }
 
-// Assumes that the current rune is '_'.
+// Assumes that caller has consumed '_'.
+// BLANK_NODE_LABEL ::= '_:' (PN_CHARS_U | [0-9]) ((PN_CHARS | '.')* PN_CHARS)?
 func lexBlankNode(l *lex.Lexer, styp lex.ItemType,
 	sfn lex.StateFn) lex.StateFn {
-
-	// RDF Blank Node.
-	// TODO: At some point do checkings based on the guidelines. For now,
-	// just accept everything until space.
-	l.AcceptUntil(isSpace)
-	r := l.Peek()
+	r := l.Next()
+	if r != ':' {
+		return l.Errorf("Invalid character after _. Expected :, found %v", r)
+	}
+	r = l.Next()
 	if r == lex.EOF {
 		return l.Errorf("Unexpected end of subject")
+	}
+	if !(isPNCharsU(r) || (r >= '0' && r <= '9')) {
+		return l.Errorf("Invalid character in %v after _: , Got %v", styp, r)
+	}
+	lastAccRune, validRune := l.AcceptRun(func(r rune) bool {
+		return r == '.' || isPNChar(r)
+	})
+	if validRune && lastAccRune == '.' {
+		return l.Errorf("Can not end %v with '.'", styp)
+	}
+
+	r = l.Peek()
+	if r == lex.EOF {
+		return l.Errorf("Unexpected end of %v", styp)
 	}
 
 	if isSpace(r) {
@@ -177,12 +201,7 @@ func lexSubject(l *lex.Lexer) lex.StateFn {
 	// The subject represents a blank node.
 	if r == '_' {
 		l.Depth++
-		r = l.Next()
-		if r == ':' {
-			return lexBlankNode(l, itemSubject, lexText)
-		} else {
-			return l.Errorf("Invalid character after _ during lexSubject: %v", r)
-		}
+		return lexBlankNode(l, itemSubject, lexText)
 	}
 	// See if its an uid
 	return lexUidNode(l, itemSubject, lexText)
@@ -211,18 +230,30 @@ func lexLanguage(l *lex.Lexer) lex.StateFn {
 		return l.Errorf("Invalid language tag prefix: %v", r)
 	}
 
-	l.AcceptRun(isLangTag)
+	lastRune, validRune := l.AcceptRun(isLangTag)
+	if validRune && lastRune == '-' {
+		return l.Errorf("Invalid character - at the end of language literal.")
+	}
 	l.Emit(itemLanguage)
 	return lexText
 }
 
 // Assumes '"' has already been encountered.
+// literal ::= STRING_LITERAL_QUOTE ('^^' IRIREF | LANGTAG)?
+// STRING_LITERAL_QUOTE ::= '"' ([^#x22#x5C#xA#xD] | ECHAR | UCHAR)* '"'
 func lexLiteral(l *lex.Lexer) lex.StateFn {
 	for {
 		r := l.Next()
 		if r == '\u005c' { // backslash
 			r = l.Next()
-			continue // This would skip over the escaped rune.
+			if isEscChar(r) || hasUChars(r, l) {
+				continue // This would skip over the escaped rune.
+			}
+			return l.Errorf("Invalid escape character : %v in literal", r)
+		} else {
+			if r == 0x5c || r == 0xa || r == 0xd { // 0x22 ('"') is endLiteral
+				return l.Errorf("Invalid character %v in literal.", r)
+			}
 		}
 
 		if r == lex.EOF || isEndLiteral(r) {
@@ -278,12 +309,7 @@ func lexObject(l *lex.Lexer) lex.StateFn {
 
 	if r == '_' {
 		l.Depth++
-		r = l.Next()
-		if r == ':' {
-			return lexBlankNode(l, itemObject, lexText)
-		} else {
-			return l.Errorf("Invalid char after _: %v at lexObject", r)
-		}
+		return lexBlankNode(l, itemObject, lexText)
 	}
 
 	if r == '"' {
@@ -304,15 +330,23 @@ func lexLabel(l *lex.Lexer) lex.StateFn {
 
 	if r == '_' {
 		l.Depth++
-		r = l.Next()
-		if r != ':' {
-			return l.Errorf("Invalid char: %c at lexLabel", r)
-		}
-
-		l.Backup()
 		return lexBlankNode(l, itemLabel, lexText)
 	}
 	return l.Errorf("Invalid char: %v at lexLabel", r)
+}
+
+// lexComment lexes a comment text.
+func lexComment(l *lex.Lexer) lex.StateFn {
+	l.Backup()
+	for {
+		r := l.Next()
+		if isEndOfLine(r) || r == lex.EOF {
+			break
+		}
+	}
+	l.Emit(itemComment)
+	l.Emit(lex.ItemEOF)
+	return nil // Stop the run loop.
 }
 
 func isClosingBracket(r rune) bool {
@@ -322,6 +356,11 @@ func isClosingBracket(r rune) bool {
 // isSpace returns true if the rune is a tab or space.
 func isSpace(r rune) bool {
 	return r == '\u0009' || r == '\u0020'
+}
+
+// isEndOfLine returns true if the rune is a Linefeed or a Carriage return.
+func isEndOfLine(r rune) bool {
+	return r == '\u000A' || r == '\u000D'
 }
 
 func isEndLiteral(r rune) bool {
@@ -355,6 +394,7 @@ func isLangTag(r rune) bool {
 	}
 }
 
+// IRIREF ::= '<' ([^#x00-#x20<>"{}|^`\] | UCHAR)* '>'
 func isIRIChar(r rune, l *lex.Lexer) bool {
 	if r <= 32 { // no chars b/w 0x00 to 0x20 inclusive
 		return false
@@ -370,28 +410,97 @@ func isIRIChar(r rune, l *lex.Lexer) bool {
 	case '`':
 	case '\\':
 		r2 := l.Next()
-		times := 4
 		if r2 != 'u' && r2 != 'U' {
 			l.Backup()
 			return false
-		} else {
-			if r2 == 'U' {
-				times = 8
-			}
-			rs := l.AcceptRunTimes(isHex, times)
-			return rs == times
 		}
+		return hasUChars(r2, l)
 	default:
 		return true
 	}
 	return false
 }
 
+// HEX ::= [0-9] | [A-F] | [a-f]
 func isHex(r rune) bool {
 	switch {
 	case r >= '0' && r <= '9':
 	case r >= 'a' && r <= 'f':
 	case r >= 'A' && r <= 'F':
+	default:
+		return false
+	}
+	return true
+}
+
+// PN_CHARS_BASE ::=   [A-Z] | [a-z] | [#x00C0-#x00D6] | [#x00D8-#x00F6] |
+// [#x00F8-#x02FF] | [#x0370-#x037D] | [#x037F-#x1FFF] | [#x200C-#x200D] | [#x2070-#x218F] |
+// [#x2C00-#x2FEF] | [#x3001-#xD7FF] | [#xF900-#xFDCF] | [#xFDF0-#xFFFD] | [#x10000-#xEFFFF]
+func isPnCharsBase(r rune) bool {
+	switch {
+	case r >= 'a' && r <= 'z':
+	case r >= 'A' && r <= 'Z':
+	case r >= 0xC0 && r <= 0xD6:
+	case r >= 0xD8 && r <= 0xF6:
+	case r >= 0xF8 && r <= 0x2FF:
+	case r >= 0x370 && r <= 0x37D:
+	case r >= 0x37F && r <= 0x1FFF:
+	case r >= 0x200C && r <= 0x200D:
+	case r >= 0x2070 && r <= 0x218F:
+	case r >= 0x2C00 && r <= 0X2FEF:
+	case r >= 0x3001 && r <= 0xD7FF:
+	case r >= 0xF900 && r <= 0xFDCF:
+	case r >= 0xFDF0 && r <= 0xFFFD:
+	case r >= 0x10000 && r <= 0xEFFFF:
+	default:
+		return false
+	}
+	return true
+}
+
+// PN_CHARS_U ::= PN_CHARS_BASE | '_' | ':'
+func isPNCharsU(r rune) bool {
+	return r == '_' || r == ':' || isPnCharsBase(r)
+}
+
+// PN_CHARS ::= PN_CHARS_U | '-' | [0-9] | #x00B7 | [#x0300-#x036F] | [#x203F-#x2040]
+func isPNChar(r rune) bool {
+	switch {
+	case r == '-':
+	case r >= '0' && r <= '9':
+	case r == 0xB7:
+	case r >= 0x300 && r <= 0x36F:
+	case r >= 0x203F && r <= 0x2040:
+	default:
+		return isPNCharsU(r)
+	}
+	return true
+}
+
+// UCHAR ::= '\u' HEX HEX HEX HEX | '\U' HEX HEX HEX HEX HEX HEX HEX HEX
+func hasUChars(r rune, l *lex.Lexer) bool {
+	if r != 'u' && r != 'U' {
+		return false
+	}
+	times := 4
+	if r == 'U' {
+		times = 8
+	}
+	return times == l.AcceptRunTimes(isHex, times)
+}
+
+// ECHAR ::= '\' [tbnrf"'\]
+func isEscChar(r rune) bool {
+	switch r {
+	case 't':
+	case 'b':
+	case 'n':
+	case 'r':
+	case 'f':
+	case '"':
+	case '\'':
+	case '\\':
+		// true for all above.
 	default:
 		return false
 	}

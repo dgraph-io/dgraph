@@ -122,10 +122,9 @@ func TestKeyGeneratorPoint(t *testing.T) {
 	data, err := wkb.Marshal(p, binary.LittleEndian)
 	require.NoError(t, err)
 
-	gc := ValueForType(GeoID)
 	src := ValueForType(BinaryID)
 	src.Value = data
-	err = Convert(src, &gc)
+	gc, err := Convert(src, GeoID)
 	require.NoError(t, err)
 	g := gc.Value.(geom.T)
 
@@ -140,10 +139,9 @@ func TestKeyGeneratorPolygon(t *testing.T) {
 	data, err := wkb.Marshal(p, binary.LittleEndian)
 	require.NoError(t, err)
 
-	gc := ValueForType(GeoID)
 	src := ValueForType(BinaryID)
 	src.Value = data
-	err = Convert(src, &gc)
+	gc, err := Convert(src, GeoID)
 	require.NoError(t, err)
 	g := gc.Value.(geom.T)
 
@@ -236,10 +234,9 @@ func BenchmarkKeyGeneratorPoint(b *testing.B) {
 		b.Error(err)
 	}
 
-	gc := ValueForType(GeoID)
 	src := ValueForType(BinaryID)
 	src.Value = data
-	err = Convert(src, &gc)
+	gc, err := Convert(src, GeoID)
 	require.NoError(b, err)
 	g := gc.Value.(geom.T)
 
@@ -259,10 +256,9 @@ func BenchmarkKeyGeneratorPolygon(b *testing.B) {
 		b.Error(err)
 	}
 
-	gc := ValueForType(GeoID)
 	src := ValueForType(GeoID)
 	src.Value = data
-	err = Convert(src, &gc)
+	gc, err := Convert(src, GeoID)
 	require.NoError(b, err)
 	g := gc.Value.(geom.T)
 

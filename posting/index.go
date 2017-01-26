@@ -48,8 +48,7 @@ func IndexTokens(attr string, src types.Val) ([]string, error) {
 		return nil, x.Errorf("Cannot index attribute %s of type object.", attr)
 	}
 	s := schemaType
-	sv := types.ValueForType(s)
-	err = types.Convert(src, &sv)
+	sv, err := types.Convert(src, s)
 	if err != nil {
 		return nil, err
 	}

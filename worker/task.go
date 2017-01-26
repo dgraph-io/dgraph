@@ -81,8 +81,7 @@ func convertValue(attr, data string) (types.Val, error) {
 	}
 
 	src := types.Val{types.StringID, []byte(data)}
-	dst := types.ValueForType(t)
-	err = types.Convert(src, &dst)
+	dst, err := types.Convert(src, t)
 	return dst, err
 }
 

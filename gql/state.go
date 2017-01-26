@@ -38,6 +38,9 @@ const (
 	equal        = '='
 	quote        = '"'
 	at           = '@'
+	colon        = ':'
+	lsThan       = '<'
+	grThan       = '>'
 )
 
 // Constants representing type of different graphql lexed items.
@@ -46,7 +49,6 @@ const (
 	itemLeftCurl                                // left curly bracket
 	itemRightCurl                               // right curly bracket
 	itemEqual                                   // equals to symbol
-	itemComment                                 // comment
 	itemName                                    // [9] names
 	itemOpType                                  // operation type
 	itemString                                  // quoted string
@@ -83,6 +85,8 @@ func lexInsideMutation(l *lex.Lexer) lex.StateFn {
 			l.Ignore()
 		case isNameBegin(r):
 			return lexNameMutation
+		case r == '#':
+			return lexComment
 		case r == lex.EOF:
 			return l.Errorf("Unclosed mutation action")
 		default:
@@ -120,6 +124,9 @@ func lexFuncOrArg(l *lex.Lexer) lex.StateFn {
 		case isSpace(r) || isEndOfLine(r):
 			l.Ignore()
 		case r == comma:
+			if empty {
+				return l.Errorf("Consecutive commas not allowed.")
+			}
 			empty = true
 			l.Ignore()
 		case r == '&':
@@ -141,7 +148,7 @@ func lexFuncOrArg(l *lex.Lexer) lex.StateFn {
 		case isNameBegin(r) || isNumber(r):
 			empty = false
 			return lexArgName
-		case r == ':':
+		case r == colon:
 			l.Emit(itemColon)
 		case r == equal:
 			l.Emit(itemEqual)
@@ -154,6 +161,8 @@ func lexFuncOrArg(l *lex.Lexer) lex.StateFn {
 				l.Next() // Consume the " and ignore it.
 				l.Ignore()
 			}
+		case r == lsThan:
+			return lexIRIRef
 		case r == '[':
 			{
 				depth := 1
@@ -180,6 +189,8 @@ func lexFuncOrArg(l *lex.Lexer) lex.StateFn {
 					return l.Errorf("Invalid bracket sequence")
 				}
 			}
+		case r == '#':
+			return lexComment
 		default:
 			return l.Errorf("Unrecognized character in inside a func: %#U", r)
 		}
@@ -199,6 +210,8 @@ Loop:
 			return l.Errorf("Too many right curl")
 		case r == lex.EOF:
 			break Loop
+		case r == '#':
+			return lexComment
 		case r == leftRound:
 			l.Backup()
 			l.Emit(itemText)
@@ -255,7 +268,6 @@ func lexText(l *lex.Lexer) lex.StateFn {
 		case isNameBegin(r):
 			return lexName
 		case r == '#':
-			l.Backup()
 			return lexComment
 		case r == leftRound:
 			l.Emit(itemLeftRound)
@@ -263,15 +275,29 @@ func lexText(l *lex.Lexer) lex.StateFn {
 			l.Ignore()
 			l.ArgDepth++
 			return lexText
-		case r == ':':
+		case r == colon:
 			l.Emit(itemColon)
 		case r == at:
 			l.Emit(itemAt)
 			return lexDirective
+		case r == lsThan:
+			return lexIRIRef
 		default:
 			return l.Errorf("Unrecognized character in lexText: %#U", r)
 		}
 	}
+}
+
+func lexIRIRef(l *lex.Lexer) lex.StateFn {
+	l.Ignore() // ignore '<'
+	l.AcceptRunRec(isIRIChar)
+	l.Emit(itemName) // will emit without '<' and '>'
+	r := l.Next()
+	if r != '>' {
+		return l.Errorf("IRI should end with '>'. Got %v", r)
+	}
+	l.Ignore() // ignore '>'
+	return lexText
 }
 
 // lexFilterFuncName expects input to look like equal("...", "...").
@@ -341,16 +367,14 @@ func lexComment(l *lex.Lexer) lex.StateFn {
 	for {
 		r := l.Next()
 		if isEndOfLine(r) {
-			l.Emit(itemComment)
+			l.Ignore()
 			return lexText
 		}
 		if r == lex.EOF {
 			break
 		}
 	}
-	if l.Pos > l.Start {
-		l.Emit(itemComment)
-	}
+	l.Ignore()
 	l.Emit(lex.ItemEOF)
 	return nil // Stop the run loop.
 }
@@ -519,4 +543,55 @@ func isNameSuffix(r rune) bool {
 		return true
 	}
 	return false
+}
+
+// IRIREF ::= '<' ([^#x00-#x20<>"{}|^`\] | UCHAR)* '>'
+func isIRIChar(r rune, l *lex.Lexer) bool {
+	if r <= 32 { // no chars b/w 0x00 to 0x20 inclusive
+		return false
+	}
+	switch r {
+	case '<':
+	case '>':
+	case '"':
+	case '{':
+	case '}':
+	case '|':
+	case '^':
+	case '`':
+	case '\\':
+		r2 := l.Next()
+		if r2 != 'u' && r2 != 'U' {
+			l.Backup()
+			return false
+		}
+		return hasUChars(r2, l)
+	default:
+		return true
+	}
+	return false
+}
+
+// UCHAR ::= '\u' HEX HEX HEX HEX | '\U' HEX HEX HEX HEX HEX HEX HEX HEX
+func hasUChars(r rune, l *lex.Lexer) bool {
+	if r != 'u' && r != 'U' {
+		return false
+	}
+	times := 4
+	if r == 'U' {
+		times = 8
+	}
+	return times == l.AcceptRunTimes(isHex, times)
+}
+
+// HEX ::= [0-9] | [A-F] | [a-f]
+func isHex(r rune) bool {
+	switch {
+	case r >= '0' && r <= '9':
+	case r >= 'a' && r <= 'f':
+	case r >= 'A' && r <= 'F':
+	default:
+		return false
+	}
+	return true
 }

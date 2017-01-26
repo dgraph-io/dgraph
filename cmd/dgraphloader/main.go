@@ -69,7 +69,10 @@ func processFile(file string, batch *client.BatchMutation) {
 			break
 		}
 		nq, err := rdf.Parse(buf.String())
-		if err != nil {
+		if err == rdf.ErrEmpty { // special case: comment/empty line
+			buf.Reset()
+			continue
+		} else if err != nil {
 			log.Fatal("While parsing RDF: ", err)
 		}
 		buf.Reset()
@@ -86,7 +89,7 @@ func printCounters(batch *client.BatchMutation, ticker *time.Ticker) {
 	for range ticker.C {
 		c := batch.Counter()
 		rate := float64(c.Rdfs) / c.Elapsed.Seconds()
-		fmt.Printf("[Request: %6d] Total RDFs done: %8d RDFs per second: %7.0f\r", c.Mutations, c.Rdfs, rate)
+		fmt.Printf("[Request: %6d] Total RDFs done: %8d RDFs per second: %7.0f \r", c.Mutations, c.Rdfs, rate)
 	}
 }
 

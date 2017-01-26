@@ -84,14 +84,14 @@ func TestSchemaIndex_Error2(t *testing.T) {
 	require.Error(t, Parse("testfiles/test_schema_index3"))
 }
 
-func TestSchemaIndexCustom(t *testing.T) {
-	str = make(map[string]types.TypeID)
-	require.NoError(t, Parse("testfiles/test_schema_index4"))
-	require.Equal(t, 3, len(indexedFields))
-	require.Equal(t, "int", indexedFields["age"].Name())
-	require.Equal(t, "exact", indexedFields["name"].Name())
-	require.Equal(t, "term", indexedFields["address"].Name())
-}
+//func TestSchemaIndexCustom(t *testing.T) {
+//	str = make(map[string]types.TypeID)
+//	require.NoError(t, Parse("testfiles/test_schema_index4"))
+//	require.Equal(t, 3, len(indexedFields))
+//	require.Equal(t, "int", indexedFields["age"].Name())
+//	require.Equal(t, "exact", indexedFields["name"].Name())
+//	require.Equal(t, "term", indexedFields["address"].Name())
+//}
 
 func TestMain(m *testing.M) {
 	x.SetTestRun()

@@ -24,9 +24,10 @@ import (
 )
 
 var testNQuads = []struct {
-	input       string
-	nq          graph.NQuad
-	expectedErr bool
+	input        string
+	nq           graph.NQuad
+	expectedErr  bool
+	shouldIgnore bool
 }{
 	{
 		input: `<some_subject_id> <predicate> <object_id> .`,
@@ -395,8 +396,92 @@ var testNQuads = []struct {
 		expectedErr: true, // should fail because of \
 	},
 	{
+		input:       `_:|alice <abc> <abc> .`,
+		expectedErr: true, // | is not allowed first char in blanknode.
+	},
+	{
+		input:       "_:al\u00d7ice <abc> <abc> .",
+		expectedErr: true, // 0xd7 is not allowed
+	},
+	{
 		input:       `_:gabe <name> "Gabe' .`,
 		expectedErr: true,
+	},
+	{
+		input: `_:0 <name> <good> .`,
+		nq: graph.NQuad{
+			Subject:   "_:0",
+			Predicate: "name",
+			ObjectId:  "good",
+		},
+	},
+	{
+		input: `_:0a.b <name> <good> .`,
+		nq: graph.NQuad{
+			Subject:   "_:0a.b",
+			Predicate: "name",
+			ObjectId:  "good",
+		},
+	},
+	{
+		input:       `_:0a. <name> <bad> .`,
+		expectedErr: true, // blanknode can not end with .
+	},
+	{
+		input:       `<alice> <lives> "wonder \a land" .`,
+		expectedErr: true, // \a not valid escape char.
+	},
+	{
+		input: `<alice> <lives> "\u0045 wonderland" .`,
+		nq: graph.NQuad{
+			Subject:     "alice",
+			Predicate:   "lives",
+			ObjectId:    "",
+			ObjectValue: &graph.Value{&graph.Value_StrVal{`\u0045 wonderland`}},
+		},
+		expectedErr: false,
+	},
+	{
+		input:       `<alice> <lives> "\u004 wonderland" .`,
+		expectedErr: true, // should have 4 hex values after \u
+	},
+	{
+		input:       `<alice> <lives> "wonderful land"@a- .`,
+		expectedErr: true, // object langtag can not end with -
+	},
+	{
+		input: `<alice> <lives> "\t\b\n\r\f\"\'\\"@a-b .`,
+		nq: graph.NQuad{
+			Subject:     "alice",
+			Predicate:   "lives.a-b",
+			ObjectValue: &graph.Value{&graph.Value_StrVal{`\t\b\n\r\f\"\'\\`}},
+		},
+	},
+	{
+		input:       `<alice> <lives> "\a" .`,
+		expectedErr: true, // \a is not valid escape char
+  },
+  {
+		input: `# nothing happened`,
+		expectedErr: true,
+		shouldIgnore: true,
+	},
+	{
+		input: `<some_subject_id> # <predicate> <object_id> .`,
+		expectedErr: true,
+	},
+	{
+		input: `<some_subject_id> <predicate> <object_id> # .`,
+		expectedErr: true,
+	},
+	{
+		input: `check me as error`,
+		expectedErr: true,
+	},
+	{
+		input: `   `,
+		expectedErr: true,
+		shouldIgnore: true,
 	},
 }
 
@@ -404,7 +489,10 @@ func TestLex(t *testing.T) {
 	for _, test := range testNQuads {
 		t.Logf("Testing %v", test.input)
 		rnq, err := Parse(test.input)
-		if test.expectedErr {
+		if test.expectedErr && test.shouldIgnore {
+			assert.Equal(t, ErrEmpty, err, "Catch an ignorable case: %v", 
+				err.Error())
+		} else if test.expectedErr {
 			assert.Error(t, err, "Expected error for input: %q. Output: %+v",
 				test.input, rnq)
 		} else {

@@ -24,10 +24,12 @@ import (
 	"io/ioutil"
 	"os"
 	"testing"
+	"time"
 
 	farm "github.com/dgryski/go-farm"
 	"github.com/gogo/protobuf/proto"
 	"github.com/stretchr/testify/require"
+	geom "github.com/twpayne/go-geom"
 
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/gql"
@@ -58,49 +60,7 @@ func taskValues(t *testing.T, v []*task.Value) []string {
 	return out
 }
 
-func TestNewGraph(t *testing.T) {
-	dir, err := ioutil.TempDir("", "storetest_")
-	require.NoError(t, err)
-
-	gq := &gql.GraphQuery{
-		UID:  []uint64{101},
-		Attr: "me",
-	}
-	ps, err := store.NewStore(dir)
-	require.NoError(t, err)
-
-	posting.Init(ps)
-
-	ctx := context.Background()
-	sg, err := newGraph(ctx, gq)
-	require.NoError(t, err)
-
-	require.EqualValues(t,
-		[][]uint64{
-			[]uint64{101},
-		}, algo.ToUintsListForTest(sg.uidMatrix))
-}
-
-// TODO(jchiu): Modify tests to try all equivalent schemas.
-//const schemaStr = `
-//scalar name:string @index
-//scalar dob:date @index
-//scalar loc:geo @index
-
-//type Person {
-//  friend: Person @reverse
-//}`
-
-const schemaStr = `
-scalar name:string @index
-scalar dob:date @index
-scalar loc:geo @index
-scalar (
-  friend:uid @reverse
-)
-`
-
-func addEdgeToValue(t *testing.T, ps *store.Store, attr string, src uint64,
+func addEdgeToValue(t *testing.T, attr string, src uint64,
 	value string) {
 	edge := &task.DirectedEdge{
 		Value:  []byte(value),
@@ -114,7 +74,7 @@ func addEdgeToValue(t *testing.T, ps *store.Store, attr string, src uint64,
 		l.AddMutationWithIndex(context.Background(), edge))
 }
 
-func addEdgeToTypedValue(t *testing.T, ps *store.Store, attr string, src uint64,
+func addEdgeToTypedValue(t *testing.T, attr string, src uint64,
 	typ types.TypeID, value []byte) {
 	edge := &task.DirectedEdge{
 		Value:     value,
@@ -129,7 +89,7 @@ func addEdgeToTypedValue(t *testing.T, ps *store.Store, attr string, src uint64,
 		l.AddMutationWithIndex(context.Background(), edge))
 }
 
-func addEdgeToUID(t *testing.T, ps *store.Store, attr string, src uint64, dst uint64) {
+func addEdgeToUID(t *testing.T, attr string, src uint64, dst uint64) {
 	edge := &task.DirectedEdge{
 		ValueId: dst,
 		Label:   "testing",
@@ -142,7 +102,7 @@ func addEdgeToUID(t *testing.T, ps *store.Store, attr string, src uint64, dst ui
 		l.AddMutationWithIndex(context.Background(), edge))
 }
 
-func delEdgeToUID(t *testing.T, ps *store.Store, attr string, src uint64, dst uint64) {
+func delEdgeToUID(t *testing.T, attr string, src uint64, dst uint64) {
 	edge := &task.DirectedEdge{
 		ValueId: dst,
 		Label:   "testing",
@@ -155,110 +115,139 @@ func delEdgeToUID(t *testing.T, ps *store.Store, attr string, src uint64, dst ui
 		l.AddMutationWithIndex(context.Background(), edge))
 }
 
-func populateGraph(t *testing.T) (string, string, *store.Store) {
+func addGeoData(t *testing.T, ps *store.Store, uid uint64, p geom.T, name string) {
+	value := types.ValueForType(types.BinaryID)
+	src := types.ValueForType(types.GeoID)
+	src.Value = p
+	err := types.Marshal(src, &value)
+	require.NoError(t, err)
+	addEdgeToTypedValue(t, "geometry", uid, types.GeoID, value.Value.([]byte))
+	addEdgeToTypedValue(t, "name", uid, types.StringID, []byte(name))
+}
+
+var ps *store.Store
+
+func populateGraph(t *testing.T) {
+	x.AssertTrue(ps != nil)
 	// logrus.SetLevel(logrus.DebugLevel)
-	dir, err := ioutil.TempDir("", "storetest_")
-	require.NoError(t, err)
-
-	ps, err := store.NewStore(dir)
-	require.NoError(t, err)
-
-	schema.ParseBytes([]byte(schemaStr))
-	posting.Init(ps)
-	worker.Init(ps)
-
-	group.ParseGroupConfig("")
-	dir2, err := ioutil.TempDir("", "wal_")
-	require.NoError(t, err)
-	worker.StartRaftNodes(dir2)
-
 	// So, user we're interested in has uid: 1.
 	// She has 5 friends: 23, 24, 25, 31, and 101
-	addEdgeToUID(t, ps, "friend", 1, 23)
-	addEdgeToUID(t, ps, "friend", 1, 24)
-	addEdgeToUID(t, ps, "friend", 1, 25)
-	addEdgeToUID(t, ps, "friend", 1, 31)
-	addEdgeToUID(t, ps, "friend", 1, 101)
-	addEdgeToUID(t, ps, "friend", 31, 24)
+	addEdgeToUID(t, "friend", 1, 23)
+	addEdgeToUID(t, "friend", 1, 24)
+	addEdgeToUID(t, "friend", 1, 25)
+	addEdgeToUID(t, "friend", 1, 31)
+	addEdgeToUID(t, "friend", 1, 101)
+	addEdgeToUID(t, "friend", 31, 24)
+	addEdgeToUID(t, "friend", 23, 1)
 
 	// Now let's add a few properties for the main user.
-	addEdgeToValue(t, ps, "name", 1, "Michonne")
-	addEdgeToValue(t, ps, "gender", 1, "female")
+	addEdgeToValue(t, "name", 1, "Michonne")
+	addEdgeToValue(t, "gender", 1, "female")
 
-	coord := types.ValueForType(types.GeoID)
 	src := types.ValueForType(types.StringID)
 	src.Value = []byte("{\"Type\":\"Point\", \"Coordinates\":[1.1,2.0]}")
-	err = types.Convert(src, &coord)
+	coord, err := types.Convert(src, types.GeoID)
 	require.NoError(t, err)
 	gData := types.ValueForType(types.BinaryID)
 	err = types.Marshal(coord, &gData)
 	require.NoError(t, err)
-	addEdgeToTypedValue(t, ps, "loc", 1, types.GeoID, gData.Value.([]byte))
+	addEdgeToTypedValue(t, "loc", 1, types.GeoID, gData.Value.([]byte))
 
 	// Int32ID
 	data := types.ValueForType(types.BinaryID)
 	intD := types.Val{types.Int32ID, int32(15)}
 	err = types.Marshal(intD, &data)
 	require.NoError(t, err)
-	addEdgeToTypedValue(t, ps, "age", 1, types.Int32ID, data.Value.([]byte))
+	addEdgeToTypedValue(t, "age", 1, types.Int32ID, data.Value.([]byte))
 
 	// FloatID
 	fdata := types.ValueForType(types.BinaryID)
 	floatD := types.Val{types.FloatID, float64(13.25)}
 	err = types.Marshal(floatD, &fdata)
 	require.NoError(t, err)
-	addEdgeToTypedValue(t, ps, "power", 1, types.FloatID, fdata.Value.([]byte))
+	addEdgeToTypedValue(t, "power", 1, types.FloatID, fdata.Value.([]byte))
 
-	addEdgeToValue(t, ps, "address", 1, "31, 32 street, Jupiter")
+	addEdgeToValue(t, "address", 1, "31, 32 street, Jupiter")
 
 	boolD := types.Val{types.BoolID, true}
 	err = types.Marshal(boolD, &data)
 	require.NoError(t, err)
-	addEdgeToTypedValue(t, ps, "alive", 1, types.BoolID, data.Value.([]byte))
-	addEdgeToValue(t, ps, "age", 1, "38")
-	addEdgeToValue(t, ps, "survival_rate", 1, "98.99")
-	addEdgeToValue(t, ps, "sword_present", 1, "true")
-	addEdgeToValue(t, ps, "_xid_", 1, "mich")
+	addEdgeToTypedValue(t, "alive", 1, types.BoolID, data.Value.([]byte))
+	addEdgeToValue(t, "age", 1, "38")
+	addEdgeToValue(t, "survival_rate", 1, "98.99")
+	addEdgeToValue(t, "sword_present", 1, "true")
+	addEdgeToValue(t, "_xid_", 1, "mich")
 
 	// Now let's add a name for each of the friends, except 101.
-	addEdgeToTypedValue(t, ps, "name", 23, types.StringID, []byte("Rick Grimes"))
-	addEdgeToValue(t, ps, "age", 23, "15")
+	addEdgeToTypedValue(t, "name", 23, types.StringID, []byte("Rick Grimes"))
+	addEdgeToValue(t, "age", 23, "15")
 
 	src.Value = []byte(`{"Type":"Polygon", "Coordinates":[[[0.0,0.0], [2.0,0.0], [2.0, 2.0], [0.0, 2.0], [0.0, 0.0]]]}`)
-	err = types.Convert(src, &coord)
+	coord, err = types.Convert(src, types.GeoID)
 	require.NoError(t, err)
 	gData = types.ValueForType(types.BinaryID)
 	err = types.Marshal(coord, &gData)
 	require.NoError(t, err)
-	addEdgeToTypedValue(t, ps, "loc", 23, types.GeoID, gData.Value.([]byte))
+	addEdgeToTypedValue(t, "loc", 23, types.GeoID, gData.Value.([]byte))
 
-	addEdgeToValue(t, ps, "address", 23, "21, mark street, Mars")
-	addEdgeToValue(t, ps, "name", 24, "Glenn Rhee")
+	addEdgeToValue(t, "address", 23, "21, mark street, Mars")
+	addEdgeToValue(t, "name", 24, "Glenn Rhee")
 	src.Value = []byte(`{"Type":"Point", "Coordinates":[1.10001,2.000001]}`)
-	err = types.Convert(src, &coord)
+	coord, err = types.Convert(src, types.GeoID)
 	require.NoError(t, err)
 	gData = types.ValueForType(types.BinaryID)
 	err = types.Marshal(coord, &gData)
 	require.NoError(t, err)
-	addEdgeToTypedValue(t, ps, "loc", 24, types.GeoID, gData.Value.([]byte))
+	addEdgeToTypedValue(t, "loc", 24, types.GeoID, gData.Value.([]byte))
 
-	addEdgeToValue(t, ps, "name", farm.Fingerprint64([]byte("a.bc")), "Alice")
-	addEdgeToValue(t, ps, "name", 25, "Daryl Dixon")
-	addEdgeToValue(t, ps, "name", 31, "Andrea")
+	addEdgeToValue(t, "name", farm.Fingerprint64([]byte("a.bc")), "Alice")
+	addEdgeToValue(t, "name", 25, "Daryl Dixon")
+	addEdgeToValue(t, "name", 31, "Andrea")
 	src.Value = []byte(`{"Type":"Point", "Coordinates":[2.0, 2.0]}`)
-	err = types.Convert(src, &coord)
+	coord, err = types.Convert(src, types.GeoID)
 	require.NoError(t, err)
 	gData = types.ValueForType(types.BinaryID)
 	err = types.Marshal(coord, &gData)
 	require.NoError(t, err)
-	addEdgeToTypedValue(t, ps, "loc", 31, types.GeoID, gData.Value.([]byte))
+	addEdgeToTypedValue(t, "loc", 31, types.GeoID, gData.Value.([]byte))
 
-	addEdgeToValue(t, ps, "dob", 23, "1910-01-02")
-	addEdgeToValue(t, ps, "dob", 24, "1909-05-05")
-	addEdgeToValue(t, ps, "dob", 25, "1909-01-10")
-	addEdgeToValue(t, ps, "dob", 31, "1901-01-15")
+	addEdgeToValue(t, "dob", 23, "1910-01-02")
+	addEdgeToValue(t, "dob", 24, "1909-05-05")
+	addEdgeToValue(t, "dob", 25, "1909-01-10")
+	addEdgeToValue(t, "dob", 31, "1901-01-15")
 
-	return dir, dir2, ps
+	// GEO stuff
+	p := geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{-122.082506, 37.4249518})
+	addGeoData(t, ps, 5101, p, "Googleplex")
+
+	p = geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{-122.080668, 37.426753})
+	addGeoData(t, ps, 5102, p, "Shoreline Amphitheater")
+
+	p = geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{-122.2527428, 37.513653})
+	addGeoData(t, ps, 5103, p, "San Carlos Airport")
+
+	poly := geom.NewPolygon(geom.XY).MustSetCoords([][]geom.Coord{
+		{{-121.6, 37.1}, {-122.4, 37.3}, {-122.6, 37.8}, {-122.5, 38.3}, {-121.9, 38},
+			{-121.6, 37.1}},
+	})
+	addGeoData(t, ps, 5104, poly, "SF Bay area")
+	poly = geom.NewPolygon(geom.XY).MustSetCoords([][]geom.Coord{
+		{{-122.06, 37.37}, {-122.1, 37.36}, {-122.12, 37.4}, {-122.11, 37.43},
+			{-122.04, 37.43}, {-122.06, 37.37}},
+	})
+	addGeoData(t, ps, 5105, poly, "Mountain View")
+	poly = geom.NewPolygon(geom.XY).MustSetCoords([][]geom.Coord{
+		{{-122.25, 37.49}, {-122.28, 37.49}, {-122.27, 37.51}, {-122.25, 37.52},
+			{-122.24, 37.51}},
+	})
+	addGeoData(t, ps, 5106, poly, "San Carlos")
+
+	addEdgeToValue(t, "film.film.initial_release_date", 23, "1900-01-02")
+	addEdgeToValue(t, "film.film.initial_release_date", 24, "1909-05-05")
+	addEdgeToValue(t, "film.film.initial_release_date", 25, "1929-01-10")
+	addEdgeToValue(t, "film.film.initial_release_date", 31, "1801-01-15")
+
+	time.Sleep(5 * time.Millisecond)
 }
 
 func processToFastJSON(t *testing.T, query string) string {
@@ -276,10 +265,7 @@ func processToFastJSON(t *testing.T, query string) string {
 }
 
 func TestGetUID(t *testing.T) {
-	dir, dir2, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir)
-	defer os.RemoveAll(dir2)
+	populateGraph(t)
 	query := `
 		{
 			me(id:0x01) {
@@ -296,15 +282,12 @@ func TestGetUID(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"_uid_":"0x1","alive":"true","friend":[{"_uid_":"0x17","name":"Rick Grimes"},{"_uid_":"0x18","name":"Glenn Rhee"},{"_uid_":"0x19","name":"Daryl Dixon"},{"_uid_":"0x1f","name":"Andrea"},{"_uid_":"0x65"}],"gender":"female","name":"Michonne"}]}`,
+		`{"me":[{"_uid_":"0x1","alive":true,"friend":[{"_uid_":"0x17","name":"Rick Grimes"},{"_uid_":"0x18","name":"Glenn Rhee"},{"_uid_":"0x19","name":"Daryl Dixon"},{"_uid_":"0x1f","name":"Andrea"},{"_uid_":"0x65"}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
 
 func TestGetUIDNotInChild(t *testing.T) {
-	dir, dir2, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir)
-	defer os.RemoveAll(dir2)
+	populateGraph(t)
 	query := `
 		{
 			me(id:0x01) {
@@ -320,15 +303,12 @@ func TestGetUIDNotInChild(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"_uid_":"0x1","alive":"true","gender":"female","name":"Michonne", "friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}]}`,
+		`{"me":[{"_uid_":"0x1","alive":true,"gender":"female","name":"Michonne", "friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}]}`,
 		js)
 }
 
 func TestMultiEmptyBlocks(t *testing.T) {
-	dir, dir2, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir)
-	defer os.RemoveAll(dir2)
+	populateGraph(t)
 	query := `
 		{
 			you(id:0x01) {
@@ -345,10 +325,7 @@ func TestMultiEmptyBlocks(t *testing.T) {
 }
 
 func TestUseVarsMultiCascade(t *testing.T) {
-	dir, dir2, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir)
-	defer os.RemoveAll(dir2)
+	populateGraph(t)
 	query := `
 		{
 			var(id:0x01) {
@@ -357,32 +334,25 @@ func TestUseVarsMultiCascade(t *testing.T) {
 				}
 			}
 
-			me(L) {
-				name
-			}
-
-			friend(B) {
+			me([L, B]) {
 				name
 			}
 		}
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"name":"Andrea"}], "friend":[{"name":"Glenn Rhee"}]}`,
+		`{"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"}, {"name":"Andrea"}]}`,
 		js)
 }
 
 func TestUseVarsMultiOrder(t *testing.T) {
-	dir, dir2, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir)
-	defer os.RemoveAll(dir2)
+	populateGraph(t)
 	query := `
 		{
 			var(id:0x01) {
 				L AS friend(first:2, order: dob)
 			}
-			
+
 			var(id:0x01) {
 				G AS friend(first:2, offset:2, order: dob)
 			}
@@ -401,11 +371,104 @@ func TestUseVarsMultiOrder(t *testing.T) {
 		`{"friend1":[{"name":"Daryl Dixon"}, {"name":"Andrea"}],"friend2":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"}]}`,
 		js)
 }
+
+func TestUseVarsFilterVarReuse1(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			friend(id:0x01) {
+				friend {
+					L as friend {
+						name
+						friend @filter(id(L)) {
+							name
+						}
+					}
+				}
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"friend":[{"friend":[{"friend":[{"name":"Michonne", "friend":[{"name":"Glenn Rhee"}]}]}, {"friend":[{"name":"Glenn Rhee"}]}]}]}`,
+		js)
+}
+
+func TestUseVarsFilterVarReuse2(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			friend(anyof(name, "Michonne Andrea Glenn")) {
+				friend {
+				 L as friend {
+					 name
+					 friend @filter(id(L)) {
+						name
+					}
+				}
+			}
+		}
+	}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"friend":[{"friend":[{"friend":[{"name":"Michonne", "friend":[{"name":"Glenn Rhee"}]}]}, {"friend":[{"name":"Glenn Rhee"}]}]}]}`,
+		js)
+}
+
+func TestUseVarsFilterVarReuse3(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			var(id:0x01) {
+				fr AS friend(first:2, offset:2, order: dob)
+			}
+
+			friend(id:0x01) {
+				L as friend {
+					friend {
+						name
+						friend @filter(id(L) && id(fr)) {
+							name
+						}
+					}
+				}
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"friend":[{"friend":[{"friend":[{"name":"Michonne", "friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"}]}]}, {"friend":[{"name":"Glenn Rhee"}]}]}]}`,
+		js)
+}
+
+func TestUseVarsFilterMultiId(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			var(id:0x01) {
+				L AS friend {
+					friend
+				}
+			}
+
+			var(id:31) {
+				G AS friend
+			}
+
+			friend(anyof(name, "Michonne Andrea Glenn")) @filter(id(G, L)) {
+				name
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"friend":[{"name":"Glenn Rhee"},{"name":"Andrea"}]}`,
+		js)
+}
+
 func TestUseVarsMultiFilterId(t *testing.T) {
-	dir, dir2, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir)
-	defer os.RemoveAll(dir2)
+	populateGraph(t)
 	query := `
 		{
 			var(id:0x01) {
@@ -428,10 +491,7 @@ func TestUseVarsMultiFilterId(t *testing.T) {
 }
 
 func TestUseVarsCascade(t *testing.T) {
-	dir, dir2, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir)
-	defer os.RemoveAll(dir2)
+	populateGraph(t)
 	query := `
 		{
 			var(id:0x01) {
@@ -447,15 +507,12 @@ func TestUseVarsCascade(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"name":"Andrea"}]}`,
+		`{"me":[{"name":"Rick Grimes"}, {"name":"Andrea"} ]}`,
 		js)
 }
 
 func TestUseVars(t *testing.T) {
-	dir, dir2, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir)
-	defer os.RemoveAll(dir2)
+	populateGraph(t)
 	query := `
 		{
 			var(id:0x01) {
@@ -474,10 +531,7 @@ func TestUseVars(t *testing.T) {
 }
 
 func TestGetUIDCount(t *testing.T) {
-	dir, dir2, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir)
-	defer os.RemoveAll(dir2)
+	populateGraph(t)
 	query := `
 		{
 			me(id:0x01) {
@@ -491,15 +545,12 @@ func TestGetUIDCount(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"_uid_":"0x1","alive":"true","friend":[{"count":5}],"gender":"female","name":"Michonne"}]}`,
+		`{"me":[{"_uid_":"0x1","alive":true,"friend":[{"count":5}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
 
 func TestDebug1(t *testing.T) {
-	dir, dir2, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir)
-	defer os.RemoveAll(dir2)
+	populateGraph(t)
 
 	// Alright. Now we have everything set up. Let's create the query.
 	query := `
@@ -528,10 +579,7 @@ func TestDebug1(t *testing.T) {
 }
 
 func TestDebug2(t *testing.T) {
-	dir, dir2, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir)
-	defer os.RemoveAll(dir2)
+	populateGraph(t)
 
 	query := `
 		{
@@ -554,10 +602,7 @@ func TestDebug2(t *testing.T) {
 }
 
 func TestCount(t *testing.T) {
-	dir, dir2, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir)
-	defer os.RemoveAll(dir2)
+	populateGraph(t)
 
 	// Alright. Now we have everything set up. Let's create the query.
 	query := `
@@ -573,7 +618,7 @@ func TestCount(t *testing.T) {
 
 	js := processToFastJSON(t, query)
 	require.EqualValues(t,
-		`{"me":[{"alive":"true","friend":[{"count":5}],"gender":"female","name":"Michonne"}]}`,
+		`{"me":[{"alive":true,"friend":[{"count":5}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
 
@@ -632,11 +677,7 @@ func TestCountError3(t *testing.T) {
 }
 
 func TestProcessGraph(t *testing.T) {
-	dir, dir2, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir)
-	defer os.RemoveAll(dir2)
-
+	populateGraph(t)
 	// Alright. Now we have everything set up. Let's create the query.
 	query := `
 		{
@@ -685,11 +726,7 @@ func TestProcessGraph(t *testing.T) {
 }
 
 func TestToFastJSON(t *testing.T) {
-	dir, dir2, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir)
-	defer os.RemoveAll(dir2)
-
+	populateGraph(t)
 	// Alright. Now we have everything set up. Let's create the query.
 	query := `
 		{
@@ -706,15 +743,12 @@ func TestToFastJSON(t *testing.T) {
 
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"alive":"true","friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
+		`{"me":[{"alive":true,"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
 
 func TestFieldAlias(t *testing.T) {
-	dir, dir2, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir)
-	defer os.RemoveAll(dir2)
+	populateGraph(t)
 
 	// Alright. Now we have everything set up. Let's create the query.
 	query := `
@@ -732,15 +766,12 @@ func TestFieldAlias(t *testing.T) {
 
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"alive":"true","Buddies":[{"BudName":"Rick Grimes"},{"BudName":"Glenn Rhee"},{"BudName":"Daryl Dixon"},{"BudName":"Andrea"}],"gender":"female","MyName":"Michonne"}]}`,
+		`{"me":[{"alive":true,"Buddies":[{"BudName":"Rick Grimes"},{"BudName":"Glenn Rhee"},{"BudName":"Daryl Dixon"},{"BudName":"Andrea"}],"gender":"female","MyName":"Michonne"}]}`,
 		string(js))
 }
 
 func TestFieldAliasProto(t *testing.T) {
-	dir, dir2, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir)
-	defer os.RemoveAll(dir2)
+	populateGraph(t)
 
 	// Alright. Now we have everything set up. Let's create the query.
 	query := `
@@ -788,7 +819,7 @@ children: <
   properties: <
     prop: "alive"
     value: <
-      str_val: "true"
+      bool_val: true
     >
   >
   children: <
@@ -835,10 +866,7 @@ children: <
 }
 
 func TestToFastJSONFilter(t *testing.T) {
-	dir, dir2, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir)
-	defer os.RemoveAll(dir2)
+	populateGraph(t)
 	query := `
 		{
 			me(id:0x01) {
@@ -858,10 +886,7 @@ func TestToFastJSONFilter(t *testing.T) {
 }
 
 func TestToFastJSONFilterMissBrac(t *testing.T) {
-	dir, dir2, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir)
-	defer os.RemoveAll(dir2)
+	populateGraph(t)
 	query := `
 		{
 			me(id:0x01) {
@@ -878,10 +903,7 @@ func TestToFastJSONFilterMissBrac(t *testing.T) {
 }
 
 func TestToFastJSONFilterAllOf(t *testing.T) {
-	dir, dir2, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir)
-	defer os.RemoveAll(dir2)
+	populateGraph(t)
 	query := `
 		{
 			me(id:0x01) {
@@ -900,10 +922,7 @@ func TestToFastJSONFilterAllOf(t *testing.T) {
 }
 
 func TestToFastJSONFilterUID(t *testing.T) {
-	dir, dir2, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir)
-	defer os.RemoveAll(dir2)
+	populateGraph(t)
 	query := `
 		{
 			me(id:0x01) {
@@ -923,10 +942,7 @@ func TestToFastJSONFilterUID(t *testing.T) {
 }
 
 func TestToFastJSONFilterOrUID(t *testing.T) {
-	dir, dir2, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir)
-	defer os.RemoveAll(dir2)
+	populateGraph(t)
 	query := `
 		{
 			me(id:0x01) {
@@ -947,10 +963,7 @@ func TestToFastJSONFilterOrUID(t *testing.T) {
 }
 
 func TestToFastJSONFilterOrCount(t *testing.T) {
-	dir, dir2, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir)
-	defer os.RemoveAll(dir2)
+	populateGraph(t)
 	query := `
 		{
 			me(id:0x01) {
@@ -971,10 +984,7 @@ func TestToFastJSONFilterOrCount(t *testing.T) {
 }
 
 func TestToFastJSONFilterOrFirst(t *testing.T) {
-	dir, dir2, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir)
-	defer os.RemoveAll(dir2)
+	populateGraph(t)
 	query := `
 		{
 			me(id:0x01) {
@@ -994,10 +1004,7 @@ func TestToFastJSONFilterOrFirst(t *testing.T) {
 }
 
 func TestToFastJSONFilterOrOffset(t *testing.T) {
-	dir, dir2, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir)
-	defer os.RemoveAll(dir2)
+	populateGraph(t)
 	query := `
 		{
 			me(id:0x01) {
@@ -1017,10 +1024,7 @@ func TestToFastJSONFilterOrOffset(t *testing.T) {
 }
 
 func TestToFastJSONFilterGeq(t *testing.T) {
-	dir, dir2, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir)
-	defer os.RemoveAll(dir2)
+	populateGraph(t)
 	query := `
 		{
 			me(id:0x01) {
@@ -1040,10 +1044,7 @@ func TestToFastJSONFilterGeq(t *testing.T) {
 }
 
 func TestToFastJSONFilterGt(t *testing.T) {
-	dir, dir2, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir)
-	defer os.RemoveAll(dir2)
+	populateGraph(t)
 	query := `
 		{
 			me(id:0x01) {
@@ -1063,10 +1064,7 @@ func TestToFastJSONFilterGt(t *testing.T) {
 }
 
 func TestToFastJSONFilterLeq(t *testing.T) {
-	dir, dir2, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir)
-	defer os.RemoveAll(dir2)
+	populateGraph(t)
 	query := `
 		{
 			me(id:0x01) {
@@ -1086,10 +1084,7 @@ func TestToFastJSONFilterLeq(t *testing.T) {
 }
 
 func TestToFastJSONFilterLt(t *testing.T) {
-	dir, dir2, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir)
-	defer os.RemoveAll(dir2)
+	populateGraph(t)
 	query := `
 		{
 			me(id:0x01) {
@@ -1109,10 +1104,7 @@ func TestToFastJSONFilterLt(t *testing.T) {
 }
 
 func TestToFastJSONFilterEqualNoHit(t *testing.T) {
-	dir, dir2, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir)
-	defer os.RemoveAll(dir2)
+	populateGraph(t)
 	query := `
 		{
 			me(id:0x01) {
@@ -1132,10 +1124,7 @@ func TestToFastJSONFilterEqualNoHit(t *testing.T) {
 }
 
 func TestToFastJSONFilterEqual(t *testing.T) {
-	dir, dir2, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir)
-	defer os.RemoveAll(dir2)
+	populateGraph(t)
 	query := `
 		{
 			me(id:0x01) {
@@ -1155,10 +1144,7 @@ func TestToFastJSONFilterEqual(t *testing.T) {
 }
 
 func TestToFastJSONFilterLeqOrder(t *testing.T) {
-	dir, dir2, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir)
-	defer os.RemoveAll(dir2)
+	populateGraph(t)
 	query := `
 		{
 			me(id:0x01) {
@@ -1178,10 +1164,7 @@ func TestToFastJSONFilterLeqOrder(t *testing.T) {
 }
 
 func TestToFastJSONFilterGeqNoResult(t *testing.T) {
-	dir, dir2, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir)
-	defer os.RemoveAll(dir2)
+	populateGraph(t)
 	query := `
 		{
 			me(id:0x01) {
@@ -1201,10 +1184,7 @@ func TestToFastJSONFilterGeqNoResult(t *testing.T) {
 
 // No filter. Just to test first and offset.
 func TestToFastJSONFirstOffset(t *testing.T) {
-	dir, dir2, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir)
-	defer os.RemoveAll(dir2)
+	populateGraph(t)
 	query := `
 		{
 			me(id:0x01) {
@@ -1224,10 +1204,7 @@ func TestToFastJSONFirstOffset(t *testing.T) {
 }
 
 func TestToFastJSONFilterOrFirstOffset(t *testing.T) {
-	dir, dir2, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir)
-	defer os.RemoveAll(dir2)
+	populateGraph(t)
 	query := `
 		{
 			me(id:0x01) {
@@ -1247,10 +1224,7 @@ func TestToFastJSONFilterOrFirstOffset(t *testing.T) {
 }
 
 func TestToFastJSONFilterLeqFirstOffset(t *testing.T) {
-	dir, dir2, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir)
-	defer os.RemoveAll(dir2)
+	populateGraph(t)
 	query := `
 		{
 			me(id:0x01) {
@@ -1270,10 +1244,7 @@ func TestToFastJSONFilterLeqFirstOffset(t *testing.T) {
 }
 
 func TestToFastJSONFilterOrFirstOffsetCount(t *testing.T) {
-	dir, dir2, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir)
-	defer os.RemoveAll(dir2)
+	populateGraph(t)
 	query := `
 		{
 			me(id:0x01) {
@@ -1291,10 +1262,7 @@ func TestToFastJSONFilterOrFirstOffsetCount(t *testing.T) {
 }
 
 func TestToFastJSONFilterOrFirstNegative(t *testing.T) {
-	dir, dir2, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir)
-	defer os.RemoveAll(dir2)
+	populateGraph(t)
 	// When negative first/count is specified, we ignore offset and returns the last
 	// few number of items.
 	query := `
@@ -1316,10 +1284,7 @@ func TestToFastJSONFilterOrFirstNegative(t *testing.T) {
 }
 
 func TestToFastJSONFilterAnd(t *testing.T) {
-	dir, dir2, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir)
-	defer os.RemoveAll(dir2)
+	populateGraph(t)
 	query := `
 		{
 			me(id:0x01) {
@@ -1338,10 +1303,7 @@ func TestToFastJSONFilterAnd(t *testing.T) {
 }
 
 func TestToFastJSONReverse(t *testing.T) {
-	dir, dir2, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir)
-	defer os.RemoveAll(dir2)
+	populateGraph(t)
 	query := `
 		{
 			me(id:0x18) {
@@ -1356,15 +1318,12 @@ func TestToFastJSONReverse(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"name":"Glenn Rhee","~friend":[{"alive":"true","gender":"female","name":"Michonne"},{"name":"Andrea"}]}]}`,
+		`{"me":[{"name":"Glenn Rhee","~friend":[{"alive":true,"gender":"female","name":"Michonne"},{"name":"Andrea"}]}]}`,
 		js)
 }
 
 func TestToFastJSONReverseFilter(t *testing.T) {
-	dir, dir2, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir)
-	defer os.RemoveAll(dir2)
+	populateGraph(t)
 	query := `
 		{
 			me(id:0x18) {
@@ -1384,14 +1343,10 @@ func TestToFastJSONReverseFilter(t *testing.T) {
 }
 
 func TestToFastJSONReverseDelSet(t *testing.T) {
-	dir, dir2, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir)
-	defer os.RemoveAll(dir2)
-
-	delEdgeToUID(t, ps, "friend", 1, 24)  // Delete Michonne.
-	delEdgeToUID(t, ps, "friend", 23, 24) // Ignored.
-	addEdgeToUID(t, ps, "friend", 25, 24) // Add Daryl.
+	populateGraph(t)
+	delEdgeToUID(t, "friend", 1, 24)  // Delete Michonne.
+	delEdgeToUID(t, "friend", 23, 24) // Ignored.
+	addEdgeToUID(t, "friend", 25, 24) // Add Daryl.
 
 	query := `
 		{
@@ -1412,14 +1367,10 @@ func TestToFastJSONReverseDelSet(t *testing.T) {
 }
 
 func TestToFastJSONReverseDelSetCount(t *testing.T) {
-	dir, dir2, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir)
-	defer os.RemoveAll(dir2)
-
-	delEdgeToUID(t, ps, "friend", 1, 24)  // Delete Michonne.
-	delEdgeToUID(t, ps, "friend", 23, 24) // Ignored.
-	addEdgeToUID(t, ps, "friend", 25, 24) // Add Daryl.
+	populateGraph(t)
+	delEdgeToUID(t, "friend", 1, 24)  // Delete Michonne.
+	delEdgeToUID(t, "friend", 23, 24) // Ignored.
+	addEdgeToUID(t, "friend", 25, 24) // Add Daryl.
 
 	query := `
 		{
@@ -1445,11 +1396,7 @@ func getProperty(properties []*graph.Property, prop string) *graph.Value {
 }
 
 func TestToProto(t *testing.T) {
-	dir, dir2, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir)
-	defer os.RemoveAll(dir2)
-
+	populateGraph(t)
 	query := `
 		{
 			debug(id:0x1) {
@@ -1503,7 +1450,7 @@ children: <
   properties: <
     prop: "alive"
     value: <
-      str_val: "true"
+      bool_val: true
     >
   >
   children: <
@@ -1555,11 +1502,7 @@ children: <
 }
 
 func TestToProtoFilter(t *testing.T) {
-	dir, dir2, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir)
-	defer os.RemoveAll(dir2)
-
+	populateGraph(t)
 	// Alright. Now we have everything set up. Let's create the query.
 	query := `
 		{
@@ -1619,11 +1562,7 @@ children: <
 }
 
 func TestToProtoFilterOr(t *testing.T) {
-	dir, dir2, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir)
-	defer os.RemoveAll(dir2)
-
+	populateGraph(t)
 	// Alright. Now we have everything set up. Let's create the query.
 	query := `
 		{
@@ -1692,11 +1631,7 @@ children: <
 }
 
 func TestToProtoFilterAnd(t *testing.T) {
-	dir, dir2, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir)
-	defer os.RemoveAll(dir2)
-
+	populateGraph(t)
 	// Alright. Now we have everything set up. Let's create the query.
 	query := `
 		{
@@ -1748,11 +1683,7 @@ children: <
 
 // Test sorting / ordering by dob.
 func TestToFastJSONOrder(t *testing.T) {
-	dir, dir2, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir)
-	defer os.RemoveAll(dir2)
-
+	populateGraph(t)
 	query := `
 		{
 			me(id:0x01) {
@@ -1774,10 +1705,7 @@ func TestToFastJSONOrder(t *testing.T) {
 
 // Test sorting / ordering by dob.
 func TestToFastJSONOrderDesc(t *testing.T) {
-	dir, dir2, _ := populateGraph(t)
-	defer os.RemoveAll(dir)
-	defer os.RemoveAll(dir2)
-
+	populateGraph(t)
 	query := `
 		{
 			me(id:0x01) {
@@ -1797,12 +1725,31 @@ func TestToFastJSONOrderDesc(t *testing.T) {
 		string(js))
 }
 
+// Test sorting / ordering by dob.
+func TestToFastJSONOrderDesc_pawan(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id:0x01) {
+				name
+				gender
+				friend(orderdesc: film.film.initial_release_date) {
+					name
+					film.film.initial_release_date
+				}
+			}
+		}
+	`
+
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"friend":[{"film.film.initial_release_date":"1929-01-10","name":"Daryl Dixon"},{"film.film.initial_release_date":"1909-05-05","name":"Glenn Rhee"},{"film.film.initial_release_date":"1900-01-02","name":"Rick Grimes"},{"film.film.initial_release_date":"1801-01-15","name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
+		string(js))
+}
+
 // Test sorting / ordering by dob and count.
 func TestToFastJSONOrderDescCount(t *testing.T) {
-	dir, dir2, _ := populateGraph(t)
-	defer os.RemoveAll(dir)
-	defer os.RemoveAll(dir2)
-
+	populateGraph(t)
 	query := `
 		{
 			me(id:0x01) {
@@ -1821,11 +1768,7 @@ func TestToFastJSONOrderDescCount(t *testing.T) {
 
 // Test sorting / ordering by dob.
 func TestToFastJSONOrderOffset(t *testing.T) {
-	dir, dir2, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir)
-	defer os.RemoveAll(dir2)
-
+	populateGraph(t)
 	query := `
 		{
 			me(id:0x01) {
@@ -1846,11 +1789,7 @@ func TestToFastJSONOrderOffset(t *testing.T) {
 
 // Test sorting / ordering by dob.
 func TestToFastJSONOrderOffsetCount(t *testing.T) {
-	dir, dir2, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir)
-	defer os.RemoveAll(dir2)
-
+	populateGraph(t)
 	query := `
 		{
 			me(id:0x01) {
@@ -1954,17 +1893,13 @@ func TestMockSubGraphFastJson(t *testing.T) {
 	var unmarshalJs map[string]interface{}
 	require.NoError(t, json.Unmarshal([]byte(js), &unmarshalJs))
 
-	require.JSONEq(t, `{"me":[{"_uid_":"0x1","age":"39","friend":[{"_uid_":"0x2","age":"56","name":"lincon"},{"_uid_":"0x3","age":"29","name":"messi"},{"_uid_":"0x4","age":"45","name":"martin"},{"_uid_":"0x5","age":"36","name":"aishwarya"}],"name":"unknown"}]}`,
+	require.JSONEq(t, `{"me":[{"_uid_":"0x1","age":39,"friend":[{"_uid_":"0x2","age":56,"name":"lincon"},{"_uid_":"0x3","age":29,"name":"messi"},{"_uid_":"0x4","age":45,"name":"martin"},{"_uid_":"0x5","age":36,"name":"aishwarya"}],"name":"unknown"}]}`,
 		string(js))
 }
 
 // Test sorting / ordering by dob.
 func TestToProtoOrder(t *testing.T) {
-	dir, dir2, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir)
-	defer os.RemoveAll(dir2)
-
+	populateGraph(t)
 	query := `
 		{
 			me(id:0x01) {
@@ -2051,11 +1986,7 @@ children: <
 
 // Test sorting / ordering by dob.
 func TestToProtoOrderCount(t *testing.T) {
-	dir, dir2, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir)
-	defer os.RemoveAll(dir2)
-
+	populateGraph(t)
 	query := `
 		{
 			me(id:0x01) {
@@ -2124,11 +2055,7 @@ children: <
 
 // Test sorting / ordering by dob.
 func TestToProtoOrderOffsetCount(t *testing.T) {
-	dir, dir2, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir)
-	defer os.RemoveAll(dir2)
-
+	populateGraph(t)
 	query := `
 		{
 			me(id:0x01) {
@@ -2196,23 +2123,18 @@ children: <
 }
 
 func TestSchema1(t *testing.T) {
-	require.NoError(t, schema.Parse("test_schema"))
-
-	dir, dir2, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir)
-	defer os.RemoveAll(dir2)
-
+	populateGraph(t)
 	// Alright. Now we have everything set up. Let's create the query.
 	query := `
 		{
 			person(id:0x01) {
 				name
-				age 
+				age
 				address
 				alive
 				survival_rate
 				friend {
+					name
 					address
 					age
 				}
@@ -2221,15 +2143,11 @@ func TestSchema1(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"person":[{"address":"31, 32 street, Jupiter","age":38,"alive":true,"friend":[{"address":"21, mark street, Mars","age":15}],"name":"Michonne","survival_rate":98.99}]}`,
-		js)
+		`{"person":[{"address":"31, 32 street, Jupiter","age":38,"alive":true,"friend":[{"address":"21, mark street, Mars","age":15,"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}],"name":"Michonne","survival_rate":98.990000}]}`, js)
 }
 
 func TestMultiQuery(t *testing.T) {
-	dir1, dir2, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir1)
-	defer os.RemoveAll(dir2)
+	populateGraph(t)
 	query := `
 		{
 			me(anyof("name", "Michonne")) {
@@ -2247,16 +2165,12 @@ func TestMultiQuery(t *testing.T) {
 }
 
 func TestMultiQueryError1(t *testing.T) {
-	dir1, dir2, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir1)
-	defer os.RemoveAll(dir2)
+	populateGraph(t)
 	query := `
     {
       me(anyof("name", "Michonne")) {
         name
         gender
-			
 
       you(anyof("name", "Andrea")) {
         name
@@ -2268,10 +2182,7 @@ func TestMultiQueryError1(t *testing.T) {
 }
 
 func TestMultiQueryError2(t *testing.T) {
-	dir1, dir2, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir1)
-	defer os.RemoveAll(dir2)
+	populateGraph(t)
 	query := `
     {
       me(anyof("name", "Michonne")) {
@@ -2290,10 +2201,7 @@ func TestMultiQueryError2(t *testing.T) {
 }
 
 func TestGenerator(t *testing.T) {
-	dir1, dir2, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir1)
-	defer os.RemoveAll(dir2)
+	populateGraph(t)
 	query := `
     {
       me(anyof("name", "Michonne")) {
@@ -2307,10 +2215,7 @@ func TestGenerator(t *testing.T) {
 }
 
 func TestGeneratorMultiRootMultiQueryRootVar(t *testing.T) {
-	dir1, dir2, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir1)
-	defer os.RemoveAll(dir2)
+	populateGraph(t)
 	query := `
     {
 			friend AS var(anyof("name", "Michonne Rick Glenn")) {
@@ -2327,10 +2232,7 @@ func TestGeneratorMultiRootMultiQueryRootVar(t *testing.T) {
 }
 
 func TestGeneratorMultiRootMultiQueryVarFilter(t *testing.T) {
-	dir1, dir2, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir1)
-	defer os.RemoveAll(dir2)
+	populateGraph(t)
 	query := `
     {
 			f AS var(anyof("name", "Michonne Rick Glenn")) {
@@ -2349,10 +2251,7 @@ func TestGeneratorMultiRootMultiQueryVarFilter(t *testing.T) {
 }
 
 func TestGeneratorMultiRootMultiQueryRootVarFilter(t *testing.T) {
-	dir1, dir2, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir1)
-	defer os.RemoveAll(dir2)
+	populateGraph(t)
 	query := `
     {
 			friend AS var(anyof("name", "Michonne Rick Glenn")) {
@@ -2368,10 +2267,7 @@ func TestGeneratorMultiRootMultiQueryRootVarFilter(t *testing.T) {
 }
 
 func TestGeneratorMultiRootMultiQuery(t *testing.T) {
-	dir1, dir2, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir1)
-	defer os.RemoveAll(dir2)
+	populateGraph(t)
 	query := `
     {
       me(anyof("name", "Michonne Rick Glenn")) {
@@ -2387,10 +2283,7 @@ func TestGeneratorMultiRootMultiQuery(t *testing.T) {
 	require.JSONEq(t, `{"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"}], "you":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"}]}`, js)
 }
 func TestGeneratorMultiRoot(t *testing.T) {
-	dir1, dir2, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir1)
-	defer os.RemoveAll(dir2)
+	populateGraph(t)
 	query := `
     {
       me(anyof("name", "Michonne Rick Glenn")) {
@@ -2403,10 +2296,7 @@ func TestGeneratorMultiRoot(t *testing.T) {
 }
 
 func TestRootList(t *testing.T) {
-	dir1, dir2, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir1)
-	defer os.RemoveAll(dir2)
+	populateGraph(t)
 	query := `{
 	me(id:[1, 23, 24]) {
 		name
@@ -2417,10 +2307,7 @@ func TestRootList(t *testing.T) {
 }
 
 func TestRootList1(t *testing.T) {
-	dir1, dir2, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir1)
-	defer os.RemoveAll(dir2)
+	populateGraph(t)
 	query := `{
 	me(id:[0x01, 23, 24, a.bc]) {
 		name
@@ -2431,10 +2318,7 @@ func TestRootList1(t *testing.T) {
 }
 
 func TestGeneratorMultiRootFilter1(t *testing.T) {
-	dir1, dir2, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir1)
-	defer os.RemoveAll(dir2)
+	populateGraph(t)
 	query := `
     {
       me(anyof("name", "Daryl Rick Glenn")) @filter(leq(dob, 1909-01-10)) {
@@ -2447,10 +2331,7 @@ func TestGeneratorMultiRootFilter1(t *testing.T) {
 }
 
 func TestGeneratorMultiRootFilter2(t *testing.T) {
-	dir1, dir2, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir1)
-	defer os.RemoveAll(dir2)
+	populateGraph(t)
 	query := `
     {
       me(anyof("name", "Michonne Rick Glenn")) @filter(geq(dob, 1909-01-10)) {
@@ -2463,10 +2344,7 @@ func TestGeneratorMultiRootFilter2(t *testing.T) {
 }
 
 func TestGeneratorMultiRootFilter3(t *testing.T) {
-	dir1, dir2, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir1)
-	defer os.RemoveAll(dir2)
+	populateGraph(t)
 	query := `
     {
       me(anyof("name", "Michonne Rick Glenn")) @filter(anyof(name, "Glenn") && geq(dob, 1909-01-10)) {
@@ -2479,11 +2357,7 @@ func TestGeneratorMultiRootFilter3(t *testing.T) {
 }
 
 func TestToProtoMultiRoot(t *testing.T) {
-	dir, dir2, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir)
-	defer os.RemoveAll(dir2)
-
+	populateGraph(t)
 	query := `
     {
       me(anyof("name", "Michonne Rick Glenn")) {
@@ -2541,10 +2415,7 @@ children: <
 }
 
 func TestNearGenerator(t *testing.T) {
-	dir1, dir2, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir1)
-	defer os.RemoveAll(dir2)
+	populateGraph(t)
 	query := `{
 		me(near(loc, [1.1,2.0], 5.001)) {
 			name
@@ -2557,10 +2428,7 @@ func TestNearGenerator(t *testing.T) {
 }
 
 func TestNearGeneratorFilter(t *testing.T) {
-	dir1, dir2, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir1)
-	defer os.RemoveAll(dir2)
+	populateGraph(t)
 	query := `{
 		me(near(loc, [1.1,2.0], 5.001)) @filter(allof(name, "Michonne")) {
 			name
@@ -2573,10 +2441,7 @@ func TestNearGeneratorFilter(t *testing.T) {
 }
 
 func TestNearGeneratorError(t *testing.T) {
-	dir1, dir2, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir1)
-	defer os.RemoveAll(dir2)
+	populateGraph(t)
 	query := `{
 		me(near(loc, [1.1,2.0], -5.0)) {
 			name
@@ -2599,10 +2464,7 @@ func TestNearGeneratorError(t *testing.T) {
 }
 
 func TestNearGeneratorErrorMissDist(t *testing.T) {
-	dir1, dir2, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir1)
-	defer os.RemoveAll(dir2)
+	populateGraph(t)
 	query := `{
 		me(near(loc, [1.1,2.0])) {
 			name
@@ -2625,10 +2487,7 @@ func TestNearGeneratorErrorMissDist(t *testing.T) {
 }
 
 func TestWithinGeneratorError(t *testing.T) {
-	dir1, dir2, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir1)
-	defer os.RemoveAll(dir2)
+	populateGraph(t)
 	query := `{
 		me(within(loc, [[0.0,0.0], [2.0,0.0], [1.5, 3.0], [0.0, 2.0], [0.0, 0.0]], 12.2)) {
 			name
@@ -2651,10 +2510,7 @@ func TestWithinGeneratorError(t *testing.T) {
 }
 
 func TestWithinGenerator(t *testing.T) {
-	dir1, dir2, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir1)
-	defer os.RemoveAll(dir2)
+	populateGraph(t)
 	query := `{
 		me(within(loc,  [[0.0,0.0], [2.0,0.0], [1.5, 3.0], [0.0, 2.0], [0.0, 0.0]])) {
 			name
@@ -2666,10 +2522,7 @@ func TestWithinGenerator(t *testing.T) {
 }
 
 func TestContainsGenerator(t *testing.T) {
-	dir1, dir2, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir1)
-	defer os.RemoveAll(dir2)
+	populateGraph(t)
 	query := `{
 		me(contains(loc, [2.0,0.0])) {
 			name
@@ -2681,10 +2534,7 @@ func TestContainsGenerator(t *testing.T) {
 }
 
 func TestContainsGenerator2(t *testing.T) {
-	dir1, dir2, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir1)
-	defer os.RemoveAll(dir2)
+	populateGraph(t)
 	query := `{
 		me(contains(loc,  [[1.0,1.0], [1.9,1.0], [1.9, 1.9], [1.0, 1.9], [1.0, 1.0]])) {
 			name
@@ -2696,10 +2546,7 @@ func TestContainsGenerator2(t *testing.T) {
 }
 
 func TestIntersectsGeneratorError(t *testing.T) {
-	dir1, dir2, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir1)
-	defer os.RemoveAll(dir2)
+	populateGraph(t)
 	query := `{
 		me(intersects(loc, [0.0,0.0])) {
 			name
@@ -2721,10 +2568,7 @@ func TestIntersectsGeneratorError(t *testing.T) {
 }
 
 func TestIntersectsGenerator(t *testing.T) {
-	dir1, dir2, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir1)
-	defer os.RemoveAll(dir2)
+	populateGraph(t)
 	query := `{
 		me(intersects(loc, [[0.0,0.0], [2.0,0.0], [1.5, 3.0], [0.0, 2.0], [0.0, 0.0]])) {
 			name
@@ -2736,11 +2580,7 @@ func TestIntersectsGenerator(t *testing.T) {
 }
 
 func TestSchema(t *testing.T) {
-	dir, dir2, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir)
-	defer os.RemoveAll(dir2)
-
+	populateGraph(t)
 	query := `
 		{
 			debug(id:0x1) {
@@ -2750,6 +2590,7 @@ func TestSchema(t *testing.T) {
 				alive
 				loc
 				friend {
+					dob
 					name
 				}
 				friend {
@@ -2782,10 +2623,10 @@ func TestSchema(t *testing.T) {
 	require.EqualValues(t, "Michonne",
 		getProperty(gr.Children[0].Properties, "name").GetStrVal())
 
-	g1 := types.ValueForType(types.StringID)
 	g := types.ValueForType(types.GeoID)
 	g.Value = getProperty(gr.Children[0].Properties, "loc").GetGeoVal()
-	x.Check(types.Convert(g, &g1))
+	g1, err := types.Convert(g, types.StringID)
+	x.Check(err)
 	require.EqualValues(t, "{'type':'Point','coordinates':[1.1,2]}", string(g1.Value.(string)))
 
 	require.Len(t, gr.Children[0].Children, 5)
@@ -2794,9 +2635,13 @@ func TestSchema(t *testing.T) {
 	require.EqualValues(t, 23, child.Uid)
 	require.EqualValues(t, "friend", child.Attribute)
 
-	require.Len(t, child.Properties, 1)
+	require.Len(t, child.Properties, 2)
 	require.EqualValues(t, "Rick Grimes",
 		getProperty(child.Properties, "name").GetStrVal())
+	dob := getProperty(child.Properties, "dob").GetDateVal()
+	var date time.Time
+	date.UnmarshalBinary(dob)
+	require.EqualValues(t, "1910-01-02 00:00:00 +0000 UTC", date.String())
 	require.Empty(t, child.Children)
 
 	child = gr.Children[0].Children[4]
@@ -2806,8 +2651,168 @@ func TestSchema(t *testing.T) {
 	require.Empty(t, child.Children)
 }
 
+func runQuery(t *testing.T, gq *gql.GraphQuery) string {
+	ctx := context.Background()
+	ch := make(chan error)
+
+	sg, err := ToSubGraph(ctx, gq)
+	require.NoError(t, err)
+	go ProcessGraph(ctx, sg, nil, ch)
+	err = <-ch
+	require.NoError(t, err)
+
+	var l Latency
+	var buf bytes.Buffer
+	err = sg.ToFastJSON(&l, &buf)
+	require.NoError(t, err)
+	return string(buf.Bytes())
+}
+
+func TestWithinPoint(t *testing.T) {
+	populateGraph(t)
+	gq := &gql.GraphQuery{
+		Alias: "me",
+		Func: &gql.Function{
+			Attr: "geometry",
+			Name: "near",
+			Args: []string{`[-122.082506, 37.4249518]`, "1"},
+		},
+		Children: []*gql.GraphQuery{&gql.GraphQuery{Attr: "name"}},
+	}
+
+	mp := runQuery(t, gq)
+	expected := `{"me":[{"name":"Googleplex"}]}`
+	require.JSONEq(t, expected, mp)
+}
+
+func TestWithinPolygon(t *testing.T) {
+	populateGraph(t)
+	gq := &gql.GraphQuery{
+		Alias: "me",
+		Func: &gql.Function{Attr: "geometry", Name: "within", Args: []string{
+			`[[-122.06, 37.37], [-122.1, 37.36], [-122.12, 37.4], [-122.11, 37.43], [-122.04, 37.43], [-122.06, 37.37]]`},
+		},
+		Children: []*gql.GraphQuery{&gql.GraphQuery{Attr: "name"}},
+	}
+
+	mp := runQuery(t, gq)
+	expected := `{"me":[{"name":"Googleplex"},{"name":"Shoreline Amphitheater"}]}`
+	require.JSONEq(t, expected, mp)
+}
+
+func TestContainsPoint(t *testing.T) {
+	populateGraph(t)
+	gq := &gql.GraphQuery{
+		Alias: "me",
+		Func: &gql.Function{Attr: "geometry", Name: "contains", Args: []string{
+			`[-122.082506, 37.4249518]`},
+		},
+		Children: []*gql.GraphQuery{&gql.GraphQuery{Attr: "name"}},
+	}
+
+	mp := runQuery(t, gq)
+	expected := `{"me":[{"name":"SF Bay area"},{"name":"Mountain View"}]}`
+	require.JSONEq(t, expected, mp)
+}
+
+func TestNearPoint(t *testing.T) {
+	populateGraph(t)
+	gq := &gql.GraphQuery{
+		Alias: "me",
+		Func: &gql.Function{
+			Attr: "geometry",
+			Name: "near",
+			Args: []string{`[-122.082506, 37.4249518]`, "1000"},
+		},
+		Children: []*gql.GraphQuery{&gql.GraphQuery{Attr: "name"}},
+	}
+
+	mp := runQuery(t, gq)
+	expected := `{"me":[{"name":"Googleplex"},{"name":"Shoreline Amphitheater"}]}`
+	require.JSONEq(t, expected, mp)
+}
+
+func TestIntersectsPolygon1(t *testing.T) {
+	populateGraph(t)
+	gq := &gql.GraphQuery{
+		Alias: "me",
+		Func: &gql.Function{
+			Attr: "geometry",
+			Name: "intersects",
+			Args: []string{
+				`[[-122.06, 37.37], [-122.1, 37.36], 
+					[-122.12, 37.4], [-122.11, 37.43], [-122.04, 37.43], [-122.06, 37.37]]`,
+			},
+		},
+		Children: []*gql.GraphQuery{&gql.GraphQuery{Attr: "name"}},
+	}
+
+	mp := runQuery(t, gq)
+	expected := `{"me":[{"name":"Googleplex"},{"name":"Shoreline Amphitheater"},
+		{"name":"SF Bay area"},{"name":"Mountain View"}]}`
+	require.JSONEq(t, expected, mp)
+}
+
+func TestIntersectsPolygon2(t *testing.T) {
+	populateGraph(t)
+	gq := &gql.GraphQuery{
+		Alias: "me",
+		Func: &gql.Function{
+			Attr: "geometry",
+			Name: "intersects",
+			Args: []string{
+				`[[-121.6, 37.1], [-122.4, 37.3], 
+					[-122.6, 37.8], [-122.5, 38.3], [-121.9, 38], [-121.6, 37.1]]`,
+			},
+		},
+		Children: []*gql.GraphQuery{&gql.GraphQuery{Attr: "name"}},
+	}
+
+	mp := runQuery(t, gq)
+	expected := `{"me":[{"name":"Googleplex"},{"name":"Shoreline Amphitheater"},
+			{"name":"San Carlos Airport"},{"name":"SF Bay area"},
+			{"name":"Mountain View"},{"name":"San Carlos"}]}`
+	require.JSONEq(t, expected, mp)
+}
+
+const schemaStr = `
+scalar name:string @index
+scalar dob:date @index
+scalar film.film.initial_release_date:date @index
+scalar loc:geo @index
+scalar (
+	survival_rate : float
+	alive         : bool
+	age           : int
+)
+scalar (
+  friend:uid @reverse
+)
+scalar geometry:geo @index
+`
+
 func TestMain(m *testing.M) {
 	x.SetTestRun()
 	x.Init()
+
+	dir, err := ioutil.TempDir("", "storetest_")
+	x.Check(err)
+	defer os.RemoveAll(dir)
+
+	ps, err = store.NewStore(dir)
+	x.Check(err)
+	defer ps.Close()
+
+	schema.ParseBytes([]byte(schemaStr))
+	posting.Init(ps)
+	worker.Init(ps)
+
+	group.ParseGroupConfig("")
+	dir2, err := ioutil.TempDir("", "wal_")
+	x.Check(err)
+
+	worker.StartRaftNodes(dir2)
+	defer os.RemoveAll(dir2)
+
 	os.Exit(m.Run())
 }

@@ -32,8 +32,9 @@ type RaftValue struct {
 // Mark contains raft proposal id and a done boolean. It is used to
 // update the WaterMark struct about the status of a proposal.
 type Mark struct {
-	Index uint64
-	Done  bool // Set to true if the pending mutation is done.
+	Index   uint64
+	Indices []uint64
+	Done    bool // Set to true if the pending mutation is done.
 }
 
 // WaterMark is used to keep track of the maximum done index. The right way to use
@@ -79,38 +80,34 @@ func (w *WaterMark) process() {
 
 	heap.Init(&indices)
 	var loop uint64
-	for mark := range w.Ch {
-		if IsTestRun() {
-			// Don't run this during testing.
-			continue
-		}
 
+	processOne := func(index uint64, done bool) {
 		// If not already done, then set. Otherwise, don't undo a done entry.
-		prev, present := pending[mark.Index]
+		prev, present := pending[index]
 		if !present {
-			heap.Push(&indices, mark.Index)
+			heap.Push(&indices, index)
 			// indices now nonempty, update waitingFor.
 			atomic.StoreUint32(&w.waitingFor, 1)
 		}
 
 		delta := 1
-		if mark.Done {
+		if done {
 			delta = -1
 		}
-		pending[mark.Index] = prev + delta
+		pending[index] = prev + delta
 
 		loop++
 		if len(indices) > 0 && loop%10000 == 0 {
 			min := indices[0]
 			w.elog.Printf("WaterMark %s: Done entry %4d. Size: %4d Watermark: %-4d Looking for: %-4d. Value: %d\n",
-				w.Name, mark.Index, len(indices), w.DoneUntil(), min, pending[min])
+				w.Name, index, len(indices), w.DoneUntil(), min, pending[min])
 		}
 
 		// Update mark by going through all indices in order; and checking if they have
 		// been done. Stop at the first index, which isn't done.
 		doneUntil := w.DoneUntil()
-		AssertTruef(doneUntil < mark.Index,
-			"Watermark %s: Done until %d should be below new index: %d", w.Name, doneUntil, mark.Index)
+		AssertTruef(doneUntil < index,
+			"Watermark %s: Done until %d should be below new index: %d", w.Name, doneUntil, index)
 
 		until := doneUntil
 		loops := 0
@@ -134,6 +131,20 @@ func (w *WaterMark) process() {
 		if until != doneUntil {
 			AssertTrue(atomic.CompareAndSwapUint64(&w.doneUntil, doneUntil, until))
 			w.elog.Printf("%s: Done until %d. Loops: %d\n", w.Name, until, loops)
+		}
+	}
+
+	for mark := range w.Ch {
+		if IsTestRun() {
+			// Don't run this during testing.
+			continue
+		}
+
+		if mark.Index > 0 {
+			processOne(mark.Index, mark.Done)
+		}
+		for _, index := range mark.Indices {
+			processOne(index, mark.Done)
 		}
 	}
 }

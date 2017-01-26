@@ -2,18 +2,38 @@
 
 package icutok
 
-// #cgo CPPFLAGS: -I../vendor/github.com/dgraph-io/goicu/icuembed
+// #cgo CPPFLAGS: -I../../goicu/icuembed
 // #cgo darwin LDFLAGS: -Wl,-undefined -Wl,dynamic_lookup
 // #cgo !darwin LDFLAGS: -Wl,-unresolved-symbols=ignore-all -lrt
 import "C"
 
 import (
+	"flag"
+
 	"github.com/dgraph-io/dgraph/x"
-	_ "github.com/dgraph-io/goicu/icuembed"
+	"github.com/dgraph-io/goicu/icuembed"
+)
+
+var (
+	icuDataFile = flag.String("icu", "icudt58l.dat",
+		"Location of ICU data file such as icudt58l.dat.")
 )
 
 func init() {
 	x.AddInit(func() {
+		if len(*icuDataFile) == 0 {
+			disableICU = true
+			x.Printf("ICU data file missing")
+			return
+		}
+
+		if err := icuembed.Load(*icuDataFile); err != nil {
+			disableICU = true
+			x.Printf("Failed to load ICU data file: %v", err)
+			return
+		}
+
+		// Basic testing.
 		t, err := NewTokenizer([]byte("hello world"))
 		if err != nil {
 			disableICU = true

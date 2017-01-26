@@ -17,6 +17,7 @@
 package rdf
 
 import (
+	"errors"
 	"log"
 	"strconv"
 	"strings"
@@ -32,6 +33,9 @@ import (
 )
 
 var emptyEdge task.DirectedEdge
+var (
+	ErrEmpty = errors.New("rdf: harmless error, e.g. comment line")
+)
 
 // Gets the uid corresponding to an xid from the posting list which stores the
 // mapping.
@@ -173,6 +177,7 @@ func Parse(line string) (rnq graph.NQuad, rerr error) {
 	it := l.NewIterator()
 	var oval string
 	var vend, hasBrackets bool
+	isCommentLine := false
 	// We read items from the l.Items channel to which the lexer sends items.
 	for it.Next() {
 		item := it.Item()
@@ -212,15 +217,15 @@ func Parse(line string) (rnq graph.NQuad, rerr error) {
 			if strings.Trim(val, " ") == "*" {
 				return rnq, x.Errorf("itemObject can't be *")
 			}
+			// Lets find out the storage type from the type map.
 			if t, ok := typeMap[val]; ok {
 				if oval == "_nil_" && t != types.StringID {
 					return rnq, x.Errorf("Invalid ObjectValue")
 				}
 				rnq.ObjectType = int32(t)
-				p := types.ValueForType(t)
 				src := types.ValueForType(types.StringID)
 				src.Value = []byte(oval)
-				err := types.Convert(src, &p)
+				p, err := types.Convert(src, t)
 				if err != nil {
 					return rnq, err
 				}
@@ -236,6 +241,10 @@ func Parse(line string) (rnq graph.NQuad, rerr error) {
 		case lex.ItemError:
 			return rnq, x.Errorf(item.Val)
 
+		case itemComment:
+			isCommentLine = true
+			vend = true
+
 		case itemValidEnd:
 			vend = true
 
@@ -246,6 +255,9 @@ func Parse(line string) (rnq graph.NQuad, rerr error) {
 
 	if !vend {
 		return rnq, x.Errorf("Invalid end of input. Input: [%s]", line)
+	}
+	if isCommentLine {
+		return rnq, ErrEmpty
 	}
 	if len(oval) > 0 {
 		rnq.ObjectValue = &graph.Value{&graph.Value_StrVal{oval}}

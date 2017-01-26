@@ -112,17 +112,18 @@ func (l *Latency) ToMap() map[string]string {
 }
 
 type params struct {
-	Alias     string
-	Count     int
-	Offset    int
-	AfterUID  uint64
-	DoCount   bool
-	GetUID    bool
-	Order     string
-	OrderDesc bool
-	isDebug   bool
-	Var       string
-	NeedsVar  string
+	Alias      string
+	Count      int
+	Offset     int
+	AfterUID   uint64
+	DoCount    bool
+	GetUID     bool
+	Order      string
+	OrderDesc  bool
+	isDebug    bool
+	Var        string
+	NeedsVar   []string
+	ParentVars map[string]*task.List
 }
 
 // SubGraph is the way to represent data internally. It contains both the
@@ -266,8 +267,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 			}
 
 			if pc.Attr == "_xid_" {
-				txt := types.ValueForType(types.StringID)
-				err := types.Convert(v, &txt)
+				txt, err := types.Convert(v, types.StringID)
 				if err != nil {
 					return err
 				}
@@ -287,14 +287,14 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 						return x.Errorf("Leaf predicate:'%v' must be a scalar.", pc.Attr)
 					}
 					gtID := globalType
-					sv = types.ValueForType(gtID)
 					// Convert to schema type.
-					err = types.Convert(v, &sv)
+					sv, err = types.Convert(v, gtID)
 					if bytes.Equal(tv.Val, nil) || err != nil {
 						continue
 					}
 				} else {
-					x.Check(types.Convert(v, &sv))
+					sv, err = types.Convert(v, types.StringID)
+					x.Check(err)
 				}
 				if bytes.Equal(tv.Val, nil) {
 					continue
@@ -333,7 +333,7 @@ func filterCopy(sg *SubGraph, ft *gql.FilterTree) {
 		sg.Attr = ft.Func.Attr
 		sg.SrcFunc = append(sg.SrcFunc, ft.Func.Name)
 		sg.SrcFunc = append(sg.SrcFunc, ft.Func.Args...)
-		sg.Params.NeedsVar = ft.Func.NeedsVar
+		sg.Params.NeedsVar = append(sg.Params.NeedsVar, ft.Func.NeedsVar...)
 	}
 	for _, ftc := range ft.Child {
 		child := &SubGraph{}
@@ -354,11 +354,11 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 		}
 
 		args := params{
-			Alias:    gchild.Alias,
-			isDebug:  sg.Params.isDebug,
-			Var:      gchild.Var,
-			NeedsVar: gchild.NeedsVar,
+			Alias:   gchild.Alias,
+			isDebug: sg.Params.isDebug,
+			Var:     gchild.Var,
 		}
+		args.NeedsVar = append(args.NeedsVar, gchild.NeedsVar...)
 		if gchild.IsCount {
 			if len(gchild.Children) != 0 {
 				return errors.New("Node with count cannot have child attributes")
@@ -425,7 +425,7 @@ func ToSubGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	// This would set the Result field in SubGraph,
 	// and populate the children for attributes.
-	if len(gq.UID) == 0 && gq.Func == nil && gq.NeedsVar == "" {
+	if len(gq.UID) == 0 && gq.Func == nil && len(gq.NeedsVar) == 0 {
 		err := x.Errorf("Invalid query, query internal id is zero and generator is nil")
 		x.TraceError(ctx, err)
 		return nil, err
@@ -434,10 +434,13 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	// For the root, the name to be used in result is stored in Alias, not Attr.
 	// The attr at root (if present) would stand for the source functions attr.
 	args := params{
-		isDebug:  gq.Alias == "debug",
-		Alias:    gq.Alias,
-		Var:      gq.Var,
-		NeedsVar: gq.NeedsVar,
+		isDebug:    gq.Alias == "debug",
+		Alias:      gq.Alias,
+		Var:        gq.Var,
+		ParentVars: make(map[string]*task.List),
+	}
+	for _, it := range gq.NeedsVar {
+		args.NeedsVar = append(args.NeedsVar, it)
 	}
 
 	sg := &SubGraph{
@@ -503,7 +506,7 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 	loopStart := time.Now()
 	for i := 0; i < len(res.Query); i++ {
 		gq := res.Query[i]
-		if gq == nil || (len(gq.UID) == 0 && gq.Func == nil && gq.NeedsVar == "") {
+		if gq == nil || (len(gq.UID) == 0 && gq.Func == nil && len(gq.NeedsVar) == 0) {
 			continue
 		}
 		sg, err := ToSubGraph(ctx, gq)
@@ -519,9 +522,21 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 	hasExecuted := make([]bool, len(sgl))
 	numQueriesDone := 0
 
+	// canExecute returns true if a query block is ready to execute with all the variables
+	// that it depends on are already populated or are defined in the same block.
 	canExecute := func(idx int) bool {
 		for _, v := range res.QueryVars[idx].Needs {
-			if _, ok := doneVars[v]; !ok {
+			// here we check if this block defines the variable v.
+			var selfDep bool
+			for _, vd := range res.QueryVars[idx].Defines {
+				if v == vd {
+					selfDep = true
+					break
+				}
+			}
+			// The variable should be defined in this block or should have already been
+			// populated by some other block, otherwise we are not ready to execute yet.
+			if _, ok := doneVars[v]; !ok && !selfDep {
 				return false
 			}
 		}
@@ -543,7 +558,7 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 				continue
 			}
 
-			fillUpVariables(sg, doneVars)
+			sg.recursiveFillVars(doneVars)
 			hasExecuted[idx] = true
 			idxList = append(idxList, idx)
 			numQueriesDone++
@@ -568,10 +583,12 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 		// If the executed subgraph had some variable defined in it, Populate it in the map.
 		for _, idx := range idxList {
 			sg := sgl[idx]
-			if sg.Params.Alias != "var" {
+			if len(res.QueryVars[idx].Defines) == 0 {
 				continue
 			}
-			populateVarMap(sg, doneVars)
+
+			isCascade := shouldCascade(res, idx)
+			populateVarMap(sg, doneVars, isCascade)
 		}
 	}
 
@@ -586,17 +603,40 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 	return sgl, nil
 }
 
+// shouldCascade returns true if the query block is not self depenedent and we should
+// remove the uids from the bottom up if the children are empty.
+func shouldCascade(res gql.Result, idx int) bool {
+	for _, def := range res.QueryVars[idx].Defines {
+		for _, need := range res.QueryVars[idx].Needs {
+			if def == need {
+				return false
+			}
+		}
+	}
+	return true
+}
+
 // TODO(Ashwin): Benchmark this function. Map implementation might be slow.
-func populateVarMap(sg *SubGraph, doneVars map[string]*task.List) {
+func populateVarMap(sg *SubGraph, doneVars map[string]*task.List, isCascade bool) {
 	// Filter out UIDs that don't have atleast one UID in every child.
 	excluded := make(map[uint64]struct{})
 	for _, child := range sg.Children {
-		populateVarMap(child, doneVars)
+		populateVarMap(child, doneVars, isCascade)
+		if !isCascade {
+			continue
+		}
+		// If the length of child UID list is zero and it has no valid value, then the
+		// current UID should be removed form this level; which would be stored in excluded
+		// map.
 		for i := 0; i < len(child.uidMatrix); i++ {
 			if len(child.values[i].Val) == 0 && len(child.uidMatrix[i].Uids) == 0 {
 				excluded[sg.DestUIDs.Uids[i]] = struct{}{}
 			}
 		}
+	}
+
+	if !isCascade {
+		goto AssignStep
 	}
 
 	// Remove the excluded UIDs from the UID matrix of this level.
@@ -618,21 +658,33 @@ func populateVarMap(sg *SubGraph, doneVars map[string]*task.List) {
 			})
 	}
 
+AssignStep:
 	if sg.Params.Var != "" {
 		doneVars[sg.Params.Var] = sg.DestUIDs
 	}
 }
 
-func fillUpVariables(sg *SubGraph, doneVars map[string]*task.List) {
-	if v, ok := doneVars[sg.Params.NeedsVar]; ok {
-		sg.DestUIDs = v
-	}
+func (sg *SubGraph) recursiveFillVars(doneVars map[string]*task.List) {
+	sg.fillVars(doneVars)
 	for _, child := range sg.Children {
-		fillUpVariables(child, doneVars)
+		child.recursiveFillVars(doneVars)
 	}
 	for _, fchild := range sg.Filters {
-		fillUpVariables(fchild, doneVars)
+		fchild.recursiveFillVars(doneVars)
 	}
+}
+
+func (sg *SubGraph) fillVars(mp map[string]*task.List) {
+	lists := make([]*task.List, 0, 3)
+	if sg.DestUIDs != nil {
+		lists = append(lists, sg.DestUIDs)
+	}
+	for _, v := range sg.Params.NeedsVar {
+		if l, ok := mp[v]; ok {
+			lists = append(lists, l)
+		}
+	}
+	sg.DestUIDs = algo.MergeSorted(lists)
 }
 
 // ProcessGraph processes the SubGraph instance accumulating result for the query
@@ -655,6 +707,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		if len(sg.SrcFunc) > 0 && sg.SrcFunc[0] == "id" {
 			// If its an id() filter, we just have to intersect the SrcUIDs with DestUIDs
 			// and return.
+			sg.fillVars(sg.Params.ParentVars)
 			algo.IntersectWith(sg.DestUIDs, sg.SrcUIDs)
 			rch <- nil
 			return
@@ -703,6 +756,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		filterChan := make(chan error, len(sg.Filters))
 		for _, filter := range sg.Filters {
 			filter.SrcUIDs = sg.DestUIDs
+			filter.Params.ParentVars = sg.Params.ParentVars // Pass to the child.
 			go ProcessGraph(ctx, filter, sg, filterChan)
 		}
 
@@ -756,6 +810,12 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		}
 	}
 
+	// If the current node defines a variable, we store it in the map and pass it on
+	// to the children later which might depend on it.
+	if sg.Params.Var != "" {
+		sg.Params.ParentVars[sg.Params.Var] = sg.DestUIDs
+	}
+
 	// Here we consider handling count with filtering. We do this after
 	// pagination because otherwise, we need to do the count with pagination
 	// taken into account. For example, a PL might have only 50 entries but the
@@ -778,7 +838,8 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	childChan := make(chan error, len(sg.Children))
 	for i := 0; i < len(sg.Children); i++ {
 		child := sg.Children[i]
-		child.SrcUIDs = sg.DestUIDs // Make the connection.
+		child.Params.ParentVars = sg.Params.ParentVars // Pass to the child.
+		child.SrcUIDs = sg.DestUIDs                    // Make the connection.
 		go ProcessGraph(ctx, child, sg, childChan)
 	}
 
