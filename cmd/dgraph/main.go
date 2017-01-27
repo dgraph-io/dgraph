@@ -576,9 +576,9 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background()
 	if err := worker.BackupOverNetwork(ctx); err != nil {
 		x.SetStatus(w, err.Error(), "Backup failed.")
-	} else {
-		x.SetStatus(w, x.Success, "Backup completed.")
+		return
 	}
+	x.SetStatus(w, x.Success, "Backup completed.")
 }
 
 func indexHandler(w http.ResponseWriter, r *http.Request) {
@@ -679,7 +679,7 @@ func serveGRPC(l net.Listener) {
 func serveHTTP(l net.Listener) {
 	srv := &http.Server{
 		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 60 * time.Second,
+		WriteTimeout: 150 * time.Second,
 		// TODO(Ashwin): Add idle timeout while switching to Go 1.8.
 	}
 	x.Checkf(srv.Serve(l), "Error while serving http request")
