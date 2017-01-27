@@ -314,14 +314,19 @@ func lexDirective(l *lex.Lexer) lex.StateFn {
 		l.Backup()
 		l.Emit(itemName)
 
-		directive := buf.Bytes()[:buf.Len()-1]
-		// The lexer may behave differently for different directives. Hence, we need
-		// to check the directive here and go into the right state.
-		if string(directive) == "filter" {
-			l.InsideDirective = true
+		if r == leftRound {
+			directive := buf.Bytes()[:buf.Len()-1]
+			// The lexer may behave differently for different directives. Hence, we need
+			// to check the directive here and go into the right state.
+			if string(directive) == "filter" {
+				l.InsideDirective = true
+				return lexText
+			}
+			return l.Errorf("Unhandled directive %s", directive)
+		} else {
+			// this is language
 			return lexText
 		}
-		return l.Errorf("Unhandled directive %s", directive)
 	}
 	return lexText
 }

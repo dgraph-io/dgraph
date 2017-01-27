@@ -154,3 +154,37 @@ func TestIRIRef(t *testing.T) {
 		t.Log(item.String())
 	}
 }
+
+func TestLangSupport(t *testing.T) {
+	input := `
+	query {
+		me(_xid_: test) {
+			name@en
+		}
+	}
+	`
+	l := lex.NewLexer(input).Run(lexText)
+	it := l.NewIterator()
+	for it.Next() {
+		item := it.Item()
+		require.NotEqual(t, item.Typ, lex.ItemError)
+		t.Log(item.String())
+	}
+}
+
+func TestMultiLangSupport(t *testing.T) {
+	input := `
+	query {
+		me(_xid_: test) {
+			name@en, name@en:ru:fr:de
+		}
+	}
+	`
+	l := lex.NewLexer(input).Run(lexText)
+	it := l.NewIterator()
+	for it.Next() {
+		item := it.Item()
+		require.NotEqual(t, item.Typ, lex.ItemError)
+		t.Log(item.String())
+	}
+}
