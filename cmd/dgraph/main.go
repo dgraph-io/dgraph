@@ -31,12 +31,14 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"os"
+	"os/signal"
 	"path"
 	"runtime"
 	"runtime/pprof"
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"golang.org/x/net/context"
@@ -566,21 +568,26 @@ func handlerInit(w http.ResponseWriter, r *http.Request) bool {
 }
 
 func shutDownHandler(w http.ResponseWriter, r *http.Request) {
-	shutdownWg.Add(1)
-	defer shutdownWg.Done()
 	if !handlerInit(w, r) {
 		return
 	}
-	exitWithProfiles()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-	defer cancel()
-
-	if errs := worker.SyncMarksAllNodes(ctx); len(errs) != 0 {
+	if errs := shutdownServer(); len(errs) != 0 {
 		x.SetStatus(w, x.Error, "Error: "+x.StringifyErrors(errs))
 	} else {
 		x.SetStatus(w, x.Success, "Server has been shutdown")
 	}
+}
+
+func shutdownServer() []error {
+	shutdownWg.Add(1)
+	defer shutdownWg.Done()
+
+	exitWithProfiles()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+	return worker.SyncMarksAllNodes(ctx)
 }
 
 func backupHandler(w http.ResponseWriter, r *http.Request) {
@@ -785,6 +792,14 @@ func main() {
 	posting.Init(ps)
 	worker.Init(ps)
 	x.Check(group.ParseGroupConfig(*gconf))
+
+	// setup shutdown os signal handler
+	sdCh := make(chan os.Signal, 1)
+	signal.Notify(sdCh, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-sdCh
+		shutdownServer()
+	}()
 
 	// Setup external communication.
 	che := make(chan error, 1)
