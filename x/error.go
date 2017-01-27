@@ -190,6 +190,8 @@ func TraceError(ctx context.Context, err error) {
 	Trace(ctx, shortenedErrorString(err))
 }
 
+// StrinfifyErrors returns all errors combined in string form.
+// Format : 1. <first error msg> \n 2. <second error msg> ...so on..
 func StringifyErrors(errs []error) string {
 	var buf bytes.Buffer
 	// error returned by buf.Write* are always nil : by doc
