@@ -15,7 +15,7 @@ import (
 )
 
 var (
-	icuDataFile = flag.String("icu", "icudt58l.dat",
+	icuDataFile = flag.String("icu", "/usr/local/share/icudt58l.dat",
 		"Location of ICU data file such as icudt58l.dat.")
 )
 
