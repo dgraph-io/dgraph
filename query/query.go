@@ -965,7 +965,7 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 	return nil
 }
 
-// Check valid argument keyword.
+// isValidArg checks if arg passed is valid keyword.
 func isValidArg(a string) bool {
 	switch a {
 	case "order":
@@ -979,18 +979,18 @@ func isValidArg(a string) bool {
 	return true
 }
 
-// Check valid function name keyword.
+// isValidFuncName checks if fn passed is valid keyword.
 func isValidFuncName(f string) bool {
 	switch f {
 	case "anyof":
 	case "allof":
 	case "id":
 	default:
-		return isEqualityFn(f) || types.IsGeoFunc(f)
+		return isCompareFn(f) || types.IsGeoFunc(f)
 	}
 	return true
 }
 
-func isEqualityFn(f string) bool {
+func isCompareFn(f string) bool {
 	return f == "leq" || f == "geq" || f == "lt" || f == "gt" || f == "eq"
 }
