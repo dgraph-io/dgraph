@@ -630,6 +630,10 @@ func populateVarMap(sg *SubGraph, doneVars map[string]*task.List, isCascade bool
 		// If the length of child UID list is zero and it has no valid value, then the
 		// current UID should be removed form this level; which would be stored in excluded
 		// map.
+
+		for _, l := range child.uidMatrix {
+			algo.IntersectWith(l, child.DestUIDs)
+		}
 		for i := 0; i < len(child.uidMatrix); i++ {
 			if len(child.values[i].Val) == 0 && len(child.uidMatrix[i].Uids) == 0 {
 				excluded[sg.DestUIDs.Uids[i]] = struct{}{}
@@ -641,16 +645,6 @@ func populateVarMap(sg *SubGraph, doneVars map[string]*task.List, isCascade bool
 		goto AssignStep
 	}
 
-	// Remove the excluded UIDs from the UID matrix of this level.
-	if sg.uidMatrix != nil {
-		for i := 0; i < len(sg.uidMatrix); i++ {
-			algo.ApplyFilter(sg.uidMatrix[i],
-				func(uid uint64, idx int) bool {
-					_, ok := excluded[uid]
-					return !ok
-				})
-		}
-	}
 	// Remove the excluded UIDs from the DestUIDs of this level.
 	if sg.DestUIDs != nil {
 		algo.ApplyFilter(sg.DestUIDs,
@@ -793,9 +787,6 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		}
 	}
 
-	for _, l := range sg.uidMatrix {
-		algo.IntersectWith(l, sg.DestUIDs)
-	}
 	if len(sg.Params.Order) == 0 {
 		// There is no ordering. Just apply pagination and return.
 		if err = sg.applyPagination(ctx); err != nil {
@@ -894,6 +885,9 @@ func (sg *SubGraph) applyPagination(ctx context.Context) error {
 
 	if params.Count == 0 && params.Offset == 0 { // No pagination.
 		return nil
+	}
+	for _, l := range sg.uidMatrix {
+		algo.IntersectWith(l, sg.DestUIDs)
 	}
 	x.AssertTrue(len(sg.SrcUIDs.Uids) == len(sg.uidMatrix))
 	for _, l := range sg.uidMatrix {
