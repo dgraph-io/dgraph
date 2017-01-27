@@ -14,7 +14,7 @@ message NQuad {
     string objectId = 3;
     Value objectValue = 4;
     string label = 5;
-	string lang = 7;
+    string lang = 7;
     sint32 objectType = 6;
 }
 

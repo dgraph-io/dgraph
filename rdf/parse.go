@@ -197,14 +197,6 @@ func (nq NQuad) valueType() nQuadTypeInfo {
 	}
 }
 
-// This function is used to extract an IRI from an IRIREF.
-func stripBracketsAndTrim(val string) (string, bool) {
-	if val[0] != '<' && val[len(val)-1] != '>' {
-		return strings.Trim(val, " "), false
-	}
-	return strings.Trim(val[1:len(val)-1], " "), true
-}
-
 // Function to do sanity check for subject, predicate, object and label strings.
 func sane(s string) bool {
 	// Label and ObjectId can be "", we already check that subject and predicate
@@ -247,6 +239,7 @@ func Parse(line string) (rnq graph.NQuad, rerr error) {
 			}
 
 		case itemLanguage:
+			rnq.Predicate += "." + item.Val // TODO(tzdybal) - remove
 			rnq.Lang = item.Val
 
 		case itemObjectType:
