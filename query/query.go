@@ -272,9 +272,11 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 					return err
 				}
 				dst.SetXID(txt.Value.(string))
-			} else if pc.Attr == "_uid_" && !uidAlreadySet {
-				uidAlreadySet = true
-				dst.SetUID(uid)
+			} else if pc.Attr == "_uid_" {
+				if !uidAlreadySet {
+					uidAlreadySet = true
+					dst.SetUID(uid)
+				}
 			} else {
 				// globalType is the best effort type to which we try converting
 				// and if not possible, we ignore it in the result.
