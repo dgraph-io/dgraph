@@ -19,10 +19,80 @@ func ApplyFilter(u *task.List, f func(uint64, int) bool) {
 	u.Uids = out
 }
 
+func IntersectWith(u, v *task.List) {
+	var wasSwitched bool
+	n := len(u.Uids)
+	m := len(v.Uids)
+
+	if n > m {
+		wasSwitched = true
+		n, m = m, n
+	}
+
+	ratio := float64(m) / float64(n+1)
+	if ratio <= 10 && n >= 10000 {
+		IntersectWithLin(u, v, wasSwitched)
+	} else if n <= 1000 {
+		IntersectWithBin(u, v, wasSwitched)
+	} else {
+		IntersectWithExp(u, v, wasSwitched)
+	}
+}
+
+func idealJump(u []uint64, id uint64, i int) int {
+	step := 1
+	lenL := len(u)
+	for i+step < lenL && u[i+step] < id {
+		i += step
+		step *= 10
+	}
+	if step > 1 {
+		step /= 10
+	}
+	for i+step < lenL && u[i+step] < id {
+		i += step
+		step += step
+	}
+	return i
+}
+
+func IntersectWithExp(u, v *task.List, sw bool) {
+	out := u.Uids[:0]
+	if sw {
+		u, v = v, u
+	}
+	n := len(u.Uids)
+	m := len(v.Uids)
+	for i, k := 0, 0; i < n && k < m; {
+		uid := u.Uids[i]
+		vid := v.Uids[k]
+		if uid > vid {
+			k = idealJump(v.Uids, uid, k)
+			for ; k < m && v.Uids[k] < uid; k++ {
+			}
+		} else if uid == vid {
+			out = append(out, uid)
+			k++
+			i++
+		} else {
+			i = idealJump(u.Uids, vid, i)
+			for ; i < n && u.Uids[i] < vid; i++ {
+			}
+		}
+	}
+	if sw {
+		u, v = v, u
+	}
+	u.Uids = out
+}
+
 // IntersectWith intersects u with v. The update is made to u.
 // u, v should be sorted.
-func IntersectWith(u, v *task.List) {
+func IntersectWithLin(u, v *task.List, sw bool) {
 	out := u.Uids[:0]
+	if sw {
+		u, v = v, u
+	}
 	n := len(u.Uids)
 	m := len(v.Uids)
 	for i, k := 0, 0; i < n && k < m; {
@@ -39,6 +109,29 @@ func IntersectWith(u, v *task.List) {
 			for i = i + 1; i < n && u.Uids[i] < vid; i++ {
 			}
 		}
+	}
+	if sw {
+		u, v = v, u
+	}
+	u.Uids = out
+}
+
+func IntersectWithBin(u, v *task.List, sw bool) {
+	out := u.Uids[:0]
+	if sw {
+		u, v = v, u
+	}
+	m := len(v.Uids)
+	for _, uid := range u.Uids {
+		idx := sort.Search(m, func(i int) bool {
+			return v.Uids[i] >= uid
+		})
+		if idx < m && v.Uids[idx] == uid {
+			out = append(out, uid)
+		}
+	}
+	if sw {
+		u, v = v, u
 	}
 	u.Uids = out
 }
