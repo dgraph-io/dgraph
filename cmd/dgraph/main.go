@@ -795,10 +795,13 @@ func main() {
 
 	// setup shutdown os signal handler
 	sdCh := make(chan os.Signal, 1)
+	defer close(sdCh)
 	signal.Notify(sdCh, os.Interrupt, syscall.SIGTERM)
 	go func() {
-		<-sdCh
-		shutdownServer()
+		_, ok := <-sdCh
+		if ok {
+			shutdownServer()
+		}
 	}()
 
 	// Setup external communication.
