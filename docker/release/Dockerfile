@@ -22,12 +22,7 @@ RUN curl https://get.dgraph.io | bash
 # to host machine for persistence.
 RUN mkdir /dgraph && mkdir /data
 
-# Export the ICU DATA variable.
-ENV ICU_DATA /usr/local/share/icudt58l.dat
-
 EXPOSE 8080
 WORKDIR /dgraph
-# Get the golden data schema.
-RUN wget "https://github.com/dgraph-io/benchmarks/blob/master/data/goldendata.schema?raw=true" -O goldendata.schema -q
 
 CMD ["dgraph"]
