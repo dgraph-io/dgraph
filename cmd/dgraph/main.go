@@ -679,7 +679,7 @@ func serveGRPC(l net.Listener) {
 func serveHTTP(l net.Listener) {
 	srv := &http.Server{
 		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 150 * time.Second,
+		WriteTimeout: 600 * time.Second,
 		// TODO(Ashwin): Add idle timeout while switching to Go 1.8.
 	}
 	x.Checkf(srv.Serve(l), "Error while serving http request")
