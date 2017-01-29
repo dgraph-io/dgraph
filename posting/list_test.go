@@ -18,7 +18,6 @@ package posting
 
 import (
 	"context"
-	"io/ioutil"
 	"log"
 	"math"
 	"math/rand"
@@ -26,9 +25,9 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/boltdb/bolt"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
@@ -66,12 +65,10 @@ func addMutation(t *testing.T, l *List, edge *task.DirectedEdge, op uint32) {
 
 func TestAddMutation(t *testing.T) {
 	key := x.DataKey("name", 1)
-	dir, err := ioutil.TempDir("", "storetest_")
+	ps, err := bolt.Open("test.db", 0600, nil)
 	require.NoError(t, err)
-	defer os.RemoveAll(dir)
+	defer os.Remove(ps.Path())
 
-	ps, err := store.NewStore(dir)
-	require.NoError(t, err)
 	Init(ps)
 
 	l := getNew(key, ps)
@@ -146,15 +143,9 @@ func checkValue(t *testing.T, ol *List, val string) {
 
 func TestAddMutation_Value(t *testing.T) {
 	key := x.DataKey("value", 10)
-	dir, err := ioutil.TempDir("", "storetest_")
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	defer os.RemoveAll(dir)
-
-	ps, err := store.NewStore(dir)
+	ps, err := bolt.Open("test.db", 0600, nil)
 	require.NoError(t, err)
+	defer os.Remove(ps.Path())
 	Init(ps)
 
 	ol := getNew(key, ps)
@@ -180,12 +171,9 @@ func TestAddMutation_Value(t *testing.T) {
 
 func TestAddMutation_jchiu1(t *testing.T) {
 	key := x.DataKey("value", 10)
-	dir, err := ioutil.TempDir("", "storetest_")
+	ps, err := bolt.Open("test.db", 0600, nil)
 	require.NoError(t, err)
-	defer os.RemoveAll(dir)
-
-	ps, err := store.NewStore(dir)
-	require.NoError(t, err)
+	defer os.Remove(ps.Path())
 	Init(ps)
 	ol := getNew(key, ps)
 
@@ -233,12 +221,9 @@ func TestAddMutation_jchiu1(t *testing.T) {
 
 func TestAddMutation_jchiu2(t *testing.T) {
 	key := x.DataKey("value", 10)
-	dir, err := ioutil.TempDir("", "storetest_")
+	ps, err := bolt.Open("test.db", 0600, nil)
 	require.NoError(t, err)
-	defer os.RemoveAll(dir)
-
-	ps, err := store.NewStore(dir)
-	require.NoError(t, err)
+	defer os.Remove(ps.Path())
 	Init(ps)
 	ol := getNew(key, ps)
 
@@ -272,12 +257,6 @@ func TestAddMutation_jchiu2(t *testing.T) {
 
 func TestAddMutation_jchiu3(t *testing.T) {
 	key := x.DataKey("value", 10)
-	dir, err := ioutil.TempDir("", "storetest_")
-	require.NoError(t, err)
-	defer os.RemoveAll(dir)
-
-	ps, err := store.NewStore(dir)
-	require.NoError(t, err)
 	Init(ps)
 	ol := getNew(key, ps)
 
@@ -331,12 +310,6 @@ func TestAddMutation_jchiu3(t *testing.T) {
 
 func TestAddMutation_mrjn1(t *testing.T) {
 	key := x.DataKey("value", 10)
-	dir, err := ioutil.TempDir("", "storetest_")
-	require.NoError(t, err)
-	defer os.RemoveAll(dir)
-
-	ps, err := store.NewStore(dir)
-	require.NoError(t, err)
 	Init(ps)
 	ol := getNew(key, ps)
 
@@ -396,12 +369,6 @@ func TestAddMutation_mrjn1(t *testing.T) {
 func TestAddMutation_checksum(t *testing.T) {
 	var c1, c2, c3 []byte
 
-	dir, err := ioutil.TempDir("", "storetest_")
-	require.NoError(t, err)
-	defer os.RemoveAll(dir)
-
-	ps, err := store.NewStore(dir)
-	require.NoError(t, err)
 	Init(ps)
 
 	{
@@ -489,12 +456,6 @@ func TestAddMutation_checksum(t *testing.T) {
 
 func TestAddMutation_gru(t *testing.T) {
 	key := x.DataKey("question.tag", 0x01)
-	dir, err := ioutil.TempDir("", "storetest_")
-	require.NoError(t, err)
-	defer os.RemoveAll(dir)
-
-	ps, err := store.NewStore(dir)
-	require.NoError(t, err)
 	Init(ps)
 	ol := getNew(key, ps)
 
@@ -534,12 +495,6 @@ func TestAddMutation_gru(t *testing.T) {
 
 func TestAddMutation_gru2(t *testing.T) {
 	key := x.DataKey("question.tag", 0x01)
-	dir, err := ioutil.TempDir("", "storetest_")
-	require.NoError(t, err)
-	defer os.RemoveAll(dir)
-
-	ps, err := store.NewStore(dir)
-	require.NoError(t, err)
 	Init(ps)
 	ol := getNew(key, ps)
 
@@ -591,12 +546,6 @@ func TestAddMutation_gru2(t *testing.T) {
 
 func TestAfterUIDCount(t *testing.T) {
 	key := x.DataKey("value", 10)
-	dir, err := ioutil.TempDir("", "storetest_")
-	require.NoError(t, err)
-	defer os.RemoveAll(dir)
-
-	ps, err := store.NewStore(dir)
-	require.NoError(t, err)
 	ol := getNew(key, ps)
 
 	// Set value to cars and merge to RocksDB.
@@ -670,12 +619,6 @@ func TestAfterUIDCount(t *testing.T) {
 
 func TestAfterUIDCount2(t *testing.T) {
 	key := x.DataKey("value", 10)
-	dir, err := ioutil.TempDir("", "storetest_")
-	require.NoError(t, err)
-	defer os.RemoveAll(dir)
-
-	ps, err := store.NewStore(dir)
-	require.NoError(t, err)
 	ol := getNew(key, ps)
 
 	// Set value to cars and merge to RocksDB.
@@ -704,12 +647,6 @@ func TestAfterUIDCount2(t *testing.T) {
 
 func TestAfterUIDCountWithCommit(t *testing.T) {
 	key := x.DataKey("value", 10)
-	dir, err := ioutil.TempDir("", "storetest_")
-	require.NoError(t, err)
-	defer os.RemoveAll(dir)
-
-	ps, err := store.NewStore(dir)
-	require.NoError(t, err)
 	Init(ps)
 	ol := getNew(key, ps)
 
@@ -788,30 +725,31 @@ func TestAfterUIDCountWithCommit(t *testing.T) {
 	require.EqualValues(t, 0, ol.Length(300))
 }
 
+var ps *bolt.DB
+
 func TestMain(m *testing.M) {
 	x.Init()
+	var err error
+	ps, err = bolt.Open("test.db", 0600, nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+	ps.Update(func(tx *bolt.Tx) error {
+		_, err := tx.CreateBucketIfNotExists([]byte("data"))
+		x.Check(err)
+		return nil
+	})
+	defer os.Remove(ps.Path())
 	os.Exit(m.Run())
 }
 
 func BenchmarkAddMutations(b *testing.B) {
 	// logrus.SetLevel(logrus.DebugLevel)
 	key := x.DataKey("name", 1)
-	dir, err := ioutil.TempDir("", "storetest_")
-	if err != nil {
-		b.Error(err)
-		return
-	}
-
-	defer os.RemoveAll(dir)
-	ps, err := store.NewStore(dir)
-	if err != nil {
-		b.Error(err)
-		return
-	}
-
 	l := getNew(key, ps)
 	b.ResetTimer()
 
+	var err error
 	ctx := context.Background()
 	for i := 0; i < b.N; i++ {
 		if err != nil {

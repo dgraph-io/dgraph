@@ -105,47 +105,54 @@ func processSort(ts *task.Sort) (*task.SortResult, error) {
 		out[i].ulist = &task.List{Uids: []uint64{}}
 	}
 
-	// Iterate over every bucket / token.
-	it := pstore.NewIterator()
-	defer it.Close()
-	pk := x.Parse(x.IndexKey(attr, ""))
-	indexPrefix := pk.IndexPrefix()
-
-	if !ts.Desc {
-		it.Seek(indexPrefix)
-	} else {
-		it.Seek(pk.SkipRangeOfSameType())
-		if it.Valid() {
-			it.Prev()
-		} else {
-			it.SeekToLast()
-		}
-	}
-
-BUCKETS:
-
-	for it.ValidForPrefix(indexPrefix) {
-		k := x.Parse(it.Key().Data())
-		x.AssertTrue(k != nil)
-		x.AssertTrue(k.IsIndex())
-		token := k.Term
-
-		err := intersectBucket(ts, attr, token, out)
-		switch err {
-		case errDone:
-			break BUCKETS
-		case errContinue:
-			// Continue iterating over tokens.
-		default:
-			return &emptySortResult, err
-		}
-		if ts.Desc {
-			it.Prev()
-		} else {
-			it.Next()
-		}
-	}
-
+	//	if err := pstore.View(func(tx *bolt.Tx) error {
+	//		c := tx.Bucket([]byte("data")).Cursor()
+	//
+	//		// Iterate over every bucket / token.
+	//		pk := x.Parse(x.IndexKey(attr, ""))
+	//		indexPrefix := pk.IndexPrefix()
+	//
+	//		var k []byte
+	//		if !ts.Desc {
+	//			k, _ = c.Seek(indexPrefix)
+	//		} else {
+	//			k, _ = c.Seek(pk.SkipRangeOfSameType())
+	//			if k != nil {
+	//				k, _ = c.Prev()
+	//			} else {
+	//				k, _ = c.Last()
+	//			}
+	//		}
+	//
+	//	BUCKETS:
+	//
+	//		for ; k != nil && bytes.HasPrefix(k, indexPrefix); k, _ = c.Next() {
+	//			key := x.Parse(k)
+	//			x.AssertTrue(key != nil)
+	//			x.AssertTrue(key.IsIndex())
+	//			token := key.Term
+	//
+	//			err := intersectBucket(ts, attr, token, out)
+	//			switch err {
+	//			case errDone:
+	//				break BUCKETS
+	//			case errContinue:
+	//			// Continue iterating over tokens.
+	//			default:
+	//				return err
+	//			}
+	//			if ts.Desc {
+	//				c.Prev()
+	//			} else {
+	//				c.Next()
+	//			}
+	//		}
+	//
+	//		return nil
+	//	}); err != nil {
+	//		return &emptySortResult, err
+	//	}
+	//
 	r := new(task.SortResult)
 	for _, il := range out {
 		r.UidMatrix = append(r.UidMatrix, il.ulist)

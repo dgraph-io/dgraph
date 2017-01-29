@@ -1,18 +1,18 @@
 package posting
 
 import (
+	"bytes"
 	"context"
-	"io/ioutil"
+	"fmt"
 	"math"
-	"os"
 	"sort"
 	"testing"
 	"time"
 
+	"github.com/boltdb/bolt"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgraph/schema"
-	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
@@ -76,15 +76,7 @@ func addMutationWithIndex(t *testing.T, l *List, edge *task.DirectedEdge, op uin
 }
 
 func TestTokensTable(t *testing.T) {
-	dir, err := ioutil.TempDir("", "storetest_")
-	require.NoError(t, err)
-	defer os.RemoveAll(dir)
-
 	schema.ParseBytes([]byte(schemaStr))
-
-	ps, err := store.NewStore(dir)
-	defer ps.Close()
-	require.NoError(t, err)
 	Init(ps)
 
 	key := x.DataKey("name", 1)
@@ -99,20 +91,36 @@ func TestTokensTable(t *testing.T) {
 	addMutationWithIndex(t, l, edge, Set)
 
 	key = x.IndexKey("name", "david")
-	slice, err := ps.Get(key)
+
+	var slice []byte
+	err := ps.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte("data"))
+		if b == nil {
+			return fmt.Errorf("Bucket not found")
+		}
+		slice = b.Get(key)
+		return nil
+	})
 	require.NoError(t, err)
 
 	var pl types.PostingList
-	x.Check(pl.Unmarshal(slice.Data()))
+	x.Check(pl.Unmarshal(slice))
 
 	require.EqualValues(t, []string{"david"}, tokensForTest("name"))
 
 	CommitLists(10)
 	time.Sleep(time.Second)
 
-	slice, err = ps.Get(key)
+	err = ps.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte("data"))
+		if b == nil {
+			return fmt.Errorf("Bucket not found")
+		}
+		slice = b.Get(key)
+		return nil
+	})
 	require.NoError(t, err)
-	x.Check(pl.Unmarshal(slice.Data()))
+	x.Check(pl.Unmarshal(slice))
 
 	require.EqualValues(t, []string{"david"}, tokensForTest("name"))
 }
@@ -126,20 +134,23 @@ scalar dob:date @index
 func tokensForTest(attr string) []string {
 	pk := x.ParsedKey{Attr: attr}
 	prefix := pk.IndexPrefix()
-	it := pstore.NewIterator()
-	defer it.Close()
 
 	var out []string
-	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
-		k := x.Parse(it.Key().Data())
-		x.AssertTrue(k.IsIndex())
-		out = append(out, k.Term)
-	}
+	pstore.View(func(tx *bolt.Tx) error {
+		c := tx.Bucket([]byte("data")).Cursor()
+		for k, _ := c.Seek(prefix); k != nil && bytes.HasPrefix(k, prefix); k, _ = c.Next() {
+			key := x.Parse(k)
+			x.AssertTrue(key.IsIndex())
+			out = append(out, key.Term)
+		}
+		return nil
+	})
+
 	return out
 }
 
 // addEdgeToValue adds edge without indexing.
-func addEdgeToValue(t *testing.T, ps *store.Store, attr string, src uint64,
+func addEdgeToValue(t *testing.T, attr string, src uint64,
 	value string) {
 	edge := &task.DirectedEdge{
 		Value:  []byte(value),
@@ -155,26 +166,17 @@ func addEdgeToValue(t *testing.T, ps *store.Store, attr string, src uint64,
 	require.True(t, ok)
 }
 
-func populateGraph(t *testing.T) (string, *store.Store) {
-	dir, err := ioutil.TempDir("", "storetest_")
-	require.NoError(t, err)
-
-	ps, err := store.NewStore(dir)
-	require.NoError(t, err)
-
+func populateGraph(t *testing.T) *bolt.DB {
 	schema.ParseBytes([]byte(schemaStrAlt))
 	Init(ps)
 
-	addEdgeToValue(t, ps, "name", 1, "Michonne")
-	addEdgeToValue(t, ps, "name", 20, "David")
-	return dir, ps
+	addEdgeToValue(t, "name", 1, "Michonne")
+	addEdgeToValue(t, "name", 20, "David")
+	return ps
 }
 
 func TestRebuildIndex(t *testing.T) {
-	dir, ps := populateGraph(t)
-	defer ps.Close()
-	defer os.RemoveAll(dir)
-
+	populateGraph(t)
 	// RebuildIndex requires the data to be committed to data store.
 	CommitLists(10)
 	for len(syncCh) > 0 {
@@ -182,8 +184,12 @@ func TestRebuildIndex(t *testing.T) {
 	}
 
 	// Create some fake wrong entries for data store.
-	ps.SetOne(x.IndexKey("name", "wrongname1"), []byte("nothing"))
-	ps.SetOne(x.IndexKey("name", "wrongname2"), []byte("nothing"))
+	ps.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte("data"))
+		b.Put(x.IndexKey("name", "wrongname1"), []byte("nothing"))
+		b.Put(x.IndexKey("name", "wrongname2"), []byte("nothing"))
+		return nil
+	})
 
 	require.NoError(t, RebuildIndex(context.Background(), "name"))
 
@@ -194,18 +200,22 @@ func TestRebuildIndex(t *testing.T) {
 	}
 
 	// Check index entries in data store.
-	it := ps.NewIterator()
-	defer it.Close()
 	pk := x.ParsedKey{Attr: "name"}
 	prefix := pk.IndexPrefix()
 	var idxKeys []string
 	var idxVals []*types.PostingList
-	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
-		idxKeys = append(idxKeys, string(it.Key().Data()))
-		pl := new(types.PostingList)
-		require.NoError(t, pl.Unmarshal(it.Value().Data()))
-		idxVals = append(idxVals, pl)
-	}
+
+	ps.View(func(tx *bolt.Tx) error {
+		c := tx.Bucket([]byte("data")).Cursor()
+		for k, v := c.Seek(prefix); k != nil && bytes.HasPrefix(k, prefix); k, v = c.Next() {
+			idxKeys = append(idxKeys, string(k))
+			pl := new(types.PostingList)
+			require.NoError(t, pl.Unmarshal(v))
+			idxVals = append(idxVals, pl)
+		}
+		return nil
+	})
+
 	require.Len(t, idxKeys, 2)
 	require.Len(t, idxVals, 2)
 	require.EqualValues(t, x.IndexKey("name", "david"), idxKeys[0])

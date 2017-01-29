@@ -25,13 +25,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/boltdb/bolt"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/query"
-	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -51,13 +51,9 @@ var m = `
 	}
 `
 
-func prepare() (dir1, dir2 string, ps *store.Store, rerr error) {
+func prepare() (dir1, dir2 string, ps *bolt.DB, rerr error) {
 	var err error
-	dir1, err = ioutil.TempDir("", "storetest_")
-	if err != nil {
-		return "", "", nil, err
-	}
-	ps, err = store.NewStore(dir1)
+	ps, err = bolt.Open("test.db", 0600, nil)
 	if err != nil {
 		return "", "", nil, err
 	}

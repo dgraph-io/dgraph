@@ -49,12 +49,12 @@ import (
 	"github.com/dgraph-io/dgraph/query/graph"
 	"github.com/dgraph-io/dgraph/rdf"
 	"github.com/dgraph-io/dgraph/schema"
-	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/soheilhy/cmux"
+	"github.com/syndtr/goleveldb/leveldb"
 )
 
 var (
@@ -666,8 +666,6 @@ func checkFlagsAndInitDirs() {
 	prev := runtime.GOMAXPROCS(numCpus)
 	log.Printf("num_cpu: %v. prev_maxprocs: %v. Set max procs to num cpus",
 		numCpus, prev)
-	// Create parent directories for postings, uids and mutations
-	x.Check(os.MkdirAll(*postingDir, 0700))
 }
 
 func serveGRPC(l net.Listener) {
@@ -734,11 +732,10 @@ func main() {
 	x.Init()
 	checkFlagsAndInitDirs()
 
-	// All the writes to posting store should be synchronous. We use batched writers
-	// for posting lists, so the cost of sync writes is amortized.
-	ps, err := store.NewSyncStore(*postingDir)
-	x.Checkf(err, "Error initializing postings store")
-	defer ps.Close()
+	db, err := leveldb.OpenFile("posting.db", nil)
+	x.Checkf(err, "While opening boltdb")
+
+	defer db.Close()
 
 	if len(*schemaFile) > 0 {
 		err = schema.Parse(*schemaFile)
@@ -746,8 +743,8 @@ func main() {
 	}
 	// Posting will initialize index which requires schema. Hence, initialize
 	// schema before calling posting.Init().
-	posting.Init(ps)
-	worker.Init(ps)
+	posting.Init(db)
+	worker.Init(db)
 	x.Check(group.ParseGroupConfig(*gconf))
 
 	// Setup external communication.

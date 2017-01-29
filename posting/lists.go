@@ -34,8 +34,8 @@ import (
 	"time"
 
 	"github.com/dgryski/go-farm"
+	"github.com/syndtr/goleveldb/leveldb"
 
-	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -317,14 +317,14 @@ func getMemUsage() int {
 var (
 	stopTheWorld sync.RWMutex
 	lhmap        *listMap
-	pstore       *store.Store
+	pstore       *leveldb.DB
 	syncCh       chan syncEntry
 	dirtyChan    chan uint64 // All dirty posting list keys are pushed here.
 	marks        *syncMarks
 )
 
 // Init initializes the posting lists package, the in memory and dirty list hash.
-func Init(ps *store.Store) {
+func Init(ps *leveldb.DB) {
 	marks = new(syncMarks)
 	pstore = ps
 	lhmap = newShardedListMap(*lhmapNumShards)
@@ -389,10 +389,9 @@ func GetOrCreate(key []byte, group uint32) (rlist *List, decr func()) {
 		l.Lock()
 		go func(key []byte) {
 			defer l.Unlock()
-			slice, err := pstore.Get(key)
-			x.Check(err)
-			if slice.Size() == 0 {
-				x.Check(pstore.SetOne(key, dummyPostingList))
+			v, err := pstore.Get(key, nil)
+			if err != nil || v == nil {
+				x.Check(pstore.Put(key, dummyPostingList, nil))
 			}
 		}(key)
 	}
@@ -458,9 +457,7 @@ func batchSync() {
 	var entries []syncEntry
 	var loop uint64
 
-	b := pstore.NewWriteBatch()
-	defer b.Destroy()
-
+	batch := new(leveldb.Batch)
 	for {
 		select {
 		case e := <-syncCh:
@@ -470,14 +467,12 @@ func batchSync() {
 			// default is executed if no other case is ready.
 			start := time.Now()
 			if len(entries) > 0 {
-				x.AssertTrue(b != nil)
 				loop++
 				fmt.Printf("[%4d] Writing batch of size: %v\n", loop, len(entries))
 				for _, e := range entries {
-					b.Put(e.key, e.val)
+					batch.Put(e.key, e.val)
 				}
-				x.Checkf(pstore.WriteBatch(b), "Error while writing to RocksDB.")
-				b.Clear()
+				x.Checkf(pstore.Write(batch, nil), "Error while doing a batch write to BoltDB")
 
 				for _, e := range entries {
 					e.sw.Done()

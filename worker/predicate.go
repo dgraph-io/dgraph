@@ -17,14 +17,10 @@
 package worker
 
 import (
-	"bytes"
 	"context"
 	"io"
-	"sort"
 
-	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/task"
-	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -35,78 +31,60 @@ const (
 
 // writeBatch performs a batch write of key value pairs to RocksDB.
 func writeBatch(ctx context.Context, kv chan *task.KV, che chan error) {
-	wb := pstore.NewWriteBatch()
-	defer wb.Destroy()
-
-	batchSize := 0
-	batchWriteNum := 1
-	for i := range kv {
-		wb.Put(i.Key, i.Val)
-		batchSize += len(i.Key) + len(i.Val)
-		// We write in batches of size 32MB.
-		if batchSize >= 32*MB {
-			x.Trace(ctx, "SNAPSHOT: Doing batch write num: %d", batchWriteNum)
-			if err := pstore.WriteBatch(wb); err != nil {
-				che <- err
-				return
-			}
-
-			batchWriteNum++
-			// Resetting batch size after a batch write.
-			batchSize = 0
-			// Since we are writing data in batches, we need to clear up items enqueued
-			// for batch write after every successful write.
-			wb.Clear()
-		}
-	}
-	// After channel is closed the above loop would exit, we write the data in
-	// write batch here.
-	if batchSize > 0 {
-		x.Trace(ctx, "Doing batch write %d.", batchWriteNum)
-		che <- pstore.WriteBatch(wb)
-		return
-	}
+	//	if err := pstore.Update(func(tx *bolt.Tx) error {
+	//		b := tx.Bucket([]byte("data"))
+	//		for i := range kv {
+	//			if err := b.Put(i.Key, i.Val); err != nil {
+	//				return err
+	//			}
+	//		}
+	//		x.Trace(ctx, "Doing batch write.")
+	//		return nil
+	//	}); err != nil {
+	//		che <- err
+	//		return
+	//	}
 	che <- nil
 }
 
 func streamKeys(stream Worker_PredicateDataClient, groupId uint32) error {
-	it := pstore.NewIterator()
-	defer it.Close()
-
 	g := &task.GroupKeys{
 		GroupId: groupId,
 	}
 
-	for it.SeekToFirst(); it.Valid(); it.Next() {
-		k, v := it.Key(), it.Value()
-		pk := x.Parse(k.Data())
-
-		if pk == nil {
-			continue
-		}
-		if group.BelongsTo(pk.Attr) != g.GroupId {
-			it.Seek(pk.SkipPredicate())
-			it.Prev() // To tackle it.Next() called by default.
-			continue
-		}
-
-		var pl types.PostingList
-		x.Check(pl.Unmarshal(v.Data()))
-
-		kdup := make([]byte, len(k.Data()))
-		copy(kdup, k.Data())
-		key := &task.KC{
-			Key:      kdup,
-			Checksum: pl.Checksum,
-		}
-		g.Keys = append(g.Keys, key)
-		if len(g.Keys) >= 1000 {
-			if err := stream.Send(g); err != nil {
-				return x.Wrapf(err, "While sending group keys to server.")
-			}
-			g.Keys = g.Keys[:0]
-		}
-	}
+	//	pstore.View(func(tx *bolt.Tx) error {
+	//		c := tx.Bucket([]byte("data")).Cursor()
+	//		for k, v := c.First(); k != nil; k, v = c.Next() {
+	//			pk := x.Parse(k)
+	//
+	//			if pk == nil {
+	//				continue
+	//			}
+	//			if group.BelongsTo(pk.Attr) != g.GroupId {
+	//				c.Seek(pk.SkipPredicate())
+	//				c.Prev() // To tackle it.Next() called by default.
+	//				continue
+	//			}
+	//
+	//			var pl types.PostingList
+	//			x.Check(pl.Unmarshal(v))
+	//
+	//			kdup := make([]byte, len(k))
+	//			copy(kdup, k)
+	//			key := &task.KC{
+	//				Key:      kdup,
+	//				Checksum: pl.Checksum,
+	//			}
+	//			g.Keys = append(g.Keys, key)
+	//			if len(g.Keys) >= 1000 {
+	//				if err := stream.Send(g); err != nil {
+	//					return x.Wrapf(err, "While sending group keys to server.")
+	//				}
+	//				g.Keys = g.Keys[:0]
+	//			}
+	//		}
+	//		return nil
+	//	})
 	if err := stream.Send(g); err != nil {
 		return x.Wrapf(err, "While sending group keys to server.")
 	}
@@ -209,61 +187,57 @@ func (w *grpcWorker) PredicateData(stream Worker_PredicateDataServer) error {
 		return x.Errorf("Not leader of group: %d", gkeys.GroupId)
 	}
 
-	// TODO(pawan) - Shift to CheckPoints once we figure out how to add them to the
-	// RocksDB library we are using.
-	// http://rocksdb.org/blog/2609/use-checkpoints-for-efficient-snapshots/
-	it := pstore.NewIterator()
-	defer it.Close()
-
 	var count int
-	for it.SeekToFirst(); it.Valid(); it.Next() {
-		k, v := it.Key(), it.Value()
-		pk := x.Parse(k.Data())
-
-		if pk == nil {
-			continue
-		}
-		if group.BelongsTo(pk.Attr) != gkeys.GroupId {
-			it.Seek(pk.SkipPredicate())
-			it.Prev() // To tackle it.Next() called by default.
-			continue
-		}
-
-		var pl types.PostingList
-		x.Check(pl.Unmarshal(v.Data()))
-
-		idx := sort.Search(len(gkeys.Keys), func(i int) bool {
-			t := gkeys.Keys[i]
-			return bytes.Compare(k.Data(), t.Key) <= 0
-		})
-
-		if idx < len(gkeys.Keys) {
-			// Found a match.
-			t := gkeys.Keys[idx]
-			// Different keys would have the same prefix. So, check Checksum first,
-			// it would be cheaper when there's no match.
-			if bytes.Equal(pl.Checksum, t.Checksum) && bytes.Equal(k.Data(), t.Key) {
-				// No need to send this.
-				continue
-			}
-		}
-
-		// We just need to stream this kv. So, we can directly use the key
-		// and val without any copying.
-		kv := &task.KV{
-			Key: k.Data(),
-			Val: v.Data(),
-		}
-
-		count++
-		if err := stream.Send(kv); err != nil {
-			return err
-		}
-	} // end of iterator
+	//	if err := pstore.View(func(tx *bolt.Tx) error {
+	//		c := tx.Bucket([]byte("data")).Cursor()
+	//		for k, v := c.First(); k != nil; k, v = c.Next() {
+	//			pk := x.Parse(k)
+	//
+	//			if pk == nil {
+	//				continue
+	//			}
+	//			if group.BelongsTo(pk.Attr) != gkeys.GroupId {
+	//				c.Seek(pk.SkipPredicate())
+	//				c.Prev() // To tackle it.Next() called by default.
+	//				continue
+	//			}
+	//
+	//			var pl types.PostingList
+	//			x.Check(pl.Unmarshal(v))
+	//
+	//			idx := sort.Search(len(gkeys.Keys), func(i int) bool {
+	//				t := gkeys.Keys[i]
+	//				return bytes.Compare(k, t.Key) <= 0
+	//			})
+	//
+	//			if idx < len(gkeys.Keys) {
+	//				// Found a match.
+	//				t := gkeys.Keys[idx]
+	//				// Different keys would have the same prefix. So, check Checksum first,
+	//				// it would be cheaper when there's no match.
+	//				if bytes.Equal(pl.Checksum, t.Checksum) && bytes.Equal(k, t.Key) {
+	//					// No need to send this.
+	//					continue
+	//				}
+	//			}
+	//
+	//			// We just need to stream this kv. So, we can directly use the key
+	//			// and val without any copying.
+	//			kv := &task.KV{
+	//				Key: k,
+	//				Val: v,
+	//			}
+	//
+	//			count++
+	//			if err := stream.Send(kv); err != nil {
+	//				return err
+	//			}
+	//		} // end of iterator
+	//		return nil
+	//	}); err != nil {
+	//		return err
+	//	}
 	x.Trace(stream.Context(), "Sent %d keys to client. Done.\n", count)
 
-	if err := it.Err(); err != nil {
-		return err
-	}
 	return nil
 }

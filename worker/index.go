@@ -58,9 +58,9 @@ func (n *node) rebuildIndex(ctx context.Context, proposalData []byte) error {
 	// Do actual index work.
 	attr := proposal.RebuildIndex.Attr
 	x.AssertTrue(group.BelongsTo(attr) == gid)
-	if err = posting.RebuildIndex(ctx, attr); err != nil {
-		return err
-	}
+	//	if err = posting.RebuildIndex(ctx, attr); err != nil {
+	//		return err
+	//	}
 	return nil
 }
 

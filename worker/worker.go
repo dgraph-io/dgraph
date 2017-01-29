@@ -25,7 +25,7 @@ import (
 	"net"
 	"sync"
 
-	"github.com/dgraph-io/dgraph/store"
+	"github.com/syndtr/goleveldb/leveldb"
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
@@ -36,10 +36,10 @@ var (
 		"Port used by worker for internal communication.")
 	backupPath = flag.String("backup", "backup",
 		"Folder in which to store backups.")
-	pstore *store.Store
+	pstore *leveldb.DB
 )
 
-func Init(ps *store.Store) {
+func Init(ps *leveldb.DB) {
 	pstore = ps
 }
 
@@ -90,5 +90,6 @@ func RunServer(bindall bool) {
 
 // StoreStats returns stats for data store.
 func StoreStats() string {
-	return pstore.GetStats()
+	return ""
+	//	return pstore.GetStats()
 }
