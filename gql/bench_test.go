@@ -87,9 +87,9 @@ var q2 = `{
 }`
 
 var q3 = `{
-  debug(_xid_: m.06pj8) {
+  debug(id: m.06pj8) {
     type.object.name.en
-    film.director.film @filter(allof("type.object.name.en", "jones indiana") || allof("type.object.name.en", "jurassic park"))  {
+    film.director.film @filter(allof("type.object.name.en", "jones indiana") or allof("type.object.name.en", "jurassic park"))  {
 	      _uid_
 	      type.object.name.en
      }
@@ -97,7 +97,7 @@ var q3 = `{
 }`
 
 var q4 = `{
-  debug(_xid_: m.0bxtg) {
+  debug(id: m.0bxtg) {
     type.object.name.en
     film.director.film @filter(geq("film.film.initial_release_date", "1970-01-01")) {
       film.film.initial_release_date
