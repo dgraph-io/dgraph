@@ -2776,7 +2776,7 @@ func TestNormalizeDirective(t *testing.T) {
 	js := processToFastJSON(t, query)
 	fmt.Println(string(js))
 	require.EqualValues(t,
-		`{"me":[{"fn":"Michonne","mn":"Michonne","n":"Rick Grimes"},{"mn":"Michonne","n":"Glenn Rhee"},{"mn":"Michonne","n":"Daryl Dixon"},{"fn":"Glenn Rhee","mn":"Michonne","n":"Andrea"}]}`,
+		`{"me":[{"fn":"Michonne","mn":"Michonne","n":"Rick Grimes"},{"mn":"Michonne","n":"Glenn Rhee"},{"fn":"Glenn Rhee","mn":"Michonne","n":"Daryl Dixon"},{"fn":"Glenn Rhee","mn":"Michonne","n":"Andrea"}]}`,
 		js)
 }
 
