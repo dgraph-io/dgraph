@@ -75,8 +75,8 @@ var (
 	memprofile   = flag.String("mem", "", "write memory profile to file")
 	dumpSubgraph = flag.String("dumpsg", "", "Directory to save subgraph for testing, debugging")
 
-	finishCh       = make(chan struct{})
-	shutdownCh     = make(chan struct{})
+	finishCh       = make(chan struct{}) // channel to wait for all pending reqs to finish.
+	shutdownCh     = make(chan struct{}) // channel to signal shutdown.
 	pendingQueries = make(chan struct{}, 10000*runtime.NumCPU())
 )
 
@@ -570,7 +570,7 @@ func shutDownHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func shutdownServer() {
-	log.Println("Got clean exit request")
+	x.Printf("Got clean exit request")
 	stopProfiling()          // stop profiling
 	shutdownCh <- struct{}{} // exit grpc and http servers.
 
@@ -590,7 +590,7 @@ func shutdownServer() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		defer cancel()
 		if err := worker.SyncAllMarks(ctx); err != nil {
-			log.Printf("Error in sync watermarks : %s", err.Error())
+			x.Printf("Error in sync watermarks : %s", err.Error())
 		}
 	}()
 }
@@ -760,7 +760,7 @@ func setupServer(che chan error) {
 	log.Println("Server listening on port", *port)
 
 	err = tcpm.Serve() // Start cmux serving. blocking call
-	<-shutdownCh       // wait for shutdownserver to finish
+	<-shutdownCh       // wait for shutdownServer to finish
 	che <- err         // final close for main.
 }
 

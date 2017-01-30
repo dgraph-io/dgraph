@@ -86,7 +86,8 @@ type node struct {
 	cfg         *raft.Config
 	applyCh     chan raftpb.Entry
 	ctx         context.Context
-	done        chan struct{}
+	stop        chan struct{} // to send the stop signal to Run
+	done        chan struct{} // to check whether node is running or not
 	gid         uint32
 	id          uint64
 	messages    chan sendmsg
@@ -168,6 +169,7 @@ func newNode(gid uint32, id uint64, myAddr string) *node {
 		props:       props,
 		raftContext: rc,
 		messages:    make(chan sendmsg, 1000),
+		stop:        make(chan struct{}),
 		done:        make(chan struct{}),
 	}
 	n.applied = x.WaterMark{Name: fmt.Sprintf("Committed: Group %d", n.gid)}
@@ -545,14 +547,21 @@ func (n *node) Run() {
 				firstRun = false
 			}
 
-		case <-n.done:
+		case <-n.stop:
+			close(n.done)
 			return
 		}
 	}
 }
 
 func (n *node) Stop() {
-	close(n.done)
+	select {
+	case n.stop <- struct{}{}:
+	case <-n.done:
+		// already stopped.
+		return
+	}
+	<-n.done // wait for Run to respond.
 }
 
 func (n *node) Step(ctx context.Context, msg raftpb.Message) error {
