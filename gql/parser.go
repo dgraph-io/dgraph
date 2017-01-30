@@ -47,7 +47,8 @@ type GraphQuery struct {
 
 	// Internal fields below.
 	// If gq.fragment is nonempty, then it is a fragment reference / spread.
-	fragment string
+	fragment  string
+	normalize bool
 }
 
 // Mutation stores the strings corresponding to set and delete operations.
@@ -513,6 +514,8 @@ L:
 				}
 				gq.Filter = filter
 
+			case "normalize":
+				gq.normalize = true
 			default:
 				return nil, x.Errorf("Unknown directive [%s]", item.Val)
 			}
