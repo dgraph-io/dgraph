@@ -1127,70 +1127,13 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 			it.Next()
 			item := it.Item()
 			parseVarList(gq, item.Val)
+		} else {
+			it.Next()
+			item := it.Item()
+			gq.Args[key] = item.Val
 		}
 	}
 
-	/*
-		for _, p := range args {
-			if p.Key == "id" {
-				// Check and parse if its a list.
-				err := parseID(gq, p.Val)
-				if err != nil {
-					return nil, err
-				}
-			} else if p.Key == "var" {
-				parseVarList(gq, p.Val)
-			} else if p.Key == "func" {
-
-			} else if p.Key == "count" {
-			} else if p.Key == "offset" {
-			} else {
-				return nil, x.Errorf("Expecting id at root. Got: %+v", p)
-			}
-		}
-
-		// TODO(Ashwin): Refactor to make everythin a KV pair.
-			if peekItems[1].Typ == itemRightRound {
-				it.Next()
-				item := it.Item()
-				parseVarList(gq, item.Val)
-				it.Next() // consume the right round.
-			} else if peekItems[1].Typ == itemLeftRound {
-				// Store the generator function.
-				gen, err := parseFunction(it)
-				if err != nil {
-					return gq, err
-				}
-				if !schema.IsIndexed(gen.Attr) {
-					return nil, x.Errorf(
-						"Field %s is not indexed and cannot be used in functions",
-						gen.Attr)
-				}
-				if err != nil {
-					return nil, err
-				}
-				gq.Func = gen
-			} else if peekItems[1].Typ == itemColon {
-				args, err := parseArguments(it)
-				if err != nil {
-					return nil, err
-				}
-
-				for _, p := range args {
-					if p.Key == "id" {
-						// Check and parse if its a list.
-						err := parseID(gq, p.Val)
-						if err != nil {
-							return nil, err
-						}
-					} else {
-						return nil, x.Errorf("Expecting id at root. Got: %+v", p)
-					}
-				}
-			} else {
-				return nil, x.Errorf("Unexpected root argument. Got: %v", peekItems)
-			}
-	*/
 	return gq, nil
 }
 

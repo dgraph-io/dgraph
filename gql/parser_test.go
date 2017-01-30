@@ -217,6 +217,52 @@ func TestParseMultipleQueries(t *testing.T) {
 	require.Equal(t, 2, len(res.Query))
 }
 
+func TestParseRootArgs1(t *testing.T) {
+	query := `
+	query {
+		me(id:0x0a, first:4, offset:1) {
+			friends {
+				name
+			}
+			gender,age
+			hometown
+		}
+	}
+`
+	res, err := Parse(query)
+	require.NoError(t, err)
+	require.NotNil(t, res.Query)
+	require.Equal(t, 1, len(res.Query))
+	require.Equal(t, 2, len(res.Query[0].Args))
+	require.Equal(t, "4", res.Query[0].Args["first"])
+	require.Equal(t, "1", res.Query[0].Args["offset"])
+	require.Equal(t, childAttrs(res.Query[0]), []string{"friends", "gender", "age", "hometown"})
+	require.Equal(t, childAttrs(res.Query[0].Children[0]), []string{"name"})
+}
+
+func TestParseRootArgs2(t *testing.T) {
+	query := `
+	query {
+		me(id:0x0a, first: 1, offset:0) {
+			friends {
+				name
+			}
+			gender,age
+			hometown
+		}
+	}
+`
+	res, err := Parse(query)
+	require.NoError(t, err)
+	require.NotNil(t, res.Query)
+	require.Equal(t, 1, len(res.Query))
+	require.Equal(t, 2, len(res.Query[0].Args))
+	require.Equal(t, "1", res.Query[0].Args["first"])
+	require.Equal(t, "0", res.Query[0].Args["offset"])
+	require.Equal(t, childAttrs(res.Query[0]), []string{"friends", "gender", "age", "hometown"})
+	require.Equal(t, childAttrs(res.Query[0].Children[0]), []string{"name"})
+}
+
 func TestParse(t *testing.T) {
 	query := `
 	query {
