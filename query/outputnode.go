@@ -275,39 +275,31 @@ func copyMap(m map[string][]byte) map[string][]byte {
 	return out
 }
 
-func normalize(n *fastJsonNode, m map[string][]byte, out *fastJsonNode) {
+func normalize(n *fastJsonNode, attrMap map[string][]byte, out []fastJsonNode) []fastJsonNode {
 	if len(n.children) == 0 {
-		cm := copyMap(m)
+		// No more children nodes, lets copy the attrs to the map and attach the
+		// result to out.
 		for k, v := range n.attrs {
-			cm[k] = v
+			attrMap[k] = v
 		}
-		out.children["normalize"] = append(out.children["normalize"], &fastJsonNode{
-			attrs: cm,
+		out = append(out, fastJsonNode{
+			attrs: attrMap,
 		})
-		return
+		return out
 	}
 
 	for _, child := range n.children {
-		for _, c := range child {
-			cm := copyMap(m)
+		// n.children is a map of string -> []*fastJsonNode.
+		for _, jn := range child {
+			am := copyMap(attrMap)
 			// Create a copy of the map, attach attrs and pass to children.
 			for k, v := range n.attrs {
-				cm[k] = v
+				am[k] = v
 			}
-			normalize(c, cm, out)
+			out = normalize(jn, am, out)
 		}
 	}
-}
-
-func print(out *fastJsonNode) {
-	c := out.children["normalize"]
-	for _, ch := range c {
-		m := ""
-		for k, v := range ch.attrs {
-			m = m + k + " " + string(v) + "  "
-		}
-		fmt.Println(m)
-	}
+	return out
 }
 
 func processNodeUids(n *fastJsonNode, sg *SubGraph) error {
@@ -330,19 +322,19 @@ func processNodeUids(n *fastJsonNode, sg *SubGraph) error {
 			continue
 		}
 
-		if sg.Params.Normalize {
-			normalized := &fastJsonNode{
-				children: make(map[string][]*fastJsonNode),
-			}
-
-			m := make(map[string][]byte)
-			normalize(n1.(*fastJsonNode), m, normalized)
-			print(normalized)
-			for _, c := range normalized.children["normalize"] {
-				n.AddChild(sg.Params.Alias, c)
-			}
-		} else {
+		if !sg.Params.Normalize {
 			n.AddChild(sg.Params.Alias, n1)
+			continue
+		}
+
+		// Lets normalize the response now.
+		normalized := make([]fastJsonNode, 0)
+
+		// This map is used to mantain the leaf nodes along a path while traversing
+		// the Subgraph.
+		attrMap := make(map[string][]byte)
+		for _, c := range normalize(n1.(*fastJsonNode), attrMap, normalized) {
+			n.AddChild(sg.Params.Alias, &fastJsonNode{attrs: c.attrs})
 		}
 	}
 	return nil

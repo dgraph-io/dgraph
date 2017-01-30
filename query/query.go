@@ -302,11 +302,13 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 					sv.Value = ""
 				}
 
-				if pc.Params.Normalize {
-					if pc.Params.Alias != "" {
-						dst.AddValue(fieldName, sv)
-					}
-				} else {
+				if !pc.Params.Normalize {
+					dst.AddValue(fieldName, sv)
+					continue
+				}
+				// If the query had the normalize directive, then we only add nodes
+				// with an Alias.
+				if pc.Params.Alias != "" {
 					dst.AddValue(fieldName, sv)
 				}
 			}

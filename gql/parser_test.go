@@ -1491,5 +1491,5 @@ func TestParseNormalize(t *testing.T) {
 	res, err := Parse(query)
 	require.NoError(t, err)
 	require.NotNil(t, res.Query[0])
-	require.True(t, res.Query[0].normalize)
+	require.True(t, res.Query[0].Normalize)
 }
