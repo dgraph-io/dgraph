@@ -1086,15 +1086,13 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 
 	// Parse in KV fashion. Depending on the value of key, decide the path.
 	for it.Next() {
-		var p pair
+		var key, val string
 		// Get key.
 		item := it.Item()
 		if item.Typ == itemName {
-			p.Key = item.Val
-
+			key = item.Val
 		} else if item.Typ == itemRightRound {
 			break
-
 		} else {
 			return result, x.Errorf("Expecting argument name. Got: %v", item)
 		}
@@ -1105,6 +1103,17 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 			return result, x.Errorf("Expecting a collon. Got: %v", item)
 		}
 
+		if key == "id" {
+			it.Next()
+			item = it.Item()
+			// Check and parse if its a list.
+			err := parseID(gq, item.Val)
+			if err != nil {
+				return nil, err
+			}
+		} else if key == "func" {
+
+		} else if key
 		// Get value.
 		it.Next()
 		item = it.Item()
