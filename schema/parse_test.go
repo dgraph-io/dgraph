@@ -29,6 +29,7 @@ import (
 func TestSchema(t *testing.T) {
 	str = make(map[string]types.TypeID)
 	require.NoError(t, Parse("testfiles/test_schema"))
+	x.Printf("~~~%v", str)
 }
 
 func TestSchema1_Error(t *testing.T) {

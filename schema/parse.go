@@ -43,24 +43,22 @@ func ParseBytes(schema []byte) (rerr error) {
 	it := l.NewIterator()
 	for it.Next() {
 		item := it.Item()
-		switch item.Typ {
-		case itemScalar:
-			{
-				if rerr = processScalar(it); rerr != nil {
-					return rerr
-				}
+		if item.Typ != itemText {
+			return x.Errorf("Expected text here but got: %v", item)
+		}
+		switch item.Val {
+		case "scalar":
+			if rerr = processScalar(it); rerr != nil {
+				return rerr
 			}
-		case itemType:
-			{
-				if rerr = processObject(it); rerr != nil {
-					return rerr
-				}
+		case "type":
+			if rerr = processObject(it); rerr != nil {
+				return rerr
 			}
-		case lex.ItemError:
-			return x.Errorf(item.Val)
+		default:
+			return x.Errorf("Expected either 'scalar' or 'type' but got: %v", item)
 		}
 	}
-
 	return nil
 }
 
@@ -70,19 +68,19 @@ func processScalarBlock(it *lex.ItemIterator) error {
 		switch item.Typ {
 		case itemRightRound:
 			return nil
-		case itemScalarName:
+		case itemText:
 			{
 				var name, typ string
 				name = item.Val
 
 				it.Next()
-				if next := it.Item(); next.Typ != itemCollon {
-					return x.Errorf("Missing collon")
+				if next := it.Item(); next.Typ != itemColon {
+					return x.Errorf("Missing colon")
 				}
 
 				it.Next()
 				next := it.Item()
-				if next.Typ != itemScalarType {
+				if next.Typ != itemText {
 					return x.Errorf("Missing Type")
 				}
 				typ = next.Val
@@ -105,16 +103,20 @@ func processScalarBlock(it *lex.ItemIterator) error {
 					if next.Typ == itemAt {
 						it.Next()
 						next = it.Item()
-						if next.Typ == itemIndex {
+						if next.Typ != itemText {
+							return x.Errorf("Missing directive name")
+						}
+						switch next.Val {
+						case "index":
 							if err := processIndexDirective(it, name, t); err != nil {
 								return err
 							}
-						} else if next.Typ == itemReverse {
+						case "reverse":
 							if t != types.UidID {
 								return x.Errorf("Cannot reverse for non-UID type")
 							}
 							reversedFields[name] = true
-						} else {
+						default:
 							return x.Errorf("Invalid index specification")
 						}
 					}
@@ -170,20 +172,20 @@ func processScalar(it *lex.ItemIterator) error {
 			{
 				return processScalarBlock(it)
 			}
-		case itemScalarName:
+		case itemText:
 			{
 				var name, typ string
 				name = item.Val
 
 				it.Next()
 				next := it.Item()
-				if next.Typ != itemCollon {
-					return x.Errorf("Missing collon")
+				if next.Typ != itemColon {
+					return x.Errorf("Missing colon")
 				}
 
 				it.Next()
 				next = it.Item()
-				if next.Typ != itemScalarType {
+				if next.Typ != itemText {
 					return x.Errorf("Missing Type")
 				}
 				typ = next.Val
@@ -207,17 +209,21 @@ func processScalar(it *lex.ItemIterator) error {
 					if next.Typ == itemAt {
 						it.Next()
 						next = it.Item()
-						if next.Typ == itemIndex {
+						if next.Typ != itemText {
+							return x.Errorf("Missing directive name")
+						}
+						switch next.Val {
+						case "index":
 							if err := processIndexDirective(it, name, t); err != nil {
 								return err
 							}
-						} else if next.Typ == itemReverse {
+						case "reverse":
 							if t != types.UidID {
 								return x.Errorf("Cannot reverse for non-UID type")
 							}
 							reversedFields[name] = true
-						} else {
-							return x.Errorf("Invalid index specification")
+						default:
+							return x.Errorf("Invalid directive")
 						}
 					}
 				}
@@ -234,7 +240,7 @@ func processObject(it *lex.ItemIterator) error {
 	var objName string
 	it.Next()
 	next := it.Item()
-	if next.Typ != itemObject {
+	if next.Typ != itemText {
 		return x.Errorf("Missing object name")
 	}
 	objName = next.Val
@@ -254,20 +260,20 @@ L:
 		switch item.Typ {
 		case itemRightCurl:
 			break L
-		case itemObjectName:
+		case itemText:
 			{
 				var name, typ string
 				name = item.Val
 
 				it.Next()
 				next := it.Item()
-				if next.Typ != itemCollon {
-					return x.Errorf("Missing collon")
+				if next.Typ != itemColon {
+					return x.Errorf("Missing colon")
 				}
 
 				it.Next()
 				next = it.Item()
-				if next.Typ != itemObjectType {
+				if next.Typ != itemText {
 					return x.Errorf("Missing Type")
 				}
 				typ = next.Val
@@ -287,7 +293,10 @@ L:
 				if next.Typ == itemAt {
 					it.Next()
 					index := it.Item()
-					if index.Typ == itemReverse {
+					if index.Typ != itemText {
+						return x.Errorf("Missing directive name")
+					}
+					if index.Val == "reverse" {
 						// TODO(jchiu): Add test for this check.
 						if t.IsScalar() /* && t != types.UidID */ {
 							return x.Errorf("Cannot reverse non-UID scalar")
