@@ -267,6 +267,49 @@ func (fj *fastJsonNode) encode(bufw *bufio.Writer) {
 	bufw.WriteRune('}')
 }
 
+func copyMap(m map[string][]byte) map[string][]byte {
+	out := make(map[string][]byte)
+	for k, v := range m {
+		out[k] = v
+	}
+	return out
+}
+
+func normalize(n *fastJsonNode, m map[string][]byte, out *fastJsonNode) {
+	if len(n.children) == 0 {
+		cm := copyMap(m)
+		for k, v := range n.attrs {
+			cm[k] = v
+		}
+		out.children["normalize"] = append(out.children["normalize"], &fastJsonNode{
+			attrs: cm,
+		})
+		return
+	}
+
+	for _, child := range n.children {
+		for _, c := range child {
+			cm := copyMap(m)
+			// Create a copy of the map, attach attrs and pass to children.
+			for k, v := range n.attrs {
+				cm[k] = v
+			}
+			normalize(c, cm, out)
+		}
+	}
+}
+
+func print(out *fastJsonNode) {
+	c := out.children["normalize"]
+	for _, ch := range c {
+		m := ""
+		for k, v := range ch.attrs {
+			m = m + k + " " + string(v) + "  "
+		}
+		fmt.Println(m)
+	}
+}
+
 func processNodeUids(n *fastJsonNode, sg *SubGraph) error {
 	var seedNode *fastJsonNode
 	if sg.DestUIDs == nil {
@@ -286,7 +329,21 @@ func processNodeUids(n *fastJsonNode, sg *SubGraph) error {
 		if n1.IsEmpty() {
 			continue
 		}
-		n.AddChild(sg.Params.Alias, n1)
+
+		if sg.Params.Normalize {
+			normalized := &fastJsonNode{
+				children: make(map[string][]*fastJsonNode),
+			}
+
+			m := make(map[string][]byte)
+			normalize(n1.(*fastJsonNode), m, normalized)
+			print(normalized)
+			for _, c := range normalized.children["normalize"] {
+				n.AddChild(sg.Params.Alias, c)
+			}
+		} else {
+			n.AddChild(sg.Params.Alias, n1)
+		}
 	}
 	return nil
 }
