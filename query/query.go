@@ -644,6 +644,8 @@ func populateVarMap(sg *SubGraph, doneVars map[string]*task.List, isCascade bool
 			continue
 		}
 
+		// Intersect the UidMatrix with the DestUids as some UIDs might have been removed
+		// by other operations. So we need to apply it on the UidMatrix.
 		for _, l := range child.uidMatrix {
 			algo.IntersectWith(l, child.DestUIDs)
 		}
@@ -658,8 +660,7 @@ func populateVarMap(sg *SubGraph, doneVars map[string]*task.List, isCascade bool
 		var exclude bool
 		for _, child := range sg.Children {
 			// If the length of child UID list is zero and it has no valid value, then the
-			// current UID should be removed form this level; which would be stored in excluded
-			// map.
+			// current UID should be removed form this level.
 			if len(child.values[i].Val) == 0 && len(child.uidMatrix[i].Uids) == 0 {
 				exclude = true
 				break
@@ -838,7 +839,6 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		for i, ul := range sg.uidMatrix {
 			// A possible optimization is to return the size of the intersection
 			// without forming the intersection.
-
 			algo.IntersectWith(ul, sg.DestUIDs)
 			sg.counts[i] = uint32(len(ul.Uids))
 		}
@@ -904,11 +904,11 @@ func (sg *SubGraph) applyPagination(ctx context.Context) error {
 		return nil
 	}
 
-	for _, l := range sg.uidMatrix {
-		algo.IntersectWith(l, sg.DestUIDs)
-	}
 	x.AssertTrue(len(sg.SrcUIDs.Uids) == len(sg.uidMatrix))
 	for _, l := range sg.uidMatrix {
+		// Update the UidMatrix before applying the pagination as
+		// we want valid uids which are present in DestUids.
+		algo.IntersectWith(l, sg.DestUIDs)
 		start, end := pageRange(&sg.Params, len(l.Uids))
 		l.Uids = l.Uids[start:end]
 	}
