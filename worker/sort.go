@@ -88,7 +88,13 @@ var (
 	errDone     = x.Errorf("Done processing buckets")
 )
 
-// processSort does either a coarse or a fine sort.
+// processSort does sorting with pagination. It works by iterating over index
+// buckets. As it iterates, it intersects with each UID list of the UID
+// matrix. To optimize for pagination, we maintain the "offsets and sizes" or
+// pagination window for each UID list. For each UID list, we ignore the
+// bucket if we haven't hit the offset. We stop getting results when we got
+// enough for our pagination params. When all the UID lists are done, we stop
+// iterating over the index.
 func processSort(ts *task.Sort) (*task.SortResult, error) {
 	attr := ts.Attr
 	x.AssertTruef(ts.Count > 0,
@@ -124,18 +130,21 @@ func processSort(ts *task.Sort) (*task.SortResult, error) {
 
 BUCKETS:
 
+	// Outermost loop is over index buckets.
 	for it.ValidForPrefix(indexPrefix) {
 		k := x.Parse(it.Key().Data())
 		x.AssertTrue(k != nil)
 		x.AssertTrue(k.IsIndex())
 		token := k.Term
 
+		// Intersect every UID list with the index bucket, and update their
+		// results (in out).
 		err := intersectBucket(ts, attr, token, out)
 		switch err {
 		case errDone:
 			break BUCKETS
 		case errContinue:
-			// Continue iterating over tokens.
+			// Continue iterating over tokens / index buckets.
 		default:
 			return &emptySortResult, err
 		}
@@ -158,6 +167,8 @@ type intersectedList struct {
 	ulist  *task.List
 }
 
+// intersectBucket intersects every UID list in the UID matrix with the
+// indexed bucket.
 func intersectBucket(ts *task.Sort, attr, token string, out []intersectedList) error {
 	count := int(ts.Count)
 	sType, err := schema.TypeOf(attr)
@@ -170,6 +181,7 @@ func intersectBucket(ts *task.Sort, attr, token string, out []intersectedList) e
 	pl, decr := posting.GetOrCreate(key, 0)
 	defer decr()
 
+	// For each UID list, we need to intersect with the index bucket.
 	for i, ul := range ts.UidMatrix {
 		il := &out[i]
 		if count > 0 && len(il.ulist.Uids) >= count {
@@ -178,21 +190,23 @@ func intersectBucket(ts *task.Sort, attr, token string, out []intersectedList) e
 
 		// Intersect index with i-th input UID list.
 		listOpt := posting.ListOptions{Intersect: ul}
-		result := pl.Uids(listOpt)
+		result := pl.Uids(listOpt) // The actual intersection work is done here.
 		n := len(result.Uids)
 
 		// Check offsets[i].
 		if il.offset >= n {
 			// We are going to skip the whole intersection. No need to do actual
-			// sorting. Just update offsets[i].
+			// sorting. Just update offsets[i]. We now offset less.
 			il.offset -= n
 			continue
 		}
 
+		// We are within the page. We need to apply sorting.
 		// Sort results by value before applying offset.
 		sortByValue(attr, result, scalar, ts.Desc)
 
 		if il.offset > 0 {
+			// Apply the offset.
 			result.Uids = result.Uids[il.offset:n]
 			il.offset = 0
 			n = len(result.Uids)
@@ -206,11 +220,11 @@ func intersectBucket(ts *task.Sort, attr, token string, out []intersectedList) e
 			}
 		}
 
-		// Copy from result to out.
+		// Copy from result to out. Copy n items.
 		for j := 0; j < n; j++ {
 			il.ulist.Uids = append(il.ulist.Uids, result.Uids[j])
 		}
-	} // end for loop
+	} // end for loop over UID lists in UID matrix.
 
 	// Check out[i] sizes for all i.
 	for i := 0; i < len(ts.UidMatrix); i++ { // Iterate over UID lists.
@@ -219,6 +233,8 @@ func intersectBucket(ts *task.Sort, attr, token string, out []intersectedList) e
 		}
 		x.AssertTrue(len(out[i].ulist.Uids) == count)
 	}
+	// All UID lists have enough items (according to pagination). Let's notify
+	// the outermost loop.
 	return errDone
 }
 

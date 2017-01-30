@@ -676,6 +676,124 @@ func TestCountError3(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestToSubgraphInvalidFnName(t *testing.T) {
+	query := `
+		{
+			me(invalidfn1(name, "some cool name")) {
+				name
+				gender
+				alive
+			}
+		}
+	`
+	res, err := gql.Parse(query)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	_, err = ToSubGraph(ctx, res.Query[0])
+	require.Error(t, err)
+}
+
+func TestToSubgraphInvalidFnName2(t *testing.T) {
+	query := `
+		{
+			me(anyof(name, "some cool name")) {
+				name
+				friend @filter(invalidfn2(name, "some name")) {
+				       name
+				}
+			}
+		}
+	`
+	res, err := gql.Parse(query)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	_, err = ToSubGraph(ctx, res.Query[0])
+	require.Error(t, err)
+}
+
+func TestToSubgraphInvalidFnName3(t *testing.T) {
+	query := `
+		{
+			me(anyof(name, "some cool name")) {
+				name
+				friend @filter(anyof(name, "Andrea") or
+					       invalidfn3(name, "Andrea Rhee")){
+					name
+				}
+			}
+		}
+	`
+	res, err := gql.Parse(query)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	_, err = ToSubGraph(ctx, res.Query[0])
+	require.Error(t, err)
+}
+
+func TestToSubgraphInvalidFnName4(t *testing.T) {
+	query := `
+		{
+			f AS var(invalidfn4("name", "Michonne Rick Glenn")) {
+				name
+			}
+			you(anyof(name, "Michonne")) {
+				friend @filter(id(f)) {
+					name
+				}
+			}
+		}
+	`
+	res, err := gql.Parse(query)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	_, err = ToSubGraph(ctx, res.Query[0])
+	require.Error(t, err)
+}
+
+func TestToSubgraphInvalidArgs1(t *testing.T) {
+	query := `
+		{
+			me(id:0x01) {
+				name
+				gender
+				friend(disorder: dob) @filter(leq("dob", "1909-03-20")) {
+					name
+				}
+			}
+		}
+	`
+	res, err := gql.Parse(query)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	_, err = ToSubGraph(ctx, res.Query[0])
+	require.Error(t, err)
+}
+
+func TestToSubgraphInvalidArgs2(t *testing.T) {
+	query := `
+		{
+			me(id:0x01) {
+				name
+				gender
+				friend(offset:1, invalidorder:1) @filter(anyof("name", "Andrea")) {
+					name
+				}
+			}
+		}
+	`
+	res, err := gql.Parse(query)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	_, err = ToSubGraph(ctx, res.Query[0])
+	require.Error(t, err)
+}
+
 func TestProcessGraph(t *testing.T) {
 	populateGraph(t)
 	// Alright. Now we have everything set up. Let's create the query.

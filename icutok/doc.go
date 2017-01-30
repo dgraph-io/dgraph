@@ -14,5 +14,5 @@
  * limitations under the License.
  */
 
-// Package tok is a wrapper around ICU boundary iterating functions.
-package tok
+// Package icutok is a wrapper around ICU boundary iterating functions.
+package icutok

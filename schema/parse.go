@@ -20,6 +20,7 @@ import (
 	"io/ioutil"
 
 	"github.com/dgraph-io/dgraph/lex"
+	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -105,7 +106,9 @@ func processScalarBlock(it *lex.ItemIterator) error {
 						it.Next()
 						next = it.Item()
 						if next.Typ == itemIndex {
-							indexedFields[name] = true
+							if err := processIndexDirective(it, name, t); err != nil {
+								return err
+							}
 						} else if next.Typ == itemReverse {
 							if t != types.UidID {
 								return x.Errorf("Cannot reverse for non-UID type")
@@ -122,6 +125,39 @@ func processScalarBlock(it *lex.ItemIterator) error {
 		}
 	}
 
+	return nil
+}
+
+func processIndexDirective(it *lex.ItemIterator, name string, typ types.TypeID) error {
+	indexedFields[name] = tok.Default(typ)
+	if !it.Next() {
+		// Nothing to read.
+		return nil
+	}
+	next := it.Item()
+	if next.Typ != itemLeftRound {
+		it.Prev() // Backup.
+		return nil
+	}
+
+	// Look for tokenizer.
+	var hasArg bool
+	for {
+		it.Next()
+		next = it.Item()
+		if next.Typ == itemRightRound {
+			break
+		}
+		if next.Typ != itemText {
+			return x.Errorf("Expected directive arg but got: %v", next)
+		}
+		// We have the argument.
+		if hasArg {
+			return x.Errorf("Found more than one arguments for index directive")
+		}
+		// Look for custom tokenizer.
+		indexedFields[name] = tok.GetTokenizer(next.Val)
+	}
 	return nil
 }
 
@@ -172,7 +208,9 @@ func processScalar(it *lex.ItemIterator) error {
 						it.Next()
 						next = it.Item()
 						if next.Typ == itemIndex {
-							indexedFields[name] = true
+							if err := processIndexDirective(it, name, t); err != nil {
+								return err
+							}
 						} else if next.Typ == itemReverse {
 							if t != types.UidID {
 								return x.Errorf("Cannot reverse for non-UID type")

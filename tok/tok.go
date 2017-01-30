@@ -16,138 +16,172 @@
 
 package tok
 
-// #include <stdint.h>
-// #include <stdlib.h>
-// #include "icuc.h"
-import "C"
-
 import (
-	"bytes"
-	"reflect"
-	"unicode"
-	"unsafe"
+	"encoding/binary"
+	"strings"
+	"time"
 
-	// We rely on these almost standard Go libraries to do unicode normalization.
-	"golang.org/x/text/transform"
-	"golang.org/x/text/unicode/norm"
+	geom "github.com/twpayne/go-geom"
 
+	"github.com/dgraph-io/dgraph/icutok"
+	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
 
-const maxTokenSize = 100
+// Tokenizer defines what a tokenizer must provide.
+type Tokenizer interface {
+	// Name is name of tokenizer. This should be unique.
+	Name() string
+
+	// Type returns typeID that we care about.
+	Type() types.TypeID
+
+	// Tokens return tokens for a given value.
+	Tokens(sv types.Val) ([]string, error)
+}
 
 var (
-	transformer transform.Transformer
-	disableICU  bool
+	tokenizers map[string]Tokenizer
+	defaults   map[types.TypeID]Tokenizer
 )
 
-// ICUDisabled returns whether ICU is disabled. It may be disabled if we are in
-// embed mode and no data file is specified.
-func ICUDisabled() bool { return disableICU }
-
-// Tokenizer wraps the Tokenizer object in icuc.c.
-type Tokenizer struct {
-	c *C.Tokenizer
-
-	// We do not own this. It belongs to C.Tokenizer. But we like to cache it to
-	// avoid extra cgo calls.
-	token *C.char
+func init() {
+	RegisterTokenizer(GeoTokenizer{})
+	RegisterTokenizer(Int32Tokenizer{})
+	RegisterTokenizer(FloatTokenizer{})
+	RegisterTokenizer(DateTokenizer{})
+	RegisterTokenizer(DateTimeTokenizer{})
+	RegisterTokenizer(TermTokenizer{})
+	RegisterTokenizer(ExactTokenizer{})
+	SetDefault(types.GeoID, "geo")
+	SetDefault(types.Int32ID, "int")
+	SetDefault(types.FloatID, "float")
+	SetDefault(types.DateID, "date")
+	SetDefault(types.DateTimeID, "datetime")
+	SetDefault(types.StringID, "term")
 }
 
-// normalize does unicode normalization.
-func normalize(in []byte) ([]byte, error) {
-	// We need a new transformer for each input as it cannot be reused.
-	filter := func(r rune) bool {
-		return unicode.Is(unicode.Mn, r) // Mn: nonspacing marks (to be removed)
+// GetTokenizer returns tokenizer given unique name.
+func GetTokenizer(name string) Tokenizer {
+	t, found := tokenizers[name]
+	x.AssertTruef(found, "Tokenizer not found %s", name)
+	return t
+}
+
+// Default returns the default tokenizer for a given type.
+func Default(typ types.TypeID) Tokenizer {
+	t, found := defaults[typ]
+	x.AssertTruef(found, "No default tokenizer set for type %v", typ)
+	return t
+}
+
+// SetDefault sets the default tokenizer for given typeID.
+func SetDefault(typ types.TypeID, name string) {
+	if defaults == nil {
+		defaults = make(map[types.TypeID]Tokenizer)
 	}
-	transformer := transform.Chain(norm.NFD, transform.RemoveFunc(filter), norm.NFC)
-	out, _, err := transform.Bytes(transformer, in)
-	out = bytes.Map(func(r rune) rune {
-		if unicode.IsPunct(r) { // Replace punctuations with spaces.
-			return ' '
+	t := GetTokenizer(name)
+	x.AssertTruef(t.Type() == typ, "Type mismatch %v vs %v", t.Type(), typ)
+	defaults[typ] = t
+}
+
+// RegisterTokenizer adds your tokenizer to our list.
+func RegisterTokenizer(t Tokenizer) {
+	if tokenizers == nil {
+		tokenizers = make(map[string]Tokenizer)
+	}
+	name := t.Name()
+	_, found := tokenizers[name]
+	x.AssertTruef(!found, "Duplicate tokenizer name %s", name)
+	tokenizers[name] = t
+}
+
+type GeoTokenizer struct{}
+
+func (t GeoTokenizer) Name() string       { return "geo" }
+func (t GeoTokenizer) Type() types.TypeID { return types.GeoID }
+func (t GeoTokenizer) Tokens(sv types.Val) ([]string, error) {
+	return types.IndexGeoTokens(sv.Value.(geom.T))
+}
+
+type Int32Tokenizer struct{}
+
+func (t Int32Tokenizer) Name() string       { return "int" }
+func (t Int32Tokenizer) Type() types.TypeID { return types.Int32ID }
+func (t Int32Tokenizer) Tokens(sv types.Val) ([]string, error) {
+	return encodeInt(sv.Value.(int32))
+}
+
+type FloatTokenizer struct{}
+
+func (t FloatTokenizer) Name() string       { return "float" }
+func (t FloatTokenizer) Type() types.TypeID { return types.FloatID }
+func (t FloatTokenizer) Tokens(sv types.Val) ([]string, error) {
+	return encodeInt(int32(sv.Value.(float64)))
+}
+
+type DateTokenizer struct{}
+
+func (t DateTokenizer) Name() string       { return "date" }
+func (t DateTokenizer) Type() types.TypeID { return types.DateID }
+func (t DateTokenizer) Tokens(sv types.Val) ([]string, error) {
+	return encodeInt(int32(sv.Value.(time.Time).Year()))
+}
+
+type DateTimeTokenizer struct{}
+
+func (t DateTimeTokenizer) Name() string       { return "datetime" }
+func (t DateTimeTokenizer) Type() types.TypeID { return types.DateTimeID }
+func (t DateTimeTokenizer) Tokens(sv types.Val) ([]string, error) {
+	return encodeInt(int32(sv.Value.(time.Time).Year()))
+}
+
+type TermTokenizer struct{}
+
+func (t TermTokenizer) Name() string       { return "term" }
+func (t TermTokenizer) Type() types.TypeID { return types.StringID }
+func (t TermTokenizer) Tokens(sv types.Val) ([]string, error) {
+	words := strings.Fields(sv.Value.(string))
+	tokens := make([]string, 0, 5)
+	for _, it := range words {
+		if it == "_nil_" {
+			tokens = append(tokens, it)
+			continue
 		}
-		return unicode.ToLower(r) // Convert to lower case.
-	}, out)
-	return out, err
-}
 
-// NewTokenizer creates a new Tokenizer object from a given input string of bytes.
-func NewTokenizer(s []byte) (*Tokenizer, error) {
-	x.AssertTrue(s != nil)
-
-	if disableICU {
-		// ICU is disabled. Return a dummy tokenizer.
-		return &Tokenizer{}, nil
-	}
-
-	sNorm, terr := normalize(s)
-	if terr != nil {
-		return nil, terr
-	}
-	sNorm = append(sNorm, 0) // Null-terminate this for ICU's C functions.
-
-	var err C.UErrorCode
-	c := C.NewTokenizer(byteToChar(sNorm), C.int(len(s)), maxTokenSize, &err)
-	if int(err) > 0 {
-		return nil, x.Errorf("ICU new tokenizer error %d", int(err))
-	}
-	if c == nil {
-		return nil, x.Errorf("NewTokenizer returns nil")
-	}
-	return &Tokenizer{c, C.TokenizerToken(c)}, nil
-}
-
-// Destroy destroys the tokenizer object.
-func (t *Tokenizer) Destroy() {
-	if !disableICU {
-		C.DestroyTokenizer(t.c)
-	}
-}
-
-// Next returns the next token. It will allocate memory for the token.
-func (t *Tokenizer) Next() []byte {
-	if disableICU {
-		return nil
-	}
-	for {
-		n := int(C.TokenizerNext(t.c))
-		if n < 0 {
-			break
+		x.AssertTruef(!icutok.ICUDisabled(), "Indexing requires ICU to be enabled.")
+		tokenizer, err := icutok.NewTokenizer([]byte(it))
+		if err != nil {
+			return nil, err
 		}
-		s := bytes.TrimSpace(charToByte(t.token, n))
-		if len(s) > 0 {
-			return s
+		for {
+			s := tokenizer.Next()
+			if s == nil {
+				break
+			}
+			tokens = append(tokens, string(s))
 		}
+		tokenizer.Destroy()
 	}
-	return nil
+	return tokens, nil
 }
 
-// Tokens returns all tokens. If we fail, we return nil.
-func (t *Tokenizer) Tokens() []string {
-	out := make([]string, 0, 10)
-	for {
-		s := t.Next()
-		if s == nil {
-			break
-		}
-		out = append(out, string(s))
-	}
-	return out
+type ExactTokenizer struct{}
+
+func (t ExactTokenizer) Name() string       { return "exact" }
+func (t ExactTokenizer) Type() types.TypeID { return types.StringID }
+func (t ExactTokenizer) Tokens(sv types.Val) ([]string, error) {
+	words := strings.Fields(sv.Value.(string))
+	return []string{strings.Join(words, " ")}, nil
 }
 
-// byteToChar returns *C.char from byte slice.
-func byteToChar(b []byte) *C.char {
-	var c *C.char
-	if len(b) > 0 {
-		c = (*C.char)(unsafe.Pointer(&b[0]))
+func encodeInt(val int32) ([]string, error) {
+	buf := make([]byte, 5)
+	binary.BigEndian.PutUint32(buf[1:], uint32(val))
+	if val < 0 {
+		buf[0] = 0
+	} else {
+		buf[0] = 1
 	}
-	return c
-}
-
-// charToByte converts a *C.char to a byte slice.
-func charToByte(data *C.char, l int) []byte {
-	var value []byte
-	sH := (*reflect.SliceHeader)(unsafe.Pointer(&value))
-	sH.Cap, sH.Len, sH.Data = l, l, uintptr(unsafe.Pointer(data))
-	return value
+	return []string{string(buf)}, nil
 }

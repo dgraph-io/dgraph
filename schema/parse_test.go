@@ -17,10 +17,13 @@
 package schema
 
 import (
+	"os"
 	"testing"
 
-	"github.com/dgraph-io/dgraph/types"
 	"github.com/stretchr/testify/require"
+
+	"github.com/dgraph-io/dgraph/types"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 func TestSchema(t *testing.T) {
@@ -72,13 +75,26 @@ func TestSchemaIndex(t *testing.T) {
 // Indexing can't be specified inside object types.
 func TestSchemaIndex_Error1(t *testing.T) {
 	str = make(map[string]types.TypeID)
-	indexedFields = make(map[string]bool)
 	require.Error(t, Parse("testfiles/test_schema_index2"))
 }
 
 // Object types cant be indexed.
 func TestSchemaIndex_Error2(t *testing.T) {
 	str = make(map[string]types.TypeID)
-	indexedFields = make(map[string]bool)
 	require.Error(t, Parse("testfiles/test_schema_index3"))
+}
+
+func TestSchemaIndexCustom(t *testing.T) {
+	str = make(map[string]types.TypeID)
+	require.NoError(t, Parse("testfiles/test_schema_index4"))
+	require.Equal(t, 3, len(indexedFields))
+	require.Equal(t, "int", indexedFields["age"].Name())
+	require.Equal(t, "exact", indexedFields["name"].Name())
+	require.Equal(t, "term", indexedFields["address"].Name())
+}
+
+func TestMain(m *testing.M) {
+	x.SetTestRun()
+	x.Init()
+	os.Exit(m.Run())
 }
