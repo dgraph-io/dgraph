@@ -72,6 +72,7 @@ func (w *grpcWorker) Echo(ctx context.Context, in *Payload) (*Payload, error) {
 
 // RunServer initializes a tcp server on port which listens to requests from
 // other workers for internal communication.
+// Sends on the finishCh when it finishes.
 func RunServer(bindall bool, finishCh chan<- struct{}) {
 	laddr := "localhost"
 	if bindall {

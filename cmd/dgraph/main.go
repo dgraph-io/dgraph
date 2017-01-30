@@ -75,7 +75,6 @@ var (
 	memprofile   = flag.String("mem", "", "write memory profile to file")
 	dumpSubgraph = flag.String("dumpsg", "", "Directory to save subgraph for testing, debugging")
 
-	closeCh        = make(chan struct{})
 	finishCh       = make(chan struct{})
 	shutdownCh     = make(chan struct{})
 	pendingQueries = make(chan struct{}, 10000*runtime.NumCPU())
@@ -572,8 +571,8 @@ func shutDownHandler(w http.ResponseWriter, r *http.Request) {
 
 func shutdownServer() {
 	log.Println("Got clean exit request")
-	stopProfiling()       // stop profiling
-	closeCh <- struct{}{} // exit grpc and http servers.
+	stopProfiling()          // stop profiling
+	shutdownCh <- struct{}{} // exit grpc and http servers.
 
 	// wait for grpc and http servers to finish pending reqs and
 	// then stop all nodes, internal grpc servers and sync all the marks
@@ -751,7 +750,7 @@ func setupServer(che chan error) {
 	go serveHTTP(http2)
 
 	go func() {
-		<-closeCh
+		<-shutdownCh
 		// Stops grpc/http servers; Already accepted connections are not closed.
 		l.Close()
 	}()
@@ -760,10 +759,9 @@ func setupServer(che chan error) {
 	log.Println("http server started.")
 	log.Println("Server listening on port", *port)
 
-	// Start cmux serving.
-	err = tcpm.Serve()
-	<-shutdownCh // wait for shutdownserver to finish
-	che <- err   // final close for main.
+	err = tcpm.Serve() // Start cmux serving. blocking call
+	<-shutdownCh       // wait for shutdownserver to finish
+	che <- err         // final close for main.
 }
 
 func main() {
