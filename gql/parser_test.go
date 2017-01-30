@@ -35,7 +35,7 @@ func childAttrs(g *GraphQuery) []string {
 func TestParseQueryWithVarMultiRoot(t *testing.T) {
 	query := `
 	{	
-		me([L, J, K]) {name}
+		me(var:[L, J, K]) {name}
 		var(id:0x0a) {L AS friends}
 		var(id:0x0a) {J AS friends}
 		var(id:0x0a) {K AS friends}
@@ -56,9 +56,9 @@ func TestParseQueryWithVarMultiRoot(t *testing.T) {
 func TestParseQueryWithVar(t *testing.T) {
 	query := `
 	{	
-		me(L) {name}
-		him(J) {name}
-		you(K) {name}
+		me(var:L) {name}
+		him(var:J) {name}
+		you(var:K) {name}
 		var(id:0x0a) {L AS friends}
 		var(id:0x0a) {J AS friends}
 		var(id:0x0a) {K AS friends}
@@ -79,8 +79,8 @@ func TestParseQueryWithVar(t *testing.T) {
 func TestParseQueryWithVarError1(t *testing.T) {
 	query := `
 	{	
-		him(J) {name}
-		you(K) {name}
+		him(var:J) {name}
+		you(var:K) {name}
 		var(id:0x0a) {L AS friends}
 		var(id:0x0a) {J AS friends}
 		var(id:0x0a) {K AS friends}
@@ -93,9 +93,9 @@ func TestParseQueryWithVarError1(t *testing.T) {
 func TestParseQueryWithVarError2(t *testing.T) {
 	query := `
 	{	
-		me(L) {name}
-		him(J) {name}	
-		you(K) {name}
+		me(var:L) {name}
+		him(var:J) {name}	
+		you(var:K) {name}
 		var(id:0x0a) {L AS friends}
 		var(id:0x0a) {K AS friends}
 	}
@@ -111,7 +111,7 @@ func TestParseQueryWithVarAtRootFilterID(t *testing.T) {
 			L AS friends
 		}
 	
-		me(K) @filter(id(L)) {
+		me(var:K) @filter(id(L)) {
 		 name	
 		}
 	}
@@ -133,7 +133,7 @@ func TestParseQueryWithVarAtRoot(t *testing.T) {
 			fr as friends
 		}
 	
-		me(fr) @filter(id(K)) {
+		me(var:fr) @filter(id(K)) {
 		 name	@filter(id(fr))
 		}
 	}
@@ -155,7 +155,7 @@ func TestParseQueryWithVar1(t *testing.T) {
 			L AS friends
 		}
 	
-		me(L) {
+		me(var:L) {
 		 name	
 		}
 	}
@@ -177,11 +177,11 @@ func TestParseQueryWithMultipleVar(t *testing.T) {
 			}
 		}
 	
-		me(L) {
+		me(var:L) {
 		 name	
 		}
 
-		relatives(B) {
+		relatives(var:B) {
 			name
 		}
 	}
@@ -909,7 +909,7 @@ func TestParseFilter_root(t *testing.T) {
 	schema.ParseBytes([]byte("scalar abc: string @index"))
 	query := `
 	query {
-		me(abc(abc)) @filter(allof(name, "alice")) {
+		me(func:abc(abc)) @filter(allof(name, "alice")) {
 			friends @filter() {
 				name @filter(namefilter("a"))
 			}
@@ -1291,7 +1291,7 @@ func TestParseComments(t *testing.T) {
 	query := `
 	# Something
 	{
-		me(allof("name", "barack")) {
+		me(func:allof("name", "barack")) {
 			friends {
 				name
 			} # Something
@@ -1308,7 +1308,7 @@ func TestParseComments1(t *testing.T) {
 	schema.ParseBytes([]byte("scalar name:string @index"))
 	query := `{
 		#Something 
-		me(allof("name", "barack")) {
+		me(func:allof("name", "barack")) {
 			friends {
 				name  # Name of my friend
 			}
@@ -1324,7 +1324,7 @@ func TestParseComments1(t *testing.T) {
 func TestParseGenerator(t *testing.T) {
 	schema.ParseBytes([]byte("scalar name:string @index"))
 	query := `{
-		me(allof("name", "barack")) {
+		me(func:allof("name", "barack")) {
 			friends {
 				name
 			}
@@ -1362,7 +1362,7 @@ func TestParseIRIRef2(t *testing.T) {
 	require.NoError(t, schema.ParseBytes(
 		[]byte("scalar <http://helloworld.com/how/are/you>:string @index")))
 	query := `{
-		me(anyof(<http://helloworld.com/how/are/you>, "good better bad")) {
+		me(func:anyof(<http://helloworld.com/how/are/you>, "good better bad")) {
 			<http://verygood.com/what/about/you>
 			friends @filter(allof(<http://verygood.com/what/about/you>,
 				"good better bad")){

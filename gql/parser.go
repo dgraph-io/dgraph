@@ -25,6 +25,7 @@ import (
 	"strings"
 
 	"github.com/dgraph-io/dgraph/lex"
+	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
 	farm "github.com/dgryski/go-farm"
 )
@@ -490,7 +491,10 @@ func getQuery(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 	var seenFilter bool
 L:
 	// Recurse to deeper levels through godeep.
-	it.Next()
+	if !it.Next() {
+		return nil, x.Errorf("Invalid query")
+	}
+
 	item := it.Item()
 	if item.Typ == itemLeftCurl {
 		if rerr = godeep(it, gq); rerr != nil {
@@ -842,6 +846,7 @@ func evalStack(opStack, valueStack *filterTreeStack) {
 
 func parseFunction(it *lex.ItemIterator) (*Function, error) {
 	var g *Function
+L:
 	for it.Next() {
 		item := it.Item()
 		if item.Typ == itemName { // Value.
@@ -854,7 +859,7 @@ func parseFunction(it *lex.ItemIterator) (*Function, error) {
 			for it.Next() {
 				itemInFunc := it.Item()
 				if itemInFunc.Typ == itemRightRound {
-					break
+					break L
 				} else if itemInFunc.Typ != itemName {
 					return nil, x.Errorf("Expected arg after func [%s], but got item %v",
 						g.Name, itemInFunc)
@@ -869,8 +874,6 @@ func parseFunction(it *lex.ItemIterator) (*Function, error) {
 					g.Args = append(g.Args, it)
 				}
 			}
-		} else if item.Typ == itemRightRound {
-			break
 		} else {
 			return nil, x.Errorf("Expected a function but got %q", item.Val)
 		}
@@ -1078,15 +1081,9 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 		return nil, x.Errorf("Expected Left round brackets. Got: %v", item)
 	}
 
-	// Peeks items to see if its an argument or function.
-	peekItems, err := it.Peek(2)
-	if err != nil {
-		return gq, err
-	}
-
 	// Parse in KV fashion. Depending on the value of key, decide the path.
 	for it.Next() {
-		var key, val string
+		var key string
 		// Get key.
 		item := it.Item()
 		if item.Typ == itemName {
@@ -1094,13 +1091,13 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 		} else if item.Typ == itemRightRound {
 			break
 		} else {
-			return result, x.Errorf("Expecting argument name. Got: %v", item)
+			return nil, x.Errorf("Expecting argument name. Got: %v", item)
 		}
 
 		it.Next()
 		item = it.Item()
 		if item.Typ != itemColon {
-			return result, x.Errorf("Expecting a collon. Got: %v", item)
+			return nil, x.Errorf("Expecting a collon. Got: %v", item)
 		}
 
 		if key == "id" {
@@ -1112,53 +1109,6 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 				return nil, err
 			}
 		} else if key == "func" {
-
-		} else if key
-		// Get value.
-		it.Next()
-		item = it.Item()
-		var val string
-		if item.Typ == itemDollar {
-			val = "$"
-			it.Next()
-			item = it.Item()
-			if item.Typ != itemName {
-				return result, x.Errorf("Expecting argument value. Got: %v", item)
-			}
-		} else if item.Typ != itemName {
-			return result, x.Errorf("Expecting argument value. Got: %v", item)
-		}
-
-		p.Val = val + item.Val
-		result = append(result, p)
-	}
-
-	for _, p := range args {
-		if p.Key == "id" {
-			// Check and parse if its a list.
-			err := parseID(gq, p.Val)
-			if err != nil {
-				return nil, err
-			}
-		} else if p.Key == "var" {
-			parseVarList(gq, p.Val)
-		} else if p.Key == "func" {
-
-		} else if p.Key == "count" {
-		} else if p.Key == "offset" {
-		} else {
-			return nil, x.Errorf("Expecting id at root. Got: %+v", p)
-		}
-	}
-
-	// TODO(Ashwin): Refactor to make everythin a KV pair.
-	/*
-		if peekItems[1].Typ == itemRightRound {
-			it.Next()
-			item := it.Item()
-			parseVarList(gq, item.Val)
-			it.Next() // consume the right round.
-		} else if peekItems[1].Typ == itemLeftRound {
 			// Store the generator function.
 			gen, err := parseFunction(it)
 			if err != nil {
@@ -1173,26 +1123,73 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 				return nil, err
 			}
 			gq.Func = gen
-		} else if peekItems[1].Typ == itemColon {
-			args, err := parseArguments(it)
-			if err != nil {
-				return nil, err
-			}
-
-			for _, p := range args {
-				if p.Key == "id" {
-					// Check and parse if its a list.
-					err := parseID(gq, p.Val)
-					if err != nil {
-						return nil, err
-					}
-				} else {
-					return nil, x.Errorf("Expecting id at root. Got: %+v", p)
-				}
-			}
-		} else {
-			return nil, x.Errorf("Unexpected root argument. Got: %v", peekItems)
+		} else if key == "var" {
+			it.Next()
+			item := it.Item()
+			parseVarList(gq, item.Val)
 		}
+	}
+
+	/*
+		for _, p := range args {
+			if p.Key == "id" {
+				// Check and parse if its a list.
+				err := parseID(gq, p.Val)
+				if err != nil {
+					return nil, err
+				}
+			} else if p.Key == "var" {
+				parseVarList(gq, p.Val)
+			} else if p.Key == "func" {
+
+			} else if p.Key == "count" {
+			} else if p.Key == "offset" {
+			} else {
+				return nil, x.Errorf("Expecting id at root. Got: %+v", p)
+			}
+		}
+
+		// TODO(Ashwin): Refactor to make everythin a KV pair.
+			if peekItems[1].Typ == itemRightRound {
+				it.Next()
+				item := it.Item()
+				parseVarList(gq, item.Val)
+				it.Next() // consume the right round.
+			} else if peekItems[1].Typ == itemLeftRound {
+				// Store the generator function.
+				gen, err := parseFunction(it)
+				if err != nil {
+					return gq, err
+				}
+				if !schema.IsIndexed(gen.Attr) {
+					return nil, x.Errorf(
+						"Field %s is not indexed and cannot be used in functions",
+						gen.Attr)
+				}
+				if err != nil {
+					return nil, err
+				}
+				gq.Func = gen
+			} else if peekItems[1].Typ == itemColon {
+				args, err := parseArguments(it)
+				if err != nil {
+					return nil, err
+				}
+
+				for _, p := range args {
+					if p.Key == "id" {
+						// Check and parse if its a list.
+						err := parseID(gq, p.Val)
+						if err != nil {
+							return nil, err
+						}
+					} else {
+						return nil, x.Errorf("Expecting id at root. Got: %+v", p)
+					}
+				}
+			} else {
+				return nil, x.Errorf("Unexpected root argument. Got: %v", peekItems)
+			}
 	*/
 	return gq, nil
 }
