@@ -458,6 +458,39 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		args.NeedsVar = append(args.NeedsVar, it)
 	}
 
+	if v, ok := gq.Args["offset"]; ok {
+		offset, err := strconv.ParseInt(v, 0, 32)
+		if err != nil {
+			return nil, err
+		}
+		args.Offset = int(offset)
+	}
+	if v, ok := gq.Args["after"]; ok {
+		after, err := strconv.ParseUint(v, 0, 64)
+		if err != nil {
+			return nil, err
+		}
+		args.AfterUID = uint64(after)
+	}
+	if v, ok := gq.Args["first"]; ok {
+		first, err := strconv.ParseInt(v, 0, 32)
+		if err != nil {
+			return nil, err
+		}
+		args.Count = int(first)
+	}
+	if v, ok := gq.Args["order"]; ok {
+		args.Order = v
+	} else if v, ok := gq.Args["orderdesc"]; ok {
+		args.Order = v
+		args.OrderDesc = true
+	}
+	for argk, _ := range gq.Args {
+		if !isValidArg(argk) {
+			return nil, x.Errorf("Invalid argument : %s", argk)
+		}
+	}
+
 	sg := &SubGraph{
 		Params: args,
 	}
