@@ -88,6 +88,7 @@ func RunServer(bindall bool, finishCh chan<- struct{}) {
 	s := grpc.NewServer()
 	RegisterWorkerServer(s, &grpcWorker{})
 	s.Serve(workerListener)
+	s.GracefulStop()
 	finishCh <- struct{}{}
 }
 
@@ -97,6 +98,7 @@ func StoreStats() string {
 }
 
 // StopServer stops the listener between other workers.
-func StopServer() {
+func StopServer(finishCh <-chan struct{}) {
 	workerListener.Close()
+	<-finishCh
 }

@@ -47,7 +47,7 @@ func (n *node) syncAllMarks(ctx context.Context, numCommitRoutines int) error {
 	// Wait for syncing to data store.
 	for n.applied.WaitingFor() {
 		doneUntil := n.applied.DoneUntil() // applied until.
-		x.Trace(ctx, "RebuildIndex waiting, appliedUntil:%d lastIndex: %d",
+		x.Trace(ctx, "syncAllMarks waiting, appliedUntil:%d lastIndex: %d",
 			doneUntil, lastIndex)
 		if doneUntil >= lastIndex {
 			break // Do the check before sleep.
@@ -62,7 +62,7 @@ func (n *node) syncAllMarks(ctx context.Context, numCommitRoutines int) error {
 	w := posting.SyncMarkFor(gid)
 	for w.WaitingFor() {
 		doneUntil := w.DoneUntil() // synced until.
-		x.Trace(ctx, "RebuildIndex waiting, syncedUntil:%d lastIndex:%d",
+		x.Trace(ctx, "syncAllMarks waiting, syncedUntil:%d lastIndex:%d",
 			doneUntil, lastIndex)
 		if doneUntil >= lastIndex {
 			break // Do the check before sleep.

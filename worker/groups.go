@@ -523,6 +523,7 @@ func (w *grpcWorker) UpdateMembership(ctx context.Context,
 	return reply, nil
 }
 
+// SyncAllMarks syncs marks of all nodes of the worker group.
 func SyncAllMarks(ctx context.Context) error {
 	var wg sync.WaitGroup
 	var err error
@@ -537,4 +538,11 @@ func SyncAllMarks(ctx context.Context) error {
 	}
 	wg.Wait()
 	return err
+}
+
+// StopAllNodes stops all the nodes of the worker group.
+func StopAllNodes() {
+	for _, n := range groups().nodes() {
+		n.Stop()
+	}
 }

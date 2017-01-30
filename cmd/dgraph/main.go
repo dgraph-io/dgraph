@@ -76,6 +76,7 @@ var (
 	dumpSubgraph = flag.String("dumpsg", "", "Directory to save subgraph for testing, debugging")
 
 	closeCh        = make(chan struct{})
+	finishCh       = make(chan struct{})
 	shutdownCh     = make(chan struct{})
 	pendingQueries = make(chan struct{}, 10000*runtime.NumCPU())
 )
@@ -565,23 +566,34 @@ func shutDownHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := shutdownServer(shutdownCh); err != nil {
-		x.SetStatus(w, x.Error, err.Error())
-	} else {
-		x.SetStatus(w, x.Success, "Server has been shutdown")
-	}
+	shutdownServer()
+	x.SetStatus(w, x.Success, "Server has been shutdown")
 }
 
-func shutdownServer(finishCh chan<- struct{}) error {
-	defer func() { finishCh <- struct{}{} }()
+func shutdownServer() {
 	log.Println("Got clean exit request")
-	stopProfiling()
-	// exit grpc and http servers.
-	closeCh <- struct{}{}
+	stopProfiling()       // stop profiling
+	closeCh <- struct{}{} // exit grpc and http servers.
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-	defer cancel()
-	return worker.SyncAllMarks(ctx)
+	// wait for grpc and http servers to finish pending reqs and
+	// then stop all nodes, internal grpc servers and sync all the marks
+	go func() {
+		defer func() { shutdownCh <- struct{}{} }()
+
+		// wait for grpc, http and http2 servers to stop
+		<-finishCh
+		<-finishCh
+		<-finishCh
+
+		worker.StopAllNodes()
+		worker.StopServer(finishCh)
+
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		defer cancel()
+		if err := worker.SyncAllMarks(ctx); err != nil {
+			log.Printf("Error in sync watermarks : %s", err.Error())
+		}
+	}()
 }
 
 func backupHandler(w http.ResponseWriter, r *http.Request) {
@@ -685,7 +697,7 @@ func checkFlagsAndInitDirs() {
 	x.Check(os.MkdirAll(*postingDir, 0700))
 }
 
-func serveGRPC(l net.Listener, finishCh chan<- struct{}) {
+func serveGRPC(l net.Listener) {
 	defer func() { finishCh <- struct{}{} }()
 	s := grpc.NewServer(grpc.CustomCodec(&query.Codec{}))
 	graph.RegisterDgraphServer(s, &grpcServer{})
@@ -694,7 +706,7 @@ func serveGRPC(l net.Listener, finishCh chan<- struct{}) {
 	s.GracefulStop()
 }
 
-func serveHTTP(l net.Listener, finishCh chan<- struct{}) {
+func serveHTTP(l net.Listener) {
 	defer func() { finishCh <- struct{}{} }()
 	srv := &http.Server{
 		ReadTimeout:  10 * time.Second,
@@ -708,7 +720,7 @@ func serveHTTP(l net.Listener, finishCh chan<- struct{}) {
 }
 
 func setupServer(che chan error) {
-	go worker.RunServer(*bindall, shutdownCh) // For internal communication.
+	go worker.RunServer(*bindall, finishCh) // For internal communication.
 
 	laddr := "localhost"
 	if *bindall {
@@ -734,16 +746,14 @@ func setupServer(che chan error) {
 	http.HandleFunc("/admin/backup", backupHandler)
 
 	// Initilize the servers.
-	go serveGRPC(grpcl, shutdownCh)
-	go serveHTTP(httpl, shutdownCh)
-	go serveHTTP(http2, shutdownCh)
+	go serveGRPC(grpcl)
+	go serveHTTP(httpl)
+	go serveHTTP(http2)
 
 	go func() {
 		<-closeCh
 		// Stops grpc/http servers; Already accepted connections are not closed.
 		l.Close()
-		// Stop internal grpc server.
-		worker.StopServer()
 	}()
 
 	log.Println("grpc server started.")
@@ -752,11 +762,8 @@ func setupServer(che chan error) {
 
 	// Start cmux serving.
 	err = tcpm.Serve()
-
-	for i := 0; i < 5; i++ { // grpc, http, http2, internal-grpc, syncmarks
-		<-shutdownCh
-	}
-	che <- err // final close
+	<-shutdownCh // wait for shutdownserver to finish
+	che <- err   // final close for main.
 }
 
 func main() {
@@ -787,7 +794,7 @@ func main() {
 	go func() {
 		_, ok := <-sdCh
 		if ok {
-			shutdownServer(shutdownCh)
+			shutdownServer()
 		}
 	}()
 

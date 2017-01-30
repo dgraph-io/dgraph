@@ -168,6 +168,7 @@ func newNode(gid uint32, id uint64, myAddr string) *node {
 		props:       props,
 		raftContext: rc,
 		messages:    make(chan sendmsg, 1000),
+		done:        make(chan struct{}),
 	}
 	n.applied = x.WaterMark{Name: fmt.Sprintf("Committed: Group %d", n.gid)}
 	n.applied.Init()
