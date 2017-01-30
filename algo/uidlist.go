@@ -1,13 +1,34 @@
 package algo
 
-import (
-	"container/heap"
-	"sort"
+import "github.com/dgraph-io/dgraph/task"
 
-	"github.com/dgraph-io/dgraph/task"
-	"github.com/dgraph-io/dgraph/x"
-)
+func SortedListToBlock(l []uint64) []task.Block {
+	var b = make([]task.Block, 1, 2)
+	bIdx := 0
+	for _, it := range l {
+		if len(b[bIdx].List) > 100 {
+			b[bIdx].MaxInt = b[bIdx].List[100]
+			b = append(b, task.Block{List: make([]uint64, 0, 100)})
+			bIdx++
+		}
+		b[bIdx].List = append(b[bIdx].List, it)
+	}
 
+	b[bIdx].MaxInt = b[bIdx].List[len(b[bIdx].List)-1]
+	return b
+}
+
+func BlockToList(b []task.Block) []uint64 {
+	var res []uint64
+	for _, it := range b {
+		for _, el := range it.List {
+			res = append(res, el)
+		}
+	}
+	return res
+}
+
+/*
 // ApplyFilter applies a filter to our UIDList.
 func ApplyFilter(u *task.List, f func(uint64, int) bool) {
 	out := u.Uids[:0]
@@ -201,3 +222,4 @@ func ToUintsListForTest(ul []*task.List) [][]uint64 {
 	}
 	return out
 }
+*/

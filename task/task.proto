@@ -3,8 +3,13 @@ syntax = "proto3";
 
 package task;
 
+message Block {	
+	fixed64 max_int = 2;
+	repeated fixed64 list = 1;
+}
+
 message List {
-	repeated fixed64 uids = 1;
+	repeated Block blocks = 1;
 }
 
 message Value {
