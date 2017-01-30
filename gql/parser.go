@@ -1051,6 +1051,48 @@ func parseVarList(gq *GraphQuery, val string) error {
 	return nil
 }
 
+func parseDirective(it *lex.ItemIterator, curp *GraphQuery) error {
+	it.Next()
+	item := it.Item()
+	peek, err := it.Peek(1)
+	if err == nil && item.Typ == itemName {
+		if peek[0].Typ == itemLeftRound {
+			// this is directive
+			switch item.Val {
+			case "filter":
+				filter, err := parseFilter(it)
+				if err != nil {
+					return err
+				}
+				curp.Filter = filter
+
+			default:
+				return x.Errorf("Unknown directive [%s]", item.Val)
+			}
+		} else if len(curp.Attr) > 0 && len(curp.Langs) == 0 {
+			// this is language list
+			for ; item.Typ == itemName; item = it.Item() {
+				curp.Langs = append(curp.Langs, item.Val)
+				it.Next()
+				if it.Item().Typ == itemColon {
+					it.Next()
+				} else {
+					break
+				}
+			}
+			it.Prev()
+			if len(curp.Langs) == 0 {
+				return x.Errorf("Expected at least 1 language in list for %s", curp.Attr)
+			}
+		} else {
+			return x.Errorf("Expected directive or language list, got @%s", item.Val)
+		}
+	} else {
+		return x.Errorf("Expected directive or language list")
+	}
+	return nil
+}
+
 // getRoot gets the root graph query object after parsing the args.
 func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 	gq = &GraphQuery{
@@ -1225,43 +1267,9 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				curp.Args[p.Key] = p.Val
 			}
 		case itemAt:
-			it.Next()
-			item := it.Item()
-			peek, err := it.Peek(1)
-			if err == nil && item.Typ == itemName {
-				if peek[0].Typ == itemLeftRound {
-					// this is directive
-					switch item.Val {
-					case "filter":
-						filter, err := parseFilter(it)
-						if err != nil {
-							return err
-						}
-						curp.Filter = filter
-
-					default:
-						return x.Errorf("Unknown directive [%s]", item.Val)
-					}
-				} else if len(curp.Attr) > 0 && len(curp.Langs) == 0 {
-					// this is language list
-					for ; item.Typ == itemName; item = it.Item() {
-						curp.Langs = append(curp.Langs, item.Val)
-						it.Next()
-						if it.Item().Typ == itemColon {
-							it.Next()
-						} else {
-							break
-						}
-					}
-					it.Prev()
-					if len(curp.Langs) == 0 {
-						return x.Errorf("Expected at least 1 language in list for %s", curp.Attr)
-					}
-				} else {
-					return x.Errorf("Expected directive or language list, got @%s", item.Val)
-				}
-			} else {
-				return x.Errorf("Expected directive or language list")
+			err := parseDirective(it, curp)
+			if err != nil {
+				return err
 			}
 		case itemRightRound:
 			if isCount != 2 {

@@ -308,28 +308,28 @@ func (l *List) AddMutation(ctx context.Context, t *task.DirectedEdge) (bool, err
 type valueTypeInfo int32
 
 const (
-	valueEmpty    valueTypeInfo = iota
-	valueUid      valueTypeInfo = iota
-	valueUntagged valueTypeInfo = iota
-	valueTagged   valueTypeInfo = iota
+	valueEmpty valueTypeInfo = iota
+	valueUid
+	valueUntagged
+	valueTagged
 )
 
 func edgeType(t *task.DirectedEdge) valueTypeInfo {
-	if !bytes.Equal(t.Value, nil) {
-		if t.ValueId == 0 {
-			return valueUntagged // value without lang tag
-		} else {
-			return valueTagged // value with lang tag
-		}
-	} else {
-		if t.ValueId == 0 {
-			return valueEmpty // empty - no Uid and no Value
-		} else {
-			return valueUid // Uid
-		}
+	hasVal := !bytes.Equal(t.Value, nil)
+	hasId := t.ValueId != 0
+	switch {
+	case hasVal && hasId:
+		return valueTagged
+	case hasVal && !hasId:
+		return valueUntagged
+	case !hasVal && hasId:
+		return valueUid
+	default:
+		return valueEmpty
 	}
 }
 
+// TODO(tzdybal) - refactor
 func postingType(p *types.Posting) valueTypeInfo {
 	if !bytes.Equal(p.Value, nil) {
 		if len(p.Lang) == 0 {

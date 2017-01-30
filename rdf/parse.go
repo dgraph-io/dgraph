@@ -175,10 +175,10 @@ func copyValue(out *task.DirectedEdge, nq NQuad) error {
 type nQuadTypeInfo int32
 
 const (
-	nQuadEmpty       nQuadTypeInfo = iota
-	nQuadUid         nQuadTypeInfo = iota
-	nQuadValue       nQuadTypeInfo = iota
-	nQuadTaggedValue nQuadTypeInfo = iota
+	nQuadEmpty nQuadTypeInfo = iota
+	nQuadUid
+	nQuadValue
+	nQuadTaggedValue
 )
 
 func (nq NQuad) valueType() nQuadTypeInfo {
