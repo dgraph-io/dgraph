@@ -523,18 +523,18 @@ func (w *grpcWorker) UpdateMembership(ctx context.Context,
 	return reply, nil
 }
 
-func SyncMarksAllNodes(ctx context.Context) []error {
+func SyncAllMarks(ctx context.Context) error {
 	var wg sync.WaitGroup
-	errs := make([]error, 0)
+	var err error
 	for _, n := range groups().nodes() {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if err := n.syncAllMarks(ctx); err != nil {
-				errs = append(errs, err)
+			if e := n.syncAllMarks(ctx, 1); e != nil && err == nil {
+				err = e
 			}
 		}()
 	}
 	wg.Wait()
-	return errs
+	return err
 }

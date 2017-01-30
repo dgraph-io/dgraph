@@ -37,7 +37,6 @@ import (
 	"runtime/pprof"
 	"strconv"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
 
@@ -77,9 +76,7 @@ var (
 	dumpSubgraph = flag.String("dumpsg", "", "Directory to save subgraph for testing, debugging")
 
 	closeCh        = make(chan struct{})
-	isShuttingDown = false
-	shutdownWg     = new(sync.WaitGroup)
-
+	shutdownCh     = make(chan struct{})
 	pendingQueries = make(chan struct{}, 10000*runtime.NumCPU())
 )
 
@@ -88,9 +85,7 @@ type mutationResult struct {
 	newUids map[string]uint64
 }
 
-func exitWithProfiles() {
-	log.Println("Got clean exit request")
-
+func stopProfiling() {
 	// Stop the CPU profiling that was initiated.
 	if len(*cpuprofile) > 0 {
 		pprof.StopCPUProfile()
@@ -105,8 +100,6 @@ func exitWithProfiles() {
 		pprof.WriteHeapProfile(f)
 		f.Close()
 	}
-	// To exit the server after the response is returned.
-	closeCh <- struct{}{}
 }
 
 func addCorsHeaders(w http.ResponseWriter) {
@@ -572,22 +565,23 @@ func shutDownHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if errs := shutdownServer(); len(errs) != 0 {
-		x.SetStatus(w, x.Error, "Error: "+x.StringifyErrors(errs))
+	if err := shutdownServer(shutdownCh); err != nil {
+		x.SetStatus(w, x.Error, err.Error())
 	} else {
 		x.SetStatus(w, x.Success, "Server has been shutdown")
 	}
 }
 
-func shutdownServer() []error {
-	shutdownWg.Add(1)
-	defer shutdownWg.Done()
-
-	exitWithProfiles()
+func shutdownServer(finishCh chan<- struct{}) error {
+	defer func() { finishCh <- struct{}{} }()
+	log.Println("Got clean exit request")
+	stopProfiling()
+	// exit grpc and http servers.
+	closeCh <- struct{}{}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
-	return worker.SyncMarksAllNodes(ctx)
+	return worker.SyncAllMarks(ctx)
 }
 
 func backupHandler(w http.ResponseWriter, r *http.Request) {
@@ -691,22 +685,17 @@ func checkFlagsAndInitDirs() {
 	x.Check(os.MkdirAll(*postingDir, 0700))
 }
 
-func serveGRPC(l net.Listener, sdWg *sync.WaitGroup) {
-	sdWg.Add(1)
-	defer sdWg.Done()
+func serveGRPC(l net.Listener, finishCh chan<- struct{}) {
+	defer func() { finishCh <- struct{}{} }()
 	s := grpc.NewServer(grpc.CustomCodec(&query.Codec{}))
 	graph.RegisterDgraphServer(s, &grpcServer{})
 	err := s.Serve(l)
-	if !isShuttingDown {
-		x.Checkf(err, "Error while serving gRpc request")
-	} else {
-		s.GracefulStop()
-	}
+	log.Printf("gRpc server stopped : %s", err.Error())
+	s.GracefulStop()
 }
 
-func serveHTTP(l net.Listener, sdWg *sync.WaitGroup) {
-	sdWg.Add(1)
-	defer sdWg.Done()
+func serveHTTP(l net.Listener, finishCh chan<- struct{}) {
+	defer func() { finishCh <- struct{}{} }()
 	srv := &http.Server{
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 60 * time.Second,
@@ -714,16 +703,12 @@ func serveHTTP(l net.Listener, sdWg *sync.WaitGroup) {
 	}
 
 	err := srv.Serve(l)
-	if !isShuttingDown {
-		x.Checkf(err, "Error while serving http request")
-	} else {
-		// TODO(ashish): Use srv.Shutdown go 1.8
-	}
+	log.Printf("http server stopped : %s", err.Error())
+	// TODO(ashish): Use srv.Shutdown go 1.8
 }
 
 func setupServer(che chan error) {
-	shutdownCh := make(chan struct{}, 1)
-	go worker.RunServer(*bindall, shutdownCh, shutdownWg) // For internal communication.
+	go worker.RunServer(*bindall, shutdownCh) // For internal communication.
 
 	laddr := "localhost"
 	if *bindall {
@@ -749,16 +734,16 @@ func setupServer(che chan error) {
 	http.HandleFunc("/admin/backup", backupHandler)
 
 	// Initilize the servers.
-	go serveGRPC(grpcl, shutdownWg)
-	go serveHTTP(httpl, shutdownWg)
-	go serveHTTP(http2, shutdownWg)
+	go serveGRPC(grpcl, shutdownCh)
+	go serveHTTP(httpl, shutdownCh)
+	go serveHTTP(http2, shutdownCh)
 
 	go func() {
 		<-closeCh
-		shutdownCh <- struct{}{}
-		isShuttingDown = true
-		// Stops listening further but already accepted connections are not closed.
+		// Stops grpc/http servers; Already accepted connections are not closed.
 		l.Close()
+		// Stop internal grpc server.
+		worker.StopServer()
 	}()
 
 	log.Println("grpc server started.")
@@ -768,8 +753,10 @@ func setupServer(che chan error) {
 	// Start cmux serving.
 	err = tcpm.Serve()
 
-	shutdownWg.Wait() // wait for grpc, http and http2 to stop
-	che <- err        // final close
+	for i := 0; i < 5; i++ { // grpc, http, http2, internal-grpc, syncmarks
+		<-shutdownCh
+	}
+	che <- err // final close
 }
 
 func main() {
@@ -800,7 +787,7 @@ func main() {
 	go func() {
 		_, ok := <-sdCh
 		if ok {
-			shutdownServer()
+			shutdownServer(shutdownCh)
 		}
 	}()
 

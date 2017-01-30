@@ -36,7 +36,8 @@ var (
 		"Port used by worker for internal communication.")
 	backupPath = flag.String("backup", "backup",
 		"Folder in which to store backups.")
-	pstore *store.Store
+	pstore         *store.Store
+	workerListener net.Listener
 )
 
 func Init(ps *store.Store) {
@@ -69,32 +70,33 @@ func (w *grpcWorker) Echo(ctx context.Context, in *Payload) (*Payload, error) {
 	return &Payload{Data: in.Data}, nil
 }
 
-// runServer initializes a tcp server on port which listens to requests from
+// RunServer initializes a tcp server on port which listens to requests from
 // other workers for internal communication.
-func RunServer(bindall bool, sdCh chan struct{}, sdWg *sync.WaitGroup) {
-	sdWg.Add(1)
-	defer sdWg.Done()
+func RunServer(bindall bool, finishCh chan<- struct{}) {
 	laddr := "localhost"
 	if bindall {
 		laddr = "0.0.0.0"
 	}
-	ln, err := net.Listen("tcp", fmt.Sprintf("%s:%d", laddr, *workerPort))
+	var err error
+	workerListener, err = net.Listen("tcp", fmt.Sprintf("%s:%d", laddr, *workerPort))
 	if err != nil {
 		log.Fatalf("While running server: %v", err)
 		return
 	}
-	log.Printf("Worker listening at address: %v", ln.Addr())
+	log.Printf("Worker listening at address: %v", workerListener.Addr())
 
 	s := grpc.NewServer()
 	RegisterWorkerServer(s, &grpcWorker{})
-	go func() {
-		<-sdCh     // wait for shutdown channel to signal
-		ln.Close() // to close listening more reqs.
-	}()
-	s.Serve(ln)
+	s.Serve(workerListener)
+	finishCh <- struct{}{}
 }
 
 // StoreStats returns stats for data store.
 func StoreStats() string {
 	return pstore.GetStats()
+}
+
+// StopServer stops the listener between other workers.
+func StopServer() {
+	workerListener.Close()
 }
