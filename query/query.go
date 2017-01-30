@@ -660,7 +660,7 @@ func populateVarMap(sg *SubGraph, doneVars map[string]*task.List, isCascade bool
 		var exclude bool
 		for _, child := range sg.Children {
 			// If the length of child UID list is zero and it has no valid value, then the
-			// current UID should be removed form this level.
+			// current UID should be removed from this level.
 			if len(child.values[i].Val) == 0 && len(child.uidMatrix[i].Uids) == 0 {
 				exclude = true
 				break
