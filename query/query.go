@@ -272,9 +272,11 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 					return err
 				}
 				dst.SetXID(txt.Value.(string))
-			} else if pc.Attr == "_uid_" && !uidAlreadySet {
-				uidAlreadySet = true
-				dst.SetUID(uid)
+			} else if pc.Attr == "_uid_" {
+				if !uidAlreadySet {
+					uidAlreadySet = true
+					dst.SetUID(uid)
+				}
 			} else {
 				// globalType is the best effort type to which we try converting
 				// and if not possible, we ignore it in the result.
@@ -325,21 +327,27 @@ func isPresent(list []string, str string) bool {
 	return false
 }
 
-func filterCopy(sg *SubGraph, ft *gql.FilterTree) {
+func filterCopy(sg *SubGraph, ft *gql.FilterTree) error {
 	// Either we'll have an operation specified, or the function specified.
 	if len(ft.Op) > 0 {
 		sg.FilterOp = ft.Op
 	} else {
 		sg.Attr = ft.Func.Attr
+		if !isValidFuncName(ft.Func.Name) {
+			return x.Errorf("Invalid function name : %s", ft.Func.Name)
+		}
 		sg.SrcFunc = append(sg.SrcFunc, ft.Func.Name)
 		sg.SrcFunc = append(sg.SrcFunc, ft.Func.Args...)
 		sg.Params.NeedsVar = append(sg.Params.NeedsVar, ft.Func.NeedsVar...)
 	}
 	for _, ftc := range ft.Child {
 		child := &SubGraph{}
-		filterCopy(child, ftc)
+		if err := filterCopy(child, ftc); err != nil {
+			return err
+		}
 		sg.Filters = append(sg.Filters, child)
 	}
+	return nil
 }
 
 func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
@@ -371,7 +379,9 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 		}
 		if gchild.Filter != nil {
 			dstf := &SubGraph{}
-			filterCopy(dstf, gchild.Filter)
+			if err := filterCopy(dstf, gchild.Filter); err != nil {
+				return err
+			}
 			dst.Filters = append(dst.Filters, dstf)
 		}
 
@@ -401,6 +411,11 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 		} else if v, ok := gchild.Args["orderdesc"]; ok {
 			dst.Params.Order = v
 			dst.Params.OrderDesc = true
+		}
+		for argk, _ := range gchild.Args {
+			if !isValidArg(argk) {
+				return x.Errorf("Invalid argument : %s", argk)
+			}
 		}
 		sg.Children = append(sg.Children, dst)
 		err := treeCopy(ctx, gchild, dst)
@@ -448,6 +463,9 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	}
 	if gq.Func != nil {
 		sg.Attr = gq.Func.Attr
+		if !isValidFuncName(gq.Func.Name) {
+			return nil, x.Errorf("Invalid function name : %s", gq.Func.Name)
+		}
 		sg.SrcFunc = append(sg.SrcFunc, gq.Func.Name)
 		sg.SrcFunc = append(sg.SrcFunc, gq.Func.Args...)
 	}
@@ -459,7 +477,9 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	// Copy roots filter.
 	if gq.Filter != nil {
 		sgf := &SubGraph{}
-		filterCopy(sgf, gq.Filter)
+		if err := filterCopy(sgf, gq.Filter); err != nil {
+			return nil, err
+		}
 		sg.Filters = append(sg.Filters, sgf)
 	}
 	return sg, nil
@@ -750,7 +770,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		return
 	}
 
-	// Apply filters if any.
+	// Run filters if any.
 	if len(sg.Filters) > 0 {
 		// Run all filters in parallel.
 		filterChan := make(chan error, len(sg.Filters))
@@ -781,11 +801,12 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		for _, filter := range sg.Filters {
 			lists = append(lists, filter.DestUIDs)
 		}
-		if sg.FilterOp == "|" {
+		if sg.FilterOp == "or" {
 			sg.DestUIDs = algo.MergeSorted(lists)
+		} else if sg.FilterOp == "not" {
+			x.AssertTrue(len(sg.Filters) == 1)
+			algo.Difference(sg.DestUIDs, sg.Filters[0].DestUIDs)
 		} else {
-			// If one of the arguments was id so append it once more
-			lists = append(lists, sg.DestUIDs)
 			sg.DestUIDs = algo.IntersectSorted(lists)
 		}
 	}
@@ -944,4 +965,34 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 	algo.ApplyFilter(sg.DestUIDs,
 		func(uid uint64, idx int) bool { return included[idx] })
 	return nil
+}
+
+// isValidArg checks if arg passed is valid keyword.
+func isValidArg(a string) bool {
+	switch a {
+	case "order":
+	case "orderdesc":
+	case "first":
+	case "offset":
+	case "after":
+	default:
+		return false
+	}
+	return true
+}
+
+// isValidFuncName checks if fn passed is valid keyword.
+func isValidFuncName(f string) bool {
+	switch f {
+	case "anyof":
+	case "allof":
+	case "id":
+	default:
+		return isCompareFn(f) || types.IsGeoFunc(f)
+	}
+	return true
+}
+
+func isCompareFn(f string) bool {
+	return f == "leq" || f == "geq" || f == "lt" || f == "gt" || f == "eq"
 }

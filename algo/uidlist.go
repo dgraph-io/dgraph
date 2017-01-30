@@ -79,7 +79,7 @@ func IntersectSorted(lists []*task.List) *task.List {
 	// lptrs[j] is the element we are looking at for lists[j].
 	lptrs := make([]int, len(lists))
 	shortList := lists[minLenIdx]
-	elemsLeft := true  // If some list has no elems left, we can't intersect more.
+	elemsLeft := true // If some list has no elems left, we can't intersect more.
 
 	for i := 0; i < len(shortList.Uids) && elemsLeft; i++ {
 		val := shortList.Uids[i]
@@ -113,6 +113,32 @@ func IntersectSorted(lists []*task.List) *task.List {
 		}
 	}
 	return &task.List{Uids: output}
+}
+
+func Difference(u, v *task.List) {
+	if u == nil || v == nil {
+		return
+	}
+	out := u.Uids[:0]
+	n := len(u.Uids)
+	m := len(v.Uids)
+	for i, k := 0, 0; i < n && k < m; {
+		uid := u.Uids[i]
+		vid := v.Uids[k]
+		if uid < vid {
+			for i < n && u.Uids[i] < vid {
+				out = append(out, u.Uids[i])
+				i++
+			}
+		} else if uid == vid {
+			i++
+			k++
+		} else {
+			for k = k + 1; k < m && v.Uids[k] < uid; k++ {
+			}
+		}
+	}
+	u.Uids = out
 }
 
 // MergeSorted merges sorted lists.

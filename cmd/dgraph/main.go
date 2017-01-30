@@ -399,7 +399,7 @@ type wrappedErr struct {
 func processRequest(ctx context.Context, gq *gql.GraphQuery,
 	l *query.Latency) (*query.SubGraph, wrappedErr) {
 	if gq == nil || (len(gq.UID) == 0 && gq.Func == nil) {
-		return &query.SubGraph{}, wrappedErr{nil, x.ErrorOk}
+		return &query.SubGraph{}, wrappedErr{nil, x.Success}
 	}
 
 	sg, err := query.ToSubGraph(ctx, gq)
@@ -492,7 +492,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 
 	if len(res.Query) == 0 {
 		mp := map[string]interface{}{
-			"code":    x.ErrorOk,
+			"code":    x.Success,
 			"message": "Done",
 			"uids":    allocIdsStr,
 		}
@@ -566,7 +566,7 @@ func shutDownHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	exitWithProfiles()
-	x.SetStatus(w, x.ErrorOk, "Server has been shutdown")
+	x.SetStatus(w, x.Success, "Server has been shutdown")
 }
 
 func backupHandler(w http.ResponseWriter, r *http.Request) {
@@ -576,9 +576,9 @@ func backupHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background()
 	if err := worker.BackupOverNetwork(ctx); err != nil {
 		x.SetStatus(w, err.Error(), "Backup failed.")
-	} else {
-		x.SetStatus(w, x.ErrorOk, "Backup completed.")
+		return
 	}
+	x.SetStatus(w, x.Success, "Backup completed.")
 }
 
 func indexHandler(w http.ResponseWriter, r *http.Request) {
@@ -594,7 +594,7 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 	if err := worker.RebuildIndexOverNetwork(ctx, attr); err != nil {
 		x.SetStatus(w, err.Error(), "RebuildIndex failed.")
 	} else {
-		x.SetStatus(w, x.ErrorOk, "RebuildIndex completed.")
+		x.SetStatus(w, x.Success, "RebuildIndex completed.")
 	}
 }
 
@@ -679,7 +679,7 @@ func serveGRPC(l net.Listener) {
 func serveHTTP(l net.Listener) {
 	srv := &http.Server{
 		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 60 * time.Second,
+		WriteTimeout: 600 * time.Second,
 		// TODO(Ashwin): Add idle timeout while switching to Go 1.8.
 	}
 	x.Checkf(srv.Serve(l), "Error while serving http request")

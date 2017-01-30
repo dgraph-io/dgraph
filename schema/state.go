@@ -17,9 +17,6 @@
 package schema
 
 import (
-	"errors"
-	"fmt"
-
 	"github.com/dgraph-io/dgraph/lex"
 )
 
@@ -232,7 +229,7 @@ L1:
 func lexName(l *lex.Lexer, styp lex.ItemType) error {
 	r := l.Next()
 	if r == lsThan {
-		return lexIRIRef(l, styp)
+		return lex.LexIRIRef(l, styp)
 	}
 
 	for {
@@ -245,19 +242,6 @@ func lexName(l *lex.Lexer, styp lex.ItemType) error {
 		l.Emit(styp)
 		break
 	}
-	return nil
-}
-
-// assumes '<' is already lexed.
-func lexIRIRef(l *lex.Lexer, styp lex.ItemType) error {
-	l.Ignore() // ignore '<'
-	l.AcceptRunRec(isIRIChar)
-	l.Emit(styp) // will emit without '<' and '>'
-	r := l.Next()
-	if r != grThan {
-		return errors.New(fmt.Sprintf("Unexpected character %v. Expected '>'.", r))
-	}
-	l.Ignore() // ignore '>'
 	return nil
 }
 
@@ -474,55 +458,4 @@ func isSpace(r rune) bool {
 // isEndOfLine returns true if the rune is a Linefeed or a Carriage return.
 func isEndOfLine(r rune) bool {
 	return r == '\u000A' || r == '\u000D'
-}
-
-// IRIREF ::= '<' ([^#x00-#x20<>"{}|^`\] | UCHAR)* '>'
-func isIRIChar(r rune, l *lex.Lexer) bool {
-	if r <= 32 { // no chars b/w 0x00 to 0x20 inclusive
-		return false
-	}
-	switch r {
-	case '<':
-	case '>':
-	case '"':
-	case '{':
-	case '}':
-	case '|':
-	case '^':
-	case '`':
-	case '\\':
-		r2 := l.Next()
-		if r2 != 'u' && r2 != 'U' {
-			l.Backup()
-			return false
-		}
-		return hasUChars(r2, l)
-	default:
-		return true
-	}
-	return false
-}
-
-// UCHAR ::= '\u' HEX HEX HEX HEX | '\U' HEX HEX HEX HEX HEX HEX HEX HEX
-func hasUChars(r rune, l *lex.Lexer) bool {
-	if r != 'u' && r != 'U' {
-		return false
-	}
-	times := 4
-	if r == 'U' {
-		times = 8
-	}
-	return times == l.AcceptRunTimes(isHex, times)
-}
-
-// HEX ::= [0-9] | [A-F] | [a-f]
-func isHex(r rune) bool {
-	switch {
-	case r >= '0' && r <= '9':
-	case r >= 'a' && r <= 'f':
-	case r >= 'A' && r <= 'F':
-	default:
-		return false
-	}
-	return true
 }

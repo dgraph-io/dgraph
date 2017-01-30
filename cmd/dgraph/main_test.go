@@ -17,10 +17,10 @@
 package main
 
 import (
+	"bytes"
 	"context"
-	"encoding/json"
-	"fmt"
 	"io/ioutil"
+	"log"
 	"os"
 	"testing"
 	"time"
@@ -39,10 +39,14 @@ import (
 var q0 = `
 	{
 		user(id:alice) {
-			follows {
-				status
-			}
-			status
+			name
+		}
+	}
+`
+var m = `
+	mutation {
+		set {
+			<alice> <name> "Alice" .
 		}
 	}
 `
@@ -83,34 +87,36 @@ func childAttrs(sg *query.SubGraph) []string {
 	return out
 }
 
-func TestQuery(t *testing.T) {
-	dir1, dir2, _, err := prepare()
-	require.NoError(t, err)
-	defer closeAll(dir1, dir2)
+func processToFastJSON(q string) string {
+	res, err := gql.Parse(q)
+	if err != nil {
+		log.Fatal(err)
+	}
 
-	// Parse GQL into internal query representation.
-	res, err := gql.Parse(q0)
+	var l query.Latency
+	ctx := context.Background()
+	sgl, err := query.ProcessQuery(ctx, res, &l)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	var buf bytes.Buffer
+	err = query.ToJson(&l, sgl, &buf)
+	if err != nil {
+		log.Fatal(err)
+	}
+	return string(buf.Bytes())
+}
+
+func TestQuery(t *testing.T) {
+	res, err := gql.Parse(m)
 	require.NoError(t, err)
 
 	ctx := context.Background()
-	g, err := query.ToSubGraph(ctx, res.Query[0])
-	require.NoError(t, err)
+	_, err = mutationHandler(ctx, res.Mutation)
 
-	// Test internal query representation.
-	require.EqualValues(t, []string{"follows", "status"}, childAttrs(g))
-	require.EqualValues(t, []string{"status"}, childAttrs(g.Children[0]))
-
-	ch := make(chan error)
-	go query.ProcessGraph(ctx, g, nil, ch)
-	err = <-ch
-	require.NoError(t, err)
-
-	var l query.Latency
-	js, err := g.ToJSON(&l)
-	require.NoError(t, err)
-	j, err := json.Marshal(js)
-	require.NoError(t, err)
-	fmt.Println(string(j))
+	output := processToFastJSON(q0)
+	require.JSONEq(t, `{"user":[{"name":"Alice"}]}`, output)
 }
 
 var qm = `
@@ -125,12 +131,6 @@ var qm = `
 `
 
 func TestAssignUid(t *testing.T) {
-	dir1, dir2, _, err := prepare()
-	require.NoError(t, err)
-	defer closeAll(dir1, dir2)
-	time.Sleep(5 * time.Second) // Wait for ME to become leader.
-
-	// Parse GQL into internal query representation.
 	res, err := gql.Parse(qm)
 	require.NoError(t, err)
 
@@ -185,30 +185,17 @@ func BenchmarkQuery(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		res, err := gql.Parse(q1)
-		if err != nil {
-			b.Error(err)
-			return
-		}
-		ctx := context.Background()
-		g, err := query.ToSubGraph(ctx, res.Query[0])
-		if err != nil {
-			b.Error(err)
-			return
-		}
-
-		ch := make(chan error)
-		go query.ProcessGraph(ctx, g, nil, ch)
-		err = <-ch
-		require.NoError(b, err)
-		var l query.Latency
-		_, err = g.ToJSON(&l)
-		require.NoError(b, err)
+		processToFastJSON(q1)
 	}
 }
 
 func TestMain(m *testing.M) {
 	x.SetTestRun()
 	x.Init()
+	dir1, dir2, _, _ := prepare()
+	defer closeAll(dir1, dir2)
+	time.Sleep(5 * time.Second) // Wait for ME to become leader.
+
+	// Parse GQL into internal query representation.
 	os.Exit(m.Run())
 }
