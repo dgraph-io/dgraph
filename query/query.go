@@ -124,6 +124,7 @@ type params struct {
 	Var        string
 	NeedsVar   []string
 	ParentVars map[string]*task.List
+	Normalize  bool
 }
 
 // SubGraph is the way to represent data internally. It contains both the
@@ -241,11 +242,6 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 				}
 				uc := dst.New(fieldName)
 
-				// Doing check for UID here is no good because some of these might be
-				// invalid nodes.
-				// if pc.Params.GetUID || pc.Params.isDebug {
-				//	dst.SetUID(uid)
-				// }
 				if rerr := pc.preTraverse(childUID, uc); rerr != nil {
 					if rerr.Error() == "_INV_" {
 						invalidUids[childUID] = true
@@ -305,7 +301,16 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 				if sv.Tid == types.StringID && sv.Value.(string) == "_nil_" {
 					sv.Value = ""
 				}
-				dst.AddValue(fieldName, sv)
+
+				if !pc.Params.Normalize {
+					dst.AddValue(fieldName, sv)
+					continue
+				}
+				// If the query had the normalize directive, then we only add nodes
+				// with an Alias.
+				if pc.Params.Alias != "" {
+					dst.AddValue(fieldName, sv)
+				}
 			}
 		}
 	}
@@ -362,9 +367,10 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 		}
 
 		args := params{
-			Alias:   gchild.Alias,
-			isDebug: sg.Params.isDebug,
-			Var:     gchild.Var,
+			Alias:     gchild.Alias,
+			isDebug:   sg.Params.isDebug,
+			Var:       gchild.Var,
+			Normalize: sg.Params.Normalize,
 		}
 		args.NeedsVar = append(args.NeedsVar, gchild.NeedsVar...)
 		if gchild.IsCount {
@@ -377,6 +383,7 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 			Attr:   gchild.Attr,
 			Params: args,
 		}
+
 		if gchild.Filter != nil {
 			dstf := &SubGraph{}
 			if err := filterCopy(dstf, gchild.Filter); err != nil {
@@ -453,6 +460,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		Alias:      gq.Alias,
 		Var:        gq.Var,
 		ParentVars: make(map[string]*task.List),
+		Normalize:  gq.Normalize,
 	}
 	for _, it := range gq.NeedsVar {
 		args.NeedsVar = append(args.NeedsVar, it)
@@ -461,6 +469,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	sg := &SubGraph{
 		Params: args,
 	}
+
 	if gq.Func != nil {
 		sg.Attr = gq.Func.Attr
 		if !isValidFuncName(gq.Func.Name) {
@@ -834,6 +843,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	// user wants to skip 100 entries and return 10 entries. In this case, you
 	// should return a count of 0, not 10.
 	if sg.Params.DoCount {
+
 		x.AssertTrue(len(sg.Filters) > 0)
 		sg.counts = make([]uint32, len(sg.uidMatrix))
 		for i, ul := range sg.uidMatrix {

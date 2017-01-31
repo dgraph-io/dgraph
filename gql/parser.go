@@ -42,9 +42,10 @@ type GraphQuery struct {
 	NeedsVar []string
 	Func     *Function
 
-	Args     map[string]string
-	Children []*GraphQuery
-	Filter   *FilterTree
+	Args      map[string]string
+	Children  []*GraphQuery
+	Filter    *FilterTree
+	Normalize bool
 
 	// Internal fields below.
 	// If gq.fragment is nonempty, then it is a fragment reference / spread.
@@ -514,6 +515,8 @@ L:
 				}
 				gq.Filter = filter
 
+			case "normalize":
+				gq.Normalize = true
 			default:
 				return nil, x.Errorf("Unknown directive [%s]", item.Val)
 			}

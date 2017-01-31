@@ -120,6 +120,23 @@ func (p *protoNode) IsEmpty() bool {
 	return true
 }
 
+func (n *protoNode) normalize(props []*graph.Property, out []protoNode) []protoNode {
+	if len(n.Children) == 0 {
+		props = append(props, n.Properties...)
+		pn := protoNode{&graph.Node{Properties: props}}
+		out = append(out, pn)
+		return out
+	}
+
+	for _, child := range n.Children {
+		p := make([]*graph.Property, len(props))
+		copy(p, props)
+		p = append(p, n.Properties...)
+		out = (&protoNode{child}).normalize(p, out)
+	}
+	return out
+}
+
 // ToProtocolBuffer does preorder traversal to build a proto buffer. We have
 // used postorder traversal before, but preorder seems simpler and faster for
 // most cases.
@@ -146,7 +163,17 @@ func (sg *SubGraph) ToProtocolBuffer(l *Latency) (*graph.Node, error) {
 		if n1.IsEmpty() {
 			continue
 		}
-		n.AddChild(sg.Params.Alias, n1)
+		if !sg.Params.Normalize {
+			n.AddChild(sg.Params.Alias, n1)
+			continue
+		}
+
+		// Lets normalize the response now.
+		normalized := make([]protoNode, 0, 10)
+		props := make([]*graph.Property, 0, 10)
+		for _, c := range (n1.(*protoNode)).normalize(props, normalized) {
+			n.AddChild(sg.Params.Alias, &c)
+		}
 	}
 	l.ProtocolBuffer = time.Since(l.Start) - l.Parsing - l.Processing
 	return n.(*protoNode).Node, nil
@@ -267,6 +294,44 @@ func (fj *fastJsonNode) encode(bufw *bufio.Writer) {
 	bufw.WriteRune('}')
 }
 
+func (n *fastJsonNode) normalize(av []attrVal, out []fastJsonNode) []fastJsonNode {
+	if len(n.children) == 0 {
+		// No more children nodes, lets copy the attrs to the slice and attach the
+		// result to out.
+		for k, v := range n.attrs {
+			av = append(av, attrVal{k, v})
+		}
+
+		fn := fastJsonNode{
+			attrs: make(map[string][]byte),
+		}
+		for _, pair := range av {
+			fn.attrs[pair.attr] = pair.val
+		}
+		out = append(out, fn)
+		return out
+	}
+
+	for _, child := range n.children {
+		// n.children is a map of string -> []*fastJsonNode.
+		for _, jn := range child {
+			vals := make([]attrVal, len(av))
+			copy(vals, av)
+			// Create a copy of the attr-val slice, attach attrs and pass to children.
+			for k, v := range n.attrs {
+				vals = append(vals, attrVal{k, v})
+			}
+			out = jn.normalize(vals, out)
+		}
+	}
+	return out
+}
+
+type attrVal struct {
+	attr string
+	val  []byte
+}
+
 func processNodeUids(n *fastJsonNode, sg *SubGraph) error {
 	var seedNode *fastJsonNode
 	if sg.DestUIDs == nil {
@@ -286,7 +351,21 @@ func processNodeUids(n *fastJsonNode, sg *SubGraph) error {
 		if n1.IsEmpty() {
 			continue
 		}
-		n.AddChild(sg.Params.Alias, n1)
+
+		if !sg.Params.Normalize {
+			n.AddChild(sg.Params.Alias, n1)
+			continue
+		}
+
+		// Lets normalize the response now.
+		normalized := make([]fastJsonNode, 0, 10)
+
+		// This slice is used to mantain the leaf nodes along a path while traversing
+		// the Subgraph.
+		av := make([]attrVal, 0, 10)
+		for _, c := range (n1.(*fastJsonNode)).normalize(av, normalized) {
+			n.AddChild(sg.Params.Alias, &fastJsonNode{attrs: c.attrs})
+		}
 	}
 	return nil
 }
