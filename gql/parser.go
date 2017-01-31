@@ -1057,7 +1057,9 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 	gq = &GraphQuery{
 		Args: make(map[string]string),
 	}
-	it.Next()
+	if !it.Next() {
+		return nil, x.Errorf("Invalid query")
+	}
 	item := it.Item()
 	if item.Typ != itemName {
 		return nil, x.Errorf("Expected some name. Got: %v", item)
@@ -1075,7 +1077,9 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 	}
 
 	gq.Alias = item.Val
-	it.Next()
+	if !it.Next() {
+		return nil, x.Errorf("Invalid query")
+	}
 	item = it.Item()
 	if item.Typ != itemLeftRound {
 		return nil, x.Errorf("Expected Left round brackets. Got: %v", item)
@@ -1094,14 +1098,18 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 			return nil, x.Errorf("Expecting argument name. Got: %v", item)
 		}
 
-		it.Next()
+		if !it.Next() {
+			return nil, x.Errorf("Invalid query")
+		}
 		item = it.Item()
 		if item.Typ != itemColon {
 			return nil, x.Errorf("Expecting a collon. Got: %v", item)
 		}
 
 		if key == "id" {
-			it.Next()
+			if !it.Next() {
+				return nil, x.Errorf("Invalid query")
+			}
 			item = it.Item()
 			// Check and parse if its a list.
 			err := parseID(gq, item.Val)
@@ -1124,11 +1132,15 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 			}
 			gq.Func = gen
 		} else if key == "var" {
-			it.Next()
+			if !it.Next() {
+				return nil, x.Errorf("Invalid query")
+			}
 			item := it.Item()
 			parseVarList(gq, item.Val)
 		} else {
-			it.Next()
+			if !it.Next() {
+				return nil, x.Errorf("Invalid query")
+			}
 			item := it.Item()
 			gq.Args[key] = item.Val
 		}
