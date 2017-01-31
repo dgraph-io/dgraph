@@ -84,7 +84,7 @@ message MembershipUpdate {
 
 message Attr {
 	string name = 1;
-	Value value = 2;
+	Value val = 2;
 }
 
 message DirectedEdge {

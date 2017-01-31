@@ -157,7 +157,7 @@ func toEdgeAttrs(attrs []*task.Attr) []*types.EdgeAttr {
 	edgeAttrs := make([]*types.EdgeAttr, 0, len(attrs))
 	for _, a := range attrs {
 		edgeAttrs = append(edgeAttrs,
-			&types.EdgeAttr{a.Name, a.Value.Val, types.ValType(a.Value.ValType)})
+			&types.EdgeAttr{a.Name, a.Val.Val, types.ValType(a.Val.ValType)})
 	}
 	return edgeAttrs
 }

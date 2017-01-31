@@ -74,10 +74,10 @@ func typeValFrom(val *graph.Value) types.Val {
 	return types.Val{types.StringID, ""}
 }
 
-func byteVal(nq NQuad) ([]byte, error) {
+func byteVal(value *graph.Value) ([]byte, error) {
 	// We infer object type from type of value. We set appropriate type in parse
 	// function or the Go client has already set.
-	p := typeValFrom(nq.ObjectValue)
+	p := typeValFrom(value)
 	// These three would have already been marshalled to bytes by the client or
 	// in parse function.
 	if p.Tid == types.GeoID || p.Tid == types.DateID || p.Tid == types.DateTimeID {
@@ -128,12 +128,16 @@ func toUid(xid string, newToUid map[string]uint64) (uid uint64) {
 func (nq NQuad) ToEdgeUsing(newToUid map[string]uint64) (*task.DirectedEdge, error) {
 	var err error
 	uid := toUid(nq.Subject, newToUid)
-
+	edgeAttrs, err := toEdgeAttrs(nq)
+	if err != nil {
+		return nil, err
+	}
 	out := &task.DirectedEdge{
 		Entity: uid,
 		Attr:   nq.Predicate,
 		Label:  nq.Label,
 		Lang:   nq.Lang,
+		Attrs:  edgeAttrs,
 	}
 
 	switch nq.valueType() {
@@ -146,6 +150,20 @@ func (nq NQuad) ToEdgeUsing(newToUid map[string]uint64) (*task.DirectedEdge, err
 		}
 	}
 	return out, nil
+}
+
+func toEdgeAttrs(nq NQuad) ([]*task.Attr, error) {
+	weights := make([]*task.Attr, len(nq.Weights))
+	var value []byte
+	var err error
+	for _, w := range nq.Weights {
+		if value, err = byteVal(w.Val); err != nil {
+			return nil, err
+		}
+		weights = append(weights,
+			&task.Attr{w.Key, &task.Value{value, int32(w.ValType)}})
+	}
+	return weights, nil
 }
 
 // TODO(tzdybal) - remove
@@ -165,7 +183,7 @@ func (nq NQuad) hasValue() bool {
 
 func copyValue(out *task.DirectedEdge, nq NQuad) error {
 	var err error
-	if out.Value, err = byteVal(nq); err != nil {
+	if out.Value, err = byteVal(nq.ObjectValue); err != nil {
 		return err
 	}
 	out.ValueType = uint32(nq.ObjectType)

@@ -11,6 +11,7 @@ service Dgraph {
 message Weight {
 	string key = 1;
 	Value val = 2;
+	sint32 valType = 3;
 }
 
 message NQuad {
