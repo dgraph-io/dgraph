@@ -847,6 +847,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	for _, l := range sg.uidMatrix {
 		algo.IntersectWith(l, sg.DestUIDs)
 	}
+
 	if len(sg.Params.Order) == 0 {
 		// There is no ordering. Just apply pagination and return.
 		if err = sg.applyPagination(ctx); err != nil {
@@ -946,6 +947,13 @@ func (sg *SubGraph) applyPagination(ctx context.Context) error {
 	if params.Count == 0 && params.Offset == 0 { // No pagination.
 		return nil
 	}
+
+	if sg.SrcUIDs == nil || len(sg.SrcUIDs.Uids) != len(sg.uidMatrix) {
+		start, end := pageRange(&sg.Params, len(sg.DestUIDs.Uids))
+		sg.DestUIDs.Uids = sg.DestUIDs.Uids[start:end]
+		return nil
+	}
+
 	x.AssertTrue(len(sg.SrcUIDs.Uids) == len(sg.uidMatrix))
 	for _, l := range sg.uidMatrix {
 		start, end := pageRange(&sg.Params, len(l.Uids))

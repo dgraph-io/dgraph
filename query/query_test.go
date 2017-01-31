@@ -2470,15 +2470,28 @@ func TestGeneratorMultiRoot(t *testing.T) {
 	require.JSONEq(t, `{"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"}]}`, js)
 }
 
-func TestRootList(t *testing.T) {
+func TestGeneratorMultiRootOrder(t *testing.T) {
+	populateGraph(t)
+	query := `
+    {
+			me(func:anyof("name", "Michonne Rick Glenn"), first:1) {
+        name
+      }
+    }
+  `
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"me":[{"name":"Michonne"}]}`, js)
+}
+
+func TestRootListPagination(t *testing.T) {
 	populateGraph(t)
 	query := `{
-	me(id:[1, 23, 24]) {
+		me(id:[1, 23, 24], first: 2, offset:1) {
 		name
 	}
 }`
 	js := processToFastJSON(t, query)
-	require.JSONEq(t, `{"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"}]}`, js)
+	require.JSONEq(t, `{"me":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"}]}`, js)
 }
 
 func TestRootList1(t *testing.T) {
