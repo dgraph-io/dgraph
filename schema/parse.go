@@ -43,8 +43,11 @@ func ParseBytes(schema []byte) (rerr error) {
 	it := l.NewIterator()
 	for it.Next() {
 		item := it.Item()
+		if item.Typ == lex.ItemEOF {
+			break
+		}
 		if item.Typ != itemText {
-			return x.Errorf("Expected text here but got: %v", item)
+			return x.Errorf("Expected text here but got: [%v] %v %v", item.Val, item.Typ, lex.EOF)
 		}
 		switch item.Val {
 		case "scalar":
@@ -62,6 +65,7 @@ func ParseBytes(schema []byte) (rerr error) {
 	return nil
 }
 
+// processScalarBlock starts work on the inside of a scalar block.
 func processScalarBlock(it *lex.ItemIterator) error {
 	for it.Next() {
 		item := it.Item()
@@ -69,67 +73,79 @@ func processScalarBlock(it *lex.ItemIterator) error {
 		case itemRightRound:
 			return nil
 		case itemText:
-			{
-				var name, typ string
-				name = item.Val
-
-				it.Next()
-				if next := it.Item(); next.Typ != itemColon {
-					return x.Errorf("Missing colon")
-				}
-
-				it.Next()
-				next := it.Item()
-				if next.Typ != itemText {
-					return x.Errorf("Missing Type")
-				}
-				typ = next.Val
-
-				t, ok := types.TypeForName(typ)
-				if !ok {
-					return x.Errorf("Invalid type")
-				}
-				str[name] = t
-
-				// Check for index / reverse.
-				for it.Next() {
-					next = it.Item()
-					if next.Typ == lex.ItemError {
-						return x.Errorf(next.Val)
-					}
-					if next.Typ == itemDummy {
-						break
-					}
-					if next.Typ == itemAt {
-						it.Next()
-						next = it.Item()
-						if next.Typ != itemText {
-							return x.Errorf("Missing directive name")
-						}
-						switch next.Val {
-						case "index":
-							if err := processIndexDirective(it, name, t); err != nil {
-								return err
-							}
-						case "reverse":
-							if t != types.UidID {
-								return x.Errorf("Cannot reverse for non-UID type")
-							}
-							reversedFields[name] = true
-						default:
-							return x.Errorf("Invalid index specification")
-						}
-					}
-				}
+			if err := processScalarPair(it, item.Val, true); err != nil {
+				return err
 			}
 		case lex.ItemError:
 			return x.Errorf(item.Val)
+		default:
+			return x.Errorf("Unexpected token: %v", item)
 		}
 	}
 
 	return nil
 }
 
+// processScalarPair processes "name: type (directive)" where name is already
+// consumed and is provided as input.
+func processScalarPair(it *lex.ItemIterator, name string, allowIndex bool) error {
+	it.Next()
+	if next := it.Item(); next.Typ != itemColon {
+		return x.Errorf("Missing colon")
+	}
+
+	it.Next()
+	next := it.Item()
+	if next.Typ != itemText {
+		return x.Errorf("Missing Type")
+	}
+	typ := next.Val
+	t, ok := types.TypeForName(typ)
+	if ok {
+		if t1, ok := str[name]; ok {
+			if t1 != t {
+				return x.Errorf("Same field cant have multiple types")
+			}
+		} else {
+			str[name] = t
+		}
+	}
+
+	// Check for index / reverse.
+	for it.Next() {
+		next = it.Item()
+		if next.Typ == lex.ItemError {
+			return x.Errorf(next.Val)
+		}
+		if next.Typ == itemAt {
+			it.Next()
+			next = it.Item()
+			if next.Typ != itemText {
+				return x.Errorf("Missing directive name")
+			}
+			switch next.Val {
+			case "reverse":
+				if t != types.UidID {
+					return x.Errorf("Cannot reverse for non-UID type")
+				}
+				reversedFields[name] = true
+				return nil
+			case "index":
+				if !allowIndex {
+					return x.Errorf("@index not allowed")
+				}
+				return processIndexDirective(it, name, t)
+			default:
+				return x.Errorf("Invalid index specification")
+			}
+		}
+		it.Prev()
+		break
+	}
+	return nil
+}
+
+// processIndexDirective works on "@index" or "@index(customtokenizer)".
 func processIndexDirective(it *lex.ItemIterator, name string, typ types.TypeID) error {
 	indexedFields[name] = tok.Default(typ)
 	if !it.Next() {
@@ -163,79 +179,26 @@ func processIndexDirective(it *lex.ItemIterator, name string, typ types.TypeID) 
 	return nil
 }
 
+// processScalar works on either a single scalar pair or a scalar block.
+// A scalar block looks like "scalar ( .... )".
 func processScalar(it *lex.ItemIterator) error {
-
 	for it.Next() {
 		item := it.Item()
 		switch item.Typ {
 		case itemLeftRound:
-			{
-				return processScalarBlock(it)
-			}
+			return processScalarBlock(it)
 		case itemText:
-			{
-				var name, typ string
-				name = item.Val
-
-				it.Next()
-				next := it.Item()
-				if next.Typ != itemColon {
-					return x.Errorf("Missing colon")
-				}
-
-				it.Next()
-				next = it.Item()
-				if next.Typ != itemText {
-					return x.Errorf("Missing Type")
-				}
-				typ = next.Val
-
-				t, ok := types.TypeForName(typ)
-				if ok {
-					str[name] = t
-				} else {
-					return x.Errorf("Invalid type")
-				}
-
-				// Check for index.
-				for it.Next() {
-					next = it.Item()
-					if next.Typ == lex.ItemError {
-						return x.Errorf(next.Val)
-					}
-					if next.Typ == itemDummy {
-						break
-					}
-					if next.Typ == itemAt {
-						it.Next()
-						next = it.Item()
-						if next.Typ != itemText {
-							return x.Errorf("Missing directive name")
-						}
-						switch next.Val {
-						case "index":
-							if err := processIndexDirective(it, name, t); err != nil {
-								return err
-							}
-						case "reverse":
-							if t != types.UidID {
-								return x.Errorf("Cannot reverse for non-UID type")
-							}
-							reversedFields[name] = true
-						default:
-							return x.Errorf("Invalid directive")
-						}
-					}
-				}
-				return nil
-			}
+			return processScalarPair(it, item.Val, true)
 		case lex.ItemError:
 			return x.Errorf(item.Val)
+		default:
+			return x.Errorf("Unexpected item: %v", item)
 		}
 	}
 	return nil
 }
 
+// processObject works on "type { ... }".
 func processObject(it *lex.ItemIterator) error {
 	var objName string
 	it.Next()
@@ -261,53 +224,10 @@ L:
 		case itemRightCurl:
 			break L
 		case itemText:
-			{
-				var name, typ string
-				name = item.Val
-
-				it.Next()
-				next := it.Item()
-				if next.Typ != itemColon {
-					return x.Errorf("Missing colon")
-				}
-
-				it.Next()
-				next = it.Item()
-				if next.Typ != itemText {
-					return x.Errorf("Missing Type")
-				}
-				typ = next.Val
-				t, ok := types.TypeForName(typ)
-				if ok {
-					if t1, ok := str[name]; ok {
-						if t1 != t {
-							return x.Errorf("Same field cant have multiple types")
-						}
-					} else {
-						str[name] = t
-					}
-				}
-				// Check for reverse.
-				it.Next()
-				next = it.Item()
-				if next.Typ == itemAt {
-					it.Next()
-					index := it.Item()
-					if index.Typ != itemText {
-						return x.Errorf("Missing directive name")
-					}
-					if index.Val == "reverse" {
-						// TODO(jchiu): Add test for this check.
-						if t.IsScalar() /* && t != types.UidID */ {
-							return x.Errorf("Cannot reverse non-UID scalar")
-						}
-						reversedFields[name] = true
-					} else {
-						return x.Errorf("Invalid reverse specification")
-					}
-				}
-				fieldCount++
+			if err := processScalarPair(it, item.Val, false); err != nil {
+				return err
 			}
+			fieldCount++
 		case lex.ItemError:
 			return x.Errorf(item.Val)
 		}
