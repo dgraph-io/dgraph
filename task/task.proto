@@ -41,10 +41,13 @@ message Sort {
 	int32 count = 3;   // Return this many elements.
 	int32 offset = 4;  // Skip this many elements.
 	bool desc = 5;
+	List dest_uids = 6; 
+	bool is_parent = 7;
 }
 
 message SortResult {
 	repeated List uid_matrix = 1;
+	List uid_list = 2;
 }
 
 message Num {

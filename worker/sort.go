@@ -102,6 +102,20 @@ func processSort(ts *task.Sort) (*task.SortResult, error) {
 			"Try flipping order and return first few elements instead."),
 		attr, ts.Count)
 
+	r := new(task.SortResult)
+	if ts.IsParent {
+		schemaType, err := schema.TypeOf(ts.Attr)
+		if err != nil {
+			return r, err
+		}
+		err = sortByValue(ts.Attr, ts.DestUids, schemaType, ts.Desc)
+		if err != nil {
+			return r, err
+		}
+		r.UidList = ts.DestUids
+		return r, nil
+	}
+
 	n := len(ts.UidMatrix)
 	out := make([]intersectedList, n)
 	for i := 0; i < n; i++ {
@@ -155,7 +169,6 @@ BUCKETS:
 		}
 	}
 
-	r := new(task.SortResult)
 	for _, il := range out {
 		r.UidMatrix = append(r.UidMatrix, il.ulist)
 	}

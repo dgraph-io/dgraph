@@ -146,7 +146,8 @@ type SubGraph struct {
 	Children []*SubGraph
 
 	// destUIDs is a list of destination UIDs, after applying filters, pagination.
-	DestUIDs *task.List
+	DestUIDs   *task.List
+	CustomDest *task.List
 }
 
 // DebugPrint prints out the SubGraph tree in a nice format for debugging purposes.
@@ -858,10 +859,11 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		// If we are asked for count, we don't need to change the order of results.
 		if !sg.Params.DoCount {
 			// We need to sort first before pagination.
-			if err = sg.applyOrderAndPagination(ctx); err != nil {
+			if err = sg.applyOrderAndPagination(ctx, parent == nil); err != nil {
 				rch <- err
 				return
 			}
+			// Now the DestUids maynot be sorted.
 		}
 	}
 
@@ -966,7 +968,7 @@ func (sg *SubGraph) applyPagination(ctx context.Context) error {
 
 // applyOrderAndPagination orders each posting list by a given attribute
 // before applying pagination.
-func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
+func (sg *SubGraph) applyOrderAndPagination(ctx context.Context, isParent bool) error {
 	if len(sg.Params.Order) == 0 {
 		return nil
 	}
@@ -975,9 +977,16 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 		sg.Params.Count = 1000
 	}
 
+	if isParent {
+		sg.CustomDest = new(task.List)
+		sg.CustomDest.Uids = make([]uint64, len(sg.DestUIDs.Uids), len(sg.DestUIDs.Uids))
+		copy(sg.CustomDest.Uids, sg.DestUIDs.Uids)
+	}
 	sort := &task.Sort{
 		Attr:      sg.Params.Order,
 		UidMatrix: sg.uidMatrix,
+		DestUids:  sg.CustomDest,
+		IsParent:  isParent,
 		Offset:    int32(sg.Params.Offset),
 		Count:     int32(sg.Params.Count),
 		Desc:      sg.Params.OrderDesc,
@@ -985,6 +994,11 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 	result, err := worker.SortOverNetwork(ctx, sort)
 	if err != nil {
 		return err
+	}
+
+	if isParent {
+		sg.CustomDest = result.GetUidList()
+		return nil
 	}
 
 	x.AssertTrue(len(result.UidMatrix) == len(sg.uidMatrix))

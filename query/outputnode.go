@@ -43,6 +43,9 @@ func ToProtocolBuf(l *Latency, sgl []*SubGraph) ([]*graph.Node, error) {
 		if sg.Params.Alias == "var" {
 			continue
 		}
+		if sg.CustomDest != nil {
+			sg.DestUIDs = sg.CustomDest
+		}
 		node, err := sg.ToProtocolBuffer(l)
 		if err != nil {
 			return nil, err
@@ -63,6 +66,9 @@ func ToJson(l *Latency, sgl []*SubGraph, w io.Writer) error {
 		}
 		if sg.Params.isDebug {
 			sgr.Params.isDebug = true
+		}
+		if sg.CustomDest != nil {
+			sg.DestUIDs = sg.CustomDest
 		}
 		sgr.Children = append(sgr.Children, sg)
 	}

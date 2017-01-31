@@ -211,6 +211,7 @@ func populateGraph(t *testing.T) {
 	require.NoError(t, err)
 	addEdgeToTypedValue(t, "loc", 31, types.GeoID, gData.Value.([]byte))
 
+	addEdgeToValue(t, "dob", 1, "1909-01-01")
 	addEdgeToValue(t, "dob", 23, "1910-01-02")
 	addEdgeToValue(t, "dob", 24, "1909-05-05")
 	addEdgeToValue(t, "dob", 25, "1909-01-10")
@@ -1873,7 +1874,7 @@ func TestToFastJSONOrder(t *testing.T) {
 	`
 
 	js := processToFastJSON(t, query)
-	require.EqualValues(t,
+	require.JSONEq(t,
 		`{"me":[{"friend":[{"dob":"1901-01-15","name":"Andrea"},{"dob":"1909-01-10","name":"Daryl Dixon"},{"dob":"1909-05-05","name":"Glenn Rhee"},{"dob":"1910-01-02","name":"Rick Grimes"}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
@@ -2457,6 +2458,33 @@ func TestGeneratorMultiRootMultiQuery(t *testing.T) {
 	js := processToFastJSON(t, query)
 	require.JSONEq(t, `{"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"}], "you":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"}]}`, js)
 }
+
+func TestGeneratorMultiRootOrderdesc(t *testing.T) {
+	populateGraph(t)
+	query := `
+    {
+			me(func:anyof(name, "michonne rick glenn"), orderdesc: dob) {
+        name
+      }
+    }
+  `
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"me":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Michonne"}]}`, js)
+}
+
+func TestGeneratorMultiRootOrder(t *testing.T) {
+	populateGraph(t)
+	query := `
+    {
+			me(func:anyof(name, "michonne rick glenn"), order: dob) {
+        name
+      }
+    }
+  `
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"me":[{"name":"Michonne"},{"name":"Glenn Rhee"},{"name":"Rick Grimes"}]}`, js)
+}
+
 func TestGeneratorMultiRoot(t *testing.T) {
 	populateGraph(t)
 	query := `
@@ -2470,7 +2498,7 @@ func TestGeneratorMultiRoot(t *testing.T) {
 	require.JSONEq(t, `{"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"}]}`, js)
 }
 
-func TestGeneratorMultiRootOrder(t *testing.T) {
+func TestGeneratorMultiRootPage(t *testing.T) {
 	populateGraph(t)
 	query := `
     {
@@ -2486,12 +2514,23 @@ func TestGeneratorMultiRootOrder(t *testing.T) {
 func TestRootListPagination(t *testing.T) {
 	populateGraph(t)
 	query := `{
-		me(id:[1, 23, 24], first: 2, offset:1) {
+		me(id:[1, 23, 24], offset:1) {
 		name
 	}
 }`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t, `{"me":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"}]}`, js)
+}
+
+func TestRootListPaginationoffset(t *testing.T) {
+	populateGraph(t)
+	query := `{
+		me(id:[1, 23, 24], first: 1, offset:1) {
+		name
+	}
+}`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"me":[{"name":"Rick Grimes"}]}`, js)
 }
 
 func TestRootList1(t *testing.T) {
