@@ -52,11 +52,12 @@ popd &> /dev/null
 # Lets wait for stuff to be committed to RocksDB.
 sleep 20
 
+pushd contrib/indextest &> /dev/null
+
 function run_index_test {
 	X=$1
 	GREPFOR=$2
 	ANS=$3
-	wget https://raw.githubusercontent.com/dgraph-io/dgraph/$TRAVIS_BRANCH/contrib/indextest/${X}.in
 	N=`curl localhost:8080/query -XPOST -d @${X}.in 2> /dev/null | python -m json.tool | grep $GREPFOR | wc -l`
 	if [[ ! "$N" -eq "$ANS" ]]; then
 	  echo "Index test failed: ${X}  Expected: $ANS  Got: $N"
@@ -71,6 +72,7 @@ run_index_test releasedate release 137858
 run_index_test releasedate_sort release 137858
 run_index_test releasedate_sort_first_offset release 2315
 run_index_test releasedate_geq release 60991
-run_index_test gen_anyof_good_bad object 1103
+run_index_test gen_anyof_good_bad name 1103
 
+popd &> /dev/null
 killall dgraph
