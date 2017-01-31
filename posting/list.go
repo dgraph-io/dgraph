@@ -358,11 +358,15 @@ func (l *List) addMutation(ctx context.Context, t *task.DirectedEdge) (bool, err
 	// All edges with a value without LANGTAG, have the same uid. In other words,
 	// an (entity, attribute) can only have one untagged value.
 	if !bytes.Equal(t.Value, nil) {
-		if len(t.Lang) > 0 {
-			t.ValueId = farm.Fingerprint64([]byte(t.Lang))
-		} else {
-			t.ValueId = math.MaxUint64
-		}
+		t.ValueId = math.MaxUint64
+		// TODO(tzdybal) - uncomment when entire code is ready for the change
+		/*
+			if len(t.Lang) > 0 {
+				t.ValueId = farm.Fingerprint64([]byte(t.Lang))
+			} else {
+				t.ValueId = math.MaxUint64
+			}
+		*/
 	}
 	if t.ValueId == 0 {
 		err := x.Errorf("ValueId cannot be zero")
