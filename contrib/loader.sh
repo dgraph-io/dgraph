@@ -63,10 +63,10 @@ function run_index_test {
 	  exit 1
 	fi
 }
-run_index_test basic object 138676
-run_index_test allof_the object 25431
-run_index_test allof_the_a object 367
-run_index_test allof_the_first object 4383
+run_index_test basic name 138676
+run_index_test allof_the name 25431
+run_index_test allof_the_a name 367
+run_index_test allof_the_first name 4383
 run_index_test releasedate release 137858
 run_index_test releasedate_sort release 137858
 run_index_test releasedate_sort_first_offset release 2315
