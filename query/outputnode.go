@@ -125,12 +125,13 @@ func (p *protoNode) IsEmpty() bool {
 // most cases.
 func (sg *SubGraph) ToProtocolBuffer(l *Latency) (*graph.Node, error) {
 	var seedNode *protoNode
-	if sg.DestUIDs == nil {
+	if sg.uidMatrix == nil {
 		return seedNode.New(sg.Params.Alias).(*protoNode).Node, nil
 	}
 
 	n := seedNode.New("_root_")
-	for _, uid := range sg.DestUIDs.Uids {
+	// At the root, we always have one list in UidMatrix.
+	for _, uid := range sg.uidMatrix[0].Uids {
 		// For the root, the name is stored in Alias, not Attr.
 		n1 := seedNode.New(sg.Params.Alias)
 		if sg.Params.GetUID || sg.Params.isDebug {
@@ -269,10 +270,11 @@ func (fj *fastJsonNode) encode(bufw *bufio.Writer) {
 
 func processNodeUids(n *fastJsonNode, sg *SubGraph) error {
 	var seedNode *fastJsonNode
-	if sg.DestUIDs == nil {
+	if sg.uidMatrix == nil {
 		return nil
 	}
-	for _, uid := range sg.DestUIDs.Uids {
+	// At the root, we always have one list in UidMatrix.
+	for _, uid := range sg.uidMatrix[0].Uids {
 		n1 := seedNode.New(sg.Params.Alias)
 		if sg.Params.GetUID || sg.Params.isDebug {
 			n1.SetUID(uid)

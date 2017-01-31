@@ -373,6 +373,17 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 			}
 			args.DoCount = true
 		}
+
+		for argk, _ := range gchild.Args {
+			if !isValidArg(argk) {
+				return x.Errorf("Invalid argument : %s", argk)
+			}
+		}
+		err := args.fill(gchild)
+		if err != nil {
+			return err
+		}
+
 		dst := &SubGraph{
 			Attr:   gchild.Attr,
 			Params: args,
@@ -385,43 +396,39 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 			dst.Filters = append(dst.Filters, dstf)
 		}
 
-		if v, ok := gchild.Args["offset"]; ok {
-			offset, err := strconv.ParseInt(v, 0, 32)
-			if err != nil {
-				return err
-			}
-			dst.Params.Offset = int(offset)
-		}
-		if v, ok := gchild.Args["after"]; ok {
-			after, err := strconv.ParseUint(v, 0, 64)
-			if err != nil {
-				return err
-			}
-			dst.Params.AfterUID = uint64(after)
-		}
-		if v, ok := gchild.Args["first"]; ok {
-			first, err := strconv.ParseInt(v, 0, 32)
-			if err != nil {
-				return err
-			}
-			dst.Params.Count = int(first)
-		}
-		if v, ok := gchild.Args["order"]; ok {
-			dst.Params.Order = v
-		} else if v, ok := gchild.Args["orderdesc"]; ok {
-			dst.Params.Order = v
-			dst.Params.OrderDesc = true
-		}
-		for argk, _ := range gchild.Args {
-			if !isValidArg(argk) {
-				return x.Errorf("Invalid argument : %s", argk)
-			}
-		}
 		sg.Children = append(sg.Children, dst)
-		err := treeCopy(ctx, gchild, dst)
+		err = treeCopy(ctx, gchild, dst)
+	}
+	return nil
+}
+func (args *params) fill(gq *gql.GraphQuery) error {
+
+	if v, ok := gq.Args["offset"]; ok {
+		offset, err := strconv.ParseInt(v, 0, 32)
 		if err != nil {
 			return err
 		}
+		args.Offset = int(offset)
+	}
+	if v, ok := gq.Args["after"]; ok {
+		after, err := strconv.ParseUint(v, 0, 64)
+		if err != nil {
+			return err
+		}
+		args.AfterUID = uint64(after)
+	}
+	if v, ok := gq.Args["first"]; ok {
+		first, err := strconv.ParseInt(v, 0, 32)
+		if err != nil {
+			return err
+		}
+		args.Count = int(first)
+	}
+	if v, ok := gq.Args["order"]; ok {
+		args.Order = v
+	} else if v, ok := gq.Args["orderdesc"]; ok {
+		args.Order = v
+		args.OrderDesc = true
 	}
 	return nil
 }
@@ -456,6 +463,16 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	}
 	for _, it := range gq.NeedsVar {
 		args.NeedsVar = append(args.NeedsVar, it)
+	}
+
+	for argk, _ := range gq.Args {
+		if !isValidArg(argk) {
+			return nil, x.Errorf("Invalid argument : %s", argk)
+		}
+	}
+	err := args.fill(gq)
+	if err != nil {
+		return nil, err
 	}
 
 	sg := &SubGraph{
@@ -706,17 +723,16 @@ func (sg *SubGraph) fillVars(mp map[string]*task.List) {
 func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	var err error
 	if len(sg.Params.NeedsVar) != 0 && len(sg.SrcFunc) == 0 {
-		// Do nothing as the list has already been populated.
+		sg.uidMatrix = []*task.List{&task.List{sg.DestUIDs.Uids}}
 	} else if len(sg.Attr) == 0 {
 		// If we have a filter SubGraph which only contains an operator,
 		// it won't have any attribute to work on.
 		// This is to allow providing SrcUIDs to the filter children.
 		sg.DestUIDs = sg.SrcUIDs
-
 	} else if parent == nil && len(sg.SrcFunc) == 0 {
 		// I am root. I don't have any function to execute, and my
 		// result has been prepared for me already.
-		sg.DestUIDs = algo.MergeSorted(sg.uidMatrix) // Could also be = sg.SrcUIDs
+		sg.DestUIDs = sg.SrcUIDs
 	} else {
 		if len(sg.SrcFunc) > 0 && sg.SrcFunc[0] == "id" {
 			// If its an id() filter, we just have to intersect the SrcUIDs with DestUIDs
@@ -754,6 +770,11 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			sg.DestUIDs = algo.IntersectSorted(result.UidMatrix)
 		} else {
 			sg.DestUIDs = algo.MergeSorted(result.UidMatrix)
+		}
+
+		if parent == nil {
+			// I'm root. We reach here if root had a function.
+			sg.uidMatrix = []*task.List{&task.List{sg.DestUIDs.Uids}}
 		}
 	}
 
@@ -903,8 +924,6 @@ func (sg *SubGraph) applyPagination(ctx context.Context) error {
 	if params.Count == 0 && params.Offset == 0 { // No pagination.
 		return nil
 	}
-
-	x.AssertTrue(len(sg.SrcUIDs.Uids) == len(sg.uidMatrix))
 	for _, l := range sg.uidMatrix {
 		// Update the UidMatrix before applying the pagination as
 		// we want valid uids which are present in DestUids.

@@ -211,6 +211,7 @@ func populateGraph(t *testing.T) {
 	require.NoError(t, err)
 	addEdgeToTypedValue(t, "loc", 31, types.GeoID, gData.Value.([]byte))
 
+	addEdgeToValue(t, "dob", 1, "1910-01-01")
 	addEdgeToValue(t, "dob", 23, "1910-01-02")
 	addEdgeToValue(t, "dob", 24, "1909-05-05")
 	addEdgeToValue(t, "dob", 25, "1909-01-10")
@@ -334,7 +335,7 @@ func TestUseVarsMultiCascade(t *testing.T) {
 				}
 			}
 
-			me([L, B]) {
+			me(var:[L, B]) {
 				name
 			}
 		}
@@ -357,11 +358,11 @@ func TestUseVarsMultiOrder(t *testing.T) {
 				G AS friend(first:2, offset:2, order: dob)
 			}
 
-			friend1(L) {
+			friend1(var:L) {
 				name
 			}
 
-			friend2(G) {
+			friend2(var:G) {
 				name
 			}
 		}
@@ -398,7 +399,7 @@ func TestUseVarsFilterVarReuse2(t *testing.T) {
 	populateGraph(t)
 	query := `
 		{
-			friend(anyof(name, "Michonne Andrea Glenn")) {
+			friend(func:anyof(name, "Michonne Andrea Glenn")) {
 				friend {
 				 L as friend {
 					 name
@@ -456,7 +457,7 @@ func TestUseVarsFilterMultiId(t *testing.T) {
 				G AS friend
 			}
 
-			friend(anyof(name, "Michonne Andrea Glenn")) @filter(id(G, L)) {
+			friend(func:anyof(name, "Michonne Andrea Glenn")) @filter(id(G, L)) {
 				name
 			}
 		}
@@ -479,7 +480,7 @@ func TestUseVarsMultiFilterId(t *testing.T) {
 				G AS friend
 			}
 
-			friend(L) @filter(id(G)) {
+			friend(var:L) @filter(id(G)) {
 				name
 			}
 		}
@@ -500,7 +501,7 @@ func TestUseVarsCascade(t *testing.T) {
 				}
 			}
 
-			me(L) {
+			me(var:L) {
 				name
 			}
 		}
@@ -519,7 +520,7 @@ func TestUseVars(t *testing.T) {
 				L AS friend 	
 			}
 
-			me(L) {
+			me(var : L) {
 				name
 			}
 		}
@@ -679,7 +680,7 @@ func TestCountError3(t *testing.T) {
 func TestToSubgraphInvalidFnName(t *testing.T) {
 	query := `
 		{
-			me(invalidfn1(name, "some cool name")) {
+			me(func:invalidfn1(name, "some cool name")) {
 				name
 				gender
 				alive
@@ -697,7 +698,7 @@ func TestToSubgraphInvalidFnName(t *testing.T) {
 func TestToSubgraphInvalidFnName2(t *testing.T) {
 	query := `
 		{
-			me(anyof(name, "some cool name")) {
+			me(func:anyof(name, "some cool name")) {
 				name
 				friend @filter(invalidfn2(name, "some name")) {
 				       name
@@ -716,7 +717,7 @@ func TestToSubgraphInvalidFnName2(t *testing.T) {
 func TestToSubgraphInvalidFnName3(t *testing.T) {
 	query := `
 		{
-			me(anyof(name, "some cool name")) {
+			me(func:anyof(name, "some cool name")) {
 				name
 				friend @filter(anyof(name, "Andrea") or
 					       invalidfn3(name, "Andrea Rhee")){
@@ -736,10 +737,10 @@ func TestToSubgraphInvalidFnName3(t *testing.T) {
 func TestToSubgraphInvalidFnName4(t *testing.T) {
 	query := `
 		{
-			f AS var(invalidfn4("name", "Michonne Rick Glenn")) {
+			f AS var(func:invalidfn4("name", "Michonne Rick Glenn")) {
 				name
 			}
-			you(anyof(name, "Michonne")) {
+			you(func:anyof(name, "Michonne")) {
 				friend @filter(id(f)) {
 					name
 				}
@@ -2035,43 +2036,6 @@ func rootSg(uidMatrix []*task.List, srcUids *task.List, names []string, ages []u
 	}
 }
 
-func mockSubGraph() *SubGraph {
-	emptyUids := []uint64{}
-	uidMatrix := []*task.List{&task.List{Uids: emptyUids}, &task.List{Uids: emptyUids}, &task.List{Uids: emptyUids}, &task.List{Uids: emptyUids}}
-	srcUids := &task.List{Uids: []uint64{2, 3, 4, 5}}
-
-	names := []string{"lincon", "messi", "martin", "aishwarya"}
-	ages := []uint32{56, 29, 45, 36}
-	namesSg := nameSg(uidMatrix, srcUids, names)
-	agesSg := ageSg(uidMatrix, srcUids, ages)
-
-	sgSrcUids := &task.List{Uids: []uint64{1}}
-	sgUidMatrix := []*task.List{&task.List{Uids: emptyUids}}
-
-	friendUidMatrix := []*task.List{&task.List{Uids: []uint64{2, 3, 4, 5}}}
-	friendsSg1 := friendsSg(friendUidMatrix, sgSrcUids, []*SubGraph{namesSg, agesSg})
-
-	sg := rootSg(sgUidMatrix, sgSrcUids, []string{"unknown"}, []uint32{39})
-	sg.Children = append(sg.Children, friendsSg1)
-	sg.DestUIDs = &task.List{Uids: []uint64{1}}
-	sg.Params.Alias = "me"
-	return sg
-}
-
-func TestMockSubGraphFastJson(t *testing.T) {
-	sg := mockSubGraph()
-	var l Latency
-	var buf bytes.Buffer
-	require.NoError(t, ToJson(&l, []*SubGraph{sg}, &buf))
-	js := buf.Bytes()
-	// check validity of json
-	var unmarshalJs map[string]interface{}
-	require.NoError(t, json.Unmarshal([]byte(js), &unmarshalJs))
-
-	require.JSONEq(t, `{"me":[{"_uid_":"0x1","age":39,"friend":[{"_uid_":"0x2","age":56,"name":"lincon"},{"_uid_":"0x3","age":29,"name":"messi"},{"_uid_":"0x4","age":45,"name":"martin"},{"_uid_":"0x5","age":36,"name":"aishwarya"}],"name":"unknown"}]}`,
-		string(js))
-}
-
 // Test sorting / ordering by dob.
 func TestToProtoOrder(t *testing.T) {
 	populateGraph(t)
@@ -2325,12 +2289,12 @@ func TestMultiQuery(t *testing.T) {
 	populateGraph(t)
 	query := `
 		{
-			me(anyof("name", "Michonne")) {
+			me(func:anyof("name", "Michonne")) {
 				name
 				gender
 			}
 
-			you(anyof("name", "Andrea")) {
+			you(func:anyof("name", "Andrea")) {
 				name
 			}
 		}
@@ -2343,11 +2307,11 @@ func TestMultiQueryError1(t *testing.T) {
 	populateGraph(t)
 	query := `
     {
-      me(anyof("name", "Michonne")) {
+			me(func:anyof("name", "Michonne")) {
         name
         gender
 
-      you(anyof("name", "Andrea")) {
+			you(func:anyof("name", "Andrea")) {
         name
       }
     }
@@ -2379,7 +2343,7 @@ func TestGenerator(t *testing.T) {
 	populateGraph(t)
 	query := `
     {
-      me(anyof("name", "Michonne")) {
+			me(func:anyof("name", "Michonne")) {
         name
         gender
       }
@@ -2393,11 +2357,11 @@ func TestGeneratorMultiRootMultiQueryRootVar(t *testing.T) {
 	populateGraph(t)
 	query := `
     {
-			friend AS var(anyof("name", "Michonne Rick Glenn")) {
+			friend AS var(func:anyof("name", "Michonne Rick Glenn")) {
       	name
 			}
 
-			you(friend) {
+			you(var:friend) {
 				name
 			}
     }
@@ -2410,11 +2374,11 @@ func TestGeneratorMultiRootMultiQueryVarFilter(t *testing.T) {
 	populateGraph(t)
 	query := `
     {
-			f AS var(anyof("name", "Michonne Rick Glenn")) {
+			f AS var(func:anyof("name", "Michonne Rick Glenn")) {
       	name
 			}
 
-			you(anyof(name, "Michonne")) {
+			you(func:anyof(name, "Michonne")) {
 				friend @filter(id(f)) {
 					name
 				}
@@ -2429,10 +2393,10 @@ func TestGeneratorMultiRootMultiQueryRootVarFilter(t *testing.T) {
 	populateGraph(t)
 	query := `
     {
-			friend AS var(anyof("name", "Michonne Rick Glenn")) {
+			friend AS var(func:anyof("name", "Michonne Rick Glenn")) {
 			}
 
-			you(anyof(name, "Michonne Andrea Glenn")) @filter(id(friend)) {
+			you(func:anyof(name, "Michonne Andrea Glenn")) @filter(id(friend)) {
 				name
 			}
     }
@@ -2445,7 +2409,7 @@ func TestGeneratorMultiRootMultiQuery(t *testing.T) {
 	populateGraph(t)
 	query := `
     {
-      me(anyof("name", "Michonne Rick Glenn")) {
+			me(func:anyof("name", "Michonne Rick Glenn")) {
         name
       }
 
@@ -2457,11 +2421,97 @@ func TestGeneratorMultiRootMultiQuery(t *testing.T) {
 	js := processToFastJSON(t, query)
 	require.JSONEq(t, `{"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"}], "you":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"}]}`, js)
 }
+
+func TestGeneratorMultiRootVarOrderOffset(t *testing.T) {
+	populateGraph(t)
+	query := `
+    {
+			L as var(func:anyof("name", "Michonne Rick Glenn"), order: dob, offset:2) {
+        name
+      }
+
+			me(var:L) {
+			 name
+			}
+    }
+  `
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"me":[{"name":"Rick Grimes"}]}`, js)
+}
+
+func TestGeneratorMultiRootVarOrderOffset1(t *testing.T) {
+	populateGraph(t)
+	query := `
+    {
+			me(func:anyof("name", "Michonne Rick Glenn"), order: dob, offset:2) {
+        name
+      }
+    }
+  `
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"me":[{"name":"Rick Grimes"}]}`, js)
+}
+
+func TestGeneratorMultiRootOrderOffset(t *testing.T) {
+	populateGraph(t)
+	query := `
+    {
+			L as var(func:anyof("name", "Michonne Rick Glenn")) {
+        name
+      }
+			me(var: L, order: dob, offset:2) {
+        name
+      }
+    }
+  `
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"me":[{"name":"Rick Grimes"}]}`, js)
+}
+
+func TestGeneratorMultiRootOrderdesc(t *testing.T) {
+	populateGraph(t)
+	query := `
+    {
+			me(func:anyof("name", "Michonne Rick Glenn"), orderdesc: dob) {
+        name
+      }
+    }
+  `
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"me":[{"name":"Rick Grimes"},{"name":"Michonne"},{"name":"Glenn Rhee"}]}`, js)
+}
+
+func TestGeneratorMultiRootOrder(t *testing.T) {
+	populateGraph(t)
+	query := `
+    {
+			me(func:anyof("name", "Michonne Rick Glenn"), order: dob) {
+        name
+      }
+    }
+  `
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"me":[{"name":"Glenn Rhee"},{"name":"Michonne"},{"name":"Rick Grimes"}]}`, js)
+}
+
+func TestGeneratorMultiRootOffset(t *testing.T) {
+	populateGraph(t)
+	query := `
+    {
+			me(func:anyof("name", "Michonne Rick Glenn"), offset: 1) {
+        name
+      }
+    }
+  `
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"me":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"}]}`, js)
+}
+
 func TestGeneratorMultiRoot(t *testing.T) {
 	populateGraph(t)
 	query := `
     {
-      me(anyof("name", "Michonne Rick Glenn")) {
+			me(func:anyof("name", "Michonne Rick Glenn")) {
         name
       }
     }
@@ -2496,7 +2546,7 @@ func TestGeneratorMultiRootFilter1(t *testing.T) {
 	populateGraph(t)
 	query := `
     {
-      me(anyof("name", "Daryl Rick Glenn")) @filter(leq(dob, 1909-01-10)) {
+			me(func:anyof("name", "Daryl Rick Glenn")) @filter(leq(dob, 1909-01-10)) {
         name
       }
     }
@@ -2509,20 +2559,20 @@ func TestGeneratorMultiRootFilter2(t *testing.T) {
 	populateGraph(t)
 	query := `
     {
-      me(anyof("name", "Michonne Rick Glenn")) @filter(geq(dob, 1909-01-10)) {
+			me(func:anyof("name", "Michonne Rick Glenn")) @filter(geq(dob, 1909-01-10)) {
         name
       }
     }
   `
 	js := processToFastJSON(t, query)
-	require.JSONEq(t, `{"me":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"}]}`, js)
+	require.JSONEq(t, `{"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"}]}`, js)
 }
 
 func TestGeneratorMultiRootFilter3(t *testing.T) {
 	populateGraph(t)
 	query := `
     {
-      me(anyof("name", "Michonne Rick Glenn")) @filter(anyof(name, "Glenn") and geq(dob, 1909-01-10)) {
+			me(func:anyof("name", "Michonne Rick Glenn")) @filter(anyof(name, "Glenn") and geq(dob, 1909-01-10)) {
         name
       }
     }
@@ -2535,7 +2585,7 @@ func TestToProtoMultiRoot(t *testing.T) {
 	populateGraph(t)
 	query := `
     {
-      me(anyof("name", "Michonne Rick Glenn")) {
+			me(func:anyof("name", "Michonne Rick Glenn")) {
         name
       }
     }
@@ -2592,7 +2642,7 @@ children: <
 func TestNearGenerator(t *testing.T) {
 	populateGraph(t)
 	query := `{
-		me(near(loc, [1.1,2.0], 5.001)) {
+		me(func:near(loc, [1.1,2.0], 5.001)) {
 			name
 			gender
 		}
@@ -2605,7 +2655,7 @@ func TestNearGenerator(t *testing.T) {
 func TestNearGeneratorFilter(t *testing.T) {
 	populateGraph(t)
 	query := `{
-		me(near(loc, [1.1,2.0], 5.001)) @filter(allof(name, "Michonne")) {
+		me(func:near(loc, [1.1,2.0], 5.001)) @filter(allof(name, "Michonne")) {
 			name
 			gender
 		}
@@ -2618,7 +2668,7 @@ func TestNearGeneratorFilter(t *testing.T) {
 func TestNearGeneratorError(t *testing.T) {
 	populateGraph(t)
 	query := `{
-		me(near(loc, [1.1,2.0], -5.0)) {
+		me(func:near(loc, [1.1,2.0], -5.0)) {
 			name
 			gender
 		}
@@ -2641,7 +2691,7 @@ func TestNearGeneratorError(t *testing.T) {
 func TestNearGeneratorErrorMissDist(t *testing.T) {
 	populateGraph(t)
 	query := `{
-		me(near(loc, [1.1,2.0])) {
+		me(func:near(loc, [1.1,2.0])) {
 			name
 			gender
 		}
@@ -2664,7 +2714,7 @@ func TestNearGeneratorErrorMissDist(t *testing.T) {
 func TestWithinGeneratorError(t *testing.T) {
 	populateGraph(t)
 	query := `{
-		me(within(loc, [[0.0,0.0], [2.0,0.0], [1.5, 3.0], [0.0, 2.0], [0.0, 0.0]], 12.2)) {
+		me(func:within(loc, [[0.0,0.0], [2.0,0.0], [1.5, 3.0], [0.0, 2.0], [0.0, 0.0]], 12.2)) {
 			name
 			gender
 		}
@@ -2687,7 +2737,7 @@ func TestWithinGeneratorError(t *testing.T) {
 func TestWithinGenerator(t *testing.T) {
 	populateGraph(t)
 	query := `{
-		me(within(loc,  [[0.0,0.0], [2.0,0.0], [1.5, 3.0], [0.0, 2.0], [0.0, 0.0]])) {
+		me(func:within(loc,  [[0.0,0.0], [2.0,0.0], [1.5, 3.0], [0.0, 2.0], [0.0, 0.0]])) {
 			name
 		}
 	}`
@@ -2699,7 +2749,7 @@ func TestWithinGenerator(t *testing.T) {
 func TestContainsGenerator(t *testing.T) {
 	populateGraph(t)
 	query := `{
-		me(contains(loc, [2.0,0.0])) {
+		me(func:contains(loc, [2.0,0.0])) {
 			name
 		}
 	}`
@@ -2711,7 +2761,7 @@ func TestContainsGenerator(t *testing.T) {
 func TestContainsGenerator2(t *testing.T) {
 	populateGraph(t)
 	query := `{
-		me(contains(loc,  [[1.0,1.0], [1.9,1.0], [1.9, 1.9], [1.0, 1.9], [1.0, 1.0]])) {
+		me(func:contains(loc,  [[1.0,1.0], [1.9,1.0], [1.9, 1.9], [1.0, 1.9], [1.0, 1.0]])) {
 			name
 		}
 	}`
@@ -2723,7 +2773,7 @@ func TestContainsGenerator2(t *testing.T) {
 func TestIntersectsGeneratorError(t *testing.T) {
 	populateGraph(t)
 	query := `{
-		me(intersects(loc, [0.0,0.0])) {
+		me(func:intersects(loc, [0.0,0.0])) {
 			name
 		}
 	}`
@@ -2745,7 +2795,7 @@ func TestIntersectsGeneratorError(t *testing.T) {
 func TestIntersectsGenerator(t *testing.T) {
 	populateGraph(t)
 	query := `{
-		me(intersects(loc, [[0.0,0.0], [2.0,0.0], [1.5, 3.0], [0.0, 2.0], [0.0, 0.0]])) {
+		me(func:intersects(loc, [[0.0,0.0], [2.0,0.0], [1.5, 3.0], [0.0, 2.0], [0.0, 0.0]])) {
 			name
 		}
 	}`
