@@ -143,13 +143,23 @@ func newPosting(t *task.DirectedEdge) *types.Posting {
 	}
 
 	return &types.Posting{
-		Uid:     t.ValueId,
-		Value:   t.Value,
-		ValType: types.ValType(t.ValueType),
-		Label:   t.Label,
-		Lang:    t.Lang,
-		Op:      op,
+		Uid:       t.ValueId,
+		Value:     t.Value,
+		ValType:   types.ValType(t.ValueType),
+		Label:     t.Label,
+		Lang:      t.Lang,
+		Op:        op,
+		EdgeAttrs: toEdgeAttrs(t.Attrs),
 	}
+}
+
+func toEdgeAttrs(attrs []*task.Attr) []*types.EdgeAttr {
+	edgeAttrs := make([]*types.EdgeAttr, 0, len(attrs))
+	for _, a := range attrs {
+		edgeAttrs = append(edgeAttrs,
+			&types.EdgeAttr{a.Name, a.Value.Val, types.ValType(a.Value.ValType)})
+	}
+	return edgeAttrs
 }
 
 func (l *List) WaitForCommit() {
