@@ -2755,6 +2755,119 @@ func TestIntersectsGenerator(t *testing.T) {
 	require.JSONEq(t, `{"me":[{"name":"Michonne"}, {"name":"Rick Grimes"}, {"name":"Glenn Rhee"}]}`, string(js))
 }
 
+func TestToProtoNormalizeDirective(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id:0x01) @normalize {
+				mn: name
+				gender
+				friend {
+					n: name
+					dob
+					friend {
+						fn : name
+					}
+				}
+			}
+		}
+	`
+	res, err := gql.Parse(query)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	sg, err := ToSubGraph(ctx, res.Query[0])
+	require.NoError(t, err)
+
+	ch := make(chan error)
+	go ProcessGraph(ctx, sg, nil, ch)
+	err = <-ch
+	require.NoError(t, err)
+
+	var l Latency
+	pb, err := sg.ToProtocolBuffer(&l)
+	require.NoError(t, err)
+	expectedPb := `attribute: "_root_"
+children: <
+  properties: <
+    prop: "mn"
+    value: <
+      str_val: "Michonne"
+    >
+  >
+  properties: <
+    prop: "n"
+    value: <
+      str_val: "Rick Grimes"
+    >
+  >
+  properties: <
+    prop: "fn"
+    value: <
+      str_val: "Michonne"
+    >
+  >
+>
+children: <
+  properties: <
+    prop: "mn"
+    value: <
+      str_val: "Michonne"
+    >
+  >
+  properties: <
+    prop: "n"
+    value: <
+      str_val: "Glenn Rhee"
+    >
+  >
+>
+children: <
+  properties: <
+    prop: "mn"
+    value: <
+      str_val: "Michonne"
+    >
+  >
+  properties: <
+    prop: "n"
+    value: <
+      str_val: "Daryl Dixon"
+    >
+  >
+  properties: <
+    prop: "fn"
+    value: <
+      str_val: "Glenn Rhee"
+    >
+  >
+>
+children: <
+  properties: <
+    prop: "mn"
+    value: <
+      str_val: "Michonne"
+    >
+  >
+  properties: <
+    prop: "n"
+    value: <
+      str_val: "Andrea"
+    >
+  >
+  properties: <
+    prop: "fn"
+    value: <
+      str_val: "Glenn Rhee"
+    >
+  >
+>
+`
+	require.EqualValues(t,
+		expectedPb,
+		proto.MarshalTextString(pb))
+}
+
 func TestNormalizeDirective(t *testing.T) {
 	populateGraph(t)
 	query := `
