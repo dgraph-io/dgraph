@@ -493,7 +493,10 @@ func getQuery(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 	var seenFilter bool
 L:
 	// Recurse to deeper levels through godeep.
-	it.Next()
+	if !it.Next() {
+		return nil, x.Errorf("Invalid query")
+	}
+
 	item := it.Item()
 	if item.Typ == itemLeftCurl {
 		if rerr = godeep(it, gq); rerr != nil {
@@ -847,6 +850,7 @@ func evalStack(opStack, valueStack *filterTreeStack) {
 
 func parseFunction(it *lex.ItemIterator) (*Function, error) {
 	var g *Function
+L:
 	for it.Next() {
 		item := it.Item()
 		if item.Typ == itemName { // Value.
@@ -859,7 +863,7 @@ func parseFunction(it *lex.ItemIterator) (*Function, error) {
 			for it.Next() {
 				itemInFunc := it.Item()
 				if itemInFunc.Typ == itemRightRound {
-					break
+					break L
 				} else if itemInFunc.Typ != itemName {
 					return nil, x.Errorf("Expected arg after func [%s], but got item %v",
 						g.Name, itemInFunc)
@@ -874,8 +878,6 @@ func parseFunction(it *lex.ItemIterator) (*Function, error) {
 					g.Args = append(g.Args, it)
 				}
 			}
-		} else if item.Typ == itemRightRound {
-			break
 		} else {
 			return nil, x.Errorf("Expected a function but got %q", item.Val)
 		}
@@ -1101,7 +1103,9 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 	gq = &GraphQuery{
 		Args: make(map[string]string),
 	}
-	it.Next()
+	if !it.Next() {
+		return nil, x.Errorf("Invalid query")
+	}
 	item := it.Item()
 	if item.Typ != itemName {
 		return nil, x.Errorf("Expected some name. Got: %v", item)
@@ -1119,56 +1123,73 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 	}
 
 	gq.Alias = item.Val
-	it.Next()
+	if !it.Next() {
+		return nil, x.Errorf("Invalid query")
+	}
 	item = it.Item()
 	if item.Typ != itemLeftRound {
 		return nil, x.Errorf("Expected Left round brackets. Got: %v", item)
 	}
 
-	// Peeks items to see if its an argument or function.
-	peekItems, err := it.Peek(2)
-	if err != nil {
-		return gq, err
-	}
-	if peekItems[1].Typ == itemRightRound {
-		it.Next()
+	// Parse in KV fashion. Depending on the value of key, decide the path.
+	for it.Next() {
+		var key string
+		// Get key.
 		item := it.Item()
-		parseVarList(gq, item.Val)
-		it.Next() // consume the right round.
-	} else if peekItems[1].Typ == itemLeftRound {
-		// Store the generator function.
-		gen, err := parseFunction(it)
-		if err != nil {
-			return gq, err
-		}
-		if !schema.IsIndexed(gen.Attr) {
-			return nil, x.Errorf(
-				"Field %s is not indexed and cannot be used in functions",
-				gen.Attr)
-		}
-		if err != nil {
-			return nil, err
-		}
-		gq.Func = gen
-	} else if peekItems[1].Typ == itemColon {
-		args, err := parseArguments(it)
-		if err != nil {
-			return nil, err
+		if item.Typ == itemName {
+			key = item.Val
+		} else if item.Typ == itemRightRound {
+			break
+		} else {
+			return nil, x.Errorf("Expecting argument name. Got: %v", item)
 		}
 
-		for _, p := range args {
-			if p.Key == "id" {
-				// Check and parse if its a list.
-				err := parseID(gq, p.Val)
-				if err != nil {
-					return nil, err
-				}
-			} else {
-				return nil, x.Errorf("Expecting id at root. Got: %+v", p)
-			}
+		if !it.Next() {
+			return nil, x.Errorf("Invalid query")
 		}
-	} else {
-		return nil, x.Errorf("Unexpected root argument. Got: %v", peekItems)
+		item = it.Item()
+		if item.Typ != itemColon {
+			return nil, x.Errorf("Expecting a collon. Got: %v", item)
+		}
+
+		if key == "id" {
+			if !it.Next() {
+				return nil, x.Errorf("Invalid query")
+			}
+			item = it.Item()
+			// Check and parse if its a list.
+			err := parseID(gq, item.Val)
+			if err != nil {
+				return nil, err
+			}
+		} else if key == "func" {
+			// Store the generator function.
+			gen, err := parseFunction(it)
+			if err != nil {
+				return gq, err
+			}
+			if !schema.IsIndexed(gen.Attr) {
+				return nil, x.Errorf(
+					"Field %s is not indexed and cannot be used in functions",
+					gen.Attr)
+			}
+			if err != nil {
+				return nil, err
+			}
+			gq.Func = gen
+		} else if key == "var" {
+			if !it.Next() {
+				return nil, x.Errorf("Invalid query")
+			}
+			item := it.Item()
+			parseVarList(gq, item.Val)
+		} else {
+			if !it.Next() {
+				return nil, x.Errorf("Invalid query")
+			}
+			item := it.Item()
+			gq.Args[key] = item.Val
+		}
 	}
 
 	return gq, nil
