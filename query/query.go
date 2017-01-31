@@ -373,6 +373,17 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 			}
 			args.DoCount = true
 		}
+
+		for argk, _ := range gchild.Args {
+			if !isValidArg(argk) {
+				return x.Errorf("Invalid argument : %s", argk)
+			}
+		}
+		err := args.fill(gchild)
+		if err != nil {
+			return err
+		}
+
 		dst := &SubGraph{
 			Attr:   gchild.Attr,
 			Params: args,
@@ -385,43 +396,39 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 			dst.Filters = append(dst.Filters, dstf)
 		}
 
-		if v, ok := gchild.Args["offset"]; ok {
-			offset, err := strconv.ParseInt(v, 0, 32)
-			if err != nil {
-				return err
-			}
-			dst.Params.Offset = int(offset)
-		}
-		if v, ok := gchild.Args["after"]; ok {
-			after, err := strconv.ParseUint(v, 0, 64)
-			if err != nil {
-				return err
-			}
-			dst.Params.AfterUID = uint64(after)
-		}
-		if v, ok := gchild.Args["first"]; ok {
-			first, err := strconv.ParseInt(v, 0, 32)
-			if err != nil {
-				return err
-			}
-			dst.Params.Count = int(first)
-		}
-		if v, ok := gchild.Args["order"]; ok {
-			dst.Params.Order = v
-		} else if v, ok := gchild.Args["orderdesc"]; ok {
-			dst.Params.Order = v
-			dst.Params.OrderDesc = true
-		}
-		for argk, _ := range gchild.Args {
-			if !isValidArg(argk) {
-				return x.Errorf("Invalid argument : %s", argk)
-			}
-		}
 		sg.Children = append(sg.Children, dst)
-		err := treeCopy(ctx, gchild, dst)
+		err = treeCopy(ctx, gchild, dst)
+	}
+	return nil
+}
+func (args *params) fill(gq *gql.GraphQuery) error {
+
+	if v, ok := gq.Args["offset"]; ok {
+		offset, err := strconv.ParseInt(v, 0, 32)
 		if err != nil {
 			return err
 		}
+		args.Offset = int(offset)
+	}
+	if v, ok := gq.Args["after"]; ok {
+		after, err := strconv.ParseUint(v, 0, 64)
+		if err != nil {
+			return err
+		}
+		args.AfterUID = uint64(after)
+	}
+	if v, ok := gq.Args["first"]; ok {
+		first, err := strconv.ParseInt(v, 0, 32)
+		if err != nil {
+			return err
+		}
+		args.Count = int(first)
+	}
+	if v, ok := gq.Args["order"]; ok {
+		args.Order = v
+	} else if v, ok := gq.Args["orderdesc"]; ok {
+		args.Order = v
+		args.OrderDesc = true
 	}
 	return nil
 }
@@ -458,37 +465,14 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		args.NeedsVar = append(args.NeedsVar, it)
 	}
 
-	if v, ok := gq.Args["offset"]; ok {
-		offset, err := strconv.ParseInt(v, 0, 32)
-		if err != nil {
-			return nil, err
-		}
-		args.Offset = int(offset)
-	}
-	if v, ok := gq.Args["after"]; ok {
-		after, err := strconv.ParseUint(v, 0, 64)
-		if err != nil {
-			return nil, err
-		}
-		args.AfterUID = uint64(after)
-	}
-	if v, ok := gq.Args["first"]; ok {
-		first, err := strconv.ParseInt(v, 0, 32)
-		if err != nil {
-			return nil, err
-		}
-		args.Count = int(first)
-	}
-	if v, ok := gq.Args["order"]; ok {
-		args.Order = v
-	} else if v, ok := gq.Args["orderdesc"]; ok {
-		args.Order = v
-		args.OrderDesc = true
-	}
 	for argk, _ := range gq.Args {
 		if !isValidArg(argk) {
 			return nil, x.Errorf("Invalid argument : %s", argk)
 		}
+	}
+	err := args.fill(gq)
+	if err != nil {
+		return nil, err
 	}
 
 	sg := &SubGraph{
