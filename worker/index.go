@@ -56,7 +56,7 @@ func (n *node) syncAllMarks(ctx context.Context) error {
 	}
 
 	// Force an aggressive evict.
-	posting.CommitLists(1)
+	posting.CommitLists(10)
 
 	// Wait for posting lists applying.
 	w := posting.SyncMarkFor(gid)
