@@ -211,6 +211,7 @@ func populateGraph(t *testing.T) {
 	require.NoError(t, err)
 	addEdgeToTypedValue(t, "loc", 31, types.GeoID, gData.Value.([]byte))
 
+	addEdgeToValue(t, "dob", 1, "1910-01-01")
 	addEdgeToValue(t, "dob", 23, "1910-01-02")
 	addEdgeToValue(t, "dob", 24, "1909-05-05")
 	addEdgeToValue(t, "dob", 25, "1909-01-10")
@@ -2035,43 +2036,6 @@ func rootSg(uidMatrix []*task.List, srcUids *task.List, names []string, ages []u
 	}
 }
 
-func mockSubGraph() *SubGraph {
-	emptyUids := []uint64{}
-	uidMatrix := []*task.List{&task.List{Uids: emptyUids}, &task.List{Uids: emptyUids}, &task.List{Uids: emptyUids}, &task.List{Uids: emptyUids}}
-	srcUids := &task.List{Uids: []uint64{2, 3, 4, 5}}
-
-	names := []string{"lincon", "messi", "martin", "aishwarya"}
-	ages := []uint32{56, 29, 45, 36}
-	namesSg := nameSg(uidMatrix, srcUids, names)
-	agesSg := ageSg(uidMatrix, srcUids, ages)
-
-	sgSrcUids := &task.List{Uids: []uint64{1}}
-	sgUidMatrix := []*task.List{&task.List{Uids: emptyUids}}
-
-	friendUidMatrix := []*task.List{&task.List{Uids: []uint64{2, 3, 4, 5}}}
-	friendsSg1 := friendsSg(friendUidMatrix, sgSrcUids, []*SubGraph{namesSg, agesSg})
-
-	sg := rootSg(sgUidMatrix, sgSrcUids, []string{"unknown"}, []uint32{39})
-	sg.Children = append(sg.Children, friendsSg1)
-	sg.DestUIDs = &task.List{Uids: []uint64{1}}
-	sg.Params.Alias = "me"
-	return sg
-}
-
-func TestMockSubGraphFastJson(t *testing.T) {
-	sg := mockSubGraph()
-	var l Latency
-	var buf bytes.Buffer
-	require.NoError(t, ToJson(&l, []*SubGraph{sg}, &buf))
-	js := buf.Bytes()
-	// check validity of json
-	var unmarshalJs map[string]interface{}
-	require.NoError(t, json.Unmarshal([]byte(js), &unmarshalJs))
-
-	require.JSONEq(t, `{"me":[{"_uid_":"0x1","age":39,"friend":[{"_uid_":"0x2","age":56,"name":"lincon"},{"_uid_":"0x3","age":29,"name":"messi"},{"_uid_":"0x4","age":45,"name":"martin"},{"_uid_":"0x5","age":36,"name":"aishwarya"}],"name":"unknown"}]}`,
-		string(js))
-}
-
 // Test sorting / ordering by dob.
 func TestToProtoOrder(t *testing.T) {
 	populateGraph(t)
@@ -2457,6 +2421,57 @@ func TestGeneratorMultiRootMultiQuery(t *testing.T) {
 	js := processToFastJSON(t, query)
 	require.JSONEq(t, `{"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"}], "you":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"}]}`, js)
 }
+func TestGeneratorMultiRootOrderOffset(t *testing.T) {
+	populateGraph(t)
+	query := `
+    {
+			me(func:anyof("name", "Michonne Rick Glenn"), order: dob, offset:2) {
+        name
+      }
+    }
+  `
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"me":[{"name":"Rick Grimes"}]}`, js)
+}
+func TestGeneratorMultiRootOrderdesc(t *testing.T) {
+	populateGraph(t)
+	query := `
+    {
+			me(func:anyof("name", "Michonne Rick Glenn"), orderdesc: dob) {
+        name
+      }
+    }
+  `
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"me":[{"name":"Rick Grimes"},{"name":"Michonne"},{"name":"Glenn Rhee"}]}`, js)
+}
+
+func TestGeneratorMultiRootOrder(t *testing.T) {
+	populateGraph(t)
+	query := `
+    {
+			me(func:anyof("name", "Michonne Rick Glenn"), order: dob) {
+        name
+      }
+    }
+  `
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"me":[{"name":"Glenn Rhee"},{"name":"Michonne"},{"name":"Rick Grimes"}]}`, js)
+}
+
+func TestGeneratorMultiRootOffset(t *testing.T) {
+	populateGraph(t)
+	query := `
+    {
+			me(func:anyof("name", "Michonne Rick Glenn"), offset: 1) {
+        name
+      }
+    }
+  `
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"me":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"}]}`, js)
+}
+
 func TestGeneratorMultiRoot(t *testing.T) {
 	populateGraph(t)
 	query := `
@@ -2515,7 +2530,7 @@ func TestGeneratorMultiRootFilter2(t *testing.T) {
     }
   `
 	js := processToFastJSON(t, query)
-	require.JSONEq(t, `{"me":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"}]}`, js)
+	require.JSONEq(t, `{"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"}]}`, js)
 }
 
 func TestGeneratorMultiRootFilter3(t *testing.T) {

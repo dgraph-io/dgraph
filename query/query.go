@@ -745,7 +745,7 @@ func (sg *SubGraph) fillVars(mp map[string]*task.List) {
 func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	var err error
 	if len(sg.Params.NeedsVar) != 0 && len(sg.SrcFunc) == 0 {
-		// Do nothing as the list has already been populated.
+		sg.uidMatrix = []*task.List{&task.List{sg.DestUIDs.Uids}}
 	} else if len(sg.Attr) == 0 {
 		// If we have a filter SubGraph which only contains an operator,
 		// it won't have any attribute to work on.
@@ -756,6 +756,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		// I am root. I don't have any function to execute, and my
 		// result has been prepared for me already.
 		sg.DestUIDs = algo.MergeSorted(sg.uidMatrix) // Could also be = sg.SrcUIDs
+		sg.uidMatrix = []*task.List{&task.List{sg.DestUIDs.Uids}}
 	} else {
 		if len(sg.SrcFunc) > 0 && sg.SrcFunc[0] == "id" {
 			// If its an id() filter, we just have to intersect the SrcUIDs with DestUIDs
@@ -793,6 +794,10 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			sg.DestUIDs = algo.IntersectSorted(result.UidMatrix)
 		} else {
 			sg.DestUIDs = algo.MergeSorted(result.UidMatrix)
+		}
+
+		if parent == nil {
+			sg.uidMatrix = []*task.List{&task.List{sg.DestUIDs.Uids}}
 		}
 	}
 
@@ -946,7 +951,7 @@ func (sg *SubGraph) applyPagination(ctx context.Context) error {
 	if params.Count == 0 && params.Offset == 0 { // No pagination.
 		return nil
 	}
-	x.AssertTrue(len(sg.SrcUIDs.Uids) == len(sg.uidMatrix))
+	//x.AssertTrue(len(sg.SrcUIDs.Uids) == len(sg.uidMatrix))
 	for _, l := range sg.uidMatrix {
 		start, end := pageRange(&sg.Params, len(l.Uids))
 		l.Uids = l.Uids[start:end]
