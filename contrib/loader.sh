@@ -52,13 +52,16 @@ popd &> /dev/null
 # Lets wait for stuff to be committed to RocksDB.
 sleep 20
 
-pushd contrib/indextest &> /dev/null
+echo "Before pushd", $(pwd)
+pushd $GOPATH/src/github.com/dgraph-io/dgraph/contrib/indextest &> /dev/null
+echo "After pushd", $(pwd)
 
 function run_index_test {
 	X=$1
 	GREPFOR=$2
 	ANS=$3
-	N=`curl localhost:8080/query -XPOST -d @${X}.in 2> /dev/null | python -m json.tool | grep $GREPFOR | wc -l`
+    echo $(curl localhost:8080/query -XPOST -d @${X}.in 2> /dev/null | python -m json.tool)
+    N=`curl localhost:8080/query -XPOST -d @${X}.in 2> /dev/null | python -m json.tool | grep $GREPFOR | wc -l`
 	if [[ ! "$N" -eq "$ANS" ]]; then
 	  echo "Index test failed: ${X}  Expected: $ANS  Got: $N"
 	  exit 1
