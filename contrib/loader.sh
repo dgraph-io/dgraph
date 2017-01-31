@@ -60,22 +60,21 @@ function run_index_test {
 	X=$1
 	GREPFOR=$2
 	ANS=$3
-    echo $(curl localhost:8080/query -XPOST -d @${X}.in 2> /dev/null | python -m json.tool)
     N=`curl localhost:8080/query -XPOST -d @${X}.in 2> /dev/null | python -m json.tool | grep $GREPFOR | wc -l`
 	if [[ ! "$N" -eq "$ANS" ]]; then
 	  echo "Index test failed: ${X}  Expected: $ANS  Got: $N"
 	  exit 1
 	fi
 }
-run_index_test basic name 138676
-run_index_test allof_the name 25431
-run_index_test allof_the_a name 367
-run_index_test allof_the_first name 4383
-run_index_test releasedate release 137858
-run_index_test releasedate_sort release 137858
-run_index_test releasedate_sort_first_offset release 2315
-run_index_test releasedate_geq release 60991
-run_index_test gen_anyof_good_bad name 1103
+run_index_test basic _uid_ 138676
+run_index_test allof_the _uid_ 25431
+run_index_test allof_the_a _uid_ 367
+run_index_test allof_the_first _uid_ 4383
+run_index_test releasedate release_date 137858
+run_index_test releasedate_sort release_date 137858
+run_index_test releasedate_sort_first_offset release_date 2315
+run_index_test releasedate_geq release_date 60991
+run_index_test gen_anyof_good_bad _uid_ 1103
 
 popd &> /dev/null
 killall dgraph
