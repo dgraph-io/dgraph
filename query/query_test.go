@@ -2422,11 +2422,44 @@ func TestGeneratorMultiRootMultiQuery(t *testing.T) {
 	require.JSONEq(t, `{"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"}], "you":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"}]}`, js)
 }
 
-func TestGeneratorMultiRootOrderOffset(t *testing.T) {
+func TestGeneratorMultiRootVarOrderOffset(t *testing.T) {
+	populateGraph(t)
+	query := `
+    {
+			L as var(func:anyof("name", "Michonne Rick Glenn"), order: dob, offset:2) {
+        name
+      }
+
+			me(var:L) {
+			 name
+			}
+    }
+  `
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"me":[{"name":"Rick Grimes"}]}`, js)
+}
+
+func TestGeneratorMultiRootVarOrderOffset1(t *testing.T) {
 	populateGraph(t)
 	query := `
     {
 			me(func:anyof("name", "Michonne Rick Glenn"), order: dob, offset:2) {
+        name
+      }
+    }
+  `
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"me":[{"name":"Rick Grimes"}]}`, js)
+}
+
+func TestGeneratorMultiRootOrderOffset(t *testing.T) {
+	populateGraph(t)
+	query := `
+    {
+			L as var(func:anyof("name", "Michonne Rick Glenn")) {
+        name
+      }
+			me(var: L, order: dob, offset:2) {
         name
       }
     }
