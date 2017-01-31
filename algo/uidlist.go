@@ -2,30 +2,132 @@ package algo
 
 import "github.com/dgraph-io/dgraph/task"
 
-func SortedListToBlock(l []uint64) []task.Block {
-	var b = make([]task.Block, 1, 2)
+func SortedListToBlock(l []uint64) *task.List {
+	b := new(task.List)
+	b.Blocks = make([]*task.Block, 1, 2)
 	bIdx := 0
-	for _, it := range l {
-		if len(b[bIdx].List) > 100 {
-			b[bIdx].MaxInt = b[bIdx].List[100]
-			b = append(b, task.Block{List: make([]uint64, 0, 100)})
-			bIdx++
-		}
-		b[bIdx].List = append(b[bIdx].List, it)
+	b.Blocks[0] = new(task.Block)
+	b.Blocks[0].List = make([]uint64, 0, 100)
+
+	if len(l) == 0 {
+		return b
 	}
 
-	b[bIdx].MaxInt = b[bIdx].List[len(b[bIdx].List)-1]
+	for _, it := range l {
+		if len(b.Blocks[bIdx].List) > 100 {
+			b.Blocks[bIdx].MaxInt = b.Blocks[bIdx].List[100]
+			b.Blocks = append(b.Blocks, &task.Block{List: make([]uint64, 0, 100)})
+			bIdx++
+		}
+		b.Blocks[bIdx].List = append(b.Blocks[bIdx].List, it)
+	}
+
+	b.Blocks[bIdx].MaxInt = b.Blocks[bIdx].List[len(b.Blocks[bIdx].List)-1]
 	return b
 }
 
-func BlockToList(b []task.Block) []uint64 {
+func BlockToList(b *task.List) []uint64 {
 	var res []uint64
-	for _, it := range b {
+	for _, it := range b.Blocks {
 		for _, el := range it.List {
 			res = append(res, el)
 		}
 	}
 	return res
+}
+
+func IntersectWith(u, v *task.List) {
+	out := u
+	if out.Blocks == nil || len(out.Blocks) == 0 {
+		return
+	}
+	out.Blocks = out.Blocks[:1]
+	out.Blocks[0].List = out.Blocks[0].List[:0]
+
+	i := 0
+	j := 0
+
+	ii := 0
+	jj := 0
+	kk := 0
+
+	m := len(u.Blocks)
+	n := len(v.Blocks)
+
+	for i < m && j < n {
+
+		ulist := u.Blocks[i].List
+		vlist := v.Blocks[j].List
+		ub := u.Blocks[i].MaxInt
+		vb := v.Blocks[j].MaxInt
+		ulen := len(u.Blocks[i].List)
+		vlen := len(v.Blocks[j].List)
+
+	L:
+		for ii < ulen && jj < vlen {
+			uid := ulist[ii]
+			vid := vlist[jj]
+
+			if uid == vid {
+				out.Blocks[i].List[kk] = uid
+				kk++
+				ii++
+				jj++
+				if ii == ulen {
+					out.Blocks[i].List = out.Blocks[i].List[:kk]
+					i++
+					ii = 0
+					kk = 0
+					break L
+				}
+				if jj == vlen {
+					j++
+					jj = 0
+					break L
+				}
+			} else if ub < vid {
+				out.Blocks[i].List = out.Blocks[i].List[:kk]
+				i++
+				ii = 0
+				kk = 0
+				break L
+			} else if vb < uid {
+				j++
+				jj = 0
+				break L
+			} else if uid < vid {
+				for ; ii < ulen && u.Blocks[i].List[ii] < vid; ii++ {
+				}
+				if ii == ulen {
+					out.Blocks[i].List = out.Blocks[i].List[:kk]
+					i++
+					ii = 0
+					kk = 0
+					break L
+				}
+			} else if uid > vid {
+				for ; jj < vlen && v.Blocks[j].List[jj] < uid; jj++ {
+				}
+				if jj == vlen {
+					j++
+					jj = 0
+					break L
+				}
+			}
+		}
+
+		if ii == ulen {
+			out.Blocks[i].List = out.Blocks[i].List[:kk]
+			i++
+			ii = 0
+			kk = 0
+		}
+		if jj == vlen {
+			j++
+			jj = 0
+		}
+	}
+	u = out
 }
 
 /*

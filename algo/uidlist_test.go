@@ -18,8 +18,6 @@ package algo
 
 import (
 	"fmt"
-	"math/rand"
-	"sort"
 	"testing"
 
 	"github.com/dgraph-io/dgraph/task"
@@ -27,9 +25,10 @@ import (
 )
 
 func newList(data []uint64) *task.List {
-	return &task.List{Uids: data}
+	return SortedListToBlock(data)
 }
 
+/*
 func TestMergeSorted1(t *testing.T) {
 	input := []*task.List{
 		newList([]uint64{55}),
@@ -172,68 +171,72 @@ func TestSubSorted6(t *testing.T) {
 	Difference(input[0], input[1])
 	require.Equal(t, []uint64{10, 12}, input[0].Uids)
 }
-
+*/
 func TestUIDListIntersect1(t *testing.T) {
 	u := newList([]uint64{1, 2, 3})
 	v := newList([]uint64{})
+	fmt.Println(u, v)
 	IntersectWith(u, v)
-	require.Empty(t, u.Uids)
+
+	require.Empty(t, BlockToList(u))
 }
 
 func TestUIDListIntersect2(t *testing.T) {
 	u := newList([]uint64{1, 2, 3})
 	v := newList([]uint64{1, 2, 3, 4, 5})
 	IntersectWith(u, v)
-	require.Equal(t, u.Uids, []uint64{1, 2, 3})
+	require.Equal(t, []uint64{1, 2, 3}, BlockToList(u))
 }
 
 func TestUIDListIntersect3(t *testing.T) {
 	u := newList([]uint64{1, 2, 3})
 	v := newList([]uint64{2})
 	IntersectWith(u, v)
-	require.Equal(t, u.Uids, []uint64{2})
+	require.Equal(t, []uint64{2}, BlockToList(u))
 }
 
 func TestUIDListIntersect4(t *testing.T) {
 	u := newList([]uint64{1, 2, 3})
 	v := newList([]uint64{0, 5})
 	IntersectWith(u, v)
-	require.Empty(t, u.Uids)
+	require.Empty(t, BlockToList(u))
 }
 
 func TestUIDListIntersect5(t *testing.T) {
 	u := newList([]uint64{1, 2, 3})
 	v := newList([]uint64{3, 5})
 	IntersectWith(u, v)
-	require.Equal(t, u.Uids, []uint64{3})
+	require.Equal(t, []uint64{3}, BlockToList(u))
 }
 
 func TestUIDListIntersectDupFirst(t *testing.T) {
 	u := newList([]uint64{1, 1, 2, 3})
 	v := newList([]uint64{1, 2})
 	IntersectWith(u, v)
-	require.Equal(t, []uint64{1, 2}, u.Uids)
+	require.Equal(t, []uint64{1, 2}, BlockToList(u))
 }
 
 func TestUIDListIntersectDupBoth(t *testing.T) {
 	u := newList([]uint64{1, 1, 2, 3, 5})
 	v := newList([]uint64{1, 1, 2, 4})
 	IntersectWith(u, v)
-	require.Equal(t, []uint64{1, 1, 2}, u.Uids)
+	require.Equal(t, []uint64{1, 1, 2}, BlockToList(u))
 }
 
 func TestUIDListIntersectDupSecond(t *testing.T) {
 	u := newList([]uint64{1, 2, 3, 5})
 	v := newList([]uint64{1, 1, 2, 4})
 	IntersectWith(u, v)
-	require.Equal(t, []uint64{1, 2}, u.Uids)
+	require.Equal(t, []uint64{1, 2}, BlockToList(u))
 }
 
+/*
 func TestApplyFilterUint(t *testing.T) {
 	u := newList([]uint64{1, 2, 3, 4, 5})
 	ApplyFilter(u, func(a uint64, idx int) bool { return (a % 2) == 1 })
-	require.Equal(t, u.Uids, []uint64{1, 3, 5})
+	require.Equal(t, BlockToList(u), []uint64{1, 3, 5})
 }
+*/
 
 // sort interface for []uint64
 type uint64Slice []uint64
@@ -248,6 +251,7 @@ func (xs uint64Slice) Swap(i, j int) {
 	xs[i], xs[j] = xs[j], xs[i]
 }
 
+/*
 // Benchmarks for IntersectWith
 // random data : u and v having data within range [0, limit)
 // where limit = N * sizeof-list ; for different N
@@ -292,3 +296,4 @@ func BenchmarkListIntersectRandom(b *testing.B) {
 	randomTests(10000, 0.01)
 	randomTests(1000000, 0.01)
 }
+*/
