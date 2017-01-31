@@ -158,7 +158,7 @@ func TestIRIRef(t *testing.T) {
 func TestLangSupport(t *testing.T) {
 	input := `
 	query {
-		me(_xid_: test) {
+		me(id: test) {
 			name@en
 		}
 	}
@@ -175,7 +175,7 @@ func TestLangSupport(t *testing.T) {
 func TestMultiLangSupport(t *testing.T) {
 	input := `
 	query {
-		me(_xid_: test) {
+		me(id: test) {
 			name@en, name@en:ru:fr:de
 		}
 	}

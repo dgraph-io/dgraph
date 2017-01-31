@@ -307,11 +307,12 @@ func (l *List) AddMutation(ctx context.Context, t *task.DirectedEdge) (bool, err
 // TODO(tzdybal) - this is almost the same as in rdf/parse.go - maybe some refactoring?
 type valueTypeInfo int32
 
+// Type of a data inside DirectedEdge or Posting
 const (
-	valueEmpty valueTypeInfo = iota
-	valueUid
-	valueUntagged
-	valueTagged
+	valueEmpty    valueTypeInfo = iota // no UID and no value
+	valueUid                           // UID
+	valueUntagged                      // value without defined language tag
+	valueTagged                        // value with defined language tag
 )
 
 func edgeType(t *task.DirectedEdge) valueTypeInfo {

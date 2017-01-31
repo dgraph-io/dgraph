@@ -89,12 +89,12 @@ message DirectedEdge {
 	uint32 value_type = 4;  // The type of the value
 	fixed64 value_id = 5;   // Object or destination node / UID.
 	string label = 6;
-	string lang = 8;
+	string lang = 7;
 	enum Op {
 		SET = 0;
 		DEL = 1;
 	}
-	Op op = 7;
+	Op op = 8;
 }
 
 message Mutations {
