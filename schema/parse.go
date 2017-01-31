@@ -34,8 +34,10 @@ func Parse(file string) (rerr error) {
 	return ParseBytes(b)
 }
 
-// ParseBytes parses the byte array which holds the schema.
+// ParseBytes parses the byte array which holds the schema. We will reset
+// all the globals.
 func ParseBytes(schema []byte) (rerr error) {
+	reset()
 	s := string(schema)
 
 	l := lex.NewLexer(s).Run(lexText)
@@ -104,7 +106,7 @@ func processScalarPair(it *lex.ItemIterator, name string, allowIndex bool) error
 	if ok {
 		if t1, ok := str[name]; ok {
 			if t1 != t {
-				return x.Errorf("Same field cant have multiple types")
+				return x.Errorf("Same field cannot have multiple types")
 			}
 		} else {
 			str[name] = t

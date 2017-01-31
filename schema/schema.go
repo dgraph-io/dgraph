@@ -32,6 +32,10 @@ var (
 )
 
 func init() {
+	reset()
+}
+
+func reset() {
 	str = make(map[string]types.TypeID)
 	indexedFields = make(map[string]tok.Tokenizer)
 	reversedFields = make(map[string]bool)
