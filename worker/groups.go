@@ -7,6 +7,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/net/context"
@@ -208,6 +209,15 @@ func (g *groupi) KnownGroups() (gids []uint32) {
 	defer g.RUnlock()
 	for gid := range g.all {
 		gids = append(gids, gid)
+	}
+	return
+}
+
+func (g *groupi) nodes() (nodes []*node) {
+	g.RLock()
+	defer g.RUnlock()
+	for _, n := range g.local {
+		nodes = append(nodes, n)
 	}
 	return
 }
@@ -511,4 +521,28 @@ func (w *grpcWorker) UpdateMembership(ctx context.Context,
 	// the last raft index that the caller has recorded an update for.
 	reply := groups().MembershipUpdateAfter(update.LastUpdate)
 	return reply, nil
+}
+
+// SyncAllMarks syncs marks of all nodes of the worker group.
+func syncAllMarks(ctx context.Context) error {
+	var wg sync.WaitGroup
+	var err error
+	for _, n := range groups().nodes() {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if e := n.syncAllMarks(ctx); e != nil && err == nil {
+				err = e
+			}
+		}()
+	}
+	wg.Wait()
+	return err
+}
+
+// StopAllNodes stops all the nodes of the worker group.
+func stopAllNodes() {
+	for _, n := range groups().nodes() {
+		n.Stop()
+	}
 }
