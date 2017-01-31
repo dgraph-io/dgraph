@@ -24,8 +24,10 @@ import (
 	"log"
 	"net"
 	"sync"
+	"time"
 
 	"github.com/dgraph-io/dgraph/store"
+	"github.com/dgraph-io/dgraph/x"
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
@@ -36,7 +38,8 @@ var (
 		"Port used by worker for internal communication.")
 	backupPath = flag.String("backup", "backup",
 		"Folder in which to store backups.")
-	pstore *store.Store
+	pstore       *store.Store
+	workerServer *grpc.Server
 )
 
 func Init(ps *store.Store) {
@@ -69,13 +72,14 @@ func (w *grpcWorker) Echo(ctx context.Context, in *Payload) (*Payload, error) {
 	return &Payload{Data: in.Data}, nil
 }
 
-// runServer initializes a tcp server on port which listens to requests from
+// RunServer initializes a tcp server on port which listens to requests from
 // other workers for internal communication.
 func RunServer(bindall bool) {
 	laddr := "localhost"
 	if bindall {
 		laddr = "0.0.0.0"
 	}
+	var err error
 	ln, err := net.Listen("tcp", fmt.Sprintf("%s:%d", laddr, *workerPort))
 	if err != nil {
 		log.Fatalf("While running server: %v", err)
@@ -83,12 +87,24 @@ func RunServer(bindall bool) {
 	}
 	log.Printf("Worker listening at address: %v", ln.Addr())
 
-	s := grpc.NewServer()
-	RegisterWorkerServer(s, &grpcWorker{})
-	s.Serve(ln)
+	workerServer = grpc.NewServer()
+	RegisterWorkerServer(workerServer, &grpcWorker{})
+	workerServer.Serve(ln)
 }
 
 // StoreStats returns stats for data store.
 func StoreStats() string {
 	return pstore.GetStats()
+}
+
+// BlockingStop stops all the nodes, server between other workers and syncs all marks.
+func BlockingStop() {
+	stopAllNodes()              // blocking stop all nodes
+	workerServer.GracefulStop() // blocking stop server
+	// blocking sync all marks
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+	if err := syncAllMarks(ctx); err != nil {
+		x.Printf("Error in sync watermarks : %s", err.Error())
+	}
 }
