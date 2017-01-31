@@ -671,45 +671,39 @@ func shouldCascade(res gql.Result, idx int) bool {
 
 // TODO(Ashwin): Benchmark this function. Map implementation might be slow.
 func populateVarMap(sg *SubGraph, doneVars map[string]*task.List, isCascade bool) {
-	// Filter out UIDs that don't have atleast one UID in every child.
-	excluded := make(map[uint64]struct{})
 	for _, child := range sg.Children {
 		populateVarMap(child, doneVars, isCascade)
 		if !isCascade {
 			continue
 		}
-		// If the length of child UID list is zero and it has no valid value, then the
-		// current UID should be removed form this level; which would be stored in excluded
-		// map.
-		for i := 0; i < len(child.uidMatrix); i++ {
-			if len(child.values[i].Val) == 0 && len(child.uidMatrix[i].Uids) == 0 {
-				excluded[sg.DestUIDs.Uids[i]] = struct{}{}
-			}
+
+		// Intersect the UidMatrix with the DestUids as some UIDs might have been removed
+		// by other operations. So we need to apply it on the UidMatrix.
+		for _, l := range child.uidMatrix {
+			algo.IntersectWith(l, child.DestUIDs)
 		}
 	}
-
+	out := sg.DestUIDs.Uids[:0]
 	if !isCascade {
 		goto AssignStep
 	}
 
-	// Remove the excluded UIDs from the UID matrix of this level.
-	if sg.uidMatrix != nil {
-		for i := 0; i < len(sg.uidMatrix); i++ {
-			algo.ApplyFilter(sg.uidMatrix[i],
-				func(uid uint64, idx int) bool {
-					_, ok := excluded[uid]
-					return !ok
-				})
+	// Filter out UIDs that don't have atleast one UID in every child.
+	for i := 0; i < len(sg.DestUIDs.Uids); i++ {
+		var exclude bool
+		for _, child := range sg.Children {
+			// If the length of child UID list is zero and it has no valid value, then the
+			// current UID should be removed from this level.
+			if len(child.values[i].Val) == 0 && len(child.uidMatrix[i].Uids) == 0 {
+				exclude = true
+				break
+			}
+		}
+		if !exclude {
+			out = append(out, sg.DestUIDs.Uids[i])
 		}
 	}
-	// Remove the excluded UIDs from the DestUIDs of this level.
-	if sg.DestUIDs != nil {
-		algo.ApplyFilter(sg.DestUIDs,
-			func(uid uint64, idx int) bool {
-				_, ok := excluded[uid]
-				return !ok
-			})
-	}
+	sg.DestUIDs.Uids = out
 
 AssignStep:
 	if sg.Params.Var != "" {
@@ -849,9 +843,6 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		}
 	}
 
-	for _, l := range sg.uidMatrix {
-		algo.IntersectWith(l, sg.DestUIDs)
-	}
 	if len(sg.Params.Order) == 0 {
 		// There is no ordering. Just apply pagination and return.
 		if err = sg.applyPagination(ctx); err != nil {
@@ -886,7 +877,6 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		for i, ul := range sg.uidMatrix {
 			// A possible optimization is to return the size of the intersection
 			// without forming the intersection.
-
 			algo.IntersectWith(ul, sg.DestUIDs)
 			sg.counts[i] = uint32(len(ul.Uids))
 		}
@@ -951,8 +941,10 @@ func (sg *SubGraph) applyPagination(ctx context.Context) error {
 	if params.Count == 0 && params.Offset == 0 { // No pagination.
 		return nil
 	}
-	//x.AssertTrue(len(sg.SrcUIDs.Uids) == len(sg.uidMatrix))
 	for _, l := range sg.uidMatrix {
+		// Update the UidMatrix before applying the pagination as
+		// we want valid uids which are present in DestUids.
+		algo.IntersectWith(l, sg.DestUIDs)
 		start, end := pageRange(&sg.Params, len(l.Uids))
 		l.Uids = l.Uids[start:end]
 	}
