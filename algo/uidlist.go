@@ -6,6 +6,55 @@ import (
 	"github.com/dgraph-io/dgraph/task"
 )
 
+type ListIterator struct {
+	list *task.List
+	bIdx int // Block index
+	idx  int // List index
+}
+
+func NewListIterator(l *task.List) ListIterator {
+	return ListIterator{
+		list: l,
+		bIdx: 0,
+		idx:  0,
+	}
+}
+
+func (l *ListIterator) Valid() bool {
+	if l == nil || l.list.Blocks == nil || len(l.list.Blocks) == 0 {
+		return false
+	}
+	if l.bIdx >= len(l.list.Blocks) {
+		return false
+	}
+	if l.list.Blocks[l.bIdx].List == nil || l.idx >= len(l.list.Blocks[l.bIdx].List) {
+		return false
+	}
+	return true
+}
+
+func (l *ListIterator) Val() uint64 {
+	if !l.Valid() {
+		return 0
+	}
+	return l.list.Blocks[l.bIdx].List[l.idx]
+}
+
+func (l *ListIterator) Next() bool {
+	if !l.Valid() {
+		return false
+	}
+	l.idx++
+	if l.idx >= len(l.list.Blocks[l.bIdx].List) {
+		l.idx = 0
+		l.bIdx++
+		if l.bIdx >= len(l.list.Blocks) {
+			return false
+		}
+	}
+	return true
+}
+
 func SortedListToBlock(l []uint64) *task.List {
 	b := new(task.List)
 	b.Blocks = make([]*task.Block, 1, 2)

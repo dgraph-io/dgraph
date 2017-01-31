@@ -171,6 +171,32 @@ func TestSubSorted6(t *testing.T) {
 	require.Equal(t, []uint64{10, 12}, input[0].Uids)
 }
 */
+
+func TestIterator1(t *testing.T) {
+	u := newList([]uint64{1, 2, 3, 4, 43, 234, 2344})
+
+	it := NewListIterator(u)
+	var res []uint64
+	for ; it.Valid(); it.Next() {
+		res = append(res, it.Val())
+	}
+
+	require.Equal(t, []uint64{1, 2, 3, 4, 43, 234, 2344}, res)
+}
+
+func TestIterator2(t *testing.T) {
+	var ls, res []uint64
+	for i := 0; i < 1000; i++ {
+		ls = append(ls, uint64(i*2))
+	}
+	u := newList(ls)
+	it := NewListIterator(u)
+	for ; it.Valid(); it.Next() {
+		res = append(res, it.Val())
+	}
+	require.Equal(t, ls, res)
+}
+
 func TestUIDListIntersect1(t *testing.T) {
 	u := newList([]uint64{1, 2, 3})
 	v := newList([]uint64{})
