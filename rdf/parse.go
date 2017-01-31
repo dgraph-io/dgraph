@@ -100,18 +100,18 @@ func (nq NQuad) ToEdge() (*task.DirectedEdge, error) {
 	out := &task.DirectedEdge{
 		Attr:   nq.Predicate,
 		Label:  nq.Label,
+		Lang:   nq.Lang,
 		Entity: sid,
 	}
 
-	// An edge can have an id or a value.
-	if len(nq.ObjectId) > 0 {
+	switch nq.valueType() {
+	case nQuadUid:
 		oid := GetUid(nq.ObjectId)
 		out.ValueId = oid
-	} else {
-		if out.Value, err = byteVal(nq); err != nil {
+	case nQuadValue, nQuadTaggedValue:
+		if err = copyValue(out, nq); err != nil {
 			return &emptyEdge, err
 		}
-		out.ValueType = uint32(nq.ObjectType)
 	}
 	return out, nil
 }
@@ -133,18 +133,68 @@ func (nq NQuad) ToEdgeUsing(newToUid map[string]uint64) (*task.DirectedEdge, err
 		Entity: uid,
 		Attr:   nq.Predicate,
 		Label:  nq.Label,
+		Lang:   nq.Lang,
 	}
 
-	if len(nq.ObjectId) == 0 {
-		if out.Value, err = byteVal(nq); err != nil {
-			return &emptyEdge, err
-		}
-		out.ValueType = uint32(nq.ObjectType)
-	} else {
+	switch nq.valueType() {
+	case nQuadUid:
 		uid = toUid(nq.ObjectId, newToUid)
 		out.ValueId = uid
+	case nQuadValue, nQuadTaggedValue:
+		if err = copyValue(out, nq); err != nil {
+			return &emptyEdge, err
+		}
 	}
 	return out, nil
+}
+
+// TODO(tzdybal) - remove
+/*
+func (nq NQuad) hasUid() bool {
+	return len(nq.ObjectId) > 0 && nq.ObjectValue == nil
+}
+
+func (nq NQuad) hasLangTag() bool {
+	return len(nq.ObjectId) > 0 && nq.ObjectValue != nil
+}
+
+func (nq NQuad) hasValue() bool {
+	return len(nq.ObjectId) == 0 && nq.ObjectValue != nil
+}
+*/
+
+func copyValue(out *task.DirectedEdge, nq NQuad) error {
+	var err error
+	if out.Value, err = byteVal(nq); err != nil {
+		return err
+	}
+	out.ValueType = uint32(nq.ObjectType)
+	return nil
+}
+
+type nQuadTypeInfo int32
+
+const (
+	nQuadEmpty nQuadTypeInfo = iota
+	nQuadUid
+	nQuadValue
+	nQuadTaggedValue
+)
+
+func (nq NQuad) valueType() nQuadTypeInfo {
+	if nq.ObjectValue != nil {
+		if len(nq.Lang) == 0 {
+			return nQuadValue // value without lang tag
+		} else {
+			return nQuadTaggedValue // value with lang tag
+		}
+	} else {
+		if len(nq.ObjectId) == 0 {
+			return nQuadEmpty // empty NQuad - no Uid and no Value
+		} else {
+			return nQuadUid // Uid
+		}
+	}
 }
 
 // Function to do sanity check for subject, predicate, object and label strings.
@@ -189,7 +239,8 @@ func Parse(line string) (rnq graph.NQuad, rerr error) {
 			}
 
 		case itemLanguage:
-			rnq.Predicate += "." + item.Val
+			rnq.Predicate += "." + item.Val // TODO(tzdybal) - remove
+			rnq.Lang = item.Val
 
 		case itemObjectType:
 			if len(oval) == 0 {

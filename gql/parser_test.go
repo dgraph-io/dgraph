@@ -1474,3 +1474,86 @@ func TestMutationSingleQuote(t *testing.T) {
 	_, err := Parse(query)
 	require.Error(t, err)
 }
+
+func TestLangs(t *testing.T) {
+	query := `
+	query {
+		me(id:1) {
+			name@en,name@en:ru:hu
+		}
+	}
+	`
+
+	gq, err := Parse(query)
+	require.NoError(t, err)
+	require.Equal(t, 2, len(gq.Query[0].Children))
+	require.Equal(t, "name", gq.Query[0].Children[0].Attr)
+	require.Equal(t, []string{"en"}, gq.Query[0].Children[0].Langs)
+	require.Equal(t, "name", gq.Query[0].Children[1].Attr)
+	require.Equal(t, []string{"en", "ru", "hu"}, gq.Query[0].Children[1].Langs)
+}
+
+func TestLangsInvalid1(t *testing.T) {
+	query := `
+	query {
+		me(id:1) {
+			name@en@ru
+		}
+	}
+	`
+
+	_, err := Parse(query)
+	require.Error(t, err)
+}
+
+func TestLangsInvalid2(t *testing.T) {
+	query := `
+	query {
+		me(id:1) {
+			@en:ru
+		}
+	}
+	`
+
+	_, err := Parse(query)
+	require.Error(t, err)
+}
+
+func TestLangsInvalid3(t *testing.T) {
+	query := `
+	query {
+		me(id:1) {
+			name@en:ru, @en:ru
+		}
+	}
+	`
+
+	_, err := Parse(query)
+	require.Error(t, err)
+}
+
+func TestLangsInvalid4(t *testing.T) {
+	query := `
+	query {
+		me(id:1) {
+			name@
+		}
+	}
+	`
+
+	_, err := Parse(query)
+	require.Error(t, err)
+}
+
+func TestLangsInvalid5(t *testing.T) {
+	query := `
+	query {
+		me(id:1) {
+			name@<something.wrong>
+		}
+	}
+	`
+
+	_, err := Parse(query)
+	require.Error(t, err)
+}

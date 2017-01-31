@@ -18,7 +18,6 @@ package posting
 
 import (
 	"context"
-	"math"
 
 	"golang.org/x/net/trace"
 
@@ -227,8 +226,10 @@ func RebuildIndex(ctx context.Context, attr string) error {
 		if len(pl.Postings) == 0 {
 			continue
 		}
+		// TODO(tzdybal) - what about the values with Lang?
 		p := pl.Postings[len(pl.Postings)-1]
-		if p.Uid != math.MaxUint64 {
+		pt := postingType(p)
+		if pt != valueTagged && pt != valueUntagged {
 			continue
 		}
 
