@@ -73,7 +73,7 @@ func lexWord(l *lex.Lexer) lex.StateFn {
 	for {
 		// The caller already checked isNameBegin, and absorbed one rune.
 		r := l.Next()
-		if isNameBegin(r) {
+		if isNameSuffix(r) {
 			continue
 		}
 		l.Backup()

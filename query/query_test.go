@@ -301,6 +301,7 @@ func TestGetUID(t *testing.T) {
 		}
 	`
 	js := processToFastJSON(t, query)
+	x.Printf(js)
 	require.JSONEq(t,
 		`{"me":[{"_uid_":"0x1","alive":true,"friend":[{"_uid_":"0x17","name":"Rick Grimes"},{"_uid_":"0x18","name":"Glenn Rhee"},{"_uid_":"0x19","name":"Daryl Dixon"},{"_uid_":"0x1f","name":"Andrea"},{"_uid_":"0x65"}],"gender":"female","name":"Michonne"}]}`,
 		js)
