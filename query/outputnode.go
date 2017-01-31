@@ -130,6 +130,7 @@ func (sg *SubGraph) ToProtocolBuffer(l *Latency) (*graph.Node, error) {
 	}
 
 	n := seedNode.New("_root_")
+	// At the root, we always have one list in UidMatrix.
 	for _, uid := range sg.uidMatrix[0].Uids {
 		// For the root, the name is stored in Alias, not Attr.
 		n1 := seedNode.New(sg.Params.Alias)
@@ -272,6 +273,7 @@ func processNodeUids(n *fastJsonNode, sg *SubGraph) error {
 	if sg.uidMatrix == nil {
 		return nil
 	}
+	// At the root, we always have one list in UidMatrix.
 	for _, uid := range sg.uidMatrix[0].Uids {
 		n1 := seedNode.New(sg.Params.Alias)
 		if sg.Params.GetUID || sg.Params.isDebug {
