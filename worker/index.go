@@ -23,7 +23,7 @@ func (n *node) rebuildIndex(ctx context.Context, proposalData []byte) error {
 	x.AssertTrue(gid == proposal.RebuildIndex.GroupId)
 	x.Trace(ctx, "Processing proposal to rebuild index: %v", proposal.RebuildIndex)
 
-	if err := n.syncAllMarks(ctx, 10); err != nil {
+	if err := n.syncAllMarks(ctx); err != nil {
 		return err
 	}
 
@@ -36,7 +36,7 @@ func (n *node) rebuildIndex(ctx context.Context, proposalData []byte) error {
 	return nil
 }
 
-func (n *node) syncAllMarks(ctx context.Context, numCommitRoutines int) error {
+func (n *node) syncAllMarks(ctx context.Context) error {
 	gid := n.gid
 	// Get index of last committed.
 	lastIndex, err := n.store.LastIndex()
@@ -56,7 +56,7 @@ func (n *node) syncAllMarks(ctx context.Context, numCommitRoutines int) error {
 	}
 
 	// Force an aggressive evict.
-	posting.CommitLists(numCommitRoutines)
+	posting.CommitLists(1)
 
 	// Wait for posting lists applying.
 	w := posting.SyncMarkFor(gid)

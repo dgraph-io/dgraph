@@ -566,7 +566,7 @@ func shutDownHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	shutdownServer()
-	x.SetStatus(w, x.Success, "Server has been shutdown")
+	x.SetStatus(w, x.Success, "Server is shutting down")
 }
 
 func shutdownServer() {
@@ -584,14 +584,7 @@ func shutdownServer() {
 		<-finishCh
 		<-finishCh
 
-		worker.StopAllNodes()
-		worker.StopServer(finishCh)
-
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-		defer cancel()
-		if err := worker.SyncAllMarks(ctx); err != nil {
-			x.Printf("Error in sync watermarks : %s", err.Error())
-		}
+		worker.BlockingStop()
 	}()
 }
 
@@ -719,7 +712,7 @@ func serveHTTP(l net.Listener) {
 }
 
 func setupServer(che chan error) {
-	go worker.RunServer(*bindall, finishCh) // For internal communication.
+	go worker.RunServer(*bindall) // For internal communication.
 
 	laddr := "localhost"
 	if *bindall {
