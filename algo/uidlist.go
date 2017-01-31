@@ -37,12 +37,7 @@ func BlockToList(b *task.List) []uint64 {
 }
 
 func IntersectWith(u, v *task.List) {
-	out := u
-	if out.Blocks == nil || len(out.Blocks) == 0 {
-		return
-	}
-	out.Blocks = out.Blocks[:1]
-	out.Blocks[0].List = out.Blocks[0].List[:0]
+	out := u.Blocks
 
 	i := 0
 	j := 0
@@ -69,12 +64,12 @@ func IntersectWith(u, v *task.List) {
 			vid := vlist[jj]
 
 			if uid == vid {
-				out.Blocks[i].List[kk] = uid
+				out[i].List[kk] = uid
 				kk++
 				ii++
 				jj++
 				if ii == ulen {
-					out.Blocks[i].List = out.Blocks[i].List[:kk]
+					out[i].List = out[i].List[:kk]
 					i++
 					ii = 0
 					kk = 0
@@ -86,7 +81,7 @@ func IntersectWith(u, v *task.List) {
 					break L
 				}
 			} else if ub < vid {
-				out.Blocks[i].List = out.Blocks[i].List[:kk]
+				out[i].List = out[i].List[:kk]
 				i++
 				ii = 0
 				kk = 0
@@ -99,7 +94,7 @@ func IntersectWith(u, v *task.List) {
 				for ; ii < ulen && u.Blocks[i].List[ii] < vid; ii++ {
 				}
 				if ii == ulen {
-					out.Blocks[i].List = out.Blocks[i].List[:kk]
+					out[i].List = out[i].List[:kk]
 					i++
 					ii = 0
 					kk = 0
@@ -117,7 +112,7 @@ func IntersectWith(u, v *task.List) {
 		}
 
 		if ii == ulen {
-			out.Blocks[i].List = out.Blocks[i].List[:kk]
+			out[i].List = out[i].List[:kk]
 			i++
 			ii = 0
 			kk = 0
@@ -127,7 +122,11 @@ func IntersectWith(u, v *task.List) {
 			jj = 0
 		}
 	}
-	u = out
+
+	if i < m {
+		out = out[:i+1]
+		out[i].List = out[i].List[:kk]
+	}
 }
 
 /*

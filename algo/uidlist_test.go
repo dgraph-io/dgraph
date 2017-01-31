@@ -17,7 +17,6 @@
 package algo
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/dgraph-io/dgraph/task"
@@ -175,7 +174,6 @@ func TestSubSorted6(t *testing.T) {
 func TestUIDListIntersect1(t *testing.T) {
 	u := newList([]uint64{1, 2, 3})
 	v := newList([]uint64{})
-	fmt.Println(u, v)
 	IntersectWith(u, v)
 
 	require.Empty(t, BlockToList(u))
