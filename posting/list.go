@@ -145,7 +145,7 @@ func newPosting(t *task.DirectedEdge) *types.Posting {
 	return &types.Posting{
 		Uid:     t.ValueId,
 		Value:   t.Value,
-		ValType: types.Posting_ValType(t.ValueType),
+		ValType: types.ValType(t.ValueType),
 		Label:   t.Label,
 		Lang:    t.Lang,
 		Op:      op,

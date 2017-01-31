@@ -31,15 +31,15 @@ const (
 // data. When adding a new type *always* add to the end of this list.
 // Never delete anything from this list even if it becomes unused.
 const (
-	BinaryID   = TypeID(Posting_BINARY)
-	Int32ID    = TypeID(Posting_INT32)
-	FloatID    = TypeID(Posting_FLOAT)
-	BoolID     = TypeID(Posting_BOOL)
-	DateTimeID = TypeID(Posting_DATETIME)
-	StringID   = TypeID(Posting_STRING)
-	DateID     = TypeID(Posting_DATE)
-	GeoID      = TypeID(Posting_GEO)
-	UidID      = TypeID(Posting_UID)
+	BinaryID   = TypeID(ValType_BINARY)
+	Int32ID    = TypeID(ValType_INT32)
+	FloatID    = TypeID(ValType_FLOAT)
+	BoolID     = TypeID(ValType_BOOL)
+	DateTimeID = TypeID(ValType_DATETIME)
+	StringID   = TypeID(ValType_STRING)
+	DateID     = TypeID(ValType_DATE)
+	GeoID      = TypeID(ValType_GEO)
+	UidID      = TypeID(ValType_UID)
 )
 
 var typeNameMap = map[string]TypeID{
@@ -54,7 +54,7 @@ var typeNameMap = map[string]TypeID{
 	"uid":      UidID,
 }
 
-type TypeID Posting_ValType
+type TypeID ValType
 
 func (t TypeID) Name() string {
 	switch t {
