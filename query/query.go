@@ -745,12 +745,10 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		// it won't have any attribute to work on.
 		// This is to allow providing SrcUIDs to the filter children.
 		sg.DestUIDs = sg.SrcUIDs
-
 	} else if parent == nil && len(sg.SrcFunc) == 0 {
 		// I am root. I don't have any function to execute, and my
 		// result has been prepared for me already.
-		sg.DestUIDs = algo.MergeSorted(sg.uidMatrix) // Could also be = sg.SrcUIDs
-		sg.uidMatrix = []*task.List{&task.List{sg.DestUIDs.Uids}}
+		sg.DestUIDs = sg.SrcUIDs
 	} else {
 		if len(sg.SrcFunc) > 0 && sg.SrcFunc[0] == "id" {
 			// If its an id() filter, we just have to intersect the SrcUIDs with DestUIDs
@@ -791,6 +789,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		}
 
 		if parent == nil {
+			// I'm root. We reach here if root had a function.
 			sg.uidMatrix = []*task.List{&task.List{sg.DestUIDs.Uids}}
 		}
 	}
