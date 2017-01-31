@@ -56,7 +56,7 @@ function run_index_test {
 	X=$1
 	GREPFOR=$2
 	ANS=$3
-	wget https://raw.githubusercontent.com/dgraph-io/dgraph/master/contrib/indextest/${X}.in
+	wget https://raw.githubusercontent.com/dgraph-io/dgraph/$TRAVIS_BRANCH/contrib/indextest/${X}.in
 	N=`curl localhost:8080/query -XPOST -d @${X}.in 2> /dev/null | python -m json.tool | grep $GREPFOR | wc -l`
 	if [[ ! "$N" -eq "$ANS" ]]; then
 	  echo "Index test failed: ${X}  Expected: $ANS  Got: $N"
