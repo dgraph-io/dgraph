@@ -82,6 +82,11 @@ message MembershipUpdate {
 	string redirect_addr = 4;
 }
 
+message Attr {
+	string name = 1;
+	Value value = 2;
+}
+
 message DirectedEdge {
 	fixed64 entity = 1;    // Subject or source node / UID.
 	string attr = 2;       // Attribute or predicate. Labels the edge.
@@ -95,6 +100,7 @@ message DirectedEdge {
 		DEL = 1;
 	}
 	Op op = 8;
+	repeated Attr attrs = 9;
 }
 
 message Mutations {
