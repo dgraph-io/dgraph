@@ -264,6 +264,25 @@ func processToFastJSON(t *testing.T, query string) string {
 	return string(buf.Bytes())
 }
 
+func processToPB(t *testing.T, query string) *graph.Node {
+	res, err := gql.Parse(query)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	sg, err := ToSubGraph(ctx, res.Query[0])
+	require.NoError(t, err)
+
+	ch := make(chan error)
+	go ProcessGraph(ctx, sg, nil, ch)
+	err = <-ch
+	require.NoError(t, err)
+
+	var l Latency
+	pb, err := sg.ToProtocolBuffer(&l)
+	require.NoError(t, err)
+	return pb
+}
+
 func TestGetUID(t *testing.T) {
 	populateGraph(t)
 	query := `
@@ -904,21 +923,7 @@ func TestFieldAliasProto(t *testing.T) {
 			}
 		}
 	`
-	res, err := gql.Parse(query)
-	require.NoError(t, err)
-
-	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, res.Query[0])
-	require.NoError(t, err)
-
-	ch := make(chan error)
-	go ProcessGraph(ctx, sg, nil, ch)
-	err = <-ch
-	require.NoError(t, err)
-
-	var l Latency
-	pb, err := sg.ToProtocolBuffer(&l)
-	require.NoError(t, err)
+	pb := processToPB(t, query)
 	expectedPb := `attribute: "_root_"
 children: <
   attribute: "me"
@@ -1587,23 +1592,7 @@ func TestToProto(t *testing.T) {
 			}
 		}
   `
-
-	res, err := gql.Parse(query)
-	require.NoError(t, err)
-
-	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, res.Query[0])
-	require.NoError(t, err)
-
-	ch := make(chan error)
-	go ProcessGraph(ctx, sg, nil, ch)
-	err = <-ch
-	require.NoError(t, err)
-
-	var l Latency
-	gr, err := sg.ToProtocolBuffer(&l)
-	require.NoError(t, err)
-
+	pb := processToPB(t, query)
 	require.EqualValues(t,
 		`attribute: "_root_"
 children: <
@@ -1673,7 +1662,7 @@ children: <
     attribute: "friend"
   >
 >
-`, proto.MarshalTextString(gr))
+`, proto.MarshalTextString(pb))
 }
 
 func TestToProtoFilter(t *testing.T) {
@@ -1691,22 +1680,7 @@ func TestToProtoFilter(t *testing.T) {
 		}
 	`
 
-	res, err := gql.Parse(query)
-	require.NoError(t, err)
-
-	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, res.Query[0])
-	require.NoError(t, err)
-
-	ch := make(chan error)
-	go ProcessGraph(ctx, sg, nil, ch)
-	err = <-ch
-	require.NoError(t, err)
-
-	var l Latency
-	pb, err := sg.ToProtocolBuffer(&l)
-	require.NoError(t, err)
-
+	pb := processToPB(t, query)
 	expectedPb := `attribute: "_root_"
 children: <
   attribute: "me"
@@ -1751,22 +1725,7 @@ func TestToProtoFilterOr(t *testing.T) {
 		}
 	`
 
-	res, err := gql.Parse(query)
-	require.NoError(t, err)
-
-	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, res.Query[0])
-	require.NoError(t, err)
-
-	ch := make(chan error)
-	go ProcessGraph(ctx, sg, nil, ch)
-	err = <-ch
-	require.NoError(t, err)
-
-	var l Latency
-	pb, err := sg.ToProtocolBuffer(&l)
-	require.NoError(t, err)
-
+	pb := processToPB(t, query)
 	expectedPb := `attribute: "_root_"
 children: <
   attribute: "me"
@@ -1820,22 +1779,7 @@ func TestToProtoFilterAnd(t *testing.T) {
 		}
 	`
 
-	res, err := gql.Parse(query)
-	require.NoError(t, err)
-
-	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, res.Query[0])
-	require.NoError(t, err)
-
-	ch := make(chan error)
-	go ProcessGraph(ctx, sg, nil, ch)
-	err = <-ch
-	require.NoError(t, err)
-
-	var l Latency
-	pb, err := sg.ToProtocolBuffer(&l)
-	require.NoError(t, err)
-
+	pb := processToPB(t, query)
 	expectedPb := `attribute: "_root_"
 children: <
   attribute: "me"
@@ -2087,22 +2031,7 @@ func TestToProtoOrder(t *testing.T) {
 		}
 	`
 
-	res, err := gql.Parse(query)
-	require.NoError(t, err)
-
-	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, res.Query[0])
-	require.NoError(t, err)
-
-	ch := make(chan error)
-	go ProcessGraph(ctx, sg, nil, ch)
-	err = <-ch
-	require.NoError(t, err)
-
-	var l Latency
-	pb, err := sg.ToProtocolBuffer(&l)
-	require.NoError(t, err)
-
+	pb := processToPB(t, query)
 	expectedPb := `attribute: "_root_"
 children: <
   attribute: "me"
@@ -2174,22 +2103,7 @@ func TestToProtoOrderCount(t *testing.T) {
 		}
 	`
 
-	res, err := gql.Parse(query)
-	require.NoError(t, err)
-
-	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, res.Query[0])
-	require.NoError(t, err)
-
-	ch := make(chan error)
-	go ProcessGraph(ctx, sg, nil, ch)
-	err = <-ch
-	require.NoError(t, err)
-
-	var l Latency
-	pb, err := sg.ToProtocolBuffer(&l)
-	require.NoError(t, err)
-
+	pb := processToPB(t, query)
 	expectedPb := `attribute: "_root_"
 children: <
   attribute: "me"
@@ -2243,22 +2157,7 @@ func TestToProtoOrderOffsetCount(t *testing.T) {
 		}
 	`
 
-	res, err := gql.Parse(query)
-	require.NoError(t, err)
-
-	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, res.Query[0])
-	require.NoError(t, err)
-
-	ch := make(chan error)
-	go ProcessGraph(ctx, sg, nil, ch)
-	err = <-ch
-	require.NoError(t, err)
-
-	var l Latency
-	pb, err := sg.ToProtocolBuffer(&l)
-	require.NoError(t, err)
-
+	pb := processToPB(t, query)
 	expectedPb := `attribute: "_root_"
 children: <
   attribute: "me"
@@ -2541,22 +2440,7 @@ func TestToProtoMultiRoot(t *testing.T) {
     }
   `
 
-	res, err := gql.Parse(query)
-	require.NoError(t, err)
-
-	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, res.Query[0])
-	require.NoError(t, err)
-
-	ch := make(chan error)
-	go ProcessGraph(ctx, sg, nil, ch)
-	err = <-ch
-	require.NoError(t, err)
-
-	var l Latency
-	pb, err := sg.ToProtocolBuffer(&l)
-	require.NoError(t, err)
-
+	pb := processToPB(t, query)
 	expectedPb := `attribute: "_root_"
 children: <
   attribute: "me"
@@ -2771,21 +2655,7 @@ func TestToProtoNormalizeDirective(t *testing.T) {
 			}
 		}
 	`
-	res, err := gql.Parse(query)
-	require.NoError(t, err)
-
-	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, res.Query[0])
-	require.NoError(t, err)
-
-	ch := make(chan error)
-	go ProcessGraph(ctx, sg, nil, ch)
-	err = <-ch
-	require.NoError(t, err)
-
-	var l Latency
-	pb, err := sg.ToProtocolBuffer(&l)
-	require.NoError(t, err)
+	pb := processToPB(t, query)
 	expectedPb := `attribute: "_root_"
 children: <
   properties: <
@@ -2911,22 +2781,7 @@ func TestSchema(t *testing.T) {
 		}
   `
 
-	res, err := gql.Parse(query)
-	require.NoError(t, err)
-
-	ctx := context.Background()
-	sg, err := ToSubGraph(ctx, res.Query[0])
-	require.NoError(t, err)
-
-	ch := make(chan error)
-	go ProcessGraph(ctx, sg, nil, ch)
-	err = <-ch
-	require.NoError(t, err)
-
-	var l Latency
-	gr, err := sg.ToProtocolBuffer(&l)
-	require.NoError(t, err)
-
+	gr := processToPB(t, query)
 	require.EqualValues(t, "debug", gr.Children[0].Attribute)
 	require.EqualValues(t, 1, gr.Children[0].Uid)
 	require.EqualValues(t, "mich", gr.Children[0].Xid)
