@@ -1,10 +1,10 @@
 {
  me(id: 15161013152876854722) {
-  film.director.film {
-   film.film.directed_by {
-    film.director.film(order: film.film.initial_release_date, first: 5, offset: 10) {
+  director.film {
+   directed_by {
+    director.film(order: initial_release_date, first: 5, offset: 10) {
      _uid_
-     film.film.initial_release_date
+     initial_release_date
     }
    }
   }

@@ -1,10 +1,10 @@
 {
  me(id: 15161013152876854722) {
-  film.director.film {
-   film.film.directed_by {
-    film.director.film @filter(allof("type.object.name.en", "the") and allof("type.object.name.en", "a")) {
+  director.film {
+   directed_by {
+    director.film @filter(allof("name.en", "the") and allof("name.en", "a")) {
      _uid_
-     type.object.name.en
+     name.en
     }
    }
   }

@@ -33,8 +33,8 @@ export LD_LIBRARY_PATH="${ICUDIR}/lib:${ROCKSDBDIR}:${LD_LIBRARY_PATH}"
 # schema file
 echo -e "
 scalar (
-	type.object.name.en: string @index
-	film.film.initial_release_date: date @index
+	name.en: string @index
+	initial_release_date: date @index
 )" > $BUILD/schema.txt
 
 pushd cmd/dgraph &> /dev/null
