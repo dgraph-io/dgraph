@@ -2421,6 +2421,7 @@ func TestGeneratorMultiRootMultiQuery(t *testing.T) {
 	js := processToFastJSON(t, query)
 	require.JSONEq(t, `{"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"}], "you":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"}]}`, js)
 }
+
 func TestGeneratorMultiRootOrderOffset(t *testing.T) {
 	populateGraph(t)
 	query := `
@@ -2433,6 +2434,7 @@ func TestGeneratorMultiRootOrderOffset(t *testing.T) {
 	js := processToFastJSON(t, query)
 	require.JSONEq(t, `{"me":[{"name":"Rick Grimes"}]}`, js)
 }
+
 func TestGeneratorMultiRootOrderdesc(t *testing.T) {
 	populateGraph(t)
 	query := `
