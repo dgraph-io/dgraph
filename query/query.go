@@ -211,10 +211,11 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 
 	// We go through all predicate children of the subgraph.
 	for _, pc := range sg.Children {
-		idx := algo.IndexOf(pc.SrcUIDs, uid)
-		if idx < 0 {
+		idxi, idxj := algo.IndexOf(pc.SrcUIDs, uid)
+		if idxi < 0 {
 			continue
 		}
+		idx := algo.Idx(pc.SrcUIDs, idxi, idxj)
 		ul := pc.uidMatrix[idx]
 
 		fieldName := pc.Attr
@@ -956,8 +957,9 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 	included := make([]bool, len(sg.DestUIDs.Uids))
 	for _, ul := range sg.uidMatrix {
 		for _, uid := range ul.Uids {
-			idx := algo.IndexOf(sg.DestUIDs, uid) // Binary search.
-			if idx >= 0 {
+			idxi, idxj := algo.IndexOf(sg.DestUIDs, uid) // Binary search.
+			if idxi >= 0 {
+				idx := algo.Idx(sg.DestUids, idxi, idxj)
 				included[idx] = true
 			}
 		}

@@ -228,13 +228,12 @@ func TestUIDListIntersectDupSecond(t *testing.T) {
 	require.Equal(t, []uint64{1, 2}, BlockToList(u))
 }
 
-/*
 func TestApplyFilterUint(t *testing.T) {
-	u := newList([]uint64{1, 2, 3, 4, 5})
-	ApplyFilter(u, func(a uint64, idx int) bool { return (a % 2) == 1 })
-	require.Equal(t, BlockToList(u), []uint64{1, 3, 5})
+	l := []uint64{1, 2, 3, 4, 5}
+	u := newList(l)
+	ApplyFilter(u, func(a uint64, idx int) bool { return (l[idx] % 2) == 1 })
+	require.Equal(t, []uint64{1, 3, 5}, BlockToList(u))
 }
-*/
 
 // sort interface for []uint64
 type uint64Slice []uint64

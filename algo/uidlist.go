@@ -1,6 +1,10 @@
 package algo
 
-import "github.com/dgraph-io/dgraph/task"
+import (
+	"sort"
+
+	"github.com/dgraph-io/dgraph/task"
+)
 
 func SortedListToBlock(l []uint64) *task.List {
 	b := new(task.List)
@@ -129,42 +133,22 @@ func IntersectWith(u, v *task.List) {
 	}
 }
 
-/*
 // ApplyFilter applies a filter to our UIDList.
 func ApplyFilter(u *task.List, f func(uint64, int) bool) {
-	out := u.Uids[:0]
-	for i, uid := range u.Uids {
-		if f(uid, i) {
-			out = append(out, uid)
-		}
-	}
-	u.Uids = out
-}
-
-// IntersectWith intersects u with v. The update is made to u.
-// u, v should be sorted.
-func IntersectWith(u, v *task.List) {
-	out := u.Uids[:0]
-	n := len(u.Uids)
-	m := len(v.Uids)
-	for i, k := 0, 0; i < n && k < m; {
-		uid := u.Uids[i]
-		vid := v.Uids[k]
-		if uid > vid {
-			for k = k + 1; k < m && v.Uids[k] < uid; k++ {
-			}
-		} else if uid == vid {
-			out = append(out, uid)
-			k++
-			i++
-		} else {
-			for i = i + 1; i < n && u.Uids[i] < vid; i++ {
+	out := u.Blocks
+	for i, block := range u.Blocks {
+		kk := 0
+		for j, uid := range block.List {
+			if f(uid, Idx(u, i, j)) {
+				out[i].List[kk] = uid
+				kk++
 			}
 		}
+		out[i].List = out[i].List[:kk]
 	}
-	u.Uids = out
 }
 
+/*
 // IntersectSorted intersect a list of UIDLists. An alternative is to do
 // pairwise intersections n-1 times where n=number of lists. This is less
 // efficient:
@@ -304,23 +288,34 @@ func MergeSorted(lists []*task.List) *task.List {
 	}
 	return &task.List{Uids: output}
 }
+*/
 
 // IndexOf performs a binary search on the uids slice and returns the index at
 // which it finds the uid, else returns -1
-func IndexOf(u *task.List, uid uint64) int {
-	i := sort.Search(len(u.Uids), func(i int) bool { return u.Uids[i] >= uid })
-	if i < len(u.Uids) && u.Uids[i] == uid {
-		return i
+func IndexOf(u *task.List, uid uint64) (int, int) {
+	i := sort.Search(len(u.Blocks), func(i int) bool { return u.Blocks[i].MaxInt >= uid })
+	if i < len(u.Blocks) {
+		j := sort.Search(len(u.Blocks[i].List), func(j int) bool { return u.Blocks[i].List[j] >= uid })
+		if j < len(u.Blocks) && u.Blocks[i].List[j] == uid {
+			return i, j
+		}
 	}
-	return -1
+	return -1, -1
+}
+
+func Idx(ul *task.List, i, j int) int {
+	res := 0
+	for k := 0; k < i; k++ {
+		res += len(ul.Blocks[k].List)
+	}
+	return res + j
 }
 
 // ToUintsListForTest converts to list of uints for testing purpose only.
 func ToUintsListForTest(ul []*task.List) [][]uint64 {
 	out := make([][]uint64, 0, len(ul))
 	for _, u := range ul {
-		out = append(out, u.Uids)
+		out = append(out, BlockToList(u))
 	}
 	return out
 }
-*/
