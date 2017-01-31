@@ -379,8 +379,7 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 				return x.Errorf("Invalid argument : %s", argk)
 			}
 		}
-		err := args.fill(gchild)
-		if err != nil {
+		if err := args.fill(gchild); err != nil {
 			return err
 		}
 
@@ -397,7 +396,9 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 		}
 
 		sg.Children = append(sg.Children, dst)
-		err = treeCopy(ctx, gchild, dst)
+		if err := treeCopy(ctx, gchild, dst); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -470,8 +471,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 			return nil, x.Errorf("Invalid argument : %s", argk)
 		}
 	}
-	err := args.fill(gq)
-	if err != nil {
+	if err := args.fill(gq); err != nil {
 		return nil, err
 	}
 
