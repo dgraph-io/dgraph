@@ -8,6 +8,11 @@ service Dgraph {
     rpc Run (Request) returns (Response) {};
 }
 
+message Weight {
+	string key = 1;
+	Value val = 2;
+}
+
 message NQuad {
     string subject = 1;
     string predicate = 2;
@@ -16,6 +21,7 @@ message NQuad {
     string label = 5;
     string lang = 7;
     sint32 objectType = 6;
+    repeated Weight weights = 8;
 }
 
 message Value {
