@@ -7,10 +7,51 @@ import (
 	"github.com/dgraph-io/dgraph/task"
 )
 
+const blockSize = 100
+
 type ListIterator struct {
 	list *task.List
 	bIdx int // Block index
 	idx  int // List index
+}
+
+type WriteIterator struct {
+	list *task.List
+	bIdx int
+	idx  int
+}
+
+func NewWriteIterator(l *task.List) WriteIterator {
+	if l.Blocks == nil {
+		l.Blocks = make([]*task.Block, 1, 2)
+		l.Blocks[0] = new(task.Block)
+		l.Blocks[0].List = make([]uint64, 0, blockSize)
+	}
+	return WriteIterator{
+		list: l,
+		bIdx: 0,
+		idx:  0,
+	}
+}
+
+func (l *WriteIterator) Append(uid uint64) {
+	l.list.Blocks[l.bIdx].List = append(l.list.Blocks[l.bIdx].List, uid)
+	l.idx++
+	if l.idx == blockSize {
+		l.list.Blocks[l.bIdx].MaxInt = l.list.Blocks[l.bIdx].List[blockSize-1]
+		l.idx = 0
+		l.list.Blocks = append(l.list.Blocks, &task.Block{List: make([]uint64, 0, blockSize)})
+		l.bIdx++
+	}
+}
+
+func (l *WriteIterator) End() {
+	lenLast := len(l.list.Blocks[l.bIdx].List)
+	if lenLast == 0 {
+		// We didn't add any element to the list
+		return
+	}
+	l.list.Blocks[l.bIdx].MaxInt = l.list.Blocks[l.bIdx].List[lenLast-1]
 }
 
 func NewListIterator(l *task.List) ListIterator {
@@ -58,25 +99,30 @@ func (l *ListIterator) Next() bool {
 
 func SortedListToBlock(l []uint64) *task.List {
 	b := new(task.List)
-	b.Blocks = make([]*task.Block, 1, 2)
-	bIdx := 0
-	b.Blocks[0] = new(task.Block)
-	b.Blocks[0].List = make([]uint64, 0, 100)
-
+	wit := NewWriteIterator(b)
+	/*
+		b.Blocks = make([]*task.Block, 1, 2)
+		bIdx := 0
+		b.Blocks[0] = new(task.Block)
+		b.Blocks[0].List = make([]uint64, 0, blockSize)
+	*/
 	if len(l) == 0 {
 		return b
 	}
 
 	for _, it := range l {
-		if len(b.Blocks[bIdx].List) > 100 {
-			b.Blocks[bIdx].MaxInt = b.Blocks[bIdx].List[100]
-			b.Blocks = append(b.Blocks, &task.Block{List: make([]uint64, 0, 100)})
-			bIdx++
-		}
-		b.Blocks[bIdx].List = append(b.Blocks[bIdx].List, it)
+		/*
+			if len(b.Blocks[bIdx].List) > blockSize {
+				b.Blocks[bIdx].MaxInt = b.Blocks[bIdx].List[blockSize]
+				b.Blocks = append(b.Blocks, &task.Block{List: make([]uint64, 0, blockSize)})
+				bIdx++
+			}
+			b.Blocks[bIdx].List = append(b.Blocks[bIdx].List, it)
+		*/
+		wit.Append(it)
 	}
 
-	b.Blocks[bIdx].MaxInt = b.Blocks[bIdx].List[len(b.Blocks[bIdx].List)-1]
+	wit.End()
 	return b
 }
 

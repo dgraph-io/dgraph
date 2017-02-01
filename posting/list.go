@@ -562,7 +562,8 @@ func (l *List) Uids(opt ListOptions) *task.List {
 	l.RLock()
 	defer l.RUnlock()
 
-	result := make([]uint64, 0, 10)
+	res := new(task.List)
+	wit := algo.NewWriteIterator(res)
 	l.iterate(opt.AfterUID, func(p *types.Posting) bool {
 		if postingType(p) != valueUid {
 			return false
@@ -577,10 +578,11 @@ func (l *List) Uids(opt ListOptions) *task.List {
 				return true
 			}
 		}
-		result = append(result, uid)
+		wit.Append(uid)
 		return true
 	})
-	return algo.SortedListToBlock(result)
+	wit.End()
+	return res
 }
 
 func (l *List) Value() (rval types.Val, rerr error) {
