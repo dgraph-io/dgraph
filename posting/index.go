@@ -69,10 +69,11 @@ func addIndexMutations(ctx context.Context, t *task.DirectedEdge, p types.Val, o
 
 	// Create a value token -> uid edge.
 	edge := &task.DirectedEdge{
-		ValueId: uid,
-		Attr:    attr,
-		Label:   "idx",
-		Op:      op,
+		ValueId:    uid,
+		Attr:       attr,
+		Label:      "idx",
+		Op:         op,
+		Properties: t.Properties,
 	}
 
 	for _, token := range tokens {
@@ -113,11 +114,12 @@ func addReverseMutation(ctx context.Context, t *task.DirectedEdge) {
 	x.AssertTruef(plist != nil, "plist is nil [%s] %d %d",
 		t.Attr, t.Entity, t.ValueId)
 	edge := &task.DirectedEdge{
-		Entity:  t.ValueId,
-		ValueId: t.Entity,
-		Attr:    t.Attr,
-		Label:   "rev",
-		Op:      t.Op,
+		Entity:     t.ValueId,
+		ValueId:    t.Entity,
+		Attr:       t.Attr,
+		Label:      "rev",
+		Op:         t.Op,
+		Properties: t.Properties,
 	}
 
 	_, err := plist.AddMutation(ctx, edge)

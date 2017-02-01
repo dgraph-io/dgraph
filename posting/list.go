@@ -153,13 +153,13 @@ func newPosting(t *task.DirectedEdge) *types.Posting {
 	}
 }
 
-func toAttrs(attrs []*task.Property) []*types.Attr {
-	edgeAttrs := make([]*types.Attr, 0, len(attrs))
-	for _, a := range attrs {
-		edgeAttrs = append(edgeAttrs,
-			&types.Attr{a.Name, a.Val.Val, types.ValType(a.Val.ValType)})
+func toAttrs(properties []*task.Property) []*types.Attr {
+	attrs := make([]*types.Attr, 0, len(properties))
+	for _, p := range properties {
+		attrs = append(attrs,
+			&types.Attr{p.Name, p.Val.Val, types.ValType(p.Val.ValType)})
 	}
-	return edgeAttrs
+	return attrs
 }
 
 func (l *List) WaitForCommit() {

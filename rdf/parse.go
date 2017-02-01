@@ -96,12 +96,17 @@ func byteVal(value *graph.Value) ([]byte, error) {
 func (nq NQuad) ToEdge() (*task.DirectedEdge, error) {
 	var err error
 	sid := GetUid(nq.Subject)
+	properties, err := toProperties(nq)
+	if err != nil {
+		return nil, err
+	}
 
 	out := &task.DirectedEdge{
-		Attr:   nq.Predicate,
-		Label:  nq.Label,
-		Lang:   nq.Lang,
-		Entity: sid,
+		Attr:       nq.Predicate,
+		Label:      nq.Label,
+		Lang:       nq.Lang,
+		Entity:     sid,
+		Properties: properties,
 	}
 
 	switch nq.valueType() {
@@ -153,17 +158,17 @@ func (nq NQuad) ToEdgeUsing(newToUid map[string]uint64) (*task.DirectedEdge, err
 }
 
 func toProperties(nq NQuad) ([]*task.Property, error) {
-	weights := make([]*task.Property, len(nq.Weights))
+	properties := make([]*task.Property, len(nq.Weights))
 	var value []byte
 	var err error
 	for _, w := range nq.Weights {
 		if value, err = byteVal(w.Val); err != nil {
 			return nil, err
 		}
-		weights = append(weights,
+		properties = append(properties,
 			&task.Property{w.Key, &task.Value{value, int32(w.ValType)}})
 	}
-	return weights, nil
+	return properties, nil
 }
 
 // TODO(tzdybal) - remove
