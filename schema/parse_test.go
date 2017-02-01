@@ -29,6 +29,17 @@ import (
 func TestSchema(t *testing.T) {
 	str = make(map[string]types.TypeID)
 	require.NoError(t, Parse("testfiles/test_schema"))
+
+	require.Len(t, str, 12)
+	for _, s := range []string{"name", "address", "http://film.com/name:", "http://scalar.com/helloworld/"} {
+		require.EqualValues(t, types.StringID, str[s], s)
+	}
+	for _, s := range []string{"age", "budget", "http://film.com/budget", "NumFollower"} {
+		require.EqualValues(t, types.Int32ID, str[s], s)
+	}
+	for _, s := range []string{"http://film.com/", "Person", "Actor", "Film"} {
+		require.EqualValues(t, types.UidID, str[s], s)
+	}
 }
 
 func TestSchema1_Error(t *testing.T) {
