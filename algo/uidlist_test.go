@@ -188,8 +188,7 @@ func TestIterator2(t *testing.T) {
 		ls = append(ls, uint64(i*2))
 	}
 	u := newList(ls)
-	it := NewListIterator(u)
-	for ; it.Valid(); it.Next() {
+	for it := NewListIterator(u); it.Valid(); it.Next() {
 		res = append(res, it.Val())
 	}
 	require.Equal(t, ls, res)

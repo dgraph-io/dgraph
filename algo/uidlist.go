@@ -10,9 +10,10 @@ import (
 const blockSize = 100
 
 type ListIterator struct {
-	list *task.List
-	bIdx int // Block index
-	idx  int // List index
+	list  *task.List
+	bIdx  int  // Block index
+	idx   int  // List index
+	isEnd bool // To indicate reaching the end
 }
 
 type WriteIterator struct {
@@ -54,24 +55,63 @@ func (l *WriteIterator) End() {
 }
 
 func NewListIterator(l *task.List) ListIterator {
+	var end bool
+	if l == nil || l.Blocks == nil || len(l.Blocks) == 0 {
+		end = true
+	}
+	if l.Blocks[0].List == nil || len(l.Blocks[0].List) == 0 {
+		end = true
+	}
+
 	return ListIterator{
-		list: l,
-		bIdx: 0,
-		idx:  0,
+		list:  l,
+		bIdx:  0,
+		idx:   0,
+		isEnd: end,
 	}
 }
 
+// IndexOf performs a binary search on the uids slice and returns the index at
+// which it finds the uid, else returns -1
+func (l *ListIterator) Seek(uid uint64) {
+	u := l.list
+	i := sort.Search(len(u.Blocks), func(i int) bool { return u.Blocks[i].MaxInt >= uid })
+	if i < len(u.Blocks) {
+		j := sort.Search(len(u.Blocks[i].List), func(j int) bool { return u.Blocks[i].List[j] >= uid })
+		if j == len(u.Blocks[i].List) {
+			l.isEnd = true
+			return
+		}
+		if u.Blocks[i].List[j] == uid {
+			l.bIdx = i
+			l.idx = j
+		} else {
+			if j == 0 {
+				l.bIdx = i - 1
+				l.idx = len(u.Blocks[i-1].List) - 1
+			} else {
+				l.bIdx = i
+				l.idx = j - 1
+			}
+		}
+	}
+	l.isEnd = true
+}
+
 func (l *ListIterator) Valid() bool {
-	if l == nil || l.list.Blocks == nil || len(l.list.Blocks) == 0 {
-		return false
-	}
-	if l.bIdx >= len(l.list.Blocks) {
-		return false
-	}
-	if l.list.Blocks[l.bIdx].List == nil || l.idx >= len(l.list.Blocks[l.bIdx].List) {
-		return false
-	}
-	return true
+	return !l.isEnd
+	/*
+		if l == nil || l.list.Blocks == nil || len(l.list.Blocks) == 0 {
+			return false
+		}
+		if l.bIdx >= len(l.list.Blocks) {
+			return false
+		}
+		if l.list.Blocks[l.bIdx].List == nil || l.idx >= len(l.list.Blocks[l.bIdx].List) {
+			return false
+		}
+		return true
+	*/
 }
 
 func (l *ListIterator) Val() uint64 {
@@ -81,19 +121,22 @@ func (l *ListIterator) Val() uint64 {
 	return l.list.Blocks[l.bIdx].List[l.idx]
 }
 
-func (l *ListIterator) Next() bool {
+func (l *ListIterator) Next() {
 	if !l.Valid() {
-		return false
+		return
 	}
 	l.idx++
 	if l.idx >= len(l.list.Blocks[l.bIdx].List) {
 		l.idx = 0
 		l.bIdx++
-		if l.bIdx >= len(l.list.Blocks) {
-			return false
-		}
 	}
-	return true
+	if l.bIdx >= len(l.list.Blocks) {
+		l.isEnd = true
+		return
+	}
+	if len(l.list.Blocks[l.bIdx].List) == 0 {
+		l.isEnd = true
+	}
 }
 
 func SortedListToBlock(l []uint64) *task.List {
@@ -409,7 +452,8 @@ func MergeSorted(lists []*task.List) *task.List {
 			out.Append(me.val) // Add if unique.
 			last = me.val
 		}
-		if !lIt[me.listIdx].Next() {
+		lIt[me.listIdx].Next()
+		if !lIt[me.listIdx].Valid() {
 			heap.Pop(h)
 		} else {
 			val := lIt[me.listIdx].Val()
