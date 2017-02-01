@@ -429,6 +429,19 @@ func IndexOf(u *task.List, uid uint64) (int, int) {
 	return -1, -1
 }
 
+func Ridx(ul *task.List, i int) (int, int) {
+	r1, r2 := 0, 0
+	for _, it := range ul.Blocks {
+		if r2+len(it.List) >= i {
+			break
+		}
+		r1++
+		r2 += len(it.List)
+	}
+
+	return r1, i - r2
+}
+
 func Idx(ul *task.List, i, j int) int {
 	res := 0
 	for k := 0; k < i; k++ {

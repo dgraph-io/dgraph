@@ -19,6 +19,7 @@ package worker
 import (
 	"golang.org/x/net/context"
 
+	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/uid"
@@ -73,12 +74,12 @@ func assignUids(ctx context.Context, num *task.Num) (*task.List, error) {
 	}
 	// Mutations successfully applied.
 
-	out := new(task.List)
+	var out []uint64
 	// Only the First N entities are newly assigned UIDs, so we collect them.
 	for i := 0; i < val; i++ {
-		out.Uids = append(out.Uids, mutations.Edges[i].Entity)
+		out = append(out, mutations.Edges[i].Entity)
 	}
-	return out, nil
+	return algo.SortedListToBlock(out), nil
 }
 
 // AssignUidsOverNetwork assigns new uids and writes them to the umap.
@@ -123,13 +124,14 @@ func AssignUidsOverNetwork(ctx context.Context, umap map[string]uint64) error {
 		}
 	}
 
-	x.AssertTruef(len(ul.Uids) == int(num.Val),
-		"Requested: %d != Retrieved Uids: %d", num.Val, len(ul.Uids))
+	x.AssertTruef(algo.ListLen(ul) == int(num.Val),
+		"Requested: %d != Retrieved Uids: %d", num.Val, algo.ListLen(ul))
 
 	i := 0
 	for k, v := range umap {
 		if v == 0 {
-			uid := ul.Uids[i]
+			i1, i2 := algo.Ridx(ul, i)
+			uid := ul.Blocks[i1].List[i1]
 			umap[k] = uid // Write uids to map.
 			i++
 		}

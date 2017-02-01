@@ -190,7 +190,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 		}
 		// If we have srcFunc and Uids, it means its a filter. So we intersect.
 		if useFunc && len(q.Uids) > 0 {
-			opts.Intersect = &task.List{Uids: q.Uids}
+			opts.Intersect = algo.SortedListToBlock(q.Uids)
 		}
 		out.UidMatrix = append(out.UidMatrix, pl.Uids(opts))
 	}
@@ -232,7 +232,9 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 	var values []*task.Value
 	if geoQuery != nil {
 		uids := algo.MergeSorted(out.UidMatrix)
-		for _, uid := range uids.Uids {
+		it := algo.NewListIterator(uids)
+		for ; it.Valid(); it.Next() {
+			uid := it.Val()
 			key := x.DataKey(attr, uid)
 			pl, decr := posting.GetOrCreate(key, gid)
 

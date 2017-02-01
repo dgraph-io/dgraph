@@ -32,6 +32,7 @@ import (
 
 	"github.com/dgryski/go-farm"
 
+	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/types"
@@ -509,24 +510,24 @@ func (l *List) Uids(opt ListOptions) *task.List {
 	defer l.RUnlock()
 
 	result := make([]uint64, 0, 10)
-	var intersectIdx int // Indexes into opt.Intersect if it exists.
 	l.iterate(opt.AfterUID, func(p *types.Posting) bool {
 		if p.Uid == math.MaxUint64 {
 			return false
 		}
 		uid := p.Uid
 		if opt.Intersect != nil {
-			intersectUidsLen := len(opt.Intersect.Uids)
-			for ; intersectIdx < intersectUidsLen && opt.Intersect.Uids[intersectIdx] < uid; intersectIdx++ {
+			it := algo.NewListIterator(opt.Intersect)
+			//intersectUidsLen := len(opt.Intersect.Uids)
+			for ; it.Valid() && it.Val() < uid; it.Next() { //intersectIdx < intersectUidsLen && opt.Intersect.Uids[intersectIdx] < uid; intersectIdx++ {
 			}
-			if intersectIdx >= intersectUidsLen || opt.Intersect.Uids[intersectIdx] > uid {
+			if !it.Valid() || it.Val() > uid { //intersectIdx >= intersectUidsLen || opt.Intersect.Uids[intersectIdx] > uid {
 				return true
 			}
 		}
 		result = append(result, uid)
 		return true
 	})
-	return &task.List{Uids: result}
+	return algo.SortedListToBlock(result)
 }
 
 func (l *List) Value() (rval types.Val, rerr error) {

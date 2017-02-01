@@ -3,6 +3,7 @@ package worker
 import (
 	"golang.org/x/net/context"
 
+	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/schema"
@@ -108,7 +109,7 @@ func processSort(ts *task.Sort) (*task.SortResult, error) {
 		// offsets[i] is the offset for i-th posting list. It gets decremented as we
 		// iterate over buckets.
 		out[i].offset = int(ts.Offset)
-		out[i].ulist = &task.List{Uids: []uint64{}}
+		out[i].ulist = algo.SortedListToBlock([]uint64{})
 	}
 
 	// Iterate over every bucket / token.
@@ -184,14 +185,14 @@ func intersectBucket(ts *task.Sort, attr, token string, out []intersectedList) e
 	// For each UID list, we need to intersect with the index bucket.
 	for i, ul := range ts.UidMatrix {
 		il := &out[i]
-		if count > 0 && len(il.ulist.Uids) >= count {
+		if count > 0 && algo.ListLen(il.ulist) >= count {
 			continue
 		}
 
 		// Intersect index with i-th input UID list.
 		listOpt := posting.ListOptions{Intersect: ul}
 		result := pl.Uids(listOpt) // The actual intersection work is done here.
-		n := len(result.Uids)
+		n := algo.ListLen(result)
 
 		// Check offsets[i].
 		if il.offset >= n {
@@ -205,16 +206,18 @@ func intersectBucket(ts *task.Sort, attr, token string, out []intersectedList) e
 		// Sort results by value before applying offset.
 		sortByValue(attr, result, scalar, ts.Desc)
 
+		//TODO(Ashwin): Have truncate functions which truncate first and last n elements
+		// from task.list
 		if il.offset > 0 {
 			// Apply the offset.
-			result.Uids = result.Uids[il.offset:n]
+			//result.Uids result.Uids[il.offset:n]
 			il.offset = 0
-			n = len(result.Uids)
+			n = algo.ListLen(result)
 		}
 
 		// n is number of elements to copy from result to out.
 		if count > 0 {
-			slack := count - len(il.ulist.Uids)
+			slack := count - algo.ListLen(il.ulist)
 			if slack < n {
 				n = slack
 			}
