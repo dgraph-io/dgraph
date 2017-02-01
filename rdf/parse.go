@@ -74,10 +74,10 @@ func typeValFrom(val *graph.Value) types.Val {
 	return types.Val{types.StringID, ""}
 }
 
-func byteVal(value *graph.Value) ([]byte, error) {
+func byteVal(nq NQuad) ([]byte, error) {
 	// We infer object type from type of value. We set appropriate type in parse
 	// function or the Go client has already set.
-	p := typeValFrom(value)
+	p := typeValFrom(nq.ObjectValue)
 	// These three would have already been marshalled to bytes by the client or
 	// in parse function.
 	if p.Tid == types.GeoID || p.Tid == types.DateID || p.Tid == types.DateTimeID {
@@ -166,7 +166,7 @@ func (nq NQuad) hasValue() bool {
 
 func copyValue(out *task.DirectedEdge, nq NQuad) error {
 	var err error
-	if out.Value, err = byteVal(nq.ObjectValue); err != nil {
+	if out.Value, err = byteVal(nq); err != nil {
 		return err
 	}
 	out.ValueType = uint32(nq.ObjectType)
