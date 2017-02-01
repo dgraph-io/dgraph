@@ -76,4 +76,4 @@ run_index_test gen_anyof_good_bad name 1103
 
 popd &> /dev/null
 
-killall dgraph
+curl localhost:8080/admin/shutdown
