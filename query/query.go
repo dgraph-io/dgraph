@@ -153,10 +153,10 @@ type SubGraph struct {
 func (sg *SubGraph) DebugPrint(prefix string) {
 	var src, dst int
 	if sg.SrcUIDs != nil {
-		src = len(sg.SrcUIDs.Uids)
+		src = algo.ListLen(sg.SrcUIDs)
 	}
 	if sg.DestUIDs != nil {
-		dst = len(sg.DestUIDs.Uids)
+		dst = algo.ListLen(sg.DestUIDs)
 	}
 	x.Printf("%s[%q Alias:%q Func:%v SrcSz:%v Op:%q DestSz:%v Dest: %p ValueSz:%v]\n",
 		prefix, sg.Attr, sg.Params.Alias, sg.SrcFunc, src, sg.FilterOp,
@@ -233,10 +233,12 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 			uc.AddValue("count", c)
 			dst.AddChild(pc.Attr, uc)
 
-		} else if len(ul.Uids) > 0 || len(pc.Children) > 0 {
+		} else if algo.ListLen(ul) > 0 || len(pc.Children) > 0 {
 			// We create as many predicate entity children as the length of uids for
 			// this predicate.
-			for _, childUID := range ul.Uids {
+			it := algo.NewListIterator(ul)
+			for ; it.Valid(); it.Next() {
+				childUID := it.Val()
 				if invalidUids[childUID] {
 					continue
 				}
@@ -471,8 +473,8 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		sg.SrcFunc = append(sg.SrcFunc, gq.Func.Args...)
 	}
 	if len(gq.UID) > 0 {
-		sg.SrcUIDs = &task.List{Uids: gq.UID}
-		sg.uidMatrix = []*task.List{&task.List{Uids: gq.UID}}
+		sg.SrcUIDs = algo.SortedListToBlock(gq.UID)
+		sg.uidMatrix = []*task.List{algo.SortedListToBlock(gq.UID)}
 	}
 	sg.values = createNilValuesList(1)
 	// Copy roots filter.
@@ -514,7 +516,7 @@ func createTaskQuery(sg *SubGraph) *task.Query {
 		DoCount:  len(sg.Filters) == 0 && sg.Params.DoCount,
 	}
 	if sg.SrcUIDs != nil {
-		out.Uids = sg.SrcUIDs.Uids
+		out.Uids = algo.BlockToList(sg.SrcUIDs)
 	}
 	return out
 }
@@ -650,8 +652,9 @@ func populateVarMap(sg *SubGraph, doneVars map[string]*task.List, isCascade bool
 		// current UID should be removed form this level; which would be stored in excluded
 		// map.
 		for i := 0; i < len(child.uidMatrix); i++ {
-			if len(child.values[i].Val) == 0 && len(child.uidMatrix[i].Uids) == 0 {
-				excluded[sg.DestUIDs.Uids[i]] = struct{}{}
+			if len(child.values[i].Val) == 0 && algo.ListLen(child.uidMatrix[i]) == 0 {
+				idx1, idx2 := algo.Ridx(sg.DestUIDs, i)
+				excluded[sg.DestUIDs.Blocks[idx1].List[idx2]] = struct{}{}
 			}
 		}
 	}
@@ -764,7 +767,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		}
 	}
 
-	if sg.DestUIDs == nil || len(sg.DestUIDs.Uids) == 0 {
+	if sg.DestUIDs == nil || algo.ListLen(sg.DestUIDs) == 0 {
 		// Looks like we're done here. Be careful with nil srcUIDs!
 		x.Trace(ctx, "Zero uids for %q. Num attr children: %v", sg.Attr, len(sg.Children))
 		rch <- nil
@@ -851,7 +854,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			// without forming the intersection.
 
 			algo.IntersectWith(ul, sg.DestUIDs)
-			sg.counts[i] = uint32(len(ul.Uids))
+			sg.counts[i] = uint32(algo.ListLen(ul))
 		}
 		rch <- nil
 		return
@@ -914,10 +917,13 @@ func (sg *SubGraph) applyPagination(ctx context.Context) error {
 	if params.Count == 0 && params.Offset == 0 { // No pagination.
 		return nil
 	}
-	x.AssertTrue(len(sg.SrcUIDs.Uids) == len(sg.uidMatrix))
-	for _, l := range sg.uidMatrix {
-		start, end := pageRange(&sg.Params, len(l.Uids))
-		l.Uids = l.Uids[start:end]
+	x.AssertTrue(algo.ListLen(sg.SrcUIDs) == len(sg.uidMatrix))
+	for i := 0; i < len(sg.uidMatrix); i++ { //_, l := range sg.uidMatrix {
+		start, end := pageRange(&sg.Params, algo.ListLen(sg.uidMatrix[i]))
+		//TODO(Ashwin): Optimise this -> l.Uids = l.Uids[start:end]
+		l1 := algo.BlockToList(sg.uidMatrix[i])
+		sg.uidMatrix[i] = algo.SortedListToBlock(l1[start:end])
+
 	}
 	// Re-merge the UID matrix.
 	sg.DestUIDs = algo.MergeSorted(sg.uidMatrix)
@@ -954,12 +960,14 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 	// UID). For each element in UID matrix, we do a binary search in the
 	// current destUID and mark it. Then we scan over this bool array and
 	// rebuild destUIDs.
-	included := make([]bool, len(sg.DestUIDs.Uids))
+	included := make([]bool, algo.ListLen(sg.DestUIDs))
 	for _, ul := range sg.uidMatrix {
-		for _, uid := range ul.Uids {
+		it := algo.NewListIterator(ul)
+		for ; it.Valid(); it.Next() {
+			uid := it.Val()
 			idxi, idxj := algo.IndexOf(sg.DestUIDs, uid) // Binary search.
 			if idxi >= 0 {
-				idx := algo.Idx(sg.DestUids, idxi, idxj)
+				idx := algo.Idx(sg.DestUIDs, idxi, idxj)
 				included[idx] = true
 			}
 		}

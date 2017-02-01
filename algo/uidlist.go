@@ -81,7 +81,7 @@ func SortedListToBlock(l []uint64) *task.List {
 }
 
 func BlockToList(b *task.List) []uint64 {
-	var res []uint64
+	res := make([]uint64, 0, 5)
 	for _, it := range b.Blocks {
 		for _, el := range it.List {
 			res = append(res, el)
@@ -422,7 +422,7 @@ func IndexOf(u *task.List, uid uint64) (int, int) {
 	i := sort.Search(len(u.Blocks), func(i int) bool { return u.Blocks[i].MaxInt >= uid })
 	if i < len(u.Blocks) {
 		j := sort.Search(len(u.Blocks[i].List), func(j int) bool { return u.Blocks[i].List[j] >= uid })
-		if j < len(u.Blocks) && u.Blocks[i].List[j] == uid {
+		if j < len(u.Blocks[i].List) && u.Blocks[i].List[j] == uid {
 			return i, j
 		}
 	}
@@ -432,7 +432,7 @@ func IndexOf(u *task.List, uid uint64) (int, int) {
 func Ridx(ul *task.List, i int) (int, int) {
 	r1, r2 := 0, 0
 	for _, it := range ul.Blocks {
-		if r2+len(it.List) >= i {
+		if r2+len(it.List) > i {
 			break
 		}
 		r1++

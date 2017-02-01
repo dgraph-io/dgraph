@@ -210,7 +210,11 @@ func intersectBucket(ts *task.Sort, attr, token string, out []intersectedList) e
 		// from task.list
 		if il.offset > 0 {
 			// Apply the offset.
-			//result.Uids result.Uids[il.offset:n]
+			// TODO(Ashwin): Optimize -> result.Uids = result.Uids[il.offset:n]
+			l1 := algo.BlockToList(result)
+			l1 = l1[il.offset:n]
+			result = algo.SortedListToBlock(l1)
+
 			il.offset = 0
 			n = algo.ListLen(result)
 		}
@@ -223,18 +227,25 @@ func intersectBucket(ts *task.Sort, attr, token string, out []intersectedList) e
 			}
 		}
 
-		// Copy from result to out. Copy n items.
-		for j := 0; j < n; j++ {
-			il.ulist.Uids = append(il.ulist.Uids, result.Uids[j])
-		}
+		//TODO(Ashwin): Optimise this operation.
+		l1 := algo.BlockToList(il.ulist)
+		l2 := algo.BlockToList(result)
+		l1 = append(l1, l2[:n]...)
+		il.ulist = algo.SortedListToBlock(l1)
+		/*
+			// Copy from result to out. Copy n items.
+			for j := 0; j < n; j++ {
+				il.ulist.Uids = append(il.ulist.Uids, result.Uids[j])
+			}
+		*/
 	} // end for loop over UID lists in UID matrix.
 
 	// Check out[i] sizes for all i.
 	for i := 0; i < len(ts.UidMatrix); i++ { // Iterate over UID lists.
-		if len(out[i].ulist.Uids) < count {
+		if algo.ListLen(out[i].ulist) < count {
 			return errContinue
 		}
-		x.AssertTrue(len(out[i].ulist.Uids) == count)
+		x.AssertTrue(algo.ListLen(out[i].ulist) == count)
 	}
 	// All UID lists have enough items (according to pagination). Let's notify
 	// the outermost loop.
@@ -243,13 +254,15 @@ func intersectBucket(ts *task.Sort, attr, token string, out []intersectedList) e
 
 // sortByValue fetches values and sort UIDList.
 func sortByValue(attr string, ul *task.List, typ types.TypeID, desc bool) error {
-	values := make([]types.Val, len(ul.Uids))
-	for i, uid := range ul.Uids {
+	values := make([]types.Val, 0, algo.ListLen(ul))
+	it := algo.NewListIterator(ul)
+	for ; it.Valid(); it.Next() {
+		uid := it.Val()
 		val, err := fetchValue(uid, attr, typ)
 		if err != nil {
 			return err
 		}
-		values[i] = val
+		values = append(values, val)
 	}
 	return types.Sort(typ, values, ul, desc)
 }

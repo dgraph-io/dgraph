@@ -131,7 +131,7 @@ func AssignUidsOverNetwork(ctx context.Context, umap map[string]uint64) error {
 	for k, v := range umap {
 		if v == 0 {
 			i1, i2 := algo.Ridx(ul, i)
-			uid := ul.Blocks[i1].List[i1]
+			uid := ul.Blocks[i1].List[i2]
 			umap[k] = uid // Write uids to map.
 			i++
 		}

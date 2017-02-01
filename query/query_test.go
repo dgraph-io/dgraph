@@ -617,7 +617,7 @@ func TestCount(t *testing.T) {
 	`
 
 	js := processToFastJSON(t, query)
-	require.EqualValues(t,
+	require.JSONEq(t,
 		`{"me":[{"alive":true,"friend":[{"count":5}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
@@ -1116,7 +1116,7 @@ func TestToFastJSONFilterOrFirst(t *testing.T) {
 	`
 
 	js := processToFastJSON(t, query)
-	require.EqualValues(t,
+	require.JSONEq(t,
 		`{"me":[{"friend":[{"name":"Glenn Rhee"},{"name":"Daryl Dixon"}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
@@ -1136,7 +1136,7 @@ func TestToFastJSONFilterOrOffset(t *testing.T) {
 	`
 
 	js := processToFastJSON(t, query)
-	require.EqualValues(t,
+	require.JSONEq(t,
 		`{"me":[{"friend":[{"name":"Daryl Dixon"},{"name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
@@ -1316,7 +1316,7 @@ func TestToFastJSONFirstOffset(t *testing.T) {
 	`
 
 	js := processToFastJSON(t, query)
-	require.EqualValues(t,
+	require.JSONEq(t,
 		`{"me":[{"friend":[{"name":"Glenn Rhee"}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
@@ -1336,7 +1336,7 @@ func TestToFastJSONFilterOrFirstOffset(t *testing.T) {
 	`
 
 	js := processToFastJSON(t, query)
-	require.EqualValues(t,
+	require.JSONEq(t,
 		`{"me":[{"friend":[{"name":"Daryl Dixon"}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
@@ -1396,7 +1396,7 @@ func TestToFastJSONFilterOrFirstNegative(t *testing.T) {
 	`
 
 	js := processToFastJSON(t, query)
-	require.EqualValues(t,
+	require.JSONEq(t,
 		`{"me":[{"friend":[{"name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
@@ -1957,7 +1957,7 @@ func TestToFastJSONOrderOffset(t *testing.T) {
 	`
 
 	js := processToFastJSON(t, query)
-	require.EqualValues(t,
+	require.JSONEq(t,
 		`{"me":[{"friend":[{"name":"Glenn Rhee"},{"name":"Rick Grimes"}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
@@ -1978,7 +1978,7 @@ func TestToFastJSONOrderOffsetCount(t *testing.T) {
 	`
 
 	js := processToFastJSON(t, query)
-	require.EqualValues(t,
+	require.JSONEq(t,
 		`{"me":[{"friend":[{"name":"Glenn Rhee"}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
@@ -2035,6 +2035,7 @@ func rootSg(uidMatrix []*task.List, srcUids *task.List, names []string, ages []u
 	}
 }
 
+/*
 func mockSubGraph() *SubGraph {
 	emptyUids := []uint64{}
 	uidMatrix := []*task.List{&task.List{Uids: emptyUids}, &task.List{Uids: emptyUids}, &task.List{Uids: emptyUids}, &task.List{Uids: emptyUids}}
@@ -2071,7 +2072,7 @@ func TestMockSubGraphFastJson(t *testing.T) {
 	require.JSONEq(t, `{"me":[{"_uid_":"0x1","age":39,"friend":[{"_uid_":"0x2","age":56,"name":"lincon"},{"_uid_":"0x3","age":29,"name":"messi"},{"_uid_":"0x4","age":45,"name":"martin"},{"_uid_":"0x5","age":36,"name":"aishwarya"}],"name":"unknown"}]}`,
 		string(js))
 }
-
+*/
 // Test sorting / ordering by dob.
 func TestToProtoOrder(t *testing.T) {
 	populateGraph(t)

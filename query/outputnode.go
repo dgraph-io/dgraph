@@ -30,6 +30,7 @@ import (
 	geom "github.com/twpayne/go-geom"
 	"github.com/twpayne/go-geom/encoding/geojson"
 
+	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/query/graph"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
@@ -130,7 +131,9 @@ func (sg *SubGraph) ToProtocolBuffer(l *Latency) (*graph.Node, error) {
 	}
 
 	n := seedNode.New("_root_")
-	for _, uid := range sg.DestUIDs.Uids {
+	it := algo.NewListIterator(sg.DestUIDs)
+	for ; it.Valid(); it.Next() {
+		uid := it.Val()
 		// For the root, the name is stored in Alias, not Attr.
 		n1 := seedNode.New(sg.Params.Alias)
 		if sg.Params.GetUID || sg.Params.isDebug {
@@ -272,7 +275,9 @@ func processNodeUids(n *fastJsonNode, sg *SubGraph) error {
 	if sg.DestUIDs == nil {
 		return nil
 	}
-	for _, uid := range sg.DestUIDs.Uids {
+	it := algo.NewListIterator(sg.DestUIDs)
+	for ; it.Valid(); it.Next() {
+		uid := it.Val()
 		n1 := seedNode.New(sg.Params.Alias)
 		if sg.Params.GetUID || sg.Params.isDebug {
 			n1.SetUID(uid)
