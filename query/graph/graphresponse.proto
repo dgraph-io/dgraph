@@ -1,8 +1,8 @@
 // To compile this file, in dgraph directory :
-// protoc --gofast_out=plugins=grpc,Mdprotoc/facets.proto=github.com/dgraph-io/dgraph/dprotoc:. query/graph/graphresponse.proto
+// protoc --gofast_out=plugins=grpc,Mdproto/facets.proto=github.com/dgraph-io/dgraph/dproto:. query/graph/graphresponse.proto
 
 syntax="proto3";
-import "dprotoc/facets.proto";
+import "dproto/facets.proto";
 
 package graph;
 
@@ -18,7 +18,7 @@ message NQuad {
     string label = 5;
     string lang = 7;
     sint32 objectType = 6;
-    repeated dprotoc.Facet facets = 8;
+    repeated dproto.Facet facets = 8;
 }
 
 message Value {
