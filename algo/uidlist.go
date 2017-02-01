@@ -134,7 +134,7 @@ func ListLen(l *task.List) int {
 }
 
 func IntersectWith(u, v *task.List) {
-	o := new(task.List) //u.Blocks
+	o := new(task.List)
 	out := NewWriteIterator(o)
 
 	i := 0
@@ -240,9 +240,11 @@ func ApplyFilter(u *task.List, f func(uint64, int) bool) {
 // reads (each element is read only once) whereas pairwise intersections can
 // require np + nq - p reads, which can be up to ~twice as many.
 func IntersectSorted(lists []*task.List) *task.List {
+	o := new(task.List)
 	if len(lists) == 0 {
-		return new(task.List)
+		return o
 	}
+	out := NewWriteIterator(o)
 
 	// Scan through the smallest list. Denote as A.
 	// For each x in A,
@@ -261,8 +263,6 @@ func IntersectSorted(lists []*task.List) *task.List {
 		}
 	}
 
-	// Our final output. Give it some capacity.
-	output := make([]uint64, 0, minLen)
 	// lptrs[j] is the element we are looking at for lists[j].
 	lptrs := make([]ListIterator, len(lists))
 	for i, l := range lists {
@@ -291,10 +291,11 @@ func IntersectSorted(lists []*task.List) *task.List {
 			// Otherwise, lj.Get(ljp) = val and we continue checking other lists.
 		}
 		if !skip {
-			output = append(output, val)
+			out.Append(val)
 		}
 	}
-	return SortedListToBlock(output)
+	out.End()
+	return o
 }
 
 func Difference(u, v *task.List) {
@@ -381,9 +382,11 @@ func Difference(u, v *task.List) {
 
 // MergeSorted merges sorted lists.
 func MergeSorted(lists []*task.List) *task.List {
+	o := new(task.List)
 	if len(lists) == 0 {
-		return new(task.List)
+		return o
 	}
+	out := NewWriteIterator(o)
 
 	h := &uint64Heap{}
 	heap.Init(h)
@@ -399,13 +402,11 @@ func MergeSorted(lists []*task.List) *task.List {
 		}
 	}
 
-	// Our final output. Give it some capacity.
-	output := make([]uint64, 0, 100)
 	var last uint64   // Last element added to sorted / final output.
 	for h.Len() > 0 { // While heap is not empty.
 		me := (*h)[0] // Peek at the top element in heap.
-		if len(output) == 0 || me.val != last {
-			output = append(output, me.val) // Add if unique.
+		if (out.idx == 0 && out.bIdx == 0) || me.val != last {
+			out.Append(me.val) // Add if unique.
 			last = me.val
 		}
 		if !lIt[me.listIdx].Next() {
@@ -416,7 +417,8 @@ func MergeSorted(lists []*task.List) *task.List {
 			heap.Fix(h, 0) // Faster than Pop() followed by Push().
 		}
 	}
-	return SortedListToBlock(output)
+	out.End()
+	return o
 }
 
 // IndexOf performs a binary search on the uids slice and returns the index at
