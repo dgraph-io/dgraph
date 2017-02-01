@@ -52,9 +52,7 @@ popd &> /dev/null
 # Lets wait for stuff to be committed to RocksDB.
 sleep 20
 
-echo "Before pushd", $(pwd)
 pushd $GOPATH/src/github.com/dgraph-io/dgraph/contrib/indextest &> /dev/null
-echo "After pushd", $(pwd)
 
 function run_index_test {
 	X=$1
@@ -77,4 +75,5 @@ run_index_test releasedate_geq release_date 60991
 run_index_test gen_anyof_good_bad name 1103
 
 popd &> /dev/null
+
 killall dgraph
