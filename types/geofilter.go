@@ -325,7 +325,8 @@ func (q GeoQueryData) intersects(g geom.T) bool {
 // FilterGeoUids filters the uids based on the corresponding values and GeoQueryData.
 func FilterGeoUids(uids *task.List, values []*task.Value, q *GeoQueryData) *task.List {
 	x.AssertTruef(len(values) == algo.ListLen(uids), "lengths not matching")
-	var rv []uint64
+	o := new(task.List)
+	out := algo.NewWriteIterator(o)
 	it := algo.NewListIterator(uids)
 	for i := -1; it.Valid(); it.Next() {
 		i++
@@ -350,7 +351,8 @@ func FilterGeoUids(uids *task.List, values []*task.Value, q *GeoQueryData) *task
 		}
 
 		// we matched the geo filter, add the uid to the list
-		rv = append(rv, it.Val())
+		out.Append(it.Val())
 	}
-	return algo.SortedListToBlock(rv)
+	out.End()
+	return o
 }
