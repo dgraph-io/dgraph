@@ -82,7 +82,7 @@ message MembershipUpdate {
 	string redirect_addr = 4;
 }
 
-message Attr {
+message Property {
 	string name = 1;
 	Value val = 2;
 }
@@ -100,7 +100,7 @@ message DirectedEdge {
 		DEL = 1;
 	}
 	Op op = 8;
-	repeated Attr attrs = 9;
+	repeated Property properties = 9;
 }
 
 message Mutations {

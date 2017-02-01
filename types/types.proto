@@ -15,7 +15,7 @@ enum ValType {
 	UID = 8;
 }
 
-message EdgeAttr {
+message Attr {
 	string key = 1;
 	bytes value = 2;
 	ValType val_type = 3;
@@ -28,7 +28,7 @@ message Posting {
 	string lang = 4;
 	string label = 5;
 	uint64 commit = 6;  // More inclination towards smaller values.
-	repeated EdgeAttr edgeAttrs = 7;
+	repeated Attr attrs = 7;
 
 	// TODO: op is only used temporarily. See if we can remove it from here.
 	uint32 op = 12;

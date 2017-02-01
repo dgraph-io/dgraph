@@ -128,16 +128,16 @@ func toUid(xid string, newToUid map[string]uint64) (uid uint64) {
 func (nq NQuad) ToEdgeUsing(newToUid map[string]uint64) (*task.DirectedEdge, error) {
 	var err error
 	uid := toUid(nq.Subject, newToUid)
-	edgeAttrs, err := toEdgeAttrs(nq)
+	properties, err := toProperties(nq)
 	if err != nil {
 		return nil, err
 	}
 	out := &task.DirectedEdge{
-		Entity: uid,
-		Attr:   nq.Predicate,
-		Label:  nq.Label,
-		Lang:   nq.Lang,
-		Attrs:  edgeAttrs,
+		Entity:     uid,
+		Attr:       nq.Predicate,
+		Label:      nq.Label,
+		Lang:       nq.Lang,
+		Properties: properties,
 	}
 
 	switch nq.valueType() {
@@ -152,8 +152,8 @@ func (nq NQuad) ToEdgeUsing(newToUid map[string]uint64) (*task.DirectedEdge, err
 	return out, nil
 }
 
-func toEdgeAttrs(nq NQuad) ([]*task.Attr, error) {
-	weights := make([]*task.Attr, len(nq.Weights))
+func toProperties(nq NQuad) ([]*task.Property, error) {
+	weights := make([]*task.Property, len(nq.Weights))
 	var value []byte
 	var err error
 	for _, w := range nq.Weights {
@@ -161,7 +161,7 @@ func toEdgeAttrs(nq NQuad) ([]*task.Attr, error) {
 			return nil, err
 		}
 		weights = append(weights,
-			&task.Attr{w.Key, &task.Value{value, int32(w.ValType)}})
+			&task.Property{w.Key, &task.Value{value, int32(w.ValType)}})
 	}
 	return weights, nil
 }
