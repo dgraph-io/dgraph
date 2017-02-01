@@ -22,11 +22,10 @@ type WriteIterator struct {
 }
 
 func NewWriteIterator(l *task.List) WriteIterator {
-	if l.Blocks == nil {
-		l.Blocks = make([]*task.Block, 1, 2)
-		l.Blocks[0] = new(task.Block)
-		l.Blocks[0].List = make([]uint64, 0, blockSize)
-	}
+	// Initialise and allocate some memory.
+	l.Blocks = make([]*task.Block, 1, 2)
+	l.Blocks[0] = new(task.Block)
+	l.Blocks[0].List = make([]uint64, 0, blockSize)
 	return WriteIterator{
 		list: l,
 		bIdx: 0,
@@ -475,7 +474,18 @@ func IndexOf(u *task.List, uid uint64) (int, int) {
 	return -1, -1
 }
 
-func Ridx(ul *task.List, i int) (int, int) {
+func Swap(ul *task.List, i, j int) {
+	i1, i2 := ridx(ul, i)
+	j1, j2 := ridx(ul, j)
+	ul.Blocks[i1].List[i2], ul.Blocks[j1].List[j2] = ul.Blocks[j1].List[j2], ul.Blocks[i1].List[i2]
+}
+
+func ItemAtIndex(ul *task.List, i int) uint64 {
+	i, j := ridx(ul, i)
+	return ul.Blocks[i].List[j]
+}
+
+func ridx(ul *task.List, i int) (int, int) {
 	r1, r2 := 0, 0
 	for _, it := range ul.Blocks {
 		if r2+len(it.List) > i {
