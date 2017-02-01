@@ -18,6 +18,8 @@ package worker
 
 import (
 	"strings"
+	"strconv"
+	"fmt"
 
 	"golang.org/x/net/context"
 
@@ -90,6 +92,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 	attr := q.Attr
 
 	useFunc := len(q.SrcFunc) != 0
+	fmt.Printf("[processTask] task.Query: %#v\n", q)
 	var n int
 	var tokens []string
 	var geoQuery *types.GeoQueryData
@@ -97,12 +100,20 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 	var intersectDest bool
 	var ineqValue types.Val
 	var ineqValueToken string
-	var isIneq bool
+	var isIneq, isAgrtr bool
 
 	if useFunc {
 		f := q.SrcFunc[0]
 		isIneq = f == "leq" || f == "geq" || f == "lt" || f == "gt" || f == "eq"
+		isAgrtr = f == "count" || f == "min"
 		switch {
+		case isAgrtr:
+			// confirm agrregator could apply on the attributes
+			if !CouldApplyOpOn(f, attr) {
+				return nil, x.Errorf("Aggregator %v could not apply on %v",
+					f, attr)
+			}
+
 		case isIneq:
 			if len(q.SrcFunc) != 2 {
 				return nil, x.Errorf("Function requires 2 arguments, but got %d %v",
@@ -113,6 +124,9 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 				return nil, err
 			}
 			// Tokenizing RHS value of inequality.
+			// TODO(kg): more comments about why we convert to types.BinaryID, and
+			// then convert it back to attr type in IndexTokens.
+			// the point is IndexTokens need BinaryID type to be passed in
 			v := types.ValueForType(types.BinaryID)
 			err = types.Marshal(ineqValue, &v)
 			if err != nil {
@@ -146,15 +160,22 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 			}
 			intersectDest = (strings.ToLower(q.SrcFunc[0]) == "allof")
 		}
-		n = len(tokens)
+		if isAgrtr {
+			n = len(q.Uids)
+		} else {
+			n = len(tokens)
+		}
 	} else {
 		n = len(q.Uids)
 	}
 
 	var out task.Result
+	typ, _ := schema.TypeOf(attr)
 	for i := 0; i < n; i++ {
 		var key []byte
-		if useFunc {
+		if isAgrtr {
+			key = x.DataKey(attr, q.Uids[i])
+		} else if useFunc {
 			key = x.IndexKey(attr, tokens[i])
 		} else if q.Reverse {
 			key = x.ReverseKey(attr, q.Uids[i])
@@ -168,22 +189,33 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 		// If a posting list contains a value, we store that or else we store a nil
 		// byte so that processing is consistent later.
 		val, err := pl.Value()
-
 		newValue := &task.Value{ValType: int32(val.Tid)}
 		if err == nil {
 			newValue.Val = val.Value.([]byte)
 		} else {
 			newValue.Val = x.Nilbyte
 		}
-		out.Values = append(out.Values, newValue)
-
-		if q.DoCount {
-			out.Counts = append(out.Counts, uint32(pl.Length(0)))
+			
+		if !isAgrtr {
+			out.Values = append(out.Values, newValue)
+		} else if q.SrcFunc[0] == "count" {
+			strCnt := strconv.Itoa(pl.Length(0))
+			cntValue := &task.Value{ValType: int32(types.StringID), Val: []byte(strCnt)}
+			out.Values = append(out.Values, cntValue)
 			// Add an empty UID list to make later processing consistent
 			out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
 			continue
+		} else {
+			if len(newValue.Val) == 0 {
+				// do nothing
+			} else if len(out.Values) == 0 {
+				out.Values = append(out.Values, newValue)
+				out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
+			} else {
+				out.Values[0], _ = Aggregate(q.SrcFunc[0], out.Values[0], newValue, typ)
+			}
+			continue
 		}
-
 		// The more usual case: Getting the UIDs.
 		opts := posting.ListOptions{
 			AfterUID: uint64(q.AfterUid),

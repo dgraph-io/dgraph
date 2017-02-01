@@ -44,6 +44,7 @@ type GraphQuery struct {
 	Args     map[string]string
 	Children []*GraphQuery
 	Filter   *FilterTree
+	Agrtr    *Function
 
 	// Internal fields below.
 	// If gq.fragment is nonempty, then it is a fragment reference / spread.
@@ -1130,7 +1131,8 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 
 // godeep constructs the subgraph from the lexed items and a GraphQuery node.
 func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
-	var isCount uint16
+	var isAgrtr uint16
+	var agrtr string
 	curp := gq // Used to track current node, for nesting.
 	for it.Next() {
 		item := it.Item()
@@ -1171,30 +1173,34 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				continue
 			}
 
-			if item.Val == "count" {
-				if isCount != 0 {
-					return x.Errorf("Invalid mention of count.")
+			if item.Val == "count" || item.Val == "min" {
+				if isAgrtr != 0 {
+					return x.Errorf("Invalid mention of aggregator.")
 				}
-				isCount = 1
+				isAgrtr = 1
+				agrtr = item.Val
 				it.Next()
 				item = it.Item()
 				if item.Typ != itemLeftRound {
-					return x.Errorf("Invalid mention of count.")
+					return x.Errorf("Invalid mention of aggregator.")
 				}
 				continue
 			}
-			if isCount == 2 {
+			if isAgrtr == 2 {
 				return x.Errorf("Multiple predicates not allowed in single count.")
 			}
 			child := &GraphQuery{
 				Args:    make(map[string]string),
 				Attr:    item.Val,
-				IsCount: isCount == 1,
+				//IsCount: isAgrtr == 1,
+			}
+			if isAgrtr == 1 {
+				child.Agrtr = &Function{Name:agrtr, Attr: item.Val}
 			}
 			gq.Children = append(gq.Children, child)
 			curp = child
-			if isCount == 1 {
-				isCount = 2
+			if isAgrtr == 1 {
+				isAgrtr = 2
 			}
 		case itemColon:
 			it.Next()
@@ -1240,10 +1246,10 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				}
 			}
 		case itemRightRound:
-			if isCount != 2 {
+			if isAgrtr != 2 {
 				return x.Errorf("Invalid mention of brackets")
 			}
-			isCount = 0
+			isAgrtr = 0
 		}
 	}
 	return nil
