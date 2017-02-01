@@ -1,6 +1,7 @@
 package algo
 
 import (
+	"container/heap"
 	"sort"
 
 	"github.com/dgraph-io/dgraph/task"
@@ -89,6 +90,18 @@ func BlockToList(b *task.List) []uint64 {
 	return res
 }
 
+func ListLen(l *task.List) int {
+	var n int
+	if l == nil || l.Blocks == nil {
+		return 0
+	}
+
+	for _, it := range l.Blocks {
+		n += len(it.List)
+	}
+	return n
+}
+
 func IntersectWith(u, v *task.List) {
 	out := u.Blocks
 
@@ -144,7 +157,7 @@ func IntersectWith(u, v *task.List) {
 				jj = 0
 				break L
 			} else if uid < vid {
-				for ; ii < ulen && u.Blocks[i].List[ii] < vid; ii++ {
+				for ; ii < ulen && ulist[ii] < vid; ii++ {
 				}
 				if ii == ulen {
 					out[i].List = out[i].List[:kk]
@@ -154,7 +167,7 @@ func IntersectWith(u, v *task.List) {
 					break L
 				}
 			} else if uid > vid {
-				for ; jj < vlen && v.Blocks[j].List[jj] < uid; jj++ {
+				for ; jj < vlen && vlist[jj] < uid; jj++ {
 				}
 				if jj == vlen {
 					j++
@@ -197,7 +210,6 @@ func ApplyFilter(u *task.List, f func(uint64, int) bool) {
 	}
 }
 
-/*
 // IntersectSorted intersect a list of UIDLists. An alternative is to do
 // pairwise intersections n-1 times where n=number of lists. This is less
 // efficient:
@@ -219,10 +231,10 @@ func IntersectSorted(lists []*task.List) *task.List {
 	//     If y > x, mark x as "skipped". Break out of loop.
 	//   If x is not marked as "skipped", append x to result.
 	var minLenIdx int
-	minLen := len(lists[0].Uids)
+	minLen := ListLen(lists[0])
 	for i := 1; i < len(lists); i++ { // Start from 1.
 		l := lists[i]
-		n := len(l.Uids)
+		n := ListLen(l)
 		if n < minLen {
 			minLen = n
 			minLenIdx = i
@@ -232,15 +244,21 @@ func IntersectSorted(lists []*task.List) *task.List {
 	// Our final output. Give it some capacity.
 	output := make([]uint64, 0, minLen)
 	// lptrs[j] is the element we are looking at for lists[j].
-	lptrs := make([]int, len(lists))
-	shortList := lists[minLenIdx]
+	lptrs := make([]ListIterator, len(lists))
+	for i, l := range lists {
+		lptrs[i] = NewListIterator(l)
+	}
+	shortListIt := lptrs[minLenIdx]
 	elemsLeft := true // If some list has no elems left, we can't intersect more.
 
-	for i := 0; i < len(shortList.Uids) && elemsLeft; i++ {
-		val := shortList.Uids[i]
-		if i > 0 && val == shortList.Uids[i-1] {
-			x.AssertTruef(false, "We shouldn't have duplicates in UIDLists")
-		}
+	for ; shortListIt.Valid() && elemsLeft; shortListIt.Next() { //for i := 0; i < len(shortList.Uids) && elemsLeft; i++ {
+		val := shortListIt.Val()
+		// We dont need this
+		/*
+			if i > 0 && val == shortList.Uids[i-1] {
+				x.AssertTruef(false, "We shouldn't have duplicates in UIDLists")
+			}
+		*/
 
 		var skip bool                     // Should we skip val in output?
 		for j := 0; j < len(lists); j++ { // For each other list in lists.
@@ -249,15 +267,11 @@ func IntersectSorted(lists []*task.List) *task.List {
 				continue
 			}
 
-			lj := lists[j]
-			ljp := lptrs[j]
-			lsz := len(lj.Uids)
-			for ; ljp < lsz && lj.Uids[ljp] < val; ljp++ {
+			for ; lptrs[j].Valid() && lptrs[j].Val() < val; lptrs[j].Next() {
 			}
 
-			lptrs[j] = ljp
-			if ljp >= lsz || lj.Uids[ljp] > val {
-				elemsLeft = ljp < lsz
+			if !lptrs[j].Valid() || lptrs[j].Val() > val {
+				elemsLeft = lptrs[j].Valid()
 				skip = true
 				break
 			}
@@ -267,33 +281,99 @@ func IntersectSorted(lists []*task.List) *task.List {
 			output = append(output, val)
 		}
 	}
-	return &task.List{Uids: output}
+	return SortedListToBlock(output)
 }
 
 func Difference(u, v *task.List) {
-	if u == nil || v == nil {
-		return
-	}
-	out := u.Uids[:0]
-	n := len(u.Uids)
-	m := len(v.Uids)
-	for i, k := 0, 0; i < n && k < m; {
-		uid := u.Uids[i]
-		vid := v.Uids[k]
-		if uid < vid {
-			for i < n && u.Uids[i] < vid {
-				out = append(out, u.Uids[i])
+	out := u.Blocks
+
+	i := 0
+	j := 0
+
+	ii := 0
+	jj := 0
+	kk := 0
+
+	m := len(u.Blocks)
+	n := len(v.Blocks)
+
+	for i < m && j < n {
+
+		ulist := u.Blocks[i].List
+		vlist := v.Blocks[j].List
+		ub := u.Blocks[i].MaxInt
+		vb := v.Blocks[j].MaxInt
+		ulen := len(u.Blocks[i].List)
+		vlen := len(v.Blocks[j].List)
+
+	L:
+		for ii < ulen && jj < vlen {
+			uid := ulist[ii]
+			vid := vlist[jj]
+
+			if uid == vid {
+				ii++
+				jj++
+				if ii == ulen {
+					out[i].List = out[i].List[:kk]
+					i++
+					ii = 0
+					kk = 0
+					break L
+				}
+				if jj == vlen {
+					j++
+					jj = 0
+					break L
+				}
+			} else if ub < vid {
 				i++
-			}
-		} else if uid == vid {
-			i++
-			k++
-		} else {
-			for k = k + 1; k < m && v.Uids[k] < uid; k++ {
+				ii = 0
+				kk = 0
+				break L
+			} else if vb < uid {
+				j++
+				jj = 0
+				break L
+			} else if uid < vid {
+				for ; ii < ulen && ulist[ii] < vid; ii++ {
+					out[i].List[kk] = ulist[ii]
+					kk++
+				}
+				if ii == ulen {
+					out[i].List = out[i].List[:kk]
+					i++
+					ii = 0
+					kk = 0
+					break L
+				}
+			} else if uid > vid {
+				for ; jj < vlen && vlist[jj] < uid; jj++ {
+				}
+				if jj == vlen {
+					j++
+					jj = 0
+					break L
+				}
 			}
 		}
+
+		if ii == ulen {
+			out[i].List = out[i].List[:kk]
+			i++
+			ii = 0
+			kk = 0
+		}
+		if jj == vlen {
+			j++
+			jj = 0
+		}
 	}
-	u.Uids = out
+
+	if i < m {
+		out = out[:i+1]
+		out[i].List = out[i].List[:kk]
+	}
 }
 
 // MergeSorted merges sorted lists.
@@ -304,11 +384,13 @@ func MergeSorted(lists []*task.List) *task.List {
 
 	h := &uint64Heap{}
 	heap.Init(h)
-
+	var lIt []ListIterator
 	for i, l := range lists {
-		if len(l.Uids) > 0 {
+		it := NewListIterator(l)
+		lIt = append(lIt, it)
+		if it.Valid() {
 			heap.Push(h, elem{
-				val:     l.Uids[0],
+				val:     it.Val(),
 				listIdx: i,
 			})
 		}
@@ -316,8 +398,6 @@ func MergeSorted(lists []*task.List) *task.List {
 
 	// Our final output. Give it some capacity.
 	output := make([]uint64, 0, 100)
-	// idx[i] is the element we are looking at for lists[i].
-	idx := make([]int, len(lists))
 	var last uint64   // Last element added to sorted / final output.
 	for h.Len() > 0 { // While heap is not empty.
 		me := (*h)[0] // Peek at the top element in heap.
@@ -325,19 +405,16 @@ func MergeSorted(lists []*task.List) *task.List {
 			output = append(output, me.val) // Add if unique.
 			last = me.val
 		}
-		l := lists[me.listIdx]
-		if idx[me.listIdx] >= len(l.Uids)-1 {
+		if !lIt[me.listIdx].Next() {
 			heap.Pop(h)
 		} else {
-			idx[me.listIdx]++
-			val := l.Uids[idx[me.listIdx]]
+			val := lIt[me.listIdx].Val()
 			(*h)[0].val = val
 			heap.Fix(h, 0) // Faster than Pop() followed by Push().
 		}
 	}
-	return &task.List{Uids: output}
+	return SortedListToBlock(output)
 }
-*/
 
 // IndexOf performs a binary search on the uids slice and returns the index at
 // which it finds the uid, else returns -1
