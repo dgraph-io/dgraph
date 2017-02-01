@@ -58,9 +58,22 @@ func NewListIterator(l *task.List) ListIterator {
 	var end bool
 	if l == nil || l.Blocks == nil || len(l.Blocks) == 0 {
 		end = true
+		return ListIterator{
+			list:  l,
+			bIdx:  0,
+			idx:   0,
+			isEnd: end,
+		}
+
 	}
 	if l.Blocks[0].List == nil || len(l.Blocks[0].List) == 0 {
 		end = true
+		return ListIterator{
+			list:  l,
+			bIdx:  0,
+			idx:   0,
+			isEnd: end,
+		}
 	}
 
 	return ListIterator{
