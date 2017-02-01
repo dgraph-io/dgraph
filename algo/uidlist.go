@@ -99,25 +99,11 @@ func (l *ListIterator) Next() bool {
 func SortedListToBlock(l []uint64) *task.List {
 	b := new(task.List)
 	wit := NewWriteIterator(b)
-	/*
-		b.Blocks = make([]*task.Block, 1, 2)
-		bIdx := 0
-		b.Blocks[0] = new(task.Block)
-		b.Blocks[0].List = make([]uint64, 0, blockSize)
-	*/
 	if len(l) == 0 {
 		return b
 	}
 
 	for _, it := range l {
-		/*
-			if len(b.Blocks[bIdx].List) > blockSize {
-				b.Blocks[bIdx].MaxInt = b.Blocks[bIdx].List[blockSize]
-				b.Blocks = append(b.Blocks, &task.Block{List: make([]uint64, 0, blockSize)})
-				bIdx++
-			}
-			b.Blocks[bIdx].List = append(b.Blocks[bIdx].List, it)
-		*/
 		wit.Append(it)
 	}
 
