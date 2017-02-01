@@ -131,7 +131,7 @@ func samePosting(a *types.Posting, b *types.Posting) bool {
 }
 
 func newPosting(t *task.DirectedEdge) *types.Posting {
-	x.AssertTruef(bytes.Equal(t.Value, nil) || t.ValueId == math.MaxUint64,
+	x.AssertTruef(edgeType(t) != valueEmpty,
 		"This should have been set by the caller.")
 
 	var op uint32
@@ -148,6 +148,7 @@ func newPosting(t *task.DirectedEdge) *types.Posting {
 		Value:   t.Value,
 		ValType: types.Posting_ValType(t.ValueType),
 		Label:   t.Label,
+		Lang:    t.Lang,
 		Op:      op,
 	}
 }
@@ -304,6 +305,50 @@ func (l *List) AddMutation(ctx context.Context, t *task.DirectedEdge) (bool, err
 	return l.addMutation(ctx, t)
 }
 
+// TODO(tzdybal) - this is almost the same as in rdf/parse.go - maybe some refactoring?
+type valueTypeInfo int32
+
+// Type of a data inside DirectedEdge or Posting
+const (
+	valueEmpty    valueTypeInfo = iota // no UID and no value
+	valueUid                           // UID
+	valueUntagged                      // value without defined language tag
+	valueTagged                        // value with defined language tag
+)
+
+func edgeType(t *task.DirectedEdge) valueTypeInfo {
+	hasVal := !bytes.Equal(t.Value, nil)
+	hasId := t.ValueId != 0
+	switch {
+	case hasVal && hasId:
+		return valueTagged
+	case hasVal && !hasId:
+		return valueUntagged
+	case !hasVal && hasId:
+		return valueUid
+	default:
+		return valueEmpty
+	}
+}
+
+// TODO(tzdybal) - refactor
+func postingType(p *types.Posting) valueTypeInfo {
+	if !bytes.Equal(p.Value, nil) {
+		if len(p.Lang) == 0 {
+			return valueUntagged // value without lang tag
+		} else {
+			return valueTagged // value with lang tag
+		}
+	} else {
+		if p.Uid == math.MaxUint64 {
+			return valueEmpty // empty - no Uid and no Value
+		} else {
+			return valueUid // Uid
+		}
+
+	}
+}
+
 func (l *List) addMutation(ctx context.Context, t *task.DirectedEdge) (bool, error) {
 	if atomic.LoadInt32(&l.deleteMe) == 1 {
 		x.TraceError(ctx, x.Errorf("DELETEME set to true. Temporary error."))
@@ -311,10 +356,18 @@ func (l *List) addMutation(ctx context.Context, t *task.DirectedEdge) (bool, err
 	}
 
 	l.AssertLock()
-	// All edges with a value set, have the same uid. In other words,
-	// an (entity, attribute) can only have one value.
+	// All edges with a value without LANGTAG, have the same uid. In other words,
+	// an (entity, attribute) can only have one untagged value.
 	if !bytes.Equal(t.Value, nil) {
 		t.ValueId = math.MaxUint64
+		// TODO(tzdybal) - uncomment when entire code is ready for the change
+		/*
+			if len(t.Lang) > 0 {
+				t.ValueId = farm.Fingerprint64([]byte(t.Lang))
+			} else {
+				t.ValueId = math.MaxUint64
+			}
+		*/
 	}
 	if t.ValueId == 0 {
 		err := x.Errorf("ValueId cannot be zero")
@@ -511,7 +564,7 @@ func (l *List) Uids(opt ListOptions) *task.List {
 
 	result := make([]uint64, 0, 10)
 	l.iterate(opt.AfterUID, func(p *types.Posting) bool {
-		if p.Uid == math.MaxUint64 {
+		if postingType(p) != valueUid {
 			return false
 		}
 		uid := p.Uid
@@ -555,3 +608,5 @@ func (l *List) value() (rval types.Val, rerr error) {
 	}
 	return rval, nil
 }
+
+// TODO(tzdybal) function for value in given language

@@ -46,6 +46,7 @@ func populateGraphBackup(t *testing.T) {
 	addEdge(t, edge, getOrCreate(x.DataKey("name", 1)))
 
 	edge.Entity = 2
+	edge.Lang = "en"
 	addEdge(t, edge, getOrCreate(x.DataKey("name", 2)))
 }
 

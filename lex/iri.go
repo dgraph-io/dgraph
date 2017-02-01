@@ -43,14 +43,8 @@ func isIRIChar(r rune, l *Lexer) bool {
 		return false
 	}
 	switch r {
-	case '<':
-	case '>':
-	case '"':
-	case '{':
-	case '}':
-	case '|':
-	case '^':
-	case '`':
+	case '<', '>', '"', '{', '}', '|', '^', '`':
+		return false
 	case '\\':
 		r2 := l.Next()
 		if r2 != 'u' && r2 != 'U' {
@@ -58,10 +52,8 @@ func isIRIChar(r rune, l *Lexer) bool {
 			return false
 		}
 		return HasUChars(r2, l)
-	default:
-		return true
 	}
-	return false
+	return true
 }
 
 // UCHAR ::= '\u' HEX HEX HEX HEX | '\U' HEX HEX HEX HEX HEX HEX HEX HEX

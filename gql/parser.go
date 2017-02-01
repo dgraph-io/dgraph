@@ -35,15 +35,17 @@ import (
 type GraphQuery struct {
 	UID      []uint64
 	Attr     string
+	Langs    []string
 	Alias    string
 	IsCount  bool
 	Var      string
 	NeedsVar []string
 	Func     *Function
 
-	Args     map[string]string
-	Children []*GraphQuery
-	Filter   *FilterTree
+	Args      map[string]string
+	Children  []*GraphQuery
+	Filter    *FilterTree
+	Normalize bool
 
 	// Internal fields below.
 	// If gq.fragment is nonempty, then it is a fragment reference / spread.
@@ -491,7 +493,10 @@ func getQuery(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 	var seenFilter bool
 L:
 	// Recurse to deeper levels through godeep.
-	it.Next()
+	if !it.Next() {
+		return nil, x.Errorf("Invalid query")
+	}
+
 	item := it.Item()
 	if item.Typ == itemLeftCurl {
 		if rerr = godeep(it, gq); rerr != nil {
@@ -513,6 +518,8 @@ L:
 				}
 				gq.Filter = filter
 
+			case "normalize":
+				gq.Normalize = true
 			default:
 				return nil, x.Errorf("Unknown directive [%s]", item.Val)
 			}
@@ -843,6 +850,7 @@ func evalStack(opStack, valueStack *filterTreeStack) {
 
 func parseFunction(it *lex.ItemIterator) (*Function, error) {
 	var g *Function
+L:
 	for it.Next() {
 		item := it.Item()
 		if item.Typ == itemName { // Value.
@@ -855,7 +863,7 @@ func parseFunction(it *lex.ItemIterator) (*Function, error) {
 			for it.Next() {
 				itemInFunc := it.Item()
 				if itemInFunc.Typ == itemRightRound {
-					break
+					break L
 				} else if itemInFunc.Typ != itemName {
 					return nil, x.Errorf("Expected arg after func [%s], but got item %v",
 						g.Name, itemInFunc)
@@ -870,8 +878,6 @@ func parseFunction(it *lex.ItemIterator) (*Function, error) {
 					g.Args = append(g.Args, it)
 				}
 			}
-		} else if item.Typ == itemRightRound {
-			break
 		} else {
 			return nil, x.Errorf("Expected a function but got %q", item.Val)
 		}
@@ -1050,12 +1056,56 @@ func parseVarList(gq *GraphQuery, val string) error {
 	return nil
 }
 
+func parseDirective(it *lex.ItemIterator, curp *GraphQuery) error {
+	it.Next()
+	item := it.Item()
+	peek, err := it.Peek(1)
+	if err == nil && item.Typ == itemName {
+		if peek[0].Typ == itemLeftRound {
+			// this is directive
+			switch item.Val {
+			case "filter":
+				filter, err := parseFilter(it)
+				if err != nil {
+					return err
+				}
+				curp.Filter = filter
+
+			default:
+				return x.Errorf("Unknown directive [%s]", item.Val)
+			}
+		} else if len(curp.Attr) > 0 && len(curp.Langs) == 0 {
+			// this is language list
+			for ; item.Typ == itemName; item = it.Item() {
+				curp.Langs = append(curp.Langs, item.Val)
+				it.Next()
+				if it.Item().Typ == itemColon {
+					it.Next()
+				} else {
+					break
+				}
+			}
+			it.Prev()
+			if len(curp.Langs) == 0 {
+				return x.Errorf("Expected at least 1 language in list for %s", curp.Attr)
+			}
+		} else {
+			return x.Errorf("Expected directive or language list, got @%s", item.Val)
+		}
+	} else {
+		return x.Errorf("Expected directive or language list")
+	}
+	return nil
+}
+
 // getRoot gets the root graph query object after parsing the args.
 func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 	gq = &GraphQuery{
 		Args: make(map[string]string),
 	}
-	it.Next()
+	if !it.Next() {
+		return nil, x.Errorf("Invalid query")
+	}
 	item := it.Item()
 	if item.Typ != itemName {
 		return nil, x.Errorf("Expected some name. Got: %v", item)
@@ -1073,56 +1123,73 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 	}
 
 	gq.Alias = item.Val
-	it.Next()
+	if !it.Next() {
+		return nil, x.Errorf("Invalid query")
+	}
 	item = it.Item()
 	if item.Typ != itemLeftRound {
 		return nil, x.Errorf("Expected Left round brackets. Got: %v", item)
 	}
 
-	// Peeks items to see if its an argument or function.
-	peekItems, err := it.Peek(2)
-	if err != nil {
-		return gq, err
-	}
-	if peekItems[1].Typ == itemRightRound {
-		it.Next()
+	// Parse in KV fashion. Depending on the value of key, decide the path.
+	for it.Next() {
+		var key string
+		// Get key.
 		item := it.Item()
-		parseVarList(gq, item.Val)
-		it.Next() // consume the right round.
-	} else if peekItems[1].Typ == itemLeftRound {
-		// Store the generator function.
-		gen, err := parseFunction(it)
-		if err != nil {
-			return gq, err
-		}
-		if !schema.IsIndexed(gen.Attr) {
-			return nil, x.Errorf(
-				"Field %s is not indexed and cannot be used in functions",
-				gen.Attr)
-		}
-		if err != nil {
-			return nil, err
-		}
-		gq.Func = gen
-	} else if peekItems[1].Typ == itemColon {
-		args, err := parseArguments(it)
-		if err != nil {
-			return nil, err
+		if item.Typ == itemName {
+			key = item.Val
+		} else if item.Typ == itemRightRound {
+			break
+		} else {
+			return nil, x.Errorf("Expecting argument name. Got: %v", item)
 		}
 
-		for _, p := range args {
-			if p.Key == "id" {
-				// Check and parse if its a list.
-				err := parseID(gq, p.Val)
-				if err != nil {
-					return nil, err
-				}
-			} else {
-				return nil, x.Errorf("Expecting id at root. Got: %+v", p)
-			}
+		if !it.Next() {
+			return nil, x.Errorf("Invalid query")
 		}
-	} else {
-		return nil, x.Errorf("Unexpected root argument. Got: %v", peekItems)
+		item = it.Item()
+		if item.Typ != itemColon {
+			return nil, x.Errorf("Expecting a collon. Got: %v", item)
+		}
+
+		if key == "id" {
+			if !it.Next() {
+				return nil, x.Errorf("Invalid query")
+			}
+			item = it.Item()
+			// Check and parse if its a list.
+			err := parseID(gq, item.Val)
+			if err != nil {
+				return nil, err
+			}
+		} else if key == "func" {
+			// Store the generator function.
+			gen, err := parseFunction(it)
+			if err != nil {
+				return gq, err
+			}
+			if !schema.IsIndexed(gen.Attr) {
+				return nil, x.Errorf(
+					"Field %s is not indexed and cannot be used in functions",
+					gen.Attr)
+			}
+			if err != nil {
+				return nil, err
+			}
+			gq.Func = gen
+		} else if key == "var" {
+			if !it.Next() {
+				return nil, x.Errorf("Invalid query")
+			}
+			item := it.Item()
+			parseVarList(gq, item.Val)
+		} else {
+			if !it.Next() {
+				return nil, x.Errorf("Invalid query")
+			}
+			item := it.Item()
+			gq.Args[key] = item.Val
+		}
 	}
 
 	return gq, nil
@@ -1224,20 +1291,9 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				curp.Args[p.Key] = p.Val
 			}
 		case itemAt:
-			it.Next()
-			item := it.Item()
-			if item.Typ == itemName {
-				switch item.Val {
-				case "filter":
-					filter, err := parseFilter(it)
-					if err != nil {
-						return err
-					}
-					curp.Filter = filter
-
-				default:
-					return x.Errorf("Unknown directive [%s]", item.Val)
-				}
+			err := parseDirective(it, curp)
+			if err != nil {
+				return err
 			}
 		case itemRightRound:
 			if isCount != 2 {

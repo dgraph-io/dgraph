@@ -124,6 +124,7 @@ type params struct {
 	Var        string
 	NeedsVar   []string
 	ParentVars map[string]*task.List
+	Normalize  bool
 }
 
 // SubGraph is the way to represent data internally. It contains both the
@@ -244,11 +245,6 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 				}
 				uc := dst.New(fieldName)
 
-				// Doing check for UID here is no good because some of these might be
-				// invalid nodes.
-				// if pc.Params.GetUID || pc.Params.isDebug {
-				//	dst.SetUID(uid)
-				// }
 				if rerr := pc.preTraverse(childUID, uc); rerr != nil {
 					if rerr.Error() == "_INV_" {
 						invalidUids[childUID] = true
@@ -308,7 +304,16 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 				if sv.Tid == types.StringID && sv.Value.(string) == "_nil_" {
 					sv.Value = ""
 				}
-				dst.AddValue(fieldName, sv)
+
+				if !pc.Params.Normalize {
+					dst.AddValue(fieldName, sv)
+					continue
+				}
+				// If the query had the normalize directive, then we only add nodes
+				// with an Alias.
+				if pc.Params.Alias != "" {
+					dst.AddValue(fieldName, sv)
+				}
 			}
 		}
 	}
@@ -365,9 +370,10 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 		}
 
 		args := params{
-			Alias:   gchild.Alias,
-			isDebug: sg.Params.isDebug,
-			Var:     gchild.Var,
+			Alias:     gchild.Alias,
+			isDebug:   sg.Params.isDebug,
+			Var:       gchild.Var,
+			Normalize: sg.Params.Normalize,
 		}
 		args.NeedsVar = append(args.NeedsVar, gchild.NeedsVar...)
 		if gchild.IsCount {
@@ -376,10 +382,21 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 			}
 			args.DoCount = true
 		}
+
+		for argk, _ := range gchild.Args {
+			if !isValidArg(argk) {
+				return x.Errorf("Invalid argument : %s", argk)
+			}
+		}
+		if err := args.fill(gchild); err != nil {
+			return err
+		}
+
 		dst := &SubGraph{
 			Attr:   gchild.Attr,
 			Params: args,
 		}
+
 		if gchild.Filter != nil {
 			dstf := &SubGraph{}
 			if err := filterCopy(dstf, gchild.Filter); err != nil {
@@ -388,43 +405,41 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 			dst.Filters = append(dst.Filters, dstf)
 		}
 
-		if v, ok := gchild.Args["offset"]; ok {
-			offset, err := strconv.ParseInt(v, 0, 32)
-			if err != nil {
-				return err
-			}
-			dst.Params.Offset = int(offset)
-		}
-		if v, ok := gchild.Args["after"]; ok {
-			after, err := strconv.ParseUint(v, 0, 64)
-			if err != nil {
-				return err
-			}
-			dst.Params.AfterUID = uint64(after)
-		}
-		if v, ok := gchild.Args["first"]; ok {
-			first, err := strconv.ParseInt(v, 0, 32)
-			if err != nil {
-				return err
-			}
-			dst.Params.Count = int(first)
-		}
-		if v, ok := gchild.Args["order"]; ok {
-			dst.Params.Order = v
-		} else if v, ok := gchild.Args["orderdesc"]; ok {
-			dst.Params.Order = v
-			dst.Params.OrderDesc = true
-		}
-		for argk, _ := range gchild.Args {
-			if !isValidArg(argk) {
-				return x.Errorf("Invalid argument : %s", argk)
-			}
-		}
 		sg.Children = append(sg.Children, dst)
-		err := treeCopy(ctx, gchild, dst)
+		if err := treeCopy(ctx, gchild, dst); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+func (args *params) fill(gq *gql.GraphQuery) error {
+
+	if v, ok := gq.Args["offset"]; ok {
+		offset, err := strconv.ParseInt(v, 0, 32)
 		if err != nil {
 			return err
 		}
+		args.Offset = int(offset)
+	}
+	if v, ok := gq.Args["after"]; ok {
+		after, err := strconv.ParseUint(v, 0, 64)
+		if err != nil {
+			return err
+		}
+		args.AfterUID = uint64(after)
+	}
+	if v, ok := gq.Args["first"]; ok {
+		first, err := strconv.ParseInt(v, 0, 32)
+		if err != nil {
+			return err
+		}
+		args.Count = int(first)
+	}
+	if v, ok := gq.Args["order"]; ok {
+		args.Order = v
+	} else if v, ok := gq.Args["orderdesc"]; ok {
+		args.Order = v
+		args.OrderDesc = true
 	}
 	return nil
 }
@@ -456,14 +471,25 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		Alias:      gq.Alias,
 		Var:        gq.Var,
 		ParentVars: make(map[string]*task.List),
+		Normalize:  gq.Normalize,
 	}
 	for _, it := range gq.NeedsVar {
 		args.NeedsVar = append(args.NeedsVar, it)
 	}
 
+	for argk, _ := range gq.Args {
+		if !isValidArg(argk) {
+			return nil, x.Errorf("Invalid argument : %s", argk)
+		}
+	}
+	if err := args.fill(gq); err != nil {
+		return nil, err
+	}
+
 	sg := &SubGraph{
 		Params: args,
 	}
+
 	if gq.Func != nil {
 		sg.Attr = gq.Func.Attr
 		if !isValidFuncName(gq.Func.Name) {
@@ -641,46 +667,44 @@ func shouldCascade(res gql.Result, idx int) bool {
 
 // TODO(Ashwin): Benchmark this function. Map implementation might be slow.
 func populateVarMap(sg *SubGraph, doneVars map[string]*task.List, isCascade bool) {
-	// Filter out UIDs that don't have atleast one UID in every child.
-	excluded := make(map[uint64]struct{})
 	for _, child := range sg.Children {
 		populateVarMap(child, doneVars, isCascade)
 		if !isCascade {
 			continue
 		}
-		// If the length of child UID list is zero and it has no valid value, then the
-		// current UID should be removed form this level; which would be stored in excluded
-		// map.
-		for i := 0; i < len(child.uidMatrix); i++ {
-			if len(child.values[i].Val) == 0 && algo.ListLen(child.uidMatrix[i]) == 0 {
-				idx1, idx2 := algo.Ridx(sg.DestUIDs, i)
-				excluded[sg.DestUIDs.Blocks[idx1].List[idx2]] = struct{}{}
-			}
+
+		// Intersect the UidMatrix with the DestUids as some UIDs might have been removed
+		// by other operations. So we need to apply it on the UidMatrix.
+		for _, l := range child.uidMatrix {
+			algo.IntersectWith(l, child.DestUIDs)
 		}
 	}
-
+	//TODO(Ashwin): Opimize
+	var out []uint64
+	it := algo.NewListIterator(sg.DestUIDs)
+	i := -1
 	if !isCascade {
 		goto AssignStep
 	}
 
-	// Remove the excluded UIDs from the UID matrix of this level.
-	if sg.uidMatrix != nil {
-		for i := 0; i < len(sg.uidMatrix); i++ {
-			algo.ApplyFilter(sg.uidMatrix[i],
-				func(uid uint64, idx int) bool {
-					_, ok := excluded[uid]
-					return !ok
-				})
+	// Filter out UIDs that don't have atleast one UID in every child.
+	for ; it.Valid(); it.Next() { //i := 0; i < len(sg.DestUIDs.Uids); i++ {
+		i++
+		uid := it.Val()
+		var exclude bool
+		for _, child := range sg.Children {
+			// If the length of child UID list is zero and it has no valid value, then the
+			// current UID should be removed from this level.
+			if len(child.values[i].Val) == 0 && algo.ListLen(child.uidMatrix[i]) == 0 {
+				exclude = true
+				break
+			}
+		}
+		if !exclude {
+			out = append(out, uid)
 		}
 	}
-	// Remove the excluded UIDs from the DestUIDs of this level.
-	if sg.DestUIDs != nil {
-		algo.ApplyFilter(sg.DestUIDs,
-			func(uid uint64, idx int) bool {
-				_, ok := excluded[uid]
-				return !ok
-			})
-	}
+	sg.DestUIDs = algo.SortedListToBlock(out)
 
 AssignStep:
 	if sg.Params.Var != "" {
@@ -716,17 +740,16 @@ func (sg *SubGraph) fillVars(mp map[string]*task.List) {
 func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	var err error
 	if len(sg.Params.NeedsVar) != 0 && len(sg.SrcFunc) == 0 {
-		// Do nothing as the list has already been populated.
+		sg.uidMatrix = []*task.List{sg.DestUIDs}
 	} else if len(sg.Attr) == 0 {
 		// If we have a filter SubGraph which only contains an operator,
 		// it won't have any attribute to work on.
 		// This is to allow providing SrcUIDs to the filter children.
 		sg.DestUIDs = sg.SrcUIDs
-
 	} else if parent == nil && len(sg.SrcFunc) == 0 {
 		// I am root. I don't have any function to execute, and my
 		// result has been prepared for me already.
-		sg.DestUIDs = algo.MergeSorted(sg.uidMatrix) // Could also be = sg.SrcUIDs
+		sg.DestUIDs = sg.SrcUIDs
 	} else {
 		if len(sg.SrcFunc) > 0 && sg.SrcFunc[0] == "id" {
 			// If its an id() filter, we just have to intersect the SrcUIDs with DestUIDs
@@ -764,6 +787,11 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			sg.DestUIDs = algo.IntersectSorted(result.UidMatrix)
 		} else {
 			sg.DestUIDs = algo.MergeSorted(result.UidMatrix)
+		}
+
+		if parent == nil {
+			// I'm root. We reach here if root had a function.
+			sg.uidMatrix = []*task.List{sg.DestUIDs}
 		}
 	}
 
@@ -815,9 +843,6 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		}
 	}
 
-	for _, l := range sg.uidMatrix {
-		algo.IntersectWith(l, sg.DestUIDs)
-	}
 	if len(sg.Params.Order) == 0 {
 		// There is no ordering. Just apply pagination and return.
 		if err = sg.applyPagination(ctx); err != nil {
@@ -847,12 +872,12 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	// user wants to skip 100 entries and return 10 entries. In this case, you
 	// should return a count of 0, not 10.
 	if sg.Params.DoCount {
+
 		x.AssertTrue(len(sg.Filters) > 0)
 		sg.counts = make([]uint32, len(sg.uidMatrix))
 		for i, ul := range sg.uidMatrix {
 			// A possible optimization is to return the size of the intersection
 			// without forming the intersection.
-
 			algo.IntersectWith(ul, sg.DestUIDs)
 			sg.counts[i] = uint32(algo.ListLen(ul))
 		}
@@ -917,13 +942,12 @@ func (sg *SubGraph) applyPagination(ctx context.Context) error {
 	if params.Count == 0 && params.Offset == 0 { // No pagination.
 		return nil
 	}
-	x.AssertTrue(algo.ListLen(sg.SrcUIDs) == len(sg.uidMatrix))
 	for i := 0; i < len(sg.uidMatrix); i++ { //_, l := range sg.uidMatrix {
+		algo.IntersectWith(sg.uidMatrix[i], sg.DestUIDs)
 		start, end := pageRange(&sg.Params, algo.ListLen(sg.uidMatrix[i]))
 		//TODO(Ashwin): Optimise this -> l.Uids = l.Uids[start:end]
 		l1 := algo.BlockToList(sg.uidMatrix[i])
 		sg.uidMatrix[i] = algo.SortedListToBlock(l1[start:end])
-
 	}
 	// Re-merge the UID matrix.
 	sg.DestUIDs = algo.MergeSorted(sg.uidMatrix)
@@ -980,29 +1004,25 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 // isValidArg checks if arg passed is valid keyword.
 func isValidArg(a string) bool {
 	switch a {
-	case "order":
-	case "orderdesc":
-	case "first":
-	case "offset":
-	case "after":
-	default:
-		return false
+	case "order", "orderdesc", "first", "offset", "after":
+		return true
 	}
-	return true
+	return false
 }
 
 // isValidFuncName checks if fn passed is valid keyword.
 func isValidFuncName(f string) bool {
 	switch f {
-	case "anyof":
-	case "allof":
-	case "id":
-	default:
-		return isCompareFn(f) || types.IsGeoFunc(f)
+	case "anyof", "allof", "id":
+		return true
 	}
-	return true
+	return isCompareFn(f) || types.IsGeoFunc(f)
 }
 
 func isCompareFn(f string) bool {
-	return f == "leq" || f == "geq" || f == "lt" || f == "gt" || f == "eq"
+	switch f {
+	case "leq", "geq", "lt", "gt", "eq":
+		return true
+	}
+	return false
 }

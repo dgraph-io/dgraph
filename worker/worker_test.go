@@ -81,6 +81,7 @@ func populateGraph(t *testing.T) {
 
 	edge.Entity = 12
 	edge.Value = []byte("photon")
+	edge.ValueId = 0
 	addEdge(t, edge, getOrCreate(x.DataKey("friend", 12)))
 
 	edge.Entity = 10
