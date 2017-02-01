@@ -55,24 +55,21 @@ func (l *WriteIterator) End() {
 }
 
 func NewListIterator(l *task.List) ListIterator {
-	var end bool
 	if l == nil || l.Blocks == nil || len(l.Blocks) == 0 {
-		end = true
 		return ListIterator{
 			list:  l,
 			bIdx:  0,
 			idx:   0,
-			isEnd: end,
+			isEnd: true,
 		}
 
 	}
 	if l.Blocks[0].List == nil || len(l.Blocks[0].List) == 0 {
-		end = true
 		return ListIterator{
 			list:  l,
 			bIdx:  0,
 			idx:   0,
-			isEnd: end,
+			isEnd: true,
 		}
 	}
 
@@ -80,7 +77,7 @@ func NewListIterator(l *task.List) ListIterator {
 		list:  l,
 		bIdx:  0,
 		idx:   0,
-		isEnd: end,
+		isEnd: false,
 	}
 }
 
@@ -95,36 +92,15 @@ func (l *ListIterator) Seek(uid uint64) {
 			l.isEnd = true
 			return
 		}
-		if u.Blocks[i].List[j] == uid {
-			l.bIdx = i
-			l.idx = j
-		} else {
-			if j == 0 {
-				l.bIdx = i - 1
-				l.idx = len(u.Blocks[i-1].List) - 1
-			} else {
-				l.bIdx = i
-				l.idx = j - 1
-			}
-		}
+		l.bIdx = i
+		l.idx = j
+		return
 	}
 	l.isEnd = true
 }
 
 func (l *ListIterator) Valid() bool {
 	return !l.isEnd
-	/*
-		if l == nil || l.list.Blocks == nil || len(l.list.Blocks) == 0 {
-			return false
-		}
-		if l.bIdx >= len(l.list.Blocks) {
-			return false
-		}
-		if l.list.Blocks[l.bIdx].List == nil || l.idx >= len(l.list.Blocks[l.bIdx].List) {
-			return false
-		}
-		return true
-	*/
 }
 
 func (l *ListIterator) Val() uint64 {
@@ -192,81 +168,21 @@ func ListLen(l *task.List) int {
 func IntersectWith(u, v *task.List) {
 	o := new(task.List)
 	out := NewWriteIterator(o)
-
-	i := 0
-	j := 0
-
-	ii := 0
-	jj := 0
-
-	m := len(u.Blocks)
-	n := len(v.Blocks)
-
-	for i < m && j < n {
-
-		ulist := u.Blocks[i].List
-		vlist := v.Blocks[j].List
-		ub := u.Blocks[i].MaxInt
-		vb := v.Blocks[j].MaxInt
-		ulen := len(u.Blocks[i].List)
-		vlen := len(v.Blocks[j].List)
-
-	L:
-		for ii < ulen && jj < vlen {
-			uid := ulist[ii]
-			vid := vlist[jj]
-
-			if uid == vid {
-				out.Append(uid)
-				ii++
-				jj++
-				if ii == ulen {
-					i++
-					ii = 0
-					break L
-				}
-				if jj == vlen {
-					j++
-					jj = 0
-					break L
-				}
-			} else if ub < vid {
-				i++
-				ii = 0
-				break L
-			} else if vb < uid {
-				j++
-				jj = 0
-				break L
-			} else if uid < vid {
-				for ; ii < ulen && ulist[ii] < vid; ii++ {
-				}
-				if ii == ulen {
-					i++
-					ii = 0
-					break L
-				}
-			} else if uid > vid {
-				for ; jj < vlen && vlist[jj] < uid; jj++ {
-				}
-				if jj == vlen {
-					j++
-					jj = 0
-					break L
-				}
-			}
-		}
-
-		if ii == ulen {
-			i++
-			ii = 0
-		}
-		if jj == vlen {
-			j++
-			jj = 0
+	itu := NewListIterator(u)
+	itv := NewListIterator(v)
+	for itu.Valid() && itv.Valid() {
+		uid := itu.Val()
+		vid := itv.Val()
+		if uid == vid {
+			out.Append(uid)
+			itu.Next()
+			itv.Next()
+		} else if uid < vid {
+			itu.Seek(vid)
+		} else if uid > vid {
+			itv.Seek(uid)
 		}
 	}
-
 	out.End()
 	u.Blocks = o.Blocks
 }
@@ -357,81 +273,21 @@ func IntersectSorted(lists []*task.List) *task.List {
 func Difference(u, v *task.List) {
 	o := new(task.List)
 	out := NewWriteIterator(o)
-
-	i := 0
-	j := 0
-
-	ii := 0
-	jj := 0
-
-	m := len(u.Blocks)
-	n := len(v.Blocks)
-
-	for i < m && j < n {
-
-		ulist := u.Blocks[i].List
-		vlist := v.Blocks[j].List
-		ub := u.Blocks[i].MaxInt
-		vb := v.Blocks[j].MaxInt
-		ulen := len(u.Blocks[i].List)
-		vlen := len(v.Blocks[j].List)
-
-	L:
-		for ii < ulen && jj < vlen {
-			uid := ulist[ii]
-			vid := vlist[jj]
-
-			if uid == vid {
-				ii++
-				jj++
-				if ii == ulen {
-					i++
-					ii = 0
-					break L
-				}
-				if jj == vlen {
-					j++
-					jj = 0
-					break L
-				}
-			} else if ub < vid {
-				i++
-				ii = 0
-				break L
-			} else if vb < uid {
-				j++
-				jj = 0
-				break L
-			} else if uid < vid {
-				for ; ii < ulen && ulist[ii] < vid; ii++ {
-					out.Append(ulist[ii])
-				}
-				if ii == ulen {
-					i++
-					ii = 0
-					break L
-				}
-			} else if uid > vid {
-				for ; jj < vlen && vlist[jj] < uid; jj++ {
-				}
-				if jj == vlen {
-					j++
-					jj = 0
-					break L
-				}
-			}
-		}
-
-		if ii == ulen {
-			i++
-			ii = 0
-		}
-		if jj == vlen {
-			j++
-			jj = 0
+	itu := NewListIterator(u)
+	itv := NewListIterator(v)
+	for itu.Valid() && itv.Valid() {
+		uid := itu.Val()
+		vid := itv.Val()
+		if uid == vid {
+			itu.Next()
+			itv.Next()
+		} else if uid < vid {
+			out.Append(uid)
+			itu.Next()
+		} else if uid > vid {
+			itv.Seek(uid)
 		}
 	}
-
 	out.End()
 	u.Blocks = o.Blocks
 }
