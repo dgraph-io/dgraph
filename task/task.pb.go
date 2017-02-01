@@ -32,7 +32,7 @@ package task
 import proto "github.com/golang/protobuf/proto"
 import fmt "fmt"
 import math "math"
-import dprotoc "dprotoc"
+import dprotoc "github.com/dgraph-io/dgraph/dprotoc"
 
 import io "io"
 

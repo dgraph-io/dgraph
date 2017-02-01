@@ -1,5 +1,5 @@
 // To compile this file, in dgraph directory :
-// protoc --gofast_out=. -I. types/types.proto
+// protoc --gofast_out=plugins=grpc,Mdprotoc/facets.proto=github.com/dgraph-io/dgraph/dprotoc:.  types/types.proto
 
 syntax = "proto3";
 

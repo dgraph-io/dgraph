@@ -32,6 +32,7 @@ import (
 
 	"github.com/dgryski/go-farm"
 
+	"github.com/dgraph-io/dgraph/dprotoc"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/types"
@@ -145,21 +146,12 @@ func newPosting(t *task.DirectedEdge) *types.Posting {
 	return &types.Posting{
 		Uid:     t.ValueId,
 		Value:   t.Value,
-		ValType: types.ValType(t.ValueType),
+		ValType: dprotoc.ValType(t.ValueType),
 		Label:   t.Label,
 		Lang:    t.Lang,
 		Op:      op,
-		Attrs:   toAttrs(t.Properties),
+		Facets:  t.Facets,
 	}
-}
-
-func toAttrs(properties []*task.Property) []*types.Attr {
-	attrs := make([]*types.Attr, 0, len(properties))
-	for _, p := range properties {
-		attrs = append(attrs,
-			&types.Attr{p.Name, p.Val.Val, types.ValType(p.Val.ValType)})
-	}
-	return attrs
 }
 
 func (l *List) WaitForCommit() {

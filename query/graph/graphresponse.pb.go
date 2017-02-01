@@ -23,7 +23,12 @@ package graph
 import proto "github.com/golang/protobuf/proto"
 import fmt "fmt"
 import math "math"
-import dprotoc "dprotoc"
+import dprotoc "github.com/dgraph-io/dgraph/dprotoc"
+
+import (
+	context "golang.org/x/net/context"
+	grpc "google.golang.org/grpc"
+)
 
 import io "io"
 
@@ -582,6 +587,79 @@ func init() {
 	proto.RegisterType((*Node)(nil), "graph.Node")
 	proto.RegisterType((*Response)(nil), "graph.Response")
 }
+
+// Reference imports to suppress errors if they are not otherwise used.
+var _ context.Context
+var _ grpc.ClientConn
+
+// This is a compile-time assertion to ensure that this generated file
+// is compatible with the grpc package it is being compiled against.
+const _ = grpc.SupportPackageIsVersion4
+
+// Client API for Dgraph service
+
+type DgraphClient interface {
+	Run(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
+}
+
+type dgraphClient struct {
+	cc *grpc.ClientConn
+}
+
+func NewDgraphClient(cc *grpc.ClientConn) DgraphClient {
+	return &dgraphClient{cc}
+}
+
+func (c *dgraphClient) Run(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error) {
+	out := new(Response)
+	err := grpc.Invoke(ctx, "/graph.Dgraph/Run", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// Server API for Dgraph service
+
+type DgraphServer interface {
+	Run(context.Context, *Request) (*Response, error)
+}
+
+func RegisterDgraphServer(s *grpc.Server, srv DgraphServer) {
+	s.RegisterService(&_Dgraph_serviceDesc, srv)
+}
+
+func _Dgraph_Run_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Request)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DgraphServer).Run(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/graph.Dgraph/Run",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DgraphServer).Run(ctx, req.(*Request))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+var _Dgraph_serviceDesc = grpc.ServiceDesc{
+	ServiceName: "graph.Dgraph",
+	HandlerType: (*DgraphServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "Run",
+			Handler:    _Dgraph_Run_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "query/graph/graphresponse.proto",
+}
+
 func (m *NQuad) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
