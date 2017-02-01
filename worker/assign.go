@@ -74,12 +74,14 @@ func assignUids(ctx context.Context, num *task.Num) (*task.List, error) {
 	}
 	// Mutations successfully applied.
 
-	var out []uint64
+	o := new(task.List)
+	out := algo.NewWriteIterator(o)
 	// Only the First N entities are newly assigned UIDs, so we collect them.
 	for i := 0; i < val; i++ {
-		out = append(out, mutations.Edges[i].Entity)
+		out.Append(mutations.Edges[i].Entity)
 	}
-	return algo.SortedListToBlock(out), nil
+	out.End()
+	return o, nil
 }
 
 // AssignUidsOverNetwork assigns new uids and writes them to the umap.
