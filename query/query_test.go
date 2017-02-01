@@ -370,11 +370,11 @@ func TestUseVarsMultiOrder(t *testing.T) {
 	query := `
 		{
 			var(id:0x01) {
-				L AS friend(first:2, order: dob)
+				L AS friend(first:2, orderasc: dob)
 			}
 
 			var(id:0x01) {
-				G AS friend(first:2, offset:2, order: dob)
+				G AS friend(first:2, offset:2, orderasc: dob)
 			}
 
 			friend1(var:L) {
@@ -441,7 +441,7 @@ func TestUseVarsFilterVarReuse3(t *testing.T) {
 	query := `
 		{
 			var(id:0x01) {
-				fr AS friend(first:2, offset:2, order: dob)
+				fr AS friend(first:2, offset:2, orderasc: dob)
 			}
 
 			friend(id:0x01) {
@@ -780,7 +780,7 @@ func TestToSubgraphInvalidArgs1(t *testing.T) {
 			me(id:0x01) {
 				name
 				gender
-				friend(disorder: dob) @filter(leq("dob", "1909-03-20")) {
+				friend(disorderasc: dob) @filter(leq("dob", "1909-03-20")) {
 					name
 				}
 			}
@@ -800,7 +800,7 @@ func TestToSubgraphInvalidArgs2(t *testing.T) {
 			me(id:0x01) {
 				name
 				gender
-				friend(offset:1, invalidorder:1) @filter(anyof("name", "Andrea")) {
+				friend(offset:1, invalidorderasc:1) @filter(anyof("name", "Andrea")) {
 					name
 				}
 			}
@@ -1274,7 +1274,7 @@ func TestToFastJSONFilterLeqOrder(t *testing.T) {
 			me(id:0x01) {
 				name
 				gender
-				friend(order: dob) @filter(leq("dob", "1909-03-20")) {
+				friend(orderasc: dob) @filter(leq("dob", "1909-03-20")) {
 					name
 				}
 			}
@@ -1809,7 +1809,7 @@ func TestToFastJSONOrder(t *testing.T) {
 			me(id:0x01) {
 				name
 				gender
-				friend(order: dob) {
+				friend(orderasc: dob) {
 					name
 					dob
 				}
@@ -1875,7 +1875,7 @@ func TestToFastJSONOrderDescCount(t *testing.T) {
 			me(id:0x01) {
 				name
 				gender
-				count(friend @filter(anyof("name", "Rick")) (order: dob)) 
+				count(friend @filter(anyof("name", "Rick")) (orderasc: dob)) 
 			}
 		}
 	`
@@ -1894,7 +1894,7 @@ func TestToFastJSONOrderOffset(t *testing.T) {
 			me(id:0x01) {
 				name
 				gender
-				friend(order: dob, offset: 2) {
+				friend(orderasc: dob, offset: 2) {
 					name
 				}
 			}
@@ -1915,7 +1915,7 @@ func TestToFastJSONOrderOffsetCount(t *testing.T) {
 			me(id:0x01) {
 				name
 				gender
-				friend(order: dob, offset: 2, first: 1) {
+				friend(orderasc: dob, offset: 2, first: 1) {
 					name
 				}
 			}
@@ -1988,7 +1988,7 @@ func TestToProtoOrder(t *testing.T) {
 			me(id:0x01) {
 				name
 				gender
-				friend(order: dob) {
+				friend(orderasc: dob) {
 					name
 				}
 			}
@@ -2060,7 +2060,7 @@ func TestToProtoOrderCount(t *testing.T) {
 			me(id:0x01) {
 				name
 				gender
-				friend(order: dob, first: 2) {
+				friend(orderasc: dob, first: 2) {
 					name
 				}
 			}
@@ -2114,7 +2114,7 @@ func TestToProtoOrderOffsetCount(t *testing.T) {
 			me(id:0x01) {
 				name
 				gender
-				friend(order: dob, first: 2, offset: 1) {
+				friend(orderasc: dob, first: 2, offset: 1) {
 					name
 				}
 			}
@@ -2325,7 +2325,7 @@ func TestGeneratorMultiRootVarOrderOffset(t *testing.T) {
 	populateGraph(t)
 	query := `
     {
-			L as var(func:anyof("name", "Michonne Rick Glenn"), order: dob, offset:2) {
+			L as var(func:anyof("name", "Michonne Rick Glenn"), orderasc: dob, offset:2) {
         name
       }
 
@@ -2342,7 +2342,7 @@ func TestGeneratorMultiRootVarOrderOffset1(t *testing.T) {
 	populateGraph(t)
 	query := `
     {
-			me(func:anyof("name", "Michonne Rick Glenn"), order: dob, offset:2) {
+			me(func:anyof("name", "Michonne Rick Glenn"), orderasc: dob, offset:2) {
         name
       }
     }
@@ -2358,7 +2358,7 @@ func TestGeneratorMultiRootOrderOffset(t *testing.T) {
 			L as var(func:anyof("name", "Michonne Rick Glenn")) {
         name
       }
-			me(var: L, order: dob, offset:2) {
+			me(var: L, orderasc: dob, offset:2) {
         name
       }
     }
@@ -2384,7 +2384,7 @@ func TestGeneratorMultiRootOrder(t *testing.T) {
 	populateGraph(t)
 	query := `
     {
-			me(func:anyof("name", "Michonne Rick Glenn"), order: dob) {
+			me(func:anyof("name", "Michonne Rick Glenn"), orderasc: dob) {
         name
       }
     }
