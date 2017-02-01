@@ -1,5 +1,8 @@
-// protoc --gofast_out=.  task.proto
+// To compile this file, in dgraph directory :
+// protoc --gofast_out=. -I. task/task.proto
+
 syntax = "proto3";
+import "dprotoc/facets.proto";
 
 package task;
 
@@ -82,11 +85,6 @@ message MembershipUpdate {
 	string redirect_addr = 4;
 }
 
-message Property {
-	string name = 1;
-	Value val = 2;
-}
-
 message DirectedEdge {
 	fixed64 entity = 1;    // Subject or source node / UID.
 	string attr = 2;       // Attribute or predicate. Labels the edge.
@@ -100,7 +98,7 @@ message DirectedEdge {
 		DEL = 1;
 	}
 	Op op = 8;
-	repeated Property properties = 9;
+	repeated dprotoc.Facet facets = 9;
 }
 
 message Mutations {

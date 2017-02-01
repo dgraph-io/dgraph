@@ -1,34 +1,20 @@
-// protoc --gofast_out=. types.proto
+// To compile this file, in dgraph directory :
+// protoc --gofast_out=. -I. types/types.proto
+
 syntax = "proto3";
 
+import "dprotoc/facets.proto";
+
 package types;
-
-enum ValType {
-	STRING = 0;
-	BINARY = 1;
-	INT32 = 2;
-	FLOAT = 3;
-	BOOL = 4;
-	DATE = 5;
-	DATETIME = 6;
-	GEO = 7;
-	UID = 8;
-}
-
-message Attr {
-	string key = 1;
-	bytes value = 2;
-	ValType val_type = 3;
-}
 
 message Posting {
 	fixed64 uid = 1;
 	bytes value = 2;
-	ValType val_type = 3;
+	dprotoc.ValType val_type = 3;
 	string lang = 4;
 	string label = 5;
 	uint64 commit = 6;  // More inclination towards smaller values.
-	repeated Attr attrs = 7;
+	repeated dprotoc.Facet facets = 7;
 
 	// TODO: op is only used temporarily. See if we can remove it from here.
 	uint32 op = 12;
