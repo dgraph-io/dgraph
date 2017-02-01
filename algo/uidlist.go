@@ -134,14 +134,14 @@ func ListLen(l *task.List) int {
 }
 
 func IntersectWith(u, v *task.List) {
-	out := u.Blocks
+	o := new(task.List) //u.Blocks
+	out := NewWriteIterator(o)
 
 	i := 0
 	j := 0
 
 	ii := 0
 	jj := 0
-	kk := 0
 
 	m := len(u.Blocks)
 	n := len(v.Blocks)
@@ -161,15 +161,12 @@ func IntersectWith(u, v *task.List) {
 			vid := vlist[jj]
 
 			if uid == vid {
-				out[i].List[kk] = uid
-				kk++
+				out.Append(uid)
 				ii++
 				jj++
 				if ii == ulen {
-					out[i].List = out[i].List[:kk]
 					i++
 					ii = 0
-					kk = 0
 					break L
 				}
 				if jj == vlen {
@@ -178,10 +175,8 @@ func IntersectWith(u, v *task.List) {
 					break L
 				}
 			} else if ub < vid {
-				out[i].List = out[i].List[:kk]
 				i++
 				ii = 0
-				kk = 0
 				break L
 			} else if vb < uid {
 				j++
@@ -191,10 +186,8 @@ func IntersectWith(u, v *task.List) {
 				for ; ii < ulen && ulist[ii] < vid; ii++ {
 				}
 				if ii == ulen {
-					out[i].List = out[i].List[:kk]
 					i++
 					ii = 0
-					kk = 0
 					break L
 				}
 			} else if uid > vid {
@@ -209,10 +202,8 @@ func IntersectWith(u, v *task.List) {
 		}
 
 		if ii == ulen {
-			out[i].List = out[i].List[:kk]
 			i++
 			ii = 0
-			kk = 0
 		}
 		if jj == vlen {
 			j++
@@ -220,10 +211,8 @@ func IntersectWith(u, v *task.List) {
 		}
 	}
 
-	if i < m {
-		out = out[:i+1]
-		out[i].List = out[i].List[:kk]
-	}
+	out.End()
+	u.Blocks = o.Blocks
 }
 
 // ApplyFilter applies a filter to our UIDList.
@@ -284,13 +273,6 @@ func IntersectSorted(lists []*task.List) *task.List {
 
 	for ; shortListIt.Valid() && elemsLeft; shortListIt.Next() { //for i := 0; i < len(shortList.Uids) && elemsLeft; i++ {
 		val := shortListIt.Val()
-		// We dont need this
-		/*
-			if i > 0 && val == shortList.Uids[i-1] {
-				x.AssertTruef(false, "We shouldn't have duplicates in UIDLists")
-			}
-		*/
-
 		var skip bool                     // Should we skip val in output?
 		for j := 0; j < len(lists); j++ { // For each other list in lists.
 			if j == minLenIdx {
@@ -316,14 +298,14 @@ func IntersectSorted(lists []*task.List) *task.List {
 }
 
 func Difference(u, v *task.List) {
-	out := u.Blocks
+	o := new(task.List)
+	out := NewWriteIterator(o)
 
 	i := 0
 	j := 0
 
 	ii := 0
 	jj := 0
-	kk := 0
 
 	m := len(u.Blocks)
 	n := len(v.Blocks)
@@ -346,10 +328,8 @@ func Difference(u, v *task.List) {
 				ii++
 				jj++
 				if ii == ulen {
-					out[i].List = out[i].List[:kk]
 					i++
 					ii = 0
-					kk = 0
 					break L
 				}
 				if jj == vlen {
@@ -360,7 +340,6 @@ func Difference(u, v *task.List) {
 			} else if ub < vid {
 				i++
 				ii = 0
-				kk = 0
 				break L
 			} else if vb < uid {
 				j++
@@ -368,14 +347,11 @@ func Difference(u, v *task.List) {
 				break L
 			} else if uid < vid {
 				for ; ii < ulen && ulist[ii] < vid; ii++ {
-					out[i].List[kk] = ulist[ii]
-					kk++
+					out.Append(ulist[ii])
 				}
 				if ii == ulen {
-					out[i].List = out[i].List[:kk]
 					i++
 					ii = 0
-					kk = 0
 					break L
 				}
 			} else if uid > vid {
@@ -390,10 +366,8 @@ func Difference(u, v *task.List) {
 		}
 
 		if ii == ulen {
-			out[i].List = out[i].List[:kk]
 			i++
 			ii = 0
-			kk = 0
 		}
 		if jj == vlen {
 			j++
@@ -401,10 +375,8 @@ func Difference(u, v *task.List) {
 		}
 	}
 
-	if i < m {
-		out = out[:i+1]
-		out[i].List = out[i].List[:kk]
-	}
+	out.End()
+	u.Blocks = o.Blocks
 }
 
 // MergeSorted merges sorted lists.
