@@ -451,11 +451,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Lets add the value of the debug query parameter to the context.
-	var debug string
-	if len(r.URL.Query()["debug"]) > 0 && (r.URL.Query()["debug"][0] == "true") {
-		debug = "true"
-	}
-	c := context.WithValue(context.Background(), "debug", debug)
+	c := context.WithValue(context.Background(), "debug", r.URL.Query().Get("debug"))
 	ctx, cancel := context.WithTimeout(c, time.Minute)
 	defer cancel()
 
