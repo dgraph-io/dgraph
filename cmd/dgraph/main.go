@@ -736,6 +736,7 @@ func setupServer(che chan error) {
 	http.HandleFunc("/admin/index", indexHandler)
 	http.HandleFunc("/admin/shutdown", shutDownHandler)
 	http.HandleFunc("/admin/backup", backupHandler)
+	http.Handle("/", http.FileServer(http.Dir("../../dashboard")))
 
 	// Initilize the servers.
 	go serveGRPC(grpcl)
