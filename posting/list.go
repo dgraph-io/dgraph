@@ -32,7 +32,6 @@ import (
 
 	"github.com/dgryski/go-farm"
 
-	"github.com/dgraph-io/dgraph/dproto"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/types"
@@ -146,7 +145,7 @@ func newPosting(t *task.DirectedEdge) *types.Posting {
 	return &types.Posting{
 		Uid:     t.ValueId,
 		Value:   t.Value,
-		ValType: dproto.ValType(t.ValueType),
+		ValType: types.Posting_ValType(t.ValueType),
 		Label:   t.Label,
 		Lang:    t.Lang,
 		Op:      op,

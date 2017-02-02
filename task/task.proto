@@ -1,8 +1,8 @@
 // To compile this file, in dgraph directory :
-// protoc --gofast_out=plugins=grpc,Mdproto/facets.proto=github.com/dgraph-io/dgraph/dproto:.  task/task.proto
+// protoc --gofast_out=plugins=grpc,Mtypes/facets/facets.proto=github.com/dgraph-io/dgraph/types/facets:.  task/task.proto
 
 syntax = "proto3";
-import "dproto/facets.proto";
+import "types/facets/facets.proto";
 
 package task;
 
@@ -98,7 +98,7 @@ message DirectedEdge {
 		DEL = 1;
 	}
 	Op op = 8;
-	repeated dproto.Facet facets = 9;
+	repeated facets.Facet facets = 9;
 }
 
 message Mutations {
