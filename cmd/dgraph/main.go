@@ -450,7 +450,9 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	// Lets add the value of the debug query parameter to the context.
+	c := context.WithValue(context.Background(), "debug", r.FormValue("debug"))
+	ctx, cancel := context.WithTimeout(c, time.Minute)
 	defer cancel()
 
 	if rand.Float64() < *tracing {
@@ -469,6 +471,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		x.SetStatus(w, x.ErrorInvalidRequest, "Invalid request encountered.")
 		return
 	}
+
 	res, err := parseQueryAndMutation(ctx, q)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -738,6 +741,7 @@ func setupServer(che chan error) {
 	http.HandleFunc("/admin/index", indexHandler)
 	http.HandleFunc("/admin/shutdown", shutDownHandler)
 	http.HandleFunc("/admin/backup", backupHandler)
+	http.Handle("/", http.FileServer(http.Dir("../../dashboard")))
 
 	// Initilize the servers.
 	go serveGRPC(grpcl)
