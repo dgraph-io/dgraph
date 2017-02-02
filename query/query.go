@@ -464,7 +464,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	// For the root, the name to be used in result is stored in Alias, not Attr.
 	// The attr at root (if present) would stand for the source functions attr.
 	args := params{
-		isDebug:    gq.Alias == "debug",
+		isDebug:    ctx.Value("debug") == "true" || gq.Alias == "debug",
 		Alias:      gq.Alias,
 		Var:        gq.Var,
 		ParentVars: make(map[string]*task.List),

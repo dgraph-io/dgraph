@@ -1,3 +1,4 @@
+var editor;
 $(document).ready(function() {
   var nodes = [],
     edges = [],
@@ -110,23 +111,25 @@ $(document).ready(function() {
     $("#server_latency").val("");
     $("#rendering").val("");
 
-    $.ajax({
-      url: "http://localhost:8080/query",
-      method: "POST",
-      data: $("#query").val(),
+    $.post({
+      url: "http://localhost:8080/query?debug=true",
+      data: editor.getValue(),
       dataType: 'json',
+      contentType: 'text/plain',
       success: function(result) {
         $("#graph").removeClass("hourglass");
         $("#graph").removeClass("error-res");
         $("#graph").removeClass("success-res");
-        response = result.debug
-        if (response != undefined) {
+
+        var key = Object.keys(result)[0];
+        if (key != undefined) {
+          response = result[key]
           $("#server_latency").val(result.server_latency.total);
           var startTime = new Date();
           for (var i = 0; i < response.length; i++) {
             processObject(response[i], {
               id: "",
-              pred: "debug",
+              pred: key,
             })
           }
           renderNetwork(nodes, edges)
@@ -138,7 +141,7 @@ $(document).ready(function() {
           $("#graph").text(JSON.stringify(result, null, 2));
         } else {
           $("#graph").addClass("error-res");
-          $("#graph").text("Only queries with debug as root work for now.")
+          $("#graph").text("Your query did not return any results.")
         }
       },
       error: function(jqXHR, textStatus, errorThrown) {
@@ -185,12 +188,20 @@ $(document).ready(function() {
     // });
   }
 
-  $('#query').keydown(function(e) {
-    // Ctrl + Enter submits the query.
-    if (e.ctrlKey && e.keyCode == 13) {
-      if ($("#query").val() != "") {
-        $("#query-form").submit();
-      }
-    }
+  editor = ace.edit("editor");
+  editor.setTheme("ace/theme/github");
+  editor.getSession().setMode("ace/mode/logiql");
+  editor.getSession().setUseWrapMode(true);
+  editor.setShowPrintMargin(false);
+
+  editor.commands.addCommand({
+    name: 'runQuery',
+    bindKey: {
+      win: 'Ctrl-Enter',
+      mac: 'Command-Enter'
+    },
+    exec: function(editor) {
+      $("#query-form").submit();
+    },
   });
 })
