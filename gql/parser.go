@@ -820,11 +820,13 @@ func (s *filterTreeStack) empty() bool        { return len(s.a) == 0 }
 func (s *filterTreeStack) size() int          { return len(s.a) }
 func (s *filterTreeStack) push(t *FilterTree) { s.a = append(s.a, t) }
 
-func (s *filterTreeStack) pop() *FilterTree {
-	x.AssertTruef(!s.empty(), "Trying to pop empty stack")
+func (s *filterTreeStack) pop() (*FilterTree, error) {
+	if s.empty() {
+		return nil, x.Errorf("Empty stack")
+	}
 	last := s.a[len(s.a)-1]
 	s.a = s.a[:len(s.a)-1]
-	return last
+	return last, nil
 }
 
 func (s *filterTreeStack) peek() *FilterTree {
@@ -832,20 +834,33 @@ func (s *filterTreeStack) peek() *FilterTree {
 	return s.a[len(s.a)-1]
 }
 
-func evalStack(opStack, valueStack *filterTreeStack) {
-	topOp := opStack.pop()
+func evalStack(opStack, valueStack *filterTreeStack) error {
+	topOp, err := opStack.pop()
+	if err != nil {
+		return x.Errorf("Invalid filter statement")
+	}
 	if topOp.Op == "not" {
 		// Since "not" is a unary operator, just pop one value.
-		topVal := valueStack.pop()
+		topVal, err := valueStack.pop()
+		if err != nil {
+			return x.Errorf("Invalid filter statement")
+		}
 		topOp.Child = []*FilterTree{topVal}
 	} else {
 		// "and" and "or" are binary operators, so pop two values.
-		topVal1 := valueStack.pop()
-		topVal2 := valueStack.pop()
+		topVal1, err := valueStack.pop()
+		if err != nil {
+			return x.Errorf("Invalid filter statement")
+		}
+		topVal2, err := valueStack.pop()
+		if err != nil {
+			return x.Errorf("Invalid filter statement")
+		}
 		topOp.Child = []*FilterTree{topVal2, topVal1}
 	}
 	// Push the new value (tree) into the valueStack.
 	valueStack.push(topOp)
+	return nil
 }
 
 func parseFunction(it *lex.ItemIterator) (*Function, error) {
@@ -912,7 +927,10 @@ func parseFilter(it *lex.ItemIterator) (*FilterTree, error) {
 				if filterOpPrecedence[topOp.Op] < opPred {
 					break
 				}
-				evalStack(opStack, valueStack)
+				err := evalStack(opStack, valueStack)
+				if err != nil {
+					return nil, err
+				}
 			}
 			opStack.push(&FilterTree{Op: op}) // Push current operator.
 		} else if item.Typ == itemName { // Value.
@@ -960,9 +978,15 @@ func parseFilter(it *lex.ItemIterator) (*FilterTree, error) {
 				if topOp.Op == "(" {
 					break
 				}
-				evalStack(opStack, valueStack)
+				err := evalStack(opStack, valueStack)
+				if err != nil {
+					return nil, err
+				}
 			}
-			opStack.pop() // Pop away the (.
+			_, err := opStack.pop() // Pop away the (.
+			if err != nil {
+				return nil, x.Errorf("Invalid filter statement")
+			}
 			if opStack.empty() {
 				// The parentheses are balanced out. Let's break.
 				break
@@ -989,7 +1013,7 @@ func parseFilter(it *lex.ItemIterator) (*FilterTree, error) {
 		return nil, x.Errorf("Expected one item in value stack, but got %d",
 			valueStack.size())
 	}
-	return valueStack.pop(), nil
+	return valueStack.pop()
 }
 
 func parseID(gq *GraphQuery, val string) error {
