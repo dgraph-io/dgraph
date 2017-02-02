@@ -26,6 +26,8 @@ import (
 	"sync"
 	"time"
 
+	"google.golang.org/grpc/metadata"
+
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/query/graph"
@@ -461,10 +463,19 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		return nil, err
 	}
 
+	var debug bool
+	// gRPC client passes information about debug as metadata.
+	if md, ok := metadata.FromContext(ctx); ok {
+		// md is a map[string][]string
+		debug = len(md["debug"]) > 0 && md["debug"][0] == "true"
+	}
+	// HTTP passes information about debug as query parameter which is attached to context.
+	debug = debug || ctx.Value("debug") == "true"
+
 	// For the root, the name to be used in result is stored in Alias, not Attr.
 	// The attr at root (if present) would stand for the source functions attr.
 	args := params{
-		isDebug:    ctx.Value("debug") == "true" || gq.Alias == "debug",
+		isDebug:    debug,
 		Alias:      gq.Alias,
 		Var:        gq.Var,
 		ParentVars: make(map[string]*task.List),

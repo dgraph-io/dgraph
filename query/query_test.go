@@ -21,10 +21,13 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"testing"
 	"time"
+
+	"google.golang.org/grpc/metadata"
 
 	farm "github.com/dgryski/go-farm"
 	"github.com/gogo/protobuf/proto"
@@ -1590,7 +1593,7 @@ func TestToProto(t *testing.T) {
 	populateGraph(t)
 	query := `
 		{
-			debug(id:0x1) {
+			me(id:0x1) {
 				_xid_
 				name
 				gender
@@ -1603,13 +1606,29 @@ func TestToProto(t *testing.T) {
 			}
 		}
   `
-	pb := processToPB(t, query)
+	res, err := gql.Parse(query)
+	require.NoError(t, err)
+
+	ctx := metadata.NewContext(context.Background(), metadata.Pairs("debug", "true"))
+	sg, err := ToSubGraph(ctx, res.Query[0])
+	require.NoError(t, err)
+
+	ch := make(chan error)
+	go ProcessGraph(ctx, sg, nil, ch)
+	err = <-ch
+	require.NoError(t, err)
+
+	var l Latency
+	pb, err := sg.ToProtocolBuffer(&l)
+	require.NoError(t, err)
+	fmt.Println(proto.MarshalTextString(pb))
+
 	require.EqualValues(t,
 		`attribute: "_root_"
 children: <
   uid: 1
   xid: "mich"
-  attribute: "debug"
+  attribute: "me"
   properties: <
     prop: "name"
     value: <
@@ -1674,6 +1693,7 @@ children: <
   >
 >
 `, proto.MarshalTextString(pb))
+
 }
 
 func TestToProtoFilter(t *testing.T) {
@@ -2840,8 +2860,22 @@ func TestSchema(t *testing.T) {
 			}
 		}
   `
+	res, err := gql.Parse(query)
+	require.NoError(t, err)
 
-	gr := processToPB(t, query)
+	ctx := metadata.NewContext(context.Background(), metadata.Pairs("debug", "true"))
+	sg, err := ToSubGraph(ctx, res.Query[0])
+	require.NoError(t, err)
+
+	ch := make(chan error)
+	go ProcessGraph(ctx, sg, nil, ch)
+	err = <-ch
+	require.NoError(t, err)
+
+	var l Latency
+	gr, err := sg.ToProtocolBuffer(&l)
+	require.NoError(t, err)
+
 	require.EqualValues(t, "debug", gr.Children[0].Attribute)
 	require.EqualValues(t, 1, gr.Children[0].Uid)
 	require.EqualValues(t, "mich", gr.Children[0].Xid)
