@@ -848,14 +848,11 @@ func evalStack(opStack, valueStack *filterTreeStack) error {
 		topOp.Child = []*FilterTree{topVal}
 	} else {
 		// "and" and "or" are binary operators, so pop two values.
-		topVal1, err := valueStack.pop()
-		if err != nil {
+		if valueStack.size() < 2 {
 			return x.Errorf("Invalid filter statement")
 		}
-		topVal2, err := valueStack.pop()
-		if err != nil {
-			return x.Errorf("Invalid filter statement")
-		}
+		topVal1, _ := valueStack.pop()
+		topVal2, _ := valueStack.pop()
 		topOp.Child = []*FilterTree{topVal2, topVal1}
 	}
 	// Push the new value (tree) into the valueStack.
