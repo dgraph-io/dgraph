@@ -20,8 +20,8 @@ type ListIterator struct {
 // WriteIterator is used to append UIDs to a task.List.
 type WriteIterator struct {
 	list *task.List
-	bidx int
-	lidx int
+	bidx int // Block index
+	lidx int // List index
 }
 
 // NewWriteIterator provides an iterator for the list passed to it.
