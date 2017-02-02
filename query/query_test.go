@@ -21,7 +21,6 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -1621,7 +1620,6 @@ func TestToProto(t *testing.T) {
 	var l Latency
 	pb, err := sg.ToProtocolBuffer(&l)
 	require.NoError(t, err)
-	fmt.Println(proto.MarshalTextString(pb))
 
 	require.EqualValues(t,
 		`attribute: "_root_"
