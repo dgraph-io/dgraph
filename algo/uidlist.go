@@ -24,14 +24,25 @@ type WriteIterator struct {
 
 func NewWriteIterator(l *task.List) WriteIterator {
 	// Initialise and allocate some memory.
-	l.Blocks = make([]*task.Block, 1, 2)
-	l.Blocks[0] = new(task.Block)
-	l.Blocks[0].List = make([]uint64, 0, blockSize)
+	if l.Blocks == nil {
+		l.Blocks = make([]*task.Block, 1, 2)
+		l.Blocks[0] = new(task.Block)
+		l.Blocks[0].List = make([]uint64, 0, blockSize)
+		return WriteIterator{
+			list: l,
+			bIdx: 0,
+			idx:  0,
+		}
+	}
+
+	i := len(l.Blocks) - 1
+	j := len(l.Blocks[i].List) - 1
 	return WriteIterator{
 		list: l,
-		bIdx: 0,
-		idx:  0,
+		bIdx: i,
+		idx:  j,
 	}
+
 }
 
 func (l *WriteIterator) Append(uid uint64) {
@@ -81,8 +92,32 @@ func NewListIterator(l *task.List) ListIterator {
 	}
 }
 
-// IndexOf performs a binary search on the uids slice and returns the index at
-// which it finds the uid, else returns -1
+func Slice(ul *task.List, start, end int) *task.List {
+	o := new(task.List)
+	out := NewWriteIterator(o)
+
+	it := NewListIterator(ul)
+	it.SeekToIndex(start)
+
+	i := 0
+	for ; start+i < end && it.Valid(); it.Next() {
+		out.Append(it.Val())
+		i++
+	}
+	out.End()
+	return o
+}
+
+func (l *ListIterator) SeekToIndex(idx int) {
+	i, j := ridx(l.list, idx)
+	if i == -1 {
+		l.isEnd = true
+		return
+	}
+	l.bIdx = i
+	l.idx = j
+}
+
 func (l *ListIterator) Seek(uid uint64) {
 	u := l.list
 	i := sort.Search(len(u.Blocks), func(i int) bool { return u.Blocks[i].MaxInt >= uid })
@@ -360,6 +395,9 @@ func ItemAtIndex(ul *task.List, i int) uint64 {
 
 func ridx(ul *task.List, i int) (int, int) {
 	r1, r2 := 0, 0
+	if i >= ListLen(ul) {
+		return -1, -1
+	}
 	for _, it := range ul.Blocks {
 		if r2+len(it.List) > i {
 			break

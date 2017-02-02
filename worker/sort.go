@@ -210,11 +210,7 @@ func intersectBucket(ts *task.Sort, attr, token string, out []intersectedList) e
 		// from task.list
 		if il.offset > 0 {
 			// Apply the offset.
-			// TODO(Ashwin): Optimize -> result.Uids = result.Uids[il.offset:n]
-			l1 := algo.BlockToList(result)
-			l1 = l1[il.offset:n]
-			result = algo.SortedListToBlock(l1)
-
+			result = algo.Slice(result, il.offset, n)
 			il.offset = 0
 			n = algo.ListLen(result)
 		}
@@ -227,11 +223,14 @@ func intersectBucket(ts *task.Sort, attr, token string, out []intersectedList) e
 			}
 		}
 
-		//TODO(Ashwin): Optimise this operation.
-		l1 := algo.BlockToList(il.ulist)
-		l2 := algo.BlockToList(result)
-		l1 = append(l1, l2[:n]...)
-		il.ulist = algo.SortedListToBlock(l1)
+		out := algo.NewWriteIterator(il.ulist)
+		in := algo.NewListIterator(result)
+		i := 0
+		for ; in.Valid() && i < n; in.Next() {
+			out.Append(in.Val())
+			i++
+		}
+		out.End()
 		/*
 			// Copy from result to out. Copy n items.
 			for j := 0; j < n; j++ {
