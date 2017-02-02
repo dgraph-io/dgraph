@@ -9,6 +9,7 @@ import (
 
 const blockSize = 100
 
+// ListIterator is used to read through the task.List.
 type ListIterator struct {
 	list  *task.List
 	bIdx  int  // Block index
@@ -16,12 +17,14 @@ type ListIterator struct {
 	isEnd bool // To indicate reaching the end
 }
 
+// WriteIterator is used to append UIDs to a task.List.
 type WriteIterator struct {
 	list *task.List
 	bIdx int
 	idx  int
 }
 
+// NewWriteIterator provides an iterator for the list passed to it.
 func NewWriteIterator(l *task.List) WriteIterator {
 	// Initialise and allocate some memory.
 	if l.Blocks == nil {
@@ -45,6 +48,7 @@ func NewWriteIterator(l *task.List) WriteIterator {
 
 }
 
+// Append appends an UID to the end of task.List following the blockSize specified.
 func (l *WriteIterator) Append(uid uint64) {
 	l.list.Blocks[l.bIdx].List = append(l.list.Blocks[l.bIdx].List, uid)
 	l.idx++
@@ -56,6 +60,7 @@ func (l *WriteIterator) Append(uid uint64) {
 	}
 }
 
+// End is called after the write is over to update the MaxInt of the last block.
 func (l *WriteIterator) End() {
 	lenLast := len(l.list.Blocks[l.bIdx].List)
 	if lenLast == 0 {
@@ -65,6 +70,7 @@ func (l *WriteIterator) End() {
 	l.list.Blocks[l.bIdx].MaxInt = l.list.Blocks[l.bIdx].List[lenLast-1]
 }
 
+// NewListIterator returns a read iterator for the list passed to it.
 func NewListIterator(l *task.List) ListIterator {
 	if l == nil || l.Blocks == nil || len(l.Blocks) == 0 {
 		return ListIterator{
@@ -92,22 +98,7 @@ func NewListIterator(l *task.List) ListIterator {
 	}
 }
 
-func Slice(ul *task.List, start, end int) *task.List {
-	o := new(task.List)
-	out := NewWriteIterator(o)
-
-	it := NewListIterator(ul)
-	it.SeekToIndex(start)
-
-	i := 0
-	for ; start+i < end && it.Valid(); it.Next() {
-		out.Append(it.Val())
-		i++
-	}
-	out.End()
-	return o
-}
-
+// SeekToIndex moves the iterator to the specified index.
 func (l *ListIterator) SeekToIndex(idx int) {
 	i, j := ridx(l.list, idx)
 	if i == -1 {
@@ -118,6 +109,8 @@ func (l *ListIterator) SeekToIndex(idx int) {
 	l.idx = j
 }
 
+// Seek seeks to the index whose value is greater than or equal to the given UID.
+// It uses binary search to move around.
 func (l *ListIterator) Seek(uid uint64) {
 	u := l.list
 	i := sort.Search(len(u.Blocks), func(i int) bool { return u.Blocks[i].MaxInt >= uid })
@@ -134,10 +127,12 @@ func (l *ListIterator) Seek(uid uint64) {
 	l.isEnd = true
 }
 
+// Valid returns true if we haven't reached the end of the list.
 func (l *ListIterator) Valid() bool {
 	return !l.isEnd
 }
 
+// Val returns the value pointed to by the iterator.
 func (l *ListIterator) Val() uint64 {
 	if !l.Valid() {
 		return 0
@@ -145,6 +140,8 @@ func (l *ListIterator) Val() uint64 {
 	return l.list.Blocks[l.bIdx].List[l.idx]
 }
 
+// Next moves the iterator to the next element and also sets the end if the last element
+// is consumed already.
 func (l *ListIterator) Next() {
 	if !l.Valid() {
 		return
@@ -163,6 +160,23 @@ func (l *ListIterator) Next() {
 	}
 }
 
+// Slice returns a new task.List with the elements between start and end of
+// the list passed to it.
+func Slice(ul *task.List, start, end int) *task.List {
+	o := new(task.List)
+	out := NewWriteIterator(o)
+
+	it := NewListIterator(ul)
+	it.SeekToIndex(start)
+
+	i := 0
+	for ; start+i < end && it.Valid(); it.Next() {
+		out.Append(it.Val())
+		i++
+	}
+	out.End()
+	return o
+}
 func SortedListToBlock(l []uint64) *task.List {
 	b := new(task.List)
 	wit := NewWriteIterator(b)
@@ -189,15 +203,13 @@ func BlockToList(b *task.List) []uint64 {
 }
 
 func ListLen(l *task.List) int {
-	var n int
 	if l == nil || l.Blocks == nil {
 		return 0
 	}
 
-	for _, it := range l.Blocks {
-		n += len(it.List)
-	}
-	return n
+	n := len(l.Blocks) - 1
+	len := n*blockSize + len(l.Blocks[n].List)
+	return len
 }
 
 func IntersectWith(u, v *task.List) {
