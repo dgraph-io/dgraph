@@ -450,7 +450,9 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	// Lets add the value of the debug query parameter to the context.
+	c := context.WithValue(context.Background(), "debug", r.URL.Query().Get("debug"))
+	ctx, cancel := context.WithTimeout(c, time.Minute)
 	defer cancel()
 
 	if rand.Float64() < *tracing {
@@ -469,6 +471,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		x.SetStatus(w, x.ErrorInvalidRequest, "Invalid request encountered.")
 		return
 	}
+
 	res, err := parseQueryAndMutation(ctx, q)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)

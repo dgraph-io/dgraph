@@ -26,6 +26,8 @@ import (
 	"testing"
 	"time"
 
+	"google.golang.org/grpc/metadata"
+
 	farm "github.com/dgryski/go-farm"
 	"github.com/gogo/protobuf/proto"
 	"github.com/stretchr/testify/require"
@@ -265,11 +267,15 @@ func processToFastJSON(t *testing.T, query string) string {
 	return string(buf.Bytes())
 }
 
-func processToPB(t *testing.T, query string) *graph.Node {
+func processToPB(t *testing.T, query string, debug bool) *graph.Node {
 	res, err := gql.Parse(query)
 	require.NoError(t, err)
-
-	ctx := context.Background()
+	var ctx context.Context
+	if debug {
+		ctx = metadata.NewContext(context.Background(), metadata.Pairs("debug", "true"))
+	} else {
+		ctx = context.Background()
+	}
 	sg, err := ToSubGraph(ctx, res.Query[0])
 	require.NoError(t, err)
 
@@ -575,7 +581,7 @@ func TestDebug1(t *testing.T) {
 	// Alright. Now we have everything set up. Let's create the query.
 	query := `
 		{
-			debug(id:0x01) {
+			me(id:0x01) {
 				name
 				gender
 				alive
@@ -583,12 +589,22 @@ func TestDebug1(t *testing.T) {
 			}
 		}
 	`
+	res, err := gql.Parse(query)
+	require.NoError(t, err)
 
-	js := processToFastJSON(t, query)
+	var l Latency
+	ctx := context.Background()
+	ctx = context.WithValue(ctx, "debug", "true")
+	sgl, err := ProcessQuery(ctx, res, &l)
+	require.NoError(t, err)
+
+	var buf bytes.Buffer
+	require.NoError(t, ToJson(&l, sgl, &buf))
+
 	var mp map[string]interface{}
-	require.NoError(t, json.Unmarshal([]byte(js), &mp))
+	require.NoError(t, json.Unmarshal([]byte(buf.Bytes()), &mp))
 
-	resp := mp["debug"]
+	resp := mp["me"]
 	uid := resp.([]interface{})[0].(map[string]interface{})["_uid_"].(string)
 	require.EqualValues(t, "0x1", uid)
 
@@ -924,7 +940,7 @@ func TestFieldAliasProto(t *testing.T) {
 			}
 		}
 	`
-	pb := processToPB(t, query)
+	pb := processToPB(t, query, false)
 	expectedPb := `attribute: "_root_"
 children: <
   attribute: "me"
@@ -1580,7 +1596,7 @@ func TestToProto(t *testing.T) {
 	populateGraph(t)
 	query := `
 		{
-			debug(id:0x1) {
+			me(id:0x1) {
 				_xid_
 				name
 				gender
@@ -1593,13 +1609,13 @@ func TestToProto(t *testing.T) {
 			}
 		}
   `
-	pb := processToPB(t, query)
+	pb := processToPB(t, query, true)
 	require.EqualValues(t,
 		`attribute: "_root_"
 children: <
   uid: 1
   xid: "mich"
-  attribute: "debug"
+  attribute: "me"
   properties: <
     prop: "name"
     value: <
@@ -1664,6 +1680,7 @@ children: <
   >
 >
 `, proto.MarshalTextString(pb))
+
 }
 
 func TestToProtoFilter(t *testing.T) {
@@ -1681,7 +1698,7 @@ func TestToProtoFilter(t *testing.T) {
 		}
 	`
 
-	pb := processToPB(t, query)
+	pb := processToPB(t, query, false)
 	expectedPb := `attribute: "_root_"
 children: <
   attribute: "me"
@@ -1726,7 +1743,7 @@ func TestToProtoFilterOr(t *testing.T) {
 		}
 	`
 
-	pb := processToPB(t, query)
+	pb := processToPB(t, query, false)
 	expectedPb := `attribute: "_root_"
 children: <
   attribute: "me"
@@ -1780,7 +1797,7 @@ func TestToProtoFilterAnd(t *testing.T) {
 		}
 	`
 
-	pb := processToPB(t, query)
+	pb := processToPB(t, query, false)
 	expectedPb := `attribute: "_root_"
 children: <
   attribute: "me"
@@ -1995,7 +2012,7 @@ func TestToProtoOrder(t *testing.T) {
 		}
 	`
 
-	pb := processToPB(t, query)
+	pb := processToPB(t, query, false)
 	expectedPb := `attribute: "_root_"
 children: <
   attribute: "me"
@@ -2067,7 +2084,7 @@ func TestToProtoOrderCount(t *testing.T) {
 		}
 	`
 
-	pb := processToPB(t, query)
+	pb := processToPB(t, query, false)
 	expectedPb := `attribute: "_root_"
 children: <
   attribute: "me"
@@ -2121,7 +2138,7 @@ func TestToProtoOrderOffsetCount(t *testing.T) {
 		}
 	`
 
-	pb := processToPB(t, query)
+	pb := processToPB(t, query, false)
 	expectedPb := `attribute: "_root_"
 children: <
   attribute: "me"
@@ -2490,7 +2507,7 @@ func TestToProtoMultiRoot(t *testing.T) {
     }
   `
 
-	pb := processToPB(t, query)
+	pb := processToPB(t, query, false)
 	expectedPb := `attribute: "_root_"
 children: <
   attribute: "me"
@@ -2705,7 +2722,7 @@ func TestToProtoNormalizeDirective(t *testing.T) {
 			}
 		}
 	`
-	pb := processToPB(t, query)
+	pb := processToPB(t, query, false)
 	expectedPb := `attribute: "_root_"
 children: <
   properties: <
@@ -2830,8 +2847,7 @@ func TestSchema(t *testing.T) {
 			}
 		}
   `
-
-	gr := processToPB(t, query)
+	gr := processToPB(t, query, true)
 	require.EqualValues(t, "debug", gr.Children[0].Attribute)
 	require.EqualValues(t, 1, gr.Children[0].Uid)
 	require.EqualValues(t, "mich", gr.Children[0].Xid)
