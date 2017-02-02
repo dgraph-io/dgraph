@@ -206,8 +206,6 @@ func intersectBucket(ts *task.Sort, attr, token string, out []intersectedList) e
 		// Sort results by value before applying offset.
 		sortByValue(attr, result, scalar, ts.Desc)
 
-		//TODO(Ashwin): Have truncate functions which truncate first and last n elements
-		// from task.list
 		if il.offset > 0 {
 			// Apply the offset.
 			result = algo.Slice(result, il.offset, n)
@@ -231,12 +229,6 @@ func intersectBucket(ts *task.Sort, attr, token string, out []intersectedList) e
 			i++
 		}
 		out.End()
-		/*
-			// Copy from result to out. Copy n items.
-			for j := 0; j < n; j++ {
-				il.ulist.Uids = append(il.ulist.Uids, result.Uids[j])
-			}
-		*/
 	} // end for loop over UID lists in UID matrix.
 
 	// Check out[i] sizes for all i.

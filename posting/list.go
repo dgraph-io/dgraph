@@ -571,10 +571,9 @@ func (l *List) Uids(opt ListOptions) *task.List {
 		uid := p.Uid
 		if opt.Intersect != nil {
 			it := algo.NewListIterator(opt.Intersect)
-			//intersectUidsLen := len(opt.Intersect.Uids)
-			for ; it.Valid() && it.Val() < uid; it.Next() { //intersectIdx < intersectUidsLen && opt.Intersect.Uids[intersectIdx] < uid; intersectIdx++ {
+			for ; it.Valid() && it.Val() < uid; it.Next() {
 			}
-			if !it.Valid() || it.Val() > uid { //intersectIdx >= intersectUidsLen || opt.Intersect.Uids[intersectIdx] > uid {
+			if !it.Valid() || it.Val() > uid {
 				return true
 			}
 		}

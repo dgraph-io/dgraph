@@ -679,8 +679,9 @@ func populateVarMap(sg *SubGraph, doneVars map[string]*task.List, isCascade bool
 			algo.IntersectWith(l, child.DestUIDs)
 		}
 	}
-	//TODO(Ashwin): Opimize
-	var out []uint64
+
+	o := new(task.List)
+	out := algo.NewWriteIterator(o)
 	it := algo.NewListIterator(sg.DestUIDs)
 	i := -1
 	if !isCascade {
@@ -688,9 +689,8 @@ func populateVarMap(sg *SubGraph, doneVars map[string]*task.List, isCascade bool
 	}
 
 	// Filter out UIDs that don't have atleast one UID in every child.
-	for ; it.Valid(); it.Next() { //i := 0; i < len(sg.DestUIDs.Uids); i++ {
+	for ; it.Valid(); it.Next() {
 		i++
-		uid := it.Val()
 		var exclude bool
 		for _, child := range sg.Children {
 			// If the length of child UID list is zero and it has no valid value, then the
@@ -701,10 +701,11 @@ func populateVarMap(sg *SubGraph, doneVars map[string]*task.List, isCascade bool
 			}
 		}
 		if !exclude {
-			out = append(out, uid)
+			out.Append(it.Val())
 		}
 	}
-	sg.DestUIDs = algo.SortedListToBlock(out)
+	out.End()
+	sg.DestUIDs = o
 
 AssignStep:
 	if sg.Params.Var != "" {
