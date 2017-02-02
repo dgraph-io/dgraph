@@ -148,7 +148,7 @@ $(document).ready(function() {
         $("#graph").text(jqXHR.responseText);
       },
       // Timeout of 60 seconds.
-      timeout: 6000,
+      timeout: 60000,
     });
   })
 
