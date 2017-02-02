@@ -130,7 +130,9 @@ func convertToNQuad(ctx context.Context, mutation string) ([]*graph.NQuad, error
 			continue
 		}
 		nq, err := rdf.Parse(ln)
-		if err != nil {
+		if err == rdf.ErrEmpty { // special case: comment/empty line
+			continue
+		} else if err != nil {
 			x.TraceError(ctx, x.Wrapf(err, "Error while parsing RDF"))
 			return nquads, err
 		}

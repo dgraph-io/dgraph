@@ -31,8 +31,6 @@ func TestSimple(t *testing.T) {
             <alice-in-wonderland> <name> "Alice in Wonderland" .
             <alice-in-wonderland> <sequel> <looking-glass> .
             <alice> <name> "Alice" .
-            <alice> <name> "Алисия"@ru .
-            <alice> <name> "Adélaïde"@fr .
             <lewis-carrol> <name> "Lewis Carroll" .
             <lewis-carrol> <born> "1832" .
             <lewis-carrol> <died> "1898" .
@@ -49,8 +47,6 @@ func TestSimple(t *testing.T) {
     		name
     		character {
                 name
-    			name.fr
-    			name.ru
     		}
     		author {
                 name
@@ -60,7 +56,7 @@ func TestSimple(t *testing.T) {
     	}
     }`
 
-	expectedRes := `{"me":[{"author":[{"born":"1832","died":"1898","name":"Lewis Carroll"}],"character":[{"name":"Alice","name.fr":"Adélaïde","name.ru":"Алисия"}],"name":"Alice in Wonderland","written-in":"1865"}]}`
+	expectedRes := `{"me":[{"author":[{"born":"1832","died":"1898","name":"Lewis Carroll"}],"character":[{"name":"Alice"}],"name":"Alice in Wonderland","written-in":"1865"}]}`
 	res := decodeResponse(q)
 	if res != expectedRes {
 		log.Fatal("Query response is not as expected")

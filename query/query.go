@@ -435,7 +435,7 @@ func (args *params) fill(gq *gql.GraphQuery) error {
 		}
 		args.Count = int(first)
 	}
-	if v, ok := gq.Args["order"]; ok {
+	if v, ok := gq.Args["orderasc"]; ok {
 		args.Order = v
 	} else if v, ok := gq.Args["orderdesc"]; ok {
 		args.Order = v
@@ -1002,7 +1002,7 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 // isValidArg checks if arg passed is valid keyword.
 func isValidArg(a string) bool {
 	switch a {
-	case "order", "orderdesc", "first", "offset", "after":
+	case "orderasc", "orderdesc", "first", "offset", "after":
 		return true
 	}
 	return false

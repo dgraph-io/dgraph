@@ -1,10 +1,10 @@
 {
  me(id: 15161013152876854722) {
-  film.director.film {
-   film.film.directed_by {
-    film.director.film @filter(geq("film.film.initial_release_date", "2000-01-05")) {
+  director.film {
+   directed_by {
+    director.film @filter(geq("initial_release_date", "2000-01-05")) {
      _uid_
-     film.film.initial_release_date
+     initial_release_date
     }
    }
   }

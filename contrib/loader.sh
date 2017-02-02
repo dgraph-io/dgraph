@@ -33,8 +33,8 @@ export LD_LIBRARY_PATH="${ICUDIR}/lib:${ROCKSDBDIR}:${LD_LIBRARY_PATH}"
 # schema file
 echo -e "
 scalar (
-	type.object.name.en: string @index
-	film.film.initial_release_date: date @index
+	name.en: string @index
+	initial_release_date: date @index
 )" > $BUILD/schema.txt
 
 pushd cmd/dgraph &> /dev/null
@@ -52,25 +52,28 @@ popd &> /dev/null
 # Lets wait for stuff to be committed to RocksDB.
 sleep 20
 
+pushd $GOPATH/src/github.com/dgraph-io/dgraph/contrib/indextest &> /dev/null
+
 function run_index_test {
 	X=$1
 	GREPFOR=$2
 	ANS=$3
-	wget https://raw.githubusercontent.com/dgraph-io/dgraph/master/contrib/indextest/${X}.in
-	N=`curl localhost:8080/query -XPOST -d @${X}.in 2> /dev/null | python -m json.tool | grep $GREPFOR | wc -l`
+    N=`curl localhost:8080/query -XPOST -d @${X}.in 2> /dev/null | python -m json.tool | grep $GREPFOR | wc -l`
 	if [[ ! "$N" -eq "$ANS" ]]; then
 	  echo "Index test failed: ${X}  Expected: $ANS  Got: $N"
 	  exit 1
 	fi
 }
-run_index_test basic object 138676
-run_index_test allof_the object 25431
-run_index_test allof_the_a object 367
-run_index_test allof_the_first object 4383
-run_index_test releasedate release 137858
-run_index_test releasedate_sort release 137858
-run_index_test releasedate_sort_first_offset release 2315
-run_index_test releasedate_geq release 60991
-run_index_test gen_anyof_good_bad object 1103
+run_index_test basic name 138676
+run_index_test allof_the name 25431
+run_index_test allof_the_a name 367
+run_index_test allof_the_first name 4383
+run_index_test releasedate release_date 137858
+run_index_test releasedate_sort release_date 137858
+run_index_test releasedate_sort_first_offset release_date 2315
+run_index_test releasedate_geq release_date 60991
+run_index_test gen_anyof_good_bad name 1103
 
-killall dgraph
+popd &> /dev/null
+
+curl localhost:8080/admin/shutdown
