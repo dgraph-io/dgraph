@@ -9,7 +9,7 @@ import (
 )
 
 
-func CouldApplyOpOn(agrtr, attr string) bool {
+func CouldApplyAgrtrOn(agrtr, attr string) bool {
 	if agrtr == "count" {
 		return true
 	}

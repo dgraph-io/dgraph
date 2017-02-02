@@ -26,6 +26,7 @@ import (
 	"sync"
 	"time"
 	"fmt"
+	"encoding/binary"
 
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/gql"
@@ -229,8 +230,8 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 		}
 		if pc.Agrtr == "count" {
 			uc := dst.New(pc.Attr)
-			c := types.ValueForType(types.StringID)
-			c.Value = string(pc.values[idx].Val)
+			c := types.ValueForType(types.Int32ID)
+			c.Value = int32(binary.LittleEndian.Uint32(pc.values[idx].Val))
 			uc.AddValue("count", c)
 			dst.AddChild(pc.Attr, uc)
 		} else if len(pc.Children) > 0 &&
@@ -338,6 +339,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 }
 
 func createProperty(prop string, v types.Val) *graph.Property {
+	fmt.Printf("[createProperty] will %v to %#v\n", prop, v)
 	pval := toProtoValue(v)
 	return &graph.Property{Prop: prop, Value: pval}
 }
@@ -569,7 +571,7 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 		}
 		x.Trace(ctx, "Query parsed")
 		sgl = append(sgl, sg)
-		sg.DebugPrint("---")
+		//sg.DebugPrint("---")
 	}
 	l.Parsing += time.Since(loopStart)
 

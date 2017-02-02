@@ -18,7 +18,8 @@ package worker
 
 import (
 	"strings"
-	"strconv"
+	//"strconv"
+	"encoding/binary"
 	"fmt"
 
 	"golang.org/x/net/context"
@@ -92,7 +93,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 	attr := q.Attr
 
 	useFunc := len(q.SrcFunc) != 0
-	fmt.Printf("[processTask] task.Query: %#v\n", q)
+	//fmt.Printf("[processTask] task.Query: %#v\n", q)
 	var n int
 	var tokens []string
 	var geoQuery *types.GeoQueryData
@@ -109,7 +110,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 		switch {
 		case isAgrtr:
 			// confirm agrregator could apply on the attributes
-			if !CouldApplyOpOn(f, attr) {
+			if !CouldApplyAgrtrOn(f, attr) {
 				return nil, x.Errorf("Aggregator %v could not apply on %v",
 					f, attr)
 			}
@@ -199,9 +200,9 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 		if !isAgrtr {
 			out.Values = append(out.Values, newValue)
 		} else if q.SrcFunc[0] == "count" {
-			strCnt := strconv.Itoa(pl.Length(0))
-			cntValue := &task.Value{ValType: int32(types.StringID), Val: []byte(strCnt)}
-			out.Values = append(out.Values, cntValue)
+			bs := make([]byte, 4)
+			binary.LittleEndian.PutUint32(bs, uint32(pl.Length(0)))
+			out.Values = append(out.Values, &task.Value{[]byte(bs), int32(types.Int32ID)})
 			// Add an empty UID list to make later processing consistent
 			out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
 			continue
