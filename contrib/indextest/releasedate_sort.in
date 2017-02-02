@@ -2,7 +2,7 @@
  me(id: 15161013152876854722) {
   director.film {
    directed_by {
-    director.film(order: initial_release_date) {
+    director.film(orderasc: initial_release_date) {
      _uid_
      initial_release_date
     }

@@ -46,6 +46,7 @@ var q0 = `
 var m = `
 	mutation {
 		set {
+                        # comment line should be ignored
 			<alice> <name> "Alice" .
 		}
 	}
