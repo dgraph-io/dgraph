@@ -1682,3 +1682,86 @@ func TestParseNormalize(t *testing.T) {
 	require.NotNil(t, res.Query[0])
 	require.True(t, res.Query[0].Normalize)
 }
+
+func TestParseFacets(t *testing.T) {
+	query := `
+	query {
+		me(id:0x1) {
+			friends @facets {
+				name @facets(facet1)
+			}
+			hometown
+			age
+		}
+	}
+`
+	res, err := Parse(query)
+	require.NoError(t, err)
+	require.NotNil(t, res.Query[0])
+	require.Equal(t, []string{"friends", "hometown", "age"}, childAttrs(res.Query[0]))
+	require.NotNil(t, res.Query[0].Children[0].Facets)
+	require.Equal(t, true, res.Query[0].Children[0].Facets.AllKeys)
+	require.Equal(t, []string{"name"}, childAttrs(res.Query[0].Children[0]))
+	require.NotNil(t, res.Query[0].Children[0].Children[0].Facets)
+	require.Equal(t, false, res.Query[0].Children[0].Children[0].Facets.AllKeys)
+	require.Equal(t, []string{"facet1"}, res.Query[0].Children[0].Children[0].Facets.Keys)
+}
+
+func TestParseFacetsMultiple(t *testing.T) {
+	query := `
+	query {
+		me(id:0x1) {
+			friends @facets {
+				name @facets(key1, key2, key3)
+			}
+			hometown
+			age
+		}
+	}
+`
+	res, err := Parse(query)
+	require.NoError(t, err)
+	require.NotNil(t, res.Query[0])
+	require.Equal(t, []string{"friends", "hometown", "age"}, childAttrs(res.Query[0]))
+	require.NotNil(t, res.Query[0].Children[0].Facets)
+	require.Equal(t, true, res.Query[0].Children[0].Facets.AllKeys)
+	require.Equal(t, []string{"name"}, childAttrs(res.Query[0].Children[0]))
+	require.NotNil(t, res.Query[0].Children[0].Children[0].Facets)
+	require.Equal(t, false, res.Query[0].Children[0].Children[0].Facets.AllKeys)
+	require.Equal(t, []string{"key1", "key2", "key3"}, res.Query[0].Children[0].Children[0].Facets.Keys)
+}
+
+func TestParseFacetsEmpty(t *testing.T) {
+	query := `
+	query {
+		me(id:0x1) {
+			friends @facets() {
+			}
+			hometown
+			age
+		}
+	}
+`
+	res, err := Parse(query)
+	require.NoError(t, err)
+	require.NotNil(t, res.Query[0])
+	require.Equal(t, []string{"friends", "hometown", "age"}, childAttrs(res.Query[0]))
+	require.NotNil(t, res.Query[0].Children[0].Facets)
+	require.Equal(t, true, res.Query[0].Children[0].Facets.AllKeys)
+}
+
+func TestParseFacetsFail1(t *testing.T) {
+	// key can not be empty..
+	query := `
+	query {
+		me(id:0x1) {
+			friends @facets(key1,, key2) {
+			}
+			hometown
+			age
+		}
+	}
+`
+	_, err := Parse(query)
+	require.Error(t, err)
+}

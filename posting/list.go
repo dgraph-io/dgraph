@@ -36,6 +36,7 @@ import (
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/types"
+	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -114,21 +115,27 @@ func (pa ByUid) Len() int           { return len(pa) }
 func (pa ByUid) Swap(i, j int)      { pa[i], pa[j] = pa[j], pa[i] }
 func (pa ByUid) Less(i, j int) bool { return pa[i].Uid < pa[j].Uid }
 
-func samePosting(a *types.Posting, b *types.Posting) bool {
-	if a.Uid != b.Uid {
+// samePosting tells whether this is same posting depending upon operation of new posting.
+// if operation is Del, we ignore facets and only care about uid and value.
+// otherwise we match everything.
+func samePosting(oldp *types.Posting, newp *types.Posting) bool {
+	if oldp.Uid != newp.Uid {
 		return false
 	}
-	if a.ValType != b.ValType {
+	if oldp.ValType != newp.ValType {
 		return false
 	}
-	if !bytes.Equal(a.Value, b.Value) {
+	if !bytes.Equal(oldp.Value, newp.Value) {
 		return false
 	}
 	// Checking source might not be necessary.
-	if a.Label != b.Label {
+	if oldp.Label != newp.Label {
 		return false
 	}
-	return true
+	if newp.Op == Del {
+		return true
+	}
+	return facets.SameFacets(oldp.Facets, newp.Facets)
 }
 
 func newPosting(t *task.DirectedEdge) *types.Posting {
@@ -561,11 +568,30 @@ func (l *List) LastCompactionTs() time.Time {
 // Uids returns the UIDs given some query params.
 // We have to apply the filtering before applying (offset, count).
 func (l *List) Uids(opt ListOptions) *task.List {
+	res := new(task.List)
+	writeIt := algo.NewWriteIterator(res, 0)
+	l.intersectingPostings(opt, func(p *types.Posting) {
+		writeIt.Append(p.Uid)
+	})
+	writeIt.End()
+	return res
+}
+
+// FacetsForUids gives Facets for postings common with uids in opt listOptions.
+func (l *List) FacetsForUids(opt ListOptions, param *facets.Param) []*facets.Facets {
+	result := make([]*facets.Facets, 0, 10)
+	l.intersectingPostings(opt, func(p *types.Posting) {
+		result = append(result, &facets.Facets{Facets: copyFacets(p, param)})
+	})
+	return result
+}
+
+// intersectingPostings calls postFn with the postings that are common with
+// uids in the opt ListOptions.
+func (l *List) intersectingPostings(opt ListOptions, postFn func(*types.Posting)) {
 	l.RLock()
 	defer l.RUnlock()
 
-	res := new(task.List)
-	wit := algo.NewWriteIterator(res, 0)
 	it := algo.NewListIterator(opt.Intersect)
 	l.iterate(opt.AfterUID, func(p *types.Posting) bool {
 		if postingType(p) != valueUid {
@@ -578,17 +604,14 @@ func (l *List) Uids(opt ListOptions) *task.List {
 			}
 		}
 		if opt.Intersect != nil {
-			for ; it.Valid() && it.Val() < uid; it.Next() {
-			}
+			it.Seek(uid, 1)
 			if !it.Valid() || it.Val() > uid {
 				return true
 			}
 		}
-		wit.Append(uid)
+		postFn(p)
 		return true
 	})
-	wit.End()
-	return res
 }
 
 func (l *List) Value() (rval types.Val, rerr error) {
@@ -599,22 +622,71 @@ func (l *List) Value() (rval types.Val, rerr error) {
 
 func (l *List) value() (rval types.Val, rerr error) {
 	l.AssertRLock()
+	p, err := l.valuePosting()
+	if err != nil {
+		return rval, err
+	}
+	val := make([]byte, len(p.Value))
+	copy(val, p.Value)
+	rval.Value = val
+	rval.Tid = types.TypeID(p.ValType)
+	return rval, nil
+}
+
+// TODO(tzdybal) function for value in given language
+
+// Facets gives facets for the posting representing value.
+func (l *List) Facets(param *facets.Param) (fs []*facets.Facet, ferr error) {
+	l.RLock()
+	defer l.RUnlock()
+	p, err := l.valuePosting()
+	if err != nil {
+		return nil, err
+	}
+	return copyFacets(p, param), nil
+}
+
+// copyFacets makes a copy of facets of the posting which are requested in param.Keys.
+func copyFacets(p *types.Posting, param *facets.Param) (fs []*facets.Facet) {
+	// since facets and param.keys are both sorted,
+	// we can break when either param.Keys OR p.Facets.Key(s) go ahead of each other.
+	// However, we need all keys if param.AllKeys is true.
+	numCopied := 0
+	numKeys := len(param.Keys)
+	for _, f := range p.Facets {
+		if param.AllKeys || param.Keys[numCopied] == f.Key {
+			fcopy := &facets.Facet{Key: f.Key, Value: nil, ValType: f.ValType}
+			fcopy.Value = make([]byte, len(f.Value))
+			copy(fcopy.Value, f.Value)
+			fs = append(fs, fcopy)
+			numCopied++
+			if !param.AllKeys && (numCopied >= numKeys) {
+				// break if we don't want all keys and
+				// we have taken all param.Keys.
+				break
+			}
+		} else if f.Key > param.Keys[numCopied] {
+			break
+		}
+	}
+	return fs
+}
+
+// valuePosting gives the posting representing value.
+// This fn expects to be called from inside a read lock.
+func (l *List) valuePosting() (p *types.Posting, err error) {
+	l.AssertRLock()
 	var found bool
-	l.iterate(math.MaxUint64-1, func(p *types.Posting) bool {
-		if p.Uid == math.MaxUint64 {
-			val := make([]byte, len(p.Value))
-			copy(val, p.Value)
-			rval.Value = val
-			rval.Tid = types.TypeID(p.ValType)
+	l.iterate(math.MaxUint64-1, func(pi *types.Posting) bool {
+		if pi.Uid == math.MaxUint64 {
+			p = pi
 			found = true
 		}
 		return false
 	})
 
 	if !found {
-		return rval, ErrNoValue
+		return p, ErrNoValue
 	}
-	return rval, nil
+	return p, nil
 }
-
-// TODO(tzdybal) function for value in given language
