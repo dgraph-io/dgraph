@@ -73,7 +73,6 @@ func addIndexMutations(ctx context.Context, t *task.DirectedEdge, p types.Val, o
 		Attr:    attr,
 		Label:   "idx",
 		Op:      op,
-		Facets:  t.Facets,
 	}
 
 	for _, token := range tokens {
@@ -119,7 +118,6 @@ func addReverseMutation(ctx context.Context, t *task.DirectedEdge) {
 		Attr:    t.Attr,
 		Label:   "rev",
 		Op:      t.Op,
-		Facets:  t.Facets,
 	}
 
 	_, err := plist.AddMutation(ctx, edge)
