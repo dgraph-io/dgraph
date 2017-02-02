@@ -338,6 +338,41 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 	return nil
 }
 
+/*func addChild(tv *task.Val, attr string, dst outputnode) error {
+	// convert to StringID, then add into node
+	v, _ := getValue(tv)
+	typ, err := schema.TypeOf(attr)
+	if err == nil {
+		// Try to coerce types if this is an optional scalar outside an
+		// object definition.
+		if !typ.IsScalar() {
+			return x.Errorf("Leaf predicate:'%v' must be a scalar.", attr)
+		}
+		sv := types.ValueForType(types.StringID)
+		if err == nil {
+			sv, err = types.Convert(v, typ)
+		}
+	}
+
+	// Try to coerce types if this is an optional scalar outside an
+	// object definition.
+	if !globalType.IsScalar() {
+		return x.Errorf("Leaf predicate:'%v' must be a scalar.", pc.Attr)
+	}
+	gtID := globalType
+	// Convert to schema type.
+	sv, err = types.Convert(v, gtID)
+	if bytes.Equal(tv.Val, nil) || err != nil {
+		continue
+	}
+		
+
+	chuc := uc.New(child.Attr)
+	chuc.AddValue(child.Agrtr, sv)
+	uc.AddChild(child.Attr, chuc)
+	return nil
+}*/
+
 func createProperty(prop string, v types.Val) *graph.Property {
 	fmt.Printf("[createProperty] will %v to %#v\n", prop, v)
 	pval := toProtoValue(v)
@@ -381,6 +416,7 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 			sg.Params.GetUID = true
 		}
 
+		fmt.Printf("gchild is %#v\n", gchild)
 		args := params{
 			Alias:   gchild.Alias,
 			isDebug: sg.Params.isDebug,
@@ -571,7 +607,7 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 		}
 		x.Trace(ctx, "Query parsed")
 		sgl = append(sgl, sg)
-		//sg.DebugPrint("---")
+		sg.DebugPrint("---")
 	}
 	l.Parsing += time.Since(loopStart)
 
@@ -888,9 +924,9 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			// A possible optimization is to return the size of the intersection
 			// without forming the intersection.
 			algo.IntersectWith(ul, sg.DestUIDs)
-			strCnt := strconv.Itoa(len(ul.Uids))
-			cntValue := &task.Value{ValType: int32(types.StringID), Val: []byte(strCnt)}
-			sg.values[i] = cntValue
+			bs := make([]byte, 4)
+			binary.LittleEndian.PutUint32(bs, uint32(len(ul.Uids)))
+			sg.values[i] = &task.Value{[]byte(bs), int32(types.Int32ID)}
 		}
 		rch <- nil
 		return

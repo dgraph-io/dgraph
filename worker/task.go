@@ -93,7 +93,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 	attr := q.Attr
 
 	useFunc := len(q.SrcFunc) != 0
-	//fmt.Printf("[processTask] task.Query: %#v\n", q)
+	fmt.Printf("[processTask] task.Query: %#v\n", q)
 	var n int
 	var tokens []string
 	var geoQuery *types.GeoQueryData
@@ -174,12 +174,12 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 	typ, _ := schema.TypeOf(attr)
 	for i := 0; i < n; i++ {
 		var key []byte
-		if isAgrtr {
+		if q.Reverse {
+			key = x.ReverseKey(attr, q.Uids[i])
+		} else if isAgrtr {
 			key = x.DataKey(attr, q.Uids[i])
 		} else if useFunc {
 			key = x.IndexKey(attr, tokens[i])
-		} else if q.Reverse {
-			key = x.ReverseKey(attr, q.Uids[i])
 		} else {
 			key = x.DataKey(attr, q.Uids[i])
 		}

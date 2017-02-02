@@ -14,16 +14,11 @@ func CouldApplyAgrtrOn(agrtr, attr string) bool {
 		return true
 	}
 	typ, err := schema.TypeOf(attr)
-	if err != nil {
-		return false
-	}
-	if !typ.IsScalar() {
+	if err != nil || !typ.IsScalar() {
 		return false
 	}
 	switch agrtr {
-	case "min":
-		fallthrough
-	case "max":
+	case "min", "max":
 		return (typ == types.Int32ID || 
 			typ == types.FloatID ||
 			typ == types.DateTimeID ||
