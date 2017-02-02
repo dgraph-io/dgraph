@@ -134,18 +134,12 @@ func (l *ListIterator) Valid() bool {
 
 // Val returns the value pointed to by the iterator.
 func (l *ListIterator) Val() uint64 {
-	if !l.Valid() {
-		return 0
-	}
 	return l.list.Blocks[l.bIdx].List[l.idx]
 }
 
 // Next moves the iterator to the next element and also sets the end if the last element
 // is consumed already.
 func (l *ListIterator) Next() {
-	if !l.Valid() {
-		return
-	}
 	l.idx++
 	if l.idx >= len(l.list.Blocks[l.bIdx].List) {
 		l.idx = 0
@@ -177,6 +171,7 @@ func Slice(ul *task.List, start, end int) *task.List {
 	out.End()
 	return o
 }
+
 func SortedListToBlock(l []uint64) *task.List {
 	b := new(task.List)
 	wit := NewWriteIterator(b)
@@ -236,17 +231,17 @@ func IntersectWith(u, v *task.List) {
 
 // ApplyFilter applies a filter to our UIDList.
 func ApplyFilter(u *task.List, f func(uint64, int) bool) {
-	out := u.Blocks
+	o := new(task.List)
+	out := NewWriteIterator(o)
 	for i, block := range u.Blocks {
-		kk := 0
 		for j, uid := range block.List {
 			if f(uid, Idx(u, i, j)) {
-				out[i].List[kk] = uid
-				kk++
+				out.Append(uid)
 			}
 		}
-		out[i].List = out[i].List[:kk]
 	}
+	out.End()
+	u.Blocks = o.Blocks
 }
 
 // IntersectSorted intersect a list of UIDLists. An alternative is to do
