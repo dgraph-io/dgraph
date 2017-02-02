@@ -29,6 +29,7 @@ import (
 	"github.com/dgraph-io/dgraph/query/graph"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/types"
+	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -218,7 +219,7 @@ func sane(s string) bool {
 func Parse(line string) (rnq graph.NQuad, rerr error) {
 	l := lex.NewLexer(line).Run(lexText)
 	it := l.NewIterator()
-	var oval string
+	var oval, facetKey, facetVal string
 	var vend bool
 	isCommentLine := false
 	// We read items from the l.Items channel to which the lexer sends items.
@@ -287,6 +288,18 @@ func Parse(line string) (rnq graph.NQuad, rerr error) {
 
 		case itemLabel:
 			rnq.Label = strings.Trim(item.Val, " ")
+		case itemFacetKey:
+			facetKey = strings.Trim(item.Val, " ")
+		case itemFacetVal:
+			facetVal = strings.Trim(item.Val, " ")
+		case itemFacetValType:
+			typ := strings.Trim(item.Val, " ")
+			if t, ok := facetsTypeMap[typ]; ok {
+				rnq.Facets = append(rnq.Facets, &facets.Facet{facetKey,
+					[]byte(facetVal), facets.TypeIDToValType(t)})
+			} else {
+				return rnq, x.Errorf("Invalid type for facet : [%s]", typ)
+			}
 		}
 	}
 
@@ -337,4 +350,24 @@ var typeMap = map[string]types.TypeID{
 	"http://www.w3.org/2001/XMLSchema#float":      types.FloatID,
 	"http://www.w3.org/2001/XMLSchema#gYear":      types.DateID,
 	"http://www.w3.org/2001/XMLSchema#gYearMonth": types.DateID,
+}
+
+var facetsTypeMap = map[string]facets.TypeID{
+	"":            facets.StringID,
+	"xs:string":   facets.StringID,
+	"xs:dateTime": facets.DateTimeID,
+	"xs:date":     facets.DateID,
+	"xs:int":      facets.Int32ID,
+	"xs:boolean":  facets.BoolID,
+	"xs:double":   facets.FloatID,
+	"xs:float":    facets.FloatID,
+	"http://www.w3.org/2001/XMLSchema#string":     facets.StringID,
+	"http://www.w3.org/2001/XMLSchema#dateTime":   facets.DateTimeID,
+	"http://www.w3.org/2001/XMLSchema#date":       facets.DateID,
+	"http://www.w3.org/2001/XMLSchema#int":        facets.Int32ID,
+	"http://www.w3.org/2001/XMLSchema#boolean":    facets.BoolID,
+	"http://www.w3.org/2001/XMLSchema#double":     facets.FloatID,
+	"http://www.w3.org/2001/XMLSchema#float":      facets.FloatID,
+	"http://www.w3.org/2001/XMLSchema#gYear":      facets.DateID,
+	"http://www.w3.org/2001/XMLSchema#gYearMonth": facets.DateID,
 }

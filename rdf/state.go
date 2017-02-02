@@ -19,6 +19,7 @@
 package rdf
 
 import (
+	"errors"
 	"strconv"
 
 	"github.com/dgraph-io/dgraph/lex"
@@ -26,16 +27,19 @@ import (
 
 // The constants represent different types of lexed Items possible for an rdf N-Quad.
 const (
-	itemText       lex.ItemType = 5 + iota // plain text
-	itemSubject                            // subject, 6
-	itemPredicate                          // predicate, 7
-	itemObject                             // object, 8
-	itemLabel                              // label, 9
-	itemLiteral                            // literal, 10
-	itemLanguage                           // language, 11
-	itemObjectType                         // object type, 12
-	itemValidEnd                           // end with dot, 13
-	itemComment                            // comment, 14
+	itemText         lex.ItemType = 5 + iota // plain text
+	itemSubject                              // subject, 6
+	itemPredicate                            // predicate, 7
+	itemObject                               // object, 8
+	itemLabel                                // label, 9
+	itemLiteral                              // literal, 10
+	itemLanguage                             // language, 11
+	itemObjectType                           // object type, 12
+	itemValidEnd                             // end with dot, 13
+	itemComment                              // comment, 14
+	itemFacetKey                             // facet key, 15
+	itemFacetVal                             // facet value, 16
+	itemFacetValType                         // facet value type, 17
 )
 
 // These constants keep a track of the depth while parsing an rdf N-Quad.
@@ -44,6 +48,7 @@ const (
 	atPredicate
 	atObject
 	atLabel
+	atFacet
 )
 
 const (
@@ -57,6 +62,9 @@ const (
 	dot        = '.'
 	at         = '@'
 	caret      = '^'
+	leftRound  = '('
+	rightRound = ')'
+	comma      = ','
 )
 
 // This function inspects the next rune and calls the appropriate stateFn.
@@ -104,6 +112,14 @@ Loop:
 				return l.Errorf("Invalid input: %c at lexText", r)
 			}
 			return lexComment
+
+		case r == leftRound:
+			if l.Depth == atFacet {
+				l.Backup()
+				l.Emit(itemText)
+				return lexFacets
+			}
+			return l.Errorf("Invalid input: %c at Facet", r)
 
 		case r == lex.EOF:
 			break Loop
@@ -285,23 +301,30 @@ func lexLiteral(l *lex.Lexer) lex.StateFn {
 }
 
 func lexObjectType(l *lex.Lexer) lex.StateFn {
+	if err := lexType(l, itemObjectType); err != nil {
+		return l.Errorf(err.Error())
+	}
+	return lexText
+}
+
+func lexType(l *lex.Lexer, styp lex.ItemType) error {
 	r := l.Next()
 	if r != caret {
-		return l.Errorf("Expected ^ for lexObjectType")
+		return errors.New("Expected ^ for lexType")
 	}
 
 	r = l.Next()
 	if r != caret {
-		return l.Errorf("Expected ^^ for lexObjectType")
+		return errors.New("Expected ^^ for lexType")
 	}
 
 	l.Ignore()
 	r = l.Next()
 	if r != lsThan {
-		return l.Errorf("Expected < for lexObjectType")
+		return errors.New("Expected < for lexType")
 	}
 
-	return lexIRIRef(l, itemObjectType, lexText)
+	return lex.LexIRIRef(l, styp)
 }
 
 func lexObject(l *lex.Lexer) lex.StateFn {
@@ -338,6 +361,78 @@ func lexLabel(l *lex.Lexer) lex.StateFn {
 		return lexBlankNode(l, itemLabel, lexText)
 	}
 	return l.Errorf("Invalid char: %v at lexLabel", r)
+}
+
+// ( key1 = "value1"^^<xs:int> , key2="value2"^^<xs:string> )
+func lexFacets(l *lex.Lexer) lex.StateFn {
+	r := l.Next()
+	if r != leftRound {
+		return l.Errorf("Expected '(' but found %v at Facet.", r)
+	}
+
+	l.Depth++
+
+	for {
+		l.IgnoreRun(isSpace) // eat all spaces.
+		// Lex Facet Key
+		_, validr := l.AcceptRun(func(r rune) bool {
+			return r != ',' && !isSpace(r)
+		})
+		if !validr {
+			return l.Errorf("Facet key can not be empty.")
+		}
+		l.Emit(itemFacetKey)
+
+		l.IgnoreRun(isSpace) // eat all sapces before '='
+		r = l.Next()
+		if r != '=' {
+			return l.Errorf("Expected = after Facet key. Got %v", r)
+		}
+
+		l.IgnoreRun(isSpace) // eat all spaces before value
+
+		// Lex FacetValue
+		r = l.Next()
+		if r == comma || r == rightRound {
+			l.Ignore()
+			l.Emit(itemFacetVal)     // empty itemFacetVal : default value
+			l.Emit(itemFacetValType) // default type.
+		} else if r == quote {
+			l.AcceptRun(func(r rune) bool {
+				return r != quote
+			})
+			l.Emit(itemFacetVal)
+
+			// Lex FacetValue Type
+			r = l.Next()
+			if r == caret {
+				l.Backup()
+				if err := lexType(l, itemFacetValType); err != nil {
+					return l.Errorf(err.Error())
+				}
+				r = l.Next()
+			} else {
+				l.Ignore() // take default type.
+				l.Emit(itemFacetValType)
+			}
+
+			if isSpace(r) {
+				l.IgnoreRun(isSpace)
+				r = l.Next()
+			}
+			if r == lex.EOF {
+				return l.Errorf("Premature end of Facet pair.")
+			} else if r == rightRound {
+				return lexText
+			} else if r != comma {
+				return l.Errorf("Expected , found %v in Facet value.", r)
+			}
+			l.Ignore() // ignore comma
+		} else {
+			return l.Errorf("Expected quote (\") in start of Facet value. Found %v", r)
+		}
+	}
+
 }
 
 // lexComment lexes a comment text.
