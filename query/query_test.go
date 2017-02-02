@@ -575,7 +575,7 @@ func TestDebug1(t *testing.T) {
 	// Alright. Now we have everything set up. Let's create the query.
 	query := `
 		{
-			debug(id:0x01) {
+			me(id:0x01) {
 				name
 				gender
 				alive
@@ -583,12 +583,22 @@ func TestDebug1(t *testing.T) {
 			}
 		}
 	`
+	res, err := gql.Parse(query)
+	require.NoError(t, err)
 
-	js := processToFastJSON(t, query)
+	var l Latency
+	ctx := context.Background()
+	ctx = context.WithValue(ctx, "debug", "true")
+	sgl, err := ProcessQuery(ctx, res, &l)
+	require.NoError(t, err)
+
+	var buf bytes.Buffer
+	require.NoError(t, ToJson(&l, sgl, &buf))
+
 	var mp map[string]interface{}
-	require.NoError(t, json.Unmarshal([]byte(js), &mp))
+	require.NoError(t, json.Unmarshal([]byte(buf.Bytes()), &mp))
 
-	resp := mp["debug"]
+	resp := mp["me"]
 	uid := resp.([]interface{})[0].(map[string]interface{})["_uid_"].(string)
 	require.EqualValues(t, "0x1", uid)
 
