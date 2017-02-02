@@ -1036,6 +1036,23 @@ func TestParseFilter_op(t *testing.T) {
 	require.Equal(t, `(OR (a "a") (AND (b "a") (c "a")))`, res.Query[0].Children[0].Filter.debugString())
 }
 
+func TestParseFilter_opError(t *testing.T) {
+	query := `
+	query {
+		me(id:0x0a) {
+			friends @filter(a("a") or b("a")
+			and ) {
+				name
+			}
+			gender,age
+			hometown
+		}
+	}
+`
+	_, err := Parse(query)
+	require.Error(t, err)
+}
+
 func TestParseFilter_opNot1(t *testing.T) {
 	query := `
 	query {
