@@ -124,6 +124,7 @@ type params struct {
 	Var        string
 	NeedsVar   []string
 	ParentVars map[string]*task.List
+	Langs      []string
 }
 
 // SubGraph is the way to represent data internally. It contains both the
@@ -363,6 +364,7 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 
 		args := params{
 			Alias:   gchild.Alias,
+			Langs:   gchild.Langs,
 			isDebug: sg.Params.isDebug,
 			Var:     gchild.Var,
 		}
@@ -451,6 +453,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	args := params{
 		isDebug:    gq.Alias == "debug",
 		Alias:      gq.Alias,
+		Langs:      gq.Langs,
 		Var:        gq.Var,
 		ParentVars: make(map[string]*task.List),
 	}
@@ -505,6 +508,7 @@ func createTaskQuery(sg *SubGraph) *task.Query {
 	}
 	out := &task.Query{
 		Attr:     attr,
+		Langs:    sg.Params.Langs,
 		Reverse:  reverse,
 		SrcFunc:  sg.SrcFunc,
 		Count:    int32(sg.Params.Count),

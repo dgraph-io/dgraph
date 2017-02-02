@@ -148,21 +148,6 @@ func (nq NQuad) ToEdgeUsing(newToUid map[string]uint64) (*task.DirectedEdge, err
 	return out, nil
 }
 
-// TODO(tzdybal) - remove
-/*
-func (nq NQuad) hasUid() bool {
-	return len(nq.ObjectId) > 0 && nq.ObjectValue == nil
-}
-
-func (nq NQuad) hasLangTag() bool {
-	return len(nq.ObjectId) > 0 && nq.ObjectValue != nil
-}
-
-func (nq NQuad) hasValue() bool {
-	return len(nq.ObjectId) == 0 && nq.ObjectValue != nil
-}
-*/
-
 func copyValue(out *task.DirectedEdge, nq NQuad) error {
 	var err error
 	if out.Value, err = byteVal(nq); err != nil {
@@ -239,7 +224,6 @@ func Parse(line string) (rnq graph.NQuad, rerr error) {
 			}
 
 		case itemLanguage:
-			rnq.Predicate += "." + item.Val // TODO(tzdybal) - remove
 			rnq.Lang = item.Val
 
 		case itemObjectType:

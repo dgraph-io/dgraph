@@ -146,7 +146,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *task.DirectedEdge) e
 		l.Lock()
 		if doUpdateIndex {
 			// Check last posting for original value BEFORE any mutation actually happens.
-			val, verr = l.value()
+			val, verr = l.value(nil)
 		}
 		hasMutated, err := l.addMutation(ctx, t)
 		l.Unlock()
@@ -227,6 +227,7 @@ func RebuildIndex(ctx context.Context, attr string) error {
 			continue
 		}
 		// TODO(tzdybal) - what about the values with Lang?
+
 		p := pl.Postings[len(pl.Postings)-1]
 		pt := postingType(p)
 		if pt != valueTagged && pt != valueUntagged {

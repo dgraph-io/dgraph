@@ -62,8 +62,14 @@ func taskValues(t *testing.T, v []*task.Value) []string {
 
 func addEdgeToValue(t *testing.T, attr string, src uint64,
 	value string) {
+	addEdgeToLangValue(t, attr, src, value, "")
+}
+
+func addEdgeToLangValue(t *testing.T, attr string, src uint64,
+	value, lang string) {
 	edge := &task.DirectedEdge{
 		Value:  []byte(value),
+		Lang:   lang,
 		Label:  "testing",
 		Attr:   attr,
 		Entity: src,
@@ -246,6 +252,15 @@ func populateGraph(t *testing.T) {
 	addEdgeToValue(t, "film.film.initial_release_date", 24, "1909-05-05")
 	addEdgeToValue(t, "film.film.initial_release_date", 25, "1929-01-10")
 	addEdgeToValue(t, "film.film.initial_release_date", 31, "1801-01-15")
+
+	// language stuff
+	// 0x1001 is uid of interest for language tests
+	addEdgeToLangValue(t, "name", 0x1001, "Badger", "")
+	addEdgeToLangValue(t, "name", 0x1001, "European badger", "en")
+	addEdgeToLangValue(t, "name", 0x1001, "Borsuk europejski", "pl")
+	addEdgeToLangValue(t, "name", 0x1001, "Europäischer Dachs", "de")
+	addEdgeToLangValue(t, "name", 0x1001, "Барсук", "ru")
+	addEdgeToLangValue(t, "name", 0x1001, "Blaireau européen", "fr")
 
 	time.Sleep(5 * time.Millisecond)
 }
@@ -2948,6 +2963,111 @@ func TestIntersectsPolygon2(t *testing.T) {
 			{"name":"San Carlos Airport"},{"name":"SF Bay area"},
 			{"name":"Mountain View"},{"name":"San Carlos"}]}`
 	require.JSONEq(t, expected, mp)
+}
+
+func TestLangDefault(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id:0x1001) {
+				name
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"name":"Badger"}]}`,
+		js)
+}
+
+func TestLangSingle(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id:0x1001) {
+				name@pl
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"name":"Borsuk europejski"}]}`,
+		js)
+}
+
+func TestLangSingleFallback(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id:0x1001) {
+				name@cn
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"name":"Badger"}]}`,
+		js)
+}
+
+func TestLangMany1(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id:0x1001) {
+				name@ru:en:fr
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"name":"Барсук"}]}`,
+		js)
+}
+
+func TestLangMany2(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id:0x1001) {
+				name@hu:fi:fr
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"name":"Blaireau européen"}]}`,
+		js)
+}
+
+func TestLangMany3(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id:0x1001) {
+				name@hu:fr:fi
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"name":"Blaireau européen"}]}`,
+		js)
+}
+
+func TestLangManyFallback(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id:0x1001) {
+				name@hu:fi:cn
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"name":"Badger"}]}`,
+		js)
 }
 
 const schemaStr = `

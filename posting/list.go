@@ -578,17 +578,60 @@ func (l *List) Uids(opt ListOptions) *task.List {
 	return &task.List{Uids: result}
 }
 
-func (l *List) Value() (rval types.Val, rerr error) {
+// Returns Value from posting list, according to preffered language list (langs).
+// If list is empty, value without language is returned; if such value is not available, value with
+// smallest Uid is returned.
+// If list consists of one or more languages, first available value is returned; if no language
+// from list match the values, processing is the same as for empty list.
+func (l *List) Value(langs []string) (rval types.Val, rerr error) {
 	l.RLock()
 	defer l.RUnlock()
-	return l.value()
+	return l.value(langs)
 }
 
-func (l *List) value() (rval types.Val, rerr error) {
+func (l *List) value(langs []string) (rval types.Val, rerr error) {
 	l.AssertRLock()
 	var found bool
-	l.iterate(math.MaxUint64-1, func(p *types.Posting) bool {
-		if p.Uid == math.MaxUint64 {
+
+	// look for language in preffered order
+	for _, lang := range langs {
+		langUid := farm.Fingerprint64([]byte(lang))
+		found, rval = l.findValue(langUid)
+		if found {
+			break
+		}
+	}
+
+	// look for value without language
+	if !found {
+		found, rval = l.findValue(math.MaxUint64)
+	}
+
+	// last resort - return value with smallest lang Uid
+	if !found {
+		// TODO(tzdybal) - store list of languages in List, to avoid iteration
+		l.iterate(0, func(p *types.Posting) bool {
+			if postingType(p) == valueTagged {
+				val := make([]byte, len(p.Value))
+				copy(val, p.Value)
+				rval.Value = val
+				rval.Tid = types.TypeID(p.ValType)
+				found = true
+			}
+			return false
+		})
+	}
+
+	if !found {
+		return rval, ErrNoValue
+	}
+
+	return rval, nil
+}
+
+func (l *List) findValue(uid uint64) (found bool, rval types.Val) {
+	l.iterate(uid-1, func(p *types.Posting) bool {
+		if p.Uid == uid {
 			val := make([]byte, len(p.Value))
 			copy(val, p.Value)
 			rval.Value = val
@@ -598,10 +641,5 @@ func (l *List) value() (rval types.Val, rerr error) {
 		return false
 	})
 
-	if !found {
-		return rval, ErrNoValue
-	}
-	return rval, nil
+	return found, rval
 }
-
-// TODO(tzdybal) function for value in given language
