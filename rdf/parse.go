@@ -288,6 +288,7 @@ func Parse(line string) (rnq graph.NQuad, rerr error) {
 
 		case itemLabel:
 			rnq.Label = strings.Trim(item.Val, " ")
+
 		case itemLeftRound:
 			it.Prev() // backup '('
 			if err := parseFacets(it, &rnq); err != nil {
@@ -329,6 +330,11 @@ func parseFacets(it *lex.ItemIterator, rnq *graph.NQuad) error {
 	if item.Typ != itemLeftRound {
 		return x.Errorf("Expected '(' but found %v at Facet.", item.Val)
 	}
+	defer func() {
+		if rnq.Facets != nil {
+			facets.SortFacets(rnq.Facets)
+		}
+	}()
 
 	for it.Next() { // parse one key value pair
 		// parse key

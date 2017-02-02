@@ -35,6 +35,7 @@ import (
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/types"
+	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -128,17 +129,19 @@ type params struct {
 	NeedsVar   []string
 	ParentVars map[string]*task.List
 	Normalize  bool
+	Facet      *facets.Param
 }
 
 // SubGraph is the way to represent data internally. It contains both the
 // query and the response. Once generated, this can then be encoded to other
 // client convenient formats, like GraphQL / JSON.
 type SubGraph struct {
-	Attr      string
-	Params    params
-	counts    []uint32
-	values    []*task.Value
-	uidMatrix []*task.List
+	Attr        string
+	Params      params
+	counts      []uint32
+	values      []*task.Value
+	uidMatrix   []*task.List
+	FacetsLists []*facets.List
 
 	// SrcUIDs is a list of unique source UIDs. They are always copies of destUIDs
 	// of parent nodes in GraphQL structure.
@@ -217,6 +220,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 	invalidUids := make(map[uint64]bool)
 	uidAlreadySet := false
 
+	facetsNode := dst.New("facets")
 	// We go through all predicate children of the subgraph.
 	for _, pc := range sg.Children {
 		idxi, idxj := algo.IndexOf(pc.SrcUIDs, uid)
@@ -258,8 +262,13 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 		} else if algo.ListLen(ul) > 0 || len(pc.Children) > 0 {
 			// We create as many predicate entity children as the length of uids for
 			// this predicate.
+			var fcsList []*facets.Facets
+			if pc.Params.Facet != nil {
+				fcsList = pc.FacetsLists[idx].FacetsList
+			}
 			it := algo.NewListIterator(ul)
-			for ; it.Valid(); it.Next() {
+			for childIdx := -1; it.Valid(); it.Next() {
+				childIdx++
 				childUID := it.Val()
 				if invalidUids[childUID] {
 					continue
@@ -275,6 +284,22 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 					log.Printf("Error while traversal: %v", rerr)
 					return rerr
 				}
+				if pc.Params.Facet != nil && len(fcsList) > childIdx {
+					fs := fcsList[childIdx]
+					fc := dst.New(fieldName)
+					for _, f := range fs.Facets {
+						if tVal, err := types.TypeValForFacet(f); err != nil {
+							return err
+						} else {
+							fc.AddValue(f.Key, tVal)
+						}
+					}
+					if !fc.IsEmpty() {
+						fcParent := dst.New("_")
+						fcParent.AddNodeValue("_", fc)
+						uc.AddNodeValue("@facets", fcParent)
+					}
+				}
 				if !uc.IsEmpty() {
 					dst.AddChild(fieldName, uc)
 				}
@@ -284,6 +309,20 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 			v, err := getValue(tv)
 			if err != nil {
 				return err
+			}
+			if pc.Params.Facet != nil && len(pc.FacetsLists[idx].FacetsList) > 0 {
+				fc := dst.New(fieldName)
+				// in case of Value we have only one Facets
+				for _, f := range pc.FacetsLists[idx].FacetsList[0].Facets {
+					if tVal, err := types.TypeValForFacet(f); err != nil {
+						return err
+					} else {
+						fc.AddValue(f.Key, tVal)
+					}
+				}
+				if !fc.IsEmpty() {
+					facetsNode.AddNodeValue(fieldName, fc)
+				}
 			}
 
 			if pc.Attr == "_xid_" {
@@ -309,7 +348,6 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 				if sv.Tid == types.StringID && sv.Value.(string) == "_nil_" {
 					sv.Value = ""
 				}
-
 				if !pc.Params.Normalize {
 					dst.AddValue(fieldName, sv)
 					continue
@@ -323,6 +361,9 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 		}
 	}
 
+	if !facetsNode.IsEmpty() {
+		dst.AddNodeValue("@facets", facetsNode)
+	}
 	return nil
 }
 
@@ -354,6 +395,11 @@ func convertWithBestEffort(tv *task.Value, attr string) (types.Val, error) {
 
 func createProperty(prop string, v types.Val) *graph.Property {
 	pval := toProtoValue(v)
+	return &graph.Property{Prop: prop, Value: pval}
+}
+
+func createPropertyFromNode(prop string, v *graph.Node) *graph.Property {
+	pval := &graph.Property_NodeValue{v}
 	return &graph.Property{Prop: prop, Value: pval}
 }
 
@@ -406,6 +452,10 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 			Var:       gchild.Var,
 			Normalize: sg.Params.Normalize,
 		}
+		if gchild.Facets != nil {
+			args.Facet = &facets.Param{gchild.Facets.AllKeys, gchild.Facets.Keys}
+		}
+
 		args.NeedsVar = append(args.NeedsVar, gchild.NeedsVar...)
 		if gchild.IsCount {
 			if len(gchild.Children) != 0 {
@@ -531,6 +581,10 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		ParentVars: make(map[string]*task.List),
 		Normalize:  gq.Normalize,
 	}
+	if gq.Facets != nil {
+		args.Facet = &facets.Param{gq.Facets.AllKeys, gq.Facets.Keys}
+	}
+
 	for _, it := range gq.NeedsVar {
 		args.NeedsVar = append(args.NeedsVar, it)
 	}
@@ -597,13 +651,14 @@ func createTaskQuery(sg *SubGraph) *task.Query {
 		attr = strings.TrimPrefix(attr, "~")
 	}
 	out := &task.Query{
-		Attr:     attr,
-		Reverse:  reverse,
-		SrcFunc:  sg.SrcFunc,
-		Count:    int32(sg.Params.Count),
-		Offset:   int32(sg.Params.Offset),
-		AfterUid: sg.Params.AfterUID,
-		DoCount:  len(sg.Filters) == 0 && sg.Params.DoCount,
+		Attr:       attr,
+		Reverse:    reverse,
+		SrcFunc:    sg.SrcFunc,
+		Count:      int32(sg.Params.Count),
+		Offset:     int32(sg.Params.Offset),
+		AfterUid:   sg.Params.AfterUID,
+		DoCount:    len(sg.Filters) == 0 && sg.Params.DoCount,
+		FacetParam: sg.Params.Facet,
 	}
 	if sg.SrcUIDs != nil {
 		out.Uids = sg.SrcUIDs
@@ -836,6 +891,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 
 		sg.uidMatrix = result.UidMatrix
 		sg.values = result.Values
+		sg.FacetsLists = result.FacetsLists
 		if len(sg.values) > 0 {
 			v := sg.values[0]
 			x.Trace(ctx, "Sample value for attr: %v Val: %v", sg.Attr, string(v.Val))

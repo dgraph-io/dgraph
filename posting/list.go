@@ -36,6 +36,7 @@ import (
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/types"
+	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -560,11 +561,35 @@ func (l *List) LastCompactionTs() time.Time {
 // Uids returns the UIDs given some query params.
 // We have to apply the filtering before applying (offset, count).
 func (l *List) Uids(opt ListOptions) *task.List {
+	res := new(task.List)
+	writeIt := algo.NewWriteIterator(res)
+	l.intersectingPostings(opt, func(ps []*types.Posting) {
+		for _, p := range ps {
+			writeIt.Append(p.Uid)
+		}
+	})
+	writeIt.End()
+	return res
+}
+
+// FacetsForUids gives Facets for postings common with uids in opt listOptions.
+func (l *List) FacetsForUids(opt ListOptions, param *facets.Param) []*facets.Facets {
+	result := make([]*facets.Facets, 0, 10)
+	l.intersectingPostings(opt, func(ps []*types.Posting) {
+		for _, p := range ps {
+			result = append(result, &facets.Facets{mkFacetsCopy(p, param)})
+		}
+	})
+	return result
+}
+
+// intersectingPostings calls postFn with the postings that are common with
+// uids in the opt ListOptions.
+func (l *List) intersectingPostings(opt ListOptions, postFn func([]*types.Posting)) {
 	l.RLock()
 	defer l.RUnlock()
 
-	res := new(task.List)
-	wit := algo.NewWriteIterator(res)
+	result := make([]*types.Posting, 0, 10)
 	it := algo.NewListIterator(opt.Intersect)
 	l.iterate(opt.AfterUID, func(p *types.Posting) bool {
 		if postingType(p) != valueUid {
@@ -578,11 +603,10 @@ func (l *List) Uids(opt ListOptions) *task.List {
 				return true
 			}
 		}
-		wit.Append(uid)
+		result = append(result, p)
 		return true
 	})
-	wit.End()
-	return res
+	postFn(result)
 }
 
 func (l *List) Value() (rval types.Val, rerr error) {
@@ -593,22 +617,66 @@ func (l *List) Value() (rval types.Val, rerr error) {
 
 func (l *List) value() (rval types.Val, rerr error) {
 	l.AssertRLock()
+	p, err := l.valuePosting()
+	if err != nil {
+		return rval, err
+	}
+	val := make([]byte, len(p.Value))
+	copy(val, p.Value)
+	rval.Value = val
+	rval.Tid = types.TypeID(p.ValType)
+	return rval, nil
+}
+
+// TODO(tzdybal) function for value in given language
+
+// Facets gives facets for the posting representing value.
+func (l *List) Facets(param *facets.Param) (fs []*facets.Facet, ferr error) {
+	l.RLock()
+	defer l.RUnlock()
+	p, err := l.valuePosting()
+	if err != nil {
+		return nil, err
+	}
+	return mkFacetsCopy(p, param), nil
+}
+
+// mkFacetsCopy makes a copy of facets of the posting.
+func mkFacetsCopy(p *types.Posting, param *facets.Param) (fs []*facets.Facet) {
+	paramKeyIdx := 0
+	lParamKeys := len(param.Keys)
+	for _, f := range p.Facets {
+		if param.AllKeys || param.Keys[paramKeyIdx] == f.Key {
+			fcopy := &facets.Facet{f.Key, nil, f.ValType}
+			fcopy.Value = make([]byte, len(f.Value))
+			copy(fcopy.Value, f.Value)
+			fs = append(fs, fcopy)
+			paramKeyIdx++
+			if !param.AllKeys && (paramKeyIdx >= lParamKeys) {
+				break
+			}
+		} else if f.Key > param.Keys[paramKeyIdx] {
+			break
+		}
+	}
+	return fs
+}
+
+// valuePosting gives the posting representing value.
+// This fn expects to be called from inside a read lock.
+func (l *List) valuePosting() (p *types.Posting, err error) {
+	l.AssertRLock()
 	var found bool
-	l.iterate(math.MaxUint64-1, func(p *types.Posting) bool {
-		if p.Uid == math.MaxUint64 {
-			val := make([]byte, len(p.Value))
-			copy(val, p.Value)
-			rval.Value = val
-			rval.Tid = types.TypeID(p.ValType)
+	l.iterate(math.MaxUint64-1, func(pi *types.Posting) bool {
+		if pi.Uid == math.MaxUint64 {
+			p = pi
 			found = true
 		}
 		return false
 	})
 
 	if !found {
-		return rval, ErrNoValue
+		return p, ErrNoValue
 	}
-	return rval, nil
+	return p, nil
 }
-
-// TODO(tzdybal) function for value in given language

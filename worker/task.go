@@ -17,9 +17,8 @@
 package worker
 
 import (
-	"strings"
-
 	"golang.org/x/net/context"
+	"strings"
 
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/group"
@@ -27,6 +26,7 @@ import (
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/types"
+	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -173,6 +173,14 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 
 	var out task.Result
 	it := algo.NewListIterator(q.Uids)
+	opts := posting.ListOptions{
+		AfterUID: uint64(q.AfterUid),
+	}
+	// If we have srcFunc and Uids, it means its a filter. So we intersect.
+	if useFunc && algo.ListLen(q.Uids) > 0 {
+		opts.Intersect = q.Uids
+	}
+
 	for i := 0; i < n; i++ {
 		var key []byte
 		if isAgrtr {
@@ -202,6 +210,19 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 		}
 		out.Values = append(out.Values, newValue)
 
+		// get facets.
+		if q.FacetParam != nil {
+			if fs, err := pl.Facets(q.FacetParam); err == nil { // for value node
+				fl := &facets.List{nil}
+				fl.FacetsList = append(fl.FacetsList, &facets.Facets{fs})
+				out.FacetsLists = append(out.FacetsLists, fl)
+			} else { // for uid node.
+				out.FacetsLists = append(out.FacetsLists,
+					&facets.List{pl.FacetsForUids(opts, q.FacetParam)})
+			}
+		}
+
+		// The more usual case: Getting the UIDs.
 		if q.DoCount || isAgrtr {
 			if q.DoCount {
 				out.Counts = append(out.Counts, uint32(pl.Length(0)))
@@ -211,13 +232,6 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 			continue
 		}
 		// The more usual case: Getting the UIDs.
-		opts := posting.ListOptions{
-			AfterUID: uint64(q.AfterUid),
-		}
-		// If we have srcFunc and Uids, it means its a filter. So we intersect.
-		if useFunc && algo.ListLen(q.Uids) > 0 {
-			opts.Intersect = q.Uids
-		}
 		out.UidMatrix = append(out.UidMatrix, pl.Uids(opts))
 	}
 
