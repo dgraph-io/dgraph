@@ -235,7 +235,6 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 		for _, uid := range uids.Uids {
 			key := x.DataKey(attr, uid)
 			pl, decr := posting.GetOrCreate(key, gid)
-			defer decr()
 			val, err := pl.Value()
 			newValue := &task.Value{ValType: int32(val.Tid)}
 			if err == nil {
@@ -244,6 +243,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 				newValue.Val = x.Nilbyte
 			}
 			values = append(values, newValue)
+			decr() // Decrement the reference count of the pl.
 		}
 
 		filtered := types.FilterGeoUids(uids, values, geoQuery)
