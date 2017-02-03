@@ -247,6 +247,22 @@ func populateGraph(t *testing.T) {
 	addEdgeToValue(t, "film.film.initial_release_date", 25, "1929-01-10")
 	addEdgeToValue(t, "film.film.initial_release_date", 31, "1801-01-15")
 
+	// for aggregator(sum) test
+	{
+		data := types.ValueForType(types.BinaryID)
+		intD := types.Val{types.Int32ID, int32(4)}
+		err = types.Marshal(intD, &data)
+		require.NoError(t, err)
+		addEdgeToTypedValue(t, "shadow_deep", 23, types.Int32ID, data.Value.([]byte))
+	}
+	{
+		data := types.ValueForType(types.BinaryID)
+		intD := types.Val{types.Int32ID, int32(14)}
+		err = types.Marshal(intD, &data)
+		require.NoError(t, err)
+		addEdgeToTypedValue(t, "shadow_deep", 24, types.Int32ID, data.Value.([]byte))
+	}
+
 	time.Sleep(5 * time.Millisecond)
 }
 
@@ -621,6 +637,76 @@ func TestCount(t *testing.T) {
 		`{"me":[{"alive":true,"friend":[{"count":5}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
+
+func TestMin(t *testing.T) {
+	populateGraph(t)
+
+	// Alright. Now we have everything set up. Let's create the query.
+	query := `
+		{
+			me(id:0x01) {
+				name
+				gender
+				alive
+				friend {
+                                    min(dob)
+                                }
+			}
+		}
+	`
+
+	js := processToFastJSON(t, query)
+	require.EqualValues(t,
+		`{"me":[{"alive":true,"friend":[{"dob":[{"min":"1901-01-15"}]}],"gender":"female","name":"Michonne"}]}`,
+		js)
+}
+
+func TestMax(t *testing.T) {
+	populateGraph(t)
+
+	// Alright. Now we have everything set up. Let's create the query.
+	query := `
+		{
+			me(id:0x01) {
+				name
+				gender
+				alive
+				friend {
+                                    max(dob)
+                                }
+			}
+		}
+	`
+
+	js := processToFastJSON(t, query)
+	require.EqualValues(t,
+		`{"me":[{"alive":true,"friend":[{"dob":[{"max":"1910-01-02"}]}],"gender":"female","name":"Michonne"}]}`,
+		js)
+}
+
+func TestSum(t *testing.T) {
+	populateGraph(t)
+
+	// Alright. Now we have everything set up. Let's create the query.
+	query := `
+		{
+			me(id:0x01) {
+				name
+				gender
+				alive
+				friend {
+                                    sum(shadow_deep)
+                                }
+			}
+		}
+	`
+
+	js := processToFastJSON(t, query)
+	require.EqualValues(t,
+		`{"me":[{"alive":true,"friend":[{"shadow_deep":[{"sum":18}]}],"gender":"female","name":"Michonne"}]}`,
+		js)
+}
+
 
 func TestCountError1(t *testing.T) {
 	// Alright. Now we have everything set up. Let's create the query.
@@ -2841,6 +2927,7 @@ scalar (
 	survival_rate : float
 	alive         : bool
 	age           : int
+        shadow_deep   : int
 )
 scalar (
   friend:uid @reverse

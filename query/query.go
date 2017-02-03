@@ -118,7 +118,8 @@ type params struct {
 	Count      int
 	Offset     int
 	AfterUID   uint64
-	DoCount    bool
+	//DoCount    bool
+	Agrtr      string
 	GetUID     bool
 	Order      string
 	OrderDesc  bool
@@ -134,7 +135,7 @@ type params struct {
 type SubGraph struct {
 	Attr      string
 	Params    params
-	counts    []uint32
+	//counts    []uint32
 	values    []*task.Value
 	uidMatrix []*task.List
 
@@ -145,7 +146,7 @@ type SubGraph struct {
 
 	FilterOp string
 	Filters  []*SubGraph
-	Agrtr    string
+	//Agrtr    string
 	Children []*SubGraph
 
 	// destUIDs is a list of destination UIDs, after applying filters, pagination.
@@ -228,37 +229,29 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 			uidAlreadySet = true
 			dst.SetUID(uid)
 		}
-		if pc.Agrtr == "count" {
+		if pc.Params.Agrtr == "count" {
 			uc := dst.New(pc.Attr)
 			c := types.ValueForType(types.Int32ID)
 			c.Value = int32(binary.LittleEndian.Uint32(pc.values[idx].Val))
 			uc.AddValue("count", c)
 			dst.AddChild(pc.Attr, uc)
-		} else if len(pc.Children) > 0 &&
-			len(pc.Children[0].Agrtr) > 0 &&
-			pc.Children[0].Agrtr != "count" {
-			// aggregator is applied on its child attr
-			// outside layer
-			uc := dst.New(pc.Attr)
-			{
-				// inner layer
-				child := pc.Children[0]
-				// convert to StringID, then add into node
-				v, err := getValue(child.values[0])
-				if err != nil {
-					return err
-				}
-				globalType, hasType := schema.TypeOf(child.Attr)
-				sv := types.ValueForType(types.StringID)
-				if hasType == nil {
-					gtID := globalType
-					sv, err = types.Convert(v, gtID)
-				}
-				chuc := uc.New(child.Attr)
-				chuc.AddValue(child.Agrtr, sv)
-				uc.AddChild(child.Attr, chuc)
+		} else if pc.Params.Agrtr == "min" || 
+			pc.Params.Agrtr == "max" ||
+			pc.Params.Agrtr == "sum" {
+			if idx > 0 { // aggregator will put value at index 0
+				continue
 			}
+			uc := dst.New(pc.Attr)
+			// convert to StringID, then add into node
+			v, _ := getValue(pc.values[0])
+			typ, err := schema.TypeOf(pc.Attr)
+			sv := types.ValueForType(types.StringID)
+			if err == nil {
+				sv, err = types.Convert(v, typ)
+			}
+			uc.AddValue(pc.Params.Agrtr, sv)
 			dst.AddChild(pc.Attr, uc)
+			//fmt.Printf("------ [min] attr %#v\n", pc.Attr)
 		} else if len(ul.Uids) > 0 || len(pc.Children) > 0 {
 			// We create as many predicate entity children as the length of uids for
 			// this predicate.
@@ -374,7 +367,6 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 }*/
 
 func createProperty(prop string, v types.Val) *graph.Property {
-	fmt.Printf("[createProperty] will %v to %#v\n", prop, v)
 	pval := toProtoValue(v)
 	return &graph.Property{Prop: prop, Value: pval}
 }
@@ -416,7 +408,7 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 			sg.Params.GetUID = true
 		}
 
-		fmt.Printf("gchild is %#v\n", gchild)
+		//fmt.Printf("gchild is %#v\n", gchild)
 		args := params{
 			Alias:   gchild.Alias,
 			isDebug: sg.Params.isDebug,
@@ -429,32 +421,27 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 			}
 			args.DoCount = true
 		}*/
-		if gchild.Agrtr != nil {
-			if gchild.Agrtr.Name == "count" {
-				if len(gchild.Children) != 0 {
-					return errors.New("Node with count cannot have child attributes")
-				}
-				//args.DoCount = true
-			} else {
-				if len(gq.Children) > 1 {
-					note := fmt.Sprintf("Node with aggregator %s cannot have sibling",
-						gchild.Agrtr.Name)
-					return errors.New(note)
-				}
-			}
-		}
+		
 		dst := &SubGraph{
 			Attr:   gchild.Attr,
 			Params: args,
+		}
+		if gchild.Func != nil {
+			f := gchild.Func.Name
+			if gchild.Func.IsAgrtr() {
+				if len(gchild.Children) != 0 {
+					note := fmt.Sprintf("Node with aggregator %s cant have child attr", f)
+					return errors.New(note)
+				}
+			}
+			dst.Params.Agrtr = f
+			dst.SrcFunc = append(dst.SrcFunc, f)
 		}
 		if gchild.Filter != nil {
 			dstf := &SubGraph{}
 			filterCopy(dstf, gchild.Filter)
 			dst.Filters = append(dst.Filters, dstf)
-		}
-		if gchild.Agrtr != nil {
-			dst.Agrtr =  gchild.Agrtr.Name
-		}
+		} 
 
 		if v, ok := gchild.Args["offset"]; ok {
 			offset, err := strconv.ParseInt(v, 0, 32)
@@ -576,7 +563,12 @@ func createTaskQuery(sg *SubGraph) *task.Query {
 	if sg.SrcUIDs != nil {
 		out.Uids = sg.SrcUIDs.Uids
 	}
-	if sg.SrcFunc == nil && len(sg.Agrtr) != 0 {
+	if sg.SrcFunc != nil {
+		if sg.SrcFunc[0] == "count" && len(sg.Filters) > 0 {
+			out.SrcFunc = nil
+		}
+	}
+	/*if sg.SrcFunc == nil && len(sg.Agrtr) != 0 {
 		switch sg.Agrtr {
 		case "count":
 			if len(sg.Filters) == 0 {
@@ -585,7 +577,7 @@ func createTaskQuery(sg *SubGraph) *task.Query {
 		case "min":
 			out.SrcFunc = append(sg.SrcFunc, "min")
 		}
-	}
+	}*/
 	return out
 }
 
@@ -607,7 +599,7 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 		}
 		x.Trace(ctx, "Query parsed")
 		sgl = append(sgl, sg)
-		sg.DebugPrint("---")
+		//sg.DebugPrint("---")
 	}
 	l.Parsing += time.Since(loopStart)
 
@@ -796,6 +788,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		// I am root. I don't have any function to execute, and my
 		// result has been prepared for me already.
 		sg.DestUIDs = algo.MergeSorted(sg.uidMatrix) // Could also be = sg.SrcUIDs
+
 	} else {
 		if len(sg.SrcFunc) > 0 && sg.SrcFunc[0] == "id" {
 			// If its an id() filter, we just have to intersect the SrcUIDs with DestUIDs
@@ -822,7 +815,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		}
 		//sg.counts = result.Counts
 
-		if sg.Agrtr == "count" && len(sg.Filters) == 0 {
+		if sg.Params.Agrtr == "count" && len(sg.Filters) == 0 {
 			// If there is a filter, we need to do more work to get the actual count.
 			x.Trace(ctx, "Zero uids. Only count requested")
 			rch <- nil
@@ -895,7 +888,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		}
 	} else {
 		// If we are asked for count, we don't need to change the order of results.
-		if sg.Agrtr != "count" {
+		if sg.Params.Agrtr != "count" {
 			// We need to sort first before pagination.
 			if err = sg.applyOrderAndPagination(ctx); err != nil {
 				rch <- err
@@ -917,7 +910,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	// should return a count of 0, not 10.
 
 	// take care of the order
-	if sg.Agrtr == "count" {
+	if sg.Params.Agrtr == "count" {
 		x.AssertTrue(len(sg.Filters) > 0)
 		sg.values = make([]*task.Value, len(sg.uidMatrix))
 		for i, ul := range sg.uidMatrix {

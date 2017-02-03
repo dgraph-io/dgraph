@@ -1217,11 +1217,11 @@ func TestParseCountAsFuncMultiple(t *testing.T) {
 	gq, err := Parse(query)
 	require.NoError(t, err)
 	require.Equal(t, 6, len(gq.Query[0].Children))
-	require.Equal(t, "count", gq.Query[0].Children[0].Agrtr.Name)
+	require.Equal(t, "count", gq.Query[0].Children[0].Func.Name)
 	require.Equal(t, "friends", gq.Query[0].Children[0].Attr)
-	require.Equal(t, "count", gq.Query[0].Children[1].Agrtr.Name)
+	require.Equal(t, "count", gq.Query[0].Children[1].Func.Name)
 	require.Equal(t, "relatives", gq.Query[0].Children[1].Attr)
-	require.Equal(t, "count", gq.Query[0].Children[2].Agrtr.Name)
+	require.Equal(t, "count", gq.Query[0].Children[2].Func.Name)
 	require.Equal(t, "classmates", gq.Query[0].Children[2].Attr)
 
 }

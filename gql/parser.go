@@ -108,6 +108,13 @@ func init() {
 	}
 }
 
+func (f *Function) IsAgrtr() bool {
+	return f.Name == "count" ||
+		f.Name == "min" ||
+		f.Name == "max" ||
+		f.Name == "sum"
+}
+
 // DebugPrint is useful for debugging.
 func (gq *GraphQuery) DebugPrint(prefix string) {
 	x.Printf("%s[%x %q %q->%q]\n", prefix, gq.UID, gq.Attr, gq.Alias)
@@ -1173,7 +1180,8 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				continue
 			}
 
-			if item.Val == "count" || item.Val == "min" {
+			if item.Val == "count" || item.Val == "min" || 
+				item.Val == "max" || item.Val == "sum" {
 				if isAgrtr != 0 {
 					return x.Errorf("Invalid mention of aggregator.")
 				}
@@ -1195,7 +1203,8 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				//IsCount: isAgrtr == 1,
 			}
 			if isAgrtr == 1 {
-				child.Agrtr = &Function{Name:agrtr, Attr: item.Val}
+				child.Func = &Function{Name:agrtr, Attr: item.Val}
+				//child.Agrtr = &Function{Name:agrtr, Attr: item.Val}
 			}
 			gq.Children = append(gq.Children, child)
 			curp = child

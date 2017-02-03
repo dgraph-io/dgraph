@@ -20,7 +20,7 @@ import (
 	"strings"
 	//"strconv"
 	"encoding/binary"
-	"fmt"
+	//"fmt"
 
 	"golang.org/x/net/context"
 
@@ -93,7 +93,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 	attr := q.Attr
 
 	useFunc := len(q.SrcFunc) != 0
-	fmt.Printf("[processTask] task.Query: %#v\n", q)
+	//fmt.Printf("[processTask] task.Query: %#v\n", q)
 	var n int
 	var tokens []string
 	var geoQuery *types.GeoQueryData
@@ -106,7 +106,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 	if useFunc {
 		f := q.SrcFunc[0]
 		isIneq = f == "leq" || f == "geq" || f == "lt" || f == "gt" || f == "eq"
-		isAgrtr = f == "count" || f == "min"
+		isAgrtr = f == "count" || f == "min" || f == "max" || f == "sum"
 		switch {
 		case isAgrtr:
 			// confirm agrregator could apply on the attributes
@@ -211,10 +211,10 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 				// do nothing
 			} else if len(out.Values) == 0 {
 				out.Values = append(out.Values, newValue)
-				out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
 			} else {
 				out.Values[0], _ = Aggregate(q.SrcFunc[0], out.Values[0], newValue, typ)
 			}
+			out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
 			continue
 		}
 		// The more usual case: Getting the UIDs.

@@ -14,7 +14,14 @@ func CouldApplyAgrtrOn(agrtr, attr string) bool {
 		return true
 	}
 	typ, err := schema.TypeOf(attr)
-	if err != nil || !typ.IsScalar() {
+	if err != nil {
+		return false
+	}
+	return couldApplyAgrtrOn(agrtr, typ)
+}
+
+func couldApplyAgrtrOn(agrtr string, typ types.TypeID) bool {
+	if !typ.IsScalar() {
 		return false
 	}
 	switch agrtr {
@@ -42,6 +49,9 @@ func getValue(tv *task.Value) (types.Val, error) {
 }
 
 func Aggregate(agrtr string, lh, rh *task.Value, typ types.TypeID) (*task.Value, error) {
+	if !couldApplyAgrtrOn(agrtr, typ) {
+		return lh, x.Errorf("Cant apply aggregator %v on type %d\n", agrtr, typ)
+	}
 	lvh, _ := getValue(lh)
 	va, erra := types.Convert(lvh, typ)
 	if erra != nil {
@@ -65,8 +75,24 @@ func Aggregate(agrtr string, lh, rh *task.Value, typ types.TypeID) (*task.Value,
 		} else {
 			return lh, nil
 		}
+	case "sum":
+		data := types.ValueForType(types.BinaryID)
+		var err error
+		if typ == types.Int32ID {
+			num := va.Value.(int32) + vb.Value.(int32)
+			intV := types.Val{types.Int32ID, num}
+			err = types.Marshal(intV, &data)
+		} else if typ == types.FloatID {
+			num := va.Value.(float64) + vb.Value.(float64)
+			floatV := types.Val{types.FloatID, num}
+			err = types.Marshal(floatV, &data)
+		}
+		if err != nil {
+			return lh, x.Errorf("Failed aggregator(sum) during Marshal")
+		}
+		lh.Val = data.Value.([]byte)
+		return lh, nil
 	default:
 		return lh, x.Errorf("Invalid Aggregator provided")
 	}
-
 }
