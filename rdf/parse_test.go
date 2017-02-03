@@ -566,6 +566,59 @@ var testNQuads = []struct {
 		},
 		expectedErr: false,
 	},
+	// Should not fail even if facets is empty
+	{
+		input: `_:alice <knows> "stuff" () .`,
+		nq: graph.NQuad{
+			Subject:     "_:alice",
+			Predicate:   "knows",
+			ObjectId:    "",
+			ObjectValue: &graph.Value{&graph.Value_StrVal{"stuff"}},
+			ObjectType:  0,
+			Facets:      nil,
+		},
+		expectedErr: false,
+	},
+	// Should not fail parsing with unnecessary spaces
+	{
+		input: `_:alice <knows> "stuff" ( key1 = "12"^^<xs:int> , key2="value2"^^<xs:string>, key3=, key4 ="val4" ) .`,
+		nq: graph.NQuad{
+			Subject:     "_:alice",
+			Predicate:   "knows",
+			ObjectId:    "",
+			ObjectValue: &graph.Value{&graph.Value_StrVal{"stuff"}},
+			ObjectType:  0,
+			Facets: []*facets.Facet{
+				&facets.Facet{"key1", []byte("12"),
+					facets.TypeIDToValType(facets.Int32ID)},
+				&facets.Facet{"key2", []byte("value2"),
+					facets.TypeIDToValType(facets.StringID)},
+				&facets.Facet{"key3", []byte(""),
+					facets.TypeIDToValType(facets.StringID)},
+				&facets.Facet{"key4", []byte("val4"),
+					facets.TypeIDToValType(facets.StringID)},
+			},
+		},
+		expectedErr: false,
+	},
+
+	// failing tests for facets
+	{
+		input:       `_:alice <knows> "stuff" (key1="val1,key2="13"^^<xs:int>) .`,
+		expectedErr: true, // should fail because of unclosed " in key1
+	},
+	{
+		input:       `_:alice <knows> "stuff" (key1="val1",key2="13"^<xs:int>) .`,
+		expectedErr: true, // should fail because of single ^ . Should be ^^
+	},
+	{
+		input:       `_:alice <knows> "stuff" (key1="val1",key2="13"^^<xs:unknown-type>) .`,
+		expectedErr: true, // should fail because of unknown-type given.
+	},
+	{
+		input:       `_:alice <knows> "stuff" (key1="val1",key2="13"^^<xs:int) .`,
+		expectedErr: true, // unclosed type : missing '>'
+	},
 }
 
 func TestLex(t *testing.T) {

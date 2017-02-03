@@ -372,15 +372,20 @@ func lexFacets(l *lex.Lexer) lex.StateFn {
 		return l.Errorf("Expected '(' but found %v at Facet.", r)
 	}
 
-	l.Depth++
+	// we can come here from the lexObject also ;
+	// so setting to ahead of atFacet explicitly
+	l.Depth = atFacet + 1
 
 	for {
 		l.IgnoreRun(isSpace) // eat all spaces.
 		// Lex Facet Key
 		_, validr := l.AcceptRun(func(r rune) bool {
-			return r != equal && !isSpace(r)
+			return r != equal && !isSpace(r) && r != rightRound
 		})
 		if !validr {
+			if l.Next() == rightRound {
+				return lexText // empty facets..
+			}
 			return l.Errorf("Facet key can not be empty.")
 		}
 		l.Emit(itemFacetKey)
