@@ -221,11 +221,11 @@ func intersectBucket(ts *task.Sort, attr, token string, out []intersectedList) e
 			}
 		}
 
-		o := new(task.List)
-		var out algo.WriteIterator
-		out.Init(o)
 		var in1 algo.ListIterator
 		in1.Init(il.ulist)
+		var out algo.WriteIterator
+		o := new(task.List)
+		out.Init(o)
 		for ; in1.Valid(); in1.Next() {
 			out.Append(in1.Val())
 		}

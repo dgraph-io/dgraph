@@ -26,7 +26,7 @@ type WriteIterator struct {
 
 func (w *WriteIterator) Init(l *task.List) {
 	// Initialise and allocate some memory.
-	if l.Blocks == nil {
+	if len(l.Blocks) == 0 {
 		l.Blocks = make([]*task.Block, 0, 2)
 	}
 
