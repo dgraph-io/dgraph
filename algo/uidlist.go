@@ -50,24 +50,22 @@ func NewWriteIterator(l *task.List) WriteIterator {
 
 // Append appends an UID to the end of task.List following the blockSize specified.
 func (l *WriteIterator) Append(uid uint64) {
-	l.list.Blocks[l.bidx].List = append(l.list.Blocks[l.bidx].List, uid)
-	l.lidx++
 	if l.lidx == blockSize {
 		l.list.Blocks[l.bidx].MaxInt = l.list.Blocks[l.bidx].List[blockSize-1]
 		l.lidx = 0
 		l.list.Blocks = append(l.list.Blocks, &task.Block{List: make([]uint64, 0, blockSize)})
 		l.bidx++
 	}
+	l.list.Blocks[l.bidx].List = append(l.list.Blocks[l.bidx].List, uid)
+	l.lidx++
 }
 
 // End is called after the write is over to update the MaxInt of the last block.
 func (l *WriteIterator) End() {
-	lenLast := len(l.list.Blocks[l.bidx].List)
-	if lenLast == 0 {
-		// We didn't add any element to the list
+	if l.lidx == 0 {
 		return
 	}
-	l.list.Blocks[l.bidx].MaxInt = l.list.Blocks[l.bidx].List[lenLast-1]
+	l.list.Blocks[l.bidx].MaxInt = l.list.Blocks[l.bidx].List[l.lidx-1]
 }
 
 // NewListIterator returns a read iterator for the list passed to it.
