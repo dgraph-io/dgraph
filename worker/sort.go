@@ -221,14 +221,20 @@ func intersectBucket(ts *task.Sort, attr, token string, out []intersectedList) e
 			}
 		}
 
-		out := algo.NewWriteIterator(il.ulist)
-		in := algo.NewListIterator(result)
+		o := new(task.List)
+		out := algo.NewWriteIterator(o)
+		in1 := algo.NewListIterator(il.ulist)
+		for ; in1.Valid(); in1.Next() {
+			out.Append(in1.Val())
+		}
 		i := 0
-		for ; in.Valid() && i < n; in.Next() {
-			out.Append(in.Val())
+		in2 := algo.NewListIterator(result)
+		for ; in2.Valid() && i < n; in2.Next() {
+			out.Append(in2.Val())
 			i++
 		}
 		out.End()
+		il.ulist.Blocks = o.Blocks
 	} // end for loop over UID lists in UID matrix.
 
 	// Check out[i] sizes for all i.
@@ -236,7 +242,8 @@ func intersectBucket(ts *task.Sort, attr, token string, out []intersectedList) e
 		if algo.ListLen(out[i].ulist) < count {
 			return errContinue
 		}
-		x.AssertTrue(algo.ListLen(out[i].ulist) == count)
+
+		x.AssertTruef(algo.ListLen(out[i].ulist) == count, "%d %d", algo.ListLen(out[i].ulist), count)
 	}
 	// All UID lists have enough items (according to pagination). Let's notify
 	// the outermost loop.

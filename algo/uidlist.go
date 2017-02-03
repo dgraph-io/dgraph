@@ -30,22 +30,23 @@ func NewWriteIterator(l *task.List) WriteIterator {
 	if l.Blocks == nil {
 		l.Blocks = make([]*task.Block, 1, 2)
 		l.Blocks[0] = new(task.Block)
-		l.Blocks[0].List = make([]uint64, 0, blockSize)
-		return WriteIterator{
-			list: l,
-			bidx: 0,
-			lidx: 0,
-		}
+		l.Blocks[0].List = make([]uint64, blockSize)
 	}
 
-	i := len(l.Blocks) - 1
-	j := len(l.Blocks[i].List) - 1
 	return WriteIterator{
 		list: l,
-		bidx: i,
-		lidx: j,
+		bidx: 0,
+		lidx: 0,
 	}
-
+	/*
+		i := len(l.Blocks) - 1
+		j := len(l.Blocks[i].List) - 1
+		return WriteIterator{
+			list: l,
+			bidx: i,
+			lidx: j,
+		}
+	*/
 }
 
 // Append appends an UID to the end of task.List following the blockSize specified.
@@ -53,19 +54,19 @@ func (l *WriteIterator) Append(uid uint64) {
 	if l.lidx == blockSize {
 		l.list.Blocks[l.bidx].MaxInt = l.list.Blocks[l.bidx].List[blockSize-1]
 		l.lidx = 0
-		l.list.Blocks = append(l.list.Blocks, &task.Block{List: make([]uint64, 0, blockSize)})
 		l.bidx++
 		if l.bidx == len(l.list.Blocks) {
 			// If we reached the end of blocks, add a new one.
 			l.list.Blocks = append(l.list.Blocks, &task.Block{List: make([]uint64, blockSize)})
 		}
 	}
-	l.list.Blocks[l.bidx].List = append(l.list.Blocks[l.bidx].List, uid)
+	l.list.Blocks[l.bidx].List[l.lidx] = uid // = append(l.list.Blocks[l.bidx].List, uid)
 	l.lidx++
 }
 
 // End is called after the write is over to update the MaxInt of the last block.
 func (l *WriteIterator) End() {
+	l.list.Blocks[l.bidx].List = l.list.Blocks[l.bidx].List[0:l.lidx]
 	if l.lidx == 0 {
 		return
 	}
@@ -188,10 +189,10 @@ func Slice(ul *task.List, start, end int) *task.List {
 
 func SortedListToBlock(l []uint64) *task.List {
 	b := new(task.List)
-	wit := NewWriteIterator(b)
 	if len(l) == 0 {
 		return b
 	}
+	wit := NewWriteIterator(b)
 
 	for _, it := range l {
 		wit.Append(it)
