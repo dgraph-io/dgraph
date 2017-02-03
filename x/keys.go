@@ -9,6 +9,7 @@ const (
 	byteData    = byte(0x00)
 	byteIndex   = byte(0x01)
 	byteReverse = byte(0x02)
+	byteSchema  = byte(0x03)
 )
 
 func writeAttr(buf []byte, attr string) []byte {
@@ -19,6 +20,16 @@ func writeAttr(buf []byte, attr string) []byte {
 	AssertTrue(len(attr) == copy(rest, attr[:]))
 
 	return rest[len(attr):]
+}
+
+func SchemaKey(attr string) []byte {
+	buf := make([]byte, 1+len(attr))
+
+	buf[0] = byteSchema
+
+	rest := buf[1:]
+	AssertTrue(len(attr) == copy(rest, attr[:]))
+	return buf
 }
 
 func DataKey(attr string, uid uint64) []byte {
@@ -105,6 +116,18 @@ func (p ParsedKey) IndexPrefix() []byte {
 	AssertTrue(len(k) == 1)
 	k[0] = byteIndex
 	return buf
+}
+
+// SchemaPrefix returns the prefix for Schema keys.
+func SchemaPrefix() []byte {
+	buf := make([]byte, 1)
+	buf[0] = byteSchema
+	return buf
+}
+
+func ParseSchemaKey(key []byte) string {
+	k := key[1:]
+	return string(k)
 }
 
 func Parse(key []byte) *ParsedKey {

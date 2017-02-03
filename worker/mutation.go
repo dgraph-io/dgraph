@@ -21,7 +21,9 @@ import (
 
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
+	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/task"
+	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -32,7 +34,16 @@ const (
 
 // runMutations goes through all the edges and applies them. It returns the
 // mutations which were not applied in left.
-func runMutations(ctx context.Context, edges []*task.DirectedEdge) error {
+func runMutations(ctx context.Context, edges []*task.DirectedEdge, schemaUpdates []*task.SchemaUpdate) error {
+	// mutations should only succedd if schema updates are successful
+	// this takes care of mutations originating from different servers at same time with different schema
+	for _, suTask := range schemaUpdates {
+		if _, err := schema.UpdateSchemaIfMissing(suTask.Attr, types.TypeID(suTask.ValueType)); err != nil {
+			x.Printf("Error while updating schema: %v", suTask)
+			return err
+		}
+	}
+
 	for _, edge := range edges {
 		if !groups().ServesGroup(group.BelongsTo(edge.Attr)) {
 			return x.Errorf("Predicate fingerprint doesn't match this instance")
@@ -74,13 +85,25 @@ func proposeOrSend(ctx context.Context, gid uint32, m *task.Mutations, che chan 
 	defer pl.Put(conn)
 
 	c := NewWorkerClient(conn)
-	_, err = c.Mutate(ctx, m)
-	che <- err
+	if _, err = c.Mutate(ctx, m); err != nil {
+		che <- err
+	} else {
+		// current node doesn't serve the raft group, so update schema here
+		// schema update would have succeded in remote since mutation was successful
+		// drawback with this uproach - queries can fail even though object value could be
+		// converted to desired type
+		// TODO: This node needs to find out schema type of predicate which it doesn't handle
+		for _, suTask := range m.SchemaUpdate {
+			if _, err := schema.UpdateSchemaIfMissing(suTask.Attr, types.TypeID(suTask.ValueType)); err != nil {
+				che <- err
+			}
+		}
+	}
 }
 
 // addToMutationArray adds the edges to the appropriate index in the mutationArray,
 // taking into account the op(operation) and the attribute.
-func addToMutationMap(mutationMap map[uint32]*task.Mutations, edges []*task.DirectedEdge) {
+func addToMutationMap(mutationMap map[uint32]*task.Mutations, edges []*task.DirectedEdge, schemaUpdates []*task.SchemaUpdate) {
 	for _, edge := range edges {
 		gid := group.BelongsTo(edge.Attr)
 		mu := mutationMap[gid]
@@ -90,13 +113,18 @@ func addToMutationMap(mutationMap map[uint32]*task.Mutations, edges []*task.Dire
 		}
 		mu.Edges = append(mu.Edges, edge)
 	}
+	for _, schemaUpdate := range schemaUpdates {
+		gid := group.BelongsTo(schemaUpdate.Attr)
+		mu := mutationMap[gid]
+		mu.SchemaUpdate = append(mu.SchemaUpdate, schemaUpdate)
+	}
 }
 
 // MutateOverNetwork checks which group should be running the mutations
 // according to fingerprint of the predicate and sends it to that instance.
 func MutateOverNetwork(ctx context.Context, m *task.Mutations) error {
 	mutationMap := make(map[uint32]*task.Mutations)
-	addToMutationMap(mutationMap, m.Edges)
+	addToMutationMap(mutationMap, m.Edges, m.SchemaUpdate)
 
 	errors := make(chan error, len(mutationMap))
 	for gid, mu := range mutationMap {
