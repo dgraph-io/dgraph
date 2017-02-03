@@ -56,10 +56,12 @@ func (l *WriteIterator) Append(uid uint64) {
 
 // End is called after the write is over to update the MaxInt of the last block.
 func (l *WriteIterator) End() {
-	l.list.Blocks[l.bidx].List = l.list.Blocks[l.bidx].List[0:l.lidx]
+	l.list.Blocks = l.list.Blocks[:l.bidx+1]
 	if l.lidx == 0 {
+		l.list.Blocks = l.list.Blocks[:l.bidx]
 		return
 	}
+	l.list.Blocks[l.bidx].List = l.list.Blocks[l.bidx].List[:l.lidx]
 	l.list.Blocks[l.bidx].MaxInt = l.list.Blocks[l.bidx].List[l.lidx-1]
 }
 
@@ -149,10 +151,9 @@ func (l *ListIterator) Next() {
 
 // Slice returns a new task.List with the elements between start index and end index
 // of  the list passed to it.
-func Slice(ul *task.List, start, end int) *task.List {
-	o := new(task.List)
+func Slice(ul *task.List, start, end int) {
 	var out WriteIterator
-	out.Init(o)
+	out.Init(ul)
 
 	var it ListIterator
 	it.Init(ul)
@@ -164,7 +165,6 @@ func Slice(ul *task.List, start, end int) *task.List {
 		i++
 	}
 	out.End()
-	return o
 }
 
 func SortedListToBlock(l []uint64) *task.List {
@@ -204,13 +204,12 @@ func ListLen(l *task.List) int {
 }
 
 func IntersectWith(u, v *task.List) {
-	o := new(task.List)
-	var out WriteIterator
-	out.Init(o)
 	var itu ListIterator
 	itu.Init(u)
 	var itv ListIterator
 	itv.Init(v)
+	var out WriteIterator
+	out.Init(u)
 	for itu.Valid() && itv.Valid() {
 		uid := itu.Val()
 		vid := itv.Val()
@@ -225,14 +224,12 @@ func IntersectWith(u, v *task.List) {
 		}
 	}
 	out.End()
-	u.Blocks = o.Blocks
 }
 
 // ApplyFilter applies a filter to our UIDList.
 func ApplyFilter(u *task.List, f func(uint64, int) bool) {
-	o := new(task.List)
 	var out WriteIterator
-	out.Init(o)
+	out.Init(u)
 	for i, block := range u.Blocks {
 		for j, uid := range block.List {
 			if f(uid, Idx(u, i, j)) {
@@ -241,7 +238,6 @@ func ApplyFilter(u *task.List, f func(uint64, int) bool) {
 		}
 	}
 	out.End()
-	u.Blocks = o.Blocks
 }
 
 // IntersectSorted intersect a list of UIDLists. An alternative is to do

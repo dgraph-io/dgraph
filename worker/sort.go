@@ -208,7 +208,7 @@ func intersectBucket(ts *task.Sort, attr, token string, out []intersectedList) e
 
 		if il.offset > 0 {
 			// Apply the offset.
-			result = algo.Slice(result, il.offset, n)
+			algo.Slice(result, il.offset, n)
 			il.offset = 0
 			n = algo.ListLen(result)
 		}

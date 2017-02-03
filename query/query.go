@@ -948,7 +948,7 @@ func (sg *SubGraph) applyPagination(ctx context.Context) error {
 	for i := 0; i < len(sg.uidMatrix); i++ { //_, l := range sg.uidMatrix {
 		algo.IntersectWith(sg.uidMatrix[i], sg.DestUIDs)
 		start, end := pageRange(&sg.Params, algo.ListLen(sg.uidMatrix[i]))
-		sg.uidMatrix[i] = algo.Slice(sg.uidMatrix[i], start, end)
+		algo.Slice(sg.uidMatrix[i], start, end)
 	}
 	// Re-merge the UID matrix.
 	sg.DestUIDs = algo.MergeSorted(sg.uidMatrix)
