@@ -112,17 +112,17 @@ func (l *ListIterator) SeekToIndex(idx int) {
 func (l *ListIterator) Seek(uid uint64) {
 	u := l.list
 	i := sort.Search(len(u.Blocks), func(i int) bool { return u.Blocks[i].MaxInt >= uid })
-	if i < len(u.Blocks) {
-		j := sort.Search(len(u.Blocks[i].List), func(j int) bool { return u.Blocks[i].List[j] >= uid })
-		if j == len(u.Blocks[i].List) {
-			l.isEnd = true
-			return
-		}
-		l.bidx = i
-		l.lidx = j
+	if i >= len(u.Blocks) {
+		l.isEnd = true
 		return
 	}
-	l.isEnd = true
+	j := sort.Search(len(u.Blocks[i].List), func(j int) bool { return u.Blocks[i].List[j] >= uid })
+	if j == len(u.Blocks[i].List) {
+		l.isEnd = true
+		return
+	}
+	l.bidx = i
+	l.lidx = j
 }
 
 // Valid returns true if we haven't reached the end of the list.
