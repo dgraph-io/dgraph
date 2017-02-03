@@ -109,7 +109,16 @@ func (l *ListIterator) SeekToIndex(idx int) {
 
 // Seek seeks to the index whose value is greater than or equal to the given UID.
 // It uses binary search to move around.
-func (l *ListIterator) Seek(uid uint64) {
+func (l *ListIterator) Seek(typ int, uid uint64) {
+	if typ == 1 {
+		// Seek the current list first.
+		for l.lidx < len(l.list.Blocks[l.bidx].List) && l.list.Blocks[l.bidx].List[l.lidx] < uid {
+			l.lidx++
+		}
+		if l.lidx < len(l.list.Blocks[l.bidx].List) {
+			return
+		}
+	}
 	u := l.list
 	i := sort.Search(len(u.Blocks), func(i int) bool { return u.Blocks[i].MaxInt >= uid })
 	if i >= len(u.Blocks) {
@@ -221,9 +230,9 @@ func IntersectWith(u, v *task.List) {
 			itu.Next()
 			itv.Next()
 		} else if uid < vid {
-			itu.Seek(vid)
+			itu.Seek(1, vid)
 		} else if uid > vid {
-			itv.Seek(uid)
+			itv.Seek(1, uid)
 		}
 	}
 	out.End()
@@ -328,7 +337,7 @@ func Difference(u, v *task.List) {
 			out.Append(uid)
 			itu.Next()
 		} else if uid > vid {
-			itv.Seek(uid)
+			itv.Seek(1, uid)
 		}
 	}
 	out.End()
