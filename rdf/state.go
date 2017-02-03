@@ -65,6 +65,7 @@ const (
 	leftRound  = '('
 	rightRound = ')'
 	comma      = ','
+	equal      = '='
 )
 
 // This function inspects the next rune and calls the appropriate stateFn.
@@ -363,7 +364,8 @@ func lexLabel(l *lex.Lexer) lex.StateFn {
 	return l.Errorf("Invalid char: %v at lexLabel", r)
 }
 
-// ( key1 = "value1"^^<xs:int> , key2="value2"^^<xs:string> )
+// lexFacets parses key-value pairs of Facets. sample is :
+// ( key1 = "value1"^^<xs:int> , key2="value2"^^<xs:string>, key3=, key4 ="val4" )
 func lexFacets(l *lex.Lexer) lex.StateFn {
 	r := l.Next()
 	if r != leftRound {
@@ -376,7 +378,7 @@ func lexFacets(l *lex.Lexer) lex.StateFn {
 		l.IgnoreRun(isSpace) // eat all spaces.
 		// Lex Facet Key
 		_, validr := l.AcceptRun(func(r rune) bool {
-			return r != ',' && !isSpace(r)
+			return r != equal && !isSpace(r)
 		})
 		if !validr {
 			return l.Errorf("Facet key can not be empty.")
@@ -385,7 +387,7 @@ func lexFacets(l *lex.Lexer) lex.StateFn {
 
 		l.IgnoreRun(isSpace) // eat all sapces before '='
 		r = l.Next()
-		if r != '=' {
+		if r != equal {
 			return l.Errorf("Expected = after Facet key. Got %v", r)
 		}
 
@@ -398,10 +400,17 @@ func lexFacets(l *lex.Lexer) lex.StateFn {
 			l.Emit(itemFacetVal)     // empty itemFacetVal : default value
 			l.Emit(itemFacetValType) // default type.
 		} else if r == quote {
+			l.Ignore() // ignore quote
 			l.AcceptRun(func(r rune) bool {
 				return r != quote
 			})
 			l.Emit(itemFacetVal)
+
+			r = l.Next()
+			if r != quote {
+				return l.Errorf("Expected quote (\") at end of Value. Found %v", r)
+			}
+			l.Ignore() // ignore quote
 
 			// Lex FacetValue Type
 			r = l.Next()
@@ -414,6 +423,9 @@ func lexFacets(l *lex.Lexer) lex.StateFn {
 			} else {
 				l.Ignore() // take default type.
 				l.Emit(itemFacetValType)
+				// we had to ignore r to give default valtype.
+				// but r is still relevant for next checks of ')' and ','
+				// so do not do r = l.Next()
 			}
 
 			if isSpace(r) {

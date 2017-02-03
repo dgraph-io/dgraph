@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/dgraph-io/dgraph/query/graph"
+	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -495,6 +496,58 @@ var testNQuads = []struct {
 		input:        `   `,
 		expectedErr:  true,
 		shouldIgnore: true,
+	},
+	// Edge weights test.
+	{
+		input: `_:alice <knows> "stuff"^^<xs:string> _:label (key1="val1",key2="13"^^<xs:int>) .`,
+		nq: graph.NQuad{
+			Subject:     "_:alice",
+			Predicate:   "knows",
+			ObjectId:    "",
+			ObjectValue: &graph.Value{&graph.Value_StrVal{"stuff"}},
+			Label:       "_:label",
+			ObjectType:  0,
+			Facets: []*facets.Facet{
+				&facets.Facet{"key1", []byte("val1"),
+					facets.TypeIDToValType(facets.StringID)},
+				&facets.Facet{"key2", []byte("13"),
+					facets.TypeIDToValType(facets.Int32ID)}},
+		},
+		expectedErr: false,
+	},
+	{
+		input: `_:alice <knows> "stuff"^^<xs:string> _:label (key1=,key2="13"^^<xs:int>) .`,
+		nq: graph.NQuad{
+			Subject:     "_:alice",
+			Predicate:   "knows",
+			ObjectId:    "",
+			ObjectValue: &graph.Value{&graph.Value_StrVal{"stuff"}},
+			Label:       "_:label",
+			ObjectType:  0,
+			Facets: []*facets.Facet{
+				&facets.Facet{"key1", []byte(""),
+					facets.TypeIDToValType(facets.StringID)},
+				&facets.Facet{"key2", []byte("13"),
+					facets.TypeIDToValType(facets.Int32ID)}},
+		},
+		expectedErr: false,
+	},
+	{
+		input: `_:alice <knows> "stuff"^^<xs:string> _:label (key1=,key2="13") .`,
+		nq: graph.NQuad{
+			Subject:     "_:alice",
+			Predicate:   "knows",
+			ObjectId:    "",
+			ObjectValue: &graph.Value{&graph.Value_StrVal{"stuff"}},
+			Label:       "_:label",
+			ObjectType:  0,
+			Facets: []*facets.Facet{
+				&facets.Facet{"key1", []byte(""),
+					facets.TypeIDToValType(facets.StringID)},
+				&facets.Facet{"key2", []byte("13"),
+					facets.TypeIDToValType(facets.StringID)}},
+		},
+		expectedErr: false,
 	},
 }
 
