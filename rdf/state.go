@@ -115,7 +115,7 @@ Loop:
 			return lexComment
 
 		case r == leftRound:
-			if l.Depth == atFacet {
+			if l.Depth > atObject {
 				l.Backup()
 				l.Emit(itemText)
 				return lexFacets

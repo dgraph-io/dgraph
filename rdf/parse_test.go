@@ -497,9 +497,9 @@ var testNQuads = []struct {
 		expectedErr:  true,
 		shouldIgnore: true,
 	},
-	// Edge weights test.
+	// Edge Facets test.
 	{
-		input: `_:alice <knows> "stuff"^^<xs:string> _:label (key1="val1",key2="13"^^<xs:int>) .`,
+		input: `_:alice <knows> "stuff" _:label (key1="val1",key2="13"^^<xs:int>) .`,
 		nq: graph.NQuad{
 			Subject:     "_:alice",
 			Predicate:   "knows",
@@ -516,7 +516,7 @@ var testNQuads = []struct {
 		expectedErr: false,
 	},
 	{
-		input: `_:alice <knows> "stuff"^^<xs:string> _:label (key1=,key2="13"^^<xs:int>) .`,
+		input: `_:alice <knows> "stuff" _:label (key1=,key2="13"^^<xs:int>) .`,
 		nq: graph.NQuad{
 			Subject:     "_:alice",
 			Predicate:   "knows",
@@ -533,7 +533,7 @@ var testNQuads = []struct {
 		expectedErr: false,
 	},
 	{
-		input: `_:alice <knows> "stuff"^^<xs:string> _:label (key1=,key2="13") .`,
+		input: `_:alice <knows> "stuff" _:label (key1=,key2="13") .`,
 		nq: graph.NQuad{
 			Subject:     "_:alice",
 			Predicate:   "knows",
@@ -546,6 +546,23 @@ var testNQuads = []struct {
 					facets.TypeIDToValType(facets.StringID)},
 				&facets.Facet{"key2", []byte("13"),
 					facets.TypeIDToValType(facets.StringID)}},
+		},
+		expectedErr: false,
+	},
+	// Should parse facets even if there is no label
+	{
+		input: `_:alice <knows> "stuff" (key1=,key2="13"^^<xs:int>) .`,
+		nq: graph.NQuad{
+			Subject:     "_:alice",
+			Predicate:   "knows",
+			ObjectId:    "",
+			ObjectValue: &graph.Value{&graph.Value_StrVal{"stuff"}},
+			ObjectType:  0,
+			Facets: []*facets.Facet{
+				&facets.Facet{"key1", []byte(""),
+					facets.TypeIDToValType(facets.StringID)},
+				&facets.Facet{"key2", []byte("13"),
+					facets.TypeIDToValType(facets.Int32ID)}},
 		},
 		expectedErr: false,
 	},
