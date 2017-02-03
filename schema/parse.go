@@ -104,12 +104,12 @@ func processScalarPair(it *lex.ItemIterator, name string, allowIndex bool) error
 	typ := next.Val
 	t, ok := types.TypeForName(typ)
 	if ok {
-		if t1, ok := str[name]; ok {
+		if t1, err := str.getTypeOf(name); err == nil {
 			if t1 != t {
 				return x.Errorf("Same field cannot have multiple types")
 			}
 		} else {
-			str[name] = t
+			str.setType(name, t)
 		}
 	}
 
@@ -209,7 +209,7 @@ func processObject(it *lex.ItemIterator) error {
 		return x.Errorf("Missing object name")
 	}
 	objName = next.Val
-	str[objName] = types.UidID
+	str.setType(objName, types.UidID)
 
 	it.Next()
 	next = it.Item()

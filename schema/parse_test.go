@@ -28,54 +28,49 @@ import (
 
 type nameType struct {
 	name string
-	typ  types.TypeID
+	typ  *types.SchemaDescription
 }
 
-func checkSchema(t *testing.T, h map[string]types.TypeID, expected []nameType) {
+func checkSchema(t *testing.T, h map[string]*types.SchemaDescription, expected []nameType) {
 	require.Len(t, h, len(expected))
 	for _, nt := range expected {
 		typ, found := h[nt.name]
 		require.True(t, found, nt)
-		require.EqualValues(t, nt.typ, typ)
+		require.EqualValues(t, *nt.typ, *typ)
 	}
 }
 
 func TestSchema(t *testing.T) {
-	str = make(map[string]types.TypeID)
 	require.NoError(t, Parse("testfiles/test_schema"))
-	checkSchema(t, str, []nameType{
-		{"name", types.StringID},
-		{"address", types.StringID},
-		{"http://film.com/name", types.StringID},
-		{"http://scalar.com/helloworld/", types.StringID},
-		{"age", types.Int32ID},
-		{"budget", types.Int32ID},
-		{"http://film.com/budget", types.Int32ID},
-		{"NumFollower", types.Int32ID},
-		{"Person", types.UidID},
-		{"Actor", types.UidID},
-		{"Film", types.UidID},
-		{"http://film.com/", types.UidID},
+	checkSchema(t, str.sm, []nameType{
+		{"name", &types.SchemaDescription{ValueType: uint32(types.StringID)}},
+		{"address", &types.SchemaDescription{ValueType: uint32(types.StringID)}},
+		{"http://film.com/name", &types.SchemaDescription{ValueType: uint32(types.StringID)}},
+		{"http://scalar.com/helloworld/", &types.SchemaDescription{ValueType: uint32(types.StringID)}},
+		{"age", &types.SchemaDescription{ValueType: uint32(types.Int32ID)}},
+		{"budget", &types.SchemaDescription{ValueType: uint32(types.Int32ID)}},
+		{"http://film.com/budget", &types.SchemaDescription{ValueType: uint32(types.Int32ID)}},
+		{"NumFollower", &types.SchemaDescription{ValueType: uint32(types.Int32ID)}},
+		{"Person", &types.SchemaDescription{ValueType: uint32(types.UidID)}},
+		{"Actor", &types.SchemaDescription{ValueType: uint32(types.UidID)}},
+		{"Film", &types.SchemaDescription{ValueType: uint32(types.UidID)}},
+		{"http://film.com/", &types.SchemaDescription{ValueType: uint32(types.UidID)}},
 	})
 }
 
 func TestSchema1_Error(t *testing.T) {
-	str = make(map[string]types.TypeID)
 	require.Error(t, Parse("testfiles/test_schema1"))
 }
 
 func TestSchema2_Error(t *testing.T) {
-	str = make(map[string]types.TypeID)
 	require.Error(t, Parse("testfiles/test_schema2"))
 }
 
 func TestSchema3_Error(t *testing.T) {
-	str = make(map[string]types.TypeID)
 	require.Error(t, Parse("testfiles/test_schema3"))
 }
 
 func TestSchema4_Error(t *testing.T) {
-	str = make(map[string]types.TypeID)
 	err := Parse("testfiles/test_schema4")
 	require.Error(t, err)
 }
@@ -95,31 +90,27 @@ func TestSchema6_Error(t *testing.T) {
 */
 // Correct specification of indexing
 func TestSchemaIndex(t *testing.T) {
-	str = make(map[string]types.TypeID)
 	require.NoError(t, Parse("testfiles/test_schema_index1"))
 	require.Equal(t, 2, len(indexedFields))
 }
 
 // Indexing can't be specified inside object types.
 func TestSchemaIndex_Error1(t *testing.T) {
-	str = make(map[string]types.TypeID)
 	require.Error(t, Parse("testfiles/test_schema_index2"))
 }
 
 // Object types cant be indexed.
 func TestSchemaIndex_Error2(t *testing.T) {
-	str = make(map[string]types.TypeID)
 	require.Error(t, Parse("testfiles/test_schema_index3"))
 }
 
 func TestSchemaIndexCustom(t *testing.T) {
-	str = make(map[string]types.TypeID)
 	require.NoError(t, Parse("testfiles/test_schema_index4"))
-	checkSchema(t, str, []nameType{
-		{"name", types.StringID},
-		{"address", types.StringID},
-		{"age", types.Int32ID},
-		{"Person", types.UidID},
+	checkSchema(t, str.sm, []nameType{
+		{"name", &types.SchemaDescription{ValueType: uint32(types.StringID)}},
+		{"address", &types.SchemaDescription{ValueType: uint32(types.StringID)}},
+		{"age", &types.SchemaDescription{ValueType: uint32(types.Int32ID)}},
+		{"Person", &types.SchemaDescription{ValueType: uint32(types.UidID)}},
 	})
 	require.Equal(t, 3, len(indexedFields))
 	require.Equal(t, "int", indexedFields["age"].Name())

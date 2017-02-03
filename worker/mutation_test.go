@@ -25,7 +25,30 @@ import (
 
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/task"
+	"github.com/dgraph-io/dgraph/types"
 )
+
+func TestValidateEdgeType(t *testing.T) {
+	edge := &task.DirectedEdge{
+		Value: []byte("set edge"),
+		Label: "test-mutation",
+		Attr:  "name",
+	}
+
+	err := validateType(edge, types.StringID)
+	require.NoError(t, err)
+}
+
+func TestValidateEdgeTypeError(t *testing.T) {
+	edge := &task.DirectedEdge{
+		Value: []byte("set edge"),
+		Label: "test-mutation",
+		Attr:  "name",
+	}
+
+	err := validateType(edge, types.DateTimeID)
+	require.Error(t, err)
+}
 
 func TestAddToMutationArray(t *testing.T) {
 	group.ParseGroupConfig("")

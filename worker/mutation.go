@@ -21,7 +21,9 @@ import (
 
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
+	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/task"
+	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -39,8 +41,21 @@ func runMutations(ctx context.Context, edges []*task.DirectedEdge) error {
 		}
 
 		var group uint32
+		var rv x.RaftValue
 		if rv, ok := ctx.Value("raft").(x.RaftValue); ok {
 			group = rv.Group
+		}
+
+		if typ, err := schema.TypeOf(edge.Attr); err != nil {
+			if err = updateSchema(edge, &rv); err != nil {
+				x.Printf("Error while updating schema: %v %v", edge, err)
+				return err
+			}
+		} else {
+			if err = validateType(edge, typ); err != nil {
+				x.Printf("Error while casting object value to schema type: %v %v", edge, err)
+				return err
+			}
 		}
 
 		key := x.DataKey(edge.Attr, edge.Entity)
@@ -50,6 +65,64 @@ func runMutations(ctx context.Context, edges []*task.DirectedEdge) error {
 		if err := plist.AddMutationWithIndex(ctx, edge); err != nil {
 			x.Printf("Error while adding mutation: %v %v", edge, err)
 			return err // abort applying the rest of them.
+		}
+	}
+	return nil
+}
+
+func getType(edge *task.DirectedEdge) types.TypeID {
+	if edge.ValueId != 0 {
+		return types.UidID
+	}
+	return types.TypeID(edge.ValueType)
+}
+
+func getTypeUint(edge *task.DirectedEdge) uint32 {
+	if edge.ValueId != 0 {
+		return uint32(types.UidID)
+	}
+	return edge.ValueType
+}
+
+func updateSchema(edge *task.DirectedEdge, rv *x.RaftValue) error {
+	ce := schema.SyncEntry{
+		Attr:              edge.Attr,
+		SchemaDescription: &types.SchemaDescription{ValueType: getTypeUint(edge)},
+		Index:             rv.Index,
+		Water:             posting.SyncMarkFor(rv.Group),
+	}
+	if _, err := schema.UpdateIfMissing(&ce); err != nil {
+		return err
+	}
+	return nil
+}
+
+func validateType(edge *task.DirectedEdge, schemaType types.TypeID) error {
+	storageType := getType(edge)
+
+	if !schemaType.IsScalar() {
+		if !storageType.IsScalar() {
+			return nil
+		} else {
+			return x.Errorf("Input for predicate %s of type uid is scalar", edge.Attr)
+		}
+	} else if !storageType.IsScalar() {
+		return x.Errorf("Input for predicate %s of type scalar is uid", edge.Attr)
+	}
+
+	if storageType != schemaType {
+		src := types.Val{types.TypeID(edge.ValueType), edge.Value}
+		// check if storage type is compatible with schema type
+		if dst, err := types.Convert(src, schemaType); err != nil {
+			return err
+		} else {
+			b := types.ValueForType(types.BinaryID)
+			if err = types.Marshal(dst, &b); err != nil {
+				return err
+			} else {
+				edge.ValueType = uint32(schemaType)
+				edge.Value = b.Value.([]byte)
+			}
 		}
 	}
 	return nil

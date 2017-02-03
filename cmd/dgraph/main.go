@@ -250,13 +250,6 @@ func runMutations(ctx context.Context, mu *graph.Mutation) (map[string]uint64, e
 	var allocIds map[string]uint64
 	var err error
 
-	if err = validateTypes(mu.Set); err != nil {
-		return nil, x.Wrap(err)
-	}
-	if err = validateTypes(mu.Del); err != nil {
-		return nil, x.Wrap(err)
-	}
-
 	if allocIds, err = convertAndApply(ctx, mu.Set, mu.Del); err != nil {
 		return nil, err
 	}
@@ -281,13 +274,6 @@ func mutationHandler(ctx context.Context, mu *gql.Mutation) (map[string]uint64, 
 		if del, err = convertToNQuad(ctx, mu.Del); err != nil {
 			return nil, x.Wrap(err)
 		}
-	}
-
-	if err = validateTypes(set); err != nil {
-		return nil, x.Wrap(err)
-	}
-	if err = validateTypes(del); err != nil {
-		return nil, x.Wrap(err)
 	}
 
 	if allocIds, err = convertAndApply(ctx, set, del); err != nil {
@@ -768,13 +754,8 @@ func main() {
 	x.Checkf(err, "Error initializing postings store")
 	defer ps.Close()
 
-	if len(*schemaFile) > 0 {
-		err = schema.Parse(*schemaFile)
-		x.Checkf(err, "Error while loading schema: %s", *schemaFile)
-		log.Println("Schema file loaded successfully.")
-	} else {
-		log.Println("No schema provided. Starting without one.")
-	}
+	err = schema.Init(ps, *schemaFile)
+	x.Checkf(err, "Error while loading schema")
 
 	// Posting will initialize index which requires schema. Hence, initialize
 	// schema before calling posting.Init().
