@@ -55,6 +55,10 @@ func (l *WriteIterator) Append(uid uint64) {
 		l.lidx = 0
 		l.list.Blocks = append(l.list.Blocks, &task.Block{List: make([]uint64, 0, blockSize)})
 		l.bidx++
+		if l.bidx == len(l.list.Blocks) {
+			// If we reached the end of blocks, add a new one.
+			l.list.Blocks = append(l.list.Blocks, &task.Block{List: make([]uint64, blockSize)})
+		}
 	}
 	l.list.Blocks[l.bidx].List = append(l.list.Blocks[l.bidx].List, uid)
 	l.lidx++
