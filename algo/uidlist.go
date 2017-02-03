@@ -27,9 +27,7 @@ type WriteIterator struct {
 func (w *WriteIterator) Init(l *task.List) {
 	// Initialise and allocate some memory.
 	if l.Blocks == nil {
-		l.Blocks = make([]*task.Block, 1, 2)
-		l.Blocks[0] = new(task.Block)
-		l.Blocks[0].List = make([]uint64, blockSize)
+		l.Blocks = make([]*task.Block, 0, 2)
 	}
 
 	*w = WriteIterator{
@@ -41,6 +39,9 @@ func (w *WriteIterator) Init(l *task.List) {
 
 // Append appends an UID to the end of task.List following the blockSize specified.
 func (l *WriteIterator) Append(uid uint64) {
+	if l.bidx == len(l.list.Blocks) {
+		l.list.Blocks = append(l.list.Blocks, &task.Block{List: make([]uint64, blockSize)})
+	}
 	if l.lidx == blockSize {
 		l.list.Blocks[l.bidx].MaxInt = l.list.Blocks[l.bidx].List[blockSize-1]
 		l.lidx = 0
@@ -312,13 +313,12 @@ func IntersectSorted(lists []*task.List) *task.List {
 }
 
 func Difference(u, v *task.List) {
-	o := new(task.List)
-	var out WriteIterator
-	out.Init(o)
 	var itu ListIterator
 	itu.Init(u)
 	var itv ListIterator
 	itv.Init(v)
+	var out WriteIterator
+	out.Init(u)
 	for itu.Valid() && itv.Valid() {
 		uid := itu.Val()
 		vid := itv.Val()
@@ -333,7 +333,6 @@ func Difference(u, v *task.List) {
 		}
 	}
 	out.End()
-	u.Blocks = o.Blocks
 }
 
 // MergeSorted merges sorted lists.
