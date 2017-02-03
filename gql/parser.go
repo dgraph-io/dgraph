@@ -59,6 +59,12 @@ type Mutation struct {
 	Del string
 }
 
+// Schema stores list of predicates and attributes
+type Schema struct {
+	Predicates []string
+	Fields     []string
+}
+
 // pair denotes the key value pair that is part of the GraphQL query root in parenthesis.
 type pair struct {
 	Key string
@@ -320,6 +326,7 @@ type Result struct {
 	Query     []*GraphQuery
 	QueryVars []*Vars
 	Mutation  *Mutation
+	Schema    *Schema
 }
 
 // Parse initializes and runs the lexer. It also constructs the GraphQuery subgraph
@@ -346,6 +353,13 @@ func Parse(input string) (res Result, rerr error) {
 					return res, x.Errorf("Only one mutation block allowed.")
 				}
 				if res.Mutation, rerr = getMutation(it); rerr != nil {
+					return res, rerr
+				}
+			} else if item.Val == "schema" {
+				if res.Schema != nil {
+					return res, x.Errorf("Only one schema block allowed")
+				}
+				if res.Schema, rerr = parseSchema(it); rerr != nil {
 					return res, rerr
 				}
 			} else if item.Val == "fragment" {
@@ -608,6 +622,109 @@ func getMutation(it *lex.ItemIterator) (*Mutation, error) {
 		}
 	}
 	return nil, x.Errorf("Invalid mutation.")
+}
+
+// parses till rightSquare is found
+func parseListPredicates(it *lex.ItemIterator, s *Schema) error {
+	for it.Next() {
+		item := it.Item()
+		switch item.Typ {
+		case itemRightSquare:
+			return nil
+		case itemName:
+			s.Predicates = append(s.Predicates, item.Val)
+		case comma:
+			it.Next()
+			item = it.Item()
+			if item.Typ != itemName {
+				return x.Errorf("Invalid scheam block")
+			} else {
+				s.Predicates = append(s.Predicates, item.Val)
+			}
+		default:
+			return x.Errorf("Invalid schema block")
+		}
+	}
+	return x.Errorf("Invalid schema block")
+}
+
+// Currently similar code for parsing (id : [a,b]) is present inside lexer
+// Reuse that code after lexer is refactored
+// parses till rightround is found
+func parseSchemaPredicates(it *lex.ItemIterator, s *Schema) error {
+	// pred should be followed by colon
+	it.Next()
+	item := it.Item()
+	if item.Typ != itemName && item.Val != "pred" {
+		return x.Errorf("Invalid schema block")
+	}
+	it.Next()
+	item = it.Item()
+	if item.Typ != itemColon {
+		return x.Errorf("Invalid schema block")
+	}
+
+	// can be a or [a,b]
+	it.Next()
+	item = it.Item()
+	if item.Typ == itemName {
+		s.Predicates = append(s.Predicates, item.Val)
+	} else if item.Typ == itemLeftSquare {
+		if err := parseListPredicates(it, s); err != nil {
+			return err
+		}
+	} else {
+		return x.Errorf("Invalid schema block")
+	}
+
+	it.Next()
+	item = it.Item()
+	if item.Typ == itemRightRound {
+		return nil
+	}
+	return x.Errorf("Invalid schema blocks")
+}
+
+// parses till rightcurl is found
+func parseSchemaFields(it *lex.ItemIterator, s *Schema) error {
+	for it.Next() {
+		item := it.Item()
+		switch item.Typ {
+		case itemRightCurl:
+			return nil
+		case itemName:
+			s.Fields = append(s.Fields, item.Val)
+		default:
+			return x.Errorf("Invalid schema block.")
+		}
+	}
+	return x.Errorf("Invalid schema block.")
+}
+
+func parseSchema(it *lex.ItemIterator) (*Schema, error) {
+	var s Schema
+	leftRoundSeen := false
+	for it.Next() {
+		item := it.Item()
+		switch item.Typ {
+		case itemLeftCurl:
+			if err := parseSchemaFields(it, &s); err != nil {
+				return nil, err
+			}
+			return &s, nil
+		case itemLeftRound:
+			if leftRoundSeen {
+				return nil, x.Errorf("Too many left rounds in schema block")
+			}
+			leftRoundSeen = true
+			if err := parseSchemaPredicates(it, &s); err != nil {
+				return nil, err
+			}
+		default:
+			return nil, x.Errorf("Invalid schema block")
+		}
+	}
+	return nil, x.Errorf("Invalid schema block.")
 }
 
 // parseMutationOp parses and stores set or delete operation string in Mutation.

@@ -528,6 +528,120 @@ func TestParse_block(t *testing.T) {
 	require.Equal(t, childAttrs(res.Query[0]), []string{"type.object.name.es-419"})
 }
 
+func TestParseSchema(t *testing.T) {
+	query := `
+		schema (pred : name) {
+			pred
+			type
+		}
+	`
+	res, err := Parse(query)
+	require.NoError(t, err)
+	require.Equal(t, res.Schema.Predicates[0], "name")
+	require.Equal(t, len(res.Schema.Fields), 2)
+	require.Equal(t, res.Schema.Fields[0], "pred")
+	require.Equal(t, res.Schema.Fields[1], "type")
+}
+
+func TestParseSchemaMulti(t *testing.T) {
+	query := `
+		schema (pred : [name,hi]) {
+			pred
+			type
+		}
+	`
+	res, err := Parse(query)
+	require.NoError(t, err)
+	require.Equal(t, len(res.Schema.Predicates), 2)
+	require.Equal(t, res.Schema.Predicates[0], "name")
+	require.Equal(t, res.Schema.Predicates[1], "hi")
+	require.Equal(t, len(res.Schema.Fields), 2)
+	require.Equal(t, res.Schema.Fields[0], "pred")
+	require.Equal(t, res.Schema.Fields[1], "type")
+}
+
+func TestParseSchemaAll(t *testing.T) {
+	query := `
+		schema {
+			pred
+			type
+		}
+	`
+	res, err := Parse(query)
+	require.NoError(t, err)
+	require.Equal(t, len(res.Schema.Predicates), 0)
+	require.Equal(t, len(res.Schema.Fields), 2)
+	require.Equal(t, res.Schema.Fields[0], "pred")
+	require.Equal(t, res.Schema.Fields[1], "type")
+}
+
+func TestParseSchemaWithComments(t *testing.T) {
+	query := `
+		schema (pred : name) {
+			#hi
+			pred #bye
+			type
+		}
+	`
+	res, err := Parse(query)
+	require.NoError(t, err)
+	require.Equal(t, res.Schema.Predicates[0], "name")
+	require.Equal(t, len(res.Schema.Fields), 2)
+	require.Equal(t, res.Schema.Fields[0], "pred")
+	require.Equal(t, res.Schema.Fields[1], "type")
+}
+
+func TestParseSchemaAndQuery(t *testing.T) {
+	query := `
+		schema {
+			pred
+			type
+		}
+		query {
+			me(id: tomhanks) {
+				name
+				hometown
+			}
+		}
+	`
+	res, err := Parse(query)
+	require.NoError(t, err)
+	require.Equal(t, len(res.Schema.Predicates), 0)
+	require.Equal(t, len(res.Schema.Fields), 2)
+	require.Equal(t, res.Schema.Fields[0], "pred")
+	require.Equal(t, res.Schema.Fields[1], "type")
+
+	require.NotNil(t, res.Query[0])
+	require.Equal(t, 1, len(res.Query[0].UID))
+	require.Equal(t, childAttrs(res.Query[0]), []string{"name", "hometown"})
+}
+
+func TestParseSchemaError(t *testing.T) {
+	query := `
+		schema () {
+			pred
+			type
+		}
+	`
+	_, err := Parse(query)
+	require.Error(t, err)
+}
+
+func TestParseSchemaErrorMulti(t *testing.T) {
+	query := `
+		schema {
+			pred
+			type
+		}
+		schema {
+			pred
+			type
+		}
+	`
+	_, err := Parse(query)
+	require.Error(t, err)
+}
+
 func TestParseMutation(t *testing.T) {
 	query := `
 		mutation {

@@ -28,6 +28,8 @@ const (
 	rightCurl    = '}'
 	leftRound    = '('
 	rightRound   = ')'
+	leftSquare   = '['
+	rightSquare  = ']'
 	period       = '.'
 	comma        = ','
 	bang         = '!'
@@ -35,6 +37,7 @@ const (
 	queryMode    = 1
 	mutationMode = 2
 	fragmentMode = 3
+	schemaMode   = 4
 	equal        = '='
 	quote        = '"'
 	at           = '@'
@@ -60,6 +63,8 @@ const (
 	itemMutationOp                              // mutation operation
 	itemMutationContent                         // mutation content
 	itemThreeDots                               // three dots (...)
+	itemLeftSquare
+	itemRightSquare
 )
 
 func lexInsideMutation(l *lex.Lexer) lex.StateFn {
@@ -91,6 +96,45 @@ func lexInsideMutation(l *lex.Lexer) lex.StateFn {
 		}
 	}
 	return nil
+}
+
+func lexInsideSchema(l *lex.Lexer) lex.StateFn {
+	for {
+		switch r := l.Next(); {
+		case r == rightRound:
+			l.Emit(itemRightRound)
+		case r == leftRound:
+			l.Emit(itemLeftRound)
+		case r == rightCurl:
+			l.Depth--
+			l.Emit(itemRightCurl)
+			if l.Depth == 0 {
+				l.Mode = 0
+				return lexText
+			}
+		case r == leftCurl:
+			l.Depth++
+			l.Emit(itemLeftCurl)
+		case r == leftSquare:
+			l.Emit(itemLeftSquare)
+		case r == rightSquare:
+			l.Emit(itemRightSquare)
+		case isSpace(r) || isEndOfLine(r):
+			l.Ignore()
+		case isNameBegin(r):
+			return lexArgName
+		case r == '#':
+			return lexComment
+		case r == colon:
+			l.Emit(itemColon)
+		case r == comma:
+			l.Emit(comma)
+		case r == lex.EOF:
+			return l.Errorf("Unclosed schema action")
+		default:
+			return l.Errorf("Unrecognized character inside schema: %#U", r)
+		}
+	}
 }
 
 func lexFuncOrArg(l *lex.Lexer) lex.StateFn {
@@ -220,6 +264,8 @@ func lexText(l *lex.Lexer) lex.StateFn {
 	for {
 		if l.Mode == mutationMode {
 			return lexInsideMutation
+		} else if l.Mode == schemaMode {
+			return lexInsideSchema
 		} else if l.ArgDepth > 0 || l.InsideDirective {
 			return lexFuncOrArg
 		} else if l.Depth == 0 && l.Mode != fragmentMode {
@@ -429,7 +475,7 @@ LOOP:
 	return lexTextMutation
 }
 
-// lexOperationType lexes a query or mutation operation type.
+// lexOperationType lexes a query or mutation or schema operation type.
 func lexOperationType(l *lex.Lexer) lex.StateFn {
 	for {
 		r := l.Next()
@@ -448,6 +494,9 @@ func lexOperationType(l *lex.Lexer) lex.StateFn {
 		} else if word == "query" {
 			l.Emit(itemOpType)
 			l.Mode = queryMode
+		} else if word == "schema" {
+			l.Emit(itemOpType)
+			l.Mode = schemaMode
 		} else {
 			if l.Mode == 0 {
 				l.Errorf("Invalid operation type")
