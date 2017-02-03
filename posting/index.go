@@ -227,7 +227,6 @@ func RebuildIndex(ctx context.Context, attr string) error {
 			continue
 		}
 		// TODO(tzdybal) - what about the values with Lang?
-
 		p := pl.Postings[len(pl.Postings)-1]
 		pt := postingType(p)
 		if pt != valueTagged && pt != valueUntagged {

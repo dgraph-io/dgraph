@@ -35,7 +35,7 @@ func childAttrs(g *GraphQuery) []string {
 func TestParseQueryWithVarMultiRoot(t *testing.T) {
 	query := `
 	{	
-		me([L, J, K]) {name}
+		me(var:[L, J, K]) {name}
 		var(id:0x0a) {L AS friends}
 		var(id:0x0a) {J AS friends}
 		var(id:0x0a) {K AS friends}
@@ -56,9 +56,9 @@ func TestParseQueryWithVarMultiRoot(t *testing.T) {
 func TestParseQueryWithVar(t *testing.T) {
 	query := `
 	{	
-		me(L) {name}
-		him(J) {name}
-		you(K) {name}
+		me(var:L) {name}
+		him(var:J) {name}
+		you(var:K) {name}
 		var(id:0x0a) {L AS friends}
 		var(id:0x0a) {J AS friends}
 		var(id:0x0a) {K AS friends}
@@ -79,8 +79,8 @@ func TestParseQueryWithVar(t *testing.T) {
 func TestParseQueryWithVarError1(t *testing.T) {
 	query := `
 	{	
-		him(J) {name}
-		you(K) {name}
+		him(var:J) {name}
+		you(var:K) {name}
 		var(id:0x0a) {L AS friends}
 		var(id:0x0a) {J AS friends}
 		var(id:0x0a) {K AS friends}
@@ -93,9 +93,9 @@ func TestParseQueryWithVarError1(t *testing.T) {
 func TestParseQueryWithVarError2(t *testing.T) {
 	query := `
 	{	
-		me(L) {name}
-		him(J) {name}	
-		you(K) {name}
+		me(var:L) {name}
+		him(var:J) {name}	
+		you(var:K) {name}
 		var(id:0x0a) {L AS friends}
 		var(id:0x0a) {K AS friends}
 	}
@@ -110,8 +110,7 @@ func TestParseQueryWithVarAtRootFilterID(t *testing.T) {
 		K as var(id:0x0a) {
 			L AS friends
 		}
-	
-		me(K) @filter(id(L)) {
+		me(var:K) @filter(id(L)) {
 		 name	
 		}
 	}
@@ -132,8 +131,7 @@ func TestParseQueryWithVarAtRoot(t *testing.T) {
 		K AS var(id:0x0a) {
 			fr as friends
 		}
-	
-		me(fr) @filter(id(K)) {
+		me(var:fr) @filter(id(K)) {
 		 name	@filter(id(fr))
 		}
 	}
@@ -155,7 +153,7 @@ func TestParseQueryWithVar1(t *testing.T) {
 			L AS friends
 		}
 	
-		me(L) {
+		me(var:L) {
 		 name	
 		}
 	}
@@ -177,11 +175,11 @@ func TestParseQueryWithMultipleVar(t *testing.T) {
 			}
 		}
 	
-		me(L) {
+		me(var:L) {
 		 name	
 		}
 
-		relatives(B) {
+		relatives(var:B) {
 			name
 		}
 	}
@@ -205,9 +203,9 @@ func TestParseMultipleQueries(t *testing.T) {
 		you(id:0x0a) {
 			name
 		}
-	
+
 		me(id:0x0b) {
-		 friends	
+		 friends
 		}
 	}
 `
@@ -215,6 +213,52 @@ func TestParseMultipleQueries(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, res.Query)
 	require.Equal(t, 2, len(res.Query))
+}
+
+func TestParseRootArgs1(t *testing.T) {
+	query := `
+	query {
+		me(id:0x0a, first:4, offset:1) {
+			friends {
+				name
+			}
+			gender,age
+			hometown
+		}
+	}
+`
+	res, err := Parse(query)
+	require.NoError(t, err)
+	require.NotNil(t, res.Query)
+	require.Equal(t, 1, len(res.Query))
+	require.Equal(t, 2, len(res.Query[0].Args))
+	require.Equal(t, "4", res.Query[0].Args["first"])
+	require.Equal(t, "1", res.Query[0].Args["offset"])
+	require.Equal(t, childAttrs(res.Query[0]), []string{"friends", "gender", "age", "hometown"})
+	require.Equal(t, childAttrs(res.Query[0].Children[0]), []string{"name"})
+}
+
+func TestParseRootArgs2(t *testing.T) {
+	query := `
+	query {
+		me(id:0x0a, first: 1, offset:0) {
+			friends {
+				name
+			}
+			gender,age
+			hometown
+		}
+	}
+`
+	res, err := Parse(query)
+	require.NoError(t, err)
+	require.NotNil(t, res.Query)
+	require.Equal(t, 1, len(res.Query))
+	require.Equal(t, 2, len(res.Query[0].Args))
+	require.Equal(t, "1", res.Query[0].Args["first"])
+	require.Equal(t, "0", res.Query[0].Args["offset"])
+	require.Equal(t, childAttrs(res.Query[0]), []string{"friends", "gender", "age", "hometown"})
+	require.Equal(t, childAttrs(res.Query[0].Children[0]), []string{"name"})
 }
 
 func TestParse(t *testing.T) {
@@ -599,7 +643,7 @@ func TestParseFragmentMultiQuery(t *testing.T) {
 			hobbies
 			...fragmentd
 		}
-	
+
 		me(id:0x01) {
 			...fragmenta
 			...fragmentb
@@ -909,7 +953,7 @@ func TestParseFilter_root(t *testing.T) {
 	schema.ParseBytes([]byte("scalar abc: string @index"))
 	query := `
 	query {
-		me(abc(abc)) @filter(allof(name, "alice")) {
+		me(func:abc(abc)) @filter(allof(name, "alice")) {
 			friends @filter() {
 				name @filter(namefilter("a"))
 			}
@@ -991,6 +1035,24 @@ func TestParseFilter_op(t *testing.T) {
 	require.Equal(t, []string{"name"}, childAttrs(res.Query[0].Children[0]))
 	require.Equal(t, `(OR (a "a") (AND (b "a") (c "a")))`, res.Query[0].Children[0].Filter.debugString())
 }
+
+func TestParseFilter_opError(t *testing.T) {
+	query := `
+	query {
+		me(id:0x0a) {
+			friends @filter(a("a") or b("a")
+			and ) {
+				name
+			}
+			gender,age
+			hometown
+		}
+	}
+`
+	_, err := Parse(query)
+	require.Error(t, err)
+}
+
 func TestParseFilter_opNot1(t *testing.T) {
 	query := `
 	query {
@@ -1291,7 +1353,7 @@ func TestParseComments(t *testing.T) {
 	query := `
 	# Something
 	{
-		me(allof("name", "barack")) {
+		me(func:allof("name", "barack")) {
 			friends {
 				name
 			} # Something
@@ -1308,7 +1370,7 @@ func TestParseComments1(t *testing.T) {
 	schema.ParseBytes([]byte("scalar name:string @index"))
 	query := `{
 		#Something 
-		me(allof("name", "barack")) {
+		me(func:allof("name", "barack")) {
 			friends {
 				name  # Name of my friend
 			}
@@ -1324,7 +1386,7 @@ func TestParseComments1(t *testing.T) {
 func TestParseGenerator(t *testing.T) {
 	schema.ParseBytes([]byte("scalar name:string @index"))
 	query := `{
-		me(allof("name", "barack")) {
+		me(func:allof("name", "barack")) {
 			friends {
 				name
 			}
@@ -1362,7 +1424,7 @@ func TestParseIRIRef2(t *testing.T) {
 	require.NoError(t, schema.ParseBytes(
 		[]byte("scalar <http://helloworld.com/how/are/you>:string @index")))
 	query := `{
-		me(anyof(<http://helloworld.com/how/are/you>, "good better bad")) {
+		me(func:anyof(<http://helloworld.com/how/are/you>, "good better bad")) {
 			<http://verygood.com/what/about/you>
 			friends @filter(allof(<http://verygood.com/what/about/you>,
 				"good better bad")){
@@ -1556,4 +1618,22 @@ func TestLangsInvalid5(t *testing.T) {
 
 	_, err := Parse(query)
 	require.Error(t, err)
+}
+
+func TestParseNormalize(t *testing.T) {
+	query := `
+	query {
+		me(id: abc) @normalize {
+			friends {
+				name
+			}
+			gender
+			hometown
+		}
+}
+`
+	res, err := Parse(query)
+	require.NoError(t, err)
+	require.NotNil(t, res.Query[0])
+	require.True(t, res.Query[0].Normalize)
 }

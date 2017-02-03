@@ -26,6 +26,8 @@ import (
 	"sync"
 	"time"
 
+	"google.golang.org/grpc/metadata"
+
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/query/graph"
@@ -125,6 +127,7 @@ type params struct {
 	NeedsVar   []string
 	ParentVars map[string]*task.List
 	Langs      []string
+	Normalize  bool
 }
 
 // SubGraph is the way to represent data internally. It contains both the
@@ -242,11 +245,6 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 				}
 				uc := dst.New(fieldName)
 
-				// Doing check for UID here is no good because some of these might be
-				// invalid nodes.
-				// if pc.Params.GetUID || pc.Params.isDebug {
-				//	dst.SetUID(uid)
-				// }
 				if rerr := pc.preTraverse(childUID, uc); rerr != nil {
 					if rerr.Error() == "_INV_" {
 						invalidUids[childUID] = true
@@ -306,7 +304,16 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 				if sv.Tid == types.StringID && sv.Value.(string) == "_nil_" {
 					sv.Value = ""
 				}
-				dst.AddValue(fieldName, sv)
+
+				if !pc.Params.Normalize {
+					dst.AddValue(fieldName, sv)
+					continue
+				}
+				// If the query had the normalize directive, then we only add nodes
+				// with an Alias.
+				if pc.Params.Alias != "" {
+					dst.AddValue(fieldName, sv)
+				}
 			}
 		}
 	}
@@ -363,10 +370,11 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 		}
 
 		args := params{
-			Alias:   gchild.Alias,
-			Langs:   gchild.Langs,
-			isDebug: sg.Params.isDebug,
-			Var:     gchild.Var,
+			Alias:     gchild.Alias,
+			Langs:     gchild.Langs,
+			isDebug:   sg.Params.isDebug,
+			Var:       gchild.Var,
+			Normalize: sg.Params.Normalize,
 		}
 		args.NeedsVar = append(args.NeedsVar, gchild.NeedsVar...)
 		if gchild.IsCount {
@@ -375,10 +383,21 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 			}
 			args.DoCount = true
 		}
+
+		for argk, _ := range gchild.Args {
+			if !isValidArg(argk) {
+				return x.Errorf("Invalid argument : %s", argk)
+			}
+		}
+		if err := args.fill(gchild); err != nil {
+			return err
+		}
+
 		dst := &SubGraph{
 			Attr:   gchild.Attr,
 			Params: args,
 		}
+
 		if gchild.Filter != nil {
 			dstf := &SubGraph{}
 			if err := filterCopy(dstf, gchild.Filter); err != nil {
@@ -387,43 +406,41 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 			dst.Filters = append(dst.Filters, dstf)
 		}
 
-		if v, ok := gchild.Args["offset"]; ok {
-			offset, err := strconv.ParseInt(v, 0, 32)
-			if err != nil {
-				return err
-			}
-			dst.Params.Offset = int(offset)
-		}
-		if v, ok := gchild.Args["after"]; ok {
-			after, err := strconv.ParseUint(v, 0, 64)
-			if err != nil {
-				return err
-			}
-			dst.Params.AfterUID = uint64(after)
-		}
-		if v, ok := gchild.Args["first"]; ok {
-			first, err := strconv.ParseInt(v, 0, 32)
-			if err != nil {
-				return err
-			}
-			dst.Params.Count = int(first)
-		}
-		if v, ok := gchild.Args["order"]; ok {
-			dst.Params.Order = v
-		} else if v, ok := gchild.Args["orderdesc"]; ok {
-			dst.Params.Order = v
-			dst.Params.OrderDesc = true
-		}
-		for argk, _ := range gchild.Args {
-			if !isValidArg(argk) {
-				return x.Errorf("Invalid argument : %s", argk)
-			}
-		}
 		sg.Children = append(sg.Children, dst)
-		err := treeCopy(ctx, gchild, dst)
+		if err := treeCopy(ctx, gchild, dst); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+func (args *params) fill(gq *gql.GraphQuery) error {
+
+	if v, ok := gq.Args["offset"]; ok {
+		offset, err := strconv.ParseInt(v, 0, 32)
 		if err != nil {
 			return err
 		}
+		args.Offset = int(offset)
+	}
+	if v, ok := gq.Args["after"]; ok {
+		after, err := strconv.ParseUint(v, 0, 64)
+		if err != nil {
+			return err
+		}
+		args.AfterUID = uint64(after)
+	}
+	if v, ok := gq.Args["first"]; ok {
+		first, err := strconv.ParseInt(v, 0, 32)
+		if err != nil {
+			return err
+		}
+		args.Count = int(first)
+	}
+	if v, ok := gq.Args["orderasc"]; ok {
+		args.Order = v
+	} else if v, ok := gq.Args["orderdesc"]; ok {
+		args.Order = v
+		args.OrderDesc = true
 	}
 	return nil
 }
@@ -448,22 +465,42 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		return nil, err
 	}
 
+	var debug bool
+	// gRPC client passes information about debug as metadata.
+	if md, ok := metadata.FromContext(ctx); ok {
+		// md is a map[string][]string
+		debug = len(md["debug"]) > 0 && md["debug"][0] == "true"
+	}
+	// HTTP passes information about debug as query parameter which is attached to context.
+	debug = debug || ctx.Value("debug") == "true"
+
 	// For the root, the name to be used in result is stored in Alias, not Attr.
 	// The attr at root (if present) would stand for the source functions attr.
 	args := params{
-		isDebug:    gq.Alias == "debug",
+		isDebug:    debug,
 		Alias:      gq.Alias,
 		Langs:      gq.Langs,
 		Var:        gq.Var,
 		ParentVars: make(map[string]*task.List),
+		Normalize:  gq.Normalize,
 	}
 	for _, it := range gq.NeedsVar {
 		args.NeedsVar = append(args.NeedsVar, it)
 	}
 
+	for argk, _ := range gq.Args {
+		if !isValidArg(argk) {
+			return nil, x.Errorf("Invalid argument : %s", argk)
+		}
+	}
+	if err := args.fill(gq); err != nil {
+		return nil, err
+	}
+
 	sg := &SubGraph{
 		Params: args,
 	}
+
 	if gq.Func != nil {
 		sg.Attr = gq.Func.Attr
 		if !isValidFuncName(gq.Func.Name) {
@@ -710,17 +747,16 @@ func (sg *SubGraph) fillVars(mp map[string]*task.List) {
 func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	var err error
 	if len(sg.Params.NeedsVar) != 0 && len(sg.SrcFunc) == 0 {
-		// Do nothing as the list has already been populated.
+		sg.uidMatrix = []*task.List{&task.List{sg.DestUIDs.Uids}}
 	} else if len(sg.Attr) == 0 {
 		// If we have a filter SubGraph which only contains an operator,
 		// it won't have any attribute to work on.
 		// This is to allow providing SrcUIDs to the filter children.
 		sg.DestUIDs = sg.SrcUIDs
-
 	} else if parent == nil && len(sg.SrcFunc) == 0 {
 		// I am root. I don't have any function to execute, and my
 		// result has been prepared for me already.
-		sg.DestUIDs = algo.MergeSorted(sg.uidMatrix) // Could also be = sg.SrcUIDs
+		sg.DestUIDs = sg.SrcUIDs
 	} else {
 		if len(sg.SrcFunc) > 0 && sg.SrcFunc[0] == "id" {
 			// If its an id() filter, we just have to intersect the SrcUIDs with DestUIDs
@@ -758,6 +794,11 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			sg.DestUIDs = algo.IntersectSorted(result.UidMatrix)
 		} else {
 			sg.DestUIDs = algo.MergeSorted(result.UidMatrix)
+		}
+
+		if parent == nil {
+			// I'm root. We reach here if root had a function.
+			sg.uidMatrix = []*task.List{&task.List{sg.DestUIDs.Uids}}
 		}
 	}
 
@@ -838,6 +879,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	// user wants to skip 100 entries and return 10 entries. In this case, you
 	// should return a count of 0, not 10.
 	if sg.Params.DoCount {
+
 		x.AssertTrue(len(sg.Filters) > 0)
 		sg.counts = make([]uint32, len(sg.uidMatrix))
 		for i, ul := range sg.uidMatrix {
@@ -907,8 +949,6 @@ func (sg *SubGraph) applyPagination(ctx context.Context) error {
 	if params.Count == 0 && params.Offset == 0 { // No pagination.
 		return nil
 	}
-
-	x.AssertTrue(len(sg.SrcUIDs.Uids) == len(sg.uidMatrix))
 	for _, l := range sg.uidMatrix {
 		// Update the UidMatrix before applying the pagination as
 		// we want valid uids which are present in DestUids.
@@ -968,7 +1008,7 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 // isValidArg checks if arg passed is valid keyword.
 func isValidArg(a string) bool {
 	switch a {
-	case "order", "orderdesc", "first", "offset", "after":
+	case "orderasc", "orderdesc", "first", "offset", "after":
 		return true
 	}
 	return false

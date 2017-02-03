@@ -102,6 +102,7 @@ func (nq NQuad) ToEdge() (*task.DirectedEdge, error) {
 		Label:  nq.Label,
 		Lang:   nq.Lang,
 		Entity: sid,
+		Facets: nq.Facets,
 	}
 
 	switch nq.valueType() {
@@ -128,12 +129,12 @@ func toUid(xid string, newToUid map[string]uint64) (uid uint64) {
 func (nq NQuad) ToEdgeUsing(newToUid map[string]uint64) (*task.DirectedEdge, error) {
 	var err error
 	uid := toUid(nq.Subject, newToUid)
-
 	out := &task.DirectedEdge{
 		Entity: uid,
 		Attr:   nq.Predicate,
 		Label:  nq.Label,
 		Lang:   nq.Lang,
+		Facets: nq.Facets,
 	}
 
 	switch nq.valueType() {
