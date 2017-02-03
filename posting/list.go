@@ -563,14 +563,16 @@ func (l *List) Uids(opt ListOptions) *task.List {
 	defer l.RUnlock()
 
 	res := new(task.List)
-	wit := algo.NewWriteIterator(res)
+	var wit algo.WriteIterator
+	wit.Init(res)
 	l.iterate(opt.AfterUID, func(p *types.Posting) bool {
 		if postingType(p) != valueUid {
 			return false
 		}
 		uid := p.Uid
 		if opt.Intersect != nil {
-			it := algo.NewListIterator(opt.Intersect)
+			var it algo.ListIterator
+			it.Init(opt.Intersect)
 			for ; it.Valid() && it.Val() < uid; it.Next() {
 			}
 			if !it.Valid() || it.Val() > uid {

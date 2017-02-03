@@ -148,7 +148,8 @@ func (sg *SubGraph) ToProtocolBuffer(l *Latency) (*graph.Node, error) {
 	}
 
 	n := seedNode.New("_root_")
-	it := algo.NewListIterator(sg.uidMatrix[0])
+	var it algo.ListIterator
+	it.Init(sg.uidMatrix[0])
 	for ; it.Valid(); it.Next() {
 		uid := it.Val()
 		// For the root, the name is stored in Alias, not Attr.
@@ -340,7 +341,8 @@ func processNodeUids(n *fastJsonNode, sg *SubGraph) error {
 	if sg.uidMatrix == nil {
 		return nil
 	}
-	it := algo.NewListIterator(sg.uidMatrix[0])
+	var it algo.ListIterator
+	it.Init(sg.uidMatrix[0])
 	for ; it.Valid(); it.Next() {
 		uid := it.Val()
 		n1 := seedNode.New(sg.Params.Alias)

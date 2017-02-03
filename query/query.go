@@ -237,7 +237,8 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 		} else if algo.ListLen(ul) > 0 || len(pc.Children) > 0 {
 			// We create as many predicate entity children as the length of uids for
 			// this predicate.
-			it := algo.NewListIterator(ul)
+			var it algo.ListIterator
+			it.Init(ul)
 			for ; it.Valid(); it.Next() {
 				childUID := it.Val()
 				if invalidUids[childUID] {
@@ -681,8 +682,10 @@ func populateVarMap(sg *SubGraph, doneVars map[string]*task.List, isCascade bool
 	}
 
 	o := new(task.List)
-	out := algo.NewWriteIterator(o)
-	it := algo.NewListIterator(sg.DestUIDs)
+	var out algo.WriteIterator
+	out.Init(o)
+	var it algo.ListIterator
+	it.Init(sg.DestUIDs)
 	i := -1
 	if !isCascade {
 		goto AssignStep
@@ -984,7 +987,8 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 	// rebuild destUIDs.
 	included := make([]bool, algo.ListLen(sg.DestUIDs))
 	for _, ul := range sg.uidMatrix {
-		it := algo.NewListIterator(ul)
+		var it algo.ListIterator
+		it.Init(ul)
 		for ; it.Valid(); it.Next() {
 			uid := it.Val()
 			idxi, idxj := algo.IndexOf(sg.DestUIDs, uid) // Binary search.

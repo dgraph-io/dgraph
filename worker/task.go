@@ -232,7 +232,8 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 	var values []*task.Value
 	if geoQuery != nil {
 		uids := algo.MergeSorted(out.UidMatrix)
-		it := algo.NewListIterator(uids)
+		var it algo.ListIterator
+		it.Init(uids)
 		for ; it.Valid(); it.Next() {
 			uid := it.Val()
 			key := x.DataKey(attr, uid)

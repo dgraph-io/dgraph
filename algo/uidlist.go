@@ -24,8 +24,7 @@ type WriteIterator struct {
 	lidx int // List index
 }
 
-// NewWriteIterator provides an iterator for the list passed to it.
-func NewWriteIterator(l *task.List) WriteIterator {
+func (w *WriteIterator) Init(l *task.List) {
 	// Initialise and allocate some memory.
 	if l.Blocks == nil {
 		l.Blocks = make([]*task.Block, 1, 2)
@@ -33,20 +32,11 @@ func NewWriteIterator(l *task.List) WriteIterator {
 		l.Blocks[0].List = make([]uint64, blockSize)
 	}
 
-	return WriteIterator{
+	*w = WriteIterator{
 		list: l,
 		bidx: 0,
 		lidx: 0,
 	}
-	/*
-		i := len(l.Blocks) - 1
-		j := len(l.Blocks[i].List) - 1
-		return WriteIterator{
-			list: l,
-			bidx: i,
-			lidx: j,
-		}
-	*/
 }
 
 // Append appends an UID to the end of task.List following the blockSize specified.
@@ -74,30 +64,18 @@ func (l *WriteIterator) End() {
 }
 
 // NewListIterator returns a read iterator for the list passed to it.
-func NewListIterator(l *task.List) ListIterator {
-	if l == nil || l.Blocks == nil || len(l.Blocks) == 0 {
-		return ListIterator{
-			list:  l,
-			bidx:  0,
-			lidx:  0,
-			isEnd: true,
-		}
-
-	}
-	if l.Blocks[0].List == nil || len(l.Blocks[0].List) == 0 {
-		return ListIterator{
-			list:  l,
-			bidx:  0,
-			lidx:  0,
-			isEnd: true,
-		}
+func (r *ListIterator) Init(l *task.List) {
+	var isEnd bool
+	if l == nil || l.Blocks == nil || len(l.Blocks) == 0 ||
+		len(l.Blocks[0].List) == 0 {
+		isEnd = true
 	}
 
-	return ListIterator{
+	*r = ListIterator{
 		list:  l,
 		bidx:  0,
 		lidx:  0,
-		isEnd: false,
+		isEnd: isEnd,
 	}
 }
 
@@ -173,9 +151,11 @@ func (l *ListIterator) Next() {
 // of  the list passed to it.
 func Slice(ul *task.List, start, end int) *task.List {
 	o := new(task.List)
-	out := NewWriteIterator(o)
+	var out WriteIterator
+	out.Init(o)
 
-	it := NewListIterator(ul)
+	var it ListIterator
+	it.Init(ul)
 	it.SeekToIndex(start)
 
 	i := 0
@@ -192,7 +172,8 @@ func SortedListToBlock(l []uint64) *task.List {
 	if len(l) == 0 {
 		return b
 	}
-	wit := NewWriteIterator(b)
+	var wit WriteIterator
+	wit.Init(b)
 
 	for _, it := range l {
 		wit.Append(it)
@@ -224,9 +205,12 @@ func ListLen(l *task.List) int {
 
 func IntersectWith(u, v *task.List) {
 	o := new(task.List)
-	out := NewWriteIterator(o)
-	itu := NewListIterator(u)
-	itv := NewListIterator(v)
+	var out WriteIterator
+	out.Init(o)
+	var itu ListIterator
+	itu.Init(u)
+	var itv ListIterator
+	itv.Init(v)
 	for itu.Valid() && itv.Valid() {
 		uid := itu.Val()
 		vid := itv.Val()
@@ -247,7 +231,8 @@ func IntersectWith(u, v *task.List) {
 // ApplyFilter applies a filter to our UIDList.
 func ApplyFilter(u *task.List, f func(uint64, int) bool) {
 	o := new(task.List)
-	out := NewWriteIterator(o)
+	var out WriteIterator
+	out.Init(o)
 	for i, block := range u.Blocks {
 		for j, uid := range block.List {
 			if f(uid, Idx(u, i, j)) {
@@ -273,7 +258,8 @@ func IntersectSorted(lists []*task.List) *task.List {
 	if len(lists) == 0 {
 		return o
 	}
-	out := NewWriteIterator(o)
+	var out WriteIterator
+	out.Init(o)
 
 	// Scan through the smallest list. Denote as A.
 	// For each x in A,
@@ -295,7 +281,9 @@ func IntersectSorted(lists []*task.List) *task.List {
 	// lptrs[j] is the element we are looking at for lists[j].
 	lptrs := make([]ListIterator, len(lists))
 	for i, l := range lists {
-		lptrs[i] = NewListIterator(l)
+		var it ListIterator
+		it.Init(l)
+		lptrs[i] = it
 	}
 	shortListIt := lptrs[minLenIdx]
 	elemsLeft := true // If some list has no elems left, we can't intersect more.
@@ -329,9 +317,12 @@ func IntersectSorted(lists []*task.List) *task.List {
 
 func Difference(u, v *task.List) {
 	o := new(task.List)
-	out := NewWriteIterator(o)
-	itu := NewListIterator(u)
-	itv := NewListIterator(v)
+	var out WriteIterator
+	out.Init(o)
+	var itu ListIterator
+	itu.Init(u)
+	var itv ListIterator
+	itv.Init(v)
 	for itu.Valid() && itv.Valid() {
 		uid := itu.Val()
 		vid := itv.Val()
@@ -355,13 +346,15 @@ func MergeSorted(lists []*task.List) *task.List {
 	if len(lists) == 0 {
 		return o
 	}
-	out := NewWriteIterator(o)
+	var out WriteIterator
+	out.Init(o)
 
 	h := &uint64Heap{}
 	heap.Init(h)
 	var lIt []ListIterator
 	for i, l := range lists {
-		it := NewListIterator(l)
+		var it ListIterator
+		it.Init(l)
 		lIt = append(lIt, it)
 		if it.Valid() {
 			heap.Push(h, elem{
