@@ -203,7 +203,7 @@ func intersectBucket(ts *task.Sort, attr, token string, out []intersectedList) e
 
 		// We are within the page. We need to apply sorting.
 		// Sort results by value before applying offset.
-		sortByValue(attr, result, scalar, ts.Desc)
+		sortByValue(attr, ts.Langs, result, scalar, ts.Desc)
 
 		if il.offset > 0 {
 			// Apply the offset.
@@ -239,10 +239,10 @@ func intersectBucket(ts *task.Sort, attr, token string, out []intersectedList) e
 }
 
 // sortByValue fetches values and sort UIDList.
-func sortByValue(attr string, ul *task.List, typ types.TypeID, desc bool) error {
+func sortByValue(attr string, langs []string, ul *task.List, typ types.TypeID, desc bool) error {
 	values := make([]types.Val, len(ul.Uids))
 	for i, uid := range ul.Uids {
-		val, err := fetchValue(uid, attr, typ)
+		val, err := fetchValue(uid, attr, langs, typ)
 		if err != nil {
 			return err
 		}
@@ -252,12 +252,12 @@ func sortByValue(attr string, ul *task.List, typ types.TypeID, desc bool) error 
 }
 
 // fetchValue gets the value for a given UID.
-func fetchValue(uid uint64, attr string, scalar types.TypeID) (types.Val, error) {
+func fetchValue(uid uint64, attr string, langs []string, scalar types.TypeID) (types.Val, error) {
 	// TODO: Maybe use posting.Get
 	pl, decr := posting.GetOrCreate(x.DataKey(attr, uid), group.BelongsTo(attr))
 	defer decr()
 
-	src, err := pl.Value(nil) // TODO(tzdybal)
+	src, err := pl.Value(langs)
 	if err != nil {
 		return types.Val{}, err
 	}

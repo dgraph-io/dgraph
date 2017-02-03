@@ -42,10 +42,11 @@ message Result {
 
 message Sort {
 	string attr = 1;
-	repeated List uid_matrix = 2;
-	int32 count = 3;   // Return this many elements.
-	int32 offset = 4;  // Skip this many elements.
-	bool desc = 5;
+	repeated string langs = 2;
+	repeated List uid_matrix = 3;
+	int32 count = 4;   // Return this many elements.
+	int32 offset = 5;  // Skip this many elements.
+	bool desc = 6;
 }
 
 message SortResult {

@@ -206,7 +206,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 		// Filter the first row of UidMatrix. Since ineqValue != nil, we may
 		// assume that ineqValue is equal to the first token found in TokensTable.
 		algo.ApplyFilter(out.UidMatrix[0], func(uid uint64, i int) bool {
-			sv, err := fetchValue(uid, attr, typ)
+			sv, err := fetchValue(uid, attr, q.Langs, typ)
 			if sv.Value == nil || err != nil {
 				return false
 			}

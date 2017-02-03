@@ -978,6 +978,7 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 		Offset:    int32(sg.Params.Offset),
 		Count:     int32(sg.Params.Count),
 		Desc:      sg.Params.OrderDesc,
+		Langs:     sg.Params.Langs,
 	}
 	result, err := worker.SortOverNetwork(ctx, sort)
 	if err != nil {
