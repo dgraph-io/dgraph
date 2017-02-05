@@ -31,11 +31,13 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"os"
+	"os/signal"
 	"path"
 	"runtime"
 	"runtime/pprof"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"golang.org/x/net/context"
@@ -73,7 +75,8 @@ var (
 	memprofile   = flag.String("mem", "", "write memory profile to file")
 	dumpSubgraph = flag.String("dumpsg", "", "Directory to save subgraph for testing, debugging")
 
-	closeCh        = make(chan struct{})
+	finishCh       = make(chan struct{}) // channel to wait for all pending reqs to finish.
+	shutdownCh     = make(chan struct{}) // channel to signal shutdown.
 	pendingQueries = make(chan struct{}, 10000*runtime.NumCPU())
 )
 
@@ -82,9 +85,7 @@ type mutationResult struct {
 	newUids map[string]uint64
 }
 
-func exitWithProfiles() {
-	log.Println("Got clean exit request")
-
+func stopProfiling() {
 	// Stop the CPU profiling that was initiated.
 	if len(*cpuprofile) > 0 {
 		pprof.StopCPUProfile()
@@ -99,8 +100,6 @@ func exitWithProfiles() {
 		pprof.WriteHeapProfile(f)
 		f.Close()
 	}
-	// To exit the server after the response is returned.
-	closeCh <- struct{}{}
 }
 
 func addCorsHeaders(w http.ResponseWriter) {
@@ -131,7 +130,9 @@ func convertToNQuad(ctx context.Context, mutation string) ([]*graph.NQuad, error
 			continue
 		}
 		nq, err := rdf.Parse(ln)
-		if err != nil {
+		if err == rdf.ErrEmpty { // special case: comment/empty line
+			continue
+		} else if err != nil {
 			x.TraceError(ctx, x.Wrapf(err, "Error while parsing RDF"))
 			return nquads, err
 		}
@@ -449,7 +450,9 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	// Lets add the value of the debug query parameter to the context.
+	c := context.WithValue(context.Background(), "debug", r.URL.Query().Get("debug"))
+	ctx, cancel := context.WithTimeout(c, time.Minute)
 	defer cancel()
 
 	if rand.Float64() < *tracing {
@@ -468,6 +471,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		x.SetStatus(w, x.ErrorInvalidRequest, "Invalid request encountered.")
 		return
 	}
+
 	res, err := parseQueryAndMutation(ctx, q)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -565,8 +569,28 @@ func shutDownHandler(w http.ResponseWriter, r *http.Request) {
 	if !handlerInit(w, r) {
 		return
 	}
-	exitWithProfiles()
-	x.SetStatus(w, x.Success, "Server has been shutdown")
+
+	shutdownServer()
+	x.SetStatus(w, x.Success, "Server is shutting down")
+}
+
+func shutdownServer() {
+	x.Printf("Got clean exit request")
+	stopProfiling()          // stop profiling
+	shutdownCh <- struct{}{} // exit grpc and http servers.
+
+	// wait for grpc and http servers to finish pending reqs and
+	// then stop all nodes, internal grpc servers and sync all the marks
+	go func() {
+		defer func() { shutdownCh <- struct{}{} }()
+
+		// wait for grpc, http and http2 servers to stop
+		<-finishCh
+		<-finishCh
+		<-finishCh
+
+		worker.BlockingStop()
+	}()
 }
 
 func backupHandler(w http.ResponseWriter, r *http.Request) {
@@ -671,18 +695,25 @@ func checkFlagsAndInitDirs() {
 }
 
 func serveGRPC(l net.Listener) {
+	defer func() { finishCh <- struct{}{} }()
 	s := grpc.NewServer(grpc.CustomCodec(&query.Codec{}))
 	graph.RegisterDgraphServer(s, &grpcServer{})
-	x.Checkf(s.Serve(l), "Error while serving gRpc request")
+	err := s.Serve(l)
+	log.Printf("gRpc server stopped : %s", err.Error())
+	s.GracefulStop()
 }
 
 func serveHTTP(l net.Listener) {
+	defer func() { finishCh <- struct{}{} }()
 	srv := &http.Server{
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 600 * time.Second,
 		// TODO(Ashwin): Add idle timeout while switching to Go 1.8.
 	}
-	x.Checkf(srv.Serve(l), "Error while serving http request")
+
+	err := srv.Serve(l)
+	log.Printf("http server stopped : %s", err.Error())
+	// TODO(ashish): Use srv.Shutdown go 1.8
 }
 
 func setupServer(che chan error) {
@@ -710,14 +741,15 @@ func setupServer(che chan error) {
 	http.HandleFunc("/admin/index", indexHandler)
 	http.HandleFunc("/admin/shutdown", shutDownHandler)
 	http.HandleFunc("/admin/backup", backupHandler)
+
 	// Initilize the servers.
 	go serveGRPC(grpcl)
 	go serveHTTP(httpl)
 	go serveHTTP(http2)
 
 	go func() {
-		<-closeCh
-		// Stops listening further but already accepted connections are not closed.
+		<-shutdownCh
+		// Stops grpc/http servers; Already accepted connections are not closed.
 		l.Close()
 	}()
 
@@ -725,8 +757,9 @@ func setupServer(che chan error) {
 	log.Println("http server started.")
 	log.Println("Server listening on port", *port)
 
-	// Start cmux serving.
-	che <- tcpm.Serve()
+	err = tcpm.Serve() // Start cmux serving. blocking call
+	<-shutdownCh       // wait for shutdownServer to finish
+	che <- err         // final close for main.
 }
 
 func main() {
@@ -749,6 +782,17 @@ func main() {
 	posting.Init(ps)
 	worker.Init(ps)
 	x.Check(group.ParseGroupConfig(*gconf))
+
+	// setup shutdown os signal handler
+	sdCh := make(chan os.Signal, 1)
+	defer close(sdCh)
+	signal.Notify(sdCh, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		_, ok := <-sdCh
+		if ok {
+			shutdownServer()
+		}
+	}()
 
 	// Setup external communication.
 	che := make(chan error, 1)

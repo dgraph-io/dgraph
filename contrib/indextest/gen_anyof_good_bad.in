@@ -1,6 +1,6 @@
 {
- me(anyof("type.object.name.en", "good bad")) {
+ me(func:anyof("name.en", "good bad")) {
   _uid_
-  type.object.name.en
+  name.en
  }
 }

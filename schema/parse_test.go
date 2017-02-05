@@ -17,15 +17,46 @@
 package schema
 
 import (
+	"os"
 	"testing"
 
-	"github.com/dgraph-io/dgraph/types"
 	"github.com/stretchr/testify/require"
+
+	"github.com/dgraph-io/dgraph/types"
+	"github.com/dgraph-io/dgraph/x"
 )
+
+type nameType struct {
+	name string
+	typ  types.TypeID
+}
+
+func checkSchema(t *testing.T, h map[string]types.TypeID, expected []nameType) {
+	require.Len(t, h, len(expected))
+	for _, nt := range expected {
+		typ, found := h[nt.name]
+		require.True(t, found, nt)
+		require.EqualValues(t, nt.typ, typ)
+	}
+}
 
 func TestSchema(t *testing.T) {
 	str = make(map[string]types.TypeID)
 	require.NoError(t, Parse("testfiles/test_schema"))
+	checkSchema(t, str, []nameType{
+		{"name", types.StringID},
+		{"address", types.StringID},
+		{"http://film.com/name", types.StringID},
+		{"http://scalar.com/helloworld/", types.StringID},
+		{"age", types.Int32ID},
+		{"budget", types.Int32ID},
+		{"http://film.com/budget", types.Int32ID},
+		{"NumFollower", types.Int32ID},
+		{"Person", types.UidID},
+		{"Actor", types.UidID},
+		{"Film", types.UidID},
+		{"http://film.com/", types.UidID},
+	})
 }
 
 func TestSchema1_Error(t *testing.T) {
@@ -72,13 +103,32 @@ func TestSchemaIndex(t *testing.T) {
 // Indexing can't be specified inside object types.
 func TestSchemaIndex_Error1(t *testing.T) {
 	str = make(map[string]types.TypeID)
-	indexedFields = make(map[string]bool)
 	require.Error(t, Parse("testfiles/test_schema_index2"))
 }
 
 // Object types cant be indexed.
 func TestSchemaIndex_Error2(t *testing.T) {
 	str = make(map[string]types.TypeID)
-	indexedFields = make(map[string]bool)
 	require.Error(t, Parse("testfiles/test_schema_index3"))
+}
+
+func TestSchemaIndexCustom(t *testing.T) {
+	str = make(map[string]types.TypeID)
+	require.NoError(t, Parse("testfiles/test_schema_index4"))
+	checkSchema(t, str, []nameType{
+		{"name", types.StringID},
+		{"address", types.StringID},
+		{"age", types.Int32ID},
+		{"Person", types.UidID},
+	})
+	require.Equal(t, 3, len(indexedFields))
+	require.Equal(t, "int", indexedFields["age"].Name())
+	require.Equal(t, "exact", indexedFields["name"].Name())
+	require.Equal(t, "term", indexedFields["address"].Name())
+}
+
+func TestMain(m *testing.M) {
+	x.SetTestRun()
+	x.Init()
+	os.Exit(m.Run())
 }

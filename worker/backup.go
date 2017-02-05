@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"compress/gzip"
 	"fmt"
-	"math"
 	"math/rand"
 	"os"
 	"path"
@@ -31,7 +30,7 @@ func toRDF(buf *bytes.Buffer, item kv) {
 	for _, p := range pl.Postings {
 		x.Check2(buf.WriteString(item.prefix))
 
-		if p.Uid == math.MaxUint64 && !bytes.Equal(p.Value, nil) {
+		if !bytes.Equal(p.Value, nil) {
 			// Value posting
 			// Convert to appropriate type
 			vID := types.TypeID(p.ValType)
@@ -42,8 +41,11 @@ func toRDF(buf *bytes.Buffer, item kv) {
 			x.Check2(buf.WriteString(fmt.Sprintf("\"%s\"", str.Value)))
 			if types.TypeID(p.ValType) == types.GeoID {
 				x.Check2(buf.WriteString(fmt.Sprintf("^^<geo:geojson> ")))
+				// TODO(tzdybal) - uncomment
+				/* } else if len(p.Lang) > 0 {
+				x.Check2(buf.WriteString(fmt.Sprintf("@%s", p.Lang))) */
 			} else if types.TypeID(p.ValType) != types.BinaryID {
-				x.Check2(buf.WriteString(fmt.Sprintf("^^<xs:%s> ", vID.Name())))
+				x.Check2(buf.WriteString(fmt.Sprintf("^^<xs:%s>", vID.Name())))
 			}
 			x.Check2(buf.WriteString(" .\n"))
 			return

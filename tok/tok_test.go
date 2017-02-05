@@ -16,70 +16,47 @@
 
 package tok
 
-/*
-For testing embedded version, try:
-wget https://github.com/dgraph-io/goicu/raw/master/icudt57l.dat -P /tmp
-go test -icu /tmp/icudt57l.dat -tags embed
-*/
-
 import (
-	"os"
-	"strings"
+	"math"
+	"sort"
 	"testing"
 
 	"github.com/stretchr/testify/require"
-
-	"github.com/dgraph-io/dgraph/x"
 )
 
-func TestTokenizeBasic(t *testing.T) {
-	testData := []struct {
-		in       string
-		expected []string
-	}{
-		{"hello world", []string{"hello", "world"}},
-		{"  HE,LLO,  \n  world  ", []string{"he", "llo", "world"}},
-		{"在新加坡鞭刑是處置犯人  的方法之一!",
-			[]string{"在", "新加坡", "鞭刑", "是", "處置", "犯人", "的", "方法", "之一"}},
-		{"cafés   cool", []string{"cafes", "cool"}},
-		{"nörmalization", []string{"normalization"}},
-		{" 住宅地域における本機の使用は有害な電波妨害を引き起こすことがあり、その場合ユーザーは自己負担で電波妨害の問題を解決しなければなりません。",
-			[]string{"住宅", "地域", "における", "本機", "の", "使用", "は", "有害", "な",
-				"電波", "妨害", "を", "引き起こす", "こと", "か", "あり", "その", "場合", "ユー",
-				"サー", "は", "自己", "負担", "て", "電波", "妨害", "の", "問題", "を", "解決",
-				"しな", "け", "れ", "は", "なり", "ま", "せん"}},
-		// Exceed the max token width and test that we did not exceed.
-		{strings.Repeat("a", (1+maxTokenSize)*5),
-			[]string{strings.Repeat("a", maxTokenSize)}},
-	}
-
-	for _, d := range testData {
-		func(in string, expected []string) {
-			tokenizer, err := NewTokenizer([]byte(d.in))
-			defer tokenizer.Destroy()
-			require.NoError(t, err)
-			require.NotNil(t, tokenizer)
-			tokensBytes := tokenizer.Tokens()
-			var tokens []string
-			for _, token := range tokensBytes {
-				tokens = append(tokens, string(token))
-			}
-			require.EqualValues(t, expected, tokens)
-		}(d.in, d.expected)
-	}
+type encL struct {
+	ints   []int32
+	tokens []string
 }
 
-func TestNoICU(t *testing.T) {
-	disableICU = true
-	tokenizer, err := NewTokenizer([]byte("hello world"))
-	defer tokenizer.Destroy()
-	require.NotNil(t, tokenizer)
-	require.NoError(t, err)
-	tokens := tokenizer.Tokens()
-	require.Empty(t, tokens)
+type byEnc struct{ encL }
+
+func (o byEnc) Less(i, j int) bool { return o.ints[i] < o.ints[j] }
+
+func (o byEnc) Len() int { return len(o.ints) }
+
+func (o byEnc) Swap(i, j int) {
+	o.ints[i], o.ints[j] = o.ints[j], o.ints[i]
+	o.tokens[i], o.tokens[j] = o.tokens[j], o.tokens[i]
 }
 
-func TestMain(m *testing.M) {
-	x.Init()
-	os.Exit(m.Run())
+func TestIntEncoding(t *testing.T) {
+	a := int32(1<<24 + 10)
+	b := int32(-1<<24 - 1)
+	c := int32(math.MaxInt32)
+	d := int32(math.MinInt32)
+	enc := encL{}
+	arr := []int32{a, b, c, d, 1, 2, 3, 4, -1, -2, -3, 0, 234, 10000, 123, -1543}
+	enc.ints = arr
+	for _, it := range arr {
+		encoded, err := encodeInt(int32(it))
+		require.NoError(t, err)
+		enc.tokens = append(enc.tokens, encoded[0])
+	}
+	sort.Sort(byEnc{enc})
+	for i := 1; i < len(enc.tokens); i++ {
+		// The corresponding string tokens should be greater.
+		require.True(t, enc.tokens[i-1] < enc.tokens[i], "%d %v vs %d %v",
+			enc.ints[i-1], []byte(enc.tokens[i-1]), enc.ints[i], []byte(enc.tokens[i]))
+	}
 }

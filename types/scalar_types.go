@@ -120,7 +120,7 @@ func ValueForType(id TypeID) Val {
 
 	case StringID:
 		var s string
-		return Val{StringID, &s}
+		return Val{StringID, s}
 
 	case DateID:
 		var d time.Time

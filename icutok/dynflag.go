@@ -1,6 +1,6 @@
 // +build !embed
 
-package tok
+package icutok
 
 // We assume ICU4C is installed to /usr/local/include and /usr/local/lib.
 

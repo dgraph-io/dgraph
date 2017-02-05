@@ -1,5 +1,8 @@
-// protoc --gofast_out=.  task.proto
+// To compile this file, in dgraph directory :
+// protoc --gofast_out=plugins=grpc,Mtypes/facets/facets.proto=github.com/dgraph-io/dgraph/types/facets:.  task/task.proto
+
 syntax = "proto3";
+import "types/facets/facets.proto";
 
 package task;
 
@@ -89,11 +92,13 @@ message DirectedEdge {
 	uint32 value_type = 4;  // The type of the value
 	fixed64 value_id = 5;   // Object or destination node / UID.
 	string label = 6;
+	string lang = 7;
 	enum Op {
 		SET = 0;
 		DEL = 1;
 	}
-	Op op = 7;
+	Op op = 8;
+	repeated facets.Facet facets = 9;
 }
 
 message Mutations {

@@ -446,17 +446,8 @@ func isPNChar(r rune) bool {
 // ECHAR ::= '\' [tbnrf"'\]
 func isEscChar(r rune) bool {
 	switch r {
-	case 't':
-	case 'b':
-	case 'n':
-	case 'r':
-	case 'f':
-	case '"':
-	case '\'':
-	case '\\':
-		// true for all above.
-	default:
-		return false
+	case 't', 'b', 'n', 'r', 'f', '"', '\'', '\\':
+		return true
 	}
-	return true
+	return false
 }
