@@ -49,24 +49,24 @@ func TypeIDToValType(typId TypeID) Facet_ValType {
 }
 
 // ValStrToTypeID gives Facet's TypeID for given facet value
-func ValStrToTypeID(val string) TypeID {
+func ValStrToValType(val string) Facet_ValType {
 	if _, err := strconv.ParseBool(val); err == nil {
-		return BoolID
+		return Facet_BOOL
 	}
 	if _, err := strconv.ParseInt(val, 0, 32); err == nil {
-		return Int32ID
+		return Facet_INT32
 	}
 	if _, err := strconv.ParseFloat(val, 64); err == nil {
-		return FloatID
+		return Facet_FLOAT
 	}
 	if _, err := time.Parse(dateTimeFormat, val); err != nil {
 		if _, err = time.Parse(dateFormatYMD, val); err == nil {
-			return DateTimeID
+			return Facet_DATETIME
 		}
 	} else {
-		return DateTimeID
+		return Facet_DATETIME
 	}
-	return StringID
+	return Facet_STRING
 }
 
 const dateFormatYMD = "2006-01-02"
