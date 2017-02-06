@@ -638,76 +638,6 @@ func TestCount(t *testing.T) {
 		js)
 }
 
-func TestMin(t *testing.T) {
-	populateGraph(t)
-
-	// Alright. Now we have everything set up. Let's create the query.
-	query := `
-		{
-			me(id:0x01) {
-				name
-				gender
-				alive
-				friend {
-                                    min(dob)
-                                }
-			}
-		}
-	`
-
-	js := processToFastJSON(t, query)
-	require.EqualValues(t,
-		`{"me":[{"alive":true,"friend":[{"dob":[{"min":"1901-01-15"}]}],"gender":"female","name":"Michonne"}]}`,
-		js)
-}
-
-func TestMax(t *testing.T) {
-	populateGraph(t)
-
-	// Alright. Now we have everything set up. Let's create the query.
-	query := `
-		{
-			me(id:0x01) {
-				name
-				gender
-				alive
-				friend {
-                                    max(dob)
-                                }
-			}
-		}
-	`
-
-	js := processToFastJSON(t, query)
-	require.EqualValues(t,
-		`{"me":[{"alive":true,"friend":[{"dob":[{"max":"1910-01-02"}]}],"gender":"female","name":"Michonne"}]}`,
-		js)
-}
-
-func TestSum(t *testing.T) {
-	populateGraph(t)
-
-	// Alright. Now we have everything set up. Let's create the query.
-	query := `
-		{
-			me(id:0x01) {
-				name
-				gender
-				alive
-				friend {
-                                    sum(shadow_deep)
-                                }
-			}
-		}
-	`
-
-	js := processToFastJSON(t, query)
-	require.EqualValues(t,
-		`{"me":[{"alive":true,"friend":[{"shadow_deep":[{"sum":18}]}],"gender":"female","name":"Michonne"}]}`,
-		js)
-}
-
-
 func TestCountError1(t *testing.T) {
 	// Alright. Now we have everything set up. Let's create the query.
 	query := `
@@ -760,6 +690,148 @@ func TestCountError3(t *testing.T) {
 	`
 	_, err := gql.Parse(query)
 	require.Error(t, err)
+}
+
+func TestMin(t *testing.T) {
+	populateGraph(t)
+
+	// Alright. Now we have everything set up. Let's create the query.
+	query := `
+		{
+			me(id:0x01) {
+				name
+				gender
+				alive
+				friend {
+                                    min(dob)
+                                }
+			}
+		}
+	`
+
+	js := processToFastJSON(t, query)
+	require.EqualValues(t,
+		`{"me":[{"alive":true,"friend":[{"dob":[{"min":"1901-01-15"}]}],"gender":"female","name":"Michonne"}]}`,
+		js)
+}
+
+func TestMinError1(t *testing.T) {
+	populateGraph(t)
+
+	// error: min could not performed on non-scalar-type
+	query := `
+		{
+			me(id:0x01) {
+				name
+				gender
+				alive
+				min(friend)
+			}
+		}
+	`
+	res, err := gql.Parse(query)
+	require.NoError(t, err)
+
+	var l Latency
+	_, queryErr := ProcessQuery(context.Background(), res, &l)
+	require.NotNil(t, queryErr)
+}
+
+func TestMax(t *testing.T) {
+	populateGraph(t)
+
+	// Alright. Now we have everything set up. Let's create the query.
+	query := `
+		{
+			me(id:0x01) {
+				name
+				gender
+				alive
+				friend {
+                                    max(dob)
+                                }
+			}
+		}
+	`
+
+	js := processToFastJSON(t, query)
+	require.EqualValues(t,
+		`{"me":[{"alive":true,"friend":[{"dob":[{"max":"1910-01-02"}]}],"gender":"female","name":"Michonne"}]}`,
+		js)
+}
+
+
+func TestMaxError1(t *testing.T) {
+	populateGraph(t)
+
+	// error: aggregator 'max' should not have filters on its own
+	query := `
+		{
+			me(id:0x01) {
+				name
+				gender
+				alive
+				friend {
+                                    max(dob @filter(gt("dob", "1910-01-02")))
+                                }
+			}
+		}
+	`
+	res, err := gql.Parse(query)
+	require.NoError(t, err)
+
+	var l Latency
+	_, queryErr := ProcessQuery(context.Background(), res, &l)
+	require.NotNil(t, queryErr)
+}
+
+
+func TestSum(t *testing.T) {
+	populateGraph(t)
+
+	// Alright. Now we have everything set up. Let's create the query.
+	query := `
+		{
+			me(id:0x01) {
+				name
+				gender
+				alive
+				friend {
+                                    sum(shadow_deep)
+                                }
+			}
+		}
+	`
+
+	js := processToFastJSON(t, query)
+	require.EqualValues(t,
+		`{"me":[{"alive":true,"friend":[{"shadow_deep":[{"sum":18}]}],"gender":"female","name":"Michonne"}]}`,
+		js)
+}
+
+func TestSumError1(t *testing.T) {
+	populateGraph(t)
+
+	// error: sum could only be applied on int/float
+	query := `
+		{
+			me(id:0x01) {
+				name
+				gender
+				alive
+				friend {
+                                    sum(name)
+                                }
+			}
+		}
+	`
+
+	res, err := gql.Parse(query)
+	require.NoError(t, err)
+
+	var l Latency
+	_, queryErr := ProcessQuery(context.Background(), res, &l)
+	require.NotNil(t, queryErr)
 }
 
 func TestProcessGraph(t *testing.T) {

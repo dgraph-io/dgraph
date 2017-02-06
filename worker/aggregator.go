@@ -49,6 +49,11 @@ func getValue(tv *task.Value) (types.Val, error) {
 }
 
 func Aggregate(agrtr string, lh, rh *task.Value, typ types.TypeID) (*task.Value, error) {
+	if len(lh.Val) == 0 {
+		return rh, nil
+	} else if len(rh.Val) == 0 {
+		return lh, nil
+	}
 	if !couldApplyAgrtrOn(agrtr, typ) {
 		return lh, x.Errorf("Cant apply aggregator %v on type %d\n", agrtr, typ)
 	}

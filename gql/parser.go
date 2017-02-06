@@ -1200,11 +1200,9 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 			child := &GraphQuery{
 				Args:    make(map[string]string),
 				Attr:    item.Val,
-				//IsCount: isAgrtr == 1,
 			}
 			if isAgrtr == 1 {
 				child.Func = &Function{Name:agrtr, Attr: item.Val}
-				//child.Agrtr = &Function{Name:agrtr, Attr: item.Val}
 			}
 			gq.Children = append(gq.Children, child)
 			curp = child

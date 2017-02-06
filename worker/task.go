@@ -18,9 +18,7 @@ package worker
 
 import (
 	"strings"
-	//"strconv"
 	"encoding/binary"
-	//"fmt"
 
 	"golang.org/x/net/context"
 
@@ -111,7 +109,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 		case isAgrtr:
 			// confirm agrregator could apply on the attributes
 			if !CouldApplyAgrtrOn(f, attr) {
-				return nil, x.Errorf("Aggregator %v could not apply on %v",
+				return nil, x.Errorf("Aggregator %q could not apply on %v",
 					f, attr)
 			}
 
@@ -207,9 +205,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 			out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
 			continue
 		} else {
-			if len(newValue.Val) == 0 {
-				// do nothing
-			} else if len(out.Values) == 0 {
+			if len(out.Values) == 0 {
 				out.Values = append(out.Values, newValue)
 			} else {
 				out.Values[0], _ = Aggregate(q.SrcFunc[0], out.Values[0], newValue, typ)

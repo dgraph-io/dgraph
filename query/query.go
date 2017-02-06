@@ -118,7 +118,6 @@ type params struct {
 	Count      int
 	Offset     int
 	AfterUID   uint64
-	//DoCount    bool
 	Agrtr      string
 	GetUID     bool
 	Order      string
@@ -135,7 +134,6 @@ type params struct {
 type SubGraph struct {
 	Attr      string
 	Params    params
-	//counts    []uint32
 	values    []*task.Value
 	uidMatrix []*task.List
 
@@ -208,8 +206,12 @@ func init() {
 	go release()
 }
 
+var (
+	ErrEmptyVal = errors.New("query: harmless error, e.g. task.Val is nil")
+)
+
 // This method gets the values and children for a subgraph.
-func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
+func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 	invalidUids := make(map[uint64]bool)
 	uidAlreadySet := false
 
@@ -235,23 +237,24 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 			c.Value = int32(binary.LittleEndian.Uint32(pc.values[idx].Val))
 			uc.AddValue("count", c)
 			dst.AddChild(pc.Attr, uc)
-		} else if pc.Params.Agrtr == "min" || 
-			pc.Params.Agrtr == "max" ||
-			pc.Params.Agrtr == "sum" {
-			if idx > 0 { // aggregator will put value at index 0
+		} else if len(pc.Params.Agrtr) > 0 {
+			if idx > 0 { // aggregator will put value at index 0; place once
 				continue
 			}
-			uc := dst.New(pc.Attr)
-			// convert to StringID, then add into node
-			v, _ := getValue(pc.values[0])
-			typ, err := schema.TypeOf(pc.Attr)
-			sv := types.ValueForType(types.StringID)
-			if err == nil {
-				sv, err = types.Convert(v, typ)
+			// add sg.Attr as child on 'parent' instead of 'dst', otherwise
+			// within output, aggregator will messed with other attrs
+			outc := parent.New(sg.Attr)
+			{
+				uc := outc.New(pc.Attr)
+				// convert to attr's type
+				sv, err := tryBestEffortConvert(pc.values[0], pc.Attr)
+				if err != nil && err != ErrEmptyVal {
+					return err
+				}
+				uc.AddValue(pc.Params.Agrtr, sv)
+				outc.AddChild(pc.Attr, uc)
 			}
-			uc.AddValue(pc.Params.Agrtr, sv)
-			dst.AddChild(pc.Attr, uc)
-			//fmt.Printf("------ [min] attr %#v\n", pc.Attr)
+			parent.AddChild(sg.Attr, outc)
 		} else if len(ul.Uids) > 0 || len(pc.Children) > 0 {
 			// We create as many predicate entity children as the length of uids for
 			// this predicate.
@@ -266,7 +269,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 				// if pc.Params.GetUID || pc.Params.isDebug {
 				//	dst.SetUID(uid)
 				// }
-				if rerr := pc.preTraverse(childUID, uc); rerr != nil {
+				if rerr := pc.preTraverse(childUID, uc, dst); rerr != nil {
 					if rerr.Error() == "_INV_" {
 						invalidUids[childUID] = true
 						continue // next UID.
@@ -298,7 +301,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 			} else {
 				// globalType is the best effort type to which we try converting
 				// and if not possible, we ignore it in the result.
-				globalType, hasType := schema.TypeOf(pc.Attr)
+				/*globalType, hasType := schema.TypeOf(pc.Attr)
 				sv := types.ValueForType(types.StringID)
 				if hasType == nil {
 					// Try to coerce types if this is an optional scalar outside an
@@ -318,6 +321,12 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 				}
 				if bytes.Equal(tv.Val, nil) {
 					continue
+				}*/
+				sv, conv_err := tryBestEffortConvert(tv, pc.Attr)
+				if conv_err == ErrEmptyVal {
+					continue
+				} else if conv_err != nil {
+					return conv_err
 				}
 				// Only strings can have empty values.
 				if sv.Tid == types.StringID && sv.Value.(string) == "_nil_" {
@@ -331,40 +340,31 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 	return nil
 }
 
-/*func addChild(tv *task.Val, attr string, dst outputnode) error {
-	// convert to StringID, then add into node
+// convert from task.Val to types.Value which is determined by attr
+// if convert failed, try convert to types.StringID 
+func tryBestEffortConvert(tv *task.Value, attr string) (types.Val, error) {
 	v, _ := getValue(tv)
 	typ, err := schema.TypeOf(attr)
+	sv := types.ValueForType(types.StringID)
 	if err == nil {
 		// Try to coerce types if this is an optional scalar outside an
 		// object definition.
 		if !typ.IsScalar() {
-			return x.Errorf("Leaf predicate:'%v' must be a scalar.", attr)
+			return sv, x.Errorf("Leaf predicate:'%v' must be a scalar.", attr)
 		}
-		sv := types.ValueForType(types.StringID)
-		if err == nil {
-			sv, err = types.Convert(v, typ)
+		sv, err = types.Convert(v, typ)
+		if bytes.Equal(tv.Val, nil) || err != nil {
+			return sv, ErrEmptyVal
 		}
+	} else {
+		sv, err = types.Convert(v, types.StringID)
+		x.Check(err)
 	}
-
-	// Try to coerce types if this is an optional scalar outside an
-	// object definition.
-	if !globalType.IsScalar() {
-		return x.Errorf("Leaf predicate:'%v' must be a scalar.", pc.Attr)
+	if bytes.Equal(tv.Val, nil) {
+		return sv, ErrEmptyVal
 	}
-	gtID := globalType
-	// Convert to schema type.
-	sv, err = types.Convert(v, gtID)
-	if bytes.Equal(tv.Val, nil) || err != nil {
-		continue
-	}
-		
-
-	chuc := uc.New(child.Attr)
-	chuc.AddValue(child.Agrtr, sv)
-	uc.AddChild(child.Attr, chuc)
-	return nil
-}*/
+	return sv, nil
+}
 
 func createProperty(prop string, v types.Val) *graph.Property {
 	pval := toProtoValue(v)
@@ -408,20 +408,13 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 			sg.Params.GetUID = true
 		}
 
-		//fmt.Printf("gchild is %#v\n", gchild)
 		args := params{
 			Alias:   gchild.Alias,
 			isDebug: sg.Params.isDebug,
 			Var:     gchild.Var,
 		}
 		args.NeedsVar = append(args.NeedsVar, gchild.NeedsVar...)
-		/*if gchild.IsCount {
-			if len(gchild.Children) != 0 {
-				return errors.New("Node with count cannot have child attributes")
-			}
-			args.DoCount = true
-		}*/
-		
+
 		dst := &SubGraph{
 			Attr:   gchild.Attr,
 			Params: args,
@@ -430,7 +423,16 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 			f := gchild.Func.Name
 			if gchild.Func.IsAgrtr() {
 				if len(gchild.Children) != 0 {
-					note := fmt.Sprintf("Node with aggregator %s cant have child attr", f)
+					note := fmt.Sprintf("Node with aggregator %q cant have child attr", f)
+					return errors.New(note)
+				}
+				// embedded filter will cause ambiguous output like following,
+				// director.film @filter(gt(initial_release_date, "2016")) {
+				//    min(initial_release_date @filter(gt(initial_release_date, "1986"))
+				// }
+				if f != "count" && gchild.Filter != nil {
+					note := fmt.Sprintf("Node with aggregator %q cant have filter,", f) +
+						" please place the filter on the upper level"
 					return errors.New(note)
 				}
 			}
