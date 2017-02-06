@@ -161,13 +161,23 @@ function parseJSON(response) {
   return response.json()
 }
 
+function timeout(ms, promise) {
+  return new Promise(function(resolve, reject) {
+    setTimeout(function() {
+      reject(new Error("timeout"))
+    }, ms)
+    promise.then(resolve, reject)
+  })
+}
+
 var Home = React.createClass({
   getInitialState: function() {
     return {
       query: '',
       response: '',
       latency: '',
-      rendering: ''
+      rendering: '',
+      resType: ''
     }
   },
   queryChange: function(newValue) {
@@ -183,11 +193,13 @@ var Home = React.createClass({
     network && network.destroy();
     this.setState({
       rendering: '',
-      latency: ''
+      latency: '',
+      resType: 'hourglass',
+      response: ''
     })
 
     var that = this;
-    fetch('http://localhost:8082/query?debug=true', {
+    timeout(60000, fetch('http://localhost:8080/query?debug=true', {
         method: 'POST',
         mode: 'cors',
         headers: {
@@ -235,17 +247,17 @@ var Home = React.createClass({
             response: "Your query did not return any results."
           })
         }
-      }).catch(function(error) {
-        return error.response.text()
-      }).then(function(errorMsg) {
-        if (errorMsg != undefined) {
-          console.error("Error from server", errorMsg)
-          that.setState({
-            response: errorMsg,
-            resType: 'error-res'
-          })
-        }
-      })
+      })).catch(function(error) {
+      var err = error.response && error.response.text() || error.message
+      return err
+    }).then(function(errorMsg) {
+      if (errorMsg != undefined) {
+        that.setState({
+          response: errorMsg,
+          resType: 'error-res'
+        })
+      }
+    })
   },
   render: function() {
     return (
@@ -281,7 +293,6 @@ var Home = React.createClass({
             mac: 'Command-Enter'
           },
           exec: function(editor) {
-            console.log("here",this)
             this.runQuery(new Event(''));
           }.bind(this)
         }]}
