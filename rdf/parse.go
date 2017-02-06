@@ -292,14 +292,12 @@ func Parse(line string) (rnq graph.NQuad, rerr error) {
 			facetKey = strings.Trim(item.Val, " ")
 		case itemFacetVal:
 			facetVal = strings.Trim(item.Val, " ")
-		case itemFacetValType:
-			typ := strings.Trim(item.Val, " ")
-			if t, ok := facetsTypeMap[typ]; ok {
-				rnq.Facets = append(rnq.Facets, &facets.Facet{facetKey,
-					[]byte(facetVal), facets.TypeIDToValType(t)})
-			} else {
-				return rnq, x.Errorf("Invalid type for facet : [%s]", typ)
+			typ := facets.ValStrToTypeID(facetVal)
+			if typ == facets.StringID {
+				facetVal = strings.Trim(item.Val, "\"")
 			}
+			rnq.Facets = append(rnq.Facets, &facets.Facet{facetKey,
+				[]byte(facetVal), facets.TypeIDToValType(typ)})
 		}
 	}
 

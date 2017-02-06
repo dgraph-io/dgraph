@@ -499,7 +499,7 @@ var testNQuads = []struct {
 	},
 	// Edge Facets test.
 	{
-		input: `_:alice <knows> "stuff" _:label (key1="val1",key2="13"^^<xs:int>) .`,
+		input: `_:alice <knows> "stuff" _:label (key1="val1",key2=13) .`,
 		nq: graph.NQuad{
 			Subject:     "_:alice",
 			Predicate:   "knows",
@@ -516,7 +516,7 @@ var testNQuads = []struct {
 		expectedErr: false,
 	},
 	{
-		input: `_:alice <knows> "stuff" _:label (key1=,key2="13"^^<xs:int>) .`,
+		input: `_:alice <knows> "stuff" _:label (key1=,key2=13) .`,
 		nq: graph.NQuad{
 			Subject:     "_:alice",
 			Predicate:   "knows",
@@ -532,26 +532,9 @@ var testNQuads = []struct {
 		},
 		expectedErr: false,
 	},
-	{
-		input: `_:alice <knows> "stuff" _:label (key1=,key2="13") .`,
-		nq: graph.NQuad{
-			Subject:     "_:alice",
-			Predicate:   "knows",
-			ObjectId:    "",
-			ObjectValue: &graph.Value{&graph.Value_StrVal{"stuff"}},
-			Label:       "_:label",
-			ObjectType:  0,
-			Facets: []*facets.Facet{
-				&facets.Facet{"key1", []byte(""),
-					facets.TypeIDToValType(facets.StringID)},
-				&facets.Facet{"key2", []byte("13"),
-					facets.TypeIDToValType(facets.StringID)}},
-		},
-		expectedErr: false,
-	},
 	// Should parse facets even if there is no label
 	{
-		input: `_:alice <knows> "stuff" (key1=,key2="13"^^<xs:int>) .`,
+		input: `_:alice <knows> "stuff" (key1=,key2=13) .`,
 		nq: graph.NQuad{
 			Subject:     "_:alice",
 			Predicate:   "knows",
@@ -581,7 +564,7 @@ var testNQuads = []struct {
 	},
 	// Should not fail parsing with unnecessary spaces
 	{
-		input: `_:alice <knows> "stuff" ( key1 = "12"^^<xs:int> , key2="value2"^^<xs:string>, key3=, key4 ="val4" ) .`,
+		input: `_:alice <knows> "stuff" ( key1 = 12 , key2="value2", key3=, key4 ="val4" ) .`,
 		nq: graph.NQuad{
 			Subject:     "_:alice",
 			Predicate:   "knows",
@@ -604,20 +587,8 @@ var testNQuads = []struct {
 
 	// failing tests for facets
 	{
-		input:       `_:alice <knows> "stuff" (key1="val1,key2="13"^^<xs:int>) .`,
+		input:       `_:alice <knows> "stuff" (key1="val1,key2="13") .`,
 		expectedErr: true, // should fail because of unclosed " in key1
-	},
-	{
-		input:       `_:alice <knows> "stuff" (key1="val1",key2="13"^<xs:int>) .`,
-		expectedErr: true, // should fail because of single ^ . Should be ^^
-	},
-	{
-		input:       `_:alice <knows> "stuff" (key1="val1",key2="13"^^<xs:unknown-type>) .`,
-		expectedErr: true, // should fail because of unknown-type given.
-	},
-	{
-		input:       `_:alice <knows> "stuff" (key1="val1",key2="13"^^<xs:int) .`,
-		expectedErr: true, // unclosed type : missing '>'
 	},
 }
 

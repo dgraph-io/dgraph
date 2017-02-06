@@ -16,6 +16,10 @@
 
 package facets
 
+import (
+	"strconv"
+)
+
 const (
 	Int32ID    = TypeID(Facet_INT32)
 	FloatID    = TypeID(Facet_FLOAT)
@@ -43,4 +47,18 @@ func TypeIDToValType(typId TypeID) Facet_ValType {
 		return Facet_DATE
 	}
 	panic("Unhandled case in TypeIDToValType.")
+}
+
+func ValStrToTypeID(val string) TypeID {
+	if _, err := strconv.ParseBool(val); err == nil {
+		return BoolID
+	}
+	if _, err := strconv.ParseInt(val, 0, 32); err == nil {
+		return Int32ID
+	}
+	if _, err := strconv.ParseFloat(val, 64); err == nil {
+		return FloatID
+	}
+	// handle date and datetime
+	return StringID
 }

@@ -27,19 +27,18 @@ import (
 
 // The constants represent different types of lexed Items possible for an rdf N-Quad.
 const (
-	itemText         lex.ItemType = 5 + iota // plain text
-	itemSubject                              // subject, 6
-	itemPredicate                            // predicate, 7
-	itemObject                               // object, 8
-	itemLabel                                // label, 9
-	itemLiteral                              // literal, 10
-	itemLanguage                             // language, 11
-	itemObjectType                           // object type, 12
-	itemValidEnd                             // end with dot, 13
-	itemComment                              // comment, 14
-	itemFacetKey                             // facet key, 15
-	itemFacetVal                             // facet value, 16
-	itemFacetValType                         // facet value type, 17
+	itemText       lex.ItemType = 5 + iota // plain text
+	itemSubject                            // subject, 6
+	itemPredicate                          // predicate, 7
+	itemObject                             // object, 8
+	itemLabel                              // label, 9
+	itemLiteral                            // literal, 10
+	itemLanguage                           // language, 11
+	itemObjectType                         // object type, 12
+	itemValidEnd                           // end with dot, 13
+	itemComment                            // comment, 14
+	itemFacetKey                           // facet key, 15
+	itemFacetVal                           // facet value, 16
 )
 
 // These constants keep a track of the depth while parsing an rdf N-Quad.
@@ -402,41 +401,28 @@ func lexFacets(l *lex.Lexer) lex.StateFn {
 		r = l.Next()
 		if r == comma || r == rightRound {
 			l.Ignore()
-			l.Emit(itemFacetVal)     // empty itemFacetVal : default value
-			l.Emit(itemFacetValType) // default type.
-		} else if r == quote {
-			l.Ignore() // ignore quote
-			l.AcceptRun(func(r rune) bool {
-				return r != quote
-			})
-			l.Emit(itemFacetVal)
-
-			r = l.Next()
-			if r != quote {
-				return l.Errorf("Expected quote (\") at end of Value. Found %v", r)
-			}
-			l.Ignore() // ignore quote
-
-			// Lex FacetValue Type
-			r = l.Next()
-			if r == caret {
-				l.Backup()
-				if err := lexType(l, itemFacetValType); err != nil {
-					return l.Errorf(err.Error())
+			l.Emit(itemFacetVal) // empty itemFacetVal : default value
+		} else if r == lex.EOF {
+			return l.Errorf("Premature end of Facet pair.")
+		} else {
+			startsWithQuote := r == quote
+			l.AcceptUntil(func(r rune) bool {
+				if startsWithQuote {
+					return r == quote
+				} else {
+					return r == comma || r == rightRound
 				}
+			})
+			if startsWithQuote {
 				r = l.Next()
-			} else {
-				l.Ignore() // take default type.
-				l.Emit(itemFacetValType)
-				// we had to ignore r to give default valtype.
-				// but r is still relevant for next checks of ')' and ','
-				// so do not do r = l.Next()
+				if r != quote {
+					return l.Errorf("Expected quote (\") at end of FacetValue")
+				}
 			}
+			l.Emit(itemFacetVal)
+			l.IgnoreRun(isSpace)
 
-			if isSpace(r) {
-				l.IgnoreRun(isSpace)
-				r = l.Next()
-			}
+			r = l.Next()
 			if r == lex.EOF {
 				return l.Errorf("Premature end of Facet pair.")
 			} else if r == rightRound {
@@ -445,11 +431,8 @@ func lexFacets(l *lex.Lexer) lex.StateFn {
 				return l.Errorf("Expected , found %v in Facet value.", r)
 			}
 			l.Ignore() // ignore comma
-		} else {
-			return l.Errorf("Expected quote (\") in start of Facet value. Found %v", r)
 		}
 	}
-
 }
 
 // lexComment lexes a comment text.
