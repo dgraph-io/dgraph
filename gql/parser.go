@@ -44,7 +44,6 @@ type GraphQuery struct {
 	Args     map[string]string
 	Children []*GraphQuery
 	Filter   *FilterTree
-	Agrtr    *Function
 
 	// Internal fields below.
 	// If gq.fragment is nonempty, then it is a fragment reference / spread.
