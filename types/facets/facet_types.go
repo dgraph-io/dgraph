@@ -18,6 +18,7 @@ package facets
 
 import (
 	"strconv"
+	"time"
 )
 
 const (
@@ -26,7 +27,6 @@ const (
 	BoolID     = TypeID(Facet_BOOL)
 	DateTimeID = TypeID(Facet_DATETIME)
 	StringID   = TypeID(Facet_STRING)
-	DateID     = TypeID(Facet_DATE)
 )
 
 type TypeID Facet_ValType
@@ -43,8 +43,6 @@ func TypeIDToValType(typId TypeID) Facet_ValType {
 		return Facet_DATETIME
 	case StringID:
 		return Facet_STRING
-	case DateID:
-		return Facet_DATE
 	}
 	panic("Unhandled case in TypeIDToValType.")
 }
@@ -59,6 +57,16 @@ func ValStrToTypeID(val string) TypeID {
 	if _, err := strconv.ParseFloat(val, 64); err == nil {
 		return FloatID
 	}
+	if _, err := time.Parse(dateTimeFormat, val); err != nil {
+		if _, err = time.Parse(dateFormatYMD); err == nil {
+			return DateTimeID
+		}
+	} else {
+		return DateTimeID
+	}
 	// handle date and datetime
 	return StringID
 }
+
+const dateFormatYMD = "2006-01-02"
+const dateTimeFormat = "2006-01-02T15:04:05"
