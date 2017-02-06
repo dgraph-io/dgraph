@@ -364,7 +364,8 @@ func lexLabel(l *lex.Lexer) lex.StateFn {
 }
 
 // lexFacets parses key-value pairs of Facets. sample is :
-// ( key1 = "value1"^^<xs:int> , key2="value2"^^<xs:string>, key3=, key4 ="val4" )
+// ( key1 = "value1", key2=13, key3=, key4 =2.4, key5=2006-01-02T15:04:05,
+//   key6=2006-01-02 )
 func lexFacets(l *lex.Lexer) lex.StateFn {
 	r := l.Next()
 	if r != leftRound {

@@ -31,6 +31,7 @@ const (
 
 type TypeID Facet_ValType
 
+// TypeIDToValType gives Facet_ValType for given TypeID
 func TypeIDToValType(typId TypeID) Facet_ValType {
 	switch typId {
 	case Int32ID:
@@ -47,6 +48,7 @@ func TypeIDToValType(typId TypeID) Facet_ValType {
 	panic("Unhandled case in TypeIDToValType.")
 }
 
+// ValStrToTypeID gives Facet's TypeID for given facet value
 func ValStrToTypeID(val string) TypeID {
 	if _, err := strconv.ParseBool(val); err == nil {
 		return BoolID
@@ -64,7 +66,6 @@ func ValStrToTypeID(val string) TypeID {
 	} else {
 		return DateTimeID
 	}
-	// handle date and datetime
 	return StringID
 }
 
