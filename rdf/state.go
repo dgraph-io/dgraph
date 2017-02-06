@@ -403,7 +403,7 @@ func lexFacets(l *lex.Lexer) lex.StateFn {
 			l.Ignore()
 			l.Emit(itemFacetVal) // empty itemFacetVal : default value
 		} else if r == lex.EOF {
-			return l.Errorf("Premature end of Facet pair.")
+			return l.Errorf("Premature end of Facet pair after key.")
 		} else {
 			l.AcceptUntil(func(r rune) bool {
 				return r == comma || r == rightRound
@@ -413,7 +413,7 @@ func lexFacets(l *lex.Lexer) lex.StateFn {
 
 			r = l.Next()
 			if r == lex.EOF {
-				return l.Errorf("Premature end of Facet pair.")
+				return l.Errorf("Premature end of Facet pair after value.")
 			} else if r == rightRound {
 				return lexText
 			} else if r != comma {

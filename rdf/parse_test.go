@@ -606,8 +606,32 @@ var testNQuads = []struct {
 	},
 	// failing tests for facets
 	{
-		input:       `_:alice <knows> "stuff" (key1="val1,key2) .`,
+		input:       `_:alice <knows> "stuff" (key1=val1,key2) .`,
 		expectedErr: true, // should fail because of no '=' after key2
+	},
+	{
+		input:       `_:alice <knows> "stuff" (key1=val1,=) .`,
+		expectedErr: true, // key can not be empty
+	},
+	{
+		input:       `_:alice <knows> "stuff" (key1=val1,=val1) .`,
+		expectedErr: true, // key can not be empty
+	},
+	{
+		input:       `_:alice <knows> "stuff" (key1=val1,key1 val1) .`,
+		expectedErr: true, // '=' should separate key and val
+	},
+	{
+		input:       `_:alice <knows> "stuff" (key1=val1,key1= val1 .`,
+		expectedErr: true, // facets should end by ')'
+	},
+	{
+		input:       `_:alice <knows> "stuff" (key1=val1,key1= .`,
+		expectedErr: true, // facets should end by ')'
+	},
+	{
+		input:       `_:alice <knows> "stuff" (key1=val1,key1=`,
+		expectedErr: true, // facets should end by ')'
 	},
 }
 
