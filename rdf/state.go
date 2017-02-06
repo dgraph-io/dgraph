@@ -405,20 +405,9 @@ func lexFacets(l *lex.Lexer) lex.StateFn {
 		} else if r == lex.EOF {
 			return l.Errorf("Premature end of Facet pair.")
 		} else {
-			startsWithQuote := r == quote
 			l.AcceptUntil(func(r rune) bool {
-				if startsWithQuote {
-					return r == quote
-				} else {
-					return r == comma || r == rightRound
-				}
+				return r == comma || r == rightRound
 			})
-			if startsWithQuote {
-				r = l.Next()
-				if r != quote {
-					return l.Errorf("Expected quote (\") at end of FacetValue")
-				}
-			}
 			l.Emit(itemFacetVal)
 			l.IgnoreRun(isSpace)
 

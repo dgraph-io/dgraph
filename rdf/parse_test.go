@@ -499,7 +499,7 @@ var testNQuads = []struct {
 	},
 	// Edge Facets test.
 	{
-		input: `_:alice <knows> "stuff" _:label (key1="val1",key2=13) .`,
+		input: `_:alice <knows> "stuff" _:label (key1=val1,key2=13) .`,
 		nq: graph.NQuad{
 			Subject:     "_:alice",
 			Predicate:   "knows",
@@ -564,7 +564,7 @@ var testNQuads = []struct {
 	},
 	// Should not fail parsing with unnecessary spaces
 	{
-		input: `_:alice <knows> "stuff" ( key1 = 12 , key2="value2", key3=, key4 ="val4" ) .`,
+		input: `_:alice <knows> "stuff" ( key1 = 12 , key2=value2, key3=, key4 =val4 ) .`,
 		nq: graph.NQuad{
 			Subject:     "_:alice",
 			Predicate:   "knows",
@@ -584,11 +584,30 @@ var testNQuads = []struct {
 		},
 		expectedErr: false,
 	},
-
+	// Should parse all types
+	{
+		input: `_:alice <knows> "stuff" ( key1 = 12 , key2=value2, key3=1.2 ) .`,
+		nq: graph.NQuad{
+			Subject:     "_:alice",
+			Predicate:   "knows",
+			ObjectId:    "",
+			ObjectValue: &graph.Value{&graph.Value_StrVal{"stuff"}},
+			ObjectType:  0,
+			Facets: []*facets.Facet{
+				&facets.Facet{"key1", []byte("12"),
+					facets.TypeIDToValType(facets.Int32ID)},
+				&facets.Facet{"key2", []byte("value2"),
+					facets.TypeIDToValType(facets.StringID)},
+				&facets.Facet{"key3", []byte("1.2"),
+					facets.TypeIDToValType(facets.FloatID)},
+			},
+		},
+		expectedErr: false,
+	},
 	// failing tests for facets
 	{
-		input:       `_:alice <knows> "stuff" (key1="val1,key2="13") .`,
-		expectedErr: true, // should fail because of unclosed " in key1
+		input:       `_:alice <knows> "stuff" (key1="val1,key2) .`,
+		expectedErr: true, // should fail because of no '=' after key2
 	},
 }
 
