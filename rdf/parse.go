@@ -346,23 +346,3 @@ var typeMap = map[string]types.TypeID{
 	"http://www.w3.org/2001/XMLSchema#gYear":      types.DateID,
 	"http://www.w3.org/2001/XMLSchema#gYearMonth": types.DateID,
 }
-
-var facetsTypeMap = map[string]facets.TypeID{
-	"":            facets.StringID,
-	"xs:string":   facets.StringID,
-	"xs:dateTime": facets.DateTimeID,
-	"xs:date":     facets.DateID,
-	"xs:int":      facets.Int32ID,
-	"xs:boolean":  facets.BoolID,
-	"xs:double":   facets.FloatID,
-	"xs:float":    facets.FloatID,
-	"http://www.w3.org/2001/XMLSchema#string":     facets.StringID,
-	"http://www.w3.org/2001/XMLSchema#dateTime":   facets.DateTimeID,
-	"http://www.w3.org/2001/XMLSchema#date":       facets.DateID,
-	"http://www.w3.org/2001/XMLSchema#int":        facets.Int32ID,
-	"http://www.w3.org/2001/XMLSchema#boolean":    facets.BoolID,
-	"http://www.w3.org/2001/XMLSchema#double":     facets.FloatID,
-	"http://www.w3.org/2001/XMLSchema#float":      facets.FloatID,
-	"http://www.w3.org/2001/XMLSchema#gYear":      facets.DateID,
-	"http://www.w3.org/2001/XMLSchema#gYearMonth": facets.DateID,
-}

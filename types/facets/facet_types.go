@@ -58,7 +58,7 @@ func ValStrToTypeID(val string) TypeID {
 		return FloatID
 	}
 	if _, err := time.Parse(dateTimeFormat, val); err != nil {
-		if _, err = time.Parse(dateFormatYMD); err == nil {
+		if _, err = time.Parse(dateFormatYMD, val); err == nil {
 			return DateTimeID
 		}
 	} else {

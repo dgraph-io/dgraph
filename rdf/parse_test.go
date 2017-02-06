@@ -586,7 +586,7 @@ var testNQuads = []struct {
 	},
 	// Should parse all types
 	{
-		input: `_:alice <knows> "stuff" ( key1 = 12 , key2=value2, key3=1.2 ) .`,
+		input: `_:alice <knows> "stuff" ( key1 = 12 , key2=value2, key3=1.2, key4=2006-01-02T15:04:05 ) .`,
 		nq: graph.NQuad{
 			Subject:     "_:alice",
 			Predicate:   "knows",
@@ -600,6 +600,8 @@ var testNQuads = []struct {
 					facets.TypeIDToValType(facets.StringID)},
 				&facets.Facet{"key3", []byte("1.2"),
 					facets.TypeIDToValType(facets.FloatID)},
+				&facets.Facet{"key4", []byte("2006-01-02T15:04:05"),
+					facets.TypeIDToValType(facets.DateTimeID)},
 			},
 		},
 		expectedErr: false,
