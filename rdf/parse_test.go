@@ -608,7 +608,7 @@ var testNQuads = []struct {
 	},
 	// Should parse dates
 	{
-		input: `_:alice <knows> "stuff" (key1=2006-01-02T15:04:05, key2=2006-01-02) .`,
+		input: `_:alice <knows> "stuff" (key1=2002-10-02T15:00:00.05Z, key2=2006-01-02T15:04:05, key3=2006-01-02) .`,
 		nq: graph.NQuad{
 			Subject:     "_:alice",
 			Predicate:   "knows",
@@ -616,9 +616,11 @@ var testNQuads = []struct {
 			ObjectValue: &graph.Value{&graph.Value_StrVal{"stuff"}},
 			ObjectType:  0,
 			Facets: []*facets.Facet{
-				&facets.Facet{"key1", []byte("2006-01-02T15:04:05"),
+				&facets.Facet{"key1", []byte("2002-10-02T15:00:00.05Z"),
 					facets.TypeIDToValType(facets.DateTimeID)},
-				&facets.Facet{"key2", []byte("2006-01-02"),
+				&facets.Facet{"key2", []byte("2006-01-02T15:04:05"),
+					facets.TypeIDToValType(facets.DateTimeID)},
+				&facets.Facet{"key3", []byte("2006-01-02"),
 					facets.TypeIDToValType(facets.DateTimeID)},
 			},
 		},

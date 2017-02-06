@@ -59,8 +59,13 @@ func ValStrToValType(val string) Facet_ValType {
 	if _, err := strconv.ParseFloat(val, 64); err == nil {
 		return Facet_FLOAT
 	}
-	if _, err := time.Parse(dateTimeFormat, val); err != nil {
-		if _, err = time.Parse(dateFormatYMD, val); err == nil {
+	var t time.Time
+	if err := t.UnmarshalText([]byte(val)); err != nil {
+		if _, err := time.Parse(dateTimeFormat, val); err != nil {
+			if _, err = time.Parse(dateFormatYMD, val); err == nil {
+				return Facet_DATETIME
+			}
+		} else {
 			return Facet_DATETIME
 		}
 	} else {
