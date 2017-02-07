@@ -40,7 +40,7 @@ func (h *priorityQueue) Pop() interface{} {
 	return x
 }
 
-func execNextLevel(ctx context.Context, start *SubGraph, next chan struct{}, res chan uint64, rch chan error) {
+func execNextLevel(ctx context.Context, start *SubGraph, next chan bool, res chan uint64, rch chan error) {
 	var exec []*SubGraph
 	var err error
 	start.SrcUIDs = &task.List{[]uint64{start.Params.From}}
@@ -53,7 +53,10 @@ func execNextLevel(ctx context.Context, start *SubGraph, next chan struct{}, res
 	}
 	dummy := &SubGraph{}
 	for {
-		<-next
+		over := <-next
+		if over {
+			return
+		}
 		rrch := make(chan error, len(exec))
 		for _, sg := range exec {
 			go ProcessGraph(ctx, sg, dummy, rrch)
@@ -117,8 +120,8 @@ func ShortestPath(ctx context.Context, sg *SubGraph, rch chan error) {
 	var finalCost float64
 	numHops := -1
 
-	next := make(chan struct{})
-	rch1 := make(chan error)
+	next := make(chan bool, 2)
+	rch1 := make(chan error, 2)
 	res := make(chan uint64, 1000)
 	go execNextLevel(ctx, sg, next, res, rch1)
 
@@ -132,7 +135,7 @@ func ShortestPath(ctx context.Context, sg *SubGraph, rch chan error) {
 		if item.hop > numHops {
 			// Explore the next level by calling processGraph and add them
 			// to the queue.
-			next <- struct{}{}
+			next <- false
 
 			select {
 			case err = <-rch1:
@@ -170,6 +173,7 @@ func ShortestPath(ctx context.Context, sg *SubGraph, rch chan error) {
 	}
 
 	sg.DestUIDs = result
+	next <- true
 	rch <- nil
 }
 
