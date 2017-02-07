@@ -66,8 +66,6 @@ var (
 	port       = flag.Int("port", 8080, "Port to run server on.")
 	bindall    = flag.Bool("bindall", false,
 		"Use 0.0.0.0 instead of localhost to bind to all addresses on local machine.")
-	numcpu = flag.Int("cores", runtime.NumCPU(),
-		"Number of cores to be used by the process")
 	nomutations  = flag.Bool("nomutations", false, "Don't allow mutations on this server.")
 	tracing      = flag.Float64("trace", 0.0, "The ratio of queries to trace.")
 	schemaFile   = flag.String("schema", "", "Path to schema file")
@@ -680,16 +678,12 @@ func (s *grpcServer) Run(ctx context.Context,
 }
 
 func checkFlagsAndInitDirs() {
-	numCpus := *numcpu
 	if len(*cpuprofile) > 0 {
 		f, err := os.Create(*cpuprofile)
 		x.Check(err)
 		pprof.StartCPUProfile(f)
 	}
 
-	prev := runtime.GOMAXPROCS(numCpus)
-	log.Printf("num_cpu: %v. prev_maxprocs: %v. Set max procs to num cpus",
-		numCpus, prev)
 	// Create parent directories for postings, uids and mutations
 	x.Check(os.MkdirAll(*postingDir, 0700))
 }
