@@ -9,12 +9,29 @@ var styles = {
     marginTop: '10px',
     width: '100%',
     height: '500px',
-    border: '1px solid gray'
+    border: '1px solid gray',
+    position: 'relative'
   },
   statistics: {
     padding: '5px',
     marginTop: '10px',
     marginBottom: '100px',
+  },
+  properties: {
+    display: 'flex',
+    justifyContent: 'center',
+    alignContent: 'center',
+    flexDirection: 'column',
+    marginTop: '10px',
+    height: '50px',
+    border: '1px solid gray',
+    padding: '5px',
+    overflow: 'hidden'
+  },
+  fullscreen: {
+    position: 'absolute',
+    top: '10px',
+    right: '10px'
   }
 }
 
