@@ -304,6 +304,7 @@ var Home = React.createClass({
   getInitialState: function() {
     return {
       query: '',
+      lastQuery: '',
       response: '',
       latency: '',
       rendering: '',
@@ -321,10 +322,16 @@ var Home = React.createClass({
   runQuery: function(e) {
     e.preventDefault();
 
+    if (this.query === this.state.lastQuery) {
+      return;
+    }
     // Resetting state
     predLabel = {}, edgeLabels = {}, uidMap = {}, nodes = [], edges = [];
     network && network.destroy();
-    this.setState(Object.assign(this.getInitialState(), { resType: 'hourglass' }));
+    this.setState(Object.assign(this.getInitialState(), {
+      resType: 'hourglass',
+      lastQuery: this.query
+    }));
 
     var that = this;
     timeout(60000, fetch('http://localhost:8080/query?debug=true', {
