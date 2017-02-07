@@ -2,25 +2,16 @@
 package worker
 
 import (
-	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
 
 
-func CouldApplyAgrtrOn(agrtr, attr string) bool {
+func CouldApplyAgrtrOn(agrtr string, typ types.TypeID) bool {
 	if agrtr == "count" {
 		return true
 	}
-	typ, err := schema.TypeOf(attr)
-	if err != nil {
-		return false
-	}
-	return couldApplyAgrtrOn(agrtr, typ)
-}
-
-func couldApplyAgrtrOn(agrtr string, typ types.TypeID) bool {
 	if !typ.IsScalar() {
 		return false
 	}
@@ -58,7 +49,7 @@ func convertTo(from *task.Value, typ types.TypeID) (types.Val, error) {
 }
 
 func Aggregate(agrtr string, values []*task.Value, typ types.TypeID) (*task.Value, error) {
-	if !couldApplyAgrtrOn(agrtr, typ) {
+	if !CouldApplyAgrtrOn(agrtr, typ) {
 		return nil, x.Errorf("Cant apply aggregator %v on type %d\n", agrtr, typ)
 	}
 	
