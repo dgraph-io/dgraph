@@ -3,8 +3,8 @@ package query
 import (
 	"container/heap"
 	"context"
-	"fmt"
 
+	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -54,10 +54,8 @@ func execNextLevel(ctx context.Context, start *SubGraph, next chan struct{}, res
 	dummy := &SubGraph{}
 	for {
 		<-next
-		fmt.Println("***")
 		rrch := make(chan error, len(exec))
 		for _, sg := range exec {
-			fmt.Println(sg.Attr)
 			go ProcessGraph(ctx, sg, dummy, rrch)
 		}
 
@@ -91,7 +89,8 @@ func execNextLevel(ctx context.Context, start *SubGraph, next chan struct{}, res
 			for _, child := range start.Children {
 				temp := new(SubGraph)
 				*temp = *child
-				*temp.SrcUIDs = *sg.DestUIDs
+				temp.Children = []*SubGraph{}
+				temp.SrcUIDs = sg.DestUIDs
 				sg.Children = append(sg.Children, temp)
 				out = append(out, temp)
 			}
@@ -123,9 +122,9 @@ func ShortestPath(ctx context.Context, sg *SubGraph, rch chan error) {
 	res := make(chan uint64, 1000)
 	go execNextLevel(ctx, sg, next, res, rch1)
 
-	for pq.Len() > 0 {
+	// For now, lets allow a maximum of 10 hops.
+	for pq.Len() > 0 && numHops < 10 {
 		item := heap.Pop(&pq).(*Item)
-		fmt.Println("Top queue: ", item.uid, item.hop, numHops)
 		if item.uid == sg.Params.To {
 			finalCost = item.cost
 			break
@@ -152,30 +151,47 @@ func ShortestPath(ctx context.Context, sg *SubGraph, rch chan error) {
 				if it == 0 {
 					break
 				}
-				fmt.Println(it, "###")
 				node := &Item{it, item.cost + 1, item.hop + 1, 0}
 				heap.Push(&pq, node)
 			}
 			numHops++
 		}
-
-		fmt.Println(item.uid, item.cost)
 	}
 
 	// Go through the execution tree to find the path.
-	result := postTraverse(sg, finalCost)
-	fmt.Println(result.Uids)
+	result := new(task.List)
+	isPathFound := getPath(sg, sg.Params.From, sg.Params.To, result, 0, finalCost)
+	if isPathFound {
+		result.Uids = append(result.Uids, sg.Params.From)
+		l := len(result.Uids)
+		for i := 0; i < l/2; i++ {
+			result.Uids[i], result.Uids[l-i-1] = result.Uids[l-i-1], result.Uids[i]
+		}
+	}
+
 	sg.DestUIDs = result
 	rch <- nil
 }
 
-func postTraverse(sg *SubGraph, cost float64) *task.List {
-	from := sg.Params.From
-	to := sg.Params.To
+func getPath(sg *SubGraph, uid, to uint64, path *task.List, cost, finalCost float64) bool {
+	if uid == to && cost == finalCost {
+		return true
+	}
 
-	res := new(task.List)
-	res.Uids = append(res.Uids, from)
-	res.Uids = append(res.Uids, to)
+	for _, pc := range sg.Children {
+		idx := algo.IndexOf(pc.SrcUIDs, uid)
+		if idx < 0 {
+			continue
+		}
+		ul := pc.uidMatrix[idx]
 
-	return res
+		for _, childUID := range ul.Uids {
+			if getPath(pc, childUID, to, path, cost+1, finalCost) {
+				path.Uids = append(path.Uids, childUID)
+				return true
+			}
+		}
+	}
+
+	return false
 }
