@@ -142,6 +142,11 @@ func populateGraph(t *testing.T) {
 	addEdgeToUID(t, "friend", 31, 24)
 	addEdgeToUID(t, "friend", 23, 1)
 
+	addEdgeToUID(t, "path", 1, 31)
+	addEdgeToUID(t, "path", 1, 24)
+	addEdgeToUID(t, "path", 31, 1000)
+	addEdgeToValue(t, "name", 1000, "Alice")
+
 	// Now let's add a few properties for the main user.
 	addEdgeToValue(t, "name", 1, "Michonne")
 	addEdgeToValue(t, "gender", 1, "female")
