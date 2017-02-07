@@ -110,7 +110,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 		case isAgrtr:
 			// confirm agrregator could apply on the attributes
 			typ, err := schema.TypeOf(attr)
-			if err != nil {
+			if err != nil && f != "count" {
 				return nil, x.Errorf("Attribute %q is not scalar-type", attr)
 			}
 			if !CouldApplyAgrtrOn(f, typ) {
