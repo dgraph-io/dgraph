@@ -5,12 +5,12 @@ var HTMLWebpackPluginConfig = new HtmlWebpackPlugin({
   inject: 'body'
 });
 var path = require('path');
-var webpack = require('webpack');
+var CopyWebpackPlugin = require('copy-webpack-plugin');
 
 module.exports = {
   entry: [
     'whatwg-fetch',
-    './app/index.js'
+    './index.js'
   ],
   output: {
     path: __dirname + '/dist',
@@ -21,7 +21,17 @@ module.exports = {
       { test: /\.js$/, exclude: /node_modules/, loader: "babel-loader" }
     ]
   },
+  context: path.join(__dirname, 'app'),
+  devServer: {
+    // This is required for older versions of webpack-dev-server
+    // if you use absolute 'to' paths. The path should be an
+    // absolute path to your build destination.
+    outputPath: path.join(__dirname, 'dist')
+  },
   plugins: [
-    HTMLWebpackPluginConfig
+    HTMLWebpackPluginConfig,
+    new CopyWebpackPlugin([
+      { from: 'assets', to: 'assets' }
+    ])
   ]
 };
