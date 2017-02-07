@@ -144,7 +144,6 @@ type SubGraph struct {
 
 	FilterOp string
 	Filters  []*SubGraph
-	//Agrtr    string
 	Children []*SubGraph
 
 	// destUIDs is a list of destination UIDs, after applying filters, pagination.
@@ -247,7 +246,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 			{
 				uc := outc.New(pc.Attr)
 				// convert to attr's type
-				sv, err := tryBestEffortConvert(pc.values[0], pc.Attr)
+				sv, err := convertWithBestEffort(pc.values[0], pc.Attr)
 				if err != nil && err != ErrEmptyVal {
 					return err
 				}
@@ -322,11 +321,11 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 				if bytes.Equal(tv.Val, nil) {
 					continue
 				}*/
-				sv, conv_err := tryBestEffortConvert(tv, pc.Attr)
-				if conv_err == ErrEmptyVal {
+				sv, convErr := convertWithBestEffort(tv, pc.Attr)
+				if convErr == ErrEmptyVal {
 					continue
-				} else if conv_err != nil {
-					return conv_err
+				} else if convErr != nil {
+					return convErr
 				}
 				// Only strings can have empty values.
 				if sv.Tid == types.StringID && sv.Value.(string) == "_nil_" {
@@ -342,7 +341,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 
 // convert from task.Val to types.Value which is determined by attr
 // if convert failed, try convert to types.StringID 
-func tryBestEffortConvert(tv *task.Value, attr string) (types.Val, error) {
+func convertWithBestEffort(tv *task.Value, attr string) (types.Val, error) {
 	v, _ := getValue(tv)
 	typ, err := schema.TypeOf(attr)
 	sv := types.ValueForType(types.StringID)

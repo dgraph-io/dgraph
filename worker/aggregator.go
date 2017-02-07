@@ -48,56 +48,77 @@ func getValue(tv *task.Value) (types.Val, error) {
 	return val, nil
 }
 
-func Aggregate(agrtr string, lh, rh *task.Value, typ types.TypeID) (*task.Value, error) {
-	if len(lh.Val) == 0 {
-		return rh, nil
-	} else if len(rh.Val) == 0 {
-		return lh, nil
+func convertTo(from *task.Value, typ types.TypeID) (types.Val, error) {
+	vh, _ := getValue(from)
+	va, err := types.Convert(vh, typ)
+	if err != nil {
+		return vh, x.Errorf("Fail to convert from task.Value to types.Val")
 	}
+	return va, err
+}
+
+func Aggregate(agrtr string, values []*task.Value, typ types.TypeID) (*task.Value, error) {
 	if !couldApplyAgrtrOn(agrtr, typ) {
-		return lh, x.Errorf("Cant apply aggregator %v on type %d\n", agrtr, typ)
+		return nil, x.Errorf("Cant apply aggregator %v on type %d\n", agrtr, typ)
 	}
-	lvh, _ := getValue(lh)
-	va, erra := types.Convert(lvh, typ)
-	if erra != nil {
-		return lh, x.Errorf("Fail to convert from task.Value to types.Val")
-	}
-	rvh, _ := getValue(rh)
-	vb, errb := types.Convert(rvh, typ)
-	if errb != nil {
-		return lh, x.Errorf("Fail to convert from task.Value to types.Val")
-	}
-	switch agrtr {
-	case "min":
-		if types.Less(va, vb) {
-			return lh, nil
-		} else {
-			return rh, nil
+	
+	accumulate := func(va, vb types.Val) (types.Val) {
+		switch agrtr {
+		case "min":
+			if types.Less(va, vb) {
+				return va
+			} else {
+				return vb
+			}
+		case "max":
+			if types.Less(va, vb) {
+				return vb
+			} else {
+				return va
+			}
+		case "sum":
+			if typ == types.Int32ID {
+				va.Value = va.Value.(int32) + vb.Value.(int32)
+			} else if typ == types.FloatID {
+				va.Value = va.Value.(float64) + vb.Value.(float64)
+			}
+			return va
+		default:
+			return va
 		}
-	case "max":
-		if types.Less(va, vb) {
-			return rh, nil
-		} else {
-			return lh, nil
+	}
+	
+	var lva, rva types.Val
+	var err error
+	result := &task.Value{ValType: int32(typ), Val:x.Nilbyte}
+	for _, iter := range values {
+		if len(iter.Val) == 0 {
+			continue
+		} else if len(result.Val) == 0 {
+			result = iter
+			if lva, err = convertTo(iter, typ); err != nil {
+				return result, err
+			}
+			continue
 		}
-	case "sum":
+		if rva, err = convertTo(iter, typ); err != nil {
+			return result, err
+		}
+		va := accumulate(lva, rva)
+		if lva != va {
+			result = iter
+			lva = va
+		}
+	}
+	
+	if agrtr == "sum" && len(result.Val) > 0 {
 		data := types.ValueForType(types.BinaryID)
-		var err error
-		if typ == types.Int32ID {
-			num := va.Value.(int32) + vb.Value.(int32)
-			intV := types.Val{types.Int32ID, num}
-			err = types.Marshal(intV, &data)
-		} else if typ == types.FloatID {
-			num := va.Value.(float64) + vb.Value.(float64)
-			floatV := types.Val{types.FloatID, num}
-			err = types.Marshal(floatV, &data)
-		}
+		err = types.Marshal(lva, &data)
 		if err != nil {
-			return lh, x.Errorf("Failed aggregator(sum) during Marshal")
+			return nil, x.Errorf("Failed aggregator(sum) during Marshal")
 		}
-		lh.Val = data.Value.([]byte)
-		return lh, nil
-	default:
-		return lh, x.Errorf("Invalid Aggregator provided")
+		result.Val = data.Value.([]byte)
 	}
+
+	return result, nil
 }

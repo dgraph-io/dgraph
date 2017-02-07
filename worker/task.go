@@ -100,9 +100,10 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 	var ineqValue types.Val
 	var ineqValueToken string
 	var isIneq, isAgrtr bool
+	var f string
 
 	if useFunc {
-		f := q.SrcFunc[0]
+		f = q.SrcFunc[0]
 		isIneq = f == "leq" || f == "geq" || f == "lt" || f == "gt" || f == "eq"
 		isAgrtr = f == "count" || f == "min" || f == "max" || f == "sum"
 		switch {
@@ -169,7 +170,6 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 	}
 
 	var out task.Result
-	typ, _ := schema.TypeOf(attr)
 	for i := 0; i < n; i++ {
 		var key []byte
 		if q.Reverse {
@@ -197,7 +197,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 			
 		if !isAgrtr {
 			out.Values = append(out.Values, newValue)
-		} else if q.SrcFunc[0] == "count" {
+		} else if f == "count" {
 			bs := make([]byte, 4)
 			binary.LittleEndian.PutUint32(bs, uint32(pl.Length(0)))
 			out.Values = append(out.Values, &task.Value{[]byte(bs), int32(types.Int32ID)})
@@ -205,11 +205,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 			out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
 			continue
 		} else {
-			if len(out.Values) == 0 {
-				out.Values = append(out.Values, newValue)
-			} else {
-				out.Values[0], _ = Aggregate(q.SrcFunc[0], out.Values[0], newValue, typ)
-			}
+			out.Values = append(out.Values, newValue)
 			out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
 			continue
 		}
@@ -222,6 +218,15 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 			opts.Intersect = &task.List{Uids: q.Uids}
 		}
 		out.UidMatrix = append(out.UidMatrix, pl.Uids(opts))
+	}
+
+	if isAgrtr && f != "count" && len(out.Values) > 0 {
+		var err error
+		typ, _ := schema.TypeOf(attr)
+		out.Values[0], err = Aggregate(f, out.Values, typ)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	if isIneq && len(tokens) > 0 && ineqValueToken == tokens[0] {
