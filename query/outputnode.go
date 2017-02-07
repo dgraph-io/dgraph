@@ -40,7 +40,7 @@ import (
 func ToProtocolBuf(l *Latency, sgl []*SubGraph) ([]*graph.Node, error) {
 	var resNode []*graph.Node
 	for _, sg := range sgl {
-		if sg.Params.Alias == "var" {
+		if sg.Params.Alias == "var" || sg.Params.Alias == "shortest" {
 			continue
 		}
 		node, err := sg.ToProtocolBuffer(l)
@@ -58,7 +58,7 @@ func ToJson(l *Latency, sgl []*SubGraph, w io.Writer) error {
 		Attr: "__",
 	}
 	for _, sg := range sgl {
-		if sg.Params.Alias == "var" {
+		if sg.Params.Alias == "var" || sg.Params.Alias == "shortest" {
 			continue
 		}
 		if sg.Params.isDebug {

@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"strconv"
 	"strings"
@@ -127,6 +128,8 @@ type params struct {
 	NeedsVar   []string
 	ParentVars map[string]*task.List
 	Normalize  bool
+	From       uint64
+	To         uint64
 }
 
 // SubGraph is the way to represent data internally. It contains both the
@@ -427,6 +430,20 @@ func (args *params) fill(gq *gql.GraphQuery) error {
 		}
 		args.AfterUID = uint64(after)
 	}
+	if v, ok := gq.Args["from"]; ok {
+		from, err := strconv.ParseUint(v, 0, 64)
+		if err != nil {
+			return err
+		}
+		args.From = uint64(from)
+	}
+	if v, ok := gq.Args["to"]; ok {
+		to, err := strconv.ParseUint(v, 0, 64)
+		if err != nil {
+			return err
+		}
+		args.To = uint64(to)
+	}
 	if v, ok := gq.Args["first"]; ok {
 		first, err := strconv.ParseInt(v, 0, 32)
 		if err != nil {
@@ -457,7 +474,7 @@ func ToSubGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	// This would set the Result field in SubGraph,
 	// and populate the children for attributes.
-	if len(gq.UID) == 0 && gq.Func == nil && len(gq.NeedsVar) == 0 {
+	if len(gq.UID) == 0 && gq.Func == nil && len(gq.NeedsVar) == 0 && gq.Alias != "shortest" {
 		err := x.Errorf("Invalid query, query internal id is zero and generator is nil")
 		x.TraceError(ctx, err)
 		return nil, err
@@ -563,7 +580,7 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 	loopStart := time.Now()
 	for i := 0; i < len(res.Query); i++ {
 		gq := res.Query[i]
-		if gq == nil || (len(gq.UID) == 0 && gq.Func == nil && len(gq.NeedsVar) == 0) {
+		if gq == nil || (len(gq.UID) == 0 && gq.Func == nil && len(gq.NeedsVar) == 0 && gq.Alias != "shortest") {
 			continue
 		}
 		sg, err := ToSubGraph(ctx, gq)
@@ -619,7 +636,12 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 			hasExecuted[idx] = true
 			idxList = append(idxList, idx)
 			numQueriesDone++
-			go ProcessGraph(ctx, sg, nil, errChan)
+			if sg.Params.Alias == "shortest" {
+				go ShortestPath(ctx, sg, errChan)
+
+			} else {
+				go ProcessGraph(ctx, sg, nil, errChan)
+			}
 			x.Trace(ctx, "Graph processed")
 		}
 
@@ -637,6 +659,7 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 			}
 		}
 
+		fmt.Println("@@@@@@@@@@@@@@@@", sgl[0].DestUIDs)
 		// If the executed subgraph had some variable defined in it, Populate it in the map.
 		for _, idx := range idxList {
 			sg := sgl[idx]
@@ -663,6 +686,10 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 // shouldCascade returns true if the query block is not self depenedent and we should
 // remove the uids from the bottom up if the children are empty.
 func shouldCascade(res gql.Result, idx int) bool {
+	if res.Query[idx].Attr == "shortest" {
+		return false
+	}
+
 	for _, def := range res.QueryVars[idx].Defines {
 		for _, need := range res.QueryVars[idx].Needs {
 			if def == need {
@@ -673,8 +700,12 @@ func shouldCascade(res gql.Result, idx int) bool {
 	return true
 }
 
-// TODO(Ashwin): Benchmark this function. Map implementation might be slow.
+// TODO(Ashwin): Benchmark this function.
 func populateVarMap(sg *SubGraph, doneVars map[string]*task.List, isCascade bool) {
+	out := sg.DestUIDs.Uids[:0]
+	if sg.Params.Alias == "shortest" {
+		goto AssignStep
+	}
 	for _, child := range sg.Children {
 		populateVarMap(child, doneVars, isCascade)
 		if !isCascade {
@@ -687,7 +718,6 @@ func populateVarMap(sg *SubGraph, doneVars map[string]*task.List, isCascade bool
 			algo.IntersectWith(l, child.DestUIDs)
 		}
 	}
-	out := sg.DestUIDs.Uids[:0]
 	if !isCascade {
 		goto AssignStep
 	}
@@ -1004,7 +1034,7 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 // isValidArg checks if arg passed is valid keyword.
 func isValidArg(a string) bool {
 	switch a {
-	case "orderasc", "orderdesc", "first", "offset", "after":
+	case "from", "to", "orderasc", "orderdesc", "first", "offset", "after":
 		return true
 	}
 	return false

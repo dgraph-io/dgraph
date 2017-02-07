@@ -468,6 +468,24 @@ func TestUseVarsFilterVarReuse3(t *testing.T) {
 		js)
 }
 
+func TestShortestPath(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			A as shortest(from:0x01, to:31) {
+				friend 
+			}
+
+			me(var: A) {
+				name
+			}
+		}`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"name":"Michonne"},{"name":"Andrea"}]}`,
+		js)
+}
+
 func TestUseVarsFilterMultiId(t *testing.T) {
 	populateGraph(t)
 	query := `
