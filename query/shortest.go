@@ -86,7 +86,7 @@ func execNextLevel(ctx context.Context, start *SubGraph, next chan bool, res cha
 		}
 
 		res <- 0
-		// modify the parents and exec.
+		// modify the exec and attach child nodes.
 		var out []*SubGraph
 		for _, sg := range exec {
 			for _, child := range start.Children {

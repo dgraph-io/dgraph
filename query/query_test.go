@@ -142,6 +142,15 @@ func populateGraph(t *testing.T) {
 	addEdgeToUID(t, "friend", 31, 24)
 	addEdgeToUID(t, "friend", 23, 1)
 
+	addEdgeToUID(t, "follow", 1, 31)
+	addEdgeToUID(t, "follow", 1, 24)
+	addEdgeToUID(t, "follow", 31, 1001)
+	addEdgeToUID(t, "follow", 1001, 1000)
+	addEdgeToUID(t, "follow", 1002, 1000)
+	addEdgeToUID(t, "follow", 1001, 1002)
+	addEdgeToUID(t, "follow", 1001, 1003)
+	addEdgeToUID(t, "follow", 1003, 1001)
+
 	addEdgeToUID(t, "path", 1, 31)
 	addEdgeToUID(t, "path", 1, 24)
 	addEdgeToUID(t, "path", 31, 1000)
@@ -487,6 +496,7 @@ func TestShortestPath_NoPath(t *testing.T) {
 		{
 			A as shortest(from:0x01, to:101) {
 				path
+				follow
 			}
 
 			me(var: A) {
@@ -550,6 +560,25 @@ func TestShortestPath3(t *testing.T) {
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
 		`{"me":[{"name":"Michonne"},{"name":"Andrea"},{"name":"Alice"},{"name":"Matt"},{"name":"John"}]}`,
+		js)
+}
+
+func TestShortestPath4(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			A as shortest(from:1, to:1003) {
+				path 
+				follow
+			}
+
+			me(var: A) {
+				name
+			}
+		}`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"name":"Michonne"},{"name":"Andrea"},{"name":"Bob"},{"name":"John"}]}`,
 		js)
 }
 
