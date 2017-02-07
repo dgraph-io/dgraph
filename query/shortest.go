@@ -183,6 +183,10 @@ func getPath(sg *SubGraph, uid, to uint64, path *task.List, cost, finalCost floa
 		if idx < 0 {
 			continue
 		}
+		if len(pc.uidMatrix) <= idx {
+			// Its possible that we created a child level but never executed it.
+			return false
+		}
 		ul := pc.uidMatrix[idx]
 
 		for _, childUID := range ul.Uids {
