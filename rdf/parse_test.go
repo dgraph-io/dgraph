@@ -647,7 +647,7 @@ var testNQuads = []struct {
 	},
 	{
 		input:       `_:alice <knows> "stuff" (k=,) .`,
-		expectedErr: false, // comma should be followed by another key-value pair.
+		expectedErr: true, // comma should be followed by another key-value pair.
 	},
 }
 

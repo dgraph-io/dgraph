@@ -59,19 +59,21 @@ func ValStrToValType(val string) Facet_ValType {
 	if _, err := strconv.ParseFloat(val, 64); err == nil {
 		return Facet_FLOAT
 	}
-	var t time.Time
-	if err := t.UnmarshalText([]byte(val)); err != nil {
-		if _, err := time.Parse(dateTimeFormat, val); err != nil {
-			if _, err = time.Parse(dateFormatYMD, val); err == nil {
-				return Facet_DATETIME
-			}
-		} else {
-			return Facet_DATETIME
-		}
-	} else {
+	if _, err := parseTime(val); err == nil {
 		return Facet_DATETIME
 	}
 	return Facet_STRING
+}
+
+func parseTime(val string) (time.Time, error) {
+	var t time.Time
+	if err := t.UnmarshalText([]byte(val)); err == nil {
+		return t, err
+	}
+	if t, err := time.Parse(dateTimeFormat, val); err == nil {
+		return t, err
+	}
+	return time.Parse(dateFormatYMD, val)
 }
 
 const dateFormatYMD = "2006-01-02"
