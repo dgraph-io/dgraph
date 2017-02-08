@@ -46,7 +46,7 @@ type info struct {
 	cost float64
 }
 
-func (start *SubGraph) execNextLevel(ctx context.Context, next chan bool, res chan info, rch chan error) {
+func (start *SubGraph) execNextLevel(ctx context.Context, mp map[uint64]map[uint64]float64, next chan bool, rch chan error) {
 	var exec []*SubGraph
 	var err error
 	start.SrcUIDs = &task.List{[]uint64{start.Params.From}}
@@ -82,19 +82,33 @@ func (start *SubGraph) execNextLevel(ctx context.Context, next chan bool, res ch
 				return
 			}
 		}
-		rch <- nil
 
+		var isNew bool
 		for _, sg := range exec {
 			// Send the destuids in res chan.
 			for idx, fromUID := range sg.SrcUIDs.Uids {
 				ul := sg.uidMatrix[idx].Uids
 				for _, toUid := range ul {
-					res <- info{fromUID, toUid, 1} // Cost is 1 for now.
+					// res <- info{fromUID, toUid, 1} // Cost is 1 for now.
+					if mp[fromUID] == nil {
+						mp[fromUID] = make(map[uint64]float64)
+					}
+					if _, ok := mp[fromUID][toUid]; !ok {
+						isNew = true
+					}
+					mp[fromUID][toUid] = 1.0 // cost is 1 for now.
 				}
 			}
 		}
 
-		res <- info{0, 0, 0}
+		if !isNew {
+			// No progress. So stop this function and notify the listner.
+			rch <- x.Errorf("Stop Expansion")
+			return
+		}
+
+		rch <- nil
+
 		// modify the exec and attach child nodes.
 		var out []*SubGraph
 		for _, sg := range exec {
@@ -104,8 +118,16 @@ func (start *SubGraph) execNextLevel(ctx context.Context, next chan bool, res ch
 			for _, child := range start.Children {
 				temp := new(SubGraph)
 				*temp = *child
+				// Filter out the uids that we have already seen
 				temp.Children = []*SubGraph{}
 				temp.SrcUIDs = sg.DestUIDs
+				/*
+					// Remove those nodes which we have already traversed. Is it right?
+					algo.ApplyFilter(temp.SrcUIDs, func(uid uint64, i int) bool {
+						_, ok := mp[uid]
+						return !ok
+					})
+				*/
 				sg.Children = append(sg.Children, temp)
 				out = append(out, temp)
 			}
@@ -134,22 +156,23 @@ func ShortestPath(ctx context.Context, sg *SubGraph, rch chan error) {
 
 	next := make(chan bool, 2)
 	rch1 := make(chan error, 2)
-	res := make(chan info, 1000)
-	go sg.execNextLevel(ctx, next, res, rch1)
 	mp := make(map[uint64]map[uint64]float64)
+	go sg.execNextLevel(ctx, mp, next, rch1)
 	dist := make(map[uint64]float64) // map to store the min cost to nodes we've seen.
 	dist[srcNode.uid] = 0
+	var stopExpansion bool
 
-	var maxLoopLevel int
 	//TODO(Ashwin): We can maintain another parent map which could avoid the tree traversal
 	// later and let us find the path directly.
 
 	// For now, lets allow a maximum of 10 hops.
 	for pq.Len() > 0 && numHops < 10 {
 		item := heap.Pop(&pq).(*Item)
-		if item.hop > maxLoopLevel {
-			break
-		}
+		/*
+			if item.hop > maxLoopLevel {
+				break
+			}
+		*/
 		if item.uid == sg.Params.To {
 			finalCost = item.cost
 			break
@@ -157,14 +180,20 @@ func ShortestPath(ctx context.Context, sg *SubGraph, rch chan error) {
 		if item.hop > numHops {
 			// Explore the next level by calling processGraph and add them
 			// to the queue.
-			next <- false
+			if !stopExpansion {
+				next <- false
+			}
 
 			select {
 			case err = <-rch1:
 				if err != nil {
-					x.TraceError(ctx, x.Wrapf(err, "Error while processing child task"))
-					rch <- err
-					return
+					if err.Error() == "Stop Expansion" {
+						stopExpansion = true
+					} else {
+						x.TraceError(ctx, x.Wrapf(err, "Error while processing child task"))
+						rch <- err
+						return
+					}
 				}
 			case <-ctx.Done():
 				x.TraceError(ctx, x.Wrapf(ctx.Err(), "Context done before full execution"))
@@ -172,42 +201,14 @@ func ShortestPath(ctx context.Context, sg *SubGraph, rch chan error) {
 				return
 			}
 
-			for it := range res {
-				if it.to == 0 {
-					break
-				}
-
-				if _, ok := dist[it.to]; !ok {
-					// This would be the last level we explore if we dont see any new
-					// node at this level.
-					maxLoopLevel = item.hop + 1
-				}
-				if item.uid == it.from {
-					if d, ok := dist[it.to]; !ok || d > item.cost+it.cost {
-						node := &Item{it.to, item.cost + it.cost, item.hop + 1, 0}
-						heap.Push(&pq, node) // Add a node wit hlesser cost in the queue.
-						dist[it.to] = item.cost + it.cost
-						// Note the removing the same uid with higher cost is expensive. So
-						// we just let it be. It won't affect the result.
-					}
-				} else {
-					//Put it in map.
-					if mp[it.from] == nil {
-						mp[it.from] = make(map[uint64]float64)
-					}
-					mp[it.from][it.to] = it.cost
-				}
-			}
 			numHops++
-		} else {
-			// look at the map that we've already populated..
-			neigh := mp[item.uid]
-			for toUid, cost := range neigh {
-				if d, ok := dist[toUid]; !ok || d > item.cost+cost {
-					node := &Item{toUid, item.cost + cost, item.hop + 1, 0}
-					heap.Push(&pq, node) // Add a node wit hlesser cost in the queue.
-					dist[toUid] = item.cost + cost
-				}
+		}
+		neigh := mp[item.uid]
+		for toUid, cost := range neigh {
+			if d, ok := dist[toUid]; !ok || d > item.cost+cost {
+				node := &Item{toUid, item.cost + cost, item.hop + 1, 0}
+				heap.Push(&pq, node) // Add a node with lesser cost in the queue.
+				dist[toUid] = item.cost + cost
 			}
 		}
 	}
