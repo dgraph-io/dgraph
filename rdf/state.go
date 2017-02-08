@@ -37,8 +37,10 @@ const (
 	itemObjectType                         // object type, 12
 	itemValidEnd                           // end with dot, 13
 	itemComment                            // comment, 14
-	itemFacetKey                           // facet key, 15
-	itemFacetVal                           // facet value, 16
+	itemComma                              // comma, 15
+	itemEqual                              // equal, 16
+	itemLeftRound                          // '(', 17
+	itemRightRound                         // ')', 18
 )
 
 // These constants keep a track of the depth while parsing an rdf N-Quad.
@@ -371,58 +373,37 @@ func lexFacets(l *lex.Lexer) lex.StateFn {
 	if r != leftRound {
 		return l.Errorf("Expected '(' but found %v at Facet.", r)
 	}
+	l.Emit(itemLeftRound)
 
 	// we can come here from the lexObject also ;
 	// so setting to ahead of atFacet explicitly
 	l.Depth = atFacet + 1
 
+forLoop:
 	for {
-		l.IgnoreRun(isSpace) // eat all spaces.
-		// Lex Facet Key
-		_, validr := l.AcceptRun(func(r rune) bool {
-			return r != equal && !isSpace(r) && r != rightRound
-		})
-		if !validr {
-			if l.Next() == rightRound {
-				return lexText // empty facets..
-			}
-			return l.Errorf("Facet key can not be empty.")
-		}
-		l.Emit(itemFacetKey)
-
-		l.IgnoreRun(isSpace) // eat all sapces before '='
 		r = l.Next()
-		if r != equal {
-			return l.Errorf("Expected = after Facet key. Got %v", r)
-		}
-
-		l.IgnoreRun(isSpace) // eat all spaces before value
-
-		// Lex FacetValue
-		r = l.Next()
-		if r == comma || r == rightRound {
+		switch {
+		case isSpace(r):
 			l.Ignore()
-			l.Emit(itemFacetVal) // empty itemFacetVal : default value
-		} else if r == lex.EOF {
-			return l.Errorf("Premature end of Facet pair after key.")
-		} else {
-			l.AcceptUntil(func(r rune) bool {
-				return r == comma || r == rightRound
+		case r == equal:
+			l.Emit(itemEqual)
+		case r == comma:
+			l.Emit(itemComma)
+		case r == rightRound:
+			l.Emit(itemRightRound)
+			break forLoop
+		case r == leftRound:
+			l.Emit(itemLeftRound)
+		case r == lex.EOF:
+			return l.Errorf("Unexpected end of facets.")
+		default:
+			l.AcceptRun(func(r rune) bool {
+				return r != equal && !isSpace(r) && r != rightRound && r != comma
 			})
-			l.Emit(itemFacetVal)
-			l.IgnoreRun(isSpace)
-
-			r = l.Next()
-			if r == lex.EOF {
-				return l.Errorf("Premature end of Facet pair after value.")
-			} else if r == rightRound {
-				return lexText
-			} else if r != comma {
-				return l.Errorf("Expected , found %v in Facet value.", r)
-			}
-			l.Ignore() // ignore comma
+			l.Emit(itemText)
 		}
 	}
+	return lexText
 }
 
 // lexComment lexes a comment text.

@@ -219,7 +219,7 @@ func sane(s string) bool {
 func Parse(line string) (rnq graph.NQuad, rerr error) {
 	l := lex.NewLexer(line).Run(lexText)
 	it := l.NewIterator()
-	var oval, facetKey, facetVal string
+	var oval string
 	var vend bool
 	isCommentLine := false
 	// We read items from the l.Items channel to which the lexer sends items.
@@ -288,12 +288,17 @@ func Parse(line string) (rnq graph.NQuad, rerr error) {
 
 		case itemLabel:
 			rnq.Label = strings.Trim(item.Val, " ")
-		case itemFacetKey:
-			facetKey = strings.Trim(item.Val, " ")
-		case itemFacetVal:
-			facetVal = strings.Trim(item.Val, " ")
-			rnq.Facets = append(rnq.Facets, &facets.Facet{facetKey,
-				[]byte(facetVal), facets.ValStrToValType(facetVal)})
+		case itemLeftRound:
+			it.Prev() // backup '('
+			if err := parseFacets(it, &rnq); err != nil {
+				return rnq, x.Errorf(err.Error())
+			}
+			// case itemFacetKey:
+			// 	facetKey = strings.Trim(item.Val, " ")
+			// case itemFacetVal:
+			// 	facetVal = strings.Trim(item.Val, " ")
+			// 	rnq.Facets = append(rnq.Facets, &facets.Facet{facetKey,
+			// 		[]byte(facetVal), facets.ValStrToValType(facetVal)})
 		}
 	}
 
@@ -320,6 +325,70 @@ func Parse(line string) (rnq graph.NQuad, rerr error) {
 	}
 
 	return rnq, nil
+}
+
+func parseFacets(it *lex.ItemIterator, rnq *graph.NQuad) error {
+	if !it.Next() {
+		return x.Errorf("Unexpected end of facets.")
+	}
+	item := it.Item()
+	if item.Typ != itemLeftRound {
+		return x.Errorf("Expected '(' but found %v at Facet.", item.Val)
+	}
+
+	for it.Next() { // parse one key value pair
+		// parse key
+		item = it.Item()
+		if item.Typ != itemText {
+			return x.Errorf("Expected key but found %v.", item.Val)
+		}
+		facetKey := strings.TrimSpace(item.Val)
+		if len(facetKey) == 0 {
+			return x.Errorf("Empty facetKeys not allowed.")
+		}
+		// parse =
+		if !it.Next() {
+			return x.Errorf("Unexpected end of facets.")
+		}
+		item = it.Item()
+		if item.Typ != itemEqual {
+			return x.Errorf("Expected = after facetKey. Found %v", item.Val)
+		}
+		// parse value or empty value
+		if !it.Next() {
+			return x.Errorf("Unexpected end of facets.")
+		}
+		item = it.Item()
+		facetVal := ""
+		if item.Typ == itemText {
+			facetVal = item.Val
+		}
+		rnq.Facets = append(rnq.Facets, &facets.Facet{facetKey,
+			[]byte(facetVal), facets.ValStrToValType(facetVal)})
+
+		// empty value case..
+		if item.Typ == itemRightRound {
+			return nil
+		}
+		if item.Typ == itemComma {
+			continue
+		}
+
+		// value was present..
+		if !it.Next() { // get either ')' or ','
+			return x.Errorf("Unexpected end of facets.")
+		}
+		item = it.Item()
+		if item.Typ == itemRightRound {
+			return nil
+		}
+		if item.Typ == itemComma {
+			continue
+		}
+		return x.Errorf("Expected , or ) after facet. Received [%s]", item.Val)
+	}
+
+	return x.Errorf("Unexpected end of facets.")
 }
 
 func isNewline(r rune) bool {

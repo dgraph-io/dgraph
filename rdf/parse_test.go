@@ -549,19 +549,6 @@ var testNQuads = []struct {
 		},
 		expectedErr: false,
 	},
-	// Should not fail even if facets is empty
-	{
-		input: `_:alice <knows> "stuff" () .`,
-		nq: graph.NQuad{
-			Subject:     "_:alice",
-			Predicate:   "knows",
-			ObjectId:    "",
-			ObjectValue: &graph.Value{&graph.Value_StrVal{"stuff"}},
-			ObjectType:  0,
-			Facets:      nil,
-		},
-		expectedErr: false,
-	},
 	// Should not fail parsing with unnecessary spaces
 	{
 		input: `_:alice <knows> "stuff" ( key1 = 12 , key2=value2, key3=, key4 =val4 ) .`,
@@ -653,6 +640,10 @@ var testNQuads = []struct {
 	{
 		input:       `_:alice <knows> "stuff" (key1=val1,key1=`,
 		expectedErr: true, // facets should end by ')'
+	},
+	{
+		input:       `_:alice <knows> "stuff" () .`,
+		expectedErr: true, // empty facets not allowed
 	},
 }
 
