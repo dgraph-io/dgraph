@@ -11,6 +11,7 @@ require('brace/mode/logiql');
 require('brace/theme/github');
 
 var NavBar = require('./Navbar');
+var Stats = require('./Stats');
 
 var styles = require('../styles');
 var graph = styles.graph;
@@ -92,6 +93,15 @@ function getPredProperties(pred, predLabel, edgeLabels) {
   return predLabel[pred]
 }
 
+function hasChildren(node) {
+  for (var prop in node) {
+    if (Array.isArray(node[prop])) {
+      return true
+    }
+  }
+  return false
+}
+
 function processGraph(response, root, maxNodes) {
   var nodesStack = [],
     predLabel = {},
@@ -107,15 +117,28 @@ function processGraph(response, root, maxNodes) {
       }
     };
 
+  var someNodeHasChildren = false;
+  var ignoredChildren = [];
+
   for (var i = 0; i < response.length; i++) {
-    nodesStack.push({
+    var n = {
       node: response[i],
       src: {
         id: "",
         pred: root
       }
-    })
+    };
+    if (hasChildren(response[i])) {
+      someNodeHasChildren = true;
+      nodesStack.push(n);
+    } else {
+      ignoredChildren.push(n);
+    }
   };
+
+  if (!someNodeHasChildren) {
+    nodesStack.push.apply(nodesStack, ignoredChildren)
+  }
 
   // We push an empty node after all the children. This would help us know when
   // we have traversed all nodes at a level.
@@ -375,7 +398,7 @@ var Home = React.createClass({
 
           // We call procesGraph with a 40 node limit and calculate the whole dataset in
           // the background.
-          var graph = processGraph(response, key, 40);
+          var graph = processGraph(response, key, 20);
           setTimeout(function() {
             that.setState({
               partial: this.state.nodes > graph[0].length
@@ -414,66 +437,60 @@ var Home = React.createClass({
     return (
       <div>
       <NavBar></NavBar>
-    <div className="container">
+    <div className="container-fluid">
         <div className="row justify-content-md-center">
-            <div className="col-md-offset-1 col-md-10">
+            <div className="col-sm-12">
+              <div className="col-sm-5">
                 <form id="query-form">
                     <div className="form-group">
                         <label htmlFor="query">Query</label>
                         <button type="submit" className="btn btn-primary pull-right" onClick={this.runQuery}>Run</button>
                     </div>
                 </form>
-      <div className="editor" style={editor}>
-      <AceEditor
-        mode="logiql"
-        theme="github"
-        name="editor"
-        editorProps={{$blockScrolling: true}}
-        width='100%'
-        height='300px'
-        fontSize='16px'
-        value={this.query}
-        focus={true}
-        showPrintMargin={false}
-        wrapEnabled={true}
-        onChange={this.queryChange}
-        commands={[{
-          name: 'runQuery',
-          bindKey: {
-            win: 'Ctrl-Enter',
-            mac: 'Command-Enter'
-          },
-          exec: function(editor) {
-            this.runQuery(new Event(''));
-          }.bind(this)
-        }]}
-      />
-      </div>
-          <label> Response </label>
-        <div>Nodes: {this.state.nodes}, Edges: {this.state.relations}</div>
-        <div style={{height:'20px'}}>{this.state.partial == true ? 'We have only loaded a subset of the graph. Click on a leaf node to expand its child nodes.': ''}</div>
-        <div style={properties} title={this.state.currentNode}><span>Selected Node: <em>{this.state.currentNode}</em></span></div>
-        <div style={graph} id="graph" className={this.state.resType}>{this.state.response}
-          {/* <span style={fullscreen} onClick={activateFullScreen} className="glyphicon glyphicon-glyphicon glyphicon-resize-full">
-           </span>
-          */}
-        </div>
-          <div style={stats}>
-              <form>
-                      <div className="form-group col-sm-6">
-                          <label htmlFor="server_latency">Server Latency</label>
-                          <input type="input" className="form-control" value={this.state.latency} readOnly/>
-                      </div>
-                      <div className="form-group col-sm-6">
-                          <label htmlFor="rendering">Rendering</label>
-                          <input type="input" className="form-control" value={this.state.rendering} readOnly/>
-                      </div>
-              </form>
+                <div className="editor" style={editor}>
+                  <AceEditor
+                    mode="logiql"
+                    theme="github"
+                    name="editor"
+                    editorProps={{$blockScrolling: true}}
+                    width='100%'
+                    height='350px'
+                    fontSize='14px'
+                    value={this.query}
+                    focus={true}
+                    showPrintMargin={false}
+                    wrapEnabled={true}
+                    onChange={this.queryChange}
+                    commands={[{
+                      name: 'runQuery',
+                      bindKey: {
+                        win: 'Ctrl-Enter',
+                        mac: 'Command-Enter'
+                      },
+                      exec: function(editor) {
+                        this.runQuery(new Event(''));
+                      }.bind(this)
+                    }]}
+                  />
+                </div>
+                <Stats rendering={this.state.rendering} latency={this.state.latency} class="hidden-xs"></Stats>
+              </div>
+            <div className="col-sm-7">
+              <label> Response </label>
+              <div style={graph} id="graph" className={this.state.resType}>{this.state.response}</div>
+              <div>Nodes: {this.state.nodes}, Edges: {this.state.relations}</div>
+              <div style={{height:'auto'}}>{this.state.partial == true ? 'We have only loaded a subset of the graph. Click on a leaf node to expand its child nodes.': ''}</div>
+              <div style={properties} title={this.state.currentNode}><span>Selected Node: <em>{this.state.currentNode}</em></span></div>
+
+                {/* <span style={fullscreen} onClick={activateFullScreen} className="glyphicon glyphicon-glyphicon glyphicon-resize-full">
+                 </span>
+                */}
+            </div>
+            <Stats rendering={this.state.rendering} latency={this.state.latency} class="visible-xs"></Stats>  
           </div>
         </div>
       </div>
     </div>
-      </div>
     );
   }
 });

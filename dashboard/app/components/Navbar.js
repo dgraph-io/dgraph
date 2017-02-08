@@ -6,7 +6,7 @@ var NavItem = require('react-bootstrap').NavItem;
 var NavBar = React.createClass({
   render: function() {
     return (
-      <Navbar style={{borderBottom: '0.5px solid gray'}}>
+      <Navbar style={{borderBottom: '0.5px solid gray'}} fluid={true}>
 		<Navbar.Header>
 	      <Navbar.Brand>
 	        <a href="#" style={{paddingTop: '10px'}}><img src="assets/images/logo.svg" width="100" height="30" alt=""/></a>

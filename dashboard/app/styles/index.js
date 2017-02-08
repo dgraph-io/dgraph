@@ -7,12 +7,14 @@ var styles = {
     fontSize: '12px',
     wordBreak: 'break-all',
     marginTop: '10px',
+    marginBottom: '10px',
     width: '100%',
     height: '500px',
     border: '1px solid gray',
     position: 'relative'
   },
   statistics: {
+    display: 'inline-block',
     padding: '5px',
     marginTop: '10px',
     marginBottom: '100px',
@@ -23,7 +25,8 @@ var styles = {
     alignContent: 'center',
     flexDirection: 'column',
     marginTop: '10px',
-    height: '50px',
+    marginBottom: '10px',
+    height: 'auto',
     border: '1px solid gray',
     padding: '5px',
     overflow: 'hidden'
