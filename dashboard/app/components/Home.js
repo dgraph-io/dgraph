@@ -3,6 +3,7 @@ var ReactRouter = require('react-router');
 var Link = ReactRouter.Link;
 require('whatwg-fetch');
 var vis = require('vis');
+var Glyphicon = require('react-bootstrap').Glyphicon;
 
 require('brace');
 var AceEditor = require('react-ace').default;
@@ -10,19 +11,20 @@ require('brace/mode/logiql');
 require('brace/theme/github');
 
 var NavBar = require('./Navbar');
+var Stats = require('./Stats');
 
 var styles = require('../styles');
 var graph = styles.graph;
 var stats = styles.statistics;
 var editor = styles.editor;
+var properties = styles.properties;
+var fullscreen = styles.fullscreen;
 
 // TODO - Abstract these out and remove these from global scope.
-var predLabel = {};
-var edgeLabels = {};
-var uidMap = {};
-var nodes = [],
-  edges = [],
-  network;
+var network,
+  // We will store the vis data set in these nodes.
+  nodeSet,
+  edgeSet;
 
 // TODO - Move these three functions to server or to some other component. They dont
 // really belong here.
@@ -36,17 +38,31 @@ function getLabel(properties) {
     label = properties["_uid_"]
   }
 
-  var words = label.split(" ")
-  if (words.length > 1) {
-    label = words[0] + "\n" + words[1]
-    if (words.length > 2) {
-      label += "..."
+  var words = label.split(" "),
+    firstWord = words[0];
+  if (firstWord.length > 20) {
+    label = [firstWord.substr(0, 9), firstWord.substr(9, 17) + "..."].join("-\n")
+  } else if (firstWord.length > 10) {
+    label = [firstWord.substr(0, 9), firstWord.substr(9, firstWord.length)].join("-\n")
+  } else {
+    // First word is less than 10 chars so we can display it in full.
+    if (words.length > 1) {
+      if (words[1].length > 10) {
+        label = [firstWord, words[1] + "..."].join("\n")
+      } else {
+        label = [firstWord, words[1]].join("\n")
+      }
+    } else {
+      label = firstWord
     }
   }
+
+
   return label
 }
 
-function getPredProperties(pred) {
+// This function shortens and calculates the label for a predicate.
+function getPredProperties(pred, predLabel, edgeLabels) {
   var prop = predLabel[pred]
   if (prop != undefined) {
     // We have already calculated the label for this predicate.
@@ -77,45 +93,115 @@ function getPredProperties(pred) {
   return predLabel[pred]
 }
 
-function processObject(obj, src) {
-  var properties = {}
-  for (var prop in obj) {
-    // If its just a value, then we store it in properties for this node.
-    if (!Array.isArray(obj[prop])) {
-      properties[prop] = obj[prop]
+function hasChildren(node) {
+  for (var prop in node) {
+    if (Array.isArray(node[prop])) {
+      return true
+    }
+  }
+  return false
+}
+
+function processGraph(response, root, maxNodes) {
+  var nodesStack = [],
+    predLabel = {},
+    edgeLabels = {},
+    uidMap = {},
+    nodes = [],
+    edges = [],
+    emptyNode = {
+      node: {},
+      src: {
+        id: "",
+        pred: "empty"
+      }
+    };
+
+  var someNodeHasChildren = false;
+  var ignoredChildren = [];
+
+  for (var i = 0; i < response.length; i++) {
+    var n = {
+      node: response[i],
+      src: {
+        id: "",
+        pred: root
+      }
+    };
+    if (hasChildren(response[i])) {
+      someNodeHasChildren = true;
+      nodesStack.push(n);
     } else {
-      var arr = obj[prop]
-      for (var i = 0; i < arr.length; i++) {
-        processObject(arr[i], {
-          id: obj["_uid_"],
-          pred: prop
-        })
+      ignoredChildren.push(n);
+    }
+  };
+
+  if (!someNodeHasChildren) {
+    nodesStack.push.apply(nodesStack, ignoredChildren)
+  }
+
+  // We push an empty node after all the children. This would help us know when
+  // we have traversed all nodes at a level.
+  nodesStack.push(emptyNode)
+
+  while (nodesStack.length > 0) {
+    var obj = nodesStack.shift()
+      // Check if this is an empty node.
+    if (Object.keys(obj.node).length === 0 && obj.src.pred === "empty") {
+      // We break out if we have reached the max node limit.
+      if (nodesStack.length == 0 || (maxNodes != -1 && nodes.length > maxNodes)) {
+        break
+      } else {
+        nodesStack.push(emptyNode)
+        continue
       }
     }
 
+    var properties = {}
+
+    for (var prop in obj.node) {
+      // If its just a value, then we store it in properties for this node.
+      if (!Array.isArray(obj.node[prop])) {
+        properties[prop] = obj.node[prop]
+      } else {
+        var arr = obj.node[prop]
+        for (var i = 0; i < arr.length; i++) {
+          nodesStack.push({
+            node: arr[i],
+            src: {
+              pred: prop,
+              id: obj.node["_uid_"]
+            }
+          })
+        }
+      }
+    }
+
+    if (!uidMap[properties["_uid_"]]) {
+      uidMap[properties["_uid_"]] = true
+      nodes.push({
+        id: properties["_uid_"],
+        label: getLabel(properties),
+        title: JSON.stringify(properties),
+        group: obj.src.pred,
+        value: 1
+      })
+    }
+
+    var predProperties = getPredProperties(obj.src.pred, predLabel, edgeLabels)
+    if (obj.src.id != "") {
+      edges.push({
+        id: [obj.src.id, properties["_uid_"]].join("-"),
+        from: obj.src.id,
+        to: properties["_uid_"],
+        title: obj.src.pred,
+        label: predProperties["label"],
+        arrows: 'to'
+      })
+    }
   }
 
-  var predProperties = getPredProperties(src.pred)
-  if (!uidMap[obj["_uid_"]]) {
-    uidMap[obj["_uid_"]] = true
-
-    nodes.push({
-      id: obj["_uid_"],
-      label: getLabel(properties),
-      title: JSON.stringify(properties),
-      group: src.pred
-    })
-  }
-
-  if (src.pred != "") {
-    edges.push({
-      from: src.id,
-      to: obj["_uid_"],
-      title: src.pred,
-      label: predProperties["label"],
-      arrows: 'to'
-    })
-  }
+  return [nodes, edges];
 }
 
 // create a network
@@ -128,12 +214,21 @@ function renderNetwork(nodes, edges) {
   var options = {
     nodes: {
       shape: 'circle',
+      scaling: {
+        max: 20,
+        min: 20,
+        label: {
+          enabled: true,
+          min: 14,
+          max: 14
+        }
+      },
       font: {
         size: 16
       },
       margin: {
         top: 25
-      }
+      },
     },
     height: '100%',
     width: '100%',
@@ -141,11 +236,79 @@ function renderNetwork(nodes, edges) {
       hover: true,
       tooltipDelay: 1000
     },
+    layout: {
+      improvedLayout: nodes.length < 50
+    }
   };
 
   network = new vis.Network(container, data, options);
-}
+  var that = this;
+  network.on("click", function(params) {
+    if (params.nodes.length > 0) {
+      var nodeUid = params.nodes[0],
+        currentNode = nodeSet.get(nodeUid);
 
+      that.setState({
+        currentNode: currentNode.title
+      });
+
+      var outgoing = data.edges.get({
+        filter: function(node) {
+          return node.from === nodeUid
+        }
+      })
+      var expanded = outgoing.length > 0
+
+      var outgoingEdges = edgeSet.get({
+        filter: function(node) {
+          return node.from === nodeUid
+        }
+      })
+
+      var adjacentNodeIds = outgoingEdges.map(function(edge) {
+        return edge.to
+      })
+
+
+      var adjacentNodes = nodeSet.get(adjacentNodeIds)
+        // TODO -See if we can set a meta property to a node to know that its
+        // expanded or closed and avoid this computation.
+      if (expanded) {
+        data.nodes.remove(adjacentNodeIds)
+        data.edges.remove(outgoingEdges.map(function(edge) {
+          return edge.id
+        }))
+      } else {
+        var updatedNodeIds = data.nodes.update(adjacentNodes)
+        var updatedEdgeids = data.edges.update(outgoingEdges)
+      }
+    }
+  });
+
+
+  network.on("hoverNode", function(params) {
+    var nodeUid = params.node,
+      currentNode = nodeSet.get(nodeUid);
+
+    that.setState({
+      currentNode: currentNode.title
+    });
+  });
+
+  network.on("dragEnd", function(params) {
+    for (var i = 0; i < params.nodes.length; i++) {
+      var nodeId = params.nodes[i];
+      data.nodes.update({ id: nodeId, fixed: { x: true, y: true } });
+    }
+  });
+
+  network.on('dragStart', function(params) {
+    for (var i = 0; i < params.nodes.length; i++) {
+      var nodeId = params.nodes[i];
+      data.nodes.update({ id: nodeId, fixed: { x: false, y: false } });
+    }
+  });
+}
 
 function checkStatus(response) {
   if (response.status >= 200 && response.status < 300) {
@@ -174,10 +337,14 @@ var Home = React.createClass({
   getInitialState: function() {
     return {
       query: '',
+      lastQuery: '',
       response: '',
       latency: '',
       rendering: '',
-      resType: ''
+      resType: '',
+      currentNode: '{}',
+      nodes: 0,
+      relations: 0
     }
   },
   queryChange: function(newValue) {
@@ -188,15 +355,16 @@ var Home = React.createClass({
   runQuery: function(e) {
     e.preventDefault();
 
+    if (this.query === this.state.lastQuery) {
+      return;
+    }
     // Resetting state
     predLabel = {}, edgeLabels = {}, uidMap = {}, nodes = [], edges = [];
     network && network.destroy();
-    this.setState({
-      rendering: '',
-      latency: '',
+    this.setState(Object.assign(this.getInitialState(), {
       resType: 'hourglass',
-      response: ''
-    })
+      lastQuery: this.query
+    }));
 
     var that = this;
     timeout(60000, fetch('http://localhost:8080/query?debug=true', {
@@ -227,13 +395,28 @@ var Home = React.createClass({
             'latency': result.server_latency.total
           });
           var startTime = new Date();
-          for (var i = 0; i < response.length; i++) {
-            processObject(response[i], {
-              id: "",
-              pred: key,
+
+          setTimeout(function() {
+            var graph = processGraph(response, key, -1);
+            nodeSet = new vis.DataSet(graph[0])
+            edgeSet = new vis.DataSet(graph[1])
+            that.setState({
+              nodes: graph[0].length,
+              relations: graph[1].length
+            });
+          }.bind(that), 1000)
+
+          // We call procesGraph with a 40 node limit and calculate the whole dataset in
+          // the background.
+          var graph = processGraph(response, key, 20);
+          setTimeout(function() {
+            that.setState({
+              partial: this.state.nodes > graph[0].length
             })
-          }
-          renderNetwork(nodes, edges)
+          }.bind(that), 1000)
+
+          renderNetwork.call(that, graph[0], graph[1]);
+
           var endTime = new Date();
           var timeTaken = (endTime.getTime() - startTime.getTime()) / 1000;
           that.setState({
@@ -248,6 +431,7 @@ var Home = React.createClass({
           })
         }
       })).catch(function(error) {
+      console.log(error.stack)
       var err = error.response && error.response.text() || error.message
       return err
     }).then(function(errorMsg) {
@@ -263,59 +447,60 @@ var Home = React.createClass({
     return (
       <div>
       <NavBar></NavBar>
-    <div className="container">
+    <div className="container-fluid">
         <div className="row justify-content-md-center">
-            <div className="col-md-offset-1 col-md-10">
+            <div className="col-sm-12">
+              <div className="col-sm-5">
                 <form id="query-form">
                     <div className="form-group">
                         <label htmlFor="query">Query</label>
                         <button type="submit" className="btn btn-primary pull-right" onClick={this.runQuery}>Run</button>
                     </div>
                 </form>
-      <div className="editor" style={editor}>
-      <AceEditor
-        mode="logiql"
-        theme="github"
-        name="editor"
-        editorProps={{$blockScrolling: true}}
-        width='100%'
-        height='300px'
-        fontSize='16px'
-        value={this.query}
-        focus={true}
-        showPrintMargin={false}
-        wrapEnabled={true}
-        onChange={this.queryChange}
-        commands={[{
-          name: 'runQuery',
-          bindKey: {
-            win: 'Ctrl-Enter',
-            mac: 'Command-Enter'
-          },
-          exec: function(editor) {
-            this.runQuery(new Event(''));
-          }.bind(this)
-        }]}
-      />
-      </div>
-          <label> Response </label>
-          <div style={graph} id="graph" className={this.state.resType}>{this.state.response}</div>
-          <div style={stats}>
-              <form>
-                      <div className="form-group col-sm-6">
-                          <label htmlFor="server_latency">Server Latency</label>
-                          <input type="input" className="form-control" value={this.state.latency} readOnly/>
-                      </div>
-                      <div className="form-group col-sm-6">
-                          <label htmlFor="rendering">Rendering</label>
-                          <input type="input" className="form-control" value={this.state.rendering} readOnly/>
-                      </div>
-              </form>
+                <div className="editor" style={editor}>
+                  <AceEditor
+                    mode="logiql"
+                    theme="github"
+                    name="editor"
+                    editorProps={{$blockScrolling: true}}
+                    width='100%'
+                    height='350px'
+                    fontSize='12px'
+                    value={this.query}
+                    focus={true}
+                    showPrintMargin={false}
+                    wrapEnabled={true}
+                    onChange={this.queryChange}
+                    commands={[{
+                      name: 'runQuery',
+                      bindKey: {
+                        win: 'Ctrl-Enter',
+                        mac: 'Command-Enter'
+                      },
+                      exec: function(editor) {
+                        this.runQuery(new Event(''));
+                      }.bind(this)
+                    }]}
+                  />
+                </div>
+                <Stats rendering={this.state.rendering} latency={this.state.latency} class="hidden-xs"></Stats>
+              </div>
+            <div className="col-sm-7">
+              <label> Response </label>
+              <div style={graph} id="graph" className={this.state.resType}>{this.state.response}</div>
+              <div>Nodes: {this.state.nodes}, Edges: {this.state.relations}</div>
+              <div style={{height:'auto'}}>{this.state.partial == true ? 'We have only loaded a subset of the graph. Click on a leaf node to expand its child nodes.': ''}</div>
+              <div style={properties} title={this.state.currentNode}><span>Current Node: <em><pre>{JSON.stringify(JSON.parse(this.state.currentNode), null, 2)}</pre></em></span></div>
+
+                {/* <span style={fullscreen} onClick={activateFullScreen} className="glyphicon glyphicon-glyphicon glyphicon-resize-full">
+                 </span>
+                */}
+            </div>
+            <Stats rendering={this.state.rendering} latency={this.state.latency} class="visible-xs"></Stats>  
           </div>
         </div>
       </div>
     </div>
-      </div>
     );
   }
 });
