@@ -8,7 +8,7 @@ import (
 )
 
 
-func CouldApplyAgrtrOn(agrtr string, typ types.TypeID) bool {
+func CouldApplyAggregatorOn(agrtr string, typ types.TypeID) bool {
 	if !typ.IsScalar() {
 		return false
 	}
@@ -46,7 +46,7 @@ func convertTo(from *task.Value, typ types.TypeID) (types.Val, error) {
 }
 
 func Aggregate(agrtr string, values []*task.Value, typ types.TypeID) (*task.Value, error) {
-	if !CouldApplyAgrtrOn(agrtr, typ) {
+	if !CouldApplyAggregatorOn(agrtr, typ) {
 		return nil, x.Errorf("Cant apply aggregator %v on type %d\n", agrtr, typ)
 	}
 	
@@ -83,14 +83,13 @@ func Aggregate(agrtr string, values []*task.Value, typ types.TypeID) (*task.Valu
 		if len(iter.Val) == 0 {
 			continue
 		} else if len(result.Val) == 0 {
-			result = iter
-			if lva, err = convertTo(iter, typ); err != nil {
-				return result, err
+			if lva, err = convertTo(iter, typ); err == nil {
+				result = iter
 			}
 			continue
 		}
 		if rva, err = convertTo(iter, typ); err != nil {
-			return result, err
+			continue
 		}
 		va := accumulate(lva, rva)
 		if lva != va {

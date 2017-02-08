@@ -748,7 +748,7 @@ func TestMinError2(t *testing.T) {
 				gender
 				alive
 				min(friend) {
-                                    name     
+                                    name
                                 }
 			}
 		}

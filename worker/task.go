@@ -18,7 +18,6 @@ package worker
 
 import (
 	"strings"
-	//"fmt"
 	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/dgraph/algo"
@@ -90,7 +89,6 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 	attr := q.Attr
 
 	useFunc := len(q.SrcFunc) != 0
-	//fmt.Printf("[processTask] task.Query: %#v\n", q)
 	var n int
 	var tokens []string
 	var geoQuery *types.GeoQueryData
@@ -112,7 +110,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 			if err != nil {
 				return nil, x.Errorf("Attribute %q is not scalar-type", attr)
 			}
-			if !CouldApplyAgrtrOn(f, typ) {
+			if !CouldApplyAggregatorOn(f, typ) {
 				return nil, x.Errorf("Aggregator %q could not apply on %v",
 					f, attr)
 			}
@@ -225,6 +223,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 		if err != nil {
 			return nil, err
 		}
+		out.Values = out.Values[0:1] // trim length to 1
 	}
 
 	if isIneq && len(tokens) > 0 && ineqValueToken == tokens[0] {

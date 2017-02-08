@@ -1252,7 +1252,7 @@ func TestParseCountAsFunc(t *testing.T) {
 `
 	gq, err := Parse(query)
 	require.NoError(t, err)
-	//require.Equal(t, true, gq.Query[0].Children[0].IsCount)
+	require.Equal(t, true, gq.Query[0].Children[0].IsCount)
 	require.Equal(t, 4, len(gq.Query[0].Children))
 
 }

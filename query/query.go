@@ -295,29 +295,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 				uidAlreadySet = true
 				dst.SetUID(uid)
 			} else {
-				// globalType is the best effort type to which we try converting
-				// and if not possible, we ignore it in the result.
-				/*globalType, hasType := schema.TypeOf(pc.Attr)
-				sv := types.ValueForType(types.StringID)
-				if hasType == nil {
-					// Try to coerce types if this is an optional scalar outside an
-					// object definition.
-					if !globalType.IsScalar() {
-						return x.Errorf("Leaf predicate:'%v' must be a scalar.", pc.Attr)
-					}
-					gtID := globalType
-					// Convert to schema type.
-					sv, err = types.Convert(v, gtID)
-					if bytes.Equal(tv.Val, nil) || err != nil {
-						continue
-					}
-				} else {
-					sv, err = types.Convert(v, types.StringID)
-					x.Check(err)
-				}
-				if bytes.Equal(tv.Val, nil) {
-					continue
-				}*/
+				// if conversion not possible, we ignore it in the result.
 				sv, convErr := convertWithBestEffort(tv, pc.Attr)
 				if convErr == ErrEmptyVal {
 					continue
