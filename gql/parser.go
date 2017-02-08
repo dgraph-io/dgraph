@@ -847,7 +847,7 @@ func evalStack(opStack, valueStack *filterTreeStack) {
 	valueStack.push(topOp)
 }
 
-func parseFunction(it *lex.ItemIterator, roundBalanced bool) (*Function, error) {
+func parseFunction(it *lex.ItemIterator) (*Function, error) {
 	var g *Function
 	for it.Next() {
 		item := it.Item()
@@ -861,7 +861,11 @@ func parseFunction(it *lex.ItemIterator, roundBalanced bool) (*Function, error) 
 			for it.Next() {
 				itemInFunc := it.Item()
 				if itemInFunc.Typ == itemRightRound {
-					if roundBalanced {
+					peekIt, err := it.Peek(1)
+					if err != nil {
+						return nil, x.Errorf("Invalid Query")
+					}
+					if peekIt[0].Typ != itemRightRound {
 						goto out
 					}
 					break
@@ -1101,7 +1105,7 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 		it.Next() // consume the right round.
 	} else if peekItems[1].Typ == itemLeftRound {
 		// Store the generator function.
-		gen, err := parseFunction(it, false)
+		gen, err := parseFunction(it)
 		if err != nil {
 			return gq, err
 		}
@@ -1203,7 +1207,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 			}
 			if isAggregator(item.Val) {
 				it.Prev()
-				child.Func, err = parseFunction(it, true)
+				child.Func, err = parseFunction(it)
 				if err != nil {
 					return err
 				}
