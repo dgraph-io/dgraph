@@ -46,7 +46,7 @@ type info struct {
 	cost float64
 }
 
-func execNextLevel(ctx context.Context, start *SubGraph, next chan bool, res chan info, rch chan error) {
+func (start *SubGraph) execNextLevel(ctx context.Context, next chan bool, res chan info, rch chan error) {
 	var exec []*SubGraph
 	var err error
 	start.SrcUIDs = &task.List{[]uint64{start.Params.From}}
@@ -135,8 +135,8 @@ func ShortestPath(ctx context.Context, sg *SubGraph, rch chan error) {
 	next := make(chan bool, 2)
 	rch1 := make(chan error, 2)
 	res := make(chan info, 1000)
-	go execNextLevel(ctx, sg, next, res, rch1)
-	mp := make(map[uint64][]info)
+	go sg.execNextLevel(ctx, next, res, rch1)
+	mp := make(map[uint64]map[uint64]float64)
 	dist := make(map[uint64]float64) // map to store the min cost to nodes we've seen.
 	dist[srcNode.uid] = 0
 
@@ -172,7 +172,6 @@ func ShortestPath(ctx context.Context, sg *SubGraph, rch chan error) {
 				return
 			}
 
-			mp = make(map[uint64][]info)
 			for it := range res {
 				if it.to == 0 {
 					break
@@ -193,18 +192,21 @@ func ShortestPath(ctx context.Context, sg *SubGraph, rch chan error) {
 					}
 				} else {
 					//Put it in map.
-					mp[it.from] = append(mp[it.from], it)
+					if mp[it.from] == nil {
+						mp[it.from] = make(map[uint64]float64)
+					}
+					mp[it.from][it.to] = it.cost
 				}
 			}
 			numHops++
 		} else {
 			// look at the map that we've already populated..
 			neigh := mp[item.uid]
-			for _, it := range neigh {
-				if d, ok := dist[it.to]; !ok || d > item.cost+it.cost {
-					node := &Item{it.to, item.cost + it.cost, item.hop + 1, 0}
+			for toUid, cost := range neigh {
+				if d, ok := dist[toUid]; !ok || d > item.cost+cost {
+					node := &Item{toUid, item.cost + cost, item.hop + 1, 0}
 					heap.Push(&pq, node) // Add a node wit hlesser cost in the queue.
-					dist[it.to] = item.cost + it.cost
+					dist[toUid] = item.cost + cost
 				}
 			}
 		}
@@ -212,7 +214,7 @@ func ShortestPath(ctx context.Context, sg *SubGraph, rch chan error) {
 
 	// Go through the execution tree to find the path.
 	result := new(task.List)
-	isPathFound := getPath(sg, sg.Params.From, sg.Params.To, result, 0, finalCost)
+	isPathFound := sg.getPath(sg.Params.From, sg.Params.To, result, 0, finalCost)
 	if isPathFound {
 		// Append the start node to the list.
 		result.Uids = append(result.Uids, sg.Params.From)
@@ -229,7 +231,7 @@ func ShortestPath(ctx context.Context, sg *SubGraph, rch chan error) {
 	rch <- nil
 }
 
-func getPath(sg *SubGraph, uid, to uint64, path *task.List, cost, finalCost float64) bool {
+func (sg *SubGraph) getPath(uid, to uint64, path *task.List, cost, finalCost float64) bool {
 	if uid == to && cost == finalCost {
 		// We found the required end node.
 		return true
@@ -247,7 +249,7 @@ func getPath(sg *SubGraph, uid, to uint64, path *task.List, cost, finalCost floa
 		ul := pc.uidMatrix[idx]
 
 		for _, childUID := range ul.Uids {
-			if getPath(pc, childUID, to, path, cost+1, finalCost) {
+			if pc.getPath(childUID, to, path, cost+1, finalCost) {
 				// If this node was on the path, add it to the list.
 				path.Uids = append(path.Uids, childUID)
 				return true
