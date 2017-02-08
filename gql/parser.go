@@ -109,6 +109,12 @@ func init() {
 	}
 }
 
+func (f *Function) IsAggregator() bool {
+	return f.Name == "min" ||
+		f.Name == "max" ||
+		f.Name == "sum"
+}
+
 // DebugPrint is useful for debugging.
 func (gq *GraphQuery) DebugPrint(prefix string) {
 	x.Printf("%s[%x %q %q->%q]\n", prefix, gq.UID, gq.Attr, gq.Alias)
@@ -1259,9 +1265,23 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				continue
 			}
 
+			if isAggregator(item.Val) {
+				child := &GraphQuery{
+					Args:    make(map[string]string),
+				}
+				it.Prev()
+				if child.Func, err = parseFunction(it); err != nil {
+					return err
+				}
+				child.Attr = child.Func.Attr
+				gq.Children = append(gq.Children, child)
+				curp = child
+				continue
+			}
+
 			if item.Val == "count" {
 				if isCount != 0 {
-					return x.Errorf("Invalid mention of count.")
+					return x.Errorf("Invalid mention of function count")
 				}
 				isCount = 1
 				it.Next()
@@ -1325,3 +1345,11 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 	}
 	return nil
 }
+
+func isAggregator(f string) bool {
+	fname := strings.ToLower(f)
+	return fname == "min" || fname == "max" || fname == "sum"
+}
+
+
+
