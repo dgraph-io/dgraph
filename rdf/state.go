@@ -384,10 +384,9 @@ forLoop:
 		case r == rightRound:
 			l.Emit(itemRightRound)
 			break forLoop
-		case r == leftRound:
-			l.Emit(itemLeftRound)
 		case r == lex.EOF:
-			return l.Errorf("Unexpected end of facets.")
+			l.Emit(lex.ItemEOF)
+			return nil
 		default:
 			l.AcceptRun(func(r rune) bool {
 				return r != equal && !isSpace(r) && r != rightRound && r != comma

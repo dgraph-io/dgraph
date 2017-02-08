@@ -374,6 +374,9 @@ func parseFacets(it *lex.ItemIterator, rnq *graph.NQuad) error {
 			continue
 		}
 
+		if item.Typ != itemText {
+			return x.Errorf("Expected , or ) or text but found %s", item.Val)
+		}
 		// value was present..
 		if !it.Next() { // get either ')' or ','
 			return x.Errorf("Unexpected end of facets.")
@@ -385,7 +388,7 @@ func parseFacets(it *lex.ItemIterator, rnq *graph.NQuad) error {
 		if item.Typ == itemComma {
 			continue
 		}
-		return x.Errorf("Expected , or ) after facet. Received [%s]", item.Val)
+		return x.Errorf("Expected , or ) after facet. Received %s", item.Val)
 	}
 
 	return x.Errorf("Unexpected end of facets.")

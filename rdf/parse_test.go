@@ -642,8 +642,12 @@ var testNQuads = []struct {
 		expectedErr: true, // facets should end by ')'
 	},
 	{
-		input:       `_:alice <knows> "stuff" () .`,
-		expectedErr: true, // empty facets not allowed
+		input:       `_:alice <knows> "stuff" (k==)`,
+		expectedErr: true, // equal not allowed in value
+	},
+	{
+		input:       `_:alice <knows> "stuff" (k=,) .`,
+		expectedErr: false, // comma should be followed by another key-value pair.
 	},
 }
 
