@@ -98,6 +98,9 @@ func execNextLevel(ctx context.Context, start *SubGraph, next chan bool, res cha
 		// modify the exec and attach child nodes.
 		var out []*SubGraph
 		for _, sg := range exec {
+			if len(sg.DestUIDs.Uids) == 0 {
+				continue
+			}
 			for _, child := range start.Children {
 				temp := new(SubGraph)
 				*temp = *child
@@ -137,12 +140,16 @@ func ShortestPath(ctx context.Context, sg *SubGraph, rch chan error) {
 	dist := make(map[uint64]float64) // map to store the min cost to nodes we've seen.
 	dist[srcNode.uid] = 0
 
+	var maxLoopLevel int
 	//TODO(Ashwin): We can maintain another parent map which could avoid the tree traversal
 	// later and let us find the path directly.
 
 	// For now, lets allow a maximum of 10 hops.
-	for pq.Len() > 0 && numHops < 5 {
+	for pq.Len() > 0 && numHops < 10 {
 		item := heap.Pop(&pq).(*Item)
+		if item.hop > maxLoopLevel {
+			break
+		}
 		if item.uid == sg.Params.To {
 			finalCost = item.cost
 			break
@@ -165,18 +172,22 @@ func ShortestPath(ctx context.Context, sg *SubGraph, rch chan error) {
 				return
 			}
 
-			for k, _ := range mp {
-				delete(mp, k)
-			}
+			mp = make(map[uint64][]info)
 			for it := range res {
 				if it.to == 0 {
 					break
 				}
+
+				if _, ok := dist[it.to]; !ok {
+					// This would be the last level we explore if we dont see any new
+					// node at this level.
+					maxLoopLevel = item.hop + 1
+				}
 				if item.uid == it.from {
-					// Weight update should be modified when we have actual weights.
 					if d, ok := dist[it.to]; !ok || d > item.cost+it.cost {
 						node := &Item{it.to, item.cost + it.cost, item.hop + 1, 0}
 						heap.Push(&pq, node) // Add a node wit hlesser cost in the queue.
+						dist[it.to] = item.cost + it.cost
 						// Note the removing the same uid with higher cost is expensive. So
 						// we just let it be. It won't affect the result.
 					}
@@ -187,13 +198,13 @@ func ShortestPath(ctx context.Context, sg *SubGraph, rch chan error) {
 			}
 			numHops++
 		} else {
-			// look at the store map.
+			// look at the map that we've already populated..
 			neigh := mp[item.uid]
 			for _, it := range neigh {
-				// Weight update should be modified when we have actual weights.
 				if d, ok := dist[it.to]; !ok || d > item.cost+it.cost {
 					node := &Item{it.to, item.cost + it.cost, item.hop + 1, 0}
 					heap.Push(&pq, node) // Add a node wit hlesser cost in the queue.
+					dist[it.to] = item.cost + it.cost
 				}
 			}
 		}
