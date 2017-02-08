@@ -121,6 +121,8 @@ func lexInsideSchema(l *lex.Lexer) lex.StateFn {
 			return lexComment
 		case r == colon:
 			l.Emit(itemColon)
+		case r == comma:
+			l.Emit(comma)
 		case r == lex.EOF:
 			return l.Errorf("Unclosed schema action")
 		default:

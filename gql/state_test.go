@@ -81,6 +81,10 @@ func TestNewSchemaInterospection(t *testing.T) {
 	schema( pred : name ) {
 		pred
 		type
+	}
+	schema( pred : name,hi ) {
+		pred
+		type
 	}`
 	l := lex.NewLexer(input).Run(lexText)
 	it := l.NewIterator()
