@@ -40,7 +40,13 @@ func (h *priorityQueue) Pop() interface{} {
 	return x
 }
 
-func execNextLevel(ctx context.Context, start *SubGraph, next chan bool, res chan uint64, rch chan error) {
+type info struct {
+	from uint64
+	to   uint64
+	cost float64
+}
+
+func execNextLevel(ctx context.Context, start *SubGraph, next chan bool, res chan info, rch chan error) {
 	var exec []*SubGraph
 	var err error
 	start.SrcUIDs = &task.List{[]uint64{start.Params.From}}
@@ -80,12 +86,15 @@ func execNextLevel(ctx context.Context, start *SubGraph, next chan bool, res cha
 
 		for _, sg := range exec {
 			// Send the destuids in res chan.
-			for _, uid := range sg.DestUIDs.Uids {
-				res <- uid
+			for idx, fromUID := range sg.SrcUIDs.Uids {
+				ul := sg.uidMatrix[idx].Uids
+				for _, toUid := range ul {
+					res <- info{fromUID, toUid, 1} // Cost is 1 for now.
+				}
 			}
 		}
 
-		res <- 0
+		res <- info{0, 0, 0}
 		// modify the exec and attach child nodes.
 		var out []*SubGraph
 		for _, sg := range exec {
@@ -122,11 +131,12 @@ func ShortestPath(ctx context.Context, sg *SubGraph, rch chan error) {
 
 	next := make(chan bool, 2)
 	rch1 := make(chan error, 2)
-	res := make(chan uint64, 1000)
+	res := make(chan info, 1000)
 	go execNextLevel(ctx, sg, next, res, rch1)
+	mp := make(map[uint64][]info)
 
 	// For now, lets allow a maximum of 10 hops.
-	for pq.Len() > 0 && numHops < 10 {
+	for pq.Len() > 0 && numHops < 5 {
 		item := heap.Pop(&pq).(*Item)
 		if item.uid == sg.Params.To {
 			finalCost = item.cost
@@ -150,14 +160,31 @@ func ShortestPath(ctx context.Context, sg *SubGraph, rch chan error) {
 				return
 			}
 
+			for k, _ := range mp {
+				delete(mp, k)
+			}
 			for it := range res {
-				if it == 0 {
+				if it.to == 0 {
 					break
 				}
-				node := &Item{it, item.cost + 1, item.hop + 1, 0}
-				heap.Push(&pq, node)
+				if item.uid == it.from {
+					// Weight update should be modified when we have actual weights.
+					node := &Item{it.to, item.cost + it.cost, item.hop + 1, 0}
+					heap.Push(&pq, node) //This should be an update.
+				} else {
+					//Put it in map.
+					mp[it.from] = append(mp[it.from], it)
+				}
 			}
 			numHops++
+		} else {
+			// look at the store map.
+			neigh := mp[item.uid]
+			for _, it := range neigh {
+				// Weight update should be modified when we have actual weights.
+				node := &Item{it.to, item.cost + it.cost, item.hop + 1, 0}
+				heap.Push(&pq, node) //This should be an update.
+			}
 		}
 	}
 
@@ -165,13 +192,16 @@ func ShortestPath(ctx context.Context, sg *SubGraph, rch chan error) {
 	result := new(task.List)
 	isPathFound := getPath(sg, sg.Params.From, sg.Params.To, result, 0, finalCost)
 	if isPathFound {
+		// Append the start node to the list.
 		result.Uids = append(result.Uids, sg.Params.From)
 		l := len(result.Uids)
+		// Reverse the list.
 		for i := 0; i < l/2; i++ {
 			result.Uids[i], result.Uids[l-i-1] = result.Uids[l-i-1], result.Uids[i]
 		}
 	}
 
+	// Put the path in DestUIDs of the root.
 	sg.DestUIDs = result
 	next <- true
 	rch <- nil
@@ -179,6 +209,7 @@ func ShortestPath(ctx context.Context, sg *SubGraph, rch chan error) {
 
 func getPath(sg *SubGraph, uid, to uint64, path *task.List, cost, finalCost float64) bool {
 	if uid == to && cost == finalCost {
+		// We found the required end node.
 		return true
 	}
 
@@ -195,6 +226,7 @@ func getPath(sg *SubGraph, uid, to uint64, path *task.List, cost, finalCost floa
 
 		for _, childUID := range ul.Uids {
 			if getPath(pc, childUID, to, path, cost+1, finalCost) {
+				// If this node was on the path, add it to the list.
 				path.Uids = append(path.Uids, childUID)
 				return true
 			}
