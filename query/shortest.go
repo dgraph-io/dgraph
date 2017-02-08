@@ -134,6 +134,11 @@ func ShortestPath(ctx context.Context, sg *SubGraph, rch chan error) {
 	res := make(chan info, 1000)
 	go execNextLevel(ctx, sg, next, res, rch1)
 	mp := make(map[uint64][]info)
+	dist := make(map[uint64]float64) // map to store the min cost to nodes we've seen.
+	dist[srcNode.uid] = 0
+
+	//TODO(Ashwin): We can maintain another parent map which could avoid the tree traversal
+	// later and let us find the path directly.
 
 	// For now, lets allow a maximum of 10 hops.
 	for pq.Len() > 0 && numHops < 5 {
@@ -169,8 +174,12 @@ func ShortestPath(ctx context.Context, sg *SubGraph, rch chan error) {
 				}
 				if item.uid == it.from {
 					// Weight update should be modified when we have actual weights.
-					node := &Item{it.to, item.cost + it.cost, item.hop + 1, 0}
-					heap.Push(&pq, node) //This should be an update.
+					if d, ok := dist[it.to]; !ok || d > item.cost+it.cost {
+						node := &Item{it.to, item.cost + it.cost, item.hop + 1, 0}
+						heap.Push(&pq, node) // Add a node wit hlesser cost in the queue.
+						// Note the removing the same uid with higher cost is expensive. So
+						// we just let it be. It won't affect the result.
+					}
 				} else {
 					//Put it in map.
 					mp[it.from] = append(mp[it.from], it)
@@ -182,8 +191,10 @@ func ShortestPath(ctx context.Context, sg *SubGraph, rch chan error) {
 			neigh := mp[item.uid]
 			for _, it := range neigh {
 				// Weight update should be modified when we have actual weights.
-				node := &Item{it.to, item.cost + it.cost, item.hop + 1, 0}
-				heap.Push(&pq, node) //This should be an update.
+				if d, ok := dist[it.to]; !ok || d > item.cost+it.cost {
+					node := &Item{it.to, item.cost + it.cost, item.hop + 1, 0}
+					heap.Push(&pq, node) // Add a node wit hlesser cost in the queue.
+				}
 			}
 		}
 	}
