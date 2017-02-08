@@ -9,9 +9,6 @@ import (
 
 
 func CouldApplyAgrtrOn(agrtr string, typ types.TypeID) bool {
-	if agrtr == "count" {
-		return true
-	}
 	if !typ.IsScalar() {
 		return false
 	}

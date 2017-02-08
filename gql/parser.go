@@ -107,9 +107,8 @@ func init() {
 	}
 }
 
-func (f *Function) IsAgrtr() bool {
-	return f.Name == "count" ||
-		f.Name == "min" ||
+func (f *Function) IsAggregator() bool {
+	return f.Name == "min" ||
 		f.Name == "max" ||
 		f.Name == "sum"
 }
@@ -848,7 +847,7 @@ func evalStack(opStack, valueStack *filterTreeStack) {
 	valueStack.push(topOp)
 }
 
-func parseFunction(it *lex.ItemIterator) (*Function, error) {
+func parseFunction(it *lex.ItemIterator, roundBalanced bool) (*Function, error) {
 	var g *Function
 	for it.Next() {
 		item := it.Item()
@@ -862,6 +861,9 @@ func parseFunction(it *lex.ItemIterator) (*Function, error) {
 			for it.Next() {
 				itemInFunc := it.Item()
 				if itemInFunc.Typ == itemRightRound {
+					if roundBalanced {
+						goto out
+					}
 					break
 				} else if itemInFunc.Typ != itemName {
 					return nil, x.Errorf("Expected arg after func [%s], but got item %v",
@@ -883,6 +885,7 @@ func parseFunction(it *lex.ItemIterator) (*Function, error) {
 			return nil, x.Errorf("Expected a function but got %q", item.Val)
 		}
 	}
+out:
 	return g, nil
 }
 
@@ -1098,7 +1101,7 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 		it.Next() // consume the right round.
 	} else if peekItems[1].Typ == itemLeftRound {
 		// Store the generator function.
-		gen, err := parseFunction(it)
+		gen, err := parseFunction(it, false)
 		if err != nil {
 			return gq, err
 		}
@@ -1137,8 +1140,7 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 
 // godeep constructs the subgraph from the lexed items and a GraphQuery node.
 func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
-	var isAgrtr uint16
-	var agrtr string
+	var isCount uint16
 	curp := gq // Used to track current node, for nesting.
 	for it.Next() {
 		item := it.Item()
@@ -1179,34 +1181,38 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				continue
 			}
 
-			if item.Val == "count" || item.Val == "min" || 
-				item.Val == "max" || item.Val == "sum" {
-				if isAgrtr != 0 {
-					return x.Errorf("Invalid mention of aggregator.")
+			if item.Val == "count" {
+				if isCount != 0 {
+					return x.Errorf("Invalid mention of function count")
 				}
-				isAgrtr = 1
-				agrtr = item.Val
+				isCount = 1
 				it.Next()
 				item = it.Item()
 				if item.Typ != itemLeftRound {
-					return x.Errorf("Invalid mention of aggregator.")
+					return x.Errorf("Invalid mention of count.")
 				}
 				continue
 			}
-			if isAgrtr == 2 {
+			if isCount == 2 {
 				return x.Errorf("Multiple predicates not allowed in single count.")
 			}
 			child := &GraphQuery{
 				Args:    make(map[string]string),
 				Attr:    item.Val,
+				IsCount: isCount == 1,
 			}
-			if isAgrtr == 1 {
-				child.Func = &Function{Name:agrtr, Attr: item.Val}
+			if isAggregator(item.Val) {
+				it.Prev()
+				child.Func, err = parseFunction(it, true)
+				if err != nil {
+					return err
+				}
+				child.Attr = child.Func.Attr
 			}
 			gq.Children = append(gq.Children, child)
 			curp = child
-			if isAgrtr == 1 {
-				isAgrtr = 2
+			if isCount == 1 {
+				isCount = 2
 			}
 		case itemColon:
 			it.Next()
@@ -1252,11 +1258,18 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				}
 			}
 		case itemRightRound:
-			if isAgrtr != 2 {
+			if isCount != 2 {
 				return x.Errorf("Invalid mention of brackets")
 			}
-			isAgrtr = 0
+			isCount = 0
 		}
 	}
 	return nil
 }
+
+func isAggregator(f string) bool {
+	return f == "min" || f == "max" || f == "sum"
+}
+
+
+

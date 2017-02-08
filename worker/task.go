@@ -18,8 +18,7 @@ package worker
 
 import (
 	"strings"
-	"encoding/binary"
-
+	//"fmt"
 	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/dgraph/algo"
@@ -105,12 +104,12 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 	if useFunc {
 		f = q.SrcFunc[0]
 		isIneq = f == "leq" || f == "geq" || f == "lt" || f == "gt" || f == "eq"
-		isAgrtr = f == "count" || f == "min" || f == "max" || f == "sum"
+		isAgrtr = f == "min" || f == "max" || f == "sum"
 		switch {
 		case isAgrtr:
 			// confirm agrregator could apply on the attributes
 			typ, err := schema.TypeOf(attr)
-			if err != nil && f != "count" {
+			if err != nil {
 				return nil, x.Errorf("Attribute %q is not scalar-type", attr)
 			}
 			if !CouldApplyAgrtrOn(f, typ) {
@@ -176,12 +175,12 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 	var out task.Result
 	for i := 0; i < n; i++ {
 		var key []byte
-		if q.Reverse {
-			key = x.ReverseKey(attr, q.Uids[i])
-		} else if isAgrtr {
+		if isAgrtr {
 			key = x.DataKey(attr, q.Uids[i])
 		} else if useFunc {
 			key = x.IndexKey(attr, tokens[i])
+		} else if q.Reverse {
+			key = x.ReverseKey(attr, q.Uids[i])
 		} else {
 			key = x.DataKey(attr, q.Uids[i])
 		}
@@ -198,18 +197,13 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 		} else {
 			newValue.Val = x.Nilbyte
 		}
-			
-		if !isAgrtr {
-			out.Values = append(out.Values, newValue)
-		} else if f == "count" {
-			bs := make([]byte, 4)
-			binary.LittleEndian.PutUint32(bs, uint32(pl.Length(0)))
-			out.Values = append(out.Values, &task.Value{[]byte(bs), int32(types.Int32ID)})
+		out.Values = append(out.Values, newValue)
+
+		if q.DoCount || isAgrtr {
+			if q.DoCount {
+				out.Counts = append(out.Counts, uint32(pl.Length(0)))
+			}
 			// Add an empty UID list to make later processing consistent
-			out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
-			continue
-		} else {
-			out.Values = append(out.Values, newValue)
 			out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
 			continue
 		}
@@ -224,7 +218,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 		out.UidMatrix = append(out.UidMatrix, pl.Uids(opts))
 	}
 
-	if isAgrtr && f != "count" && len(out.Values) > 0 {
+	if isAgrtr && len(out.Values) > 0 {
 		var err error
 		typ, _ := schema.TypeOf(attr)
 		out.Values[0], err = Aggregate(f, out.Values, typ)

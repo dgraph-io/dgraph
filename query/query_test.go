@@ -711,7 +711,7 @@ func TestMin(t *testing.T) {
 
 	js := processToFastJSON(t, query)
 	require.EqualValues(t,
-		`{"me":[{"alive":true,"friend":[{"dob":[{"min":"1901-01-15"}]}],"gender":"female","name":"Michonne"}]}`,
+		`{"me":[{"alive":true,"friend":[{"min(dob)":"1901-01-15"}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
 
@@ -726,6 +726,30 @@ func TestMinError1(t *testing.T) {
 				gender
 				alive
 				min(friend)
+			}
+		}
+	`
+	res, err := gql.Parse(query)
+	require.NoError(t, err)
+
+	var l Latency
+	_, queryErr := ProcessQuery(context.Background(), res, &l)
+	require.NotNil(t, queryErr)
+}
+
+func TestMinError2(t *testing.T) {
+	populateGraph(t)
+
+	// error: min should not have children
+	query := `
+		{
+			me(id:0x01) {
+				name
+				gender
+				alive
+				min(friend) {
+                                    name     
+                                }
 			}
 		}
 	`
@@ -756,7 +780,7 @@ func TestMax(t *testing.T) {
 
 	js := processToFastJSON(t, query)
 	require.EqualValues(t,
-		`{"me":[{"alive":true,"friend":[{"dob":[{"max":"1910-01-02"}]}],"gender":"female","name":"Michonne"}]}`,
+		`{"me":[{"alive":true,"friend":[{"max(dob)":"1910-01-02"}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
 
@@ -777,12 +801,8 @@ func TestMaxError1(t *testing.T) {
 			}
 		}
 	`
-	res, err := gql.Parse(query)
-	require.NoError(t, err)
-
-	var l Latency
-	_, queryErr := ProcessQuery(context.Background(), res, &l)
-	require.NotNil(t, queryErr)
+	_, err := gql.Parse(query)
+	require.NotNil(t, err)
 }
 
 
@@ -805,7 +825,7 @@ func TestSum(t *testing.T) {
 
 	js := processToFastJSON(t, query)
 	require.EqualValues(t,
-		`{"me":[{"alive":true,"friend":[{"shadow_deep":[{"sum":18}]}],"gender":"female","name":"Michonne"}]}`,
+		`{"me":[{"alive":true,"friend":[{"sum(shadow_deep)":18}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
 
