@@ -19,6 +19,7 @@ var stats = styles.statistics;
 var editor = styles.editor;
 var properties = styles.properties;
 var fullscreen = styles.fullscreen;
+var tip = styles.tip;
 
 // TODO - Abstract these out and remove these from global scope.
 var network,
@@ -234,7 +235,11 @@ function renderNetwork(nodes, edges) {
     width: '100%',
     interaction: {
       hover: true,
-      tooltipDelay: 1000
+      tooltipDelay: 1000,
+      keyboard: {
+        enabled: true,
+        bindToWindow: false
+      }
     },
     layout: {
       improvedLayout: nodes.length < 50
@@ -335,8 +340,10 @@ function timeout(ms, promise) {
 
 var Home = React.createClass({
   getInitialState: function() {
+    var response = this.lastQuery()
     return {
-      query: '',
+      queryIndex: response[0],
+      query: response[1],
       lastQuery: '',
       response: '',
       latency: '',
@@ -347,24 +354,88 @@ var Home = React.createClass({
       relations: 0
     }
   },
+  // Handler which listens to changes on AceEditor.
   queryChange: function(newValue) {
-    // TODO - Maybe store this at a better place once you figure it out.
-    this.query = newValue;
+    this.setState({ query: newValue });
   },
-  // TODO - Dont send mutation. query if text didn't change.
+  resetState: function() {
+    return {
+      response: '',
+      latency: '',
+      rendering: '',
+      resType: '',
+      currentNode: '{}',
+      nodes: 0,
+      relations: 0,
+      resType: 'hourglass',
+      lastQuery: this.state.query
+    }
+  },
+  storeQuery: function(query) {
+    var queries = JSON.parse(localStorage.getItem("queries")) || [];
+    queries.push(query);
+
+    // We just store the last 10 queries.
+    // if (queries.length > 10) {
+    //   queries.splice(0, 1)
+    // }
+
+    this.setState({
+      queryIndex: queries.length - 1
+    })
+    localStorage.setItem("queries", JSON.stringify(queries));
+  },
+  lastQuery: function() {
+    var queries = JSON.parse(localStorage.getItem("queries"))
+    if (queries == null) {
+      return [undefined, ""]
+    }
+    // This means queries has atleast one element.
+
+    var idx = queries.length - 1;
+    return [idx, queries[idx]]
+  },
+  previousQuery: function() {
+    var queries = JSON.parse(localStorage.getItem("queries"))
+    if (queries == null) {
+      return
+    }
+
+    var idx = this.state.queryIndex;
+    if (idx === undefined || idx - 1 < 0) {
+      return
+    }
+    this.setState({
+      query: queries[idx - 1],
+      queryIndex: idx - 1
+    });
+  },
+  nextQuery: function() {
+    var queries = JSON.parse(localStorage.getItem("queries"))
+    if (queries == null) {
+      return
+    }
+
+    var idx = this.state.queryIndex;
+    if (idx === undefined || (idx + 1) === queries.length) {
+      return
+    }
+    this.setState({
+      queryIndex: idx + 1,
+      query: queries[idx + 1]
+    })
+  },
   runQuery: function(e) {
     e.preventDefault();
 
-    if (this.query === this.state.lastQuery) {
-      return;
-    }
+    // if (this.state.query === this.state.lastQuery && this.state.resType == "") {
+  //   return;
+  // }
+
     // Resetting state
-    predLabel = {}, edgeLabels = {}, uidMap = {}, nodes = [], edges = [];
     network && network.destroy();
-    this.setState(Object.assign(this.getInitialState(), {
-      resType: 'hourglass',
-      lastQuery: this.query
-    }));
+    this.setState(this.resetState());
+    this.storeQuery(this.state.query);
 
     var that = this;
     timeout(60000, fetch('http://localhost:8080/query?debug=true', {
@@ -373,7 +444,7 @@ var Home = React.createClass({
         headers: {
           'Content-Type': 'text/plain',
         },
-        body: this.query
+        body: this.state.query
       }).then(checkStatus)
       .then(parseJSON)
       .then(function(result) {
@@ -462,11 +533,11 @@ var Home = React.createClass({
                     mode="logiql"
                     theme="github"
                     name="editor"
-                    editorProps={{$blockScrolling: true}}
+                    editorProps={{$blockScrolling: Infinity}}
                     width='100%'
                     height='350px'
                     fontSize='12px'
-                    value={this.query}
+                    value={this.state.query}
                     focus={true}
                     showPrintMargin={false}
                     wrapEnabled={true}
@@ -480,8 +551,32 @@ var Home = React.createClass({
                       exec: function(editor) {
                         this.runQuery(new Event(''));
                       }.bind(this)
+                    },
+                    {
+                      name: 'previousQuery',
+                      bindKey: {
+                        win: 'Ctrl-Up',
+                        mac: 'Command-Up'
+                      },
+                      exec: function(editor) {
+                        this.previousQuery();
+                      }.bind(this)
+                    },
+                    {
+                      name: 'nextQuery',
+                      bindKey: {
+                        win: 'Ctrl-Down',
+                        mac: 'Command-Down'
+                      },
+                      exec: function(editor) {
+                        this.nextQuery();
+                      }.bind(this)
                     }]}
                   />
+                </div>
+                <div style={tip}>Tips:<br/>
+                  Ctrl + Enter to execute the query.<br/>
+                  Ctrl + Up/Down arrow key to see previously run queries.
                 </div>
                 <Stats rendering={this.state.rendering} latency={this.state.latency} class="hidden-xs"></Stats>
               </div>

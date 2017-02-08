@@ -35,6 +35,14 @@ var styles = {
     position: 'absolute',
     top: '10px',
     right: '10px'
+  },
+  tip: {
+    border: '1px solid #87cb74',
+    backgroundColor: '#e3f9e3',
+    padding: '10px',
+    margin: '10px',
+    borderRadius: '3px',
+    height: 'auto'
   }
 }
 
