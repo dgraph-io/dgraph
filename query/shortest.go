@@ -46,7 +46,7 @@ type info struct {
 	cost float64
 }
 
-func (start *SubGraph) execNextLevel(ctx context.Context, mp map[uint64]map[uint64]float64, next chan bool, rch chan error) {
+func (start *SubGraph) expandOut(ctx context.Context, mp map[uint64]map[uint64]float64, next chan bool, rch chan error) {
 	var exec []*SubGraph
 	var err error
 	start.SrcUIDs = &task.List{[]uint64{start.Params.From}}
@@ -140,14 +140,19 @@ func (start *SubGraph) execNextLevel(ctx context.Context, mp map[uint64]map[uint
 func ShortestPath(ctx context.Context, sg *SubGraph, rch chan error) {
 	var err error
 	if sg.Params.Alias != "shortest" {
-		rch <- nil
+		rch <- x.Errorf("Invalid shortest path query")
 		return
 	}
 
 	pq := make(priorityQueue, 0)
 	heap.Init(&pq)
 
-	srcNode := &Item{sg.Params.From, 0, 0, 0}
+	srcNode := &Item{
+		uid:   sg.Params.From,
+		cost:  0,
+		hop:   0,
+		index: 0,
+	}
 
 	heap.Push(&pq, srcNode)
 
@@ -157,7 +162,7 @@ func ShortestPath(ctx context.Context, sg *SubGraph, rch chan error) {
 	next := make(chan bool, 2)
 	rch1 := make(chan error, 2)
 	mp := make(map[uint64]map[uint64]float64)
-	go sg.execNextLevel(ctx, mp, next, rch1)
+	go sg.expandOut(ctx, mp, next, rch1)
 	dist := make(map[uint64]float64) // map to store the min cost to nodes we've seen.
 	dist[srcNode.uid] = 0
 	var stopExpansion bool
