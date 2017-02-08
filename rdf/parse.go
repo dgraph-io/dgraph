@@ -293,12 +293,6 @@ func Parse(line string) (rnq graph.NQuad, rerr error) {
 			if err := parseFacets(it, &rnq); err != nil {
 				return rnq, x.Errorf(err.Error())
 			}
-			// case itemFacetKey:
-			// 	facetKey = strings.Trim(item.Val, " ")
-			// case itemFacetVal:
-			// 	facetVal = strings.Trim(item.Val, " ")
-			// 	rnq.Facets = append(rnq.Facets, &facets.Facet{facetKey,
-			// 		[]byte(facetVal), facets.ValStrToValType(facetVal)})
 		}
 	}
 
