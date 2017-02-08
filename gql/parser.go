@@ -1185,6 +1185,20 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				continue
 			}
 
+			if isAggregator(item.Val) {
+				child := &GraphQuery{
+					Args:    make(map[string]string),
+				}
+				it.Prev()
+				if child.Func, err = parseFunction(it); err != nil {
+					return err
+				}
+				child.Attr = child.Func.Attr
+				gq.Children = append(gq.Children, child)
+				curp = child
+				continue
+			}
+
 			if item.Val == "count" {
 				if isCount != 0 {
 					return x.Errorf("Invalid mention of function count")
@@ -1204,14 +1218,6 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				Args:    make(map[string]string),
 				Attr:    item.Val,
 				IsCount: isCount == 1,
-			}
-			if isAggregator(item.Val) {
-				it.Prev()
-				child.Func, err = parseFunction(it)
-				if err != nil {
-					return err
-				}
-				child.Attr = child.Func.Attr
 			}
 			gq.Children = append(gq.Children, child)
 			curp = child
@@ -1272,7 +1278,8 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 }
 
 func isAggregator(f string) bool {
-	return f == "min" || f == "max" || f == "sum"
+	fname := strings.ToLower(f)
+	return fname == "min" || fname == "max" || fname == "sum"
 }
 
 
