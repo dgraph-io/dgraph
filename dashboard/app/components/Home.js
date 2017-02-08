@@ -285,6 +285,16 @@ function renderNetwork(nodes, edges) {
     }
   });
 
+
+  network.on("hoverNode", function(params) {
+    var nodeUid = params.node,
+      currentNode = nodeSet.get(nodeUid);
+
+    that.setState({
+      currentNode: currentNode.title
+    });
+  });
+
   network.on("dragEnd", function(params) {
     for (var i = 0; i < params.nodes.length; i++) {
       var nodeId = params.nodes[i];
@@ -332,7 +342,7 @@ var Home = React.createClass({
       latency: '',
       rendering: '',
       resType: '',
-      currentNode: '',
+      currentNode: '{}',
       nodes: 0,
       relations: 0
     }
@@ -455,7 +465,7 @@ var Home = React.createClass({
                     editorProps={{$blockScrolling: true}}
                     width='100%'
                     height='350px'
-                    fontSize='14px'
+                    fontSize='12px'
                     value={this.query}
                     focus={true}
                     showPrintMargin={false}
@@ -480,7 +490,7 @@ var Home = React.createClass({
               <div style={graph} id="graph" className={this.state.resType}>{this.state.response}</div>
               <div>Nodes: {this.state.nodes}, Edges: {this.state.relations}</div>
               <div style={{height:'auto'}}>{this.state.partial == true ? 'We have only loaded a subset of the graph. Click on a leaf node to expand its child nodes.': ''}</div>
-              <div style={properties} title={this.state.currentNode}><span>Selected Node: <em>{this.state.currentNode}</em></span></div>
+              <div style={properties} title={this.state.currentNode}><span>Current Node: <em><pre>{JSON.stringify(JSON.parse(this.state.currentNode), null, 2)}</pre></em></span></div>
 
                 {/* <span style={fullscreen} onClick={activateFullScreen} className="glyphicon glyphicon-glyphicon glyphicon-resize-full">
                  </span>

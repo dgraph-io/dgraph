@@ -6,7 +6,7 @@ var styles = {
   graph: {
     fontSize: '12px',
     wordBreak: 'break-all',
-    marginTop: '10px',
+    marginTop: '14px',
     marginBottom: '10px',
     width: '100%',
     height: '500px',
