@@ -19,7 +19,6 @@
 package rdf
 
 import (
-	"errors"
 	"strconv"
 
 	"github.com/dgraph-io/dgraph/lex"
@@ -303,30 +302,23 @@ func lexLiteral(l *lex.Lexer) lex.StateFn {
 }
 
 func lexObjectType(l *lex.Lexer) lex.StateFn {
-	if err := lexType(l, itemObjectType); err != nil {
-		return l.Errorf(err.Error())
-	}
-	return lexText
-}
-
-func lexType(l *lex.Lexer, styp lex.ItemType) error {
 	r := l.Next()
 	if r != caret {
-		return errors.New("Expected ^ for lexType")
+		return l.Errorf("Expected ^ for lexObjectType")
 	}
 
 	r = l.Next()
 	if r != caret {
-		return errors.New("Expected ^^ for lexType")
+		return l.Errorf("Expected ^^ for lexObjectType")
 	}
 
 	l.Ignore()
 	r = l.Next()
 	if r != lsThan {
-		return errors.New("Expected < for lexType")
+		return l.Errorf("Expected < for lexObjectType")
 	}
 
-	return lex.LexIRIRef(l, styp)
+	return lexIRIRef(l, itemObjectType, lexText)
 }
 
 func lexObject(l *lex.Lexer) lex.StateFn {
