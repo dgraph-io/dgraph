@@ -15,3 +15,8 @@
     padding-top: 20px;
     color: green;
 }
+
+.query:hover pre {
+    border: 1px solid gray;
+    cursor: pointer;
+}

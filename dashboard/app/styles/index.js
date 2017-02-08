@@ -34,7 +34,9 @@ var styles = {
   fullscreen: {
     position: 'absolute',
     top: '10px',
-    right: '10px'
+    right: '10px',
+    height: '30px',
+    width: '30px'
   },
   tip: {
     border: '1px solid #87cb74',

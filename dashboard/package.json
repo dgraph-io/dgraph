@@ -20,6 +20,7 @@
     "react-bootstrap": "^0.30.7",
     "react-dom": "^15.4.2",
     "react-router": "^3.0.2",
+    "screenfull": "^3.0.2",
     "vis": "^4.18.1",
     "whatwg-fetch": "^2.0.2"
   },

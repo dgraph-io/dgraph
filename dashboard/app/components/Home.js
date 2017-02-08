@@ -9,9 +9,11 @@ require('brace');
 var AceEditor = require('react-ace').default;
 require('brace/mode/logiql');
 require('brace/theme/github');
+var screenfull = require('screenfull');
 
 var NavBar = require('./Navbar');
 var Stats = require('./Stats');
+var Query = require('./Query');
 
 var styles = require('../styles');
 var graph = styles.graph;
@@ -338,12 +340,20 @@ function timeout(ms, promise) {
   })
 }
 
+function enterFullScreen(e) {
+  e.preventDefault();
+  screenfull.request(document.getElementById('graph'))
+}
+
 var Home = React.createClass({
   getInitialState: function() {
     var response = this.lastQuery()
     return {
       queryIndex: response[0],
       query: response[1],
+      // We store the queries run in state, so that they can be displayed
+      // to the user.
+      queries: response[2],
       lastQuery: '',
       response: '',
       latency: '',
@@ -353,6 +363,16 @@ var Home = React.createClass({
       nodes: 0,
       relations: 0
     }
+  },
+  updateQuery: function(e) {
+    e.preventDefault();
+    this.setState({
+      query: e.target.innerHTML
+    });
+    window.scrollTo(0, 0);
+    this.refs.code.editor.focus();
+    this.refs.code.editor.navigateFileEnd();
+    network && network.destroy();
   },
   // Handler which listens to changes on AceEditor.
   queryChange: function(newValue) {
@@ -373,27 +393,25 @@ var Home = React.createClass({
   },
   storeQuery: function(query) {
     var queries = JSON.parse(localStorage.getItem("queries")) || [];
-    queries.push(query);
+    queries.unshift(query);
 
-    // We just store the last 10 queries.
-    // if (queries.length > 10) {
-    //   queries.splice(0, 1)
-    // }
+    (queries.length > 20) && (queries = queries.splice(0, 20))
 
     this.setState({
-      queryIndex: queries.length - 1
+      queryIndex: queries.length - 1,
+      queries: queries
     })
     localStorage.setItem("queries", JSON.stringify(queries));
   },
   lastQuery: function() {
     var queries = JSON.parse(localStorage.getItem("queries"))
     if (queries == null) {
-      return [undefined, ""]
+      return [undefined, "", []]
     }
     // This means queries has atleast one element.
 
     var idx = queries.length - 1;
-    return [idx, queries[idx]]
+    return [idx, queries[idx], queries]
   },
   previousQuery: function() {
     var queries = JSON.parse(localStorage.getItem("queries"))
@@ -429,8 +447,8 @@ var Home = React.createClass({
     e.preventDefault();
 
     // if (this.state.query === this.state.lastQuery && this.state.resType == "") {
-  //   return;
-  // }
+    //   return;
+    // }
 
     // Resetting state
     network && network.destroy();
@@ -539,6 +557,7 @@ var Home = React.createClass({
                     fontSize='12px'
                     value={this.state.query}
                     focus={true}
+                    ref="code"
                     showPrintMargin={false}
                     wrapEnabled={true}
                     onChange={this.queryChange}
@@ -582,20 +601,35 @@ var Home = React.createClass({
               </div>
             <div className="col-sm-7">
               <label> Response </label>
-              <div style={graph} id="graph" className={this.state.resType}>{this.state.response}</div>
+              {
+                screenfull.enabled  &&
+              <div style={fullscreen} onClick={enterFullScreen}>
+                <span style={{fontSize: '20px',padding:'5px'}} className="glyphicon glyphicon-glyphicon glyphicon-resize-full">
+                </span>
+              </div>
+              }
+              <div style={graph} id="graph" className={this.state.resType}>{this.state.response}
+              </div>
               <div>Nodes: {this.state.nodes}, Edges: {this.state.relations}</div>
               <div style={{height:'auto'}}>{this.state.partial == true ? 'We have only loaded a subset of the graph. Click on a leaf node to expand its child nodes.': ''}</div>
               <div style={properties} title={this.state.currentNode}><span>Current Node: <em><pre>{JSON.stringify(JSON.parse(this.state.currentNode), null, 2)}</pre></em></span></div>
-
-                {/* <span style={fullscreen} onClick={activateFullScreen} className="glyphicon glyphicon-glyphicon glyphicon-resize-full">
-                 </span>
-                */}
+              
             </div>
-            <Stats rendering={this.state.rendering} latency={this.state.latency} class="visible-xs"></Stats>  
+            <Stats rendering={this.state.rendering} latency={this.state.latency} class="visible-xs"></Stats>
+            </div>
+            </div>
+            <div className="row">
+              <div className="col-sm-12">
+            <div style={{marginTop: '10px', borderTop: '1px solid black'}}>
+            <h3>Previous Queries (click to replay)</h3>
+            {this.state.queries.map(function (query, i) {
+              return <Query text={query} update={this.updateQuery} key={i}></Query>;
+            },this)}
+            </div>
+            </div>
+            </div>
           </div>
         </div>
-      </div>
-    </div>
     );
   }
 });
