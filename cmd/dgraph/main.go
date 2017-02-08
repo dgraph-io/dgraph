@@ -520,6 +520,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 
 	var allocIds map[string]uint64
 	var allocIdsStr map[string]string
+	var schemaMap map[string]string
 	// If we have mutations, run them first.
 	if res.Mutation != nil && (len(res.Mutation.Set) > 0 || len(res.Mutation.Del) > 0) {
 		if allocIds, err = mutationHandler(ctx, res.Mutation); err != nil {
@@ -534,11 +535,20 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Run schema interospection
+	if res.SchemaInterospection != nil {
+		schemaMap = schema.MultiGet(res.SchemaInterospection.Predicates)
+	}
+
+	// do we need to return schema if query is present ?
 	if len(res.Query) == 0 {
 		mp := map[string]interface{}{
 			"code":    x.Success,
 			"message": "Done",
 			"uids":    allocIdsStr,
+		}
+		if res.SchemaInterospection != nil {
+			mp["schema"] = schemaMap
 		}
 		if js, err := json.Marshal(mp); err == nil {
 			w.Write(js)
@@ -698,6 +708,10 @@ func (s *grpcServer) Run(ctx context.Context,
 		}
 	}
 	resp.AssignedUids = allocIds
+
+	if req.Schema != nil {
+		resp.Schema = schema.MultiGet(req.Schema.Predicates)
+	}
 
 	sgl, err := query.ProcessQuery(ctx, res, &l)
 	if err != nil {

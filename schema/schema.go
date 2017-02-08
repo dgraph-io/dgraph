@@ -54,6 +54,24 @@ func Init(ps *store.Store, file string) error {
 	return nil
 }
 
+func MultiGet(attrs []string) map[string]string {
+	schema := map[string]string{}
+	if len(attrs) > 0 {
+		for _, attr := range attrs {
+			if schemaType, err := TypeOf(attr); err == nil {
+				schema[attr] = schemaType.Name()
+			}
+		}
+	} else {
+		schemaLock.RLock()
+		defer schemaLock.RUnlock()
+		for k, v := range str {
+			schema[k] = v.Name()
+		}
+	}
+	return schema
+}
+
 func init() {
 	reset()
 }
