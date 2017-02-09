@@ -150,6 +150,7 @@ func newPosting(t *task.DirectedEdge) *types.Posting {
 		Label:   t.Label,
 		Lang:    t.Lang,
 		Op:      op,
+		Facets:  t.Facets,
 	}
 }
 

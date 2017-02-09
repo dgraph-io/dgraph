@@ -158,7 +158,7 @@ func (sg *SubGraph) ToProtocolBuffer(l *Latency) (*graph.Node, error) {
 			n1.SetUID(uid)
 		}
 
-		if rerr := sg.preTraverse(uid, n1); rerr != nil {
+		if rerr := sg.preTraverse(uid, n1, n1); rerr != nil {
 			if rerr.Error() == "_INV_" {
 				continue
 			}
@@ -349,7 +349,7 @@ func processNodeUids(n *fastJsonNode, sg *SubGraph) error {
 		if sg.Params.GetUID || sg.Params.isDebug {
 			n1.SetUID(uid)
 		}
-		if err := sg.preTraverse(uid, n1); err != nil {
+		if err := sg.preTraverse(uid, n1, n1); err != nil {
 			if err.Error() == "_INV_" {
 				continue
 			}

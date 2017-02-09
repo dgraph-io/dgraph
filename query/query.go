@@ -20,11 +20,14 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"google.golang.org/grpc/metadata"
 
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/gql"
@@ -205,8 +208,12 @@ func init() {
 	go release()
 }
 
+var (
+	ErrEmptyVal = errors.New("query: harmless error, e.g. task.Val is nil")
+)
+
 // This method gets the values and children for a subgraph.
-func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
+func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 	invalidUids := make(map[uint64]bool)
 	uidAlreadySet := false
 
@@ -234,6 +241,20 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 			uc.AddValue("count", c)
 			dst.AddChild(pc.Attr, uc)
 
+		} else if len(pc.SrcFunc) > 0 && isAggregatorFn(pc.SrcFunc[0]) {
+			if idx > 0 { // aggregator will put value at index 0; place once
+				continue
+			}
+			// add sg.Attr as child on 'parent' instead of 'dst', otherwise
+			// within output, aggregator will messed with other attrs
+			uc := parent.New(sg.Attr)
+			name := fmt.Sprintf("%s(%s)", pc.SrcFunc[0], pc.Attr)
+			sv, err := convertWithBestEffort(pc.values[0], pc.Attr)
+			if err != nil && err != ErrEmptyVal {
+				return err
+			}
+			uc.AddValue(name, sv)
+			parent.AddChild(sg.Attr, uc)
 		} else if algo.ListLen(ul) > 0 || len(pc.Children) > 0 {
 			// We create as many predicate entity children as the length of uids for
 			// this predicate.
@@ -246,7 +267,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 				}
 				uc := dst.New(fieldName)
 
-				if rerr := pc.preTraverse(childUID, uc); rerr != nil {
+				if rerr := pc.preTraverse(childUID, uc, dst); rerr != nil {
 					if rerr.Error() == "_INV_" {
 						invalidUids[childUID] = true
 						continue // next UID.
@@ -278,28 +299,12 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 					dst.SetUID(uid)
 				}
 			} else {
-				// globalType is the best effort type to which we try converting
-				// and if not possible, we ignore it in the result.
-				globalType, hasType := schema.TypeOf(pc.Attr)
-				sv := types.ValueForType(types.StringID)
-				if hasType == nil {
-					// Try to coerce types if this is an optional scalar outside an
-					// object definition.
-					if !globalType.IsScalar() {
-						return x.Errorf("Leaf predicate:'%v' must be a scalar.", pc.Attr)
-					}
-					gtID := globalType
-					// Convert to schema type.
-					sv, err = types.Convert(v, gtID)
-					if bytes.Equal(tv.Val, nil) || err != nil {
-						continue
-					}
-				} else {
-					sv, err = types.Convert(v, types.StringID)
-					x.Check(err)
-				}
-				if bytes.Equal(tv.Val, nil) {
+				// if conversion not possible, we ignore it in the result.
+				sv, convErr := convertWithBestEffort(tv, pc.Attr)
+				if convErr == ErrEmptyVal {
 					continue
+				} else if convErr != nil {
+					return convErr
 				}
 				// Only strings can have empty values.
 				if sv.Tid == types.StringID && sv.Value.(string) == "_nil_" {
@@ -320,6 +325,32 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 	}
 
 	return nil
+}
+
+// convert from task.Val to types.Value which is determined by attr
+// if convert failed, try convert to types.StringID
+func convertWithBestEffort(tv *task.Value, attr string) (types.Val, error) {
+	v, _ := getValue(tv)
+	typ, err := schema.TypeOf(attr)
+	sv := types.ValueForType(types.StringID)
+	if err == nil {
+		// Try to coerce types if this is an optional scalar outside an
+		// object definition.
+		if !typ.IsScalar() {
+			return sv, x.Errorf("Leaf predicate:'%v' must be a scalar.", attr)
+		}
+		sv, err = types.Convert(v, typ)
+		if bytes.Equal(tv.Val, nil) || err != nil {
+			return sv, ErrEmptyVal
+		}
+	} else {
+		sv, err = types.Convert(v, types.StringID)
+		x.Check(err)
+	}
+	if bytes.Equal(tv.Val, nil) {
+		return sv, ErrEmptyVal
+	}
+	return sv, nil
 }
 
 func createProperty(prop string, v types.Val) *graph.Property {
@@ -398,6 +429,24 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 			Params: args,
 		}
 
+		if gchild.Func != nil && gchild.Func.IsAggregator() {
+			f := gchild.Func.Name
+			if len(gchild.Children) != 0 {
+				note := fmt.Sprintf("Node with aggregator %q cant have child attr", f)
+				return errors.New(note)
+			}
+			// embedded filter will cause ambiguous output like following,
+			// director.film @filter(gt(initial_release_date, "2016")) {
+			//    min(initial_release_date @filter(gt(initial_release_date, "1986"))
+			// }
+			if gchild.Filter != nil {
+				note := fmt.Sprintf("Node with aggregator %q cant have filter,", f) +
+					" please place the filter on the upper level"
+				return errors.New(note)
+			}
+			dst.SrcFunc = append(dst.SrcFunc, f)
+		}
+
 		if gchild.Filter != nil {
 			dstf := &SubGraph{}
 			if err := filterCopy(dstf, gchild.Filter); err != nil {
@@ -465,10 +514,19 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		return nil, err
 	}
 
+	var debug bool
+	// gRPC client passes information about debug as metadata.
+	if md, ok := metadata.FromContext(ctx); ok {
+		// md is a map[string][]string
+		debug = len(md["debug"]) > 0 && md["debug"][0] == "true"
+	}
+	// HTTP passes information about debug as query parameter which is attached to context.
+	debug = debug || ctx.Value("debug") == "true"
+
 	// For the root, the name to be used in result is stored in Alias, not Attr.
 	// The attr at root (if present) would stand for the source functions attr.
 	args := params{
-		isDebug:    gq.Alias == "debug",
+		isDebug:    debug,
 		Alias:      gq.Alias,
 		Var:        gq.Var,
 		ParentVars: make(map[string]*task.List),
@@ -565,6 +623,7 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 		}
 		x.Trace(ctx, "Query parsed")
 		sgl = append(sgl, sg)
+		//sg.DebugPrint("---")
 	}
 	l.Parsing += time.Since(loopStart)
 
@@ -875,6 +934,8 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	// taken into account. For example, a PL might have only 50 entries but the
 	// user wants to skip 100 entries and return 10 entries. In this case, you
 	// should return a count of 0, not 10.
+
+	// take care of the order
 	if sg.Params.DoCount {
 		x.AssertTrue(len(sg.Filters) > 0)
 		sg.counts = make([]uint32, len(sg.uidMatrix))
@@ -1024,6 +1085,14 @@ func isValidFuncName(f string) bool {
 func isCompareFn(f string) bool {
 	switch f {
 	case "leq", "geq", "lt", "gt", "eq":
+		return true
+	}
+	return false
+}
+
+func isAggregatorFn(f string) bool {
+	switch f {
+	case "min", "max", "sum":
 		return true
 	}
 	return false

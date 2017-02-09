@@ -66,15 +66,13 @@ var (
 	port       = flag.Int("port", 8080, "Port to run server on.")
 	bindall    = flag.Bool("bindall", false,
 		"Use 0.0.0.0 instead of localhost to bind to all addresses on local machine.")
-	numcpu = flag.Int("cores", runtime.NumCPU(),
-		"Number of cores to be used by the process")
-	nomutations  = flag.Bool("nomutations", false, "Don't allow mutations on this server.")
-	tracing      = flag.Float64("trace", 0.0, "The ratio of queries to trace.")
-	schemaFile   = flag.String("schema", "", "Path to schema file")
-	cpuprofile   = flag.String("cpu", "", "write cpu profile to file")
-	memprofile   = flag.String("mem", "", "write memory profile to file")
-	dumpSubgraph = flag.String("dumpsg", "", "Directory to save subgraph for testing, debugging")
-
+	nomutations    = flag.Bool("nomutations", false, "Don't allow mutations on this server.")
+	tracing        = flag.Float64("trace", 0.0, "The ratio of queries to trace.")
+	schemaFile     = flag.String("schema", "", "Path to schema file")
+	cpuprofile     = flag.String("cpu", "", "write cpu profile to file")
+	memprofile     = flag.String("mem", "", "write memory profile to file")
+	dumpSubgraph   = flag.String("dumpsg", "", "Directory to save subgraph for testing, debugging")
+	uiDir          = flag.String("ui", os.Getenv("GOPATH")+"/src/github.com/dgraph-io/dgraph/dashboard/dist", "Directory which contains assets for the user interface")
 	finishCh       = make(chan struct{}) // channel to wait for all pending reqs to finish.
 	shutdownCh     = make(chan struct{}) // channel to signal shutdown.
 	pendingQueries = make(chan struct{}, 10000*runtime.NumCPU())
@@ -450,7 +448,9 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	// Lets add the value of the debug query parameter to the context.
+	c := context.WithValue(context.Background(), "debug", r.URL.Query().Get("debug"))
+	ctx, cancel := context.WithTimeout(c, time.Minute)
 	defer cancel()
 
 	if rand.Float64() < *tracing {
@@ -469,6 +469,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		x.SetStatus(w, x.ErrorInvalidRequest, "Invalid request encountered.")
 		return
 	}
+
 	res, err := parseQueryAndMutation(ctx, q)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -677,16 +678,12 @@ func (s *grpcServer) Run(ctx context.Context,
 }
 
 func checkFlagsAndInitDirs() {
-	numCpus := *numcpu
 	if len(*cpuprofile) > 0 {
 		f, err := os.Create(*cpuprofile)
 		x.Check(err)
 		pprof.StartCPUProfile(f)
 	}
 
-	prev := runtime.GOMAXPROCS(numCpus)
-	log.Printf("num_cpu: %v. prev_maxprocs: %v. Set max procs to num cpus",
-		numCpus, prev)
 	// Create parent directories for postings, uids and mutations
 	x.Check(os.MkdirAll(*postingDir, 0700))
 }
@@ -738,6 +735,7 @@ func setupServer(che chan error) {
 	http.HandleFunc("/admin/index", indexHandler)
 	http.HandleFunc("/admin/shutdown", shutDownHandler)
 	http.HandleFunc("/admin/backup", backupHandler)
+	http.Handle("/", http.FileServer(http.Dir(*uiDir)))
 
 	// Initilize the servers.
 	go serveGRPC(grpcl)

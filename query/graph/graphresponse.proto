@@ -1,7 +1,9 @@
-// To compile this file run the command below from inside the graph directory
-// protoc --gofast_out=plugins=grpc:. *.proto
+// To compile this file, in dgraph directory :
+// protoc --gofast_out=plugins=grpc,Mtypes/facets/facets.proto=github.com/dgraph-io/dgraph/types/facets:. query/graph/graphresponse.proto
 
 syntax="proto3";
+import "types/facets/facets.proto";
+
 package graph;
 
 service Dgraph {
@@ -16,6 +18,7 @@ message NQuad {
     string label = 5;
     string lang = 7;
     sint32 objectType = 6;
+    repeated facets.Facet facets = 8;
 }
 
 message Value {
