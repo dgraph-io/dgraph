@@ -238,7 +238,6 @@ function renderNetwork(nodes, edges) {
     width: '100%',
     interaction: {
       hover: true,
-      tooltipDelay: 1000,
       keyboard: {
         enabled: true,
         bindToWindow: false
@@ -248,7 +247,7 @@ function renderNetwork(nodes, edges) {
       improvedLayout: true
     },
     physics: {
-      timestep: 0.75
+      timestep: 0.6
     }
   };
 
@@ -263,11 +262,23 @@ function renderNetwork(nodes, edges) {
         currentNode: currentNode.title
       });
 
+      var incoming = data.edges.get({
+        filter: function(node) {
+          return node.to === nodeUid
+        }
+      })
+
+      if (incoming.length === 0) {
+        // Its a root node, we don't want to expand/collapse.
+        return
+      }
+
       var outgoing = data.edges.get({
         filter: function(node) {
           return node.from === nodeUid
         }
       })
+
       var expanded = outgoing.length > 0
 
       var outgoingEdges = edgeSet.get({
