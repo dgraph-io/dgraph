@@ -108,8 +108,9 @@ func processSort(ts *task.Sort) (*task.SortResult, error) {
 	for i := 0; i < n; i++ {
 		// offsets[i] is the offset for i-th posting list. It gets decremented as we
 		// iterate over buckets.
+		var emptyUidList task.List
 		out[i].offset = int(ts.Offset)
-		out[i].ulist = algo.SortedListToBlock([]uint64{})
+		out[i].ulist = &emptyUidList
 	}
 
 	// Iterate over every bucket / token.

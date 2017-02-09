@@ -557,8 +557,14 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		sg.SrcFunc = append(sg.SrcFunc, gq.Func.Args...)
 	}
 	if len(gq.UID) > 0 {
-		sg.SrcUIDs = algo.SortedListToBlock(gq.UID)
-		sg.uidMatrix = []*task.List{algo.SortedListToBlock(gq.UID)}
+		o := new(task.List)
+		it := algo.NewWriteIterator(o)
+		for _, uid := range gq.UID {
+			it.Append(uid)
+		}
+		it.End()
+		sg.SrcUIDs = o
+		sg.uidMatrix = []*task.List{o}
 	}
 	sg.values = createNilValuesList(1)
 	// Copy roots filter.

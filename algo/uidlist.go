@@ -180,16 +180,6 @@ func SortedListToBlock(l []uint64) *task.List {
 	return b
 }
 
-func BlockToList(b *task.List) []uint64 {
-	res := make([]uint64, 0, 5)
-	for _, it := range b.Blocks {
-		for _, el := range it.List {
-			res = append(res, el)
-		}
-	}
-	return res
-}
-
 func ListLen(l *task.List) int {
 	if l == nil || len(l.Blocks) == 0 {
 		return 0
@@ -406,4 +396,14 @@ func ToUintsListForTest(ul []*task.List) [][]uint64 {
 		out = append(out, BlockToList(u))
 	}
 	return out
+}
+
+func BlockToList(b *task.List) []uint64 {
+	res := make([]uint64, 0, 5)
+	for _, it := range b.Blocks {
+		for _, el := range it.List {
+			res = append(res, el)
+		}
+	}
+	return res
 }
