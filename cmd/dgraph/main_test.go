@@ -31,6 +31,7 @@ import (
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/query"
+	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
@@ -67,6 +68,8 @@ func prepare() (dir1, dir2 string, ps *store.Store, rerr error) {
 	if err != nil {
 		return dir1, "", nil, err
 	}
+
+	schema.Init(ps, "")
 
 	posting.Init(ps)
 	group.ParseGroupConfig("groups.conf")

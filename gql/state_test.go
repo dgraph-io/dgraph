@@ -72,6 +72,45 @@ func TestNewLexerMutation(t *testing.T) {
 	}
 }
 
+func TestNewSchemaInterospection(t *testing.T) {
+	input := `
+	schema {
+		pred
+		type
+	}
+	schema( pred : name ) {
+		pred
+		type
+	}
+	schema( pred : name,hi ) {
+		pred
+		type
+	}`
+	l := lex.NewLexer(input).Run(lexText)
+	it := l.NewIterator()
+	for it.Next() {
+		item := it.Item()
+		require.NotEqual(t, item.Typ, lex.ItemError)
+		t.Log(item.String())
+	}
+}
+
+func TestAbruptSchemaInterospection(t *testing.T) {
+	input := `
+	schema {
+		pred
+	`
+	l := lex.NewLexer(input).Run(lexText)
+	var typ lex.ItemType
+	it := l.NewIterator()
+	for it.Next() {
+		item := it.Item()
+		t.Log(item.String())
+		typ = item.Typ
+	}
+	require.Equal(t, lex.ItemError, typ)
+}
+
 func TestAbruptMutation(t *testing.T) {
 	input := `
 	mutation {

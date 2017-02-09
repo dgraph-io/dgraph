@@ -40,9 +40,15 @@ message Mutation {
     repeated NQuad del = 2;
 }
 
+message Schema {
+    repeated string predicates = 1;
+    repeated string attributes = 2;
+}
+
 message Request {
     string query = 1;
     Mutation mutation = 2;
+    Schema schema = 3;
 }
 
 message Latency {
@@ -68,4 +74,5 @@ message Response {
     repeated Node n = 1;
     Latency l = 2;
     map<string, uint64> AssignedUids = 3;
+    map<string, string> schema = 4;
 }

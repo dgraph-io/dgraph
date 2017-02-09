@@ -372,7 +372,7 @@ func (n *node) processMutation(e raftpb.Entry, m *task.Mutations) error {
 	// TODO: Need to pass node and entry index.
 	rv := x.RaftValue{Group: n.gid, Index: e.Index}
 	ctx := context.WithValue(n.ctx, "raft", rv)
-	if err := runMutations(ctx, m.Edges); err != nil {
+	if err := runMutations(ctx, m.Edges, m.SchemaUpdate); err != nil {
 		x.TraceError(n.ctx, err)
 		return err
 	}
