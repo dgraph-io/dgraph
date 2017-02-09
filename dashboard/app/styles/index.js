@@ -26,14 +26,14 @@ var styles = {
     flexDirection: 'column',
     marginTop: '10px',
     marginBottom: '10px',
-    height: 'auto',
+    height: '150px',
     border: '1px solid gray',
     padding: '5px',
     overflow: 'hidden'
   },
   fullscreen: {
     position: 'absolute',
-    top: '10px',
+    top: '0px',
     right: '10px',
     height: '30px',
     width: '30px',

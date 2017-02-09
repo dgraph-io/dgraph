@@ -21,18 +21,27 @@
     cursor: pointer;
 }
 
-#graph:focus {
+:focus {
     outline: none;
 }
 
 .graph {
     width: 100%;
-    height: 450px;
-    margin-top: 50px;
+    height: 500px;
 }
 
 .fullscreen {
     width: 100%;
     height: 100%;
     margin-top: 0px;
+}
+
+.vis-tooltip {
+    border: 1px solid #f3d98c;
+    background-color: #fffad5;
+    padding: 10px;
+    margin: 10px;
+    border-radius: 3px;
+    height: auto;
+    position: absolute !important;
 }

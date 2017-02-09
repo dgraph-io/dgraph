@@ -17,8 +17,10 @@ function replay() {
 var Query = React.createClass({
   render: function() {
     return (
-      <div onClick={this.props.update} className="query" style={{marginBottom: '20px', borderBottom: '1px solid lightgray'}}>
-      <pre>{prettifyQuery(this.props.text)}</pre> 
+      <div className="query" style={{marginBottom: '20px', paddingBottom: '10px', borderBottom: '2px solid lightgray'}}>
+      <div style={{border: '1px solid black', padding: '5px'}}>
+        <pre onClick={this.props.update}>{prettifyQuery(this.props.text)}</pre>
+      </div>
       </div>
     )
   }

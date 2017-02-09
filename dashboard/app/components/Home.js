@@ -186,7 +186,7 @@ function processGraph(response, root, maxNodes) {
       nodes.push({
         id: properties["_uid_"],
         label: getLabel(properties),
-        title: JSON.stringify(properties),
+        title: JSON.stringify(properties, null, 2),
         group: obj.src.pred,
         value: 1
       })
@@ -241,13 +241,17 @@ function renderNetwork(nodes, edges) {
       keyboard: {
         enabled: true,
         bindToWindow: false
-      }
+      },
+      tooltipDelay: 10000
     },
     layout: {
       improvedLayout: true
     },
     physics: {
-      timestep: 0.6
+      timestep: 0.8,
+      barnesHut: {
+        // avoidOverlap: 1
+      }
     }
   };
 
@@ -356,211 +360,218 @@ function timeout(ms, promise) {
 }
 
 var Home = React.createClass({
-  getInitialState: function() {
-    var response = this.lastQuery()
-    return {
-      queryIndex: response[0],
-      query: response[1],
-      // We store the queries run in state, so that they can be displayed
-      // to the user.
-      queries: response[2],
-      lastQuery: '',
-      response: '',
-      latency: '',
-      rendering: '',
-      resType: '',
-      currentNode: '{}',
-      nodes: 0,
-      relations: 0,
-      graph: ''
-    }
-  },
-  updateQuery: function(e) {
-    e.preventDefault();
-    this.setState({
-      query: e.target.innerHTML
-    });
-    window.scrollTo(0, 0);
-    this.refs.code.editor.focus();
-    this.refs.code.editor.navigateFileEnd();
-    network && network.destroy();
-  },
-  // Handler which listens to changes on AceEditor.
-  queryChange: function(newValue) {
-    this.setState({ query: newValue });
-  },
-  resetState: function() {
-    return {
-      response: '',
-      latency: '',
-      rendering: '',
-      resType: '',
-      currentNode: '{}',
-      nodes: 0,
-      relations: 0,
-      resType: 'hourglass',
-      lastQuery: this.state.query
-    }
-  },
-  storeQuery: function(query) {
-    var queries = JSON.parse(localStorage.getItem("queries")) || [];
-    queries.unshift(query);
-
-    (queries.length > 20) && (queries = queries.splice(0, 20))
-
-    this.setState({
-      queryIndex: queries.length - 1,
-      queries: queries
-    })
-    localStorage.setItem("queries", JSON.stringify(queries));
-  },
-  lastQuery: function() {
-    var queries = JSON.parse(localStorage.getItem("queries"))
-    if (queries == null) {
-      return [undefined, "", []]
-    }
-    // This means queries has atleast one element.
-
-    return [0, queries[0], queries]
-  },
-  nextQuery: function() {
-    var queries = JSON.parse(localStorage.getItem("queries"))
-    if (queries == null) {
-      return
-    }
-
-    var idx = this.state.queryIndex;
-    if (idx === undefined || idx - 1 < 0) {
-      return
-    }
-    this.setState({
-      query: queries[idx - 1],
-      queryIndex: idx - 1
-    });
-  },
-  previousQuery: function() {
-    var queries = JSON.parse(localStorage.getItem("queries"))
-    if (queries == null) {
-      return
-    }
-
-    var idx = this.state.queryIndex;
-    if (idx === undefined || (idx + 1) === queries.length) {
-      return
-    }
-    this.setState({
-      queryIndex: idx + 1,
-      query: queries[idx + 1]
-    })
-  },
-  runQuery: function(e) {
-    e.preventDefault();
-
-    // if (this.state.query === this.state.lastQuery && this.state.resType == "") {
-    //   return;
-    // }
-
-    // Resetting state
-    network && network.destroy();
-    this.setState(this.resetState());
-    this.storeQuery(this.state.query);
-
-    var that = this;
-    timeout(60000, fetch('http://localhost:8080/query?debug=true', {
-        method: 'POST',
-        mode: 'cors',
-        headers: {
-          'Content-Type': 'text/plain',
-        },
-        body: this.state.query
-      }).then(checkStatus)
-      .then(parseJSON)
-      .then(function(result) {
-        that.setState({
+      getInitialState: function() {
+        var response = this.lastQuery()
+        return {
+          queryIndex: response[0],
+          query: response[1],
+          // We store the queries run in state, so that they can be displayed
+          // to the user.
+          queries: response[2],
+          lastQuery: '',
           response: '',
-          resType: ''
-        })
-        var key = Object.keys(result)[0];
-        if (result.code != undefined && result.message != undefined) {
-          // This is the case in which user sends a mutation. We display the response from server.
-          that.setState({
-            resType: 'success-res',
-            response: JSON.stringify(result, null, 2)
-          })
-        } else if (key != undefined) {
-          // We got the result for a query.
-          var response = result[key]
-          that.setState({
-            'latency': result.server_latency.total
-          });
-          var startTime = new Date();
-
-          setTimeout(function() {
-            var graph = processGraph(response, key, -1);
-            nodeSet = new vis.DataSet(graph[0])
-            edgeSet = new vis.DataSet(graph[1])
-            that.setState({
-              nodes: graph[0].length,
-              relations: graph[1].length
-            });
-          }.bind(that), 1000)
-
-          // We call procesGraph with a 40 node limit and calculate the whole dataset in
-          // the background.
-          var graph = processGraph(response, key, 20);
-          setTimeout(function() {
-            that.setState({
-              partial: this.state.nodes > graph[0].length
-            })
-          }.bind(that), 1000)
-
-          renderNetwork.call(that, graph[0], graph[1]);
-
-          var endTime = new Date();
-          var timeTaken = (endTime.getTime() - startTime.getTime()) / 1000;
-          that.setState({
-            'rendering': timeTaken + 's'
-          });
-        } else {
-          console.warn("We shouldn't be here really")
-            // We probably didn't get any results.
-          that.setState({
-            resType: 'error-res',
-            response: "Your query did not return any results."
-          })
-        }
-      })).catch(function(error) {
-      console.log(error.stack)
-      var err = error.response && error.response.text() || error.message
-      return err
-    }).then(function(errorMsg) {
-      if (errorMsg != undefined) {
-        that.setState({
-          response: errorMsg,
-          resType: 'error-res'
-        })
-      }
-    })
-  },
-  enterFullScreen: function(e) {
-    e.preventDefault();
-    document.addEventListener(screenfull.raw.fullscreenchange, () => {
-      if (!screenfull.isFullscreen) {
-        this.setState({
+          latency: '',
+          rendering: '',
+          resType: '',
+          currentNode: '{}',
+          nodes: 0,
+          relations: 0,
           graph: ''
-        })
-      } else {
+        }
+      },
+      updateQuery: function(e) {
+        e.preventDefault();
         this.setState({
-          graph: 'fullscreen'
+          query: e.target.innerHTML
         });
-      }
-    });
-    screenfull.request(document.getElementById('graph'))
-  },
-  render: function() {
-    var graphClass = classNames({ 'fullscreen': this.state.graph === 'fullscreen' }, { 'graph': this.state.graph !== 'fullscreen' }, { 'error-res': this.state.resType == 'error-res' }, { 'success-res': this.state.resType == 'success-res' })
-    return (
-      <div>
+        window.scrollTo(0, 0);
+        this.refs.code.editor.focus();
+        this.refs.code.editor.navigateFileEnd();
+        network && network.destroy();
+      },
+      // Handler which listens to changes on AceEditor.
+      queryChange: function(newValue) {
+        this.setState({ query: newValue });
+      },
+      resetState: function() {
+        return {
+          response: '',
+          latency: '',
+          rendering: '',
+          resType: '',
+          currentNode: '{}',
+          nodes: 0,
+          relations: 0,
+          resType: 'hourglass',
+          lastQuery: this.state.query
+        }
+      },
+      storeQuery: function(query) {
+        var queries = JSON.parse(localStorage.getItem("queries")) || [];
+        queries.unshift(query);
+
+        (queries.length > 20) && (queries = queries.splice(0, 20))
+
+        this.setState({
+          queryIndex: queries.length - 1,
+          queries: queries
+        })
+        localStorage.setItem("queries", JSON.stringify(queries));
+      },
+      lastQuery: function() {
+        var queries = JSON.parse(localStorage.getItem("queries"))
+        if (queries == null) {
+          return [undefined, "", []]
+        }
+        // This means queries has atleast one element.
+
+        return [0, queries[0], queries]
+      },
+      nextQuery: function() {
+        var queries = JSON.parse(localStorage.getItem("queries"))
+        if (queries == null) {
+          return
+        }
+
+        var idx = this.state.queryIndex;
+        if (idx === undefined || idx - 1 < 0) {
+          return
+        }
+        this.setState({
+          query: queries[idx - 1],
+          queryIndex: idx - 1
+        });
+      },
+      previousQuery: function() {
+        var queries = JSON.parse(localStorage.getItem("queries"))
+        if (queries == null) {
+          return
+        }
+
+        var idx = this.state.queryIndex;
+        if (idx === undefined || (idx + 1) === queries.length) {
+          return
+        }
+        this.setState({
+          queryIndex: idx + 1,
+          query: queries[idx + 1]
+        })
+      },
+      runQuery: function(e) {
+        e.preventDefault();
+
+        // if (this.state.query === this.state.lastQuery && this.state.resType == "") {
+        //   return;
+        // }
+
+        // Resetting state
+        network && network.destroy();
+        this.setState(this.resetState());
+        this.storeQuery(this.state.query);
+
+        var that = this;
+        timeout(60000, fetch('http://localhost:8080/query?debug=true', {
+            method: 'POST',
+            mode: 'cors',
+            headers: {
+              'Content-Type': 'text/plain',
+            },
+            body: this.state.query
+          }).then(checkStatus)
+          .then(parseJSON)
+          .then(function(result) {
+            that.setState({
+              response: '',
+              resType: ''
+            })
+            var key = Object.keys(result)[0];
+            if (result.code != undefined && result.message != undefined) {
+              // This is the case in which user sends a mutation. We display the response from server.
+              that.setState({
+                resType: 'success-res',
+                response: JSON.stringify(result, null, 2)
+              })
+            } else if (key != undefined) {
+              // We got the result for a query.
+              var response = result[key]
+              that.setState({
+                'latency': result.server_latency.total
+              });
+              var startTime = new Date();
+
+              setTimeout(function() {
+                var graph = processGraph(response, key, -1);
+                nodeSet = new vis.DataSet(graph[0])
+                edgeSet = new vis.DataSet(graph[1])
+                that.setState({
+                  nodes: graph[0].length,
+                  relations: graph[1].length
+                });
+              }.bind(that), 1000)
+
+              // We call procesGraph with a 40 node limit and calculate the whole dataset in
+              // the background.
+              var graph = processGraph(response, key, 20);
+              setTimeout(function() {
+                that.setState({
+                  partial: this.state.nodes > graph[0].length
+                })
+              }.bind(that), 1000)
+
+              renderNetwork.call(that, graph[0], graph[1]);
+
+              var endTime = new Date();
+              var timeTaken = (endTime.getTime() - startTime.getTime()) / 1000;
+              that.setState({
+                'rendering': timeTaken + 's'
+              });
+            } else {
+              console.warn("We shouldn't be here really")
+                // We probably didn't get any results.
+              that.setState({
+                resType: 'error-res',
+                response: "Your query did not return any results."
+              })
+            }
+          })).catch(function(error) {
+          console.log(error.stack)
+          var err = error.response && error.response.text() || error.message
+          return err
+        }).then(function(errorMsg) {
+          if (errorMsg != undefined) {
+            that.setState({
+              response: errorMsg,
+              resType: 'error-res'
+            })
+          }
+        })
+      },
+      enterFullScreen: function(e) {
+        e.preventDefault();
+        document.addEventListener(screenfull.raw.fullscreenchange, () => {
+          if (!screenfull.isFullscreen) {
+            this.setState({
+              graph: ''
+            })
+            network.interactionHandler.options.tooltipDelay = 10000;
+            network.redraw();
+          } else {
+            // In full screen mode, we display the properties as a tooltip.
+            this.setState({
+              graph: 'fullscreen'
+            });
+            network.interactionHandler.options.tooltipDelay = 300;
+            network.redraw();
+          }
+        });
+        console.log(network.interactionHandler.options)
+        screenfull.request(document.getElementById('graph'));
+        screenfull.request(document.getElementById('properties'));
+      },
+      render: function() {
+          var graphClass = classNames({ 'fullscreen': this.state.graph === 'fullscreen' }, { 'graph': this.state.graph !== 'fullscreen' }, { 'error-res': this.state.resType == 'error-res' }, { 'success-res': this.state.resType == 'success-res' })
+          return (
+              <div>
       <NavBar></NavBar>
     <div className="container-fluid">
         <div className="row justify-content-md-center">
@@ -627,20 +638,21 @@ var Home = React.createClass({
               </div>
             <div className="col-sm-7">
               <label> Response </label>
-              <div id="response">
-              <div style={graph}>
-              {
+                            {
                 screenfull.enabled  &&
-              <div style={fullscreen} onClick={this.enterFullScreen}>
+              <div style={fullscreen} className="pull-right" onClick={this.enterFullScreen}>
                 <span style={{fontSize: '20px',padding:'5px'}} className="glyphicon glyphicon-glyphicon glyphicon-resize-full">
                 </span>
               </div>
               }
+              <div id="response">
+              <div style={graph}>
               <div id="graph" className={graphClass}>{this.state.response}</div>
               </div>
               <div>Nodes: {this.state.nodes}, Edges: {this.state.relations}</div>
               <div style={{height:'auto'}}>{this.state.partial == true ? 'We have only loaded a subset of the graph. Click on a leaf node to expand its child nodes.': ''}</div>
-              <div style={properties} title={this.state.currentNode}><span>Current Node: <em><pre>{JSON.stringify(JSON.parse(this.state.currentNode), null, 2)}</pre></em></span></div>
+              <div id="properties" style={{marginTop: '10px'}}>Current Node:<div style={properties} title={this.state.currentNode}><em><pre>{JSON.stringify(JSON.parse(this.state.currentNode), null, 2)}</pre></em></div>
+              </div>
               </div>
 
             </div>
@@ -657,8 +669,7 @@ var Home = React.createClass({
             </div>
             </div>
             </div>
-          </div>
-        </div>
+          </div> < /div>
     );
   }
 });
