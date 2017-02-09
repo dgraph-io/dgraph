@@ -22,6 +22,7 @@ type WriteIterator struct {
 	list *task.List
 	bidx int // Block index
 	lidx int // List index
+
 }
 
 func NewWriteIterator(l *task.List) WriteIterator {
@@ -48,7 +49,7 @@ func (l *WriteIterator) Append(uid uint64) {
 		// If we reached the end of blocks, add a new one.
 		l.list.Blocks = append(l.list.Blocks, &task.Block{List: make([]uint64, blockSize)})
 	}
-	l.list.Blocks[l.bidx].List[l.lidx] = uid // = append(l.list.Blocks[l.bidx].List, uid)
+	l.list.Blocks[l.bidx].List[l.lidx] = uid
 	l.lidx++
 }
 
