@@ -19,9 +19,10 @@ type ListIterator struct {
 
 // WriteIterator is used to append UIDs to a task.List.
 type WriteIterator struct {
-	list *task.List
-	bidx int // Block index
-	lidx int // List index
+	list     *task.List
+	curBlock *task.Block
+	bidx     int // Block index
+	lidx     int // List index
 
 }
 
@@ -31,25 +32,31 @@ func NewWriteIterator(l *task.List) WriteIterator {
 		l.Blocks = make([]*task.Block, 0, 2)
 	}
 
+	var cur *task.Block
+	if len(l.Blocks) > 0 {
+		cur = l.Blocks[0]
+	}
 	return WriteIterator{
-		list: l,
-		bidx: 0,
-		lidx: 0,
+		list:     l,
+		curBlock: cur,
+		bidx:     0,
+		lidx:     0,
 	}
 }
 
 // Append appends an UID to the end of task.List following the blockSize specified.
 func (l *WriteIterator) Append(uid uint64) {
 	if l.lidx == blockSize {
-		l.list.Blocks[l.bidx].MaxInt = l.list.Blocks[l.bidx].List[blockSize-1]
+		l.curBlock.MaxInt = l.curBlock.List[blockSize-1]
 		l.lidx = 0
 		l.bidx++
 	}
 	if l.bidx == len(l.list.Blocks) {
 		// If we reached the end of blocks, add a new one.
 		l.list.Blocks = append(l.list.Blocks, &task.Block{List: make([]uint64, blockSize)})
+		l.curBlock = l.list.Blocks[l.bidx]
 	}
-	l.list.Blocks[l.bidx].List[l.lidx] = uid
+	l.curBlock.List[l.lidx] = uid
 	l.lidx++
 }
 
@@ -60,8 +67,8 @@ func (l *WriteIterator) End() {
 		l.list.Blocks = l.list.Blocks[:l.bidx]
 		return
 	}
-	l.list.Blocks[l.bidx].List = l.list.Blocks[l.bidx].List[:l.lidx]
-	l.list.Blocks[l.bidx].MaxInt = l.list.Blocks[l.bidx].List[l.lidx-1]
+	l.curBlock.List = l.curBlock.List[:l.lidx]
+	l.curBlock.MaxInt = l.curBlock.List[l.lidx-1]
 }
 
 // NewListIterator returns a read iterator for the list passed to it.
