@@ -151,9 +151,9 @@ func Round(d time.Duration) time.Duration {
 	} else if d > time.Second {
 		denominator = time.Millisecond
 	} else if d > time.Millisecond {
-		denominator = time.Microsecond
+		denominator = time.Millisecond
 	} else {
-		denominator = time.Nanosecond
+		denominator = time.Microsecond
 	}
 
 	if remainder := d % denominator; 2*remainder < denominator {

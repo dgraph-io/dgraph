@@ -533,7 +533,7 @@ var Home = React.createClass({
               renderNetwork.call(that, graph[0], graph[1]);
 
               var endTime = new Date();
-              var timeTaken = (endTime.getTime() - startTime.getTime()) / 1000;
+              var timeTaken = ((endTime.getTime() - startTime.getTime()) / 1000).toFixed(2);
               that.setState({
                 'rendering': timeTaken + 's'
               });
