@@ -106,10 +106,10 @@ type Latency struct {
 func (l *Latency) ToMap() map[string]string {
 	m := make(map[string]string)
 	j := time.Since(l.Start) - l.Processing - l.Parsing
-	m["parsing"] = l.Parsing.String()
-	m["processing"] = l.Processing.String()
-	m["json"] = j.String()
-	m["total"] = time.Since(l.Start).String()
+	m["parsing"] = x.Round(l.Parsing).String()
+	m["processing"] = x.Round(l.Processing).String()
+	m["json"] = x.Round(j).String()
+	m["total"] = x.Round(time.Since(l.Start)).String()
 	return m
 }
 

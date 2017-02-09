@@ -242,7 +242,7 @@ function renderNetwork(nodes, edges) {
         enabled: true,
         bindToWindow: false
       },
-      tooltipDelay: 10000
+      tooltipDelay: 100000
     },
     layout: {
       improvedLayout: true
@@ -263,7 +263,7 @@ function renderNetwork(nodes, edges) {
         currentNode = nodeSet.get(nodeUid);
 
       that.setState({
-        currentNode: currentNode.title
+        currentNode: currentNode.title,
       });
 
       var incoming = data.edges.get({
@@ -300,11 +300,17 @@ function renderNetwork(nodes, edges) {
         // TODO -See if we can set a meta property to a node to know that its
         // expanded or closed and avoid this computation.
       if (expanded) {
+        that.setState({
+          selectedNode: false
+        });
         data.nodes.remove(adjacentNodeIds)
         data.edges.remove(outgoingEdges.map(function(edge) {
           return edge.id
         }))
       } else {
+        that.setState({
+          selectedNode: true
+        });
         var updatedNodeIds = data.nodes.update(adjacentNodes)
         var updatedEdgeids = data.edges.update(outgoingEdges)
       }
@@ -313,6 +319,10 @@ function renderNetwork(nodes, edges) {
 
   window.onresize = function() { network.fit(); }
   network.on("hoverNode", function(params) {
+    // Only change properties if no node is selected.
+    if (that.state.selectedNode) {
+      return;
+    }
     var nodeUid = params.node,
       currentNode = nodeSet.get(nodeUid);
 
@@ -363,6 +373,7 @@ var Home = React.createClass({
       getInitialState: function() {
         var response = this.lastQuery()
         return {
+          selectedNode: false,
           queryIndex: response[0],
           query: response[1],
           // We store the queries run in state, so that they can be displayed
@@ -396,6 +407,7 @@ var Home = React.createClass({
       resetState: function() {
         return {
           response: '',
+          selectedNode: false,
           latency: '',
           rendering: '',
           resType: '',
@@ -553,7 +565,7 @@ var Home = React.createClass({
             this.setState({
               graph: ''
             })
-            network.interactionHandler.options.tooltipDelay = 10000;
+            network.interactionHandler.options.tooltipDelay = 100000;
             network.redraw();
           } else {
             // In full screen mode, we display the properties as a tooltip.
