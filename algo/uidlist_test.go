@@ -173,8 +173,7 @@ func TestSubSorted6(t *testing.T) {
 func TestIterator1(t *testing.T) {
 	u := newList([]uint64{1, 2, 3, 4, 43, 234, 2344})
 
-	var it ListIterator
-	it.Init(u)
+	it := NewListIterator(u)
 	var res []uint64
 	for ; it.Valid(); it.Next() {
 		res = append(res, it.Val())
@@ -189,8 +188,7 @@ func TestIterator2(t *testing.T) {
 		ls = append(ls, uint64(i*2))
 	}
 	u := newList(ls)
-	var it ListIterator
-	it.Init(u)
+	it := NewListIterator(u)
 	for ; it.Valid(); it.Next() {
 		res = append(res, it.Val())
 	}

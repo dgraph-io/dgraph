@@ -221,17 +221,14 @@ func intersectBucket(ts *task.Sort, attr, token string, out []intersectedList) e
 			}
 		}
 
-		var in1 algo.ListIterator
-		in1.Init(il.ulist)
-		var out algo.WriteIterator
+		in1 := algo.NewListIterator(il.ulist)
 		o := new(task.List)
-		out.Init(o)
+		out := algo.NewWriteIterator(o)
 		for ; in1.Valid(); in1.Next() {
 			out.Append(in1.Val())
 		}
 		i := 0
-		var in2 algo.ListIterator
-		in2.Init(result)
+		in2 := algo.NewListIterator(result)
 		for ; in2.Valid() && i < n; in2.Next() {
 			out.Append(in2.Val())
 			i++
@@ -256,8 +253,7 @@ func intersectBucket(ts *task.Sort, attr, token string, out []intersectedList) e
 // sortByValue fetches values and sort UIDList.
 func sortByValue(attr string, ul *task.List, typ types.TypeID, desc bool) error {
 	values := make([]types.Val, 0, algo.ListLen(ul))
-	var it algo.ListIterator
-	it.Init(ul)
+	it := algo.NewListIterator(ul)
 	for ; it.Valid(); it.Next() {
 		uid := it.Val()
 		val, err := fetchValue(uid, attr, typ)

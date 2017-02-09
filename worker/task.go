@@ -18,6 +18,7 @@ package worker
 
 import (
 	"strings"
+
 	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/dgraph/algo"
@@ -89,7 +90,6 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 	attr := q.Attr
 
 	useFunc := len(q.SrcFunc) != 0
-	var n int
 	var tokens []string
 	var geoQuery *types.GeoQueryData
 	var err error
@@ -98,6 +98,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 	var ineqValueToken string
 	var isIneq, isAgrtr bool
 	var f string
+	var n int
 
 	if useFunc {
 		f = q.SrcFunc[0]
@@ -263,8 +264,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 	var values []*task.Value
 	if geoQuery != nil {
 		uids := algo.MergeSorted(out.UidMatrix)
-		var it algo.ListIterator
-		it.Init(uids)
+		it := algo.NewListIterator(uids)
 		for ; it.Valid(); it.Next() {
 			uid := it.Val()
 			key := x.DataKey(attr, uid)
