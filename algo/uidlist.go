@@ -131,6 +131,7 @@ func (l *ListIterator) Seek(uid uint64, whence int) {
 		return
 	}
 	l.bidx = i
+	l.curBlock = l.list.Blocks[l.bidx]
 	l.lidx = j
 }
 
