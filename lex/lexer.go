@@ -235,3 +235,8 @@ func (l *Lexer) AcceptRunTimes(c CheckRune, times int) int {
 	l.Backup()
 	return i
 }
+
+func (l *Lexer) IgnoreRun(c CheckRune) {
+	l.AcceptRun(c)
+	l.Ignore()
+}

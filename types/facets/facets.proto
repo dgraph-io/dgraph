@@ -10,8 +10,7 @@ message Facet {
 	     INT32 = 1;
 	     FLOAT = 2;
 	     BOOL = 3;
-	     DATE = 4;
-	     DATETIME = 5;
+	     DATETIME = 4;
 	}
 
 	string key = 1;
