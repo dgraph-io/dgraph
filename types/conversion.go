@@ -151,6 +151,13 @@ func Convert(from Val, toID TypeID) (Val, error) {
 					return to, err
 				}
 				*res = g
+			case PasswordID:
+				// TODO(kg): add more types besides String -> Password
+				password, err := GenerateFromPassword(vc)
+				if err != nil {
+					return to, err
+				}
+				*res = password
 			default:
 				return to, cantConvert(fromID, toID)
 			}
@@ -365,6 +372,21 @@ func Convert(from Val, toID TypeID) (Val, error) {
 				return to, cantConvert(fromID, toID)
 			}
 		}
+	case PasswordID:
+		{
+			vc := string(data)
+			switch toID {
+			case BinaryID:
+				// Marshal Binary
+				*res = []byte(vc)
+			case StringID:
+				*res = vc
+			case PasswordID:
+				*res = vc
+			default:
+				return to, cantConvert(fromID, toID)
+			}
+		}
 	default:
 		return to, cantConvert(fromID, toID)
 	}
@@ -497,6 +519,18 @@ func Marshal(from Val, to *Val) error {
 		default:
 			return cantConvert(fromID, toID)
 		}
+	case PasswordID:
+		vc := val.(string)
+		switch toID {
+		case StringID:
+			*res = vc
+		case BinaryID:
+			// Marshal Binary
+			*res = []byte(vc)
+		default:
+			return cantConvert(fromID, toID)
+		}
+
 	default:
 		return cantConvert(fromID, toID)
 	}
@@ -559,6 +593,12 @@ func ObjectValue(id TypeID, value interface{}) (*graph.Value, error) {
 			return def, err
 		}
 		return &graph.Value{&graph.Value_DatetimeVal{b}}, nil
+	case PasswordID:
+		var v string
+		if v, ok = value.(string); !ok {
+			return def, x.Errorf("Expected value of type password. Got : %v", value)
+		}
+		return &graph.Value{&graph.Value_PasswordVal{v}}, nil
 	default:
 		return def, x.Errorf("ObjectValue not available for: %v", id)
 	}
@@ -593,6 +633,8 @@ func (v Val) MarshalJSON() ([]byte, error) {
 	case GeoID:
 		return geojson.Marshal(v.Value.(geom.T))
 	case StringID:
+		return json.Marshal(v.Value.(string))
+	case PasswordID:
 		return json.Marshal(v.Value.(string))
 	}
 	return nil, x.Errorf("Invalid type for MarshalJSON: %v", v.Tid)

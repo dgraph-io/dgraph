@@ -249,6 +249,8 @@ func valToBytes(v types.Val) ([]byte, error) {
 		return geojson.Marshal(v.Value.(geom.T))
 	case types.UidID:
 		return []byte(fmt.Sprintf("\"%#x\"", v.Value)), nil
+	case types.PasswordID:
+		return []byte(fmt.Sprintf("%q", v.Value.(string))), nil
 	default:
 		return nil, errors.New("unsupported types.Val.Tid")
 	}

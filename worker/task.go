@@ -84,6 +84,17 @@ func convertValue(attr, data string) (types.Val, error) {
 	return dst, err
 }
 
+// ItemType is used to set the type of a token. These constants can be defined
+// in the file containing state functions. Note that their value should be >= 5.
+type FuncType int
+const (
+	NotFunc        FuncType = iota
+	CompareFunc
+	GeoFunc
+	AggregatorFunc
+	StandardFunc
+)
+
 // processTask processes the query, accumulates and returns the result.
 func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 	attr := q.Attr

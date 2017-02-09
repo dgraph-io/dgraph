@@ -1265,7 +1265,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				continue
 			}
 
-			if isAggregator(item.Val) {
+			if isAggregator(item.Val) || isPasswordVerifier(item.Val) {
 				child := &GraphQuery{
 					Args:    make(map[string]string),
 				}
@@ -1351,5 +1351,8 @@ func isAggregator(f string) bool {
 	return fname == "min" || fname == "max" || fname == "sum"
 }
 
-
+func isPasswordVerifier(f string) bool {
+	fname := strings.ToLower(f)
+	return fname == "pwdcheck"
+}
 

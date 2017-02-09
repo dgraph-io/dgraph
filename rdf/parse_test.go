@@ -496,6 +496,21 @@ var testNQuads = []struct {
 		expectedErr:  true,
 		shouldIgnore: true,
 	},
+	/*{
+		input: `<alice> <password> "guessii"^^<pwd:password> .`,
+		expectedErr: false,
+		nq: graph.NQuad{
+			Subject:     "_:alice",
+			Predicate:   "age",
+			ObjectId:    "",
+			ObjectValue: &graph.Value{&graph.Value_IntVal{13}},
+			ObjectType:  2,
+		},
+	},*/
+	{
+		input: `<alice> <password> "guess"^^<pwd:password> .`,
+		expectedErr: true, // len(password) should >= 6
+	},
 }
 
 func TestLex(t *testing.T) {
