@@ -36,7 +36,8 @@ var styles = {
     top: '10px',
     right: '10px',
     height: '30px',
-    width: '30px'
+    width: '30px',
+    cursor: 'pointer'
   },
   tip: {
     border: '1px solid #87cb74',

@@ -20,3 +20,19 @@
     border: 1px solid gray;
     cursor: pointer;
 }
+
+#graph:focus {
+    outline: none;
+}
+
+.graph {
+    width: 100%;
+    height: 450px;
+    margin-top: 50px;
+}
+
+.fullscreen {
+    width: 100%;
+    height: 100%;
+    margin-top: 0px;
+}
