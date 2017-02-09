@@ -11,10 +11,11 @@ const blockSize = 100
 
 // ListIterator is used to read through the task.List.
 type ListIterator struct {
-	list  *task.List
-	bidx  int  // Block index
-	lidx  int  // List index
-	isEnd bool // To indicate reaching the end
+	list     *task.List
+	curBlock *task.Block
+	bidx     int  // Block index
+	lidx     int  // List index
+	isEnd    bool // To indicate reaching the end
 }
 
 // WriteIterator is used to append UIDs to a task.List.
@@ -74,16 +75,23 @@ func (l *WriteIterator) End() {
 // NewListIterator returns a read iterator for the list passed to it.
 func NewListIterator(l *task.List) ListIterator {
 	var isEnd bool
-	if l == nil || l.Blocks == nil || len(l.Blocks) == 0 ||
+	if l == nil || len(l.Blocks) == 0 ||
 		len(l.Blocks[0].List) == 0 {
 		isEnd = true
+
+	}
+
+	var cur *task.Block
+	if l != nil && len(l.Blocks) > 0 {
+		cur = l.Blocks[0]
 	}
 
 	return ListIterator{
-		list:  l,
-		bidx:  0,
-		lidx:  0,
-		isEnd: isEnd,
+		list:     l,
+		curBlock: cur,
+		bidx:     0,
+		lidx:     0,
+		isEnd:    isEnd,
 	}
 }
 
@@ -103,10 +111,10 @@ func (l *ListIterator) SeekToIndex(idx int) {
 func (l *ListIterator) Seek(uid uint64, whence int) {
 	if whence == 1 {
 		// Seek the current list first.
-		for l.lidx < len(l.list.Blocks[l.bidx].List) && l.list.Blocks[l.bidx].List[l.lidx] < uid {
+		for l.lidx < len(l.curBlock.List) && l.curBlock.List[l.lidx] < uid {
 			l.lidx++
 		}
-		if l.lidx < len(l.list.Blocks[l.bidx].List) {
+		if l.lidx < len(l.curBlock.List) {
 			return
 		}
 	}
@@ -133,7 +141,7 @@ func (l *ListIterator) Valid() bool {
 
 // Val returns the value pointed to by the iterator.
 func (l *ListIterator) Val() uint64 {
-	return l.list.Blocks[l.bidx].List[l.lidx]
+	return l.curBlock.List[l.lidx]
 }
 
 // Next moves the iterator to the next element and also sets the end if the last element
@@ -143,7 +151,7 @@ func (l *ListIterator) Next() {
 		return
 	}
 	l.lidx++
-	if l.lidx >= len(l.list.Blocks[l.bidx].List) {
+	if l.lidx >= len(l.curBlock.List) {
 		l.lidx = 0
 		l.bidx++
 	}
@@ -151,7 +159,9 @@ func (l *ListIterator) Next() {
 		l.isEnd = true
 		return
 	}
-	if len(l.list.Blocks[l.bidx].List) == 0 {
+	// Update the current block.
+	l.curBlock = l.list.Blocks[l.bidx]
+	if len(l.curBlock.List) == 0 {
 		l.isEnd = true
 	}
 }
