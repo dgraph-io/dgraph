@@ -39,17 +39,14 @@ func (w *WriteIterator) Init(l *task.List) {
 
 // Append appends an UID to the end of task.List following the blockSize specified.
 func (l *WriteIterator) Append(uid uint64) {
-	if l.bidx == len(l.list.Blocks) {
-		l.list.Blocks = append(l.list.Blocks, &task.Block{List: make([]uint64, blockSize)})
-	}
 	if l.lidx == blockSize {
 		l.list.Blocks[l.bidx].MaxInt = l.list.Blocks[l.bidx].List[blockSize-1]
 		l.lidx = 0
 		l.bidx++
-		if l.bidx == len(l.list.Blocks) {
-			// If we reached the end of blocks, add a new one.
-			l.list.Blocks = append(l.list.Blocks, &task.Block{List: make([]uint64, blockSize)})
-		}
+	}
+	if l.bidx == len(l.list.Blocks) {
+		// If we reached the end of blocks, add a new one.
+		l.list.Blocks = append(l.list.Blocks, &task.Block{List: make([]uint64, blockSize)})
 	}
 	l.list.Blocks[l.bidx].List[l.lidx] = uid // = append(l.list.Blocks[l.bidx].List, uid)
 	l.lidx++
@@ -95,8 +92,8 @@ func (l *ListIterator) SeekToIndex(idx int) {
 
 // Seek seeks to the index whose value is greater than or equal to the given UID.
 // It uses binary search to move around.
-func (l *ListIterator) Seek(typ int, uid uint64) {
-	if typ == 1 {
+func (l *ListIterator) Seek(uid uint64, whence int) {
+	if whence == 1 {
 		// Seek the current list first.
 		for l.lidx < len(l.list.Blocks[l.bidx].List) && l.list.Blocks[l.bidx].List[l.lidx] < uid {
 			l.lidx++
@@ -105,6 +102,7 @@ func (l *ListIterator) Seek(typ int, uid uint64) {
 			return
 		}
 	}
+	// TODO(Ashwin): Do a benchmark to see if linear scan is better than binary if whence is 1
 	u := l.list
 	i := sort.Search(len(u.Blocks), func(i int) bool { return u.Blocks[i].MaxInt >= uid })
 	if i >= len(u.Blocks) {
@@ -200,8 +198,8 @@ func ListLen(l *task.List) int {
 	}
 
 	n := len(l.Blocks) - 1
-	len := n*blockSize + len(l.Blocks[n].List)
-	return len
+	length := n*blockSize + len(l.Blocks[n].List)
+	return length
 }
 
 func IntersectWith(u, v *task.List) {
@@ -219,9 +217,9 @@ func IntersectWith(u, v *task.List) {
 			itu.Next()
 			itv.Next()
 		} else if uid < vid {
-			itu.Seek(1, vid)
+			itu.Seek(vid, 1)
 		} else if uid > vid {
-			itv.Seek(1, uid)
+			itv.Seek(uid, 1)
 		}
 	}
 	out.End()
@@ -329,7 +327,7 @@ func Difference(u, v *task.List) {
 			out.Append(uid)
 			itu.Next()
 		} else if uid > vid {
-			itv.Seek(1, uid)
+			itv.Seek(uid, 1)
 		}
 	}
 	out.End()
@@ -408,7 +406,7 @@ func ridx(ul *task.List, i int) (int, int) {
 		return -1, -1
 	}
 
-	return i / blockSize, i - (i / blockSize * blockSize)
+	return i / blockSize, i % blockSize
 }
 
 func Idx(ul *task.List, i, j int) int {
