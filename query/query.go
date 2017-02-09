@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"strconv"
 	"strings"
@@ -156,10 +157,10 @@ type SubGraph struct {
 func (sg *SubGraph) DebugPrint(prefix string) {
 	var src, dst int
 	if sg.SrcUIDs != nil {
-		src = len(sg.SrcUIDs.Uids)
+		src = algo.ListLen(sg.SrcUIDs)
 	}
 	if sg.DestUIDs != nil {
-		dst = len(sg.DestUIDs.Uids)
+		dst = algo.ListLen(sg.DestUIDs)
 	}
 	x.Printf("%s[%q Alias:%q Func:%v SrcSz:%v Op:%q DestSz:%v Dest: %p ValueSz:%v]\n",
 		prefix, sg.Attr, sg.Params.Alias, sg.SrcFunc, src, sg.FilterOp,
@@ -207,17 +208,22 @@ func init() {
 	go release()
 }
 
+var (
+	ErrEmptyVal = errors.New("query: harmless error, e.g. task.Val is nil")
+)
+
 // This method gets the values and children for a subgraph.
-func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
+func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 	invalidUids := make(map[uint64]bool)
 	uidAlreadySet := false
 
 	// We go through all predicate children of the subgraph.
 	for _, pc := range sg.Children {
-		idx := algo.IndexOf(pc.SrcUIDs, uid)
-		if idx < 0 {
+		idxi, idxj := algo.IndexOf(pc.SrcUIDs, uid)
+		if idxi < 0 {
 			continue
 		}
+		idx := algo.Idx(pc.SrcUIDs, idxi, idxj)
 		ul := pc.uidMatrix[idx]
 
 		fieldName := pc.Attr
@@ -235,16 +241,32 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 			uc.AddValue("count", c)
 			dst.AddChild(pc.Attr, uc)
 
-		} else if len(ul.Uids) > 0 || len(pc.Children) > 0 {
+		} else if len(pc.SrcFunc) > 0 && isAggregatorFn(pc.SrcFunc[0]) {
+			if idx > 0 { // aggregator will put value at index 0; place once
+				continue
+			}
+			// add sg.Attr as child on 'parent' instead of 'dst', otherwise
+			// within output, aggregator will messed with other attrs
+			uc := parent.New(sg.Attr)
+			name := fmt.Sprintf("%s(%s)", pc.SrcFunc[0], pc.Attr)
+			sv, err := convertWithBestEffort(pc.values[0], pc.Attr)
+			if err != nil && err != ErrEmptyVal {
+				return err
+			}
+			uc.AddValue(name, sv)
+			parent.AddChild(sg.Attr, uc)
+		} else if algo.ListLen(ul) > 0 || len(pc.Children) > 0 {
 			// We create as many predicate entity children as the length of uids for
 			// this predicate.
-			for _, childUID := range ul.Uids {
+			it := algo.NewListIterator(ul)
+			for ; it.Valid(); it.Next() {
+				childUID := it.Val()
 				if invalidUids[childUID] {
 					continue
 				}
 				uc := dst.New(fieldName)
 
-				if rerr := pc.preTraverse(childUID, uc); rerr != nil {
+				if rerr := pc.preTraverse(childUID, uc, dst); rerr != nil {
 					if rerr.Error() == "_INV_" {
 						invalidUids[childUID] = true
 						continue // next UID.
@@ -276,28 +298,12 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 					dst.SetUID(uid)
 				}
 			} else {
-				// globalType is the best effort type to which we try converting
-				// and if not possible, we ignore it in the result.
-				globalType, hasType := schema.TypeOf(pc.Attr)
-				sv := types.ValueForType(types.StringID)
-				if hasType == nil {
-					// Try to coerce types if this is an optional scalar outside an
-					// object definition.
-					if !globalType.IsScalar() {
-						return x.Errorf("Leaf predicate:'%v' must be a scalar.", pc.Attr)
-					}
-					gtID := globalType
-					// Convert to schema type.
-					sv, err = types.Convert(v, gtID)
-					if bytes.Equal(tv.Val, nil) || err != nil {
-						continue
-					}
-				} else {
-					sv, err = types.Convert(v, types.StringID)
-					x.Check(err)
-				}
-				if bytes.Equal(tv.Val, nil) {
+				// if conversion not possible, we ignore it in the result.
+				sv, convErr := convertWithBestEffort(tv, pc.Attr)
+				if convErr == ErrEmptyVal {
 					continue
+				} else if convErr != nil {
+					return convErr
 				}
 				// Only strings can have empty values.
 				if sv.Tid == types.StringID && sv.Value.(string) == "_nil_" {
@@ -318,6 +324,32 @@ func (sg *SubGraph) preTraverse(uid uint64, dst outputNode) error {
 	}
 
 	return nil
+}
+
+// convert from task.Val to types.Value which is determined by attr
+// if convert failed, try convert to types.StringID
+func convertWithBestEffort(tv *task.Value, attr string) (types.Val, error) {
+	v, _ := getValue(tv)
+	typ, err := schema.TypeOf(attr)
+	sv := types.ValueForType(types.StringID)
+	if err == nil {
+		// Try to coerce types if this is an optional scalar outside an
+		// object definition.
+		if !typ.IsScalar() {
+			return sv, x.Errorf("Leaf predicate:'%v' must be a scalar.", attr)
+		}
+		sv, err = types.Convert(v, typ)
+		if bytes.Equal(tv.Val, nil) || err != nil {
+			return sv, ErrEmptyVal
+		}
+	} else {
+		sv, err = types.Convert(v, types.StringID)
+		x.Check(err)
+	}
+	if bytes.Equal(tv.Val, nil) {
+		return sv, ErrEmptyVal
+	}
+	return sv, nil
 }
 
 func createProperty(prop string, v types.Val) *graph.Property {
@@ -394,6 +426,24 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 		dst := &SubGraph{
 			Attr:   gchild.Attr,
 			Params: args,
+		}
+
+		if gchild.Func != nil && gchild.Func.IsAggregator() {
+			f := gchild.Func.Name
+			if len(gchild.Children) != 0 {
+				note := fmt.Sprintf("Node with aggregator %q cant have child attr", f)
+				return errors.New(note)
+			}
+			// embedded filter will cause ambiguous output like following,
+			// director.film @filter(gt(initial_release_date, "2016")) {
+			//    min(initial_release_date @filter(gt(initial_release_date, "1986"))
+			// }
+			if gchild.Filter != nil {
+				note := fmt.Sprintf("Node with aggregator %q cant have filter,", f) +
+					" please place the filter on the upper level"
+				return errors.New(note)
+			}
+			dst.SrcFunc = append(dst.SrcFunc, f)
 		}
 
 		if gchild.Filter != nil {
@@ -507,8 +557,14 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		sg.SrcFunc = append(sg.SrcFunc, gq.Func.Args...)
 	}
 	if len(gq.UID) > 0 {
-		sg.SrcUIDs = &task.List{Uids: gq.UID}
-		sg.uidMatrix = []*task.List{&task.List{Uids: gq.UID}}
+		o := new(task.List)
+		it := algo.NewWriteIterator(o)
+		for _, uid := range gq.UID {
+			it.Append(uid)
+		}
+		it.End()
+		sg.SrcUIDs = o
+		sg.uidMatrix = []*task.List{o}
 	}
 	sg.values = createNilValuesList(1)
 	// Copy roots filter.
@@ -550,7 +606,7 @@ func createTaskQuery(sg *SubGraph) *task.Query {
 		DoCount:  len(sg.Filters) == 0 && sg.Params.DoCount,
 	}
 	if sg.SrcUIDs != nil {
-		out.Uids = sg.SrcUIDs.Uids
+		out.Uids = sg.SrcUIDs
 	}
 	return out
 }
@@ -572,6 +628,7 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 		}
 		x.Trace(ctx, "Query parsed")
 		sgl = append(sgl, sg)
+		//sg.DebugPrint("---")
 	}
 	l.Parsing += time.Since(loopStart)
 
@@ -687,27 +744,33 @@ func populateVarMap(sg *SubGraph, doneVars map[string]*task.List, isCascade bool
 			algo.IntersectWith(l, child.DestUIDs)
 		}
 	}
-	out := sg.DestUIDs.Uids[:0]
+
+	o := new(task.List)
+	out := algo.NewWriteIterator(o)
+	it := algo.NewListIterator(sg.DestUIDs)
+	i := -1
 	if !isCascade {
 		goto AssignStep
 	}
 
 	// Filter out UIDs that don't have atleast one UID in every child.
-	for i := 0; i < len(sg.DestUIDs.Uids); i++ {
+	for ; it.Valid(); it.Next() {
+		i++
 		var exclude bool
 		for _, child := range sg.Children {
 			// If the length of child UID list is zero and it has no valid value, then the
 			// current UID should be removed from this level.
-			if len(child.values[i].Val) == 0 && len(child.uidMatrix[i].Uids) == 0 {
+			if len(child.values[i].Val) == 0 && algo.ListLen(child.uidMatrix[i]) == 0 {
 				exclude = true
 				break
 			}
 		}
 		if !exclude {
-			out = append(out, sg.DestUIDs.Uids[i])
+			out.Append(it.Val())
 		}
 	}
-	sg.DestUIDs.Uids = out
+	out.End()
+	sg.DestUIDs = o
 
 AssignStep:
 	if sg.Params.Var != "" {
@@ -743,7 +806,7 @@ func (sg *SubGraph) fillVars(mp map[string]*task.List) {
 func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	var err error
 	if len(sg.Params.NeedsVar) != 0 && len(sg.SrcFunc) == 0 {
-		sg.uidMatrix = []*task.List{&task.List{sg.DestUIDs.Uids}}
+		sg.uidMatrix = []*task.List{sg.DestUIDs}
 	} else if len(sg.Attr) == 0 {
 		// If we have a filter SubGraph which only contains an operator,
 		// it won't have any attribute to work on.
@@ -794,11 +857,11 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 
 		if parent == nil {
 			// I'm root. We reach here if root had a function.
-			sg.uidMatrix = []*task.List{&task.List{sg.DestUIDs.Uids}}
+			sg.uidMatrix = []*task.List{sg.DestUIDs}
 		}
 	}
 
-	if sg.DestUIDs == nil || len(sg.DestUIDs.Uids) == 0 {
+	if sg.DestUIDs == nil || algo.ListLen(sg.DestUIDs) == 0 {
 		// Looks like we're done here. Be careful with nil srcUIDs!
 		x.Trace(ctx, "Zero uids for %q. Num attr children: %v", sg.Attr, len(sg.Children))
 		rch <- nil
@@ -874,15 +937,16 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	// taken into account. For example, a PL might have only 50 entries but the
 	// user wants to skip 100 entries and return 10 entries. In this case, you
 	// should return a count of 0, not 10.
-	if sg.Params.DoCount {
 
+	// take care of the order
+	if sg.Params.DoCount {
 		x.AssertTrue(len(sg.Filters) > 0)
 		sg.counts = make([]uint32, len(sg.uidMatrix))
 		for i, ul := range sg.uidMatrix {
 			// A possible optimization is to return the size of the intersection
 			// without forming the intersection.
 			algo.IntersectWith(ul, sg.DestUIDs)
-			sg.counts[i] = uint32(len(ul.Uids))
+			sg.counts[i] = uint32(algo.ListLen(ul))
 		}
 		rch <- nil
 		return
@@ -945,12 +1009,10 @@ func (sg *SubGraph) applyPagination(ctx context.Context) error {
 	if params.Count == 0 && params.Offset == 0 { // No pagination.
 		return nil
 	}
-	for _, l := range sg.uidMatrix {
-		// Update the UidMatrix before applying the pagination as
-		// we want valid uids which are present in DestUids.
-		algo.IntersectWith(l, sg.DestUIDs)
-		start, end := pageRange(&sg.Params, len(l.Uids))
-		l.Uids = l.Uids[start:end]
+	for i := 0; i < len(sg.uidMatrix); i++ { //_, l := range sg.uidMatrix {
+		algo.IntersectWith(sg.uidMatrix[i], sg.DestUIDs)
+		start, end := pageRange(&sg.Params, algo.ListLen(sg.uidMatrix[i]))
+		algo.Slice(sg.uidMatrix[i], start, end)
 	}
 	// Re-merge the UID matrix.
 	sg.DestUIDs = algo.MergeSorted(sg.uidMatrix)
@@ -987,11 +1049,14 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 	// UID). For each element in UID matrix, we do a binary search in the
 	// current destUID and mark it. Then we scan over this bool array and
 	// rebuild destUIDs.
-	included := make([]bool, len(sg.DestUIDs.Uids))
+	included := make([]bool, algo.ListLen(sg.DestUIDs))
 	for _, ul := range sg.uidMatrix {
-		for _, uid := range ul.Uids {
-			idx := algo.IndexOf(sg.DestUIDs, uid) // Binary search.
-			if idx >= 0 {
+		it := algo.NewListIterator(ul)
+		for ; it.Valid(); it.Next() {
+			uid := it.Val()
+			idxi, idxj := algo.IndexOf(sg.DestUIDs, uid) // Binary search.
+			if idxi >= 0 {
+				idx := algo.Idx(sg.DestUIDs, idxi, idxj)
 				included[idx] = true
 			}
 		}
@@ -1022,6 +1087,14 @@ func isValidFuncName(f string) bool {
 func isCompareFn(f string) bool {
 	switch f {
 	case "leq", "geq", "lt", "gt", "eq":
+		return true
+	}
+	return false
+}
+
+func isAggregatorFn(f string) bool {
+	switch f {
+	case "min", "max", "sum":
 		return true
 	}
 	return false

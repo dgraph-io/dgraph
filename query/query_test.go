@@ -250,6 +250,22 @@ func populateGraph(t *testing.T) {
 	addEdgeToValue(t, "film.film.initial_release_date", 25, "1929-01-10")
 	addEdgeToValue(t, "film.film.initial_release_date", 31, "1801-01-15")
 
+	// for aggregator(sum) test
+	{
+		data := types.ValueForType(types.BinaryID)
+		intD := types.Val{types.Int32ID, int32(4)}
+		err = types.Marshal(intD, &data)
+		require.NoError(t, err)
+		addEdgeToTypedValue(t, "shadow_deep", 23, types.Int32ID, data.Value.([]byte))
+	}
+	{
+		data := types.ValueForType(types.BinaryID)
+		intD := types.Val{types.Int32ID, int32(14)}
+		err = types.Marshal(intD, &data)
+		require.NoError(t, err)
+		addEdgeToTypedValue(t, "shadow_deep", 24, types.Int32ID, data.Value.([]byte))
+	}
+
 	time.Sleep(5 * time.Millisecond)
 }
 
@@ -653,7 +669,7 @@ func TestCount(t *testing.T) {
 	`
 
 	js := processToFastJSON(t, query)
-	require.EqualValues(t,
+	require.JSONEq(t,
 		`{"me":[{"alive":true,"friend":[{"count":5}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
@@ -712,16 +728,166 @@ func TestCountError3(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestMin(t *testing.T) {
+	populateGraph(t)
+	// Alright. Now we have everything set up. Let's create the query.
+	query := `
+                {
+                        me(id:0x01) {
+                                name
+                                gender
+                                alive
+                                friend {
+                                    min(dob)
+                                }
+                        }
+                }
+        `
+	js := processToFastJSON(t, query)
+	require.EqualValues(t,
+		`{"me":[{"alive":true,"friend":[{"min(dob)":"1901-01-15"}],"gender":"female","name":"Michonne"}]}`,
+		js)
+}
+
+func TestMinError1(t *testing.T) {
+	populateGraph(t)
+	// error: min could not performed on non-scalar-type
+	query := `
+                {
+                        me(id:0x01) {
+                                name
+                                gender
+                                alive
+                                min(friend)
+                        }
+                }
+        `
+	res, err := gql.Parse(query)
+	require.NoError(t, err)
+
+	var l Latency
+	_, queryErr := ProcessQuery(context.Background(), res, &l)
+	require.NotNil(t, queryErr)
+}
+
+func TestMinError2(t *testing.T) {
+	populateGraph(t)
+	// error: min should not have children
+	query := `
+                {
+                        me(id:0x01) {
+                                name
+                                gender
+                                alive
+                                min(friend) {
+                                    name
+                                }
+                        }
+                }
+        `
+	res, err := gql.Parse(query)
+	require.NoError(t, err)
+
+	var l Latency
+	_, queryErr := ProcessQuery(context.Background(), res, &l)
+	require.NotNil(t, queryErr)
+}
+
+func TestMax(t *testing.T) {
+	populateGraph(t)
+	// Alright. Now we have everything set up. Let's create the query.
+	query := `
+                {
+                        me(id:0x01) {
+                                name
+                                gender
+                                alive
+                                friend {
+                                    max(dob)
+                                }
+                        }
+                }
+        `
+	js := processToFastJSON(t, query)
+	require.EqualValues(t,
+		`{"me":[{"alive":true,"friend":[{"max(dob)":"1910-01-02"}],"gender":"female","name":"Michonne"}]}`,
+		js)
+}
+
+
+func TestMaxError1(t *testing.T) {
+	populateGraph(t)
+	// error: aggregator 'max' should not have filters on its own
+	query := `
+                {
+                        me(id:0x01) {
+                                name
+                                gender
+                                alive
+                                friend {
+                                    max(dob @filter(gt("dob", "1910-01-02")))
+                                }
+                        }
+                }
+        `
+	_, err := gql.Parse(query)
+	require.NotNil(t, err)
+}
+
+func TestSum(t *testing.T) {
+	populateGraph(t)
+	// Alright. Now we have everything set up. Let's create the query.
+	query := `
+                {
+                        me(id:0x01) {
+                                name
+                                gender
+                                alive
+                                friend {
+                                    sum(shadow_deep)
+                                }
+                        }
+                }
+        `
+	js := processToFastJSON(t, query)
+	require.EqualValues(t,
+		`{"me":[{"alive":true,"friend":[{"sum(shadow_deep)":18}],"gender":"female","name":"Michonne"}]}`,
+		js)
+}
+
+func TestSumError1(t *testing.T) {
+	populateGraph(t)
+	// error: sum could only be applied on int/float
+	query := `
+                {
+                        me(id:0x01) {
+                                name
+                                gender
+                                alive
+                                friend {
+                                    sum(name)
+                                }
+                        }
+                }
+        `
+	res, err := gql.Parse(query)
+	require.NoError(t, err)
+
+	var l Latency
+	_, queryErr := ProcessQuery(context.Background(), res, &l)
+	require.NotNil(t, queryErr)
+}
+
 func TestToSubgraphInvalidFnName(t *testing.T) {
 	query := `
-		{
-			me(func:invalidfn1(name, "some cool name")) {
-				name
-				gender
-				alive
-			}
-		}
-	`
+                {
+                        me(func:invalidfn1(name, "some cool name")) {
+                                name
+                                gender
+                                alive
+                        }
+                }
+        `
 	res, err := gql.Parse(query)
 	require.NoError(t, err)
 
@@ -732,15 +898,15 @@ func TestToSubgraphInvalidFnName(t *testing.T) {
 
 func TestToSubgraphInvalidFnName2(t *testing.T) {
 	query := `
-		{
-			me(func:anyof(name, "some cool name")) {
-				name
-				friend @filter(invalidfn2(name, "some name")) {
-				       name
-				}
-			}
-		}
-	`
+                {
+                        me(func:anyof(name, "some cool name")) {
+                                name
+                                friend @filter(invalidfn2(name, "some name")) {
+                                       name
+                                }
+                        }
+                }
+        `
 	res, err := gql.Parse(query)
 	require.NoError(t, err)
 
@@ -751,16 +917,16 @@ func TestToSubgraphInvalidFnName2(t *testing.T) {
 
 func TestToSubgraphInvalidFnName3(t *testing.T) {
 	query := `
-		{
-			me(func:anyof(name, "some cool name")) {
-				name
-				friend @filter(anyof(name, "Andrea") or
-					       invalidfn3(name, "Andrea Rhee")){
-					name
-				}
-			}
-		}
-	`
+                {
+                        me(func:anyof(name, "some cool name")) {
+                                name
+                                friend @filter(anyof(name, "Andrea") or
+                                               invalidfn3(name, "Andrea Rhee")){
+                                        name
+                                }
+                        }
+                }
+        `
 	res, err := gql.Parse(query)
 	require.NoError(t, err)
 
@@ -771,17 +937,17 @@ func TestToSubgraphInvalidFnName3(t *testing.T) {
 
 func TestToSubgraphInvalidFnName4(t *testing.T) {
 	query := `
-		{
-			f AS var(func:invalidfn4("name", "Michonne Rick Glenn")) {
-				name
-			}
-			you(func:anyof(name, "Michonne")) {
-				friend @filter(id(f)) {
-					name
-				}
-			}
-		}
-	`
+                {
+                        f AS var(func:invalidfn4("name", "Michonne Rick Glenn")) {
+                                name
+                        }
+                        you(func:anyof(name, "Michonne")) {
+                                friend @filter(id(f)) {
+                                        name
+                                }
+                        }
+                }
+        `
 	res, err := gql.Parse(query)
 	require.NoError(t, err)
 
@@ -792,16 +958,16 @@ func TestToSubgraphInvalidFnName4(t *testing.T) {
 
 func TestToSubgraphInvalidArgs1(t *testing.T) {
 	query := `
-		{
-			me(id:0x01) {
-				name
-				gender
-				friend(disorderasc: dob) @filter(leq("dob", "1909-03-20")) {
-					name
-				}
-			}
-		}
-	`
+                {
+                        me(id:0x01) {
+                                name
+                                gender
+                                friend(disorderasc: dob) @filter(leq("dob", "1909-03-20")) {
+                                        name
+                                }
+                        }
+                }
+        `
 	res, err := gql.Parse(query)
 	require.NoError(t, err)
 
@@ -812,16 +978,16 @@ func TestToSubgraphInvalidArgs1(t *testing.T) {
 
 func TestToSubgraphInvalidArgs2(t *testing.T) {
 	query := `
-		{
-			me(id:0x01) {
-				name
-				gender
-				friend(offset:1, invalidorderasc:1) @filter(anyof("name", "Andrea")) {
-					name
-				}
-			}
-		}
-	`
+                {
+                        me(id:0x01) {
+                                name
+                                gender
+                                friend(offset:1, invalidorderasc:1) @filter(anyof("name", "Andrea")) {
+                                        name
+                                }
+                        }
+                }
+        `
 	res, err := gql.Parse(query)
 	require.NoError(t, err)
 
@@ -1138,7 +1304,7 @@ func TestToFastJSONFilterOrFirst(t *testing.T) {
 	`
 
 	js := processToFastJSON(t, query)
-	require.EqualValues(t,
+	require.JSONEq(t,
 		`{"me":[{"friend":[{"name":"Glenn Rhee"},{"name":"Daryl Dixon"}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
@@ -1158,7 +1324,7 @@ func TestToFastJSONFilterOrOffset(t *testing.T) {
 	`
 
 	js := processToFastJSON(t, query)
-	require.EqualValues(t,
+	require.JSONEq(t,
 		`{"me":[{"friend":[{"name":"Daryl Dixon"},{"name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
@@ -1338,7 +1504,7 @@ func TestToFastJSONFirstOffset(t *testing.T) {
 	`
 
 	js := processToFastJSON(t, query)
-	require.EqualValues(t,
+	require.JSONEq(t,
 		`{"me":[{"friend":[{"name":"Glenn Rhee"}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
@@ -1358,7 +1524,7 @@ func TestToFastJSONFilterOrFirstOffset(t *testing.T) {
 	`
 
 	js := processToFastJSON(t, query)
-	require.EqualValues(t,
+	require.JSONEq(t,
 		`{"me":[{"friend":[{"name":"Daryl Dixon"}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
@@ -1418,7 +1584,7 @@ func TestToFastJSONFilterOrFirstNegative(t *testing.T) {
 	`
 
 	js := processToFastJSON(t, query)
-	require.EqualValues(t,
+	require.JSONEq(t,
 		`{"me":[{"friend":[{"name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
@@ -1919,7 +2085,7 @@ func TestToFastJSONOrderOffset(t *testing.T) {
 	`
 
 	js := processToFastJSON(t, query)
-	require.EqualValues(t,
+	require.JSONEq(t,
 		`{"me":[{"friend":[{"name":"Glenn Rhee"},{"name":"Rick Grimes"}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
@@ -1940,7 +2106,7 @@ func TestToFastJSONOrderOffsetCount(t *testing.T) {
 	`
 
 	js := processToFastJSON(t, query)
-	require.EqualValues(t,
+	require.JSONEq(t,
 		`{"me":[{"friend":[{"name":"Glenn Rhee"}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
@@ -3017,6 +3183,7 @@ scalar (
 	survival_rate : float
 	alive         : bool
 	age           : int
+        shadow_deep   : int
 )
 scalar (
   friend:uid @reverse

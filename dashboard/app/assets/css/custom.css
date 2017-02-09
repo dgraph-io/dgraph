@@ -1,0 +1,17 @@
+.hourglass {
+    background: url(../images/hourglass.svg) no-repeat center center;
+    width: 32px;
+    height: 32px;
+}
+
+.error-res {
+    padding-left: 10px;
+    padding-top: 20px;
+    color: red;
+}
+
+.success-res {
+    padding-left: 10px;
+    padding-top: 20px;
+    color: green;
+}

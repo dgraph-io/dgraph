@@ -90,19 +90,32 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 	attr := q.Attr
 
 	useFunc := len(q.SrcFunc) != 0
-	var n int
 	var tokens []string
 	var geoQuery *types.GeoQueryData
 	var err error
 	var intersectDest bool
 	var ineqValue types.Val
 	var ineqValueToken string
-	var isIneq bool
+	var isIneq, isAgrtr bool
+	var f string
+	var n int
 
 	if useFunc {
-		f := q.SrcFunc[0]
+		f = q.SrcFunc[0]
 		isIneq = f == "leq" || f == "geq" || f == "lt" || f == "gt" || f == "eq"
+		isAgrtr = f == "min" || f == "max" || f == "sum"
 		switch {
+		case isAgrtr:
+			// confirm agrregator could apply on the attributes
+			typ, err := schema.TypeOf(attr)
+			if err != nil {
+				return nil, x.Errorf("Attribute %q is not scalar-type", attr)
+			}
+			if !CouldApplyAggregatorOn(f, typ) {
+				return nil, x.Errorf("Aggregator %q could not apply on %v",
+					f, attr)
+			}
+
 		case isIneq:
 			if len(q.SrcFunc) != 2 {
 				return nil, x.Errorf("Function requires 2 arguments, but got %d %v",
@@ -113,6 +126,9 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 				return nil, err
 			}
 			// Tokenizing RHS value of inequality.
+			// TODO(kg): more comments about why we convert to types.BinaryID, and
+			// then convert it back to attr type in IndexTokens.
+			// the point is IndexTokens need BinaryID type to be passed in
 			v := types.ValueForType(types.BinaryID)
 			err = types.Marshal(ineqValue, &v)
 			if err != nil {
@@ -146,20 +162,30 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 			}
 			intersectDest = (strings.ToLower(q.SrcFunc[0]) == "allof")
 		}
-		n = len(tokens)
+		if isAgrtr {
+			n = algo.ListLen(q.Uids)
+		} else {
+			n = len(tokens)
+		}
 	} else {
-		n = len(q.Uids)
+		n = algo.ListLen(q.Uids)
 	}
 
 	var out task.Result
+	it := algo.NewListIterator(q.Uids)
 	for i := 0; i < n; i++ {
 		var key []byte
-		if useFunc {
+		if isAgrtr {
+			key = x.DataKey(attr, it.Val())
+			it.Next()
+		} else if useFunc {
 			key = x.IndexKey(attr, tokens[i])
 		} else if q.Reverse {
-			key = x.ReverseKey(attr, q.Uids[i])
+			key = x.ReverseKey(attr, it.Val())
+			it.Next()
 		} else {
-			key = x.DataKey(attr, q.Uids[i])
+			key = x.DataKey(attr, it.Val())
+			it.Next()
 		}
 		// Get or create the posting list for an entity, attribute combination.
 		pl, decr := posting.GetOrCreate(key, gid)
@@ -168,7 +194,6 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 		// If a posting list contains a value, we store that or else we store a nil
 		// byte so that processing is consistent later.
 		val, err := pl.Value()
-
 		newValue := &task.Value{ValType: int32(val.Tid)}
 		if err == nil {
 			newValue.Val = val.Value.([]byte)
@@ -177,22 +202,33 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 		}
 		out.Values = append(out.Values, newValue)
 
-		if q.DoCount {
-			out.Counts = append(out.Counts, uint32(pl.Length(0)))
+		if q.DoCount || isAgrtr {
+			if q.DoCount {
+				out.Counts = append(out.Counts, uint32(pl.Length(0)))
+			}
 			// Add an empty UID list to make later processing consistent
 			out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
 			continue
 		}
-
 		// The more usual case: Getting the UIDs.
 		opts := posting.ListOptions{
 			AfterUID: uint64(q.AfterUid),
 		}
 		// If we have srcFunc and Uids, it means its a filter. So we intersect.
-		if useFunc && len(q.Uids) > 0 {
-			opts.Intersect = &task.List{Uids: q.Uids}
+		if useFunc && algo.ListLen(q.Uids) > 0 {
+			opts.Intersect = q.Uids
 		}
 		out.UidMatrix = append(out.UidMatrix, pl.Uids(opts))
+	}
+
+	if isAgrtr && len(out.Values) > 0 {
+		var err error
+		typ, _ := schema.TypeOf(attr)
+		out.Values[0], err = Aggregate(f, out.Values, typ)
+		if err != nil {
+			return nil, err
+		}
+		out.Values = out.Values[0:1] // trim length to 1
 	}
 
 	if isIneq && len(tokens) > 0 && ineqValueToken == tokens[0] {
@@ -232,7 +268,9 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 	var values []*task.Value
 	if geoQuery != nil {
 		uids := algo.MergeSorted(out.UidMatrix)
-		for _, uid := range uids.Uids {
+		it := algo.NewListIterator(uids)
+		for ; it.Valid(); it.Next() {
+			uid := it.Val()
 			key := x.DataKey(attr, uid)
 			pl, decr := posting.GetOrCreate(key, gid)
 			val, err := pl.Value()
@@ -262,7 +300,7 @@ func (w *grpcWorker) ServeTask(ctx context.Context, q *task.Query) (*task.Result
 	}
 
 	gid := group.BelongsTo(q.Attr)
-	x.Trace(ctx, "Attribute: %q NumUids: %v groupId: %v ServeTask", q.Attr, len(q.Uids), gid)
+	x.Trace(ctx, "Attribute: %q NumUids: %v groupId: %v ServeTask", q.Attr, algo.ListLen(q.Uids), gid)
 
 	var reply *task.Result
 	x.AssertTruef(groups().ServesGroup(gid),

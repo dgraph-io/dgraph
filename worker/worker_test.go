@@ -132,7 +132,7 @@ func TestProcessTask(t *testing.T) {
 func newQuery(attr string, uids []uint64, srcFunc []string) *task.Query {
 	x.AssertTrue(uids == nil || srcFunc == nil)
 	return &task.Query{
-		Uids:    uids,
+		Uids:    algo.SortedListToBlock(uids),
 		SrcFunc: srcFunc,
 		Attr:    attr,
 	}
