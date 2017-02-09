@@ -17,9 +17,14 @@ module.exports = {
     filename: "index_bundle.js"
   },
   module: {
-    loaders: [
-      { test: /\.js$/, exclude: /node_modules/, loader: "babel-loader" }
-    ]
+    loaders: [{
+      test: /\.js$/,
+      exclude: /node_modules/,
+      loader: "babel-loader",
+      query: {
+        presets: ['es2015']
+      }
+    }]
   },
   context: path.join(__dirname, 'app'),
   devServer: {
