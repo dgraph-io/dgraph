@@ -163,25 +163,29 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 			intersectDest = (strings.ToLower(q.SrcFunc[0]) == "allof")
 		}
 		if isAgrtr {
-			n = len(q.Uids)
+			n = algo.ListLen(q.Uids)
 		} else {
 			n = len(tokens)
 		}
 	} else {
-		n = len(q.Uids)
+		n = algo.ListLen(q.Uids)
 	}
 
 	var out task.Result
+	it := algo.NewListIterator(q.Uids)
 	for i := 0; i < n; i++ {
 		var key []byte
 		if isAgrtr {
-			key = x.DataKey(attr, q.Uids[i])
+			key = x.DataKey(attr, it.Val())
+			it.Next()
 		} else if useFunc {
 			key = x.IndexKey(attr, tokens[i])
 		} else if q.Reverse {
-			key = x.ReverseKey(attr, q.Uids[i])
+			key = x.ReverseKey(attr, it.Val())
+			it.Next()
 		} else {
-			key = x.DataKey(attr, q.Uids[i])
+			key = x.DataKey(attr, it.Val())
+			it.Next()
 		}
 		// Get or create the posting list for an entity, attribute combination.
 		pl, decr := posting.GetOrCreate(key, gid)
@@ -211,8 +215,8 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 			AfterUID: uint64(q.AfterUid),
 		}
 		// If we have srcFunc and Uids, it means its a filter. So we intersect.
-		if useFunc && len(q.Uids) > 0 {
-			opts.Intersect = algo.SortedListToBlock(q.Uids)
+		if useFunc && algo.ListLen(q.Uids) > 0 {
+			opts.Intersect = q.Uids
 		}
 		out.UidMatrix = append(out.UidMatrix, pl.Uids(opts))
 	}
@@ -296,7 +300,7 @@ func (w *grpcWorker) ServeTask(ctx context.Context, q *task.Query) (*task.Result
 	}
 
 	gid := group.BelongsTo(q.Attr)
-	x.Trace(ctx, "Attribute: %q NumUids: %v groupId: %v ServeTask", q.Attr, len(q.Uids), gid)
+	x.Trace(ctx, "Attribute: %q NumUids: %v groupId: %v ServeTask", q.Attr, algo.ListLen(q.Uids), gid)
 
 	var reply *task.Result
 	x.AssertTruef(groups().ServesGroup(gid),

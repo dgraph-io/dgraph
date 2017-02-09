@@ -600,7 +600,7 @@ func createTaskQuery(sg *SubGraph) *task.Query {
 		DoCount:  len(sg.Filters) == 0 && sg.Params.DoCount,
 	}
 	if sg.SrcUIDs != nil {
-		out.Uids = algo.BlockToList(sg.SrcUIDs)
+		out.Uids = sg.SrcUIDs
 	}
 	return out
 }
