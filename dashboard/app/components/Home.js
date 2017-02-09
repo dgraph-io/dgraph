@@ -11,6 +11,7 @@ require('brace/mode/logiql');
 require('brace/theme/github');
 var screenfull = require('screenfull');
 var classNames = require('classnames');
+var _ = require('lodash');
 
 var NavBar = require('./Navbar');
 var Stats = require('./Stats');
@@ -106,6 +107,11 @@ function hasChildren(node) {
   return false
 }
 
+function hasProperties(props) {
+  // Each node will have a _uid_. We check if it has other properties.
+  return Object.keys(props).length !== 1
+}
+
 function processGraph(response, root, maxNodes) {
   var nodesStack = [],
     predLabel = {},
@@ -161,13 +167,15 @@ function processGraph(response, root, maxNodes) {
       }
     }
 
-    var properties = {}
+    var properties = {},
+      hasChildNodes = false;
 
     for (var prop in obj.node) {
       // If its just a value, then we store it in properties for this node.
       if (!Array.isArray(obj.node[prop])) {
         properties[prop] = obj.node[prop]
       } else {
+        hasChildNodes = true;
         var arr = obj.node[prop]
         for (var i = 0; i < arr.length; i++) {
           nodesStack.push({
@@ -183,13 +191,15 @@ function processGraph(response, root, maxNodes) {
 
     if (!uidMap[properties["_uid_"]]) {
       uidMap[properties["_uid_"]] = true
-      nodes.push({
-        id: properties["_uid_"],
-        label: getLabel(properties),
-        title: JSON.stringify(properties, null, 2),
-        group: obj.src.pred,
-        value: 1
-      })
+      if (hasProperties(properties) || hasChildNodes) {
+        nodes.push({
+          id: properties["_uid_"],
+          label: getLabel(properties),
+          title: JSON.stringify(properties, null, 2),
+          group: obj.src.pred,
+          value: 1
+        })
+      }
     }
 
     var predProperties = getPredProperties(obj.src.pred, predLabel, edgeLabels)
@@ -248,15 +258,102 @@ function renderNetwork(nodes, edges) {
       improvedLayout: true
     },
     physics: {
-      timestep: 0.8,
+      timestep: 0.6,
       barnesHut: {
-        // avoidOverlap: 1
+        // avoidOverlap: 0.8,
+        // springConstant: 0.1,
+        damping: 0.3
       }
     }
   };
 
+  var nodes = [],
+    edges = [];
+
   network = new vis.Network(container, data, options);
   var that = this;
+  // network.on("doubleClick", function(params) {
+  //   if (params.nodes.length > 0) {
+  //     var nodeUid = params.nodes[0],
+  //       currentNode = nodeSet.get(nodeUid);
+
+  //     that.setState({
+  //       currentNode: currentNode.title,
+  //     });
+
+  //     var incoming = edgeSet.get({
+  //       filter: function(node) {
+  //         return node.to === nodeUid
+  //       }
+  //     })
+
+  //     if (incoming.length === 0) {
+  //       // Its a root node, we don't want to expand/collapse. It should be
+  //       // already expanded.
+  //       return
+  //     }
+
+  //     var outgoing = edgeSet.get({
+  //       filter: function(node) {
+  //         return node.from === nodeUid
+  //       }
+  //     })
+
+  //     var outgoingInGraph = data.edges.get({
+  //       filter: function(node) {
+  //         return node.from === nodeUid
+  //       }
+  //     })
+
+  //     // Leaf node.
+  //     if (outgoing.length == 0) {
+  //       return;
+  //     }
+
+  //     var expanded = outgoingInGraph.length > 0
+  //     that.setState({
+  //       selectedNode: false
+  //     });
+
+  //     var outgoingEdges = edgeSet.get({
+  //       filter: function(node) {
+  //         return node.from === nodeUid
+  //       }
+  //     })
+
+  //     var adjacentNodeIds = outgoingEdges.map(function(edge) {
+  //       return edge.to
+  //     })
+
+
+  //     var adjacentNodes = nodeSet.get(adjacentNodeIds)
+  //       // TODO -See if we can set a meta property to a node to know that its
+  //       // expanded or closed and avoid this computation.
+  //     if (expanded) {
+  //       data.nodes.clear()
+  //       data.edges.clear()
+  //       data.nodes.update(nodes)
+  //       data.edges.update(edges)
+  //         // network.redraw();
+  //       network.fit()
+  //     } else {
+  //       // While expanding, we just show this node and its children and hide
+  //       // everything else.
+
+  //       // Cache stuff.
+  //       nodes = _.cloneDeep(data.nodes.get(data.nodes.getIds()))
+  //       edges = _.cloneDeep(data.edges.get(data.edges.getIds()))
+  //       adjacentNodes[adjacentNodes.length] = currentNode
+  //       data.nodes.clear()
+  //       data.edges.clear()
+  //       data.nodes.update(adjacentNodes)
+  //       data.edges.update(outgoingEdges)
+  //       network.fit()
+  //     }
+  //   }
+  // });
+
+
   network.on("click", function(params) {
     if (params.nodes.length > 0) {
       var nodeUid = params.nodes[0],
@@ -316,6 +413,7 @@ function renderNetwork(nodes, edges) {
       }
     }
   });
+
 
   window.onresize = function() { network.fit(); }
   network.on("hoverNode", function(params) {
@@ -422,7 +520,7 @@ var Home = React.createClass({
         var queries = JSON.parse(localStorage.getItem("queries")) || [];
         queries.unshift(query);
 
-        (queries.length > 20) && (queries = queries.splice(0, 20))
+        // (queries.length > 20) && (queries = queries.splice(0, 20))
 
         this.setState({
           queryIndex: queries.length - 1,
@@ -576,9 +674,8 @@ var Home = React.createClass({
             network.redraw();
           }
         });
-        console.log(network.interactionHandler.options)
         screenfull.request(document.getElementById('graph'));
-        screenfull.request(document.getElementById('properties'));
+        // screenfull.request(document.getElementById('properties'));
       },
       render: function() {
           var graphClass = classNames({ 'fullscreen': this.state.graph === 'fullscreen' }, { 'graph': this.state.graph !== 'fullscreen' }, { 'error-res': this.state.resType == 'error-res' }, { 'success-res': this.state.resType == 'success-res' })

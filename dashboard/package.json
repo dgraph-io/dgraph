@@ -15,6 +15,7 @@
   "license": "Apache-2.0",
   "dependencies": {
     "classnames": "^2.2.5",
+    "lodash": "^4.17.4",
     "randomcolor": "^0.4.4",
     "react": "^15.4.2",
     "react-ace": "^4.1.1",
