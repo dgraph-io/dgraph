@@ -633,11 +633,13 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 
 			sg.recursiveFillVars(doneVars)
 			hasExecuted[idx] = true
-			idxList = append(idxList, idx)
 			numQueriesDone++
+			idxList = append(idxList, idx)
 			if sg.Params.Alias == "shortest" {
-				go ShortestPath(ctx, sg, errChan)
-
+				err := ShortestPath(ctx, sg)
+				if err != nil {
+					return nil, err
+				}
 			} else {
 				go ProcessGraph(ctx, sg, nil, errChan)
 			}
@@ -646,6 +648,9 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 
 		// Wait for the execution that was started in this iteration.
 		for i := 0; i < len(idxList); i++ {
+			if sgl[idxList[i]].Params.Alias == "shortest" {
+				continue
+			}
 			select {
 			case err := <-errChan:
 				if err != nil {

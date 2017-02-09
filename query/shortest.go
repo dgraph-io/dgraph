@@ -10,10 +10,9 @@ import (
 )
 
 type Item struct {
-	uid   uint64  // uid of the node.
-	cost  float64 // cost of taking the path till this uid.
-	hop   int     // number of hops taken to reach this node.
-	index int
+	uid  uint64  // uid of the node.
+	cost float64 // cost of taking the path till this uid.
+	hop  int     // number of hops taken to reach this node.
 }
 
 type priorityQueue []*Item
@@ -22,13 +21,9 @@ func (h priorityQueue) Len() int           { return len(h) }
 func (h priorityQueue) Less(i, j int) bool { return h[i].cost < h[j].cost }
 func (h priorityQueue) Swap(i, j int) {
 	h[i], h[j] = h[j], h[i]
-	h[i].index = i
-	h[j].index = j
 }
 func (h *priorityQueue) Push(x interface{}) {
-	n := len(*h)
 	item := x.(*Item)
-	item.index = n
 	*h = append(*h, item)
 }
 
@@ -106,7 +101,6 @@ func (start *SubGraph) expandOut(ctx context.Context, mp map[uint64]map[uint64]f
 			rch <- x.Errorf("Stop Expansion")
 			return
 		}
-
 		rch <- nil
 
 		// modify the exec and attach child nodes.
@@ -137,32 +131,28 @@ func (start *SubGraph) expandOut(ctx context.Context, mp map[uint64]map[uint64]f
 	}
 }
 
-func ShortestPath(ctx context.Context, sg *SubGraph, rch chan error) {
+func ShortestPath(ctx context.Context, sg *SubGraph) error {
 	var err error
 	if sg.Params.Alias != "shortest" {
-		rch <- x.Errorf("Invalid shortest path query")
-		return
+		return x.Errorf("Invalid shortest path query")
 	}
 
 	pq := make(priorityQueue, 0)
 	heap.Init(&pq)
 
 	srcNode := &Item{
-		uid:   sg.Params.From,
-		cost:  0,
-		hop:   0,
-		index: 0,
+		uid:  sg.Params.From,
+		cost: 0,
+		hop:  0,
 	}
-
 	heap.Push(&pq, srcNode)
 
 	var finalCost float64
 	numHops := -1
-
 	next := make(chan bool, 2)
-	rch1 := make(chan error, 2)
+	expandErr := make(chan error, 2)
 	mp := make(map[uint64]map[uint64]float64)
-	go sg.expandOut(ctx, mp, next, rch1)
+	go sg.expandOut(ctx, mp, next, expandErr)
 	dist := make(map[uint64]float64) // map to store the min cost to nodes we've seen.
 	dist[srcNode.uid] = 0
 	var stopExpansion bool
@@ -171,13 +161,8 @@ func ShortestPath(ctx context.Context, sg *SubGraph, rch chan error) {
 	// later and let us find the path directly.
 
 	// For now, lets allow a maximum of 10 hops.
-	for pq.Len() > 0 && numHops < 10 {
+	for pq.Len() > 0 && len(mp) < 1000000 {
 		item := heap.Pop(&pq).(*Item)
-		/*
-			if item.hop > maxLoopLevel {
-				break
-			}
-		*/
 		if item.uid == sg.Params.To {
 			finalCost = item.cost
 			break
@@ -188,36 +173,35 @@ func ShortestPath(ctx context.Context, sg *SubGraph, rch chan error) {
 			if !stopExpansion {
 				next <- false
 			}
-
 			select {
-			case err = <-rch1:
+			case err = <-expandErr:
 				if err != nil {
 					if err.Error() == "Stop Expansion" {
 						stopExpansion = true
 					} else {
 						x.TraceError(ctx, x.Wrapf(err, "Error while processing child task"))
-						rch <- err
-						return
+						return err
 					}
 				}
 			case <-ctx.Done():
 				x.TraceError(ctx, x.Wrapf(ctx.Err(), "Context done before full execution"))
-				rch <- ctx.Err()
-				return
+				return ctx.Err()
 			}
-
 			numHops++
 		}
-		neigh := mp[item.uid]
-		for toUid, cost := range neigh {
+		neighbours := mp[item.uid]
+		for toUid, cost := range neighbours {
 			if d, ok := dist[toUid]; !ok || d > item.cost+cost {
-				node := &Item{toUid, item.cost + cost, item.hop + 1, 0}
+				node := &Item{
+					uid:  toUid,
+					cost: item.cost + cost,
+					hop:  item.hop + 1,
+				}
 				heap.Push(&pq, node) // Add a node with lesser cost in the queue.
 				dist[toUid] = item.cost + cost
 			}
 		}
 	}
-
 	// Go through the execution tree to find the path.
 	result := new(task.List)
 	isPathFound := sg.getPath(sg.Params.From, sg.Params.To, result, 0, finalCost)
@@ -230,11 +214,10 @@ func ShortestPath(ctx context.Context, sg *SubGraph, rch chan error) {
 			result.Uids[i], result.Uids[l-i-1] = result.Uids[l-i-1], result.Uids[i]
 		}
 	}
-
 	// Put the path in DestUIDs of the root.
 	sg.DestUIDs = result
 	next <- true
-	rch <- nil
+	return nil
 }
 
 func (sg *SubGraph) getPath(uid, to uint64, path *task.List, cost, finalCost float64) bool {
@@ -242,7 +225,6 @@ func (sg *SubGraph) getPath(uid, to uint64, path *task.List, cost, finalCost flo
 		// We found the required end node.
 		return true
 	}
-
 	for _, pc := range sg.Children {
 		idx := algo.IndexOf(pc.SrcUIDs, uid)
 		if idx < 0 {
@@ -262,6 +244,5 @@ func (sg *SubGraph) getPath(uid, to uint64, path *task.List, cost, finalCost flo
 			}
 		}
 	}
-
 	return false
 }
