@@ -32,6 +32,7 @@ import (
 
 	"github.com/dgryski/go-farm"
 
+	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/types"
@@ -562,25 +563,26 @@ func (l *List) Uids(opt ListOptions) *task.List {
 	l.RLock()
 	defer l.RUnlock()
 
-	result := make([]uint64, 0, 10)
-	var intersectIdx int // Indexes into opt.Intersect if it exists.
+	res := new(task.List)
+	wit := algo.NewWriteIterator(res)
 	l.iterate(opt.AfterUID, func(p *types.Posting) bool {
 		if postingType(p) != valueUid {
 			return false
 		}
 		uid := p.Uid
 		if opt.Intersect != nil {
-			intersectUidsLen := len(opt.Intersect.Uids)
-			for ; intersectIdx < intersectUidsLen && opt.Intersect.Uids[intersectIdx] < uid; intersectIdx++ {
+			it := algo.NewListIterator(opt.Intersect)
+			for ; it.Valid() && it.Val() < uid; it.Next() {
 			}
-			if intersectIdx >= intersectUidsLen || opt.Intersect.Uids[intersectIdx] > uid {
+			if !it.Valid() || it.Val() > uid {
 				return true
 			}
 		}
-		result = append(result, uid)
+		wit.Append(uid)
 		return true
 	})
-	return &task.List{Uids: result}
+	wit.End()
+	return res
 }
 
 func (l *List) Value() (rval types.Val, rerr error) {

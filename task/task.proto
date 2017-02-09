@@ -6,8 +6,13 @@ import "types/facets/facets.proto";
 
 package task;
 
+message Block {	
+	fixed64 max_int = 2;
+	repeated fixed64 list = 1;
+}
+
 message List {
-	repeated fixed64 uids = 1;
+	repeated Block blocks = 1;
 }
 
 message Value {
@@ -23,7 +28,7 @@ message Query {
 	bool do_count = 5;      // Are we just getting lengths?
 
 	// Exactly one of uids and terms is populated.
-	repeated fixed64 uids = 6;
+	List uids = 6;
 
 	// Function to generate or filter UIDs.
 	repeated string src_func = 7;

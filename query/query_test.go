@@ -669,7 +669,7 @@ func TestCount(t *testing.T) {
 	`
 
 	js := processToFastJSON(t, query)
-	require.EqualValues(t,
+	require.JSONEq(t,
 		`{"me":[{"alive":true,"friend":[{"count":5}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
@@ -1304,7 +1304,7 @@ func TestToFastJSONFilterOrFirst(t *testing.T) {
 	`
 
 	js := processToFastJSON(t, query)
-	require.EqualValues(t,
+	require.JSONEq(t,
 		`{"me":[{"friend":[{"name":"Glenn Rhee"},{"name":"Daryl Dixon"}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
@@ -1324,7 +1324,7 @@ func TestToFastJSONFilterOrOffset(t *testing.T) {
 	`
 
 	js := processToFastJSON(t, query)
-	require.EqualValues(t,
+	require.JSONEq(t,
 		`{"me":[{"friend":[{"name":"Daryl Dixon"},{"name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
@@ -1504,7 +1504,7 @@ func TestToFastJSONFirstOffset(t *testing.T) {
 	`
 
 	js := processToFastJSON(t, query)
-	require.EqualValues(t,
+	require.JSONEq(t,
 		`{"me":[{"friend":[{"name":"Glenn Rhee"}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
@@ -1524,7 +1524,7 @@ func TestToFastJSONFilterOrFirstOffset(t *testing.T) {
 	`
 
 	js := processToFastJSON(t, query)
-	require.EqualValues(t,
+	require.JSONEq(t,
 		`{"me":[{"friend":[{"name":"Daryl Dixon"}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
@@ -1584,7 +1584,7 @@ func TestToFastJSONFilterOrFirstNegative(t *testing.T) {
 	`
 
 	js := processToFastJSON(t, query)
-	require.EqualValues(t,
+	require.JSONEq(t,
 		`{"me":[{"friend":[{"name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
@@ -2085,7 +2085,7 @@ func TestToFastJSONOrderOffset(t *testing.T) {
 	`
 
 	js := processToFastJSON(t, query)
-	require.EqualValues(t,
+	require.JSONEq(t,
 		`{"me":[{"friend":[{"name":"Glenn Rhee"},{"name":"Rick Grimes"}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
@@ -2106,7 +2106,7 @@ func TestToFastJSONOrderOffsetCount(t *testing.T) {
 	`
 
 	js := processToFastJSON(t, query)
-	require.EqualValues(t,
+	require.JSONEq(t,
 		`{"me":[{"friend":[{"name":"Glenn Rhee"}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
