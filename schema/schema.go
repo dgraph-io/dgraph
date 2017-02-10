@@ -34,7 +34,7 @@ type schemaInformation struct {
 	sm map[string]types.TypeID
 }
 
-func (si *schemaInformation) updateSchemaIfMissing(se schemaSyncEntry) (types.TypeID, error) {
+func (si *schemaInformation) updateSchemaIfMissing(se *schemaSyncEntry) (types.TypeID, error) {
 	si.Lock()
 	defer si.Unlock()
 	if si.sm == nil {
@@ -47,12 +47,12 @@ func (si *schemaInformation) updateSchemaIfMissing(se schemaSyncEntry) (types.Ty
 
 	si.sm[se.Attr] = se.ValueType
 	se.Water.Ch <- x.Mark{Index: se.Index, Done: false}
-	syncCh <- se
+	syncCh <- *se
 	fmt.Printf("Setting schema for attr %s: %v\n", se.Attr, se.ValueType)
 	return se.ValueType, nil
 }
 
-func UpdateSchemaIfMissing(se schemaSyncEntry) (types.TypeID, error) {
+func UpdateSchemaIfMissing(se *schemaSyncEntry) (types.TypeID, error) {
 	return str.updateSchemaIfMissing(se)
 }
 

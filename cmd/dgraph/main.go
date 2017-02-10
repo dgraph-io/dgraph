@@ -63,6 +63,7 @@ var (
 	gconf      = flag.String("group_conf", "", "group configuration file")
 	postingDir = flag.String("p", "p", "Directory to store posting lists.")
 	walDir     = flag.String("w", "w", "Directory to store raft write-ahead logs.")
+	schemaDir  = flag.String("s", "s", "Directory to store schema information")
 	port       = flag.Int("port", 8080, "Port to run server on.")
 	bindall    = flag.Bool("bindall", false,
 		"Use 0.0.0.0 instead of localhost to bind to all addresses on local machine.")
@@ -250,13 +251,6 @@ func runMutations(ctx context.Context, mu *graph.Mutation) (map[string]uint64, e
 	var allocIds map[string]uint64
 	var err error
 
-	if err = validateTypes(mu.Set); err != nil {
-		return nil, x.Wrap(err)
-	}
-	if err = validateTypes(mu.Del); err != nil {
-		return nil, x.Wrap(err)
-	}
-
 	if allocIds, err = convertAndApply(ctx, mu.Set, mu.Del); err != nil {
 		return nil, err
 	}
@@ -281,13 +275,6 @@ func mutationHandler(ctx context.Context, mu *gql.Mutation) (map[string]uint64, 
 		if del, err = convertToNQuad(ctx, mu.Del); err != nil {
 			return nil, x.Wrap(err)
 		}
-	}
-
-	if err = validateTypes(set); err != nil {
-		return nil, x.Wrap(err)
-	}
-	if err = validateTypes(del); err != nil {
-		return nil, x.Wrap(err)
 	}
 
 	if allocIds, err = convertAndApply(ctx, set, del); err != nil {
@@ -781,7 +768,10 @@ func main() {
 	x.Checkf(err, "Error initializing postings store")
 	defer ps.Close()
 
-	err = schema.Init(ps, *schemaFile)
+	ss, err := store.NewSyncStore(*schemaDir)
+	x.Checkf(err, "Error initilizing schema dir")
+
+	err = schema.Init(ss, *schemaFile)
 	x.Checkf(err, "Error while loading schema")
 
 	// Posting will initialize index which requires schema. Hence, initialize
