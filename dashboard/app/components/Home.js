@@ -273,13 +273,13 @@ function renderNetwork(nodes, edges) {
         enabled: true,
         bindToWindow: false
       },
-      tooltipDelay: 100000
+      tooltipDelay: 1000000
     },
     layout: {
       improvedLayout: true
     },
     physics: {
-      timestep: 0.6,
+      timestep: 0.8,
       barnesHut: {
         // avoidOverlap: 0.8,
         // springConstant: 0.1,
@@ -438,7 +438,8 @@ var Home = React.createClass({
       currentNode: '{}',
       nodes: 0,
       relations: 0,
-      graph: ''
+      graph: '',
+      graphHeight: 'fixed-height',
     }
   },
   updateQuery: function(e) {
@@ -614,12 +615,14 @@ var Home = React.createClass({
     document.addEventListener(screenfull.raw.fullscreenchange, () => {
       if (!screenfull.isFullscreen) {
         this.setState({
-          graph: ''
+          graph: '',
+          graphHeight: 'fixed-height'
         })
       } else {
         // In full screen mode, we display the properties as a tooltip.
         this.setState({
-          graph: 'fullscreen'
+          graph: 'fullscreen',
+          graphHeight: 'full-height'
         });
       }
     });
@@ -703,8 +706,8 @@ var Home = React.createClass({
                 </span>
               </div>
               }
-              <div style={{width: '100%', height: '100%'}} id="response">
-              <div style={graph}>
+              <div style={{width: '100%', height: '100%', padding: '5px'}} id="response">
+              <div style={graph} className={this.state.graphHeight}>
               <div id="graph" className={graphClass}>{this.state.response}</div>
               </div>
               <div>Nodes: {this.state.nodes}, Edges: {this.state.relations}</div>

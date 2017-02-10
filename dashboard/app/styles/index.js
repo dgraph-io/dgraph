@@ -6,10 +6,9 @@ var styles = {
   graph: {
     fontSize: '12px',
     wordBreak: 'break-all',
-    marginTop: '14px',
+    marginTop: '9px',
     marginBottom: '10px',
     width: '100%',
-    height: '500px',
     border: '1px solid gray',
     position: 'relative'
   },
@@ -28,8 +27,8 @@ var styles = {
     marginBottom: '10px',
     height: '150px',
     border: '1px solid gray',
-    padding: '5px',
-    overflow: 'hidden'
+    padding: '10px',
+    overflow: 'auto'
   },
   fullscreen: {
     position: 'absolute',

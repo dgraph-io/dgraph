@@ -36,6 +36,14 @@
     margin-top: 0px;
 }
 
+.full-height {
+    height: calc(100vh - 280px);
+}
+
+.fixed-height {
+    height: 500px;
+}
+
 .vis-tooltip {
     border: 1px solid #f3d98c;
     background-color: #fffad5;
@@ -44,4 +52,12 @@
     border-radius: 3px;
     height: auto;
     position: absolute !important;
+}
+
+#properties em {
+    height: 100%;
+}
+
+#properties pre {
+    height: 100%;
 }
