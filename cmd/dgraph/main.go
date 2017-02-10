@@ -771,7 +771,11 @@ func main() {
 	if len(*schemaFile) > 0 {
 		err = schema.Parse(*schemaFile)
 		x.Checkf(err, "Error while loading schema: %s", *schemaFile)
+		log.Println("Schema file loaded successfully.")
+	} else {
+		log.Println("No schema provided. Starting without one.")
 	}
+
 	// Posting will initialize index which requires schema. Hence, initialize
 	// schema before calling posting.Init().
 	posting.Init(ps)
