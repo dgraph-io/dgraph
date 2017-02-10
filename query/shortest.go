@@ -44,8 +44,9 @@ type minInfo struct {
 }
 
 func (start *SubGraph) expandOut(ctx context.Context,
-	mp map[uint64]map[uint64]float64, next chan bool, rch chan error) {
+	adjacencyMap map[uint64]map[uint64]float64, next chan bool, rch chan error) {
 
+	var numEdges uint64
 	var exec []*SubGraph
 	var err error
 	start.SrcUIDs = &task.List{[]uint64{start.Params.From}}
@@ -87,12 +88,18 @@ func (start *SubGraph) expandOut(ctx context.Context,
 			for idx, fromUID := range sg.SrcUIDs.Uids {
 				ul := sg.uidMatrix[idx].Uids
 				for _, toUid := range ul {
-					if mp[fromUID] == nil {
-						mp[fromUID] = make(map[uint64]float64)
+					if adjacencyMap[fromUID] == nil {
+						adjacencyMap[fromUID] = make(map[uint64]float64)
 					}
-					mp[fromUID][toUid] = 1.0 // cost is 1 for now.
+					adjacencyMap[fromUID][toUid] = 1.0 // cost is 1 for now.
+					numEdges++
 				}
 			}
+		}
+
+		if numEdges > 10000000 {
+			// If we've seen too many nodes, stop the query.
+			rch <- ErrTooBig
 		}
 
 		// modify the exec and attach child nodes.
@@ -110,7 +117,7 @@ func (start *SubGraph) expandOut(ctx context.Context,
 				// Remove those nodes which we have already traversed. As this cannot be
 				// in the path again.
 				algo.ApplyFilter(temp.SrcUIDs, func(uid uint64, i int) bool {
-					_, ok := mp[uid]
+					_, ok := adjacencyMap[uid]
 					return !ok
 				})
 				if len(temp.SrcUIDs.Uids) == 0 {
@@ -176,8 +183,8 @@ func ShortestPath(ctx context.Context, sg *SubGraph) error {
 	numHops := -1
 	next := make(chan bool, 2)
 	expandErr := make(chan error, 2)
-	mp := make(map[uint64]map[uint64]float64)
-	go sg.expandOut(ctx, mp, next, expandErr)
+	adjacencyMap := make(map[uint64]map[uint64]float64)
+	go sg.expandOut(ctx, adjacencyMap, next, expandErr)
 
 	// map to store the min cost and parent of nodes.
 	dist := make(map[uint64]minInfo)
@@ -188,7 +195,7 @@ func ShortestPath(ctx context.Context, sg *SubGraph) error {
 
 	var stopExpansion bool
 	// For now, lets allow a maximum of 10 hops.
-	for pq.Len() > 0 && len(mp) < 1000000 {
+	for pq.Len() > 0 {
 		item := heap.Pop(&pq).(*Item)
 		if item.uid == sg.Params.To {
 			break
@@ -218,7 +225,7 @@ func ShortestPath(ctx context.Context, sg *SubGraph) error {
 			numHops++
 		}
 		if !stopExpansion {
-			neighbours := mp[item.uid]
+			neighbours := adjacencyMap[item.uid]
 			for toUid, cost := range neighbours {
 				if d, ok := dist[toUid]; !ok || d.cost > item.cost+cost {
 					node := &Item{
