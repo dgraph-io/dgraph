@@ -106,8 +106,16 @@ func validateType(edge *task.DirectedEdge, schemaType types.TypeID) error {
 	if storageType != schemaType {
 		src := types.Val{types.TypeID(edge.ValueType), edge.Value}
 		// check if storage type is compatible with schema type
-		if _, err := types.Convert(src, schemaType); err != nil {
+		if dst, err := types.Convert(src, schemaType); err != nil {
 			return err
+		} else {
+			b := types.ValueForType(types.BinaryID)
+			if err = types.Marshal(dst, &b); err != nil {
+				return err
+			} else {
+				edge.ValueType = uint32(schemaType)
+				edge.Value = b.Value.([]byte)
+			}
 		}
 	}
 	return nil

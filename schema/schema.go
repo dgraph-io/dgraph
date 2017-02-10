@@ -31,21 +31,21 @@ import (
 type schemaInformation struct {
 	x.SafeMutex
 	// Map containing predicate to type information.
-	sm map[string]types.TypeID
+	sm map[string]types.SchemaDescription
 }
 
 func (si *schemaInformation) updateSchemaIfMissing(se *SchemaSyncEntry) (types.TypeID, error) {
 	si.Lock()
 	defer si.Unlock()
 	if si.sm == nil {
-		si.sm = make(map[string]types.TypeID)
+		si.sm = make(map[string]types.SchemaDescription)
 	}
 
-	if oldVal, ok := si.sm[se.Attr]; ok && oldVal != se.ValueType {
-		return oldVal, x.Errorf("Schema for attr %s already set to %d", se.Attr, se.ValueType)
+	if oldVal, ok := si.sm[se.Attr]; ok && types.TypeID(oldVal.ValueType) != se.ValueType {
+		return types.TypeID(oldVal.ValueType), x.Errorf("Schema for attr %s already set to %d", se.Attr, se.ValueType)
 	}
 
-	si.sm[se.Attr] = se.ValueType
+	si.sm[se.Attr] = types.SchemaDescription{ValueType: uint32(se.ValueType)}
 	se.Water.Ch <- x.Mark{Index: se.Index, Done: false}
 	syncCh <- *se
 	fmt.Printf("Setting schema for attr %s: %v\n", se.Attr, se.ValueType)
@@ -58,26 +58,31 @@ func UpdateSchemaIfMissing(se *SchemaSyncEntry) (types.TypeID, error) {
 
 // This function should be called only during init and is not thread safe
 // This change won't be persisted to db, since this contains the schema read from file
-func (si *schemaInformation) updateSchema(attr string, valueType types.TypeID) (types.TypeID, error) {
+func (si *schemaInformation) setSchemaType(attr string, valueType types.TypeID) (types.TypeID, error) {
 	if si.sm == nil {
-		si.sm = make(map[string]types.TypeID)
+		si.sm = make(map[string]types.SchemaDescription)
 	}
 
-	si.sm[attr] = valueType
+	si.sm[attr] = types.SchemaDescription{ValueType: uint32(valueType)}
 	fmt.Printf("Setting schema for attr %s: %v\n", attr, valueType)
 	return valueType, nil
 }
 
 // This function should be called only during init and is not thread safe
-func (si *schemaInformation) getSchema(pred string) (types.TypeID, bool) {
-	typ, ok := si.sm[pred]
-	return typ, ok
+// This change won't be persisted to db, since this contains the schema read from file
+func (si *schemaInformation) setSchema(attr string, s *types.SchemaDescription) (types.TypeID, error) {
+	if si.sm == nil {
+		si.sm = make(map[string]types.SchemaDescription)
+	}
+
+	si.sm[attr] = *s
+	fmt.Printf("Setting schema for attr %s: %v\n", attr, s.ValueType)
+	return types.TypeID(s.ValueType), nil
 }
 
 func (si *schemaInformation) getTypeOf(pred string) (types.TypeID, error) {
-	si.AssertRLock()
 	if typ, ok := si.sm[pred]; ok {
-		return typ, nil
+		return types.TypeID(typ.ValueType), nil
 	}
 	return types.TypeID(100), x.Errorf("Undefined predicate")
 }
@@ -91,7 +96,7 @@ func (si *schemaInformation) getSchemaMap() map[string]string {
 
 	schema := map[string]string{}
 	for k, v := range si.sm {
-		schema[k] = v.Name()
+		schema[k] = types.TypeID(v.ValueType).Name()
 	}
 	return schema
 }
@@ -154,10 +159,12 @@ func loadSchemaFromDb() error {
 
 	for idxIt.Seek(prefix); idxIt.ValidForPrefix(prefix); idxIt.Next() {
 		key := idxIt.Key().Data()
-		attr := x.ParseSchemaKey(key)
+		attr := x.Parse(key).Attr
 		slice := idxIt.Value()
 		defer slice.Free() // there won't be too many slices
-		str.updateSchema(attr, types.TypeID(binary.BigEndian.Uint32(slice.Data())))
+		var sd types.SchemaDescription
+		x.Check(sd.Unmarshal(slice.Data()))
+		str.setSchema(attr, &sd)
 	}
 
 	return nil
@@ -235,6 +242,7 @@ func batchSync() {
 				x.Checkf(pstore.WriteBatch(b), "Error while writing to RocksDB.")
 				b.Clear()
 
+				// can't batch this as entries might belong to different raft groups
 				for _, e := range entries {
 					if e.Water != nil {
 						e.Water.Ch <- x.Mark{Index: e.Index, Done: true}

@@ -36,3 +36,7 @@ message PostingList {
 	bytes checksum = 2;
 	uint64 commit = 3; // More inclination towards smaller values.
 }
+
+message SchemaDescription {
+	uint32 value_type = 1;
+}

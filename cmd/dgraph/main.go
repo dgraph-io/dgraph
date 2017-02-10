@@ -768,10 +768,7 @@ func main() {
 	x.Checkf(err, "Error initializing postings store")
 	defer ps.Close()
 
-	ss, err := store.NewSyncStore(*schemaDir)
-	x.Checkf(err, "Error initilizing schema dir")
-
-	err = schema.Init(ss, *schemaFile)
+	err = schema.Init(ps, *schemaFile)
 	x.Checkf(err, "Error while loading schema")
 
 	// Posting will initialize index which requires schema. Hence, initialize

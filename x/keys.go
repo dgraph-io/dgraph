@@ -10,6 +10,9 @@ const (
 	byteIndex   = byte(0x01)
 	byteReverse = byte(0x02)
 	byteSchema  = byte(0x03)
+	// same prefix for data, index and reverse keys so that relative order of data doesn't change
+	// keys of same attributes are located together
+	defaultPrefix = byte(0x00)
 )
 
 func writeAttr(buf []byte, attr string) []byte {
@@ -22,20 +25,25 @@ func writeAttr(buf []byte, attr string) []byte {
 	return rest[len(attr):]
 }
 
+// schema keys are stored separately with unique prefix,
+// since we need to iterate over all keys
 func SchemaKey(attr string) []byte {
-	buf := make([]byte, 1+len(attr))
-
+	buf := make([]byte, 2+len(attr)+2)
 	buf[0] = byteSchema
-
 	rest := buf[1:]
-	AssertTrue(len(attr) == copy(rest, attr[:]))
+
+	rest = writeAttr(rest, attr)
+	rest[0] = byteSchema
+
 	return buf
 }
 
 func DataKey(attr string, uid uint64) []byte {
-	buf := make([]byte, 2+len(attr)+1+8)
+	buf := make([]byte, 2+len(attr)+2+8)
+	buf[0] = defaultPrefix
+	rest := buf[1:]
 
-	rest := writeAttr(buf, attr)
+	rest = writeAttr(rest, attr)
 	rest[0] = byteData
 
 	rest = rest[1:]
@@ -44,9 +52,11 @@ func DataKey(attr string, uid uint64) []byte {
 }
 
 func ReverseKey(attr string, uid uint64) []byte {
-	buf := make([]byte, 2+len(attr)+1+8)
+	buf := make([]byte, 2+len(attr)+2+8)
+	buf[0] = defaultPrefix
+	rest := buf[1:]
 
-	rest := writeAttr(buf, attr)
+	rest = writeAttr(rest, attr)
 	rest[0] = byteReverse
 
 	rest = rest[1:]
@@ -55,9 +65,11 @@ func ReverseKey(attr string, uid uint64) []byte {
 }
 
 func IndexKey(attr, term string) []byte {
-	buf := make([]byte, 2+len(attr)+1+len(term))
+	buf := make([]byte, 2+len(attr)+2+len(term))
+	buf[0] = defaultPrefix
+	rest := buf[1:]
 
-	rest := writeAttr(buf, attr)
+	rest = writeAttr(rest, attr)
 	rest[0] = byteIndex
 
 	rest = rest[1:]
@@ -84,26 +96,52 @@ func (p ParsedKey) IsIndex() bool {
 	return p.byteType == byteIndex
 }
 
+func (p ParsedKey) IsSchema() bool {
+	return p.byteType == byteSchema
+}
+
 func (p ParsedKey) SkipPredicate() []byte {
-	buf := make([]byte, 2+len(p.Attr)+1)
-	k := writeAttr(buf, p.Attr)
+	buf := make([]byte, 2+len(p.Attr)+2)
+	if p.byteType == byteSchema {
+		// skip only current entry for schema
+		buf[0] = byteSchema
+	} else {
+		buf[0] = defaultPrefix
+	}
+	rest := buf[1:]
+	k := writeAttr(rest, p.Attr)
 	AssertTrue(len(k) == 1)
 	k[0] = 0xFF
 	return buf
 }
 
 func (p ParsedKey) SkipRangeOfSameType() []byte {
-	buf := make([]byte, 2+len(p.Attr)+1)
-	k := writeAttr(buf, p.Attr)
+	buf := make([]byte, 2+len(p.Attr)+2)
+	if p.byteType == byteSchema {
+		// skip only current entry for schema
+		buf[0] = byteSchema
+	} else {
+		buf[0] = defaultPrefix
+	}
+	rest := buf[1:]
+	k := writeAttr(rest, p.Attr)
 	AssertTrue(len(k) == 1)
 	k[0] = p.byteType + 1
 	return buf
 }
 
+func (p ParsedKey) SkipSchema() []byte {
+	buf := make([]byte, 1)
+	buf[0] = byteSchema + 1
+	return buf
+}
+
 // DataPrefix returns the prefix for data keys.
 func (p ParsedKey) DataPrefix() []byte {
-	buf := make([]byte, 2+len(p.Attr)+1)
-	k := writeAttr(buf, p.Attr)
+	buf := make([]byte, 2+len(p.Attr)+2)
+	buf[0] = defaultPrefix
+	rest := buf[1:]
+	k := writeAttr(rest, p.Attr)
 	AssertTrue(len(k) == 1)
 	k[0] = byteData
 	return buf
@@ -111,8 +149,10 @@ func (p ParsedKey) DataPrefix() []byte {
 
 // IndexPrefix returns the prefix for index keys.
 func (p ParsedKey) IndexPrefix() []byte {
-	buf := make([]byte, 2+len(p.Attr)+1)
-	k := writeAttr(buf, p.Attr)
+	buf := make([]byte, 2+len(p.Attr)+2)
+	buf[0] = defaultPrefix
+	rest := buf[1:]
+	k := writeAttr(rest, p.Attr)
 	AssertTrue(len(k) == 1)
 	k[0] = byteIndex
 	return buf
@@ -125,16 +165,11 @@ func SchemaPrefix() []byte {
 	return buf
 }
 
-func ParseSchemaKey(key []byte) string {
-	k := key[1:]
-	return string(k)
-}
-
 func Parse(key []byte) *ParsedKey {
 	p := &ParsedKey{}
 
-	sz := int(binary.BigEndian.Uint16(key[0:2]))
-	k := key[2:]
+	sz := int(binary.BigEndian.Uint16(key[1:3]))
+	k := key[3:]
 
 	p.Attr = string(k[:sz])
 	k = k[sz:]
@@ -143,7 +178,7 @@ func Parse(key []byte) *ParsedKey {
 	k = k[1:]
 
 	switch p.byteType {
-	case byteData:
+	case byteData, byteSchema:
 		fallthrough
 	case byteReverse:
 		p.Uid = binary.BigEndian.Uint64(k)
