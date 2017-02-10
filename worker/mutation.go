@@ -104,7 +104,7 @@ func validateType(edge *task.DirectedEdge, schemaType types.TypeID) error {
 	}
 
 	if storageType != schemaType {
-		src := types.Val{types.StringID, edge.Value}
+		src := types.Val{types.TypeID(edge.ValueType), edge.Value}
 		// check if storage type is compatible with schema type
 		if _, err := types.Convert(src, schemaType); err != nil {
 			return err
