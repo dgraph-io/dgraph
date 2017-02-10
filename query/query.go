@@ -36,6 +36,7 @@ import (
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
+	farm "github.com/dgryski/go-farm"
 )
 
 /*
@@ -432,14 +433,16 @@ func (args *params) fill(gq *gql.GraphQuery) error {
 	if v, ok := gq.Args["from"]; ok {
 		from, err := strconv.ParseUint(v, 0, 64)
 		if err != nil {
-			return err
+			// Treat it as an XID.
+			from = farm.Fingerprint64([]byte(v))
 		}
 		args.From = uint64(from)
 	}
 	if v, ok := gq.Args["to"]; ok {
 		to, err := strconv.ParseUint(v, 0, 64)
 		if err != nil {
-			return err
+			// Treat it as an XID.
+			to = farm.Fingerprint64([]byte(v))
 		}
 		args.To = uint64(to)
 	}
