@@ -44,10 +44,12 @@ func (h *priorityQueue) Pop() interface{} {
 	return x
 }
 
-type minInfo struct {
+// We manintain a map from UID to nodeInfo for Djikstras.
+type nodeInfo struct {
 	cost   float64
 	parent uint64
-	node   *Item
+	// Pointer to the item in heap. Used to update priority
+	node *Item
 }
 
 func (start *SubGraph) expandOut(ctx context.Context,
@@ -194,8 +196,8 @@ func ShortestPath(ctx context.Context, sg *SubGraph) error {
 	go sg.expandOut(ctx, adjacencyMap, next, expandErr)
 
 	// map to store the min cost and parent of nodes.
-	dist := make(map[uint64]minInfo)
-	dist[srcNode.uid] = minInfo{
+	dist := make(map[uint64]nodeInfo)
+	dist[srcNode.uid] = nodeInfo{
 		parent: 0,
 		cost:   0,
 		node:   srcNode,
@@ -245,7 +247,7 @@ func ShortestPath(ctx context.Context, sg *SubGraph) error {
 							hop:  item.hop + 1,
 						}
 						heap.Push(&pq, node)
-						dist[toUid] = minInfo{
+						dist[toUid] = nodeInfo{
 							cost:   item.cost + cost,
 							parent: item.uid,
 							node:   node,
