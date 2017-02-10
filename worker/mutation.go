@@ -93,6 +93,16 @@ func updateSchema(edge *task.DirectedEdge, rv *x.RaftValue) error {
 func validateType(edge *task.DirectedEdge, schemaType types.TypeID) error {
 	storageType := getType(edge)
 
+	if !schemaType.IsScalar() {
+		if !storageType.IsScalar() {
+			return nil
+		} else {
+			return x.Errorf("Input for predicate %s of type uid is scalar", edge.Attr)
+		}
+	} else if !storageType.IsScalar() {
+		return x.Errorf("Input for predicate %s of type scalar is uid", edge.Attr)
+	}
+
 	if storageType != schemaType {
 		src := types.Val{types.StringID, edge.Value}
 		// check if storage type is compatible with schema type
