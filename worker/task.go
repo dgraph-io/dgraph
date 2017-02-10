@@ -17,7 +17,6 @@
 package worker
 
 import (
-	"fmt"
 	"strings"
 	"golang.org/x/net/context"
 
@@ -102,7 +101,6 @@ func parseFuncType(arr []string) (FuncType, string) {
 		return NotFn, ""
 	}
 	f := strings.ToLower(arr[0])
-	fmt.Printf("[parseFn} %v\n", f)
 	switch f {
 	case "leq", "geq", "lt", "gt", "eq":
 		return CompareFn, f

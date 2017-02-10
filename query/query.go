@@ -450,7 +450,7 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 				return errors.New(note)
 			}
 			dst.SrcFunc = append(sg.SrcFunc, gchild.Func.Name)
-			dst.SrcFunc = append(sg.SrcFunc, gchild.Func.Args...)
+			dst.SrcFunc = append(dst.SrcFunc, gchild.Func.Args...)
 		}
 
 		if gchild.Filter != nil {
@@ -839,7 +839,6 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		}
 		sg.counts = result.Counts
 
-			
 		if sg.Params.DoCount && len(sg.Filters) == 0 {
 			// If there is a filter, we need to do more work to get the actual count.
 			x.Trace(ctx, "Zero uids. Only count requested")

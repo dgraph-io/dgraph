@@ -37,26 +37,29 @@ func GenerateFromPassword(password string) (string, error) {
 	if err != nil {
 		return result, err
 	}
+	// get rid of '$', since '$' is the delimiter
 	result = base64.StdEncoding.EncodeToString(byt)
-
 	result = fmt.Sprintf("$2b$%d$%s$%s", bcrypt.DefaultCost, salt, result)
+
 	return result, nil
+}
+
+func VerifyPassword(password, crypted string) error {
+	if len(password) < pwdLenLimit || len(crypted) == 0 {
+		return x.Errorf("invalid password/crypted string")
+	}
+	// password stored format like: $2b$10$salt$cryptedstr
+	arr := strings.Split(strings.Trim(crypted, "$"), "$")
+	x.AssertTruef(len(arr) == 4, "Password is corrupted")
+	salt, target := arr[2], arr[3]
+	
+	byt, err := base64.StdEncoding.DecodeString(target)
+	x.AssertTruef(err == nil, "Password is corrupted")
+	
+	return bcrypt.CompareHashAndPassword(byt, []byte(compose(salt, password)))
 }
 
 func compose(salt, password string) string {
 	return salt + password
 }
 
-func VerifyPassword(password, crypted string) error {
-	fmt.Printf("[Verify password] password %v, crypted %v\n", password, crypted)
-	
-	if len(password) < pwdLenLimit || len(crypted) == 0 {
-		return x.Errorf("invalid password/crypted string")
-	}
-	
-	// password stored format like: $2b$10$salt$cryptedstr
-	arr := strings.Split(strings.Trim(crypted, "$"), "$")
-	x.AssertTruef(len(arr) == 4, "Password is corrupted")
-	salt, target := arr[2], arr[3]
-	return bcrypt.CompareHashAndPassword([]byte(target), []byte(compose(salt, password)))
-}
