@@ -15,6 +15,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/raftwal"
+	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -478,6 +479,7 @@ func (n *node) retrieveSnapshot(rc task.RaftContext) {
 
 	x.AssertTrue(rc.Group == n.gid)
 	x.Check2(populateShard(n.ctx, pool, n.gid))
+	x.Checkf(schema.LoadSchemaFromDb(), "Error while initilizating schema")
 }
 
 func (n *node) Run() {

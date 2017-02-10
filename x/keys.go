@@ -178,12 +178,14 @@ func Parse(key []byte) *ParsedKey {
 	k = k[1:]
 
 	switch p.byteType {
-	case byteData, byteSchema:
+	case byteData:
 		fallthrough
 	case byteReverse:
 		p.Uid = binary.BigEndian.Uint64(k)
 	case byteIndex:
 		p.Term = string(k)
+	case byteSchema:
+		break
 	default:
 		// Some other data type.
 		return nil

@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/dgraph-io/dgraph/query/graph"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
@@ -31,21 +32,21 @@ import (
 type schemaInformation struct {
 	x.SafeMutex
 	// Map containing predicate to type information.
-	sm map[string]types.SchemaDescription
+	sm map[string]*types.SchemaDescription
 }
 
 func (si *schemaInformation) updateSchemaIfMissing(se *SchemaSyncEntry) (types.TypeID, error) {
 	si.Lock()
 	defer si.Unlock()
 	if si.sm == nil {
-		si.sm = make(map[string]types.SchemaDescription)
+		si.sm = make(map[string]*types.SchemaDescription)
 	}
 
 	if oldVal, ok := si.sm[se.Attr]; ok && types.TypeID(oldVal.ValueType) != se.ValueType {
 		return types.TypeID(oldVal.ValueType), x.Errorf("Schema for attr %s already set to %d", se.Attr, se.ValueType)
 	}
 
-	si.sm[se.Attr] = types.SchemaDescription{ValueType: uint32(se.ValueType)}
+	si.sm[se.Attr] = &types.SchemaDescription{ValueType: uint32(se.ValueType)}
 	se.Water.Ch <- x.Mark{Index: se.Index, Done: false}
 	syncCh <- *se
 	fmt.Printf("Setting schema for attr %s: %v\n", se.Attr, se.ValueType)
@@ -60,10 +61,10 @@ func UpdateSchemaIfMissing(se *SchemaSyncEntry) (types.TypeID, error) {
 // This change won't be persisted to db, since this contains the schema read from file
 func (si *schemaInformation) setSchemaType(attr string, valueType types.TypeID) (types.TypeID, error) {
 	if si.sm == nil {
-		si.sm = make(map[string]types.SchemaDescription)
+		si.sm = make(map[string]*types.SchemaDescription)
 	}
 
-	si.sm[attr] = types.SchemaDescription{ValueType: uint32(valueType)}
+	si.sm[attr] = &types.SchemaDescription{ValueType: uint32(valueType)}
 	fmt.Printf("Setting schema for attr %s: %v\n", attr, valueType)
 	return valueType, nil
 }
@@ -72,10 +73,10 @@ func (si *schemaInformation) setSchemaType(attr string, valueType types.TypeID) 
 // This change won't be persisted to db, since this contains the schema read from file
 func (si *schemaInformation) setSchema(attr string, s *types.SchemaDescription) (types.TypeID, error) {
 	if si.sm == nil {
-		si.sm = make(map[string]types.SchemaDescription)
+		si.sm = make(map[string]*types.SchemaDescription)
 	}
 
-	si.sm[attr] = *s
+	si.sm[attr] = s
 	fmt.Printf("Setting schema for attr %s: %v\n", attr, s.ValueType)
 	return types.TypeID(s.ValueType), nil
 }
@@ -85,20 +86,6 @@ func (si *schemaInformation) getTypeOf(pred string) (types.TypeID, error) {
 		return types.TypeID(typ.ValueType), nil
 	}
 	return types.TypeID(100), x.Errorf("Undefined predicate")
-}
-
-func (si *schemaInformation) getSchemaMap() map[string]string {
-	si.RLock()
-	defer si.RUnlock()
-	if si.sm == nil {
-		return nil
-	}
-
-	schema := map[string]string{}
-	for k, v := range si.sm {
-		schema[k] = types.TypeID(v.ValueType).Name()
-	}
-	return schema
 }
 
 var (
@@ -118,28 +105,51 @@ func Init(ps *store.Store, file string) error {
 			return err
 		}
 	}
-	if err := loadSchemaFromDb(); err != nil {
+	if err := LoadSchemaFromDb(); err != nil {
 		return err
 	}
 	go batchSync()
 	return nil
 }
 
-func MultiGet(attrs []string) map[string]string {
+// This function would be called with minimal frequency
+// so allocations shouldn't be an issue as of now, or we can look for using
+// sync.pool later
+func MultiGet(preds []string, attrs []string) []*graph.SchemaDescription {
 	str.RLock()
 	defer str.RUnlock()
-	var schema map[string]string
-	if len(attrs) > 0 {
-		schema = make(map[string]string)
-		for _, attr := range attrs {
-			if schemaType, err := str.getTypeOf(attr); err == nil {
-				schema[attr] = schemaType.Name()
-			}
+	var schemaDescriptions []*graph.SchemaDescription
+	if len(attrs) == 0 {
+		return schemaDescriptions
+	}
+	if len(preds) > 0 {
+		for _, pred := range preds {
+			sd := &graph.SchemaDescription{}
+			populateSchemaDescription(sd, attrs, str.sm[pred], pred)
+			schemaDescriptions = append(schemaDescriptions, sd)
 		}
 	} else {
-		schema = str.getSchemaMap()
+		for k, v := range str.sm {
+			sd := &graph.SchemaDescription{}
+			populateSchemaDescription(sd, attrs, v, k)
+			schemaDescriptions = append(schemaDescriptions, sd)
+		}
 	}
-	return schema
+	return schemaDescriptions
+}
+
+func populateSchemaDescription(sd *graph.SchemaDescription, attrs []string, schema *types.SchemaDescription, pred string) error {
+	for _, attr := range attrs {
+		switch attr {
+		case "pred":
+			sd.Predicate = pred
+		case "type":
+			sd.Type = types.TypeID(schema.ValueType).Name()
+		default:
+			return nil
+		}
+	}
+	return nil
 }
 
 func init() {
@@ -152,7 +162,8 @@ func getSchemaTypeValue(valueType types.TypeID) []byte {
 	return buf
 }
 
-func loadSchemaFromDb() error {
+// not thread safe, call only during initilization at beginning
+func LoadSchemaFromDb() error {
 	prefix := x.SchemaPrefix()
 	idxIt := pstore.NewIterator()
 	defer idxIt.Close()
@@ -235,7 +246,7 @@ func batchSync() {
 			if len(entries) > 0 {
 				x.AssertTrue(b != nil)
 				loop++
-				fmt.Printf("[%4d] Writing batch of size: %v\n", loop, len(entries))
+				fmt.Printf("[%4d] Writing schema batch of size: %v\n", loop, len(entries))
 				for _, e := range entries {
 					b.Put(x.SchemaKey(e.Attr), getSchemaTypeValue(e.ValueType))
 				}

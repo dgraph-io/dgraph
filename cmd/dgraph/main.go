@@ -63,7 +63,6 @@ var (
 	gconf      = flag.String("group_conf", "", "group configuration file")
 	postingDir = flag.String("p", "p", "Directory to store posting lists.")
 	walDir     = flag.String("w", "w", "Directory to store raft write-ahead logs.")
-	schemaDir  = flag.String("s", "s", "Directory to store schema information")
 	port       = flag.Int("port", 8080, "Port to run server on.")
 	bindall    = flag.Bool("bindall", false,
 		"Use 0.0.0.0 instead of localhost to bind to all addresses on local machine.")
@@ -465,7 +464,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 
 	var allocIds map[string]uint64
 	var allocIdsStr map[string]string
-	var schemaMap map[string]string
+	var schemaDescriptions []*graph.SchemaDescription
 	// If we have mutations, run them first.
 	if res.Mutation != nil && (len(res.Mutation.Set) > 0 || len(res.Mutation.Del) > 0) {
 		if allocIds, err = mutationHandler(ctx, res.Mutation); err != nil {
@@ -482,7 +481,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Run schema interospection
 	if res.SchemaInterospection != nil {
-		schemaMap = schema.MultiGet(res.SchemaInterospection.Predicates)
+		schemaDescriptions = schema.MultiGet(res.SchemaInterospection.Predicates, res.SchemaInterospection.Attrs)
 	}
 
 	// do we need to return schema if query is present ?
@@ -493,7 +492,8 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 			"uids":    allocIdsStr,
 		}
 		if res.SchemaInterospection != nil {
-			mp["schema"] = schemaMap
+			// for now returning only schema map until other information is added
+			mp["schema"] = schemaDescriptions
 		}
 		if js, err := json.Marshal(mp); err == nil {
 			w.Write(js)
@@ -655,7 +655,7 @@ func (s *grpcServer) Run(ctx context.Context,
 	resp.AssignedUids = allocIds
 
 	if req.Schema != nil {
-		resp.Schema = schema.MultiGet(req.Schema.Predicates)
+		resp.Schema = schema.MultiGet(req.Schema.Predicates, req.Schema.Attributes)
 	}
 
 	sgl, err := query.ProcessQuery(ctx, res, &l)
