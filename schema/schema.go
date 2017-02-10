@@ -34,7 +34,7 @@ type schemaInformation struct {
 	sm map[string]types.TypeID
 }
 
-func (si *schemaInformation) updateSchemaIfMissing(se *schemaSyncEntry) (types.TypeID, error) {
+func (si *schemaInformation) updateSchemaIfMissing(se *SchemaSyncEntry) (types.TypeID, error) {
 	si.Lock()
 	defer si.Unlock()
 	if si.sm == nil {
@@ -52,7 +52,7 @@ func (si *schemaInformation) updateSchemaIfMissing(se *schemaSyncEntry) (types.T
 	return se.ValueType, nil
 }
 
-func UpdateSchemaIfMissing(se *schemaSyncEntry) (types.TypeID, error) {
+func UpdateSchemaIfMissing(se *SchemaSyncEntry) (types.TypeID, error) {
 	return str.updateSchemaIfMissing(se)
 }
 
@@ -103,7 +103,7 @@ var (
 	// Map containing fields / predicates that are reversed.
 	reversedFields map[string]bool
 	pstore         *store.Store
-	syncCh         chan schemaSyncEntry
+	syncCh         chan SchemaSyncEntry
 )
 
 func Init(ps *store.Store, file string) error {
@@ -167,7 +167,7 @@ func reset() {
 	str = new(schemaInformation)
 	indexedFields = make(map[string]tok.Tokenizer)
 	reversedFields = make(map[string]bool)
-	syncCh = make(chan schemaSyncEntry, 10000)
+	syncCh = make(chan SchemaSyncEntry, 10000)
 }
 
 // IsIndexed returns if a given predicate is indexed or not.
@@ -203,7 +203,7 @@ func IndexedFields() []string {
 }
 
 // The following logic is used to batch up all the writes to RocksDB.
-type schemaSyncEntry struct {
+type SchemaSyncEntry struct {
 	Attr      string
 	ValueType types.TypeID
 	Water     *x.WaterMark
@@ -211,7 +211,7 @@ type schemaSyncEntry struct {
 }
 
 func batchSync() {
-	var entries []schemaSyncEntry
+	var entries []SchemaSyncEntry
 	var loop uint64
 
 	b := pstore.NewWriteBatch()
