@@ -1302,7 +1302,6 @@ func TestParseCountAsFuncMultiple(t *testing.T) {
 	require.Equal(t, "relatives", gq.Query[0].Children[1].Attr)
 	require.Equal(t, true, gq.Query[0].Children[2].IsCount)
 	require.Equal(t, "classmates", gq.Query[0].Children[2].Attr)
-
 }
 
 func TestParseCountAsFuncMultipleError(t *testing.T) {

@@ -1,5 +1,10 @@
 #!/bin/bash
 
+# This script is used to compile and tar gzip the release binaries so that they
+# can be uploaded to Github. It would typically only be used by Dgraph developers
+# while doing a new release. If you are looking to build Dgraph, you should run a
+# go build from inside $GOPATH/src/github.com/dgraph-io/dgraph/cmd/dgraph
+
 # Exit script in case an error is encountered.
 set -e
 
@@ -72,4 +77,6 @@ rm -rf $tmp_dir
 
 echo -e "\nCalculating and storing checksum for ICU data file."
 checksum=$($digest_cmd $GOPATH/src/github.com/dgraph-io/goicu/icudt58l.dat | awk '{print $1}')
+PATH/src/github.com/dgraph-io/dgraph/cmd/dgraph
+
 echo "$checksum /usr/local/share/icudt58l.dat" >> $checksum_file

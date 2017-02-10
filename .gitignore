@@ -1,3 +1,6 @@
 /build
 /installs
 /coverage.out
+
+dashboard/node_modules
+dashboard/npm-debug.log
