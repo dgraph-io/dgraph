@@ -211,7 +211,7 @@ func applyMutations(ctx context.Context, m *task.Mutations) error {
 	return nil
 }
 
-func convertAndApply(ctx context.Context, set []*graph.NQuad, del []*graph.NQuad, schemaUpdate []*task.SchemaUpdate) (map[string]uint64, error) {
+func convertAndApply(ctx context.Context, set []*graph.NQuad, del []*graph.NQuad) (map[string]uint64, error) {
 	var allocIds map[string]uint64
 	var m task.Mutations
 	var err error
@@ -238,12 +238,9 @@ func convertAndApply(ctx context.Context, set []*graph.NQuad, del []*graph.NQuad
 		m.Edges = append(m.Edges, edge)
 	}
 
-	m.SchemaUpdate = schemaUpdate
-
 	if err := applyMutations(ctx, &m); err != nil {
 		return nil, x.Wrap(err)
 	}
-
 	return allocIds, nil
 }
 
@@ -251,21 +248,16 @@ func convertAndApply(ctx context.Context, set []*graph.NQuad, del []*graph.NQuad
 // language clients.
 func runMutations(ctx context.Context, mu *graph.Mutation) (map[string]uint64, error) {
 	var allocIds map[string]uint64
-	// per bulk mutation state
-	var schemaMap = make(map[string]uint32)
-	var schemaUpdates1, schemaUpdates2 []*task.SchemaUpdate
 	var err error
 
-	if schemaUpdates1, err = validateTypes(mu.Set, schemaMap); err != nil {
+	if err = validateTypes(mu.Set); err != nil {
 		return nil, x.Wrap(err)
 	}
-	if schemaUpdates2, err = validateTypes(mu.Del, schemaMap); err != nil {
+	if err = validateTypes(mu.Del); err != nil {
 		return nil, x.Wrap(err)
 	}
 
-	schemaUpdates := append(schemaUpdates1, schemaUpdates2...)
-
-	if allocIds, err = convertAndApply(ctx, mu.Set, mu.Del, schemaUpdates); err != nil {
+	if allocIds, err = convertAndApply(ctx, mu.Set, mu.Del); err != nil {
 		return nil, err
 	}
 	return allocIds, nil
@@ -276,10 +268,7 @@ func runMutations(ctx context.Context, mu *graph.Mutation) (map[string]uint64, e
 func mutationHandler(ctx context.Context, mu *gql.Mutation) (map[string]uint64, error) {
 	var set []*graph.NQuad
 	var del []*graph.NQuad
-	// per bulk mutation sate
-	var schemaMap = make(map[string]uint32)
 	var allocIds map[string]uint64
-	var schemaUpdates1, schemaUpdates2 []*task.SchemaUpdate
 	var err error
 
 	if len(mu.Set) > 0 {
@@ -294,16 +283,14 @@ func mutationHandler(ctx context.Context, mu *gql.Mutation) (map[string]uint64, 
 		}
 	}
 
-	if schemaUpdates1, err = validateTypes(set, schemaMap); err != nil {
+	if err = validateTypes(set); err != nil {
 		return nil, x.Wrap(err)
 	}
-	if schemaUpdates2, err = validateTypes(del, schemaMap); err != nil {
+	if err = validateTypes(del); err != nil {
 		return nil, x.Wrap(err)
 	}
 
-	schemaUpdates := append(schemaUpdates1, schemaUpdates2...)
-
-	if allocIds, err = convertAndApply(ctx, set, del, schemaUpdates); err != nil {
+	if allocIds, err = convertAndApply(ctx, set, del); err != nil {
 		return nil, err
 	}
 	return allocIds, nil
@@ -333,58 +320,29 @@ func getVal(t types.TypeID, val *graph.Value) interface{} {
 
 // validateTypes checks for predicate types present in the schema and validates if the
 // input value is of the correct type
-func validateTypes(nquads []*graph.NQuad, schemaMap map[string]uint32) (schemaUpdates []*task.SchemaUpdate, err error) {
+func validateTypes(nquads []*graph.NQuad) error {
 	var schemaType types.TypeID
+	var err error
 	for i := range nquads {
 		nquad := nquads[i]
-		// Add check later to not allow both uid and scalar for same predicate
 		// Lets try to get the type of the predicate from the schema file.
-		var isUid = len(nquad.ObjectId) > 0 && nquad.ObjectValue == nil
-		if schemaType, err = schema.TypeOf(nquad.Predicate); err != nil {
-			// if schema was not found, try to get schema from first mutation of the predicate
-			if schemaTypeId, ok := schemaMap[nquad.Predicate]; ok {
-				schemaType = types.TypeID(schemaTypeId)
-			} else {
-				// if schema was not found, store it
-				if isUid {
-					schemaType = types.TypeID(types.UidID)
-				} else {
-					schemaType = types.TypeID(nquad.ObjectType)
-				}
-				schemaMap[nquad.Predicate] = uint32(schemaType)
-				schema := task.SchemaUpdate{
-					Attr:      nquad.Predicate,
-					ValueType: uint32(schemaType),
-				}
-				schemaUpdates = append(schemaUpdates, &schema)
-			}
+		if schemaType, err = schema.TypeOf(nquad.Predicate); err != nil || !schemaType.IsScalar() {
+			continue
 		}
-
 		// Lets get the storage type for the object now. nquad.ObjectType should either be
 		// supplied by the language clients or should have been assigned in rdf.Parse.
 		storageType := types.TypeID(nquad.ObjectType)
-
-		if !schemaType.IsScalar() {
-			if isUid {
-				continue
-			} else {
-				return schemaUpdates, x.Errorf("Input for predicate %s of type uid is scalar", nquad.Predicate)
-			}
-		} else if isUid {
-			return schemaUpdates, x.Errorf("Input for predicate %s of type scalar is uid", nquad.Predicate)
-		}
-
 		if storageType == types.StringID {
 			// Storage type was not specified in the RDF, so try to convert the data to the schema
 			// type.
 			src := types.Val{types.StringID, []byte(nquad.ObjectValue.GetStrVal())}
 			dst, err := types.Convert(src, schemaType)
 			if err != nil {
-				return schemaUpdates, err
+				return err
 			}
 			b := types.ValueForType(types.BinaryID)
 			if err = types.Marshal(dst, &b); err != nil {
-				return schemaUpdates, err
+				return err
 			}
 			nquad.ObjectValue = &graph.Value{&graph.Value_BytesVal{b.Value.([]byte)}}
 			nquad.ObjectType = int32(schemaType)
@@ -392,11 +350,11 @@ func validateTypes(nquads []*graph.NQuad, schemaMap map[string]uint32) (schemaUp
 			src := types.ValueForType(storageType)
 			src.Value = getVal(storageType, nquad.ObjectValue)
 			if _, err = types.Convert(src, schemaType); err != nil {
-				return schemaUpdates, err
+				return err
 			}
 		}
 	}
-	return schemaUpdates, nil
+	return nil
 }
 
 func healthCheck(w http.ResponseWriter, r *http.Request) {

@@ -104,12 +104,6 @@ message DirectedEdge {
 message Mutations {
 	uint32 group_id = 1;
 	repeated DirectedEdge edges = 2;
-	repeated SchemaUpdate schema_update = 3;
-}
-
-message SchemaUpdate {
-	string attr = 1;
-	uint32 value_type = 2;
 }
 
 message RebuildIndex {

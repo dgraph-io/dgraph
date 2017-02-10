@@ -35,14 +35,13 @@ func TestAddToMutationArray(t *testing.T) {
 
 	mutationsMap := make(map[uint32]*task.Mutations)
 	edges := []*task.DirectedEdge{}
-	schemaUpdates := []*task.SchemaUpdate{}
 
 	edges = append(edges, &task.DirectedEdge{
 		Value: []byte("set edge"),
 		Label: "test-mutation",
 	})
 
-	addToMutationMap(mutationsMap, edges, schemaUpdates)
+	addToMutationMap(mutationsMap, edges)
 	mu := mutationsMap[1]
 	require.NotNil(t, mu)
 	require.NotNil(t, mu.Edges)
