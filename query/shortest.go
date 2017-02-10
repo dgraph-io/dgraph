@@ -58,8 +58,12 @@ func (start *SubGraph) expandOut(ctx context.Context,
 	var numEdges uint64
 	var exec []*SubGraph
 	var err error
-	start.SrcUIDs = &task.List{[]uint64{start.Params.From}}
-	start.uidMatrix = []*task.List{&task.List{Uids: []uint64{start.Params.From}}}
+	in := new(task.List)
+	it := algo.NewWriteIterator(in)
+	it.Append(start.Params.From)
+	it.End()
+	start.SrcUIDs = in
+	start.uidMatrix = []*task.List{in}
 	start.DestUIDs = start.SrcUIDs
 
 	for _, child := range start.Children {
@@ -94,9 +98,15 @@ func (start *SubGraph) expandOut(ctx context.Context,
 
 		for _, sg := range exec {
 			// Send the destuids in res chan.
-			for idx, fromUID := range sg.SrcUIDs.Uids {
-				ul := sg.uidMatrix[idx].Uids
-				for _, toUid := range ul {
+			it := algo.NewListIterator(sg.SrcUIDs)
+			idx := -1
+			for ; it.Valid(); it.Next() { // idx, fromUID := range sg.SrcUIDs.Uids {
+				idx++
+				fromUID := it.Val()
+				it1 := algo.NewListIterator(sg.uidMatrix[idx])
+				// ul := sg.uidMatrix[idx].Uids
+				for ; it1.Valid(); it1.Next() { // _, toUid := range ul {
+					toUid := it1.Val()
 					if adjacencyMap[fromUID] == nil {
 						adjacencyMap[fromUID] = make(map[uint64]float64)
 					}
@@ -114,7 +124,7 @@ func (start *SubGraph) expandOut(ctx context.Context,
 		// modify the exec and attach child nodes.
 		var out []*SubGraph
 		for _, sg := range exec {
-			if len(sg.DestUIDs.Uids) == 0 {
+			if algo.ListLen(sg.DestUIDs) == 0 {
 				continue
 			}
 			for _, child := range start.Children {
@@ -129,7 +139,7 @@ func (start *SubGraph) expandOut(ctx context.Context,
 					_, ok := adjacencyMap[uid]
 					return !ok
 				})
-				if len(temp.SrcUIDs.Uids) == 0 {
+				if algo.ListLen(temp.SrcUIDs) == 0 {
 					continue
 				}
 				sg.Children = append(sg.Children, temp)
@@ -266,21 +276,27 @@ func ShortestPath(ctx context.Context, sg *SubGraph) error {
 	}
 
 	// Go through the distance map to find the path.
-	result := new(task.List)
+	var result []uint64
 	cur := sg.Params.To
 	for i := 0; cur != sg.Params.From && i < len(dist); i++ {
-		result.Uids = append(result.Uids, cur)
+		result = append(result, cur)
 		cur = dist[cur].parent
 	}
 	// Put the path in DestUIDs of the root.
 	if cur == sg.Params.From {
-		result.Uids = append(result.Uids, cur)
-		l := len(result.Uids)
+		result = append(result, cur)
+		l := len(result)
 		// Reverse the list.
 		for i := 0; i < l/2; i++ {
-			result.Uids[i], result.Uids[l-i-1] = result.Uids[l-i-1], result.Uids[i]
+			result[i], result[l-i-1] = result[l-i-1], result[i]
 		}
-		sg.DestUIDs = result
+		r := new(task.List)
+		out := algo.NewWriteIterator(r)
+		for i := 0; i < len(result); i++ {
+			out.Append(result[i])
+		}
+		out.End()
+		sg.DestUIDs = r
 	} else {
 		sg.DestUIDs = &task.List{}
 	}
