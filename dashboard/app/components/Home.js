@@ -218,6 +218,27 @@ function processGraph(response, root, maxNodes) {
   return [nodes, edges];
 }
 
+var doubleClickTime = 0;
+var threshold = 200;
+
+function doOnClick(params) {
+  console.log("in do on click")
+  if (params.nodes.length > 0) {
+    var nodeUid = params.nodes[0],
+      currentNode = nodeSet.get(nodeUid);
+
+    this.setState({
+      currentNode: currentNode.title,
+      selectedNode: true
+    });
+  } else {
+    this.setState({
+      selectedNode: false,
+      currentNode: '{}'
+    })
+  }
+}
+
 // create a network
 function renderNetwork(nodes, edges) {
   var container = document.getElementById('graph');
@@ -272,95 +293,17 @@ function renderNetwork(nodes, edges) {
 
   network = new vis.Network(container, data, options);
   var that = this;
-  // network.on("doubleClick", function(params) {
-  //   if (params.nodes.length > 0) {
-  //     var nodeUid = params.nodes[0],
-  //       currentNode = nodeSet.get(nodeUid);
 
-  //     that.setState({
-  //       currentNode: currentNode.title,
-  //     });
-
-  //     var incoming = edgeSet.get({
-  //       filter: function(node) {
-  //         return node.to === nodeUid
-  //       }
-  //     })
-
-  //     if (incoming.length === 0) {
-  //       // Its a root node, we don't want to expand/collapse. It should be
-  //       // already expanded.
-  //       return
-  //     }
-
-  //     var outgoing = edgeSet.get({
-  //       filter: function(node) {
-  //         return node.from === nodeUid
-  //       }
-  //     })
-
-  //     var outgoingInGraph = data.edges.get({
-  //       filter: function(node) {
-  //         return node.from === nodeUid
-  //       }
-  //     })
-
-  //     // Leaf node.
-  //     if (outgoing.length == 0) {
-  //       return;
-  //     }
-
-  //     var expanded = outgoingInGraph.length > 0
-  //     that.setState({
-  //       selectedNode: false
-  //     });
-
-  //     var outgoingEdges = edgeSet.get({
-  //       filter: function(node) {
-  //         return node.from === nodeUid
-  //       }
-  //     })
-
-  //     var adjacentNodeIds = outgoingEdges.map(function(edge) {
-  //       return edge.to
-  //     })
-
-
-  //     var adjacentNodes = nodeSet.get(adjacentNodeIds)
-  //       // TODO -See if we can set a meta property to a node to know that its
-  //       // expanded or closed and avoid this computation.
-  //     if (expanded) {
-  //       data.nodes.clear()
-  //       data.edges.clear()
-  //       data.nodes.update(nodes)
-  //       data.edges.update(edges)
-  //         // network.redraw();
-  //       network.fit()
-  //     } else {
-  //       // While expanding, we just show this node and its children and hide
-  //       // everything else.
-
-  //       // Cache stuff.
-  //       nodes = _.cloneDeep(data.nodes.get(data.nodes.getIds()))
-  //       edges = _.cloneDeep(data.edges.get(data.edges.getIds()))
-  //       adjacentNodes[adjacentNodes.length] = currentNode
-  //       data.nodes.clear()
-  //       data.edges.clear()
-  //       data.nodes.update(adjacentNodes)
-  //       data.edges.update(outgoingEdges)
-  //       network.fit()
-  //     }
-  //   }
-  // });
-
-
-  network.on("click", function(params) {
-    if (params.nodes.length > 0) {
+  network.on("doubleClick", function(params) {
+    doubleClickTime = new Date();
+    if (params.nodes && params.nodes.length > 0) {
       var nodeUid = params.nodes[0],
         currentNode = nodeSet.get(nodeUid);
 
+      network.unselectAll();
       that.setState({
         currentNode: currentNode.title,
+        selectedNode: false
       });
 
       var incoming = data.edges.get({
@@ -397,20 +340,27 @@ function renderNetwork(nodes, edges) {
         // TODO -See if we can set a meta property to a node to know that its
         // expanded or closed and avoid this computation.
       if (expanded) {
-        that.setState({
-          selectedNode: false
-        });
         data.nodes.remove(adjacentNodeIds)
         data.edges.remove(outgoingEdges.map(function(edge) {
           return edge.id
         }))
       } else {
-        that.setState({
-          selectedNode: true
-        });
         var updatedNodeIds = data.nodes.update(adjacentNodes)
         var updatedEdgeids = data.edges.update(outgoingEdges)
       }
+    }
+  });
+
+
+
+  network.on("click", function(params) {
+    var t0 = new Date();
+    if (t0 - doubleClickTime > threshold) {
+      setTimeout(function() {
+        if (t0 - doubleClickTime > threshold) {
+          doOnClick.bind(that)(params);
+        }
+      }, threshold);
     }
   });
 
@@ -419,6 +369,9 @@ function renderNetwork(nodes, edges) {
   network.on("hoverNode", function(params) {
     // Only change properties if no node is selected.
     if (that.state.selectedNode) {
+      return;
+    }
+    if (params.node === undefined) {
       return;
     }
     var nodeUid = params.node,
