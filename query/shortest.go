@@ -10,9 +10,10 @@ import (
 )
 
 type Item struct {
-	uid  uint64  // uid of the node.
-	cost float64 // cost of taking the path till this uid.
-	hop  int     // number of hops taken to reach this node.
+	uid   uint64  // uid of the node.
+	cost  float64 // cost of taking the path till this uid.
+	hop   int     // number of hops taken to reach this node.
+	index int
 }
 
 var ErrStop = x.Errorf("STOP")
@@ -24,9 +25,13 @@ func (h priorityQueue) Len() int           { return len(h) }
 func (h priorityQueue) Less(i, j int) bool { return h[i].cost < h[j].cost }
 func (h priorityQueue) Swap(i, j int) {
 	h[i], h[j] = h[j], h[i]
+	h[i].index = i
+	h[j].index = j
 }
 func (h *priorityQueue) Push(x interface{}) {
+	n := len(*h)
 	item := x.(*Item)
+	item.index = n
 	*h = append(*h, item)
 }
 
@@ -35,12 +40,14 @@ func (h *priorityQueue) Pop() interface{} {
 	n := len(old)
 	x := old[n-1]
 	*h = old[0 : n-1]
+	x.index = -1
 	return x
 }
 
 type minInfo struct {
 	cost   float64
 	parent uint64
+	node   *Item
 }
 
 func (start *SubGraph) expandOut(ctx context.Context,
@@ -191,6 +198,7 @@ func ShortestPath(ctx context.Context, sg *SubGraph) error {
 	dist[srcNode.uid] = minInfo{
 		parent: 0,
 		cost:   0,
+		node:   srcNode,
 	}
 
 	var stopExpansion bool
@@ -228,15 +236,27 @@ func ShortestPath(ctx context.Context, sg *SubGraph) error {
 			neighbours := adjacencyMap[item.uid]
 			for toUid, cost := range neighbours {
 				if d, ok := dist[toUid]; !ok || d.cost > item.cost+cost {
-					node := &Item{
-						uid:  toUid,
-						cost: item.cost + cost,
-						hop:  item.hop + 1,
-					}
-					heap.Push(&pq, node) // Add a node with lesser cost in the queue.
-					dist[toUid] = minInfo{
-						cost:   item.cost + cost,
-						parent: item.uid,
+					if !ok {
+						// This is the first time we're seeing this node. So
+						// create a new node and add it to the heap nad map.
+						node := &Item{
+							uid:  toUid,
+							cost: item.cost + cost,
+							hop:  item.hop + 1,
+						}
+						heap.Push(&pq, node)
+						dist[toUid] = minInfo{
+							cost:   item.cost + cost,
+							parent: item.uid,
+							node:   node,
+						}
+					} else {
+						// We've already seen this node. So, just update the cost
+						// and fix the priority in the queue.
+						node := dist[toUid].node
+						node.cost = item.cost + cost
+						node.hop = item.hop + 1
+						heap.Fix(&pq, node.index)
 					}
 				}
 			}
