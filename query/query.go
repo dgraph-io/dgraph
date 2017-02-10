@@ -579,7 +579,8 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 	loopStart := time.Now()
 	for i := 0; i < len(res.Query); i++ {
 		gq := res.Query[i]
-		if gq == nil || (len(gq.UID) == 0 && gq.Func == nil && len(gq.NeedsVar) == 0 && gq.Alias != "shortest") {
+		if gq == nil || (len(gq.UID) == 0 && gq.Func == nil &&
+			len(gq.NeedsVar) == 0 && gq.Alias != "shortest") {
 			continue
 		}
 		sg, err := ToSubGraph(ctx, gq)
