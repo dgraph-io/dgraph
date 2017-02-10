@@ -445,7 +445,7 @@ var Home = React.createClass({
   updateQuery: function(e) {
     e.preventDefault();
     this.setState({
-      query: e.target.innerHTML
+      query: e.target.dataset.query
     });
     window.scrollTo(0, 0);
     this.refs.code.editor.focus();
@@ -523,7 +523,6 @@ var Home = React.createClass({
   },
   runQuery: function(e) {
     e.preventDefault();
-
     // if (this.state.query === this.state.lastQuery && this.state.resType == "") {
     //   return;
     // }
@@ -543,10 +542,6 @@ var Home = React.createClass({
       }).then(checkStatus)
       .then(parseJSON)
       .then(function(result) {
-        that.setState({
-          response: '',
-          resType: ''
-        })
         var key = Object.keys(result)[0];
         if (result.code != undefined && result.message != undefined) {
           that.storeQuery(that.state.query);
@@ -588,7 +583,8 @@ var Home = React.createClass({
           var endTime = new Date();
           var timeTaken = ((endTime.getTime() - startTime.getTime()) / 1000).toFixed(2);
           that.setState({
-            'rendering': timeTaken + 's'
+            'rendering': timeTaken + 's',
+            'resType': 'success-res'
           });
         } else {
           console.warn("We shouldn't be here really")
@@ -631,7 +627,7 @@ var Home = React.createClass({
     // screenfull.request(document.getElementById('properties'));
   },
   render: function() {
-    var graphClass = classNames({ 'fullscreen': this.state.graph === 'fullscreen' }, { 'graph': this.state.graph !== 'fullscreen' }, { 'error-res': this.state.resType == 'error-res' }, { 'success-res': this.state.resType == 'success-res' })
+    var graphClass = classNames({ 'fullscreen': this.state.graph === 'fullscreen' }, { 'graph': this.state.graph !== 'fullscreen' }, { 'error-res': this.state.resType == 'error-res' }, { 'success-res': this.state.resType == 'success-res' }, { 'hourglass': this.state.resType == 'hourglass' })
     return (
       <div>
       <NavBar></NavBar>
