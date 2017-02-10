@@ -115,6 +115,11 @@ func (f *Function) IsAggregator() bool {
 		f.Name == "sum"
 }
 
+func (f *Function) IsPasswordVerifier() bool {
+	fn := strings.ToLower(f.Name)
+	return fn == "checkpwd"
+}
+
 // DebugPrint is useful for debugging.
 func (gq *GraphQuery) DebugPrint(prefix string) {
 	x.Printf("%s[%x %q %q->%q]\n", prefix, gq.UID, gq.Attr, gq.Alias)
@@ -1267,7 +1272,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 
 			if isAggregator(item.Val) || isPasswordVerifier(item.Val) {
 				child := &GraphQuery{
-					Args:    make(map[string]string),
+					Args: make(map[string]string),
 				}
 				it.Prev()
 				if child.Func, err = parseFunction(it); err != nil {
@@ -1353,6 +1358,6 @@ func isAggregator(f string) bool {
 
 func isPasswordVerifier(f string) bool {
 	fname := strings.ToLower(f)
-	return fname == "pwdcheck"
+	return fname == "checkpwd"
 }
 

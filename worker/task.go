@@ -17,6 +17,7 @@
 package worker
 
 import (
+	"fmt"
 	"strings"
 	"golang.org/x/net/context"
 
@@ -88,18 +89,39 @@ func convertValue(attr, data string) (types.Val, error) {
 // in the file containing state functions. Note that their value should be >= 5.
 type FuncType int
 const (
-	NotFunc        FuncType = iota
-	CompareFunc
-	GeoFunc
-	AggregatorFunc
-	StandardFunc
+	NotFn        FuncType = iota
+	AggregatorFn
+	CompareFn
+	GeoFn
+	PasswordFn
+	StandardFn = 100
 )
+
+func parseFuncType(arr []string) (FuncType, string) {
+	if len(arr) == 0 {
+		return NotFn, ""
+	}
+	f := strings.ToLower(arr[0])
+	fmt.Printf("[parseFn} %v\n", f)
+	switch f {
+	case "leq", "geq", "lt", "gt", "eq":
+		return CompareFn, f
+	case "min", "max", "sum":
+		return AggregatorFn, f
+	case "checkpwd":
+		return PasswordFn, f
+	default:
+		if types.IsGeoFunc(f) {
+			return GeoFn, f
+		}
+		return StandardFn, f
+	}
+}
 
 // processTask processes the query, accumulates and returns the result.
 func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 	attr := q.Attr
 
-	useFunc := len(q.SrcFunc) != 0
 	var n int
 	var tokens []string
 	var geoQuery *types.GeoQueryData
@@ -107,86 +129,88 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 	var intersectDest bool
 	var ineqValue types.Val
 	var ineqValueToken string
-	var isIneq, isAgrtr bool
-	var f string
-
-	if useFunc {
-		f = q.SrcFunc[0]
-		isIneq = f == "leq" || f == "geq" || f == "lt" || f == "gt" || f == "eq"
-		isAgrtr = f == "min" || f == "max" || f == "sum"
-		switch {
-		case isAgrtr:
-			// confirm agrregator could apply on the attributes
-			typ, err := schema.TypeOf(attr)
-			if err != nil {
-				return nil, x.Errorf("Attribute %q is not scalar-type", attr)
-			}
-			if !CouldApplyAggregatorOn(f, typ) {
-				return nil, x.Errorf("Aggregator %q could not apply on %v",
-					f, attr)
-			}
-
-		case isIneq:
-			if len(q.SrcFunc) != 2 {
-				return nil, x.Errorf("Function requires 2 arguments, but got %d %v",
-					len(q.SrcFunc), q.SrcFunc)
-			}
-			ineqValue, err = convertValue(attr, q.SrcFunc[1])
-			if err != nil {
-				return nil, err
-			}
-			// Tokenizing RHS value of inequality.
-			// TODO(kg): more comments about why we convert to types.BinaryID, and
-			// then convert it back to attr type in IndexTokens.
-			// the point is IndexTokens need BinaryID type to be passed in
-			v := types.ValueForType(types.BinaryID)
-			err = types.Marshal(ineqValue, &v)
-			if err != nil {
-				return nil, err
-			}
-			ineqTokens, err := posting.IndexTokens(attr, types.Val{ineqValue.Tid, v.Value.([]byte)})
-			if err != nil {
-				return nil, err
-			}
-			if len(ineqTokens) != 1 {
-				return nil, x.Errorf("Expected only 1 token but got: %v", ineqTokens)
-			}
-			ineqValueToken = ineqTokens[0]
-			// Get tokens geq / leq ineqValueToken.
-			tokens, err = getInequalityTokens(attr, ineqValueToken, f)
-			if err != nil {
-				return nil, err
-			}
-
-		case types.IsGeoFunc(q.SrcFunc[0]):
-			// For geo functions, we get extra information used for filtering.
-			tokens, geoQuery, err = types.GetGeoTokens(q.SrcFunc)
-			if err != nil {
-				return nil, err
-			}
-
-		default:
-			tokens, err = getTokens(q.SrcFunc)
-			if err != nil {
-				return nil, err
-			}
-			intersectDest = (strings.ToLower(q.SrcFunc[0]) == "allof")
+	
+	fnType, f := parseFuncType(q.SrcFunc)
+	switch fnType {
+	case AggregatorFn:
+		// confirm agrregator could apply on the attributes
+		typ, err := schema.TypeOf(attr)
+		if err != nil {
+			return nil, x.Errorf("Attribute %q is not scalar-type", attr)
 		}
-		if isAgrtr {
-			n = len(q.Uids)
-		} else {
-			n = len(tokens)
+		if !CouldApplyAggregatorOn(f, typ) {
+			return nil, x.Errorf("Aggregator %q could not apply on %v",
+				f, attr)
 		}
-	} else {
+		n = len(q.Uids)
+
+	case CompareFn:
+		if len(q.SrcFunc) != 2 {
+			return nil, x.Errorf("Function requires 2 arguments, but got %d %v",
+				len(q.SrcFunc), q.SrcFunc)
+		}
+		ineqValue, err = convertValue(attr, q.SrcFunc[1])
+		if err != nil {
+			return nil, err
+		}
+		// Tokenizing RHS value of inequality.
+		// TODO(kg): more comments about why we convert to types.BinaryID, and
+		// then convert it back to attr type in IndexTokens.
+		// the point is IndexTokens need BinaryID type to be passed in
+		v := types.ValueForType(types.BinaryID)
+		err = types.Marshal(ineqValue, &v)
+		if err != nil {
+			return nil, err
+		}
+		ineqTokens, err := posting.IndexTokens(attr, types.Val{ineqValue.Tid, v.Value.([]byte)})
+		if err != nil {
+			return nil, err
+		}
+		if len(ineqTokens) != 1 {
+			return nil, x.Errorf("Expected only 1 token but got: %v", ineqTokens)
+		}
+		ineqValueToken = ineqTokens[0]
+		// Get tokens geq / leq ineqValueToken.
+		tokens, err = getInequalityTokens(attr, ineqValueToken, f)
+		if err != nil {
+			return nil, err
+		}
+		n = len(tokens)
+
+	case GeoFn:
+		// For geo functions, we get extra information used for filtering.
+		tokens, geoQuery, err = types.GetGeoTokens(q.SrcFunc)
+		if err != nil {
+			return nil, err
+		}
+		n = len(tokens)
+
+	case PasswordFn:
+		// confirm agrregator could apply on the attributes
+		if len(q.SrcFunc) != 2 {
+			return nil, x.Errorf("Function requires 2 arguments, but got %d %v",
+				len(q.SrcFunc), q.SrcFunc)
+		}
+		n = len(q.Uids)
+
+	case StandardFn:
+		tokens, err = getTokens(q.SrcFunc)
+		if err != nil {
+			return nil, err
+		}
+		intersectDest = (strings.ToLower(q.SrcFunc[0]) == "allof")
+		n = len(tokens)
+
+	case NotFn:
 		n = len(q.Uids)
 	}
 
 	var out task.Result
 	for i := 0; i < n; i++ {
 		var key []byte
-		if isAgrtr {
+		if fnType == AggregatorFn || fnType == PasswordFn {
 			key = x.DataKey(attr, q.Uids[i])
-		} else if useFunc {
+		} else if fnType != NotFn {
 			key = x.IndexKey(attr, tokens[i])
 		} else if q.Reverse {
 			key = x.ReverseKey(attr, q.Uids[i])
@@ -208,9 +232,21 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 		}
 		out.Values = append(out.Values, newValue)
 
-		if q.DoCount || isAgrtr {
+		if q.DoCount || fnType == AggregatorFn || fnType == PasswordFn {
 			if q.DoCount {
 				out.Counts = append(out.Counts, uint32(pl.Length(0)))
+			} else if fnType == PasswordFn {
+				lastPos := len(out.Values) - 1
+				if len(newValue.Val) == 0 {
+					out.Values[lastPos] = task.FromInt(0)
+				}
+				pwd := q.SrcFunc[1]
+				err = types.VerifyPassword(pwd, string(newValue.Val))
+				if err != nil {
+					out.Values[lastPos] = task.FromInt(0)
+				} else {
+					out.Values[lastPos] = task.FromInt(1)
+				}
 			}
 			// Add an empty UID list to make later processing consistent
 			out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
@@ -221,13 +257,13 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 			AfterUID: uint64(q.AfterUid),
 		}
 		// If we have srcFunc and Uids, it means its a filter. So we intersect.
-		if useFunc && len(q.Uids) > 0 {
+		if fnType != NotFn && len(q.Uids) > 0 {
 			opts.Intersect = &task.List{Uids: q.Uids}
 		}
 		out.UidMatrix = append(out.UidMatrix, pl.Uids(opts))
 	}
 
-	if isAgrtr && len(out.Values) > 0 {
+	if fnType == AggregatorFn && len(out.Values) > 0 {
 		var err error
 		typ, _ := schema.TypeOf(attr)
 		out.Values[0], err = Aggregate(f, out.Values, typ)
@@ -237,7 +273,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 		out.Values = out.Values[0:1] // trim length to 1
 	}
 
-	if isIneq && len(tokens) > 0 && ineqValueToken == tokens[0] {
+	if fnType == CompareFn && len(tokens) > 0 && ineqValueToken == tokens[0] {
 		// Need to evaluate inequality for entries in the first bucket.
 		typ, err := schema.TypeOf(attr)
 		if err != nil || !typ.IsScalar() {

@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
+	"strings"
 
 	"golang.org/x/crypto/bcrypt"
 
@@ -13,9 +14,8 @@ import (
 )
 
 const (
-	PW_SALT_BYTES = 32
-	//PW_HASH_BYTES = 64
-	PW_LEN_LIMIT  = 6
+	saltLen = 32
+	pwdLenLimit = 6
 )
 
 func GenerateFromPassword(password string) (string, error) {
@@ -23,26 +23,40 @@ func GenerateFromPassword(password string) (string, error) {
 	var byt []byte
 	var err error
 
-	fmt.Printf("[GenerateFromPassword] entered\n")
-	
-	if len(password) < PW_LEN_LIMIT {
+	if len(password) < pwdLenLimit {
 		return result, x.Errorf("Password too short, i.e. should has at least 6 chars")
 	}
 
-	byt = make([]byte, PW_SALT_BYTES)
+	byt = make([]byte, saltLen)
 	if _, err = io.ReadFull(rand.Reader, byt); err != nil {
 		return result, err
 	}
 	salt = base64.StdEncoding.EncodeToString(byt)
 
-	byt, err = bcrypt.GenerateFromPassword([]byte(salt + password), bcrypt.DefaultCost)
+	byt, err = bcrypt.GenerateFromPassword([]byte(compose(salt, password)), bcrypt.DefaultCost)
 	if err != nil {
 		return result, err
 	}
 	result = base64.StdEncoding.EncodeToString(byt)
 
 	result = fmt.Sprintf("$2b$%d$%s$%s", bcrypt.DefaultCost, salt, result)
-
-	fmt.Printf("result is %v\n", result)
 	return result, nil
+}
+
+func compose(salt, password string) string {
+	return salt + password
+}
+
+func VerifyPassword(password, crypted string) error {
+	fmt.Printf("[Verify password] password %v, crypted %v\n", password, crypted)
+	
+	if len(password) < pwdLenLimit || len(crypted) == 0 {
+		return x.Errorf("invalid password/crypted string")
+	}
+	
+	// password stored format like: $2b$10$salt$cryptedstr
+	arr := strings.Split(strings.Trim(crypted, "$"), "$")
+	x.AssertTruef(len(arr) == 4, "Password is corrupted")
+	salt, target := arr[2], arr[3]
+	return bcrypt.CompareHashAndPassword([]byte(target), []byte(compose(salt, password)))
 }

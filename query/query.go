@@ -254,6 +254,15 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 			}
 			uc.AddValue(name, sv)
 			parent.AddChild(sg.Attr, uc)
+
+		} else if len(pc.SrcFunc) > 0 && isPasswordFn(pc.SrcFunc[0]) {
+			c := types.ValueForType(types.Int32ID)
+			c.Value = task.ToInt(pc.values[idx])
+			uc := dst.New(pc.Attr)
+			name := fmt.Sprintf("%s(%s)", pc.SrcFunc[0], pc.Attr)
+			uc.AddValue(name, c)
+			dst.AddChild(pc.Attr, uc)
+			
 		} else if len(ul.Uids) > 0 || len(pc.Children) > 0 {
 			// We create as many predicate entity children as the length of uids for
 			// this predicate.
@@ -425,10 +434,10 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 			Params: args,
 		}
 
-		if gchild.Func != nil && gchild.Func.IsAggregator() {
+		if gchild.Func != nil && (gchild.Func.IsAggregator() || gchild.Func.IsPasswordVerifier()) {
 			f := gchild.Func.Name
 			if len(gchild.Children) != 0 {
-				note := fmt.Sprintf("Node with aggregator %q cant have child attr", f)
+				note := fmt.Sprintf("Node with %q cant have child attr", f)
 				return errors.New(note)
 			}
 			// embedded filter will cause ambiguous output like following,
@@ -436,11 +445,12 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 			//    min(initial_release_date @filter(gt(initial_release_date, "1986"))
 			// }
 			if gchild.Filter != nil {
-				note := fmt.Sprintf("Node with aggregator %q cant have filter,", f) +
+				note := fmt.Sprintf("Node with %q cant have filter,", f) +
 					" please place the filter on the upper level"
 				return errors.New(note)
 			}
-			dst.SrcFunc = append(dst.SrcFunc, f)
+			dst.SrcFunc = append(sg.SrcFunc, gchild.Func.Name)
+			dst.SrcFunc = append(sg.SrcFunc, gchild.Func.Args...)
 		}
 
 		if gchild.Filter != nil {
@@ -458,6 +468,7 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 	}
 	return nil
 }
+
 func (args *params) fill(gq *gql.GraphQuery) error {
 
 	if v, ok := gq.Args["offset"]; ok {
@@ -1087,4 +1098,9 @@ func isAggregatorFn(f string) bool {
 		return true
 	}
 	return false
+}
+
+func isPasswordFn(f string) bool {
+	fn := strings.ToLower(f)
+	return fn == "checkpwd"
 }
