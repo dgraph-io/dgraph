@@ -41,9 +41,8 @@ func checkSchema(t *testing.T, h map[string]types.TypeID, expected []nameType) {
 }
 
 func TestSchema(t *testing.T) {
-	str = make(map[string]types.TypeID)
 	require.NoError(t, Parse("testfiles/test_schema"))
-	checkSchema(t, str, []nameType{
+	checkSchema(t, str.sm, []nameType{
 		{"name", types.StringID},
 		{"address", types.StringID},
 		{"http://film.com/name", types.StringID},
@@ -60,22 +59,18 @@ func TestSchema(t *testing.T) {
 }
 
 func TestSchema1_Error(t *testing.T) {
-	str = make(map[string]types.TypeID)
 	require.Error(t, Parse("testfiles/test_schema1"))
 }
 
 func TestSchema2_Error(t *testing.T) {
-	str = make(map[string]types.TypeID)
 	require.Error(t, Parse("testfiles/test_schema2"))
 }
 
 func TestSchema3_Error(t *testing.T) {
-	str = make(map[string]types.TypeID)
 	require.Error(t, Parse("testfiles/test_schema3"))
 }
 
 func TestSchema4_Error(t *testing.T) {
-	str = make(map[string]types.TypeID)
 	err := Parse("testfiles/test_schema4")
 	require.Error(t, err)
 }
@@ -95,27 +90,23 @@ func TestSchema6_Error(t *testing.T) {
 */
 // Correct specification of indexing
 func TestSchemaIndex(t *testing.T) {
-	str = make(map[string]types.TypeID)
 	require.NoError(t, Parse("testfiles/test_schema_index1"))
 	require.Equal(t, 2, len(indexedFields))
 }
 
 // Indexing can't be specified inside object types.
 func TestSchemaIndex_Error1(t *testing.T) {
-	str = make(map[string]types.TypeID)
 	require.Error(t, Parse("testfiles/test_schema_index2"))
 }
 
 // Object types cant be indexed.
 func TestSchemaIndex_Error2(t *testing.T) {
-	str = make(map[string]types.TypeID)
 	require.Error(t, Parse("testfiles/test_schema_index3"))
 }
 
 func TestSchemaIndexCustom(t *testing.T) {
-	str = make(map[string]types.TypeID)
 	require.NoError(t, Parse("testfiles/test_schema_index4"))
-	checkSchema(t, str, []nameType{
+	checkSchema(t, str.sm, []nameType{
 		{"name", types.StringID},
 		{"address", types.StringID},
 		{"age", types.Int32ID},

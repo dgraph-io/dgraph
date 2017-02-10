@@ -18,7 +18,7 @@ package schema
 
 import (
 	"fmt"
-	"sync"
+	"time"
 
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/tok"
@@ -28,20 +28,86 @@ import (
 	"encoding/binary"
 )
 
-var (
-	schemaLock sync.RWMutex
+type schemaInformation struct {
+	x.SafeMutex
 	// Map containing predicate to type information.
-	str map[string]types.TypeID
+	sm map[string]types.TypeID
+}
+
+func (si *schemaInformation) updateSchemaIfMissing(se schemaSyncEntry) (types.TypeID, error) {
+	si.Lock()
+	defer si.Unlock()
+	if si.sm == nil {
+		si.sm = make(map[string]types.TypeID)
+	}
+
+	if oldVal, ok := si.sm[se.Attr]; ok && oldVal != se.ValueType {
+		return oldVal, x.Errorf("Schema for attr %s already set to %d", se.Attr, se.ValueType)
+	}
+
+	si.sm[se.Attr] = se.ValueType
+	se.Water.Ch <- x.Mark{Index: se.Index, Done: false}
+	syncCh <- se
+	fmt.Printf("Setting schema for attr %s: %v\n", se.Attr, se.ValueType)
+	return se.ValueType, nil
+}
+
+func UpdateSchemaIfMissing(se schemaSyncEntry) (types.TypeID, error) {
+	return str.updateSchemaIfMissing(se)
+}
+
+// This function should be called only during init and is not thread safe
+// This change won't be persisted to db, since this contains the schema read from file
+func (si *schemaInformation) updateSchema(attr string, valueType types.TypeID) (types.TypeID, error) {
+	if si.sm == nil {
+		si.sm = make(map[string]types.TypeID)
+	}
+
+	si.sm[attr] = valueType
+	fmt.Printf("Setting schema for attr %s: %v\n", attr, valueType)
+	return valueType, nil
+}
+
+// This function should be called only during init and is not thread safe
+func (si *schemaInformation) getSchema(pred string) (types.TypeID, bool) {
+	typ, ok := si.sm[pred]
+	return typ, ok
+}
+
+func (si *schemaInformation) getTypeOf(pred string) (types.TypeID, error) {
+	si.AssertRLock()
+	if typ, ok := si.sm[pred]; ok {
+		return typ, nil
+	}
+	return types.TypeID(100), x.Errorf("Undefined predicate")
+}
+
+func (si *schemaInformation) getSchemaMap() map[string]string {
+	si.RLock()
+	defer si.RUnlock()
+	if si.sm == nil {
+		return nil
+	}
+
+	schema := map[string]string{}
+	for k, v := range si.sm {
+		schema[k] = v.Name()
+	}
+	return schema
+}
+
+var (
+	str *schemaInformation
 	// Map predicate to tokenizer.
 	indexedFields map[string]tok.Tokenizer
 	// Map containing fields / predicates that are reversed.
 	reversedFields map[string]bool
 	pstore         *store.Store
+	syncCh         chan schemaSyncEntry
 )
 
 func Init(ps *store.Store, file string) error {
 	pstore = ps
-	reset()
 	if len(file) > 0 {
 		if err := Parse(file); err != nil {
 			return err
@@ -50,24 +116,23 @@ func Init(ps *store.Store, file string) error {
 	if err := loadSchemaFromDb(); err != nil {
 		return err
 	}
-	fmt.Printf("Loaded schema is %v\n", str)
+	go batchSync()
 	return nil
 }
 
 func MultiGet(attrs []string) map[string]string {
-	schema := map[string]string{}
+	str.RLock()
+	defer str.RUnlock()
+	var schema map[string]string
 	if len(attrs) > 0 {
+		schema = make(map[string]string)
 		for _, attr := range attrs {
-			if schemaType, err := TypeOf(attr); err == nil {
+			if schemaType, err := str.getTypeOf(attr); err == nil {
 				schema[attr] = schemaType.Name()
 			}
 		}
 	} else {
-		schemaLock.RLock()
-		defer schemaLock.RUnlock()
-		for k, v := range str {
-			schema[k] = v.Name()
-		}
+		schema = str.getSchemaMap()
 	}
 	return schema
 }
@@ -76,30 +141,10 @@ func init() {
 	reset()
 }
 
-// put in map and add to rocksdb only if it doesn't exist
-func UpdateSchemaIfMissing(attr string, valueType types.TypeID) (types.TypeID, error) {
-	schemaLock.Lock()
-	defer schemaLock.Unlock()
-
-	if oldVal, ok := str[attr]; ok && oldVal != valueType {
-		return oldVal, x.Errorf("Schema for attr %s already set to %d", attr, valueType)
-	}
-
-	if err := setSchemaInDb(attr, valueType); err != nil {
-		return types.TypeID(100), err
-	}
-	str[attr] = valueType
-	fmt.Printf("Setting schema for attr %s: %v\n", attr, valueType)
-	return valueType, nil
-}
-
-func setSchemaInDb(attr string, valueType types.TypeID) error {
+func getSchemaTypeValue(valueType types.TypeID) []byte {
 	buf := make([]byte, 4)
 	binary.BigEndian.PutUint32(buf, uint32(valueType))
-	if err := pstore.SetOne(x.SchemaKey(attr), buf); err != nil {
-		return err
-	}
-	return nil
+	return buf
 }
 
 func loadSchemaFromDb() error {
@@ -112,25 +157,17 @@ func loadSchemaFromDb() error {
 		attr := x.ParseSchemaKey(key)
 		slice := idxIt.Value()
 		defer slice.Free() // there won't be too many slices
-		str[attr] = types.TypeID(binary.BigEndian.Uint32(slice.Data()))
+		str.updateSchema(attr, types.TypeID(binary.BigEndian.Uint32(slice.Data())))
 	}
 
 	return nil
 }
 
-func getSchemaFromDb(attr string) (types.TypeID, error) {
-	if slice, err := pstore.Get(x.SchemaKey(attr)); err == nil && slice != nil {
-		defer slice.Free()
-		return types.TypeID(binary.BigEndian.Uint32(slice.Data()[1:])), nil
-	} else {
-		return types.TypeID(100), err
-	}
-}
-
 func reset() {
-	str = make(map[string]types.TypeID)
+	str = new(schemaInformation)
 	indexedFields = make(map[string]tok.Tokenizer)
 	reversedFields = make(map[string]bool)
+	syncCh = make(chan schemaSyncEntry, 10000)
 }
 
 // IsIndexed returns if a given predicate is indexed or not.
@@ -151,12 +188,9 @@ func IsReversed(str string) bool {
 
 // TypeOf returns the type of given field.
 func TypeOf(pred string) (types.TypeID, error) {
-	schemaLock.RLock()
-	defer schemaLock.RUnlock()
-	if typ, ok := str[pred]; ok {
-		return typ, nil
-	}
-	return types.TypeID(100), x.Errorf("Undefined predicate")
+	str.RLock()
+	defer str.RUnlock()
+	return str.getTypeOf(pred)
 }
 
 // IndexedFields returns a list of indexed fields.
@@ -166,4 +200,51 @@ func IndexedFields() []string {
 		out = append(out, k)
 	}
 	return out
+}
+
+// The following logic is used to batch up all the writes to RocksDB.
+type schemaSyncEntry struct {
+	Attr      string
+	ValueType types.TypeID
+	Water     *x.WaterMark
+	Index     uint64
+}
+
+func batchSync() {
+	var entries []schemaSyncEntry
+	var loop uint64
+
+	b := pstore.NewWriteBatch()
+	defer b.Destroy()
+
+	for {
+		select {
+		case e := <-syncCh:
+			entries = append(entries, e)
+
+		default:
+			// default is executed if no other case is ready.
+			start := time.Now()
+			if len(entries) > 0 {
+				x.AssertTrue(b != nil)
+				loop++
+				fmt.Printf("[%4d] Writing batch of size: %v\n", loop, len(entries))
+				for _, e := range entries {
+					b.Put(x.SchemaKey(e.Attr), getSchemaTypeValue(e.ValueType))
+				}
+				x.Checkf(pstore.WriteBatch(b), "Error while writing to RocksDB.")
+				b.Clear()
+
+				for _, e := range entries {
+					if e.Water != nil {
+						e.Water.Ch <- x.Mark{Index: e.Index, Done: true}
+					}
+				}
+				entries = entries[:0]
+			}
+			// Add a sleep clause to avoid a busy wait loop if there's no input to commitCh.
+			sleepFor := 10*time.Millisecond - time.Since(start)
+			time.Sleep(sleepFor)
+		}
+	}
 }
