@@ -368,7 +368,11 @@ func GetOrCreate(key []byte, group uint32) (rlist *List, decr func()) {
 		return lp, lp.decr
 	}
 
+	// Any initialization for l must be done before PutIfMissing. Once it's added
+	// to the map, any other goroutine can retrieve it.
 	l := getNew(key, pstore) // This retrieves a new *List and sets refcount to 1.
+	l.water = marks.Get(group)
+
 	lp = lhmap.PutIfMissing(fp, l)
 	// We are always going to return lp to caller, whether it is l or not. So, let's
 	// increment its reference counter.
@@ -378,7 +382,6 @@ func GetOrCreate(key []byte, group uint32) (rlist *List, decr func()) {
 		// Undo the increment in getNew() call above.
 		l.decr()
 	}
-	lp.water = marks.Get(group)
 	pk := x.Parse(key)
 
 	// This replaces "TokensTable". The idea is that we want to quickly add the
