@@ -531,7 +531,6 @@ var Home = React.createClass({
     // Resetting state
     network && network.destroy();
     this.setState(this.resetState());
-    this.storeQuery(this.state.query);
 
     var that = this;
     timeout(60000, fetch('http://localhost:8080/query?debug=true', {
@@ -550,12 +549,14 @@ var Home = React.createClass({
         })
         var key = Object.keys(result)[0];
         if (result.code != undefined && result.message != undefined) {
+          that.storeQuery(that.state.query);
           // This is the case in which user sends a mutation. We display the response from server.
           that.setState({
             resType: 'success-res',
             response: JSON.stringify(result, null, 2)
           })
         } else if (key != undefined) {
+          that.storeQuery(that.state.query);
           // We got the result for a query.
           var response = result[key]
           that.setState({
@@ -723,10 +724,12 @@ var Home = React.createClass({
             <div className="row">
               <div className="col-sm-12">
             <div style={{marginTop: '10px', borderTop: '1px solid black'}}>
-            <h3>Previous Queries</h3>
+            <h3 style={{marginLeft: '50px'}}>Previous Queries</h3>
+            <div style={{maxHeight: '500px',overflowY: 'scroll', border: '1px solid black', margin: '0 50px'}}>
             {this.state.queries.map(function (query, i) {
               return <Query text={query} update={this.updateQuery} key={i}></Query>;
             },this)}
+            </div>
             </div>
             </div>
             </div>
