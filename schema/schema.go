@@ -25,8 +25,6 @@ import (
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
-
-	"encoding/binary"
 )
 
 type schemaInformation struct {
@@ -42,15 +40,15 @@ func (si *schemaInformation) updateSchemaIfMissing(se *SchemaSyncEntry) (types.T
 		si.sm = make(map[string]*types.SchemaDescription)
 	}
 
-	if oldVal, ok := si.sm[se.Attr]; ok && types.TypeID(oldVal.ValueType) != se.ValueType {
-		return types.TypeID(oldVal.ValueType), x.Errorf("Schema for attr %s already set to %d", se.Attr, se.ValueType)
+	if oldVal, ok := si.sm[se.Attr]; ok && oldVal.ValueType != se.SchemaDescription.ValueType {
+		return types.TypeID(oldVal.ValueType), x.Errorf("Schema for attr %s already set to %d", se.Attr, se.SchemaDescription.ValueType)
 	}
 
-	si.sm[se.Attr] = &types.SchemaDescription{ValueType: uint32(se.ValueType)}
+	si.sm[se.Attr] = se.SchemaDescription
 	se.Water.Ch <- x.Mark{Index: se.Index, Done: false}
 	syncCh <- *se
-	fmt.Printf("Setting schema for attr %s: %v\n", se.Attr, se.ValueType)
-	return se.ValueType, nil
+	fmt.Printf("Setting schema for attr %s: %v\n", se.Attr, se.SchemaDescription.ValueType)
+	return types.TypeID(se.SchemaDescription.ValueType), nil
 }
 
 func UpdateSchemaIfMissing(se *SchemaSyncEntry) (types.TypeID, error) {
@@ -156,9 +154,9 @@ func init() {
 	reset()
 }
 
-func getSchemaTypeValue(valueType types.TypeID) []byte {
-	buf := make([]byte, 4)
-	binary.BigEndian.PutUint32(buf, uint32(valueType))
+func getSchemaTypeValue(sd *types.SchemaDescription) []byte {
+	buf, err := sd.Marshal()
+	x.Checkf(err, "error while serilizing schema description")
 	return buf
 }
 
@@ -174,7 +172,7 @@ func LoadSchemaFromDb() error {
 		slice := idxIt.Value()
 		defer slice.Free() // there won't be too many slices
 		var sd types.SchemaDescription
-		x.Check(sd.Unmarshal(slice.Data()))
+		x.Checkf(sd.Unmarshal(slice.Data()), "Error while loading schema from db")
 		str.setSchema(attr, &sd)
 	}
 
@@ -222,10 +220,10 @@ func IndexedFields() []string {
 
 // The following logic is used to batch up all the writes to RocksDB.
 type SchemaSyncEntry struct {
-	Attr      string
-	ValueType types.TypeID
-	Water     *x.WaterMark
-	Index     uint64
+	Attr              string
+	SchemaDescription *types.SchemaDescription
+	Water             *x.WaterMark
+	Index             uint64
 }
 
 func batchSync() {
@@ -248,7 +246,7 @@ func batchSync() {
 				loop++
 				fmt.Printf("[%4d] Writing schema batch of size: %v\n", loop, len(entries))
 				for _, e := range entries {
-					b.Put(x.SchemaKey(e.Attr), getSchemaTypeValue(e.ValueType))
+					b.Put(x.SchemaKey(e.Attr), getSchemaTypeValue(e.SchemaDescription))
 				}
 				x.Checkf(pstore.WriteBatch(b), "Error while writing to RocksDB.")
 				b.Clear()

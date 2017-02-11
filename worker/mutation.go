@@ -77,12 +77,19 @@ func getType(edge *task.DirectedEdge) types.TypeID {
 	return types.TypeID(edge.ValueType)
 }
 
+func getTypeUint(edge *task.DirectedEdge) uint32 {
+	if edge.ValueId != 0 {
+		return uint32(types.UidID)
+	}
+	return edge.ValueType
+}
+
 func updateSchema(edge *task.DirectedEdge, rv *x.RaftValue) error {
 	ce := schema.SchemaSyncEntry{
-		Attr:      edge.Attr,
-		ValueType: getType(edge),
-		Index:     rv.Index,
-		Water:     posting.SyncMarkFor(rv.Group),
+		Attr:              edge.Attr,
+		SchemaDescription: &types.SchemaDescription{ValueType: getTypeUint(edge)},
+		Index:             rv.Index,
+		Water:             posting.SyncMarkFor(rv.Group),
 	}
 	if _, err := schema.UpdateSchemaIfMissing(&ce); err != nil {
 		return err
