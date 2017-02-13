@@ -17,15 +17,17 @@ import Query from './Query';
 import '../assets/css/App.css'
 
 
-// TODO - Abstract these out and remove these from global scope.
+type Edge = {| id: string, from: string, to: string, arrows: string, label: string, title: string |}
+type Node = {| id: string, label: string, title: string, group: string, value: number |}
+
+// Visjs network
 var network,
-  // We will store the vis data set in these nodes.
-  nodeSet,
-  edgeSet;
+  globalNodeSet,
+  globalEdgeSet;
 
 // TODO - Move these three functions to server or to some other component. They dont
 // really belong here.
-function getLabel(properties) {
+function getLabel(properties: Object): string {
   var label = "";
   if (properties["name"] !== undefined) {
     label = properties["name"]
@@ -54,7 +56,6 @@ function getLabel(properties) {
     }
   }
 
-
   return label
 }
 
@@ -63,7 +64,7 @@ type MapOfBooleans = { [key: string]: boolean};
 
 // This function shortens and calculates the label for a predicate.
 function getPredProperties(pred: string, predLabel: MapOfStrings,
-    edgeLabels: MapOfBooleans) {
+    edgeLabels: MapOfBooleans): string {
   var prop = predLabel[pred]
   if (prop !== undefined) {
     // We have already calculated the label for this predicate.
@@ -88,7 +89,7 @@ function getPredProperties(pred: string, predLabel: MapOfStrings,
   return predLabel[pred]
 }
 
-function hasChildren(node) {
+function hasChildren(node: Object): boolean{
   for (var prop in node) {
     if (Array.isArray(node[prop])) {
       return true
@@ -97,7 +98,7 @@ function hasChildren(node) {
   return false
 }
 
-function hasProperties(props) {
+function hasProperties(props: Object): boolean {
   // Each node will have a _uid_. We check if it has other properties.
   return Object.keys(props).length !== 1
 }
@@ -105,9 +106,7 @@ function hasProperties(props) {
 type Src = {| id: string, pred: string |};
 type ResponseNode = {| node: Object, src: Src |};
 
-type Edge = {| id: string, from: string, to: string, arrows: string, label: string, title: string |}
-
-function processGraph(response, root, maxNodes) {
+function processGraph(response: Object, root: string, maxNodes: number) {
   let nodesStack: Array <ResponseNode> = [],
     // Contains map of a lable to its shortform thats displayed.
     predLabel: MapOfStrings = {},
@@ -119,7 +118,7 @@ function processGraph(response, root, maxNodes) {
     // us avoid creating duplicating nodes while parsing the JSON structure
     // which is a tree.
     uidMap : MapOfBooleans = {},
-    nodes = [],
+    nodes: Array <Node> = [],
     edges: Array <Edge> = [],
     emptyNode: ResponseNode = {
       node: {},
@@ -168,8 +167,8 @@ function processGraph(response, root, maxNodes) {
       }
     }
 
-    let properties = {},
-      hasChildNodes = false;
+    let properties: MapOfStrings = {},
+      hasChildNodes: boolean = false;
 
     for (let prop in obj.node) {
       // If its just a value, then we store it in properties for this node.
@@ -193,13 +192,14 @@ function processGraph(response, root, maxNodes) {
     if (!uidMap[properties["_uid_"]]) {
       uidMap[properties["_uid_"]] = true
       if (hasProperties(properties) || hasChildNodes) {
-        nodes.push({
+        var n: Node = {
           id: properties["_uid_"],
           label: getLabel(properties),
           title: JSON.stringify(properties, null, 2),
           group: obj.src.pred,
           value: 1
-        })
+        }
+		nodes.push(n)
       }
     }
 
@@ -227,7 +227,7 @@ function doOnClick(params) {
   console.log("in do on click")
   if (params.nodes.length > 0) {
     var nodeUid = params.nodes[0],
-      currentNode = nodeSet.get(nodeUid);
+      currentNode = globalNodeSet.get(nodeUid);
 
     this.setState({
       currentNode: currentNode.title,
@@ -242,7 +242,7 @@ function doOnClick(params) {
 }
 
 // create a network
-function renderNetwork(nodes, edges) {
+function renderNetwork(nodes: Array <Node>, edges: Array <Edge>) {
   var container = document.getElementById('graph');
   var data = {
     nodes: new vis.DataSet(nodes),
@@ -297,7 +297,7 @@ function renderNetwork(nodes, edges) {
     doubleClickTime = new Date();
     if (params.nodes && params.nodes.length > 0) {
       let nodeUid = params.nodes[0],
-        currentNode = nodeSet.get(nodeUid);
+        currentNode = globalNodeSet.get(nodeUid);
 
       network.unselectAll();
       that.setState({
@@ -311,20 +311,20 @@ function renderNetwork(nodes, edges) {
         }
       })
 
-      let expanded = outgoing.length > 0
+      let expanded: boolean = outgoing.length > 0
 
-      let outgoingEdges = edgeSet.get({
+      let outgoingEdges = globalEdgeSet.get({
         filter: function(node) {
           return node.from === nodeUid
         }
       })
 
-      let adjacentNodeIds = outgoingEdges.map(function(edge) {
+      let adjacentNodeIds: Array <string> = outgoingEdges.map(function(edge) {
         return edge.to
       })
 
 
-      let adjacentNodes = nodeSet.get(adjacentNodeIds)
+      let adjacentNodes = globalNodeSet.get(adjacentNodeIds)
         // TODO -See if we can set a meta property to a node to know that its
         // expanded or closed and avoid this computation.
       if (expanded) {
@@ -362,8 +362,8 @@ function renderNetwork(nodes, edges) {
     if (params.node === undefined) {
       return;
     }
-    var nodeUid = params.node,
-      currentNode = nodeSet.get(nodeUid);
+    let nodeUid: string = params.node,
+      currentNode = globalNodeSet.get(nodeUid);
 
     that.setState({
       currentNode: currentNode.title
@@ -371,15 +371,15 @@ function renderNetwork(nodes, edges) {
   });
 
   network.on("dragEnd", function(params) {
-    for (var i = 0; i < params.nodes.length; i++) {
-      var nodeId = params.nodes[i];
+    for (let i = 0; i < params.nodes.length; i++) {
+      let nodeId: string = params.nodes[i];
       data.nodes.update({ id: nodeId, fixed: { x: true, y: true } });
     }
   });
 
   network.on('dragStart', function(params) {
-    for (var i = 0; i < params.nodes.length; i++) {
-      var nodeId = params.nodes[i];
+    for (let i = 0; i < params.nodes.length; i++) {
+      let nodeId: string = params.nodes[i];
       data.nodes.update({ id: nodeId, fixed: { x: false, y: false } });
     }
   });
@@ -389,7 +389,7 @@ function checkStatus(response) {
   if (response.status >= 200 && response.status < 300) {
     return response
   } else {
-    var error = new Error(response.statusText)
+    let error = new Error(response.statusText)
     throw error
   }
 }
@@ -490,7 +490,7 @@ class App extends React.Component {
   }
 
   storeQuery = (query: string) => {
-    var queries = JSON.parse(localStorage.getItem("queries") || '[]');
+    let queries: Array <string> = JSON.parse(localStorage.getItem("queries") || '[]');
     queries.unshift(query);
 
     // (queries.length > 20) && (queries = queries.splice(0, 20))
@@ -503,7 +503,7 @@ class App extends React.Component {
   }
 
   lastQuery = () => {
-    var queries = JSON.parse(localStorage.getItem("queries") || '[]')
+    let queries: Array <string> = JSON.parse(localStorage.getItem("queries") || '[]')
     if (queries.length === 0) {
       return [-1, "", []]
     }
@@ -513,12 +513,12 @@ class App extends React.Component {
   }
 
   nextQuery = () => {
-    var queries = JSON.parse(localStorage.getItem("queries") || '[]')
+    let queries: Array <string> = JSON.parse(localStorage.getItem("queries") || '[]')
     if (queries.length === 0) {
       return
     }
 
-    var idx = this.state.queryIndex;
+    let idx: number = this.state.queryIndex;
     if (idx === -1 || idx - 1 < 0) {
       return
     }
@@ -529,7 +529,7 @@ class App extends React.Component {
   }
 
   previousQuery = () => {
-    var queries = JSON.parse(localStorage.getItem("queries") || '[]')
+    var queries: Array <string> = JSON.parse(localStorage.getItem("queries") || '[]')
     if (queries === '[]') {
       return
     }
@@ -572,16 +572,19 @@ class App extends React.Component {
         } else if (key !== undefined) {
           that.storeQuery(that.state.query);
           // We got the result for a query.
-          var response = result[key]
+          let response: Object = result[key]
           that.setState({
             'latency': result.server_latency.total
           });
           var startTime = new Date();
 
           setTimeout(function() {
-            var graph = processGraph(response, key, -1);
-            nodeSet = new vis.DataSet(graph[0])
-            edgeSet = new vis.DataSet(graph[1])
+          // We process all the nodes and edges in the response in background and
+          // store the structure in globalNodeSet and globalEdgeSet. We can use this
+          // later when we do expansion of nodes.
+          let graph = processGraph(response, key, -1);
+            globalNodeSet = new vis.DataSet(graph[0])
+            globalEdgeSet = new vis.DataSet(graph[1])
             that.setState({
               nodes: graph[0].length,
               relations: graph[1].length
@@ -601,7 +604,7 @@ class App extends React.Component {
 
           var endTime = new Date();
           var timeTaken = (endTime.getTime() - startTime.getTime()) / 1000;
-          let render = '';
+          let render: string = '';
           if (timeTaken > 1) {
             render = timeTaken.toFixed(3) + 's';
           } else {
