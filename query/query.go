@@ -558,7 +558,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	}
 	if len(gq.UID) > 0 {
 		o := new(task.List)
-		it := algo.NewWriteIterator(o)
+		it := algo.NewWriteIterator(o, 0)
 		for _, uid := range gq.UID {
 			it.Append(uid)
 		}
@@ -746,7 +746,7 @@ func populateVarMap(sg *SubGraph, doneVars map[string]*task.List, isCascade bool
 	}
 
 	o := new(task.List)
-	out := algo.NewWriteIterator(o)
+	out := algo.NewWriteIterator(o, 0)
 	it := algo.NewListIterator(sg.DestUIDs)
 	i := -1
 	if !isCascade {

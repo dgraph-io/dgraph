@@ -224,7 +224,7 @@ func intersectBucket(ts *task.Sort, attr, token string, out []intersectedList) e
 
 		in1 := algo.NewListIterator(il.ulist)
 		o := new(task.List)
-		out := algo.NewWriteIterator(o)
+		out := algo.NewWriteIterator(o, 0)
 		for ; in1.Valid(); in1.Next() {
 			out.Append(in1.Val())
 		}
