@@ -127,6 +127,15 @@ func addGeoData(t *testing.T, ps *store.Store, uid uint64, p geom.T, name string
 	addEdgeToTypedValue(t, "name", uid, types.StringID, []byte(name))
 }
 
+func addPassword(t *testing.T, uid uint64, password string) {
+	value := types.ValueForType(types.BinaryID)
+	src := types.ValueForType(types.PasswordID)
+	src.Value, _ = types.GenerateFromPassword(password)
+	err := types.Marshal(src, &value)
+	require.NoError(t, err)
+	addEdgeToTypedValue(t, "password", uid, types.PasswordID, value.Value.([]byte))
+}
+
 var ps *store.Store
 
 func populateGraph(t *testing.T) {
@@ -179,6 +188,8 @@ func populateGraph(t *testing.T) {
 	addEdgeToValue(t, "survival_rate", 1, "98.99")
 	addEdgeToValue(t, "sword_present", 1, "true")
 	addEdgeToValue(t, "_xid_", 1, "mich")
+
+	addPassword(t, 1, "123456")
 
 	// Now let's add a name for each of the friends, except 101.
 	addEdgeToTypedValue(t, "name", 23, types.StringID, []byte("Rick Grimes"))
@@ -876,6 +887,59 @@ func TestSumError1(t *testing.T) {
 	var l Latency
 	_, queryErr := ProcessQuery(context.Background(), res, &l)
 	require.NotNil(t, queryErr)
+}
+
+func TestQueryPassword(t *testing.T) {
+	populateGraph(t)
+	// Password is not fetchable
+	query := `
+                {
+                        me(id:0x01) {
+                                name
+                                password
+                        }
+                }
+	`
+	res, err := gql.Parse(query)
+	require.NoError(t, err)
+
+	var l Latency
+	_, queryErr := ProcessQuery(context.Background(), res, &l)
+	require.NotNil(t, queryErr)
+}
+
+func TestCheckPassword(t *testing.T) {
+	populateGraph(t)
+	query := `
+                {
+                        me(id:0x01) {
+                                name
+                                checkpwd("123456")
+                        }
+                }
+	`
+	js := processToFastJSON(t, query)
+	require.EqualValues(t,
+		`{"me":[{"name":"Michonne","password":[{"checkpwd()":1}]}]}`,
+		js)
+
+}
+
+func TestCheckPasswordIncorrect(t *testing.T) {
+	populateGraph(t)
+	query := `
+                {
+                        me(id:0x01) {
+                                name
+                                checkpwd("654123")
+                        }
+                }
+	`
+	js := processToFastJSON(t, query)
+	require.EqualValues(t,
+		`{"me":[{"name":"Michonne","password":[{"checkpwd()":0}]}]}`,
+		js)
+
 }
 
 func TestToSubgraphInvalidFnName(t *testing.T) {

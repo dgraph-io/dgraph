@@ -91,6 +91,8 @@ func Convert(from Val, toID TypeID) (Val, error) {
 					return to, err
 				}
 				*res = w
+			case PasswordID:
+				*res = string(data)
 			default:
 				return to, cantConvert(fromID, toID)
 			}
@@ -152,7 +154,6 @@ func Convert(from Val, toID TypeID) (Val, error) {
 				}
 				*res = g
 			case PasswordID:
-				// TODO(kg): add more types besides String -> Password
 				password, err := GenerateFromPassword(vc)
 				if err != nil {
 					return to, err

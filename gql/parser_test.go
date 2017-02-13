@@ -1347,6 +1347,22 @@ func TestParseCountError2(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestParseCheckPwd(t *testing.T) {
+	schema.ParseBytes([]byte("scalar name:string @index"))
+	query := `{
+		me(id:1) {
+			checkpwd("123456")
+			hometown
+		}
+	}
+`
+	gq, err := Parse(query)
+	require.NoError(t, err)
+	require.Equal(t, "checkpwd", gq.Query[0].Children[0].Func.Name)
+	require.Equal(t, "123456", gq.Query[0].Children[0].Func.Args[0])
+	require.Equal(t, "password", gq.Query[0].Children[0].Attr)
+}
+
 func TestParseComments(t *testing.T) {
 	schema.ParseBytes([]byte("scalar name:string @index"))
 	query := `
@@ -1535,6 +1551,19 @@ func TestMutationSingleQuote(t *testing.T) {
 	_, err := Parse(query)
 	require.Error(t, err)
 }
+
+func TestMutationPassword(t *testing.T) {
+	query := `
+	mutation {
+		set {
+			<alice> <password> "PenAndPencil"^^<pwd:password>
+		}
+	}
+	`
+	_, err := Parse(query)
+	require.NoError(t, err)
+}
+
 
 func TestLangs(t *testing.T) {
 	query := `

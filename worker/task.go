@@ -206,7 +206,9 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 	var out task.Result
 	for i := 0; i < n; i++ {
 		var key []byte
-		if fnType == AggregatorFn || fnType == PasswordFn {
+		if fnType == AggregatorFn {
+			key = x.DataKey(attr, q.Uids[i])
+		} else if fnType == PasswordFn {
 			key = x.DataKey(attr, q.Uids[i])
 		} else if fnType != NotFn {
 			key = x.IndexKey(attr, tokens[i])

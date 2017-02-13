@@ -259,8 +259,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 			c := types.ValueForType(types.Int32ID)
 			c.Value = task.ToInt(pc.values[idx])
 			uc := dst.New(pc.Attr)
-			name := fmt.Sprintf("%s(%s)", pc.SrcFunc[0], pc.Attr)
-			uc.AddValue(name, c)
+			uc.AddValue("checkpwd", c)
 			dst.AddChild(pc.Attr, uc)
 			
 		} else if len(ul.Uids) > 0 || len(pc.Children) > 0 {
@@ -404,6 +403,10 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 	for _, gchild := range gq.Children {
 		if gchild.Attr == "_uid_" {
 			sg.Params.GetUID = true
+		} else if gchild.Attr == "password" { // query password is forbidden
+			if gchild.Func == nil || !gchild.Func.IsPasswordVerifier() { 
+				return errors.New("Password is not fetchable")
+			}
 		}
 
 		args := params{
@@ -434,7 +437,8 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 			Params: args,
 		}
 
-		if gchild.Func != nil && (gchild.Func.IsAggregator() || gchild.Func.IsPasswordVerifier()) {
+		if gchild.Func != nil &&
+			(gchild.Func.IsAggregator() || gchild.Func.IsPasswordVerifier()) {
 			f := gchild.Func.Name
 			if len(gchild.Children) != 0 {
 				note := fmt.Sprintf("Node with %q cant have child attr", f)

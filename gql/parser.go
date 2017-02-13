@@ -1278,7 +1278,12 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 				if child.Func, err = parseFunction(it); err != nil {
 					return err
 				}
-				child.Attr = child.Func.Attr
+				if isPasswordVerifier(item.Val) {
+					child.Func.Args = append(child.Func.Args, child.Func.Attr)
+					child.Attr = "password"
+				} else {
+					child.Attr = child.Func.Attr
+				}
 				gq.Children = append(gq.Children, child)
 				curp = child
 				continue
