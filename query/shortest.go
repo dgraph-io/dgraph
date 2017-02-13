@@ -58,12 +58,12 @@ func (start *SubGraph) expandOut(ctx context.Context,
 	var numEdges uint64
 	var exec []*SubGraph
 	var err error
-	in := new(task.List)
-	it := algo.NewWriteIterator(in)
+	var in task.List
+	it := algo.NewWriteIterator(&in)
 	it.Append(start.Params.From)
 	it.End()
-	start.SrcUIDs = in
-	start.uidMatrix = []*task.List{in}
+	start.SrcUIDs = &in
+	start.uidMatrix = []*task.List{&in}
 	start.DestUIDs = start.SrcUIDs
 
 	for _, child := range start.Children {
@@ -247,30 +247,33 @@ func ShortestPath(ctx context.Context, sg *SubGraph) error {
 		if !stopExpansion {
 			neighbours := adjacencyMap[item.uid]
 			for toUid, cost := range neighbours {
-				if d, ok := dist[toUid]; !ok || d.cost > item.cost+cost {
-					if !ok {
-						// This is the first time we're seeing this node. So
-						// create a new node and add it to the heap nad map.
-						node := &Item{
-							uid:  toUid,
-							cost: item.cost + cost,
-							hop:  item.hop + 1,
-						}
-						heap.Push(&pq, node)
-						dist[toUid] = nodeInfo{
-							cost:   item.cost + cost,
-							parent: item.uid,
-							node:   node,
-						}
-					} else {
-						// We've already seen this node. So, just update the cost
-						// and fix the priority in the queue.
-						node := dist[toUid].node
-						node.cost = item.cost + cost
-						node.hop = item.hop + 1
-						heap.Fix(&pq, node.index)
-					}
+				d, ok := dist[toUid]
+				if ok && d.cost <= item.cost+cost {
+					continue
 				}
+				if !ok {
+					// This is the first time we're seeing this node. So
+					// create a new node and add it to the heap nad map.
+					node := &Item{
+						uid:  toUid,
+						cost: item.cost + cost,
+						hop:  item.hop + 1,
+					}
+					heap.Push(&pq, node)
+					dist[toUid] = nodeInfo{
+						cost:   item.cost + cost,
+						parent: item.uid,
+						node:   node,
+					}
+				} else {
+					// We've already seen this node. So, just update the cost
+					// and fix the priority in the queue.
+					node := dist[toUid].node
+					node.cost = item.cost + cost
+					node.hop = item.hop + 1
+					heap.Fix(&pq, node.index)
+				}
+
 			}
 		}
 	}

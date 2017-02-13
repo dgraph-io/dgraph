@@ -766,8 +766,8 @@ func shouldCascade(res gql.Result, idx int) bool {
 
 // TODO(Ashwin): Benchmark this function.
 func populateVarMap(sg *SubGraph, doneVars map[string]*task.List, isCascade bool) {
-	o := new(task.List)
-	out := algo.NewWriteIterator(o)
+	var o task.List
+	out := algo.NewWriteIterator(&o)
 	it := algo.NewListIterator(sg.DestUIDs)
 	i := -1
 	if sg.Params.Alias == "shortest" {
@@ -807,7 +807,7 @@ func populateVarMap(sg *SubGraph, doneVars map[string]*task.List, isCascade bool
 		}
 	}
 	out.End()
-	sg.DestUIDs = o
+	sg.DestUIDs = &o
 
 AssignStep:
 	if sg.Params.Var != "" {
