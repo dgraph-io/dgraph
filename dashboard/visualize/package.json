@@ -1,7 +1,13 @@
 {
-  "name": "visualize",
+  "name": "dgraph-ui",
   "version": "0.1.0",
-  "private": true,
+  "description": "The user interface for interacting with Dgraph server.",
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:dgraph-io/dgraph.git"
+  },
+  "author": "Dgraph Labs",
+  "license": "Apache-2.0",
   "devDependencies": {
     "react-scripts": "0.9.0"
   },
