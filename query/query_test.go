@@ -920,7 +920,7 @@ func TestCheckPassword(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.EqualValues(t,
-		`{"me":[{"name":"Michonne","password":[{"checkpwd()":1}]}]}`,
+		`{"me":[{"name":"Michonne","password":[{"checkpwd":1}]}]}`,
 		js)
 
 }
@@ -937,7 +937,7 @@ func TestCheckPasswordIncorrect(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.EqualValues(t,
-		`{"me":[{"name":"Michonne","password":[{"checkpwd()":0}]}]}`,
+		`{"me":[{"name":"Michonne","password":[{"checkpwd":0}]}]}`,
 		js)
 
 }
