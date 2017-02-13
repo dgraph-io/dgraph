@@ -244,7 +244,6 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 			uc := dst.New(pc.Attr)
 			uc.AddValue("count", c)
 			dst.AddChild(pc.Attr, uc)
-
 		} else if len(pc.SrcFunc) > 0 && isAggregatorFn(pc.SrcFunc[0]) {
 			if idx > 0 { // aggregator will put value at index 0; place once
 				continue

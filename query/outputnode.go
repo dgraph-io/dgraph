@@ -93,8 +93,30 @@ func (p *protoNode) AddValue(attr string, v types.Val) {
 
 // AddNodeValue adds a node value for protoOutputNode.
 func (p *protoNode) AddNodeValue(attr string, v outputNode) {
-	// ToDo (Ashish) : merge Properties with same attr
-	p.Node.Properties = append(p.Node.Properties, createPropertyFromNode(attr, v.(*protoNode).Node))
+	var propNode *graph.Node
+	for _, p := range p.Node.Properties {
+		if p.Prop == attr {
+			x.AssertTruef(p.Value.(*graph.Property_NodeValue) != nil,
+				"Can not merge RawValue with NodeValue")
+			propNode = p.Value.(*graph.Property_NodeValue).NodeValue
+			break
+		}
+	}
+	if propNode != nil {
+		// merge outputNode into propNode
+		vnode := v.(*protoNode).Node
+		x.AssertTruef(vnode.Uid == propNode.Uid && vnode.Xid == propNode.Xid,
+			"Invalid nodes while merging.")
+		for _, p := range vnode.Properties {
+			propNode.Properties = append(propNode.Properties, p)
+		}
+		for _, c := range vnode.Children {
+			propNode.Children = append(propNode.Children, c)
+		}
+	} else {
+		p.Node.Properties = append(p.Node.Properties,
+			createPropertyFromNode(attr, v.(*protoNode).Node))
+	}
 }
 
 // AddChild adds a child for protoOutputNode.

@@ -20,6 +20,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gogo/protobuf/proto"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgraph/types"
@@ -190,4 +191,209 @@ func TestUnknownFacets(t *testing.T) {
 	require.JSONEq(t,
 		`{"me":[{"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}],"name":"Michonne"}]}`,
 		js)
+}
+
+func TestToProtoFacets(t *testing.T) {
+	populateGraphWithFacets(t)
+	query := `
+		{
+			me(id:0x1) {
+				name @facets
+				friend @facets {
+					name @facets
+				}
+			}
+		}
+	`
+	pb := processToPB(t, query, true)
+	require.EqualValues(t,
+		`attribute: "_root_"
+children: <
+  uid: 1
+  attribute: "me"
+  properties: <
+    prop: "name"
+    raw_value: <
+      str_val: "Michonne"
+    >
+  >
+  properties: <
+    prop: "@facets"
+    node_value: <
+      attribute: "facets"
+      properties: <
+        prop: "name"
+        node_value: <
+          attribute: "name"
+          properties: <
+            prop: "origin"
+            raw_value: <
+              str_val: "french"
+            >
+          >
+        >
+      >
+    >
+  >
+  children: <
+    uid: 23
+    attribute: "friend"
+    properties: <
+      prop: "name"
+      raw_value: <
+        str_val: "Rick Grimes"
+      >
+    >
+    properties: <
+      prop: "@facets"
+      node_value: <
+        attribute: "facets"
+        properties: <
+          prop: "name"
+          node_value: <
+            attribute: "name"
+            properties: <
+              prop: "origin"
+              raw_value: <
+                str_val: "french"
+              >
+            >
+          >
+        >
+        properties: <
+          prop: "_"
+          node_value: <
+            attribute: "friend"
+            properties: <
+              prop: "since"
+              raw_value: <
+                str_val: "12-01-1991"
+              >
+            >
+          >
+        >
+      >
+    >
+  >
+  children: <
+    uid: 24
+    attribute: "friend"
+    properties: <
+      prop: "name"
+      raw_value: <
+        str_val: "Glenn Rhee"
+      >
+    >
+    properties: <
+      prop: "@facets"
+      node_value: <
+        attribute: "_"
+        properties: <
+          prop: "_"
+          node_value: <
+            attribute: "friend"
+            properties: <
+              prop: "since"
+              raw_value: <
+                str_val: "12-01-1991"
+              >
+            >
+          >
+        >
+      >
+    >
+  >
+  children: <
+    uid: 25
+    attribute: "friend"
+    properties: <
+      prop: "name"
+      raw_value: <
+        str_val: "Daryl Dixon"
+      >
+    >
+    properties: <
+      prop: "@facets"
+      node_value: <
+        attribute: "_"
+        properties: <
+          prop: "_"
+          node_value: <
+            attribute: "friend"
+            properties: <
+              prop: "since"
+              raw_value: <
+                str_val: "12-01-1991"
+              >
+            >
+          >
+        >
+      >
+    >
+  >
+  children: <
+    uid: 31
+    attribute: "friend"
+    properties: <
+      prop: "name"
+      raw_value: <
+        str_val: "Andrea"
+      >
+    >
+    properties: <
+      prop: "@facets"
+      node_value: <
+        attribute: "_"
+        properties: <
+          prop: "_"
+          node_value: <
+            attribute: "friend"
+            properties: <
+              prop: "since"
+              raw_value: <
+                str_val: "12-01-1991"
+              >
+            >
+          >
+        >
+      >
+    >
+  >
+  children: <
+    uid: 101
+    attribute: "friend"
+    properties: <
+      prop: "@facets"
+      node_value: <
+        attribute: "_"
+        properties: <
+          prop: "_"
+          node_value: <
+            attribute: "friend"
+            properties: <
+              prop: "close"
+              raw_value: <
+                bool_val: true
+              >
+            >
+            properties: <
+              prop: "family"
+              raw_value: <
+                bool_val: false
+              >
+            >
+            properties: <
+              prop: "since"
+              raw_value: <
+                str_val: "11-10-2001"
+              >
+            >
+          >
+        >
+      >
+    >
+  >
+>
+`,
+		proto.MarshalTextString(pb))
 }
