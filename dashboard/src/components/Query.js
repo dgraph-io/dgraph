@@ -42,7 +42,7 @@ class Query extends Component {
     return (
       <div className="query" style={{marginBottom: '20px', paddingBottom: '10px', borderBottom: '1px solid gray'}}>
       <div style={{ padding: '5px'}}>
-        <pre onClick={this.props.update} data-query={this.props.text}>{getQueryStructure(prettifyQuery(this.props.text))}</pre>
+        <pre style={{whiteSpace: 'pre-wrap'}} onClick={this.props.update} data-query={this.props.text}>{getQueryStructure(prettifyQuery(this.props.text))}</pre>
       </div>
       </div>
     )

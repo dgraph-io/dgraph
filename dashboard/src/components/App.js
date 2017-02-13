@@ -573,9 +573,15 @@ class App extends React.Component {
           renderNetwork.call(that, graph[0], graph[1]);
 
           var endTime = new Date();
-          var timeTaken = ((endTime.getTime() - startTime.getTime()) / 1000).toFixed(2);
+          var timeTaken = (endTime.getTime() - startTime.getTime()) / 1000;
+          let render = '';
+          if (timeTaken > 1) {
+            render = timeTaken.toFixed(3) + 's';
+          } else {
+            render = (timeTaken - Math.floor(timeTaken)) * 1000 + 'ms';
+          }
           that.setState({
-            'rendering': timeTaken + 's',
+            'rendering': render,
             'resType': 'success-res'
           });
         } else {
