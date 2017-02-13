@@ -166,8 +166,11 @@ BUCKETS:
 }
 
 type intersectedList struct {
-	offset     int
-	ulist      *task.List
+	offset int
+	ulist  *task.List
+
+	// For term index, a UID might appear in multiple buckets. We want to dedup.
+	// We cannot do this at the end of the sort because we do need to track offsets and counts.
 	excludeSet map[uint64]struct{}
 }
 
@@ -226,14 +229,16 @@ func intersectBucket(ts *task.Sort, attr, token string, out []intersectedList) e
 				n = slack
 			}
 		}
-		out := algo.NewWriteIterator(il.ulist, 1)
+		wit := algo.NewWriteIterator(il.ulist, 1)
 		i := 0
 		in2 := algo.NewListIterator(result)
 		for ; in2.Valid() && i < n; in2.Next() {
-			out.Append(in2.Val())
+			uid := in2.Val()
+			wit.Append(uid)
+			il.excludeSet[uid] = struct{}{}
 			i++
 		}
-		out.End()
+		wit.End()
 	} // end for loop over UID lists in UID matrix.
 
 	// Check out[i] sizes for all i.
