@@ -259,6 +259,28 @@ func TestApplyFilterUint(t *testing.T) {
 	require.Equal(t, []uint64{1, 3, 5}, BlockToList(u))
 }
 
+func TestWriteAppend1(t *testing.T) {
+	l := []uint64{1, 2, 3}
+	u := newList(l)
+	w := NewWriteIterator(u, 1)
+	w.Append(4)
+	w.Append(5)
+	w.Append(6)
+	w.End()
+	require.Equal(t, []uint64{1, 2, 3, 4, 5, 6}, BlockToList(u))
+}
+
+func TestWriteAppend2(t *testing.T) {
+	l := []uint64{1, 2, 3}
+	u := newList(l)
+	w := NewWriteIterator(u, 0)
+	w.Append(4)
+	w.Append(5)
+	w.Append(6)
+	w.End()
+	require.Equal(t, []uint64{4, 5, 6}, BlockToList(u))
+}
+
 // sort interface for []uint64
 type uint64Slice []uint64
 
