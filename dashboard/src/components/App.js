@@ -390,7 +390,6 @@ function checkStatus(response) {
     return response
   } else {
     var error = new Error(response.statusText)
-    error["response"] = response
     throw error
   }
 }
@@ -457,11 +456,13 @@ class App extends React.Component {
     };
   }
 
-  updateQuery = (e) => {
+  updateQuery = (e: Event) => {
     e.preventDefault();
-    this.setState({
-      query: e.target.dataset.query
-    });
+    if(e.target instanceof HTMLElement){
+        this.setState({
+          query: e.target.dataset.query
+        });
+    }
     window.scrollTo(0, 0);
     this.refs.code.editor.focus();
     this.refs.code.editor.navigateFileEnd();
@@ -543,7 +544,7 @@ class App extends React.Component {
     })
   }
 
-  runQuery = (e) => {
+  runQuery = (e: Event) => {
     e.preventDefault();
     // Resetting state
     network && network.destroy();
@@ -632,7 +633,7 @@ class App extends React.Component {
     })
   }
 
-  enterFullScreen = (e) => {
+  enterFullScreen = (e: Event) => {
     e.preventDefault();
     document.addEventListener(screenfull.raw.fullscreenchange, () => {
       if (!screenfull.isFullscreen) {
