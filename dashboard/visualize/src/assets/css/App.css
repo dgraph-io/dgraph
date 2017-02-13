@@ -1,0 +1,117 @@
+.App-editor {
+    margin-bottom: 10px;
+    border: 1px solid gray;
+}
+
+.App-graph {
+    font-size: 12px;
+    word-break: break-all;
+    margin-top: 9px;
+    margin-bottom: 10px;
+    width: 100%;
+    border: 1px solid gray;
+    position: relative;
+}
+
+.App-statistics {
+    display: inline-block;
+    padding: 5px;
+    margin-top: 10px;
+    margin-bottom: 100px;
+}
+
+.App-properties {
+    display: flex;
+    justify-content: center;
+    align-content: center;
+    flex-direction: column;
+    margin-top: 10px;
+    margin-bottom: 10px;
+    height: 150px;
+    border: 1px solid gray;
+    padding: 10px;
+    overflow: auto;
+}
+
+.App-fullscreen {
+    position: absolute;
+    top: 0px;
+    right: 10px;
+    height: 30px;
+    width: 30px;
+    cursor: pointer;
+}
+
+.App-tip {
+    border: 1px solid #87cb74;
+    background-color: #e3f9e3;
+    padding: 10px;
+    margin: 10px;
+    border-radius: 3px;
+    height: auto;
+}
+
+.hourglass {
+    background: url(../images/hourglass.svg) no-repeat center center;
+    width: 32px;
+    height: 32px;
+}
+
+.error-res {
+    padding-left: 10px;
+    padding-top: 20px;
+    color: red;
+}
+
+.success-res {
+    padding-left: 10px;
+    padding-top: 20px;
+    color: green;
+}
+
+.query:hover pre {
+    border: 1px solid gray;
+    cursor: pointer;
+}
+
+:focus {
+    outline: none;
+}
+
+
+.graph-s {
+    width: 100%;
+    height: 500px;
+}
+
+.fullscreen {
+    width: 100%;
+    height: 100%;
+    margin-top: 0px;
+}
+
+.full-height {
+    height: calc(100vh - 280px);
+}
+
+.fixed-height {
+    height: 500px;
+}
+
+.vis-tooltip {
+    border: 1px solid #f3d98c;
+    background-color: #fffad5;
+    padding: 10px;
+    margin: 10px;
+    border-radius: 3px;
+    height: auto;
+    position: absolute !important;
+}
+
+#properties em {
+    height: 100%;
+}
+
+#properties pre {
+    height: 100%;
+}

@@ -1,0 +1,24 @@
+{
+  "name": "visualize",
+  "version": "0.1.0",
+  "private": true,
+  "devDependencies": {
+    "react-scripts": "0.9.0"
+  },
+  "dependencies": {
+    "bootstrap": "^3.3.7",
+    "classnames": "^2.2.5",
+    "react": "^15.4.2",
+    "react-ace": "^4.1.4",
+    "react-bootstrap": "^0.30.7",
+    "react-dom": "^15.4.2",
+    "screenfull": "^3.0.2",
+    "vis": "^4.18.1"
+  },
+  "scripts": {
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "test": "react-scripts test --env=jsdom",
+    "eject": "react-scripts eject"
+  }
+}
