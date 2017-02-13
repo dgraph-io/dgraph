@@ -84,8 +84,6 @@ func convertValue(attr, data string) (types.Val, error) {
 	return dst, err
 }
 
-// ItemType is used to set the type of a token. These constants can be defined
-// in the file containing state functions. Note that their value should be >= 5.
 type FuncType int
 const (
 	NotFn        FuncType = iota
@@ -232,26 +230,32 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 		}
 		out.Values = append(out.Values, newValue)
 
-		if q.DoCount || fnType == AggregatorFn || fnType == PasswordFn {
+		if q.DoCount || fnType == AggregatorFn {
 			if q.DoCount {
 				out.Counts = append(out.Counts, uint32(pl.Length(0)))
-			} else if fnType == PasswordFn {
-				lastPos := len(out.Values) - 1
-				if len(newValue.Val) == 0 {
-					out.Values[lastPos] = task.FromInt(0)
-				}
-				pwd := q.SrcFunc[1]
-				err = types.VerifyPassword(pwd, string(newValue.Val))
-				if err != nil {
-					out.Values[lastPos] = task.FromInt(0)
-				} else {
-					out.Values[lastPos] = task.FromInt(1)
-				}
 			}
 			// Add an empty UID list to make later processing consistent
 			out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
 			continue
 		}
+
+		if fnType == PasswordFn {
+			lastPos := len(out.Values) - 1
+			if len(newValue.Val) == 0 {
+				out.Values[lastPos] = task.FromInt(0)
+			}
+			pwd := q.SrcFunc[1]
+			err = types.VerifyPassword(pwd, string(newValue.Val))
+			if err != nil {
+				out.Values[lastPos] = task.FromInt(0)
+			} else {
+				out.Values[lastPos] = task.FromInt(1)
+			}
+			// Add an empty UID list to make later processing consistent
+			out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
+			continue
+		}
+
 		// The more usual case: Getting the UIDs.
 		opts := posting.ListOptions{
 			AfterUID: uint64(q.AfterUid),
