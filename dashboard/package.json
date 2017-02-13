@@ -9,6 +9,7 @@
   "author": "Dgraph Labs",
   "license": "Apache-2.0",
   "devDependencies": {
+    "flow-bin": "^0.39.0",
     "react-scripts": "0.9.0"
   },
   "dependencies": {
@@ -25,6 +26,7 @@
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test --env=jsdom",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+    "flow": "flow"
   }
 }

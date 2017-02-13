@@ -1,3 +1,5 @@
+// @flow
+
 import React from 'react';
 
 import vis from 'vis';
@@ -56,8 +58,12 @@ function getLabel(properties) {
   return label
 }
 
+type MapOfStrings = { [key: string]: string };
+type MapOfBooleans = { [key: string]: boolean};
+
 // This function shortens and calculates the label for a predicate.
-function getPredProperties(pred, predLabel, edgeLabels) {
+function getPredProperties(pred: string, predLabel: MapOfStrings,
+    edgeLabels: MapOfBooleans) {
   var prop = predLabel[pred]
   if (prop !== undefined) {
     // We have already calculated the label for this predicate.
@@ -69,21 +75,15 @@ function getPredProperties(pred, predLabel, edgeLabels) {
     l = pred.substr(0, i)
     if (edgeLabels[l] === undefined) {
       // This label hasn't been allocated yet.
-      predLabel[pred] = {
-        'label': l,
-        // 'color': randomColor()
-      };
+      predLabel[pred] = l
       edgeLabels[l] = true;
       break;
     }
     // If it has already been allocated, then we increase the substring length and look again.
   }
   if (l === undefined) {
-    predLabel[pred] = {
-      'label': pred,
-      // 'color': randomColor()
-    };
-    edgeLabels[l] = true;
+    predLabel[pred] = pred;
+    edgeLabels[pred] = true;
   }
   return predLabel[pred]
 }
@@ -102,25 +102,37 @@ function hasProperties(props) {
   return Object.keys(props).length !== 1
 }
 
+type Src = {| id: string, pred: string |};
+type ResponseNode = {| node: Object, src: Src |};
+
+type Edge = {| id: string, from: string, to: string, arrows: string, label: string, title: string |}
+
 function processGraph(response, root, maxNodes) {
-  let nodesStack = [],
-    predLabel = {},
-    edgeLabels = {},
-    uidMap = {},
+  let nodesStack: Array <ResponseNode> = [],
+    // Contains map of a lable to its shortform thats displayed.
+    predLabel: MapOfStrings = {},
+
+    // Stores the map of a label to boolean (only true values are stored).
+    // This helps quickly find if a label has already been assigned.
+    edgeLabels : MapOfBooleans = {},
+    // Map of whether a Node with an Uid has already been created. This helps
+    // us avoid creating duplicating nodes while parsing the JSON structure
+    // which is a tree.
+    uidMap : MapOfBooleans = {},
     nodes = [],
-    edges = [],
-    emptyNode = {
+    edges: Array <Edge> = [],
+    emptyNode: ResponseNode = {
       node: {},
       src: {
         id: "",
         pred: "empty"
       }
     },
-    someNodeHasChildren = false,
-    ignoredChildren = [];
+    someNodeHasChildren: boolean = false,
+    ignoredChildren: Array <ResponseNode> = [];
 
   for (let i = 0; i < response.length; i++) {
-    let n = {
+    let n: ResponseNode = {
       node: response[i],
       src: {
         id: "",
@@ -193,14 +205,15 @@ function processGraph(response, root, maxNodes) {
 
     let predProperties = getPredProperties(obj.src.pred, predLabel, edgeLabels)
     if (obj.src.id !== "") {
-      edges.push({
+      var e: Edge = {
         id: [obj.src.id, properties["_uid_"]].join("-"),
         from: obj.src.id,
         to: properties["_uid_"],
         title: obj.src.pred,
-        label: predProperties["label"],
+        label: predProperties,
         arrows: 'to'
-      })
+      }
+      edges.push(e)
     }
   }
 
@@ -377,7 +390,7 @@ function checkStatus(response) {
     return response
   } else {
     var error = new Error(response.statusText)
-    error.response = response
+    error["response"] = response
     throw error
   }
 }
@@ -395,13 +408,37 @@ function timeout(ms, promise) {
   })
 }
 
+type State = {
+  selectedNode: boolean,
+  partial: boolean,
+  queryIndex: number,
+  query: string,
+  queries: Array <string>,
+  lastQuery: string,
+  response: string,
+  latency: string,
+  rendering: string,
+  resType: string,
+  currentNode: string,
+  nodes: number,
+  relations: number,
+  graph: string,
+  graphHeight: string
+};
+
+type Props = {
+}
+
 class App extends React.Component {
-  constructor(props) {
+  state: State;
+
+  constructor(props: Props) {
     super(props);
     let response = this.lastQuery()
 
     this.state = {
       selectedNode: false,
+      partial: false,
       queryIndex: response[0],
       query: response[1],
       // We store the queries run in state, so that they can be displayed
@@ -433,7 +470,7 @@ class App extends React.Component {
   }
 
   // Handler which listens to changes on AceEditor.
-  queryChange = (newValue) => {
+  queryChange = (newValue: string) => {
     this.setState({ query: newValue });
   }
 
@@ -451,8 +488,8 @@ class App extends React.Component {
     }
   }
 
-  storeQuery = (query) => {
-    var queries = JSON.parse(localStorage.getItem("queries")) || [];
+  storeQuery = (query: string) => {
+    var queries = JSON.parse(localStorage.getItem("queries") || '[]');
     queries.unshift(query);
 
     // (queries.length > 20) && (queries = queries.splice(0, 20))
@@ -465,9 +502,9 @@ class App extends React.Component {
   }
 
   lastQuery = () => {
-    var queries = JSON.parse(localStorage.getItem("queries"))
-    if (queries == null) {
-      return [undefined, "", []]
+    var queries = JSON.parse(localStorage.getItem("queries") || '[]')
+    if (queries.length === 0) {
+      return [-1, "", []]
     }
     // This means queries has atleast one element.
 
@@ -475,13 +512,13 @@ class App extends React.Component {
   }
 
   nextQuery = () => {
-    var queries = JSON.parse(localStorage.getItem("queries"))
-    if (queries == null) {
+    var queries = JSON.parse(localStorage.getItem("queries") || '[]')
+    if (queries.length === 0) {
       return
     }
 
     var idx = this.state.queryIndex;
-    if (idx === undefined || idx - 1 < 0) {
+    if (idx === -1 || idx - 1 < 0) {
       return
     }
     this.setState({
@@ -491,13 +528,13 @@ class App extends React.Component {
   }
 
   previousQuery = () => {
-    var queries = JSON.parse(localStorage.getItem("queries"))
-    if (queries == null) {
+    var queries = JSON.parse(localStorage.getItem("queries") || '[]')
+    if (queries === '[]') {
       return
     }
 
     var idx = this.state.queryIndex;
-    if (idx === undefined || (idx + 1) === queries.length) {
+    if (idx === -1 || (idx + 1) === queries.length) {
       return
     }
     this.setState({
