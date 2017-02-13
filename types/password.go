@@ -37,6 +37,7 @@ func GenerateFromPassword(password string) (string, error) {
 	if err != nil {
 		return result, err
 	}
+	// follow the format like linux used: $2b$cost$salt$crypted
 	// get rid of '$', since '$' is the delimiter
 	result = base64.StdEncoding.EncodeToString(byt)
 	result = fmt.Sprintf("$2b$%d$%s$%s", bcrypt.DefaultCost, salt, result)

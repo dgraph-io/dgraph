@@ -256,6 +256,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 			parent.AddChild(sg.Attr, uc)
 
 		} else if len(pc.SrcFunc) > 0 && isPasswordFn(pc.SrcFunc[0]) {
+			// password correct return int(1), else return int(0)
 			c := types.ValueForType(types.Int32ID)
 			c.Value = task.ToInt(pc.values[idx])
 			uc := dst.New(pc.Attr)
