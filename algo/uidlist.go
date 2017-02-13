@@ -185,7 +185,6 @@ func (l *ListIterator) Next() {
 // of  the list passed to it.
 func Slice(ul *task.List, start, end int) {
 	out := NewWriteIterator(ul, 0)
-
 	it := NewListIterator(ul)
 	it.SeekToIndex(start)
 
@@ -203,7 +202,6 @@ func SortedListToBlock(l []uint64) *task.List {
 		return b
 	}
 	wit := NewWriteIterator(b, 0)
-
 	for _, it := range l {
 		wit.Append(it)
 	}
@@ -270,7 +268,6 @@ func IntersectSorted(lists []*task.List) *task.List {
 		return o
 	}
 	out := NewWriteIterator(o, 0)
-
 	// Scan through the smallest list. Denote as A.
 	// For each x in A,
 	//   For each other list B,
@@ -350,7 +347,6 @@ func MergeSorted(lists []*task.List) *task.List {
 		return o
 	}
 	out := NewWriteIterator(o, 0)
-
 	h := &uint64Heap{}
 	heap.Init(h)
 	var lIt []ListIterator
