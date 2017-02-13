@@ -221,13 +221,7 @@ func intersectBucket(ts *task.Sort, attr, token string, out []intersectedList) e
 				n = slack
 			}
 		}
-
-		in1 := algo.NewListIterator(il.ulist)
-		o := new(task.List)
-		out := algo.NewWriteIterator(o, 0)
-		for ; in1.Valid(); in1.Next() {
-			out.Append(in1.Val())
-		}
+		out := algo.NewWriteIterator(il.ulist, 1)
 		i := 0
 		in2 := algo.NewListIterator(result)
 		for ; in2.Valid() && i < n; in2.Next() {
@@ -235,7 +229,6 @@ func intersectBucket(ts *task.Sort, attr, token string, out []intersectedList) e
 			i++
 		}
 		out.End()
-		il.ulist.Blocks = o.Blocks
 	} // end for loop over UID lists in UID matrix.
 
 	// Check out[i] sizes for all i.

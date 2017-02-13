@@ -34,10 +34,12 @@ func NewWriteIterator(l *task.List, whence int) WriteIterator {
 		// Set the iterator to the end of the list.
 		llen := len(l.Blocks[blen-1].List)
 		cur = l.Blocks[blen-1]
+		// Set the list to its actual size as we want to append.
+		cur.List = cur.List[:blockSize]
 		return WriteIterator{
 			list:     l,
 			curBlock: cur,
-			bidx:     blen,
+			bidx:     blen - 1,
 			lidx:     llen,
 		}
 	}
