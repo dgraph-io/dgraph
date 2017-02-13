@@ -279,7 +279,7 @@ func processToFastJSON(t *testing.T, query string) string {
 	require.NoError(t, err)
 
 	var buf bytes.Buffer
-	require.NoError(t, ToJson(&l, sgl, &buf))
+	require.NoError(t, ToJson(&l, sgl, &buf, nil))
 	return string(buf.Bytes())
 }
 
@@ -615,7 +615,7 @@ func TestDebug1(t *testing.T) {
 	require.NoError(t, err)
 
 	var buf bytes.Buffer
-	require.NoError(t, ToJson(&l, sgl, &buf))
+	require.NoError(t, ToJson(&l, sgl, &buf, nil))
 
 	var mp map[string]interface{}
 	require.NoError(t, json.Unmarshal([]byte(buf.Bytes()), &mp))
@@ -813,7 +813,6 @@ func TestMax(t *testing.T) {
 		`{"me":[{"alive":true,"friend":[{"max(dob)":"1910-01-02"}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
-
 
 func TestMaxError1(t *testing.T) {
 	populateGraph(t)
@@ -3062,7 +3061,7 @@ func runQuery(t *testing.T, gq *gql.GraphQuery) string {
 
 	var l Latency
 	var buf bytes.Buffer
-	err = sg.ToFastJSON(&l, &buf)
+	err = sg.ToFastJSON(&l, &buf, nil)
 	require.NoError(t, err)
 	return string(buf.Bytes())
 }

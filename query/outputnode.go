@@ -54,7 +54,7 @@ func ToProtocolBuf(l *Latency, sgl []*SubGraph) ([]*graph.Node, error) {
 }
 
 // ToJson converts the list of subgraph into a JSON response by calling ToFastJSON.
-func ToJson(l *Latency, sgl []*SubGraph, w io.Writer) error {
+func ToJson(l *Latency, sgl []*SubGraph, w io.Writer, allocIds map[string]string) error {
 	sgr := &SubGraph{
 		Attr: "__",
 	}
@@ -67,7 +67,7 @@ func ToJson(l *Latency, sgl []*SubGraph, w io.Writer) error {
 		}
 		sgr.Children = append(sgr.Children, sg)
 	}
-	return sgr.ToFastJSON(l, w)
+	return sgr.ToFastJSON(l, w, allocIds)
 }
 
 // outputNode is the generic output / writer for preTraverse.
@@ -375,7 +375,7 @@ func processNodeUids(n *fastJsonNode, sg *SubGraph) error {
 	return nil
 }
 
-func (sg *SubGraph) ToFastJSON(l *Latency, w io.Writer) error {
+func (sg *SubGraph) ToFastJSON(l *Latency, w io.Writer, allocIds map[string]string) error {
 	var seedNode *fastJsonNode
 	n := seedNode.New("_root_")
 	if sg.Attr == "__" {
@@ -405,6 +405,21 @@ func (sg *SubGraph) ToFastJSON(l *Latency, w io.Writer) error {
 			return slw.Flush()
 		}
 		n.(*fastJsonNode).attrs["server_latency"] = slBuf.Bytes()
+	}
+
+	if allocIds != nil && len(allocIds) > 0 {
+		sl := seedNode.New("uids").(*fastJsonNode)
+		for k, v := range allocIds {
+			sl.attrs[k] = []byte(v)
+		}
+
+		var slBuf bytes.Buffer
+		slw := bufio.NewWriter(&slBuf)
+		sl.encode(slw)
+		if slw.Flush() != nil {
+			return slw.Flush()
+		}
+		n.(*fastJsonNode).attrs["uids"] = slBuf.Bytes()
 	}
 
 	bufw := bufio.NewWriter(w)
