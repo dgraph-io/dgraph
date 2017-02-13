@@ -40,11 +40,9 @@ function getQueryStructure(query) {
 class Query extends Component {
   render() {
     return (
-      <div className="query" style={{marginBottom: '20px', paddingBottom: '10px', borderBottom: '1px solid gray'}}>
-      <div style={{ padding: '5px'}}>
-        <pre style={{whiteSpace: 'pre-wrap'}} onClick={this.props.update} data-query={this.props.text}>{getQueryStructure(prettifyQuery(this.props.text))}</pre>
-      </div>
-      </div>
+      <li className="query" style={{marginBottom: '20px', padding: '5px', borderBottom: '1px solid gray'}}>
+        <pre style={{whiteSpace: 'pre-wrap', backgroundColor: '#f0ece9'}} onClick={this.props.update} data-query={this.props.text}>{getQueryStructure(prettifyQuery(this.props.text))}</pre>
+      </li>
     )
   }
 }

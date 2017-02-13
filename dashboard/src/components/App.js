@@ -709,16 +709,15 @@ class App extends React.Component {
               <div className="col-sm-12">
             <div style={{marginTop: '10px', borderTop: '1px solid black'}}>
             <h3 style={{marginLeft: '50px'}}>Previous Queries</h3>
-            <div style={{maxHeight: '500px',overflowY: 'scroll', border: '1px solid black', margin: '0px 50px 50px 50px', padding: '10px'}}>
+            <ul style={{height: '500px',overflowY: 'scroll', border: '1px solid black', margin: '0px 50px 50px 50px', padding: '10px'}}>
             {this.state.queries.map(function (query, i) {
               return <Query text={query} update={this.updateQuery} key={i}></Query>;
             },this)}
+            </ul>
             </div>
             </div>
             </div>
-            </div>
-          </div> 
-        </div>
+          </div> </div>
     );
   }
 }
