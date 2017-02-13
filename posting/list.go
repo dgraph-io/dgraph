@@ -565,7 +565,7 @@ func (l *List) Uids(opt ListOptions) *task.List {
 	defer l.RUnlock()
 
 	res := new(task.List)
-	wit := algo.NewWriteIterator(res)
+	wit := algo.NewWriteIterator(res, 0)
 	it := algo.NewListIterator(opt.Intersect)
 	l.iterate(opt.AfterUID, func(p *types.Posting) bool {
 		if postingType(p) != valueUid {

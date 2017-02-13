@@ -27,13 +27,27 @@ type WriteIterator struct {
 
 }
 
-func NewWriteIterator(l *task.List) WriteIterator {
+func NewWriteIterator(l *task.List, whence int) WriteIterator {
+	blen := len(l.Blocks)
+	var cur *task.Block
+	if whence == 1 && blen != 0 {
+		// Set the iterator to the end of the list.
+		llen := len(l.Blocks[blen-1].List)
+		cur = l.Blocks[blen-1]
+		// Set the list to its actual size as we want to append.
+		cur.List = cur.List[:blockSize]
+		return WriteIterator{
+			list:     l,
+			curBlock: cur,
+			bidx:     blen - 1,
+			lidx:     llen,
+		}
+	}
 	// Initialise and allocate some memory.
 	if len(l.Blocks) == 0 {
 		l.Blocks = make([]*task.Block, 0, 2)
 	}
 
-	var cur *task.Block
 	if len(l.Blocks) > 0 {
 		cur = l.Blocks[0]
 	}
@@ -170,8 +184,7 @@ func (l *ListIterator) Next() {
 // Slice returns a new task.List with the elements between start index and end index
 // of  the list passed to it.
 func Slice(ul *task.List, start, end int) {
-	out := NewWriteIterator(ul)
-
+	out := NewWriteIterator(ul, 0)
 	it := NewListIterator(ul)
 	it.SeekToIndex(start)
 
@@ -188,8 +201,7 @@ func SortedListToBlock(l []uint64) *task.List {
 	if len(l) == 0 {
 		return b
 	}
-	wit := NewWriteIterator(b)
-
+	wit := NewWriteIterator(b, 0)
 	for _, it := range l {
 		wit.Append(it)
 	}
@@ -211,7 +223,7 @@ func ListLen(l *task.List) int {
 func IntersectWith(u, v *task.List) {
 	itu := NewListIterator(u)
 	itv := NewListIterator(v)
-	out := NewWriteIterator(u)
+	out := NewWriteIterator(u, 0)
 	for itu.Valid() && itv.Valid() {
 		uid := itu.Val()
 		vid := itv.Val()
@@ -230,7 +242,7 @@ func IntersectWith(u, v *task.List) {
 
 // ApplyFilter applies a filter to our UIDList.
 func ApplyFilter(u *task.List, f func(uint64, int) bool) {
-	out := NewWriteIterator(u)
+	out := NewWriteIterator(u, 0)
 	for i, block := range u.Blocks {
 		for j, uid := range block.List {
 			if f(uid, Idx(u, i, j)) {
@@ -255,8 +267,7 @@ func IntersectSorted(lists []*task.List) *task.List {
 	if len(lists) == 0 {
 		return o
 	}
-	out := NewWriteIterator(o)
-
+	out := NewWriteIterator(o, 0)
 	// Scan through the smallest list. Denote as A.
 	// For each x in A,
 	//   For each other list B,
@@ -312,7 +323,7 @@ func IntersectSorted(lists []*task.List) *task.List {
 func Difference(u, v *task.List) {
 	itu := NewListIterator(u)
 	itv := NewListIterator(v)
-	out := NewWriteIterator(u)
+	out := NewWriteIterator(u, 0)
 	for itu.Valid() && itv.Valid() {
 		uid := itu.Val()
 		vid := itv.Val()
@@ -335,8 +346,7 @@ func MergeSorted(lists []*task.List) *task.List {
 	if len(lists) == 0 {
 		return o
 	}
-	out := NewWriteIterator(o)
-
+	out := NewWriteIterator(o, 0)
 	h := &uint64Heap{}
 	heap.Init(h)
 	var lIt []ListIterator
