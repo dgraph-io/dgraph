@@ -17,6 +17,7 @@
 package facets
 
 import (
+	"bytes"
 	"strconv"
 	"time"
 )
@@ -95,3 +96,18 @@ func parseTime(val string) (time.Time, error) {
 
 const dateFormatYMD = "2006-01-02"
 const dateTimeFormat = "2006-01-02T15:04:05"
+
+func SameFacets(a []*Facet, b []*Facet) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	la := len(a)
+	for i := 0; i < la; i++ {
+		if (a[i].Key != b[i].Key) ||
+			!bytes.Equal(a[i].Value, b[i].Value) ||
+			(a[i].ValType != b[i].ValType) {
+			return false
+		}
+	}
+	return true
+}

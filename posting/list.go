@@ -128,7 +128,7 @@ func samePosting(a *types.Posting, b *types.Posting) bool {
 	if a.Label != b.Label {
 		return false
 	}
-	return true
+	return facets.SameFacets(a.Facets, b.Facets)
 }
 
 func newPosting(t *task.DirectedEdge) *types.Posting {
