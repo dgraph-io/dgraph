@@ -292,17 +292,6 @@ function renderNetwork(nodes, edges) {
         selectedNode: false
       });
 
-      let incoming = data.edges.get({
-        filter: function(node) {
-          return node.to === nodeUid
-        }
-      })
-
-      if (incoming.length === 0) {
-        // Its a root node, we don't want to expand/collapse.
-        return
-      }
-
       let outgoing = data.edges.get({
         filter: function(node) {
           return node.from === nodeUid
@@ -707,7 +696,7 @@ class App extends React.Component {
               <div id="graph" className={graphClass}>{this.state.response}</div>
               </div>
               <div>Nodes: {this.state.nodes}, Edges: {this.state.relations}</div>
-              <div style={{height:'auto'}}>{this.state.partial === true ? 'We have only loaded a subset of the graph. Click on a leaf node to expand its child nodes.': ''}</div>
+              <div style={{height:'auto'}}>{this.state.partial === true ? 'We have only loaded a subset of the graph. Double click on a leaf node to expand its child nodes.': ''}</div>
               <div id="properties" style={{marginTop: '10px'}}>Current Node:<div className="App-properties" title={this.state.currentNode}><em><pre>{JSON.stringify(JSON.parse(this.state.currentNode), null, 2)}</pre></em></div>
               </div>
               </div>
