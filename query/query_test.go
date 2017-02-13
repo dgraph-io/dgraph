@@ -966,7 +966,6 @@ func TestMax(t *testing.T) {
 		js)
 }
 
-
 func TestMaxError1(t *testing.T) {
 	populateGraph(t)
 	// error: aggregator 'max' should not have filters on its own
@@ -2200,6 +2199,28 @@ func TestToFastJSONOrderDesc_pawan(t *testing.T) {
 	require.JSONEq(t,
 		`{"me":[{"friend":[{"film.film.initial_release_date":"1929-01-10","name":"Daryl Dixon"},{"film.film.initial_release_date":"1909-05-05","name":"Glenn Rhee"},{"film.film.initial_release_date":"1900-01-02","name":"Rick Grimes"},{"film.film.initial_release_date":"1801-01-15","name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
 		string(js))
+}
+
+// Test sorting / ordering by dob.
+func TestToFastJSONOrderDedup(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id:0x01) {
+				name
+				gender
+				friend(orderasc: name) {
+					name
+					dob
+				}
+			}
+		}
+	`
+
+	js := processToFastJSON(t, query)
+	require.EqualValues(t,
+		`{"me":[{"friend":[{"dob":"1901-01-15","name":"Andrea"},{"dob":"1909-01-10","name":"Daryl Dixon"},{"dob":"1909-05-05","name":"Glenn Rhee"},{"dob":"1910-01-02","name":"Rick Grimes"}],"gender":"female","name":"Michonne"}]}`,
+		js)
 }
 
 // Test sorting / ordering by dob and count.
