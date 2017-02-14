@@ -574,7 +574,7 @@ func (l *List) Uids(opt ListOptions) *task.List {
 func (l *List) FacetsForUids(opt ListOptions, param *facets.Param) []*facets.Facets {
 	result := make([]*facets.Facets, 0, 10)
 	l.intersectingPostings(opt, func(p *types.Posting) {
-		result = append(result, &facets.Facets{mkFacetsCopy(p, param)})
+		result = append(result, &facets.Facets{copyFacets(p, param)})
 	})
 	return result
 }
@@ -632,13 +632,16 @@ func (l *List) Facets(param *facets.Param) (fs []*facets.Facet, ferr error) {
 	if err != nil {
 		return nil, err
 	}
-	return mkFacetsCopy(p, param), nil
+	return copyFacets(p, param), nil
 }
 
-// mkFacetsCopy makes a copy of facets of the posting.
-func mkFacetsCopy(p *types.Posting, param *facets.Param) (fs []*facets.Facet) {
+// copyFacets makes a copy of facets of the posting which are requested in param.Keys.
+func copyFacets(p *types.Posting, param *facets.Param) (fs []*facets.Facet) {
+	// since facets and param.keys are both sorted,
+	// we can break when either param.Keys OR p.Facets.Key(s) go ahead of each other.
+	// However, we need all keys if param.AllKeys is true.
 	paramKeyIdx := 0
-	lParamKeys := len(param.Keys)
+	numKeys := len(param.Keys)
 	for _, f := range p.Facets {
 		if param.AllKeys || param.Keys[paramKeyIdx] == f.Key {
 			fcopy := &facets.Facet{f.Key, nil, f.ValType}
@@ -646,7 +649,9 @@ func mkFacetsCopy(p *types.Posting, param *facets.Param) (fs []*facets.Facet) {
 			copy(fcopy.Value, f.Value)
 			fs = append(fs, fcopy)
 			paramKeyIdx++
-			if !param.AllKeys && (paramKeyIdx >= lParamKeys) {
+			if !param.AllKeys && (paramKeyIdx >= numKeys) {
+				// break if we don't want all keys and
+				// we have taken all param.Keys.
 				break
 			}
 		} else if f.Key > param.Keys[paramKeyIdx] {
