@@ -122,6 +122,9 @@ func samePosting(a *types.Posting, b *types.Posting) bool {
 	if !bytes.Equal(a.Value, b.Value) {
 		return false
 	}
+	if a.Lang != b.Lang {
+		return false
+	}
 	// Checking source might not be necessary.
 	if a.Label != b.Label {
 		return false
@@ -562,7 +565,7 @@ func (l *List) Uids(opt ListOptions) *task.List {
 	var intersectIdx int // Indexes into opt.Intersect if it exists.
 	l.iterate(opt.AfterUID, func(p *types.Posting) bool {
 		if postingType(p) != valueUid {
-			return false
+			return true
 		}
 		uid := p.Uid
 		if opt.Intersect != nil {

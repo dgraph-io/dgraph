@@ -93,6 +93,7 @@ type FilterTree struct {
 // Function holds the information about gql functions.
 type Function struct {
 	Attr     string
+	Langs    []string
 	Name     string   // Specifies the name of the function.
 	Args     []string // Contains the arguments of the function.
 	NeedsVar []string // If the function requires some variable
@@ -880,14 +881,19 @@ L:
 					return nil, x.Errorf("Expected arg after func [%s], but got item %v",
 						g.Name, itemInFunc)
 				}
-				it := strings.Trim(itemInFunc.Val, "\" \t")
-				if it == "" {
+				val := strings.Trim(itemInFunc.Val, "\" \t")
+				if val == "" {
 					return nil, x.Errorf("Empty argument received")
 				}
 				if len(g.Attr) == 0 {
-					g.Attr = it
+					if idx := strings.IndexRune(val, '@'); idx > 0 {
+						g.Attr = val[:idx]
+						g.Langs = strings.Split(val[idx+1:], ":")
+					} else {
+						g.Attr = val
+					}
 				} else {
-					g.Args = append(g.Args, it)
+					g.Args = append(g.Args, val)
 				}
 			}
 		} else {
@@ -949,17 +955,22 @@ func parseFilter(it *lex.ItemIterator) (*FilterTree, error) {
 					return nil, x.Errorf("Expected arg after func [%s], but got item %v",
 						leaf.Func.Name, itemInFunc)
 				}
-				it := strings.Trim(itemInFunc.Val, "\" \t")
-				if it == "" {
+				val := strings.Trim(itemInFunc.Val, "\" \t")
+				if val == "" {
 					return nil, x.Errorf("Empty argument received")
 				}
 				if len(f.Attr) == 0 {
-					f.Attr = it
+					if idx := strings.IndexRune(val, '@'); idx > 0 {
+						f.Attr = val[:idx]
+						f.Langs = strings.Split(val[idx+1:], ":")
+					} else {
+						f.Attr = val
+					}
 				} else {
-					f.Args = append(f.Args, it)
+					f.Args = append(f.Args, val)
 				}
 				if f.Name == "id" {
-					f.NeedsVar = append(f.NeedsVar, it)
+					f.NeedsVar = append(f.NeedsVar, val)
 				}
 			}
 			if !terminated {

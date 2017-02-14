@@ -341,6 +341,7 @@ func filterCopy(sg *SubGraph, ft *gql.FilterTree) error {
 		sg.FilterOp = ft.Op
 	} else {
 		sg.Attr = ft.Func.Attr
+		sg.Params.Langs = ft.Func.Langs
 		if !isValidFuncName(ft.Func.Name) {
 			return x.Errorf("Invalid function name : %s", ft.Func.Name)
 		}
@@ -503,6 +504,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 
 	if gq.Func != nil {
 		sg.Attr = gq.Func.Attr
+		sg.Params.Langs = gq.Func.Langs
 		if !isValidFuncName(gq.Func.Name) {
 			return nil, x.Errorf("Invalid function name : %s", gq.Func.Name)
 		}

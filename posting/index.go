@@ -18,8 +18,12 @@ package posting
 
 import (
 	"context"
+	"math"
+	"sort"
 
 	"golang.org/x/net/trace"
+
+	"github.com/dgryski/go-farm"
 
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/schema"
@@ -71,6 +75,7 @@ func addIndexMutations(ctx context.Context, t *task.DirectedEdge, p types.Val, o
 	edge := &task.DirectedEdge{
 		ValueId: uid,
 		Attr:    attr,
+		Lang:    t.Lang,
 		Label:   "idx",
 		Op:      op,
 	}
@@ -136,7 +141,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *task.DirectedEdge) e
 		"[%s] [%d] [%v] %d %d\n", t.Attr, t.Entity, t.Value, t.ValueId, t.Op)
 
 	var val types.Val
-	var verr error
+	var found bool
 
 	l.index.Lock()
 	defer l.index.Unlock()
@@ -145,8 +150,12 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *task.DirectedEdge) e
 	{
 		l.Lock()
 		if doUpdateIndex {
-			// Check last posting for original value BEFORE any mutation actually happens.
-			val, verr = l.value(nil)
+			// Check original value BEFORE any mutation actually happens.
+			if len(t.Lang) > 0 {
+				found, val = l.findValue(farm.Fingerprint64([]byte(t.Lang)))
+			} else {
+				found, val = l.findValue(math.MaxUint64)
+			}
 		}
 		hasMutated, err := l.addMutation(ctx, t)
 		l.Unlock()
@@ -160,7 +169,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *task.DirectedEdge) e
 	}
 	if doUpdateIndex {
 		// Exact matches.
-		if verr == nil && val.Value != nil {
+		if found && val.Value != nil {
 			addIndexMutations(ctx, t, val, task.DirectedEdge_DEL)
 		}
 		if t.Op == task.DirectedEdge_SET {
@@ -217,28 +226,42 @@ func RebuildIndex(ctx context.Context, attr string) error {
 	it := pstore.NewIterator()
 	defer it.Close()
 	var pl types.PostingList
+
+	addPostingToIndex := func(idx int) {
+		p := pl.Postings[idx]
+		pt := postingType(p)
+		if pt == valueTagged || pt == valueUntagged {
+			// Add index entries based on p.
+			val := types.Val{
+				Value: p.Value,
+				Tid:   types.TypeID(p.ValType),
+			}
+			edge.Lang = p.Lang
+			addIndexMutations(ctx, &edge, val, task.DirectedEdge_SET)
+		}
+	}
+
 	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
 		pki := x.Parse(it.Key().Data())
 		edge.Entity = pki.Uid
 		x.Check(pl.Unmarshal(it.Value().Data()))
 
-		// Check last entry for value.
-		if len(pl.Postings) == 0 {
+		postingLen := len(pl.Postings)
+		if postingLen == 0 {
 			continue
 		}
-		// TODO(tzdybal) - what about the values with Lang?
-		p := pl.Postings[len(pl.Postings)-1]
-		pt := postingType(p)
-		if pt != valueTagged && pt != valueUntagged {
-			continue
-		}
+		for _, lang := range pl.Langs {
+			langUid := farm.Fingerprint64([]byte(lang))
+			idx := sort.Search(postingLen, func(i int) bool {
+				p := pl.Postings[i]
+				return langUid < p.Uid
+			})
 
-		// Add index entries based on p.
-		val := types.Val{
-			Value: p.Value,
-			Tid:   types.TypeID(p.ValType),
+			if pl.Postings[idx].Lang == lang {
+				addPostingToIndex(idx)
+			}
 		}
-		addIndexMutations(ctx, &edge, val, task.DirectedEdge_SET)
+		addPostingToIndex(len(pl.Postings) - 1) // value without language
 	}
 	return nil
 }
