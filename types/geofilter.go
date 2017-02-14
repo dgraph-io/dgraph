@@ -326,7 +326,7 @@ func (q GeoQueryData) intersects(g geom.T) bool {
 func FilterGeoUids(uids *task.List, values []*task.Value, q *GeoQueryData) *task.List {
 	x.AssertTruef(len(values) == algo.ListLen(uids), "lengths not matching")
 	o := new(task.List)
-	out := algo.NewWriteIterator(o)
+	out := algo.NewWriteIterator(o, 0)
 	it := algo.NewListIterator(uids)
 	for i := -1; it.Valid(); it.Next() {
 		i++

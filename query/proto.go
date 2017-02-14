@@ -61,6 +61,9 @@ func toProtoValue(v types.Val) *graph.Value {
 		x.Check(types.Marshal(src, &b))
 		return &graph.Value{&graph.Value_GeoVal{b.Value.([]byte)}}
 
+	case types.PasswordID:
+		return &graph.Value{&graph.Value_PasswordVal{v.Value.(string)}}
+
 	default:
 		// A type that isn't supported in the proto
 		return nil

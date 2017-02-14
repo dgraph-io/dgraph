@@ -20,6 +20,7 @@ message Posting {
 		DATETIME = 6;
 		GEO = 7;
 		UID = 8;
+		PASSWORD = 9;
 	}
 	ValType val_type = 3;
 	string lang = 4;

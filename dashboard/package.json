@@ -2,34 +2,31 @@
   "name": "dgraph-ui",
   "version": "0.1.0",
   "description": "The user interface for interacting with Dgraph server.",
-  "main": "index.js",
-  "scripts": {
-    "production": "webpack -p",
-    "start": "webpack-dev-server --port 9090"
-  },
   "repository": {
     "type": "git",
     "url": "git@github.com:dgraph-io/dgraph.git"
   },
   "author": "Dgraph Labs",
   "license": "Apache-2.0",
+  "devDependencies": {
+    "flow-bin": "^0.39.0",
+    "react-scripts": "0.9.0"
+  },
   "dependencies": {
-    "randomcolor": "^0.4.4",
+    "bootstrap": "^3.3.7",
+    "classnames": "^2.2.5",
     "react": "^15.4.2",
-    "react-ace": "^4.1.1",
+    "react-ace": "^4.1.4",
     "react-bootstrap": "^0.30.7",
     "react-dom": "^15.4.2",
-    "react-router": "^3.0.2",
-    "vis": "^4.18.1",
-    "whatwg-fetch": "^2.0.2"
+    "screenfull": "^3.0.2",
+    "vis": "^4.18.1"
   },
-  "devDependencies": {
-    "babel-core": "^6.22.1",
-    "babel-loader": "^6.2.10",
-    "babel-preset-react": "^6.22.0",
-    "copy-webpack-plugin": "^4.0.1",
-    "html-webpack-plugin": "^2.28.0",
-    "webpack": "^2.2.1",
-    "webpack-dev-server": "^1.16.3"
+  "scripts": {
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "test": "react-scripts test --env=jsdom",
+    "eject": "react-scripts eject",
+    "flow": "flow"
   }
 }

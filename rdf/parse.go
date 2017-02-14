@@ -71,6 +71,8 @@ func typeValFrom(val *graph.Value) types.Val {
 		return types.Val{types.DateID, val.GetDateVal()}
 	case *graph.Value_DatetimeVal:
 		return types.Val{types.DateTimeID, val.GetDatetimeVal()}
+	case *graph.Value_PasswordVal:
+		return types.Val{types.PasswordID, val.GetPasswordVal()}
 	}
 	return types.Val{types.StringID, ""}
 }
@@ -399,6 +401,7 @@ var typeMap = map[string]types.TypeID{
 	"xs:double":                                   types.FloatID,
 	"xs:float":                                    types.FloatID,
 	"geo:geojson":                                 types.GeoID,
+	"pwd:password":                                types.PasswordID,
 	"http://www.w3.org/2001/XMLSchema#string":     types.StringID,
 	"http://www.w3.org/2001/XMLSchema#dateTime":   types.DateTimeID,
 	"http://www.w3.org/2001/XMLSchema#date":       types.DateID,

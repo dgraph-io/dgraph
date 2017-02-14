@@ -37,6 +37,7 @@ import (
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
+	farm "github.com/dgryski/go-farm"
 )
 
 /*
@@ -107,10 +108,10 @@ type Latency struct {
 func (l *Latency) ToMap() map[string]string {
 	m := make(map[string]string)
 	j := time.Since(l.Start) - l.Processing - l.Parsing
-	m["parsing"] = l.Parsing.String()
-	m["processing"] = l.Processing.String()
-	m["json"] = j.String()
-	m["total"] = time.Since(l.Start).String()
+	m["parsing"] = x.Round(l.Parsing).String()
+	m["processing"] = x.Round(l.Processing).String()
+	m["json"] = x.Round(j).String()
+	m["total"] = x.Round(time.Since(l.Start)).String()
 	return m
 }
 
@@ -128,6 +129,8 @@ type params struct {
 	NeedsVar   []string
 	ParentVars map[string]*task.List
 	Normalize  bool
+	From       uint64
+	To         uint64
 }
 
 // SubGraph is the way to represent data internally. It contains both the
@@ -255,6 +258,14 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 			}
 			uc.AddValue(name, sv)
 			parent.AddChild(sg.Attr, uc)
+
+		} else if len(pc.SrcFunc) > 0 && pc.SrcFunc[0] == "checkpwd" {
+			c := types.ValueForType(types.BoolID)
+			c.Value = task.ToBool(pc.values[idx])
+			uc := dst.New(pc.Attr)
+			uc.AddValue("checkpwd", c)
+			dst.AddChild(pc.Attr, uc)
+			
 		} else if algo.ListLen(ul) > 0 || len(pc.Children) > 0 {
 			// We create as many predicate entity children as the length of uids for
 			// this predicate.
@@ -398,6 +409,10 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 	for _, gchild := range gq.Children {
 		if gchild.Attr == "_uid_" {
 			sg.Params.GetUID = true
+		} else if gchild.Attr == "password" { // query password is forbidden
+			if gchild.Func == nil || !gchild.Func.IsPasswordVerifier() { 
+				return errors.New("Password is not fetchable")
+			}
 		}
 
 		args := params{
@@ -428,10 +443,11 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 			Params: args,
 		}
 
-		if gchild.Func != nil && gchild.Func.IsAggregator() {
+		if gchild.Func != nil &&
+			(gchild.Func.IsAggregator() || gchild.Func.IsPasswordVerifier()) {
 			f := gchild.Func.Name
 			if len(gchild.Children) != 0 {
-				note := fmt.Sprintf("Node with aggregator %q cant have child attr", f)
+				note := fmt.Sprintf("Node with %q cant have child attr", f)
 				return errors.New(note)
 			}
 			// embedded filter will cause ambiguous output like following,
@@ -439,11 +455,12 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 			//    min(initial_release_date @filter(gt(initial_release_date, "1986"))
 			// }
 			if gchild.Filter != nil {
-				note := fmt.Sprintf("Node with aggregator %q cant have filter,", f) +
+				note := fmt.Sprintf("Node with %q cant have filter,", f) +
 					" please place the filter on the upper level"
 				return errors.New(note)
 			}
-			dst.SrcFunc = append(dst.SrcFunc, f)
+			dst.SrcFunc = append(sg.SrcFunc, gchild.Func.Name)
+			dst.SrcFunc = append(dst.SrcFunc, gchild.Func.Args...)
 		}
 
 		if gchild.Filter != nil {
@@ -461,6 +478,7 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 	}
 	return nil
 }
+
 func (args *params) fill(gq *gql.GraphQuery) error {
 
 	if v, ok := gq.Args["offset"]; ok {
@@ -476,6 +494,22 @@ func (args *params) fill(gq *gql.GraphQuery) error {
 			return err
 		}
 		args.AfterUID = uint64(after)
+	}
+	if v, ok := gq.Args["from"]; ok {
+		from, err := strconv.ParseUint(v, 0, 64)
+		if err != nil {
+			// Treat it as an XID.
+			from = farm.Fingerprint64([]byte(v))
+		}
+		args.From = uint64(from)
+	}
+	if v, ok := gq.Args["to"]; ok {
+		to, err := strconv.ParseUint(v, 0, 64)
+		if err != nil {
+			// Treat it as an XID.
+			to = farm.Fingerprint64([]byte(v))
+		}
+		args.To = uint64(to)
 	}
 	if v, ok := gq.Args["first"]; ok {
 		first, err := strconv.ParseInt(v, 0, 32)
@@ -507,7 +541,7 @@ func ToSubGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	// This would set the Result field in SubGraph,
 	// and populate the children for attributes.
-	if len(gq.UID) == 0 && gq.Func == nil && len(gq.NeedsVar) == 0 {
+	if len(gq.UID) == 0 && gq.Func == nil && len(gq.NeedsVar) == 0 && gq.Alias != "shortest" {
 		err := x.Errorf("Invalid query, query internal id is zero and generator is nil")
 		x.TraceError(ctx, err)
 		return nil, err
@@ -558,7 +592,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	}
 	if len(gq.UID) > 0 {
 		o := new(task.List)
-		it := algo.NewWriteIterator(o)
+		it := algo.NewWriteIterator(o, 0)
 		for _, uid := range gq.UID {
 			it.Append(uid)
 		}
@@ -619,7 +653,8 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 	loopStart := time.Now()
 	for i := 0; i < len(res.Query); i++ {
 		gq := res.Query[i]
-		if gq == nil || (len(gq.UID) == 0 && gq.Func == nil && len(gq.NeedsVar) == 0) {
+		if gq == nil || (len(gq.UID) == 0 && gq.Func == nil &&
+			len(gq.NeedsVar) == 0 && gq.Alias != "shortest") {
 			continue
 		}
 		sg, err := ToSubGraph(ctx, gq)
@@ -674,14 +709,24 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 
 			sg.recursiveFillVars(doneVars)
 			hasExecuted[idx] = true
-			idxList = append(idxList, idx)
 			numQueriesDone++
-			go ProcessGraph(ctx, sg, nil, errChan)
+			idxList = append(idxList, idx)
+			if sg.Params.Alias == "shortest" {
+				err := ShortestPath(ctx, sg)
+				if err != nil {
+					return nil, err
+				}
+			} else {
+				go ProcessGraph(ctx, sg, nil, errChan)
+			}
 			x.Trace(ctx, "Graph processed")
 		}
 
 		// Wait for the execution that was started in this iteration.
 		for i := 0; i < len(idxList); i++ {
+			if sgl[idxList[i]].Params.Alias == "shortest" {
+				continue
+			}
 			select {
 			case err := <-errChan:
 				if err != nil {
@@ -720,6 +765,10 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 // shouldCascade returns true if the query block is not self depenedent and we should
 // remove the uids from the bottom up if the children are empty.
 func shouldCascade(res gql.Result, idx int) bool {
+	if res.Query[idx].Attr == "shortest" {
+		return false
+	}
+
 	for _, def := range res.QueryVars[idx].Defines {
 		for _, need := range res.QueryVars[idx].Needs {
 			if def == need {
@@ -730,8 +779,14 @@ func shouldCascade(res gql.Result, idx int) bool {
 	return true
 }
 
-// TODO(Ashwin): Benchmark this function. Map implementation might be slow.
+// TODO(Ashwin): Benchmark this function.
 func populateVarMap(sg *SubGraph, doneVars map[string]*task.List, isCascade bool) {
+	out := algo.NewWriteIterator(sg.DestUIDs, 0)
+	it := algo.NewListIterator(sg.DestUIDs)
+	i := -1
+	if sg.Params.Alias == "shortest" {
+		goto AssignStep
+	}
 	for _, child := range sg.Children {
 		populateVarMap(child, doneVars, isCascade)
 		if !isCascade {
@@ -745,10 +800,6 @@ func populateVarMap(sg *SubGraph, doneVars map[string]*task.List, isCascade bool
 		}
 	}
 
-	o := new(task.List)
-	out := algo.NewWriteIterator(o)
-	it := algo.NewListIterator(sg.DestUIDs)
-	i := -1
 	if !isCascade {
 		goto AssignStep
 	}
@@ -770,7 +821,6 @@ func populateVarMap(sg *SubGraph, doneVars map[string]*task.List, isCascade bool
 		}
 	}
 	out.End()
-	sg.DestUIDs = o
 
 AssignStep:
 	if sg.Params.Var != "" {
@@ -1069,7 +1119,7 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 // isValidArg checks if arg passed is valid keyword.
 func isValidArg(a string) bool {
 	switch a {
-	case "orderasc", "orderdesc", "first", "offset", "after":
+	case "from", "to", "orderasc", "orderdesc", "first", "offset", "after":
 		return true
 	}
 	return false

@@ -497,6 +497,7 @@ var testNQuads = []struct {
 		expectedErr:  true,
 		shouldIgnore: true,
 	},
+
 	// Edge Facets test.
 	{
 		input: `_:alice <knows> "stuff" _:label (key1=val1,key2=13) .`,
@@ -648,6 +649,10 @@ var testNQuads = []struct {
 	{
 		input:       `_:alice <knows> "stuff" (k=,) .`,
 		expectedErr: true, // comma should be followed by another key-value pair.
+	},
+	{
+		input: `<alice> <password> "guess"^^<pwd:password> .`,
+		expectedErr: true, // len(password) should >= 6
 	},
 }
 

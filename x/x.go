@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/Sirupsen/logrus"
 	"golang.org/x/net/trace"
@@ -139,4 +140,27 @@ func ReadLine(r *bufio.Reader, buf *bytes.Buffer) error {
 		}
 	}
 	return err
+}
+
+// Go doesn't have a round function for Duration and the duration value can be a
+// bit ugly to look at sometimes. This is an attempt to round the value.
+func Round(d time.Duration) time.Duration {
+	var denominator time.Duration
+	if d > time.Minute {
+		denominator = time.Second
+	} else if d > time.Second {
+		denominator = time.Millisecond
+	} else if d > time.Millisecond {
+		denominator = time.Millisecond
+	} else {
+		denominator = time.Microsecond
+	}
+
+	if remainder := d % denominator; 2*remainder < denominator {
+		// This means we have to round it down.
+		d = d - remainder
+	} else {
+		d = d + denominator - remainder
+	}
+	return d
 }

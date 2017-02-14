@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -127,6 +128,15 @@ func addGeoData(t *testing.T, ps *store.Store, uid uint64, p geom.T, name string
 	addEdgeToTypedValue(t, "name", uid, types.StringID, []byte(name))
 }
 
+func addPassword(t *testing.T, uid uint64, password string) {
+	value := types.ValueForType(types.BinaryID)
+	src := types.ValueForType(types.PasswordID)
+	src.Value, _ = types.Encrypt(password)
+	err := types.Marshal(src, &value)
+	require.NoError(t, err)
+	addEdgeToTypedValue(t, "password", uid, types.PasswordID, value.Value.([]byte))
+}
+
 var ps *store.Store
 
 func populateGraph(t *testing.T) {
@@ -141,6 +151,28 @@ func populateGraph(t *testing.T) {
 	addEdgeToUID(t, "friend", 1, 101)
 	addEdgeToUID(t, "friend", 31, 24)
 	addEdgeToUID(t, "friend", 23, 1)
+
+	addEdgeToUID(t, "follow", 1, 31)
+	addEdgeToUID(t, "follow", 1, 24)
+	addEdgeToUID(t, "follow", 31, 1001)
+	addEdgeToUID(t, "follow", 1001, 1000)
+	addEdgeToUID(t, "follow", 1002, 1000)
+	addEdgeToUID(t, "follow", 1001, 1003)
+	addEdgeToUID(t, "follow", 1001, 1003)
+	addEdgeToUID(t, "follow", 1003, 1002)
+
+	addEdgeToUID(t, "path", 1, 31)
+	addEdgeToUID(t, "path", 1, 24)
+	addEdgeToUID(t, "path", 31, 1000)
+	addEdgeToUID(t, "path", 1000, 1001)
+	addEdgeToUID(t, "path", 1000, 1002)
+	addEdgeToUID(t, "path", 1001, 1002)
+	addEdgeToUID(t, "path", 1002, 1003)
+	addEdgeToUID(t, "path", 1003, 1001)
+	addEdgeToValue(t, "name", 1000, "Alice")
+	addEdgeToValue(t, "name", 1001, "Bob")
+	addEdgeToValue(t, "name", 1002, "Matt")
+	addEdgeToValue(t, "name", 1003, "John")
 
 	// Now let's add a few properties for the main user.
 	addEdgeToValue(t, "name", 1, "Michonne")
@@ -179,6 +211,8 @@ func populateGraph(t *testing.T) {
 	addEdgeToValue(t, "survival_rate", 1, "98.99")
 	addEdgeToValue(t, "sword_present", 1, "true")
 	addEdgeToValue(t, "_xid_", 1, "mich")
+
+	addPassword(t, 1, "123456")
 
 	// Now let's add a name for each of the friends, except 101.
 	addEdgeToTypedValue(t, "name", 23, types.StringID, []byte("Rick Grimes"))
@@ -279,7 +313,7 @@ func processToFastJSON(t *testing.T, query string) string {
 	require.NoError(t, err)
 
 	var buf bytes.Buffer
-	require.NoError(t, ToJson(&l, sgl, &buf))
+	require.NoError(t, ToJson(&l, sgl, &buf, nil))
 	return string(buf.Bytes())
 }
 
@@ -325,6 +359,43 @@ func TestGetUID(t *testing.T) {
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
 		`{"me":[{"_uid_":"0x1","alive":true,"friend":[{"_uid_":"0x17","name":"Rick Grimes"},{"_uid_":"0x18","name":"Glenn Rhee"},{"_uid_":"0x19","name":"Daryl Dixon"},{"_uid_":"0x1f","name":"Andrea"},{"_uid_":"0x65"}],"gender":"female","name":"Michonne"}]}`,
+		js)
+}
+func TestReturnUids(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id:0x01) {
+				name
+				_uid_
+				gender
+				alive
+				friend {
+					_uid_
+					name
+				}
+			}
+		}
+	`
+	res, err := gql.Parse(query)
+	require.NoError(t, err)
+
+	var l Latency
+	ctx := context.Background()
+	sgl, err := ProcessQuery(ctx, res, &l)
+	require.NoError(t, err)
+
+	var buf bytes.Buffer
+	mp := map[string]string{
+		"a": "123",
+	}
+	require.NoError(t, ToJson(&l, sgl, &buf, mp))
+	js := buf.String()
+
+	fmt.Println(js)
+
+	require.JSONEq(t,
+		`{"uids":{"a":123},"me":[{"_uid_":"0x1","alive":true,"friend":[{"_uid_":"0x17","name":"Rick Grimes"},{"_uid_":"0x18","name":"Glenn Rhee"},{"_uid_":"0x19","name":"Daryl Dixon"},{"_uid_":"0x1f","name":"Andrea"},{"_uid_":"0x65"}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
 
@@ -484,6 +555,136 @@ func TestUseVarsFilterVarReuse3(t *testing.T) {
 		js)
 }
 
+func TestShortestPath_NoPath(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			A as shortest(from:0x01, to:101) {
+				path
+				follow
+			}
+
+			me(var: A) {
+				name
+			}
+		}`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{}`,
+		js)
+}
+
+func TestShortestPath(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			A as shortest(from:0x01, to:31) {
+				friend 
+			}
+
+			me(var: A) {
+				name
+			}
+		}`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"name":"Michonne"},{"name":"Andrea"}]}`,
+		js)
+}
+
+func TestShortestPath2(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			A as shortest(from:0x01, to:1000) {
+				path 
+			}
+
+			me(var: A) {
+				name
+			}
+		}`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"name":"Michonne"},{"name":"Andrea"},{"name":"Alice"}]}`,
+		js)
+}
+
+func TestShortestPath3(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			A as shortest(from:1, to:1003) {
+				path 
+			}
+
+			me(var: A) {
+				name
+			}
+		}`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"name":"Michonne"},{"name":"Andrea"},{"name":"Alice"},{"name":"Matt"},{"name":"John"}]}`,
+		js)
+}
+
+func TestShortestPath4(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			A as shortest(from:1, to:1003) {
+				path 
+				follow
+			}
+
+			me(var: A) {
+				name
+			}
+		}`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"name":"Michonne"},{"name":"Andrea"},{"name":"Bob"},{"name":"John"}]}`,
+		js)
+}
+
+func TestShortestPath_filter(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			A as shortest(from:1, to:1002) {
+				path @filter(not anyof(name, "alice"))
+				follow
+			}
+
+			me(var: A) {
+				name
+			}
+		}`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"name":"Michonne"},{"name":"Andrea"},{"name":"Bob"},{"name":"Matt"}]}`,
+		js)
+}
+
+func TestShortestPath_filter2(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			A as shortest(from:1, to:1002) {
+				path @filter(not anyof(name, "alice"))
+				follow @filter(not anyof(name, "bob"))
+			}
+
+			me(var: A) {
+				name
+			}
+		}`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{}`,
+		js)
+}
+
 func TestUseVarsFilterMultiId(t *testing.T) {
 	populateGraph(t)
 	query := `
@@ -615,7 +816,7 @@ func TestDebug1(t *testing.T) {
 	require.NoError(t, err)
 
 	var buf bytes.Buffer
-	require.NoError(t, ToJson(&l, sgl, &buf))
+	require.NoError(t, ToJson(&l, sgl, &buf, nil))
 
 	var mp map[string]interface{}
 	require.NoError(t, json.Unmarshal([]byte(buf.Bytes()), &mp))
@@ -814,7 +1015,6 @@ func TestMax(t *testing.T) {
 		js)
 }
 
-
 func TestMaxError1(t *testing.T) {
 	populateGraph(t)
 	// error: aggregator 'max' should not have filters on its own
@@ -876,6 +1076,59 @@ func TestSumError1(t *testing.T) {
 	var l Latency
 	_, queryErr := ProcessQuery(context.Background(), res, &l)
 	require.NotNil(t, queryErr)
+}
+
+func TestQueryPassword(t *testing.T) {
+	populateGraph(t)
+	// Password is not fetchable
+	query := `
+                {
+                        me(id:0x01) {
+                                name
+                                password
+                        }
+                }
+	`
+	res, err := gql.Parse(query)
+	require.NoError(t, err)
+
+	var l Latency
+	_, queryErr := ProcessQuery(context.Background(), res, &l)
+	require.NotNil(t, queryErr)
+}
+
+func TestCheckPassword(t *testing.T) {
+	populateGraph(t)
+	query := `
+                {
+                        me(id:0x01) {
+                                name
+                                checkpwd("123456")
+                        }
+                }
+	`
+	js := processToFastJSON(t, query)
+	require.EqualValues(t,
+		`{"me":[{"name":"Michonne","password":[{"checkpwd":true}]}]}`,
+		js)
+
+}
+
+func TestCheckPasswordIncorrect(t *testing.T) {
+	populateGraph(t)
+	query := `
+                {
+                        me(id:0x01) {
+                                name
+                                checkpwd("654123")
+                        }
+                }
+	`
+	js := processToFastJSON(t, query)
+	require.EqualValues(t,
+		`{"me":[{"name":"Michonne","password":[{"checkpwd":false}]}]}`,
+		js)
+
 }
 
 func TestToSubgraphInvalidFnName(t *testing.T) {
@@ -2050,6 +2303,28 @@ func TestToFastJSONOrderDesc_pawan(t *testing.T) {
 		string(js))
 }
 
+// Test sorting / ordering by dob.
+func TestToFastJSONOrderDedup(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id:0x01) {
+				name
+				gender
+				friend(orderasc: name) {
+					name
+					dob
+				}
+			}
+		}
+	`
+
+	js := processToFastJSON(t, query)
+	require.EqualValues(t,
+		`{"me":[{"friend":[{"dob":"1901-01-15","name":"Andrea"},{"dob":"1909-01-10","name":"Daryl Dixon"},{"dob":"1909-05-05","name":"Glenn Rhee"},{"dob":"1910-01-02","name":"Rick Grimes"}],"gender":"female","name":"Michonne"}]}`,
+		js)
+}
+
 // Test sorting / ordering by dob and count.
 func TestToFastJSONOrderDescCount(t *testing.T) {
 	populateGraph(t)
@@ -3062,7 +3337,7 @@ func runQuery(t *testing.T, gq *gql.GraphQuery) string {
 
 	var l Latency
 	var buf bytes.Buffer
-	err = sg.ToFastJSON(&l, &buf)
+	err = sg.ToFastJSON(&l, &buf, nil)
 	require.NoError(t, err)
 	return string(buf.Bytes())
 }
