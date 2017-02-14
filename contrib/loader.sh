@@ -33,7 +33,7 @@ export LD_LIBRARY_PATH="${ICUDIR}/lib:${ROCKSDBDIR}:${LD_LIBRARY_PATH}"
 # schema file
 echo -e "
 scalar (
-	name.en: string @index
+	name: string @index
 	initial_release_date: date @index
 )" > $BUILD/schema.txt
 
