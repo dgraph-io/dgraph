@@ -54,7 +54,6 @@ func UpdateIfMissing(se *SyncEntry) (types.TypeID, error) {
 	return str.updateIfMissing(se)
 }
 
-// This function should be called only during init and is not thread safe
 func (si *schemaInformation) setType(attr string, valueType types.TypeID) (types.TypeID, error) {
 	if si.sm == nil {
 		si.sm = make(map[string]*types.SchemaDescription)
@@ -70,8 +69,6 @@ func (si *schemaInformation) setType(attr string, valueType types.TypeID) (types
 	return valueType, nil
 }
 
-// This function should be called only during init and is not thread safe
-// This change won't be persisted to db, since this contains the schema read from file
 func (si *schemaInformation) set(attr string, s *types.SchemaDescription) (types.TypeID, error) {
 	if si.sm == nil {
 		si.sm = make(map[string]*types.SchemaDescription)
@@ -102,7 +99,7 @@ var (
 func Init(ps *store.Store, file string) error {
 	pstore = ps
 	if len(file) > 0 {
-		if err := Parse(file); err != nil {
+		if err := parse(file); err != nil {
 			return err
 		}
 	}

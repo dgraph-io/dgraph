@@ -17,13 +17,14 @@
 package schema
 
 import (
+	"io/ioutil"
 	"os"
 	"testing"
 
-	"github.com/stretchr/testify/require"
-
+	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/stretchr/testify/require"
 )
 
 type nameType struct {
@@ -40,8 +41,21 @@ func checkSchema(t *testing.T, h map[string]*types.SchemaDescription, expected [
 	}
 }
 
+func initSchemaStore(t *testing.T) (string, *store.Store) {
+	dir, err := ioutil.TempDir("", "storetest_")
+	require.NoError(t, err)
+
+	ps, err := store.NewStore(dir)
+	require.NoError(t, err)
+	return dir, ps
+}
+
 func TestSchema(t *testing.T) {
-	require.NoError(t, Parse("testfiles/test_schema"))
+	dir, ps := initSchemaStore(t)
+	defer os.RemoveAll(dir)
+	defer ps.Close()
+
+	require.NoError(t, Init(ps, "testfiles/test_schema"))
 	checkSchema(t, str.sm, []nameType{
 		{"name", &types.SchemaDescription{ValueType: uint32(types.StringID)}},
 		{"address", &types.SchemaDescription{ValueType: uint32(types.StringID)}},
@@ -59,20 +73,35 @@ func TestSchema(t *testing.T) {
 }
 
 func TestSchema1_Error(t *testing.T) {
-	require.Error(t, Parse("testfiles/test_schema1"))
+	dir, ps := initSchemaStore(t)
+	defer os.RemoveAll(dir)
+	defer ps.Close()
+
+	require.Error(t, Init(ps, "testfiles/test_schema1"))
 }
 
 func TestSchema2_Error(t *testing.T) {
-	require.Error(t, Parse("testfiles/test_schema2"))
+	dir, ps := initSchemaStore(t)
+	defer os.RemoveAll(dir)
+	defer ps.Close()
+
+	require.Error(t, Init(ps, "testfiles/test_schema2"))
 }
 
 func TestSchema3_Error(t *testing.T) {
-	require.Error(t, Parse("testfiles/test_schema3"))
+	dir, ps := initSchemaStore(t)
+	defer os.RemoveAll(dir)
+	defer ps.Close()
+
+	require.Error(t, Init(ps, "testfiles/test_schema3"))
 }
 
 func TestSchema4_Error(t *testing.T) {
-	err := Parse("testfiles/test_schema4")
-	require.Error(t, err)
+	dir, ps := initSchemaStore(t)
+	defer os.RemoveAll(dir)
+	defer ps.Close()
+
+	require.Error(t, Init(ps, "testfiles/test_schema4"))
 }
 
 /*
@@ -90,22 +119,38 @@ func TestSchema6_Error(t *testing.T) {
 */
 // Correct specification of indexing
 func TestSchemaIndex(t *testing.T) {
-	require.NoError(t, Parse("testfiles/test_schema_index1"))
+	dir, ps := initSchemaStore(t)
+	defer os.RemoveAll(dir)
+	defer ps.Close()
+
+	require.NoError(t, Init(ps, "testfiles/test_schema_index1"))
 	require.Equal(t, 2, len(indexedFields))
 }
 
 // Indexing can't be specified inside object types.
 func TestSchemaIndex_Error1(t *testing.T) {
-	require.Error(t, Parse("testfiles/test_schema_index2"))
+	dir, ps := initSchemaStore(t)
+	defer os.RemoveAll(dir)
+	defer ps.Close()
+
+	require.Error(t, Init(ps, "testfiles/test_schema_index2"))
 }
 
 // Object types cant be indexed.
 func TestSchemaIndex_Error2(t *testing.T) {
-	require.Error(t, Parse("testfiles/test_schema_index3"))
+	dir, ps := initSchemaStore(t)
+	defer os.RemoveAll(dir)
+	defer ps.Close()
+
+	require.Error(t, Init(ps, "testfiles/test_schema_index3"))
 }
 
 func TestSchemaIndexCustom(t *testing.T) {
-	require.NoError(t, Parse("testfiles/test_schema_index4"))
+	dir, ps := initSchemaStore(t)
+	defer os.RemoveAll(dir)
+	defer ps.Close()
+
+	require.NoError(t, Init(ps, "testfiles/test_schema_index4"))
 	checkSchema(t, str.sm, []nameType{
 		{"name", &types.SchemaDescription{ValueType: uint32(types.StringID)}},
 		{"address", &types.SchemaDescription{ValueType: uint32(types.StringID)}},

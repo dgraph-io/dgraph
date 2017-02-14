@@ -26,7 +26,7 @@ import (
 )
 
 // Parse parses the schema file.
-func Parse(file string) (rerr error) {
+func parse(file string) (rerr error) {
 	b, err := ioutil.ReadFile(file)
 	if err != nil {
 		return x.Errorf("Error reading file: %v", err)
@@ -36,6 +36,7 @@ func Parse(file string) (rerr error) {
 
 // ParseBytes parses the byte array which holds the schema. We will reset
 // all the globals.
+// Not Thread safe, call before initializing schema - Used only in testing ?
 func ParseBytes(schema []byte) (rerr error) {
 	reset()
 	s := string(schema)
