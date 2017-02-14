@@ -314,6 +314,8 @@ func getVal(t types.TypeID, val *graph.Value) interface{} {
 		return val.GetDateVal()
 	case types.DateTimeID:
 		return val.GetDatetimeVal()
+	case types.PasswordID:
+		return val.GetPasswordVal()
 	}
 	return val.GetStrVal()
 }
