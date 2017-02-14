@@ -66,24 +66,10 @@ func runMutations(ctx context.Context, edges []*task.DirectedEdge) error {
 	return nil
 }
 
-func getType(edge *task.DirectedEdge) types.TypeID {
-	if edge.ValueId != 0 {
-		return types.UidID
-	}
-	return types.TypeID(edge.ValueType)
-}
-
-func getTypeUint(edge *task.DirectedEdge) uint32 {
-	if edge.ValueId != 0 {
-		return uint32(types.UidID)
-	}
-	return edge.ValueType
-}
-
 func updateSchema(edge *task.DirectedEdge, rv *x.RaftValue) error {
 	ce := schema.SyncEntry{
 		Attr:              edge.Attr,
-		SchemaDescription: &types.Schema{ValueType: getTypeUint(edge)},
+		SchemaDescription: &types.Schema{ValueType: uint32(posting.EdgeTypeID(edge))},
 		Index:             rv.Index,
 		Water:             posting.SyncMarkFor(rv.Group),
 	}
@@ -94,7 +80,7 @@ func updateSchema(edge *task.DirectedEdge, rv *x.RaftValue) error {
 }
 
 func validateType(edge *task.DirectedEdge, schemaType types.TypeID) error {
-	storageType := getType(edge)
+	storageType := posting.EdgeTypeID(edge)
 
 	if !schemaType.IsScalar() && !storageType.IsScalar() {
 		return nil
@@ -114,6 +100,7 @@ func validateType(edge *task.DirectedEdge, schemaType types.TypeID) error {
 		if dst, err := types.Convert(src, schemaType); err != nil {
 			return err
 		} else {
+			// convert to schema type
 			b := types.ValueForType(types.BinaryID)
 			if err = types.Marshal(dst, &b); err != nil {
 				return err
