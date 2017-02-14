@@ -28,5 +28,5 @@ message Facets {
 }
 
 message List {
-	repeated Facets facetsList = 1;
+	repeated Facets facets_list = 1;
 }

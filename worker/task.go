@@ -202,6 +202,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 		// If a posting list contains a value, we store that or else we store a nil
 		// byte so that processing is consistent later.
 		val, err := pl.Value()
+		isValueEdge := err == nil
 		newValue := &task.Value{ValType: int32(val.Tid)}
 		if err == nil {
 			newValue.Val = val.Value.([]byte)
@@ -212,11 +213,14 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 
 		// get facets.
 		if q.FacetParam != nil {
-			if fs, err := pl.Facets(q.FacetParam); err == nil { // for value node
-				fl := &facets.List{nil}
-				fl.FacetsList = append(fl.FacetsList, &facets.Facets{fs})
-				out.FacetsLists = append(out.FacetsLists, fl)
-			} else { // for uid node.
+			if isValueEdge {
+				fs, err := pl.Facets(q.FacetParam)
+				if err != nil {
+					return nil, err
+				}
+				out.FacetsLists = append(out.FacetsLists,
+					&facets.List{[]*facets.Facets{&facets.Facets{fs}}})
+			} else {
 				out.FacetsLists = append(out.FacetsLists,
 					&facets.List{pl.FacetsForUids(opts, q.FacetParam)})
 			}
