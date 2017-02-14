@@ -114,21 +114,27 @@ func (pa ByUid) Len() int           { return len(pa) }
 func (pa ByUid) Swap(i, j int)      { pa[i], pa[j] = pa[j], pa[i] }
 func (pa ByUid) Less(i, j int) bool { return pa[i].Uid < pa[j].Uid }
 
-func samePosting(a *types.Posting, b *types.Posting) bool {
-	if a.Uid != b.Uid {
+// samePosting tells whether this is same posting depending upon operation of new posting.
+// if operation is Del, we ignore facets and only care about uid and value.
+// otherwise we match everything.
+func samePosting(old *types.Posting, new *types.Posting) bool {
+	if old.Uid != new.Uid {
 		return false
 	}
-	if a.ValType != b.ValType {
+	if old.ValType != new.ValType {
 		return false
 	}
-	if !bytes.Equal(a.Value, b.Value) {
+	if !bytes.Equal(old.Value, new.Value) {
 		return false
 	}
 	// Checking source might not be necessary.
-	if a.Label != b.Label {
+	if old.Label != new.Label {
 		return false
 	}
-	return facets.SameFacets(a.Facets, b.Facets)
+	if new.Op == Del {
+		return true
+	}
+	return facets.SameFacets(old.Facets, new.Facets)
 }
 
 func newPosting(t *task.DirectedEdge) *types.Posting {

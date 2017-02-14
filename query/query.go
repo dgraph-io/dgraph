@@ -287,10 +287,10 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 					fs := fcsList[childIdx]
 					fc := dst.New(fieldName)
 					for _, f := range fs.Facets {
-						if tVal, err := types.TypeValForFacet(f); err != nil {
+						if tv, err := types.TypeValForFacet(f); err != nil {
 							return err
 						} else {
-							fc.AddValue(f.Key, tVal)
+							fc.AddValue(f.Key, tv)
 						}
 					}
 					if !fc.IsEmpty() {

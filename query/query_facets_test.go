@@ -50,7 +50,7 @@ func populateGraphWithFacets(t *testing.T) {
 	// Now let's add a name for each of the friends, except 101.
 	addEdgeToTypedValue(t, "name", 23, types.StringID, []byte("Rick Grimes"), nameFacets)
 	addEdgeToValue(t, "gender", 23, "male", nil)
-	addEdgeToValue(t, "name", 24, "Glenn Rhee", nil)
+	addEdgeToValue(t, "name", 24, "Glenn Rhee", nameFacets)
 	addEdgeToValue(t, "name", 25, "Daryl Dixon", nil)
 	addEdgeToValue(t, "name", 31, "Andrea", nil)
 	// missing name for 101 -- no name edge and no facets.
@@ -64,13 +64,33 @@ func TestRetrieveFacetsSimple(t *testing.T) {
 		{
 			me(id:0x1) {
 				name @facets
+				gender @facets
 			}
 		}
 	`
 
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"name": "Michonne", "@facets": {"name": {"origin": "french"}}}]}`,
+		`{"me":[{"@facets":{"name":{"origin":"french"}},"gender":"female","name":"Michonne"}]}`,
+		js)
+}
+
+func TestRetrieveFacetsUidValues(t *testing.T) {
+	populateGraphWithFacets(t)
+	// to see how friend @facets are positioned in output.
+	query := `
+		{
+			me(id:0x1) {
+				friend @facets {
+					name @facets
+				}
+			}
+		}
+	`
+
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"friend":[{"@facets":{"_":{"since":"12-01-1991"},"name":{"origin":"french"}},"name":"Rick Grimes"},{"@facets":{"_":{"since":"12-01-1991"},"name":{"origin":"french"}},"name":"Glenn Rhee"},{"@facets":{"_":{"since":"12-01-1991"}},"name":"Daryl Dixon"},{"@facets":{"_":{"since":"12-01-1991"}},"name":"Andrea"},{"@facets":{"_":{"close":true,"family":false,"since":"11-10-2001"}}}]}]}`,
 		js)
 }
 
@@ -82,14 +102,16 @@ func TestRetrieveFacetsAll(t *testing.T) {
 				name @facets
 				friend @facets {
 					name @facets
+					gender @facets
 				}
+				gender @facets
 			}
 		}
 	`
 
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"@facets":{"name":{"origin":"french"}},"friend":[{"@facets":{"_":{"since":"12-01-1991"},"name":{"origin":"french"}},"name":"Rick Grimes"},{"@facets":{"_":{"since":"12-01-1991"}},"name":"Glenn Rhee"},{"@facets":{"_":{"since":"12-01-1991"}},"name":"Daryl Dixon"},{"@facets":{"_":{"since":"12-01-1991"}},"name":"Andrea"},{"@facets":{"_":{"close":true,"family":false,"since":"11-10-2001"}}}],"name":"Michonne"}]}`,
+		`{"me":[{"@facets":{"name":{"origin":"french"}},"friend":[{"@facets":{"_":{"since":"12-01-1991"},"name":{"origin":"french"}},"gender":"male","name":"Rick Grimes"},{"@facets":{"_":{"since":"12-01-1991"},"name":{"origin":"french"}},"name":"Glenn Rhee"},{"@facets":{"_":{"since":"12-01-1991"}},"name":"Daryl Dixon"},{"@facets":{"_":{"since":"12-01-1991"}},"name":"Andrea"},{"@facets":{"_":{"close":true,"family":false,"since":"11-10-2001"}}}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
 
@@ -99,8 +121,10 @@ func TestFacetsNotInQuery(t *testing.T) {
 		{
 			me(id:0x1) {
 				name
+				gender
 				friend {
 					name
+					gender
 				}
 			}
 		}
@@ -108,7 +132,7 @@ func TestFacetsNotInQuery(t *testing.T) {
 
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}],"name":"Michonne"}]}`,
+		`{"me":[{"friend":[{"gender":"male","name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
 
@@ -166,7 +190,6 @@ func TestFacetsSortOrder(t *testing.T) {
 	`
 
 	js := processToFastJSON(t, query)
-	x.Printf(js)
 	require.JSONEq(t,
 		`{"me":[{"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"},{"@facets":{"_":{"close":true,"family":false}}}],"name":"Michonne"}]}`,
 		js)
@@ -187,9 +210,31 @@ func TestUnknownFacets(t *testing.T) {
 	`
 
 	js := processToFastJSON(t, query)
-	x.Printf(js)
 	require.JSONEq(t,
 		`{"me":[{"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}],"name":"Michonne"}]}`,
+		js)
+}
+
+func TestFacetsMutation(t *testing.T) {
+	populateGraphWithFacets(t)
+	delEdgeToUID(t, "friend", 1, 24) // Delete friendship between Michonne and Glenn
+	friendFacets := map[string]string{"since": "11-10-2001", "close": "false", "family": "false"}
+	addEdgeToUID(t, "friend", 1, 101, friendFacets) // and 101 is not close friend now.
+	query := `
+		{
+			me(id:0x1) {
+				name
+				friend @facets {
+					name
+				}
+			}
+		}
+	`
+
+	js := processToFastJSON(t, query)
+	x.Printf(js)
+	require.JSONEq(t,
+		`{"me":[{"friend":[{"@facets":{"_":{"since":"12-01-1991"}},"name":"Rick Grimes"},{"@facets":{"_":{"since":"12-01-1991"}},"name":"Daryl Dixon"},{"@facets":{"_":{"since":"12-01-1991"}},"name":"Andrea"},{"@facets":{"_":{"close":false,"family":false,"since":"11-10-2001"}}}],"name":"Michonne"}]}`,
 		js)
 }
 
@@ -262,6 +307,15 @@ children: <
     >
     children: <
       attribute: "@facets"
+      children: <
+        attribute: "name"
+        properties: <
+          prop: "origin"
+          value: <
+            str_val: "french"
+          >
+        >
+      >
       children: <
         attribute: "_"
         children: <
