@@ -31,6 +31,7 @@ import (
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/query"
+	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
@@ -197,6 +198,14 @@ func TestMain(m *testing.M) {
 	defer closeAll(dir1, dir2)
 	time.Sleep(5 * time.Second) // Wait for ME to become leader.
 
+	dir, err := ioutil.TempDir("", "storetest_")
+	x.Check(err)
+	ps, err := store.NewStore(dir)
+	x.Check(err)
+	defer os.RemoveAll(dir)
+	defer ps.Close()
+
+	schema.Init(ps, "")
 	// Parse GQL into internal query representation.
 	os.Exit(m.Run())
 }

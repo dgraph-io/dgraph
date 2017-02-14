@@ -26,7 +26,7 @@ import (
 )
 
 // Parse parses the schema file.
-func Parse(file string) (rerr error) {
+func parse(file string) (rerr error) {
 	b, err := ioutil.ReadFile(file)
 	if err != nil {
 		return x.Errorf("Error reading file: %v", err)
@@ -36,6 +36,7 @@ func Parse(file string) (rerr error) {
 
 // ParseBytes parses the byte array which holds the schema. We will reset
 // all the globals.
+// Not Thread safe, call before initializing schema - Used only in testing ?
 func ParseBytes(schema []byte) (rerr error) {
 	reset()
 	s := string(schema)
@@ -104,12 +105,12 @@ func processScalarPair(it *lex.ItemIterator, name string, allowIndex bool) error
 	typ := next.Val
 	t, ok := types.TypeForName(typ)
 	if ok {
-		if t1, ok := str[name]; ok {
+		if t1, err := TypeOf(name); err == nil {
 			if t1 != t {
 				return x.Errorf("Same field cannot have multiple types")
 			}
 		} else {
-			str[name] = t
+			stateInfo().setType(name, t)
 		}
 	}
 
@@ -130,7 +131,7 @@ func processScalarPair(it *lex.ItemIterator, name string, allowIndex bool) error
 				if t != types.UidID {
 					return x.Errorf("Cannot reverse for non-UID type")
 				}
-				reversedFields[name] = true
+				stateInfo().setReverse(name, true)
 				return nil
 			case "index":
 				if !allowIndex {
@@ -149,7 +150,7 @@ func processScalarPair(it *lex.ItemIterator, name string, allowIndex bool) error
 
 // processIndexDirective works on "@index" or "@index(customtokenizer)".
 func processIndexDirective(it *lex.ItemIterator, name string, typ types.TypeID) error {
-	indexedFields[name] = tok.Default(typ)
+	stateInfo().setIndex(name, tok.Default(typ).Name())
 	if !it.Next() {
 		// Nothing to read.
 		return nil
@@ -176,7 +177,7 @@ func processIndexDirective(it *lex.ItemIterator, name string, typ types.TypeID) 
 			return x.Errorf("Found more than one arguments for index directive")
 		}
 		// Look for custom tokenizer.
-		indexedFields[name] = tok.GetTokenizer(next.Val)
+		stateInfo().setIndex(name, tok.GetTokenizer(next.Val).Name())
 	}
 	return nil
 }
@@ -209,7 +210,7 @@ func processObject(it *lex.ItemIterator) error {
 		return x.Errorf("Missing object name")
 	}
 	objName = next.Val
-	str[objName] = types.UidID
+	stateInfo().setType(objName, types.UidID)
 
 	it.Next()
 	next = it.Item()

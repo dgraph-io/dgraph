@@ -17,59 +17,243 @@
 package schema
 
 import (
+	"fmt"
+	"time"
+
+	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
 
-var (
+type state struct {
+	x.SafeMutex
 	// Map containing predicate to type information.
-	str map[string]types.TypeID
-	// Map predicate to tokenizer.
-	indexedFields map[string]tok.Tokenizer
-	// Map containing fields / predicates that are reversed.
-	reversedFields map[string]bool
-)
-
-func init() {
-	reset()
+	info map[string]*types.Schema
 }
 
-func reset() {
-	str = make(map[string]types.TypeID)
-	indexedFields = make(map[string]tok.Tokenizer)
-	reversedFields = make(map[string]bool)
+func (s *state) updateIfMissing(se *SyncEntry) (types.TypeID, error) {
+	s.Lock()
+	defer s.Unlock()
+
+	if oldVal, ok := s.info[se.Attr]; ok && oldVal.ValueType != se.SchemaDescription.ValueType {
+		se.Water.Ch <- x.Mark{Index: se.Index, Done: false}
+		return types.TypeID(oldVal.ValueType), x.Errorf("Schema for attr %s already set to %d", se.Attr, se.SchemaDescription.ValueType)
+	}
+
+	s.info[se.Attr] = se.SchemaDescription
+	se.Water.Ch <- x.Mark{Index: se.Index, Done: false}
+	syncCh <- *se
+
+	fmt.Printf("Setting schema for attr %s: %v\n", se.Attr, se.SchemaDescription.ValueType)
+	return types.TypeID(se.SchemaDescription.ValueType), nil
 }
 
-// IsIndexed returns if a given predicate is indexed or not.
-func IsIndexed(attr string) bool {
-	_, found := indexedFields[attr]
-	return found
+func UpdateIfMissing(se *SyncEntry) (types.TypeID, error) {
+	return stateInfo().updateIfMissing(se)
 }
 
-// Tokenizer returns tokenizer for given predicate.
-func Tokenizer(attr string) tok.Tokenizer {
-	return indexedFields[attr]
+func (s *state) setType(attr string, valueType types.TypeID) {
+	s.Lock()
+	defer s.Unlock()
+	if info, ok := s.info[attr]; ok {
+		info.ValueType = uint32(valueType)
+	} else {
+		s.info[attr] = &types.Schema{ValueType: uint32(valueType)}
+	}
+	fmt.Printf("Setting schema for attr %s: %v\n", attr, valueType)
 }
 
-// IsReversed returns if a given predicate is reversed or not.
-func IsReversed(str string) bool {
-	return reversedFields[str]
+func (s *state) setReverse(attr string, rev bool) {
+	s.Lock()
+	defer s.Unlock()
+	info, ok := s.info[attr]
+	x.AssertTruef(ok, "schema info not found for %s", attr)
+	info.Reverse = rev
 }
 
-// TypeOf returns the type of given field.
-func TypeOf(pred string) (types.TypeID, error) {
-	if typ, ok := str[pred]; ok {
-		return typ, nil
+func (s *state) setIndex(attr string, tokenizer string) {
+	fmt.Println("Setting tokenizer", attr, tokenizer)
+	s.Lock()
+	defer s.Unlock()
+	info, ok := s.info[attr]
+	x.AssertTruef(ok, "schema info not found for %s", attr)
+	info.Tokenizer = tokenizer
+}
+
+func (s *state) set(attr string, info *types.Schema) {
+	s.Lock()
+	defer s.Unlock()
+	s.info[attr] = info
+	fmt.Printf("Setting schema for attr %s: %v\n", attr, info.ValueType)
+}
+
+func (s *state) typeOf(pred string) (types.TypeID, error) {
+	s.RLock()
+	defer s.RUnlock()
+	if info, ok := s.info[pred]; ok {
+		return types.TypeID(info.ValueType), nil
 	}
 	return types.TypeID(100), x.Errorf("Undefined predicate")
 }
 
-// IndexedFields returns a list of indexed fields.
-func IndexedFields() []string {
-	out := make([]string, 0, len(indexedFields))
-	for k := range indexedFields {
-		out = append(out, k)
+func (s *state) isIndexed(pred string) bool {
+	s.RLock()
+	defer s.RUnlock()
+	if info, ok := s.info[pred]; ok {
+		return info.Tokenizer != ""
+	}
+	return false
+}
+
+func (s *state) indexedFields() []string {
+	s.RLock()
+	defer s.RUnlock()
+	var out []string
+	for k, v := range s.info {
+		if v.Tokenizer != "" {
+			out = append(out, k)
+		}
 	}
 	return out
+}
+
+func (s *state) tokenizer(pred string) tok.Tokenizer {
+	s.RLock()
+	defer s.RUnlock()
+	info, ok := s.info[pred]
+	x.AssertTruef(ok, "schema info not found for %s", pred)
+	return tok.GetTokenizer(info.Tokenizer)
+}
+
+func (s *state) IsReversed(pred string) bool {
+	s.RLock()
+	defer s.RUnlock()
+	if info, ok := s.info[pred]; ok {
+		return info.Reverse
+	}
+	return false
+}
+
+var (
+	predicateInfo *state
+	pstore        *store.Store
+	syncCh        chan SyncEntry
+)
+
+func stateInfo() *state {
+	return predicateInfo
+}
+
+func Init(ps *store.Store, file string) error {
+	pstore = ps
+	reset()
+	if len(file) > 0 {
+		if err := parse(file); err != nil {
+			return err
+		}
+	}
+	if err := LoadFromDb(); err != nil {
+		return err
+	}
+	go batchSync()
+	return nil
+}
+
+func LoadFromDb() error {
+	prefix := x.SchemaPrefix()
+	itr := pstore.NewIterator()
+	defer itr.Close()
+
+	for itr.Seek(prefix); itr.ValidForPrefix(prefix); itr.Next() {
+		key := itr.Key().Data()
+		attr := x.Parse(key).Attr
+		slice := itr.Value()
+		var info types.Schema
+		x.Checkf(info.Unmarshal(slice.Data()), "Error while loading schema from db")
+		stateInfo().set(attr, &info)
+		slice.Free()
+	}
+
+	return nil
+}
+
+func reset() {
+	predicateInfo = new(state)
+	stateInfo().info = make(map[string]*types.Schema)
+	syncCh = make(chan SyncEntry, 10000)
+}
+
+// IsIndexed returns if a given predicate is indexed or not.
+func IsIndexed(attr string) bool {
+	return stateInfo().isIndexed(attr)
+}
+
+// Tokenizer returns tokenizer for given predicate.
+func Tokenizer(attr string) tok.Tokenizer {
+	return stateInfo().tokenizer(attr)
+}
+
+// IsReversed returns if a given predicate is reversed or not.
+func IsReversed(str string) bool {
+	return stateInfo().IsReversed(str)
+}
+
+// TypeOf returns the type of given field.
+func TypeOf(pred string) (types.TypeID, error) {
+	return stateInfo().typeOf(pred)
+}
+
+// IndexedFields returns a list of indexed fields.
+func IndexedFields() []string {
+	return stateInfo().indexedFields()
+}
+
+// The following logic is used to batch up all the writes to RocksDB.
+type SyncEntry struct {
+	Attr              string
+	SchemaDescription *types.Schema
+	Water             *x.WaterMark
+	Index             uint64
+}
+
+func batchSync() {
+	var entries []SyncEntry
+	var loop uint64
+
+	b := pstore.NewWriteBatch()
+	defer b.Destroy()
+
+	for {
+		select {
+		case e := <-syncCh:
+			entries = append(entries, e)
+
+		default:
+			// default is executed if no other case is ready.
+			start := time.Now()
+			if len(entries) > 0 {
+				x.AssertTrue(b != nil)
+				loop++
+				fmt.Printf("[%4d] Writing schema batch of size: %v\n", loop, len(entries))
+				for _, e := range entries {
+					val, err := e.SchemaDescription.Marshal()
+					x.Checkf(err, "Error while marshalling schema description")
+					b.Put(x.SchemaKey(e.Attr), val)
+				}
+				x.Checkf(pstore.WriteBatch(b), "Error while writing to RocksDB.")
+				b.Clear()
+
+				for _, e := range entries {
+					if e.Water != nil {
+						e.Water.Ch <- x.Mark{Index: e.Index, Done: true}
+					}
+				}
+				entries = entries[:0]
+			}
+			// Add a sleep clause to avoid a busy wait loop if there's no input to commitCh.
+			sleepFor := 10*time.Millisecond - time.Since(start)
+			time.Sleep(sleepFor)
+		}
+	}
 }

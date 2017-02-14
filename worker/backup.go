@@ -147,6 +147,11 @@ func backup(gid uint32, bdir string) error {
 			it.Seek(pk.SkipPredicate())
 			continue
 		}
+		if pk.IsSchema() {
+			// index values are the last keys currently
+			it.Seek(pk.SkipSchema())
+			continue
+		}
 
 		x.AssertTrue(pk.IsData())
 		pred, uid := pk.Attr, pk.Uid
