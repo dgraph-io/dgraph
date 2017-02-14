@@ -44,6 +44,8 @@ func toRDF(buf *bytes.Buffer, item kv) {
 				// TODO(tzdybal) - uncomment
 				/* } else if len(p.Lang) > 0 {
 				x.Check2(buf.WriteString(fmt.Sprintf("@%s", p.Lang))) */
+			} else if types.TypeID(p.ValType) == types.PasswordID {
+				x.Check2(buf.WriteString(fmt.Sprintf("^^<pwd:%s>", vID.Name())))
 			} else if types.TypeID(p.ValType) != types.BinaryID {
 				x.Check2(buf.WriteString(fmt.Sprintf("^^<xs:%s>", vID.Name())))
 			}
