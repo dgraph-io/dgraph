@@ -72,7 +72,7 @@ var (
 	cpuprofile     = flag.String("cpu", "", "write cpu profile to file")
 	memprofile     = flag.String("mem", "", "write memory profile to file")
 	dumpSubgraph   = flag.String("dumpsg", "", "Directory to save subgraph for testing, debugging")
-	uiDir          = flag.String("ui", os.Getenv("GOPATH")+"/src/github.com/dgraph-io/dgraph/dashboard/dist", "Directory which contains assets for the user interface")
+	uiDir          = flag.String("ui", os.Getenv("GOPATH")+"/src/github.com/dgraph-io/dgraph/dashboard/build", "Directory which contains assets for the user interface")
 	finishCh       = make(chan struct{}) // channel to wait for all pending reqs to finish.
 	shutdownCh     = make(chan struct{}) // channel to signal shutdown.
 	pendingQueries = make(chan struct{}, 10000*runtime.NumCPU())
