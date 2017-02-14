@@ -40,11 +40,7 @@ func runMutations(ctx context.Context, edges []*task.DirectedEdge) error {
 			return x.Errorf("Predicate fingerprint doesn't match this instance")
 		}
 
-		var group uint32
-		var rv x.RaftValue
-		if rv, ok := ctx.Value("raft").(x.RaftValue); ok {
-			group = rv.Group
-		}
+		rv := ctx.Value("raft").(x.RaftValue)
 
 		if typ, err := schema.TypeOf(edge.Attr); err != nil {
 			if err = updateSchema(edge, &rv); err != nil {
@@ -59,7 +55,7 @@ func runMutations(ctx context.Context, edges []*task.DirectedEdge) error {
 		}
 
 		key := x.DataKey(edge.Attr, edge.Entity)
-		plist, decr := posting.GetOrCreate(key, group)
+		plist, decr := posting.GetOrCreate(key, rv.Group)
 		defer decr()
 
 		if err := plist.AddMutationWithIndex(ctx, edge); err != nil {
@@ -87,7 +83,7 @@ func getTypeUint(edge *task.DirectedEdge) uint32 {
 func updateSchema(edge *task.DirectedEdge, rv *x.RaftValue) error {
 	ce := schema.SyncEntry{
 		Attr:              edge.Attr,
-		SchemaDescription: &types.SchemaDescription{ValueType: getTypeUint(edge)},
+		SchemaDescription: &types.Schema{ValueType: getTypeUint(edge)},
 		Index:             rv.Index,
 		Water:             posting.SyncMarkFor(rv.Group),
 	}
@@ -100,16 +96,18 @@ func updateSchema(edge *task.DirectedEdge, rv *x.RaftValue) error {
 func validateType(edge *task.DirectedEdge, schemaType types.TypeID) error {
 	storageType := getType(edge)
 
-	if !schemaType.IsScalar() {
-		if !storageType.IsScalar() {
-			return nil
-		} else {
-			return x.Errorf("Input for predicate %s of type uid is scalar", edge.Attr)
-		}
+	if !schemaType.IsScalar() && !storageType.IsScalar() {
+		return nil
+	} else if !schemaType.IsScalar() && storageType.IsScalar() {
+		return x.Errorf("Input for predicate %s of type uid is scalar", edge.Attr)
 	} else if !storageType.IsScalar() {
 		return x.Errorf("Input for predicate %s of type scalar is uid", edge.Attr)
 	}
 
+	// During NQuad parsing, value is parsed as appropriate type if storage type is
+	// specified or else as string and corresponsing type is set in directedEdge
+	// In case no schema is specified schema type would be set as tye type coming
+	// in directedEdge on first mutation.
 	if storageType != schemaType {
 		src := types.Val{types.TypeID(edge.ValueType), edge.Value}
 		// check if storage type is compatible with schema type

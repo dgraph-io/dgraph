@@ -37,6 +37,8 @@ message PostingList {
 	uint64 commit = 3; // More inclination towards smaller values.
 }
 
-message SchemaDescription {
+message Schema {
 	uint32 value_type = 1;
+	bool reverse = 2;
+	string tokenizer = 3;
 }

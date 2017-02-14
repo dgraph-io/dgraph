@@ -78,10 +78,11 @@ func IndexKey(attr, term string) []byte {
 }
 
 type ParsedKey struct {
-	byteType byte
-	Attr     string
-	Uid      uint64
-	Term     string
+	byteType   byte
+	Attr       string
+	Uid        uint64
+	Term       string
+	bytePrefix byte
 }
 
 func (p ParsedKey) IsData() bool {
@@ -102,12 +103,7 @@ func (p ParsedKey) IsSchema() bool {
 
 func (p ParsedKey) SkipPredicate() []byte {
 	buf := make([]byte, 2+len(p.Attr)+2)
-	if p.byteType == byteSchema {
-		// skip only current entry for schema
-		buf[0] = byteSchema
-	} else {
-		buf[0] = defaultPrefix
-	}
+	buf[0] = p.bytePrefix
 	rest := buf[1:]
 	k := writeAttr(rest, p.Attr)
 	AssertTrue(len(k) == 1)
@@ -117,12 +113,7 @@ func (p ParsedKey) SkipPredicate() []byte {
 
 func (p ParsedKey) SkipRangeOfSameType() []byte {
 	buf := make([]byte, 2+len(p.Attr)+2)
-	if p.byteType == byteSchema {
-		// skip only current entry for schema
-		buf[0] = byteSchema
-	} else {
-		buf[0] = defaultPrefix
-	}
+	buf[0] = p.bytePrefix
 	rest := buf[1:]
 	k := writeAttr(rest, p.Attr)
 	AssertTrue(len(k) == 1)
@@ -139,7 +130,7 @@ func (p ParsedKey) SkipSchema() []byte {
 // DataPrefix returns the prefix for data keys.
 func (p ParsedKey) DataPrefix() []byte {
 	buf := make([]byte, 2+len(p.Attr)+2)
-	buf[0] = defaultPrefix
+	buf[0] = p.bytePrefix
 	rest := buf[1:]
 	k := writeAttr(rest, p.Attr)
 	AssertTrue(len(k) == 1)
@@ -150,7 +141,7 @@ func (p ParsedKey) DataPrefix() []byte {
 // IndexPrefix returns the prefix for index keys.
 func (p ParsedKey) IndexPrefix() []byte {
 	buf := make([]byte, 2+len(p.Attr)+2)
-	buf[0] = defaultPrefix
+	buf[0] = p.bytePrefix
 	rest := buf[1:]
 	k := writeAttr(rest, p.Attr)
 	AssertTrue(len(k) == 1)
@@ -168,6 +159,7 @@ func SchemaPrefix() []byte {
 func Parse(key []byte) *ParsedKey {
 	p := &ParsedKey{}
 
+	p.bytePrefix = key[0]
 	sz := int(binary.BigEndian.Uint16(key[1:3]))
 	k := key[3:]
 

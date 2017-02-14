@@ -29,10 +29,10 @@ import (
 
 type nameType struct {
 	name string
-	typ  *types.SchemaDescription
+	typ  *types.Schema
 }
 
-func checkSchema(t *testing.T, h map[string]*types.SchemaDescription, expected []nameType) {
+func checkSchema(t *testing.T, h map[string]*types.Schema, expected []nameType) {
 	require.Len(t, h, len(expected))
 	for _, nt := range expected {
 		typ, found := h[nt.name]
@@ -41,66 +41,37 @@ func checkSchema(t *testing.T, h map[string]*types.SchemaDescription, expected [
 	}
 }
 
-func initSchemaStore(t *testing.T) (string, *store.Store) {
-	dir, err := ioutil.TempDir("", "storetest_")
-	require.NoError(t, err)
-
-	ps, err := store.NewStore(dir)
-	require.NoError(t, err)
-	return dir, ps
-}
-
 func TestSchema(t *testing.T) {
-	dir, ps := initSchemaStore(t)
-	defer os.RemoveAll(dir)
-	defer ps.Close()
-
 	require.NoError(t, Init(ps, "testfiles/test_schema"))
-	checkSchema(t, str.sm, []nameType{
-		{"name", &types.SchemaDescription{ValueType: uint32(types.StringID)}},
-		{"address", &types.SchemaDescription{ValueType: uint32(types.StringID)}},
-		{"http://film.com/name", &types.SchemaDescription{ValueType: uint32(types.StringID)}},
-		{"http://scalar.com/helloworld/", &types.SchemaDescription{ValueType: uint32(types.StringID)}},
-		{"age", &types.SchemaDescription{ValueType: uint32(types.Int32ID)}},
-		{"budget", &types.SchemaDescription{ValueType: uint32(types.Int32ID)}},
-		{"http://film.com/budget", &types.SchemaDescription{ValueType: uint32(types.Int32ID)}},
-		{"NumFollower", &types.SchemaDescription{ValueType: uint32(types.Int32ID)}},
-		{"Person", &types.SchemaDescription{ValueType: uint32(types.UidID)}},
-		{"Actor", &types.SchemaDescription{ValueType: uint32(types.UidID)}},
-		{"Film", &types.SchemaDescription{ValueType: uint32(types.UidID)}},
-		{"http://film.com/", &types.SchemaDescription{ValueType: uint32(types.UidID)}},
+	checkSchema(t, stateInfo().info, []nameType{
+		{"name", &types.Schema{ValueType: uint32(types.StringID)}},
+		{"address", &types.Schema{ValueType: uint32(types.StringID)}},
+		{"http://film.com/name", &types.Schema{ValueType: uint32(types.StringID)}},
+		{"http://scalar.com/helloworld/", &types.Schema{ValueType: uint32(types.StringID)}},
+		{"age", &types.Schema{ValueType: uint32(types.Int32ID)}},
+		{"budget", &types.Schema{ValueType: uint32(types.Int32ID)}},
+		{"http://film.com/budget", &types.Schema{ValueType: uint32(types.Int32ID)}},
+		{"NumFollower", &types.Schema{ValueType: uint32(types.Int32ID)}},
+		{"Person", &types.Schema{ValueType: uint32(types.UidID)}},
+		{"Actor", &types.Schema{ValueType: uint32(types.UidID)}},
+		{"Film", &types.Schema{ValueType: uint32(types.UidID)}},
+		{"http://film.com/", &types.Schema{ValueType: uint32(types.UidID)}},
 	})
 }
 
 func TestSchema1_Error(t *testing.T) {
-	dir, ps := initSchemaStore(t)
-	defer os.RemoveAll(dir)
-	defer ps.Close()
-
 	require.Error(t, Init(ps, "testfiles/test_schema1"))
 }
 
 func TestSchema2_Error(t *testing.T) {
-	dir, ps := initSchemaStore(t)
-	defer os.RemoveAll(dir)
-	defer ps.Close()
-
 	require.Error(t, Init(ps, "testfiles/test_schema2"))
 }
 
 func TestSchema3_Error(t *testing.T) {
-	dir, ps := initSchemaStore(t)
-	defer os.RemoveAll(dir)
-	defer ps.Close()
-
 	require.Error(t, Init(ps, "testfiles/test_schema3"))
 }
 
 func TestSchema4_Error(t *testing.T) {
-	dir, ps := initSchemaStore(t)
-	defer os.RemoveAll(dir)
-	defer ps.Close()
-
 	require.Error(t, Init(ps, "testfiles/test_schema4"))
 }
 
@@ -119,52 +90,43 @@ func TestSchema6_Error(t *testing.T) {
 */
 // Correct specification of indexing
 func TestSchemaIndex(t *testing.T) {
-	dir, ps := initSchemaStore(t)
-	defer os.RemoveAll(dir)
-	defer ps.Close()
-
 	require.NoError(t, Init(ps, "testfiles/test_schema_index1"))
-	require.Equal(t, 2, len(indexedFields))
+	require.Equal(t, 2, len(IndexedFields()))
 }
 
 // Indexing can't be specified inside object types.
 func TestSchemaIndex_Error1(t *testing.T) {
-	dir, ps := initSchemaStore(t)
-	defer os.RemoveAll(dir)
-	defer ps.Close()
-
 	require.Error(t, Init(ps, "testfiles/test_schema_index2"))
 }
 
 // Object types cant be indexed.
 func TestSchemaIndex_Error2(t *testing.T) {
-	dir, ps := initSchemaStore(t)
-	defer os.RemoveAll(dir)
-	defer ps.Close()
-
 	require.Error(t, Init(ps, "testfiles/test_schema_index3"))
 }
 
 func TestSchemaIndexCustom(t *testing.T) {
-	dir, ps := initSchemaStore(t)
-	defer os.RemoveAll(dir)
-	defer ps.Close()
-
 	require.NoError(t, Init(ps, "testfiles/test_schema_index4"))
-	checkSchema(t, str.sm, []nameType{
-		{"name", &types.SchemaDescription{ValueType: uint32(types.StringID)}},
-		{"address", &types.SchemaDescription{ValueType: uint32(types.StringID)}},
-		{"age", &types.SchemaDescription{ValueType: uint32(types.Int32ID)}},
-		{"Person", &types.SchemaDescription{ValueType: uint32(types.UidID)}},
+	checkSchema(t, stateInfo().info, []nameType{
+		{"name", &types.Schema{ValueType: uint32(types.StringID), Tokenizer: "exact"}},
+		{"address", &types.Schema{ValueType: uint32(types.StringID), Tokenizer: "term"}},
+		{"age", &types.Schema{ValueType: uint32(types.Int32ID), Tokenizer: "int"}},
+		{"Person", &types.Schema{ValueType: uint32(types.UidID)}},
 	})
-	require.Equal(t, 3, len(indexedFields))
-	require.Equal(t, "int", indexedFields["age"].Name())
-	require.Equal(t, "exact", indexedFields["name"].Name())
-	require.Equal(t, "term", indexedFields["address"].Name())
+	require.Equal(t, 3, len(IndexedFields()))
 }
+
+var ps *store.Store
 
 func TestMain(m *testing.M) {
 	x.SetTestRun()
 	x.Init()
+
+	dir, err := ioutil.TempDir("", "storetest_")
+	x.Check(err)
+	ps, err = store.NewStore(dir)
+	x.Check(err)
+	defer os.RemoveAll(dir)
+	defer ps.Close()
+
 	os.Exit(m.Run())
 }
