@@ -49,7 +49,7 @@ const popover = (
 );
 
     return (
-      <div className="query" style={{marginBottom: '20px', padding: '5px', borderBottom: '1px solid gray'}}>
+      <div className="query" style={{marginBottom: '10px', padding: '5px', borderBottom: '1px solid gray'}}>
          <OverlayTrigger delayShow={1000} delayHide={0}
         overlay={popover} placement="bottom">
           <pre style={{whiteSpace: 'pre-wrap', backgroundColor: '#f0ece9'}}
