@@ -592,8 +592,7 @@ func (l *List) intersectingPostings(opt ListOptions, postFn func(*types.Posting)
 		}
 		uid := p.Uid
 		if opt.Intersect != nil {
-			for ; it.Valid() && it.Val() < uid; it.Next() {
-			}
+			it.Seek(uid, 1)
 			if !it.Valid() || it.Val() > uid {
 				return true
 			}
