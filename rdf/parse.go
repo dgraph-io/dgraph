@@ -330,7 +330,7 @@ func parseFacets(it *lex.ItemIterator, rnq *graph.NQuad) error {
 	if item.Typ != itemLeftRound {
 		return x.Errorf("Expected '(' but found %v at Facet.", item.Val)
 	}
-	defer func() {
+	defer func() { // always sort facets before returning.
 		if rnq.Facets != nil {
 			facets.SortFacets(rnq.Facets)
 		}
