@@ -37,7 +37,6 @@ func (s *state) updateIfMissing(se *SyncEntry) (types.TypeID, error) {
 	defer s.Unlock()
 
 	if oldVal, ok := s.info[se.Attr]; ok && oldVal.ValueType != se.SchemaDescription.ValueType {
-		se.Water.Ch <- x.Mark{Index: se.Index, Done: false}
 		return types.TypeID(oldVal.ValueType), x.Errorf("Schema for attr %s already set to %d", se.Attr, se.SchemaDescription.ValueType)
 	}
 
@@ -168,11 +167,10 @@ func LoadFromDb() error {
 	for itr.Seek(prefix); itr.ValidForPrefix(prefix); itr.Next() {
 		key := itr.Key().Data()
 		attr := x.Parse(key).Attr
-		slice := itr.Value()
+		data := itr.Value().Data()
 		var info types.Schema
-		x.Checkf(info.Unmarshal(slice.Data()), "Error while loading schema from db")
+		x.Checkf(info.Unmarshal(data), "Error while loading schema from db")
 		stateInfo().set(attr, &info)
-		slice.Free()
 	}
 
 	return nil
@@ -217,6 +215,14 @@ type SyncEntry struct {
 	Index             uint64
 }
 
+func addToEntriesMap(entriesMap map[chan x.Mark][]uint64, entries []SyncEntry) {
+	for _, entry := range entries {
+		if entry.Water != nil {
+			entriesMap[entry.Water.Ch] = append(entriesMap[entry.Water.Ch], entry.Index)
+		}
+	}
+}
+
 func batchSync() {
 	var entries []SyncEntry
 	var loop uint64
@@ -244,10 +250,10 @@ func batchSync() {
 				x.Checkf(pstore.WriteBatch(b), "Error while writing to RocksDB.")
 				b.Clear()
 
-				for _, e := range entries {
-					if e.Water != nil {
-						e.Water.Ch <- x.Mark{Index: e.Index, Done: true}
-					}
+				entriesMap := make(map[chan x.Mark][]uint64)
+				addToEntriesMap(entriesMap, entries)
+				for ch, indices := range entriesMap {
+					ch <- x.Mark{Indices: indices, Done: true}
 				}
 				entries = entries[:0]
 			}

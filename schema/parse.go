@@ -36,7 +36,7 @@ func parse(file string) (rerr error) {
 
 // ParseBytes parses the byte array which holds the schema. We will reset
 // all the globals.
-// Not Thread safe, call before initializing schema - Used only in testing ?
+// Overwrites schema blindly - called only during initilization in testing
 func ParseBytes(schema []byte) (rerr error) {
 	reset()
 	s := string(schema)

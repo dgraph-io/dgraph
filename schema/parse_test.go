@@ -24,6 +24,7 @@ import (
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
+
 	"github.com/stretchr/testify/require"
 )
 
@@ -57,6 +58,13 @@ func TestSchema(t *testing.T) {
 		{"Film", &types.Schema{ValueType: uint32(types.UidID)}},
 		{"http://film.com/", &types.Schema{ValueType: uint32(types.UidID)}},
 	})
+
+	typ, err := TypeOf("age")
+	require.NoError(t, err)
+	require.Equal(t, types.Int32ID, typ)
+
+	typ, err = TypeOf("agea")
+	require.Error(t, err)
 }
 
 func TestSchema1_Error(t *testing.T) {
@@ -112,6 +120,9 @@ func TestSchemaIndexCustom(t *testing.T) {
 		{"age", &types.Schema{ValueType: uint32(types.Int32ID), Tokenizer: "int"}},
 		{"Person", &types.Schema{ValueType: uint32(types.UidID)}},
 	})
+	require.True(t, IsIndexed("name"))
+	require.False(t, IsReversed("name"))
+	require.Equal(t, "int", Tokenizer("age").Name())
 	require.Equal(t, 3, len(IndexedFields()))
 }
 
