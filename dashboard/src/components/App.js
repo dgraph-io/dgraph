@@ -457,7 +457,14 @@ class App extends React.Component {
     e.preventDefault();
     if(e.target instanceof HTMLElement){
         this.setState({
-          query: e.target.dataset.query
+          query: e.target.dataset.query,
+          rendering: '',
+          latency: '',
+          nodes: 0,
+          relations: 0,
+          selectedNode: false,
+          partial: false,
+          currentNode: '{}'
         });
     }
     window.scrollTo(0, 0);
