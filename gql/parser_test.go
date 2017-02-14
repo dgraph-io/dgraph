@@ -197,6 +197,23 @@ func TestParseQueryWithMultipleVar(t *testing.T) {
 	require.Equal(t, []string{"B"}, res.QueryVars[2].Needs)
 }
 
+func TestParseShortestPath(t *testing.T) {
+	query := `
+	{
+		shortest(from:0x0a, to:0x0b) {
+			friends
+			name
+		}
+	}
+`
+	res, err := Parse(query)
+	require.NoError(t, err)
+	require.NotNil(t, res.Query)
+	require.Equal(t, 1, len(res.Query))
+	require.Equal(t, "0x0a", res.Query[0].Args["from"])
+	require.Equal(t, "0x0b", res.Query[0].Args["to"])
+}
+
 func TestParseMultipleQueries(t *testing.T) {
 	query := `
 	{
@@ -1285,7 +1302,6 @@ func TestParseCountAsFuncMultiple(t *testing.T) {
 	require.Equal(t, "relatives", gq.Query[0].Children[1].Attr)
 	require.Equal(t, true, gq.Query[0].Children[2].IsCount)
 	require.Equal(t, "classmates", gq.Query[0].Children[2].Attr)
-
 }
 
 func TestParseCountAsFuncMultipleError(t *testing.T) {

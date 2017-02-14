@@ -36,6 +36,10 @@ const (
 	itemObjectType                         // object type, 12
 	itemValidEnd                           // end with dot, 13
 	itemComment                            // comment, 14
+	itemComma                              // comma, 15
+	itemEqual                              // equal, 16
+	itemLeftRound                          // '(', 17
+	itemRightRound                         // ')', 18
 )
 
 // These constants keep a track of the depth while parsing an rdf N-Quad.
@@ -44,6 +48,7 @@ const (
 	atPredicate
 	atObject
 	atLabel
+	atFacet
 )
 
 const (
@@ -57,6 +62,10 @@ const (
 	dot        = '.'
 	at         = '@'
 	caret      = '^'
+	leftRound  = '('
+	rightRound = ')'
+	comma      = ','
+	equal      = '='
 )
 
 // This function inspects the next rune and calls the appropriate stateFn.
@@ -104,6 +113,14 @@ Loop:
 				return l.Errorf("Invalid input: %c at lexText", r)
 			}
 			return lexComment
+
+		case r == leftRound:
+			if l.Depth > atObject {
+				l.Backup()
+				l.Emit(itemText)
+				return lexFacets
+			}
+			return l.Errorf("Invalid input: %c at Facet", r)
 
 		case r == lex.EOF:
 			break Loop
@@ -340,6 +357,46 @@ func lexLabel(l *lex.Lexer) lex.StateFn {
 	return l.Errorf("Invalid char: %v at lexLabel", r)
 }
 
+// lexFacets parses key-value pairs of Facets. sample is :
+// ( key1 = "value1", key2=13, key3=, key4 =2.4, key5=2006-01-02T15:04:05,
+//   key6=2006-01-02 )
+func lexFacets(l *lex.Lexer) lex.StateFn {
+	r := l.Next()
+	if r != leftRound {
+		return l.Errorf("Expected '(' but found %v at Facet.", r)
+	}
+	l.Emit(itemLeftRound)
+
+	// we can come here from the lexObject also ;
+	// so setting to ahead of atFacet explicitly
+	l.Depth = atFacet + 1
+
+forLoop:
+	for {
+		r = l.Next()
+		switch {
+		case isSpace(r):
+			l.Ignore()
+		case r == equal:
+			l.Emit(itemEqual)
+		case r == comma:
+			l.Emit(itemComma)
+		case r == rightRound:
+			l.Emit(itemRightRound)
+			break forLoop
+		case r == lex.EOF:
+			l.Emit(lex.ItemEOF)
+			return nil
+		default:
+			l.AcceptRun(func(r rune) bool {
+				return r != equal && !isSpace(r) && r != rightRound && r != comma
+			})
+			l.Emit(itemText)
+		}
+	}
+	return lexText
+}
+
 // lexComment lexes a comment text.
 func lexComment(l *lex.Lexer) lex.StateFn {
 	l.Backup()
@@ -446,17 +503,8 @@ func isPNChar(r rune) bool {
 // ECHAR ::= '\' [tbnrf"'\]
 func isEscChar(r rune) bool {
 	switch r {
-	case 't':
-	case 'b':
-	case 'n':
-	case 'r':
-	case 'f':
-	case '"':
-	case '\'':
-	case '\\':
-		// true for all above.
-	default:
-		return false
+	case 't', 'b', 'n', 'r', 'f', '"', '\'', '\\':
+		return true
 	}
-	return true
+	return false
 }

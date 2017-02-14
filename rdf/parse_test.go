@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/dgraph-io/dgraph/query/graph"
+	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -495,6 +496,158 @@ var testNQuads = []struct {
 		input:        `   `,
 		expectedErr:  true,
 		shouldIgnore: true,
+	},
+	// Edge Facets test.
+	{
+		input: `_:alice <knows> "stuff" _:label (key1=val1,key2=13) .`,
+		nq: graph.NQuad{
+			Subject:     "_:alice",
+			Predicate:   "knows",
+			ObjectId:    "",
+			ObjectValue: &graph.Value{&graph.Value_StrVal{"stuff"}},
+			Label:       "_:label",
+			ObjectType:  0,
+			Facets: []*facets.Facet{
+				&facets.Facet{"key1", []byte("val1"),
+					facets.TypeIDToValType(facets.StringID)},
+				&facets.Facet{"key2", []byte("13"),
+					facets.TypeIDToValType(facets.Int32ID)}},
+		},
+		expectedErr: false,
+	},
+	{
+		input: `_:alice <knows> "stuff" _:label (key1=,key2=13) .`,
+		nq: graph.NQuad{
+			Subject:     "_:alice",
+			Predicate:   "knows",
+			ObjectId:    "",
+			ObjectValue: &graph.Value{&graph.Value_StrVal{"stuff"}},
+			Label:       "_:label",
+			ObjectType:  0,
+			Facets: []*facets.Facet{
+				&facets.Facet{"key1", []byte(""),
+					facets.TypeIDToValType(facets.StringID)},
+				&facets.Facet{"key2", []byte("13"),
+					facets.TypeIDToValType(facets.Int32ID)}},
+		},
+		expectedErr: false,
+	},
+	// Should parse facets even if there is no label
+	{
+		input: `_:alice <knows> "stuff" (key1=,key2=13) .`,
+		nq: graph.NQuad{
+			Subject:     "_:alice",
+			Predicate:   "knows",
+			ObjectId:    "",
+			ObjectValue: &graph.Value{&graph.Value_StrVal{"stuff"}},
+			ObjectType:  0,
+			Facets: []*facets.Facet{
+				&facets.Facet{"key1", []byte(""),
+					facets.TypeIDToValType(facets.StringID)},
+				&facets.Facet{"key2", []byte("13"),
+					facets.TypeIDToValType(facets.Int32ID)}},
+		},
+		expectedErr: false,
+	},
+	// Should not fail parsing with unnecessary spaces
+	{
+		input: `_:alice <knows> "stuff" ( key1 = 12 , key2=value2, key3=, key4 =val4 ) .`,
+		nq: graph.NQuad{
+			Subject:     "_:alice",
+			Predicate:   "knows",
+			ObjectId:    "",
+			ObjectValue: &graph.Value{&graph.Value_StrVal{"stuff"}},
+			ObjectType:  0,
+			Facets: []*facets.Facet{
+				&facets.Facet{"key1", []byte("12"),
+					facets.TypeIDToValType(facets.Int32ID)},
+				&facets.Facet{"key2", []byte("value2"),
+					facets.TypeIDToValType(facets.StringID)},
+				&facets.Facet{"key3", []byte(""),
+					facets.TypeIDToValType(facets.StringID)},
+				&facets.Facet{"key4", []byte("val4"),
+					facets.TypeIDToValType(facets.StringID)},
+			},
+		},
+		expectedErr: false,
+	},
+	// Should parse all types
+	{
+		input: `_:alice <knows> "stuff" (key1=12,key2=value2,key3=1.2,key4=2006-01-02T15:04:05 ) .`,
+		nq: graph.NQuad{
+			Subject:     "_:alice",
+			Predicate:   "knows",
+			ObjectId:    "",
+			ObjectValue: &graph.Value{&graph.Value_StrVal{"stuff"}},
+			ObjectType:  0,
+			Facets: []*facets.Facet{
+				&facets.Facet{"key1", []byte("12"),
+					facets.TypeIDToValType(facets.Int32ID)},
+				&facets.Facet{"key2", []byte("value2"),
+					facets.TypeIDToValType(facets.StringID)},
+				&facets.Facet{"key3", []byte("1.2"),
+					facets.TypeIDToValType(facets.FloatID)},
+				&facets.Facet{"key4", []byte("2006-01-02T15:04:05"),
+					facets.TypeIDToValType(facets.DateTimeID)},
+			},
+		},
+		expectedErr: false,
+	},
+	// Should parse dates
+	{
+		input: `_:alice <knows> "stuff" (key1=2002-10-02T15:00:00.05Z, key2=2006-01-02T15:04:05, key3=2006-01-02) .`,
+		nq: graph.NQuad{
+			Subject:     "_:alice",
+			Predicate:   "knows",
+			ObjectId:    "",
+			ObjectValue: &graph.Value{&graph.Value_StrVal{"stuff"}},
+			ObjectType:  0,
+			Facets: []*facets.Facet{
+				&facets.Facet{"key1", []byte("2002-10-02T15:00:00.05Z"),
+					facets.TypeIDToValType(facets.DateTimeID)},
+				&facets.Facet{"key2", []byte("2006-01-02T15:04:05"),
+					facets.TypeIDToValType(facets.DateTimeID)},
+				&facets.Facet{"key3", []byte("2006-01-02"),
+					facets.TypeIDToValType(facets.DateTimeID)},
+			},
+		},
+	},
+	// failing tests for facets
+	{
+		input:       `_:alice <knows> "stuff" (key1=val1,key2) .`,
+		expectedErr: true, // should fail because of no '=' after key2
+	},
+	{
+		input:       `_:alice <knows> "stuff" (key1=val1,=) .`,
+		expectedErr: true, // key can not be empty
+	},
+	{
+		input:       `_:alice <knows> "stuff" (key1=val1,=val1) .`,
+		expectedErr: true, // key can not be empty
+	},
+	{
+		input:       `_:alice <knows> "stuff" (key1=val1,key1 val1) .`,
+		expectedErr: true, // '=' should separate key and val
+	},
+	{
+		input:       `_:alice <knows> "stuff" (key1=val1,key1= val1 .`,
+		expectedErr: true, // facets should end by ')'
+	},
+	{
+		input:       `_:alice <knows> "stuff" (key1=val1,key1= .`,
+		expectedErr: true, // facets should end by ')'
+	},
+	{
+		input:       `_:alice <knows> "stuff" (key1=val1,key1=`,
+		expectedErr: true, // facets should end by ')'
+	},
+	{
+		input:       `_:alice <knows> "stuff" (k==)`,
+		expectedErr: true, // equal not allowed in value
+	},
+	{
+		input:       `_:alice <knows> "stuff" (k=,) .`,
+		expectedErr: true, // comma should be followed by another key-value pair.
 	},
 }
 

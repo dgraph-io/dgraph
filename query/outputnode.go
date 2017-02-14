@@ -30,6 +30,7 @@ import (
 	geom "github.com/twpayne/go-geom"
 	"github.com/twpayne/go-geom/encoding/geojson"
 
+	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/query/graph"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
@@ -40,7 +41,7 @@ import (
 func ToProtocolBuf(l *Latency, sgl []*SubGraph) ([]*graph.Node, error) {
 	var resNode []*graph.Node
 	for _, sg := range sgl {
-		if sg.Params.Alias == "var" {
+		if sg.Params.Alias == "var" || sg.Params.Alias == "shortest" {
 			continue
 		}
 		node, err := sg.ToProtocolBuffer(l)
@@ -58,7 +59,7 @@ func ToJson(l *Latency, sgl []*SubGraph, w io.Writer) error {
 		Attr: "__",
 	}
 	for _, sg := range sgl {
-		if sg.Params.Alias == "var" {
+		if sg.Params.Alias == "var" || sg.Params.Alias == "shortest" {
 			continue
 		}
 		if sg.Params.isDebug {
@@ -147,15 +148,16 @@ func (sg *SubGraph) ToProtocolBuffer(l *Latency) (*graph.Node, error) {
 	}
 
 	n := seedNode.New("_root_")
-	// At the root, we always have one list in UidMatrix.
-	for _, uid := range sg.uidMatrix[0].Uids {
+	it := algo.NewListIterator(sg.uidMatrix[0])
+	for ; it.Valid(); it.Next() {
+		uid := it.Val()
 		// For the root, the name is stored in Alias, not Attr.
 		n1 := seedNode.New(sg.Params.Alias)
 		if sg.Params.GetUID || sg.Params.isDebug {
 			n1.SetUID(uid)
 		}
 
-		if rerr := sg.preTraverse(uid, n1); rerr != nil {
+		if rerr := sg.preTraverse(uid, n1, n1); rerr != nil {
 			if rerr.Error() == "_INV_" {
 				continue
 			}
@@ -338,13 +340,14 @@ func processNodeUids(n *fastJsonNode, sg *SubGraph) error {
 	if sg.uidMatrix == nil {
 		return nil
 	}
-	// At the root, we always have one list in UidMatrix.
-	for _, uid := range sg.uidMatrix[0].Uids {
+	it := algo.NewListIterator(sg.uidMatrix[0])
+	for ; it.Valid(); it.Next() {
+		uid := it.Val()
 		n1 := seedNode.New(sg.Params.Alias)
 		if sg.Params.GetUID || sg.Params.isDebug {
 			n1.SetUID(uid)
 		}
-		if err := sg.preTraverse(uid, n1); err != nil {
+		if err := sg.preTraverse(uid, n1, n1); err != nil {
 			if err.Error() == "_INV_" {
 				continue
 			}

@@ -24,6 +24,7 @@ import (
 	"github.com/golang/geo/s2"
 	"github.com/twpayne/go-geom"
 
+	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -323,9 +324,12 @@ func (q GeoQueryData) intersects(g geom.T) bool {
 
 // FilterGeoUids filters the uids based on the corresponding values and GeoQueryData.
 func FilterGeoUids(uids *task.List, values []*task.Value, q *GeoQueryData) *task.List {
-	x.AssertTruef(len(values) == len(uids.Uids), "lengths not matching")
-	rv := &task.List{}
-	for i := 0; i < len(values); i++ {
+	x.AssertTruef(len(values) == algo.ListLen(uids), "lengths not matching")
+	o := new(task.List)
+	out := algo.NewWriteIterator(o, 0)
+	it := algo.NewListIterator(uids)
+	for i := -1; it.Valid(); it.Next() {
+		i++
 		valBytes := values[i].Val
 		if bytes.Equal(valBytes, nil) {
 			continue
@@ -347,7 +351,8 @@ func FilterGeoUids(uids *task.List, values []*task.Value, q *GeoQueryData) *task
 		}
 
 		// we matched the geo filter, add the uid to the list
-		rv.Uids = append(rv.Uids, uids.Uids[i])
+		out.Append(it.Val())
 	}
-	return rv
+	out.End()
+	return o
 }
