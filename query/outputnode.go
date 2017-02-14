@@ -73,8 +73,8 @@ func ToJson(l *Latency, sgl []*SubGraph, w io.Writer) error {
 // outputNode is the generic output / writer for preTraverse.
 type outputNode interface {
 	AddValue(attr string, v types.Val)
-	AddNodeValue(attr string, node outputNode, topNode bool)
-	AddChild(attr string, child outputNode)
+	AddMapChild(attr string, node outputNode, topNode bool)
+	AddListChild(attr string, child outputNode)
 	New(attr string) outputNode
 	SetUID(uid uint64)
 	SetXID(xid string)
@@ -91,8 +91,8 @@ func (p *protoNode) AddValue(attr string, v types.Val) {
 	p.Node.Properties = append(p.Node.Properties, createProperty(attr, v))
 }
 
-// AddNodeValue adds a node value for protoOutputNode.
-func (p *protoNode) AddNodeValue(attr string, v outputNode, topNode bool) {
+// AddMapChild adds a node value for protoOutputNode.
+func (p *protoNode) AddMapChild(attr string, v outputNode, topNode bool) {
 	// Assert that attr == v.Node.Attribute
 	var childNode *graph.Node
 	var as []string
@@ -122,14 +122,14 @@ func (p *protoNode) AddNodeValue(attr string, v outputNode, topNode bool) {
 		vParent := v
 		if topNode {
 			vParent = v.New(attr)
-			vParent.AddChild(attr, v)
+			vParent.AddListChild(attr, v)
 		}
 		p.Node.Children = append(p.Node.Children, vParent.(*protoNode).Node)
 	}
 }
 
-// AddChild adds a child for protoOutputNode.
-func (p *protoNode) AddChild(attr string, child outputNode) {
+// AddListChild adds a child for protoOutputNode.
+func (p *protoNode) AddListChild(attr string, child outputNode) {
 	p.Node.Children = append(p.Node.Children, child.(*protoNode).Node)
 }
 
@@ -205,7 +205,7 @@ func (sg *SubGraph) ToProtocolBuffer(l *Latency) (*graph.Node, error) {
 			continue
 		}
 		if !sg.Params.Normalize {
-			n.AddChild(sg.Params.Alias, n1)
+			n.AddListChild(sg.Params.Alias, n1)
 			continue
 		}
 
@@ -213,7 +213,7 @@ func (sg *SubGraph) ToProtocolBuffer(l *Latency) (*graph.Node, error) {
 		normalized := make([]protoNode, 0, 10)
 		props := make([]*graph.Property, 0, 10)
 		for _, c := range (n1.(*protoNode)).normalize(props, normalized) {
-			n.AddChild(sg.Params.Alias, &c)
+			n.AddListChild(sg.Params.Alias, &c)
 		}
 	}
 	l.ProtocolBuffer = time.Since(l.Start) - l.Parsing - l.Processing
@@ -246,7 +246,7 @@ func (fj *fastJsonNode) AddValue(attr string, v types.Val) {
 	}
 }
 
-func (fj *fastJsonNode) AddNodeValue(attr string, val outputNode, _ bool) {
+func (fj *fastJsonNode) AddMapChild(attr string, val outputNode, _ bool) {
 	nodeAttr, found := fj.attrs[attr]
 	if found {
 		if nodeAttr.isScalar {
@@ -264,7 +264,7 @@ func (fj *fastJsonNode) AddNodeValue(attr string, val outputNode, _ bool) {
 	}
 }
 
-func (fj *fastJsonNode) AddChild(attr string, child outputNode) {
+func (fj *fastJsonNode) AddListChild(attr string, child outputNode) {
 	children, found := fj.children[attr]
 	if !found {
 		children = make([]*fastJsonNode, 0, 5)
@@ -434,7 +434,7 @@ func processNodeUids(n *fastJsonNode, sg *SubGraph) error {
 		}
 
 		if !sg.Params.Normalize {
-			n.AddChild(sg.Params.Alias, n1)
+			n.AddListChild(sg.Params.Alias, n1)
 			continue
 		}
 
@@ -445,7 +445,7 @@ func processNodeUids(n *fastJsonNode, sg *SubGraph) error {
 		// the Subgraph.
 		av := make([]attrVal, 0, 10)
 		for _, c := range (n1.(*fastJsonNode)).normalize(av, normalized) {
-			n.AddChild(sg.Params.Alias, &fastJsonNode{attrs: c.attrs})
+			n.AddListChild(sg.Params.Alias, &fastJsonNode{attrs: c.attrs})
 		}
 	}
 	return nil

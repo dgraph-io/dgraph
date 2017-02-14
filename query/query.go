@@ -243,7 +243,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 			c.Value = int32(pc.counts[idx])
 			uc := dst.New(pc.Attr)
 			uc.AddValue("count", c)
-			dst.AddChild(pc.Attr, uc)
+			dst.AddListChild(pc.Attr, uc)
 		} else if len(pc.SrcFunc) > 0 && isAggregatorFn(pc.SrcFunc[0]) {
 			if idx > 0 { // aggregator will put value at index 0; place once
 				continue
@@ -257,7 +257,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 				return err
 			}
 			uc.AddValue(name, sv)
-			parent.AddChild(sg.Attr, uc)
+			parent.AddListChild(sg.Attr, uc)
 		} else if algo.ListLen(ul) > 0 || len(pc.Children) > 0 {
 			// We create as many predicate entity children as the length of uids for
 			// this predicate.
@@ -295,12 +295,12 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 					}
 					if !fc.IsEmpty() {
 						fcParent := dst.New("_")
-						fcParent.AddNodeValue("_", fc, false)
-						uc.AddNodeValue("@facets", fcParent, true)
+						fcParent.AddMapChild("_", fc, false)
+						uc.AddMapChild("@facets", fcParent, true)
 					}
 				}
 				if !uc.IsEmpty() {
-					dst.AddChild(fieldName, uc)
+					dst.AddListChild(fieldName, uc)
 				}
 			}
 		} else {
@@ -320,7 +320,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 					}
 				}
 				if !fc.IsEmpty() {
-					facetsNode.AddNodeValue(fieldName, fc, false)
+					facetsNode.AddMapChild(fieldName, fc, false)
 				}
 			}
 
@@ -361,7 +361,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 	}
 
 	if !facetsNode.IsEmpty() {
-		dst.AddNodeValue("@facets", facetsNode, false)
+		dst.AddMapChild("@facets", facetsNode, false)
 	}
 	return nil
 }

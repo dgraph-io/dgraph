@@ -19,7 +19,7 @@ message Facet {
 }
 
 message Param {
-	bool AllKeys = 1;
+	bool all_keys = 1;
 	repeated string keys = 2;
 }
 
