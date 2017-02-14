@@ -69,7 +69,7 @@
     color: green;
 }
 
-.query:hover pre {
+div.query pre:hover {
     border: 1px solid gray;
     cursor: pointer;
 }

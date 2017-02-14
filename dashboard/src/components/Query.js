@@ -1,4 +1,5 @@
 import React, { Component } from 'react';
+import {Popover, OverlayTrigger} from 'react-bootstrap';
 
 function prettifyQuery(q) {
   var parsedQuery
@@ -39,10 +40,25 @@ function getQueryStructure(query) {
 
 class Query extends Component {
   render() {
+const popover = (
+  <Popover id={this.props.unique}>
+    <pre style={{fontSize: '10px', whiteSpace: 'pre-wrap'}}>
+    {this.props.text}
+    </pre>
+  </Popover>
+);
+
     return (
-      <li className="query" style={{marginBottom: '20px', padding: '5px', borderBottom: '1px solid gray'}}>
-        <pre style={{whiteSpace: 'pre-wrap', backgroundColor: '#f0ece9'}} onClick={this.props.update} data-query={this.props.text}>{getQueryStructure(prettifyQuery(this.props.text))}</pre>
-      </li>
+      <div className="query" style={{marginBottom: '20px', padding: '5px', borderBottom: '1px solid gray'}}>
+         <OverlayTrigger delayShow={1000} delayHide={0}
+        overlay={popover} placement="bottom">
+          <pre style={{whiteSpace: 'pre-wrap', backgroundColor: '#f0ece9'}}
+            onClick={this.props.update} data-query={this.props.text}>{getQueryStructure(prettifyQuery(this.props.text))}
+          </pre>
+          </OverlayTrigger>
+        <div className="col-sm-6">
+        </div>
+      </div>
     )
   }
 }
