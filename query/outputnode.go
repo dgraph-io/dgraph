@@ -73,7 +73,7 @@ func ToJson(l *Latency, sgl []*SubGraph, w io.Writer) error {
 // outputNode is the generic output / writer for preTraverse.
 type outputNode interface {
 	AddValue(attr string, v types.Val)
-	AddNodeValue(attr string, node outputNode)
+	AddNodeValue(attr string, node outputNode, topNode bool)
 	AddChild(attr string, child outputNode)
 	New(attr string) outputNode
 	SetUID(uid uint64)
@@ -92,30 +92,39 @@ func (p *protoNode) AddValue(attr string, v types.Val) {
 }
 
 // AddNodeValue adds a node value for protoOutputNode.
-func (p *protoNode) AddNodeValue(attr string, v outputNode) {
-	var propNode *graph.Node
-	for _, p := range p.Node.Properties {
-		if p.Prop == attr {
-			x.AssertTruef(p.Value.(*graph.Property_NodeValue) != nil,
-				"Can not merge RawValue with NodeValue")
-			propNode = p.Value.(*graph.Property_NodeValue).NodeValue
+func (p *protoNode) AddNodeValue(attr string, v outputNode, topNode bool) {
+	// Assert that attr == v.Node.Attribute
+	var childNode *graph.Node
+	var as []string
+	for _, c := range p.Node.Children {
+		as = append(as, c.Attribute)
+		if c.Attribute == attr {
+			childNode = c
 			break
 		}
 	}
-	if propNode != nil {
-		// merge outputNode into propNode
-		vnode := v.(*protoNode).Node
-		x.AssertTruef(vnode.Uid == propNode.Uid && vnode.Xid == propNode.Xid,
-			"Invalid nodes while merging.")
-		for _, p := range vnode.Properties {
-			propNode.Properties = append(propNode.Properties, p)
-		}
-		for _, c := range vnode.Children {
-			propNode.Children = append(propNode.Children, c)
+	if childNode != nil {
+		if topNode {
+			childNode.Children = append(childNode.Children, v.(*protoNode).Node)
+		} else {
+			// merge outputNode into childNode
+			vnode := v.(*protoNode).Node
+			x.AssertTruef(vnode.Uid == childNode.Uid && vnode.Xid == childNode.Xid,
+				"Invalid nodes while merging.")
+			for _, p := range vnode.Properties {
+				childNode.Properties = append(childNode.Properties, p)
+			}
+			for _, c := range vnode.Children {
+				childNode.Children = append(childNode.Children, c)
+			}
 		}
 	} else {
-		p.Node.Properties = append(p.Node.Properties,
-			createPropertyFromNode(attr, v.(*protoNode).Node))
+		vParent := v
+		if topNode {
+			vParent = v.New(attr)
+			vParent.AddChild(attr, v)
+		}
+		p.Node.Children = append(p.Node.Children, vParent.(*protoNode).Node)
 	}
 }
 
@@ -237,7 +246,7 @@ func (fj *fastJsonNode) AddValue(attr string, v types.Val) {
 	}
 }
 
-func (fj *fastJsonNode) AddNodeValue(attr string, val outputNode) {
+func (fj *fastJsonNode) AddNodeValue(attr string, val outputNode, _ bool) {
 	nodeAttr, found := fj.attrs[attr]
 	if found {
 		if nodeAttr.isScalar {

@@ -213,26 +213,8 @@ children: <
   attribute: "me"
   properties: <
     prop: "name"
-    raw_value: <
+    value: <
       str_val: "Michonne"
-    >
-  >
-  properties: <
-    prop: "@facets"
-    node_value: <
-      attribute: "facets"
-      properties: <
-        prop: "name"
-        node_value: <
-          attribute: "name"
-          properties: <
-            prop: "origin"
-            raw_value: <
-              str_val: "french"
-            >
-          >
-        >
-      >
     >
   >
   children: <
@@ -240,35 +222,29 @@ children: <
     attribute: "friend"
     properties: <
       prop: "name"
-      raw_value: <
+      value: <
         str_val: "Rick Grimes"
       >
     >
-    properties: <
-      prop: "@facets"
-      node_value: <
-        attribute: "facets"
+    children: <
+      attribute: "@facets"
+      children: <
+        attribute: "name"
         properties: <
-          prop: "name"
-          node_value: <
-            attribute: "name"
-            properties: <
-              prop: "origin"
-              raw_value: <
-                str_val: "french"
-              >
-            >
+          prop: "origin"
+          value: <
+            str_val: "french"
           >
         >
-        properties: <
-          prop: "_"
-          node_value: <
-            attribute: "friend"
-            properties: <
-              prop: "since"
-              raw_value: <
-                str_val: "12-01-1991"
-              >
+      >
+      children: <
+        attribute: "_"
+        children: <
+          attribute: "friend"
+          properties: <
+            prop: "since"
+            value: <
+              str_val: "12-01-1991"
             >
           >
         >
@@ -280,23 +256,20 @@ children: <
     attribute: "friend"
     properties: <
       prop: "name"
-      raw_value: <
+      value: <
         str_val: "Glenn Rhee"
       >
     >
-    properties: <
-      prop: "@facets"
-      node_value: <
+    children: <
+      attribute: "@facets"
+      children: <
         attribute: "_"
-        properties: <
-          prop: "_"
-          node_value: <
-            attribute: "friend"
-            properties: <
-              prop: "since"
-              raw_value: <
-                str_val: "12-01-1991"
-              >
+        children: <
+          attribute: "friend"
+          properties: <
+            prop: "since"
+            value: <
+              str_val: "12-01-1991"
             >
           >
         >
@@ -308,23 +281,20 @@ children: <
     attribute: "friend"
     properties: <
       prop: "name"
-      raw_value: <
+      value: <
         str_val: "Daryl Dixon"
       >
     >
-    properties: <
-      prop: "@facets"
-      node_value: <
+    children: <
+      attribute: "@facets"
+      children: <
         attribute: "_"
-        properties: <
-          prop: "_"
-          node_value: <
-            attribute: "friend"
-            properties: <
-              prop: "since"
-              raw_value: <
-                str_val: "12-01-1991"
-              >
+        children: <
+          attribute: "friend"
+          properties: <
+            prop: "since"
+            value: <
+              str_val: "12-01-1991"
             >
           >
         >
@@ -336,23 +306,20 @@ children: <
     attribute: "friend"
     properties: <
       prop: "name"
-      raw_value: <
+      value: <
         str_val: "Andrea"
       >
     >
-    properties: <
-      prop: "@facets"
-      node_value: <
+    children: <
+      attribute: "@facets"
+      children: <
         attribute: "_"
-        properties: <
-          prop: "_"
-          node_value: <
-            attribute: "friend"
-            properties: <
-              prop: "since"
-              raw_value: <
-                str_val: "12-01-1991"
-              >
+        children: <
+          attribute: "friend"
+          properties: <
+            prop: "since"
+            value: <
+              str_val: "12-01-1991"
             >
           >
         >
@@ -362,33 +329,42 @@ children: <
   children: <
     uid: 101
     attribute: "friend"
-    properties: <
-      prop: "@facets"
-      node_value: <
+    children: <
+      attribute: "@facets"
+      children: <
         attribute: "_"
-        properties: <
-          prop: "_"
-          node_value: <
-            attribute: "friend"
-            properties: <
-              prop: "close"
-              raw_value: <
-                bool_val: true
-              >
-            >
-            properties: <
-              prop: "family"
-              raw_value: <
-                bool_val: false
-              >
-            >
-            properties: <
-              prop: "since"
-              raw_value: <
-                str_val: "11-10-2001"
-              >
+        children: <
+          attribute: "friend"
+          properties: <
+            prop: "close"
+            value: <
+              bool_val: true
             >
           >
+          properties: <
+            prop: "family"
+            value: <
+              bool_val: false
+            >
+          >
+          properties: <
+            prop: "since"
+            value: <
+              str_val: "11-10-2001"
+            >
+          >
+        >
+      >
+    >
+  >
+  children: <
+    attribute: "@facets"
+    children: <
+      attribute: "name"
+      properties: <
+        prop: "origin"
+        value: <
+          str_val: "french"
         >
       >
     >

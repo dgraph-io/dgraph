@@ -28,39 +28,38 @@ import (
 // This file contains helper functions for converting scalar types to
 // protobuf values.
 
-func toProtoValue(v types.Val) *graph.Property_RawValue {
+func toProtoValue(v types.Val) *graph.Value {
 	switch v.Tid {
 	case types.StringID:
-		return &graph.Property_RawValue{&graph.Value{&graph.Value_StrVal{v.Value.(string)}}}
+		return &graph.Value{&graph.Value_StrVal{v.Value.(string)}}
 
 	case types.Int32ID:
-		return &graph.Property_RawValue{&graph.Value{&graph.Value_IntVal{v.Value.(int32)}}}
+		return &graph.Value{&graph.Value_IntVal{v.Value.(int32)}}
 
 	case types.FloatID:
-		return &graph.Property_RawValue{&graph.Value{
-			&graph.Value_DoubleVal{v.Value.(float64)}}}
+		return &graph.Value{&graph.Value_DoubleVal{v.Value.(float64)}}
 
 	case types.BoolID:
-		return &graph.Property_RawValue{&graph.Value{&graph.Value_BoolVal{v.Value.(bool)}}}
+		return &graph.Value{&graph.Value_BoolVal{v.Value.(bool)}}
 
 	case types.DateID:
 		val := v.Value.(time.Time)
 		b, err := val.MarshalBinary()
 		x.Check(err)
-		return &graph.Property_RawValue{&graph.Value{&graph.Value_DateVal{b}}}
+		return &graph.Value{&graph.Value_DateVal{b}}
 
 	case types.DateTimeID:
 		val := v.Value.(time.Time)
 		b, err := val.MarshalBinary()
 		x.Check(err)
-		return &graph.Property_RawValue{&graph.Value{&graph.Value_DatetimeVal{b}}}
+		return &graph.Value{&graph.Value_DatetimeVal{b}}
 
 	case types.GeoID:
 		b := types.ValueForType(types.BinaryID)
 		src := types.ValueForType(types.GeoID)
 		src.Value = v.Value.(geom.T)
 		x.Check(types.Marshal(src, &b))
-		return &graph.Property_RawValue{&graph.Value{&graph.Value_GeoVal{b.Value.([]byte)}}}
+		return &graph.Value{&graph.Value_GeoVal{b.Value.([]byte)}}
 
 	default:
 		// A type that isn't supported in the proto

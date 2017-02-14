@@ -220,7 +220,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 	invalidUids := make(map[uint64]bool)
 	uidAlreadySet := false
 
-	facetsNode := dst.New("facets")
+	facetsNode := dst.New("@facets")
 	// We go through all predicate children of the subgraph.
 	for _, pc := range sg.Children {
 		idxi, idxj := algo.IndexOf(pc.SrcUIDs, uid)
@@ -295,8 +295,8 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 					}
 					if !fc.IsEmpty() {
 						fcParent := dst.New("_")
-						fcParent.AddNodeValue("_", fc)
-						uc.AddNodeValue("@facets", fcParent)
+						fcParent.AddNodeValue("_", fc, false)
+						uc.AddNodeValue("@facets", fcParent, true)
 					}
 				}
 				if !uc.IsEmpty() {
@@ -320,7 +320,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 					}
 				}
 				if !fc.IsEmpty() {
-					facetsNode.AddNodeValue(fieldName, fc)
+					facetsNode.AddNodeValue(fieldName, fc, false)
 				}
 			}
 
@@ -361,7 +361,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 	}
 
 	if !facetsNode.IsEmpty() {
-		dst.AddNodeValue("@facets", facetsNode)
+		dst.AddNodeValue("@facets", facetsNode, false)
 	}
 	return nil
 }
@@ -394,11 +394,6 @@ func convertWithBestEffort(tv *task.Value, attr string) (types.Val, error) {
 
 func createProperty(prop string, v types.Val) *graph.Property {
 	pval := toProtoValue(v)
-	return &graph.Property{Prop: prop, Value: pval}
-}
-
-func createPropertyFromNode(prop string, v *graph.Node) *graph.Property {
-	pval := &graph.Property_NodeValue{v}
 	return &graph.Property{Prop: prop, Value: pval}
 }
 

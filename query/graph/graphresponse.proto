@@ -53,10 +53,7 @@ message Latency {
 
 message Property {
     string prop = 1;
-    oneof value {
-       Value raw_value = 2;
-       Node node_value = 3;
-    }
+    Value value = 2;
 }
 
 message Node {

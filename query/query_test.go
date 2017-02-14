@@ -991,19 +991,19 @@ children: <
   attribute: "me"
   properties: <
     prop: "MyName"
-    raw_value: <
+    value: <
       str_val: "Michonne"
     >
   >
   properties: <
     prop: "gender"
-    raw_value: <
+    value: <
       str_val: "female"
     >
   >
   properties: <
     prop: "alive"
-    raw_value: <
+    value: <
       bool_val: true
     >
   >
@@ -1011,7 +1011,7 @@ children: <
     attribute: "Buddies"
     properties: <
       prop: "BudName"
-      raw_value: <
+      value: <
         str_val: "Rick Grimes"
       >
     >
@@ -1020,7 +1020,7 @@ children: <
     attribute: "Buddies"
     properties: <
       prop: "BudName"
-      raw_value: <
+      value: <
         str_val: "Glenn Rhee"
       >
     >
@@ -1029,7 +1029,7 @@ children: <
     attribute: "Buddies"
     properties: <
       prop: "BudName"
-      raw_value: <
+      value: <
         str_val: "Daryl Dixon"
       >
     >
@@ -1038,7 +1038,7 @@ children: <
     attribute: "Buddies"
     properties: <
       prop: "BudName"
-      raw_value: <
+      value: <
         str_val: "Andrea"
       >
     >
@@ -1631,11 +1631,7 @@ func TestToFastJSONReverseDelSetCount(t *testing.T) {
 func getProperty(properties []*graph.Property, prop string) *graph.Value {
 	for _, p := range properties {
 		if p.Prop == prop {
-			if pv, ok := p.Value.(*graph.Property_RawValue); ok {
-				return pv.RawValue
-			} else {
-				panic("Unhandled case in getProperty.")
-			}
+			return p.Value
 		}
 	}
 	return nil
@@ -1667,19 +1663,19 @@ children: <
   attribute: "me"
   properties: <
     prop: "name"
-    raw_value: <
+    value: <
       str_val: "Michonne"
     >
   >
   properties: <
     prop: "gender"
-    raw_value: <
+    value: <
       str_val: "female"
     >
   >
   properties: <
     prop: "alive"
-    raw_value: <
+    value: <
       bool_val: true
     >
   >
@@ -1688,7 +1684,7 @@ children: <
     attribute: "friend"
     properties: <
       prop: "name"
-      raw_value: <
+      value: <
         str_val: "Rick Grimes"
       >
     >
@@ -1698,7 +1694,7 @@ children: <
     attribute: "friend"
     properties: <
       prop: "name"
-      raw_value: <
+      value: <
         str_val: "Glenn Rhee"
       >
     >
@@ -1708,7 +1704,7 @@ children: <
     attribute: "friend"
     properties: <
       prop: "name"
-      raw_value: <
+      value: <
         str_val: "Daryl Dixon"
       >
     >
@@ -1718,7 +1714,7 @@ children: <
     attribute: "friend"
     properties: <
       prop: "name"
-      raw_value: <
+      value: <
         str_val: "Andrea"
       >
     >
@@ -1753,13 +1749,13 @@ children: <
   attribute: "me"
   properties: <
     prop: "name"
-    raw_value: <
+    value: <
       str_val: "Michonne"
     >
   >
   properties: <
     prop: "gender"
-    raw_value: <
+    value: <
       str_val: "female"
     >
   >
@@ -1767,7 +1763,7 @@ children: <
     attribute: "friend"
     properties: <
       prop: "name"
-      raw_value: <
+      value: <
         str_val: "Andrea"
       >
     >
@@ -1798,13 +1794,13 @@ children: <
   attribute: "me"
   properties: <
     prop: "name"
-    raw_value: <
+    value: <
       str_val: "Michonne"
     >
   >
   properties: <
     prop: "gender"
-    raw_value: <
+    value: <
       str_val: "female"
     >
   >
@@ -1812,7 +1808,7 @@ children: <
     attribute: "friend"
     properties: <
       prop: "name"
-      raw_value: <
+      value: <
         str_val: "Glenn Rhee"
       >
     >
@@ -1821,7 +1817,7 @@ children: <
     attribute: "friend"
     properties: <
       prop: "name"
-      raw_value: <
+      value: <
         str_val: "Andrea"
       >
     >
@@ -1852,13 +1848,13 @@ children: <
   attribute: "me"
   properties: <
     prop: "name"
-    raw_value: <
+    value: <
       str_val: "Michonne"
     >
   >
   properties: <
     prop: "gender"
-    raw_value: <
+    value: <
       str_val: "female"
     >
   >
@@ -2067,13 +2063,13 @@ children: <
   attribute: "me"
   properties: <
     prop: "name"
-    raw_value: <
+    value: <
       str_val: "Michonne"
     >
   >
   properties: <
     prop: "gender"
-    raw_value: <
+    value: <
       str_val: "female"
     >
   >
@@ -2081,7 +2077,7 @@ children: <
     attribute: "friend"
     properties: <
       prop: "name"
-      raw_value: <
+      value: <
         str_val: "Andrea"
       >
     >
@@ -2090,7 +2086,7 @@ children: <
     attribute: "friend"
     properties: <
       prop: "name"
-      raw_value: <
+      value: <
         str_val: "Daryl Dixon"
       >
     >
@@ -2099,7 +2095,7 @@ children: <
     attribute: "friend"
     properties: <
       prop: "name"
-      raw_value: <
+      value: <
         str_val: "Glenn Rhee"
       >
     >
@@ -2108,7 +2104,7 @@ children: <
     attribute: "friend"
     properties: <
       prop: "name"
-      raw_value: <
+      value: <
         str_val: "Rick Grimes"
       >
     >
@@ -2139,13 +2135,13 @@ children: <
   attribute: "me"
   properties: <
     prop: "name"
-    raw_value: <
+    value: <
       str_val: "Michonne"
     >
   >
   properties: <
     prop: "gender"
-    raw_value: <
+    value: <
       str_val: "female"
     >
   >
@@ -2153,7 +2149,7 @@ children: <
     attribute: "friend"
     properties: <
       prop: "name"
-      raw_value: <
+      value: <
         str_val: "Andrea"
       >
     >
@@ -2162,7 +2158,7 @@ children: <
     attribute: "friend"
     properties: <
       prop: "name"
-      raw_value: <
+      value: <
         str_val: "Daryl Dixon"
       >
     >
@@ -2193,13 +2189,13 @@ children: <
   attribute: "me"
   properties: <
     prop: "name"
-    raw_value: <
+    value: <
       str_val: "Michonne"
     >
   >
   properties: <
     prop: "gender"
-    raw_value: <
+    value: <
       str_val: "female"
     >
   >
@@ -2207,7 +2203,7 @@ children: <
     attribute: "friend"
     properties: <
       prop: "name"
-      raw_value: <
+      value: <
         str_val: "Daryl Dixon"
       >
     >
@@ -2216,7 +2212,7 @@ children: <
     attribute: "friend"
     properties: <
       prop: "name"
-      raw_value: <
+      value: <
         str_val: "Glenn Rhee"
       >
     >
@@ -2562,7 +2558,7 @@ children: <
   attribute: "me"
   properties: <
     prop: "name"
-    raw_value: <
+    value: <
       str_val: "Michonne"
     >
   >
@@ -2571,7 +2567,7 @@ children: <
   attribute: "me"
   properties: <
     prop: "name"
-    raw_value: <
+    value: <
       str_val: "Rick Grimes"
     >
   >
@@ -2580,7 +2576,7 @@ children: <
   attribute: "me"
   properties: <
     prop: "name"
-    raw_value: <
+    value: <
       str_val: "Glenn Rhee"
     >
   >
@@ -2776,19 +2772,19 @@ func TestToProtoNormalizeDirective(t *testing.T) {
 children: <
   properties: <
     prop: "mn"
-    raw_value: <
+    value: <
       str_val: "Michonne"
     >
   >
   properties: <
     prop: "n"
-    raw_value: <
+    value: <
       str_val: "Rick Grimes"
     >
   >
   properties: <
     prop: "fn"
-    raw_value: <
+    value: <
       str_val: "Michonne"
     >
   >
@@ -2796,13 +2792,13 @@ children: <
 children: <
   properties: <
     prop: "mn"
-    raw_value: <
+    value: <
       str_val: "Michonne"
     >
   >
   properties: <
     prop: "n"
-    raw_value: <
+    value: <
       str_val: "Glenn Rhee"
     >
   >
@@ -2810,19 +2806,19 @@ children: <
 children: <
   properties: <
     prop: "mn"
-    raw_value: <
+    value: <
       str_val: "Michonne"
     >
   >
   properties: <
     prop: "n"
-    raw_value: <
+    value: <
       str_val: "Daryl Dixon"
     >
   >
   properties: <
     prop: "fn"
-    raw_value: <
+    value: <
       str_val: "Glenn Rhee"
     >
   >
@@ -2830,19 +2826,19 @@ children: <
 children: <
   properties: <
     prop: "mn"
-    raw_value: <
+    value: <
       str_val: "Michonne"
     >
   >
   properties: <
     prop: "n"
-    raw_value: <
+    value: <
       str_val: "Andrea"
     >
   >
   properties: <
     prop: "fn"
-    raw_value: <
+    value: <
       str_val: "Glenn Rhee"
     >
   >
