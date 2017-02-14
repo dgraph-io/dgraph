@@ -563,10 +563,8 @@ func (l *List) LastCompactionTs() time.Time {
 func (l *List) Uids(opt ListOptions) *task.List {
 	res := new(task.List)
 	writeIt := algo.NewWriteIterator(res)
-	l.intersectingPostings(opt, func(ps []*types.Posting) {
-		for _, p := range ps {
-			writeIt.Append(p.Uid)
-		}
+	l.intersectingPostings(opt, func(p *types.Posting) {
+		writeIt.Append(p.Uid)
 	})
 	writeIt.End()
 	return res
@@ -575,21 +573,18 @@ func (l *List) Uids(opt ListOptions) *task.List {
 // FacetsForUids gives Facets for postings common with uids in opt listOptions.
 func (l *List) FacetsForUids(opt ListOptions, param *facets.Param) []*facets.Facets {
 	result := make([]*facets.Facets, 0, 10)
-	l.intersectingPostings(opt, func(ps []*types.Posting) {
-		for _, p := range ps {
-			result = append(result, &facets.Facets{mkFacetsCopy(p, param)})
-		}
+	l.intersectingPostings(opt, func(p *types.Posting) {
+		result = append(result, &facets.Facets{mkFacetsCopy(p, param)})
 	})
 	return result
 }
 
 // intersectingPostings calls postFn with the postings that are common with
 // uids in the opt ListOptions.
-func (l *List) intersectingPostings(opt ListOptions, postFn func([]*types.Posting)) {
+func (l *List) intersectingPostings(opt ListOptions, postFn func(*types.Posting)) {
 	l.RLock()
 	defer l.RUnlock()
 
-	result := make([]*types.Posting, 0, 10)
 	it := algo.NewListIterator(opt.Intersect)
 	l.iterate(opt.AfterUID, func(p *types.Posting) bool {
 		if postingType(p) != valueUid {
@@ -603,10 +598,9 @@ func (l *List) intersectingPostings(opt ListOptions, postFn func([]*types.Postin
 				return true
 			}
 		}
-		result = append(result, p)
+		postFn(p)
 		return true
 	})
-	postFn(result)
 }
 
 func (l *List) Value() (rval types.Val, rerr error) {
