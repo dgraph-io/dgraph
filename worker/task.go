@@ -242,14 +242,14 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 		if fnType == PasswordFn {
 			lastPos := len(out.Values) - 1
 			if len(newValue.Val) == 0 {
-				out.Values[lastPos] = task.FromInt(0)
+				out.Values[lastPos] = task.FalseVal
 			}
 			pwd := q.SrcFunc[1]
 			err = types.VerifyPassword(pwd, string(newValue.Val))
 			if err != nil {
-				out.Values[lastPos] = task.FromInt(0)
+				out.Values[lastPos] = task.FalseVal
 			} else {
-				out.Values[lastPos] = task.FromInt(1)
+				out.Values[lastPos] = task.TrueVal
 			}
 			// Add an empty UID list to make later processing consistent
 			out.UidMatrix = append(out.UidMatrix, &emptyUIDList)

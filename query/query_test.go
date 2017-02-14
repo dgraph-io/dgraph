@@ -130,7 +130,7 @@ func addGeoData(t *testing.T, ps *store.Store, uid uint64, p geom.T, name string
 func addPassword(t *testing.T, uid uint64, password string) {
 	value := types.ValueForType(types.BinaryID)
 	src := types.ValueForType(types.PasswordID)
-	src.Value, _ = types.GenerateFromPassword(password)
+	src.Value, _ = types.Encrypt(password)
 	err := types.Marshal(src, &value)
 	require.NoError(t, err)
 	addEdgeToTypedValue(t, "password", uid, types.PasswordID, value.Value.([]byte))
@@ -920,7 +920,7 @@ func TestCheckPassword(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.EqualValues(t,
-		`{"me":[{"name":"Michonne","password":[{"checkpwd":1}]}]}`,
+		`{"me":[{"name":"Michonne","password":[{"checkpwd":true}]}]}`,
 		js)
 
 }
@@ -937,7 +937,7 @@ func TestCheckPasswordIncorrect(t *testing.T) {
 	`
 	js := processToFastJSON(t, query)
 	require.EqualValues(t,
-		`{"me":[{"name":"Michonne","password":[{"checkpwd":0}]}]}`,
+		`{"me":[{"name":"Michonne","password":[{"checkpwd":false}]}]}`,
 		js)
 
 }

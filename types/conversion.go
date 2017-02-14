@@ -154,7 +154,7 @@ func Convert(from Val, toID TypeID) (Val, error) {
 				}
 				*res = g
 			case PasswordID:
-				password, err := GenerateFromPassword(vc)
+				password, err := Encrypt(vc)
 				if err != nil {
 					return to, err
 				}

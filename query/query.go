@@ -255,10 +255,9 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 			uc.AddValue(name, sv)
 			parent.AddChild(sg.Attr, uc)
 
-		} else if len(pc.SrcFunc) > 0 && isPasswordFn(pc.SrcFunc[0]) {
-			// password correct return int(1), else return int(0)
-			c := types.ValueForType(types.Int32ID)
-			c.Value = task.ToInt(pc.values[idx])
+		} else if len(pc.SrcFunc) > 0 && pc.SrcFunc[0] == "checkpwd" {
+			c := types.ValueForType(types.BoolID)
+			c.Value = task.ToBool(pc.values[idx])
 			uc := dst.New(pc.Attr)
 			uc.AddValue("checkpwd", c)
 			dst.AddChild(pc.Attr, uc)
@@ -1102,9 +1101,4 @@ func isAggregatorFn(f string) bool {
 		return true
 	}
 	return false
-}
-
-func isPasswordFn(f string) bool {
-	fn := strings.ToLower(f)
-	return fn == "checkpwd"
 }
