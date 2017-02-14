@@ -19,6 +19,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"crypto/tls"
 	"encoding/gob"
 	"encoding/json"
 	"flag"
@@ -66,6 +67,9 @@ var (
 	port       = flag.Int("port", 8080, "Port to run server on.")
 	bindall    = flag.Bool("bindall", false,
 		"Use 0.0.0.0 instead of localhost to bind to all addresses on local machine.")
+	tlsEnabled     = flag.Bool("tls", true, "Use TLS connections with clients")
+	cert           = flag.String("cert", "", "Certificate path")
+	key            = flag.String("cert_key", "", "Certificate key")
 	nomutations    = flag.Bool("nomutations", false, "Don't allow mutations on this server.")
 	tracing        = flag.Float64("trace", 0.0, "The ratio of queries to trace.")
 	schemaFile     = flag.String("schema", "", "Path to schema file")
@@ -690,6 +694,25 @@ func checkFlagsAndInitDirs() {
 	x.Check(os.MkdirAll(*postingDir, 0700))
 }
 
+func setupListener(addr string, port int) (net.Listener, error) {
+	laddr := fmt.Sprintf("%s:%d", addr, port)
+	if !*tlsEnabled {
+		return net.Listen("tcp", laddr)
+	}
+
+	certificate, err := tls.LoadX509KeyPair(*cert, *key)
+	if err != nil {
+		return nil, fmt.Errorf("Error reading certificate {cert: '%s', key: '%s'}\n%s", *cert, *key, err)
+	}
+
+	tlsCfg := &tls.Config{
+		MinVersion:   tls.VersionTLS11, // min secure version
+		Certificates: []tls.Certificate{certificate},
+	}
+
+	return tls.Listen("tcp", laddr, tlsCfg)
+}
+
 func serveGRPC(l net.Listener) {
 	defer func() { finishCh <- struct{}{} }()
 	s := grpc.NewServer(grpc.CustomCodec(&query.Codec{}))
@@ -720,7 +743,7 @@ func setupServer(che chan error) {
 		laddr = "0.0.0.0"
 	}
 
-	l, err := net.Listen("tcp", fmt.Sprintf("%s:%d", laddr, *port))
+	l, err := setupListener(laddr, *port)
 	if err != nil {
 		log.Fatal(err)
 	}
