@@ -73,7 +73,7 @@ func ToJson(l *Latency, sgl []*SubGraph, w io.Writer) error {
 // outputNode is the generic output / writer for preTraverse.
 type outputNode interface {
 	AddValue(attr string, v types.Val)
-	AddMapChild(attr string, node outputNode, topNode bool)
+	AddMapChild(attr string, node outputNode, isRoot bool)
 	AddListChild(attr string, child outputNode)
 	New(attr string) outputNode
 	SetUID(uid uint64)
@@ -92,7 +92,7 @@ func (p *protoNode) AddValue(attr string, v types.Val) {
 }
 
 // AddMapChild adds a node value for protoOutputNode.
-func (p *protoNode) AddMapChild(attr string, v outputNode, topNode bool) {
+func (p *protoNode) AddMapChild(attr string, v outputNode, isRoot bool) {
 	// Assert that attr == v.Node.Attribute
 	var childNode *graph.Node
 	var as []string
@@ -103,24 +103,22 @@ func (p *protoNode) AddMapChild(attr string, v outputNode, topNode bool) {
 			break
 		}
 	}
-	if childNode != nil {
-		if topNode {
-			childNode.Children = append(childNode.Children, v.(*protoNode).Node)
-		} else {
-			// merge outputNode into childNode
-			vnode := v.(*protoNode).Node
-			x.AssertTruef(vnode.Uid == childNode.Uid && vnode.Xid == childNode.Xid,
-				"Invalid nodes while merging.")
-			for _, p := range vnode.Properties {
-				childNode.Properties = append(childNode.Properties, p)
-			}
-			for _, c := range vnode.Children {
-				childNode.Children = append(childNode.Children, c)
-			}
+	if childNode != nil && isRoot {
+		childNode.Children = append(childNode.Children, v.(*protoNode).Node)
+	} else if childNode != nil {
+		// merge outputNode into childNode
+		vnode := v.(*protoNode).Node
+		x.AssertTruef(vnode.Uid == childNode.Uid && vnode.Xid == childNode.Xid,
+			"Invalid nodes while merging.")
+		for _, p := range vnode.Properties {
+			childNode.Properties = append(childNode.Properties, p)
+		}
+		for _, c := range vnode.Children {
+			childNode.Children = append(childNode.Children, c)
 		}
 	} else {
 		vParent := v
-		if topNode {
+		if isRoot {
 			vParent = v.New(attr)
 			vParent.AddListChild(attr, v)
 		}

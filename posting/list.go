@@ -117,24 +117,24 @@ func (pa ByUid) Less(i, j int) bool { return pa[i].Uid < pa[j].Uid }
 // samePosting tells whether this is same posting depending upon operation of new posting.
 // if operation is Del, we ignore facets and only care about uid and value.
 // otherwise we match everything.
-func samePosting(old *types.Posting, new *types.Posting) bool {
-	if old.Uid != new.Uid {
+func samePosting(oldp *types.Posting, newp *types.Posting) bool {
+	if oldp.Uid != newp.Uid {
 		return false
 	}
-	if old.ValType != new.ValType {
+	if oldp.ValType != newp.ValType {
 		return false
 	}
-	if !bytes.Equal(old.Value, new.Value) {
+	if !bytes.Equal(oldp.Value, newp.Value) {
 		return false
 	}
 	// Checking source might not be necessary.
-	if old.Label != new.Label {
+	if oldp.Label != newp.Label {
 		return false
 	}
-	if new.Op == Del {
+	if newp.Op == Del {
 		return true
 	}
-	return facets.SameFacets(old.Facets, new.Facets)
+	return facets.SameFacets(oldp.Facets, newp.Facets)
 }
 
 func newPosting(t *task.DirectedEdge) *types.Posting {
@@ -580,7 +580,7 @@ func (l *List) Uids(opt ListOptions) *task.List {
 func (l *List) FacetsForUids(opt ListOptions, param *facets.Param) []*facets.Facets {
 	result := make([]*facets.Facets, 0, 10)
 	l.intersectingPostings(opt, func(p *types.Posting) {
-		result = append(result, &facets.Facets{copyFacets(p, param)})
+		result = append(result, &facets.Facets{Facets: copyFacets(p, param)})
 	})
 	return result
 }
@@ -645,21 +645,21 @@ func copyFacets(p *types.Posting, param *facets.Param) (fs []*facets.Facet) {
 	// since facets and param.keys are both sorted,
 	// we can break when either param.Keys OR p.Facets.Key(s) go ahead of each other.
 	// However, we need all keys if param.AllKeys is true.
-	paramKeyIdx := 0
+	numCopied := 0
 	numKeys := len(param.Keys)
 	for _, f := range p.Facets {
-		if param.AllKeys || param.Keys[paramKeyIdx] == f.Key {
-			fcopy := &facets.Facet{f.Key, nil, f.ValType}
+		if param.AllKeys || param.Keys[numCopied] == f.Key {
+			fcopy := &facets.Facet{Key: f.Key, Value: nil, ValType: f.ValType}
 			fcopy.Value = make([]byte, len(f.Value))
 			copy(fcopy.Value, f.Value)
 			fs = append(fs, fcopy)
-			paramKeyIdx++
-			if !param.AllKeys && (paramKeyIdx >= numKeys) {
+			numCopied++
+			if !param.AllKeys && (numCopied >= numKeys) {
 				// break if we don't want all keys and
 				// we have taken all param.Keys.
 				break
 			}
-		} else if f.Key > param.Keys[paramKeyIdx] {
+		} else if f.Key > param.Keys[numCopied] {
 			break
 		}
 	}
