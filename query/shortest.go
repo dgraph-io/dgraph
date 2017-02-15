@@ -6,6 +6,8 @@ import (
 
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/task"
+	"github.com/dgraph-io/dgraph/types"
+	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -104,13 +106,40 @@ func (start *SubGraph) expandOut(ctx context.Context,
 				idx++
 				fromUID := it.Val()
 				it1 := algo.NewListIterator(sg.uidMatrix[idx])
+				var fcsList []*facets.Facets
+				if sg.Params.Facet != nil {
+					fcsList = sg.FacetsLists[idx].FacetsList
+				}
 				// ul := sg.uidMatrix[idx].Uids
+				idxi := -1
 				for ; it1.Valid(); it1.Next() { // _, toUid := range ul {
+					idxi++
 					toUid := it1.Val()
 					if adjacencyMap[fromUID] == nil {
 						adjacencyMap[fromUID] = make(map[uint64]float64)
 					}
-					adjacencyMap[fromUID][toUid] = 1.0 // cost is 1 for now.
+					cost := 1.0
+					if sg.Params.Facet != nil && len(fcsList) > idxi {
+						fcs := fcsList[idxi]
+						if len(fcs.Facets) > 1 {
+							rch <- x.Errorf("More than one facet.")
+							return
+						}
+						if tv, err := types.TypeValForFacet(fcs.Facets[0]); err != nil {
+							rch <- err
+							return
+						} else {
+							if tv.Tid == types.Int32ID {
+								cost = float64(tv.Value.(int32))
+							} else if tv.Tid == types.FloatID {
+								cost = float64(tv.Value.(float64))
+							} else {
+								rch <- x.Errorf("Invalid type of facet for weight.")
+								return
+							}
+						}
+					}
+					adjacencyMap[fromUID][toUid] = cost // cost is 1 for now.
 					numEdges++
 				}
 			}
@@ -217,9 +246,11 @@ func ShortestPath(ctx context.Context, sg *SubGraph) error {
 	// For now, lets allow a maximum of 10 hops.
 	for pq.Len() > 0 {
 		item := heap.Pop(&pq).(*Item)
-		if item.uid == sg.Params.To {
-			break
-		}
+		/*
+			if item.uid == sg.Params.To {
+				break
+			}
+		*/
 		if item.hop > numHops {
 			// Explore the next level by calling processGraph and add them
 			// to the queue.
@@ -253,7 +284,7 @@ func ShortestPath(ctx context.Context, sg *SubGraph) error {
 				}
 				if !ok {
 					// This is the first time we're seeing this node. So
-					// create a new node and add it to the heap nad map.
+					// create a new node and add it to the heap and map.
 					node := &Item{
 						uid:  toUid,
 						cost: item.cost + cost,
@@ -272,6 +303,11 @@ func ShortestPath(ctx context.Context, sg *SubGraph) error {
 					node.cost = item.cost + cost
 					node.hop = item.hop + 1
 					heap.Fix(&pq, node.index)
+					dist[toUid] = nodeInfo{
+						cost:   item.cost + cost,
+						parent: item.uid,
+						node:   node,
+					}
 				}
 
 			}
