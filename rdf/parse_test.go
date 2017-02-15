@@ -625,6 +625,25 @@ var testNQuads = []struct {
 		},
 		expectedErr: false,
 	},
+	// Should parse to string even if value start with ints if it has alphabets.
+	// Only support decimal format for ints.
+	{
+		input: `_:alice <knows> "stuff" (key1=11adsf234,key2=11111111111111111111132333uasfk333) .`,
+		nq: graph.NQuad{
+			Subject:     "_:alice",
+			Predicate:   "knows",
+			ObjectId:    "",
+			ObjectValue: &graph.Value{&graph.Value_StrVal{"stuff"}},
+			ObjectType:  0,
+			Facets: []*facets.Facet{
+				&facets.Facet{"key1", []byte("11adsf234"),
+					facets.TypeIDToValType(facets.StringID)},
+				&facets.Facet{"key2", []byte("11111111111111111111132333uasfk333"),
+					facets.TypeIDToValType(facets.StringID)},
+			},
+		},
+	},
+
 	// Should parse dates
 	{
 		input: `_:alice <knows> "stuff" (key1=2002-10-02T15:00:00.05Z, key2=2006-01-02T15:04:05, key3=2006-01-02) .`,

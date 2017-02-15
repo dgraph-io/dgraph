@@ -68,10 +68,21 @@ func ValTypeToTypeID(valType Facet_ValType) TypeID {
 
 // ValStrToTypeID gives Facet's TypeID for given facet value
 func ValStrToValType(val string) (Facet_ValType, error) {
-	if _, err := strconv.ParseInt(val, 0, 32); err == nil {
+	if _, err := strconv.ParseInt(val, 10, 32); err == nil {
 		return Facet_INT32, nil
 	} else if nume := err.(*strconv.NumError); nume.Err == strconv.ErrRange {
-		return Facet_INT32, err
+		// check if whole string is only of nums or not.
+		// comes here for : 11111111111111111111132333uasfk333 ; see test.
+		nonNumChar := false
+		for _, v := range val {
+			if v < '0' || v > '9' {
+				nonNumChar = true
+				break
+			}
+		}
+		if !nonNumChar {
+			return Facet_INT32, err
+		}
 	}
 	if _, err := strconv.ParseFloat(val, 64); err == nil {
 		return Facet_FLOAT, nil
