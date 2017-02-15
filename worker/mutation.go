@@ -95,9 +95,11 @@ func validateType(edge *task.DirectedEdge, schemaType types.TypeID) error {
 	// In case no schema is specified schema type would be set as tye type coming
 	// in directedEdge on first mutation.
 	if storageType != schemaType {
+		var dst types.Val
+		var err error
 		src := types.Val{types.TypeID(edge.ValueType), edge.Value}
 		// check if storage type is compatible with schema type
-		if dst, err := types.Convert(src, schemaType); err != nil {
+		if dst, err = types.Convert(src, schemaType); err != nil {
 			return err
 		}
 		// convert to schema type
