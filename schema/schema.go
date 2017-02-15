@@ -48,6 +48,8 @@ func (s *state) updateIfMissing(se *SyncEntry) (types.TypeID, error) {
 	return types.TypeID(se.SchemaDescription.ValueType), nil
 }
 
+// UpdateIfMissing checks sets the schema if it doesn't exist
+// already for given predicate
 func UpdateIfMissing(se *SyncEntry) (types.TypeID, error) {
 	return stateInfo().updateIfMissing(se)
 }
@@ -159,6 +161,8 @@ func Init(ps *store.Store, file string) error {
 	return nil
 }
 
+// LoadFromDb reads schema information from db
+// and stores it in memory
 func LoadFromDb() error {
 	prefix := x.SchemaPrefix()
 	itr := pstore.NewIterator()

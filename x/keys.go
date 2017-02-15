@@ -25,8 +25,9 @@ func writeAttr(buf []byte, attr string) []byte {
 	return rest[len(attr):]
 }
 
+// SchemaKey returns schema key for given attribute,
 // schema keys are stored separately with unique prefix,
-// since we need to iterate over all keys
+// since we need to iterate over all schema keys
 func SchemaKey(attr string) []byte {
 	buf := make([]byte, 2+len(attr)+2)
 	buf[0] = byteSchema

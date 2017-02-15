@@ -84,7 +84,8 @@ func streamKeys(stream Worker_PredicateAndSchemaDataClient, groupId uint32) erro
 		if pk == nil {
 			continue
 		}
-		// No need to send KC for schema keys
+		// No need to send KC for schema keys, since we won't save anything
+		// by sending checksum of schema key
 		if pk.IsSchema() {
 			it.Seek(pk.SkipSchema())
 			it.Prev()
