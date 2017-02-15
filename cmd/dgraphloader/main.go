@@ -10,6 +10,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"crypto/tls"
 	"flag"
 	"fmt"
 	"io"
@@ -19,6 +20,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 
 	"github.com/dgraph-io/dgraph/client"
 	"github.com/dgraph-io/dgraph/rdf"
@@ -28,6 +30,8 @@ import (
 var (
 	files      = flag.String("r", "", "Location of rdf files to load")
 	dgraph     = flag.String("d", "127.0.0.1:8080", "Dgraph server address")
+	tlsEnabled = flag.Bool("tls", true, "Enable TLS connection")
+	insecure   = flag.Bool("insecure", false, "Skip insecure cert validation")
 	concurrent = flag.Int("c", 100, "Number of concurrent requests to make to Dgraph")
 	numRdf     = flag.Int("m", 1000, "Number of RDF N-Quads to send as part of a mutation.")
 )
@@ -93,11 +97,23 @@ func printCounters(batch *client.BatchMutation, ticker *time.Ticker) {
 	}
 }
 
+func setupConnection() (*grpc.ClientConn, error) {
+	if !*tlsEnabled {
+		return grpc.Dial(*dgraph, grpc.WithInsecure())
+	}
+
+	tlsCfg := &tls.Config{
+		InsecureSkipVerify: *insecure,
+		MinVersion:         tls.VersionTLS11, //min secure version
+	}
+
+	return grpc.Dial(*dgraph, grpc.WithTransportCredentials(credentials.NewTLS(tlsCfg)))
+}
+
 func main() {
 	x.Init()
 
-	var err error
-	conn, err := grpc.Dial(*dgraph, grpc.WithInsecure())
+	conn, err := setupConnection()
 	x.Checkf(err, "While trying to dial gRPC")
 	defer conn.Close()
 

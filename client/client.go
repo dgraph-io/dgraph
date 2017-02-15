@@ -19,6 +19,8 @@ package client
 import (
 	"context"
 	"fmt"
+	"log"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -171,7 +173,12 @@ func (batch *BatchMutation) request(req *Req) {
 RETRY:
 	_, err := batch.dc.Run(context.Background(), &req.gr)
 	if err != nil {
-		fmt.Printf("Retrying req: %d. Error: %v\n", counter, err)
+		errString := err.Error()
+		// Invalid certificate, irrecoverable
+		if strings.Contains(errString, "x509") {
+			log.Fatal(errString)
+		}
+		fmt.Printf("Retrying req: %d. Error: %v\n", counter, errString)
 		time.Sleep(5 * time.Millisecond)
 		goto RETRY
 	}
