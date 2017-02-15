@@ -1581,7 +1581,6 @@ func TestMutationPassword(t *testing.T) {
 	require.NoError(t, err)
 }
 
-
 func TestLangs(t *testing.T) {
 	query := `
 	query {

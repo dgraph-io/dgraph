@@ -67,20 +67,24 @@ func ValTypeToTypeID(valType Facet_ValType) TypeID {
 }
 
 // ValStrToTypeID gives Facet's TypeID for given facet value
-func ValStrToValType(val string) Facet_ValType {
-	if _, err := strconv.ParseBool(val); err == nil {
-		return Facet_BOOL
-	}
+func ValStrToValType(val string) (Facet_ValType, error) {
 	if _, err := strconv.ParseInt(val, 0, 32); err == nil {
-		return Facet_INT32
+		return Facet_INT32, nil
+	} else if nume := err.(*strconv.NumError); nume.Err == strconv.ErrRange {
+		return Facet_INT32, err
 	}
 	if _, err := strconv.ParseFloat(val, 64); err == nil {
-		return Facet_FLOAT
+		return Facet_FLOAT, nil
+	} else if nume := err.(*strconv.NumError); nume.Err == strconv.ErrRange {
+		return Facet_FLOAT, err
+	}
+	if val == "true" || val == "false" {
+		return Facet_BOOL, nil
 	}
 	if _, err := parseTime(val); err == nil {
-		return Facet_DATETIME
+		return Facet_DATETIME, nil
 	}
-	return Facet_STRING
+	return Facet_STRING, nil
 }
 
 func parseTime(val string) (time.Time, error) {

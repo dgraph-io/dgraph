@@ -574,7 +574,7 @@ var testNQuads = []struct {
 	},
 	// Should parse all types
 	{
-		input: `_:alice <knows> "stuff" (key1=12,key2=value2,key3=1.2,key4=2006-01-02T15:04:05 ) .`,
+		input: `_:alice <knows> "stuff" (key1=12,key2=value2,key3=1.2,key4=2006-01-02T15:04:05,key5=true,key6=false) .`,
 		nq: graph.NQuad{
 			Subject:     "_:alice",
 			Predicate:   "knows",
@@ -590,6 +590,37 @@ var testNQuads = []struct {
 					facets.TypeIDToValType(facets.FloatID)},
 				&facets.Facet{"key4", []byte("2006-01-02T15:04:05"),
 					facets.TypeIDToValType(facets.DateTimeID)},
+				&facets.Facet{"key5", []byte("true"),
+					facets.TypeIDToValType(facets.BoolID)},
+				&facets.Facet{"key6", []byte("false"),
+					facets.TypeIDToValType(facets.BoolID)},
+			},
+		},
+		expectedErr: false,
+	},
+	// Should parse bools for only "true" and "false"
+	{
+		// True, 1 , t are some valid true values in go strconv.ParseBool
+		input: `_:alice <knows> "stuff" (key1=true,key2=false,key3=True,key4=False,key5=1, key6=t) .`,
+		nq: graph.NQuad{
+			Subject:     "_:alice",
+			Predicate:   "knows",
+			ObjectId:    "",
+			ObjectValue: &graph.Value{&graph.Value_StrVal{"stuff"}},
+			ObjectType:  0,
+			Facets: []*facets.Facet{
+				&facets.Facet{"key1", []byte("true"),
+					facets.TypeIDToValType(facets.BoolID)},
+				&facets.Facet{"key2", []byte("false"),
+					facets.TypeIDToValType(facets.BoolID)},
+				&facets.Facet{"key3", []byte("True"),
+					facets.TypeIDToValType(facets.StringID)},
+				&facets.Facet{"key4", []byte("False"),
+					facets.TypeIDToValType(facets.StringID)},
+				&facets.Facet{"key5", []byte("1"),
+					facets.TypeIDToValType(facets.Int32ID)},
+				&facets.Facet{"key6", []byte("t"),
+					facets.TypeIDToValType(facets.StringID)},
 			},
 		},
 		expectedErr: false,
@@ -651,7 +682,12 @@ var testNQuads = []struct {
 		expectedErr: true, // comma should be followed by another key-value pair.
 	},
 	{
-		input: `<alice> <password> "guess"^^<pwd:password> .`,
+		input:       `_:alice <knows> "stuff" (k=111111111111111111888888) .`,
+		expectedErr: true, // integer can not fit in int32.
+	},
+	// Facet tests end
+	{
+		input:       `<alice> <password> "guess"^^<pwd:password> .`,
 		expectedErr: true, // len(password) should >= 6
 	},
 }
