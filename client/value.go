@@ -111,3 +111,13 @@ func Bool(val bool, nq *graph.NQuad) error {
 func Uid(uid uint64) string {
 	return fmt.Sprintf("%#x", uid)
 }
+
+func Password(val string, nq *graph.NQuad) error {
+	v, err := types.ObjectValue(types.PasswordID, val)
+	if err != nil {
+		return err
+	}
+	nq.ObjectValue = v
+	nq.ObjectType = int32(types.PasswordID)
+	return nil
+}
