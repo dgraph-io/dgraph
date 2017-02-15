@@ -44,7 +44,7 @@ func checkSchema(t *testing.T, h map[string]*types.Schema, expected []nameType) 
 
 func TestSchema(t *testing.T) {
 	require.NoError(t, Init(ps, "testfiles/test_schema"))
-	checkSchema(t, stateInfo().info, []nameType{
+	checkSchema(t, schema().schemaMap, []nameType{
 		{"name", &types.Schema{ValueType: uint32(types.StringID)}},
 		{"address", &types.Schema{ValueType: uint32(types.StringID)}},
 		{"http://film.com/name", &types.Schema{ValueType: uint32(types.StringID)}},
@@ -114,7 +114,7 @@ func TestSchemaIndex_Error2(t *testing.T) {
 
 func TestSchemaIndexCustom(t *testing.T) {
 	require.NoError(t, Init(ps, "testfiles/test_schema_index4"))
-	checkSchema(t, stateInfo().info, []nameType{
+	checkSchema(t, schema().schemaMap, []nameType{
 		{"name", &types.Schema{ValueType: uint32(types.StringID), Tokenizer: "exact"}},
 		{"address", &types.Schema{ValueType: uint32(types.StringID), Tokenizer: "term"}},
 		{"age", &types.Schema{ValueType: uint32(types.Int32ID), Tokenizer: "int"}},

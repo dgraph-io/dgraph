@@ -29,18 +29,18 @@ import (
 type state struct {
 	x.SafeMutex
 	// Map containing predicate to type information.
-	info map[string]*types.Schema
+	schemaMap map[string]*types.Schema
 }
 
 func (s *state) updateIfMissing(se *SyncEntry) (types.TypeID, error) {
 	s.Lock()
 	defer s.Unlock()
 
-	if oldVal, ok := s.info[se.Attr]; ok && oldVal.ValueType != se.SchemaDescription.ValueType {
+	if oldVal, ok := s.schemaMap[se.Attr]; ok && oldVal.ValueType != se.SchemaDescription.ValueType {
 		return types.TypeID(oldVal.ValueType), x.Errorf("Schema for attr %s already set to %d", se.Attr, se.SchemaDescription.ValueType)
 	}
 
-	s.info[se.Attr] = se.SchemaDescription
+	s.schemaMap[se.Attr] = se.SchemaDescription
 	se.Water.Ch <- x.Mark{Index: se.Index, Done: false}
 	syncCh <- *se
 
@@ -51,16 +51,16 @@ func (s *state) updateIfMissing(se *SyncEntry) (types.TypeID, error) {
 // UpdateIfMissing checks sets the schema if it doesn't exist
 // already for given predicate
 func UpdateIfMissing(se *SyncEntry) (types.TypeID, error) {
-	return stateInfo().updateIfMissing(se)
+	return schema().updateIfMissing(se)
 }
 
 func (s *state) setType(attr string, valueType types.TypeID) {
 	s.Lock()
 	defer s.Unlock()
-	if info, ok := s.info[attr]; ok {
-		info.ValueType = uint32(valueType)
+	if schema, ok := s.schemaMap[attr]; ok {
+		schema.ValueType = uint32(valueType)
 	} else {
-		s.info[attr] = &types.Schema{ValueType: uint32(valueType)}
+		s.schemaMap[attr] = &types.Schema{ValueType: uint32(valueType)}
 	}
 	fmt.Printf("Setting schema for attr %s: %v\n", attr, valueType)
 }
@@ -68,32 +68,32 @@ func (s *state) setType(attr string, valueType types.TypeID) {
 func (s *state) setReverse(attr string, rev bool) {
 	s.Lock()
 	defer s.Unlock()
-	info, ok := s.info[attr]
-	x.AssertTruef(ok, "schema info not found for %s", attr)
-	info.Reverse = rev
+	schema, ok := s.schemaMap[attr]
+	x.AssertTruef(ok, "schema state not found for %s", attr)
+	schema.Reverse = rev
 }
 
 func (s *state) setIndex(attr string, tokenizer string) {
 	fmt.Println("Setting tokenizer", attr, tokenizer)
 	s.Lock()
 	defer s.Unlock()
-	info, ok := s.info[attr]
-	x.AssertTruef(ok, "schema info not found for %s", attr)
-	info.Tokenizer = tokenizer
+	schema, ok := s.schemaMap[attr]
+	x.AssertTruef(ok, "schema state not found for %s", attr)
+	schema.Tokenizer = tokenizer
 }
 
-func (s *state) set(attr string, info *types.Schema) {
+func (s *state) set(attr string, schema *types.Schema) {
 	s.Lock()
 	defer s.Unlock()
-	s.info[attr] = info
-	fmt.Printf("Setting schema for attr %s: %v\n", attr, info.ValueType)
+	s.schemaMap[attr] = schema
+	fmt.Printf("Setting schema for attr %s: %v\n", attr, schema.ValueType)
 }
 
 func (s *state) typeOf(pred string) (types.TypeID, error) {
 	s.RLock()
 	defer s.RUnlock()
-	if info, ok := s.info[pred]; ok {
-		return types.TypeID(info.ValueType), nil
+	if schema, ok := s.schemaMap[pred]; ok {
+		return types.TypeID(schema.ValueType), nil
 	}
 	return types.TypeID(100), x.Errorf("Undefined predicate")
 }
@@ -101,8 +101,8 @@ func (s *state) typeOf(pred string) (types.TypeID, error) {
 func (s *state) isIndexed(pred string) bool {
 	s.RLock()
 	defer s.RUnlock()
-	if info, ok := s.info[pred]; ok {
-		return info.Tokenizer != ""
+	if schema, ok := s.schemaMap[pred]; ok {
+		return schema.Tokenizer != ""
 	}
 	return false
 }
@@ -111,7 +111,7 @@ func (s *state) indexedFields() []string {
 	s.RLock()
 	defer s.RUnlock()
 	var out []string
-	for k, v := range s.info {
+	for k, v := range s.schemaMap {
 		if v.Tokenizer != "" {
 			out = append(out, k)
 		}
@@ -122,28 +122,28 @@ func (s *state) indexedFields() []string {
 func (s *state) tokenizer(pred string) tok.Tokenizer {
 	s.RLock()
 	defer s.RUnlock()
-	info, ok := s.info[pred]
-	x.AssertTruef(ok, "schema info not found for %s", pred)
-	return tok.GetTokenizer(info.Tokenizer)
+	schema, ok := s.schemaMap[pred]
+	x.AssertTruef(ok, "schema state not found for %s", pred)
+	return tok.GetTokenizer(schema.Tokenizer)
 }
 
 func (s *state) isReversed(pred string) bool {
 	s.RLock()
 	defer s.RUnlock()
-	if info, ok := s.info[pred]; ok {
-		return info.Reverse
+	if schema, ok := s.schemaMap[pred]; ok {
+		return schema.Reverse
 	}
 	return false
 }
 
 var (
-	predicateInfo *state
-	pstore        *store.Store
-	syncCh        chan SyncEntry
+	predicatesState *state
+	pstore          *store.Store
+	syncCh          chan SyncEntry
 )
 
-func stateInfo() *state {
-	return predicateInfo
+func schema() *state {
+	return predicatesState
 }
 
 func Init(ps *store.Store, file string) error {
@@ -172,43 +172,43 @@ func LoadFromDb() error {
 		key := itr.Key().Data()
 		attr := x.Parse(key).Attr
 		data := itr.Value().Data()
-		var info types.Schema
-		x.Checkf(info.Unmarshal(data), "Error while loading schema from db")
-		stateInfo().set(attr, &info)
+		var s types.Schema
+		x.Checkf(s.Unmarshal(data), "Error while loading schema from db")
+		schema().set(attr, &s)
 	}
 
 	return nil
 }
 
 func reset() {
-	predicateInfo = new(state)
-	stateInfo().info = make(map[string]*types.Schema)
+	predicatesState = new(state)
+	schema().schemaMap = make(map[string]*types.Schema)
 	syncCh = make(chan SyncEntry, 10000)
 }
 
 // IsIndexed returns if a given predicate is indexed or not.
 func IsIndexed(attr string) bool {
-	return stateInfo().isIndexed(attr)
+	return schema().isIndexed(attr)
 }
 
 // Tokenizer returns tokenizer for given predicate.
 func Tokenizer(attr string) tok.Tokenizer {
-	return stateInfo().tokenizer(attr)
+	return schema().tokenizer(attr)
 }
 
 // IsReversed returns if a given predicate is reversed or not.
 func IsReversed(str string) bool {
-	return stateInfo().isReversed(str)
+	return schema().isReversed(str)
 }
 
 // TypeOf returns the type of given field.
 func TypeOf(pred string) (types.TypeID, error) {
-	return stateInfo().typeOf(pred)
+	return schema().typeOf(pred)
 }
 
 // IndexedFields returns a list of indexed fields.
 func IndexedFields() []string {
-	return stateInfo().indexedFields()
+	return schema().indexedFields()
 }
 
 // The following logic is used to batch up all the writes to RocksDB.
