@@ -333,7 +333,7 @@ func edgeType(t *task.DirectedEdge) valueTypeInfo {
 	}
 }
 
-// returns the typeid of destiantion vertex
+// EdgeTypeID returns the typeid of destiantion vertex
 func EdgeTypeID(edge *task.DirectedEdge) types.TypeID {
 	if edge.ValueId != 0 {
 		return types.UidID
