@@ -125,7 +125,7 @@ func (s *state) tokenizer(pred string) tok.Tokenizer {
 	return tok.GetTokenizer(info.Tokenizer)
 }
 
-func (s *state) IsReversed(pred string) bool {
+func (s *state) isReversed(pred string) bool {
 	s.RLock()
 	defer s.RUnlock()
 	if info, ok := s.info[pred]; ok {
@@ -194,7 +194,7 @@ func Tokenizer(attr string) tok.Tokenizer {
 
 // IsReversed returns if a given predicate is reversed or not.
 func IsReversed(str string) bool {
-	return stateInfo().IsReversed(str)
+	return stateInfo().isReversed(str)
 }
 
 // TypeOf returns the type of given field.

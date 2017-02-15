@@ -229,11 +229,11 @@ func (w *grpcWorker) PredicateAndSchemaData(stream Worker_PredicateAndSchemaData
 		if pk == nil {
 			continue
 		}
-		if group.BelongsTo(pk.Attr) != gkeys.GroupId {
-			if !pk.IsSchema() {
-				it.Seek(pk.SkipPredicate())
-				it.Prev() // To tackle it.Next() called by default.
-			}
+		if group.BelongsTo(pk.Attr) != gkeys.GroupId && !pk.IsSchema() {
+			it.Seek(pk.SkipPredicate())
+			it.Prev() // To tackle it.Next() called by default.
+			continue
+		} else if group.BelongsTo(pk.Attr) != gkeys.GroupId {
 			continue
 		}
 
