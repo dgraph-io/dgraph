@@ -17,9 +17,8 @@
 package worker
 
 import (
-	"strings"
-
 	"golang.org/x/net/context"
+	"strings"
 
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/group"
@@ -27,6 +26,7 @@ import (
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/types"
+	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -204,6 +204,14 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 
 	var out task.Result
 	it := algo.NewListIterator(q.Uids)
+	opts := posting.ListOptions{
+		AfterUID: uint64(q.AfterUid),
+	}
+	// If we have srcFunc and Uids, it means its a filter. So we intersect.
+	if fnType != NotFn && algo.ListLen(q.Uids) > 0 {
+		opts.Intersect = q.Uids
+	}
+
 	for i := 0; i < n; i++ {
 		var key []byte
 		if fnType == AggregatorFn {
@@ -228,6 +236,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 		// If a posting list contains a value, we store that or else we store a nil
 		// byte so that processing is consistent later.
 		val, err := pl.Value()
+		isValueEdge := err == nil
 		newValue := &task.Value{ValType: int32(val.Tid)}
 		if err == nil {
 			newValue.Val = val.Value.([]byte)
@@ -236,6 +245,22 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 		}
 		out.Values = append(out.Values, newValue)
 
+		// get facets.
+		if q.FacetParam != nil {
+			if isValueEdge {
+				fs, err := pl.Facets(q.FacetParam)
+				if err != nil {
+					return nil, err
+				}
+				out.FacetsLists = append(out.FacetsLists,
+					&facets.List{[]*facets.Facets{&facets.Facets{fs}}})
+			} else {
+				out.FacetsLists = append(out.FacetsLists,
+					&facets.List{pl.FacetsForUids(opts, q.FacetParam)})
+			}
+		}
+
+		// The more usual case: Getting the UIDs.
 		if q.DoCount || fnType == AggregatorFn {
 			if q.DoCount {
 				out.Counts = append(out.Counts, uint32(pl.Length(0)))
@@ -263,13 +288,6 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 		}
 
 		// The more usual case: Getting the UIDs.
-		opts := posting.ListOptions{
-			AfterUID: uint64(q.AfterUid),
-		}
-		// If we have srcFunc and Uids, it means its a filter. So we intersect.
-		if fnType != NotFn && algo.ListLen(q.Uids) > 0 {
-			opts.Intersect = q.Uids
-		}
 		out.UidMatrix = append(out.UidMatrix, pl.Uids(opts))
 	}
 

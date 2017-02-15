@@ -10,6 +10,9 @@
 
 	It has these top-level messages:
 		Facet
+		Param
+		Facets
+		List
 */
 package facets
 
@@ -92,8 +95,67 @@ func (m *Facet) GetValType() Facet_ValType {
 	return Facet_STRING
 }
 
+type Param struct {
+	AllKeys bool     `protobuf:"varint,1,opt,name=all_keys,json=allKeys,proto3" json:"all_keys,omitempty"`
+	Keys    []string `protobuf:"bytes,2,rep,name=keys" json:"keys,omitempty"`
+}
+
+func (m *Param) Reset()                    { *m = Param{} }
+func (m *Param) String() string            { return proto.CompactTextString(m) }
+func (*Param) ProtoMessage()               {}
+func (*Param) Descriptor() ([]byte, []int) { return fileDescriptorFacets, []int{1} }
+
+func (m *Param) GetAllKeys() bool {
+	if m != nil {
+		return m.AllKeys
+	}
+	return false
+}
+
+func (m *Param) GetKeys() []string {
+	if m != nil {
+		return m.Keys
+	}
+	return nil
+}
+
+type Facets struct {
+	Facets []*Facet `protobuf:"bytes,1,rep,name=facets" json:"facets,omitempty"`
+}
+
+func (m *Facets) Reset()                    { *m = Facets{} }
+func (m *Facets) String() string            { return proto.CompactTextString(m) }
+func (*Facets) ProtoMessage()               {}
+func (*Facets) Descriptor() ([]byte, []int) { return fileDescriptorFacets, []int{2} }
+
+func (m *Facets) GetFacets() []*Facet {
+	if m != nil {
+		return m.Facets
+	}
+	return nil
+}
+
+type List struct {
+	FacetsList []*Facets `protobuf:"bytes,1,rep,name=facets_list,json=facetsList" json:"facets_list,omitempty"`
+}
+
+func (m *List) Reset()                    { *m = List{} }
+func (m *List) String() string            { return proto.CompactTextString(m) }
+func (*List) ProtoMessage()               {}
+func (*List) Descriptor() ([]byte, []int) { return fileDescriptorFacets, []int{3} }
+
+func (m *List) GetFacetsList() []*Facets {
+	if m != nil {
+		return m.FacetsList
+	}
+	return nil
+}
+
 func init() {
 	proto.RegisterType((*Facet)(nil), "facets.Facet")
+	proto.RegisterType((*Param)(nil), "facets.Param")
+	proto.RegisterType((*Facets)(nil), "facets.Facets")
+	proto.RegisterType((*List)(nil), "facets.List")
 	proto.RegisterEnum("facets.Facet_ValType", Facet_ValType_name, Facet_ValType_value)
 }
 func (m *Facet) Marshal() (dAtA []byte, err error) {
@@ -127,6 +189,109 @@ func (m *Facet) MarshalTo(dAtA []byte) (int, error) {
 		dAtA[i] = 0x18
 		i++
 		i = encodeVarintFacets(dAtA, i, uint64(m.ValType))
+	}
+	return i, nil
+}
+
+func (m *Param) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalTo(dAtA)
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *Param) MarshalTo(dAtA []byte) (int, error) {
+	var i int
+	_ = i
+	var l int
+	_ = l
+	if m.AllKeys {
+		dAtA[i] = 0x8
+		i++
+		if m.AllKeys {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i++
+	}
+	if len(m.Keys) > 0 {
+		for _, s := range m.Keys {
+			dAtA[i] = 0x12
+			i++
+			l = len(s)
+			for l >= 1<<7 {
+				dAtA[i] = uint8(uint64(l)&0x7f | 0x80)
+				l >>= 7
+				i++
+			}
+			dAtA[i] = uint8(l)
+			i++
+			i += copy(dAtA[i:], s)
+		}
+	}
+	return i, nil
+}
+
+func (m *Facets) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalTo(dAtA)
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *Facets) MarshalTo(dAtA []byte) (int, error) {
+	var i int
+	_ = i
+	var l int
+	_ = l
+	if len(m.Facets) > 0 {
+		for _, msg := range m.Facets {
+			dAtA[i] = 0xa
+			i++
+			i = encodeVarintFacets(dAtA, i, uint64(msg.Size()))
+			n, err := msg.MarshalTo(dAtA[i:])
+			if err != nil {
+				return 0, err
+			}
+			i += n
+		}
+	}
+	return i, nil
+}
+
+func (m *List) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalTo(dAtA)
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *List) MarshalTo(dAtA []byte) (int, error) {
+	var i int
+	_ = i
+	var l int
+	_ = l
+	if len(m.FacetsList) > 0 {
+		for _, msg := range m.FacetsList {
+			dAtA[i] = 0xa
+			i++
+			i = encodeVarintFacets(dAtA, i, uint64(msg.Size()))
+			n, err := msg.MarshalTo(dAtA[i:])
+			if err != nil {
+				return 0, err
+			}
+			i += n
+		}
 	}
 	return i, nil
 }
@@ -171,6 +336,45 @@ func (m *Facet) Size() (n int) {
 	}
 	if m.ValType != 0 {
 		n += 1 + sovFacets(uint64(m.ValType))
+	}
+	return n
+}
+
+func (m *Param) Size() (n int) {
+	var l int
+	_ = l
+	if m.AllKeys {
+		n += 2
+	}
+	if len(m.Keys) > 0 {
+		for _, s := range m.Keys {
+			l = len(s)
+			n += 1 + l + sovFacets(uint64(l))
+		}
+	}
+	return n
+}
+
+func (m *Facets) Size() (n int) {
+	var l int
+	_ = l
+	if len(m.Facets) > 0 {
+		for _, e := range m.Facets {
+			l = e.Size()
+			n += 1 + l + sovFacets(uint64(l))
+		}
+	}
+	return n
+}
+
+func (m *List) Size() (n int) {
+	var l int
+	_ = l
+	if len(m.FacetsList) > 0 {
+		for _, e := range m.FacetsList {
+			l = e.Size()
+			n += 1 + l + sovFacets(uint64(l))
+		}
 	}
 	return n
 }
@@ -317,6 +521,267 @@ func (m *Facet) Unmarshal(dAtA []byte) error {
 	}
 	return nil
 }
+func (m *Param) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowFacets
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= (uint64(b) & 0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: Param: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: Param: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field AllKeys", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowFacets
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= (int(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.AllKeys = bool(v != 0)
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Keys", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowFacets
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= (uint64(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthFacets
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Keys = append(m.Keys, string(dAtA[iNdEx:postIndex]))
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipFacets(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthFacets
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *Facets) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowFacets
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= (uint64(b) & 0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: Facets: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: Facets: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Facets", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowFacets
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= (int(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthFacets
+			}
+			postIndex := iNdEx + msglen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Facets = append(m.Facets, &Facet{})
+			if err := m.Facets[len(m.Facets)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipFacets(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthFacets
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *List) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowFacets
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= (uint64(b) & 0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: List: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: List: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field FacetsList", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowFacets
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= (int(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthFacets
+			}
+			postIndex := iNdEx + msglen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.FacetsList = append(m.FacetsList, &Facets{})
+			if err := m.FacetsList[len(m.FacetsList)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipFacets(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthFacets
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
 func skipFacets(dAtA []byte) (n int, err error) {
 	l := len(dAtA)
 	iNdEx := 0
@@ -425,19 +890,25 @@ var (
 func init() { proto.RegisterFile("types/facets/facets.proto", fileDescriptorFacets) }
 
 var fileDescriptorFacets = []byte{
-	// 212 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0xe2, 0x92, 0x2c, 0xa9, 0x2c, 0x48,
-	0x2d, 0xd6, 0x4f, 0x4b, 0x4c, 0x4e, 0x2d, 0x81, 0x51, 0x7a, 0x05, 0x45, 0xf9, 0x25, 0xf9, 0x42,
-	0x6c, 0x10, 0x9e, 0xd2, 0x32, 0x46, 0x2e, 0x56, 0x37, 0x10, 0x53, 0x48, 0x80, 0x8b, 0x39, 0x3b,
-	0xb5, 0x52, 0x82, 0x51, 0x81, 0x51, 0x83, 0x33, 0x08, 0xc4, 0x14, 0x12, 0xe1, 0x62, 0x2d, 0x4b,
-	0xcc, 0x29, 0x4d, 0x95, 0x60, 0x52, 0x60, 0xd4, 0xe0, 0x09, 0x82, 0x70, 0x84, 0x0c, 0xb8, 0x38,
-	0xca, 0x12, 0x73, 0xe2, 0x41, 0x46, 0x4b, 0x30, 0x2b, 0x30, 0x6a, 0xf0, 0x19, 0x89, 0xea, 0x41,
-	0x8d, 0x06, 0x1b, 0xa4, 0x17, 0x96, 0x98, 0x13, 0x52, 0x59, 0x90, 0x1a, 0xc4, 0x5e, 0x06, 0x61,
-	0x28, 0x39, 0x73, 0xb1, 0x43, 0xc5, 0x84, 0xb8, 0xb8, 0xd8, 0x82, 0x43, 0x82, 0x3c, 0xfd, 0xdc,
-	0x05, 0x18, 0x84, 0x38, 0xb9, 0x58, 0x3d, 0xfd, 0x42, 0x8c, 0x8d, 0x04, 0x18, 0x41, 0x4c, 0x37,
-	0x1f, 0x7f, 0xc7, 0x10, 0x01, 0x26, 0x21, 0x0e, 0x2e, 0x16, 0x27, 0x7f, 0x7f, 0x1f, 0x01, 0x66,
-	0x21, 0x1e, 0x2e, 0x0e, 0x17, 0xc7, 0x10, 0xd7, 0x10, 0x4f, 0x5f, 0x57, 0x01, 0x16, 0x27, 0x81,
-	0x13, 0x8f, 0xe4, 0x18, 0x2f, 0x3c, 0x92, 0x63, 0x7c, 0xf0, 0x48, 0x8e, 0x71, 0xc6, 0x63, 0x39,
-	0x86, 0x24, 0x36, 0xb0, 0x4f, 0x8c, 0x01, 0x01, 0x00, 0x00, 0xff, 0xff, 0x68, 0x4f, 0xde, 0x05,
-	0xe6, 0x00, 0x00, 0x00,
+	// 308 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0x54, 0x90, 0xcf, 0x6a, 0xf2, 0x40,
+	0x14, 0xc5, 0x1d, 0xf3, 0xc7, 0x78, 0xf5, 0x93, 0xe1, 0xf2, 0x15, 0xe2, 0x26, 0x84, 0x40, 0x21,
+	0x2b, 0x2d, 0x0a, 0xed, 0x5a, 0x5b, 0x2d, 0x52, 0xab, 0x65, 0x3a, 0x74, 0x2b, 0xd3, 0x32, 0x05,
+	0x71, 0x8a, 0xc1, 0x49, 0x03, 0x79, 0x93, 0x3e, 0x41, 0x9f, 0xa5, 0xcb, 0x3e, 0x42, 0x49, 0x5f,
+	0xa4, 0x64, 0x12, 0x17, 0xae, 0xe6, 0x77, 0x0e, 0x9c, 0xc3, 0x99, 0x0b, 0xfd, 0x34, 0x4f, 0xa4,
+	0x1e, 0xbe, 0x8a, 0x17, 0x99, 0x1e, 0x9f, 0x41, 0x72, 0xd8, 0xa7, 0x7b, 0x74, 0x2b, 0x15, 0x7d,
+	0x12, 0x70, 0xe6, 0x25, 0x22, 0x05, 0x6b, 0x27, 0x73, 0x9f, 0x84, 0x24, 0x6e, 0xb3, 0x12, 0xf1,
+	0x3f, 0x38, 0x99, 0x50, 0xef, 0xd2, 0x6f, 0x86, 0x24, 0xee, 0xb2, 0x4a, 0xe0, 0x05, 0x78, 0x99,
+	0x50, 0x9b, 0xb2, 0xda, 0xb7, 0x42, 0x12, 0xf7, 0x46, 0x67, 0x83, 0xba, 0xda, 0x14, 0x0d, 0x9e,
+	0x84, 0xe2, 0x79, 0x22, 0x59, 0x2b, 0xab, 0x20, 0xba, 0x86, 0x56, 0xed, 0x21, 0x80, 0xfb, 0xc8,
+	0xd9, 0x62, 0x75, 0x4b, 0x1b, 0xd8, 0x06, 0x67, 0xb1, 0xe2, 0xe3, 0x11, 0x25, 0x25, 0xce, 0x97,
+	0xeb, 0x09, 0xa7, 0x4d, 0xf4, 0xc0, 0x9e, 0xae, 0xd7, 0x4b, 0x6a, 0x61, 0x17, 0xbc, 0x9b, 0x09,
+	0x9f, 0xf1, 0xc5, 0xfd, 0x8c, 0xda, 0xd1, 0x25, 0x38, 0x0f, 0xe2, 0x20, 0xde, 0xb0, 0x0f, 0x9e,
+	0x50, 0x6a, 0xb3, 0x93, 0xb9, 0x36, 0x63, 0x3d, 0xd6, 0x12, 0x4a, 0xdd, 0xc9, 0x5c, 0x23, 0x82,
+	0x6d, 0xec, 0x66, 0x68, 0xc5, 0x6d, 0x66, 0x38, 0x1a, 0x82, 0x6b, 0x66, 0x69, 0x3c, 0x87, 0xfa,
+	0xd3, 0x3e, 0x09, 0xad, 0xb8, 0x33, 0xfa, 0x77, 0x32, 0x9b, 0x1d, 0x2f, 0x72, 0x05, 0xf6, 0x72,
+	0xab, 0x53, 0x1c, 0x42, 0xa7, 0x72, 0x36, 0x6a, 0xab, 0xd3, 0x3a, 0xd3, 0x3b, 0xc9, 0x68, 0x06,
+	0x95, 0x2c, 0x03, 0x53, 0xfa, 0x55, 0x04, 0xe4, 0xbb, 0x08, 0xc8, 0x4f, 0x11, 0x90, 0x8f, 0xdf,
+	0xa0, 0xf1, 0xec, 0x9a, 0x5b, 0x8f, 0xff, 0x02, 0x00, 0x00, 0xff, 0xff, 0xc7, 0x9e, 0x41, 0xeb,
+	0x88, 0x01, 0x00, 0x00,
 }

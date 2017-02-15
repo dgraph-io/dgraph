@@ -29,6 +29,7 @@ import (
 	"github.com/twpayne/go-geom/encoding/wkb"
 
 	"github.com/dgraph-io/dgraph/query/graph"
+	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -639,4 +640,26 @@ func (v Val) MarshalJSON() ([]byte, error) {
 		return json.Marshal(v.Value.(string))
 	}
 	return nil, x.Errorf("Invalid type for MarshalJSON: %v", v.Tid)
+}
+
+func typeIDForFacet(f *facets.Facet) TypeID {
+	switch facets.ValTypeToTypeID(f.ValType) {
+	case facets.Int32ID:
+		return Int32ID
+	case facets.StringID:
+		return StringID
+	case facets.BoolID:
+		return BoolID
+	case facets.DateTimeID:
+		return DateTimeID
+	case facets.FloatID:
+		return FloatID
+	default:
+		panic("unhandled case in facetValToTypeVal")
+	}
+}
+
+func TypeValForFacet(f *facets.Facet) (Val, error) {
+	val := Val{StringID, f.Value}
+	return Convert(val, typeIDForFacet(f))
 }
