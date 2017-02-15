@@ -21,7 +21,6 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -271,9 +270,6 @@ func TestReturnUids(t *testing.T) {
 	}
 	require.NoError(t, ToJson(&l, sgl, &buf, mp))
 	js := buf.String()
-
-	fmt.Println(js)
-
 	require.JSONEq(t,
 		`{"uids":{"a":123},"me":[{"_uid_":"0x1","alive":true,"friend":[{"_uid_":"0x17","name":"Rick Grimes"},{"_uid_":"0x18","name":"Glenn Rhee"},{"_uid_":"0x19","name":"Daryl Dixon"},{"_uid_":"0x1f","name":"Andrea"},{"_uid_":"0x65"}],"gender":"female","name":"Michonne"}]}`,
 		js)

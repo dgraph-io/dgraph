@@ -232,7 +232,6 @@ func TestFacetsMutation(t *testing.T) {
 	`
 
 	js := processToFastJSON(t, query)
-	x.Printf(js)
 	require.JSONEq(t,
 		`{"me":[{"friend":[{"@facets":{"_":{"since":"12-01-1991"}},"name":"Rick Grimes"},{"@facets":{"_":{"since":"12-01-1991"}},"name":"Daryl Dixon"},{"@facets":{"_":{"since":"12-01-1991"}},"name":"Andrea"},{"@facets":{"_":{"close":false,"family":false,"since":"11-10-2001"}}}],"name":"Michonne"}]}`,
 		js)
