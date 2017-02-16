@@ -59,9 +59,9 @@ func addEdge(t *testing.T, attr string, src uint64, edge *task.DirectedEdge) {
 		l.AddMutationWithIndex(context.Background(), edge))
 }
 
-func mkFacets(facetKVs map[string]string) (fs []*facets.Facet) {
+func makeFacets(facetKVs map[string]string) (fs []*facets.Facet, err error) {
 	if len(facetKVs) == 0 {
-		return nil
+		return nil, nil
 	}
 	allKeys := make([]string, 0, len(facetKVs))
 	for k := range facetKVs {
@@ -71,30 +71,38 @@ func mkFacets(facetKVs map[string]string) (fs []*facets.Facet) {
 
 	for _, k := range allKeys {
 		v := facetKVs[k]
+		typ, err := facets.ValType(v)
+		if err != nil {
+			return nil, err
+		}
 		fs = append(fs, &facets.Facet{
 			k,
 			[]byte(v),
-			facets.ValStrToValType(v),
+			typ,
 		})
 	}
-	return fs
+	return fs, nil
 }
 
 func addEdgeToValue(t *testing.T, attr string, src uint64,
 	value string, facetKVs map[string]string) {
+	fs, err := makeFacets(facetKVs)
+	require.NoError(t, err)
 	edge := &task.DirectedEdge{
 		Value:  []byte(value),
 		Label:  "testing",
 		Attr:   attr,
 		Entity: src,
 		Op:     task.DirectedEdge_SET,
-		Facets: mkFacets(facetKVs),
+		Facets: fs,
 	}
 	addEdge(t, attr, src, edge)
 }
 
 func addEdgeToTypedValue(t *testing.T, attr string, src uint64,
 	typ types.TypeID, value []byte, facetKVs map[string]string) {
+	fs, err := makeFacets(facetKVs)
+	require.NoError(t, err)
 	edge := &task.DirectedEdge{
 		Value:     value,
 		ValueType: uint32(typ),
@@ -102,20 +110,22 @@ func addEdgeToTypedValue(t *testing.T, attr string, src uint64,
 		Attr:      attr,
 		Entity:    src,
 		Op:        task.DirectedEdge_SET,
-		Facets:    mkFacets(facetKVs),
+		Facets:    fs,
 	}
 	addEdge(t, attr, src, edge)
 }
 
 func addEdgeToUID(t *testing.T, attr string, src uint64,
 	dst uint64, facetKVs map[string]string) {
+	fs, err := makeFacets(facetKVs)
+	require.NoError(t, err)
 	edge := &task.DirectedEdge{
 		ValueId: dst,
 		Label:   "testing",
 		Attr:    attr,
 		Entity:  src,
 		Op:      task.DirectedEdge_SET,
-		Facets:  mkFacets(facetKVs),
+		Facets:  fs,
 	}
 	addEdge(t, attr, src, edge)
 }
