@@ -986,7 +986,8 @@ func parseFilter(it *lex.ItemIterator) (*FilterTree, error) {
 			it.Next()
 			itemInFunc := it.Item()
 			if itemInFunc.Typ != itemLeftRound {
-				return nil, x.Errorf("Expected ( after func name [%s]", leaf.Func.Name)
+				return nil, x.Errorf("Expected ( after func name [%s]",
+					leaf.Func.Name)
 			}
 			var terminated bool
 			for it.Next() {
@@ -1001,15 +1002,14 @@ func parseFilter(it *lex.ItemIterator) (*FilterTree, error) {
 						return nil, x.Errorf(
 							"Facets only allowed at attributed position.")
 					}
-					items, err := it.Peek(1)
-					if err != nil {
-						return nil, err
+					if !it.Next() {
+						return nil, x.Errorf("Unexpected end of input.")
 					}
-					if items[0].Typ != itemName || items[0].Val != "facets" {
+					item := it.Item()
+					if item.Typ != itemName || item.Val != "facets" {
 						return nil, x.Errorf("Expected facets but found : %v",
-							items[0].Val)
+							item.Val)
 					}
-					it.Next() // ignore facets.
 					fs, err := parseFacets(it)
 					if err != nil {
 						return nil, err

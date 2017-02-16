@@ -1820,3 +1820,57 @@ func TestFacetsFilter2(t *testing.T) {
 	require.Equal(t, 1, len(child1.Children[0].Filter.Func.Args))
 	require.Equal(t, "french", child1.Children[0].Filter.Func.Args[0])
 }
+
+func TestFacetsFilterFail(t *testing.T) {
+	// @facets() not allowed - should have some facet
+	query := `
+		{
+			me(id:0x1) {
+				name
+				friend @filter(eq(@facets(), "male")) {
+					name
+					gender
+				}
+			}
+		}
+	`
+
+	_, err := Parse(query)
+	require.Error(t, err)
+}
+
+func TestFacetsFilterFail2(t *testing.T) {
+	// @facets not allowed - should have some facet
+	query := `
+		{
+			me(id:0x1) {
+				name
+				friend @filter(eq(@facets, "male")) {
+					name
+					gender
+				}
+			}
+		}
+	`
+
+	_, err := Parse(query)
+	require.Error(t, err)
+}
+
+func TestFacetsFilterFail3(t *testing.T) {
+	// @facets only allowed in attr part ; not at arguments.
+	query := `
+		{
+			me(id:0x1) {
+				name
+				friend @filter(somefn(gender, @facets, "male")) {
+					name
+					gender
+				}
+			}
+		}
+	`
+
+	_, err := Parse(query)
+	require.Error(t, err)
+}
