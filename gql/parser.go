@@ -93,11 +93,11 @@ type FilterTree struct {
 
 // Function holds the information about gql functions.
 type Function struct {
-	Attr        string
-	IsFacetAttr bool     // Is this facet's attr ? @facets(attr)
-	Name        string   // Specifies the name of the function.
-	Args        []string // Contains the arguments of the function.
-	NeedsVar    []string // If the function requires some variable
+	Attr     string
+	IsFacet  bool     // Is this facet's attr ? @facets(attr)
+	Name     string   // Specifies the name of the function.
+	Args     []string // Contains the arguments of the function.
+	NeedsVar []string // If the function requires some variable
 }
 
 // Facet holds the information about gql Facets (edge key-value pairs).
@@ -991,7 +991,7 @@ func parseFilter(it *lex.ItemIterator) (*FilterTree, error) {
 			}
 			var terminated bool
 			for it.Next() {
-				isFacetAttr := false
+				isFacet := false
 				var attrName string
 				itemInFunc := it.Item()
 				if itemInFunc.Typ == itemRightRound {
@@ -1019,12 +1019,12 @@ func parseFilter(it *lex.ItemIterator) (*FilterTree, error) {
 							len(fs.Keys))
 					}
 					attrName = fs.Keys[0]
-					isFacetAttr = true
+					isFacet = true
 				} else if itemInFunc.Typ != itemName {
 					return nil, x.Errorf("Expected arg after func [%s], but got item %v",
 						leaf.Func.Name, itemInFunc)
 				}
-				if !isFacetAttr {
+				if !isFacet {
 					attrName = itemInFunc.Val
 				}
 				it := strings.Trim(attrName, "\" \t")
@@ -1033,7 +1033,7 @@ func parseFilter(it *lex.ItemIterator) (*FilterTree, error) {
 				}
 				if len(f.Attr) == 0 {
 					f.Attr = it
-					f.IsFacetAttr = isFacetAttr
+					f.IsFacet = isFacet
 				} else {
 					f.Args = append(f.Args, it)
 				}

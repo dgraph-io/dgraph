@@ -1787,7 +1787,7 @@ func TestFacetsFilter(t *testing.T) {
 	require.NotNil(t, res.Query[0].Children[1].Filter.Func)
 	require.Equal(t, "eq", res.Query[0].Children[1].Filter.Func.Name)
 	require.Equal(t, "close", res.Query[0].Children[1].Filter.Func.Attr)
-	require.Equal(t, true, res.Query[0].Children[1].Filter.Func.IsFacetAttr)
+	require.Equal(t, true, res.Query[0].Children[1].Filter.Func.IsFacet)
 	require.Equal(t, 1, len(res.Query[0].Children[1].Filter.Func.Args))
 	require.Equal(t, "true", res.Query[0].Children[1].Filter.Func.Args[0])
 }
@@ -1798,7 +1798,7 @@ func TestFacetsFilter2(t *testing.T) {
 		{
 			me(id:0x1) {
 				name
-				friend @filter(eq(@facets(gender), "male")) {
+				friend @filter(eq(@facets(close), true)) {
 				       name @filter(eq(@facets(origin), "french"))
 				       gender
 				}
@@ -1816,7 +1816,7 @@ func TestFacetsFilter2(t *testing.T) {
 	require.NotNil(t, child1.Children[0].Filter.Func)
 	require.Equal(t, "eq", child1.Children[0].Filter.Func.Name)
 	require.Equal(t, "origin", child1.Children[0].Filter.Func.Attr)
-	require.Equal(t, true, child1.Children[0].Filter.Func.IsFacetAttr)
+	require.Equal(t, true, child1.Children[0].Filter.Func.IsFacet)
 	require.Equal(t, 1, len(child1.Children[0].Filter.Func.Args))
 	require.Equal(t, "french", child1.Children[0].Filter.Func.Args[0])
 }
@@ -1827,7 +1827,7 @@ func TestFacetsFilterFail(t *testing.T) {
 		{
 			me(id:0x1) {
 				name
-				friend @filter(eq(@facets(), "male")) {
+				friend @filter(eq(@facets(), true)) {
 					name
 					gender
 				}
@@ -1845,7 +1845,7 @@ func TestFacetsFilterFail2(t *testing.T) {
 		{
 			me(id:0x1) {
 				name
-				friend @filter(eq(@facets, "male")) {
+				friend @filter(eq(@facets, true)) {
 					name
 					gender
 				}
@@ -1863,7 +1863,25 @@ func TestFacetsFilterFail3(t *testing.T) {
 		{
 			me(id:0x1) {
 				name
-				friend @filter(somefn(gender, @facets, "male")) {
+				friend @filter(somefn(abc, @facets, def)) {
+					name
+					gender
+				}
+			}
+		}
+	`
+
+	_, err := Parse(query)
+	require.Error(t, err)
+}
+
+func TestFacetsFilterFail4(t *testing.T) {
+	// multiple facets not allowed in facets inside filters
+	query := `
+		{
+			me(id:0x1) {
+				name
+				friend @filter(eq(@facets(close, family, since), true)) {
 					name
 					gender
 				}
