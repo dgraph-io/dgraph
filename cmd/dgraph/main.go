@@ -67,7 +67,7 @@ var (
 	port       = flag.Int("port", 8080, "Port to run server on.")
 	bindall    = flag.Bool("bindall", false,
 		"Use 0.0.0.0 instead of localhost to bind to all addresses on local machine.")
-	tlsEnabled     = flag.Bool("tls", true, "Use TLS connections with clients")
+	tlsEnabled     = flag.Bool("tls", false, "Use TLS connections with clients")
 	cert           = flag.String("cert", "", "Certificate file path")
 	key            = flag.String("cert_key", "", "Certificate key file key")
 	nomutations    = flag.Bool("nomutations", false, "Don't allow mutations on this server.")
@@ -711,7 +711,7 @@ func setupListener(addr string, port int) (net.Listener, error) {
 
 	certificate, err := tls.LoadX509KeyPair(*cert, *key)
 	if err != nil {
-		return nil, fmt.Errorf("Error reading certificate {cert: '%s', key: '%s'}\n%s", *cert, *key, err)
+		return nil, fmt.Errorf("Error reading certificate {cert: '%s', cert_key: '%s'}\n%s", *cert, *key, err)
 	}
 
 	tlsCfg := &tls.Config{

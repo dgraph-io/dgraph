@@ -30,7 +30,7 @@ import (
 var (
 	files      = flag.String("r", "", "Location of rdf files to load")
 	dgraph     = flag.String("d", "127.0.0.1:8080", "Dgraph server address")
-	tlsEnabled = flag.Bool("tls", true, "Enable TLS connection")
+	tlsEnabled = flag.Bool("tls", false, "Enable TLS connection")
 	insecure   = flag.Bool("insecure", false, "Skip insecure cert validation")
 	concurrent = flag.Int("c", 100, "Number of concurrent requests to make to Dgraph")
 	numRdf     = flag.Int("m", 1000, "Number of RDF N-Quads to send as part of a mutation.")
