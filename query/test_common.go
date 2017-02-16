@@ -71,7 +71,7 @@ func makeFacets(facetKVs map[string]string) (fs []*facets.Facet, err error) {
 
 	for _, k := range allKeys {
 		v := facetKVs[k]
-		typ, err := facets.ValStrToValType(v)
+		typ, err := facets.ValType(v)
 		if err != nil {
 			return nil, err
 		}

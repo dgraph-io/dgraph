@@ -365,7 +365,7 @@ func parseFacets(it *lex.ItemIterator, rnq *graph.NQuad) error {
 		if item.Typ == itemText {
 			facetVal = item.Val
 		}
-		valTyp, err := facets.ValStrToValType(facetVal)
+		valTyp, err := facets.ValType(facetVal)
 		if err != nil {
 			return err
 		}

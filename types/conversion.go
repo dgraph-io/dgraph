@@ -643,7 +643,7 @@ func (v Val) MarshalJSON() ([]byte, error) {
 }
 
 func typeIDForFacet(f *facets.Facet) TypeID {
-	switch facets.ValTypeToTypeID(f.ValType) {
+	switch facets.TypeIDForValType(f.ValType) {
 	case facets.Int32ID:
 		return Int32ID
 	case facets.StringID:
