@@ -244,6 +244,9 @@ func ShortestPath(ctx context.Context, sg *SubGraph) error {
 	var stopExpansion bool
 	for pq.Len() > 0 {
 		item := heap.Pop(&pq).(*Item)
+		if item.uid == sg.Params.To {
+			break
+		}
 		if item.hop > numHops {
 			// Explore the next level by calling processGraph and add them
 			// to the queue.
