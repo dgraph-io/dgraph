@@ -993,6 +993,17 @@ func parseFilter(it *lex.ItemIterator) (*FilterTree, error) {
 				if itemInFunc.Typ == itemRightRound {
 					terminated = true
 					break
+				} else if itemInFunc.Typ == itemLeftRound {
+					// embed func, like gt(count(films), 0)
+					// => f: {Name: gt, Attr:films, Args:[count, 0]}
+					it.Prev(); it.Prev()
+					fn, err := parseFunction(it)
+					if err != nil {
+						return nil, err
+					}
+					f.Attr = fn.Attr
+					f.Args = append(f.Args, fn.Name)
+					continue
 				} else if itemInFunc.Typ != itemName {
 					return nil, x.Errorf("Expected arg after func [%s], but got item %v",
 						leaf.Func.Name, itemInFunc)

@@ -18,6 +18,7 @@ package worker
 
 import (
 	"golang.org/x/net/context"
+	"strconv"
 	"strings"
 
 	"github.com/dgraph-io/dgraph/algo"
@@ -89,7 +90,8 @@ type FuncType int
 const (
 	NotFn        FuncType = iota
 	AggregatorFn
-	CompareFn
+	CompareAttrFn
+	CompareScalarFn
 	GeoFn
 	PasswordFn
 	StandardFn = 100
@@ -102,7 +104,14 @@ func parseFuncType(arr []string) (FuncType, string) {
 	f := strings.ToLower(arr[0])
 	switch f {
 	case "leq", "geq", "lt", "gt", "eq":
-		return CompareFn, f
+		// gt(release_date, "1990") is 'CompareAttr' which
+		//    takes advantage of indexed-attr
+		// gt(count(films), 0) is 'CompareScalar', we first do
+		//    counting on attr, then compare the result as scalar with int
+		if len(arr) > 2 && arr[1] == "count" {
+			return CompareScalarFn, "compare"
+		}
+		return CompareAttrFn, f
 	case "min", "max", "sum":
 		return AggregatorFn, f
 	case "checkpwd":
@@ -126,7 +135,8 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 	var ineqValue types.Val
 	var ineqValueToken string
 	var n int
-	
+	var threshold int64
+
 	fnType, f := parseFuncType(q.SrcFunc)
 	switch fnType {
 	case AggregatorFn:
@@ -141,7 +151,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 		}
 		n = algo.ListLen(q.Uids)
 
-	case CompareFn:
+	case CompareAttrFn:
 		if len(q.SrcFunc) != 2 {
 			return nil, x.Errorf("Function requires 2 arguments, but got %d %v",
 				len(q.SrcFunc), q.SrcFunc)
@@ -173,6 +183,18 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 			return nil, err
 		}
 		n = len(tokens)
+
+        case CompareScalarFn:
+		if len(q.SrcFunc) != 3 {
+			return nil, x.Errorf("Function requires 2 arguments, but got %d %v",
+				len(q.SrcFunc), q.SrcFunc)
+		}
+		threshold, err = strconv.ParseInt(q.SrcFunc[2], 10, 64)
+		if err != nil {
+			return nil, x.Errorf("Compare %v(%v) require digits, but got invalid num",
+				q.SrcFunc[0], q.SrcFunc[1])
+		}
+		n = algo.ListLen(q.Uids)
 
 	case GeoFn:
 		// For geo functions, we get extra information used for filtering.
@@ -214,10 +236,13 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 
 	for i := 0; i < n; i++ {
 		var key []byte
-		if fnType == AggregatorFn {
-			key = x.DataKey(attr, it.Val())
-			it.Next()
-		} else if fnType == PasswordFn {
+		var uid uint64
+		if it.Valid() {
+			uid = it.Val()
+		}
+		if fnType == AggregatorFn ||
+			fnType == CompareScalarFn ||
+			fnType == PasswordFn {
 			key = x.DataKey(attr, it.Val())
 			it.Next()
 		} else if fnType != NotFn {
@@ -260,7 +285,6 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 			}
 		}
 
-		// The more usual case: Getting the UIDs.
 		if q.DoCount || fnType == AggregatorFn {
 			if q.DoCount {
 				out.Counts = append(out.Counts, uint32(pl.Length(0)))
@@ -287,10 +311,21 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 			continue
 		}
 
+		if fnType == CompareScalarFn {
+			cnt := int64(pl.Length(0))
+			ret, _ := Compare(f, cnt, threshold)
+			if ret {
+				tlist := algo.SortedListToBlock([]uint64{uid})
+				out.UidMatrix = append(out.UidMatrix, tlist)
+			}
+			continue
+		}
+
 		// The more usual case: Getting the UIDs.
 		out.UidMatrix = append(out.UidMatrix, pl.Uids(opts))
 	}
-
+	
+	// aggregate on the collection out.Values[]
 	if fnType == AggregatorFn && len(out.Values) > 0 {
 		var err error
 		typ, _ := schema.TypeOf(attr)
@@ -298,10 +333,10 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 		if err != nil {
 			return nil, err
 		}
-		out.Values = out.Values[0:1] // trim length to 1
+		out.Values = out.Values[:1] // trim length to 1
 	}
 
-	if fnType == CompareFn && len(tokens) > 0 && ineqValueToken == tokens[0] {
+	if fnType == CompareAttrFn && len(tokens) > 0 && ineqValueToken == tokens[0] {
 		// Need to evaluate inequality for entries in the first bucket.
 		typ, err := schema.TypeOf(attr)
 		if err != nil || !typ.IsScalar() {
