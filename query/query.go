@@ -333,7 +333,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 // if convert failed, try convert to types.StringID
 func convertWithBestEffort(tv *task.Value, attr string) (types.Val, error) {
 	v, _ := getValue(tv)
-	typ, err := schema.TypeOf(attr)
+	typ, err := schema.State().TypeOf(attr)
 	sv := types.ValueForType(types.StringID)
 	if err == nil {
 		// Try to coerce types if this is an optional scalar outside an
@@ -417,7 +417,7 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 			args.DoCount = true
 		}
 
-		for argk, _ := range gchild.Args {
+		for argk := range gchild.Args {
 			if !isValidArg(argk) {
 				return x.Errorf("Invalid argument : %s", argk)
 			}
@@ -554,7 +554,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		args.NeedsVar = append(args.NeedsVar, it)
 	}
 
-	for argk, _ := range gq.Args {
+	for argk := range gq.Args {
 		if !isValidArg(argk) {
 			return nil, x.Errorf("Invalid argument : %s", argk)
 		}
@@ -913,7 +913,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			go ProcessGraph(ctx, filter, sg, filterChan)
 		}
 
-		for _ = range sg.Filters {
+		for range sg.Filters {
 			select {
 			case err = <-filterChan:
 				if err != nil {
@@ -996,7 +996,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	}
 
 	// Now get all the results back.
-	for _ = range sg.Children {
+	for range sg.Children {
 		select {
 		case err = <-childChan:
 			if err != nil {

@@ -42,7 +42,7 @@ func runMutations(ctx context.Context, edges []*task.DirectedEdge) error {
 
 		rv := ctx.Value("raft").(x.RaftValue)
 
-		if typ, err := schema.TypeOf(edge.Attr); err != nil {
+		if typ, err := schema.State().TypeOf(edge.Attr); err != nil {
 			if err = updateSchema(edge, &rv); err != nil {
 				x.Printf("Error while updating schema: %v %v", edge, err)
 				return err
@@ -73,7 +73,7 @@ func updateSchema(edge *task.DirectedEdge, rv *x.RaftValue) error {
 		Index:             rv.Index,
 		Water:             posting.SyncMarkFor(rv.Group),
 	}
-	if _, err := schema.UpdateIfMissing(&ce); err != nil {
+	if _, err := schema.State().UpdateIfMissing(&ce); err != nil {
 		return err
 	}
 	return nil

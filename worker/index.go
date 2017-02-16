@@ -98,7 +98,7 @@ func proposeRebuildIndex(ctx context.Context, ri *task.RebuildIndex) error {
 // it will rebuild index. Otherwise, it will send a request to a server that
 // serves the attr.
 func RebuildIndexOverNetwork(ctx context.Context, attr string) error {
-	if !schema.IsIndexed(attr) {
+	if !schema.State().IsIndexed(attr) {
 		return x.Errorf("Attribute %s is indexed", attr)
 	}
 

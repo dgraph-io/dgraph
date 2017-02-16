@@ -42,7 +42,7 @@ func init() {
 
 // IndexTokens return tokens, without the predicate prefix and index rune.
 func IndexTokens(attr string, src types.Val) ([]string, error) {
-	schemaType, err := schema.TypeOf(attr)
+	schemaType, err := schema.State().TypeOf(attr)
 	if err != nil || !schemaType.IsScalar() {
 		return nil, x.Errorf("Cannot index attribute %s of type object.", attr)
 	}
@@ -52,7 +52,7 @@ func IndexTokens(attr string, src types.Val) ([]string, error) {
 		return nil, err
 	}
 	// Schema will know the mapping from attr to tokenizer.
-	return schema.Tokenizer(attr).Tokens(sv)
+	return schema.State().Tokenizer(attr).Tokens(sv)
 }
 
 // addIndexMutations adds mutation(s) for a single term, to maintain index.
@@ -141,7 +141,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *task.DirectedEdge) e
 	l.index.Lock()
 	defer l.index.Unlock()
 
-	doUpdateIndex := pstore != nil && (t.Value != nil) && schema.Schema().IsIndexed(t.Attr)
+	doUpdateIndex := pstore != nil && (t.Value != nil) && schema.State().IsIndexed(t.Attr)
 	{
 		l.Lock()
 		if doUpdateIndex {
@@ -172,7 +172,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *task.DirectedEdge) e
 		}
 	}
 
-	if (pstore != nil) && (t.ValueId != 0) && schema.IsReversed(t.Attr) {
+	if (pstore != nil) && (t.ValueId != 0) && schema.State().IsReversed(t.Attr) {
 		addReverseMutation(ctx, t)
 	}
 	return nil
@@ -180,7 +180,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *task.DirectedEdge) e
 
 // RebuildIndex rebuilds index for a given attribute.
 func RebuildIndex(ctx context.Context, attr string) error {
-	x.AssertTruef(schema.IsIndexed(attr), "Attr %s not indexed", attr)
+	x.AssertTruef(schema.State().IsIndexed(attr), "Attr %s not indexed", attr)
 
 	// Delete index entries from data store.
 	pk := x.ParsedKey{Attr: attr}

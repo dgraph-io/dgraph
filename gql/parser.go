@@ -1195,7 +1195,7 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 			if err != nil {
 				return gq, err
 			}
-			if !schema.IsIndexed(gen.Attr) {
+			if !schema.State().IsIndexed(gen.Attr) {
 				return nil, x.Errorf(
 					"Field %s is not indexed and cannot be used in functions",
 					gen.Attr)
@@ -1267,7 +1267,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 
 			if isAggregator(item.Val) {
 				child := &GraphQuery{
-					Args:    make(map[string]string),
+					Args: make(map[string]string),
 				}
 				it.Prev()
 				if child.Func, err = parseFunction(it); err != nil {
@@ -1350,6 +1350,3 @@ func isAggregator(f string) bool {
 	fname := strings.ToLower(f)
 	return fname == "min" || fname == "max" || fname == "sum"
 }
-
-
-

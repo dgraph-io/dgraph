@@ -75,7 +75,7 @@ func ProcessTaskOverNetwork(ctx context.Context, q *task.Query) (*task.Result, e
 // convertValue converts the data to the schema type of predicate.
 func convertValue(attr, data string) (types.Val, error) {
 	// Parse given value and get token. There should be only one token.
-	t, err := schema.TypeOf(attr)
+	t, err := schema.State().TypeOf(attr)
 	if err != nil || !t.IsScalar() {
 		return types.Val{}, x.Errorf("Attribute %s is not valid scalar type", attr)
 	}
@@ -107,7 +107,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 		switch {
 		case isAgrtr:
 			// confirm agrregator could apply on the attributes
-			typ, err := schema.TypeOf(attr)
+			typ, err := schema.State().TypeOf(attr)
 			if err != nil {
 				return nil, x.Errorf("Attribute %q is not scalar-type", attr)
 			}
@@ -223,7 +223,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 
 	if isAgrtr && len(out.Values) > 0 {
 		var err error
-		typ, _ := schema.TypeOf(attr)
+		typ, _ := schema.State().TypeOf(attr)
 		out.Values[0], err = Aggregate(f, out.Values, typ)
 		if err != nil {
 			return nil, err
@@ -233,7 +233,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 
 	if isIneq && len(tokens) > 0 && ineqValueToken == tokens[0] {
 		// Need to evaluate inequality for entries in the first bucket.
-		typ, err := schema.TypeOf(attr)
+		typ, err := schema.State().TypeOf(attr)
 		if err != nil || !typ.IsScalar() {
 			return nil, x.Errorf("Attribute not scalar: %s %v", attr, typ)
 		}

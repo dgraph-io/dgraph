@@ -312,7 +312,7 @@ func validateTypes(nquads []*graph.NQuad) error {
 	for i := range nquads {
 		nquad := nquads[i]
 		// Lets try to get the type of the predicate from the schema file.
-		if schemaType, err = schema.TypeOf(nquad.Predicate); err != nil || !schemaType.IsScalar() {
+		if schemaType, err = schema.State().TypeOf(nquad.Predicate); err != nil || !schemaType.IsScalar() {
 			continue
 		}
 		// Lets get the storage type for the object now. nquad.ObjectType should either be
@@ -757,7 +757,7 @@ func main() {
 	err = schema.Init(ps, *schemaFile)
 	x.Checkf(err, "Error while loading schema")
 
-	// Posting will initialize index which requires schema. Hence, initialize
+	// Posting will initialize index which requires schema.State(). Hence, initialize
 	// schema before calling posting.Init().
 	posting.Init(ps)
 	worker.Init(ps)

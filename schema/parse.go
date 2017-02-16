@@ -105,12 +105,12 @@ func processScalarPair(it *lex.ItemIterator, name string, allowIndex bool) error
 	typ := next.Val
 	t, ok := types.TypeForName(typ)
 	if ok {
-		if t1, err := Schema().TypeOf(name); err == nil {
+		if t1, err := State().TypeOf(name); err == nil {
 			if t1 != t {
 				return x.Errorf("Same field cannot have multiple types")
 			}
 		} else {
-			Schema().setType(name, t)
+			State().SetType(name, t)
 		}
 	}
 
@@ -131,7 +131,7 @@ func processScalarPair(it *lex.ItemIterator, name string, allowIndex bool) error
 				if t != types.UidID {
 					return x.Errorf("Cannot reverse for non-UID type")
 				}
-				Schema().setReverse(name, true)
+				State().SetReverse(name, true)
 				return nil
 			case "index":
 				if !allowIndex {
@@ -150,7 +150,7 @@ func processScalarPair(it *lex.ItemIterator, name string, allowIndex bool) error
 
 // processIndexDirective works on "@index" or "@index(customtokenizer)".
 func processIndexDirective(it *lex.ItemIterator, name string, typ types.TypeID) error {
-	Schema().setIndex(name, tok.Default(typ).Name())
+	State().SetIndex(name, tok.Default(typ).Name())
 	if !it.Next() {
 		// Nothing to read.
 		return nil
@@ -177,7 +177,7 @@ func processIndexDirective(it *lex.ItemIterator, name string, typ types.TypeID) 
 			return x.Errorf("Found more than one arguments for index directive")
 		}
 		// Look for custom tokenizer.
-		Schema().setIndex(name, tok.GetTokenizer(next.Val).Name())
+		State().SetIndex(name, tok.GetTokenizer(next.Val).Name())
 	}
 	return nil
 }
@@ -210,7 +210,7 @@ func processObject(it *lex.ItemIterator) error {
 		return x.Errorf("Missing object name")
 	}
 	objName = next.Val
-	Schema().setType(objName, types.UidID)
+	State().SetType(objName, types.UidID)
 
 	it.Next()
 	next = it.Item()

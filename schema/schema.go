@@ -27,9 +27,9 @@ import (
 )
 
 var (
-	predicatesState *state
-	pstore          *store.Store
-	syncCh          chan SyncEntry
+	pState *state
+	pstore *store.Store
+	syncCh chan SyncEntry
 )
 
 type state struct {
@@ -38,9 +38,9 @@ type state struct {
 	predicate map[string]*types.Schema
 }
 
-// schema.Schema().IsSomething
-func Schema() *state {
-	return predicatesState
+// State returns the schema state
+func State() *state {
+	return pState
 }
 
 // UpdateIfMissing checks sets the schema if it doesn't exist
@@ -61,7 +61,8 @@ func (s *state) UpdateIfMissing(se *SyncEntry) (types.TypeID, error) {
 	return types.TypeID(se.SchemaDescription.ValueType), nil
 }
 
-func (s *state) setType(attr string, valueType types.TypeID) {
+// SetType sets the schema type for given predicate
+func (s *state) SetType(attr string, valueType types.TypeID) {
 	s.Lock()
 	defer s.Unlock()
 	if schema, ok := s.predicate[attr]; ok {
@@ -72,7 +73,9 @@ func (s *state) setType(attr string, valueType types.TypeID) {
 	fmt.Printf("Setting schema for attr %s: %v\n", attr, valueType)
 }
 
-func (s *state) setReverse(attr string, rev bool) {
+// SetReverse sets whether the reverse edge is enabled or
+// not for given predicate
+func (s *state) SetReverse(attr string, rev bool) {
 	s.Lock()
 	defer s.Unlock()
 	if schema, ok := s.predicate[attr]; ok {
@@ -82,7 +85,8 @@ func (s *state) setReverse(attr string, rev bool) {
 	}
 }
 
-func (s *state) setIndex(attr string, tokenizer string) {
+// SetIndex sets the tokenizer for given predicate
+func (s *state) SetIndex(attr string, tokenizer string) {
 	fmt.Println("Setting tokenizer", attr, tokenizer)
 	s.Lock()
 	defer s.Unlock()
@@ -91,13 +95,15 @@ func (s *state) setIndex(attr string, tokenizer string) {
 	schema.Tokenizer = tokenizer
 }
 
-func (s *state) set(attr string, schema *types.Schema) {
+// Set sets the schema for given predicate
+func (s *state) Set(attr string, schema *types.Schema) {
 	s.Lock()
 	defer s.Unlock()
 	s.predicate[attr] = schema
 	fmt.Printf("Setting schema for attr %s: %v\n", attr, schema.ValueType)
 }
 
+// TypeOf returns the schema type of predicate
 func (s *state) TypeOf(pred string) (types.TypeID, error) {
 	s.RLock()
 	defer s.RUnlock()
@@ -107,6 +113,7 @@ func (s *state) TypeOf(pred string) (types.TypeID, error) {
 	return types.TypeID(100), x.Errorf("Undefined predicate")
 }
 
+// IsIndexed returns whether the predicate is indexed or not
 func (s *state) IsIndexed(pred string) bool {
 	s.RLock()
 	defer s.RUnlock()
@@ -116,6 +123,7 @@ func (s *state) IsIndexed(pred string) bool {
 	return false
 }
 
+// IndexedFields returns the list of indexed fields
 func (s *state) IndexedFields() []string {
 	s.RLock()
 	defer s.RUnlock()
@@ -128,6 +136,7 @@ func (s *state) IndexedFields() []string {
 	return out
 }
 
+// Tokenizer returns the tokenizer for given predicate
 func (s *state) Tokenizer(pred string) tok.Tokenizer {
 	s.RLock()
 	defer s.RUnlock()
@@ -136,6 +145,7 @@ func (s *state) Tokenizer(pred string) tok.Tokenizer {
 	return tok.GetTokenizer(schema.Tokenizer)
 }
 
+// IsReversed returns whether the predicate has reverse edge or not
 func (s *state) IsReversed(pred string) bool {
 	s.RLock()
 	defer s.RUnlock()
@@ -173,19 +183,19 @@ func LoadFromDb() error {
 		data := itr.Value().Data()
 		var s types.Schema
 		x.Checkf(s.Unmarshal(data), "Error while loading schema from db")
-		Schema().set(attr, &s)
+		State().Set(attr, &s)
 	}
 
 	return nil
 }
 
 func reset() {
-	predicatesState = new(state)
-	Schema().predicate = make(map[string]*types.Schema)
+	pState = new(state)
+	State().predicate = make(map[string]*types.Schema)
 	syncCh = make(chan SyncEntry, 10000)
 }
 
-// The following logic is used to batch up all the writes to RocksDB.
+// SyncEntry stores the schema mutation information
 type SyncEntry struct {
 	Attr              string
 	SchemaDescription *types.Schema
