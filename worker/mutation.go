@@ -70,7 +70,7 @@ func runMutations(ctx context.Context, edges []*task.DirectedEdge) error {
 func updateSchema(edge *task.DirectedEdge, rv *x.RaftValue) error {
 	ce := schema.SyncEntry{
 		Attr:              edge.Attr,
-		SchemaDescription: &types.Schema{ValueType: uint32(posting.EdgeTypeID(edge))},
+		SchemaDescription: &types.Schema{ValueType: uint32(posting.TypeID(edge))},
 		Index:             rv.Index,
 		Water:             posting.SyncMarkFor(rv.Group),
 	}
@@ -81,37 +81,39 @@ func updateSchema(edge *task.DirectedEdge, rv *x.RaftValue) error {
 }
 
 func validateType(edge *task.DirectedEdge, schemaType types.TypeID) error {
-	storageType := posting.EdgeTypeID(edge)
+	storageType := posting.TypeID(edge)
 
 	if !schemaType.IsScalar() && !storageType.IsScalar() {
 		return nil
 	} else if !schemaType.IsScalar() && storageType.IsScalar() {
 		return x.Errorf("Input for predicate %s of type uid is scalar", edge.Attr)
-	} else if !storageType.IsScalar() {
+	} else if schemaType.IsScalar() && !storageType.IsScalar() {
 		return x.Errorf("Input for predicate %s of type scalar is uid", edge.Attr)
+	} else {
+		// Both are scalars. Continue.
+	}
+	if storageType == schemaType {
+		return nil
 	}
 
 	// During NQuad parsing, value is parsed as appropriate type if storage type is
 	// specified or else as string and corresponsing type is set in directedEdge
 	// In case no schema is specified schema type would be set as tye type coming
 	// in directedEdge on first mutation.
-	if storageType != schemaType {
-		var dst types.Val
-		var err error
-		src := types.Val{types.TypeID(edge.ValueType), edge.Value}
-		// check if storage type is compatible with schema type
-		if dst, err = types.Convert(src, schemaType); err != nil {
-			return err
-		}
-		// convert to schema type
-		b := types.ValueForType(types.BinaryID)
-		if err = types.Marshal(dst, &b); err != nil {
-			return err
-		}
-		edge.ValueType = uint32(schemaType)
-		edge.Value = b.Value.([]byte)
-
+	var dst types.Val
+	var err error
+	src := types.Val{types.TypeID(edge.ValueType), edge.Value}
+	// check if storage type is compatible with schema type
+	if dst, err = types.Convert(src, schemaType); err != nil {
+		return err
 	}
+	// convert to schema type
+	b := types.ValueForType(types.BinaryID)
+	if err = types.Marshal(dst, &b); err != nil {
+		return err
+	}
+	edge.ValueType = uint32(schemaType)
+	edge.Value = b.Value.([]byte)
 	return nil
 }
 
