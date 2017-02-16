@@ -173,52 +173,62 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 
 	var out task.Result
 	it := algo.NewListIterator(q.Uids)
+
+	langs := append(q.Langs, "")
 	for i := 0; i < n; i++ {
-		var key []byte
-		if isAgrtr {
-			key = x.DataKey(attr, it.Val())
-			it.Next()
-		} else if useFunc {
-			key = x.IndexKey(attr, tokens[i])
-		} else if q.Reverse {
-			key = x.ReverseKey(attr, it.Val())
-			it.Next()
-		} else {
-			key = x.DataKey(attr, it.Val())
-			it.Next()
-		}
-		// Get or create the posting list for an entity, attribute combination.
-		pl, decr := posting.GetOrCreate(key, gid)
-		defer decr()
-
-		// If a posting list contains a value, we store that or else we store a nil
-		// byte so that processing is consistent later.
-		val, err := pl.Value(q.Langs)
-		newValue := &task.Value{ValType: int32(val.Tid)}
-		if err == nil {
-			newValue.Val = val.Value.([]byte)
-		} else {
-			newValue.Val = x.Nilbyte
-		}
-		out.Values = append(out.Values, newValue)
-
-		if q.DoCount || isAgrtr {
-			if q.DoCount {
-				out.Counts = append(out.Counts, uint32(pl.Length(0)))
+		var uids []*task.List
+		for _, lang := range langs {
+			var key []byte
+			if isAgrtr {
+				key = x.DataKey(attr, it.Val())
+				it.Next()
+			} else if useFunc {
+				indexAttr := attr
+				if len(lang) > 0 {
+					indexAttr += "@" + lang
+				}
+				key = x.IndexKey(indexAttr, tokens[i])
+			} else if q.Reverse {
+				key = x.ReverseKey(attr, it.Val())
+				it.Next()
+			} else {
+				key = x.DataKey(attr, it.Val())
+				it.Next()
 			}
-			// Add an empty UID list to make later processing consistent
-			out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
-			continue
+			// Get or create the posting list for an entity, attribute combination.
+			pl, decr := posting.GetOrCreate(key, gid)
+			defer decr()
+
+			// If a posting list contains a value, we store that or else we store a nil
+			// byte so that processing is consistent later.
+			val, err := pl.Value(q.Langs)
+			newValue := &task.Value{ValType: int32(val.Tid)}
+			if err == nil {
+				newValue.Val = val.Value.([]byte)
+			} else {
+				newValue.Val = x.Nilbyte
+			}
+			out.Values = append(out.Values, newValue)
+
+			if q.DoCount || isAgrtr {
+				if q.DoCount {
+					out.Counts = append(out.Counts, uint32(pl.Length(0)))
+				}
+				// Add an empty UID list to make later processing consistent
+				out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
+				continue
+			}
+			// The more usual case: Getting the UIDs.
+			opts := posting.ListOptions{
+				AfterUID: uint64(q.AfterUid),
+			}
+			// If we have srcFunc and Uids, it means its a filter. So we intersect.
+			if useFunc && algo.ListLen(q.Uids) > 0 {
+				opts.Intersect = q.Uids
+			}
+			uids = append(uids, pl.Uids(opts))
 		}
-		// The more usual case: Getting the UIDs.
-		opts := posting.ListOptions{
-			AfterUID: uint64(q.AfterUid),
-		}
-		// If we have srcFunc and Uids, it means its a filter. So we intersect.
-		if useFunc && algo.ListLen(q.Uids) > 0 {
-			opts.Intersect = q.Uids
-		}
-		out.UidMatrix = append(out.UidMatrix, pl.Uids(opts))
+		out.UidMatrix = append(out.UidMatrix, algo.MergeSorted(uids))
 	}
 
 	if isAgrtr && len(out.Values) > 0 {
