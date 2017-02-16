@@ -141,7 +141,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *task.DirectedEdge) e
 	l.index.Lock()
 	defer l.index.Unlock()
 
-	doUpdateIndex := pstore != nil && (t.Value != nil) && schema.IsIndexed(t.Attr)
+	doUpdateIndex := pstore != nil && (t.Value != nil) && schema.Schema().IsIndexed(t.Attr)
 	{
 		l.Lock()
 		if doUpdateIndex {

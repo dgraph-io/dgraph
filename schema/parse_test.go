@@ -44,7 +44,7 @@ func checkSchema(t *testing.T, h map[string]*types.Schema, expected []nameType) 
 
 func TestSchema(t *testing.T) {
 	require.NoError(t, Init(ps, "testfiles/test_schema"))
-	checkSchema(t, pstate().schema, []nameType{
+	checkSchema(t, Schema().predicate, []nameType{
 		{"name", &types.Schema{ValueType: uint32(types.StringID)}},
 		{"address", &types.Schema{ValueType: uint32(types.StringID)}},
 		{"http://film.com/name", &types.Schema{ValueType: uint32(types.StringID)}},
@@ -59,11 +59,11 @@ func TestSchema(t *testing.T) {
 		{"http://film.com/", &types.Schema{ValueType: uint32(types.UidID)}},
 	})
 
-	typ, err := TypeOf("age")
+	typ, err := Schema().TypeOf("age")
 	require.NoError(t, err)
 	require.Equal(t, types.Int32ID, typ)
 
-	typ, err = TypeOf("agea")
+	typ, err = Schema().TypeOf("agea")
 	require.Error(t, err)
 }
 
@@ -99,7 +99,7 @@ func TestSchema6_Error(t *testing.T) {
 // Correct specification of indexing
 func TestSchemaIndex(t *testing.T) {
 	require.NoError(t, Init(ps, "testfiles/test_schema_index1"))
-	require.Equal(t, 2, len(IndexedFields()))
+	require.Equal(t, 2, len(Schema().IndexedFields()))
 }
 
 // Indexing can't be specified inside object types.
@@ -114,16 +114,16 @@ func TestSchemaIndex_Error2(t *testing.T) {
 
 func TestSchemaIndexCustom(t *testing.T) {
 	require.NoError(t, Init(ps, "testfiles/test_schema_index4"))
-	checkSchema(t, pstate().schema, []nameType{
+	checkSchema(t, Schema().predicate, []nameType{
 		{"name", &types.Schema{ValueType: uint32(types.StringID), Tokenizer: "exact"}},
 		{"address", &types.Schema{ValueType: uint32(types.StringID), Tokenizer: "term"}},
 		{"age", &types.Schema{ValueType: uint32(types.Int32ID), Tokenizer: "int"}},
 		{"Person", &types.Schema{ValueType: uint32(types.UidID)}},
 	})
-	require.True(t, IsIndexed("name"))
-	require.False(t, IsReversed("name"))
-	require.Equal(t, "int", Tokenizer("age").Name())
-	require.Equal(t, 3, len(IndexedFields()))
+	require.True(t, Schema().IsIndexed("name"))
+	require.False(t, Schema().IsReversed("name"))
+	require.Equal(t, "int", Schema().Tokenizer("age").Name())
+	require.Equal(t, 3, len(Schema().IndexedFields()))
 }
 
 var ps *store.Store
