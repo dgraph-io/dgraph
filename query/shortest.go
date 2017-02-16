@@ -243,14 +243,8 @@ func ShortestPath(ctx context.Context, sg *SubGraph) error {
 	}
 
 	var stopExpansion bool
-	// For now, lets allow a maximum of 10 hops.
 	for pq.Len() > 0 {
 		item := heap.Pop(&pq).(*Item)
-		/*
-			if item.uid == sg.Params.To {
-				break
-			}
-		*/
 		if item.hop > numHops {
 			// Explore the next level by calling processGraph and add them
 			// to the queue.
@@ -298,11 +292,12 @@ func ShortestPath(ctx context.Context, sg *SubGraph) error {
 					}
 				} else {
 					// We've already seen this node. So, just update the cost
-					// and fix the priority in the queue.
+					// and fix the priority in the heap and map.
 					node := dist[toUid].node
 					node.cost = item.cost + cost
 					node.hop = item.hop + 1
 					heap.Fix(&pq, node.index)
+					// Update the map with new values.
 					dist[toUid] = nodeInfo{
 						cost:   item.cost + cost,
 						parent: item.uid,
