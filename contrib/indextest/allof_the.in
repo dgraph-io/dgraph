@@ -2,7 +2,7 @@
  me(id: 15161013152876854722) {
   director.film {
    directed_by {
-    director.film @filter(allof("name@en", "the")) {
+    director.film @filter(allof("name", "the")) {
      _uid_
      name@en
     }

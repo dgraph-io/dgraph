@@ -327,6 +327,8 @@ func lexDirective(l *lex.Lexer) lex.StateFn {
 			return lexText
 		case "normalize":
 			return lexText
+		case "facets":
+			return lexText
 		default:
 			return l.Errorf("Unhandled directive %s", directive)
 		}

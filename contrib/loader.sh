@@ -72,8 +72,7 @@ run_index_test releasedate release_date 137858
 run_index_test releasedate_sort release_date 137858
 run_index_test releasedate_sort_first_offset release_date 2315
 run_index_test releasedate_geq release_date 60991
-run_index_test gen_anyof_good_bad name 1103
-run_index_test gen_anyof_good_bad_ja _uid_ 4
+run_index_test gen_anyof_good_bad name 1104
 
 popd &> /dev/null
 

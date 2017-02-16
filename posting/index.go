@@ -72,9 +72,6 @@ func addIndexMutations(ctx context.Context, t *task.DirectedEdge, p types.Val, o
 	}
 
 	// Create a value token -> uid edge.
-	if len(t.Lang) > 0 {
-		attr += "@" + t.Lang
-	}
 	edge := &task.DirectedEdge{
 		ValueId: uid,
 		Attr:    attr,
