@@ -93,10 +93,11 @@ type FilterTree struct {
 
 // Function holds the information about gql functions.
 type Function struct {
-	Attr     string
-	Name     string   // Specifies the name of the function.
-	Args     []string // Contains the arguments of the function.
-	NeedsVar []string // If the function requires some variable
+	Attr        string
+	IsFacetAttr bool     // Is this facet's attr ? @facets(attr)
+	Name        string   // Specifies the name of the function.
+	Args        []string // Contains the arguments of the function.
+	NeedsVar    []string // If the function requires some variable
 }
 
 // Facet holds the information about gql Facets (edge key-value pairs).
@@ -989,20 +990,50 @@ func parseFilter(it *lex.ItemIterator) (*FilterTree, error) {
 			}
 			var terminated bool
 			for it.Next() {
+				isFacetAttr := false
+				var attrName string
 				itemInFunc := it.Item()
 				if itemInFunc.Typ == itemRightRound {
 					terminated = true
 					break
+				} else if itemInFunc.Typ == itemAt {
+					if len(f.Attr) != 0 {
+						return nil, x.Errorf(
+							"Facets only allowed at attributed position.")
+					}
+					items, err := it.Peek(1)
+					if err != nil {
+						return nil, err
+					}
+					if items[0].Typ != itemName || items[0].Val != "facets" {
+						return nil, x.Errorf("Expected facets but found : %v",
+							items[0].Val)
+					}
+					it.Next() // ignore facets.
+					fs, err := parseFacets(it)
+					if err != nil {
+						return nil, err
+					}
+					if len(fs.Keys) != 1 {
+						return nil, x.Errorf("Expected 1 facet but got %v",
+							len(fs.Keys))
+					}
+					attrName = fs.Keys[0]
+					isFacetAttr = true
 				} else if itemInFunc.Typ != itemName {
 					return nil, x.Errorf("Expected arg after func [%s], but got item %v",
 						leaf.Func.Name, itemInFunc)
 				}
-				it := strings.Trim(itemInFunc.Val, "\" \t")
+				if !isFacetAttr {
+					attrName = itemInFunc.Val
+				}
+				it := strings.Trim(attrName, "\" \t")
 				if it == "" {
 					return nil, x.Errorf("Empty argument received")
 				}
 				if len(f.Attr) == 0 {
 					f.Attr = it
+					f.IsFacetAttr = isFacetAttr
 				} else {
 					f.Args = append(f.Args, it)
 				}
