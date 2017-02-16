@@ -40,18 +40,19 @@ func runMutations(ctx context.Context, edges []*task.DirectedEdge) error {
 			return x.Errorf("Predicate fingerprint doesn't match this instance")
 		}
 
+		var typ types.TypeID
+		var err error
 		rv := ctx.Value("raft").(x.RaftValue)
 
-		if typ, err := schema.State().TypeOf(edge.Attr); err != nil {
+		if typ, err = schema.State().TypeOf(edge.Attr); err != nil {
 			if err = updateSchema(edge, &rv); err != nil {
 				x.Printf("Error while updating schema: %v %v", edge, err)
 				return err
 			}
-		} else {
-			if err = validateType(edge, typ); err != nil {
-				x.Printf("Error while casting object value to schema type: %v %v", edge, err)
-				return err
-			}
+		}
+		if err = validateType(edge, typ); err != nil {
+			x.Printf("Error while casting object value to schema type: %v %v", edge, err)
+			return err
 		}
 
 		key := x.DataKey(edge.Attr, edge.Entity)

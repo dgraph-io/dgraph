@@ -417,7 +417,7 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 			args.DoCount = true
 		}
 
-		for argk := range gchild.Args {
+		for argk, _ := range gchild.Args {
 			if !isValidArg(argk) {
 				return x.Errorf("Invalid argument : %s", argk)
 			}
@@ -554,7 +554,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		args.NeedsVar = append(args.NeedsVar, it)
 	}
 
-	for argk := range gq.Args {
+	for argk, _ := range gq.Args {
 		if !isValidArg(argk) {
 			return nil, x.Errorf("Invalid argument : %s", argk)
 		}
@@ -913,7 +913,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			go ProcessGraph(ctx, filter, sg, filterChan)
 		}
 
-		for range sg.Filters {
+		for _ = range sg.Filters {
 			select {
 			case err = <-filterChan:
 				if err != nil {
@@ -996,7 +996,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	}
 
 	// Now get all the results back.
-	for range sg.Children {
+	for _ = range sg.Children {
 		select {
 		case err = <-childChan:
 			if err != nil {
