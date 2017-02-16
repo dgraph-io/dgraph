@@ -68,9 +68,11 @@ func (s *state) setType(attr string, valueType types.TypeID) {
 func (s *state) setReverse(attr string, rev bool) {
 	s.Lock()
 	defer s.Unlock()
-	schema, ok := s.schemaMap[attr]
-	x.AssertTruef(ok, "schema state not found for %s", attr)
-	schema.Reverse = rev
+	if schema, ok := s.schemaMap[attr]; ok {
+		schema.Reverse = rev
+	} else {
+		s.schemaMap[attr] = &types.Schema{Reverse: rev}
+	}
 }
 
 func (s *state) setIndex(attr string, tokenizer string) {
