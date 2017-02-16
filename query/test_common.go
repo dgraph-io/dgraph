@@ -59,7 +59,7 @@ func addEdge(t *testing.T, attr string, src uint64, edge *task.DirectedEdge) {
 		l.AddMutationWithIndex(context.Background(), edge))
 }
 
-func mkFacets(facetKVs map[string]string) (fs []*facets.Facet, err error) {
+func makeFacets(facetKVs map[string]string) (fs []*facets.Facet, err error) {
 	if len(facetKVs) == 0 {
 		return nil, nil
 	}
@@ -86,7 +86,7 @@ func mkFacets(facetKVs map[string]string) (fs []*facets.Facet, err error) {
 
 func addEdgeToValue(t *testing.T, attr string, src uint64,
 	value string, facetKVs map[string]string) {
-	fs, err := mkFacets(facetKVs)
+	fs, err := makeFacets(facetKVs)
 	require.NoError(t, err)
 	edge := &task.DirectedEdge{
 		Value:  []byte(value),
@@ -101,7 +101,7 @@ func addEdgeToValue(t *testing.T, attr string, src uint64,
 
 func addEdgeToTypedValue(t *testing.T, attr string, src uint64,
 	typ types.TypeID, value []byte, facetKVs map[string]string) {
-	fs, err := mkFacets(facetKVs)
+	fs, err := makeFacets(facetKVs)
 	require.NoError(t, err)
 	edge := &task.DirectedEdge{
 		Value:     value,
@@ -117,7 +117,7 @@ func addEdgeToTypedValue(t *testing.T, attr string, src uint64,
 
 func addEdgeToUID(t *testing.T, attr string, src uint64,
 	dst uint64, facetKVs map[string]string) {
-	fs, err := mkFacets(facetKVs)
+	fs, err := makeFacets(facetKVs)
 	require.NoError(t, err)
 	edge := &task.DirectedEdge{
 		ValueId: dst,

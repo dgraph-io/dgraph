@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"strconv"
 	"time"
+	"unicode"
 )
 
 const (
@@ -75,7 +76,7 @@ func ValStrToValType(val string) (Facet_ValType, error) {
 		// comes here for : 11111111111111111111132333uasfk333 ; see test.
 		nonNumChar := false
 		for _, v := range val {
-			if v < '0' || v > '9' {
+			if !unicode.IsDigit(v) {
 				nonNumChar = true
 				break
 			}
