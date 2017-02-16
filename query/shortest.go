@@ -110,9 +110,7 @@ func (start *SubGraph) expandOut(ctx context.Context,
 				if sg.Params.Facet != nil {
 					fcsList = sg.FacetsLists[idx].FacetsList
 				}
-				// ul := sg.uidMatrix[idx].Uids
-				idxi := -1
-				for ; it1.Valid(); it1.Next() { // _, toUid := range ul {
+				for idxi := -1; it1.Valid(); it1.Next() {
 					idxi++
 					toUid := it1.Val()
 					if adjacencyMap[fromUID] == nil {
@@ -122,8 +120,8 @@ func (start *SubGraph) expandOut(ctx context.Context,
 					cost := 1.0
 					if sg.Params.Facet != nil && len(fcsList) > idxi {
 						fcs := fcsList[idxi]
-						if len(fcs.Facets) > 1 {
-							rch <- x.Errorf("More than one facet.")
+						if len(fcs.Facets) != 1 {
+							rch <- x.Errorf("Expected 1 but got %d facets", len(fcs.Facets))
 							return
 						}
 						if tv, err := types.TypeValForFacet(fcs.Facets[0]); err != nil {

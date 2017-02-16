@@ -473,6 +473,27 @@ func TestShortestPath(t *testing.T) {
 		js)
 }
 
+func TestShortestPathWeightsError(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			A as shortest(from:1, to:1002) {
+				path @facets(weight1, weight2)
+			}
+
+			me(var: A) {
+				name
+			}
+		}`
+	res, err := gql.Parse(query)
+	require.NoError(t, err)
+
+	var l Latency
+	ctx := context.Background()
+	_, err = ProcessQuery(ctx, res, &l)
+	require.Error(t, err)
+}
+
 func TestShortestPathWeights(t *testing.T) {
 	populateGraph(t)
 	query := `
