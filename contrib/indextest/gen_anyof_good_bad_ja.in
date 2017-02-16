@@ -1,0 +1,6 @@
+{
+ me(func:anyof("name@ja", "good bad")) {
+_uid_
+  name@ja
+ }
+}
