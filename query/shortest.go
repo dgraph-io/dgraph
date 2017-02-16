@@ -118,6 +118,7 @@ func (start *SubGraph) expandOut(ctx context.Context,
 					if adjacencyMap[fromUID] == nil {
 						adjacencyMap[fromUID] = make(map[uint64]float64)
 					}
+					// The default cost we'd use is 1.
 					cost := 1.0
 					if sg.Params.Facet != nil && len(fcsList) > idxi {
 						fcs := fcsList[idxi]
