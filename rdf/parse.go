@@ -349,8 +349,12 @@ func parseFacets(it *lex.ItemIterator, rnq *graph.NQuad) error {
 		if item.Typ == itemText {
 			facetVal = item.Val
 		}
-		rnq.Facets = append(rnq.Facets, &facets.Facet{facetKey,
-			[]byte(facetVal), facets.ValStrToValType(facetVal)})
+		valTyp, err := facets.ValType(facetVal)
+		if err != nil {
+			return err
+		}
+		rnq.Facets = append(rnq.Facets,
+			&facets.Facet{Key: facetKey, Value: []byte(facetVal), ValType: valTyp})
 
 		// empty value case..
 		if item.Typ == itemRightRound {
