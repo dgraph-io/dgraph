@@ -128,7 +128,7 @@ func (start *SubGraph) expandOut(ctx context.Context,
 							rch <- x.Errorf("Expected 1 but got %d facets", len(fcs.Facets))
 							return
 						}
-						tv, err := types.TypeValForFacet(fcs.Facets[0])
+						tv, err := types.ValFor(fcs.Facets[0])
 						if err != nil {
 							rch <- err
 							return

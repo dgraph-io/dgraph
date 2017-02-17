@@ -296,7 +296,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 					fs := fcsList[childIdx]
 					fc := dst.New(fieldName)
 					for _, f := range fs.Facets {
-						if tv, err := types.TypeValForFacet(f); err != nil {
+						if tv, err := types.ValFor(f); err != nil {
 							return err
 						} else {
 							fc.AddValue(f.Key, tv)
@@ -322,7 +322,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 				fc := dst.New(fieldName)
 				// in case of Value we have only one Facets
 				for _, f := range pc.FacetMatrix[idx].FacetsList[0].Facets {
-					if tVal, err := types.TypeValForFacet(f); err != nil {
+					if tVal, err := types.ValFor(f); err != nil {
 						return err
 					} else {
 						fc.AddValue(f.Key, tVal)
