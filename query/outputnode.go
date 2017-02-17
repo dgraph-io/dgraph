@@ -18,7 +18,6 @@ package query
 
 import (
 	"bufio"
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -471,31 +470,21 @@ func (sg *SubGraph) ToFastJSON(l *Latency, w io.Writer, allocIds map[string]stri
 	if sg.Params.isDebug {
 		sl := seedNode.New("serverLatency").(*fastJsonNode)
 		for k, v := range l.ToMap() {
-			sl.attrs[k] = makeScalarAttr([]byte(fmt.Sprintf("%q", v)))
+			val := types.ValueForType(types.BinaryID)
+			val.Value = []byte(fmt.Sprintf("%q", v))
+			sl.AddValue(k, val)
 		}
-
-		var slBuf bytes.Buffer
-		slw := bufio.NewWriter(&slBuf)
-		sl.encode(slw)
-		if slw.Flush() != nil {
-			return slw.Flush()
-		}
-		n.(*fastJsonNode).attrs["server_latency"] = makeScalarAttr(slBuf.Bytes())
+		n.AddMapChild("server_latency", sl, false)
 	}
 
 	if allocIds != nil && len(allocIds) > 0 {
 		sl := seedNode.New("uids").(*fastJsonNode)
 		for k, v := range allocIds {
-			sl.attrs[k] = makeScalarAttr([]byte(v))
+			val := types.ValueForType(types.BinaryID)
+			val.Value = []byte(v)
+			sl.AddValue(k, val)
 		}
-
-		var slBuf bytes.Buffer
-		slw := bufio.NewWriter(&slBuf)
-		sl.encode(slw)
-		if slw.Flush() != nil {
-			return slw.Flush()
-		}
-		n.(*fastJsonNode).attrs["uids"] = makeScalarAttr(slBuf.Bytes())
+		n.AddMapChild("uids", sl, false)
 	}
 
 	bufw := bufio.NewWriter(w)

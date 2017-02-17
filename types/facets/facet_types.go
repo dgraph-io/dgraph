@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"strconv"
 	"time"
+	"unicode"
 )
 
 const (
@@ -32,8 +33,8 @@ const (
 
 type TypeID Facet_ValType
 
-// TypeIDToValType gives Facet_ValType for given TypeID
-func TypeIDToValType(typId TypeID) Facet_ValType {
+// ValTypeForTypeID gives Facet_ValType for given TypeID
+func ValTypeForTypeID(typId TypeID) Facet_ValType {
 	switch typId {
 	case Int32ID:
 		return Facet_INT32
@@ -46,11 +47,11 @@ func TypeIDToValType(typId TypeID) Facet_ValType {
 	case StringID:
 		return Facet_STRING
 	}
-	panic("Unhandled case in TypeIDToValType.")
+	panic("Unhandled case in ValTypeForTypeID.")
 }
 
-// ValTypeToTypeID gives TypeID for Facet_ValType
-func ValTypeToTypeID(valType Facet_ValType) TypeID {
+// TypeIDForValType gives TypeID for Facet_ValType
+func TypeIDForValType(valType Facet_ValType) TypeID {
 	switch valType {
 	case Facet_INT32:
 		return Int32ID
@@ -63,24 +64,39 @@ func ValTypeToTypeID(valType Facet_ValType) TypeID {
 	case Facet_STRING:
 		return StringID
 	}
-	panic("Unhandled case in TypeIDToValType.")
+	panic("Unhandled case in TypeIDForValType.")
 }
 
-// ValStrToTypeID gives Facet's TypeID for given facet value
-func ValStrToValType(val string) Facet_ValType {
-	if _, err := strconv.ParseBool(val); err == nil {
-		return Facet_BOOL
-	}
-	if _, err := strconv.ParseInt(val, 0, 32); err == nil {
-		return Facet_INT32
+// ValType gives Facet's TypeID for given facet value str.
+func ValType(val string) (Facet_ValType, error) {
+	if _, err := strconv.ParseInt(val, 10, 32); err == nil {
+		return Facet_INT32, nil
+	} else if nume := err.(*strconv.NumError); nume.Err == strconv.ErrRange {
+		// check if whole string is only of nums or not.
+		// comes here for : 11111111111111111111132333uasfk333 ; see test.
+		nonNumChar := false
+		for _, v := range val {
+			if !unicode.IsDigit(v) {
+				nonNumChar = true
+				break
+			}
+		}
+		if !nonNumChar {
+			return Facet_INT32, err
+		}
 	}
 	if _, err := strconv.ParseFloat(val, 64); err == nil {
-		return Facet_FLOAT
+		return Facet_FLOAT, nil
+	} else if nume := err.(*strconv.NumError); nume.Err == strconv.ErrRange {
+		return Facet_FLOAT, err
+	}
+	if val == "true" || val == "false" {
+		return Facet_BOOL, nil
 	}
 	if _, err := parseTime(val); err == nil {
-		return Facet_DATETIME
+		return Facet_DATETIME, nil
 	}
-	return Facet_STRING
+	return Facet_STRING, nil
 }
 
 func parseTime(val string) (time.Time, error) {

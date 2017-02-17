@@ -650,6 +650,15 @@ func (s *grpcServer) Run(ctx context.Context,
 		return resp, err
 	}
 
+	// If mutations are part of the query, we run them through the mutation handler
+	// same as the http client.
+	if res.Mutation != nil && (len(res.Mutation.Set) > 0 || len(res.Mutation.Del) > 0) {
+		if allocIds, err = mutationHandler(ctx, res.Mutation); err != nil {
+			x.TraceError(ctx, x.Wrapf(err, "Error while handling mutations"))
+			return resp, err
+		}
+	}
+
 	// Mutations are sent as part of the mutation object
 	if req.Mutation != nil && (len(req.Mutation.Set) > 0 || len(req.Mutation.Del) > 0) {
 		if allocIds, err = runMutations(ctx, req.Mutation); err != nil {
