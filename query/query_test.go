@@ -78,7 +78,7 @@ func populateGraph(t *testing.T) {
 	addEdgeToUID(t, "follow", 1001, 1003, nil)
 	addEdgeToUID(t, "follow", 1003, 1002, nil)
 
-	addEdgeToUID(t, "path", 1, 31, map[string]string{"weight": "0.1"})
+	addEdgeToUID(t, "path", 1, 31, map[string]string{"weight": "0.1", "weight1": "0.2"})
 	addEdgeToUID(t, "path", 1, 24, map[string]string{"weight": "0.2"})
 	addEdgeToUID(t, "path", 31, 1000, map[string]string{"weight": "0.1"})
 	addEdgeToUID(t, "path", 1000, 1001, map[string]string{"weight": "0.1"})
@@ -473,12 +473,12 @@ func TestShortestPath(t *testing.T) {
 		js)
 }
 
-func TestShortestPathWeightsError(t *testing.T) {
+func TestShortestPathWeightsMultiFacet_Error(t *testing.T) {
 	populateGraph(t)
 	query := `
 		{
 			A as shortest(from:1, to:1002) {
-				path @facets(weight1, weight2)
+				path @facets(weight, weight1)
 			}
 
 			me(var: A) {

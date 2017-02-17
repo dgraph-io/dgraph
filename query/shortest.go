@@ -105,14 +105,14 @@ func (start *SubGraph) expandOut(ctx context.Context,
 			for ; it.Valid(); it.Next() { // idx, fromUID := range sg.SrcUIDs.Uids {
 				idx++
 				fromUID := it.Val()
-				it1 := algo.NewListIterator(sg.uidMatrix[idx])
+				destIt := algo.NewListIterator(sg.uidMatrix[idx])
 				var fcsList []*facets.Facets
 				if sg.Params.Facet != nil {
 					fcsList = sg.FacetsLists[idx].FacetsList
 				}
-				for idxi := -1; it1.Valid(); it1.Next() {
+				for idxi := -1; destIt.Valid(); destIt.Next() {
 					idxi++
-					toUid := it1.Val()
+					toUid := destIt.Val()
 					if adjacencyMap[fromUID] == nil {
 						adjacencyMap[fromUID] = make(map[uint64]float64)
 					}
@@ -120,7 +120,11 @@ func (start *SubGraph) expandOut(ctx context.Context,
 					cost := 1.0
 					if sg.Params.Facet != nil && len(fcsList) > idxi {
 						fcs := fcsList[idxi]
-						if len(fcs.Facets) != 1 {
+						if len(fcs.Facets) == 0 {
+							// No facet found. So ignore this edge.
+							continue
+						}
+						if len(fcs.Facets) > 1 {
 							rch <- x.Errorf("Expected 1 but got %d facets", len(fcs.Facets))
 							return
 						}
