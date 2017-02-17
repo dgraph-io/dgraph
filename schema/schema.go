@@ -27,9 +27,9 @@ import (
 )
 
 var (
-	pState *state
+	pstate *state
 	pstore *store.Store
-	syncCh chan SyncEntry
+	syncCh chan *SyncEntry
 )
 
 type state struct {
@@ -40,23 +40,31 @@ type state struct {
 
 // State returns the schema state
 func State() *state {
-	return pState
+	return pstate
 }
 
 // Update updates the schema in memory and sends an entry to syncCh so that it can be
 // comitted later
-func (s *state) Update(se *SyncEntry) {
+func (s *state) UpdateIfMissing(se *SyncEntry) (types.TypeID, bool) {
+	if typ, err := s.TypeOf(se.Attr); err == nil {
+		return typ, false
+	}
 	s.Lock()
 	defer s.Unlock()
 
-	_, ok := s.predicate[se.Attr]
-	x.AssertTruef(!ok, "Schema already exists for predicate %s", se.Attr)
+	if schema, ok := s.predicate[se.Attr]; ok {
+		return types.TypeID(schema.ValueType), false
+	}
 
-	s.predicate[se.Attr] = se.SchemaDescription
+	// Creating a copy to avoid race condition during marshalling
+	schema := se.Schema
+	s.predicate[se.Attr] = &schema
 	se.Water.Ch <- x.Mark{Index: se.Index, Done: false}
-	syncCh <- *se
 
-	fmt.Printf("Setting schema for attr %s: %v\n", se.Attr, se.SchemaDescription.ValueType)
+	syncCh <- se
+
+	fmt.Printf("Setting schema for attr %s: %v\n", se.Attr, se.Schema.ValueType)
+	return types.TypeID(se.Schema.ValueType), true
 }
 
 // SetType sets the schema type for given predicate
@@ -118,7 +126,7 @@ func (s *state) IsIndexed(pred string) bool {
 	s.RLock()
 	defer s.RUnlock()
 	if schema, ok := s.predicate[pred]; ok {
-		return schema.Tokenizer != ""
+		return len(schema.Tokenizer) > 0
 	}
 	return false
 }
@@ -129,7 +137,7 @@ func (s *state) IndexedFields() []string {
 	defer s.RUnlock()
 	var out []string
 	for k, v := range s.predicate {
-		if v.Tokenizer != "" {
+		if len(v.Tokenizer) > 0 {
 			out = append(out, k)
 		}
 	}
@@ -157,7 +165,7 @@ func (s *state) IsReversed(pred string) bool {
 
 func Init(ps *store.Store, file string) error {
 	pstore = ps
-	syncCh = make(chan SyncEntry, 10000)
+	syncCh = make(chan *SyncEntry, 10000)
 	if err := ReloadData(file); err != nil {
 		return err
 	}
@@ -198,19 +206,19 @@ func LoadFromDb() error {
 }
 
 func reset() {
-	pState = new(state)
+	pstate = new(state)
 	State().predicate = make(map[string]*types.Schema)
 }
 
 // SyncEntry stores the schema mutation information
 type SyncEntry struct {
-	Attr              string
-	SchemaDescription *types.Schema
-	Water             *x.WaterMark
-	Index             uint64
+	Attr   string
+	Schema types.Schema
+	Water  *x.WaterMark
+	Index  uint64
 }
 
-func addToEntriesMap(entriesMap map[chan x.Mark][]uint64, entries []SyncEntry) {
+func addToEntriesMap(entriesMap map[chan x.Mark][]uint64, entries []*SyncEntry) {
 	for _, entry := range entries {
 		if entry.Water != nil {
 			entriesMap[entry.Water.Ch] = append(entriesMap[entry.Water.Ch], entry.Index)
@@ -219,7 +227,7 @@ func addToEntriesMap(entriesMap map[chan x.Mark][]uint64, entries []SyncEntry) {
 }
 
 func batchSync() {
-	var entries []SyncEntry
+	var entries []*SyncEntry
 	var loop uint64
 
 	b := pstore.NewWriteBatch()
@@ -238,7 +246,7 @@ func batchSync() {
 				loop++
 				fmt.Printf("[%4d] Writing schema batch of size: %v\n", loop, len(entries))
 				for _, e := range entries {
-					val, err := e.SchemaDescription.Marshal()
+					val, err := e.Schema.Marshal()
 					x.Checkf(err, "Error while marshalling schema description")
 					b.Put(x.SchemaKey(e.Attr), val)
 				}

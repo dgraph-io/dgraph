@@ -54,7 +54,7 @@ type groupi struct {
 
 var gr *groupi
 
-func groups() *groupi {
+func Groups() *groupi {
 	return gr
 }
 
@@ -270,7 +270,7 @@ func (g *groupi) TouchLastUpdate(u uint64) {
 // - If the peer doesn't serve group zero, it would return back a redirect with the right address.
 // - Otherwise, it would iterate over the memberships, check for duplicates, and apply updates.
 // - Once iteration is over without errors, it would return back all new updates.
-// - These updates are then applied to groups().all state via applyMembershipUpdate.
+// - These updates are then applied to Groups().all state via applyMembershipUpdate.
 func (g *groupi) syncMemberships() {
 	if g.ServesGroup(0) {
 		// This server serves group zero.
@@ -476,8 +476,8 @@ func (w *grpcWorker) UpdateMembership(ctx context.Context,
 	if ctx.Err() != nil {
 		return &emptyMembershipUpdate, ctx.Err()
 	}
-	if !groups().ServesGroup(0) {
-		addr := groups().AnyServer(0)
+	if !Groups().ServesGroup(0) {
+		addr := Groups().AnyServer(0)
 		// fmt.Printf("I don't serve group zero. But, here's who does: %v\n", addr)
 
 		return &task.MembershipUpdate{
@@ -488,7 +488,7 @@ func (w *grpcWorker) UpdateMembership(ctx context.Context,
 
 	che := make(chan error, len(update.Members))
 	for _, mm := range update.Members {
-		if groups().isDuplicate(mm.GroupId, mm.Id, mm.Addr, mm.Leader) {
+		if Groups().isDuplicate(mm.GroupId, mm.Id, mm.Addr, mm.Leader) {
 			che <- nil
 			continue
 		}
@@ -501,12 +501,12 @@ func (w *grpcWorker) UpdateMembership(ctx context.Context,
 		}
 
 		go func(mmNew *task.Membership) {
-			zero := groups().Node(0)
+			zero := Groups().Node(0)
 			che <- zero.ProposeAndWait(zero.ctx, &task.Proposal{Membership: mmNew})
 		}(mmNew)
 	}
 
-	for _ = range update.Members {
+	for range update.Members {
 		select {
 		case <-ctx.Done():
 			return &emptyMembershipUpdate, ctx.Err()
@@ -519,7 +519,7 @@ func (w *grpcWorker) UpdateMembership(ctx context.Context,
 
 	// Find all membership updates since the provided lastUpdate. LastUpdate is
 	// the last raft index that the caller has recorded an update for.
-	reply := groups().MembershipUpdateAfter(update.LastUpdate)
+	reply := Groups().MembershipUpdateAfter(update.LastUpdate)
 	return reply, nil
 }
 
@@ -527,7 +527,7 @@ func (w *grpcWorker) UpdateMembership(ctx context.Context,
 func syncAllMarks(ctx context.Context) error {
 	var wg sync.WaitGroup
 	var err error
-	for _, n := range groups().nodes() {
+	for _, n := range Groups().nodes() {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -542,7 +542,7 @@ func syncAllMarks(ctx context.Context) error {
 
 // StopAllNodes stops all the nodes of the worker group.
 func stopAllNodes() {
-	for _, n := range groups().nodes() {
+	for _, n := range Groups().nodes() {
 		n.Stop()
 	}
 }

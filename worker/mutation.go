@@ -36,20 +36,31 @@ const (
 // mutations which were not applied in left.
 func runMutations(ctx context.Context, edges []*task.DirectedEdge) error {
 	for _, edge := range edges {
-		if !groups().ServesGroup(group.BelongsTo(edge.Attr)) {
+		if !Groups().ServesGroup(group.BelongsTo(edge.Attr)) {
 			return x.Errorf("Predicate fingerprint doesn't match this instance")
 		}
 
 		var typ types.TypeID
 		var err error
+		var shouldConvert bool
+		var ok bool
 		rv := ctx.Value("raft").(x.RaftValue)
 
 		if typ, err = schema.State().TypeOf(edge.Attr); err != nil {
 			// schema doesn't exist already
-			updateSchema(edge, &rv)
-		} else if err = convert(edge, typ); err != nil {
-			// schema is defined already
-			return err
+			if typ, ok = updateSchema(edge, &rv); !ok {
+				// some one else updated schema before us
+				shouldConvert = true
+			}
+		} else {
+			shouldConvert = true
+		}
+
+		if shouldConvert {
+			if err = convert(edge, typ); err != nil {
+				// schema is defined already
+				return err
+			}
 		}
 
 		key := x.DataKey(edge.Attr, edge.Entity)
@@ -64,14 +75,14 @@ func runMutations(ctx context.Context, edges []*task.DirectedEdge) error {
 	return nil
 }
 
-func updateSchema(edge *task.DirectedEdge, rv *x.RaftValue) {
+func updateSchema(edge *task.DirectedEdge, rv *x.RaftValue) (types.TypeID, bool) {
 	ce := schema.SyncEntry{
-		Attr:              edge.Attr,
-		SchemaDescription: &types.Schema{ValueType: uint32(posting.TypeID(edge))},
-		Index:             rv.Index,
-		Water:             posting.SyncMarkFor(rv.Group),
+		Attr:   edge.Attr,
+		Schema: types.Schema{ValueType: uint32(posting.TypeID(edge))},
+		Index:  rv.Index,
+		Water:  posting.SyncMarkFor(rv.Group),
 	}
-	schema.State().Update(&ce)
+	return schema.State().UpdateIfMissing(&ce)
 }
 
 // If storage type is specified, then check compatability or convert to schema type
@@ -118,13 +129,13 @@ func convert(edge *task.DirectedEdge, schemaType types.TypeID) error {
 
 // runMutate is used to run the mutations on an instance.
 func proposeOrSend(ctx context.Context, gid uint32, m *task.Mutations, che chan error) {
-	if groups().ServesGroup(gid) {
-		node := groups().Node(gid)
+	if Groups().ServesGroup(gid) {
+		node := Groups().Node(gid)
 		che <- node.ProposeAndWait(ctx, &task.Proposal{Mutations: m})
 		return
 	}
 
-	_, addr := groups().Leader(gid)
+	_, addr := Groups().Leader(gid)
 	pl := pools().get(addr)
 	conn, err := pl.Get()
 	if err != nil {
@@ -188,11 +199,11 @@ func (w *grpcWorker) Mutate(ctx context.Context, m *task.Mutations) (*Payload, e
 		return &Payload{}, ctx.Err()
 	}
 
-	if !groups().ServesGroup(m.GroupId) {
+	if !Groups().ServesGroup(m.GroupId) {
 		return &Payload{}, x.Errorf("This server doesn't serve group id: %v", m.GroupId)
 	}
 	c := make(chan error, 1)
-	node := groups().Node(m.GroupId)
+	node := Groups().Node(m.GroupId)
 	go func() { c <- node.ProposeAndWait(ctx, &task.Proposal{Mutations: m}) }()
 
 	select {

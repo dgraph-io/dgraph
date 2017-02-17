@@ -385,7 +385,7 @@ func (n *node) processMembership(e raftpb.Entry, mm *task.Membership) error {
 
 	x.Printf("group: %v Addr: %q leader: %v dead: %v\n",
 		mm.GroupId, mm.Addr, mm.Leader, mm.AmDead)
-	groups().applyMembershipUpdate(e.Index, mm)
+	Groups().applyMembershipUpdate(e.Index, mm)
 	return nil
 }
 
@@ -622,7 +622,7 @@ func (n *node) snapshotPeriodically() {
 
 func (n *node) joinPeers() {
 	// Get leader information for MY group.
-	pid, paddr := groups().Leader(n.gid)
+	pid, paddr := Groups().Leader(n.gid)
 	n.Connect(pid, paddr)
 	fmt.Printf("joinPeers connected with: %q with peer id: %d\n", paddr, pid)
 
@@ -700,7 +700,7 @@ func (n *node) InitAndStartNode(wal *raftwal.Wal) {
 
 	} else {
 		fmt.Printf("New Node for group: %d\n", n.gid)
-		if groups().HasPeer(n.gid) {
+		if Groups().HasPeer(n.gid) {
 			n.joinPeers()
 			n.SetRaft(raft.StartNode(n.cfg, nil))
 
@@ -730,7 +730,7 @@ func (n *node) AmLeader() bool {
 func (w *grpcWorker) applyMessage(ctx context.Context, msg raftpb.Message) error {
 	var rc task.RaftContext
 	x.Check(rc.Unmarshal(msg.Context))
-	node := groups().Node(rc.Group)
+	node := Groups().Node(rc.Group)
 	// TODO: Handle the case where node isn't present for this group.
 	node.Connect(msg.From, rc.Addr)
 
@@ -781,7 +781,7 @@ func (w *grpcWorker) JoinCluster(ctx context.Context, rc *task.RaftContext) (*Pa
 		return &Payload{}, ctx.Err()
 	}
 
-	node := groups().Node(rc.Group)
+	node := Groups().Node(rc.Group)
 	if node == nil {
 		return &Payload{}, nil
 	}

@@ -86,7 +86,7 @@ func (w *grpcWorker) RebuildIndex(ctx context.Context, req *task.RebuildIndex) (
 
 func proposeRebuildIndex(ctx context.Context, ri *task.RebuildIndex) error {
 	gid := ri.GroupId
-	n := groups().Node(gid)
+	n := Groups().Node(gid)
 	proposal := &task.Proposal{RebuildIndex: ri}
 	if err := n.ProposeAndWait(ctx, proposal); err != nil {
 		return err
@@ -105,13 +105,13 @@ func RebuildIndexOverNetwork(ctx context.Context, attr string) error {
 	gid := group.BelongsTo(attr)
 	x.Trace(ctx, "RebuildIndex attr: %v groupId: %v", attr, gid)
 
-	if groups().ServesGroup(gid) {
+	if Groups().ServesGroup(gid) {
 		// No need for a network call, as this should be run from within this instance.
 		return proposeRebuildIndex(ctx, &task.RebuildIndex{GroupId: gid, Attr: attr})
 	}
 
 	// Send this over the network.
-	addr := groups().AnyServer(gid)
+	addr := Groups().AnyServer(gid)
 	pl := pools().get(addr)
 
 	conn, err := pl.Get()

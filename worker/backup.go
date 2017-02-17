@@ -183,7 +183,7 @@ func backup(gid uint32, bdir string) error {
 }
 
 func handleBackupForGroup(ctx context.Context, reqId uint64, gid uint32) *BackupPayload {
-	n := groups().Node(gid)
+	n := Groups().Node(gid)
 	if n.AmLeader() {
 		x.Trace(ctx, "Leader of group: %d. Running backup.", gid)
 		if err := backup(gid, *backupPath); err != nil {
@@ -205,10 +205,10 @@ func handleBackupForGroup(ctx context.Context, reqId uint64, gid uint32) *Backup
 	var addrs []string
 	{
 		// Try in order: leader of given group, any server from given group, leader of group zero.
-		_, addr := groups().Leader(gid)
+		_, addr := Groups().Leader(gid)
 		addrs = append(addrs, addr)
-		addrs = append(addrs, groups().AnyServer(gid))
-		_, addr = groups().Leader(0)
+		addrs = append(addrs, Groups().AnyServer(gid))
+		_, addr = Groups().Leader(0)
 		addrs = append(addrs, addr)
 	}
 
@@ -283,12 +283,12 @@ func (w *grpcWorker) Backup(ctx context.Context, req *BackupPayload) (*BackupPay
 
 func BackupOverNetwork(ctx context.Context) error {
 	// If we haven't even had a single membership update, don't run backup.
-	if len(*peerAddr) > 0 && groups().LastUpdate() == 0 {
+	if len(*peerAddr) > 0 && Groups().LastUpdate() == 0 {
 		x.Trace(ctx, "This server hasn't yet been fully initiated. Please retry later.")
 		return x.Errorf("Uninitiated server. Please retry later")
 	}
 	// Let's first collect all groups.
-	gids := groups().KnownGroups()
+	gids := Groups().KnownGroups()
 
 	ch := make(chan *BackupPayload, len(gids))
 	for _, gid := range gids {
