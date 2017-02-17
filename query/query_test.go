@@ -2819,49 +2819,49 @@ func TestGeneratorMultiRootFilter3(t *testing.T) {
 }
 
 func TestGeneratorRootFilterOnCountGt(t *testing.T) {
-        populateGraph(t)
-        query := `
+	populateGraph(t)
+	query := `
                 {
                         me(func:anyof("name", "Michonne Rick")) @filter(gt(count(friend), 2)) {
                                 name
                         }
                 }
         `
-        _, err := gql.Parse(query)
-        require.NoError(t, err)
+	_, err := gql.Parse(query)
+	require.NoError(t, err)
 
-        js := processToFastJSON(t, query)
-        require.JSONEq(t, `{"me":[{"name":"Michonne"}]}`, js)
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"me":[{"name":"Michonne"}]}`, js)
 }
 
 func TestGeneratorRootFilterOnCountLeq(t *testing.T) {
-        populateGraph(t)
-        query := `
+	populateGraph(t)
+	query := `
                 {
                         me(func:anyof("name", "Michonne Rick")) @filter(leq(count(friend), 2)) {
                                 name
                         }
                 }
         `
-        _, err := gql.Parse(query)
-        require.NoError(t, err)
+	_, err := gql.Parse(query)
+	require.NoError(t, err)
 
-        js := processToFastJSON(t, query)
-        require.JSONEq(t, `{"me":[{"name":"Rick Grimes"}]}`, js)
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"me":[{"name":"Rick Grimes"}]}`, js)
 }
 
 func TestGeneratorRootFilterOnCountError1(t *testing.T) {
-        populateGraph(t)
+	populateGraph(t)
 	// only cmp(count(attr), int) is valid, 'max'/'min'/'sum' not supported
-        query := `
+	query := `
                 {
                         me(func:anyof("name", "Michonne Rick")) @filter(gt(count(friend), "invalid")) {
                                 name
                         }
                 }
         `
-        res, err := gql.Parse(query)
-        require.NoError(t, err)
+	res, err := gql.Parse(query)
+	require.NoError(t, err)
 
 	var l Latency
 	_, queryErr := ProcessQuery(context.Background(), res, &l)
@@ -2869,17 +2869,17 @@ func TestGeneratorRootFilterOnCountError1(t *testing.T) {
 }
 
 func TestGeneratorRootFilterOnCountError2(t *testing.T) {
-        populateGraph(t)
+	populateGraph(t)
 	// missing digits
-        query := `
+	query := `
                 {
                         me(func:anyof("name", "Michonne Rick")) @filter(gt(count(friend))) {
                                 name
                         }
                 }
         `
-        res, err := gql.Parse(query)
-        require.NoError(t, err)
+	res, err := gql.Parse(query)
+	require.NoError(t, err)
 
 	var l Latency
 	_, queryErr := ProcessQuery(context.Background(), res, &l)
@@ -2887,17 +2887,17 @@ func TestGeneratorRootFilterOnCountError2(t *testing.T) {
 }
 
 func TestGeneratorRootFilterOnCountError3(t *testing.T) {
-        populateGraph(t)
+	populateGraph(t)
 	// to much args
-        query := `
+	query := `
                 {
                         me(func:anyof("name", "Michonne Rick")) @filter(gt(count(friend), 2, 4)) {
                                 name
                         }
                 }
         `
-        res, err := gql.Parse(query)
-        require.NoError(t, err)
+	res, err := gql.Parse(query)
+	require.NoError(t, err)
 
 	var l Latency
 	_, queryErr := ProcessQuery(context.Background(), res, &l)

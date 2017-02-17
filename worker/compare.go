@@ -1,10 +1,8 @@
-
 package worker
 
 import (
 	"github.com/dgraph-io/dgraph/x"
 )
-
 
 func Compare(cmp string, lv, rv int64) (bool, error) {
 	switch cmp {
@@ -18,6 +16,7 @@ func Compare(cmp string, lv, rv int64) (bool, error) {
 		return lv > rv, nil
 	case "eq":
 		return lv == rv, nil
+	default:
+		x.AssertTruef(false, "Compare: Invalid comparator")
 	}
-	return true, x.Errorf("Invalid comparator")
 }

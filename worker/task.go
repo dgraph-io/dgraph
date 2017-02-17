@@ -87,8 +87,9 @@ func convertValue(attr, data string) (types.Val, error) {
 }
 
 type FuncType int
+
 const (
-	NotFn        FuncType = iota
+	NotFn FuncType = iota
 	AggregatorFn
 	CompareAttrFn
 	CompareScalarFn
@@ -184,7 +185,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 		}
 		n = len(tokens)
 
-        case CompareScalarFn:
+	case CompareScalarFn:
 		if len(q.SrcFunc) != 3 {
 			return nil, x.Errorf("Function requires 2 arguments, but got %d %v",
 				len(q.SrcFunc), q.SrcFunc)
@@ -240,9 +241,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 		if it.Valid() {
 			uid = it.Val()
 		}
-		if fnType == AggregatorFn ||
-			fnType == CompareScalarFn ||
-			fnType == PasswordFn {
+		if fnType == AggregatorFn || fnType == CompareScalarFn || fnType == PasswordFn {
 			key = x.DataKey(attr, it.Val())
 			it.Next()
 		} else if fnType != NotFn {
@@ -324,7 +323,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 		// The more usual case: Getting the UIDs.
 		out.UidMatrix = append(out.UidMatrix, pl.Uids(opts))
 	}
-	
+
 	// aggregate on the collection out.Values[]
 	if fnType == AggregatorFn && len(out.Values) > 0 {
 		var err error

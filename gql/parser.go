@@ -996,7 +996,8 @@ func parseFilter(it *lex.ItemIterator) (*FilterTree, error) {
 				} else if itemInFunc.Typ == itemLeftRound {
 					// embed func, like gt(count(films), 0)
 					// => f: {Name: gt, Attr:films, Args:[count, 0]}
-					it.Prev(); it.Prev()
+					it.Prev()
+					it.Prev()
 					fn, err := parseFunction(it)
 					if err != nil {
 						return nil, err
