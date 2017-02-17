@@ -47,9 +47,9 @@ func runMutations(ctx context.Context, edges []*task.DirectedEdge) error {
 		if typ, err = schema.State().TypeOf(edge.Attr); err != nil {
 			// schema doesn't exist already
 			updateSchema(edge, &rv)
-		} else {
+		} else if err = convert(edge, typ); err != nil {
 			// schema is defined already
-			convert(edge, typ)
+			return err
 		}
 
 		key := x.DataKey(edge.Attr, edge.Entity)
@@ -96,11 +96,13 @@ func convert(edge *task.DirectedEdge, schemaType types.TypeID) error {
 	var err error
 
 	src = types.Val{types.TypeID(edge.ValueType), edge.Value}
+	// check comptability of schema type and storage type
 	if dst, err = types.Convert(src, schemaType); err != nil {
 		return err
 	}
 
-	if storageType == types.DefaultID {
+	// if storage type was specified skip
+	if storageType != types.DefaultID {
 		return nil
 	}
 

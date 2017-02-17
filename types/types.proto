@@ -11,7 +11,7 @@ message Posting {
 	fixed64 uid = 1;
 	bytes value = 2;
 	enum ValType {
-		STRING = 0;
+		DEFAULT = 0;
 		BINARY = 1;
 		INT32 = 2;
 		FLOAT = 3;
@@ -20,7 +20,7 @@ message Posting {
 		DATETIME = 6;
 		GEO = 7;
 		UID = 8;
-		DEFAULT = 15;
+		STRING = 9;
 	}
 	ValType val_type = 3;
 	string lang = 4;

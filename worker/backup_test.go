@@ -116,7 +116,7 @@ func TestBackup(t *testing.T) {
 			require.Contains(t, []string{"0x1", "0x2", "0x3", "0x4"}, nq.Subject)
 			// The only value we set was "photon".
 			if nq.ObjectValue != nil {
-				require.Equal(t, &graph.Value{&graph.Value_StrVal{"pho\\ton"}}, nq.ObjectValue)
+				require.Equal(t, &graph.Value{&graph.Value_DefaultVal{"pho\\ton"}}, nq.ObjectValue)
 			}
 			// The only objectId we set was uid 5.
 			if nq.ObjectId != "" {

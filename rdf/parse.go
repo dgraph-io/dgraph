@@ -246,6 +246,14 @@ func Parse(line string) (rnq graph.NQuad, rerr error) {
 			rnq.Predicate += "." + item.Val // TODO(tzdybal) - remove
 			rnq.Lang = item.Val
 
+			// if lang tag is specified then type is set to string
+			// grammar allows either ^^ iriref or lang tag
+			if len(oval) > 0 {
+				rnq.ObjectValue = &graph.Value{&graph.Value_StrVal{oval}}
+				// If no type is specified, we default to string.
+				rnq.ObjectType = int32(types.StringID)
+				oval = ""
+			}
 		case itemObjectType:
 			if len(oval) == 0 {
 				log.Fatalf(

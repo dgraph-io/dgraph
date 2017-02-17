@@ -45,9 +45,10 @@ func TestConvertEdgeType(t *testing.T) {
 			to:        types.StringID,
 			expectErr: false,
 			output: &task.DirectedEdge{
-				Value: []byte("set edge"),
-				Label: "test-mutation",
-				Attr:  "name",
+				Value:     []byte("set edge"),
+				Label:     "test-mutation",
+				Attr:      "name",
+				ValueType: 9,
 			},
 		},
 		{
@@ -58,11 +59,6 @@ func TestConvertEdgeType(t *testing.T) {
 			},
 			to:        types.StringID,
 			expectErr: true,
-			output: &task.DirectedEdge{
-				ValueId: 123,
-				Label:   "test-mutation",
-				Attr:    "name",
-			},
 		},
 		{
 			input: &task.DirectedEdge{
@@ -72,11 +68,6 @@ func TestConvertEdgeType(t *testing.T) {
 			},
 			to:        types.UidID,
 			expectErr: true,
-			output: &task.DirectedEdge{
-				Value: []byte("set edge"),
-				Label: "test-mutation",
-				Attr:  "name",
-			},
 		},
 	}
 
@@ -86,8 +77,8 @@ func TestConvertEdgeType(t *testing.T) {
 			require.Error(t, err)
 		} else {
 			require.NoError(t, err)
+			require.True(t, reflect.DeepEqual(testEdge.input, testEdge.output))
 		}
-		require.True(t, reflect.DeepEqual(testEdge.input, testEdge.output))
 	}
 
 }
