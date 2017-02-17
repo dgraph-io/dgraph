@@ -187,7 +187,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 
 	case CompareScalarFn:
 		if len(q.SrcFunc) != 3 {
-			return nil, x.Errorf("Function requires 2 arguments, but got %d %v",
+			return nil, x.Errorf("Function requires 3 arguments, but got %d %v",
 				len(q.SrcFunc), q.SrcFunc)
 		}
 		threshold, err = strconv.ParseInt(q.SrcFunc[2], 10, 64)
