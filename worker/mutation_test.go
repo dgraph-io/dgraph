@@ -19,6 +19,7 @@ package worker
 import (
 	"io/ioutil"
 	"os"
+	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -28,15 +29,67 @@ import (
 	"github.com/dgraph-io/dgraph/types"
 )
 
-func TestValidateEdgeType(t *testing.T) {
-	edge := &task.DirectedEdge{
-		Value: []byte("set edge"),
-		Label: "test-mutation",
-		Attr:  "name",
+func TestConvertEdgeType(t *testing.T) {
+	var testEdges = []struct {
+		input     *task.DirectedEdge
+		to        types.TypeID
+		expectErr bool
+		output    *task.DirectedEdge
+	}{
+		{
+			input: &task.DirectedEdge{
+				Value: []byte("set edge"),
+				Label: "test-mutation",
+				Attr:  "name",
+			},
+			to:        types.StringID,
+			expectErr: false,
+			output: &task.DirectedEdge{
+				Value: []byte("set edge"),
+				Label: "test-mutation",
+				Attr:  "name",
+			},
+		},
+		{
+			input: &task.DirectedEdge{
+				ValueId: 123,
+				Label:   "test-mutation",
+				Attr:    "name",
+			},
+			to:        types.StringID,
+			expectErr: true,
+			output: &task.DirectedEdge{
+				ValueId: 123,
+				Label:   "test-mutation",
+				Attr:    "name",
+			},
+		},
+		{
+			input: &task.DirectedEdge{
+				Value: []byte("set edge"),
+				Label: "test-mutation",
+				Attr:  "name",
+			},
+			to:        types.UidID,
+			expectErr: true,
+			output: &task.DirectedEdge{
+				Value: []byte("set edge"),
+				Label: "test-mutation",
+				Attr:  "name",
+			},
+		},
 	}
 
-	err := convert(edge, types.StringID)
-	require.NoError(t, err)
+	for _, testEdge := range testEdges {
+		err := convert(testEdge.input, testEdge.to)
+		if testEdge.expectErr {
+			require.Error(t, err)
+		} else {
+			require.NoError(t, err)
+		}
+		require.True(t, reflect.DeepEqual(testEdge.input, testEdge.output))
+	}
+
 }
 
 func TestValidateEdgeTypeError(t *testing.T) {
