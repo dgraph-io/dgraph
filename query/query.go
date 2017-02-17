@@ -144,7 +144,7 @@ type SubGraph struct {
 	counts      []uint32
 	values      []*task.Value
 	uidMatrix   []*task.List
-	FacetsLists []*facets.List
+	FacetMatrix []*facets.List
 
 	// SrcUIDs is a list of unique source UIDs. They are always copies of destUIDs
 	// of parent nodes in GraphQL structure.
@@ -266,13 +266,13 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 			c.Value = task.ToBool(pc.values[idx])
 			uc := dst.New(pc.Attr)
 			uc.AddValue("checkpwd", c)
-			dst.AddListChild(pc.Attr, uc)			
+			dst.AddListChild(pc.Attr, uc)
 		} else if algo.ListLen(ul) > 0 || len(pc.Children) > 0 {
 			// We create as many predicate entity children as the length of uids for
 			// this predicate.
 			var fcsList []*facets.Facets
 			if pc.Params.Facet != nil {
-				fcsList = pc.FacetsLists[idx].FacetsList
+				fcsList = pc.FacetMatrix[idx].FacetsList
 			}
 			it := algo.NewListIterator(ul)
 			for childIdx := -1; it.Valid(); it.Next() {
@@ -318,10 +318,10 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 			if err != nil {
 				return err
 			}
-			if pc.Params.Facet != nil && len(pc.FacetsLists[idx].FacetsList) > 0 {
+			if pc.Params.Facet != nil && len(pc.FacetMatrix[idx].FacetsList) > 0 {
 				fc := dst.New(fieldName)
 				// in case of Value we have only one Facets
-				for _, f := range pc.FacetsLists[idx].FacetsList[0].Facets {
+				for _, f := range pc.FacetMatrix[idx].FacetsList[0].Facets {
 					if tVal, err := types.TypeValForFacet(f); err != nil {
 						return err
 					} else {
@@ -448,7 +448,7 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 		if gchild.Attr == "_uid_" {
 			sg.Params.GetUID = true
 		} else if gchild.Attr == "password" { // query password is forbidden
-			if gchild.Func == nil || !gchild.Func.IsPasswordVerifier() { 
+			if gchild.Func == nil || !gchild.Func.IsPasswordVerifier() {
 				return errors.New("Password is not fetchable")
 			}
 		}
@@ -933,7 +933,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 
 		sg.uidMatrix = result.UidMatrix
 		sg.values = result.Values
-		sg.FacetsLists = result.FacetsLists
+		sg.FacetMatrix = result.FacetMatrix
 		if len(sg.values) > 0 {
 			v := sg.values[0]
 			x.Trace(ctx, "Sample value for attr: %v Val: %v", sg.Attr, string(v.Val))

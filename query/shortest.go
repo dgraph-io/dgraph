@@ -108,7 +108,7 @@ func (start *SubGraph) expandOut(ctx context.Context,
 				destIt := algo.NewListIterator(sg.uidMatrix[idx])
 				var fcsList []*facets.Facets
 				if sg.Params.Facet != nil {
-					fcsList = sg.FacetsLists[idx].FacetsList
+					fcsList = sg.FacetMatrix[idx].FacetsList
 				}
 				for idxi := -1; destIt.Valid(); destIt.Next() {
 					idxi++
