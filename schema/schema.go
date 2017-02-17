@@ -60,26 +60,29 @@ func (s *state) Update(se *SyncEntry) {
 }
 
 // SetType sets the schema type for given predicate
-func (s *state) SetType(attr string, valueType types.TypeID) {
+func (s *state) SetType(pred string, valueType types.TypeID) {
 	s.Lock()
 	defer s.Unlock()
-	if schema, ok := s.predicate[attr]; ok {
+	if schema, ok := s.predicate[pred]; ok {
 		schema.ValueType = uint32(valueType)
 	} else {
-		s.predicate[attr] = &types.Schema{ValueType: uint32(valueType)}
+		s.predicate[pred] = &types.Schema{ValueType: uint32(valueType)}
 	}
-	fmt.Printf("Setting schema for attr %s: %v\n", attr, valueType)
+	fmt.Printf("Setting schema for predicate %s: %v\n", pred, valueType)
 }
 
 // SetReverse sets whether the reverse edge is enabled or
-// not for given predicate
+// not for given predicate, if schema is not already defined, it's set to uid type
 func (s *state) SetReverse(pred string, rev bool) {
 	s.Lock()
 	defer s.Unlock()
-	schema, ok := s.predicate[pred]
-	x.AssertTruef(schema.ValueType == uint32(types.UidID), "predicate %s is not of type uid", pred)
-	x.AssertTruef(ok, "schema state not found for %s", pred)
-	schema.Reverse = rev
+	if schema, ok := s.predicate[pred]; !ok {
+		s.predicate[pred] = &types.Schema{ValueType: uint32(types.UidID), Reverse: rev}
+	} else {
+		x.AssertTruef(schema.ValueType == uint32(types.UidID),
+			"predicate %s is not of type uid", pred)
+		schema.Reverse = rev
+	}
 }
 
 // SetIndex sets the tokenizer for given predicate
