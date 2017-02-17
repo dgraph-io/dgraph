@@ -110,7 +110,7 @@ func parseFuncType(arr []string) (FuncType, string) {
 		// gt(count(films), 0) is 'CompareScalar', we first do
 		//    counting on attr, then compare the result as scalar with int
 		if len(arr) > 2 && arr[1] == "count" {
-			return CompareScalarFn, "compare"
+			return CompareScalarFn, f
 		}
 		return CompareAttrFn, f
 	case "min", "max", "sum":
@@ -192,7 +192,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 		}
 		threshold, err = strconv.ParseInt(q.SrcFunc[2], 10, 64)
 		if err != nil {
-			return nil, x.Errorf("Compare %v(%v) require digits, but got invalid num",
+			return nil, x.Wrapf(err, "Compare %v(%v) require digits, but got invalid num",
 				q.SrcFunc[0], q.SrcFunc[1])
 		}
 		n = algo.ListLen(q.Uids)
@@ -311,9 +311,8 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 		}
 
 		if fnType == CompareScalarFn {
-			cnt := int64(pl.Length(0))
-			ret, _ := Compare(f, cnt, threshold)
-			if ret {
+			count := int64(pl.Length(0))
+			if EvalCompare(f, count, threshold) {
 				tlist := algo.SortedListToBlock([]uint64{uid})
 				out.UidMatrix = append(out.UidMatrix, tlist)
 			}

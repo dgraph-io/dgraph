@@ -2850,6 +2850,44 @@ func TestGeneratorRootFilterOnCountLeq(t *testing.T) {
 	require.JSONEq(t, `{"me":[{"name":"Rick Grimes"}]}`, js)
 }
 
+func TestGeneratorRootFilterOnCountChildLevel(t *testing.T) {
+	populateGraph(t)
+	query := `
+                {
+                        me(id:23) {
+                                name
+                                friend @filter(gt(count(friend), 2)) {
+                                        name
+                                }
+                        }
+                }
+        `
+	_, err := gql.Parse(query)
+	require.NoError(t, err)
+
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"me":[{"friend":[{"name":"Michonne"}],"name":"Rick Grimes"}]}`, js)
+}
+
+func TestGeneratorRootFilterOnCountWithAnd(t *testing.T) {
+	populateGraph(t)
+	query := `
+                {
+                        me(id:23) {
+                                name
+                                friend @filter(gt(count(friend), 4) and lt(count(friend), 100)) {
+                                        name
+                                }
+                        }
+                }
+        `
+	_, err := gql.Parse(query)
+	require.NoError(t, err)
+
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"me":[{"friend":[{"name":"Michonne"}],"name":"Rick Grimes"}]}`, js)
+}
+
 func TestGeneratorRootFilterOnCountError1(t *testing.T) {
 	populateGraph(t)
 	// only cmp(count(attr), int) is valid, 'max'/'min'/'sum' not supported
