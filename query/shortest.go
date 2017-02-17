@@ -128,19 +128,17 @@ func (start *SubGraph) expandOut(ctx context.Context,
 							rch <- x.Errorf("Expected 1 but got %d facets", len(fcs.Facets))
 							return
 						}
-						if tv, err := types.TypeValForFacet(fcs.Facets[0]); err != nil {
+						tv, err := types.TypeValForFacet(fcs.Facets[0])
+						if err != nil {
 							rch <- err
 							return
-						} else {
-							if tv.Tid == types.Int32ID {
-								cost = float64(tv.Value.(int32))
-							} else if tv.Tid == types.FloatID {
-								cost = float64(tv.Value.(float64))
-							} else {
-								rch <- x.Errorf("Invalid type of facet for weight.")
-								return
-							}
 						}
+						if tv.Tid == types.Int32ID {
+							cost = float64(tv.Value.(int32))
+						} else if tv.Tid == types.FloatID {
+							cost = float64(tv.Value.(float64))
+						}
+						// We ignore the facet if its not an int or float.
 					}
 					adjacencyMap[fromUID][toUid] = cost // cost is 1 for now.
 					numEdges++
