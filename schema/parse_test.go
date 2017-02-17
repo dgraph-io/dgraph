@@ -43,7 +43,7 @@ func checkSchema(t *testing.T, h map[string]*types.Schema, expected []nameType) 
 }
 
 func TestSchema(t *testing.T) {
-	require.NoError(t, Init(ps, "testfiles/test_schema"))
+	require.NoError(t, ReloadData("testfiles/test_schema"))
 	checkSchema(t, State().predicate, []nameType{
 		{"name", &types.Schema{ValueType: uint32(types.StringID)}},
 		{"address", &types.Schema{ValueType: uint32(types.StringID)}},
@@ -68,19 +68,19 @@ func TestSchema(t *testing.T) {
 }
 
 func TestSchema1_Error(t *testing.T) {
-	require.Error(t, Init(ps, "testfiles/test_schema1"))
+	require.Error(t, ReloadData("testfiles/test_schema1"))
 }
 
 func TestSchema2_Error(t *testing.T) {
-	require.Error(t, Init(ps, "testfiles/test_schema2"))
+	require.Error(t, ReloadData("testfiles/test_schema2"))
 }
 
 func TestSchema3_Error(t *testing.T) {
-	require.Error(t, Init(ps, "testfiles/test_schema3"))
+	require.Error(t, ReloadData("testfiles/test_schema3"))
 }
 
 func TestSchema4_Error(t *testing.T) {
-	require.Error(t, Init(ps, "testfiles/test_schema4"))
+	require.Error(t, ReloadData("testfiles/test_schema4"))
 }
 
 /*
@@ -98,22 +98,22 @@ func TestSchema6_Error(t *testing.T) {
 */
 // Correct specification of indexing
 func TestSchemaIndex(t *testing.T) {
-	require.NoError(t, Init(ps, "testfiles/test_schema_index1"))
+	require.NoError(t, ReloadData("testfiles/test_schema_index1"))
 	require.Equal(t, 2, len(State().IndexedFields()))
 }
 
 // Indexing can't be specified inside object types.
 func TestSchemaIndex_Error1(t *testing.T) {
-	require.Error(t, Init(ps, "testfiles/test_schema_index2"))
+	require.Error(t, ReloadData("testfiles/test_schema_index2"))
 }
 
 // Object types cant be indexed.
 func TestSchemaIndex_Error2(t *testing.T) {
-	require.Error(t, Init(ps, "testfiles/test_schema_index3"))
+	require.Error(t, ReloadData("testfiles/test_schema_index3"))
 }
 
 func TestSchemaIndexCustom(t *testing.T) {
-	require.NoError(t, Init(ps, "testfiles/test_schema_index4"))
+	require.NoError(t, ReloadData("testfiles/test_schema_index4"))
 	checkSchema(t, State().predicate, []nameType{
 		{"name", &types.Schema{ValueType: uint32(types.StringID), Tokenizer: "exact"}},
 		{"address", &types.Schema{ValueType: uint32(types.StringID), Tokenizer: "term"}},
@@ -136,6 +136,7 @@ func TestMain(m *testing.M) {
 	x.Check(err)
 	ps, err = store.NewStore(dir)
 	x.Check(err)
+	x.Check(Init(ps, ""))
 	defer os.RemoveAll(dir)
 	defer ps.Close()
 

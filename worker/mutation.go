@@ -45,21 +45,18 @@ func runMutations(ctx context.Context, edges []*task.DirectedEdge) error {
 		rv := ctx.Value("raft").(x.RaftValue)
 
 		if typ, err = schema.State().TypeOf(edge.Attr); err != nil {
-			if err = updateSchema(edge, &rv); err != nil {
-				x.Printf("Error while updating schema: %v %v", edge, err)
-				return err
-			}
-		}
-		if err = validateType(edge, typ); err != nil {
-			x.Printf("Error while casting object value to schema type: %v %v", edge, err)
-			return err
+			// schema doesn't exist already
+			updateSchema(edge, &rv)
+		} else {
+			// schema is defined already
+			convert(edge, typ)
 		}
 
 		key := x.DataKey(edge.Attr, edge.Entity)
 		plist, decr := posting.GetOrCreate(key, rv.Group)
 		defer decr()
 
-		if err := plist.AddMutationWithIndex(ctx, edge); err != nil {
+		if err = plist.AddMutationWithIndex(ctx, edge); err != nil {
 			x.Printf("Error while adding mutation: %v %v", edge, err)
 			return err // abort applying the rest of them.
 		}
@@ -67,20 +64,18 @@ func runMutations(ctx context.Context, edges []*task.DirectedEdge) error {
 	return nil
 }
 
-func updateSchema(edge *task.DirectedEdge, rv *x.RaftValue) error {
+func updateSchema(edge *task.DirectedEdge, rv *x.RaftValue) {
 	ce := schema.SyncEntry{
 		Attr:              edge.Attr,
 		SchemaDescription: &types.Schema{ValueType: uint32(posting.TypeID(edge))},
 		Index:             rv.Index,
 		Water:             posting.SyncMarkFor(rv.Group),
 	}
-	if _, err := schema.State().UpdateIfMissing(&ce); err != nil {
-		return err
-	}
-	return nil
+	schema.State().Update(&ce)
 }
 
-func validateType(edge *task.DirectedEdge, schemaType types.TypeID) error {
+// If storage type is specified, then check compatability or convert to schema type
+func convert(edge *task.DirectedEdge, schemaType types.TypeID) error {
 	storageType := posting.TypeID(edge)
 
 	if !schemaType.IsScalar() && !storageType.IsScalar() {
@@ -96,17 +91,19 @@ func validateType(edge *task.DirectedEdge, schemaType types.TypeID) error {
 		return nil
 	}
 
-	// During NQuad parsing, value is parsed as appropriate type if storage type is
-	// specified or else as string and corresponsing type is set in directedEdge
-	// In case no schema is specified schema type would be set as tye type coming
-	// in directedEdge on first mutation.
+	var src types.Val
 	var dst types.Val
 	var err error
-	src := types.Val{types.TypeID(edge.ValueType), edge.Value}
-	// check if storage type is compatible with schema type
+
+	src = types.Val{types.TypeID(edge.ValueType), edge.Value}
 	if dst, err = types.Convert(src, schemaType); err != nil {
 		return err
 	}
+
+	if storageType == types.DefaultID {
+		return nil
+	}
+
 	// convert to schema type
 	b := types.ValueForType(types.BinaryID)
 	if err = types.Marshal(dst, &b); err != nil {

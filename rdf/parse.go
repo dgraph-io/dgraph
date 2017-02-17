@@ -71,6 +71,8 @@ func typeValFrom(val *graph.Value) types.Val {
 		return types.Val{types.DateID, val.GetDateVal()}
 	case *graph.Value_DatetimeVal:
 		return types.Val{types.DateTimeID, val.GetDatetimeVal()}
+	case *graph.Value_DefaultVal:
+		return types.Val{types.DefaultID, val.GetDefaultVal()}
 	}
 	return types.Val{types.StringID, ""}
 }
@@ -303,9 +305,9 @@ func Parse(line string) (rnq graph.NQuad, rerr error) {
 		return rnq, ErrEmpty
 	}
 	if len(oval) > 0 {
-		rnq.ObjectValue = &graph.Value{&graph.Value_StrVal{oval}}
+		rnq.ObjectValue = &graph.Value{&graph.Value_DefaultVal{oval}}
 		// If no type is specified, we default to string.
-		rnq.ObjectType = int32(0)
+		rnq.ObjectType = int32(types.DefaultID)
 	}
 	if len(rnq.Subject) == 0 || len(rnq.Predicate) == 0 {
 		return rnq, x.Errorf("Empty required fields in NQuad. Input: [%s]", line)

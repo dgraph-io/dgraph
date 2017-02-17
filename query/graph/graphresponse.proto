@@ -31,6 +31,7 @@ message Value {
         bytes geo_val = 6;  // Geo data in WKB format
         bytes date_val = 7;
         bytes datetime_val = 8;
+        string default_val = 15;
     }
 }
 

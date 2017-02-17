@@ -67,6 +67,7 @@ func ToJson(l *Latency, sgl []*SubGraph, w io.Writer) error {
 		}
 		sgr.Children = append(sgr.Children, sg)
 	}
+
 	return sgr.ToFastJSON(l, w)
 }
 
@@ -240,7 +241,7 @@ func valToBytes(v types.Val) ([]byte, error) {
 			return []byte("true"), nil
 		}
 		return []byte("false"), nil
-	case types.StringID:
+	case types.StringID, types.DefaultID:
 		return []byte(fmt.Sprintf("%q", v.Value.(string))), nil
 	case types.DateID:
 		s := v.Value.(time.Time).Format("2006-01-02")

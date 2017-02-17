@@ -43,22 +43,20 @@ func State() *state {
 	return pState
 }
 
-// UpdateIfMissing checks sets the schema if it doesn't exist
-// already for given predicate
-func (s *state) UpdateIfMissing(se *SyncEntry) (types.TypeID, error) {
+// Update updates the schema in memory and sends an entry to syncCh so that it can be
+// comitted later
+func (s *state) Update(se *SyncEntry) {
 	s.Lock()
 	defer s.Unlock()
 
-	if oldVal, ok := s.predicate[se.Attr]; ok && oldVal.ValueType != se.SchemaDescription.ValueType {
-		return types.TypeID(oldVal.ValueType), x.Errorf("Schema for attr %s already set to %d", se.Attr, se.SchemaDescription.ValueType)
-	}
+	_, ok := s.predicate[se.Attr]
+	x.AssertTruef(!ok, "Schema already exists for predicate %s", se.Attr)
 
 	s.predicate[se.Attr] = se.SchemaDescription
 	se.Water.Ch <- x.Mark{Index: se.Index, Done: false}
 	syncCh <- *se
 
 	fmt.Printf("Setting schema for attr %s: %v\n", se.Attr, se.SchemaDescription.ValueType)
-	return types.TypeID(se.SchemaDescription.ValueType), nil
 }
 
 // SetType sets the schema type for given predicate
@@ -75,32 +73,31 @@ func (s *state) SetType(attr string, valueType types.TypeID) {
 
 // SetReverse sets whether the reverse edge is enabled or
 // not for given predicate
-func (s *state) SetReverse(attr string, rev bool) {
+func (s *state) SetReverse(pred string, rev bool) {
 	s.Lock()
 	defer s.Unlock()
-	if schema, ok := s.predicate[attr]; ok {
-		schema.Reverse = rev
-	} else {
-		s.predicate[attr] = &types.Schema{Reverse: rev}
-	}
+	schema, ok := s.predicate[pred]
+	x.AssertTruef(schema.ValueType == uint32(types.UidID), "predicate %s is not of type uid", pred)
+	x.AssertTruef(ok, "schema state not found for %s", pred)
+	schema.Reverse = rev
 }
 
 // SetIndex sets the tokenizer for given predicate
-func (s *state) SetIndex(attr string, tokenizer string) {
-	fmt.Println("Setting tokenizer", attr, tokenizer)
+func (s *state) SetIndex(pred string, tokenizer string) {
+	fmt.Println("Setting tokenizer", pred, tokenizer)
 	s.Lock()
 	defer s.Unlock()
-	schema, ok := s.predicate[attr]
-	x.AssertTruef(ok, "schema state not found for %s", attr)
+	schema, ok := s.predicate[pred]
+	x.AssertTruef(ok, "schema state not found for %s", pred)
 	schema.Tokenizer = tokenizer
 }
 
 // Set sets the schema for given predicate
-func (s *state) Set(attr string, schema *types.Schema) {
+func (s *state) Set(pred string, schema *types.Schema) {
 	s.Lock()
 	defer s.Unlock()
-	s.predicate[attr] = schema
-	fmt.Printf("Setting schema for attr %s: %v\n", attr, schema.ValueType)
+	s.predicate[pred] = schema
+	fmt.Printf("Setting schema for attr %s: %v\n", pred, schema.ValueType)
 }
 
 // TypeOf returns the schema type of predicate
@@ -157,6 +154,16 @@ func (s *state) IsReversed(pred string) bool {
 
 func Init(ps *store.Store, file string) error {
 	pstore = ps
+	syncCh = make(chan SyncEntry, 10000)
+	if err := ReloadData(file); err != nil {
+		return err
+	}
+	go batchSync()
+	return nil
+}
+
+// ReloadData loads schema from file and then later from db
+func ReloadData(file string) error {
 	reset()
 	if len(file) > 0 {
 		if err := parse(file); err != nil {
@@ -166,12 +173,10 @@ func Init(ps *store.Store, file string) error {
 	if err := LoadFromDb(); err != nil {
 		return err
 	}
-	go batchSync()
 	return nil
 }
 
-// LoadFromDb reads schema information from db
-// and stores it in memory
+// LoadFromDb reads schema information from db and stores it in memory
 func LoadFromDb() error {
 	prefix := x.SchemaPrefix()
 	itr := pstore.NewIterator()
@@ -192,7 +197,6 @@ func LoadFromDb() error {
 func reset() {
 	pState = new(state)
 	State().predicate = make(map[string]*types.Schema)
-	syncCh = make(chan SyncEntry, 10000)
 }
 
 // SyncEntry stores the schema mutation information

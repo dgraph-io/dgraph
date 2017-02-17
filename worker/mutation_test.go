@@ -35,7 +35,7 @@ func TestValidateEdgeType(t *testing.T) {
 		Attr:  "name",
 	}
 
-	err := validateType(edge, types.StringID)
+	err := convert(edge, types.StringID)
 	require.NoError(t, err)
 }
 
@@ -46,7 +46,7 @@ func TestValidateEdgeTypeError(t *testing.T) {
 		Attr:  "name",
 	}
 
-	err := validateType(edge, types.DateTimeID)
+	err := convert(edge, types.DateTimeID)
 	require.Error(t, err)
 }
 
