@@ -43,14 +43,14 @@ func ProcessTaskOverNetwork(ctx context.Context, q *task.Query) (*task.Result, e
 	gid := group.BelongsTo(attr)
 	x.Trace(ctx, "attr: %v groupId: %v", attr, gid)
 
-	if groups().ServesGroup(gid) {
+	if Groups().ServesGroup(gid) {
 		// No need for a network call, as this should be run from within this instance.
 		return processTask(q, gid)
 	}
 
 	// Send this over the network.
 	// TODO: Send the request to multiple servers as described in Jeff Dean's talk.
-	addr := groups().AnyServer(gid)
+	addr := Groups().AnyServer(gid)
 	pl := pools().get(addr)
 
 	conn, err := pl.Get()
@@ -303,7 +303,7 @@ func (w *grpcWorker) ServeTask(ctx context.Context, q *task.Query) (*task.Result
 	x.Trace(ctx, "Attribute: %q NumUids: %v groupId: %v ServeTask", q.Attr, algo.ListLen(q.Uids), gid)
 
 	var reply *task.Result
-	x.AssertTruef(groups().ServesGroup(gid),
+	x.AssertTruef(Groups().ServesGroup(gid),
 		"attr: %q groupId: %v Request sent to wrong server.", q.Attr, gid)
 
 	c := make(chan error, 1)

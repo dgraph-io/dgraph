@@ -17,6 +17,7 @@ import (
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/task"
+	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -244,6 +245,17 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *task.Proposal) erro
 		return x.Errorf("RAFT isn't initialized yet")
 	}
 
+	// Do a type check here if schema is present
+	if proposal.Mutations != nil {
+		for _, edge := range proposal.Mutations.Edges {
+			if typ, err := schema.State().TypeOf(edge.Attr); err != nil {
+				continue
+			} else if err := validateAndConvert(edge, typ); err != nil {
+				return err
+			}
+		}
+	}
+
 	proposal.Id = rand.Uint32()
 
 	slice := slicePool.Get().([]byte)
@@ -385,7 +397,7 @@ func (n *node) processMembership(e raftpb.Entry, mm *task.Membership) error {
 
 	x.Printf("group: %v Addr: %q leader: %v dead: %v\n",
 		mm.GroupId, mm.Addr, mm.Leader, mm.AmDead)
-	groups().applyMembershipUpdate(e.Index, mm)
+	Groups().applyMembershipUpdate(e.Index, mm)
 	return nil
 }
 
@@ -443,6 +455,33 @@ func (n *node) processApplyCh() {
 			n.applied.Ch <- mark
 			posting.SyncMarkFor(n.gid).Ch <- mark
 			continue
+		}
+
+		// We derive the schema here if it's not present
+		// Since raft committed logs are serialized, we can derive
+		// schema here without any locking
+		var proposal task.Proposal
+		x.AssertTrue(len(e.Data) > 0)
+		x.Checkf(proposal.Unmarshal(e.Data[1:]), "Unable to parse entry: %+v", e)
+
+		if e.Type == raftpb.EntryNormal && proposal.Mutations != nil {
+			// stores a map of predicate and type of first mutation for each predicate
+			schemaMap := make(map[string]types.TypeID)
+			for _, edge := range proposal.Mutations.Edges {
+				if _, ok := schemaMap[edge.Attr]; !ok {
+					schemaMap[edge.Attr] = posting.TypeID(edge)
+				}
+			}
+
+			for attr, storageType := range schemaMap {
+				if _, err := schema.State().TypeOf(attr); err != nil {
+					// Schema doesn't exist
+					// Since comitted entries are serialized, updateSchemaIfMissing is not
+					// needed, In future if schema needs to be changed, it would flow through
+					// raft so there won't be race conditions between read and update schema
+					updateSchema(attr, storageType, e.Index, n.raftContext.Group)
+				}
+			}
 		}
 
 		go n.process(e, pending)
@@ -622,7 +661,7 @@ func (n *node) snapshotPeriodically() {
 
 func (n *node) joinPeers() {
 	// Get leader information for MY group.
-	pid, paddr := groups().Leader(n.gid)
+	pid, paddr := Groups().Leader(n.gid)
 	n.Connect(pid, paddr)
 	fmt.Printf("joinPeers connected with: %q with peer id: %d\n", paddr, pid)
 
@@ -700,7 +739,7 @@ func (n *node) InitAndStartNode(wal *raftwal.Wal) {
 
 	} else {
 		fmt.Printf("New Node for group: %d\n", n.gid)
-		if groups().HasPeer(n.gid) {
+		if Groups().HasPeer(n.gid) {
 			n.joinPeers()
 			n.SetRaft(raft.StartNode(n.cfg, nil))
 
@@ -730,7 +769,7 @@ func (n *node) AmLeader() bool {
 func (w *grpcWorker) applyMessage(ctx context.Context, msg raftpb.Message) error {
 	var rc task.RaftContext
 	x.Check(rc.Unmarshal(msg.Context))
-	node := groups().Node(rc.Group)
+	node := Groups().Node(rc.Group)
 	// TODO: Handle the case where node isn't present for this group.
 	node.Connect(msg.From, rc.Addr)
 
@@ -781,7 +820,7 @@ func (w *grpcWorker) JoinCluster(ctx context.Context, rc *task.RaftContext) (*Pa
 		return &Payload{}, ctx.Err()
 	}
 
-	node := groups().Node(rc.Group)
+	node := Groups().Node(rc.Group)
 	if node == nil {
 		return &Payload{}, nil
 	}

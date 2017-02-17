@@ -36,19 +36,18 @@ const (
 // mutations which were not applied in left.
 func runMutations(ctx context.Context, edges []*task.DirectedEdge) error {
 	for _, edge := range edges {
-		if !groups().ServesGroup(group.BelongsTo(edge.Attr)) {
+		if !Groups().ServesGroup(group.BelongsTo(edge.Attr)) {
 			return x.Errorf("Predicate fingerprint doesn't match this instance")
 		}
 
-		var typ types.TypeID
-		var err error
 		rv := ctx.Value("raft").(x.RaftValue)
 
-		if typ, err = schema.State().TypeOf(edge.Attr); err != nil {
-			// schema doesn't exist already
-			updateSchema(edge, &rv)
-		} else if err = convert(edge, typ); err != nil {
-			// schema is defined already
+		typ, err := schema.State().TypeOf(edge.Attr)
+		x.Checkf(err, "Schema is not present for predicate %s", edge.Attr)
+
+		// Is schema is not applied, type check might not be done in propose and wait
+		// so doing type check here also
+		if err = validateAndConvert(edge, typ); err != nil {
 			return err
 		}
 
@@ -64,18 +63,19 @@ func runMutations(ctx context.Context, edges []*task.DirectedEdge) error {
 	return nil
 }
 
-func updateSchema(edge *task.DirectedEdge, rv *x.RaftValue) {
+func updateSchema(attr string, typ types.TypeID, raftIndex uint64, group uint32) {
 	ce := schema.SyncEntry{
-		Attr:              edge.Attr,
-		SchemaDescription: &types.Schema{ValueType: uint32(posting.TypeID(edge))},
-		Index:             rv.Index,
-		Water:             posting.SyncMarkFor(rv.Group),
+		Attr:   attr,
+		Schema: types.Schema{ValueType: uint32(typ)},
+		Index:  raftIndex,
+		Water:  posting.SyncMarkFor(group),
 	}
 	schema.State().Update(&ce)
 }
 
 // If storage type is specified, then check compatability or convert to schema type
-func convert(edge *task.DirectedEdge, schemaType types.TypeID) error {
+// if no storage type is specified then convert to schema type
+func validateAndConvert(edge *task.DirectedEdge, schemaType types.TypeID) error {
 	storageType := posting.TypeID(edge)
 
 	if !schemaType.IsScalar() && !storageType.IsScalar() {
@@ -118,13 +118,13 @@ func convert(edge *task.DirectedEdge, schemaType types.TypeID) error {
 
 // runMutate is used to run the mutations on an instance.
 func proposeOrSend(ctx context.Context, gid uint32, m *task.Mutations, che chan error) {
-	if groups().ServesGroup(gid) {
-		node := groups().Node(gid)
+	if Groups().ServesGroup(gid) {
+		node := Groups().Node(gid)
 		che <- node.ProposeAndWait(ctx, &task.Proposal{Mutations: m})
 		return
 	}
 
-	_, addr := groups().Leader(gid)
+	_, addr := Groups().Leader(gid)
 	pl := pools().get(addr)
 	conn, err := pl.Get()
 	if err != nil {
@@ -188,11 +188,11 @@ func (w *grpcWorker) Mutate(ctx context.Context, m *task.Mutations) (*Payload, e
 		return &Payload{}, ctx.Err()
 	}
 
-	if !groups().ServesGroup(m.GroupId) {
+	if !Groups().ServesGroup(m.GroupId) {
 		return &Payload{}, x.Errorf("This server doesn't serve group id: %v", m.GroupId)
 	}
 	c := make(chan error, 1)
-	node := groups().Node(m.GroupId)
+	node := Groups().Node(m.GroupId)
 	go func() { c <- node.ProposeAndWait(ctx, &task.Proposal{Mutations: m}) }()
 
 	select {

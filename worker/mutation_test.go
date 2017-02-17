@@ -72,7 +72,7 @@ func TestConvertEdgeType(t *testing.T) {
 	}
 
 	for _, testEdge := range testEdges {
-		err := convert(testEdge.input, testEdge.to)
+		err := validateAndConvert(testEdge.input, testEdge.to)
 		if testEdge.expectErr {
 			require.Error(t, err)
 		} else {
@@ -90,7 +90,7 @@ func TestValidateEdgeTypeError(t *testing.T) {
 		Attr:  "name",
 	}
 
-	err := convert(edge, types.DateTimeID)
+	err := validateAndConvert(edge, types.DateTimeID)
 	require.Error(t, err)
 }
 
