@@ -84,7 +84,7 @@ func populateGraph(t *testing.T) {
 	addEdgeToUID(t, "path", 1000, 1002, map[string]string{"weight": "0.7"})
 	addEdgeToUID(t, "path", 1001, 1002, map[string]string{"weight": "0.1"})
 	addEdgeToUID(t, "path", 1002, 1003, map[string]string{"weight": "0.6"})
-	addEdgeToUID(t, "path", 1003, 1001, map[string]string{"weight": "0.3"})
+	addEdgeToUID(t, "path", 1003, 1001, map[string]string{})
 
 	addEdgeToValue(t, "name", 1000, "Alice", nil)
 	addEdgeToValue(t, "name", 1001, "Bob", nil)

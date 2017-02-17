@@ -60,28 +60,27 @@ func (sg *SubGraph) getCost(i, j int) (float64, error) {
 		return cost, nil
 	}
 	fcsList := sg.facetMatrix[i].FacetsList
-	if len(fcsList) > j {
-		fcs := fcsList[j]
-		if len(fcs.Facets) == 0 {
-			return cost, ErrFacet
-		}
-		if len(fcs.Facets) > 1 {
-			return cost, x.Errorf("Expected 1 but got %d facets", len(fcs.Facets))
-		}
-		tv, err := types.ValFor(fcs.Facets[0])
-		if err != nil {
-			return cost, ErrFacet
-		}
-		if tv.Tid == types.Int32ID {
-			cost = float64(tv.Value.(int32))
-		} else if tv.Tid == types.FloatID {
-			cost = float64(tv.Value.(float64))
-		} else {
-			return cost, ErrFacet
-		}
-		// We ignore the facet if its not an int or float.
+	if len(fcsList) <= j {
+		return cost, ErrFacet
 	}
-
+	fcs := fcsList[j]
+	if len(fcs.Facets) == 0 {
+		return cost, ErrFacet
+	}
+	if len(fcs.Facets) > 1 {
+		return cost, x.Errorf("Expected 1 but got %d facets", len(fcs.Facets))
+	}
+	tv, err := types.ValFor(fcs.Facets[0])
+	if err != nil {
+		return cost, ErrFacet
+	}
+	if tv.Tid == types.Int32ID {
+		cost = float64(tv.Value.(int32))
+	} else if tv.Tid == types.FloatID {
+		cost = float64(tv.Value.(float64))
+	} else {
+		return cost, ErrFacet
+	}
 	return cost, nil
 }
 
