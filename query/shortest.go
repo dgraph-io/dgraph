@@ -54,16 +54,16 @@ type nodeInfo struct {
 	node *Item
 }
 
-func (sg *SubGraph) getCost(i, j int) (float64, error) {
+func (sg *SubGraph) getCostFromFacets(mIdx, lIdx int) (float64, error) {
 	cost := 1.0
 	if sg.Params.Facet == nil {
 		return cost, nil
 	}
-	fcsList := sg.facetsMatrix[i].FacetsList
-	if len(fcsList) <= j {
+	fcsList := sg.facetsMatrix[mIdx].FacetsList
+	if len(fcsList) <= lIdx {
 		return cost, ErrFacet
 	}
-	fcs := fcsList[j]
+	fcs := fcsList[lIdx]
 	if len(fcs.Facets) == 0 {
 		return cost, ErrFacet
 	}
@@ -131,20 +131,20 @@ func (start *SubGraph) expandOut(ctx context.Context,
 		for _, sg := range exec {
 			// Send the destuids in res chan.
 			it := algo.NewListIterator(sg.SrcUIDs)
-			idx := -1
+			mIdx := -1
 			for ; it.Valid(); it.Next() { // idx, fromUID := range sg.SrcUIDs.Uids {
-				idx++
+				mIdx++
 				fromUID := it.Val()
-				destIt := algo.NewListIterator(sg.uidMatrix[idx])
-				idxi := -1
+				destIt := algo.NewListIterator(sg.uidMatrix[mIdx])
+				lIdx := -1
 				for ; destIt.Valid(); destIt.Next() {
-					idxi++
+					lIdx++
 					toUid := destIt.Val()
 					if adjacencyMap[fromUID] == nil {
 						adjacencyMap[fromUID] = make(map[uint64]float64)
 					}
 					// The default cost we'd use is 1.
-					cost, err := sg.getCost(idx, idxi)
+					cost, err := sg.getCostFromFacets(mIdx, lIdx)
 					if err == ErrFacet {
 						// Ignore the edge and continue.
 						continue
