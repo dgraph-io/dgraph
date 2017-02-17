@@ -59,7 +59,7 @@ func (sg *SubGraph) getCost(i, j int) (float64, error) {
 	if sg.Params.Facet == nil {
 		return cost, nil
 	}
-	fcsList := sg.FacetMatrix[i].FacetsList
+	fcsList := sg.facetMatrix[i].FacetsList
 	if len(fcsList) > j {
 		fcs := fcsList[j]
 		if len(fcs.Facets) == 0 {

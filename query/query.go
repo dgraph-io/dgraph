@@ -144,7 +144,7 @@ type SubGraph struct {
 	counts      []uint32
 	values      []*task.Value
 	uidMatrix   []*task.List
-	FacetMatrix []*facets.List
+	facetMatrix []*facets.List
 
 	// SrcUIDs is a list of unique source UIDs. They are always copies of destUIDs
 	// of parent nodes in GraphQL structure.
@@ -272,7 +272,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 			// this predicate.
 			var fcsList []*facets.Facets
 			if pc.Params.Facet != nil {
-				fcsList = pc.FacetMatrix[idx].FacetsList
+				fcsList = pc.facetMatrix[idx].FacetsList
 			}
 			it := algo.NewListIterator(ul)
 			for childIdx := -1; it.Valid(); it.Next() {
@@ -318,10 +318,10 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 			if err != nil {
 				return err
 			}
-			if pc.Params.Facet != nil && len(pc.FacetMatrix[idx].FacetsList) > 0 {
+			if pc.Params.Facet != nil && len(pc.facetMatrix[idx].FacetsList) > 0 {
 				fc := dst.New(fieldName)
 				// in case of Value we have only one Facets
-				for _, f := range pc.FacetMatrix[idx].FacetsList[0].Facets {
+				for _, f := range pc.facetMatrix[idx].FacetsList[0].Facets {
 					if tVal, err := types.ValFor(f); err != nil {
 						return err
 					} else {
@@ -933,7 +933,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 
 		sg.uidMatrix = result.UidMatrix
 		sg.values = result.Values
-		sg.FacetMatrix = result.FacetMatrix
+		sg.facetMatrix = result.FacetMatrix
 		if len(sg.values) > 0 {
 			v := sg.values[0]
 			x.Trace(ctx, "Sample value for attr: %v Val: %v", sg.Attr, string(v.Val))
