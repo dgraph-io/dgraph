@@ -7,7 +7,6 @@ import (
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/types"
-	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -20,6 +19,7 @@ type Item struct {
 
 var ErrStop = x.Errorf("STOP")
 var ErrTooBig = x.Errorf("Query exceeded memory limit")
+var ErrFacet = x.Errorf("Skip the edge")
 
 type priorityQueue []*Item
 
@@ -52,6 +52,37 @@ type nodeInfo struct {
 	parent uint64
 	// Pointer to the item in heap. Used to update priority
 	node *Item
+}
+
+func (sg *SubGraph) getCost(i, j int) (float64, error) {
+	cost := 1.0
+	if sg.Params.Facet == nil {
+		return cost, nil
+	}
+	fcsList := sg.FacetMatrix[i].FacetsList
+	if len(fcsList) > j {
+		fcs := fcsList[j]
+		if len(fcs.Facets) == 0 {
+			return cost, ErrFacet
+		}
+		if len(fcs.Facets) > 1 {
+			return cost, x.Errorf("Expected 1 but got %d facets", len(fcs.Facets))
+		}
+		tv, err := types.ValFor(fcs.Facets[0])
+		if err != nil {
+			return cost, ErrFacet
+		}
+		if tv.Tid == types.Int32ID {
+			cost = float64(tv.Value.(int32))
+		} else if tv.Tid == types.FloatID {
+			cost = float64(tv.Value.(float64))
+		} else {
+			return cost, ErrFacet
+		}
+		// We ignore the facet if its not an int or float.
+	}
+
+	return cost, nil
 }
 
 func (start *SubGraph) expandOut(ctx context.Context,
@@ -106,41 +137,23 @@ func (start *SubGraph) expandOut(ctx context.Context,
 				idx++
 				fromUID := it.Val()
 				destIt := algo.NewListIterator(sg.uidMatrix[idx])
-				var fcsList []*facets.Facets
-				if sg.Params.Facet != nil {
-					fcsList = sg.FacetMatrix[idx].FacetsList
-				}
-				for idxi := -1; destIt.Valid(); destIt.Next() {
+				idxi := -1
+				for ; destIt.Valid(); destIt.Next() {
 					idxi++
 					toUid := destIt.Val()
 					if adjacencyMap[fromUID] == nil {
 						adjacencyMap[fromUID] = make(map[uint64]float64)
 					}
 					// The default cost we'd use is 1.
-					cost := 1.0
-					if sg.Params.Facet != nil && len(fcsList) > idxi {
-						fcs := fcsList[idxi]
-						if len(fcs.Facets) == 0 {
-							// No facet found. So ignore this edge.
-							continue
-						}
-						if len(fcs.Facets) > 1 {
-							rch <- x.Errorf("Expected 1 but got %d facets", len(fcs.Facets))
-							return
-						}
-						tv, err := types.ValFor(fcs.Facets[0])
-						if err != nil {
-							rch <- err
-							return
-						}
-						if tv.Tid == types.Int32ID {
-							cost = float64(tv.Value.(int32))
-						} else if tv.Tid == types.FloatID {
-							cost = float64(tv.Value.(float64))
-						}
-						// We ignore the facet if its not an int or float.
+					cost, err := sg.getCost(idx, idxi)
+					if err == ErrFacet {
+						// Ignore the edge and continue.
+						continue
+					} else if err != nil {
+						rch <- err
+						return
 					}
-					adjacencyMap[fromUID][toUid] = cost // cost is 1 for now.
+					adjacencyMap[fromUID][toUid] = cost
 					numEdges++
 				}
 			}
