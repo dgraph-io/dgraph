@@ -17,3 +17,16 @@ message Facet {
 	bytes value = 2;
 	ValType val_type = 3;
 }
+
+message Param {
+	bool all_keys = 1;
+	repeated string keys = 2;
+}
+
+message Facets {
+	repeated Facet facets = 1;
+}
+
+message List {
+	repeated Facets facets_list = 1;
+}

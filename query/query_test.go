@@ -26,8 +26,6 @@ import (
 	"testing"
 	"time"
 
-	"google.golang.org/grpc/metadata"
-
 	farm "github.com/dgryski/go-farm"
 	"github.com/gogo/protobuf/proto"
 	"github.com/stretchr/testify/require"
@@ -46,85 +44,13 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-func childAttrs(sg *SubGraph) []string {
-	var out []string
-	for _, c := range sg.Children {
-		out = append(out, c.Attr)
-	}
-	return out
-}
-
-func taskValues(t *testing.T, v []*task.Value) []string {
-	out := make([]string, len(v))
-	for i, tv := range v {
-		out[i] = string(tv.Val)
-	}
-	return out
-}
-
-func addEdgeToValue(t *testing.T, attr string, src uint64,
-	value string) {
-	edge := &task.DirectedEdge{
-		Value:  []byte(value),
-		Label:  "testing",
-		Attr:   attr,
-		Entity: src,
-		Op:     task.DirectedEdge_SET,
-	}
-	l, _ := posting.GetOrCreate(x.DataKey(attr, src), 0)
-	require.NoError(t,
-		l.AddMutationWithIndex(context.Background(), edge))
-}
-
-func addEdgeToTypedValue(t *testing.T, attr string, src uint64,
-	typ types.TypeID, value []byte) {
-	edge := &task.DirectedEdge{
-		Value:     value,
-		ValueType: uint32(typ),
-		Label:     "testing",
-		Attr:      attr,
-		Entity:    src,
-		Op:        task.DirectedEdge_SET,
-	}
-	l, _ := posting.GetOrCreate(x.DataKey(attr, src), 0)
-	require.NoError(t,
-		l.AddMutationWithIndex(context.Background(), edge))
-}
-
-func addEdgeToUID(t *testing.T, attr string, src uint64, dst uint64) {
-	edge := &task.DirectedEdge{
-		ValueId: dst,
-		Label:   "testing",
-		Attr:    attr,
-		Entity:  src,
-		Op:      task.DirectedEdge_SET,
-	}
-	l, _ := posting.GetOrCreate(x.DataKey(attr, src), 0)
-	require.NoError(t,
-		l.AddMutationWithIndex(context.Background(), edge))
-}
-
-func delEdgeToUID(t *testing.T, attr string, src uint64, dst uint64) {
-	edge := &task.DirectedEdge{
-		ValueId: dst,
-		Label:   "testing",
-		Attr:    attr,
-		Entity:  src,
-		Op:      task.DirectedEdge_DEL,
-	}
-	l, _ := posting.GetOrCreate(x.DataKey(attr, src), 0)
-	require.NoError(t,
-		l.AddMutationWithIndex(context.Background(), edge))
-}
-
-func addGeoData(t *testing.T, ps *store.Store, uid uint64, p geom.T, name string) {
+func addPassword(t *testing.T, uid uint64, password string) {
 	value := types.ValueForType(types.BinaryID)
-	src := types.ValueForType(types.GeoID)
-	src.Value = p
+	src := types.ValueForType(types.PasswordID)
+	src.Value, _ = types.Encrypt(password)
 	err := types.Marshal(src, &value)
 	require.NoError(t, err)
-	addEdgeToTypedValue(t, "geometry", uid, types.GeoID, value.Value.([]byte))
-	addEdgeToTypedValue(t, "name", uid, types.StringID, []byte(name))
+	addEdgeToTypedValue(t, "password", uid, types.PasswordID, value.Value.([]byte), nil)
 }
 
 var ps *store.Store
@@ -134,39 +60,39 @@ func populateGraph(t *testing.T) {
 	// logrus.SetLevel(logrus.DebugLevel)
 	// So, user we're interested in has uid: 1.
 	// She has 5 friends: 23, 24, 25, 31, and 101
-	addEdgeToUID(t, "friend", 1, 23)
-	addEdgeToUID(t, "friend", 1, 24)
-	addEdgeToUID(t, "friend", 1, 25)
-	addEdgeToUID(t, "friend", 1, 31)
-	addEdgeToUID(t, "friend", 1, 101)
-	addEdgeToUID(t, "friend", 31, 24)
-	addEdgeToUID(t, "friend", 23, 1)
+	addEdgeToUID(t, "friend", 1, 23, nil)
+	addEdgeToUID(t, "friend", 1, 24, nil)
+	addEdgeToUID(t, "friend", 1, 25, nil)
+	addEdgeToUID(t, "friend", 1, 31, nil)
+	addEdgeToUID(t, "friend", 1, 101, nil)
+	addEdgeToUID(t, "friend", 31, 24, nil)
+	addEdgeToUID(t, "friend", 23, 1, nil)
 
-	addEdgeToUID(t, "follow", 1, 31)
-	addEdgeToUID(t, "follow", 1, 24)
-	addEdgeToUID(t, "follow", 31, 1001)
-	addEdgeToUID(t, "follow", 1001, 1000)
-	addEdgeToUID(t, "follow", 1002, 1000)
-	addEdgeToUID(t, "follow", 1001, 1003)
-	addEdgeToUID(t, "follow", 1001, 1003)
-	addEdgeToUID(t, "follow", 1003, 1002)
+	addEdgeToUID(t, "follow", 1, 31, nil)
+	addEdgeToUID(t, "follow", 1, 24, nil)
+	addEdgeToUID(t, "follow", 31, 1001, nil)
+	addEdgeToUID(t, "follow", 1001, 1000, nil)
+	addEdgeToUID(t, "follow", 1002, 1000, nil)
+	addEdgeToUID(t, "follow", 1001, 1003, nil)
+	addEdgeToUID(t, "follow", 1001, 1003, nil)
+	addEdgeToUID(t, "follow", 1003, 1002, nil)
 
-	addEdgeToUID(t, "path", 1, 31)
-	addEdgeToUID(t, "path", 1, 24)
-	addEdgeToUID(t, "path", 31, 1000)
-	addEdgeToUID(t, "path", 1000, 1001)
-	addEdgeToUID(t, "path", 1000, 1002)
-	addEdgeToUID(t, "path", 1001, 1002)
-	addEdgeToUID(t, "path", 1002, 1003)
-	addEdgeToUID(t, "path", 1003, 1001)
-	addEdgeToValue(t, "name", 1000, "Alice")
-	addEdgeToValue(t, "name", 1001, "Bob")
-	addEdgeToValue(t, "name", 1002, "Matt")
-	addEdgeToValue(t, "name", 1003, "John")
+	addEdgeToUID(t, "path", 1, 31, nil)
+	addEdgeToUID(t, "path", 1, 24, nil)
+	addEdgeToUID(t, "path", 31, 1000, nil)
+	addEdgeToUID(t, "path", 1000, 1001, nil)
+	addEdgeToUID(t, "path", 1000, 1002, nil)
+	addEdgeToUID(t, "path", 1001, 1002, nil)
+	addEdgeToUID(t, "path", 1002, 1003, nil)
+	addEdgeToUID(t, "path", 1003, 1001, nil)
+	addEdgeToValue(t, "name", 1000, "Alice", nil)
+	addEdgeToValue(t, "name", 1001, "Bob", nil)
+	addEdgeToValue(t, "name", 1002, "Matt", nil)
+	addEdgeToValue(t, "name", 1003, "John", nil)
 
 	// Now let's add a few properties for the main user.
-	addEdgeToValue(t, "name", 1, "Michonne")
-	addEdgeToValue(t, "gender", 1, "female")
+	addEdgeToValue(t, "name", 1, "Michonne", nil)
+	addEdgeToValue(t, "gender", 1, "female", nil)
 
 	src := types.ValueForType(types.StringID)
 	src.Value = []byte("{\"Type\":\"Point\", \"Coordinates\":[1.1,2.0]}")
@@ -175,36 +101,38 @@ func populateGraph(t *testing.T) {
 	gData := types.ValueForType(types.BinaryID)
 	err = types.Marshal(coord, &gData)
 	require.NoError(t, err)
-	addEdgeToTypedValue(t, "loc", 1, types.GeoID, gData.Value.([]byte))
+	addEdgeToTypedValue(t, "loc", 1, types.GeoID, gData.Value.([]byte), nil)
 
 	// Int32ID
 	data := types.ValueForType(types.BinaryID)
 	intD := types.Val{types.Int32ID, int32(15)}
 	err = types.Marshal(intD, &data)
 	require.NoError(t, err)
-	addEdgeToTypedValue(t, "age", 1, types.Int32ID, data.Value.([]byte))
+	addEdgeToTypedValue(t, "age", 1, types.Int32ID, data.Value.([]byte), nil)
 
 	// FloatID
 	fdata := types.ValueForType(types.BinaryID)
 	floatD := types.Val{types.FloatID, float64(13.25)}
 	err = types.Marshal(floatD, &fdata)
 	require.NoError(t, err)
-	addEdgeToTypedValue(t, "power", 1, types.FloatID, fdata.Value.([]byte))
+	addEdgeToTypedValue(t, "power", 1, types.FloatID, fdata.Value.([]byte), nil)
 
-	addEdgeToValue(t, "address", 1, "31, 32 street, Jupiter")
+	addEdgeToValue(t, "address", 1, "31, 32 street, Jupiter", nil)
 
 	boolD := types.Val{types.BoolID, true}
 	err = types.Marshal(boolD, &data)
 	require.NoError(t, err)
-	addEdgeToTypedValue(t, "alive", 1, types.BoolID, data.Value.([]byte))
-	addEdgeToValue(t, "age", 1, "38")
-	addEdgeToValue(t, "survival_rate", 1, "98.99")
-	addEdgeToValue(t, "sword_present", 1, "true")
-	addEdgeToValue(t, "_xid_", 1, "mich")
+	addEdgeToTypedValue(t, "alive", 1, types.BoolID, data.Value.([]byte), nil)
+	addEdgeToValue(t, "age", 1, "38", nil)
+	addEdgeToValue(t, "survival_rate", 1, "98.99", nil)
+	addEdgeToValue(t, "sword_present", 1, "true", nil)
+	addEdgeToValue(t, "_xid_", 1, "mich", nil)
+
+	addPassword(t, 1, "123456")
 
 	// Now let's add a name for each of the friends, except 101.
-	addEdgeToTypedValue(t, "name", 23, types.StringID, []byte("Rick Grimes"))
-	addEdgeToValue(t, "age", 23, "15")
+	addEdgeToTypedValue(t, "name", 23, types.StringID, []byte("Rick Grimes"), nil)
+	addEdgeToValue(t, "age", 23, "15", nil)
 
 	src.Value = []byte(`{"Type":"Polygon", "Coordinates":[[[0.0,0.0], [2.0,0.0], [2.0, 2.0], [0.0, 2.0], [0.0, 0.0]]]}`)
 	coord, err = types.Convert(src, types.GeoID)
@@ -212,34 +140,34 @@ func populateGraph(t *testing.T) {
 	gData = types.ValueForType(types.BinaryID)
 	err = types.Marshal(coord, &gData)
 	require.NoError(t, err)
-	addEdgeToTypedValue(t, "loc", 23, types.GeoID, gData.Value.([]byte))
+	addEdgeToTypedValue(t, "loc", 23, types.GeoID, gData.Value.([]byte), nil)
 
-	addEdgeToValue(t, "address", 23, "21, mark street, Mars")
-	addEdgeToValue(t, "name", 24, "Glenn Rhee")
+	addEdgeToValue(t, "address", 23, "21, mark street, Mars", nil)
+	addEdgeToValue(t, "name", 24, "Glenn Rhee", nil)
 	src.Value = []byte(`{"Type":"Point", "Coordinates":[1.10001,2.000001]}`)
 	coord, err = types.Convert(src, types.GeoID)
 	require.NoError(t, err)
 	gData = types.ValueForType(types.BinaryID)
 	err = types.Marshal(coord, &gData)
 	require.NoError(t, err)
-	addEdgeToTypedValue(t, "loc", 24, types.GeoID, gData.Value.([]byte))
+	addEdgeToTypedValue(t, "loc", 24, types.GeoID, gData.Value.([]byte), nil)
 
-	addEdgeToValue(t, "name", farm.Fingerprint64([]byte("a.bc")), "Alice")
-	addEdgeToValue(t, "name", 25, "Daryl Dixon")
-	addEdgeToValue(t, "name", 31, "Andrea")
+	addEdgeToValue(t, "name", farm.Fingerprint64([]byte("a.bc")), "Alice", nil)
+	addEdgeToValue(t, "name", 25, "Daryl Dixon", nil)
+	addEdgeToValue(t, "name", 31, "Andrea", nil)
 	src.Value = []byte(`{"Type":"Point", "Coordinates":[2.0, 2.0]}`)
 	coord, err = types.Convert(src, types.GeoID)
 	require.NoError(t, err)
 	gData = types.ValueForType(types.BinaryID)
 	err = types.Marshal(coord, &gData)
 	require.NoError(t, err)
-	addEdgeToTypedValue(t, "loc", 31, types.GeoID, gData.Value.([]byte))
+	addEdgeToTypedValue(t, "loc", 31, types.GeoID, gData.Value.([]byte), nil)
 
-	addEdgeToValue(t, "dob", 1, "1910-01-01")
-	addEdgeToValue(t, "dob", 23, "1910-01-02")
-	addEdgeToValue(t, "dob", 24, "1909-05-05")
-	addEdgeToValue(t, "dob", 25, "1909-01-10")
-	addEdgeToValue(t, "dob", 31, "1901-01-15")
+	addEdgeToValue(t, "dob", 1, "1910-01-01", nil)
+	addEdgeToValue(t, "dob", 23, "1910-01-02", nil)
+	addEdgeToValue(t, "dob", 24, "1909-05-05", nil)
+	addEdgeToValue(t, "dob", 25, "1909-01-10", nil)
+	addEdgeToValue(t, "dob", 31, "1901-01-15", nil)
 
 	// GEO stuff
 	p := geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{-122.082506, 37.4249518})
@@ -267,10 +195,10 @@ func populateGraph(t *testing.T) {
 	})
 	addGeoData(t, ps, 5106, poly, "San Carlos")
 
-	addEdgeToValue(t, "film.film.initial_release_date", 23, "1900-01-02")
-	addEdgeToValue(t, "film.film.initial_release_date", 24, "1909-05-05")
-	addEdgeToValue(t, "film.film.initial_release_date", 25, "1929-01-10")
-	addEdgeToValue(t, "film.film.initial_release_date", 31, "1801-01-15")
+	addEdgeToValue(t, "film.film.initial_release_date", 23, "1900-01-02", nil)
+	addEdgeToValue(t, "film.film.initial_release_date", 24, "1909-05-05", nil)
+	addEdgeToValue(t, "film.film.initial_release_date", 25, "1929-01-10", nil)
+	addEdgeToValue(t, "film.film.initial_release_date", 31, "1801-01-15", nil)
 
 	// for aggregator(sum) test
 	{
@@ -278,54 +206,17 @@ func populateGraph(t *testing.T) {
 		intD := types.Val{types.Int32ID, int32(4)}
 		err = types.Marshal(intD, &data)
 		require.NoError(t, err)
-		addEdgeToTypedValue(t, "shadow_deep", 23, types.Int32ID, data.Value.([]byte))
+		addEdgeToTypedValue(t, "shadow_deep", 23, types.Int32ID, data.Value.([]byte), nil)
 	}
 	{
 		data := types.ValueForType(types.BinaryID)
 		intD := types.Val{types.Int32ID, int32(14)}
 		err = types.Marshal(intD, &data)
 		require.NoError(t, err)
-		addEdgeToTypedValue(t, "shadow_deep", 24, types.Int32ID, data.Value.([]byte))
+		addEdgeToTypedValue(t, "shadow_deep", 24, types.Int32ID, data.Value.([]byte), nil)
 	}
 
 	time.Sleep(5 * time.Millisecond)
-}
-
-func processToFastJSON(t *testing.T, query string) string {
-	res, err := gql.Parse(query)
-	require.NoError(t, err)
-
-	var l Latency
-	ctx := context.Background()
-	sgl, err := ProcessQuery(ctx, res, &l)
-	require.NoError(t, err)
-
-	var buf bytes.Buffer
-	require.NoError(t, ToJson(&l, sgl, &buf))
-	return string(buf.Bytes())
-}
-
-func processToPB(t *testing.T, query string, debug bool) *graph.Node {
-	res, err := gql.Parse(query)
-	require.NoError(t, err)
-	var ctx context.Context
-	if debug {
-		ctx = metadata.NewContext(context.Background(), metadata.Pairs("debug", "true"))
-	} else {
-		ctx = context.Background()
-	}
-	sg, err := ToSubGraph(ctx, res.Query[0])
-	require.NoError(t, err)
-
-	ch := make(chan error)
-	go ProcessGraph(ctx, sg, nil, ch)
-	err = <-ch
-	require.NoError(t, err)
-
-	var l Latency
-	pb, err := sg.ToProtocolBuffer(&l)
-	require.NoError(t, err)
-	return pb
 }
 
 func TestGetUID(t *testing.T) {
@@ -347,6 +238,40 @@ func TestGetUID(t *testing.T) {
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
 		`{"me":[{"_uid_":"0x1","alive":true,"friend":[{"_uid_":"0x17","name":"Rick Grimes"},{"_uid_":"0x18","name":"Glenn Rhee"},{"_uid_":"0x19","name":"Daryl Dixon"},{"_uid_":"0x1f","name":"Andrea"},{"_uid_":"0x65"}],"gender":"female","name":"Michonne"}]}`,
+		js)
+}
+func TestReturnUids(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			me(id:0x01) {
+				name
+				_uid_
+				gender
+				alive
+				friend {
+					_uid_
+					name
+				}
+			}
+		}
+	`
+	res, err := gql.Parse(query)
+	require.NoError(t, err)
+
+	var l Latency
+	ctx := context.Background()
+	sgl, err := ProcessQuery(ctx, res, &l)
+	require.NoError(t, err)
+
+	var buf bytes.Buffer
+	mp := map[string]string{
+		"a": "123",
+	}
+	require.NoError(t, ToJson(&l, sgl, &buf, mp))
+	js := buf.String()
+	require.JSONEq(t,
+		`{"uids":{"a":123},"me":[{"_uid_":"0x1","alive":true,"friend":[{"_uid_":"0x17","name":"Rick Grimes"},{"_uid_":"0x18","name":"Glenn Rhee"},{"_uid_":"0x19","name":"Daryl Dixon"},{"_uid_":"0x1f","name":"Andrea"},{"_uid_":"0x65"}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
 
@@ -767,7 +692,7 @@ func TestDebug1(t *testing.T) {
 	require.NoError(t, err)
 
 	var buf bytes.Buffer
-	require.NoError(t, ToJson(&l, sgl, &buf))
+	require.NoError(t, ToJson(&l, sgl, &buf, nil))
 
 	var mp map[string]interface{}
 	require.NoError(t, json.Unmarshal([]byte(buf.Bytes()), &mp))
@@ -1027,6 +952,59 @@ func TestSumError1(t *testing.T) {
 	var l Latency
 	_, queryErr := ProcessQuery(context.Background(), res, &l)
 	require.NotNil(t, queryErr)
+}
+
+func TestQueryPassword(t *testing.T) {
+	populateGraph(t)
+	// Password is not fetchable
+	query := `
+                {
+                        me(id:0x01) {
+                                name
+                                password
+                        }
+                }
+	`
+	res, err := gql.Parse(query)
+	require.NoError(t, err)
+
+	var l Latency
+	_, queryErr := ProcessQuery(context.Background(), res, &l)
+	require.NotNil(t, queryErr)
+}
+
+func TestCheckPassword(t *testing.T) {
+	populateGraph(t)
+	query := `
+                {
+                        me(id:0x01) {
+                                name
+                                checkpwd("123456")
+                        }
+                }
+	`
+	js := processToFastJSON(t, query)
+	require.EqualValues(t,
+		`{"me":[{"name":"Michonne","password":[{"checkpwd":true}]}]}`,
+		js)
+
+}
+
+func TestCheckPasswordIncorrect(t *testing.T) {
+	populateGraph(t)
+	query := `
+                {
+                        me(id:0x01) {
+                                name
+                                checkpwd("654123")
+                        }
+                }
+	`
+	js := processToFastJSON(t, query)
+	require.EqualValues(t,
+		`{"me":[{"name":"Michonne","password":[{"checkpwd":false}]}]}`,
+		js)
+
 }
 
 func TestToSubgraphInvalidFnName(t *testing.T) {
@@ -1858,9 +1836,9 @@ func TestToFastJSONReverseFilter(t *testing.T) {
 
 func TestToFastJSONReverseDelSet(t *testing.T) {
 	populateGraph(t)
-	delEdgeToUID(t, "friend", 1, 24)  // Delete Michonne.
-	delEdgeToUID(t, "friend", 23, 24) // Ignored.
-	addEdgeToUID(t, "friend", 25, 24) // Add Daryl.
+	delEdgeToUID(t, "friend", 1, 24)       // Delete Michonne.
+	delEdgeToUID(t, "friend", 23, 24)      // Ignored.
+	addEdgeToUID(t, "friend", 25, 24, nil) // Add Daryl.
 
 	query := `
 		{
@@ -1882,9 +1860,9 @@ func TestToFastJSONReverseDelSet(t *testing.T) {
 
 func TestToFastJSONReverseDelSetCount(t *testing.T) {
 	populateGraph(t)
-	delEdgeToUID(t, "friend", 1, 24)  // Delete Michonne.
-	delEdgeToUID(t, "friend", 23, 24) // Ignored.
-	addEdgeToUID(t, "friend", 25, 24) // Add Daryl.
+	delEdgeToUID(t, "friend", 1, 24)       // Delete Michonne.
+	delEdgeToUID(t, "friend", 23, 24)      // Ignored.
+	addEdgeToUID(t, "friend", 25, 24, nil) // Add Daryl.
 
 	query := `
 		{
@@ -3235,7 +3213,7 @@ func runQuery(t *testing.T, gq *gql.GraphQuery) string {
 
 	var l Latency
 	var buf bytes.Buffer
-	err = sg.ToFastJSON(&l, &buf)
+	err = sg.ToFastJSON(&l, &buf, nil)
 	require.NoError(t, err)
 	return string(buf.Bytes())
 }

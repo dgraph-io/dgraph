@@ -21,6 +21,7 @@ message Posting {
 		GEO = 7;
 		UID = 8;
 		STRING = 9;
+		PASSWORD = 10;
 	}
 	ValType val_type = 3;
 	string lang = 4;

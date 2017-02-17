@@ -73,6 +73,8 @@ func typeValFrom(val *graph.Value) types.Val {
 		return types.Val{types.DateTimeID, val.GetDatetimeVal()}
 	case *graph.Value_DefaultVal:
 		return types.Val{types.DefaultID, val.GetDefaultVal()}
+	case *graph.Value_PasswordVal:
+		return types.Val{types.PasswordID, val.GetPasswordVal()}
 	}
 	return types.Val{types.StringID, ""}
 }
@@ -298,6 +300,7 @@ func Parse(line string) (rnq graph.NQuad, rerr error) {
 
 		case itemLabel:
 			rnq.Label = strings.Trim(item.Val, " ")
+
 		case itemLeftRound:
 			it.Prev() // backup '('
 			if err := parseFacets(it, &rnq); err != nil {
@@ -339,6 +342,11 @@ func parseFacets(it *lex.ItemIterator, rnq *graph.NQuad) error {
 	if item.Typ != itemLeftRound {
 		return x.Errorf("Expected '(' but found %v at Facet.", item.Val)
 	}
+	defer func() { // always sort facets before returning.
+		if rnq.Facets != nil {
+			facets.SortFacets(rnq.Facets)
+		}
+	}()
 
 	for it.Next() { // parse one key value pair
 		// parse key
@@ -367,8 +375,12 @@ func parseFacets(it *lex.ItemIterator, rnq *graph.NQuad) error {
 		if item.Typ == itemText {
 			facetVal = item.Val
 		}
-		rnq.Facets = append(rnq.Facets, &facets.Facet{facetKey,
-			[]byte(facetVal), facets.ValStrToValType(facetVal)})
+		valTyp, err := facets.ValType(facetVal)
+		if err != nil {
+			return err
+		}
+		rnq.Facets = append(rnq.Facets,
+			&facets.Facet{Key: facetKey, Value: []byte(facetVal), ValType: valTyp})
 
 		// empty value case..
 		if item.Typ == itemRightRound {
@@ -409,6 +421,7 @@ var typeMap = map[string]types.TypeID{
 	"xs:double":                                   types.FloatID,
 	"xs:float":                                    types.FloatID,
 	"geo:geojson":                                 types.GeoID,
+	"pwd:password":                                types.PasswordID,
 	"http://www.w3.org/2001/XMLSchema#string":     types.StringID,
 	"http://www.w3.org/2001/XMLSchema#dateTime":   types.DateTimeID,
 	"http://www.w3.org/2001/XMLSchema#date":       types.DateID,

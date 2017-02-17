@@ -34,6 +34,8 @@ message Query {
 	repeated string src_func = 7;
 	
 	bool reverse = 8;  // Whether this is a reverse edge.
+
+	facets.Param facet_param = 9; // which facets to fetch
 }
 
 message Result {
@@ -41,6 +43,7 @@ message Result {
 	repeated Value values = 2;
 	repeated uint32 counts = 3;
 	bool intersect_dest = 4;
+	repeated facets.List facets_lists = 5;
 }
 
 message Sort {

@@ -100,7 +100,6 @@ var testNQuads = []struct {
 			Predicate:   "name",
 			ObjectId:    "",
 			ObjectValue: &graph.Value{&graph.Value_DefaultVal{"Alice In Wonderland"}},
-			ObjectType:  0,
 		},
 	},
 	{
@@ -110,16 +109,6 @@ var testNQuads = []struct {
 			Predicate:   "name.en-0", // TODO(tzdybal) - remove ".en-0"
 			ObjectId:    "",
 			Lang:        "en-0",
-			ObjectValue: &graph.Value{&graph.Value_StrVal{"Alice In Wonderland"}},
-			ObjectType:  9,
-		},
-	},
-	{
-		input: `_:alice <name> "Alice In Wonderland"^^<xs:string> .`,
-		nq: graph.NQuad{
-			Subject:     "_:alice",
-			Predicate:   "name",
-			ObjectId:    "",
 			ObjectValue: &graph.Value{&graph.Value_StrVal{"Alice In Wonderland"}},
 			ObjectType:  9,
 		},
@@ -514,6 +503,7 @@ var testNQuads = []struct {
 		expectedErr:  true,
 		shouldIgnore: true,
 	},
+
 	// Edge Facets test.
 	{
 		input: `_:alice <knows> "stuff" _:label (key1=val1,key2=13) .`,
@@ -526,9 +516,9 @@ var testNQuads = []struct {
 			ObjectType:  0,
 			Facets: []*facets.Facet{
 				{"key1", []byte("val1"),
-					facets.TypeIDToValType(facets.StringID)},
+					facets.ValTypeForTypeID(facets.StringID)},
 				{"key2", []byte("13"),
-					facets.TypeIDToValType(facets.Int32ID)}},
+					facets.ValTypeForTypeID(facets.Int32ID)}},
 		},
 		expectedErr: false,
 	},
@@ -543,9 +533,9 @@ var testNQuads = []struct {
 			ObjectType:  0,
 			Facets: []*facets.Facet{
 				{"key1", []byte(""),
-					facets.TypeIDToValType(facets.StringID)},
+					facets.ValTypeForTypeID(facets.StringID)},
 				{"key2", []byte("13"),
-					facets.TypeIDToValType(facets.Int32ID)}},
+					facets.ValTypeForTypeID(facets.Int32ID)}},
 		},
 		expectedErr: false,
 	},
@@ -560,9 +550,9 @@ var testNQuads = []struct {
 			ObjectType:  0,
 			Facets: []*facets.Facet{
 				{"key1", []byte(""),
-					facets.TypeIDToValType(facets.StringID)},
+					facets.ValTypeForTypeID(facets.StringID)},
 				{"key2", []byte("13"),
-					facets.TypeIDToValType(facets.Int32ID)}},
+					facets.ValTypeForTypeID(facets.Int32ID)}},
 		},
 		expectedErr: false,
 	},
@@ -577,20 +567,20 @@ var testNQuads = []struct {
 			ObjectType:  0,
 			Facets: []*facets.Facet{
 				{"key1", []byte("12"),
-					facets.TypeIDToValType(facets.Int32ID)},
+					facets.ValTypeForTypeID(facets.Int32ID)},
 				{"key2", []byte("value2"),
-					facets.TypeIDToValType(facets.StringID)},
+					facets.ValTypeForTypeID(facets.StringID)},
 				{"key3", []byte(""),
-					facets.TypeIDToValType(facets.StringID)},
+					facets.ValTypeForTypeID(facets.StringID)},
 				{"key4", []byte("val4"),
-					facets.TypeIDToValType(facets.StringID)},
+					facets.ValTypeForTypeID(facets.StringID)},
 			},
 		},
 		expectedErr: false,
 	},
 	// Should parse all types
 	{
-		input: `_:alice <knows> "stuff" (key1=12,key2=value2,key3=1.2,key4=2006-01-02T15:04:05 ) .`,
+		input: `_:alice <knows> "stuff" (key1=12,key2=value2,key3=1.2,key4=2006-01-02T15:04:05,key5=true,key6=false) .`,
 		nq: graph.NQuad{
 			Subject:     "_:alice",
 			Predicate:   "knows",
@@ -599,17 +589,67 @@ var testNQuads = []struct {
 			ObjectType:  0,
 			Facets: []*facets.Facet{
 				{"key1", []byte("12"),
-					facets.TypeIDToValType(facets.Int32ID)},
+					facets.ValTypeForTypeID(facets.Int32ID)},
 				{"key2", []byte("value2"),
-					facets.TypeIDToValType(facets.StringID)},
+					facets.ValTypeForTypeID(facets.StringID)},
 				{"key3", []byte("1.2"),
-					facets.TypeIDToValType(facets.FloatID)},
+					facets.ValTypeForTypeID(facets.FloatID)},
 				{"key4", []byte("2006-01-02T15:04:05"),
-					facets.TypeIDToValType(facets.DateTimeID)},
+					facets.ValTypeForTypeID(facets.DateTimeID)},
+				{"key5", []byte("true"),
+					facets.ValTypeForTypeID(facets.BoolID)},
+				{"key6", []byte("false"),
+					facets.ValTypeForTypeID(facets.BoolID)},
 			},
 		},
 		expectedErr: false,
 	},
+	// Should parse bools for only "true" and "false"
+	{
+		// True, 1 , t are some valid true values in go strconv.ParseBool
+		input: `_:alice <knows> "stuff" (key1=true,key2=false,key3=True,key4=False,key5=1, key6=t) .`,
+		nq: graph.NQuad{
+			Subject:     "_:alice",
+			Predicate:   "knows",
+			ObjectId:    "",
+			ObjectValue: &graph.Value{&graph.Value_DefaultVal{"stuff"}},
+			ObjectType:  0,
+			Facets: []*facets.Facet{
+				{"key1", []byte("true"),
+					facets.ValTypeForTypeID(facets.BoolID)},
+				{"key2", []byte("false"),
+					facets.ValTypeForTypeID(facets.BoolID)},
+				{"key3", []byte("True"),
+					facets.ValTypeForTypeID(facets.StringID)},
+				{"key4", []byte("False"),
+					facets.ValTypeForTypeID(facets.StringID)},
+				{"key5", []byte("1"),
+					facets.ValTypeForTypeID(facets.Int32ID)},
+				{"key6", []byte("t"),
+					facets.ValTypeForTypeID(facets.StringID)},
+			},
+		},
+		expectedErr: false,
+	},
+	// Should parse to string even if value start with ints if it has alphabets.
+	// Only support decimal format for ints.
+	{
+		input: `_:alice <knows> "stuff" (key1=11adsf234,key2=11111111111111111111132333uasfk333) .`,
+		nq: graph.NQuad{
+			Subject:     "_:alice",
+			Predicate:   "knows",
+			ObjectId:    "",
+			ObjectValue: &graph.Value{&graph.Value_DefaultVal{"stuff"}},
+			ObjectType:  0,
+			Facets: []*facets.Facet{
+				{"key1", []byte("11adsf234"),
+					facets.ValTypeForTypeID(facets.StringID)},
+				{"key2", []byte("11111111111111111111132333uasfk333"),
+					facets.ValTypeForTypeID(facets.StringID)},
+			},
+		},
+	},
+
 	// Should parse dates
 	{
 		input: `_:alice <knows> "stuff" (key1=2002-10-02T15:00:00.05Z, key2=2006-01-02T15:04:05, key3=2006-01-02) .`,
@@ -621,11 +661,11 @@ var testNQuads = []struct {
 			ObjectType:  0,
 			Facets: []*facets.Facet{
 				{"key1", []byte("2002-10-02T15:00:00.05Z"),
-					facets.TypeIDToValType(facets.DateTimeID)},
+					facets.ValTypeForTypeID(facets.DateTimeID)},
 				{"key2", []byte("2006-01-02T15:04:05"),
-					facets.TypeIDToValType(facets.DateTimeID)},
+					facets.ValTypeForTypeID(facets.DateTimeID)},
 				{"key3", []byte("2006-01-02"),
-					facets.TypeIDToValType(facets.DateTimeID)},
+					facets.ValTypeForTypeID(facets.DateTimeID)},
 			},
 		},
 	},
@@ -665,6 +705,15 @@ var testNQuads = []struct {
 	{
 		input:       `_:alice <knows> "stuff" (k=,) .`,
 		expectedErr: true, // comma should be followed by another key-value pair.
+	},
+	{
+		input:       `_:alice <knows> "stuff" (k=111111111111111111888888) .`,
+		expectedErr: true, // integer can not fit in int32.
+	},
+	// Facet tests end
+	{
+		input:       `<alice> <password> "guess"^^<pwd:password> .`,
+		expectedErr: true, // len(password) should >= 6
 	},
 }
 

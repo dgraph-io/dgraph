@@ -71,7 +71,7 @@ var (
 	cpuprofile     = flag.String("cpu", "", "write cpu profile to file")
 	memprofile     = flag.String("mem", "", "write memory profile to file")
 	dumpSubgraph   = flag.String("dumpsg", "", "Directory to save subgraph for testing, debugging")
-	uiDir          = flag.String("ui", os.Getenv("GOPATH")+"/src/github.com/dgraph-io/dgraph/dashboard/dist", "Directory which contains assets for the user interface")
+	uiDir          = flag.String("ui", os.Getenv("GOPATH")+"/src/github.com/dgraph-io/dgraph/dashboard/build", "Directory which contains assets for the user interface")
 	finishCh       = make(chan struct{}) // channel to wait for all pending reqs to finish.
 	shutdownCh     = make(chan struct{}) // channel to signal shutdown.
 	pendingQueries = make(chan struct{}, 10000*runtime.NumCPU())
@@ -451,7 +451,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	err = query.ToJson(&l, sgl, w)
+	err = query.ToJson(&l, sgl, w, allocIdsStr)
 	if err != nil {
 		// since we performed w.Write in ToJson above,
 		// calling WriteHeader with 500 code will be ignored.
@@ -570,6 +570,15 @@ func (s *grpcServer) Run(ctx context.Context,
 	res, err := parseQueryAndMutation(ctx, req.Query)
 	if err != nil {
 		return resp, err
+	}
+
+	// If mutations are part of the query, we run them through the mutation handler
+	// same as the http client.
+	if res.Mutation != nil && (len(res.Mutation.Set) > 0 || len(res.Mutation.Del) > 0) {
+		if allocIds, err = mutationHandler(ctx, res.Mutation); err != nil {
+			x.TraceError(ctx, x.Wrapf(err, "Error while handling mutations"))
+			return resp, err
+		}
 	}
 
 	// Mutations are sent as part of the mutation object
@@ -693,9 +702,9 @@ func main() {
 	defer ps.Close()
 
 	err = schema.Init(ps, *schemaFile)
-	x.Checkf(err, "Error while loading schema")
+	x.Checkf(err, "Error initializing schema")
 
-	// Posting will initialize index which requires schema.State(). Hence, initialize
+	// Posting will initialize index which requires schema. Hence, initialize
 	// schema before calling posting.Init().
 	posting.Init(ps)
 	worker.Init(ps)

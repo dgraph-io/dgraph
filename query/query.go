@@ -35,6 +35,7 @@ import (
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/types"
+	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 	farm "github.com/dgryski/go-farm"
@@ -108,10 +109,10 @@ type Latency struct {
 func (l *Latency) ToMap() map[string]string {
 	m := make(map[string]string)
 	j := time.Since(l.Start) - l.Processing - l.Parsing
-	m["parsing"] = l.Parsing.String()
-	m["processing"] = l.Processing.String()
-	m["json"] = j.String()
-	m["total"] = time.Since(l.Start).String()
+	m["parsing"] = x.Round(l.Parsing).String()
+	m["processing"] = x.Round(l.Processing).String()
+	m["json"] = x.Round(j).String()
+	m["total"] = x.Round(time.Since(l.Start)).String()
 	return m
 }
 
@@ -131,17 +132,19 @@ type params struct {
 	Normalize  bool
 	From       uint64
 	To         uint64
+	Facet      *facets.Param
 }
 
 // SubGraph is the way to represent data internally. It contains both the
 // query and the response. Once generated, this can then be encoded to other
 // client convenient formats, like GraphQL / JSON.
 type SubGraph struct {
-	Attr      string
-	Params    params
-	counts    []uint32
-	values    []*task.Value
-	uidMatrix []*task.List
+	Attr        string
+	Params      params
+	counts      []uint32
+	values      []*task.Value
+	uidMatrix   []*task.List
+	FacetsLists []*facets.List
 
 	// SrcUIDs is a list of unique source UIDs. They are always copies of destUIDs
 	// of parent nodes in GraphQL structure.
@@ -220,6 +223,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 	invalidUids := make(map[uint64]bool)
 	uidAlreadySet := false
 
+	facetsNode := dst.New("@facets")
 	// We go through all predicate children of the subgraph.
 	for _, pc := range sg.Children {
 		idxi, idxj := algo.IndexOf(pc.SrcUIDs, uid)
@@ -242,8 +246,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 			c.Value = int32(pc.counts[idx])
 			uc := dst.New(pc.Attr)
 			uc.AddValue("count", c)
-			dst.AddChild(pc.Attr, uc)
-
+			dst.AddListChild(pc.Attr, uc)
 		} else if len(pc.SrcFunc) > 0 && isAggregatorFn(pc.SrcFunc[0]) {
 			if idx > 0 { // aggregator will put value at index 0; place once
 				continue
@@ -257,12 +260,23 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 				return err
 			}
 			uc.AddValue(name, sv)
-			parent.AddChild(sg.Attr, uc)
+			parent.AddListChild(sg.Attr, uc)
+		} else if len(pc.SrcFunc) > 0 && pc.SrcFunc[0] == "checkpwd" {
+			c := types.ValueForType(types.BoolID)
+			c.Value = task.ToBool(pc.values[idx])
+			uc := dst.New(pc.Attr)
+			uc.AddValue("checkpwd", c)
+			dst.AddListChild(pc.Attr, uc)			
 		} else if algo.ListLen(ul) > 0 || len(pc.Children) > 0 {
 			// We create as many predicate entity children as the length of uids for
 			// this predicate.
+			var fcsList []*facets.Facets
+			if pc.Params.Facet != nil {
+				fcsList = pc.FacetsLists[idx].FacetsList
+			}
 			it := algo.NewListIterator(ul)
-			for ; it.Valid(); it.Next() {
+			for childIdx := -1; it.Valid(); it.Next() {
+				childIdx++
 				childUID := it.Val()
 				if invalidUids[childUID] {
 					continue
@@ -278,8 +292,24 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 					log.Printf("Error while traversal: %v", rerr)
 					return rerr
 				}
+				if pc.Params.Facet != nil && len(fcsList) > childIdx {
+					fs := fcsList[childIdx]
+					fc := dst.New(fieldName)
+					for _, f := range fs.Facets {
+						if tv, err := types.TypeValForFacet(f); err != nil {
+							return err
+						} else {
+							fc.AddValue(f.Key, tv)
+						}
+					}
+					if !fc.IsEmpty() {
+						fcParent := dst.New("_")
+						fcParent.AddMapChild("_", fc, false)
+						uc.AddMapChild("@facets", fcParent, true)
+					}
+				}
 				if !uc.IsEmpty() {
-					dst.AddChild(fieldName, uc)
+					dst.AddListChild(fieldName, uc)
 				}
 			}
 		} else {
@@ -287,6 +317,20 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 			v, err := getValue(tv)
 			if err != nil {
 				return err
+			}
+			if pc.Params.Facet != nil && len(pc.FacetsLists[idx].FacetsList) > 0 {
+				fc := dst.New(fieldName)
+				// in case of Value we have only one Facets
+				for _, f := range pc.FacetsLists[idx].FacetsList[0].Facets {
+					if tVal, err := types.TypeValForFacet(f); err != nil {
+						return err
+					} else {
+						fc.AddValue(f.Key, tVal)
+					}
+				}
+				if !fc.IsEmpty() {
+					facetsNode.AddMapChild(fieldName, fc, false)
+				}
 			}
 
 			if pc.Attr == "_xid_" {
@@ -312,7 +356,6 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 				if sv.Tid == types.StringID && sv.Value.(string) == "_nil_" {
 					sv.Value = ""
 				}
-
 				if !pc.Params.Normalize {
 					dst.AddValue(fieldName, sv)
 					continue
@@ -326,6 +369,9 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 		}
 	}
 
+	if !facetsNode.IsEmpty() {
+		dst.AddMapChild("@facets", facetsNode, false)
+	}
 	return nil
 }
 
@@ -401,6 +447,10 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 	for _, gchild := range gq.Children {
 		if gchild.Attr == "_uid_" {
 			sg.Params.GetUID = true
+		} else if gchild.Attr == "password" { // query password is forbidden
+			if gchild.Func == nil || !gchild.Func.IsPasswordVerifier() { 
+				return errors.New("Password is not fetchable")
+			}
 		}
 
 		args := params{
@@ -409,6 +459,10 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 			Var:       gchild.Var,
 			Normalize: sg.Params.Normalize,
 		}
+		if gchild.Facets != nil {
+			args.Facet = &facets.Param{gchild.Facets.AllKeys, gchild.Facets.Keys}
+		}
+
 		args.NeedsVar = append(args.NeedsVar, gchild.NeedsVar...)
 		if gchild.IsCount {
 			if len(gchild.Children) != 0 {
@@ -431,10 +485,11 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 			Params: args,
 		}
 
-		if gchild.Func != nil && gchild.Func.IsAggregator() {
+		if gchild.Func != nil &&
+			(gchild.Func.IsAggregator() || gchild.Func.IsPasswordVerifier()) {
 			f := gchild.Func.Name
 			if len(gchild.Children) != 0 {
-				note := fmt.Sprintf("Node with aggregator %q cant have child attr", f)
+				note := fmt.Sprintf("Node with %q cant have child attr", f)
 				return errors.New(note)
 			}
 			// embedded filter will cause ambiguous output like following,
@@ -442,11 +497,12 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 			//    min(initial_release_date @filter(gt(initial_release_date, "1986"))
 			// }
 			if gchild.Filter != nil {
-				note := fmt.Sprintf("Node with aggregator %q cant have filter,", f) +
+				note := fmt.Sprintf("Node with %q cant have filter,", f) +
 					" please place the filter on the upper level"
 				return errors.New(note)
 			}
-			dst.SrcFunc = append(dst.SrcFunc, f)
+			dst.SrcFunc = append(sg.SrcFunc, gchild.Func.Name)
+			dst.SrcFunc = append(dst.SrcFunc, gchild.Func.Args...)
 		}
 
 		if gchild.Filter != nil {
@@ -464,6 +520,7 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 	}
 	return nil
 }
+
 func (args *params) fill(gq *gql.GraphQuery) error {
 
 	if v, ok := gq.Args["offset"]; ok {
@@ -550,6 +607,10 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		ParentVars: make(map[string]*task.List),
 		Normalize:  gq.Normalize,
 	}
+	if gq.Facets != nil {
+		args.Facet = &facets.Param{gq.Facets.AllKeys, gq.Facets.Keys}
+	}
+
 	for _, it := range gq.NeedsVar {
 		args.NeedsVar = append(args.NeedsVar, it)
 	}
@@ -616,13 +677,14 @@ func createTaskQuery(sg *SubGraph) *task.Query {
 		attr = strings.TrimPrefix(attr, "~")
 	}
 	out := &task.Query{
-		Attr:     attr,
-		Reverse:  reverse,
-		SrcFunc:  sg.SrcFunc,
-		Count:    int32(sg.Params.Count),
-		Offset:   int32(sg.Params.Offset),
-		AfterUid: sg.Params.AfterUID,
-		DoCount:  len(sg.Filters) == 0 && sg.Params.DoCount,
+		Attr:       attr,
+		Reverse:    reverse,
+		SrcFunc:    sg.SrcFunc,
+		Count:      int32(sg.Params.Count),
+		Offset:     int32(sg.Params.Offset),
+		AfterUid:   sg.Params.AfterUID,
+		DoCount:    len(sg.Filters) == 0 && sg.Params.DoCount,
+		FacetParam: sg.Params.Facet,
 	}
 	if sg.SrcUIDs != nil {
 		out.Uids = sg.SrcUIDs
@@ -871,6 +933,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 
 		sg.uidMatrix = result.UidMatrix
 		sg.values = result.Values
+		sg.FacetsLists = result.FacetsLists
 		if len(sg.values) > 0 {
 			v := sg.values[0]
 			x.Trace(ctx, "Sample value for attr: %v Val: %v", sg.Attr, string(v.Val))

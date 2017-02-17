@@ -18,7 +18,6 @@ package query
 
 import (
 	"bufio"
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -54,7 +53,7 @@ func ToProtocolBuf(l *Latency, sgl []*SubGraph) ([]*graph.Node, error) {
 }
 
 // ToJson converts the list of subgraph into a JSON response by calling ToFastJSON.
-func ToJson(l *Latency, sgl []*SubGraph, w io.Writer) error {
+func ToJson(l *Latency, sgl []*SubGraph, w io.Writer, allocIds map[string]string) error {
 	sgr := &SubGraph{
 		Attr: "__",
 	}
@@ -67,14 +66,14 @@ func ToJson(l *Latency, sgl []*SubGraph, w io.Writer) error {
 		}
 		sgr.Children = append(sgr.Children, sg)
 	}
-
-	return sgr.ToFastJSON(l, w)
+	return sgr.ToFastJSON(l, w, allocIds)
 }
 
 // outputNode is the generic output / writer for preTraverse.
 type outputNode interface {
 	AddValue(attr string, v types.Val)
-	AddChild(attr string, child outputNode)
+	AddMapChild(attr string, node outputNode, isRoot bool)
+	AddListChild(attr string, child outputNode)
 	New(attr string) outputNode
 	SetUID(uid uint64)
 	SetXID(xid string)
@@ -91,8 +90,43 @@ func (p *protoNode) AddValue(attr string, v types.Val) {
 	p.Node.Properties = append(p.Node.Properties, createProperty(attr, v))
 }
 
-// AddChild adds a child for protoOutputNode.
-func (p *protoNode) AddChild(attr string, child outputNode) {
+// AddMapChild adds a node value for protoOutputNode.
+func (p *protoNode) AddMapChild(attr string, v outputNode, isRoot bool) {
+	// Assert that attr == v.Node.Attribute
+	var childNode *graph.Node
+	var as []string
+	for _, c := range p.Node.Children {
+		as = append(as, c.Attribute)
+		if c.Attribute == attr {
+			childNode = c
+			break
+		}
+	}
+	if childNode != nil && isRoot {
+		childNode.Children = append(childNode.Children, v.(*protoNode).Node)
+	} else if childNode != nil {
+		// merge outputNode into childNode
+		vnode := v.(*protoNode).Node
+		x.AssertTruef(vnode.Uid == childNode.Uid && vnode.Xid == childNode.Xid,
+			"Invalid nodes while merging.")
+		for _, p := range vnode.Properties {
+			childNode.Properties = append(childNode.Properties, p)
+		}
+		for _, c := range vnode.Children {
+			childNode.Children = append(childNode.Children, c)
+		}
+	} else {
+		vParent := v
+		if isRoot {
+			vParent = v.New(attr)
+			vParent.AddListChild(attr, v)
+		}
+		p.Node.Children = append(p.Node.Children, vParent.(*protoNode).Node)
+	}
+}
+
+// AddListChild adds a child for protoOutputNode.
+func (p *protoNode) AddListChild(attr string, child outputNode) {
 	p.Node.Children = append(p.Node.Children, child.(*protoNode).Node)
 }
 
@@ -168,7 +202,7 @@ func (sg *SubGraph) ToProtocolBuffer(l *Latency) (*graph.Node, error) {
 			continue
 		}
 		if !sg.Params.Normalize {
-			n.AddChild(sg.Params.Alias, n1)
+			n.AddListChild(sg.Params.Alias, n1)
 			continue
 		}
 
@@ -176,25 +210,58 @@ func (sg *SubGraph) ToProtocolBuffer(l *Latency) (*graph.Node, error) {
 		normalized := make([]protoNode, 0, 10)
 		props := make([]*graph.Property, 0, 10)
 		for _, c := range (n1.(*protoNode)).normalize(props, normalized) {
-			n.AddChild(sg.Params.Alias, &c)
+			n.AddListChild(sg.Params.Alias, &c)
 		}
 	}
 	l.ProtocolBuffer = time.Since(l.Start) - l.Parsing - l.Processing
 	return n.(*protoNode).Node, nil
 }
 
+type fastJsonAttr struct {
+	isScalar  bool
+	scalarVal []byte
+	nodeVal   *fastJsonNode
+}
+
+func makeScalarAttr(val []byte) *fastJsonAttr {
+	return &fastJsonAttr{true, val, nil}
+}
+func makeNodeAttr(val *fastJsonNode) *fastJsonAttr {
+	return &fastJsonAttr{false, nil, val}
+}
+
 type fastJsonNode struct {
 	children map[string][]*fastJsonNode
-	attrs    map[string][]byte
+	attrs    map[string]*fastJsonAttr
 }
 
 func (fj *fastJsonNode) AddValue(attr string, v types.Val) {
 	if bs, err := valToBytes(v); err == nil {
-		fj.attrs[attr] = bs
+		_, found := fj.attrs[attr]
+		x.AssertTruef(!found, "Setting value twice for same attribute")
+		fj.attrs[attr] = makeScalarAttr(bs)
 	}
 }
 
-func (fj *fastJsonNode) AddChild(attr string, child outputNode) {
+func (fj *fastJsonNode) AddMapChild(attr string, val outputNode, _ bool) {
+	nodeAttr, found := fj.attrs[attr]
+	if found {
+		if nodeAttr.isScalar {
+			x.Fatalf("Can not merge scalar and node values.")
+		}
+		// merge val and nodeAttr.nodeVal
+		for k, v := range val.(*fastJsonNode).children {
+			nodeAttr.nodeVal.children[k] = v
+		}
+		for k, v := range val.(*fastJsonNode).attrs {
+			nodeAttr.nodeVal.attrs[k] = v
+		}
+	} else {
+		fj.attrs[attr] = makeNodeAttr(val.(*fastJsonNode))
+	}
+}
+
+func (fj *fastJsonNode) AddListChild(attr string, child outputNode) {
 	children, found := fj.children[attr]
 	if !found {
 		children = make([]*fastJsonNode, 0, 5)
@@ -205,23 +272,24 @@ func (fj *fastJsonNode) AddChild(attr string, child outputNode) {
 func (fj *fastJsonNode) New(attr string) outputNode {
 	return &fastJsonNode{
 		children: make(map[string][]*fastJsonNode),
-		attrs:    make(map[string][]byte),
+		attrs:    make(map[string]*fastJsonAttr),
 	}
 }
 
 func (fj *fastJsonNode) SetUID(uid uint64) {
 	uidBs, found := fj.attrs["_uid_"]
 	if found {
-		lUidBs := len(uidBs)
-		currUid, err := strconv.ParseUint(string(uidBs[1:lUidBs-1]), 0, 64)
+		x.AssertTruef(uidBs.isScalar, "Found node value for _uid_. Expected scalar value.")
+		lUidBs := len(uidBs.scalarVal)
+		currUid, err := strconv.ParseUint(string(uidBs.scalarVal[1:lUidBs-1]), 0, 64)
 		x.AssertTruef(err == nil && currUid == uid, "Setting two different uids on same node.")
 	} else {
-		fj.attrs["_uid_"] = []byte(fmt.Sprintf("\"%#x\"", uid))
+		fj.attrs["_uid_"] = makeScalarAttr([]byte(fmt.Sprintf("\"%#x\"", uid)))
 	}
 }
 
 func (fj *fastJsonNode) SetXID(xid string) {
-	fj.attrs["_xid_"] = []byte(xid)
+	fj.attrs["_xid_"] = makeScalarAttr([]byte(xid))
 }
 
 func (fj *fastJsonNode) IsEmpty() bool {
@@ -252,6 +320,8 @@ func valToBytes(v types.Val) ([]byte, error) {
 		return geojson.Marshal(v.Value.(geom.T))
 	case types.UidID:
 		return []byte(fmt.Sprintf("\"%#x\"", v.Value)), nil
+	case types.PasswordID:
+		return []byte(fmt.Sprintf("%q", v.Value.(string))), nil
 	default:
 		return nil, errors.New("unsupported types.Val.Tid")
 	}
@@ -259,10 +329,10 @@ func valToBytes(v types.Val) ([]byte, error) {
 
 func (fj *fastJsonNode) encode(bufw *bufio.Writer) {
 	allKeys := make([]string, 0, len(fj.attrs))
-	for k, _ := range fj.attrs {
+	for k := range fj.attrs {
 		allKeys = append(allKeys, k)
 	}
-	for k, _ := range fj.children {
+	for k := range fj.children {
 		allKeys = append(allKeys, k)
 	}
 	sort.Strings(allKeys)
@@ -280,7 +350,11 @@ func (fj *fastJsonNode) encode(bufw *bufio.Writer) {
 		bufw.WriteRune(':')
 
 		if v, ok := fj.attrs[k]; ok {
-			bufw.Write(v)
+			if v.isScalar {
+				bufw.Write(v.scalarVal)
+			} else {
+				v.nodeVal.encode(bufw)
+			}
 		} else {
 			v := fj.children[k]
 			first := true
@@ -307,7 +381,7 @@ func (n *fastJsonNode) normalize(av []attrVal, out []fastJsonNode) []fastJsonNod
 		}
 
 		fn := fastJsonNode{
-			attrs: make(map[string][]byte),
+			attrs: make(map[string]*fastJsonAttr),
 		}
 		for _, pair := range av {
 			fn.attrs[pair.attr] = pair.val
@@ -333,7 +407,7 @@ func (n *fastJsonNode) normalize(av []attrVal, out []fastJsonNode) []fastJsonNod
 
 type attrVal struct {
 	attr string
-	val  []byte
+	val  *fastJsonAttr
 }
 
 func processNodeUids(n *fastJsonNode, sg *SubGraph) error {
@@ -359,7 +433,7 @@ func processNodeUids(n *fastJsonNode, sg *SubGraph) error {
 		}
 
 		if !sg.Params.Normalize {
-			n.AddChild(sg.Params.Alias, n1)
+			n.AddListChild(sg.Params.Alias, n1)
 			continue
 		}
 
@@ -370,13 +444,13 @@ func processNodeUids(n *fastJsonNode, sg *SubGraph) error {
 		// the Subgraph.
 		av := make([]attrVal, 0, 10)
 		for _, c := range (n1.(*fastJsonNode)).normalize(av, normalized) {
-			n.AddChild(sg.Params.Alias, &fastJsonNode{attrs: c.attrs})
+			n.AddListChild(sg.Params.Alias, &fastJsonNode{attrs: c.attrs})
 		}
 	}
 	return nil
 }
 
-func (sg *SubGraph) ToFastJSON(l *Latency, w io.Writer) error {
+func (sg *SubGraph) ToFastJSON(l *Latency, w io.Writer, allocIds map[string]string) error {
 	var seedNode *fastJsonNode
 	n := seedNode.New("_root_")
 	if sg.Attr == "__" {
@@ -396,16 +470,21 @@ func (sg *SubGraph) ToFastJSON(l *Latency, w io.Writer) error {
 	if sg.Params.isDebug {
 		sl := seedNode.New("serverLatency").(*fastJsonNode)
 		for k, v := range l.ToMap() {
-			sl.attrs[k] = []byte(fmt.Sprintf("%q", v))
+			val := types.ValueForType(types.BinaryID)
+			val.Value = []byte(fmt.Sprintf("%q", v))
+			sl.AddValue(k, val)
 		}
+		n.AddMapChild("server_latency", sl, false)
+	}
 
-		var slBuf bytes.Buffer
-		slw := bufio.NewWriter(&slBuf)
-		sl.encode(slw)
-		if slw.Flush() != nil {
-			return slw.Flush()
+	if allocIds != nil && len(allocIds) > 0 {
+		sl := seedNode.New("uids").(*fastJsonNode)
+		for k, v := range allocIds {
+			val := types.ValueForType(types.BinaryID)
+			val.Value = []byte(v)
+			sl.AddValue(k, val)
 		}
-		n.(*fastJsonNode).attrs["server_latency"] = slBuf.Bytes()
+		n.AddMapChild("uids", sl, false)
 	}
 
 	bufw := bufio.NewWriter(w)

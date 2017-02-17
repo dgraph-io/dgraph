@@ -41,6 +41,7 @@ const (
 	GeoID      = TypeID(Posting_GEO)
 	UidID      = TypeID(Posting_UID)
 	DefaultID  = TypeID(Posting_DEFAULT)
+	PasswordID = TypeID(Posting_PASSWORD)
 )
 
 var typeNameMap = map[string]TypeID{
@@ -54,6 +55,7 @@ var typeNameMap = map[string]TypeID{
 	"geo":      GeoID,
 	"uid":      UidID,
 	"default":  DefaultID,
+	"password": PasswordID,
 }
 
 type TypeID Posting_ValType
@@ -78,6 +80,8 @@ func (t TypeID) Name() string {
 		return "uid"
 	case DefaultID:
 		return "default"
+	case PasswordID:
+		return "password"
 	}
 	return ""
 }
@@ -141,6 +145,10 @@ func ValueForType(id TypeID) Val {
 	case UidID:
 		var i uint64
 		return Val{UidID, &i}
+
+	case PasswordID:
+		var p string
+		return Val{PasswordID, p}
 
 	default:
 		return Val{}
