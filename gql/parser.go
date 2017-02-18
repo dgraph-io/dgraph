@@ -459,6 +459,18 @@ func (f *FilterTree) collectVars(v *Vars) {
 	}
 }
 
+func (f *FilterTree) hasVars() bool {
+	if (f.Func != nil) && (len(f.Func.NeedsVar) > 0) {
+		return true
+	}
+	for _, fch := range f.Child {
+		if fch.hasVars() {
+			return true
+		}
+	}
+	return false
+}
+
 // getVariablesAndQuery checks if the query has a variable list and stores it in
 // vmap. For variable list to be present, the query should have a name which is
 // also checked for. It also calls getQuery to create the GraphQuery object tree.
@@ -1170,6 +1182,10 @@ func parseDirective(it *lex.ItemIterator, curp *GraphQuery) error {
 			} else if facetsFilter != nil {
 				if curp.FacetsFilter != nil {
 					return x.Errorf("Only one facets filter allowed")
+				}
+				if facetsFilter.hasVars() {
+					return x.Errorf(
+						"variables are not allowed in facets filter.")
 				}
 				curp.FacetsFilter = facetsFilter
 			} else {

@@ -1899,3 +1899,22 @@ func TestFacetsFilterFail2(t *testing.T) {
 	_, err := Parse(query)
 	require.Error(t, err)
 }
+
+func TestFacetsFilterFail3(t *testing.T) {
+	// vars are not allowed in facets filtering.
+	query := `
+	{
+		K as var(id:0x0a) {
+			L AS friends
+		}
+		me(var:K) {
+			friend @facets(id(L)) {
+				name
+			}
+		}
+	}
+`
+
+	_, err := Parse(query)
+	require.Error(t, err)
+}
