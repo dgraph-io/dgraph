@@ -592,7 +592,7 @@ func TestParseSchemaWithComments(t *testing.T) {
 }
 
 func TestParseSchemaAndQuery(t *testing.T) {
-	query := `
+	query1 := `
 		schema {
 			pred
 			type
@@ -604,16 +604,25 @@ func TestParseSchemaAndQuery(t *testing.T) {
 			}
 		}
 	`
-	res, err := Parse(query)
-	require.NoError(t, err)
-	require.Equal(t, len(res.Schema.Predicates), 0)
-	require.Equal(t, len(res.Schema.Fields), 2)
-	require.Equal(t, res.Schema.Fields[0], "pred")
-	require.Equal(t, res.Schema.Fields[1], "type")
+	query2 := `
+		query {
+			me(id: tomhanks) {
+				name
+				hometown
+			}
+		}
+		schema {
+			pred
+			type
+		}
+	`
 
-	require.NotNil(t, res.Query[0])
-	require.Equal(t, 1, len(res.Query[0].UID))
-	require.Equal(t, childAttrs(res.Query[0]), []string{"name", "hometown"})
+	_, err := Parse(query1)
+	require.Error(t, err)
+
+	_, err = Parse(query2)
+	require.Error(t, err)
+
 }
 
 func TestParseSchemaError(t *testing.T) {

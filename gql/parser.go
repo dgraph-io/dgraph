@@ -357,7 +357,10 @@ func Parse(input string) (res Result, rerr error) {
 				}
 			} else if item.Val == "schema" {
 				if res.Schema != nil {
-					return res, x.Errorf("Only one schema block allowed")
+					return res, x.Errorf("Only one schema block allowed ")
+				}
+				if res.Query != nil {
+					return res, x.Errorf("schema block is not allowed with query block")
 				}
 				if res.Schema, rerr = parseSchema(it); rerr != nil {
 					return res, rerr
@@ -370,6 +373,9 @@ func Parse(input string) (res Result, rerr error) {
 				}
 				fmap[fnode.Name] = fnode
 			} else if item.Val == "query" {
+				if res.Schema != nil {
+					return res, x.Errorf("schema block is not allowed with query block")
+				}
 				if qu, rerr = getVariablesAndQuery(it, vmap); rerr != nil {
 					return res, rerr
 				}

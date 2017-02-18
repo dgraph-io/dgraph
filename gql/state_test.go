@@ -72,7 +72,7 @@ func TestNewLexerMutation(t *testing.T) {
 	}
 }
 
-func TestNewSchemaInterospection(t *testing.T) {
+func TestNewSchemaQuery(t *testing.T) {
 	input := `
 	schema {
 		pred
@@ -99,7 +99,7 @@ func TestNewSchemaInterospection(t *testing.T) {
 	}
 }
 
-func TestAbruptSchemaInterospection(t *testing.T) {
+func TestAbruptSchemaQuery(t *testing.T) {
 	input := `
 	schema {
 		pred
