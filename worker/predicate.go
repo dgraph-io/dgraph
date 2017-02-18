@@ -208,10 +208,10 @@ func (w *grpcWorker) PredicateAndSchemaData(stream Worker_PredicateAndSchemaData
 	}
 	x.Trace(stream.Context(), "Got %d keys from client\n", len(gkeys.Keys))
 
-	if !Groups().ServesGroup(gkeys.GroupId) {
+	if !groups().ServesGroup(gkeys.GroupId) {
 		return x.Errorf("Group %d not served.", gkeys.GroupId)
 	}
-	n := Groups().Node(gkeys.GroupId)
+	n := groups().Node(gkeys.GroupId)
 	if !n.AmLeader() {
 		return x.Errorf("Not leader of group: %d", gkeys.GroupId)
 	}

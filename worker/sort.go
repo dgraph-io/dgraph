@@ -19,14 +19,14 @@ func SortOverNetwork(ctx context.Context, q *task.Sort) (*task.SortResult, error
 	gid := group.BelongsTo(q.Attr)
 	x.Trace(ctx, "worker.Sort attr: %v groupId: %v", q.Attr, gid)
 
-	if Groups().ServesGroup(gid) {
+	if groups().ServesGroup(gid) {
 		// No need for a network call, as this should be run from within this instance.
 		return processSort(q)
 	}
 
 	// Send this over the network.
 	// TODO: Send the request to multiple servers as described in Jeff Dean's talk.
-	addr := Groups().AnyServer(gid)
+	addr := groups().AnyServer(gid)
 	pl := pools().get(addr)
 
 	conn, err := pl.Get()
@@ -66,7 +66,7 @@ func (w *grpcWorker) Sort(ctx context.Context, s *task.Sort) (*task.SortResult, 
 	//x.Trace(ctx, "Attribute: %q NumUids: %v groupId: %v Sort", q.Attr(), q.UidsLength(), gid)
 
 	var reply *task.SortResult
-	x.AssertTruef(Groups().ServesGroup(gid),
+	x.AssertTruef(groups().ServesGroup(gid),
 		"attr: %q groupId: %v Request sent to wrong server.", s.Attr, gid)
 
 	c := make(chan error, 1)

@@ -45,7 +45,7 @@ func createNumQuery(group uint32, umap map[string]uint64) *task.Num {
 // so we can tackle any collisions that might happen with the lockmanager.
 // In essence, we just want one server to be handing out new uids.
 func assignUids(ctx context.Context, num *task.Num) (*task.List, error) {
-	node := Groups().Node(num.Group)
+	node := groups().Node(num.Group)
 	if !node.AmLeader() {
 		return &emptyUIDList, x.Errorf("Assigning UIDs is only allowed on leader.")
 	}
@@ -91,8 +91,8 @@ func AssignUidsOverNetwork(ctx context.Context, umap map[string]uint64) error {
 
 	var ul *task.List
 	var err error
-	lid, _ := Groups().Leader(gid)
-	n := Groups().Node(gid)
+	lid, _ := groups().Leader(gid)
+	n := groups().Node(gid)
 	if n != nil {
 		// This is useful for testing, when the membership information doesn't have chance
 		// to propagate.
@@ -108,7 +108,7 @@ func AssignUidsOverNetwork(ctx context.Context, umap map[string]uint64) error {
 
 	} else {
 		x.Trace(ctx, "Not leader of group: %d. Sending to: %d", gid, lid)
-		_, addr := Groups().Leader(gid)
+		_, addr := groups().Leader(gid)
 		p := pools().get(addr)
 		conn, err := p.Get()
 		if err != nil {
@@ -146,7 +146,7 @@ func (w *grpcWorker) AssignUids(ctx context.Context, num *task.Num) (*task.List,
 		return &emptyUIDList, ctx.Err()
 	}
 
-	if !Groups().ServesGroup(num.Group) {
+	if !groups().ServesGroup(num.Group) {
 		x.Fatalf("groupId: %v. GetOrAssign. We shouldn't be getting this req", num.Group)
 	}
 

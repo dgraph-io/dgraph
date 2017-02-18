@@ -36,7 +36,7 @@ const (
 // mutations which were not applied in left.
 func runMutations(ctx context.Context, edges []*task.DirectedEdge) error {
 	for _, edge := range edges {
-		if !Groups().ServesGroup(group.BelongsTo(edge.Attr)) {
+		if !groups().ServesGroup(group.BelongsTo(edge.Attr)) {
 			return x.Errorf("Predicate fingerprint doesn't match this instance")
 		}
 
@@ -118,13 +118,13 @@ func validateAndConvert(edge *task.DirectedEdge, schemaType types.TypeID) error 
 
 // runMutate is used to run the mutations on an instance.
 func proposeOrSend(ctx context.Context, gid uint32, m *task.Mutations, che chan error) {
-	if Groups().ServesGroup(gid) {
-		node := Groups().Node(gid)
+	if groups().ServesGroup(gid) {
+		node := groups().Node(gid)
 		che <- node.ProposeAndWait(ctx, &task.Proposal{Mutations: m})
 		return
 	}
 
-	_, addr := Groups().Leader(gid)
+	_, addr := groups().Leader(gid)
 	pl := pools().get(addr)
 	conn, err := pl.Get()
 	if err != nil {
@@ -188,11 +188,11 @@ func (w *grpcWorker) Mutate(ctx context.Context, m *task.Mutations) (*Payload, e
 		return &Payload{}, ctx.Err()
 	}
 
-	if !Groups().ServesGroup(m.GroupId) {
+	if !groups().ServesGroup(m.GroupId) {
 		return &Payload{}, x.Errorf("This server doesn't serve group id: %v", m.GroupId)
 	}
 	c := make(chan error, 1)
-	node := Groups().Node(m.GroupId)
+	node := groups().Node(m.GroupId)
 	go func() { c <- node.ProposeAndWait(ctx, &task.Proposal{Mutations: m}) }()
 
 	select {
