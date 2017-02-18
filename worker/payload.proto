@@ -33,7 +33,7 @@ service Worker {
 	rpc AssignUids (task.Num)                 returns (task.List) {}
 	rpc Mutate (task.Mutations)               returns (Payload) {}
 	rpc ServeTask (task.Query)                returns (task.Result) {}
-	rpc PredicateData (stream task.GroupKeys) returns (stream task.KV) {}
+	rpc PredicateAndSchemaData (stream task.GroupKeys) returns (stream task.KV) {}
 	rpc Sort (task.Sort)                      returns (task.SortResult) {}
 	rpc RebuildIndex (task.RebuildIndex)      returns (Payload) {}
 

@@ -21,7 +21,9 @@ import (
 
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
+	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/task"
+	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -38,20 +40,79 @@ func runMutations(ctx context.Context, edges []*task.DirectedEdge) error {
 			return x.Errorf("Predicate fingerprint doesn't match this instance")
 		}
 
-		var group uint32
-		if rv, ok := ctx.Value("raft").(x.RaftValue); ok {
-			group = rv.Group
+		rv := ctx.Value("raft").(x.RaftValue)
+
+		typ, err := schema.State().TypeOf(edge.Attr)
+		x.Checkf(err, "Schema is not present for predicate %s", edge.Attr)
+
+		// Is schema is not applied, type check might not be done in propose and wait
+		// so doing type check here also
+		if err = validateAndConvert(edge, typ); err != nil {
+			return err
 		}
 
 		key := x.DataKey(edge.Attr, edge.Entity)
-		plist, decr := posting.GetOrCreate(key, group)
+		plist, decr := posting.GetOrCreate(key, rv.Group)
 		defer decr()
 
-		if err := plist.AddMutationWithIndex(ctx, edge); err != nil {
+		if err = plist.AddMutationWithIndex(ctx, edge); err != nil {
 			x.Printf("Error while adding mutation: %v %v", edge, err)
 			return err // abort applying the rest of them.
 		}
 	}
+	return nil
+}
+
+func updateSchema(attr string, typ types.TypeID, raftIndex uint64, group uint32) {
+	ce := schema.SyncEntry{
+		Attr:   attr,
+		Schema: types.Schema{ValueType: uint32(typ)},
+		Index:  raftIndex,
+		Water:  posting.SyncMarkFor(group),
+	}
+	schema.State().Update(&ce)
+}
+
+// If storage type is specified, then check compatability or convert to schema type
+// if no storage type is specified then convert to schema type
+func validateAndConvert(edge *task.DirectedEdge, schemaType types.TypeID) error {
+	storageType := posting.TypeID(edge)
+
+	if !schemaType.IsScalar() && !storageType.IsScalar() {
+		return nil
+	} else if !schemaType.IsScalar() && storageType.IsScalar() {
+		return x.Errorf("Input for predicate %s of type uid is scalar", edge.Attr)
+	} else if schemaType.IsScalar() && !storageType.IsScalar() {
+		return x.Errorf("Input for predicate %s of type scalar is uid", edge.Attr)
+	} else {
+		// Both are scalars. Continue.
+	}
+	if storageType == schemaType {
+		return nil
+	}
+
+	var src types.Val
+	var dst types.Val
+	var err error
+
+	src = types.Val{types.TypeID(edge.ValueType), edge.Value}
+	// check comptability of schema type and storage type
+	if dst, err = types.Convert(src, schemaType); err != nil {
+		return err
+	}
+
+	// if storage type was specified skip
+	if storageType != types.DefaultID {
+		return nil
+	}
+
+	// convert to schema type
+	b := types.ValueForType(types.BinaryID)
+	if err = types.Marshal(dst, &b); err != nil {
+		return err
+	}
+	edge.ValueType = uint32(schemaType)
+	edge.Value = b.Value.([]byte)
 	return nil
 }
 

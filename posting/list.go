@@ -340,6 +340,14 @@ func edgeType(t *task.DirectedEdge) valueTypeInfo {
 	}
 }
 
+// TypeID returns the typeid of destiantion vertex
+func TypeID(edge *task.DirectedEdge) types.TypeID {
+	if edge.ValueId != 0 {
+		return types.UidID
+	}
+	return types.TypeID(edge.ValueType)
+}
+
 // TODO(tzdybal) - refactor
 func postingType(p *types.Posting) valueTypeInfo {
 	if !bytes.Equal(p.Value, nil) {

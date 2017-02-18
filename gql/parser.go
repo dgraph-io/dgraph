@@ -1274,7 +1274,7 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 			if err != nil {
 				return gq, err
 			}
-			if !schema.IsIndexed(gen.Attr) {
+			if !schema.State().IsIndexed(gen.Attr) {
 				return nil, x.Errorf(
 					"Field %s is not indexed and cannot be used in functions",
 					gen.Attr)

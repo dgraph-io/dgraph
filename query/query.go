@@ -379,7 +379,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 // if convert failed, try convert to types.StringID
 func convertWithBestEffort(tv *task.Value, attr string) (types.Val, error) {
 	v, _ := getValue(tv)
-	typ, err := schema.TypeOf(attr)
+	typ, err := schema.State().TypeOf(attr)
 	sv := types.ValueForType(types.StringID)
 	if err == nil {
 		// Try to coerce types if this is an optional scalar outside an
