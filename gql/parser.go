@@ -42,11 +42,12 @@ type GraphQuery struct {
 	NeedsVar []string
 	Func     *Function
 
-	Args      map[string]string
-	Children  []*GraphQuery
-	Filter    *FilterTree
-	Normalize bool
-	Facets    *Facets
+	Args         map[string]string
+	Children     []*GraphQuery
+	Filter       *FilterTree
+	Normalize    bool
+	Facets       *Facets
+	FacetsFilter *FilterTree
 
 	// Internal fields below.
 	// If gq.fragment is nonempty, then it is a fragment reference / spread.
@@ -85,10 +86,12 @@ type varInfo struct {
 type varMap map[string]varInfo
 
 // FilterTree is the result of parsing the filter directive.
+// Either you can have `Op and Children` on non-leaf nodes
+// Or Func at leaf nodes.
 type FilterTree struct {
 	Op    string
-	Func  *Function
 	Child []*FilterTree
+	Func  *Function
 }
 
 // Function holds the information about gql functions.
@@ -914,14 +917,16 @@ L:
 	return g, nil
 }
 
-func parseFacets(it *lex.ItemIterator) (*Facets, error) {
+func parseFacets(it *lex.ItemIterator) (*Facets, *FilterTree, error) {
 	facets := new(Facets)
 	peeks, err := it.Peek(1)
 	if err == nil && peeks[0].Typ == itemLeftRound {
 		it.Next() // ignore '('
 		// parse comma separated strings (a1,b1,c1)
 		done := false
+		itCount := 0
 		for it.Next() {
+			itCount++
 			item := it.Item()
 			if item.Typ == itemRightRound { // done
 				done = true
@@ -929,20 +934,27 @@ func parseFacets(it *lex.ItemIterator) (*Facets, error) {
 			} else if item.Typ == itemName {
 				facets.Keys = append(facets.Keys, item.Val)
 			} else {
-				return nil, x.Errorf("Got %s", item.Val)
+				break
 			}
 		}
 		if !done {
-			return nil, x.Errorf("Expected ')' at end of Facets.")
+			// this is not (facet1, facet2, facet3) read..
+			// try parsing filters. eq(facet1, val1) AND eq(facet2, val2)...)
+			// revert back itCount
+			for i := 0; i < itCount; i++ {
+				it.Prev()
+			}
+			it.Prev() // get '(' also
+			filterTree, err := parseFilter(it)
+			return nil, filterTree, err
 		}
-
 	}
 	if len(facets.Keys) == 0 {
 		facets.AllKeys = true
 	} else {
 		sort.Strings(facets.Keys)
 	}
-	return facets, nil
+	return facets, nil, nil
 }
 
 // parseFilter parses the filter directive to produce a QueryFilter / parse tree.
@@ -1147,10 +1159,16 @@ func parseDirective(it *lex.ItemIterator, curp *GraphQuery) error {
 	peek, err := it.Peek(1)
 	if err == nil && item.Typ == itemName {
 		if item.Val == "facets" { // because @facets can come w/t '()'
-			if facets, err := parseFacets(it); err != nil {
+			if facets, facetsFilter, err := parseFacets(it); err != nil {
 				return err
 			} else {
-				curp.Facets = facets
+				if facets != nil {
+					curp.Facets = facets
+				} else if facetsFilter != nil {
+					curp.FacetsFilter = facetsFilter
+				} else {
+					return x.Errorf("Facets parsing failed.")
+				}
 			}
 		} else if peek[0].Typ == itemLeftRound {
 			// this is directive
