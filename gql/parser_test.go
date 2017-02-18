@@ -1924,7 +1924,7 @@ func TestFacetsFilterFailRoot(t *testing.T) {
 	query := `
 	{
 		me(id:0x1) @facets(eq(some-facet, true)) {
-			friend  {
+			friend	{
 				name
 			}
 		}

@@ -17,6 +17,7 @@
 package worker
 
 import (
+	"sort"
 	"strconv"
 	"strings"
 
@@ -215,7 +216,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 		n = algo.ListLen(q.Uids)
 
 	case StandardFn:
-		tokens, err = getTokens(q.SrcFunc)
+		tokens, err = getTokens(q.SrcFunc[1:])
 		if err != nil {
 			return nil, err
 		}
@@ -257,7 +258,6 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 		// Get or create the posting list for an entity, attribute combination.
 		pl, decr := posting.GetOrCreate(key, gid)
 		defer decr()
-
 		// If a posting list contains a value, we store that or else we store a nil
 		// byte so that processing is consistent later.
 		val, err := pl.Value()
@@ -268,7 +268,32 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 		} else {
 			newValue.Val = x.Nilbyte
 		}
-		out.Values = append(out.Values, newValue)
+
+		var facetFilterRes []bool // which index of facets/uids to take.
+		if q.FacetsFilter != nil {
+			fcKeys := attrsFromFilter(q.FacetsFilter)
+			sort.Strings(fcKeys)
+			var fcs []*facets.Facets
+			var err error
+			param := &facets.Param{AllKeys: false, Keys: fcKeys}
+			if isValueEdge {
+				x.Fatalf("Facet filters on value edge are not supported.")
+			} else {
+				fcs = pl.FacetsForUids(opts, param)
+			}
+			if err != nil {
+				// we treat any filter as AND.
+				// if we can not get the facet, edge not included.
+				continue
+			}
+			for _, fc := range fcs {
+				res, err := applyFacetFilter(fc.Facets, q.FacetsFilter)
+				if err != nil {
+					return nil, err
+				}
+				facetFilterRes = append(facetFilterRes, res)
+			}
+		}
 
 		// get facets.
 		if q.FacetParam != nil {
@@ -280,10 +305,18 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 				out.FacetMatrix = append(out.FacetMatrix,
 					&facets.List{[]*facets.Facets{&facets.Facets{fs}}})
 			} else {
-				out.FacetMatrix = append(out.FacetMatrix,
-					&facets.List{pl.FacetsForUids(opts, q.FacetParam)})
+				fcsList := pl.FacetsForUids(opts, q.FacetParam)
+				if q.FacetsFilter != nil {
+					filterFacets(fcsList, func(i int, _ *facets.Facets) bool {
+						return facetFilterRes[i]
+					})
+				}
+				out.FacetMatrix = append(out.FacetMatrix, &facets.List{fcsList})
 			}
 		}
+
+		// add to Values now.. since we can continue because of facetsFilter
+		out.Values = append(out.Values, newValue)
 
 		if q.DoCount || fnType == AggregatorFn {
 			if q.DoCount {
@@ -321,7 +354,13 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 		}
 
 		// The more usual case: Getting the UIDs.
-		out.UidMatrix = append(out.UidMatrix, pl.Uids(opts))
+		uids := pl.Uids(opts)
+		if q.FacetsFilter != nil {
+			algo.ApplyFilter(uids, func(_ uint64, i int) bool {
+				return facetFilterRes[i]
+			})
+		}
+		out.UidMatrix = append(out.UidMatrix, uids)
 	}
 
 	// aggregate on the collection out.Values[]
@@ -350,21 +389,8 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 			if sv.Value == nil || err != nil {
 				return false
 			}
-			switch q.SrcFunc[0] {
-			case "geq":
-				return !types.Less(sv, ineqValue)
-			case "gt":
-				return types.Less(ineqValue, sv)
-			case "leq":
-				return !types.Less(ineqValue, sv)
-			case "lt":
-				return types.Less(sv, ineqValue)
-			case "eq":
-				return !types.Less(sv, ineqValue) && !types.Less(ineqValue, sv)
-			default:
-				x.Fatalf("Unknown ineqType %v", q.SrcFunc[0])
-			}
-			return false
+			// Are we making copies of sv and ineqValue ? expensive ?
+			return compareTypeVals(q.SrcFunc[0], sv, ineqValue)
 		})
 	}
 
@@ -423,4 +449,177 @@ func (w *grpcWorker) ServeTask(ctx context.Context, q *task.Query) (*task.Result
 	case err := <-c:
 		return reply, err
 	}
+}
+
+func attrsFromFilter(ftree *facets.FilterTree) (attrs []string) {
+	if ftree.Func != nil {
+		attrs = append(attrs, ftree.Func.Key)
+	}
+	for _, c := range ftree.Children {
+		attrs = append(attrs, attrsFromFilter(c)...)
+	}
+	return attrs
+}
+
+// we return error only when query has some problems..
+// like Or has 3 arguments, argument facet val overflows integer.
+func applyFacetFilter(fcs []*facets.Facet, ftree *facets.FilterTree) (bool, error) {
+	if ftree.Func != nil {
+		fname := strings.ToLower(ftree.Func.Name)
+		var fc *facets.Facet
+		for _, fci := range fcs {
+			if fci.Key == ftree.Func.Key {
+				fc = fci
+				break
+			}
+		}
+		if fc == nil { // attribute is not there
+			return false, nil
+		}
+		fattr := ftree.Func.Key
+		fnType, fname := parseFuncType([]string{fname})
+		if len(ftree.Func.Args) != 1 {
+			return false, x.Errorf("Only one argument expected in %s. Got %d.",
+				fname,
+				len(ftree.Func.Args))
+		}
+
+		fctv := types.ValFor(fc)
+		switch fnType {
+		case CompareAttrFn:
+			// Should move this to outside of applyFacetFilter
+			argf, err := facets.FacetFor(fc.Key, ftree.Func.Args[0])
+			if err != nil {
+				return false, err // stop processing as this is query error
+			}
+			argtv := types.ValFor(argf)
+			return compareTypeVals(fname, fctv, argtv), nil
+		case StandardFn:
+			if fctv.Tid != types.StringID { // facet should be a string.
+				return false, nil
+			}
+			fcTokens, ferr := getTokens([]string{fctv.Value.(string)})
+			if ferr != nil {
+				return false, nil
+			}
+			sort.Strings(fcTokens)
+			argTokens, aerr := getTokens(ftree.Func.Args)
+			if aerr != nil { // query error ; stop processing.
+				return false, aerr
+			}
+			sort.Strings(argTokens)
+
+			switch fname {
+			case "allof":
+				// allof argTokens should be in fcTokens
+				if len(argTokens) > len(fcTokens) {
+					return false, nil
+				}
+				aidx := 0
+				for fidx := 0; aidx < len(argTokens) && fidx < len(fcTokens); {
+					if fcTokens[fidx] < argTokens[aidx] {
+						fidx++
+					} else if fcTokens[fidx] == argTokens[aidx] {
+						fidx++
+						aidx++
+					} else {
+						// as all of argTokens should match
+						// which is not possible now.
+						break
+					}
+				}
+				return aidx == len(argTokens), nil
+			case "anyof":
+				for aidx, fidx := 0, 0; aidx < len(argTokens) && fidx < len(fcTokens); {
+					if fcTokens[fidx] < argTokens[aidx] {
+						fidx++
+					} else if fcTokens[fidx] == argTokens[aidx] {
+						return true, nil
+					} else {
+						aidx++
+					}
+				}
+				return false, nil
+			default:
+				return false,
+					x.Errorf("Fn %s not supported in facets filtering.", fname)
+			}
+		default:
+			return false, x.Errorf("Fn %s not supported in facets filtering.", fattr)
+		}
+	}
+
+	var res []bool
+	for _, c := range ftree.Children {
+		if r, err := applyFacetFilter(fcs, c); err != nil {
+			return false, err
+		} else {
+			res = append(res, r)
+		}
+	}
+
+	switch strings.ToLower(ftree.Op) {
+	case "not":
+		if len(res) != 1 {
+			return false, x.Errorf("Expected 1 child for not but got %d.", len(res))
+		}
+		return !res[0], nil
+	case "and":
+		if len(res) != 2 {
+			return false, x.Errorf("Expected 2 child for not but got %d.", len(res))
+		}
+		return res[0] && res[1], nil
+	case "or":
+		if len(res) != 2 {
+			return false, x.Errorf("Expected 2 child for not but got %d.", len(res))
+		}
+		return res[0] || res[1], nil
+	default:
+		return false, x.Errorf("Unsupported operation in facet filtering: %s.", ftree.Op)
+	}
+	return false, x.Errorf("Unexpected behavior in applyFacetFilter.")
+}
+
+func filterFacets(fcs []*facets.Facets, f func(i int, fc *facets.Facets) bool) {
+	writeIdx := 0
+	for i, fc := range fcs {
+		if f(i, fc) {
+			fcs[writeIdx] = fc
+			writeIdx++
+		}
+	}
+	fcs = fcs[:writeIdx]
+}
+
+// Should be used only in filtering arg1 by comparing with arg2.
+// arg2 is reference Val to which arg1 is compared.
+func compareTypeVals(op string, arg1, arg2 types.Val) bool {
+	revRes := func(b bool, e error) (bool, error) { // reverses result
+		return !b, e
+	}
+	noError := func(b bool, e error) bool {
+		return b && e == nil
+	}
+	switch op {
+	case "geq":
+		return noError(revRes(types.Less(arg1, arg2)))
+	case "gt":
+		return noError(types.Less(arg2, arg1))
+	case "leq":
+		return noError(revRes(types.Less(arg2, arg1)))
+	case "lt":
+		return noError(types.Less(arg1, arg2))
+	case "eq":
+		if arg1.Tid == types.BoolID {
+			return (arg2.Tid == types.BoolID) &&
+				(arg1.Value.(bool) == arg2.Value.(bool))
+		} else {
+			return noError(revRes(types.Less(arg1, arg2))) &&
+				noError(revRes(types.Less(arg2, arg1)))
+		}
+	default:
+		// should have been checked at query level.
+		x.Fatalf("Unknown ineqType %v", op)
+	}
+	return false
 }

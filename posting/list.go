@@ -656,25 +656,23 @@ func (l *List) Facets(param *facets.Param) (fs []*facets.Facet, ferr error) {
 
 // copyFacets makes a copy of facets of the posting which are requested in param.Keys.
 func copyFacets(p *types.Posting, param *facets.Param) (fs []*facets.Facet) {
-	// since facets and param.keys are both sorted,
-	// we can break when either param.Keys OR p.Facets.Key(s) go ahead of each other.
-	// However, we need all keys if param.AllKeys is true.
-	numCopied := 0
+	// facets and param.keys are both sorted,
+	// We also need all keys if param.AllKeys is true.
 	numKeys := len(param.Keys)
-	for _, f := range p.Facets {
-		if param.AllKeys || param.Keys[numCopied] == f.Key {
+	numFacets := len(p.Facets)
+	for kidx, fidx := 0, 0; (param.AllKeys || kidx < numKeys) && fidx < numFacets; {
+		f := p.Facets[fidx]
+		if param.AllKeys || param.Keys[kidx] == f.Key {
 			fcopy := &facets.Facet{Key: f.Key, Value: nil, ValType: f.ValType}
 			fcopy.Value = make([]byte, len(f.Value))
 			copy(fcopy.Value, f.Value)
 			fs = append(fs, fcopy)
-			numCopied++
-			if !param.AllKeys && (numCopied >= numKeys) {
-				// break if we don't want all keys and
-				// we have taken all param.Keys.
-				break
-			}
-		} else if f.Key > param.Keys[numCopied] {
-			break
+			kidx++
+			fidx++
+		} else if f.Key > param.Keys[kidx] {
+			kidx++
+		} else {
+			fidx++
 		}
 	}
 	return fs

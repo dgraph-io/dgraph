@@ -657,6 +657,9 @@ func typeIDForFacet(f *facets.Facet) TypeID {
 	case facets.BoolID:
 		return BoolID
 	case facets.DateTimeID:
+		if facets.OnlyDate(string(f.Value)) {
+			return DateID
+		}
 		return DateTimeID
 	case facets.FloatID:
 		return FloatID
@@ -665,7 +668,12 @@ func typeIDForFacet(f *facets.Facet) TypeID {
 	}
 }
 
-func ValFor(f *facets.Facet) (Val, error) {
-	val := Val{StringID, f.Value}
-	return Convert(val, typeIDForFacet(f))
+// ValFor converts Facet into types.Val.
+func ValFor(f *facets.Facet) Val {
+	val := Val{Tid: StringID, Value: f.Value}
+	typId := typeIDForFacet(f)
+	v, err := Convert(val, typId)
+	x.AssertTruef(err == nil,
+		"We should always be able to covert facet into val. %v %v", f.Value, typId)
+	return v
 }
