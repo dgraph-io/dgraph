@@ -77,14 +77,15 @@ func populateGraph(t *testing.T) {
 	addEdgeToUID(t, "follow", 1001, 1003, nil)
 	addEdgeToUID(t, "follow", 1003, 1002, nil)
 
-	addEdgeToUID(t, "path", 1, 31, nil)
-	addEdgeToUID(t, "path", 1, 24, nil)
-	addEdgeToUID(t, "path", 31, 1000, nil)
-	addEdgeToUID(t, "path", 1000, 1001, nil)
-	addEdgeToUID(t, "path", 1000, 1002, nil)
-	addEdgeToUID(t, "path", 1001, 1002, nil)
-	addEdgeToUID(t, "path", 1002, 1003, nil)
-	addEdgeToUID(t, "path", 1003, 1001, nil)
+	addEdgeToUID(t, "path", 1, 31, map[string]string{"weight": "0.1", "weight1": "0.2"})
+	addEdgeToUID(t, "path", 1, 24, map[string]string{"weight": "0.2"})
+	addEdgeToUID(t, "path", 31, 1000, map[string]string{"weight": "0.1"})
+	addEdgeToUID(t, "path", 1000, 1001, map[string]string{"weight": "0.1"})
+	addEdgeToUID(t, "path", 1000, 1002, map[string]string{"weight": "0.7"})
+	addEdgeToUID(t, "path", 1001, 1002, map[string]string{"weight": "0.1"})
+	addEdgeToUID(t, "path", 1002, 1003, map[string]string{"weight": "0.6"})
+	addEdgeToUID(t, "path", 1003, 1001, map[string]string{})
+
 	addEdgeToValue(t, "name", 1000, "Alice", nil)
 	addEdgeToValue(t, "name", 1001, "Bob", nil)
 	addEdgeToValue(t, "name", 1002, "Matt", nil)
@@ -465,6 +466,45 @@ func TestShortestPath(t *testing.T) {
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
 		`{"me":[{"name":"Michonne"},{"name":"Andrea"}]}`,
+		js)
+}
+
+func TestShortestPathWeightsMultiFacet_Error(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			A as shortest(from:1, to:1002) {
+				path @facets(weight, weight1)
+			}
+
+			me(var: A) {
+				name
+			}
+		}`
+	res, err := gql.Parse(query)
+	require.NoError(t, err)
+
+	var l Latency
+	ctx := context.Background()
+	_, err = ProcessQuery(ctx, res, &l)
+	require.Error(t, err)
+}
+
+func TestShortestPathWeights(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			A as shortest(from:1, to:1002) {
+				path @facets(weight)
+			}
+
+			me(var: A) {
+				name
+			}
+		}`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"name":"Michonne"},{"name":"Andrea"},{"name":"Alice"},{"name":"Bob"},{"name":"Matt"}]}`,
 		js)
 }
 

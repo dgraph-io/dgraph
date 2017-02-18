@@ -17,8 +17,9 @@
 package worker
 
 import (
-	"golang.org/x/net/context"
 	"strings"
+
+	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/group"
@@ -253,10 +254,10 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 				if err != nil {
 					return nil, err
 				}
-				out.FacetsLists = append(out.FacetsLists,
+				out.FacetMatrix = append(out.FacetMatrix,
 					&facets.List{[]*facets.Facets{&facets.Facets{fs}}})
 			} else {
-				out.FacetsLists = append(out.FacetsLists,
+				out.FacetMatrix = append(out.FacetMatrix,
 					&facets.List{pl.FacetsForUids(opts, q.FacetParam)})
 			}
 		}
