@@ -663,7 +663,7 @@ func TestFacetsFilterNotAndOrGeqMutuallyExclusive(t *testing.T) {
 		{
 			me(id:0x1) {
 				name
-				friend @facets(not eq(close, false) OR eq(family, true) AND geq(since, "2007-01-10")) {
+				friend @facets(not (eq(close, false) OR eq(family, true) AND geq(since, "2007-01-10"))) {
 					name
 					_uid_
 				}
