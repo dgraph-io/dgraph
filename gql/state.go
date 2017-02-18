@@ -439,13 +439,7 @@ func lexTextMutation(l *lex.Lexer) lex.StateFn {
 			return lexMutationValue
 		}
 		if r == leftCurl {
-			l.Depth++
-		}
-		if r == rightCurl {
-			if l.Depth > 2 {
-				l.Depth--
-				continue
-			}
+			return l.Errorf("Invalid character '{' inside mutation text")
 		}
 		if r != rightCurl {
 			// Absorb everything until we find '}'.

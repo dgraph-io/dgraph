@@ -55,8 +55,9 @@ type GraphQuery struct {
 
 // Mutation stores the strings corresponding to set and delete operations.
 type Mutation struct {
-	Set string
-	Del string
+	Set    string
+	Del    string
+	Schema string
 }
 
 // Schema stores list of predicates and attributes
@@ -362,7 +363,7 @@ func Parse(input string) (res Result, rerr error) {
 				if res.Query != nil {
 					return res, x.Errorf("schema block is not allowed with query block")
 				}
-				if res.Schema, rerr = parseSchema(it); rerr != nil {
+				if res.Schema, rerr = getSchema(it); rerr != nil {
 					return res, rerr
 				}
 			} else if item.Val == "fragment" {
@@ -630,32 +631,32 @@ func getMutation(it *lex.ItemIterator) (*Mutation, error) {
 	return nil, x.Errorf("Invalid mutation.")
 }
 
-// parses till rightSquare is found
-func parseListPredicates(it *lex.ItemIterator, s *Schema) error {
+// parses till rightSquare is found (parses [a, b]) excluding leftSquare
+// This function can be reused for query later
+func parseListItemNames(it *lex.ItemIterator) ([]string, error) {
+	var items []string
 	for it.Next() {
 		item := it.Item()
 		switch item.Typ {
 		case itemRightSquare:
-			return nil
+			return items, nil
 		case itemName:
-			s.Predicates = append(s.Predicates, item.Val)
+			items = append(items, item.Val)
 		case comma:
 			it.Next()
 			item = it.Item()
 			if item.Typ != itemName {
-				return x.Errorf("Invalid scheam block")
+				return items, x.Errorf("Invalid scheam block")
 			} else {
-				s.Predicates = append(s.Predicates, item.Val)
+				items = append(items, item.Val)
 			}
 		default:
-			return x.Errorf("Invalid schema block")
+			return items, x.Errorf("Invalid schema block")
 		}
 	}
-	return x.Errorf("Invalid schema block")
+	return items, x.Errorf("Invalid schema block")
 }
 
-// Currently similar code for parsing (id : [a,b]) is present inside lexer
-// Reuse that code after lexer is refactored
 // parses till rightround is found
 func parseSchemaPredicates(it *lex.ItemIterator, s *Schema) error {
 	// pred should be followed by colon
@@ -676,7 +677,8 @@ func parseSchemaPredicates(it *lex.ItemIterator, s *Schema) error {
 	if item.Typ == itemName {
 		s.Predicates = append(s.Predicates, item.Val)
 	} else if item.Typ == itemLeftSquare {
-		if err := parseListPredicates(it, s); err != nil {
+		var err error
+		if s.Predicates, err = parseListItemNames(it); err != nil {
 			return err
 		}
 	} else {
@@ -707,7 +709,7 @@ func parseSchemaFields(it *lex.ItemIterator, s *Schema) error {
 	return x.Errorf("Invalid schema block.")
 }
 
-func parseSchema(it *lex.ItemIterator) (*Schema, error) {
+func getSchema(it *lex.ItemIterator) (*Schema, error) {
 	var s Schema
 	leftRoundSeen := false
 	for it.Next() {
@@ -759,6 +761,8 @@ func parseMutationOp(it *lex.ItemIterator, op string, mu *Mutation) error {
 				mu.Set = item.Val
 			} else if op == "delete" {
 				mu.Del = item.Val
+			} else if op == "schema" {
+				mu.Schema = item.Val
 			} else {
 				return x.Errorf("Invalid mutation operation.")
 			}

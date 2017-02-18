@@ -1711,7 +1711,7 @@ func TestMutationQuotes(t *testing.T) {
 	query := `
 	mutation {
 		set {
-			<m.05vb159>  <type.object.name>  "\"Maison de Hoodle, Satoko Tachibana"@en  .
+			<m.05vb159>  <type.object.name> "\"Maison de Hoodle, Satoko Tachibana"@en  .
 		}
 	}
 	`
@@ -1741,6 +1741,22 @@ func TestMutationPassword(t *testing.T) {
 	`
 	_, err := Parse(query)
 	require.NoError(t, err)
+}
+
+func TestMutationSchema(t *testing.T) {
+	query := `
+	mutation {
+		set {
+			<m.05vb159>  <type.object.name> "\"Maison de Hoodle, Satoko Tachibana"@en  .
+		}
+		schema {
+           name: string @index(exact)
+		}
+	}
+	`
+	res, err := Parse(query)
+	require.NoError(t, err)
+	require.Equal(t, res.Mutation.Schema, "\n           name: string @index(exact)\n\t\t")
 }
 
 func TestLangs(t *testing.T) {

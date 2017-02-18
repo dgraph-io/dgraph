@@ -36,6 +36,10 @@ message Value {
     }
 }
 
+message Schema {
+    repeated string predicates = 1;
+    repeated string fields = 2;
+}
 
 message Mutation {
     repeated NQuad set = 1;
@@ -66,8 +70,17 @@ message Node {
     repeated Node children = 5; // Each node can have multiple children
 }
 
+message SchemaNode {
+    string predicate = 1;
+    string type = 2;
+    bool indexed = 3;
+    string tokenizer = 4;
+    bool reversed = 5;
+}
+
 message Response {
     repeated Node n = 1;
     Latency l = 2;
     map<string, uint64> AssignedUids = 3;
+    repeated SchemaNode schema = 4;
 }
