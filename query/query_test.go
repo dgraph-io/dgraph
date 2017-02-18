@@ -2814,6 +2814,130 @@ func TestGeneratorMultiRootFilter3(t *testing.T) {
 	require.JSONEq(t, `{"me":[{"name":"Glenn Rhee"}]}`, js)
 }
 
+func TestGeneratorRootFilterOnCountGt(t *testing.T) {
+	populateGraph(t)
+	query := `
+                {
+                        me(func:anyof("name", "Michonne Rick")) @filter(gt(count(friend), 2)) {
+                                name
+                        }
+                }
+        `
+	_, err := gql.Parse(query)
+	require.NoError(t, err)
+
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"me":[{"name":"Michonne"}]}`, js)
+}
+
+func TestGeneratorRootFilterOnCountLeq(t *testing.T) {
+	populateGraph(t)
+	query := `
+                {
+                        me(func:anyof("name", "Michonne Rick")) @filter(leq(count(friend), 2)) {
+                                name
+                        }
+                }
+        `
+	_, err := gql.Parse(query)
+	require.NoError(t, err)
+
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"me":[{"name":"Rick Grimes"}]}`, js)
+}
+
+func TestGeneratorRootFilterOnCountChildLevel(t *testing.T) {
+	populateGraph(t)
+	query := `
+                {
+                        me(id:23) {
+                                name
+                                friend @filter(gt(count(friend), 2)) {
+                                        name
+                                }
+                        }
+                }
+        `
+	_, err := gql.Parse(query)
+	require.NoError(t, err)
+
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"me":[{"friend":[{"name":"Michonne"}],"name":"Rick Grimes"}]}`, js)
+}
+
+func TestGeneratorRootFilterOnCountWithAnd(t *testing.T) {
+	populateGraph(t)
+	query := `
+                {
+                        me(id:23) {
+                                name
+                                friend @filter(gt(count(friend), 4) and lt(count(friend), 100)) {
+                                        name
+                                }
+                        }
+                }
+        `
+	_, err := gql.Parse(query)
+	require.NoError(t, err)
+
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"me":[{"friend":[{"name":"Michonne"}],"name":"Rick Grimes"}]}`, js)
+}
+
+func TestGeneratorRootFilterOnCountError1(t *testing.T) {
+	populateGraph(t)
+	// only cmp(count(attr), int) is valid, 'max'/'min'/'sum' not supported
+	query := `
+                {
+                        me(func:anyof("name", "Michonne Rick")) @filter(gt(count(friend), "invalid")) {
+                                name
+                        }
+                }
+        `
+	res, err := gql.Parse(query)
+	require.NoError(t, err)
+
+	var l Latency
+	_, queryErr := ProcessQuery(context.Background(), res, &l)
+	require.NotNil(t, queryErr)
+}
+
+func TestGeneratorRootFilterOnCountError2(t *testing.T) {
+	populateGraph(t)
+	// missing digits
+	query := `
+                {
+                        me(func:anyof("name", "Michonne Rick")) @filter(gt(count(friend))) {
+                                name
+                        }
+                }
+        `
+	res, err := gql.Parse(query)
+	require.NoError(t, err)
+
+	var l Latency
+	_, queryErr := ProcessQuery(context.Background(), res, &l)
+	require.NotNil(t, queryErr)
+}
+
+func TestGeneratorRootFilterOnCountError3(t *testing.T) {
+	populateGraph(t)
+	// to much args
+	query := `
+                {
+                        me(func:anyof("name", "Michonne Rick")) @filter(gt(count(friend), 2, 4)) {
+                                name
+                        }
+                }
+        `
+	res, err := gql.Parse(query)
+	require.NoError(t, err)
+
+	var l Latency
+	_, queryErr := ProcessQuery(context.Background(), res, &l)
+	require.NotNil(t, queryErr)
+}
+
 func TestToProtoMultiRoot(t *testing.T) {
 	populateGraph(t)
 	query := `
