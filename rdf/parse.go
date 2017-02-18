@@ -235,7 +235,7 @@ func Parse(line string) (rnq graph.NQuad, rerr error) {
 			// if lang tag is specified then type is set to string
 			// grammar allows either ^^ iriref or lang tag
 			if len(oval) > 0 {
-				rnq.ObjectValue = &graph.Value{&graph.Value_StrVal{oval}}
+				rnq.ObjectValue = &graph.Value{&graph.Value_DefaultVal{oval}}
 				// If no type is specified, we default to string.
 				rnq.ObjectType = int32(types.StringID)
 				oval = ""
