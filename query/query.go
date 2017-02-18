@@ -266,7 +266,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 			c.Value = task.ToBool(pc.values[idx])
 			uc := dst.New(pc.Attr)
 			uc.AddValue("checkpwd", c)
-			dst.AddListChild(pc.Attr, uc)			
+			dst.AddListChild(pc.Attr, uc)
 		} else if algo.ListLen(ul) > 0 || len(pc.Children) > 0 {
 			// We create as many predicate entity children as the length of uids for
 			// this predicate.
@@ -448,7 +448,7 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 		if gchild.Attr == "_uid_" {
 			sg.Params.GetUID = true
 		} else if gchild.Attr == "password" { // query password is forbidden
-			if gchild.Func == nil || !gchild.Func.IsPasswordVerifier() { 
+			if gchild.Func == nil || !gchild.Func.IsPasswordVerifier() {
 				return errors.New("Password is not fetchable")
 			}
 		}
@@ -501,7 +501,7 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 					" please place the filter on the upper level"
 				return errors.New(note)
 			}
-			dst.SrcFunc = append(sg.SrcFunc, gchild.Func.Name)
+			dst.SrcFunc = append(dst.SrcFunc, gchild.Func.Name)
 			dst.SrcFunc = append(dst.SrcFunc, gchild.Func.Args...)
 		}
 
