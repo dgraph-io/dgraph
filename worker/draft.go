@@ -461,7 +461,6 @@ func (n *node) processApplyCh() {
 		// Since raft committed logs are serialized, we can derive
 		// schema here without any locking
 		var proposal task.Proposal
-		x.AssertTrue(len(e.Data) > 0)
 		x.Checkf(proposal.Unmarshal(e.Data[1:]), "Unable to parse entry: %+v", e)
 
 		if e.Type == raftpb.EntryNormal && proposal.Mutations != nil {

@@ -17,8 +17,9 @@
 package schema
 
 import (
-	"fmt"
 	"time"
+
+	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/tok"
@@ -37,35 +38,12 @@ type state struct {
 	x.SafeMutex
 	// Map containing predicate to type information.
 	predicate map[string]*types.Schema
+	elog      trace.EventLog
 }
 
 // State returns the schema state
 func State() *state {
 	return pstate
-}
-
-// Update updates the schema in memory if it doesn't exist already. And sends an
-// entry to syncCh so that it can be comitted later
-func (s *state) UpdateIfMissing(se *SyncEntry) (types.TypeID, bool) {
-	if typ, err := s.TypeOf(se.Attr); err == nil {
-		return typ, false
-	}
-	s.Lock()
-	defer s.Unlock()
-
-	if schema, ok := s.predicate[se.Attr]; ok {
-		return types.TypeID(schema.ValueType), false
-	}
-
-	// Creating a copy to avoid race condition during marshalling
-	schema := se.Schema
-	s.predicate[se.Attr] = &schema
-	se.Water.Ch <- x.Mark{Index: se.Index, Done: false}
-
-	syncCh <- se
-
-	fmt.Printf("Setting schema for attr %s: %v\n", se.Attr, se.Schema.ValueType)
-	return types.TypeID(se.Schema.ValueType), true
 }
 
 // Update updates the schema in memory and sends an entry to syncCh so that it can be
@@ -81,10 +59,8 @@ func (s *state) Update(se *SyncEntry) {
 	schema := se.Schema
 	s.predicate[se.Attr] = &schema
 	se.Water.Ch <- x.Mark{Index: se.Index, Done: false}
-
 	syncCh <- se
-
-	fmt.Printf("Setting schema for attr %s: %v\n", se.Attr, se.Schema.ValueType)
+	s.elog.Printf("Setting schema for attr %s: %v\n", se.Attr, se.Schema.ValueType)
 }
 
 // SetType sets the schema type for given predicate
@@ -96,7 +72,6 @@ func (s *state) SetType(pred string, valueType types.TypeID) {
 	} else {
 		s.predicate[pred] = &types.Schema{ValueType: uint32(valueType)}
 	}
-	fmt.Printf("Setting schema for predicate %s: %v\n", pred, valueType)
 }
 
 // SetReverse sets whether the reverse edge is enabled or
@@ -115,7 +90,6 @@ func (s *state) SetReverse(pred string, rev bool) {
 
 // SetIndex sets the tokenizer for given predicate
 func (s *state) SetIndex(pred string, tokenizer string) {
-	fmt.Println("Setting tokenizer", pred, tokenizer)
 	s.Lock()
 	defer s.Unlock()
 	schema, ok := s.predicate[pred]
@@ -128,7 +102,7 @@ func (s *state) Set(pred string, schema *types.Schema) {
 	s.Lock()
 	defer s.Unlock()
 	s.predicate[pred] = schema
-	fmt.Printf("Setting schema for attr %s: %v\n", pred, schema.ValueType)
+	s.elog.Printf("Setting schema for attr %s: %v\n", pred, schema.ValueType)
 }
 
 // TypeOf returns the schema type of predicate
@@ -228,6 +202,7 @@ func LoadFromDb() error {
 func reset() {
 	pstate = new(state)
 	State().predicate = make(map[string]*types.Schema)
+	State().elog = trace.NewEventLog("Dynamic Schema", "state")
 }
 
 // SyncEntry stores the schema mutation information
@@ -264,7 +239,7 @@ func batchSync() {
 			if len(entries) > 0 {
 				x.AssertTrue(b != nil)
 				loop++
-				fmt.Printf("[%4d] Writing schema batch of size: %v\n", loop, len(entries))
+				State().elog.Printf("[%4d] Writing schema batch of size: %v\n", loop, len(entries))
 				for _, e := range entries {
 					val, err := e.Schema.Marshal()
 					x.Checkf(err, "Error while marshalling schema description")
