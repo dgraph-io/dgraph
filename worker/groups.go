@@ -506,7 +506,7 @@ func (w *grpcWorker) UpdateMembership(ctx context.Context,
 		}(mmNew)
 	}
 
-	for range update.Members {
+	for _ = range update.Members {
 		select {
 		case <-ctx.Done():
 			return &emptyMembershipUpdate, ctx.Err()
