@@ -987,13 +987,17 @@ func parseFilter(it *lex.ItemIterator) (*FilterTree, error) {
 			if itemInFunc.Typ != itemLeftRound {
 				return nil, x.Errorf("Expected ( after func name [%s]", leaf.Func.Name)
 			}
-			var terminated bool
+			var terminated, seenFuncAsArgument bool
 			for it.Next() {
 				itemInFunc := it.Item()
 				if itemInFunc.Typ == itemRightRound {
 					terminated = true
 					break
 				} else if itemInFunc.Typ == itemLeftRound {
+					if seenFuncAsArgument {
+						return nil, x.Errorf("Expected only one argument as function")
+					}
+					seenFuncAsArgument = true
 					// embed func, like gt(count(films), 0)
 					// => f: {Name: gt, Attr:films, Args:[count, 0]}
 					it.Prev()

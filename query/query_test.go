@@ -2942,24 +2942,6 @@ func TestGeneratorRootFilterOnCountError3(t *testing.T) {
 	require.NotNil(t, queryErr)
 }
 
-func TestGeneratorRootFilterOnCountError4(t *testing.T) {
-	populateGraph(t)
-	// to much args
-	query := `
-                {
-                        me(func:anyof("name", "Michonne Rick")) @filter(gt(count(friend), count(friend))) {
-                                name
-                        }
-                }
-        `
-	res, err := gql.Parse(query)
-	require.NoError(t, err)
-
-	var l Latency
-	_, queryErr := ProcessQuery(context.Background(), res, &l)
-	require.NotNil(t, queryErr)
-}
-
 func TestToProtoMultiRoot(t *testing.T) {
 	populateGraph(t)
 	query := `

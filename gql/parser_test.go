@@ -1030,6 +1030,23 @@ func TestParseFilter_root_Error(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestParseFilter_root_Error2(t *testing.T) {
+	schema.ParseBytes([]byte("scalar abc: string @index"))
+	// filter-by-count only support first argument as function
+	query := `
+	query {
+		me(func:abc(abc)) @filter(gt(count(friends), sum(friends))) {
+			friends @filter() {
+				name
+			}
+			hometown
+		}
+	}
+`
+	_, err := Parse(query)
+	require.Error(t, err)
+}
+
 func TestParseFilter_simplest(t *testing.T) {
 	query := `
 	query {
@@ -1602,7 +1619,6 @@ func TestMutationPassword(t *testing.T) {
 	_, err := Parse(query)
 	require.NoError(t, err)
 }
-
 
 func TestLangs(t *testing.T) {
 	query := `
