@@ -69,8 +69,13 @@ func TypeIDForValType(valType Facet_ValType) TypeID {
 
 // ValType gives Facet's TypeID for given facet value str.
 func ValType(val string) (Facet_ValType, error) {
-	if _, err := strconv.ParseInt(val, 10, 32); err == nil {
-		return Facet_INT32, nil
+	_, typ, err := ValAndValType(val)
+	return typ, err
+}
+
+func ValAndValType(val string) (interface{}, Facet_ValType, error) {
+	if fint, err := strconv.ParseInt(val, 10, 32); err == nil {
+		return fint, Facet_INT32, nil
 	} else if nume := err.(*strconv.NumError); nume.Err == strconv.ErrRange {
 		// check if whole string is only of nums or not.
 		// comes here for : 11111111111111111111132333uasfk333 ; see test.
@@ -81,22 +86,22 @@ func ValType(val string) (Facet_ValType, error) {
 				break
 			}
 		}
-		if !nonNumChar {
-			return Facet_INT32, err
+		if !nonNumChar { // return error
+			return nil, Facet_INT32, err
 		}
 	}
-	if _, err := strconv.ParseFloat(val, 64); err == nil {
-		return Facet_FLOAT, nil
+	if ffloat, err := strconv.ParseFloat(val, 64); err == nil {
+		return ffloat, Facet_FLOAT, nil
 	} else if nume := err.(*strconv.NumError); nume.Err == strconv.ErrRange {
-		return Facet_FLOAT, err
+		return nil, Facet_FLOAT, err
 	}
 	if val == "true" || val == "false" {
-		return Facet_BOOL, nil
+		return val == "true", Facet_BOOL, nil
 	}
-	if _, err := parseTime(val); err == nil {
-		return Facet_DATETIME, nil
+	if t, err := parseTime(val); err == nil {
+		return t, Facet_DATETIME, nil
 	}
-	return Facet_STRING, nil
+	return val, Facet_STRING, nil
 }
 
 // FacetFor returns Facet for given key and val.

@@ -30,6 +30,7 @@ import (
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
+	"github.com/dgraph-io/dgraph/utils"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -341,12 +342,11 @@ func parseFacets(it *lex.ItemIterator, rnq *graph.NQuad) error {
 		if item.Typ == itemText {
 			facetVal = item.Val
 		}
-		valTyp, err := facets.ValType(facetVal)
+		facet, err := utils.FacetFor(facetKey, facetVal)
 		if err != nil {
 			return err
 		}
-		rnq.Facets = append(rnq.Facets,
-			&facets.Facet{Key: facetKey, Value: []byte(facetVal), ValType: valTyp})
+		rnq.Facets = append(rnq.Facets, facet)
 
 		// empty value case..
 		if item.Typ == itemRightRound {

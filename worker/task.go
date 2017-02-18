@@ -28,8 +28,10 @@ import (
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/task"
+	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
+	"github.com/dgraph-io/dgraph/utils"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -218,7 +220,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 	case StandardFn:
 		// srcfunc 0th val is func name and and [1:] are args.
 		// we tokenize the arguments of the query.
-		tokens, err = getTokens(q.SrcFunc[1:])
+		tokens, err = tok.GetTokens(q.SrcFunc[1:])
 		if err != nil {
 			return nil, err
 		}
@@ -456,15 +458,23 @@ func (w *grpcWorker) ServeTask(ctx context.Context, q *task.Query) (*task.Result
 // applyFacetFilter : we return error only when query has some problems.
 // like Or has 3 arguments, argument facet val overflows integer.
 // returns true if postingFacets can be included.
-func applyFacetFilter(postingFacets []*facets.Facet, ftree *facets.FilterTree) (bool, error) {
+func applyFacetFilter(postingFacets []*facets.Facet, tree *facets.FilterTree) (bool, error) {
+	ftree, err := preProcessFilter(tree)
+	if err != nil {
+		return false, err
+	}
+	return applyFacetsTree(postingFacets, ftree)
+}
+
+func applyFacetsTree(postingFacets []*facets.Facet, ftree *facetsTree) (bool, error) {
 	if ftree == nil {
 		return true, nil
 	}
-	if ftree.Func != nil {
-		fname := strings.ToLower(ftree.Func.Name)
+	if ftree.function != nil {
+		fname := strings.ToLower(ftree.function.name)
 		var fc *facets.Facet
 		for _, fci := range postingFacets {
-			if fci.Key == ftree.Func.Key {
+			if fci.Key == ftree.function.key {
 				fc = fci
 				break
 			}
@@ -473,74 +483,42 @@ func applyFacetFilter(postingFacets []*facets.Facet, ftree *facets.FilterTree) (
 			return false, nil
 		}
 		fnType, fname := parseFuncType([]string{fname})
-		if len(ftree.Func.Args) != 1 {
+		if len(ftree.function.args) != 1 {
 			return false, x.Errorf("Only one argument expected in %s, but got %d.",
-				fname, len(ftree.Func.Args))
+				fname, len(ftree.function.args))
 		}
 
 		switch fnType {
 		case CompareAttrFn: // lt, gt, le, ge, eq
-			fctv := types.ValFor(fc)
-			// TODO(ashish): Should move this to outside of applyFacetFilter
-			argf, err := facets.FacetFor(fc.Key, ftree.Func.Args[0])
-			if err != nil {
-				return false, err // stop processing as this is query error
-			}
-			argtv := types.ValFor(argf)
-			return compareTypeVals(fname, fctv, argtv), nil
+			return compareTypeVals(fname, types.ValFor(fc), ftree.function.val), nil
 
 		case StandardFn: // allof, anyof
 			if facets.TypeIDForValType(fc.ValType) != facets.StringID {
 				return false, nil
 			}
-			// TODO: Tokenize facet with string values and store them,
-			// instead of creating them on the fly.
-			fcTokens, ferr := getTokens([]string{string(fc.Value)})
-			if ferr != nil {
-				return false, nil
-			}
-			sort.Strings(fcTokens)
-
-			// TODO: Also tokenize the query once and use it.
-			argTokens, aerr := getTokens(ftree.Func.Args)
-			if aerr != nil { // query error ; stop processing.
-				return false, aerr
-			}
-			sort.Strings(argTokens)
-			return filterOnStandardFn(fname, fcTokens, argTokens)
+			return filterOnStandardFn(fname, fc.Tokens, ftree.function.tokens)
 		}
 		return false, x.Errorf("Fn %s not supported in facets filtering.", fname)
 	}
 
 	var res []bool
-	for _, c := range ftree.Children {
-		if r, err := applyFacetFilter(postingFacets, c); err != nil {
+	for _, c := range ftree.children {
+		if r, err := applyFacetsTree(postingFacets, c); err != nil {
 			return false, err
 		} else {
 			res = append(res, r)
 		}
 	}
 
-	switch strings.ToLower(ftree.Op) {
+	switch strings.ToLower(ftree.op) {
 	case "not":
-		if len(res) != 1 {
-			return false, x.Errorf("Expected 1 child for not but got %d.", len(res))
-		}
 		return !res[0], nil
 	case "and":
-		if len(res) != 2 {
-			return false, x.Errorf("Expected 2 child for not but got %d.", len(res))
-		}
 		return res[0] && res[1], nil
 	case "or":
-		if len(res) != 2 {
-			return false, x.Errorf("Expected 2 child for not but got %d.", len(res))
-		}
 		return res[0] || res[1], nil
-	default:
-		return false, x.Errorf("Unsupported operation in facet filtering: %s.", ftree.Op)
 	}
-	return false, x.Errorf("Unexpected behavior in applyFacetFilter.")
+	return false, x.Errorf("Unexpected behavior in applyFacetsTree.")
 }
 
 // Should be used only in filtering arg1 by comparing with arg2.
@@ -606,4 +584,78 @@ func filterOnStandardFn(fname string, fcTokens []string, argTokens []string) (bo
 		return false, nil
 	}
 	return false, x.Errorf("Fn %s not supported in facets filtering.", fname)
+}
+
+type facetsFunc struct {
+	name   string
+	key    string
+	args   []string
+	tokens []string
+	val    types.Val
+}
+type facetsTree struct {
+	op       string
+	children []*facetsTree
+	function *facetsFunc
+}
+
+func preProcessFilter(tree *facets.FilterTree) (*facetsTree, error) {
+	if tree == nil {
+		return nil, nil
+	}
+	ftree := &facetsTree{}
+	ftree.op = tree.Op
+	if tree.Func != nil {
+		ftree.function = &facetsFunc{}
+		ftree.function.name = tree.Func.Name
+		ftree.function.key = tree.Func.Key
+		ftree.function.args = tree.Func.Args
+
+		fnType, fname := parseFuncType([]string{ftree.function.name})
+		switch fnType {
+		case CompareAttrFn:
+			argf, err := utils.FacetFor(tree.Func.Key, tree.Func.Args[0])
+			if err != nil {
+				return nil, err // stop processing as this is query error
+			}
+			ftree.function.val = types.ValFor(argf)
+		case StandardFn:
+			argTokens, aerr := tok.GetTokens(tree.Func.Args)
+			if aerr != nil { // query error ; stop processing.
+				return nil, aerr
+			}
+			sort.Strings(argTokens)
+			ftree.function.tokens = argTokens
+		default:
+			return nil, x.Errorf("Fn %s not supported in preProcessFilter.", fname)
+		}
+		return ftree, nil
+	}
+
+	for _, c := range tree.Children {
+		ftreec, err := preProcessFilter(c)
+		if err != nil {
+			return nil, err
+		}
+		ftree.children = append(ftree.children, ftreec)
+	}
+
+	numChild := len(tree.Children)
+	switch strings.ToLower(tree.Op) {
+	case "not":
+		if numChild != 1 {
+			return nil, x.Errorf("Expected 1 child for not but got %d.", numChild)
+		}
+	case "and":
+		if numChild != 2 {
+			return nil, x.Errorf("Expected 2 child for not but got %d.", numChild)
+		}
+	case "or":
+		if numChild != 2 {
+			return nil, x.Errorf("Expected 2 child for not but got %d.", numChild)
+		}
+	default:
+		return nil, x.Errorf("Unsupported operation in facet filtering: %s.", ftree.op)
+	}
+	return ftree, nil
 }
