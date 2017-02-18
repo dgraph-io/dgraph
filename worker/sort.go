@@ -178,7 +178,7 @@ type intersectedList struct {
 // indexed bucket.
 func intersectBucket(ts *task.Sort, attr, token string, out []intersectedList) error {
 	count := int(ts.Count)
-	sType, err := schema.TypeOf(attr)
+	sType, err := schema.State().TypeOf(attr)
 	if err != nil || !sType.IsScalar() {
 		return x.Errorf("Cannot sort attribute %s of type object.", attr)
 	}

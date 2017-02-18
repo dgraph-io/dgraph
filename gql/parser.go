@@ -989,7 +989,7 @@ func parseFilter(it *lex.ItemIterator) (*FilterTree, error) {
 				return nil, x.Errorf("Expected ( after func name [%s]",
 					leaf.Func.Name)
 			}
-			var terminated bool
+			var terminated, seenFuncAsArgument bool
 			for it.Next() {
 				isFacet := false
 				var attrName string
@@ -1020,6 +1020,22 @@ func parseFilter(it *lex.ItemIterator) (*FilterTree, error) {
 					}
 					attrName = fs.Keys[0]
 					isFacet = true
+				} else if itemInFunc.Typ == itemLeftRound {
+					if seenFuncAsArgument {
+						return nil, x.Errorf("Expected only one function as argument")
+					}
+					seenFuncAsArgument = true
+					// embed func, like gt(count(films), 0)
+					// => f: {Name: gt, Attr:films, Args:[count, 0]}
+					it.Prev()
+					it.Prev()
+					fn, err := parseFunction(it)
+					if err != nil {
+						return nil, err
+					}
+					f.Attr = fn.Attr
+					f.Args = append(f.Args, fn.Name)
+					continue
 				} else if itemInFunc.Typ != itemName {
 					return nil, x.Errorf("Expected arg after func [%s], but got item %v",
 						leaf.Func.Name, itemInFunc)
@@ -1274,7 +1290,7 @@ func getRoot(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 			if err != nil {
 				return gq, err
 			}
-			if !schema.IsIndexed(gen.Attr) {
+			if !schema.State().IsIndexed(gen.Attr) {
 				return nil, x.Errorf(
 					"Field %s is not indexed and cannot be used in functions",
 					gen.Attr)

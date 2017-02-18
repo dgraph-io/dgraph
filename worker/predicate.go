@@ -69,7 +69,7 @@ func writeBatch(ctx context.Context, kv chan *task.KV, che chan error) {
 	che <- nil
 }
 
-func streamKeys(stream Worker_PredicateDataClient, groupId uint32) error {
+func streamKeys(stream Worker_PredicateAndSchemaDataClient, groupId uint32) error {
 	it := pstore.NewIterator()
 	defer it.Close()
 
@@ -82,6 +82,13 @@ func streamKeys(stream Worker_PredicateDataClient, groupId uint32) error {
 		pk := x.Parse(k.Data())
 
 		if pk == nil {
+			continue
+		}
+		// No need to send KC for schema keys, since we won't save anything
+		// by sending checksum of schema key
+		if pk.IsSchema() {
+			it.Seek(pk.SkipSchema())
+			it.Prev()
 			continue
 		}
 		if group.BelongsTo(pk.Attr) != g.GroupId {
@@ -123,7 +130,7 @@ func populateShard(ctx context.Context, pl *pool, group uint32) (int, error) {
 	defer pl.Put(conn)
 	c := NewWorkerClient(conn)
 
-	stream, err := c.PredicateData(context.Background())
+	stream, err := c.PredicateAndSchemaData(context.Background())
 	if err != nil {
 		x.TraceError(ctx, err)
 		return 0, err
@@ -177,9 +184,9 @@ func populateShard(ctx context.Context, pl *pool, group uint32) (int, error) {
 	return count, nil
 }
 
-// PredicateData can be used to return data corresponding to a predicate over
+// PredicateAndSchemaData can be used to return data corresponding to a predicate over
 // a stream.
-func (w *grpcWorker) PredicateData(stream Worker_PredicateDataServer) error {
+func (w *grpcWorker) PredicateAndSchemaData(stream Worker_PredicateAndSchemaDataServer) error {
 	gkeys := &task.GroupKeys{}
 
 	// Receive all keys from client first.
@@ -223,28 +230,33 @@ func (w *grpcWorker) PredicateData(stream Worker_PredicateDataServer) error {
 		if pk == nil {
 			continue
 		}
-		if group.BelongsTo(pk.Attr) != gkeys.GroupId {
+		if group.BelongsTo(pk.Attr) != gkeys.GroupId && !pk.IsSchema() {
 			it.Seek(pk.SkipPredicate())
 			it.Prev() // To tackle it.Next() called by default.
 			continue
+		} else if group.BelongsTo(pk.Attr) != gkeys.GroupId {
+			continue
 		}
 
-		var pl types.PostingList
-		x.Check(pl.Unmarshal(v.Data()))
+		// No checksum check for schema keys
+		if !pk.IsSchema() {
+			var pl types.PostingList
+			x.Check(pl.Unmarshal(v.Data()))
 
-		idx := sort.Search(len(gkeys.Keys), func(i int) bool {
-			t := gkeys.Keys[i]
-			return bytes.Compare(k.Data(), t.Key) <= 0
-		})
+			idx := sort.Search(len(gkeys.Keys), func(i int) bool {
+				t := gkeys.Keys[i]
+				return bytes.Compare(k.Data(), t.Key) <= 0
+			})
 
-		if idx < len(gkeys.Keys) {
-			// Found a match.
-			t := gkeys.Keys[idx]
-			// Different keys would have the same prefix. So, check Checksum first,
-			// it would be cheaper when there's no match.
-			if bytes.Equal(pl.Checksum, t.Checksum) && bytes.Equal(k.Data(), t.Key) {
-				// No need to send this.
-				continue
+			if idx < len(gkeys.Keys) {
+				// Found a match.
+				t := gkeys.Keys[idx]
+				// Different keys would have the same prefix. So, check Checksum first,
+				// it would be cheaper when there's no match.
+				if bytes.Equal(pl.Checksum, t.Checksum) && bytes.Equal(k.Data(), t.Key) {
+					// No need to send this.
+					continue
+				}
 			}
 		}
 

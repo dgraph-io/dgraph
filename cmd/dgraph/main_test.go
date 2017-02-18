@@ -22,6 +22,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -31,7 +32,9 @@ import (
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/query"
+	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/store"
+	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -97,6 +100,7 @@ func processToFastJSON(q string) string {
 	var l query.Latency
 	ctx := context.Background()
 	sgl, err := query.ProcessQuery(ctx, res, &l)
+
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -118,6 +122,70 @@ func TestQuery(t *testing.T) {
 
 	output := processToFastJSON(q0)
 	require.JSONEq(t, `{"user":[{"name":"Alice"}]}`, output)
+}
+
+var m5 = `
+	mutation {
+		set {
+                        # comment line should be ignored
+			<ram> <name> "1"^^<xs:int> .
+			<shyam> <name> "abc"^^<xs:int> .
+		}
+	}
+`
+
+var q5 = `
+	{
+		user(id:<id>) {
+			name
+		}
+	}
+`
+
+func TestSchemaValidationError(t *testing.T) {
+	res, err := gql.Parse(m5)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	_, err = mutationHandler(ctx, res.Mutation)
+
+	require.Error(t, err)
+	output := processToFastJSON(strings.Replace(q5, "<id>", "ram", -1))
+	require.JSONEq(t, `{}`, output)
+}
+
+var m6 = `
+	mutation {
+		set {
+                        # comment line should be ignored
+			<ram2> <name2> "1"^^<xs:int> .
+			<shyam2> <name2> "1.5"^^<xs:float> .
+		}
+	}
+`
+
+var q6 = `
+	{
+		user(id:<id>) {
+			name2
+		}
+	}
+`
+
+func TestSchemaConversion(t *testing.T) {
+	res, err := gql.Parse(m6)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	_, err = mutationHandler(ctx, res.Mutation)
+
+	require.NoError(t, err)
+	output := processToFastJSON(strings.Replace(q6, "<id>", "shyam2", -1))
+	require.JSONEq(t, `{"user":[{"name2":1}]}`, output)
+
+	schema.State().SetType("name2", types.FloatID)
+	output = processToFastJSON(strings.Replace(q6, "<id>", "shyam2", -1))
+	require.JSONEq(t, `{"user":[{"name2":1.5}]}`, output)
 }
 
 var qm = `
@@ -197,6 +265,14 @@ func TestMain(m *testing.M) {
 	defer closeAll(dir1, dir2)
 	time.Sleep(5 * time.Second) // Wait for ME to become leader.
 
+	dir, err := ioutil.TempDir("", "storetest_")
+	x.Check(err)
+	ps, err := store.NewStore(dir)
+	x.Check(err)
+	defer os.RemoveAll(dir)
+	defer ps.Close()
+
+	schema.Init(ps, "")
 	// Parse GQL into internal query representation.
 	os.Exit(m.Run())
 }

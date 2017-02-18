@@ -15,7 +15,9 @@ import (
 
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/raftwal"
+	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/task"
+	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -243,6 +245,17 @@ func (n *node) ProposeAndWait(ctx context.Context, proposal *task.Proposal) erro
 		return x.Errorf("RAFT isn't initialized yet")
 	}
 
+	// Do a type check here if schema is present
+	if proposal.Mutations != nil {
+		for _, edge := range proposal.Mutations.Edges {
+			if typ, err := schema.State().TypeOf(edge.Attr); err != nil {
+				continue
+			} else if err := validateAndConvert(edge, typ); err != nil {
+				return err
+			}
+		}
+	}
+
 	proposal.Id = rand.Uint32()
 
 	slice := slicePool.Get().([]byte)
@@ -444,6 +457,32 @@ func (n *node) processApplyCh() {
 			continue
 		}
 
+		// We derive the schema here if it's not present
+		// Since raft committed logs are serialized, we can derive
+		// schema here without any locking
+		var proposal task.Proposal
+		x.Checkf(proposal.Unmarshal(e.Data[1:]), "Unable to parse entry: %+v", e)
+
+		if e.Type == raftpb.EntryNormal && proposal.Mutations != nil {
+			// stores a map of predicate and type of first mutation for each predicate
+			schemaMap := make(map[string]types.TypeID)
+			for _, edge := range proposal.Mutations.Edges {
+				if _, ok := schemaMap[edge.Attr]; !ok {
+					schemaMap[edge.Attr] = posting.TypeID(edge)
+				}
+			}
+
+			for attr, storageType := range schemaMap {
+				if _, err := schema.State().TypeOf(attr); err != nil {
+					// Schema doesn't exist
+					// Since comitted entries are serialized, updateSchemaIfMissing is not
+					// needed, In future if schema needs to be changed, it would flow through
+					// raft so there won't be race conditions between read and update schema
+					updateSchema(attr, storageType, e.Index, n.raftContext.Group)
+				}
+			}
+		}
+
 		go n.process(e, pending)
 	}
 }
@@ -478,6 +517,7 @@ func (n *node) retrieveSnapshot(rc task.RaftContext) {
 
 	x.AssertTrue(rc.Group == n.gid)
 	x.Check2(populateShard(n.ctx, pool, n.gid))
+	x.Checkf(schema.LoadFromDb(), "Error while initilizating schema")
 }
 
 func (n *node) Run() {

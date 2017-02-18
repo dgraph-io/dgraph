@@ -53,7 +53,6 @@ import (
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/task"
-	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/soheilhy/cmux"
@@ -250,13 +249,6 @@ func runMutations(ctx context.Context, mu *graph.Mutation) (map[string]uint64, e
 	var allocIds map[string]uint64
 	var err error
 
-	if err = validateTypes(mu.Set); err != nil {
-		return nil, x.Wrap(err)
-	}
-	if err = validateTypes(mu.Del); err != nil {
-		return nil, x.Wrap(err)
-	}
-
 	if allocIds, err = convertAndApply(ctx, mu.Set, mu.Del); err != nil {
 		return nil, err
 	}
@@ -283,80 +275,10 @@ func mutationHandler(ctx context.Context, mu *gql.Mutation) (map[string]uint64, 
 		}
 	}
 
-	if err = validateTypes(set); err != nil {
-		return nil, x.Wrap(err)
-	}
-	if err = validateTypes(del); err != nil {
-		return nil, x.Wrap(err)
-	}
-
 	if allocIds, err = convertAndApply(ctx, set, del); err != nil {
 		return nil, err
 	}
 	return allocIds, nil
-}
-
-func getVal(t types.TypeID, val *graph.Value) interface{} {
-	switch t {
-	case types.StringID:
-		return val.GetStrVal()
-	case types.Int32ID:
-		return val.GetIntVal()
-	case types.FloatID:
-		return val.GetDoubleVal()
-	case types.BoolID:
-		return val.GetBoolVal()
-	case types.BinaryID:
-		return val.GetBytesVal()
-	case types.GeoID:
-		return val.GetGeoVal()
-	case types.DateID:
-		return val.GetDateVal()
-	case types.DateTimeID:
-		return val.GetDatetimeVal()
-	case types.PasswordID:
-		return val.GetPasswordVal()
-	}
-	return val.GetStrVal()
-}
-
-// validateTypes checks for predicate types present in the schema and validates if the
-// input value is of the correct type
-func validateTypes(nquads []*graph.NQuad) error {
-	var schemaType types.TypeID
-	var err error
-	for i := range nquads {
-		nquad := nquads[i]
-		// Lets try to get the type of the predicate from the schema file.
-		if schemaType, err = schema.TypeOf(nquad.Predicate); err != nil || !schemaType.IsScalar() {
-			continue
-		}
-		// Lets get the storage type for the object now. nquad.ObjectType should either be
-		// supplied by the language clients or should have been assigned in rdf.Parse.
-		storageType := types.TypeID(nquad.ObjectType)
-		if storageType == types.StringID {
-			// Storage type was not specified in the RDF, so try to convert the data to the schema
-			// type.
-			src := types.Val{types.StringID, []byte(nquad.ObjectValue.GetStrVal())}
-			dst, err := types.Convert(src, schemaType)
-			if err != nil {
-				return err
-			}
-			b := types.ValueForType(types.BinaryID)
-			if err = types.Marshal(dst, &b); err != nil {
-				return err
-			}
-			nquad.ObjectValue = &graph.Value{&graph.Value_BytesVal{b.Value.([]byte)}}
-			nquad.ObjectType = int32(schemaType)
-		} else if storageType != schemaType {
-			src := types.ValueForType(storageType)
-			src.Value = getVal(storageType, nquad.ObjectValue)
-			if _, err = types.Convert(src, schemaType); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
 }
 
 func healthCheck(w http.ResponseWriter, r *http.Request) {
@@ -779,13 +701,8 @@ func main() {
 	x.Checkf(err, "Error initializing postings store")
 	defer ps.Close()
 
-	if len(*schemaFile) > 0 {
-		err = schema.Parse(*schemaFile)
-		x.Checkf(err, "Error while loading schema: %s", *schemaFile)
-		log.Println("Schema file loaded successfully.")
-	} else {
-		log.Println("No schema provided. Starting without one.")
-	}
+	err = schema.Init(ps, *schemaFile)
+	x.Checkf(err, "Error while loading schema")
 
 	// Posting will initialize index which requires schema. Hence, initialize
 	// schema before calling posting.Init().

@@ -23,15 +23,16 @@ message NQuad {
 
 message Value {
     oneof val {
-        bytes bytes_val = 1;
-        int32 int_val = 2;
-        bool bool_val = 3;
-        string str_val = 4;
-        double double_val = 5;
-        bytes geo_val = 6;  // Geo data in WKB format
-        bytes date_val = 7;
-        bytes datetime_val = 8;
-	string password_val = 9;
+        string default_val = 1;
+        bytes bytes_val = 2;
+        int32 int_val = 3;
+        bool bool_val = 4;
+        string str_val = 5;
+        double double_val = 6;
+        bytes geo_val = 7;  // Geo data in WKB format
+        bytes date_val = 8;
+        bytes datetime_val = 9;
+        string password_val = 10;
     }
 }
 

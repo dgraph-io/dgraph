@@ -43,10 +43,11 @@ func toRDF(buf *bytes.Buffer, item kv) {
 				x.Check2(buf.WriteString(fmt.Sprintf("^^<geo:geojson> ")))
 			} else if types.TypeID(p.ValType) == types.PasswordID {
 				x.Check2(buf.WriteString(fmt.Sprintf("^^<pwd:%s>", vID.Name())))
+			} else if types.TypeID(p.ValType) != types.BinaryID &&
+				types.TypeID(p.ValType) != types.DefaultID {
+				x.Check2(buf.WriteString(fmt.Sprintf("^^<xs:%s>", vID.Name())))
 			} else if len(p.Lang) > 0 {
 				x.Check2(buf.WriteString(fmt.Sprintf("@%s", p.Lang)))
-			} else if types.TypeID(p.ValType) != types.BinaryID {
-				x.Check2(buf.WriteString(fmt.Sprintf("^^<xs:%s>", vID.Name())))
 			}
 			x.Check2(buf.WriteString(" .\n"))
 			return
@@ -146,6 +147,11 @@ func backup(gid uint32, bdir string) error {
 		if pk.Attr == "_uid_" {
 			// Skip the UID mappings.
 			it.Seek(pk.SkipPredicate())
+			continue
+		}
+		if pk.IsSchema() {
+			// index values are the last keys currently
+			it.Seek(pk.SkipSchema())
 			continue
 		}
 

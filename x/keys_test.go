@@ -48,3 +48,30 @@ func TestIndexKey(t *testing.T) {
 		require.Equal(t, sterm, pk.Term)
 	}
 }
+
+func TestReverseKey(t *testing.T) {
+	var uid uint64
+	for uid = 0; uid < 1001; uid++ {
+		sattr := fmt.Sprintf("attr:%d", uid)
+
+		key := ReverseKey(sattr, uid)
+		pk := Parse(key)
+
+		require.True(t, pk.IsReverse())
+		require.Equal(t, sattr, pk.Attr)
+		require.Equal(t, uid, pk.Uid)
+	}
+}
+
+func TestSchemaKey(t *testing.T) {
+	var uid uint64
+	for uid = 0; uid < 1001; uid++ {
+		sattr := fmt.Sprintf("attr:%d", uid)
+
+		key := SchemaKey(sattr)
+		pk := Parse(key)
+
+		require.True(t, pk.IsSchema())
+		require.Equal(t, sattr, pk.Attr)
+	}
+}

@@ -49,7 +49,7 @@ func Convert(from Val, toID TypeID) (Val, error) {
 			switch toID {
 			case BinaryID:
 				*res = data
-			case StringID:
+			case StringID, DefaultID:
 				*res = string(data)
 			case Int32ID:
 				if len(data) < 4 {
@@ -98,7 +98,7 @@ func Convert(from Val, toID TypeID) (Val, error) {
 				return to, cantConvert(fromID, toID)
 			}
 		}
-	case StringID:
+	case StringID, DefaultID:
 		{
 			vc := string(data)
 			switch toID {
@@ -118,7 +118,7 @@ func Convert(from Val, toID TypeID) (Val, error) {
 					return to, err
 				}
 				*res = float64(val)
-			case StringID:
+			case StringID, DefaultID:
 				*res = string(vc)
 			case BoolID:
 				val, err := strconv.ParseBool(string(vc))
@@ -182,7 +182,7 @@ func Convert(from Val, toID TypeID) (Val, error) {
 				*res = float64(vc)
 			case BoolID:
 				*res = bool(vc != 1)
-			case StringID:
+			case StringID, DefaultID:
 				*res = string(strconv.FormatInt(int64(vc), 10))
 			case DateID:
 				date := time.Unix(int64(vc), 0).UTC()
@@ -217,7 +217,7 @@ func Convert(from Val, toID TypeID) (Val, error) {
 				*res = int32(vc)
 			case BoolID:
 				*res = bool(vc != 1)
-			case StringID:
+			case StringID, DefaultID:
 				*res = string(strconv.FormatFloat(float64(vc), 'E', -1, 64))
 			case DateID:
 				secs := int64(vc)
@@ -266,7 +266,7 @@ func Convert(from Val, toID TypeID) (Val, error) {
 				if vc {
 					*res = float64(1)
 				}
-			case StringID:
+			case StringID, DefaultID:
 				*res = string(strconv.FormatBool(bool(vc)))
 			default:
 				return to, cantConvert(fromID, toID)
@@ -291,7 +291,7 @@ func Convert(from Val, toID TypeID) (Val, error) {
 				*res = bs[:]
 			case DateTimeID:
 				*res = createDate(vc.Date())
-			case StringID:
+			case StringID, DefaultID:
 				*res = vc.Format(dateFormatYMD)
 			case Int32ID:
 				secs := vc.Unix()
@@ -327,7 +327,7 @@ func Convert(from Val, toID TypeID) (Val, error) {
 				*res = r
 			case DateID:
 				*res = createDate(vc.Date())
-			case StringID:
+			case StringID, DefaultID:
 				val, err := vc.MarshalText()
 				if err != nil {
 					return to, err
@@ -364,7 +364,7 @@ func Convert(from Val, toID TypeID) (Val, error) {
 					return to, err
 				}
 				*res = r
-			case StringID:
+			case StringID, DefaultID:
 				val, err := geojson.Marshal(vc)
 				if err != nil {
 					return to, nil
@@ -406,7 +406,7 @@ func Marshal(from Val, to *Val) error {
 	case BinaryID:
 		vc := val.([]byte)
 		switch toID {
-		case StringID:
+		case StringID, DefaultID:
 			*res = string(vc)
 		case BinaryID:
 			// Marshal Binary
@@ -414,10 +414,10 @@ func Marshal(from Val, to *Val) error {
 		default:
 			return cantConvert(fromID, toID)
 		}
-	case StringID:
+	case StringID, DefaultID:
 		vc := val.(string)
 		switch toID {
-		case StringID:
+		case StringID, DefaultID:
 			*res = vc
 		case BinaryID:
 			// Marshal Binary
@@ -428,7 +428,7 @@ func Marshal(from Val, to *Val) error {
 	case Int32ID:
 		vc := val.(int32)
 		switch toID {
-		case StringID:
+		case StringID, DefaultID:
 			*res = strconv.FormatInt(int64(vc), 10)
 		case BinaryID:
 			// Marshal Binary
@@ -441,7 +441,7 @@ func Marshal(from Val, to *Val) error {
 	case FloatID:
 		vc := val.(float64)
 		switch toID {
-		case StringID:
+		case StringID, DefaultID:
 			*res = strconv.FormatFloat(float64(vc), 'E', -1, 64)
 		case BinaryID:
 			// Marshal Binary
@@ -455,7 +455,7 @@ func Marshal(from Val, to *Val) error {
 	case BoolID:
 		vc := val.(bool)
 		switch toID {
-		case StringID:
+		case StringID, DefaultID:
 			*res = strconv.FormatBool(bool(vc))
 		case BinaryID:
 			// Marshal Binary
@@ -471,7 +471,7 @@ func Marshal(from Val, to *Val) error {
 	case DateID:
 		vc := val.(time.Time)
 		switch toID {
-		case StringID:
+		case StringID, DefaultID:
 			*res = vc.Format(dateFormatYMD)
 		case BinaryID:
 			var bs [8]byte
@@ -483,7 +483,7 @@ func Marshal(from Val, to *Val) error {
 	case DateTimeID:
 		vc := val.(time.Time)
 		switch toID {
-		case StringID:
+		case StringID, DefaultID:
 			val, err := vc.MarshalText()
 			if err != nil {
 				return err
@@ -512,7 +512,7 @@ func Marshal(from Val, to *Val) error {
 				return err
 			}
 			*res = r
-		case StringID:
+		case StringID, DefaultID:
 			val, err := geojson.Marshal(vc)
 			if err != nil {
 				return nil
@@ -551,6 +551,12 @@ func ObjectValue(id TypeID, value interface{}) (*graph.Value, error) {
 			return def, x.Errorf("Expected value of type string. Got : %v", value)
 		}
 		return &graph.Value{&graph.Value_StrVal{v}}, nil
+	case DefaultID:
+		var v string
+		if v, ok = value.(string); !ok {
+			return def, x.Errorf("Expected value of type string. Got : %v", value)
+		}
+		return &graph.Value{&graph.Value_DefaultVal{v}}, nil
 	case Int32ID:
 		var v int32
 		if v, ok = value.(int32); !ok {
@@ -634,7 +640,7 @@ func (v Val) MarshalJSON() ([]byte, error) {
 		return json.Marshal(v.Value.(time.Time))
 	case GeoID:
 		return geojson.Marshal(v.Value.(geom.T))
-	case StringID:
+	case StringID, DefaultID:
 		return json.Marshal(v.Value.(string))
 	case PasswordID:
 		return json.Marshal(v.Value.(string))

@@ -309,7 +309,7 @@ func valToBytes(v types.Val) ([]byte, error) {
 			return []byte("true"), nil
 		}
 		return []byte("false"), nil
-	case types.StringID:
+	case types.StringID, types.DefaultID:
 		return []byte(fmt.Sprintf("%q", v.Value.(string))), nil
 	case types.DateID:
 		s := v.Value.(time.Time).Format("2006-01-02")
@@ -329,10 +329,10 @@ func valToBytes(v types.Val) ([]byte, error) {
 
 func (fj *fastJsonNode) encode(bufw *bufio.Writer) {
 	allKeys := make([]string, 0, len(fj.attrs))
-	for k, _ := range fj.attrs {
+	for k := range fj.attrs {
 		allKeys = append(allKeys, k)
 	}
-	for k, _ := range fj.children {
+	for k := range fj.children {
 		allKeys = append(allKeys, k)
 	}
 	sort.Strings(allKeys)

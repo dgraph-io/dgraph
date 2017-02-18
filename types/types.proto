@@ -11,7 +11,7 @@ message Posting {
 	fixed64 uid = 1;
 	bytes value = 2;
 	enum ValType {
-		STRING = 0;
+		DEFAULT = 0;
 		BINARY = 1;
 		INT32 = 2;
 		FLOAT = 3;
@@ -21,6 +21,8 @@ message Posting {
 		GEO = 7;
 		UID = 8;
 		PASSWORD = 9;
+		STRING = 10;
+
 	}
 	ValType val_type = 3;
 	string lang = 4;
@@ -37,4 +39,10 @@ message PostingList {
 	bytes checksum = 2;
 	uint64 commit = 3; // More inclination towards smaller values.
 	repeated string langs = 4;
+}
+
+message Schema {
+	uint32 value_type = 1;
+	bool reverse = 2;
+	string tokenizer = 3;
 }
