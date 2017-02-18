@@ -1766,7 +1766,31 @@ func TestParseFacetsFail1(t *testing.T) {
 }
 
 // Test facets parsing for filtering..
-func TestFacetsFilter(t *testing.T) {
+func TestFacetsFilterSimple(t *testing.T) {
+	// all friends of 0x1 who are close to him
+	query := `
+	       {
+		me(id:0x1) {
+			name
+			friend @facets(eq(close, true)) {
+				name
+				gender
+			}
+		}
+	}
+`
+
+	res, err := Parse(query)
+	require.NoError(t, err)
+	require.NotNil(t, res.Query[0])
+	require.Equal(t, []string{"name", "friend"}, childAttrs(res.Query[0]))
+	require.Nil(t, res.Query[0].Children[1].Facets)
+	require.NotNil(t, res.Query[0].Children[1].FacetsFilter)
+	require.Equal(t, `(eq "close" "true")`,
+		res.Query[0].Children[1].FacetsFilter.debugString())
+}
+
+func TestFacetsFilterAll(t *testing.T) {
 	// all friends of 0x1 who are close to him or are in his family
 	query := `
 	       {
@@ -1799,4 +1823,40 @@ func TestFacetsFilter(t *testing.T) {
 	require.NotNil(t, genderChild)
 	require.Nil(t, genderChild.Facets)
 	require.Nil(t, genderChild.FacetsFilter)
+}
+
+func TestFacetsFilterFail(t *testing.T) {
+	// multiple @facets and @facets(close, since) are not allowed.
+	query := `
+	       {
+		me(id:0x1) {
+			name
+			friend @facets @facets(close, since) {
+				name
+				gender
+			}
+		}
+	}
+`
+
+	_, err := Parse(query)
+	require.Error(t, err)
+}
+
+func TestFacetsFilterFail2(t *testing.T) {
+	// multiple facets-filter not allowed
+	query := `
+	       {
+		me(id:0x1) {
+			name
+			friend @facets(eq(close, true)) @facets(eq(family, true)) {
+				name
+				gender
+			}
+		}
+	}
+`
+
+	_, err := Parse(query)
+	require.Error(t, err)
 }

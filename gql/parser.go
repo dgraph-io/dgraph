@@ -924,9 +924,9 @@ func parseFacets(it *lex.ItemIterator) (*Facets, *FilterTree, error) {
 		it.Next() // ignore '('
 		// parse comma separated strings (a1,b1,c1)
 		done := false
-		itCount := 0
+		numTokens := 0
 		for it.Next() {
-			itCount++
+			numTokens++
 			item := it.Item()
 			if item.Typ == itemRightRound { // done
 				done = true
@@ -938,13 +938,12 @@ func parseFacets(it *lex.ItemIterator) (*Facets, *FilterTree, error) {
 			}
 		}
 		if !done {
-			// this is not (facet1, facet2, facet3) read..
-			// try parsing filters. eq(facet1, val1) AND eq(facet2, val2)...)
-			// revert back itCount
-			for i := 0; i < itCount; i++ {
+			// this is not (facet1, facet2, facet3)
+			// try parsing filters. (eq(facet1, val1) AND eq(facet2, val2)...)
+			// revert back tokens
+			for i := 0; i < numTokens+1; i++ { // +1 for starting '('
 				it.Prev()
 			}
-			it.Prev() // get '(' also
 			filterTree, err := parseFilter(it)
 			return nil, filterTree, err
 		}
@@ -1143,16 +1142,22 @@ func parseDirective(it *lex.ItemIterator, curp *GraphQuery) error {
 	peek, err := it.Peek(1)
 	if err == nil && item.Typ == itemName {
 		if item.Val == "facets" { // because @facets can come w/t '()'
-			if facets, facetsFilter, err := parseFacets(it); err != nil {
+			facets, facetsFilter, err := parseFacets(it)
+			if err != nil {
 				return err
-			} else {
-				if facets != nil {
-					curp.Facets = facets
-				} else if facetsFilter != nil {
-					curp.FacetsFilter = facetsFilter
-				} else {
-					return x.Errorf("Facets parsing failed.")
+			}
+			if facets != nil {
+				if curp.Facets != nil {
+					return x.Errorf("Only one facets allowed")
 				}
+				curp.Facets = facets
+			} else if facetsFilter != nil {
+				if curp.FacetsFilter != nil {
+					return x.Errorf("Only one facets filter allowed")
+				}
+				curp.FacetsFilter = facetsFilter
+			} else {
+				return x.Errorf("Facets parsing failed.")
 			}
 		} else if peek[0].Typ == itemLeftRound {
 			// this is directive
