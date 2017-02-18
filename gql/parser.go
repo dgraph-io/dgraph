@@ -94,7 +94,6 @@ type FilterTree struct {
 // Function holds the information about gql functions.
 type Function struct {
 	Attr     string
-	IsFacet  bool     // Is this facet's attr ? @facets(attr)
 	Name     string   // Specifies the name of the function.
 	Args     []string // Contains the arguments of the function.
 	NeedsVar []string // If the function requires some variable
@@ -986,54 +985,24 @@ func parseFilter(it *lex.ItemIterator) (*FilterTree, error) {
 			it.Next()
 			itemInFunc := it.Item()
 			if itemInFunc.Typ != itemLeftRound {
-				return nil, x.Errorf("Expected ( after func name [%s]",
-					leaf.Func.Name)
+				return nil, x.Errorf("Expected ( after func name [%s]", leaf.Func.Name)
 			}
 			var terminated bool
 			for it.Next() {
-				isFacet := false
-				var attrName string
 				itemInFunc := it.Item()
 				if itemInFunc.Typ == itemRightRound {
 					terminated = true
 					break
-				} else if itemInFunc.Typ == itemAt {
-					if len(f.Attr) != 0 {
-						return nil, x.Errorf(
-							"Facets only allowed at attributed position.")
-					}
-					if !it.Next() {
-						return nil, x.Errorf("Unexpected end of input.")
-					}
-					item := it.Item()
-					if item.Typ != itemName || item.Val != "facets" {
-						return nil, x.Errorf("Expected facets but found : %v",
-							item.Val)
-					}
-					fs, err := parseFacets(it)
-					if err != nil {
-						return nil, err
-					}
-					if len(fs.Keys) != 1 {
-						return nil, x.Errorf("Expected 1 facet but got %v",
-							len(fs.Keys))
-					}
-					attrName = fs.Keys[0]
-					isFacet = true
 				} else if itemInFunc.Typ != itemName {
 					return nil, x.Errorf("Expected arg after func [%s], but got item %v",
 						leaf.Func.Name, itemInFunc)
 				}
-				if !isFacet {
-					attrName = itemInFunc.Val
-				}
-				it := strings.Trim(attrName, "\" \t")
+				it := strings.Trim(itemInFunc.Val, "\" \t")
 				if it == "" {
 					return nil, x.Errorf("Empty argument received")
 				}
 				if len(f.Attr) == 0 {
 					f.Attr = it
-					f.IsFacet = isFacet
 				} else {
 					f.Args = append(f.Args, it)
 				}
