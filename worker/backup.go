@@ -286,7 +286,7 @@ func BackupOverNetwork(ctx context.Context) error {
 		return x.Errorf("Uninitiated server. Please retry later")
 	}
 	// Let's first collect all groups.
-	gids := groups().Knowngroups()
+	gids := groups().KnownGroups()
 
 	ch := make(chan *BackupPayload, len(gids))
 	for _, gid := range gids {

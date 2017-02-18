@@ -204,7 +204,7 @@ func (g *groupi) Leader(group uint32) (uint64, string) {
 	return all.list[0].NodeId, all.list[0].Addr
 }
 
-func (g *groupi) Knowngroups() (gids []uint32) {
+func (g *groupi) KnownGroups() (gids []uint32) {
 	g.RLock()
 	defer g.RUnlock()
 	for gid := range g.all {
