@@ -57,15 +57,71 @@ func ParseBytes(schema []byte) (rerr error) {
 			if rerr = processScalar(it); rerr != nil {
 				return rerr
 			}
-		case "type":
-			if rerr = processObject(it); rerr != nil {
-				return rerr
-			}
 		default:
 			return x.Errorf("Expected either 'scalar' or 'type' but got: %v", item)
 		}
 	}
 	return nil
+}
+
+func parseScalarPair(it *lex.ItemIterator, predicate string,
+	allowIndex bool) (*types.Schema, error) {
+	it.Next()
+	if next := it.Item(); next.Typ != itemColon {
+		return nil, x.Errorf("Missing colon")
+	}
+
+	it.Next()
+	next := it.Item()
+	if next.Typ != itemText {
+		return nil, x.Errorf("Missing Type")
+	}
+	typ := next.Val
+	t, ok := types.TypeForName(typ)
+	if !ok {
+		return nil, x.Errorf("Undefined Type")
+	}
+
+	// Check for index / reverse.
+	for it.Next() {
+		next = it.Item()
+		if next.Typ == lex.ItemError {
+			return nil, x.Errorf(next.Val)
+		}
+		if next.Typ == itemAt {
+			it.Next()
+			next = it.Item()
+			if next.Typ != itemText {
+				return nil, x.Errorf("Missing directive name")
+			}
+			switch next.Val {
+			case "reverse":
+				if t != types.UidID {
+					return nil, x.Errorf("Cannot reverse for non-UID type")
+				}
+				return &types.Schema{ValueType: uint32(t), Reverse: true}, nil
+			case "index":
+				if !allowIndex {
+					return nil, x.Errorf("@index not allowed")
+				}
+				if tokenizer, err := parseIndexDirective(it, predicate, t); err != nil {
+					return nil, err
+				} else {
+					return &types.Schema{ValueType: uint32(t), Tokenizer: tokenizer}, nil
+				}
+			default:
+				return nil, x.Errorf("Invalid index specification")
+			}
+		}
+		it.Prev()
+		break
+	}
+	return &types.Schema{ValueType: uint32(t)}, nil
+}
+
+func parseScalarBlock(s string) {
+	lex.NewLexer(s).Run(lexText)
+
 }
 
 // processScalarBlock starts work on the inside of a scalar block.
@@ -90,96 +146,53 @@ func processScalarBlock(it *lex.ItemIterator) error {
 }
 
 // processScalarPair processes "name: type (directive)" where name is already
-// consumed and is provided as input.
+// consumed and is provided as input in file during loading
 func processScalarPair(it *lex.ItemIterator, predicate string, allowIndex bool) error {
-	it.Next()
-	if next := it.Item(); next.Typ != itemColon {
-		return x.Errorf("Missing colon")
+	if schema, err := parseScalarPair(it, predicate, allowIndex); err != nil {
+		return err
+	} else {
+		// Schema is already present for this predicate
+		_, err := State().TypeOf(predicate)
+		if err == nil {
+			return x.Errorf("Multiple schema declarations for same predicate %s", predicate)
+		}
+		State().Set(predicate, schema)
 	}
 
-	it.Next()
-	next := it.Item()
-	if next.Typ != itemText {
-		return x.Errorf("Missing Type")
-	}
-	typ := next.Val
-	t, ok := types.TypeForName(typ)
-	if ok {
-		if t1, err := State().TypeOf(predicate); err == nil {
-			if t1 != t {
-				return x.Errorf("Same field cannot have multiple types")
-			}
-		} else {
-			State().SetType(predicate, t)
-		}
-	}
-
-	// Check for index / reverse.
-	for it.Next() {
-		next = it.Item()
-		if next.Typ == lex.ItemError {
-			return x.Errorf(next.Val)
-		}
-		if next.Typ == itemAt {
-			it.Next()
-			next = it.Item()
-			if next.Typ != itemText {
-				return x.Errorf("Missing directive name")
-			}
-			switch next.Val {
-			case "reverse":
-				if t != types.UidID {
-					return x.Errorf("Cannot reverse for non-UID type")
-				}
-				State().SetReverse(predicate, true)
-				return nil
-			case "index":
-				if !allowIndex {
-					return x.Errorf("@index not allowed")
-				}
-				return processIndexDirective(it, predicate, t)
-			default:
-				return x.Errorf("Invalid index specification")
-			}
-		}
-		it.Prev()
-		break
-	}
 	return nil
 }
 
 // processIndexDirective works on "@index" or "@index(customtokenizer)".
-func processIndexDirective(it *lex.ItemIterator, predicate string, typ types.TypeID) error {
-	State().SetIndex(predicate, tok.Default(typ).Name())
+func parseIndexDirective(it *lex.ItemIterator, predicate string,
+	typ types.TypeID) (string, error) {
+	if typ == types.UidID {
+		return "", x.Errorf("Indexing not allowed on predicate %s of type uid", predicate)
+	}
 	if !it.Next() {
 		// Nothing to read.
-		return nil
+		return tok.Default(typ).Name(), nil
 	}
 	next := it.Item()
 	if next.Typ != itemLeftRound {
 		it.Prev() // Backup.
-		return nil
+		return tok.Default(typ).Name(), nil
 	}
 
 	// Look for tokenizer.
-	var hasArg bool
-	for {
-		it.Next()
-		next = it.Item()
-		if next.Typ == itemRightRound {
-			break
-		}
-		if next.Typ != itemText {
-			return x.Errorf("Expected directive arg but got: %v", next)
-		}
-		// We have the argument.
-		if hasArg {
-			return x.Errorf("Found more than one arguments for index directive")
-		}
-		// Look for custom tokenizer.
-		State().SetIndex(predicate, tok.GetTokenizer(next.Val).Name())
+
+	it.Next()
+	next = it.Item()
+	if next.Typ != itemText {
+		return "", x.Errorf("Expected directive arg but got: %v", next)
 	}
-	return nil
+	tokenizer := tok.GetTokenizer(next.Val).Name()
+	it.Next()
+	next = it.Item()
+	if next.Typ != itemRightRound {
+		return "", x.Errorf("Expected rightRound but got: %v", next)
+	}
+
+	return tokenizer, nil
 }
 
 // processScalar works on either a single scalar pair or a scalar block.
@@ -197,46 +210,6 @@ func processScalar(it *lex.ItemIterator) error {
 		default:
 			return x.Errorf("Unexpected item: %v", item)
 		}
-	}
-	return nil
-}
-
-// processObject works on "type { ... }".
-func processObject(it *lex.ItemIterator) error {
-	var objName string
-	it.Next()
-	next := it.Item()
-	if next.Typ != itemText {
-		return x.Errorf("Missing object name")
-	}
-	objName = next.Val
-	State().SetType(objName, types.UidID)
-
-	it.Next()
-	next = it.Item()
-	if next.Typ != itemLeftCurl {
-		return x.Errorf("Missing left curly brace")
-	}
-
-	fieldCount := 0
-
-L:
-	for it.Next() {
-		item := it.Item()
-		switch item.Typ {
-		case itemRightCurl:
-			break L
-		case itemText:
-			if err := processScalarPair(it, item.Val, false); err != nil {
-				return err
-			}
-			fieldCount++
-		case lex.ItemError:
-			return x.Errorf(item.Val)
-		}
-	}
-	if fieldCount == 0 {
-		return x.Errorf("Object type %v with no fields", objName)
 	}
 	return nil
 }
