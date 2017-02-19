@@ -44,7 +44,7 @@ message Result {
 	repeated Value values = 2;
 	repeated uint32 counts = 3;
 	bool intersect_dest = 4;
-	repeated facets.List facets_lists = 5;
+	repeated facets.List facet_matrix = 5;
 }
 
 message Sort {

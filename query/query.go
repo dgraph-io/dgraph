@@ -140,12 +140,12 @@ type params struct {
 // query and the response. Once generated, this can then be encoded to other
 // client convenient formats, like GraphQL / JSON.
 type SubGraph struct {
-	Attr        string
-	Params      params
-	counts      []uint32
-	values      []*task.Value
-	uidMatrix   []*task.List
-	FacetsLists []*facets.List
+	Attr         string
+	Params       params
+	counts       []uint32
+	values       []*task.Value
+	uidMatrix    []*task.List
+	facetsMatrix []*facets.List
 
 	// SrcUIDs is a list of unique source UIDs. They are always copies of destUIDs
 	// of parent nodes in GraphQL structure.
@@ -273,7 +273,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 			// this predicate.
 			var fcsList []*facets.Facets
 			if pc.Params.Facet != nil {
-				fcsList = pc.FacetsLists[idx].FacetsList
+				fcsList = pc.facetsMatrix[idx].FacetsList
 			}
 			it := algo.NewListIterator(ul)
 			for childIdx := -1; it.Valid(); it.Next() {
@@ -297,7 +297,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 					fs := fcsList[childIdx]
 					fc := dst.New(fieldName)
 					for _, f := range fs.Facets {
-						if tv, err := types.TypeValForFacet(f); err != nil {
+						if tv, err := types.ValFor(f); err != nil {
 							return err
 						} else {
 							fc.AddValue(f.Key, tv)
@@ -319,11 +319,11 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 			if err != nil {
 				return err
 			}
-			if pc.Params.Facet != nil && len(pc.FacetsLists[idx].FacetsList) > 0 {
+			if pc.Params.Facet != nil && len(pc.facetsMatrix[idx].FacetsList) > 0 {
 				fc := dst.New(fieldName)
 				// in case of Value we have only one Facets
-				for _, f := range pc.FacetsLists[idx].FacetsList[0].Facets {
-					if tVal, err := types.TypeValForFacet(f); err != nil {
+				for _, f := range pc.facetsMatrix[idx].FacetsList[0].Facets {
+					if tVal, err := types.ValFor(f); err != nil {
 						return err
 					} else {
 						fc.AddValue(f.Key, tVal)
@@ -937,7 +937,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 
 		sg.uidMatrix = result.UidMatrix
 		sg.values = result.Values
-		sg.FacetsLists = result.FacetsLists
+		sg.facetsMatrix = result.FacetMatrix
 		if len(sg.values) > 0 {
 			v := sg.values[0]
 			x.Trace(ctx, "Sample value for attr: %v Val: %v", sg.Attr, string(v.Val))
