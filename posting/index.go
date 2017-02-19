@@ -226,6 +226,7 @@ func RebuildIndex(ctx context.Context, attr string) error {
 	defer it.Close()
 	var pl types.PostingList
 
+	// Helper function - Add index entries for value kept in pl.Postings[idx]
 	addPostingToIndex := func(idx int) {
 		p := pl.Postings[idx]
 		pt := postingType(p)
@@ -249,18 +250,18 @@ func RebuildIndex(ctx context.Context, attr string) error {
 		if postingLen == 0 {
 			continue
 		}
+		// Add all values with languages
 		for _, lang := range pl.Langs {
 			langUid := farm.Fingerprint64([]byte(lang))
 			idx := sort.Search(postingLen, func(i int) bool {
 				p := pl.Postings[i]
-				return langUid < p.Uid
+				return langUid <= p.Uid
 			})
-
-			if pl.Postings[idx].Lang == lang {
+			if idx < len(pl.Postings) && pl.Postings[idx].Uid == langUid {
 				addPostingToIndex(idx)
 			}
 		}
-		addPostingToIndex(len(pl.Postings) - 1) // value without language
+		addPostingToIndex(len(pl.Postings) - 1) // Add value without language
 	}
 	return nil
 }

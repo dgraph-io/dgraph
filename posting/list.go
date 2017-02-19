@@ -621,18 +621,39 @@ func (l *List) intersectingPostings(opt ListOptions, postFn func(*types.Posting)
 	})
 }
 
-// Returns Value from posting list, according to preffered language list (langs).
+// Returns Value from posting list.
+// This function looks only for "default" value (one without language).
+func (l *List) Value() (rval types.Val, rerr error) {
+	l.RLock()
+	defer l.RUnlock()
+	return l.value()
+}
+
+// Returns Value from posting list, according to preferred language list (langs).
 // If list is empty, value without language is returned; if such value is not available, value with
 // smallest Uid is returned.
 // If list consists of one or more languages, first available value is returned; if no language
 // from list match the values, processing is the same as for empty list.
-func (l *List) Value(langs []string) (rval types.Val, rerr error) {
+func (l *List) ValueFor(langs []string) (rval types.Val, rerr error) {
 	l.RLock()
 	defer l.RUnlock()
-	return l.value(langs)
+	return l.valueFor(langs)
 }
 
-func (l *List) value(langs []string) (rval types.Val, rerr error) {
+func (l *List) value() (rval types.Val, rerr error) {
+	l.AssertRLock()
+	var found bool
+
+	found, rval = l.findValue(math.MaxUint64)
+
+	if !found {
+		return rval, ErrNoValue
+	}
+
+	return rval, nil
+}
+
+func (l *List) valueFor(langs []string) (rval types.Val, rerr error) {
 	l.AssertRLock()
 	var found bool
 

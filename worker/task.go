@@ -259,7 +259,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 
 		// If a posting list contains a value, we store that or else we store a nil
 		// byte so that processing is consistent later.
-		val, err := pl.Value(q.Langs)
+		val, err := pl.ValueFor(q.Langs)
 		isValueEdge := err == nil
 		newValue := &task.Value{ValType: int32(val.Tid)}
 		if err == nil {
@@ -376,7 +376,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 			uid := it.Val()
 			key := x.DataKey(attr, uid)
 			pl, decr := posting.GetOrCreate(key, gid)
-			val, err := pl.Value(nil)
+			val, err := pl.Value()
 			newValue := &task.Value{ValType: int32(val.Tid)}
 			if err == nil {
 				newValue.Val = val.Value.([]byte)

@@ -275,7 +275,7 @@ func fetchValue(uid uint64, attr string, langs []string, scalar types.TypeID) (t
 	pl, decr := posting.GetOrCreate(x.DataKey(attr, uid), group.BelongsTo(attr))
 	defer decr()
 
-	src, err := pl.Value(langs)
+	src, err := pl.ValueFor(langs)
 	if err != nil {
 		return types.Val{}, err
 	}
