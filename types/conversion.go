@@ -665,7 +665,7 @@ func typeIDForFacet(f *facets.Facet) TypeID {
 	}
 }
 
-func TypeValForFacet(f *facets.Facet) (Val, error) {
+func ValFor(f *facets.Facet) (Val, error) {
 	val := Val{StringID, f.Value}
 	return Convert(val, typeIDForFacet(f))
 }
