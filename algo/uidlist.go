@@ -471,11 +471,11 @@ func MergeSorted(lists []*task.List) *task.List {
 	var lIt []int // ListIterator
 	var bIt []int // ListIterator
 	for i, l := range lists {
-		i, j := 0, 0
-		lIt = append(lIt, it)
-		if it.Valid() {
+		lIt = append(lIt, 0)
+		bIt = append(bIt, 0)
+		if len(l.Blocks) > 0 && len(l.Blocks[0].List) > 0 {
 			heap.Push(h, elem{
-				val:     it.Val(),
+				val:     l.Blocks[0].List[0],
 				listIdx: i,
 			})
 		}
@@ -488,11 +488,16 @@ func MergeSorted(lists []*task.List) *task.List {
 			out.Append(me.val) // Add if unique.
 			last = me.val
 		}
-		lIt[me.listIdx].Next()
-		if !lIt[me.listIdx].Valid() {
+		lIt[me.listIdx]++
+		if lIt[me.listIdx] == len(lists[me.listIdx].Blocks[bIt[me.listIdx]].List) {
+			bIt[me.listIdx]++
+			lIt[me.listIdx] = 0
+		}
+		if bIt[me.listIdx] >= len(lists[me.listIdx].Blocks) || lIt[me.listIdx] >= len(lists[me.listIdx].Blocks[0].List) {
+			//if !lIt[me.listIdx].Valid() {
 			heap.Pop(h)
 		} else {
-			val := lIt[me.listIdx].Val()
+			val := lists[me.listIdx].Blocks[bIt[me.listIdx]].List[lIt[me.listIdx]] // lIt[me.listIdx].Val()
 			(*h)[0].val = val
 			heap.Fix(h, 0) // Faster than Pop() followed by Push().
 		}
