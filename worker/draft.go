@@ -12,6 +12,7 @@ import (
 	"github.com/coreos/etcd/raft"
 	"github.com/coreos/etcd/raft/raftpb"
 	"golang.org/x/net/context"
+	"google.golang.org/grpc"
 
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/raftwal"
@@ -375,8 +376,15 @@ func (n *node) doSendMessage(to uint64, data []byte) {
 	select {
 	case <-ctx.Done():
 		return
-	case <-ch:
-		// We don't need to do anything if we receive any error while sending message.
+	case err := <-ch:
+		if grpc.ErrorDesc(err) == ErrorInvalidToNodeId {
+			fmt.Printf("Sending Message to Remove Node %v from cluster\n", to)
+			n.Raft().ProposeConfChange(ctx, raftpb.ConfChange{
+				Type:   raftpb.ConfChangeRemoveNode,
+				NodeID: to,
+			})
+		}
+		// We don't need to do anything if we receive any other error while sending message.
 		// RAFT would automatically retry.
 		return
 	}
@@ -450,7 +458,6 @@ func (n *node) processApplyCh() {
 				x.Check(rc.Unmarshal(cc.Context))
 				n.Connect(rc.Id, rc.Addr)
 			}
-
 			cs := n.Raft().ApplyConfChange(cc)
 			n.SetConfState(cs)
 			n.applied.Ch <- mark
