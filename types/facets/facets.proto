@@ -30,3 +30,16 @@ message Facets {
 message List {
 	repeated Facets facets_list = 1;
 }
+
+message Function {
+	string name = 2;          // Name of the function : eq, leq
+	string key = 1;           // Facet key over which to run the function.
+	repeated string args = 3; // Arguments of the function.
+}
+
+// Op and Children are internal nodes and Func on leaves.
+message FilterTree {
+	string op = 1;
+	repeated FilterTree children = 2;
+	Function func = 3;
+}

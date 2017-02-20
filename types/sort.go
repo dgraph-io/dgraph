@@ -73,19 +73,21 @@ func Sort(sID TypeID, v []Val, ul *task.List, desc bool) error {
 }
 
 // Less returns true if a is strictly less than b.
-func Less(a, b Val) bool {
+func Less(a, b Val) (bool, error) {
+	if a.Tid != b.Tid {
+		return false, x.Errorf("Arguments of different type can not be compared.")
+	}
 	switch a.Tid {
 	case DateID:
-		return a.Value.(time.Time).Before(b.Value.(time.Time))
+		return a.Value.(time.Time).Before(b.Value.(time.Time)), nil
 	case DateTimeID:
-		return a.Value.(time.Time).Before(b.Value.(time.Time))
+		return a.Value.(time.Time).Before(b.Value.(time.Time)), nil
 	case Int32ID:
-		return (a.Value.(int32)) < (b.Value.(int32))
+		return (a.Value.(int32)) < (b.Value.(int32)), nil
 	case FloatID:
-		return (a.Value.(float64)) < (b.Value.(float64))
+		return (a.Value.(float64)) < (b.Value.(float64)), nil
 	case StringID:
-		return (a.Value.(string)) < (b.Value.(string))
+		return (a.Value.(string)) < (b.Value.(string)), nil
 	}
-	x.Fatalf("Unexpected scalar: %v", a.Tid)
-	return false
+	return false, x.Errorf("Compare not supported for type: %v", a.Tid)
 }

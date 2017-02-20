@@ -1,4 +1,3 @@
-
 package worker
 
 import (
@@ -7,14 +6,13 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-
 func CouldApplyAggregatorOn(agrtr string, typ types.TypeID) bool {
 	if !typ.IsScalar() {
 		return false
 	}
 	switch agrtr {
 	case "min", "max":
-		return (typ == types.Int32ID || 
+		return (typ == types.Int32ID ||
 			typ == types.FloatID ||
 			typ == types.DateTimeID ||
 			typ == types.StringID ||
@@ -49,20 +47,23 @@ func Aggregate(agrtr string, values []*task.Value, typ types.TypeID) (*task.Valu
 	if !CouldApplyAggregatorOn(agrtr, typ) {
 		return nil, x.Errorf("Cant apply aggregator %v on type %d\n", agrtr, typ)
 	}
-	
-	accumulate := func(va, vb types.Val) (types.Val) {
+
+	// va is accumulated. if some error comes in accumulate, we keep va
+	accumulate := func(va, vb types.Val) types.Val {
 		switch agrtr {
 		case "min":
-			if types.Less(va, vb) {
+			r, err := types.Less(va, vb)
+			if err != nil || r {
 				return va
 			} else {
 				return vb
 			}
 		case "max":
-			if types.Less(va, vb) {
-				return vb
-			} else {
+			r, err := types.Less(va, vb)
+			if err != nil || !r {
 				return va
+			} else {
+				return vb
 			}
 		case "sum":
 			if typ == types.Int32ID {
@@ -75,10 +76,10 @@ func Aggregate(agrtr string, values []*task.Value, typ types.TypeID) (*task.Valu
 			return va
 		}
 	}
-	
+
 	var lva, rva types.Val
 	var err error
-	result := &task.Value{ValType: int32(typ), Val:x.Nilbyte}
+	result := &task.Value{ValType: int32(typ), Val: x.Nilbyte}
 	for _, iter := range values {
 		if len(iter.Val) == 0 {
 			continue
@@ -97,7 +98,7 @@ func Aggregate(agrtr string, values []*task.Value, typ types.TypeID) (*task.Valu
 			lva = va
 		}
 	}
-	
+
 	if agrtr == "sum" && len(result.Val) > 0 {
 		data := types.ValueForType(types.BinaryID)
 		err = types.Marshal(lva, &data)

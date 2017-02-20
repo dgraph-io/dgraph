@@ -70,10 +70,7 @@ func (sg *SubGraph) getCost(matrix, list int) (float64, error) {
 	if len(fcs.Facets) > 1 {
 		return cost, x.Errorf("Expected 1 but got %d facets", len(fcs.Facets))
 	}
-	tv, err := types.ValFor(fcs.Facets[0])
-	if err != nil {
-		return cost, ErrFacet
-	}
+	tv := types.ValFor(fcs.Facets[0])
 	if tv.Tid == types.Int32ID {
 		cost = float64(tv.Value.(int32))
 	} else if tv.Tid == types.FloatID {

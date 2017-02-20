@@ -36,6 +36,7 @@ message Query {
 	bool reverse = 8;  // Whether this is a reverse edge.
 
 	facets.Param facet_param = 9; // which facets to fetch
+	facets.FilterTree facets_filter = 10; // filtering on facets : has Op (and/or/not) tree
 }
 
 message Result {
