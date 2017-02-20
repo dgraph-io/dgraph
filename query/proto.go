@@ -64,6 +64,9 @@ func toProtoValue(v types.Val) *graph.Value {
 	case types.PasswordID:
 		return &graph.Value{&graph.Value_PasswordVal{v.Value.(string)}}
 
+	case types.DefaultID:
+		return &graph.Value{&graph.Value_DefaultVal{v.Value.(string)}}
+
 	default:
 		// A type that isn't supported in the proto
 		return nil
