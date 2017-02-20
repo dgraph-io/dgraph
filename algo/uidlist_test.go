@@ -27,6 +27,7 @@ func newList(data []uint64) *task.List {
 	return SortedListToBlock(data)
 }
 
+/*
 func TestMergeSorted1(t *testing.T) {
 	input := []*task.List{
 		newList([]uint64{55}),
@@ -194,7 +195,7 @@ func TestIterator2(t *testing.T) {
 	}
 	require.Equal(t, ls, res)
 }
-
+*/
 func TestUIDListIntersect1(t *testing.T) {
 	u := newList([]uint64{1, 2, 3})
 	v := newList([]uint64{})

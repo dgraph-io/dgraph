@@ -1,13 +1,12 @@
 package algo
 
 import (
-	"container/heap"
 	"sort"
 
 	"github.com/dgraph-io/dgraph/task"
 )
 
-const blockSize = 100
+const blockSize = 3 //100
 
 // ListIterator is used to read through the task.List.
 type ListIterator struct {
@@ -86,6 +85,7 @@ func (l *WriteIterator) End() {
 	l.curBlock.MaxInt = l.curBlock.List[l.lidx-1]
 }
 
+/*
 // NewListIterator returns a read iterator for the list passed to it.
 func NewListIterator(l *task.List) ListIterator {
 	var isEnd bool
@@ -195,6 +195,7 @@ func Slice(ul *task.List, start, end int) {
 	}
 	out.End()
 }
+*/
 
 func SortedListToBlock(l []uint64) *task.List {
 	b := new(task.List)
@@ -221,22 +222,91 @@ func ListLen(l *task.List) int {
 }
 
 func IntersectWith(u, v *task.List) {
-	itu := NewListIterator(u)
-	itv := NewListIterator(v)
+	i, ii := 0, 0 //itu := NewListIterator(u)
+	j, jj := 0, 0 //itv := NewListIterator(v)
 	out := NewWriteIterator(u, 0)
-	for itu.Valid() && itv.Valid() {
-		uid := itu.Val()
-		vid := itv.Val()
-		if uid == vid {
-			out.Append(uid)
-			itu.Next()
-			itv.Next()
-		} else if uid < vid {
-			itu.Seek(vid, 1)
-		} else if uid > vid {
-			itv.Seek(uid, 1)
+	m := len(u.Blocks)
+	n := len(v.Blocks)
+	for i < m && j < n {
+		ulist := u.Blocks[i].List
+		vlist := v.Blocks[j].List
+		ub := u.Blocks[i].MaxInt
+		vb := v.Blocks[j].MaxInt
+		ulen := len(ulist)
+		vlen := len(vlist)
+	L:
+		for ii < ulen && jj < vlen {
+			uid := ulist[ii]
+			vid := vlist[jj]
+
+			if uid == vid {
+				out.Append(uid)
+				ii++
+				jj++
+				if ii == ulen {
+					i++
+					ii = 0
+					break L
+				}
+				if jj == vlen {
+					j++
+					jj = 0
+					break L
+				}
+			} else if ub < vid {
+				i++
+				ii = 0
+				break L
+			} else if vb < uid {
+				j++
+				jj = 0
+				break L
+			} else if uid < vid {
+				for ; ii < ulen && ulist[ii] < vid; ii++ {
+				}
+				if ii == ulen {
+					i++
+					ii = 0
+					break L
+				}
+			} else if uid > vid {
+				for ; jj < vlen && vlist[jj] < uid; jj++ {
+				}
+				if jj == vlen {
+					j++
+					jj = 0
+					break L
+				}
+			}
+		}
+		if ii == ulen {
+			i++
+			ii = 0
+		}
+		if jj == vlen {
+			j++
+			jj = 0
 		}
 	}
+	/*
+		if i == len(u) {
+			out[i-1].list = out[i-1].list[:kk]
+		}
+	*/
+	/*
+		for itu.Valid() && itv.Valid() {
+			uid := itu.Val()
+			vid := itv.Val()
+			if uid == vid {
+				out.Append(uid)
+				itu.Next()
+				itv.Next()
+			} else if uid < vid {
+				itu.Seek(vid, 1)
+			} else if uid > vid {
+				itv.Seek(uid, 1)
+			}
+		}*/
 	out.End()
 }
 
@@ -253,6 +323,7 @@ func ApplyFilter(u *task.List, f func(uint64, int) bool) {
 	out.End()
 }
 
+/*
 // IntersectSorted intersect a list of UIDLists. An alternative is to do
 // pairwise intersections n-1 times where n=number of lists. This is less
 // efficient:
@@ -380,7 +451,7 @@ func MergeSorted(lists []*task.List) *task.List {
 	out.End()
 	return o
 }
-
+*/
 // IndexOf performs a binary search on the uids slice and returns the index at
 // which it finds the uid, else returns -1
 func IndexOf(u *task.List, uid uint64) (int, int) {
