@@ -117,22 +117,23 @@ func (l *Latency) ToMap() map[string]string {
 }
 
 type params struct {
-	Alias      string
-	Count      int
-	Offset     int
-	AfterUID   uint64
-	DoCount    bool
-	GetUID     bool
-	Order      string
-	OrderDesc  bool
-	isDebug    bool
-	Var        string
-	NeedsVar   []string
-	ParentVars map[string]*task.List
-	Normalize  bool
-	From       uint64
-	To         uint64
-	Facet      *facets.Param
+	Alias       string
+	Count       int
+	Offset      int
+	AfterUID    uint64
+	DoCount     bool
+	GetUID      bool
+	Order       string
+	OrderDesc   bool
+	isDebug     bool
+	Var         string
+	NeedsVar    []string
+	ParentVars  map[string]*task.List
+	Normalize   bool
+	From        uint64
+	To          uint64
+	Facet       *facets.Param
+	IsSearchAll bool
 }
 
 // SubGraph is the way to represent data internally. It contains both the
@@ -216,6 +217,8 @@ func init() {
 
 var (
 	ErrEmptyVal = errors.New("query: harmless error, e.g. task.Val is nil")
+
+	SearchAllUid = farm.Fingerprint64([]byte("_searchall_"))
 )
 
 // This method gets the values and children for a subgraph.
@@ -655,6 +658,21 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		}
 		sg.Filters = append(sg.Filters, sgf)
 	}
+	//
+	if len(gq.UID) > 0 && gq.UID[0] == SearchAllUid {
+
+		if len(sg.Filters) != 1 {
+			return nil, x.Errorf("search-all should be combined with 1 filter")
+		}
+		srcFunc := sg.Filters[0].SrcFunc
+		if len(srcFunc) != 3 || srcFunc[0] != "gt" || srcFunc[1] != "count" {
+			return nil, x.Errorf("search-all should be combined with filter gt(count)")
+		}
+		sg.Attr = sg.Filters[0].Attr
+		sg.SrcFunc = sg.Filters[0].SrcFunc
+		sg.Filters = sg.Filters[:0]
+		sg.Params.IsSearchAll = true
+	}
 	return sg, nil
 }
 
@@ -677,14 +695,15 @@ func createTaskQuery(sg *SubGraph) *task.Query {
 		attr = strings.TrimPrefix(attr, "~")
 	}
 	out := &task.Query{
-		Attr:       attr,
-		Reverse:    reverse,
-		SrcFunc:    sg.SrcFunc,
-		Count:      int32(sg.Params.Count),
-		Offset:     int32(sg.Params.Offset),
-		AfterUid:   sg.Params.AfterUID,
-		DoCount:    len(sg.Filters) == 0 && sg.Params.DoCount,
-		FacetParam: sg.Params.Facet,
+		Attr:        attr,
+		Reverse:     reverse,
+		SrcFunc:     sg.SrcFunc,
+		Count:       int32(sg.Params.Count),
+		Offset:      int32(sg.Params.Offset),
+		AfterUid:    sg.Params.AfterUID,
+		DoCount:     len(sg.Filters) == 0 && sg.Params.DoCount,
+		FacetParam:  sg.Params.Facet,
+		IsSearchAll: sg.Params.IsSearchAll,
 	}
 	if sg.SrcUIDs != nil {
 		out.Uids = sg.SrcUIDs
@@ -710,7 +729,7 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 		}
 		x.Trace(ctx, "Query parsed")
 		sgl = append(sgl, sg)
-		//sg.DebugPrint("---")
+		sg.DebugPrint("---")
 	}
 	l.Parsing += time.Since(loopStart)
 

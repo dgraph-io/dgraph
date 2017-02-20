@@ -17,8 +17,10 @@
 package worker
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"golang.org/x/net/context"
 
@@ -196,6 +198,17 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 			return nil, x.Wrapf(err, "Compare %v(%v) require digits, but got invalid num",
 				q.SrcFunc[0], q.SrcFunc[1])
 		}
+
+		if q.IsSearchAll {
+			fmt.Printf("-- Is search all, attr %v\n", attr)
+			dict := algo.DataKeysForPrefix(attr, pstore)
+			q.Uids = new(task.List)
+			it := algo.NewWriteIterator(q.Uids, 0)
+			for _, parsed := range dict {
+				it.Append(parsed.Uid)
+			}
+			it.End()
+		}
 		n = algo.ListLen(q.Uids)
 
 	case GeoFn:
@@ -236,6 +249,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 		opts.Intersect = q.Uids
 	}
 
+	startTm := time.Now()
 	for i := 0; i < n; i++ {
 		var key []byte
 		var uid uint64
@@ -394,6 +408,8 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 		}
 	}
 	out.IntersectDest = intersectDest
+
+	fmt.Printf("[iter get Length] time usage %v\n", time.Since(startTm))
 	return &out, nil
 }
 

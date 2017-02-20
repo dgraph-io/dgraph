@@ -1931,3 +1931,18 @@ func TestFacetsFilterFail4(t *testing.T) {
 	_, err := Parse(query)
 	require.Error(t, err)
 }
+
+func TestParseSearchAll(t *testing.T) {
+	query := `
+	{
+		me(id:_searchall_) {
+			friends
+			name
+		}
+	}
+`
+	res, err := Parse(query)
+	require.NoError(t, err)
+	require.NotNil(t, res.Query)
+	require.Equal(t, 1, len(res.Query))
+}
