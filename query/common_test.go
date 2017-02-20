@@ -151,18 +151,26 @@ func addGeoData(t *testing.T, ps *store.Store, uid uint64, p geom.T, name string
 	addEdgeToTypedValue(t, "name", uid, types.StringID, []byte(name), nil)
 }
 
-func processToFastJSON(t *testing.T, query string) string {
+func processToFastJsonReq(t *testing.T, query string) (string, error) {
 	res, err := gql.Parse(query)
-	require.NoError(t, err)
-
+	if err != nil {
+		return "", err
+	}
 	var l Latency
 	ctx := context.Background()
 	sgl, err := ProcessQuery(ctx, res, &l)
-	require.NoError(t, err)
-
+	if err != nil {
+		return "", err
+	}
 	var buf bytes.Buffer
-	require.NoError(t, ToJson(&l, sgl, &buf, nil))
-	return string(buf.Bytes())
+	err = ToJson(&l, sgl, &buf, nil)
+	return string(buf.Bytes()), err
+}
+
+func processToFastJSON(t *testing.T, query string) string {
+	res, err := processToFastJsonReq(t, query)
+	require.NoError(t, err)
+	return res
 }
 
 func processToPB(t *testing.T, query string, debug bool) *graph.Node {
