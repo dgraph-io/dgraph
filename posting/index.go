@@ -18,6 +18,7 @@ package posting
 
 import (
 	"context"
+	"time"
 
 	"golang.org/x/net/trace"
 
@@ -28,7 +29,10 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-const maxBatchSize = 32 * (1 << 20)
+const (
+	maxBatchSize       = 32 * (1 << 20)
+	checkIndexInterval = time.Second * 10
+)
 
 var (
 	indexLog   trace.EventLog
@@ -38,6 +42,39 @@ var (
 func init() {
 	indexLog = trace.NewEventLog("index", "Logger")
 	reverseLog = trace.NewEventLog("reverse", "Logger")
+	go checkIndex()
+}
+
+func checkIndexKey(groupID uint32, key []byte) {
+	pl, decr := GetOrCreate(key, groupID)
+	defer decr()
+
+	var opts ListOptions
+	uids := pl.Uids(opts)
+
+	pki := x.Parse(key)
+	x.AssertTrue(pki.IsIndex())
+	term := pki.Term
+}
+
+// checkIndex iterates over index entries and delete invalid entries.
+func checkIndex() {
+	var pk x.ParsedKey
+	idxIt := pstore.NewIterator()
+	defer idxIt.Close()
+	for {
+		timeStart := time.Now()
+		for _, attr := range schema.State().IndexedFields() {
+			groupID := group.BelongsTo(attr)
+			pk.Attr = attr
+			prefix := pk.IndexPrefix()
+			for idxIt.Seek(prefix); idxIt.ValidForPrefix(prefix); idxIt.Next() {
+				checkIndexKey(groupID, idxIt.Key().Data())
+			}
+		}
+		elapsed := time.Since(timeStart)
+		time.Sleep(checkIndexInterval - elapsed) // If negative, we don't sleep.
+	}
 }
 
 // IndexTokens return tokens, without the predicate prefix and index rune.
