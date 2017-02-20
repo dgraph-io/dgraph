@@ -484,9 +484,9 @@ func applyFacetFilter(fcs []*facets.Facet, ftree *facets.FilterTree) (bool, erro
 				len(ftree.Func.Args))
 		}
 
-		fctv := types.ValFor(fc)
 		switch fnType {
 		case CompareAttrFn:
+			fctv := types.ValFor(fc)
 			// Should move this to outside of applyFacetFilter
 			argf, err := facets.FacetFor(fc.Key, ftree.Func.Args[0])
 			if err != nil {
@@ -495,10 +495,11 @@ func applyFacetFilter(fcs []*facets.Facet, ftree *facets.FilterTree) (bool, erro
 			argtv := types.ValFor(argf)
 			return compareTypeVals(fname, fctv, argtv), nil
 		case StandardFn:
-			if fctv.Tid != types.StringID { // facet should be a string.
+			// facet should be a string for : allof, anyof
+			if facets.TypeIDForValType(fc.ValType) != facets.StringID {
 				return false, nil
 			}
-			fcTokens, ferr := getTokens([]string{fctv.Value.(string)})
+			fcTokens, ferr := getTokens([]string{string(fc.Value)})
 			if ferr != nil {
 				return false, nil
 			}
@@ -508,42 +509,7 @@ func applyFacetFilter(fcs []*facets.Facet, ftree *facets.FilterTree) (bool, erro
 				return false, aerr
 			}
 			sort.Strings(argTokens)
-
-			switch fname {
-			case "allof":
-				// allof argTokens should be in fcTokens
-				if len(argTokens) > len(fcTokens) {
-					return false, nil
-				}
-				aidx := 0
-				for fidx := 0; aidx < len(argTokens) && fidx < len(fcTokens); {
-					if fcTokens[fidx] < argTokens[aidx] {
-						fidx++
-					} else if fcTokens[fidx] == argTokens[aidx] {
-						fidx++
-						aidx++
-					} else {
-						// as all of argTokens should match
-						// which is not possible now.
-						break
-					}
-				}
-				return aidx == len(argTokens), nil
-			case "anyof":
-				for aidx, fidx := 0, 0; aidx < len(argTokens) && fidx < len(fcTokens); {
-					if fcTokens[fidx] < argTokens[aidx] {
-						fidx++
-					} else if fcTokens[fidx] == argTokens[aidx] {
-						return true, nil
-					} else {
-						aidx++
-					}
-				}
-				return false, nil
-			default:
-				return false,
-					x.Errorf("Fn %s not supported in facets filtering.", fname)
-			}
+			return filterOnStandardFn(fname, fcTokens, argTokens)
 		default:
 			return false, x.Errorf("Fn %s not supported in facets filtering.", fattr)
 		}
@@ -622,4 +588,40 @@ func compareTypeVals(op string, arg1, arg2 types.Val) bool {
 		x.Fatalf("Unknown ineqType %v", op)
 	}
 	return false
+}
+
+func filterOnStandardFn(fname string, fcTokens []string, argTokens []string) (bool, error) {
+	switch fname {
+	case "allof":
+		// allof argTokens should be in fcTokens
+		if len(argTokens) > len(fcTokens) {
+			return false, nil
+		}
+		aidx := 0
+		for fidx := 0; aidx < len(argTokens) && fidx < len(fcTokens); {
+			if fcTokens[fidx] < argTokens[aidx] {
+				fidx++
+			} else if fcTokens[fidx] == argTokens[aidx] {
+				fidx++
+				aidx++
+			} else {
+				// as all of argTokens should match
+				// which is not possible now.
+				break
+			}
+		}
+		return aidx == len(argTokens), nil
+	case "anyof":
+		for aidx, fidx := 0, 0; aidx < len(argTokens) && fidx < len(fcTokens); {
+			if fcTokens[fidx] < argTokens[aidx] {
+				fidx++
+			} else if fcTokens[fidx] == argTokens[aidx] {
+				return true, nil
+			} else {
+				aidx++
+			}
+		}
+		return false, nil
+	}
+	return false, x.Errorf("Fn %s not supported in facets filtering.", fname)
 }
