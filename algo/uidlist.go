@@ -181,22 +181,28 @@ func (l *ListIterator) Next() {
 		l.isEnd = true
 	}
 }
-
+*/
 // Slice returns a new task.List with the elements between start index and end index
 // of  the list passed to it.
 func Slice(ul *task.List, start, end int) {
 	out := NewWriteIterator(ul, 0)
-	it := NewListIterator(ul)
-	it.SeekToIndex(start)
 
-	i := 0
-	for ; start+i < end && it.Valid(); it.Next() {
-		out.Append(it.Val())
+	i, ii, k := 0, 0, 0
+	blockLen := len(ul.Blocks)
+	for i < blockLen {
+		ulist := ul.Blocks[i].List
+		listLen := len(ulist)
+		for ii < listLen {
+			if k >= start && k < end {
+				out.Append(ulist[ii])
+			}
+			ii++
+			k++
+		}
 		i++
 	}
 	out.End()
 }
-*/
 
 func SortedListToBlock(l []uint64) *task.List {
 	b := new(task.List)
