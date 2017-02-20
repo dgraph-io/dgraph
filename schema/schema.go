@@ -138,6 +138,14 @@ func (s *state) IndexedFields() []string {
 	return out
 }
 
+func (s *state) Predicates() []string {
+	out := make([]string, 0, len(s.predicate))
+	for k := range s.predicate {
+		out = append(out, k)
+	}
+	return out
+}
+
 // Tokenizer returns the tokenizer for given predicate
 func (s *state) Tokenizer(pred string) tok.Tokenizer {
 	s.RLock()

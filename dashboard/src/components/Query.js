@@ -1,7 +1,9 @@
+// @flow
+
 import React, { Component } from 'react';
 import {Popover, OverlayTrigger} from 'react-bootstrap';
 
-function prettifyQuery(q) {
+function prettifyQuery(q:string) {
   var parsedQuery
   try {
     parsedQuery = JSON.parse(q);
@@ -11,7 +13,7 @@ function prettifyQuery(q) {
   return JSON.stringify(parsedQuery, null, 2);
 }
 
-function getQueryStructure(query) {
+function getQueryStructure(query:string) {
   var lines = query.split("\n");
   lines = lines.map(function(line) {
     return line.trim();
@@ -38,7 +40,56 @@ function getQueryStructure(query) {
   return structure
 }
 
+function plural(val) {
+  if(val > 1) {
+    return "s"
+  } else {
+    return ""
+  }
+}
+
+function since(lastRun) {
+  // In seconds
+  let diff = (Date.now() - new Date(lastRun))/1000
+
+  let minute = 60,
+    hour = minute * 60,
+    day = hour * 24,
+    // Lets just take 30.
+    month = day * 30,
+    year = month * 12;
+
+  if (diff > year) {
+    let val = Math.round(diff/year)
+    return `${val} year${plural(val)} ago`
+  } else if (diff > month) {
+    let val = Math.round(diff/month)
+    return `${val} month${plural(val)} ago`
+  } else if (diff > day) {
+    let val = Math.round(diff/day)
+    return `${val} day${plural(val)} ago`
+  } else if (diff > hour) {
+    let val = Math.round(diff/hour)
+    return `${val} hour${plural(val)} ago`
+  } else if (diff > minute) {
+    let val = Math.round(diff/minute);
+    return `${val} minute${plural(val)} ago`
+  } else {
+    let val = Math.round(diff/1)
+    return `${val} second${plural(val)} ago`
+  }
+}
+
 class Query extends Component {
+  shouldComponentUpdate(nextProps, nextState) {
+    let timeNow = new Date();
+    let diff = (timeNow - this.props.lastRun) /1000;
+    if(diff < 60) {
+      return false
+    }
+    return true
+  }
+
   render() {
 const popover = (
   <Popover id={this.props.unique}>
@@ -48,17 +99,19 @@ const popover = (
   </Popover>
 );
 
+    const timeDiff = since(this.props.lastRun)
     return (
-      <div className="query" style={{marginBottom: '10px', padding: '5px', borderBottom: '1px solid gray'}}>
-         <OverlayTrigger delayShow={1000} delayHide={0}
-        overlay={popover} placement="bottom">
-          <pre style={{whiteSpace: 'pre-wrap', backgroundColor: '#f0ece9'}}
+      <tr className="query" style={{padding: '5px'}}>
+         <td style={{padding: '0px 5px 0px 10px', width: '20%'}}>{timeDiff}</td>
+         <td style={{padding: '0px 10px 0px 5px'}}>
+         <OverlayTrigger delayShow={1500} delayHide={0}
+        overlay={popover} placement="top">
+            <pre style={{whiteSpace: 'pre-wrap', backgroundColor: '#f0ece9', margin: '5px 0px', wordBreak: 'break-word'}}
             onClick={this.props.update} data-query={this.props.text}>{getQueryStructure(prettifyQuery(this.props.text))}
-          </pre>
+            </pre>
           </OverlayTrigger>
-        <div className="col-sm-6">
-        </div>
-      </div>
+          </td>
+      </tr>
     )
   }
 }

@@ -15,12 +15,18 @@
   "dependencies": {
     "bootstrap": "^3.3.7",
     "classnames": "^2.2.5",
+    "codemirror": "^5.23.0",
+    "codemirror-graphql": "^0.6.3",
+    "graphql": "^0.9.1",
+    "randomcolor": "^0.4.4",
     "react": "^15.4.2",
-    "react-ace": "^4.1.4",
     "react-bootstrap": "^0.30.7",
     "react-dom": "^15.4.2",
     "screenfull": "^3.0.2",
     "vis": "^4.18.1"
+  },
+  "peerDependencies": {
+    "graphql": "^0.6.0 || ^0.7.0 || ^0.8.0-b || ^0.9.0"
   },
   "scripts": {
     "start": "react-scripts start",
