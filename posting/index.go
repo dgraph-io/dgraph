@@ -229,7 +229,7 @@ func RebuildIndex(ctx context.Context, attr string) error {
 	addPostingToIndex := func(idx int) {
 		p := pl.Postings[idx]
 		pt := postingType(p)
-		if pt == valueTagged || pt == valueUntagged {
+		if pt == x.ValueTagged || pt == x.ValueUntagged {
 			// Add index entries based on p.
 			val := types.Val{
 				Value: p.Value,
@@ -243,6 +243,7 @@ func RebuildIndex(ctx context.Context, attr string) error {
 	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
 		pki := x.Parse(it.Key().Data())
 		edge.Entity = pki.Uid
+		pl.Reset()
 		x.Check(pl.Unmarshal(it.Value().Data()))
 
 		postingLen := len(pl.Postings)
@@ -252,7 +253,7 @@ func RebuildIndex(ctx context.Context, attr string) error {
 
 		// Posting lists contains (only) values if there are some languages defined or last posting
 		// is a value without language. Otherwise it cointais UIDs.
-		if len(pl.Langs) > 0 || postingType(pl.Postings[postingLen-1]) == valueUntagged {
+		if len(pl.Langs) > 0 || postingType(pl.Postings[postingLen-1]) == x.ValueUntagged {
 			for idx := 0; idx < postingLen; idx++ {
 				addPostingToIndex(idx)
 			}

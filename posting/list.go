@@ -142,7 +142,7 @@ func samePosting(oldp *types.Posting, newp *types.Posting) bool {
 }
 
 func newPosting(t *task.DirectedEdge) *types.Posting {
-	x.AssertTruef(edgeType(t) != valueEmpty,
+	x.AssertTruef(edgeType(t) != x.ValueEmpty,
 		"This should have been set by the caller.")
 
 	var op uint32
@@ -317,30 +317,26 @@ func (l *List) AddMutation(ctx context.Context, t *task.DirectedEdge) (bool, err
 	return l.addMutation(ctx, t)
 }
 
-// TODO(tzdybal) - this is almost the same as in rdf/parse.go - maybe some refactoring?
-type valueTypeInfo int32
-
-// Type of a data inside DirectedEdge or Posting
-const (
-	valueEmpty    valueTypeInfo = iota // no UID and no value
-	valueUid                           // UID
-	valueUntagged                      // value without defined language tag
-	valueTagged                        // value with defined language tag
-)
-
-func edgeType(t *task.DirectedEdge) valueTypeInfo {
+func edgeType(t *task.DirectedEdge) x.ValueTypeInfo {
 	hasVal := !bytes.Equal(t.Value, nil)
 	hasId := t.ValueId != 0
 	switch {
 	case hasVal && hasId:
-		return valueTagged
+		return x.ValueTagged
 	case hasVal && !hasId:
-		return valueUntagged
+		return x.ValueUntagged
 	case !hasVal && hasId:
-		return valueUid
+		return x.ValueUid
 	default:
-		return valueEmpty
+		return x.ValueEmpty
 	}
+}
+
+func postingType(p *types.Posting) x.ValueTypeInfo {
+	hasValue := !bytes.Equal(p.Value, nil)
+	hasLang := len(p.Lang) > 0
+	hasSpecialId := p.Uid == math.MaxUint64
+	return x.ValueType(hasValue, hasLang, hasSpecialId)
 }
 
 // TypeID returns the typeid of destiantion vertex
@@ -349,24 +345,6 @@ func TypeID(edge *task.DirectedEdge) types.TypeID {
 		return types.UidID
 	}
 	return types.TypeID(edge.ValueType)
-}
-
-// TODO(tzdybal) - refactor
-func postingType(p *types.Posting) valueTypeInfo {
-	if !bytes.Equal(p.Value, nil) {
-		if len(p.Lang) == 0 {
-			return valueUntagged // value without lang tag
-		} else {
-			return valueTagged // value with lang tag
-		}
-	} else {
-		if p.Uid == math.MaxUint64 {
-			return valueEmpty // empty - no Uid and no Value
-		} else {
-			return valueUid // Uid
-		}
-
-	}
 }
 
 func (l *List) addMutation(ctx context.Context, t *task.DirectedEdge) (bool, error) {
@@ -601,7 +579,7 @@ func (l *List) intersectingPostings(opt ListOptions, postFn func(*types.Posting)
 
 	it := algo.NewListIterator(opt.Intersect)
 	l.iterate(opt.AfterUID, func(p *types.Posting) bool {
-		if postingType(p) != valueUid {
+		if postingType(p) != x.ValueUid {
 			return true
 		}
 		uid := p.Uid
@@ -673,9 +651,8 @@ func (l *List) valueFor(langs []string) (rval types.Val, rerr error) {
 
 	// last resort - return value with smallest lang Uid
 	if !found {
-		// TODO(tzdybal) - store list of languages in List, to avoid iteration
 		l.iterate(0, func(p *types.Posting) bool {
-			if postingType(p) == valueTagged {
+			if postingType(p) == x.ValueTagged {
 				val := make([]byte, len(p.Value))
 				copy(val, p.Value)
 				rval.Value = val
