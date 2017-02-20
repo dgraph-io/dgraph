@@ -380,7 +380,7 @@ func IntersectSorted(lists []*task.List) *task.List {
 					for ; lptrs[j].Valid() && lptrs[j].Val() < val; lptrs[j].Next() {
 							}
 				*/
-				if k != llen && lists[j].Blocks[k].List[kk] > val {
+				if k == llen || lists[j].Blocks[k].List[kk] > val {
 					elemsLeft = k < llen //lists[j].Blocks[k].List[kk]
 					skip = true
 					break
