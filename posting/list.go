@@ -578,7 +578,7 @@ func (l *List) LastCompactionTs() time.Time {
 func (l *List) Uids(opt ListOptions) *task.List {
 	res := new(task.List)
 	writeIt := algo.NewWriteIterator(res, 0)
-	l.intersectingPostings(opt, func(p *types.Posting) {
+	l.Postings(opt, func(p *types.Posting) {
 		writeIt.Append(p.Uid)
 	})
 	writeIt.End()
@@ -588,15 +588,15 @@ func (l *List) Uids(opt ListOptions) *task.List {
 // FacetsForUids gives Facets for postings common with uids in opt listOptions.
 func (l *List) FacetsForUids(opt ListOptions, param *facets.Param) []*facets.Facets {
 	result := make([]*facets.Facets, 0, 10)
-	l.intersectingPostings(opt, func(p *types.Posting) {
+	l.Postings(opt, func(p *types.Posting) {
 		result = append(result, &facets.Facets{Facets: copyFacets(p, param)})
 	})
 	return result
 }
 
-// intersectingPostings calls postFn with the postings that are common with
+// Postings calls postFn with the postings that are common with
 // uids in the opt ListOptions.
-func (l *List) intersectingPostings(opt ListOptions, postFn func(*types.Posting)) {
+func (l *List) Postings(opt ListOptions, postFn func(*types.Posting)) {
 	l.RLock()
 	defer l.RUnlock()
 

@@ -269,12 +269,13 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 			newValue.Val = x.Nilbyte
 		}
 
-		var facetFilterRes []bool // which index of facets/uids to take.
+		// Which index of posting id to keep from filtered (by facets) posting list.
+		var keepIds []bool
 		if q.FacetsFilter != nil {
 			if isValueEdge {
 				return nil, x.Errorf("Facet filtering is not supported on values.")
 			}
-			fcKeys := attrsFromFilter(q.FacetsFilter)
+			fcKeys := keysFromFilter(q.FacetsFilter)
 			sort.Strings(fcKeys)
 			param := &facets.Param{AllKeys: false, Keys: fcKeys}
 			// generate facetFilterRes : which indexes should be taken.
@@ -283,7 +284,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 				if err != nil {
 					return nil, err
 				}
-				facetFilterRes = append(facetFilterRes, res)
+				keepIds = append(keepIds, res)
 			}
 		}
 
@@ -300,7 +301,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 				fcsList := pl.FacetsForUids(opts, q.FacetParam)
 				if q.FacetsFilter != nil {
 					filterFacets(fcsList, func(i int, _ *facets.Facets) bool {
-						return facetFilterRes[i]
+						return keepIds[i]
 					})
 				}
 				out.FacetMatrix = append(out.FacetMatrix, &facets.List{fcsList})
@@ -349,7 +350,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 		uids := pl.Uids(opts)
 		if q.FacetsFilter != nil {
 			algo.ApplyFilter(uids, func(_ uint64, i int) bool {
-				return facetFilterRes[i]
+				return keepIds[i]
 			})
 		}
 		out.UidMatrix = append(out.UidMatrix, uids)
@@ -443,23 +444,23 @@ func (w *grpcWorker) ServeTask(ctx context.Context, q *task.Query) (*task.Result
 	}
 }
 
-func attrsFromFilter(ftree *facets.FilterTree) (attrs []string) {
+func keysFromFilter(ftree *facets.FilterTree) (attrs []string) {
 	if ftree.Func != nil {
 		attrs = append(attrs, ftree.Func.Key)
 	}
 	for _, c := range ftree.Children {
-		attrs = append(attrs, attrsFromFilter(c)...)
+		attrs = append(attrs, keysFromFilter(c)...)
 	}
 	return attrs
 }
 
-// we return error only when query has some problems..
+// we return error only when query has some problems.
 // like Or has 3 arguments, argument facet val overflows integer.
-func applyFacetFilter(fcs []*facets.Facet, ftree *facets.FilterTree) (bool, error) {
+func applyFacetFilter(postingFacets []*facets.Facet, ftree *facets.FilterTree) (bool, error) {
 	if ftree.Func != nil {
 		fname := strings.ToLower(ftree.Func.Name)
 		var fc *facets.Facet
-		for _, fci := range fcs {
+		for _, fci := range postingFacets {
 			if fci.Key == ftree.Func.Key {
 				fc = fci
 				break
@@ -475,25 +476,29 @@ func applyFacetFilter(fcs []*facets.Facet, ftree *facets.FilterTree) (bool, erro
 		}
 
 		switch fnType {
-		case CompareAttrFn:
+		case CompareAttrFn: // lt, gt, le, ge, eq
 			fctv := types.ValFor(fc)
-			// Should move this to outside of applyFacetFilter
+			// TODO(ashish): Should move this to outside of applyFacetFilter
 			argf, err := facets.FacetFor(fc.Key, ftree.Func.Args[0])
 			if err != nil {
 				return false, err // stop processing as this is query error
 			}
 			argtv := types.ValFor(argf)
 			return compareTypeVals(fname, fctv, argtv), nil
-		case StandardFn:
-			// facet should be a string for : allof, anyof
+
+		case StandardFn: // allof, anyof
 			if facets.TypeIDForValType(fc.ValType) != facets.StringID {
 				return false, nil
 			}
+			// TODO: Tokenize facet with string values and store them,
+			// instead of creating them on the fly.
 			fcTokens, ferr := getTokens([]string{string(fc.Value)})
 			if ferr != nil {
 				return false, nil
 			}
 			sort.Strings(fcTokens)
+
+			// TODO: Also tokenize the query once and use it.
 			argTokens, aerr := getTokens(ftree.Func.Args)
 			if aerr != nil { // query error ; stop processing.
 				return false, aerr
@@ -506,7 +511,7 @@ func applyFacetFilter(fcs []*facets.Facet, ftree *facets.FilterTree) (bool, erro
 
 	var res []bool
 	for _, c := range ftree.Children {
-		if r, err := applyFacetFilter(fcs, c); err != nil {
+		if r, err := applyFacetFilter(postingFacets, c); err != nil {
 			return false, err
 		} else {
 			res = append(res, r)
