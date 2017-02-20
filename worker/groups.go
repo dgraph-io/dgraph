@@ -529,12 +529,12 @@ func syncAllMarks(ctx context.Context) error {
 	var err error
 	for _, n := range groups().nodes() {
 		wg.Add(1)
-		go func() {
+		go func(n *node) {
 			defer wg.Done()
 			if e := n.syncAllMarks(ctx); e != nil && err == nil {
 				err = e
 			}
-		}()
+		}(n)
 	}
 	wg.Wait()
 	return err

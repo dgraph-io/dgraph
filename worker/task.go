@@ -275,7 +275,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 			if isValueEdge {
 				fs, err := pl.Facets(q.FacetParam)
 				if err != nil {
-					return nil, err
+					fs = []*facets.Facet{}
 				}
 				out.FacetMatrix = append(out.FacetMatrix,
 					&facets.List{[]*facets.Facets{&facets.Facets{fs}}})
