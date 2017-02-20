@@ -47,6 +47,12 @@ func (p *peerPool) Set(id uint64, addr string) {
 	p.peers[id] = addr
 }
 
+func (p *peerPool) Del(id uint64) {
+	p.Lock()
+	defer p.Unlock()
+	delete(p.peers, id)
+}
+
 type proposals struct {
 	sync.RWMutex
 	ids map[uint32]chan error
@@ -378,11 +384,17 @@ func (n *node) doSendMessage(to uint64, data []byte) {
 		return
 	case err := <-ch:
 		if grpc.ErrorDesc(err) == ErrorInvalidToNodeId {
+			// Leader detects that some other node has started on same port
 			fmt.Printf("Sending Message to Remove Node %v from cluster\n", to)
-			n.Raft().ProposeConfChange(ctx, raftpb.ConfChange{
+			// ProposeConfChange is not returning error when there is no quorum to
+			// process conf change. Hence Not calling groups().removeNode here
+			err := n.Raft().ProposeConfChange(ctx, raftpb.ConfChange{
 				Type:   raftpb.ConfChangeRemoveNode,
 				NodeID: to,
 			})
+			if err != nil {
+				x.TraceError(ctx, err)
+			}
 		}
 		// We don't need to do anything if we receive any other error while sending message.
 		// RAFT would automatically retry.
@@ -453,10 +465,14 @@ func (n *node) processApplyCh() {
 			var cc raftpb.ConfChange
 			cc.Unmarshal(e.Data)
 
-			if len(cc.Context) > 0 {
+			if cc.Type != raftpb.ConfChangeRemoveNode && len(cc.Context) > 0 {
 				var rc task.RaftContext
 				x.Check(rc.Unmarshal(cc.Context))
 				n.Connect(rc.Id, rc.Addr)
+			} else if cc.Type == raftpb.ConfChangeRemoveNode {
+				addr := n.peers.Get(cc.NodeID)
+				n.peers.Del(cc.NodeID)
+				groups().removeNode(n.gid, cc.NodeID, addr)
 			}
 			cs := n.Raft().ApplyConfChange(cc)
 			n.SetConfState(cs)

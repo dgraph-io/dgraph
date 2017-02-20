@@ -41,5 +41,6 @@ service Worker {
 	rpc RaftMessage (Payload)                     returns (Payload) {}
 	rpc JoinCluster (task.RaftContext)            returns (Payload) {}
 	rpc UpdateMembership (task.MembershipUpdate)  returns (task.MembershipUpdate) {}
+	rpc RemoveMembership (task.Membership)  returns (task.MembershipUpdate) {}
 	rpc Backup (BackupPayload)                    returns (BackupPayload) {}
 }
