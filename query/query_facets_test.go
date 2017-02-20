@@ -888,3 +888,21 @@ func TestFacetsFilterAllofAndAnyof(t *testing.T) {
 		js)
 	teardownGraphWithFacets(t)
 }
+
+func TestFacetsFilterAtValueFail(t *testing.T) {
+	populateGraphWithFacets(t)
+	// facet filtering is not supported at value level.
+	query := `
+	{
+		me(id:1) {
+			friend {
+				name @facets(eq(origin, french))
+			}
+		}
+	}
+`
+
+	_, err := processToFastJsonReq(t, query)
+	require.Error(t, err)
+	teardownGraphWithFacets(t)
+}
