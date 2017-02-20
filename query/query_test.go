@@ -241,6 +241,7 @@ func TestGetUID(t *testing.T) {
 		`{"me":[{"_uid_":"0x1","alive":true,"friend":[{"_uid_":"0x17","name":"Rick Grimes"},{"_uid_":"0x18","name":"Glenn Rhee"},{"_uid_":"0x19","name":"Daryl Dixon"},{"_uid_":"0x1f","name":"Andrea"},{"_uid_":"0x65"}],"gender":"female","name":"Michonne"}]}`,
 		js)
 }
+
 func TestReturnUids(t *testing.T) {
 	populateGraph(t)
 	query := `
@@ -3530,4 +3531,22 @@ func TestMain(m *testing.M) {
 	defer os.RemoveAll(dir2)
 
 	os.Exit(m.Run())
+}
+
+func TestFilterNonIndexedPredicateFail(t *testing.T) {
+	populateGraph(t)
+	// filtering on non indexing predicate fails
+	query := `
+		{
+			me(id:0x01) {
+				friend @filter(leq(age, 30)) {
+					_uid_
+					name
+					age
+				}
+			}
+		}
+	`
+	_, err := processToFastJsonReq(t, query)
+	require.Error(t, err)
 }
