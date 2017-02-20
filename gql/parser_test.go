@@ -1804,129 +1804,132 @@ func TestParseFacetsFail1(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestFacetsFilter(t *testing.T) {
-	// all friends close to 0x1
+// Test facets parsing for filtering..
+func TestFacetsFilterSimple(t *testing.T) {
+	// all friends of 0x1 who are close to him
 	query := `
-		{
-			me(id:0x1) {
+	       {
+		me(id:0x1) {
+			name
+			friend @facets(eq(close, true)) {
 				name
-				friend @filter(eq(@facets(close), true)) {
-				       name
-				       gender
-				}
+				gender
 			}
 		}
-	`
+	}
+`
 
 	res, err := Parse(query)
 	require.NoError(t, err)
 	require.NotNil(t, res.Query[0])
 	require.Equal(t, []string{"name", "friend"}, childAttrs(res.Query[0]))
-	require.NotNil(t, res.Query[0].Children[1].Filter)
-	require.NotNil(t, res.Query[0].Children[1].Filter.Func)
-	require.Equal(t, "eq", res.Query[0].Children[1].Filter.Func.Name)
-	require.Equal(t, "close", res.Query[0].Children[1].Filter.Func.Attr)
-	require.Equal(t, true, res.Query[0].Children[1].Filter.Func.IsFacet)
-	require.Equal(t, 1, len(res.Query[0].Children[1].Filter.Func.Args))
-	require.Equal(t, "true", res.Query[0].Children[1].Filter.Func.Args[0])
+	require.Nil(t, res.Query[0].Children[1].Facets)
+	require.NotNil(t, res.Query[0].Children[1].FacetsFilter)
+	require.Equal(t, `(eq "close" "true")`,
+		res.Query[0].Children[1].FacetsFilter.debugString())
 }
 
-func TestFacetsFilter2(t *testing.T) {
-	// all male friends of 0x1 whose name has french origin.
+func TestFacetsFilterAll(t *testing.T) {
+	// all friends of 0x1 who are close to him or are in his family
 	query := `
-		{
-			me(id:0x1) {
-				name
-				friend @filter(eq(@facets(close), true)) {
-				       name @filter(eq(@facets(origin), "french"))
-				       gender
-				}
+	       {
+		me(id:0x1) {
+			name
+			friend @facets(eq(close, true) or eq(family, true)) @facets(close, family, since) {
+				name @facets
+				gender
 			}
 		}
-	`
+	}
+`
 
 	res, err := Parse(query)
 	require.NoError(t, err)
 	require.NotNil(t, res.Query[0])
 	require.Equal(t, []string{"name", "friend"}, childAttrs(res.Query[0]))
-	child1 := res.Query[0].Children[1]
-	require.Equal(t, []string{"name", "gender"}, childAttrs(child1))
-	require.NotNil(t, child1.Children[0].Filter)
-	require.NotNil(t, child1.Children[0].Filter.Func)
-	require.Equal(t, "eq", child1.Children[0].Filter.Func.Name)
-	require.Equal(t, "origin", child1.Children[0].Filter.Func.Attr)
-	require.Equal(t, true, child1.Children[0].Filter.Func.IsFacet)
-	require.Equal(t, 1, len(child1.Children[0].Filter.Func.Args))
-	require.Equal(t, "french", child1.Children[0].Filter.Func.Args[0])
+	require.NotNil(t, res.Query[0].Children[1].Facets)
+	require.Equal(t, []string{"close", "family", "since"}, res.Query[0].Children[1].Facets.Keys)
+	require.NotNil(t, res.Query[0].Children[1].FacetsFilter)
+	require.Equal(t, `(OR (eq "close" "true") (eq "family" "true"))`,
+		res.Query[0].Children[1].FacetsFilter.debugString())
+
+	require.Equal(t, []string{"name", "gender"}, childAttrs(res.Query[0].Children[1]))
+	nameChild := res.Query[0].Children[1].Children[0]
+	require.NotNil(t, nameChild)
+	require.NotNil(t, nameChild.Facets)
+	require.Nil(t, nameChild.FacetsFilter)
+	genderChild := res.Query[0].Children[1].Children[1]
+	require.NotNil(t, genderChild)
+	require.Nil(t, genderChild.Facets)
+	require.Nil(t, genderChild.FacetsFilter)
 }
 
 func TestFacetsFilterFail(t *testing.T) {
-	// @facets() not allowed - should have some facet
+	// multiple @facets and @facets(close, since) are not allowed.
 	query := `
-		{
-			me(id:0x1) {
+	       {
+		me(id:0x1) {
+			name
+			friend @facets @facets(close, since) {
 				name
-				friend @filter(eq(@facets(), true)) {
-					name
-					gender
-				}
+				gender
 			}
 		}
-	`
+	}
+`
 
 	_, err := Parse(query)
 	require.Error(t, err)
 }
 
 func TestFacetsFilterFail2(t *testing.T) {
-	// @facets not allowed - should have some facet
+	// multiple facets-filter not allowed
 	query := `
-		{
-			me(id:0x1) {
+	       {
+		me(id:0x1) {
+			name
+			friend @facets(eq(close, true)) @facets(eq(family, true)) {
 				name
-				friend @filter(eq(@facets, true)) {
-					name
-					gender
-				}
+				gender
 			}
 		}
-	`
+	}
+`
 
 	_, err := Parse(query)
 	require.Error(t, err)
 }
 
 func TestFacetsFilterFail3(t *testing.T) {
-	// @facets only allowed in attr part ; not at arguments.
+	// vars are not allowed in facets filtering.
 	query := `
-		{
-			me(id:0x1) {
+	{
+		K as var(id:0x0a) {
+			L AS friends
+		}
+		me(var:K) {
+			friend @facets(id(L)) {
 				name
-				friend @filter(somefn(abc, @facets, def)) {
-					name
-					gender
-				}
 			}
 		}
-	`
+	}
+`
 
 	_, err := Parse(query)
 	require.Error(t, err)
 }
 
-func TestFacetsFilterFail4(t *testing.T) {
-	// multiple facets not allowed in facets inside filters
+func TestFacetsFilterFailRoot(t *testing.T) {
+	// vars are not allowed in facets filtering.
 	query := `
-		{
-			me(id:0x1) {
+	{
+		me(id:0x1) @facets(eq(some-facet, true)) {
+			friend  {
 				name
-				friend @filter(eq(@facets(close, family, since), true)) {
-					name
-					gender
-				}
 			}
 		}
-	`
+	}
+`
 
 	_, err := Parse(query)
 	require.Error(t, err)

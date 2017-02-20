@@ -42,11 +42,12 @@ type GraphQuery struct {
 	NeedsVar []string
 	Func     *Function
 
-	Args      map[string]string
-	Children  []*GraphQuery
-	Filter    *FilterTree
-	Normalize bool
-	Facets    *Facets
+	Args         map[string]string
+	Children     []*GraphQuery
+	Filter       *FilterTree
+	Normalize    bool
+	Facets       *Facets
+	FacetsFilter *FilterTree
 
 	// Internal fields below.
 	// If gq.fragment is nonempty, then it is a fragment reference / spread.
@@ -85,16 +86,17 @@ type varInfo struct {
 type varMap map[string]varInfo
 
 // FilterTree is the result of parsing the filter directive.
+// Either you can have `Op and Children` on non-leaf nodes
+// Or Func at leaf nodes.
 type FilterTree struct {
 	Op    string
-	Func  *Function
 	Child []*FilterTree
+	Func  *Function
 }
 
 // Function holds the information about gql functions.
 type Function struct {
 	Attr     string
-	IsFacet  bool     // Is this facet's attr ? @facets(attr)
 	Name     string   // Specifies the name of the function.
 	Args     []string // Contains the arguments of the function.
 	NeedsVar []string // If the function requires some variable
@@ -455,6 +457,18 @@ func (f *FilterTree) collectVars(v *Vars) {
 	for _, fch := range f.Child {
 		fch.collectVars(v)
 	}
+}
+
+func (f *FilterTree) hasVars() bool {
+	if (f.Func != nil) && (len(f.Func.NeedsVar) > 0) {
+		return true
+	}
+	for _, fch := range f.Child {
+		if fch.hasVars() {
+			return true
+		}
+	}
+	return false
 }
 
 // getVariablesAndQuery checks if the query has a variable list and stores it in
@@ -915,14 +929,16 @@ L:
 	return g, nil
 }
 
-func parseFacets(it *lex.ItemIterator) (*Facets, error) {
+func parseFacets(it *lex.ItemIterator) (*Facets, *FilterTree, error) {
 	facets := new(Facets)
 	peeks, err := it.Peek(1)
 	if err == nil && peeks[0].Typ == itemLeftRound {
 		it.Next() // ignore '('
 		// parse comma separated strings (a1,b1,c1)
 		done := false
+		numTokens := 0
 		for it.Next() {
+			numTokens++
 			item := it.Item()
 			if item.Typ == itemRightRound { // done
 				done = true
@@ -930,20 +946,26 @@ func parseFacets(it *lex.ItemIterator) (*Facets, error) {
 			} else if item.Typ == itemName {
 				facets.Keys = append(facets.Keys, item.Val)
 			} else {
-				return nil, x.Errorf("Got %s", item.Val)
+				break
 			}
 		}
 		if !done {
-			return nil, x.Errorf("Expected ')' at end of Facets.")
+			// this is not (facet1, facet2, facet3)
+			// try parsing filters. (eq(facet1, val1) AND eq(facet2, val2)...)
+			// revert back tokens
+			for i := 0; i < numTokens+1; i++ { // +1 for starting '('
+				it.Prev()
+			}
+			filterTree, err := parseFilter(it)
+			return nil, filterTree, err
 		}
-
 	}
 	if len(facets.Keys) == 0 {
 		facets.AllKeys = true
 	} else {
 		sort.Strings(facets.Keys)
 	}
-	return facets, nil
+	return facets, nil, nil
 }
 
 // parseFilter parses the filter directive to produce a QueryFilter / parse tree.
@@ -986,40 +1008,14 @@ func parseFilter(it *lex.ItemIterator) (*FilterTree, error) {
 			it.Next()
 			itemInFunc := it.Item()
 			if itemInFunc.Typ != itemLeftRound {
-				return nil, x.Errorf("Expected ( after func name [%s]",
-					leaf.Func.Name)
+				return nil, x.Errorf("Expected ( after func name [%s]", leaf.Func.Name)
 			}
 			var terminated, seenFuncAsArgument bool
 			for it.Next() {
-				isFacet := false
-				var attrName string
 				itemInFunc := it.Item()
 				if itemInFunc.Typ == itemRightRound {
 					terminated = true
 					break
-				} else if itemInFunc.Typ == itemAt {
-					if len(f.Attr) != 0 {
-						return nil, x.Errorf(
-							"Facets only allowed at attributed position.")
-					}
-					if !it.Next() {
-						return nil, x.Errorf("Unexpected end of input.")
-					}
-					item := it.Item()
-					if item.Typ != itemName || item.Val != "facets" {
-						return nil, x.Errorf("Expected facets but found : %v",
-							item.Val)
-					}
-					fs, err := parseFacets(it)
-					if err != nil {
-						return nil, err
-					}
-					if len(fs.Keys) != 1 {
-						return nil, x.Errorf("Expected 1 facet but got %v",
-							len(fs.Keys))
-					}
-					attrName = fs.Keys[0]
-					isFacet = true
 				} else if itemInFunc.Typ == itemLeftRound {
 					if seenFuncAsArgument {
 						return nil, x.Errorf("Expected only one function as argument")
@@ -1040,16 +1036,12 @@ func parseFilter(it *lex.ItemIterator) (*FilterTree, error) {
 					return nil, x.Errorf("Expected arg after func [%s], but got item %v",
 						leaf.Func.Name, itemInFunc)
 				}
-				if !isFacet {
-					attrName = itemInFunc.Val
-				}
-				it := strings.Trim(attrName, "\" \t")
+				it := strings.Trim(itemInFunc.Val, "\" \t")
 				if it == "" {
 					return nil, x.Errorf("Empty argument received")
 				}
 				if len(f.Attr) == 0 {
 					f.Attr = it
-					f.IsFacet = isFacet
 				} else {
 					f.Args = append(f.Args, it)
 				}
@@ -1178,10 +1170,26 @@ func parseDirective(it *lex.ItemIterator, curp *GraphQuery) error {
 	peek, err := it.Peek(1)
 	if err == nil && item.Typ == itemName {
 		if item.Val == "facets" { // because @facets can come w/t '()'
-			if facets, err := parseFacets(it); err != nil {
+			facets, facetsFilter, err := parseFacets(it)
+			if err != nil {
 				return err
-			} else {
+			}
+			if facets != nil {
+				if curp.Facets != nil {
+					return x.Errorf("Only one facets allowed")
+				}
 				curp.Facets = facets
+			} else if facetsFilter != nil {
+				if curp.FacetsFilter != nil {
+					return x.Errorf("Only one facets filter allowed")
+				}
+				if facetsFilter.hasVars() {
+					return x.Errorf(
+						"variables are not allowed in facets filter.")
+				}
+				curp.FacetsFilter = facetsFilter
+			} else {
+				return x.Errorf("Facets parsing failed.")
 			}
 		} else if peek[0].Typ == itemLeftRound {
 			// this is directive
