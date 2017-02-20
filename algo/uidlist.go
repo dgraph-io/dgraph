@@ -291,6 +291,70 @@ func IntersectWith(u, v *task.List) {
 	out.End()
 }
 
+func Difference(u, v *task.List) {
+	i, ii := 0, 0 //itu := NewListIterator(u)
+	j, jj := 0, 0 //itv := NewListIterator(v)
+	out := NewWriteIterator(u, 0)
+	m := len(u.Blocks)
+	n := len(v.Blocks)
+	for i < m && j < n {
+		ulist := u.Blocks[i].List
+		vlist := v.Blocks[j].List
+		vb := v.Blocks[j].MaxInt
+		ulen := len(ulist)
+		vlen := len(vlist)
+	L:
+		for ii < ulen && jj < vlen {
+			uid := ulist[ii]
+			vid := vlist[jj]
+
+			if uid == vid {
+				ii++
+				jj++
+				if ii == ulen {
+					i++
+					ii = 0
+					break L
+				}
+				if jj == vlen {
+					j++
+					jj = 0
+					break L
+				}
+			} else if vb < uid {
+				j++
+				jj = 0
+				break L
+			} else if uid < vid {
+				out.Append(uid)
+				ii++
+				if ii == ulen {
+					i++
+					ii = 0
+					break L
+				}
+			} else if uid > vid {
+				for ; jj < vlen && vlist[jj] < uid; jj++ {
+				}
+				if jj == vlen {
+					j++
+					jj = 0
+					break L
+				}
+			}
+		}
+		if ii == ulen {
+			i++
+			ii = 0
+		}
+		if jj == vlen {
+			j++
+			jj = 0
+		}
+	}
+	out.End()
+}
+
 // ApplyFilter applies a filter to our UIDList.
 func ApplyFilter(u *task.List, f func(uint64, int) bool) {
 	out := NewWriteIterator(u, 0)
@@ -376,10 +440,6 @@ func IntersectSorted(lists []*task.List) *task.List {
 						break
 					}
 				}
-				/*
-					for ; lptrs[j].Valid() && lptrs[j].Val() < val; lptrs[j].Next() {
-							}
-				*/
 				if k == llen || lists[j].Blocks[k].List[kk] > val {
 					elemsLeft = k < llen //lists[j].Blocks[k].List[kk]
 					skip = true
@@ -396,33 +456,6 @@ func IntersectSorted(lists []*task.List) *task.List {
 	}
 	out.End()
 	return o
-	/*
-		for ; shortListIt.Valid() && elemsLeft; shortListIt.Next() { //for i := 0; i < len(shortList.Uids) && elemsLeft; i++ {
-			val := shortListIt.Val()
-			var skip bool                     // Should we skip val in output?
-			for j := 0; j < len(lists); j++ { // For each other list in lists.
-				if j == minLenIdx {
-					// No point checking yourself.
-					continue
-				}
-
-				for ; lptrs[j].Valid() && lptrs[j].Val() < val; lptrs[j].Next() {
-				}
-
-				if !lptrs[j].Valid() || lptrs[j].Val() > val {
-					elemsLeft = lptrs[j].Valid()
-					skip = true
-					break
-				}
-				// Otherwise, lj.Get(ljp) = val and we continue checking other lists.
-			}
-			if !skip {
-				out.Append(val)
-			}
-		}
-		out.End()
-		return o
-	*/
 }
 
 /*

@@ -153,7 +153,6 @@ func TestIntersectSorted6(t *testing.T) {
 	require.Empty(t, BlockToList(IntersectSorted(input)))
 }
 
-/*
 func TestSubSorted1(t *testing.T) {
 	input := []*task.List{
 		newList([]uint64{1, 2, 3}),
@@ -172,6 +171,7 @@ func TestSubSorted6(t *testing.T) {
 	require.Equal(t, []uint64{10, 12}, BlockToList(input[0]))
 }
 
+/*
 func TestIterator1(t *testing.T) {
 	u := newList([]uint64{1, 2, 3, 4, 43, 234, 2344})
 
