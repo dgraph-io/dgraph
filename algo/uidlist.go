@@ -288,25 +288,6 @@ func IntersectWith(u, v *task.List) {
 			jj = 0
 		}
 	}
-	/*
-		if i == len(u) {
-			out[i-1].list = out[i-1].list[:kk]
-		}
-	*/
-	/*
-		for itu.Valid() && itv.Valid() {
-			uid := itu.Val()
-			vid := itv.Val()
-			if uid == vid {
-				out.Append(uid)
-				itu.Next()
-				itv.Next()
-			} else if uid < vid {
-				itu.Seek(vid, 1)
-			} else if uid > vid {
-				itv.Seek(uid, 1)
-			}
-		}*/
 	out.End()
 }
 
@@ -323,7 +304,6 @@ func ApplyFilter(u *task.List, f func(uint64, int) bool) {
 	out.End()
 }
 
-/*
 // IntersectSorted intersect a list of UIDLists. An alternative is to do
 // pairwise intersections n-1 times where n=number of lists. This is less
 // efficient:
@@ -357,40 +337,88 @@ func IntersectSorted(lists []*task.List) *task.List {
 	}
 
 	// lptrs[j] is the element we are looking at for lists[j].
-	lptrs := make([]ListIterator, len(lists))
+	lptrs := make([]int, len(lists))
+	bptrs := make([]int, len(lists))
 	for i, l := range lists {
-		lptrs[i] = NewListIterator(l)
+		lptrs[i] = 0 //NewListIterator(l)
+		bptrs[i] = 0
 	}
-	shortListIt := lptrs[minLenIdx]
+	shortList := lists[minLenIdx]
+	i := 0            //lptrs[minLenIdx]
+	ii := 0           //bptrs[minLenIdx]
 	elemsLeft := true // If some list has no elems left, we can't intersect more.
+	m := len(lists[minLenIdx].Blocks)
+	for i < m {
+		ulist := shortList.Blocks[i].List
+		ulen := len(ulist)
+		ii = 0
+		for ii < ulen {
+			val := ulist[ii]
+			var skip bool                     // Should we skip val in output?
+			for j := 0; j < len(lists); j++ { // For each other list in lists.
+				if j == minLenIdx {
+					// No point checking yourself.
+					continue
+				}
 
-	for ; shortListIt.Valid() && elemsLeft; shortListIt.Next() { //for i := 0; i < len(shortList.Uids) && elemsLeft; i++ {
-		val := shortListIt.Val()
-		var skip bool                     // Should we skip val in output?
-		for j := 0; j < len(lists); j++ { // For each other list in lists.
-			if j == minLenIdx {
-				// No point checking yourself.
-				continue
-			}
+				k, kk := bptrs[j], lptrs[j]
+				llen := len(lists[j].Blocks)
+				for k < llen {
+					ulist := lists[j].Blocks[i].List
+					ulen := len(ulist)
 
-			for ; lptrs[j].Valid() && lptrs[j].Val() < val; lptrs[j].Next() {
+					kk = 0
+				}
+				/*
+					for ; lptrs[j].Valid() && lptrs[j].Val() < val; lptrs[j].Next() {
+							}
+				*/
+				if !lptrs[j].Valid() || lptrs[j].Val() > val {
+					elemsLeft = lptrs[j].Valid()
+					skip = true
+					break
+				}
+				// Otherwise, lj.Get(ljp) = val and we continue checking other lists.
 			}
-
-			if !lptrs[j].Valid() || lptrs[j].Val() > val {
-				elemsLeft = lptrs[j].Valid()
-				skip = true
-				break
+			if !skip {
+				out.Append(val)
 			}
-			// Otherwise, lj.Get(ljp) = val and we continue checking other lists.
+			ii++
 		}
-		if !skip {
-			out.Append(val)
-		}
+		i++
 	}
 	out.End()
 	return o
+	/*
+		for ; shortListIt.Valid() && elemsLeft; shortListIt.Next() { //for i := 0; i < len(shortList.Uids) && elemsLeft; i++ {
+			val := shortListIt.Val()
+			var skip bool                     // Should we skip val in output?
+			for j := 0; j < len(lists); j++ { // For each other list in lists.
+				if j == minLenIdx {
+					// No point checking yourself.
+					continue
+				}
+
+				for ; lptrs[j].Valid() && lptrs[j].Val() < val; lptrs[j].Next() {
+				}
+
+				if !lptrs[j].Valid() || lptrs[j].Val() > val {
+					elemsLeft = lptrs[j].Valid()
+					skip = true
+					break
+				}
+				// Otherwise, lj.Get(ljp) = val and we continue checking other lists.
+			}
+			if !skip {
+				out.Append(val)
+			}
+		}
+		out.End()
+		return o
+	*/
 }
 
+/*
 func Difference(u, v *task.List) {
 	itu := NewListIterator(u)
 	itv := NewListIterator(v)
