@@ -22,8 +22,9 @@ import (
 )
 
 const (
-	proposalMutation = 0
-	proposalReindex  = 1
+	proposalMutation     = 0
+	proposalReindex      = 1
+	ErrorInvalidToNodeId = "Error Invalid Recipient Node ID"
 )
 
 // peerPool stores the peers per node and the addresses corresponding to them.
@@ -801,6 +802,9 @@ func (w *grpcWorker) RaftMessage(ctx context.Context, query *Payload) (*Payload,
 		}
 		if err := msg.Unmarshal(query.Data[idx : idx+sz]); err != nil {
 			x.Check(err)
+		}
+		if msg.To != *raftId {
+			return &Payload{}, x.Errorf(ErrorInvalidToNodeId)
 		}
 		if msg.Type != raftpb.MsgHeartbeat && msg.Type != raftpb.MsgHeartbeatResp {
 			fmt.Printf("RECEIVED: %v %v-->%v\n", msg.Type, msg.From, msg.To)
