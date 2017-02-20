@@ -1,6 +1,7 @@
 package algo
 
 import (
+	"container/heap"
 	"sort"
 
 	"github.com/dgraph-io/dgraph/task"
@@ -458,27 +459,6 @@ func IntersectSorted(lists []*task.List) *task.List {
 	return o
 }
 
-/*
-func Difference(u, v *task.List) {
-	itu := NewListIterator(u)
-	itv := NewListIterator(v)
-	out := NewWriteIterator(u, 0)
-	for itu.Valid() && itv.Valid() {
-		uid := itu.Val()
-		vid := itv.Val()
-		if uid == vid {
-			itu.Next()
-			itv.Next()
-		} else if uid < vid {
-			out.Append(uid)
-			itu.Next()
-		} else if uid > vid {
-			itv.Seek(uid, 1)
-		}
-	}
-	out.End()
-}
-
 // MergeSorted merges sorted lists.
 func MergeSorted(lists []*task.List) *task.List {
 	o := new(task.List)
@@ -488,9 +468,10 @@ func MergeSorted(lists []*task.List) *task.List {
 	out := NewWriteIterator(o, 0)
 	h := &uint64Heap{}
 	heap.Init(h)
-	var lIt []ListIterator
+	var lIt []int // ListIterator
+	var bIt []int // ListIterator
 	for i, l := range lists {
-		it := NewListIterator(l)
+		i, j := 0, 0
 		lIt = append(lIt, it)
 		if it.Valid() {
 			heap.Push(h, elem{
@@ -519,7 +500,7 @@ func MergeSorted(lists []*task.List) *task.List {
 	out.End()
 	return o
 }
-*/
+
 // IndexOf performs a binary search on the uids slice and returns the index at
 // which it finds the uid, else returns -1
 func IndexOf(u *task.List, uid uint64) (int, int) {
