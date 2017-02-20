@@ -339,7 +339,7 @@ func IntersectSorted(lists []*task.List) *task.List {
 	// lptrs[j] is the element we are looking at for lists[j].
 	lptrs := make([]int, len(lists))
 	bptrs := make([]int, len(lists))
-	for i, l := range lists {
+	for i := range lists {
 		lptrs[i] = 0 //NewListIterator(l)
 		bptrs[i] = 0
 	}
@@ -352,7 +352,7 @@ func IntersectSorted(lists []*task.List) *task.List {
 		ulist := shortList.Blocks[i].List
 		ulen := len(ulist)
 		ii = 0
-		for ii < ulen {
+		for ii < ulen && elemsLeft {
 			val := ulist[ii]
 			var skip bool                     // Should we skip val in output?
 			for j := 0; j < len(lists); j++ { // For each other list in lists.
@@ -366,15 +366,22 @@ func IntersectSorted(lists []*task.List) *task.List {
 				for k < llen {
 					ulist := lists[j].Blocks[i].List
 					ulen := len(ulist)
-
-					kk = 0
+					for ; kk < ulen && ulist[kk] < val; kk++ {
+					}
+					if kk == ulen {
+						kk = 0
+						k++
+					}
+					if ulist[kk] >= val {
+						break
+					}
 				}
 				/*
 					for ; lptrs[j].Valid() && lptrs[j].Val() < val; lptrs[j].Next() {
 							}
 				*/
-				if !lptrs[j].Valid() || lptrs[j].Val() > val {
-					elemsLeft = lptrs[j].Valid()
+				if k != llen && lists[j].Blocks[k].List[kk] > val {
+					elemsLeft = k < llen //lists[j].Blocks[k].List[kk]
 					skip = true
 					break
 				}
