@@ -26,6 +26,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgraph/algo"
+	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/store"
@@ -105,6 +106,7 @@ func initTest(t *testing.T, schemaStr string) (string, *store.Store) {
 	ps, err := store.NewStore(dir)
 	require.NoError(t, err)
 
+	group.ParseGroupConfig("")
 	posting.Init(ps)
 	populateGraph(t)
 	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
@@ -166,6 +168,7 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 	addEdge(t, edge, getOrCreate(x.DataKey("friend", 12)))
 	edge.Value = []byte("notphoton")
 	addEdge(t, edge, getOrCreate(x.DataKey("friend", 12)))
+	posting.ForceUpdateIndex()
 	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
 
 	// Issue a similar query.
@@ -197,6 +200,7 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 	delEdge(t, edge, getOrCreate(x.DataKey("friend", 12)))
 	edge.Value = []byte("ignored")
 	addEdge(t, edge, getOrCreate(x.DataKey("friend", 12)))
+	posting.ForceUpdateIndex()
 	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
 
 	// Issue a similar query.
@@ -255,6 +259,9 @@ func TestProcessTaskIndex(t *testing.T) {
 	addEdge(t, edge, getOrCreate(x.DataKey("friend", 12)))
 	edge.Value = []byte("notphoton")
 	addEdge(t, edge, getOrCreate(x.DataKey("friend", 12)))
+
+	// Force an index update.
+	posting.ForceUpdateIndex()
 	time.Sleep(200 * time.Millisecond) // Let the index process jobs from channel.
 
 	// Issue a similar query.
@@ -289,6 +296,7 @@ func TestProcessTaskIndex(t *testing.T) {
 	delEdge(t, edge, getOrCreate(x.DataKey("friend", 12)))
 	edge.Value = []byte("ignored")
 	addEdge(t, edge, getOrCreate(x.DataKey("friend", 12)))
+	posting.ForceUpdateIndex()
 	time.Sleep(200 * time.Millisecond) // Let indexing finish.
 
 	// Issue a similar query.

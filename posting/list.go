@@ -362,7 +362,6 @@ func postingType(p *types.Posting) valueTypeInfo {
 		} else {
 			return valueUid // Uid
 		}
-
 	}
 }
 
@@ -399,7 +398,6 @@ func (l *List) addMutation(ctx context.Context, t *task.DirectedEdge) (bool, err
 	// a)		check if the entity exists in main posting list.
 	// 				- If yes, store the mutation.
 	// 				- If no, disregard this mutation.
-
 	hasMutated := l.updateMutationLayer(mpost)
 	if hasMutated {
 		if rv, ok := ctx.Value("raft").(x.RaftValue); ok {

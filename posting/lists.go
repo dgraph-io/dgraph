@@ -334,6 +334,7 @@ func Init(ps *store.Store) {
 
 	go periodicCommit()
 	go batchSync()
+	go updateIndex()
 }
 
 func getFromMap(key uint64) *List {

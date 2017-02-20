@@ -9,6 +9,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/task"
@@ -138,7 +139,7 @@ func tokensForTest(attr string) []string {
 
 // addEdgeToValue adds edge without indexing.
 func addEdgeToValue(t *testing.T, ps *store.Store, attr string, src uint64,
-	value string) {
+	value string, index bool) {
 	edge := &task.DirectedEdge{
 		Value:  []byte(value),
 		Label:  "testing",
@@ -147,13 +148,17 @@ func addEdgeToValue(t *testing.T, ps *store.Store, attr string, src uint64,
 		Op:     task.DirectedEdge_SET,
 	}
 	l, _ := GetOrCreate(x.DataKey(attr, src), 0)
-	// No index entries added here as we do not call AddMutationWithIndex.
-	ok, err := l.AddMutation(context.Background(), edge)
-	require.NoError(t, err)
-	require.True(t, ok)
+
+	if !index {
+		ok, err := l.AddMutation(context.Background(), edge)
+		require.NoError(t, err)
+		require.True(t, ok)
+		return
+	}
+	require.NoError(t, l.AddMutationWithIndex(context.Background(), edge))
 }
 
-func populateGraph(t *testing.T) (string, *store.Store) {
+func populateGraph(t *testing.T, index bool) (string, *store.Store) {
 	dir, err := ioutil.TempDir("", "storetest_")
 	require.NoError(t, err)
 
@@ -163,13 +168,15 @@ func populateGraph(t *testing.T) (string, *store.Store) {
 	schema.ParseBytes([]byte(schemaStrAlt))
 	Init(ps)
 
-	addEdgeToValue(t, ps, "name", 1, "Michonne")
-	addEdgeToValue(t, ps, "name", 20, "David")
+	group.ParseGroupConfig("")
+
+	addEdgeToValue(t, ps, "name", 1, "Michonne", index)
+	addEdgeToValue(t, ps, "name", 20, "David", index)
 	return dir, ps
 }
 
 func TestRebuildIndex(t *testing.T) {
-	dir, ps := populateGraph(t)
+	dir, ps := populateGraph(t, false)
 	defer ps.Close()
 	defer os.RemoveAll(dir)
 
@@ -212,4 +219,29 @@ func TestRebuildIndex(t *testing.T) {
 	require.Len(t, idxVals[1].Postings, 1)
 	require.EqualValues(t, idxVals[0].Postings[0].Uid, 20)
 	require.EqualValues(t, idxVals[1].Postings[0].Uid, 1)
+}
+
+func TestUpdateIndex(t *testing.T) {
+	dir, ps := populateGraph(t, true)
+	defer ps.Close()
+	defer os.RemoveAll(dir)
+
+	// Commit to store. We still need the store to get all the index keys.
+	CommitLists(10)
+	for len(syncCh) > 0 {
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	addEdgeToValue(t, ps, "name", 20, "NotDavid", true)
+	time.Sleep(100 * time.Millisecond)
+	updateIndexChan <- struct{}{}
+	time.Sleep(time.Second * 10)
+
+	// Add some wrong entries.
+	//	l, _ := GetOrCreate(x.IndexKey(attr, src), 0)
+	// No index entries added here as we do not call AddMutationWithIndex.
+	//	ok, err := l.AddMutation(context.Background(), edge)
+
+	//	ps.SetOne(x.IndexKey("name", "wrongname1"), []byte("nothing"))
+	//	ps.SetOne(x.IndexKey("name", "wrongname2"), []byte("nothing"))
 }

@@ -22,6 +22,7 @@ import (
 
 	"golang.org/x/net/trace"
 
+	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/task"
@@ -30,50 +31,119 @@ import (
 )
 
 const (
-	maxBatchSize       = 32 * (1 << 20)
-	checkIndexInterval = time.Second * 10
+	maxBatchSize        = 32 * (1 << 20)
+	updateIndexInterval = time.Second * 10
 )
 
 var (
-	indexLog   trace.EventLog
-	reverseLog trace.EventLog
+	indexLog        trace.EventLog
+	reverseLog      trace.EventLog
+	updateIndexChan chan struct{} // Push here to force an updateIndex.
 )
 
 func init() {
 	indexLog = trace.NewEventLog("index", "Logger")
 	reverseLog = trace.NewEventLog("reverse", "Logger")
-	go checkIndex()
+	updateIndexChan = make(chan struct{}, 5)
 }
 
-func checkIndexKey(groupID uint32, key []byte) {
-	pl, decr := GetOrCreate(key, groupID)
+// ForceUpdateIndex forces updateIndex.
+func ForceUpdateIndex() {
+	updateIndexChan <- struct{}{}
+}
+
+type indexUpdater struct {
+	indexPl *List
+	attr    string
+	groupID uint32
+	term    string
+}
+
+func (s *indexUpdater) processUID(ctx context.Context, uid uint64) error {
+	pl, decr := GetOrCreate(x.DataKey(s.attr, uid), s.groupID)
+	defer decr()
+	v, err := pl.Value()
+	if err == nil {
+		// Tokenize v and check if it matches term.
+		tokens, err := IndexTokens(s.attr, v)
+		if err != nil {
+			return err
+		}
+		for _, tok := range tokens {
+			if tok == s.term {
+				return nil
+			}
+		}
+	}
+
+	// Delete uid from index.
+	edge := task.DirectedEdge{
+		ValueId: uid,
+		Attr:    s.attr,
+		Label:   "idx",
+		Op:      task.DirectedEdge_DEL,
+	}
+	_, err = s.indexPl.AddMutation(ctx, &edge)
+	return err
+}
+
+func (s *indexUpdater) processIndexKey(ctx context.Context, indexKey []byte) error {
+	var decr func()
+	s.indexPl, decr = GetOrCreate(indexKey, s.groupID) // Get index data.
 	defer decr()
 
 	var opts ListOptions
-	uids := pl.Uids(opts)
-
-	pki := x.Parse(key)
+	uids := s.indexPl.Uids(opts)
+	pki := x.Parse(indexKey)
 	x.AssertTrue(pki.IsIndex())
-	term := pki.Term
+	s.term = pki.Term
+	x.AssertTrue(len(s.term) > 0)
+
+	it := algo.NewListIterator(uids)
+	for ; it.Valid(); it.Next() {
+		uid := it.Val()
+		if err := s.processUID(ctx, uid); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
-// checkIndex iterates over index entries and delete invalid entries.
-func checkIndex() {
+func (s *indexUpdater) run() {
+	indexLog.Printf("indexUpdater run")
+	it := pstore.NewIterator()
+	defer it.Close()
 	var pk x.ParsedKey
-	idxIt := pstore.NewIterator()
-	defer idxIt.Close()
-	for {
-		timeStart := time.Now()
-		for _, attr := range schema.State().IndexedFields() {
-			groupID := group.BelongsTo(attr)
-			pk.Attr = attr
-			prefix := pk.IndexPrefix()
-			for idxIt.Seek(prefix); idxIt.ValidForPrefix(prefix); idxIt.Next() {
-				checkIndexKey(groupID, idxIt.Key().Data())
+	ctx := context.Background()
+	for _, attr := range schema.State().IndexedFields() {
+		pk.Attr = attr
+		prefix := pk.IndexPrefix()
+		s.attr = attr
+		s.groupID = group.BelongsTo(attr)
+		// Iterate over data store just to get the index keys.
+		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+			if err := s.processIndexKey(ctx, it.Key().Data()); err != nil {
+				indexLog.Errorf("Error updating index for attr %s: %v", attr, err)
 			}
 		}
-		elapsed := time.Since(timeStart)
-		time.Sleep(checkIndexInterval - elapsed) // If negative, we don't sleep.
+	}
+}
+
+// updateIndex iterates over index entries and delete invalid entries.
+func updateIndex() {
+	// Wait for group config to be ready. We do it by simple polling. It is a one-off.
+	for !group.Ready() {
+		time.Sleep(100 * time.Millisecond)
+	}
+	tickC := time.Tick(updateIndexInterval)
+	var updater indexUpdater
+	for {
+		select {
+		case <-tickC:
+			updater.run() // select has no fallthrough.
+		case <-updateIndexChan:
+			updater.run()
+		}
 	}
 }
 
@@ -172,41 +242,31 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *task.DirectedEdge) e
 	x.AssertTruef(len(t.Attr) > 0,
 		"[%s] [%d] [%v] %d %d\n", t.Attr, t.Entity, t.Value, t.ValueId, t.Op)
 
-	var val types.Val
-	var verr error
+	//	var val types.Val
+	//	var verr error
 
 	l.index.Lock()
 	defer l.index.Unlock()
 
-	doUpdateIndex := pstore != nil && (t.Value != nil) && schema.State().IsIndexed(t.Attr)
-	{
-		l.Lock()
-		if doUpdateIndex {
-			// Check last posting for original value BEFORE any mutation actually happens.
-			val, verr = l.value()
-		}
-		hasMutated, err := l.addMutation(ctx, t)
-		l.Unlock()
+	l.Lock()
+	hasMutated, err := l.addMutation(ctx, t)
+	l.Unlock()
 
-		if err != nil {
-			return err
-		}
-		if !hasMutated {
-			return nil
-		}
+	if err != nil {
+		return err
 	}
-	if doUpdateIndex {
-		// Exact matches.
-		if verr == nil && val.Value != nil {
-			addIndexMutations(ctx, t, val, task.DirectedEdge_DEL)
+	if !hasMutated {
+		return nil
+	}
+
+	// We only add index mutations, but not delete here.
+	if pstore != nil && (t.Value != nil) && t.Op == task.DirectedEdge_SET &&
+		schema.State().IsIndexed(t.Attr) {
+		p := types.Val{
+			Tid:   types.TypeID(t.ValueType),
+			Value: t.Value,
 		}
-		if t.Op == task.DirectedEdge_SET {
-			p := types.Val{
-				Tid:   types.TypeID(t.ValueType),
-				Value: t.Value,
-			}
-			addIndexMutations(ctx, t, p, task.DirectedEdge_SET)
-		}
+		addIndexMutations(ctx, t, p, task.DirectedEdge_SET)
 	}
 
 	if (pstore != nil) && (t.ValueId != 0) && schema.State().IsReversed(t.Attr) {
