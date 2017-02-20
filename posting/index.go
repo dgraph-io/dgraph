@@ -19,7 +19,6 @@ package posting
 import (
 	"context"
 	"math"
-	"sort"
 
 	"golang.org/x/net/trace"
 
@@ -250,18 +249,14 @@ func RebuildIndex(ctx context.Context, attr string) error {
 		if postingLen == 0 {
 			continue
 		}
-		// Add all values with languages
-		for _, lang := range pl.Langs {
-			langUid := farm.Fingerprint64([]byte(lang))
-			idx := sort.Search(postingLen, func(i int) bool {
-				p := pl.Postings[i]
-				return langUid <= p.Uid
-			})
-			if idx < len(pl.Postings) && pl.Postings[idx].Uid == langUid {
+
+		// Posting lists contains (only) values if there are some languages defined or last posting
+		// is a value without language. Otherwise it cointais UIDs.
+		if len(pl.Langs) > 0 || postingType(pl.Postings[postingLen-1]) == valueUntagged {
+			for idx := 0; idx < postingLen; idx++ {
 				addPostingToIndex(idx)
 			}
 		}
-		addPostingToIndex(len(pl.Postings) - 1) // Add value without language
 	}
 	return nil
 }
