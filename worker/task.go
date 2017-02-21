@@ -18,6 +18,7 @@ package worker
 
 import (
 	"fmt"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -30,7 +31,6 @@ import (
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/types"
-	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -89,45 +89,6 @@ func convertValue(attr, data string) (types.Val, error) {
 	return dst, err
 }
 
-type FuncType int
-
-const (
-	NotFn FuncType = iota
-	AggregatorFn
-	CompareAttrFn
-	CompareScalarFn
-	GeoFn
-	PasswordFn
-	StandardFn = 100
-)
-
-func parseFuncType(arr []string) (FuncType, string) {
-	if len(arr) == 0 {
-		return NotFn, ""
-	}
-	f := strings.ToLower(arr[0])
-	switch f {
-	case "leq", "geq", "lt", "gt", "eq":
-		// gt(release_date, "1990") is 'CompareAttr' which
-		//    takes advantage of indexed-attr
-		// gt(count(films), 0) is 'CompareScalar', we first do
-		//    counting on attr, then compare the result as scalar with int
-		if len(arr) > 2 && arr[1] == "count" {
-			return CompareScalarFn, f
-		}
-		return CompareAttrFn, f
-	case "min", "max", "sum":
-		return AggregatorFn, f
-	case "checkpwd":
-		return PasswordFn, f
-	default:
-		if types.IsGeoFunc(f) {
-			return GeoFn, f
-		}
-		return StandardFn, f
-	}
-}
-
 // processTask processes the query, accumulates and returns the result.
 func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 	attr := q.Attr
@@ -141,7 +102,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 	var n int
 	var threshold int64
 
-	fnType, f := parseFuncType(q.SrcFunc)
+	fnType, f := ParseFuncType(q.SrcFunc)
 	switch fnType {
 	case AggregatorFn:
 		// confirm agrregator could apply on the attributes
@@ -199,8 +160,11 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 				q.SrcFunc[0], q.SrcFunc[1])
 		}
 
+		// sure we could bridge a channel, once a key is get, throw it directly to
+		// processFunc, instead of waiting for all keys are fetched from db.
+		// Under which implementation, we could halve the time usage.
+		// while that will ugly the code, i won't do it
 		if q.IsSearchAll {
-			fmt.Printf("-- Is search all, attr %v\n", attr)
 			dict := algo.DataKeysForPrefix(attr, pstore)
 			q.Uids = new(task.List)
 			it := algo.NewWriteIterator(q.Uids, 0)
@@ -249,7 +213,46 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 		opts.Intersect = q.Uids
 	}
 
-	startTm := time.Now()
+	//startTm := time.Now()
+	funcArgs := &FuncArg{
+		fname:     f,
+		fnType:    fnType,
+		gid:       gid,
+		q:         q,
+		opts:      opts,
+		threshold: threshold,
+	}
+	chCount := 1
+	if chCount > 500 { // TODO(kg): random number picked, need to close it later
+		chCount = runtime.NumCPU()
+	}
+	chin := make([]chan *Key, chCount)
+	chout := make([]chan *FuncResult, chCount)
+	chdone := make(chan struct{})
+	for i := 0; i < chCount; i++ {
+		chin[i] = make(chan *Key, 10)
+		chout[i] = make(chan *FuncResult, 10)
+	}
+	for i := 0; i < chCount; i++ {
+		go processFunction(funcArgs, chin[i], chout[i])
+	}
+	// collect results, need to be placed here. otherwise chin will get stucked
+	// given the capacity of chout
+	go func() {
+		for i := 0; i < n; i++ {
+			result := <-chout[i%chCount]
+			out.Values = append(out.Values, result.Value)
+			out.UidMatrix = append(out.UidMatrix, result.List)
+			if q.DoCount {
+				out.Counts = append(out.Counts, result.Count)
+			}
+			if q.FacetParam != nil {
+				out.FacetMatrix = append(out.FacetMatrix, result.Facets)
+			}
+		}
+		chdone <- struct{}{}
+	}()
+	// iter all keys, send to process
 	for i := 0; i < n; i++ {
 		var key []byte
 		var uid uint64
@@ -268,75 +271,16 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 			key = x.DataKey(attr, it.Val())
 			it.Next()
 		}
-		// Get or create the posting list for an entity, attribute combination.
-		pl, decr := posting.GetOrCreate(key, gid)
-		defer decr()
-
-		// If a posting list contains a value, we store that or else we store a nil
-		// byte so that processing is consistent later.
-		val, err := pl.Value()
-		isValueEdge := err == nil
-		newValue := &task.Value{ValType: int32(val.Tid)}
-		if err == nil {
-			newValue.Val = val.Value.([]byte)
-		} else {
-			newValue.Val = x.Nilbyte
+		chin[i%chCount] <- &Key{
+			key: key,
+			uid: uid,
 		}
-		out.Values = append(out.Values, newValue)
-
-		// get facets.
-		if q.FacetParam != nil {
-			if isValueEdge {
-				fs, err := pl.Facets(q.FacetParam)
-				if err != nil {
-					return nil, err
-				}
-				out.FacetMatrix = append(out.FacetMatrix,
-					&facets.List{[]*facets.Facets{&facets.Facets{fs}}})
-			} else {
-				out.FacetMatrix = append(out.FacetMatrix,
-					&facets.List{pl.FacetsForUids(opts, q.FacetParam)})
-			}
-		}
-
-		if q.DoCount || fnType == AggregatorFn {
-			if q.DoCount {
-				out.Counts = append(out.Counts, uint32(pl.Length(0)))
-			}
-			// Add an empty UID list to make later processing consistent
-			out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
-			continue
-		}
-
-		if fnType == PasswordFn {
-			lastPos := len(out.Values) - 1
-			if len(newValue.Val) == 0 {
-				out.Values[lastPos] = task.FalseVal
-			}
-			pwd := q.SrcFunc[1]
-			err = types.VerifyPassword(pwd, string(newValue.Val))
-			if err != nil {
-				out.Values[lastPos] = task.FalseVal
-			} else {
-				out.Values[lastPos] = task.TrueVal
-			}
-			// Add an empty UID list to make later processing consistent
-			out.UidMatrix = append(out.UidMatrix, &emptyUIDList)
-			continue
-		}
-
-		if fnType == CompareScalarFn {
-			count := int64(pl.Length(0))
-			if EvalCompare(f, count, threshold) {
-				tlist := algo.SortedListToBlock([]uint64{uid})
-				out.UidMatrix = append(out.UidMatrix, tlist)
-			}
-			continue
-		}
-
-		// The more usual case: Getting the UIDs.
-		out.UidMatrix = append(out.UidMatrix, pl.Uids(opts))
 	}
+	// close all input channels
+	for i := 0; i < chCount; i++ {
+		close(chin[i])
+	}
+	<-chdone
 
 	// aggregate on the collection out.Values[]
 	if fnType == AggregatorFn && len(out.Values) > 0 {
@@ -409,7 +353,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 	}
 	out.IntersectDest = intersectDest
 
-	fmt.Printf("[iter get Length] time usage %v\n", time.Since(startTm))
+	//fmt.Printf("[iter get Length] time usage %v\n", time.Since(startTm))
 	return &out, nil
 }
 

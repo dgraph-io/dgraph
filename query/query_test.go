@@ -2978,6 +2978,22 @@ func TestGeneratorRootFilterOnCountError3(t *testing.T) {
 	require.NotNil(t, queryErr)
 }
 
+func TestGeneratorRootSearchAll(t *testing.T) {
+	populateGraph(t)
+	query := `
+                {
+                        me(id:_searchall_) @filter(gt(count(friend), 2)) {
+                                name
+                        }
+                }
+        `
+	_, err := gql.Parse(query)
+	require.NoError(t, err)
+
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"me":[{"name":"Michonne"}]}`, js)
+}
+
 func TestToProtoMultiRoot(t *testing.T) {
 	populateGraph(t)
 	query := `

@@ -658,15 +658,14 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		}
 		sg.Filters = append(sg.Filters, sgf)
 	}
-	//
+	// check validity is 'SearchAll'
 	if len(gq.UID) > 0 && gq.UID[0] == SearchAllUid {
-
 		if len(sg.Filters) != 1 {
 			return nil, x.Errorf("search-all should be combined with 1 filter")
 		}
-		srcFunc := sg.Filters[0].SrcFunc
-		if len(srcFunc) != 3 || srcFunc[0] != "gt" || srcFunc[1] != "count" {
-			return nil, x.Errorf("search-all should be combined with filter gt(count)")
+		fnType, _ := worker.ParseFuncType(sg.Filters[0].SrcFunc)
+		if fnType != worker.CompareScalarFn {
+			return nil, x.Errorf("search-all should be combined with CompareScalar")
 		}
 		sg.Attr = sg.Filters[0].Attr
 		sg.SrcFunc = sg.Filters[0].SrcFunc
