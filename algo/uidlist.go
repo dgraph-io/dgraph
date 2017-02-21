@@ -186,16 +186,18 @@ func (l *ListIterator) Next() {
 // of  the list passed to it.
 func Slice(ul *task.List, start, end int) {
 	out := NewWriteIterator(ul, 0)
-
-	i, ii, k := 0, 0, 0
+	i, ii := ridx(ul, start)
+	k := 0
+	var stop bool
 	blockLen := len(ul.Blocks)
-	for i < blockLen {
+	for i < blockLen && !stop {
 		ulist := ul.Blocks[i].List
 		listLen := len(ulist)
-		for ii < listLen {
-			if k >= start && k < end {
-				out.Append(ulist[ii])
+		for ii < listLen && !stop {
+			if k == end-start {
+				stop = true
 			}
+			out.Append(ulist[ii])
 			ii++
 			k++
 		}
