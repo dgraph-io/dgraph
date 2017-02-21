@@ -471,6 +471,16 @@ function timeout(ms, promise) {
   })
 }
 
+function getRootKey(response) {
+  let keys = Object.keys(response)
+  for(let i = 0; i < keys.length; i++) {
+    if(keys[i] != "server_latency" && keys[i] != "uids") {
+      return keys[i]
+    }
+  }
+  return ""
+}
+
 type QueryTs = {|
   text: string,
   lastRun: number
@@ -638,7 +648,10 @@ class App extends React.Component {
       }).then(checkStatus)
       .then(parseJSON)
       .then(function(result) {
-        var key = Object.keys(result)[0];
+        var key = getRootKey(result)
+        if(key === "") {
+          return;
+        }
         if (result.code !== undefined && result.message !== undefined) {
           that.storeQuery(that.state.query);
           // This is the case in which user sends a mutation. We display the response from server.

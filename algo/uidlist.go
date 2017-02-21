@@ -125,6 +125,9 @@ func (l *ListIterator) SeekToIndex(idx int) {
 // It uses binary search to move around.
 func (l *ListIterator) Seek(uid uint64, whence int) {
 	if whence == 1 {
+		if l.isEnd {
+			return
+		}
 		// Seek the current list first.
 		for l.lidx < len(l.curBlock.List) && l.curBlock.List[l.lidx] < uid {
 			l.lidx++
