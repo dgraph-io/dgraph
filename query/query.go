@@ -378,9 +378,12 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 // convert from task.Val to types.Value which is determined by attr
 // if convert failed, try convert to types.StringID
 func convertWithBestEffort(tv *task.Value, attr string) (types.Val, error) {
+	sv := types.ValueForType(types.StringID)
+	if len(tv.Val) == 0 {
+		return sv, ErrEmptyVal
+	}
 	v, _ := getValue(tv)
 	typ, err := schema.State().TypeOf(attr)
-	sv := types.ValueForType(types.StringID)
 	if err == nil {
 		// Try to coerce types if this is an optional scalar outside an
 		// object definition.
