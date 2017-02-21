@@ -2,7 +2,6 @@ package algo
 
 import (
 	"container/heap"
-	"fmt"
 	"sort"
 
 	"github.com/dgraph-io/dgraph/task"
@@ -198,7 +197,6 @@ func Slice(ul *task.List, start, end int) {
 	var stop bool
 	blockLen := len(ul.Blocks)
 	for ; i < blockLen; i++ {
-		fmt.Println(i, blockLen, "$$$$")
 		ulist := ul.Blocks[i].List
 		listLen := len(ulist)
 		for ; ii < listLen; ii++ {
@@ -411,12 +409,9 @@ func IntersectSorted(lists []*task.List) *task.List {
 	//   If x is not marked as "skipped", append x to result.
 	var minLenIdx int
 	minLen := ListLen(lists[0])
-	fmt.Println("-----")
-	fmt.Println("Lengths: ", minLen)
 	for i := 1; i < len(lists); i++ { // Start from 1.
 		l := lists[i]
 		n := ListLen(l)
-		fmt.Println("Lengths: ", n)
 		if n < minLen {
 			minLen = n
 			minLenIdx = i
@@ -462,7 +457,7 @@ func IntersectSorted(lists []*task.List) *task.List {
 				}
 				bptrs[j], lptrs[j] = k, kk
 				if k == plen || lists[j].Blocks[k].List[kk] > val {
-					elemsLeft = k < llen //lists[j].Blocks[k].List[kk]
+					elemsLeft = k < plen //lists[j].Blocks[k].List[kk]
 					skip = true
 					break
 				}
@@ -480,8 +475,6 @@ func IntersectSorted(lists []*task.List) *task.List {
 		}
 	}
 	out.End()
-	fmt.Println("Final Length: ", ListLen(o))
-	fmt.Println("-----")
 	return o
 }
 
