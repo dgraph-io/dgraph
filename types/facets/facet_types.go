@@ -99,6 +99,16 @@ func ValType(val string) (Facet_ValType, error) {
 	return Facet_STRING, nil
 }
 
+// FacetFor returns Facet for given key and val.
+func FacetFor(key string, val string) (*Facet, error) {
+	vt, err := ValType(val)
+	if err != nil {
+		return nil, err
+	}
+	return &Facet{Key: key, Value: []byte(val), ValType: vt}, nil
+}
+
+// Move to types/parse namespace.
 func parseTime(val string) (time.Time, error) {
 	var t time.Time
 	if err := t.UnmarshalText([]byte(val)); err == nil {
@@ -108,6 +118,11 @@ func parseTime(val string) (time.Time, error) {
 		return t, err
 	}
 	return time.Parse(dateFormatYMD, val)
+}
+
+func OnlyDate(val string) bool {
+	_, err := time.Parse(dateFormatYMD, val)
+	return err == nil
 }
 
 const dateFormatYMD = "2006-01-02"
