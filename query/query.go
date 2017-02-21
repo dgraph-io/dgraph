@@ -226,6 +226,9 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 	facetsNode := dst.New("@facets")
 	// We go through all predicate children of the subgraph.
 	for _, pc := range sg.Children {
+		if pc.Attr == "name.en" {
+			fmt.Printf("**** %#x \n", uid)
+		}
 		idxi, idxj := algo.IndexOf(pc.SrcUIDs, uid)
 		if idxi < 0 {
 			continue
@@ -282,7 +285,6 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 					continue
 				}
 				uc := dst.New(fieldName)
-
 				if rerr := pc.preTraverse(childUID, uc, dst); rerr != nil {
 					if rerr.Error() == "_INV_" {
 						invalidUids[childUID] = true
@@ -637,14 +639,20 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		sg.SrcFunc = append(sg.SrcFunc, gq.Func.Args...)
 	}
 	if len(gq.UID) > 0 {
-		o := new(task.List)
-		it := algo.NewWriteIterator(o, 0)
+		o1 := new(task.List)
+		o2 := new(task.List)
+		it1 := algo.NewWriteIterator(o1, 0)
+		it2 := algo.NewWriteIterator(o2, 0)
 		for _, uid := range gq.UID {
-			it.Append(uid)
+			it1.Append(uid)
+			it2.Append(uid)
 		}
-		it.End()
-		sg.SrcUIDs = o
-		sg.uidMatrix = []*task.List{o}
+		it1.End()
+		it2.End()
+		sg.uidMatrix = []*task.List{o1}
+		sg.SrcUIDs = o2
+		// User specified list maynot be sorted.
+		algo.Sort(sg.SrcUIDs)
 	}
 	sg.values = createNilValuesList(1)
 	// Copy roots filter.
@@ -904,6 +912,15 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	var err error
 	if len(sg.Params.NeedsVar) != 0 && len(sg.SrcFunc) == 0 {
 		sg.uidMatrix = []*task.List{sg.DestUIDs}
+		it := algo.NewListIterator(sg.DestUIDs)
+		var o task.List
+		wit := algo.NewWriteIterator(&o, 0)
+		for ; it.Valid(); it.Next() {
+			wit.Append(it.Val())
+		}
+		wit.End()
+		algo.Sort(&o)
+		sg.DestUIDs = &o
 	} else if len(sg.Attr) == 0 {
 		// If we have a filter SubGraph which only contains an operator,
 		// it won't have any attribute to work on.

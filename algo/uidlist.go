@@ -27,6 +27,21 @@ type WriteIterator struct {
 
 }
 
+func Sort(ul *task.List) {
+	var l []uint64
+	for it := NewListIterator(ul); it.Valid(); it.Next() {
+		l = append(l, it.Val())
+	}
+	sort.Slice(l, func(i, j int) bool {
+		return l[i] < l[j]
+	})
+	wit := NewWriteIterator(ul, 0)
+	for _, uid := range l {
+		wit.Append(uid)
+	}
+	wit.End()
+}
+
 func NewWriteIterator(l *task.List, whence int) WriteIterator {
 	blen := len(l.Blocks)
 	var cur *task.Block
