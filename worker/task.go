@@ -236,7 +236,10 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 	}
 
 	i, ii := 0, 0
-	blen := len(q.Uids.Blocks)
+	var blen int
+	if q.Uids != nil {
+		blen = len(q.Uids.Blocks)
+	}
 	var ulist []uint64
 	var llen int
 	if i < blen {

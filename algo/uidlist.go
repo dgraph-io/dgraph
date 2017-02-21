@@ -190,18 +190,21 @@ func Slice(ul *task.List, start, end int) {
 	k := 0
 	var stop bool
 	blockLen := len(ul.Blocks)
-	for i < blockLen && !stop {
+	for ; i < blockLen; i++ {
 		ulist := ul.Blocks[i].List
 		listLen := len(ulist)
-		for ii < listLen && !stop {
+		for ; ii < listLen; ii++ {
 			if k == end-start {
 				stop = true
+				break
 			}
 			out.Append(ulist[ii])
-			ii++
 			k++
 		}
-		i++
+		if stop {
+			break
+		}
+		ii = 0
 	}
 	out.End()
 }
