@@ -149,7 +149,7 @@ type ResponseNode = {| node: Object, src: Src |};
 // This helps quickly find if a label has already been assigned.
 var groups : GroupMap = {};
 
-function processGraph(response: Object, root: string, maxNodes: number) {
+function processGraph(response: Object, maxNodes: number) {
   let nodesStack: Array <ResponseNode> = [],
     // Contains map of a lable to its shortform thats displayed.
     predLabel: MapOfStrings = {},
@@ -169,24 +169,32 @@ function processGraph(response: Object, root: string, maxNodes: number) {
     someNodeHasChildren: boolean = false,
     ignoredChildren: Array <ResponseNode> = [];
 
-  for (let i = 0; i < response.length; i++) {
-    let n: ResponseNode = {
-      node: response[i],
-      src: {
-        id: "",
-        pred: root
-      }
-    };
-    if (hasChildren(response[i])) {
-      someNodeHasChildren = true;
-      nodesStack.push(n);
-    } else {
-      ignoredChildren.push(n);
-    }
-  };
+  for (var root in response) {
+    someNodeHasChildren = false
+    ignoredChildren = []
+    if (response.hasOwnProperty(root) && root != "server_latency" && root != "uids") {
+      let block = response[root]
+      for (let i = 0; i < block.length; i++) {
+        let n: ResponseNode = {
+          node: block[i],
+          src: {
+            id: "",
+            pred: root
+          }
+        };
+        if (hasChildren(block[i])) {
+          someNodeHasChildren = true;
+          nodesStack.push(n);
+        } else {
+          ignoredChildren.push(n);
+        }
+      };
 
-  if (!someNodeHasChildren) {
-    nodesStack.push.apply(nodesStack, ignoredChildren)
+      // Lets put in the root nodes which have any children here.
+      if (!someNodeHasChildren) {
+        nodesStack.push.apply(nodesStack, ignoredChildren)
+      }
+    }
   }
 
   // We push an empty node after all the children. This would help us know when
@@ -239,13 +247,13 @@ function processGraph(response: Object, root: string, maxNodes: number) {
           group: obj.src.pred,
           color: props.color,
         }
-		    nodes.push(n)
+        nodes.push(n)
       }
     }
 
     if (obj.src.id !== "") {
       var e: Edge = {
-        id: [obj.src.id, properties["_uid_"]].join("-"),
+        // id: [obj.src.id, properties["_uid_"]].join("-"),
         from: obj.src.id,
         to: properties["_uid_"],
         title: obj.src.pred,
@@ -374,10 +382,12 @@ function renderNetwork(nodes: Array <Node>, edges: Array <Edge>) {
         // TODO -See if we can set a meta property to a node to know that its
         // expanded or closed and avoid this computation.
       if (expanded) {
-        let allNodes = adjacentNodeIds.slice();
-        let allEdges = outgoingEdges.map(function(edge) {
+        // Collapse all child nodes recursively.
+        let allEdges = outgoing.map(function(edge) {
           return edge.id
         });
+
+        let allNodes = adjacentNodes.slice();
 
         while(adjacentNodeIds.length > 0) {
           let node = adjacentNodeIds.pop()
@@ -471,14 +481,14 @@ function timeout(ms, promise) {
   })
 }
 
-function getRootKey(response) {
+function isNotEmpty(response) {
   let keys = Object.keys(response)
   for(let i = 0; i < keys.length; i++) {
     if(keys[i] != "server_latency" && keys[i] != "uids") {
-      return keys[i]
+      return keys[i].length > 0
     }
   }
-  return ""
+  return false
 }
 
 type QueryTs = {|
@@ -648,21 +658,15 @@ class App extends React.Component {
       }).then(checkStatus)
       .then(parseJSON)
       .then(function(result) {
-        var key = getRootKey(result)
-        if(key === "") {
-          return;
-        }
+        // This is the case in which user sends a mutation. We display the response from server.
         if (result.code !== undefined && result.message !== undefined) {
           that.storeQuery(that.state.query);
-          // This is the case in which user sends a mutation. We display the response from server.
           that.setState({
             resType: 'success-res',
             response: JSON.stringify(result, null, 2)
           })
-        } else if (key !== undefined) {
+        } else if (isNotEmpty(result)) {
           that.storeQuery(that.state.query);
-          // We got the result for a query.
-          let response: Object = result[key]
           that.setState({
             latency: result.server_latency.total,
             resType: ''
@@ -673,7 +677,7 @@ class App extends React.Component {
           // We process all the nodes and edges in the response in background and
           // store the structure in globalNodeSet and globalEdgeSet. We can use this
           // later when we do expansion of nodes.
-            let graph = processGraph(response, key, -1);
+            let graph = processGraph(result, -1);
               globalNodeSet = new vis.DataSet(graph[0])
               globalEdgeSet = new vis.DataSet(graph[1])
 
@@ -686,7 +690,7 @@ class App extends React.Component {
 
           // We call procesGraph with a 20 node limit and calculate the whole dataset in
           // the background.
-          var graph = processGraph(response, key, 20);
+          var graph = processGraph(result, 20);
           setTimeout(function() {
             that.setState({
               partial: this.state.nodes > graph[0].length
