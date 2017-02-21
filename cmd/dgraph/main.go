@@ -610,6 +610,47 @@ func (s *grpcServer) Run(ctx context.Context,
 	return resp, err
 }
 
+type keyword struct {
+	// Type could be a predicate, function etc.
+	Type string `json:"type"`
+	Name string `json:"name"`
+}
+
+type keywords struct {
+	Keywords []keyword `json:"keywords"`
+}
+
+// Used to return a list of keywords, so that UI can show them for autocompletion.
+func keywordHandler(w http.ResponseWriter, r *http.Request) {
+	addCorsHeaders(w)
+	preds := schema.State().Predicates()
+	kw := make([]keyword, 0, len(preds))
+	for _, p := range preds {
+		kw = append(kw, keyword{
+			Type: "predicate",
+			Name: p,
+		})
+	}
+	kws := keywords{Keywords: kw}
+
+	predefined := []string{"id", "_uid_", "after", "first", "offset", "count",
+		"@filter", "func", "anyof", "allof", "leq", "geq", "or", "and",
+		"orderasc", "orderdesc", "near", "within", "contains", "intersects"}
+
+	for _, w := range predefined {
+		kws.Keywords = append(kws.Keywords, keyword{
+			Name: w,
+		})
+	}
+	js, err := json.Marshal(kws)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(err.Error()))
+		return
+	}
+	w.Write(js)
+}
+
 func checkFlagsAndInitDirs() {
 	if len(*cpuprofile) > 0 {
 		f, err := os.Create(*cpuprofile)
@@ -668,7 +709,10 @@ func setupServer(che chan error) {
 	http.HandleFunc("/admin/index", indexHandler)
 	http.HandleFunc("/admin/shutdown", shutDownHandler)
 	http.HandleFunc("/admin/backup", backupHandler)
+
+	// UI related API's.
 	http.Handle("/", http.FileServer(http.Dir(*uiDir)))
+	http.HandleFunc("/ui/keywords", keywordHandler)
 
 	// Initilize the servers.
 	go serveGRPC(grpcl)

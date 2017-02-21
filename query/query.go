@@ -139,12 +139,12 @@ type params struct {
 // query and the response. Once generated, this can then be encoded to other
 // client convenient formats, like GraphQL / JSON.
 type SubGraph struct {
-	Attr        string
-	Params      params
-	counts      []uint32
-	values      []*task.Value
-	uidMatrix   []*task.List
-	FacetsLists []*facets.List
+	Attr         string
+	Params       params
+	counts       []uint32
+	values       []*task.Value
+	uidMatrix    []*task.List
+	facetsMatrix []*facets.List
 
 	// SrcUIDs is a list of unique source UIDs. They are always copies of destUIDs
 	// of parent nodes in GraphQL structure.
@@ -266,13 +266,13 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 			c.Value = task.ToBool(pc.values[idx])
 			uc := dst.New(pc.Attr)
 			uc.AddValue("checkpwd", c)
-			dst.AddListChild(pc.Attr, uc)			
+			dst.AddListChild(pc.Attr, uc)
 		} else if algo.ListLen(ul) > 0 || len(pc.Children) > 0 {
 			// We create as many predicate entity children as the length of uids for
 			// this predicate.
 			var fcsList []*facets.Facets
 			if pc.Params.Facet != nil {
-				fcsList = pc.FacetsLists[idx].FacetsList
+				fcsList = pc.facetsMatrix[idx].FacetsList
 			}
 			it := algo.NewListIterator(ul)
 			for childIdx := -1; it.Valid(); it.Next() {
@@ -296,7 +296,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 					fs := fcsList[childIdx]
 					fc := dst.New(fieldName)
 					for _, f := range fs.Facets {
-						if tv, err := types.TypeValForFacet(f); err != nil {
+						if tv, err := types.ValFor(f); err != nil {
 							return err
 						} else {
 							fc.AddValue(f.Key, tv)
@@ -318,11 +318,11 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 			if err != nil {
 				return err
 			}
-			if pc.Params.Facet != nil && len(pc.FacetsLists[idx].FacetsList) > 0 {
+			if pc.Params.Facet != nil && len(pc.facetsMatrix[idx].FacetsList) > 0 {
 				fc := dst.New(fieldName)
 				// in case of Value we have only one Facets
-				for _, f := range pc.FacetsLists[idx].FacetsList[0].Facets {
-					if tVal, err := types.TypeValForFacet(f); err != nil {
+				for _, f := range pc.facetsMatrix[idx].FacetsList[0].Facets {
+					if tVal, err := types.ValFor(f); err != nil {
 						return err
 					} else {
 						fc.AddValue(f.Key, tVal)
@@ -448,7 +448,7 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 		if gchild.Attr == "_uid_" {
 			sg.Params.GetUID = true
 		} else if gchild.Attr == "password" { // query password is forbidden
-			if gchild.Func == nil || !gchild.Func.IsPasswordVerifier() { 
+			if gchild.Func == nil || !gchild.Func.IsPasswordVerifier() {
 				return errors.New("Password is not fetchable")
 			}
 		}
@@ -501,7 +501,7 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 					" please place the filter on the upper level"
 				return errors.New(note)
 			}
-			dst.SrcFunc = append(sg.SrcFunc, gchild.Func.Name)
+			dst.SrcFunc = append(dst.SrcFunc, gchild.Func.Name)
 			dst.SrcFunc = append(dst.SrcFunc, gchild.Func.Args...)
 		}
 
@@ -933,7 +933,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 
 		sg.uidMatrix = result.UidMatrix
 		sg.values = result.Values
-		sg.FacetsLists = result.FacetsLists
+		sg.facetsMatrix = result.FacetMatrix
 		if len(sg.values) > 0 {
 			v := sg.values[0]
 			x.Trace(ctx, "Sample value for attr: %v Val: %v", sg.Attr, string(v.Val))
