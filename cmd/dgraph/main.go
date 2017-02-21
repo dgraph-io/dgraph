@@ -67,9 +67,6 @@ var (
 	port       = flag.Int("port", 8080, "Port to run server on.")
 	bindall    = flag.Bool("bindall", false,
 		"Use 0.0.0.0 instead of localhost to bind to all addresses on local machine.")
-	tlsEnabled     = flag.Bool("tls", false, "Use TLS connections with clients")
-	cert           = flag.String("cert", "", "Certificate file path")
-	key            = flag.String("cert_key", "", "Certificate key file key")
 	nomutations    = flag.Bool("nomutations", false, "Don't allow mutations on this server.")
 	tracing        = flag.Float64("trace", 0.0, "The ratio of queries to trace.")
 	schemaFile     = flag.String("schema", "", "Path to schema file")
@@ -80,6 +77,16 @@ var (
 	finishCh       = make(chan struct{}) // channel to wait for all pending reqs to finish.
 	shutdownCh     = make(chan struct{}) // channel to signal shutdown.
 	pendingQueries = make(chan struct{}, 10000*runtime.NumCPU())
+	// TLS configurations
+	tlsEnabled       = flag.Bool("tls.on", false, "Use TLS connections with clients.")
+	tlsCert          = flag.String("tls.cert", "", "Certificate file path.")
+	tlsKey           = flag.String("tls.cert_key", "", "Certificate key file path.")
+	tlsKeyPass       = flag.String("tls.cert_key_passphrase", "", "Certificate key passphrase.")
+	tlsClientAuth    = flag.String("tls.client_auth", "", "Enable TLS client auth")
+	tlsClientCACerts = flag.String("tls.client_ca_certs", "", "Client CA Certs file path.")
+	tlsSystemCACerts = flag.Bool("tls.use_system_ca", false, "Include System CA into Clients CA Certs.")
+	tlsMinVersion    = flag.String("tls.min_version", "TLS11", "TLS min versions.")
+	tlsMaxVersion    = flag.String("tls.max_version", "TLS12", "TLS max versions.")
 )
 
 type mutationResult struct {
@@ -709,14 +716,19 @@ func setupListener(addr string, port int) (net.Listener, error) {
 		return net.Listen("tcp", laddr)
 	}
 
-	certificate, err := tls.LoadX509KeyPair(*cert, *key)
+	tlsCfg, err := x.GenerateTLSConfig(x.TLSHelperConfig{
+		CertRequired:           *tlsEnabled,
+		Cert:                   *tlsCert,
+		Key:                    *tlsKey,
+		KeyPassphrase:          *tlsKeyPass,
+		ClientAuth:             *tlsClientAuth,
+		ClientCACerts:          *tlsClientCACerts,
+		UseSystemClientCACerts: *tlsSystemCACerts,
+		MinVersion:             *tlsMinVersion,
+		MaxVersion:             *tlsMaxVersion,
+	})
 	if err != nil {
-		return nil, fmt.Errorf("Error reading certificate {cert: '%s', cert_key: '%s'}\n%s", *cert, *key, err)
-	}
-
-	tlsCfg := &tls.Config{
-		MinVersion:   tls.VersionTLS11, // min secure version
-		Certificates: []tls.Certificate{certificate},
+		return nil, err
 	}
 
 	return tls.Listen("tcp", laddr, tlsCfg)

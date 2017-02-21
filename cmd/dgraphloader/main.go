@@ -10,7 +10,6 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
-	"crypto/tls"
 	"flag"
 	"fmt"
 	"io"
@@ -30,10 +29,19 @@ import (
 var (
 	files      = flag.String("r", "", "Location of rdf files to load")
 	dgraph     = flag.String("d", "127.0.0.1:8080", "Dgraph server address")
-	tlsEnabled = flag.Bool("tls", false, "Enable TLS connection")
-	insecure   = flag.Bool("insecure", false, "Skip insecure cert validation")
 	concurrent = flag.Int("c", 100, "Number of concurrent requests to make to Dgraph")
 	numRdf     = flag.Int("m", 1000, "Number of RDF N-Quads to send as part of a mutation.")
+	// TLS configuration
+	tlsEnabled       = flag.Bool("tls.on", false, "Use TLS connections.")
+	tlsInsecure      = flag.Bool("tls.insecure", false, "Skip insecure cert validation")
+	tlsServerName    = flag.String("tls.server_name", "", "Server name.")
+	tlsCert          = flag.String("tls.cert", "", "Certificate file path.")
+	tlsKey           = flag.String("tls.cert_key", "", "Certificate key file path.")
+	tlsKeyPass       = flag.String("tls.cert_key_passphrase", "", "Certificate key passphrase.")
+	tlsRootCACerts   = flag.String("tls.root_ca_certs", "", "Include Client CA Certs file path.")
+	tlsSystemCACerts = flag.Bool("tls.use_system_ca", false, "Include System CA into Root CA Certs.")
+	tlsMinVersion    = flag.String("tls.min_version", "TLS11", "TLS min versions.")
+	tlsMaxVersion    = flag.String("tls.max_version", "TLS12", "TLS max versions.")
 )
 
 // Reads a single line from a buffered reader. The line is read into the
@@ -102,9 +110,19 @@ func setupConnection() (*grpc.ClientConn, error) {
 		return grpc.Dial(*dgraph, grpc.WithInsecure())
 	}
 
-	tlsCfg := &tls.Config{
-		InsecureSkipVerify: *insecure,
-		MinVersion:         tls.VersionTLS11, //min secure version
+	tlsCfg, err := x.GenerateTLSConfig(x.TLSHelperConfig{
+		Insecure:             *tlsInsecure,
+		ServerName:           *tlsServerName,
+		Cert:                 *tlsCert,
+		Key:                  *tlsKey,
+		KeyPassphrase:        *tlsKeyPass,
+		RootCACerts:          *tlsRootCACerts,
+		UseSystemRootCACerts: *tlsSystemCACerts,
+		MinVersion:           *tlsMinVersion,
+		MaxVersion:           *tlsMaxVersion,
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	return grpc.Dial(*dgraph, grpc.WithTransportCredentials(credentials.NewTLS(tlsCfg)))
