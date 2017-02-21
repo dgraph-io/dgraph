@@ -226,9 +226,6 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 	facetsNode := dst.New("@facets")
 	// We go through all predicate children of the subgraph.
 	for _, pc := range sg.Children {
-		if pc.Attr == "name.en" {
-			fmt.Printf("**** %#x \n", uid)
-		}
 		idxi, idxj := algo.IndexOf(pc.SrcUIDs, uid)
 		if idxi < 0 {
 			continue
