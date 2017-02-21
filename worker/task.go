@@ -288,6 +288,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 			var perr error
 			// Get postings and filter based on facetFilterTree.
 			pl.Postings(opts, func(p *types.Posting) {
+				// TODO (ashish): have a way to break the loop.
 				res := true
 				if q.FacetsFilter != nil {
 					res, perr = applyFacetFilter(p.Facets, q.FacetsFilter)
@@ -314,14 +315,14 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 				out.FacetMatrix = append(out.FacetMatrix,
 					&facets.List{[]*facets.Facets{&facets.Facets{fs}}})
 			} else {
+				var fcsList []*facets.Facets
 				// remove keys that are not required.
 				if !q.FacetParam.AllKeys {
-					for _, _ = range filteredRes {
-						// Todo (ashish)
-						// keep only specifc facets in q.FacetParam.Keys
+					for _, fres := range filteredRes {
+						fres.facets = facets.FilterKeys(q.FacetParam,
+							fres.facets)
 					}
 				}
-				var fcsList []*facets.Facets
 				for _, fres := range filteredRes {
 					fcsList = append(fcsList, &facets.Facets{fres.facets})
 				}

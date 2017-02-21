@@ -18,6 +18,7 @@ package facets
 
 import (
 	"sort"
+	"strings"
 )
 
 func (a Facets) Len() int { return len(a.Facets) }
@@ -57,4 +58,30 @@ func CopyFacets(fcs []*Facet, param *Param) (fs []*Facet) {
 		}
 	}
 	return fs
+}
+
+// FilterKeys keeps only param.Keys in fcs array.
+// param.Keys and fcs should be sorted (as always).
+func FilterKeys(param *Param, fcs []*Facet) []*Facet {
+	if param.AllKeys {
+		return fcs
+	}
+	numFacets := len(fcs)
+	numKeys := len(param.Keys)
+	writeIdx := 0
+	for fi, ki := 0, 0; fi < numFacets && ki < numKeys; {
+		scmp := strings.Compare(fcs[fi].Key, param.Keys[ki])
+		if scmp == 0 {
+			fcs[writeIdx] = fcs[fi]
+			fi++
+			ki++
+			writeIdx++
+		} else if scmp == -1 {
+			fi++
+		} else {
+			ki++
+		}
+	}
+	fcs = fcs[:writeIdx]
+	return fcs
 }

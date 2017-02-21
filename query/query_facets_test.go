@@ -908,11 +908,12 @@ func TestFacetsFilterAtValueFail(t *testing.T) {
 
 func TestFacetsFilterAndRetrieval(t *testing.T) {
 	populateGraphWithFacets(t)
+	// Close should not be retrieved.. only used for filtering.
 	query := `
 		{
 			me(id:1) {
 				name
-				friend @facets(eq(close, true)) @facets(since) {
+				friend @facets(eq(close, true)) @facets(family) {
 					name
 					_uid_
 				}
@@ -921,9 +922,8 @@ func TestFacetsFilterAndRetrieval(t *testing.T) {
 	`
 
 	js := processToFastJSON(t, query)
-	x.Printf(js)
 	require.JSONEq(t,
-		`{}`,
+		`{"me":[{"friend":[{"@facets":{"_":{"family":true}},"_uid_":"0x18","name":"Glenn Rhee"},{"@facets":{"_":{"family":false}},"_uid_":"0x65"}],"name":"Michonne"}]}`,
 		js)
 	teardownGraphWithFacets(t)
 }
