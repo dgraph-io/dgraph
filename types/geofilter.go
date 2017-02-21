@@ -327,32 +327,63 @@ func FilterGeoUids(uids *task.List, values []*task.Value, q *GeoQueryData) *task
 	x.AssertTruef(len(values) == algo.ListLen(uids), "lengths not matching")
 	o := new(task.List)
 	out := algo.NewWriteIterator(o, 0)
-	it := algo.NewListIterator(uids)
-	for i := -1; it.Valid(); it.Next() {
-		i++
-		valBytes := values[i].Val
-		if bytes.Equal(valBytes, nil) {
-			continue
-		}
-		vType := values[i].ValType
-		if TypeID(vType) != GeoID {
-			continue
-		}
-		src := ValueForType(BinaryID)
-		src.Value = valBytes
-		gc, err := Convert(src, GeoID)
-		if err != nil {
-			continue
-		}
-		g := gc.Value.(geom.T)
+	i, ii, k := 0, 0, 0 //it := algo.NewListIterator(uids)
+	blen := len(uids.Blocks)
+	for i < blen {
+		ulist := uids.Blocks[i].List
+		llen := len(ulist)
+		for ii < llen {
+			valBytes := values[k].Val
+			if bytes.Equal(valBytes, nil) {
+				continue
+			}
+			vType := values[i].ValType
+			if TypeID(vType) != GeoID {
+				continue
+			}
+			src := ValueForType(BinaryID)
+			src.Value = valBytes
+			gc, err := Convert(src, GeoID)
+			if err != nil {
+				continue
+			}
+			g := gc.Value.(geom.T)
 
-		if !q.MatchesFilter(g) {
-			continue
+			if !q.MatchesFilter(g) {
+				continue
+			}
+			// we matched the geo filter, add the uid to the list
+			out.Append(ulist[ii])
+			ii++
 		}
-
-		// we matched the geo filter, add the uid to the list
-		out.Append(it.Val())
+		i, ii = i+1, 0
 	}
+	/*	for i := -1; it.Valid(); it.Next() {
+			i++
+			valBytes := values[i].Val
+			if bytes.Equal(valBytes, nil) {
+				continue
+			}
+			vType := values[i].ValType
+			if TypeID(vType) != GeoID {
+				continue
+			}
+			src := ValueForType(BinaryID)
+			src.Value = valBytes
+			gc, err := Convert(src, GeoID)
+			if err != nil {
+				continue
+			}
+			g := gc.Value.(geom.T)
+
+			if !q.MatchesFilter(g) {
+				continue
+			}
+
+			// we matched the geo filter, add the uid to the list
+			out.Append(it.Val())
+		}
+	*/
 	out.End()
 	return o
 }
