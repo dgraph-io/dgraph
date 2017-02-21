@@ -269,23 +269,39 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 			newValue.Val = x.Nilbyte
 		}
 
-		// Which index of posting id to keep from filtered (by facets) posting list.
-		var keepIds []bool
-		if q.FacetsFilter != nil {
-			if isValueEdge {
-				return nil, x.Errorf("Facet filtering is not supported on values.")
-			}
+		type result struct {
+			uid    uint64
+			facets []*facets.Facet
+		}
+		var filteredRes []*result
+		if !isValueEdge { // for uid edge.. get postings
+			// Get all facet keys that both filtering and retreival will need.
 			fcKeys := keysFromFilter(q.FacetsFilter)
-			sort.Strings(fcKeys)
-			param := &facets.Param{AllKeys: false, Keys: fcKeys}
-			// generate facetFilterRes : which indexes should be taken.
-			for _, fc := range pl.FacetsForUids(opts, param) {
-				res, err := applyFacetFilter(fc.Facets, q.FacetsFilter)
-				if err != nil {
-					return nil, err
-				}
-				keepIds = append(keepIds, res)
+			param := &facets.Param{AllKeys: false}
+			if q.FacetParam != nil { // @facets : retrieval part.
+				param.AllKeys = q.FacetParam.AllKeys
+				fcKeys = append(fcKeys, q.FacetParam.Keys...)
 			}
+			sort.Strings(fcKeys)
+			param.Keys = fcKeys
+
+			var perr error
+			// Get postings and filter based on facetFilterTree.
+			pl.Postings(opts, func(p *types.Posting) {
+				res := true
+				if q.FacetsFilter != nil {
+					res, perr = applyFacetFilter(p.Facets, q.FacetsFilter)
+				}
+				if res {
+					filteredRes = append(filteredRes, &result{uid: p.Uid,
+						facets: facets.CopyFacets(p.Facets, param)})
+				}
+			})
+			if perr != nil {
+				return nil, perr
+			}
+		} else if q.FacetsFilter != nil {
+			return nil, x.Errorf("Facet filtering is not supported on values.")
 		}
 
 		// get facets.
@@ -298,11 +314,16 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 				out.FacetMatrix = append(out.FacetMatrix,
 					&facets.List{[]*facets.Facets{&facets.Facets{fs}}})
 			} else {
-				fcsList := pl.FacetsForUids(opts, q.FacetParam)
-				if q.FacetsFilter != nil {
-					filterFacets(fcsList, func(i int, _ *facets.Facets) bool {
-						return keepIds[i]
-					})
+				// remove keys that are not required.
+				if !q.FacetParam.AllKeys {
+					for _, _ = range filteredRes {
+						// Todo (ashish)
+						// keep only specifc facets in q.FacetParam.Keys
+					}
+				}
+				var fcsList []*facets.Facets
+				for _, fres := range filteredRes {
+					fcsList = append(fcsList, &facets.Facets{fres.facets})
 				}
 				out.FacetMatrix = append(out.FacetMatrix, &facets.List{fcsList})
 			}
@@ -347,13 +368,13 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 		}
 
 		// The more usual case: Getting the UIDs.
-		uids := pl.Uids(opts)
-		if q.FacetsFilter != nil {
-			algo.ApplyFilter(uids, func(_ uint64, i int) bool {
-				return keepIds[i]
-			})
+		uidList := new(task.List)
+		uidw := algo.NewWriteIterator(uidList, 0)
+		for _, fres := range filteredRes {
+			uidw.Append(fres.uid)
 		}
-		out.UidMatrix = append(out.UidMatrix, uids)
+		uidw.End()
+		out.UidMatrix = append(out.UidMatrix, uidList)
 	}
 
 	// aggregate on the collection out.Values[]
@@ -445,6 +466,9 @@ func (w *grpcWorker) ServeTask(ctx context.Context, q *task.Query) (*task.Result
 }
 
 func keysFromFilter(ftree *facets.FilterTree) (attrs []string) {
+	if ftree == nil {
+		return []string{}
+	}
 	if ftree.Func != nil {
 		attrs = append(attrs, ftree.Func.Key)
 	}

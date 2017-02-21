@@ -585,15 +585,6 @@ func (l *List) Uids(opt ListOptions) *task.List {
 	return res
 }
 
-// FacetsForUids gives Facets for postings common with uids in opt listOptions.
-func (l *List) FacetsForUids(opt ListOptions, param *facets.Param) []*facets.Facets {
-	result := make([]*facets.Facets, 0, 10)
-	l.Postings(opt, func(p *types.Posting) {
-		result = append(result, &facets.Facets{Facets: copyFacets(p, param)})
-	})
-	return result
-}
-
 // Postings calls postFn with the postings that are common with
 // uids in the opt ListOptions.
 func (l *List) Postings(opt ListOptions, postFn func(*types.Posting)) {
@@ -651,31 +642,7 @@ func (l *List) Facets(param *facets.Param) (fs []*facets.Facet, ferr error) {
 	if err != nil {
 		return nil, err
 	}
-	return copyFacets(p, param), nil
-}
-
-// copyFacets makes a copy of facets of the posting which are requested in param.Keys.
-func copyFacets(p *types.Posting, param *facets.Param) (fs []*facets.Facet) {
-	// facets and param.keys are both sorted,
-	// We also need all keys if param.AllKeys is true.
-	numKeys := len(param.Keys)
-	numFacets := len(p.Facets)
-	for kidx, fidx := 0, 0; (param.AllKeys || kidx < numKeys) && fidx < numFacets; {
-		f := p.Facets[fidx]
-		if param.AllKeys || param.Keys[kidx] == f.Key {
-			fcopy := &facets.Facet{Key: f.Key, Value: nil, ValType: f.ValType}
-			fcopy.Value = make([]byte, len(f.Value))
-			copy(fcopy.Value, f.Value)
-			fs = append(fs, fcopy)
-			kidx++
-			fidx++
-		} else if f.Key > param.Keys[kidx] {
-			kidx++
-		} else {
-			fidx++
-		}
-	}
-	return fs
+	return facets.CopyFacets(p.Facets, param), nil
 }
 
 // valuePosting gives the posting representing value.

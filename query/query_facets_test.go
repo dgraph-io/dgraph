@@ -882,7 +882,6 @@ func TestFacetsFilterAllofAndAnyof(t *testing.T) {
 	`
 
 	js := processToFastJSON(t, query)
-	x.Printf(js)
 	require.JSONEq(t,
 		`{"me":[{"friend":[{"_uid_":"0x19","name":"Daryl Dixon"}],"name":"Andrea"}]}`,
 		js)
@@ -904,5 +903,27 @@ func TestFacetsFilterAtValueFail(t *testing.T) {
 
 	_, err := processToFastJsonReq(t, query)
 	require.Error(t, err)
+	teardownGraphWithFacets(t)
+}
+
+func TestFacetsFilterAndRetrieval(t *testing.T) {
+	populateGraphWithFacets(t)
+	query := `
+		{
+			me(id:1) {
+				name
+				friend @facets(eq(close, true)) @facets(since) {
+					name
+					_uid_
+				}
+			}
+		}
+	`
+
+	js := processToFastJSON(t, query)
+	x.Printf(js)
+	require.JSONEq(t,
+		`{}`,
+		js)
 	teardownGraphWithFacets(t)
 }
