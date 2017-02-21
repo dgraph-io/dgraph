@@ -91,3 +91,25 @@ func Less(a, b Val) (bool, error) {
 	}
 	return false, x.Errorf("Compare not supported for type: %v", a.Tid)
 }
+
+// Equal returns true if a is equal to b.
+func Equal(a, b Val) (bool, error) {
+	if a.Tid != b.Tid {
+		return false, x.Errorf("Arguments of different type can not be compared.")
+	}
+	switch a.Tid {
+	case DateID:
+		return a.Value.(time.Time) == (b.Value.(time.Time)), nil
+	case DateTimeID:
+		return a.Value.(time.Time) == (b.Value.(time.Time)), nil
+	case Int32ID:
+		return (a.Value.(int32)) == (b.Value.(int32)), nil
+	case FloatID:
+		return (a.Value.(float64)) == (b.Value.(float64)), nil
+	case StringID:
+		return (a.Value.(string)) == (b.Value.(string)), nil
+	case BoolID:
+		return a.Value.(bool) == (b.Value.(bool)), nil
+	}
+	return false, x.Errorf("Equal not supported for type: %v", a.Tid)
+}

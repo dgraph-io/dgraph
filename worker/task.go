@@ -216,6 +216,8 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 		n = algo.ListLen(q.Uids)
 
 	case StandardFn:
+		// srcfunc 0th val is func name and and [1:] are args.
+		// we tokenize the arguments of the query.
 		tokens, err = getTokens(q.SrcFunc[1:])
 		if err != nil {
 			return nil, err
@@ -277,7 +279,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 		if !isValueEdge { // for uid edge.. get postings
 			var perr error
 			// Get postings and filter based on facetFilterTree.
-			pl.Postings(opts, func(p *types.Posting) {
+			pl.Postings(opts, func(p *types.Posting) bool {
 				res := true
 				if q.FacetsFilter != nil {
 					res, perr = applyFacetFilter(p.Facets, q.FacetsFilter)
@@ -289,6 +291,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 					filteredRes = append(filteredRes, &result{uid: p.Uid,
 						facets: facets.CopyFacets(p.Facets, q.FacetParam)})
 				}
+				return true
 			})
 			if perr != nil {
 				return nil, perr
@@ -464,8 +467,9 @@ func keysFromFilter(ftree *facets.FilterTree) (attrs []string) {
 	return attrs
 }
 
-// we return error only when query has some problems.
+// applyFacetFilter : we return error only when query has some problems.
 // like Or has 3 arguments, argument facet val overflows integer.
+// returns true if postingFacets can be included.
 func applyFacetFilter(postingFacets []*facets.Facet, ftree *facets.FilterTree) (bool, error) {
 	if ftree.Func != nil {
 		fname := strings.ToLower(ftree.Func.Name)
@@ -580,13 +584,7 @@ func compareTypeVals(op string, arg1, arg2 types.Val) bool {
 	case "lt":
 		return noError(types.Less(arg1, arg2))
 	case "eq":
-		if arg1.Tid == types.BoolID {
-			return (arg2.Tid == types.BoolID) &&
-				(arg1.Value.(bool) == arg2.Value.(bool))
-		} else {
-			return noError(revRes(types.Less(arg1, arg2))) &&
-				noError(revRes(types.Less(arg2, arg1)))
-		}
+		return noError(types.Equal(arg1, arg2))
 	default:
 		// should have been checked at query level.
 		x.Fatalf("Unknown ineqType %v", op)
@@ -594,6 +592,8 @@ func compareTypeVals(op string, arg1, arg2 types.Val) bool {
 	return false
 }
 
+// filterOnStandardFn : tells whether facet corresponding to fcTokens can be taken or not.
+// fcTokens and argTokens should be sorted.
 func filterOnStandardFn(fname string, fcTokens []string, argTokens []string) (bool, error) {
 	switch fname {
 	case "allof":
