@@ -636,18 +636,17 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		sg.SrcFunc = append(sg.SrcFunc, gq.Func.Args...)
 	}
 	if len(gq.UID) > 0 {
-		o1 := new(task.List)
-		o2 := new(task.List)
-		it1 := algo.NewWriteIterator(o1, 0)
-		it2 := algo.NewWriteIterator(o2, 0)
+		o := new(task.List)
+		sg.SrcUIDs = new(task.List)
+		ito := algo.NewWriteIterator(o, 0)
+		itsg := algo.NewWriteIterator(sg.SrcUIDs, 0)
 		for _, uid := range gq.UID {
-			it1.Append(uid)
-			it2.Append(uid)
+			ito.Append(uid)
+			itsg.Append(uid)
 		}
-		it1.End()
-		it2.End()
-		sg.uidMatrix = []*task.List{o1}
-		sg.SrcUIDs = o2
+		ito.End()
+		itsg.End()
+		sg.uidMatrix = []*task.List{o}
 		// User specified list maynot be sorted.
 		algo.Sort(sg.SrcUIDs)
 	}

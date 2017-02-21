@@ -27,19 +27,24 @@ type WriteIterator struct {
 
 }
 
+// AsList implements sort.Interface by providing Less and using the Len and
+// Swap methods of the embedded Organs value.
+type AsList struct{ l *task.List }
+
+func (s AsList) Len() int { return ListLen(s.l) }
+func (s AsList) Swap(i, j int) {
+	p, q := ridx(s.l, i)
+	m, n := ridx(s.l, j)
+	s.l.Blocks[p].List[q], s.l.Blocks[m].List[n] = s.l.Blocks[m].List[n], s.l.Blocks[p].List[q]
+}
+func (s AsList) Less(i, j int) bool {
+	p, q := ridx(s.l, i)
+	m, n := ridx(s.l, j)
+	return s.l.Blocks[p].List[q] < s.l.Blocks[m].List[n]
+}
+
 func Sort(ul *task.List) {
-	var l []uint64
-	for it := NewListIterator(ul); it.Valid(); it.Next() {
-		l = append(l, it.Val())
-	}
-	sort.Slice(l, func(i, j int) bool {
-		return l[i] < l[j]
-	})
-	wit := NewWriteIterator(ul, 0)
-	for _, uid := range l {
-		wit.Append(uid)
-	}
-	wit.End()
+	sort.Sort(AsList{ul})
 }
 
 func NewWriteIterator(l *task.List, whence int) WriteIterator {
