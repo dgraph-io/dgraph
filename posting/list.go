@@ -578,8 +578,9 @@ func (l *List) LastCompactionTs() time.Time {
 func (l *List) Uids(opt ListOptions) *task.List {
 	res := new(task.List)
 	writeIt := algo.NewWriteIterator(res, 0)
-	l.Postings(opt, func(p *types.Posting) {
+	l.Postings(opt, func(p *types.Posting) bool {
 		writeIt.Append(p.Uid)
+		return true
 	})
 	writeIt.End()
 	return res
@@ -587,7 +588,7 @@ func (l *List) Uids(opt ListOptions) *task.List {
 
 // Postings calls postFn with the postings that are common with
 // uids in the opt ListOptions.
-func (l *List) Postings(opt ListOptions, postFn func(*types.Posting)) {
+func (l *List) Postings(opt ListOptions, postFn func(*types.Posting) bool) {
 	l.RLock()
 	defer l.RUnlock()
 
@@ -608,8 +609,7 @@ func (l *List) Postings(opt ListOptions, postFn func(*types.Posting)) {
 				return true
 			}
 		}
-		postFn(p)
-		return true
+		return postFn(p)
 	})
 }
 

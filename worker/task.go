@@ -275,27 +275,19 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 		}
 		var filteredRes []*result
 		if !isValueEdge { // for uid edge.. get postings
-			// Get all facet keys that both filtering and retreival will need.
-			fcKeys := keysFromFilter(q.FacetsFilter)
-			param := &facets.Param{AllKeys: false}
-			if q.FacetParam != nil { // @facets : retrieval part.
-				param.AllKeys = q.FacetParam.AllKeys
-				fcKeys = append(fcKeys, q.FacetParam.Keys...)
-			}
-			sort.Strings(fcKeys)
-			param.Keys = fcKeys
-
 			var perr error
 			// Get postings and filter based on facetFilterTree.
 			pl.Postings(opts, func(p *types.Posting) {
-				// TODO (ashish): have a way to break the loop.
 				res := true
 				if q.FacetsFilter != nil {
 					res, perr = applyFacetFilter(p.Facets, q.FacetsFilter)
+					if perr != nil {
+						return false // break loop.
+					}
 				}
 				if res {
 					filteredRes = append(filteredRes, &result{uid: p.Uid,
-						facets: facets.CopyFacets(p.Facets, param)})
+						facets: facets.CopyFacets(p.Facets, q.FacetParam)})
 				}
 			})
 			if perr != nil {
@@ -316,13 +308,6 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 					&facets.List{[]*facets.Facets{&facets.Facets{fs}}})
 			} else {
 				var fcsList []*facets.Facets
-				// remove keys that are not required.
-				if !q.FacetParam.AllKeys {
-					for _, fres := range filteredRes {
-						fres.facets = facets.FilterKeys(q.FacetParam,
-							fres.facets)
-					}
-				}
 				for _, fres := range filteredRes {
 					fcsList = append(fcsList, &facets.Facets{fres.facets})
 				}

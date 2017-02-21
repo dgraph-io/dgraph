@@ -35,8 +35,8 @@ func SortFacets(fs []*Facet) {
 
 // CopyFacets makes a copy of facets of the posting which are requested in param.Keys.
 func CopyFacets(fcs []*Facet, param *Param) (fs []*Facet) {
-	if len(fcs) == 0 {
-		return []*Facet{}
+	if param == nil || fcs == nil {
+		return nil
 	}
 	// facets and param.keys are both sorted,
 	// We also need all keys if param.AllKeys is true.
