@@ -82,11 +82,11 @@ var (
 	tlsCert          = flag.String("tls.cert", "", "Certificate file path.")
 	tlsKey           = flag.String("tls.cert_key", "", "Certificate key file path.")
 	tlsKeyPass       = flag.String("tls.cert_key_passphrase", "", "Certificate key passphrase.")
-	tlsClientAuth    = flag.String("tls.client_auth", "", "Enable TLS client auth")
-	tlsClientCACerts = flag.String("tls.client_ca_certs", "", "Client CA Certs file path.")
-	tlsSystemCACerts = flag.Bool("tls.use_system_ca", false, "Include System CA into Clients CA Certs.")
-	tlsMinVersion    = flag.String("tls.min_version", "TLS11", "TLS min versions.")
-	tlsMaxVersion    = flag.String("tls.max_version", "TLS12", "TLS max versions.")
+	tlsClientAuth    = flag.String("tls.client_auth", "", "Enable TLS client authentication")
+	tlsClientCACerts = flag.String("tls.ca_certs", "", "CA Certs file path.")
+	tlsSystemCACerts = flag.Bool("tls.use_system_ca", false, "Include System CA into CA Certs.")
+	tlsMinVersion    = flag.String("tls.min_version", "TLS11", "TLS min version.")
+	tlsMaxVersion    = flag.String("tls.max_version", "TLS12", "TLS max version.")
 )
 
 type mutationResult struct {

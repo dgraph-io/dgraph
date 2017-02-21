@@ -33,15 +33,15 @@ var (
 	numRdf     = flag.Int("m", 1000, "Number of RDF N-Quads to send as part of a mutation.")
 	// TLS configuration
 	tlsEnabled       = flag.Bool("tls.on", false, "Use TLS connections.")
-	tlsInsecure      = flag.Bool("tls.insecure", false, "Skip insecure cert validation")
+	tlsInsecure      = flag.Bool("tls.insecure", false, "Skip certificate validation (insecure)")
 	tlsServerName    = flag.String("tls.server_name", "", "Server name.")
 	tlsCert          = flag.String("tls.cert", "", "Certificate file path.")
 	tlsKey           = flag.String("tls.cert_key", "", "Certificate key file path.")
 	tlsKeyPass       = flag.String("tls.cert_key_passphrase", "", "Certificate key passphrase.")
-	tlsRootCACerts   = flag.String("tls.root_ca_certs", "", "Include Client CA Certs file path.")
-	tlsSystemCACerts = flag.Bool("tls.use_system_ca", false, "Include System CA into Root CA Certs.")
-	tlsMinVersion    = flag.String("tls.min_version", "TLS11", "TLS min versions.")
-	tlsMaxVersion    = flag.String("tls.max_version", "TLS12", "TLS max versions.")
+	tlsRootCACerts   = flag.String("tls.ca_certs", "", "CA Certs file path.")
+	tlsSystemCACerts = flag.Bool("tls.use_system_ca", false, "Include System CA into CA Certs.")
+	tlsMinVersion    = flag.String("tls.min_version", "TLS11", "TLS min version.")
+	tlsMaxVersion    = flag.String("tls.max_version", "TLS12", "TLS max version.")
 )
 
 // Reads a single line from a buffered reader. The line is read into the
