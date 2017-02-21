@@ -2,6 +2,7 @@ package algo
 
 import (
 	"container/heap"
+	"fmt"
 	"sort"
 
 	"github.com/dgraph-io/dgraph/task"
@@ -190,10 +191,14 @@ func (l *ListIterator) Next() {
 func Slice(ul *task.List, start, end int) {
 	out := NewWriteIterator(ul, 0)
 	i, ii := ridx(ul, start)
+	if i < 0 {
+		return
+	}
 	k := 0
 	var stop bool
 	blockLen := len(ul.Blocks)
 	for ; i < blockLen; i++ {
+		fmt.Println(i, blockLen, "$$$$")
 		ulist := ul.Blocks[i].List
 		listLen := len(ulist)
 		for ; ii < listLen; ii++ {
@@ -406,9 +411,12 @@ func IntersectSorted(lists []*task.List) *task.List {
 	//   If x is not marked as "skipped", append x to result.
 	var minLenIdx int
 	minLen := ListLen(lists[0])
+	fmt.Println("-----")
+	fmt.Println("Lengths: ", minLen)
 	for i := 1; i < len(lists); i++ { // Start from 1.
 		l := lists[i]
 		n := ListLen(l)
+		fmt.Println("Lengths: ", n)
 		if n < minLen {
 			minLen = n
 			minLenIdx = i
@@ -423,15 +431,12 @@ func IntersectSorted(lists []*task.List) *task.List {
 		bptrs[i] = 0
 	}
 	shortList := lists[minLenIdx]
-	i := 0            //lptrs[minLenIdx]
-	ii := 0           //bptrs[minLenIdx]
 	elemsLeft := true // If some list has no elems left, we can't intersect more.
-	m := len(lists[minLenIdx].Blocks)
-	for i < m {
+	blen := len(lists[minLenIdx].Blocks)
+	for i := 0; i < blen; i++ {
 		ulist := shortList.Blocks[i].List
-		ulen := len(ulist)
-		ii = 0
-		for ii < ulen && elemsLeft {
+		llen := len(ulist)
+		for ii := 0; ii < llen; ii++ {
 			val := ulist[ii]
 			var skip bool                     // Should we skip val in output?
 			for j := 0; j < len(lists); j++ { // For each other list in lists.
@@ -441,23 +446,27 @@ func IntersectSorted(lists []*task.List) *task.List {
 				}
 
 				k, kk := bptrs[j], lptrs[j]
-				llen := len(lists[j].Blocks)
-				for k < llen {
-					ulist := lists[j].Blocks[i].List
-					ulen := len(ulist)
-					for ; kk < ulen && ulist[kk] < val; kk++ {
+				plen := len(lists[j].Blocks)
+				for k < plen {
+					qlist := lists[j].Blocks[k].List
+					qlen := len(qlist)
+					for ; kk < qlen && qlist[kk] < val; kk++ {
 					}
-					if kk == ulen {
+					if kk == qlen {
 						kk = 0
 						k++
 					}
-					if ulist[kk] >= val {
+					if qlist[kk] >= val {
 						break
 					}
 				}
-				if k == llen || lists[j].Blocks[k].List[kk] > val {
+				bptrs[j], lptrs[j] = k, kk
+				if k == plen || lists[j].Blocks[k].List[kk] > val {
 					elemsLeft = k < llen //lists[j].Blocks[k].List[kk]
 					skip = true
+					break
+				}
+				if !elemsLeft {
 					break
 				}
 				// Otherwise, lj.Get(ljp) = val and we continue checking other lists.
@@ -465,11 +474,14 @@ func IntersectSorted(lists []*task.List) *task.List {
 			if !skip {
 				out.Append(val)
 			}
-			ii++
+			if !elemsLeft {
+				break
+			}
 		}
-		i++
 	}
 	out.End()
+	fmt.Println("Final Length: ", ListLen(o))
+	fmt.Println("-----")
 	return o
 }
 

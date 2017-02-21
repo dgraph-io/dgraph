@@ -407,12 +407,11 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 	var values []*task.Value
 	if geoQuery != nil {
 		uids := algo.MergeSorted(out.UidMatrix)
-		i, ii := 0, 0
 		blen := len(uids.Blocks)
-		for i < blen {
+		for i := 0; i < blen; i++ {
 			ulist := uids.Blocks[i].List
 			llen := len(ulist)
-			for ii < llen {
+			for ii := 0; ii < llen; ii++ {
 				uid := ulist[ii]
 				key := x.DataKey(attr, uid)
 				pl, decr := posting.GetOrCreate(key, gid)
@@ -425,9 +424,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 				}
 				values = append(values, newValue)
 				decr() // Decrement the reference count of the pl.
-				ii++
 			}
-			i, ii = i+1, 0
 		}
 		/*
 			it := algo.NewListIterator(uids)

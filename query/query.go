@@ -1072,6 +1072,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		} else {
 			sg.DestUIDs = algo.IntersectSorted(lists)
 		}
+		fmt.Println("****", sg.FilterOp, algo.ListLen(sg.DestUIDs))
 	}
 
 	if len(sg.Params.Order) == 0 {
