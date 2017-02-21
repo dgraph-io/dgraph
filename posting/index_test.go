@@ -220,28 +220,3 @@ func TestRebuildIndex(t *testing.T) {
 	require.EqualValues(t, idxVals[0].Postings[0].Uid, 20)
 	require.EqualValues(t, idxVals[1].Postings[0].Uid, 1)
 }
-
-func TestUpdateIndex(t *testing.T) {
-	dir, ps := populateGraph(t, true)
-	defer ps.Close()
-	defer os.RemoveAll(dir)
-
-	// Commit to store. We still need the store to get all the index keys.
-	CommitLists(10)
-	for len(syncCh) > 0 {
-		time.Sleep(100 * time.Millisecond)
-	}
-
-	addEdgeToValue(t, ps, "name", 20, "NotDavid", true)
-	time.Sleep(100 * time.Millisecond)
-	updateIndexChan <- struct{}{}
-	time.Sleep(time.Second * 10)
-
-	// Add some wrong entries.
-	//	l, _ := GetOrCreate(x.IndexKey(attr, src), 0)
-	// No index entries added here as we do not call AddMutationWithIndex.
-	//	ok, err := l.AddMutation(context.Background(), edge)
-
-	//	ps.SetOne(x.IndexKey("name", "wrongname1"), []byte("nothing"))
-	//	ps.SetOne(x.IndexKey("name", "wrongname2"), []byte("nothing"))
-}
