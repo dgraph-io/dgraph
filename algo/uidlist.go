@@ -45,6 +45,9 @@ func (s AsList) Less(i, j int) bool {
 
 func Sort(ul *task.List) {
 	sort.Sort(AsList{ul})
+	for _, it := range ul.Blocks {
+		it.MaxInt = it.List[len(it.List)-1]
+	}
 }
 
 func NewWriteIterator(l *task.List, whence int) WriteIterator {
