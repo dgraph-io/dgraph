@@ -908,6 +908,7 @@ func (sg *SubGraph) fillVars(mp map[string]*task.List) {
 func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	var err error
 	if len(sg.Params.NeedsVar) != 0 && len(sg.SrcFunc) == 0 {
+		// Retain the actual order in uidMatrix. But sort the destUids.
 		sg.uidMatrix = []*task.List{sg.DestUIDs}
 		it := algo.NewListIterator(sg.DestUIDs)
 		var o task.List
