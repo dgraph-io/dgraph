@@ -242,21 +242,14 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *task.DirectedEdge) e
 	x.AssertTruef(len(t.Attr) > 0,
 		"[%s] [%d] [%v] %d %d\n", t.Attr, t.Entity, t.Value, t.ValueId, t.Op)
 
-	//	var val types.Val
-	//	var verr error
-
 	l.index.Lock()
 	defer l.index.Unlock()
 
 	l.Lock()
 	hasMutated, err := l.addMutation(ctx, t)
 	l.Unlock()
-
-	if err != nil {
+	if err != nil || !hasMutated {
 		return err
-	}
-	if !hasMutated {
-		return nil
 	}
 
 	// We only add index mutations, but not delete here.
