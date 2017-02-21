@@ -244,7 +244,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 		llen = len(ulist)
 	}
 	//it := algo.NewListIterator(q.Uids)
-	for i := 0; i < n; i++ {
+	for k := 0; k < n; k++ {
 		var key []byte
 		var uid uint64
 		if i < blen { //it.Valid() {
@@ -262,7 +262,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 				}
 			}
 		} else if fnType != NotFn {
-			key = x.IndexKey(attr, tokens[i])
+			key = x.IndexKey(attr, tokens[k])
 		} else if q.Reverse {
 			key = x.ReverseKey(attr, uid)
 			//it.Next()
