@@ -220,3 +220,24 @@ func TestRebuildIndex(t *testing.T) {
 	require.EqualValues(t, idxVals[0].Postings[0].Uid, 20)
 	require.EqualValues(t, idxVals[1].Postings[0].Uid, 1)
 }
+
+func TestUpdateIndex(t *testing.T) {
+	dir, ps := populateGraph(t, true)
+	defer ps.Close()
+	defer os.RemoveAll(dir)
+
+	// Wait for commit to data store. UpdateIndex needs it for the index keys.
+	CommitLists(10)
+	time.Sleep(100 * time.Millisecond)
+
+	groupID := group.BelongsTo("name")
+	pl, decr := GetOrCreate(x.IndexKey("name", "david"), groupID)
+	defer decr()
+	require.EqualValues(t, 1, pl.Length(0))
+
+	// Modify the value without updating the index.
+	addEdgeToValue(t, ps, "name", 20, "NotDavid", false)
+	ForceUpdateIndex()
+	time.Sleep(100 * time.Millisecond)
+	require.EqualValues(t, 0, pl.Length(0))
+}

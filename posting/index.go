@@ -189,6 +189,7 @@ func addIndexMutations(ctx context.Context, t *task.DirectedEdge, p types.Val, o
 
 func addIndexMutation(ctx context.Context, edge *task.DirectedEdge, token string) {
 	key := x.IndexKey(edge.Attr, token)
+	x.Printf("~~~addIndexMutation: %s %s", edge.Attr, token)
 
 	var groupId uint32
 	if rv, ok := ctx.Value("raft").(x.RaftValue); ok {
@@ -242,24 +243,39 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *task.DirectedEdge) e
 	x.AssertTruef(len(t.Attr) > 0,
 		"[%s] [%d] [%v] %d %d\n", t.Attr, t.Entity, t.Value, t.ValueId, t.Op)
 
+	var val types.Val
+	var verr error
+
 	l.index.Lock()
 	defer l.index.Unlock()
 
+	doUpdateIndex := pstore != nil && (t.Value != nil) && schema.State().IsIndexed(t.Attr)
+
 	l.Lock()
+	if doUpdateIndex {
+		// Check last posting for original value BEFORE any mutation actually happens.
+		val, verr = l.value()
+	}
 	hasMutated, err := l.addMutation(ctx, t)
 	l.Unlock()
+
 	if err != nil || !hasMutated {
 		return err
 	}
 
 	// We only add index mutations, but not delete here.
-	if pstore != nil && (t.Value != nil) && t.Op == task.DirectedEdge_SET &&
-		schema.State().IsIndexed(t.Attr) {
-		p := types.Val{
-			Tid:   types.TypeID(t.ValueType),
-			Value: t.Value,
+	if doUpdateIndex {
+		// Exact matches.
+		if verr == nil && val.Value != nil {
+			addIndexMutations(ctx, t, val, task.DirectedEdge_DEL)
 		}
-		addIndexMutations(ctx, t, p, task.DirectedEdge_SET)
+		if t.Op == task.DirectedEdge_SET {
+			p := types.Val{
+				Tid:   types.TypeID(t.ValueType),
+				Value: t.Value,
+			}
+			addIndexMutations(ctx, t, p, task.DirectedEdge_SET)
+		}
 	}
 
 	if (pstore != nil) && (t.ValueId != 0) && schema.State().IsReversed(t.Attr) {
