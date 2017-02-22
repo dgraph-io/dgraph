@@ -79,7 +79,7 @@ func setupCertificate(cfg *tls.Config, required bool, certPath string, certKeyPa
 				certKey = pem.EncodeToMemory(block)
 			}
 		} else {
-			return err
+			return fmt.Errorf("Invalid Cert Key")
 		}
 
 		// Load cert
