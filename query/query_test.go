@@ -315,6 +315,28 @@ func TestMultiEmptyBlocks(t *testing.T) {
 		js)
 }
 
+func TestUseVarsMultiCascade1(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			him(id:0x01) {
+				L AS friend {
+				 B AS friend
+					name	
+			 }
+			}
+
+			me(var:[L, B]) {
+				name
+			}
+		}
+	`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"him": [{"friend":[{"name":"Rick Grimes"}, {"name":"Andrea"}]}], "me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"}, {"name":"Andrea"}]}`,
+		js)
+}
+
 func TestUseVarsMultiCascade(t *testing.T) {
 	populateGraph(t)
 	query := `

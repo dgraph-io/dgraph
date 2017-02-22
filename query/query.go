@@ -714,7 +714,6 @@ func ProcessQuery(ctx context.Context, res gql.Result, l *Latency) ([]*SubGraph,
 		}
 		x.Trace(ctx, "Query parsed")
 		sgl = append(sgl, sg)
-		//sg.DebugPrint("---")
 	}
 	l.Parsing += time.Since(loopStart)
 
@@ -832,7 +831,8 @@ func shouldCascade(res gql.Result, idx int) bool {
 
 // TODO(Ashwin): Benchmark this function.
 func populateVarMap(sg *SubGraph, doneVars map[string]*task.List, isCascade bool) {
-	out := algo.NewWriteIterator(sg.DestUIDs, 0)
+	o := new(task.List)
+	out := algo.NewWriteIterator(o, 0)
 	it := algo.NewListIterator(sg.DestUIDs)
 	i := -1
 	if sg.Params.Alias == "shortest" {
@@ -872,6 +872,9 @@ func populateVarMap(sg *SubGraph, doneVars map[string]*task.List, isCascade bool
 		}
 	}
 	out.End()
+	// Note the we can't overwrite DestUids, as it'd also modify the SrcUids of
+	// next level and the mapping from SrcUids to uidMatrix would be lost.
+	sg.DestUIDs = o
 
 AssignStep:
 	if sg.Params.Var != "" {
