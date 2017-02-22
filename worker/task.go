@@ -454,19 +454,6 @@ func (w *grpcWorker) ServeTask(ctx context.Context, q *task.Query) (*task.Result
 	}
 }
 
-func keysFromFilter(ftree *facets.FilterTree) (attrs []string) {
-	if ftree == nil {
-		return []string{}
-	}
-	if ftree.Func != nil {
-		attrs = append(attrs, ftree.Func.Key)
-	}
-	for _, c := range ftree.Children {
-		attrs = append(attrs, keysFromFilter(c)...)
-	}
-	return attrs
-}
-
 // applyFacetFilter : we return error only when query has some problems.
 // like Or has 3 arguments, argument facet val overflows integer.
 // returns true if postingFacets can be included.
@@ -552,17 +539,6 @@ func applyFacetFilter(postingFacets []*facets.Facet, ftree *facets.FilterTree) (
 		return false, x.Errorf("Unsupported operation in facet filtering: %s.", ftree.Op)
 	}
 	return false, x.Errorf("Unexpected behavior in applyFacetFilter.")
-}
-
-func filterFacets(fcs []*facets.Facets, f func(i int, fc *facets.Facets) bool) {
-	writeIdx := 0
-	for i, fc := range fcs {
-		if f(i, fc) {
-			fcs[writeIdx] = fc
-			writeIdx++
-		}
-	}
-	fcs = fcs[:writeIdx]
 }
 
 // Should be used only in filtering arg1 by comparing with arg2.
