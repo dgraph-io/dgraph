@@ -86,105 +86,43 @@ func (l *WriteIterator) End() {
 	l.curBlock.MaxInt = l.curBlock.List[l.lidx-1]
 }
 
-/*
-// NewListIterator returns a read iterator for the list passed to it.
-func NewListIterator(l *task.List) ListIterator {
-	var isEnd bool
-	if l == nil || len(l.Blocks) == 0 ||
-		len(l.Blocks[0].List) == 0 {
-		isEnd = true
-
-	}
-
-	var cur *task.Block
-	if l != nil && len(l.Blocks) > 0 {
-		cur = l.Blocks[0]
-	}
-
-	return ListIterator{
-		list:     l,
-		curBlock: cur,
-		bidx:     0,
-		lidx:     0,
-		isEnd:    isEnd,
-	}
-}
-
-// SeekToIndex moves the iterator to the specified index.
-func (l *ListIterator) SeekToIndex(idx int) {
-	i, j := ridx(l.list, idx)
-	if i == -1 {
-		l.isEnd = true
-		return
-	}
-	l.bidx = i
-	l.lidx = j
-}
-
 // Seek seeks to the index whose value is greater than or equal to the given UID.
 // It uses binary search to move around.
-func (l *ListIterator) Seek(uid uint64, whence int) {
-	if whence == 1 {
-		if l.isEnd {
-			return
-		}
+func Seek(ul *task.List, bidx, lidx int, uid uint64, typ int) (int, int) {
+	i, ii := bidx, lidx
+	if typ == 1 {
 		// Seek the current list first.
-		for l.lidx < len(l.curBlock.List) && l.curBlock.List[l.lidx] < uid {
-			l.lidx++
+		for ii < len(ul.Blocks[i].List) && ul.Blocks[i].List[ii] < uid {
+			ii++
 		}
-		if l.lidx < len(l.curBlock.List) {
-			return
+		if ii < len(ul.Blocks[i].List) {
+			return i, ii
 		}
+
+		// linear seek over blocks.
+		for i < len(ul.Blocks) && uid > ul.Blocks[i].MaxInt {
+			i++
+		}
+		if i == len(ul.Blocks) {
+			return i, ii
+		}
+		ii = 0
+		// Seek the current list first.
+		for ii < len(ul.Blocks[i].List) && ul.Blocks[i].List[ii] < uid {
+			ii++
+		}
+		return i, ii
 	}
+	// Binary seek.
 	// TODO(Ashwin): Do a benchmark to see if linear scan is better than binary if whence is 1
-	u := l.list
-	i := sort.Search(len(u.Blocks), func(i int) bool { return u.Blocks[i].MaxInt >= uid })
-	if i >= len(u.Blocks) {
-		l.isEnd = true
-		return
+	idx := sort.Search(len(ul.Blocks), func(i int) bool { return ul.Blocks[i].MaxInt >= uid })
+	if idx >= len(ul.Blocks) {
+		return idx, ii
 	}
-	j := sort.Search(len(u.Blocks[i].List), func(j int) bool { return u.Blocks[i].List[j] >= uid })
-	if j == len(u.Blocks[i].List) {
-		l.isEnd = true
-		return
-	}
-	l.bidx = i
-	l.curBlock = l.list.Blocks[l.bidx]
-	l.lidx = j
+	j := sort.Search(len(ul.Blocks[idx].List), func(j int) bool { return ul.Blocks[idx].List[j] >= uid })
+	return idx, j
 }
 
-// Valid returns true if we haven't reached the end of the list.
-func (l *ListIterator) Valid() bool {
-	return !l.isEnd
-}
-
-// Val returns the value pointed to by the iterator.
-func (l *ListIterator) Val() uint64 {
-	return l.curBlock.List[l.lidx]
-}
-
-// Next moves the iterator to the next element and also sets the end if the last element
-// is consumed already.
-func (l *ListIterator) Next() {
-	if l.isEnd {
-		return
-	}
-	l.lidx++
-	if l.lidx >= len(l.curBlock.List) {
-		l.lidx = 0
-		l.bidx++
-	}
-	if l.bidx >= len(l.list.Blocks) {
-		l.isEnd = true
-		return
-	}
-	// Update the current block.
-	l.curBlock = l.list.Blocks[l.bidx]
-	if len(l.curBlock.List) == 0 {
-		l.isEnd = true
-	}
-}
-*/
 // Slice returns a new task.List with the elements between start index and end index
 // of  the list passed to it.
 func Slice(ul *task.List, start, end int) {
