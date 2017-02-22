@@ -470,6 +470,24 @@ func TestShortestPath(t *testing.T) {
 		js)
 }
 
+func TestShortestPathRev(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			A as shortest(from:23, to:1) {
+				friend 
+			}
+
+			me(var: A) {
+				name
+			}
+		}`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"name":"Rick Grimes"},{"name":"Michonne"}]}`,
+		js)
+}
+
 func TestShortestPathWeightsMultiFacet_Error(t *testing.T) {
 	populateGraph(t)
 	query := `
@@ -2814,6 +2832,17 @@ func TestRootList1(t *testing.T) {
 }`
 	js := processToFastJSON(t, query)
 	require.JSONEq(t, `{"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Alice"}]}`, js)
+}
+
+func TestRootList2(t *testing.T) {
+	populateGraph(t)
+	query := `{
+	me(id:[0x01, 23, a.bc, 24]) {
+		name
+	}
+}`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Alice"},{"name":"Glenn Rhee"}]}`, js)
 }
 
 func TestGeneratorMultiRootFilter1(t *testing.T) {

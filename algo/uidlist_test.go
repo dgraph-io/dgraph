@@ -27,6 +27,30 @@ func newList(data []uint64) *task.List {
 	return SortedListToBlock(data)
 }
 
+func TestSort1(t *testing.T) {
+	input := newList([]uint64{55})
+	Sort(input)
+	require.Equal(t, BlockToList(input), []uint64{55})
+}
+
+func TestSort2(t *testing.T) {
+	input := newList([]uint64{})
+	Sort(input)
+	require.Equal(t, BlockToList(input), []uint64{})
+}
+
+func TestSort3(t *testing.T) {
+	input := newList([]uint64{55, 392, 1, 123})
+	Sort(input)
+	require.Equal(t, BlockToList(input), []uint64{1, 55, 123, 392})
+}
+
+func TestSort4(t *testing.T) {
+	input := newList([]uint64{55, 1, 100000})
+	Sort(input)
+	require.Equal(t, BlockToList(input), []uint64{1, 55, 100000})
+}
+
 func TestMergeSorted1(t *testing.T) {
 	input := []*task.List{
 		newList([]uint64{55}),
