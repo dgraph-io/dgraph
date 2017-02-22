@@ -27,8 +27,7 @@ type WriteIterator struct {
 
 }
 
-// AsList implements sort.Interface by providing Less and using the Len and
-// Swap methods of the embedded Organs value.
+// AsList implements sort.Interface by for block lists
 type AsList struct{ l *task.List }
 
 func (s AsList) Len() int { return ListLen(s.l) }
