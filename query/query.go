@@ -647,7 +647,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		ito.End()
 		itsg.End()
 		sg.uidMatrix = []*task.List{o}
-		// User specified list maynot be sorted.
+		// User specified list may not be sorted.
 		algo.Sort(sg.SrcUIDs)
 	}
 	sg.values = createNilValuesList(1)
