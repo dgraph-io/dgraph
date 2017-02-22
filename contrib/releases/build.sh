@@ -81,6 +81,7 @@ checksum=$($digest_cmd $GOPATH/src/github.com/dgraph-io/goicu/icudt58l.dat | awk
 echo "$checksum /usr/local/share/icudt58l.dat" >> $checksum_file
 
 echo -e "Calculating and storing checksum for tar gzipped assets."
+cd $cur_dir
 tar -zcf assets.tar.gz -C $GOPATH/src/github.com/dgraph-io/dgraph/dashboard/build .
 checksum=$($digest_cmd assets.tar.gz | awk '{print $1}')
 echo "$checksum /usr/local/share/dgraph/assets.tar.gz" >> $checksum_file
