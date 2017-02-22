@@ -77,6 +77,10 @@ rm -rf $tmp_dir
 
 echo -e "\nCalculating and storing checksum for ICU data file."
 checksum=$($digest_cmd $GOPATH/src/github.com/dgraph-io/goicu/icudt58l.dat | awk '{print $1}')
-PATH/src/github.com/dgraph-io/dgraph/cmd/dgraph
 
 echo "$checksum /usr/local/share/icudt58l.dat" >> $checksum_file
+
+echo -e "Calculating and storing checksum for tar gzipped assets."
+tar -zcf assets.tar.gz -C $GOPATH/src/github.com/dgraph-io/dgraph/dashboard/build .
+checksum=$($digest_cmd assets.tar.gz | awk '{print $1}')
+echo "$checksum /usr/local/share/dgraph/assets.tar.gz" >> $checksum_file
