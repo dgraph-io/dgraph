@@ -36,9 +36,6 @@ message Query {
 	bool reverse = 8;  // Whether this is a reverse edge.
 
 	facets.Param facet_param = 9; // which facets to fetch
-	// search all possible result based on attribute
-	// used at root level
-	bool is_search_all = 10;
 }
 
 message Result {

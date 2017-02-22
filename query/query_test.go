@@ -2994,6 +2994,40 @@ func TestGeneratorRootSearchAll(t *testing.T) {
 	require.JSONEq(t, `{"me":[{"name":"Michonne"}]}`, js)
 }
 
+func TestGeneratorRootSearchAllWithAnd(t *testing.T) {
+	populateGraph(t)
+	query := `
+                {
+                        me(id:_searchall_) @filter(gt(count(friend), 2) and lt(count(friend), 10)) {
+                                name
+                        }
+                }
+        `
+	_, err := gql.Parse(query)
+	require.NoError(t, err)
+
+	js := processToFastJSON(t, query)
+	require.JSONEq(t, `{"me":[{"name":"Michonne"}]}`, js)
+}
+
+func TestGeneratorRootSearchAllError(t *testing.T) {
+	populateGraph(t)
+	// no filter provided
+	query := `
+                {
+                        me(id:_searchall_) {
+                                name
+                        }
+                }
+        `
+	res, err := gql.Parse(query)
+	require.NoError(t, err)
+
+	var l Latency
+	_, queryErr := ProcessQuery(context.Background(), res, &l)
+	require.NotNil(t, queryErr)
+}
+
 func TestToProtoMultiRoot(t *testing.T) {
 	populateGraph(t)
 	query := `

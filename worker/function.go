@@ -36,6 +36,7 @@ const (
 	CompareScalarFn
 	GeoFn
 	PasswordFn
+	SearchAllFn
 	StandardFn = 100
 )
 
@@ -58,6 +59,8 @@ func ParseFuncType(arr []string) (FuncType, string) {
 		return AggregatorFn, f
 	case "checkpwd":
 		return PasswordFn, f
+	case "searchall":
+		return SearchAllFn, f
 	default:
 		if types.IsGeoFunc(f) {
 			return GeoFn, f

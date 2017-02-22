@@ -17,11 +17,9 @@
 package worker
 
 import (
-	"fmt"
 	"runtime"
 	"strconv"
 	"strings"
-	"time"
 
 	"golang.org/x/net/context"
 
@@ -159,20 +157,6 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 			return nil, x.Wrapf(err, "Compare %v(%v) require digits, but got invalid num",
 				q.SrcFunc[0], q.SrcFunc[1])
 		}
-
-		// sure we could bridge a channel, once a key is get, throw it directly to
-		// processFunc, instead of waiting for all keys are fetched from db.
-		// Under which implementation, we could halve the time usage.
-		// while that will ugly the code, i won't do it
-		if q.IsSearchAll {
-			dict := algo.DataKeysForPrefix(attr, pstore)
-			q.Uids = new(task.List)
-			it := algo.NewWriteIterator(q.Uids, 0)
-			for _, parsed := range dict {
-				it.Append(parsed.Uid)
-			}
-			it.End()
-		}
 		n = algo.ListLen(q.Uids)
 
 	case GeoFn:
@@ -190,6 +174,22 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 				len(q.SrcFunc), q.SrcFunc)
 		}
 		n = algo.ListLen(q.Uids)
+
+	case SearchAllFn:
+		// we could bridge a channel, once a key is get, throw it directly to
+		// processFunc, instead of waiting for all keys are fetched from db.
+		// Under which implementation, we could halve the time usage.
+		// while that will ugly the code...
+		var out task.Result
+		dict := algo.DataKeysForPrefix(attr, pstore)
+		lst := new(task.List)
+		it := algo.NewWriteIterator(lst, 0)
+		for _, parsed := range dict {
+			it.Append(parsed.Uid)
+		}
+		it.End()
+		out.UidMatrix = append(out.UidMatrix, lst)
+		return &out, nil
 
 	case StandardFn:
 		tokens, err = getTokens(q.SrcFunc)

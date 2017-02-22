@@ -33,7 +33,6 @@ func DataKeysForPrefix(prefix string, store *store.Store) map[string]*x.ParsedKe
 	defer it.Close()
 	pk := x.Parse(x.DataKey(prefix, 0))
 	dataPrefix := pk.DataPrefix()
-	fmt.Printf("data prefix: %v\n", dataPrefix)
 
 	it.Seek(dataPrefix)
 	for it.ValidForPrefix(dataPrefix) {
@@ -44,6 +43,6 @@ func DataKeysForPrefix(prefix string, store *store.Store) map[string]*x.ParsedKe
 		dict[string(byt)] = k
 		it.Next()
 	}
-	fmt.Printf("Search From db time usage: %v\n", time.Since(startTm))
+	fmt.Printf("Search From db time usage: %v, dict sz %d\n", time.Since(startTm), len(dict))
 	return dict
 }

@@ -117,23 +117,22 @@ func (l *Latency) ToMap() map[string]string {
 }
 
 type params struct {
-	Alias       string
-	Count       int
-	Offset      int
-	AfterUID    uint64
-	DoCount     bool
-	GetUID      bool
-	Order       string
-	OrderDesc   bool
-	isDebug     bool
-	Var         string
-	NeedsVar    []string
-	ParentVars  map[string]*task.List
-	Normalize   bool
-	From        uint64
-	To          uint64
-	Facet       *facets.Param
-	IsSearchAll bool
+	Alias      string
+	Count      int
+	Offset     int
+	AfterUID   uint64
+	DoCount    bool
+	GetUID     bool
+	Order      string
+	OrderDesc  bool
+	isDebug    bool
+	Var        string
+	NeedsVar   []string
+	ParentVars map[string]*task.List
+	Normalize  bool
+	From       uint64
+	To         uint64
+	Facet      *facets.Param
 }
 
 // SubGraph is the way to represent data internally. It contains both the
@@ -660,19 +659,39 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	}
 	// check validity is 'SearchAll'
 	if len(gq.UID) > 0 && gq.UID[0] == SearchAllUid {
-		if len(sg.Filters) != 1 {
-			return nil, x.Errorf("search-all should be combined with 1 filter")
+		if len(sg.Filters) == 0 {
+			return nil, x.Errorf("search-all should be combined with at least 1 filter")
 		}
-		fnType, _ := worker.ParseFuncType(sg.Filters[0].SrcFunc)
-		if fnType != worker.CompareScalarFn {
-			return nil, x.Errorf("search-all should be combined with CompareScalar")
+		if len(sg.Filters[0].FilterOp) == 0 {
+			sg.Attr = sg.Filters[0].Attr
+		} else {
+			sg.Attr = sg.Filters[0].Filters[0].Attr
 		}
-		sg.Attr = sg.Filters[0].Attr
-		sg.SrcFunc = sg.Filters[0].SrcFunc
-		sg.Filters = sg.Filters[:0]
-		sg.Params.IsSearchAll = true
+		if err := validateSearchAll(sg.Filters[0], sg.Attr); err != nil {
+			return nil, err
+		}
+		sg.SrcFunc = append(sg.SrcFunc, "searchall")
 	}
 	return sg, nil
+}
+
+func validateSearchAll(filter *SubGraph, attr string) error {
+	// Either we'll have an operation specified, or the function specified.
+	if len(filter.FilterOp) == 0 {
+		fnType, _ := worker.ParseFuncType(filter.SrcFunc)
+		if fnType != worker.CompareScalarFn {
+			return x.Errorf("search-all should be combined with CompareScalar")
+		} else if filter.Attr != attr {
+			return x.Errorf("search-all should be applied on only one attribute")
+		}
+		return nil
+	}
+	for _, ftc := range filter.Filters {
+		if err := validateSearchAll(ftc, attr); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func createNilValuesList(count int) []*task.Value {
@@ -694,15 +713,14 @@ func createTaskQuery(sg *SubGraph) *task.Query {
 		attr = strings.TrimPrefix(attr, "~")
 	}
 	out := &task.Query{
-		Attr:        attr,
-		Reverse:     reverse,
-		SrcFunc:     sg.SrcFunc,
-		Count:       int32(sg.Params.Count),
-		Offset:      int32(sg.Params.Offset),
-		AfterUid:    sg.Params.AfterUID,
-		DoCount:     len(sg.Filters) == 0 && sg.Params.DoCount,
-		FacetParam:  sg.Params.Facet,
-		IsSearchAll: sg.Params.IsSearchAll,
+		Attr:       attr,
+		Reverse:    reverse,
+		SrcFunc:    sg.SrcFunc,
+		Count:      int32(sg.Params.Count),
+		Offset:     int32(sg.Params.Offset),
+		AfterUid:   sg.Params.AfterUID,
+		DoCount:    len(sg.Filters) == 0 && sg.Params.DoCount,
+		FacetParam: sg.Params.Facet,
 	}
 	if sg.SrcUIDs != nil {
 		out.Uids = sg.SrcUIDs
@@ -970,7 +988,6 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		} else {
 			sg.DestUIDs = algo.MergeSorted(result.UidMatrix)
 		}
-
 		if parent == nil {
 			// I'm root. We reach here if root had a function.
 			sg.uidMatrix = []*task.List{sg.DestUIDs}
