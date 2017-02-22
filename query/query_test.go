@@ -3490,11 +3490,31 @@ func TestIntersectsPolygon2(t *testing.T) {
 	require.JSONEq(t, expected, mp)
 }
 
+func TestNotExistObject(t *testing.T) {
+	populateGraph(t)
+	// we haven't set genre(type:uid) for 0x01, should just be ignored
+	query := `
+                {
+                        me(id:0x01) {
+                                name
+                                gender
+                                alive
+                                genre
+                        }
+                }
+        `
+	js := processToFastJSON(t, query)
+	require.EqualValues(t,
+		`{"me":[{"alive":true,"gender":"female","name":"Michonne"}]}`,
+		js)
+}
+
 const schemaStr = `
 scalar name:string @index
 scalar dob:date @index
 scalar film.film.initial_release_date:date @index
 scalar loc:geo @index
+scalar genre:uid @reverse
 scalar (
 	survival_rate : float
 	alive         : bool

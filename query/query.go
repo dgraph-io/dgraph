@@ -313,6 +313,12 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 				}
 			}
 		} else {
+			// algo.ListLen(ul) == 0 and attribute is non-scalar, just let it go
+			if typ, terr := schema.State().TypeOf(pc.Attr); terr == nil {
+				if !typ.IsScalar() {
+					continue
+				}
+			}
 			tv := pc.values[idx]
 			v, err := getValue(tv)
 			if err != nil {
