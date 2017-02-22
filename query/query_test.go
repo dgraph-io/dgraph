@@ -3404,9 +3404,9 @@ func TestSchema(t *testing.T) {
 	require.Len(t, child.Properties, 2)
 	require.EqualValues(t, "Rick Grimes",
 		getProperty(child.Properties, "name").GetStrVal())
-	dob := getProperty(child.Properties, "dob").GetDateVal()
-	var date time.Time
-	date.UnmarshalBinary(dob)
+	dob := getProperty(child.Properties, "dob").GetStrVal()
+	date, err := time.Parse(time.RFC3339, dob)
+	require.NoError(t, err)
 	require.EqualValues(t, "1910-01-02 00:00:00 +0000 UTC", date.String())
 	require.Empty(t, child.Children)
 
