@@ -12,6 +12,8 @@ import Stats from './Stats';
 import Query from './Query';
 import Label from './Label';
 
+import {Button} from 'react-bootstrap';
+
 import '../assets/css/App.css'
 require('codemirror/addon/hint/show-hint.css');
 
@@ -31,7 +33,7 @@ function getLabel(properties: Object): string {
   } else if (properties["name.en"] !== undefined) {
     label = properties["name.en"]
   } else {
-    label = properties["_uid_"]
+    return ""
   }
 
   var words = label.split(" "),
@@ -64,8 +66,8 @@ type GroupMap = {[key: string]: Group};
 
 // Picked up from http://graphicdesign.stackexchange.com/questions/3682/where-can-i-find-a-large-palette-set-of-contrasting-colors-for-coloring-many-d
 
-var initialRandomColors = ["#47c0ee", "#8dd593", "#f6c4e1", "#8595e1" , "#f79cd4", "#bec1d4",
- "#b5bbe3","#7d87b9", "#e07b91", "#11c638", "#f0b98d", "#4a6fe3"];
+var initialRandomColors = ["#47c0ee", "#8dd593", "#f6c4e1", "#8595e1" , "#f79cd4","#f0b98d", "#bec1d4", "#11c638" ,
+ "#b5bbe3","#7d87b9", "#e07b91", "#4a6fe3"];
 
 var randomColors = [];
 
@@ -327,17 +329,25 @@ function renderNetwork(nodes: Array <Node>, edges: Array <Edge>) {
         enabled: true,
         bindToWindow: false,
       },
-      tooltipDelay: 1000000
+      tooltipDelay: 1000000,
+      hideEdgesOnDrag: true
     },
     layout: {
-      improvedLayout: true
+      improvedLayout: false
     },
     physics: {
-      timestep: 0.8,
+      stabilization: {
+        fit: true,
+        // updateInterval: 1000
+      },
+      // timestep: 0.2,
       barnesHut: {
+        // gravitationalConstant: -80000,
+        // springConstant: 0.1,
+        // springLength: 10,
         // avoidOverlap: 0.8,
         // springConstant: 0.1,
-        damping: 0.3
+        damping: 0.6
       }
     }
   };
@@ -408,6 +418,9 @@ function renderNetwork(nodes: Array <Node>, edges: Array <Edge>) {
 
         data.nodes.remove(allNodes);
         data.edges.remove(allEdges);
+        that.setState({
+          expandText: 'Expand'
+        })
       } else {
         data.nodes.update(adjacentNodes)
         data.edges.update(outgoingEdges)
@@ -426,7 +439,7 @@ function renderNetwork(nodes: Array <Node>, edges: Array <Edge>) {
     }
   });
 
-  window.onresize = function() { network && network.fit(); }
+  window.onresize = function() { network != undefined && network.fit(); }
   network.on("hoverNode", function(params) {
     // Only change properties if no node is selected.
     if (that.state.selectedNode) {
@@ -491,6 +504,109 @@ function isNotEmpty(response) {
   return false
 }
 
+function outgoingEdges(nodeId, edgeSet) {
+  return edgeSet.get({
+    filter: function(edge) {
+      return edge.from === nodeId
+    }
+  })
+}
+
+function outgoingEdgesCount(nodeId, edgeSet) {
+  return outgoingEdges(nodeId, edgeSet).length
+}
+
+function childNodes(edges) {
+  return edges.map(function(edge) {
+    return edge.to
+  })
+}
+
+function isExpanded(nodeId, edgeSet) {
+  if(outgoingEdgesCount(nodeId, edgeSet) > 0) {
+    return true
+  }
+
+  return outgoingEdgesCount(nodeId, globalEdgeSet) === 0
+}
+
+function renderPartialGraph(result) {
+    var graph = processGraph(result, 2),
+      that = this;
+
+    setTimeout(function() {
+      that.setState({
+        partial: that.state.nodes > graph[0].length,
+        expandDisabled: that.state.nodes === graph[0].length
+      })
+    }.bind(that), 1000)
+
+    renderNetwork.call(that, graph[0], graph[1]);
+}
+
+function expandAll() {
+  if(network === undefined) {
+    return;
+  }
+
+  if (this.state.expandText === 'Collapse') {
+    renderPartialGraph.bind(this, this.state.result)();
+    this.setState({
+      expandText: 'Expand'
+    });
+    return;
+  }
+
+  let nodeIds = network.body.nodeIndices.slice(),
+    nodeSet = network.body.data.nodes,
+    edgeSet = network.body.data.edges,
+    // We add nodes and edges that have to be updated to these arrays.
+    nodesBatch = [],
+    edgesBatch = [],
+    batchSize = 1000,
+    nodes = [];
+  while (nodeIds.length > 0) {
+    let nodeId = nodeIds.pop();
+    // If is expanded, do nothing, else put child nodes and edges into array for
+    // expansion.
+    if (isExpanded(nodeId,edgeSet)) {
+      continue
+    }
+
+    let outEdges = outgoingEdges(nodeId, globalEdgeSet),
+      outNodeIds = childNodes(outEdges);
+
+    nodeIds = nodeIds.concat(outNodeIds)
+    nodes = globalNodeSet.get(outNodeIds)
+    nodesBatch = nodesBatch.concat(nodes)
+    edgesBatch = edgesBatch.concat(outEdges)
+
+    if (nodesBatch.length > batchSize) {
+      nodeSet.update(nodesBatch)
+      edgeSet.update(edgesBatch)
+      nodesBatch = []
+      edgesBatch = []
+
+      if(nodeIds.length === 0) {
+        this.setState({
+          expandText: 'Collapse',
+          partial: false
+        })
+      }
+      return
+    }
+  }
+
+  if(nodesBatch.length > 0 || edgesBatch.length > 0) {
+    this.setState({
+      expandText: 'Collapse',
+      partial: false
+    })
+    nodeSet.update(nodesBatch)
+    edgeSet.update(edgesBatch)
+  }
+}
+
 type QueryTs = {|
   text: string,
   lastRun: number
@@ -535,6 +651,7 @@ class App extends React.Component {
       queries: response[2],
       lastQuery: '',
       response: '',
+      result: {},
       latency: '',
       rendering: '',
       resType: '',
@@ -543,7 +660,9 @@ class App extends React.Component {
       relations: 0,
       graph: '',
       graphHeight: 'fixed-height',
-      plotAxis: []
+      plotAxis: [],
+      expandDisabled: true,
+      expandText: 'Expand'
     };
   }
 
@@ -560,7 +679,10 @@ class App extends React.Component {
           selectedNode: false,
           partial: false,
           currentNode: '{}',
-          plotAxis: []
+          plotAxis: [],
+          expandDisabled: true,
+          expandText: 'Expand',
+          result: {}
         });
     }
     window.scrollTo(0, 0);
@@ -587,7 +709,10 @@ class App extends React.Component {
       resType: 'hourglass',
       partial: false,
       lastQuery: this.state.query,
-      plotAxis: []
+      plotAxis: [],
+      expandDisabled: true,
+      expandText: 'Expand',
+      result: {}
     }
   }
 
@@ -648,7 +773,7 @@ class App extends React.Component {
     groups = {};
 
     var that = this;
-    timeout(60000, fetch('http://localhost:8080/query?debug=true', {
+    timeout(60000, fetch(process.env.REACT_APP_DGRAPH + '/query?debug=true', {
         method: 'POST',
         mode: 'cors',
         headers: {
@@ -669,7 +794,8 @@ class App extends React.Component {
           that.storeQuery(that.state.query);
           that.setState({
             latency: result.server_latency.total,
-            resType: ''
+            resType: '',
+            result: result
           });
           var startTime = new Date();
 
@@ -688,16 +814,9 @@ class App extends React.Component {
               });
           }, 200)
 
-          // We call procesGraph with a 20 node limit and calculate the whole dataset in
+          // We call procesGraph with a 5 node limit and calculate the whole dataset in
           // the background.
-          var graph = processGraph(result, 20);
-          setTimeout(function() {
-            that.setState({
-              partial: this.state.nodes > graph[0].length
-            })
-          }.bind(that), 1000)
-
-          renderNetwork.call(that, graph[0], graph[1]);
+          renderPartialGraph.bind(that, result)();
 
           var endTime = new Date();
           var timeTaken = (endTime.getTime() - startTime.getTime()) / 1000;
@@ -801,8 +920,10 @@ class App extends React.Component {
               </div>
               <div style={{fontSize: '12px'}}>
                 <Stats rendering={this.state.rendering} latency={this.state.latency} class="hidden-xs"></Stats>
+                <Button style={{float: 'right', marginRight: '10px'}} bsStyle="primary" disabled={this.state.expandDisabled} onClick={expandAll.bind(this)}>
+                {this.state.expandText}</Button>
                 <div>Nodes: {this.state.nodes}, Edges: {this.state.relations}</div>
-                <div style={{height:'auto'}}>{this.state.partial === true ? 'We have only loaded a subset of the graph. Double click on a leaf node to expand its child nodes.': ''}</div>
+                <div style={{height:'auto'}}><i>{this.state.partial === true ? 'We have only loaded a subset of the graph. Double click on a leaf node to expand its child nodes.': ''}</i></div>
                 <div id="properties" style={{marginTop: '5px'}}>Current Node:<div className="App-properties" title={this.state.currentNode}>
                 <em><pre style={{fontSize: '10px'}}>{JSON.stringify(JSON.parse(this.state.currentNode), null, 2)}</pre></em></div>
               </div>
@@ -839,7 +960,7 @@ class App extends React.Component {
     require('codemirror-graphql/mode');
 
     let keywords = [];
-    timeout(1000, fetch('http://localhost:8080/ui/keywords', {
+    timeout(1000, fetch(process.env.REACT_APP_DGRAPH + '/ui/keywords', {
         method: 'GET',
         mode: 'cors',
       }).then(checkStatus)
