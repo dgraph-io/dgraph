@@ -227,7 +227,6 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 	}
 
 	var out task.Result
-	it := algo.NewListIterator(q.Uids)
 	opts := posting.ListOptions{
 		AfterUID: uint64(q.AfterUid),
 	}
@@ -236,23 +235,59 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 		opts.Intersect = q.Uids
 	}
 
-	for i := 0; i < n; i++ {
+	i, ii := 0, 0
+	var blen int
+	if q.Uids != nil {
+		blen = len(q.Uids.Blocks)
+	}
+	var ulist []uint64
+	var llen int
+	if i < blen {
+		ulist = q.Uids.Blocks[i].List
+		llen = len(ulist)
+	}
+	//it := algo.NewListIterator(q.Uids)
+	for k := 0; k < n; k++ {
 		var key []byte
 		var uid uint64
-		if it.Valid() {
-			uid = it.Val()
+		if i < blen { //it.Valid() {
+			uid = ulist[ii]
 		}
 		if fnType == AggregatorFn || fnType == CompareScalarFn || fnType == PasswordFn {
-			key = x.DataKey(attr, it.Val())
-			it.Next()
+			key = x.DataKey(attr, uid)
+			//it.Next()
+			ii++
+			if ii == llen {
+				i, ii = i+1, 0
+				if i < blen {
+					ulist = q.Uids.Blocks[i].List
+					llen = len(ulist)
+				}
+			}
 		} else if fnType != NotFn {
-			key = x.IndexKey(attr, tokens[i])
+			key = x.IndexKey(attr, tokens[k])
 		} else if q.Reverse {
-			key = x.ReverseKey(attr, it.Val())
-			it.Next()
+			key = x.ReverseKey(attr, uid)
+			//it.Next()
+			ii++
+			if ii == llen {
+				i, ii = i+1, 0
+				if i < blen {
+					ulist = q.Uids.Blocks[i].List
+					llen = len(ulist)
+				}
+			}
 		} else {
-			key = x.DataKey(attr, it.Val())
-			it.Next()
+			key = x.DataKey(attr, uid)
+			//it.Next()
+			ii++
+			if ii == llen {
+				i, ii = i+1, 0
+				if i < blen {
+					ulist = q.Uids.Blocks[i].List
+					llen = len(ulist)
+				}
+			}
 		}
 		// Get or create the posting list for an entity, attribute combination.
 		pl, decr := posting.GetOrCreate(key, gid)
@@ -372,22 +407,25 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 	var values []*task.Value
 	if geoQuery != nil {
 		uids := algo.MergeSorted(out.UidMatrix)
-		it := algo.NewListIterator(uids)
-		for ; it.Valid(); it.Next() {
-			uid := it.Val()
-			key := x.DataKey(attr, uid)
-			pl, decr := posting.GetOrCreate(key, gid)
-			val, err := pl.Value()
-			newValue := &task.Value{ValType: int32(val.Tid)}
-			if err == nil {
-				newValue.Val = val.Value.([]byte)
-			} else {
-				newValue.Val = x.Nilbyte
+		blen := len(uids.Blocks)
+		for i := 0; i < blen; i++ {
+			ulist := uids.Blocks[i].List
+			llen := len(ulist)
+			for ii := 0; ii < llen; ii++ {
+				uid := ulist[ii]
+				key := x.DataKey(attr, uid)
+				pl, decr := posting.GetOrCreate(key, gid)
+				val, err := pl.Value()
+				newValue := &task.Value{ValType: int32(val.Tid)}
+				if err == nil {
+					newValue.Val = val.Value.([]byte)
+				} else {
+					newValue.Val = x.Nilbyte
+				}
+				values = append(values, newValue)
+				decr() // Decrement the reference count of the pl.
 			}
-			values = append(values, newValue)
-			decr() // Decrement the reference count of the pl.
 		}
-
 		filtered := types.FilterGeoUids(uids, values, geoQuery)
 		for i := 0; i < len(out.UidMatrix); i++ {
 			algo.IntersectWith(out.UidMatrix[i], filtered)

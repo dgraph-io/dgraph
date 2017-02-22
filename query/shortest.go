@@ -130,30 +130,38 @@ func (start *SubGraph) expandOut(ctx context.Context,
 
 		for _, sg := range exec {
 			// Send the destuids in res chan.
-			it := algo.NewListIterator(sg.SrcUIDs)
 			mIdx := -1
-			for ; it.Valid(); it.Next() { // idx, fromUID := range sg.SrcUIDs.Uids {
-				mIdx++
-				fromUID := it.Val()
-				destIt := algo.NewListIterator(sg.uidMatrix[mIdx])
-				lIdx := -1
-				for ; destIt.Valid(); destIt.Next() {
-					lIdx++
-					toUid := destIt.Val()
-					if adjacencyMap[fromUID] == nil {
-						adjacencyMap[fromUID] = make(map[uint64]float64)
+			blen := len(sg.SrcUIDs.Blocks)
+			for i := 0; i < blen; i++ { // ; it.Valid(); it.Next() { // idx, fromUID := range sg.SrcUIDs.Uids {
+				ulist := sg.SrcUIDs.Blocks[i].List
+				ulen := len(ulist)
+				for ii := 0; ii < ulen; ii++ {
+					mIdx++
+					fromUID := ulist[ii]
+					lIdx := -1
+					dlen := len(sg.uidMatrix[mIdx].Blocks)
+					for j := 0; j < dlen; j++ { //; destIt.Valid(); destIt.Next() {
+						vlist := sg.uidMatrix[mIdx].Blocks[j].List
+						vlen := len(vlist)
+						for jj := 0; jj < vlen; jj++ {
+							lIdx++
+							toUid := vlist[jj] // destIt.Val()
+							if adjacencyMap[fromUID] == nil {
+								adjacencyMap[fromUID] = make(map[uint64]float64)
+							}
+							// The default cost we'd use is 1.
+							cost, err := sg.getCost(mIdx, lIdx)
+							if err == ErrFacet {
+								// Ignore the edge and continue.
+								continue
+							} else if err != nil {
+								rch <- err
+								return
+							}
+							adjacencyMap[fromUID][toUid] = cost
+							numEdges++
+						}
 					}
-					// The default cost we'd use is 1.
-					cost, err := sg.getCost(mIdx, lIdx)
-					if err == ErrFacet {
-						// Ignore the edge and continue.
-						continue
-					} else if err != nil {
-						rch <- err
-						return
-					}
-					adjacencyMap[fromUID][toUid] = cost
-					numEdges++
 				}
 			}
 		}

@@ -600,7 +600,7 @@ func (l *List) intersectingPostings(opt ListOptions, postFn func(*types.Posting)
 	l.RLock()
 	defer l.RUnlock()
 
-	it := algo.NewListIterator(opt.Intersect)
+	i, ii := 0, 0
 	l.iterate(opt.AfterUID, func(p *types.Posting) bool {
 		if postingType(p) != valueUid {
 			return false
@@ -612,8 +612,24 @@ func (l *List) intersectingPostings(opt ListOptions, postFn func(*types.Posting)
 			}
 		}
 		if opt.Intersect != nil {
-			it.Seek(uid, 1)
-			if !it.Valid() || it.Val() > uid {
+			blen := len(opt.Intersect.Blocks)
+			var stop bool
+			for i < blen {
+				ulist := opt.Intersect.Blocks[i].List
+				ulen := len(ulist)
+				for ii < ulen {
+					if ulist[ii] >= uid {
+						stop = true
+						break
+					}
+					ii++
+				}
+				if stop {
+					break
+				}
+				i, ii = i+1, 0
+			}
+			if i >= blen || opt.Intersect.Blocks[i].List[ii] > uid {
 				return true
 			}
 		}

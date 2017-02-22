@@ -86,115 +86,69 @@ func (l *WriteIterator) End() {
 	l.curBlock.MaxInt = l.curBlock.List[l.lidx-1]
 }
 
-// NewListIterator returns a read iterator for the list passed to it.
-func NewListIterator(l *task.List) ListIterator {
-	var isEnd bool
-	if l == nil || len(l.Blocks) == 0 ||
-		len(l.Blocks[0].List) == 0 {
-		isEnd = true
-
-	}
-
-	var cur *task.Block
-	if l != nil && len(l.Blocks) > 0 {
-		cur = l.Blocks[0]
-	}
-
-	return ListIterator{
-		list:     l,
-		curBlock: cur,
-		bidx:     0,
-		lidx:     0,
-		isEnd:    isEnd,
-	}
-}
-
-// SeekToIndex moves the iterator to the specified index.
-func (l *ListIterator) SeekToIndex(idx int) {
-	i, j := ridx(l.list, idx)
-	if i == -1 {
-		l.isEnd = true
-		return
-	}
-	l.bidx = i
-	l.lidx = j
-}
-
 // Seek seeks to the index whose value is greater than or equal to the given UID.
 // It uses binary search to move around.
-func (l *ListIterator) Seek(uid uint64, whence int) {
-	if whence == 1 {
-		if l.isEnd {
-			return
-		}
+func Seek(ul *task.List, bidx, lidx int, uid uint64, typ int) (int, int) {
+	i, ii := bidx, lidx
+	if typ == 1 {
 		// Seek the current list first.
-		for l.lidx < len(l.curBlock.List) && l.curBlock.List[l.lidx] < uid {
-			l.lidx++
+		for ii < len(ul.Blocks[i].List) && ul.Blocks[i].List[ii] < uid {
+			ii++
 		}
-		if l.lidx < len(l.curBlock.List) {
-			return
+		if ii < len(ul.Blocks[i].List) {
+			return i, ii
 		}
+
+		// linear seek over blocks.
+		for i < len(ul.Blocks) && uid > ul.Blocks[i].MaxInt {
+			i++
+		}
+		if i == len(ul.Blocks) {
+			return i, ii
+		}
+		ii = 0
+		// Seek the current list first.
+		for ii < len(ul.Blocks[i].List) && ul.Blocks[i].List[ii] < uid {
+			ii++
+		}
+		return i, ii
 	}
+	// Binary seek.
 	// TODO(Ashwin): Do a benchmark to see if linear scan is better than binary if whence is 1
-	u := l.list
-	i := sort.Search(len(u.Blocks), func(i int) bool { return u.Blocks[i].MaxInt >= uid })
-	if i >= len(u.Blocks) {
-		l.isEnd = true
-		return
+	idx := sort.Search(len(ul.Blocks), func(i int) bool { return ul.Blocks[i].MaxInt >= uid })
+	if idx >= len(ul.Blocks) {
+		return idx, ii
 	}
-	j := sort.Search(len(u.Blocks[i].List), func(j int) bool { return u.Blocks[i].List[j] >= uid })
-	if j == len(u.Blocks[i].List) {
-		l.isEnd = true
-		return
-	}
-	l.bidx = i
-	l.curBlock = l.list.Blocks[l.bidx]
-	l.lidx = j
-}
-
-// Valid returns true if we haven't reached the end of the list.
-func (l *ListIterator) Valid() bool {
-	return !l.isEnd
-}
-
-// Val returns the value pointed to by the iterator.
-func (l *ListIterator) Val() uint64 {
-	return l.curBlock.List[l.lidx]
-}
-
-// Next moves the iterator to the next element and also sets the end if the last element
-// is consumed already.
-func (l *ListIterator) Next() {
-	if l.isEnd {
-		return
-	}
-	l.lidx++
-	if l.lidx >= len(l.curBlock.List) {
-		l.lidx = 0
-		l.bidx++
-	}
-	if l.bidx >= len(l.list.Blocks) {
-		l.isEnd = true
-		return
-	}
-	// Update the current block.
-	l.curBlock = l.list.Blocks[l.bidx]
-	if len(l.curBlock.List) == 0 {
-		l.isEnd = true
-	}
+	j := sort.Search(len(ul.Blocks[idx].List), func(j int) bool { return ul.Blocks[idx].List[j] >= uid })
+	return idx, j
 }
 
 // Slice returns a new task.List with the elements between start index and end index
 // of  the list passed to it.
 func Slice(ul *task.List, start, end int) {
 	out := NewWriteIterator(ul, 0)
-	it := NewListIterator(ul)
-	it.SeekToIndex(start)
-
-	i := 0
-	for ; start+i < end && it.Valid(); it.Next() {
-		out.Append(it.Val())
-		i++
+	i, ii := ridx(ul, start)
+	if i < 0 {
+		return
+	}
+	k := 0
+	var stop bool
+	blockLen := len(ul.Blocks)
+	for ; i < blockLen; i++ {
+		ulist := ul.Blocks[i].List
+		listLen := len(ulist)
+		for ; ii < listLen; ii++ {
+			if k == end-start {
+				stop = true
+				break
+			}
+			out.Append(ulist[ii])
+			k++
+		}
+		if stop {
+			break
+		}
+		ii = 0
 	}
 	out.End()
 }
@@ -224,20 +178,134 @@ func ListLen(l *task.List) int {
 }
 
 func IntersectWith(u, v *task.List) {
-	itu := NewListIterator(u)
-	itv := NewListIterator(v)
+	i, ii := 0, 0 //itu := NewListIterator(u)
+	j, jj := 0, 0 //itv := NewListIterator(v)
 	out := NewWriteIterator(u, 0)
-	for itu.Valid() && itv.Valid() {
-		uid := itu.Val()
-		vid := itv.Val()
-		if uid == vid {
-			out.Append(uid)
-			itu.Next()
-			itv.Next()
-		} else if uid < vid {
-			itu.Seek(vid, 1)
-		} else if uid > vid {
-			itv.Seek(uid, 1)
+	m := len(u.Blocks)
+	n := len(v.Blocks)
+	for i < m && j < n {
+		ulist := u.Blocks[i].List
+		vlist := v.Blocks[j].List
+		ub := u.Blocks[i].MaxInt
+		vb := v.Blocks[j].MaxInt
+		ulen := len(ulist)
+		vlen := len(vlist)
+	L:
+		for ii < ulen && jj < vlen {
+			uid := ulist[ii]
+			vid := vlist[jj]
+
+			if uid == vid {
+				out.Append(uid)
+				ii++
+				jj++
+				if ii == ulen {
+					i++
+					ii = 0
+					break L
+				}
+				if jj == vlen {
+					j++
+					jj = 0
+					break L
+				}
+			} else if ub < vid {
+				i++
+				ii = 0
+				break L
+			} else if vb < uid {
+				j++
+				jj = 0
+				break L
+			} else if uid < vid {
+				for ; ii < ulen && ulist[ii] < vid; ii++ {
+				}
+				if ii == ulen {
+					i++
+					ii = 0
+					break L
+				}
+			} else if uid > vid {
+				for ; jj < vlen && vlist[jj] < uid; jj++ {
+				}
+				if jj == vlen {
+					j++
+					jj = 0
+					break L
+				}
+			}
+		}
+		if ii == ulen {
+			i++
+			ii = 0
+		}
+		if jj == vlen {
+			j++
+			jj = 0
+		}
+	}
+	out.End()
+}
+
+func Difference(u, v *task.List) {
+	i, ii := 0, 0 //itu := NewListIterator(u)
+	j, jj := 0, 0 //itv := NewListIterator(v)
+	out := NewWriteIterator(u, 0)
+	m := len(u.Blocks)
+	n := len(v.Blocks)
+	for i < m && j < n {
+		ulist := u.Blocks[i].List
+		vlist := v.Blocks[j].List
+		vb := v.Blocks[j].MaxInt
+		ulen := len(ulist)
+		vlen := len(vlist)
+	L:
+		for ii < ulen && jj < vlen {
+			uid := ulist[ii]
+			vid := vlist[jj]
+
+			if uid == vid {
+				ii++
+				jj++
+				if ii == ulen {
+					i++
+					ii = 0
+					break L
+				}
+				if jj == vlen {
+					j++
+					jj = 0
+					break L
+				}
+			} else if vb < uid {
+				j++
+				jj = 0
+				break L
+			} else if uid < vid {
+				out.Append(uid)
+				ii++
+				if ii == ulen {
+					i++
+					ii = 0
+					break L
+				}
+			} else if uid > vid {
+				for ; jj < vlen && vlist[jj] < uid; jj++ {
+				}
+				if jj == vlen {
+					j++
+					jj = 0
+					break L
+				}
+			}
+		}
+		if ii == ulen {
+			i++
+			ii = 0
+		}
+		if jj == vlen {
+			j++
+			jj = 0
 		}
 	}
 	out.End()
@@ -289,58 +357,63 @@ func IntersectSorted(lists []*task.List) *task.List {
 	}
 
 	// lptrs[j] is the element we are looking at for lists[j].
-	lptrs := make([]ListIterator, len(lists))
-	for i, l := range lists {
-		lptrs[i] = NewListIterator(l)
+	lptrs := make([]int, len(lists))
+	bptrs := make([]int, len(lists))
+	for i := range lists {
+		lptrs[i] = 0 //NewListIterator(l)
+		bptrs[i] = 0
 	}
-	shortListIt := lptrs[minLenIdx]
+	shortList := lists[minLenIdx]
 	elemsLeft := true // If some list has no elems left, we can't intersect more.
+	blen := len(lists[minLenIdx].Blocks)
+	for i := 0; i < blen; i++ {
+		ulist := shortList.Blocks[i].List
+		llen := len(ulist)
+		for ii := 0; ii < llen; ii++ {
+			val := ulist[ii]
+			var skip bool                     // Should we skip val in output?
+			for j := 0; j < len(lists); j++ { // For each other list in lists.
+				if j == minLenIdx {
+					// No point checking yourself.
+					continue
+				}
 
-	for ; shortListIt.Valid() && elemsLeft; shortListIt.Next() { //for i := 0; i < len(shortList.Uids) && elemsLeft; i++ {
-		val := shortListIt.Val()
-		var skip bool                     // Should we skip val in output?
-		for j := 0; j < len(lists); j++ { // For each other list in lists.
-			if j == minLenIdx {
-				// No point checking yourself.
-				continue
+				k, kk := bptrs[j], lptrs[j]
+				plen := len(lists[j].Blocks)
+				for k < plen {
+					qlist := lists[j].Blocks[k].List
+					qlen := len(qlist)
+					for ; kk < qlen && qlist[kk] < val; kk++ {
+					}
+					if kk == qlen {
+						kk = 0
+						k++
+					}
+					if qlist[kk] >= val {
+						break
+					}
+				}
+				bptrs[j], lptrs[j] = k, kk
+				if k == plen || lists[j].Blocks[k].List[kk] > val {
+					elemsLeft = k < plen //lists[j].Blocks[k].List[kk]
+					skip = true
+					break
+				}
+				if !elemsLeft {
+					break
+				}
+				// Otherwise, lj.Get(ljp) = val and we continue checking other lists.
 			}
-
-			for ; lptrs[j].Valid() && lptrs[j].Val() < val; lptrs[j].Next() {
+			if !skip {
+				out.Append(val)
 			}
-
-			if !lptrs[j].Valid() || lptrs[j].Val() > val {
-				elemsLeft = lptrs[j].Valid()
-				skip = true
+			if !elemsLeft {
 				break
 			}
-			// Otherwise, lj.Get(ljp) = val and we continue checking other lists.
-		}
-		if !skip {
-			out.Append(val)
 		}
 	}
 	out.End()
 	return o
-}
-
-func Difference(u, v *task.List) {
-	itu := NewListIterator(u)
-	itv := NewListIterator(v)
-	out := NewWriteIterator(u, 0)
-	for itu.Valid() && itv.Valid() {
-		uid := itu.Val()
-		vid := itv.Val()
-		if uid == vid {
-			itu.Next()
-			itv.Next()
-		} else if uid < vid {
-			out.Append(uid)
-			itu.Next()
-		} else if uid > vid {
-			itv.Seek(uid, 1)
-		}
-	}
-	out.End()
 }
 
 // MergeSorted merges sorted lists.
@@ -352,13 +425,14 @@ func MergeSorted(lists []*task.List) *task.List {
 	out := NewWriteIterator(o, 0)
 	h := &uint64Heap{}
 	heap.Init(h)
-	var lIt []ListIterator
+	var lIt []int // ListIterator
+	var bIt []int // ListIterator
 	for i, l := range lists {
-		it := NewListIterator(l)
-		lIt = append(lIt, it)
-		if it.Valid() {
+		lIt = append(lIt, 0)
+		bIt = append(bIt, 0)
+		if len(l.Blocks) > 0 && len(l.Blocks[0].List) > 0 {
 			heap.Push(h, elem{
-				val:     it.Val(),
+				val:     l.Blocks[0].List[0],
 				listIdx: i,
 			})
 		}
@@ -371,11 +445,16 @@ func MergeSorted(lists []*task.List) *task.List {
 			out.Append(me.val) // Add if unique.
 			last = me.val
 		}
-		lIt[me.listIdx].Next()
-		if !lIt[me.listIdx].Valid() {
+		lIt[me.listIdx]++
+		if lIt[me.listIdx] == len(lists[me.listIdx].Blocks[bIt[me.listIdx]].List) {
+			bIt[me.listIdx]++
+			lIt[me.listIdx] = 0
+		}
+		if bIt[me.listIdx] >= len(lists[me.listIdx].Blocks) || lIt[me.listIdx] >= len(lists[me.listIdx].Blocks[0].List) {
+			//if !lIt[me.listIdx].Valid() {
 			heap.Pop(h)
 		} else {
-			val := lIt[me.listIdx].Val()
+			val := lists[me.listIdx].Blocks[bIt[me.listIdx]].List[lIt[me.listIdx]] // lIt[me.listIdx].Val()
 			(*h)[0].val = val
 			heap.Fix(h, 0) // Faster than Pop() followed by Push().
 		}
