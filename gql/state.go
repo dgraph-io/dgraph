@@ -18,8 +18,6 @@
 package gql
 
 import (
-	"bytes"
-
 	"github.com/dgraph-io/dgraph/lex"
 )
 
@@ -301,38 +299,6 @@ func lexDirective(l *lex.Lexer) lex.StateFn {
 	}
 
 	l.Backup()
-	// This gives our buffer an initial capacity. Its length is zero though. The
-	// buffer can grow beyond this initial capacity.
-	buf := bytes.NewBuffer(make([]byte, 0, 15))
-	for {
-		// The caller already checked isNameBegin, and absorbed one rune.
-		r = l.Next()
-		buf.WriteRune(r)
-		if isNameSuffix(r) {
-			continue
-		}
-		l.Backup()
-		l.Emit(itemName)
-
-		if r != leftRound {
-			// this is language
-			return lexText
-		}
-		directive := buf.Bytes()[:buf.Len()-1]
-		// The lexer may behave differently for different directives. Hence, we need
-		// to check the directive here and go into the right state.
-		switch string(directive) {
-		case "filter":
-			l.InsideDirective = true
-			return lexText
-		case "normalize":
-			return lexText
-		case "facets":
-			return lexText
-		default:
-			return l.Errorf("Unhandled directive %s", directive)
-		}
-	}
 	return lexText
 }
 
