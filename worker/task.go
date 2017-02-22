@@ -426,23 +426,6 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 				decr() // Decrement the reference count of the pl.
 			}
 		}
-		/*
-			it := algo.NewListIterator(uids)
-			for ; it.Valid(); it.Next() {
-				uid := it.Val()
-				key := x.DataKey(attr, uid)
-				pl, decr := posting.GetOrCreate(key, gid)
-				val, err := pl.Value()
-				newValue := &task.Value{ValType: int32(val.Tid)}
-				if err == nil {
-					newValue.Val = val.Value.([]byte)
-				} else {
-					newValue.Val = x.Nilbyte
-				}
-				values = append(values, newValue)
-				decr() // Decrement the reference count of the pl.
-			}
-		*/
 		filtered := types.FilterGeoUids(uids, values, geoQuery)
 		for i := 0; i < len(out.UidMatrix); i++ {
 			algo.IntersectWith(out.UidMatrix[i], filtered)

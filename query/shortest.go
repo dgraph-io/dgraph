@@ -130,7 +130,6 @@ func (start *SubGraph) expandOut(ctx context.Context,
 
 		for _, sg := range exec {
 			// Send the destuids in res chan.
-			//it := algo.NewListIterator(sg.SrcUIDs)
 			mIdx := -1
 			blen := len(sg.SrcUIDs.Blocks)
 			for i := 0; i < blen; i++ { // ; it.Valid(); it.Next() { // idx, fromUID := range sg.SrcUIDs.Uids {
@@ -139,7 +138,6 @@ func (start *SubGraph) expandOut(ctx context.Context,
 				for ii := 0; ii < ulen; ii++ {
 					mIdx++
 					fromUID := ulist[ii]
-					//destIt := algo.NewListIterator(sg.uidMatrix[mIdx])
 					lIdx := -1
 					dlen := len(sg.uidMatrix[mIdx].Blocks)
 					for j := 0; j < dlen; j++ { //; destIt.Valid(); destIt.Next() {

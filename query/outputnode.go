@@ -182,7 +182,6 @@ func (sg *SubGraph) ToProtocolBuffer(l *Latency) (*graph.Node, error) {
 	}
 
 	n := seedNode.New("_root_")
-	//it := algo.NewListIterator(sg.uidMatrix[0])
 	blen := len(sg.uidMatrix[0].Blocks)
 	for i := 0; i < blen; i++ {
 		ulist := sg.uidMatrix[0].Blocks[i].List
@@ -217,37 +216,6 @@ func (sg *SubGraph) ToProtocolBuffer(l *Latency) (*graph.Node, error) {
 			}
 		}
 	}
-	/*
-		for ; it.Valid(); it.Next() {
-			uid := it.Val()
-			// For the root, the name is stored in Alias, not Attr.
-			n1 := seedNode.New(sg.Params.Alias)
-			if sg.Params.GetUID || sg.Params.isDebug {
-				n1.SetUID(uid)
-			}
-
-			if rerr := sg.preTraverse(uid, n1, n1); rerr != nil {
-				if rerr.Error() == "_INV_" {
-					continue
-				}
-				return n.(*protoNode).Node, rerr
-			}
-			if n1.IsEmpty() {
-				continue
-			}
-			if !sg.Params.Normalize {
-				n.AddListChild(sg.Params.Alias, n1)
-				continue
-			}
-
-			// Lets normalize the response now.
-			normalized := make([]protoNode, 0, 10)
-			props := make([]*graph.Property, 0, 10)
-			for _, c := range (n1.(*protoNode)).normalize(props, normalized) {
-				n.AddListChild(sg.Params.Alias, &c)
-			}
-		}
-	*/
 	l.ProtocolBuffer = time.Since(l.Start) - l.Parsing - l.Processing
 	return n.(*protoNode).Node, nil
 }
@@ -450,7 +418,6 @@ func processNodeUids(n *fastJsonNode, sg *SubGraph) error {
 	if sg.uidMatrix == nil {
 		return nil
 	}
-	//it := algo.NewListIterator(sg.uidMatrix[0])
 	blen := len(sg.uidMatrix[0].Blocks)
 	for i := 0; i < blen; i++ {
 		ulist := sg.uidMatrix[0].Blocks[i].List
@@ -487,39 +454,6 @@ func processNodeUids(n *fastJsonNode, sg *SubGraph) error {
 			}
 		}
 	}
-	/*
-		for ; it.Valid(); it.Next() {
-			uid := it.Val()
-			n1 := seedNode.New(sg.Params.Alias)
-			if sg.Params.GetUID || sg.Params.isDebug {
-				n1.SetUID(uid)
-			}
-			if err := sg.preTraverse(uid, n1, n1); err != nil {
-				if err.Error() == "_INV_" {
-					continue
-				}
-				return err
-			}
-			if n1.IsEmpty() {
-				continue
-			}
-
-			if !sg.Params.Normalize {
-				n.AddListChild(sg.Params.Alias, n1)
-				continue
-			}
-
-			// Lets normalize the response now.
-			normalized := make([]fastJsonNode, 0, 10)
-
-			// This slice is used to mantain the leaf nodes along a path while traversing
-			// the Subgraph.
-			av := make([]attrVal, 0, 10)
-			for _, c := range (n1.(*fastJsonNode)).normalize(av, normalized) {
-				n.AddListChild(sg.Params.Alias, &fastJsonNode{attrs: c.attrs})
-			}
-		}
-	*/
 	return nil
 }
 

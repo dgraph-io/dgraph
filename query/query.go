@@ -274,7 +274,6 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 			if pc.Params.Facet != nil {
 				fcsList = pc.facetsMatrix[idx].FacetsList
 			}
-			// it := algo.NewListIterator(ul)
 			childIdx := -1
 			blen := len(ul.Blocks)
 			for i := 0; i < blen; i++ {
@@ -318,44 +317,6 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 					}
 				}
 			}
-			/*
-				for childIdx := -1; it.Valid(); it.Next() {
-					childIdx++
-					childUID := it.Val()
-					if invalidUids[childUID] {
-						continue
-					}
-					uc := dst.New(fieldName)
-
-					if rerr := pc.preTraverse(childUID, uc, dst); rerr != nil {
-						if rerr.Error() == "_INV_" {
-							invalidUids[childUID] = true
-							continue // next UID.
-						}
-						// Some other error.
-						log.Printf("Error while traversal: %v", rerr)
-						return rerr
-					}
-					if pc.Params.Facet != nil && len(fcsList) > childIdx {
-						fs := fcsList[childIdx]
-						fc := dst.New(fieldName)
-						for _, f := range fs.Facets {
-							if tv, err := types.ValFor(f); err != nil {
-								return err
-							} else {
-								fc.AddValue(f.Key, tv)
-							}
-						}
-						if !fc.IsEmpty() {
-							fcParent := dst.New("_")
-							fcParent.AddMapChild("_", fc, false)
-							uc.AddMapChild("@facets", fcParent, true)
-						}
-					}
-					if !uc.IsEmpty() {
-						dst.AddListChild(fieldName, uc)
-					}
-				}*/
 		} else {
 			tv := pc.values[idx]
 			v, err := getValue(tv)
@@ -873,7 +834,6 @@ func shouldCascade(res gql.Result, idx int) bool {
 // TODO(Ashwin): Benchmark this function.
 func populateVarMap(sg *SubGraph, doneVars map[string]*task.List, isCascade bool) {
 	out := algo.NewWriteIterator(sg.DestUIDs, 0)
-	//it := algo.NewListIterator(sg.DestUIDs)
 	blen := len(sg.DestUIDs.Blocks)
 	k := -1
 	if sg.Params.Alias == "shortest" {
@@ -917,23 +877,6 @@ func populateVarMap(sg *SubGraph, doneVars map[string]*task.List, isCascade bool
 			}
 		}
 	}
-	/*
-		for ; it.Valid(); it.Next() {
-			i++
-			var exclude bool
-			for _, child := range sg.Children {
-				// If the length of child UID list is zero and it has no valid value, then the
-				// current UID should be removed from this level.
-				if len(child.values[i].Val) == 0 && algo.ListLen(child.uidMatrix[i]) == 0 {
-					exclude = true
-					break
-				}
-			}
-			if !exclude {
-				out.Append(it.Val())
-			}
-		}
-	*/
 	out.End()
 
 AssignStep:
@@ -1216,7 +1159,6 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 	// rebuild destUIDs.
 	included := make([]bool, algo.ListLen(sg.DestUIDs))
 	for _, ul := range sg.uidMatrix {
-		//it := algo.NewListIterator(ul)
 		blen := len(ul.Blocks)
 		for i := 0; i < blen; i++ {
 			ulist := ul.Blocks[i].List
