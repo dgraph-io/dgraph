@@ -270,7 +270,9 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 		} else {
 			newValue.Val = x.Nilbyte
 		}
+		out.Values = append(out.Values, newValue)
 
+		// get filtered uids and facets.
 		type result struct {
 			uid    uint64
 			facets []*facets.Facet
@@ -300,7 +302,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 			return nil, x.Errorf("Facet filtering is not supported on values.")
 		}
 
-		// get facets.
+		// add facets to result.
 		if q.FacetParam != nil {
 			if isValueEdge {
 				fs, err := pl.Facets(q.FacetParam)
@@ -318,9 +320,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 			}
 		}
 
-		// add to Values now.. since we can continue because of facetsFilter
-		out.Values = append(out.Values, newValue)
-
+		// add uids to uidmatrix..
 		if q.DoCount || fnType == AggregatorFn {
 			if q.DoCount {
 				out.Counts = append(out.Counts, uint32(pl.Length(0)))
