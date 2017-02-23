@@ -129,6 +129,7 @@ type params struct {
 	Var        string
 	NeedsVar   []string
 	ParentVars map[string]*task.List
+	Langs      []string
 	Normalize  bool
 	From       uint64
 	To         uint64
@@ -451,6 +452,7 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 
 		args := params{
 			Alias:     gchild.Alias,
+			Langs:     gchild.Langs,
 			isDebug:   sg.Params.isDebug,
 			Var:       gchild.Var,
 			Normalize: sg.Params.Normalize,
@@ -607,6 +609,7 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	args := params{
 		isDebug:    debug,
 		Alias:      gq.Alias,
+		Langs:      gq.Langs,
 		Var:        gq.Var,
 		ParentVars: make(map[string]*task.List),
 		Normalize:  gq.Normalize,
@@ -721,6 +724,7 @@ func createTaskQuery(sg *SubGraph) *task.Query {
 	}
 	out := &task.Query{
 		Attr:         attr,
+		Langs:        sg.Params.Langs,
 		Reverse:      reverse,
 		SrcFunc:      sg.SrcFunc,
 		Count:        int32(sg.Params.Count),
@@ -1187,6 +1191,7 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 
 	sort := &task.Sort{
 		Attr:      sg.Params.Order,
+		Langs:     sg.Params.Langs,
 		UidMatrix: sg.uidMatrix,
 		Offset:    int32(sg.Params.Offset),
 		Count:     int32(sg.Params.Count),

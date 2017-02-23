@@ -107,10 +107,10 @@ var testNQuads = []struct {
 		input: `_:alice <name> "Alice In Wonderland"@en-0 .`,
 		nq: graph.NQuad{
 			Subject:     "_:alice",
-			Predicate:   "name.en-0", // TODO(tzdybal) - remove ".en-0"
+			Predicate:   "name",
 			ObjectId:    "",
 			Lang:        "en-0",
-			ObjectValue: &graph.Value{&graph.Value_StrVal{"Alice In Wonderland"}},
+			ObjectValue: &graph.Value{&graph.Value_DefaultVal{"Alice In Wonderland"}},
 			ObjectType:  10,
 		},
 	},
@@ -138,10 +138,10 @@ var testNQuads = []struct {
 		input: `<http://www.w3.org/2001/sw/RDFCore/nedges/> <http://purl.org/dc/terms/title> "N-Edges"@en-US .`,
 		nq: graph.NQuad{
 			Subject:     "http://www.w3.org/2001/sw/RDFCore/nedges/",
-			Predicate:   "http://purl.org/dc/terms/title.en-US", // TODO(tzdybal) - remove ".en-US"
+			Predicate:   "http://purl.org/dc/terms/title",
 			ObjectId:    "",
 			Lang:        "en-US",
-			ObjectValue: &graph.Value{&graph.Value_StrVal{"N-Edges"}},
+			ObjectValue: &graph.Value{&graph.Value_DefaultVal{"N-Edges"}},
 			ObjectType:  10,
 		},
 	},
@@ -482,9 +482,9 @@ var testNQuads = []struct {
 		input: `<alice> <lives> "\t\b\n\r\f\"\'\\"@a-b .`,
 		nq: graph.NQuad{
 			Subject:     "alice",
-			Predicate:   "lives.a-b", // TODO(tzdybal) - remove ".a-b"
+			Predicate:   "lives",
 			Lang:        "a-b",
-			ObjectValue: &graph.Value{&graph.Value_StrVal{`\t\b\n\r\f\"\'\\`}},
+			ObjectValue: &graph.Value{&graph.Value_DefaultVal{`\t\b\n\r\f\"\'\\`}},
 			ObjectType:  10,
 		},
 	},

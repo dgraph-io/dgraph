@@ -86,10 +86,16 @@ func makeFacets(facetKVs map[string]string) (fs []*facets.Facet, err error) {
 
 func addEdgeToValue(t *testing.T, attr string, src uint64,
 	value string, facetKVs map[string]string) {
+	addEdgeToLangValue(t, attr, src, value, "", facetKVs)
+}
+
+func addEdgeToLangValue(t *testing.T, attr string, src uint64,
+	value, lang string, facetKVs map[string]string) {
 	fs, err := makeFacets(facetKVs)
 	require.NoError(t, err)
 	edge := &task.DirectedEdge{
 		Value:  []byte(value),
+		Lang:   lang,
 		Label:  "testing",
 		Attr:   attr,
 		Entity: src,

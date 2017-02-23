@@ -111,10 +111,10 @@ func (nq NQuad) ToEdge() (*task.DirectedEdge, error) {
 	}
 
 	switch nq.valueType() {
-	case nQuadUid:
+	case x.ValueUid:
 		oid := GetUid(nq.ObjectId)
 		out.ValueId = oid
-	case nQuadValue, nQuadTaggedValue:
+	case x.ValueUntagged, x.ValueTagged:
 		if err = copyValue(out, nq); err != nil {
 			return &emptyEdge, err
 		}
@@ -143,31 +143,16 @@ func (nq NQuad) ToEdgeUsing(newToUid map[string]uint64) (*task.DirectedEdge, err
 	}
 
 	switch nq.valueType() {
-	case nQuadUid:
+	case x.ValueUid:
 		uid = toUid(nq.ObjectId, newToUid)
 		out.ValueId = uid
-	case nQuadValue, nQuadTaggedValue:
+	case x.ValueUntagged, x.ValueTagged:
 		if err = copyValue(out, nq); err != nil {
 			return &emptyEdge, err
 		}
 	}
 	return out, nil
 }
-
-// TODO(tzdybal) - remove
-/*
-func (nq NQuad) hasUid() bool {
-	return len(nq.ObjectId) > 0 && nq.ObjectValue == nil
-}
-
-func (nq NQuad) hasLangTag() bool {
-	return len(nq.ObjectId) > 0 && nq.ObjectValue != nil
-}
-
-func (nq NQuad) hasValue() bool {
-	return len(nq.ObjectId) == 0 && nq.ObjectValue != nil
-}
-*/
 
 func copyValue(out *task.DirectedEdge, nq NQuad) error {
 	var err error
@@ -178,29 +163,11 @@ func copyValue(out *task.DirectedEdge, nq NQuad) error {
 	return nil
 }
 
-type nQuadTypeInfo int32
-
-const (
-	nQuadEmpty nQuadTypeInfo = iota
-	nQuadUid
-	nQuadValue
-	nQuadTaggedValue
-)
-
-func (nq NQuad) valueType() nQuadTypeInfo {
-	if nq.ObjectValue != nil {
-		if len(nq.Lang) == 0 {
-			return nQuadValue // value without lang tag
-		} else {
-			return nQuadTaggedValue // value with lang tag
-		}
-	} else {
-		if len(nq.ObjectId) == 0 {
-			return nQuadEmpty // empty NQuad - no Uid and no Value
-		} else {
-			return nQuadUid // Uid
-		}
-	}
+func (nq NQuad) valueType() x.ValueTypeInfo {
+	hasValue := nq.ObjectValue != nil
+	hasLang := len(nq.Lang) > 0
+	hasSpecialId := len(nq.ObjectId) == 0
+	return x.ValueType(hasValue, hasLang, hasSpecialId)
 }
 
 // Function to do sanity check for subject, predicate, object and label strings.
@@ -245,13 +212,12 @@ func Parse(line string) (rnq graph.NQuad, rerr error) {
 			}
 
 		case itemLanguage:
-			rnq.Predicate += "." + item.Val // TODO(tzdybal) - remove
 			rnq.Lang = item.Val
 
 			// if lang tag is specified then type is set to string
 			// grammar allows either ^^ iriref or lang tag
 			if len(oval) > 0 {
-				rnq.ObjectValue = &graph.Value{&graph.Value_StrVal{oval}}
+				rnq.ObjectValue = &graph.Value{&graph.Value_DefaultVal{oval}}
 				// If no type is specified, we default to string.
 				rnq.ObjectType = int32(types.StringID)
 				oval = ""
