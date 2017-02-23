@@ -38,7 +38,6 @@ message PostingList {
 	repeated Posting postings = 1;
 	bytes checksum = 2;
 	uint64 commit = 3; // More inclination towards smaller values.
-	repeated string langs = 4; // Languages of values in list (to avoid iteration over all postings)
 }
 
 message Schema {

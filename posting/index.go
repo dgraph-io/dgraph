@@ -223,13 +223,12 @@ func RebuildIndex(ctx context.Context, attr string) error {
 	prefix = pk.DataPrefix()
 	it := pstore.NewIterator()
 	defer it.Close()
-	var pl types.PostingList
 
-	// Helper function - Add index entries for value kept in pl.Postings[idx]
-	addPostingToIndex := func(idx int) {
-		p := pl.Postings[idx]
-		pt := postingType(p)
-		if pt == x.ValueTagged || pt == x.ValueUntagged {
+	// Helper function - Add index entries for values in posting list
+	addPostingsToIndex := func(pl *types.PostingList) {
+		postingsLen := len(pl.Postings)
+		for idx := 0; idx < postingsLen; idx++ {
+			p := pl.Postings[idx]
 			// Add index entries based on p.
 			val := types.Val{
 				Value: p.Value,
@@ -243,20 +242,12 @@ func RebuildIndex(ctx context.Context, attr string) error {
 	for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
 		pki := x.Parse(it.Key().Data())
 		edge.Entity = pki.Uid
-		pl.Reset()
+		var pl types.PostingList
 		x.Check(pl.Unmarshal(it.Value().Data()))
 
-		postingLen := len(pl.Postings)
-		if postingLen == 0 {
-			continue
-		}
-
-		// Posting lists contains (only) values if there are some languages defined or last posting
-		// is a value without language. Otherwise it cointais UIDs.
-		if len(pl.Langs) > 0 || postingType(pl.Postings[postingLen-1]) == x.ValueUntagged {
-			for idx := 0; idx < postingLen; idx++ {
-				addPostingToIndex(idx)
-			}
+		// Posting list contains only values or only UIDs.
+		if len(pl.Postings) != 0 && postingType(pl.Postings[0]) != x.ValueUid {
+			addPostingsToIndex(&pl)
 		}
 	}
 	return nil
