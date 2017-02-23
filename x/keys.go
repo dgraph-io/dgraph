@@ -6,10 +6,11 @@ import (
 )
 
 const (
-	byteData    = byte(0x00)
-	byteIndex   = byte(0x01)
-	byteReverse = byte(0x02)
-	byteSchema  = byte(0x03)
+	byteData       = byte(0x00)
+	byteIndex      = byte(0x01)
+	byteReverse    = byte(0x02)
+	byteSchema     = byte(0x03)
+	byteExactIndex = byte(0x04)
 	// same prefix for data, index and reverse keys so that relative order of data doesn't change
 	// keys of same attributes are located together
 	defaultPrefix = byte(0x00)
@@ -78,6 +79,19 @@ func IndexKey(attr, term string) []byte {
 	return buf
 }
 
+func ExactIndexKey(attr, value string) []byte {
+	buf := make([]byte, 2+len(attr)+2+len(value))
+	buf[0] = defaultPrefix
+	rest := buf[1:]
+
+	rest = writeAttr(rest, attr)
+	rest[0] = byteExactIndex
+
+	rest = rest[1:]
+	AssertTrue(len(value) == copy(rest, value[:]))
+	return buf
+}
+
 type ParsedKey struct {
 	byteType   byte
 	Attr       string
@@ -96,6 +110,10 @@ func (p ParsedKey) IsReverse() bool {
 
 func (p ParsedKey) IsIndex() bool {
 	return p.byteType == byteIndex
+}
+
+func (p ParsedKey) IsExactIndex() bool {
+	return p.byteType == byteExactIndex
 }
 
 func (p ParsedKey) IsSchema() bool {
@@ -150,6 +168,17 @@ func (p ParsedKey) IndexPrefix() []byte {
 	return buf
 }
 
+// ExactIndexPrefix returns the prefix for index keys.
+func (p ParsedKey) ExactIndexPrefix() []byte {
+	buf := make([]byte, 2+len(p.Attr)+2)
+	buf[0] = p.bytePrefix
+	rest := buf[1:]
+	k := writeAttr(rest, p.Attr)
+	AssertTrue(len(k) == 1)
+	k[0] = byteExactIndex
+	return buf
+}
+
 // SchemaPrefix returns the prefix for Schema keys.
 func SchemaPrefix() []byte {
 	buf := make([]byte, 1)
@@ -176,6 +205,8 @@ func Parse(key []byte) *ParsedKey {
 	case byteReverse:
 		p.Uid = binary.BigEndian.Uint64(k)
 	case byteIndex:
+		p.Term = string(k)
+	case byteExactIndex:
 		p.Term = string(k)
 	case byteSchema:
 		break

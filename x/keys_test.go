@@ -49,6 +49,21 @@ func TestIndexKey(t *testing.T) {
 	}
 }
 
+func TestExactIndexKey(t *testing.T) {
+	var uid uint64
+	for uid = 0; uid < 1001; uid++ {
+		sattr := fmt.Sprintf("attr:%d", uid)
+		sterm := fmt.Sprintf("term:%d", uid)
+
+		key := ExactIndexKey(sattr, sterm)
+		pk := Parse(key)
+
+		require.True(t, pk.IsExactIndex())
+		require.Equal(t, sattr, pk.Attr)
+		require.Equal(t, sterm, pk.Term)
+	}
+}
+
 func TestReverseKey(t *testing.T) {
 	var uid uint64
 	for uid = 0; uid < 1001; uid++ {
