@@ -290,7 +290,8 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 					}
 				}
 				if res {
-					filteredRes = append(filteredRes, &result{uid: p.Uid,
+					filteredRes = append(filteredRes, &result{
+						uid:    p.Uid,
 						facets: facets.CopyFacets(p.Facets, q.FacetParam)})
 				}
 				return true
@@ -392,7 +393,6 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 			if sv.Value == nil || err != nil {
 				return false
 			}
-			// Are we making copies of sv and ineqValue ? expensive ?
 			return compareTypeVals(q.SrcFunc[0], sv, ineqValue)
 		})
 	}

@@ -100,7 +100,7 @@ func ValType(val string) (Facet_ValType, error) {
 }
 
 // FacetFor returns Facet for given key and val.
-func FacetFor(key string, val string) (*Facet, error) {
+func FacetFor(key, val string) (*Facet, error) {
 	vt, err := ValType(val)
 	if err != nil {
 		return nil, err
