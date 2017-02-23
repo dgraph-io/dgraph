@@ -8,9 +8,9 @@ import (
 const (
 	byteData       = byte(0x00)
 	byteIndex      = byte(0x01)
-	byteReverse    = byte(0x02)
-	byteSchema     = byte(0x03)
-	byteExactIndex = byte(0x04)
+	byteExactIndex = byte(0x02)
+	byteReverse    = byte(0x03)
+	byteSchema     = byte(0x04)
 	// same prefix for data, index and reverse keys so that relative order of data doesn't change
 	// keys of same attributes are located together
 	defaultPrefix = byte(0x00)

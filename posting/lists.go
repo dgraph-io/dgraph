@@ -358,7 +358,6 @@ func getFromMap(key uint64) *List {
 // That way, we don't have a dependency conflict.
 func GetOrCreate(key []byte, group uint32) (rlist *List, decr func()) {
 	fp := farm.Fingerprint64(key)
-
 	stopTheWorld.RLock()
 	defer stopTheWorld.RUnlock()
 
@@ -387,7 +386,7 @@ func GetOrCreate(key []byte, group uint32) (rlist *List, decr func()) {
 	// This replaces "TokensTable". The idea is that we want to quickly add the
 	// index key to the data store, with essentially an empty value. We just need
 	// the keys for filtering / sorting.
-	if l == lp && pk.IsIndex() {
+	if l == lp && (pk.IsIndex() || pk.IsExactIndex()) {
 		// Lock before entering goroutine. Otherwise, some tests in query will fail.
 		l.Lock()
 		go func(key []byte) {

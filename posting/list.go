@@ -392,7 +392,6 @@ func (l *List) addMutation(ctx context.Context, t *task.DirectedEdge) (bool, err
 		return false, err
 	}
 	mpost := newPosting(t)
-
 	// Mutation arrives:
 	// - Check if we had any(SET/DEL) before this, stored in the mutation list.
 	//		- If yes, then replace that mutation. Jump to a)

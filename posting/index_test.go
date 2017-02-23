@@ -62,6 +62,13 @@ func TestIndexing(t *testing.T) {
 	require.EqualValues(t, "abc", string(a[0]))
 }
 
+func TestExactIndexing(t *testing.T) {
+	schema.ParseBytes([]byte("scalar name:string @index"))
+	a, ok := NeedExactIndex("name", types.Val{types.StringID, []byte("abc")})
+	require.True(t, ok)
+	require.EqualValues(t, "abc", string(a))
+}
+
 func addMutationWithIndex(t *testing.T, l *List, edge *task.DirectedEdge, op uint32) {
 	if op == Del {
 		edge.Op = task.DirectedEdge_DEL

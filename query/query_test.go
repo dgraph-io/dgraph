@@ -217,7 +217,7 @@ func populateGraph(t *testing.T) {
 		addEdgeToTypedValue(t, "shadow_deep", 24, types.Int32ID, data.Value.([]byte), nil)
 	}
 
-	time.Sleep(5 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 }
 
 func TestGetUID(t *testing.T) {
@@ -1461,7 +1461,7 @@ func TestFilterRegex2(t *testing.T) {
     {
       me(id:0x01) {
         name
-        friend @filter(regexp(name, "^[^ao]+$")) {
+        friend @filter(regexp(name, "^[^a]+$")) {
           name
         }
       }
@@ -1479,7 +1479,7 @@ func TestFilterRegex3(t *testing.T) {
     {
       me(id:0x01) {
         name
-        friend @filter(regexp(name, "^(ri|gr)")) {
+        friend @filter(regexp(name, "^(Ri|Gl)")) {
           name
         }
       }
@@ -1488,7 +1488,7 @@ func TestFilterRegex3(t *testing.T) {
 
 	js := processToFastJSON(t, query)
 	require.JSONEq(t,
-		`{"me":[{"name":"Michonne", "friend":[{"name":"Rick Grimes"}]}]}`, js)
+		`{"me":[{"name":"Michonne", "friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"}]}]}`, js)
 }
 
 func TestToFastJSONFilterUID(t *testing.T) {
