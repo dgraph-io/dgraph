@@ -40,7 +40,7 @@ Loop:
 		case isNameBegin(r):
 			l.Backup()
 			return lexWord
-		case isSpace(r) || isEndOfLine(r):
+		case isSpace(r) || isEndOfLine(r) || r == ',':
 			l.Ignore()
 		case r == '<':
 			if err := lex.LexIRIRef(l, itemText); err != nil {

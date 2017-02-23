@@ -43,5 +43,5 @@ message PostingList {
 message Schema {
 	uint32 value_type = 1;
 	bool reverse = 2;
-	string tokenizer = 3;
+	repeated string tokenizer = 3;
 }
