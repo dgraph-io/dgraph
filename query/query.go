@@ -151,9 +151,10 @@ type SubGraph struct {
 	SrcUIDs *task.List
 	SrcFunc []string
 
-	FilterOp string
-	Filters  []*SubGraph
-	Children []*SubGraph
+	FilterOp     string
+	Filters      []*SubGraph
+	facetsFilter *facets.FilterTree
+	Children     []*SubGraph
 
 	// destUIDs is a list of destination UIDs, after applying filters, pagination.
 	DestUIDs *task.List
@@ -295,11 +296,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 					fs := fcsList[childIdx]
 					fc := dst.New(fieldName)
 					for _, f := range fs.Facets {
-						if tv, err := types.ValFor(f); err != nil {
-							return err
-						} else {
-							fc.AddValue(f.Key, tv)
-						}
+						fc.AddValue(f.Key, types.ValFor(f))
 					}
 					if !fc.IsEmpty() {
 						fcParent := dst.New("_")
@@ -325,11 +322,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 				fc := dst.New(fieldName)
 				// in case of Value we have only one Facets
 				for _, f := range pc.facetsMatrix[idx].FacetsList[0].Facets {
-					if tVal, err := types.ValFor(f); err != nil {
-						return err
-					} else {
-						fc.AddValue(f.Key, tVal)
-					}
+					fc.AddValue(f.Key, types.ValFor(f))
 				}
 				if !fc.IsEmpty() {
 					facetsNode.AddMapChild(fieldName, fc, false)
@@ -516,6 +509,14 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 			dst.Filters = append(dst.Filters, dstf)
 		}
 
+		if gchild.FacetsFilter != nil {
+			facetsFilter, err := toFacetsFilter(gchild.FacetsFilter)
+			if err != nil {
+				return err
+			}
+			dst.facetsFilter = facetsFilter
+		}
+
 		sg.Children = append(sg.Children, dst)
 		if err := treeCopy(ctx, gchild, dst); err != nil {
 			return err
@@ -663,6 +664,13 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 		}
 		sg.Filters = append(sg.Filters, sgf)
 	}
+	if gq.FacetsFilter != nil {
+		facetsFilter, err := toFacetsFilter(gq.FacetsFilter)
+		if err != nil {
+			return nil, err
+		}
+		sg.facetsFilter = facetsFilter
+	}
 	return sg, nil
 }
 
@@ -676,6 +684,33 @@ func createNilValuesList(count int) []*task.Value {
 	return out
 }
 
+func toFacetsFilter(gft *gql.FilterTree) (*facets.FilterTree, error) {
+	if gft == nil {
+		return nil, nil
+	}
+	if gft.Func != nil && len(gft.Func.NeedsVar) != 0 {
+		return nil, x.Errorf("Variables not supported in facets.FilterTree")
+	}
+	ftree := new(facets.FilterTree)
+	ftree.Op = gft.Op
+	for _, gftc := range gft.Child {
+		if ftc, err := toFacetsFilter(gftc); err != nil {
+			return nil, err
+		} else {
+			ftree.Children = append(ftree.Children, ftc)
+		}
+	}
+	if gft.Func != nil {
+		ftree.Func = &facets.Function{
+			Key:  gft.Func.Attr,
+			Name: gft.Func.Name,
+			Args: []string{},
+		}
+		ftree.Func.Args = append(ftree.Func.Args, gft.Func.Args...)
+	}
+	return ftree, nil
+}
+
 // createTaskQuery generates the query buffer.
 func createTaskQuery(sg *SubGraph) *task.Query {
 	attr := sg.Attr
@@ -685,14 +720,15 @@ func createTaskQuery(sg *SubGraph) *task.Query {
 		attr = strings.TrimPrefix(attr, "~")
 	}
 	out := &task.Query{
-		Attr:       attr,
-		Reverse:    reverse,
-		SrcFunc:    sg.SrcFunc,
-		Count:      int32(sg.Params.Count),
-		Offset:     int32(sg.Params.Offset),
-		AfterUid:   sg.Params.AfterUID,
-		DoCount:    len(sg.Filters) == 0 && sg.Params.DoCount,
-		FacetParam: sg.Params.Facet,
+		Attr:         attr,
+		Reverse:      reverse,
+		SrcFunc:      sg.SrcFunc,
+		Count:        int32(sg.Params.Count),
+		Offset:       int32(sg.Params.Offset),
+		AfterUid:     sg.Params.AfterUID,
+		DoCount:      len(sg.Filters) == 0 && sg.Params.DoCount,
+		FacetParam:   sg.Params.Facet,
+		FacetsFilter: sg.facetsFilter,
 	}
 	if sg.SrcUIDs != nil {
 		out.Uids = sg.SrcUIDs

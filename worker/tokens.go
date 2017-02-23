@@ -10,11 +10,11 @@ import (
 var termTokenizer tok.TermTokenizer
 
 func getTokens(funcArgs []string) ([]string, error) {
-	if len(funcArgs) != 2 {
-		return nil, x.Errorf("Function requires 2 arguments, but got %d",
+	if len(funcArgs) != 1 {
+		return nil, x.Errorf("Function requires 1 arguments, but got %d",
 			len(funcArgs))
 	}
-	sv := types.Val{types.StringID, funcArgs[1]}
+	sv := types.Val{types.StringID, funcArgs[0]}
 	return termTokenizer.Tokens(sv)
 }
 

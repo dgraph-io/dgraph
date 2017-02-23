@@ -1924,7 +1924,7 @@ func TestFacetsFilterFailRoot(t *testing.T) {
 	query := `
 	{
 		me(id:0x1) @facets(eq(some-facet, true)) {
-			friend  {
+			friend	{
 				name
 			}
 		}
@@ -1933,4 +1933,25 @@ func TestFacetsFilterFailRoot(t *testing.T) {
 
 	_, err := Parse(query)
 	require.Error(t, err)
+}
+
+func TestFacetsFilterAtValue(t *testing.T) {
+	// gql parses facets at value level as well.
+	query := `
+	{
+		me(id:0x1) {
+			friend	{
+				name @facets(eq(some-facet, true))
+			}
+		}
+	}
+`
+
+	res, err := Parse(query)
+	require.NoError(t, err)
+	require.Equal(t, []string{"name"}, childAttrs(res.Query[0].Children[0]))
+	nameChild := res.Query[0].Children[0].Children[0]
+	require.NotNil(t, nameChild)
+	require.NotNil(t, nameChild.FacetsFilter)
+	require.Equal(t, `(eq "some-facet" "true")`, nameChild.FacetsFilter.debugString())
 }

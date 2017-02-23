@@ -99,6 +99,16 @@ func ValType(val string) (Facet_ValType, error) {
 	return Facet_STRING, nil
 }
 
+// FacetFor returns Facet for given key and val.
+func FacetFor(key, val string) (*Facet, error) {
+	vt, err := ValType(val)
+	if err != nil {
+		return nil, err
+	}
+	return &Facet{Key: key, Value: []byte(val), ValType: vt}, nil
+}
+
+// Move to types/parse namespace.
 func parseTime(val string) (time.Time, error) {
 	var t time.Time
 	if err := t.UnmarshalText([]byte(val)); err == nil {
@@ -110,9 +120,17 @@ func parseTime(val string) (time.Time, error) {
 	return time.Parse(dateFormatYMD, val)
 }
 
+// OnlyDate returns whether val has format of only Year-Month-Day
+func OnlyDate(val string) bool {
+	_, err := time.Parse(dateFormatYMD, val)
+	return err == nil
+}
+
 const dateFormatYMD = "2006-01-02"
 const dateTimeFormat = "2006-01-02T15:04:05"
 
+// SameFacets returns whether two facets are same or not.
+// both should be sorted by key.
 func SameFacets(a []*Facet, b []*Facet) bool {
 	if len(a) != len(b) {
 		return false

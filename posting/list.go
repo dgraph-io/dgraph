@@ -578,25 +578,17 @@ func (l *List) LastCompactionTs() time.Time {
 func (l *List) Uids(opt ListOptions) *task.List {
 	res := new(task.List)
 	writeIt := algo.NewWriteIterator(res, 0)
-	l.intersectingPostings(opt, func(p *types.Posting) {
+	l.Postings(opt, func(p *types.Posting) bool {
 		writeIt.Append(p.Uid)
+		return true
 	})
 	writeIt.End()
 	return res
 }
 
-// FacetsForUids gives Facets for postings common with uids in opt listOptions.
-func (l *List) FacetsForUids(opt ListOptions, param *facets.Param) []*facets.Facets {
-	result := make([]*facets.Facets, 0, 10)
-	l.intersectingPostings(opt, func(p *types.Posting) {
-		result = append(result, &facets.Facets{Facets: copyFacets(p, param)})
-	})
-	return result
-}
-
-// intersectingPostings calls postFn with the postings that are common with
+// Postings calls postFn with the postings that are common with
 // uids in the opt ListOptions.
-func (l *List) intersectingPostings(opt ListOptions, postFn func(*types.Posting)) {
+func (l *List) Postings(opt ListOptions, postFn func(*types.Posting) bool) {
 	l.RLock()
 	defer l.RUnlock()
 
@@ -617,8 +609,7 @@ func (l *List) intersectingPostings(opt ListOptions, postFn func(*types.Posting)
 				return true
 			}
 		}
-		postFn(p)
-		return true
+		return postFn(p)
 	})
 }
 
@@ -651,33 +642,7 @@ func (l *List) Facets(param *facets.Param) (fs []*facets.Facet, ferr error) {
 	if err != nil {
 		return nil, err
 	}
-	return copyFacets(p, param), nil
-}
-
-// copyFacets makes a copy of facets of the posting which are requested in param.Keys.
-func copyFacets(p *types.Posting, param *facets.Param) (fs []*facets.Facet) {
-	// since facets and param.keys are both sorted,
-	// we can break when either param.Keys OR p.Facets.Key(s) go ahead of each other.
-	// However, we need all keys if param.AllKeys is true.
-	numCopied := 0
-	numKeys := len(param.Keys)
-	for _, f := range p.Facets {
-		if param.AllKeys || param.Keys[numCopied] == f.Key {
-			fcopy := &facets.Facet{Key: f.Key, Value: nil, ValType: f.ValType}
-			fcopy.Value = make([]byte, len(f.Value))
-			copy(fcopy.Value, f.Value)
-			fs = append(fs, fcopy)
-			numCopied++
-			if !param.AllKeys && (numCopied >= numKeys) {
-				// break if we don't want all keys and
-				// we have taken all param.Keys.
-				break
-			}
-		} else if f.Key > param.Keys[numCopied] {
-			break
-		}
-	}
-	return fs
+	return facets.CopyFacets(p.Facets, param), nil
 }
 
 // valuePosting gives the posting representing value.
