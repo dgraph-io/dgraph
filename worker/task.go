@@ -17,6 +17,7 @@
 package worker
 
 import (
+	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
@@ -342,17 +343,23 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 		for it.SeekToFirst(); it.Valid(); {
 			key := it.Key().Data()
 			pk := x.Parse(key)
-			if !pk.IsIndex() {
+			fmt.Println("###", pk.Term, pk.Attr)
+			if !pk.IsExactIndex() {
 				// Non index keys. Skip them.
-				it.Seek(pk.SkipRangeOfSameType())
-			}
-			x.AssertTrue(pk.IsIndex())
-			if pk.Attr != q.Attr {
-				// Index keys of different predicate. Skip them.
-				it.Seek(pk.SkipRangeOfSameType())
+				//it.Seek(pk.SkipRangeOfSameType())
+				it.Next()
 				continue
 			}
-			x.AssertTrue(pk.Attr == q.Attr)
+			x.AssertTruef(pk.IsExactIndex(), "Wrong key type")
+			fmt.Println("###", pk.Attr)
+			if pk.Attr != q.Attr {
+				// Index keys of different predicate. Skip them.
+				//it.Seek(pk.SkipRangeOfSameType())
+				it.Next()
+				continue
+			}
+			x.AssertTruef(pk.Attr == q.Attr, "Attr different")
+			fmt.Println("***", pk.Attr)
 			if regex.MatchString(pk.Term) {
 				// Note: Even is one term in the index passes the matcher, the
 				// uid would be included in the result. (Even though the other

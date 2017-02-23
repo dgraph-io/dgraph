@@ -18,6 +18,7 @@ package posting
 
 import (
 	"context"
+	"fmt"
 
 	"golang.org/x/net/trace"
 
@@ -132,6 +133,7 @@ func addIndexMutation(ctx context.Context, edge *task.DirectedEdge, token string
 
 func addExactIndexMutation(ctx context.Context, edge *task.DirectedEdge, val string) {
 	key := x.ExactIndexKey(edge.Attr, val)
+	fmt.Println(edge.Attr, val, key, "%%%")
 
 	var groupId uint32
 	if rv, ok := ctx.Value("raft").(x.RaftValue); ok {

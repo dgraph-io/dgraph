@@ -1443,7 +1443,7 @@ func TestFilterRegex1(t *testing.T) {
     {
       me(id:0x01) {
         name
-        friend @filter(regexp(name, "^[a-z]+$")) {
+        friend @filter(regexp(name, "^[a-z A-Z]+$")) {
           name
         }
       }
