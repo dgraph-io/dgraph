@@ -648,7 +648,8 @@ func (v Val) MarshalJSON() ([]byte, error) {
 	return nil, x.Errorf("Invalid type for MarshalJSON: %v", v.Tid)
 }
 
-func typeIDForFacet(f *facets.Facet) TypeID {
+// TypeIDFor gives types.TypdID for facet.
+func TypeIDFor(f *facets.Facet) TypeID {
 	switch facets.TypeIDForValType(f.ValType) {
 	case facets.Int32ID:
 		return Int32ID
@@ -657,9 +658,6 @@ func typeIDForFacet(f *facets.Facet) TypeID {
 	case facets.BoolID:
 		return BoolID
 	case facets.DateTimeID:
-		if facets.OnlyDate(string(f.Value)) {
-			return DateID
-		}
 		return DateTimeID
 	case facets.FloatID:
 		return FloatID
@@ -670,8 +668,8 @@ func typeIDForFacet(f *facets.Facet) TypeID {
 
 // ValFor converts Facet into types.Val.
 func ValFor(f *facets.Facet) Val {
-	val := Val{Tid: StringID, Value: f.Value}
-	typId := typeIDForFacet(f)
+	val := Val{Tid: BinaryID, Value: f.Value}
+	typId := TypeIDFor(f)
 	v, err := Convert(val, typId)
 	x.AssertTruef(err == nil,
 		"We should always be able to covert facet into val. %v %v", f.Value, typId)

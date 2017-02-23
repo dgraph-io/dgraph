@@ -75,7 +75,7 @@ func ValType(val string) (Facet_ValType, error) {
 
 func ValAndValType(val string) (interface{}, Facet_ValType, error) {
 	if fint, err := strconv.ParseInt(val, 10, 32); err == nil {
-		return fint, Facet_INT32, nil
+		return int32(fint), Facet_INT32, nil
 	} else if nume := err.(*strconv.NumError); nume.Err == strconv.ErrRange {
 		// check if whole string is only of nums or not.
 		// comes here for : 11111111111111111111132333uasfk333 ; see test.
