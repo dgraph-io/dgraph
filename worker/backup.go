@@ -135,13 +135,8 @@ func backup(gid uint32, bdir string) error {
 		key := it.Key().Data()
 		pk := x.Parse(key)
 
-		if pk.IsIndex() {
-			// Seek to the end of index keys.
-			it.Seek(pk.SkipRangeOfSameType())
-			continue
-		}
-		if pk.IsReverse() {
-			// Seek to the end of reverse keys.
+		if pk.IsIndex() || pk.IsExactIndex() || pk.IsReverse() {
+			// Seek to the end of Index/ExactIndex/Reverse keys.
 			it.Seek(pk.SkipRangeOfSameType())
 			continue
 		}
