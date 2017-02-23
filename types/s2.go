@@ -136,7 +136,6 @@ func convertToGeom(str string) (geom.T, error) {
 	var g geojson.Geometry
 	var m json.RawMessage
 	var err error
-	fmt.Println(s)
 	if s[0:2] == "[[" {
 		g.Type = "Polygon"
 		err = m.UnmarshalJSON([]byte(fmt.Sprintf("[%s]", s)))
