@@ -343,10 +343,12 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 			key := it.Key().Data()
 			pk := x.Parse(key)
 			if !pk.IsIndex() {
+				// Non index keys. Skip them.
 				it.Seek(pk.SkipRangeOfSameType())
 			}
 			x.AssertTrue(pk.IsIndex())
 			if pk.Attr != q.Attr {
+				// Index keys of different predicate. Skip them.
 				it.Seek(pk.SkipRangeOfSameType())
 				continue
 			}
