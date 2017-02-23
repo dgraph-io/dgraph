@@ -339,20 +339,13 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 		// Go through the indexkeys for the predicate and match them with
 		// the regex matcher.
 		it := pstore.NewIterator()
-		for it.SeekToFirst(); it.Valid(); {
-			key := it.Key().Data()
-			pk := x.Parse(key)
-			if !pk.IsExactIndex() {
-				// Non index keys. Skip them.
-				it.Seek(pk.SkipRangeOfSameType())
-				continue
-			}
+		startKey := x.ExactIndexKey(q.Attr, "")
+		// Start from the key we want.
+		it.Seek(startKey)
+		key := it.Key().Data()
+		pk := x.Parse(key)
+		for it.Valid() && pk.Attr == q.Attr {
 			x.AssertTruef(pk.IsExactIndex(), "Wrong key type")
-			if pk.Attr != q.Attr {
-				// Index keys of different predicate. Skip them.
-				it.Seek(pk.SkipRangeOfSameType())
-				continue
-			}
 			x.AssertTruef(pk.Attr == q.Attr, "Attr different")
 			if regex.MatchString(pk.Term) {
 				pl, decr := posting.GetOrCreate(key, gid)
@@ -360,6 +353,8 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 				decr()
 			}
 			it.Next()
+			key = it.Key().Data()
+			pk = x.Parse(key)
 		}
 		it.Close()
 	}
