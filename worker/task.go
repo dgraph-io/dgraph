@@ -17,6 +17,7 @@
 package worker
 
 import (
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -96,6 +97,7 @@ const (
 	CompareScalarFn
 	GeoFn
 	PasswordFn
+	RegexFn
 	StandardFn = 100
 )
 
@@ -118,6 +120,8 @@ func parseFuncType(arr []string) (FuncType, string) {
 		return AggregatorFn, f
 	case "checkpwd":
 		return PasswordFn, f
+	case "regexp":
+		return RegexFn, f
 	default:
 		if types.IsGeoFunc(f) {
 			return GeoFn, f
@@ -138,6 +142,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 	var ineqValueToken string
 	var n int
 	var threshold int64
+	var regex *regexp.Regexp
 
 	fnType, f := parseFuncType(q.SrcFunc)
 	switch fnType {
@@ -221,6 +226,14 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 		}
 		intersectDest = (strings.ToLower(q.SrcFunc[0]) == "allof")
 		n = len(tokens)
+
+	case RegexFn:
+		regex, err = regexp.Compile(q.SrcFunc[1])
+		if err != nil {
+			return nil, err
+		}
+		//intersectDest = (strings.ToLower(q.SrcFunc[0]) == "allof")
+		n = 0 //len(tokens)
 
 	case NotFn:
 		n = algo.ListLen(q.Uids)
@@ -322,6 +335,33 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 
 		// The more usual case: Getting the UIDs.
 		out.UidMatrix = append(out.UidMatrix, pl.Uids(opts))
+	}
+
+	if fnType == RegexFn {
+		// Go through the indexkeys for the predicate and match them with
+		// the regex matcher.
+		it := pstore.NewIterator()
+		_ = regex
+		for it.SeekToFirst(); it.Valid(); {
+			key := it.Key().Data()
+			pk := x.Parse(key)
+			if !pk.IsIndex() {
+				it.Seek(pk.SkipRangeOfSameType())
+			}
+			x.AssertTrue(pk.IsIndex())
+			if pk.Attr != q.Attr {
+				it.Seek(pk.SkipRangeOfSameType())
+				continue
+			}
+			x.AssertTrue(pk.Attr == q.Attr)
+			if regex.MatchString(pk.Term) {
+				pl, decr := posting.GetOrCreate(key, gid)
+				out.UidMatrix = append(out.UidMatrix, pl.Uids(opts))
+				decr()
+			}
+			it.Next()
+		}
+		it.Close()
 	}
 
 	// aggregate on the collection out.Values[]
