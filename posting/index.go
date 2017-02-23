@@ -40,6 +40,25 @@ func init() {
 	reverseLog = trace.NewEventLog("reverse", "Logger")
 }
 
+func NeedExactIndex(attr string, src types.Val) (string, bool) {
+	schemaType, err := schema.State().TypeOf(attr)
+	if err != nil || !schemaType.IsScalar() {
+		return "", false
+	}
+	if !schema.State().IsIndexed(attr) {
+		return "", false
+	}
+	if schemaType != types.StringID {
+		return "", false
+	}
+	sv, err := types.Convert(src, schemaType)
+	if err != nil {
+		return "", false
+	}
+	// We only do exact indices for string types.
+	return sv.Value.(string), true
+}
+
 // IndexTokens return tokens, without the predicate prefix and index rune.
 func IndexTokens(attr string, src types.Val) ([]string, error) {
 	schemaType, err := schema.State().TypeOf(attr)
@@ -82,6 +101,10 @@ func addIndexMutations(ctx context.Context, t *task.DirectedEdge, p types.Val, o
 	for _, token := range tokens {
 		addIndexMutation(ctx, edge, token)
 	}
+
+	if val, ok := NeedExactIndex(attr, p); ok {
+		addExactIndexMutation(ctx, edge, val)
+	}
 }
 
 func addIndexMutation(ctx context.Context, edge *task.DirectedEdge, token string) {
@@ -105,6 +128,29 @@ func addIndexMutation(ctx context.Context, edge *task.DirectedEdge, token string
 	}
 	indexLog.Printf("%s [%s] [%d] Term [%s]",
 		edge.Op, edge.Attr, edge.Entity, token)
+}
+
+func addExactIndexMutation(ctx context.Context, edge *task.DirectedEdge, val string) {
+	key := x.ExactIndexKey(edge.Attr, val)
+
+	var groupId uint32
+	if rv, ok := ctx.Value("raft").(x.RaftValue); ok {
+		groupId = rv.Group
+	}
+
+	plist, decr := GetOrCreate(key, groupId)
+	defer decr()
+
+	x.AssertTruef(plist != nil, "plist is nil [%s] %d %s",
+		val, edge.ValueId, edge.Attr)
+	_, err := plist.AddMutation(ctx, edge)
+	if err != nil {
+		x.TraceError(ctx, x.Wrapf(err,
+			"Error adding/deleting %s for attr %s entity %d: %v",
+			val, edge.Attr, edge.Entity))
+	}
+	indexLog.Printf("%s [%s] [%d] Term [%s]",
+		edge.Op, edge.Attr, edge.Entity, val)
 }
 
 func addReverseMutation(ctx context.Context, t *task.DirectedEdge) {
