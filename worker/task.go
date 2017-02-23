@@ -283,23 +283,22 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 			// Get postings and filter based on facetFilterTree.
 			pl.Postings(opts, func(p *types.Posting) bool {
 				res := true
-				if q.FacetsFilter != nil {
-					res, perr = applyFacetFilter(p.Facets, q.FacetsFilter)
-					if perr != nil {
-						return false // break loop.
-					}
+				res, perr = applyFacetFilter(p.Facets, q.FacetsFilter)
+				if perr != nil {
+					return false // break loop.
 				}
 				if res {
 					filteredRes = append(filteredRes, &result{
 						uid:    p.Uid,
 						facets: facets.CopyFacets(p.Facets, q.FacetParam)})
 				}
-				return true
+				return true // continue iteration.
 			})
 			if perr != nil {
 				return nil, perr
 			}
-		} else if q.FacetsFilter != nil {
+		} else if q.FacetsFilter != nil { // else part means isValueEdge
+			// This is Value edge and we are asked to do facet filtering. Not supported.
 			return nil, x.Errorf("Facet filtering is not supported on values.")
 		}
 
@@ -458,6 +457,9 @@ func (w *grpcWorker) ServeTask(ctx context.Context, q *task.Query) (*task.Result
 // like Or has 3 arguments, argument facet val overflows integer.
 // returns true if postingFacets can be included.
 func applyFacetFilter(postingFacets []*facets.Facet, ftree *facets.FilterTree) (bool, error) {
+	if ftree == nil {
+		return true, nil
+	}
 	if ftree.Func != nil {
 		fname := strings.ToLower(ftree.Func.Name)
 		var fc *facets.Facet
