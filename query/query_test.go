@@ -1437,6 +1437,60 @@ func TestToFastJSONFilterAllOf(t *testing.T) {
 		`{"me":[{"gender":"female","name":"Michonne"}]}`, js)
 }
 
+func TestFilterRegex1(t *testing.T) {
+	populateGraph(t)
+	query := `
+    {
+      me(id:0x01) {
+        name
+        friend @filter(regexp(name, "^[a-z A-Z]+$")) {
+          name
+        }
+      }
+    }
+  `
+
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"name":"Michonne", "friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"}, {"name":"Andrea"}]}]}`, js)
+}
+
+func TestFilterRegex2(t *testing.T) {
+	populateGraph(t)
+	query := `
+    {
+      me(id:0x01) {
+        name
+        friend @filter(regexp(name, "^[^ao]+$")) {
+          name
+        }
+      }
+    }
+  `
+
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"name":"Michonne", "friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"}]}]}`, js)
+}
+
+func TestFilterRegex3(t *testing.T) {
+	populateGraph(t)
+	query := `
+    {
+      me(id:0x01) {
+        name
+        friend @filter(regexp(name, "^(ri|gr)")) {
+          name
+        }
+      }
+    }
+  `
+
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"me":[{"name":"Michonne", "friend":[{"name":"Rick Grimes"}]}]}`, js)
+}
+
 func TestToFastJSONFilterUID(t *testing.T) {
 	populateGraph(t)
 	query := `

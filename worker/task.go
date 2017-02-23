@@ -17,6 +17,8 @@
 package worker
 
 import (
+	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -96,6 +98,7 @@ const (
 	CompareScalarFn
 	GeoFn
 	PasswordFn
+	RegexFn
 	StandardFn = 100
 )
 
@@ -118,6 +121,8 @@ func parseFuncType(arr []string) (FuncType, string) {
 		return AggregatorFn, f
 	case "checkpwd":
 		return PasswordFn, f
+	case "regexp":
+		return RegexFn, f
 	default:
 		if types.IsGeoFunc(f) {
 			return GeoFn, f
@@ -138,6 +143,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 	var ineqValueToken string
 	var n int
 	var threshold int64
+	var regex *regexp.Regexp
 
 	fnType, f := parseFuncType(q.SrcFunc)
 	switch fnType {
@@ -221,6 +227,12 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 		}
 		intersectDest = (strings.ToLower(q.SrcFunc[0]) == "allof")
 		n = len(tokens)
+
+	case RegexFn:
+		regex, err = regexp.Compile(q.SrcFunc[1])
+		if err != nil {
+			return nil, err
+		}
 
 	case NotFn:
 		n = algo.ListLen(q.Uids)
@@ -322,6 +334,43 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 
 		// The more usual case: Getting the UIDs.
 		out.UidMatrix = append(out.UidMatrix, pl.Uids(opts))
+	}
+
+	if fnType == RegexFn {
+		// Go through the indexkeys for the predicate and match them with
+		// the regex matcher.
+		it := pstore.NewIterator()
+		for it.SeekToFirst(); it.Valid(); {
+			key := it.Key().Data()
+			pk := x.Parse(key)
+			fmt.Println("###", pk.Term, pk.Attr)
+			if !pk.IsExactIndex() {
+				// Non index keys. Skip them.
+				//it.Seek(pk.SkipRangeOfSameType())
+				it.Next()
+				continue
+			}
+			x.AssertTruef(pk.IsExactIndex(), "Wrong key type")
+			fmt.Println("###", pk.Attr)
+			if pk.Attr != q.Attr {
+				// Index keys of different predicate. Skip them.
+				//it.Seek(pk.SkipRangeOfSameType())
+				it.Next()
+				continue
+			}
+			x.AssertTruef(pk.Attr == q.Attr, "Attr different")
+			fmt.Println("***", pk.Attr)
+			if regex.MatchString(pk.Term) {
+				// Note: Even is one term in the index passes the matcher, the
+				// uid would be included in the result. (Even though the other
+				// terms don't match the regex)
+				pl, decr := posting.GetOrCreate(key, gid)
+				out.UidMatrix = append(out.UidMatrix, pl.Uids(opts))
+				decr()
+			}
+			it.Next()
+		}
+		it.Close()
 	}
 
 	// aggregate on the collection out.Values[]
