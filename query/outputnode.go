@@ -470,8 +470,8 @@ func (sg *SubGraph) ToFastJSON(l *Latency, w io.Writer, allocIds map[string]stri
 	if sg.Params.isDebug {
 		sl := seedNode.New("serverLatency").(*fastJsonNode)
 		for k, v := range l.ToMap() {
-			val := types.ValueForType(types.BinaryID)
-			val.Value = []byte(fmt.Sprintf("%q", v))
+			val := types.ValueForType(types.StringID)
+			val.Value = v
 			sl.AddValue(k, val)
 		}
 		n.AddMapChild("server_latency", sl, false)
@@ -480,8 +480,8 @@ func (sg *SubGraph) ToFastJSON(l *Latency, w io.Writer, allocIds map[string]stri
 	if allocIds != nil && len(allocIds) > 0 {
 		sl := seedNode.New("uids").(*fastJsonNode)
 		for k, v := range allocIds {
-			val := types.ValueForType(types.BinaryID)
-			val.Value = []byte(v)
+			val := types.ValueForType(types.StringID)
+			val.Value = v
 			sl.AddValue(k, val)
 		}
 		n.AddMapChild("uids", sl, false)

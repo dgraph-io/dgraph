@@ -16,9 +16,7 @@
 
 package facets
 
-import (
-	"sort"
-)
+import "sort"
 
 func (a Facets) Len() int { return len(a.Facets) }
 func (a Facets) Swap(i, j int) {
@@ -30,4 +28,31 @@ func (a Facets) Less(i, j int) bool {
 
 func SortFacets(fs []*Facet) {
 	sort.Sort(Facets{fs})
+}
+
+// CopyFacets makes a copy of facets of the posting which are requested in param.Keys.
+func CopyFacets(fcs []*Facet, param *Param) (fs []*Facet) {
+	if param == nil || fcs == nil {
+		return nil
+	}
+	// facets and param.keys are both sorted,
+	// We also need all keys if param.AllKeys is true.
+	numKeys := len(param.Keys)
+	numFacets := len(fcs)
+	for kidx, fidx := 0, 0; (param.AllKeys || kidx < numKeys) && fidx < numFacets; {
+		f := fcs[fidx]
+		if param.AllKeys || param.Keys[kidx] == f.Key {
+			fcopy := &Facet{Key: f.Key, Value: nil, ValType: f.ValType}
+			fcopy.Value = make([]byte, len(f.Value))
+			copy(fcopy.Value, f.Value)
+			fs = append(fs, fcopy)
+			kidx++
+			fidx++
+		} else if f.Key > param.Keys[kidx] {
+			kidx++
+		} else {
+			fidx++
+		}
+	}
+	return fs
 }

@@ -44,15 +44,11 @@ func toProtoValue(v types.Val) *graph.Value {
 
 	case types.DateID:
 		val := v.Value.(time.Time)
-		b, err := val.MarshalBinary()
-		x.Check(err)
-		return &graph.Value{&graph.Value_DateVal{b}}
+		return &graph.Value{&graph.Value_StrVal{val.Format(time.RFC3339)}}
 
 	case types.DateTimeID:
 		val := v.Value.(time.Time)
-		b, err := val.MarshalBinary()
-		x.Check(err)
-		return &graph.Value{&graph.Value_DatetimeVal{b}}
+		return &graph.Value{&graph.Value_StrVal{val.Format(time.RFC3339)}}
 
 	case types.GeoID:
 		b := types.ValueForType(types.BinaryID)
