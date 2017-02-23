@@ -19,6 +19,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"crypto/tls"
 	"encoding/gob"
 	"encoding/json"
 	"flag"
@@ -75,6 +76,16 @@ var (
 	finishCh       = make(chan struct{}) // channel to wait for all pending reqs to finish.
 	shutdownCh     = make(chan struct{}) // channel to signal shutdown.
 	pendingQueries = make(chan struct{}, 10000*runtime.NumCPU())
+	// TLS configurations
+	tlsEnabled       = flag.Bool("tls.on", false, "Use TLS connections with clients.")
+	tlsCert          = flag.String("tls.cert", "", "Certificate file path.")
+	tlsKey           = flag.String("tls.cert_key", "", "Certificate key file path.")
+	tlsKeyPass       = flag.String("tls.cert_key_passphrase", "", "Certificate key passphrase.")
+	tlsClientAuth    = flag.String("tls.client_auth", "", "Enable TLS client authentication")
+	tlsClientCACerts = flag.String("tls.ca_certs", "", "CA Certs file path.")
+	tlsSystemCACerts = flag.Bool("tls.use_system_ca", false, "Include System CA into CA Certs.")
+	tlsMinVersion    = flag.String("tls.min_version", "TLS11", "TLS min version.")
+	tlsMaxVersion    = flag.String("tls.max_version", "TLS12", "TLS max version.")
 )
 
 type mutationResult struct {
@@ -662,6 +673,30 @@ func checkFlagsAndInitDirs() {
 	x.Check(os.MkdirAll(*postingDir, 0700))
 }
 
+func setupListener(addr string, port int) (net.Listener, error) {
+	laddr := fmt.Sprintf("%s:%d", addr, port)
+	if !*tlsEnabled {
+		return net.Listen("tcp", laddr)
+	}
+
+	tlsCfg, err := x.GenerateTLSConfig(x.TLSHelperConfig{
+		CertRequired:           *tlsEnabled,
+		Cert:                   *tlsCert,
+		Key:                    *tlsKey,
+		KeyPassphrase:          *tlsKeyPass,
+		ClientAuth:             *tlsClientAuth,
+		ClientCACerts:          *tlsClientCACerts,
+		UseSystemClientCACerts: *tlsSystemCACerts,
+		MinVersion:             *tlsMinVersion,
+		MaxVersion:             *tlsMaxVersion,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return tls.Listen("tcp", laddr, tlsCfg)
+}
+
 func serveGRPC(l net.Listener) {
 	defer func() { finishCh <- struct{}{} }()
 	s := grpc.NewServer(grpc.CustomCodec(&query.Codec{}))
@@ -692,7 +727,7 @@ func setupServer(che chan error) {
 		laddr = "0.0.0.0"
 	}
 
-	l, err := net.Listen("tcp", fmt.Sprintf("%s:%d", laddr, *port))
+	l, err := setupListener(laddr, *port)
 	if err != nil {
 		log.Fatal(err)
 	}
