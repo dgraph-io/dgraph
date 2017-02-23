@@ -75,7 +75,7 @@ func assignUids(ctx context.Context, num *task.Num) (*task.List, error) {
 	// Mutations successfully applied.
 
 	o := new(task.List)
-	out := algo.NewWriteIterator(o, 0)
+	out := algo.NewWriteIterator(o)
 	// Only the First N entities are newly assigned UIDs, so we collect them.
 	for i := 0; i < val; i++ {
 		out.Append(mutations.Edges[i].Entity)

@@ -554,7 +554,7 @@ func (l *List) LastCompactionTs() time.Time {
 // We have to apply the filtering before applying (offset, count).
 func (l *List) Uids(opt ListOptions) *task.List {
 	res := new(task.List)
-	writeIt := algo.NewWriteIterator(res, 0)
+	writeIt := algo.NewWriteIterator(res)
 	l.Postings(opt, func(p *types.Posting) bool {
 		writeIt.Append(p.Uid)
 		return true
