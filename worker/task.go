@@ -339,6 +339,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 		// Go through the indexkeys for the predicate and match them with
 		// the regex matcher.
 		it := pstore.NewIterator()
+		defer it.Close()
 		startKey := x.ExactIndexKey(q.Attr, "")
 		// Start from the key we want.
 		it.Seek(startKey)
@@ -356,7 +357,6 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 			key = it.Key().Data()
 			pk = x.Parse(key)
 		}
-		it.Close()
 	}
 
 	// aggregate on the collection out.Values[]
