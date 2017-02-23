@@ -232,8 +232,6 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 		if err != nil {
 			return nil, err
 		}
-		//intersectDest = (strings.ToLower(q.SrcFunc[0]) == "allof")
-		n = 0 //len(tokens)
 
 	case NotFn:
 		n = algo.ListLen(q.Uids)
@@ -341,7 +339,6 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 		// Go through the indexkeys for the predicate and match them with
 		// the regex matcher.
 		it := pstore.NewIterator()
-		_ = regex
 		for it.SeekToFirst(); it.Valid(); {
 			key := it.Key().Data()
 			pk := x.Parse(key)
@@ -355,6 +352,9 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 			}
 			x.AssertTrue(pk.Attr == q.Attr)
 			if regex.MatchString(pk.Term) {
+				// Note: Even is one term in the index passes the matcher, the
+				// uid would be included in the result. (Even though the other
+				// terms don't match the regex)
 				pl, decr := posting.GetOrCreate(key, gid)
 				out.UidMatrix = append(out.UidMatrix, pl.Uids(opts))
 				decr()
