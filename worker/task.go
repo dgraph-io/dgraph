@@ -344,7 +344,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 		it.Seek(startKey)
 		key := it.Key().Data()
 		pk := x.Parse(key)
-		for it.Valid() && pk.Attr == q.Attr {
+		for it.Valid() && pk.Attr == q.Attr && pk.IsExactIndex() {
 			x.AssertTruef(pk.IsExactIndex(), "Wrong key type")
 			x.AssertTruef(pk.Attr == q.Attr, "Attr different")
 			if regex.MatchString(pk.Term) {
