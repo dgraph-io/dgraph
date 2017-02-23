@@ -11,11 +11,12 @@ import NavBar from "./Navbar";
 import Stats from "./Stats";
 import Query from "./Query";
 import Label from "./Label";
+import Editor from "./Editor";
+import { timeout, checkStatus, parseJSON } from "./Helpers";
 
 import { Button } from "react-bootstrap";
 
 import "../assets/css/App.css";
-require("codemirror/addon/hint/show-hint.css");
 
 type Edge = {|
   id: string,
@@ -25,6 +26,7 @@ type Edge = {|
   label: string,
   title: string,
 |};
+
 type Node = {|
   id: string,
   label: string,
@@ -511,42 +513,6 @@ function renderNetwork(nodes: Array<Node>, edges: Array<Edge>) {
   });
 }
 
-function checkStatus(response) {
-  if (response.status >= 200 && response.status < 300) {
-    return response;
-  } else {
-    let error = new Error(response.statusText);
-    error["response"] = response;
-    throw error;
-  }
-}
-
-function parseJSON(response) {
-  return response.json();
-}
-
-function timeout(ms, promise) {
-  return new Promise(function(resolve, reject) {
-    setTimeout(
-      function() {
-        reject(new Error("timeout"));
-      },
-      ms,
-    );
-    promise.then(resolve, reject);
-  });
-}
-
-function isNotEmpty(response) {
-  let keys = Object.keys(response);
-  for (let i = 0; i < keys.length; i++) {
-    if (keys[i] != "server_latency" && keys[i] != "uids") {
-      return keys[i].length > 0;
-    }
-  }
-  return false;
-}
-
 function outgoingEdges(nodeId, edgeSet) {
   return edgeSet.get({
     filter: function(edge) {
@@ -689,11 +655,10 @@ class App extends React.Component {
       selectedNode: false,
       partial: false,
       // queryIndex: response[0],
-      query: response[1],
+      lastQuery: response[1],
       // We store the queries run in state, so that they can be displayed
       // to the user.
       queries: response[2],
-      lastQuery: "",
       response: "",
       result: {},
       latency: "",
@@ -712,10 +677,10 @@ class App extends React.Component {
 
   updateQuery = (e: Event) => {
     e.preventDefault();
-    this.editor.setValue(e.target.dataset.query);
+    console.log("In update query");
     if (e.target instanceof HTMLElement) {
       this.setState({
-        query: e.target.dataset.query,
+        lastQuery: e.target.dataset.query,
         rendering: "",
         latency: "",
         nodes: 0,
@@ -737,8 +702,8 @@ class App extends React.Component {
   };
 
   // Handler which listens to changes on Codemirror.
-  queryChange = () => {
-    this.setState({ query: this.editor.getValue() });
+  queryChange = query => {
+    this.setState({ query: query });
   };
 
   resetState = () => {
@@ -752,7 +717,6 @@ class App extends React.Component {
       relations: 0,
       resType: "hourglass",
       partial: false,
-      lastQuery: this.state.query,
       plotAxis: [],
       expandDisabled: true,
       expandText: "Expand",
@@ -809,102 +773,6 @@ class App extends React.Component {
     return [0, queries[0].text, queries];
   };
 
-  runQuery = (e: Event) => {
-    e.preventDefault();
-    // Resetting state
-    network && network.destroy();
-    this.setState(this.resetState());
-    randomColors = initialRandomColors.slice();
-    groups = {};
-
-    var that = this;
-    timeout(
-      60000,
-      fetch(process.env.REACT_APP_DGRAPH + "/query?debug=true", {
-        method: "POST",
-        mode: "cors",
-        headers: {
-          "Content-Type": "text/plain",
-        },
-        body: this.state.query,
-      })
-        .then(checkStatus)
-        .then(parseJSON)
-        .then(function(result) {
-          // This is the case in which user sends a mutation. We display the response from server.
-          if (result.code !== undefined && result.message !== undefined) {
-            that.storeQuery(that.state.query);
-            that.setState({
-              resType: "success-res",
-              response: JSON.stringify(result, null, 2),
-            });
-          } else if (isNotEmpty(result)) {
-            that.storeQuery(that.state.query);
-            that.setState({
-              latency: result.server_latency.total,
-              resType: "",
-              result: result,
-            });
-            var startTime = new Date();
-
-            setTimeout(
-              function() {
-                // We process all the nodes and edges in the response in background and
-                // store the structure in globalNodeSet and globalEdgeSet. We can use this
-                // later when we do expansion of nodes.
-                let graph = processGraph(result, -1);
-                globalNodeSet = new vis.DataSet(graph[0]);
-                globalEdgeSet = new vis.DataSet(graph[1]);
-
-                that.setState({
-                  nodes: graph[0].length,
-                  relations: graph[1].length,
-                  plotAxis: graph[2],
-                });
-              },
-              200,
-            );
-
-            // We call procesGraph with a 5 node limit and calculate the whole dataset in
-            // the background.
-            renderPartialGraph.bind(that, result)();
-
-            var endTime = new Date();
-            var timeTaken = (endTime.getTime() - startTime.getTime()) / 1000;
-            let render: string = "";
-            if (timeTaken > 1) {
-              render = timeTaken.toFixed(1) + "s";
-            } else {
-              render = (timeTaken - Math.floor(timeTaken)) * 1000 + "ms";
-            }
-            that.setState({
-              rendering: render,
-            });
-          } else {
-            console.warn("We shouldn't be here really");
-            // We probably didn't get any results.
-            that.setState({
-              resType: "error-res",
-              response: "Your query did not return any results.",
-            });
-          }
-        }),
-    )
-      .catch(function(error) {
-        console.log(error.stack);
-        var err = error.response && error.response.text() || error.message;
-        return err;
-      })
-      .then(function(errorMsg) {
-        if (errorMsg !== undefined) {
-          that.setState({
-            response: errorMsg,
-            resType: "error-res",
-          });
-        }
-      });
-  };
-
   enterFullScreen = (e: Event) => {
     e.preventDefault();
     document.addEventListener(screenfull.raw.fullscreenchange, () => {
@@ -924,6 +792,61 @@ class App extends React.Component {
     screenfull.request(document.getElementById("response"));
   };
 
+  resetStateOnQuery = () => {
+    network && network.destroy();
+    this.setState(this.resetState());
+    randomColors = initialRandomColors.slice();
+    groups = {};
+  };
+
+  renderGraph = result => {
+    let startTime = new Date(), that = this;
+
+    setTimeout(
+      function() {
+        // We process all the nodes and edges in the response in background and
+        // store the structure in globalNodeSet and globalEdgeSet. We can use this
+        // later when we do expansion of nodes.
+        let graph = processGraph(result, -1);
+        globalNodeSet = new vis.DataSet(graph[0]);
+        globalEdgeSet = new vis.DataSet(graph[1]);
+        that.setState({
+          nodes: graph[0].length,
+          relations: graph[1].length,
+          plotAxis: graph[2],
+        });
+      },
+      200,
+    );
+    // We call procesGraph with a 5 node limit and calculate the whole dataset in
+    // the background.
+    renderPartialGraph.bind(that, result)();
+
+    let endTime = new Date(),
+      timeTaken = (endTime.getTime() - startTime.getTime()) / 1000,
+      render = "";
+
+    if (timeTaken > 1) {
+      render = timeTaken.toFixed(1) + "s";
+    } else {
+      render = (timeTaken - Math.floor(timeTaken)) * 1000 + "ms";
+    }
+
+    that.setState({
+      latency: result.server_latency.total,
+      resType: "",
+      result: result,
+      rendering: render,
+    });
+  };
+
+  renderResText = (type, text) => {
+    this.setState({
+      resType: type,
+      response: text,
+    });
+  };
+
   render = () => {
     var graphClass = classNames(
       { "graph-s": true, fullscreen: this.state.graph === "fullscreen" },
@@ -939,24 +862,15 @@ class App extends React.Component {
           <div className="row justify-content-md-center">
             <div className="col-sm-12">
               <div className="col-sm-5">
-                <form id="query-form">
-                  <div className="form-group">
-                    <label htmlFor="query">Query</label>
-                    <button
-                      type="submit"
-                      className="btn btn-primary pull-right"
-                      onClick={this.runQuery}
-                    >
-                      Run
-                    </button>
-                  </div>
-                </form>
-                <div
-                  className="App-editor"
-                  ref={editor => {
-                    this._editor = editor;
-                  }}
+                <Editor
+                  query={this.state.lastQuery}
+                  updateQuery={this.queryChange}
+                  storeQuery={this.storeQuery}
+                  resetState={this.resetStateOnQuery}
+                  renderGraph={this.renderGraph}
+                  renderResText={this.renderResText}
                 />
+
                 <div
                   style={{
                     marginTop: "10px",
@@ -1102,164 +1016,6 @@ class App extends React.Component {
         </div>{" "}
       </div>
     );
-  };
-
-  componentDidMount = () => {
-    const CodeMirror = require("codemirror");
-    require("codemirror/addon/hint/show-hint");
-    require("codemirror/addon/comment/comment");
-    require("codemirror/addon/edit/matchbrackets");
-    require("codemirror/addon/edit/closebrackets");
-    require("codemirror/addon/fold/foldcode");
-    require("codemirror/addon/fold/foldgutter");
-    require("codemirror/addon/fold/brace-fold");
-    require("codemirror/addon/lint/lint");
-    require("codemirror/keymap/sublime");
-    require("codemirror-graphql/hint");
-    require("codemirror-graphql/lint");
-    require("codemirror-graphql/info");
-    require("codemirror-graphql/jump");
-    require("codemirror-graphql/mode");
-
-    let keywords = [];
-    timeout(
-      1000,
-      fetch(process.env.REACT_APP_DGRAPH + "/ui/keywords", {
-        method: "GET",
-        mode: "cors",
-      })
-        .then(checkStatus)
-        .then(parseJSON)
-        .then(function(result) {
-          keywords = result.keywords.map(function(kw) {
-            return kw.name;
-          });
-        }),
-    )
-      .catch(function(error) {
-        console.log(error.stack);
-        console.warn(
-          "In catch: Error while trying to fetch list of keywords",
-          error,
-        );
-        return error;
-      })
-      .then(function(errorMsg) {
-        if (errorMsg !== undefined) {
-          console.warn(
-            "Error while trying to fetch list of keywords",
-            errorMsg,
-          );
-        }
-      });
-
-    this.editor = CodeMirror(this._editor, {
-      value: this.state.query,
-      lineNumbers: true,
-      tabSize: 2,
-      lineWrapping: true,
-      mode: "graphql",
-      theme: "graphiql",
-      keyMap: "sublime",
-      autoCloseBrackets: true,
-      completeSingle: false,
-      showCursorWhenSelecting: true,
-      foldGutter: true,
-      gutters: ["CodeMirror-linenumbers", "CodeMirror-foldgutter"],
-      extraKeys: {
-        "Ctrl-Space": cm => {
-          CodeMirror.commands.autocomplete(cm);
-        },
-        "Cmd-Space": cm => {
-          CodeMirror.commands.autocomplete(cm);
-        },
-        "Cmd-Enter": () => {
-          this.runQuery(new Event(""));
-        },
-        "Ctrl-Enter": () => {
-          this.runQuery(new Event(""));
-        },
-      },
-      autofocus: true,
-    });
-
-    this.editor.setCursor(this.editor.lineCount(), 0);
-
-    this.editor.on("change", this.queryChange);
-
-    CodeMirror.registerHelper("hint", "fromList", function(cm, options) {
-      var cur = cm.getCursor(), token = cm.getTokenAt(cur);
-
-      // This is so that we automatically have a space before (, so that auto-
-      // complete inside braces works. Otherwise it doesn't work for
-      // director.film(orderasc: release_date).
-      let openBrac = token.string.indexOf("(");
-      if (
-        openBrac !== -1 &&
-        token.string[openBrac - 1] != undefined &&
-        token.string[openBrac - 1] != " "
-      ) {
-        let oldString = token.string.substr(openBrac);
-        cm.replaceRange(" ", { line: cur.line, ch: token.start + openBrac });
-      }
-
-      var to = CodeMirror.Pos(cur.line, token.end);
-      if (token.string) {
-        var term = token.string, from = CodeMirror.Pos(cur.line, token.start);
-      } else {
-        var term = "", from = to;
-      }
-
-      // So that we don't autosuggest for anyof/allof filter values which
-      // would be inside quotes.
-      if (term.length > 0 && term[0] === '"') {
-        return { list: [], from: from, to: to };
-      }
-
-      // TODO - This is a hack because Graphiql mode considers . as an invalidchar.
-      // Ideally we should write our own mode which allows . in predicate.
-      if (
-        token.type === "invalidchar" &&
-        token.state.prevState !== undefined &&
-        token.state.prevState.kind === "Field"
-      ) {
-        term = token.state.prevState.name + token.string;
-        from.ch = from.ch - token.state.prevState.name.length;
-      }
-
-      // because Codemirror strips the @ from a directive.
-      if (token.state.kind === "Directive") {
-        term = "@" + term;
-        from.ch -= 1;
-      }
-
-      term = term.toLowerCase();
-
-      var found = [];
-      for (var i = 0; i < options.words.length; i++) {
-        var word = options.words[i];
-        if (term.length > 0 && word.startsWith(term)) {
-          found.push(word);
-        }
-      }
-
-      if (found.length) return { list: found, from: from, to: to };
-    });
-
-    CodeMirror.commands.autocomplete = function(cm) {
-      CodeMirror.showHint(cm, CodeMirror.hint.fromList, {
-        completeSingle: false,
-        words: keywords,
-      });
-    };
-
-    this.editor.on("keydown", function(cm, event) {
-      const code = event.keyCode;
-
-      if (!event.ctrlKey && code >= 65 && code <= 90) {
-        CodeMirror.commands.autocomplete(cm);
-      }
-    });
   };
 }
 
