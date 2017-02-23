@@ -18,9 +18,11 @@ package posting
 
 import (
 	"context"
+	"time"
 
 	"golang.org/x/net/trace"
 
+	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/task"
@@ -28,16 +30,121 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-const maxBatchSize = 32 * (1 << 20)
+const (
+	maxBatchSize        = 32 * (1 << 20)
+	updateIndexInterval = time.Second * 10
+)
 
 var (
-	indexLog   trace.EventLog
-	reverseLog trace.EventLog
+	indexLog        trace.EventLog
+	reverseLog      trace.EventLog
+	updateIndexChan chan struct{} // Push here to force an updateIndex.
 )
 
 func init() {
 	indexLog = trace.NewEventLog("index", "Logger")
 	reverseLog = trace.NewEventLog("reverse", "Logger")
+	updateIndexChan = make(chan struct{}, 5)
+}
+
+// ForceUpdateIndex forces updateIndex.
+func ForceUpdateIndex() {
+	updateIndexChan <- struct{}{}
+}
+
+type indexUpdater struct {
+	indexPl *List
+	attr    string
+	groupID uint32
+	term    string
+}
+
+func (s *indexUpdater) processUID(ctx context.Context, uid uint64) error {
+	pl, decr := GetOrCreate(x.DataKey(s.attr, uid), s.groupID)
+	defer decr()
+	v, err := pl.Value()
+	if err == nil {
+		// Tokenize v and check if it matches term.
+		tokens, err := IndexTokens(s.attr, v)
+		if err != nil {
+			return err
+		}
+		for _, tok := range tokens {
+			if tok == s.term {
+				return nil
+			}
+		}
+	}
+
+	// Delete uid from index.
+	edge := task.DirectedEdge{
+		ValueId: uid,
+		Attr:    s.attr,
+		Label:   "idx",
+		Op:      task.DirectedEdge_DEL,
+	}
+	_, err = s.indexPl.AddMutation(ctx, &edge)
+	return err
+}
+
+func (s *indexUpdater) processIndexKey(ctx context.Context, indexKey []byte) error {
+	var decr func()
+	s.indexPl, decr = GetOrCreate(indexKey, s.groupID) // Get index data.
+	defer decr()
+
+	var opts ListOptions
+	uids := s.indexPl.Uids(opts)
+	pki := x.Parse(indexKey)
+	x.AssertTrue(pki.IsIndex())
+	s.term = pki.Term
+	x.AssertTrue(len(s.term) > 0)
+
+	it := algo.NewListIterator(uids)
+	for ; it.Valid(); it.Next() {
+		uid := it.Val()
+		if err := s.processUID(ctx, uid); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *indexUpdater) run() {
+	indexLog.Printf("indexUpdater run")
+	it := pstore.NewIterator()
+	defer it.Close()
+	var pk x.ParsedKey
+	ctx := context.Background()
+	for _, attr := range schema.State().IndexedFields() {
+		pk.Attr = attr
+		prefix := pk.IndexPrefix()
+		s.attr = attr
+		s.groupID = group.BelongsTo(attr)
+		// Iterate over data store just to get the index keys.
+		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+			if err := s.processIndexKey(ctx, it.Key().Data()); err != nil {
+				indexLog.Errorf("Error updating index for attr %s: %v", attr, err)
+			}
+		}
+	}
+}
+
+// updateIndex iterates over index entries and delete invalid entries.
+func updateIndex() {
+	// Wait for group config to be ready. We do it by simple polling. It is a one-off.
+	for !group.Ready() {
+		time.Sleep(100 * time.Millisecond)
+	}
+	tickC := time.Tick(updateIndexInterval)
+	var updater indexUpdater
+	for {
+		select {
+		case <-tickC:
+			updater.run() // select has no fallthrough.
+		case <-updateIndexChan:
+			updater.run()
+		}
+	}
 }
 
 // IndexTokens return tokens, without the predicate prefix and index rune.
@@ -86,6 +193,7 @@ func addIndexMutations(ctx context.Context, t *task.DirectedEdge, p types.Val, o
 
 func addIndexMutation(ctx context.Context, edge *task.DirectedEdge, token string) {
 	key := x.IndexKey(edge.Attr, token)
+	x.Printf("~~~addIndexMutation: %s %s", edge.Attr, token)
 
 	var groupId uint32
 	if rv, ok := ctx.Value("raft").(x.RaftValue); ok {
@@ -146,22 +254,20 @@ func (l *List) AddMutationWithIndex(ctx context.Context, t *task.DirectedEdge) e
 	defer l.index.Unlock()
 
 	doUpdateIndex := pstore != nil && (t.Value != nil) && schema.State().IsIndexed(t.Attr)
-	{
-		l.Lock()
-		if doUpdateIndex {
-			// Check last posting for original value BEFORE any mutation actually happens.
-			val, verr = l.value()
-		}
-		hasMutated, err := l.addMutation(ctx, t)
-		l.Unlock()
 
-		if err != nil {
-			return err
-		}
-		if !hasMutated {
-			return nil
-		}
+	l.Lock()
+	if doUpdateIndex {
+		// Check last posting for original value BEFORE any mutation actually happens.
+		val, verr = l.value()
 	}
+	hasMutated, err := l.addMutation(ctx, t)
+	l.Unlock()
+
+	if err != nil || !hasMutated {
+		return err
+	}
+
+	// We only add index mutations, but not delete here.
 	if doUpdateIndex {
 		// Exact matches.
 		if verr == nil && val.Value != nil {

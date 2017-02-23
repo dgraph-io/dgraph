@@ -7,6 +7,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync/atomic"
 
 	"github.com/dgraph-io/dgraph/x"
 	farm "github.com/dgryski/go-farm"
@@ -19,9 +20,10 @@ type predMeta struct {
 }
 
 type config struct {
-	n    uint32
-	k    uint32
-	pred []predMeta
+	n     uint32
+	k     uint32
+	pred  []predMeta
+	ready int32 // Atomic read-write.
 }
 
 var groupConfig config
@@ -136,6 +138,7 @@ func ParseConfig(r io.Reader) error {
 		}
 	}
 	x.Check(scanner.Err())
+	atomic.StoreInt32(&groupConfig.ready, 1)
 	return nil
 }
 
@@ -145,6 +148,7 @@ func ParseGroupConfig(file string) error {
 	if os.IsNotExist(err) {
 		groupConfig.n = 1
 		groupConfig.k = 1
+		atomic.StoreInt32(&groupConfig.ready, 1)
 		return nil
 	}
 	x.Check(err)
@@ -161,7 +165,6 @@ func fpGroup(pred string) uint32 {
 	if groupConfig.n == 1 {
 		return groupConfig.k
 	}
-
 	return farm.Fingerprint32([]byte(pred))%groupConfig.n + groupConfig.k
 }
 
@@ -175,4 +178,9 @@ func BelongsTo(pred string) uint32 {
 		}
 	}
 	return fpGroup(pred)
+}
+
+// Ready returns whether group config is parsed.
+func Ready() bool {
+	return atomic.LoadInt32(&groupConfig.ready) != 0
 }
