@@ -177,8 +177,11 @@ type ExactTokenizer struct{}
 func (t ExactTokenizer) Name() string       { return "exact" }
 func (t ExactTokenizer) Type() types.TypeID { return types.StringID }
 func (t ExactTokenizer) Tokens(sv types.Val) ([]string, error) {
-	//words := strings.Fields(sv.Value.(string))
-	return []string{encodeToken(sv.Value.(string), byteExact)}, nil
+	term, ok := sv.Value.(string)
+	if !ok {
+		return nil, x.Errorf("Exact indices only supported for string types")
+	}
+	return []string{encodeToken(term, byteExact)}, nil
 }
 
 func encodeInt(val int32) string {
