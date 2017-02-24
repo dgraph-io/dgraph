@@ -16,6 +16,7 @@ function isNotEmpty(response) {
 }
 
 function handleResponse(result) {
+  console.log(result);
   // This is the case in which user sends a mutation. We display the response from server.
   if (result.code !== undefined && result.message !== undefined) {
     this.props.storeQuery(this.state.query);
@@ -46,6 +47,7 @@ class Editor extends Component {
     this.props.resetState();
 
     var that = this;
+    console.log(that.state.query);
     timeout(
       60000,
       fetch(process.env.REACT_APP_DGRAPH + "/query?debug=true", {
@@ -54,7 +56,7 @@ class Editor extends Component {
         headers: {
           "Content-Type": "text/plain",
         },
-        body: this.state.query,
+        body: that.state.query,
       })
         .then(checkStatus)
         .then(parseJSON)
@@ -67,7 +69,7 @@ class Editor extends Component {
       })
       .then(function(errorMsg) {
         if (errorMsg !== undefined) {
-          this.props.renderResText("error-res", errorMsg);
+          that.props.renderResText("error-res", errorMsg);
         }
       });
   };
@@ -154,7 +156,7 @@ class Editor extends Component {
       });
 
     this.editor = CodeMirror(this._editor, {
-      value: this.props.query,
+      value: this.state.query,
       lineNumbers: true,
       tabSize: 2,
       lineWrapping: true,
@@ -188,9 +190,13 @@ class Editor extends Component {
     this.editor.on(
       "change",
       (function(cm, obj) {
-        this.setState({
-          query: obj.text.join("\n"),
-        });
+        let newQuery = obj.text.join("\n"), oldQuery = obj.removed.join("\n");
+        if (newQuery !== oldQuery) {
+          this.setState({
+            query: newQuery,
+          });
+          this.props.updateQuery(newQuery);
+        }
       }).bind(this),
     );
 

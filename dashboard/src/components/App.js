@@ -703,7 +703,7 @@ class App extends React.Component {
 
   // Handler which listens to changes on Codemirror.
   queryChange = query => {
-    this.setState({ query: query });
+    this.setState({ lastQuery: query });
   };
 
   resetState = () => {
