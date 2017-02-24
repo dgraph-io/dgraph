@@ -339,27 +339,16 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 		// Go through the indexkeys for the predicate and match them with
 		// the regex matcher.
 		it := pstore.NewIterator()
-		for it.SeekToFirst(); it.Valid(); {
-			key := it.Key().Data()
-			pk := x.Parse(key)
-			if !pk.IsIndex() {
-				// Non index keys. Skip them.
-				it.Seek(pk.SkipRangeOfSameType())
-				continue
-			}
+		defer it.Close()
+		startKey := x.IndexKey(q.Attr, "\x00~") // byte 1 for exact index.
+		it.Seek(startKey)
+		key := it.Key().Data()
+		pk := x.Parse(key)
+		for it.Valid() && pk.Attr == q.Attr && pk.Term[0] == '\x01' {
 			x.AssertTrue(pk.IsIndex())
-			if pk.Attr != q.Attr {
-				// Index keys of different predicate. Skip them.
-				it.Seek(pk.SkipRangeOfSameType())
-				continue
-			}
 			x.AssertTrue(pk.Attr == q.Attr)
-			term := pk.Term[1:]
-			isExact := pk.Term[0] != '\x01'
-			if isExact {
-				it.Next()
-				continue
-			}
+			x.AssertTrue(pk.Term[0] == '\x01')
+			term := pk.Term[1:] // skip the first byte.
 			if regex.MatchString(term) {
 				// Note: Even is one term in the index passes the matcher, the
 				// uid would be included in the result. (Even though the other
@@ -369,8 +358,9 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 				decr()
 			}
 			it.Next()
+			key = it.Key().Data()
+			pk = x.Parse(key)
 		}
-		it.Close()
 	}
 
 	// aggregate on the collection out.Values[]
