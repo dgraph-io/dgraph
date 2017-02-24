@@ -63,17 +63,19 @@ func processFile(file string, batch *client.BatchMutation) {
 
 	var buf bytes.Buffer
 	bufReader := bufio.NewReader(gr)
+	var line int
 	for {
 		err = readLine(bufReader, &buf)
 		if err != nil {
 			break
 		}
+		line++
 		nq, err := rdf.Parse(buf.String())
 		if err == rdf.ErrEmpty { // special case: comment/empty line
 			buf.Reset()
 			continue
 		} else if err != nil {
-			log.Fatal("While parsing RDF: ", err)
+			log.Fatalf("Error while parsing RDF: %v, on line:%v %v", err, line, buf.String())
 		}
 		buf.Reset()
 		if err = batch.AddMutation(nq, client.SET); err != nil {
