@@ -3,6 +3,7 @@ import classNames from "classnames";
 import vis from "vis";
 
 import Label from "./Label";
+import { outgoingEdges } from "./Helpers";
 
 // import "../assets/css/Graph.css";
 import "../assets/css/App.css";
@@ -16,20 +17,19 @@ function doOnClick(params) {
             currentNode = this.props.allNodes.get(nodeUid);
 
         this.setState({
-            currentNode: currentNode.title,
             selectedNode: true,
         });
+        this.props.setCurrentNode(currentNode.title);
     } else {
         this.setState({
             selectedNode: false,
-            currentNode: "{}",
         });
+        this.props.setCurrentNode("{}");
     }
 }
 
 // create a network
 function renderNetwork(nodes: Array<Node>, edges: Array<Edge>) {
-    console.log("nodes", nodes, "edges", edges);
     var container = document.getElementById("graph");
     var data = {
         nodes: new vis.DataSet(nodes),
@@ -85,44 +85,36 @@ function renderNetwork(nodes: Array<Node>, edges: Array<Edge>) {
         },
     };
 
-    // container
-
     let network = new vis.Network(container, data, options);
     let that = this;
 
     network.on("doubleClick", function(params) {
         doubleClickTime = new Date();
         if (params.nodes && params.nodes.length > 0) {
-            let nodeUid = params.nodes[0],
-                currentNode = this.props.allNodes.get(nodeUid);
+            let clickedNodeUid = params.nodes[0],
+                clickedNode = data.nodes.get(clickedNodeUid);
 
             network.unselectAll();
+            that.props.setCurrentNode(clickedNode.title);
             that.setState({
-                currentNode: currentNode.title,
                 selectedNode: false,
             });
 
-            let outgoing = data.edges.get({
-                filter: function(node) {
-                    return node.from === nodeUid;
-                },
-            });
+            let outgoing = outgoingEdges(clickedNodeUid, data.edges),
+                expanded = outgoing.length > 0,
+                allOutgoingEdges = outgoingEdges(
+                    clickedNodeUid,
+                    that.state.allEdgeSet,
+                );
 
-            let expanded: boolean = outgoing.length > 0;
-
-            let outgoingEdges = this.state.allEdgeSet.get({
-                filter: function(node) {
-                    return node.from === nodeUid;
-                },
-            });
-
-            let adjacentNodeIds: Array<string> = outgoingEdges.map(function(
+            let adjacentNodeIds: Array<string> = allOutgoingEdges.map(function(
                 edge,
             ) {
                 return edge.to;
             });
 
-            let adjacentNodes = this.props.allNodes.get(adjacentNodeIds);
+            let adjacentNodes = that.state.allNodeSet.get(adjacentNodeIds);
+
             // TODO -See if we can set a meta property to a node to know that its
             // expanded or closed and avoid this computation.
             if (expanded) {
@@ -135,11 +127,7 @@ function renderNetwork(nodes: Array<Node>, edges: Array<Edge>) {
 
                 while (adjacentNodeIds.length > 0) {
                     let node = adjacentNodeIds.pop();
-                    let connectedEdges = data.edges.get({
-                        filter: function(edge) {
-                            return edge.from === node;
-                        },
-                    });
+                    let connectedEdges = outgoingEdges(node, data.edges);
 
                     let connectedNodes = connectedEdges.map(function(edge) {
                         return edge.to;
@@ -152,13 +140,13 @@ function renderNetwork(nodes: Array<Node>, edges: Array<Edge>) {
 
                 data.nodes.remove(allNodes);
                 data.edges.remove(allEdges);
-                that.setState({
-                    expandText: "Expand",
-                    expandDisabled: false,
-                });
+                // that.setState({
+                //     expandText: "Expand",
+                //     expandDisabled: false,
+                // });
             } else {
                 data.nodes.update(adjacentNodes);
-                data.edges.update(outgoingEdges);
+                data.edges.update(allOutgoingEdges);
             }
         }
     });
@@ -190,11 +178,9 @@ function renderNetwork(nodes: Array<Node>, edges: Array<Edge>) {
             return;
         }
         let nodeUid: string = params.node,
-            currentNode = this.props.allNodes.get(nodeUid);
+            currentNode = that.state.allNodeSet.get(nodeUid);
 
-        that.setState({
-            currentNode: currentNode.title,
-        });
+        that.props.setCurrentNode(currentNode.title);
     });
 
     network.on("dragEnd", function(params) {
@@ -220,6 +206,7 @@ class Graph extends Component {
             network: {},
             allNodeSet: {},
             allEdgeSet: {},
+            selectedNode: false,
         };
     }
 
@@ -269,13 +256,21 @@ class Graph extends Component {
     }
 
     componentWillReceiveProps = nextProps => {
+        if (
+            // TODO - Check how to do a shallow check?
+            nextProps.nodes.length === this.props.nodes.length &&
+            nextProps.edges.length === this.props.edges.length &&
+            nextProps.response === this.props.response
+        ) {
+            return;
+        }
         this.setState({
             network: {},
             allNodeSet: new vis.DataSet(nextProps.allNodes),
             allEdgeSet: new vis.DataSet(nextProps.allEdges),
         });
 
-        renderNetwork(nextProps.nodes, nextProps.edges);
+        renderNetwork.bind(this, nextProps.nodes, nextProps.edges)();
     };
 }
 

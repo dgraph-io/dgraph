@@ -2,6 +2,7 @@ import React, { Component } from "react";
 
 import Stats from "./Stats";
 import Graph from "./Graph";
+import Properties from "./Properties";
 // import { outgoingEdges } from "./Helpers";
 
 import { Button } from "react-bootstrap";
@@ -86,6 +87,20 @@ import "../assets/css/App.css";
 // }
 
 class Response extends Component {
+    constructor(props: Props) {
+        super(props);
+
+        this.state = {
+            currentNode: "{}",
+        };
+    }
+
+    setCurrentNode = properties => {
+        this.setState({
+            currentNode: properties,
+        });
+    };
+
     render() {
         return (
             <div
@@ -95,7 +110,11 @@ class Response extends Component {
                 <Graph
                     allNodes={this.props.allNodes}
                     allEdges={this.props.allEdges}
+                    nodes={this.props.nodes}
+                    edges={this.props.edges}
+                    response={this.props.response}
                     plotAxis={this.props.plotAxis}
+                    setCurrentNode={this.setCurrentNode}
                 />
                 <div style={{ fontSize: "12px" }}>
                     <Stats
@@ -106,13 +125,16 @@ class Response extends Component {
                     <Button
                         style={{ float: "right", marginRight: "10px" }}
                         bsStyle="primary"
-                        disabled={this.props.expandDisabled}
+                        disabled={this.props.nodes === this.props.allNodes}
                         // onClick={expandAll.bind(this)}
                     >
                         {this.props.expandText}
                     </Button>
                     <div>
-                        Nodes: {this.props.nodes}, Edges: {this.props.relations}
+                        Nodes:{" "}
+                        {this.props.allNodes.length}
+                        , Edges:{" "}
+                        {this.props.allEdges.length}
                     </div>
                     <div style={{ height: "auto" }}>
                         <i>
@@ -121,22 +143,7 @@ class Response extends Component {
                                 : ""}
                         </i>
                     </div>
-                    <div id="properties" style={{ marginTop: "5px" }}>
-                        Current Node:<div
-                            className="App-properties"
-                            title={this.props.currentNode}
-                        >
-                            <em>
-                                <pre style={{ fontSize: "10px" }}>
-                                    {JSON.stringify(
-                                        JSON.parse(this.props.currentNode),
-                                        null,
-                                        2,
-                                    )}
-                                </pre>
-                            </em>
-                        </div>
-                    </div>
+                    <Properties currentNode={this.state.currentNode} />
                 </div>
             </div>
         );

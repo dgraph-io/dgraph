@@ -279,17 +279,12 @@ function renderPartialGraph(result) {
   setTimeout(
     function() {
       that.setState({
-        // TODO - Remove these two states, because they can be derived from other data.
-        partial: that.state.nodes > graph[0].length,
-        expandDisabled: that.state.nodes === graph[0].length,
-        nodeSet: graph[0],
-        edgeSet: graph[1],
+        nodes: graph[0],
+        edges: graph[1],
       });
     },
     1000,
   );
-
-  // renderNetwork.call(that, graph[0], graph[1]);
 }
 
 type QueryTs = {|
@@ -307,7 +302,6 @@ type State = {
   latency: string,
   rendering: string,
   resType: string,
-  currentNode: string,
   nodes: number,
   relations: number,
   graph: string,
@@ -336,7 +330,6 @@ class App extends React.Component {
       latency: "",
       rendering: "",
       resType: "",
-      currentNode: "{}",
       graph: "",
       graphHeight: "fixed-height",
       plotAxis: [],
@@ -358,7 +351,6 @@ class App extends React.Component {
         latency: "",
         selectedNode: false,
         partial: false,
-        currentNode: "{}",
         plotAxis: [],
         expandDisabled: true,
         expandText: "Expand",
@@ -366,8 +358,6 @@ class App extends React.Component {
       });
     }
     window.scrollTo(0, 0);
-
-    // network && network.destroy();
   };
 
   // Handler which is used to update lastQuery by Editor component..
@@ -381,7 +371,6 @@ class App extends React.Component {
       selectedNode: false,
       latency: "",
       rendering: "",
-      currentNode: "{}",
       resType: "hourglass",
       partial: false,
       plotAxis: [],
@@ -460,7 +449,6 @@ class App extends React.Component {
   };
 
   resetStateOnQuery = () => {
-    // network && network.destroy();
     this.setState(this.resetState());
     randomColors = initialRandomColors.slice();
     groups = {};
@@ -475,14 +463,9 @@ class App extends React.Component {
         // store the structure in globalNodeSet and globalEdgeSet. We can use this
         // later when we do expansion of nodes.
         let graph = processGraph(result, -1);
-        // globalNodeSet = new vis.DataSet(graph[0]);
-        // globalEdgeSet = new vis.DataSet(graph[1]);
+
         that.setState({
-          // nodes: graph[0].length,
-          // relations: graph[1].length,
           plotAxis: graph[2],
-          // nodeSet: new vis.DataSet(graph[0]),
-          // edgeSet: new vis.DataSet(graph[1]),
           allNodes: graph[0],
           allEdges: graph[1],
         });
@@ -598,7 +581,6 @@ class App extends React.Component {
                   latency={this.state.latency}
                   expandText={this.state.expandText}
                   partial={this.state.partial}
-                  currentNode={this.state.currentNode}
                   nodes={this.state.nodes}
                   edges={this.state.edges}
                   allNodes={this.state.allNodes}
