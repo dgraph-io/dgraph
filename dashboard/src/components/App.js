@@ -2,18 +2,15 @@
 
 import React from "react";
 
-import vis from "vis";
 import screenfull from "screenfull";
-import classNames from "classnames";
 import randomColor from "randomcolor";
 
 import NavBar from "./Navbar";
 import Stats from "./Stats";
-import Query from "./Query";
-import Label from "./Label";
+import PreviousQuery from "./PreviousQuery";
 import Editor from "./Editor";
-
-import { Button } from "react-bootstrap";
+import Response from "./Response";
+import { getNodeLabel } from "./Helpers";
 
 import "../assets/css/App.css";
 
@@ -34,54 +31,29 @@ type Node = {|
   value: number,
 |};
 
-// Visjs network
-var network, globalNodeSet, globalEdgeSet;
-
-// TODO - Move these three functions to a helper.
-function getLabel(properties: Object): string {
-  var label = "";
-  if (properties["name"] !== undefined) {
-    label = properties["name"];
-  } else if (properties["name.en"] !== undefined) {
-    label = properties["name.en"];
-  } else {
-    return "";
-  }
-
-  var words = label.split(" "), firstWord = words[0];
-  if (firstWord.length > 20) {
-    label = [firstWord.substr(0, 9), firstWord.substr(9, 17) + "..."].join(
-      "-\n",
-    );
-  } else if (firstWord.length > 10) {
-    label = [
-      firstWord.substr(0, 9),
-      firstWord.substr(9, firstWord.length),
-    ].join("-\n");
-  } else {
-    // First word is less than 10 chars so we can display it in full.
-    if (words.length > 1) {
-      if (words[1].length > 10) {
-        label = [firstWord, words[1] + "..."].join("\n");
-      } else {
-        label = [firstWord, words[1]].join("\n");
-      }
-    } else {
-      label = firstWord;
-    }
-  }
-
-  return label;
-}
-
 type MapOfStrings = { [key: string]: string };
 type MapOfBooleans = { [key: string]: boolean };
 
 type Group = {| color: string, label: string |};
 type GroupMap = { [key: string]: Group };
 
-// Picked up from http://graphicdesign.stackexchange.com/questions/3682/where-can-i-find-a-large-palette-set-of-contrasting-colors-for-coloring-many-d
+type Src = {| id: string, pred: string |};
+type ResponseNode = {| node: Object, src: Src |};
 
+// Stores the map of a label to boolean (only true values are stored).
+// This helps quickly find if a label has already been assigned.
+var groups: GroupMap = {};
+
+function hasChildren(node: Object): boolean {
+  for (var prop in node) {
+    if (Array.isArray(node[prop])) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// Picked up from http://graphicdesign.stackexchange.com/questions/3682/where-can-i-find-a-large-palette-set-of-contrasting-colors-for-coloring-many-d
 var initialRandomColors = [
   "#47c0ee",
   "#8dd593",
@@ -160,26 +132,10 @@ function getGroupProperties(
   return groups[pred];
 }
 
-function hasChildren(node: Object): boolean {
-  for (var prop in node) {
-    if (Array.isArray(node[prop])) {
-      return true;
-    }
-  }
-  return false;
-}
-
 function hasProperties(props: Object): boolean {
   // Each node will have a _uid_. We check if it has other properties.
   return Object.keys(props).length !== 1;
 }
-
-type Src = {| id: string, pred: string |};
-type ResponseNode = {| node: Object, src: Src |};
-
-// Stores the map of a label to boolean (only true values are stored).
-// This helps quickly find if a label has already been assigned.
-var groups: GroupMap = {};
 
 function processGraph(response: Object, maxNodes: number) {
   let nodesStack: Array<ResponseNode> = [],
@@ -202,13 +158,13 @@ function processGraph(response: Object, maxNodes: number) {
     ignoredChildren: Array<ResponseNode> = [];
 
   for (var root in response) {
+    if (!response.hasOwnProperty(root)) {
+      continue;
+    }
+
     someNodeHasChildren = false;
     ignoredChildren = [];
-    if (
-      response.hasOwnProperty(root) &&
-      root != "server_latency" &&
-      root != "uids"
-    ) {
+    if (root !== "server_latency" && root !== "uids") {
       let block = response[root];
       for (let i = 0; i < block.length; i++) {
         let n: ResponseNode = {
@@ -242,9 +198,8 @@ function processGraph(response: Object, maxNodes: number) {
     // Check if this is an empty node.
     if (Object.keys(obj.node).length === 0 && obj.src.pred === "empty") {
       // We break out if we have reached the max node limit.
-      if (
-        nodesStack.length === 0 || maxNodes !== -1 && nodes.length > maxNodes
-      ) {
+      let maxNodesElapsed = maxNodes !== -1 && nodes.length > maxNodes;
+      if (nodesStack.length === 0 || maxNodesElapsed) {
         break;
       } else {
         nodesStack.push(emptyNode);
@@ -279,7 +234,7 @@ function processGraph(response: Object, maxNodes: number) {
       if (hasProperties(properties) || hasChildNodes) {
         var n: Node = {
           id: properties["_uid_"],
-          label: getLabel(properties),
+          label: getNodeLabel(properties),
           title: JSON.stringify(properties, null, 2),
           group: obj.src.pred,
           color: props.color,
@@ -304,6 +259,10 @@ function processGraph(response: Object, maxNodes: number) {
 
   var plotAxis = [];
   for (let pred in groups) {
+    if (!groups.hasOwnProperty(pred)) {
+      continue;
+    }
+
     plotAxis.push({
       label: groups[pred]["label"],
       pred: pred,
@@ -314,307 +273,23 @@ function processGraph(response: Object, maxNodes: number) {
   return [nodes, edges, plotAxis];
 }
 
-var doubleClickTime = 0;
-var threshold = 200;
-
-function doOnClick(params) {
-  if (params.nodes.length > 0) {
-    var nodeUid = params.nodes[0], currentNode = globalNodeSet.get(nodeUid);
-
-    this.setState({
-      currentNode: currentNode.title,
-      selectedNode: true,
-    });
-  } else {
-    this.setState({
-      selectedNode: false,
-      currentNode: "{}",
-    });
-  }
-}
-
-// create a network
-function renderNetwork(nodes: Array<Node>, edges: Array<Edge>) {
-  var container = document.getElementById("graph");
-  var data = {
-    nodes: new vis.DataSet(nodes),
-    edges: new vis.DataSet(edges),
-  };
-  var options = {
-    nodes: {
-      shape: "circle",
-      scaling: {
-        max: 20,
-        min: 20,
-        label: {
-          enabled: true,
-          min: 14,
-          max: 14,
-        },
-      },
-      font: {
-        size: 16,
-      },
-      margin: {
-        top: 25,
-      },
-    },
-    height: "100%",
-    width: "100%",
-    interaction: {
-      hover: true,
-      keyboard: {
-        enabled: true,
-        bindToWindow: false,
-      },
-      tooltipDelay: 1000000,
-      hideEdgesOnDrag: true,
-    },
-    layout: {
-      improvedLayout: false,
-    },
-    physics: {
-      stabilization: {
-        fit: true,
-        // updateInterval: 1000
-      },
-      // timestep: 0.2,
-      barnesHut: {
-        // gravitationalConstant: -80000,
-        // springConstant: 0.1,
-        // springLength: 10,
-        // avoidOverlap: 0.8,
-        // springConstant: 0.1,
-        damping: 0.6,
-      },
-    },
-  };
-
-  // container
-
-  network = new vis.Network(container, data, options);
-  let that = this;
-
-  network.on("doubleClick", function(params) {
-    doubleClickTime = new Date();
-    if (params.nodes && params.nodes.length > 0) {
-      let nodeUid = params.nodes[0], currentNode = globalNodeSet.get(nodeUid);
-
-      network.unselectAll();
-      that.setState({
-        currentNode: currentNode.title,
-        selectedNode: false,
-      });
-
-      let outgoing = data.edges.get({
-        filter: function(node) {
-          return node.from === nodeUid;
-        },
-      });
-
-      let expanded: boolean = outgoing.length > 0;
-
-      let outgoingEdges = globalEdgeSet.get({
-        filter: function(node) {
-          return node.from === nodeUid;
-        },
-      });
-
-      let adjacentNodeIds: Array<string> = outgoingEdges.map(function(edge) {
-        return edge.to;
-      });
-
-      let adjacentNodes = globalNodeSet.get(adjacentNodeIds);
-      // TODO -See if we can set a meta property to a node to know that its
-      // expanded or closed and avoid this computation.
-      if (expanded) {
-        // Collapse all child nodes recursively.
-        let allEdges = outgoing.map(function(edge) {
-          return edge.id;
-        });
-
-        let allNodes = adjacentNodes.slice();
-
-        while (adjacentNodeIds.length > 0) {
-          let node = adjacentNodeIds.pop();
-          let connectedEdges = data.edges.get({
-            filter: function(edge) {
-              return edge.from === node;
-            },
-          });
-
-          let connectedNodes = connectedEdges.map(function(edge) {
-            return edge.to;
-          });
-
-          allNodes = allNodes.concat(connectedNodes);
-          allEdges = allEdges.concat(connectedEdges);
-          adjacentNodeIds = adjacentNodeIds.concat(connectedNodes);
-        }
-
-        data.nodes.remove(allNodes);
-        data.edges.remove(allEdges);
-        that.setState({
-          expandText: "Expand",
-          expandDisabled: false,
-        });
-      } else {
-        data.nodes.update(adjacentNodes);
-        data.edges.update(outgoingEdges);
-      }
-    }
-  });
-
-  network.on("click", function(params) {
-    var t0 = new Date();
-    if (t0 - doubleClickTime > threshold) {
-      setTimeout(
-        function() {
-          if (t0 - doubleClickTime > threshold) {
-            doOnClick.bind(that)(params);
-          }
-        },
-        threshold,
-      );
-    }
-  });
-
-  window.onresize = function() {
-    network != undefined && network.fit();
-  };
-  network.on("hoverNode", function(params) {
-    // Only change properties if no node is selected.
-    if (that.state.selectedNode) {
-      return;
-    }
-    if (params.node === undefined) {
-      return;
-    }
-    let nodeUid: string = params.node, currentNode = globalNodeSet.get(nodeUid);
-
-    that.setState({
-      currentNode: currentNode.title,
-    });
-  });
-
-  network.on("dragEnd", function(params) {
-    for (let i = 0; i < params.nodes.length; i++) {
-      let nodeId: string = params.nodes[i];
-      data.nodes.update({ id: nodeId, fixed: { x: true, y: true } });
-    }
-  });
-
-  network.on("dragStart", function(params) {
-    for (let i = 0; i < params.nodes.length; i++) {
-      let nodeId: string = params.nodes[i];
-      data.nodes.update({ id: nodeId, fixed: { x: false, y: false } });
-    }
-  });
-}
-
-function outgoingEdges(nodeId, edgeSet) {
-  return edgeSet.get({
-    filter: function(edge) {
-      return edge.from === nodeId;
-    },
-  });
-}
-
-function outgoingEdgesCount(nodeId, edgeSet) {
-  return outgoingEdges(nodeId, edgeSet).length;
-}
-
-function childNodes(edges) {
-  return edges.map(function(edge) {
-    return edge.to;
-  });
-}
-
-function isExpanded(nodeId, edgeSet) {
-  if (outgoingEdgesCount(nodeId, edgeSet) > 0) {
-    return true;
-  }
-
-  return outgoingEdgesCount(nodeId, globalEdgeSet) === 0;
-}
-
 function renderPartialGraph(result) {
   var graph = processGraph(result, 2), that = this;
 
   setTimeout(
-    (function() {
+    function() {
       that.setState({
+        // TODO - Remove these two states, because they can be derived from other data.
         partial: that.state.nodes > graph[0].length,
         expandDisabled: that.state.nodes === graph[0].length,
+        nodeSet: graph[0],
+        edgeSet: graph[1],
       });
-    }).bind(that),
+    },
     1000,
   );
 
-  renderNetwork.call(that, graph[0], graph[1]);
-}
-
-function expandAll() {
-  if (network === undefined) {
-    return;
-  }
-
-  if (this.state.expandText === "Collapse") {
-    renderPartialGraph.bind(this, this.state.result)();
-    this.setState({
-      expandText: "Expand",
-    });
-    return;
-  }
-
-  let nodeIds = network.body.nodeIndices.slice(),
-    nodeSet = network.body.data.nodes,
-    edgeSet = network.body.data.edges,
-    // We add nodes and edges that have to be updated to these arrays.
-    nodesBatch = [],
-    edgesBatch = [],
-    batchSize = 1000,
-    nodes = [];
-  while (nodeIds.length > 0) {
-    let nodeId = nodeIds.pop();
-    // If is expanded, do nothing, else put child nodes and edges into array for
-    // expansion.
-    if (isExpanded(nodeId, edgeSet)) {
-      continue;
-    }
-
-    let outEdges = outgoingEdges(nodeId, globalEdgeSet),
-      outNodeIds = childNodes(outEdges);
-
-    nodeIds = nodeIds.concat(outNodeIds);
-    nodes = globalNodeSet.get(outNodeIds);
-    nodesBatch = nodesBatch.concat(nodes);
-    edgesBatch = edgesBatch.concat(outEdges);
-
-    if (nodesBatch.length > batchSize) {
-      nodeSet.update(nodesBatch);
-      edgeSet.update(edgesBatch);
-      nodesBatch = [];
-      edgesBatch = [];
-
-      if (nodeIds.length === 0) {
-        this.setState({
-          expandText: "Collapse",
-          partial: false,
-        });
-      }
-      return;
-    }
-  }
-
-  if (nodesBatch.length > 0 || edgesBatch.length > 0) {
-    this.setState({
-      expandText: "Collapse",
-      partial: false,
-    });
-    nodeSet.update(nodesBatch);
-    edgeSet.update(edgesBatch);
-  }
+  // renderNetwork.call(that, graph[0], graph[1]);
 }
 
 type QueryTs = {|
@@ -662,13 +337,15 @@ class App extends React.Component {
       rendering: "",
       resType: "",
       currentNode: "{}",
-      nodes: 0,
-      relations: 0,
       graph: "",
       graphHeight: "fixed-height",
       plotAxis: [],
-      expandDisabled: true,
       expandText: "Expand",
+
+      nodes: [],
+      edges: [],
+      allNodes: [],
+      allEdges: [],
     };
   }
 
@@ -679,8 +356,6 @@ class App extends React.Component {
         lastQuery: e.target.dataset.query,
         rendering: "",
         latency: "",
-        nodes: 0,
-        relations: 0,
         selectedNode: false,
         partial: false,
         currentNode: "{}",
@@ -692,7 +367,7 @@ class App extends React.Component {
     }
     window.scrollTo(0, 0);
 
-    network && network.destroy();
+    // network && network.destroy();
   };
 
   // Handler which is used to update lastQuery by Editor component..
@@ -707,8 +382,6 @@ class App extends React.Component {
       latency: "",
       rendering: "",
       currentNode: "{}",
-      nodes: 0,
-      relations: 0,
       resType: "hourglass",
       partial: false,
       plotAxis: [],
@@ -787,7 +460,7 @@ class App extends React.Component {
   };
 
   resetStateOnQuery = () => {
-    network && network.destroy();
+    // network && network.destroy();
     this.setState(this.resetState());
     randomColors = initialRandomColors.slice();
     groups = {};
@@ -802,12 +475,16 @@ class App extends React.Component {
         // store the structure in globalNodeSet and globalEdgeSet. We can use this
         // later when we do expansion of nodes.
         let graph = processGraph(result, -1);
-        globalNodeSet = new vis.DataSet(graph[0]);
-        globalEdgeSet = new vis.DataSet(graph[1]);
+        // globalNodeSet = new vis.DataSet(graph[0]);
+        // globalEdgeSet = new vis.DataSet(graph[1]);
         that.setState({
-          nodes: graph[0].length,
-          relations: graph[1].length,
+          // nodes: graph[0].length,
+          // relations: graph[1].length,
           plotAxis: graph[2],
+          // nodeSet: new vis.DataSet(graph[0]),
+          // edgeSet: new vis.DataSet(graph[1]),
+          allNodes: graph[0],
+          allEdges: graph[1],
         });
       },
       200,
@@ -842,13 +519,6 @@ class App extends React.Component {
   };
 
   render = () => {
-    var graphClass = classNames(
-      { "graph-s": true, fullscreen: this.state.graph === "fullscreen" },
-      { "App-graph": this.state.graph !== "fullscreen" },
-      { "error-res": this.state.resType === "error-res" },
-      { "success-res": this.state.resType === "success-res" },
-      { hourglass: this.state.resType === "hourglass" },
-    );
     return (
       <div>
         <NavBar />
@@ -891,7 +561,7 @@ class App extends React.Component {
                       {this.state.queries.map(
                         function(query, i) {
                           return (
-                            <Query
+                            <PreviousQuery
                               text={query.text}
                               update={this.updateQuery}
                               key={i}
@@ -918,84 +588,22 @@ class App extends React.Component {
                       className="glyphicon glyphicon-glyphicon glyphicon-resize-full"
                     />
                   </div>}
-                <div
-                  style={{ width: "100%", height: "100%", padding: "5px" }}
-                  id="response"
-                >
-                  <div className={this.state.graphHeight}>
-                    <div id="graph" className={graphClass}>
-                      {this.state.response}
-                    </div>
-                  </div>
-                  <div
-                    style={{
-                      padding: "5px",
-                      borderWidth: "0px 1px 1px 1px ",
-                      borderStyle: "solid",
-                      borderColor: "gray",
-                      textAlign: "right",
-                      margin: "0px",
-                    }}
-                  >
-                    <div style={{ marginRight: "10px", marginLeft: "auto" }}>
-                      {this.state.plotAxis.map(
-                        function(label, i) {
-                          return (
-                            <Label
-                              key={i}
-                              color={label.color}
-                              pred={label.pred}
-                              label={label.label}
-                            />
-                          );
-                        },
-                        this,
-                      )}
-                    </div>
-                  </div>
-                  <div style={{ fontSize: "12px" }}>
-                    <Stats
-                      rendering={this.state.rendering}
-                      latency={this.state.latency}
-                      class="hidden-xs"
-                    />
-                    <Button
-                      style={{ float: "right", marginRight: "10px" }}
-                      bsStyle="primary"
-                      disabled={this.state.expandDisabled}
-                      onClick={expandAll.bind(this)}
-                    >
-                      {this.state.expandText}
-                    </Button>
-                    <div>
-                      Nodes: {this.state.nodes}, Edges: {this.state.relations}
-                    </div>
-                    <div style={{ height: "auto" }}>
-                      <i>
-                        {this.state.partial === true
-                          ? "We have only loaded a subset of the graph. Double click on a leaf node to expand its child nodes."
-                          : ""}
-                      </i>
-                    </div>
-                    <div id="properties" style={{ marginTop: "5px" }}>
-                      Current Node:<div
-                        className="App-properties"
-                        title={this.state.currentNode}
-                      >
-                        <em>
-                          <pre style={{ fontSize: "10px" }}>
-                            {JSON.stringify(
-                              JSON.parse(this.state.currentNode),
-                              null,
-                              2,
-                            )}
-                          </pre>
-                        </em>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
+                <Response
+                  graph={this.state.graph}
+                  resType={this.state.resType}
+                  graphHeight={this.state.graphHeight}
+                  response={this.state.response}
+                  plotAxis={this.state.plotAxis}
+                  rendering={this.state.rendering}
+                  latency={this.state.latency}
+                  expandText={this.state.expandText}
+                  partial={this.state.partial}
+                  currentNode={this.state.currentNode}
+                  nodes={this.state.nodes}
+                  edges={this.state.edges}
+                  allNodes={this.state.allNodes}
+                  allEdges={this.state.allEdges}
+                />
               </div>
               <Stats
                 rendering={this.state.rendering}

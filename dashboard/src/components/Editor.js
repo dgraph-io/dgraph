@@ -60,7 +60,7 @@ class Editor extends Component {
     )
       .catch(function(error) {
         console.log(error.stack);
-        var err = error.response && error.response.text() || error.message;
+        var err = error.response && (error.response.text() || error.message);
         return err;
       })
       .then(function(errorMsg) {
@@ -192,18 +192,20 @@ class Editor extends Component {
       let openBrac = token.string.indexOf("(");
       if (
         openBrac !== -1 &&
-        token.string[openBrac - 1] != undefined &&
-        token.string[openBrac - 1] != " "
+        token.string[openBrac - 1] !== undefined &&
+        token.string[openBrac - 1] !== " "
       ) {
-        let oldString = token.string.substr(openBrac);
         cm.replaceRange(" ", { line: cur.line, ch: token.start + openBrac });
       }
 
       var to = CodeMirror.Pos(cur.line, token.end);
+      let from = "", term = "";
       if (token.string) {
-        var term = token.string, from = CodeMirror.Pos(cur.line, token.start);
+        term = token.string;
+        from = CodeMirror.Pos(cur.line, token.start);
       } else {
-        var term = "", from = to;
+        term = "";
+        from = to;
       }
 
       // So that we don't autosuggest for anyof/allof filter values which
@@ -220,7 +222,7 @@ class Editor extends Component {
         token.state.prevState.kind === "Field"
       ) {
         term = token.state.prevState.name + token.string;
-        from.ch = from.ch - token.state.prevState.name.length;
+        from.ch -= token.state.prevState.name.length;
       }
 
       // because Codemirror strips the @ from a directive.

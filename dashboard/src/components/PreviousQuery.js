@@ -80,7 +80,7 @@ function since(lastRun) {
   }
 }
 
-class Query extends Component {
+class PreviousQuery extends Component {
   shouldComponentUpdate(nextProps, nextState) {
     return true;
   }
@@ -126,4 +126,4 @@ class Query extends Component {
   }
 }
 
-export default Query;
+export default PreviousQuery;
