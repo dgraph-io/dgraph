@@ -61,7 +61,6 @@ export function getNodeLabel(properties: Object): string {
 }
 
 export function outgoingEdges(nodeId, edgeSet) {
-  console.log("nodeId", nodeId, "edgeSet", edgeSet);
   return edgeSet.get({
     filter: function(edge) {
       return edge.from === nodeId;

@@ -11,10 +11,9 @@ import "../assets/css/App.css";
 var doubleClickTime = 0;
 var threshold = 200;
 
-function doOnClick(params) {
+function doOnClick(params, allNodeSet) {
     if (params.nodes.length > 0) {
-        var nodeUid = params.nodes[0],
-            currentNode = this.props.allNodes.get(nodeUid);
+        var nodeUid = params.nodes[0], currentNode = allNodeSet.get(nodeUid);
 
         this.setState({
             selectedNode: true,
@@ -87,6 +86,8 @@ function renderNetwork(nodes: Array<Node>, edges: Array<Edge>) {
 
     let network = new vis.Network(container, data, options);
     let that = this;
+    let allNodeSet = new vis.DataSet(this.props.allNodes);
+    let allEdgeSet = new vis.DataSet(this.props.allEdges);
 
     network.on("doubleClick", function(params) {
         doubleClickTime = new Date();
@@ -102,10 +103,7 @@ function renderNetwork(nodes: Array<Node>, edges: Array<Edge>) {
 
             let outgoing = outgoingEdges(clickedNodeUid, data.edges),
                 expanded = outgoing.length > 0,
-                allOutgoingEdges = outgoingEdges(
-                    clickedNodeUid,
-                    that.state.allEdgeSet,
-                );
+                allOutgoingEdges = outgoingEdges(clickedNodeUid, allEdgeSet);
 
             let adjacentNodeIds: Array<string> = allOutgoingEdges.map(function(
                 edge,
@@ -113,7 +111,7 @@ function renderNetwork(nodes: Array<Node>, edges: Array<Edge>) {
                 return edge.to;
             });
 
-            let adjacentNodes = that.state.allNodeSet.get(adjacentNodeIds);
+            let adjacentNodes = allNodeSet.get(adjacentNodeIds);
 
             // TODO -See if we can set a meta property to a node to know that its
             // expanded or closed and avoid this computation.
@@ -157,7 +155,7 @@ function renderNetwork(nodes: Array<Node>, edges: Array<Edge>) {
             setTimeout(
                 function() {
                     if (t0 - doubleClickTime > threshold) {
-                        doOnClick.bind(that)(params);
+                        doOnClick.bind(that)(params, allNodeSet);
                     }
                 },
                 threshold,
@@ -178,7 +176,7 @@ function renderNetwork(nodes: Array<Node>, edges: Array<Edge>) {
             return;
         }
         let nodeUid: string = params.node,
-            currentNode = that.state.allNodeSet.get(nodeUid);
+            currentNode = allNodeSet.get(nodeUid);
 
         that.props.setCurrentNode(currentNode.title);
     });
@@ -204,8 +202,6 @@ class Graph extends Component {
 
         this.state = {
             network: {},
-            allNodeSet: {},
-            allEdgeSet: {},
             selectedNode: false,
         };
     }
@@ -266,8 +262,6 @@ class Graph extends Component {
         }
         this.setState({
             network: {},
-            allNodeSet: new vis.DataSet(nextProps.allNodes),
-            allEdgeSet: new vis.DataSet(nextProps.allEdges),
         });
 
         renderNetwork.bind(this, nextProps.nodes, nextProps.edges)();

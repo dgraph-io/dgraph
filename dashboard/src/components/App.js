@@ -355,6 +355,10 @@ class App extends React.Component {
         expandDisabled: true,
         expandText: "Expand",
         result: {},
+        nodes: [],
+        edges: [],
+        allNodes: [],
+        allEdges: [],
       });
     }
     window.scrollTo(0, 0);

@@ -3,7 +3,7 @@ import React, { Component } from "react";
 import Stats from "./Stats";
 import Graph from "./Graph";
 import Properties from "./Properties";
-// import { outgoingEdges } from "./Helpers";
+import { outgoingEdges } from "./Helpers";
 
 import { Button } from "react-bootstrap";
 
@@ -24,9 +24,9 @@ import "../assets/css/App.css";
 // }
 
 // function expandAll() {
-//     if (network === undefined) {
-//         return;
-//     }
+//     // if (network === undefined) {
+//     //     return;
+//     // }
 
 //     if (this.state.expandText === "Collapse") {
 //         renderPartialGraph.bind(this, this.state.result)();
@@ -113,6 +113,9 @@ class Response extends Component {
                     nodes={this.props.nodes}
                     edges={this.props.edges}
                     response={this.props.response}
+                    resType={this.props.resType}
+                    graph={this.props.graph}
+                    graphHeight={this.props.graphHeight}
                     plotAxis={this.props.plotAxis}
                     setCurrentNode={this.setCurrentNode}
                 />
