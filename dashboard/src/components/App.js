@@ -12,7 +12,6 @@ import Stats from "./Stats";
 import Query from "./Query";
 import Label from "./Label";
 import Editor from "./Editor";
-import { timeout, checkStatus, parseJSON } from "./Helpers";
 
 import { Button } from "react-bootstrap";
 
@@ -626,8 +625,7 @@ type QueryTs = {|
 type State = {
   selectedNode: boolean,
   partial: boolean,
-  // queryIndex: number,
-  query: string,
+  lastQuery: string,
   queries: Array<QueryTs>,
   lastQuery: string,
   response: string,
@@ -654,7 +652,6 @@ class App extends React.Component {
     this.state = {
       selectedNode: false,
       partial: false,
-      // queryIndex: response[0],
       lastQuery: response[1],
       // We store the queries run in state, so that they can be displayed
       // to the user.
@@ -677,7 +674,6 @@ class App extends React.Component {
 
   updateQuery = (e: Event) => {
     e.preventDefault();
-    console.log("In update query");
     if (e.target instanceof HTMLElement) {
       this.setState({
         lastQuery: e.target.dataset.query,
@@ -695,13 +691,11 @@ class App extends React.Component {
       });
     }
     window.scrollTo(0, 0);
-    // this.refs.code.editor.focus();
-    // this.refs.code.editor.navigateFileEnd();
 
     network && network.destroy();
   };
 
-  // Handler which listens to changes on Codemirror.
+  // Handler which is used to update lastQuery by Editor component..
   queryChange = query => {
     this.setState({ lastQuery: query });
   };
@@ -724,12 +718,12 @@ class App extends React.Component {
     };
   };
 
-  storeQuery = (query: string) => {
+  storeQuery = () => {
     let queries: Array<QueryTs> = JSON.parse(
       localStorage.getItem("queries") || "[]",
     );
 
-    query = query.trim();
+    let query = this.state.lastQuery.trim();
     queries.forEach(function(q, idx) {
       if (q.text === query) {
         queries.splice(idx, 1);
@@ -865,7 +859,7 @@ class App extends React.Component {
                 <Editor
                   query={this.state.lastQuery}
                   updateQuery={this.queryChange}
-                  storeQuery={this.storeQuery}
+                  storeLastQuery={this.storeQuery}
                   resetState={this.resetStateOnQuery}
                   renderGraph={this.renderGraph}
                   renderResText={this.renderResText}

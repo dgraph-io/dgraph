@@ -16,13 +16,12 @@ function isNotEmpty(response) {
 }
 
 function handleResponse(result) {
-  console.log(result);
   // This is the case in which user sends a mutation. We display the response from server.
   if (result.code !== undefined && result.message !== undefined) {
-    this.props.storeQuery(this.state.query);
+    this.props.storeLastQuery();
     this.props.renderResText("success-res", JSON.stringify(result, null, 2));
   } else if (isNotEmpty(result)) {
-    this.props.storeQuery(this.state.query);
+    this.props.storeLastQuery();
     this.props.renderGraph(result);
   } else {
     // We probably didn't get any results.
@@ -34,20 +33,17 @@ function handleResponse(result) {
 }
 
 class Editor extends Component {
-  constructor(props: Props) {
-    super(props);
-    this.state = {
-      query: this.props.query,
-    };
-  }
+  getValue = () => {
+    return this.editor.getValue();
+  };
 
   runQuery = (e: Event) => {
     e.preventDefault();
+    this.props.updateQuery(this.getValue());
     // Resetting state of parent related to a query.
     this.props.resetState();
 
     var that = this;
-    console.log(that.state.query);
     timeout(
       60000,
       fetch(process.env.REACT_APP_DGRAPH + "/query?debug=true", {
@@ -56,7 +52,7 @@ class Editor extends Component {
         headers: {
           "Content-Type": "text/plain",
         },
-        body: that.state.query,
+        body: that.getValue(),
       })
         .then(checkStatus)
         .then(parseJSON)
@@ -101,7 +97,7 @@ class Editor extends Component {
   }
 
   componentWillReceiveProps = nextProps => {
-    if (nextProps.query !== undefined && this.state.query !== nextProps.query) {
+    if (nextProps.query !== this.getValue()) {
       this.editor.setValue(nextProps.query);
     }
   };
@@ -156,7 +152,7 @@ class Editor extends Component {
       });
 
     this.editor = CodeMirror(this._editor, {
-      value: this.state.query,
+      value: this.props.query,
       lineNumbers: true,
       tabSize: 2,
       lineWrapping: true,
@@ -186,19 +182,6 @@ class Editor extends Component {
     });
 
     this.editor.setCursor(this.editor.lineCount(), 0);
-
-    this.editor.on(
-      "change",
-      (function(cm, obj) {
-        let newQuery = obj.text.join("\n"), oldQuery = obj.removed.join("\n");
-        if (newQuery !== oldQuery) {
-          this.setState({
-            query: newQuery,
-          });
-          this.props.updateQuery(newQuery);
-        }
-      }).bind(this),
-    );
 
     CodeMirror.registerHelper("hint", "fromList", function(cm, options) {
       var cur = cm.getCursor(), token = cm.getTokenAt(cur);

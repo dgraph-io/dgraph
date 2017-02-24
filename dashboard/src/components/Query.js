@@ -82,11 +82,6 @@ function since(lastRun) {
 
 class Query extends Component {
   shouldComponentUpdate(nextProps, nextState) {
-    let timeNow = new Date();
-    let diff = (timeNow - this.props.lastRun) / 1000;
-    if (diff < 60) {
-      return false;
-    }
     return true;
   }
 
