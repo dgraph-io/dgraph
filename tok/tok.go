@@ -17,6 +17,7 @@
 package tok
 
 import (
+	"bytes"
 	"encoding/binary"
 	"strings"
 	"time"
@@ -43,6 +44,11 @@ type Tokenizer interface {
 var (
 	tokenizers map[string]Tokenizer
 	defaults   map[types.TypeID]Tokenizer
+)
+
+const (
+	byteDefault = 0x0
+	byteExact   = 0x1
 )
 
 func init() {
@@ -109,7 +115,7 @@ type Int32Tokenizer struct{}
 func (t Int32Tokenizer) Name() string       { return "int" }
 func (t Int32Tokenizer) Type() types.TypeID { return types.Int32ID }
 func (t Int32Tokenizer) Tokens(sv types.Val) ([]string, error) {
-	return encodeInt(sv.Value.(int32))
+	return []string{encodeToken(encodeInt(sv.Value.(int32)), byteDefault)}, nil
 }
 
 type FloatTokenizer struct{}
@@ -117,7 +123,7 @@ type FloatTokenizer struct{}
 func (t FloatTokenizer) Name() string       { return "float" }
 func (t FloatTokenizer) Type() types.TypeID { return types.FloatID }
 func (t FloatTokenizer) Tokens(sv types.Val) ([]string, error) {
-	return encodeInt(int32(sv.Value.(float64)))
+	return []string{encodeToken(encodeInt(int32(sv.Value.(float64))), byteDefault)}, nil
 }
 
 type DateTokenizer struct{}
@@ -125,7 +131,7 @@ type DateTokenizer struct{}
 func (t DateTokenizer) Name() string       { return "date" }
 func (t DateTokenizer) Type() types.TypeID { return types.DateID }
 func (t DateTokenizer) Tokens(sv types.Val) ([]string, error) {
-	return encodeInt(int32(sv.Value.(time.Time).Year()))
+	return []string{encodeToken(encodeInt(int32(sv.Value.(time.Time).Year())), byteDefault)}, nil
 }
 
 type DateTimeTokenizer struct{}
@@ -133,7 +139,7 @@ type DateTimeTokenizer struct{}
 func (t DateTimeTokenizer) Name() string       { return "datetime" }
 func (t DateTimeTokenizer) Type() types.TypeID { return types.DateTimeID }
 func (t DateTimeTokenizer) Tokens(sv types.Val) ([]string, error) {
-	return encodeInt(int32(sv.Value.(time.Time).Year()))
+	return []string{encodeToken(encodeInt(int32(sv.Value.(time.Time).Year())), byteDefault)}, nil
 }
 
 type TermTokenizer struct{}
@@ -159,7 +165,7 @@ func (t TermTokenizer) Tokens(sv types.Val) ([]string, error) {
 			if s == nil {
 				break
 			}
-			tokens = append(tokens, string(s))
+			tokens = append(tokens, encodeToken(string(s), byteDefault))
 		}
 		tokenizer.Destroy()
 	}
@@ -171,11 +177,11 @@ type ExactTokenizer struct{}
 func (t ExactTokenizer) Name() string       { return "exact" }
 func (t ExactTokenizer) Type() types.TypeID { return types.StringID }
 func (t ExactTokenizer) Tokens(sv types.Val) ([]string, error) {
-	words := strings.Fields(sv.Value.(string))
-	return []string{strings.Join(words, " ")}, nil
+	//words := strings.Fields(sv.Value.(string))
+	return []string{encodeToken(sv.Value.(string), byteExact)}, nil
 }
 
-func encodeInt(val int32) ([]string, error) {
+func encodeInt(val int32) string {
 	buf := make([]byte, 5)
 	binary.BigEndian.PutUint32(buf[1:], uint32(val))
 	if val < 0 {
@@ -183,5 +189,13 @@ func encodeInt(val int32) ([]string, error) {
 	} else {
 		buf[0] = 1
 	}
-	return []string{string(buf)}, nil
+	return string(buf)
+}
+
+func encodeToken(tok string, typ byte) string {
+	var b []byte
+	buf := bytes.NewBuffer(b)
+	buf.WriteByte(typ)
+	buf.WriteString(tok)
+	return buf.String()
 }

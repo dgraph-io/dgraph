@@ -345,6 +345,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 			if !pk.IsIndex() {
 				// Non index keys. Skip them.
 				it.Seek(pk.SkipRangeOfSameType())
+				continue
 			}
 			x.AssertTrue(pk.IsIndex())
 			if pk.Attr != q.Attr {
@@ -353,7 +354,13 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 				continue
 			}
 			x.AssertTrue(pk.Attr == q.Attr)
-			if regex.MatchString(pk.Term) {
+			term := pk.Term[1:]
+			isExact := pk.Term[0] != '\x01'
+			if isExact {
+				it.Next()
+				continue
+			}
+			if regex.MatchString(term) {
 				// Note: Even is one term in the index passes the matcher, the
 				// uid would be included in the result. (Even though the other
 				// terms don't match the regex)

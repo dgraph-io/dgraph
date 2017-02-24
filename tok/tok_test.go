@@ -49,9 +49,8 @@ func TestIntEncoding(t *testing.T) {
 	arr := []int32{a, b, c, d, 1, 2, 3, 4, -1, -2, -3, 0, 234, 10000, 123, -1543}
 	enc.ints = arr
 	for _, it := range arr {
-		encoded, err := encodeInt(int32(it))
-		require.NoError(t, err)
-		enc.tokens = append(enc.tokens, encoded[0])
+		encoded := encodeInt(int32(it))
+		enc.tokens = append(enc.tokens, encoded)
 	}
 	sort.Sort(byEnc{enc})
 	for i := 1; i < len(enc.tokens); i++ {

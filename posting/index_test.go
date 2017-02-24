@@ -24,42 +24,42 @@ func TestIndexingInt(t *testing.T) {
 	schema.ParseBytes([]byte("scalar age:int @index"))
 	a, err := IndexTokens("age", types.Val{types.StringID, []byte("10")})
 	require.NoError(t, err)
-	require.EqualValues(t, []byte{0x1, 0x0, 0x0, 0x0, 0xa}, []byte(a[0]))
+	require.EqualValues(t, []byte{0x0, 0x1, 0x0, 0x0, 0x0, 0xa}, []byte(a[0]))
 }
 
 func TestIndexingIntNegative(t *testing.T) {
 	schema.ParseBytes([]byte("scalar age:int @index"))
 	a, err := IndexTokens("age", types.Val{types.StringID, []byte("-10")})
 	require.NoError(t, err)
-	require.EqualValues(t, []byte{0x0, 0xff, 0xff, 0xff, 0xf6}, []byte(a[0]))
+	require.EqualValues(t, []byte{0x0, 0x0, 0xff, 0xff, 0xff, 0xf6}, []byte(a[0]))
 }
 
 func TestIndexingFloat(t *testing.T) {
 	schema.ParseBytes([]byte("scalar age:float @index"))
 	a, err := IndexTokens("age", types.Val{types.StringID, []byte("10.43")})
 	require.NoError(t, err)
-	require.EqualValues(t, []byte{0x1, 0x0, 0x0, 0x0, 0xa}, []byte(a[0]))
+	require.EqualValues(t, []byte{0x0, 0x1, 0x0, 0x0, 0x0, 0xa}, []byte(a[0]))
 }
 
 func TestIndexingDate(t *testing.T) {
 	schema.ParseBytes([]byte("scalar age:date @index"))
 	a, err := IndexTokens("age", types.Val{types.StringID, []byte("0010-01-01")})
 	require.NoError(t, err)
-	require.EqualValues(t, []byte{0x1, 0x0, 0x0, 0x0, 0xa}, []byte(a[0]))
+	require.EqualValues(t, []byte{0x0, 0x1, 0x0, 0x0, 0x0, 0xa}, []byte(a[0]))
 }
 
 func TestIndexingTime(t *testing.T) {
 	schema.ParseBytes([]byte("scalar age:datetime @index"))
 	a, err := IndexTokens("age", types.Val{types.StringID, []byte("0010-01-01T01:01:01.000000001")})
 	require.NoError(t, err)
-	require.EqualValues(t, []byte{0x1, 0x0, 0x0, 0x0, 0xa}, []byte(a[0]))
+	require.EqualValues(t, []byte{0x0, 0x1, 0x0, 0x0, 0x0, 0xa}, []byte(a[0]))
 }
 
 func TestIndexing(t *testing.T) {
 	schema.ParseBytes([]byte("scalar name:string @index"))
 	a, err := IndexTokens("name", types.Val{types.StringID, []byte("abc")})
 	require.NoError(t, err)
-	require.EqualValues(t, "abc", string(a[0]))
+	require.EqualValues(t, "\x00abc", string(a[0]))
 }
 
 func addMutationWithIndex(t *testing.T, l *List, edge *task.DirectedEdge, op uint32) {
@@ -103,7 +103,7 @@ func TestTokensTable(t *testing.T) {
 	var pl types.PostingList
 	x.Check(pl.Unmarshal(slice.Data()))
 
-	require.EqualValues(t, []string{"david"}, tokensForTest("name"))
+	require.EqualValues(t, []string{"\x00david"}, tokensForTest("name"))
 
 	CommitLists(10)
 	time.Sleep(time.Second)
@@ -112,7 +112,7 @@ func TestTokensTable(t *testing.T) {
 	require.NoError(t, err)
 	x.Check(pl.Unmarshal(slice.Data()))
 
-	require.EqualValues(t, []string{"david"}, tokensForTest("name"))
+	require.EqualValues(t, []string{"\x00david"}, tokensForTest("name"))
 }
 
 const schemaStrAlt = `
@@ -206,8 +206,8 @@ func TestRebuildIndex(t *testing.T) {
 	}
 	require.Len(t, idxKeys, 2)
 	require.Len(t, idxVals, 2)
-	require.EqualValues(t, x.IndexKey("name", "david"), idxKeys[0])
-	require.EqualValues(t, x.IndexKey("name", "michonne"), idxKeys[1])
+	require.EqualValues(t, x.IndexKey("name", "\x00david"), idxKeys[0])
+	require.EqualValues(t, x.IndexKey("name", "\x00michonne"), idxKeys[1])
 	require.Len(t, idxVals[0].Postings, 1)
 	require.Len(t, idxVals[1].Postings, 1)
 	require.EqualValues(t, idxVals[0].Postings[0].Uid, 20)

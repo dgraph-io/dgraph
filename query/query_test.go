@@ -1443,7 +1443,7 @@ func TestFilterRegex1(t *testing.T) {
     {
       me(id:0x01) {
         name
-        friend @filter(regexp(name, "^[a-z]+$")) {
+        friend @filter(regexp(name, "^[a-z A-Z]+$")) {
           name
         }
       }
@@ -1479,7 +1479,7 @@ func TestFilterRegex3(t *testing.T) {
     {
       me(id:0x01) {
         name
-        friend @filter(regexp(name, "^(ri|gr)")) {
+        friend @filter(regexp(name, "^(Ri)")) {
           name
         }
       }
@@ -3615,7 +3615,7 @@ func TestNotExistObject(t *testing.T) {
 }
 
 const schemaStr = `
-scalar name:string @index
+scalar name:string @index(term, exact)
 scalar dob:date @index
 scalar film.film.initial_release_date:date @index
 scalar loc:geo @index

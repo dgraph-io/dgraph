@@ -56,7 +56,16 @@ func IndexTokens(attr string, src types.Val) ([]string, error) {
 		return nil, err
 	}
 	// Schema will know the mapping from attr to tokenizer.
-	return schema.State().Tokenizer(attr).Tokens(sv)
+	var tokens []string
+	tokenizers := schema.State().Tokenizer(attr)
+	for _, it := range tokenizers {
+		toks, err := it.Tokens(sv)
+		if err != nil {
+			return tokens, err
+		}
+		tokens = append(tokens, toks...)
+	}
+	return tokens, nil
 }
 
 // addIndexMutations adds mutation(s) for a single term, to maintain index.
