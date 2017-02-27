@@ -1,0 +1,60 @@
+.Graph {
+    font-size: 12px;
+    word-break: break-all;
+    margin-top: 9px;
+    width: 100%;
+    border: 1px solid gray;
+    border-bottom: 0px;
+    position: relative;
+}
+
+.Graph-s {
+    width: 100%;
+    height: 500px;
+}
+
+.Graph-fs {
+    width: 100%;
+    height: 100%;
+    margin-top: 0px;
+}
+
+.Graph-hourglass {
+    background: url(../images/hourglass.svg) no-repeat center center;
+}
+
+.Graph-error {
+    padding-left: 10px;
+    padding-top: 20px;
+    color: red;
+}
+
+.Graph-success {
+    padding-left: 10px;
+    padding-top: 20px;
+    color: green;
+}
+
+.Graph-label-box {
+    padding: 5px;
+    border-width: 0px 1px 1px 1px;
+    border-style: solid;
+    border-color: gray;
+    text-align: right;
+    margin: 0px;
+}
+
+.Graph-label {
+    margin-right: 10px;
+    margin-left: auto;
+}
+
+
+.Graph-full-height {
+    height: calc(100vh - 250px);
+    border-bottom: 0px;
+}
+
+.Graph-fixed-height {
+    height: 500px;
+}
