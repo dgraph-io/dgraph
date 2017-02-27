@@ -317,7 +317,7 @@ class App extends React.Component {
       rendering: "",
       resType: "",
       graph: "",
-      graphHeight: "fixed-height",
+      graphHeight: "Graph-fixed-height",
       plotAxis: [],
 
       nodes: [],
@@ -424,13 +424,13 @@ class App extends React.Component {
       if (!screenfull.isFullscreen) {
         this.setState({
           graph: "",
-          graphHeight: "fixed-height",
+          graphHeight: "Graph-fixed-height",
         });
       } else {
         // In full screen mode, we display the properties as a tooltip.
         this.setState({
           graph: "fullscreen",
-          graphHeight: "full-height",
+          graphHeight: "Graph-full-height",
         });
       }
     });
@@ -508,29 +508,10 @@ class App extends React.Component {
                   renderResText={this.renderResText}
                 />
 
-                <div
-                  style={{
-                    marginTop: "10px",
-                    width: "100%",
-                    marginBottom: "100px",
-                  }}
-                >
+                <div className="App-prev-queries">
                   <span><b>Previous Queries</b></span>
-                  <table
-                    style={{
-                      width: "100%",
-                      border: "1px solid black",
-                      margin: "15px 0px",
-                      padding: "0px 5px 5px 5px",
-                    }}
-                  >
-                    <tbody
-                      style={{
-                        height: "500px",
-                        overflowY: "scroll",
-                        display: "block",
-                      }}
-                    >
+                  <table className="App-prev-queries-table">
+                    <tbody className="App-prev-queries-tbody">
                       {this.state.queries.map(
                         function(query, i) {
                           return (
@@ -557,8 +538,7 @@ class App extends React.Component {
                     onClick={this.enterFullScreen}
                   >
                     <span
-                      style={{ fontSize: "20px", padding: "5px" }}
-                      className="glyphicon glyphicon-glyphicon glyphicon-resize-full"
+                      className="App-fs-icon glyphicon glyphicon-glyphicon glyphicon-resize-full"
                     />
                   </div>}
                 <Response

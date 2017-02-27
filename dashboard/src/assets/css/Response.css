@@ -1,0 +1,11 @@
+.Response {
+	width: 100%;
+	height: 100%;
+	padding: 5px;
+}
+
+.Response-button {
+	float: right;
+	margin-right: 10px;
+	margin-left: 5px;
+}

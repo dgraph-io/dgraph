@@ -27,6 +27,11 @@
     cursor: pointer;
 }
 
+.App-fs-icon {
+    font-size: 20px;
+    padding: 5px;
+}
+
 .App-tip {
     border: 1px solid #87cb74;
     background-color: #e3f9e3;
@@ -36,6 +41,32 @@
     height: auto;
 }
 
+.App-prev-queries {
+    margin-top: 10px;
+    width: 100%;
+    margin-bottom: 100px;
+}
+
+.App-prev-queries-table {
+    width: 100%;
+    border: 1px solid black;
+    margin: 15px 0px;
+    padding: 0px 5px 5px 5px;
+}
+
+.App-prev-queries-tbody {
+    height: 500px;
+    overflow-y: scroll;
+    display: block;
+}
+
+.App-label {
+    text-align: center;
+    margin: 0px 0px 0px 10px;
+    width: 20px;
+    display: inline-block;
+}
+
 tr.query pre:hover {
     border: 1px solid gray;
     cursor: pointer;
@@ -43,16 +74,6 @@ tr.query pre:hover {
 
 :focus {
     outline: none;
-}
-
-.full-height {
-    height: calc(100vh - 250px);
-    border: 1px solid gray;
-    border-bottom: 0px;
-}
-
-.fixed-height {
-    height: 500px;
 }
 
 .vis-tooltip {
@@ -71,11 +92,4 @@ tr.query pre:hover {
 
 #properties pre {
     height: 100%;
-}
-
-.App-label {
-    text-align: center;
-    margin: 0px 0px 0px 10px;
-    width: 20px;
-    display: inline-block;
 }

@@ -6,7 +6,7 @@ import Properties from "./Properties";
 
 import { Button } from "react-bootstrap";
 
-import "../assets/css/App.css";
+import "../assets/css/Response.css";
 
 class Response extends Component {
     constructor(props: Props) {
@@ -51,10 +51,7 @@ class Response extends Component {
 
     render() {
         return (
-            <div
-                style={{ width: "100%", height: "100%", padding: "5px" }}
-                id="response"
-            >
+            <div className="Response" id="response">
                 <Graph
                     ref="graph"
                     allNodes={this.props.allNodes}
@@ -78,7 +75,7 @@ class Response extends Component {
                         class="hidden-xs"
                     />
                     <Button
-                        style={{ float: "right", marginRight: "10px" }}
+                        className="Response-button"
                         bsStyle="primary"
                         disabled={
                             this.props.allNodes.length === 0 ||

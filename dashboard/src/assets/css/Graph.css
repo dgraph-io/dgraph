@@ -48,3 +48,13 @@
     margin-right: 10px;
     margin-left: auto;
 }
+
+
+.Graph-full-height {
+    height: calc(100vh - 250px);
+    border-bottom: 0px;
+}
+
+.Graph-fixed-height {
+    height: 500px;
+}
