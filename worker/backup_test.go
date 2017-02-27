@@ -25,7 +25,7 @@ import (
 
 func populateGraphBackup(t *testing.T) {
 	friendFacets := map[string]string{
-		"since": "2005-05-02T15:04:05", "close": "true", "family": "false", "age": "33"}
+		"since": "2005-05-02T15:04:05", "close": "true", "age": "33"}
 	edge := &task.DirectedEdge{
 		ValueId: 5,
 		Label:   "author0",
@@ -166,6 +166,18 @@ func TestBackup(t *testing.T) {
 			// The only objectId we set was uid 5.
 			if nq.ObjectId != "" {
 				require.Equal(t, "0x5", nq.ObjectId)
+			}
+
+			if nq.Subject == "0x4" {
+				require.Equal(t, "age", nq.Facets[0].Key)
+				require.Equal(t, "close", nq.Facets[1].Key)
+				require.Equal(t, "since", nq.Facets[2].Key)
+				require.Equal(t, "33", string(nq.Facets[0].Value))
+				require.Equal(t, "true", string(nq.Facets[1].Value))
+				require.Equal(t, "2005-05-02T15:04:05", string(nq.Facets[2].Value))
+				require.Equal(t, 1, int(nq.Facets[0].ValType))
+				require.Equal(t, 3, int(nq.Facets[1].ValType))
+				require.Equal(t, 4, int(nq.Facets[2].ValType))
 			}
 			count++
 		}
