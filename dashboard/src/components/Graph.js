@@ -34,11 +34,11 @@ function doOnClick(params, allNodeSet) {
 }
 
 // create a network
-function renderNetwork(nodes: Array<Node>, edges: Array<Edge>) {
+function renderNetwork(props) {
     var container = document.getElementById("graph");
     var data = {
-        nodes: new vis.DataSet(nodes),
-        edges: new vis.DataSet(edges),
+        nodes: new vis.DataSet(props.nodes),
+        edges: new vis.DataSet(props.edges),
     };
     var options = {
         nodes: {
@@ -91,13 +91,8 @@ function renderNetwork(nodes: Array<Node>, edges: Array<Edge>) {
     };
 
     let network = new vis.Network(container, data, options);
-    let that = this;
-    let allNodeSet = new vis.DataSet(this.props.allNodes);
-    let allEdgeSet = new vis.DataSet(this.props.allEdges);
-
-    this.setState({
-        network: network,
-    });
+    let allNodeSet = new vis.DataSet(props.allNodes);
+    let allEdgeSet = new vis.DataSet(props.allEdges), that = this;
 
     network.on("doubleClick", function(params) {
         doubleClickTime = new Date();
@@ -211,7 +206,6 @@ function renderNetwork(nodes: Array<Node>, edges: Array<Edge>) {
     }
 
     var expand = function() {
-        // let network = this.state.network;
         if (network === undefined) {
             return;
         }
@@ -229,10 +223,9 @@ function renderNetwork(nodes: Array<Node>, edges: Array<Edge>) {
             nodeSet = data.nodes,
             edgeSet = data.edges,
             // We add nodes and edges that have to be updated to these arrays.
-            nodesBatch = [],
+            nodesBatch = new Set(),
             edgesBatch = [],
-            batchSize = 1000,
-            nodes = [];
+            batchSize = 500;
 
         while (nodeIds.length > 0) {
             let nodeId = nodeIds.pop();
@@ -246,27 +239,29 @@ function renderNetwork(nodes: Array<Node>, edges: Array<Edge>) {
                 outNodeIds = childNodes(outEdges);
 
             nodeIds = nodeIds.concat(outNodeIds);
-            nodes = allNodeSet.get(outNodeIds);
-            nodesBatch = nodesBatch.concat(nodes);
+            // nodes = allNodeSet.get(outNodeIds);
+
+            for (let id of outNodeIds) {
+                nodesBatch.add(id);
+            }
+
             edgesBatch = edgesBatch.concat(outEdges);
 
-            if (nodesBatch.length > batchSize) {
-                nodeSet.update(nodesBatch);
+            if (nodesBatch.size > batchSize) {
+                nodeSet.update(allNodeSet.get(Array.from(nodesBatch)));
                 edgeSet.update(edgesBatch);
-                nodesBatch = [];
+                nodesBatch = new Set();
                 edgesBatch = [];
-
-                if (nodeIds.length === 0) {
-                    that.props.updateExpanded(true);
-                }
                 return;
             }
         }
 
-        if (nodesBatch.length > 0 || edgesBatch.length > 0) {
+        if (nodeIds.length === 0) {
             that.props.updateExpanded(true);
+        }
 
-            nodeSet.update(nodesBatch);
+        if (nodesBatch.size > 0 || edgesBatch.length > 0) {
+            nodeSet.update(allNodeSet.get(Array.from(nodesBatch)));
             edgeSet.update(edgesBatch);
         }
     };
@@ -279,7 +274,6 @@ class Graph extends Component {
         super(props);
 
         this.state = {
-            network: {},
             selectedNode: false,
             expand: function() {},
         };
@@ -339,15 +333,14 @@ class Graph extends Component {
             // TODO - Check how to do a shallow check?
             nextProps.nodes.length === this.props.nodes.length &&
             nextProps.edges.length === this.props.edges.length &&
+            nextProps.allNodes.length === this.props.allNodes.length &&
+            nextProps.allEdges.length === this.props.allEdges.length &&
             nextProps.response === this.props.response
         ) {
             return;
         }
-        this.setState({
-            network: {},
-        });
 
-        renderNetwork.bind(this, nextProps.nodes, nextProps.edges)();
+        renderNetwork.bind(this, nextProps)();
     };
 }
 

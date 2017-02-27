@@ -19,6 +19,19 @@ class Response extends Component {
         };
     }
 
+    componentWillReceiveProps = nextProps => {
+        if (
+            // TODO - Check how to do a shallow check?
+            nextProps.nodes.length !== this.props.nodes.length ||
+            nextProps.edges.length !== this.props.edges.length
+        ) {
+            this.setState({
+                currentNode: "{}",
+                fullyExpanded: false,
+            });
+        }
+    };
+
     setCurrentNode = properties => {
         this.setState({
             currentNode: properties,
@@ -84,7 +97,8 @@ class Response extends Component {
                     </div>
                     <div style={{ height: "auto" }}>
                         <i>
-                            {!this.fullyExpanded
+                            {this.props.allNodes.length !== 0 &&
+                                !this.state.fullyExpanded
                                 ? "We have only loaded a subset of the graph. Double click on a leaf node to expand its child nodes."
                                 : ""}
                         </i>

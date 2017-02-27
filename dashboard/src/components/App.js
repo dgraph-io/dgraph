@@ -137,20 +137,6 @@ function hasProperties(props: Object): boolean {
   return Object.keys(props).length !== 1;
 }
 
-function renderPartialGraph(result) {
-  var graph = processGraph(result, 2), that = this;
-
-  setTimeout(
-    function() {
-      that.setState({
-        nodes: graph[0],
-        edges: graph[1],
-      });
-    },
-    1000,
-  );
-}
-
 function processGraph(response: Object, maxNodes: number) {
   let nodesStack: Array<ResponseNode> = [],
     // Contains map of a lable to its shortform thats displayed.
@@ -460,10 +446,12 @@ class App extends React.Component {
   renderGraph = result => {
     let startTime = new Date(), that = this;
 
+    // We call procesGraph with a 5 node limit and calculate the whole dataset in
+    // the background.
+    var restrictedGraph = processGraph(result, 2);
     setTimeout(
       function() {
         // We process all the nodes and edges in the response in background and
-        // store the structure in globalNodeSet and globalEdgeSet. We can use this
         // later when we do expansion of nodes.
         let graph = processGraph(result, -1);
 
@@ -471,13 +459,12 @@ class App extends React.Component {
           plotAxis: graph[2],
           allNodes: graph[0],
           allEdges: graph[1],
+          nodes: restrictedGraph[0],
+          edges: restrictedGraph[1],
         });
       },
-      200,
+      0,
     );
-    // We call procesGraph with a 5 node limit and calculate the whole dataset in
-    // the background.
-    renderPartialGraph.bind(that, result)();
 
     let endTime = new Date(),
       timeTaken = (endTime.getTime() - startTime.getTime()) / 1000,
