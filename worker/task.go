@@ -28,6 +28,7 @@ import (
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/task"
+	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
@@ -206,6 +207,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 	case GeoFn:
 		// For geo functions, we get extra information used for filtering.
 		tokens, geoQuery, err = types.GetGeoTokens(q.SrcFunc)
+		tok.EncodeGeoTokens(tokens)
 		if err != nil {
 			return nil, err
 		}

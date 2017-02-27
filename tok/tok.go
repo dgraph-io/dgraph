@@ -51,6 +51,13 @@ const (
 	byteExact   = 0x1
 )
 
+func IsExact(term string) bool {
+	if term[0] == byteExact {
+		return true
+	}
+	return false
+}
+
 func init() {
 	RegisterTokenizer(GeoTokenizer{})
 	RegisterTokenizer(Int32Tokenizer{})
@@ -107,7 +114,9 @@ type GeoTokenizer struct{}
 func (t GeoTokenizer) Name() string       { return "geo" }
 func (t GeoTokenizer) Type() types.TypeID { return types.GeoID }
 func (t GeoTokenizer) Tokens(sv types.Val) ([]string, error) {
-	return types.IndexGeoTokens(sv.Value.(geom.T))
+	tokens, err := types.IndexGeoTokens(sv.Value.(geom.T))
+	EncodeGeoTokens(tokens)
+	return tokens, err
 }
 
 type Int32Tokenizer struct{}
@@ -201,4 +210,10 @@ func encodeToken(tok string, typ byte) string {
 	buf.WriteByte(typ)
 	buf.WriteString(tok)
 	return buf.String()
+}
+
+func EncodeGeoTokens(tokens []string) {
+	for i := 0; i < len(tokens); i++ {
+		tokens[i] = encodeToken(tokens[i], byteDefault)
+	}
 }
