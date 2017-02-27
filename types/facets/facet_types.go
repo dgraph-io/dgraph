@@ -125,12 +125,6 @@ func parseTime(val string) (time.Time, error) {
 	return time.Parse(dateFormatYMD, val)
 }
 
-// OnlyDate returns whether val has format of only Year-Month-Day
-func OnlyDate(val string) bool {
-	_, err := time.Parse(dateFormatYMD, val)
-	return err == nil
-}
-
 const dateFormatYMD = "2006-01-02"
 const dateTimeFormat = "2006-01-02T15:04:05"
 

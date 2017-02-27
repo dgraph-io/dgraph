@@ -132,104 +132,19 @@ func parseFuncType(arr []string) (FuncType, string) {
 // processTask processes the query, accumulates and returns the result.
 func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 	attr := q.Attr
-
-	var tokens []string
-	var geoQuery *types.GeoQueryData
-	var err error
-	var intersectDest bool
-	var ineqValue types.Val
-	var ineqValueToken string
-	var n int
-	var threshold int64
-
-	fnType, f := parseFuncType(q.SrcFunc)
-	switch fnType {
-	case AggregatorFn:
-		// confirm agrregator could apply on the attributes
-		typ, err := schema.State().TypeOf(attr)
-		if err != nil {
-			return nil, x.Errorf("Attribute %q is not scalar-type", attr)
-		}
-		if !CouldApplyAggregatorOn(f, typ) {
-			return nil, x.Errorf("Aggregator %q could not apply on %v",
-				f, attr)
-		}
-		n = algo.ListLen(q.Uids)
-
-	case CompareAttrFn:
-		if len(q.SrcFunc) != 2 {
-			return nil, x.Errorf("Function requires 2 arguments, but got %d %v",
-				len(q.SrcFunc), q.SrcFunc)
-		}
-		ineqValue, err = convertValue(attr, q.SrcFunc[1])
-		if err != nil {
-			return nil, err
-		}
-		// Tokenizing RHS value of inequality.
-		// TODO(kg): more comments about why we convert to types.BinaryID, and
-		// then convert it back to attr type in IndexTokens.
-		// the point is IndexTokens need BinaryID type to be passed in
-		v := types.ValueForType(types.BinaryID)
-		err = types.Marshal(ineqValue, &v)
-		if err != nil {
-			return nil, err
-		}
-		ineqTokens, err := posting.IndexTokens(attr, types.Val{ineqValue.Tid, v.Value.([]byte)})
-		if err != nil {
-			return nil, err
-		}
-		if len(ineqTokens) != 1 {
-			return nil, x.Errorf("Expected only 1 token but got: %v", ineqTokens)
-		}
-		ineqValueToken = ineqTokens[0]
-		// Get tokens geq / leq ineqValueToken.
-		tokens, err = getInequalityTokens(attr, ineqValueToken, f)
-		if err != nil {
-			return nil, err
-		}
-		n = len(tokens)
-
-	case CompareScalarFn:
-		if len(q.SrcFunc) != 3 {
-			return nil, x.Errorf("Function requires 3 arguments, but got %d %v",
-				len(q.SrcFunc), q.SrcFunc)
-		}
-		threshold, err = strconv.ParseInt(q.SrcFunc[2], 10, 64)
-		if err != nil {
-			return nil, x.Wrapf(err, "Compare %v(%v) require digits, but got invalid num",
-				q.SrcFunc[0], q.SrcFunc[1])
-		}
-		n = algo.ListLen(q.Uids)
-
-	case GeoFn:
-		// For geo functions, we get extra information used for filtering.
-		tokens, geoQuery, err = types.GetGeoTokens(q.SrcFunc)
-		if err != nil {
-			return nil, err
-		}
-		n = len(tokens)
-
-	case PasswordFn:
-		// confirm agrregator could apply on the attributes
-		if len(q.SrcFunc) != 2 {
-			return nil, x.Errorf("Function requires 2 arguments, but got %d %v",
-				len(q.SrcFunc), q.SrcFunc)
-		}
-		n = algo.ListLen(q.Uids)
-
-	case StandardFn:
-		// srcfunc 0th val is func name and and [1:] are args.
-		// we tokenize the arguments of the query.
-		tokens, err = tok.GetTokens(q.SrcFunc[1:])
-		if err != nil {
-			return nil, err
-		}
-		intersectDest = (strings.ToLower(q.SrcFunc[0]) == "allof")
-		n = len(tokens)
-
-	case NotFn:
-		n = algo.ListLen(q.Uids)
+	resParseFn, err := parseQuery(q)
+	if err != nil {
+		return nil, err
 	}
+
+	fnType, f := resParseFn.fnType, resParseFn.fname
+	tokens := resParseFn.tokens
+	geoQuery := resParseFn.geoQuery
+	intersectDest := resParseFn.intersectDest
+	ineqValue := resParseFn.ineqValue
+	ineqValueToken := resParseFn.ineqValueToken
+	n := resParseFn.n
+	threshold := resParseFn.threshold
 
 	var out task.Result
 	it := algo.NewListIterator(q.Uids)
@@ -425,6 +340,122 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 	}
 	out.IntersectDest = intersectDest
 	return &out, nil
+}
+
+type resultParseQuery struct {
+	tokens         []string
+	geoQuery       *types.GeoQueryData
+	err            error
+	intersectDest  bool
+	ineqValue      types.Val
+	ineqValueToken string
+	n              int
+	threshold      int64
+	fname          string
+	fnType         FuncType
+}
+
+func parseQuery(q *task.Query) (*resultParseQuery, error) {
+	fnType, f := parseFuncType(q.SrcFunc)
+	attr := q.Attr
+	res := &resultParseQuery{fnType: fnType, fname: f}
+	var err error
+
+	switch fnType {
+	case AggregatorFn:
+		// confirm agrregator could apply on the attributes
+		typ, err := schema.State().TypeOf(attr)
+		if err != nil {
+			return nil, x.Errorf("Attribute %q is not scalar-type", attr)
+		}
+		if !CouldApplyAggregatorOn(f, typ) {
+			return nil, x.Errorf("Aggregator %q could not apply on %v",
+				f, attr)
+		}
+		res.n = algo.ListLen(q.Uids)
+		return res, nil
+	case CompareAttrFn:
+		if len(q.SrcFunc) != 2 {
+			return nil, x.Errorf("Function requires 2 arguments, but got %d %v",
+				len(q.SrcFunc), q.SrcFunc)
+		}
+		res.ineqValue, err = convertValue(attr, q.SrcFunc[1])
+		if err != nil {
+			return nil, err
+		}
+		// Tokenizing RHS value of inequality.
+		// TODO(kg): more comments about why we convert to types.BinaryID, and
+		// then convert it back to attr type in IndexTokens.
+		// the point is IndexTokens need BinaryID type to be passed in
+		v := types.ValueForType(types.BinaryID)
+		err = types.Marshal(res.ineqValue, &v)
+		if err != nil {
+			return nil, err
+		}
+		ineqTokens, err := posting.IndexTokens(attr,
+			types.Val{res.ineqValue.Tid, v.Value.([]byte)})
+		if err != nil {
+			return nil, err
+		}
+		if len(ineqTokens) != 1 {
+			return nil, x.Errorf("Expected only 1 token but got: %v", ineqTokens)
+		}
+		res.ineqValueToken = ineqTokens[0]
+		// Get tokens geq / leq ineqValueToken.
+		res.tokens, err = getInequalityTokens(attr, res.ineqValueToken, f)
+		if err != nil {
+			return nil, err
+		}
+		res.n = len(res.tokens)
+		return res, nil
+
+	case CompareScalarFn:
+		if len(q.SrcFunc) != 3 {
+			return nil, x.Errorf("Function requires 3 arguments, but got %d %v",
+				len(q.SrcFunc), q.SrcFunc)
+		}
+		res.threshold, err = strconv.ParseInt(q.SrcFunc[2], 10, 64)
+		if err != nil {
+			return nil, x.Wrapf(err, "Compare %v(%v) require digits, but got invalid num",
+				q.SrcFunc[0], q.SrcFunc[1])
+		}
+		res.n = algo.ListLen(q.Uids)
+		return res, nil
+
+	case GeoFn:
+		// For geo functions, we get extra information used for filtering.
+		res.tokens, res.geoQuery, err = types.GetGeoTokens(q.SrcFunc)
+		if err != nil {
+			return nil, err
+		}
+		res.n = len(res.tokens)
+		return res, nil
+
+	case PasswordFn:
+		// confirm agrregator could apply on the attributes
+		if len(q.SrcFunc) != 2 {
+			return nil, x.Errorf("Function requires 2 arguments, but got %d %v",
+				len(q.SrcFunc), q.SrcFunc)
+		}
+		res.n = algo.ListLen(q.Uids)
+		return res, nil
+
+	case StandardFn:
+		// srcfunc 0th val is func name and and [1:] are args.
+		// we tokenize the arguments of the query.
+		res.tokens, err = tok.GetTokens(q.SrcFunc[1:])
+		if err != nil {
+			return nil, err
+		}
+		res.intersectDest = (strings.ToLower(q.SrcFunc[0]) == "allof")
+		res.n = len(res.tokens)
+		return res, nil
+
+	case NotFn:
+		res.n = algo.ListLen(q.Uids)
+		return res, nil
+	}
+	return nil, x.Errorf("FnType %d not handled in numFnAttrs.", fnType)
 }
 
 // ServeTask is used to respond to a query.
@@ -655,7 +686,7 @@ func preProcessFilter(tree *facets.FilterTree) (*facetsTree, error) {
 			return nil, x.Errorf("Expected 2 child for not but got %d.", numChild)
 		}
 	default:
-		return nil, x.Errorf("Unsupported operation in facet filtering: %s.", ftree.op)
+		return nil, x.Errorf("Unsupported operation in facet filtering: %s.", tree.Op)
 	}
 	return ftree, nil
 }
