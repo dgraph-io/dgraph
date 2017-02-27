@@ -8,6 +8,12 @@ import { outgoingEdges } from "./Helpers";
 // import "../assets/css/Graph.css";
 import "../assets/css/App.css";
 
+function childNodes(edges) {
+    return edges.map(function(edge) {
+        return edge.to;
+    });
+}
+
 var doubleClickTime = 0;
 var threshold = 200;
 
@@ -89,6 +95,10 @@ function renderNetwork(nodes: Array<Node>, edges: Array<Edge>) {
     let allNodeSet = new vis.DataSet(this.props.allNodes);
     let allEdgeSet = new vis.DataSet(this.props.allEdges);
 
+    this.setState({
+        network: network,
+    });
+
     network.on("doubleClick", function(params) {
         doubleClickTime = new Date();
         if (params.nodes && params.nodes.length > 0) {
@@ -138,10 +148,7 @@ function renderNetwork(nodes: Array<Node>, edges: Array<Edge>) {
 
                 data.nodes.remove(allNodes);
                 data.edges.remove(allEdges);
-                // that.setState({
-                //     expandText: "Expand",
-                //     expandDisabled: false,
-                // });
+                that.props.updateExpanded(false);
             } else {
                 data.nodes.update(adjacentNodes);
                 data.edges.update(allOutgoingEdges);
@@ -194,6 +201,77 @@ function renderNetwork(nodes: Array<Node>, edges: Array<Edge>) {
             data.nodes.update({ id: nodeId, fixed: { x: false, y: false } });
         }
     });
+
+    function isExpanded(nodeId, edgeSet) {
+        if (outgoingEdges(nodeId, edgeSet).length > 0) {
+            return true;
+        }
+
+        return outgoingEdges(nodeId, allEdgeSet).length === 0;
+    }
+
+    var expand = function() {
+        // let network = this.state.network;
+        if (network === undefined) {
+            return;
+        }
+
+        if (this.props.fullyExpanded) {
+            data.nodes.remove(data.nodes.getIds());
+            data.edges.remove(data.edges.getIds());
+            data.nodes.update(this.props.nodes);
+            data.edges.update(this.props.edges);
+            this.props.updateExpanded(false);
+            return;
+        }
+
+        let nodeIds = data.nodes.getIds(),
+            nodeSet = data.nodes,
+            edgeSet = data.edges,
+            // We add nodes and edges that have to be updated to these arrays.
+            nodesBatch = [],
+            edgesBatch = [],
+            batchSize = 1000,
+            nodes = [];
+
+        while (nodeIds.length > 0) {
+            let nodeId = nodeIds.pop();
+            // If is expanded, do nothing, else put child nodes and edges into array for
+            // expansion.
+            if (isExpanded.bind(this)(nodeId, edgeSet)) {
+                continue;
+            }
+
+            let outEdges = outgoingEdges(nodeId, allEdgeSet),
+                outNodeIds = childNodes(outEdges);
+
+            nodeIds = nodeIds.concat(outNodeIds);
+            nodes = allNodeSet.get(outNodeIds);
+            nodesBatch = nodesBatch.concat(nodes);
+            edgesBatch = edgesBatch.concat(outEdges);
+
+            if (nodesBatch.length > batchSize) {
+                nodeSet.update(nodesBatch);
+                edgeSet.update(edgesBatch);
+                nodesBatch = [];
+                edgesBatch = [];
+
+                if (nodeIds.length === 0) {
+                    that.props.updateExpanded(true);
+                }
+                return;
+            }
+        }
+
+        if (nodesBatch.length > 0 || edgesBatch.length > 0) {
+            that.props.updateExpanded(true);
+
+            nodeSet.update(nodesBatch);
+            edgeSet.update(edgesBatch);
+        }
+    };
+
+    this.setState({ expand: expand });
 }
 
 class Graph extends Component {
@@ -203,8 +281,13 @@ class Graph extends Component {
         this.state = {
             network: {},
             selectedNode: false,
+            expand: function() {},
         };
     }
+
+    expandAll = () => {
+        this.state.expand.bind(this)();
+    };
 
     render() {
         var graphClass = classNames(

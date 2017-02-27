@@ -137,6 +137,20 @@ function hasProperties(props: Object): boolean {
   return Object.keys(props).length !== 1;
 }
 
+function renderPartialGraph(result) {
+  var graph = processGraph(result, 2), that = this;
+
+  setTimeout(
+    function() {
+      that.setState({
+        nodes: graph[0],
+        edges: graph[1],
+      });
+    },
+    1000,
+  );
+}
+
 function processGraph(response: Object, maxNodes: number) {
   let nodesStack: Array<ResponseNode> = [],
     // Contains map of a lable to its shortform thats displayed.
@@ -273,20 +287,6 @@ function processGraph(response: Object, maxNodes: number) {
   return [nodes, edges, plotAxis];
 }
 
-function renderPartialGraph(result) {
-  var graph = processGraph(result, 2), that = this;
-
-  setTimeout(
-    function() {
-      that.setState({
-        nodes: graph[0],
-        edges: graph[1],
-      });
-    },
-    1000,
-  );
-}
-
 type QueryTs = {|
   text: string,
   lastRun: number,
@@ -333,7 +333,6 @@ class App extends React.Component {
       graph: "",
       graphHeight: "fixed-height",
       plotAxis: [],
-      expandText: "Expand",
 
       nodes: [],
       edges: [],
@@ -352,8 +351,6 @@ class App extends React.Component {
         selectedNode: false,
         partial: false,
         plotAxis: [],
-        expandDisabled: true,
-        expandText: "Expand",
         result: {},
         nodes: [],
         edges: [],
@@ -378,9 +375,11 @@ class App extends React.Component {
       resType: "hourglass",
       partial: false,
       plotAxis: [],
-      expandDisabled: true,
-      expandText: "Expand",
       result: {},
+      allNodes: [],
+      allEdges: [],
+      nodes: [],
+      edges: [],
     };
   };
 
@@ -580,10 +579,10 @@ class App extends React.Component {
                   resType={this.state.resType}
                   graphHeight={this.state.graphHeight}
                   response={this.state.response}
+                  result={this.state.result}
                   plotAxis={this.state.plotAxis}
                   rendering={this.state.rendering}
                   latency={this.state.latency}
-                  expandText={this.state.expandText}
                   partial={this.state.partial}
                   nodes={this.state.nodes}
                   edges={this.state.edges}
