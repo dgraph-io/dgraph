@@ -9,14 +9,13 @@ if [ -z "$1" ]; then
 fi
 
 ROCKSDBDIR=$BUILD/rocksdb-4.11.2
-ICUDIR=$BUILD/icu/build
 
 set -e
 
 # build flags needed for rocksdb
-export CGO_CPPFLAGS="-I${ROCKSDBDIR}/include -I${ICUDIR}/include"
-export CGO_LDFLAGS="-L${ROCKSDBDIR} -L${ICUDIR}/lib"
-export LD_LIBRARY_PATH="${ICUDIR}/lib:${ROCKSDBDIR}:${LD_LIBRARY_PATH}"
+export CGO_CPPFLAGS="-I${ROCKSDBDIR}/include"
+export CGO_LDFLAGS="-L${ROCKSDBDIR}"
+export LD_LIBRARY_PATH="${ROCKSDBDIR}:${LD_LIBRARY_PATH}"
 
 pushd cmd/dgraph &> /dev/null
 go build .

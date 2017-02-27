@@ -21,9 +21,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/blevesearch/bleve/analysis"
+	"github.com/blevesearch/bleve/analysis/token/lowercase"
+	"github.com/blevesearch/bleve/analysis/token/unicodenorm"
+	"github.com/blevesearch/bleve/analysis/tokenizer/unicode"
 	geom "github.com/twpayne/go-geom"
 
-	"github.com/dgraph-io/dgraph/icutok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -141,29 +144,24 @@ type TermTokenizer struct{}
 func (t TermTokenizer) Name() string       { return "term" }
 func (t TermTokenizer) Type() types.TypeID { return types.StringID }
 func (t TermTokenizer) Tokens(sv types.Val) ([]string, error) {
-	words := strings.Fields(sv.Value.(string))
-	tokens := make([]string, 0, 5)
-	for _, it := range words {
-		if it == "_nil_" {
-			tokens = append(tokens, it)
-			continue
-		}
-
-		x.AssertTruef(!icutok.ICUDisabled(), "Indexing requires ICU to be enabled.")
-		tokenizer, err := icutok.NewTokenizer([]byte(it))
-		if err != nil {
-			return nil, err
-		}
-		for {
-			s := tokenizer.Next()
-			if s == nil {
-				break
-			}
-			tokens = append(tokens, string(s))
-		}
-		tokenizer.Destroy()
+	tokenizer := unicode.NewUnicodeTokenizer()
+	toLowerFilter := lowercase.NewLowerCaseFilter()
+	normalizeFilter, err := unicodenorm.NewUnicodeNormalizeFilter("nfkc")
+	if err != nil {
+		return nil, err
 	}
-	return tokens, nil
+
+	analyzer := analysis.Analyzer{
+		Tokenizer: tokenizer,
+		TokenFilters: []analysis.TokenFilter{
+			toLowerFilter,
+			normalizeFilter,
+		},
+	}
+
+	tokenStream := analyzer.Analyze([]byte(sv.Value.(string)))
+
+	return extractTerms(tokenStream), nil
 }
 
 type ExactTokenizer struct{}
@@ -173,6 +171,15 @@ func (t ExactTokenizer) Type() types.TypeID { return types.StringID }
 func (t ExactTokenizer) Tokens(sv types.Val) ([]string, error) {
 	words := strings.Fields(sv.Value.(string))
 	return []string{strings.Join(words, " ")}, nil
+}
+
+func extractTerms(tokenStream analysis.TokenStream) []string {
+	terms := make([]string, len(tokenStream))
+	for i, token := range tokenStream {
+		terms[i] = string(token.Term)
+	}
+
+	return terms
 }
 
 func encodeInt(val int32) ([]string, error) {
