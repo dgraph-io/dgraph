@@ -346,10 +346,10 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 		it.Seek(startKey)
 		key := it.Key().Data()
 		pk := x.Parse(key)
-		for it.Valid() && pk.Attr == q.Attr && pk.Term[0] == '\x01' {
+		for it.Valid() && pk.Attr == q.Attr && tok.IsExact(pk.Term) {
 			x.AssertTrue(pk.IsIndex())
 			x.AssertTrue(pk.Attr == q.Attr)
-			x.AssertTrue(pk.Term[0] == '\x01')
+			x.AssertTrue(tok.IsExact(pk.Term))
 			term := pk.Term[1:] // skip the first byte.
 			if regex.MatchString(term) {
 				// Note: Even is one term in the index passes the matcher, the
