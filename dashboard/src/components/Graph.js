@@ -76,7 +76,6 @@ function renderNetwork(props) {
         physics: {
             stabilization: {
                 fit: true,
-                // updateInterval: 1000
             },
             // timestep: 0.2,
             barnesHut: {
@@ -93,6 +92,26 @@ function renderNetwork(props) {
     let network = new vis.Network(container, data, options);
     let allNodeSet = new vis.DataSet(props.allNodes);
     let allEdgeSet = new vis.DataSet(props.allEdges), that = this;
+
+    function multiLevelExpand(adjNodes, adjEdges) {
+        let nodes = adjNodes.slice();
+        // We expand till we there are no more child nodes or the
+        // number of nodes to be added is > 50.
+        while (nodes.length < 50 && adjNodes.length !== 0) {
+            let nodeId = adjNodes.pop();
+
+            let outgoing = outgoingEdges(nodeId, allEdgeSet),
+                adjNodeIds = outgoing.map(function(edge) {
+                    return edge.to;
+                });
+
+            adjNodes = adjNodes.concat(adjNodeIds);
+            nodes = nodes.concat(adjNodeIds);
+            adjEdges = adjEdges.concat(outgoing);
+        }
+        data.nodes.update(allNodeSet.get(nodes));
+        data.edges.update(adjEdges);
+    }
 
     network.on("doubleClick", function(params) {
         doubleClickTime = new Date();
@@ -145,8 +164,7 @@ function renderNetwork(props) {
                 data.edges.remove(allEdges);
                 that.props.updateExpanded(false);
             } else {
-                data.nodes.update(adjacentNodes);
-                data.edges.update(allOutgoingEdges);
+                multiLevelExpand(adjacentNodeIds, allOutgoingEdges);
             }
         }
     });

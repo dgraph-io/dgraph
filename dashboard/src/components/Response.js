@@ -3,7 +3,6 @@ import React, { Component } from "react";
 import Stats from "./Stats";
 import Graph from "./Graph";
 import Properties from "./Properties";
-// import { outgoingEdges } from "./Helpers";
 
 import { Button } from "react-bootstrap";
 
