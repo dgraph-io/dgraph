@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"sort"
 	"testing"
 	"time"
 
@@ -18,10 +19,13 @@ import (
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/task"
+	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
 )
 
 func populateGraphBackup(t *testing.T) {
+	friendFacets := map[string]string{
+		"since": "2005-05-02T15:04:05", "close": "true", "family": "false", "age": "33"}
 	edge := &task.DirectedEdge{
 		ValueId: 5,
 		Label:   "author0",
@@ -36,8 +40,8 @@ func populateGraphBackup(t *testing.T) {
 	edge.Entity = 3
 	addEdge(t, edge, getOrCreate(x.DataKey("friend", 3)))
 
-	edge.Entity = 4
-	addEdge(t, edge, getOrCreate(x.DataKey("friend", 4)))
+	//Add an edge with facet.
+	addEdgeToUID(t, "friend", 4, 5, friendFacets)
 
 	edge.Entity = 1
 	edge.ValueId = 0
@@ -48,6 +52,46 @@ func populateGraphBackup(t *testing.T) {
 	edge.Entity = 2
 	edge.Lang = "en"
 	addEdge(t, edge, getOrCreate(x.DataKey("name", 2)))
+}
+
+func makeFacets(facetKVs map[string]string) (fs []*facets.Facet, err error) {
+	if len(facetKVs) == 0 {
+		return nil, nil
+	}
+	allKeys := make([]string, 0, len(facetKVs))
+	for k := range facetKVs {
+		allKeys = append(allKeys, k)
+	}
+	sort.Strings(allKeys)
+
+	for _, k := range allKeys {
+		v := facetKVs[k]
+		typ, err := facets.ValType(v)
+		if err != nil {
+			return nil, err
+		}
+		fs = append(fs, &facets.Facet{
+			k,
+			[]byte(v),
+			typ,
+		})
+	}
+	return fs, nil
+}
+
+func addEdgeToUID(t *testing.T, attr string, src uint64,
+	dst uint64, facetKVs map[string]string) {
+	fs, err := makeFacets(facetKVs)
+	require.NoError(t, err)
+	edge := &task.DirectedEdge{
+		ValueId: dst,
+		Label:   "testing",
+		Attr:    attr,
+		Entity:  src,
+		Op:      task.DirectedEdge_SET,
+		Facets:  fs,
+	}
+	addEdge(t, edge, getOrCreate(x.DataKey(attr, src)))
 }
 
 func initTestBackup(t *testing.T, schemaStr string) (string, *store.Store) {
