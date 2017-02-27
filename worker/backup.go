@@ -59,11 +59,11 @@ func toRDF(buf *bytes.Buffer, item kv) {
 		for i, f := range facets {
 			x.Check2(buf.WriteString(fmt.Sprintf("%s=%s", f.Key, string(f.Value))))
 			if i != len(facets)-1 {
-				x.Check2(buf.WriteString(","))
+				x.Check2(buf.WriteRune(','))
 			}
 		}
 		if len(facets) != 0 {
-			x.Check2(buf.WriteString(")"))
+			x.Check2(buf.WriteRune(')'))
 		}
 		x.Check2(buf.WriteString(" .\n"))
 	}
