@@ -15,7 +15,6 @@ import { getNodeLabel } from "./Helpers";
 import "../assets/css/App.css";
 
 type Edge = {|
-  id: string,
   from: string,
   to: string,
   arrows: string,
@@ -28,7 +27,7 @@ type Node = {|
   label: string,
   title: string,
   group: string,
-  value: number,
+  color: string,
 |};
 
 type MapOfStrings = { [key: string]: string };
@@ -280,7 +279,6 @@ type QueryTs = {|
 
 type State = {
   selectedNode: boolean,
-  partial: boolean,
   lastQuery: string,
   queries: Array<QueryTs>,
   lastQuery: string,
@@ -288,8 +286,6 @@ type State = {
   latency: string,
   rendering: string,
   resType: string,
-  nodes: number,
-  relations: number,
   graph: string,
   graphHeight: string,
   plotAxis: Array<Object>,
@@ -306,7 +302,6 @@ class App extends React.Component {
 
     this.state = {
       selectedNode: false,
-      partial: false,
       lastQuery: response[1],
       // We store the queries run in state, so that they can be displayed
       // to the user.
@@ -359,7 +354,6 @@ class App extends React.Component {
       latency: "",
       rendering: "",
       resType: "hourglass",
-      partial: false,
       plotAxis: [],
       result: {},
       allNodes: [],
@@ -448,7 +442,7 @@ class App extends React.Component {
 
     // We call procesGraph with a 5 node limit and calculate the whole dataset in
     // the background.
-    var restrictedGraph = processGraph(result, 2);
+    var renderedGraph = processGraph(result, 2);
     setTimeout(
       function() {
         // We process all the nodes and edges in the response in background and
@@ -459,8 +453,8 @@ class App extends React.Component {
           plotAxis: graph[2],
           allNodes: graph[0],
           allEdges: graph[1],
-          nodes: restrictedGraph[0],
-          edges: restrictedGraph[1],
+          nodes: renderedGraph[0],
+          edges: renderedGraph[1],
         });
       },
       0,
