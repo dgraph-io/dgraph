@@ -5,8 +5,7 @@ import vis from "vis";
 import Label from "./Label";
 import { outgoingEdges } from "./Helpers";
 
-// import "../assets/css/Graph.css";
-import "../assets/css/App.css";
+import "../assets/css/Graph.css";
 
 function childNodes(edges) {
     return edges.map(function(edge) {
@@ -303,11 +302,11 @@ class Graph extends Component {
 
     render() {
         var graphClass = classNames(
-            { "graph-s": true, fullscreen: this.props.graph === "fullscreen" },
-            { "App-graph": this.props.graph !== "fullscreen" },
-            { "error-res": this.props.resType === "error-res" },
-            { "success-res": this.props.resType === "success-res" },
-            { hourglass: this.props.resType === "hourglass" },
+            { Graph: true, "Graph-fs": this.props.graph === "fullscreen" },
+            { "Graph-s": this.props.graph !== "fullscreen" },
+            { "Graph-error": this.props.resType === "error-res" },
+            { "Graph-success": this.props.resType === "success-res" },
+            { "Graph-hourglass": this.props.resType === "hourglass" },
         );
         return (
             <div>
@@ -316,17 +315,8 @@ class Graph extends Component {
                         {this.props.response}
                     </div>
                 </div>
-                <div
-                    style={{
-                        padding: "5px",
-                        borderWidth: "0px 1px 1px 1px ",
-                        borderStyle: "solid",
-                        borderColor: "gray",
-                        textAlign: "right",
-                        margin: "0px",
-                    }}
-                >
-                    <div style={{ marginRight: "10px", marginLeft: "auto" }}>
+                <div className="Graph-label-box">
+                    <div className="Graph-label">
                         {this.props.plotAxis.map(
                             function(label, i) {
                                 return (
