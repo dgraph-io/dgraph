@@ -646,8 +646,8 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	if len(gq.UID) > 0 {
 		o := new(task.List)
 		sg.SrcUIDs = new(task.List)
-		ito := algo.NewWriteIterator(o, 0)
-		itsg := algo.NewWriteIterator(sg.SrcUIDs, 0)
+		ito := algo.NewWriteIterator(o)
+		itsg := algo.NewWriteIterator(sg.SrcUIDs)
 		for _, uid := range gq.UID {
 			ito.Append(uid)
 			itsg.Append(uid)
@@ -876,7 +876,7 @@ func shouldCascade(res gql.Result, idx int) bool {
 // TODO(Ashwin): Benchmark this function.
 func populateVarMap(sg *SubGraph, doneVars map[string]*task.List, isCascade bool) {
 	o := new(task.List)
-	out := algo.NewWriteIterator(o, 0)
+	out := algo.NewWriteIterator(o)
 	it := algo.NewListIterator(sg.DestUIDs)
 	i := -1
 	if sg.Params.Alias == "shortest" {
@@ -958,7 +958,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		sg.uidMatrix = []*task.List{sg.DestUIDs}
 		it := algo.NewListIterator(sg.DestUIDs)
 		var o task.List
-		wit := algo.NewWriteIterator(&o, 0)
+		wit := algo.NewWriteIterator(&o)
 		for ; it.Valid(); it.Next() {
 			wit.Append(it.Val())
 		}
