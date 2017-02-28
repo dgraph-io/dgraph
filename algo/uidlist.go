@@ -200,13 +200,9 @@ func IntersectWith(u, v *task.List) {
 				ii++
 				jj++
 				if ii == ulen {
-					i++
-					ii = 0
 					break L
 				}
 				if jj == vlen {
-					j++
-					jj = 0
 					break L
 				}
 			} else if ubMax < vid {
@@ -221,16 +217,12 @@ func IntersectWith(u, v *task.List) {
 				for ; ii < ulen && ulist[ii] < vid; ii++ {
 				}
 				if ii == ulen {
-					i++
-					ii = 0
 					break L
 				}
 			} else if uid > vid {
 				for ; jj < vlen && vlist[jj] < uid; jj++ {
 				}
 				if jj == vlen {
-					j++
-					jj = 0
 					break L
 				}
 			}
