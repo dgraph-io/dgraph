@@ -190,7 +190,7 @@ func IntersectWith(u, v *task.List) {
 		vbMax := v.Blocks[j].MaxInt
 		ulen := len(ulist)
 		vlen := len(vlist)
-	L:
+
 		for ii < ulen && jj < vlen {
 			uid := ulist[ii]
 			vid := vlist[jj]
@@ -199,31 +199,15 @@ func IntersectWith(u, v *task.List) {
 				out.Append(uid)
 				ii++
 				jj++
-				if ii == ulen {
-					break L
-				}
-				if jj == vlen {
-					break L
-				}
 			} else if ubMax < vid {
-				i++
-				ii = 0
-				break L
+				ii = ulen
 			} else if vbMax < uid {
-				j++
-				jj = 0
-				break L
+				jj = vlen
 			} else if uid < vid {
 				for ; ii < ulen && ulist[ii] < vid; ii++ {
 				}
-				if ii == ulen {
-					break L
-				}
 			} else if uid > vid {
 				for ; jj < vlen && vlist[jj] < uid; jj++ {
-				}
-				if jj == vlen {
-					break L
 				}
 			}
 		}
