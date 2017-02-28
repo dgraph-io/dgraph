@@ -1768,7 +1768,7 @@ func TestParseFacetsMultiple(t *testing.T) {
 	require.Equal(t, []string{"key1", "key2", "key3"}, res.Query[0].Children[0].Children[0].Facets.Keys)
 }
 
-func TestParseFacetsMultipleRepeat_Error(t *testing.T) {
+func TestParseFacetsMultipleRepeat(t *testing.T) {
 	query := `
 	query {
 		me(id:0x1) {
