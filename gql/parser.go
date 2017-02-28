@@ -965,6 +965,21 @@ func parseFacets(it *lex.ItemIterator) (*Facets, *FilterTree, error) {
 	} else {
 		sort.Strings(facets.Keys)
 	}
+	if len(facets.Keys) > 1 {
+		// deduplicate facets
+		i, j := 1, 0
+		for i < len(facets.Keys) {
+			if facets.Keys[i-1] == facets.Keys[i] {
+				i++
+				continue
+			}
+			facets.Keys[j] = facets.Keys[i-1]
+			i++
+			j++
+		}
+		facets.Keys[j] = facets.Keys[i-1]
+		facets.Keys = facets.Keys[:j+1]
+	}
 	return facets, nil, nil
 }
 
