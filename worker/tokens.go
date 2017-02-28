@@ -24,7 +24,7 @@ func getInequalityTokens(attr, ineqValueToken string, f string) ([]string, error
 	defer it.Close()
 	it.Seek(x.IndexKey(attr, ineqValueToken))
 
-	hit := it.Value() != nil && it.Value().Size() > 0
+	hit := it.Valid() && it.Value() != nil && it.Value().Size() > 0
 	if f == "eq" {
 		if hit {
 			return []string{ineqValueToken}, nil
