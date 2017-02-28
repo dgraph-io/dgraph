@@ -274,14 +274,12 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 			if pc.Params.Facet != nil {
 				fcsList = pc.facetsMatrix[idx].FacetsList
 			}
-			childIdx := -1
-			blen := len(ul.Blocks)
-			for i := 0; i < blen; i++ {
-				ulist := ul.Blocks[i].List
+			for bi, blen, childIdx := 0, len(ul.Blocks), -1; bi < blen; bi++ {
+				ulist := ul.Blocks[bi].List
 				llen := len(ulist)
-				for ii := 0; ii < llen; ii++ {
+				for li := 0; li < llen; li++ {
 					childIdx++
-					childUID := ulist[ii]
+					childUID := ulist[li]
 					if invalidUids[childUID] {
 						continue
 					}
