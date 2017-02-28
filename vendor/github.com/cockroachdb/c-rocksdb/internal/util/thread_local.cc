@@ -14,7 +14,7 @@
 
 namespace rocksdb {
 
-#if ROCKSDB_SUPPORT_THREAD_LOCAL
+#ifdef ROCKSDB_SUPPORT_THREAD_LOCAL
 __thread ThreadLocalPtr::ThreadData* ThreadLocalPtr::StaticMeta::tls_ = nullptr;
 #endif
 
@@ -126,10 +126,9 @@ ThreadLocalPtr::StaticMeta* ThreadLocalPtr::Instance() {
   // of using __thread.  The major difference between thread_local and __thread
   // is that thread_local supports dynamic construction and destruction of
   // non-primitive typed variables.  As a result, we can guarantee the
-  // desturction order even when the main thread dies before any child threads.
-  // However, thread_local requires gcc 4.8 and is not supported in all the
-  // compilers that accepts -std=c++11 (e.g., the default clang on Mac), while
-  // the current RocksDB still accept gcc 4.7.
+  // destruction order even when the main thread dies before any child threads.
+  // However, thread_local is not supported in all compilers that accept -std=c++11
+  // (e.g., eg Mac with XCode < 8. XCode 8+ supports thread_local).
   static ThreadLocalPtr::StaticMeta* inst = new ThreadLocalPtr::StaticMeta();
   return inst;
 }
@@ -185,7 +184,7 @@ ThreadLocalPtr::StaticMeta::StaticMeta() : next_instance_id_(0), head_(this) {
 #if !defined(OS_WIN)
   static struct A {
     ~A() {
-#if !(ROCKSDB_SUPPORT_THREAD_LOCAL)
+#ifndef ROCKSDB_SUPPORT_THREAD_LOCAL
       ThreadData* tls_ =
         static_cast<ThreadData*>(pthread_getspecific(Instance()->pthread_key_));
 #endif
@@ -223,7 +222,7 @@ void ThreadLocalPtr::StaticMeta::RemoveThreadData(
 }
 
 ThreadLocalPtr::ThreadData* ThreadLocalPtr::StaticMeta::GetThreadLocal() {
-#if !(ROCKSDB_SUPPORT_THREAD_LOCAL)
+#ifndef ROCKSDB_SUPPORT_THREAD_LOCAL
   // Make this local variable name look like a member variable so that we
   // can share all the code below
   ThreadData* tls_ =
@@ -302,6 +301,18 @@ void ThreadLocalPtr::StaticMeta::Scrape(uint32_t id, autovector<void*>* ptrs,
           t->entries[id].ptr.exchange(replacement, std::memory_order_acquire);
       if (ptr != nullptr) {
         ptrs->push_back(ptr);
+      }
+    }
+  }
+}
+
+void ThreadLocalPtr::StaticMeta::Fold(uint32_t id, FoldFunc func, void* res) {
+  MutexLock l(Mutex());
+  for (ThreadData* t = head_.next; t != &head_; t = t->next) {
+    if (id < t->entries.size()) {
+      void* ptr = t->entries[id].ptr.load();
+      if (ptr != nullptr) {
+        func(ptr, res);
       }
     }
   }
@@ -386,6 +397,10 @@ bool ThreadLocalPtr::CompareAndSwap(void* ptr, void*& expected) {
 
 void ThreadLocalPtr::Scrape(autovector<void*>* ptrs, void* const replacement) {
   Instance()->Scrape(id_, ptrs, replacement);
+}
+
+void ThreadLocalPtr::Fold(FoldFunc func, void* res) {
+  Instance()->Fold(id_, func, res);
 }
 
 }  // namespace rocksdb

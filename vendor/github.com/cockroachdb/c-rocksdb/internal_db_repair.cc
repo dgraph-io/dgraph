@@ -78,10 +78,10 @@
 #include "rocksdb/comparator.h"
 #include "rocksdb/db.h"
 #include "rocksdb/env.h"
-#include "rocksdb/immutable_options.h"
 #include "rocksdb/options.h"
 #include "rocksdb/write_buffer_manager.h"
 #include "table/scoped_arena_iterator.h"
+#include "util/cf_options.h"
 #include "util/file_reader_writer.h"
 #include "util/string_util.h"
 
@@ -99,10 +99,11 @@ class Repairer {
         env_(db_options.env),
         env_options_(),
         db_options_(SanitizeOptions(dbname_, db_options)),
+        immutable_db_options_(db_options_),
         icmp_(default_cf_opts.comparator),
         default_cf_opts_(default_cf_opts),
         default_cf_iopts_(
-            ImmutableCFOptions(Options(db_options_, default_cf_opts))),
+            ImmutableCFOptions(immutable_db_options_, default_cf_opts)),
         unknown_cf_opts_(unknown_cf_opts),
         create_unknown_cfs_(create_unknown_cfs),
         raw_table_cache_(
@@ -113,8 +114,8 @@ class Repairer {
                                     raw_table_cache_.get())),
         wb_(db_options_.db_write_buffer_size),
         wc_(db_options_.delayed_write_rate),
-        vset_(dbname_, &db_options_, env_options_, raw_table_cache_.get(), &wb_,
-              &wc_),
+        vset_(dbname_, &immutable_db_options_, env_options_,
+              raw_table_cache_.get(), &wb_, &wc_),
         next_file_number_(1) {
     for (const auto& cfd : column_families) {
       cf_name_to_opts_[cfd.name] = cfd.options;
@@ -141,7 +142,7 @@ class Repairer {
                                 cf_name + ", id=" + ToString(cf_id));
     }
     Options opts(db_options_, *cf_opts);
-    MutableCFOptions mut_cf_opts(opts, ImmutableCFOptions(opts));
+    MutableCFOptions mut_cf_opts(opts);
 
     VersionEdit edit;
     edit.SetComparatorName(opts.comparator->Name());
@@ -222,6 +223,7 @@ class Repairer {
   Env* const env_;
   const EnvOptions env_options_;
   const DBOptions db_options_;
+  const ImmutableDBOptions immutable_db_options_;
   const InternalKeyComparator icmp_;
   const ColumnFamilyOptions default_cf_opts_;
   const ImmutableCFOptions default_cf_iopts_;  // table_cache_ holds reference
@@ -378,11 +380,12 @@ class Repairer {
       ScopedArenaIterator iter(mem->NewIterator(ro, &arena));
       status = BuildTable(
           dbname_, env_, *cfd->ioptions(), *cfd->GetLatestMutableCFOptions(),
-          env_options_, table_cache_, iter.get(), &meta,
-          cfd->internal_comparator(), cfd->int_tbl_prop_collector_factories(),
-          cfd->GetID(), cfd->GetName(), {}, kMaxSequenceNumber, kNoCompression,
-          CompressionOptions(), false, nullptr /* internal_stats */,
-          TableFileCreationReason::kRecovery);
+          env_options_, table_cache_, iter.get(),
+          std::unique_ptr<InternalIterator>(mem->NewRangeTombstoneIterator(ro)),
+          &meta, cfd->internal_comparator(),
+          cfd->int_tbl_prop_collector_factories(), cfd->GetID(), cfd->GetName(),
+          {}, kMaxSequenceNumber, kNoCompression, CompressionOptions(), false,
+          nullptr /* internal_stats */, TableFileCreationReason::kRecovery);
       Log(InfoLogLevel::INFO_LEVEL, db_options_.info_log,
           "Log #%" PRIu64 ": %d ops saved to Table #%" PRIu64 " %s", log,
           counter, meta.fd.GetNumber(), status.ToString().c_str());
@@ -464,7 +467,8 @@ class Repairer {
     }
     if (status.ok()) {
       InternalIterator* iter = table_cache_->NewIterator(
-          ReadOptions(), env_options_, cfd->internal_comparator(), t->meta.fd);
+          ReadOptions(), env_options_, cfd->internal_comparator(), t->meta.fd,
+          nullptr /* range_del_agg */);
       bool empty = true;
       ParsedInternalKey parsed;
       t->min_sequence = 0;

@@ -63,7 +63,13 @@ enum CompressionType : unsigned char {
   kLZ4Compression = 0x4,
   kLZ4HCCompression = 0x5,
   kXpressCompression = 0x6,
-  // zstd format is not finalized yet so it's subject to changes.
+  kZSTD = 0x7,
+
+  // Only use kZSTDNotFinalCompression if you have to use ZSTD lib older than
+  // 0.8.0 or consider a possibility of downgrading the service or copying
+  // the database files to another service running with an older version of
+  // RocksDB that doesn't have kZSTD. Otherwise, you should use kZSTD. We will
+  // eventually remove the option from the public API.
   kZSTDNotFinalCompression = 0x40,
 
   // kDisableCompressionOption is used to disable some compression options.
@@ -521,7 +527,7 @@ struct ColumnFamilyOptions {
   // Default: 10.
   //
   // Dynamically changeable through SetOptions() API
-  int max_bytes_for_level_multiplier;
+  double max_bytes_for_level_multiplier;
 
   // Different max-size multipliers for different levels.
   // These are multiplied by max_bytes_for_level_multiplier to arrive
@@ -532,30 +538,12 @@ struct ColumnFamilyOptions {
   // Dynamically changeable through SetOptions() API
   std::vector<int> max_bytes_for_level_multiplier_additional;
 
-  // Maximum number of bytes in all compacted files.  We avoid expanding
-  // the lower level file set of a compaction if it would make the
-  // total compaction cover more than
-  // (expanded_compaction_factor * targetFileSizeLevel()) many bytes.
+  // We try to limit number of bytes in one compaction to be lower than this
+  // threshold. But it's not guaranteed.
+  // Value 0 will be sanitized.
   //
-  // Dynamically changeable through SetOptions() API
-  int expanded_compaction_factor;
-
-  // Maximum number of bytes in all source files to be compacted in a
-  // single compaction run. We avoid picking too many files in the
-  // source level so that we do not exceed the total source bytes
-  // for compaction to exceed
-  // (source_compaction_factor * targetFileSizeLevel()) many bytes.
-  // Default:1, i.e. pick maxfilesize amount of data as the source of
-  // a compaction.
-  //
-  // Dynamically changeable through SetOptions() API
-  int source_compaction_factor;
-
-  // Control maximum bytes of overlaps in grandparent (i.e., level+2) before we
-  // stop building a single file in a level->level+1 compaction.
-  //
-  // Dynamically changeable through SetOptions() API
-  int max_grandparent_overlap_factor;
+  // Default: result.target_file_size_base * 25
+  uint64_t max_compaction_bytes;
 
   // DEPRECATED -- this options is no longer used
   // Puts are delayed to options.delayed_write_rate when any level has a
@@ -758,6 +746,28 @@ struct ColumnFamilyOptions {
   // Dynamically changeable through SetOptions() API
   size_t memtable_huge_page_size;
 
+  // If non-nullptr, memtable will use the specified function to extract
+  // prefixes for keys, and for each prefix maintain a hint of insert location
+  // to reduce CPU usage for inserting keys with the prefix. Keys out of
+  // domain of the prefix extractor will be insert without using hints.
+  //
+  // Currently only the default skiplist based memtable implements the feature.
+  // All other memtable implementation will ignore the option. It incurs ~250
+  // additional bytes of memory overhead to store a hint for each prefix.
+  // Also concurrent writes (when allow_concurrent_memtable_write is true) will
+  // ignore the option.
+  //
+  // The option is best suited for workloads where keys will likely to insert
+  // to a location close the the last inserted key with the same prefix.
+  // One example could be inserting keys of the form (prefix + timestamp),
+  // and keys of the same prefix always comes in with time order. Another
+  // example would be updating the same key over and over again, in which case
+  // the prefix can be the key itself.
+  //
+  // Default: nullptr (disable)
+  std::shared_ptr<const SliceTransform>
+      memtable_insert_with_hint_prefix_extractor;
+
   // Control locality of bloom filter probes to improve cache miss rate.
   // This option only applies to memtable prefix bloom and plaintable
   // prefix bloom. It essentially limits every bloom checking to one cache line.
@@ -807,6 +817,12 @@ struct ColumnFamilyOptions {
   // After writing every SST file, reopen it and read all the keys.
   // Default: false
   bool paranoid_file_checks;
+
+  // In debug mode, RocksDB run consistency checks on the LSM everytime the LSM
+  // change (Flush, Compaction, AddFile). These checks are disabled in release
+  // mode, use this option to enable them in release mode as well.
+  // Default: false
+  bool force_consistency_checks;
 
   // Measure IO stats in compactions and flushes, if true.
   // Default: false
@@ -925,7 +941,7 @@ struct DBOptions {
   // to stable storage. Their contents remain in the OS buffers till the
   // OS decides to flush them. This option is good for bulk-loading
   // of data. Once the bulk-loading is complete, please issue a
-  // sync to the OS to flush all dirty buffesrs to stable storage.
+  // sync to the OS to flush all dirty buffers to stable storage.
   // Default: false
   bool disableDataSync;
 
@@ -1084,26 +1100,6 @@ struct DBOptions {
   // large amounts of data (such as xfs's allocsize option).
   size_t manifest_preallocation_size;
 
-  // Hint the OS that it should not buffer disk I/O. Enabling this
-  // parameter may improve performance but increases pressure on the
-  // system cache.
-  //
-  // The exact behavior of this parameter is platform dependent.
-  //
-  // On POSIX systems, after RocksDB reads data from disk it will
-  // mark the pages as "unneeded". The operating system may - or may not
-  // - evict these pages from memory, reducing pressure on the system
-  // cache. If the disk block is requested again this can result in
-  // additional disk I/O.
-  //
-  // On WINDOWS system, files will be opened in "unbuffered I/O" mode
-  // which means that data read from the disk will not be cached or
-  // bufferized. The hardware buffer of the devices may however still
-  // be used. Memory mapped files are not impacted by this parameter.
-  //
-  // Default: true
-  bool allow_os_buffer;
-
   // Allow the OS to mmap file for reading sst tables. Default: false
   bool allow_mmap_reads;
 
@@ -1111,6 +1107,22 @@ struct DBOptions {
   // DB::SyncWAL() only works if this is set to false.
   // Default: false
   bool allow_mmap_writes;
+
+  // Enable direct I/O mode for read/write
+  // they may or may not improve performance depending on the use case
+  //
+  // Files will be opened in "direct I/O" mode
+  // which means that data r/w from the disk will not be cached or
+  // bufferized. The hardware buffer of the devices may however still
+  // be used. Memory mapped files are not impacted by these parameters.
+
+  // Use O_DIRECT for reading file
+  // Default: false
+  bool use_direct_reads;
+
+  // Use O_DIRECT for writing file
+  // Default: false
+  bool use_direct_writes;
 
   // If false, fallocate() calls are bypassed
   bool allow_fallocate;
@@ -1232,7 +1244,7 @@ struct DBOptions {
 
   // Allows OS to incrementally sync files to disk while they are being
   // written, asynchronously, in the background. This operation can be used
-  // to smooth out write I/Os over time. Users shouldn't reply on it for
+  // to smooth out write I/Os over time. Users shouldn't rely on it for
   // persistency guarantee.
   // Issue one request for every bytes_per_sync written. 0 turns it off.
   // Default: 0
@@ -1276,7 +1288,7 @@ struct DBOptions {
   // It is strongly recommended to set enable_write_thread_adaptive_yield
   // if you are going to use this feature.
   //
-  // Default: false
+  // Default: true
   bool allow_concurrent_memtable_write;
 
   // If true, threads synchronizing with the write batch group leader will
@@ -1284,7 +1296,7 @@ struct DBOptions {
   // This can substantially improve throughput for concurrent workloads,
   // regardless of whether allow_concurrent_memtable_write is enabled.
   //
-  // Default: false
+  // Default: true
   bool enable_write_thread_adaptive_yield;
 
   // The maximum number of microseconds that a write operation will use
@@ -1356,6 +1368,15 @@ struct DBOptions {
   //
   // DEFAULT: false
   bool avoid_flush_during_recovery;
+
+  // By default RocksDB will flush all memtables on DB close if there are
+  // unpersisted data (i.e. with WAL disabled) The flush can be skip to speedup
+  // DB close. Unpersisted data WILL BE LOST.
+  //
+  // DEFAULT: false
+  //
+  // Dynamically changeable through SetDBOptions() API.
+  bool avoid_flush_during_shutdown;
 };
 
 // Options to control the behavior of a database (passed to DB::Open)
@@ -1430,7 +1451,7 @@ struct ReadOptions {
 
   // If "snapshot" is non-nullptr, read as of the supplied snapshot
   // (which must belong to the DB that is being read and which must
-  // not have been released).  If "snapshot" is nullptr, use an impliicit
+  // not have been released).  If "snapshot" is nullptr, use an implicit
   // snapshot of the state at the beginning of this read operation.
   // Default: nullptr
   const Snapshot* snapshot;
@@ -1519,6 +1540,12 @@ struct ReadOptions {
   // Default: 0
   size_t readahead_size;
 
+  // If true, keys deleted using the DeleteRange() API will be visible to
+  // readers until they are naturally deleted during compaction. This improves
+  // read performance in DBs with many range deletions.
+  // Default: false
+  bool ignore_range_deletions;
+
   ReadOptions();
   ReadOptions(bool cksum, bool cache);
 };
@@ -1556,11 +1583,16 @@ struct WriteOptions {
   // Default: false
   bool ignore_missing_column_families;
 
+  // If true and we need to wait or sleep for the write request, fails
+  // immediately with Status::Incomplete().
+  bool no_slowdown;
+
   WriteOptions()
       : sync(false),
         disableWAL(false),
         timeout_hint_us(0),
-        ignore_missing_column_families(false) {}
+        ignore_missing_column_families(false),
+        no_slowdown(false) {}
 };
 
 // Options that control flush operations
@@ -1621,6 +1653,21 @@ struct CompactRangeOptions {
   // if there is a compaction filter
   BottommostLevelCompaction bottommost_level_compaction =
       BottommostLevelCompaction::kIfHaveCompactionFilter;
+};
+
+// IngestExternalFileOptions is used by IngestExternalFile()
+struct IngestExternalFileOptions {
+  // Can be set to true to move the files instead of copying them.
+  bool move_files = false;
+  // If set to false, an ingested file keys could appear in existing snapshots
+  // that where created before the file was ingested.
+  bool snapshot_consistency = true;
+  // If set to false, IngestExternalFile() will fail if the file key range
+  // overlaps with existing keys or tombstones in the DB.
+  bool allow_global_seqno = true;
+  // If set to false and the file key range overlaps with the memtable key range
+  // (memtable flush required), IngestExternalFile will fail.
+  bool allow_blocking_flush = true;
 };
 
 }  // namespace rocksdb

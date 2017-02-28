@@ -43,12 +43,14 @@ struct TablePropertiesNames {
   static const std::string kColumnFamilyId;
   static const std::string kComparator;
   static const std::string kMergeOperator;
+  static const std::string kPrefixExtractorName;
   static const std::string kPropertyCollectors;
   static const std::string kCompression;
 };
 
 extern const std::string kPropertiesBlock;
 extern const std::string kCompressionDictBlock;
+extern const std::string kRangeDelBlock;
 
 enum EntryType {
   kEntryPut,
@@ -166,6 +168,10 @@ struct TableProperties {
   // If no merge operator is used, `merge_operator_name` will be "nullptr".
   std::string merge_operator_name;
 
+  // The name of the prefix extractor used in this table
+  // If no prefix extractor is used, `prefix_extractor_name` will be "nullptr".
+  std::string prefix_extractor_name;
+
   // The names of the property collectors factories used in this table
   // separated by commas
   // {collector_name[1]},{collector_name[2]},{collector_name[3]} ..
@@ -177,6 +183,9 @@ struct TableProperties {
   // user collected properties
   UserCollectedProperties user_collected_properties;
   UserCollectedProperties readable_properties;
+
+  // The offset of the value of each property in the file.
+  std::map<std::string, uint64_t> properties_offsets;
 
   // convert this object to a human readable form
   //   @prop_delim: delimiter for each property.

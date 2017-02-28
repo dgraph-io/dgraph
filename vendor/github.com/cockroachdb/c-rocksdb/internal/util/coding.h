@@ -295,6 +295,17 @@ inline bool GetVarint64(Slice* input, uint64_t* value) {
   }
 }
 
+// Provide an interface for platform independent endianness transformation
+inline uint64_t EndianTransform(uint64_t input, size_t size) {
+  char* pos = reinterpret_cast<char*>(&input);
+  uint64_t ret_val = 0;
+  for (size_t i = 0; i < size; ++i) {
+    ret_val |= (static_cast<uint64_t>(static_cast<unsigned char>(pos[i]))
+                << ((size - i - 1) << 3));
+  }
+  return ret_val;
+}
+
 inline bool GetLengthPrefixedSlice(Slice* input, Slice* result) {
   uint32_t len = 0;
   if (GetVarint32(input, &len) && input->size() >= len) {
@@ -309,6 +320,7 @@ inline bool GetLengthPrefixedSlice(Slice* input, Slice* result) {
 inline Slice GetLengthPrefixedSlice(const char* data) {
   uint32_t len = 0;
   // +5: we assume "data" is not corrupted
+  // unsigned char is 7 bits, uint32_t is 32 bits, need 5 unsigned char
   auto p = GetVarint32Ptr(data, data + 5 /* limit */, &len);
   return Slice(p, len);
 }

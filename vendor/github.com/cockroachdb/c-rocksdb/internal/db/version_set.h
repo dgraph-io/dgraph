@@ -28,18 +28,20 @@
 #include <utility>
 #include <vector>
 
-#include "db/dbformat.h"
-#include "db/version_builder.h"
-#include "db/version_edit.h"
-#include "port/port.h"
-#include "db/table_cache.h"
+#include "db/column_family.h"
 #include "db/compaction.h"
 #include "db/compaction_picker.h"
-#include "db/column_family.h"
-#include "db/log_reader.h"
+#include "db/dbformat.h"
 #include "db/file_indexer.h"
+#include "db/log_reader.h"
+#include "db/range_del_aggregator.h"
+#include "db/table_cache.h"
+#include "db/version_builder.h"
+#include "db/version_edit.h"
 #include "db/write_controller.h"
+#include "port/port.h"
 #include "rocksdb/env.h"
+#include "util/db_options.h"
 #include "util/instrumented_mutex.h"
 
 namespace rocksdb {
@@ -92,7 +94,8 @@ class VersionStorageInfo {
   VersionStorageInfo(const InternalKeyComparator* internal_comparator,
                      const Comparator* user_comparator, int num_levels,
                      CompactionStyle compaction_style,
-                     VersionStorageInfo* src_vstorage);
+                     VersionStorageInfo* src_vstorage,
+                     bool _force_consistency_checks);
   ~VersionStorageInfo();
 
   void Reserve(int level, size_t size) { files_[level].reserve(size); }
@@ -120,7 +123,8 @@ class VersionStorageInfo {
   // We use compaction scores to figure out which compaction to do next
   // REQUIRES: db_mutex held!!
   // TODO find a better way to pass compaction_options_fifo.
-  void ComputeCompactionScore(const MutableCFOptions& mutable_cf_options);
+  void ComputeCompactionScore(const ImmutableCFOptions& immutable_cf_options,
+                              const MutableCFOptions& mutable_cf_options);
 
   // Estimate est_comp_needed_bytes_
   void EstimateCompactionBytesNeeded(
@@ -135,7 +139,7 @@ class VersionStorageInfo {
   // Sort all files for this version based on their file size and
   // record results in files_by_compaction_pri_. The largest files are listed
   // first.
-  void UpdateFilesByCompactionPri(const MutableCFOptions& mutable_cf_options);
+  void UpdateFilesByCompactionPri(CompactionPri compaction_pri);
 
   void GenerateLevel0NonOverlapping();
   bool level0_non_overlapping() const {
@@ -329,6 +333,8 @@ class VersionStorageInfo {
     estimated_compaction_needed_bytes_ = v;
   }
 
+  bool force_consistency_checks() const { return force_consistency_checks_; }
+
  private:
   const InternalKeyComparator* internal_comparator_;
   const Comparator* user_comparator_;
@@ -411,6 +417,10 @@ class VersionStorageInfo {
 
   bool finalized_;
 
+  // If set to true, we will run consistency checks even if RocksDB
+  // is compiled in release mode
+  bool force_consistency_checks_;
+
   friend class Version;
   friend class VersionSet;
   // No copying allowed
@@ -424,7 +434,12 @@ class Version {
   // yield the contents of this Version when merged together.
   // REQUIRES: This version has been saved (see VersionSet::SaveTo)
   void AddIterators(const ReadOptions&, const EnvOptions& soptions,
-                    MergeIteratorBuilder* merger_iter_builder);
+                    MergeIteratorBuilder* merger_iter_builder,
+                    RangeDelAggregator* range_del_agg);
+
+  void AddIteratorsForLevel(const ReadOptions&, const EnvOptions& soptions,
+                            MergeIteratorBuilder* merger_iter_builder,
+                            int level, RangeDelAggregator* range_del_agg);
 
   // Lookup the value for key.  If found, store it in *val and
   // return OK.  Else return a non-OK status.
@@ -444,8 +459,8 @@ class Version {
   // REQUIRES: lock is not held
   void Get(const ReadOptions&, const LookupKey& key, std::string* val,
            Status* status, MergeContext* merge_context,
-           bool* value_found = nullptr, bool* key_exists = nullptr,
-           SequenceNumber* seq = nullptr);
+           RangeDelAggregator* range_del_agg, bool* value_found = nullptr,
+           bool* key_exists = nullptr, SequenceNumber* seq = nullptr);
 
   // Loads some stats information from files. Call without mutex held. It needs
   // to be called before applying the version to the version set.
@@ -504,6 +519,8 @@ class Version {
   Version* TEST_Next() const {
     return next_;
   }
+
+  int TEST_refs() const { return refs_; }
 
   VersionStorageInfo* storage_info() { return &storage_info_; }
 
@@ -573,7 +590,7 @@ class Version {
 
 class VersionSet {
  public:
-  VersionSet(const std::string& dbname, const DBOptions* db_options,
+  VersionSet(const std::string& dbname, const ImmutableDBOptions* db_options,
              const EnvOptions& env_options, Cache* table_cache,
              WriteBufferManager* write_buffer_manager,
              WriteController* write_controller);
@@ -686,7 +703,8 @@ class VersionSet {
 
   // Create an iterator that reads over the compaction inputs for "*c".
   // The caller should delete the iterator when no longer needed.
-  InternalIterator* MakeInputIterator(const Compaction* c);
+  InternalIterator* MakeInputIterator(const Compaction* c,
+                                      RangeDelAggregator* range_del_agg);
 
   // Add all files listed in any live version to *live.
   void AddLiveFiles(std::vector<FileDescriptor>* live_list);
@@ -755,7 +773,7 @@ class VersionSet {
 
   Env* const env_;
   const std::string dbname_;
-  const DBOptions* const db_options_;
+  const ImmutableDBOptions* const db_options_;
   std::atomic<uint64_t> next_file_number_;
   uint64_t manifest_file_number_;
   uint64_t options_file_number_;

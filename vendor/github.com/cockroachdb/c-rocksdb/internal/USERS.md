@@ -7,7 +7,7 @@ At Facebook, we use RocksDB as storage engines in multiple data management servi
 2. MongoRocks -- https://github.com/mongodb-partners/mongo-rocks
 3. ZippyDB --  Facebook's distributed key-value store with Paxos-style replication, built on top of RocksDB.[*] https://www.youtube.com/watch?v=DfiN7pG0D0khtt
 4. Laser -- Laser is a high query throughput, low (millisecond) latency, key-value storage service built on top of RocksDB.[*]
-4. Dragan -- a distributed graph query engine. https://code.facebook.com/posts/1737605303120405/dragon-a-distributed-graph-query-engine/
+4. Dragon -- a distributed graph query engine. https://code.facebook.com/posts/1737605303120405/dragon-a-distributed-graph-query-engine/
 5. Stylus -- a low-level stream processing framework writtenin C++.[*]
 
 [*] https://research.facebook.com/publications/realtime-data-processing-at-facebook/
@@ -64,10 +64,16 @@ Pinterest's Object Retrieval System uses RocksDB for storage: https://www.youtub
 quasardb uses a heavily tuned RocksDB as its persistence layer.
 
 ## Netflix
-[Netflix](http://techblog.netflix.com/2016/05/application-data-caching-using-ssds.html) uses RocksDB on spinning disks to cache application data.
+[Netflix](http://techblog.netflix.com/2016/05/application-data-caching-using-ssds.html) Netflix uses RocksDB on AWS EC2 instances with local SSD drives to cache application data.
 
 ## TiKV
 [TiKV](https://github.com/pingcap/tikv) is a GEO-replicated, high-performance, distributed, transactional key-value database. TiKV is powered by Rust and Raft. TiKV uses RocksDB as its persistence layer.
 
 ## Apache Flink
 [Apache Flink](https://flink.apache.org/news/2016/03/08/release-1.0.0.html) uses RocksDB to store state locally on a machine.
+
+## Dgraph
+[Dgraph](https://github.com/dgraph-io/dgraph) is an open-source, scalable, distributed, low latency, high throughput Graph database .They use RocksDB to store state locally on a machine.
+
+## Uber
+[Uber](http://eng.uber.com/cherami/) uses RocksDB as a durable and and scalable task queue.

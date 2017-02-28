@@ -21,7 +21,7 @@ int test_threads()
   je_malloc_conf = "narenas:3";
   int narenas = 0;
   size_t sz = sizeof(narenas);
-  je_mallctl("opt.narenas", &narenas, &sz, NULL, 0);
+  je_mallctl("opt.narenas", (void *)&narenas, &sz, NULL, 0);
   if (narenas != 3) {
     printf("Error: unexpected number of arenas: %d\n", narenas);
     return 1;
@@ -33,7 +33,7 @@ int test_threads()
   je_malloc_stats_print(NULL, NULL, NULL);
   size_t allocated1;
   size_t sz1 = sizeof(allocated1);
-  je_mallctl("stats.active", &allocated1, &sz1, NULL, 0);
+  je_mallctl("stats.active", (void *)&allocated1, &sz1, NULL, 0);
   printf("\nPress Enter to start threads...\n");
   getchar();
   printf("Starting %d threads x %d x %d iterations...\n", numThreads, numIter1, numIter2);
@@ -78,7 +78,7 @@ int test_threads()
   }
   je_malloc_stats_print(NULL, NULL, NULL);
   size_t allocated2;
-  je_mallctl("stats.active", &allocated2, &sz1, NULL, 0);
+  je_mallctl("stats.active", (void *)&allocated2, &sz1, NULL, 0);
   size_t leaked = allocated2 - allocated1;
   printf("\nDone. Leaked: %zd bytes\n", leaked);
   bool failed = leaked > 65536; // in case C++ runtime allocated something (e.g. iostream locale or facet)

@@ -574,12 +574,10 @@ public class DbBenchmark {
         (Integer)flags_.get(Flag.num_levels));
     options.setTargetFileSizeBase(
         (Integer)flags_.get(Flag.target_file_size_base));
-    options.setTargetFileSizeMultiplier(
-        (Integer)flags_.get(Flag.target_file_size_multiplier));
+    options.setTargetFileSizeMultiplier((Double) flags_.get(Flag.target_file_size_multiplier));
     options.setMaxBytesForLevelBase(
         (Integer)flags_.get(Flag.max_bytes_for_level_base));
-    options.setMaxBytesForLevelMultiplier(
-        (Integer)flags_.get(Flag.max_bytes_for_level_multiplier));
+    options.setMaxBytesForLevelMultiplier((Double) flags_.get(Flag.max_bytes_for_level_multiplier));
     options.setLevelZeroStopWritesTrigger(
         (Integer)flags_.get(Flag.level0_stop_writes_trigger));
     options.setLevelZeroSlowdownWritesTrigger(
@@ -1268,7 +1266,7 @@ public class DbBenchmark {
     max_bytes_for_level_multiplier(10,
         "A multiplier to compute max bytes for level-N (N >= 2)") {
       @Override public Object parseValue(String value) {
-        return Integer.parseInt(value);
+        return Double.parseDouble(value);
       }
     },
     level0_stop_writes_trigger(12,"Number of files in level-0\n" +
@@ -1419,12 +1417,18 @@ public class DbBenchmark {
       }
     },
     /* TODO(yhchiang): enable the following
-    bufferedio(rocksdb::EnvOptions().use_os_buffer,
-        "Allow buffered io using OS buffers.") {
+    direct_reads(rocksdb::EnvOptions().use_direct_reads,
+        "Allow direct I/O reads.") {
       @Override public Object parseValue(String value) {
         return parseBoolean(value);
       }
-    },
+      },
+    direct_writes(rocksdb::EnvOptions().use_direct_reads,
+      "Allow direct I/O reads.") {
+      @Override public Object parseValue(String value) {
+      return parseBoolean(value);
+      }
+      },
     */
     mmap_read(false,
         "Allow reads to occur via mmap-ing files.") {

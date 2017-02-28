@@ -99,7 +99,8 @@ ckh_try_bucket_insert(ckh_t *ckh, size_t bucket, const void *key,
 	 * Cycle through the cells in the bucket, starting at a random position.
 	 * The randomness avoids worst-case search overhead as buckets fill up.
 	 */
-	offset = (unsigned)prng_lg_range(&ckh->prng_state, LG_CKH_BUCKET_CELLS);
+	offset = (unsigned)prng_lg_range_u64(&ckh->prng_state,
+	    LG_CKH_BUCKET_CELLS);
 	for (i = 0; i < (ZU(1) << LG_CKH_BUCKET_CELLS); i++) {
 		cell = &ckh->tab[(bucket << LG_CKH_BUCKET_CELLS) +
 		    ((i + offset) & ((ZU(1) << LG_CKH_BUCKET_CELLS) - 1))];
@@ -141,7 +142,7 @@ ckh_evict_reloc_insert(ckh_t *ckh, size_t argbucket, void const **argkey,
 		 * were an item for which both hashes indicated the same
 		 * bucket.
 		 */
-		i = (unsigned)prng_lg_range(&ckh->prng_state,
+		i = (unsigned)prng_lg_range_u64(&ckh->prng_state,
 		    LG_CKH_BUCKET_CELLS);
 		cell = &ckh->tab[(bucket << LG_CKH_BUCKET_CELLS) + i];
 		assert(cell->key != NULL);
@@ -270,8 +271,8 @@ ckh_grow(tsd_t *tsd, ckh_t *ckh)
 			ret = true;
 			goto label_return;
 		}
-		tab = (ckhc_t *)ipallocztm(tsd, usize, CACHELINE, true, NULL,
-		    true, NULL);
+		tab = (ckhc_t *)ipallocztm(tsd_tsdn(tsd), usize, CACHELINE,
+		    true, NULL, true, arena_ichoose(tsd, NULL));
 		if (tab == NULL) {
 			ret = true;
 			goto label_return;
@@ -283,12 +284,12 @@ ckh_grow(tsd_t *tsd, ckh_t *ckh)
 		ckh->lg_curbuckets = lg_curcells - LG_CKH_BUCKET_CELLS;
 
 		if (!ckh_rebuild(ckh, tab)) {
-			idalloctm(tsd, tab, tcache_get(tsd, false), true, true);
+			idalloctm(tsd_tsdn(tsd), tab, NULL, true, true);
 			break;
 		}
 
 		/* Rebuilding failed, so back out partially rebuilt table. */
-		idalloctm(tsd, ckh->tab, tcache_get(tsd, false), true, true);
+		idalloctm(tsd_tsdn(tsd), ckh->tab, NULL, true, true);
 		ckh->tab = tab;
 		ckh->lg_curbuckets = lg_prevbuckets;
 	}
@@ -314,8 +315,8 @@ ckh_shrink(tsd_t *tsd, ckh_t *ckh)
 	usize = sa2u(sizeof(ckhc_t) << lg_curcells, CACHELINE);
 	if (unlikely(usize == 0 || usize > HUGE_MAXCLASS))
 		return;
-	tab = (ckhc_t *)ipallocztm(tsd, usize, CACHELINE, true, NULL, true,
-	    NULL);
+	tab = (ckhc_t *)ipallocztm(tsd_tsdn(tsd), usize, CACHELINE, true, NULL,
+	    true, arena_ichoose(tsd, NULL));
 	if (tab == NULL) {
 		/*
 		 * An OOM error isn't worth propagating, since it doesn't
@@ -330,7 +331,7 @@ ckh_shrink(tsd_t *tsd, ckh_t *ckh)
 	ckh->lg_curbuckets = lg_curcells - LG_CKH_BUCKET_CELLS;
 
 	if (!ckh_rebuild(ckh, tab)) {
-		idalloctm(tsd, tab, tcache_get(tsd, false), true, true);
+		idalloctm(tsd_tsdn(tsd), tab, NULL, true, true);
 #ifdef CKH_COUNT
 		ckh->nshrinks++;
 #endif
@@ -338,7 +339,7 @@ ckh_shrink(tsd_t *tsd, ckh_t *ckh)
 	}
 
 	/* Rebuilding failed, so back out partially rebuilt table. */
-	idalloctm(tsd, ckh->tab, tcache_get(tsd, false), true, true);
+	idalloctm(tsd_tsdn(tsd), ckh->tab, NULL, true, true);
 	ckh->tab = tab;
 	ckh->lg_curbuckets = lg_prevbuckets;
 #ifdef CKH_COUNT
@@ -391,8 +392,8 @@ ckh_new(tsd_t *tsd, ckh_t *ckh, size_t minitems, ckh_hash_t *hash,
 		ret = true;
 		goto label_return;
 	}
-	ckh->tab = (ckhc_t *)ipallocztm(tsd, usize, CACHELINE, true, NULL, true,
-	    NULL);
+	ckh->tab = (ckhc_t *)ipallocztm(tsd_tsdn(tsd), usize, CACHELINE, true,
+	    NULL, true, arena_ichoose(tsd, NULL));
 	if (ckh->tab == NULL) {
 		ret = true;
 		goto label_return;
@@ -421,9 +422,9 @@ ckh_delete(tsd_t *tsd, ckh_t *ckh)
 	    (unsigned long long)ckh->nrelocs);
 #endif
 
-	idalloctm(tsd, ckh->tab, tcache_get(tsd, false), true, true);
+	idalloctm(tsd_tsdn(tsd), ckh->tab, NULL, true, true);
 	if (config_debug)
-		memset(ckh, 0x5a, sizeof(ckh_t));
+		memset(ckh, JEMALLOC_FREE_JUNK, sizeof(ckh_t));
 }
 
 size_t

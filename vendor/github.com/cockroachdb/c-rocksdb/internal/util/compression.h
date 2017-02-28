@@ -80,6 +80,14 @@ inline bool XPRESS_Supported() {
 
 inline bool ZSTD_Supported() {
 #ifdef ZSTD
+  // ZSTD format is finalized since version 0.8.0.
+  return (ZSTD_versionNumber() >= 800);
+#endif
+  return false;
+}
+
+inline bool ZSTDNotFinal_Supported() {
+#ifdef ZSTD
   return true;
 #endif
   return false;
@@ -102,6 +110,8 @@ inline bool CompressionTypeSupported(CompressionType compression_type) {
     case kXpressCompression:
       return XPRESS_Supported();
     case kZSTDNotFinalCompression:
+      return ZSTDNotFinal_Supported();
+    case kZSTD:
       return ZSTD_Supported();
     default:
       assert(false);
@@ -125,6 +135,7 @@ inline std::string CompressionTypeToString(CompressionType compression_type) {
       return "LZ4HC";
     case kXpressCompression:
       return "Xpress";
+    case kZSTD:
     case kZSTDNotFinalCompression:
       return "ZSTD";
     default:
@@ -542,9 +553,15 @@ inline bool LZ4_Compress(const CompressionOptions& opts,
     LZ4_loadDict(stream, compression_dict.data(),
                  static_cast<int>(compression_dict.size()));
   }
+#if LZ4_VERSION_NUMBER >= 10700  // r129+
+  outlen = LZ4_compress_fast_continue(
+      stream, input, &(*output)[output_header_len], static_cast<int>(length),
+      compress_bound, 1);
+#else  // up to r128
   outlen = LZ4_compress_limitedOutput_continue(
       stream, input, &(*output)[output_header_len], static_cast<int>(length),
       compress_bound);
+#endif
   LZ4_freeStream(stream);
 #else   // up to r123
   outlen = LZ4_compress_limitedOutput(input, &(*output)[output_header_len],

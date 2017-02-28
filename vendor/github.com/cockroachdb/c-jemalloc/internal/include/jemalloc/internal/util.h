@@ -40,6 +40,14 @@
  */
 #define	MALLOC_PRINTF_BUFSIZE	4096
 
+/* Junk fill patterns. */
+#ifndef JEMALLOC_ALLOC_JUNK
+#  define JEMALLOC_ALLOC_JUNK	((uint8_t)0xa5)
+#endif
+#ifndef JEMALLOC_FREE_JUNK
+#  define JEMALLOC_FREE_JUNK	((uint8_t)0x5a)
+#endif
+
 /*
  * Wrap a cpp argument that contains commas such that it isn't broken up into
  * multiple arguments.
@@ -57,29 +65,19 @@
 #	define JEMALLOC_CC_SILENCE_INIT(v)
 #endif
 
-#define	JEMALLOC_GNUC_PREREQ(major, minor)				\
-    (!defined(__clang__) &&						\
-    (__GNUC__ > (major) || (__GNUC__ == (major) && __GNUC_MINOR__ >= (minor))))
-#ifndef __has_builtin
-#  define __has_builtin(builtin) (0)
-#endif
-#define	JEMALLOC_CLANG_HAS_BUILTIN(builtin)				\
-    (defined(__clang__) && __has_builtin(builtin))
-
 #ifdef __GNUC__
 #	define likely(x)   __builtin_expect(!!(x), 1)
 #	define unlikely(x) __builtin_expect(!!(x), 0)
-#  if JEMALLOC_GNUC_PREREQ(4, 6) ||					\
-      JEMALLOC_CLANG_HAS_BUILTIN(__builtin_unreachable)
-#	define unreachable() __builtin_unreachable()
-#  else
-#	define unreachable()
-#  endif
 #else
 #	define likely(x)   !!(x)
 #	define unlikely(x) !!(x)
-#	define unreachable()
 #endif
+
+#if !defined(JEMALLOC_INTERNAL_UNREACHABLE)
+#  error JEMALLOC_INTERNAL_UNREACHABLE should have been defined by configure
+#endif
+
+#define unreachable() JEMALLOC_INTERNAL_UNREACHABLE()
 
 #include "jemalloc/internal/assert.h"
 
@@ -106,9 +104,9 @@ void	malloc_write(const char *s);
  * malloc_vsnprintf() supports a subset of snprintf(3) that avoids floating
  * point math.
  */
-int	malloc_vsnprintf(char *str, size_t size, const char *format,
+size_t	malloc_vsnprintf(char *str, size_t size, const char *format,
     va_list ap);
-int	malloc_snprintf(char *str, size_t size, const char *format, ...)
+size_t	malloc_snprintf(char *str, size_t size, const char *format, ...)
     JEMALLOC_FORMAT_PRINTF(3, 4);
 void	malloc_vcprintf(void (*write_cb)(void *, const char *), void *cbopaque,
     const char *format, va_list ap);
