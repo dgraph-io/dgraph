@@ -186,8 +186,8 @@ func IntersectWith(u, v *task.List) {
 	for i < m && j < n {
 		ulist := u.Blocks[i].List
 		vlist := v.Blocks[j].List
-		ub := u.Blocks[i].MaxInt
-		vb := v.Blocks[j].MaxInt
+		ubMax := u.Blocks[i].MaxInt
+		vbMax := v.Blocks[j].MaxInt
 		ulen := len(ulist)
 		vlen := len(vlist)
 	L:
@@ -209,11 +209,11 @@ func IntersectWith(u, v *task.List) {
 					jj = 0
 					break L
 				}
-			} else if ub < vid {
+			} else if ubMax < vid {
 				i++
 				ii = 0
 				break L
-			} else if vb < uid {
+			} else if vbMax < uid {
 				j++
 				jj = 0
 				break L
@@ -256,7 +256,7 @@ func Difference(u, v *task.List) {
 	for i < m && j < n {
 		ulist := u.Blocks[i].List
 		vlist := v.Blocks[j].List
-		vb := v.Blocks[j].MaxInt
+		vbMax := v.Blocks[j].MaxInt
 		ulen := len(ulist)
 		vlen := len(vlist)
 	L:
@@ -277,7 +277,7 @@ func Difference(u, v *task.List) {
 					jj = 0
 					break L
 				}
-			} else if vb < uid {
+			} else if vbMax < uid {
 				j++
 				jj = 0
 				break L
