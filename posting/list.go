@@ -629,7 +629,9 @@ func (l *List) intersectingPostings(opt ListOptions, postFn func(*types.Posting)
 				}
 				i, ii = i+1, 0
 			}
-			if i >= blen || opt.Intersect.Blocks[i].List[ii] > uid {
+			if i >= blen ||
+				(ii < len(opt.Intersect.Blocks[i].List) &&
+					opt.Intersect.Blocks[i].List[ii] > uid) {
 				return true
 			}
 		}
