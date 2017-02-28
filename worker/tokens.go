@@ -34,29 +34,21 @@ func getInequalityTokens(attr, ineqValueToken string, f string) ([]string, error
 	}
 
 	var out []string
-	if isPresent {
-		out = []string{ineqValueToken}
-	}
-
 	indexPrefix := x.ParsedKey{Attr: attr}.IndexPrefix()
 	isGeqOrGt := f == "geq" || f == "gt"
 
-	if !isGeqOrGt && idxKey.Term != ineqValueToken {
+	if f == "lt" || (f == "leq" && idxKey.Term != ineqValueToken) {
 		it.Prev()
 	}
-	for {
+	for it.Valid() && it.ValidForPrefix(indexPrefix) {
+		k := x.Parse(it.Key().Data())
+		x.AssertTrue(k != nil)
+		out = append(out, k.Term)
 		if isGeqOrGt {
 			it.Next()
 		} else {
 			it.Prev()
 		}
-		if !it.ValidForPrefix(indexPrefix) {
-			break
-		}
-
-		k := x.Parse(it.Key().Data())
-		x.AssertTrue(k != nil)
-		out = append(out, k.Term)
 	}
 	return out, nil
 }
