@@ -25,8 +25,8 @@ func getInequalityTokens(attr, ineqValueToken string, f string) ([]string, error
 	it.Seek(x.IndexKey(attr, ineqValueToken))
 
 	isPresent := it.Valid() && it.Value() != nil && it.Value().Size() > 0
+	idxKey := x.Parse(it.Key().Data())
 	if f == "eq" {
-		idxKey := x.Parse(it.Key().Data())
 		if isPresent && idxKey.Term == ineqValueToken {
 			return []string{ineqValueToken}, nil
 		}
@@ -41,7 +41,7 @@ func getInequalityTokens(attr, ineqValueToken string, f string) ([]string, error
 	indexPrefix := x.ParsedKey{Attr: attr}.IndexPrefix()
 	isGeqOrGt := f == "geq" || f == "gt"
 
-	if !isGeqOrGt {
+	if !isGeqOrGt && idxKey.Term != ineqValueToken {
 		it.Prev()
 	}
 	for {
