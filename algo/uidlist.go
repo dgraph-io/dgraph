@@ -235,7 +235,7 @@ func Difference(u, v *task.List) {
 		vbMax := v.Blocks[j].MaxInt
 		ulen := len(ulist)
 		vlen := len(vlist)
-	L:
+
 		for ii < ulen && jj < vlen {
 			uid := ulist[ii]
 			vid := vlist[jj]
@@ -243,29 +243,13 @@ func Difference(u, v *task.List) {
 			if uid == vid {
 				ii++
 				jj++
-				if ii == ulen {
-					break L
-				}
-				if jj == vlen {
-					break L
-				}
 			} else if vbMax < uid {
-				j++
-				jj = 0
-				break L
+				jj = vlen
 			} else if uid < vid {
 				out.Append(uid)
 				ii++
-				if ii == ulen {
-					i++
-					ii = 0
-					break L
-				}
 			} else if uid > vid {
 				for ; jj < vlen && vlist[jj] < uid; jj++ {
-				}
-				if jj == vlen {
-					break L
 				}
 			}
 		}
