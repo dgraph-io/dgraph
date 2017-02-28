@@ -308,11 +308,6 @@ func parseFacets(it *lex.ItemIterator, rnq *graph.NQuad) error {
 	if item.Typ != itemLeftRound {
 		return x.Errorf("Expected '(' but found %v at Facet.", item.Val)
 	}
-	defer func() { // always sort facets before returning.
-		if rnq.Facets != nil {
-			facets.SortFacets(rnq.Facets)
-		}
-	}()
 
 	for it.Next() { // parse one key value pair
 		// parse key
@@ -350,7 +345,7 @@ func parseFacets(it *lex.ItemIterator, rnq *graph.NQuad) error {
 
 		// empty value case..
 		if item.Typ == itemRightRound {
-			return nil
+			break
 		}
 		if item.Typ == itemComma {
 			continue
@@ -364,14 +359,24 @@ func parseFacets(it *lex.ItemIterator, rnq *graph.NQuad) error {
 		}
 		item = it.Item()
 		if item.Typ == itemRightRound {
-			return nil
+			break
 		}
 		if item.Typ == itemComma {
 			continue
 		}
 		return x.Errorf("Expected , or ) after facet. Received %s", item.Val)
 	}
-	return x.Errorf("Unexpected end of facets.")
+
+	if rnq.Facets != nil {
+		facets.SortFacets(rnq.Facets)
+	}
+	for i := 1; i < len(rnq.Facets); i++ {
+		if rnq.Facets[i-1].Key == rnq.Facets[i].Key {
+			return x.Errorf("Repeated keys are not allowed in facets. But got %s",
+				rnq.Facets[i].Key)
+		}
+	}
+	return nil
 }
 
 func isNewline(r rune) bool {
