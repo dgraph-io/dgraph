@@ -342,7 +342,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 		// the regex matcher.
 		it := pstore.NewIterator()
 		defer it.Close()
-		startKey := x.IndexKey(q.Attr, "\x00~") // byte 1 for exact index.
+		startKey := tok.ExactTokenizer{}.Prefix(q.Attr)
 		it.Seek(startKey)
 		key := it.Key().Data()
 		pk := x.Parse(key)
