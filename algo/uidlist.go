@@ -320,13 +320,13 @@ func IntersectSorted(lists []*task.List) *task.List {
 	shortList := lists[minLenIdx]
 	elemsLeft := true // If some list has no elems left, we can't intersect more.
 	blen := len(lists[minLenIdx].Blocks)
-	for i := 0; i < blen; i++ {
+	for i := 0; i < blen && elemsLeft; i++ {
 		ulist := shortList.Blocks[i].List
 		llen := len(ulist)
 		for ii := 0; ii < llen; ii++ {
 			val := ulist[ii]
-			var skip bool                     // Should we skip val in output?
-			for j := 0; j < len(lists); j++ { // For each other list in lists.
+			var skip bool                                  // Should we skip val in output?
+			for j := 0; j < len(lists) && elemsLeft; j++ { // For each other list in lists.
 				if j == minLenIdx {
 					// No point checking yourself.
 					continue
@@ -337,13 +337,17 @@ func IntersectSorted(lists []*task.List) *task.List {
 				for k < plen {
 					qlist := lists[j].Blocks[k].List
 					qlen := len(qlist)
+					qmax := lists[j].Blocks[k].MaxInt
+					if qmax < val {
+						kk = qlen
+					}
 					for ; kk < qlen && qlist[kk] < val; kk++ {
 					}
 					if kk == qlen {
 						kk = 0
 						k++
 					}
-					if qlist[kk] >= val {
+					if qlen != 0 && qlist[kk] >= val {
 						break
 					}
 				}
@@ -353,16 +357,10 @@ func IntersectSorted(lists []*task.List) *task.List {
 					skip = true
 					break
 				}
-				if !elemsLeft {
-					break
-				}
 				// Otherwise, lj.Get(ljp) = val and we continue checking other lists.
 			}
 			if !skip {
 				out.Append(val)
-			}
-			if !elemsLeft {
-				break
 			}
 		}
 	}
