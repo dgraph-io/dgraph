@@ -41,6 +41,9 @@ func getInequalityTokens(attr, ineqValueToken string, f string) ([]string, error
 	indexPrefix := x.ParsedKey{Attr: attr}.IndexPrefix()
 	isGeqOrGt := f == "geq" || f == "gt"
 
+	if !isGeqOrGt {
+		it.Prev()
+	}
 	for {
 		if isGeqOrGt {
 			it.Next()
