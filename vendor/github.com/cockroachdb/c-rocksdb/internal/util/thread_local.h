@@ -10,6 +10,7 @@
 #pragma once
 
 #include <atomic>
+#include <functional>
 #include <memory>
 #include <unordered_map>
 #include <vector>
@@ -17,9 +18,8 @@
 #include "util/autovector.h"
 #include "port/port.h"
 
-#ifndef ROCKSDB_SUPPORT_THREAD_LOCAL
-#define ROCKSDB_SUPPORT_THREAD_LOCAL \
-  !defined(OS_WIN) && !defined(OS_MACOSX) && !defined(IOS_CROSS_COMPILE)
+#if !defined(OS_WIN) && !defined(OS_MACOSX) && !defined(IOS_CROSS_COMPILE)
+#define ROCKSDB_SUPPORT_THREAD_LOCAL
 #endif
 
 namespace rocksdb {
@@ -62,6 +62,13 @@ class ThreadLocalPtr {
   // Reset all thread local data to replacement, and return non-nullptr
   // data for all existing threads
   void Scrape(autovector<void*>* ptrs, void* const replacement);
+
+  typedef std::function<void(void*, void*)> FoldFunc;
+  // Update res by applying func on each thread-local value. Holds a lock that
+  // prevents unref handler from running during this call, but clients must
+  // still provide external synchronization since the owning thread can
+  // access the values without internal locking, e.g., via Get() and Reset().
+  void Fold(FoldFunc func, void* res);
 
   // Initialize the static singletons of the ThreadLocalPtr.
   //
@@ -119,7 +126,6 @@ class ThreadLocalPtr {
     // Return the pointer value for the given id for the current thread.
     void* Get(uint32_t id) const;
     // Reset the pointer value for the given id for the current thread.
-    // It triggers UnrefHanlder if the id has existing pointer value.
     void Reset(uint32_t id, void* ptr);
     // Atomically swap the supplied ptr and return the previous value
     void* Swap(uint32_t id, void* ptr);
@@ -129,6 +135,11 @@ class ThreadLocalPtr {
     // Reset all thread local data to replacement, and return non-nullptr
     // data for all existing threads
     void Scrape(uint32_t id, autovector<void*>* ptrs, void* const replacement);
+    // Update res by applying func on each thread-local value. Holds a lock that
+    // prevents unref handler from running during this call, but clients must
+    // still provide external synchronization since the owning thread can
+    // access the values without internal locking, e.g., via Get() and Reset().
+    void Fold(uint32_t id, FoldFunc func, void* res);
 
     // Register the UnrefHandler for id
     void SetHandler(uint32_t id, UnrefHandler handler);
@@ -191,7 +202,7 @@ class ThreadLocalPtr {
     // The private mutex.  Developers should always use Mutex() instead of
     // using this variable directly.
     port::Mutex mutex_;
-#if ROCKSDB_SUPPORT_THREAD_LOCAL
+#ifdef ROCKSDB_SUPPORT_THREAD_LOCAL
     // Thread local storage
     static __thread ThreadData* tls_;
 #endif

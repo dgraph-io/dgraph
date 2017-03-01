@@ -6,20 +6,22 @@
 #pragma once
 #include <string>
 
+#include "rocksdb/env.h"
 #include "rocksdb/status.h"
 #include "rocksdb/types.h"
-#include "rocksdb/env.h"
-#include "rocksdb/options.h"
+#include "util/db_options.h"
 
 namespace rocksdb {
-
+// use_fsync maps to options.use_fsync, which determines the way that
+// the file is synced after copying.
 extern Status CopyFile(Env* env, const std::string& source,
-                       const std::string& destination, uint64_t size = 0);
+                       const std::string& destination, uint64_t size,
+                       bool use_fsync);
 
 extern Status CreateFile(Env* env, const std::string& destination,
                          const std::string& contents);
 
-extern Status DeleteSSTFile(const DBOptions* db_options,
+extern Status DeleteSSTFile(const ImmutableDBOptions* db_options,
                             const std::string& fname, uint32_t path_id);
 
 }  // namespace rocksdb

@@ -32,9 +32,8 @@ timer_ratio(timedelta_t *a, timedelta_t *b, char *buf, size_t buflen)
 	uint64_t t0 = timer_usec(a);
 	uint64_t t1 = timer_usec(b);
 	uint64_t mult;
-	unsigned i = 0;
-	unsigned j;
-	int n;
+	size_t i = 0;
+	size_t j, n;
 
 	/* Whole. */
 	n = malloc_snprintf(&buf[i], buflen-i, "%"FMTu64, t0 / t1);

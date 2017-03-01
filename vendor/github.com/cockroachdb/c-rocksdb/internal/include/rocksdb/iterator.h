@@ -36,6 +36,9 @@ class Cleanable {
   // not abstract and therefore clients should not override it.
   typedef void (*CleanupFunction)(void* arg1, void* arg2);
   void RegisterCleanup(CleanupFunction function, void* arg1, void* arg2);
+  void DelegateCleanupsTo(Cleanable* other);
+  // DoCleanup and also resets the pointers for reuse
+  void Reset();
 
  protected:
   struct Cleanup {
@@ -45,6 +48,13 @@ class Cleanable {
     Cleanup* next;
   };
   Cleanup cleanup_;
+  // It also becomes the owner of c
+  void RegisterCleanup(Cleanup* c);
+
+ private:
+  // Performs all the cleanups. It does not reset the pointers. Making it
+  // private to prevent misuse
+  inline void DoCleanup();
 };
 
 class Iterator : public Cleanable {
@@ -68,6 +78,11 @@ class Iterator : public Cleanable {
   // The iterator is Valid() after this call iff the source contains
   // an entry that comes at or past target.
   virtual void Seek(const Slice& target) = 0;
+
+  // Position at the last key in the source that at or before target
+  // The iterator is Valid() after this call iff the source contains
+  // an entry that comes at or before target.
+  virtual void SeekForPrev(const Slice& target) {}
 
   // Moves to the next entry in the source.  After this call, Valid() is
   // true iff the iterator was not positioned at the last entry in the source.

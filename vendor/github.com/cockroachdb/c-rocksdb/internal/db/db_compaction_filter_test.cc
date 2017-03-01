@@ -13,6 +13,7 @@
 namespace rocksdb {
 
 static int cfilter_count = 0;
+static int cfilter_skips = 0;
 
 // This is a static filter used for filtering
 // kvs during the compaction process.
@@ -58,6 +59,30 @@ class DeleteISFilter : public CompactionFilter {
       return true;
     }
     return false;
+  }
+
+  virtual bool IgnoreSnapshots() const override { return true; }
+
+  virtual const char* Name() const override { return "DeleteFilter"; }
+};
+
+// Skip x if floor(x/10) is even, use range skips. Requires that keys are
+// zero-padded to length 10.
+class SkipEvenFilter : public CompactionFilter {
+ public:
+  virtual Decision FilterV2(int level, const Slice& key, ValueType value_type,
+                            const Slice& existing_value, std::string* new_value,
+                            std::string* skip_until) const override {
+    cfilter_count++;
+    int i = std::stoi(key.ToString());
+    if (i / 10 % 2 == 0) {
+      char key_str[100];
+      snprintf(key_str, sizeof(key), "%010d", i / 10 * 10 + 10);
+      *skip_until = key_str;
+      ++cfilter_skips;
+      return Decision::kRemoveAndSkipUntil;
+    }
+    return Decision::kKeep;
   }
 
   virtual bool IgnoreSnapshots() const override { return true; }
@@ -174,6 +199,20 @@ class DeleteISFilterFactory : public CompactionFilterFactory {
   virtual const char* Name() const override { return "DeleteFilterFactory"; }
 };
 
+class SkipEvenFilterFactory : public CompactionFilterFactory {
+ public:
+  virtual std::unique_ptr<CompactionFilter> CreateCompactionFilter(
+      const CompactionFilter::Context& context) override {
+    if (context.is_manual_compaction) {
+      return std::unique_ptr<CompactionFilter>(new SkipEvenFilter());
+    } else {
+      return std::unique_ptr<CompactionFilter>(nullptr);
+    }
+  }
+
+  virtual const char* Name() const override { return "SkipEvenFilterFactory"; }
+};
+
 class DelayFilterFactory : public CompactionFilterFactory {
  public:
   explicit DelayFilterFactory(DBTestBase* d) : db_test(d) {}
@@ -261,8 +300,10 @@ TEST_F(DBTestCompactionFilter, CompactionFilter) {
   int total = 0;
   Arena arena;
   {
+    InternalKeyComparator icmp(options.comparator);
+    RangeDelAggregator range_del_agg(icmp, {} /* snapshots */);
     ScopedArenaIterator iter(
-        dbfull()->NewInternalIterator(&arena, handles_[1]));
+        dbfull()->NewInternalIterator(&arena, &range_del_agg, handles_[1]));
     iter->SeekToFirst();
     ASSERT_OK(iter->status());
     while (iter->Valid()) {
@@ -349,8 +390,10 @@ TEST_F(DBTestCompactionFilter, CompactionFilter) {
   // level Lmax because this record is at the tip
   count = 0;
   {
+    InternalKeyComparator icmp(options.comparator);
+    RangeDelAggregator range_del_agg(icmp, {} /* snapshots */);
     ScopedArenaIterator iter(
-        dbfull()->NewInternalIterator(&arena, handles_[1]));
+        dbfull()->NewInternalIterator(&arena, &range_del_agg, handles_[1]));
     iter->SeekToFirst();
     ASSERT_OK(iter->status());
     while (iter->Valid()) {
@@ -566,7 +609,10 @@ TEST_F(DBTestCompactionFilter, CompactionFilterContextManual) {
     int count = 0;
     int total = 0;
     Arena arena;
-    ScopedArenaIterator iter(dbfull()->NewInternalIterator(&arena));
+    InternalKeyComparator icmp(options.comparator);
+    RangeDelAggregator range_del_agg(icmp, {} /* snapshots */);
+    ScopedArenaIterator iter(
+        dbfull()->NewInternalIterator(&arena, &range_del_agg));
     iter->SeekToFirst();
     ASSERT_OK(iter->status());
     while (iter->Valid()) {
@@ -711,6 +757,47 @@ TEST_F(DBTestCompactionFilter, CompactionFilterIgnoreSnapshot) {
   db_->ReleaseSnapshot(snapshot);
 }
 #endif  // ROCKSDB_LITE
+
+TEST_F(DBTestCompactionFilter, SkipUntil) {
+  Options options = CurrentOptions();
+  options.compaction_filter_factory = std::make_shared<SkipEvenFilterFactory>();
+  options.disable_auto_compactions = true;
+  options.create_if_missing = true;
+  DestroyAndReopen(options);
+
+  // Write 100K keys, these are written to a few files in L0.
+  for (int table = 0; table < 4; ++table) {
+    // Key ranges in tables are [0, 38], [106, 149], [212, 260], [318, 371].
+    for (int i = table * 6; i < 39 + table * 11; ++i) {
+      char key[100];
+      snprintf(key, sizeof(key), "%010d", table * 100 + i);
+      Put(key, std::to_string(table * 1000 + i));
+    }
+    Flush();
+  }
+
+  cfilter_skips = 0;
+  ASSERT_OK(db_->CompactRange(CompactRangeOptions(), nullptr, nullptr));
+  // Numberof skips in tables: 2, 3, 3, 3.
+  ASSERT_EQ(11, cfilter_skips);
+
+  for (int table = 0; table < 4; ++table) {
+    for (int i = table * 6; i < 39 + table * 11; ++i) {
+      int k = table * 100 + i;
+      char key[100];
+      snprintf(key, sizeof(key), "%010d", table * 100 + i);
+      auto expected = std::to_string(table * 1000 + i);
+      std::string val;
+      Status s = db_->Get(ReadOptions(), key, &val);
+      if (k / 10 % 2 == 0) {
+        ASSERT_TRUE(s.IsNotFound());
+      } else {
+        ASSERT_OK(s);
+        ASSERT_EQ(expected, val);
+      }
+    }
+  }
+}
 
 }  // namespace rocksdb
 

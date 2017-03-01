@@ -34,6 +34,7 @@
 #include "rocksdb/transaction_log.h"
 #include "table/scoped_arena_iterator.h"
 #include "util/autovector.h"
+#include "util/db_options.h"
 #include "util/event_logger.h"
 #include "util/instrumented_mutex.h"
 #include "util/stop_watch.h"
@@ -53,7 +54,7 @@ class FlushJob {
   // TODO(icanadi) make effort to reduce number of parameters here
   // IMPORTANT: mutable_cf_options needs to be alive while FlushJob is alive
   FlushJob(const std::string& dbname, ColumnFamilyData* cfd,
-           const DBOptions& db_options,
+           const ImmutableDBOptions& db_options,
            const MutableCFOptions& mutable_cf_options,
            const EnvOptions& env_options, VersionSet* versions,
            InstrumentedMutex* db_mutex, std::atomic<bool>* shutting_down,
@@ -66,9 +67,11 @@ class FlushJob {
 
   ~FlushJob();
 
-  // Require db_mutex held
+  // Require db_mutex held.
+  // Once PickMemTable() is called, either Run() or Cancel() has to be call.
   void PickMemTable();
   Status Run(FileMetaData* file_meta = nullptr);
+  void Cancel();
   TableProperties GetTableProperties() const { return table_properties_; }
 
  private:
@@ -78,7 +81,7 @@ class FlushJob {
   Status WriteLevel0Table();
   const std::string& dbname_;
   ColumnFamilyData* cfd_;
-  const DBOptions& db_options_;
+  const ImmutableDBOptions& db_options_;
   const MutableCFOptions& mutable_cf_options_;
   const EnvOptions& env_options_;
   VersionSet* versions_;

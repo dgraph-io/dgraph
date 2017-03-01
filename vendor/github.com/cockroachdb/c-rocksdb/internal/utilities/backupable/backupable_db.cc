@@ -30,6 +30,7 @@
 #include <stdlib.h>
 #include <algorithm>
 #include <atomic>
+#include <functional>
 #include <future>
 #include <limits>
 #include <map>
@@ -275,17 +276,12 @@ class BackupEngineImpl : public BackupEngine {
     return file_copy.erase(first_underscore,
                            file_copy.find_last_of('.') - first_underscore);
   }
-  inline std::string GetLatestBackupFile(bool tmp = false) const {
-    return GetAbsolutePath(std::string("LATEST_BACKUP") + (tmp ? ".tmp" : ""));
-  }
   inline std::string GetBackupMetaDir() const {
     return GetAbsolutePath("meta");
   }
   inline std::string GetBackupMetaFile(BackupID backup_id) const {
     return GetBackupMetaDir() + "/" + rocksdb::ToString(backup_id);
   }
-
-  Status PutLatestBackupFileContents(uint32_t latest_backup);
 
   // If size_limit == 0, there is no size limit, copy everything.
   //
@@ -561,8 +557,10 @@ Status BackupEngineImpl::Initialize() {
   std::vector<std::string> backup_meta_files;
   {
     auto s = backup_env_->GetChildren(GetBackupMetaDir(), &backup_meta_files);
-    if (!s.ok()) {
+    if (s.IsNotFound()) {
       return Status::NotFound(GetBackupMetaDir() + " is missing");
+    } else if (!s.ok()) {
+      return s;
     }
   }
   // create backups_ structure
@@ -616,11 +614,16 @@ Status BackupEngineImpl::Initialize() {
           &abs_path_to_size);
       Status s =
           backup.second->LoadFromFile(options_.backup_dir, abs_path_to_size);
-      if (!s.ok()) {
+      if (s.IsCorruption()) {
         Log(options_.info_log, "Backup %u corrupted -- %s", backup.first,
             s.ToString().c_str());
         corrupt_backups_.insert(std::make_pair(
               backup.first, std::make_pair(s, std::move(backup.second))));
+      } else if (!s.ok()) {
+        // Distinguish corruption errors from errors in the backup Env.
+        // Errors in the backup Env (i.e., this code path) will cause Open() to
+        // fail, whereas corruption errors would not cause Open() failures.
+        return s;
       } else {
         Log(options_.info_log, "Loading backup %" PRIu32 " OK:\n%s",
             backup.first, backup.second->GetInfoString().c_str());
@@ -634,13 +637,6 @@ Status BackupEngineImpl::Initialize() {
   }
 
   Log(options_.info_log, "Latest backup is %u", latest_backup_id_);
-
-  if (!read_only_) {
-    auto s = PutLatestBackupFileContents(latest_backup_id_);
-    if (!s.ok()) {
-      return s;
-    }
-  }
 
   // set up threads perform copies from files_to_copy_or_create_ in the
   // background
@@ -785,36 +781,24 @@ Status BackupEngineImpl::CreateNewBackupWithMetadata(
         manifest_fname.size(), 0 /* size_limit */, false /* shared_checksum */,
         progress_callback, manifest_fname.substr(1) + "\n");
   }
-
-  // Pre-fetch sizes for WAL files
-  std::unordered_map<std::string, uint64_t> wal_path_to_size;
-  if (s.ok()) {
-    if (db->GetOptions().wal_dir != "") {
-      s = InsertPathnameToSizeBytes(db->GetOptions().wal_dir, db_env_,
-                                    &wal_path_to_size);
-    } else {
-      wal_path_to_size = std::move(data_path_to_size);
-    }
-  }
-
+  Log(options_.info_log, "begin add wal files for backup -- %" ROCKSDB_PRIszt,
+      live_wal_files.size());
   // Add a CopyOrCreateWorkItem to the channel for each WAL file
   for (size_t i = 0; s.ok() && i < live_wal_files.size(); ++i) {
-    auto wal_path_to_size_iter =
-        wal_path_to_size.find(live_wal_files[i]->PathName());
-    uint64_t size_bytes = wal_path_to_size_iter == wal_path_to_size.end()
-                              ? port::kMaxUint64
-                              : wal_path_to_size_iter->second;
+    uint64_t size_bytes = live_wal_files[i]->SizeFileBytes();
     if (live_wal_files[i]->Type() == kAliveLogFile) {
+      Log(options_.info_log, "add wal file for backup %s -- %" PRIu64,
+          live_wal_files[i]->PathName().c_str(), size_bytes);
       // we only care about live log files
       // copy the file into backup_dir/files/<new backup>/
       s = AddBackupFileWorkItem(live_dst_paths, backup_items_to_finish,
                                 new_backup_id, false, /* not shared */
                                 db->GetOptions().wal_dir,
                                 live_wal_files[i]->PathName(), rate_limiter,
-                                size_bytes);
+                                size_bytes, size_bytes);
     }
   }
-
+  Log(options_.info_log, "add files for backup done, wait finish.");
   Status item_status;
   for (auto& item : backup_items_to_finish) {
     item.result.wait();
@@ -854,10 +838,6 @@ Status BackupEngineImpl::CreateNewBackupWithMetadata(
   if (s.ok()) {
     // persist the backup metadata on the disk
     s = new_backup->StoreToFile(options_.sync);
-  }
-  if (s.ok()) {
-    // install the newly created backup meta! (atomic)
-    s = PutLatestBackupFileContents(new_backup_id);
   }
   if (s.ok() && options_.sync) {
     unique_ptr<Directory> backup_private_directory;
@@ -1159,44 +1139,6 @@ Status BackupEngineImpl::VerifyBackup(BackupID backup_id) {
   return Status::OK();
 }
 
-// this operation HAS to be atomic
-// writing 4 bytes to the file is atomic alright, but we should *never*
-// do something like 1. delete file, 2. write new file
-// We write to a tmp file and then atomically rename
-Status BackupEngineImpl::PutLatestBackupFileContents(uint32_t latest_backup) {
-  assert(!read_only_);
-  Status s;
-  unique_ptr<WritableFile> file;
-  EnvOptions env_options;
-  env_options.use_mmap_writes = false;
-  s = backup_env_->NewWritableFile(GetLatestBackupFile(true),
-                                   &file,
-                                   env_options);
-  if (!s.ok()) {
-    backup_env_->DeleteFile(GetLatestBackupFile(true));
-    return s;
-  }
-
-  unique_ptr<WritableFileWriter> file_writer(
-      new WritableFileWriter(std::move(file), env_options));
-  char file_contents[10];
-  int len =
-      snprintf(file_contents, sizeof(file_contents), "%u\n", latest_backup);
-  s = file_writer->Append(Slice(file_contents, len));
-  if (s.ok() && options_.sync) {
-    file_writer->Sync(false);
-  }
-  if (s.ok()) {
-    s = file_writer->Close();
-  }
-  if (s.ok()) {
-    // atomically replace real file with new tmp
-    s = backup_env_->RenameFile(GetLatestBackupFile(true),
-                                GetLatestBackupFile(false));
-  }
-  return s;
-}
-
 Status BackupEngineImpl::CopyOrCreateFile(
     const std::string& src, const std::string& dst, const std::string& contents,
     Env* src_env, Env* dst_env, bool sync, RateLimiter* rate_limiter,
@@ -1208,7 +1150,7 @@ Status BackupEngineImpl::CopyOrCreateFile(
   unique_ptr<SequentialFile> src_file;
   EnvOptions env_options;
   env_options.use_mmap_writes = false;
-  env_options.use_os_buffer = false;
+  // TODO:(gzh) maybe use direct writes here if possible
   if (size != nullptr) {
     *size = 0;
   }
@@ -1411,7 +1353,7 @@ Status BackupEngineImpl::CalculateChecksum(const std::string& src, Env* src_env,
 
   EnvOptions env_options;
   env_options.use_mmap_writes = false;
-  env_options.use_os_buffer = false;
+  env_options.use_direct_reads = false;
 
   std::unique_ptr<SequentialFile> src_file;
   Status s = src_env->NewSequentialFile(src, &src_file, env_options);
@@ -1667,7 +1609,7 @@ Status BackupEngineImpl::BackupMeta::LoadFromFile(
       try {
         size = abs_path_to_size.at(abs_path);
       } catch (std::out_of_range&) {
-        return Status::NotFound("Size missing for pathname: " + abs_path);
+        return Status::Corruption("Size missing for pathname: " + abs_path);
       }
     }
 
@@ -1717,6 +1659,7 @@ Status BackupEngineImpl::BackupMeta::StoreToFile(bool sync) {
   unique_ptr<WritableFile> backup_meta_file;
   EnvOptions env_options;
   env_options.use_mmap_writes = false;
+  env_options.use_direct_writes = false;
   s = env_->NewWritableFile(meta_filename_ + ".tmp", &backup_meta_file,
                             env_options);
   if (!s.ok()) {
