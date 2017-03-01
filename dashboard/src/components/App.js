@@ -136,7 +136,7 @@ function hasProperties(props: Object): boolean {
   return Object.keys(props).length !== 1;
 }
 
-function processGraph(response: Object, maxNodes: number) {
+function processGraph(response: Object, maxNodes: number, treeView: boolean) {
   let nodesStack: Array<ResponseNode> = [],
     // Contains map of a lable to its shortform thats displayed.
     predLabel: MapOfStrings = {},
@@ -166,7 +166,7 @@ function processGraph(response: Object, maxNodes: number) {
     if (root !== "server_latency" && root !== "uids") {
       let block = response[root];
       for (let i = 0; i < block.length; i++) {
-        let n: ResponseNode = {
+        let rn: ResponseNode = {
           node: block[i],
           src: {
             id: "",
@@ -175,9 +175,9 @@ function processGraph(response: Object, maxNodes: number) {
         };
         if (hasChildren(block[i])) {
           someNodeHasChildren = true;
-          nodesStack.push(n);
+          nodesStack.push(rn);
         } else {
-          ignoredChildren.push(n);
+          ignoredChildren.push(rn);
         }
       }
 
@@ -206,54 +206,78 @@ function processGraph(response: Object, maxNodes: number) {
       }
     }
 
-    let properties: MapOfStrings = {}, hasChildNodes: boolean = false;
+    let properties: MapOfStrings = {},
+      hasChildNodes: boolean = false,
+      id: string;
 
     for (let prop in obj.node) {
+      if (!obj.node.hasOwnProperty(prop)) {
+        continue;
+      }
+      id = treeView
+        ? // For tree view, the id is the join of ids of this node
+          // with all its ancestors. That would make it unique.
+          [obj.src.id, properties["_uid_"]].join("-")
+        : properties["_uid_"];
+
       // If its just a value, then we store it in properties for this node.
       if (!Array.isArray(obj.node[prop])) {
         properties[prop] = obj.node[prop];
-      } else {
-        hasChildNodes = true;
-        let arr = obj.node[prop];
-        for (let i = 0; i < arr.length; i++) {
-          nodesStack.push({
-            node: arr[i],
-            src: {
-              pred: prop,
-              id: obj.node["_uid_"],
-            },
-          });
-        }
+        continue;
+      }
+      hasChildNodes = true;
+      let arr = obj.node[prop], xposition = 1;
+      for (let j = 0; j < arr.length; j++) {
+        arr[j]["x"] = xposition++;
+        nodesStack.push({
+          node: arr[j],
+          src: {
+            pred: prop,
+            id: id,
+          },
+        });
       }
     }
 
+    if (!hasProperties(obj) && !hasChildNodes) {
+      continue;
+    }
+
     let props = getGroupProperties(obj.src.pred, predLabel, groups);
-    if (!uidMap[properties["_uid_"]]) {
-      uidMap[properties["_uid_"]] = true;
-      if (hasProperties(properties) || hasChildNodes) {
-        var n: Node = {
-          id: properties["_uid_"],
-          label: getNodeLabel(properties),
-          title: JSON.stringify(properties, null, 2),
-          group: obj.src.pred,
-          color: props.color,
-        };
+    let x = properties["x"];
+    delete properties["x"];
+
+    let n: Node = {
+      id: id,
+      x: x,
+      label: getNodeLabel(properties),
+      title: JSON.stringify(properties, null, 2),
+      group: obj.src.pred,
+      color: props.color,
+    };
+
+    if (treeView) {
+      // For tree view, we push duplicate nodes too.
+      nodes.push(n);
+    } else {
+      if (!uidMap[properties["_uid_"]]) {
+        uidMap[properties["_uid_"]] = true;
         nodes.push(n);
       }
     }
 
-    if (obj.src.id !== "") {
-      var e: Edge = {
-        // id: [obj.src.id, properties["_uid_"]].join("-"),
-        from: obj.src.id,
-        to: properties["_uid_"],
-        title: obj.src.pred,
-        label: props.label,
-        color: props.color,
-        arrows: "to",
-      };
-      edges.push(e);
+    if (obj.src.id === "") {
+      continue;
     }
+    var e: Edge = {
+      from: obj.src.id,
+      to: id,
+      title: obj.src.pred,
+      label: props.label,
+      color: props.color,
+      arrows: "to",
+    };
+    edges.push(e);
   }
 
   var plotAxis = [];
@@ -319,6 +343,7 @@ class App extends React.Component {
       edges: [],
       allNodes: [],
       allEdges: [],
+      treeView: false,
     };
   }
 
@@ -337,6 +362,7 @@ class App extends React.Component {
         edges: [],
         allNodes: [],
         allEdges: [],
+        treeView: false,
       });
     }
     window.scrollTo(0, 0);
@@ -360,6 +386,7 @@ class App extends React.Component {
       allEdges: [],
       nodes: [],
       edges: [],
+      treeView: false,
     };
   };
 
@@ -437,17 +464,17 @@ class App extends React.Component {
     groups = {};
   };
 
-  renderGraph = result => {
+  renderGraph = (result, treeView) => {
     let startTime = new Date(), that = this;
 
     // We call procesGraph with a 5 node limit and calculate the whole dataset in
     // the background.
-    var renderedGraph = processGraph(result, 2);
+    var renderedGraph = processGraph(result, 2, treeView);
     setTimeout(
       function() {
         // We process all the nodes and edges in the response in background and
         // later when we do expansion of nodes.
-        let graph = processGraph(result, -1);
+        let graph = processGraph(result, -1, treeView);
 
         that.setState({
           plotAxis: graph[2],
@@ -455,6 +482,7 @@ class App extends React.Component {
           allEdges: graph[1],
           nodes: renderedGraph[0],
           edges: renderedGraph[1],
+          treeView: treeView,
         });
       },
       0,
@@ -549,6 +577,8 @@ class App extends React.Component {
                   edges={this.state.edges}
                   allNodes={this.state.allNodes}
                   allEdges={this.state.allEdges}
+                  treeView={this.state.treeView}
+                  renderGraph={this.renderGraph}
                 />
               </div>
               <Stats

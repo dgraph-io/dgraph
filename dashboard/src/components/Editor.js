@@ -22,7 +22,10 @@ function handleResponse(result) {
     this.props.renderResText("success-res", JSON.stringify(result, null, 2));
   } else if (isNotEmpty(result)) {
     this.props.storeLastQuery();
-    this.props.renderGraph(result);
+    let query = this.getValue(),
+      mantainSortOrder = query.indexOf("orderasc") !== -1 ||
+        query.indexOf("orderdesc") !== -1;
+    this.props.renderGraph(result, mantainSortOrder);
   } else {
     // We probably didn't get any results.
     this.props.renderResText(
