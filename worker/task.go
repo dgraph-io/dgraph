@@ -31,7 +31,7 @@ import (
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
-	"github.com/dgraph-io/dgraph/utils"
+	"github.com/dgraph-io/dgraph/types/facets/utils"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -207,7 +207,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 				if res {
 					filteredRes = append(filteredRes, &result{
 						uid:    p.Uid,
-						facets: facets.CopyFacets(p.Facets, q.FacetParam)})
+						facets: utils.CopyFacets(p.Facets, q.FacetParam)})
 				}
 				return true // continue iteration.
 			})

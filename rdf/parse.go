@@ -29,8 +29,7 @@ import (
 	"github.com/dgraph-io/dgraph/query/graph"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/types"
-	"github.com/dgraph-io/dgraph/types/facets"
-	"github.com/dgraph-io/dgraph/utils"
+	"github.com/dgraph-io/dgraph/types/facets/utils"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -311,7 +310,7 @@ func parseFacets(it *lex.ItemIterator, rnq *graph.NQuad) error {
 	}
 	defer func() { // always sort facets before returning.
 		if rnq.Facets != nil {
-			facets.SortFacets(rnq.Facets)
+			utils.SortFacets(rnq.Facets)
 		}
 	}()
 

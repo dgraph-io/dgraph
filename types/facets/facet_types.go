@@ -17,7 +17,6 @@
 package facets
 
 import (
-	"bytes"
 	"strconv"
 	"time"
 	"unicode"
@@ -73,6 +72,8 @@ func ValType(val string) (Facet_ValType, error) {
 	return typ, err
 }
 
+// ValAndValType returns interface val and valtype for facet.
+// Exported for facets/utils.go's FacetFor api.
 func ValAndValType(val string) (interface{}, Facet_ValType, error) {
 	if fint, err := strconv.ParseInt(val, 10, 32); err == nil {
 		return int32(fint), Facet_INT32, nil
@@ -104,15 +105,6 @@ func ValAndValType(val string) (interface{}, Facet_ValType, error) {
 	return val, Facet_STRING, nil
 }
 
-// FacetFor returns Facet for given key and val.
-func FacetFor(key, val string) (*Facet, error) {
-	vt, err := ValType(val)
-	if err != nil {
-		return nil, err
-	}
-	return &Facet{Key: key, Value: []byte(val), ValType: vt}, nil
-}
-
 // Move to types/parse namespace.
 func parseTime(val string) (time.Time, error) {
 	var t time.Time
@@ -128,19 +120,11 @@ func parseTime(val string) (time.Time, error) {
 const dateFormatYMD = "2006-01-02"
 const dateTimeFormat = "2006-01-02T15:04:05"
 
-// SameFacets returns whether two facets are same or not.
-// both should be sorted by key.
-func SameFacets(a []*Facet, b []*Facet) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	la := len(a)
-	for i := 0; i < la; i++ {
-		if (a[i].Key != b[i].Key) ||
-			!bytes.Equal(a[i].Value, b[i].Value) ||
-			(a[i].ValType != b[i].ValType) {
-			return false
-		}
-	}
-	return true
+// Len, Swap and Less satisfy sorting interface
+func (a Facets) Len() int { return len(a.Facets) }
+func (a Facets) Swap(i, j int) {
+	a.Facets[i], a.Facets[j] = a.Facets[j], a.Facets[i]
+}
+func (a Facets) Less(i, j int) bool {
+	return a.Facets[i].Key < a.Facets[j].Key
 }
