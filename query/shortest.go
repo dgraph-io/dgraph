@@ -188,8 +188,9 @@ func (start *SubGraph) expandOut(ctx context.Context,
 
 		if len(out) == 0 {
 			rch <- ErrStop
+		} else {
+			rch <- nil
 		}
-		rch <- nil
 		exec = out
 	}
 }
