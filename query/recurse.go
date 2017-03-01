@@ -133,12 +133,12 @@ func Recurse(ctx context.Context, sg *SubGraph) error {
 	go sg.expandRecurse(ctx, next, expandErr)
 	depth := sg.Params.RecurseDepth
 	if depth == 0 {
-		depth = math.MaxInt64
+		depth = math.MaxUint64
 	}
 
 L:
 	// Recurse number of times specified by the user.
-	for i := 0; i < depth; i++ {
+	for i := uint64(0); i < depth; i++ {
 		next <- false
 		select {
 		case err = <-expandErr:

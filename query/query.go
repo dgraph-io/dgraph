@@ -134,7 +134,7 @@ type params struct {
 	From         uint64
 	To           uint64
 	Facet        *facets.Param
-	RecurseDepth int
+	RecurseDepth uint64
 }
 
 // SubGraph is the way to represent data internally. It contains both the
@@ -231,6 +231,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 	for _, pc := range sg.Children {
 
 		if pc.uidMatrix == nil {
+			// Can happen in recurse query.
 			continue
 		}
 		idxi, idxj := algo.IndexOf(pc.SrcUIDs, uid)
@@ -548,14 +549,14 @@ func (args *params) fill(gq *gql.GraphQuery) error {
 		}
 		args.AfterUID = uint64(after)
 	}
-	if v, ok := gq.Args["depth"]; ok {
-		from, err := strconv.ParseInt(v, 0, 64)
+	if v, ok := gq.Args["depth"]; ok && args.Alias == "recurse" {
+		from, err := strconv.ParseUint(v, 0, 64)
 		if err != nil {
 			return err
 		}
-		args.RecurseDepth = int(from)
+		args.RecurseDepth = from
 	}
-	if v, ok := gq.Args["from"]; ok {
+	if v, ok := gq.Args["from"]; ok && args.Alias == "shortest" {
 		from, err := strconv.ParseUint(v, 0, 64)
 		if err != nil {
 			// Treat it as an XID.
@@ -563,7 +564,7 @@ func (args *params) fill(gq *gql.GraphQuery) error {
 		}
 		args.From = uint64(from)
 	}
-	if v, ok := gq.Args["to"]; ok {
+	if v, ok := gq.Args["to"]; ok && args.Alias == "shortest" {
 		to, err := strconv.ParseUint(v, 0, 64)
 		if err != nil {
 			// Treat it as an XID.
