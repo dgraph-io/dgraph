@@ -228,6 +228,9 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 	facetsNode := dst.New("@facets")
 	// We go through all predicate children of the subgraph.
 	for _, pc := range sg.Children {
+		if dst.Error() != nil || parent.Error() != nil || facetsNode.Error() != nil {
+			break
+		}
 		idxi, idxj := algo.IndexOf(pc.SrcUIDs, uid)
 		if idxi < 0 {
 			continue
@@ -303,10 +306,14 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 						fcParent := dst.New("_")
 						fcParent.AddMapChild("_", fc, false)
 						uc.AddMapChild("@facets", fcParent, true)
+					} else if fc.Error() != nil {
+						return fc.Error()
 					}
 				}
 				if !uc.IsEmpty() {
 					dst.AddListChild(fieldName, uc)
+				} else if uc.Error() != nil {
+					return uc.Error()
 				}
 			}
 		} else {
@@ -327,6 +334,8 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 				}
 				if !fc.IsEmpty() {
 					facetsNode.AddMapChild(fieldName, fc, false)
+				} else if fc.Error() != nil {
+					return fc.Error()
 				}
 			}
 
@@ -369,7 +378,15 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 	if !facetsNode.IsEmpty() {
 		dst.AddMapChild("@facets", facetsNode, false)
 	}
-	return nil
+	err := dst.Error()
+	if err == nil {
+		err = parent.Error()
+	}
+	if err == nil {
+		err = facetsNode.Error()
+	}
+	return err
+
 }
 
 // convert from task.Val to types.Value which is determined by attr
@@ -440,13 +457,16 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 	// children. But, in this case, we don't want to muck with the current
 	// node, because of the way we're dealing with the root node.
 	// So, we work on the children, and then recurse for grand children.
-	attrsSeen := make(map[string]bool, len(gq.Children))
+	attrsSeen := make(map[string]struct{})
 	for _, gchild := range gq.Children {
-		if _, ok := attrsSeen[gchild.Attr]; ok {
-			return x.Errorf("%s not allowed multiple times in same query block.",
-				gchild.Attr)
+		if !gchild.IsCount { // ignore count subgraphs..
+			if _, ok := attrsSeen[gchild.Attr]; ok {
+				// ignoring querygraph that want counts.
+				return x.Errorf("%s not allowed multiple times in same sub-query.",
+					gchild.Attr)
+			}
+			attrsSeen[gchild.Attr] = struct{}{}
 		}
-		attrsSeen[gchild.Attr] = true
 		if gchild.Attr == "_uid_" {
 			sg.Params.GetUID = true
 		} else if gchild.Attr == "password" { // query password is forbidden

@@ -1989,8 +1989,6 @@ func TestToProto(t *testing.T) {
 				friend {
 					name
 				}
-				friend {
-				}
 			}
 		}
   `
@@ -3383,8 +3381,6 @@ func TestSchema(t *testing.T) {
 				friend {
 					dob
 					name
-				}
-				friend {
 				}
 			}
 		}
