@@ -132,7 +132,7 @@ func parseFuncType(arr []string) (FuncType, string) {
 // processTask processes the query, accumulates and returns the result.
 func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 	attr := q.Attr
-	resParseFn, err := parseQuery(q)
+	resParseFn, err := getSrcFnContext(q)
 	if err != nil {
 		return nil, err
 	}
@@ -342,10 +342,9 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 	return &out, nil
 }
 
-type resultParseQuery struct {
+type functionContext struct {
 	tokens         []string
 	geoQuery       *types.GeoQueryData
-	err            error
 	intersectDest  bool
 	ineqValue      types.Val
 	ineqValueToken string
@@ -355,10 +354,10 @@ type resultParseQuery struct {
 	fnType         FuncType
 }
 
-func parseQuery(q *task.Query) (*resultParseQuery, error) {
+func getSrcFnContext(q *task.Query) (*functionContext, error) {
 	fnType, f := parseFuncType(q.SrcFunc)
 	attr := q.Attr
-	res := &resultParseQuery{fnType: fnType, fname: f}
+	res := &functionContext{fnType: fnType, fname: f}
 	var err error
 
 	switch fnType {
@@ -490,7 +489,7 @@ func (w *grpcWorker) ServeTask(ctx context.Context, q *task.Query) (*task.Result
 // like Or has 3 arguments, argument facet val overflows integer.
 // returns true if postingFacets can be included.
 func applyFacetFilter(postingFacets []*facets.Facet, tree *facets.FilterTree) (bool, error) {
-	ftree, err := preProcessFilter(tree)
+	ftree, err := preprocessFilter(tree)
 	if err != nil {
 		return false, err
 	}
@@ -630,7 +629,7 @@ type facetsTree struct {
 	function *facetsFunc
 }
 
-func preProcessFilter(tree *facets.FilterTree) (*facetsTree, error) {
+func preprocessFilter(tree *facets.FilterTree) (*facetsTree, error) {
 	if tree == nil {
 		return nil, nil
 	}
@@ -658,13 +657,13 @@ func preProcessFilter(tree *facets.FilterTree) (*facetsTree, error) {
 			sort.Strings(argTokens)
 			ftree.function.tokens = argTokens
 		default:
-			return nil, x.Errorf("Fn %s not supported in preProcessFilter.", fname)
+			return nil, x.Errorf("Fn %s not supported in preprocessFilter.", fname)
 		}
 		return ftree, nil
 	}
 
 	for _, c := range tree.Children {
-		ftreec, err := preProcessFilter(c)
+		ftreec, err := preprocessFilter(c)
 		if err != nil {
 			return nil, err
 		}
