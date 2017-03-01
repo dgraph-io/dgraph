@@ -5,7 +5,6 @@ import (
 	"math"
 
 	"github.com/dgraph-io/dgraph/algo"
-	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -42,7 +41,6 @@ func (start *SubGraph) expandRecurse(ctx context.Context,
 		exec = append(exec, child)
 		start.Children = append(start.Children, child)
 	}
-	exec = append(exec, start)
 	dummy := &SubGraph{}
 	for {
 		over := <-next
@@ -103,14 +101,7 @@ func (start *SubGraph) expandRecurse(ctx context.Context,
 				temp := new(SubGraph)
 				*temp = *child
 				// Filter out the uids that we have already seen
-				temp.Children = []*SubGraph{}
-				temp.SrcUIDs = new(task.List)
-				wit := algo.NewWriteIterator(temp.SrcUIDs)
-				it := algo.NewListIterator(sg.DestUIDs)
-				for ; it.Valid(); it.Next() {
-					wit.Append(it.Val())
-				}
-				wit.End()
+				temp.SrcUIDs = sg.DestUIDs
 				// Remove those nodes which we have already traversed. As this cannot be
 				// in the path again.
 				algo.ApplyFilter(temp.SrcUIDs, func(uid uint64, i int) bool {
