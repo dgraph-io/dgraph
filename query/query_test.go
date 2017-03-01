@@ -3735,3 +3735,59 @@ func TestFilterNonIndexedPredicateFail(t *testing.T) {
 	_, err := processToFastJsonReq(t, query)
 	require.Error(t, err)
 }
+
+func TestMultipleSamePredicateInBlockFail(t *testing.T) {
+	populateGraph(t)
+	// name is asked for two times..
+	query := `
+		{
+			me(id:0x01) {
+				name
+				friend {
+					age
+				}
+				name
+			}
+		}
+	`
+	_, err := processToFastJsonReq(t, query)
+	require.Error(t, err)
+}
+
+func TestMultipleSamePredicateInBlockFail2(t *testing.T) {
+	populateGraph(t)
+	// age is asked for two times..
+	query := `
+		{
+			me(id:0x01) {
+				friend {
+					age
+					age
+				}
+				name
+			}
+		}
+	`
+	_, err := processToFastJsonReq(t, query)
+	require.Error(t, err)
+}
+
+func TestMultipleSamePredicateInBlockFail3(t *testing.T) {
+	populateGraph(t)
+	// friend is asked for two times..
+	query := `
+		{
+			me(id:0x01) {
+				friend {
+					age
+				}
+				friend {
+					name
+				}
+				name
+			}
+		}
+	`
+	_, err := processToFastJsonReq(t, query)
+	require.Error(t, err)
+}
