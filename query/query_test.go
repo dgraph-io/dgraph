@@ -478,6 +478,20 @@ func TestRecurseQuery(t *testing.T) {
 		`{"recurse":[{"name":"Michonne", "friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea", "friend":[{"name":"Glenn Rhee"}]}]}]}`, js)
 }
 
+func TestRecurseQueryLimitDepth(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			recurse(id:0x01, depth: 2) {
+				friend 
+				name
+			}
+		}`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"recurse":[{"name":"Michonne", "friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}]}`, js)
+}
+
 func TestShortestPath_NoPath(t *testing.T) {
 	populateGraph(t)
 	query := `

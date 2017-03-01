@@ -229,6 +229,10 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 	facetsNode := dst.New("@facets")
 	// We go through all predicate children of the subgraph.
 	for _, pc := range sg.Children {
+
+		if pc.uidMatrix == nil {
+			continue
+		}
 		idxi, idxj := algo.IndexOf(pc.SrcUIDs, uid)
 		if idxi < 0 {
 			continue
@@ -543,6 +547,13 @@ func (args *params) fill(gq *gql.GraphQuery) error {
 			return err
 		}
 		args.AfterUID = uint64(after)
+	}
+	if v, ok := gq.Args["depth"]; ok {
+		from, err := strconv.ParseInt(v, 0, 64)
+		if err != nil {
+			return err
+		}
+		args.RecurseDepth = int(from)
 	}
 	if v, ok := gq.Args["from"]; ok {
 		from, err := strconv.ParseUint(v, 0, 64)
@@ -1236,7 +1247,7 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 // isValidArg checks if arg passed is valid keyword.
 func isValidArg(a string) bool {
 	switch a {
-	case "from", "to", "orderasc", "orderdesc", "first", "offset", "after":
+	case "from", "to", "orderasc", "orderdesc", "first", "offset", "after", "depth":
 		return true
 	}
 	return false

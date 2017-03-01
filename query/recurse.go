@@ -18,8 +18,8 @@ func (start *SubGraph) expandRecurse(ctx context.Context,
 
 	// Process the root first.
 	rrch := make(chan error, len(exec))
-	temp := make([]*SubGraph, len(start.Children))
-	copy(temp, start.Children)
+	startChildren := make([]*SubGraph, len(start.Children))
+	copy(startChildren, start.Children)
 	start.Children = []*SubGraph{}
 	go ProcessGraph(ctx, start, nil, rrch)
 	select {
@@ -36,10 +36,13 @@ func (start *SubGraph) expandRecurse(ctx context.Context,
 	}
 
 	// Prepare the children.
-	for _, child := range temp {
-		child.SrcUIDs = start.DestUIDs
-		exec = append(exec, child)
-		start.Children = append(start.Children, child)
+	for _, child := range startChildren {
+		temp := new(SubGraph)
+		*temp = *child
+		temp.SrcUIDs = start.DestUIDs
+		temp.Children = []*SubGraph{}
+		exec = append(exec, temp)
+		start.Children = append(start.Children, temp)
 	}
 	dummy := &SubGraph{}
 	for {
@@ -47,6 +50,7 @@ func (start *SubGraph) expandRecurse(ctx context.Context,
 		if over {
 			return
 		}
+
 		rrch := make(chan error, len(exec))
 		for _, sg := range exec {
 			go ProcessGraph(ctx, sg, dummy, rrch)
@@ -86,7 +90,7 @@ func (start *SubGraph) expandRecurse(ctx context.Context,
 			}
 		}
 
-		if numEdges > 10000000 {
+		if numEdges > 1000000 {
 			// If we've seen too many nodes, stop the query.
 			rch <- ErrTooBig
 		}
@@ -97,11 +101,11 @@ func (start *SubGraph) expandRecurse(ctx context.Context,
 			if algo.ListLen(sg.DestUIDs) == 0 {
 				continue
 			}
-			for _, child := range start.Children {
+			for _, child := range startChildren {
 				temp := new(SubGraph)
 				*temp = *child
-				// Filter out the uids that we have already seen
 				temp.SrcUIDs = sg.DestUIDs
+				temp.Children = []*SubGraph{}
 				// Remove those nodes which we have already traversed. As this cannot be
 				// in the path again.
 				algo.ApplyFilter(temp.SrcUIDs, func(uid uint64, i int) bool {
