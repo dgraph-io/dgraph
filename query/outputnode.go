@@ -220,6 +220,9 @@ func (sg *SubGraph) ToProtocolBuffer(l *Latency) (*graph.Node, error) {
 		}
 
 		if rerr := sg.preTraverse(uid, n1, n1); rerr != nil {
+			if n1.Error() != nil {
+				return nil, n1.Error()
+			}
 			if rerr.Error() == "_INV_" {
 				continue
 			}
@@ -315,6 +318,7 @@ func (fj *fastJsonNode) AddListChild(attr string, child outputNode) {
 	}
 	if child.Error() != nil {
 		fj.err = child.Error()
+		return
 	}
 	children, found := fj.children[attr]
 	if !found {
@@ -399,7 +403,7 @@ func valToBytes(v types.Val) ([]byte, error) {
 }
 
 func (fj *fastJsonNode) encode(bufw *bufio.Writer) {
-	if fj.Error() != nil {
+	if fj.err != nil {
 		return
 	}
 	allKeys := make([]string, 0, len(fj.attrs))
@@ -497,6 +501,9 @@ func processNodeUids(n *fastJsonNode, sg *SubGraph) error {
 			n1.SetUID(uid)
 		}
 		if err := sg.preTraverse(uid, n1, n1); err != nil {
+			if n1.Error() != nil {
+				return n1.Error()
+			}
 			if err.Error() == "_INV_" {
 				continue
 			}
