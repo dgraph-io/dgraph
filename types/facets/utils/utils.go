@@ -19,6 +19,9 @@ package utils
 import (
 	"bytes"
 	"sort"
+	"strconv"
+	"time"
+	"unicode"
 
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
@@ -60,7 +63,7 @@ func CopyFacets(fcs []*facets.Facet, param *facets.Param) (fs []*facets.Facet) {
 
 // FacetFor returns Facet for given key and val.
 func FacetFor(key, val string) (*facets.Facet, error) {
-	v, vt, err := facets.ValAndValType(val)
+	v, vt, err := valAndValType(val)
 	if err != nil {
 		return nil, err
 	}
@@ -103,3 +106,50 @@ func SameFacets(a []*facets.Facet, b []*facets.Facet) bool {
 	}
 	return true
 }
+
+// valAndValType returns interface val and valtype for facet.
+func valAndValType(val string) (interface{}, facets.Facet_ValType, error) {
+	if fint, err := strconv.ParseInt(val, 10, 32); err == nil {
+		return int32(fint), facets.Facet_INT32, nil
+	} else if nume := err.(*strconv.NumError); nume.Err == strconv.ErrRange {
+		// check if whole string is only of nums or not.
+		// comes here for : 11111111111111111111132333uasfk333 ; see test.
+		nonNumChar := false
+		for _, v := range val {
+			if !unicode.IsDigit(v) {
+				nonNumChar = true
+				break
+			}
+		}
+		if !nonNumChar { // return error
+			return nil, facets.Facet_INT32, err
+		}
+	}
+	if ffloat, err := strconv.ParseFloat(val, 64); err == nil {
+		return ffloat, facets.Facet_FLOAT, nil
+	} else if nume := err.(*strconv.NumError); nume.Err == strconv.ErrRange {
+		return nil, facets.Facet_FLOAT, err
+	}
+	if val == "true" || val == "false" {
+		return val == "true", facets.Facet_BOOL, nil
+	}
+	if t, err := parseTime(val); err == nil {
+		return t, facets.Facet_DATETIME, nil
+	}
+	return val, facets.Facet_STRING, nil
+}
+
+// Move to types/parse namespace.
+func parseTime(val string) (time.Time, error) {
+	var t time.Time
+	if err := t.UnmarshalText([]byte(val)); err == nil {
+		return t, err
+	}
+	if t, err := time.Parse(dateTimeFormat, val); err == nil {
+		return t, err
+	}
+	return time.Parse(dateFormatYMD, val)
+}
+
+const dateFormatYMD = "2006-01-02"
+const dateTimeFormat = "2006-01-02T15:04:05"

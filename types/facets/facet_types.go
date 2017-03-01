@@ -16,12 +16,6 @@
 
 package facets
 
-import (
-	"strconv"
-	"time"
-	"unicode"
-)
-
 const (
 	Int32ID    = TypeID(Facet_INT32)
 	FloatID    = TypeID(Facet_FLOAT)
@@ -65,60 +59,6 @@ func TypeIDForValType(valType Facet_ValType) TypeID {
 	}
 	panic("Unhandled case in TypeIDForValType.")
 }
-
-// ValType gives Facet's TypeID for given facet value str.
-func ValType(val string) (Facet_ValType, error) {
-	_, typ, err := ValAndValType(val)
-	return typ, err
-}
-
-// ValAndValType returns interface val and valtype for facet.
-// Exported for facets/utils.go's FacetFor api.
-func ValAndValType(val string) (interface{}, Facet_ValType, error) {
-	if fint, err := strconv.ParseInt(val, 10, 32); err == nil {
-		return int32(fint), Facet_INT32, nil
-	} else if nume := err.(*strconv.NumError); nume.Err == strconv.ErrRange {
-		// check if whole string is only of nums or not.
-		// comes here for : 11111111111111111111132333uasfk333 ; see test.
-		nonNumChar := false
-		for _, v := range val {
-			if !unicode.IsDigit(v) {
-				nonNumChar = true
-				break
-			}
-		}
-		if !nonNumChar { // return error
-			return nil, Facet_INT32, err
-		}
-	}
-	if ffloat, err := strconv.ParseFloat(val, 64); err == nil {
-		return ffloat, Facet_FLOAT, nil
-	} else if nume := err.(*strconv.NumError); nume.Err == strconv.ErrRange {
-		return nil, Facet_FLOAT, err
-	}
-	if val == "true" || val == "false" {
-		return val == "true", Facet_BOOL, nil
-	}
-	if t, err := parseTime(val); err == nil {
-		return t, Facet_DATETIME, nil
-	}
-	return val, Facet_STRING, nil
-}
-
-// Move to types/parse namespace.
-func parseTime(val string) (time.Time, error) {
-	var t time.Time
-	if err := t.UnmarshalText([]byte(val)); err == nil {
-		return t, err
-	}
-	if t, err := time.Parse(dateTimeFormat, val); err == nil {
-		return t, err
-	}
-	return time.Parse(dateFormatYMD, val)
-}
-
-const dateFormatYMD = "2006-01-02"
-const dateTimeFormat = "2006-01-02T15:04:05"
 
 // Len, Swap and Less satisfy sorting interface
 func (a Facets) Len() int { return len(a.Facets) }
