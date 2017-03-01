@@ -11,8 +11,8 @@ import (
 func (start *SubGraph) expandRecurse(ctx context.Context,
 	next chan bool, rch chan error) {
 
-	adjacencyMap := make(map[uint64]map[uint64]struct{})
-	var numEdges uint64
+	reachMap := make(map[uint64]struct{})
+	var numEdges int
 	var exec []*SubGraph
 	var err error
 
@@ -76,16 +76,10 @@ func (start *SubGraph) expandRecurse(ctx context.Context,
 			for ; it.Valid(); it.Next() { // idx, fromUID := range sg.SrcUIDs.Uids {
 				mIdx++
 				fromUID := it.Val()
-				destIt := algo.NewListIterator(sg.uidMatrix[mIdx])
-				lIdx := -1
-				for ; destIt.Valid(); destIt.Next() {
-					lIdx++
-					toUid := destIt.Val()
-					if adjacencyMap[fromUID] == nil {
-						adjacencyMap[fromUID] = make(map[uint64]struct{})
-					}
-					adjacencyMap[fromUID][toUid] = struct{}{}
-					numEdges++
+				if l := algo.ListLen(sg.uidMatrix[mIdx]); l > 0 {
+					// Mark as set only if its not a value edge.
+					reachMap[fromUID] = struct{}{}
+					numEdges += l
 				}
 			}
 		}
@@ -109,7 +103,7 @@ func (start *SubGraph) expandRecurse(ctx context.Context,
 				// Remove those nodes which we have already traversed. As this cannot be
 				// in the path again.
 				algo.ApplyFilter(temp.SrcUIDs, func(uid uint64, i int) bool {
-					_, ok := adjacencyMap[uid]
+					_, ok := reachMap[uid]
 					return !ok
 				})
 				if algo.ListLen(temp.SrcUIDs) == 0 {
