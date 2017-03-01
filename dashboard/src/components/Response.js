@@ -22,7 +22,10 @@ class Response extends Component {
         if (
             // TODO - Check how to do a shallow check?
             nextProps.nodes.length !== this.props.nodes.length ||
-            nextProps.edges.length !== this.props.edges.length
+            nextProps.edges.length !== this.props.edges.length ||
+            nextProps.allNodes.length !== this.props.allNodes.length ||
+            nextProps.allEdges.length !== this.props.allEdges.length ||
+            nextProps.treeView !== this.props.treeView
         ) {
             if (this.isFullyExpanded(nextProps)) {
                 this.setState({
@@ -74,6 +77,7 @@ class Response extends Component {
                     setCurrentNode={this.setCurrentNode}
                     updateExpanded={this.updateExpanded}
                     fullyExpanded={this.state.fullyExpanded}
+                    treeView={this.props.treeView}
                 />
                 <div style={{ fontSize: "12px" }}>
                     <Stats
@@ -91,6 +95,18 @@ class Response extends Component {
                         onClick={() => this.refs.graph.expandAll()}
                     >
                         {this.state.fullyExpanded ? "Collapse" : "Expand"}
+                    </Button>
+                    <Button
+                        className="Response-button"
+                        bsStyle="primary"
+                        disabled={this.props.allNodes.length === 0}
+                        onClick={() =>
+                            this.props.renderGraph(
+                                this.props.result,
+                                !this.props.treeView,
+                            )}
+                    >
+                        {this.props.treeView ? "Graph view" : "Tree View"}
                     </Button>
                     <div>
                         Nodes:{" "}

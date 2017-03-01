@@ -70,6 +70,7 @@ function renderNetwork(props) {
             hideEdgesOnDrag: true,
         },
         layout: {
+            randomSeed: 42,
             improvedLayout: false,
         },
         physics: {
@@ -87,6 +88,22 @@ function renderNetwork(props) {
             },
         },
     };
+
+    if (props.treeView) {
+        Object.assign(options, {
+            layout: {
+                hierarchical: {
+                    sortMethod: "directed",
+                },
+            },
+            physics: {
+                // Otherwise there is jittery movement (existing nodes move
+                // horizontally which doesn't look good) when you expand some nodes.
+                enabled: false,
+                barnesHut: {},
+            },
+        });
+    }
 
     let network = new vis.Network(container, data, options);
     let allNodeSet = new vis.DataSet(props.allNodes);
@@ -233,6 +250,7 @@ function renderNetwork(props) {
             data.nodes.update(this.props.nodes);
             data.edges.update(this.props.edges);
             this.props.updateExpanded(false);
+            network.fit();
             return;
         }
 
@@ -280,6 +298,8 @@ function renderNetwork(props) {
             nodeSet.update(allNodeSet.get(Array.from(nodesBatch)));
             edgeSet.update(edgesBatch);
         }
+
+        network.fit();
     };
 
     this.setState({ expand: expand });
@@ -342,7 +362,8 @@ class Graph extends Component {
             nextProps.edges.length === this.props.edges.length &&
             nextProps.allNodes.length === this.props.allNodes.length &&
             nextProps.allEdges.length === this.props.allEdges.length &&
-            nextProps.response === this.props.response
+            nextProps.response === this.props.response &&
+            nextProps.treeView === this.props.treeView
         ) {
             return;
         }

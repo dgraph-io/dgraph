@@ -5,19 +5,6 @@
     margin-bottom: 100px;
 }
 
-.App-properties {
-    display: flex;
-    justify-content: center;
-    align-content: center;
-    flex-direction: column;
-    margin-top: 5px;
-    margin-bottom: 10px;
-    height: 120px;
-    border: 1px solid gray;
-    padding: 10px;
-    overflow: auto;
-}
-
 .App-fullscreen {
     position: absolute;
     top: 0px;

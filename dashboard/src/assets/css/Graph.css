@@ -51,7 +51,7 @@
 
 
 .Graph-full-height {
-    height: calc(100vh - 250px);
+    height: calc(100vh - 170px);
     border-bottom: 0px;
 }
 
