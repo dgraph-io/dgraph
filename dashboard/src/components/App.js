@@ -206,9 +206,15 @@ function processGraph(response: Object, maxNodes: number, treeView: boolean) {
       }
     }
 
-    let properties: MapOfStrings = {},
+    let properties: MapOfStrings = {
+      attrs: {},
+      facets: {},
+    },
       hasChildNodes: boolean = false,
-      id: string;
+      id: string,
+      edgeAttributes = {
+        facets: {},
+      };
 
     for (let prop in obj.node) {
       if (!obj.node.hasOwnProperty(prop)) {
@@ -217,25 +223,50 @@ function processGraph(response: Object, maxNodes: number, treeView: boolean) {
       id = treeView
         ? // For tree view, the id is the join of ids of this node
           // with all its ancestors. That would make it unique.
-          [obj.src.id, properties["_uid_"]].join("-")
-        : properties["_uid_"];
+          [obj.src.id, obj.node["_uid_"]].join("-")
+        : obj.node["_uid_"];
 
-      // If its just a value, then we store it in properties for this node.
-      if (!Array.isArray(obj.node[prop])) {
-        properties[prop] = obj.node[prop];
-        continue;
-      }
-      hasChildNodes = true;
-      let arr = obj.node[prop], xposition = 1;
-      for (let j = 0; j < arr.length; j++) {
-        arr[j]["x"] = xposition++;
-        nodesStack.push({
-          node: arr[j],
-          src: {
-            pred: prop,
-            id: id,
-          },
-        });
+      // We can have a key-val pair, another array or an object here (in case of facets)
+      let val = obj.node[prop];
+      if (Array.isArray(val)) {
+        hasChildNodes = true;
+        let arr = val, xposition = 1;
+        for (let j = 0; j < arr.length; j++) {
+          arr[j]["x"] = xposition++;
+          nodesStack.push({
+            node: arr[j],
+            src: {
+              pred: prop,
+              id: id,
+            },
+          });
+        }
+      } else if (typeof val === "object") {
+        if (prop === "@facets") {
+          // lets handle @facets between uids here.
+          for (let pred in val) {
+            if (!val.hasOwnProperty(pred)) {
+              continue;
+            }
+
+            // pred could either be _ or other predicates. If its a predicate it could have
+            // multiple k-v pairs.
+            if (pred === "_") {
+              edgeAttributes["facets"] = val["_"];
+            } else {
+              let predFacets = val[pred];
+              for (let f in predFacets) {
+                if (!predFacets.hasOwnProperty(f)) {
+                  continue;
+                }
+
+                properties["facets"][`${pred}[${f}]`] = predFacets[f];
+              }
+            }
+          }
+        }
+      } else {
+        properties["attrs"][prop] = val;
       }
     }
 
@@ -244,14 +275,15 @@ function processGraph(response: Object, maxNodes: number, treeView: boolean) {
     }
 
     let props = getGroupProperties(obj.src.pred, predLabel, groups);
-    let x = properties["x"];
-    delete properties["x"];
+    let nodeAttrs = properties["attrs"];
+    let x = nodeAttrs["x"];
+    delete nodeAttrs["x"];
 
     let n: Node = {
       id: id,
       x: x,
-      label: getNodeLabel(properties),
-      title: JSON.stringify(properties, null, 2),
+      label: getNodeLabel(nodeAttrs),
+      title: JSON.stringify(properties),
       group: obj.src.pred,
       color: props.color,
     };
@@ -260,8 +292,8 @@ function processGraph(response: Object, maxNodes: number, treeView: boolean) {
       // For tree view, we push duplicate nodes too.
       nodes.push(n);
     } else {
-      if (!uidMap[properties["_uid_"]]) {
-        uidMap[properties["_uid_"]] = true;
+      if (!uidMap[nodeAttrs["_uid_"]]) {
+        uidMap[nodeAttrs["_uid_"]] = true;
         nodes.push(n);
       }
     }
@@ -272,7 +304,7 @@ function processGraph(response: Object, maxNodes: number, treeView: boolean) {
     var e: Edge = {
       from: obj.src.id,
       to: id,
-      title: obj.src.pred,
+      title: JSON.stringify(edgeAttributes),
       label: props.label,
       color: props.color,
       arrows: "to",

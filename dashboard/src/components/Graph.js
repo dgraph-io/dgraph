@@ -16,7 +16,7 @@ function childNodes(edges) {
 var doubleClickTime = 0;
 var threshold = 200;
 
-function doOnClick(params, allNodeSet) {
+function doOnClick(params, allNodeSet, edgeSet) {
     if (params.nodes.length > 0) {
         var nodeUid = params.nodes[0], currentNode = allNodeSet.get(nodeUid);
 
@@ -24,6 +24,12 @@ function doOnClick(params, allNodeSet) {
             selectedNode: true,
         });
         this.props.setCurrentNode(currentNode.title);
+    } else if (params.edges.length > 0) {
+        var edgeUid = params.edges[0], currentEdge = edgeSet.get(edgeUid);
+        this.setState({
+            selectedNode: true,
+        });
+        this.props.setCurrentNode(currentEdge.title);
     } else {
         this.setState({
             selectedNode: false,
@@ -191,7 +197,7 @@ function renderNetwork(props) {
             setTimeout(
                 function() {
                     if (t0 - doubleClickTime > threshold) {
-                        doOnClick.bind(that)(params, allNodeSet);
+                        doOnClick.bind(that)(params, allNodeSet, data.edges);
                     }
                 },
                 threshold,
@@ -208,13 +214,23 @@ function renderNetwork(props) {
         if (that.state.selectedNode) {
             return;
         }
-        if (params.node === undefined) {
+        if (params.node.length > 0) {
+            let nodeUid: string = params.node,
+                currentNode = allNodeSet.get(nodeUid);
+
+            that.props.setCurrentNode(currentNode.title);
+        }
+    });
+
+    network.on("hoverEdge", function(params) {
+        // Only change properties if no node is selected.
+        if (that.state.selectedNode) {
             return;
         }
-        let nodeUid: string = params.node,
-            currentNode = allNodeSet.get(nodeUid);
-
-        that.props.setCurrentNode(currentNode.title);
+        if (params.edge.length > 0) {
+            let edgeUid = params.edge, currentEdge = data.edges.get(edgeUid);
+            that.props.setCurrentNode(currentEdge.title);
+        }
     });
 
     network.on("dragEnd", function(params) {
