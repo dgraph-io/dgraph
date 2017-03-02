@@ -19,6 +19,7 @@ package worker
 import (
 	"context"
 	"io/ioutil"
+	"math"
 	"os"
 	"testing"
 	"time"
@@ -33,16 +34,22 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
+var raftIndex uint64
+
 func addEdge(t *testing.T, edge *taskp.DirectedEdge, l *posting.List) {
 	edge.Op = taskp.DirectedEdge_SET
-	require.NoError(t,
-		l.AddMutationWithIndex(context.Background(), edge))
+	raftIndex++
+	rv := x.RaftValue{Group: 0, Index: raftIndex}
+	ctx := context.WithValue(context.Background(), "raft", rv)
+	require.NoError(t, l.AddMutationWithIndex(ctx, edge))
 }
 
 func delEdge(t *testing.T, edge *taskp.DirectedEdge, l *posting.List) {
 	edge.Op = taskp.DirectedEdge_DEL
-	require.NoError(t,
-		l.AddMutationWithIndex(context.Background(), edge))
+	raftIndex++
+	rv := x.RaftValue{Group: 0, Index: raftIndex}
+	ctx := context.WithValue(context.Background(), "raft", rv)
+	require.NoError(t, l.AddMutationWithIndex(ctx, edge))
 }
 
 func getOrCreate(key []byte) *posting.List {
@@ -118,6 +125,7 @@ func TestProcessTask(t *testing.T) {
 	dir, ps := initTest(t, `scalar friend:string @index`)
 	defer os.RemoveAll(dir)
 	defer ps.Close()
+	defer syncMarksToIndex(context.Background(), 0, math.MaxUint64)
 
 	query := newQuery("neighbour", []uint64{10, 11, 12}, nil)
 	r, err := processTask(query, 0)
@@ -147,6 +155,7 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 	dir, ps := initTest(t, `scalar friend:string @index`)
 	defer os.RemoveAll(dir)
 	defer ps.Close()
+	defer syncMarksToIndex(context.Background(), 0, math.MaxUint64)
 
 	query := newQuery("friend", nil, []string{"anyofterms", "hey photon"})
 	r, err := processTask(query, 0)
@@ -233,6 +242,7 @@ func TestProcessTaskIndex(t *testing.T) {
 	dir, ps := initTest(t, `scalar friend:string @index`)
 	defer os.RemoveAll(dir)
 	defer ps.Close()
+	defer syncMarksToIndex(context.Background(), 0, math.MaxUint64)
 
 	query := newQuery("friend", nil, []string{"anyofterms", "hey photon"})
 	r, err := processTask(query, 0)
