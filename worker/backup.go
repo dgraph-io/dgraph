@@ -40,28 +40,28 @@ func toRDF(buf *bytes.Buffer, item kv) {
 			str, err := types.Convert(src, types.StringID)
 			x.Check(err)
 			stringValue := str.Value.(string)
-			buf.WriteString("\"")
+			buf.WriteByte('"')
 			buf.WriteString(stringValue)
-			buf.WriteString("\"")
+			buf.WriteByte('"')
 			if types.TypeID(p.ValType) == types.GeoID {
 				buf.WriteString("^^<geo:geojson> ")
 			} else if types.TypeID(p.ValType) == types.PasswordID {
 				buf.WriteString("^^<pwd:")
 				buf.WriteString(vID.Name())
-				buf.WriteString(">")
+				buf.WriteByte('>')
 			} else if types.TypeID(p.ValType) != types.BinaryID &&
 				types.TypeID(p.ValType) != types.DefaultID {
 				buf.WriteString("^^<xs:")
 				buf.WriteString(vID.Name())
-				buf.WriteString(">")
+				buf.WriteByte('>')
 			} else if len(p.Lang) > 0 {
-				buf.WriteString("@")
+				buf.WriteByte('@')
 				buf.WriteString(p.Lang)
 			}
 		} else {
 			buf.WriteString("<0x")
 			buf.WriteString(strconv.FormatUint(p.Uid, 16))
-			buf.WriteString(">")
+			buf.WriteByte('>')
 		}
 
 		facets := p.Facets
@@ -69,15 +69,15 @@ func toRDF(buf *bytes.Buffer, item kv) {
 			buf.WriteString(" (")
 
 			for i, f := range facets {
-				buf.WriteString(f.Key)
-				buf.WriteString("=")
-				buf.WriteString(string(f.Value))
-				if i != len(facets)-1 {
-					buf.WriteString(",")
+				if i != 0 {
+					buf.WriteByte(',')
 				}
+				buf.WriteString(f.Key)
+				buf.WriteByte('=')
+				buf.WriteString(string(f.Value))
 			}
 
-			buf.WriteString(")")
+			buf.WriteByte(')')
 		}
 		buf.WriteString(" .\n")
 	}

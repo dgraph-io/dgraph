@@ -267,25 +267,20 @@ func generateBenchValues() []kv {
 	return benchItems
 }
 
-func BenchmarkToRDF_New(b *testing.B) {
-	runBenchToRDF(b, toRDF)
-}
-
-func runBenchToRDF(b *testing.B, f func(buf *bytes.Buffer, item kv)) {
+func BenchmarkToRDF(b *testing.B) {
 	buf := new(bytes.Buffer)
 	buf.Grow(50000)
 
 	items := generateBenchValues()
 
-	var i int
 	b.ReportAllocs()
 	b.ResetTimer()
-	for i = 0; i < b.N; i++ {
-		f(buf, items[0])
-		f(buf, items[1])
-		f(buf, items[2])
-		f(buf, items[3])
-		f(buf, items[4])
+	for i := 0; i < b.N; i++ {
+		toRDF(buf, items[0])
+		toRDF(buf, items[1])
+		toRDF(buf, items[2])
+		toRDF(buf, items[3])
+		toRDF(buf, items[4])
 		buf.Reset()
 	}
 }
