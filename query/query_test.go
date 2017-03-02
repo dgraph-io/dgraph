@@ -3702,6 +3702,8 @@ func TestMain(m *testing.M) {
 
 	schema.ParseBytes([]byte(schemaStr))
 	posting.Init(ps)
+	defer posting.Stop()
+
 	worker.Init(ps)
 
 	group.ParseGroupConfig("")

@@ -82,6 +82,7 @@ func TestTokensTable(t *testing.T) {
 
 	ps, err := store.NewStore(dir)
 	defer ps.Close()
+	defer Stop()
 	require.NoError(t, err)
 	Init(ps)
 
@@ -170,8 +171,9 @@ func populateGraph(t *testing.T) (string, *store.Store) {
 
 func TestRebuildIndex(t *testing.T) {
 	dir, ps := populateGraph(t)
-	defer ps.Close()
 	defer os.RemoveAll(dir)
+	defer ps.Close()
+	defer Stop() // stop posting.
 
 	// RebuildIndex requires the data to be committed to data store.
 	CommitLists(10)

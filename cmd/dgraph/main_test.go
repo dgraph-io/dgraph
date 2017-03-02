@@ -270,6 +270,7 @@ func TestMain(m *testing.M) {
 	x.Check(err)
 	defer os.RemoveAll(dir)
 	defer ps.Close()
+	defer posting.Stop()
 
 	schema.Init(ps, "")
 	// Parse GQL into internal query representation.
