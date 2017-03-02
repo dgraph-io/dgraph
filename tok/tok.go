@@ -48,13 +48,6 @@ var (
 	defaults   map[types.TypeID]Tokenizer
 )
 
-func IsExact(term string) bool {
-	if term[0] == 0x2 {
-		return true
-	}
-	return false
-}
-
 func init() {
 	RegisterTokenizer(GeoTokenizer{})
 	RegisterTokenizer(Int32Tokenizer{})
@@ -69,6 +62,14 @@ func init() {
 	SetDefault(types.DateID, "date")
 	SetDefault(types.DateTimeID, "datetime")
 	SetDefault(types.StringID, "term")
+
+	usedIds := make(map[byte]struct{})
+	for _, tok := range tokenizers {
+		tokID := tok.Identifier()
+		_, ok := usedIds[tokID]
+		x.AssertTruef(!ok, "Same ID used by multiple tokenizers")
+		usedIds[tokID] = struct{}{}
+	}
 }
 
 // GetTokenizer returns tokenizer given unique name.
@@ -115,7 +116,7 @@ func (t GeoTokenizer) Tokens(sv types.Val) ([]string, error) {
 	EncodeGeoTokens(tokens)
 	return tokens, err
 }
-func (t GeoTokenizer) Identifier() byte { return 0x4 }
+func (t GeoTokenizer) Identifier() byte { return 0x5 }
 
 type Int32Tokenizer struct{}
 
@@ -124,7 +125,7 @@ func (t Int32Tokenizer) Type() types.TypeID { return types.Int32ID }
 func (t Int32Tokenizer) Tokens(sv types.Val) ([]string, error) {
 	return []string{encodeToken(encodeInt(sv.Value.(int32)), 0x3)}, nil
 }
-func (t Int32Tokenizer) Identifier() byte { return 0x3 }
+func (t Int32Tokenizer) Identifier() byte { return 0x6 }
 
 type FloatTokenizer struct{}
 
@@ -133,7 +134,7 @@ func (t FloatTokenizer) Type() types.TypeID { return types.FloatID }
 func (t FloatTokenizer) Tokens(sv types.Val) ([]string, error) {
 	return []string{encodeToken(encodeInt(int32(sv.Value.(float64))), 0x3)}, nil
 }
-func (t FloatTokenizer) Identifier() byte { return 0x3 }
+func (t FloatTokenizer) Identifier() byte { return 0x7 }
 
 type DateTokenizer struct{}
 
@@ -151,7 +152,7 @@ func (t DateTimeTokenizer) Type() types.TypeID { return types.DateTimeID }
 func (t DateTimeTokenizer) Tokens(sv types.Val) ([]string, error) {
 	return []string{encodeToken(encodeInt(int32(sv.Value.(time.Time).Year())), 0x3)}, nil
 }
-func (t DateTimeTokenizer) Identifier() byte { return 0x3 }
+func (t DateTimeTokenizer) Identifier() byte { return 0x4 }
 
 type TermTokenizer struct{}
 
