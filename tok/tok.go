@@ -177,7 +177,7 @@ func (t TermTokenizer) Tokens(sv types.Val) ([]string, error) {
 			if s == nil {
 				break
 			}
-			tokens = append(tokens, encodeToken(string(s), 0x1))
+			tokens = append(tokens, encodeToken(string(s), t.Identifier()))
 		}
 		tokenizer.Destroy()
 	}
