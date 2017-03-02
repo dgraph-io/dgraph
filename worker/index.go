@@ -37,7 +37,6 @@ func (n *node) rebuildIndex(ctx context.Context, proposalData []byte) error {
 }
 
 func (n *node) syncAllMarks(ctx context.Context) error {
-	gid := n.gid
 	// Get index of last committed.
 	lastIndex, err := n.store.LastIndex()
 	if err != nil {
@@ -55,6 +54,11 @@ func (n *node) syncAllMarks(ctx context.Context) error {
 		time.Sleep(100 * time.Millisecond)
 	}
 
+	syncMarksToIndex(ctx, n.gid, lastIndex)
+	return nil
+}
+
+func syncMarksToIndex(ctx context.Context, gid uint32, lastIndex uint64) {
 	// Force an aggressive evict.
 	posting.CommitLists(10)
 
@@ -69,7 +73,6 @@ func (n *node) syncAllMarks(ctx context.Context) error {
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
-	return nil
 }
 
 // RebuildIndex request is used to trigger rebuilding of index for the requested
