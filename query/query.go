@@ -440,13 +440,16 @@ func treeCopy(ctx context.Context, gq *gql.GraphQuery, sg *SubGraph) error {
 	// children. But, in this case, we don't want to muck with the current
 	// node, because of the way we're dealing with the root node.
 	// So, we work on the children, and then recurse for grand children.
-	attrsSeen := make(map[string]bool, len(gq.Children))
+	attrsSeen := make(map[string]struct{})
 	for _, gchild := range gq.Children {
-		if _, ok := attrsSeen[gchild.Attr]; ok {
-			return x.Errorf("%s not allowed multiple times in same query block.",
-				gchild.Attr)
+		if !gchild.IsCount { // ignore count subgraphs..
+			if _, ok := attrsSeen[gchild.Attr]; ok {
+				// ignoring querygraph that want counts.
+				return x.Errorf("%s not allowed multiple times in same sub-query.",
+					gchild.Attr)
+			}
+			attrsSeen[gchild.Attr] = struct{}{}
 		}
-		attrsSeen[gchild.Attr] = true
 		if gchild.Attr == "_uid_" {
 			sg.Params.GetUID = true
 		} else if gchild.Attr == "password" { // query password is forbidden
