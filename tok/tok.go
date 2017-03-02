@@ -39,7 +39,7 @@ type Tokenizer interface {
 	// Tokens return tokens for a given value.
 	Tokens(sv types.Val) ([]string, error)
 
-	// Prefix returns the prefix byte for this token type.
+	// Identifier returns the prefix byte for this token type.
 	Identifier() byte
 }
 
