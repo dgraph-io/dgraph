@@ -123,7 +123,7 @@ type Int32Tokenizer struct{}
 func (t Int32Tokenizer) Name() string       { return "int" }
 func (t Int32Tokenizer) Type() types.TypeID { return types.Int32ID }
 func (t Int32Tokenizer) Tokens(sv types.Val) ([]string, error) {
-	return []string{encodeToken(encodeInt(sv.Value.(int32)), 0x3)}, nil
+	return []string{encodeToken(encodeInt(sv.Value.(int32)), t.Identifier())}, nil
 }
 func (t Int32Tokenizer) Identifier() byte { return 0x6 }
 
@@ -132,7 +132,7 @@ type FloatTokenizer struct{}
 func (t FloatTokenizer) Name() string       { return "float" }
 func (t FloatTokenizer) Type() types.TypeID { return types.FloatID }
 func (t FloatTokenizer) Tokens(sv types.Val) ([]string, error) {
-	return []string{encodeToken(encodeInt(int32(sv.Value.(float64))), 0x3)}, nil
+	return []string{encodeToken(encodeInt(int32(sv.Value.(float64))), t.Identifier())}, nil
 }
 func (t FloatTokenizer) Identifier() byte { return 0x7 }
 
@@ -141,7 +141,7 @@ type DateTokenizer struct{}
 func (t DateTokenizer) Name() string       { return "date" }
 func (t DateTokenizer) Type() types.TypeID { return types.DateID }
 func (t DateTokenizer) Tokens(sv types.Val) ([]string, error) {
-	return []string{encodeToken(encodeInt(int32(sv.Value.(time.Time).Year())), 0x3)}, nil
+	return []string{encodeToken(encodeInt(int32(sv.Value.(time.Time).Year())), t.Identifier())}, nil
 }
 func (t DateTokenizer) Identifier() byte { return 0x3 }
 
@@ -150,7 +150,7 @@ type DateTimeTokenizer struct{}
 func (t DateTimeTokenizer) Name() string       { return "datetime" }
 func (t DateTimeTokenizer) Type() types.TypeID { return types.DateTimeID }
 func (t DateTimeTokenizer) Tokens(sv types.Val) ([]string, error) {
-	return []string{encodeToken(encodeInt(int32(sv.Value.(time.Time).Year())), 0x3)}, nil
+	return []string{encodeToken(encodeInt(int32(sv.Value.(time.Time).Year())), t.Identifier())}, nil
 }
 func (t DateTimeTokenizer) Identifier() byte { return 0x4 }
 
@@ -194,7 +194,7 @@ func (t ExactTokenizer) Tokens(sv types.Val) ([]string, error) {
 	if !ok {
 		return nil, x.Errorf("Exact indices only supported for string types")
 	}
-	return []string{encodeToken(term, 0x2)}, nil
+	return []string{encodeToken(term, t.Identifier())}, nil
 }
 func (t ExactTokenizer) Identifier() byte { return 0x2 }
 
