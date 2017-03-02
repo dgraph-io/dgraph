@@ -8,6 +8,7 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
 #include "db/db_test_util.h"
+#include "db/forward_iterator.h"
 
 namespace rocksdb {
 
@@ -19,7 +20,7 @@ SpecialEnv::SpecialEnv(Env* base)
       sleep_counter_(this),
       addon_time_(0),
       time_elapse_only_sleep_(false),
-      no_sleep_(false) {
+      no_slowdown_(false) {
   delay_sstable_sync_.store(false, std::memory_order_release);
   drop_writes_.store(false, std::memory_order_release);
   no_space_.store(false, std::memory_order_release);
@@ -233,6 +234,7 @@ Options DBTestBase::CurrentOptions(
     case kHashSkipList:
       options.prefix_extractor.reset(NewFixedPrefixTransform(1));
       options.memtable_factory.reset(NewHashSkipListRepFactory(16));
+      options.allow_concurrent_memtable_write = false;
       break;
     case kPlainTableFirstBytePrefix:
       options.table_factory.reset(new PlainTableFactory());
@@ -264,15 +266,18 @@ Options DBTestBase::CurrentOptions(
       break;
     case kVectorRep:
       options.memtable_factory.reset(new VectorRepFactory(100));
+      options.allow_concurrent_memtable_write = false;
       break;
     case kHashLinkList:
       options.prefix_extractor.reset(NewFixedPrefixTransform(1));
       options.memtable_factory.reset(
           NewHashLinkListRepFactory(4, 0, 3, true, 4));
+      options.allow_concurrent_memtable_write = false;
       break;
     case kHashCuckoo:
       options.memtable_factory.reset(
           NewHashCuckooRepFactory(options.write_buffer_size));
+      options.allow_concurrent_memtable_write = false;
       break;
 #endif  // ROCKSDB_LITE
     case kMergePut:
@@ -303,6 +308,7 @@ Options DBTestBase::CurrentOptions(
       break;
     case kManifestFileSize:
       options.max_manifest_file_size = 50;  // 50 bytes
+      break;
     case kPerfOptions:
       options.soft_rate_limit = 2.0;
       options.delayed_write_rate = 8 * 1024 * 1024;
@@ -472,6 +478,22 @@ Status DBTestBase::TryReopen(const Options& options) {
   return DB::Open(options, dbname_, &db_);
 }
 
+bool DBTestBase::IsDirectIOSupported() {
+  EnvOptions env_options;
+  env_options.use_mmap_writes = false;
+  env_options.use_direct_writes = true;
+  std::string tmp = TempFileName(dbname_, 999);
+  Status s;
+  {
+    unique_ptr<WritableFile> file;
+    s = env_->NewWritableFile(tmp, &file, env_options);
+  }
+  if (s.ok()) {
+    s = env_->DeleteFile(tmp);
+  }
+  return s.ok();
+}
+
 Status DBTestBase::Flush(int cf) {
   if (cf == 0) {
     return db_->Flush(FlushOptions());
@@ -495,6 +517,15 @@ Status DBTestBase::Put(int cf, const Slice& k, const Slice& v,
   } else {
     return db_->Put(wo, handles_[cf], k, v);
   }
+}
+
+Status DBTestBase::Merge(const Slice& k, const Slice& v, WriteOptions wo) {
+  return db_->Merge(wo, k, v);
+}
+
+Status DBTestBase::Merge(int cf, const Slice& k, const Slice& v,
+                         WriteOptions wo) {
+  return db_->Merge(wo, handles_[cf], k, v);
 }
 
 Status DBTestBase::Delete(const std::string& k) {
@@ -585,11 +616,15 @@ std::string DBTestBase::Contents(int cf) {
 
 std::string DBTestBase::AllEntriesFor(const Slice& user_key, int cf) {
   Arena arena;
+  auto options = CurrentOptions();
+  InternalKeyComparator icmp(options.comparator);
+  RangeDelAggregator range_del_agg(icmp, {} /* snapshots */);
   ScopedArenaIterator iter;
   if (cf == 0) {
-    iter.set(dbfull()->NewInternalIterator(&arena));
+    iter.set(dbfull()->NewInternalIterator(&arena, &range_del_agg));
   } else {
-    iter.set(dbfull()->NewInternalIterator(&arena, handles_[cf]));
+    iter.set(
+        dbfull()->NewInternalIterator(&arena, &range_del_agg, handles_[cf]));
   }
   InternalKey target(user_key, kMaxSequenceNumber, kTypeValue);
   iter->Seek(target.Encode());
@@ -732,7 +767,7 @@ double DBTestBase::CompressionRatioAtLevel(int level, int cf) {
 
 int DBTestBase::TotalTableFiles(int cf, int levels) {
   if (levels == -1) {
-    levels = CurrentOptions().num_levels;
+    levels = (cf == 0) ? db_->NumberLevels() : db_->NumberLevels(handles_[1]);
   }
   int result = 0;
   for (int level = 0; level < levels; level++) {
@@ -990,10 +1025,14 @@ UpdateStatus DBTestBase::updateInPlaceNoAction(char* prevValue,
 void DBTestBase::validateNumberOfEntries(int numValues, int cf) {
   ScopedArenaIterator iter;
   Arena arena;
+  auto options = CurrentOptions();
+  InternalKeyComparator icmp(options.comparator);
+  RangeDelAggregator range_del_agg(icmp, {} /* snapshots */);
   if (cf != 0) {
-    iter.set(dbfull()->NewInternalIterator(&arena, handles_[cf]));
+    iter.set(
+        dbfull()->NewInternalIterator(&arena, &range_del_agg, handles_[cf]));
   } else {
-    iter.set(dbfull()->NewInternalIterator(&arena));
+    iter.set(dbfull()->NewInternalIterator(&arena, &range_del_agg));
   }
   iter->SeekToFirst();
   ASSERT_EQ(iter->status().ok(), true);
@@ -1076,69 +1115,139 @@ std::vector<std::uint64_t> DBTestBase::ListTableFiles(Env* env,
   return file_numbers;
 }
 
-void DBTestBase::VerifyDBFromMap(std::map<std::string, std::string> true_data) {
+void DBTestBase::VerifyDBFromMap(std::map<std::string, std::string> true_data,
+                                 size_t* total_reads_res, bool tailing_iter,
+                                 std::map<std::string, Status> status) {
+  size_t total_reads = 0;
+
   for (auto& kv : true_data) {
-    ASSERT_EQ(Get(kv.first), kv.second);
+    Status s = status[kv.first];
+    if (s.ok()) {
+      ASSERT_EQ(Get(kv.first), kv.second);
+    } else {
+      std::string value;
+      ASSERT_EQ(s, db_->Get(ReadOptions(), kv.first, &value));
+    }
+    total_reads++;
   }
 
-  ReadOptions ro;
-  ro.total_order_seek = true;
-  Iterator* iter = db_->NewIterator(ro);
-  // Verify Iterator::Next()
-  auto data_iter = true_data.begin();
-  for (iter->SeekToFirst(); iter->Valid(); iter->Next(), data_iter++) {
-    ASSERT_EQ(iter->key().ToString(), data_iter->first);
-    ASSERT_EQ(iter->value().ToString(), data_iter->second);
-  }
-  ASSERT_EQ(data_iter, true_data.end());
+  // Normal Iterator
+  {
+    int iter_cnt = 0;
+    ReadOptions ro;
+    ro.total_order_seek = true;
+    Iterator* iter = db_->NewIterator(ro);
+    // Verify Iterator::Next()
+    iter_cnt = 0;
+    auto data_iter = true_data.begin();
+    Status s;
+    for (iter->SeekToFirst(); iter->Valid(); iter->Next(), data_iter++) {
+      ASSERT_EQ(iter->key().ToString(), data_iter->first);
+      Status current_status = status[data_iter->first];
+      if (!current_status.ok()) {
+        s = current_status;
+      }
+      ASSERT_EQ(iter->status(), s);
+      if (current_status.ok()) {
+        ASSERT_EQ(iter->value().ToString(), data_iter->second);
+      }
+      iter_cnt++;
+      total_reads++;
+    }
+    ASSERT_EQ(data_iter, true_data.end()) << iter_cnt << " / "
+                                          << true_data.size();
+    delete iter;
 
-  // Verify Iterator::Prev()
-  auto data_rev = true_data.rbegin();
-  for (iter->SeekToLast(); iter->Valid(); iter->Prev(), data_rev++) {
-    ASSERT_EQ(iter->key().ToString(), data_rev->first);
-    ASSERT_EQ(iter->value().ToString(), data_rev->second);
-  }
-  ASSERT_EQ(data_rev, true_data.rend());
+    // Verify Iterator::Prev()
+    // Use a new iterator to make sure its status is clean.
+    iter = db_->NewIterator(ro);
+    iter_cnt = 0;
+    s = Status::OK();
+    auto data_rev = true_data.rbegin();
+    for (iter->SeekToLast(); iter->Valid(); iter->Prev(), data_rev++) {
+      ASSERT_EQ(iter->key().ToString(), data_rev->first);
+      Status current_status = status[data_rev->first];
+      if (!current_status.ok()) {
+        s = current_status;
+      }
+      ASSERT_EQ(iter->status(), s);
+      if (current_status.ok()) {
+        ASSERT_EQ(iter->value().ToString(), data_rev->second);
+      }
+      iter_cnt++;
+      total_reads++;
+    }
+    ASSERT_EQ(data_rev, true_data.rend()) << iter_cnt << " / "
+                                          << true_data.size();
 
-  // Verify Iterator::Seek()
-  for (auto kv : true_data) {
-    iter->Seek(kv.first);
-    ASSERT_EQ(kv.first, iter->key().ToString());
-    ASSERT_EQ(kv.second, iter->value().ToString());
+    // Verify Iterator::Seek()
+    for (auto kv : true_data) {
+      iter->Seek(kv.first);
+      ASSERT_EQ(kv.first, iter->key().ToString());
+      ASSERT_EQ(kv.second, iter->value().ToString());
+      total_reads++;
+    }
+    delete iter;
   }
 
-  delete iter;
+  if (tailing_iter) {
+#ifndef ROCKSDB_LITE
+    // Tailing iterator
+    int iter_cnt = 0;
+    ReadOptions ro;
+    ro.tailing = true;
+    ro.total_order_seek = true;
+    Iterator* iter = db_->NewIterator(ro);
+
+    // Verify ForwardIterator::Next()
+    iter_cnt = 0;
+    auto data_iter = true_data.begin();
+    for (iter->SeekToFirst(); iter->Valid(); iter->Next(), data_iter++) {
+      ASSERT_EQ(iter->key().ToString(), data_iter->first);
+      ASSERT_EQ(iter->value().ToString(), data_iter->second);
+      iter_cnt++;
+      total_reads++;
+    }
+    ASSERT_EQ(data_iter, true_data.end()) << iter_cnt << " / "
+                                          << true_data.size();
+
+    // Verify ForwardIterator::Seek()
+    for (auto kv : true_data) {
+      iter->Seek(kv.first);
+      ASSERT_EQ(kv.first, iter->key().ToString());
+      ASSERT_EQ(kv.second, iter->value().ToString());
+      total_reads++;
+    }
+
+    delete iter;
+#endif  // ROCKSDB_LITE
+  }
+
+  if (total_reads_res) {
+    *total_reads_res = total_reads;
+  }
+}
+
+void DBTestBase::VerifyDBInternal(
+    std::vector<std::pair<std::string, std::string>> true_data) {
+  Arena arena;
+  InternalKeyComparator icmp(last_options_.comparator);
+  RangeDelAggregator range_del_agg(icmp, {});
+  auto iter = dbfull()->NewInternalIterator(&arena, &range_del_agg);
+  iter->SeekToFirst();
+  for (auto p : true_data) {
+    ASSERT_TRUE(iter->Valid());
+    ParsedInternalKey ikey;
+    ASSERT_TRUE(ParseInternalKey(iter->key(), &ikey));
+    ASSERT_EQ(p.first, ikey.user_key);
+    ASSERT_EQ(p.second, iter->value());
+    iter->Next();
+  };
+  ASSERT_FALSE(iter->Valid());
+  iter->~InternalIterator();
 }
 
 #ifndef ROCKSDB_LITE
-
-Status DBTestBase::GenerateAndAddExternalFile(const Options options,
-                                              std::vector<int> keys,
-                                              size_t file_id) {
-  std::string file_path =
-      test::TmpDir(env_) + "/sst_files/" + ToString(file_id);
-  SstFileWriter sst_file_writer(EnvOptions(), options, options.comparator);
-
-  Status s = sst_file_writer.Open(file_path);
-  if (!s.ok()) {
-    return s;
-  }
-  for (auto& entry : keys) {
-    std::string k = Key(entry);
-    std::string v = k + ToString(file_id);
-    s = sst_file_writer.Add(k, v);
-    if (!s.ok()) {
-      return s;
-    }
-  }
-  s = sst_file_writer.Finish();
-
-  if (s.ok()) {
-    s = db_->AddFile(std::vector<std::string>(1, file_path));
-  }
-
-  return s;
-}
 
 uint64_t DBTestBase::GetNumberOfSstFilesForColumnFamily(
     DB* db, std::string column_family_name) {

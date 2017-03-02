@@ -108,10 +108,11 @@ func processSort(ts *task.Sort) (*task.SortResult, error) {
 	for i := 0; i < n; i++ {
 		// offsets[i] is the offset for i-th posting list. It gets decremented as we
 		// iterate over buckets.
-		var emptyUidList task.List
 		out[i].offset = int(ts.Offset)
-		out[i].ulist = &emptyUidList
+		var emptyList task.List
+		out[i].ulist = &emptyList
 		out[i].excludeSet = make(map[uint64]struct{})
+		out[i].wit = algo.NewWriteIterator(&emptyList)
 	}
 
 	// Iterate over every bucket / token.
@@ -160,6 +161,7 @@ BUCKETS:
 
 	r := new(task.SortResult)
 	for _, il := range out {
+		il.wit.End()
 		r.UidMatrix = append(r.UidMatrix, il.ulist)
 	}
 	return r, nil
@@ -168,6 +170,7 @@ BUCKETS:
 type intersectedList struct {
 	offset int
 	ulist  *task.List
+	wit    algo.WriteIterator
 
 	// For term index, a UID might appear in multiple buckets. We want to dedup.
 	// We cannot do this at the end of the sort because we do need to track offsets and counts.
@@ -191,7 +194,9 @@ func intersectBucket(ts *task.Sort, attr, token string, out []intersectedList) e
 	// For each UID list, we need to intersect with the index bucket.
 	for i, ul := range ts.UidMatrix {
 		il := &out[i]
-		if count > 0 && algo.ListLen(il.ulist) >= count {
+		// Caution: Use ListLen from WriteIterator. Potential cleanup: get rid of indices in
+		// WriteIterator. Let the slices in the list itself do the counting.
+		if count > 0 && il.wit.ListLen() >= count {
 			continue
 		}
 
@@ -224,30 +229,29 @@ func intersectBucket(ts *task.Sort, attr, token string, out []intersectedList) e
 
 		// n is number of elements to copy from result to out.
 		if count > 0 {
-			slack := count - algo.ListLen(il.ulist)
+			slack := count - il.wit.ListLen()
 			if slack < n {
 				n = slack
 			}
 		}
-		wit := algo.NewWriteIterator(il.ulist, 1)
+
 		i := 0
 		in2 := algo.NewListIterator(result)
 		for ; in2.Valid() && i < n; in2.Next() {
 			uid := in2.Val()
-			wit.Append(uid)
+			il.wit.Append(uid)
 			il.excludeSet[uid] = struct{}{}
 			i++
 		}
-		wit.End()
 	} // end for loop over UID lists in UID matrix.
 
 	// Check out[i] sizes for all i.
 	for i := 0; i < len(ts.UidMatrix); i++ { // Iterate over UID lists.
-		if algo.ListLen(out[i].ulist) < count {
+		if out[i].wit.ListLen() < count {
 			return errContinue
 		}
 
-		x.AssertTruef(algo.ListLen(out[i].ulist) == count, "%d %d", algo.ListLen(out[i].ulist), count)
+		x.AssertTruef(out[i].wit.ListLen() == count, "%d %d", out[i].wit.ListLen(), count)
 	}
 	// All UID lists have enough items (according to pagination). Let's notify
 	// the outermost loop.

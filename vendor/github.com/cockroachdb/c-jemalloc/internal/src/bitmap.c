@@ -74,15 +74,11 @@ bitmap_init(bitmap_t *bitmap, const bitmap_info_t *binfo)
 void
 bitmap_info_init(bitmap_info_t *binfo, size_t nbits)
 {
-	size_t i;
 
 	assert(nbits > 0);
 	assert(nbits <= (ZU(1) << LG_BITMAP_MAXBITS));
 
-	i = nbits >> LG_BITMAP_GROUP_NBITS;
-	if (nbits % BITMAP_GROUP_NBITS != 0)
-		i++;
-	binfo->ngroups = i;
+	binfo->ngroups = BITMAP_BITS2GROUPS(nbits);
 	binfo->nbits = nbits;
 }
 
@@ -99,9 +95,10 @@ bitmap_init(bitmap_t *bitmap, const bitmap_info_t *binfo)
 	size_t extra;
 
 	memset(bitmap, 0xffU, bitmap_size(binfo));
-	extra = (binfo->nbits % (binfo->ngroups * BITMAP_GROUP_NBITS));
+	extra = (BITMAP_GROUP_NBITS - (binfo->nbits & BITMAP_GROUP_NBITS_MASK))
+	    & BITMAP_GROUP_NBITS_MASK;
 	if (extra != 0)
-		bitmap[binfo->ngroups - 1] >>= (BITMAP_GROUP_NBITS - extra);
+		bitmap[binfo->ngroups - 1] >>= extra;
 }
 
 #endif /* USE_TREE */

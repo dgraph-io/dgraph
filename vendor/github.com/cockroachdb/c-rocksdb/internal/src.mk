@@ -10,15 +10,16 @@ LIB_SOURCES =                                                   \
   db/compaction_job.cc                                          \
   db/compaction_picker.cc                                       \
   db/convenience.cc                                             \
+  db/range_del_aggregator.cc                                    \
   db/db_filesnapshot.cc                                         \
   db/dbformat.cc                                                \
   db/db_impl.cc                                                 \
   db/db_impl_debug.cc                                           \
   db/db_impl_readonly.cc                                        \
   db/db_impl_experimental.cc                                    \
-  db/db_impl_add_file.cc                                        \
   db/db_info_dumper.cc                                          \
   db/db_iter.cc                                                 \
+  db/external_sst_file_ingestion_job.cc                         \
   db/experimental.cc                                            \
   db/event_helpers.cc                                           \
   db/file_indexer.cc                                            \
@@ -88,17 +89,21 @@ LIB_SOURCES =                                                   \
   util/arena.cc                                                 \
   util/bloom.cc                                                 \
   util/build_version.cc                                         \
+  util/cf_options.cc                                            \
+  util/clock_cache.cc                                           \
   util/coding.cc                                                \
   util/comparator.cc                                            \
   util/compaction_job_stats_impl.cc                             \
   util/concurrent_arena.cc                                      \
   util/crc32c.cc                                                \
+  util/db_options.cc                                            \
   util/delete_scheduler.cc                                      \
   util/dynamic_bloom.cc                                         \
   util/env.cc                                                   \
   util/env_chroot.cc                                            \
   util/env_hdfs.cc                                              \
   util/env_posix.cc                                             \
+  util/event_logger.cc                                          \
   util/file_util.cc                                             \
   util/file_reader_writer.cc                                    \
   util/filter_policy.cc                                         \
@@ -108,12 +113,39 @@ LIB_SOURCES =                                                   \
   util/instrumented_mutex.cc                                    \
   util/iostats_context.cc                                       \
   util/io_posix.cc                                              \
+  util/log_buffer.cc                                            \
+  util/logging.cc                                               \
   util/lru_cache.cc                                             \
-  util/threadpool.cc                                            \
-  util/transaction_test_util.cc                                 \
-	util/sharded_cache.cc       																	\
+  util/memenv.cc                                                \
+  util/murmurhash.cc                                            \
+  util/options.cc                                               \
+  util/options_helper.cc                                        \
+  util/options_parser.cc                                        \
+  util/options_sanity_check.cc                                  \
+  util/perf_context.cc                                          \
+  util/perf_level.cc                                            \
+  util/random.cc                                                \
+  util/rate_limiter.cc                                          \
+  util/sharded_cache.cc                                         \
+  util/slice.cc                                                 \
   util/sst_file_manager_impl.cc                                 \
+  util/statistics.cc                                            \
+  util/status.cc                                                \
+  util/status_message.cc                                        \
+  util/string_util.cc                                           \
+  util/sync_point.cc                                            \
+  util/thread_local.cc                                          \
+  util/thread_status_impl.cc                                    \
+  util/thread_status_updater.cc                                 \
+  util/thread_status_updater_debug.cc                           \
+  util/thread_status_util.cc                                    \
+  util/thread_status_util_debug.cc                              \
+  util/threadpool_imp.cc                                        \
+  util/transaction_test_util.cc                                 \
+  util/xfunc.cc                                                 \
+  util/xxhash.cc                                                \
   utilities/backupable/backupable_db.cc                         \
+  utilities/blob_db/blob_db.cc                                  \
   utilities/convenience/info_log_finder.cc                      \
   utilities/checkpoint/checkpoint.cc                            \
   utilities/compaction_filters/remove_emptyvalue_compactionfilter.cc    \
@@ -122,9 +154,9 @@ LIB_SOURCES =                                                   \
   utilities/document/json_document.cc                           \
   utilities/env_mirror.cc                                       \
   utilities/env_registry.cc                                     \
-  utilities/flashcache/flashcache.cc                            \
   utilities/geodb/geodb_impl.cc                                 \
   utilities/leveldb_options/leveldb_options.cc                  \
+  utilities/lua/rocks_lua_compaction_filter.cc                  \
   utilities/memory/memory_util.cc                               \
   utilities/merge_operators/put.cc                              \
   utilities/merge_operators/max.cc                              \
@@ -137,6 +169,7 @@ LIB_SOURCES =                                                   \
   utilities/persistent_cache/volatile_tier_impl.cc              \
   utilities/persistent_cache/block_cache_tier_file.cc           \
   utilities/persistent_cache/block_cache_tier_metadata.cc       \
+  utilities/persistent_cache/block_cache_tier.cc                \
   utilities/redis/redis_lists.cc                                \
   utilities/simulator_cache/sim_cache.cc                        \
   utilities/spatialdb/spatial_db.cc                             \
@@ -150,36 +183,9 @@ LIB_SOURCES =                                                   \
   utilities/transactions/transaction_impl.cc                    \
   utilities/transactions/transaction_util.cc                    \
   utilities/ttl/db_ttl_impl.cc                                  \
+  utilities/date_tiered/date_tiered_db_impl.cc                  \
   utilities/write_batch_with_index/write_batch_with_index.cc    \
   utilities/write_batch_with_index/write_batch_with_index_internal.cc    \
-  util/event_logger.cc                                          \
-  util/log_buffer.cc                                            \
-  util/logging.cc                                               \
-  util/memenv.cc                                                \
-  util/murmurhash.cc                                            \
-  util/mutable_cf_options.cc                                    \
-  util/options.cc                                               \
-  util/options_helper.cc                                        \
-  util/options_parser.cc                                        \
-  util/options_sanity_check.cc                                  \
-  util/perf_context.cc                                          \
-  util/perf_level.cc                                            \
-  util/random.cc                                                \
-  util/rate_limiter.cc                                          \
-  util/slice.cc                                                 \
-  util/statistics.cc                                            \
-  util/status.cc                                                \
-  util/status_message.cc                                        \
-  util/string_util.cc                                           \
-  util/sync_point.cc                                            \
-  util/thread_local.cc                                          \
-  util/thread_status_impl.cc                                    \
-  util/thread_status_updater.cc                                 \
-  util/thread_status_updater_debug.cc                           \
-  util/thread_status_util.cc                                    \
-  util/thread_status_util_debug.cc                              \
-  util/xfunc.cc                                                 \
-  util/xxhash.cc                                                \
 
 TOOL_LIB_SOURCES = \
   tools/ldb_cmd.cc                                               \
@@ -192,7 +198,12 @@ MOCK_LIB_SOURCES = \
   util/fault_injection_test_env.cc
 
 BENCH_LIB_SOURCES = \
-  tools/db_bench_tool.cc
+  tools/db_bench_tool.cc                                        \
+
+EXP_LIB_SOURCES = \
+  utilities/col_buf_encoder.cc                                          \
+  utilities/col_buf_decoder.cc                                          \
+  utilities/column_aware_encoding_util.cc
 
 TEST_LIB_SOURCES = \
   util/testharness.cc                                                   \
@@ -212,18 +223,22 @@ MAIN_SOURCES =                                                    \
   db/dbformat_test.cc                                                   \
   db/db_iter_test.cc                                                    \
   db/db_test.cc                                                         \
-	db/db_block_cache_test.cc																							\
+  db/db_block_cache_test.cc                                             \
   db/db_io_failure_test.cc                                              \
   db/db_bloom_filter_test.cc                                            \
   db/db_compaction_filter_test.cc                                       \
   db/db_compaction_test.cc                                              \
   db/db_dynamic_level_test.cc                                           \
-	db/db_flush_test.cc																										\
+  db/db_flush_test.cc                                                    \
   db/db_inplace_update_test.cc                                          \
-	db/db_iterator_test.cc																								\
+  db/db_iterator_test.cc                                                \
   db/db_log_iter_test.cc                                                \
-	db/db_options_test.cc																									\
-	db/db_sst_test.cc																											\
+  db/db_memtable_test.cc                                                \
+  db/db_merge_operator_test.cc                                          \
+  db/db_options_test.cc                                                 \
+  db/db_range_del_test.cc                                               \
+  db/db_sst_test.cc                                                     \
+  db/external_sst_file_test.cc                                          \
   db/db_tailing_iter_test.cc                                            \
   db/db_universal_compaction_test.cc                                    \
   db/db_wal_test.cc                                                     \
@@ -280,6 +295,7 @@ MAIN_SOURCES =                                                    \
   util/histogram_test.cc                                                \
   util/statistics_test.cc                                               \
   utilities/backupable/backupable_db_test.cc                            \
+  utilities/blob_db/blob_db_test.cc                                     \
   utilities/checkpoint/checkpoint_test.cc                               \
   utilities/document/document_db_test.cc                                \
   utilities/document/json_document_test.cc                              \
@@ -296,8 +312,11 @@ MAIN_SOURCES =                                                    \
   utilities/transactions/optimistic_transaction_test.cc                 \
   utilities/transactions/transaction_test.cc                            \
   utilities/ttl/ttl_test.cc                                             \
+  utilities/date_tiered/date_tiered_test.cc                             \
   utilities/write_batch_with_index/write_batch_with_index_test.cc       \
-	util/iostats_context_test.cc																					\
+  utilities/column_aware_encoding_test.cc                               \
+  utilities/lua/rocks_lua_test.cc                                       \
+  util/iostats_context_test.cc                                          \
   util/log_write_bench.cc                                               \
   util/mock_env_test.cc                                                 \
   util/options_test.cc                                                  \
@@ -305,7 +324,8 @@ MAIN_SOURCES =                                                    \
   util/rate_limiter_test.cc                                             \
   util/slice_transform_test.cc                                          \
   util/thread_list_test.cc                                              \
-  util/thread_local_test.cc
+  util/thread_local_test.cc                                             \
+  utilities/column_aware_encoding_exp.cc
 
 JNI_NATIVE_SOURCES =                                          \
   java/rocksjni/backupenginejni.cc                            \
@@ -316,6 +336,8 @@ JNI_NATIVE_SOURCES =                                          \
   java/rocksjni/comparator.cc                                 \
   java/rocksjni/comparatorjnicallback.cc                      \
   java/rocksjni/env.cc                                        \
+  java/rocksjni/env_options.cc                                \
+  java/rocksjni/external_sst_file_info.cc                     \
   java/rocksjni/filter.cc                                     \
   java/rocksjni/iterator.cc                                   \
   java/rocksjni/loggerjnicallback.cc                          \
@@ -326,8 +348,10 @@ JNI_NATIVE_SOURCES =                                          \
   java/rocksjni/remove_emptyvalue_compactionfilterjni.cc      \
   java/rocksjni/restorejni.cc                                 \
   java/rocksjni/rocksjni.cc                                   \
+  java/rocksjni/rocksdb_exception_test.cc                     \
   java/rocksjni/slice.cc                                      \
   java/rocksjni/snapshot.cc                                   \
+  java/rocksjni/sst_file_writerjni.cc                         \
   java/rocksjni/statistics.cc                                 \
   java/rocksjni/table.cc                                      \
   java/rocksjni/transaction_log.cc                            \

@@ -375,7 +375,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 
 		// The more usual case: Getting the UIDs.
 		uidList := new(task.List)
-		uidw := algo.NewWriteIterator(uidList, 0)
+		uidw := algo.NewWriteIterator(uidList)
 		for _, fres := range filteredRes {
 			uidw.Append(fres.uid)
 		}

@@ -56,7 +56,7 @@
 namespace rocksdb {
 
 FlushJob::FlushJob(const std::string& dbname, ColumnFamilyData* cfd,
-                   const DBOptions& db_options,
+                   const ImmutableDBOptions& db_options,
                    const MutableCFOptions& mutable_cf_options,
                    const EnvOptions& env_options, VersionSet* versions,
                    InstrumentedMutex* db_mutex,
@@ -97,7 +97,7 @@ FlushJob::~FlushJob() {
 
 void FlushJob::ReportStartedFlush() {
   ThreadStatusUtil::SetColumnFamily(cfd_, cfd_->ioptions()->env,
-                                    cfd_->options()->enable_thread_tracking);
+                                    db_options_.enable_thread_tracking);
   ThreadStatusUtil::SetThreadOperation(ThreadStatus::OP_FLUSH);
   ThreadStatusUtil::SetThreadOperationProperty(
       ThreadStatus::COMPACTION_JOB_ID,
@@ -230,6 +230,12 @@ Status FlushJob::Run(FileMetaData* file_meta) {
   return s;
 }
 
+void FlushJob::Cancel() {
+  db_mutex_->AssertHeld();
+  assert(base_ != nullptr);
+  base_->Unref();
+}
+
 Status FlushJob::WriteLevel0Table() {
   AutoThreadOperationStageUpdater stage_updater(
       ThreadStatus::STAGE_FLUSH_WRITE_L0);
@@ -241,7 +247,11 @@ Status FlushJob::WriteLevel0Table() {
     if (log_buffer_) {
       log_buffer_->FlushBufferToLog();
     }
+    // memtables and range_del_iters store internal iterators over each data
+    // memtable and its associated range deletion memtable, respectively, at
+    // corresponding indexes.
     std::vector<InternalIterator*> memtables;
+    std::vector<InternalIterator*> range_del_iters;
     ReadOptions ro;
     ro.total_order_seek = true;
     Arena arena;
@@ -252,6 +262,10 @@ Status FlushJob::WriteLevel0Table() {
           "[%s] [JOB %d] Flushing memtable with next log file: %" PRIu64 "\n",
           cfd_->GetName().c_str(), job_context_->job_id, m->GetNextLogNumber());
       memtables.push_back(m->NewIterator(ro, &arena));
+      auto* range_del_iter = m->NewRangeTombstoneIterator(ro);
+      if (range_del_iter != nullptr) {
+        range_del_iters.push_back(range_del_iter);
+      }
       total_num_entries += m->num_entries();
       total_num_deletes += m->num_deletes();
       total_memory_usage += m->ApproximateMemoryUsage();
@@ -268,6 +282,10 @@ Status FlushJob::WriteLevel0Table() {
       ScopedArenaIterator iter(
           NewMergingIterator(&cfd_->internal_comparator(), &memtables[0],
                              static_cast<int>(memtables.size()), &arena));
+      std::unique_ptr<InternalIterator> range_del_iter(NewMergingIterator(
+          &cfd_->internal_comparator(),
+          range_del_iters.empty() ? nullptr : &range_del_iters[0],
+          static_cast<int>(range_del_iters.size())));
       Log(InfoLogLevel::INFO_LEVEL, db_options_.info_log,
           "[%s] [JOB %d] Level-0 flush table #%" PRIu64 ": started",
           cfd_->GetName().c_str(), job_context_->job_id, meta_.fd.GetNumber());
@@ -276,9 +294,10 @@ Status FlushJob::WriteLevel0Table() {
                                &output_compression_);
       s = BuildTable(
           dbname_, db_options_.env, *cfd_->ioptions(), mutable_cf_options_,
-          env_options_, cfd_->table_cache(), iter.get(), &meta_,
-          cfd_->internal_comparator(), cfd_->int_tbl_prop_collector_factories(),
-          cfd_->GetID(), cfd_->GetName(), existing_snapshots_,
+          env_options_, cfd_->table_cache(), iter.get(),
+          std::move(range_del_iter), &meta_, cfd_->internal_comparator(),
+          cfd_->int_tbl_prop_collector_factories(), cfd_->GetID(),
+          cfd_->GetName(), existing_snapshots_,
           earliest_write_conflict_snapshot_, output_compression_,
           cfd_->ioptions()->compression_opts,
           mutable_cf_options_.paranoid_file_checks, cfd_->internal_stats(),
@@ -294,7 +313,7 @@ Status FlushJob::WriteLevel0Table() {
         meta_.fd.GetFileSize(), s.ToString().c_str(),
         meta_.marked_for_compaction ? " (needs compaction)" : "");
 
-    if (!db_options_.disableDataSync && output_file_directory_ != nullptr) {
+    if (!db_options_.disable_data_sync && output_file_directory_ != nullptr) {
       output_file_directory_->Fsync();
     }
     TEST_SYNC_POINT("FlushJob::WriteLevel0Table");

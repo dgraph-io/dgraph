@@ -17,8 +17,8 @@ typedef unsigned long bitmap_t;
 
 /*
  * Do some analysis on how big the bitmap is before we use a tree.  For a brute
- * force linear search, if we would have to call ffsl more than 2^3 times, use a
- * tree instead.
+ * force linear search, if we would have to call ffs_lu() more than 2^3 times,
+ * use a tree instead.
  */
 #if LG_BITMAP_MAXBITS - LG_BITMAP_GROUP_NBITS > 3
 #  define USE_TREE
@@ -223,7 +223,7 @@ bitmap_sfu(bitmap_t *bitmap, const bitmap_info_t *binfo)
 		i++;
 		g = bitmap[i];
 	}
-	bit = (bit - 1) + (i << 6);
+	bit = (i << LG_BITMAP_GROUP_NBITS) + (bit - 1);
 #endif
 	bitmap_set(bitmap, binfo, bit);
 	return (bit);

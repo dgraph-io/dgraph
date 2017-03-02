@@ -93,10 +93,10 @@
 			"revisionTime": "2016-09-15T18:50:41Z"
 		},
 		{
-			"checksumSHA1": "MtpYxrtNS/B3gvcV2bm/irGJsDo=",
+			"checksumSHA1": "tJAP/Glrwyzlyn873qPhQ/em2Vo=",
 			"path": "github.com/cockroachdb/c-jemalloc",
-			"revision": "42e6a32cd7a4dff9c70d80323681d46d046181ef",
-			"revisionTime": "2016-07-29T16:27:41Z",
+			"revision": "7eb7980d8a9f68b771568a7eb15196a63a818595",
+			"revisionTime": "2017-02-03T23:06:53Z",
 			"tree": true
 		},
 		{
@@ -111,17 +111,17 @@
 			"revision": ""
 		},
 		{
-			"checksumSHA1": "7I4Di0rg3CwipuoVDkqvsb94ovk=",
+			"checksumSHA1": "+uhPIrBtVQiZam8M3XKMd1f3+oI=",
 			"path": "github.com/cockroachdb/c-rocksdb",
-			"revision": "894d369c4ea259b65f75563feeb06bea322a8450",
-			"revisionTime": "2016-09-29T14:23:45Z",
+			"revision": "97c232fc39550ac0f6287a49421615cc633eec42",
+			"revisionTime": "2017-02-27T22:18:07Z",
 			"tree": true
 		},
 		{
 			"checksumSHA1": "pjTmyGU6EOYq7lrj3z+d7AkWkfE=",
 			"path": "github.com/cockroachdb/c-snappy",
-			"revision": "d4e7b428fe7fc09e93573df3448567a62df8c9fa",
-			"revisionTime": "2016-06-06T19:20:24Z",
+			"revision": "c0cd3c9ce92f195001595e1fbbe66f045daad34f",
+			"revisionTime": "2016-11-24T05:17:49Z",
 			"tree": true
 		},
 		{

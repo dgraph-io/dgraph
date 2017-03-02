@@ -1,0 +1,42 @@
+.Properties {
+    width: 100%;
+    margin-top: 5px;
+    margin-bottom: 10px;
+    border: 1px solid gray;
+    text-align: center;
+}
+
+.Properties-key-val {
+    flex:0 0 33%;
+    display: inline-flex;
+    padding: 0px 5px;
+}
+
+.Properties-key {
+    color: #008000;
+    font-weight: bold
+}
+
+.Properties-val {
+    color: #BA2121;
+}
+
+.Properties tbody {
+  width: 100%;
+  height: 40px;
+  display: block;
+  padding: 0px 5px 5px 5px;
+  overflow-y: scroll;
+}
+
+.Properties tr  {
+  display: table;
+  width: 100%;
+  vertical-align: top;
+}
+
+.Properties td {
+  width: 33%;
+  text-align: left;
+  padding: 5px;
+}

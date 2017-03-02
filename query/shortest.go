@@ -88,7 +88,7 @@ func (start *SubGraph) expandOut(ctx context.Context,
 	var exec []*SubGraph
 	var err error
 	var in task.List
-	it := algo.NewWriteIterator(&in, 0)
+	it := algo.NewWriteIterator(&in)
 	it.Append(start.Params.From)
 	it.End()
 	start.SrcUIDs = &in
@@ -338,7 +338,7 @@ func ShortestPath(ctx context.Context, sg *SubGraph) error {
 			result[i], result[l-i-1] = result[l-i-1], result[i]
 		}
 		var r task.List
-		out := algo.NewWriteIterator(&r, 0)
+		out := algo.NewWriteIterator(&r)
 		for i := 0; i < len(result); i++ {
 			out.Append(result[i])
 		}

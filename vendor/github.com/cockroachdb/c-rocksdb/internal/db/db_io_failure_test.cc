@@ -33,7 +33,7 @@ TEST_F(DBIOFailureTest, DropWrites) {
     // Force out-of-space errors
     env_->drop_writes_.store(true, std::memory_order_release);
     env_->sleep_counter_.Reset();
-    env_->no_sleep_ = true;
+    env_->no_slowdown_ = true;
     for (int i = 0; i < 5; i++) {
       if (option_config_ != kUniversalCompactionMultiLevel &&
           option_config_ != kUniversalSubcompactions) {
@@ -111,6 +111,7 @@ TEST_F(DBIOFailureTest, NoSpaceCompactRange) {
     Status s = dbfull()->TEST_CompactRange(0, nullptr, nullptr, nullptr,
                                            true /* disallow trivial move */);
     ASSERT_TRUE(s.IsIOError());
+    ASSERT_TRUE(s.IsNoSpace());
 
     env_->no_space_.store(false, std::memory_order_release);
   } while (ChangeCompactOptions());

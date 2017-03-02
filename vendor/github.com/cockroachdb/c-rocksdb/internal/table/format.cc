@@ -59,6 +59,9 @@ Status BlockHandle::DecodeFrom(Slice* input) {
       GetVarint64(input, &size_)) {
     return Status::OK();
   } else {
+    // reset in case failure after partially decoding
+    offset_ = 0;
+    size_ = 0;
     return Status::Corruption("bad block handle");
   }
 }
@@ -498,6 +501,7 @@ Status UncompressBlockContentsForCompressionType(
       *contents =
         BlockContents(std::move(ubuf), decompress_size, true, kNoCompression);
       break;
+    case kZSTD:
     case kZSTDNotFinalCompression:
       ubuf.reset(ZSTD_Uncompress(data, n, &decompress_size, compression_dict));
       if (!ubuf) {

@@ -24,11 +24,11 @@ abs_objroot := @abs_objroot@
 
 # Build parameters.
 CPPFLAGS := @CPPFLAGS@ -I$(srcroot)include -I$(objroot)include
-CFLAGS := @CFLAGS@
+EXTRA_CFLAGS := @EXTRA_CFLAGS@
+CFLAGS := @CFLAGS@ $(EXTRA_CFLAGS)
 LDFLAGS := @LDFLAGS@
 EXTRA_LDFLAGS := @EXTRA_LDFLAGS@
 LIBS := @LIBS@
-TESTLIBS := @TESTLIBS@
 RPATH_EXTRA := @RPATH_EXTRA@
 SO := @so@
 IMPORTLIB := @importlib@
@@ -53,15 +53,19 @@ enable_prof := @enable_prof@
 enable_valgrind := @enable_valgrind@
 enable_zone_allocator := @enable_zone_allocator@
 MALLOC_CONF := @JEMALLOC_CPREFIX@MALLOC_CONF
+link_whole_archive := @link_whole_archive@
 DSO_LDFLAGS = @DSO_LDFLAGS@
 SOREV = @SOREV@
 PIC_CFLAGS = @PIC_CFLAGS@
 CTARGET = @CTARGET@
 LDTARGET = @LDTARGET@
+TEST_LD_MODE = @TEST_LD_MODE@
 MKLIB = @MKLIB@
 AR = @AR@
 ARFLAGS = @ARFLAGS@
 CC_MM = @CC_MM@
+LM := @LM@
+INSTALL = @INSTALL@
 
 ifeq (macho, $(ABI))
 TEST_LIBRARY_PATH := DYLD_FALLBACK_LIBRARY_PATH="$(objroot)lib"
@@ -100,10 +104,12 @@ C_SRCS := $(srcroot)src/jemalloc.c \
 	$(srcroot)src/quarantine.c \
 	$(srcroot)src/rtree.c \
 	$(srcroot)src/stats.c \
+	$(srcroot)src/spin.c \
 	$(srcroot)src/tcache.c \
 	$(srcroot)src/ticker.c \
 	$(srcroot)src/tsd.c \
-	$(srcroot)src/util.c
+	$(srcroot)src/util.c \
+	$(srcroot)src/witness.c
 ifeq ($(enable_valgrind), 1)
 C_SRCS += $(srcroot)src/valgrind.c
 endif
@@ -122,6 +128,11 @@ DSOS := $(objroot)lib/$(LIBJEMALLOC).$(SOREV)
 ifneq ($(SOREV),$(SO))
 DSOS += $(objroot)lib/$(LIBJEMALLOC).$(SO)
 endif
+ifeq (1, $(link_whole_archive))
+LJEMALLOC := -Wl,--whole-archive -L$(objroot)lib -l$(LIBJEMALLOC) -Wl,--no-whole-archive
+else
+LJEMALLOC := $(objroot)lib/$(LIBJEMALLOC).$(IMPORTLIB)
+endif
 PC := $(objroot)jemalloc.pc
 MAN3 := $(objroot)doc/jemalloc$(install_suffix).3
 DOCS_XML := $(objroot)doc/jemalloc$(install_suffix).xml
@@ -133,11 +144,19 @@ C_TESTLIB_SRCS := $(srcroot)test/src/btalloc.c $(srcroot)test/src/btalloc_0.c \
 	$(srcroot)test/src/mtx.c $(srcroot)test/src/mq.c \
 	$(srcroot)test/src/SFMT.c $(srcroot)test/src/test.c \
 	$(srcroot)test/src/thd.c $(srcroot)test/src/timer.c
+ifeq (1, $(link_whole_archive))
+C_UTIL_INTEGRATION_SRCS :=
+else
 C_UTIL_INTEGRATION_SRCS := $(srcroot)src/nstime.c $(srcroot)src/util.c
-TESTS_UNIT := $(srcroot)test/unit/atomic.c \
+endif
+TESTS_UNIT := \
+	$(srcroot)test/unit/a0.c \
+	$(srcroot)test/unit/arena_reset.c \
+	$(srcroot)test/unit/atomic.c \
 	$(srcroot)test/unit/bitmap.c \
 	$(srcroot)test/unit/ckh.c \
 	$(srcroot)test/unit/decay.c \
+	$(srcroot)test/unit/fork.c \
 	$(srcroot)test/unit/hash.c \
 	$(srcroot)test/unit/junk.c \
 	$(srcroot)test/unit/junk_alloc.c \
@@ -147,6 +166,9 @@ TESTS_UNIT := $(srcroot)test/unit/atomic.c \
 	$(srcroot)test/unit/math.c \
 	$(srcroot)test/unit/mq.c \
 	$(srcroot)test/unit/mtx.c \
+	$(srcroot)test/unit/pack.c \
+	$(srcroot)test/unit/pages.c \
+	$(srcroot)test/unit/ph.c \
 	$(srcroot)test/unit/prng.c \
 	$(srcroot)test/unit/prof_accum.c \
 	$(srcroot)test/unit/prof_active.c \
@@ -168,6 +190,7 @@ TESTS_UNIT := $(srcroot)test/unit/atomic.c \
 	$(srcroot)test/unit/nstime.c \
 	$(srcroot)test/unit/tsd.c \
 	$(srcroot)test/unit/util.c \
+	$(srcroot)test/unit/witness.c \
 	$(srcroot)test/unit/zero.c
 TESTS_INTEGRATION := $(srcroot)test/integration/aligned_alloc.c \
 	$(srcroot)test/integration/allocated.c \
@@ -289,69 +312,69 @@ $(STATIC_LIBS):
 
 $(objroot)test/unit/%$(EXE): $(objroot)test/unit/%.$(O) $(TESTS_UNIT_LINK_OBJS) $(C_JET_OBJS) $(C_TESTLIB_UNIT_OBJS)
 	@mkdir -p $(@D)
-	$(CC) $(LDTARGET) $(filter %.$(O),$^) $(call RPATH,$(objroot)lib) $(LDFLAGS) $(filter-out -lm,$(LIBS)) -lm $(TESTLIBS) $(EXTRA_LDFLAGS)
+	$(CC) $(LDTARGET) $(filter %.$(O),$^) $(call RPATH,$(objroot)lib) $(LDFLAGS) $(filter-out -lm,$(LIBS)) $(LM) $(EXTRA_LDFLAGS)
 
 $(objroot)test/integration/%$(EXE): $(objroot)test/integration/%.$(O) $(C_TESTLIB_INTEGRATION_OBJS) $(C_UTIL_INTEGRATION_OBJS) $(objroot)lib/$(LIBJEMALLOC).$(IMPORTLIB)
 	@mkdir -p $(@D)
-	$(CC) $(LDTARGET) $(filter %.$(O),$^) $(call RPATH,$(objroot)lib) $(objroot)lib/$(LIBJEMALLOC).$(IMPORTLIB) $(LDFLAGS) $(filter-out -lm,$(filter -lpthread,$(LIBS))) -lm $(TESTLIBS) $(EXTRA_LDFLAGS)
+	$(CC) $(TEST_LD_MODE) $(LDTARGET) $(filter %.$(O),$^) $(call RPATH,$(objroot)lib) $(LJEMALLOC) $(LDFLAGS) $(filter-out -lm,$(filter -lrt -lpthread,$(LIBS))) $(LM) $(EXTRA_LDFLAGS)
 
 $(objroot)test/stress/%$(EXE): $(objroot)test/stress/%.$(O) $(C_JET_OBJS) $(C_TESTLIB_STRESS_OBJS) $(objroot)lib/$(LIBJEMALLOC).$(IMPORTLIB)
 	@mkdir -p $(@D)
-	$(CC) $(LDTARGET) $(filter %.$(O),$^) $(call RPATH,$(objroot)lib) $(objroot)lib/$(LIBJEMALLOC).$(IMPORTLIB) $(LDFLAGS) $(filter-out -lm,$(LIBS)) -lm $(TESTLIBS) $(EXTRA_LDFLAGS)
+	$(CC) $(TEST_LD_MODE) $(LDTARGET) $(filter %.$(O),$^) $(call RPATH,$(objroot)lib) $(objroot)lib/$(LIBJEMALLOC).$(IMPORTLIB) $(LDFLAGS) $(filter-out -lm,$(LIBS)) $(LM) $(EXTRA_LDFLAGS)
 
 build_lib_shared: $(DSOS)
 build_lib_static: $(STATIC_LIBS)
 build_lib: build_lib_shared build_lib_static
 
 install_bin:
-	install -d $(BINDIR)
+	$(INSTALL) -d $(BINDIR)
 	@for b in $(BINS); do \
-	echo "install -m 755 $$b $(BINDIR)"; \
-	install -m 755 $$b $(BINDIR); \
+	echo "$(INSTALL) -m 755 $$b $(BINDIR)"; \
+	$(INSTALL) -m 755 $$b $(BINDIR); \
 done
 
 install_include:
-	install -d $(INCLUDEDIR)/jemalloc
+	$(INSTALL) -d $(INCLUDEDIR)/jemalloc
 	@for h in $(C_HDRS); do \
-	echo "install -m 644 $$h $(INCLUDEDIR)/jemalloc"; \
-	install -m 644 $$h $(INCLUDEDIR)/jemalloc; \
+	echo "$(INSTALL) -m 644 $$h $(INCLUDEDIR)/jemalloc"; \
+	$(INSTALL) -m 644 $$h $(INCLUDEDIR)/jemalloc; \
 done
 
 install_lib_shared: $(DSOS)
-	install -d $(LIBDIR)
-	install -m 755 $(objroot)lib/$(LIBJEMALLOC).$(SOREV) $(LIBDIR)
+	$(INSTALL) -d $(LIBDIR)
+	$(INSTALL) -m 755 $(objroot)lib/$(LIBJEMALLOC).$(SOREV) $(LIBDIR)
 ifneq ($(SOREV),$(SO))
 	ln -sf $(LIBJEMALLOC).$(SOREV) $(LIBDIR)/$(LIBJEMALLOC).$(SO)
 endif
 
 install_lib_static: $(STATIC_LIBS)
-	install -d $(LIBDIR)
+	$(INSTALL) -d $(LIBDIR)
 	@for l in $(STATIC_LIBS); do \
-	echo "install -m 755 $$l $(LIBDIR)"; \
-	install -m 755 $$l $(LIBDIR); \
+	echo "$(INSTALL) -m 755 $$l $(LIBDIR)"; \
+	$(INSTALL) -m 755 $$l $(LIBDIR); \
 done
 
 install_lib_pc: $(PC)
-	install -d $(LIBDIR)/pkgconfig
+	$(INSTALL) -d $(LIBDIR)/pkgconfig
 	@for l in $(PC); do \
-	echo "install -m 644 $$l $(LIBDIR)/pkgconfig"; \
-	install -m 644 $$l $(LIBDIR)/pkgconfig; \
+	echo "$(INSTALL) -m 644 $$l $(LIBDIR)/pkgconfig"; \
+	$(INSTALL) -m 644 $$l $(LIBDIR)/pkgconfig; \
 done
 
 install_lib: install_lib_shared install_lib_static install_lib_pc
 
 install_doc_html:
-	install -d $(DATADIR)/doc/jemalloc$(install_suffix)
+	$(INSTALL) -d $(DATADIR)/doc/jemalloc$(install_suffix)
 	@for d in $(DOCS_HTML); do \
-	echo "install -m 644 $$d $(DATADIR)/doc/jemalloc$(install_suffix)"; \
-	install -m 644 $$d $(DATADIR)/doc/jemalloc$(install_suffix); \
+	echo "$(INSTALL) -m 644 $$d $(DATADIR)/doc/jemalloc$(install_suffix)"; \
+	$(INSTALL) -m 644 $$d $(DATADIR)/doc/jemalloc$(install_suffix); \
 done
 
 install_doc_man:
-	install -d $(MANDIR)/man3
+	$(INSTALL) -d $(MANDIR)/man3
 	@for d in $(DOCS_MAN3); do \
-	echo "install -m 644 $$d $(MANDIR)/man3"; \
-	install -m 644 $$d $(MANDIR)/man3; \
+	echo "$(INSTALL) -m 644 $$d $(MANDIR)/man3"; \
+	$(INSTALL) -m 644 $$d $(MANDIR)/man3; \
 done
 
 install_doc: install_doc_html install_doc_man

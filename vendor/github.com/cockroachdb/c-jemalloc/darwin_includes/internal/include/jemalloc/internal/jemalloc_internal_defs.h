@@ -24,7 +24,7 @@
 #define CPU_SPINWAIT __asm__ volatile("pause")
 
 /* Defined if C11 atomics are available. */
-/* #undef JEMALLOC_C11ATOMICS */
+#define JEMALLOC_C11ATOMICS 1
 
 /* Defined if the equivalent of FreeBSD's atomic(9) functions are available. */
 /* #undef JEMALLOC_ATOMIC9 */
@@ -57,15 +57,18 @@
 #define JEMALLOC_HAVE_BUILTIN_CLZ 
 
 /*
- * Defined if madvise(2) is available.
+ * Defined if os_unfair_lock_*() functions are available, as provided by Darwin.
  */
-#define JEMALLOC_HAVE_MADVISE 
+/* #undef JEMALLOC_OS_UNFAIR_LOCK */
 
 /*
  * Defined if OSSpin*() functions are available, as provided by Darwin, and
  * documented in the spinlock(3) manual page.
  */
 #define JEMALLOC_OSSPIN 
+
+/* Defined if syscall(2) is usable. */
+#define JEMALLOC_USE_SYSCALL 
 
 /*
  * Defined if secure_getenv(3) is available.
@@ -76,6 +79,24 @@
  * Defined if issetugid(2) is available.
  */
 #define JEMALLOC_HAVE_ISSETUGID 
+
+/* Defined if pthread_atfork(3) is available. */
+#define JEMALLOC_HAVE_PTHREAD_ATFORK 
+
+/*
+ * Defined if clock_gettime(CLOCK_MONOTONIC_COARSE, ...) is available.
+ */
+/* #undef JEMALLOC_HAVE_CLOCK_MONOTONIC_COARSE */
+
+/*
+ * Defined if clock_gettime(CLOCK_MONOTONIC, ...) is available.
+ */
+/* #undef JEMALLOC_HAVE_CLOCK_MONOTONIC */
+
+/*
+ * Defined if mach_absolute_time() is available.
+ */
+#define JEMALLOC_HAVE_MACH_ABSOLUTE_TIME 1
 
 /*
  * Defined if _malloc_thread_cleanup() exists.  At least in the case of
@@ -119,7 +140,7 @@
 #define JEMALLOC_STATS 
 
 /* JEMALLOC_PROF enables allocation profiling. */
-#define JEMALLOC_PROF 
+/* #undef JEMALLOC_PROF */
 
 /* Use libunwind for profile backtracing if defined. */
 /* #undef JEMALLOC_PROF_LIBUNWIND */
@@ -128,7 +149,7 @@
 /* #undef JEMALLOC_PROF_LIBGCC */
 
 /* Use gcc intrinsics for profile backtracing if defined. */
-#define JEMALLOC_PROF_GCC 
+/* #undef JEMALLOC_PROF_GCC */
 
 /*
  * JEMALLOC_TCACHE enables a thread-specific caching layer for small objects.
@@ -190,6 +211,12 @@
 /* #undef JEMALLOC_TLS */
 
 /*
+ * Used to mark unreachable code to quiet "end of non-void" compiler warnings.
+ * Don't use this directly; instead use unreachable() from util.h
+ */
+#define JEMALLOC_INTERNAL_UNREACHABLE __builtin_unreachable
+
+/*
  * ffs*() functions to use for bitmapping.  Don't use these directly; instead,
  * use ffs_*() from util.h.
  */
@@ -216,17 +243,34 @@
 #define JEMALLOC_ZONE_VERSION 8
 
 /*
+ * Methods for determining whether the OS overcommits.
+ * JEMALLOC_PROC_SYS_VM_OVERCOMMIT_MEMORY: Linux's
+ *                                         /proc/sys/vm.overcommit_memory file.
+ * JEMALLOC_SYSCTL_VM_OVERCOMMIT: FreeBSD's vm.overcommit sysctl.
+ */
+/* #undef JEMALLOC_SYSCTL_VM_OVERCOMMIT */
+/* #undef JEMALLOC_PROC_SYS_VM_OVERCOMMIT_MEMORY */
+
+/* Defined if madvise(2) is available. */
+#define JEMALLOC_HAVE_MADVISE 
+
+/*
  * Methods for purging unused pages differ between operating systems.
  *
- *   madvise(..., MADV_DONTNEED) : On Linux, this immediately discards pages,
- *                                 such that new pages will be demand-zeroed if
- *                                 the address region is later touched.
- *   madvise(..., MADV_FREE) : On FreeBSD and Darwin, this marks pages as being
- *                             unused, such that they will be discarded rather
- *                             than swapped out.
+ *   madvise(..., MADV_FREE) : This marks pages as being unused, such that they
+ *                             will be discarded rather than swapped out.
+ *   madvise(..., MADV_DONTNEED) : This immediately discards pages, such that
+ *                                 new pages will be demand-zeroed if the
+ *                                 address region is later touched.
  */
-/* #undef JEMALLOC_PURGE_MADVISE_DONTNEED */
 #define JEMALLOC_PURGE_MADVISE_FREE 
+#define JEMALLOC_PURGE_MADVISE_DONTNEED 
+
+/*
+ * Defined if transparent huge pages are supported via the MADV_[NO]HUGEPAGE
+ * arguments to madvise(2).
+ */
+/* #undef JEMALLOC_THP */
 
 /* Define if operating system has alloca.h header. */
 /* #undef JEMALLOC_HAS_ALLOCA_H */

@@ -101,7 +101,7 @@ TEST_BEGIN(test_bitmap_sfu)
 		bitmap_info_t binfo;
 		bitmap_info_init(&binfo, i);
 		{
-			ssize_t j;
+			size_t j;
 			bitmap_t *bitmap = (bitmap_t *)malloc(
 			    bitmap_size(&binfo));
 			bitmap_init(bitmap, &binfo);
@@ -119,7 +119,7 @@ TEST_BEGIN(test_bitmap_sfu)
 			 * Iteratively unset bits starting at the end, and
 			 * verify that bitmap_sfu() reaches the unset bits.
 			 */
-			for (j = i - 1; j >= 0; j--) {
+			for (j = i - 1; j < i; j--) { /* (i..0] */
 				bitmap_unset(bitmap, &binfo, j);
 				assert_zd_eq(bitmap_sfu(bitmap, &binfo), j,
 				    "First unset bit should the bit previously "

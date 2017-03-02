@@ -8,7 +8,6 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
 #include "table/two_level_iterator.h"
-
 #include "db/pinned_iterators_manager.h"
 #include "rocksdb/options.h"
 #include "rocksdb/table.h"
@@ -41,6 +40,7 @@ class TwoLevelIterator : public InternalIterator {
   }
 
   virtual void Seek(const Slice& target) override;
+  virtual void SeekForPrev(const Slice& target) override;
   virtual void SeekToFirst() override;
   virtual void SeekToLast() override;
   virtual void Next() override;
@@ -126,6 +126,28 @@ void TwoLevelIterator::Seek(const Slice& target) {
   SkipEmptyDataBlocksForward();
 }
 
+void TwoLevelIterator::SeekForPrev(const Slice& target) {
+  if (state_->check_prefix_may_match && !state_->PrefixMayMatch(target)) {
+    SetSecondLevelIterator(nullptr);
+    return;
+  }
+  first_level_iter_.Seek(target);
+  InitDataBlock();
+  if (second_level_iter_.iter() != nullptr) {
+    second_level_iter_.SeekForPrev(target);
+  }
+  if (!Valid()) {
+    if (!first_level_iter_.Valid()) {
+      first_level_iter_.SeekToLast();
+      InitDataBlock();
+      if (second_level_iter_.iter() != nullptr) {
+        second_level_iter_.SeekForPrev(target);
+      }
+    }
+    SkipEmptyDataBlocksBackward();
+  }
+}
+
 void TwoLevelIterator::SeekToFirst() {
   first_level_iter_.SeekToFirst();
   InitDataBlock();
@@ -202,7 +224,7 @@ void TwoLevelIterator::SetSecondLevelIterator(InternalIterator* iter) {
 
   InternalIterator* old_iter = second_level_iter_.Set(iter);
   if (pinned_iters_mgr_ && pinned_iters_mgr_->PinningEnabled()) {
-    pinned_iters_mgr_->PinIteratorIfNeeded(old_iter);
+    pinned_iters_mgr_->PinIterator(old_iter);
   } else {
     delete old_iter;
   }

@@ -13,19 +13,21 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <vector>
 #include "db/dbformat.h"
+#include "db/memtable_allocator.h"
+#include "db/range_del_aggregator.h"
 #include "db/skiplist.h"
 #include "db/version_edit.h"
 #include "rocksdb/db.h"
 #include "rocksdb/env.h"
 #include "rocksdb/memtablerep.h"
-#include "rocksdb/immutable_options.h"
-#include "db/memtable_allocator.h"
+#include "util/cf_options.h"
 #include "util/concurrent_arena.h"
 #include "util/dynamic_bloom.h"
+#include "util/hash.h"
 #include "util/instrumented_mutex.h"
-#include "util/mutable_cf_options.h"
 
 namespace rocksdb {
 
@@ -159,6 +161,8 @@ class MemTable {
   //        those allocated in arena.
   InternalIterator* NewIterator(const ReadOptions& read_options, Arena* arena);
 
+  InternalIterator* NewRangeTombstoneIterator(const ReadOptions& read_options);
+
   // Add an entry into memtable that maps key to value at the
   // specified sequence number and with the specified type.
   // Typically value will be empty if type==kTypeDeletion.
@@ -183,12 +187,14 @@ class MemTable {
   // On success, *s may be set to OK, NotFound, or MergeInProgress.  Any other
   // status returned indicates a corruption or other unexpected error.
   bool Get(const LookupKey& key, std::string* value, Status* s,
-           MergeContext* merge_context, SequenceNumber* seq);
+           MergeContext* merge_context, RangeDelAggregator* range_del_agg,
+           SequenceNumber* seq, const ReadOptions& read_opts);
 
   bool Get(const LookupKey& key, std::string* value, Status* s,
-           MergeContext* merge_context) {
+           MergeContext* merge_context, RangeDelAggregator* range_del_agg,
+           const ReadOptions& read_opts) {
     SequenceNumber seq;
-    return Get(key, value, s, merge_context, &seq);
+    return Get(key, value, s, merge_context, range_del_agg, &seq, read_opts);
   }
 
   // Attempts to update the new_value inplace, else does normal Add
@@ -345,6 +351,8 @@ class MemTable {
   ConcurrentArena arena_;
   MemTableAllocator allocator_;
   unique_ptr<MemTableRep> table_;
+  unique_ptr<MemTableRep> range_del_table_;
+  bool is_range_del_table_empty_;
 
   // Total data size of all data inserted
   std::atomic<uint64_t> data_size_;
@@ -383,6 +391,12 @@ class MemTable {
   std::atomic<FlushStateEnum> flush_state_;
 
   Env* env_;
+
+  // Extract sequential insert prefixes.
+  const SliceTransform* insert_with_hint_prefix_extractor_;
+
+  // Insert hints for each prefix.
+  std::unordered_map<Slice, void*, SliceHasher> insert_hints_;
 
   // Returns a heuristic flush decision
   bool ShouldFlushNow() const;

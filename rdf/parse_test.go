@@ -718,6 +718,18 @@ var testNQuads = []struct {
 		expectedErr: true, // comma should be followed by another key-value pair.
 	},
 	{
+		input:       `_:alice <knows> "stuff" (k=1,k=2) .`,
+		expectedErr: true, // Duplicate keys not allowed.
+	},
+	{
+		input:       `_:alice <knows> "stuff" (k=1,k1=1,k=2) .`,
+		expectedErr: true, // Duplicate keys not allowed.
+	},
+	{
+		input:       `_:alice <knows> "stuff" (k=1,k1=,k=2) .`,
+		expectedErr: true, // Duplicate keys not allowed.
+	},
+	{
 		input:       `_:alice <knows> "stuff" (k=111111111111111111888888) .`,
 		expectedErr: true, // integer can not fit in int32.
 	},

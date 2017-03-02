@@ -13,7 +13,7 @@ TEST_BEGIN(test_small_run_size)
 	 */
 
 	sz = sizeof(unsigned);
-	assert_d_eq(mallctl("arenas.nbins", &nbins, &sz, NULL, 0), 0,
+	assert_d_eq(mallctl("arenas.nbins", (void *)&nbins, &sz, NULL, 0), 0,
 	    "Unexpected mallctl failure");
 
 	assert_d_eq(mallctlnametomib("arenas.bin.0.run_size", mib, &miblen), 0,
@@ -21,8 +21,8 @@ TEST_BEGIN(test_small_run_size)
 	for (i = 0; i < nbins; i++) {
 		mib[2] = i;
 		sz = sizeof(size_t);
-		assert_d_eq(mallctlbymib(mib, miblen, &run_size, &sz, NULL, 0),
-		    0, "Unexpected mallctlbymib failure");
+		assert_d_eq(mallctlbymib(mib, miblen, (void *)&run_size, &sz,
+		    NULL, 0), 0, "Unexpected mallctlbymib failure");
 		assert_zu_eq(run_size, run_quantize_floor(run_size),
 		    "Small run quantization should be a no-op (run_size=%zu)",
 		    run_size);
@@ -47,11 +47,11 @@ TEST_BEGIN(test_large_run_size)
 	 */
 
 	sz = sizeof(bool);
-	assert_d_eq(mallctl("config.cache_oblivious", &cache_oblivious, &sz,
-	    NULL, 0), 0, "Unexpected mallctl failure");
+	assert_d_eq(mallctl("config.cache_oblivious", (void *)&cache_oblivious,
+	    &sz, NULL, 0), 0, "Unexpected mallctl failure");
 
 	sz = sizeof(unsigned);
-	assert_d_eq(mallctl("arenas.nlruns", &nlruns, &sz, NULL, 0), 0,
+	assert_d_eq(mallctl("arenas.nlruns", (void *)&nlruns, &sz, NULL, 0), 0,
 	    "Unexpected mallctl failure");
 
 	assert_d_eq(mallctlnametomib("arenas.lrun.0.size", mib, &miblen), 0,
@@ -61,8 +61,8 @@ TEST_BEGIN(test_large_run_size)
 
 		mib[2] = i;
 		sz = sizeof(size_t);
-		assert_d_eq(mallctlbymib(mib, miblen, &lrun_size, &sz, NULL, 0),
-		    0, "Unexpected mallctlbymib failure");
+		assert_d_eq(mallctlbymib(mib, miblen, (void *)&lrun_size, &sz,
+		    NULL, 0), 0, "Unexpected mallctlbymib failure");
 		run_size = cache_oblivious ? lrun_size + PAGE : lrun_size;
 		floor = run_quantize_floor(run_size);
 		ceil = run_quantize_ceil(run_size);
@@ -102,16 +102,16 @@ TEST_BEGIN(test_monotonic)
 	 */
 
 	sz = sizeof(unsigned);
-	assert_d_eq(mallctl("arenas.nbins", &nbins, &sz, NULL, 0), 0,
+	assert_d_eq(mallctl("arenas.nbins", (void *)&nbins, &sz, NULL, 0), 0,
 	    "Unexpected mallctl failure");
 
 	sz = sizeof(unsigned);
-	assert_d_eq(mallctl("arenas.nlruns", &nlruns, &sz, NULL, 0), 0,
+	assert_d_eq(mallctl("arenas.nlruns", (void *)&nlruns, &sz, NULL, 0), 0,
 	    "Unexpected mallctl failure");
 
 	floor_prev = 0;
 	ceil_prev = 0;
-	for (i = 1; i < run_quantize_max >> LG_PAGE; i++) {
+	for (i = 1; i <= chunksize >> LG_PAGE; i++) {
 		size_t run_size, floor, ceil;
 
 		run_size = i << LG_PAGE;

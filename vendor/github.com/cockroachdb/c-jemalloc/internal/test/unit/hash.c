@@ -64,14 +64,15 @@ static void
 hash_variant_verify_key(hash_variant_t variant, uint8_t *key)
 {
 	const int hashbytes = hash_variant_bits(variant) / 8;
-	VARIABLE_ARRAY(uint8_t, hashes, hashbytes * 256);
+	const int hashes_size = hashbytes * 256;
+	VARIABLE_ARRAY(uint8_t, hashes, hashes_size);
 	VARIABLE_ARRAY(uint8_t, final, hashbytes);
 	unsigned i;
 	uint32_t computed, expected;
 
 	memset(key, 0, KEY_SIZE);
-	memset(hashes, 0, sizeof(hashes));
-	memset(final, 0, sizeof(final));
+	memset(hashes, 0, hashes_size);
+	memset(final, 0, hashbytes);
 
 	/*
 	 * Hash keys of the form {0}, {0,1}, {0,1,2}, ..., {0,1,...,255} as the
@@ -102,17 +103,17 @@ hash_variant_verify_key(hash_variant_t variant, uint8_t *key)
 	/* Hash the result array. */
 	switch (variant) {
 	case hash_variant_x86_32: {
-		uint32_t out = hash_x86_32(hashes, hashbytes*256, 0);
+		uint32_t out = hash_x86_32(hashes, hashes_size, 0);
 		memcpy(final, &out, sizeof(out));
 		break;
 	} case hash_variant_x86_128: {
 		uint64_t out[2];
-		hash_x86_128(hashes, hashbytes*256, 0, out);
+		hash_x86_128(hashes, hashes_size, 0, out);
 		memcpy(final, out, sizeof(out));
 		break;
 	} case hash_variant_x64_128: {
 		uint64_t out[2];
-		hash_x64_128(hashes, hashbytes*256, 0, out);
+		hash_x64_128(hashes, hashes_size, 0, out);
 		memcpy(final, out, sizeof(out));
 		break;
 	} default: not_reached();

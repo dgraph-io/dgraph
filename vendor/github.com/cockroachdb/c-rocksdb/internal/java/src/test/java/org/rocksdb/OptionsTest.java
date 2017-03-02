@@ -135,36 +135,29 @@ public class OptionsTest {
   @Test
   public void maxBytesForLevelMultiplier() {
     try (final Options opt = new Options()) {
-      final int intValue = rand.nextInt();
-      opt.setMaxBytesForLevelMultiplier(intValue);
-      assertThat(opt.maxBytesForLevelMultiplier()).isEqualTo(intValue);
+      final double doubleValue = rand.nextDouble();
+      opt.setMaxBytesForLevelMultiplier(doubleValue);
+      assertThat(opt.maxBytesForLevelMultiplier()).isEqualTo(doubleValue);
     }
   }
 
   @Test
-  public void expandedCompactionFactor() {
+  public void maxBytesForLevelMultiplierAdditional() {
     try (final Options opt = new Options()) {
-      final int intValue = rand.nextInt();
-      opt.setExpandedCompactionFactor(intValue);
-      assertThat(opt.expandedCompactionFactor()).isEqualTo(intValue);
+      final int intValue1 = rand.nextInt();
+      final int intValue2 = rand.nextInt();
+      final int[] ints = new int[]{intValue1, intValue2};
+      opt.setMaxBytesForLevelMultiplierAdditional(ints);
+      assertThat(opt.maxBytesForLevelMultiplierAdditional()).isEqualTo(ints);
     }
   }
 
   @Test
-  public void sourceCompactionFactor() {
+  public void maxCompactionBytes() {
     try (final Options opt = new Options()) {
-      final int intValue = rand.nextInt();
-      opt.setSourceCompactionFactor(intValue);
-      assertThat(opt.sourceCompactionFactor()).isEqualTo(intValue);
-    }
-  }
-
-  @Test
-  public void maxGrandparentOverlapFactor() {
-    try (final Options opt = new Options()) {
-      final int intValue = rand.nextInt();
-      opt.setMaxGrandparentOverlapFactor(intValue);
-      assertThat(opt.maxGrandparentOverlapFactor()).isEqualTo(intValue);
+      final long longValue = rand.nextLong();
+      opt.setMaxCompactionBytes(longValue);
+      assertThat(opt.maxCompactionBytes()).isEqualTo(longValue);
     }
   }
 
@@ -178,11 +171,56 @@ public class OptionsTest {
   }
 
   @Test
+  public void softPendingCompactionBytesLimit() {
+    try (final Options opt = new Options()) {
+      final long longValue = rand.nextLong();
+      opt.setSoftPendingCompactionBytesLimit(longValue);
+      assertThat(opt.softPendingCompactionBytesLimit()).isEqualTo(longValue);
+    }
+  }
+
+  @Test
   public void hardRateLimit() {
     try (final Options opt = new Options()) {
       final double doubleValue = rand.nextDouble();
       opt.setHardRateLimit(doubleValue);
       assertThat(opt.hardRateLimit()).isEqualTo(doubleValue);
+    }
+  }
+
+  @Test
+  public void hardPendingCompactionBytesLimit() {
+    try (final Options opt = new Options()) {
+      final long longValue = rand.nextLong();
+      opt.setHardPendingCompactionBytesLimit(longValue);
+      assertThat(opt.hardPendingCompactionBytesLimit()).isEqualTo(longValue);
+    }
+  }
+
+  @Test
+  public void level0FileNumCompactionTrigger() {
+    try (final Options opt = new Options()) {
+      final int intValue = rand.nextInt();
+      opt.setLevel0FileNumCompactionTrigger(intValue);
+      assertThat(opt.level0FileNumCompactionTrigger()).isEqualTo(intValue);
+    }
+  }
+
+  @Test
+  public void level0SlowdownWritesTrigger() {
+    try (final Options opt = new Options()) {
+      final int intValue = rand.nextInt();
+      opt.setLevel0SlowdownWritesTrigger(intValue);
+      assertThat(opt.level0SlowdownWritesTrigger()).isEqualTo(intValue);
+    }
+  }
+
+  @Test
+  public void level0StopWritesTrigger() {
+    try (final Options opt = new Options()) {
+      final int intValue = rand.nextInt();
+      opt.setLevel0StopWritesTrigger(intValue);
+      assertThat(opt.level0StopWritesTrigger()).isEqualTo(intValue);
     }
   }
 
@@ -264,6 +302,15 @@ public class OptionsTest {
       final double doubleValue = rand.nextDouble();
       opt.setMemtablePrefixBloomSizeRatio(doubleValue);
       assertThat(opt.memtablePrefixBloomSizeRatio()).isEqualTo(doubleValue);
+    }
+  }
+
+  @Test
+  public void memtableHugePageSize() {
+    try (final Options opt = new Options()) {
+      final long longValue = rand.nextLong();
+      opt.setMemtableHugePageSize(longValue);
+      assertThat(opt.memtableHugePageSize()).isEqualTo(longValue);
     }
   }
 
@@ -409,11 +456,31 @@ public class OptionsTest {
   }
 
   @Test
+  public void baseBackgroundCompactions() {
+    try (final Options opt = new Options()) {
+      final int intValue = rand.nextInt();
+      opt.setBaseBackgroundCompactions(intValue);
+      assertThat(opt.baseBackgroundCompactions()).
+          isEqualTo(intValue);
+    }
+  }
+
+  @Test
   public void maxBackgroundCompactions() {
     try (final Options opt = new Options()) {
       final int intValue = rand.nextInt();
       opt.setMaxBackgroundCompactions(intValue);
       assertThat(opt.maxBackgroundCompactions()).
+          isEqualTo(intValue);
+    }
+  }
+
+  @Test
+  public void maxSubcompactions() {
+    try (final Options opt = new Options()) {
+      final int intValue = rand.nextInt();
+      opt.setMaxSubcompactions(intValue);
+      assertThat(opt.maxSubcompactions()).
           isEqualTo(intValue);
     }
   }
@@ -505,11 +572,20 @@ public class OptionsTest {
   }
 
   @Test
-  public void allowOsBuffer() {
-    try (final Options opt = new Options()) {
+  public void useDirectReads() {
+    try(final Options opt = new Options()) {
       final boolean boolValue = rand.nextBoolean();
-      opt.setAllowOsBuffer(boolValue);
-      assertThat(opt.allowOsBuffer()).isEqualTo(boolValue);
+      opt.setUseDirectReads(boolValue);
+      assertThat(opt.useDirectReads()).isEqualTo(boolValue);
+    }
+  }
+
+  @Test
+  public void useDirectWrites() {
+    try(final Options opt = new Options()) {
+      final boolean boolValue = rand.nextBoolean();
+      opt.setUseDirectWrites(boolValue);
+      assertThat(opt.useDirectWrites()).isEqualTo(boolValue);
     }
   }
 
@@ -573,6 +649,42 @@ public class OptionsTest {
       final long longValue = rand.nextLong();
       opt.setBytesPerSync(longValue);
       assertThat(opt.bytesPerSync()).isEqualTo(longValue);
+    }
+  }
+
+  @Test
+  public void allowConcurrentMemtableWrite() {
+    try (final Options opt = new Options()) {
+      final boolean boolValue = rand.nextBoolean();
+      opt.setAllowConcurrentMemtableWrite(boolValue);
+      assertThat(opt.allowConcurrentMemtableWrite()).isEqualTo(boolValue);
+    }
+  }
+
+  @Test
+  public void enableWriteThreadAdaptiveYield() {
+    try (final Options opt = new Options()) {
+      final boolean boolValue = rand.nextBoolean();
+      opt.setEnableWriteThreadAdaptiveYield(boolValue);
+      assertThat(opt.enableWriteThreadAdaptiveYield()).isEqualTo(boolValue);
+    }
+  }
+
+  @Test
+  public void writeThreadMaxYieldUsec() {
+    try (final Options opt = new Options()) {
+      final long longValue = rand.nextLong();
+      opt.setWriteThreadMaxYieldUsec(longValue);
+      assertThat(opt.writeThreadMaxYieldUsec()).isEqualTo(longValue);
+    }
+  }
+
+  @Test
+  public void writeThreadSlowYieldUsec() {
+    try (final Options opt = new Options()) {
+      final long longValue = rand.nextLong();
+      opt.setWriteThreadSlowYieldUsec(longValue);
+      assertThat(opt.writeThreadSlowYieldUsec()).isEqualTo(longValue);
     }
   }
 
@@ -694,6 +806,19 @@ public class OptionsTest {
 
       anotherOptions.setRateLimiterConfig(
           new GenericRateLimiterConfig(1000));
+    }
+  }
+
+  @Test
+  public void rateLimiter() {
+    try (final Options options = new Options();
+         final Options anotherOptions = new Options()) {
+      final RateLimiter rateLimiter =
+          new RateLimiter(1000, 100 * 1000, 1);
+      options.setRateLimiter(rateLimiter);
+      // Test with parameter initialization
+      anotherOptions.setRateLimiter(
+          new RateLimiter(1000));
     }
   }
 

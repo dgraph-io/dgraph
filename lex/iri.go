@@ -30,8 +30,8 @@ func LexIRIRef(l *Lexer, styp ItemType) error {
 		return errors.New("Unexpected end of IRI.")
 	}
 	if r != '>' {
-		return errors.New(fmt.Sprintf(
-			"Unexpected character %v while parsing IRI for itemtype: %v", r, styp))
+		return fmt.Errorf(
+			"Unexpected character %q while parsing IRI", r)
 	}
 	l.Ignore() // ignore '>'
 	return nil

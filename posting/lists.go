@@ -397,6 +397,9 @@ func GetOrCreate(key []byte, group uint32) (rlist *List, decr func()) {
 			if slice.Size() == 0 {
 				x.Check(pstore.SetOne(key, dummyPostingList))
 			}
+			if slice != nil {
+				slice.Free() // Remember to free.
+			}
 		}(key)
 	}
 	return lp, lp.decr
