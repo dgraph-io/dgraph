@@ -36,8 +36,9 @@ import (
 )
 
 var (
-	emptyUIDList task.List
-	emptyResult  task.Result
+	emptyUIDList   task.List
+	emptyResult    task.Result
+	ExactTokenizer tok.ExactTokenizer
 )
 
 // ProcessTaskOverNetwork is used to process the query and get the result from
@@ -388,26 +389,19 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 		// the regex matcher.
 		it := pstore.NewIterator()
 		defer it.Close()
-		startKey := tok.ExactTokenizer{}.Prefix(q.Attr)
-		it.Seek(startKey)
-		key := it.Key().Data()
-		pk := x.Parse(key)
-		for it.Valid() && pk.Attr == q.Attr && tok.IsExact(pk.Term) {
+		prefixKey := x.IndexKey(q.Attr, string(ExactTokenizer.Identifier()))
+		for it.Seek(prefixKey); it.ValidForPrefix(prefixKey); it.Next() {
+			key := it.Key().Data()
+			pk := x.Parse(key)
 			x.AssertTrue(pk.IsIndex())
 			x.AssertTrue(pk.Attr == q.Attr)
 			x.AssertTrue(tok.IsExact(pk.Term))
-			term := pk.Term[1:] // skip the first byte.
+			term := pk.Term[1:] // skip the first byte which is tokenizer prefix.
 			if regex.MatchString(term) {
-				// Note: Even is one term in the index passes the matcher, the
-				// uid would be included in the result. (Even though the other
-				// terms don't match the regex)
 				pl, decr := posting.GetOrCreate(key, gid)
 				out.UidMatrix = append(out.UidMatrix, pl.Uids(opts))
 				decr()
 			}
-			it.Next()
-			key = it.Key().Data()
-			pk = x.Parse(key)
 		}
 	}
 

@@ -94,6 +94,12 @@ func (s *state) AddIndex(pred string, tokenizer string) {
 	defer s.Unlock()
 	schema, ok := s.predicate[pred]
 	x.AssertTruef(ok, "schema state not found for %s", pred)
+	// Check for duplicates.
+	for _, tok := range schema.Tokenizer {
+		if tok == tokenizer {
+			return
+		}
+	}
 	schema.Tokenizer = append(schema.Tokenizer, tokenizer)
 }
 
