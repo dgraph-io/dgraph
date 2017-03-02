@@ -152,6 +152,7 @@ func processScalarPair(it *lex.ItemIterator, predicate string, allowIndex bool) 
 func processIndexDirective(it *lex.ItemIterator, predicate string, typ types.TypeID) error {
 	if !it.Next() {
 		// Nothing to read.
+		State().AddIndex(predicate, tok.Default(typ).Name())
 		return nil
 	}
 	next := it.Item()
