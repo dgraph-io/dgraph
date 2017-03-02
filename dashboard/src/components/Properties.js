@@ -45,7 +45,7 @@ class Properties extends Component {
         let props = JSON.parse(this.props.currentNode),
             // Nodes have facets and attrs keys.
             isEdge = Object.keys(props).length === 1,
-            attrs = props["attrs"],
+            attrs = props["attrs"] || {},
             attrPieceArrays = getSubArrays(attrs),
             facets = props["facets"] || {},
             facetsPieceArrays = getSubArrays(facets);

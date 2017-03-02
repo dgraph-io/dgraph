@@ -67,3 +67,9 @@ export function outgoingEdges(nodeId, edgeSet) {
     },
   });
 }
+
+export function isShortestPath(query) {
+  return query.indexOf("shortest") !== -1 &&
+    query.indexOf("to") !== -1 &&
+    query.indexOf("from") !== -1;
+}

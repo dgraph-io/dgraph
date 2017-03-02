@@ -10,7 +10,7 @@ import Stats from "./Stats";
 import PreviousQuery from "./PreviousQuery";
 import Editor from "./Editor";
 import Response from "./Response";
-import { getNodeLabel } from "./Helpers";
+import { getNodeLabel, isShortestPath } from "./Helpers";
 
 import "../assets/css/App.css";
 
@@ -136,7 +136,12 @@ function hasProperties(props: Object): boolean {
   return Object.keys(props).length !== 1;
 }
 
-function processGraph(response: Object, maxNodes: number, treeView: boolean) {
+function processGraph(
+  response: Object,
+  maxNodes: number,
+  treeView: boolean,
+  query: string,
+) {
   let nodesStack: Array<ResponseNode> = [],
     // Contains map of a lable to its shortform thats displayed.
     predLabel: MapOfStrings = {},
@@ -154,7 +159,8 @@ function processGraph(response: Object, maxNodes: number, treeView: boolean) {
       },
     },
     someNodeHasChildren: boolean = false,
-    ignoredChildren: Array<ResponseNode> = [];
+    ignoredChildren: Array<ResponseNode> = [],
+    shortestPath: boolean = isShortestPath(query);
 
   for (var root in response) {
     if (!response.hasOwnProperty(root)) {
@@ -179,10 +185,22 @@ function processGraph(response: Object, maxNodes: number, treeView: boolean) {
         } else {
           ignoredChildren.push(rn);
         }
+
+        if (shortestPath && i - 1 >= 0) {
+          // Fo shortest path, we create edges between the root nodes.
+          edges.push({
+            to: block[i]["_uid_"],
+            from: block[i - 1]["_uid_"],
+            arrows: "to",
+            label: "p",
+            title: "{}",
+          });
+        }
       }
 
-      // Lets put in the root nodes which have any children here.
-      if (!someNodeHasChildren) {
+      // If no node has children or its a shortest path query, then we add root
+      // level nodes to the view.
+      if (!someNodeHasChildren || shortestPath) {
         nodesStack.push.apply(nodesStack, ignoredChildren);
       }
     }
@@ -223,7 +241,7 @@ function processGraph(response: Object, maxNodes: number, treeView: boolean) {
       id = treeView
         ? // For tree view, the id is the join of ids of this node
           // with all its ancestors. That would make it unique.
-          [obj.src.id, obj.node["_uid_"]].join("-")
+          [obj.src.id, obj.node["_uid_"]].filter(val => val).join("-")
         : obj.node["_uid_"];
 
       // We can have a key-val pair, another array or an object here (in case of facets)
@@ -280,13 +298,18 @@ function processGraph(response: Object, maxNodes: number, treeView: boolean) {
     delete nodeAttrs["x"];
 
     let n: Node = {
-      id: id,
       x: x,
       label: getNodeLabel(nodeAttrs),
       title: JSON.stringify(properties),
       group: obj.src.pred,
       color: props.color,
     };
+
+    // For aggregation queries, aggregation result nodes don't have a uid.
+    // We let the library assign a uid to them.
+    if (obj.node["_uid_"] !== undefined) {
+      Object.assign(n, { id: id });
+    }
 
     if (treeView) {
       // For tree view, we push duplicate nodes too.
@@ -501,12 +524,12 @@ class App extends React.Component {
 
     // We call procesGraph with a 5 node limit and calculate the whole dataset in
     // the background.
-    var renderedGraph = processGraph(result, 2, treeView);
+    var renderedGraph = processGraph(result, 2, treeView, this.state.lastQuery);
     setTimeout(
       function() {
         // We process all the nodes and edges in the response in background and
         // later when we do expansion of nodes.
-        let graph = processGraph(result, -1, treeView);
+        let graph = processGraph(result, -1, treeView, that.state.lastQuery);
 
         that.setState({
           plotAxis: graph[2],

@@ -197,7 +197,7 @@ function renderNetwork(props) {
             setTimeout(
                 function() {
                     if (t0 - doubleClickTime > threshold) {
-                        doOnClick.bind(that)(params, allNodeSet, data.edges);
+                        doOnClick.bind(that)(params, data.nodes, data.edges);
                     }
                 },
                 threshold,
@@ -216,7 +216,7 @@ function renderNetwork(props) {
         }
         if (params.node.length > 0) {
             let nodeUid: string = params.node,
-                currentNode = allNodeSet.get(nodeUid);
+                currentNode = data.nodes.get(nodeUid);
 
             that.props.setCurrentNode(currentNode.title);
         }
@@ -248,11 +248,8 @@ function renderNetwork(props) {
     });
 
     function isExpanded(nodeId, edgeSet) {
-        if (outgoingEdges(nodeId, edgeSet).length > 0) {
-            return true;
-        }
-
-        return outgoingEdges(nodeId, allEdgeSet).length === 0;
+        return outgoingEdges(nodeId, edgeSet).length ===
+            outgoingEdges(nodeId, allEdgeSet).length;
     }
 
     var expand = function() {
