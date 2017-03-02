@@ -63,6 +63,7 @@ func init() {
 	SetDefault(types.DateTimeID, "datetime")
 	SetDefault(types.StringID, "term")
 
+	// Check for duplicate prexif bytes.
 	usedIds := make(map[byte]struct{})
 	for _, tok := range tokenizers {
 		tokID := tok.Identifier()
