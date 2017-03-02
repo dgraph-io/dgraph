@@ -17,6 +17,7 @@
 package worker
 
 import (
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -28,6 +29,7 @@ import (
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/task"
+	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
@@ -97,6 +99,7 @@ const (
 	CompareScalarFn
 	GeoFn
 	PasswordFn
+	RegexFn
 	FullTextSearchFn
 	StandardFn = 100
 )
@@ -120,6 +123,8 @@ func parseFuncType(arr []string) (FuncType, string) {
 		return AggregatorFn, f
 	case "checkpwd":
 		return PasswordFn, f
+	case "regexp":
+		return RegexFn, f
 	case "fts_allof", "fts_anyof":
 		return FullTextSearchFn, f
 	default:
@@ -142,6 +147,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 	var ineqValueToken string
 	var n int
 	var threshold int64
+	var regex *regexp.Regexp
 
 	fnType, f := parseFuncType(q.SrcFunc)
 	switch fnType {
@@ -205,6 +211,7 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 	case GeoFn:
 		// For geo functions, we get extra information used for filtering.
 		tokens, geoQuery, err = types.GetGeoTokens(q.SrcFunc)
+		tok.EncodeGeoTokens(tokens)
 		if err != nil {
 			return nil, err
 		}
@@ -228,6 +235,12 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 		fnName := strings.ToLower(q.SrcFunc[0])
 		intersectDest = strings.HasSuffix(fnName, "allof") // allof and fts_allof
 		n = len(tokens)
+
+	case RegexFn:
+		regex, err = regexp.Compile(q.SrcFunc[1])
+		if err != nil {
+			return nil, err
+		}
 
 	case NotFn:
 		n = algo.ListLen(q.Uids)
@@ -368,6 +381,34 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 		}
 		uidw.End()
 		out.UidMatrix = append(out.UidMatrix, uidList)
+	}
+
+	if fnType == RegexFn {
+		// Go through the indexkeys for the predicate and match them with
+		// the regex matcher.
+		it := pstore.NewIterator()
+		defer it.Close()
+		startKey := tok.ExactTokenizer{}.Prefix(q.Attr)
+		it.Seek(startKey)
+		key := it.Key().Data()
+		pk := x.Parse(key)
+		for it.Valid() && pk.Attr == q.Attr && tok.IsExact(pk.Term) {
+			x.AssertTrue(pk.IsIndex())
+			x.AssertTrue(pk.Attr == q.Attr)
+			x.AssertTrue(tok.IsExact(pk.Term))
+			term := pk.Term[1:] // skip the first byte.
+			if regex.MatchString(term) {
+				// Note: Even is one term in the index passes the matcher, the
+				// uid would be included in the result. (Even though the other
+				// terms don't match the regex)
+				pl, decr := posting.GetOrCreate(key, gid)
+				out.UidMatrix = append(out.UidMatrix, pl.Uids(opts))
+				decr()
+			}
+			it.Next()
+			key = it.Key().Data()
+			pk = x.Parse(key)
+		}
 	}
 
 	// aggregate on the collection out.Values[]
