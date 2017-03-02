@@ -117,6 +117,7 @@ func TestBackup(t *testing.T) {
 	dir, ps := initTestBackup(t, "scalar name:string @index")
 	defer os.RemoveAll(dir)
 	defer ps.Close()
+	defer posting.Stop()
 	// Remove already existing backup folders is any.
 	bdir, err := ioutil.TempDir("", "backup")
 	require.NoError(t, err)

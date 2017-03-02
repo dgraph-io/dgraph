@@ -26,6 +26,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/x"
 
@@ -107,4 +108,6 @@ func BlockingStop() {
 	if err := syncAllMarks(ctx); err != nil {
 		x.Printf("Error in sync watermarks : %s", err.Error())
 	}
+	// sync everything to persistence.
+	posting.Stop()
 }

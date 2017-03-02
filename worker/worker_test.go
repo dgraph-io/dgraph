@@ -118,6 +118,7 @@ func TestProcessTask(t *testing.T) {
 	dir, ps := initTest(t, `scalar friend:string @index`)
 	defer os.RemoveAll(dir)
 	defer ps.Close()
+	defer posting.Stop()
 
 	query := newQuery("neighbour", []uint64{10, 11, 12}, nil)
 	r, err := processTask(query, 0)
@@ -147,6 +148,7 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 	dir, ps := initTest(t, `scalar friend:string @index`)
 	defer os.RemoveAll(dir)
 	defer ps.Close()
+	defer posting.Stop()
 
 	query := newQuery("friend", nil, []string{"anyof", "hey photon"})
 	r, err := processTask(query, 0)
@@ -233,6 +235,7 @@ func TestProcessTaskIndex(t *testing.T) {
 	dir, ps := initTest(t, `scalar friend:string @index`)
 	defer os.RemoveAll(dir)
 	defer ps.Close()
+	defer posting.Stop()
 
 	query := newQuery("friend", nil, []string{"anyof", "hey photon"})
 	r, err := processTask(query, 0)

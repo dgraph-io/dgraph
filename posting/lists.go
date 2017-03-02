@@ -217,11 +217,45 @@ func periodicCommit() {
 	// pending is used to ensure that we only have up to 15 goroutines doing gentle commits.
 	pending := make(chan struct{}, 15)
 	dsize := 0 // needed for better reporting.
+
+	// dirtyLoop makes sure that all entries are on syncCh.
+	dirtyLoop := func() {
+		// Do aggressive commit, which would delete all the PLs from memory.
+		// Acquire lock, so no new posting lists are given out.
+		stopTheWorld.Lock()
+		defer stopTheWorld.Unlock()
+
+		// Flush out the dirtyChan after acquiring lock. This allow posting lists which
+		// are currently being processed to not get stuck on dirtyChan, which won't be
+		// processed until aggressive evict finishes.
+		dirtyChanEmpty := false
+		for !dirtyChanEmpty {
+			select {
+			case <-dirtyChan:
+				// pass
+			default:
+				dirtyChanEmpty = true
+			}
+		}
+		aggressivelyEvict()
+		for k := range dirtyMap {
+			delete(dirtyMap, k)
+		}
+	}
+
 	for {
 		select {
-		case key := <-dirtyChan:
+		case key, ok := <-dirtyChan:
+			if !ok {
+				dirtyLoop()
+				close(syncCh)
+				return
+			}
 			dirtyMap[key] = struct{}{}
-
+		case <-stop:
+			dirtyLoop()
+			close(syncCh)
+			return
 		case <-ticker.C:
 			if len(dirtyMap) != dsize {
 				dsize = len(dirtyMap)
@@ -233,27 +267,7 @@ func periodicCommit() {
 				gentleCommit(dirtyMap, pending)
 				break
 			}
-
-			// Do aggressive commit, which would delete all the PLs from memory.
-			// Acquire lock, so no new posting lists are given out.
-			stopTheWorld.Lock()
-		DIRTYLOOP:
-			// Flush out the dirtyChan after acquiring lock. This allow posting lists which
-			// are currently being processed to not get stuck on dirtyChan, which won't be
-			// processed until aggressive evict finishes.
-			for {
-				select {
-				case <-dirtyChan:
-					// pass
-				default:
-					break DIRTYLOOP
-				}
-			}
-			aggressivelyEvict()
-			for k := range dirtyMap {
-				delete(dirtyMap, k)
-			}
-			stopTheWorld.Unlock()
+			dirtyLoop()
 		}
 	}
 }
@@ -321,6 +335,13 @@ var (
 	syncCh       chan syncEntry
 	dirtyChan    chan uint64 // All dirty posting list keys are pushed here.
 	marks        *syncMarks
+
+	// stopping strategy: send signal on "stop" to periodicCommit go-routine
+	// that causes to flush all dirty mutations to "syncCh".
+	// close "syncCh" that is received by batchSync go-routine
+	// which then closes "done" to signal that work is done.
+	stop chan struct{} // to send the stop signal to periodCommit.
+	done chan struct{} // to check whether syncing is done.
 )
 
 // Init initializes the posting lists package, the in memory and dirty list hash.
@@ -331,9 +352,23 @@ func Init(ps *store.Store) {
 	dirtyChan = make(chan uint64, 10000)
 	fmt.Println("Starting commit routine.")
 	syncCh = make(chan syncEntry, 10000)
+	stop = make(chan struct{})
+	done = make(chan struct{})
 
 	go periodicCommit()
 	go batchSync()
+}
+
+// Stop stops listening for any mutations.
+// So, it should be called only after all current mutations
+// have been placed on dirtyChan
+func Stop() {
+	select {
+	case stop <- struct{}{}:
+	case <-done:
+		return
+	}
+	<-done
 }
 
 func getFromMap(key uint64) *List {
@@ -467,32 +502,41 @@ func batchSync() {
 	b := pstore.NewWriteBatch()
 	defer b.Destroy()
 
+	syncEntries := func() {
+		if len(entries) > 0 {
+			x.AssertTrue(b != nil)
+			loop++
+			fmt.Printf("[%4d] Writing batch of size: %v\n", loop, len(entries))
+			for _, e := range entries {
+				b.Put(e.key, e.val)
+			}
+			x.Checkf(pstore.WriteBatch(b), "Error while writing to RocksDB.")
+			b.Clear()
+
+			for _, e := range entries {
+				e.sw.Done()
+				if e.water != nil {
+					e.water.Ch <- x.Mark{Indices: e.pending, Done: true}
+				}
+			}
+			entries = entries[:0]
+		}
+	}
+
 	for {
 		select {
-		case e := <-syncCh:
+		case e, ok := <-syncCh:
+			if !ok {
+				syncEntries()
+				close(done) // we are done with syncing.
+				return
+			}
 			entries = append(entries, e)
 
 		default:
 			// default is executed if no other case is ready.
 			start := time.Now()
-			if len(entries) > 0 {
-				x.AssertTrue(b != nil)
-				loop++
-				fmt.Printf("[%4d] Writing batch of size: %v\n", loop, len(entries))
-				for _, e := range entries {
-					b.Put(e.key, e.val)
-				}
-				x.Checkf(pstore.WriteBatch(b), "Error while writing to RocksDB.")
-				b.Clear()
-
-				for _, e := range entries {
-					e.sw.Done()
-					if e.water != nil {
-						e.water.Ch <- x.Mark{Indices: e.pending, Done: true}
-					}
-				}
-				entries = entries[:0]
-			}
+			syncEntries()
 			// Add a sleep clause to avoid a busy wait loop if there's no input to commitCh.
 			sleepFor := 10*time.Millisecond - time.Since(start)
 			time.Sleep(sleepFor)
