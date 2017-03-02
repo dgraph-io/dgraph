@@ -204,10 +204,12 @@ func TestRebuildIndex(t *testing.T) {
 		require.NoError(t, pl.Unmarshal(it.Value().Data()))
 		idxVals = append(idxVals, pl)
 	}
-	require.Len(t, idxKeys, 2)
-	require.Len(t, idxVals, 2)
+	// TODO(tzdybal) - temporary changes for FTS
+	require.Len(t, idxKeys, 3)
+	require.Len(t, idxVals, 3)
 	require.EqualValues(t, x.IndexKey("name", "david"), idxKeys[0])
-	require.EqualValues(t, x.IndexKey("name", "michonne"), idxKeys[1])
+	require.EqualValues(t, x.IndexKey("name", "michonn"), idxKeys[1])
+	require.EqualValues(t, x.IndexKey("name", "michonne"), idxKeys[2])
 	require.Len(t, idxVals[0].Postings, 1)
 	require.Len(t, idxVals[1].Postings, 1)
 	require.EqualValues(t, idxVals[0].Postings[0].Uid, 20)

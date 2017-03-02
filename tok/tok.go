@@ -23,6 +23,7 @@ import (
 
 	"github.com/blevesearch/bleve/analysis"
 	"github.com/blevesearch/bleve/analysis/token/lowercase"
+	"github.com/blevesearch/bleve/analysis/token/porter"
 	"github.com/blevesearch/bleve/analysis/token/unicodenorm"
 	"github.com/blevesearch/bleve/analysis/tokenizer/unicode"
 	geom "github.com/twpayne/go-geom"
@@ -56,6 +57,7 @@ func init() {
 	RegisterTokenizer(DateTimeTokenizer{})
 	RegisterTokenizer(TermTokenizer{})
 	RegisterTokenizer(ExactTokenizer{})
+	RegisterTokenizer(FullTextTokenizer{})
 	SetDefault(types.GeoID, "geo")
 	SetDefault(types.Int32ID, "int")
 	SetDefault(types.FloatID, "float")
@@ -171,6 +173,33 @@ func (t ExactTokenizer) Type() types.TypeID { return types.StringID }
 func (t ExactTokenizer) Tokens(sv types.Val) ([]string, error) {
 	words := strings.Fields(sv.Value.(string))
 	return []string{strings.Join(words, " ")}, nil
+}
+
+type FullTextTokenizer struct{}
+
+func (t FullTextTokenizer) Name() string       { return "fulltext" }
+func (t FullTextTokenizer) Type() types.TypeID { return types.StringID }
+func (t FullTextTokenizer) Tokens(sv types.Val) ([]string, error) {
+	tokenizer := unicode.NewUnicodeTokenizer()
+	toLowerFilter := lowercase.NewLowerCaseFilter()
+	normalizeFilter, err := unicodenorm.NewUnicodeNormalizeFilter("nfkc")
+	if err != nil {
+		return nil, err
+	}
+	porterFilter := porter.NewPorterStemmer()
+
+	analyzer := analysis.Analyzer{
+		Tokenizer: tokenizer,
+		TokenFilters: []analysis.TokenFilter{
+			toLowerFilter,
+			normalizeFilter,
+			porterFilter,
+		},
+	}
+
+	tokenStream := analyzer.Analyze([]byte(sv.Value.(string)))
+
+	return extractTerms(tokenStream), nil
 }
 
 func extractTerms(tokenStream analysis.TokenStream) []string {

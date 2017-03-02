@@ -21,6 +21,12 @@
 			"revisionTime": "2017-02-24T21:36:31Z"
 		},
 		{
+			"checksumSHA1": "QOw3ypU4VTmFT8XYS/52P3RILZw=",
+			"path": "github.com/blevesearch/bleve/analysis/token/porter",
+			"revision": "a7ebb8480579777c6cd1c4750d2e6b5ff2b49bdd",
+			"revisionTime": "2017-02-24T21:36:31Z"
+		},
+		{
 			"checksumSHA1": "rHPnW85/nLMuW8PICbcMX4O8Xg8=",
 			"path": "github.com/blevesearch/bleve/analysis/token/unicodenorm",
 			"revision": "a7ebb8480579777c6cd1c4750d2e6b5ff2b49bdd",
@@ -33,10 +39,58 @@
 			"revisionTime": "2017-02-24T21:36:31Z"
 		},
 		{
+			"checksumSHA1": "sHiAGWdgVs0tX8CSVhS9Lyu+Coo=",
+			"path": "github.com/blevesearch/bleve/document",
+			"revision": "a7ebb8480579777c6cd1c4750d2e6b5ff2b49bdd",
+			"revisionTime": "2017-02-24T21:36:31Z"
+		},
+		{
+			"checksumSHA1": "kCeM1Kt3udQNNWcIdjmIKBGf2Mc=",
+			"path": "github.com/blevesearch/bleve/index",
+			"revision": "a7ebb8480579777c6cd1c4750d2e6b5ff2b49bdd",
+			"revisionTime": "2017-02-24T21:36:31Z"
+		},
+		{
+			"checksumSHA1": "3ttI5qH9k/gOBaW8FJFVmOh5oIA=",
+			"path": "github.com/blevesearch/bleve/index/store",
+			"revision": "a7ebb8480579777c6cd1c4750d2e6b5ff2b49bdd",
+			"revisionTime": "2017-02-24T21:36:31Z"
+		},
+		{
+			"checksumSHA1": "FfBcpmvzvh14FWXCyRF3a3HKXZs=",
+			"path": "github.com/blevesearch/bleve/numeric",
+			"revision": "a7ebb8480579777c6cd1c4750d2e6b5ff2b49bdd",
+			"revisionTime": "2017-02-24T21:36:31Z"
+		},
+		{
 			"checksumSHA1": "Qj1wH6TzvIl4OAiPQaFDpkWvwLM=",
 			"path": "github.com/blevesearch/bleve/registry",
 			"revision": "a7ebb8480579777c6cd1c4750d2e6b5ff2b49bdd",
 			"revisionTime": "2017-02-24T21:36:31Z"
+		},
+		{
+			"checksumSHA1": "lFalwozuY6WJaqYLU6s26nRNNYc=",
+			"path": "github.com/blevesearch/bleve/search",
+			"revision": "a7ebb8480579777c6cd1c4750d2e6b5ff2b49bdd",
+			"revisionTime": "2017-02-24T21:36:31Z"
+		},
+		{
+			"checksumSHA1": "J/bdoPp+OZ6vSqsXF10484C7asc=",
+			"path": "github.com/blevesearch/bleve/search/highlight",
+			"revision": "a7ebb8480579777c6cd1c4750d2e6b5ff2b49bdd",
+			"revisionTime": "2017-02-24T21:36:31Z"
+		},
+		{
+			"checksumSHA1": "F6iBQThfd04TIlxT49zaPRGvlqE=",
+			"path": "github.com/blevesearch/go-porterstemmer",
+			"revision": "23a2c8e5cf1f380f27722c6d2ae8896431dc7d0e",
+			"revisionTime": "2014-12-30T01:30:33Z"
+		},
+		{
+			"checksumSHA1": "mgj+zuxi8AgQsRmBY8LR2ys4gaM=",
+			"path": "github.com/blevesearch/segment",
+			"revision": "762005e7a34fd909a84586299f1dd457371d36ee",
+			"revisionTime": "2016-09-15T18:50:41Z"
 		},
 		{
 			"checksumSHA1": "MtpYxrtNS/B3gvcV2bm/irGJsDo=",

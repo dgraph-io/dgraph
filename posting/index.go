@@ -27,6 +27,7 @@ import (
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/task"
+	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -59,7 +60,12 @@ func IndexTokens(attr string, src types.Val) ([]string, error) {
 		return nil, err
 	}
 	// Schema will know the mapping from attr to tokenizer.
-	return schema.State().Tokenizer(attr).Tokens(sv)
+	tokens, err := schema.State().Tokenizer(attr).Tokens(sv)
+	if schemaType == types.StringID {
+		ftTokens, _ := tok.GetTokenizer("fulltext").Tokens(sv)
+		tokens = append(tokens, ftTokens...)
+	}
+	return tokens, err
 }
 
 // addIndexMutations adds mutation(s) for a single term, to maintain index.

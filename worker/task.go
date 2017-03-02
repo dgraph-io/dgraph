@@ -97,6 +97,7 @@ const (
 	CompareScalarFn
 	GeoFn
 	PasswordFn
+	FullTextSearchFn
 	StandardFn = 100
 )
 
@@ -119,6 +120,8 @@ func parseFuncType(arr []string) (FuncType, string) {
 		return AggregatorFn, f
 	case "checkpwd":
 		return PasswordFn, f
+	case "fts_allof", "fts_anyof":
+		return FullTextSearchFn, f
 	default:
 		if types.IsGeoFunc(f) {
 			return GeoFn, f
@@ -215,14 +218,15 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 		}
 		n = algo.ListLen(q.Uids)
 
-	case StandardFn:
+	case StandardFn, FullTextSearchFn:
 		// srcfunc 0th val is func name and and [1:] are args.
 		// we tokenize the arguments of the query.
-		tokens, err = getTokens(q.SrcFunc[1:])
+		tokens, err = getStringTokens(q.SrcFunc[1:], fnType)
 		if err != nil {
 			return nil, err
 		}
-		intersectDest = (strings.ToLower(q.SrcFunc[0]) == "allof")
+		fnName := strings.ToLower(q.SrcFunc[0])
+		intersectDest = strings.HasSuffix(fnName, "allof") // allof and fts_allof
 		n = len(tokens)
 
 	case NotFn:

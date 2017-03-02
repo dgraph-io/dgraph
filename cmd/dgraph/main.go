@@ -645,7 +645,7 @@ func keywordHandler(w http.ResponseWriter, r *http.Request) {
 	kws := keywords{Keywords: kw}
 
 	predefined := []string{"id", "_uid_", "after", "first", "offset", "count",
-		"@filter", "func", "anyof", "allof", "leq", "geq", "or", "and",
+		"@filter", "func", "anyof", "allof", "fts_anyof", "fts_allof", "leq", "geq", "or", "and",
 		"orderasc", "orderdesc", "near", "within", "contains", "intersects"}
 
 	for _, w := range predefined {
