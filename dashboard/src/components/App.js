@@ -10,7 +10,7 @@ import Stats from "./Stats";
 import PreviousQuery from "./PreviousQuery";
 import Editor from "./Editor";
 import Response from "./Response";
-import { getNodeLabel, isShortestPath } from "./Helpers";
+import { getNodeLabel, isShortestPath, aggregationPrefix } from "./Helpers";
 
 import "../assets/css/App.css";
 
@@ -292,8 +292,11 @@ function processGraph(
       continue;
     }
 
-    let props = getGroupProperties(obj.src.pred, predLabel, groups);
     let nodeAttrs = properties["attrs"];
+    let aggrTerm = aggregationPrefix(nodeAttrs);
+    let name = aggrTerm !== "" ? aggrTerm : obj.src.pred;
+
+    let props = getGroupProperties(name, predLabel, groups);
     let x = nodeAttrs["x"];
     delete nodeAttrs["x"];
 
@@ -301,8 +304,8 @@ function processGraph(
       x: x,
       label: getNodeLabel(nodeAttrs),
       title: JSON.stringify(properties),
-      group: obj.src.pred,
       color: props.color,
+      group: obj.src.pred,
     };
 
     // For aggregation queries, aggregation result nodes don't have a uid.
