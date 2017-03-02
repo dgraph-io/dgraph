@@ -4,7 +4,7 @@ scalar (
   name: string @index(exact)
   address: string @index(term)
   age: int
-	id: id @index(exact, term)
+  id: id @index(exact, term)
 )
 
 type  Person {
