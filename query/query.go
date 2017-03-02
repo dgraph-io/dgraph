@@ -228,9 +228,6 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 	facetsNode := dst.New("@facets")
 	// We go through all predicate children of the subgraph.
 	for _, pc := range sg.Children {
-		if dst.Error() != nil || parent.Error() != nil || facetsNode.Error() != nil {
-			break
-		}
 		idxi, idxj := algo.IndexOf(pc.SrcUIDs, uid)
 		if idxi < 0 {
 			continue
@@ -244,13 +241,17 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 		}
 		if !uidAlreadySet && (sg.Params.GetUID || sg.Params.isDebug) {
 			uidAlreadySet = true
-			dst.SetUID(uid)
+			if err := dst.SetUID(uid); err != nil {
+				return err
+			}
 		}
 		if len(pc.counts) > 0 {
 			c := types.ValueForType(types.Int32ID)
 			c.Value = int32(pc.counts[idx])
 			uc := dst.New(pc.Attr)
-			uc.AddValue("count", c)
+			if err := uc.AddValue("count", c); err != nil {
+				return err
+			}
 			dst.AddListChild(pc.Attr, uc)
 		} else if len(pc.SrcFunc) > 0 && isAggregatorFn(pc.SrcFunc[0]) {
 			if idx > 0 { // aggregator will put value at index 0; place once
@@ -264,13 +265,17 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 			if err != nil && err != ErrEmptyVal {
 				return err
 			}
-			uc.AddValue(name, sv)
+			if err = uc.AddValue(name, sv); err != nil {
+				return err
+			}
 			parent.AddListChild(sg.Attr, uc)
 		} else if len(pc.SrcFunc) > 0 && pc.SrcFunc[0] == "checkpwd" {
 			c := types.ValueForType(types.BoolID)
 			c.Value = task.ToBool(pc.values[idx])
 			uc := dst.New(pc.Attr)
-			uc.AddValue("checkpwd", c)
+			if err := uc.AddValue("checkpwd", c); err != nil {
+				return err
+			}
 			dst.AddListChild(pc.Attr, uc)
 		} else if algo.ListLen(ul) > 0 || len(pc.Children) > 0 {
 			// We create as many predicate entity children as the length of uids for
@@ -300,20 +305,25 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 					fs := fcsList[childIdx]
 					fc := dst.New(fieldName)
 					for _, f := range fs.Facets {
-						fc.AddValue(f.Key, types.ValFor(f))
+						err := fc.AddValue(f.Key, types.ValFor(f))
+						if err != nil {
+							return err
+						}
 					}
 					if !fc.IsEmpty() {
 						fcParent := dst.New("_")
-						fcParent.AddMapChild("_", fc, false)
-						uc.AddMapChild("@facets", fcParent, true)
-					} else if fc.Error() != nil {
-						return fc.Error()
+						err := fcParent.AddMapChild("_", fc, false)
+						if err == nil {
+							err = uc.AddMapChild("@facets", fcParent,
+								true)
+						}
+						if err != nil {
+							return err
+						}
 					}
 				}
 				if !uc.IsEmpty() {
 					dst.AddListChild(fieldName, uc)
-				} else if uc.Error() != nil {
-					return uc.Error()
 				}
 			}
 		} else {
@@ -330,12 +340,15 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 				fc := dst.New(fieldName)
 				// in case of Value we have only one Facets
 				for _, f := range pc.facetsMatrix[idx].FacetsList[0].Facets {
-					fc.AddValue(f.Key, types.ValFor(f))
+					if err := fc.AddValue(f.Key, types.ValFor(f)); err != nil {
+						return err
+					}
 				}
 				if !fc.IsEmpty() {
-					facetsNode.AddMapChild(fieldName, fc, false)
-				} else if fc.Error() != nil {
-					return fc.Error()
+					err := facetsNode.AddMapChild(fieldName, fc, false)
+					if err != nil {
+						return err
+					}
 				}
 			}
 
@@ -348,7 +361,9 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 			} else if pc.Attr == "_uid_" {
 				if !uidAlreadySet {
 					uidAlreadySet = true
-					dst.SetUID(uid)
+					if err := dst.SetUID(uid); err != nil {
+						return err
+					}
 				}
 			} else {
 				// if conversion not possible, we ignore it in the result.
@@ -363,29 +378,28 @@ func (sg *SubGraph) preTraverse(uid uint64, dst, parent outputNode) error {
 					sv.Value = ""
 				}
 				if !pc.Params.Normalize {
-					dst.AddValue(fieldName, sv)
+					if err := dst.AddValue(fieldName, sv); err != nil {
+						return err
+					}
 					continue
 				}
 				// If the query had the normalize directive, then we only add nodes
 				// with an Alias.
 				if pc.Params.Alias != "" {
-					dst.AddValue(fieldName, sv)
+					if err := dst.AddValue(fieldName, sv); err != nil {
+						return err
+					}
 				}
 			}
 		}
 	}
 
 	if !facetsNode.IsEmpty() {
-		dst.AddMapChild("@facets", facetsNode, false)
+		if err := dst.AddMapChild("@facets", facetsNode, false); err != nil {
+			return err
+		}
 	}
-	err := dst.Error()
-	if err == nil {
-		err = parent.Error()
-	}
-	if err == nil {
-		err = facetsNode.Error()
-	}
-	return err
+	return nil
 
 }
 
