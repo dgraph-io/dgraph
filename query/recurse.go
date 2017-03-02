@@ -16,11 +16,12 @@ func (start *SubGraph) expandRecurse(ctx context.Context,
 	var exec []*SubGraph
 	var err error
 
-	// Process the root first.
 	rrch := make(chan error, len(exec))
 	startChildren := make([]*SubGraph, len(start.Children))
 	copy(startChildren, start.Children)
 	start.Children = []*SubGraph{}
+
+	// Process the root first.
 	go ProcessGraph(ctx, start, nil, rrch)
 	select {
 	case err = <-rrch:
@@ -35,7 +36,7 @@ func (start *SubGraph) expandRecurse(ctx context.Context,
 		return
 	}
 
-	// Prepare the children.
+	// Prepare the children for execution.
 	for _, child := range startChildren {
 		temp := new(SubGraph)
 		*temp = *child
@@ -44,6 +45,7 @@ func (start *SubGraph) expandRecurse(ctx context.Context,
 		exec = append(exec, temp)
 		start.Children = append(start.Children, temp)
 	}
+
 	dummy := &SubGraph{}
 	for {
 		over := <-next
@@ -72,8 +74,7 @@ func (start *SubGraph) expandRecurse(ctx context.Context,
 		}
 		for _, sg := range exec {
 			it := algo.NewListIterator(sg.SrcUIDs)
-			mIdx := -1
-			for ; it.Valid(); it.Next() { // idx, fromUID := range sg.SrcUIDs.Uids {
+			for mIdx := -1; it.Valid(); it.Next() {
 				mIdx++
 				fromUID := it.Val()
 				if l := algo.ListLen(sg.uidMatrix[mIdx]); l > 0 {
@@ -98,14 +99,15 @@ func (start *SubGraph) expandRecurse(ctx context.Context,
 			for _, child := range startChildren {
 				temp := new(SubGraph)
 				*temp = *child
-				temp.SrcUIDs = sg.DestUIDs
 				temp.Children = []*SubGraph{}
+				temp.SrcUIDs = sg.DestUIDs
 				// Remove those nodes which we have already traversed. As this cannot be
 				// in the path again.
 				algo.ApplyFilter(temp.SrcUIDs, func(uid uint64, i int) bool {
 					_, ok := reachMap[uid]
 					return !ok
 				})
+				// If no UIDs are left after filtering, Ignore the node.
 				if algo.ListLen(temp.SrcUIDs) == 0 {
 					continue
 				}
@@ -133,6 +135,8 @@ func Recurse(ctx context.Context, sg *SubGraph) error {
 	go sg.expandRecurse(ctx, next, expandErr)
 	depth := sg.Params.RecurseDepth
 	if depth == 0 {
+		// If no depth is specified, expand till we reach all leaf nodes
+		// or we see reach too many nodes.
 		depth = math.MaxUint64
 	}
 

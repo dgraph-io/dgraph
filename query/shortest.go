@@ -18,7 +18,7 @@ type Item struct {
 }
 
 var ErrStop = x.Errorf("STOP")
-var ErrTooBig = x.Errorf("Query exceeded memory limit")
+var ErrTooBig = x.Errorf("Query exceeded memory limit. Please modify the query")
 var ErrFacet = x.Errorf("Skip the edge")
 
 type priorityQueue []*Item
