@@ -24,8 +24,31 @@ export function timeout(ms, promise) {
   });
 }
 
+export function aggregationPrefix(properties) {
+  let aggTerms = ["count", "max(", "min(", "sum("];
+  for (let k in properties) {
+    for (let term of aggTerms) {
+      if (k.startsWith(term)) {
+        if (term === "count") {
+          return term;
+        }
+        return term.substr(0, term.length - 1);
+      }
+    }
+  }
+  return "";
+}
+
 export function getNodeLabel(properties: Object): string {
   var label = "";
+
+  let keys = Object.keys(properties);
+  if (keys.length === 1) {
+    label = aggregationPrefix(properties);
+    if (label !== "") {
+      return label;
+    }
+  }
   if (properties["name"] !== undefined) {
     label = properties["name"];
   } else if (properties["name.en"] !== undefined) {
@@ -66,4 +89,10 @@ export function outgoingEdges(nodeId, edgeSet) {
       return edge.from === nodeId;
     },
   });
+}
+
+export function isShortestPath(query) {
+  return query.indexOf("shortest") !== -1 &&
+    query.indexOf("to") !== -1 &&
+    query.indexOf("from") !== -1;
 }

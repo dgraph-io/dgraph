@@ -16,7 +16,7 @@ function childNodes(edges) {
 var doubleClickTime = 0;
 var threshold = 200;
 
-function doOnClick(params, allNodeSet) {
+function doOnClick(params, allNodeSet, edgeSet) {
     if (params.nodes.length > 0) {
         var nodeUid = params.nodes[0], currentNode = allNodeSet.get(nodeUid);
 
@@ -24,6 +24,12 @@ function doOnClick(params, allNodeSet) {
             selectedNode: true,
         });
         this.props.setCurrentNode(currentNode.title);
+    } else if (params.edges.length > 0) {
+        var edgeUid = params.edges[0], currentEdge = edgeSet.get(edgeUid);
+        this.setState({
+            selectedNode: true,
+        });
+        this.props.setCurrentNode(currentEdge.title);
     } else {
         this.setState({
             selectedNode: false,
@@ -109,21 +115,22 @@ function renderNetwork(props) {
     let allNodeSet = new vis.DataSet(props.allNodes);
     let allEdgeSet = new vis.DataSet(props.allEdges), that = this;
 
-    function multiLevelExpand(adjNodes, adjEdges) {
-        let nodes = adjNodes.slice();
-        // We expand till we there are no more child nodes or the
-        // number of nodes to be added is > 50.
-        while (nodes.length < 50 && adjNodes.length !== 0) {
-            let nodeId = adjNodes.pop();
+    function multiLevelExpand(nodeId) {
+        let nodes = [nodeId], nodeStack = [nodeId], adjEdges = [];
+        while (nodeStack.length !== 0) {
+            let nodeId = nodeStack.pop();
 
             let outgoing = outgoingEdges(nodeId, allEdgeSet),
                 adjNodeIds = outgoing.map(function(edge) {
                     return edge.to;
                 });
 
-            adjNodes = adjNodes.concat(adjNodeIds);
+            nodeStack = nodeStack.concat(adjNodeIds);
             nodes = nodes.concat(adjNodeIds);
             adjEdges = adjEdges.concat(outgoing);
+            if (adjNodeIds.length > 3) {
+                break;
+            }
         }
         data.nodes.update(allNodeSet.get(nodes));
         data.edges.update(adjEdges);
@@ -180,7 +187,7 @@ function renderNetwork(props) {
                 data.edges.remove(allEdges);
                 that.props.updateExpanded(false);
             } else {
-                multiLevelExpand(adjacentNodeIds, allOutgoingEdges);
+                multiLevelExpand(clickedNodeUid);
             }
         }
     });
@@ -191,7 +198,7 @@ function renderNetwork(props) {
             setTimeout(
                 function() {
                     if (t0 - doubleClickTime > threshold) {
-                        doOnClick.bind(that)(params, allNodeSet);
+                        doOnClick.bind(that)(params, data.nodes, data.edges);
                     }
                 },
                 threshold,
@@ -208,13 +215,23 @@ function renderNetwork(props) {
         if (that.state.selectedNode) {
             return;
         }
-        if (params.node === undefined) {
+        if (params.node.length > 0) {
+            let nodeUid: string = params.node,
+                currentNode = data.nodes.get(nodeUid);
+
+            that.props.setCurrentNode(currentNode.title);
+        }
+    });
+
+    network.on("hoverEdge", function(params) {
+        // Only change properties if no node is selected.
+        if (that.state.selectedNode) {
             return;
         }
-        let nodeUid: string = params.node,
-            currentNode = allNodeSet.get(nodeUid);
-
-        that.props.setCurrentNode(currentNode.title);
+        if (params.edge.length > 0) {
+            let edgeUid = params.edge, currentEdge = data.edges.get(edgeUid);
+            that.props.setCurrentNode(currentEdge.title);
+        }
     });
 
     network.on("dragEnd", function(params) {
@@ -232,11 +249,8 @@ function renderNetwork(props) {
     });
 
     function isExpanded(nodeId, edgeSet) {
-        if (outgoingEdges(nodeId, edgeSet).length > 0) {
-            return true;
-        }
-
-        return outgoingEdges(nodeId, allEdgeSet).length === 0;
+        return outgoingEdges(nodeId, edgeSet).length ===
+            outgoingEdges(nodeId, allEdgeSet).length;
     }
 
     var expand = function() {
@@ -302,7 +316,11 @@ function renderNetwork(props) {
         network.fit();
     };
 
-    this.setState({ expand: expand });
+    var fit = function() {
+        network.fit();
+    };
+
+    this.setState({ expand: expand, fit: fit });
 }
 
 class Graph extends Component {
@@ -312,6 +330,7 @@ class Graph extends Component {
         this.state = {
             selectedNode: false,
             expand: function() {},
+            fit: function() {},
         };
     }
 
@@ -328,7 +347,13 @@ class Graph extends Component {
             { "Graph-hourglass": this.props.resType === "hourglass" },
         );
         return (
-            <div>
+            <div
+                style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    flex: "auto",
+                }}
+            >
                 <div className={this.props.graphHeight}>
                     <div id="graph" className={graphClass}>
                         {this.props.response}
@@ -356,6 +381,9 @@ class Graph extends Component {
     }
 
     componentWillReceiveProps = nextProps => {
+        if (nextProps.graphHeight !== this.props.graphHeight) {
+            this.state.fit();
+        }
         if (
             // TODO - Check how to do a shallow check?
             nextProps.nodes.length === this.props.nodes.length &&
