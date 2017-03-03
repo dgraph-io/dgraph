@@ -115,21 +115,22 @@ function renderNetwork(props) {
     let allNodeSet = new vis.DataSet(props.allNodes);
     let allEdgeSet = new vis.DataSet(props.allEdges), that = this;
 
-    function multiLevelExpand(adjNodes, adjEdges) {
-        let nodes = adjNodes.slice();
-        // We expand till we there are no more child nodes or the
-        // number of nodes to be added is > 50.
-        while (nodes.length < 50 && adjNodes.length !== 0) {
-            let nodeId = adjNodes.pop();
+    function multiLevelExpand(nodeId) {
+        let nodes = [nodeId], nodeStack = [nodeId], adjEdges = [];
+        while (nodeStack.length !== 0) {
+            let nodeId = nodeStack.pop();
 
             let outgoing = outgoingEdges(nodeId, allEdgeSet),
                 adjNodeIds = outgoing.map(function(edge) {
                     return edge.to;
                 });
 
-            adjNodes = adjNodes.concat(adjNodeIds);
+            nodeStack = nodeStack.concat(adjNodeIds);
             nodes = nodes.concat(adjNodeIds);
             adjEdges = adjEdges.concat(outgoing);
+            if (adjNodeIds.length > 3) {
+                break;
+            }
         }
         data.nodes.update(allNodeSet.get(nodes));
         data.edges.update(adjEdges);
@@ -186,7 +187,7 @@ function renderNetwork(props) {
                 data.edges.remove(allEdges);
                 that.props.updateExpanded(false);
             } else {
-                multiLevelExpand(adjacentNodeIds, allOutgoingEdges);
+                multiLevelExpand(clickedNodeUid);
             }
         }
     });
@@ -315,7 +316,11 @@ function renderNetwork(props) {
         network.fit();
     };
 
-    this.setState({ expand: expand });
+    var fit = function() {
+        network.fit();
+    };
+
+    this.setState({ expand: expand, fit: fit });
 }
 
 class Graph extends Component {
@@ -325,6 +330,7 @@ class Graph extends Component {
         this.state = {
             selectedNode: false,
             expand: function() {},
+            fit: function() {},
         };
     }
 
@@ -375,6 +381,9 @@ class Graph extends Component {
     }
 
     componentWillReceiveProps = nextProps => {
+        if (nextProps.graphHeight !== this.props.graphHeight) {
+            this.state.fit();
+        }
         if (
             // TODO - Check how to do a shallow check?
             nextProps.nodes.length === this.props.nodes.length &&
