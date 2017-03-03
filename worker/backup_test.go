@@ -2,7 +2,9 @@ package worker
 
 import (
 	"bufio"
+	"bytes"
 	"compress/gzip"
+	"encoding/binary"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -11,6 +13,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	geom "github.com/twpayne/go-geom"
+	"github.com/twpayne/go-geom/encoding/wkb"
 
 	"github.com/dgraph-io/dgraph/group"
 	"github.com/dgraph-io/dgraph/posting"
@@ -19,6 +23,7 @@ import (
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/store"
 	"github.com/dgraph-io/dgraph/task"
+	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -186,4 +191,96 @@ func TestBackup(t *testing.T) {
 	}
 	// This order will bw presereved due to file naming.
 	require.Equal(t, []int{4, 2}, counts)
+}
+
+func generateBenchValues() []kv {
+	byteInt := make([]byte, 4)
+	binary.LittleEndian.PutUint32(byteInt, 123)
+
+	fac := []*facets.Facet{
+		&facets.Facet{
+			Key:   "facetTest",
+			Value: []byte("testVal"),
+		},
+	}
+
+	geoData, _ := wkb.Marshal(geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{-122.082506, 37.4249518}), binary.LittleEndian)
+
+	// Posting_STRING   Posting_ValType = 0
+	// Posting_BINARY   Posting_ValType = 1
+	// Posting_INT32    Posting_ValType = 2
+	// Posting_FLOAT    Posting_ValType = 3
+	// Posting_BOOL     Posting_ValType = 4
+	// Posting_DATE     Posting_ValType = 5
+	// Posting_DATETIME Posting_ValType = 6
+	// Posting_GEO      Posting_ValType = 7
+	// Posting_UID      Posting_ValType = 8
+	benchItems := []kv{
+		kv{
+			prefix: "testString",
+			list: &types.PostingList{
+				Postings: []*types.Posting{&types.Posting{
+					ValType: types.Posting_STRING,
+					Value:   []byte("手機裡的眼淚"),
+					Uid:     uint64(65454),
+					Facets:  fac,
+				}},
+			},
+		},
+		kv{prefix: "testGeo",
+			list: &types.PostingList{
+				Postings: []*types.Posting{&types.Posting{
+					ValType: types.Posting_GEO,
+					Value:   geoData,
+					Uid:     uint64(65454),
+					Facets:  fac,
+				}},
+			}},
+		kv{prefix: "testPassword",
+			list: &types.PostingList{
+				Postings: []*types.Posting{&types.Posting{
+					ValType: types.Posting_PASSWORD,
+					Value:   []byte("test"),
+					Uid:     uint64(65454),
+					Facets:  fac,
+				}},
+			}},
+		kv{prefix: "testInt",
+			list: &types.PostingList{
+				Postings: []*types.Posting{&types.Posting{
+					ValType: types.Posting_INT32,
+					Value:   byteInt,
+					Uid:     uint64(65454),
+					Facets:  fac,
+				}},
+			}},
+		kv{prefix: "testUid",
+			list: &types.PostingList{
+				Postings: []*types.Posting{&types.Posting{
+					ValType: types.Posting_INT32,
+					Uid:     uint64(65454),
+					Facets:  fac,
+				}},
+			}},
+	}
+
+	return benchItems
+}
+
+func BenchmarkToRDF(b *testing.B) {
+	buf := new(bytes.Buffer)
+	buf.Grow(50000)
+
+	items := generateBenchValues()
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		toRDF(buf, items[0])
+		toRDF(buf, items[1])
+		toRDF(buf, items[2])
+		toRDF(buf, items[3])
+		toRDF(buf, items[4])
+		buf.Reset()
+	}
 }

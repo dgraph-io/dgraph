@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"os"
 	"path"
+	"strconv"
 	"sync"
 	"time"
 
@@ -28,7 +29,8 @@ type kv struct {
 func toRDF(buf *bytes.Buffer, item kv) {
 	pl := item.list
 	for _, p := range pl.Postings {
-		x.Check2(buf.WriteString(item.prefix))
+		buf.WriteString(item.prefix)
+
 		if !bytes.Equal(p.Value, nil) {
 			// Value posting
 			// Convert to appropriate type
@@ -37,35 +39,46 @@ func toRDF(buf *bytes.Buffer, item kv) {
 			src.Value = p.Value
 			str, err := types.Convert(src, types.StringID)
 			x.Check(err)
-			x.Check2(buf.WriteString(fmt.Sprintf("\"%s\"", str.Value)))
-			if types.TypeID(p.ValType) == types.GeoID {
-				x.Check2(buf.WriteString(fmt.Sprintf("^^<geo:geojson> ")))
-			} else if types.TypeID(p.ValType) == types.PasswordID {
-				x.Check2(buf.WriteString(fmt.Sprintf("^^<pwd:%s>", vID.Name())))
-			} else if types.TypeID(p.ValType) != types.BinaryID &&
-				types.TypeID(p.ValType) != types.DefaultID {
-				x.Check2(buf.WriteString(fmt.Sprintf("^^<xs:%s>", vID.Name())))
-			} else if len(p.Lang) > 0 {
-				x.Check2(buf.WriteString(fmt.Sprintf("@%s", p.Lang)))
+			buf.WriteByte('"')
+			buf.WriteString(str.Value.(string))
+			buf.WriteByte('"')
+			if vID == types.GeoID {
+				buf.WriteString("^^<geo:geojson> ")
+			} else if vID == types.PasswordID {
+				buf.WriteString("^^<pwd:")
+				buf.WriteString(vID.Name())
+				buf.WriteByte('>')
+			} else if vID == types.StringID && len(p.Lang) > 0 {
+				buf.WriteByte('@')
+				buf.WriteString(p.Lang)
+			} else if vID != types.BinaryID &&
+				vID != types.DefaultID {
+				buf.WriteString("^^<xs:")
+				buf.WriteString(vID.Name())
+				buf.WriteByte('>')
 			}
 		} else {
-			x.Check2(buf.WriteString(fmt.Sprintf("<%#x>", p.Uid)))
+			buf.WriteString("<0x")
+			buf.WriteString(strconv.FormatUint(p.Uid, 16))
+			buf.WriteByte('>')
 		}
 
 		facets := p.Facets
 		if len(facets) != 0 {
-			x.Check2(buf.WriteString(" ("))
-		}
-		for i, f := range facets {
-			x.Check2(buf.WriteString(fmt.Sprintf("%s=%s", f.Key, string(f.Value))))
-			if i != len(facets)-1 {
-				x.Check2(buf.WriteRune(','))
+			buf.WriteString(" (")
+
+			for i, f := range facets {
+				if i != 0 {
+					buf.WriteByte(',')
+				}
+				buf.WriteString(f.Key)
+				buf.WriteByte('=')
+				buf.WriteString(string(f.Value))
 			}
+
+			buf.WriteByte(')')
 		}
-		if len(facets) != 0 {
-			x.Check2(buf.WriteRune(')'))
-		}
-		x.Check2(buf.WriteString(" .\n"))
+		buf.WriteString(" .\n")
 	}
 }
 
@@ -143,6 +156,8 @@ func backup(gid uint32, bdir string) error {
 	it := pstore.NewIterator()
 	defer it.Close()
 	var lastPred string
+	prefix := new(bytes.Buffer)
+	prefix.Grow(100)
 	for it.SeekToFirst(); it.Valid(); {
 		key := it.Key().Data()
 		pk := x.Parse(key)
@@ -175,13 +190,18 @@ func backup(gid uint32, bdir string) error {
 			continue
 		}
 
-		prefix := fmt.Sprintf("<%#x> <%s> ", uid, pred)
+		prefix.WriteString("<0x")
+		prefix.WriteString(strconv.FormatUint(uid, 16))
+		prefix.WriteString("> <")
+		prefix.WriteString(pred)
+		prefix.WriteString("> ")
 		pl := &types.PostingList{}
 		x.Check(pl.Unmarshal(it.Value().Data()))
 		chkv <- kv{
-			prefix: prefix,
+			prefix: prefix.String(),
 			list:   pl,
 		}
+		prefix.Reset()
 		lastPred = pred
 		it.Next()
 	}
