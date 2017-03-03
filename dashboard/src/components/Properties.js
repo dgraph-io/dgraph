@@ -23,36 +23,49 @@ function getSubArrays(obj) {
     return pieceArrays;
 }
 
+function createRows(pieceArrays, props) {
+    return pieceArrays.map((arr, i) => (
+        <tr key={i}>
+            {arr.map((key, j) => (
+                <td key={j} className="Properties-key-val">
+                    <div className="Properties-key">
+                        {key}:&nbsp;
+                    </div>
+                    <div className="Properties-val">
+                        {String(props[key])}
+                    </div>
+                </td>
+            ))}
+        </tr>
+    ));
+}
+
 class Properties extends Component {
     render() {
         let props = JSON.parse(this.props.currentNode),
-            pieceArrays = getSubArrays(props);
+            // Nodes have facets and attrs keys.
+            isEdge = Object.keys(props).length === 1,
+            attrs = props["attrs"] || {},
+            attrPieceArrays = getSubArrays(attrs),
+            facets = props["facets"] || {},
+            facetsPieceArrays = getSubArrays(facets);
 
         return (
             <div id="properties" style={{ marginTop: "5px" }}>
-                Current Node:
+                {isEdge ? "Edge" : "Node"} Attributes:
                 <table className="Properties" title={this.props.currentNode}>
                     <tbody>
-                        {pieceArrays.map((arr, i) => (
-                            <tr key={i}>
-                                {arr.map((key, j) => (
-                                    <td key={j}>
-                                        <span className="Properties-key">
-                                            {key}
-                                        </span>
-                                        &nbsp;:{" "}
-                                        <span className="Properties-val">
-                                            {props[key]}
-                                        </span>
-                                    </td>
-                                ))}
-                                {arr.length !== 0 && arr.length < 3
-                                    ? [...Array(3 - arr.length)].map((_, i) => {
-                                          return <td key={i} />;
-                                      })
-                                    : []}
-                            </tr>
-                        ))}
+                        {createRows(attrPieceArrays, attrs)}
+                        {Object.keys(facets).length > 0 &&
+                            <tr
+                                style={{
+                                    textAlign: "left",
+                                }}
+                            >
+                                <td>{!isEdge && "Facets"}</td>
+                            </tr>}
+                        {Object.keys(facets).length > 0 &&
+                            createRows(facetsPieceArrays, facets)}
                     </tbody>
                 </table>
             </div>

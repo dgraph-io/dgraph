@@ -464,6 +464,34 @@ func TestUseVarsFilterVarReuse3(t *testing.T) {
 		js)
 }
 
+func TestRecurseQuery(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			recurse(id:0x01) {
+				friend 
+				name
+			}
+		}`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"recurse":[{"name":"Michonne", "friend":[{"name":"Rick Grimes", "friend":[{"name":"Michonne"}]},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea", "friend":[{"name":"Glenn Rhee"}]}]}]}`, js)
+}
+
+func TestRecurseQueryLimitDepth(t *testing.T) {
+	populateGraph(t)
+	query := `
+		{
+			recurse(id:0x01, depth: 2) {
+				friend 
+				name
+			}
+		}`
+	js := processToFastJSON(t, query)
+	require.JSONEq(t,
+		`{"recurse":[{"name":"Michonne", "friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]}]}`, js)
+}
+
 func TestShortestPath_NoPath(t *testing.T) {
 	populateGraph(t)
 	query := `
@@ -2043,8 +2071,6 @@ func TestToProto(t *testing.T) {
 				friend {
 					name
 				}
-				friend {
-				}
 			}
 		}
   `
@@ -3438,8 +3464,6 @@ func TestSchema(t *testing.T) {
 					dob
 					name
 				}
-				friend {
-				}
 			}
 		}
   `
@@ -3783,6 +3807,62 @@ func TestFilterNonIndexedPredicateFail(t *testing.T) {
 					name
 					age
 				}
+			}
+		}
+	`
+	_, err := processToFastJsonReq(t, query)
+	require.Error(t, err)
+}
+
+func TestMultipleSamePredicateInBlockFail(t *testing.T) {
+	populateGraph(t)
+	// name is asked for two times..
+	query := `
+		{
+			me(id:0x01) {
+				name
+				friend {
+					age
+				}
+				name
+			}
+		}
+	`
+	_, err := processToFastJsonReq(t, query)
+	require.Error(t, err)
+}
+
+func TestMultipleSamePredicateInBlockFail2(t *testing.T) {
+	populateGraph(t)
+	// age is asked for two times..
+	query := `
+		{
+			me(id:0x01) {
+				friend {
+					age
+					age
+				}
+				name
+			}
+		}
+	`
+	_, err := processToFastJsonReq(t, query)
+	require.Error(t, err)
+}
+
+func TestMultipleSamePredicateInBlockFail3(t *testing.T) {
+	populateGraph(t)
+	// friend is asked for two times..
+	query := `
+		{
+			me(id:0x01) {
+				friend {
+					age
+				}
+				friend {
+					name
+				}
+				name
 			}
 		}
 	`

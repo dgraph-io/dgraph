@@ -18,7 +18,7 @@ type Item struct {
 }
 
 var ErrStop = x.Errorf("STOP")
-var ErrTooBig = x.Errorf("Query exceeded memory limit")
+var ErrTooBig = x.Errorf("Query exceeded memory limit. Please modify the query")
 var ErrFacet = x.Errorf("Skip the edge")
 
 type priorityQueue []*Item
@@ -101,8 +101,8 @@ func (start *SubGraph) expandOut(ctx context.Context,
 	}
 	dummy := &SubGraph{}
 	for {
-		over := <-next
-		if over {
+		isNext := <-next
+		if !isNext {
 			return
 		}
 		rrch := make(chan error, len(exec))
@@ -158,6 +158,7 @@ func (start *SubGraph) expandOut(ctx context.Context,
 		if numEdges > 10000000 {
 			// If we've seen too many nodes, stop the query.
 			rch <- ErrTooBig
+			return
 		}
 
 		// modify the exec and attach child nodes.
@@ -188,6 +189,7 @@ func (start *SubGraph) expandOut(ctx context.Context,
 
 		if len(out) == 0 {
 			rch <- ErrStop
+			return
 		}
 		rch <- nil
 		exec = out
@@ -262,7 +264,7 @@ func ShortestPath(ctx context.Context, sg *SubGraph) error {
 			// Explore the next level by calling processGraph and add them
 			// to the queue.
 			if !stopExpansion {
-				next <- false
+				next <- true
 			}
 			select {
 			case err = <-expandErr:
@@ -347,6 +349,6 @@ func ShortestPath(ctx context.Context, sg *SubGraph) error {
 	} else {
 		sg.DestUIDs = &task.List{}
 	}
-	next <- true
+	next <- false
 	return nil
 }

@@ -4,13 +4,14 @@ import React from "react";
 
 import screenfull from "screenfull";
 import randomColor from "randomcolor";
+import uuid from "uuid";
 
 import NavBar from "./Navbar";
 import Stats from "./Stats";
 import PreviousQuery from "./PreviousQuery";
 import Editor from "./Editor";
 import Response from "./Response";
-import { getNodeLabel } from "./Helpers";
+import { getNodeLabel, isShortestPath, aggregationPrefix } from "./Helpers";
 
 import "../assets/css/App.css";
 
@@ -58,8 +59,8 @@ var initialRandomColors = [
   "#8dd593",
   "#f6c4e1",
   "#8595e1",
-  "#f79cd4",
   "#f0b98d",
+  "#f79cd4",
   "#bec1d4",
   "#11c638",
   "#b5bbe3",
@@ -136,7 +137,7 @@ function hasProperties(props: Object): boolean {
   return Object.keys(props).length !== 1;
 }
 
-function processGraph(response: Object, maxNodes: number, treeView: boolean) {
+function processGraph(response: Object, treeView: boolean, query: string) {
   let nodesStack: Array<ResponseNode> = [],
     // Contains map of a lable to its shortform thats displayed.
     predLabel: MapOfStrings = {},
@@ -154,7 +155,13 @@ function processGraph(response: Object, maxNodes: number, treeView: boolean) {
       },
     },
     someNodeHasChildren: boolean = false,
-    ignoredChildren: Array<ResponseNode> = [];
+    ignoredChildren: Array<ResponseNode> = [],
+    shortestPath: boolean = isShortestPath(query),
+    // We store the indexes corresponding to what we show at first render here.
+    // That we can only do one traversal.
+    nodesIndex,
+    edgesIndex,
+    level = 0;
 
   for (var root in response) {
     if (!response.hasOwnProperty(root)) {
@@ -179,10 +186,22 @@ function processGraph(response: Object, maxNodes: number, treeView: boolean) {
         } else {
           ignoredChildren.push(rn);
         }
+
+        if (shortestPath && i - 1 >= 0) {
+          // Fo shortest path, we create edges between the root nodes.
+          edges.push({
+            to: block[i]["_uid_"],
+            from: block[i - 1]["_uid_"],
+            arrows: "to",
+            label: "p",
+            title: "{}",
+          });
+        }
       }
 
-      // Lets put in the root nodes which have any children here.
-      if (!someNodeHasChildren) {
+      // If no node has children or its a shortest path query, then we add root
+      // level nodes to the view.
+      if (!someNodeHasChildren || shortestPath) {
         nodesStack.push.apply(nodesStack, ignoredChildren);
       }
     }
@@ -196,46 +215,84 @@ function processGraph(response: Object, maxNodes: number, treeView: boolean) {
     let obj = nodesStack.shift();
     // Check if this is an empty node.
     if (Object.keys(obj.node).length === 0 && obj.src.pred === "empty") {
-      // We break out if we have reached the max node limit.
-      let maxNodesElapsed = maxNodes !== -1 && nodes.length > maxNodes;
-      if (nodesStack.length === 0 || maxNodesElapsed) {
-        break;
-      } else {
-        nodesStack.push(emptyNode);
-        continue;
+      if (level === 0 || level === 1 && nodes.length < 100) {
+        nodesIndex = nodes.length;
+        edgesIndex = edges.length;
       }
+
+      if (nodesStack.length === 0) {
+        break;
+      }
+
+      nodesStack.push(emptyNode);
+      level++;
+      continue;
     }
 
-    let properties: MapOfStrings = {},
+    let properties: MapOfStrings = {
+      attrs: {},
+      facets: {},
+    },
       hasChildNodes: boolean = false,
-      id: string;
+      id: string,
+      edgeAttributes = {
+        facets: {},
+      },
+      uid: string;
+
+    uid = obj.node["_uid_"] === undefined ? uuid() : obj.node["_uid_"];
+    id = treeView
+      ? // For tree view, the id is the join of ids of this node
+        // with all its ancestors. That would make it unique.
+        [obj.src.id, uid].filter(val => val).join("-")
+      : uid;
 
     for (let prop in obj.node) {
       if (!obj.node.hasOwnProperty(prop)) {
         continue;
       }
-      id = treeView
-        ? // For tree view, the id is the join of ids of this node
-          // with all its ancestors. That would make it unique.
-          [obj.src.id, properties["_uid_"]].join("-")
-        : properties["_uid_"];
 
-      // If its just a value, then we store it in properties for this node.
-      if (!Array.isArray(obj.node[prop])) {
-        properties[prop] = obj.node[prop];
-        continue;
-      }
-      hasChildNodes = true;
-      let arr = obj.node[prop], xposition = 1;
-      for (let j = 0; j < arr.length; j++) {
-        arr[j]["x"] = xposition++;
-        nodesStack.push({
-          node: arr[j],
-          src: {
-            pred: prop,
-            id: id,
-          },
-        });
+      // We can have a key-val pair, another array or an object here (in case of facets)
+      let val = obj.node[prop];
+      if (Array.isArray(val)) {
+        hasChildNodes = true;
+        let arr = val, xposition = 1;
+        for (let j = 0; j < arr.length; j++) {
+          arr[j]["x"] = xposition++;
+          nodesStack.push({
+            node: arr[j],
+            src: {
+              pred: prop,
+              id: id,
+            },
+          });
+        }
+      } else if (typeof val === "object") {
+        if (prop === "@facets") {
+          // lets handle @facets between uids here.
+          for (let pred in val) {
+            if (!val.hasOwnProperty(pred)) {
+              continue;
+            }
+
+            // pred could either be _ or other predicates. If its a predicate it could have
+            // multiple k-v pairs.
+            if (pred === "_") {
+              edgeAttributes["facets"] = val["_"];
+            } else {
+              let predFacets = val[pred];
+              for (let f in predFacets) {
+                if (!predFacets.hasOwnProperty(f)) {
+                  continue;
+                }
+
+                properties["facets"][`${pred}[${f}]`] = predFacets[f];
+              }
+            }
+          }
+        }
+      } else {
+        properties["attrs"][prop] = val;
       }
     }
 
@@ -243,25 +300,29 @@ function processGraph(response: Object, maxNodes: number, treeView: boolean) {
       continue;
     }
 
-    let props = getGroupProperties(obj.src.pred, predLabel, groups);
-    let x = properties["x"];
-    delete properties["x"];
+    let nodeAttrs = properties["attrs"];
+    let aggrTerm = aggregationPrefix(nodeAttrs);
+    let name = aggrTerm !== "" ? aggrTerm : obj.src.pred;
+
+    let props = getGroupProperties(name, predLabel, groups);
+    let x = nodeAttrs["x"];
+    delete nodeAttrs["x"];
 
     let n: Node = {
       id: id,
       x: x,
-      label: getNodeLabel(properties),
-      title: JSON.stringify(properties, null, 2),
-      group: obj.src.pred,
+      label: getNodeLabel(nodeAttrs),
+      title: JSON.stringify(properties),
       color: props.color,
+      group: obj.src.pred,
     };
 
     if (treeView) {
       // For tree view, we push duplicate nodes too.
       nodes.push(n);
     } else {
-      if (!uidMap[properties["_uid_"]]) {
-        uidMap[properties["_uid_"]] = true;
+      if (!uidMap[id]) {
+        uidMap[id] = true;
         nodes.push(n);
       }
     }
@@ -269,10 +330,11 @@ function processGraph(response: Object, maxNodes: number, treeView: boolean) {
     if (obj.src.id === "") {
       continue;
     }
+
     var e: Edge = {
       from: obj.src.id,
       to: id,
-      title: obj.src.pred,
+      title: JSON.stringify(edgeAttributes),
       label: props.label,
       color: props.color,
       arrows: "to",
@@ -293,7 +355,7 @@ function processGraph(response: Object, maxNodes: number, treeView: boolean) {
     });
   }
 
-  return [nodes, edges, plotAxis];
+  return [nodes, edges, plotAxis, nodesIndex, edgesIndex];
 }
 
 type QueryTs = {|
@@ -467,26 +529,20 @@ class App extends React.Component {
   renderGraph = (result, treeView) => {
     let startTime = new Date(), that = this;
 
-    // We call procesGraph with a 5 node limit and calculate the whole dataset in
-    // the background.
-    var renderedGraph = processGraph(result, 2, treeView);
-    setTimeout(
-      function() {
-        // We process all the nodes and edges in the response in background and
-        // later when we do expansion of nodes.
-        let graph = processGraph(result, -1, treeView);
-
-        that.setState({
-          plotAxis: graph[2],
-          allNodes: graph[0],
-          allEdges: graph[1],
-          nodes: renderedGraph[0],
-          edges: renderedGraph[1],
-          treeView: treeView,
-        });
-      },
-      0,
+    let [nodes, edges, labels, nodesIdx, edgesIdx] = processGraph(
+      result,
+      treeView,
+      this.state.lastQuery,
     );
+
+    that.setState({
+      plotAxis: labels,
+      allNodes: nodes,
+      allEdges: edges,
+      nodes: nodes.slice(0, nodesIdx),
+      edges: edges.slice(0, edgesIdx),
+      treeView: treeView,
+    });
 
     let endTime = new Date(),
       timeTaken = (endTime.getTime() - startTime.getTime()) / 1000,
@@ -581,11 +637,6 @@ class App extends React.Component {
                   renderGraph={this.renderGraph}
                 />
               </div>
-              <Stats
-                rendering={this.state.rendering}
-                latency={this.state.latency}
-                class="visible-xs"
-              />
             </div>
           </div>
           <div className="row">

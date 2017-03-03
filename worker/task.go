@@ -36,9 +36,9 @@ import (
 )
 
 var (
-	emptyUIDList   task.List
-	emptyResult    task.Result
-	ExactTokenizer tok.ExactTokenizer
+	emptyUIDList task.List
+	emptyResult  task.Result
+	exactTok     tok.ExactTokenizer
 )
 
 // ProcessTaskOverNetwork is used to process the query and get the result from
@@ -389,13 +389,11 @@ func processTask(q *task.Query, gid uint32) (*task.Result, error) {
 		// the regex matcher.
 		it := pstore.NewIterator()
 		defer it.Close()
-		prefixKey := x.IndexKey(q.Attr, string(ExactTokenizer.Identifier()))
+		prefixKey := x.IndexKey(q.Attr, string(exactTok.Identifier()))
 		for it.Seek(prefixKey); it.ValidForPrefix(prefixKey); it.Next() {
 			key := it.Key().Data()
 			pk := x.Parse(key)
-			x.AssertTrue(pk.IsIndex())
 			x.AssertTrue(pk.Attr == q.Attr)
-			x.AssertTrue(tok.IsExact(pk.Term))
 			term := pk.Term[1:] // skip the first byte which is tokenizer prefix.
 			if regex.MatchString(term) {
 				pl, decr := posting.GetOrCreate(key, gid)

@@ -72,7 +72,7 @@ var (
 	cpuprofile     = flag.String("cpu", "", "write cpu profile to file")
 	memprofile     = flag.String("mem", "", "write memory profile to file")
 	dumpSubgraph   = flag.String("dumpsg", "", "Directory to save subgraph for testing, debugging")
-	uiDir          = flag.String("ui", "/usr/local/share/dgraph/assets", "Directory which contains assets for the user interface")
+	uiDir          = flag.String("ui", os.Getenv("GOPATH")+"/src/github.com/dgraph-io/dgraph/dashboard/build", "Directory which contains assets for the user interface")
 	finishCh       = make(chan struct{}) // channel to wait for all pending reqs to finish.
 	shutdownCh     = make(chan struct{}) // channel to signal shutdown.
 	pendingQueries = make(chan struct{}, 10000*runtime.NumCPU())
@@ -645,7 +645,7 @@ func keywordHandler(w http.ResponseWriter, r *http.Request) {
 	kws := keywords{Keywords: kw}
 
 	predefined := []string{"id", "_uid_", "after", "first", "offset", "count",
-		"@filter", "func", "anyof", "allof", "fts_anyof", "fts_allof", "leq", "geq", "or", "and",
+		"@facets", "@filter", "func", "anyof", "allof", "fts_anyof", "fts_allof", "leq", "geq", "or", "and",
 		"orderasc", "orderdesc", "near", "within", "contains", "intersects"}
 
 	for _, w := range predefined {

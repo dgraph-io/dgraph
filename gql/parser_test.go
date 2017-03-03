@@ -528,6 +528,129 @@ func TestParse_block(t *testing.T) {
 	require.Equal(t, childAttrs(res.Query[0]), []string{"type.object.name.es-419"})
 }
 
+func TestParseSchema(t *testing.T) {
+	query := `
+		schema (pred : name) {
+			pred
+			type
+		}
+	`
+	res, err := Parse(query)
+	require.NoError(t, err)
+	require.Equal(t, res.Schema.Predicates[0], "name")
+	require.Equal(t, len(res.Schema.Fields), 2)
+	require.Equal(t, res.Schema.Fields[0], "pred")
+	require.Equal(t, res.Schema.Fields[1], "type")
+}
+
+func TestParseSchemaMulti(t *testing.T) {
+	query := `
+		schema (pred : [name,hi]) {
+			pred
+			type
+		}
+	`
+	res, err := Parse(query)
+	require.NoError(t, err)
+	require.Equal(t, len(res.Schema.Predicates), 2)
+	require.Equal(t, res.Schema.Predicates[0], "name")
+	require.Equal(t, res.Schema.Predicates[1], "hi")
+	require.Equal(t, len(res.Schema.Fields), 2)
+	require.Equal(t, res.Schema.Fields[0], "pred")
+	require.Equal(t, res.Schema.Fields[1], "type")
+}
+
+func TestParseSchemaAll(t *testing.T) {
+	query := `
+		schema {
+			pred
+			type
+		}
+	`
+	res, err := Parse(query)
+	require.NoError(t, err)
+	require.Equal(t, len(res.Schema.Predicates), 0)
+	require.Equal(t, len(res.Schema.Fields), 2)
+	require.Equal(t, res.Schema.Fields[0], "pred")
+	require.Equal(t, res.Schema.Fields[1], "type")
+}
+
+func TestParseSchemaWithComments(t *testing.T) {
+	query := `
+		schema (pred : name) {
+			#hi
+			pred #bye
+			type
+		}
+	`
+	res, err := Parse(query)
+	require.NoError(t, err)
+	require.Equal(t, res.Schema.Predicates[0], "name")
+	require.Equal(t, len(res.Schema.Fields), 2)
+	require.Equal(t, res.Schema.Fields[0], "pred")
+	require.Equal(t, res.Schema.Fields[1], "type")
+}
+
+func TestParseSchemaAndQuery(t *testing.T) {
+	query1 := `
+		schema {
+			pred
+			type
+		}
+		query {
+			me(id: tomhanks) {
+				name
+				hometown
+			}
+		}
+	`
+	query2 := `
+		query {
+			me(id: tomhanks) {
+				name
+				hometown
+			}
+		}
+		schema {
+			pred
+			type
+		}
+	`
+
+	_, err := Parse(query1)
+	require.Error(t, err)
+
+	_, err = Parse(query2)
+	require.Error(t, err)
+
+}
+
+func TestParseSchemaError(t *testing.T) {
+	query := `
+		schema () {
+			pred
+			type
+		}
+	`
+	_, err := Parse(query)
+	require.Error(t, err)
+}
+
+func TestParseSchemaErrorMulti(t *testing.T) {
+	query := `
+		schema {
+			pred
+			type
+		}
+		schema {
+			pred
+			type
+		}
+	`
+	_, err := Parse(query)
+	require.Error(t, err)
+}
+
 func TestParseMutation(t *testing.T) {
 	query := `
 		mutation {
@@ -1588,7 +1711,7 @@ func TestMutationQuotes(t *testing.T) {
 	query := `
 	mutation {
 		set {
-			<m.05vb159>  <type.object.name>  "\"Maison de Hoodle, Satoko Tachibana"@en  .
+			<m.05vb159>  <type.object.name> "\"Maison de Hoodle, Satoko Tachibana"@en  .
 		}
 	}
 	`
@@ -1618,6 +1741,22 @@ func TestMutationPassword(t *testing.T) {
 	`
 	_, err := Parse(query)
 	require.NoError(t, err)
+}
+
+func TestMutationSchema(t *testing.T) {
+	query := `
+	mutation {
+		set {
+			<m.05vb159>  <type.object.name> "\"Maison de Hoodle, Satoko Tachibana"@en  .
+		}
+		schema {
+           name: string @index(exact)
+		}
+	}
+	`
+	res, err := Parse(query)
+	require.NoError(t, err)
+	require.Equal(t, res.Mutation.Schema, "\n           name: string @index(exact)\n\t\t")
 }
 
 func TestLangs(t *testing.T) {

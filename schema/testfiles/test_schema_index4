@@ -3,13 +3,5 @@ scalar age:int @index(int)
 scalar (
   name: string @index(exact, exact)
   address: string @index(term)
-  age: int
   id: id @index(exact, term, exact)
 )
-
-type  Person {
-  name: string
-  age: int
-  address: string
-  friend: Person
-}

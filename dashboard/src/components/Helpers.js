@@ -24,15 +24,48 @@ export function timeout(ms, promise) {
   });
 }
 
+export function aggregationPrefix(properties) {
+  let aggTerms = ["count", "max(", "min(", "sum("];
+  for (let k in properties) {
+    for (let term of aggTerms) {
+      if (k.startsWith(term)) {
+        if (term === "count") {
+          return term;
+        }
+        return term.substr(0, term.length - 1);
+      }
+    }
+  }
+  return "";
+}
+
+function getNameKey(properties) {
+  for (let i in properties) {
+    let toLower = i.toLowerCase();
+    if (toLower === "name" || toLower === "name.en") {
+      return i;
+    }
+  }
+  return "";
+}
+
 export function getNodeLabel(properties: Object): string {
   var label = "";
-  if (properties["name"] !== undefined) {
-    label = properties["name"];
-  } else if (properties["name.en"] !== undefined) {
-    label = properties["name.en"];
-  } else {
+
+  let keys = Object.keys(properties);
+  if (keys.length === 1) {
+    label = aggregationPrefix(properties);
+    if (label !== "") {
+      return label;
+    }
+  }
+
+  let nameKey = getNameKey(properties);
+  if (nameKey === "") {
     return "";
   }
+
+  label = properties[nameKey];
 
   var words = label.split(" "), firstWord = words[0];
   if (firstWord.length > 20) {
@@ -66,4 +99,10 @@ export function outgoingEdges(nodeId, edgeSet) {
       return edge.from === nodeId;
     },
   });
+}
+
+export function isShortestPath(query) {
+  return query.indexOf("shortest") !== -1 &&
+    query.indexOf("to") !== -1 &&
+    query.indexOf("from") !== -1;
 }

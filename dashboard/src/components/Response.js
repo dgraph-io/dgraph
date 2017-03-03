@@ -79,40 +79,50 @@ class Response extends Component {
                     fullyExpanded={this.state.fullyExpanded}
                     treeView={this.props.treeView}
                 />
-                <div style={{ fontSize: "12px" }}>
-                    <Stats
-                        rendering={this.props.rendering}
-                        latency={this.props.latency}
-                        class="hidden-xs"
-                    />
-                    <Button
-                        className="Response-button"
-                        bsStyle="primary"
-                        disabled={
-                            this.props.allNodes.length === 0 ||
-                                this.isFullyExpanded(this.props)
-                        }
-                        onClick={() => this.refs.graph.expandAll()}
-                    >
-                        {this.state.fullyExpanded ? "Collapse" : "Expand"}
-                    </Button>
-                    <Button
-                        className="Response-button"
-                        bsStyle="primary"
-                        disabled={this.props.allNodes.length === 0}
-                        onClick={() =>
-                            this.props.renderGraph(
-                                this.props.result,
-                                !this.props.treeView,
-                            )}
-                    >
-                        {this.props.treeView ? "Graph view" : "Tree View"}
-                    </Button>
-                    <div>
-                        Nodes:{" "}
-                        {this.props.allNodes.length}
-                        , Edges:{" "}
-                        {this.props.allEdges.length}
+                <div style={{ fontSize: "13px", flex: "0 auto" }}>
+                    <Properties currentNode={this.state.currentNode} />
+                    <div style={{ display: "flex" }}>
+                        <div style={{ flex: "0 0 60%" }}>
+                            <Stats
+                                rendering={this.props.rendering}
+                                latency={this.props.latency}
+                            />
+                            <div>
+                                Nodes:{" "}
+                                {this.props.allNodes.length}
+                                , Edges:{" "}
+                                {this.props.allEdges.length}
+                            </div>
+                        </div>
+                        <div style={{ flex: "0 0 40%" }}>
+                            <Button
+                                className="Response-button"
+                                bsStyle="primary"
+                                disabled={
+                                    this.props.allNodes.length === 0 ||
+                                        this.isFullyExpanded(this.props)
+                                }
+                                onClick={() => this.refs.graph.expandAll()}
+                            >
+                                {this.state.fullyExpanded
+                                    ? "Collapse"
+                                    : "Expand"}
+                            </Button>
+                            <Button
+                                className="Response-button"
+                                bsStyle="primary"
+                                disabled={this.props.allNodes.length === 0}
+                                onClick={() =>
+                                    this.props.renderGraph(
+                                        this.props.result,
+                                        !this.props.treeView,
+                                    )}
+                            >
+                                {this.props.treeView
+                                    ? "Graph view"
+                                    : "Tree View"}
+                            </Button>
+                        </div>
                     </div>
                     <div style={{ height: "auto" }}>
                         <i>
@@ -122,7 +132,6 @@ class Response extends Component {
                                 : ""}
                         </i>
                     </div>
-                    <Properties currentNode={this.state.currentNode} />
                 </div>
             </div>
         );
