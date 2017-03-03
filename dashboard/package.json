@@ -23,6 +23,7 @@
     "react-bootstrap": "^0.30.7",
     "react-dom": "^15.4.2",
     "screenfull": "^3.0.2",
+    "uuid": "^3.0.1",
     "vis": "^4.18.1"
   },
   "peerDependencies": {

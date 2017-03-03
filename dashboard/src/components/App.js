@@ -4,6 +4,7 @@ import React from "react";
 
 import screenfull from "screenfull";
 import randomColor from "randomcolor";
+import uuid from "uuid";
 
 import NavBar from "./Navbar";
 import Stats from "./Stats";
@@ -58,8 +59,8 @@ var initialRandomColors = [
   "#8dd593",
   "#f6c4e1",
   "#8595e1",
-  "#f79cd4",
   "#f0b98d",
+  "#f79cd4",
   "#bec1d4",
   "#11c638",
   "#b5bbe3",
@@ -136,12 +137,7 @@ function hasProperties(props: Object): boolean {
   return Object.keys(props).length !== 1;
 }
 
-function processGraph(
-  response: Object,
-  maxNodes: number,
-  treeView: boolean,
-  query: string,
-) {
+function processGraph(response: Object, treeView: boolean, query: string) {
   let nodesStack: Array<ResponseNode> = [],
     // Contains map of a lable to its shortform thats displayed.
     predLabel: MapOfStrings = {},
@@ -160,7 +156,12 @@ function processGraph(
     },
     someNodeHasChildren: boolean = false,
     ignoredChildren: Array<ResponseNode> = [],
-    shortestPath: boolean = isShortestPath(query);
+    shortestPath: boolean = isShortestPath(query),
+    // We store the indexes corresponding to what we show at first render here.
+    // That we can only do one traversal.
+    nodesIndex,
+    maxNodes = 2,
+    edgesIndex;
 
   for (var root in response) {
     if (!response.hasOwnProperty(root)) {
@@ -214,14 +215,19 @@ function processGraph(
     let obj = nodesStack.shift();
     // Check if this is an empty node.
     if (Object.keys(obj.node).length === 0 && obj.src.pred === "empty") {
-      // We break out if we have reached the max node limit.
-      let maxNodesElapsed = maxNodes !== -1 && nodes.length > maxNodes;
-      if (nodesStack.length === 0 || maxNodesElapsed) {
+      if (nodesStack.length === 0) {
         break;
+      } else if (
+        nodes.length >= maxNodes &&
+        nodesIndex === undefined &&
+        edgesIndex === undefined
+      ) {
+        nodesIndex = nodes.length;
+        edgesIndex = edges.length;
       } else {
         nodesStack.push(emptyNode);
-        continue;
       }
+      continue;
     }
 
     let properties: MapOfStrings = {
@@ -232,17 +238,20 @@ function processGraph(
       id: string,
       edgeAttributes = {
         facets: {},
-      };
+      },
+      uid: string;
+
+    uid = obj.node["_uid_"] === undefined ? uuid() : obj.node["_uid_"];
+    id = treeView
+      ? // For tree view, the id is the join of ids of this node
+        // with all its ancestors. That would make it unique.
+        [obj.src.id, uid].filter(val => val).join("-")
+      : uid;
 
     for (let prop in obj.node) {
       if (!obj.node.hasOwnProperty(prop)) {
         continue;
       }
-      id = treeView
-        ? // For tree view, the id is the join of ids of this node
-          // with all its ancestors. That would make it unique.
-          [obj.src.id, obj.node["_uid_"]].filter(val => val).join("-")
-        : obj.node["_uid_"];
 
       // We can have a key-val pair, another array or an object here (in case of facets)
       let val = obj.node[prop];
@@ -301,6 +310,7 @@ function processGraph(
     delete nodeAttrs["x"];
 
     let n: Node = {
+      id: id,
       x: x,
       label: getNodeLabel(nodeAttrs),
       title: JSON.stringify(properties),
@@ -308,18 +318,12 @@ function processGraph(
       group: obj.src.pred,
     };
 
-    // For aggregation queries, aggregation result nodes don't have a uid.
-    // We let the library assign a uid to them.
-    if (obj.node["_uid_"] !== undefined) {
-      Object.assign(n, { id: id });
-    }
-
     if (treeView) {
       // For tree view, we push duplicate nodes too.
       nodes.push(n);
     } else {
-      if (!uidMap[nodeAttrs["_uid_"]]) {
-        uidMap[nodeAttrs["_uid_"]] = true;
+      if (!uidMap[id]) {
+        uidMap[id] = true;
         nodes.push(n);
       }
     }
@@ -327,6 +331,7 @@ function processGraph(
     if (obj.src.id === "") {
       continue;
     }
+
     var e: Edge = {
       from: obj.src.id,
       to: id,
@@ -351,7 +356,7 @@ function processGraph(
     });
   }
 
-  return [nodes, edges, plotAxis];
+  return [nodes, edges, plotAxis, nodesIndex, edgesIndex];
 }
 
 type QueryTs = {|
@@ -525,26 +530,20 @@ class App extends React.Component {
   renderGraph = (result, treeView) => {
     let startTime = new Date(), that = this;
 
-    // We call procesGraph with a 5 node limit and calculate the whole dataset in
-    // the background.
-    var renderedGraph = processGraph(result, 2, treeView, this.state.lastQuery);
-    setTimeout(
-      function() {
-        // We process all the nodes and edges in the response in background and
-        // later when we do expansion of nodes.
-        let graph = processGraph(result, -1, treeView, that.state.lastQuery);
-
-        that.setState({
-          plotAxis: graph[2],
-          allNodes: graph[0],
-          allEdges: graph[1],
-          nodes: renderedGraph[0],
-          edges: renderedGraph[1],
-          treeView: treeView,
-        });
-      },
-      0,
+    let [nodes, edges, labels, nodesIdx, edgesIdx] = processGraph(
+      result,
+      treeView,
+      this.state.lastQuery,
     );
+
+    that.setState({
+      plotAxis: labels,
+      allNodes: nodes,
+      allEdges: edges,
+      nodes: nodes.slice(0, nodesIdx),
+      edges: edges.slice(0, edgesIdx),
+      treeView: treeView,
+    });
 
     let endTime = new Date(),
       timeTaken = (endTime.getTime() - startTime.getTime()) / 1000,
